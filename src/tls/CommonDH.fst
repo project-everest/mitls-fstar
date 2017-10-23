@@ -103,36 +103,45 @@ let lemma_group_of_namedGroup (ng:namedGroup)
 
 let default_group = ECDH (CoreCrypto.ECC_P256)
 
-(* Global log of honestly generated DH shares *)
+
+/// Global log of honestly generated DH shares.
+/// This code is almost generic. 
+/// (no mechanism for collision avoidance yet)
+
 type honest (i:id) = bool
 let dh_region = new_region tls_tables_region
 private type ideal_log = MM.t dh_region id honest (fun _ -> True)
 private type share_table = (if Flags.ideal_KEF then ideal_log else unit)
 
 abstract let share_log: share_table =
-  (if Flags.ideal_KEF then
-    MM.alloc #dh_region #id #honest #(fun _ -> True)
-  else
-    ())
+  if Flags.ideal_KEF 
+  then MM.alloc #dh_region #id #honest #(fun _ -> True)
+  else ()
+
+// arbitrarily, when idealization is off all shares are registered as
+// compromised.
 
 let registered i =
-  (if Flags.ideal_KEF then
-    let log : ideal_log = share_log in
+  if Flags.ideal_KEF 
+  then 
+    let log: ideal_log = share_log in 
     MR.witnessed (MM.defined log i)
-  else
-    True)
+  else True
 
 let honest_share i =
-  (if Flags.ideal_KEF then
-    let log : ideal_log = share_log in
+  if Flags.ideal_KEF 
+  then 
+    let log: ideal_log = share_log in 
     MR.witnessed (MM.contains log i true)
-  else False)
+  else False
 
 let dishonest_share i =
-  (if Flags.ideal_KEF then
-    let log : ideal_log = share_log in
+  if Flags.ideal_KEF 
+  then 
+    let log: ideal_log = share_log in 
     MR.witnessed (MM.contains log i false)
-  else True)
+  else True
+
 
 let pre_pubshare #g ks =
   match g with
@@ -160,7 +169,7 @@ let is_honest i =
 
 let lemma_honest_or_dishonest (i:id) : ST unit
   (requires (fun h -> registered i))
-  (ensures (fun h0 _ h1 -> dishonest_share i \/ honest_share i))
+  (ensures (fun h0 _ h1 -> honest_share i \/ dishonest_share i))
   =
   if Flags.ideal_KEF then
    begin
@@ -234,30 +243,33 @@ let lemma_honest_not_dishonest (i:id)
    end
   else ()
 
+
 #set-options "--z3rlimit 100"
+// these proofs are slow, not sure why.
+
 let rec keygen g =
-  dbg ("Keygen on " ^ (string_of_group g));
-  let gx : pre_keyshare g =
+  dbg ("Keygen on "^string_of_group g);
+
+  // concrete sampling 
+  let x: pre_keyshare g =
     match g with
     | FFDH g -> KS_FF g (DHGroup.keygen g)
-    | ECDH g -> KS_EC g (ECGroup.keygen g)
-    in
-  let gx : keyshare g =
-   if Flags.ideal_KEF then
-    begin
-     let log : ideal_log = share_log in
-     let i : id = (| g, pre_pubshare gx |) in
-     MR.m_recall log;
-     match MM.lookup log i with
-     | None ->
-       MM.extend log i true;
-       cut(registered i); cut(honest_share i);
-       let gx : keyshare g = gx in gx
-     | Some _ -> // Bad luck, we generated the same share twice
-       keygen g
-    end
-   else gx in
-  gx
+    | ECDH g -> KS_EC g (ECGroup.keygen g) in
+  let gx = pre_pubshare x in 
+  // idealization: collision avoidance
+  // this code re-samples with probability ~ #(keygen g)^2 / |g|
+  if Flags.ideal_KEF then
+    let log: ideal_log = share_log in
+    let i: id = (| g, gx |) in
+    MR.m_recall log;
+    match MM.lookup log i with
+    | Some _ -> keygen g // bad luck: we sampled the same element twice
+    | None ->
+      MM.extend log i true;
+      assert(registered i); 
+      assert(honest_share i);
+      x
+  else x 
 
 let dh_initiator #g x gy =
   dbg ("DH initiator on "^string_of_group g);
@@ -281,20 +293,21 @@ let dh_responder #g gx =
 let register #g gx =
   if Flags.ideal_KEF then
    begin
-    let log : ideal_log = share_log in
-    let i : id = (| g, gx |) in
+    let log: ideal_log = share_log in
+    let i: id = (| g, gx |) in
     MR.m_recall log;
     match MM.lookup log i with
     | None ->
       MM.extend log i false;
-      cut(registered i);
-      cut(dishonest_share i);
+      assert(registered i);
+      assert(dishonest_share i);
       gx
     | Some b ->
-      cut(MR.witnessed (MM.defined log i));
+      assert(MR.witnessed (MM.defined log i));
       gx
    end
   else gx
+
 
 let parse g x =
   match g with

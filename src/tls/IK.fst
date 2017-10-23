@@ -1,10 +1,7 @@
 module IK 
 
-open FStar.HyperStack
-open FStar.HyperStack.ST
-
-/// a standalone experiment modelling key derivation parametrically in
-/// the use of the derived keyed functionalities.
+/// Standalone experiment modelling key derivation parametrized by a
+/// usage function from labels to derived keyed functionalities.
 ///
 /// * captures nested derivations via bounded-recursive instantiation.
 /// * applied to the full extract/expand key schedule of TLS 1.3
@@ -21,6 +18,24 @@ open FStar.HyperStack.ST
 /// enable more details to be bound as part of the derivation label.
 
 
+(**! TBC
+
+- outline code modularity & packaging 
+  which modules are index-parametric? 
+
+- make salt or DH optional
+
+- registration & honesty
+  (uniform enforcement of unique creation)
+
+- usage restriction ['f(label) = idh] 
+  requires digests; see also loginfo.
+
+*)
+
+open FStar.HyperStack
+open FStar.HyperStack.ST
+
 // temporary imports
 
 type bytes = Platform.Bytes.bytes
@@ -33,6 +48,7 @@ let sample (len:UInt32.t): ST (lbytes len)
 
 
 /// --------------------------------------------------------------------------------------------------
+/// module Pkg (stateless)
 /// We embed first-class modules as datatype "packages"
 ///
 /// Index packages provide a "safe" predicate to control conditional idealization.
@@ -65,16 +81,31 @@ noeq type pkg (ip:ipkg) = | Pkg:
     (ensures fun h0 p h1 -> True)) ->
   pkg ip
 
-/// pick an ordering: ip.t -> use for now.
+
+/// Generic "key module" implementation:
+/// can we factor out pre/post and boilerplate spec? 
+///
+/// When ~(honest i), we must have  
+///
+/// create i a == coerce i a (sample (len a))
+
+
+
+/// pick an argument ordering: ip.t -> use for now.
 ///
 /// We must ensure a shared `use` for all instances (or only when
 /// idealized?); this may follow from static memoization.
 /// 
-/// Do we want to hardwire that u is a function of i? 
+/// Do we want to hardwire that u is a function of i? No.
 
+
+
+/// NEXT, FUNCTIONALITIES with ABSTRACT INDEXES.
 /// --------------------------------------------------------------------------------------------------
 /// module AEAD
-/// sample agile functionality,
+/// sample generic, agile functionality.
+///
+/// TODO package instead StAE.
 
 type aeadAlg = | AES_GCM128 | AES_GCM256
 val aeadLen: aeadAlg -> keylen 
@@ -103,6 +134,9 @@ let create_raw (#ip: ipkg) (i: ip.t) (len:keylen): St (raw  i len) = sample len
 let coerce_raw (#ip: ipkg) (i: ip.t) (len:keylen) (r:lbytes len): raw i len = r
 let rp (ip:ipkg): pkg ip = Pkg keylen raw (fun n -> n) create_raw coerce_raw
 
+
+
+/// TLS-SPECIFIC KEY SCHEDULE
 /// --------------------------------------------------------------------------------------------------
 /// module Index
 
@@ -116,19 +150,45 @@ type label = string
 type usage (a:Type0) (ip:ipkg) =
   label -> p:pkg ip & (ctx:a -> p.use)
 
+
+/// parametricity? (Later)
+/// we have [#id #pd #u #i #a] 
+/// u v returns [#ip #p (derive_alg: pd.info -> p.info) (derive_index: id.t -> i.t)] 
+///
+/// We finally use a global, recursive instantiation of indexes to
+/// compose all our functionalities, with for instance
+/// (fun i -> Derived i v) to get the derived index.
+
+type usage' (#ii:ipkg) (a:Type0) = 
+  label -> 
+    ip:ipkg & 
+    p: pkg ip & 
+    derive_index: (i:ii.t -> ip.t) &
+    derive_info: (a -> p.use)
+// note that [a] is [d.use]
+// should usage be part of info?
+// what about state state (safety etc)? 
+
+
 type id_dhe = g: CommonDH.group & gX: CommonDH.share g & CommonDH.share g
 type id_psk = nat // external application PSKs only; we may need a special PSK0 constructor too
 type id = 
-  | Zero // symbolic constant for absent extraction arguments
+//| Zero // symbolic constant for absent extraction arguments
   | Preshared of id_psk  // external application PSKs only
   | Extract0: materials:id -> id
   | Extract1: salt:id -> materials: id_dhe -> id 
-// do we need 2 cases?
-//| ExtractWide1: salt:id -> #g: CommonDH.group -> CommonDH.share g -> id // do we need 2 cases?
   | Extract2: salt:id  -> id
   | Derived: id -> label -> id  
+//| Derived: id -> label -> hv -> len -> id 
+// - we could let the caller deal with label formatting
+// - providing the derived length automatically helps a bit functionally, is unused in verification
+// - hv is the hashed digest; consider recording instead the actual transcript
 
-// 17-10-17 Discussion with Markulf
+// do we need 2 cases? No.
+//| ExtractWide1: salt:id -> #g: CommonDH.group -> CommonDH.share g -> id // do we need 2 cases?
+
+
+// 17-10-21 WIDE/NARROW INDEXES (old) 
 //
 // We'd rather keep wide indexes secret.  Internally, for each salt
 // index, we maintain a table from (g, gX, gY) to PRFs, with some
@@ -141,8 +201,9 @@ type id =
 // this does not matter because security does not depend on their
 // sharing.
 
+
 /// Using different constructors for different constructions; we don't
-/// restrict index, but we only provide the key-level operations at
+/// restrict indexes, but we only provide key-level operations at
 /// specific types.
 ///
 /// TODO: extend Derived to take (and record) an optional hashed digest.
@@ -152,6 +213,7 @@ type id =
 /// to the extractor index.
 ///
 /// MK: what is meant with "clip 'Extracted' to the extractor index"?
+
 
 let ii:ipkg = Idx id (fun _ -> true)
 
@@ -178,7 +240,6 @@ let ii:ipkg = Idx id (fun _ -> true)
 /// 
 type kdfa = Hashing.Spec.alg
 type info = {ha:kdfa; aea:aeadAlg} (* runtime *) 
-//type suse = a:info * usage info ii
 
 let derived_key (u: usage info ii) (i: ii.t) (v:label) (a: info) = 
   let (| pkg', derived_alg |) = u v in 
@@ -186,6 +247,7 @@ let derived_key (u: usage info ii) (i: ii.t) (v:label) (a: info) =
 
 let there: FStar.Monotonic.RRef.rid = admit() 
 
+/// key-derivation table (memoizing create/coerce)
 private type table 
   // (ip: ipkg) 
   (u: usage info ii)
@@ -288,7 +350,7 @@ let derive  #u #i #a k v =
       //17-10-20 TODO framing across create
       let h = HyperStack.ST.get() in 
       assume(MonotoneMap.fresh (secret_ideal k) v h);
-      MonotoneMap.extend (secret_ideal k) v dk; // why do I need explicit args?
+      MonotoneMap.extend (secret_ideal k) v dk; 
       dk
   else 
     let raw =
@@ -334,8 +396,13 @@ let pskp (ip:ipkg) (u:usage info ip): pkg ip = Pkg
   (coerce_psk #ip #u)
   
 
-/// Derived salt; note it is already indexed by the usage of the
-/// following extension.
+/// The "salt" is an optional secret used (exclusively) as HKDF
+/// extraction key. The absence of salt (e.g. when no PSK is used) is
+/// handled using a special, constant salt marked as compromised.
+/// 
+/// salt is indexed by the usage of the secret that will be extracted
+/// (the usage of the salt itself is fixed).
+/// 
 assume type salt (ip:ipkg) (u: usage info ip) (i: ip.t)  (a: info)
 
 assume val create_salt: 
@@ -353,7 +420,8 @@ assume val coerce_salt:
   raw: lbytes (secret_len a) ->
   salt ip u i a
 
-// use instances of the same package for both? 
+/// We use separate packages for Extract1 and Extract2,
+/// as formally they involve separate security assumptions.
 
 let saltp1 (ip:ipkg) (u:usage info ip): pkg ip = Pkg 
   info 
@@ -380,19 +448,25 @@ assume val extract0:
   secret u (Extract0 i) a
 
 
-/// HKDF.Extract(key=s, materials=dh_secret) idealized as 2-bit
+/// HKDF.Extract(key=s, materials=dh_secret) idealized as 2-step
 /// (KEF-ODH, KEF-Salt game); we will need separate calls for clients
 /// and servers.
 
-/// we write prf_ for the middle salt-keyed extraction, conditionally
-/// idealized as a PRF keyed by salt1 depending on b1.
+/// two flags; we will idealize ODH first
 /// 
-/// its interface provides create, coerce, leak, and extract
-/// its internal table memoizes it with *wide* domain gZ 
+assume val flag_prf1: bool 
+assume val flag_odh: b:bool { (flag_prf1 ==> b) /\ (b ==> Flags.ideal_KEF) } 
 
+/// we write prf_ for the middle salt-keyed extraction, conditionally
+/// idealized as a PRF keyed by salt1 depending on flag_prf1
+/// 
+/// its interface provides create, coerce, leak, and extract its
+/// internal table memoizes it either with *wide* domain gZ, or with
+/// *narrow* domain idh
+///
 /// Returns a narrow-indexed key, 
 /// 
-/// its internal state must ensure sharing
+/// its internal state ensures sharing
 ///
 assume val prf_extract1:
   #u: usage info ii -> 
@@ -402,23 +476,15 @@ assume val prf_extract1:
   g: CommonDH.group ->
   gX: CommonDH.share g -> 
   gY: CommonDH.share g ->
-  gZ: CommonDH.share g (* { dh gX gY gZ } *) ->
+  gZ: bytes -> // CommonDH.share g (* { dh gX gY gZ } *) ->
   secret u (Extract1 i (| g, gX, gY |)) a
-
-/// two flags; we will idealize ODH first
-/// 
-assume val flag_prf1: bool 
-assume val flag_odh: b:bool { flag_prf1 ==> b } 
-
-(* TBC, adding a narrow memoization table? 
+(*
 let prf_extract1 #u #i #a s g gX gY gZ = 
   let idh = (| g, gX, gY |) in
   let j = Extract1 i idh in
   let pkg = pp ii u in 
   if flag_prf1 && ii.honest i 
   then 
-    if b2 then 
-    let 
     let w = 
       // "wide" PRF, memoized on gZ
       match find s.wide gZ with 
@@ -427,7 +493,7 @@ let prf_extract1 #u #i #a s g gX gY gZ =
         let w = pkg.create0 j a in
         s.wide := snoc s.wide w;
         w in 
-    pkg.narrow j k 
+    pkg.create j k 
     // agreement on the algorithms follows from the salt.
   else 
     let raw = HKDF.extract (prf_leak s) gZ (* narrow, concrete *) in 
@@ -438,16 +504,42 @@ assume val prf_leak:
   #u: usage info ii -> 
   #i: id ->
   #a: info -> 
-  s: salt ii u i a {~(ii.honest i)} -> bytes 
-
+  s: salt ii u i a { flag_prf1 ==> ~(ii.honest i)} -> Hashing.Spec.hkey a.ha
+// revisit condition, a bit awkward.
 
 /// ODH (precisely tracking the games, not yet code-complete
 /// --------------------------------------------------------------------------------------------------
 
-assume val honest_gX: 
-  #g: CommonDH.group ->
-  gX: CommonDH.share g -> 
-  bool 
+// Ideally, we maintain a monotonic map from every honestly-sampled
+// initiator share gX to its set of honestly-sampled responders shares
+// (i,gY). TODO 17-10-22 
+
+type entry (g_gX: CommonDH.id) = 
+  peers: list (i:id & gY: CommonDH.share (dfst g_gX)) {CommonDH.honest_share g_gX}
+  // no need to record more, e.g. the existence of a client connection? 
+  
+type peer_table = MonotoneMap.t there CommonDH.id entry (fun _ -> True)
+
+//17-10-22 TODO I need a variant of MonotoneMap that enables monotonic updates to each entry.
+
+
+let odh_table: (if flag_odh then peer_table else unit) =
+  if flag_odh 
+  then MonotoneMap.alloc #there #CommonDH.id #entry #(fun _ -> True)
+  else ()
+
+val honest_gX: #g:CommonDH.group -> gX: CommonDH.share g -> Type0  // awkward
+let honest_gX #g gX = 
+  if flag_odh then 
+    let t: peer_table = odh_table in 
+    Monotonic.RRef.witnessed (MonotoneMap.defined t (|g,gX|))
+  else True
+//17-10-22 why can't I write flag_odh ==> ... ? {logic} error   
+//17-10-23 for now we could use that style only with an annotated let instead of val;let
+
+assume val peers_gX: #g:CommonDH.group -> gX: CommonDH.share g -> entry (|g,gX|)
+// add state-passing
+// let peers_gX #g gx = let t: peer_table = odh_table in MonotoneMap.lookup h0.[t] (|g,gX|)
 
 // ideal state 
 // val peer: mref (map gX --> list (i,gY)) 
@@ -457,15 +549,26 @@ assume val honest_gX:
 
 /// Client-side instance creation
 /// (possibly used by many honest servers)
-val odh_init:
-  g: CommonDH.group -> St (CommonDH.keyshare g)
+val odh_init: g: CommonDH.group -> ST (CommonDH.keyshare g)
+  (requires fun h0 -> True)
+  (ensures fun h0 x h1 -> honest_gX (CommonDH.pubshare x))
+// TODO framing: we only modify the global table regions for CommonDH and ODH
 
 let odh_init g = 
   let x = CommonDH.keygen g in 
-  let gX = CommonDH.pubshare x in  
-  // check gX is fresh;
-  // peer[gX] := []
-  x // also return gX?
+  if flag_odh then (
+    let t: peer_table = odh_table in 
+    let gX = CommonDH.pubshare x in  
+    let g_gX = (|g,gX|) in 
+    assert(CommonDH.honest_share g_gX);
+    // TODO 17-10-22 since gX is freshly registered, we statically
+    // know it can't occur in the peers table; what's a better keygen
+    // spec for that?
+    if None? (MonotoneMap.lookup t g_gX) then MonotoneMap.extend t g_gX []
+    //not needed? Monotonic.RRef.testify (MonotoneMap.defined t g_gX)
+    );
+  x // could additionally return gX 
+// TODO crypto agility: do we record keygen as honest for a bad group? 
 
 /// Server-side creation and completion
 ///
@@ -479,28 +582,35 @@ val odh_test:
   #a: info -> 
   s: salt ii u i a ->
   g: CommonDH.group ->
-  gX: CommonDH.share g {honest_gX gX} -> 
+  gX: CommonDH.share g -> 
   ST ( 
     gY:CommonDH.share g &
     secret u (Extract1 i (| g, gX, gY |)) a )
-  (requires fun h0 -> True)
-  (ensures fun h0 _ h1 -> True)
+  (requires fun h0 -> honest_gX gX)
+  (ensures fun h0 r h1 -> 
+    let gY = dfst r in 
+    flag_odh ==> List.Tot.mem (|i,gY|) (peers_gX gX))
   
-// requires peer[gX] defined.
+// requires peer[gX] defined, i.e. gX was sampled by an honest client. 
 // I and R may not share the same salt (i)
 
 let odh_test #u #i #a s g gX = 
+  (* we get the same code as in the game by unfolding dh_responder, e.g.
   let y = CommonDH.keygen g in 
   let gY = CommonDH.pubshare y in  
-  // peer[gX] += (i, gY);
+  let gZ: bytes (*CommonDH.share g*) = ... in  // used only when (not flag_odh)
+  *)
+  let gY, gZ = CommonDH.dh_responder gX in 
+  //TODO table[gX] += (i, gY);
   let idh = (| g, gX, gY |) in
   let j = Extract1 i idh in 
   let k = 
     if flag_odh
     then (*KDF.*) create u j a (* narrow *)
     else 
-      let gZ: bytes (*CommonDH.share g*) = admit() in 
+      // we know the salt is dishonest because flag_kdf is off
       let raw = HKDF.extract #a.ha (prf_leak s) gZ (* wide, concrete *) in 
+      //TODO deduce that j is dishonest too.
       coerce u j a raw 
   in
   (| gY, k |) (* TODO k is not registered yet *)
@@ -512,18 +622,22 @@ val odh_prf:
   #a: info -> 
   s: salt ii u i a ->
   g: CommonDH.group ->
-  x: CommonDH.keyshare g { honest_gX (CommonDH.pubshare x) } -> 
+  x: CommonDH.keyshare g -> 
   gY: CommonDH.share g -> 
   ST (secret u (Extract1 i (| g, CommonDH.pubshare x, gY |)) a)
-    (requires fun h0 -> True)
+    (requires fun h0 -> 
+      let gX = CommonDH.pubshare x in
+      honest_gX gX /\
+      (flag_odh ==> ~ (List.Tot.mem (|i,gY|) (peers_gX gX)))
+    )
     (ensures fun h0 _ h1 -> True)
   
 // requires peer[gX] is defined (witnessed in x) and does not contain (i,gY)
 // None? (find (i, gY) !peer[gX])
 
 let odh_prf #u #i #a s g x gY = 
-  let gX = CommonDH.pubshare x in
-  let gZ: CommonDH.share g = admit() in 
+  let gX = CommonDH.pubshare x in 
+  let gZ = CommonDH.dh_initiator x gY in
   prf_extract1 s g gX gY gZ 
 
 /// --------------------------------------------------------------------------------------------------

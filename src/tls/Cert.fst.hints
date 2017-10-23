@@ -27,7 +27,8 @@
         "refinement_interpretation_Extensions_Tm_refine_4e1e5ff69cd4b614f69ecde54550ffb8",
         "refinement_interpretation_Platform.Bytes_Tm_refine_3458b9f6f40fe62446cdc2c6d3755a94"
       ],
-      0
+      0,
+      "c0ed86b1937976eefc340b279f2d8d09"
     ],
     [
       "Cert.certificateListBytes",
@@ -46,7 +47,8 @@
         "refinement_interpretation_Cert_Tm_refine_388a138262028752b10b63c189f3811c",
         "subterm_ordering_Prims.Cons"
       ],
-      0
+      0,
+      "1c739a429b22ede8b07b3afb9854731e"
     ],
     [
       "Cert.certificateListBytes13",
@@ -68,7 +70,8 @@
         "refinement_interpretation_Cert_Tm_refine_ef91239410f148290cffb9b5ea68fee4",
         "subterm_ordering_Prims.Cons"
       ],
-      0
+      0,
+      "59bcfd00b1a6c1d8a2d4da4bb8ea9178"
     ],
     [
       "Cert.certificateListBytes_is_injective",
@@ -142,7 +145,8 @@
         "typing_FStar.Seq.Base.length", "typing_Parse.is_tls_rgn",
         "typing_Platform.Bytes.length", "unit_inversion"
       ],
-      0
+      0,
+      "33b5ffd322cb7aeb16fc11b4ba52db21"
     ],
     [
       "Cert.certificateListBytes_is_injective",
@@ -150,7 +154,8 @@
       0,
       1,
       [ "@query", "assumption_Platform.Bytes.HasEq_bytes" ],
-      0
+      0,
+      "3ac11a12bfea060f2f4019ddd6d8b3ed"
     ],
     [
       "Cert.certificateListBytes_is_injective",
@@ -158,7 +163,8 @@
       0,
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
-      0
+      0,
+      "c33b087c0ec4f99c60a77b7ae5b55f7f"
     ],
     [
       "Cert.certificateListBytes_is_injective",
@@ -166,7 +172,8 @@
       0,
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
-      0
+      0,
+      "5cd1eca03f67e50648e1939552208dc0"
     ],
     [
       "Cert.endpoint_keytype",
@@ -178,7 +185,8 @@
         "equation_Cert.cert", "equation_Cert.chain",
         "fuel_guarded_inversion_Prims.list"
       ],
-      0
+      0,
+      "1b80c712586a939bfcfe7ccc306957b4"
     ],
     [
       "Cert.endpoint_keytype13",
@@ -190,7 +198,8 @@
         "disc_equation_Prims.Nil", "equation_Cert.certes",
         "equation_Cert.chain13", "fuel_guarded_inversion_Prims.list"
       ],
-      0
+      0,
+      "730da774dcf5389f4d7a9181eb47dec0"
     ],
     [
       "Cert.parseCertificateList",
@@ -199,30 +208,34 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
+        "Platform.Bytes_interpretation_Tm_arrow_1139a32bf9a4ad0c89ccc399066b071a",
         "binder_x_1377d5c007cd42fd33e0c81ade242007_0", "bool_inversion",
         "constructor_distinct_Platform.Error.Correct",
         "constructor_distinct_Platform.Error.Error",
         "data_elim_FStar.Pervasives.Native.Mktuple2",
+        "data_elim_Platform.Error.Correct",
         "disc_equation_Platform.Error.Correct",
         "disc_equation_Platform.Error.Error",
         "equality_tok_Prims.LexTop@tok", "equation_Cert.chain",
         "equation_FStar.Char.char", "equation_FStar.Pervasives.Native.fst",
         "equation_FStar.Pervasives.Native.snd",
-        "equation_FStar.Seq.Properties.split",
-        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
-        "equation_Platform.Bytes.length", "equation_Platform.Bytes.split",
-        "equation_Prims.nat", "equation_TLSError.error",
-        "equation_TLSError.result", "equation_Parse.is_tls_rgn",
+        "equation_FStar.Seq.Properties.split", "equation_Parse.is_tls_rgn",
         "equation_Parse.rgn", "equation_Parse.tls_rgn",
-        "equation_Parse.vlsplit",
-        "fuel_guarded_inversion_Platform.Error.optResult",
-        "function_token_typing_Cert.chain",
-        "function_token_typing_TLSError.error",
-        "function_token_typing_Parse.tls_region", "int_inversion",
-        "kinding_FStar.Char.char_@tok",
+        "equation_Parse.vlbytes", "equation_Parse.vlsplit",
+        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.length",
+        "equation_Platform.Bytes.op_At_Bar", "equation_Platform.Bytes.split",
+        "equation_Prims.nat", "equation_TLSError.error",
+        "equation_TLSError.result", "function_token_typing_Cert.chain",
+        "function_token_typing_Parse.tls_region",
+        "function_token_typing_Platform.Bytes.split",
+        "function_token_typing_TLSError.error", "int_inversion",
+        "int_typing", "kinding_FStar.Char.char_@tok",
+        "lemma_FStar.Seq.Base.lemma_eq_elim",
+        "lemma_FStar.Seq.Base.lemma_len_append",
         "lemma_Platform.Error.invertOptResult",
-        "primitive_Prims.op_LessThan", "primitive_Prims.op_LessThanOrEqual",
-        "primitive_Prims.op_Subtraction",
+        "primitive_Prims.op_Addition", "primitive_Prims.op_LessThan",
+        "primitive_Prims.op_LessThanOrEqual",
         "proj_equation_FStar.Pervasives.Native.Mktuple2__1",
         "proj_equation_FStar.Pervasives.Native.Mktuple2__2",
         "projection_inverse_BoxBool_proj_0",
@@ -230,23 +243,28 @@
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
         "projection_inverse_Platform.Error.Correct__0",
-        "projection_inverse_Platform.Error.Correct__b",
+        "refinement_interpretation_Cert_Tm_refine_88ec188dc7db29981cf930925921374f",
         "refinement_interpretation_FStar.Seq.Base_Tm_refine_cd046bc4a887ee7e1b05946e0bf5772b",
         "refinement_interpretation_FStar.Seq.Properties_Tm_refine_3421154546287b0f0c012dd3d63b4945",
+        "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
+        "refinement_interpretation_Parse_Tm_refine_ab412774dec1aa8ece0a65e6266a128e",
+        "refinement_interpretation_Parse_Tm_refine_d26422d9696ba619f4813a3f4ad1e26e",
+        "refinement_interpretation_Parse_Tm_refine_e64f0ec31c8e377535d70d4855334d9b",
         "refinement_interpretation_Platform.Bytes_Tm_refine_71050496a0b6bdbab08b701114cb2b13",
         "refinement_interpretation_Platform.Bytes_Tm_refine_df45e13378b64cfc3cd23f54e8657bfc",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "refinement_interpretation_Prims_Tm_refine_f048236b5f8051f83b495ea5eaa6127b",
-        "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
-        "refinement_interpretation_Parse_Tm_refine_c07d4060d37e3232f72a27cf19147668",
-        "typing_FStar.Seq.Properties.split",
-        "typing_Platform.Bytes.int_of_bytes", "typing_Platform.Bytes.length",
-        "typing_Platform.Bytes.repr_bytes", "typing_Platform.Bytes.split",
+        "refinement_kinding_Cert_Tm_refine_88ec188dc7db29981cf930925921374f",
+        "token_correspondence_Platform.Bytes.split",
+        "typing_FStar.Seq.Base.append", "typing_FStar.Seq.Base.length",
+        "typing_FStar.Seq.Properties.split", "typing_Parse.is_tls_rgn",
+        "typing_Parse.vlbytes", "typing_Platform.Bytes.int_of_bytes",
+        "typing_Platform.Bytes.length", "typing_Platform.Bytes.repr_bytes",
         "typing_Platform.Error.uu___is_Correct",
-        "typing_Platform.Error.uu___is_Error", "typing_Parse.is_tls_rgn",
-        "well-founded-ordering-on-nat"
+        "typing_Platform.Error.uu___is_Error", "well-founded-ordering-on-nat"
       ],
-      0
+      0,
+      "7815f57792c42fad6a603366da8df843"
     ],
     [
       "Cert.parseCertificateList",
@@ -254,7 +272,8 @@
       0,
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
-      0
+      0,
+      "b80f075a44697fee2a71d04ae8280f4f"
     ],
     [
       "Cert.parseCertificateList13",
@@ -263,41 +282,39 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "Prims_interpretation_Tm_arrow_44faff5d8543c30ad9bf2eeaf1b3abcf",
         "binder_x_1377d5c007cd42fd33e0c81ade242007_0", "bool_inversion",
-        "constructor_distinct_Platform.Error.Correct",
+        "bool_typing", "constructor_distinct_Platform.Error.Correct",
         "constructor_distinct_Platform.Error.Error",
         "data_elim_Platform.Error.Correct",
         "disc_equation_Platform.Error.Correct",
         "disc_equation_Platform.Error.Error",
-        "equality_tok_Extensions.EM_Certificate@tok",
         "equality_tok_Prims.LexTop@tok", "equation_Cert.chain13",
         "equation_Extensions.binders", "equation_Extensions.bindersLen",
         "equation_Extensions.extension", "equation_Extensions.extensions",
-        "equation_Extensions.parseExtensions", "equation_FStar.Char.char",
-        "equation_FStar.Pervasives.Native.fst",
+        "equation_FStar.Char.char", "equation_FStar.Pervasives.Native.fst",
         "equation_FStar.Pervasives.Native.snd",
-        "equation_FStar.Seq.Properties.split",
-        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
-        "equation_Platform.Bytes.empty_bytes",
-        "equation_Platform.Bytes.lbytes", "equation_Platform.Bytes.length",
+        "equation_FStar.Seq.Properties.split", "equation_Parse.hs_color",
+        "equation_Parse.is_tls_rgn", "equation_Parse.rgn",
+        "equation_Parse.tls_rgn", "equation_Parse.vlbytes",
+        "equation_Parse.vlsplit", "equation_Platform.Bytes.byte",
+        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
         "equation_Platform.Bytes.op_At_Bar", "equation_Platform.Bytes.split",
         "equation_Prims.nat", "equation_TLSError.error",
-        "equation_TLSError.result", "equation_Parse.is_tls_rgn",
-        "equation_Parse.rgn", "equation_Parse.tls_rgn",
-        "equation_Parse.vlbytes", "equation_Parse.vlsplit",
+        "equation_TLSError.result",
         "fuel_guarded_inversion_Platform.Error.optResult",
         "function_token_typing_Cert.chain13",
         "function_token_typing_Extensions.binders",
         "function_token_typing_Extensions.extensions",
+        "function_token_typing_Parse.hs_color",
+        "function_token_typing_Parse.tls_region",
+        "function_token_typing_Parse.tls_tables_region",
         "function_token_typing_Platform.Bytes.bytes",
-        "function_token_typing_Platform.Bytes.empty_bytes",
-        "function_token_typing_Platform.Bytes.op_At_Bar",
-        "function_token_typing_TLSError.error",
-        "function_token_typing_Parse.tls_region", "int_inversion",
-        "kinding_FStar.Char.char_@tok",
+        "function_token_typing_TLSError.error", "int_inversion",
+        "int_typing", "kinding_FStar.Char.char_@tok",
         "kinding_FStar.Pervasives.Native.option@tok",
         "kinding_FStar.Pervasives.Native.tuple2@tok",
+        "lemma_FStar.Monotonic.HyperHeap.lemma_extends_includes",
+        "lemma_FStar.Monotonic.HyperHeap.lemma_extends_parent",
         "lemma_FStar.Seq.Base.lemma_eq_elim",
         "lemma_FStar.Seq.Base.lemma_len_append",
         "lemma_Platform.Error.invertOptResult",
@@ -311,37 +328,33 @@
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
         "projection_inverse_Platform.Error.Correct__0",
-        "projection_inverse_Platform.Error.Correct__a",
-        "projection_inverse_Platform.Error.Correct__b",
         "projection_inverse_Platform.Error.Error__0",
         "projection_inverse_Platform.Error.Error__a",
         "projection_inverse_Platform.Error.Error__b",
-        "refinement_interpretation_Cert_Tm_refine_d9af963ffc7463241232eeace82f9f90",
+        "refinement_interpretation_Cert_Tm_refine_8b7c6f59e4fdb53eb15ecb005e1e6c81",
         "refinement_interpretation_Extensions_Tm_refine_4e1e5ff69cd4b614f69ecde54550ffb8",
-        "refinement_interpretation_FStar.Seq.Base_Tm_refine_aebc5aa9049e78f605051015a3436e68",
+        "refinement_interpretation_FStar.Monotonic.HyperHeap_Tm_refine_f0496eb03f3fb51b5e4ca0d53ea58c01",
         "refinement_interpretation_FStar.Seq.Base_Tm_refine_cd046bc4a887ee7e1b05946e0bf5772b",
-        "refinement_interpretation_Platform.Bytes_Tm_refine_3458b9f6f40fe62446cdc2c6d3755a94",
+        "refinement_interpretation_Parse_Tm_refine_4d7ec9f37b8652b3f5b5f1fa9818aa2d",
+        "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
+        "refinement_interpretation_Parse_Tm_refine_b9611c68854b3e8b5fcc372285b2bc8d",
+        "refinement_interpretation_Parse_Tm_refine_d26422d9696ba619f4813a3f4ad1e26e",
         "refinement_interpretation_Platform.Bytes_Tm_refine_71050496a0b6bdbab08b701114cb2b13",
-        "refinement_interpretation_Platform.Bytes_Tm_refine_ae1323a175e9ad58f7d231ac3b9bf0e0",
         "refinement_interpretation_Platform.Bytes_Tm_refine_df45e13378b64cfc3cd23f54e8657bfc",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "refinement_interpretation_Prims_Tm_refine_f048236b5f8051f83b495ea5eaa6127b",
-        "refinement_interpretation_Parse_Tm_refine_21f75f9c10a2190c1374132bd6513ffc",
-        "refinement_interpretation_Parse_Tm_refine_4d7ec9f37b8652b3f5b5f1fa9818aa2d",
-        "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
-        "refinement_interpretation_Parse_Tm_refine_c07d4060d37e3232f72a27cf19147668",
-        "token_correspondence_Platform.Bytes.op_At_Bar",
+        "refinement_kinding_Cert_Tm_refine_88ec188dc7db29981cf930925921374f",
         "typing_Extensions.extensionListBytes",
+        "typing_FStar.Pervasives.Native.fst",
         "typing_FStar.Pervasives.Native.snd", "typing_FStar.Seq.Base.append",
-        "typing_FStar.Seq.Base.length", "typing_FStar.Seq.Base.slice",
-        "typing_Platform.Bytes.bytes_of_int",
+        "typing_FStar.Seq.Base.length", "typing_Parse.is_tls_rgn",
         "typing_Platform.Bytes.int_of_bytes", "typing_Platform.Bytes.length",
         "typing_Platform.Bytes.repr_bytes", "typing_Platform.Bytes.split",
         "typing_Platform.Error.uu___is_Correct",
-        "typing_Platform.Error.uu___is_Error", "typing_Parse.is_tls_rgn",
-        "well-founded-ordering-on-nat"
+        "typing_Platform.Error.uu___is_Error", "well-founded-ordering-on-nat"
       ],
-      0
+      0,
+      "5b1378556050dac2936b70d919d56af0"
     ],
     [
       "Cert.parseCertificateList13",
@@ -349,7 +362,8 @@
       0,
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
-      0
+      0,
+      "c127a8df88b8448c33c9c34a0c6147b7"
     ],
     [
       "Cert.parseCertificateList13",
@@ -357,7 +371,8 @@
       0,
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
-      0
+      0,
+      "0f4a72f0095a1ee56e6c57e6eee7a680"
     ],
     [
       "Cert.lemma_parseCertificateList_length",
@@ -368,7 +383,8 @@
         "@query", "assumption_Prims.HasEq_int", "equation_Prims.nat",
         "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
-      0
+      0,
+      "ab644794c9ee7b876fa4360f5e9598e9"
     ],
     [
       "Cert.lemma_parseCertificateList_length",
@@ -454,9 +470,18 @@
         "typing_Platform.Bytes.op_At_Bar", "typing_Platform.Bytes.split",
         "unit_inversion", "well-founded-ordering-on-nat"
       ],
-      0
+      0,
+      "8fce5ec3ec22ebc27dc72d0d842beeb9"
     ],
-    [ "Cert.validate_chain13", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "Cert.validate_chain13",
+      1,
+      0,
+      1,
+      [ "@query" ],
+      0,
+      "4a47ede00361cd6af5f3978c2ec8172b"
+    ],
     [
       "Cert.check_length",
       1,
@@ -480,7 +505,8 @@
         "refinement_interpretation_Tm_refine_cf48a0b0f0401633a2d7556681f50219",
         "subterm_ordering_Prims.Cons"
       ],
-      0
+      0,
+      "118d8165c97f95e9ca380416257275f4"
     ],
     [
       "Cert.lookup_chain",
@@ -502,7 +528,8 @@
         "string_inversion", "typing_Cert.check_length",
         "typing_CoreCrypto.load_chain"
       ],
-      0
+      0,
+      "3e264b4b1cee6de785bdea9a7e094563"
     ]
   ]
 ]

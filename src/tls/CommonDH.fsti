@@ -2,9 +2,10 @@
 An abstract interface for Diffie-Hellman operations
 
 When the key extraction stack is idealized (ideal_KEF), this module
-records the honesty of shares using two layers of types: pre_share
-is for syntactically valid shares (used in parsing modules) while
-share is for registered shares (for which is_honest is defined).
+records the honesty of shares using two layers of types
+
+[pre_share] is for syntactically valid shares (used in parsing modules);
+[share] is for registered shares (for which is_honest is defined).
 *)
 module CommonDH
 
@@ -15,9 +16,9 @@ open Parse
 open TLSError
 open FStar.HyperStack.ST
 
-/// Public key shares and private exponents are indexed by an
-/// abstract groups covering both fields and elliptic curves for
-/// cryptographic agility.
+/// Public key shares and private exponents are indexed by an abstract
+/// group descriptor (including its generator), ranging over both
+/// prime fields and elliptic curves for cryptographic agility.
 ///
 /// DHGroup and ECGroup provide their concrete implementations.
 
@@ -80,6 +81,12 @@ val keygen: g:group -> ST (keyshare g)
       honest_share (|g, pubshare s|)
      else
       modifies_none h0 h1)))
+// TODO: we need the abstract stateful property of being freshly registered, 
+// with a lemma [registered h0 v /\ freshly_registered h0 w h1 ==> v <> w] 
+
+
+// dh_initiator is used within dh_responder, 
+// hence this definition ordering.
 
 val dh_initiator: #g:group -> keyshare g -> share g -> ST (secret g)
   (requires (fun h0 -> True))
@@ -94,6 +101,11 @@ val dh_responder: #g:group -> share g -> ST (share g * secret g)
      else
       modifies_none h0 h1)))
 
+/// When parsing gx, and unless gx is already registered,
+/// we register it as dishonest.
+/// The registration property is captured in the returned type.
+/// Still missing details, e.g. functional correctness.
+/// 
 val register: #g:group -> gx:pre_share g -> ST (share g)
   (requires (fun h0 -> True))
   (ensures (fun h0 s h1 ->

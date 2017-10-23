@@ -525,7 +525,7 @@ let safety_table: s_table =
 
 type registered (i:pre_index) =
   (if Flags.ideal_KEF then
-    let log : i_safety_log = safety_table in
+    let log: i_safety_log = safety_table in
     MR.witnessed (MM.defined log i)
   else True)
 
