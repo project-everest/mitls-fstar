@@ -34,13 +34,13 @@ with the private key.
 
 */
 
-
 // The parsed representation of chains and private keys
 typedef struct {
   X509* endpoint;
   STACK_OF(X509) *intermediates;
   EVP_PKEY* key;
   int is_universal;
+  int is_ephemeral;
 } config_entry;
 
 typedef struct mipki_state {
@@ -48,25 +48,6 @@ typedef struct mipki_state {
   config_entry *config; // Flat array
   size_t config_len;
 } mipki_state;
-
-/* CODE POINTS FOR SIGNATURE ALGORITHMS
-  rsa_pkcs1_sha1(0x0201),
-  rsa_pkcs1_sha256(0x0401),
-  rsa_pkcs1_sha384(0x0501),
-  rsa_pkcs1_sha512(0x0601),
-
-  rsa_pss_sha256(0x0804),
-  rsa_pss_sha384(0x0805),
-  rsa_pss_sha512(0x0806),
-
-  ecdsa_sha1(0x0203),
-  ecdsa_secp256r1_sha256(0x0403),
-  ecdsa_secp384r1_sha384(0x0503),
-  ecdsa_secp521r1_sha512(0x0603),
-
-  ed25519(0x0807),
-  ed448(0x0808),
-*/
 
 #if DEBUG
 static void dump(const unsigned char *buffer, size_t len)
@@ -121,7 +102,7 @@ int password_cb(char *buf, int size, int rwflag, void *p)
   return s->cb(buf, size, s->info);
 }
 
-void mipki_cleanup(mipki_state *st)
+void mipki_free(mipki_state *st)
 {
   if(!st) return;
 
@@ -204,6 +185,7 @@ mipki_state *mipki_init(const mipki_config_entry config[], size_t config_len, pa
     cfg->intermediates = chain;
     cfg->key = sk;
     cfg->is_universal = cur->is_universal;
+    cfg->is_ephemeral = 0;
   }
 
   return st;
@@ -487,7 +469,9 @@ mipki_chain mipki_parse_chain(mipki_state *st, const char *chain, size_t chain_l
   config_entry c = {
     .endpoint = NULL,
     .intermediates = sk_X509_new_null(),
-    .key = NULL
+    .key = NULL,
+    .is_universal = 0,
+    .is_ephemeral = 1
   };
 
   do {
@@ -628,7 +612,7 @@ void mipki_free_chain(mipki_state *st, mipki_chain chain)
 {
   assert(st != NULL);
   config_entry *cfg = (config_entry*)chain;
-  if(cfg == NULL) return;
+  if(cfg == NULL || !cfg->is_ephemeral) return;
 
   X509_free(cfg->endpoint);
   EVP_PKEY_free(cfg->key);

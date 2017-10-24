@@ -12,19 +12,34 @@ OCAMLDEP = ocamlfind dep -slash
 
 CCOPTS = -std=c11 -D__USE_MINGW_ANSI_STDIO -Lopenssl -I$(OPENSSL_HOME)/include
 
+ifneq ($(VS140COMNTOOLS),)
+        VS_BIN_DOSPATH=$(VS140COMNTOOLS)/../../VC/bin
+else ifneq ($(VS120COMNTOOLS),)
+        VS_BIN_DOSPATH=$(VS120COMNTOOLS)/../../VC/bin
+else ifneq ($(VS120COMNTOOLS),)
+        VS_BIN_DOSPATH=$(VS120COMNTOOLS)/../../VC/bin
+else ifneq ($(VS110COMNTOOLS),)
+        VS_BIN_DOSPATH=$(VS110COMNTOOLS)/../../VC/bin
+else
+        VS_BIN_DOSPATH=
+endif
+
 ifeq ($(OS),Windows_NT)
     # On cygwin + cygwinports, DLLs are searched in the PATH, which is not
     # altered to include by default the mingw64 native DLLs. We also need to
     # find dllcorecrypto.dll; it is in the current directory, which Windows
     # always uses to search for DLLs.
     EXTRA_PATH = PATH="/usr/$(MARCH)-w64-mingw32/sys-root/mingw/bin/:$(PATH)"
+    VS_BIN = $(shell cygpath -u "$(VS_BIN_DOSPATH)")
     ARCH = win32
     EXTRA_OPTS =
     EXTRA_LIBS = -L.
     CC = $(MARCH)-w64-mingw32-gcc
     ifeq ($(MARCH),x86_64)
+      LIB_MACHINE=x64
       OPENSSL_CONF = CC=x86_64-w64-mingw32-gcc ./Configure mingw64 enable-tls1_3
     else
+      LIB_MACHINE=x86
       OPENSSL_CONF = CC=i686-w64-mingw32-gcc ./Configure mingw enable-tls1_3
     endif
 else
@@ -32,6 +47,7 @@ else
     # correctly setup to find libssleay.so and the like, but never includes the
     # current directory, which is where dllcorecrypto.so is located.
     EXTRA_PATH = LD_LIBRARY_PATH=.
+    VS_BIN =
     UNAME_S := $(shell uname -s)
     ifeq ($(UNAME_S),Darwin)
         EXTRA_OPTS =
@@ -46,9 +62,19 @@ else
     endif
 endif
 
+ifeq ($(VS_BIN),)
+LIBFILE=
+else
+LIBFILE=libmipki.lib
+libmipki.lib: libmipki.dll
+	"$(VS_BIN)/dumpbin.exe" /nologo /exports libmipki.dll | awk -F " " 'BEGIN {print "LIBRARY libmipki"; print "EXPORTS";} $$4 ~/mipki_/{print $$4}' > libmipki.def
+	"$(VS_BIN)/lib.exe" /nologo /def:libmipki.def /out:$@ /machine:$(LIB_MACHINE)
+	-rm *.def *.exp
+endif
+
 .PHONY: test clean
 
-all: libmipki.dll
+all: libmipki.dll $(LIBFILE)
 
 mipki.o: mipki.c
 	$(CC) $(CCOPTS) $(EXTRA_OPTS) -c mipki.c
@@ -96,4 +122,3 @@ test: test.exe
 clean:
 	$(MAKE) -C $(PLATFORM) clean
 	rm -f *.[oa] *.so *.cm[ixoa] *.cmxa *.exe *.dll *.lib *.annot *~
-

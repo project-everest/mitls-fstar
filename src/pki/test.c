@@ -93,7 +93,9 @@ int main(int argc, char **argv)
     return 1;
   }
 
+  mipki_free_chain(st, s);
   free(sig);
+  mipki_free(st);
 
   return 0;
 }

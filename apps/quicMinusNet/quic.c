@@ -481,6 +481,7 @@ int main(int argc, char **argv)
 
   FFI_mitls_quic_free(server);
   FFI_mitls_quic_free(client);
+  mipki_free(pki);
 
   printf("Ok\n");
   return 0;
