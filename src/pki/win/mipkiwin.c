@@ -68,36 +68,34 @@ int mipki_add_root_file_or_path(mipki_state *st, const char *ca_file)
     return 0;
 }
 
-// High byte of algs[] is the TLS HashAlgorithm:
-//  none(0), md5(1), sha1(2), sha224(3), sha256(4), sha384(5), sha512(6)
-// Low byte of algs[] is the TLS SignatureAlgorithm:
-//  anonymous(0), rsa(1), dsa(2), ecdsa(3)
+// Map the TLS signature to the OID value expected in a certificate
 static const char *OIDFromTLS(mipki_signature alg)
 {
     switch (alg) {
-    case 0x0101: return szOID_RSA_MD5RSA;
-    case 0x0201: return szOID_RSA_SHA1RSA;
-    case 0x0401: return szOID_RSA_SHA256RSA;
-    case 0x0501: return szOID_RSA_SHA384RSA;
-    case 0x0601: return szOID_RSA_SHA512RSA;
-    
-    case 0x0203: return szOID_ECDSA_SHA1;
-    case 0x0403: return szOID_ECDSA_SHA256;
-    case 0x0503: return szOID_ECDSA_SHA384;
-    case 0x0603: return szOID_ECDSA_SHA512;
-    default:
-        return NULL; // Unknown/unsupported value
-    }
-}
+    // RSASSA-PKCS1-v1_5
+    case 0x0401: return szOID_RSA_SHA256RSA; // rsa_pkcs1_sha256
+    case 0x0501: return szOID_RSA_SHA384RSA; // rsa_pkcs1_sha384
+    case 0x0601: return szOID_RSA_SHA512RSA; // rsa_pkcs1_sha512
 
-static DWORD ProviderTypeFromTLS(mipki_signature alg)
-{
-    switch (alg & 0xff) {
-    case 0x01: return PROV_RSA_FULL;
-    case 0x02: return PROV_DSS;
-    case 0x03: return PROV_EC_ECDSA_FULL;
-    default:
-        return ~0u;
+    // ECDSA
+    case 0x0403: return szOID_ECDSA_SHA256; // ecdsa_secp256r1_sha256
+    case 0x0503: return szOID_ECDSA_SHA384; // ecdsa_secp384r1_sha384
+    case 0x0603: return szOID_ECDSA_SHA512; // ecdsa_secp384r1_sha512
+
+    // RSASSA-PSS
+    case 0x0804: return szOID_RSA_SHA256RSA; // rsa_pss_sha256
+    case 0x0805: return szOID_RSA_SHA384RSA; // rsa_pss_sha384
+    case 0x0806: return szOID_RSA_SHA512RSA; // rsa_pss_sha512
+
+    // EdDSA
+    case 0x0807: return NULL; // ed25519 supported by bcrypt: BCRYPT_ECC_CURVE_25519
+    case 0x0808: return NULL; // ed448   not supported by Windows
+
+    // Legacy
+    case 0x0201: return szOID_RSA_SHA1RSA; // rsa_pkcs1_sha1
+    case 0x0203: return NULL; // ecdsa_sha1 supported by bcyprpt: BCRYPT_ECDSA_ALGORITHM
+
+    return NULL; // Unknown/unsupported value
     }
 }
 
@@ -187,13 +185,30 @@ mipki_chain mipki_select_certificate(mipki_state *st, const char *sni, const mip
 //  none(0), md5(1), sha1(2), sha224(3), sha256(4), sha384(5), sha512(6)
 static ALG_ID AlgidFromTLS(mipki_signature alg)
 {
-    switch (alg >> 8) {
-    case 0x01: return CALG_MD5;
-    case 0x02: return CALG_SHA1;
-    case 0x03: return ~0u; // unsupported
-    case 0x04: return CALG_SHA_256;
-    case 0x05: return CALG_SHA_384;
-    case 0x06: return CALG_SHA_512;
+    switch (alg) {
+    // RSASSA-PKCS1-v1_5
+    case 0x0401: return CALG_SHA_256; // rsa_pkcs1_sha256
+    case 0x0501: return CALG_SHA_384; // rsa_pkcs1_sha384
+    case 0x0601: return CALG_SHA_512; // rsa_pkcs1_sha512
+
+    // ECDSA
+    case 0x0403: return CALG_SHA_256; // ecdsa_secp256r1_sha256
+    case 0x0503: return CALG_SHA_384; // ecdsa_secp384r1_sha384
+    case 0x0603: return CALG_SHA_512; // ecdsa_secp384r1_sha512
+
+    // RSASSA-PSS
+    case 0x0804: return CALG_SHA_256; // rsa_pss_sha256
+    case 0x0805: return CALG_SHA_384; // rsa_pss_sha384
+    case 0x0806: return CALG_SHA_512; // rsa_pss_sha512
+
+    // EdDSA
+    case 0x0807: return ~0u; // ed25519 supported by bcrypt: BCRYPT_ECC_CURVE_25519
+    case 0x0808: return ~0u; // ed448   not supported by Windows
+
+    // Legacy
+    case 0x0201: return CALG_SHA1; // rsa_pkcs1_sha1
+    case 0x0203: return ~0u; // ecdsa_sha1 supported by bcyprpt: BCRYPT_ECDSA_ALGORITHM
+
     default:
         return ~0u;
     }
@@ -201,10 +216,30 @@ static ALG_ID AlgidFromTLS(mipki_signature alg)
 
 static DWORD ProvTypeFromTLS(mipki_signature alg)
 {
-    switch (alg & 0xff) {
-    case 0x01: return PROV_RSA_AES;
-    case 0x02: return PROV_DSS;
-    case 0x03: return ~0u; // This requires Crypto CNG
+    switch (alg) {
+    // RSASSA-PKCS1-v1_5
+    case 0x0401: return PROV_RSA_AES; // rsa_pkcs1_sha256
+    case 0x0501: return PROV_RSA_AES; // rsa_pkcs1_sha384
+    case 0x0601: return PROV_RSA_AES; // rsa_pkcs1_sha512
+
+    // ECDSA
+    case 0x0403: return ~0u; // ecdsa_secp256r1_sha256
+    case 0x0503: return ~0u; // ecdsa_secp384r1_sha384
+    case 0x0603: return ~0u; // ecdsa_secp384r1_sha512
+
+    // RSASSA-PSS
+    case 0x0804: return PROV_RSA_AES; // rsa_pss_sha256
+    case 0x0805: return PROV_RSA_AES; // rsa_pss_sha384
+    case 0x0806: return PROV_RSA_AES; // rsa_pss_sha512
+
+    // EdDSA
+    case 0x0807: return ~0u; // ed25519 supported by bcrypt: BCRYPT_ECC_CURVE_25519
+    case 0x0808: return ~0u; // ed448   not supported by Windows
+
+    // Legacy
+    case 0x0201: return PROV_RSA_AES; // rsa_pkcs1_sha1
+    case 0x0203: return ~0u; // ecdsa_sha1 supported by bcyprpt: BCRYPT_ECDSA_ALGORITHM
+
     default:
         return ~0u;
     }
@@ -217,7 +252,14 @@ int mipki_sign_verify(mipki_state *st, const mipki_chain cert_ptr, const mipki_s
     DWORD dwProvType = ProvTypeFromTLS(sigalg);
     if (dwProvType == ~0u) {
         #if DEBUG
-        printf("Unsupported signature algorithm 0x%x\n", sigalg);
+        printf("Unsupported signature algorithm 0x%x (ProvType)\n", sigalg);
+        #endif
+        return 0;
+    }
+    ALG_ID Algid = AlgidFromTLS(sigalg);
+    if (Algid == ~0u) {
+        #if DEBUG
+        printf("Unsupported signature algorithm 0x%x (AlgId)\n", sigalg);
         #endif
         return 0;
     }
@@ -248,7 +290,6 @@ int mipki_sign_verify(mipki_state *st, const mipki_chain cert_ptr, const mipki_s
         return 0;
     }
     
-    ALG_ID Algid = AlgidFromTLS(sigalg);
     HCRYPTHASH hHash;
     if (!CryptCreateHash(hProv,
       Algid,
@@ -322,22 +363,125 @@ int mipki_sign_verify(mipki_state *st, const mipki_chain cert_ptr, const mipki_s
 
 mipki_chain mipki_parse_chain(mipki_state *st, const char *chain, size_t chain_len)
 {
-    // bugbug: implement
-    #if DEBUG
-    printf("mipki_parse_chain is NYI\n");
-    #endif
+    HCERTSTORE h;
     
-    return NULL;
+    h = CertOpenStore(CERT_STORE_PROV_MEMORY,
+        0,0, CERT_STORE_DEFER_CLOSE_UNTIL_LAST_FREE_FLAG, 0);
+    if (!h) {
+        #if DEBUG
+        printf("CertOpenStore failed.  gle=0x%x\n", GetLastError());
+        #endif
+        return NULL;
+    }
+
+    PCCERT_CONTEXT Root = NULL;
+    PCCERT_CONTEXT p = NULL;
+    for (DWORD certnumber=0; chain_len; ++certnumber) {
+        if (chain_len < 3) {
+            #if DEBUG
+            printf("Insufficient buffer\n");
+            #endif
+            CertCloseStore(h, 0);
+            return NULL;
+        }
+        DWORD cb = ((DWORD)(BYTE)chain[0]) << 16 |
+                   ((DWORD)(BYTE)chain[1]) << 8 |
+                   ((DWORD)(BYTE)chain[2]);
+        chain_len -= 3;
+        chain += 3;
+        if (!CertAddEncodedCertificateToStore(
+            h,
+            X509_ASN_ENCODING,
+            chain,
+            cb,
+            CERT_STORE_ADD_USE_EXISTING,
+            &p)) {
+            #if DEBUG
+            printf("CertAddEncodedCertificateToStore failed for cert #%u.  gle=0x%x\n", certnumber, GetLastError());
+            #endif
+            if (Root) {
+                CertFreeCertificateContext(Root);
+            }
+            CertCloseStore(h, 0);
+            return NULL;
+        }
+        chain += cb;
+        chain_len -= cb;
+        if (Root == NULL) {
+            Root = p;
+        } else {
+            CertFreeCertificateContext(p);
+        }
+    }
+    if (chain_len) {
+        #if DEBUG
+        printf("Not all bytes were processed.\n");
+        #endif
+        if (Root) {
+            CertFreeCertificateContext(Root);
+        }
+        CertCloseStore(h, 0);
+        return NULL;
+    }
+    CertCloseStore(h, 0);
+
+    return Root;
 }
 
 size_t mipki_format_chain(mipki_state *st, const mipki_chain chain, char *buffer, size_t buffer_len)
 {
-    // bugbug: implement
-    #if DEBUG
-    printf("mipki_format_chain is NYI\n");
-    #endif
+    CERT_CHAIN_PARA ChainPara;
+    CERT_ENHKEY_USAGE EnhkeyUsage;
+    CERT_USAGE_MATCH CertUsage;
+    PCCERT_CHAIN_CONTEXT pChainContext;
     
-    return 0;
+    EnhkeyUsage.cUsageIdentifier = 0;
+    EnhkeyUsage.rgpszUsageIdentifier=NULL;
+    CertUsage.dwType = USAGE_MATCH_TYPE_AND;
+    CertUsage.Usage  = EnhkeyUsage;
+    ChainPara.cbSize = sizeof(CERT_CHAIN_PARA);
+    ChainPara.RequestedUsage=CertUsage;
+
+    if (!CertGetCertificateChain(
+        NULL,   // default chain engine
+        (PCCERT_CONTEXT)chain,
+        NULL,
+        NULL,
+        &ChainPara,
+        0,
+        NULL,
+        &pChainContext)) {
+        #if DEBUG
+        printf("CertGetCertificateChain failed.  gle=0x%x\n", GetLastError());
+        #endif
+        return 0;
+    }
+    char *b = buffer;
+    for (DWORD i=0; i<pChainContext->cChain; ++i) {
+        PCERT_SIMPLE_CHAIN schain = pChainContext->rgpChain[i];
+        for (DWORD j=0; j<schain->cElement; ++j) {
+            PCERT_CHAIN_ELEMENT element = schain->rgpElement[j];
+            PCCERT_CONTEXT p = element->pCertContext;
+            if (p->cbCertEncoded+3 > buffer_len) {
+                #if DEBUG
+                printf("Insufficient buffer to store the formatted chain\n");
+                #endif
+                CertFreeCertificateChain(pChainContext);
+                return 0;
+            }
+            b[0] = (char)(p->cbCertEncoded >> 16);
+            b[1] = (char)(p->cbCertEncoded >> 8);
+            b[2] = (char)p->cbCertEncoded;
+            b += 3;
+            memcpy(b, p->pbCertEncoded, p->cbCertEncoded);
+            b += p->cbCertEncoded;
+            buffer_len -= (3+p->cbCertEncoded);
+        }
+    }
+    size_t ChainLength = (size_t)(b-buffer);
+
+    CertFreeCertificateChain(pChainContext);
+    return ChainLength;
 }
 
 int mipki_validate_chain(mipki_state *st, const mipki_chain chain, const char *host)
@@ -351,11 +495,9 @@ int mipki_validate_chain(mipki_state *st, const mipki_chain chain, const char *h
 }
 
 void mipki_free_chain(mipki_state *st, mipki_chain chain)
-{    
-    // bugbug: implement
-    #if DEBUG
-    printf("mipki_free_chain is NYI\n");
-    #endif
+{
+    PCCERT_CONTEXT p = (PCCERT_CONTEXT)chain;
+    CertFreeCertificateContext(p);
 }
 
 

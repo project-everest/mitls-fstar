@@ -73,7 +73,7 @@ int main(int argc, char **argv)
   else
   {
     printf("Failed to sign <%04x, %s>\n", selected, tbs);
-    return 1;
+    //return 1;
   }
 
   size_t len = mipki_format_chain(st, s, sig, 8192);
@@ -81,6 +81,9 @@ int main(int argc, char **argv)
   {
     printf("Formatted chain:\n");
     dump(sig, len);
+    if (!mipki_parse_chain(st, sig, len)) {
+        printf("Failed to parse the just-formatted chain\n");
+    }
   }
   else{
     printf("ERROR: failed to format chain\n");
