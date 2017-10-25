@@ -390,12 +390,12 @@ mipki_chain mipki_parse_chain(mipki_state *st, const char *chain, size_t chain_l
         chain_len -= 3;
         chain += 3;
         if (!CertAddEncodedCertificateToStore(
-            h,
-            X509_ASN_ENCODING,
-            chain,
-            cb,
-            CERT_STORE_ADD_USE_EXISTING,
-            &p)) {
+          h,
+          X509_ASN_ENCODING,
+          chain,
+          cb,
+          CERT_STORE_ADD_USE_EXISTING,
+          &p)) {
             #if DEBUG
             printf("CertAddEncodedCertificateToStore failed for cert #%u.  gle=0x%x\n", certnumber, GetLastError());
             #endif
@@ -443,14 +443,14 @@ size_t mipki_format_chain(mipki_state *st, const mipki_chain chain, char *buffer
     ChainPara.RequestedUsage=CertUsage;
 
     if (!CertGetCertificateChain(
-        NULL,   // default chain engine
-        (PCCERT_CONTEXT)chain,
-        NULL,
-        NULL,
-        &ChainPara,
-        0,
-        NULL,
-        &pChainContext)) {
+      NULL,   // default chain engine
+      (PCCERT_CONTEXT)chain,
+      NULL,
+      NULL,
+      &ChainPara,
+      0,
+      NULL,
+      &pChainContext)) {
         #if DEBUG
         printf("CertGetCertificateChain failed.  gle=0x%x\n", GetLastError());
         #endif
@@ -486,12 +486,98 @@ size_t mipki_format_chain(mipki_state *st, const mipki_chain chain, char *buffer
 
 int mipki_validate_chain(mipki_state *st, const mipki_chain chain, const char *host)
 {
-    // bugbug: implement
-    #if DEBUG
-    printf("mipki_validate_chain is NYI\n");
-    #endif
+    PCCERT_CONTEXT p = (PCCERT_CONTEXT)chain;
+    HTTPSPolicyCallbackData polHttps;
+    CERT_CHAIN_PARA ChainPara;
+    LPWSTR pwszServerName = NULL;
+    PCCERT_CHAIN_CONTEXT pChainContext = NULL;
+    CERT_CHAIN_POLICY_PARA PolicyPara;
+    CERT_CHAIN_POLICY_STATUS PolicyStatus;
     
-    return 0;
+    LPSTR rgszUsages[] = {
+        szOID_PKIX_KP_SERVER_AUTH,
+        szOID_SERVER_GATED_CRYPTO,
+        szOID_SGC_NETSCAPE };
+
+    memset(&ChainPara, 0, sizeof(ChainPara));
+    ChainPara.cbSize = sizeof(ChainPara);
+    ChainPara.RequestedUsage.dwType = USAGE_MATCH_TYPE_OR;
+    ChainPara.RequestedUsage.Usage.cUsageIdentifier     = ARRAYSIZE(rgszUsages);
+    ChainPara.RequestedUsage.Usage.rgpszUsageIdentifier = rgszUsages;
+
+    if (!CertGetCertificateChain(
+      NULL,
+      p,
+      NULL,
+      p->hCertStore,
+      &ChainPara,
+      0,
+      NULL,
+      &pChainContext)) {
+        #if DEBUG
+        printf("CertGetCertificateChain() failed.  gle=0x%x\n", GetLastError());
+        #endif
+        return 0;
+    }
+
+    if (host) {
+        int widelen = MultiByteToWideChar(CP_UTF8, 0, host, -1, NULL, 0);
+        if (widelen == 0) {
+            #if DEBUG
+            printf("MultiByteToWideChar (1) failed.  gle=%d\n", GetLastError());
+            #endif
+            CertFreeCertificateChain(pChainContext);
+            return 0;
+        }
+        pwszServerName = (LPWSTR)HeapAlloc(GetProcessHeap(), 0, widelen*sizeof(WCHAR));
+        if (!pwszServerName) {
+            #if DEBUG
+            printf("Out of memory\n");
+            #endif
+            CertFreeCertificateChain(pChainContext);
+            return 0;
+        }
+        widelen = MultiByteToWideChar(CP_UTF8, 0, host, -1, pwszServerName, widelen);
+        if (widelen == 0) {
+            #if DEBUG
+            printf("MultiByteToWideChar (2) failed.  gle=%d\n", GetLastError());
+            #endif
+            CertFreeCertificateChain(pChainContext);
+            HeapFree(GetProcessHeap(), 0, pwszServerName);
+            return 0;
+        }
+    }
+
+    memset(&polHttps, 0, sizeof(HTTPSPolicyCallbackData));
+    polHttps.cbStruct = sizeof(HTTPSPolicyCallbackData);
+    polHttps.dwAuthType = AUTHTYPE_SERVER;
+    polHttps.fdwChecks = 0;
+    polHttps.pwszServerName = pwszServerName;
+
+    memset(&PolicyPara, 0, sizeof(PolicyPara));
+    PolicyPara.cbSize = sizeof(PolicyPara);
+    PolicyPara.pvExtraPolicyPara = &polHttps;
+
+    memset(&PolicyStatus, 0, sizeof(PolicyStatus));
+    PolicyStatus.cbSize = sizeof(PolicyStatus);
+
+    if (!CertVerifyCertificateChainPolicy(
+      CERT_CHAIN_POLICY_SSL,
+      pChainContext,
+      &PolicyPara,
+      &PolicyStatus))
+    {
+        #if DEBUG
+        printf("CertVerifyCertificateChainPolicy() failed.  gle=0x%x\n", GetLastError());
+        #endif
+        CertFreeCertificateChain(pChainContext);
+        HeapFree(GetProcessHeap(), 0, pwszServerName);
+        return 0;
+    }
+
+    CertFreeCertificateChain(pChainContext);
+    HeapFree(GetProcessHeap(), 0, pwszServerName);
+    return 1;
 }
 
 void mipki_free_chain(mipki_state *st, mipki_chain chain)

@@ -84,6 +84,9 @@ int main(int argc, char **argv)
     if (!mipki_parse_chain(st, sig, len)) {
         printf("Failed to parse the just-formatted chain\n");
     }
+    if (!mipki_validate_chain(st, s, NULL)) {
+        printf("Failed to validate the chain\n");
+    }
   }
   else{
     printf("ERROR: failed to format chain\n");
