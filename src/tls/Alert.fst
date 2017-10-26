@@ -10,7 +10,8 @@ open Platform.Bytes
 open TLSError
 open TLSConstants
 open TLSInfo
-open Range
+module Range = Range
+let range = Range.range
 
 //16-05-29 not much protocol left; consider merging with TLSError
 

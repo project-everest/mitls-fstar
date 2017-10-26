@@ -16,7 +16,12 @@ open Platform.Error
 open TLSError
 open TLSConstants
 open TLSInfo
-open Range
+module Range = Range
+let range = Range.range
+let within = Range.within
+let frange = Range.frange
+let rbytes = Range.rbytes
+let cipherRangeClass = Range.cipherRangeClass
 
 // for now, we *exclude* MACOnly
 

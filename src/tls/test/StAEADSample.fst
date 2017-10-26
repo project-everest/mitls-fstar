@@ -20,7 +20,8 @@ open TLSInfo
 open StatefulPlain
 open AEAD_GCM
 open StatefulLHAE
-open Range
+module Range = Range
+let range = Range.range
 open FStar.Heap
 open FStar.HyperHeap
 

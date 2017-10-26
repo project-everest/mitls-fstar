@@ -16,7 +16,8 @@ open Platform.Bytes
 
 open TLSError
 open TLSInfo
-open Range
+module Range = Range
+let range = Range.range
 open DataStream
 
 type output_buffer =

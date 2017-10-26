@@ -7,7 +7,7 @@ open Platform.Error
 open TLSError
 open TLSConstants
 open TLSInfo
-open Range
+module Range = Range
 open Content
 
 // Defines an abstract "plain i len" plaintext interface from the more

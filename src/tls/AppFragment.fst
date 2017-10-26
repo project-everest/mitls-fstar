@@ -4,7 +4,8 @@
 module AppFragment
 open Platform.Bytes
 open TLSInfo
-open Range
+module Range = Range
+let range = Range.range
 open DataStream
 open Platform.Error
 open TLSError

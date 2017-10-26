@@ -13,7 +13,12 @@ open TLSConstants
 open TLSInfo
 open LHAEPlain
 
-open Range
+module Range = Range
+let range = Range.range
+let within = Range.within
+let valid_clen = Range.valid_clen
+let cipherRangeClass = Range.cipherRangeClass
+
 open FStar.Monotonic.Seq
 open FStar.Monotonic.RRef
 
@@ -200,10 +205,10 @@ let concrete_encrypt (#i:id) (e:writer i)
   assert_norm(length ad = 11);
   let ad' = ad @| bytes_of_int 2 (length text) in
   assert(length ad' = 13);
-  let tlen = targetLength i rg in
-  targetLength_converges i rg;
+  let tlen = Range.targetLength i rg in
+  Range.targetLength_converges i rg;
   cut (within (length text) (cipherRangeClass i tlen));
-  targetLength_at_most_max_TLSCiphertext_fragment_length i (cipherRangeClass i tlen);
+  Range.targetLength_at_most_max_TLSCiphertext_fragment_length i (cipherRangeClass i tlen);
   nonce_explicit @| AEAD.encrypt #i #l e.aead iv ad' text
 
 // Encryption of plaintexts; safe instances are idealized
@@ -326,7 +331,7 @@ let decrypt #i d ad c =
     | Some text ->
       let clen = length c in
       let r = cipherRangeClass i clen in
-      cipherRangeClass_width i clen;
+      Range.cipherRangeClass_width i clen;
       // Decryption is probably doing more than it should in checking the content of
       // CCS and Alert fragments
       // TODO: This should be done by StatefulPlain.mk_plain

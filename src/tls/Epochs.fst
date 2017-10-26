@@ -18,7 +18,8 @@ open Platform.Bytes
 open TLSError
 open TLSInfo
 open TLSConstants
-open Range
+module Range = Range
+let range = Range.range
 //open HandshakeMessages
 open StAE
 //open Negotiation

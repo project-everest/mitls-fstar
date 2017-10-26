@@ -21,7 +21,9 @@ open TLSError
 open TLSConstants
 open TLSInfo
 open LHAEPlain
-open Range
+module Range = Range
+let range = Range.range
+let cipherRangeClass = Range.cipherRangeClass
 
 (* Also using Encode; we do not open it so that we can syntactically
    check its usage restrictions *)

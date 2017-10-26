@@ -12,7 +12,7 @@ open TLSError
 open TLSConstants
 open Extensions
 open TLSInfo
-open Range
+module Range = Range
 open StatefulLHAE
 open HKDF
 open PSK

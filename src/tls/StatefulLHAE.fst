@@ -16,7 +16,9 @@ open Platform.Bytes
 
 open TLSConstants
 open TLSInfo
-open Range
+module Range = Range
+let range = Range.range
+let cipherRangeClass = Range.cipherRangeClass
 open AEAD_GCM
 open StatefulPlain
 

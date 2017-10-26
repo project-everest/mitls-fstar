@@ -17,7 +17,8 @@ open TLSError
 open TLSConstants
 open TLSInfo
   
-open Range
+module Range = Range
+let range = Range.range
 
 open Epochs
 open Handshake

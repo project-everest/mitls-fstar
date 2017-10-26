@@ -14,7 +14,13 @@ open TLSError
 open TLSConstants
 open TLSInfo
 
-open Range
+module Range = Range
+let range = Range.range
+let point = Range.point
+let frange = Range.frange
+let valid_clen = Range.valid_clen
+let fragment_range = Range.fragment_range
+
 //open Negotiation
 open Epochs
 //open Handshake

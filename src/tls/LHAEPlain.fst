@@ -7,7 +7,10 @@ open Platform.Error
 open TLSError
 open TLSConstants
 open TLSInfo
-open Range
+module Range = Range
+let range = Range.range
+let frange = Range.frange
+let rbytes = Range.rbytes
 
 //--------------------------------------------------------------------
 // `Plain' interface towards LHAE

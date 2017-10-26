@@ -7,7 +7,13 @@ open Platform.Error
 open TLSError
 open TLSConstants
 open TLSInfo
-open Range
+module Range = Range
+let range = Range.range
+let frange = Range.frange
+let rbytes = Range.rbytes
+let fragment_range = Range.fragment_range
+let valid_clen = Range.valid_clen
+
 open Content
 
 // Defines additional data and an abstract "plain i ad rg" plaintext

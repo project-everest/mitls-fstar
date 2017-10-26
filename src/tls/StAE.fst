@@ -17,6 +17,7 @@ module HS   = FStar.HyperStack
 module MR   = FStar.Monotonic.RRef
 module MS   = FStar.Monotonic.Seq
 module C    = Content
+module Range = Range
 
 module Stream = StreamAE
 module StLHAE = StatefulLHAE

@@ -10,7 +10,7 @@ open Platform.Bytes
 open TLSError
 open TLSInfo
 open TLSConstants
-open Range
+module Range = Range
 open HandshakeMessages // for the message syntax
 open HandshakeLog // for Outgoing
 open Epochs
