@@ -227,7 +227,7 @@ val frame_seqT_auto: i:id -> rw:rw -> s:state i rw -> h0:mem -> h1:mem ->
         (ensures seqnT s h0 = seqnT s h1)
 	[SMTPat (seqnT s h0);
 	 SMTPat (seqnT s h1)]
-//	 SMTPatT (trigger_frame h1)]
+//	 SMTPat (trigger_frame h1)]
 let frame_seqT_auto i rw s h0 h1 = ()
 
 val frame_fragments_auto: i:id{authId i} -> rw:rw -> s:state i rw -> h0:mem -> h1:mem ->
@@ -236,7 +236,7 @@ val frame_fragments_auto: i:id{authId i} -> rw:rw -> s:state i rw -> h0:mem -> h
         (ensures fragments s h0 == fragments s h1)
 	[SMTPat (fragments s h0);
 	 SMTPat (fragments s h1)]
-	 (* SMTPatT (trigger_frame h1)] *)
+	 (* SMTPat (trigger_frame h1)] *)
 let frame_fragments_auto i rw s h0 h1 = ()
 
 

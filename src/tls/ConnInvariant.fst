@@ -200,7 +200,7 @@ val ms_derive_is_ok: h0:HST.mem -> h1:HST.mem -> i:AE.id -> w:MS.writer i
 val invertOption : a:Type -> Lemma 
   (requires True)
   (ensures (forall (x:option a). None? x \/ Some? x))
-  [SMTPatT (option a)]
+  [SMTPat (option a)]
 let invertOption a = ()  
 	 
 #reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0 --z3rlimit 100"	 
