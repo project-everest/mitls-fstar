@@ -593,7 +593,7 @@ assume val prf_extract1:
   s: salt u i a ->
   idh: id_dhe ->
   gZ: bytes -> 
-  ST (secret u (Derive i (ExtractDH idh)) (info_extract1 i a idh))
+  ST (secret u (Derive i "" (ExtractDH idh)) (info_extract1 i a idh))
   (requires fun h0 -> True) 
   (ensures fun h0 k h1 -> True)
 (*
