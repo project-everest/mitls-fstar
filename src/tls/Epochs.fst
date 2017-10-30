@@ -6,8 +6,8 @@ An elaboration would ensure that keys in old epochs are erased.
 *)
 module Epochs
 
-open FStar.Heap
-open FStar.HyperHeap
+open FStar.Heap //17-10-27 TODO remove!
+open FStar.HyperHeap //17-10-27 We'd like to remove it too. Conversely we miss HyperStack.ST 
 open FStar.Seq // DO NOT move further below, it would shadow `FStar.HyperStack.mem`
 open FStar.HyperStack
 open FStar.Monotonic.RRef
@@ -136,6 +136,32 @@ noeq type epochs (r:rgn) (n:random) = | MkEpochs:
   write: epoch_ctr r es -> 
   exporter: MS.i_seq r KeySchedule.exportKey (fun s -> Seq.length s <= 2)  ->
   epochs r n
+
+/// Epochs stores all keys produced by the HS and used by TLS.
+/// These keys consist of 
+/// - the StAE reader or writer for 0RTT (client2server only)
+/// - StAE 1RTT reader or writer for 1RTT (in both directions)
+/// - the 0RTT and 1RTT exporter keys.
+/// We also need to keep track of which key is in use, if any, in each direction.
+///
+/// Proposal:
+/// - have a single mutable state 
+/// - instead of "-1", we could have a special "NULL" value for StAE.
+/// - we need to think ahead for key erasure:
+///   * we have a "ghost" sequence of readers (or writers) for overall integrity.
+///   * we only keep concrete current keys + future keys
+///   * (for DTLS, we may need to keep a few keys for the record layer)
+///
+/// Questions:
+/// 
+/// - what to do with the epoch context? We need to bind the keys to
+///   the connection and to the handshake, in order to give
+///   precise TLS-level security guarantees.
+/// - how to guarantee synchronized configs between readers and writers?
+/// - how to control the usage of these keys? Some of them CANNOT be
+///   used for application data.
+/// - should epochs track connection closure? 
+
 
 let containsT (#r:rgn) (#n:random) (es:epochs r n) (h:mem) =
     MS.i_contains (MkEpochs?.es es) h

@@ -132,28 +132,24 @@ QUIC
 	$(FSTAR) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include $(MITLS_HOME)/src/tls/ideal-flags \
-	--verify_module $(basename $(notdir $@)) \
 	$(basename $@).fst
 
 %.fsti-ver:
 	$(FSTAR) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include $(MITLS_HOME)/src/tls/ideal-flags \
-	--verify_module $(basename $(notdir $@)) \
 	$(basename $@).fsti
 
 # Targets to get F* arguments in interactive mode
 %.fst-in: 
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
-	--include $(MITLS_HOME)/src/tls/ideal-flags \
-	--verify_module $(basename $(notdir $@))
+	--include $(MITLS_HOME)/src/tls/ideal-flags
 
 %.fsti-in: 
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
-	--include $(MITLS_HOME)/src/tls/ideal-flags \
-	--verify_module $(basename $(notdir $@))
+	--include $(MITLS_HOME)/src/tls/ideal-flags
 
 # These rules are silent to avoid disturbing .fst-in etc
 .depend-TLS: # $(wildcard *.fst *.fsti)
