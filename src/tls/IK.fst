@@ -439,7 +439,7 @@ val derive:
   (requires fun h0 -> True)
   (ensures fun h0 r h1 -> True)
 
-(* 17-10-30 commenting out due to type error 
+// 17-10-30 commenting out due to type error 
 let derive  #u #i #a k lbl ctx = 
   let x = Domain lbl ctx in 
   let (| pkg, derived_alg |) = u lbl in 
@@ -447,8 +447,9 @@ let derive  #u #i #a k lbl ctx =
   let i' = Derive i lbl ctx in 
   if ii.honest (*safe*) i 
   then
-    let v: option #(derived_key u i lbl a ctx) = MonotoneMap.lookup (secret_ideal k) x in 
+    let v: option (derived_key u i lbl a ctx) = MonotoneMap.lookup (secret_ideal k) x in 
     match v with 
+    //17-10-30 failing with scrutiny error: match MonotoneMap.lookup (secret_ideal k) x
     | Some dk -> dk
     | None -> 
       let dk = pkg.create i' a' in 
@@ -461,7 +462,7 @@ let derive  #u #i #a k lbl ctx =
     let raw =
       HKDF.expand #(a.ha) k (Platform.Bytes.abytes lbl) (UInt32.v (pkg.len i' a')) in 
     pkg.coerce i' a' raw
-*)
+
 
 /// Reconsider packaging: should create take external randomness?
 
@@ -543,8 +544,12 @@ let saltp2 (*ip:ipkg*) (u:usage info): pkg ii = Pkg
   coerce_salt
 
 
-let info_extract0 (i:ii.t) (a: info i): info (Derive i "" Extract) = admit()
-let info_extract1 (i:ii.t) (a: info i) (materials: id_dhe): info (Derive i "" (ExtractDH materials)) =  admit()
+// re-indexing... a bit of a pain 
+let info_extract0 (i:ii.t) (a: info i): info (Derive i "" Extract) = 
+  let Info ha v = a in Info ha v
+let info_extract1 (i:ii.t) (a: info i) (materials: id_dhe): info (Derive i "" (ExtractDH materials)) =  
+  let Info ha v = a in Info ha v
+
 //17-10-25 how to do this?? a bit ridiculous
   // match a with 
   // | Info ha aea loginfo hv -> 
@@ -649,7 +654,7 @@ let peer_table (#g: CommonDH.group) (gX: CommonDH.share g): Type0 =
     (fun i_gY -> 
       let (i, gY) = i_gY in 
       let a = admit() in //17-10-25 ha_of_id i in ///TODO not much info at this stage.
-      secret u_extract1 (Derive i (ExtractDH (Some(| g, gX, gY |))) a))
+      secret u_extract1 (Derive i "" (ExtractDH (Some(| g, gX, gY |)))) a)
     (fun _ -> True)
 
 let odh_table = 
@@ -691,7 +696,8 @@ let test_honest_gX #g gX =
   | Some _ -> true
   | None -> false
 
-(* --- 
+
+(* --- to be restored
 
 // TODO add state-passing
 assume val peer_gX: #g:CommonDH.group -> i:id -> gX: CommonDH.share g -> gY: CommonDH.share g -> 
@@ -735,7 +741,7 @@ let odh_init g =
   x // could additionally return gX 
 // TODO crypto agility: do we record keygen as honest for a bad group? 
 
-(*--- to be restored 
+
 /// Server-side creation and completion
 ///
 /// An elaboration of "derive" for two-secret extraction
@@ -902,7 +908,8 @@ assume val extract2:
   #a: info ->
   s: salt ii u i a -> 
   secret u (Extract2 i) a
-*)
+
+--- *)
 
 /// module KeySchedule
 /// composing them specifically for TLS
@@ -913,55 +920,81 @@ assume val extract2:
 let some_keylen: keylen = 32ul
 
 inline_for_extraction
-let u_default:  p:pkg ii & (i:id -> ctx:info i -> j:id & p.use j)  = (| rp ii, (fun (i:id) (a:info i) -> (|i, some_keylen|))|)
+let u_default:  usage info = fun lbl -> (| rp ii, (fun (i:id) (a:info i) (ctx:context) -> some_keylen) |)
+
+// p:pkg ii & (i:id -> ctx:info i -> j:id & p.use j)  = 
+
+let derived_aea (lbl:label) (i:id) (a:info i) (ctx:context{wellformed_id (Derive i lbl ctx)}): aeadAlg #ii (Derive i lbl ctx) = AES_GCM256 //fixme!
 
 inline_for_extraction
-let u_traffic: usage ii info = function 
-  | "ClientKey" | "ServerKey" -> (| mp ii , (fun (i:id) (a:info i) -> Derived a.aea) |)
-  | _ -> u_default
+let u_traffic: usage info = 
+  fun (lbl:label) -> 
+  match lbl with 
+  | "ClientKey" | "ServerKey" -> (| mp ii , derived_aea lbl |)
+  | _ -> u_default lbl
 
+// #set-options "--detail_errors"
 // #set-options "--print_universes --print_implicits"
+
+let derived_info (lbl:label) (i:id) (a:info i) (ctx:context{wellformed_id (Derive i lbl ctx)}): info (Derive i lbl ctx) = 
+  let Info ha o = a in Info ha o
 
 // 17-10-20 this causes a loop, as could be expected.
 inline_for_extraction
-let rec u_master_secret (n:nat ): Tot (usage info ii) (decreases (%[n; 0])) = function 
-  | "traffic" -> (| pp u_traffic, (fun a -> a) |)
-  | "resumption" -> if n > 0 then (| pskp ii (u_early_secret (n-1)), (fun (a:info) -> a)|) else (| rp ii, (fun (a:info) -> some_keylen) |)
-  | _ -> u_default
-and u_handshake_secret (n:nat): Tot (usage info ii) (decreases (%[n; 1])) = function 
-  | "traffic" -> (| pp u_traffic , (fun (a:info) -> a) |)
-  | "salt" -> (| saltp2 ii (u_master_secret n), (fun (a:info) -> a) |)
-  | _ -> u_default
-and u_early_secret (n:nat): Tot (usage info ii) (decreases (%[n;2])) = function
-  | "traffic" -> (| pp u_traffic, (fun (a:info) -> a) |)
-  | "salt" -> (| saltp1 ii (u_handshake_secret n), (fun (a:info) -> a) |)
-  | _ -> u_default
+let rec u_master_secret (n:nat ): Tot (usage info) (decreases (%[n; 0])) = 
+  fun lbl -> match lbl with 
+  | "traffic" -> (| pp u_traffic, derived_info lbl |)
+  | "resumption" -> 
+    if n > 0 
+    then (| pskp (u_early_secret (n-1)), derived_info lbl |) 
+    else u_default lbl
+  | _ -> u_default lbl
+and u_handshake_secret (n:nat): Tot (usage info) (decreases (%[n; 1])) =  
+  fun lbl -> match lbl with 
+  | "traffic" -> (| pp u_traffic , derived_info lbl |)
+  | "salt" -> (| saltp2 (u_master_secret n), derived_info lbl |)
+  | _ -> u_default lbl
+and u_early_secret (n:nat): Tot (usage info) (decreases (%[n;2])) = 
+  fun lbl -> match lbl with 
+  | "traffic" -> (| pp u_traffic, derived_info lbl  |)
+  | "salt" -> (| saltp1 (u_handshake_secret n), derived_info lbl |)
+  | _ -> u_default lbl
 
 /// Tot required... can we live with this integer indexing?
 /// One cheap trick is to store a PSK only when it enables resumption.
 
+
+/// Usability? Should try with fewer annotations, possibly returning (| i, a, key i a... |)
+///
 /// Testing normalization works for a parametric depth
 assume val depth:  n:nat {n > 1} 
-let u: usage info ii = u_early_secret depth 
-let i0 = Extract0 (Preshared 0)
+let u: usage info = u_early_secret depth 
 
-/// Usability?
+let ipsk = Preshared Hashing.Spec.SHA1 0
+let a: info ipsk = Info Hashing.Spec.SHA1 None
+let psk0: psk #u ipsk  a = create_psk ipsk a
 
-let a = { ha=Hashing.Spec.SHA1; aea=AES_GCM256 }
+let i0 = Derive ipsk "" Extract
+let a0 = Info #i0 Hashing.Spec.SHA1 None
+let early_secret: secret u i0 a0 = extract0 psk0 
 
-let psk0: psk #ii #u (Preshared 0) a = create_psk (Preshared 0) a
+let i_traffic0 = Derive i0 "traffic" Expand 
+let a_traffic0 = Info #i_traffic0 Hashing.Spec.SHA1 None
+val early_traffic: secret u_traffic i_traffic0 a_traffic0
+let early_traffic = derive early_secret "traffic" Expand 
+// not sure where to add the loginfo
 
-let early_secret: secret u i0 a = extract0 psk0 
-
-val early_traffic: secret u_traffic (Derived i0 "traffic") a
-let early_traffic = derive early_secret "traffic"
-
-val k0: key #ii (Derived (Derived i0 "traffic") "ClientKey") AES_GCM256
-let k0 = derive early_traffic "ClientKey" 
+let i_0rtt = Derive i_traffic0 "ClientKey" Expand
+val k0: key #ii i_0rtt AES_GCM256
+let k0 = derive early_traffic "ClientKey" Expand 
 let cipher  = encrypt k0 10
 
-val salt1:  salt ii (u_handshake_secret depth) (Derived i0 "salt") a
-let salt1  = derive early_secret "salt"
+let i_salt1 = Derive i0 "salt" Expand 
+let a_salt1 = Info #i_salt1 Hashing.Spec.SHA1 None
+val salt1:  salt (u_handshake_secret depth) i_salt1 a_salt1 
+let salt1  = derive early_secret "salt" Expand
+
+(* --- 
 
 let g = CommonDH.default_group
 //let x: CommonDH.sh = initI g 
