@@ -63,15 +63,16 @@ noeq type ipkg = | Idx:
 type keylen = l:UInt32.t {UInt32.v l <= 256} 
 
 noeq type pkg (ip:ipkg) = | Pkg:
-  use: (ip.t -> Type0) -> 
-  key: (i:ip.t -> use i -> Type0) -> 
-  len: (i:ip.t -> use i -> keylen) ->
+  info: (ip.t -> Type0) -> 
+  get_info: (i:ip.t -> info i) ->
+  key: (ip.t -> Type0) -> 
+  len: (i:ip.t -> info i -> keylen) ->
   create: (
-    i:ip.t -> u:use i -> ST (key i u)
+    i:ip.t -> a:info i -> ST (key i)
     (requires fun h0 -> True)
     (ensures fun h0 p h1 -> True)) -> 
   coerce: (
-    i:ip.t -> u:use i -> lbytes (len i u) -> ST (key i u)
+    i:ip.t -> a:info i -> lbytes (len i a) -> ST (key i)
     (requires fun h0 -> ~(ip.honest i))
     (ensures fun h0 p h1 -> True)) ->
   pkg ip
@@ -645,8 +646,11 @@ assume val prf_leak:
 // how to share the u and a parameters? intuitively, u is statically
 // fixed for everyone, and a is determined by the index i.
 
-//17-10-23 unclear how to fix the usage a packaging-time. This should be entirely static. 
-assume val u_extract1: usage info 
+//17-10-30 unclear how to fix the usage at packaging-time.  This
+// should be entirely static. Intuitively, there is a function from
+// indexes to usage. Probably definable with the actual usage (big
+// mutual reduction?)
+assume val u_of_i: i:id -> usage info 
 
 let peer_table (#g: CommonDH.group) (gX: CommonDH.share g): Type0 = 
   MonotoneMap.t there 
@@ -654,7 +658,7 @@ let peer_table (#g: CommonDH.group) (gX: CommonDH.share g): Type0 =
     (fun i_gY -> 
       let (i, gY) = i_gY in 
       let a = admit() in //17-10-25 ha_of_id i in ///TODO not much info at this stage.
-      secret u_extract1 (Derive i "" (ExtractDH (Some(| g, gX, gY |)))) a)
+      secret (u_of_i i) (Derive i "" (ExtractDH (Some(| g, gX, gY |)))) a)
     (fun _ -> True)
 
 let odh_table = 
@@ -697,11 +701,17 @@ let test_honest_gX #g gX =
   | None -> false
 
 
-(* --- to be restored
+assume val info_id: i:id -> a: info i
 
-// TODO add state-passing
-assume val peer_gX: #g:CommonDH.group -> i:id -> gX: CommonDH.share g -> gY: CommonDH.share g -> 
-  option (secret u_extract1 (Derive i (ExtractDH (| g, gX, gY |))) (admit() (*ha_of_id i*)))
+
+#set-options "--print_universes --print_implicits"
+
+// assume val peer_gX: #g:CommonDH.group -> i:id -> gX: CommonDH.share g -> gY: CommonDH.share g {wellformed_id (Derive i "" (ExtractDH (Some (| g, gX, gY |))))} -> 
+//   option (secret 
+//     (u_of_i i)
+//     (Derive i "" (ExtractDH (Some (| g, gX, gY |)))) 
+//     (info_id (Derive i "" (ExtractDH (Some (| g, gX, gY |))))))
+
 
 // let peers_gX #g gx = let t: peer_table = odh_table in MonotoneMap.lookup h0.[t] (|g,gX|)
 
@@ -732,8 +742,8 @@ let odh_init g =
       #(i:id * gY: CommonDH.share g)
       #(fun i_gY -> 
         let (i, gY) = i_gY in 
-        let a = admit() in //17-10-25 ha_of_id i in 
-        secret u_extract1 (Derive i (Extract (| g, gX, gY |)) a))
+        let a = admit() in //tricky... we don't know a (nor its type) // ha_of_id i in 
+        secret (u_of_i i) (Derive i "" (ExtractDH (Some (| g, gX, gY |)))) a)
       #(fun _ -> True) in
     if None? (MonotoneMap.lookup t (|g,gX|)) then MonotoneMap.extend t (|g,gX|) peers;
     assert(honest_gX gX)
@@ -750,24 +760,28 @@ let odh_init g =
 ///
 /// We require that gX be the share of a honest initiator,
 /// but not that they agree on the salt index
-val odh_test:
+assume val odh_test:
 //#u: usage info ii -> 
   #i: id -> 
   #a: info i -> 
-  s: salt u_extract1 i a ->
+  s: salt (u_of_i i) i a ->
   g: CommonDH.group ->
   gX: CommonDH.share g -> 
   ST ( 
     gY:CommonDH.share g &
-    secret u_extract1 (Extract1 i (Some(| g, gX, gY |))) (info_extract1 i a (Some(|g,gX,gY|)) ))
+    (let idh = Some(| g,gX,gY |) in //17-10-31 BUG? adding the eta-expansion was necessary
+    let a' = info_extract1 i a idh in
+    secret (u_of_i i) (Derive i "" (ExtractDH idh)) a'))
   (requires fun h0 -> honest_gX gX)
   (ensures fun h0 r h1 -> 
     // todo, as sanity check
     // let (|gY, s|) = dfst r in 
     // flag_odh ==> s == peer_gX gY
     True)
+
+(* 17-10-31 commenting out due to typing errors 
 let odh_test #i #a s g gX = 
-  let u = u_extract1 in 
+  let u = u_of_i i in 
   (* we get the same code as in the game by unfolding dh_responder, e.g.
   let y = CommonDH.keygen g in 
   let gY = CommonDH.pubshare y in  
@@ -775,11 +789,12 @@ let odh_test #i #a s g gX =
   *)
   let gY, gZ = CommonDH.dh_responder gX in 
   let idh = Some (| g, gX, gY |) in
-  let j = Extract1 i idh in 
+  let j = Derive i "" (ExtractDH idh) in 
+  let a' = info_extract1 i a idh in 
   // assume(a == ha_of_id i); //17-10-23 not great
-  let k: secret u_extract1 (Extract1 i idh) a = 
+  let k: secret u j a' = 
     if flag_odh
-    then (*KDF.*) create u j a (* narrow *)
+    then (*KDF.*) create u j a' (* narrow *)
     else 
       // we know the salt is dishonest because flag_kdf is off
       let raw = HKDF.extract #a.ha (prf_leak s) gZ (* wide, concrete *) in 
@@ -795,17 +810,22 @@ let odh_test #i #a s g gX =
       MonotoneMap.extend peers (i,gY) k
       );
   (| gY, k |) 
+*)
 
 // the PRF-ODH oracle, computing with secret exponent x
-val odh_prf:
+assume val odh_prf:
 //#u: usage info ii -> 
   #i: id -> 
   #a: info i -> 
-  s: salt u_extract1 i a ->
+  s: salt (u_of_i i) i a ->
   g: CommonDH.group ->
   x: CommonDH.keyshare g -> 
   gY: CommonDH.share g -> 
-  ST (secret u_extract1 (Extract1 i (Some(| g, CommonDH.pubshare x, gY |))) a)
+  ST (
+    let gX = CommonDH.pubshare x in 
+    let idh = Some (|g,gX,gY|) in //17-10-31 BUG? adding the eta-expansion was necessary
+    let a' = info_extract1 i a idh in
+    secret (u_of_i i) (Derive i "" (ExtractDH idh)) a')
     (requires fun h0 -> 
       let gX = CommonDH.pubshare x in
       honest_gX gX /\ (
@@ -815,15 +835,17 @@ val odh_prf:
         let peers = MonotoneMap.value t (|g,gX|) h0 in 
         ~ (MonotoneMap.defined peers (i,gY) h0)))))  // what a mouthful
     (ensures fun h0 _ h1 -> True)
-  
+
+(* --- 17-10-31 commenting out the rest due to errors 
+
 // requires peer[gX] is defined (witnessed in x) and does not contain (i,gY)
 // None? (find (i, gY) !peer[gX])
 
 let odh_prf #i #a s g x gY = 
   let gX = CommonDH.pubshare x in 
   let gZ = CommonDH.dh_initiator x gY in
-  prf_extract1 s (Some(|g, gX, gY|)) gZ 
-
+  let idh = Some (|g,gX,gY|) in //17-10-31 BUG? adding the eta-expansion was necessary
+  prf_extract1 s idh gZ 
 
 /// --------------------------------------------------------------------------------------------------
 /// Diffie-Hellman shares
@@ -840,11 +862,15 @@ let initI (g:CommonDH.group) = odh_init g
 val extractR:
 //#u: usage info ii -> 
   #i: id -> 
-  #a: info -> 
-  s: salt ii u_extract1 i a ->
+  #a: info i -> 
+  s: salt (u_of_i i) i a ->
   g: CommonDH.group ->
   gX: CommonDH.share g ->
-  ST( gY:CommonDH.share g & secret u_extract1 (Extract1 i (Some(| g, gX, gY |))) a )
+  ST( 
+    gY:CommonDH.share g & (
+      let idh = Some(| g, gX, gY |) in 
+      let a' = info_extract1 i a idh in 
+      secret (u_of_i i) (Derive i "" (ExtractDH idh)) a' ))
     (requires fun h0 -> True)
     (ensures fun h0 _ h1 -> True)
 
@@ -857,7 +883,7 @@ let extractR #i #a s g gX =
     // real computation: gY is honestly-generated but the exchange is doomed
     let gY, gZ = CommonDH.dh_responder gX in 
     let idh = Some (| g, gX, gY |) in
-    let j = Extract1 i idh in 
+    let j = Derive i "" (ExtractDH idh) in 
     let k = prf_extract1 s idh gZ in
     (| gY, k |)
 
@@ -865,8 +891,8 @@ let extractR #i #a s g gX =
 val extractI: 
 //#u: usage info ii -> 
   #i: id -> 
-  #a: info ->
-  s: salt ii u_extract1 i a ->
+  #a: info i ->
+  s: salt u_extract1 i a ->
   g: CommonDH.group ->
   x: CommonDH.keyshare g ->
   gY: CommonDH.share g ->
@@ -910,6 +936,7 @@ assume val extract2:
   secret u (Extract2 i) a
 
 --- *)
+
 
 /// module KeySchedule
 /// composing them specifically for TLS
@@ -964,11 +991,35 @@ and u_early_secret (n:nat): Tot (usage info) (decreases (%[n;2])) =
 /// One cheap trick is to store a PSK only when it enables resumption.
 
 
-/// Usability? Should try with fewer annotations, possibly returning (| i, a, key i a... |)
-///
-/// Testing normalization works for a parametric depth
+/// Usability? A mock-up of the TLS 1.3 key schedule.
+/// 
+/// Although the usage computes everything at each derivation, each
+/// still requires 3 type annotations to go through... Can we improve
+/// it?
+
+// Testing normalization works for a parametric depth
 assume val depth:  n:nat {n > 1} 
 let u: usage info = u_early_secret depth 
+
+val ks: unit -> St unit 
+let ks() =
+  (**) let ipsk: id = Preshared Hashing.Spec.SHA1 0 in
+  let a = Info Hashing.Spec.SHA1 None in
+  let psk0: psk #u ipsk  a = create_psk ipsk a in
+  (**) let i0: id = Derive ipsk "" Extract in 
+  (**) let a0 = Info #i0 Hashing.Spec.SHA1 None in
+  let early_secret: secret u i0 a0 = extract0 psk0 in
+  (**) let i_traffic0: id = Derive i0 "traffic" Expand in 
+  (**) let a_traffic0 = Info #i_traffic0 Hashing.Spec.SHA1 None in
+  let early_traffic: secret u_traffic i_traffic0 a_traffic0 = derive early_secret "traffic" Expand in  
+  (**) let i_0rtt: id = Derive i_traffic0 "ClientKey" Expand in
+  (**) let a_0rtt = AES_GCM256 in //17-10-31 this expansion silences a warning
+  let k0: key #ii i_0rtt a_0rtt = derive early_traffic "ClientKey" Expand in 
+  let cipher  = encrypt k0 10 in 
+  ()
+
+
+// same, using top-level bindings for debuggability.
 
 let ipsk = Preshared Hashing.Spec.SHA1 0
 let a: info ipsk = Info Hashing.Spec.SHA1 None
