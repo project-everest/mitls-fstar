@@ -771,7 +771,7 @@ val odh_test:
   ST ( 
     gY:CommonDH.share g &
     (let idh = DHE g gX gY in //17-10-31 BUG? adding the eta-expansion was necessary
-    secret (u_of_i i) (Derive i "" (ExtractDH idh))))
+    secret u (Derive i "" (ExtractDH idh))))
   (requires fun h0 -> honest_gX gX)
   (ensures fun h0 r h1 -> 
     // todo, as sanity check
@@ -780,7 +780,7 @@ val odh_test:
     True)
 
 let odh_test #u #i a s g gX = 
-  let u = u_of_i i in 
+  assume (u == u_of_i i); //17-11-01 TODO!
   (* we get the same code as in the game by unfolding dh_responder, e.g.
   let y = CommonDH.keygen g in 
   let gY = CommonDH.pubshare y in  
@@ -810,7 +810,7 @@ let odh_test #u #i a s g gX =
   (| gY, k |) 
 
 // the PRF-ODH oracle, computing with secret exponent x
-assume val odh_prf:
+val odh_prf:
   #u: usage info -> 
   #i: id -> 
   a: info {a == get_info i}-> 
@@ -835,15 +835,17 @@ assume val odh_prf:
 // requires peer[gX] is defined (witnessed in x) and does not contain (i,gY)
 // None? (find (i, gY) !peer[gX])
 
-// 17-11-01 stuck
-// #set-options "--detail_errors"
-// #set-options "--print_universes --print_implicits"
-// let odh_prf #u #i a s g x gY = 
-//   let gX = CommonDH.pubshare x in 
-//   let idh = DHE g gX gY in
-//   let gZ = CommonDH.dh_initiator x gY in
-//   prf_extract1 a s idh gZ
-  
+// 17-11-01 stuck on seemingly identical types.
+#set-options "--detail_errors"
+#set-options "--print_full_names --print_universes --print_implicits"
+#set-options "--ugly" 
+let odh_prf #u #i a s g x gY = 
+  let gX = CommonDH.pubshare x in 
+  let idh = DHE g gX gY in
+  let gZ = CommonDH.dh_initiator x gY in
+  // admit()
+  prf_extract1 a s idh gZ
+
 
 /// --------------------------------------------------------------------------------------------------
 /// Diffie-Hellman shares
@@ -871,21 +873,26 @@ val extractR:
     (requires fun h0 -> True)
     (ensures fun h0 _ h1 -> True)
 
-#set-options "--print_universes --print_implicits"
+#set-options "--print_universes --print_implicits --print_full_names"
 #set-options "--max_ifuel 3 --initial_ifuel 1"
 #set-options "--ugly" 
 let extractR #u #i a s g gX = 
   let b = 
     if Flags.ideal_KEF then test_honest_gX gX else false in
   if b 
-  then odh_test a s g gX
+  then 
+//17-11-01 why do I need to rewrite [odh_test a s g gX] to this?
+    let (| gY, k |) = odh_test a s g gX in
+    (| gY, k |)
   else
     // real computation: gY is honestly-generated but the exchange is doomed
     let gY, gZ = CommonDH.dh_responder gX in 
     let idh = DHE g gX gY in
     let j = Derive i "" (ExtractDH idh) in 
     let k = prf_extract1 a s idh gZ in
-    (| gY, k |)
+    admit() 
+//17-11-01 still stuck on that one    
+   (| gY, k |)
 
 /// Initiator computes DH secret material
 val extractI: 
