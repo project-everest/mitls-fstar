@@ -348,13 +348,13 @@ type info = | Info:
 
 
 val get_info: id -> info 
-// 17-10-31 can't get it to verify; should follow from definition?
+// 17-11-01 can't get it to verify; should follow from the definition of wellformed_id? 
 let rec get_info (i0: id): info = 
   match i0 with 
   | Preshared a _ -> Info a None 
   | Derive i l (ExpandLog log hv) ->
        assert(wellformed_id i0); 
-       assume false; 
+       // assume false; 
        assert(wellformed_id i); 
        let i:id = i in // sigh
        let Info a _ = get_info i in
@@ -780,7 +780,7 @@ val odh_test:
     True)
 
 let odh_test #u #i a s g gX = 
-  assume (u == u_of_i i); //17-11-01 TODO!
+  assume (u == u_of_i i); //17-11-01 TODO modelling
   (* we get the same code as in the game by unfolding dh_responder, e.g.
   let y = CommonDH.keygen g in 
   let gY = CommonDH.pubshare y in  
@@ -843,7 +843,7 @@ let odh_prf #u #i a s g x gY =
   let gX = CommonDH.pubshare x in 
   let idh = DHE g gX gY in
   let gZ = CommonDH.dh_initiator x gY in
-  // admit()
+  //admit()
   prf_extract1 a s idh gZ
 
 
@@ -890,8 +890,8 @@ let extractR #u #i a s g gX =
     let idh = DHE g gX gY in
     let j = Derive i "" (ExtractDH idh) in 
     let k = prf_extract1 a s idh gZ in
-    admit() 
-//17-11-01 still stuck on that one    
+//17-11-01 still stuck on that one
+   // admit() 
    (| gY, k |)
 
 /// Initiator computes DH secret material
@@ -911,27 +911,32 @@ let extractI #u #i a s g x gY =
   if Flags.ideal_KEF then 
     let gX = CommonDH.pubshare x in
     let t: odh_table = odh_state in 
-    assume(a == ha_of_id i);
     Monotonic.RRef.testify(MonotoneMap.defined t (|g,gX|));
     let idh = DHE g (CommonDH.pubshare x) gY in
     let peers = Some?.v (MonotoneMap.lookup t (|g,gX|)) in 
-    let ot = secret u (Derive i "" (ExtractDH idh)) in
+    let i' = Derive i "" (ExtractDH idh) in
+    assert(wellformed_id i);
+    assume(wellformed_id i'); //17-11-01 ?
+    let ot = secret u i' in
+    assume (u == u_of_i i); //17-11-01 indexing does not cover u yet
     let o : option ot = MonotoneMap.lookup peers (i,gY) in
     match o with 
     | Some k -> k
-    | None -> odh_prf s g x gY
-  else odh_prf s g x gY
+    | None -> odh_prf #u #i a s g x gY
+  else odh_prf #u #i a s g x gY
 
 val extractP: 
   #u:usage info ->
   #i: id ->
   a: info {a == get_info i} -> 
   s: salt u i ->
-  ST(secret u (Derive i "" (ExtractDH None)))
+  ST(secret u (Derive i "" (ExtractDH NoDHE)))
   (requires fun h0 -> True)
   (ensures fun h0 r h1 -> True)
-let extractP #i #a s = 
-  prf_extract1 s None (Hashing.Spec.zeroHash a.ha)
+let extractP #u #i a s = 
+  let gZ = Hashing.Spec.zeroHash a.ha in
+///17-11-01 stuck on this one too.  
+  prf_extract1 a s NoDHE gZ
   
 
 
