@@ -150,9 +150,9 @@ type label = string
 /// the middle extraction takes an optional DH secret, identified by this triple
 /// we use our own datatype to simplify typechecking
 type id_dhe = 
-  | NoDHE
-  | DHE:
-    g: CommonDH.group -> 
+  | NoIDH 
+  | IDH:
+    #g: CommonDH.group -> 
     gX: CommonDH.share g ->
     gY: CommonDH.share g -> id_dhe
 
@@ -601,7 +601,7 @@ assume val flag_odh: b:bool { (flag_prf1 ==> b) /\ (b ==> Flags.ideal_KEF) }
 /// 
 /// its internal state ensures sharing
 ///
-assume val prf_extract1:
+val prf_extract1:
   #u: usage info -> 
   #i: id ->
   a: info {a == get_info i} -> 
@@ -611,10 +611,10 @@ assume val prf_extract1:
   ST (secret u (Derive i "" (ExtractDH idh)))
   (requires fun h0 -> True) 
   (ensures fun h0 k h1 -> True)
-(*
+
 let prf_extract1 #u #i #a s g gX gY gZ = 
-  let idh = (| g, gX, gY |) in
-  let j = Extract1 i idh in
+  let idh = IDH gX gY in
+  let j = Derive i "" (ExtractDH idh) in
   let pkg = pp ii u in 
   if flag_prf1 && ii.honest i 
   then 
@@ -631,7 +631,6 @@ let prf_extract1 #u #i #a s g gX gY gZ =
   else 
     let raw = HKDF.extract (prf_leak s) gZ (* narrow, concrete *) in 
     pkg.coerce j a raw 
-*)
 
 assume val prf_leak:
   #u: usage info -> 
@@ -666,7 +665,7 @@ let peer_table (#g: CommonDH.group) (gX: CommonDH.share g): Type0 =
     (i:id * gY: CommonDH.share g)
     (fun i_gY -> 
       let (i, gY) = i_gY in 
-      secret (u_of_i i) (Derive i "" (ExtractDH (DHE g gX gY))))
+      secret (u_of_i i) (Derive i "" (ExtractDH (IDH gX gY))))
     (fun _ -> True)
 
 let odh_table = 
@@ -750,7 +749,7 @@ let odh_init g =
       #(i:id * gY: CommonDH.share g)
       #(fun i_gY -> 
         let (i, gY) = i_gY in 
-        secret (u_of_i i) (Derive i "" (ExtractDH (DHE g gX gY))))
+        secret (u_of_i i) (Derive i "" (ExtractDH (IDH gX gY))))
       #(fun _ -> True) in
     if None? (MonotoneMap.lookup t (|g,gX|)) then MonotoneMap.extend t (|g,gX|) peers;
     assert(honest_gX gX)
@@ -776,7 +775,7 @@ val odh_test:
   gX: CommonDH.share g -> 
   ST ( 
     gY:CommonDH.share g &
-    (let idh = DHE g gX gY in //17-10-31 BUG? adding the eta-expansion was necessary
+    (let idh = IDH gX gY in //17-10-31 BUG? adding the eta-expansion was necessary
     secret u (Derive i "" (ExtractDH idh))))
   (requires fun h0 -> honest_gX gX)
   (ensures fun h0 r h1 -> 
@@ -793,7 +792,7 @@ let odh_test #u #i a s g gX =
   let gZ: bytes (*CommonDH.share g*) = ... in  // used only when (not flag_odh)
   *)
   let gY, gZ = CommonDH.dh_responder gX in 
-  let idh = DHE g gX gY in
+  let idh = IDH gX gY in
   let j = Derive i "" (ExtractDH idh) in 
   assert(a == get_info j);
   let k: secret u j = 
@@ -826,7 +825,7 @@ val odh_prf:
   gY: CommonDH.share g -> 
   ST (
     let gX = CommonDH.pubshare x in 
-    let idh = DHE g gX gY in //17-10-31 BUG? adding the eta-expansion was necessary
+    let idh = IDH gX gY in //17-10-31 BUG? adding the eta-expansion was necessary
     secret u (Derive i "" (ExtractDH idh)))
     (requires fun h0 -> 
       let gX = CommonDH.pubshare x in
@@ -847,7 +846,7 @@ val odh_prf:
 // #set-options "--ugly" 
 let odh_prf #u #i a s g x gY = 
   let gX = CommonDH.pubshare x in 
-  let idh = DHE g gX gY in
+  let idh = IDH gX gY in
   let gZ = CommonDH.dh_initiator x gY in
   admit()
   // prf_extract1 a s idh gZ
@@ -874,7 +873,7 @@ val extractR:
   gX: CommonDH.share g ->
   ST( 
     gY:CommonDH.share g & (
-      let idh = DHE g gX gY in 
+      let idh = IDH gX gY in 
       secret u (Derive i "" (ExtractDH idh))))
     (requires fun h0 -> True)
     (ensures fun h0 _ h1 -> True)
@@ -893,7 +892,7 @@ let extractR #u #i s a g gX =
   else
     // real computation: gY is honestly-generated but the exchange is doomed
     let gY, gZ = CommonDH.dh_responder gX in 
-    let idh = DHE g gX gY in
+    let idh = IDH gX gY in
     let j = Derive i "" (ExtractDH idh) in 
     let k = prf_extract1 a s idh gZ in
 //17-11-01 still stuck on that one
@@ -909,7 +908,7 @@ val extractI:
   g: CommonDH.group ->
   x: CommonDH.keyshare g ->
   gY: CommonDH.share g ->
-  ST(secret u (Derive i "" (ExtractDH (DHE g (CommonDH.pubshare x) gY))))
+  ST(secret u (Derive i "" (ExtractDH (IDH (CommonDH.pubshare x) gY))))
   (requires fun h0 -> honest_gX (CommonDH.pubshare x))
   (ensures fun h0 k h1 -> True)
 
@@ -918,7 +917,7 @@ let extractI #u #i a s g x gY =
     let gX = CommonDH.pubshare x in
     let t: odh_table = odh_state in 
     Monotonic.RRef.testify(MonotoneMap.defined t (|g,gX|));
-    let idh = DHE g (CommonDH.pubshare x) gY in
+    let idh = IDH (CommonDH.pubshare x) gY in
     let peers = Some?.v (MonotoneMap.lookup t (|g,gX|)) in 
     let i' = Derive i "" (ExtractDH idh) in
     assert(wellformed_id i);
@@ -936,7 +935,7 @@ val extractP:
   #i: id ->
   a: info {a == get_info i} -> 
   s: salt u i ->
-  ST(secret u (Derive i "" (ExtractDH NoDHE)))
+  ST(secret u (Derive i "" (ExtractDH NoIDH)))
   (requires fun h0 -> True)
   (ensures fun h0 r h1 -> True)
 let extractP #u #i a s = 
@@ -1139,7 +1138,7 @@ let ks() =
   let x = initI g in 
   let gX = CommonDH.pubshare x in
   let (| gY, hs_secret |) = extractR salt1 a g gX in 
-  let idh = DHE g gX gY in 
+  let idh = IDH gX gY in 
   let i1: id = Derive i_salt1 "" (ExtractDH idh) in 
   let hs_secret: secret (u_handshake_secret depth) i1= hs_secret in 
   let i_traffic1: id = Derive i1 "traffic" Expand  in
