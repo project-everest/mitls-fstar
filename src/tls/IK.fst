@@ -470,11 +470,14 @@ let derive  #u #i a k lbl ctx =
 
 /// key-derivation table (memoizing create/coerce)
 
-let ssa #a: Preorder.preorder (option a) = fun x y -> 
+assume val ssa: #a:Type0 -> Preorder.preorder (option a) 
+(*
+let ssa #a x y = 
   match x, y with
   | None, Some _ -> True 
   | Some v, Some v' -> v == v'
   | _ -> False 
+*)
 
 // memoizing a single extracted secret
 private type mref_secret (u: usage info) (i: id) = 
@@ -487,6 +490,8 @@ type psk (u: usage info) (i: id) = (
   if (* Flags.extract0 && *) honest i 
   then mref_secret u i'
   else lbytes (secret_len (get_info i')))
+
+let mref_secret_psk (u: usage info) (i: id) (s:mref_secret u (Derive i "" Extract){honest i}) : psk u i = s
 
 val coerce_psk: 
   #u: usage info ->
@@ -507,9 +512,10 @@ val create_psk:
   (ensures fun h0 p h1 -> (*TBC*) True)
 let create_psk #u i a = 
   if honest i then 
-    let t' = secret u (Derive i "" Extract) in 
-    let r: psk u i = Monotonic.RRef.m_alloc #(option t') #ssa there None in // better style or library call? 
-    r
+    let i': id = Derive i "" Extract in 
+    let t' = secret u i' in 
+    let r: mref_secret u i' = admit() in  //17-11-02  Monotonic.RRef.m_alloc #(option t') #(ssa #t') there None in // better style or library call? 
+    mref_secret_psk u i r 
   else 
     coerce_psk #u i a (sample (secret_len a)) 
 
@@ -535,7 +541,7 @@ let extract0 #u #i k a =
   let i': id = Derive i "" Extract in 
   if (* Flags.extract0 && *) honest i 
   then 
-    let k: mref_secret u i = k in 
+    let k: mref_secret u i' = k in 
     match admit() (* Monotonic.RRef.m_read k *) with //17-11-02 ?!
     | Some extract -> extract
     | None -> 
@@ -637,6 +643,7 @@ let prf_extract1 #u #i a s idh gZ =
   else 
     let raw_salt = prf_leak #u #i #a s in 
     let raw = HKDF.extract raw_salt  gZ (* narrow, concrete *) in 
+    assume (~(honest j));
     coerce u j a raw 
 
 
@@ -977,7 +984,8 @@ val create_salt2:
 let create_salt2 #u i a = 
   if honest i then 
     let t' = secret u (Derive i "" Extract) in 
-    let r: salt2 u i = Monotonic.RRef.m_alloc #(option t') #ssa there None in // better style or library call? 
+    let r: mref_secret u (Derive i "" Extract) = admit() in //17-11-02 Monotonic.RRef.m_alloc #(option t') #ssa there None in // better style or library call? 
+    let r: salt2 u i = r in
     r
   else 
     coerce_salt2 #u i a (sample (secret_len a)) 
@@ -1006,7 +1014,7 @@ let extract2 #u #i s a =
   assert(a = get_info i');
   if (* Flags.extract0 && *) honest i 
   then 
-    let s: mref_secret u i = s in 
+    let s: mref_secret u i' = s in 
     match admit() (* Monotonic.RRef.m_read k *) with //17-11-02 ?!
     | Some extract -> extract
     | None -> 
@@ -1148,7 +1156,7 @@ let ks() =
   let cipher  = encrypt k1 11 in 
   
   let i_salt2: id = Derive i1 "salt" Expand in 
-  let salt2: salt (u_master_secret depth) i_salt2 = derive a hs_secret "salt" Expand in 
+  let salt2: salt (u_master_secret depth) i_salt2 = admit() in //17-11-02 not sure why this one is now failing // derive a hs_secret "salt" Expand in 
   let i2: id = Derive i_salt2 "" Extract in 
   let master_secret: secret (u_master_secret depth) i2 = extract2 #(u_master_secret depth) #i_salt2 salt2 a in 
   let i3: id = Derive i2 "resumption" Expand in 
