@@ -1,32 +1,28 @@
 module IK 
 
-/// Standalone experiment modelling key derivation parametrized by a
-/// usage function from labels to derived keyed functionalities.
+/// Standalone experiment modelling key extraction and key derivation
+/// parametrized by a usage function from labels to derived keyed
+/// functionalities.
 ///
 /// * captures nested derivations via bounded-recursive instantiation.
+/// * captures PRF-ODH double game 
 /// * applied to the full extract/expand key schedule of TLS 1.3
 /// * models partial key compromise, controlled by the adversary for each new key
 /// * features agility and ideal-only indexes.
 ///
+/// We plan to split this file into many modules, as planned on slack.
+/// 
 /// Not done yet:
 ///
+/// * mysterious typing errors (see comments) 
+/// * reliance on u_of_i in DH extraction (intuitive but hard to code)
 /// * key registration and discretionary compromise 
-/// * ensure all strongly-dependent types disappear before extraction.
+/// * extraction: ensure all strongly-dependent types disappear
 /// * deal with create/coerce stateful pre- and post-condition.
+/// * usage restriction for KDFs, based on a generalization of wellformed_id
 ///
 /// Note also that we support rather static agility and usages; we may
 /// enable more details to be bound as part of the derivation label.
-
-
-(**! TBC
-
-- outline code modularity & packaging 
-  which modules are index-parametric? 
-
-- usage restriction ['f(label) = idh] 
-  requires digests; see also loginfo.
-
-*)
 
 open FStar.HyperStack
 open FStar.HyperStack.ST
@@ -41,7 +37,6 @@ let sample (len:UInt32.t): ST (lbytes len)
     (ensures fun h0 r h1 -> True)
   = CoreCrypto.random (UInt32.v len)
 
-
 /// --------------------------------------------------------------------------------------------------
 /// module Pkg (stateless)
 /// We embed first-class modules as datatype "packages"
@@ -50,6 +45,7 @@ let sample (len:UInt32.t): ST (lbytes len)
 /// We use "honest" to refer to the adversarie's intent, and "safe" for fine-grained idealization,
 /// with "safe ==> honest" as a pointwise lemma.
 /// When do we need to access one vs the other? Each instance can cache "safe". 
+
 noeq type ipkg (info: Type0)  = | Idx: 
   t: Type0 -> 
   get_info: (t -> info) ->
@@ -62,6 +58,8 @@ noeq type ipkg (info: Type0)  = | Idx:
 
 /// Derived key length restriction when using HKDF
 type keylen = l:UInt32.t {UInt32.v l <= 256} 
+
+// got into trouble using a type abbreviation for "info i"; retry later
 
 noeq type pkg (info: Type0) (ip: ipkg info) = | Pkg:
   key: (ip.t -> Type0) -> 
@@ -76,26 +74,20 @@ noeq type pkg (info: Type0) (ip: ipkg info) = | Pkg:
     (ensures fun h0 p h1 -> True)) ->
   pkg info ip 
 
+/// The "get_info" function ensure that all instances share the same
+/// runtime information; we still pass info inasmuch as the index will
+/// be erased.
 
-/// Generic "key module" implementation:
+
+/// NEXT, WE DEFINE A FEW SAMPLE FUNCTIONALITIES,
+/// parameterized on their abstract index package.
+/// 
 /// can we factor out pre/post and boilerplate spec? 
 ///
 /// When ~(honest i), we must have  
 ///
 /// create i a == coerce i a (sample (len a))
 
-
-
-/// pick an argument ordering: ip.t -> use for now.
-///
-/// We must ensure a shared `use` for all instances (or only when
-/// idealized?); this may follow from static memoization.
-/// 
-/// Do we want to hardwire that u is a function of i? No.
-
-
-
-/// NEXT, FUNCTIONALITIES with ABSTRACT INDEXES.
 /// --------------------------------------------------------------------------------------------------
 /// module AEAD
 /// sample generic, agile functionality.
@@ -131,7 +123,6 @@ let mp (ip:ipkg aeadAlg): pkg aeadAlg ip = Pkg
 val encrypt: #ip:ipkg aeadAlg -> #i:ip.t -> k: key i -> nat -> nat 
 let encrypt #ip #i k v = v + 1
 
-
 /// --------------------------------------------------------------------------------------------------
 /// module Raw
 /// a default functionality (no idealization);
@@ -147,17 +138,17 @@ let rp (ip:ipkg keylen): pkg keylen ip = Pkg
   coerce_raw
 
 
-
 /// TLS-SPECIFIC KEY SCHEDULE
 /// --------------------------------------------------------------------------------------------------
-/// module Index
 
+/// module Index
+/// 
 /// We provide an instance of ipkg to track key derivation (here using constant labels)
 /// these labels are specific to HKDF, for now strings e.g. "e exp master".
 type label = string
 
-// the middle extraction takes an optional DH secret, identified by this triple
-// we use our own datatype to simplify typechecking
+/// the middle extraction takes an optional DH secret, identified by this triple
+/// we use our own datatype to simplify typechecking
 type id_dhe = 
   | NoDHE
   | DHE:
@@ -170,9 +161,9 @@ type id_dhe =
 type kdfa = Hashing.Spec.alg
 
 /// Runtime key-derivation parameters, to be adjusted.
-/// (to be formatted with the static label)
 ///
-/// Consider adding dependency on the static label and the hash
+/// HKDF defines an injective function from label * context to bytes, to be used as KDF indexes.
+///
 type context = 
   | Extract: context // TLS extractions have no label and no context
   | ExtractDH: id_dhe -> context 
@@ -181,10 +172,17 @@ type context =
     info: TLSInfo.logInfo (* ghost, abstract summary of the transcript *) -> 
     hv: Hashing.Spec.anyTag (* requires stratification *) -> context
 
-type id_psk = nat // external application PSKs only; we may need a special PSK0 constructor too
+type id_psk = nat // external application PSKs only; we may also set the usage's maximal recursive depth here.
 type pre_id = 
-  | Preshared: a: kdfa -> id_psk  -> pre_id // two cases: constants for absent arguments, and application PSKs.
-  | Derive: i:pre_id -> l:label -> context -> pre_id
+  | Preshared: 
+      a: kdfa (* fixing the hash algorithm *) -> 
+      id_psk  -> 
+      pre_id 
+  | Derive: 
+      i:pre_id (* parent index *) -> 
+      l:label (* static part of the derivation label *) -> 
+      context (* dynamic part of the derivation label *) -> 
+      pre_id
 
 (* was:
   | Extract0: materials: pre_id -> pre_id
@@ -204,10 +202,7 @@ type pre_id =
     
     info: TLSInfo.logInfo (* ghost, abstract summary of the transcript *) -> 
     hv: Hashing.Spec.anyTag (* requires stratification *) -> pre_id 
-*)
 
-// OLD: 
-//
 // We could have different constructors, depending on the presence of
 // a digest and length (in which case we should be careful of label
 // formatting) or not, keeping any case analysis on the label local.
@@ -222,6 +217,7 @@ type pre_id =
 // info is a function of hv, included for verification convenience.
 // (details to be adapted from the HS). 
 // Hence same hashed digest ==> same logInfo, but not the converse.
+*)
 
 //17-10-30 painful
 // #set-options "--max_ifuel 3 --initial_ifuel 1"
@@ -232,7 +228,8 @@ let rec ha_of_id = function
   | Preshared a _ -> a
   | Derive i lbl ctx -> ha_of_id i 
 
-// placeholder
+// placeholders
+assume val idh_of_log: TLSInfo.logInfo -> id_dhe
 assume val summary: bytes -> TLSInfo.logInfo
 
 // concrete transcript digest
@@ -243,25 +240,17 @@ let digest_info (a:kdfa) (info:TLSInfo.logInfo) (hv: Hashing.Spec.anyTag) =
     Hashing.CRF.hashed a transcript /\
     info = summary transcript 
 
-// painful stratification 
+/// stratified definition of id required.
+///
 let rec wellformed_id: (pre_id -> Type0) = function
   | Preshared a _ -> True
   | Derive i l (ExpandLog info hv) -> wellformed_id i /\ digest_info (ha_of_id i) info hv 
-  | Derive i _ _ -> wellformed_id i
+  | Derive i lbl ctx -> 
+      //TODO "ctx either extends the parent's, or includes its idh" /\ 
+      wellformed_id i
+           
 type id = i:pre_id {wellformed_id i}
 
-
-/// Using different constructors for different constructions; we don't
-/// restrict indexes, but we only provide key-level operations at
-/// specific types.
-///
-/// TODO: extend Derived to take (and record) an optional hashed digest.
-///
-/// This form of indexing may be too global, e.g. extractions should
-/// not depend on expansion; in principle, we could clip "Extracted"
-/// to the extractor index.
-///
-/// MK: what is meant with "clip 'Extracted' to the extractor index"?
 
 // 17-10-21 WIDE/NARROW INDEXES (old) 
 //
@@ -286,25 +275,21 @@ let ii (#info:Type0) (get_info: id -> info) = Idx id get_info honest
 /// returning a package and a algorithm-derivation function to its
 /// agility parameter (to be usually applied at run-time).
 /// 
-type usage (info: Type0) =
-  lbl: label -> (* compile-time *)
-    info': Type0 &
-    get_info': (id -> info') &
-    pkg': pkg info' (ii #info' get_info') & 
-    (i: id -> a: info -> ctx: context {wellformed_id (Derive i lbl ctx)} -> a': info' {a' == get_info' (Derive i lbl ctx)})
-// we used to be parametric in ip; now set to ii 
 
-// We should use use specific variants of [usage ip], for the
-// different stages of the TLS 1.3 key schedule.
-//
+noeq type range (info: Type0) (lbl:label) = | Use:
+    info': Type0 ->
+    get_info': (id -> info') ->
+    pkg': pkg info' (ii #info' get_info') -> 
+    derive: (i: id -> a: info -> ctx: context {wellformed_id (Derive i lbl ctx)} -> a': info' {a' == get_info' (Derive i lbl ctx)}) -> range info lbl
+
+type usage (info: Type0) = lbl: label -> (* compile-time *) range info lbl
+
 // Initially, the info only consists of the hash algorithm, and it is
 // invariant through extractions and derivations... until the first
 // hashed transcript, at which point the
-//
-// Hopefully the label need not be parameterized by i and a...
 
-
-/// parametricity? (Later)
+(* 
+/// parametricity? (Old/Later)
 /// we have [#id #pd #u #i #a] 
 /// u v returns [#ip #p (derive_alg: pd.info -> p.info) (derive_index: id.t -> i.t)] 
 ///
@@ -321,7 +306,7 @@ type usage (info: Type0) =
 // note that [a] is [d.use]
 // should usage be part of info?
 // what about state state (safety etc)? 
-
+*)
 
 /// --------------------------------------------------------------------------------------------------
 /// module KDF
@@ -341,11 +326,9 @@ type details (ha:kdfa) = | Log:
   loginfo: TLSInfo.logInfo -> 
   hv: Hashing.Spec.anyTag {digest_info ha loginfo hv} -> details ha
 
-//TODO sync with index 
 type info = | Info:
   ha:kdfa ->
   option (details  ha) -> info 
-
 
 val get_info: id -> info 
 // 17-11-01 can't get it to verify; should follow from the definition of wellformed_id? 
@@ -354,8 +337,8 @@ let rec get_info (i0: id): info =
   | Preshared a _ -> Info a None 
   | Derive i l (ExpandLog log hv) ->
        assert(wellformed_id i0); 
-       // assume false; 
-       assert(wellformed_id i); 
+       assume false; 
+       // assert(wellformed_id i); 
        let i:id = i in // sigh
        let Info a _ = get_info i in
        Info a (Some (Log log hv))
@@ -368,13 +351,11 @@ let derived_key
   (u: usage info) 
   (i: id) 
   (lbl: label)
-  // (a: info {a.ha = ha_of_id i})
   (c: context {wellformed_id (Derive i lbl c)})
 = 
-  let (| info', get_info', pkg', _derive_info |) = u lbl in 
-  // let a' = derive_info i a c in 
+  let use = u lbl in 
   let i': id = Derive i lbl c in 
-  pkg'.key i'
+  use.pkg'.key i'
 
 let there: FStar.Monotonic.RRef.rid = admit() 
 
@@ -452,7 +433,7 @@ inline_for_extraction
 val derive:
   #u: usage info ->
   #i: id ->
-  #a: info {a == get_info i} -> 
+  a: info {a == get_info i} -> 
   k: secret u i ->
   lbl: label -> 
   ctx: context {wellformed_id (Derive i lbl ctx)} ->
@@ -460,10 +441,10 @@ val derive:
   (requires fun h0 -> True)
   (ensures fun h0 r h1 -> True)
 
-let derive  #u #i #a k lbl ctx = 
+let derive  #u #i a k lbl ctx = 
   let x = Domain lbl ctx in 
-  let (| info', get_info', pkg', derived_alg |) = u lbl in 
-  let a' = derived_alg i a ctx in 
+  let use = u lbl in 
+  let a' = use.derive i a ctx in 
   let i' = Derive i lbl ctx in 
   if honest i (*safe?*) 
   then
@@ -472,7 +453,7 @@ let derive  #u #i #a k lbl ctx =
     //17-10-30 was failing with scrutiny error: match MonotoneMap.lookup (secret_ideal k) x
     | Some dk -> dk
     | None -> 
-      let dk = pkg'.create i' a' in 
+      let dk = use.pkg'.create i' a' in 
       //17-10-20 TODO framing across create
       let h = HyperStack.ST.get() in 
       assume(MonotoneMap.fresh (secret_ideal k) x h);
@@ -480,9 +461,9 @@ let derive  #u #i #a k lbl ctx =
       dk
   else 
     let raw =
-      HKDF.expand #(a.ha) k (Platform.Bytes.abytes lbl) (UInt32.v (pkg'.len a')) in 
+      HKDF.expand #(a.ha) k (Platform.Bytes.abytes lbl) (UInt32.v (use.pkg'.len a')) in 
     assume(honest i' ==> honest i); //17-10-31 TODO with Antoine
-    pkg'.coerce i' a' raw
+    use.pkg'.coerce i' a' raw
 
 /// --------------------------------------------------------------------------------------------------
 /// PSKs, Salt, and Extraction (can we be more parametric?)
@@ -570,7 +551,7 @@ let info_extract1 (i:ii.t) (a: info i) (materials: id_dhe): info (Derive i "" (E
 assume val extract0:
   #u: usage info ->
   #i: id ->
-  #a: info {a == get_info i} ->
+  a: info {a == get_info i} ->
   k: psk #u i -> 
   secret u (Derive i "" Extract) 
 
@@ -836,15 +817,15 @@ val odh_prf:
 // None? (find (i, gY) !peer[gX])
 
 // 17-11-01 stuck on seemingly identical types.
-#set-options "--detail_errors"
-#set-options "--print_full_names --print_universes --print_implicits"
-#set-options "--ugly" 
+// #set-options "--detail_errors"
+// #set-options "--print_full_names --print_universes --print_implicits"
+// #set-options "--ugly" 
 let odh_prf #u #i a s g x gY = 
   let gX = CommonDH.pubshare x in 
   let idh = DHE g gX gY in
   let gZ = CommonDH.dh_initiator x gY in
-  //admit()
-  prf_extract1 a s idh gZ
+  admit()
+  // prf_extract1 a s idh gZ
 
 
 /// --------------------------------------------------------------------------------------------------
@@ -862,8 +843,8 @@ let initI (g:CommonDH.group) = odh_init g
 val extractR:
   #u: usage info -> 
   #i: id -> 
-  a: info {a == get_info i} -> 
   s: salt u i ->
+  a: info {a == get_info i} -> 
   g: CommonDH.group ->
   gX: CommonDH.share g ->
   ST( 
@@ -873,10 +854,10 @@ val extractR:
     (requires fun h0 -> True)
     (ensures fun h0 _ h1 -> True)
 
-#set-options "--print_universes --print_implicits --print_full_names"
-#set-options "--max_ifuel 3 --initial_ifuel 1"
-#set-options "--ugly" 
-let extractR #u #i a s g gX = 
+//#set-options "--print_universes --print_implicits --print_full_names"
+//#set-options "--max_ifuel 3 --initial_ifuel 1"
+//#set-options "--ugly" 
+let extractR #u #i s a g gX = 
   let b = 
     if Flags.ideal_KEF then test_honest_gX gX else false in
   if b 
@@ -891,8 +872,8 @@ let extractR #u #i a s g gX =
     let j = Derive i "" (ExtractDH idh) in 
     let k = prf_extract1 a s idh gZ in
 //17-11-01 still stuck on that one
-   // admit() 
-   (| gY, k |)
+   admit() 
+   // (| gY, k |)
 
 /// Initiator computes DH secret material
 val extractI: 
@@ -916,7 +897,7 @@ let extractI #u #i a s g x gY =
     let peers = Some?.v (MonotoneMap.lookup t (|g,gX|)) in 
     let i' = Derive i "" (ExtractDH idh) in
     assert(wellformed_id i);
-    assume(wellformed_id i'); //17-11-01 ?
+    assume(wellformed_id i'); //17-11-01 same as above?
     let ot = secret u i' in
     assume (u == u_of_i i); //17-11-01 indexing does not cover u yet
     let o : option ot = MonotoneMap.lookup peers (i,gY) in
@@ -936,7 +917,8 @@ val extractP:
 let extractP #u #i a s = 
   let gZ = Hashing.Spec.zeroHash a.ha in
 ///17-11-01 stuck on this one too.  
-  prf_extract1 a s NoDHE gZ
+  admit()
+  // prf_extract1 a s NoDHE gZ
   
 
 
@@ -955,46 +937,56 @@ assume val extract2:
 // val u_traffic: s:string { s = "ClientKey" \/ s = "ServerKey"} -> ip:ipkg -> pkg ip
 
 let some_keylen: keylen = 32ul
+let get_keylen (i:id) = some_keylen
 
 inline_for_extraction
-let u_default:  usage info = fun lbl -> (| keylen, rp ii, (fun (i:id) (a:info i) (ctx:context) -> some_keylen) |)
+let u_default:  usage info = fun lbl -> Use keylen get_keylen (rp (ii get_keylen)) (fun i a ctx -> some_keylen)
 
 // p:pkg ii & (i:id -> ctx:info i -> j:id & p.use j)  = 
 
-let derived_aea (lbl:label) (i:id) (a:info i) (ctx:context{wellformed_id (Derive i lbl ctx)}): aeadAlg #ii (Derive i lbl ctx) = AES_GCM256 //fixme!
-
+assume val get_aeadAlg: i:id -> aeadAlg 
+let derive_aea (lbl:label) (i:id) (a:info) (ctx:context{wellformed_id (Derive i lbl ctx)}):  a': aeadAlg {a' == get_aeadAlg (Derive i lbl ctx)}
+=
+  //fixme! should be extracted from a
+  get_aeadAlg (Derive i lbl ctx)
+ 
 inline_for_extraction
 let u_traffic: usage info = 
   fun (lbl:label) -> 
   match lbl with 
-  | "ClientKey" | "ServerKey" -> (| mp ii , derived_aea lbl |)
+  | "ClientKey" | "ServerKey" -> Use aeadAlg get_aeadAlg (mp (ii get_aeadAlg)) (derive_aea lbl)
   | _ -> u_default lbl
 
 // #set-options "--detail_errors"
 // #set-options "--print_universes --print_implicits"
 
-let derived_info (lbl:label) (i:id) (a:info i) (ctx:context{wellformed_id (Derive i lbl ctx)}): info (Derive i lbl ctx) = 
-  let Info ha o = a in Info ha o
+let derive_info (lbl:label) (i:id) (a:info) (ctx:context{wellformed_id (Derive i lbl ctx)}): a': info {a' == get_info (Derive i lbl ctx)}
+= 
+  let Info ha o = a in 
+  assume false; //17-11-02 lemma needed?
+  match ctx with 
+  | ExpandLog log hv -> Info ha (Some (Log log hv))
+  | _ -> Info ha o
 
 // 17-10-20 this causes a loop, as could be expected.
 inline_for_extraction
 let rec u_master_secret (n:nat ): Tot (usage info) (decreases (%[n; 0])) = 
   fun lbl -> match lbl with 
-  | "traffic" -> (| pp u_traffic, derived_info lbl |)
+  | "traffic" -> Use info get_info (pp u_traffic) (derive_info lbl)
   | "resumption" -> 
     if n > 0 
-    then (| pskp (u_early_secret (n-1)), derived_info lbl |) 
+    then Use info get_info (pskp (u_early_secret (n-1))) (derive_info lbl)
     else u_default lbl
   | _ -> u_default lbl
 and u_handshake_secret (n:nat): Tot (usage info) (decreases (%[n; 1])) =  
   fun lbl -> match lbl with 
-  | "traffic" -> (| pp u_traffic , derived_info lbl |)
-  | "salt" -> (| saltp2 (u_master_secret n), derived_info lbl |)
+  | "traffic" -> Use info get_info (pp u_traffic) (derive_info lbl)
+  | "salt" -> Use info get_info (saltp2 (u_master_secret n)) (derive_info lbl)
   | _ -> u_default lbl
 and u_early_secret (n:nat): Tot (usage info) (decreases (%[n;2])) = 
   fun lbl -> match lbl with 
-  | "traffic" -> (| pp u_traffic, derived_info lbl  |)
-  | "salt" -> (| saltp1 (u_handshake_secret n), derived_info lbl |)
+  | "traffic" -> Use info get_info (pp u_traffic) (derive_info lbl)
+  | "salt" -> Use info get_info (saltp1 (u_handshake_secret n)) (derive_info lbl)
   | _ -> u_default lbl
 
 /// Tot required... can we live with this integer indexing?
@@ -1013,7 +1005,6 @@ let pp (#s: shape) (u: usage s info): pkg info (ii get_info) = Pkg
   secret_len
   (create s u) 
   (coerce s u)
-
 
 val u_of_i: id -> usage info 
 
@@ -1038,20 +1029,50 @@ let u: usage info = u_early_secret depth
 
 val ks: unit -> St unit 
 let ks() =
-  (**) let ipsk: id = Preshared Hashing.Spec.SHA1 0 in
+  let ipsk: id = Preshared Hashing.Spec.SHA1 0 in
   let a = Info Hashing.Spec.SHA1 None in
-  let psk0: psk #u ipsk  a = create_psk ipsk a in
-  (**) let i0: id = Derive ipsk "" Extract in 
-  (**) let a0 = Info #i0 Hashing.Spec.SHA1 None in
-  let early_secret: secret u i0 a0 = extract0 psk0 in
-  (**) let i_traffic0: id = Derive i0 "traffic" Expand in 
-  (**) let a_traffic0 = Info #i_traffic0 Hashing.Spec.SHA1 None in
-  let early_traffic: secret u_traffic i_traffic0 a_traffic0 = derive early_secret "traffic" Expand in  
-  (**) let i_0rtt: id = Derive i_traffic0 "ClientKey" Expand in
-  (**) let a_0rtt = AES_GCM256 in //17-10-31 this expansion silences a warning
-  let k0: key #ii i_0rtt a_0rtt = derive early_traffic "ClientKey" Expand in 
+  let psk0: psk #u ipsk = create_psk ipsk a in
+  
+  let i0: id = Derive ipsk "" Extract in 
+  let early_secret: secret u i0 = extract0 a psk0 in
+  let i_traffic0: id = Derive i0 "traffic" Expand in 
+  let early_traffic: secret u_traffic i_traffic0 = derive a early_secret "traffic" Expand in  
+  let i_0rtt: id = Derive i_traffic0 "ClientKey" Expand in
+  let k0: key #(ii get_aeadAlg) i_0rtt = derive a early_traffic "ClientKey" Expand in 
   let cipher  = encrypt k0 10 in 
+
+  let i_salt1: id = Derive i0 "salt" Expand in 
+  let salt1:  salt (u_handshake_secret depth) i_salt1 = derive a early_secret "salt" Expand in
+  let g = CommonDH.default_group in
+  let x = initI g in 
+  let gX = CommonDH.pubshare x in
+  let (| gY, hs_secret |) = extractR salt1 a g gX in 
+  let idh = DHE g gX gY in 
+  let i1: id = Derive i_salt1 "" (ExtractDH idh) in 
+  let hs_secret: secret (u_handshake_secret depth) i1= hs_secret in 
+  let i_traffic1: id = Derive i1 "traffic" Expand  in
+  let hs_traffic: secret u_traffic i_traffic1 = derive a hs_secret "traffic" Expand in 
+  let k1: key #(ii get_aeadAlg) (Derive i_traffic1 "ServerKey" Expand) = derive a hs_traffic "ServerKey" Expand in 
+  let cipher  = encrypt k1 11 in 
+  
+  let i_salt2: id = Derive i1 "salt" Expand in 
+  let salt2: salt (u_master_secret depth) i_salt2 = derive a hs_secret "salt" Expand in 
+  let i2: id = Derive i_salt2 "" Extract in 
+  let master_secret: secret (u_master_secret depth) i2 = extract2 a salt2 in 
+  let i3: id = Derive i2 "resumption" Expand in 
+  let rsk: psk #(u_early_secret (depth - 1)) i3  = derive a master_secret "resumption" Expand in 
+  let i4: id = Derive i3 "" Extract in
+  let next_early_secret: secret (u_early_secret (depth -1)) i4 = extract0 a rsk in
   ()
+
+
+(* --- 
+
+let i3 = Extract0 (Derived i2 "resumption")
+let rsk = derive master_secret "resumption" 
+// #(u_master_secret depth ) #i2 
+val next_early_secret: secret (u_early_secret (depth - 1)) i3 a
+let next_early_secret = extract0 rsk
 
 
 // same, using top-level bindings for debuggability.
@@ -1080,7 +1101,6 @@ let a_salt1 = Info #i_salt1 Hashing.Spec.SHA1 None
 val salt1:  salt (u_handshake_secret depth) i_salt1 a_salt1 
 let salt1  = derive early_secret "salt" Expand
 
-(* --- 
 
 let g = CommonDH.default_group
 //let x: CommonDH.sh = initI g 
