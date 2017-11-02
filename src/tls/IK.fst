@@ -601,6 +601,13 @@ assume val flag_odh: b:bool { (flag_prf1 ==> b) /\ (b ==> Flags.ideal_KEF) }
 /// 
 /// its internal state ensures sharing
 ///
+assume val prf_leak:
+  #u: usage info -> 
+  #i: id ->
+  #a: info {a == get_info i} -> 
+  s: salt u i { flag_prf1 ==> ~(honest i)} -> Hashing.Spec.hkey a.ha
+// revisit condition, a bit awkward.
+
 val prf_extract1:
   #u: usage info -> 
   #i: id ->
@@ -612,12 +619,11 @@ val prf_extract1:
   (requires fun h0 -> True) 
   (ensures fun h0 k h1 -> True)
 
-let prf_extract1 #u #i #a s g gX gY gZ = 
-  let idh = IDH gX gY in
-  let j = Derive i "" (ExtractDH idh) in
-  let pkg = pp ii u in 
-  if flag_prf1 && ii.honest i 
+let prf_extract1 #u #i a s idh gZ = 
+  let j: id = Derive i "" (ExtractDH idh) in
+  if flag_prf1 && honest i 
   then 
+    (* TBD: memoization
     let w = 
       // "wide" PRF, memoized on gZ
       match find s.wide gZ with 
@@ -625,19 +631,14 @@ let prf_extract1 #u #i #a s g gX gY gZ =
       | None -> 
         let w = pkg.create0 j a in
         s.wide := snoc s.wide w;
-        w in 
-    pkg.create j k 
+        w in  *)
+    create u j a 
     // agreement on the algorithms follows from the salt.
   else 
-    let raw = HKDF.extract (prf_leak s) gZ (* narrow, concrete *) in 
-    pkg.coerce j a raw 
+    let raw_salt = prf_leak #u #i #a s in 
+    let raw = HKDF.extract raw_salt  gZ (* narrow, concrete *) in 
+    coerce u j a raw 
 
-assume val prf_leak:
-  #u: usage info -> 
-  #i: id ->
-  #a: info {a == get_info i} -> 
-  s: salt u i { flag_prf1 ==> ~(honest i)} -> Hashing.Spec.hkey a.ha
-// revisit condition, a bit awkward.
 
 /// ODH (precisely tracking the games, not yet code-complete
 /// --------------------------------------------------------------------------------------------------
