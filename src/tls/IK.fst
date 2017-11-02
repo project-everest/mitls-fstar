@@ -165,8 +165,8 @@ type kdfa = Hashing.Spec.alg
 /// HKDF defines an injective function from label * context to bytes, to be used as KDF indexes.
 ///
 type context = 
-  | Extract: context // TLS extractions have no label and no context
-  | ExtractDH: id_dhe -> context 
+  | Extract: context // TLS extractions have no label and no context; we may separate Extract0 and Extract2
+  | ExtractDH: id_dhe -> context // This is Extract1 (the middle extraction)
   | Expand: context // TLS expansion with default hash value 
   | ExpandLog: // TLS expansion using hash of the handshake log
     info: TLSInfo.logInfo (* ghost, abstract summary of the transcript *) -> 
@@ -468,29 +468,86 @@ let derive  #u #i a k lbl ctx =
 /// --------------------------------------------------------------------------------------------------
 /// PSKs, Salt, and Extraction (can we be more parametric?)
 
+/// key-derivation table (memoizing create/coerce)
+
+let ssa #a: Preorder.preorder (option a) = fun x y -> 
+  match x, y with
+  | None, Some _ -> True 
+  | Some v, Some v' -> v == v'
+  | _ -> False 
+
+// memoizing a single extracted secret
+private type mref_secret (u: usage info) (i: id) = 
+  HyperStack.mref (option (secret u i)) ssa 
+
 /// covering two cases: application PSK and resumption PSK
 /// (the distinction follow from the value of i)
-assume type psk (#u: usage info) (i: id) 
-assume val create_psk: 
-  #u: usage info ->
-  i: id -> 
-  a: info {a == get_info i} -> 
-  psk #u i 
+type psk (u: usage info) (i: id) = (
+  let i' = Derive i "" Extract in 
+  if (* Flags.extract0 && *) honest i 
+  then mref_secret u i'
+  else lbytes (secret_len (get_info i')))
 
-assume val coerce_psk: 
-//#ip: ipkg -> 
+val coerce_psk: 
   #u: usage info ->
   i: id -> 
   a: info {a == get_info i} -> 
   raw: lbytes (secret_len a) -> 
-  psk #u i 
+  ST (psk u i)
+  (requires fun h0 -> ~(honest i))
+  (ensures fun h0 p h1 -> (*TBC*) True)
+let coerce_psk #u i a raw = raw
+
+val create_psk: 
+  #u: usage info ->
+  i: id -> 
+  a: info {a == get_info i} -> 
+  ST (psk u i)
+  (requires fun h0 -> True)
+  (ensures fun h0 p h1 -> (*TBC*) True)
+let create_psk #u i a = 
+  if honest i then 
+    let t' = secret u (Derive i "" Extract) in 
+    let r: psk u i = Monotonic.RRef.m_alloc #(option t') #ssa there None in // better style or library call? 
+    r
+  else 
+    coerce_psk #u i a (sample (secret_len a)) 
 
 let pskp (*ip:ipkg*) (u:usage info): pkg info (ii get_info) = Pkg 
-  psk
+  (psk u)
   secret_len
   create_psk
-  (coerce_psk #u)
-  
+  coerce_psk
+
+/// HKDF.Extract(key=0, materials=k) idealized as a (single-use) PRF,
+/// possibly customized on the distribution of k.
+val extract0:
+  #u: usage info ->
+  #i: id ->
+  k: psk u i -> 
+  a: info {a == get_info i} ->
+  ST 
+    (secret u (Derive i "" Extract))
+    (requires fun h0 -> True)
+    (ensures fun h0 p h1 -> (*TBC*) True)
+
+let extract0 #u #i k a = 
+  let i': id = Derive i "" Extract in 
+  if (* Flags.extract0 && *) honest i 
+  then 
+    let k: mref_secret u i = k in 
+    match admit() (* Monotonic.RRef.m_read k *) with //17-11-02 ?!
+    | Some extract -> extract
+    | None -> 
+        let extract = create u i' a in 
+        //TODO framing 
+        // Monotonic.RRef.m_write k extract; 
+        extract 
+  else 
+    let raw = HKDF.extract #(a.ha) (Hashing.zeroHash a.ha) k in 
+    assume(honest i' ==> honest i); //17-10-31 TODO with Antoine
+    coerce u i' a raw
+
 
 /// The "salt" is an optional secret used (exclusively) as HKDF
 /// extraction key. The absence of salt (e.g. when no PSK is used) is
@@ -498,8 +555,12 @@ let pskp (*ip:ipkg*) (u:usage info): pkg info (ii get_info) = Pkg
 /// 
 /// salt is indexed by the usage of the secret that will be extracted
 /// (the usage of the salt itself is fixed).
-/// 
+///
+/// We use separate code for salt1 and salt2 because they are
+/// separately idealized (salt1 is more complicated)
+
 assume type salt (u: usage info) (i: id)
+
 assume val create_salt: 
   #u: usage info -> 
   i: id -> 
@@ -507,53 +568,17 @@ assume val create_salt:
   salt u i
 
 assume val coerce_salt: 
-//#ip: ipkg ->
   #u: usage info ->
   i: id ->
   a: info -> 
   raw: lbytes (secret_len a) ->
   salt u i 
 
-/// We use separate packages for Extract1 and Extract2,
-/// as formally they involve separate security assumptions.
-
-let saltp1 (*ip:ipkg*) (u:usage info): pkg info (ii get_info) = Pkg 
+let saltp (*ip:ipkg*) (u:usage info): pkg info (ii get_info) = Pkg 
   (salt u)
   secret_len
   create_salt 
   coerce_salt
-
-let saltp2 (*ip:ipkg*) (u:usage info): pkg info (ii get_info) = Pkg 
-  (salt u)
-  secret_len
-  create_salt 
-  coerce_salt
-
-(* gone for now, but we'll still need to prove Info is WF
-// re-indexing... a bit of a pain 
-let info_extract0 (i:ii.t) (a: info i): info (Derive i "" Extract) = 
-  let Info ha v = a in Info ha v
-let info_extract1 (i:ii.t) (a: info i) (materials: id_dhe): info (Derive i "" (ExtractDH materials)) =  
-  let Info ha v = a in Info ha v
-
-//17-10-25 how to do this?? a bit ridiculous
-  // match a with 
-  // | Info ha aea loginfo hv -> 
-  //   let aea  = match aea with 
-  //     | AES_GCM128 -> AES_GCM128 #(Extract0 i)
-  //     | AES_GCM256 -> AES_GCM256 #(Extract0 i) in
-  //   Info #(Extract0 i) ha aea loginfo hv
-*)
-  
-
-/// HKDF.Extract(key=0, materials=k) idealized as a single-use PRF,
-/// possibly customized on the distribution of k.
-assume val extract0:
-  #u: usage info ->
-  #i: id ->
-  a: info {a == get_info i} ->
-  k: psk #u i -> 
-  secret u (Derive i "" Extract) 
 
 
 /// HKDF.Extract(key=s, materials=dh_secret) idealized as 2-step
@@ -922,13 +947,81 @@ let extractP #u #i a s =
   
 
 
+/// ---------------- final (useless) extraction --------------------
+/// 
+type salt2 (u: usage info) (i: id) = (
+  let i' = Derive i "" Extract in 
+  if (*TODO Flags.ideal && *) honest i  
+  then mref_secret u i'
+  else lbytes (secret_len (get_info i')))
+
+// same code as for PSKs; but extract0 and extract2 differ concretely
+
+val coerce_salt2: 
+  #u: usage info ->
+  i: id ->
+  a: info {a == get_info i} -> 
+  raw: lbytes (secret_len a) ->
+  ST (salt2 u i)
+  (requires fun h0 -> ~(honest i))
+  (ensures fun h0 p h1 -> (*TBC*) True)
+let coerce_salt2 #u i a raw = raw
+
+val create_salt2: 
+  #u: usage info -> 
+  i: id -> 
+  a: info {a == get_info i} -> 
+  ST (salt2 u i)
+  (requires fun h0 -> True)
+  (ensures fun h0 p h1 -> (*TBC*) True)
+let create_salt2 #u i a = 
+  if honest i then 
+    let t' = secret u (Derive i "" Extract) in 
+    let r: salt2 u i = Monotonic.RRef.m_alloc #(option t') #ssa there None in // better style or library call? 
+    r
+  else 
+    coerce_salt2 #u i a (sample (secret_len a)) 
+
+let saltp2 (u:usage info): pkg info (ii get_info) = Pkg 
+  (salt2 u)
+  secret_len
+  create_salt2 
+  coerce_salt2
+
 /// HKDF.Extract(key=s, materials=0) idealized as a single-use PRF.
-assume val extract2: 
+/// The salt is used just for extraction, hence [u] here is for the extractee.
+/// Otherwise the code is similar to [derive], with different concrete details
+val extract2: 
   #u: usage info ->
   #i: id ->
+  s: salt2 u i -> 
   a: info {a == get_info i} ->
-  s: salt u i -> 
-  secret u (Derive i "" Extract) 
+  ST (secret u (Derive i "" Extract))
+    (requires fun h0 -> True)
+    (ensures fun h0 p h1 -> (*TBC*) True)
+
+let extract2 #u #i s a = 
+  let i' = Derive i "" Extract in 
+  assert(wellformed_id i');
+  assert(a = get_info i');
+  if (* Flags.extract0 && *) honest i 
+  then 
+    let s: mref_secret u i = s in 
+    match admit() (* Monotonic.RRef.m_read k *) with //17-11-02 ?!
+    | Some extract -> extract
+    | None -> 
+        let extract = create u i' a in 
+        //TODO framing 
+        // Monotonic.RRef.m_write k extract; 
+        extract 
+  else 
+    let raw = HKDF.extract #(a.ha) s (Hashing.zeroHash a.ha) in 
+    assume(honest i' ==> honest i); //17-10-31 TODO with Antoine
+    coerce u i' a raw
+
+
+
+
 
 /// module KeySchedule
 /// composing them specifically for TLS
@@ -986,7 +1079,7 @@ and u_handshake_secret (n:nat): Tot (usage info) (decreases (%[n; 1])) =
 and u_early_secret (n:nat): Tot (usage info) (decreases (%[n;2])) = 
   fun lbl -> match lbl with 
   | "traffic" -> Use info get_info (pp u_traffic) (derive_info lbl)
-  | "salt" -> Use info get_info (saltp1 (u_handshake_secret n)) (derive_info lbl)
+  | "salt" -> Use info get_info (saltp (u_handshake_secret n)) (derive_info lbl)
   | _ -> u_default lbl
 
 /// Tot required... can we live with this integer indexing?
@@ -1016,7 +1109,6 @@ let rec u_of_i i = match i with
        let (| info', get_info', pkg', _ |) = u lbl in 
 *)       
 
-
 /// Usability? A mock-up of the TLS 1.3 key schedule.
 /// 
 /// Although the usage computes everything at each derivation, each
@@ -1031,10 +1123,10 @@ val ks: unit -> St unit
 let ks() =
   let ipsk: id = Preshared Hashing.Spec.SHA1 0 in
   let a = Info Hashing.Spec.SHA1 None in
-  let psk0: psk #u ipsk = create_psk ipsk a in
+  let psk0: psk u ipsk = create_psk ipsk a in
   
   let i0: id = Derive ipsk "" Extract in 
-  let early_secret: secret u i0 = extract0 a psk0 in
+  let early_secret: secret u i0 = extract0 psk0 a in
   let i_traffic0: id = Derive i0 "traffic" Expand in 
   let early_traffic: secret u_traffic i_traffic0 = derive a early_secret "traffic" Expand in  
   let i_0rtt: id = Derive i_traffic0 "ClientKey" Expand in
@@ -1058,11 +1150,11 @@ let ks() =
   let i_salt2: id = Derive i1 "salt" Expand in 
   let salt2: salt (u_master_secret depth) i_salt2 = derive a hs_secret "salt" Expand in 
   let i2: id = Derive i_salt2 "" Extract in 
-  let master_secret: secret (u_master_secret depth) i2 = extract2 a salt2 in 
+  let master_secret: secret (u_master_secret depth) i2 = extract2 #(u_master_secret depth) #i_salt2 salt2 a in 
   let i3: id = Derive i2 "resumption" Expand in 
-  let rsk: psk #(u_early_secret (depth - 1)) i3  = derive a master_secret "resumption" Expand in 
+  let rsk: psk (u_early_secret (depth - 1)) i3  = derive a master_secret "resumption" Expand in 
   let i4: id = Derive i3 "" Extract in
-  let next_early_secret: secret (u_early_secret (depth -1)) i4 = extract0 a rsk in
+  let next_early_secret: secret (u_early_secret (depth -1)) i4 = extract0 rsk a in
   ()
 
 
