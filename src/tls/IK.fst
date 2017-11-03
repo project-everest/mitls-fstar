@@ -253,12 +253,13 @@ let digest_info (a:kdfa) (info:TLSInfo.logInfo) (hv: Hashing.Spec.anyTag) =
 
 /// stratified definition of id required.
 ///
-let rec wellformed_id: (pre_id -> Type0) = function
+val wellformed_id: pre_id -> Type0 
+let rec wellformed_id = function
   | Preshared a _ -> True
   | Derive i l (ExpandLog info hv) -> wellformed_id i /\ digest_info (ha_of_id i) info hv 
   | Derive i lbl ctx -> 
       //TODO "ctx either extends the parent's, or includes its idh" /\ 
-      wellformed_id i
+      wellformed_id i 
            
 type id = i:pre_id {wellformed_id i}
 
@@ -343,13 +344,14 @@ type info = | Info:
 
 val get_info: id -> info 
 // 17-11-01 can't get it to verify; should follow from the definition of wellformed_id? 
+#set-options "--max_ifuel 4 --initial_ifuel 1"
 let rec get_info (i0: id): info = 
   match i0 with 
   | Preshared a _ -> Info a None 
   | Derive i l (ExpandLog log hv) ->
        assert(wellformed_id i0); 
        assume false; 
-       // assert(wellformed_id i); 
+       //17-11-01 assert(wellformed_id i); 
        let i:id = i in // sigh
        let Info a _ = get_info i in
        Info a (Some (Log log hv))
@@ -453,9 +455,12 @@ val derive:
   ctx: context {wellformed_id (Derive i lbl ctx)} ->
   ST (derived_key u i lbl ctx)
   (requires fun h0 -> True)
-  (ensures fun h0 r h1 -> True)
+  (ensures fun h0 r h1 -> True
+    // modifies our own local state and whatever create/coerce modifies
+    // no need to track the ideal state
+  )
 
-let derive  #u #i a k lbl ctx = 
+let derive #u #i a k lbl ctx = 
   let x = Domain lbl ctx in 
   let use = u lbl in 
   let a' = use.derive i a ctx in 
@@ -479,23 +484,40 @@ let derive  #u #i a k lbl ctx =
     assume(honest i' ==> honest i); //17-10-31 TODO with Antoine
     use.pkg'.coerce i' a' raw
 
+/// Outlining a global KDF state invariant, supported by package
+/// definition tables for all derivable functionalities.
+///
+/// for all (i: id) (lbl) (ctx).
+///   let i' = Derive lbl ctx in
+///   wellformed_id i' ==>
+///   let u = u_of_i i in
+///   let pkg',... = u lbl in 
+///   match KDF.lookup i with
+///   | None -> None? pkg'.lookup i' // used when creating PRFs
+///   | Some k -> pkg'.lookup i' == lookup k (Domain lbl ctx) // used when extending PRFs.
+/// 
+/// The invariant is restored by the time derive return.
+/// (note we implicitly rely on u_of_i)
+
+
 /// --------------------------------------------------------------------------------------------------
 /// PSKs, Salt, and Extraction (can we be more parametric?)
 
 /// key-derivation table (memoizing create/coerce)
 
-assume val ssa: #a:Type0 -> Preorder.preorder (option a) 
-(*
-let ssa #a x y = 
-  match x, y with
-  | None, Some _ -> True 
-  | Some v, Some v' -> v == v'
-  | _ -> False 
-*)
+val ssa: #a:Type0 -> Preorder.preorder (option a) 
+let ssa #a = 
+  let f x y = 
+    match x,y with 
+    | None, _  -> True 
+    | Some v, Some v' -> v == v'
+    | _ -> False in
+  f
 
 // memoizing a single extracted secret
 private type mref_secret (u: usage info) (i: id) = 
-  HyperStack.mref (option (secret u i)) ssa 
+  // would prefer: HyperStack.mref (option (secret u i)) (ssa #(secret u i))
+  Monotonic.RRef.m_rref there (option (secret u i)) ssa
 
 /// covering two cases: application PSK and resumption PSK
 /// (the distinction follow from the value of i)
@@ -528,8 +550,7 @@ let create_psk #u i a =
   if honest i then 
     let i': id = Derive i "" Extract in 
     let t' = secret u i' in 
-    let r: mref_secret u i' = admit() in  //17-11-02  Monotonic.RRef.m_alloc #(option t') #(ssa #t') there None in // better style or library call? 
-    mref_secret_psk u i r 
+    mref_secret_psk u i (Monotonic.RRef.m_alloc there None) // better style or library call? 
   else 
     coerce_psk #u i a (sample (secret_len a)) 
 
@@ -556,12 +577,12 @@ let extract0 #u #i k a =
   if (* Flags.extract0 && *) honest i 
   then 
     let k: mref_secret u i' = k in 
-    match admit() (* Monotonic.RRef.m_read k *) with //17-11-02 ?!
+    match Monotonic.RRef.m_read k with 
     | Some extract -> extract
     | None -> 
         let extract = create u i' a in 
-        //TODO framing 
-        // Monotonic.RRef.m_write k extract; 
+        assume false; //TODO framing the empty mref
+        Monotonic.RRef.m_write k (Some extract); 
         extract 
   else 
     let raw = HKDF.extract #(a.ha) (Hashing.zeroHash a.ha) k in 
@@ -1170,7 +1191,9 @@ let ks() =
   let cipher  = encrypt k1 11 in 
   
   let i_salt2: id = Derive i1 "salt" Expand in 
-  let salt2: salt (u_master_secret depth) i_salt2 = admit() in //17-11-02 not sure why this one is now failing // derive a hs_secret "salt" Expand in 
+  let salt2: salt (u_master_secret depth) i_salt2 = 
+    //derive a hs_secret "salt" Expand in 
+    admit() in //17-11-02 not sure why this one is now failing 
   let i2: id = Derive i_salt2 "" Extract in 
   let master_secret: secret (u_master_secret depth) i2 = extract2 #(u_master_secret depth) #i_salt2 salt2 a in 
   let i3: id = Derive i2 "resumption" Expand in 
