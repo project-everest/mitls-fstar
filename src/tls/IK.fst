@@ -70,7 +70,7 @@ noeq type ipkg (info: Type0)  = | Idx:
 /// Derived key length restriction when using HKDF
 type keylen = l:UInt32.t {UInt32.v l <= 256} 
 
-// got into trouble using a type abbreviation for "info i"; retry later
+// got into trouble using a type abbreviation for "info i"; retry later; NS-11/03: Didn't understand this remark
 
 noeq type pkg (info: Type0) (ip: ipkg info) = | Pkg:
   key: (ip.t -> Type0) -> 
@@ -131,6 +131,9 @@ let mp (ip:ipkg aeadAlg): pkg aeadAlg ip = Pkg
   create_key 
   coerce_key
 
+// NS:11/03: It's probably quite brittle for F* to infer ip
+//           It requires the type of the second argument to specifically be in
+//           the unreduced form Idx?.t ip
 val encrypt: #ip:ipkg aeadAlg -> #i:ip.t -> k: key i -> nat -> nat 
 let encrypt #ip #i k v = v + 1
 
@@ -343,23 +346,42 @@ type info = | Info:
   option (details  ha) -> info 
 
 val get_info: id -> info 
-// 17-11-01 can't get it to verify; should follow from the definition of wellformed_id? 
-#set-options "--max_ifuel 4 --initial_ifuel 1"
+#set-options "--initial_ifuel 2 --initial_fuel 2"
 let rec get_info (i0: id): info = 
   match i0 with 
-  | Preshared a _ -> Info a None 
+  | Preshared a _ ->
+    Info a None 
+  
   | Derive i l (ExpandLog log hv) ->
-       assert(wellformed_id i0); 
-       assume false; 
-       //17-11-01 assert(wellformed_id i); 
+    Info (ha_of_id i) (Some (Log log hv))
+
+  | Derive i _ _ -> 
+    get_info i 
+
+(* NS: USED TO BE WHAT FOLLOWS ...
+      
+   This indeed does not verify, 
+   since it seems to be off by a use of ha_of_id
+
+   Not sure what the intended semantics is 
+   
+// 17-11-01 can't get it to verify; should follow from the definition of wellformed_id? 
+ let rec get_info (i0: id): info =
+   match i0 with
+   | Preshared a _ -> Info a None
+   | Derive i l (ExpandLog log hv) ->
+       assert(wellformed_id i0);
+       assume false;
+       //17-11-01 assert(wellformed_id i);
        let i:id = i in // sigh
        let Info a _ = get_info i in
        Info a (Some (Log log hv))
-  | Derive i _ _ -> 
-       assert(wellformed_id i); 
+   | Derive i _ _ ->
+       assert(wellformed_id i);
        let i:id = i in // sigh
-       get_info i 
+       get_info i
 
+**)
 let derived_key 
   (u: usage info) 
   (i: id) 
@@ -415,6 +437,22 @@ val coerce:
   (ensures fun h0 p h1 -> True)
 let coerce u i a repr = repr
 
+/// NS:
+/// MonotoneMap.alloc is a stateful function with all implicit arguments
+/// F* will refuse to instantiate all those arguments, since implicit
+/// instantiation in F* should never result in an effect.
+///
+/// Stateful functions always take at least 1 concrete argument.
+///
+/// I added a unit here
+let alloc (#r:FStar.Monotonic.RRef.rid) #a #b #inv (u:unit)
+  : ST (MonotoneMap.t r a b inv)
+       (requires (fun h -> inv (MonotoneMap.empty_map a b)))
+       (ensures (fun h0 x h1 ->
+    inv (MonotoneMap.empty_map a b) /\
+    ralloc_post r (MonotoneMap.empty_map a b) h0 (FStar.Monotonic.RRef.as_hsref x) h1))
+  = MonotoneMap.alloc #r #a #b #inv
+  
 val create: 
 //ip: ipkg ->
   u: usage info -> 
@@ -426,8 +464,7 @@ val create:
 let create u i a = 
   if honest i 
   then 
-    //style: how to avoid repeating those parameters?
-    MonotoneMap.alloc #there #(domain i) #(fun (Domain lbl ctx) -> derived_key u i lbl ctx) #(fun _ -> True) 
+    ideal_secret (alloc ())
   else 
     coerce u i a (sample (secret_len a)) 
 
@@ -528,6 +565,7 @@ type psk (u: usage info) (i: id) = (
   else lbytes (secret_len (get_info i')))
 
 let mref_secret_psk (u: usage info) (i: id) (s:mref_secret u (Derive i "" Extract){honest i}) : psk u i = s
+let psk_mref_secret (#u: usage info) (#i: id) (p:psk u i{honest i}) : mref_secret u (Derive i "" Extract) = p
 
 val coerce_psk: 
   #u: usage info ->
@@ -576,13 +614,12 @@ let extract0 #u #i k a =
   let i': id = Derive i "" Extract in 
   if (* Flags.extract0 && *) honest i 
   then 
-    let k: mref_secret u i' = k in 
-    match Monotonic.RRef.m_read k with 
+    match Monotonic.RRef.m_read (psk_mref_secret k) with 
     | Some extract -> extract
     | None -> 
         let extract = create u i' a in 
         assume false; //TODO framing the empty mref
-        Monotonic.RRef.m_write k (Some extract); 
+        Monotonic.RRef.m_write (psk_mref_secret k) (Some extract); 
         extract 
   else 
     let raw = HKDF.extract #(a.ha) (Hashing.zeroHash a.ha) k in 
@@ -645,7 +682,7 @@ assume val flag_odh: b:bool { (flag_prf1 ==> b) /\ (b ==> Flags.ideal_KEF) }
 assume val prf_leak:
   #u: usage info -> 
   #i: id ->
-  #a: info {a == get_info i} -> 
+  #a: info {a == get_info i} -> //NS: why do you needs this parameter? It can only be inferred in a brittle way using the syntactic shape of the result type; and it also seems redundant since it can be computed from i
   s: salt u i { flag_prf1 ==> ~(honest i)} -> Hashing.Spec.hkey a.ha
 // revisit condition, a bit awkward.
 
@@ -719,11 +756,7 @@ let odh_table =
 
 let odh_state: (if Flags.ideal_KEF then odh_table else unit) = 
   if Flags.ideal_KEF
-  then MonotoneMap.alloc 
-    #there
-    #(g: CommonDH.group & gX: CommonDH.share g)
-    #(fun (| g, gX |) -> _:peer_table gX{CommonDH.honest_share (|g, gX|)})
-    #(fun _ -> True)
+  then alloc () <: odh_table
   else ()
 
 val honest_gX: #g:CommonDH.group -> gX: CommonDH.share g -> Type0 
@@ -787,13 +820,7 @@ let odh_init g =
     // TODO 17-10-22 since gX is freshly registered, we statically
     // know it can't occur in the peers table; what's a better keygen
     // spec for that?
-    let peers = MonotoneMap.alloc 
-      #there 
-      #(i:id * gY: CommonDH.share g)
-      #(fun i_gY -> 
-        let (i, gY) = i_gY in 
-        secret (u_of_i i) (Derive i "" (ExtractDH (IDH gX gY))))
-      #(fun _ -> True) in
+    let peers = alloc  () <: peer_table gX in
     if None? (MonotoneMap.lookup t (|g,gX|)) then MonotoneMap.extend t (|g,gX|) peers;
     assert(honest_gX gX)
     );
@@ -812,14 +839,14 @@ let odh_init g =
 val odh_test:
   #u: usage info -> 
   #i: id -> 
-  a: info {a == get_info i} -> 
+  a: info {a == get_info i} ->  //NS: Again, why this parameter that can be computed from i?
   s: salt u i ->
   g: CommonDH.group ->
   gX: CommonDH.share g -> 
   ST ( 
     gY:CommonDH.share g &
-    (let idh = IDH gX gY in //17-10-31 BUG? adding the eta-expansion was necessary
-    secret u (Derive i "" (ExtractDH idh))))
+    (// let idh = IDH gX gY in //17-10-31 BUG? adding the eta-expansion was necessary NS: doesn't seem necessary any more
+    secret u (Derive i "" (ExtractDH (IDH gX gY))))) //idh))))
   (requires fun h0 -> honest_gX gX)
   (ensures fun h0 r h1 -> 
     // todo, as sanity check
@@ -861,7 +888,7 @@ let odh_test #u #i a s g gX =
 val odh_prf:
   #u: usage info -> 
   #i: id -> 
-  a: info {a == get_info i}-> 
+  a: info {a == get_info i}->  //NS: idem
   s: salt u i ->
   g: CommonDH.group ->
   x: CommonDH.keyshare g -> 
@@ -874,25 +901,19 @@ val odh_prf:
       let gX = CommonDH.pubshare x in
       honest_gX gX /\ (
       Flags.ideal_KEF ==> (
-        let t: odh_table = odh_state in 
+        let t: odh_table = odh_state in  //NS: This coercion is a necessary, common pattern
         MonotoneMap.defined t (|g,gX|) h0 /\ (
         let peers = MonotoneMap.value t (|g,gX|) h0 in 
-        ~ (MonotoneMap.defined peers (i,gY) h0)))))  // what a mouthful
+        ~ (MonotoneMap.defined peers (i,gY) h0)))))  // what a mouthful NS: aside from the coercion above which I don't see how to remove easily, compressing this post-condition seems to be an application-specific thing, right? i.e, you could define some abbreviation to stand for this predicate
     (ensures fun h0 _ h1 -> True)
 
 // requires peer[gX] is defined (witnessed in x) and does not contain (i,gY)
 // None? (find (i, gY) !peer[gX])
-
-// 17-11-01 stuck on seemingly identical types.
-// #set-options "--detail_errors"
-// #set-options "--print_full_names --print_universes --print_implicits"
-// #set-options "--ugly" 
 let odh_prf #u #i a s g x gY = 
   let gX = CommonDH.pubshare x in 
   let idh = IDH gX gY in
   let gZ = CommonDH.dh_initiator x gY in
-  admit()
-  // prf_extract1 a s idh gZ
+  prf_extract1 a s idh gZ
 
 
 /// --------------------------------------------------------------------------------------------------
@@ -916,31 +937,21 @@ val extractR:
   gX: CommonDH.share g ->
   ST( 
     gY:CommonDH.share g & (
-      let idh = IDH gX gY in 
-      secret u (Derive i "" (ExtractDH idh))))
+      secret u (Derive i "" (ExtractDH (IDH gX gY)))))
     (requires fun h0 -> True)
     (ensures fun h0 _ h1 -> True)
-
-//#set-options "--print_universes --print_implicits --print_full_names"
-//#set-options "--max_ifuel 3 --initial_ifuel 1"
-//#set-options "--ugly" 
 let extractR #u #i s a g gX = 
   let b = 
     if Flags.ideal_KEF then test_honest_gX gX else false in
   if b 
-  then 
-//17-11-01 why do I need to rewrite [odh_test a s g gX] to this?
-    let (| gY, k |) = odh_test a s g gX in
-    (| gY, k |)
+  then odh_test a s g gX
   else
     // real computation: gY is honestly-generated but the exchange is doomed
     let gY, gZ = CommonDH.dh_responder gX in 
     let idh = IDH gX gY in
     let j = Derive i "" (ExtractDH idh) in 
     let k = prf_extract1 a s idh gZ in
-//17-11-01 still stuck on that one
-   admit() 
-   // (| gY, k |)
+    (| gY, k |)
 
 /// Initiator computes DH secret material
 val extractI: 
@@ -964,7 +975,7 @@ let extractI #u #i a s g x gY =
     let peers = Some?.v (MonotoneMap.lookup t (|g,gX|)) in 
     let i' = Derive i "" (ExtractDH idh) in
     assert(wellformed_id i);
-    assume(wellformed_id i'); //17-11-01 same as above?
+    assert(wellformed_id i'); //17-11-01 same as above? NS: seems to work
     let ot = secret u i' in
     assume (u == u_of_i i); //17-11-01 indexing does not cover u yet
     let o : option ot = MonotoneMap.lookup peers (i,gY) in
@@ -983,10 +994,7 @@ val extractP:
   (ensures fun h0 r h1 -> True)
 let extractP #u #i a s = 
   let gZ = Hashing.Spec.zeroHash a.ha in
-///17-11-01 stuck on this one too.  
-  admit()
-  // prf_extract1 a s NoDHE gZ
-  
+  prf_extract1 a s NoIDH gZ
 
 
 /// ---------------- final (useless) extraction --------------------
@@ -1019,7 +1027,7 @@ val create_salt2:
 let create_salt2 #u i a = 
   if honest i then 
     let t' = secret u (Derive i "" Extract) in 
-    let r: mref_secret u (Derive i "" Extract) = admit() in //17-11-02 Monotonic.RRef.m_alloc #(option t') #ssa there None in // better style or library call? 
+    let r: mref_secret u (Derive i "" Extract) = Monotonic.RRef.m_alloc there None in // better style or library call? 
     let r: salt2 u i = r in
     r
   else 
@@ -1044,13 +1052,12 @@ val extract2:
     (ensures fun h0 p h1 -> (*TBC*) True)
 
 let extract2 #u #i s a = 
-  let i' = Derive i "" Extract in 
-  assert(wellformed_id i');
+  let i' : id = Derive i "" Extract in 
   assert(a = get_info i');
   if (* Flags.extract0 && *) honest i 
   then 
     let s: mref_secret u i' = s in 
-    match admit() (* Monotonic.RRef.m_read k *) with //17-11-02 ?!
+    match Monotonic.RRef.m_read s with //17-11-02 ?! NS: fixed now?
     | Some extract -> extract
     | None -> 
         let extract = create u i' a in 
@@ -1157,6 +1164,9 @@ let rec u_of_i i = match i with
 /// Although the usage computes everything at each derivation, each
 /// still requires 3 type annotations to go through... Can we improve
 /// it?
+//NS: Not sure what sort of improvement you're aiming for
+//    Can you sketch what you would like to write instead?
+//    And why you would expect it to work?
 
 // Testing normalization works for a parametric depth
 assume val depth:  n:nat {n > 1} 
@@ -1192,16 +1202,19 @@ let ks() =
   
   let i_salt2: id = Derive i1 "salt" Expand in 
   let salt2: salt (u_master_secret depth) i_salt2 = 
-    //derive a hs_secret "salt" Expand in 
-    admit() in //17-11-02 not sure why this one is now failing 
+    //Subtyping check failed; expected type IK.salt (IK.u_master_secret IK.depth) i_salt2; got type IK.derived_key (IK.u_handshake_secret IK.depth) i1 "salt" IK.Expand
+    // derive a hs_secret "salt" Expand in 
+    magic () in //NS: magic is better because it doesn't admit the continuation
+    //admit() in //17-11-02 not sure why this one is now failing 
   let i2: id = Derive i_salt2 "" Extract in 
-  let master_secret: secret (u_master_secret depth) i2 = extract2 #(u_master_secret depth) #i_salt2 salt2 a in 
+  let master_secret: secret (u_master_secret depth) i2 = extract2 #(u_master_secret depth) #i_salt2 
+    (magic ()) //NS: used to be (* salt2 *)  //expected type IK.salt2 (IK.u_master_secret IK.depth) i_salt2; got type IK.salt (IK.u_master_secret IK.depth) i_salt2
+    a in 
   let i3: id = Derive i2 "resumption" Expand in 
   let rsk: psk (u_early_secret (depth - 1)) i3  = derive a master_secret "resumption" Expand in 
   let i4: id = Derive i3 "" Extract in
   let next_early_secret: secret (u_early_secret (depth -1)) i4 = extract0 rsk a in
   ()
-
 
 (* --- 
 
