@@ -4,25 +4,36 @@ module IK
 /// parametrized by a usage function from labels to derived keyed
 /// functionalities.
 ///
-/// * captures nested derivations via bounded-recursive instantiation.
+/// * captures resumption derivations via bounded-recursive instantiation.
 /// * captures PRF-ODH double game 
 /// * applied to the full extract/expand key schedule of TLS 1.3
 /// * models partial key compromise, controlled by the adversary for each new key
-/// * features agility and ideal-only indexes.
+/// * features agility on hash algorithms and DH groups, and ideal-only indexes.
 ///
 /// We plan to split this file into many modules, as planned on slack.
 /// 
 /// Not done yet:
 ///
-/// * mysterious typing errors (see comments) 
-/// * reliance on u_of_i in DH extraction (intuitive but hard to code)
-/// * key registration and discretionary compromise 
-/// * extraction: ensure all strongly-dependent types disappear
-/// * deal with create/coerce stateful pre- and post-condition.
-/// * usage restriction for KDFs, based on a generalization of wellformed_id
+/// * mysterious typing errors (see comments)
 ///
-/// Note also that we support rather static agility and usages; we may
-/// enable more details to be bound as part of the derivation label.
+/// * define/review all idealization flags. How are they accessed? 
+/// 
+/// * reliance on u_of_i in DH extraction (intuitive but hard to code)
+/// 
+/// * key registration and discretionary compromise 
+///
+/// * extraction: ensure all strongly-dependent types disappear and
+///   (concretely) the key schedule directly allocates all key
+///   instances.
+/// 
+/// * deal with create/coerce stateful pre- and post-condition.
+/// 
+/// * usage restriction for KDFs, based on a generalization of wellformed_id
+///   (starting with an example of hashed-log derivation)
+///
+/// Note also that we support rather static agility and usages; while
+/// this is sufficient for TLS, we might enable more details to be
+/// bound at derivation-time as part of the derivation context.
 
 open FStar.HyperStack
 open FStar.HyperStack.ST
@@ -418,17 +429,20 @@ let create u i a =
   else 
     coerce u i a (sample (secret_len a)) 
 
+/// We are using many KDF packages (one for each usage),
+/// idealized one at a time.  (Having one proof step for each nested
+/// level of key derivation seems unavoidable: we need to idealize
+/// parents before childrens.)
+
 let pp (* ip:ipkg *) (u: usage info): pkg info (ii get_info) = Pkg 
   (secret u) 
   secret_len
   (create u) 
   (coerce u)
 
-/// TODO consider separating pp packages more explicitly, so that we
-/// can idealize them one at a time. (Having one proof step for each
-/// nested level of key derivation seems unavoidable.)
-
-
+/// The well-formedness condition on the derived label (opaque from
+/// the viewpoint of the KDF) enforces 
+/// 
 inline_for_extraction
 val derive:
   #u: usage info ->
@@ -446,7 +460,7 @@ let derive  #u #i a k lbl ctx =
   let use = u lbl in 
   let a' = use.derive i a ctx in 
   let i' = Derive i lbl ctx in 
-  if honest i (*safe?*) 
+  if (* Flags.kdf n && *) honest i (*safe?*) 
   then
     let v: option (derived_key u i lbl ctx) = MonotoneMap.lookup (secret_ideal k) x in 
     match v with 
