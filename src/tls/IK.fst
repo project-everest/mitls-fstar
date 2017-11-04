@@ -256,6 +256,12 @@ let digest_info (a:kdfa) (info:TLSInfo.logInfo) (hv: Hashing.Spec.anyTag) =
 
 /// stratified definition of id required.
 ///
+/// we will enforce
+/// * consistency on the hash algorithm
+/// * monotonicity of the log infos (recursively including earlier resumption logs). 
+/// * usage restriction: the log after DH must include the DH identifier of the parent.
+///   (Hence, we should either forbid successive DHs or authenticate them all.)
+/// 
 val wellformed_id: pre_id -> Type0 
 let rec wellformed_id = function
   | Preshared a _ -> True
