@@ -70,7 +70,7 @@ noeq type ipkg (info: Type0)  = | Idx:
 /// Derived key length restriction when using HKDF
 type keylen = l:UInt32.t {UInt32.v l <= 256} 
 
-// got into trouble using a type abbreviation for "info i"; retry later; NS-11/03: Didn't understand this remark
+// got into trouble using a type abbreviation [a:info{a == ip.get_info i}]; retry later; NS-11/03: Didn't understand this remark
 
 noeq type pkg (info: Type0) (ip: ipkg info) = | Pkg:
   key: (ip.t -> Type0) -> 
@@ -370,22 +370,13 @@ let rec get_info (i0: id): info =
    since it seems to be off by a use of ha_of_id
 
    Not sure what the intended semantics is 
-   
-// 17-11-01 can't get it to verify; should follow from the definition of wellformed_id? 
- let rec get_info (i0: id): info =
-   match i0 with
-   | Preshared a _ -> Info a None
+
+CF: still don't get it. second case was: 
+
    | Derive i l (ExpandLog log hv) ->
-       assert(wellformed_id i0);
-       assume false;
-       //17-11-01 assert(wellformed_id i);
        let i:id = i in // sigh
        let Info a _ = get_info i in
        Info a (Some (Log log hv))
-   | Derive i _ _ ->
-       assert(wellformed_id i);
-       let i:id = i in // sigh
-       get_info i
 
 **)
 let derived_key 
@@ -451,6 +442,8 @@ let coerce u i a repr = repr
 /// Stateful functions always take at least 1 concrete argument.
 ///
 /// I added a unit here
+///
+/// CF: Ok; I did not know. Is it a style bug in MonotoneMap ?
 let alloc (#r:FStar.Monotonic.RRef.rid) #a #b #inv (u:unit)
   : ST (MonotoneMap.t r a b inv)
        (requires (fun h -> inv (MonotoneMap.empty_map a b)))
@@ -688,9 +681,9 @@ assume val flag_odh: b:bool { (flag_prf1 ==> b) /\ (b ==> Flags.ideal_KEF) }
 assume val prf_leak:
   #u: usage info -> 
   #i: id ->
-  #a: info {a == get_info i} -> //NS: why do you needs this parameter? It can only be inferred in a brittle way using the syntactic shape of the result type; and it also seems redundant since it can be computed from i
+  #a: info {a == get_info i} -> //NS: why do you needs this parameter? It can only be inferred in a brittle way using the syntactic shape of the result type; and it also seems redundant since it can be computed from i. CF: the intent is that [i] (with all provenance details) will be erased, whereas [a] (with what we need at runtime) will be checked against i then extracted. We could make [a] explicit in all such functions (we currently use both styles).
   s: salt u i { flag_prf1 ==> ~(honest i)} -> Hashing.Spec.hkey a.ha
-// revisit condition, a bit awkward.
+// revisit flag condition, a bit awkward.
 
 val prf_extract1:
   #u: usage info -> 
@@ -762,7 +755,7 @@ let odh_table =
 
 let odh_state: (if Flags.ideal_KEF then odh_table else unit) = 
   if Flags.ideal_KEF
-  then alloc () <: odh_table
+  then alloc () <: odh_table // 17-11-04 convenient use of subtyping
   else ()
 
 val honest_gX: #g:CommonDH.group -> gX: CommonDH.share g -> Type0 
@@ -851,8 +844,7 @@ val odh_test:
   gX: CommonDH.share g -> 
   ST ( 
     gY:CommonDH.share g &
-    (// let idh = IDH gX gY in //17-10-31 BUG? adding the eta-expansion was necessary NS: doesn't seem necessary any more
-    secret u (Derive i "" (ExtractDH (IDH gX gY))))) //idh))))
+    secret u (Derive i "" (ExtractDH (IDH gX gY))))
   (requires fun h0 -> honest_gX gX)
   (ensures fun h0 r h1 -> 
     // todo, as sanity check
@@ -907,7 +899,7 @@ val odh_prf:
       let gX = CommonDH.pubshare x in
       honest_gX gX /\ (
       Flags.ideal_KEF ==> (
-        let t: odh_table = odh_state in  //NS: This coercion is a necessary, common pattern
+        let t: odh_table = odh_state in  //NS: This coercion is a necessary, common pattern. CF: when to use an auxiliary function vs an auxiliary let?
         MonotoneMap.defined t (|g,gX|) h0 /\ (
         let peers = MonotoneMap.value t (|g,gX|) h0 in 
         ~ (MonotoneMap.defined peers (i,gY) h0)))))  // what a mouthful NS: aside from the coercion above which I don't see how to remove easily, compressing this post-condition seems to be an application-specific thing, right? i.e, you could define some abbreviation to stand for this predicate
@@ -981,7 +973,7 @@ let extractI #u #i a s g x gY =
     let peers = Some?.v (MonotoneMap.lookup t (|g,gX|)) in 
     let i' = Derive i "" (ExtractDH idh) in
     assert(wellformed_id i);
-    assert(wellformed_id i'); //17-11-01 same as above? NS: seems to work
+    assert(wellformed_id i');
     let ot = secret u i' in
     assume (u == u_of_i i); //17-11-01 indexing does not cover u yet
     let o : option ot = MonotoneMap.lookup peers (i,gY) in
@@ -1063,7 +1055,7 @@ let extract2 #u #i s a =
   if (* Flags.extract0 && *) honest i 
   then 
     let s: mref_secret u i' = s in 
-    match Monotonic.RRef.m_read s with //17-11-02 ?! NS: fixed now?
+    match Monotonic.RRef.m_read s with
     | Some extract -> extract
     | None -> 
         let extract = create u i' a in 
@@ -1173,6 +1165,10 @@ let rec u_of_i i = match i with
 //NS: Not sure what sort of improvement you're aiming for
 //    Can you sketch what you would like to write instead?
 //    And why you would expect it to work?
+// CF: The comment is out of date: this sample code is simpler than
+// one week ago. Still, I would prefer not to have to write the
+// intermediate indexes, which are all computable from the usage in
+// the caller context and not necessarily useful for the caller.
 
 // Testing normalization works for a parametric depth
 assume val depth:  n:nat {n > 1} 
@@ -1208,9 +1204,11 @@ let ks() =
   
   let i_salt2: id = Derive i1 "salt" Expand in 
   let salt2: salt (u_master_secret depth) i_salt2 = 
-    //Subtyping check failed; expected type IK.salt (IK.u_master_secret IK.depth) i_salt2; got type IK.derived_key (IK.u_handshake_secret IK.depth) i1 "salt" IK.Expand
+    //Subtyping check failed; expected type 
+    // IK.salt (IK.u_master_secret IK.depth) i_salt2; got type 
+    // IK.derived_key (IK.u_handshake_secret IK.depth) i1 "salt" IK.Expand
     // derive a hs_secret "salt" Expand in 
-    magic () in //NS: magic is better because it doesn't admit the continuation
+    magic () in //NS: magic is better because it doesn't admit the continuation. CF: Ok; good to know. But the two types above are equal, right? 
     //admit() in //17-11-02 not sure why this one is now failing 
   let i2: id = Derive i_salt2 "" Extract in 
   let master_secret: secret (u_master_secret depth) i2 = extract2 #(u_master_secret depth) #i_salt2 
