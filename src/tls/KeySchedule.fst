@@ -183,7 +183,9 @@ type ks_alpha13 = ae:aeadAlg * h:hash_alg
 
 type ks_client_state = (* see state machine in design slides *)
 | C_Init: 
+    // where do we use cr? table indexing? 
     cr:random -> ks_client_state
+
 | C_12_Resume_CH: 
     cr:random -> 
     si:sessionInfo -> 
@@ -201,24 +203,47 @@ type ks_client_state = (* see state machine in design slides *)
     alpha:ks_alpha12 -> 
     id:TLSInfo.msId -> 
     ms:ms -> ks_client_state
+
+// C_Init \/ C_13_wait_SH (2 cases) --> 
 | C_13_wait_SH: 
     cr:random -> 
+    // *overwritten* symmetric extracts for the PSKs we are proposing
+    // (the indexes are a function of those of the PKSs)
     esl: list (i:esId{~(NoPSK? i)} & es i) ->
+    // *overwritten* when hello_retry
+    // private exponents for the honestly-generated shares we are proposing
     gs: list (g:CommonDH.group & CommonDH.keyshare g) -> ks_client_state
+// ---> 
 | C_13_wait_SF: 
+    // algorithms for key derivation: hash_alg and aeadAlg.
     alpha:ks_alpha13 -> 
+    // finished keys and app ms; all their indexes are computed; 
+    // a bit arbitrarily we keep them in KS instead of HS
+    // maybe we can just index the state by their most recent common ancestor?
     (i:finishedId & cfk:fink i) -> 
     (i:finishedId & sfk:fink i) ->
     (i:asId & ams:ams i) -> ks_client_state
+// proposed update, assuming HS passes Nego.m and the ghost transcript to KS.
+// | C_13_wait_SF (m:Nego.mode): 
+//     cfk: fink (cfk_id m) ->
+//     sfk: fink (sfk_id m) -> 
+//     app_master_secret: secret (ams_id m) ->
+//     state 
+//
+// --->    
 | C_13_wait_CF: 
     alpha:ks_alpha13 -> 
     (i:finishedId & cfk:fink i) -> 
     (i:asId & ams:ams i) ->
+    // who should keep logInfo?
     (li:logInfo & i:rekeyId li & rekey_secrets i) -> ks_client_state
+// --->
 | C_13_postHS: 
     alpha:ks_alpha13 -> 
     (li:logInfo & i:rekeyId li & rekey_secrets i) ->
     (li:logInfo & i:rmsId li & rms i) -> ks_client_state
+
+// unreachable? 
 | C_Done
 
 type ks_server_state =
@@ -397,7 +422,7 @@ private let mk_binder (#rid) (pskid:PSK.pskid)
   let bk : binderKey bId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Binder bId) (fun _ -> True) rid bk in
   (| bId, bk|), (| i, es |)
 
-//17-09-23 never called?
+// called by Handshake
 let ks_client_13_get_binder_keys ks pskl =
   let KS #rid st = ks in
   let C (C_13_wait_SH cr [] gs) = !st in
@@ -828,12 +853,13 @@ let ks_client_12_resume ks sr pv cs =
 //   3. they are called at different locations
 
 val ks_client_13_sh: 
-  ks:ks -> 
-  sr:random -> 
-  cs:cipherSuite -> 
-  digest:bytes ->
-  gy:(g:CommonDH.group & CommonDH.share g) -> 
-  accept_psk:option nat ->
+  ks: ks -> 
+  (* new materials from ServerHello: *)
+  sr: random -> 
+  cs: cipherSuite -> 
+  gy: (g:CommonDH.group & CommonDH.share g) -> 
+  accept_psk: option nat ->
+  digest_sh: bytes ->
   ST recordInstance
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
@@ -847,21 +873,21 @@ val ks_client_13_sh:
       | _ -> False)))
   (ensures fun h0 r h1 ->
     let KS #rid st = ks in
-    modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1)) //17-09-23 fix style
+    modifies (Set.singleton rid) h0 h1 /\
+    modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1)) //17-09-23 fix style
 
 // ServerHello log breakpoint (client)
-let ks_client_13_sh ks sr cs log (| g, gy|) accept_psk =
-  dbg ("ks_client_13_sh hashed_log = "^(print_bytes log));
+let ks_client_13_sh ks sr cs (| g, gy|) accept_psk digest =
+  dbg ("ks_client_13_sh hashed_log = "^print_bytes digest);
   let KS #region st = ks in
   let C (C_13_wait_SH cr esl gc) = !st in
   let Some gx = List.Tot.find (
       fun ((| g', _ |):(x:CommonDH.group & CommonDH.keyshare g)) -> g = g'
     ) gc in
   let (| g, gx |) = gx in
-  let b = print_share gy in
+  let b = print_share gy in //style?
   let gxy = CommonDH.dh_initiator #g gx gy in
-  dbg ("DH shared secret: "^(print_bytes gxy));
+  dbg ("DH shared secret: "^print_bytes gxy);
   let CipherSuite13 ae h = cs in
   let gx = CommonDH.pubshare gx in
 
@@ -886,20 +912,23 @@ let ks_client_13_sh ks sr cs log (| g, gy|) accept_psk =
   dbg ("handshake secret:                "^print_bytes hs);
 
   let secretId = HandshakeSecretID hsId in
+
+  //17-11-06 used only ghostly; this should come as a
+  // pre-condition on the transcript associated with [digest]
   let li = LogInfo_SH ({
     li_sh_cr = cr;
     li_sh_sr = sr;
     li_sh_ae = ae;
     li_sh_hash = h;
-    li_sh_psk = None;
+    li_sh_psk = None; //17-11-06 dubious?
   }) in
-  let log: hashed_log li = log in
-  let c_expandId = ExpandedSecret secretId ClientHandshakeTrafficSecret log in
-  let s_expandId = ExpandedSecret secretId ServerHandshakeTrafficSecret log in
+  let digest: hashed_log li = digest in
+  let c_expandId = ExpandedSecret secretId ClientHandshakeTrafficSecret digest in
+  let s_expandId = ExpandedSecret secretId ServerHandshakeTrafficSecret digest in
 
-  let cts = HKDF.expand_secret hs "c hs traffic" log in
+  let cts = HKDF.expand_secret hs "c hs traffic" digest in
   dbg ("handshake traffic secret[C]:     "^print_bytes cts);
-  let sts = HKDF.expand_secret hs "s hs traffic" log in
+  let sts = HKDF.expand_secret hs "s hs traffic" digest in
   dbg ("handshake traffic secret[S]:     "^print_bytes sts);
   let (ck,civ) = keygen_13 cts ae in
   dbg ("handshake key[C]:                "^print_bytes ck^", IV="^print_bytes civ);

@@ -275,8 +275,9 @@ let verify_binder hs (bkey: i:binderId & bk:KeySchedule.binderKey i) (tag:btag b
 let client_Binders hs offer =
   match Nego.find_clientPske offer with
   | None -> () // No PSK, no binders
-  | Some (pskl, tlen) -> // Nego may filter the PSKs
+  | Some (pskl, _tlen) -> // Nego may filter the PSKs
     let pskl = List.Tot.map (fun (id, _) -> id) pskl in
+    //17-11-06 why calling KS twice? why returning the keys, rather than just [bid]? 
     let binderKeys = KeySchedule.ks_client_13_get_binder_keys hs.ks pskl in
     let binders = KeySchedule.map_ST (compute_binder hs) binderKeys in
     HandshakeLog.send hs.log (Binders binders);
@@ -285,6 +286,7 @@ let client_Binders hs offer =
     if Some? (Nego.find_early_data offer) then
      begin
       trace "setting up 0RTT";
+      // 17-11-06 should this be internal to KS? we need only ha to compute the digest.
       let (| bid, _ |) :: _ = binderKeys in
       let ha = binderId_hash bid in
       let digest_CH = HandshakeLog.hash_tag #ha hs.log in
@@ -345,7 +347,7 @@ let client_ClientHello hs i =
   let offer = Nego.client_ClientHello hs.nego shares in
   HandshakeLog.send hs.log (ClientHello offer);
 
-  // Comptue and send PSK binders & 0-RTT signals
+  // Compute and send PSK binders & 0-RTT signals (calling KeySchedule again)
   client_Binders hs offer;
 
   // we may still need to keep parts of ch
@@ -385,9 +387,9 @@ let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming 
         let hs_keys = KeySchedule.ks_client_13_sh s.ks
           mode.Nego.n_server_random
           mode.Nego.n_cipher_suite
-          digest
           (Some?.v mode.Nego.n_server_share)
-          mode.Nego.n_pski in
+          mode.Nego.n_pski
+          digest in
         register s hs_keys; // register new epoch
         (match Nego.zeroRTToffer mode.Nego.n_offer, Some? mode.Nego.n_pski with
         | true, true ->
