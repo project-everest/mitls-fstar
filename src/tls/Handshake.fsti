@@ -6,6 +6,8 @@ open FStar.HyperStack
 
 open TLSConstants
 
+module Range = Range
+
 val hs: Type0
 
 // the handshake epochs internally maintains counters for the current reader and writer

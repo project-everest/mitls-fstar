@@ -52,6 +52,8 @@ NOEXTRACT=$(addprefix --no_extract ,Prims $(addprefix FStar., $(STDLIB_REALIZED)
 HACL_INCLUDES=$(addprefix --include ,$(KREMLIN_HOME)/kremlib $(HACL_HOME)/specs $(HACL_HOME)/code/lib/kremlin $(HACL_HOME)/code/bignum $(HACL_HOME)/code/experimental/aesgcm $(HACL_HOME)/code/poly1305 $(HACL_HOME)/code/salsa-family $(LLDIR)/test $(LLDIR)/utils $(LLDIR)/vale $(LLDIR)/uf1cma $(LLDIR)/prf $(LLDIR)/aead)
 FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(LCDIR)/fst $(HACL_INCLUDES) --include $(FFI_HOME)
 
+FSTAR_INCLUDE_PATHS+=--include $(FSTAR_HOME)/examples/kv_parsing
+
 OCAMLPKG=-package batteries,stdint,fileutils,zarith,fstarlib
 OCAMLPATH=$(FSTAR_HOME)/bin
 OCAMLOPTS=$(OCAMLPKG) -thread -w -a
@@ -129,28 +131,24 @@ QUIC
 	$(FSTAR) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include $(MITLS_HOME)/src/tls/ideal-flags \
-	--verify_module $(basename $(notdir $@)) \
 	$(basename $@).fst
 
 %.fsti-ver:
 	$(FSTAR) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include $(MITLS_HOME)/src/tls/ideal-flags \
-	--verify_module $(basename $(notdir $@)) \
 	$(basename $@).fsti
 
 # Targets to get F* arguments in interactive mode
 %.fst-in: 
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
-	--include $(MITLS_HOME)/src/tls/ideal-flags \
-	--verify_module $(basename $(notdir $@))
+	--include $(MITLS_HOME)/src/tls/ideal-flags
 
 %.fsti-in: 
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
-	--include $(MITLS_HOME)/src/tls/ideal-flags \
-	--verify_module $(basename $(notdir $@))
+	--include $(MITLS_HOME)/src/tls/ideal-flags
 
 # These rules are silent to avoid disturbing .fst-in etc
 .depend-TLS: # $(wildcard *.fst *.fsti)
@@ -174,7 +172,6 @@ tls-sanity:
 	$(FSTAR) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include $(MITLS_HOME)/src/tls/ideal-flags \
-        --verify_module False \
 	$(FSTS) test/False.fst 2>&1 | tail -n 1 | grep -c '1 error was reported (see above)'
 
 tls-lax:
