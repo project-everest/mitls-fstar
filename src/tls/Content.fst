@@ -15,7 +15,7 @@ open TLSConstants
 open TLSInfo
 open Range
 open DataStream
-
+module Range = Range
 
 // this description is detailed enough to compute the size of the plaintext and ciphertext
 type fragment (i:id) =

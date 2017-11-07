@@ -19,7 +19,7 @@ open TLSInfo
 open Range
 open AEAD_GCM
 open StatefulPlain
-
+module Range = Range
 #set-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 
 // TODO: TEMPORARY, until we add back LHAE

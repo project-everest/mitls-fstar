@@ -16,7 +16,7 @@ open LHAEPlain
 open Range
 open FStar.Monotonic.Seq
 open FStar.Monotonic.RRef
-
+module Range = Range
 module AEAD = AEADProvider
 
 type id = i:id{ ID12? i /\ AEAD? (aeAlg_of_id i) }
