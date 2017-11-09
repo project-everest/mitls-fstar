@@ -9,7 +9,7 @@ open FStar.HyperStack.ST
 open FStar.Bytes
 open Platform.Error
 
-module X = Curve25519
+module X = Hacl.Curve25519
 module CC = CoreCrypto
 module U32 = FStar.UInt32
 

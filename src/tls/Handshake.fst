@@ -572,10 +572,16 @@ let client_NewSessionTicket_12 (hs:hs) (resume:bool) (digest:Hashing.anyTag) (os
   | None, true -> InError (AD_unexpected_message, "missing expected NewSessionTicket message")
 
 
+let rec iutf8 (m:bytes) : St (s:string{String.length s < pow2 30 /\ utf8_encode s = m}) =
+    match iutf8_opt m with
+    | None -> trace ("Not a utf8 encoding of a string"); iutf8 m
+    | Some s -> s
+
 // Process an incoming ticket (1.3)
 let client_NewSessionTicket_13 (hs:hs) (st13:sticket13)
   : St incoming =
-  let tid = utf8 (iutf8 st13.ticket13_ticket) in
+  let ticket_s = iutf8 st13.ticket13_ticket in
+  let tid = utf8_encode ticket_s in
   trace ("Received ticket: "^(hex_of_bytes tid));
   let mode = Nego.getMode hs.nego in
   let CipherSuite13 ae h = mode.Nego.n_cipher_suite in
@@ -606,7 +612,7 @@ let client_ServerFinished hs f digestClientFinished =
   let ha = verifyDataHashAlg_of_ciphersuite mode.Nego.n_cipher_suite in
   let expected_svd = TLSPRF.finished12 ha sfin_key Server digestClientFinished in
   //let expected_svd = TLSPRF.verifyData (mode.Nego.n_protocol_version,mode.Nego.n_cipher_suite) sfin_key Server digestClientFinished in
-  if equalBytes f.fin_vd expected_svd
+  if f.fin_vd = expected_svd
   then (
     hs.state := C_Complete; // ADL: TODO need a proper renego state Idle (Some (vd,svd)))};
     InAck false true // Client 1.2 ATK
@@ -622,7 +628,7 @@ let client_R_ServerFinished hs f digestNewSessionTicket digestServerFinished
   let mode = Nego.getMode hs.nego in
   let ha = verifyDataHashAlg_of_ciphersuite mode.Nego.n_cipher_suite in
   let expected_svd = TLSPRF.finished12 ha sfin_key Server digestNewSessionTicket in
-  if equalBytes f.fin_vd expected_svd
+  if f.fin_vd = expected_svd
   then (
     let cvd = TLSPRF.finished12 ha sfin_key Client digestServerFinished in
     let _ = HandshakeLog.send_CCS_tag #ha hs.log (Finished ({fin_vd = cvd})) true in
@@ -858,7 +864,7 @@ let server_ClientFinished2 hs cvd digestSF digestCF =
   let cs = mode.Nego.n_cipher_suite in
   let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
   let expected_cvd = TLSPRF.finished12 ha fink Client digestSF in
-  if equalBytes cvd expected_cvd then
+  if cvd = expected_cvd then
     (hs.state := S_Complete; InAck false false)
   else
     InError (AD_decode_error, "Client Finished MAC did not verify: expected digest "^print_bytes digestSF)
@@ -877,7 +883,7 @@ let server_ClientFinished hs cvd digestCCS digestClientFinished =
     let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
     let expected_cvd = TLSPRF.finished12 ha fink Client digestCCS in
     //let expected_cvd = TLSPRF.verifyData alpha fink Client digestCCS in
-    if equalBytes cvd expected_cvd
+    if cvd = expected_cvd
     then
       //let svd = TLSPRF.verifyData alpha fink Server digestClientFinished in
       let digestTicket =
@@ -985,7 +991,7 @@ let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinishe
               [Extensions.E_early_data (Some (FStar.UInt32.uint_to_t 16384))]
             else [] in
 
-          let tnonce, _ = split tb 12 in
+          let tnonce, _ = split_ tb 12 in
           HandshakeLog.send hs.log (NewSessionTicket13 ({
             ticket13_lifetime = FStar.UInt32.(uint_to_t 3600);
             ticket13_age_add = FStar.UInt32.(uint_to_t 0);

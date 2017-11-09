@@ -11,6 +11,7 @@ FSTARFLAGS = --fstar_home $(FSTAR_HOME) $(OTHERFLAGS)
 FSTAR = $(FSTAR_HOME)/bin/fstar.exe $(FSTARFLAGS)
 KRML = $(KREMLIN_HOME)/krml
 
+
 HINTS_ENABLED ?= --use_hints
 VERFLAGS = --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection $(HINTS_ENABLED)
 
@@ -139,14 +140,12 @@ QUIC
 	$(FSTAR) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include $(MITLS_HOME)/src/tls/ideal-flags \
-	--verify_module $(basename $(notdir $@)) \
 	$(basename $@).fst
 
 %.fsti-ver:
 	$(FSTAR) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include $(MITLS_HOME)/src/tls/ideal-flags \
-	--verify_module $(basename $(notdir $@)) \
 	$(basename $@).fsti
 
 # Targets to get F* arguments in interactive mode
@@ -154,14 +153,12 @@ QUIC
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include $(MITLS_HOME)/src/tls/ideal-flags \
-	--verify_module $(basename $(notdir $@)) \
 	--cache_checked_modules
 
 %.fsti-in:
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
-	--include $(MITLS_HOME)/src/tls/ideal-flags \
-	--verify_module $(basename $(notdir $@))
+	--include $(MITLS_HOME)/src/tls/ideal-flags
 
 # These rules are silent to avoid disturbing .fst-in etc
 .depend-TLS: # $(wildcard *.fst *.fsti)
@@ -185,7 +182,6 @@ tls-sanity: record_fstar_version
 	$(FSTAR) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include $(MITLS_HOME)/src/tls/ideal-flags \
-        --verify_module False \
 	$(FSTS) test/False.fst 2>&1 | tail -n 1 | grep -c '1 error was reported (see above)'
 
 tls-lax: record_fstar_version
