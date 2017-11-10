@@ -63,18 +63,18 @@ type dhpms =
   | ConcreteDHPMS of dhrepr
 
 //#if ideal
-let honestDHPMS (g:CommonDH.group) (gx:CommonDH.share g) (gy:CommonDH.share g) pms =
+let honestDHPMS (g:CommonDH.group) (gx:CommonDH.ishare g) (gy:CommonDH.rshare g gx) pms =
   match pms with
   | IdealDHPMS(s)    -> true
   | ConcreteDHPMS(s) -> false
 //#endif
 
-let coerceDH (g:CommonDH.group) (gx:CommonDH.share g) (gy:CommonDH.share g) b =
+let coerceDH (g:CommonDH.group) (gx:CommonDH.ishare g) (gy:CommonDH.rshare g gx) b =
   ConcreteDHPMS(b)
 
 type pms =
   | RSAPMS of RSAKey.pk * protocolVersion * rsapms
-  | DHPMS: g:CommonDH.group -> CommonDH.share g -> CommonDH.share g -> dhpms -> pms
+  | DHPMS: g:CommonDH.group -> gx:CommonDH.ishare g -> CommonDH.rshare g gx -> dhpms -> pms
   | DummyPMS
 
 let honestPMS = function

@@ -102,7 +102,7 @@ let dh_initiator #g x gy =
 
 
 /// Parsing and formatting (TODO: check against RFC)
-/// 
+///
 val serialize: #g:group -> share g -> Tot (b:bytes{length b < 196612})
 let serialize #g dh_Y =
   let dhp = params_of_group g in

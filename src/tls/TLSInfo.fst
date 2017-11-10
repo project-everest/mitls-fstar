@@ -399,7 +399,7 @@ and pre_binderId =
 /// handshake secrets (2nd extraction)
 and pre_hsId =
   | HSID_PSK: pre_saltId -> pre_hsId // KEF_PRF idealized
-  | HSID_DHE: pre_saltId -> g:CommonDH.group -> si:CommonDH.share g -> sr:CommonDH.share g -> pre_hsId // KEF_PRF_ODH idealized
+  | HSID_DHE: pre_saltId -> g:CommonDH.group -> si:CommonDH.ishare g -> sr:CommonDH.rshare g si -> pre_hsId // KEF_PRF_ODH idealized
 
 /// useless, 3rd extraction
 and pre_asId =
@@ -515,7 +515,7 @@ type honest_index (i:pre_index) = bool
 
 let safe_region:rgn = new_region tls_tables_region
 private type i_safety_log = MM.t safe_region pre_index honest_index (fun _ -> True)
-private let s_table = 
+private let s_table =
   if Flags.ideal_KEF then i_safety_log else unit
 
 let safety_table: s_table =
@@ -540,7 +540,10 @@ type valid (i:pre_index) =
   | I_HS i ->
     (match i with
     | HSID_PSK i -> registered (I_SALT i)
-    | HSID_DHE i g si sr -> registered (I_SALT i) /\ CommonDH.registered (|g,si|) /\ CommonDH.registered (|g,sr|))
+    | HSID_DHE i g si sr ->
+      let gx : CommonDH.dhi = (| g, si |) in
+      let gy : CommonDH.dhr gx = sr in
+      registered (I_SALT i) /\ CommonDH.registered_dhi gx /\ CommonDH.registered_dhr gy)
   | I_AS i ->
     (match i with
     | ASID i -> registered (I_SALT i))
@@ -599,13 +602,13 @@ type finishedId = i:pre_finishedId{valid (I_FINISHED i)}
 type id =
 | PlaintextID: our_rand:random -> id // For IdNonce
 | ID13: keyId:keyId -> id
-| ID12: 
-    pv:protocolVersion{pv <> TLS_1p3} -> 
-    msId:msId -> 
-    kdfAlg:kdfAlg_t -> 
-    aeAlg: aeAlg -> 
-    cr:crand -> 
-    sr:srand -> 
+| ID12:
+    pv:protocolVersion{pv <> TLS_1p3} ->
+    msId:msId ->
+    kdfAlg:kdfAlg_t ->
+    aeAlg: aeAlg ->
+    cr:crand ->
+    sr:srand ->
     writer:role -> id
 
 let peerLabel = function

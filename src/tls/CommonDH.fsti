@@ -23,11 +23,12 @@ open FStar.HyperStack.ST
 /// DHGroup and ECGroup provide their concrete implementations.
 
 val group: t:Type0{hasEq t}
-val is_ec: group -> Tot bool
-val string_of_group: group -> Tot string
+val is_ec: group -> bool
+val string_of_group: group -> string
 
-val pre_keyshare (g:group) : Tot (t:Type0{hasEq t})
-val pre_share (g:group) : Tot (t:Type0{hasEq t})
+val pre_keyshare (g:group) : t:Type0{hasEq t}
+val pre_share (g:group) : t:Type0{hasEq t}
+val pre_pubshare: #g:group -> pre_keyshare g -> pre_share g
 
 type secret (g:group) = bytes
 
@@ -40,28 +41,34 @@ val default_group: group
 /// parsing their wire format. This requires checking for collisions
 /// between honestly-generated shares.
 
-type id = g:group & s:pre_share g
+type pre_dhi = g:group & s:pre_share g
+type pre_dhr (i:pre_dhi) = s:pre_share (dfst i)
 val dh_region : rgn
-val registered: id -> GTot Type0
-val honest_share: id -> GTot Type0
-val dishonest_share: id -> GTot Type0
 
-val pre_pubshare: #g:group -> pre_keyshare g -> Tot (pre_share g)
-type share (g:group) = s:pre_share g{registered (|g, s|)}
+val registered_dhi: pre_dhi -> GTot Type0
+val fresh_dhi: pre_dhi -> mem -> GTot Type0
+val honest_dhi: pre_dhi -> GTot Type0
+val corrupt_dhi: pre_dhi -> GTot Type0
+val is_honest_dhi: i:pre_dhi -> ST bool
+  (requires fun h -> registered_dhi i)
+  (ensures fun h0 b h1 -> h0 == h1 /\ (b <==> honest_dhi i) /\ (not b <==> corrupt_dhi i))
+type dhi = i:pre_dhi{registered_dhi i}
 
-/// private keys (hiding the ephemeral secret exponent)
-/// 
-type keyshare (g:group) = s:pre_keyshare g{registered (|g, pre_pubshare s|)}
-val pubshare: #g:group -> keyshare g -> Tot (share g)
+type ishare (g:group) = s:pre_share g{registered_dhi (| g, s |)}
+type ikeyshare (g:group) = s:pre_keyshare g{registered_dhi (|g, pre_pubshare s|)}
+val ipubshare: #g:group -> i:ikeyshare g -> Tot (s:ishare g{s == pre_pubshare i})
 
-val is_honest: i:id -> ST bool
-  (requires (fun h -> registered i))
-  (ensures (fun h0 b h1 ->
-    modifies_none h0 h1 /\
-    (if Flags.ideal_KEF then
-      (b ==> honest_share i) /\ (not b ==> dishonest_share i)
-    else b = false)))
+val registered_dhr: #i:dhi -> j:pre_dhr i -> GTot Type0
+val fresh_dhr: #i:dhi -> j:pre_dhr i -> mem -> GTot Type0
+val honest_dhr: #i:dhi -> j:pre_dhr i -> GTot Type0
+val corrupt_dhr: #i:dhi -> j:pre_dhr i -> GTot Type0
+val lemma_honest_corrupt_dhr: #i:dhi -> j:pre_dhr i{registered_dhr j} -> Lemma (honest_dhr j <==> ~(corrupt_dhr j))
+val is_honest_dhr: #i:dhi -> j:pre_dhr i -> ST bool
+  (requires fun h -> registered_dhr j)
+  (ensures fun h0 b h1 -> h0 == h1 /\ (b <==> honest_dhr j) /\ (not b <==> corrupt_dhr j))
 
+type dhr (i:dhi) = j:pre_dhr i{registered_dhr j}
+type rshare (g:group) (gx:ishare g) = dhr (| g, gx |)
 
 /// Correct Ephemeral Diffie-Hellman exchanges go as follows:
 ///
@@ -70,53 +77,46 @@ val is_honest: i:id -> ST bool
 ///   x, gx <- keygen g
 ///              ----g, gx---->
 ///                         gy, gx^y <- dh_responder gx
-///              <----gy------- 
+///              <----gy-------
 ///   gy^x <- dh_initiator x gy
-/// 
-val keygen: g:group -> ST (keyshare g)
-  (requires (fun h0 -> True))
-  (ensures (fun h0 s h1 ->
-    (if Flags.ideal_KEF then
-      modifies_one dh_region h0 h1 /\
-      honest_share (|g, pubshare s|)
-     else
-      modifies_none h0 h1)))
-// TODO: we need the abstract stateful property of being freshly registered, 
-// with a lemma [registered h0 v /\ freshly_registered h0 w h1 ==> v <> w] 
+///
 
+val keygen: g:group -> ST (ikeyshare g)
+  (requires fun h0 -> True)
+  (ensures fun h0 s h1 -> modifies_one dh_region h0 h1 /\
+    (Flags.model ==>
+      (fresh_dhi (| g, ipubshare s |) h0
+      /\ honest_dhi (| g, ipubshare s |))))
 
-// dh_initiator is used within dh_responder, 
+// dh_initiator is used within dh_responder,
 // hence this definition ordering.
 
-val dh_initiator: #g:group -> keyshare g -> share g -> ST (secret g)
-  (requires (fun h0 -> True))
-  (ensures (fun h0 _ h1 -> modifies_none h0 h1))
+val dh_initiator: g:group -> gx:ikeyshare g -> gy:rshare g (ipubshare gx) -> ST (secret g)
+  (requires fun h0 -> True)
+  (ensures (fun h0 _ h1 -> modifies_one dh_region h0 h1))
 
-val dh_responder: #g:group -> share g -> ST (share g * secret g)
-  (requires (fun h0 -> True))
-  (ensures (fun h0 (ks,s) h1 ->
-    (if Flags.ideal_KEF then
-      modifies_one dh_region h0 h1 /\
-      honest_share (|g, ks|)
-     else
-      modifies_none h0 h1)))
+val dh_responder: g:group -> gx:ishare g -> ST (rshare g gx * secret g)
+  (requires fun h0 -> True)
+  (ensures fun h0 (gy, gxy) h1 -> modifies_one dh_region h0 h1 /\
+    (Flags.model ==>
+      ((honest_dhi (| g, gx |) ==> (fresh_dhr gy h0 /\ honest_dhr gy))
+      /\ (corrupt_dhi (| g, gx |) ==> corrupt_dhr gy))))
 
 /// When parsing gx, and unless gx is already registered,
 /// we register it as dishonest.
 /// The registration property is captured in the returned type.
 /// Still missing details, e.g. functional correctness.
-/// 
-val register: #g:group -> gx:pre_share g -> ST (share g)
-  (requires (fun h0 -> True))
-  (ensures (fun h0 s h1 ->
-    (if Flags.ideal_KEF then
-      modifies_one dh_region h0 h1
-     else
-      modifies_none h0 h1)))
+///
+val register_dhi: #g:group -> gx:pre_share g -> ST (ishare g)
+  (requires fun h0 -> True)
+  (ensures fun h0 s h1 -> modifies_one dh_region h0 h1)
 
+val register_dhr: #g:group -> gx:ishare g -> gy:pre_share g -> ST (rshare g gx)
+  (requires fun h0 -> True)
+  (ensures fun h0 s h1 -> modifies_one dh_region h0 h1)
 
 /// Parsing and formatting
-/// 
+///
 val parse: g:group -> bytes -> Tot (option (pre_share g))
 val parse_partial: bool -> bytes -> Tot (result ((g:group & pre_share g) * bytes))
 val serialize: #g:group -> pre_share g -> Tot bytes
