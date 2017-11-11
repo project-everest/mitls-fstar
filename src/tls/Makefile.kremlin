@@ -34,7 +34,7 @@ KRML_COMMAND=FSTAR_HOME=$(FSTAR_HOME) $(KRML) $(addprefix -I , $(INCLUDE_PATHS))
 
 # -include .depend-KRML
 all: $(addsuffix .checked.lax, $(KRML_FILES)) $(KRML_DIR)/out.krml
-	$(KRML_COMMAND) $(KRML_DIR)/out.krml
+	$(KRML_COMMAND) $(KRML_DIR)/out.krml -tmpdir $(KRML_DIR)
 	./a.exe
 
 tls: extract/full/out.krml
