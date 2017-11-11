@@ -18,7 +18,7 @@ let type_of (#a : Type) (x : a) : Type = a
 (* Start Hacks *)
 // assume val empty_bytes : FStar.Bytes.lbytes 0
 (* End Hacks *)
-
+open FStar.String
 open FStar.Seq
 open Platform.Date
 open FStar.Bytes

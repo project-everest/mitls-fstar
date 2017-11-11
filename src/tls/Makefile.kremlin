@@ -17,7 +17,7 @@ INCLUDE_PATHS= \
 	./concrete-flags
 
 
-FSTAR=fstar.exe
+FSTAR=fstar.exe $(OTHERFLAGS)
 MAIN_FILES=Test.TLSConstants.fst
 EXTRACT_DIR=extract
 KRML_DIR=$(EXTRACT_DIR)/krml_output
