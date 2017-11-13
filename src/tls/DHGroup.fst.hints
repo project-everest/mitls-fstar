@@ -1,5 +1,5 @@
 [
-  "ı\u001c√ŒDê7=\f¿æz©\\õ¢",
+  "Í˜!Áæï\u0002ó\u001f∞—õ‚˘å©",
   [
     [
       "DHGroup.make_ffdhe",
@@ -9,14 +9,14 @@
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion",
         "data_typing_intro_FStar.Char.Char@tok", "equation_FStar.Char.char",
-        "equation_FStar.Char.char_code", "equation_Platform.Bytes.abyte",
-        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.length",
-        "equation_Prims.nat", "equation_Parse.epoch_color",
-        "equation_Parse.hs_color", "equation_Parse.is_tls_rgn",
-        "equation_Parse.rgn", "equation_Parse.tls_rgn",
-        "function_token_typing_Parse.epoch_color",
-        "function_token_typing_Parse.hs_color",
-        "function_token_typing_Parse.tls_region",
+        "equation_FStar.Char.char_code", "equation_Mem.epoch_color",
+        "equation_Mem.hs_color", "equation_Mem.is_tls_rgn",
+        "equation_Mem.rgn", "equation_Mem.tls_rgn",
+        "equation_Platform.Bytes.abyte", "equation_Platform.Bytes.byte",
+        "equation_Platform.Bytes.length", "equation_Prims.nat",
+        "function_token_typing_Mem.epoch_color",
+        "function_token_typing_Mem.hs_color",
+        "function_token_typing_Mem.tls_region",
         "kinding_FStar.Char.char_@tok",
         "lemma_FStar.Seq.Base.lemma_create_len",
         "primitive_Prims.op_LessThan",
@@ -28,58 +28,13 @@
         "projection_inverse_CoreCrypto.Mkdh_params_dh_p",
         "refinement_interpretation_DHGroup_Tm_refine_b98469612ba5e5c2642d92288acbcf97",
         "refinement_interpretation_FStar.Char_Tm_refine_0e3e560c796fef6df2d948e98bb1d5d6",
+        "refinement_interpretation_Mem_Tm_refine_827021888216ac6a501be14cd4b812c9",
+        "refinement_interpretation_Mem_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
-        "refinement_interpretation_Parse_Tm_refine_c07d4060d37e3232f72a27cf19147668",
-        "typing_Parse.is_tls_rgn"
+        "typing_Mem.is_tls_rgn"
       ],
       0,
-      "a1cfe8ca679038224336a6b8fa842be4"
-    ],
-    [
-      "DHGroup.ffdhe2048",
-      1,
-      0,
-      1,
-      [ "@query" ],
-      0,
-      "67a8d00dfedaa943ea599d98de475b9a"
-    ],
-    [
-      "DHGroup.ffdhe3072",
-      1,
-      0,
-      1,
-      [ "@query" ],
-      0,
-      "613b000fb8e52c4a74d5cd4c65c24dba"
-    ],
-    [
-      "DHGroup.ffdhe4096",
-      1,
-      0,
-      1,
-      [ "@query" ],
-      0,
-      "9bb80730a46345418f043c49075fbba9"
-    ],
-    [
-      "DHGroup.ffdhe6144",
-      1,
-      0,
-      1,
-      [ "@query" ],
-      0,
-      "0e0d70da2c90fa7e9b521a985a457f4b"
-    ],
-    [
-      "DHGroup.ffdhe8192",
-      1,
-      0,
-      1,
-      [ "@query" ],
-      0,
-      "8566016b63f356da801469bb2e8b96e1"
+      "f9c2921effd7ab34c6e2e58e6711e383"
     ],
     [
       "DHGroup.group",
@@ -92,7 +47,7 @@
         "haseqDHGroup_Tm_refine_6f2b4a64b3ab3857a757176fd8a57fb5"
       ],
       0,
-      "3b47d75366de9a09651f663d6b3b715f"
+      "6ee89e118a1064177cb6da23955a7034"
     ],
     [
       "DHGroup.uu___is_Named",
@@ -101,7 +56,7 @@
       1,
       [ "@query" ],
       0,
-      "f224ae8e6c9bde23cadeeca8f08337fc"
+      "7e6ba5afbc8f30709fd6a81471076035"
     ],
     [
       "DHGroup.__proj__Named__item___0",
@@ -114,7 +69,7 @@
         "refinement_interpretation_DHGroup_Tm_refine_1f67f6deaf7b51138cd35ad2f4568e94"
       ],
       0,
-      "a2e6bf2da9c27bf83f53883d96295305"
+      "78aaf2c8bb5b5b5f3b10aa84e42d21ef"
     ],
     [
       "DHGroup.uu___is_Explicit",
@@ -123,7 +78,7 @@
       1,
       [ "@query" ],
       0,
-      "0883b99f00117dd3281fe435ea0717eb"
+      "2971cd6e27349fd52bfd5694be2b7a8b"
     ],
     [
       "DHGroup.__proj__Explicit__item___0",
@@ -136,7 +91,7 @@
         "refinement_interpretation_DHGroup_Tm_refine_dc91833cf9fb025d258378587c7faffb"
       ],
       0,
-      "05c8d165e78691c79baac272167e148e"
+      "bfdc7d02e42ef558d1ae13ed3ba5bbd5"
     ],
     [
       "DHGroup.params_of_group",
@@ -158,7 +113,7 @@
         "typing_DHGroup.__proj__Named__item___0"
       ],
       0,
-      "351764015662a653849ab577124cf6fe"
+      "f80f50ee46dd0618d00353a42f57ebe3"
     ],
     [
       "DHGroup.keyshare",
@@ -167,7 +122,7 @@
       1,
       [ "@query", "assumption_CoreCrypto.dh_params_haseq" ],
       0,
-      "4773ed0c2f7e5fe540783f80d311530c"
+      "f95bcee46d8c9f046e9c5d9bee5654ae"
     ],
     [
       "DHGroup.pubshare",
@@ -181,7 +136,7 @@
         "refinement_interpretation_DHGroup_Tm_refine_8737578315dcbd72777b0ee68a746f9d"
       ],
       0,
-      "a2090fbaa9211c561e8b3be2a444a820"
+      "93d2736ad341e0889d49d427d961f784"
     ],
     [
       "DHGroup.keygen",
@@ -239,7 +194,7 @@
         "typing_FStar.Set.complement", "typing_FStar.Set.empty"
       ],
       0,
-      "870e780401b838247b80419fd1ab55e2"
+      "435f9ef9f81dbe77f4be4637ef5da9cf"
     ],
     [
       "DHGroup.dh_initiator",
@@ -292,7 +247,7 @@
         "typing_FStar.Set.complement", "typing_FStar.Set.empty"
       ],
       0,
-      "f286ead9902f079d9a65cbe96c6bab4b"
+      "6f33641f99b3593a002216fd12c30be6"
     ],
     [
       "DHGroup.serialize",
@@ -320,7 +275,7 @@
         "typing_DHGroup.params_of_group", "typing_Platform.Bytes.op_At_Bar"
       ],
       0,
-      "767f9708a9e9a3275f6fbc0ed252eb77"
+      "fc5aba82bce6b8087aa7c059b14b19f6"
     ],
     [
       "DHGroup.serialize_public",
@@ -343,7 +298,7 @@
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "a52d65ef91d89fde229f9bd005a6dde1"
+      "f055a2f40813f51689aabc3180aef365"
     ],
     [
       "DHGroup.parse_public",
@@ -373,34 +328,31 @@
         "typing_DHGroup.params_of_group"
       ],
       0,
-      "8208110be5510f305dc9a2fb6c85b29a"
+      "a9841cfd09d6514df235dc75d2eb5c10"
     ],
     [
       "DHGroup.parse_partial",
       1,
-      0,
-      1,
+      4,
+      2,
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion",
         "constructor_distinct_DHGroup.Explicit",
         "constructor_distinct_Platform.Error.Correct",
         "constructor_distinct_Platform.Error.Error",
-        "data_elim_Platform.Error.Correct",
         "disc_equation_Platform.Error.Correct",
         "disc_equation_Platform.Error.Error",
         "equation_DHGroup.params_of_group", "equation_FStar.Char.char",
         "equation_FStar.Pervasives.Native.fst",
         "equation_FStar.Pervasives.Native.snd",
-        "equation_FStar.Seq.Properties.split",
-        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
-        "equation_Platform.Bytes.length", "equation_Platform.Bytes.split",
-        "equation_Prims.nat", "equation_TLSError.error",
-        "equation_TLSError.result", "equation_Parse.hs_color",
-        "equation_Parse.vlsplit", "fuel_guarded_inversion_DHGroup.group",
-        "fuel_guarded_inversion_Platform.Error.optResult",
+        "equation_FStar.Seq.Properties.split", "equation_Mem.hs_color",
+        "equation_Parse.vlsplit", "equation_Platform.Bytes.byte",
+        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
+        "equation_Platform.Bytes.split", "equation_Prims.nat",
+        "equation_TLSError.error", "equation_TLSError.result",
+        "function_token_typing_Mem.hs_color",
         "function_token_typing_Platform.Bytes.bytes",
-        "function_token_typing_TLSError.error",
-        "function_token_typing_Parse.hs_color", "int_inversion",
+        "function_token_typing_TLSError.error", "int_inversion",
         "lemma_Platform.Error.invertOptResult",
         "primitive_Prims.op_GreaterThanOrEqual",
         "primitive_Prims.op_LessThan", "primitive_Prims.op_LessThanOrEqual",
@@ -426,16 +378,16 @@
         "refinement_interpretation_Platform.Bytes_Tm_refine_df45e13378b64cfc3cd23f54e8657bfc",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "refinement_interpretation_Prims_Tm_refine_f048236b5f8051f83b495ea5eaa6127b",
-        "refinement_interpretation_Parse_Tm_refine_21f75f9c10a2190c1374132bd6513ffc",
-        "refinement_kinding_DHGroup_Tm_refine_5903a63c5b44870a4661961514e26771",
+        "refinement_kinding_DHGroup_Tm_refine_8b7c6f59e4fdb53eb15ecb005e1e6c81",
         "typing_FStar.Pervasives.Native.fst",
         "typing_FStar.Pervasives.Native.snd",
         "typing_Platform.Bytes.int_of_bytes", "typing_Platform.Bytes.length",
         "typing_Platform.Bytes.repr_bytes", "typing_Platform.Bytes.split",
-        "typing_Platform.Error.uu___is_Correct"
+        "typing_Platform.Error.uu___is_Correct",
+        "typing_Platform.Error.uu___is_Error"
       ],
       0,
-      "dff352c3c2b3bd39bd4dfe02d3b198b4"
+      "6d4e5c490f0f85d907f328b34f53360f"
     ]
   ]
 ]

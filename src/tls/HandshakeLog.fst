@@ -1,5 +1,7 @@
 module HandshakeLog
 
+(* see als comments in Handshake.fsti *) 
+
 open FStar.Heap
 open FStar.HyperHeap
 open FStar.HyperStack

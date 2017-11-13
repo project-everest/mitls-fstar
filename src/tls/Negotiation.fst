@@ -638,9 +638,19 @@ let rec map_ST f x = match x with
   | [] -> []
   | a::tl -> f a :: map_ST f tl
 
-val client_ClientHello: #region:rgn -> t region Client
+val client_ClientHello: #region:rgn -> n: t region Client
   -> option CommonDH.clientKeyShare
   -> St offer
+  // requires C_Init? i.e.  st = transcript_state client_config []  
+  // ensures C_offer? i.e. st = transcript_state client_config [ClientHello offer] 
+  //                                /\ witnessed (fun h -> sel h st == offer)
+
+  (ensures fun h0 offer h1 -> 
+    let st0 = sel h0 n in 
+    let st1 = sel h1 n in 
+    offer_v st == offer /\ (* also use computeOffer here? *)
+    replay_transcript st0.config [ClientHello offer] (*ghost*) == Correct st1)
+
 let client_ClientHello #region ns oks =
   //17-04-22 fix this in the definition of offer?
   let oks' =

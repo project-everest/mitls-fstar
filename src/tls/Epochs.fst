@@ -140,6 +140,8 @@ noeq type epochs (r:rgn) (n:random) = | MkEpochs:
 /// Epochs stores all keys produced by the HS and used by TLS.
 /// These keys consist of 
 /// - the StAE reader or writer for 0RTT (client2server only)
+/// - the 0RTT exporter secret key 
+///
 /// - StAE 1RTT reader or writer for 1RTT (in both directions)
 /// - the 0RTT and 1RTT exporter keys.
 /// We also need to keep track of which key is in use, if any, in each direction.
