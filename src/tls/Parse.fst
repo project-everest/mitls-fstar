@@ -308,17 +308,18 @@ val parseNamedGroup: pinverse_t namedGroupBytes
 let parseNamedGroup b =
   let open CoreCrypto in
   let bb = cbyte2 b in
-  if      bb = (0x00z, 0x17z) then Correct (SEC ECC_P256)
-  else if bb = (0x00z, 0x18z) then Correct (SEC ECC_P384)
-  else if bb = (0x00z, 0x19z) then Correct (SEC ECC_P521)
-  else if bb = (0x00z, 0x1dz) then Correct (SEC ECC_X25519)
-  else if bb = (0x00z, 0x1ez) then Correct (SEC ECC_X448)
-  else if bb = (0x01z, 0x00z) then Correct (FFDHE FFDHE2048)
-  else if bb = (0x01z, 0x01z) then Correct (FFDHE FFDHE3072)
-  else if bb = (0x01z, 0x02z) then Correct (FFDHE FFDHE4096)
-  else if bb = (0x01z, 0x03z) then Correct (FFDHE FFDHE6144)
-  else if bb = (0x01z, 0x04z) then Correct (FFDHE FFDHE8192)
-  else Correct (NG_UNKNOWN bb)
+  match bb with
+  | (0x00z, 0x17z) -> Correct (SEC ECC_P256)
+  | (0x00z, 0x18z) -> Correct (SEC ECC_P384)
+  | (0x00z, 0x19z) -> Correct (SEC ECC_P521)
+  | (0x00z, 0x1dz) -> Correct (SEC ECC_X25519)
+  | (0x00z, 0x1ez) -> Correct (SEC ECC_X448)
+  | (0x01z, 0x00z) -> Correct (FFDHE FFDHE2048)
+  | (0x01z, 0x01z) -> Correct (FFDHE FFDHE3072)
+  | (0x01z, 0x02z) -> Correct (FFDHE FFDHE4096)
+  | (0x01z, 0x03z) -> Correct (FFDHE FFDHE6144)
+  | (0x01z, 0x04z) -> Correct (FFDHE FFDHE8192)
+  | _ -> Correct (NG_UNKNOWN bb)
 
 (** Lemmas for named groups parsing/serializing inversions *)
 #set-options "--max_ifuel 10 --max_fuel 10"
