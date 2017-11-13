@@ -24,9 +24,12 @@ KRML_DIR=$(EXTRACT_DIR)/krml_output
 KRML_FILES = Test.TLSConstants.fst #TLSInfo.fst #$(wildcard *.fst)
 DROP_MODULES = $(addprefix -drop , Spec.* MonotoneMapNonDep MonotoneMap IdNonce FStar.Bytes)
 C_DRIVER = $(EXTRACT_DIR)/src/main.c
-HEADERS = $(addprefix -add-include ,'"hacks.h"' '"tcp.h"' '"krembytes.h"')
+HEADERS = $(addprefix -add-include ,'"hacks.h"' '"tcp.h"' '"krembytes.h"' '"kremstr.h"')
 KRML=krml
-KRML_COMMAND=FSTAR_HOME=$(FSTAR_HOME) $(KRML) $(addprefix -I , $(INCLUDE_PATHS)) -I extract/include $(C_DRIVER) $(DROP_MODULES) -I concrete-flags $(HEADERS) -fnoanonymous-unions $(K-OPTS) -warn-error -9+11-7-6 -ccopt -Wno-unused-function -fsopts --cache_checked_modules -verbose -fsopt --debug -fsopt yes
+KRML_COMMAND=$(KRML) $(addprefix -I , $(INCLUDE_PATHS)) -I extract/include \
+  $(C_DRIVER) $(DROP_MODULES) -I concrete-flags $(HEADERS) -fnoanonymous-unions \
+  $(K-OPTS) -warn-error -9+11-7-6 -ccopt -Wno-unused-function -fsopts \
+  --cache_checked_modules,--debug,yes -verbose extract/src/support.c \
 
 # # We can eventually unify these dependencies with the main Makefile
 # .depend-KRML:
