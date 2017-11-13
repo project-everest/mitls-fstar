@@ -655,7 +655,7 @@ val derive:
   k: secret u i ->
   lbl: label ->
   ctx: context {~(honest_idh ctx) /\ wellformed_id (Derive i lbl ctx)} ->
-  ST (i':regid{i' = Derive i lbl ctx} & ukey u lbl i')
+  ST (_:unit{registered (Derive i lbl ctx)} & ukey u lbl (Derive i lbl ctx))
   (requires fun h0 -> True)
   (ensures fun h0 r h1 -> True
     // modifies our own local state and whatever create/coerce modifies
@@ -676,19 +676,19 @@ let derive #u #i a k lbl ctx =
     let v: option (derived_key u i lbl ctx) = MonotoneMap.lookup (secret_ideal k) x in
     match v with
     //17-10-30 was failing with scrutiny error: match MonotoneMap.lookup (secret_ideal k) x
-    | Some dk -> (| i', dk |)
+    | Some dk -> (| (), dk |)
     | None ->
       let dk = use.pkg'.create i' a' in
       //17-10-20 TODO framing across create
       let h = get() in
       assume(MonotoneMap.fresh (secret_ideal k) x h); // FIXME(adl)!!
       MonotoneMap.extend (secret_ideal k) x dk;
-      (| i', dk |)
+      (| (), dk |)
   else
     let raw =
       HKDF.expand #(a.ha) (secret_corrupt k) (Platform.Bytes.abytes lbl) (UInt32.v (use.pkg'.len a')) in
     let dk = use.pkg'.coerce i' a' raw in
-    (| i', dk |)
+    (| (), dk |)
 
 /// Outlining a global KDF state invariant, supported by package
 /// definition tables for all derivable functionalities.
@@ -751,7 +751,7 @@ let real_psk (#u: usage info) (#i:regid) (t: real_secret i{corruptKEF0 i}) : psk
   else t
 
 type ext0 (u:usage info) (i:regid) =
-  i':regid{i' == Derive i "" Extract} & psk u i'
+  _:unit{registered (Derive i "" Extract)} & psk u (Derive i "" Extract)
 
 val coerce_psk:
   #u: usage info ->
@@ -765,7 +765,7 @@ val coerce_psk:
 let coerce_psk #u i a raw =
   let i', honest' = register_derive i "" Extract in
   lemma_corrupt_invariant i "" Extract;
-  (| i', real_psk #u #i' raw |)
+  (| (), real_psk #u #i' raw |)
 
 val create_psk:
   #u: usage info ->
@@ -780,9 +780,9 @@ let create_psk #u i a =
   if flag_KEF0 && honest' then
     let t' = secret u i' in
     let r: mref_secret u i' = MR.m_alloc #(option t') #(ssa #t') there None in
-    (| i', ideal_psk #u #i' r |)
+    (| (), ideal_psk #u #i' r |)
   else
-    (| i', real_psk #u #i' (sample (secret_len a)) |)
+    (| (), real_psk #u #i' (sample (secret_len a)) |)
 
 let pskp (*ip:ipkg*) (u:usage info): pkg info (ii get_info) = Pkg
   (ext0 u)
@@ -799,12 +799,13 @@ val extract0:
   k: ext0 u i ->
   a: info {a == get_info i} ->
   ST
-    (secret u (dfst k))
+    (secret u (Derive i "" Extract))
     (requires fun h0 -> True)
     (ensures fun h0 p h1 -> (*TBC*) True)
 
 let extract0 #u #i k a =
-  let (| i', p |) = k in
+  let (| _, p |) = k in
+  let i':regid = Derive i "" Extract in
   let honest' = get_honest i' in
   lemma_kdf_kef0 (); // idealKDF ==> idealKEF0
   if flag_KEF0 && honest'
@@ -896,7 +897,7 @@ assume val prf_leak:
   Hashing.Spec.hkey a.ha
 
 type ext1 (u:usage info) (i:regid) (idh:id_dhe) =
-  i':regid{i' == Derive i "" (ExtractDH idh)} & secret u i'
+  _:unit{registered (Derive i "" (ExtractDH idh))} & secret u (Derive i "" (ExtractDH idh))
 
 val prf_extract1:
   #u: usage info ->
@@ -925,12 +926,12 @@ let prf_extract1 #u #i a s idh gZ =
         let w = pkg.create0 j a in
         s.wide := snoc s.wide w;
         w in  *)
-    (| j, create u j a |)
+    (| (), create u j a |)
     // agreement on the algorithms follows from the salt.
   else
     let raw_salt = prf_leak #u #i #a s in
     let raw = HKDF.extract raw_salt gZ (* narrow, concrete *) in
-    (| j, coerce u j a raw |)
+    (| (), coerce u j a raw |)
 
 /// ODH (precisely tracking the games, not yet code-complete
 /// --------------------------------------------------------------------------------------------------
@@ -1126,7 +1127,7 @@ val odh_prf:
   g: CommonDH.group ->
   x: CommonDH.ikeyshare g ->
   gY: CommonDH.rshare g (CommonDH.ipubshare x) ->
-  ST (i':regid{i' == Derive i "" (ExtractDH (idh_of x gY))} & secret u i')
+  ST (_:unit{registered (Derive i "" (ExtractDH (idh_of x gY)))} & secret u (Derive i "" (ExtractDH (idh_of x gY))))
   (requires fun h0 ->
     let gX : CommonDH.dhi = (| g, CommonDH.ipubshare x |) in
     CommonDH.honest_dhi gX /\ odh_defined gX
@@ -1143,10 +1144,13 @@ let odh_prf #u #i a s g x gY =
   let h = get () in
   let gX : CommonDH.dhi = (| g, CommonDH.ipubshare x |) in
   let idh = IDH gX gY in
+  assert_norm(idh == idh_of x gY);
   lemma_fresh_dhr_hinv #gX gY h;
   let gZ = CommonDH.dh_initiator g x gY in
-  let (| i', s |) = prf_extract1 a s idh gZ in
-  (| i', s |)
+  let (| uu, k |) = prf_extract1 #u #i a s idh gZ in
+  let k' : secret u (Derive i "" (ExtractDH idh)) = k in
+  (| (), k' |)
+
 
 /// --------------------------------------------------------------------------------------------------
 /// Diffie-Hellman shares
@@ -1190,8 +1194,7 @@ let extractR #u #i s a gX =
     let gY, gZ = CommonDH.dh_responder (dfst gX) (dsnd gX) in
     let idh = IDH gX gY in
     assume(~(honest_idh (ExtractDH idh))); // FIXME
-    let (| i', k |) : ext1 u i idh = prf_extract1 a s idh gZ in
-    assert(i' == Derive i "" (ExtractDH idh));
+    let (| _ , k |) : ext1 u i idh = prf_extract1 a s idh gZ in
     let k : secret u (Derive i "" (ExtractDH idh)) = k in
     let i_gY : peer_index gX = (| i, gY |) in
     let s : peer_instance #gX i_gY = admit() in
@@ -1213,7 +1216,7 @@ val extractI:
   g: CommonDH.group ->
   x: CommonDH.ikeyshare g ->
   gY: CommonDH.rshare g (CommonDH.ipubshare x) ->
-  ST(i':regid{i' == Derive i "" (ExtractDH (idh_of x gY))} & secret u i')
+  ST(_:unit{registered (Derive i "" (ExtractDH (idh_of x gY)))} & secret u (Derive i "" (ExtractDH (idh_of x gY))))
   (requires fun h0 ->
     let gX : CommonDH.dhi = (| g, CommonDH.ipubshare x |) in
     CommonDH.honest_dhi gX /\ odh_defined gX)
@@ -1236,7 +1239,7 @@ let extractI #u #i a s g x gY =
     assume (u == u_of_i i); //17-11-01 indexing does not cover u yet
     let o : option ot = MM.lookup peers i_gY in
     match o with
-    | Some k -> (| i', k |)
+    | Some k -> (| (), k |)
     | None -> assume false; odh_prf #u #i a s g x gY
   else odh_prf #u #i a s g x gY
 
@@ -1245,14 +1248,17 @@ val extractP:
   #i: regid ->
   a: info {a == get_info i} ->
   s: salt u i ->
-  ST(i':regid{i' == Derive i "" (ExtractDH NoIDH)} & secret u i')
+  ST(_:unit{registered (Derive i "" (ExtractDH NoIDH))} & secret u (Derive i "" (ExtractDH NoIDH)))
   (requires fun h0 -> True)
   (ensures fun h0 r h1 -> True)
 let extractP #u #i a s =
   let gZ = Hashing.Spec.zeroHash a.ha in
 ///17-11-01 stuck on this one too.
-  admit()
-  // prf_extract1 a s NoDHE gZ
+//  admit()
+   let (| _, k |) = prf_extract1 a s NoIDH gZ in
+   assert(registered (Derive i "" (ExtractDH NoIDH)));
+   let k : secret u (Derive i "" (ExtractDH NoIDH)) = k in
+   (| (), k |)
 
 assume val flag_KEF2: b:bool{flag_KDF ==> b}
 type idealKEF2 = b2t flag_KEF2
@@ -1280,7 +1286,8 @@ let salt2_real (#u: usage info) (#i:regid) (p:salt2 u i {corruptKEF2 i}): real_s
     Real?.v t
   else p
 
-type ext2 (u: usage info) (i:regid) = i':regid{i' == Derive i "" Extract} & salt2 u i'
+type ext2 (u: usage info) (i:regid) =
+  _:unit{registered (Derive i "" Extract)} & salt2 u (Derive i "" Extract)
 
 val coerce_salt2:
   #u: usage info ->
@@ -1294,7 +1301,7 @@ val coerce_salt2:
 let coerce_salt2 #u i a raw =
   let i', honest' = register_derive i "" Extract in
   lemma_corrupt_invariant i "" Extract;
-  (| i', real_salt2 #u #i' raw |)
+  (| (), real_salt2 #u #i' raw |)
 
 let ideal_salt2 (#u: usage info) (#i:regid) (t: mref_secret u i{safeKEF2 i}) : salt2 u i =
   let t : s:ideal_or_real (mref_secret u i) (real_secret i) {safeKEF2 i <==> Ideal? s} = Ideal t in
@@ -1308,7 +1315,7 @@ val create_salt2:
   #u: usage info ->
   i: regid ->
   a: info {a == get_info i} ->
-  ST (i':regid{i' == Derive i "" Extract} & salt2 u i')
+  ST (ext2 u i)
   (requires fun h0 -> True)
   (ensures fun h0 p h1 -> (*TBC*) True)
 
@@ -1319,9 +1326,9 @@ let create_salt2 #u i a =
   if flag_KEF2 && honest' then
     let t' = secret u i' in
     let r: mref_secret u i' = MR.m_alloc #(option t') #(ssa #t') there None in
-    (| i', ideal_salt2 #u #i' r |)
+    (| (), ideal_salt2 #u #i' r |)
   else
-    (| i', real_salt2 #u #i' (sample (secret_len a)) |)
+    (| (), real_salt2 #u #i' (sample (secret_len a)) |)
 
 let saltp2 (u:usage info): pkg info (ii get_info) = Pkg
   (ext2 u)
@@ -1338,12 +1345,13 @@ val extract2:
   #i: regid ->
   s: ext2 u i ->
   a: info {a == get_info i} ->
-  ST (secret u (dfst s))
+  ST (secret u (Derive i "" Extract))
     (requires fun h0 -> True)
     (ensures fun h0 p h1 -> (*TBC*) True)
 
 let extract2 #u #i e2 a =
-  let (| i', s |) = e2 in
+  let (| _, s |) = e2 in
+  let i' : regid = Derive i "" Extract in
   let honest' = get_honest i' in
   assert(wellformed_id i');
   assert(a = get_info i');
@@ -1471,152 +1479,61 @@ let rec u_of_i i = match i with
 assume val depth:  n:nat {n > 1}
 let u: usage info = u_early_secret depth
 
+let gen_pskid a : St (n:nat{registered (Preshared a n)}) = admit()
+
 val ks: unit -> St unit
 let ks() =
-  let ipsk: id = Preshared Hashing.Spec.SHA1 0 in
+  let pskctr = gen_pskid Hashing.Spec.SHA1 in
+  let ipsk: regid = Preshared Hashing.Spec.SHA1 pskctr in
   let a = Info Hashing.Spec.SHA1 None in
-  let psk0: psk u ipsk = create_psk ipsk a in
 
-  let i0: id = Derive ipsk "" Extract in
-  let early_secret: secret u i0 = extract0 psk0 a in
-  let (| i_traffic0, early_traffic |) = derive a early_secret "traffic" Expand in
-  assert(i_traffic0 == Derive i0 "traffic" Expand);
-  admit()
+  let psk0 : ext0 u ipsk = create_psk ipsk a in
+  let i0 : regid = Derive ipsk "" Extract in
+  let early_secret : secret u i0 = extract0 psk0 a in
 
-(* 17-11-12 Antoine? 
-  let i_0rtt: id = Derive i_traffic0 "ClientKey" Expand in
-  let k0: key #(ii get_aeadAlg) i_0rtt = derive a early_traffic "ClientKey" Expand in
-  let cipher  = encrypt k0 10 in
+  let (| _, et |) = derive a early_secret "traffic" Expand in
+  let i_traffic0 : regid = Derive i0 "traffic" Expand in
+  let a_traffic0 = Info Hashing.Spec.SHA1 None in
+  let early_traffic : secret u_traffic i_traffic0 = et in
 
-  let i_salt1: id = Derive i0 "salt" Expand in
-  let salt1:  salt (u_handshake_secret depth) i_salt1 = derive a early_secret "salt" Expand in
+  let (| _, ae0 |) = derive a early_traffic "ClientKey" Expand in
+  let i_0rtt : regid = Derive i_traffic0 "ClientKey" Expand in
+  let k0 : key #(ii get_aeadAlg) i_0rtt = ae0 in
+
+  let cipher  = encrypt #_ #i_0rtt k0 10 in
+
+  let (| _, s1 |) = derive a early_secret "salt" Expand in
+  let i_salt1: regid = Derive i0 "salt" Expand in
+  let salt1: salt (u_handshake_secret depth) i_salt1 = s1 in
+
   let g = CommonDH.default_group in
   let x = initI g in
-  let gX = (| g, CommonDH.ipubshare x |) in
-  let (| i_gY, hs_secret |) = extractR salt1 a gX in
+  let gX : CommonDH.dhi = (| g, CommonDH.ipubshare x |) in
+
+  let (| i_gY, hs1 |) = extractR salt1 a gX in
   let (| _, gY |) = i_gY in
-  let idh = IDH gX gY in
-  let i1: id = Derive i_salt1 "" (ExtractDH idh) in
-  let hs_secret: secret (u_handshake_secret depth) i1= hs_secret in
-  let i_traffic1: id = Derive i1 "traffic" Expand  in
-  let hs_traffic: secret u_traffic i_traffic1 = derive a hs_secret "traffic" Expand in
-  let k1: key #(ii get_aeadAlg) (Derive i_traffic1 "ServerKey" Expand) = derive a hs_traffic "ServerKey" Expand in
+  let i1 : regid = Derive i_salt1 "" (ExtractDH (IDH gX gY)) in
+  let hs_secret: secret (u_handshake_secret depth) i1 = admit() in // due to u_of_i
+
+  let (| _, hst |) = derive a hs_secret "traffic" Expand in
+  let i_traffic1: regid = Derive i1 "traffic" Expand  in
+  let hs_traffic: secret u_traffic i_traffic1 = hst in
+
+  let (| _, ae1 |) = derive a hs_traffic "ServerKey" Expand in
+  let i_1rtt : regid = Derive i_traffic1 "ServerKey" Expand in
+  let k1: key #(ii get_aeadAlg) i_1rtt = ae1 in
+
   let cipher  = encrypt k1 11 in
 
-  let i_salt2: id = Derive i1 "salt" Expand in
-  let salt2: salt (u_master_secret depth) i_salt2 = admit() in //17-11-02 not sure why this one is now failing // derive a hs_secret "salt" Expand in
-  let i2: id = Derive i_salt2 "" Extract in
+  let (| _, s2 |) = derive a hs_secret "salt" Expand in
+  let i_salt2: regid = Derive i1 "salt" Expand in
+  let salt2 : salt2 (u_master_secret depth) i_salt2 = s2 in
+
+  let i2 : regid = Derive i_salt2 "" Extract in
   let master_secret: secret (u_master_secret depth) i2 = extract2 #(u_master_secret depth) #i_salt2 salt2 a in
-  let i3: id = Derive i2 "resumption" Expand in
-  let rsk: psk (u_early_secret (depth - 1)) i3  = derive a master_secret "resumption" Expand in
-  let i4: id = Derive i3 "" Extract in
-  let next_early_secret: secret (u_early_secret (depth -1)) i4 = extract0 rsk a in
+  let i3: regid = Derive i2 "resumption" Expand in
+
+  let rsk: ext0 (u_early_secret (depth - 1)) i3 = derive a master_secret "resumption" Expand in
+  let i4: regid = Derive i3 "" Extract in
+  let next_early_secret: secret (u_early_secret (depth - 1)) i4 = extract0 rsk a in
   ()
-*)
-
-
-(* ---
-
-let i3 = Extract0 (Derived i2 "resumption")
-let rsk = derive master_secret "resumption"
-// #(u_master_secret depth ) #i2
-val next_early_secret: secret (u_early_secret (depth - 1)) i3 a
-let next_early_secret = extract0 rsk
-
-
-// same, using top-level bindings for debuggability.
-
-let ipsk = Preshared Hashing.Spec.SHA1 0
-let a: info ipsk = Info Hashing.Spec.SHA1 None
-let psk0: psk #u ipsk  a = create_psk ipsk a
-
-let i0 = Derive ipsk "" Extract
-let a0 = Info #i0 Hashing.Spec.SHA1 None
-let early_secret: secret u i0 a0 = extract0 psk0
-
-let i_traffic0 = Derive i0 "traffic" Expand
-let a_traffic0 = Info #i_traffic0 Hashing.Spec.SHA1 None
-val early_traffic: secret u_traffic i_traffic0 a_traffic0
-let early_traffic = derive early_secret "traffic" Expand
-// not sure where to add the loginfo
-
-let i_0rtt = Derive i_traffic0 "ClientKey" Expand
-val k0: key #ii i_0rtt AES_GCM256
-let k0 = derive early_traffic "ClientKey" Expand
-let cipher  = encrypt k0 10
-
-let i_salt1 = Derive i0 "salt" Expand
-let a_salt1 = Info #i_salt1 Hashing.Spec.SHA1 None
-val salt1:  salt (u_handshake_secret depth) i_salt1 a_salt1
-let salt1  = derive early_secret "salt" Expand
-
-
-let g = CommonDH.default_group
-//let x: CommonDH.sh = initI g
-let x = CommonDH.keygen g
-let gX = CommonDH.pubshare x
-let gY: CommonDH.share g = admit()
-let dhe_id: id_dhe = Some (| g, gX, gY |)
-
-let i1 = Extract1 (Derived i0 "salt") dhe_id
-
-// we really need [let u_extract1 = u_handshake_secret depth] to go past this point.
-
-val hs_secret : secret (u_handshake_secret depth) i1 a
-let hs_secret = extractI salt1 g x gY
-
-val hs_traffic: secret u_traffic (Derived i1 "traffic") a
-let hs_traffic = derive hs_secret "traffic"
-
-val k1: key #ii (Derived (Derived i1 "traffic") "ServerKey") AES_GCM256
-let k1 = derive hs_traffic "ServerKey"
-let cipher' = encrypt k1 11
-
-val salt2:  salt ii (u_master_secret depth) (Derived i1 "salt") a
-let salt2  = derive hs_secret "salt"
-
-let i2 = Extract2 (Derived i1 "salt")
-val master_secret: secret (u_master_secret depth) i2 a
-let master_secret = extract2 salt2
-
-val rsk: psk #ii #(u_early_secret (depth - 1)) (Derived i2 "resumption") a
-
-let i3 = Extract0 (Derived i2 "resumption")
-let rsk = derive master_secret "resumption"
-// #(u_master_secret depth ) #i2
-val next_early_secret: secret (u_early_secret (depth - 1)) i3 a
-let next_early_secret = extract0 rsk
-
-/// Proof?  Typing against plain, multi-instance assumptions for each
-/// algorithm (including the KDFs)---once an instance is created at
-/// the right index, we don't care about its generation.
-///
-/// Informally, we can explain it as a game against an adversary that tries to
-/// distinguish between KDFs with oracle access to create_psk, derive,
-/// and (all) coerce functions.
-///
-/// Idea: use an intermediate multi-instance PRF, then complete the
-/// proof by typing. The main problem is to move around the fresh
-/// random sampling...
-///
-/// Underlying functionality: create takes explicit random input
-/// idealizes (at most) when its input is freshly sampled.
-///
-/// real: at creation-time,
-/// table: label ->
-///
-/// - how to benefit from the create post-condition? explicit?
-///
-
-
-// let k0 = create_psk 0 //: secret (u depth) ii (Secret 0) = create (u depth) ii (Secret 0)
-// let i1 = Derived (Preshared 0) "secret" (* this seems to help normalization *)
-// let k1: secret (u (depth-1)) ii i1  = derive k0 "secret"
-// let k2: key #ii (Derived i1 "aead") = derive k1 "aead"
-// let cipher  = encrypt k2 42
-// let k3: list nat  = derive k1 "raw"
-//
-// let k1' = derive k0 "secret"
-// let k2' = derive #(u 22)  k1'  "aead"  // the type is not normalized; the key is not usable.
-
---- *)

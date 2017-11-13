@@ -120,26 +120,25 @@ let minP (n:int) : Tot (m:int{m <= n /\ m <= max_TLSPlaintext_fragment_length}) 
   if n >= max_TLSPlaintext_fragment_length then max_TLSPlaintext_fragment_length
   else n
 
-#reset-options "--z3rlimit 30 --initial_fuel 1 --initial_ifuel 1 --max_fuel 4 --max_ifuel 4"
-//Is there a nice way to avoid writing implicit arguments for pairs and the superfluous refinement 0 <= max?
+#reset-options "--z3rlimit 30 --initial_fuel 1 --initial_ifuel 1 --max_fuel 1 --max_ifuel 1"
 (* cipherRangeClass: given a ciphertext length, how long can the plaintext be? *)
 val cipherRangeClass: i:id2 -> clen:nat -> Pure range
   (requires valid_clen i clen)
-  (ensures fun (r:range) ->
-    let min, max = match aeAlg_of_id i with
+  (ensures fun r ->
+    let (min, max) : range =
+      match aeAlg_of_id i with
       | AEAD a _ ->
-          let x = clen - AE.explicit_iv_length i - CoreCrypto.aeadTagSize a in (x,x)
+        let x = clen - AE.explicit_iv_length i - CoreCrypto.aeadTagSize a in (x,x)
       | MtE enc _ ->
         let m0 = clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i in
         let m1 = clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i in
         (min0 m0, minP m1)
       | MACOnly h ->
-          let x = clen - hashLen h in (x,x) in
-    min >= 0 /\ min <= max /\ max <= max_TLSPlaintext_fragment_length /\ r = (min, max))
+        let x = clen - hashLen h in (x,x) in
+    0 <= min /\ max <= max_TLSPlaintext_fragment_length /\ r == (min, max))
 
 let cipherRangeClass i clen =
-  let authEnc = aeAlg_of_id i in
-  match authEnc with
+  match aeAlg_of_id i with
   | MACOnly h ->
     let hLen = hashLen h in
     let minmax = clen - hLen in
@@ -156,6 +155,7 @@ let cipherRangeClass i clen =
     let tagL = CoreCrypto.aeadTagSize aeadAlg in
     let minmax = clen - ivL - tagL in
     minmax, minmax
+
 
 val cipherRangeClass_width: i:id2 ->
   clen:nat{valid_clen i clen} ->
@@ -277,7 +277,7 @@ val targetLength_at_most_max_TLSCiphertext_fragment_length: i:id2
 //At least with the long timeout it should work reliably with or without hints
 let targetLength_at_most_max_TLSCiphertext_fragment_length i r = ()
 
-#set-options "--z3rlimit 1000 --initial_fuel 1 --initial_ifuel 1 --max_fuel 2 --max_ifuel 2"
+#set-options "--z3rlimit 100 --initial_fuel 1 --initial_ifuel 1 --max_fuel 2 --max_ifuel 2"
 val targetLength_converges: i:id2
   -> r:range{
       snd r <= max_TLSPlaintext_fragment_length /\
@@ -286,9 +286,13 @@ val targetLength_converges: i:id2
       | MtE a _ -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i))
       | AEAD _ _ -> fst r = snd r)}
   -> Lemma (targetLength i r = targetLength i (cipherRangeClass i (targetLength i r)))
-//without hints, the next query also takes several seconds on a powerful desktop
-let targetLength_converges i r = admit ()  //AR: 05/02: see issue#164
-  //lemma_MtE i; lemma_ID12 i
+// SZ: This used to be slow without hints, see Issue #164
+let targetLength_converges i r = 
+  lemma_MtE i; lemma_ID12 i;
+  match aeAlg_of_id i with
+  | MACOnly hash -> ()
+  | MtE a _ -> ()
+  | AEAD _ _ -> ()
 
 #reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
 val rangeClass: i:id2 -> r:range -> ML (r':range
