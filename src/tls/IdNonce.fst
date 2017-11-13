@@ -6,7 +6,7 @@ open Platform.Error
 open TLSInfo
 
 module N=Nonce
-module MM = MonotoneMap
+module MM = FStar.Monotonic.Map
 module MR = FStar.Monotonic.RRef
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack

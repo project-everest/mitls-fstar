@@ -15,7 +15,9 @@ open Platform.Error
 
 open TLSConstants
 open TLSInfo
+module Range = Range
 open Range
+
 open DataStream
 open TLS
 open FFICallbacks

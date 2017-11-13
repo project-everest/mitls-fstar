@@ -3,7 +3,7 @@
 module MiHTTPData
 
 open Bytes
-open Range
+module Range = Range
 open TLSInfo
 open DataStream
 

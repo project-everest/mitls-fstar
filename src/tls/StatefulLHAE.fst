@@ -16,9 +16,10 @@ open Platform.Bytes
 
 open TLSConstants
 open TLSInfo
-open Range
 open AEAD_GCM
 open StatefulPlain
+
+module Range = Range
 
 #set-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 
@@ -31,18 +32,18 @@ type cipher (i:id) = StatefulPlain.cipher i
 
 (* decrypted plaintexts, within a range computed from the cipher length *)
 type dplain (i:id) (ad:adata i) (c:cipher i) =
-  StatefulPlain.plain i ad (cipherRangeClass i (length c))
+  StatefulPlain.plain i ad (Range.cipherRangeClass i (length c))
 
 type state (i:id) (rw:rw) =
   AEAD_GCM.state i rw
 
-let region = AEAD_GCM.State?.region
+let region #i #rw = AEAD_GCM.State?.region #i #rw
 
-let log_region = AEAD_GCM.State?.log_region
+let log_region #i #rw = AEAD_GCM.State?.log_region #i #rw
 
-let log = AEAD_GCM.State?.log
+let log #i #rw = AEAD_GCM.State?.log #i #rw
 
-let counter = AEAD_GCM.State?.counter
+let counter #i #rw = AEAD_GCM.State?.counter #i #rw
 
 type reader i = state i Reader
 type writer i = state i Writer
@@ -55,7 +56,7 @@ let leak (#i:id{~(authId i)}) (#role:rw) = AEAD_GCM.leak #i #role
 (*------------------------------------------------------------------*)
 #set-options "--z3rlimit 100 --max_ifuel 1 --initial_ifuel 0 --max_fuel 1 --initial_fuel 0"
 val encrypt: #i:id -> e:writer i -> ad:adata i
-  -> r:range{fst r = snd r /\ snd r <= max_TLSPlaintext_fragment_length}
+  -> r:Range.range{fst r = snd r /\ snd r <= max_TLSPlaintext_fragment_length}
   -> p:plain i ad r
   -> ST (cipher i)
      (requires (fun h0 ->

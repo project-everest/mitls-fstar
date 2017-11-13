@@ -21,6 +21,7 @@ open TLSError
 open TLSConstants
 open TLSInfo
 open LHAEPlain
+module Range = Range
 open Range
 
 (* Also using Encode; we do not open it so that we can syntactically

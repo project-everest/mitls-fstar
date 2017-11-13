@@ -1,5 +1,5 @@
 [
-  "\u007fX x∑6\u0013\u0016É¬°√–OÌ\u001e",
+  "»ÉNk›o¶ÃæÒ…Dx”Æ+",
   [
     [
       "DataStream.repr",
@@ -8,7 +8,11 @@
       1,
       [ "@query", "assumption_Platform.Bytes.HasEq_bytes" ],
       0,
+<<<<<<< HEAD
       "16bdb41eae4297437373a7631fefd11b"
+=======
+      "d79cabd78da137e1809b37a496011c1a"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "DataStream.repr",
@@ -16,12 +20,16 @@
       0,
       1,
       [
-        "@query", "equation_DataStream.fragment",
+        "@MaxIFuel_assumption", "@query", "equation_DataStream.fragment",
         "equation_DataStream.ghost_repr",
-        "refinement_interpretation_Tm_refine_977063e22be61867cab4fea130513503"
+        "refinement_interpretation_DataStream_Tm_refine_36c4e84e415a1a83b3e9bd55bf2cdadd"
       ],
       0,
+<<<<<<< HEAD
       "4e796288ee9124bb2eb8823039f59be3"
+=======
+      "44d8b221a83dfada37ac9a0994f0c1cd"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "DataStream.mk_fragment",
@@ -30,7 +38,11 @@
       1,
       [ "@query", "assumption_Platform.Bytes.HasEq_bytes" ],
       0,
+<<<<<<< HEAD
       "fd04f0eb1d3c72c5cd35f08959b87d20"
+=======
+      "367970acc7b76622744b401374042f25"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "DataStream.mk_fragment",
@@ -38,17 +50,22 @@
       0,
       1,
       [
-        "@query", "equation_DataStream.ghost_repr",
-        "equation_Platform.Bytes.bytes", "equation_Prims.nat",
-        "equation_Range.fragment_range", "equation_Range.frange",
-        "equation_Range.range", "equation_Range.rbytes",
-        "fuel_guarded_inversion_Prims.tuple2",
-        "refinement_interpretation_Tm_refine_56d46984a766ca20808801a3443ae17c",
-        "refinement_interpretation_Tm_refine_8c0595f9d7245b9878e388727ee0bff8",
-        "refinement_interpretation_Tm_refine_dcedc8fc7e2151952d52dd61e8f5d73b"
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "equation_DataStream.ghost_repr", "equation_Platform.Bytes.bytes",
+        "equation_Prims.nat", "equation_Range.fragment_range",
+        "equation_Range.frange", "equation_Range.range",
+        "equation_Range.rbytes", "equation_Range.within",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Range_Tm_refine_0486d7c345fedcd664dfe7eac695bbd7",
+        "refinement_interpretation_Range_Tm_refine_e48af6218e3040b64df43b6a7c255461",
+        "typing_Platform.Bytes.length", "typing_Range.within"
       ],
       0,
+<<<<<<< HEAD
       "13aac48bb0b7db1633ab5a349a3abaf1"
+=======
+      "f4734fab3385c859eb8e068169e7b47c"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "DataStream.appFragment",
@@ -57,7 +74,11 @@
       1,
       [ "@query", "equation_DataStream.ghost_repr" ],
       0,
+<<<<<<< HEAD
       "ac67eee9b39fafe62e02241d10e82e45"
+=======
+      "8b3aeec663581afa95ac363cec668d3a"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "DataStream.appBytes",
@@ -66,7 +87,11 @@
       1,
       [ "@query", "equation_DataStream.ghost_repr" ],
       0,
+<<<<<<< HEAD
       "aa65b033aadb5387486179578c2263dc"
+=======
+      "9e8f60bd8378f64898450347dbe72403"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "DataStream.delta",
@@ -81,7 +106,11 @@
         "haseqDataStream_Tm_refine_36c4e84e415a1a83b3e9bd55bf2cdadd"
       ],
       0,
+<<<<<<< HEAD
       "3d3a6ac7fb85c22ba566ae6ce648f4ef"
+=======
+      "d47e6d89c49ab031231e8753e12c24f1"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "DataStream.uu___is_Data",
@@ -90,7 +119,11 @@
       1,
       [ "@query" ],
       0,
+<<<<<<< HEAD
       "f5918acc1a52f9b5917e83a91071ae9c"
+=======
+      "c8d3366cf1be50a2baf664c1298f373d"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "DataStream.__proj__Data__item___0",
@@ -103,7 +136,11 @@
         "refinement_interpretation_DataStream_Tm_refine_0d466ae495b3961c5a09f777ca3640cd"
       ],
       0,
+<<<<<<< HEAD
       "b93ded1128a40896aed04d19d877152d"
+=======
+      "99c2318aa25f6dafa41c7726a281599a"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "DataStream.uu___is_Close",
@@ -112,7 +149,11 @@
       1,
       [ "@query" ],
       0,
+<<<<<<< HEAD
       "be91e564b1b6283d790c31bff140b5b2"
+=======
+      "0fab1a0400fd049158ac15a33bc24131"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "DataStream.uu___is_Alert",
@@ -121,7 +162,11 @@
       1,
       [ "@query" ],
       0,
+<<<<<<< HEAD
       "251055ef4a4dbe10836a5c75d85ac7da"
+=======
+      "9a4c5d48ef5a142ae274afa25242922e"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "DataStream.__proj__Alert__item___0",
@@ -134,7 +179,11 @@
         "refinement_interpretation_DataStream_Tm_refine_36ed55116eca5cfa741045f75917d7b2"
       ],
       0,
+<<<<<<< HEAD
       "ab3cdde1e3de14586a24bc691d3d6547"
+=======
+      "cdbe904e0b116f13fd5faf390b848566"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "DataStream.final",
@@ -142,12 +191,16 @@
       0,
       1,
       [
-        "@query", "disc_equation_DataStream.Alert",
+        "@MaxIFuel_assumption", "@query", "disc_equation_DataStream.Alert",
         "disc_equation_DataStream.Close", "disc_equation_DataStream.Data",
         "fuel_guarded_inversion_DataStream.delta"
       ],
       0,
+<<<<<<< HEAD
       "259f2bdf133b452f0f5a9a786237d8fc"
+=======
+      "9dc497491244e65ab5d3d61d8e7a047d"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "DataStream.wellformed",
@@ -155,12 +208,17 @@
       0,
       1,
       [
-        "@query", "binder_x_8734431131df6dd46aa9962779a47103_1",
+        "@MaxIFuel_assumption", "@query",
+        "binder_x_8734431131df6dd46aa9962779a47103_1",
         "disc_equation_Prims.Cons", "disc_equation_Prims.Nil",
         "fuel_guarded_inversion_Prims.list"
       ],
       0,
+<<<<<<< HEAD
       "f183af4eeec12d9526580c790acdf87c"
+=======
+      "5082b742837f4079468ce0611fc60293"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "DataStream.empty_is_well_formed",
@@ -168,14 +226,18 @@
       2,
       2,
       [
+        "@MaxFuel_assumption",
+        "@fuel_correspondence_DataStream.wellformed.fuel_instrumented",
         "@query", "constructor_distinct_Prims.Nil",
         "equation_with_fuel_DataStream.wellformed.fuel_instrumented",
-        "fuel_correspondence_DataStream.wellformed.fuel_instrumented",
-        "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_Prims.Nil_a", "unit_typing"
+        "projection_inverse_BoxBool_proj_0", "projection_inverse_Prims.Nil_a"
       ],
       0,
+<<<<<<< HEAD
       "b7c5f7c7c69764019003733519bd14d9"
+=======
+      "876d7f1b5286c42cfc18060fa4175556"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "DataStream.__proj__State__item__region",
@@ -184,7 +246,11 @@
       1,
       [ "@query" ],
       0,
+<<<<<<< HEAD
       "6e2c0cebb2c4f446dafebfa67e5064ff"
+=======
+      "9378e3f72cf5dbed73f5bf9794f77a36"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "DataStream.__proj__State__item__log",
@@ -192,14 +258,21 @@
       0,
       1,
       [
-        "@query", "fuel_guarded_inversion_DataStream.state",
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_FStar.Pervasives.Native.Some",
         "proj_equation_DataStream.State_region",
-        "projection_inverse_DataStream.State_log",
+        "projection_inverse_BoxBool_proj_0",
         "projection_inverse_DataStream.State_region",
-        "refinement_interpretation_Tm_refine_34f566d8e7230c1998dbcfe1b83b730f"
+        "refinement_interpretation_DataStream_Tm_refine_f2b8bd46318c3c3bc6a341a6faf3f78c",
+        "typing_DataStream.stream", "typing_FStar.HyperHeap.rref",
+        "typing_FStar.Pervasives.Native.uu___is_Some"
       ],
       0,
+<<<<<<< HEAD
       "7a7a486d6e81b1523f4c4f7ec3e72188"
+=======
+      "f0f634f87f8526a121e6c6c9b3a8fa3a"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "DataStream.__proj__State__item__ctr",
@@ -211,7 +284,11 @@
         "projection_inverse_DataStream.State_region"
       ],
       0,
+<<<<<<< HEAD
       "23518a63698e69ec203be3c661517370"
+=======
+      "0756f94396f77d42fceeda895eca3ce1"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "DataStream.gen",
@@ -223,7 +300,6 @@
         "constructor_distinct_FStar.Pervasives.Native.None",
         "constructor_distinct_FStar.Pervasives.Native.Some",
         "data_typing_intro_FStar.Pervasives.V@tok",
-        "disc_equation_FStar.Pervasives.Native.None",
         "disc_equation_FStar.Pervasives.Native.Some",
         "equation_FStar.HyperHeap.rref",
         "equation_FStar.Monotonic.HyperStack.is_eternal_region",
@@ -231,16 +307,23 @@
         "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
         "kinding_DataStream.state@tok",
         "kinding_FStar.Pervasives.Native.tuple2@tok",
-        "lemma_FStar.Pervasives.invertOption",
         "proj_equation_FStar.Monotonic.HyperStack.MkRef_ref",
         "projection_inverse_BoxBool_proj_0",
+<<<<<<< HEAD
+=======
+        "projection_inverse_FStar.Pervasives.Native.Some_a",
+        "projection_inverse_FStar.Pervasives.Native.Some_v",
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
         "refinement_interpretation_FStar.HyperStack.ST_Tm_refine_d52cae8b8e1ca91e1679b9bdc9938557",
         "refinement_interpretation_FStar.Monotonic.RRef_Tm_refine_ffd890ccd7288c856f2f05ce06687083",
-        "typing_DataStream.stream", "typing_FStar.HyperHeap.rref",
         "typing_FStar.Monotonic.HyperStack.is_eternal_region"
       ],
       0,
+<<<<<<< HEAD
       "b213ca59ab4a98e44cc1a8199fd6a117"
+=======
+      "e2611aa0ae81aaf19d62bcfa83ab2aa5"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "DataStream.min",
@@ -248,11 +331,16 @@
       0,
       1,
       [
-        "@query", "equation_Prims.nat", "int_inversion",
-        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
+        "@MaxIFuel_assumption", "@query", "equation_Prims.nat",
+        "int_inversion",
+        "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
+<<<<<<< HEAD
       "bd023386f918aa12bcf90f184e0cd5a7"
+=======
+      "f4818272e5db90a3c9a7017c709bcd12"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ]
   ]
 ]

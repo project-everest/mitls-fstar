@@ -16,7 +16,7 @@ open TLSInfo
 open StatefulPlain
 open AEAD_GCM
 open StatefulLHAE
-open Range
+
 open FStar.HyperHeap
 
 

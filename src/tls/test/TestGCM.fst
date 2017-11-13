@@ -9,7 +9,7 @@ open Platform.Bytes
 open TLSError
 open TLSInfo
 open TLSConstants
-open Range
+module Range = Range
 open StatefulPlain
 open AEAD_GCM
 open StatefulLHAE

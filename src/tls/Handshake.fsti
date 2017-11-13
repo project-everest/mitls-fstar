@@ -6,9 +6,14 @@ open FStar.HyperStack
 
 open TLSConstants
 
+<<<<<<< HEAD
 (*! abstract state of a handshake endpoint, 
      with various property readers. *)
 ///
+=======
+module Range = Range
+
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
 val hs: Type0
 
 // the handshake epochs internally maintains counters for the current reader and writer

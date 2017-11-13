@@ -16,8 +16,10 @@ open Platform.Bytes
 
 open TLSError
 open TLSInfo
+module Range = Range
 open Range
 open DataStream
+
 
 type output_buffer =
     | NoneOBuf of stream

@@ -6,7 +6,7 @@ module PwToken
 open Bytes
 open TLSInfo
 open DataStream
-open Range
+module Range = Range
 
 // ------------------------------------------------------------------------
 type token

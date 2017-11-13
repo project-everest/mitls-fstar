@@ -8,7 +8,11 @@
       1,
       [ "@query", "assumption_Platform.Bytes.HasEq_bytes" ],
       0,
+<<<<<<< HEAD
       "a164f3bc6ba3bfe8d79b904c9f4226d9"
+=======
+      "63a3b2774a1cd5cb99fde90431f09261"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "Hashing.__proj__Inputs__item___0",
@@ -17,7 +21,11 @@
       1,
       [ "@query" ],
       0,
+<<<<<<< HEAD
       "41822a0946093ee33c4c1e0905a16bd7"
+=======
+      "fbc4225db9bd9323ea93a74c579adc43"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "Hashing.content",
@@ -26,7 +34,11 @@
       1,
       [ "@query" ],
       0,
+<<<<<<< HEAD
       "b109e4112d5d8a7ac77b69398d1d349a"
+=======
+      "dfa88d131c2fa5d3fc0469a68c24acbf"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "Hashing.finalize",
@@ -34,17 +46,15 @@
       0,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "assumption_Prims.HasEq_int",
-        "equation_Hashing.Spec.tag", "equation_Hashing.Spec.tagLen",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.lbytes",
-        "equation_Prims.nat",
-        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "refinement_interpretation_Platform.Bytes_Tm_refine_3458b9f6f40fe62446cdc2c6d3755a94",
-        "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "typing_Platform.Bytes.length"
+        "@query", "assumption_Prims.HasEq_int", "equation_Prims.nat",
+        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
+<<<<<<< HEAD
       "084289454ad34cab9cc36f927d4668e0"
+=======
+      "7869aa17b6b93df4c6d958fb18c53847"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "Hashing.finalize",
@@ -53,7 +63,11 @@
       1,
       [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
       0,
+<<<<<<< HEAD
       "618b9ad06158f6138a58394d36b047ff"
+=======
+      "5ec01a33f4c14ac7f9d881c35c3f9623"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "Hashing.start",
@@ -61,13 +75,16 @@
       0,
       1,
       [
-        "@query", "constructor_distinct_Hashing.Inputs",
-        "equation_Hashing.content", "equation_Platform.Bytes.empty_bytes",
-        "projection_inverse_Hashing.Inputs__0",
-        "projection_inverse_Hashing.Inputs_a"
+        "@query", "equation_Hashing.content",
+        "equation_Platform.Bytes.empty_bytes",
+        "projection_inverse_Hashing.Inputs__0"
       ],
       0,
+<<<<<<< HEAD
       "e7164e546535afce6aac783139c6a81c"
+=======
+      "94423dde979065c5a18d1c8db48f039a"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "Hashing.extend",
@@ -75,12 +92,15 @@
       0,
       1,
       [
-        "@query", "constructor_distinct_Hashing.Inputs",
-        "equation_Hashing.content", "projection_inverse_Hashing.Inputs__0",
-        "projection_inverse_Hashing.Inputs_a"
+        "@query", "equation_Hashing.content",
+        "projection_inverse_Hashing.Inputs__0"
       ],
       0,
+<<<<<<< HEAD
       "9f59269d810bbb62d2eb27ef2aa569ef"
+=======
+      "ee439b1028bdd533373180e887315a0f"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "Hashing.finalize",
@@ -90,14 +110,19 @@
       [
         "@MaxIFuel_assumption", "@query", "equation_Hashing.Spec.tag",
         "equation_Hashing.content",
-        "fuel_guarded_inversion_FStar.HyperStack.mem",
+        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
         "projection_inverse_Hashing.Inputs__0",
+        "refinement_interpretation_FStar.HyperStack.ST_Tm_refine_d52cae8b8e1ca91e1679b9bdc9938557",
         "refinement_interpretation_Hashing_Tm_refine_2d0a083fca364f25257ba01d7340ba1a",
         "refinement_interpretation_Hashing_Tm_refine_ea2e6a6a6c9334ddb006ee02a478c397",
         "typing_Hashing.Spec.hash"
       ],
       0,
+<<<<<<< HEAD
       "9399cb4858e60b663be3edb920d79062"
+=======
+      "f967eabf60ee6365099836a71909d2e4"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ]
   ]
 ]

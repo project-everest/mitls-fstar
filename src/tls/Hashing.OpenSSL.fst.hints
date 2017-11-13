@@ -7,17 +7,15 @@
       0,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "assumption_Prims.HasEq_int",
-        "equation_Hashing.Spec.tag", "equation_Hashing.Spec.tagLen",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.lbytes",
-        "equation_Prims.nat",
-        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "refinement_interpretation_Platform.Bytes_Tm_refine_3458b9f6f40fe62446cdc2c6d3755a94",
-        "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "typing_Platform.Bytes.length"
+        "@query", "assumption_Prims.HasEq_int", "equation_Prims.nat",
+        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
+<<<<<<< HEAD
       "5f6199587667cd75b454bd166fd3abe2"
+=======
+      "2dd7a3e2c0a5778a457829100b1791a0"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "Hashing.OpenSSL.compute",
@@ -26,7 +24,11 @@
       1,
       [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
       0,
+<<<<<<< HEAD
       "6e1f74a6d8f5888488ee083af195e76a"
+=======
+      "781697b59deab168c4b3e61a4c13c464"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "Hashing.OpenSSL.hmac",
@@ -34,17 +36,15 @@
       0,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "assumption_Prims.HasEq_int",
-        "equation_Hashing.Spec.tag", "equation_Hashing.Spec.tagLen",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.lbytes",
-        "equation_Prims.nat",
-        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "refinement_interpretation_Platform.Bytes_Tm_refine_3458b9f6f40fe62446cdc2c6d3755a94",
-        "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "typing_Platform.Bytes.length"
+        "@query", "assumption_Prims.HasEq_int", "equation_Prims.nat",
+        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
+<<<<<<< HEAD
       "60030b5df22381460d9085d8fb5978ac"
+=======
+      "f2f5fe0f1d58585f933f77b7fd7d8101"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "Hashing.OpenSSL.hmac",
@@ -53,7 +53,11 @@
       1,
       [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
       0,
+<<<<<<< HEAD
       "baa2a629a34b39c53dfc677e7d6ced8c"
+=======
+      "4657184083c7abfd6bbfb42b524d011f"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "Hashing.OpenSSL.toCC",
@@ -61,8 +65,10 @@
       0,
       1,
       [
-        "@query", "constructor_distinct_Hashing.Spec.MD5",
+        "@MaxIFuel_assumption", "@query",
         "constructor_distinct_Hashing.Spec.SHA1",
+        "constructor_distinct_Hashing.Spec.SHA224",
+        "constructor_distinct_Hashing.Spec.SHA256",
         "constructor_distinct_Hashing.Spec.SHA384",
         "constructor_distinct_Hashing.Spec.SHA512",
         "disc_equation_Hashing.Spec.MD5", "disc_equation_Hashing.Spec.SHA1",
@@ -75,11 +81,15 @@
         "equality_tok_CoreCrypto.SHA224@tok",
         "equality_tok_CoreCrypto.SHA256@tok",
         "equality_tok_CoreCrypto.SHA384@tok",
-        "equality_tok_CoreCrypto.SHA512@tok",
+        "equality_tok_Hashing.Spec.SHA256@tok",
         "fuel_guarded_inversion_Hashing.Spec.alg"
       ],
       0,
+<<<<<<< HEAD
       "693ae7f652fe5e8cbebff9cf135209e0"
+=======
+      "01c503617da942abc7a488dd68d3f32a"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ]
   ]
 ]

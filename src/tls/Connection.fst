@@ -17,8 +17,8 @@ open TLSError
 open TLSConstants
 open TLSInfo
   
+module Range = Range
 open Range
-
 open Epochs
 open Handshake
 

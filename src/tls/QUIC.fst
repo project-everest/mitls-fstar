@@ -16,7 +16,6 @@ open Platform.Bytes
 open Platform.Error
 open TLSConstants
 open TLSInfo
-open Range
 open DataStream
 open TLS
 open FFICallbacks

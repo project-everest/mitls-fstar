@@ -45,7 +45,7 @@ private type log_t
   (i:ip.IK.t)
   (u:info)
   (r:rgn)
-= MonotoneMap.t r (tag u * text) (fun (t,v) -> _:unit{ip.IK.honest i ==> u.good v}) (fun _ -> True) // could constrain size
+= FStar.Monotonic.Map.t r (tag u * text) (fun (t,v) -> _:unit{ip.IK.honest i ==> u.good v}) (fun _ -> True) // could constrain size
 
 // readers and writers share the same private state: a log of MACed messages
 noeq abstract type key (#ip:IK.ipkg) (i:ip.IK.t) (u:info) =
@@ -68,7 +68,7 @@ private let gen (#ip:IK.ipkg) (i:ip.IK.t) (u:info) (kv:keyrepr u) : ST (key i u)
     modifies Set.empty h0 h1
   )) =
   let region: r:rgn{extends r u.parent} = new_region u.parent in
-  let log: log_t #ip i u region = MonotoneMap.alloc #region #(tag u * text) #(fun (t,v) -> _:unit{ip.IK.honest i ==> u.good v}) #(fun _ -> True) in
+  let log: log_t #ip i u region = FStar.Monotonic.Map.alloc #region #(tag u * text) #(fun (t,v) -> _:unit{ip.IK.honest i ==> u.good v}) #(fun _ -> True) in
   Key kv log
 
 val create: #ip:IK.ipkg -> i:ip.IK.t -> u:info -> ST (key i u)
@@ -105,7 +105,7 @@ val mac:
 let mac #ip #i #u k p =
   //let p : p:bytes { ip.IK.honest i ==> u.good p } = p in
   let t = HMAC.hmac u.alg k.kv p in
-  if None? (MonotoneMap.lookup k.log (t,p)) then MonotoneMap.extend k.log (t,p) ();
+  if None? (FStar.Monotonic.Map.lookup k.log (t,p)) then FStar.Monotonic.Map.extend k.log (t,p) ();
   t
 
 //abstract val matches: #i:id -> #good:(bytes -> Type) -> p:text -> entry i good -> Tot bool
@@ -120,7 +120,7 @@ val verify:
 // We use the log to correct any verification errors
 let verify #ip #i #u k p t =
   let verified = HMAC.hmacVerify u.alg k.kv p t in
-  let maced  = Some? (MonotoneMap.lookup k.log (t,p)) in
+  let maced  = Some? (FStar.Monotonic.Map.lookup k.log (t,p)) in
   verified  &&
   (not(ip.IK.honest i) || maced)
 

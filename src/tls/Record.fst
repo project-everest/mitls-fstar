@@ -9,7 +9,6 @@ open Platform.Error
 open TLSError
 open TLSInfo
 open TLSConstants
-open Range
 open Content
 
 // Consider merging some of this module with Content?

@@ -57,12 +57,16 @@
         "@MaxIFuel_assumption", "@query",
         "Prims_pretyping_f8666440faa91836cc5a13998af863fc",
         "data_typing_intro_FStar.Pervasives.V@tok",
-        "equation_FStar.HyperHeap.test0", "equation_Prims._assert",
-        "function_token_typing_FStar.HyperHeap.test0",
-        "function_token_typing_Prims.unit", "unit_typing"
+        "equation_FStar.Monotonic.HyperHeap.test0", "equation_Prims._assert",
+        "function_token_typing_FStar.Monotonic.HyperHeap.test0",
+        "function_token_typing_Prims.unit", "unit_inversion", "unit_typing"
       ],
       0,
+<<<<<<< HEAD
       "442ef67df08867de2f46bedf0aa589fe"
+=======
+      "90995402029984c608e23fe42ce2f442"
+>>>>>>> 4a80531585ed3681443a60a958212df066588b6f
     ],
     [
       "Transport.really_read_rec",

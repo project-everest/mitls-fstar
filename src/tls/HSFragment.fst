@@ -5,6 +5,7 @@
 module HSFragment
 open Platform.Bytes
 open TLSInfo
+module Range = Range
 open Range
 open Platform.Error
 open TLSError

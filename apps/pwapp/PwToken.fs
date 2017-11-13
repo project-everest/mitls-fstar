@@ -8,7 +8,7 @@ open DER
 open Nonce
 open TLSInfo
 open DataStream
-open Range
+module Range = Range
 
 // ------------------------------------------------------------------------
 type username = string

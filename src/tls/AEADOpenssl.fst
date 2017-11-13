@@ -10,7 +10,7 @@ open CoreCrypto
 open TLSConstants
 open TLSInfo
 
-module MM = MonotoneMap
+module MM = FStar.Monotonic.Map
 module MR = FStar.Monotonic.RRef
 
 type id = i:id{~(PlaintextID? i) /\ AEAD? (aeAlg_of_id i)}
