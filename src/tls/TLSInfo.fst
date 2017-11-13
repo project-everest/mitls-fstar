@@ -16,7 +16,7 @@ open TLSConstants
 //open Cert
 
 module CC = CoreCrypto
-module MM = MonotoneMap
+module MM = FStar.Monotonic.Map
 module MR = FStar.Monotonic.RRef
 module HH = FStar.HyperHeap
 

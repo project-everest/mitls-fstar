@@ -6,7 +6,7 @@ open Epochs
 open Handshake
 open Connection
 
-module MM = MonotoneMap
+module MM = FStar.Monotonic.Map
 module MR = FStar.Monotonic.RRef
 module MonSeq = FStar.Monotonic.Seq
 module HH = FStar.HyperHeap

@@ -19,7 +19,7 @@ assume val crf: alg -> Tot bool  // to be moved elsewhere, set to false for real
     incremental hash implementation. (This is always the case for now.)  *)
 
 module MR = FStar.Monotonic.RRef
-module MM = MonotoneMap
+module MM = FStar.Monotonic.Map
 
 // the precise types guarantee that the table stays empty when crf _ = false
 private type range = | Computed: a: alg {crf a} -> tag a -> range

@@ -6,7 +6,7 @@ open FStar.HyperStack.ST
 
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
-module MM = MonotoneMap
+module MM = FStar.Monotonic.Map
 module MR = FStar.Monotonic.RRef
 module ST = FStar.HyperStack.ST
 

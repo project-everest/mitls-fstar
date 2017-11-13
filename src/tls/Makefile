@@ -72,7 +72,6 @@ endif
 
 VERIFY= \
 Flags \
-MonotoneMap \
 TLSError \
 TLSConstants \
 Transport \

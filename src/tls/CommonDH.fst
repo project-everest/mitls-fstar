@@ -17,7 +17,7 @@ open TLSError
 open FStar.HyperStack.ST
 
 module MR = FStar.Monotonic.RRef
-module MM = MonotoneMap
+module MM = FStar.Monotonic.Map
 module ST = FStar.HyperStack.ST
 
 (* A flag for runtime debugging of cDH data.
