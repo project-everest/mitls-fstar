@@ -1,5 +1,5 @@
 [
-  "1«L\u000eó!„ÆŠ›°¨»<º6",
+  "9c\u0001'F\"®Û¢Š»[BsÏ\u0005",
   [
     [
       "PMS.rsaseed",
@@ -11,7 +11,7 @@
         "equation_PMS.rsarepr"
       ],
       0,
-      "16c7065d915181602450f974519870c0"
+      "6e50655b89d71eadc303b279e47c6d50"
     ],
     [
       "PMS.__proj__Mkrsaseed__item__seed",
@@ -20,7 +20,7 @@
       1,
       [ "@query" ],
       0,
-      "9c7bf975781b11c0176726db625d8e9c"
+      "0cb5a455fe7757fb37ffb285de7306ba"
     ],
     [
       "PMS.rsapms",
@@ -32,7 +32,7 @@
         "assumption_Platform.Bytes.HasEq_bytes", "equation_PMS.rsarepr"
       ],
       0,
-      "b91ed049f033ed25e53897d642c5e891"
+      "ef40893050eb5999b26e1a1a31f8120e"
     ],
     [
       "PMS.uu___is_IdealRSAPMS",
@@ -41,7 +41,7 @@
       1,
       [ "@query" ],
       0,
-      "91f1d00a3f4077234d9ed925ee42cebc"
+      "3813100cf0b5e1cca7f69ceb4900a764"
     ],
     [
       "PMS.__proj__IdealRSAPMS__item___0",
@@ -54,7 +54,7 @@
         "refinement_interpretation_PMS_Tm_refine_4b165c74d9a659bf95c22cc5c0cddc2f"
       ],
       0,
-      "193c9d01583509aa856270a16f974009"
+      "62cbe021d3c335815e299c55502906f1"
     ],
     [
       "PMS.uu___is_ConcreteRSAPMS",
@@ -63,7 +63,7 @@
       1,
       [ "@query" ],
       0,
-      "6b54b4fe9cba0c768a24c0967cf22e9e"
+      "f19ec30f5c020b02198584330ad26760"
     ],
     [
       "PMS.__proj__ConcreteRSAPMS__item___0",
@@ -76,7 +76,7 @@
         "refinement_interpretation_PMS_Tm_refine_21658e76784ec5e41f1ede63fdf3a3b0"
       ],
       0,
-      "e79c325d94acb6a0d9267e7cee4764ec"
+      "5f33bad83f15dd8b3f5ad08dd26721e3"
     ],
     [
       "PMS.honestRSAPMS",
@@ -84,11 +84,21 @@
       0,
       1,
       [
-        "@query", "disc_equation_PMS.ConcreteRSAPMS",
-        "disc_equation_PMS.IdealRSAPMS", "fuel_guarded_inversion_PMS.rsapms"
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_PMS.ConcreteRSAPMS", "disc_equation_PMS.IdealRSAPMS",
+        "disc_equation_TLSConstants.UnknownVersion",
+        "equation_Parse.is_tls_rgn", "equation_Parse.rgn",
+        "equation_Parse.tls_rgn", "equation_TLSConstants.protocolVersion",
+        "fuel_guarded_inversion_PMS.rsapms",
+        "function_token_typing_Parse.tls_region",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
+        "refinement_interpretation_Parse_Tm_refine_d26422d9696ba619f4813a3f4ad1e26e",
+        "refinement_interpretation_TLSConstants_Tm_refine_523b5ab0afa2b70ba3fdd9fbd1d1a514",
+        "typing_Parse.is_tls_rgn"
       ],
       0,
-      "23ecb3690d0eac764e7e8766a580d6f5"
+      "376a922f2453ec95b659347af45a6049"
     ],
     [
       "PMS.genRSA",
@@ -96,16 +106,20 @@
       0,
       1,
       [
-        "@query", "equation_DHGroup.params", "equation_RSAKey.strong",
-        "fuel_guarded_inversion_FStar.HyperStack.mem",
-        "function_token_typing_DHGroup.ffdhe2048",
-        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThan",
-        "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_Tm_refine_6f2b4a64b3ab3857a757176fd8a57fb5"
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_TLSConstants.UnknownVersion",
+        "equation_Parse.is_tls_rgn", "equation_Parse.rgn",
+        "equation_Parse.tls_rgn", "equation_RSAKey.strong",
+        "equation_TLSConstants.protocolVersion",
+        "function_token_typing_Parse.tls_region",
+        "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
+        "refinement_interpretation_Parse_Tm_refine_d26422d9696ba619f4813a3f4ad1e26e",
+        "refinement_interpretation_TLSConstants_Tm_refine_523b5ab0afa2b70ba3fdd9fbd1d1a514",
+        "typing_Parse.is_tls_rgn"
       ],
       0,
-      "f44381e5bc3a9f248a024c541ce4ab38"
+      "a1a9055e443a839d3bb7519c56dfd89f"
     ],
     [
       "PMS.dhseed",
@@ -117,7 +131,7 @@
         "equation_PMS.dhrepr"
       ],
       0,
-      "d044897f7e2f2b1f635dca112160f1f8"
+      "713fbae2399fa8b24f93d7cbb61c1051"
     ],
     [
       "PMS.__proj__Mkdhseed__item__seed",
@@ -126,7 +140,7 @@
       1,
       [ "@query" ],
       0,
-      "01e4957c5c873f8360fc97e19b49c56b"
+      "6e9bc77f04491d9f37d1d807c1bc0f07"
     ],
     [
       "PMS.dhpms",
@@ -138,7 +152,7 @@
         "assumption_Platform.Bytes.HasEq_bytes", "equation_PMS.dhrepr"
       ],
       0,
-      "6cabc6f14bcbc8ba70dc3d7dde12bf2e"
+      "783a3e706a36201dcd78264303a631c2"
     ],
     [
       "PMS.uu___is_IdealDHPMS",
@@ -147,7 +161,7 @@
       1,
       [ "@query" ],
       0,
-      "c5f1f7113cc1adbb211aa622641700c7"
+      "2c6b40b6a5bb90befa8583e6c321d27f"
     ],
     [
       "PMS.__proj__IdealDHPMS__item___0",
@@ -160,7 +174,7 @@
         "refinement_interpretation_PMS_Tm_refine_68f56426ab673280a097f887a8d712db"
       ],
       0,
-      "0581c89e5fbd36f7b2fdf1c5d68a887b"
+      "1fad399caa04b1447b1a27d65761fa09"
     ],
     [
       "PMS.uu___is_ConcreteDHPMS",
@@ -169,7 +183,7 @@
       1,
       [ "@query" ],
       0,
-      "95b64c989f2eda40626e5619637a1c1e"
+      "cd3b3968c85b1224dada3805d960017c"
     ],
     [
       "PMS.__proj__ConcreteDHPMS__item___0",
@@ -182,7 +196,7 @@
         "refinement_interpretation_PMS_Tm_refine_5e03437877d8157a7d93f8b434a81ef3"
       ],
       0,
-      "c29a120cd369dad249b5d50ed8fd5bc4"
+      "6ab8737b51cd6d800e44543c41efa822"
     ],
     [
       "PMS.honestDHPMS",
@@ -190,11 +204,17 @@
       0,
       1,
       [
-        "@query", "disc_equation_PMS.ConcreteDHPMS",
-        "disc_equation_PMS.IdealDHPMS", "fuel_guarded_inversion_PMS.dhpms"
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_PMS.ConcreteDHPMS", "disc_equation_PMS.IdealDHPMS",
+        "equation_Parse.is_tls_rgn", "equation_Parse.rgn",
+        "equation_Parse.tls_rgn", "fuel_guarded_inversion_PMS.dhpms",
+        "function_token_typing_Parse.tls_region",
+        "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
+        "refinement_interpretation_Parse_Tm_refine_d26422d9696ba619f4813a3f4ad1e26e",
+        "typing_Parse.is_tls_rgn"
       ],
       0,
-      "16f507ceec2813ece25b5dba9bfe2929"
+      "352c332b75723c36ce0a2dd264117ae2"
     ],
     [
       "PMS.pms",
@@ -207,20 +227,24 @@
         "assumption_FStar.Pervasives.Native.tuple3_haseq",
         "assumption_PMS.dhpms_haseq", "assumption_PMS.rsapms_haseq",
         "assumption_TLSConstants.protocolVersion__haseq",
-        "equation_CommonDH.share", "equation_Platform.Bytes.bytes",
+        "equation_CommonDH.dhr", "equation_CommonDH.ishare",
+        "equation_CommonDH.pre_dhr", "equation_CommonDH.rshare",
+        "equation_FStar.Pervasives.dfst", "equation_Platform.Bytes.bytes",
         "equation_RSAKey.pk", "equation_TLSConstants.protocolVersion",
         "function_token_typing_CommonDH.group",
         "function_token_typing_RSAKey.pk",
-        "haseqCommonDH_Tm_refine_a8be441a33e9134acfea527361c50c75",
+        "haseqCommonDH_Tm_refine_0449a919f2686f2dad948d88586b56ce",
+        "haseqCommonDH_Tm_refine_59e636272f909930c53ccc0e9facf997",
         "haseqRSAKey_Tm_refine_a9bfc0fafe17f7581769be852314b8fc",
         "haseqTLSConstants_Tm_refine_523b5ab0afa2b70ba3fdd9fbd1d1a514",
-        "kinding_PMS.rsapms@tok",
+        "kinding_PMS.rsapms@tok", "proj_equation_Prims.Mkdtuple2__1",
+        "projection_inverse_Prims.Mkdtuple2__1",
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "refinement_kinding_TLSConstants_Tm_refine_523b5ab0afa2b70ba3fdd9fbd1d1a514",
         "typing_CommonDH.pre_share"
       ],
       0,
-      "5295f18f6197c77b0bc2bdede3435616"
+      "928135a994aebcfe0c89393c446b8370"
     ],
     [
       "PMS.uu___is_RSAPMS",
@@ -229,7 +253,7 @@
       1,
       [ "@query" ],
       0,
-      "158aeeec599d0732600b1b1c0cf9e727"
+      "d56127107bdacd7751581dcb5db02df1"
     ],
     [
       "PMS.__proj__RSAPMS__item___0",
@@ -242,7 +266,7 @@
         "refinement_interpretation_PMS_Tm_refine_ef6fa93ce9da0bc0ec2e9c9a50e6dd43"
       ],
       0,
-      "21284cebe89d8c0521bac9dada077063"
+      "1846192fc149fa3547b96512ec518181"
     ],
     [
       "PMS.uu___is_DHPMS",
@@ -251,7 +275,7 @@
       1,
       [ "@query" ],
       0,
-      "1679a75235d51cd303a5af3c480a7bc8"
+      "035985f570fd22b207acf7e742d45daa"
     ],
     [
       "PMS.__proj__DHPMS__item__g",
@@ -264,10 +288,10 @@
         "refinement_interpretation_PMS_Tm_refine_a82900f6c5ee138b7d328b3c3765a0f8"
       ],
       0,
-      "aa381f8c90b2ba3793f62a794697aa58"
+      "bb73ff2d71d9f253cc67aae29577a5f1"
     ],
     [
-      "PMS.__proj__DHPMS__item___1",
+      "PMS.__proj__DHPMS__item__gx",
       1,
       0,
       1,
@@ -278,7 +302,7 @@
         "refinement_interpretation_PMS_Tm_refine_a82900f6c5ee138b7d328b3c3765a0f8"
       ],
       0,
-      "725b6ebccb7f82ea447a970f08ea5c49"
+      "b2bfe18d8c88a9ed53e585245792d34b"
     ],
     [
       "PMS.__proj__DHPMS__item___2",
@@ -287,12 +311,13 @@
       1,
       [
         "@MaxIFuel_assumption", "@query", "disc_equation_PMS.DHPMS",
-        "proj_equation_PMS.DHPMS_g", "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_PMS.DHPMS_g",
+        "proj_equation_PMS.DHPMS_g", "proj_equation_PMS.DHPMS_gx",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_PMS.DHPMS_g", "projection_inverse_PMS.DHPMS_gx",
         "refinement_interpretation_PMS_Tm_refine_a82900f6c5ee138b7d328b3c3765a0f8"
       ],
       0,
-      "c61f5527cdf83cf68192e7a9967a8291"
+      "eed5fe2679c2a4f83d795cfaf180e526"
     ],
     [
       "PMS.__proj__DHPMS__item___3",
@@ -305,7 +330,7 @@
         "refinement_interpretation_PMS_Tm_refine_a82900f6c5ee138b7d328b3c3765a0f8"
       ],
       0,
-      "67dc0adfcc0980211d1200a96ad2d0cf"
+      "c17ef34656471129cdb1a46bfb201f21"
     ],
     [
       "PMS.uu___is_DummyPMS",
@@ -314,7 +339,7 @@
       1,
       [ "@query" ],
       0,
-      "08ad1817d07f4955d7fb4697166acd93"
+      "7c5221ac8b3ca0c7c6aeb2d9489c796f"
     ],
     [
       "PMS.honestPMS",
@@ -328,7 +353,7 @@
         "fuel_guarded_inversion_PMS.pms"
       ],
       0,
-      "58e44319a77c7cea96aaaf5046ce1d8d"
+      "8025d31d264bd8bcbc2c00dd426af3d1"
     ]
   ]
 ]

@@ -2,14 +2,6 @@
   "º!$ÎÔR∑\tg∑≤Ïù¥\u0012Q",
   [
     [
-      "StreamDeltas.singleton",
-      1,
-      0,
-      1,
-      [ "@query", "projection_inverse_BoxInt_proj_0" ],
-      0
-    ],
-    [
       "StreamDeltas.project_one_frag",
       1,
       1,
@@ -33,7 +25,8 @@
         "refinement_interpretation_TLSInfo_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b",
         "typing_DataStream.ghost_repr", "typing_Platform.Bytes.length"
       ],
-      0
+      0,
+      "8e03197364ed6b3a539827162f9ccf9e"
     ],
     [
       "StreamDeltas.project_deltas",
@@ -44,7 +37,8 @@
         "@MaxIFuel_assumption", "@query", "equation_StreamDeltas.id",
         "refinement_interpretation_TLSInfo_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b"
       ],
-      0
+      0,
+      "d1d9cb2d0d9dae0ee968fdf3cf28c01c"
     ],
     [
       "StreamDeltas.stream_deltas_snoc",
@@ -57,7 +51,8 @@
         "equation_StreamDeltas.project_deltas",
         "refinement_interpretation_TLSInfo_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b"
       ],
-      0
+      0,
+      "9107f201b12bc612acb622adf7d08423"
     ],
     [
       "StreamDeltas.project_fragment_deltas",
@@ -68,7 +63,8 @@
         "@MaxIFuel_assumption", "@query", "equation_StreamDeltas.id",
         "refinement_interpretation_TLSInfo_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b"
       ],
-      0
+      0,
+      "87e77298c437dc597e85a1e86e731889"
     ],
     [
       "StreamDeltas.project_fragment_deltas",
@@ -83,12 +79,13 @@
         "equation_StAE.ilog", "equation_StAE.log_region",
         "equation_StreamDeltas.deltas_prefix", "equation_StreamDeltas.id",
         "equation_StreamDeltas.project_deltas",
-        "fuel_guarded_inversion_FStar.HyperStack.mem",
+        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
         "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_TLSInfo_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b",
-        "typing_TLSInfo.uu___is_PlaintextID", "unit_typing"
+        "typing_TLSInfo.uu___is_PlaintextID"
       ],
-      0
+      0,
+      "2935b7f552ebd378dac129ef85b310f6"
     ],
     [
       "StreamDeltas.project_fragment_deltas",
@@ -99,7 +96,8 @@
         "@MaxIFuel_assumption", "@query", "equation_StreamDeltas.id",
         "refinement_interpretation_AEADOpenssl_Tm_refine_49edabf22ed387b83e79e9af2d6a6391"
       ],
-      0
+      0,
+      "1d95e7a4f90aceae39c0e398b97cd1c3"
     ],
     [
       "StreamDeltas.stream_deltas_snoc2",
@@ -107,14 +105,13 @@
       1,
       1,
       [
-        "@query", "bool_inversion", "equation_FStar.HyperHeap.test0",
-        "equation_StreamDeltas.id", "equation_StreamDeltas.stream_deltas",
-        "function_token_typing_FStar.HyperHeap.test0",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_ec40236fcd8bb18d76e9bc637bddf141",
-        "typing_TLSInfo.authId", "unit_inversion"
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "equation_StreamDeltas.stream_deltas",
+        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
+        "projection_inverse_BoxBool_proj_0"
       ],
-      0
+      0,
+      "5ef0dc81ac1c3b4942fc9fa83cdd66f3"
     ],
     [
       "StreamDeltas.stream_deltas_snoc2",
@@ -125,18 +122,8 @@
         "@MaxIFuel_assumption", "@query", "equation_StreamDeltas.id",
         "refinement_interpretation_TLSInfo_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b"
       ],
-      0
-    ],
-    [
-      "StreamDeltas.stream_deltas_snoc2",
-      3,
-      1,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query", "equation_StreamDeltas.id",
-        "refinement_interpretation_TLSInfo_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b"
-      ],
-      0
+      0,
+      "f9757dc1891800309175330a8cd053f3"
     ],
     [
       "StreamDeltas.encrypt",
@@ -144,7 +131,8 @@
       1,
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
-      0
+      0,
+      "d85424bdcb5ab007dd44516dfea5c3d3"
     ],
     [
       "StreamDeltas.encrypt",
@@ -155,20 +143,31 @@
         "@MaxIFuel_assumption", "@query", "equation_StreamDeltas.id",
         "refinement_interpretation_TLSInfo_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b"
       ],
-      0
+      0,
+      "a1bd9e0e9c71f22909d78ade2470116b"
     ],
-    [ "StreamDeltas.encrypt", 3, 1, 1, [ "@query" ], 0 ],
+    [
+      "StreamDeltas.encrypt",
+      3,
+      1,
+      1,
+      [ "@query" ],
+      0,
+      "6a89879a825012b41afb4459b7418e52"
+    ],
     [
       "StreamDeltas.encrypt",
       4,
       1,
       1,
       [
-        "@query", "bool_inversion", "equality_tok_TLSConstants.Writer@tok",
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "equality_tok_TLSConstants.Writer@tok",
         "equation_StreamDeltas.stream_deltas",
-        "projection_inverse_BoxBool_proj_0", "unit_inversion"
+        "projection_inverse_BoxBool_proj_0"
       ],
-      0
+      0,
+      "90d852f6728fabf9d9c464500d2e5b2a"
     ]
   ]
 ]

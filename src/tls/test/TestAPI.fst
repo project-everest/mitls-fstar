@@ -9,6 +9,7 @@ open TLSInfo
 open TLSConstants
 open TLS
 
+module Range = Range
 module CC = CoreCrypto
 
 inline_for_extraction let api_debug = true

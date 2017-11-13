@@ -18,6 +18,7 @@ open Platform.Bytes
 open TLSError
 open TLSInfo
 open TLSConstants
+module Range = Range
 open Range
 //open HandshakeMessages
 open StAE
@@ -178,7 +179,7 @@ val alloc_log_and_ctrs: #a:Type0 -> #p:(seq a -> Type0) -> r:rgn ->
       m_contains c2 h1 /\
       i_sel h1 is == Seq.createEmpty)))
 
-#set-options "--using_facts_from FStar --using_facts_from Prims --using_facts_from Epochs --using_facts_from Parse"
+#reset-options "--using_facts_from FStar --using_facts_from Prims --using_facts_from Epochs --using_facts_from Parse"
 
 let alloc_log_and_ctrs #a #p r =
   let init = Seq.createEmpty in

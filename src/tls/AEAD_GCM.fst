@@ -13,7 +13,9 @@ open TLSConstants
 open TLSInfo
 open LHAEPlain
 
+module Range = Range
 open Range
+
 open FStar.Monotonic.Seq
 open FStar.Monotonic.RRef
 
@@ -184,7 +186,7 @@ let concrete_encrypt (#i:id) (e:writer i)
   (requires (fun h0 ->
     AEAD.st_inv e.aead h0))
   (ensures (fun h0 c h1 ->
-    length c = Range.targetLength i rg /\
+    length c = targetLength i rg /\
     modifies_one (AEAD.log_region e.aead) h0 h1))
   =
   let h = get() in
@@ -224,7 +226,7 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
         modifies (Set.as_set [e.log_region; AEAD.log_region e.aead]) h0 h1
   	 /\ m_contains (ctr e.counter) h1
   	 /\ m_sel h1 (ctr e.counter) === m_sel h0 (ctr e.counter) + 1
-  	 /\ length c = Range.targetLength i r
+  	 /\ length c = targetLength i r
       	 /\ (authId i ==>
   	     (let log = ilog e.log in
   	      let ent = Entry c ad p in
@@ -337,7 +339,7 @@ let decrypt #i d ad c =
       else
 	begin
 	m_write ctr (j + 1);
-	assert (Range.within (Platform.Bytes.length text) r);
+	assert (within (Platform.Bytes.length text) r);
 	let plain = mk_plain i ad r text in
         Some plain
 	end

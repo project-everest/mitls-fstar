@@ -13,7 +13,7 @@ open TLSInfo
 
 module CC = CoreCrypto
 module AE = AEADOpenssl
-module MM = MonotoneMap
+module MM = FStar.Monotonic.Map
 #set-options "--lax"
 
 type hostname = string

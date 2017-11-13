@@ -13,6 +13,7 @@ open Platform.Error
 open TLSError
 open TLSConstants
 open TLSInfo
+module Range = Range
 open Range
 open DataStream
 

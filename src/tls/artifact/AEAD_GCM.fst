@@ -15,7 +15,8 @@ open CoreCrypto          // for algorithm names, and key, IV, tag lengths
 
 open TLSConstants        // for explicit IV length
 open TLSInfo
-open Range
+module Range = Range
+let range = Range.range
 open LHAEPlain
 
 (* Kept local as adding it to Seq has a negative impact on verification performance *)

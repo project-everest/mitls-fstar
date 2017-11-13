@@ -249,7 +249,9 @@ val send_signals: s:log -> next_keys:option (bool * bool) -> complete:bool -> ST
 // - the three flags below, to be echoed and cleared once the buffer is empty
 
 type id = TLSInfo.id
-open Range // for now
+
+module Range = Range // for now
+open Range
 
 // payload of a handshake fragment, to be made opaque eventually
 type fragment (i:id) = ( rg: frange i & rbytes rg )

@@ -10,7 +10,6 @@ open TLSError
 open TLSConstants
 open Extensions
 open TLSInfo
-open Range
 open CommonDH
 
 (* External functions, locally annotated for speed *)

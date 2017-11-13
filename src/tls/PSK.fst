@@ -10,7 +10,7 @@ open Platform.Error
 open TLSError
 open TLSConstants
 
-module MM = MonotoneMap
+module MM = FStar.Monotonic.Map
 module MR = FStar.Monotonic.RRef
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
@@ -68,7 +68,7 @@ type app_psk_entry (i:psk_identifier) =
 
 
 // Global invariant on the PSK idealization table
-// No longer necessary now that MonotoneMap uses eqtype
+// No longer necessary now that FStar.Monotonic.Map uses eqtype
 //type app_psk_injective (m:MM.map' psk_identifier app_psk_entry) =
 //  forall i1 i2.{:pattern (MM.sel m i1); (MM.sel m i2)}
 //      Seq.equal i1 i2 <==> (match MM.sel m i1, MM.sel m i2 with

@@ -1,5 +1,5 @@
 [
-  "‹±b¢\u001c±`!WË‘Ç√»dƒ",
+  "ds…~Ø§∏j¨¸$l ^\u000f¡",
   [
     [
       "IdNonce.n_id",
@@ -13,7 +13,7 @@
         "haseqPlatform.Bytes_Tm_refine_3458b9f6f40fe62446cdc2c6d3755a94"
       ],
       0,
-      "c7c15a4118e0d0bdf298012834c545b7"
+      "6ef46082423e6e9fce9c46f70ea08940"
     ],
     [
       "IdNonce.nonce_id_table",
@@ -24,14 +24,13 @@
         "@MaxIFuel_assumption", "@query",
         "equation_FStar.Monotonic.HyperStack.is_above", "equation_Parse.rgn",
         "equation_Parse.tls_rgn",
-        "function_token_typing_Parse.tls_tables_region",
         "lemma_FStar.Monotonic.HyperHeap.lemma_includes_refl",
         "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
-        "refinement_interpretation_Parse_Tm_refine_b9611c68854b3e8b5fcc372285b2bc8d",
-        "refinement_interpretation_Parse_Tm_refine_d26422d9696ba619f4813a3f4ad1e26e"
+        "refinement_interpretation_Parse_Tm_refine_d26422d9696ba619f4813a3f4ad1e26e",
+        "typing_Parse.tls_tables_region"
       ],
       0,
-      "00116612951a391c334df9125ab1d62b"
+      "0808d24e483ee65d55cf0bbadf76a9bf"
     ],
     [
       "IdNonce.id_of_nonce",
@@ -47,7 +46,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "f3e399321cd88c0051c8bcea8a08593b"
+      "613f755de04ab0ae3fc9e9032bd11a01"
     ],
     [
       "IdNonce.insert",
@@ -63,7 +62,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "e8f762236cd25b96ed1e9e45b440a4e0"
+      "1a8ea4d4874444907dda5774ae874014"
     ],
     [
       "IdNonce.insert",
@@ -79,7 +78,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "6323aad3ccc7b3add14972af6c0f5e9c"
+      "3291c1590e59b27134fc73c6171140fd"
     ],
     [
       "IdNonce.insert",
@@ -88,7 +87,7 @@
       1,
       [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
       0,
-      "8e8ebb6ebc757827af04471863dae437"
+      "d56687ecfbb73c92c2f05df03a78ec61"
     ],
     [
       "IdNonce.insert",
@@ -100,7 +99,7 @@
         "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "e195de56cde842c33e05ba27a063b106"
+      "c694c65f31260d7df04411e5a9d8273a"
     ],
     [
       "IdNonce.insert",
@@ -109,38 +108,40 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
+        "FStar.Monotonic.Map_interpretation_Tm_arrow_fbd6b033fbedde900f9f1e8249641fb7",
+        "FStar.Monotonic.Map_interpretation_Tm_arrow_fde54a99b5ac0d3178aceffd7c0fb5ed",
         "FStar.Preorder_interpretation_Tm_arrow_76a60dab4e3b3182a3b4dae5a57cfb2d",
-        "MonotoneMap_interpretation_Tm_arrow_b6dbf7d83905ef7927e79d93e76860aa",
+        "IdNonce_interpretation_Tm_arrow_5db7e7d4fd16153082be858e753be463",
         "equation_FStar.Monotonic.HyperStack.is_above",
         "equation_FStar.Monotonic.HyperStack.modifies",
         "equation_FStar.Monotonic.HyperStack.modifies_ref",
+        "equation_FStar.Monotonic.Map.map", "equation_FStar.Monotonic.Map.t",
         "equation_FStar.Monotonic.RRef.as_hsref",
         "equation_FStar.Monotonic.RRef.reln",
         "equation_FStar.Monotonic.RRef.rid", "equation_IdNonce.id_of_nonce",
-        "equation_MonotoneMap.map", "equation_MonotoneMap.t",
         "equation_Nonce.random", "equation_Parse.rgn",
-        "equation_Parse.tls_rgn", "equation_Prims.nat",
-        "equation_TLSInfo.random",
+        "equation_Parse.tls_rgn", "equation_Prims.l_True",
+        "equation_Prims.nat", "equation_TLSInfo.random",
         "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
+        "function_token_typing_FStar.Monotonic.Map.grows",
         "function_token_typing_IdNonce.n_id",
         "function_token_typing_IdNonce.nonce_id_table",
-        "function_token_typing_MonotoneMap.grows",
         "function_token_typing_Nonce.random",
-        "function_token_typing_Parse.tls_tables_region",
         "lemma_FStar.Monotonic.HyperHeap.lemma_includes_refl",
         "proj_equation_FStar.Monotonic.HyperStack.MkRef_id",
         "refinement_interpretation_FStar.HyperStack.ST_Tm_refine_d52cae8b8e1ca91e1679b9bdc9938557",
+        "refinement_interpretation_FStar.Monotonic.Map_Tm_refine_3012c472af61a96f77d05f7df246bde6",
         "refinement_interpretation_FStar.Monotonic.RRef_Tm_refine_84ff73955038f2d0365d615bcc67b50a",
         "refinement_interpretation_FStar.Monotonic.RRef_Tm_refine_ffd890ccd7288c856f2f05ce06687083",
-        "refinement_interpretation_MonotoneMap_Tm_refine_190971c40057bc3cbae086409b5117ed",
         "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
-        "refinement_interpretation_Parse_Tm_refine_b9611c68854b3e8b5fcc372285b2bc8d",
         "refinement_interpretation_Parse_Tm_refine_d26422d9696ba619f4813a3f4ad1e26e",
-        "refinement_kinding_MonotoneMap_Tm_refine_190971c40057bc3cbae086409b5117ed",
-        "typing_FStar.Monotonic.RRef.as_hsref"
+        "typing_FStar.Monotonic.Map.map",
+        "typing_FStar.Monotonic.RRef.as_hsref",
+        "typing_IdNonce_Tm_abs_276aaed25bec7e9dce3bc168a32872e6",
+        "typing_Parse.tls_tables_region"
       ],
       0,
-      "440f368f79c6afbace0cb43d26174408"
+      "08dcf95af452b49a58288eefc172266f"
     ],
     [
       "IdNonce.insert",
@@ -156,7 +157,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "48714c3bbc110e78c16bf571b70ad9c6"
+      "816f04e63fed0fdc5e522684e3be6590"
     ],
     [
       "IdNonce.insert",
@@ -170,7 +171,7 @@
         "haseqPlatform.Bytes_Tm_refine_3458b9f6f40fe62446cdc2c6d3755a94"
       ],
       0,
-      "5f51301c436f4fb37bcd008ac164035b"
+      "724c60a40c23cba2b6bf4c0b9feedc7a"
     ],
     [
       "IdNonce.insert",
@@ -186,7 +187,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "52b6669d0a41f204deeebf5f3355c87c"
+      "c2d03fa1e5fc3021911a96a33da17dba"
     ],
     [
       "IdNonce.lookup",
@@ -202,7 +203,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "73ea8d966180ca0cd03a39b52bc18bc7"
+      "2dd63908403062c4ada5712790ad9a38"
     ],
     [
       "IdNonce.lookup",
@@ -212,13 +213,13 @@
       [
         "@query", "disc_equation_FStar.Pervasives.Native.None",
         "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_IdNonce.n_id", "equation_MonotoneMap.sel",
+        "equation_FStar.Monotonic.Map.sel", "equation_IdNonce.n_id",
         "equation_Prims.l_True", "equation_TLSInfo.random",
         "lemma_FStar.Pervasives.invertOption",
         "projection_inverse_BoxBool_proj_0", "typing_IdNonce.n_id"
       ],
       0,
-      "53cfa8126503749f88bed11807e90656"
+      "6d69d16fe58805487b3a1654668ea9a1"
     ],
     [
       "IdNonce.lookup",
@@ -228,15 +229,16 @@
       [
         "@query", "disc_equation_FStar.Pervasives.Native.None",
         "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_IdNonce.id_of_nonce", "equation_IdNonce.n_id",
-        "equation_MonotoneMap.contains", "equation_MonotoneMap.sel",
-        "equation_TLSInfo.random", "lemma_FStar.Pervasives.invertOption",
+        "equation_FStar.Monotonic.Map.contains",
+        "equation_FStar.Monotonic.Map.sel", "equation_IdNonce.id_of_nonce",
+        "equation_IdNonce.n_id", "equation_TLSInfo.random",
+        "lemma_FStar.Pervasives.invertOption",
         "proj_equation_FStar.Pervasives.Native.Some_v",
         "projection_inverse_BoxBool_proj_0",
         "token_correspondence_IdNonce.n_id", "typing_IdNonce.n_id"
       ],
       0,
-      "3fdc3fca768ac81600aa77eb4cc73394"
+      "c42cc3af7144fa4fd4625d84e7b7270e"
     ],
     [
       "IdNonce.lookup",
@@ -252,7 +254,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "632d06e567c4f68546ab410de610eb01"
+      "ecac7494cd243715ba1b04a14562038a"
     ],
     [
       "IdNonce.injectivity",
@@ -266,7 +268,7 @@
         "haseqPlatform.Bytes_Tm_refine_3458b9f6f40fe62446cdc2c6d3755a94"
       ],
       0,
-      "2117f7fd782430f66109274d98e21bd3"
+      "359fb60142612ae5b3291f425ea6e834"
     ],
     [
       "IdNonce.injectivity",
@@ -280,7 +282,7 @@
         "haseqPlatform.Bytes_Tm_refine_3458b9f6f40fe62446cdc2c6d3755a94"
       ],
       0,
-      "9073304cfda4ac8150d2b7d893a62e41"
+      "314bd2699c13224742225dfed1ca9303"
     ],
     [
       "IdNonce.injectivity",
@@ -288,14 +290,14 @@
       0,
       1,
       [
-        "@query", "equation_IdNonce.id_of_nonce",
-        "equation_MonotoneMap.contains",
-        "equation_TLSConstants.tls_tables_region", "equation_TLSInfo.random",
-        "fuel_guarded_inversion_FStar.HyperStack.mem",
+        "@MaxIFuel_assumption", "@query",
+        "equation_FStar.Monotonic.Map.contains",
+        "equation_IdNonce.id_of_nonce", "equation_TLSInfo.random",
+        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
         "token_correspondence_IdNonce.n_id"
       ],
       0,
-      "e0f749945ebf19bee444a58bdf6ecec4"
+      "89a7af0114fb82e7b6465c04b38d9758"
     ],
     [
       "IdNonce.injectivity",
@@ -311,7 +313,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "7ab5eb4ad3e54c259cb419ca5c04a77c"
+      "a8b9026323c5037326b7aa335365ee33"
     ],
     [
       "IdNonce.injectivity",
@@ -327,7 +329,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "cc799a909a23b58dd1a1af728174a4fc"
+      "1694c09b28d2763a0d08846819d9ed09"
     ]
   ]
 ]

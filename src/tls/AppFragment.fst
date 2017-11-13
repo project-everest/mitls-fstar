@@ -4,6 +4,7 @@
 module AppFragment
 open Platform.Bytes
 open TLSInfo
+module Range = Range
 open Range
 open DataStream
 open Platform.Error

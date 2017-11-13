@@ -6,7 +6,7 @@ open TLSConstants
 open StreamAE
 open TLSInfo
 module AE = StreamAE
-module MM = MonotoneMap
+module MM = FStar.Monotonic.Map
 module MR = FStar.Monotonic.RRef
 module HH = FStar.HyperHeap
 module N = Nonce

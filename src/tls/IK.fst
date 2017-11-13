@@ -38,7 +38,7 @@ module IK
 open FStar.HyperStack
 open FStar.HyperStack.ST
 
-module MM = MonotoneMap
+module MM = FStar.Monotonic.Map
 module MR = FStar.Monotonic.RRef
 module HH = FStar.HyperHeap
 
@@ -565,7 +565,7 @@ private type table
   // (ip: ipkg)
   (u: usage info)
   (i: regid)
-= MonotoneMap.t there (domain i) (fun (Domain lbl ctx) -> derived_key u i lbl ctx) (fun _ -> True)
+= FStar.Monotonic.Map.t there (domain i) (fun (Domain lbl ctx) -> derived_key u i lbl ctx) (fun _ -> True)
 
 let secret_len (a: info): keylen = UInt32.uint_to_t (Hashing.Spec.tagLen a.ha)
 type real_secret (i:regid) = lbytes (secret_len (get_info i))
@@ -617,7 +617,7 @@ val coerce:
 let coerce u i a repr = corrupt_secret #u #i repr
 
 /// NS:
-/// MonotoneMap.alloc is a stateful function with all implicit arguments
+/// FStar.Monotonic.Map.alloc is a stateful function with all implicit arguments
 /// F* will refuse to instantiate all those arguments, since implicit
 /// instantiation in F* should never result in an effect.
 ///
@@ -625,14 +625,14 @@ let coerce u i a repr = corrupt_secret #u #i repr
 ///
 /// I added a unit here
 ///
-/// CF: Ok; I did not know. Is it a style bug in MonotoneMap ?
+/// CF: Ok; I did not know. Is it a style bug in FStar.Monotonic.Map ?
 let alloc (#r:FStar.Monotonic.RRef.rid) #a #b #inv (u:unit)
-  : ST (MonotoneMap.t r a b inv)
-       (requires (fun h -> inv (MonotoneMap.empty_map a b)))
+  : ST (FStar.Monotonic.Map.t r a b inv)
+       (requires (fun h -> inv (FStar.Monotonic.Map.empty_map a b)))
        (ensures (fun h0 x h1 ->
-    inv (MonotoneMap.empty_map a b) /\
-    ralloc_post r (MonotoneMap.empty_map a b) h0 (FStar.Monotonic.RRef.as_hsref x) h1))
-  = MonotoneMap.alloc #r #a #b #inv
+    inv (FStar.Monotonic.Map.empty_map a b) /\
+    ralloc_post r (FStar.Monotonic.Map.empty_map a b) h0 (FStar.Monotonic.RRef.as_hsref x) h1))
+  = FStar.Monotonic.Map.alloc #r #a #b #inv
 
 val create:
 //ip: ipkg ->
@@ -645,7 +645,7 @@ val create:
 let create u i a =
   let honest = get_honest i in
   if flag_KDF && honest then
-    let t : table u i = MonotoneMap.alloc #there #(domain i) #(fun (Domain lbl ctx) -> derived_key u i lbl ctx) #(fun _ -> True) in
+    let t : table u i = FStar.Monotonic.Map.alloc #there #(domain i) #(fun (Domain lbl ctx) -> derived_key u i lbl ctx) #(fun _ -> True) in
     ideal_secret t
   else
     corrupt_secret #u #i (sample (secret_len a))
@@ -695,16 +695,16 @@ let derive #u #i a k lbl ctx =
   let a' = use.derive i a ctx in
   if flag_KDF && honest
   then
-    let v: option (derived_key u i lbl ctx) = MonotoneMap.lookup (secret_ideal k) x in
+    let v: option (derived_key u i lbl ctx) = FStar.Monotonic.Map.lookup (secret_ideal k) x in
     match v with
-    //17-10-30 was failing with scrutiny error: match MonotoneMap.lookup (secret_ideal k) x
+    //17-10-30 was failing with scrutiny error: match FStar.Monotonic.Map.lookup (secret_ideal k) x
     | Some dk -> (| i', dk |)
     | None ->
       let dk = use.pkg'.create i' a' in
       //17-10-20 TODO framing across create
       let h = get() in
-      assume(MonotoneMap.fresh (secret_ideal k) x h); // FIXME(adl)!!
-      MonotoneMap.extend (secret_ideal k) x dk;
+      assume(FStar.Monotonic.Map.fresh (secret_ideal k) x h); // FIXME(adl)!!
+      FStar.Monotonic.Map.extend (secret_ideal k) x dk;
       (| i', dk |)
   else
     let raw =
@@ -962,7 +962,7 @@ let prf_extract1 #u #i a s idh gZ =
 // (i,gY).
 // The table exists when [Flags.ideal_KDF], a precondition for [flag_odh]
 
-// We need a variant of MonotoneMap that enables monotonic updates to
+// We need a variant of FStar.Monotonic.Map that enables monotonic updates to
 // each entry. We used nested ones to re-use existing libraries, but
 // may instead invest is a custom library.
 //

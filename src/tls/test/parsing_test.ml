@@ -70,7 +70,7 @@ let parse_handshake_message bytes =
     let len = int_of_bytes len in
     if length msg <> len then print_string "Error: message length did not match bytes length\n"
     else
-      match cbyte ht with
+      match Char.chr (cbyte ht) with
       | '\x00' -> ()
       | '\x01' ->
 	 print_string "Parsing client hello...\n";
@@ -151,7 +151,7 @@ let parse_handshake_message bytes =
 	 print_string "Parsing server key exchange message...\n";
 	 (match parseServerKeyExchange !pv !kex msg with
 	  | Correct(ch) -> print_string "...OK\n";
-             
+
              let _,ske_bytes = split (serverKeyExchangeBytes(ch)) (Z.of_int 4) in
              print_string "Serializing server key exchange...";
 	     if equalBytes ske_bytes msg then (print_string "OK\n")
@@ -253,7 +253,7 @@ let rec parse_message bytes =
     match vlsplit (Z.of_int 2) bytes with
     | Correct (msg, bytes) ->
        let (len, msg) = split msg (Z.of_int 2) in
-       (match cbyte ct with
+       (match Char.chr (cbyte ct) with
         | '\x14' -> parse_ccs_message msg
 	| '\x15' -> parse_alert_message msg
 	| '\x16' -> parse_handshake_message msg
