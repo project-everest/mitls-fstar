@@ -28,8 +28,8 @@ HEADERS = $(addprefix -add-include ,'"hacks.h"' '"tcp.h"' '"krembytes.h"' '"krem
 KRML=krml
 KRML_COMMAND=$(KRML) $(addprefix -I , $(INCLUDE_PATHS)) -I extract/include \
   $(C_DRIVER) $(DROP_MODULES) -I concrete-flags $(HEADERS) -fnoanonymous-unions \
-  $(K-OPTS) -warn-error -9+11-7-6 -ccopt -Wno-unused-function -fsopts \
-  --cache_checked_modules,--debug,yes -verbose extract/src/support.c \
+  -warn-error -9+11-7-6 -ccopt -Wno-unused-function -fsopts \
+  --cache_checked_modules,--debug,yes -verbose extract/src/support.c $(KOPTS)
 
 # # We can eventually unify these dependencies with the main Makefile
 # .depend-KRML:
