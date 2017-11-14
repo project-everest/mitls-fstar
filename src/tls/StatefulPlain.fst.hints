@@ -11,7 +11,7 @@
         "equation_StatefulPlain.id", "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "3fbe82448fb81b26b7311cccb2bbab15"
+      "93ed7cbbf2c4b0ad3ca3559d7a985c9e"
     ],
     [
       "StatefulPlain.makeAD",
@@ -35,7 +35,7 @@
         "typing_Content.ctBytes"
       ],
       0,
-      "6a262fb8c6624830da5a056159525793"
+      "3cd08c808f1a1823a263434b5a8caca4"
     ],
     [
       "StatefulPlain.lemma_12",
@@ -49,7 +49,7 @@
         "refinement_interpretation_TLSInfo_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee"
       ],
       0,
-      "87f4ac568f6b170a3b3447d7656ed1e2"
+      "300b1269b6dd3655d304c5bac9f03248"
     ],
     [
       "StatefulPlain.parseAD",
@@ -67,6 +67,7 @@
         "constructor_distinct_Prims.unit", "data_elim_TLSInfo.ID12",
         "data_typing_intro_Content.Alert@tok",
         "data_typing_intro_FStar.Char.Char@tok",
+        "data_typing_intro_FStar.Pervasives.Native.Mktuple2@tok",
         "data_typing_intro_TLSConstants.TLS_1p0@tok",
         "disc_equation_Platform.Error.Correct",
         "disc_equation_TLSConstants.UnknownVersion",
@@ -110,7 +111,7 @@
         "lemma_FStar.Seq.Base.lemma_index_app2",
         "lemma_FStar.Seq.Base.lemma_index_create",
         "lemma_FStar.Seq.Base.lemma_index_slice",
-        "lemma_FStar.Seq.Base.lemma_len_append",
+        "lemma_FStar.Seq.Base.lemma_len_append", "lemma_Parse.abyte2_inj",
         "primitive_Prims.op_Addition", "primitive_Prims.op_Subtraction",
         "proj_equation_FStar.Pervasives.Native.Mktuple2__1",
         "proj_equation_FStar.Pervasives.Native.Mktuple2__2",
@@ -120,6 +121,8 @@
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
         "projection_inverse_Platform.Error.Correct__0",
+        "projection_inverse_Platform.Error.Correct__a",
+        "projection_inverse_Platform.Error.Correct__b",
         "refinement_interpretation_FStar.Char_Tm_refine_0e3e560c796fef6df2d948e98bb1d5d6",
         "refinement_interpretation_FStar.Seq.Base_Tm_refine_03127b5d59ee3055620018693b4264e8",
         "refinement_interpretation_FStar.Seq.Base_Tm_refine_3321cbe2f573e3c988fd0895bf1f0cf9",
@@ -135,13 +138,13 @@
         "refinement_interpretation_TLSConstants_Tm_refine_523b5ab0afa2b70ba3fdd9fbd1d1a514",
         "refinement_interpretation_TLSInfo_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee",
         "refinement_interpretation_TLSInfo_Tm_refine_a0053e5f09c1af6028102c1d99bd5a92",
-        "typing_Content.ctBytes", "typing_FStar.Pervasives.Native.fst",
-        "typing_FStar.Seq.Base.create", "typing_Platform.Bytes.length",
-        "typing_StatefulPlain.makeAD", "typing_TLSConstants.versionBytes",
-        "unit_typing"
+        "typing_Content.ctBytes", "typing_FStar.Pervasives.Native.snd",
+        "typing_FStar.Seq.Base.create", "typing_FStar.Seq.Base.index",
+        "typing_Platform.Bytes.length", "typing_StatefulPlain.makeAD",
+        "typing_TLSConstants.versionBytes", "unit_typing"
       ],
       0,
-      "c21a6bd4afbfd6ff049b88b6e8397469"
+      "0ea4b04340443da0dfd206868fdb9146"
     ],
     [
       "StatefulPlain.parseAD",
@@ -150,7 +153,7 @@
       1,
       [ "@query", "assumption_TLSConstants.protocolVersion__haseq" ],
       0,
-      "f4cbb524f75469eed3a09cd9ecc40f82"
+      "1f197be2fdbfe84c567b4a08f71d040e"
     ],
     [
       "StatefulPlain.lemma_makeAD_parseAD",
@@ -159,7 +162,7 @@
       0,
       [ "@query", "assumption_Content.contentType_haseq" ],
       0,
-      "fd0936a3b9d8afb012cfa28fd61cf5b0"
+      "19598cd060742e49bdcf37bf11c17c07"
     ],
     [
       "StatefulPlain.lemma_makeAD_parseAD",
@@ -171,7 +174,7 @@
         "equation_StatefulPlain.id", "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "86d2281eab016c6ca22cfd6756f7d348"
+      "eedbcf6c07316e426e0fc6adbacfa656"
     ],
     [
       "StatefulPlain.lemma_makeAD_parseAD",
@@ -180,7 +183,7 @@
       0,
       [ "@query" ],
       0,
-      "30ade032b2f57b91af020c1e6cbe73b4"
+      "9c4f640619abb137c6a0f50edc1c081e"
     ],
     [
       "StatefulPlain.lemma_makeAD_parseAD",
@@ -192,10 +195,11 @@
         "Content_pretyping_b030e2c8e211c2e89c8f24e1774b7a05",
         "FStar.Seq.Base_pretyping_7efa52b424e80c83ad68a652aa3561e4",
         "Prims_pretyping_f8666440faa91836cc5a13998af863fc",
-        "constructor_distinct_Content.Application_data",
+        "constructor_distinct_Content.Alert",
         "constructor_distinct_Content.Handshake",
         "constructor_distinct_Content.contentType",
         "constructor_distinct_FStar.Seq.Base.seq",
+        "constructor_distinct_Platform.Error.Error",
         "constructor_distinct_Prims.unit",
         "data_typing_intro_FStar.Char.Char@tok",
         "disc_equation_TLSInfo.ID12", "disc_equation_TLSInfo.PlaintextID",
@@ -237,7 +241,7 @@
         "refinement_interpretation_FStar.Seq.Base_Tm_refine_36f208f2b1019ab7b5d9be73f4c89349",
         "refinement_interpretation_FStar.Seq.Base_Tm_refine_5514fbe9e08dfda40f950a7b9f1b2b98",
         "refinement_interpretation_FStar.Seq.Base_Tm_refine_559c261b1c3777929ea329abfe70ab33",
-        "refinement_interpretation_FStar.Seq.Base_Tm_refine_cd046bc4a887ee7e1b05946e0bf5772b",
+        "refinement_interpretation_FStar.Seq.Properties_Tm_refine_3421154546287b0f0c012dd3d63b4945",
         "refinement_interpretation_Platform.Bytes_Tm_refine_3458b9f6f40fe62446cdc2c6d3755a94",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "refinement_interpretation_Range_Tm_refine_9eec96cf9e7424057db89d430151765e",
@@ -253,7 +257,7 @@
         "typing_tok_Content.Handshake@tok", "unit_typing"
       ],
       0,
-      "78d29f3500776b21b75748c0164ad51b"
+      "8eddfde8c000dc66aa9223d41dd3aa44"
     ],
     [
       "StatefulPlain.is_plain",
@@ -262,7 +266,7 @@
       0,
       [ "@query", "assumption_Content.contentType_haseq" ],
       0,
-      "1ea9634eb69b310c415de62acb0bf90c"
+      "94e376a9a16726cd30cf830e1ce4acd6"
     ],
     [
       "StatefulPlain.assert_is_plain",
@@ -274,7 +278,7 @@
         "refinement_interpretation_StatefulPlain_Tm_refine_dfb41679c4620ddf785a536323b5453d"
       ],
       0,
-      "405f86514c1823e0d5f3476f574049e1"
+      "94b26c0640b2b667ec69f82a414dfbc2"
     ],
     [
       "StatefulPlain.ghost_repr",
@@ -307,7 +311,7 @@
         "typing_tok_Content.Change_cipher_spec@tok"
       ],
       0,
-      "bbbfd0e0a410372d9502c1b4ff3e95ca"
+      "0f0c20ec6e7075cc515f27013e3822a7"
     ],
     [
       "StatefulPlain.repr",
@@ -320,7 +324,7 @@
         "haseqStatefulPlain_Tm_refine_eafff3c1026b7527be10dd24499fde69"
       ],
       0,
-      "7ee1984d7ed6eaa4e5fce83e4f9ac4e2"
+      "3ae04fcb5143be1586e6566f7c89895b"
     ],
     [
       "StatefulPlain.repr",
@@ -359,7 +363,7 @@
         "typing_tok_Content.Change_cipher_spec@tok"
       ],
       0,
-      "84711542cfe812ea14517829565736fa"
+      "e11c44e53f68af27ec90cde0781c1d42"
     ],
     [
       "StatefulPlain.wf_ad_rg",
@@ -368,7 +372,7 @@
       0,
       [ "@query", "assumption_Content.contentType_haseq" ],
       0,
-      "7feb7ca276cdcc7971ab5f5da4455ea3"
+      "1a48e7e999dc5ea24cfc6761b322fae8"
     ],
     [
       "StatefulPlain.wf_ad_rg",
@@ -377,7 +381,7 @@
       0,
       [ "@query", "assumption_Content.contentType_haseq" ],
       0,
-      "43133e3b89e199e3c087b7b3de39d1d7"
+      "e0101a57378e66df7886365a2f1cc280"
     ],
     [
       "StatefulPlain.wf_payload_ad_rg",
@@ -386,7 +390,7 @@
       0,
       [ "@query" ],
       0,
-      "f8d44f53325fb4fb3f06ead7cf951264"
+      "fbf36af47b0c97bd2a74824eaba42216"
     ],
     [
       "StatefulPlain.wf_payload_ad_rg",
@@ -395,7 +399,7 @@
       0,
       [ "@query", "assumption_Content.contentType_haseq" ],
       0,
-      "c34133ba149d5871ecc914491f378de7"
+      "15467b80f55eccb6afb7f61543342777"
     ],
     [
       "StatefulPlain.wf_payload_ad_rg",
@@ -404,7 +408,7 @@
       0,
       [ "@query", "assumption_Platform.Bytes.HasEq_bytes" ],
       0,
-      "fe8364b047112dc13bebb23a2d3083d2"
+      "7e1eb7855a9af1aaa76ed0ed9df87233"
     ],
     [
       "StatefulPlain.wf_payload_ad_rg",
@@ -413,7 +417,7 @@
       0,
       [ "@query", "assumption_Content.contentType_haseq" ],
       0,
-      "7734b7154af6279335e7b8eadc485fba"
+      "6f0c2dca04b25d7eedee6a377bf841e0"
     ],
     [
       "StatefulPlain.wf_payload_ad_rg",
@@ -422,7 +426,7 @@
       0,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "a5ea7f0d07cffd685781fb8d25122a28"
+      "e5bb512c348a8529ec17947a240efdb3"
     ],
     [
       "StatefulPlain.mk_plain",
@@ -435,7 +439,7 @@
         "haseqRange_Tm_refine_0486d7c345fedcd664dfe7eac695bbd7"
       ],
       0,
-      "8a8d2ffc7d9e0bc17bfee5f99273b43b"
+      "65959fba0b1e92ebf23384ddfc0c7ae7"
     ],
     [
       "StatefulPlain.mk_plain",
@@ -478,8 +482,6 @@
         "proj_equation_FStar.Pervasives.Native.Mktuple2__1",
         "proj_equation_FStar.Pervasives.Native.Mktuple2__2",
         "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_Content.CT_Alert__1",
-        "projection_inverse_Content.CT_Alert_i",
         "projection_inverse_Content.CT_Alert_rg",
         "projection_inverse_Content.CT_CCS_i",
         "projection_inverse_Content.CT_CCS_rg",
@@ -499,11 +501,11 @@
         "refinement_interpretation_StatefulPlain_Tm_refine_953a124a43e8c9a7c01c1de84ee083f9",
         "refinement_interpretation_StatefulPlain_Tm_refine_a054315e315e817553a0596685506b1e",
         "refinement_interpretation_TLSInfo_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee",
-        "true_interp", "typing_tok_Content.Change_cipher_spec@tok",
-        "unit_typing"
+        "true_interp", "typing_Content.rg",
+        "typing_tok_Content.Change_cipher_spec@tok", "unit_typing"
       ],
       0,
-      "4f56ebf4a8c473a12edd672829d18a3a"
+      "9b5d270611a887bc27566eeb88519557"
     ]
   ]
 ]

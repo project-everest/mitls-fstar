@@ -1,5 +1,5 @@
 [
-  "¸›“—¤Ÿ\u0013•Æ×ºXÌ\u0010F\u001d",
+  "'¼¡88ÑÑÀ\u001c<©\fCG×Ü",
   [
     [
       "HandshakeLog.eoflight",
@@ -8,7 +8,7 @@
       1,
       [ "@query" ],
       0,
-      "4c30358d3ae860cc359bf82e9fa0692a"
+      "397e0a298b45f6e0a4f0d8e2da3b0187"
     ],
     [
       "HandshakeLog.tagged",
@@ -17,7 +17,7 @@
       1,
       [ "@query" ],
       0,
-      "06286bcf688f02d68c2ccab51ce35a25"
+      "fbc6b61474a8b00628507fb290c78dfd"
     ],
     [
       "HandshakeLog.weak_valid_transcript",
@@ -26,7 +26,7 @@
       1,
       [ "@query" ],
       0,
-      "db32da5000d0c986881e2dbf1b55962e"
+      "8d796277d5e064a39a88f7a573e91954"
     ],
     [
       "HandshakeLog.transcript_version",
@@ -35,7 +35,7 @@
       1,
       [ "@query" ],
       0,
-      "f40ececfbadcb369ffe9abb8707a6c6d"
+      "2dd7538c5984609500c30ff5f3e257ab"
     ],
     [
       "HandshakeLog.gforall",
@@ -49,7 +49,7 @@
         "fuel_guarded_inversion_Prims.list", "subterm_ordering_Prims.Cons"
       ],
       0,
-      "a4d77dbbfb30969b1d144f69cff94437"
+      "90dcf25159b8368d69222ebd02a9d9fc"
     ],
     [
       "HandshakeLog.append_transcript",
@@ -61,7 +61,7 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_fb118621c0b0f2173d7d8e9b92378a43"
       ],
       0,
-      "97dcab80bcc05c89a60c84e1f3499b64"
+      "99a1861770fc40677700310f97308e9f"
     ],
     [
       "HandshakeLog.discard",
@@ -76,7 +76,7 @@
         "refinement_interpretation_FStar.HyperStack.ST_Tm_refine_d52cae8b8e1ca91e1679b9bdc9938557"
       ],
       0,
-      "b8c4dbf98ed4654c8e585700ea8a7752"
+      "2a81777edfc24e95fa038a22a9dc7676"
     ],
     [
       "HandshakeLog.trace",
@@ -91,7 +91,7 @@
         "refinement_interpretation_FStar.HyperStack.ST_Tm_refine_d52cae8b8e1ca91e1679b9bdc9938557"
       ],
       0,
-      "07bf18e1cc71ea501a017014d1c369ce"
+      "daad6cac4a64f3f4c67be5b03a6379ba"
     ],
     [
       "HandshakeLog.erased_transcript",
@@ -100,7 +100,7 @@
       1,
       [ "@query", "equation_HandshakeLog.hs_transcript" ],
       0,
-      "918e3507e770472f748e801704890ac2"
+      "9e450d95e579652a50ca5a83439cf827"
     ],
     [
       "HandshakeLog.reveal_log",
@@ -109,7 +109,7 @@
       1,
       [ "@query", "equation_HandshakeLog.erased_transcript" ],
       0,
-      "b532d8f1a1419e203d472f9585e19e6e"
+      "8a75a27312989cee07e77777614662c7"
     ],
     [
       "HandshakeLog.hide_log",
@@ -118,7 +118,7 @@
       1,
       [ "@query", "equation_HandshakeLog.erased_transcript" ],
       0,
-      "9520f7fa37fd9ad6701aea11f0d34683"
+      "5aef7bf1bd351f2d56c92510205c94e2"
     ],
     [
       "HandshakeLog.elift1_def",
@@ -131,7 +131,7 @@
         "typing_FStar.Ghost.elift1"
       ],
       0,
-      "98c913a7b86ed4ba0a484f29d85f4ae9"
+      "0207b658e48966b2d500665fb94de4e7"
     ],
     [
       "HandshakeLog.ghost_bind",
@@ -140,7 +140,7 @@
       1,
       [ "@query" ],
       0,
-      "861b5bd1a9f7ce871346ea45a687b96c"
+      "b6ef99ecb698d8c91967661eced2a75b"
     ],
     [
       "HandshakeLog.bind_log",
@@ -156,7 +156,7 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_18fbdb889da7f69d8cab334b86ce9cfa"
       ],
       0,
-      "a099fe6e17a646a5ddd492098ac3b192"
+      "49979bd9b9fc1cf780787840790ce7e4"
     ],
     [
       "HandshakeLog.empty_hs_transcript",
@@ -175,7 +175,7 @@
         "projection_inverse_Prims.Nil_a"
       ],
       0,
-      "490a45bbf453c63fec1f72c701ef073f"
+      "25e3cc2cea9cb65e8fd6f7e3125f86a3"
     ],
     [
       "HandshakeLog.append_hs_transcript",
@@ -187,7 +187,7 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_3e2c9291fd3b066a107ccf5a30cfc03a"
       ],
       0,
-      "0d2f39694a66ce6939b41ab0d66c2c59"
+      "6c21b560302f76d4b25b0cc0b7067741"
     ],
     [
       "HandshakeLog.extend_hs_transcript",
@@ -199,7 +199,7 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_cc2d11896931b330efd1e867bcf17db1"
       ],
       0,
-      "68bc7fd88326cf75da9457fa61c4ab1b"
+      "2aabf4403727b629d821fcf55249b56e"
     ],
     [
       "HandshakeLog.print_hsl",
@@ -213,7 +213,7 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_7913c46ed823df5e60659625cd966658"
       ],
       0,
-      "f2d67ea6791c7397271ac18e6f7ab51f"
+      "1b11af4940a0d60ead4d9969b3c6c99a"
     ],
     [
       "HandshakeLog.gforall_list_to_list_refined",
@@ -245,7 +245,7 @@
         "typing_HandshakeLog.gforall"
       ],
       0,
-      "cbb3569804f35c1fe3d5db59840c846e"
+      "7a9cecd45dbbc4c3c109174a5211254d"
     ],
     [
       "HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux",
@@ -270,7 +270,7 @@
         "token_correspondence_HandshakeMessages.valid_hs_msg_prop"
       ],
       0,
-      "ce25c318f28bfe04619335a08ae4eb3d"
+      "006cf168845803503b79425315b9f3cb"
     ],
     [
       "HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux_inj",
@@ -305,7 +305,7 @@
         "token_correspondence_HandshakeMessages.valid_hs_msg_prop"
       ],
       0,
-      "7f198113418a1983edaea878aa9a12d3"
+      "98f7f5f21360bb6a97b0b1d3aa0edf5a"
     ],
     [
       "HandshakeLog.transcript_bytes",
@@ -320,7 +320,7 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_7913c46ed823df5e60659625cd966658"
       ],
       0,
-      "bc3d7a060cf443a590f5fe30ec128c0a"
+      "542232099e57fe19b0a4383a1bfed09f"
     ],
     [
       "HandshakeLog.transcript_format_injective",
@@ -468,7 +468,7 @@
         "unit_typing"
       ],
       0,
-      "354216c736cf62e5bfc2380157b64d72"
+      "5268d27cbb4b6ad4cc6cbab6a80606e7"
     ],
     [
       "HandshakeLog.narrowTag",
@@ -483,7 +483,7 @@
         "refinement_interpretation_Platform.Bytes_Tm_refine_3458b9f6f40fe62446cdc2c6d3755a94"
       ],
       0,
-      "43b58a53dd9d509aff18c38e5abbe326"
+      "f3b606dac5aefe67467fcf981ad49868"
     ],
     [
       "HandshakeLog.narrowTag",
@@ -495,7 +495,7 @@
         "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "bc3014d4d6fc1ed85255e8964736b817"
+      "4127825ad84b1861554881eecd0256dc"
     ],
     [
       "HandshakeLog.tags",
@@ -512,7 +512,7 @@
         "projection_inverse_Prims.Cons_tl", "subterm_ordering_Prims.Cons"
       ],
       0,
-      "2125053115068ca99f05cfcd69396e8b"
+      "fef3da51d7a6614cd764612cacc8dddf"
     ],
     [
       "HandshakeLog.tags",
@@ -524,7 +524,7 @@
         "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "346b79bd121f25adfc303db5946d8c32"
+      "19495b96dbe631c4ce9850269a9dd29d"
     ],
     [
       "HandshakeLog.tags",
@@ -536,7 +536,7 @@
         "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "e52cb001fb20cb7b0f14a5bd411bc5ee"
+      "b7b0aad27fecba2308113ae754136c2d"
     ],
     [
       "HandshakeLog.tags_append_aux",
@@ -597,7 +597,7 @@
         "unit_inversion"
       ],
       0,
-      "ceb609984c577d5631d86f921e65fc4d"
+      "c62e7cd68a2a7dabfb9eeccd7910dd04"
     ],
     [
       "HandshakeLog.hashState",
@@ -606,7 +606,7 @@
       1,
       [ "@query", "assumption_Platform.Bytes.HasEq_bytes" ],
       0,
-      "e2280d809b8b5d96902fd196f3bee182"
+      "2a4c4b54d48e8c800954a452bbafd68a"
     ],
     [
       "HandshakeLog.hashState",
@@ -615,7 +615,7 @@
       1,
       [ "@query" ],
       0,
-      "6b581c33ae7f726fdc2976cd63b7dda0"
+      "a8480fc225cd086ad6bd23984ac2f0c4"
     ],
     [
       "HandshakeLog.hashState",
@@ -624,7 +624,7 @@
       1,
       [ "@query", "assumption_Platform.Bytes.HasEq_bytes" ],
       0,
-      "c2f01428a6e01221e0c7211175e4a96a"
+      "b4116555f7a01934efe6f62aa9c8b6bc"
     ],
     [
       "HandshakeLog.hashState",
@@ -633,7 +633,7 @@
       1,
       [ "@query" ],
       0,
-      "9a91ef967e45d136476225bba5aaa8fd"
+      "2e067c431be6592743a41713141dd1d2"
     ],
     [
       "HandshakeLog.uu___is_OpenHash",
@@ -642,7 +642,7 @@
       1,
       [ "@query" ],
       0,
-      "023baddd1f0e71f354bee9e7b3906737"
+      "52c4dc17294676cceee921c482dad589"
     ],
     [
       "HandshakeLog.__proj__OpenHash__item__b",
@@ -651,7 +651,7 @@
       1,
       [ "@query", "assumption_Platform.Bytes.HasEq_bytes" ],
       0,
-      "1c6b2f32358fa415acc466f195a5e76a"
+      "a0a6fd55df3541b211f6879d66ceda66"
     ],
     [
       "HandshakeLog.__proj__OpenHash__item__b",
@@ -665,7 +665,7 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_bc7866f3b5c800699baeb12639b77402"
       ],
       0,
-      "eb7d97a9414bf29df50213ae2ed01f99"
+      "fb1ebf80b9ec5ea7553ecc62197b6515"
     ],
     [
       "HandshakeLog.uu___is_FixedHash",
@@ -674,7 +674,7 @@
       1,
       [ "@query" ],
       0,
-      "cbee576771d34797121204fe9d8de9a1"
+      "f8b12ac7e355d09082886d08da9777b7"
     ],
     [
       "HandshakeLog.__proj__FixedHash__item__a",
@@ -688,7 +688,7 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_329949ec8234fbec70abbe9f98e44044"
       ],
       0,
-      "6b2151fb3da42a5424ddcec286e47ddb"
+      "5445caed4e0d26fe718d017f1b443561"
     ],
     [
       "HandshakeLog.__proj__FixedHash__item__state",
@@ -697,7 +697,7 @@
       1,
       [ "@query", "assumption_Platform.Bytes.HasEq_bytes" ],
       0,
-      "89506edc1a9d76e6c688004030ddddd0"
+      "664438129cc9f0ced1a2195f4908516d"
     ],
     [
       "HandshakeLog.__proj__FixedHash__item__state",
@@ -714,7 +714,7 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_9c63bcef68bdfe52b68de2c53625096a"
       ],
       0,
-      "10a5d3277c116a2d8d01b84d89a474c5"
+      "eb74364449f4ca92221b00570c6dcb66"
     ],
     [
       "HandshakeLog.__proj__FixedHash__item__hashes",
@@ -732,7 +732,7 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_a78b3f80fd9f4896e5838ead5a545b89"
       ],
       0,
-      "075b4647f11fae25400c359f01aa5a6b"
+      "a73df61cfba016a11847544712ade306"
     ],
     [
       "HandshakeLog.__proj__State__item__transcript",
@@ -741,7 +741,7 @@
       1,
       [ "@query" ],
       0,
-      "0a48983d62251b54804973c7c53fdc1b"
+      "8aceffc9433d9d09b04fcefe90a9c21a"
     ],
     [
       "HandshakeLog.__proj__State__item__outgoing",
@@ -750,7 +750,7 @@
       1,
       [ "@query" ],
       0,
-      "1814b8f8310e7f92d3e3db13c5f1daeb"
+      "4ba5c2c2a2d6cf5bf56c0147140905f3"
     ],
     [
       "HandshakeLog.__proj__State__item__outgoing_next_keys",
@@ -759,7 +759,7 @@
       1,
       [ "@query" ],
       0,
-      "5516f5168a9481c55f6480c591280f4e"
+      "4d1a4a4cffabae5f18c8bcd9bfcc74fe"
     ],
     [
       "HandshakeLog.__proj__State__item__outgoing_complete",
@@ -768,7 +768,7 @@
       1,
       [ "@query" ],
       0,
-      "e7dc6aaefaf6cdcf9f3654426f334013"
+      "86e06c092f26ce8300525e8e0694acc8"
     ],
     [
       "HandshakeLog.__proj__State__item__incoming",
@@ -777,7 +777,7 @@
       1,
       [ "@query" ],
       0,
-      "92298ef6e617b97d33ffa3501fdf800a"
+      "6d07b7b62909960ce62a359e97e56aad"
     ],
     [
       "HandshakeLog.__proj__State__item__parsed",
@@ -794,7 +794,7 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_3e2c9291fd3b066a107ccf5a30cfc03a"
       ],
       0,
-      "cbe679437fb274e8b80be2490a1c03bd"
+      "2e5b5ece48c3d2f724288248109e7b7b"
     ],
     [
       "HandshakeLog.__proj__State__item__hashes",
@@ -808,7 +808,7 @@
         "projection_inverse_HandshakeLog.State_transcript"
       ],
       0,
-      "236d1306981d091fdacfdbd374014e8a"
+      "50ae61c9821005b251bad49522cfd5e2"
     ],
     [
       "HandshakeLog.__proj__State__item__pv",
@@ -817,7 +817,7 @@
       1,
       [ "@query" ],
       0,
-      "886a7df0e516896466928cc4a5d1b174"
+      "9bc704aaf5ca52a9a13c841c2655f1ba"
     ],
     [
       "HandshakeLog.__proj__State__item__kex",
@@ -826,7 +826,7 @@
       1,
       [ "@query" ],
       0,
-      "eba237be25426854c961c12ee631d21e"
+      "f3a035ecaccb5d44d8a39cc2f6430ec2"
     ],
     [
       "HandshakeLog.__proj__State__item__dh_group",
@@ -835,7 +835,7 @@
       1,
       [ "@query" ],
       0,
-      "d1fd2909e3bba825d5b3f62370b181a3"
+      "c90a59fb75e6f8f41d6edc6a19f188fe"
     ],
     [
       "HandshakeLog.region_of",
@@ -844,7 +844,7 @@
       1,
       [ "@query" ],
       0,
-      "95706722a056bd8c062e4c5081bcf0de"
+      "7fce4a1c92b87d4cd46f1eabef31d48e"
     ],
     [
       "HandshakeLog.modifies_one",
@@ -853,7 +853,7 @@
       1,
       [ "@query" ],
       0,
-      "70349755bc8db349b93f24df528a2616"
+      "cc89b99e5661e9e3e52fc77d5e319fd3"
     ],
     [
       "HandshakeLog.modifies_one",
@@ -862,7 +862,7 @@
       1,
       [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
       0,
-      "1c2c289d1274a58d619a16a79ef8a7bb"
+      "8b0511063c82866e3f7a4a58eafcb70f"
     ],
     [
       "HandshakeLog.modifies_one",
@@ -874,7 +874,7 @@
         "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "93e229ff70b9e622ac48d8daa2ea62e3"
+      "a30eedc1a4426eec77472df452841f2e"
     ],
     [
       "HandshakeLog.init",
@@ -891,7 +891,7 @@
         "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "80d0ed669f6e9c0d826ca3cb8094bdbd"
+      "d08bc1129f1093c1c944fa761600298e"
     ],
     [
       "HandshakeLog.init",
@@ -906,7 +906,7 @@
         "refinement_kinding_TLSConstants_Tm_refine_523b5ab0afa2b70ba3fdd9fbd1d1a514"
       ],
       0,
-      "3fbcc742ce2ad64cbf4d8c629318f61c"
+      "399d82b8b8b32778e027fba9f90d5916"
     ],
     [
       "HandshakeLog.init",
@@ -919,7 +919,7 @@
         "kinding_TLSConstants.kexAlg@tok"
       ],
       0,
-      "0f081771f345ee26d188715080ba7dfa"
+      "2107c110e6e76470a770734752fe98bd"
     ],
     [
       "HandshakeLog.init",
@@ -934,7 +934,7 @@
         "typing_CommonDH.group"
       ],
       0,
-      "e09b2304d7174098115d91c94255eb5c"
+      "74b74179bcdd18dcffbe79622023d296"
     ],
     [
       "HandshakeLog.notReading",
@@ -943,7 +943,7 @@
       1,
       [ "@query", "assumption_Platform.Bytes.HasEq_bytes" ],
       0,
-      "7dfbd5b23feca01627fb1a585772b7e8"
+      "aedf4528edf445d67a318445a0d50da7"
     ],
     [
       "HandshakeLog.hashAlg",
@@ -961,7 +961,7 @@
         "typing_HandshakeLog.__proj__State__item__hashes"
       ],
       0,
-      "6a3d45f719153def4167cb10406cf6cb"
+      "587a5787e40a9d2a83ad349cce16220f"
     ],
     [
       "HandshakeLog.create",
@@ -970,7 +970,7 @@
       1,
       [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
       0,
-      "75f94857112ed258f39e64c452293a88"
+      "ec63ebe5f810fdba196ca2afac83e824"
     ],
     [
       "HandshakeLog.create",
@@ -985,15 +985,18 @@
         "@fuel_correspondence_HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux.fuel_instrumented",
         "@fuel_correspondence_HandshakeMessages.handshakeMessagesBytes.fuel_instrumented",
         "@fuel_correspondence_Prims.pow2.fuel_instrumented", "@query",
-        "FStar.Map_interpretation_Tm_arrow_a34af90f78bbaf5280115810e5546845",
+        "FStar.Pervasives.Native_pretyping_b53dbd183c526bc5d0f20d7b966ae125",
         "HandshakeLog_pretyping_e834e22d4b847c91d41c51601b871b0a",
+        "Prims_pretyping_f8666440faa91836cc5a13998af863fc",
         "assumption_FStar.Monotonic.HyperHeap.HasEq_rid", "b2t_def",
-        "bool_inversion", "bool_typing",
+        "bool_inversion",
+        "constructor_distinct_FStar.Pervasives.Native.option",
         "constructor_distinct_HandshakeLog.OpenHash",
-        "constructor_distinct_Prims.Nil",
-        "data_elim_FStar.Monotonic.HyperStack.HS",
-        "data_typing_intro_Prims.Nil@tok",
+        "constructor_distinct_Prims.Cons", "constructor_distinct_Prims.Nil",
+        "constructor_distinct_Prims.unit", "constructor_distinct_Tm_unit",
+        "data_elim_Prims.Cons", "data_typing_intro_Prims.Nil@tok",
         "equality_tok_HandshakeMessages.HT_hello_request@tok",
+        "equality_tok_TLSConstants.TLS_AES_128_GCM_SHA256@tok",
         "equation_Extensions.extension",
         "equation_Extensions.extensionListBytes",
         "equation_Extensions.extensions", "equation_Extensions.noExtensions",
@@ -1008,67 +1011,60 @@
         "equation_FStar.Monotonic.HyperStack.equal_stack_domains",
         "equation_FStar.Monotonic.HyperStack.hh",
         "equation_FStar.Monotonic.HyperStack.is_above",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
         "equation_FStar.Monotonic.HyperStack.is_in",
-        "equation_FStar.Monotonic.HyperStack.is_stack_region",
-        "equation_FStar.Monotonic.HyperStack.is_tip",
         "equation_FStar.Monotonic.HyperStack.modifies",
         "equation_FStar.Monotonic.HyperStack.mref",
         "equation_FStar.Monotonic.HyperStack.sel",
         "equation_FStar.Monotonic.HyperStack.upd",
         "equation_FStar.Pervasives.Native.snd", "equation_FStar.Set.eqtype",
-        "equation_FStar.Set.subset", "equation_FStar.UInt.fits",
-        "equation_FStar.UInt.max_int", "equation_FStar.UInt.min_int",
-        "equation_FStar.UInt.size", "equation_FStar.UInt32.n",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "equation_FStar.UInt32.n",
         "equation_HandshakeLog.empty_hs_transcript",
         "equation_HandshakeLog.hashAlg", "equation_HandshakeLog.hide_log",
         "equation_HandshakeLog.hs_transcript", "equation_HandshakeLog.log",
         "equation_HandshakeLog.msg", "equation_HandshakeLog.reveal_log",
         "equation_HandshakeLog.transcript",
         "equation_HandshakeLog.transcript_bytes",
+        "equation_HandshakeLog.transcript_version",
         "equation_HandshakeLog.valid_transcript",
         "equation_HandshakeLog.weak_valid_transcript",
         "equation_HandshakeLog.writing",
         "equation_HandshakeMessages.helloRequestBytes",
         "equation_HandshakeMessages.hs_msg_bytes",
-        "equation_HandshakeMessages.messageBytes", "equation_Parse.rgn",
+        "equation_HandshakeMessages.messageBytes", "equation_Mem.rgn",
         "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
         "equation_Platform.Bytes.empty_bytes",
         "equation_Platform.Bytes.lbytes", "equation_Platform.Bytes.length",
-        "equation_Platform.Bytes.split", "equation_Prims.eqtype",
-        "equation_Prims.l_True", "equation_Prims.nat", "equation_Prims.pos",
+        "equation_Platform.Bytes.split", "equation_Prims._assert",
+        "equation_Prims.eqtype", "equation_Prims.l_True",
+        "equation_Prims.nat", "equation_Prims.pos",
         "equation_with_fuel_FStar.List.Tot.Base.append.fuel_instrumented",
         "equation_with_fuel_FStar.List.Tot.Base.fold_left.fuel_instrumented",
         "equation_with_fuel_HandshakeLog.gforall.fuel_instrumented",
         "equation_with_fuel_HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux.fuel_instrumented",
         "equation_with_fuel_HandshakeMessages.handshakeMessagesBytes.fuel_instrumented",
         "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
-        "fuel_guarded_inversion_HandshakeLog.hashState",
         "fuel_guarded_inversion_Prims.list",
-        "function_token_typing_FStar.Map.upd",
         "function_token_typing_FStar.Monotonic.Heap.heap",
         "function_token_typing_FStar.Monotonic.HyperHeap.rid",
-        "function_token_typing_FStar.Monotonic.HyperHeap.root",
         "function_token_typing_FStar.UInt32.n",
-        "function_token_typing_Flags.debug_HSL",
         "function_token_typing_HandshakeLog.empty_hs_transcript",
         "function_token_typing_HandshakeLog.hs_transcript",
         "function_token_typing_HandshakeMessages.helloRequestBytes",
-        "function_token_typing_PSK.psk_region",
-        "function_token_typing_Platform.Bytes.bytes", "int_typing",
+        "function_token_typing_Platform.Bytes.bytes",
+        "function_token_typing_Platform.Bytes.empty_bytes", "int_typing",
         "interpretation_FStar.Heap_Tm_abs_a0a13c11aa3964346153dd55506fa009",
         "kinding_FStar.Char.char_@tok", "kinding_HandshakeLog.state@tok",
         "kinding_HandshakeMessages.hs_msg@tok",
         "lemma_FStar.Ghost.reveal_hide", "lemma_FStar.Map.lemma_ContainsDom",
         "lemma_FStar.Map.lemma_InDomConcat",
         "lemma_FStar.Map.lemma_InDomRestrict",
-        "lemma_FStar.Map.lemma_InDomUpd1", "lemma_FStar.Map.lemma_InDomUpd2",
+        "lemma_FStar.Map.lemma_InDomUpd1",
         "lemma_FStar.Map.lemma_SelConcat1",
         "lemma_FStar.Map.lemma_SelConcat2",
         "lemma_FStar.Map.lemma_SelRestrict", "lemma_FStar.Map.lemma_SelUpd1",
         "lemma_FStar.Map.lemma_SelUpd2", "lemma_FStar.Map.lemma_UpdDomain",
-        "lemma_FStar.Map.lemma_equal_elim",
         "lemma_FStar.Map.lemma_equal_intro",
         "lemma_FStar.Monotonic.Heap.lemma_sel_upd1",
         "lemma_FStar.Monotonic.HyperHeap.lemma_includes_refl",
@@ -1079,9 +1075,8 @@
         "lemma_FStar.Set.mem_union",
         "lemma_HandshakeMessages.messageBytes_is_injective",
         "primitive_Prims.op_AmpAmp", "primitive_Prims.op_BarBar",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_GreaterThan",
-        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Negation",
-        "primitive_Prims.op_Subtraction",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Negation", "primitive_Prims.op_Subtraction",
         "proj_equation_FStar.Monotonic.HyperStack.HS_h",
         "proj_equation_FStar.Monotonic.HyperStack.MkRef_id",
         "proj_equation_FStar.Monotonic.HyperStack.MkRef_ref",
@@ -1091,55 +1086,50 @@
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_FStar.Monotonic.HyperStack.HS_h",
-        "projection_inverse_HandshakeLog.OpenHash_b",
-        "projection_inverse_HandshakeLog.OpenHash_parsed",
-        "projection_inverse_HandshakeLog.OpenHash_prior",
         "projection_inverse_HandshakeLog.State_hashes",
         "projection_inverse_HandshakeLog.State_parsed",
         "projection_inverse_HandshakeLog.State_transcript",
-        "projection_inverse_Prims.Nil_a",
+        "projection_inverse_Prims.Cons_tl", "projection_inverse_Prims.Nil_a",
         "refinement_interpretation_Extensions_Tm_refine_4e1e5ff69cd4b614f69ecde54550ffb8",
         "refinement_interpretation_FStar.HyperStack.ST_Tm_refine_d52cae8b8e1ca91e1679b9bdc9938557",
         "refinement_interpretation_FStar.Monotonic.Heap_Tm_refine_910d39030c36174d69dfa7c713b6a7e7",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_0418702750d54a72833a38f310956e3d",
         "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_38d52172626ad62ce3b0e4245dab71ed",
         "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_FStar.Seq.Properties_Tm_refine_3421154546287b0f0c012dd3d63b4945",
+        "refinement_interpretation_FStar.Seq.Base_Tm_refine_cd046bc4a887ee7e1b05946e0bf5772b",
         "refinement_interpretation_HandshakeLog_Tm_refine_7913c46ed823df5e60659625cd966658",
         "refinement_interpretation_HandshakeMessages_Tm_refine_298cec5edff12a0efecc67e9916072b4",
         "refinement_interpretation_HandshakeMessages_Tm_refine_af028bea038d5d873477b956285270dd",
-        "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
+        "refinement_interpretation_Mem_Tm_refine_827021888216ac6a501be14cd4b812c9",
         "refinement_interpretation_Parse_Tm_refine_e64f0ec31c8e377535d70d4855334d9b",
         "refinement_interpretation_Platform.Bytes_Tm_refine_3458b9f6f40fe62446cdc2c6d3755a94",
+        "refinement_interpretation_Platform.Bytes_Tm_refine_df45e13378b64cfc3cd23f54e8657bfc",
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "refinement_interpretation_Prims_Tm_refine_f048236b5f8051f83b495ea5eaa6127b",
-        "token_correspondence_FStar.Map.upd", "true_interp",
-        "typing_Extensions.extensionListBytes",
+        "token_correspondence_FStar.List.Tot.Base.append.fuel_instrumented",
+        "true_interp", "typing_Extensions.extensionListBytes",
         "typing_Extensions.noExtensions",
         "typing_FStar.Heap.trivial_preorder", "typing_FStar.Map.concat",
         "typing_FStar.Map.contains", "typing_FStar.Map.domain",
         "typing_FStar.Map.restrict", "typing_FStar.Map.sel",
-        "typing_FStar.Map.upd", "typing_FStar.Monotonic.Heap.upd",
+        "typing_FStar.Monotonic.Heap.upd",
         "typing_FStar.Monotonic.HyperHeap.as_ref",
+        "typing_FStar.Monotonic.HyperHeap.upd",
+        "typing_FStar.Monotonic.HyperStack.__proj__HS__item__h",
         "typing_FStar.Monotonic.HyperStack.__proj__MkRef__item__ref",
-        "typing_FStar.Monotonic.HyperStack.is_eternal_region",
-        "typing_FStar.Monotonic.HyperStack.is_in",
-        "typing_FStar.Monotonic.HyperStack.sel",
-        "typing_FStar.Pervasives.Native.snd",
-        "typing_FStar.Seq.Properties.split", "typing_FStar.Set.complement",
-        "typing_FStar.Set.mem", "typing_FStar.Set.singleton",
-        "typing_FStar.Set.union", "typing_FStar.UInt.fits",
-        "typing_HandshakeLog.__proj__State__item__hashes",
+        "typing_FStar.Pervasives.Native.snd", "typing_FStar.Set.complement",
+        "typing_FStar.Set.singleton", "typing_FStar.Set.union",
+        "typing_FStar.UInt.fits", "typing_HandshakeLog.hashAlg",
         "typing_HandshakeLog.reveal_log",
         "typing_HandshakeLog.valid_transcript",
-        "typing_HandshakeLog.writing",
+        "typing_HandshakeLog.weak_valid_transcript",
         "typing_HandshakeMessages.helloRequestBytes",
-        "typing_Platform.Bytes.length", "typing_Prims.pow2",
-        "typing_tok_HandshakeMessages.HT_hello_request@tok"
+        "typing_Platform.Bytes.length", "typing_Platform.Bytes.split",
+        "typing_Prims.pow2",
+        "typing_tok_HandshakeMessages.HT_hello_request@tok", "unit_typing"
       ],
       0,
-      "66352ab1f4cae515255795bacae3276b"
+      "0fa7da0f8f1ef3e53dfda64884d621ea"
     ],
     [
       "HandshakeLog.setParams",
@@ -1275,7 +1265,7 @@
         "typing_tok_HandshakeMessages.HT_server_hello_done@tok"
       ],
       0,
-      "095cd0bd9ae09e97f6cbeab4862bbdcd"
+      "fd168a3021136300feff84ab5f546c6f"
     ]
   ]
 ]
