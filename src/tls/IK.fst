@@ -14,8 +14,6 @@ module IK
 ///
 /// Not done yet:
 ///
-/// * mysterious typing errors (see comments)
-///
 /// * define/review all idealization flags. How are they accessed?
 ///
 /// * reliance on u_of_i in DH extraction (intuitive but hard to code)
@@ -35,11 +33,12 @@ module IK
 /// this is sufficient for TLS, we might enable more details to be
 /// bound at derivation-time as part of the derivation context.
 
-open FStar.HyperStack
-open FStar.HyperStack.ST
+// open FStar.HyperStack
+// open FStar.HyperStack.ST
+open Mem 
 
-module MM = FStar.Monotonic.Map
 module MR = FStar.Monotonic.RRef
+module MM = FStar.Monotonic.Map
 module HH = FStar.HyperHeap
 
 let model = Flags.model
@@ -58,36 +57,58 @@ let sample (len:UInt32.t): ST (lbytes len)
 /// module Pkg (stateless)
 /// We embed first-class modules as datatype "packages"
 ///
-/// Index packages provide a "safe" predicate to control conditional idealization.
-/// We use "honest" to refer to the adversarie's intent, and "safe" for fine-grained idealization,
-/// with "safe ==> honest" as a pointwise lemma.
-/// When do we need to access one vs the other? Each instance can cache "safe".
+/// Index packages provide an abstract index for instances, with an
+/// interface to project (ghost) indexes to (concrete) runtime
+/// parameters, such as algorithms or key length , and to define their
+/// "honesty", thereby controlling their conditional idealization.
+///
+/// The "get_info" function ensure that all calls to the instance
+/// agree on their runtime parameters; we pass both the index and its
+/// info inasmuch as the index will be erased.
+
+/// We distinguish between "honest", which refers to the adversarie's
+/// intent (and is considered public) and "safe", which controls
+/// fine-grained idealization: roughly safe i = Flags.ideal /\ honest i
 
 noeq type ipkg (info: Type0)  = | Idx:
-  t: Type0 ->
-  r: MR.rid ->
-  get_info: (t -> info) ->
-  honest: (i:t -> GTot Type0) ->
-  corrupt: (i:t -> GTot Type0) ->
+  t: Type0 (* abstract type for indexes *) ->
+  r: MR.rid (* private region for the ideal honesty table (for framing; unused?) *) ->
+  get_info: (t -> info) (* function from (ghost) indexes to runtime parameters, e.g. algorithm *) ->
+  honest: (i:t -> GTot Type0) (* abstract predicate (implemented as a witness) *) ->
+  corrupt: (i:t -> GTot Type0) (* abstract predicate (implemented as a witness) *) ->
   get_honest: (i:t -> ST bool
     (requires (fun _ -> True))
-    (ensures (fun h0 b h1 -> h0 == h1
-      /\ (b ==> honest i) /\ (not b ==> corrupt i)))) ->
+    (ensures (fun h0 b h1 -> h0 == h1 /\ (b ==> honest i) /\ (not b ==> corrupt i))))
+    (* stateful reader, returning either honest or corrupt *) -> 
   ipkg info
 
-/// Keyed functionality define Key packages, parametric in their
-/// indexes, but concrete on their key randomness; instances may have
-/// any number of other functions (such a leak, for instance).
 
 /// Derived key length restriction when using HKDF
 type keylen = l:UInt32.t {UInt32.v l <= 256}
 
-// got into trouble using a type abbreviation [a:info{a == ip.get_info i}]; retry later; NS-11/03: Didn't understand this remark
+/// Keyed functionality define Key packages, parametric in their
+/// indexes, but concrete on their key randomness; instances may have
+/// any number of other functions (such a leak, for instance).
+///
+/// [info] represents runtime information, such as algorithms or key lengths;
+/// it is determined by the (ghost) index.
+///
+/// [ip] defines abstract indexes used in the package.
+///
+/// [create] and [coerce] generate new instances; [create] requires
+/// `model`, whereas [coerce] requires corruption when idealizing;
+/// hence the two may be callable on the same indexes.
+///
+/// We must have [create i a == coerce i a (sample (len a))]
+/// we currently check by hand that this follows from F* semantics.
+
+//17-11-13 do we need to know that ideal ==> model? 
+//17-11-13 is type-level access enough? 
 
 noeq type pkg (info: Type0) (ip: ipkg info) = | Pkg:
-  key: (ip.t -> Type0) ->
-  len: (info -> keylen) ->
-  ideal: Type0 -> // Type-level access to the ideal flag of the package
+  key: (ip.t -> Type0) (* indexed state of the functionality *) ->
+  len: (info -> keylen) (* computes the key-material length *) ->
+  ideal: Type0 (* type-level access to the ideal flag of the package *) -> 
   create: (
     i:ip.t -> a:info{a == ip.get_info i} -> ST (key i)
     (requires fun h0 -> model)
@@ -98,25 +119,36 @@ noeq type pkg (info: Type0) (ip: ipkg info) = | Pkg:
     (ensures fun h0 p h1 -> True)) ->
   pkg info ip
 
-/// The "get_info" function ensure that all instances share the same
-/// runtime information; we still pass info inasmuch as the index will
-/// be erased.
-
-
-/// NEXT, WE DEFINE A FEW SAMPLE FUNCTIONALITIES,
+/// Next, we define a few sample functionalities,
 /// parameterized on their abstract index package.
-///
-/// can we factor out pre/post and boilerplate spec?
-///
-/// When ~(honest i), we must have
-///
-/// create i a == coerce i a (sample (len a))
+/// --------------------------------------------------------------------------------------------------
+/// a default functionality (no interface, and no idealization);
+/// for modelling, we could also provide a "leak" function
+
+assume val flag_Raw: bool
+type idealRaw = b2t flag_Raw
+
+type raw  (#ip: ipkg keylen) (i: Idx?.t ip) = lbytes (ip.get_info i)
+let create_raw (#ip: ipkg keylen) (i: ip.t) (len:keylen {len = ip.get_info i})
+  : ST (raw  i) (requires fun h0 -> model) (ensures fun h0 p h1 -> True) =
+  sample len
+let coerce_raw (#ip: ipkg keylen) (i: ip.t) (len:keylen {len = ip.get_info i}) (r:lbytes len)
+  : ST (raw i) (requires fun h0 -> idealRaw ==> ip.corrupt i)
+  (ensures fun h0 p h1 -> True) = r
+
+let rp (ip:ipkg keylen): pkg keylen ip = Pkg
+  raw
+  (fun n -> n)
+  idealRaw
+  create_raw
+  coerce_raw
+
 
 /// --------------------------------------------------------------------------------------------------
 /// module AEAD
 /// sample generic, agile functionality.
 ///
-/// TODO package instead StAE.
+/// TODO package instead StAE; what to do with the algorithm? 
 
 type aeadAlg = | AES_GCM128 | AES_GCM256
 let aeadLen: aeadAlg -> keylen = function
@@ -151,33 +183,11 @@ let mp (ip:ipkg aeadAlg): pkg aeadAlg ip = Pkg
 val encrypt: #ip:ipkg aeadAlg -> #i:ip.t -> k: key i -> nat -> nat
 let encrypt #ip #i k v = v + 1
 
-/// --------------------------------------------------------------------------------------------------
-/// module Raw
-/// a default functionality (no idealization);
-/// for modelling, we could also provide a "leak" function
-
-assume val flag_Raw: bool
-type idealRaw = b2t flag_Raw
-
-type raw  (#ip: ipkg keylen) (i: Idx?.t ip) = lbytes (ip.get_info i)
-let create_raw (#ip: ipkg keylen) (i: ip.t) (len:keylen {len = ip.get_info i})
-  : ST (raw  i) (requires fun h0 -> model) (ensures fun h0 p h1 -> True) =
-  sample len
-let coerce_raw (#ip: ipkg keylen) (i: ip.t) (len:keylen {len = ip.get_info i}) (r:lbytes len)
-  : ST (raw i) (requires fun h0 -> idealRaw ==> ip.corrupt i)
-  (ensures fun h0 p h1 -> True) = r
-
-let rp (ip:ipkg keylen): pkg keylen ip = Pkg
-  raw
-  (fun n -> n)
-  idealRaw
-  create_raw
-  coerce_raw
 
 /// TLS-SPECIFIC KEY SCHEDULE
 /// --------------------------------------------------------------------------------------------------
 
-/// module Index
+/// module Id
 ///
 /// We provide an instance of ipkg to track key derivation (here using constant labels)
 /// these labels are specific to HKDF, for now strings e.g. "e exp master".
@@ -191,7 +201,7 @@ type id_dhe =
     gX: CommonDH.dhi ->
     gY: CommonDH.dhr gX -> id_dhe
 
-// The "ciphersuite hash algorithms"  eligible for TLS 1.3 key derivation.
+// The "ciphersuite hash algorithms" eligible for TLS 1.3 key derivation.
 // We will be more restrictive.
 type kdfa = Hashing.Spec.alg
 
@@ -207,6 +217,10 @@ type context =
     info: TLSInfo.logInfo (* ghost, abstract summary of the transcript *) ->
     hv: Hashing.Spec.anyTag (* requires stratification *) -> context
 
+/// Underneath, HKDF takes a "context" and a required length, with
+/// disjoint internal encodings of the context:
+/// [HKDF.format #ha label digest len]
+
 type id_psk = nat // external application PSKs only; we may also set the usage's maximal recursive depth here.
 type pre_id =
   | Preshared:
@@ -218,41 +232,6 @@ type pre_id =
       l:label (* static part of the derivation label *) ->
       context (* dynamic part of the derivation label *) ->
       pre_id
-
-(* was:
-  | Extract0: materials: pre_id -> pre_id
-  | Extract1: salt: pre_id -> materials: id_dhe -> pre_id
-  | Extract2: salt: pre_id -> pre_id
-  | Derived:
-    secret:pre_id ->
-    lbl: (* HKDF constant *) label ->
-    info: TLSInfo.logInfo (* ghost, abstract summary of the transcript *) ->
-    hv: Hashing.Spec.anyTag (* requires stratification *) -> pre_id
-
-  | Derived:
-    secret:pre_id ->
-    lbl: (* HKDF constant *) label ->
-    ctx: context ->
-    pre_id
-
-    info: TLSInfo.logInfo (* ghost, abstract summary of the transcript *) ->
-    hv: Hashing.Spec.anyTag (* requires stratification *) -> pre_id
-
-// We could have different constructors, depending on the presence of
-// a digest and length (in which case we should be careful of label
-// formatting) or not, keeping any case analysis on the label local.
-//
-// Underneath, HKDF takes a "context" and a required length, with
-// disjoint internal encodings of the context:
-// [HKDF.format #ha label digest len]
-//
-// [lbl] and [hv] and ha_of_id determine the HKDF context; in HKDF we
-// prove that their encoding is injective.
-//
-// info is a function of hv, included for verification convenience.
-// (details to be adapted from the HS).
-// Hence same hashed digest ==> same logInfo, but not the converse.
-*)
 
 // always bound by the index (and also passed concretely at creation-time).
 val ha_of_id: i:pre_id -> kdfa
@@ -299,13 +278,12 @@ type honest_idh (c:context) =
 // We assume write access to this table is public, but the following global
 // invariant must be enforced: if i is corrupt then all indexes derived from i
 // are also corrupt - EXCEPT if ctx is ExtractDH g gx gy with CommonDH.honest_dhr gy
-let honest_region:MR.rid = new_region HH.root
 type honesty_invariant (m:MM.map' id (fun _ -> bool)) =
   (forall (i:id) (l:label) (c:context{wellformed_id (Derive i l c)}).
   {:pattern (m (Derive i l c))}
   Some? (m (Derive i l c)) ==> Some? (m i) /\
   (m i = Some false ==> (honest_idh c \/ m (Derive i l c) = Some false)))
-
+ 
 private type i_honesty_table =
   MM.t honest_region id (fun (t:id) -> bool) honesty_invariant
 private let h_table = if model then i_honesty_table else unit
@@ -545,7 +523,7 @@ let derived_key
   let i' = Derive i lbl c in
   use.pkg'.key i'
 
-let there: MR.rid = admit()
+let there = Mem.tls_tables_region // : MR.rid = admit()
 
 /// key-derivation table (memoizing create/coerce)
 type domain (i:regid) = | Domain:
@@ -1535,7 +1513,7 @@ let ks() =
   let (| i_gY, hs1 |) = extractR salt1 a gX in
   let (| _, gY |) = i_gY in
   let i1 : regid = Derive i_salt1 "" (ExtractDH (IDH gX gY)) in
-  let hs_secret: secret (u_handshake_secret depth) i1 = admit() in
+  let hs_secret: secret (u_handshake_secret depth) i1 = admit() in // due to u_of_i
 
   let (| _, hst |) = derive a hs_secret "traffic" Expand in
   let i_traffic1: regid = Derive i1 "traffic" Expand  in
@@ -1559,110 +1537,3 @@ let ks() =
   let i4: regid = Derive i3 "" Extract in
   let next_early_secret: secret (u_early_secret (depth - 1)) i4 = extract0 rsk a in
   ()
-
-
-(* ---
-
-let i3 = Extract0 (Derived i2 "resumption")
-let rsk = derive master_secret "resumption"
-// #(u_master_secret depth ) #i2
-val next_early_secret: secret (u_early_secret (depth - 1)) i3 a
-let next_early_secret = extract0 rsk
-
-
-// same, using top-level bindings for debuggability.
-
-let ipsk = Preshared Hashing.Spec.SHA1 0
-let a: info ipsk = Info Hashing.Spec.SHA1 None
-let psk0: psk #u ipsk  a = create_psk ipsk a
-
-let i0 = Derive ipsk "" Extract
-let a0 = Info #i0 Hashing.Spec.SHA1 None
-let early_secret: secret u i0 a0 = extract0 psk0
-
-let i_traffic0 = Derive i0 "traffic" Expand
-let a_traffic0 = Info #i_traffic0 Hashing.Spec.SHA1 None
-val early_traffic: secret u_traffic i_traffic0 a_traffic0
-let early_traffic = derive early_secret "traffic" Expand
-// not sure where to add the loginfo
-
-let i_0rtt = Derive i_traffic0 "ClientKey" Expand
-val k0: key #ii i_0rtt AES_GCM256
-let k0 = derive early_traffic "ClientKey" Expand
-let cipher  = encrypt k0 10
-
-let i_salt1 = Derive i0 "salt" Expand
-let a_salt1 = Info #i_salt1 Hashing.Spec.SHA1 None
-val salt1:  salt (u_handshake_secret depth) i_salt1 a_salt1
-let salt1  = derive early_secret "salt" Expand
-
-
-let g = CommonDH.default_group
-//let x: CommonDH.sh = initI g
-let x = CommonDH.keygen g
-let gX = CommonDH.pubshare x
-let gY: CommonDH.share g = admit()
-let dhe_id: id_dhe = Some (| g, gX, gY |)
-
-let i1 = Extract1 (Derived i0 "salt") dhe_id
-
-// we really need [let u_extract1 = u_handshake_secret depth] to go past this point.
-
-val hs_secret : secret (u_handshake_secret depth) i1 a
-let hs_secret = extractI salt1 g x gY
-
-val hs_traffic: secret u_traffic (Derived i1 "traffic") a
-let hs_traffic = derive hs_secret "traffic"
-
-val k1: key #ii (Derived (Derived i1 "traffic") "ServerKey") AES_GCM256
-let k1 = derive hs_traffic "ServerKey"
-let cipher' = encrypt k1 11
-
-val salt2:  salt ii (u_master_secret depth) (Derived i1 "salt") a
-let salt2  = derive hs_secret "salt"
-
-let i2 = Extract2 (Derived i1 "salt")
-val master_secret: secret (u_master_secret depth) i2 a
-let master_secret = extract2 salt2
-
-val rsk: psk #ii #(u_early_secret (depth - 1)) (Derived i2 "resumption") a
-
-let i3 = Extract0 (Derived i2 "resumption")
-let rsk = derive master_secret "resumption"
-// #(u_master_secret depth ) #i2
-val next_early_secret: secret (u_early_secret (depth - 1)) i3 a
-let next_early_secret = extract0 rsk
-
-/// Proof?  Typing against plain, multi-instance assumptions for each
-/// algorithm (including the KDFs)---once an instance is created at
-/// the right index, we don't care about its generation.
-///
-/// Informally, we can explain it as a game against an adversary that tries to
-/// distinguish between KDFs with oracle access to create_psk, derive,
-/// and (all) coerce functions.
-///
-/// Idea: use an intermediate multi-instance PRF, then complete the
-/// proof by typing. The main problem is to move around the fresh
-/// random sampling...
-///
-/// Underlying functionality: create takes explicit random input
-/// idealizes (at most) when its input is freshly sampled.
-///
-/// real: at creation-time,
-/// table: label ->
-///
-/// - how to benefit from the create post-condition? explicit?
-///
-
-
-// let k0 = create_psk 0 //: secret (u depth) ii (Secret 0) = create (u depth) ii (Secret 0)
-// let i1 = Derived (Preshared 0) "secret" (* this seems to help normalization *)
-// let k1: secret (u (depth-1)) ii i1  = derive k0 "secret"
-// let k2: key #ii (Derived i1 "aead") = derive k1 "aead"
-// let cipher  = encrypt k2 42
-// let k3: list nat  = derive k1 "raw"
-//
-// let k1' = derive k0 "secret"
-// let k2' = derive #(u 22)  k1'  "aead"  // the type is not normalized; the key is not usable.
-
---- *)

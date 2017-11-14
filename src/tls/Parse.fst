@@ -13,42 +13,12 @@ module ST = FStar.HyperStack.ST
 
 
 (** This file should be split in 3 different modules:
-  - Regions: for global table regions
+  - Regions: for global table regions [done in Mem] 
   - Format: for generic formatting functions
   - DHFormat: for (EC)DHE-specific formatting
 *)
 
-
-(** Begin Module Regions *)
-
-//type fresh_subregion r0 r h0 h1 = ST.stronger_fresh_region r h0 h1 /\ ST.extends r r0
-
-(** Regions and colors for objects in memory *)
-let tls_color = -1
-let epoch_color = 1
-let hs_color = 2
-
-let is_tls_rgn r   = HH.color r = tls_color
-let is_epoch_rgn r = HH.color r = epoch_color
-let is_hs_rgn r    = HH.color r = hs_color
-
-(*
- * AR: Adding the eternal region predicate.
- * Strengthening the predicate because at some places, the code uses HH.parent.
- *)
-let rgn       = r:HH.rid{r<>HH.root
-                         /\ (forall (s:HH.rid).{:pattern HS.is_eternal_region s} HS.is_above s r ==> HS.is_eternal_region s)}
-let tls_rgn   = r:rgn{is_tls_rgn r}
-let epoch_rgn = r:rgn{is_epoch_rgn r}
-let hs_rgn    = r:rgn{is_hs_rgn r}
-
-let tls_region : tls_rgn = new_colored_region HH.root tls_color
-
-let tls_tables_region : (r:tls_rgn{HH.parent r = tls_region}) =
-    new_region tls_region
-
-    
-(** End Module Regions *)
+include Mem // temporary
 
 
 (** Begin Module Format *)

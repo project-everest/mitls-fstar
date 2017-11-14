@@ -28,9 +28,6 @@ type text = bytes
 type tag (i:id) = lbytes (macSize (alg i))
 type keyrepr (i:id) = lbytes (macSize (alg i))
 
-
-type fresh_subregion rg parent h0 h1 = stronger_fresh_region rg h0 h1 /\ extends rg parent
-
 // We keep the tag in case we later want to enforce tag authentication
 abstract type entry (i:id) (good: bytes -> Type) = 
   | Entry: t:tag i -> p:bytes { authId i ==> good p } -> entry i good
@@ -63,14 +60,15 @@ val gen: i:id -> good: (bytes -> Type) -> parent: rgn -> ST(key i good)
   (requires (fun _ -> True))
   (ensures (fun h0 k h1 ->  
     modifies Set.empty h0 h1 /\
-    fresh_subregion (region #i #good k) parent h0 h1 )) 
-let gen    i good parent    = gen0 i good parent (CoreCrypto.random (macKeySize (alg i)))
+    Mem.fresh_subregion (region #i #good k) parent h0 h1 )) 
+let gen i good parent = 
+  gen0 i good parent (CoreCrypto.random (macKeySize (alg i)))
 
 val coerce: i:id -> good: (bytes -> Type) -> parent: rgn -> kv:keyrepr i -> ST(key i good)
   (requires (fun _ -> ~(authId i)))
   (ensures (fun h0 k h1 ->  
     modifies Set.empty h0 h1 /\
-    fresh_subregion (region #i #good k) parent h0 h1 )) 
+    Mem.fresh_subregion (region #i #good k) parent h0 h1 )) 
 let coerce i good parent kv = gen0 i good parent kv
 
 val leak: #i:id -> #good: (bytes -> Type) -> k:key i good {~(authId i)} -> Tot (kv:keyrepr i { kv = keyval k })

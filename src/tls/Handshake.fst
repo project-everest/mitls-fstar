@@ -73,6 +73,7 @@ type machineState =
   | S_Wait_CF2 of digest       // TLS resume (CF)
   | S_Complete
 
+  
 //17-03-24 consider using instead "if role = Client then clientState else serverServer"
 //17-03-24 but that may break extraction to Kremlin and complicate typechecking
 //17-03-24 we could also use two refinements.
@@ -101,18 +102,7 @@ let resumeInfo_of (s:hs) = Nego.resume s.nego
 let get_mode (s:hs) = Nego.getMode s.nego
 let epochs_of (s:hs) = s.epochs
 
-(* WIP on the handshake invariant
-let inv (s:hs) (h:HyperStack.mem) =
-  // let context = Negotiation.context h hs.nego in
-  let transcript = HandshakeLog.transcript h hs.log in
-  match HyperStack.sel h s.state with
-  | C_Wait_ServerHello ->
-      hs.role = Client /\
-      transcript = [clientHello hs.nonce offer] /\
-      "nego in Wait_ServerHello" /\
-      "ks in wait_ServerHello"
-  | _ -> True
-*)
+
 
 // the states of the HS sub-module will be subject to a joint invariant
 // for example the Nego state is a function of ours.
@@ -154,6 +144,83 @@ let completed #rgn #nonce e = True
 // consider adding an optional (resume: option sid) on the client side
 // for now this bit is not explicitly authenticated.
 
+/// Handshake invariant (TBC) 
+/// HS machine state, e.g. 
+/// | C_Wait_ServerHello ->
+///   related states for Nego, KS, HSL
+///   transcript = [...] /\
+///   negostate = nego_of_transcript config transcript
+///
+/// nego lookups are readers functions
+/// (returning a result and its witness---or just mon. transcript?)
+/// defined once the transcript is big enough.
+/// 
+// WIP on the handshake invariant; see also hs_inv below!
+let inv (s:hs) (h:HyperStack.mem) =
+  let n = Negotiation.state h hs.nego // let context = Negotiation.context h hs.nego in
+  let tr = HandshakeLog.transcript h hs.log in
+  let control = HyperStack.sel h s.state in 
+  let kst = KeySchedule.state h hs.ks in 
+  Correct nego = Nego.replay transcript /\ 
+  
+  match control with
+  | C_Idle -> 
+      // create...client_ClientHello
+      hs.role = Client /\ 
+      tr = [] /\ 
+      writing h hs.nego /\ 
+      C_Init? kst // unclear we care about its nonce, otherwise see client_ClientHello
+
+  | C_Wait_ServerHello ->
+      // client_ClientHello...(client_HelloRetryRequest \/ client_ServerHello)
+      // with a branch on proposing TLS 1.3 or not 
+      hs.role = Client /\
+      tr = [clientHello hs.nonce (Negotiation.offer_of nego)] /\
+      match kst with 
+      | C_13_wait_SH (*cr*) esl gs -> "esl and gs compatible with offer" 
+      | _ -> False 
+      
+  | C_Wait_Finished1 -> 
+      hs.role = Client /\ 
+      tr = [clientHello hs.nonce (Negotiation.offer_of nego); ServerHello ...] /\ 
+      // When do we care about precise indexes? We plan to sync
+      // with KeySchedule on indexes, rather than transcripts
+      // (abstract for KeySchedule).  we'll need to keep around at
+      // least the PSK index in addition to the log
+      match kst with 
+      | C_13_wait_SF (*subsumed by i?: alpha*) i1 transcript_sh (*for deriving the indexes of*) cfk sfk ams -> 
+          i1 = i_hs_secret_of_transcript tr /\ 
+          transcript_sh = tr `up_to` ServerHello?
+          "something about local writers?"  
+      | _ -> False
+
+  | S_Idle -> 
+      hs.role = Server /\ 
+      tr = [] /\ 
+      S_Init? kst
+  
+(*
+/// i.e. we expect this definition in KeySchedule
+/// to keep C_13_wait_SH abstract, we'd need to record the 
+
+| C_13_wait_SH:
+    // *overwritten* symmetric extracts for the PSKs we are proposing
+    // (the indexes are a function of those of the PKSs)
+    esl: list (i:esId{~(NoPSK? i)} & es i) ->
+    // *overwritten* when hello_retry
+    // private exponents for the honestly-generated shares we are proposing
+    gs: list (g:CommonDH.group & CommonDH.keyshare g) -> ks_client_state
+// ---> 
+
+| C_13_wait_SF: 
+    i1: id (* ghost, synchronized with HS invariant *) ->
+    transcript: (*ghost*) list msg -> 
+    cfk: MAC.UFCMA.key (derive_cfk1 i1 transcript) ->
+    sfk: MAC.UFCMA.key (derive_sfk1 i1 transcript) ->
+    ams: KDF.secret (derive_ams1 i1) -> ks_client_state 
+*)
+
+
 // Well-formed logs are all prefixes of (Epoch; Complete)*; Error
 // This crucially assumes that TLS keeps track of OutCCS and InCCSAck
 // so that it knows which reader & writer to use (not always the latest ones):
@@ -174,6 +241,8 @@ let hs_inv (s:hs) (h: HyperStack.mem) = True
 
 //A framing lemma with a very trivial proof, because of the way stateT abstracts the state-dependent parts
 *)
+
+
 
 #set-options "--lax"
 let frame_iT_trivial  (s:hs) (rw:rw) (h0:HyperStack.mem) (h1:HyperStack.mem)
@@ -250,12 +319,23 @@ let clientHello offer = // pure; shared by Client and Server
 
 (* -------------------- Handshake Client ------------------------ *)
 
+
+//17-11-12 switch to implicit i? 
 type btag (binderKey: i:binderId & bk:KeySchedule.binderKey i) =
   HMAC.UFCMA.tag (HMAC.UFCMA.HMAC_Binder (let (|i,_|) = binderKey in i))
 
+//TODO inline
 let compute_binder hs (bkey:(i:binderId & bk:KeySchedule.binderKey i)): ST (btag bkey)
-    (requires fun h0 -> True)
-    (ensures fun h0 _ h1 -> modifies_none h0 h1)  // we'll need a complete spec to determine the transcript
+    (requires fun h0 -> 
+      let tr = HandshakeLog.transcript h hs.log in
+      // tr = ClientHello offer ... to match the MAC precondition for that key 
+      True
+    )
+    (ensures fun h0 _ h1 -> 
+      modifies_none h0 h1
+      // "if model then modifies {CRF table, bk's ideal table } "
+    
+      )  // we'll need a complete spec to determine the transcript
   =
   let (| bid, bk |) = bkey in
   let digest_CH0 = HandshakeLog.hash_tag #(binderId_hash bid) hs.log in
@@ -271,6 +351,13 @@ let verify_binder hs (bkey: i:binderId & bk:KeySchedule.binderKey i) (tag:btag b
 
 // Compute and send the PSK binders if necessary
 // may be called both by client_ClientHello and client_HelloRetryRequest
+val client_Binders: s:hs -> offer -> ST unit
+  (requires h0 -> True)
+  (ensures h0 _ h1 ->
+    // only dealing with Some? for now 
+    // we don't care about the presence and contents of Binders in the transcript
+    tr1 = tr0 @ 
+    )
 let client_Binders hs offer =
   match Nego.find_clientPske offer with
   | None -> () // No PSK, no binders
@@ -279,6 +366,7 @@ let client_Binders hs offer =
     //17-11-06 why calling KS twice? why returning the keys, rather than just [bid]? 
     let binderKeys = KeySchedule.ks_client_13_get_binder_keys hs.ks pskl in
     let binders = KeySchedule.map_ST (compute_binder hs) binderKeys in
+    //alt? let binders = KeySchedule.compute_binders hs.ks pskl in 
     HandshakeLog.send hs.log (Binders binders);
 
     // Nego ensures that EDI is not sent in a 2nd ClientHello
@@ -295,8 +383,16 @@ let client_Binders hs offer =
       HandshakeLog.send_signals hs.log (Some (true, false)) false
      end
 
+/// 17-11-11 verification style? we hope to factor out most of the
+/// pre/post in the invariant (but note we just called
+/// HandshakeLog.next_fragment).
+/// 
 val client_ClientHello: s:hs -> i:id -> ST (result (HandshakeLog.outgoing i))
   (requires fun h0 ->
+    inv s h0 /\ 
+    let control = HyperStack.sel h0 s.state in
+    control = C_Idle /\ 
+    // 
     let n = MR.m_sel h0 Nego.(s.nego.state) in
     let t = transcript h0 s.log in
     let k = HyperStack.sel h0 s.ks.KeySchedule.state in
@@ -369,6 +465,21 @@ let client_HelloRetryRequest (hs:hs) (hrr:hrr) : St incoming =
 
 // requires !hs.state = Wait_ServerHello
 // ensures TLS 1.3 ==> installed handshake keys
+// 17-11-11 
+// how to avoid duplicating the invariant after reading the flight? 
+// pass the whole state before calling HSL?
+// share [c_WaitServerHello tr] formulas between pre/post and the invariant?
+val client_ServerHello: s:hs -> sh:sh -> ST incoming 
+  (requires fun h0 -> 
+    inv s h0 /\ 
+    let control = HyperStack.sel h0 s.state in 
+    control = C_WaitServerHello /\
+    writing h hs.nego 
+    )
+  (ensures fun h0 r h1 -> 
+    inv s h1
+    )
+
 let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming =
   trace "client_ServerHello";
   match Nego.client_ServerHello s.nego sh with

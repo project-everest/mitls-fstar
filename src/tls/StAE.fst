@@ -1,7 +1,8 @@
 (**
-Authenticated encryptions of streams of TLS fragments (from Content)
-multiplexing StatefulLHAE and StreamAE with (some) length hiding
-(for now, under-specifying ciphertexts lengths and values)
+Authenticated encryptions of streams of TLS fragments (defined in Content)
+multiplexing StatefulLHAE and StreamAE with (some) length hiding.
+
+For now, ciphertexts lengths and values are under-specified. 
 *)
 module StAE
 
@@ -16,10 +17,8 @@ module HH   = FStar.HyperHeap
 module HS   = FStar.HyperStack
 module MR   = FStar.Monotonic.RRef
 module MS   = FStar.Monotonic.Seq
-module C    = Content
 module Range = Range
 
-module Stream = StreamAE
 module StLHAE = StatefulLHAE
 
 #set-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
@@ -44,8 +43,8 @@ type stae_id = i:id {is_stream i \/ is_stlhae i}
 //Various utilities related to lengths of ciphers and fragments
 ////////////////////////////////////////////////////////////////////////////////
 
-let frag_plain_len (#i:id{is_stream i}) (f:C.fragment i): StreamPlain.plainLen =
-  snd (C.rg i f) + 1
+let frag_plain_len (#i:id{is_stream i}) (f:Content.fragment i): StreamPlain.plainLen =
+  snd (Content.rg i f) + 1
 
 // CONCRETE KEY MATERIALS, for leaking & coercing.
 // (each implementation splits it into encryption keys, IVs, MAC keys, etc)
@@ -53,7 +52,7 @@ let frag_plain_len (#i:id{is_stream i}) (f:C.fragment i): StreamPlain.plainLen =
 let aeKeySize (i:stae_id) =
   if is_stream i
   then
-    CoreCrypto.aeadKeySize (Stream.alg i) +
+    CoreCrypto.aeadKeySize (StreamAE.alg i) +
     AEADProvider.iv_length i
   else
     CoreCrypto.aeadKeySize (AEAD?._0 (aeAlg_of_id i)) +
@@ -66,11 +65,11 @@ type keyBytes (i:stae_id) = lbytes (aeKeySize i)
 //`state i rw`, a sum to cover StreamAE (1.3) and StatefulLHAE (1.2)
 ////////////////////////////////////////////////////////////////////////////////
 noeq type state (i:id) (rw:rw) =
-  | Stream: u:unit{is_stream i} -> Stream.state i rw -> state i rw
+  | Stream: u:unit{is_stream i} -> StreamAE.state i rw -> state i rw
   | StLHAE: u:unit{is_stlhae i} -> StLHAE.state i rw -> state i rw
 
 let stream_state (#i:id{is_stream i}) (#rw:rw) (s:state i rw)
-  : Tot (Stream.state i rw)
+  : Tot (StreamAE.state i rw)
   = let Stream _ s = s in s
 
 let stlhae_state (#i:id{is_stlhae i}) (#rw:rw) (s:state i rw)
@@ -80,13 +79,13 @@ let stlhae_state (#i:id{is_stlhae i}) (#rw:rw) (s:state i rw)
 val region: #i:id -> #rw:rw -> state i rw -> Tot rgn
 let region (#i:id) (#rw:rw) (s:state i rw): Tot rgn =
   match s with
-  | Stream _ x -> Stream.State?.region x
+  | Stream _ x -> StreamAE.State?.region x
   | StLHAE _ x -> StLHAE.region x
 
 val log_region: #i:id -> #rw:rw -> state i rw -> Tot rgn
 let log_region (#i:id) (#rw:rw) (s:state i rw): Tot rgn =
   match s with
-  | Stream _ s -> Stream.State?.log_region s
+  | Stream _ s -> StreamAE.State?.log_region s
   | StLHAE _ s -> AEAD_GCM.State?.log_region s
 
 type reader i = state i Reader
@@ -114,34 +113,34 @@ let tolerate_decrypt_failure (#i:id) (r:reader i)
 //Logs of fragments, defined as projections on the underlying entry logs
 ////////////////////////////////////////////////////////////////////////////////
 // TODO: consider adding constraint on terminator fragments
-type frags (i:id{~ (PlaintextID? i)}) = Seq.seq (C.fragment i)
+type frags (i:id{~ (PlaintextID? i)}) = Seq.seq (Content.fragment i)
 
 let ideal_log (r:rgn) (i:id) =
   if is_stream i then
-    Stream.ideal_log r i
+    StreamAE.ideal_log r i
   else if is_stlhae i then
     AEAD_GCM.ideal_log r i
   else False
 
 let ilog (#i:id) (#rw:rw) (s:state i rw{authId i}): Tot (ideal_log (log_region s) i) =
   match s with
-  | Stream u s -> Stream.ilog (Stream.State?.log s)
+  | Stream u s -> StreamAE.ilog (StreamAE.State?.log s)
   | StLHAE u s -> AEAD_GCM.ilog (AEAD_GCM.State?.log s)
 
 let entry (i:id) =
    if is_stream i then
-     Stream.entry i
+     StreamAE.entry i
    else if is_stlhae i then
      AEAD_GCM.entry i
    else False
 
-let ptext (#i:id) (ent:entry i): Tot (C.fragment i) =
+let ptext (#i:id) (ent:entry i): Tot (Content.fragment i) =
   if is_stream i then
-    Stream.Entry?.p #i ent
+    StreamAE.Entry?.p #i ent
   else
     AEAD_GCM.Entry?.p #i ent
 
-//A projection of fragments from Stream.entries
+//A projection of fragments from StreamAE.entries
 let fragments (#i:id) (#rw:rw) (s:state i rw{authId i}) (h:mem): GTot (frags i) =
   let entries = MR.m_sel #(log_region s) #_ #MS.grows h (ilog s) in
   MS.map ptext entries
@@ -180,7 +179,7 @@ let fragments_prefix_stable #i #rw w h =
 
 let seqnT (#i:id) (#rw:rw) (s:state i rw) h : GTot nat =
   match s with
-  | Stream _ s -> MR.m_sel h (Stream.ctr (Stream.State?.counter s))
+  | Stream _ s -> MR.m_sel h (StreamAE.ctr (StreamAE.State?.counter s))
   | StLHAE _ s -> MR.m_sel h (AEAD_GCM.ctr (StLHAE.counter s))
 
 //it's incrementable if it doesn't overflow
@@ -270,7 +269,7 @@ val gen: parent:rgn -> i:stae_id -> ST (writer i)
 #set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 let gen parent i =
   if is_stream i then
-    Stream () (Stream.gen parent i)
+    Stream () (StreamAE.gen parent i)
   else
     StLHAE () (StLHAE.gen parent i)
 
@@ -291,7 +290,7 @@ let genReader parent #i w =
   | Stream _ w ->
     lemma_ID13 i;
     assume(StreamAE.(HyperHeap.disjoint parent (AEADProvider.region #i w.aead)));
-    Stream () (Stream.genReader parent #i w)
+    Stream () (StreamAE.genReader parent #i w)
   | StLHAE _ w ->
     lemma_ID12 i;
     assume(AEAD_GCM.(HyperHeap.disjoint parent (AEADProvider.region #i w.aead)));
@@ -310,8 +309,8 @@ val coerce: parent:rgn -> i:stae_id{~(authId i)} -> keyBytes i -> ST (writer i)
 #set-options "--z3rlimit 100"
 let coerce parent i kiv =
   if is_stream i then
-    let kv,iv = Platform.Bytes.split kiv (CoreCrypto.aeadKeySize (Stream.alg i)) in
-    Stream () (Stream.coerce parent i kv iv)
+    let kv,iv = Platform.Bytes.split kiv (CoreCrypto.aeadKeySize (StreamAE.alg i)) in
+    Stream () (StreamAE.coerce parent i kv iv)
   else
     let kv,iv = Platform.Bytes.split kiv (CoreCrypto.aeadKeySize (StLHAE.alg i)) in
     StLHAE () (StLHAE.coerce parent i kv iv)
@@ -322,7 +321,7 @@ val leak: #i:id{~(authId i)} -> #role:rw -> s:state i role -> ST (keyBytes i) //
   (ensures  (fun h0 r h1 -> modifies Set.empty h0 h1 ))
 let leak #i #role s =
   match s with
-  | Stream _ s -> let kv,iv = Stream.leak s in kv @| iv
+  | Stream _ s -> let kv,iv = StreamAE.leak s in kv @| iv
   | StLHAE _ s -> let kv,iv = StLHAE.leak s in kv @| iv
 
 
@@ -333,7 +332,7 @@ let leak #i #role s =
 //Encryption
 ////////////////////////////////////////////////////////////////////////////////
 #set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 3 --max_ifuel 3"
-val encrypt: #i:id -> e:writer i -> f:C.fragment i -> ST (C.encrypted f)
+val encrypt: #i:id -> e:writer i -> f:Content.fragment i -> ST (Content.encrypted f)
   (requires (fun h0 -> incrementable e h0))
   (ensures  (fun h0 c h1 ->
                modifies_one (region e) h0 h1
@@ -348,7 +347,7 @@ let encrypt #i e f =
   | StLHAE u s ->
     begin
     let h0 = get() in
-    let ct,rg = C.ct_rg i f in
+    let ct,rg = Content.ct_rg i f in
     let ad = StatefulPlain.makeAD i ct in
     let seqn = MR.m_read (AEAD_GCM.ctr (StLHAE.counter s)) in
     let c = StLHAE.encrypt s ad rg f in
@@ -369,13 +368,13 @@ let encrypt #i e f =
     begin
     let h0 = get() in
     let l = frag_plain_len f in
-    let c = Stream.encrypt s l f in
+    let c = StreamAE.encrypt s l f in
     let h1 = get() in
     if authId i then
       begin
-      lemma_fragments_snoc_commutes e h0 h1 (Stream.Entry l c f);
+      lemma_fragments_snoc_commutes e h0 h1 (StreamAE.Entry l c f);
       fragments_prefix_stable e h1;
-      MR.witness #(log_region e) (Stream.ilog (Stream.State?.log s))
+      MR.witness #(log_region e) (StreamAE.ilog (StreamAE.State?.log s))
 		 (fragments_prefix e (fragments e h1))
       end;
     c
@@ -386,26 +385,26 @@ let encrypt #i e f =
 //Decryption
 ////////////////////////////////////////////////////////////////////////////////
 // decryption, idealized as a lookup for safe instances
-let fragment_at_j (#i:id) (#rw:rw) (s:state i rw{authId i}) (n:nat) (f:C.fragment i) h =
+let fragment_at_j (#i:id) (#rw:rw) (s:state i rw{authId i}) (n:nat) (f:Content.fragment i) h =
   MS.map_has_at_index #_ #_ #(log_region s) (ilog s) ptext n f h
 
-let fragment_at_j_stable (#i:id) (#rw:rw) (s:state i rw{authId i}) (n:nat) (f:C.fragment i)
+let fragment_at_j_stable (#i:id) (#rw:rw) (s:state i rw{authId i}) (n:nat) (f:Content.fragment i)
   : Lemma (MR.stable_on_t #(log_region s) #_ #(MS.grows #(entry i)) (ilog s) (fragment_at_j s n f))
   = MS.map_has_at_index_stable #_ #_ #(log_region s) (ilog s) ptext n f
 
 
-val decrypt: #i:id -> d:reader i -> c:C.decrypted i
-  -> ST (option (f:C.fragment i))
+val decrypt: #i:id -> d:reader i -> c:Content.decrypted i
+  -> ST (option (f:Content.fragment i))
     (requires (fun h0 -> incrementable d h0))
     (ensures  (fun h0 res h1 ->
    	        match res with
   	        | None -> modifies Set.empty h0 h1
   	        | Some f ->
-		  let ct,rg = C.ct_rg i f in
+		  let ct,rg = Content.ct_rg i f in
 		  let j = seqnT d h0 in
   		  seqnT d h1 = j + 1 /\
     	          (if is_stream i then
-		    frag_plain_len #i f <= C.cipherLen i f
+		    frag_plain_len #i f <= Content.cipherLen i f
 		  else
 		    ct = fst c /\
 		    Range.wider (Range.cipherRangeClass i (length (snd c))) rg) /\
@@ -425,7 +424,7 @@ let decrypt #i d (ct,c) =
   match d with
   | Stream _ s ->
     begin
-    match Stream.decrypt s (Stream.lenCipher i c) c with
+    match StreamAE.decrypt s (StreamAE.lenCipher i c) c with
     | None -> None
     | Some f ->
       if authId i then

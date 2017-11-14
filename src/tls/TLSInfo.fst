@@ -611,6 +611,7 @@ type id =
     sr:srand ->
     writer:role -> id
 
+// 17-11-14 switch to concrete strings? 
 let peerLabel = function
   // these two are the same at both ends
   | ClientEarlyTrafficSecret -> ClientEarlyTrafficSecret

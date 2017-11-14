@@ -1,6 +1,20 @@
 module HandshakeLog
 
-// NB still missing regions and modifies clauses.
+/// Handles incoming and outgoing messages for the TLS handshake,
+/// grouping them into flights, hiding their parsing/formatting, and
+/// incrementally computing hashes of the whose session transcript.
+/// 
+/// 17-11-11 Partly verified, but we are still missing regions and modifies clauses
+///
+/// 17-11-11 We are planning a rewrite of this interface from lists of
+/// messages to constructed flights, to facilitate its low-level extraction.
+
+(* TODO
+- add subregion discipline and the corresponding framing conditions
+- make prior ghost
+- add record-layer calls, keeping track of bytes buffers and their effective lengths
+- support abstract plaintexts and multiple epochs
+*)
 
 open Platform.Bytes
 open FStar.Ghost // after HH so as not to shadow reveal :(
@@ -17,7 +31,8 @@ open TLSError
 
 type msg = HandshakeMessages.hs_msg
 
-// Does this message complete the flight?
+/// Specifies which messages indicate the end of incoming flights and
+/// triggers their handshake processing.
 let eoflight =
   let open HandshakeMessages in function
   | ClientHello _
@@ -30,10 +45,10 @@ let eoflight =
   | _ -> false
 // No support for binders yet
 
-// Do we compute a hash of the transcript ending with this message?
-// in doubt, we hash!
+/// Specifies which messages require an intermediate transcript hash
+/// in incoming flights. In doubt, we hash!
 //val tagged: msg -> Tot bool
-let tagged m =
+let tagged (m: msg): bool =
   match m with
   | ClientHello _
   | ServerHello _
@@ -47,13 +62,6 @@ let tagged m =
   | _ -> false
 // NB CCS is not explicitly handled here, but can trigger tagging and end-of-flights.
 
-(* TODO
-- add subregion discipline and the corresponding framing conditions
-- make prior ghost
-- add record-layer calls, keeping track of bytes buffers and their effective lengths
-- support abstract plaintexts and multiple epochs
-*)
-
 let weak_valid_transcript hsl =
     match hsl with
     | [] -> true
@@ -61,7 +69,8 @@ let weak_valid_transcript hsl =
     | (ClientHello ch) :: (ServerHello sh) :: rest -> true
     | _ -> false
 
-let transcript_version (x: list msg { weak_valid_transcript x } ) = match x with
+let transcript_version (x: list msg {weak_valid_transcript x}) = 
+    match x with
     | (ClientHello ch) :: (ServerHello sh) :: rest -> Some sh.sh_protocol_version
     | _ -> None
 
@@ -111,7 +120,14 @@ let rec tags (a:alg) (prior: list msg) (ms: list msg) (hs:list anyTag) : Tot Typ
       | false, hs -> tags a prior ms hs
       | _ -> False
 
-val tags_append: a:alg -> prior: list msg -> ms0: list msg -> ms1: list msg -> hs0: list anyTag -> hs1: list anyTag -> Lemma (tags a prior ms0 hs0 /\ tags a (prior@ms0) ms1 hs1 ==> tags a prior (ms0 @ ms1) (hs0 @ hs1))
+val tags_append: 
+  a:alg -> 
+  prior: list msg -> 
+  ms0: list msg -> 
+  ms1: list msg -> 
+  hs0: list anyTag -> 
+  hs1: list anyTag -> 
+  Lemma (tags a prior ms0 hs0 /\ tags a (prior@ms0) ms1 hs1 ==> tags a prior (ms0 @ ms1) (hs0 @ hs1))
 
 (*
 type usage =
@@ -137,7 +153,6 @@ let modifies_one (s: log) (h0 h1: HS.mem) =
     HS.modifies_ref rg (Set.singleton (HS.as_addr r)) h0 h1
   )
 
-// not needed.
 
 // the Handshake can write
 val writing: h:HS.mem -> log -> GTot bool
