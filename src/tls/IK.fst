@@ -37,8 +37,8 @@ module IK
 // open FStar.HyperStack.ST
 open Mem 
 
-module MM = MonotoneMap
 module MR = FStar.Monotonic.RRef
+module MM = FStar.Monotonic.Map
 module HH = FStar.HyperHeap
 
 let model = Flags.model
