@@ -202,7 +202,7 @@ noeq type kex_s =
 | KEX_S_RSA of (pk:CoreCrypto.rsa_key{False}) // Unimplemented
 
 noeq type kex_s_priv =
-| KEX_S_PRIV_DHE of (g:CommonDH.group & CommonDH.keyshare g)
+| KEX_S_PRIV_DHE of (g:CommonDH.group & CommonDH.ikeyshare g)
 | KEX_S_PRIV_RSA of CoreCrypto.rsa_key
 
 // REMARK: The signature algorithm field is absent in digitally-signed structs in TLS < 1.2
