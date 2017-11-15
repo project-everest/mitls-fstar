@@ -7,7 +7,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-extern bool FStar_IO_debug_print_string(Prims_string msg) {
+extern bool FStar_IO_debug_print_string(const char *msg) {
   printf("%s\n", msg);
   return true;
 }
