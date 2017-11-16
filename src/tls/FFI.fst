@@ -11,7 +11,7 @@ module FFI
 //       exceptions, notably for incomplete pattern matching
 
 open FStar.Bytes
-open Platform.Error
+open FStar.Error
 
 open TLSConstants
 open TLSInfo
@@ -329,24 +329,24 @@ let ffiSetTicketKey a k =
 
 type callbacks = FFICallbacks.callbacks
 
-val sendTcpPacket: callbacks:callbacks -> buf:bytes -> EXT (Platform.Error.optResult string unit)
+val sendTcpPacket: callbacks:callbacks -> buf:bytes -> EXT (FStar.Error.optResult string unit)
 let sendTcpPacket callbacks buf =
   let result = FFICallbacks.ocaml_send_tcp callbacks (get_cbytes buf) in
   if result < 0 then
-    Platform.Error.Error ("socket send failure")
+    FStar.Error.Error ("socket send failure")
   else
-    Platform.Error.Correct ()
+    FStar.Error.Correct ()
 
-val recvTcpPacket: callbacks:callbacks -> max:nat -> EXT (Platform.Tcp.recv_result max)
+val recvTcpPacket: callbacks:callbacks -> max:nat -> EXT (FStar.Tcp.recv_result max)
 let recvTcpPacket callbacks max =
   let (result,str) = FFICallbacks.recvcb callbacks max in
   if result then
     let b = abytes str in
     if length b = 0
-    then Platform.Tcp.RecvWouldBlock
-    else Platform.Tcp.Received b
+    then FStar.Tcp.RecvWouldBlock
+    else FStar.Tcp.Received b
   else
-    Platform.Tcp.RecvError ("socket recv failure")
+    FStar.Tcp.RecvError ("socket recv failure")
 
 let install_ticket config ticket : ML (list PSK.psk_identifier) =
   match ticket with

@@ -9,7 +9,7 @@ open FStar.Seq
 open FStar.Bytes
 open TLSConstants
 open TLSInfo
-open Platform.Error
+open FStar.Error
 open TLSError
 
 // idealizing HMAC

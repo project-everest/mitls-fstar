@@ -2,7 +2,7 @@
 module Cert
 
 open FStar.Bytes
-open Platform.Error
+open FStar.Error
 open TLSError
 open TLSConstants
 open CoreCrypto

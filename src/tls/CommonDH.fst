@@ -10,7 +10,7 @@ share is for registered shares (for which is_honest is defined).
 
 open FStar.HyperStack
 open FStar.Bytes
-open Platform.Error
+open FStar.Error
 open CoreCrypto
 open Parse
 open TLSError

@@ -5,7 +5,7 @@ open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.Seq
 open FStar.Set
-open Platform.Error
+open FStar.Error
 open FStar.Bytes
 open TLSError
 open TLSInfo
@@ -1034,15 +1034,15 @@ let create (parent:rid) cfg role resume =
   let x: hs = HS role nego log ks epochs state in //17-04-17 why needed?
   x
 
-let rehandshake s c = Platform.Error.unexpected "rehandshake: not yet implemented"
+let rehandshake s c = FStar.Error.unexpected "rehandshake: not yet implemented"
 
-let rekey s c = Platform.Error.unexpected "rekey: not yet implemented"
+let rekey s c = FStar.Error.unexpected "rekey: not yet implemented"
 
-let request s c = Platform.Error.unexpected "request: not yet implemented"
+let request s c = FStar.Error.unexpected "request: not yet implemented"
 
 let invalidateSession hs = ()
 // ADL: disabling this for top-level API testing purposes
-// Platform.Error.unexpected "invalidateSession: not yet implemented"
+// FStar.Error.unexpected "invalidateSession: not yet implemented"
 
 
 (* ------------------ Outgoing -----------------------*)
@@ -1182,4 +1182,4 @@ let recv_ccs (hs:hs) =
         InError(AD_unexpected_message, "CCS received at wrong time")
 
 
-let authorize s ch = Platform.Error.unexpected "authorize: not yet implemented"
+let authorize s ch = FStar.Error.unexpected "authorize: not yet implemented"

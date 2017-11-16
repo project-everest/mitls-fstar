@@ -3,7 +3,6 @@ module Range
 (* This module defines all range computations for the lengths of
    plaintext messages exchanged over TLS, in order to construct
    length-hiding authenticated encryption. *)
-open Platform
 open FStar.Bytes
 open TLSConstants
 open TLSInfo

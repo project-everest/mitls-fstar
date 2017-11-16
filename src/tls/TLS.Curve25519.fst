@@ -7,7 +7,7 @@ open FStar.Seq
 open FStar.HyperStack.ST
 
 open FStar.Bytes
-open Platform.Error
+open FStar.Error
 
 module X = Hacl.Curve25519
 module CC = CoreCrypto

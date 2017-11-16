@@ -13,7 +13,7 @@ module QUIC
 /// Testing both in OCaml (TCP-based, TestQUIC ~ TestFFI) and in C.
 
 open FStar.Bytes
-open Platform.Error
+open FStar.Error
 open TLSConstants
 open TLSInfo
 open Range

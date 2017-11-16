@@ -95,7 +95,7 @@ let hash alg data: bytes =
 (*
   let exp = hashSize alg in
   if l = exp then h
-  else Platform.Error.unexpected "CoreCrypto.Hash returned a hash of an unexpected size"
+  else FStar.Error.unexpected "CoreCrypto.Hash returned a hash of an unexpected size"
 *)
 *)
 

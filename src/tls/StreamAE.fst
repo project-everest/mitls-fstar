@@ -12,7 +12,7 @@ open FStar.Seq
 open FStar.Monotonic.RRef
 open FStar.Monotonic.Seq
 
-open Platform.Error
+open FStar.Error
 open FStar.Bytes
 
 open TLSError

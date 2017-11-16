@@ -5,7 +5,7 @@ Handshake protocol messages
 module HandshakeMessages
 open FStar.Seq
 open FStar.Bytes
-open Platform.Error
+open FStar.Error
 open TLSError
 open TLSConstants
 open Extensions

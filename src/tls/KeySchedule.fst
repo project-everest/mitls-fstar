@@ -7,7 +7,7 @@ open FStar.Seq
 open FStar.Set
 
 open FStar.Bytes
-open Platform.Error
+open FStar.Error
 open TLSError
 open TLSConstants
 open Extensions

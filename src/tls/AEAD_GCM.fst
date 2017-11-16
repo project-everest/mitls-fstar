@@ -333,7 +333,7 @@ let decrypt #i d ad c =
       // TODO: This should be done by StatefulPlain.mk_plain
       if StatefulPlain.parseAD i (LHAEPlain.parseAD ad) = Content.Change_cipher_spec && text <> Content.ccsBytes then
         None
-      else if StatefulPlain.parseAD i (LHAEPlain.parseAD ad) = Content.Alert && (length text <> 2 || Platform.Error.Error? (Alert.parse text)) then
+      else if StatefulPlain.parseAD i (LHAEPlain.parseAD ad) = Content.Alert && (length text <> 2 || FStar.Error.Error? (Alert.parse text)) then
         None
       else
 	begin

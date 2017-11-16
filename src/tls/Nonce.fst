@@ -1,7 +1,7 @@
 ﻿module Nonce
 open TLSConstants
 open FStar.Bytes
-open Platform.Error
+open FStar.Error
 open FStar.HyperStack.ST
 
 module HH = FStar.HyperHeap
@@ -18,7 +18,7 @@ val timestamp: unit -> ST (lbytes 4)
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> HS.modifies Set.empty h0 h1))
 let timestamp () =
-  let time = Platform.Date.secondsFromDawn () in
+  let time = FStar.Date.secondsFromDawn () in
   lemma_repr_bytes_values time;
   bytes_of_int 4 time
 

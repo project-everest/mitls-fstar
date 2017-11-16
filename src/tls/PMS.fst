@@ -43,7 +43,7 @@ let coerceRSA (pk:RSAKey.pk) (cv:protocolVersion) b = ConcreteRSAPMS(b)
 let leakRSA (pk:RSAKey.pk) (cv:protocolVersion) pms =
   match pms with
 //  #if ideal
-  | IdealRSAPMS(_) -> Platform.Error.unexpected "pms is dishonest" //MK changed to unexpected from unreachable
+  | IdealRSAPMS(_) -> FStar.Error.unexpected "pms is dishonest" //MK changed to unexpected from unreachable
 //  #endif
   | ConcreteRSAPMS(b) -> b
 

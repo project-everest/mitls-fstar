@@ -20,9 +20,9 @@ let type_of (#a : Type) (x : a) : Type = a
 (* End Hacks *)
 open FStar.String
 open FStar.Seq
-open Platform.Date
+open FStar.Date
 open FStar.Bytes
-open Platform.Error
+open FStar.Error
 open TLSError
 //open CoreCrypto // avoid?!
 

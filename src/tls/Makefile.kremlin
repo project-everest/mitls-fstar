@@ -5,8 +5,7 @@ HACL_HOME=../../../hacl-star
 MITLS_HOME=../..
 
 INCLUDE_PATHS= \
-	$(FSTAR_HOME)/ucontrib/Platform/fst/ \
-	$(FSTAR_HOME)/ucontrib/CoreCrypto/fst/ \
+	$(FSTAR_HOME)/contrib/CoreCrypto/fst/ \
 	$(HACL_HOME)/secure_api \
 	$(HACL_HOME)/secure_api/utils \
 	$(HACL_HOME)/secure_api/LowCProvider/fst \

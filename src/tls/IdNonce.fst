@@ -2,7 +2,7 @@
 module IdNonce
 open TLSConstants
 open FStar.Bytes
-open Platform.Error
+open FStar.Error
 open TLSInfo
 
 module N=Nonce

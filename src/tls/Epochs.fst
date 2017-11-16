@@ -12,7 +12,7 @@ open FStar.Seq // DO NOT move further below, it would shadow `FStar.HyperStack.m
 open FStar.HyperStack
 open FStar.Monotonic.RRef
 open FStar.Monotonic.Seq
-open Platform.Error
+open FStar.Error
 open FStar.Bytes
 
 open TLSError

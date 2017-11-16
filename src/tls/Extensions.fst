@@ -10,7 +10,7 @@ This modules defines TLS 1.3 Extensions.
 module Extensions
 
 open FStar.Bytes
-open Platform.Error
+open FStar.Error
 open TLSError
 open TLSConstants
 

@@ -2,7 +2,7 @@ module Parse
 
 open FStar.HyperStack.All
 
-open Platform.Error
+open FStar.Error
 open TLSError
 open FStar.Bytes
 
@@ -285,7 +285,7 @@ let namedGroupBytes ng =
     end
   | NG_UNKNOWN u	-> B.twobytes u
 
-(* TODO: move to Platform.Bytes *)
+(* TODO: move to FStar.Bytes *)
 let twobytes_inj x1 x2 : Lemma
   (B.twobytes x1 == B.twobytes x2 ==> x1 == x2)
   [SMTPat (B.twobytes x1); SMTPat (B.twobytes x2)]

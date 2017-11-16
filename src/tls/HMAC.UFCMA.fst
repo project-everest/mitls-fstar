@@ -11,7 +11,7 @@ open FStar.Seq
  // for e.g. found
 
 open FStar.Bytes
-open Platform.Error
+open FStar.Error
 //open CoreCrypto
 
 //open TLSConstants

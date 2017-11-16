@@ -4,9 +4,9 @@ module Transport
 
 open FStar.HyperStack.All
 
-open Platform.Tcp
+open FStar.Tcp
 open FStar.Bytes
-open Platform.Error
+open FStar.Error
 open TLSError
 
 // make this type abstract?

@@ -1,6 +1,6 @@
 module StreamDeltas
 open FStar.Bytes
-open Platform.Error
+open FStar.Error
 
 open FStar.HyperHeap
 open FStar.HyperStack
