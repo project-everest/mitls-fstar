@@ -18,7 +18,7 @@ INCLUDE_PATHS= \
 
 FSTAR=fstar.exe $(OTHERFLAGS)
 MAIN_FILES=Test.TLSConstants.fst
-MORE=RSAKey.fst DHGroup.fst ECGroup.fst CommonDH.fst
+MORE ?= RSAKey.fst DHGroup.fst ECGroup.fst CommonDH.fst
 EXTRACT_DIR=extract
 KRML_DIR=$(EXTRACT_DIR)/krml_output
 KRML_FILES = Test.TLSConstants.fst #TLSInfo.fst #$(wildcard *.fst)
