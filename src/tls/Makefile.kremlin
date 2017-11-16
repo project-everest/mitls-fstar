@@ -39,18 +39,20 @@ all: $(addsuffix .checked.lax, $(KRML_FILES)) $(KRML_DIR)/out.krml
 	$(KRML_COMMAND) $(KRML_DIR)/out.krml -tmpdir $(KRML_DIR) -o test.exe
 	./test.exe
 
-tls: extract/full/out.krml
+more: $(EXTRACT_DIR)/more/out.krml
+	$(KRML_COMMAND) $^ -tmpdir $(EXTRACT_DIR)/more -skip-linking
+
 
 $(KRML_DIR)/out.krml: $(KRML_FILES)
 	$(KRML_COMMAND) $(KRML_FILES) -skip-translation -tmpdir $(KRML_DIR)
 
-extract/full/out.krml: TLS.fst.checked.lax
-	mkdir -p extract/full
-	$(KRML_COMMAND) TLS.fst -skip-translation -tmpdir extract/full
+$(EXTRACT_DIR)/more/out.krml: Nonce.fst.checked.lax
+	mkdir -p $(EXTRACT_DIR)/more
+	$(KRML_COMMAND) $(subst .checked.lax,, $^) -skip-translation -tmpdir extract/more
 
 clean:
-	rm -f $(KRML_DIR)/*.c $(KRML_DIR)/*.h $(KRML_DIR)/*.o $(KRML_DIR)/out.krml .depend *.checked.lax
-
+	rm -f $(KRML_DIR)/*.c $(KRML_DIR)/*.h $(KRML_DIR)/*.o $(KRML_DIR)/out.krml $.depend *.checked.lax
+	rm -rf $(EXTRACT_DIR)/more
 
 .depend:
 	$(FSTAR) --lax --dep full $(addprefix --include , $(INCLUDE_PATHS)) TLS.fst Test.TLSConstants.fst > .depend
