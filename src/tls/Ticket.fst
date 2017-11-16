@@ -22,7 +22,7 @@ inline_for_extraction let tlabel = t:bytes * tls13:bool
 
 private let region:rgn = new_region tls_tables_region
 private let tickets : MM.t region hostname tlabel (fun _ -> True) =
-  MM.alloc #region #hostname #tlabel #(fun _ -> True)
+  MM.alloc ()
 (* I don't htink we want to drop pre/post, but this makes lax compilation work, moving forward - jroesch *)
 let lookup (h:hostname) : ST (option tlabel) (requires (fun _ -> True)) (ensures (fun _ _ _ -> True)) = MM.lookup tickets h
 
@@ -30,7 +30,7 @@ let extend (h:hostname) (t:tlabel) = MM.extend tickets h t
 
 type session12 = protocolVersion * cipherSuite * ems:bool * msId * ms:bytes
 private let sessions12 : MM.t region bytes session12 (fun _ -> True) =
-  MM.alloc #region #bytes #session12 #(fun _ -> True)
+  MM.alloc ()
 
  (* This is super bizzare, the lack of pre/post seems to allow it to go through -jroesch *)
 let s12_lookup (tid:bytes) : ST (option session12) (requires (fun _ -> True)) (ensures (fun _ _ _ -> True)) =

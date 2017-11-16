@@ -54,7 +54,7 @@ let empty_map a b
 
 type rid = MR.rid
 
-let alloc (#r:rid) #a #b #inv
+let alloc #a #b #inv #r ()
   : ST (t r a b inv)
        (requires (fun h -> inv (empty_map a b)))
        (ensures (fun h0 x h1 ->

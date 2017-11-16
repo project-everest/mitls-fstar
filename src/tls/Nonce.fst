@@ -47,7 +47,7 @@ let injective (n:MM.map' random ex_rid) =
 //However, in this case, we have just a single global table and the additional
 //allocation seems rather mild. Still, would be nice to do remove this allocation someday.
 let nonce_rid_table : MM.t tls_tables_region random ex_rid injective =
-  MM.alloc #tls_tables_region #random #ex_rid #injective
+  MM.alloc ()
 
 //A nonce n is fresh in h if the nonce_rid_table doesn't contain it
 let fresh (n:random) (h:HS.mem) = MM.sel (MR.m_sel h nonce_rid_table) n = None
