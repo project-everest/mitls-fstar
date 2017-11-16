@@ -148,3 +148,4 @@ let noCsr : bytes = CoreCrypto.random 64
       (ensures (fun h0 r h1 -> ~ (fresh r h1)))
       = mkHelloRandom Client (new_region (FStar.ST.new_region HH.root))
 *)
+let dummy () = Test.TLSConstants.test_signatureSchemeListBytes()

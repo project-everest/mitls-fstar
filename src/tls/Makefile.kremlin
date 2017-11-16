@@ -18,6 +18,7 @@ INCLUDE_PATHS= \
 
 FSTAR=fstar.exe $(OTHERFLAGS)
 MAIN_FILES=Test.TLSConstants.fst
+MORE=RSAKey.fst DHGroup.fst ECGroup.fst CommonDH.fst
 EXTRACT_DIR=extract
 KRML_DIR=$(EXTRACT_DIR)/krml_output
 KRML_FILES = Test.TLSConstants.fst #TLSInfo.fst #$(wildcard *.fst)
@@ -26,7 +27,7 @@ C_DRIVER = $(EXTRACT_DIR)/src/main.c
 HEADERS = $(addprefix -add-include ,'"hacks.h"' '"tcp.h"' '"krembytes.h"' '"kremstr.h"')
 KRML=krml
 KRML_COMMAND=$(KRML) $(addprefix -I , $(INCLUDE_PATHS)) -I extract/include \
-  $(C_DRIVER) $(DROP_MODULES) -I concrete-flags $(HEADERS) -fnoanonymous-unions \
+  $(DROP_MODULES) -I concrete-flags $(HEADERS) -fnoanonymous-unions \
   -warn-error -9+11-7-6 -ccopt -Wno-unused-function KRML_HOME/kremlib/kremstr.c \
   -fsopts --cache_checked_modules,--debug,yes -verbose extract/src/support.c $(KOPTS)
 
@@ -36,19 +37,25 @@ KRML_COMMAND=$(KRML) $(addprefix -I , $(INCLUDE_PATHS)) -I extract/include \
 
 # -include .depend-KRML
 all: $(addsuffix .checked.lax, $(KRML_FILES)) $(KRML_DIR)/out.krml
-	$(KRML_COMMAND) $(KRML_DIR)/out.krml -tmpdir $(KRML_DIR) -o test.exe
+	$(KRML_COMMAND) $(KRML_DIR)/out.krml -tmpdir $(KRML_DIR) $(C_DRIVER) -o test.exe
 	./test.exe
 
 more: $(EXTRACT_DIR)/more/out.krml
 	$(KRML_COMMAND) $^ -tmpdir $(EXTRACT_DIR)/more -skip-linking
 
+standalone: $(EXTRACT_DIR)/standalone/out.krml
+	$(KRML_COMMAND) $^ -tmpdir $(EXTRACT_DIR)/standalone -skip-linking
 
 $(KRML_DIR)/out.krml: $(KRML_FILES)
 	$(KRML_COMMAND) $(KRML_FILES) -skip-translation -tmpdir $(KRML_DIR)
 
-$(EXTRACT_DIR)/more/out.krml: Nonce.fst.checked.lax
+$(EXTRACT_DIR)/more/out.krml: $(addsuffix .checked.lax, $(MORE))
 	mkdir -p $(EXTRACT_DIR)/more
-	$(KRML_COMMAND) $(subst .checked.lax,, $^) -skip-translation -tmpdir extract/more
+	$(KRML_COMMAND) $(MORE) -skip-translation -tmpdir extract/more
+
+$(EXTRACT_DIR)/standalone/out.krml: Standalone.fst.checked.lax
+	mkdir -p $(EXTRACT_DIR)/standlone
+	$(KRML_COMMAND) $(subst .checked.lax,, $^) -skip-translation -tmpdir extract/standalone
 
 clean:
 	rm -f $(KRML_DIR)/*.c $(KRML_DIR)/*.h $(KRML_DIR)/*.o $(KRML_DIR)/out.krml $.depend *.checked.lax
