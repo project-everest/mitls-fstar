@@ -107,7 +107,7 @@ let extend (#r:rid) (#a:eqtype) (#b:Type) (#inv:(map' a b -> Type0)) (m:t r a b 
     witness m (defined m x);
     witness m (contains m x y)
 
-abstract let lookup #r #a #b #inv (m:t r a b inv) (x:a)
+abstract let lookup #a #b #r #inv (m:t r a b inv) (x:a)
   : ST (option b)
        (requires (fun h -> True))
        (ensures (fun h0 y h1 ->
