@@ -46,7 +46,7 @@ more: $(EXTRACT_DIR)/more/out.krml
 standalone: $(EXTRACT_DIR)/standalone/out.krml
 	$(KRML_COMMAND) $^ -tmpdir $(EXTRACT_DIR)/standalone -skip-linking
 
-READLINK=$(shell which greadlink >/dev/null 2>&1 && echo greadlink || echo readlink)
+READLINK=$(shell which greadlink >/dev/null 2>&1 && echo greadlink || echo readlink)
 KRML_BINARY=$(shell $(READLINK) -f $(shell which $(KRML)))
 
 $(KRML_DIR)/out.krml: $(KRML_FILES) $(KRML_BINARY)
