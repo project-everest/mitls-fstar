@@ -70,18 +70,18 @@ let sample (len:UInt32.t): ST (lbytes len)
 /// intent (and is considered public) and "safe", which controls
 /// fine-grained idealization: roughly safe i = Flags.ideal /\ honest i
 
-noeq type ipkg (info: Type0)  = | Idx:
+noeq type ipkg (*info: Type0*)  = | Idx:
   t: Type0 (* abstract type for indexes *) ->
   r: MR.rid (* private region for the ideal honesty table (for framing; unused?) *) ->
-  get_info: (t -> info) (* function from (ghost) indexes to runtime parameters, e.g. algorithm *) ->
+  // get_info: (t -> info) (* function from (ghost) indexes to runtime parameters, e.g. algorithm *) ->
+  registered: (i:t -> GTot Type0) ->
   honest: (i:t -> GTot Type0) (* abstract predicate (implemented as a witness) *) ->
   corrupt: (i:t -> GTot Type0) (* abstract predicate (implemented as a witness) *) ->
-  get_honest: (i:t -> ST bool
+  get_honest: (i:t{registered i} -> ST bool
     (requires (fun _ -> True))
-    (ensures (fun h0 b h1 -> h0 == h1 /\ (b ==> honest i) /\ (not b ==> corrupt i))))
+    (ensures (fun h0 b h1 -> h0 == h1 /\ (b <==> honest i) /\ (not b <==> corrupt i))))
     (* stateful reader, returning either honest or corrupt *) -> 
-  ipkg info
-
+  ipkg 
 
 /// Derived key length restriction when using HKDF
 type keylen = l:UInt32.t {UInt32.v l <= 256}
@@ -105,19 +105,20 @@ type keylen = l:UInt32.t {UInt32.v l <= 256}
 //17-11-13 do we need to know that ideal ==> model? 
 //17-11-13 is type-level access enough? 
 
-noeq type pkg (info: Type0) (ip: ipkg info) = | Pkg:
-  key: (ip.t -> Type0) (* indexed state of the functionality *) ->
-  len: (info -> keylen) (* computes the key-material length *) ->
+noeq type pkg (ip: ipkg) = | Pkg:
+  key: (i:ip.t {ip.registered i} -> Type0) (* indexed state of the functionality *) ->
+  info: (ip.t -> Type0) (* creation-time information, typically refined using i:ip.t *) -> 
+  len: (#i:ip.t -> info i -> keylen) (* computes the key-material length *) ->
   ideal: Type0 (* type-level access to the ideal flag of the package *) -> 
   create: (
-    i:ip.t -> a:info{a == ip.get_info i} -> ST (key i)
+    i:ip.t {ip.registered i} -> a:info i -> ST (key i)
     (requires fun h0 -> model)
     (ensures fun h0 p h1 -> True)) ->
   coerce: (
-    i:ip.t -> a:info{a == ip.get_info i} -> lbytes (len a) -> ST (key i)
+    i:ip.t {ip.registered i} -> a:info i -> lbytes (len a) -> ST (key i)
     (requires fun h0 -> ideal ==> ip.corrupt i)
     (ensures fun h0 p h1 -> True)) ->
-  pkg info ip
+  pkg ip
 
 /// Next, we define a few sample functionalities,
 /// parameterized on their abstract index package.
@@ -128,20 +129,32 @@ noeq type pkg (info: Type0) (ip: ipkg info) = | Pkg:
 assume val flag_Raw: bool
 type idealRaw = b2t flag_Raw
 
-type raw  (#ip: ipkg keylen) (i: Idx?.t ip) = lbytes (ip.get_info i)
-let create_raw (#ip: ipkg keylen) (i: ip.t) (len:keylen {len = ip.get_info i})
-  : ST (raw  i) (requires fun h0 -> model) (ensures fun h0 p h1 -> True) =
-  sample len
-let coerce_raw (#ip: ipkg keylen) (i: ip.t) (len:keylen {len = ip.get_info i}) (r:lbytes len)
-  : ST (raw i) (requires fun h0 -> idealRaw ==> ip.corrupt i)
-  (ensures fun h0 p h1 -> True) = r
+type rawlen (#ip: ipkg) (#len_of_i: ip.t -> keylen) (i:ip.t) = len:keylen {len = len_of_i i}
 
-let rp (ip:ipkg keylen): pkg keylen ip = Pkg
-  raw
-  (fun n -> n)
+type raw (ip: ipkg) (len_of_i: ip.t -> keylen) (i: ip.t) = lbytes (len_of_i i)
+let create_raw 
+  (ip: ipkg) (len_of_i: ip.t -> keylen) (i: ip.t) (len:keylen {len = len_of_i i}): 
+  ST (raw ip len_of_i i) 
+  (requires fun h0 -> model) 
+  (ensures fun h0 p h1 -> True) 
+=
+  sample len
+
+let coerce_raw 
+  (ip: ipkg) (len_of_i: ip.t -> keylen) (i: ip.t) (len:keylen {len = len_of_i i}) (r:lbytes len): 
+  ST (raw ip len_of_i i) 
+  (requires fun h0 -> idealRaw ==> ip.corrupt i)
+  (ensures fun h0 p h1 -> True) 
+= 
+  r
+
+let rp (ip:ipkg) (len_of_i: ip.t -> keylen): pkg ip = Pkg
+  (raw ip len_of_i)
+  (rawlen #ip #len_of_i)
+  (fun (#i:ip.t) (n:rawlen i) -> n)
   idealRaw
-  create_raw
-  coerce_raw
+  (create_raw ip len_of_i)
+  (coerce_raw ip len_of_i)
 
 
 /// --------------------------------------------------------------------------------------------------
@@ -162,26 +175,31 @@ assume val flag_Key: bool
 type idealKey = b2t flag_Key
 
 type keyrepr a = lbytes (aeadLen a)
-assume new type key (#ip: ipkg aeadAlg) (i: ip.t) // abstraction required for indexing
-assume val create_key: #ip: ipkg aeadAlg -> i: ip.t -> a:aeadAlg {a == ip.get_info i} ->
-  ST (key i)
+assume new type key (ip: ipkg) (aeadAlg_of_i: ip.t -> aeadAlg) (i: ip.t) // abstraction required for indexing
+assume val create_key: 
+  ip: ipkg -> aeadAlg_of_i: (ip.t -> aeadAlg) -> 
+  i: ip.t -> a:aeadAlg {a == aeadAlg_of_i i} ->
+  ST (key ip aeadAlg_of_i i)
     (requires fun h0 -> model)
     (ensures fun h0 p h1 -> True)
 
-assume val coerce_key: #ip: ipkg aeadAlg -> i: ip.t -> a:aeadAlg {a == ip.get_info i} -> keyrepr a ->
-  ST (key i)
+assume val coerce_key: 
+  ip: ipkg -> aeadAlg_of_i: (ip.t -> aeadAlg) -> 
+  i: ip.t -> a:aeadAlg {a == aeadAlg_of_i i} -> keyrepr a ->
+  ST (key ip aeadAlg_of_i i)
     (requires fun h0 -> idealKey ==> ip.corrupt i)
     (ensures fun h0 p h1 -> True)
 
-let mp (ip:ipkg aeadAlg): pkg aeadAlg ip = Pkg
-  key
-  aeadLen
+let mp (ip:ipkg) (aeadAlg_of_i: ip.t -> aeadAlg): pkg ip = Pkg
+  (key ip aeadAlg_of_i)
+  (fun (i:ip.t) -> a:aeadAlg{a = aeadAlg_of_i i})
+  (fun #_ a -> aeadLen a)
   idealKey
-  create_key
-  coerce_key
+  (create_key ip aeadAlg_of_i)
+  (coerce_key ip aeadAlg_of_i)
 
-val encrypt: #ip:ipkg aeadAlg -> #i:ip.t -> k: key i -> nat -> nat
-let encrypt #ip #i k v = v + 1
+val encrypt: #ip:ipkg -> #aeadAlg_of_i: (ip.t -> aeadAlg) -> #i:ip.t -> k: key ip aeadAlg_of_i i -> nat -> nat
+let encrypt #_ #_ #_ k v = v + 1
 
 
 /// TLS-SPECIFIC KEY SCHEDULE
@@ -273,11 +291,13 @@ type honest_idh (c:context) =
   ExtractDH? c /\ IDH? (ExtractDH?.v c) /\
   (let ExtractDH (IDH gX gY) = c in CommonDH.honest_dhr gY)
 
-// ADL: we use a global honesty table for all indexes
-// Inside ipkg, we assume all index types are defined in the table below
-// We assume write access to this table is public, but the following global
-// invariant must be enforced: if i is corrupt then all indexes derived from i
-// are also corrupt - EXCEPT if ctx is ExtractDH g gx gy with CommonDH.honest_dhr gy
+/// We use a global honesty table for all indexes Inside ipkg, we
+/// assume all index types are defined in the table below We assume
+/// write access to this table is public, but the following global
+/// invariant must be enforced: if i is corrupt then all indexes
+/// derived from i are also corrupt
+/// ---EXCEPT if ctx is ExtractDH g gx gy with CommonDH.honest_dhr gy
+/// 
 type honesty_invariant (m:MM.map' id (fun _ -> bool)) =
   (forall (i:id) (l:label) (c:context{wellformed_id (Derive i l c)}).
   {:pattern (m (Derive i l c))}
@@ -302,13 +322,13 @@ type registered (i:id) =
 
 type regid = i:id{registered i}
 
-type honest (i:regid) =
+type honest (i:id) =
   (if model then
-    let log : i_honesty_table = honesty_table in
+    let log: i_honesty_table = honesty_table in
     MR.witnessed (MM.contains log i true)
   else False)
 
-type corrupt (i:regid) =
+type corrupt (i:id) =
   (if model then
     let log : i_honesty_table = honesty_table in
     MR.witnessed (MM.contains log i false)
@@ -342,7 +362,7 @@ let lemma_corrupt_invariant (i:regid) (lbl:label)
       MR.witness log (MM.contains log (Derive i lbl ctx) false)
   else ()
 
-let get_honest (i:regid) : ST bool
+let get_honest (i:id {registered i}) : ST bool
   (requires fun h0 -> True)
   (ensures fun h0 b h1 -> h0 == h1
     /\ (b <==> honest i) /\ (not b <==> corrupt i))
@@ -400,8 +420,8 @@ let register_derive (i:regid) (l:label) (c:context{wellformed_id (Derive i l c)}
 // this does not matter because security does not depend on their
 // sharing.
 
-let ii (#info:Type0) (get_info: id -> info) =
-  Idx regid honest_region get_info honest corrupt get_honest
+let ii: ipkg = // (#info:Type0) (get_info: id -> info) =
+  Idx id honest_region registered honest corrupt get_honest
 
 /// Try out on examples: we may need a stateful invariant of the form
 /// "I have used this secret to create exactly these keys".
@@ -430,14 +450,16 @@ let ii (#info:Type0) (get_info: id -> info) =
 /// type usage (info: Type0) = (| ideal:Type0 & lbl: label -> (* compile-time *) range info lbl parent_ideal |)
 /// ===================================================================================
 
-noeq type range (info: Type0) (lbl:label) = | Use:
+(*
+noeq type range (lbl:label) = | Use:
     info': Type0 ->
     get_info': (id -> info') ->
-    pkg': pkg info' (ii #info' get_info') ->
-    derive: (i: id -> a: info -> ctx: context {wellformed_id (Derive i lbl ctx)} -> a': info' {a' == get_info' (Derive i lbl ctx)}) ->
-    range info lbl
+    pkg': pkg ii ->
+    derive: (i: id -> ctx: context {wellformed_id (Derive i lbl ctx)} -> a': info' {a' == get_info' (Derive i lbl ctx)}) ->
+    range lbl
+*)
 
-type usage (info: Type0) = lbl: label -> (* compile-time *) range info lbl
+type usage = lbl: label -> pkg ii (* compile-time *)
 
 // Initially, the info only consists of the hash algorithm, and it is
 // invariant through extractions and derivations... until the first
@@ -490,11 +512,11 @@ type details (ha:kdfa) = | Log:
 
 type info = | Info:
   ha:kdfa ->
-  option (details  ha) -> info
+  option (details ha) -> info
 
 // TODO find a nice way to express the idealization ordering
-assume val lemma_ideal_order: u:usage info -> lbl:label
-  -> Lemma (let use = u lbl in use.pkg'.ideal ==> idealKDF)
+assume val lemma_ideal_order: u:usage -> lbl:label
+  -> Lemma (let pkg = u lbl in pkg.ideal ==> idealKDF)
 
 val get_info: id -> info
 // 17-11-01 can't get it to verify; should follow from the definition of wellformed_id?
@@ -514,14 +536,13 @@ let rec get_info (i0: id): info =
        get_info i
 
 let derived_key
-  (u: usage info)
+  (u: usage)
   (i: regid)
   (lbl: label)
-  (c: context {wellformed_id (Derive i lbl c) /\ registered (Derive i lbl c)})
+  (ctx: context {wellformed_id (Derive i lbl ctx) /\ registered (Derive i lbl ctx)})
 =
-  let use = u lbl in
-  let i' = Derive i lbl c in
-  use.pkg'.key i'
+  (u lbl).key (Derive i lbl ctx)
+
 
 let there = Mem.tls_tables_region // : MR.rid = admit()
 
@@ -541,14 +562,15 @@ unfold type ir_key (safe: regid -> GTot Type0) (it:Type0) (rt:Type0) (i:regid) =
 
 private type table
   // (ip: ipkg)
-  (u: usage info)
+  (u: usage)
   (i: regid)
 = MM.t there (domain i) (fun (Domain lbl ctx) -> derived_key u i lbl ctx) (fun _ -> True)
 
 let secret_len (a: info): keylen = UInt32.uint_to_t (Hashing.Spec.tagLen a.ha)
 type real_secret (i:regid) = lbytes (secret_len (get_info i))
 
-type secret (u: usage info) (i:regid) =
+// id vs regid? 
+type secret (u: usage) (i: ii.t {registered i}) =
   ir_key safeKDF (table u i) (real_secret i) i
 
 // when to be parametric on ip? not for the KDF itself: we use ip's constructors.
@@ -556,21 +578,21 @@ type secret (u: usage info) (i:regid) =
 //  (if honest i then table u i
 //  else lbytes (secret_len (get_info i)))
 
-let secret_ideal (#u: usage info) (#i: regid) (t: secret u i {safeKDF i}): table u i =
+let secret_ideal (#u: usage) (#i: regid) (t: secret u i {safeKDF i}): table u i =
   let t : s:ideal_or_real (table u i) (real_secret i) {safeKDF i <==> Ideal? s} = t in
   Ideal?.v t
 
-let ideal_secret (#u: usage info) (#i: regid) (t: table u i {safeKDF i}) : secret u i =
+let ideal_secret (#u: usage) (#i: regid) (t: table u i {safeKDF i}) : secret u i =
   let t : s:ideal_or_real (table u i) (real_secret i) {safeKDF i <==> Ideal? s} = Ideal t in
   assert(model); t
 
-let secret_corrupt (#u: usage info) (#i: regid) (t: secret u i {corruptKDF i}): real_secret i =
+let secret_corrupt (#u: usage) (#i: regid) (t: secret u i {corruptKDF i}): real_secret i =
   if model then
    let t : s:ideal_or_real (table u i) (real_secret i) {safeKDF i <==> Ideal? s} = t in
    (lemma_honest_corrupt i; Real?.v t)
   else t
 
-let corrupt_secret (#u: usage info) (#i: regid) (t: real_secret i {corruptKDF i}) : secret u i =
+let corrupt_secret (#u: usage) (#i: regid) (t: real_secret i {corruptKDF i}) : secret u i =
   if model then
     (lemma_honest_corrupt i;
     let s : s:ideal_or_real (table u i) (real_secret i) {safeKDF i <==> Ideal? s} = Real t in s)
@@ -585,8 +607,8 @@ let corrupt_secret (#u: usage info) (#i: regid) (t: real_secret i {corruptKDF i}
 /// MK: what does reverse-inline of low-level KeyGen mean?
 
 val coerce:
-  u: usage info ->
-  i: regid ->
+  u: usage ->
+  i: ii.t {ii.registered i} -> // using regid yields unification failures below
   a: info {a == get_info i} (* run-time *) ->
   repr: lbytes (secret_len a) ->
   ST (secret u i)
@@ -614,8 +636,8 @@ let alloc (#r:FStar.Monotonic.RRef.rid) #a #b #inv (u:unit)
 
 val create:
 //ip: ipkg ->
-  u: usage info ->
-  i: regid ->
+  u: usage ->
+  i: ii.t {ii.registered i} -> // using regid yields unification failures below
   a: info {a == get_info i}(* run-time *) ->
   ST (secret u i)
   (requires fun h0 -> model)
@@ -633,28 +655,31 @@ let create u i a =
 /// level of key derivation seems unavoidable: we need to idealize
 /// parents before childrens.)
 
-let pp (* ip:ipkg *) (u: usage info): pkg info (ii get_info) = Pkg
+#set-options "--print_universes --print_implicits --print_full_names"
+let pp (u: usage): pkg ii = 
+  //assert_norm(regid == i: ii.t {ii.registered i});
+  Pkg
   (secret u)
-  secret_len
+  (fun (i:ii.t) -> a:info{a == get_info i})
+  (fun #_ a -> secret_len a)
   idealKDF
   (create u)
   (coerce u)
 
-let ukey (u:usage info) (lbl:label) (i':regid) =
-  let use = u lbl in
-  use.pkg'.key i'
+let ukey (u:usage) (lbl:label) (i:regid) = (u lbl).key i
 
 /// The well-formedness condition on the derived label (opaque from
 /// the viewpoint of the KDF) enforces
 ///
 inline_for_extraction
 val derive:
-  #u: usage info ->
+  #u: usage ->
   #i: regid ->
-  a: info {a == get_info i} ->
   k: secret u i ->
+  a: info {a == get_info i} ->
   lbl: label ->
   ctx: context {~(honest_idh ctx) /\ wellformed_id (Derive i lbl ctx)} ->
+  a': (u lbl).info (Derive i lbl ctx) ->
   ST (_:unit{registered (Derive i lbl ctx)} & ukey u lbl (Derive i lbl ctx))
   (requires fun h0 -> True)
   (ensures fun h0 r h1 -> True
@@ -662,15 +687,14 @@ val derive:
     // no need to track the ideal state
   )
 
-let derive #u #i a k lbl ctx =
+let derive #u #i k a lbl ctx a' =
   // register (Derive i lbl ctx) and return its honesty (defaults to get_honest i)
   let honest = get_honest i in
   let i', honest' = register_derive i lbl ctx in
   lemma_corrupt_invariant i lbl ctx;
   let x = Domain lbl ctx in
-  let use = u lbl in
+  let pkg = u lbl in
   lemma_ideal_order u lbl; // TODO(adl) get the idealization order condition from (u lbl) above
-  let a' = use.derive i a ctx in
   if flag_KDF && honest
   then
     let v: option (derived_key u i lbl ctx) = MM.lookup (secret_ideal k) x in
@@ -678,7 +702,7 @@ let derive #u #i a k lbl ctx =
     //17-10-30 was failing with scrutiny error: match MM.lookup (secret_ideal k) x
     | Some dk -> (| (), dk |)
     | None ->
-      let dk = use.pkg'.create i' a' in
+      let dk = pkg.create i' a' in
       //17-10-20 TODO framing across create
       let h = get() in
       assume(MM.fresh (secret_ideal k) x h); // FIXME(adl)!!
@@ -686,8 +710,8 @@ let derive #u #i a k lbl ctx =
       (| (), dk |)
   else
     let raw =
-      HKDF.expand #(a.ha) (secret_corrupt k) (Platform.Bytes.abytes lbl) (UInt32.v (use.pkg'.len a')) in
-    let dk = use.pkg'.coerce i' a' raw in
+      HKDF.expand #(a.ha) (secret_corrupt k) (Platform.Bytes.abytes lbl) (UInt32.v (pkg.len a')) in
+    let dk = pkg.coerce i' a' raw in
     (| (), dk |)
 
 /// Outlining a global KDF state invariant, supported by package
@@ -721,40 +745,40 @@ let safeKEF0 (i:regid) = idealKEF0 /\ honest i
 let corruptKEF0 (i:regid) = idealKEF0 ==> corrupt i
 
 // memoizing a single extracted secret
-private type mref_secret (u: usage info) (i: regid) =
+private type mref_secret (u: usage) (i: regid) =
   MR.m_rref there (option (secret u i)) ssa
 
 /// covering two cases: application PSK and resumption PSK
 /// (the distinction follow from the value of i)
-type psk (u: usage info) (i: regid) =
+type psk (u: usage) (i: regid) =
   ir_key safeKEF0 (mref_secret u i) (real_secret i) i
 
-let psk_ideal (#u: usage info) (#i:regid) (p:psk u i {safeKEF0 i}): mref_secret u i =
+let psk_ideal (#u: usage) (#i:regid) (p:psk u i {safeKEF0 i}): mref_secret u i =
   let t : s:ideal_or_real (mref_secret u i) (real_secret i) {safeKEF0 i <==> Ideal? s} = p in
   Ideal?.v t
 
-let ideal_psk (#u: usage info) (#i:regid) (t: mref_secret u i{safeKEF0 i}) : psk u i =
+let ideal_psk (#u: usage) (#i:regid) (t: mref_secret u i{safeKEF0 i}) : psk u i =
   let t : s:ideal_or_real (mref_secret u i) (real_secret i) {safeKEF0 i <==> Ideal? s} = Ideal t in
   assert(model); t
 
-let psk_real (#u: usage info) (#i:regid) (p:psk u i {corruptKEF0 i}): real_secret i =
+let psk_real (#u: usage) (#i:regid) (p:psk u i {corruptKEF0 i}): real_secret i =
   lemma_honest_corrupt i;
   if model then
     let t : s:ideal_or_real (mref_secret u i) (real_secret i) {safeKEF0 i <==> Ideal? s} = p in
     Real?.v t
   else p
 
-let real_psk (#u: usage info) (#i:regid) (t: real_secret i{corruptKEF0 i}) : psk u i =
+let real_psk (#u: usage) (#i:regid) (t: real_secret i{corruptKEF0 i}) : psk u i =
   if model then
     (lemma_honest_corrupt i;
     let s : s:ideal_or_real (mref_secret u i) (real_secret i) {safeKEF0 i <==> Ideal? s} = Real t in s)
   else t
 
-type ext0 (u:usage info) (i:regid) =
+type ext0 (u:usage) (i:regid) =
   _:unit{registered (Derive i "" Extract)} & psk u (Derive i "" Extract)
 
 val coerce_psk:
-  #u: usage info ->
+  #u: usage ->
   i: regid ->
   a: info {a == get_info i} ->
   raw: lbytes (secret_len a) ->
@@ -768,7 +792,7 @@ let coerce_psk #u i a raw =
   (| (), real_psk #u #i' raw |)
 
 val create_psk:
-  #u: usage info ->
+  #u: usage ->
   i: regid ->
   a: info {a == get_info i} ->
   ST (ext0 u i)
@@ -784,9 +808,11 @@ let create_psk #u i a =
   else
     (| (), real_psk #u #i' (sample (secret_len a)) |)
 
-let pskp (*ip:ipkg*) (u:usage info): pkg info (ii get_info) = Pkg
+(*
+let pskp (*ip:ipkg*) (u:usage): pkg ii = Pkg
   (ext0 u)
-  secret_len
+  (fun i -> a: info {a == get_info i})
+  (fun #_ a -> secret_len a)
   idealKEF0
   create_psk
   coerce_psk
@@ -794,7 +820,7 @@ let pskp (*ip:ipkg*) (u:usage info): pkg info (ii get_info) = Pkg
 /// HKDF.Extract(key=0, materials=k) idealized as a (single-use) PRF,
 /// possibly customized on the distribution of k.
 val extract0:
-  #u: usage info ->
+  #u: usage ->
   #i: regid ->
   k: ext0 u i ->
   a: info {a == get_info i} ->
@@ -1390,6 +1416,7 @@ let u_default:  usage info = fun lbl -> Use keylen get_keylen (rp (ii get_keylen
 
 // p:pkg ii & (i:id -> ctx:info i -> j:id & p.use j)  =
 
+//17-11-15 rename to aeadAlg_of_id ?
 assume val get_aeadAlg: i:id -> aeadAlg
 let derive_aea (lbl:label) (i:id) (a:info) (ctx:context{wellformed_id (Derive i lbl ctx)}):  a': aeadAlg {a' == get_aeadAlg (Derive i lbl ctx)}
 =
@@ -1414,6 +1441,8 @@ let derive_info (lbl:label) (i:id) (a:info) (ctx:context{wellformed_id (Derive i
   | ExpandLog log hv -> Info ha (Some (Log log hv))
   | _ -> Info ha o
 
+let labels = list label 
+
 // 17-10-20 this causes a loop, as could be expected.
 inline_for_extraction
 let rec u_master_secret (n:nat ): Tot (usage info) (decreases (%[n; 0])) =
@@ -1434,11 +1463,50 @@ and u_early_secret (n:nat): Tot (usage info) (decreases (%[n;2])) =
   | "traffic" -> Use info get_info (pp u_traffic) (derive_info lbl)
   | "salt" -> Use info get_info (saltp (u_handshake_secret n)) (derive_info lbl)
   | _ -> u_default lbl
-
 /// Tot required... can we live with this integer indexing?
 /// One cheap trick is to store a PSK only when it enables resumption.
 
+//17-11-16 these functions suffice to implement `i_to_u`, but 
+// - this may be too late to be useful 
+// - this feel like writing twice the same code... refactor?
+
+let rec f_master_secret (n:nat) (labels: list label): Tot (usage info) (decreases (%[n; 0])) = 
+  match labels with
+  | [] -> u_master_secret n 
+  | lbl :: labels -> 
+    match lbl with 
+    | "traffic" -> u_traffic 
+    | "resumption" -> 
+      if n > 0 then f_early_secret (n-1) labels else u_default  
+    | _ -> u_default 
+and f_handshake_secret (n:nat) (labels: list label): Tot (usage info)  (decreases (%[n; 1])) = 
+  match labels with 
+  | [] -> u_handshake_secret n
+  | lbl :: labels -> 
+    match lbl with 
+    | "traffic" -> u_traffic
+    | "salt" -> f_master_secret n labels 
+    | _ -> u_default 
+and f_early_secret (n:nat) (labels: list label): Tot (usage info) (decreases (%[n;2])) =
+  match labels with 
+  | [] -> u_early_secret n 
+  | lbl :: labels -> 
+    match lbl with 
+    | "traffic" -> u_traffic
+    | "salt" -> f_handshake_secret n labels 
+    | _ -> u_default 
+  
+let _: unit = 
+  assert(f_master_secret 3 ["resumption";"salt"] == u_handshake_secret 2)
+
+
 (* not necessary?
+
+We can write a List.fold on sequences of labels that yields the derived u. 
+
+u returns a package (not the next u)
+we have a (partial, recursive) function from u to u' 
+
 type shape = |
   | Preshared0: nat
   | Derive0: shape -> label -> shape
@@ -1537,3 +1605,5 @@ let ks() =
   let i4: regid = Derive i3 "" Extract in
   let next_early_secret: secret (u_early_secret (depth - 1)) i4 = extract0 rsk a in
   ()
+ 
+*)
