@@ -46,10 +46,13 @@ more: $(EXTRACT_DIR)/more/out.krml
 standalone: $(EXTRACT_DIR)/standalone/out.krml
 	$(KRML_COMMAND) $^ -tmpdir $(EXTRACT_DIR)/standalone -skip-linking
 
-$(KRML_DIR)/out.krml: $(KRML_FILES)
+READLINK=$(shell which greadlink >/dev/null 2>&1 && echo greadlink || echo readlink)
+KRML_BINARY=$(shell $(READLINK) -f $(shell which $(KRML)))
+
+$(KRML_DIR)/out.krml: $(KRML_FILES) $(KRML_BINARY)
 	$(KRML_COMMAND) $(KRML_FILES) -skip-translation -tmpdir $(KRML_DIR)
 
-$(EXTRACT_DIR)/more/out.krml: $(addsuffix .checked.lax, $(MORE))
+$(EXTRACT_DIR)/more/out.krml: $(addsuffix .checked.lax, $(MORE)) $(KRML_BINARY)
 	mkdir -p $(EXTRACT_DIR)/more
 	$(KRML_COMMAND) $(MORE) -skip-translation -tmpdir extract/more
 
