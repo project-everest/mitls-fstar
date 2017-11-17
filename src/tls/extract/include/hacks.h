@@ -18,5 +18,8 @@ FStar_Char FStar_Char_char_of_int(krml_checked_int_t);
 #define FStar_HyperStack_ST_new_colored_region(X, Y) 0
 #define MonotoneMapNonDep_alloc__Nonce_random_Nonce_ex_rid_Nonce_injective___(X, Y) \
   ((void*)0)
+#define MonotoneMapNonDep_alloc__FStar_Bytes_bytes______(X, Y) ((void*)0)
+
+typedef void *Hashing_OpenSSL_hash_ctx_______;
 
 #endif // __HACKS_H
