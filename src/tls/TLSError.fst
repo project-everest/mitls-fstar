@@ -118,7 +118,9 @@ let string_of_result f = function
 val resT: r:result 'a { FStar.Error.Correct? r } -> Tot 'a
 let resT (FStar.Error.Correct v) = v
 
+inline_for_extraction
 val mapResult: ('a -> Tot 'b) -> result 'a -> Tot (result 'b)
+inline_for_extraction
 let mapResult f r =
    (match r with
     | Error z -> Error z
