@@ -1,3 +1,5 @@
+#ifndef __HACKS_H
+#define __HACKS_H
 #include "kremlib.h"
 
 typedef void *FStar_Char_char_, *CoreCrypto_hash_ctx, *CoreCrypto_cipher_stream,
@@ -14,3 +16,7 @@ typedef int FStar_Char;
 FStar_Char FStar_Char_char_of_int(krml_checked_int_t);
 
 #define FStar_HyperStack_ST_new_colored_region(X, Y) 0
+#define MonotoneMapNonDep_alloc__Nonce_random_Nonce_ex_rid_Nonce_injective___(X, Y) \
+  ((void*)0)
+
+#endif // __HACKS_H

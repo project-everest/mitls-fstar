@@ -12,6 +12,7 @@ module ST = FStar.HyperStack.ST
 
 type random = lbytes 32
 
+inline_for_extraction
 let ideal = Flags.ideal_Nonce // controls idealization of random sample: collision-avoidance.
 
 val timestamp: unit -> ST (lbytes 4)
@@ -98,6 +99,7 @@ let rec mkHelloRandom cs r =
   else n
 
 (* This is super bizzare, the lack of pre/post seems to allow it to go through *)
+noextract
 val lookup: cs:role -> n:random -> ST (option ex_rid)
   (requires (fun h -> True))
   (ensures (fun _ _ _ -> True))
@@ -122,6 +124,7 @@ private let nonce_rids_exists (m:MM.map' random ex_rid) =
    underneath quantifiers. So, one should really use this version of new_region
    for every dynamic region allocation in TLS.
 *)
+noextract
 val new_region: parent:MR.rid -> ST ex_rid
   (requires (fun h -> True))
   (ensures (fun h0 r h1 ->
