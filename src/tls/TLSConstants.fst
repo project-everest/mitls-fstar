@@ -1695,23 +1695,25 @@ let signatureSchemeListBytes_is_injective
 
 (** Parsing function for a SignatureScheme list *)
 val parseSignatureSchemeList: pinverse_t signatureSchemeListBytes
-let parseSignatureSchemeList b =
-  match vlparse 2 b with
-  | Correct b ->
-    let rec aux: algs:list signatureScheme -> b':bytes{length b' + op_Multiply 2 (List.Tot.length algs) == length b} ->
+   let rec parseSignatureSchemeList_aux: b:bytes -> algs:list signatureScheme -> b':bytes{length b' + op_Multiply 2 (List.Tot.length algs) == length b} ->
     Tot
       (result (algs:list signatureScheme{op_Multiply 2 (List.Tot.length algs) == length b}))
-      (decreases (length b')) = fun algs b' ->
+      (decreases (length b')) = fun b algs b' ->
     if length b' > 0 then
       if length b' >= 2 then
       let alg, bytes = split b' 2ul in
       match parseSignatureScheme alg with
-      | Correct sha -> aux (sha::algs) bytes
+      | Correct sha -> parseSignatureSchemeList_aux b (sha::algs) bytes
       | Error z     -> Error z
       else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse sig hash algs")
-    else Correct algs in
+    else Correct algs
+ 
+
+let parseSignatureSchemeList b =
+  match vlparse 2 b with
+  | Correct b ->
     begin
-    match aux [] b with // Silly, but necessary for typechecking
+    match parseSignatureSchemeList_aux b [] b with // Silly, but necessary for typechecking
     | Correct l -> Correct l
     | Error z -> Error z
     end

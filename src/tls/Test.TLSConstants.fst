@@ -1,8 +1,11 @@
 module Test.TLSConstants
+open FStar.Error
+open TLSError
 open TLSConstants
 
 let test_signatureSchemeListBytes () 
-  : Stack (list signatureScheme * FStar.Bytes.bytes)
+  : Stack (option (either (FStar.Bytes.bytes * string * string)
+                          (FStar.Bytes.bytes * FStar.Bytes.bytes)))
           (requires (fun _ -> True))
           (ensures (fun _ _ _ -> True)) =
   let algs = [
@@ -27,6 +30,11 @@ let test_signatureSchemeListBytes ()
   ; DSA_SHA384
   ; DSA_SHA512 ] in
   let bytes = signatureSchemeListBytes algs in
-  algs, bytes
-  
-  // FStar.IO.print_string ("signatureSchemeListBytes returned: " ^ (FStar.Bytes.hex_of_bytes bytes))
+  match parseSignatureSchemeList bytes with
+  | Correct algs' -> 
+    let bytes' = signatureSchemeListBytes algs' in
+    if bytes = bytes'
+    then None //all ok
+    else Some (Inr (bytes, bytes')) //failed to round trip
+  | Error (ad, msg) ->
+    Some (Inl (bytes, string_of_ad ad, msg)) //failed to parse back
