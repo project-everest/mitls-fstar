@@ -157,13 +157,12 @@ let completed #rgn #nonce e = True
 /// 
 // WIP on the handshake invariant; see also hs_inv below!
 let inv (s:hs) (h:HyperStack.mem) =
-  let n = Negotiation.state h hs.nego // let context = Negotiation.context h hs.nego in
+  let n = Negotiation.state h hs.nego in // let context = Negotiation.context h hs.nego in
   let tr = HandshakeLog.transcript h hs.log in
   let control = HyperStack.sel h s.state in 
   let kst = KeySchedule.state h hs.ks in 
-  Correct nego = Nego.replay transcript /\ 
-  
-  match control with
+  (Correct nego = Nego.replay transcript /\ 
+  (match control with
   | C_Idle -> 
       // create...client_ClientHello
       hs.role = Client /\ 
@@ -176,10 +175,11 @@ let inv (s:hs) (h:HyperStack.mem) =
       // with a branch on proposing TLS 1.3 or not 
       hs.role = Client /\
       tr = [clientHello hs.nonce (Negotiation.offer_of nego)] /\
-      match kst with 
-      | C_13_wait_SH (*cr*) esl gs -> "esl and gs compatible with offer" 
-      | _ -> False 
-      
+      ( match kst with 
+        | C_13_wait_SH (*cr*) esl gs -> "esl and gs compatible with offer" 
+        | _ -> False )
+
+(*
   | C_Wait_Finished1 -> 
       hs.role = Client /\ 
       tr = [clientHello hs.nonce (Negotiation.offer_of nego); ServerHello ...] /\ 
@@ -193,11 +193,14 @@ let inv (s:hs) (h:HyperStack.mem) =
           transcript_sh = tr `up_to` ServerHello?
           "something about local writers?"  
       | _ -> False
-
+*)
   | S_Idle -> 
       hs.role = Server /\ 
       tr = [] /\ 
       S_Init? kst
+
+  | _ -> True
+  ))
   
 (*
 /// i.e. we expect this definition in KeySchedule
@@ -349,14 +352,18 @@ let verify_binder hs (bkey: i:binderId & bk:KeySchedule.binderKey i) (tag:btag b
   let digest_CH0 = HandshakeLog.hash_tag_truncated #(binderId_hash bid) hs.log tlen in
   HMAC.UFCMA.verify bk digest_CH0 tag
 
-// Compute and send the PSK binders if necessary
-// may be called both by client_ClientHello and client_HelloRetryRequest
+// Compute and send the PSK binders if necessary; may be called both
+// by client_ClientHello and client_HelloRetryRequest.  On the client
+// side, we don't actually care about the presence or contents of
+// Binders in the transcript.
 val client_Binders: s:hs -> offer -> ST unit
-  (requires h0 -> True)
-  (ensures h0 _ h1 ->
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 ->
     // only dealing with Some? for now 
     // we don't care about the presence and contents of Binders in the transcript
-    tr1 = tr0 @ 
+    let tr0 = HandshakeLog.transcript h0 hs.log in
+    let tr1 = HandshakeLog.transcript h1 hs.log in
+    exists (b:Extensions.binders). tr1 = tr0 @ [Binders b]
     )
 let client_Binders hs offer =
   match Nego.find_clientPske offer with
@@ -385,20 +392,20 @@ let client_Binders hs offer =
 
 /// 17-11-11 verification style? we hope to factor out most of the
 /// pre/post in the invariant (but note we just called
-/// HandshakeLog.next_fragment).
+/// HandshakeLog.next_fragment so the transcript has changed).
 /// 
 val client_ClientHello: s:hs -> i:id -> ST (result (HandshakeLog.outgoing i))
   (requires fun h0 ->
-    inv s h0 /\ 
+    inv s h0 /\ (
     let control = HyperStack.sel h0 s.state in
-    control = C_Idle /\ 
+    control = C_Idle /\ (
     // 
     let n = MR.m_sel h0 Nego.(s.nego.state) in
     let t = transcript h0 s.log in
     let k = HyperStack.sel h0 s.ks.KeySchedule.state in
     match n with
     | Nego.C_Init nonce -> k = KeySchedule.(C (C_Init nonce)) /\ t = []
-    | _ -> False )
+    | _ -> False )))
   (ensures fun h0 r h1 ->
     let n = MR.m_sel h0 Nego.(s.nego.state) in
     let t = transcript h0 s.log in
@@ -429,7 +436,7 @@ let client_ClientHello hs i =
     match (config_of hs).max_version with
     | TLS_1p3 ->
       trace "offering ClientHello 1.3";
-      Some ((config_of hs).offer_shares)
+      Some (config_of hs).offer_shares
     | _ ->
       trace "offering ClientHello 1.2"; None
     in
@@ -449,16 +456,19 @@ let client_ClientHello hs i =
   hs.state := C_Wait_ServerHello;
   Correct(HandshakeLog.next_fragment hs.log i)
 
-let client_HelloRetryRequest (hs:hs) (hrr:hrr) : St incoming =
+val client_HelloRetryRequest: hs:hs -> hrr:hrr -> ST incoming 
+  (requires fun h0 -> True)
+  (ensures fun h0 r h1 -> True)
+let client_HelloRetryRequest (hs:hs) (hrr:hrr): St incoming =
   match Nego.group_of_hrr hrr with
   | None -> InError(AD_handshake_failure, "server did not specify the requested group")
   | Some g ->
     let s = KeySchedule.ks_client_13_hello_retry hs.ks g in
     match Nego.client_HelloRetryRequest hs.nego hrr (| g, s |) with
     | Error z -> InError z
-    | Correct(ch) ->
-      HandshakeLog.send hs.log (ClientHello ch);
-      client_Binders hs ch;
+    | Correct ch2 ->
+      HandshakeLog.send hs.log (ClientHello ch2);
+      client_Binders hs ch2;
       // Note: we stay in Wait_ServerHello
       // Only the Nego state machine was moved by HRR
       InAck false false
@@ -471,11 +481,11 @@ let client_HelloRetryRequest (hs:hs) (hrr:hrr) : St incoming =
 // share [c_WaitServerHello tr] formulas between pre/post and the invariant?
 val client_ServerHello: s:hs -> sh:sh -> ST incoming 
   (requires fun h0 -> 
-    inv s h0 /\ 
+    inv s h0 /\ (
     let control = HyperStack.sel h0 s.state in 
     control = C_WaitServerHello /\
     writing h hs.nego 
-    )
+    ))
   (ensures fun h0 r h1 -> 
     inv s h1
     )
@@ -1151,13 +1161,16 @@ let next_fragment (hs:hs) i =
     trace "next_fragment";
     let outgoing = HandshakeLog.next_fragment hs.log i in
     match outgoing, !hs.state with
-    // when the output buffer is empty, we send extra messages in two cases
-    // we prepare the initial ClientHello; or
-    // after sending ServerHello in plaintext, we continue with encrypted traffic
-    // otherwise, we just returns buffered messages and signals
+    // When the output buffer is empty, we send extra messages in 3 cases
+    // * we prepare the initial ClientHello; or
+    // * we continue with encrypted traffic after sending ServerHello in plaintext; or
+    // * we continue with hs-encrypted traffic after sending EOED. 
+    // Otherwise, we just returns buffered messages and signals
     | Outgoing None None false, C_Idle -> client_ClientHello hs i
     | Outgoing None None false, S_Sent_ServerHello -> server_ServerFinished_13 hs i
-    | Outgoing None None false, C_Sent_EOED d ocr cfk -> client_ClientFinished_13 hs d ocr cfk; Correct(HandshakeLog.next_fragment hs.log i)
+    | Outgoing None None false, C_Sent_EOED d ocr cfk -> 
+        client_ClientFinished_13 hs d ocr cfk; 
+        Correct(HandshakeLog.next_fragment hs.log i)
 
     //| Outgoing msg  true _ _, _ -> (Epochs.incr_writer hs.epochs; Correct outgoing) // delayed
     | _ -> Correct outgoing // nothing to do
@@ -1183,7 +1196,8 @@ let rec recv_fragment (hs:hs) #i rg f =
         client_HelloRetryRequest hs hrr
 
       | C_Wait_ServerHello, [ServerHello sh], [] ->
-        recv_again (client_ServerHello hs sh)
+        let r = client_ServerHello hs sh in 
+        recv_again r
 
     //| C_Wait_ServerHello, Some ([ServerHello sh], [digest]) -> client_ServerHello hs sh digest
       | C_Wait_ServerHelloDone, [Certificate c; ServerKeyExchange ske; ServerHelloDone], [] ->

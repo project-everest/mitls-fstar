@@ -183,34 +183,107 @@ type ks_alpha12 = pv:protocolVersion * cs:cipherSuite * ems:bool
 type ks_alpha13 = ae:aeadAlg * h:hash_alg
 
 type ks_client_state =
-| C_Init: cr:random -> ks_client_state
-| C_12_Resume_CH: cr:random -> si:sessionInfo -> msId:TLSInfo.msId -> ms:ms -> ks_client_state
-| C_12_Full_CH: cr:random -> ks_client_state
-| C_12_wait_MS: csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.pmsId -> pms:pms -> ks_client_state
-| C_12_has_MS: csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.msId -> ms:ms -> ks_client_state
-| C_13_wait_SH: cr:random -> esl: list (i:esId{~(NoPSK? i)} & es i) ->
-                gs:list (g:CommonDH.group & CommonDH.keyshare g) -> ks_client_state
-| C_13_wait_SF: alpha:ks_alpha13 -> (i:finishedId & cfk:fink i) -> (i:finishedId & sfk:fink i) ->
-                (i:asId & ams:ams i) -> ks_client_state
-| C_13_wait_CF: alpha:ks_alpha13 -> (i:finishedId & cfk:fink i) -> (i:asId & ams:ams i) ->
-                (li:logInfo & i:rekeyId li & rekey_secrets i) -> ks_client_state
-| C_13_postHS: alpha:ks_alpha13 -> (li:logInfo & i:rekeyId li & rekey_secrets i) ->
-                (li:logInfo & i:rmsId li & rms i) -> ks_client_state
+| C_Init: 
+    cr:random -> ks_client_state
+| C_12_Resume_CH: 
+    cr:random -> 
+    si:sessionInfo -> 
+    msId:TLSInfo.msId -> 
+    ms:ms -> ks_client_state
+| C_12_Full_CH: 
+    cr:random -> ks_client_state
+| C_12_wait_MS: 
+    csr:csRands -> 
+    alpha:ks_alpha12 -> 
+    id:TLSInfo.pmsId -> 
+    pms:pms -> ks_client_state
+| C_12_has_MS: 
+    csr:csRands -> 
+    alpha:ks_alpha12 -> 
+    id:TLSInfo.msId -> 
+    ms:ms -> ks_client_state
+
+// 17-11-15 ks_alpha13 holds concrete algorithms for i
+| C_13_wait_SH: 
+    cr:random -> 
+    esl: list (i:esId{~(NoPSK? i)} & es i) ->
+    gs:list (g:CommonDH.group & CommonDH.keyshare g) -> ks_client_state
+| C_13_wait_SF: 
+    alpha:ks_alpha13 ->
+    (i:finishedId & cfk:fink i) -> 
+    (i:finishedId & sfk:fink i) ->
+    (i:asId & ams:ams i) -> ks_client_state
+| C_13_wait_CF: 
+    alpha:ks_alpha13 -> 
+    (i:finishedId & cfk:fink i) -> (i:asId & ams:ams i) ->
+    (li:logInfo & i:rekeyId li & rekey_secrets i) -> ks_client_state
+| C_13_postHS: 
+    alpha:ks_alpha13 -> 
+    (li:logInfo & i:rekeyId li & rekey_secrets i) ->
+    (li:logInfo & i:rmsId li & rms i) -> ks_client_state
 | C_Done
 
+// 17-11-15 I suggest instead something like this.
+abstract type c13_wait_ServerHello 
+  (psks  : list (i:esId{~(NoPSK? i)})) 
+  (groups: list CommonDH.group) = 
+| C13_wait_ServerHello:
+  // *overwritten* symmetric extracts for the PSKs we are proposing
+  // (the indexes are a function of those of the PKSs)
+  esl: list (i:esId{~(NoPSK? i)} & es i) ->
+  // *overwritten* when hello_retry
+  // private exponents for the honestly-generated shares we are proposing
+  gxs: list (g:CommonDH.group & CommonDH.keyshare g) -> ks_client_state 
+  // convenient? gxs = List.map df
+
+(*
+abstract type c13_wait_Finished1 (i1: esIdID.secret1 {...}) = 
+| C13_wait_Finished1:
+    ha: kdfa {ha = ha_of_id i1} -> 
+    aea: aeAlg {aea = get_aeadAlg i1} (* defined only from the transcript? *) -> 
+    transcript_fk: list msg -> 
+    cfk: MAC.UFCMA.key (ID.derive_cfk1 i1 transcript) ->
+    sfk: MAC.UFCMA.key (ID.derive_sfk1 i1 transcript) ->
+    ams: KDF.secret (ID.derive_s2 i1) -> C_13_wait_SF i1 
+*)
+
+
+
 type ks_server_state =
-| S_Init: sr:random -> ks_server_state
-| S_12_wait_CKE_DH: csr:csRands -> alpha:ks_alpha12 -> our_share:(g:CommonDH.group & CommonDH.keyshare g) -> ks_server_state
-| S_12_wait_CKE_RSA: csr: csRands -> alpha:ks_alpha12 -> ks_server_state
-| S_12_has_MS: csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.msId -> ms:ms -> ks_server_state
-| S_13_wait_SH: alpha:ks_alpha13 -> cr:random -> sr:random -> es:(i:esId & es i) ->
-                hs:( i:hsId & hs i ) -> ks_server_state
-| S_13_wait_SF: alpha:ks_alpha13 -> ( i:finishedId & cfk:fink i ) -> ( i:finishedId & sfk:fink i ) ->
-                ( i:asId & ams:ams i ) -> ks_server_state
-| S_13_wait_CF: alpha:ks_alpha13 -> ( i:finishedId & cfk:fink i ) -> ( i:asId & ams i ) ->
-                ( li:logInfo & i:rekeyId li & rekey_secrets i ) ->  ks_server_state
-| S_13_postHS: alpha:ks_alpha13 -> ( li:logInfo & i:rekeyId li & rekey_secrets i ) ->
-                ks_server_state
+| S_Init: 
+    sr:random -> ks_server_state
+| S_12_wait_CKE_DH: 
+    csr:csRands -> 
+    alpha:ks_alpha12 -> 
+    our_share:(g:CommonDH.group & CommonDH.keyshare g) -> ks_server_state
+| S_12_wait_CKE_RSA: 
+    csr: csRands -> 
+    alpha:ks_alpha12 -> ks_server_state
+| S_12_has_MS: 
+    csr:csRands -> 
+    alpha:ks_alpha12 -> 
+    id:TLSInfo.msId -> 
+    ms:ms -> ks_server_state
+| S_13_wait_SH: 
+    alpha:ks_alpha13 -> 
+    cr:random -> 
+    sr:random -> 
+    es:(i:esId & es i) ->
+    hs:( i:hsId & hs i ) -> ks_server_state
+| S_13_wait_SF: 
+    alpha:ks_alpha13 -> 
+    ( i:finishedId & cfk:fink i ) -> 
+    ( i:finishedId & sfk:fink i ) ->
+    ( i:asId & ams:ams i ) -> 
+    ks_server_state
+| S_13_wait_CF: 
+    alpha:ks_alpha13 -> 
+    ( i:finishedId & cfk:fink i ) -> 
+    ( i:asId & ams i ) ->
+    ( li:logInfo & i:rekeyId li & rekey_secrets i ) ->  ks_server_state
+| S_13_postHS: 
+    alpha:ks_alpha13 -> 
+    ( li:logInfo & i:rekeyId li & rekey_secrets i ) -> ks_server_state
 | S_Done
 
 // Reflecting state separation from HS

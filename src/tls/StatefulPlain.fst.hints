@@ -11,7 +11,7 @@
         "equation_StatefulPlain.id", "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "93ed7cbbf2c4b0ad3ca3559d7a985c9e"
+      "44a5480b1391c0e152414fed66de6e1d"
     ],
     [
       "StatefulPlain.makeAD",
@@ -35,7 +35,7 @@
         "typing_Content.ctBytes"
       ],
       0,
-      "3cd08c808f1a1823a263434b5a8caca4"
+      "f399ad2a43bf70fdba0e63269adcbbba"
     ],
     [
       "StatefulPlain.lemma_12",
@@ -49,7 +49,7 @@
         "refinement_interpretation_TLSInfo_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee"
       ],
       0,
-      "300b1269b6dd3655d304c5bac9f03248"
+      "2f350086fd626e25cde7f9c53d0c11a6"
     ],
     [
       "StatefulPlain.parseAD",
@@ -144,7 +144,7 @@
         "typing_TLSConstants.versionBytes", "unit_typing"
       ],
       0,
-      "0ea4b04340443da0dfd206868fdb9146"
+      "cd2aaebad4697b2087454e32ba84aebb"
     ],
     [
       "StatefulPlain.parseAD",
@@ -153,7 +153,7 @@
       1,
       [ "@query", "assumption_TLSConstants.protocolVersion__haseq" ],
       0,
-      "1f197be2fdbfe84c567b4a08f71d040e"
+      "4a8b48e9ee08d1c8a8b43d7747a34220"
     ],
     [
       "StatefulPlain.lemma_makeAD_parseAD",
@@ -162,7 +162,7 @@
       0,
       [ "@query", "assumption_Content.contentType_haseq" ],
       0,
-      "19598cd060742e49bdcf37bf11c17c07"
+      "e6afb8fcac8090f308652e405bcaa58d"
     ],
     [
       "StatefulPlain.lemma_makeAD_parseAD",
@@ -174,7 +174,7 @@
         "equation_StatefulPlain.id", "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "eedbcf6c07316e426e0fc6adbacfa656"
+      "42dbb3b6a89a375bb56e3e4ed068f178"
     ],
     [
       "StatefulPlain.lemma_makeAD_parseAD",
@@ -183,7 +183,7 @@
       0,
       [ "@query" ],
       0,
-      "9c4f640619abb137c6a0f50edc1c081e"
+      "91676b8f46ebcc7cf228f1e2ce501316"
     ],
     [
       "StatefulPlain.lemma_makeAD_parseAD",
@@ -257,7 +257,7 @@
         "typing_tok_Content.Handshake@tok", "unit_typing"
       ],
       0,
-      "8eddfde8c000dc66aa9223d41dd3aa44"
+      "24318da890449780f344438bcaba04fc"
     ],
     [
       "StatefulPlain.is_plain",
@@ -266,7 +266,7 @@
       0,
       [ "@query", "assumption_Content.contentType_haseq" ],
       0,
-      "94e376a9a16726cd30cf830e1ce4acd6"
+      "0fd16467091db4b1d4c49e01723b8c3d"
     ],
     [
       "StatefulPlain.assert_is_plain",
@@ -278,7 +278,7 @@
         "refinement_interpretation_StatefulPlain_Tm_refine_dfb41679c4620ddf785a536323b5453d"
       ],
       0,
-      "94b26c0640b2b667ec69f82a414dfbc2"
+      "5670a09c0ed75ab9c01e06039e5d0e7b"
     ],
     [
       "StatefulPlain.ghost_repr",
@@ -311,7 +311,7 @@
         "typing_tok_Content.Change_cipher_spec@tok"
       ],
       0,
-      "0f0c20ec6e7075cc515f27013e3822a7"
+      "576ae23f9d6eacfa2f863dfe6b852661"
     ],
     [
       "StatefulPlain.repr",
@@ -324,7 +324,7 @@
         "haseqStatefulPlain_Tm_refine_eafff3c1026b7527be10dd24499fde69"
       ],
       0,
-      "3ae04fcb5143be1586e6566f7c89895b"
+      "7e484dc21fa2541075df4eda9371c8a4"
     ],
     [
       "StatefulPlain.repr",
@@ -363,7 +363,7 @@
         "typing_tok_Content.Change_cipher_spec@tok"
       ],
       0,
-      "e11c44e53f68af27ec90cde0781c1d42"
+      "3f728412a1c6393fcab0623f1d6824c7"
     ],
     [
       "StatefulPlain.wf_ad_rg",
@@ -372,7 +372,7 @@
       0,
       [ "@query", "assumption_Content.contentType_haseq" ],
       0,
-      "1a48e7e999dc5ea24cfc6761b322fae8"
+      "ea398f56139670c7cc11c30c396e94be"
     ],
     [
       "StatefulPlain.wf_ad_rg",
@@ -381,7 +381,7 @@
       0,
       [ "@query", "assumption_Content.contentType_haseq" ],
       0,
-      "e0101a57378e66df7886365a2f1cc280"
+      "22ec38099da84935ee7422c28a033532"
     ],
     [
       "StatefulPlain.wf_payload_ad_rg",
@@ -390,7 +390,7 @@
       0,
       [ "@query" ],
       0,
-      "fbf36af47b0c97bd2a74824eaba42216"
+      "a5963ec111bc83db8224ccdfb16c9cc2"
     ],
     [
       "StatefulPlain.wf_payload_ad_rg",
@@ -399,7 +399,7 @@
       0,
       [ "@query", "assumption_Content.contentType_haseq" ],
       0,
-      "15467b80f55eccb6afb7f61543342777"
+      "32870a2a2bccba299d5be3cab4268602"
     ],
     [
       "StatefulPlain.wf_payload_ad_rg",
@@ -408,7 +408,7 @@
       0,
       [ "@query", "assumption_Platform.Bytes.HasEq_bytes" ],
       0,
-      "7e1eb7855a9af1aaa76ed0ed9df87233"
+      "f97d3fe206bbf17da97f0ab37d965ca8"
     ],
     [
       "StatefulPlain.wf_payload_ad_rg",
@@ -417,7 +417,7 @@
       0,
       [ "@query", "assumption_Content.contentType_haseq" ],
       0,
-      "6f0c2dca04b25d7eedee6a377bf841e0"
+      "8939ba17b38c67f1ac3e51f976087eff"
     ],
     [
       "StatefulPlain.wf_payload_ad_rg",
@@ -426,7 +426,7 @@
       0,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "e5bb512c348a8529ec17947a240efdb3"
+      "52e65eced4692509914925b2243dc82c"
     ],
     [
       "StatefulPlain.mk_plain",
@@ -439,7 +439,7 @@
         "haseqRange_Tm_refine_0486d7c345fedcd664dfe7eac695bbd7"
       ],
       0,
-      "65959fba0b1e92ebf23384ddfc0c7ae7"
+      "90a9f427904fa316d7e3b100265f8bf2"
     ],
     [
       "StatefulPlain.mk_plain",
@@ -482,6 +482,8 @@
         "proj_equation_FStar.Pervasives.Native.Mktuple2__1",
         "proj_equation_FStar.Pervasives.Native.Mktuple2__2",
         "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Content.CT_Alert__1",
+        "projection_inverse_Content.CT_Alert_i",
         "projection_inverse_Content.CT_Alert_rg",
         "projection_inverse_Content.CT_CCS_i",
         "projection_inverse_Content.CT_CCS_rg",
@@ -501,11 +503,11 @@
         "refinement_interpretation_StatefulPlain_Tm_refine_953a124a43e8c9a7c01c1de84ee083f9",
         "refinement_interpretation_StatefulPlain_Tm_refine_a054315e315e817553a0596685506b1e",
         "refinement_interpretation_TLSInfo_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee",
-        "true_interp", "typing_Content.rg",
-        "typing_tok_Content.Change_cipher_spec@tok", "unit_typing"
+        "true_interp", "typing_tok_Content.Change_cipher_spec@tok",
+        "unit_typing"
       ],
       0,
-      "9b5d270611a887bc27566eeb88519557"
+      "8e3257743bb83ffac945226a5faaa2e8"
     ]
   ]
 ]

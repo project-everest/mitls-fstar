@@ -2,7 +2,11 @@ module HandshakeLog
 
 /// Handles incoming and outgoing messages for the TLS handshake,
 /// grouping them into flights, hiding their parsing/formatting, and
-/// incrementally computing hashes of the whose session transcript.
+/// incrementally computing hashes of the whole session transcript.
+///
+/// Private state is held in a single reference (with a local
+/// specification expressed using refinements) so we don't need an
+/// external stateful invariant.
 /// 
 /// 17-11-11 Partly verified, but we are still missing regions and modifies clauses
 ///
@@ -19,11 +23,10 @@ module HandshakeLog
 open Platform.Bytes
 open FStar.Ghost // after HH so as not to shadow reveal :(
 
-open FStar.HyperStack
-open FStar.HyperStack.All
+open Mem
 open Hashing.CRF
 open HandshakeMessages // for pattern matching on messages
-module HH = FStar.HyperHeap
+//module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 
 open Platform.Error
@@ -273,7 +276,7 @@ type fragment (i:id) = ( rg: frange i & rbytes rg )
 //let out_msg i rg b : msg i = (|rg, b|)
 
 type next_keys_use = {
-  out_appdata: bool; // immediately enable sending AppData fragments
+  out_appdata  : bool; // the new key enables sending AppData fragments
   out_ccs_first: bool; // send a CCS fragment *before* installing the new key
   out_skip_0RTT: bool; // skip void server-to-client 0RTT epoch
 }
@@ -281,9 +284,9 @@ type next_keys_use = {
 // What the HS asks the record layer to do, in that order.
 type outgoing (i:id) (* initial index *) =
   | Outgoing:
-      send_first: option (fragment i) -> // HS fragment to be sent;  (with current id)
+      send_first: option (fragment i)  -> // HS fragment to be sent (using the current id)
       next_keys : option next_keys_use -> // the writer index increases; details included
-      complete: bool                        -> // the handshake is complete!
+      complete: bool                   -> // the handshake is complete!
       outgoing i
 
 
@@ -297,8 +300,14 @@ type outgoing (i:id) (* initial index *) =
 // provides outputs to the record layer, one fragment at a time
 // never fails, in contrast with Handshake.next_fragment
 
-val next_fragment: log -> i:id -> St (outgoing i)
-// the spec should say the "high-level" view does not change
+val next_fragment: s:log -> i:id -> ST (outgoing i)
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 ->
+    modifies_one s h0 h1 /\
+    hashAlg h0 s == hashAlg h1 s /\
+    transcript h0 s == transcript h1 s)
+// the post-condition misses outgoing-related properties
+// when changing keys (or is it for Handshake to say?)
 
 
 (* Incoming *)

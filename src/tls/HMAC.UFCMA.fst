@@ -1,136 +1,151 @@
 (**! Idealizing HMAC for Finished message payloads and Binders. *)
 module HMAC.UFCMA
 
-open FStar.Heap
-open FStar.HyperHeap
-open FStar.HyperStack
-open FStar.HyperStack.All
-open FStar.Seq
- // for e.g. found
-
+open Mem
 open Platform.Bytes
 open Platform.Error
-//open CoreCrypto
 
-//open TLSConstants
-open TLSError
+module MM = FStar.Monotonic.Map 
 
 // idealizing HMAC
 // for concreteness; the rest of the module is parametric in a:alg
 
+// FIXME
+assume val ideal: bool
+
+
 #set-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
-//open IK 
-
-
-type rgn = TLSConstants.rgn
-type fresh_subregion rg parent h0 h1 = stronger_fresh_region rg h0 h1 /\ extends rg parent
 
 type ha = Hashing.Spec.alg 
 type text = bytes
 
-
 noeq type info: Type0 = { 
-  parent:rgn; 
-  alg:ha; 
+  parent: rgn; 
+  alg: IK.kdfa; 
   good: text -> bool (*TODO: should be Type0 *)}
 
 type tag (u:info) = lbytes (Hashing.Spec.tagLen u.alg)
 
 let keylen (u:info): IK.keylen = UInt32.uint_to_t (Hashing.Spec.tagLen u.alg)
-type keyrepr (u:info) = lbytes (UInt32.v (keylen u))
+type keyrepr (u:info) = Hashing.Spec.hkey u.alg 
 
+let ipkg = IK.ipkg  
+
+let goodish (#ip:ipkg) (i:ip.IK.t) (u:info) (msg:text) = 
+  _: unit{
+  (~ ideal)\/ 
+  ip.IK.corrupt i \/ 
+  u.good msg}
 
 private type log_t
-  (#ip:IK.ipkg)
+  (#ip:ipkg)
   (i:ip.IK.t)
   (u:info)
   (r:rgn)
-= FStar.Monotonic.Map.t r (tag u * text) (fun (t,v) -> _:unit{ip.IK.honest i ==> u.good v}) (fun _ -> True) // could constrain size
+= MM.t r (tag u * text) (fun (t,v) -> goodish i u v) (fun _ -> True) // could constrain size
 
 // readers and writers share the same private state: a log of MACed messages
-noeq abstract type key (#ip:IK.ipkg) (i:ip.IK.t) (u:info) =
+noeq abstract type key (#ip:ipkg) (i:ip.IK.t) =
   | Key:
-    #region: rgn{extends region u.parent} -> // intuitively, the writer's region
+    u: info -> // creation-time parameters, kept for convenience
+    #region: Mem.subrgn u.parent ->  // intuitively, the writer's region
     kv: keyrepr u ->
     log: log_t i u region -> //TODO: make conditional
-    key i u
+    key i 
 
-val region: #ip:IK.ipkg -> #i:ip.IK.t -> #u:info -> key i u -> GTot rid
-val keyval: #ip:IK.ipkg -> #i:ip.IK.t -> #u:info -> key i u -> GTot (keyrepr u)
+val region: #ip:ipkg -> #i:ip.IK.t -> k:key i -> GTot (subrgn k.u.parent)
+val keyval: #ip:ipkg -> #i:ip.IK.t -> k:key i -> GTot (keyrepr k.u)
 
-let region #ip #i #u k  = k.region
-let keyval #ip #i #u k = k.kv
+let region #ip #i k  = k.region
+let keyval #ip #i k = k.kv
 
-private let gen (#ip:IK.ipkg) (i:ip.IK.t) (u:info) (kv:keyrepr u) : ST (key i u)
+private let gen (#ip:ipkg) (i:ip.IK.t) (u:info) (kv:keyrepr u) : ST (k:key i {k.u == u})
   (requires (fun _ -> True))
   (ensures (fun h0 k h1 ->
     fresh_subregion (region k) u.parent h0 h1 /\
     modifies Set.empty h0 h1
   )) =
-  let region: r:rgn{extends r u.parent} = new_region u.parent in
-  let log: log_t #ip i u region = FStar.Monotonic.Map.alloc #region #(tag u * text) #(fun (t,v) -> _:unit{ip.IK.honest i ==> u.good v}) #(fun _ -> True) in
-  Key kv log
+  let region: Mem.subrgn u.parent = new_region u.parent in
+  let log: log_t #ip i u region = MM.alloc #_ #_ #_ #_ in 
+  Key u kv log
 
-val create: #ip:IK.ipkg -> i:ip.IK.t -> u:info -> ST (key i u)
+val create: 
+  #ip:ipkg -> ha_of_i: (ip.IK.t -> ha) -> good_of_i: (ip.IK.t -> text -> bool) ->
+  i:ip.IK.t {ip.IK.registered i} -> 
+  u:info {u.alg = ha_of_i i /\ u.good == good_of_i i} -> ST (k:key i {k.u == u})
   (requires (fun _ -> True))
   (ensures (fun h0 k h1 ->
     modifies Set.empty h0 h1 /\
-    fresh_subregion (region k) u.parent h0 h1 ))
-let create #ip i u =
-  gen i u (CoreCrypto.random (UInt32.v (keylen u)))
+    Mem.fresh_subregion (region k) u.parent h0 h1 ))
+let create #ip _ _ i u =
+  let kv: keyrepr u = CoreCrypto.random (Hashing.Spec.tagLen u.alg) in
+  gen i u kv 
 
-val coerce: #ip:IK.ipkg -> i:ip.IK.t -> u:info -> kv:keyrepr u -> ST (key i u)
-  (requires (fun _ -> ~(ip.IK.honest i)))
+val coerce: 
+  #ip: ipkg -> ha_of_i: (ip.IK.t -> ha) -> good_of_i: (ip.IK.t -> text -> bool) ->
+  i: ip.IK.t {ip.IK.registered i} -> 
+  u: (u: info {u.alg = ha_of_i i /\ u.good == good_of_i i}) ->
+  kv: IK.lbytes (keylen u) -> // keyrepr u -> 
+  ST (k:key i)
+  (requires (fun _ -> ideal ==> ip.IK.corrupt i))
   (ensures (fun h0 k h1 ->
+    k.u == u /\
     modifies Set.empty h0 h1 /\
     fresh_subregion (region k) u.parent h0 h1 ))
-let coerce #ip i u kv = 
+let coerce #ip _ _ i u kv = 
   gen i u kv
 
 // not quite doable without reification?
 // assert_norm(forall ip i u. (create #ip i u == coerce #ip i u (CoreCrypto.random (UInt32.v (keylen u)))))
 
-val leak: #ip:IK.ipkg -> #i:ip.IK.t -> #u:info -> k:key i u {~(ip.IK.honest i)} -> kv:keyrepr u { kv = keyval k }
-let leak  #ip #i #u k = k.kv
+let pkg 
+  (#ip:ipkg) 
+  (ha_of_i: ip.IK.t -> ha)
+  (good_of_i: ip.IK.t -> text -> bool): IK.pkg ip
+= IK.Pkg
+    (key #ip)
+    (fun (i:ip.IK.t) -> a:info{a.alg = ha_of_i i /\ a.good == good_of_i i})
+    (fun #_ u -> keylen u ) 
+    ideal  
+    (create #ip ha_of_i good_of_i)
+    (coerce #ip ha_of_i good_of_i)
+
+
+val leak: #ip:ipkg -> #i:ip.IK.t -> k:key i {ip.IK.corrupt i} -> kv:keyrepr k.u { kv = keyval k }
+let leak  #ip #i k = k.kv
 
 val mac: 
-  #ip:IK.ipkg -> #i:ip.IK.t -> #u:info -> k:key i u ->
-  p:text { ip.IK.honest i ==> u.good p } -> ST (tag u)
+  #ip:ipkg -> #i:ip.IK.t -> k:key i ->
+  p:text {ip.IK.corrupt i \/ k.u.good p} -> ST (tag k.u)
   (requires (fun _ -> True))
-  (ensures (fun h0 t h1 -> modifies (Set.singleton (region k)) h0 h1
-  //  we may be more precise, e,g,  /\ sel h1 k.log = snoc (sel h0 k.log) (Entry t p)
-  ))
-
-
-let mac #ip #i #u k p =
-  //let p : p:bytes { ip.IK.honest i ==> u.good p } = p in
-  let t = HMAC.hmac u.alg k.kv p in
-  if None? (FStar.Monotonic.Map.lookup k.log (t,p)) then FStar.Monotonic.Map.extend k.log (t,p) ();
+  (ensures (fun h0 t h1 -> modifies (Set.singleton (region k)) h0 h1 ))
+  // we may be more precise to prove ideal functional correctness, 
+  // e,g,  /\ sel h1 k.log = snoc (sel h0 k.log) (Entry t p)
+let mac #ip #i k p =
+  let kv: keyrepr k.u = k.kv in  
+  let t: tag k.u = HMAC.hmac k.u.alg kv p in
+  if None? (MM.lookup k.log (t,p)) then MM.extend k.log (t,p) ();
   t
 
-//abstract val matches: #i:id -> #good:(bytes -> Type) -> p:text -> entry i good -> Tot bool
-//let matches #i #good p (Entry _ p') = p = p'
-
 val verify: 
-  #ip:IK.ipkg -> #i:ip.IK.t -> #u:info -> k:key i u ->
-  p:text -> t: tag u -> ST bool
+  #ip:ipkg -> #i:ip.IK.t {ip.IK.registered i} -> k:key i ->
+  p:text -> t: tag k.u -> ST bool
   (requires (fun _ -> True))
-  (ensures (fun h0 b h1 -> modifies Set.empty h0 h1 /\ (b /\ ip.IK.honest i ==> u.good p)))
+  (ensures (fun h0 b h1 -> 
+    modifies Set.empty h0 h1 /\ 
+    (b /\ ideal /\ ip.IK.honest i ==> k.u.good p)))
 
 // We use the log to correct any verification errors
-let verify #ip #i #u k p t =
-  let verified = HMAC.hmacVerify u.alg k.kv p t in
-  let maced  = Some? (FStar.Monotonic.Map.lookup k.log (t,p)) in
-  verified  &&
-  (not(ip.IK.honest i) || maced)
+let verify #ip #i k p t =
+  let verified = HMAC.hmacVerify k.u.alg k.kv p t in
+  if ideal then 
+    let bad = not(ip.IK.get_honest i) in
+    match FStar.Monotonic.Map.lookup k.log (t,p) with 
+    | Some _ -> verified        (* genuine MAC *) 
+    | None   -> verified && bad (* forgery, blocked when ideal & honest *)
+  else 
+    verified 
 
-
-let pkg (#ip:IK.ipkg) (u:info): IK.pkg ip = IK.Pkg
-  info
-  key
-  keylen
-  create
-  coerce
 
 /// Now entirely independent of TLS.
 /// 
@@ -154,7 +169,7 @@ let pkg (#ip:IK.ipkg) (u:info): IK.pkg ip = IK.Pkg
 /// (later) support dynamic key compromise
 
 
-
+(*
 
 /// ------------ older, TLS-specific implementation 
 
@@ -172,7 +187,7 @@ let alg (i:id) = match i with
 val authId: id -> Tot bool
 let authId id = false // TODO: move to Flags
 
-type tag (i:id) = tagr (alg i)
+type tag (i:id) = tag (alg i)
 
 
  
@@ -248,3 +263,4 @@ let verify #i #good k p t =
   let log = !k.log in
   x &&
   ( not(authId i) || Some? (seq_find (matches p) log))
+*)

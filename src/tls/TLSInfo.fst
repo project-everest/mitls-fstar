@@ -392,35 +392,27 @@ type pre_esId : Type0 =
   | ApplicationPSK: #ha:hash_alg -> #ae:aeadAlg -> i:PSK.pskid{PSK.compatible_hash_ae i ha ae} -> pre_esId
   | ResumptionPSK: #li:logInfo{~(LogInfo_CH? li)} -> i:pre_rmsId li -> pre_esId
   | NoPSK: ha:hash_alg -> pre_esId
-
 and pre_binderId =
   | Binder: pre_esId -> binderLabel -> pre_binderId
-
 /// handshake secrets (2nd extraction)
 and pre_hsId =
   | HSID_PSK: pre_saltId -> pre_hsId // KEF_PRF idealized
   | HSID_DHE: pre_saltId -> g:CommonDH.group -> si:CommonDH.ishare g -> sr:CommonDH.rshare g si -> pre_hsId // KEF_PRF_ODH idealized
-
 /// useless, 3rd extraction
 and pre_asId =
   | ASID: pre_saltId -> pre_asId
-
 and pre_saltId =
   | Salt: pre_secretId -> pre_saltId
-
 /// bundling all extracts together (not used?)
 and pre_secretId =
   | EarlySecretID: pre_esId -> pre_secretId
   | HandshakeSecretID: pre_hsId -> pre_secretId
   | ApplicationSecretID: pre_asId -> pre_secretId
-
 and pre_rmsId (li:logInfo) =
   | RMSID: pre_asId -> hashed_log li -> pre_rmsId li
-
 and pre_exportId (li:logInfo) =
   | EarlyExportID: pre_esId -> hashed_log li -> pre_exportId li
   | ExportID: pre_asId -> hashed_log li -> pre_exportId li
-
 and expandTag =
   | ClientEarlyTrafficSecret
   | ClientHandshakeTrafficSecret
@@ -428,16 +420,16 @@ and expandTag =
   | ClientApplicationTrafficSecret
   | ServerApplicationTrafficSecret
   | ApplicationTrafficSecret // Re-keying
-
 and pre_expandId (li:logInfo) =
   | ExpandedSecret: pre_secretId -> expandTag -> hashed_log li -> pre_expandId li
-
 and pre_keyId =
   | KeyID: #li:logInfo{~(LogInfo_CH? li)} -> i:pre_expandId li -> pre_keyId
-
 and pre_finishedId =
   | FinishedID: #li:logInfo -> pre_expandId li -> pre_finishedId
+// all of those will be replaced by auxiliary functions and refinements in ID. 
 
+// 17-11-15 all subsumed by *ghost* IK.ha_of_id 
+// hopefully not used too much?
 val esId_hash: i:pre_esId -> Tot hash_alg (decreases i)
 val binderId_hash: i:pre_binderId -> Tot hash_alg (decreases i)
 val hsId_hash: i:pre_hsId -> Tot hash_alg (decreases i)
@@ -601,7 +593,13 @@ type finishedId = i:pre_finishedId{valid (I_FINISHED i)}
 // Top-level index type for version-agile record keys
 type id =
 | PlaintextID: our_rand:random -> id // For IdNonce
-| ID13: keyId:keyId -> id
+| ID13: 
+    keyId:keyId -> id
+    // these extra fields carry runtime info
+    // (determined by the ghost keyId index) 
+    // local: random -> 
+    // kdfAlg:kdfAlg_t ->
+    // aeAlg: aeAlg -> id
 | ID12:
     pv:protocolVersion{pv <> TLS_1p3} ->
     msId:msId ->
@@ -639,11 +637,12 @@ let siId si r =
   let cr, sr = split (csrands si) 32 in
   ID12 si.protocol_version (msid si) (kdfAlg si.protocol_version si.cipher_suite) (siAuthEncAlg si) cr sr r
 
+// required e.g. to compute the actual algorithm to use 
 let pv_of_id (i:id{~(PlaintextID? i)}) = match i with
   | ID13 _ -> TLS_1p3
   | ID12 pv _ _ _ _ _ _ -> pv
 
-// Returns the local nonce
+// Returns the local nonce (used for accessing connection state)
 let nonce_of_id = function
   | PlaintextID r -> r
   | ID12 _ _ _ _ cr sr rw -> if rw = Client then cr else sr
@@ -712,19 +711,24 @@ let safeKDF _ = unsafe_coerce false //TODO: THIS IS A PLACEHOLDER
 //let strongAEId i   = strongAEAlg   i.pv i.aeAlg
 
 // ``We are idealizing integrity/confidentiality for this id''
-abstract let authId = function
-  | PlaintextID _ -> false
-  | ID13 ki -> false // TODO
-  | ID12 pv msid kdf ae cr sr rw -> false // TODO
+//
+// these functions are still used to control idealization in somes
+// files, so for now we keep them as `bool`
 
-abstract let safeId = function
+abstract let safeId: id -> bool = function
   | PlaintextID _ -> false
   | ID13 ki -> false // TODO
-  | ID12 pv msid kdf ae cr sr rw -> false // TODO
+  | ID12 pv msid kdf ae cr sr rw -> false //TODO 1.2
+
+abstract let authId: id -> bool = function
+  | PlaintextID _ -> false 
+  | ID13 ki -> false // TODO
+  | ID12 pv msid kdf ae cr sr rw -> false //TODO 1.2
+
 
 let plainText_is_not_auth (i:id)
   : Lemma (requires (PlaintextID? i))
-          (ensures (not (authId i)))
+          (ensures (~(authId i)))
 	  [SMTPat (PlaintextID? i)]
   = ()
 

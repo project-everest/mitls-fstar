@@ -6,14 +6,11 @@ open FStar.HyperStack
 
 open TLSConstants
 
-<<<<<<< HEAD
 (*! abstract state of a handshake endpoint, 
      with various property readers. *)
-///
-=======
+
 module Range = Range
 
->>>>>>> 4a80531585ed3681443a60a958212df066588b6f
 val hs: Type0
 
 // the handshake epochs internally maintains counters for the current reader and writer
@@ -46,7 +43,8 @@ let logT (s:hs) (h:HyperStack.mem) = Epochs.epochsT (epochs_of s) h
 
 let non_empty h s = Seq.length (logT s h) > 0
 
-let logIndex (#t:Type) (log: Seq.seq t) = n:int { -1 <= n /\ n < Seq.length log }
+// can we hide further details?
+let logIndex (#t: Type) (log: Seq.seq t) = n:int { -1 <= n /\ n < Seq.length log }
 
 val completed: #region:rgn -> #nonce:TLSInfo.random -> Epochs.epoch region nonce -> Type0
 
@@ -149,7 +147,8 @@ val invalidateSession: s:hs -> ST unit
 (*! Outgoing messages *)
 
 open TLSError //17-04-07 necessary to TC the | Correct pattern?
-let next_fragment_ensures (#i:TLSInfo.id) (s:hs) h0 (result: result (HandshakeLog.outgoing i)) h1 =
+let next_fragment_ensures 
+  (#i:TLSInfo.id) (s:hs) h0 (result: result (HandshakeLog.outgoing i)) h1 =
     let es = logT s h0 in
     let w0 = iT s Writer h0 in
     let w1 = iT s Writer h1 in
@@ -166,11 +165,12 @@ let next_fragment_ensures (#i:TLSInfo.id) (s:hs) h0 (result: result (HandshakeLo
           (b2t complete ==> r1 = w1 /\ Seq.indexable (logT s h1) w1 (*/\ completed (eT s Writer h1)*) )
       | _ -> True )
 
-val next_fragment: s:hs -> i:TLSInfo.id -> ST (result (HandshakeLog.outgoing i))
+val next_fragment: 
+  s:hs -> i:TLSInfo.id -> ST (result (HandshakeLog.outgoing i))
   (requires (fun h0 ->
     let es = logT s h0 in
     let j = iT s Writer h0 in
-    j < Seq.length es /\ //17-04-08 added verification hint
+    j < Seq.length es /\ //verification hint
     hs_inv s h0 /\
     (if j < 0 then TLSInfo.PlaintextID? i else let e = Seq.index es j in i = Epochs.epoch_id e)
   ))

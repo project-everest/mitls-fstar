@@ -2,9 +2,10 @@ module HandshakeLog
 
 (* see als comments in Handshake.fsti *) 
 
-open FStar.Heap
-open FStar.HyperHeap
-open FStar.HyperStack
+open Mem 
+// open FStar.Heap
+// open FStar.HyperHeap
+// open FStar.HyperStack
 open FStar.Seq
  // for e.g. found
 open FStar.Set
@@ -368,7 +369,7 @@ let send_signals l next_keys1 complete1 =
     | Some (enable_appdata,skip_0rtt) -> Some (enable_appdata, None, skip_0rtt)
     | None -> None in
   l := State transcript outgoing outgoing_next_keys1 complete1  incoming parsed hashes pv kex dh_group
-
+ 
 let next_fragment l (i:id) =
   let st = !l in
   // do we have a fragment to send?
@@ -412,7 +413,7 @@ let next_fragment l (i:id) =
               st.transcript outgoing' st.outgoing_next_keys st.outgoing_complete
               st.incoming st.parsed st.hashes st.pv st.kex st.dh_group;
       Outgoing fragment None false )
-
+ 
 (* RECEIVE *)
 
 //17-04-24 avoid parsing loop? may be simpler at the level of receive.

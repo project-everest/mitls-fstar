@@ -774,12 +774,12 @@ let real_psk (#u: usage) (#i:regid) (t: real_secret i{corruptKEF0 i}) : psk u i 
     let s : s:ideal_or_real (mref_secret u i) (real_secret i) {safeKEF0 i <==> Ideal? s} = Real t in s)
   else t
 
-type ext0 (u:usage) (i:regid) =
+type ext0 (u:usage) (i:ii.t {ii.registered i}) =
   _:unit{registered (Derive i "" Extract)} & psk u (Derive i "" Extract)
 
 val coerce_psk:
   #u: usage ->
-  i: regid ->
+  i: ii.t {ii.registered i} ->
   a: info {a == get_info i} ->
   raw: lbytes (secret_len a) ->
   ST (ext0 u i)
@@ -793,7 +793,7 @@ let coerce_psk #u i a raw =
 
 val create_psk:
   #u: usage ->
-  i: regid ->
+  i: ii.t {ii.registered i} ->
   a: info {a == get_info i} ->
   ST (ext0 u i)
   (requires fun h0 -> True)
@@ -808,10 +808,9 @@ let create_psk #u i a =
   else
     (| (), real_psk #u #i' (sample (secret_len a)) |)
 
-(*
 let pskp (*ip:ipkg*) (u:usage): pkg ii = Pkg
   (ext0 u)
-  (fun i -> a: info {a == get_info i})
+  (fun i -> a: info{a == get_info i})
   (fun #_ a -> secret_len a)
   idealKEF0
   create_psk
@@ -866,29 +865,30 @@ let extract0 #u #i k a =
 
 assume val flag_PRF1: b:bool{flag_KDF ==> b /\ b ==> model /\ flag_KEF0 ==> b}
 let idealPRF1 = b2t flag_PRF1
-let lemma_kdf_prf1 () : Lemma (idealKDF ==> idealPRF1) = admit()
+let lemma_kdf_prf1 (): Lemma (idealKDF ==> idealPRF1) = admit()
 
 type safePRF1 (i:regid) = idealPRF1 /\ honest i
 type corruptPRF1 (i:regid) = idealPRF1 ==> corrupt i
 
-assume type salt (u: usage info) (i: id)
+assume type salt (u: usage) (i: id)
 
 assume val create_salt:
-  #u: usage info ->
+  #u: usage ->
   i: id ->
   a: info ->
   salt u i
 
 assume val coerce_salt:
-  #u: usage info ->
+  #u: usage ->
   i: id ->
   a: info ->
   raw: lbytes (secret_len a) ->
   salt u i
 
-let saltp (*ip:ipkg*) (u:usage info): pkg info (ii get_info) = Pkg
+let saltp (*ip:ipkg*) (u:usage): pkg ii = Pkg
   (salt u)
-  secret_len
+  (fun (i:ii.t) -> a:info{a == get_info i})
+  (fun #_ a -> secret_len a)
   idealPRF1
   create_salt
   coerce_salt
@@ -916,17 +916,17 @@ type corruptODH (i:regid) = idealODH ==> corrupt i
 /// its internal state ensures sharing
 ///
 assume val prf_leak:
-  #u: usage info ->
+  #u: usage ->
   #i: regid ->
   #a: info {a == get_info i} ->
   s: salt u i {idealPRF1 ==> corrupt i} ->
   Hashing.Spec.hkey a.ha
 
-type ext1 (u:usage info) (i:regid) (idh:id_dhe) =
+type ext1 (u:usage) (i:regid) (idh:id_dhe) =
   _:unit{registered (Derive i "" (ExtractDH idh))} & secret u (Derive i "" (ExtractDH idh))
 
 val prf_extract1:
-  #u: usage info ->
+  #u: usage ->
   #i: regid ->
   a: info {a == get_info i} ->
   s: salt u i ->
@@ -978,7 +978,7 @@ let prf_extract1 #u #i a s idh gZ =
 // should be entirely static. Intuitively, there is a function from
 // indexes to usage. Probably definable with the actual usage (big
 // mutual reduction?)
-assume val u_of_i: i:id -> usage info
+assume val u_of_i: i:id -> usage
 
 type odhid = x:CommonDH.dhi{CommonDH.registered_dhi x}
 
@@ -1096,7 +1096,7 @@ private let register_odh (i:regid) (gX:CommonDH.dhi) (gY:CommonDH.dhr gX)
   | Some b -> j
 
 val odh_test:
-  #u: usage info ->
+  #u: usage ->
   #i: regid ->
   a: info {a == get_info i} ->
   s: salt u i ->
@@ -1146,7 +1146,7 @@ unfold let idh_of (#g:CommonDH.group) (x:CommonDH.ikeyshare g) (gY:CommonDH.rsha
 
 // the PRF-ODH oracle, computing with secret exponent x
 val odh_prf:
-  #u: usage info ->
+  #u: usage ->
   #i: regid ->
   a: info {a == get_info i}->
   s: salt u i ->
@@ -1191,12 +1191,12 @@ let initI (g:CommonDH.group) = odh_init g
 
 /// Responder computes DH secret material
 val extractR:
-  #u: usage info ->
+  #u: usage ->
   #i: regid ->
   s: salt u i ->
   a: info {a == get_info i} ->
   gX: odhid ->
-  ST(i_gY:peer_index gX{dfst i_gY == i} & peer_instance i_gY)
+  ST (i_gY: peer_index gX{dfst i_gY == i} & peer_instance i_gY)
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> True)
 
@@ -1235,7 +1235,7 @@ let extractR #u #i s a gX =
 
 /// Initiator computes DH secret material
 val extractI:
-  #u: usage info ->
+  #u: usage ->
   #i: regid ->
   a: info {a == get_info i} ->
   s: salt u i ->
@@ -1249,7 +1249,7 @@ val extractI:
   (ensures fun h0 k h1 -> True)
 
 let extractI #u #i a s g x gY =
-  let gX : CommonDH.dhi = (| g, CommonDH.ipubshare x |) in
+  let gX: CommonDH.dhi = (| g, CommonDH.ipubshare x |) in
   let b = if model then CommonDH.is_honest_dhi gX else false in
   if b then
     let t: odh_table = odh_state in
@@ -1270,7 +1270,7 @@ let extractI #u #i a s g x gY =
   else odh_prf #u #i a s g x gY
 
 val extractP:
-  #u:usage info ->
+  #u:usage ->
   #i: regid ->
   a: info {a == get_info i} ->
   s: salt u i ->
@@ -1294,30 +1294,30 @@ type corruptKEF2 i = idealKEF2 ==> corrupt i
 
 /// ---------------- final (useless) extraction --------------------
 ///
-type salt2 (u: usage info) (i:regid) =
+type salt2 (u: usage) (i:regid) =
   ir_key safeKEF2 (mref_secret u i) (real_secret i) i
 
 // same code as for PSKs; but extract0 and extract2 differ concretely
 
-let real_salt2 (#u: usage info) (#i:regid) (t: real_secret i{corruptKEF2 i}) : salt2 u i =
+let real_salt2 (#u: usage) (#i:regid) (t: real_secret i{corruptKEF2 i}) : salt2 u i =
   if model then
     (lemma_honest_corrupt i;
     let s : s:ideal_or_real (mref_secret u i) (real_secret i) {safeKEF2 i <==> Ideal? s} = Real t in s)
   else t
 
-let salt2_real (#u: usage info) (#i:regid) (p:salt2 u i {corruptKEF2 i}): real_secret i =
+let salt2_real (#u: usage) (#i:regid) (p:salt2 u i {corruptKEF2 i}): real_secret i =
   lemma_honest_corrupt i;
   if model then
     let t : s:ideal_or_real (mref_secret u i) (real_secret i) {safeKEF2 i <==> Ideal? s} = p in
     Real?.v t
   else p
 
-type ext2 (u: usage info) (i:regid) =
+type ext2 (u: usage) (i: ii.t {ii.registered i}) =
   _:unit{registered (Derive i "" Extract)} & salt2 u (Derive i "" Extract)
 
 val coerce_salt2:
-  #u: usage info ->
-  i: regid ->
+  #u: usage ->
+  i: ii.t {ii.registered i} -> // using regid yields unification failures below
   a: info {a == get_info i} ->
   raw: lbytes (secret_len a) ->
   ST (ext2 u i)
@@ -1329,17 +1329,17 @@ let coerce_salt2 #u i a raw =
   lemma_corrupt_invariant i "" Extract;
   (| (), real_salt2 #u #i' raw |)
 
-let ideal_salt2 (#u: usage info) (#i:regid) (t: mref_secret u i{safeKEF2 i}) : salt2 u i =
+let ideal_salt2 (#u: usage) (#i:regid) (t: mref_secret u i{safeKEF2 i}) : salt2 u i =
   let t : s:ideal_or_real (mref_secret u i) (real_secret i) {safeKEF2 i <==> Ideal? s} = Ideal t in
   assert(model); t
 
-let salt2_ideal (#u: usage info) (#i:regid) (p:salt2 u i {safeKEF2 i}): mref_secret u i =
+let salt2_ideal (#u: usage) (#i:regid) (p:salt2 u i {safeKEF2 i}): mref_secret u i =
   let t : s:ideal_or_real (mref_secret u i) (real_secret i) {safeKEF2 i <==> Ideal? s} = p in
   Ideal?.v t
 
 val create_salt2:
-  #u: usage info ->
-  i: regid ->
+  #u: usage ->
+  i: ii.t {ii.registered i} -> // using regid yields unification failures below
   a: info {a == get_info i} ->
   ST (ext2 u i)
   (requires fun h0 -> True)
@@ -1356,9 +1356,10 @@ let create_salt2 #u i a =
   else
     (| (), real_salt2 #u #i' (sample (secret_len a)) |)
 
-let saltp2 (u:usage info): pkg info (ii get_info) = Pkg
+let saltp2 (u:usage): pkg ii = Pkg
   (ext2 u)
-  secret_len
+  (fun (i:ii.t) -> a:info{a == get_info i})
+  (fun #_ a -> secret_len a)
   idealKEF2
   create_salt2
   coerce_salt2
@@ -1367,7 +1368,7 @@ let saltp2 (u:usage info): pkg info (ii get_info) = Pkg
 /// The salt is used just for extraction, hence [u] here is for the extractee.
 /// Otherwise the code is similar to [derive], with different concrete details
 val extract2:
-  #u: usage info ->
+  #u: usage ->
   #i: regid ->
   s: ext2 u i ->
   a: info {a == get_info i} ->
@@ -1412,22 +1413,23 @@ let some_keylen: keylen = 32ul
 let get_keylen (i:id) = some_keylen
 
 inline_for_extraction
-let u_default:  usage info = fun lbl -> Use keylen get_keylen (rp (ii get_keylen)) (fun i a ctx -> some_keylen)
-
-// p:pkg ii & (i:id -> ctx:info i -> j:id & p.use j)  =
+let u_default: usage = fun lbl -> rp ii get_keylen
 
 //17-11-15 rename to aeadAlg_of_id ?
 assume val get_aeadAlg: i:id -> aeadAlg
-let derive_aea (lbl:label) (i:id) (a:info) (ctx:context{wellformed_id (Derive i lbl ctx)}):  a': aeadAlg {a' == get_aeadAlg (Derive i lbl ctx)}
+let derive_aea 
+  (lbl:label) (i:id) 
+  (a:info{wellformed_id (Derive i lbl Expand)}): 
+  (a':aeadAlg{a' == get_aeadAlg (Derive i lbl Expand)})
 =
   //fixme! should be extracted from a
-  get_aeadAlg (Derive i lbl ctx)
+  get_aeadAlg (Derive i lbl Expand)
 
 inline_for_extraction
-let u_traffic: usage info =
+let u_traffic: usage =
   fun (lbl:label) ->
   match lbl with
-  | "ClientKey" | "ServerKey" -> Use aeadAlg get_aeadAlg (mp (ii get_aeadAlg)) (derive_aea lbl)
+  | "ClientKey" | "ServerKey" -> mp ii get_aeadAlg
   | _ -> u_default lbl
 
 // #set-options "--detail_errors"
@@ -1443,26 +1445,25 @@ let derive_info (lbl:label) (i:id) (a:info) (ctx:context{wellformed_id (Derive i
 
 let labels = list label 
 
-// 17-10-20 this causes a loop, as could be expected.
+// 17-10-20 this causes an extraction-time loop, as could be expected.
 inline_for_extraction
-let rec u_master_secret (n:nat ): Tot (usage info) (decreases (%[n; 0])) =
+let rec u_master_secret (n:nat ): Tot usage (decreases (%[n; 0])) =
   fun lbl -> match lbl with
-  | "traffic" -> Use info get_info (pp u_traffic) (derive_info lbl)
-  | "resumption" ->
-    if n > 0
-    then Use info get_info (pskp (u_early_secret (n-1))) (derive_info lbl)
-    else u_default lbl
-  | _ -> u_default lbl
-and u_handshake_secret (n:nat): Tot (usage info) (decreases (%[n; 1])) =
+  | "traffic"    -> pp u_traffic
+  | "resumption" -> if n > 0
+                   then pskp (u_early_secret (n-1))
+                   else u_default lbl
+  | _            -> u_default lbl
+and u_handshake_secret (n:nat): Tot usage (decreases (%[n; 1])) =
   fun lbl -> match lbl with
-  | "traffic" -> Use info get_info (pp u_traffic) (derive_info lbl)
-  | "salt" -> Use info get_info (saltp2 (u_master_secret n)) (derive_info lbl)
-  | _ -> u_default lbl
-and u_early_secret (n:nat): Tot (usage info) (decreases (%[n;2])) =
+  | "traffic"    -> pp u_traffic
+  | "salt"       -> saltp2 (u_master_secret n)
+  | _            -> u_default lbl
+and u_early_secret (n:nat): Tot usage (decreases (%[n;2])) =
   fun lbl -> match lbl with
-  | "traffic" -> Use info get_info (pp u_traffic) (derive_info lbl)
-  | "salt" -> Use info get_info (saltp (u_handshake_secret n)) (derive_info lbl)
-  | _ -> u_default lbl
+  | "traffic"    -> pp u_traffic
+  | "salt"       -> saltp (u_handshake_secret n)
+  | _            -> u_default lbl
 /// Tot required... can we live with this integer indexing?
 /// One cheap trick is to store a PSK only when it enables resumption.
 
@@ -1470,7 +1471,7 @@ and u_early_secret (n:nat): Tot (usage info) (decreases (%[n;2])) =
 // - this may be too late to be useful 
 // - this feel like writing twice the same code... refactor?
 
-let rec f_master_secret (n:nat) (labels: list label): Tot (usage info) (decreases (%[n; 0])) = 
+let rec f_master_secret (n:nat) (labels: list label): Tot usage (decreases (%[n; 0])) = 
   match labels with
   | [] -> u_master_secret n 
   | lbl :: labels -> 
@@ -1479,7 +1480,7 @@ let rec f_master_secret (n:nat) (labels: list label): Tot (usage info) (decrease
     | "resumption" -> 
       if n > 0 then f_early_secret (n-1) labels else u_default  
     | _ -> u_default 
-and f_handshake_secret (n:nat) (labels: list label): Tot (usage info)  (decreases (%[n; 1])) = 
+and f_handshake_secret (n:nat) (labels: list label): Tot usage (decreases (%[n; 1])) = 
   match labels with 
   | [] -> u_handshake_secret n
   | lbl :: labels -> 
@@ -1487,7 +1488,7 @@ and f_handshake_secret (n:nat) (labels: list label): Tot (usage info)  (decrease
     | "traffic" -> u_traffic
     | "salt" -> f_master_secret n labels 
     | _ -> u_default 
-and f_early_secret (n:nat) (labels: list label): Tot (usage info) (decreases (%[n;2])) =
+and f_early_secret (n:nat) (labels: list label): Tot usage (decreases (%[n;2])) =
   match labels with 
   | [] -> u_early_secret n 
   | lbl :: labels -> 
@@ -1545,7 +1546,7 @@ let rec u_of_i i = match i with
 
 // Testing normalization works for a parametric depth
 assume val depth:  n:nat {n > 1}
-let u: usage info = u_early_secret depth
+let u: usage = u_early_secret depth
 
 let gen_pskid a : St (n:nat{registered (Preshared a n)}) = admit()
 
@@ -1559,18 +1560,18 @@ let ks() =
   let i0 : regid = Derive ipsk "" Extract in
   let early_secret : secret u i0 = extract0 psk0 a in
 
-  let (| _, et |) = derive a early_secret "traffic" Expand in
+  let (| _, et |) = derive early_secret a "traffic" Expand a in
   let i_traffic0 : regid = Derive i0 "traffic" Expand in
   let a_traffic0 = Info Hashing.Spec.SHA1 None in
   let early_traffic : secret u_traffic i_traffic0 = et in
 
-  let (| _, ae0 |) = derive a early_traffic "ClientKey" Expand in
+  let aea_0rtt = derive_aea "ClientKey" i_traffic0 a in 
+  let (| _, ae0 |) = derive early_traffic a "ClientKey" Expand aea_0rtt in
   let i_0rtt : regid = Derive i_traffic0 "ClientKey" Expand in
-  let k0 : key #(ii get_aeadAlg) i_0rtt = ae0 in
+  let k0: key ii get_aeadAlg i_0rtt = ae0 in
+  let cipher  = encrypt k0 10 in
 
-  let cipher  = encrypt #_ #i_0rtt k0 10 in
-
-  let (| _, s1 |) = derive a early_secret "salt" Expand in
+  let (| _, s1 |) = derive early_secret a "salt" Expand a in
   let i_salt1: regid = Derive i0 "salt" Expand in
   let salt1: salt (u_handshake_secret depth) i_salt1 = s1 in
 
@@ -1583,17 +1584,18 @@ let ks() =
   let i1 : regid = Derive i_salt1 "" (ExtractDH (IDH gX gY)) in
   let hs_secret: secret (u_handshake_secret depth) i1 = admit() in // due to u_of_i
 
-  let (| _, hst |) = derive a hs_secret "traffic" Expand in
+  let (| _, hst |) = derive hs_secret a "traffic" Expand a in
   let i_traffic1: regid = Derive i1 "traffic" Expand  in
   let hs_traffic: secret u_traffic i_traffic1 = hst in
 
-  let (| _, ae1 |) = derive a hs_traffic "ServerKey" Expand in
+  let aea_1rtt = derive_aea "ServerKey" i_traffic1 a in 
+  let (| _, ae1 |) = derive hs_traffic a "ServerKey" Expand aea_1rtt in
   let i_1rtt : regid = Derive i_traffic1 "ServerKey" Expand in
-  let k1: key #(ii get_aeadAlg) i_1rtt = ae1 in
+  let k1: key ii get_aeadAlg i_1rtt = ae1 in
 
   let cipher  = encrypt k1 11 in
 
-  let (| _, s2 |) = derive a hs_secret "salt" Expand in
+  let (| _, s2 |) = derive hs_secret a "salt" Expand a in
   let i_salt2: regid = Derive i1 "salt" Expand in
   let salt2 : salt2 (u_master_secret depth) i_salt2 = s2 in
 
@@ -1601,9 +1603,7 @@ let ks() =
   let master_secret: secret (u_master_secret depth) i2 = extract2 #(u_master_secret depth) #i_salt2 salt2 a in
   let i3: regid = Derive i2 "resumption" Expand in
 
-  let rsk: ext0 (u_early_secret (depth - 1)) i3 = derive a master_secret "resumption" Expand in
+  let rsk: ext0 (u_early_secret (depth - 1)) i3 = derive master_secret a "resumption" Expand a in
   let i4: regid = Derive i3 "" Extract in
   let next_early_secret: secret (u_early_secret (depth - 1)) i4 = extract0 rsk a in
   ()
- 
-*)
