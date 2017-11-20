@@ -35,11 +35,12 @@ module IK
 
 // open FStar.HyperStack
 // open FStar.HyperStack.ST
-open Mem 
+open Mem
 
 module MR = FStar.Monotonic.RRef
 module MM = FStar.Monotonic.Map
 module HH = FStar.HyperHeap
+module HS = FStar.HyperStack
 
 let model = Flags.model
 
@@ -71,8 +72,8 @@ let sample (len:UInt32.t): ST (lbytes len)
 /// fine-grained idealization: roughly safe i = Flags.ideal /\ honest i
 
 noeq type ipkg (*info: Type0*)  = | Idx:
-  t: Type0 (* abstract type for indexes *) ->
-  r: MR.rid (* private region for the ideal honesty table (for framing; unused?) *) ->
+  t: Type0{hasEq t} (* abstract type for indexes *) ->
+  //r: MR.rid (* private region for the ideal honesty table (for framing; unused?) *) ->
   // get_info: (t -> info) (* function from (ghost) indexes to runtime parameters, e.g. algorithm *) ->
   registered: (i:t -> GTot Type0) ->
   honest: (i:t -> GTot Type0) (* abstract predicate (implemented as a witness) *) ->
@@ -80,11 +81,12 @@ noeq type ipkg (*info: Type0*)  = | Idx:
   get_honest: (i:t{registered i} -> ST bool
     (requires (fun _ -> True))
     (ensures (fun h0 b h1 -> h0 == h1 /\ (b <==> honest i) /\ (not b <==> corrupt i))))
-    (* stateful reader, returning either honest or corrupt *) -> 
-  ipkg 
+    (* stateful reader, returning either honest or corrupt *) ->
+  ipkg
 
 /// Derived key length restriction when using HKDF
 type keylen = l:UInt32.t {UInt32.v l <= 256}
+unfold let pair (#a:eqtype) (e1:a) (e2:a) : Set.set a = Set.union (Set.singleton e1) (Set.singleton e2)
 
 /// Keyed functionality define Key packages, parametric in their
 /// indexes, but concrete on their key randomness; instances may have
@@ -102,29 +104,213 @@ type keylen = l:UInt32.t {UInt32.v l <= 256}
 /// We must have [create i a == coerce i a (sample (len a))]
 /// we currently check by hand that this follows from F* semantics.
 
-//17-11-13 do we need to know that ideal ==> model? 
-//17-11-13 is type-level access enough? 
+// FIXME(adl) can't write Set.set rgn because unification fails in pkg!!
+// FIXME(adl) overcomplicated type because of transitive modifications.
+// An rset can be thought of as a set of disjoint subtrees in the region tree
+// the second line embeds the definition of rgn because of the unification bug
+type rset = s:Set.set HH.rid{
+  (forall (r1:rgn) (r2:rgn).{:pattern (Set.mem r1 s /\ Set.mem r2 s)} (Set.mem r1 s /\ Set.mem r2 s) ==> (r1 == r2 \/ HH.disjoint r1 r2)) /\
+  (forall (r1:rgn). (Set.mem r1 s ==>
+     r1<>HH.root /\
+     (is_tls_rgn r1 ==> r1 `HH.extends` tls_tables_region) /\
+     (forall (s:HH.rid).{:pattern is_eternal_region s} s `is_above` r1 ==> is_eternal_region s)))}
+
+// We get from the definition of rset that define_region and tls_honest_region are disjoint
+let lemma_define_tls_honest_regions (s:rset)
+  : Lemma (~(Set.mem tls_define_region s) /\ ~(Set.mem tls_honest_region s))
+  = ()
+
+//  if Set.mem tls_define_region s then
+//    assert(tls_define_region `HH.extends` tls_)
+
+type disjoint_rset (s1:rset) (s2:rset) =
+  Set.disjoint s1 s2 /\
+  (forall (r1:rgn) (r2:rgn).{:pattern (Set.mem r1 s1 /\ Set.mem r2 s2)}
+   (Set.mem r1 s1 /\ Set.mem r2 s2) ==> HH.disjoint r1 r2)
+
+assume val lemma_disjoint_ancestors:
+  r1:rgn -> r2:rgn -> p1:rgn{r1 `is_below` p1} -> p2:rgn{r2 `is_below` p2}
+  -> Lemma (requires p1 <> p2) (ensures HH.disjoint r1 r2 /\ r1 <> r2)
+
+type i_mem_table (#it:eqtype) (vt:it -> Type) =
+  MM.t tls_define_region it vt (fun _ -> True)
+type mem_table (#it:eqtype) (vt:it -> Type) =
+  (if model then i_mem_table vt else unit)
+
+let itable (#it:eqtype) (#vt:it -> Type) (t:mem_table vt)
+  : Pure (i_mem_table vt) (requires model) (ensures fun _ -> True) = t
+type mem_fresh (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (i:it) (h:mem) =
+  (if model then MM.fresh (itable t) i h else True)
+let lemma_ifresh (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (i:it) (h:mem)
+  : Lemma (requires model /\ mem_fresh t i h) (ensures MM.fresh (itable t) i h) = ()
+type mem_update (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (i:it) (v:vt i) (h0:mem) (h1:mem) =
+  (if model then
+    MR.m_sel h1 (itable t) == MM.upd (MR.m_sel h0 (itable t)) i v /\ MR.witnessed (MM.defined (itable t) i)
+  else True)
+let lemma_iupdate (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (i:it) (v:vt i) (h0:mem) (h1:mem)
+  : Lemma (requires model /\ MR.m_sel h1 (itable t) == MM.upd (MR.m_sel h0 (itable t)) i v /\ MR.witnessed (MM.defined (itable t) i))
+    (ensures mem_update t i v h0 h1) = ()
+
+let mem_alloc (#it:eqtype) (vt:it -> Type) : ST (mem_table vt)
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 -> modifies_one tls_define_region h0 h1)
+  =
+  if model then
+    MM.alloc #tls_define_region #it #vt #(fun _ -> True)
+  else ()
 
 noeq type pkg (ip: ipkg) = | Pkg:
-  key: (i:ip.t {ip.registered i} -> Type0) (* indexed state of the functionality *) ->
-  info: (ip.t -> Type0) (* creation-time information, typically refined using i:ip.t *) -> 
+  key: (i:ip.t{ip.registered i} -> Type0) ->
+  info: (ip.t -> Type0) (* creation-time information, typically refined using i:ip.t *) ->
   len: (#i:ip.t -> info i -> keylen) (* computes the key-material length *) ->
-  ideal: Type0 (* type-level access to the ideal flag of the package *) -> 
-  create: (
-    i:ip.t {ip.registered i} -> a:info i -> ST (key i)
-    (requires fun h0 -> model)
-    (ensures fun h0 p h1 -> True)) ->
-  coerce: (
-    i:ip.t {ip.registered i} -> a:info i -> lbytes (len a) -> ST (key i)
-    (requires fun h0 -> ideal ==> ip.corrupt i)
-    (ensures fun h0 p h1 -> True)) ->
+  ideal: Type0 -> // Type-level access to the ideal flag of the package
+  define_table: mem_table key ->
+  footprint: (mem -> GTot rset) -> // The footprint of the package, including all global and instance-local regions
+  lemma_footprint_framing: (s:Set.set HH.rid -> h0:mem -> h1:mem -> Lemma
+    (requires modifies_transitively s h0 h1 /\ ~(Set.mem tls_define_region s))
+    (ensures footprint h0 == footprint h1)) ->
+  package_invariant: (mem -> Type0) ->
+  lemma_package_invariant_framing: (s:rset -> h0:mem -> h1:mem -> Lemma
+    (requires package_invariant h0 /\ modifies_transitively s h0 h1 /\ disjoint_rset s (footprint h0))
+    (ensures package_invariant h1)) ->
+  post: (#i:ip.t{ip.registered i} -> info i -> key i -> mem -> mem -> GTot Type0) ->
+  post_framing: (s:rset -> #i:ip.t{ip.registered i} -> a:info i ->
+     k:key i -> h0:mem -> h1:mem -> h2:mem -> Lemma
+     (requires (post a k h0 h1 /\ modifies_transitively s h1 h2 /\ disjoint_rset s (footprint h0)))
+     (ensures (post a k h0 h2))) ->
+  create: (i:ip.t{ip.registered i} -> a:info i -> ST (key i)
+    (requires fun h0 -> model /\ package_invariant h0 /\ mem_fresh define_table i h0)
+    (ensures fun h0 k h1 -> modifies_one tls_define_region h0 h1 /\ post a k h0 h1
+      /\ package_invariant h1 /\ mem_update define_table i k h0 h1)) ->
+  coerce: (i:ip.t{ip.registered i} -> a:info i -> lbytes (len a) -> ST (key i)
+    (requires fun h0 -> package_invariant h0 /\ mem_fresh define_table i h0)
+    (ensures fun h0 k h1 -> modifies_one tls_define_region h0 h1 /\ post a k h0 h1
+      /\ package_invariant h1 /\ mem_update define_table i k h0 h1)) ->
   pkg ip
 
-/// Next, we define a few sample functionalities,
-/// parameterized on their abstract index package.
-/// --------------------------------------------------------------------------------------------------
-/// a default functionality (no interface, and no idealization);
-/// for modelling, we could also provide a "leak" function
+noeq type unsafe_pkg (ip: ipkg) =
+| UnsafePkg:
+  key: (i:ip.t{ip.registered i} -> Type0) ->
+  info: (ip.t -> Type0) ->
+  len: (#i:ip.t -> info i -> keylen) ->
+  ideal: Type0 -> // Type-level access to the ideal flag of the package
+  footprint: (#i:ip.t{ip.registered i} -> key i -> GTot rset) ->
+  invariant: (#i:ip.t{ip.registered i} -> key i -> mem -> GTot Type0) -> // The instance invariant
+  invariant_framing: (r:HH.rid -> i:ip.t{ip.registered i} -> k:key i -> h0:mem -> h1:mem ->
+    Lemma (requires invariant k h0 /\ modifies_one r h0 h1 /\ ~(Set.mem r (footprint k)))
+          (ensures invariant k h1)) ->
+  post: (#i:ip.t{ip.registered i} -> info i -> key i -> mem -> mem -> GTot Type0) ->
+  post_framing: (r:HH.rid -> #i:ip.t{ip.registered i} -> a:info i ->
+     k:key i -> h0:mem -> h1:mem -> h2:mem -> Lemma
+     (requires (post a k h0 h1 /\ modifies_one r h1 h2 /\ ~(Set.mem r (footprint k))))
+     (ensures (post a k h0 h2))) ->
+  create: (i:ip.t{ip.registered i} -> a:info i -> ST (key i)
+    (requires fun h0 -> model)
+    (ensures fun h0 k h1 -> modifies_none h0 h1 /\ post a k h0 h1)) ->
+  coerce: (i:ip.t{ip.registered i} -> a:info i -> lbytes (len a) -> ST (key i)
+    (requires fun h0 -> ideal ==> ip.corrupt i)
+    (ensures fun h0 k h1 -> modifies_none h0 h1 /\ post a k h0 h1)) ->
+  unsafe_pkg ip
+
+// FIXME(adl) extend MonotoneMap
+let mm_fold (#r:MR.rid) (#a:Type) (#b:a -> Type) (#inv:MM.map' a b -> Type0) (t:MM.t r a b inv)
+  (#rt:Type) (init:rt) (folder:rt -> i:a -> b i -> GTot rt) (h:mem) : GTot rt
+ = admit()
+
+type mm_forall (#r:MR.rid) (#a:Type) (#b:a -> Type) (#inv:MM.map' a b -> Type0)
+ (t:MM.t r a b inv) (pred: #i:a -> b i -> mem -> GTot Type0) (h:mem) =
+   forall (i:a).{:pattern (MM.defined t i h)}
+     MM.defined t i h ==>
+       (let k = Some?.v (MM.sel (MR.m_sel h t) i) in pred k h)
+
+let lemma_forall_frame (#r:MR.rid) (#a:Type) (#b:a -> Type) (#inv:MM.map' a b -> Type0)
+  (t:MM.t r a b inv) (pred: #i:a -> b i -> mem -> GTot Type0)
+  (footprint: #i:a -> v:b i -> GTot rset)
+  (pred_frame: r:HH.rid -> i:a -> v:b i -> h0:mem -> h1:mem ->
+    Lemma (requires pred v h0 /\ modifies_one r h0 h1 /\ ~(Set.mem r (footprint v)))
+          (ensures pred v h1))
+  (r:HH.rid) (h0:mem) (h1:mem)
+  : Lemma (requires mm_forall t pred h0 /\ (modifies_one r h0 h1 \/ modifies_none h0 h1)
+            /\ (forall (i:a) (v:b i). ~(Set.mem r (footprint v))))
+          (ensures mm_forall t pred h1)
+  = admit()
+
+// Memoization functor: memoize gen and mange defined instances
+#set-options "--z3rlimit 100"
+let functor_memoization (#ip:ipkg) (p:unsafe_pkg ip)
+  : ST (pkg ip)
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 -> modifies_one tls_define_region h0 h1)
+  =
+  let mtable : mem_table p.key = mem_alloc p.key in
+  let footprint (h:mem) : GTot rset =
+    assume false;
+    if model then
+      let log : i_mem_table p.key = itable mtable in
+      mm_fold log #rset Set.empty (fun s i k -> Set.union s (p.footprint k)) h
+    else Set.empty in
+  let package_invariant h =
+    if model then
+      let log : i_mem_table p.key = itable mtable in
+      mm_forall log (fun (#i) (k:p.key i) (h:mem) -> p.invariant k h) h
+    else True in
+  let create (i:ip.t{ip.registered i}) (a:p.info i) : ST (p.key i)
+    (requires fun h0 -> model /\ package_invariant h0 /\ mem_fresh mtable i h0)
+    (ensures fun h0 k h1 -> modifies_one tls_define_region h0 h1 /\ p.post a k h0 h1
+      /\ package_invariant h1 /\ mem_update mtable i k h0 h1)
+    =
+    let h0 = get () in
+    let tbl : i_mem_table p.key = itable mtable in
+    MR.m_recall tbl;
+    lemma_ifresh mtable i h0;
+    let k : p.key i = p.create i a in
+    let h1 = get() in
+    assert(MR.m_sel h0 tbl == MR.m_sel h1 tbl);
+    lemma_forall_frame tbl p.invariant p.footprint p.invariant_framing tls_define_region h0 h1;
+    MM.extend tbl i k;
+    let h2 = get () in
+    lemma_iupdate mtable i k h0 h2;
+    lemma_define_tls_honest_regions (p.footprint k);
+    p.post_framing tls_define_region a k h0 h1 h2;
+    lemma_forall_frame tbl p.invariant p.footprint p.invariant_framing tls_define_region h1 h2;
+    k in
+  let coerce (i:ip.t{ip.registered i}) (a:p.info i) (k0:lbytes (p.len a)) : ST (p.key i)
+    (requires fun h0 -> package_invariant h0 /\ mem_fresh mtable i h0 /\ (p.ideal ==> ip.corrupt i))
+    (ensures fun h0 k h1 -> modifies_one tls_define_region h0 h1 /\ p.post a k h0 h1
+      /\ package_invariant h1 /\ mem_update mtable i k h0 h1)
+    =
+    if model then (
+      let h0 = get () in
+      let tbl : i_mem_table p.key = itable mtable in
+      MR.m_recall tbl;
+      lemma_ifresh mtable i h0;
+      let k : p.key i = p.coerce i a k0 in
+      let h1 = get() in
+      assert(MR.m_sel h0 tbl == MR.m_sel h1 tbl);
+      lemma_forall_frame tbl p.invariant p.footprint p.invariant_framing tls_define_region h0 h1;
+      MM.extend tbl i k;
+      let h2 = get () in
+      lemma_iupdate mtable i k h0 h2;
+      lemma_define_tls_honest_regions (p.footprint k);
+      p.post_framing tls_define_region a k h0 h1 h2;
+      lemma_forall_frame tbl p.invariant p.footprint p.invariant_framing tls_define_region h1 h2;
+      k
+    ) else p.coerce i a k0
+    in
+  Pkg
+    p.key
+    p.info
+    p.len
+    p.ideal
+    mtable
+    footprint
+    (admit()) // easy
+    package_invariant
+    (admit()) // writing this one will hurt
+    p.post
+    (admit()) // not too hard
+    create
+    coerce
 
 assume val flag_Raw: bool
 type idealRaw = b2t flag_Raw
@@ -132,36 +318,48 @@ type idealRaw = b2t flag_Raw
 type rawlen (#ip: ipkg) (#len_of_i: ip.t -> keylen) (i:ip.t) = len:keylen {len = len_of_i i}
 
 type raw (ip: ipkg) (len_of_i: ip.t -> keylen) (i: ip.t) = lbytes (len_of_i i)
-let create_raw 
-  (ip: ipkg) (len_of_i: ip.t -> keylen) (i: ip.t) (len:keylen {len = len_of_i i}): 
-  ST (raw ip len_of_i i) 
-  (requires fun h0 -> model) 
-  (ensures fun h0 p h1 -> True) 
+let create_raw
+  (ip: ipkg) (len_of_i: ip.t -> keylen) (i: ip.t) (len:keylen {len = len_of_i i}):
+  ST (raw ip len_of_i i)
+  (requires fun h0 -> model)
+  (ensures fun h0 p h1 -> True)
 =
   sample len
 
-let coerce_raw 
-  (ip: ipkg) (len_of_i: ip.t -> keylen) (i: ip.t) (len:keylen {len = len_of_i i}) (r:lbytes len): 
-  ST (raw ip len_of_i i) 
+let coerce_raw
+  (ip: ipkg) (len_of_i: ip.t -> keylen) (i: ip.t) (len:keylen {len = len_of_i i}) (r:lbytes len):
+  ST (raw ip len_of_i i)
   (requires fun h0 -> idealRaw ==> ip.corrupt i)
-  (ensures fun h0 p h1 -> True) 
-= 
+  (ensures fun h0 p h1 -> True)
+=
   r
 
-let rp (ip:ipkg) (len_of_i: ip.t -> keylen): pkg ip = Pkg
-  (raw ip len_of_i)
-  (rawlen #ip #len_of_i)
-  (fun (#i:ip.t) (n:rawlen i) -> n)
-  idealRaw
-  (create_raw ip len_of_i)
-  (coerce_raw ip len_of_i)
+let footprint_raw (ip: ipkg) (len_of_i: ip.t -> keylen)
+  (#i: ip.t) (k:raw ip len_of_i i) : GTot rset = Set.empty
 
+let rp (ip:ipkg) (len_of_i: ip.t -> keylen)
+  : ST (pkg ip) (requires fun h0 -> True)
+  (ensures fun h0 _ h1 -> modifies_one tls_define_region h0 h1)
+  =
+  functor_memoization #ip
+    (UnsafePkg
+      (raw ip len_of_i)
+      (rawlen #ip #len_of_i)
+      (fun (#i:ip.t) (n:rawlen i) -> n)
+      idealRaw
+      (footprint_raw ip len_of_i)
+      (fun #_ _ _ -> True) // no invariant
+      (fun _ _ _ _ _ -> ())
+      (fun #_ _ _ _ _ -> True) // no post-condition
+      (admit())
+      (create_raw ip len_of_i)
+      (coerce_raw ip len_of_i))
 
 /// --------------------------------------------------------------------------------------------------
 /// module AEAD
 /// sample generic, agile functionality.
 ///
-/// TODO package instead StAE; what to do with the algorithm? 
+/// TODO package instead StAE; what to do with the algorithm?
 
 type aeadAlg = | AES_GCM128 | AES_GCM256
 let aeadLen: aeadAlg -> keylen = function
@@ -171,34 +369,57 @@ let aeadLen: aeadAlg -> keylen = function
 // 17-10-31  this abbreviation breaks typechecking when used; why?
 // unfold type aeadAlgi (#ip:ipkg aeadAlg) (i:ip.t) = a:aeadAlg {a == ip.get_info i}
 
-assume val flag_Key: bool
-type idealKey = b2t flag_Key
+assume val flag_AEAD: bool
+type idealAEAD = b2t flag_AEAD
 
 type keyrepr a = lbytes (aeadLen a)
-assume new type key (ip: ipkg) (aeadAlg_of_i: ip.t -> aeadAlg) (i: ip.t) // abstraction required for indexing
-assume val create_key: 
-  ip: ipkg -> aeadAlg_of_i: (ip.t -> aeadAlg) -> 
-  i: ip.t -> a:aeadAlg {a == aeadAlg_of_i i} ->
+assume new type key (ip: ipkg) (aeadAlg_of_i: ip.t -> aeadAlg) (i:ip.t{ip.registered i}) // abstraction required for indexing
+
+assume val aead_footprint: #ip:ipkg -> #aeadAlg_of_i: (ip.t -> aeadAlg) -> #i:ip.t{ip.registered i} -> k:key ip aeadAlg_of_i i -> GTot rset
+
+// The local AEAD invariant
+assume val aead_inv: #ip:ipkg -> #aeadAlg_of_i: (ip.t -> aeadAlg) -> #i:ip.t{ip.registered i} -> k:key ip aeadAlg_of_i i -> h:mem -> GTot Type0
+
+assume val aead_invariant_framing:
+  ip:ipkg -> aeadAlg_of_i: (ip.t -> aeadAlg) ->
+  r:HH.rid -> i:ip.t{ip.registered i} -> k:key ip aeadAlg_of_i i -> h0:mem -> h1:mem ->
+  Lemma (requires aead_inv k h0 /\ modifies_one r h0 h1 /\ ~(Set.mem r (aead_footprint k)))
+        (ensures aead_inv k h1)
+
+assume val create_key:
+  ip: ipkg -> aeadAlg_of_i: (ip.t -> aeadAlg) ->
+  i: ip.t{ip.registered i} -> a:aeadAlg {a == aeadAlg_of_i i} ->
   ST (key ip aeadAlg_of_i i)
     (requires fun h0 -> model)
     (ensures fun h0 p h1 -> True)
 
-assume val coerce_key: 
-  ip: ipkg -> aeadAlg_of_i: (ip.t -> aeadAlg) -> 
-  i: ip.t -> a:aeadAlg {a == aeadAlg_of_i i} -> keyrepr a ->
+assume val coerce_key:
+  ip: ipkg -> aeadAlg_of_i: (ip.t -> aeadAlg) ->
+  i: ip.t{ip.registered i} -> a:aeadAlg {a == aeadAlg_of_i i} -> keyrepr a ->
   ST (key ip aeadAlg_of_i i)
-    (requires fun h0 -> idealKey ==> ip.corrupt i)
+    (requires fun h0 -> idealAEAD ==> ip.corrupt i)
     (ensures fun h0 p h1 -> True)
 
-let mp (ip:ipkg) (aeadAlg_of_i: ip.t -> aeadAlg): pkg ip = Pkg
-  (key ip aeadAlg_of_i)
-  (fun (i:ip.t) -> a:aeadAlg{a = aeadAlg_of_i i})
-  (fun #_ a -> aeadLen a)
-  idealKey
-  (create_key ip aeadAlg_of_i)
-  (coerce_key ip aeadAlg_of_i)
+let mp (ip:ipkg) (aeadAlg_of_i: ip.t -> aeadAlg)
+  : ST (pkg ip) (requires fun h0 -> True)
+  (ensures fun h0 _ h1 -> modifies_one tls_define_region h0 h1)
+  =
+  functor_memoization #ip
+    (UnsafePkg
+      (key ip aeadAlg_of_i)
+      (fun (i:ip.t) -> a:aeadAlg{a = aeadAlg_of_i i})
+      (fun #_ a -> aeadLen a)
+      idealAEAD
+      (aead_footprint #ip #aeadAlg_of_i)
+      (aead_inv #ip #aeadAlg_of_i) // no invariant
+      (aead_invariant_framing ip aeadAlg_of_i)
+      (fun #_ _ _ _ _ -> True) // no post-condition
+      (admit())
+      (create_key ip aeadAlg_of_i)
+      (coerce_key ip aeadAlg_of_i))
 
-val encrypt: #ip:ipkg -> #aeadAlg_of_i: (ip.t -> aeadAlg) -> #i:ip.t -> k: key ip aeadAlg_of_i i -> nat -> nat
+val encrypt: #ip:ipkg -> #aeadAlg_of_i: (ip.t -> aeadAlg) -> #i:ip.t{ip.registered i} -> k: key ip aeadAlg_of_i i -> nat ->
+  ST nat (requires fun h0 -> aead_inv k h0) (ensures fun h0 c h1 -> modifies (aead_footprint k) h0 h1)
 let encrypt #_ #_ #_ k v = v + 1
 
 
@@ -297,20 +518,20 @@ type honest_idh (c:context) =
 /// invariant must be enforced: if i is corrupt then all indexes
 /// derived from i are also corrupt
 /// ---EXCEPT if ctx is ExtractDH g gx gy with CommonDH.honest_dhr gy
-/// 
+///
 type honesty_invariant (m:MM.map' id (fun _ -> bool)) =
   (forall (i:id) (l:label) (c:context{wellformed_id (Derive i l c)}).
   {:pattern (m (Derive i l c))}
   Some? (m (Derive i l c)) ==> Some? (m i) /\
   (m i = Some false ==> (honest_idh c \/ m (Derive i l c) = Some false)))
- 
+
 private type i_honesty_table =
-  MM.t honest_region id (fun (t:id) -> bool) honesty_invariant
+  MM.t tls_honest_region id (fun (t:id) -> bool) honesty_invariant
 private let h_table = if model then i_honesty_table else unit
 
 let honesty_table: h_table =
   if model then
-    MM.alloc #honest_region #id #(fun _ -> bool) #honesty_invariant
+    MM.alloc #tls_honest_region #id #(fun _ -> bool) #honesty_invariant
   else ()
 
 // Registered is monotonic
@@ -387,7 +608,7 @@ let register_derive (i:regid) (l:label) (c:context{wellformed_id (Derive i l c)}
   : ST (regid * bool)
   (requires fun h0 -> True)
   (ensures fun h0 (i', b) h1 ->
-    modifies_one honest_region h0 h1
+    modifies_one tls_honest_region h0 h1
     /\ (i' == Derive i l c)
     /\ (b2t b <==> honest i')
     /\ (not b <==> corrupt i'))
@@ -421,7 +642,7 @@ let register_derive (i:regid) (l:label) (c:context{wellformed_id (Derive i l c)}
 // sharing.
 
 let ii: ipkg = // (#info:Type0) (get_info: id -> info) =
-  Idx id honest_region registered honest corrupt get_honest
+  Idx id registered honest corrupt get_honest
 
 /// Try out on examples: we may need a stateful invariant of the form
 /// "I have used this secret to create exactly these keys".
@@ -516,7 +737,7 @@ type info = | Info:
 
 // TODO find a nice way to express the idealization ordering
 assume val lemma_ideal_order: u:usage -> lbl:label
-  -> Lemma (let pkg = u lbl in pkg.ideal ==> idealKDF)
+  -> Lemma (let p : pkg ii = u lbl in Pkg?.ideal p ==> idealKDF)
 
 val get_info: id -> info
 // 17-11-01 can't get it to verify; should follow from the definition of wellformed_id?
@@ -541,8 +762,7 @@ let derived_key
   (lbl: label)
   (ctx: context {wellformed_id (Derive i lbl ctx) /\ registered (Derive i lbl ctx)})
 =
-  (u lbl).key (Derive i lbl ctx)
-
+  (Pkg?.key (u lbl)) (Derive i lbl ctx)
 
 let there = Mem.tls_tables_region // : MR.rid = admit()
 
@@ -569,7 +789,7 @@ private type table
 let secret_len (a: info): keylen = UInt32.uint_to_t (Hashing.Spec.tagLen a.ha)
 type real_secret (i:regid) = lbytes (secret_len (get_info i))
 
-// id vs regid? 
+// id vs regid?
 type secret (u: usage) (i: ii.t {registered i}) =
   ir_key safeKDF (table u i) (real_secret i) i
 
@@ -656,7 +876,7 @@ let create u i a =
 /// parents before childrens.)
 
 #set-options "--print_universes --print_implicits --print_full_names"
-let pp (u: usage): pkg ii = 
+let pp (u: usage): pkg ii =
   //assert_norm(regid == i: ii.t {ii.registered i});
   Pkg
   (secret u)
@@ -1032,7 +1252,7 @@ let lemma_fresh_dhr (#i:odhid) (r:peer_index i) (h:mem)
   = admit () // contradition on  CommonDH.registered_dhr y
 
 let lemma_fresh_dhr_framing (#i:odhid) (r:peer_index i) (h0:mem) (h1:mem)
-  : Lemma (odhr_fresh r h0 /\ modifies (Set.union (Set.singleton CommonDH.dh_region) (Set.singleton honest_region)) h0 h1 ==> odhr_fresh r h1)
+  : Lemma (odhr_fresh r h0 /\ modifies (Set.union (Set.singleton CommonDH.dh_region) (Set.singleton tls_honest_region)) h0 h1 ==> odhr_fresh r h1)
   = admit() // assume(HH.disjoint there CommonDH.dh_region)
 
 /// Client-side instance creation
@@ -1078,7 +1298,7 @@ let odh_init g =
 private let register_odh (i:regid) (gX:CommonDH.dhi) (gY:CommonDH.dhr gX)
   : ST (j:regid{j == Derive i "" (ExtractDH (IDH gX gY))})
   (requires fun h0 -> model /\ CommonDH.honest_dhr gY)
-  (ensures fun h0 _ h1 -> modifies_one honest_region h0 h1)
+  (ensures fun h0 _ h1 -> modifies_one tls_honest_region h0 h1)
   =
   let idh = IDH gX gY in
   let ctx = ExtractDH idh in
@@ -1417,9 +1637,9 @@ let u_default: usage = fun lbl -> rp ii get_keylen
 
 //17-11-15 rename to aeadAlg_of_id ?
 assume val get_aeadAlg: i:id -> aeadAlg
-let derive_aea 
-  (lbl:label) (i:id) 
-  (a:info{wellformed_id (Derive i lbl Expand)}): 
+let derive_aea
+  (lbl:label) (i:id)
+  (a:info{wellformed_id (Derive i lbl Expand)}):
   (a':aeadAlg{a' == get_aeadAlg (Derive i lbl Expand)})
 =
   //fixme! should be extracted from a
@@ -1443,7 +1663,7 @@ let derive_info (lbl:label) (i:id) (a:info) (ctx:context{wellformed_id (Derive i
   | ExpandLog log hv -> Info ha (Some (Log log hv))
   | _ -> Info ha o
 
-let labels = list label 
+let labels = list label
 
 // 17-10-20 this causes an extraction-time loop, as could be expected.
 inline_for_extraction
@@ -1467,46 +1687,46 @@ and u_early_secret (n:nat): Tot usage (decreases (%[n;2])) =
 /// Tot required... can we live with this integer indexing?
 /// One cheap trick is to store a PSK only when it enables resumption.
 
-//17-11-16 these functions suffice to implement `i_to_u`, but 
-// - this may be too late to be useful 
+//17-11-16 these functions suffice to implement `i_to_u`, but
+// - this may be too late to be useful
 // - this feel like writing twice the same code... refactor?
 
-let rec f_master_secret (n:nat) (labels: list label): Tot usage (decreases (%[n; 0])) = 
+let rec f_master_secret (n:nat) (labels: list label): Tot usage (decreases (%[n; 0])) =
   match labels with
-  | [] -> u_master_secret n 
-  | lbl :: labels -> 
-    match lbl with 
-    | "traffic" -> u_traffic 
-    | "resumption" -> 
-      if n > 0 then f_early_secret (n-1) labels else u_default  
-    | _ -> u_default 
-and f_handshake_secret (n:nat) (labels: list label): Tot usage (decreases (%[n; 1])) = 
-  match labels with 
+  | [] -> u_master_secret n
+  | lbl :: labels ->
+    match lbl with
+    | "traffic" -> u_traffic
+    | "resumption" ->
+      if n > 0 then f_early_secret (n-1) labels else u_default
+    | _ -> u_default
+and f_handshake_secret (n:nat) (labels: list label): Tot usage (decreases (%[n; 1])) =
+  match labels with
   | [] -> u_handshake_secret n
-  | lbl :: labels -> 
-    match lbl with 
+  | lbl :: labels ->
+    match lbl with
     | "traffic" -> u_traffic
-    | "salt" -> f_master_secret n labels 
-    | _ -> u_default 
+    | "salt" -> f_master_secret n labels
+    | _ -> u_default
 and f_early_secret (n:nat) (labels: list label): Tot usage (decreases (%[n;2])) =
-  match labels with 
-  | [] -> u_early_secret n 
-  | lbl :: labels -> 
-    match lbl with 
+  match labels with
+  | [] -> u_early_secret n
+  | lbl :: labels ->
+    match lbl with
     | "traffic" -> u_traffic
-    | "salt" -> f_handshake_secret n labels 
-    | _ -> u_default 
-  
-let _: unit = 
+    | "salt" -> f_handshake_secret n labels
+    | _ -> u_default
+
+let _: unit =
   assert(f_master_secret 3 ["resumption";"salt"] == u_handshake_secret 2)
 
 
 (* not necessary?
 
-We can write a List.fold on sequences of labels that yields the derived u. 
+We can write a List.fold on sequences of labels that yields the derived u.
 
 u returns a package (not the next u)
-we have a (partial, recursive) function from u to u' 
+we have a (partial, recursive) function from u to u'
 
 type shape = |
   | Preshared0: nat
@@ -1565,7 +1785,7 @@ let ks() =
   let a_traffic0 = Info Hashing.Spec.SHA1 None in
   let early_traffic : secret u_traffic i_traffic0 = et in
 
-  let aea_0rtt = derive_aea "ClientKey" i_traffic0 a in 
+  let aea_0rtt = derive_aea "ClientKey" i_traffic0 a in
   let (| _, ae0 |) = derive early_traffic a "ClientKey" Expand aea_0rtt in
   let i_0rtt : regid = Derive i_traffic0 "ClientKey" Expand in
   let k0: key ii get_aeadAlg i_0rtt = ae0 in
@@ -1582,13 +1802,16 @@ let ks() =
   let (| i_gY, hs1 |) = extractR salt1 a gX in
   let (| _, gY |) = i_gY in
   let i1 : regid = Derive i_salt1 "" (ExtractDH (IDH gX gY)) in
-  let hs_secret: secret (u_handshake_secret depth) i1 = admit() in // due to u_of_i
+
+  // FIXME(adl) This requires a proof that u_of_i (dfst i_gY) == u_handshake_secret depth
+  //assume(peer_instance i_gY == secret (u_handshake_secret depth) i1);
+  let hs_secret: secret (u_handshake_secret depth) i1 = admit() in
 
   let (| _, hst |) = derive hs_secret a "traffic" Expand a in
   let i_traffic1: regid = Derive i1 "traffic" Expand  in
   let hs_traffic: secret u_traffic i_traffic1 = hst in
 
-  let aea_1rtt = derive_aea "ServerKey" i_traffic1 a in 
+  let aea_1rtt = derive_aea "ServerKey" i_traffic1 a in
   let (| _, ae1 |) = derive hs_traffic a "ServerKey" Expand aea_1rtt in
   let i_1rtt : regid = Derive i_traffic1 "ServerKey" Expand in
   let k1: key ii get_aeadAlg i_1rtt = ae1 in
