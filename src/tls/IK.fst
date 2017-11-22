@@ -172,7 +172,7 @@ noeq type pkg (ip: ipkg) = | Pkg:
 /// their footprints.
 ///
 noeq type local_pkg (ip: ipkg) =
-| UnsafePkg:
+| LocalPkg:
   key: (i:ip.t{ip.registered i} -> Type0) ->
   info: (ip.t -> Type0) ->
   len: (#i:ip.t -> info i -> keylen) ->
@@ -309,7 +309,7 @@ let rp (ip:ipkg) (len_of_i: ip.t -> keylen): ST (pkg ip)
   (ensures fun h0 _ h1 -> modifies_one tls_define_region h0 h1)
 =
   memoization #ip
-    (UnsafePkg
+    (LocalPkg
       (raw ip len_of_i)
       (rawlen #ip #len_of_i)
       (fun (#i:ip.t) (n:rawlen i) -> n)
@@ -375,7 +375,7 @@ let mp (ip:ipkg) (aeadAlg_of_i: ip.t -> aeadAlg)
   (ensures fun h0 _ h1 -> modifies_one tls_define_region h0 h1)
   =
   memoization #ip
-    (UnsafePkg
+    (LocalPkg
       (key ip aeadAlg_of_i)
       (fun (i:ip.t) -> a:aeadAlg{a = aeadAlg_of_i i})
       (fun #_ a -> aeadLen a)
