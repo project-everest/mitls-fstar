@@ -12,7 +12,8 @@ module MM = FStar.Monotonic.Map
 
 // FIXME
 assume val ideal: bool
-
+ 
+//let _ = assert false 
 
 #set-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 
@@ -20,7 +21,7 @@ type ha = Hashing.Spec.alg
 type text = bytes
 
 noeq type info: Type0 = { 
-  parent: rgn; 
+  parent: r:rgn {~ (is_tls_rgn r)};
   alg: IK.kdfa; 
   good: text -> bool (*TODO: should be Type0 *)}
 
@@ -48,7 +49,7 @@ private type log_t
 noeq abstract type key (#ip:ipkg) (i:ip.IK.t) =
   | Key:
     u: info -> // creation-time parameters, kept for convenience
-    #region: Mem.subrgn u.parent ->  // intuitively, the writer's region
+    region: Mem.subrgn u.parent {~(is_tls_rgn region)} ->  // intuitively, the writer's region
     kv: keyrepr u ->
     log: log_t i u region -> //TODO: make conditional
     key i 
@@ -66,8 +67,9 @@ private let gen (#ip:ipkg) (i:ip.IK.t) (u:info) (kv:keyrepr u) : ST (k:key i {k.
     modifies Set.empty h0 h1
   )) =
   let region: Mem.subrgn u.parent = new_region u.parent in
+  assert(~(is_tls_rgn u.parent));
   let log: log_t #ip i u region = MM.alloc #_ #_ #_ #_ in 
-  Key u kv log
+  Key u region kv log
 
 val create: 
   #ip:ipkg -> ha_of_i: (ip.IK.t -> ha) -> good_of_i: (ip.IK.t -> text -> bool) ->
@@ -76,6 +78,7 @@ val create:
   (requires (fun _ -> True))
   (ensures (fun h0 k h1 ->
     modifies Set.empty h0 h1 /\
+    k.u == u /\
     Mem.fresh_subregion (region k) u.parent h0 h1 ))
 let create #ip _ _ i u =
   let kv: keyrepr u = CoreCrypto.random (Hashing.Spec.tagLen u.alg) in
@@ -89,8 +92,8 @@ val coerce:
   ST (k:key i)
   (requires (fun _ -> ideal ==> ip.IK.corrupt i))
   (ensures (fun h0 k h1 ->
-    k.u == u /\
     modifies Set.empty h0 h1 /\
+    k.u == u /\
     fresh_subregion (region k) u.parent h0 h1 ))
 let coerce #ip _ _ i u kv = 
   gen i u kv
@@ -98,21 +101,41 @@ let coerce #ip _ _ i u kv =
 // not quite doable without reification?
 // assert_norm(forall ip i u. (create #ip i u == coerce #ip i u (CoreCrypto.random (UInt32.v (keylen u)))))
 
+val footprint:
+  ip: ipkg -> ha_of_i: (ip.IK.t -> ha) -> good_of_i: (ip.IK.t -> text -> bool) ->
+  #i: ip.IK.t {ip.IK.registered i} -> 
+  k: key i -> rset 
+let footprint _ _ _ #_ k = 
+  Set.singleton k.region
+
 let pkg 
-  (#ip:ipkg) 
+  (ip:ipkg) 
   (ha_of_i: ip.IK.t -> ha)
-  (good_of_i: ip.IK.t -> text -> bool): IK.pkg ip
-= IK.Pkg
+  (good_of_i: ip.IK.t -> text -> bool): ST (IK.pkg ip)
+  (requires fun h0 -> True)
+  (ensures fun h0 r h1 -> modifies_one tls_define_region h0 h1)
+= 
+  IK.memoization (IK.LocalPkg
     (key #ip)
     (fun (i:ip.IK.t) -> a:info{a.alg = ha_of_i i /\ a.good == good_of_i i})
     (fun #_ u -> keylen u ) 
     ideal  
+    // local footprint 
+    (fun #i (k:key i) -> Set.singleton k.region) 
+    // local invariant 
+    (fun #_ k h -> True)
+    (fun r i h0 k h1 -> ())
+    // create/coerce postcondition
+    (fun #i u h0 k h1 -> k.u == u /\ fresh_subregion (region k) u.parent h0 h1 )
+    (fun #i u h0 k h1 r h2 -> ())
     (create #ip ha_of_i good_of_i)
-    (coerce #ip ha_of_i good_of_i)
+    (coerce #ip ha_of_i good_of_i) )
 
-
-val leak: #ip:ipkg -> #i:ip.IK.t -> k:key i {ip.IK.corrupt i} -> kv:keyrepr k.u { kv = keyval k }
-let leak  #ip #i k = k.kv
+val leak: 
+  ip: ipkg -> ha_of_i: (ip.IK.t -> ha) -> good_of_i: (ip.IK.t -> text -> bool) ->
+  #i: ip.IK.t -> 
+  k: key i {ip.IK.corrupt i} -> kv:keyrepr k.u { kv = keyval k }
+let leak _ _ _ #i k = k.kv
 
 val mac: 
   #ip:ipkg -> #i:ip.IK.t -> k:key i ->
@@ -139,7 +162,7 @@ val verify:
 let verify #ip #i k p t =
   let verified = HMAC.hmacVerify k.u.alg k.kv p t in
   if ideal then 
-    let bad = not(ip.IK.get_honest i) in
+    let bad = not(ip.IK.get_honesty i) in
     match FStar.Monotonic.Map.lookup k.log (t,p) with 
     | Some _ -> verified        (* genuine MAC *) 
     | None   -> verified && bad (* forgery, blocked when ideal & honest *)
@@ -167,6 +190,37 @@ let verify #ip #i k p t =
 /// - how to guarantee matching goodnesses?
 /// - more specific instantiations? 
 /// (later) support dynamic key compromise
+
+let test 
+  (v' t': bytes) 
+  (r:rgn {~(is_tls_rgn r)}): St unit 
+= 
+  let ip = IK.Idx 
+    nat 
+    (fun _ -> True)
+    (fun _ -> True)
+    (fun _ -> False)
+    (fun _ -> true) in
+  let a = Hashing.SHA256 in
+  let ha_of_i (i:nat) = a in 
+  let good_of_i i v = length v = i in
+  let p = pkg ip (fun _ -> a) good_of_i in
+  // assume(IK.Pkg?.info p == (fun (i:ip.IK.t) -> a:info{a.alg = ha_of_i i /\ a.good == good_of_i i}));
+  let u = {parent=r; alg=a; good=good_of_i 0} in
+  let u: IK.Pkg?.info p 0 = u in // can't get this 
+  //let u : u: info{u.alg = ha_of_i 0 /\ u.good == good_of_i 0} = {parent=r; alg=a; good=good_of_i 0} in
+  //assert_norm(u:info{u.alg = ha_of_i 0 /\ u.good == good_of_i 0} == IK.Pkg?.info p 0);
+  
+  let k = (IK.Pkg?.create p) 0 u in
+  let v = empty_bytes in
+  assert(good_of_i 0 v);
+  // let v: p:text {ip.IK.corrupt 0 \/ k.u.good p} = v in 
+  let t = mac #ip #0 k v in
+  let b = verify #ip #0 k v' t' in
+  assert( b ==> length v' = 0 );
+  ()
+//assert( b ==> length v' = 1 );
+//assert(false)
 
 
 (*
@@ -264,3 +318,4 @@ let verify #i #good k p t =
   x &&
   ( not(authId i) || Some? (seq_find (matches p) log))
 *)
+

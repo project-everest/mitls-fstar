@@ -22,8 +22,8 @@ let disjoint = HH.disjoint
 //type fresh_subregion r0 r h0 h1 = ST.stronger_fresh_region r h0 h1 /\ ST.extends r r0
 
 (** Regions and colors for objects in memory *)
-let tls_color = -1
-let epoch_color = 1
+let tls_color = -1  //17-11-22 The color for all regions in the TLS global region.
+let epoch_color = 1 //17-11-22 This needs fixing: we are not on the stack yet.
 let hs_color = 2
 
 let is_tls_rgn r   = HH.color r = tls_color
@@ -43,6 +43,7 @@ let epoch_rgn = r:rgn {is_epoch_rgn r}
 let hs_rgn    = r:rgn {is_hs_rgn r}
 
 type fresh_subregion child parent h0 h1 =
+  (is_tls_rgn child <==> is_tls_rgn parent) /\
   stronger_fresh_region child h0 h1 /\
   HH.extends child parent
 

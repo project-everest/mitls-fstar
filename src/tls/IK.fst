@@ -103,7 +103,6 @@ type keylen = l:UInt32.t {UInt32.v l <= 256}
 /// We must have [create i a == coerce i a (sample (len a))]
 /// we currently check by hand that this follows from F* semantics.
 
-
 (* Definedness *)
 
 type i_mem_table (#it:eqtype) (vt:it -> Type) =
@@ -198,7 +197,7 @@ noeq type local_pkg (ip: ipkg) =
 #set-options "--z3rlimit 100"
 let memoization (#ip:ipkg) (p:local_pkg ip): ST (pkg ip)
   (requires fun h0 -> True)
-  (ensures fun h0 _ h1 -> modifies_one tls_define_region h0 h1)
+  (ensures fun h0 p h1 -> modifies_one tls_define_region h0 h1 /\ p.package_invariant p h1)
   =
   let mtable : mem_table p.key = mem_alloc p.key in
   let footprint (h:mem) : GTot rset =
@@ -845,6 +844,8 @@ let create u i a =
 /// level of key derivation seems unavoidable: we need to idealize
 /// parents before childrens.)
 
+
+(* ---
 #set-options "--print_universes --print_implicits --print_full_names"
 let pp (u: usage): pkg ii =
   //assert_norm(regid == i: ii.t {ii.registered i});
@@ -1808,3 +1809,5 @@ let ks() =
   let i4: regid = Derive i3 "" Extract in
   let next_early_secret: secret (u_early_secret (depth - 1)) i4 = extract0 rsk a in
   ()
+
+--- *)
