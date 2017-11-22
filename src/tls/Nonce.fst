@@ -6,7 +6,8 @@ open FStar.HyperStack.ST
 
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
-module MM = MonotoneMapNonDep
+module DM = FStar.DependentMap
+module MM = FStar.Monotonic.DependentMap
 module MR = FStar.Monotonic.RRef
 module ST = FStar.HyperStack.ST
 
@@ -34,8 +35,8 @@ let n_rid = fun (n:random) -> ex_rid
 
 // A partial map from nonces to rid is injective,
 // if it maps distinct nonces to distinct rids
-let injective (n:MM.map' random ex_rid) =
-  forall n1 n2. n1=!=n2 ==> (match MM.sel n n1, MM.sel n n2 with
+let injective (n:MM.partial_dependent_map random n_rid) =
+  forall n1 n2. n1=!=n2 ==> (match DM.sel n n1, DM.sel n n2 with
         | Some r1, Some r2 -> r1 <> r2
         | _ -> True)
 
@@ -47,7 +48,7 @@ let injective (n:MM.map' random ex_rid) =
 //See the style, e.g., in StreamAE
 //However, in this case, we have just a single global table and the additional
 //allocation seems rather mild. Still, would be nice to do remove this allocation someday.
-let nonce_rid_table : MM.t tls_tables_region random ex_rid injective =
+let nonce_rid_table : MM.t tls_tables_region random n_rid injective =
   MM.alloc ()
 
 //A nonce n is fresh in h if the nonce_rid_table doesn't contain it
@@ -113,7 +114,7 @@ let lookup role n = MM.lookup nonce_rid_table n
 
 (* Would be nice to make this a local let in new_region.
    Except, implicit argument inference for testify_forall fails *)
-private let nonce_rids_exists (m:MM.map' random ex_rid) =
+private let nonce_rids_exists (m:MM.map random n_rid) =
     forall (n:random{Some? (MM.sel m n)}). MR.witnessed (MR.rid_exists (Some?.v (MM.sel m n)))
 
 (*

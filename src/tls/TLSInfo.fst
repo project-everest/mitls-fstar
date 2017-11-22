@@ -16,7 +16,8 @@ open TLSConstants
 //open Cert
 
 module CC = CoreCrypto
-module MM = MonotoneMap
+module DM = FStar.DependentMap
+module MM = FStar.Monotonic.DependentMap
 module MR = FStar.Monotonic.RRef
 module HH = FStar.HyperHeap
 
@@ -510,7 +511,7 @@ private type s_table = (if Flags.ideal_KEF then i_safety_log else unit)
 
 let safety_table : s_table =
   (if Flags.ideal_KEF then
-    MM.alloc #safe_region #pre_index #honest_index #(fun _ -> True)
+    MM.alloc () <: i_safety_log
   else ())
 
 type registered (i:pre_index) =

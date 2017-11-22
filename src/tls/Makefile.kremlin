@@ -82,3 +82,12 @@ lax-all: $(addsuffix .checked.lax, $(ALL_FST_FILES))
 	touch $@
 
 
+
+# Targets to get F* arguments in interactive mode
+%.fst-in:
+	@echo $(addprefix --include , $(INCLUDE_PATHS)) \
+	--lax --cache_checked_modules
+
+%.fsti-in:
+	@echo $(addprefix --include , $(INCLUDE_PATHS)) \
+	--lax --cache_checked_modules

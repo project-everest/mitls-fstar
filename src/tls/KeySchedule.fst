@@ -17,7 +17,7 @@ open StatefulLHAE
 open HKDF
 open PSK
 
-module MM = MonotoneMap
+module MM = FStar.Monotonic.DependentMap
 module MR = FStar.Monotonic.RRef
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack

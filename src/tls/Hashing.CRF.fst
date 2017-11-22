@@ -19,15 +19,15 @@ assume val crf: alg -> Tot bool  // to be moved elsewhere, set to false for real
     incremental hash implementation. (This is always the case for now.)  *)
 
 module MR = FStar.Monotonic.RRef
-module MM = MonotoneMap
+module MM = FStar.Monotonic.DependentMap
 
 // the precise types guarantee that the table stays empty when crf _ = false
 private type range = | Computed: a: alg {crf a} -> tag a -> range
 private type domain (r:range) =
   b:bytes {(let Computed a t = r in Bytes.equal (hash a b) t)}
 
-private let inv (f:MM.map' range domain) = True // a bit overkill?
-private let table = MM.alloc #TLSConstants.tls_tables_region #range #domain #inv
+private let inv (f:MM.partial_dependent_map range domain) = True // a bit overkill?
+private let table : MM.t TLSConstants.tls_tables_region range domain inv = MM.alloc()
 
 // witnessing that we hashed this particular content (for collision detection)
 // to be replaced by a witness of inclusion in a global table of all hash computations.

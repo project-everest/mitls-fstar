@@ -9,7 +9,7 @@ open FStar.HyperStack.ST
 
 // tmp hack for depenency analysis bug
 module Req_FSTMRRef = FStar.Monotonic.RRef
-module Req_MM = MonotoneMap
+module Req_MM = FStar.Monotonic.DependentMap
 module IO = FStar.IO
 module Req_DHGroup = DHGroup
 module Req_ECGroup = ECGroup
@@ -119,3 +119,4 @@ val keyShareBytes: ks:keyShare -> Tot (b:bytes{
   HRRKeyShare? ks ==> (2 = length b)})
 type ks_msg = | KS_ClientHello | KS_ServerHello | KS_HRR
 val parseKeyShare: ks_msg -> bytes -> Tot (result keyShare)
+ 

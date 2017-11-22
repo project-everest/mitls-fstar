@@ -10,7 +10,7 @@ open CoreCrypto
 open TLSConstants
 open TLSInfo
 
-module MM = MonotoneMap
+module MM = FStar.Monotonic.DependentMap
 module MR = FStar.Monotonic.RRef
 
 type id = i:id{~(PlaintextID? i) /\ AEAD? (aeAlg_of_id i)}
@@ -56,9 +56,15 @@ let log_ref (r:rgn) (i:id) : Tot Type0 =
 let ilog (#r:rgn) (#i:id) (l:log_ref r i{authId i})
  : Tot (ideal_log r i) = l
 
+let ilog_as_ref (#r:rgn) (#i:id) (l:ideal_log r i{authId i})
+ : Tot (log_ref r i) = l
+
+let unit_as_ref (r:rgn) (i:id{~ (authId i)})
+ : Tot (log_ref r i) = ()
+
 noeq type state (i:id) (rw:rw) =
   | State:
-    #region: rgn ->
+    region: rgn ->
     #log_region:rgn{
        if rw = Writer then region = log_region
        else HyperHeap.disjoint region log_region} ->
@@ -69,7 +75,7 @@ noeq type state (i:id) (rw:rw) =
 type empty_log (#i:id) (#rw:rw) (st:state i rw) h =
   authId i ==>
     (MR.m_contains (ilog st.log) h /\
-     MR.m_sel h (ilog st.log) == MM.empty_map (iv i) entry)
+     MR.m_sel h (ilog st.log) == MM.empty)
 
 type writer i = s:state i Writer
 type reader i = s:state i Reader
@@ -90,10 +96,10 @@ let gen parent i =
   let writer_r = new_region parent in
   cut (is_eternal_region writer_r);
   if authId i then
-    let log : ideal_log writer_r i = MM.alloc #writer_r #(iv i) #entry #no_inv in
-    let w : writer i = State #i #Writer #writer_r #writer_r kv log in w
+    let log : ideal_log writer_r i = MM.alloc () in
+    State writer_r kv (ilog_as_ref log)
   else
-    let w : writer i = State #i #Writer #writer_r #writer_r kv () in w
+    State writer_r kv (unit_as_ref writer_r i)
 
 // A reader r peered with the writer w
 type peered (#i:id) (w:writer i) =
@@ -114,16 +120,16 @@ let genReader parent #i w =
   let reader_r = new_region parent in
   if authId i then
     let log : ideal_log w.region i = w.log in
-    State #i #Reader #reader_r #w.region w.key log
+    State reader_r #w.region w.key log
   else
-    State #i #Reader #reader_r #w.region w.key ()
+    State reader_r #w.region w.key ()
 
 val coerce: parent:rgn -> i:id{~(authId i)} -> kv:key i -> ST (writer i)
   (requires (fun h0 -> True))
   (ensures  (genPost parent))
 let coerce parent i kv =
   let writer_r = new_region parent in
-  State #i #Writer #writer_r #writer_r kv ()
+  State writer_r kv (unit_as_ref writer_r i)
 
 val leak: #i:id -> #role:rw -> state i role -> ST (key i)
   (requires (fun h0 -> ~(authId i)))
@@ -163,7 +169,7 @@ type correct_decrypt (#i:id) (#l:plainlen) (r:reader i) (iv:iv i) (ad:adata i)
                      (c:cipher i l) (po:option (plain i l)) (h:HyperStack.mem) =
   (authId i ==>
     (defined_iv #i r iv h ==>
-      (let Entry ad' p c' = MM.value (ilog r.log) iv h in
+      (let Entry ad' p c' = MM.value_of (ilog r.log) iv h in
         ((ad'=ad /\ c'=c) ==> po = Some p)))) /\
   (~(authId i) ==>
     (forall (p:plain i l).{:pattern (aead_encryptT (alg i) (State?.key r) iv ad p)}

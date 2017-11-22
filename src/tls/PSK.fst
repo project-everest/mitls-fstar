@@ -10,7 +10,8 @@ open FStar.Error
 open TLSError
 open TLSConstants
 
-module MM = MonotoneMap
+module DM = FStar.DependentMap
+module MM = FStar.Monotonic.DependentMap
 module MR = FStar.Monotonic.RRef
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
@@ -59,11 +60,11 @@ type app_psk_entry (i:psk_identifier) =
 //      Seq.equal i1 i2 <==> (match MM.sel m i1, MM.sel m i2 with
 //                  | Some (psk1, pski1, h1), Some (psk2, pski2, h2) -> Seq.equal psk1 psk2 /\ h1 == h2
 //                  | _ -> True)
-type psk_table_invariant (m:MM.map' psk_identifier app_psk_entry) = True
+type psk_table_invariant (m:MM.partial_dependent_map psk_identifier app_psk_entry) = True
 
 private let psk_region:rgn = new_region tls_tables_region
 private let app_psk_table : MM.t psk_region psk_identifier app_psk_entry psk_table_invariant =
-  MM.alloc #psk_region #psk_identifier #app_psk_entry #psk_table_invariant
+  MM.alloc ()
 
 type registered_psk (i:psk_identifier) =
   MR.witnessed (MM.defined app_psk_table i)
@@ -109,7 +110,7 @@ let psk_lookup (i:psk_identifier) : ST (option pskInfo)
 
 type honest_st (i:pskid) (h:mem) =
   (MM.defined app_psk_table i h /\
-  (let (_,_,b) = MM.value app_psk_table i h in b = true))
+  (let (_,_,b) = MM.value_of app_psk_table i h in b = true))
 
 type honest_psk (i:pskid) = MR.witnessed (honest_st i)
 
@@ -165,7 +166,7 @@ let coerce_psk (i:psk_identifier) (ctx:pskInfo) (k:app_psk i)
 
 let compatible_hash_ae_st (i:pskid) (ha:hash_alg) (ae:aeadAlg) (h:mem) =
   (MM.defined app_psk_table i h /\
-  (let (_,ctx,_) = MM.value app_psk_table i h in
+  (let (_,ctx,_) = MM.value_of app_psk_table i h in
   ha = pskInfo_hash ctx /\ ae = pskInfo_ae ctx))
 
 let compatible_hash_ae (i:pskid) (h:hash_alg) (a:aeadAlg) =
@@ -173,7 +174,7 @@ let compatible_hash_ae (i:pskid) (h:hash_alg) (a:aeadAlg) =
 
 let compatible_info_st (i:pskid) (c:pskInfo) (h:mem) =
   (MM.defined app_psk_table i h /\
-  (let (_,ctx,_) = MM.value app_psk_table i h in c = ctx))
+  (let (_,ctx,_) = MM.value_of app_psk_table i h in c = ctx))
 
 let compatible_info (i:pskid) (c:pskInfo) =
   MR.witnessed (compatible_info_st i c)
@@ -189,7 +190,7 @@ let verify_hash_ae (i:pskid) (ha:hash_alg) (ae:aeadAlg) : ST bool
   | Some x ->
     let h = get() in
     cut(MM.contains app_psk_table i x h);
-    cut(MM.value app_psk_table i h = x);
+    cut(MM.value_of app_psk_table i h = x);
     let (_, ctx, _) = x in
     if pskInfo_hash ctx = ha && pskInfo_ae ctx = ae then
      begin

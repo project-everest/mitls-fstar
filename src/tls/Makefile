@@ -150,15 +150,10 @@ QUIC
 
 # Targets to get F* arguments in interactive mode
 %.fst-in:
-	@echo $(OPTIONS) $(VERFLAGS) \
-	$(FSTAR_INCLUDE_PATHS) \
-	--include $(MITLS_HOME)/src/tls/ideal-flags \
-	--cache_checked_modules
+	$(MAKE) -f Makefile.kremlin $@
 
 %.fsti-in:
-	@echo $(OPTIONS) $(VERFLAGS) \
-	$(FSTAR_INCLUDE_PATHS) \
-	--include $(MITLS_HOME)/src/tls/ideal-flags
+	$(MAKE) -f Makefile.kremlin $@
 
 # These rules are silent to avoid disturbing .fst-in etc
 .depend-TLS: # $(wildcard *.fst *.fsti)

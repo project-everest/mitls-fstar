@@ -6,7 +6,7 @@ records the honesty of shares using two layers of types: pre_share
 is for syntactically valid shares (used in parsing modules) while
 share is for registered shares (for which is_honest is defined).
 *)
-﻿module CommonDH
+module CommonDH
 
 open FStar.HyperStack
 open FStar.Bytes
@@ -17,7 +17,8 @@ open TLSError
 open FStar.HyperStack.ST
 
 module MR = FStar.Monotonic.RRef
-module MM = MonotoneMap
+module MM = FStar.Monotonic.DependentMap
+module DM = FStar.DependentMap
 module ST = FStar.HyperStack.ST
 
 (* A flag for runtime debugging of cDH data.
@@ -111,7 +112,7 @@ private type share_table = (if Flags.ideal_KEF then ideal_log else unit)
 
 abstract let share_log: share_table =
   (if Flags.ideal_KEF then
-    MM.alloc #dh_region #id #honest #(fun _ -> True)
+    MM.alloc () <: ideal_log
   else
     ())
 
