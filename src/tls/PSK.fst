@@ -54,7 +54,7 @@ type app_psk_entry (i:psk_identifier) =
   (app_psk i) * pskInfo * bool
 
 // Global invariant on the PSK idealization table
-// No longer necessary now that MonotoneMap uses eqtype
+// No longer necessary now that FStar.Monotonic.DependentMap uses eqtype
 //type app_psk_injective (m:MM.map' psk_identifier app_psk_entry) =
 //  forall i1 i2.{:pattern (MM.sel m i1); (MM.sel m i2)}
 //      Seq.equal i1 i2 <==> (match MM.sel m i1, MM.sel m i2 with

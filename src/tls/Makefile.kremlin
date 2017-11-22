@@ -65,7 +65,7 @@ $(EXTRACT_DIR)/standalone/out.krml: Standalone.fst.checked.lax
 	$(KRML_COMMAND) $(subst .checked.lax,, $^) -skip-translation -tmpdir extract/standalone
 
 clean:
-	rm -f $(KRML_DIR)/*.c $(KRML_DIR)/*.h $(KRML_DIR)/*.o $(KRML_DIR)/out.krml $.depend *.checked.lax
+	rm -f $(KRML_DIR)/*.c $(KRML_DIR)/*.h $(KRML_DIR)/*.o $(KRML_DIR)/out.krml .depend *.checked.lax
 	rm -rf $(EXTRACT_DIR)/more
 
 .depend:

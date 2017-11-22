@@ -17,7 +17,8 @@ open TLSError
 open TLSConstants
 open TLSInfo
 
-module MM = MonotoneMap
+module DM = FStar.DependentMap
+module MM = FStar.Monotonic.DependentMap
 module MR = FStar.Monotonic.RRef
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack

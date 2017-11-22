@@ -6,7 +6,7 @@ open FStar.Error
 open TLSInfo
 
 module N=Nonce
-module MM = MonotoneMap
+module MM = FStar.Monotonic.DependentMap
 module MR = FStar.Monotonic.RRef
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
@@ -18,12 +18,12 @@ type n_id (n:random) = i:id{nonce_of_id i = n}
 //nonce_id_table:
 //  A monotone, injective partial map in the tls_tables_region, from random to rid
 let nonce_id_table : MM.t tls_tables_region random n_id (fun x -> True) =
-  MM.alloc #tls_tables_region #random #n_id #(fun x -> True)
+  MM.alloc ()
 
 let id_of_nonce (n:random) (i:n_id n) = MR.witnessed (MM.contains nonce_id_table n i)
 
 val insert: n:random -> i:n_id n -> ST unit
-  (requires (fun h -> MM.sel (MR.m_sel h nonce_id_table) n == None))
+  (requires (fun h -> MM.fresh nonce_id_table n h))
   (ensures (fun h0 _ h1 ->
       let nonce_id_table_as_hsref = MR.as_hsref nonce_id_table in
       (HS.modifies (Set.singleton tls_tables_region) h0 h1 /\
@@ -37,10 +37,10 @@ val lookup: n:random -> ST (option (n_id n))
   (requires (fun h -> True))
   (ensures (fun h0 idopt h1 ->
     h0==h1 /\
-    idopt == MM.sel (MR.m_sel h0 nonce_id_table) n /\
     (match idopt with
-     | None -> True
-     | Some i -> id_of_nonce n i)))
+     | None -> MM.fresh nonce_id_table n h0
+     | Some i -> MM.contains nonce_id_table n i h0 /\
+                id_of_nonce n i)))
 let lookup n = MM.lookup nonce_id_table n
 
 val injectivity : n:random -> m:random -> i:n_id n -> j:n_id m ->  ST unit
