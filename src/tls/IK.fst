@@ -1091,20 +1091,7 @@ let pp (u:usage) : ST (pkg ii)
   =
   memoization_ST #ii (local_kdf_pkg u)
 
-(*)
-#set-options "--print_universes --print_implicits --print_full_names"
-let pp (u: usage): pkg ii =
-  //assert_norm(regid == i: ii.t {ii.registered i});
-  Pkg
-  (secret u)
-  (fun (i:ii.t) -> a:info{a == get_info i})
-  (fun #_ a -> secret_len a)
-  idealKDF
-  (create u)
-  (coerce u)
-*)
-
-let ukey (u:usage) (lbl:label) (i:regid) = (u lbl).key i
+let ukey (u:usage) (lbl:label) (i:regid) = Pkg?.key (u lbl) i
 
 /// The well-formedness condition on the derived label (opaque from
 /// the viewpoint of the KDF) enforces
@@ -1117,7 +1104,7 @@ val derive:
   a: info {a == get_info i} ->
   lbl: label ->
   ctx: context {~(honest_idh ctx) /\ wellformed_id (Derive i lbl ctx)} ->
-  a': (u lbl).info (Derive i lbl ctx) ->
+  a': Pkg?.info (u lbl) (Derive i lbl ctx) ->
   ST (_:unit{registered (Derive i lbl ctx)} & ukey u lbl (Derive i lbl ctx))
   (requires fun h0 -> True)
   (ensures fun h0 r h1 -> True
@@ -1140,7 +1127,7 @@ let derive #u #i k a lbl ctx a' =
     //17-10-30 was failing with scrutiny error: match MM.lookup (secret_ideal k) x
     | Some dk -> (| (), dk |)
     | None ->
-      let dk = pkg.create i' a' in
+      let dk = Pkg?.create pkg i' a' in
       //17-10-20 TODO framing across create
       let h = get() in
       assume(MM.fresh (secret_ideal k) x h); // FIXME(adl)!!
@@ -1148,8 +1135,8 @@ let derive #u #i k a lbl ctx a' =
       (| (), dk |)
   else
     let raw =
-      HKDF.expand #(a.ha) (secret_corrupt k) (Platform.Bytes.abytes lbl) (UInt32.v (pkg.len a')) in
-    let dk = pkg.coerce i' a' raw in
+      HKDF.expand #(a.ha) (secret_corrupt k) (Platform.Bytes.abytes lbl) (UInt32.v (Pkg?.len pkg a')) in
+    let dk = Pkg?.coerce pkg i' a' raw in
     (| (), dk |)
 
 /// Outlining a global KDF state invariant, supported by package
@@ -1189,6 +1176,8 @@ let ssa #a =
     | _ -> False in
   f
 
+// temporary
+let there = Mem.tls_tables_region
 
 // memoizing a single extracted secret
 private type mref_secret (u: usage) (i: regid) =
@@ -1255,13 +1244,27 @@ let create_psk #u i a =
   else
     (| (), real_psk #u #i' (sample (secret_len a)) |)
 
-let pskp (*ip:ipkg*) (u:usage): pkg ii = Pkg
-  (ext0 u)
-  (fun i -> a: info{a == get_info i})
-  (fun #_ a -> secret_len a)
-  idealKEF0
-  create_psk
-  coerce_psk
+let pskp (*ip:ipkg*) (u:usage): ST (pkg ii)
+  (requires fun h0 -> True)
+  (ensures fun h0 p h1 -> (*TBC*) True)
+= 
+  let p = 
+    LocalPkg
+      (fun (i:ii.t {ii.registered i}) -> ext0 u i)
+      (fun i -> a: info{a == get_info i})
+      (fun #_ a -> secret_len a)
+      idealKEF0
+      // local footprint 
+      (fun #i (k:ext0 u i) -> Set.empty (*TBC*)) 
+      // local invariant 
+      (fun #_ k h -> True)
+      (fun r i h0 k h1 -> ())
+      // create/coerce postcondition
+      (fun #i u h0 k h1 -> True) //TODO
+      (fun #i u h0 k h1 r h2 -> ())
+      create_psk
+      coerce_psk in
+  memoization_ST p
 
 /// HKDF.Extract(key=0, materials=k) idealized as a (single-use) PRF,
 /// possibly customized on the distribution of k.
@@ -1332,13 +1335,27 @@ assume val coerce_salt:
   raw: lbytes (secret_len a) ->
   salt u i
 
-let saltp (*ip:ipkg*) (u:usage): pkg ii = Pkg
-  (salt u)
-  (fun (i:ii.t) -> a:info{a == get_info i})
-  (fun #_ a -> secret_len a)
-  idealPRF1
-  create_salt
-  coerce_salt
+let saltp (*ip:ipkg*) (u:usage): ST (pkg ii)
+  (requires fun h0 -> True)
+  (ensures fun h0 s h1 -> True)
+= 
+  let p = LocalPkg
+    (salt u)
+    (fun (i:ii.t) -> a:info{a == get_info i})
+    (fun #_ a -> secret_len a)
+    idealPRF1
+    // local footprint 
+    (fun #i (k:salt u i) -> Set.empty) 
+    // local invariant 
+    (fun #_ k h -> True)
+    (fun r i h0 k h1 -> ())
+    // create/coerce postcondition
+    (fun #i u h0 k h1 -> True)
+    (fun #i u h0 k h1 r h2 -> ())
+    create_salt
+    coerce_salt in
+  memoization_ST #ii p 
+
 
 /// HKDF.Extract(key=s, materials=dh_secret) idealized as 2-step
 /// (KEF-ODH, KEF-Salt game); we will need separate calls for clients
@@ -1802,13 +1819,27 @@ let create_salt2 #u i a =
   else
     (| (), real_salt2 #u #i' (sample (secret_len a)) |)
 
-let saltp2 (u:usage): pkg ii = Pkg
-  (ext2 u)
-  (fun (i:ii.t) -> a:info{a == get_info i})
-  (fun #_ a -> secret_len a)
-  idealKEF2
-  create_salt2
-  coerce_salt2
+let saltp2 (u:usage): ST (pkg ii) 
+  (requires fun h0 -> True)
+  (ensures fun h0 s h1 -> True)
+= 
+  let p = LocalPkg
+    (ext2 u)
+    (fun (i:ii.t) -> a:info{a == get_info i})
+    (fun #_ a -> secret_len a)
+    idealKEF2
+    // local footprint 
+    (fun #i (k:ext2 u i) -> Set.empty) 
+    // local invariant 
+    (fun #_ k h -> True)
+    (fun r i h0 k h1 -> ())
+    // create/coerce postcondition
+    (fun #i u h0 k h1 -> True)
+    (fun #i u h0 k h1 r h2 -> ())
+    create_salt2
+    coerce_salt2 in
+  memoization_ST #ii p 
+
 
 /// HKDF.Extract(key=s, materials=0) idealized as a single-use PRF.
 /// The salt is used just for extraction, hence [u] here is for the extractee.
@@ -1849,8 +1880,6 @@ let extract2 #u #i e2 a =
     coerce u i' a raw
 
 
-/// module KeySchedule
-/// composing them specifically for TLS
 
 // not sure how to enforce label restrictions, e.g.
 // val u_traffic: s:string { s = "ClientKey" \/ s = "ServerKey"} -> ip:ipkg -> pkg ip
