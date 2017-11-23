@@ -126,7 +126,9 @@ let lemma_iupdate (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (i:it) (v:vt i)
 
 let mem_alloc (#it:eqtype) (vt:it -> Type) : ST (mem_table vt)
   (requires fun h0 -> True)
-  (ensures fun h0 _ h1 -> modifies_one tls_define_region h0 h1)
+  (ensures fun h0 t h1 -> 
+    modifies_one tls_define_region h0 h1 /\ 
+    (model ==> MR.m_sel h1 (itable t) == MM.empty_map it vt))
   =
   if model then
     MM.alloc #tls_define_region #it #vt #(fun _ -> True)
@@ -141,7 +143,7 @@ noeq type pkg (ip: ipkg) = | Pkg:
   //17-11-13 do we need to know that ideal ==> model? 
   //17-11-13 is type-level access enough? 
 
-  define_table: mem_table key  (* table of all allocated instances; owned by the package *) ->
+  define_table: mem_table #(i:ip.t {ip.registered i}) key  (* table of all allocated instances; owned by the package *) ->
   footprint: (mem -> GTot rset) (* package footprint: all global and instance-local regions, but not [define_table] *) ->
   lemma_footprint_framing: (s:Set.set HH.rid -> h0:mem -> h1:mem -> Lemma
     (requires modifies_transitively s h0 h1 /\ ~(tls_define_region `Set.mem` s))
@@ -172,10 +174,10 @@ noeq type pkg (ip: ipkg) = | Pkg:
 ///
 noeq type local_pkg (ip: ipkg) =
 | LocalPkg:
-  key: (i:ip.t{ip.registered i} -> Type0) ->
-  info: (ip.t -> Type0) ->
-  len: (#i:ip.t -> info i -> keylen) ->
-  ideal: Type0 -> 
+  $key: (i:ip.t{ip.registered i} -> Type0) ->
+  $info: (ip.t -> Type0) ->
+  $len: (#i:ip.t -> info i -> keylen) ->
+  $ideal: Type0 -> 
   local_footprint: (#i:ip.t{ip.registered i} -> key i -> GTot rset) (* instance footprint *) ->
   local_invariant: (#i:ip.t{ip.registered i} -> key i -> mem -> GTot Type0) (* instance invariant *) ->
   local_invariant_framing: (r:HH.rid -> i:ip.t{ip.registered i} -> h0:mem -> k:key i -> h1:mem -> Lemma 
@@ -195,11 +197,14 @@ noeq type local_pkg (ip: ipkg) =
 
 // Memoization functor: memoize create/coerce and manage defined instances
 #set-options "--z3rlimit 100"
-let memoization (#ip:ipkg) (p:local_pkg ip): ST (pkg ip)
-  (requires fun h0 -> True)
-  (ensures fun h0 p h1 -> modifies_one tls_define_region h0 h1 /\ p.package_invariant p h1)
+unfold let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip 
+// ST (pkg ip) does not work: too opaque
+//  (requires fun h0 -> True)
+//  (ensures fun h0 q h1 -> 
+//     modifies_one tls_define_region h0 h1 /\ 
+//     q.package_invariant h1 /\ Pkg?.info q = LocalPkg?.info p)
   =
-  let mtable : mem_table p.key = mem_alloc p.key in
+//  let mtable : mem_table p.key = mem_alloc p.key in
   let footprint (h:mem) : GTot rset =
     assume false;
     if model then
@@ -303,6 +308,7 @@ let coerce_raw
 let footprint_raw (ip: ipkg) (len_of_i: ip.t -> keylen)
   (#i: ip.t) (k:raw ip len_of_i i) : GTot rset = Set.empty
 
+(* ---
 let rp (ip:ipkg) (len_of_i: ip.t -> keylen): ST (pkg ip) 
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> modifies_one tls_define_region h0 h1)
@@ -845,7 +851,6 @@ let create u i a =
 /// parents before childrens.)
 
 
-(* ---
 #set-options "--print_universes --print_implicits --print_full_names"
 let pp (u: usage): pkg ii =
   //assert_norm(regid == i: ii.t {ii.registered i});

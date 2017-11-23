@@ -12,6 +12,7 @@ module MM = FStar.Monotonic.Map
 
 // FIXME
 assume val ideal: bool
+
  
 //let _ = assert false 
 
@@ -22,7 +23,7 @@ type text = bytes
 
 noeq type info: Type0 = { 
   parent: r:rgn {~ (is_tls_rgn r)};
-  alg: IK.kdfa; 
+  alg: Hashing.Spec.alg; //too loose? IK.kdfa; 
   good: text -> bool (*TODO: should be Type0 *)}
 
 type tag (u:info) = lbytes (Hashing.Spec.tagLen u.alg)
@@ -46,23 +47,24 @@ private type log_t
 = MM.t r (tag u * text) (fun (t,v) -> goodish i u v) (fun _ -> True) // could constrain size
 
 // readers and writers share the same private state: a log of MACed messages
-noeq abstract type key (#ip:ipkg) (i:ip.IK.t) =
+noeq abstract type key (ip:ipkg) (i:ip.IK.t) =
   | Key:
     u: info -> // creation-time parameters, kept for convenience
     region: Mem.subrgn u.parent {~(is_tls_rgn region)} ->  // intuitively, the writer's region
     kv: keyrepr u ->
     log: log_t i u region -> //TODO: make conditional
-    key i 
+    key ip i 
 
-val region: #ip:ipkg -> #i:ip.IK.t -> k:key i -> GTot (subrgn k.u.parent)
-val keyval: #ip:ipkg -> #i:ip.IK.t -> k:key i -> GTot (keyrepr k.u)
+val region: #ip:ipkg -> #i:ip.IK.t -> k:key ip i -> GTot (subrgn k.u.parent)
+val keyval: #ip:ipkg -> #i:ip.IK.t -> k:key ip i -> GTot (keyrepr k.u)
 
 let region #ip #i k  = k.region
 let keyval #ip #i k = k.kv
 
-private let gen (#ip:ipkg) (i:ip.IK.t) (u:info) (kv:keyrepr u) : ST (k:key i {k.u == u})
+private let gen (ip:ipkg) (i:ip.IK.t) (u:info) (kv:keyrepr u) : ST (k:key ip i)
   (requires (fun _ -> True))
   (ensures (fun h0 k h1 ->
+    k.u == u /\
     fresh_subregion (region k) u.parent h0 h1 /\
     modifies Set.empty h0 h1
   )) =
@@ -72,31 +74,31 @@ private let gen (#ip:ipkg) (i:ip.IK.t) (u:info) (kv:keyrepr u) : ST (k:key i {k.
   Key u region kv log
 
 val create: 
-  #ip:ipkg -> ha_of_i: (ip.IK.t -> ha) -> good_of_i: (ip.IK.t -> text -> bool) ->
+  ip:ipkg -> ha_of_i: (ip.IK.t -> ha) -> good_of_i: (ip.IK.t -> text -> bool) ->
   i:ip.IK.t {ip.IK.registered i} -> 
-  u:info {u.alg = ha_of_i i /\ u.good == good_of_i i} -> ST (k:key i {k.u == u})
+  u:info {u.alg = ha_of_i i /\ u.good == good_of_i i} -> ST (k:key ip i)
   (requires (fun _ -> True))
   (ensures (fun h0 k h1 ->
     modifies Set.empty h0 h1 /\
     k.u == u /\
     Mem.fresh_subregion (region k) u.parent h0 h1 ))
-let create #ip _ _ i u =
+let create ip _ _ i u =
   let kv: keyrepr u = CoreCrypto.random (Hashing.Spec.tagLen u.alg) in
-  gen i u kv 
+  gen ip i u kv 
 
 val coerce: 
-  #ip: ipkg -> ha_of_i: (ip.IK.t -> ha) -> good_of_i: (ip.IK.t -> text -> bool) ->
+  ip: ipkg -> ha_of_i: (ip.IK.t -> ha) -> good_of_i: (ip.IK.t -> text -> bool) ->
   i: ip.IK.t {ip.IK.registered i} -> 
   u: (u: info {u.alg = ha_of_i i /\ u.good == good_of_i i}) ->
-  kv: IK.lbytes (keylen u) -> // keyrepr u -> 
-  ST (k:key i)
+  kv: IK.lbytes (keylen u) -> 
+  ST (k:key ip i)
   (requires (fun _ -> ideal ==> ip.IK.corrupt i))
   (ensures (fun h0 k h1 ->
     modifies Set.empty h0 h1 /\
     k.u == u /\
     fresh_subregion (region k) u.parent h0 h1 ))
-let coerce #ip _ _ i u kv = 
-  gen i u kv
+let coerce ip _ _ i u kv = 
+  gen ip i u kv
 
 // not quite doable without reification?
 // assert_norm(forall ip i u. (create #ip i u == coerce #ip i u (CoreCrypto.random (UInt32.v (keylen u)))))
@@ -104,41 +106,67 @@ let coerce #ip _ _ i u kv =
 val footprint:
   ip: ipkg -> ha_of_i: (ip.IK.t -> ha) -> good_of_i: (ip.IK.t -> text -> bool) ->
   #i: ip.IK.t {ip.IK.registered i} -> 
-  k: key i -> rset 
+  k: key ip i -> rset 
 let footprint _ _ _ #_ k = 
   Set.singleton k.region
 
+unfold let info1 
+  (ip:ipkg) 
+  (ha_of_i: ip.IK.t -> ha)
+  (good_of_i: ip.IK.t -> text -> bool)
+  (i: ip.IK.t): Type0 
+= 
+  a:info{a.alg = ha_of_i i /\ a.good == good_of_i i} 
+
+unfold let localpkg 
+  (ip:ipkg) 
+  (ha_of_i: i:ip.IK.t -> ha)
+  (good_of_i: ip.IK.t -> text -> bool)
+  : p: IK.local_pkg ip {IK.LocalPkg?.info #ip p == info1 ip ha_of_i good_of_i}
+= 
+    IK.LocalPkg
+      (fun (i:ip.IK.t {ip.IK.registered i}) -> key ip i)
+      (info1 ip ha_of_i good_of_i)
+      (fun #_ u -> keylen u ) 
+      ideal  
+      // local footprint 
+      (fun #i (k:key ip i) -> Set.singleton k.region) 
+      // local invariant 
+      (fun #_ k h -> True)
+      (fun r i h0 k h1 -> ())
+      // create/coerce postcondition
+      (fun #i u h0 k h1 -> k.u == u /\ fresh_subregion (region k) u.parent h0 h1 )
+      (fun #i u h0 k h1 r h2 -> ())
+      (create ip ha_of_i good_of_i)
+      (coerce ip ha_of_i good_of_i)
+
+unfold 
 let pkg 
   (ip:ipkg) 
   (ha_of_i: ip.IK.t -> ha)
-  (good_of_i: ip.IK.t -> text -> bool): ST (IK.pkg ip)
-  (requires fun h0 -> True)
-  (ensures fun h0 r h1 -> modifies_one tls_define_region h0 h1)
+  (good_of_i: ip.IK.t -> text -> bool)
+  (table: IK.mem_table (key ip))
+  : IK.pkg ip
+//  (requires fun h0 -> True)
+//  (ensures fun h0 r h1 -> modifies_one tls_define_region h0 h1)
 = 
-  IK.memoization (IK.LocalPkg
-    (key #ip)
-    (fun (i:ip.IK.t) -> a:info{a.alg = ha_of_i i /\ a.good == good_of_i i})
-    (fun #_ u -> keylen u ) 
-    ideal  
-    // local footprint 
-    (fun #i (k:key i) -> Set.singleton k.region) 
-    // local invariant 
-    (fun #_ k h -> True)
-    (fun r i h0 k h1 -> ())
-    // create/coerce postcondition
-    (fun #i u h0 k h1 -> k.u == u /\ fresh_subregion (region k) u.parent h0 h1 )
-    (fun #i u h0 k h1 r h2 -> ())
-    (create #ip ha_of_i good_of_i)
-    (coerce #ip ha_of_i good_of_i) )
+  let p = localpkg ip ha_of_i good_of_i in 
+  //assert(p.IK.key == key ip);
+  assert(IK.LocalPkg?.info #ip p == info1 ip ha_of_i good_of_i);
+
+  let table: IK.mem_table p.IK.key = admit() in //table in 
+  let q = IK.memoization p table in 
+  assert(IK.Pkg?.key q == key ip);
+  q
 
 val leak: 
-  ip: ipkg -> ha_of_i: (ip.IK.t -> ha) -> good_of_i: (ip.IK.t -> text -> bool) ->
+  #ip: ipkg -> 
   #i: ip.IK.t -> 
-  k: key i {ip.IK.corrupt i} -> kv:keyrepr k.u { kv = keyval k }
-let leak _ _ _ #i k = k.kv
+  k: key ip i {ip.IK.corrupt i} -> kv:keyrepr k.u { kv = keyval k }
+let leak #_ #_ k = k.kv
 
 val mac: 
-  #ip:ipkg -> #i:ip.IK.t -> k:key i ->
+  #ip:ipkg -> #i:ip.IK.t -> k:key ip i ->
   p:text {ip.IK.corrupt i \/ k.u.good p} -> ST (tag k.u)
   (requires (fun _ -> True))
   (ensures (fun h0 t h1 -> modifies (Set.singleton (region k)) h0 h1 ))
@@ -151,7 +179,7 @@ let mac #ip #i k p =
   t
 
 val verify: 
-  #ip:ipkg -> #i:ip.IK.t {ip.IK.registered i} -> k:key i ->
+  #ip:ipkg -> #i:ip.IK.t {ip.IK.registered i} -> k:key ip i ->
   p:text -> t: tag k.u -> ST bool
   (requires (fun _ -> True))
   (ensures (fun h0 b h1 -> 
@@ -191,38 +219,65 @@ let verify #ip #i k p t =
 /// - more specific instantiations? 
 /// (later) support dynamic key compromise
 
+val coerce_eq2: a: (nat -> Type0) -> b: (nat -> Type0) -> v:a 0{a == b} -> b 0 
+let coerce_eq2 a b v = v // this works; many similar variants did not. 
+
+
 let test 
-  (v' t': bytes) 
-  (r:rgn {~(is_tls_rgn r)}): St unit 
+  (r:rgn {~(is_tls_rgn r)})
+  (v': bytes) 
+  (t': Hashing.Spec.tag Hashing.SHA256)
+  : 
+  ST unit 
+  (requires fun h0 -> model)
+  (ensures fun h0 _ h1 -> True)
 = 
-  let ip = IK.Idx 
+  let ip = IK.Idx // honest, simple indexes
     nat 
     (fun _ -> True)
     (fun _ -> True)
     (fun _ -> False)
     (fun _ -> true) in
+
+  // testing usability of local packages
   let a = Hashing.SHA256 in
   let ha_of_i (i:nat) = a in 
-  let good_of_i i v = length v = i in
-  let p = pkg ip (fun _ -> a) good_of_i in
-  // assume(IK.Pkg?.info p == (fun (i:ip.IK.t) -> a:info{a.alg = ha_of_i i /\ a.good == good_of_i i}));
+  let good_of_i i v = length v = i in // a property worth MACing! 
+  let p = localpkg ip (fun (_:ip.IK.t) -> a) good_of_i in
+  // assert (IK.LocalPkg?.info #ip p == info1 ip ha_of_i good_of_i); // provable only with unfolds?
+
   let u = {parent=r; alg=a; good=good_of_i 0} in
-  let u: IK.Pkg?.info p 0 = u in // can't get this 
-  //let u : u: info{u.alg = ha_of_i 0 /\ u.good == good_of_i 0} = {parent=r; alg=a; good=good_of_i 0} in
-  //assert_norm(u:info{u.alg = ha_of_i 0 /\ u.good == good_of_i 0} == IK.Pkg?.info p 0);
-  
-  let k = (IK.Pkg?.create p) 0 u in
+  let u = coerce_eq2 (info1 ip ha_of_i good_of_i) (IK.LocalPkg?.info #ip p) u in 
+  let k0: key ip 0 = (IK.LocalPkg?.create p) 0 u in
+
+  // testing usability of full packages 
+  let table = IK.mem_alloc #(i:ip.IK.t{ip.IK.registered i}) (key ip) in
+  let q = pkg ip (fun (_:ip.IK.t) -> a) good_of_i table in 
+  let h0 = get() in 
+  // assert(q.IK.package_invariant h0);
+
+  //TODO superficial but hard to prove... 
+  // assume(Monotonic.RRef.m_sel h0 (IK.itable table) == MM.empty_map ip.IK.t (key ip));
+  // assert(MM.fresh (IK.itable table) 0 h0);
+  // assert(q.IK.define_table == table);
+  assume(IK.mem_fresh q.IK.define_table 0 h0);
+
+  //17-11-23  causing mysterious squash error
+  // assert_norm(u:info{u.alg = ha_of_i 0 /\ u.good == good_of_i 0} == IK.Pkg?.info p 0);
+  // let u = u <: IK.Pkg?.info q 0 in
+  let k: key ip 0 = (IK.Pkg?.create q) 0 u in
+
+  // testing usability of logical payloads
   let v = empty_bytes in
   assert(good_of_i 0 v);
-  // let v: p:text {ip.IK.corrupt 0 \/ k.u.good p} = v in 
   let t = mac #ip #0 k v in
+
   let b = verify #ip #0 k v' t' in
-  assert( b ==> length v' = 0 );
-  ()
-//assert( b ==> length v' = 1 );
-//assert(false)
-
-
+  let empty = k.u.good in 
+  assert(b /\ ideal ==> length v' = 0);
+  // assert false; 
+  ()  
+  
 (*
 
 /// ------------ older, TLS-specific implementation 
