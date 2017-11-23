@@ -514,17 +514,25 @@ assume val aead_empty_log: ip: ipkg -> aeadAlg_of_i: (ip.t -> aeadAlg) ->
   #i: ip.t{ip.registered i} -> a: aeadAlg {a == aeadAlg_of_i i} ->
   h0:mem -> k:key ip aeadAlg_of_i i -> h1:mem -> Type0
 
+assume val aead_empty_log_framing: ip: ipkg -> aeadAlg_of_i: (ip.t -> aeadAlg) ->
+  #i: ip.t{ip.registered i} -> a: aeadAlg {a == aeadAlg_of_i i} ->
+  h0:mem -> k:key ip aeadAlg_of_i i -> h1:mem -> r:HH.rid -> h2:mem -> Lemma
+    (requires (aead_empty_log ip aeadAlg_of_i a h0 k h1 /\ modifies_one r h1 h2 /\ ~(r `Set.mem` aead_footprint k)))
+    (ensures (aead_empty_log ip aeadAlg_of_i a h0 k h2))
+
 assume val create_key:
   ip: ipkg -> aeadAlg_of_i: (ip.t -> aeadAlg) -> i: ip.t{ip.registered i} ->
   a:aeadAlg {a == aeadAlg_of_i i} -> ST (key ip aeadAlg_of_i i)
     (requires fun h0 -> model)
-    (ensures fun h0 k h1 -> aead_inv k h1 /\ aead_empty_log ip aeadAlg_of_i a h0 k h1)
+    (ensures fun h0 k h1 -> modifies_none h0 h1
+      /\ aead_empty_log ip aeadAlg_of_i a h0 k h1 /\ aead_inv k h1)
 
 assume val coerce_key:
   ip: ipkg -> aeadAlg_of_i: (ip.t -> aeadAlg) -> i: ip.t{ip.registered i} ->
   a:aeadAlg {a == aeadAlg_of_i i} -> keyrepr a -> ST (key ip aeadAlg_of_i i)
     (requires fun h0 -> idealAEAD ==> ip.corrupt i)
-    (ensures fun h0 k h1 -> aead_inv k h1 /\ aead_empty_log ip aeadAlg_of_i a h0 k h1)
+    (ensures fun h0 k h1 -> modifies_none h0 h1
+      /\ aead_empty_log ip aeadAlg_of_i a h0 k h1 /\ aead_inv k h1)
 
 let mp (ip:ipkg) (aeadAlg_of_i: ip.t -> aeadAlg)
   : ST (pkg ip) (requires fun h0 -> True)
@@ -537,19 +545,19 @@ let mp (ip:ipkg) (aeadAlg_of_i: ip.t -> aeadAlg)
       (fun #_ a -> aeadLen a)
       idealAEAD
       (aead_footprint #ip #aeadAlg_of_i)
-      (aead_inv #ip #aeadAlg_of_i) // no invariant
+      (aead_inv #ip #aeadAlg_of_i)
       (aead_invariant_framing ip aeadAlg_of_i)
-      (aead_empty_log ip aeadAlg_of_i) // no post-condition
-      (admit())
+      (aead_empty_log ip aeadAlg_of_i)
+      (aead_empty_log_framing ip aeadAlg_of_i)
       (create_key ip aeadAlg_of_i)
       (coerce_key ip aeadAlg_of_i))
 
-// The two first arguments are explicit because their inference is too brittle.
 val encrypt:
   ip:ipkg -> aeadAlg_of_i: (ip.t -> aeadAlg) -> #i:ip.t{ip.registered i} ->
   k: key ip aeadAlg_of_i i -> nat -> ST nat
   (requires fun h0 -> aead_inv k h0)
   (ensures fun h0 c h1 -> modifies (aead_footprint k) h0 h1 /\ aead_inv k h1)
+
 let encrypt _ _ #_ k v = v + 1
 
 //17-11-22 TODO: generic wrapping of encrypt from local_invariant to package_invariant
@@ -686,7 +694,7 @@ type corrupt (i:id) =
     MR.witnessed (MM.contains log i false)
   else True)
 
-// ADL: difficult to prove, see CommonDH for details
+// ADL: difficult to prove, relies on an axiom outside the current formalization of FStar.Monotonic
 let lemma_honest_corrupt (i:regid)
   : Lemma (honest i <==> ~(corrupt i)) =
   admit()
@@ -733,7 +741,9 @@ let rec lemma_honesty_update (m:MM.map id (fun _ -> bool) honesty_invariant)
   (i:regid) (l:label) (c:context{wellformed_id (Derive i l c)})
   (b:bool{b <==> honest i /\ not b <==> corrupt i})
   : Lemma (honesty_invariant (MM.upd m (Derive i l c) b))
-  = admit()
+// : Lemma (requires Some? (m i ) /\ None? (m (Derive i l c)) /\ m i == Some false ==> not b)
+//         (ensures honesty_invariant (MM.upd m (Derive i l c) b))
+  = admit() // easy
 
 let register_derive (i:regid) (l:label) (c:context{wellformed_id (Derive i l c)})
   : ST (regid * bool)
