@@ -50,7 +50,7 @@ let lbytes (len:UInt32.t) = Platform.Bytes.lbytes (UInt32.v len)
 
 let sample (len:UInt32.t): ST (lbytes len)
     (requires fun h0 -> True)
-    (ensures fun h0 r h1 -> True)
+    (ensures fun h0 r h1 -> h0 == h1)
   = CoreCrypto.random (UInt32.v len)
 
 //unfold let doubleton (#a:eqtype) (e1:a) (e2:a) : Set.set a = Set.union (Set.singleton e1) (Set.singleton e2)
@@ -178,9 +178,9 @@ let lemma_iupdate (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (i:it) (v:vt i)
 
 let mem_alloc (#it:eqtype) (vt:it -> Type) : ST (mem_table vt)
   (requires fun h0 -> True)
-  (ensures fun h0 t h1 -> 
-    modifies_mem_table t h0 h1 /\ 
-    (model ==> MR.m_sel h1 (itable t) == MM.empty_map it vt)) 
+  (ensures fun h0 t h1 ->
+    modifies_mem_table t h0 h1 /\
+    (model ==> MR.m_sel h1 (itable t) == MM.empty_map it vt))
 =
   if model then MM.alloc #tls_define_region #it #vt #(fun _ -> True) else ()
 
@@ -197,12 +197,11 @@ noeq type pkg_inv_r =
 
 noeq type pkg (ip: ipkg) = | Pkg:
   $key: (i:ip.t {ip.registered i} -> Type0) (* indexed state of the functionality *) ->
-  $info: (ip.t -> Type0)                    (* creation-time arguments, typically refined using i:ip.t *) -> 
+  $info: (ip.t -> Type0)                    (* creation-time arguments, typically refined using i:ip.t *) ->
   $len: (#i:ip.t -> info i -> keylen)        (* computes the key-material length from those arguments *) ->
-  ideal: Type0                            (* type-level access to the ideal flag of the package *) -> 
-  //17-11-13 do we need to know that ideal ==> model? 
-  //17-11-13 is type-level access enough? 
-
+  ideal: Type0                            (* type-level access to the ideal flag of the package *) ->
+  //17-11-13 do we need to know that ideal ==> model?
+  //17-11-13 is type-level access enough?
   define_table: mem_table #(i:ip.t {ip.registered i}) key  (* table of all allocated instances; owned by the package *) ->
   footprint: (mem -> GTot rset) (* package footprint: all global and instance-local regions, but not [define_table] *) ->
   footprint_framing: (h0:mem -> h1:mem -> Lemma
@@ -238,7 +237,7 @@ noeq type local_pkg (ip: ipkg) =
   $key: (i:ip.t{ip.registered i} -> Type0) ->
   $info: (ip.t -> Type0) ->
   $len: (#i:ip.t -> info i -> keylen) ->
-  $ideal: Type0 -> 
+  $ideal: Type0 ->
   local_footprint: (#i:ip.t{ip.registered i} -> key i -> GTot rset) (* instance footprint *) ->
   local_invariant: (#i:ip.t{ip.registered i} -> key i -> mem -> GTot Type0) (* instance invariant *) ->
   local_invariant_framing: (r:HH.rid -> i:ip.t{ip.registered i} -> h0:mem -> k:key i -> h1:mem -> Lemma
@@ -298,14 +297,14 @@ let lemma_mm_forall_elim (#a:eqtype) (#b:a -> Type) (t:MM.map' a b)
 
 // Memoization functor: memoize create/coerce and manage defined instances
 #set-options "--z3rlimit 100"
-unfold let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip 
+unfold let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip
 // does not work: too opaque?
 //  : ST (pkg ip)
 //  (requires fun h0 -> True)
 //  (ensures fun h0 p h1 ->
 //    modifies_mem_table p.define_table h0 h1 /\
 //    p.package_invariant h1)
-=
+  =
   let footprint (h:mem) : GTot rset =
     if model then
       let log : i_mem_table p.key = itable mtable in
@@ -419,10 +418,10 @@ unfold let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): p
     assume(~(Set.mem r (footprint h0)) ==> ~(Set.mem r (p.local_footprint k)));
     p.post_framing #i a h0 k h1 r h2
     in
-  let p' = Pkg 
-    p.key 
-    p.info 
-    p.len 
+  let p' = Pkg
+    p.key
+    p.info
+    p.len
     p.ideal
     mtable footprint footprint_framing
     package_invariant package_invariant_framing
@@ -430,7 +429,7 @@ unfold let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): p
     create coerce in
   p'
 
-let memoization_ST (#ip:ipkg) (p:local_pkg ip) 
+let memoization_ST (#ip:ipkg) (p:local_pkg ip)
   : ST (pkg ip)
   (requires fun h0 -> True)
   (ensures fun h0 p h1 ->
@@ -439,7 +438,7 @@ let memoization_ST (#ip:ipkg) (p:local_pkg ip)
 =
   let h0 = get() in
   let mtable: mem_table p.key = mem_alloc #(i:ip.t{ip.registered i}) p.key in
-  let h1 = get() in 
+  let h1 = get() in
   let q = memoization #ip p mtable in
   assert(modifies_mem_table mtable h0 h1);
   (if model then lemma_mm_forall_init (MR.m_sel h1 (itable mtable)) p.local_invariant h1);
@@ -457,43 +456,46 @@ assume val flag_Raw: bool
 type idealRaw = b2t flag_Raw
 
 type rawlen (#ip: ipkg) (#len_of_i: ip.t -> keylen) (i:ip.t) = len:keylen {len = len_of_i i}
+type raw (ip: ipkg) (len_of_i: ip.t -> keylen) (i:ip.t{ip.registered i}) = lbytes (len_of_i i)
 
-type raw (ip: ipkg) (len_of_i: ip.t -> keylen) (i: ip.t  {ip.registered i}) = lbytes (len_of_i i)
-let create_raw
-  (ip: ipkg) (len_of_i: ip.t -> keylen) (i: ip.t {ip.registered i}) (len:keylen {len = len_of_i i}):
+let create_raw (ip: ipkg) (len_of_i: ip.t -> keylen)
+  (i:ip.t{ip.registered i}) (len:keylen {len = len_of_i i}):
   ST (raw ip len_of_i i)
   (requires fun h0 -> model)
-  (ensures fun h0 p h1 -> True)
+  (ensures fun h0 p h1 -> modifies_none h0 h1)
   = sample len
 
-let coerce_raw
-  (ip: ipkg) (len_of_i: ip.t -> keylen) (i: ip.t {ip.registered i}) (len:keylen {len = len_of_i i}) (r:lbytes len):
+let coerce_raw (ip: ipkg) (len_of_i: ip.t -> keylen)
+  (i: ip.t {ip.registered i}) (len:keylen {len = len_of_i i}) (r:lbytes len):
   ST (raw ip len_of_i i)
   (requires fun h0 -> idealRaw ==> ip.corrupt i)
-  (ensures fun h0 p h1 -> True)
+  (ensures fun h0 p h1 -> modifies_none h0 h1)
   = r
 
 let footprint_raw (ip: ipkg) (len_of_i: ip.t -> keylen)
-  (#i: ip.t {ip.registered i}) (k:raw ip len_of_i i) : GTot rset = Set.empty
+  (#i:ip.t {ip.registered i}) (k:raw ip len_of_i i)
+  : GTot rset = Set.empty
+
+let local_raw_pkg (ip:ipkg) (len_of_i: ip.t -> keylen) : local_pkg ip =
+  assume false; // Why??
+  LocalPkg
+    (raw ip len_of_i)
+    (rawlen #ip #len_of_i)
+    (fun #i (n:rawlen i) -> n)
+    idealRaw
+    (footprint_raw ip len_of_i)
+    (fun #_ _ _ -> True) // no invariant
+    (fun _ _ _ _ _ -> ())
+    (fun #_ _ _ _ _ -> True) // no post-condition
+    (fun #_ _ _ _ _ _ _ -> ())
+    (create_raw ip len_of_i)
+    (coerce_raw ip len_of_i)
 
 let rp (ip:ipkg) (len_of_i: ip.t -> keylen): ST (pkg ip)
   (requires fun h0 -> True)
-  (ensures fun h0 _ h1 -> modifies_one tls_define_region h0 h1)
-=
-  let p = 
-    LocalPkg
-      (raw ip len_of_i)
-      (rawlen #ip #len_of_i)
-      (fun #i (n:rawlen i) -> n)
-      idealRaw
-      (footprint_raw ip len_of_i)
-      (fun #_ _ _ -> True) // no invariant
-      (fun _ _ _ _ _ -> ())
-      (fun #_ _ _ _ _ -> True) // no post-condition
-      (fun #i u h0 k h1 r h2 -> ())
-      (create_raw ip len_of_i)
-      (coerce_raw ip len_of_i) in
-  memoization_ST #ip p
+  (ensures fun h0 p h1 -> modifies_one tls_define_region h0 h1 /\ p.package_invariant h1)
+  =
+  memoization_ST (local_raw_pkg ip len_of_i)
 
 /// --------------------------------------------------------------------------------------------------
 /// module AEAD
@@ -886,8 +888,8 @@ assume val flag_KDF: b:bool{b ==> model}
 type idealKDF = b2t flag_KDF
 
 // Note that when model is off, safeKDF is False and corruptKDF is True
-type safeKDF (i:regid) = idealKDF /\ honest i
-type corruptKDF (i:regid) = idealKDF ==> corrupt i
+type safeKDF (i:id{registered i}) = idealKDF /\ honest i
+type corruptKDF (i:id{registered i}) = idealKDF ==> corrupt i
 
 type details (ha:kdfa) = | Log:
   loginfo: TLSInfo.logInfo ->
@@ -901,7 +903,6 @@ type info = | Info:
 assume val lemma_ideal_order: u:usage -> lbl:label ->
   Lemma (let p : pkg ii = u lbl in Pkg?.ideal p ==> idealKDF)
   // can't use p.ideal because of LocalPkg shadowing
-
 
 val get_info: id -> info
 // 17-11-01 can't get it to verify; should follow from the definition of wellformed_id?
@@ -920,33 +921,33 @@ let derived_key
 =
   (Pkg?.key (u lbl)) (Derive i lbl ctx)
 
-let there = Mem.tls_tables_region // : MR.rid = admit()
+let kdf_tables_region : tls_rgn = new_region Mem.tls_tables_region
 
 /// key-derivation table (memoizing create/coerce)
-type domain (i:regid) = | Domain:
+type domain (i:id{registered i}) = | Domain:
   lbl: label ->
   ctx: context {wellformed_id (Derive i lbl ctx) /\ registered (Derive i lbl ctx)} -> domain i
+
+type kdf_range (u:usage) (i:id{registered i}) (d:domain i) =
+  (let Domain lbl ctx = d in derived_key u i lbl ctx)
 
 type ideal_or_real (it:Type0) (rt:Type0) =
   | Ideal: v:it -> ideal_or_real it rt
   | Real: v:rt -> ideal_or_real it rt
 
-unfold type ir_key (safe: regid -> GTot Type0) (it:Type0) (rt:Type0) (i:regid) =
+unfold type ir_key (safe: i:id{registered i} -> GTot Type0) (it:Type0) (rt:Type0) (i:regid) =
   (if model then
     s:ideal_or_real it rt{safe i <==> Ideal? s}
   else rt)
 
-private type table
-  // (ip: ipkg)
-  (u: usage)
-  (i: regid)
-= MM.t there (domain i) (fun (Domain lbl ctx) -> derived_key u i lbl ctx) (fun _ -> True)
+noeq private type table (*(ip: ipkg)*) (u: usage) (i:id{registered i}) =
+  | KDF_table: r:subrgn kdf_tables_region -> t:MM.t r (domain i) (kdf_range u i) (fun _ -> True) -> table u i
 
-let secret_len (a: info): keylen = UInt32.uint_to_t (Hashing.Spec.tagLen a.ha)
-type real_secret (i:regid) = lbytes (secret_len (get_info i))
+let secret_len (a:info) : keylen = UInt32.uint_to_t (Hashing.Spec.tagLen a.ha)
+type real_secret (i:id{registered i}) = lbytes (secret_len (get_info i))
 
 // id vs regid?
-type secret (u: usage) (i: ii.t {registered i}) =
+type secret (u:usage) (i:id{registered i}) =
   ir_key safeKDF (table u i) (real_secret i) i
 
 // when to be parametric on ip? not for the KDF itself: we use ip's constructors.
@@ -954,21 +955,21 @@ type secret (u: usage) (i: ii.t {registered i}) =
 //  (if honest i then table u i
 //  else lbytes (secret_len (get_info i)))
 
-let secret_ideal (#u: usage) (#i: regid) (t: secret u i {safeKDF i}): table u i =
+let secret_ideal (#u: usage) (#i:id{registered i}) (t: secret u i {safeKDF i}): table u i =
   let t : s:ideal_or_real (table u i) (real_secret i) {safeKDF i <==> Ideal? s} = t in
   Ideal?.v t
 
-let ideal_secret (#u: usage) (#i: regid) (t: table u i {safeKDF i}) : secret u i =
+let ideal_secret (#u: usage) (#i:id{registered i}) (t: table u i {safeKDF i}) : secret u i =
   let t : s:ideal_or_real (table u i) (real_secret i) {safeKDF i <==> Ideal? s} = Ideal t in
   assert(model); t
 
-let secret_corrupt (#u: usage) (#i: regid) (t: secret u i {corruptKDF i}): real_secret i =
+let secret_corrupt (#u: usage) (#i:id{registered i}) (t: secret u i {corruptKDF i}): real_secret i =
   if model then
    let t : s:ideal_or_real (table u i) (real_secret i) {safeKDF i <==> Ideal? s} = t in
    (lemma_honest_corrupt i; Real?.v t)
   else t
 
-let corrupt_secret (#u: usage) (#i: regid) (t: real_secret i {corruptKDF i}) : secret u i =
+let corrupt_secret (#u: usage) (#i:id{registered i}) (t: real_secret i {corruptKDF i}) : secret u i =
   if model then
     (lemma_honest_corrupt i;
     let s : s:ideal_or_real (table u i) (real_secret i) {safeKDF i <==> Ideal? s} = Real t in s)
@@ -977,19 +978,54 @@ let corrupt_secret (#u: usage) (#i: regid) (t: real_secret i {corruptKDF i}) : s
 /// Real KDF schemes, parameterized by an algorithm computed from the
 /// index (existing code).
 
+// For KDF, we require that being fresh in the KDF table implies being fresh
+// in the derived package's definition table
+type local_kdf_invariant (#u:usage) (#i:id{registered i}) (k:secret u i) (h:mem) =
+  (safeKDF i ==>
+    (forall (lbl:label) (ctx':context).
+      (wellformed_id (Derive i lbl ctx') /\ registered (Derive i lbl ctx')) ==>
+        (let ctx : c:context{wellformed_id (Derive i lbl c) /\ registered (Derive i lbl c)} = ctx' in
+         let KDF_table r t = secret_ideal k in
+         let dt = itable (u lbl).define_table in
+         MM.sel (MR.m_sel h t) (Domain lbl ctx) == MM.sel (MR.m_sel h dt) (Derive i lbl ctx))))
+
+let kdf_footprint (#u:usage) (#i:id{registered i}) (k:secret u i) : GTot rset =
+  if model then
+    let k : ideal_or_real (table u i) (real_secret i) = k in
+    match k with
+    | Ideal (KDF_table r _) -> assume false; Set.singleton r
+    | Real k -> Set.empty
+  else Set.empty
+
+let local_kdf_invariant_framing (#u:usage) (r:HH.rid) (i:id{registered i}) (h0:mem) (k:secret u i) (h1:mem)
+  : Lemma (requires local_kdf_invariant k h0 /\ modifies_one r h0 h1 /\ ~(r `Set.mem` kdf_footprint k))
+          (ensures local_kdf_invariant k h1)
+  = admit()
+
 /// maybe reverse-inline sampling from low-level KeyGen?
 /// otherwise we have to argue it is what Create does.
 ///
 /// MK: what does reverse-inline of low-level KeyGen mean?
 
+type kdf_post (#u:usage) (#i:id{registered i}) (a: info {a == get_info i}) (h0:mem) (k:secret u i) (h1:mem) =
+  (safeKDF i ==>
+    (let KDF_table r t = secret_ideal k in
+     MR.m_sel h1 t == MM.empty_map (domain i) (kdf_range u i)))
+
+let kdf_post_framing (#u:usage) (#i:id{registered i}) (a: info {a == get_info i})
+  (h0:mem) (k:secret u i) (h1:mem) (r:HH.rid) (h2:mem) : Lemma
+  (requires (kdf_post a h0 k h1 /\ modifies_one r h1 h2 /\ ~(r `Set.mem` kdf_footprint k)))
+  (ensures (kdf_post a h0 k h2))
+  = admit()
+
 val coerce:
   u: usage ->
-  i: ii.t {ii.registered i} -> // using regid yields unification failures below
+  i: id{registered i} -> // using regid yields unification failures below
   a: info {a == get_info i} (* run-time *) ->
   repr: lbytes (secret_len a) ->
   ST (secret u i)
   (requires fun h0 -> idealKDF ==> corrupt i)
-  (ensures fun h0 p h1 -> True)
+  (ensures fun h0 k h1 -> modifies_none h0 h1 /\ kdf_post a h0 k h1 /\ local_kdf_invariant k h1)
 let coerce u i a repr = corrupt_secret #u #i repr
 
 /// NS:
@@ -1002,7 +1038,7 @@ let coerce u i a repr = corrupt_secret #u #i repr
 /// I added a unit here
 ///
 /// CF: Ok; I did not know. Is it a style bug in FStar.Monotonic.Map ?
-let alloc (#r:FStar.Monotonic.RRef.rid) #a #b #inv (u:unit)
+let alloc #a #b #inv (r:FStar.Monotonic.RRef.rid)
   : ST (MM.t r a b inv)
        (requires (fun h -> inv (MM.empty_map a b)))
        (ensures (fun h0 x h1 ->
@@ -1013,17 +1049,20 @@ let alloc (#r:FStar.Monotonic.RRef.rid) #a #b #inv (u:unit)
 val create:
 //ip: ipkg ->
   u: usage ->
-  i: ii.t {ii.registered i} -> // using regid yields unification failures below
+  i: id{registered i} -> // using regid yields unification failures below
   a: info {a == get_info i}(* run-time *) ->
   ST (secret u i)
   (requires fun h0 -> model)
-  (ensures fun h0 r h1 -> True)
+  (ensures fun h0 k h1 -> modifies_none h0 h1 /\ kdf_post a h0 k h1 /\ local_kdf_invariant k h1)
 let create u i a =
   let honest = get_honesty i in
   if flag_KDF && honest then
-    ideal_secret (alloc())
-//    let t : table u i = MM.alloc #there #(domain i) #(fun (Domain lbl ctx) -> derived_key u i lbl ctx) #(fun _ -> True) in
-//    ideal_secret t
+    let r : subrgn kdf_tables_region = new_region kdf_tables_region in
+    let t : table u i = KDF_table r (alloc r) in
+    let h1 = get() in
+    let k : secret u i = ideal_secret t in
+    assume(local_kdf_invariant k h1); // TODO
+    k
   else
     corrupt_secret #u #i (sample (secret_len a))
 
@@ -1032,7 +1071,27 @@ let create u i a =
 /// level of key derivation seems unavoidable: we need to idealize
 /// parents before childrens.)
 
+unfold let local_kdf_pkg u : local_pkg ii =
+  (LocalPkg
+    (secret u)
+    (fun i -> a:info{a == get_info i})
+    (fun #_ a -> secret_len a)
+    idealKDF
+    (kdf_footprint #u)
+    (local_kdf_invariant #u)
+    (local_kdf_invariant_framing #u)
+    (kdf_post #u)
+    (kdf_post_framing #u)
+    (create u)
+    (coerce u))
 
+let pp (u:usage) : ST (pkg ii)
+  (requires fun h0 -> True)
+  (ensures fun h0 p h1 -> modifies_mem_table p.define_table h0 h1 /\ p.package_invariant h1)
+  =
+  memoization_ST #ii (local_kdf_pkg u)
+
+(*)
 #set-options "--print_universes --print_implicits --print_full_names"
 let pp (u: usage): pkg ii =
   //assert_norm(regid == i: ii.t {ii.registered i});
@@ -1043,6 +1102,7 @@ let pp (u: usage): pkg ii =
   idealKDF
   (create u)
   (coerce u)
+*)
 
 let ukey (u:usage) (lbl:label) (i:regid) = (u lbl).key i
 
@@ -1052,7 +1112,7 @@ let ukey (u:usage) (lbl:label) (i:regid) = (u lbl).key i
 inline_for_extraction
 val derive:
   #u: usage ->
-  #i: regid ->
+  #i: id{registered i} ->
   k: secret u i ->
   a: info {a == get_info i} ->
   lbl: label ->
@@ -1996,4 +2056,3 @@ let ks() =
   let i4: regid = Derive i3 "" Extract in
   let next_early_secret: secret (u_early_secret (depth - 1)) i4 = extract0 rsk a in
   ()
-
