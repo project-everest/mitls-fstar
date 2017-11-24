@@ -10,7 +10,7 @@ module MM = FStar.Monotonic.Map
 // idealizing HMAC
 // for concreteness; the rest of the module is parametric in a:alg
 
-// FIXME
+// To be moved to Flags.
 assume val ideal: bool
 
  
@@ -130,13 +130,13 @@ unfold let localpkg
       (fun #_ u -> keylen u ) 
       ideal  
       // local footprint 
-      (fun #i (k:key ip i) -> Set.singleton k.region) 
+      (fun #i (k:key ip i) -> Set.empty (*17-11-24 Set.singleton k.region *)  )
       // local invariant 
       (fun #_ k h -> True)
       (fun r i h0 k h1 -> ())
       // create/coerce postcondition
-      (fun #i u h0 k h1 -> k.u == u /\ fresh_subregion (region k) u.parent h0 h1 )
-      (fun #i u h0 k h1 r h2 -> ())
+      (fun #i u k h1 -> k.u == u (*17-11-24  /\ fresh_subregion (region k) u.parent h0 h1 *) )
+      (fun #i u k h1 r h2 -> ())
       (create ip ha_of_i good_of_i)
       (coerce ip ha_of_i good_of_i)
 
@@ -229,7 +229,7 @@ let test
   (t': Hashing.Spec.tag Hashing.SHA256)
   : 
   ST unit 
-  (requires fun h0 -> model)
+  (requires fun h0 -> IK.model)
   (ensures fun h0 _ h1 -> True)
 = 
   let ip = IK.Idx // honest, simple indexes
@@ -254,7 +254,7 @@ let test
   let table = IK.mem_alloc #(i:ip.IK.t{ip.IK.registered i}) (key ip) in
   let q = pkg ip (fun (_:ip.IK.t) -> a) good_of_i table in 
   let h0 = get() in 
-  // assert(q.IK.package_invariant h0);
+  assert(q.IK.package_invariant h0);
 
   //TODO superficial but hard to prove... 
   // assume(Monotonic.RRef.m_sel h0 (IK.itable table) == MM.empty_map ip.IK.t (key ip));
@@ -273,7 +273,6 @@ let test
   let t = mac #ip #0 k v in
 
   let b = verify #ip #0 k v' t' in
-  // let empty = k.u.good in 
   assert(b /\ ideal ==> length v' = 0);
   // assert false; 
   ()  

@@ -195,11 +195,16 @@ noeq type pkg_inv_r =
   | Pinv_region: r:HH.rid{r `HH.disjoint` tls_define_region} -> pkg_inv_r
   | Pinv_define: #it:eqtype -> #vt:(it -> Type) -> t:mem_table vt -> pkg_inv_r
 
+// When calling create or coerce, the footprint of a package grows only with
+// fresh subregions
+type modifies_footprint (fp:mem->GTot rset) h0 h1 =
+  forall (r:HH.rid). (Set.mem r (fp h0) /\ ~(Set.mem r (fp h1))) ==> stronger_fresh_region r h0 h1
+
 noeq type pkg (ip: ipkg) = | Pkg:
   $key: (i:ip.t {ip.registered i} -> Type0) (* indexed state of the functionality *) ->
-  $info: (ip.t -> Type0)                    (* creation-time arguments, typically refined using i:ip.t *) ->
-  $len: (#i:ip.t -> info i -> keylen)        (* computes the key-material length from those arguments *) ->
-  $ideal: Type0                            (* type-level access to the ideal flag of the package *) ->
+  info: (ip.t -> Type0)                    (* creation-time arguments, typically refined using i:ip.t *) ->
+  len: (#i:ip.t -> info i -> keylen)        (* computes the key-material length from those arguments *) ->
+  ideal: Type0                            (* type-level access to the ideal flag of the package *) ->
   //17-11-13 do we need to know that ideal ==> model?
   //17-11-13 is type-level access enough?
 
@@ -217,7 +222,7 @@ noeq type pkg (ip: ipkg) = | Pkg:
   // we maintain a package invariant, 
   // which only depends on the table and footpring.
   package_invariant: (mem -> Type0) ->
-  package_invariant_framing: (r:pkg_inv_r -> h0:mem -> h1:mem -> Lemma
+  package_invariant_framing: (h0:mem -> r:pkg_inv_r -> h1:mem -> Lemma
     (requires package_invariant h0 /\
       (match r with
       | Pinv_region r -> modifies_one r h0 h1 /\ ~(Set.mem r (footprint h0))
@@ -227,20 +232,19 @@ noeq type pkg (ip: ipkg) = | Pkg:
   // create and coerce, with a shared post-condition and framing lemma
   // so that [derive] can pass the post-condition to its caller; the
   // concrete part of the postcondition is what we need in [derive].
-  post: (#i:ip.t{ip.registered i} -> info i -> mem -> key i -> mem -> GTot Type0) ->
-  post_framing: (#i:ip.t{ip.registered i} -> a:info i ->
-    h0:mem -> k:key i -> h1:mem -> r:HH.rid -> h2:mem -> Lemma
-    (requires (post a h0 k h1 /\ modifies_one r h1 h2 /\ ~(r `Set.mem` footprint h0)))
-    (ensures (post a h0 k h2))) ->
+  post: (#i:ip.t{ip.registered i} -> info i -> key i -> mem -> GTot Type0) ->
+  post_framing: (#i:ip.t{ip.registered i} -> a:info i -> k:key i ->  h0:mem -> r:HH.rid -> h1:mem -> Lemma
+     (requires (post a k h0 /\ modifies_one r h0 h1 /\ ~(r `Set.mem` footprint h0)))
+     (ensures (post a k h1))) ->
   create: (i:ip.t{ip.registered i} -> a:info i -> ST (key i)
     (requires fun h0 -> 
       model /\ 
       package_invariant h0 /\ 
       mem_fresh define_table i h0)
     (ensures fun h0 k h1 -> 
-      post a h0 k h1 /\ 
+      post a k h1 /\ package_invariant h1 /\ 
       modifies_mem_table define_table h0 h1 /\ 
-      package_invariant h1 /\ 
+      modifies_footprint footprint h0 h1 /\
       mem_update define_table i k h0 h1)) ->
   coerce: (i:ip.t{ip.registered i} -> a:info i -> lbytes (len a) -> ST (key i)
     (requires fun h0 -> 
@@ -248,11 +252,15 @@ noeq type pkg (ip: ipkg) = | Pkg:
       package_invariant h0 /\ 
       mem_fresh define_table i h0)
     (ensures fun h0 k h1 -> 
-      post a h0 k h1 /\
-      modifies_mem_table define_table h0 h1 /\ 
-      package_invariant h1 /\ 
+      post a k h1 /\ package_invariant h1 /\
+      modifies_mem_table define_table h0 h1 /\
+      modifies_footprint footprint h0 h1 /\
       mem_update define_table i k h0 h1)) ->
   pkg ip
+
+type fresh_regions (s:rset) (h0:mem) (h1:mem) =
+  forall (r:HH.rid).{:pattern (Set.mem r s)} Set.mem r s ==>
+    (stronger_fresh_region r h0 h1 \/ is_tls_rgn r)
 
 /// packages of instances with local private state, before ensuring
 /// their unique definition at every index and the disjointness of
@@ -260,26 +268,26 @@ noeq type pkg (ip: ipkg) = | Pkg:
 noeq type local_pkg (ip: ipkg) =
 | LocalPkg:
   $key: (i:ip.t{ip.registered i} -> Type0) ->
-  $info: (ip.t -> Type0) ->
-  $len: (#i:ip.t -> info i -> keylen) ->
-  $ideal: Type0 ->
-  
+  info: (ip.t -> Type0) ->
+  len: (#i:ip.t -> info i -> keylen) ->
+  ideal: Type0 ->
   local_footprint: (#i:ip.t{ip.registered i} -> key i -> GTot rset) (* instance footprint *) ->
   local_invariant: (#i:ip.t{ip.registered i} -> key i -> mem -> GTot Type0) (* instance invariant *) ->
-  local_invariant_framing: (r:HH.rid -> i:ip.t{ip.registered i} -> h0:mem -> k:key i -> h1:mem -> Lemma
+  local_invariant_framing: (i:ip.t{ip.registered i} -> k:key i -> h0:mem -> r:HH.rid -> h1:mem -> Lemma
     (requires local_invariant k h0 /\ modifies_one r h0 h1 /\ ~(r `Set.mem` local_footprint k))
     (ensures local_invariant k h1)) ->
-
-  post: (#i:ip.t{ip.registered i} -> info i -> mem -> key i -> mem -> GTot Type0) ->
-  post_framing: (#i:ip.t{ip.registered i} -> a:info i -> h0:mem -> k:key i -> h1:mem -> r:HH.rid -> h2:mem -> Lemma
-    (requires (post a h0 k h1 /\ modifies_one r h1 h2 /\ ~(r `Set.mem` local_footprint k)))
-    (ensures (post a h0 k h2))) ->
+  post: (#i:ip.t{ip.registered i} -> info i -> key i -> mem -> GTot Type0) ->
+  post_framing: (#i:ip.t{ip.registered i} -> a:info i -> k:key i -> h0:mem -> r:HH.rid -> h1:mem -> Lemma
+    (requires (post a k h0 /\ modifies_one r h0 h1 /\ ~(r `Set.mem` local_footprint k)))
+    (ensures (post a k h1))) ->
   create: (i:ip.t{ip.registered i} -> a:info i -> ST (key i)
     (requires fun h0 -> model)
-    (ensures fun h0 k h1 -> post a h0 k h1 /\ modifies_none h0 h1 /\ local_invariant k h1)) ->
+    (ensures fun h0 k h1 -> modifies_none h0 h1 /\ local_invariant k h1
+       /\ post a k h1 /\ fresh_regions (local_footprint k) h0 h1)) ->
   coerce: (i:ip.t{ip.registered i} -> a:info i -> lbytes (len a) -> ST (key i)
     (requires fun h0 -> ideal ==> ip.corrupt i)
-    (ensures fun h0 k h1 -> post a h0 k h1 /\ modifies_none h0 h1 /\ local_invariant k h1)) ->
+    (ensures fun h0 k h1 -> modifies_none h0 h1 /\ local_invariant k h1
+       /\ post a k h1 /\ fresh_regions (local_footprint k) h0 h1)) ->
   local_pkg ip
 
 (* Iterators over Monotonic.Map, require a change of implementation *)
@@ -294,7 +302,7 @@ assume type mm_forall (#a:eqtype) (#b:a -> Type) (t:MM.map' a b)
 let lemma_mm_forall_frame (#a:eqtype) (#b:a -> Type) (t:MM.map' a b)
   (p: #i:a -> b i -> mem -> GTot Type0)
   (footprint: #i:a -> v:b i -> GTot rset)
-  (p_frame: r:HH.rid -> i:a -> h0:mem -> v:b i -> h1:mem ->
+  (p_frame: i:a -> v:b i -> h0:mem -> r:HH.rid -> h1:mem ->
     Lemma (requires p v h0 /\ modifies_one r h0 h1 /\ ~(Set.mem r (footprint v)))
           (ensures p v h1))
   (r:HH.rid) (h0:mem) (h1:mem)
@@ -321,6 +329,17 @@ let lemma_mm_forall_elim (#a:eqtype) (#b:a -> Type) (t:MM.map' a b)
           (ensures p v h)
   = admit()
 
+unfold type mem_package (#ip:ipkg) (p:local_pkg ip) =
+  p':pkg ip{
+    Pkg?.key p' == LocalPkg?.key p /\
+    Pkg?.info p' == LocalPkg?.info p /\
+    Pkg?.len p' == LocalPkg?.len p /\
+    Pkg?.ideal p' == LocalPkg?.ideal p /\
+    (forall (#i:ip.t{ip.registered i}) (k:p.key i) (h:mem).
+      (mem_defined p'.define_table i /\ p'.package_invariant h) ==> p.local_invariant k h) /\
+    (forall (#i:ip.t{ip.registered i}) (a:p.info i) (k:p.key i) (h:mem).
+      (Pkg?.post p') #i (a <: Pkg?.info p' i) (k <: Pkg?.key p' i) h ==> (LocalPkg?.post p) #i a k h)
+  }
 
 // Memoization functor from local to global packages that memoize
 // instances produced by create/coerce and maintain their joint
@@ -337,7 +356,13 @@ unfold let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): p
       let map = MR.m_sel h (itable mtable) in
       mm_fold map #rset Set.empty (fun s i k -> rset_union s (p.local_footprint k)) h
     else Set.empty in
-  let footprint_framing (h0 h1: mem): Lemma
+  let footprint_grow (h0:mem) (i:ip.t{ip.registered i}) (k:p.key i) (h1:mem) : Lemma
+    (requires (mem_update mtable i k h0 h1 /\ fresh_regions (p.local_footprint k) h0 h1))
+    (ensures (modifies_footprint footprint h0 h1))
+    =
+    admit() // TODO, relatively easy
+    in
+  let footprint_framing (h0:mem) (h1:mem) : Lemma
     (requires mem_stable mtable h0 h1)
     (ensures footprint h0 == footprint h1)
     =
@@ -351,7 +376,7 @@ unfold let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): p
       let log : i_mem_table p.key = itable mtable in
       mm_forall (MR.m_sel h log) p.local_invariant h
     else True in
-  let package_invariant_framing (r:pkg_inv_r) (h0:mem) (h1:mem) : Lemma
+  let package_invariant_framing (h0:mem) (r:pkg_inv_r) (h1:mem) : Lemma
     (requires package_invariant h0 /\
       (match r with
       | Pinv_region r -> modifies_one r h0 h1 /\ ~(Set.mem r (footprint h0))
@@ -374,9 +399,9 @@ unfold let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): p
     else () in
   let create (i:ip.t{ip.registered i}) (a:p.info i) : ST (p.key i)
     (requires fun h0 -> model /\ package_invariant h0 /\ mem_fresh mtable i h0)
-    (ensures fun h0 k h1 ->
-      modifies_mem_table mtable h0 h1 /\ p.post a h0 k h1 /\
-      package_invariant h1 /\ mem_update mtable i k h0 h1)
+    (ensures fun h0 k h1 -> modifies_mem_table mtable h0 h1
+      /\ modifies_footprint footprint h0 h1 /\ p.post a k h1
+      /\ package_invariant h1 /\ mem_update mtable i k h0 h1)
     =
     let h0 = get () in
     let tbl : i_mem_table p.key = itable mtable in
@@ -385,25 +410,26 @@ unfold let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): p
     let k : p.key i = p.create i a in
     let h1 = get() in
     assert(MR.m_sel h0 tbl == MR.m_sel h1 tbl);
-    package_invariant_framing (Pinv_region tls_tables_region) h0 h1;
+    package_invariant_framing h0 (Pinv_region tls_tables_region) h1;
     MM.extend tbl i k;
     let h2 = get () in
     lemma_iupdate mtable i k h0 h2;
     lemma_define_tls_honest_regions (p.local_footprint k);
-    p.post_framing #i a h0 k h1 tls_define_region h2;
+    p.post_framing #i a k h1 tls_define_region h2;
     lemma_mm_forall_frame (MR.m_sel h1 tbl) p.local_invariant p.local_footprint p.local_invariant_framing tls_define_region h1 h2;
-    p.local_invariant_framing tls_define_region i h1 k h2;
+    p.local_invariant_framing i k h1 tls_define_region h2;
     assert(mm_forall (MR.m_sel h1 tbl) p.local_invariant h2);
     assert(MR.m_sel h2 tbl == MM.upd (MR.m_sel h1 tbl) i k);
     lemma_mm_forall_extend (MR.m_sel h1 tbl) (MR.m_sel h2 tbl) p.local_invariant i k h1 h2;
     assume(HS.modifies_ref tls_define_region (Set.singleton (mem_addr (itable mtable))) h0 h2); // How to prove?
     lemma_imodifies_mem mtable h0 h2;
+    footprint_grow h0 i k h2;
     k in
   let coerce (i:ip.t{ip.registered i}) (a:p.info i) (k0:lbytes (p.len a)) : ST (p.key i)
     (requires fun h0 -> package_invariant h0 /\ mem_fresh mtable i h0 /\ (p.ideal ==> ip.corrupt i))
-    (ensures fun h0 k h1 ->
-      modifies_mem_table mtable h0 h1 /\ p.post a h0 k h1 /\
-      package_invariant h1 /\ mem_update mtable i k h0 h1)
+    (ensures fun h0 k h1 -> modifies_mem_table mtable h0 h1
+      /\ modifies_footprint footprint h0 h1 /\ p.post a k h1
+      /\ package_invariant h1 /\ mem_update mtable i k h0 h1)
     =
     if model then (
       let h0 = get () in
@@ -413,26 +439,27 @@ unfold let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): p
       let k : p.key i = p.coerce i a k0 in
       let h1 = get() in
       assert(MR.m_sel h0 tbl == MR.m_sel h1 tbl);
-      package_invariant_framing (Pinv_region tls_tables_region) h0 h1;
+      package_invariant_framing h0 (Pinv_region tls_tables_region) h1;
       MM.extend tbl i k;
       let h2 = get () in
       lemma_iupdate mtable i k h0 h2;
       lemma_define_tls_honest_regions (p.local_footprint k);
-      p.post_framing #i a h0 k h1 tls_define_region h2;
+      p.post_framing #i a k h1 tls_define_region h2;
       lemma_mm_forall_frame (MR.m_sel h1 tbl) p.local_invariant p.local_footprint p.local_invariant_framing tls_define_region h1 h2;
-      p.local_invariant_framing tls_define_region i h1 k h2;
+      p.local_invariant_framing i k h1 tls_define_region h2;
       assert(mm_forall (MR.m_sel h1 tbl) p.local_invariant h2);
       assert(MR.m_sel h2 tbl == MM.upd (MR.m_sel h1 tbl) i k);
       lemma_mm_forall_extend (MR.m_sel h1 tbl) (MR.m_sel h2 tbl) p.local_invariant i k h1 h2;
       assume(HS.modifies_ref tls_define_region (Set.singleton (mem_addr (itable mtable))) h0 h2); // How to prove?
       lemma_imodifies_mem mtable h0 h2;
+      footprint_grow h0 i k h2;
       k
     ) else p.coerce i a k0
     in
-  let post_framing (#i:ip.t{ip.registered i}) (a:p.info i)
-    (h0:mem) (k:p.key i) (h1:mem) (r:HH.rid) (h2:mem) : Lemma
-    (requires p.post a h0 k h1 /\ modifies_one r h1 h2 /\ ~(Set.mem r (footprint h0)))
-    (ensures p.post a h0 k h2)
+  let post_framing (#i:ip.t{ip.registered i}) (a:p.info i) (k:p.key i)
+    (h0:mem) (r:HH.rid) (h1:mem) : Lemma
+    (requires p.post a k h0 /\ modifies_one r h0 h1 /\ ~(Set.mem r (footprint h0)))
+    (ensures p.post a k h1)
     =
     // FIXME(adl): we have a problem when model is false - we have nowhere to store
     // the joint footprint of the concrete state! for now we will assume
@@ -440,9 +467,9 @@ unfold let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): p
     // We may have to maintain an erased (i_mem_table p.key) when model is off to
     // store the concrete footprints
     assume(~(Set.mem r (footprint h0)) ==> ~(Set.mem r (p.local_footprint k)));
-    p.post_framing #i a h0 k h1 r h2
+    p.post_framing #i a k h0 r h1
     in
-  let p' = Pkg
+  (Pkg
     p.key
     p.info
     p.len
@@ -450,15 +477,13 @@ unfold let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): p
     mtable footprint footprint_framing
     package_invariant package_invariant_framing
     p.post post_framing
-    create coerce in
-  p'
+    create coerce)
 
 let memoization_ST (#ip:ipkg) (p:local_pkg ip)
   : ST (pkg ip)
   (requires fun h0 -> True)
   (ensures fun h0 p h1 ->
-    modifies_mem_table p.define_table h0 h1 /\
-    p.package_invariant h1)
+    modifies_mem_table p.define_table h0 h1 /\ p.package_invariant h1)
 =
   let h0 = get() in
   let mtable: mem_table p.key = mem_alloc #(i:ip.t{ip.registered i}) p.key in
@@ -482,6 +507,10 @@ type idealRaw = b2t flag_Raw
 type rawlen (#ip: ipkg) (#len_of_i: ip.t -> keylen) (i:ip.t) = len:keylen {len = len_of_i i}
 type raw (ip: ipkg) (len_of_i: ip.t -> keylen) (i:ip.t{ip.registered i}) = lbytes (len_of_i i)
 
+let footprint_raw (ip: ipkg) (len_of_i: ip.t -> keylen)
+  (#i:ip.t {ip.registered i}) (k:raw ip len_of_i i)
+  : GTot rset = Set.empty
+
 let create_raw (ip: ipkg) (len_of_i: ip.t -> keylen)
   (i:ip.t{ip.registered i}) (len:keylen {len = len_of_i i}):
   ST (raw ip len_of_i i)
@@ -496,12 +525,7 @@ let coerce_raw (ip: ipkg) (len_of_i: ip.t -> keylen)
   (ensures fun h0 p h1 -> modifies_none h0 h1)
   = r
 
-let footprint_raw (ip: ipkg) (len_of_i: ip.t -> keylen)
-  (#i:ip.t {ip.registered i}) (k:raw ip len_of_i i)
-  : GTot rset = Set.empty
-
 let local_raw_pkg (ip:ipkg) (len_of_i: ip.t -> keylen) : local_pkg ip =
-  assume false; // Why??
   LocalPkg
     (raw ip len_of_i)
     (rawlen #ip #len_of_i)
@@ -510,8 +534,8 @@ let local_raw_pkg (ip:ipkg) (len_of_i: ip.t -> keylen) : local_pkg ip =
     (footprint_raw ip len_of_i)
     (fun #_ _ _ -> True) // no invariant
     (fun _ _ _ _ _ -> ())
-    (fun #_ _ _ _ _ -> True) // no post-condition
-    (fun #_ _ _ _ _ _ _ -> ())
+    (fun #_ _ _ _ -> True) // no post-condition
+    (fun #_ _ _ _ _ _ -> ())
     (create_raw ip len_of_i)
     (coerce_raw ip len_of_i)
 
@@ -550,36 +574,35 @@ assume val aead_inv:
   #ip:ipkg -> #aeadAlg_of_i: (ip.t -> aeadAlg) -> #i:ip.t{ip.registered i} ->
   k:key ip aeadAlg_of_i i -> h:mem -> GTot Type0
 
-assume val aead_invariant_framing:
-  ip:ipkg -> aeadAlg_of_i: (ip.t -> aeadAlg) ->
-  r:HH.rid -> i:ip.t{ip.registered i} ->
-  h0:mem -> k:key ip aeadAlg_of_i i -> h1:mem ->
+assume val aead_invariant_framing: ip:ipkg -> aeadAlg_of_i: (ip.t -> aeadAlg) ->
+  i:ip.t{ip.registered i} -> k:key ip aeadAlg_of_i i ->
+  h0:mem -> r:HH.rid -> h1:mem ->
   Lemma (requires aead_inv k h0 /\ modifies_one r h0 h1 /\ ~(r `Set.mem` aead_footprint k))
         (ensures aead_inv k h1)
 
 assume val aead_empty_log: ip: ipkg -> aeadAlg_of_i: (ip.t -> aeadAlg) ->
   #i: ip.t{ip.registered i} -> a: aeadAlg {a == aeadAlg_of_i i} ->
-  h0:mem -> k:key ip aeadAlg_of_i i -> h1:mem -> Type0
+  k:key ip aeadAlg_of_i i -> h1:mem -> Type0
 
 assume val aead_empty_log_framing: ip: ipkg -> aeadAlg_of_i: (ip.t -> aeadAlg) ->
   #i: ip.t{ip.registered i} -> a: aeadAlg {a == aeadAlg_of_i i} ->
-  h0:mem -> k:key ip aeadAlg_of_i i -> h1:mem -> r:HH.rid -> h2:mem -> Lemma
-    (requires (aead_empty_log ip aeadAlg_of_i a h0 k h1 /\ modifies_one r h1 h2 /\ ~(r `Set.mem` aead_footprint k)))
-    (ensures (aead_empty_log ip aeadAlg_of_i a h0 k h2))
+  k:key ip aeadAlg_of_i i -> h0:mem -> r:HH.rid -> h1:mem -> Lemma
+    (requires (aead_empty_log ip aeadAlg_of_i a k h0 /\ modifies_one r h0 h1 /\ ~(r `Set.mem` aead_footprint k)))
+    (ensures (aead_empty_log ip aeadAlg_of_i a k h1))
 
-assume val create_key:
-  ip: ipkg -> aeadAlg_of_i: (ip.t -> aeadAlg) -> i: ip.t{ip.registered i} ->
-  a:aeadAlg {a == aeadAlg_of_i i} -> ST (key ip aeadAlg_of_i i)
+assume val create_key: ip: ipkg -> aeadAlg_of_i: (ip.t -> aeadAlg) ->
+  i: ip.t{ip.registered i} -> a:aeadAlg {a == aeadAlg_of_i i} ->
+  ST (key ip aeadAlg_of_i i)
     (requires fun h0 -> model)
-    (ensures fun h0 k h1 -> modifies_none h0 h1
-      /\ aead_empty_log ip aeadAlg_of_i a h0 k h1 /\ aead_inv k h1)
+    (ensures fun h0 k h1 -> modifies_none h0 h1 /\ fresh_regions (aead_footprint k) h0 h1
+      /\ aead_empty_log ip aeadAlg_of_i a k h1 /\ aead_inv k h1)
 
-assume val coerce_key:
-  ip: ipkg -> aeadAlg_of_i: (ip.t -> aeadAlg) -> i: ip.t{ip.registered i} ->
-  a:aeadAlg {a == aeadAlg_of_i i} -> keyrepr a -> ST (key ip aeadAlg_of_i i)
+assume val coerce_key: ip: ipkg -> aeadAlg_of_i: (ip.t -> aeadAlg) ->
+  i: ip.t{ip.registered i} -> a:aeadAlg {a == aeadAlg_of_i i} -> keyrepr a ->
+  ST (key ip aeadAlg_of_i i)
     (requires fun h0 -> idealAEAD ==> ip.corrupt i)
-    (ensures fun h0 k h1 -> modifies_none h0 h1
-      /\ aead_empty_log ip aeadAlg_of_i a h0 k h1 /\ aead_inv k h1)
+    (ensures fun h0 k h1 -> modifies_none h0 h1 /\ fresh_regions (aead_footprint k) h0 h1
+      /\ aead_empty_log ip aeadAlg_of_i a k h1 /\ aead_inv k h1)
 
 let mp (ip:ipkg) (aeadAlg_of_i: ip.t -> aeadAlg)
   : ST (pkg ip) (requires fun h0 -> True)
@@ -792,11 +815,11 @@ let rec lemma_honesty_update (m:MM.map id (fun _ -> bool) honesty_invariant)
 //         (ensures honesty_invariant (MM.upd m (Derive i l c) b))
   = admit() // easy
 
-let register_derive (i:regid) (l:label) (c:context{wellformed_id (Derive i l c)})
-  : ST (regid * bool)
+let register_derive (i:id{registered i}) (l:label) (c:context{wellformed_id (Derive i l c)})
+  : ST (i:id{registered i} * bool)
   (requires fun h0 -> True)
   (ensures fun h0 (i', b) h1 ->
-    modifies_one tls_honest_region h0 h1
+    (if model then modifies_one tls_honest_region h0 h1 else h0 == h1)
     /\ (i' == Derive i l c)
     /\ (b2t b <==> honest i')
     /\ (not b <==> corrupt i'))
@@ -1017,11 +1040,11 @@ let kdf_footprint (#u:usage) (#i:id{registered i}) (k:secret u i) : GTot rset =
   if model then
     let k : ideal_or_real (table u i) (real_secret i) = k in
     match k with
-    | Ideal (KDF_table r _) -> assume false; Set.singleton r
+    | Ideal (KDF_table r _) -> assume false; Set.singleton r // TODO: refine r with a bunch of crap
     | Real k -> Set.empty
   else Set.empty
 
-let local_kdf_invariant_framing (#u:usage) (r:HH.rid) (i:id{registered i}) (h0:mem) (k:secret u i) (h1:mem)
+let local_kdf_invariant_framing (#u:usage) (i:id{registered i}) (k:secret u i) (h0:mem) (r:HH.rid) (h1:mem)
   : Lemma (requires local_kdf_invariant k h0 /\ modifies_one r h0 h1 /\ ~(r `Set.mem` kdf_footprint k))
           (ensures local_kdf_invariant k h1)
   = admit()
@@ -1031,15 +1054,18 @@ let local_kdf_invariant_framing (#u:usage) (r:HH.rid) (i:id{registered i}) (h0:m
 ///
 /// MK: what does reverse-inline of low-level KeyGen mean?
 
-type kdf_post (#u:usage) (#i:id{registered i}) (a: info {a == get_info i}) (h0:mem) (k:secret u i) (h1:mem) =
+// The post-condition of creating a KDF is that its table is empty
+// This is useful to re-establish the multi-KDF invariant
+type kdf_post (#u:usage) (#i:id{registered i}) (a: info {a == get_info i}) (k:secret u i) (h:mem) =
   (safeKDF i ==>
     (let KDF_table r t = secret_ideal k in
-     MR.m_sel h1 t == MM.empty_map (domain i) (kdf_range u i)))
+     MR.m_sel h t == MM.empty_map (domain i) (kdf_range u i)))
 
+// Framing for the kdf_post depends only on kdf_footprint k
 let kdf_post_framing (#u:usage) (#i:id{registered i}) (a: info {a == get_info i})
-  (h0:mem) (k:secret u i) (h1:mem) (r:HH.rid) (h2:mem) : Lemma
-  (requires (kdf_post a h0 k h1 /\ modifies_one r h1 h2 /\ ~(r `Set.mem` kdf_footprint k)))
-  (ensures (kdf_post a h0 k h2))
+  (k:secret u i) (h0:mem) (r:HH.rid) (h1:mem) : Lemma
+  (requires (kdf_post a k h0 /\ modifies_one r h0 h1 /\ ~(r `Set.mem` kdf_footprint k)))
+  (ensures (kdf_post a k h1))
   = admit()
 
 val coerce:
@@ -1049,7 +1075,10 @@ val coerce:
   repr: lbytes (secret_len a) ->
   ST (secret u i)
   (requires fun h0 -> idealKDF ==> corrupt i)
-  (ensures fun h0 k h1 -> modifies_none h0 h1 /\ kdf_post a h0 k h1 /\ local_kdf_invariant k h1)
+  (ensures fun h0 k h1 -> modifies_none h0 h1
+    /\ fresh_regions (kdf_footprint k) h0 h1
+    /\ kdf_post a k h1 /\ local_kdf_invariant k h1)
+
 let coerce u i a repr = corrupt_secret #u #i repr
 
 /// NS:
@@ -1077,15 +1106,24 @@ val create:
   a: info {a == get_info i}(* run-time *) ->
   ST (secret u i)
   (requires fun h0 -> model)
-  (ensures fun h0 k h1 -> modifies_none h0 h1 /\ kdf_post a h0 k h1 /\ local_kdf_invariant k h1)
+  (ensures fun h0 k h1 -> modifies_none h0 h1
+    /\ fresh_regions (kdf_footprint k) h0 h1
+    /\ kdf_post a k h1 /\ local_kdf_invariant k h1)
+
 let create u i a =
+  let h0 = get() in
   let honest = get_honesty i in
+  let h1 = get() in
   if flag_KDF && honest then
     let r : subrgn kdf_tables_region = new_region kdf_tables_region in
+    let h2 = get() in
+    assert(stronger_fresh_region r h1 h2);
     let t : table u i = KDF_table r (alloc r) in
-    let h1 = get() in
+    let h3 = get() in
     let k : secret u i = ideal_secret t in
-    assume(local_kdf_invariant k h1); // TODO
+    assert(kdf_footprint k == Set.singleton r);
+    assume(local_kdf_invariant k h3); // TODO
+    assert(fresh_regions (kdf_footprint k) h0 h3);
     k
   else
     corrupt_secret #u #i (sample (secret_len a))
@@ -1115,7 +1153,58 @@ let pp (u:usage) : ST (pkg ii)
   =
   memoization_ST #ii (local_kdf_pkg u)
 
-let ukey (u:usage) (lbl:label) (i:regid) = Pkg?.key (u lbl) i
+(*)
+#set-options "--print_universes --print_implicits --print_full_names"
+let pp (u: usage): pkg ii =
+  //assert_norm(regid == i: ii.t {ii.registered i});
+  Pkg
+  (secret u)
+  (fun (i:ii.t) -> a:info{a == get_info i})
+  (fun #_ a -> secret_len a)
+  idealKDF
+  (create u)
+  (coerce u)
+*)
+
+let ukey (u:usage) (lbl:label) (i:id{registered i}) = Pkg?.key (u lbl) i
+
+// Derive modifies:
+//  - the honesty table
+//  - the define table of the derived package
+//  - the KDF table
+// FIXME: can't use the normalizer to compute the set... destroys the implicit
+type modifies_derive (#u:usage) (#i:id{registered i}) (k:secret u i)
+  (lbl:label) (ctx:context {wellformed_id (Derive i lbl ctx)}) (h0:mem) (h1:mem) =
+  (if model then
+    let modset = Set.singleton tls_define_region in
+    let modset = Set.union modset (Set.singleton tls_honest_region) in
+    let k : ideal_or_real (table u i) (real_secret i) = k in
+    let modset = match k with
+    | Ideal (KDF_table r _) -> Set.union modset (Set.singleton r)
+    | Real k -> modset in
+    let utable = (u lbl).define_table in
+    modifies modset h0 h1
+    /\ HS.modifies_ref tls_define_region (Set.singleton (mem_addr (itable utable))) h0 h1
+  else modifies_none h0 h1) // FIXME concrete state
+
+/// FIXME still have to decide how to reflect KDF invariants to KS
+// To be refined. We consider several approaches: either a package-level
+// registration table and all-package invariant, or passing the list of
+// packages to derive with their respective invariants
+let all_pkg_invariant h = forall (p:pkg ii). p.package_invariant h
+
+// We can grame the multi-pkg invariant for free when touching tls_honest_region
+let all_pkg_invariant_frame h0 h1
+  : Lemma (requires all_pkg_invariant h0 /\ (modifies_none h0 h1 \/ modifies_one tls_honest_region h0 h1))
+          (ensures all_pkg_invariant h1)
+  = admit()
+
+// If we touch one package's footprint, but restore this package's invariant,
+// the multi-package invariant is restored
+let restore_all_pkg_invariant h0 (p:pkg ii) h1
+  : Lemma (requires all_pkg_invariant h0 /\ modifies (p.footprint h0) h0 h1 /\ p.package_invariant h1)
+          (ensures all_pkg_invariant h1)
+  = admit()
 
 /// The well-formedness condition on the derived label (opaque from
 /// the viewpoint of the KDF) enforces
@@ -1130,38 +1219,55 @@ val derive:
   ctx: context {~(honest_idh ctx) /\ wellformed_id (Derive i lbl ctx)} ->
   a': Pkg?.info (u lbl) (Derive i lbl ctx) ->
   ST (_:unit{registered (Derive i lbl ctx)} & ukey u lbl (Derive i lbl ctx))
-  (requires fun h0 -> True)
-  (ensures fun h0 r h1 -> True
-    // modifies our own local state and whatever create/coerce modifies
-    // no need to track the ideal state
-  )
+  // the second pre-condition is redundant, but we don't know the package of k
+  (requires fun h0 -> all_pkg_invariant h0 /\ local_kdf_invariant k h0)
+  (ensures fun h0 r h1 -> modifies_derive k lbl ctx h0 h1
+    /\ local_kdf_invariant k h1 /\ all_pkg_invariant h1
+    /\ (Pkg?.post (u lbl)) a' (dsnd r) h1)
 
 let derive #u #i k a lbl ctx a' =
+  let h0 = get() in
   // register (Derive i lbl ctx) and return its honesty (defaults to get_honesty i)
   let honest = get_honesty i in
   let i', honest' = register_derive i lbl ctx in
+  let h1 = get() in
+  // Frame the registration, only if model is one (otherwise h0 == h1)
+  (if model then local_kdf_invariant_framing i k h0 tls_honest_region h1);
+  assert(local_kdf_invariant k h1);
+  all_pkg_invariant_frame h0 h1;
   lemma_corrupt_invariant i lbl ctx;
-  let x = Domain lbl ctx in
+  let x : domain i = Domain lbl ctx in
   let pkg = u lbl in
   lemma_ideal_order u lbl; // TODO(adl) get the idealization order condition from (u lbl) above
-  if flag_KDF && honest
-  then
-    let v: option (derived_key u i lbl ctx) = MM.lookup (secret_ideal k) x in
+  assume false;
+  // WIP Nov 24 -- I think I need to maintain the KDF table even if the KDF is corrupt
+  // otherwise I cannot prove pkg.fresh i' (this can only come from local_kdf_invariant)
+  if flag_KDF && honest then
+   begin
+    let KDF_table kdf_r t : table u i = secret_ideal k in
+    let v: option (derived_key u i lbl ctx) = MM.lookup t x in
     match v with
     //17-10-30 was failing with scrutiny error: match MM.lookup (secret_ideal k) x
     | Some dk -> (| (), dk |)
     | None ->
       let dk = Pkg?.create pkg i' a' in
-      //17-10-20 TODO framing across create
-      let h = get() in
-      assume(MM.fresh (secret_ideal k) x h); // FIXME(adl)!!
-      MM.extend (secret_ideal k) x dk;
+      let h2 = get() in
+      assert(mem_fresh pkg.define_table i' h2); // from kdf_local_inv
+      MM.extend t x dk;
       (| (), dk |)
+   end
   else
-    let raw =
-      HKDF.expand #(a.ha) (secret_corrupt k) (Platform.Bytes.abytes lbl) (UInt32.v (Pkg?.len pkg a')) in
+   begin
+    let raw = HKDF.expand #(a.ha) (secret_corrupt k) (Platform.Bytes.abytes lbl) (UInt32.v (Pkg?.len pkg a')) in
+    let h2 = get() in
+    assume(modifies_none h1 h2); // FIXME HKDF framing
+    all_pkg_invariant_frame h1 h2;
+    assert(pkg.package_invariant h2);
+    assert(Pkg?.ideal pkg ==> corrupt i');
     let dk = Pkg?.coerce pkg i' a' raw in
+    // FIXME
     (| (), dk |)
+   end
 
 /// Outlining a global KDF state invariant, supported by package
 /// definition tables for all derivable functionalities.
@@ -1208,9 +1314,10 @@ private type mref_secret (u: usage) (i: regid) =
   // would prefer: HyperStack.mref (option (secret u i)) (ssa #(secret u i))
   MR.m_rref there (option (secret u i)) ssa
 
+(* --- 
 /// covering two cases: application PSK and resumption PSK
 /// (the distinction follow from the value of i)
-type psk (u: usage) (i: regid) =
+type psk (u: usage) (i: ii.t {ii.registered i}) =
   ir_key safeKEF0 (mref_secret u i) (real_secret i) i
 
 let psk_ideal (#u: usage) (#i:regid) (p:psk u i {safeKEF0 i}): mref_secret u i =
@@ -1271,16 +1378,16 @@ let create_psk #u i a =
 let pskp (*ip:ipkg*) (u:usage): ST (pkg ii)
   (requires fun h0 -> True)
   (ensures fun h0 p h1 -> (*TBC*) True)
-= 
-  let p = 
+=
+  let p =
     LocalPkg
       (fun (i:ii.t {ii.registered i}) -> ext0 u i)
       (fun i -> a: info{a == get_info i})
       (fun #_ a -> secret_len a)
       idealKEF0
-      // local footprint 
-      (fun #i (k:ext0 u i) -> Set.empty (*TBC*)) 
-      // local invariant 
+      // local footprint
+      (fun #i (k:ext0 u i) -> Set.empty (*TBC*))
+      // local invariant
       (fun #_ k h -> True)
       (fun r i h0 k h1 -> ())
       // create/coerce postcondition
@@ -1362,15 +1469,15 @@ assume val coerce_salt:
 let saltp (*ip:ipkg*) (u:usage): ST (pkg ii)
   (requires fun h0 -> True)
   (ensures fun h0 s h1 -> True)
-= 
+=
   let p = LocalPkg
     (salt u)
     (fun (i:ii.t) -> a:info{a == get_info i})
     (fun #_ a -> secret_len a)
     idealPRF1
-    // local footprint 
-    (fun #i (k:salt u i) -> Set.empty) 
-    // local invariant 
+    // local footprint
+    (fun #i (k:salt u i) -> Set.empty)
+    // local invariant
     (fun #_ k h -> True)
     (fun r i h0 k h1 -> ())
     // create/coerce postcondition
@@ -1378,7 +1485,7 @@ let saltp (*ip:ipkg*) (u:usage): ST (pkg ii)
     (fun #i u h0 k h1 r h2 -> ())
     create_salt
     coerce_salt in
-  memoization_ST #ii p 
+  memoization_ST #ii p
 
 
 /// HKDF.Extract(key=s, materials=dh_secret) idealized as 2-step
@@ -1455,7 +1562,7 @@ let prf_extract1 #u #i a s idh gZ =
   else
     let raw_salt = prf_leak #u #i #a s in
     let raw = HKDF.extract raw_salt gZ in
-    (| (), coerce u j a raw |) m
+    (| (), coerce u j a raw |) 
     // we allocate a key at a narrow index, possibly re-using key
     // materials if there are collisions on gZ or raw_salt
 
@@ -1856,18 +1963,18 @@ let create_salt2 #u i a =
   else
     (| (), real_salt2 #u #i' (sample (secret_len a)) |)
 
-let saltp2 (u:usage): ST (pkg ii) 
+let saltp2 (u:usage): ST (pkg ii)
   (requires fun h0 -> True)
   (ensures fun h0 s h1 -> True)
-= 
+=
   let p = LocalPkg
     (ext2 u)
     (fun (i:ii.t) -> a:info{a == get_info i})
     (fun #_ a -> secret_len a)
     idealKEF2
-    // local footprint 
-    (fun #i (k:ext2 u i) -> Set.empty) 
-    // local invariant 
+    // local footprint
+    (fun #i (k:ext2 u i) -> Set.empty)
+    // local invariant
     (fun #_ k h -> True)
     (fun r i h0 k h1 -> ())
     // create/coerce postcondition
@@ -1875,7 +1982,7 @@ let saltp2 (u:usage): ST (pkg ii)
     (fun #i u h0 k h1 r h2 -> ())
     create_salt2
     coerce_salt2 in
-  memoization_ST #ii p 
+  memoization_ST #ii p
 
 
 /// HKDF.Extract(key=s, materials=0) idealized as a single-use PRF.
@@ -2128,3 +2235,4 @@ let ks() =
   let i4: regid = Derive i3 "" Extract in
   let next_early_secret: secret (u_early_secret (depth - 1)) i4 = extract0 rsk a in
   ()
+--- *)
