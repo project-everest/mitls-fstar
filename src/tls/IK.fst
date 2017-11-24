@@ -199,14 +199,23 @@ noeq type pkg (ip: ipkg) = | Pkg:
   $key: (i:ip.t {ip.registered i} -> Type0) (* indexed state of the functionality *) ->
   $info: (ip.t -> Type0)                    (* creation-time arguments, typically refined using i:ip.t *) ->
   $len: (#i:ip.t -> info i -> keylen)        (* computes the key-material length from those arguments *) ->
-  ideal: Type0                            (* type-level access to the ideal flag of the package *) ->
+  $ideal: Type0                            (* type-level access to the ideal flag of the package *) ->
   //17-11-13 do we need to know that ideal ==> model?
   //17-11-13 is type-level access enough?
-  define_table: mem_table #(i:ip.t {ip.registered i}) key  (* table of all allocated instances; owned by the package *) ->
-  footprint: (mem -> GTot rset) (* package footprint: all global and instance-local regions, but not [define_table] *) ->
+
+  // when modelling, we maintain a global table of all allocated
+  // instances of the package. Only the package modifies the table.
+  //
+  // The package footprint is a function of the table contents; 
+  // that collects all global and instance-local regions, but not [define_table]
+  define_table: mem_table #(i:ip.t {ip.registered i}) key ->
+  footprint: (mem -> GTot rset) ->
   footprint_framing: (h0:mem -> h1:mem -> Lemma
     (requires mem_stable define_table h0 h1)
     (ensures footprint h0 == footprint h1)) ->
+
+  // we maintain a package invariant, 
+  // which only depends on the table and footpring.
   package_invariant: (mem -> Type0) ->
   package_invariant_framing: (r:pkg_inv_r -> h0:mem -> h1:mem -> Lemma
     (requires package_invariant h0 /\
@@ -214,19 +223,35 @@ noeq type pkg (ip: ipkg) = | Pkg:
       | Pinv_region r -> modifies_one r h0 h1 /\ ~(Set.mem r (footprint h0))
       | Pinv_define #it #vt t -> modifies_mem_table t h0 h1 /\ mem_disjoint t define_table))
     (ensures package_invariant h1)) ->
+
+  // create and coerce, with a shared post-condition and framing lemma
+  // so that [derive] can pass the post-condition to its caller; the
+  // concrete part of the postcondition is what we need in [derive].
   post: (#i:ip.t{ip.registered i} -> info i -> mem -> key i -> mem -> GTot Type0) ->
   post_framing: (#i:ip.t{ip.registered i} -> a:info i ->
-     h0:mem -> k:key i -> h1:mem -> r:HH.rid -> h2:mem -> Lemma
-     (requires (post a h0 k h1 /\ modifies_one r h1 h2 /\ ~(Set.mem r (footprint h0))))
-     (ensures (post a h0 k h2))) ->
+    h0:mem -> k:key i -> h1:mem -> r:HH.rid -> h2:mem -> Lemma
+    (requires (post a h0 k h1 /\ modifies_one r h1 h2 /\ ~(r `Set.mem` footprint h0)))
+    (ensures (post a h0 k h2))) ->
   create: (i:ip.t{ip.registered i} -> a:info i -> ST (key i)
-    (requires fun h0 -> model /\ package_invariant h0 /\ mem_fresh define_table i h0)
-    (ensures fun h0 k h1 -> modifies_mem_table define_table h0 h1 /\ post a h0 k h1
-      /\ package_invariant h1 /\ mem_update define_table i k h0 h1)) ->
+    (requires fun h0 -> 
+      model /\ 
+      package_invariant h0 /\ 
+      mem_fresh define_table i h0)
+    (ensures fun h0 k h1 -> 
+      post a h0 k h1 /\ 
+      modifies_mem_table define_table h0 h1 /\ 
+      package_invariant h1 /\ 
+      mem_update define_table i k h0 h1)) ->
   coerce: (i:ip.t{ip.registered i} -> a:info i -> lbytes (len a) -> ST (key i)
-    (requires fun h0 -> package_invariant h0 /\ mem_fresh define_table i h0 /\ (ideal ==> ip.corrupt i))
-    (ensures fun h0 k h1 -> modifies_mem_table define_table h0 h1 /\ post a h0 k h1
-      /\ package_invariant h1 /\ mem_update define_table i k h0 h1)) ->
+    (requires fun h0 -> 
+      (ideal ==> ip.corrupt i) /\
+      package_invariant h0 /\ 
+      mem_fresh define_table i h0)
+    (ensures fun h0 k h1 -> 
+      post a h0 k h1 /\
+      modifies_mem_table define_table h0 h1 /\ 
+      package_invariant h1 /\ 
+      mem_update define_table i k h0 h1)) ->
   pkg ip
 
 /// packages of instances with local private state, before ensuring
@@ -238,21 +263,23 @@ noeq type local_pkg (ip: ipkg) =
   $info: (ip.t -> Type0) ->
   $len: (#i:ip.t -> info i -> keylen) ->
   $ideal: Type0 ->
+  
   local_footprint: (#i:ip.t{ip.registered i} -> key i -> GTot rset) (* instance footprint *) ->
   local_invariant: (#i:ip.t{ip.registered i} -> key i -> mem -> GTot Type0) (* instance invariant *) ->
   local_invariant_framing: (r:HH.rid -> i:ip.t{ip.registered i} -> h0:mem -> k:key i -> h1:mem -> Lemma
     (requires local_invariant k h0 /\ modifies_one r h0 h1 /\ ~(r `Set.mem` local_footprint k))
     (ensures local_invariant k h1)) ->
+
   post: (#i:ip.t{ip.registered i} -> info i -> mem -> key i -> mem -> GTot Type0) ->
   post_framing: (#i:ip.t{ip.registered i} -> a:info i -> h0:mem -> k:key i -> h1:mem -> r:HH.rid -> h2:mem -> Lemma
     (requires (post a h0 k h1 /\ modifies_one r h1 h2 /\ ~(r `Set.mem` local_footprint k)))
     (ensures (post a h0 k h2))) ->
   create: (i:ip.t{ip.registered i} -> a:info i -> ST (key i)
     (requires fun h0 -> model)
-    (ensures fun h0 k h1 -> modifies_none h0 h1 /\ post a h0 k h1 /\ local_invariant k h1)) ->
+    (ensures fun h0 k h1 -> post a h0 k h1 /\ modifies_none h0 h1 /\ local_invariant k h1)) ->
   coerce: (i:ip.t{ip.registered i} -> a:info i -> lbytes (len a) -> ST (key i)
     (requires fun h0 -> ideal ==> ip.corrupt i)
-    (ensures fun h0 k h1 -> modifies_none h0 h1 /\ post a h0 k h1 /\ local_invariant k h1)) ->
+    (ensures fun h0 k h1 -> post a h0 k h1 /\ modifies_none h0 h1 /\ local_invariant k h1)) ->
   local_pkg ip
 
 (* Iterators over Monotonic.Map, require a change of implementation *)
@@ -295,32 +322,29 @@ let lemma_mm_forall_elim (#a:eqtype) (#b:a -> Type) (t:MM.map' a b)
   = admit()
 
 
-// Memoization functor: memoize create/coerce and manage defined instances
+// Memoization functor from local to global packages that memoize
+// instances produced by create/coerce and maintain their joint
+// invariant. 
+//
+// We provide both a pure, unfolded functor and a stateful,
+// table-allocating functor; the latter is probably too opaque for
+// correlating its result with the source definitions.
+
 #set-options "--z3rlimit 100"
-unfold let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip
-// does not work: too opaque?
-//  : ST (pkg ip)
-//  (requires fun h0 -> True)
-//  (ensures fun h0 p h1 ->
-//    modifies_mem_table p.define_table h0 h1 /\
-//    p.package_invariant h1)
-  =
-  let footprint (h:mem) : GTot rset =
+unfold let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
+  let footprint (h:mem): GTot rset =
     if model then
-      let log : i_mem_table p.key = itable mtable in
-      let map = MR.m_sel h log in
+      let map = MR.m_sel h (itable mtable) in
       mm_fold map #rset Set.empty (fun s i k -> rset_union s (p.local_footprint k)) h
     else Set.empty in
-  let footprint_framing (h0:mem) (h1:mem) : Lemma
+  let footprint_framing (h0 h1: mem): Lemma
     (requires mem_stable mtable h0 h1)
     (ensures footprint h0 == footprint h1)
     =
     if model then
-      let log : i_mem_table p.key = itable mtable in
-      let map = MR.m_sel h0 log in
-      let map' = MR.m_sel h1 log in
+      let map0 = MR.m_sel h0 (itable mtable) in
+      let map1 = MR.m_sel h1 (itable mtable) in
       lemma_mem_stable mtable h0 h1
-    else ()
   in
   let package_invariant h =
     if model then
@@ -1387,7 +1411,8 @@ assume val prf_leak:
   Hashing.Spec.hkey a.ha
 
 type ext1 (u:usage) (i:regid) (idh:id_dhe) =
-  _:unit{registered (Derive i "" (ExtractDH idh))} & secret u (Derive i "" (ExtractDH idh))
+  _:unit{registered (Derive i "" (ExtractDH idh))} & 
+  secret u (Derive i "" (ExtractDH idh))
 
 val prf_extract1:
   #u: usage ->
@@ -1407,23 +1432,35 @@ let prf_extract1 #u #i a s idh gZ =
   lemma_kdf_prf1 ();
   if flag_PRF1 && honest
   then
-    (* TBD: memoization
-    let w =
-      // "wide" PRF, memoized on gZ
-      match find s.wide gZ with
-      | Some w -> w // may return k
-      | None ->
-        let w = pkg.create0 j a in
-        s.wide := snoc s.wide w;
-        w in  *)
+    // This is the narrow idealized variant--see paper for additional
+    // discussion. Note the algorithm is determined by the salt index.
+    //
     (| (), create u j a |)
-    // agreement on the algorithms follows from the salt.
+    //
+    // We use the define table of the derived KDF to represent the
+    // state of the PRF.  todo: guard [create] with a table lookup;
+    // informally, when calling [prf_extract1] we don't care about the
+    // state of the KDF, as long as it meets its invariant.
+    //
+    // The wide idealized variant is as follows: 
+    //
+    // let j0 = 
+    //   match Map.find !s.wide (i,gZ) with
+    //   | Some j0 -> j0
+    //   | None    -> s.wide := !s.wide ++ ((i,gZ), length !s.wide) in
+    // JKDF.create u j j0 a 
+    //
+    // or just
+    // JKDF.create u j (i,gZ) a
   else
     let raw_salt = prf_leak #u #i #a s in
-    let raw = HKDF.extract raw_salt gZ (* narrow, concrete *) in
-    (| (), coerce u j a raw |)
+    let raw = HKDF.extract raw_salt gZ in
+    (| (), coerce u j a raw |) m
+    // we allocate a key at a narrow index, possibly re-using key
+    // materials if there are collisions on gZ or raw_salt
 
-/// ODH (precisely tracking the games, not yet code-complete
+
+/// ODH (precisely tracking the games)
 /// --------------------------------------------------------------------------------------------------
 
 // Ideally, we maintain a monotonic map from every honestly-sampled
@@ -1919,6 +1956,12 @@ let derive_info (lbl:label) (i:id) (a:info) (ctx:context{wellformed_id (Derive i
   | _ -> Info ha o
 
 let labels = list label
+
+(*
+let psk_tables depth = ...
+let pskp n u = 
+  memoization (local_pskp n u) psk_tables.[n]
+  *)
 
 // 17-10-20 this causes an extraction-time loop, as could be expected.
 inline_for_extraction

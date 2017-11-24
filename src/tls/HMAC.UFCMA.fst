@@ -243,7 +243,7 @@ let test
   let a = Hashing.SHA256 in
   let ha_of_i (i:nat) = a in 
   let good_of_i i v = length v = i in // a property worth MACing! 
-  let p = localpkg ip (fun (_:ip.IK.t) -> a) good_of_i in
+  let p = localpkg ip ha_of_i good_of_i in
   // assert (IK.LocalPkg?.info #ip p == info1 ip ha_of_i good_of_i); // provable only with unfolds?
 
   let u = {parent=r; alg=a; good=good_of_i 0} in
@@ -273,7 +273,7 @@ let test
   let t = mac #ip #0 k v in
 
   let b = verify #ip #0 k v' t' in
-  let empty = k.u.good in 
+  // let empty = k.u.good in 
   assert(b /\ ideal ==> length v' = 0);
   // assert false; 
   ()  
