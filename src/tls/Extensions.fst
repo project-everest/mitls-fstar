@@ -14,6 +14,12 @@ open FStar.Error
 open TLSError
 open TLSConstants
 
+//NS: hoisting a convenient function to avoid a closure conversion
+let rec existsb2 (f: 'a -> 'b -> bool) (x:'a) (y:list 'b) : bool =
+  match y with
+  | [] -> false
+  | hd::tl -> f x hd || existsb2 f x tl
+
 (*************************************************
  Define extension.
  *************************************************)
@@ -74,22 +80,24 @@ type binder = b:bytes {32 <= length b /\ length b <= 255}
 type binders =
   bs:list binder {1 <= List.Tot.length bs /\ List.Tot.length bs < 255}
 
+let rec binderListBytes_aux (bl:list binder)
+    : Tot (b:bytes{length b <= op_Multiply (List.Tot.length bl) 256}) =
+    match bl with
+    | [] -> empty_bytes
+    | b::t ->
+      let bt = binderListBytes_aux t in
+      assert(length bt <= op_Multiply (List.Tot.length bl - 1) 256);
+      let b0 = Parse.vlbytes1 b in
+      assert(length b0 <= 256);
+      b0 @| binderListBytes_aux t
+
 val binderListBytes: binders -> Pure (b:bytes)
   (requires True)
   (ensures fun b -> length b >= 33 /\ length b <= 65535)
 let binderListBytes bs =
-  let rec aux (bl:list binder) : Tot (b:bytes{length b <= op_Multiply (List.Tot.length bl) 256}) =
-    match bl with
-    | [] -> empty_bytes
-    | b::t ->
-      let bt = aux t in
-      assert(length bt <= op_Multiply (List.Tot.length bl - 1) 256);
-      let b0 = Parse.vlbytes1 b in
-      assert(length b0 <= 256);
-      b0 @| (aux t) in
   match bs with
   | h::t ->
-    let b = aux t in
+    let b = binderListBytes_aux t in
     let b0 = Parse.vlbytes1 h in
     assert(length b0 >= 33);
     b0 @| b
@@ -98,25 +106,27 @@ let bindersBytes (bs:binders): b:bytes{length b >= 35 /\ length b <= 65537} =
   let b = binderListBytes bs in
   Parse.vlbytes2 b
 
-let parseBinderList (b:bytes{2 <= length b}) : result binders =
-  let rec (aux: b:bytes -> list binder -> Tot (result (list binder)) (decreases (length b))) =
-   fun b binders ->
+let rec parseBinderList_aux (b:bytes) (binders:list binder)
+  : Tot (result (list binder)) (decreases (length b)) =
     if length b > 0 then
       if length b >= 5 then
         match vlsplit 1 b with
         | Error z -> error "parseBinderList failed to parse a binder"
         | Correct (binder, bytes) ->
           if length binder < 32 then error "parseBinderList: binder too short"
-          else (assume (length bytes < length b); aux bytes (binders @ [binder]))
+            else (assume (length bytes < length b);
+                  parseBinderList_aux bytes (binders @ [binder]))
       else error "parseBinderList: too few bytes"
-    else Correct binders in
+    else Correct binders
+
+let parseBinderList (b:bytes{2 <= length b}) : result binders =
   if length b < 2 then
     error "pskBinderList not enough bytes to read length header"
   else
     match vlparse 2 b with
     | Correct b ->
       begin
-      match aux b [] with
+      match parseBinderList_aux b [] with
       | Correct bs ->
         let len = List.Tot.length bs in
         if 0 < len && len < 255 then
@@ -150,9 +160,8 @@ let parsePskIdentity b =
         Correct (id, ota)
       else error "malformed PskIdentity"
 
-val parsePskIdentities: b:bytes{length b >= 2} -> result (list pskIdentity)
-let parsePskIdentities b =
-  let rec (aux: b:bytes -> list pskIdentity -> Tot (result (list pskIdentity)) (decreases (length b))) = fun b psks ->
+let rec parsePskIdentities_aux : b:bytes -> list pskIdentity -> Tot (result (list pskIdentity)) (decreases (length b))
+  = fun b psks ->
     if length b > 0 then
       if length b >= 2 then
         match vlsplit 2 b with
@@ -162,14 +171,17 @@ let parsePskIdentities b =
           if length bytes >= 4 then
             let ot, bytes = split bytes 4ul in
             match parsePskIdentity (vlbytes2 id @| ot) with
-            | Correct pski -> aux bytes (psks @ [pski])
+            | Correct pski -> parsePskIdentities_aux bytes (psks @ [pski])
             | Error z -> Error z
           else error "parsePSKIdentities too few bytes"
       else error "parsePSKIdentities too few bytes"
-    else Correct psks in
+    else Correct psks
+
+val parsePskIdentities: b:bytes{length b >= 2} -> result (list pskIdentity)
+let parsePskIdentities b =
   match vlparse 2 b with
   | Correct b ->
-    if length b >= 7 then aux b []
+    if length b >= 7 then parsePskIdentities_aux b []
     else error "parsePskIdentities: too short"
   | Error z -> error "parsePskIdentities: failed to parse"
 
@@ -540,17 +552,22 @@ let parseSupportedVersions b =
 (* SERVER NAME INDICATION *)
 
 private val serverNameBytes: list serverName -> Tot bytes
-let serverNameBytes l =
-  let rec (aux:list serverName -> Tot bytes) = function
+let rec serverNameBytes = function
   | [] -> empty_bytes
-  | SNI_DNS x :: r -> abyte 0z @| bytes_of_int 2 (length x) @| x @| aux r
-  | SNI_UNKNOWN(t, x) :: r -> bytes_of_int 1 t @| bytes_of_int 2 (length x) @| x @| aux r
-  in
-  aux l
+  | SNI_DNS x :: r -> abyte 0z @| bytes_of_int 2 (length x) @| x @| serverNameBytes r
+  | SNI_UNKNOWN(t, x) :: r -> bytes_of_int 1 t @| bytes_of_int 2 (length x) @| x @| serverNameBytes r
 
-private val parseServerName: r:ext_msg -> b:bytes -> Tot (result (list serverName))
-let parseServerName mt b  =
-  let rec aux: b:bytes -> Tot (canFail serverName) (decreases (length b)) = fun b ->
+private
+let snidup: serverName -> serverName -> Tot bool 
+    = fun cur x ->
+        match x,cur with
+        | SNI_DNS _, SNI_DNS _ -> true
+      	| SNI_UNKNOWN(a,_), SNI_UNKNOWN(b,_) -> a = b
+      	| _ -> false
+
+private let rec parseServerName_aux 
+  : b:bytes -> Tot (canFail serverName) (decreases (length b)) 
+  = fun b ->
     if b = empty_bytes then ExOK []
     else if length b >= 3 then
       let ty,v = split b 1ul in
@@ -560,7 +577,7 @@ let parseServerName mt b  =
 	      ExFail(x, "Failed to parse SNI length: "^ (FStar.Bytes.print_bytes b))
       | Correct(cur, next) ->
       	begin
-      	match aux next with
+      	match parseServerName_aux next with
       	| ExFail(x,y) -> ExFail(x,y)
       	| ExOK l ->
       	  let cur =
@@ -570,21 +587,15 @@ let parseServerName mt b  =
       	    | v  -> SNI_UNKNOWN(int_of_bytes ty, cur)
       	    end
       	  in
-      	  let snidup: serverName -> Tot bool = fun x ->
-      	    begin
-      	    match x,cur with
-      	    | SNI_DNS _, SNI_DNS _ -> true
-      	    | SNI_UNKNOWN(a,_), SNI_UNKNOWN(b,_) -> a = b
-      	    | _ -> false
-      	    end
-      	  in
-      	  if List.Tot.existsb snidup l then
+      	  if existsb2 snidup cur l then
       	    ExFail(AD_unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Duplicate SNI type")
       	  else ExOK(cur :: l)
       	end
       end
     else ExFail(AD_decode_error, "Failed to parse SNI")
-    in
+
+private val parseServerName: r:ext_msg -> b:bytes -> Tot (result (list serverName))
+let parseServerName mt b  =
     match mt with
     | EM_EncryptedExtensions
     | EM_ServerHello ->
@@ -598,7 +609,7 @@ let parseServerName mt b  =
 	match vlparse 2 b with
 	| Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
 	| Correct b ->
-	match aux b with
+	match parseServerName_aux b with
 	| ExFail(x,y) -> Error(x,y)
 	| ExOK [] -> Error(AD_unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Empty SNI extension")
 	| ExOK l -> correct l
@@ -1037,28 +1048,31 @@ let extensionsBytes_is_injective
 
 private val addOnce: extension -> list extension -> Tot (result (list extension))
 let addOnce ext extList =
-  if List.Tot.existsb (sameExt ext) extList then
+  if existsb2 sameExt ext extList then
     Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Same extension received more than once")
   else
     let res = FStar.List.Tot.append extList [ext] in
     correct res
 
+private let rec parseEcpfList_aux
+        : b:bytes -> Tot (result (list point_format)) (decreases (length b))
+        = fun b ->
+          if b = empty_bytes then Correct []
+          else if length b = 0 then error "malformed curve list"
+          else
+            let u,v = split b 1ul in
+            ( match parseEcpfList_aux v with
+              | Error z -> Error z
+              | Correct l ->
+                let cur =
+                match u.[0ul] with
+                | 0z -> ECP_UNCOMPRESSED
+                | _ -> ECP_UNKNOWN(int_of_bytes u) in
+                Correct (cur :: l))
+
 val parseEcpfList: bytes -> result (list point_format)
 let parseEcpfList b =
-    let rec aux: (b:bytes -> Tot (result (list point_format)) (decreases (length b))) = fun b ->
-        if b = empty_bytes then Correct []
-        else if length b = 0 then error "malformed curve list"
-        else
-          let u,v = split b 1ul in
-          ( match aux v with
-            | Error z -> Error z
-            | Correct l ->
-              let cur =
-              match u.[0ul] with
-              | 0z -> ECP_UNCOMPRESSED
-              | _ -> ECP_UNKNOWN(int_of_bytes u) in
-              Correct (cur :: l))
-    in match aux b with
+    match parseEcpfList_aux b with
     | Error z -> Error z
     | Correct l ->
       if List.Tot.mem ECP_UNCOMPRESSED l
@@ -1150,33 +1164,35 @@ let parseExtension mt b =
 
 //17-05-08 TODO precondition on bytes to prove length subtyping on the result
 // SI: simplify binder accumulation code. (Binders should be the last in the list.)
+private 
+let rec parseExtensions_aux
+        : mt:ext_msg -> b:bytes -> list extension * option binders -> Tot (result (list extension * option binders))
+          (decreases (length b)) 
+   = fun mt b (exts, obinders) ->
+       if length b >= 4 then
+         let ht, b = split b 2ul in
+         match vlsplit 2 b with
+         | Error(z) -> error "extension length"
+         | Correct(ext, bytes) ->
+      	   (* assume (Prims.precedes (Prims.LexCons b) (Prims.LexCons (ht @| vlbytes 2 ext))); *)
+      	   (match parseExtension mt (ht @| vlbytes 2 ext) with
+      	   // SI:
+      	     | Correct (ext, Some binders) ->
+      	       (match addOnce ext exts with // fails if the extension already is in the list
+      	        | Correct exts -> parseExtensions_aux mt bytes (exts, Some binders) // keep the binder we got
+      	        | Error z -> Error z)
+      	     | Correct (ext, None) ->
+      	       (match addOnce ext exts with // fails if the extension already is in the list
+       	        | Correct exts -> parseExtensions_aux mt bytes (exts, obinders)  // use binder-so-far.
+      	        | Error z -> Error z)
+      	     | Error z -> Error z)
+       else Correct (exts,obinders)
+
 val parseExtensions: ext_msg -> b:bytes -> result (extensions * option binders)
 let parseExtensions mt b =
-  let rec aux: b:bytes -> list extension * option binders
-    -> Tot (result (list extension * option binders))
-    (decreases (length b)) =
-    fun b (exts, obinders) ->
-    if length b >= 4 then
-      let ht, b = split b 2ul in
-      match vlsplit 2 b with
-      | Error(z) -> error "extension length"
-      | Correct(ext, bytes) ->
-      	(* assume (Prims.precedes (Prims.LexCons b) (Prims.LexCons (ht @| vlbytes 2 ext))); *)
-      	(match parseExtension mt (ht @| vlbytes 2 ext) with
-      	// SI:
-      	| Correct (ext, Some binders) ->
-      	  (match addOnce ext exts with // fails if the extension already is in the list
-      	  | Correct exts -> aux bytes (exts, Some binders) // keep the binder we got
-      	  | Error z -> Error z)
-      	| Correct (ext, None) ->
-      	  (match addOnce ext exts with // fails if the extension already is in the list
-      	  | Correct exts -> aux bytes (exts, obinders)  // use binder-so-far.
-      	  | Error z -> Error z)
-      	| Error z -> Error z)
-    else Correct (exts,obinders) in
   if length b < 2 then error "extensions" else
   match vlparse 2 b with
-  | Correct b -> aux b ([], None)
+  | Correct b -> parseExtensions_aux mt b ([], None)
   | Error z -> error "extensions"
 
 (* SI: API. Called by HandshakeMessages. *)
@@ -1398,7 +1414,7 @@ let rec containsExt (l: list extension) (ext: extension): bool =
   match l with
   | [] -> false
   | ext' :: l' -> sameExt ext ext' || containsExt l' ext
-
+  
 (* TODO (adl):
    The negotiation of renegotiation indication is incorrect,
    Needs to be consistent with clientToNegotiatedExtension
@@ -1410,13 +1426,9 @@ private val serverToNegotiatedExtension:
   cipherSuite ->
   option (cVerifyData * sVerifyData) ->
   bool ->
-  result unit ->
   extension ->
   result unit
-let serverToNegotiatedExtension cfg cExtL cs ri resuming res sExt =
-  match res with
-  | Error z -> Error z
-  | Correct l ->
+let serverToNegotiatedExtension cfg cExtL cs ri resuming sExt =
     if not (containsExt cExtL sExt) then
       Error(AD_unsupported_extension, perror __SOURCE_FILE__ __LINE__ "server sent an unexpected extension")
     else match sExt with
@@ -1452,6 +1464,16 @@ let serverToNegotiatedExtension cfg cExtL cs ri resuming res sExt =
     | e ->
       Error(AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ ("unhandled server extension: "^(string_of_extension e)))
 
+private
+let rec serverToNegotiatedExtensions_aux cfg cExtL cs ri resuming sExtL =
+  match sExtL with
+  | [] -> correct ()
+  | hd::tl -> 
+    match serverToNegotiatedExtension cfg cExtL cs ri resuming hd with
+    | Correct _ ->
+      serverToNegotiatedExtensions_aux cfg cExtL cs ri resuming tl
+    | er -> er
+
 val negotiateClientExtensions:
   protocolVersion ->
   config ->
@@ -1486,11 +1508,7 @@ let negotiateClientExtensions pv cfg cExtL sExtL cs ri resuming =
     *)
     Correct ()
   | _, Some cExtL, Some sExtL ->
-    begin
-    match List.Tot.fold_left (serverToNegotiatedExtension cfg cExtL cs ri resuming) (correct ()) sExtL with
-    | Error z -> Error z
-    | Correct () -> correct ()
-    end
+    serverToNegotiatedExtensions_aux cfg cExtL cs ri resuming sExtL
   | _, _, None -> Correct ()
   | _, None, Some sExtL ->
     Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "negotiation failed: missing extensions in TLS ClientHello (shouldn't happen)")
@@ -1567,10 +1585,18 @@ val negotiateServerExtensions: protocolVersion
    -> option CommonDH.keyShare
    -> bool
    -> result (option (list extension))
+let rec choose_clientToServerExtension pv cfg cs ri pski ks resuming cExtL =
+  match cExtL with
+  | [] -> []
+  | hd::cExtL ->
+    match clientToServerExtension pv cfg cs ri pski ks resuming hd with
+    | None -> choose_clientToServerExtension pv cfg cs ri pski ks resuming cExtL
+    | Some e -> e::choose_clientToServerExtension pv cfg cs ri pski ks resuming cExtL
+
 let negotiateServerExtensions pv cExtL csl cfg cs ri pski ks resuming =
    match cExtL with
    | Some cExtL ->
-     let sexts = List.Tot.choose (clientToServerExtension pv cfg cs ri pski ks resuming) cExtL in
+     let sexts = choose_clientToServerExtension pv cfg cs ri pski ks resuming cExtL in
      Correct (Some sexts)
    | None ->
      begin

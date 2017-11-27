@@ -1594,41 +1594,42 @@ let pinverse_configurationExtension x = ()
 
 // TODO: Choice, truncate when maximum length is exceeded
 (** Serialization of the configuration extension list of values *)
-val configurationExtensionsBytes: list configurationExtension -> Tot bytes
-let configurationExtensionsBytes ce =
-  let rec configurationExtensionsBytes_aux (b:bytes{length b < 65536}) (ces:list configurationExtension): Tot (b:bytes{length b < 65536}) (decreases ces) =
+let rec configurationExtensionsBytes_aux (b:bytes{length b < 65536}) (ces:list configurationExtension): Tot (b:bytes{length b < 65536}) (decreases ces) =
   match ces with
   | [] -> b
   | ce::ces ->
     if length (b @| configurationExtensionBytes ce) < 65536 then
       configurationExtensionsBytes_aux (b @| configurationExtensionBytes ce) ces
     else b
-  in
+
+val configurationExtensionsBytes: list configurationExtension -> Tot bytes
+let configurationExtensionsBytes ce =
   let b = configurationExtensionsBytes_aux empty_bytes ce in
   lemma_repr_bytes_values (length b);
   vlbytes 2 b
 
 (** Parsing of the configuration extension list of values *)
+let rec parseConfigurationExtensions_aux (b:bytes) (exts:list configurationExtension)
+  : Tot (result (list configurationExtension)) (decreases (length b))
+  = if length b > 0 then
+      if length b >= 4 then
+        let typ, len_data = split b 2ul in
+        let len, data = split len_data 2ul in
+        let len = int_of_bytes len in
+        if length b >= 4 + len then
+          let ext, bytes = split_ b len in
+          match parseConfigurationExtension ext with
+          | Correct(ext') -> parseConfigurationExtensions_aux bytes (ext'::exts)
+          | Error(z) -> Error(z)
+        else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse configuration extension length")
+      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Configuration extension length should be at least 4")
+    else Correct(exts)
+  
 val parseConfigurationExtensions: pinverse_t configurationExtensionsBytes
 let parseConfigurationExtensions b =
-  let rec (aux: b:bytes -> list configurationExtension -> Tot (result (list configurationExtension)) (decreases (length b))) =
-    fun b exts ->
-    if length b > 0 then
-      if length b >= 4 then
-  let typ, len_data = split b 2ul in
-        let len, data = split len_data 2ul in
-  let len = int_of_bytes len in
-  if length b >= 4 + len then
-    let ext, bytes = split_ b len in
-    match parseConfigurationExtension ext with
-    | Correct(ext') -> aux bytes (ext'::exts)
-    | Error(z) -> Error(z)
-  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse configuration extension length")
-      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Configuration extension length should be at least 4")
-    else Correct(exts) in
   if length b >= 2 then
   match vlparse 2 b with
-  | Correct (b) ->  aux b []
+  | Correct (b) ->  parseConfigurationExtensions_aux b []
   | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse configuration extension")
   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse configuration extension")
 
@@ -1837,16 +1838,20 @@ let string_of_quicParameter = function
   | Quic_truncate_connection_id -> "truncate_connection_id"
   | Quic_max_packet_size x -> "max_packet_size="^UInt16.to_string x
   | Quic_custom_parameter (n,b) -> "custom_parameter "^UInt16.to_string n^", "^print_bytes b
+let rec string_of_quicParameters_aux_fold a f sep p =
+  match p with
+  | [] -> a
+  | hd::tl -> string_of_quicParameters_aux_fold (a ^ f hd ^ sep) f sep tl
 let string_of_quicParameters = function
   | Some (QuicParametersClient n i p)  ->
     "QUIC client parameters\n" ^
     "negotiated version: "^string_of_quicVersion n^"\n"^
     "initial version: "^string_of_quicVersion i^"\n"^
-    List.Tot.fold_left (fun a p -> a^string_of_quicParameter p^"\n") "" p
+    string_of_quicParameters_aux_fold "" string_of_quicParameter "\n" p
   | Some (QuicParametersServer v p) ->
     "QUIC server parameters\n" ^
-    List.Tot.fold_left (fun a v -> a^string_of_quicVersion v^" ") "versions: " v ^ "\n" ^
-    List.Tot.fold_left (fun a p -> a^string_of_quicParameter p^"\n") "" p
+    string_of_quicParameters_aux_fold "versions:" string_of_quicVersion " " v ^ "\n" ^
+    string_of_quicParameters_aux_fold "" string_of_quicParameter "\n" p
   | None -> "(none)"
 
 noeq type config = {
