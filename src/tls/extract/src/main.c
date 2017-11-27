@@ -11,8 +11,9 @@ int main() {
       if (res.val.case_Some.v.tag == FStar_Pervasives_Inl) {
         FStar_Bytes_bytes b =
           res.val.case_Some.v.val.case_Inl.v.fst;
-        printf("Failed to parse back %d bytes : ", b.length);
-        print_bytes(b.data, b.length);
+        printf("Failed to parse back %d bytes : %s\n",
+               b.length,
+               FStar_Bytes_print_bytes(b));
         printf("\n%s, %s\n",
                res.val.case_Some.v.val.case_Inl.v.snd,
                res.val.case_Some.v.val.case_Inl.v.thd);
@@ -22,11 +23,9 @@ int main() {
           res.val.case_Some.v.val.case_Inr.v.fst;
         FStar_Bytes_bytes got =
           res.val.case_Some.v.val.case_Inr.v.snd;
-        printf("Expected: ");
-        print_bytes((uint8_t*)expected.data, expected.length);
-        printf("\nGot     : ");
-        print_bytes((uint8_t*)got.data, got.length);
-        printf("\nFailed\n");
+        printf("Expected: %s\nGot     : %s\nFailed!\n", 
+               FStar_Bytes_print_bytes(expected),
+               FStar_Bytes_print_bytes(got));
         return 1;
       }
     }
