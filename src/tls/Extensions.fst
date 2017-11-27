@@ -1075,6 +1075,7 @@ let parseKeyShare mt data =
 (* We don't care about duplicates, not formally excluded. *)
 #set-options "--lax"
 
+inline_for_extraction
 let normallyNone ctor r =
   (ctor r, None)
 
@@ -1392,6 +1393,11 @@ let parseRenegotiationInfo b =
   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Renegotiation info bytes are too short")
 *)
 
+(* JP: manual hoisting *)
+let rec containsExt (l: list extension) (ext: extension): bool =
+  match l with
+  | [] -> false
+  | ext' :: l' -> sameExt ext ext' || containsExt l' ext
 
 (* TODO (adl):
    The negotiation of renegotiation indication is incorrect,
@@ -1411,7 +1417,7 @@ let serverToNegotiatedExtension cfg cExtL cs ri resuming res sExt =
   match res with
   | Error z -> Error z
   | Correct l ->
-    if not (List.Tot.existsb (sameExt sExt) cExtL) then
+    if not (containsExt cExtL sExt) then
       Error(AD_unsupported_extension, perror __SOURCE_FILE__ __LINE__ "server sent an unexpected extension")
     else match sExt with
     (*

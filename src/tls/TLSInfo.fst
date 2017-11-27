@@ -383,6 +383,7 @@ type binderLabel =
   | ExtBinder
   | ResBinder
 
+[@ Gc ]
 type pre_esId : Type0 =
   | ApplicationPSK: #ha:hash_alg -> #ae:aeadAlg -> i:PSK.pskid{PSK.compatible_hash_ae i ha ae} -> pre_esId
   | ResumptionPSK: #li:logInfo{~(LogInfo_CH? li)} -> i:pre_rmsId li -> pre_esId
