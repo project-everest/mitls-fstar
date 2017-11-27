@@ -72,7 +72,7 @@ let sample (len:UInt32.t): ST (lbytes len)
 /// intent (and is considered public) and "safe", which controls
 /// fine-grained idealization: roughly safe i = Flags.ideal /\ honest i
 
-noeq type ipkg (*info: Type0*)  = | Idx:
+noeq type ipkg = | Idx:
   t: Type0{hasEq t} (* abstract type for indexes *) ->
   // three abstract predicates implemented as witnesses, and a stateful reader.
   registered: (i:t -> GTot Type0) ->
@@ -202,7 +202,7 @@ type modifies_footprint (fp:mem->GTot rset) h0 h1 =
 
 noeq type pkg (ip: ipkg) = | Pkg:
   $key: (i:ip.t {ip.registered i} -> Type0) (* indexed state of the functionality *) ->
-  info: (ip.t -> Type0)                    (* creation-time arguments, typically refined using i:ip.t *) ->
+  $info: (ip.t -> Type0)                    (* creation-time arguments, typically refined using i:ip.t *) ->
   len: (#i:ip.t -> info i -> keylen)        (* computes the key-material length from those arguments *) ->
   ideal: Type0                            (* type-level access to the ideal flag of the package *) ->
   //17-11-13 do we need to know that ideal ==> model?
@@ -1306,6 +1306,7 @@ let ssa #a =
     | _ -> False in
   f
 
+(* ----
 // temporary
 let there = Mem.tls_tables_region
 
@@ -1314,10 +1315,9 @@ private type mref_secret (u: usage) (i: regid) =
   // would prefer: HyperStack.mref (option (secret u i)) (ssa #(secret u i))
   MR.m_rref there (option (secret u i)) ssa
 
-(* --- 
 /// covering two cases: application PSK and resumption PSK
 /// (the distinction follow from the value of i)
-type psk (u: usage) (i: ii.t {ii.registered i}) =
+type psk (u: usage) (i: (Idx?.t ii) {ii.registered i}) =
   ir_key safeKEF0 (mref_secret u i) (real_secret i) i
 
 let psk_ideal (#u: usage) (#i:regid) (p:psk u i {safeKEF0 i}): mref_secret u i =

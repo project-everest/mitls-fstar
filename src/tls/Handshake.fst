@@ -352,43 +352,59 @@ let verify_binder hs (bkey: i:binderId & bk:KeySchedule.binderKey i) (tag:btag b
   let digest_CH0 = HandshakeLog.hash_tag_truncated #(binderId_hash bid) hs.log tlen in
   HMAC.UFCMA.verify bk digest_CH0 tag
 
+
+
+// 17-11-25 -------------- experimental rewriting from here -----------------
+
+// not yet tail-recursive (fix later with list processing)
+// we could also output the binders instead of building a list. 
+private let rec client_Binder_loop hs (pskids: list (PSK.pskid * _)): 
+  ST (list (i:id & info i & es i) * Extensions.binders) 
+  (requires fun h0 -> True
+    // HSL contains the truncated hello message to be authenticated in
+    // binders (satisfying their logical payloand) and these pskids
+    // are all included in the offer
+    )
+  (ensures fun h0 (earlies, binders) h1 -> True
+    // modifies "only creates local keys?"
+    // if early was None and the list is non-empty, then early is the first early context 
+    )
+= 
+  match pskids with 
+  | [] -> (early, binders)
+  | (pskid, _obfuscated_age) :: pskids -> 
+      let (| i, info, es, bfk |) = KeySchedule.compute_es_and_bfk pskid in  
+      let digest_truncated_ClientHello = HandshakeLog.hash_tag #(binderId_hash info) hs.log in 
+      let binder = HMAC.UFCMA.mac bfk digest_truncated_ClientHello in 
+      let earlies, binders = client_Binder_loop hs pskids in 
+      ((| i, info, es |) :: earlies), (binder :: binders)
+
 // Compute and send the PSK binders if necessary; may be called both
 // by client_ClientHello and client_HelloRetryRequest.  On the client
 // side, we don't actually care about the presence or contents of
 // Binders in the transcript.
-val client_Binders: s:hs -> offer -> ST unit
-  (requires fun h0 -> True)
+val client_Binders: s:hs -> offer -> ST (list (i:id & info i & es i))
+  (requires fun h0 -> True
+    // HSL contains the truncated hello message to be authenticated in
+    // binders (satisfying their logical payloand)
+    )
   (ensures fun h0 _ h1 ->
+    // TODO modifies only the transcript 
     // only dealing with Some? for now 
     // we don't care about the presence and contents of Binders in the transcript
     let tr0 = HandshakeLog.transcript h0 hs.log in
     let tr1 = HandshakeLog.transcript h1 hs.log in
-    exists (b:Extensions.binders). tr1 = tr0 @ [Binders b]
+    if None? (Nego.find_clientPske offer)
+    then tr1 = tr0 
+    else (exists (b:Extensions.binders). tr1 = tr0 @ [Binders b])
     )
 let client_Binders hs offer =
   match Nego.find_clientPske offer with
   | None -> () // No PSK, no binders
-  | Some (pskl, _tlen) -> // Nego may filter the PSKs
-    let pskl = List.Tot.map (fun (id, _) -> id) pskl in
-    //17-11-06 why calling KS twice? why returning the keys, rather than just [bid]? 
-    let binderKeys = KeySchedule.ks_client_13_get_binder_keys hs.ks pskl in
-    let binders = KeySchedule.map_ST (compute_binder hs) binderKeys in
-    //alt? let binders = KeySchedule.compute_binders hs.ks pskl in 
+  | Some (pskids, binders_len) -> 
+    let earlies, binders = client_Binder_loop hs pskids in 
     HandshakeLog.send hs.log (Binders binders);
-
-    // Nego ensures that EDI is not sent in a 2nd ClientHello
-    if Some? (Nego.find_early_data offer) then
-     begin
-      trace "setting up 0RTT";
-      // 17-11-06 should this be internal to KS? we need only ha to compute the digest.
-      let (| bid, _ |) :: _ = binderKeys in
-      let ha = binderId_hash bid in
-      let digest_CH = HandshakeLog.hash_tag #ha hs.log in
-      let early_exporter_secret, edk = KeySchedule.ks_client_13_ch hs.ks digest_CH in
-      export hs early_exporter_secret;
-      register hs edk;
-      HandshakeLog.send_signals hs.log (Some (true, false)) false
-     end
+    earlies
 
 /// 17-11-11 verification style? we hope to factor out most of the
 /// pre/post in the invariant (but note we just called
@@ -427,33 +443,43 @@ val client_ClientHello: s:hs -> i:id -> ST (result (HandshakeLog.outgoing i))
           t = [ClientHello offer] ))
         | _ -> False )))
 
-let client_ClientHello hs i =
-  (* Negotiation computes the list of groups from the configuration;
-     KeySchedule computes and serializes the shares from these groups (calling into CommonDH)
-     Messages should do the serialization (calling into CommonDH), but dependencies are tricky *)
 
+let client_ClientHello hs i =
+  // The configuration determines which groups to propose (duplicating Nego?)
+  // groups = None indicates a 1.2 handshake
+  // groups = Some [] is valid, to deliberately trigger HRR.
   let groups =
     match (config_of hs).max_version with
-    | TLS_1p3 ->
-      trace "offering ClientHello 1.3";
-      Some (config_of hs).offer_shares
-    | _ ->
-      trace "offering ClientHello 1.2"; None
-    in
+    | TLS_1p3 -> trace "offering ClientHello 1.3"; Some (config_of hs).offer_shares
+    | _       -> trace "offering ClientHello 1.2"; None in
 
-  // If groups = None, this is a 1.2 handshake
-  // Note that groups = Some [] is valid (e.g. to trigger HRR deliberately)
+  // KeySchedule samples the corresponding key shares, keeping their private exponents.
+  // (threading hs.ks ensures these shares are single-use).
   let shares = KeySchedule.ks_client_init hs.ks groups in
 
-  // Compute & send the ClientHello offer
+  // Nego compute the full client offer
   let offer = Nego.client_ClientHello hs.nego shares in
+
+  // We send it in two steps: 
+  // 1. the truncated ClientHello;
+  // 2. the binders that authenticate its offer.
   HandshakeLog.send hs.log (ClientHello offer);
+  let earlies = client_Binders hs offer in 
+    
+  if Some? (Nego.find_early_data offer) then (
+    // optional EDI
+    assert(earlies <> []); 
+    let (| i, info, _ |) = head earlies in 
+    let ha = ha_of_info info in 
+    let digest_full_ClientHello = HandshakeLog.hash_tag #ha hs.log in
+    let early_exporter_secret, edk = 
+      KeySchedule.client_0RTT (head earlies) digest_full_ClientHello in
+    export hs early_exporter_secret;
+    register hs edk;
+    HandshakeLog.send_signals hs.log (Some (true, false)) false );
 
-  // Compute and send PSK binders & 0-RTT signals (calling KeySchedule again)
-  client_Binders hs offer;
-
-  // we may still need to keep parts of ch
-  hs.state := C_Wait_ServerHello;
+  let ks0 = (shares, earlies) in 
+  hs.state := C_Wait_ServerHello ks0; 
   Correct(HandshakeLog.next_fragment hs.log i)
 
 val client_HelloRetryRequest: hs:hs -> hrr:hrr -> ST incoming 
@@ -463,18 +489,20 @@ let client_HelloRetryRequest (hs:hs) (hrr:hrr): St incoming =
   match Nego.group_of_hrr hrr with
   | None -> InError(AD_handshake_failure, "server did not specify the requested group")
   | Some g ->
-    let s = KeySchedule.ks_client_13_hello_retry hs.ks g in
-    match Nego.client_HelloRetryRequest hs.nego hrr (| g, s |) with
+    let shares1, _ = C_Wait_ServerHello?.ks0 !hs.state in
+    let shares2, gX = KeySchedule.client_HelloRetryRequest shares1 g in
+    // TODO arguably we should never fail on this second call to Nego.
+    match Nego.client_HelloRetryRequest hs.nego hrr (| g, gX |) with
     | Error z -> InError z
     | Correct ch2 ->
       HandshakeLog.send hs.log (ClientHello ch2);
-      client_Binders hs ch2;
-      // Note: we stay in Wait_ServerHello
-      // Only the Nego state machine was moved by HRR
+      let earlies2 = client_Binders hs ch2 in
+      // Nego ensures EDI is never sent in a 2nd ClientHello
+      let ks0 = (shares2, earlies2) in
+      hs.state := C_Wait_ServerHello ks0 
+      // same control state, but updated Nego and KeySchedule.
       InAck false false
 
-// requires !hs.state = Wait_ServerHello
-// ensures TLS 1.3 ==> installed handshake keys
 // 17-11-11 
 // how to avoid duplicating the invariant after reading the flight? 
 // pass the whole state before calling HSL?
@@ -487,10 +515,16 @@ val client_ServerHello: s:hs -> sh:sh -> ST incoming
     writing h hs.nego 
     ))
   (ensures fun h0 r h1 -> 
-    inv s h1
-    )
-
-let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming =
+    inv s h1 /\ (
+    let control = HyperStack.sel h1 s.state in 
+    // correct TLS 1.3 ==> 
+    //   tr = [CH;B;SH] 
+    //   control = C_Wait_Finished1 
+    //   HSL has parameters set; 
+    //   installed handshake keys
+    True
+    ))
+let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *): St incoming =
   trace "client_ServerHello";
   match Nego.client_ServerHello s.nego sh with
   | Error z -> InError z
@@ -500,27 +534,27 @@ let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming 
     let ka = Nego.kexAlg mode in
     HandshakeLog.setParams s.log pv ha (Some ka) None (*?*);
     match pv with
-    | TLS_1p3 ->
-      begin
+    | TLS_1p3 -> (
         trace "Running TLS 1.3";
-        let digest = HandshakeLog.hash_tag #ha s.log in
+        let digest_ServerHello = HandshakeLog.hash_tag #ha s.log in
         let hs_keys = KeySchedule.ks_client_13_sh s.ks
           mode.Nego.n_server_random
           mode.Nego.n_cipher_suite
           (Some?.v mode.Nego.n_server_share)
           mode.Nego.n_pski
-          digest in
+          digest_ServerHello in
         register s hs_keys; // register new epoch
         (match Nego.zeroRTToffer mode.Nego.n_offer, Some? mode.Nego.n_pski with
-        | true, true ->
-          (trace "0RTT potentially accepted (wait for EE to confirm)";
+        | true, true -> (
+          trace "0RTT potentially accepted (wait for EE to confirm)";
           Epochs.incr_reader s.epochs)
-        | true, false -> trace "No 0RTT possible because of PSK refused"
+        | true, false -> 
+          trace "No 0RTT possible because of PSK refused"
         | _ -> ());
-        s.state := C_Wait_Finished1;
+        s.state := C_Wait_Finished1; // will continue after handshake decryption
         Epochs.incr_reader s.epochs; // Client 1.3 HSK switch to handshake key for decrypting EE etc...
         InAck true false // Client 1.3 HSK
-      end
+      )
     | _ ->
       begin
         trace "Running classic TLS";
@@ -922,7 +956,8 @@ let server_ClientHello hs offer obinders =
           begin
             let zeroing = Nego.zeroRTT mode in
             if zeroing  then (
-              let early_exporter_secret, zero_keys = KeySchedule.ks_server_13_0rtt_key hs.ks digestClientHelloBinders in
+              let early_exporter_secret, zero_keys = 
+                KeySchedule.ks_server_13_0rtt_key hs.ks digestClientHelloBinders in
               export hs early_exporter_secret;
               register hs zero_keys
             );
