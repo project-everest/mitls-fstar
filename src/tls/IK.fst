@@ -1371,32 +1371,34 @@ let rec mk_secret (n:nat): St (x:tree {is_secret n x}) =
     let p = mk_kdf children in
     assert(is_kdf_p p [ "AE",Leaf ae; "RE",re ]); 
     Node children p )
-
-#set-options "--detail_errors"
+ 
+//#set-options "--detail_errors"
 let test_rekey(): St unit = 
   let x = mk_secret 10 in 
   assert(is_secret 10 x);
   match x with 
   | Node ["AE",Leaf aepkg1; "RE",x1 ] pkg0 -> (
-    let children = ["AE",Leaf aepkg1; "RE",x1 ] in 
+    let children0 = ["AE",Leaf aepkg1; "RE",x1 ] in 
     let a0 = Info Hashing.Spec.SHA1 None in
     let i0: i:id {registered i /\ a0 = get_info i} = magic() in 
-    // we first need to know pkg0 is a KDF. 
-    assert(is_kdf_p pkg0 children);
+    assert(is_kdf_p pkg0 children0);
     let h0 = get() in
     assume(model /\ pkg0.package_invariant h0 /\ mem_fresh pkg0.define_table i0 h0); // create's pre 
-    // assert(Pkg?.key pkg0 == secret children);
-    let s0: secret children i0 = (Pkg?.create pkg0) i0 a0 in
+    assert(Pkg?.key pkg0 == secret children0);
+    let s0: secret children0 i0 = (Pkg?.create pkg0) i0 a0 in
     assert(is_secret 9 x1);
     match x1 with 
     | Node ["AE",Leaf aepkg2; "RE",x2] pkg1  -> (
+      let children1 = ["AE",Leaf aepkg2; "RE",x2 ] in 
       let a1 = Info Hashing.Spec.SHA1 None in
       let h1 = get() in
-      assume(all_pkg_invariant h1 /\ local_kdf_invariant s0 h1);
+      assume(all_pkg_invariant h1 /\ local_kdf_invariant s0 h1); // derive's abusive pre
       let (|_,s1|) = derive s0 a0 "RE" Expand a1 in 
       let i1: regid = Derive i0 "RE" Expand in 
-      let s1: secret children i1 = s1 in 
+      let s1: secret children1 i1 = s1 in 
       let aea = derive_aea "AE" i1 a1 in
+      let h2 = get() in 
+      assume(all_pkg_invariant h2 /\ local_kdf_invariant s1 h2); // derive's abusive pre
       let (|_,k1|) = derive s1 a1 "AE" Expand aea in 
       let ik1: regid = Derive i1 "AE" Expand in
       let k1: key ii get_aeadAlg ik1 = k1 in
@@ -1406,8 +1408,6 @@ let test_rekey(): St unit =
   | _ -> admit() // should be excluded by is_secret 10
 // refactoring needed, e.g. define derive_secret helper function to hide access to the tree
 
-//      let h2 = get() in 
-//      assume(all_pkg_invariant h2 /\ local_kdf_invariant s1 h2); // derive's abusive pre
 
 
 
