@@ -1406,8 +1406,8 @@ let test_rekey(): St unit =
   | _ -> admit() // should be excluded by is_secret 10
 // refactoring needed, e.g. define derive_secret helper function to hide access to the tree
 
-      let h2 = get() in 
-      assume(all_pkg_invariant h2 /\ local_kdf_invariant s1 h2); // derive's abusive pre
+//      let h2 = get() in 
+//      assume(all_pkg_invariant h2 /\ local_kdf_invariant s1 h2); // derive's abusive pre
 
 
 
