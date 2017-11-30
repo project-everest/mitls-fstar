@@ -1536,7 +1536,7 @@ let clientToServerExtension pv cfg cs ri pski ks resuming cext =
       Some (E_supported_groups (list_valid_ng_is_list_ng cfg.named_groups))
     else None
   | E_early_data b -> // EE
-    if cfg.enable_early_data && pski = Some 0 then Some (E_early_data None) else None
+    if Some? cfg.max_early_data && pski = Some 0 then Some (E_early_data None) else None
   | E_session_ticket b ->
      if pv = TLS_1p3 || not cfg.enable_tickets then None
      else Some (E_session_ticket empty_bytes) // TODO we may not always want to refresh the ticket

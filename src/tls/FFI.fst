@@ -230,7 +230,7 @@ let rec findsetting f l =
 let rec updatecfg cfg l : ML config =
   match l with
   | [] -> cfg
-  | "EDI" :: t -> updatecfg ({cfg with enable_early_data = true;}) t
+  | "EDI" :: t -> updatecfg ({cfg with max_early_data = Some 16384}) t
   | r :: t -> failwith ("Unknown flag: "^r)
 
 (** SZ: FStar.List opens FStar.All.
@@ -292,11 +292,11 @@ let ffiSetALPN cfg x =
   ) apl in
   { cfg with alpn = if apl=[] then None else Some apl }
 
-val ffiSetEarlyData: cfg:config -> x:bool -> ML config
+val ffiSetEarlyData: cfg:config -> x:nat -> ML config
 let ffiSetEarlyData cfg x =
-  trace ("setting early data to "^(if x then "true" else "false"));
+  trace ("setting early data limit to "^(string_of_int x));
   { cfg with
-  enable_early_data = x;
+  max_early_data = if x>0 then Some x else None;
   }
 
 val ffiSetTicketKey: a:string -> k:string -> ML bool

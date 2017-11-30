@@ -573,11 +573,11 @@ let client_NewSessionTicket_13 (hs:hs) (st13:sticket13)
   let mode = Nego.getMode hs.nego in
   let CipherSuite13 ae h = mode.Nego.n_cipher_suite in
   let t_ext = st13.ticket13_extensions in
-  let ed = Some? (List.Tot.find Extensions.E_early_data? t_ext) in
+  let ed = List.Tot.find Extensions.E_early_data? t_ext in
   let pskInfo = PSK.({
     ticket_nonce = Some st13.ticket13_nonce;
     time_created = 0; // TODO
-    allow_early_data = ed;
+    allow_early_data = Some? ed;
     allow_dhe_resumption = true;
     allow_psk_resumption = true;
     early_ae = ae; early_hash = h;
@@ -586,8 +586,13 @@ let client_NewSessionTicket_13 (hs:hs) (st13:sticket13)
   let psk = KeySchedule.ks_client_13_rms_psk hs.ks st13.ticket13_nonce in
   let sni = iutf8 (Nego.get_sni mode.Nego.n_offer) in
   let cfg = Nego.local_config hs.nego in
-  cfg.ticket_callback sni tid (TicketInfo_13 pskInfo) psk;
-  InAck false false
+  match ed, cfg.quic_parameters with
+  | Some (Extensions.E_early_data (Some 0xfffffffful)), Some _
+  | Some (Extensions.E_early_data (Some _)), None
+  | None, None ->
+    cfg.ticket_callback sni tid (TicketInfo_13 pskInfo) psk;
+    InAck false false
+  | _ -> InError (AD_illegal_parameter, "QUIC tickets must allow 0xFFFFFFFF bytes of ealy data")
 
 let client_ServerFinished hs f digestClientFinished =
   let sfin_key = KeySchedule.ks_12_finished_key hs.ks in
@@ -966,10 +971,11 @@ let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinishe
           let tb = Ticket.create_ticket ticket in
           trace ("Sending ticket: "^(print_bytes tb));
           let ticket_ext =
-            if cfg.enable_early_data then
-              [Extensions.E_early_data (Some (FStar.UInt32.uint_to_t 16384))]
-            else [] in
-
+            match cfg.max_early_data, cfg.quic_parameters with
+            // QUIC: always enable 0-RTT data with max limit
+            | _, Some _ -> [Extensions.E_early_data (Some (FStar.UInt32.uint_to_t 0xfffffffful))]
+            | Some max_ed, None -> [Extensions.E_early_data (Some (FStar.UInt32.uint_to_t max_ed))]
+            | _ -> [] in
           let tnonce, _ = split tb 12 in
           HandshakeLog.send hs.log (NewSessionTicket13 ({
             ticket13_lifetime = FStar.UInt32.(uint_to_t 3600);

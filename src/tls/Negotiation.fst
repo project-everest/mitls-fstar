@@ -423,7 +423,7 @@ let computeOffer r cfg resume nonce ks pskinfo =
       qp
       cfg.extended_master_secret
       cfg.safe_renegotiation
-      (compatible_psk && cfg.enable_early_data)
+      (compatible_psk && Some? cfg.max_early_data)
       ticket12
       cfg.signature_algorithms
       cfg.named_groups
@@ -630,7 +630,7 @@ let client_ClientHello #region ns oks =
     | (_, i) :: _ -> i.allow_early_data // Must be the first PSK
     | _ -> false)
       then "compatible" else "");
-      trace(if ns.cfg.enable_early_data then "enabled" else "");
+      trace(if Some? ns.cfg.max_early_data then "enabled" else "");
       let offer = computeOffer Client ns.cfg ns.resume ns.nonce oks' pskinfo in
       trace ("offering client extensions "^string_of_option_extensions offer.ch_extensions);
       MR.m_write ns.state (C_Offer offer);

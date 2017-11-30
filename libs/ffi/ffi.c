@@ -403,12 +403,12 @@ static int configure_common_bool_caml(/* in */ mitls_state *state, value b, valu
     CAMLreturnT(int,ret);
 }
 
-int MITLS_CALLCONV FFI_mitls_configure_early_data(/* in */ mitls_state *state, int enable_early_data)
+int MITLS_CALLCONV FFI_mitls_configure_early_data(/* in */ mitls_state *state, uint32_t max_early_data)
 {
     int ret;
-    value b = enable_early_data ? Val_true : Val_false;
+    value max_ed = Val_int(max_early_data);
     caml_acquire_runtime_system();
-    ret = configure_common_bool_caml(state, b, g_mitls_FFI_SetEarlyData);
+    ret = configure_common_bool_caml(state, max_ed, g_mitls_FFI_SetEarlyData);
     caml_release_runtime_system();
     return ret;
 }
@@ -940,7 +940,7 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
        }
 
     if(cfg->enable_0rtt)
-       if(!configure_common_bool_caml(&ms, Val_true, g_mitls_FFI_SetEarlyData))
+       if(!configure_common_bool_caml(&ms, Val_int(0xFFFFFFFF), g_mitls_FFI_SetEarlyData))
        {
          *errmsg = strdup("FFI_mitls_quic_create_caml: can't enable early_data");
          CAMLreturnT(int, 0);

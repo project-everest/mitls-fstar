@@ -101,7 +101,7 @@ let defaultConfig =
 
   // Common
   non_blocking_read = false;
-  enable_early_data = false;
+  max_early_data = None;
   safe_renegotiation = true;
   extended_master_secret = true;
   enable_tickets = true;

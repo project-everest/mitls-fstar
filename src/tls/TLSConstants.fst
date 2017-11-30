@@ -1795,7 +1795,7 @@ noeq type config : Type0 = {
 
     (* Common *)
     non_blocking_read: bool;
-    enable_early_data: bool;      // 0-RTT offer (client) and support (server)
+    max_early_data: option nat;   // 0-RTT offer (client) and support (server), and data limit
     safe_renegotiation: bool;     // demands this extension when renegotiating
     extended_master_secret: bool; // turn on RFC 7627 extended master secret support
     enable_tickets: bool;         // Client: offer ticket support; server: emit and accept tickets
