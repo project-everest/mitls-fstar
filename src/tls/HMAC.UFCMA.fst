@@ -289,7 +289,7 @@ let test
 
   let b = verify #ip #0 k v' t' in
   assert(b /\ ideal ==> length v' = 0);
-  // assert false; 
+  assert false; 
   ()  
   
 (*
