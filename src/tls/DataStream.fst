@@ -17,6 +17,7 @@ open TLSError
 open TLSConstants
 open TLSInfo
 open Range
+module HS = FStar.HyperStack
 
 //--------- application data fragments ------------------------------
 
@@ -115,10 +116,10 @@ let gen r0 (i:id) =
   let r = new_region r0 in
   empty_is_well_formed i;
   let t = ralloc r [] in
-  let log = if authId i then Some t.ref else None in
+  let log = if authId i then Some (HS.mrref_of t) else None in
   let ctr = ralloc r 0 in
-  let enc = State #i #r log ctr.ref in
-  let dec = State #i #r log ctr.ref in
+  let enc = State #i #r log (HS.mrref_of ctr) in
+  let dec = State #i #r log (HS.mrref_of ctr) in
   enc, dec
 
 // -------------------------------------------------------------
