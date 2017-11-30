@@ -19,4 +19,6 @@ FStar_Char FStar_Char_char_of_int(krml_checked_int_t);
 
 typedef void *Hashing_OpenSSL_hash_ctx_______;
 
+typedef void *LowCProvider_aead_state;
+
 #endif // __HACKS_H
