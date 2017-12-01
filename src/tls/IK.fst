@@ -482,13 +482,19 @@ unfold let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): p
 let memoization_ST (#ip:ipkg) (p:local_pkg ip)
   : ST (pkg ip)
   (requires fun h0 -> True)
-  (ensures fun h0 p h1 ->
-    modifies_mem_table p.define_table h0 h1 /\ p.package_invariant h1)
+  (ensures fun h0 q h1 ->
+    LocalPkg?.key p == Pkg?.key q /\
+    (let t: mem_table p.key = q.define_table in
+    modifies_mem_table t h0 h1 /\ 
+    q == memoization #ip p t /\
+    q.package_invariant h1))
 =
   let h0 = get() in
   let mtable: mem_table p.key = mem_alloc #(i:ip.t{ip.registered i}) p.key in
   let h1 = get() in
   let q = memoization #ip p mtable in
+  // assert(q == memoization #ip p mtable); // fails
+  // assert_norm(q == memoization #ip p mtable);// fails with squashing error
   assert(modifies_mem_table mtable h0 h1);
   (if model then lemma_mm_forall_init (MR.m_sel h1 (itable mtable)) p.local_invariant h1);
   assert(q.package_invariant h1);
@@ -619,10 +625,13 @@ let local_ae_pkg (ip:ipkg) (aeadAlg_of_i: ip.t -> aeadAlg) =
     (create_key ip aeadAlg_of_i)
     (coerce_key ip aeadAlg_of_i)
 
-let mp (ip:ipkg) (aeadAlg_of_i: ip.t -> aeadAlg)
-  : ST (pkg ip) (requires fun h0 -> True)
-  (ensures fun h0 p h1 -> modifies_mem_table p.define_table h0 h1 /\ p.package_invariant h1)
-  =
+let mp (ip:ipkg) (aeadAlg_of_i: ip.t -> aeadAlg): ST (pkg ip) 
+  (requires fun h0 -> True)
+  (ensures fun h0 p h1 -> 
+    //17-12-01 we need freshness and emptyness of the new table + local packaging
+    modifies_mem_table p.define_table h0 h1 /\ 
+    p.package_invariant h1)
+=
   memoization_ST #ip (local_ae_pkg ip aeadAlg_of_i)
 
 val encrypt:
@@ -1322,7 +1331,7 @@ let derive #u #i k a lbl ctx a' =
 /// packaging.
 
 
-/// Global invariant, rooted at the PSK
+/// Global, generic invariant, to be rooted at the PSK
 /// (do we need some "static index"?)
  
 // node footprints already recursively collect their children's footprints
@@ -1388,6 +1397,9 @@ let derive_aea
 
 let memoized (p:pkg ii) (l:local_pkg ii) = 
   exists (t: mem_table l.key). p == memoization l t
+  // a more specific spec, saving a quantifier but stuck on subtyping:
+  // let t: mem_table l.key = p.define_table in
+  // p == memoization l t
 
 let is_ae_p (p: pkg ii)           = memoized p (local_ae_pkg ii get_aeadAlg)
 let is_kdf_p (p: pkg ii) children = memoized p (local_kdf_pkg children)
@@ -1405,6 +1417,10 @@ let rec is_secret (n:nat) (x: tree) =
       is_ae_p ae /\ 
       is_secret (n-1) re
     | _ -> False
+
+// let is_secret_shape (n:nat) (x:tree {is_secret n x}): Lemma (Node? x) = 
+//   if n = 0 then () else ()
+
 
 assume val mk_kdf: u:children -> ST (pkg ii)
   (requires fun h0 -> True) 
@@ -1432,20 +1448,24 @@ let rec mk_secret n =
     Node children p )
  
 //#set-options "--z3rlimit 100 --detail_errors"
-let test_rekey(): St unit = 
-  let x = mk_secret 10 in 
-  assert(is_secret 10 x);
-  match x with 
+let test_rekey(): St unit 
+= 
+  let x0 = mk_secret 10 in 
+  let h0 = get() in
+  assert(is_secret 10 x0);
+  assume(tree_invariant x0 h0); // soon a post of mk_secret
+  // assert(Node? x0); 
+  match x0 with 
   | Node ["AE",Leaf aepkg1; "RE",x1 ] pkg0 -> (
     let children0 = ["AE",Leaf aepkg1; "RE",x1 ] in 
     let a0 = Info Hashing.Spec.SHA1 None in
     let i0: i:id {registered i /\ a0 = get_info i} = magic() in 
     assert(is_kdf_p pkg0 children0);
-    let h0 = get() in
+    assert(pkg0.package_invariant h0 /\ tree_invariant x1 h0);
     // create's pre; should follow from pkg0's package invariant
-    assert(tree_invariant x h0 ==> pkg0.package_invariant h0);
-    assume(model /\ pkg0.package_invariant h0 /\ mem_fresh pkg0.define_table i0 h0); 
+    assume(model /\ mem_fresh pkg0.define_table i0 h0); 
     assert(Pkg?.key pkg0 == secret children0);
+    
     let s0: secret children0 i0 = (Pkg?.create pkg0) i0 a0 in
     assert(is_secret 9 x1);
     match x1 with 
@@ -1453,7 +1473,9 @@ let test_rekey(): St unit =
       let children1 = ["AE",Leaf aepkg2; "RE",x2 ] in 
       let a1 = Info Hashing.Spec.SHA1 None in
       let h1 = get() in
+      assume(tree_invariant x0 h0 ==> tree_invariant x0 h1); //TODO framing of create
       assume(all_pkg_invariant h1 /\ local_kdf_invariant s0 h1); 
+
       let (|_,s1|) = derive s0 a0 "RE" Expand a1 in 
       let i1: regid = Derive i0 "RE" Expand in 
       let s1: secret children1 i1 = s1 in 
@@ -1461,14 +1483,19 @@ let test_rekey(): St unit =
       let h2 = get() in 
       // derive's abusive pre; will follow from multi-pkg invariant 
       assume(all_pkg_invariant h2 /\ local_kdf_invariant s1 h2); 
+
       let (|_,k1|) = derive s1 a1 "AE" Expand aea in 
       let ik1: regid = Derive i1 "AE" Expand in
       let k1: key ii get_aeadAlg ik1 = k1 in
       let h3 = get() in assume(aead_inv k1 h3); // should follow from the multi-pkg invariant
+
       let cipher = encrypt ii get_aeadAlg #ik1 k1 42 in 
-      () )
-    | _ -> admit()) // should be excluded by is_secret 9
-  | _ -> admit() // should be excluded by is_secret 10
+
+      // assert(tree_invariant x1);
+      // assert(tree_invariant x0);
+      () ))
+//    | _ -> assert false) // excluded by is_secret 9
+//  |  _ -> assert false // excluded by is_secret 10
 // refactoring needed, e.g. define derive_secret helper function to hide access to the tree
 
 
