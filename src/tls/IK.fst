@@ -1322,96 +1322,6 @@ let derive #u #i k a lbl ctx a' =
 /// packaging.
 
 
-//17-11-15 for testing; rename to aeadAlg_of_id ?
-assume val get_aeadAlg: i:id -> aeadAlg
-let derive_aea
-  (lbl:label) (i:id)
-  (a:info{wellformed_id (Derive i lbl Expand)}):
-  (a':aeadAlg{a' == get_aeadAlg (Derive i lbl Expand)})
-=
-  //fixme! should be extracted from a
-  get_aeadAlg (Derive i lbl Expand)
-
-
-let memoized (p:pkg ii) (l:local_pkg ii) = 
-  exists (t: mem_table l.key). p == memoization l t
-
-let is_ae_p (p: pkg ii)           = memoized p (local_ae_pkg ii get_aeadAlg)
-let is_kdf_p (p: pkg ii) children = memoized p (local_kdf_pkg children)
-
-// this function should specify enough to call key derivations. 
-let rec is_secret (n:nat) (x: tree) = 
-  if n = 0 then 
-    match x with
-    | Node [] p -> is_kdf_p p []
-    | _ -> False
-  else
-    match x with 
-    | Node ["AE",Leaf ae; "RE",re ] p -> 
-      is_kdf_p p ["AE",Leaf ae; "RE",re ] /\
-      is_ae_p ae /\ 
-      is_secret (n-1) re
-    | _ -> False
-
-assume val mk_kdf: u:children -> ST (pkg ii)
-  (requires fun h0 -> True) 
-  (ensures fun h0 p h1 -> is_kdf_p p u)
-
-// this function allocates all tables and (WIP) sets up the initial invariant.
-let rec mk_secret (n:nat): St (x:tree {is_secret n x}) = 
-  if n = 0 then 
-    let p = mk_kdf [] in
-    Node [] p
-  else (
-    let ae = mp ii get_aeadAlg in 
-    assume(is_ae_p ae);// should be in the post of mp.
-    let re = mk_secret (n-1) in 
-    assert(is_secret (n-1) re);
-    let children = [ "AE",Leaf ae; "RE",re ] in 
-    let p = mk_kdf children in
-    assert(is_kdf_p p [ "AE",Leaf ae; "RE",re ]); 
-    Node children p )
- 
-//#set-options "--z3rlimit 100 --detail_errors"
-let test_rekey(): St unit = 
-  let x = mk_secret 10 in 
-  assert(is_secret 10 x);
-  match x with 
-  | Node ["AE",Leaf aepkg1; "RE",x1 ] pkg0 -> (
-    let children0 = ["AE",Leaf aepkg1; "RE",x1 ] in 
-    let a0 = Info Hashing.Spec.SHA1 None in
-    let i0: i:id {registered i /\ a0 = get_info i} = magic() in 
-    assert(is_kdf_p pkg0 children0);
-    let h0 = get() in
-    // create's pre; should follow from pkg0's package invariant
-    assume(model /\ pkg0.package_invariant h0 /\ mem_fresh pkg0.define_table i0 h0); 
-    assert(Pkg?.key pkg0 == secret children0);
-    let s0: secret children0 i0 = (Pkg?.create pkg0) i0 a0 in
-    assert(is_secret 9 x1);
-    match x1 with 
-    | Node ["AE",Leaf aepkg2; "RE",x2] pkg1  -> (
-      let children1 = ["AE",Leaf aepkg2; "RE",x2 ] in 
-      let a1 = Info Hashing.Spec.SHA1 None in
-      let h1 = get() in
-      assume(all_pkg_invariant h1 /\ local_kdf_invariant s0 h1); 
-      let (|_,s1|) = derive s0 a0 "RE" Expand a1 in 
-      let i1: regid = Derive i0 "RE" Expand in 
-      let s1: secret children1 i1 = s1 in 
-      let aea = derive_aea "AE" i1 a1 in
-      let h2 = get() in 
-      // derive's abusive pre; will follow from multi-pkg invariant 
-      assume(all_pkg_invariant h2 /\ local_kdf_invariant s1 h2); 
-      let (|_,k1|) = derive s1 a1 "AE" Expand aea in 
-      let ik1: regid = Derive i1 "AE" Expand in
-      let k1: key ii get_aeadAlg ik1 = k1 in
-      let h3 = get() in assume(aead_inv k1 h3); // should follow from the multi-pkg invariant
-      let cipher = encrypt ii get_aeadAlg #ik1 k1 42 in 
-      () )
-    | _ -> admit()) // should be excluded by is_secret 9
-  | _ -> admit() // should be excluded by is_secret 10
-// refactoring needed, e.g. define derive_secret helper function to hide access to the tree
-
-
 /// Global invariant, rooted at the PSK
 /// (do we need some "static index"?)
  
@@ -1462,6 +1372,106 @@ let rec tree_invariant (x:tree) (h: mem): Tot Type0 (decreases (%[depth x]))=
     Pkg?.package_invariant p h /\
     children_forall lxs (fun x -> tree_invariant x h) /\ 
     disjoint_children h lxs
+
+/// the rest of the invariant is more specific 
+
+//17-11-15 for testing; rename to aeadAlg_of_id ?
+assume val get_aeadAlg: i:id -> aeadAlg
+let derive_aea
+  (lbl:label) (i:id)
+  (a:info{wellformed_id (Derive i lbl Expand)}):
+  (a':aeadAlg{a' == get_aeadAlg (Derive i lbl Expand)})
+=
+  //fixme! should be extracted from a
+  get_aeadAlg (Derive i lbl Expand)
+
+
+let memoized (p:pkg ii) (l:local_pkg ii) = 
+  exists (t: mem_table l.key). p == memoization l t
+
+let is_ae_p (p: pkg ii)           = memoized p (local_ae_pkg ii get_aeadAlg)
+let is_kdf_p (p: pkg ii) children = memoized p (local_kdf_pkg children)
+
+// this function should specify enough to call key derivations. 
+let rec is_secret (n:nat) (x: tree) = 
+  if n = 0 then 
+    match x with
+    | Node [] p -> is_kdf_p p []
+    | _ -> False
+  else
+    match x with 
+    | Node ["AE",Leaf ae; "RE",re ] p -> 
+      is_kdf_p p ["AE",Leaf ae; "RE",re ] /\
+      is_ae_p ae /\ 
+      is_secret (n-1) re
+    | _ -> False
+
+assume val mk_kdf: u:children -> ST (pkg ii)
+  (requires fun h0 -> True) 
+  (ensures fun h0 p h1 -> is_kdf_p p u)
+
+// this function allocates all tables and (WIP) sets up the initial invariant.
+val mk_secret (n:nat): ST tree 
+  (requires fun h0 -> True)
+  (ensures fun h0 x h1 -> 
+    is_secret n x /\
+    True // tree_invariant x h1 // requires finer posts for mp pp etc 
+    )
+let rec mk_secret n =
+  if n = 0 then 
+    let p = mk_kdf [] in
+    Node [] p
+  else (
+    let ae = mp ii get_aeadAlg in 
+    assume(is_ae_p ae);// should be in the post of mp.
+    let re = mk_secret (n-1) in 
+    assert(is_secret (n-1) re);
+    let children = [ "AE",Leaf ae; "RE",re ] in 
+    let p = mk_kdf children in
+    assert(is_kdf_p p [ "AE",Leaf ae; "RE",re ]); 
+    Node children p )
+ 
+//#set-options "--z3rlimit 100 --detail_errors"
+let test_rekey(): St unit = 
+  let x = mk_secret 10 in 
+  assert(is_secret 10 x);
+  match x with 
+  | Node ["AE",Leaf aepkg1; "RE",x1 ] pkg0 -> (
+    let children0 = ["AE",Leaf aepkg1; "RE",x1 ] in 
+    let a0 = Info Hashing.Spec.SHA1 None in
+    let i0: i:id {registered i /\ a0 = get_info i} = magic() in 
+    assert(is_kdf_p pkg0 children0);
+    let h0 = get() in
+    // create's pre; should follow from pkg0's package invariant
+    assert(tree_invariant x h0 ==> pkg0.package_invariant h0);
+    assume(model /\ pkg0.package_invariant h0 /\ mem_fresh pkg0.define_table i0 h0); 
+    assert(Pkg?.key pkg0 == secret children0);
+    let s0: secret children0 i0 = (Pkg?.create pkg0) i0 a0 in
+    assert(is_secret 9 x1);
+    match x1 with 
+    | Node ["AE",Leaf aepkg2; "RE",x2] pkg1  -> (
+      let children1 = ["AE",Leaf aepkg2; "RE",x2 ] in 
+      let a1 = Info Hashing.Spec.SHA1 None in
+      let h1 = get() in
+      assume(all_pkg_invariant h1 /\ local_kdf_invariant s0 h1); 
+      let (|_,s1|) = derive s0 a0 "RE" Expand a1 in 
+      let i1: regid = Derive i0 "RE" Expand in 
+      let s1: secret children1 i1 = s1 in 
+      let aea = derive_aea "AE" i1 a1 in
+      let h2 = get() in 
+      // derive's abusive pre; will follow from multi-pkg invariant 
+      assume(all_pkg_invariant h2 /\ local_kdf_invariant s1 h2); 
+      let (|_,k1|) = derive s1 a1 "AE" Expand aea in 
+      let ik1: regid = Derive i1 "AE" Expand in
+      let k1: key ii get_aeadAlg ik1 = k1 in
+      let h3 = get() in assume(aead_inv k1 h3); // should follow from the multi-pkg invariant
+      let cipher = encrypt ii get_aeadAlg #ik1 k1 42 in 
+      () )
+    | _ -> admit()) // should be excluded by is_secret 9
+  | _ -> admit() // should be excluded by is_secret 10
+// refactoring needed, e.g. define derive_secret helper function to hide access to the tree
+
+
 
 (*    
 let modifies_instance 
