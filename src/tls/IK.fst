@@ -73,9 +73,8 @@ noeq type ipkg = | Idx:
   corrupt: (i:t -> GTot Type0) ->
   get_honesty: (i:t{registered i} -> ST bool
     (requires (fun _ -> True))
-    (ensures (fun h0 b h1 -> h0 == h1 /\ (b <==> honest i) /\ (not b <==> corrupt i))))
+    (ensures (fun h0 b h1 -> h0 == h1 /\ (b <==> honest i) /\ (not b <==> corrupt i)))) ->
   ipkg
-
 
 
 /// Keyed functionality define Key packages, parametric in their
@@ -495,7 +494,7 @@ let memoization_ST (#ip:ipkg) (p:local_pkg ip)
   : ST (pkg ip)
   (requires fun h0 -> True)
   (ensures fun h0 q h1 ->
-    LocalPkg?.key p == Pkg?.key q /\
+    LocalPkg?.key p == Pkg?.key q /\ // seems to help
     (let t: mem_table p.key = q.define_table in
     modifies_mem_table t h0 h1 /\
     q == memoization #ip p t /\
@@ -508,7 +507,7 @@ let memoization_ST (#ip:ipkg) (p:local_pkg ip)
   assume(model ==> MR.m_sel h1 (itable mtable) == MM.empty_map (i:ip.t{ip.registered i}) p.key);
   let q = memoization #ip p mtable in
   assert(q == memoization #ip p mtable); // fails when unfolding memoization
-  // assert_norm(q == memoization #ip p mtable);// fails with squashing error
+  // assert_norm(q == memoization #ip p mtable);// also fails, with squashing error
   assert(modifies_mem_table mtable h0 h1);
   (if model then lemma_mm_forall_init (MR.m_sel h1 (itable mtable)) p.local_invariant h1);
   assert(q.package_invariant h1);
@@ -1300,105 +1299,9 @@ type modifies_derive (#u:usage) (#i:id{registered i}) (k:secret u i)
     /\ HS.modifies_ref tls_define_region (Set.singleton (mem_addr (itable utable))) h0 h1
   else modifies_none h0 h1) // FIXME concrete state
 
-/// FIXME still have to decide how to reflect KDF invariants to KS
-// To be refined. We consider several approaches: either a package-level
-// registration table and all-package invariant, or passing the list of
-// packages to derive with their respective invariants
+
+//OLD
 let all_pkg_invariant h = forall (p:pkg ii). p.package_invariant h
-
-// We can grame the multi-pkg invariant for free when touching tls_honest_region
-let all_pkg_invariant_frame h0 h1
-  : Lemma (requires all_pkg_invariant h0 /\ (modifies_none h0 h1 \/ modifies_one tls_honest_region h0 h1))
-          (ensures all_pkg_invariant h1)
-  = admit()
-
-// If we touch one package's footprint, but restore this package's invariant,
-// the multi-package invariant is restored
-let restore_all_pkg_invariant h0 (p:pkg ii) h1
-  : Lemma (requires all_pkg_invariant h0 /\ modifies (p.footprint h0) h0 h1 /\ p.package_invariant h1)
-          (ensures all_pkg_invariant h1)
-  = admit()
-
-/// The well-formedness condition on the derived label (opaque from
-/// the viewpoint of the KDF) enforces
-///
-inline_for_extraction
-val derive:
-  #u: usage ->
-  #i: id{registered i} ->
-  k: secret u i ->
-  a: info {a == get_info i} ->
-  lbl: label {u `has_lbl` lbl} ->
-  ctx: context {~(honest_idh ctx) /\ wellformed_id (Derive i lbl ctx)} ->
-  a': Pkg?.info (child u lbl) (Derive i lbl ctx) ->
-  ST (_:unit{registered (Derive i lbl ctx)} & ukey u lbl (Derive i lbl ctx))
-  // the second pre-condition is redundant, but we don't know the package of k
-  (requires fun h0 -> all_pkg_invariant h0 /\ local_kdf_invariant k h0)
-  (ensures fun h0 r h1 -> modifies_derive k lbl ctx h0 h1
-    /\ local_kdf_invariant k h1 /\ all_pkg_invariant h1
-    /\ (Pkg?.post (child u lbl)) a' (dsnd r) h1)
-
-let derive #u #i k a lbl ctx a' =
-  let h0 = get() in
-  // register (Derive i lbl ctx) and return its honesty (defaults to get_honesty i)
-  let honest = get_honesty i in
-  let i', honest' = register_derive i lbl ctx in
-  let h1 = get() in
-  // Frame the registration, only if model is one (otherwise h0 == h1)
-  (if model then local_kdf_invariant_framing i k h0 tls_honest_region h1);
-  assert(local_kdf_invariant k h1);
-  all_pkg_invariant_frame h0 h1;
-  lemma_corrupt_invariant i lbl ctx;
-  let x: domain u i = Domain lbl ctx in
-  let pkg = child u lbl in
-  lemma_ideal_order u lbl; // TODO(adl) get the idealization order condition from (u lbl) above
-  assume false;
-  // WIP Nov 24 -- I think I need to maintain the KDF table even if the KDF is corrupt
-  // otherwise I cannot prove pkg.fresh i' (this can only come from local_kdf_invariant)
-  if flag_KDF && honest then
-   begin
-    let KDF_table kdf_r t : table u i = secret_ideal k in
-    let v: option (derived_key u i lbl ctx) = MM.lookup t x in
-    match v with
-    //17-10-30 was failing with scrutiny error: match MM.lookup (secret_ideal k) x
-    | Some dk -> (| (), dk |)
-    | None ->
-      let dk = Pkg?.create pkg i' a' in
-      let h2 = get() in
-      assert(mem_fresh pkg.define_table i' h2); // from kdf_local_inv
-      MM.extend t x dk;
-      (| (), dk |)
-   end
-  else
-   begin
-    let raw = HKDF.expand #(a.ha) (secret_corrupt k) (Platform.Bytes.abytes lbl) (UInt32.v (Pkg?.len pkg a')) in
-    let h2 = get() in
-    assume(modifies_none h1 h2); // FIXME HKDF framing
-    all_pkg_invariant_frame h1 h2;
-    assert(pkg.package_invariant h2);
-    assert(Pkg?.ideal pkg ==> corrupt i');
-    let dk = Pkg?.coerce pkg i' a' raw in
-    // FIXME
-    (| (), dk |)
-   end
-
-/// Outlining a global KDF state invariant, supported by package
-/// definition tables for all derivable functionalities.
-///
-/// for all (i: id) (lbl) (ctx).
-///   let i' = Derive lbl ctx in
-///   wellformed_id i' ==>
-///   let u = u_of_i i in
-///   let pkg',... = u lbl in
-///   match KDF.lookup i with
-///   | None -> None? pkg'.lookup i' // used when creating PRFs
-///   | Some k -> pkg'.lookup i' == lookup k (Domain lbl ctx) // used when extending PRFs.
-///
-/// The invariant is restored by the time derive return.
-/// (note we implicitly rely on u_of_i)
-
-
-
 
 /// 17-11-30 experiment, testing package trees on a simple case: AEAD
 /// keying and forward re-keying; still unclear how to traverse the
@@ -1456,7 +1359,119 @@ let rec tree_invariant (x:tree) (h: mem): Tot Type0 (decreases (%[depth x]))=
     children_forall lxs (fun x -> tree_invariant x h) /\
     disjoint_children h lxs
 
-/// the rest of the invariant is more specific
+
+
+
+
+
+
+// We can frame the multi-pkg invariant for free when touching tls_honest_region
+let all_pkg_invariant_frame h0 h1
+  : Lemma (requires all_pkg_invariant h0 /\ (modifies_none h0 h1 \/ modifies_one tls_honest_region h0 h1))
+          (ensures all_pkg_invariant h1)
+  = admit()
+
+// If we touch one package's footprint, but restore this package's invariant,
+// the multi-package invariant is restored
+let restore_all_pkg_invariant h0 (p:pkg ii) h1
+  : Lemma (requires all_pkg_invariant h0 /\ modifies (p.footprint h0) h0 h1 /\ p.package_invariant h1)
+          (ensures all_pkg_invariant h1)
+  = admit()
+
+// TODO 17-12-01 we need an hypothesis that captures that p is in the tree, e.g. only deal with the case where p is a child. 
+
+
+
+/// The well-formedness condition on the derived label (opaque from
+/// the viewpoint of the KDF) enforces
+///
+inline_for_extraction
+val derive:
+  #u: usage ->
+  #i: id{registered i} ->
+  k: secret u i ->
+  a: info {a == get_info i} ->
+  lbl: label {u `has_lbl` lbl} ->
+  ctx: context {~(honest_idh ctx) /\ wellformed_id (Derive i lbl ctx)} ->
+  a': Pkg?.info (child u lbl) (Derive i lbl ctx) ->
+  ST (_:unit{registered (Derive i lbl ctx)} & ukey u lbl (Derive i lbl ctx))
+  // the second pre-condition is redundant, but we don't know the package of k
+  (requires fun h0 -> 
+    all_pkg_invariant h0 /\ 
+    local_kdf_invariant k h0 // 17-12-01 will hopefully follow from tree_invariant
+    )
+  (ensures fun h0 r h1 -> 
+    modifies_derive k lbl ctx h0 h1 /\ 
+    all_pkg_invariant h1 /\
+    local_kdf_invariant k h1 /\ 
+    (Pkg?.post (child u lbl)) a' (dsnd r) h1)
+
+let derive #u #i k a lbl ctx a' =
+  let h0 = get() in
+  // register (Derive i lbl ctx) and return its honesty (defaults to get_honesty i)
+  let honest = get_honesty i in
+  let i', honest' = register_derive i lbl ctx in
+  let h1 = get() in
+  // Frame the registration, only if model is one (otherwise h0 == h1)
+  (if model then local_kdf_invariant_framing i k h0 tls_honest_region h1);
+  assert(local_kdf_invariant k h1);
+  all_pkg_invariant_frame h0 h1;
+  lemma_corrupt_invariant i lbl ctx;
+  let x: domain u i = Domain lbl ctx in
+  let pkg = child u lbl in
+  lemma_ideal_order u lbl; // TODO(adl) get the idealization order condition from (u lbl) above
+  assume false;
+  // WIP Nov 24 -- I think I need to maintain the KDF table even if the KDF is corrupt
+  // otherwise I cannot prove pkg.fresh i' (this can only come from local_kdf_invariant)
+  if flag_KDF && honest then
+   begin
+    let KDF_table kdf_r t : table u i = secret_ideal k in
+    let v: option (derived_key u i lbl ctx) = MM.lookup t x in
+    match v with
+    //17-10-30 was failing with scrutiny error: match MM.lookup (secret_ideal k) x
+    | Some dk -> (| (), dk |)
+    | None ->
+      let dk = Pkg?.create pkg i' a' in
+      let h2 = get() in
+      assert(mem_fresh pkg.define_table i' h2); // from kdf_local_inv
+      MM.extend t x dk;
+      (| (), dk |)
+   end
+  else
+   begin
+    let raw = HKDF.expand #(a.ha) (secret_corrupt k) (Platform.Bytes.abytes lbl) (UInt32.v (Pkg?.len pkg a')) in
+    let h2 = get() in
+    assume(modifies_none h1 h2); // FIXME HKDF framing
+    all_pkg_invariant_frame h1 h2;
+    assert(pkg.package_invariant h2);
+    assert(Pkg?.ideal pkg ==> corrupt i');
+    let dk = Pkg?.coerce pkg i' a' raw in
+    // FIXME
+    (| (), dk |)
+   end
+
+// OLD (17-12-01 to be deleted)
+/// Outlining a global KDF state invariant, supported by package
+/// definition tables for all derivable functionalities.
+///
+/// for all (i: id) (lbl) (ctx).
+///   let i' = Derive lbl ctx in
+///   wellformed_id i' ==>
+///   let u = u_of_i i in
+///   let pkg',... = u lbl in
+///   match KDF.lookup i with
+///   | None -> None? pkg'.lookup i' // used when creating PRFs
+///   | Some k -> pkg'.lookup i' == lookup k (Domain lbl ctx) // used when extending PRFs.
+///
+/// The invariant is restored by the time derive return.
+/// (note we implicitly rely on u_of_i)
+
+
+
+
+/// We now resume with a more specific invariant, modelling
+/// post-handshake key management.  (we will have other specific
+/// applications).
 
 //17-11-15 for testing; rename to aeadAlg_of_id ?
 assume val get_aeadAlg: i:id -> aeadAlg
@@ -1561,7 +1576,8 @@ let test_rekey(): St unit
       let (|_,k1|) = derive s1 a1 "AE" Expand aea in
       let ik1: regid = Derive i1 "AE" Expand in
       let k1: key ii get_aeadAlg ik1 = k1 in
-      let h3 = get() in assume(aead_inv k1 h3); // should follow from the multi-pkg invariant
+      let h3 = get() in 
+      assume(aead_inv k1 h3); // should follow from the multi-pkg invariant
 
       let cipher = encrypt ii get_aeadAlg #ik1 k1 42 in
 
