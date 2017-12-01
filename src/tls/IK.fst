@@ -180,12 +180,12 @@ let lemma_iupdate (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (i:it) (v:vt i)
   (requires model /\ MR.m_sel h1 (itable t) == MM.upd (MR.m_sel h0 (itable t)) i v /\ MR.witnessed (MM.defined (itable t) i))
   (ensures mem_update t i v h0 h1) = ()
 
+type mem_empty (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (h1:mem) =
+  (if model then MR.m_sel h1 (itable t) == MM.empty_map it vt else True)
 let mem_alloc (#it:eqtype) (vt:it -> Type) : ST (mem_table vt)
   (requires fun h0 -> True)
-  (ensures fun h0 t h1 ->
-    modifies_mem_table t h0 h1 /\
-    (model ==> MR.m_sel h1 (itable t) == MM.empty_map it vt))
-=
+  (ensures fun h0 t h1 -> modifies_mem_table t h0 h1 /\ mem_empty t h1)
+  =
   if model then MM.alloc #tls_define_region #it #vt #(fun _ -> True) else ()
 
 type mem_disjoint (#it:eqtype) (#vt:it -> Type) (t:mem_table vt)
@@ -215,7 +215,7 @@ noeq type pkg (ip: ipkg) = | Pkg:
   // when modelling, we maintain a global table of all allocated
   // instances of the package. Only the package modifies the table.
   //
-  // The package footprint is a function of the table contents; 
+  // The package footprint is a function of the table contents;
   // that collects all global and instance-local regions, but not [define_table]
   define_table: mem_table #(i:ip.t {ip.registered i}) key ->
   footprint: (mem -> GTot rset) ->
@@ -223,7 +223,7 @@ noeq type pkg (ip: ipkg) = | Pkg:
     (requires mem_stable define_table h0 h1)
     (ensures footprint h0 == footprint h1)) ->
 
-  // we maintain a package invariant, 
+  // we maintain a package invariant,
   // which only depends on the table and footpring.
   package_invariant: (mem -> Type0) ->
   package_invariant_framing: (h0:mem -> r:pkg_inv_r -> h1:mem -> Lemma
@@ -240,22 +240,25 @@ noeq type pkg (ip: ipkg) = | Pkg:
   post_framing: (#i:ip.t{ip.registered i} -> a:info i -> k:key i ->  h0:mem -> r:HH.rid -> h1:mem -> Lemma
      (requires (post a k h0 /\ modifies_one r h0 h1 /\ ~(r `Set.mem` footprint h0)))
      (ensures (post a k h1))) ->
+
   create: (i:ip.t{ip.registered i} -> a:info i -> ST (key i)
-    (requires fun h0 -> 
-      model /\ 
-      package_invariant h0 /\ 
+    (requires fun h0 ->
+      model /\
+      package_invariant h0 /\
       mem_fresh define_table i h0)
-    (ensures fun h0 k h1 -> 
-      post a k h1 /\ package_invariant h1 /\ 
-      modifies_mem_table define_table h0 h1 /\ 
+    (ensures fun h0 k h1 ->
+      post a k h1 /\ package_invariant h1 /\
+      modifies_mem_table define_table h0 h1 /\
       modifies_footprint footprint h0 h1 /\
       mem_update define_table i k h0 h1)) ->
-  coerce: (i:ip.t{ip.registered i} -> a:info i -> lbytes (len a) -> ST (key i)
-    (requires fun h0 -> 
+  coerceT: (i:ip.t{ip.registered i} -> a:info i -> lbytes (len a) -> GTot (key i)) ->
+  coerce: (i:ip.t{ip.registered i} -> a:info i -> rk:lbytes (len a) -> ST (key i)
+    (requires fun h0 ->
       (ideal ==> ip.corrupt i) /\
-      package_invariant h0 /\ 
+      package_invariant h0 /\
       mem_fresh define_table i h0)
-    (ensures fun h0 k h1 -> 
+    (ensures fun h0 k h1 ->
+      k == coerceT i a rk /\
       post a k h1 /\ package_invariant h1 /\
       modifies_mem_table define_table h0 h1 /\
       modifies_footprint footprint h0 h1 /\
@@ -286,12 +289,15 @@ noeq type local_pkg (ip: ipkg) =
     (ensures (post a k h1))) ->
   create: (i:ip.t{ip.registered i} -> a:info i -> ST (key i)
     (requires fun h0 -> model)
-    (ensures fun h0 k h1 -> modifies_none h0 h1 /\ local_invariant k h1
-       /\ post a k h1 /\ fresh_regions (local_footprint k) h0 h1)) ->
-  coerce: (i:ip.t{ip.registered i} -> a:info i -> lbytes (len a) -> ST (key i)
+    (ensures fun h0 k h1 ->
+       modifies_none h0 h1 /\ local_invariant k h1 /\
+       post a k h1 /\ fresh_regions (local_footprint k) h0 h1)) ->
+  coerceT: (i:ip.t{ip.registered i} -> a:info i -> lbytes (len a) -> GTot (key i)) ->
+  coerce: (i:ip.t{ip.registered i} -> a:info i -> rk:lbytes (len a) -> ST (key i)
     (requires fun h0 -> ideal ==> ip.corrupt i)
-    (ensures fun h0 k h1 -> modifies_none h0 h1 /\ local_invariant k h1
-       /\ post a k h1 /\ fresh_regions (local_footprint k) h0 h1)) ->
+    (ensures fun h0 k h1 -> k == coerceT i a rk /\
+      modifies_none h0 h1 /\ local_invariant k h1 /\
+      post a k h1 /\ fresh_regions (local_footprint k) h0 h1)) ->
   local_pkg ip
 
 (* Iterators over Monotonic.Map, require a change of implementation *)
@@ -347,7 +353,7 @@ unfold type mem_package (#ip:ipkg) (p:local_pkg ip) =
 
 // Memoization functor from local to global packages that memoize
 // instances produced by create/coerce and maintain their joint
-// invariant. 
+// invariant.
 //
 // We provide both a pure, unfolded functor and a stateful,
 // table-allocating functor; the latter is probably too opaque for
@@ -432,7 +438,8 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
     k in
   let coerce (i:ip.t{ip.registered i}) (a:p.info i) (k0:lbytes (p.len a)) : ST (p.key i)
     (requires fun h0 -> package_invariant h0 /\ mem_fresh mtable i h0 /\ (p.ideal ==> ip.corrupt i))
-    (ensures fun h0 k h1 -> modifies_mem_table mtable h0 h1
+    (ensures fun h0 k h1 -> k == p.coerceT i a k0
+      /\ modifies_mem_table mtable h0 h1
       /\ modifies_footprint footprint h0 h1 /\ p.post a k h1
       /\ package_invariant h1 /\ mem_update mtable i k h0 h1)
     =
@@ -482,21 +489,23 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
     mtable footprint footprint_framing
     package_invariant package_invariant_framing
     p.post post_framing
-    create coerce)
- 
+    create p.coerceT coerce)
+
 let memoization_ST (#ip:ipkg) (p:local_pkg ip)
   : ST (pkg ip)
   (requires fun h0 -> True)
   (ensures fun h0 q h1 ->
     LocalPkg?.key p == Pkg?.key q /\
     (let t: mem_table p.key = q.define_table in
-    modifies_mem_table t h0 h1 /\ 
+    modifies_mem_table t h0 h1 /\
     q == memoization #ip p t /\
     q.package_invariant h1))
 =
   let h0 = get() in
   let mtable: mem_table p.key = mem_alloc #(i:ip.t{ip.registered i}) p.key in
   let h1 = get() in
+  assert(mem_empty mtable h1);
+  assume(model ==> MR.m_sel h1 (itable mtable) == MM.empty_map (i:ip.t{ip.registered i}) p.key);
   let q = memoization #ip p mtable in
   assert(q == memoization #ip p mtable); // fails when unfolding memoization
   // assert_norm(q == memoization #ip p mtable);// fails with squashing error
@@ -505,7 +514,7 @@ let memoization_ST (#ip:ipkg) (p:local_pkg ip)
   assert(q.package_invariant h1);
   q
 
-#reset-options 
+#reset-options
 
 /// Next, we define a few sample functionalities,
 /// parameterized on their abstract index package.
@@ -530,11 +539,15 @@ let create_raw (ip: ipkg) (len_of_i: ip.t -> keylen)
   (ensures fun h0 p h1 -> modifies_none h0 h1)
   = sample len
 
+let coerceT_raw (ip: ipkg) (len_of_i: ip.t -> keylen)
+  (i: ip.t {ip.registered i}) (len:keylen {len = len_of_i i}) (r:lbytes len):
+  GTot (raw ip len_of_i i) = r
+
 let coerce_raw (ip: ipkg) (len_of_i: ip.t -> keylen)
   (i: ip.t {ip.registered i}) (len:keylen {len = len_of_i i}) (r:lbytes len):
   ST (raw ip len_of_i i)
   (requires fun h0 -> idealRaw ==> ip.corrupt i)
-  (ensures fun h0 p h1 -> modifies_none h0 h1)
+  (ensures fun h0 k h1 -> k == coerceT_raw ip len_of_i i len r /\ modifies_none h0 h1)
   = r
 
 let local_raw_pkg (ip:ipkg) (len_of_i: ip.t -> keylen) : local_pkg ip =
@@ -549,6 +562,7 @@ let local_raw_pkg (ip:ipkg) (len_of_i: ip.t -> keylen) : local_pkg ip =
     (fun #_ _ _ _ -> True) // no post-condition
     (fun #_ _ _ _ _ _ -> ())
     (create_raw ip len_of_i)
+    (coerceT_raw ip len_of_i)
     (coerce_raw ip len_of_i)
 
 let rp (ip:ipkg) (len_of_i: ip.t -> keylen): ST (pkg ip)
@@ -609,14 +623,19 @@ assume val create_key: ip: ipkg -> aeadAlg_of_i: (ip.t -> aeadAlg) ->
     (ensures fun h0 k h1 -> modifies_none h0 h1 /\ fresh_regions (aead_footprint k) h0 h1
       /\ aead_empty_log ip aeadAlg_of_i a k h1 /\ aead_inv k h1)
 
-assume val coerce_key: ip: ipkg -> aeadAlg_of_i: (ip.t -> aeadAlg) ->
+assume val coerceT_key: ip: ipkg -> aeadAlg_of_i: (ip.t -> aeadAlg) ->
   i: ip.t{ip.registered i} -> a:aeadAlg {a == aeadAlg_of_i i} -> keyrepr a ->
+  GTot (key ip aeadAlg_of_i i)
+
+assume val coerce_key: ip: ipkg -> aeadAlg_of_i: (ip.t -> aeadAlg) ->
+  i: ip.t{ip.registered i} -> a:aeadAlg {a == aeadAlg_of_i i} -> k0:keyrepr a ->
   ST (key ip aeadAlg_of_i i)
     (requires fun h0 -> idealAEAD ==> ip.corrupt i)
-    (ensures fun h0 k h1 -> modifies_none h0 h1 /\ fresh_regions (aead_footprint k) h0 h1
+    (ensures fun h0 k h1 -> k == coerceT_key ip aeadAlg_of_i i a k0
+      /\ modifies_none h0 h1 /\ fresh_regions (aead_footprint k) h0 h1
       /\ aead_empty_log ip aeadAlg_of_i a k h1 /\ aead_inv k h1)
 
-let local_ae_pkg (ip:ipkg) (aeadAlg_of_i: ip.t -> aeadAlg) = 
+let local_ae_pkg (ip:ipkg) (aeadAlg_of_i: ip.t -> aeadAlg) =
   LocalPkg
     (key ip aeadAlg_of_i)
     (fun (i:ip.t) -> a:aeadAlg{a = aeadAlg_of_i i})
@@ -628,13 +647,14 @@ let local_ae_pkg (ip:ipkg) (aeadAlg_of_i: ip.t -> aeadAlg) =
     (aead_empty_log ip aeadAlg_of_i)
     (aead_empty_log_framing ip aeadAlg_of_i)
     (create_key ip aeadAlg_of_i)
+    (coerceT_key ip aeadAlg_of_i)
     (coerce_key ip aeadAlg_of_i)
 
-let mp (ip:ipkg) (aeadAlg_of_i: ip.t -> aeadAlg): ST (pkg ip) 
+let mp (ip:ipkg) (aeadAlg_of_i: ip.t -> aeadAlg): ST (pkg ip)
   (requires fun h0 -> True)
-  (ensures fun h0 p h1 -> 
+  (ensures fun h0 p h1 ->
     //17-12-01 we need freshness and emptyness of the new table + local packaging
-    modifies_mem_table p.define_table h0 h1 /\ 
+    modifies_mem_table p.define_table h0 h1 /\
     p.package_invariant h1)
 =
   memoization_ST #ip (local_ae_pkg ip aeadAlg_of_i)
@@ -935,29 +955,29 @@ type old_usage = lbl: label -> pkg ii (* compile-time *)
 *)
 
 
-/// 17-11-29 experiment, using chidren as a replacement for usage. 
+/// 17-11-29 experiment, using chidren as a replacement for usage.
 
 type t = pkg ii
-noeq type tree = 
+noeq type tree =
   | Leaf of  t
   | Node: list (label * tree) -> t -> tree
 type children = list (label * tree)
 // would prefer to use Map.t, but positivity check fails
 
-let find_lbl (u: children) (l: label) = 
+let find_lbl (u: children) (l: label) =
  (List.Tot.tryPick (fun (l',t) -> if l = l' then Some t else None) u)
 
 let has_lbl (u: children) (l: label) = Some? (find_lbl u l)
 
-val down: u:children -> l:label {u `has_lbl` l} -> tree 
+val down: u:children -> l:label {u `has_lbl` l} -> tree
 let down u l = Some?.v (find_lbl u l)
 
-val child: u:children -> l:label {u `has_lbl` l} -> t 
-let child u l = 
-  match down u l  with 
-  | Leaf p -> p 
-  | Node _ p -> p 
-  
+val child: u:children -> l:label {u `has_lbl` l} -> t
+let child u l =
+  match down u l  with
+  | Leaf p -> p
+  | Node _ p -> p
+
 type usage = children
 
 
@@ -1003,6 +1023,9 @@ let rec get_info (i0: id): info =
   | Preshared a _                 -> Info a None
   | Derive i l (ExpandLog log hv) -> Info (ha_of_id i) (Some (Log log hv))
   | Derive i _ _                  -> get_info i
+
+assume val hkdf_derive_label_spec:
+  ha: Hashing.Spec.alg -> k: Hashing.Spec.tag ha -> lbl: label -> ctx:context -> GTot (Hashing.Spec.tag ha)
 
 let derived_key
   (u: usage)
@@ -1072,13 +1095,27 @@ let corrupt_secret (#u: usage) (#i:id{registered i}) (t: real_secret i {corruptK
 // For KDF, we require that being fresh in the KDF table implies being fresh
 // in the derived package's definition table
 type local_kdf_invariant (#u:usage) (#i:id{registered i}) (k:secret u i) (h:mem) =
-  (safeKDF i ==>
-    (forall (lbl:label {u `has_lbl` lbl}) (ctx':context).
-      (wellformed_id (Derive i lbl ctx') /\ registered (Derive i lbl ctx')) ==>
-        (let ctx : c:context{wellformed_id (Derive i lbl c) /\ registered (Derive i lbl c)} = ctx' in
-         let KDF_table r t = secret_ideal k in
-         let dt = itable (child u lbl).define_table in
-         MM.sel (MR.m_sel h t) (Domain lbl ctx) == MM.sel (MR.m_sel h dt) (Derive i lbl ctx))))
+  (forall (lbl:label {u `has_lbl` lbl}) (ctx':context).
+    (wellformed_id (Derive i lbl ctx') /\ registered (Derive i lbl ctx')) ==>
+      (let ctx : c:context{wellformed_id (Derive i lbl c) /\ registered (Derive i lbl c)} = ctx' in
+      let i' : regid = Derive i lbl ctx in
+      let pkg' : pkg ii = child u lbl in
+      if model then
+        let dt = itable pkg'.define_table in
+        let kdf : ideal_or_real (table u i) (real_secret i) = k in
+        match kdf with
+        | Ideal kdft ->
+          let KDF_table r t : table u i = kdft in
+          MM.sel (MR.m_sel h t) (Domain lbl ctx) == MM.sel (MR.m_sel h dt) i'
+        | Real raw ->
+          (match MM.sel (MR.m_sel h dt) i' with
+          | None -> True
+          | Some k' ->
+            let raw' = hkdf_derive_label_spec (get_info i).ha raw lbl ctx in
+            exists (a':Pkg?.info pkg' i').
+            Pkg?.len pkg' a' == UInt32.uint_to_t (Hashing.Spec.tagLen (get_info i).ha) /\
+            k' == Pkg?.coerceT pkg' i' a' raw')
+      else True))
 
 let kdf_footprint (#u:usage) (#i:id{registered i}) (k:secret u i) : GTot rset =
   if model then
@@ -1105,12 +1142,34 @@ type kdf_post (#u:usage) (#i:id{registered i}) (a: info {a == get_info i}) (k:se
     (let KDF_table r t = secret_ideal k in
      MR.m_sel h t == MM.empty_map (domain u i) (kdf_range u i)))
 
+let rec forall_usage (u:usage) (f:pkg ii -> Type0) : Type0 =
+  (match u with
+  | [] -> True
+  | (lbl, tree) :: t ->
+    (match tree with
+    | Leaf p -> f p
+    | Node u' p -> forall_usage u' f /\ f p)
+    /\ forall_usage t f)
+
+type kdf_pre (u:usage) (h:mem) =
+  (if model then
+    forall_usage u (fun (p:pkg ii) -> mem_empty p.define_table h)
+  else True)
+
 // Framing for the kdf_post depends only on kdf_footprint k
 let kdf_post_framing (#u:usage) (#i:id{registered i}) (a: info {a == get_info i})
   (k:secret u i) (h0:mem) (r:HH.rid) (h1:mem) : Lemma
   (requires (kdf_post a k h0 /\ modifies_one r h0 h1 /\ ~(r `Set.mem` kdf_footprint k)))
   (ensures (kdf_post a k h1))
   = admit()
+
+val coerceT:
+  u: usage ->
+  i: id{registered i} -> // using regid yields unification failures below
+  a: info {a == get_info i} (* run-time *) ->
+  repr: lbytes (secret_len a) ->
+  GTot (secret u i)
+let coerceT u i a repr = admit()
 
 val coerce:
   u: usage ->
@@ -1120,10 +1179,17 @@ val coerce:
   ST (secret u i)
   (requires fun h0 -> idealKDF ==> corrupt i)
   (ensures fun h0 k h1 -> modifies_none h0 h1
+    /\ k == coerceT u i a repr
     /\ fresh_regions (kdf_footprint k) h0 h1
     /\ kdf_post a k h1 /\ local_kdf_invariant k h1)
 
-let coerce u i a repr = corrupt_secret #u #i repr
+let coerce u i a repr =
+  let k = corrupt_secret #u #i repr in
+  let h1 = get() in
+  // TODO concrete correctness, from kdf_pre
+  assume(k == coerceT u i a repr);
+  (if model then assume(local_kdf_invariant k h1));
+  k
 
 /// NS:
 /// MM.alloc is a stateful function with all implicit arguments
@@ -1166,11 +1232,13 @@ let create u i a =
     let h3 = get() in
     let k : secret u i = ideal_secret t in
     assert(kdf_footprint k == Set.singleton r);
-    assume(local_kdf_invariant k h3); // TODO
+    assume(local_kdf_invariant k h3); // TODO, correctness from kdf_pre
     assert(fresh_regions (kdf_footprint k) h0 h3);
     k
   else
-    corrupt_secret #u #i (sample (secret_len a))
+    let k = corrupt_secret #u #i (sample (secret_len a)) in
+    let _ = assume(local_kdf_invariant k h1) in // TODO, correctness from kdf_pre
+    k
 
 /// We are using many KDF packages (one for each usage),
 /// idealized one at a time.  (Having one proof step for each nested
@@ -1189,6 +1257,7 @@ unfold let local_kdf_pkg u : local_pkg ii =
     (kdf_post #u)
     (kdf_post_framing #u)
     (create u)
+    (coerceT u)
     (coerce u))
 
 let pp (u:usage) : ST (pkg ii)
@@ -1338,56 +1407,56 @@ let derive #u #i k a lbl ctx a' =
 
 /// Global, generic invariant, to be rooted at the PSK
 /// (do we need some "static index"?)
- 
+
 // node footprints already recursively collect their children's footprints
-let tree_footprint (x:tree) h = 
-  match x with 
-  | Leaf p | Node _ p -> Pkg?.footprint p h 
+let tree_footprint (x:tree) h =
+  match x with
+  | Leaf p | Node _ p -> Pkg?.footprint p h
 
 // library??
 val list_forall: ('a -> Type0) -> list 'a -> Tot Type0
 let rec list_forall f l = match l with
     | [] -> True
-    | hd::tl -> f hd /\ list_forall f tl 
-let max x y = if x <= y then y else x    
+    | hd::tl -> f hd /\ list_forall f tl
+let max x y = if x <= y then y else x
 
 val disjoint_children: mem -> children -> Type0
 let rec disjoint_children h = function
-  | [] -> True 
+  | [] -> True
   | (l0, x0) :: tail -> list_forall (fun (l1, x1) -> tree_footprint x0 h `Set.disjoint` tree_footprint x1 h) tail
 
 // induction on n-ary trees requires explicit termination
-let rec depth (x:tree): nat = 
-  match x with 
-  | Leaf _ -> 0 
+let rec depth (x:tree): nat =
+  match x with
+  | Leaf _ -> 0
   | Node lxs _ -> 1 + children_depth lxs
-and children_depth (lxs: children): nat  = 
-  match lxs with 
+and children_depth (lxs: children): nat  =
+  match lxs with
   | (l,x)::lxs -> max (depth x) (children_depth lxs)
   | [] -> 0
 
 // another custom induction to get termination
-let rec children_forall 
+let rec children_forall
   (lxs: children)
   (f: x:tree{depth x <= children_depth lxs} -> Type0): Type0
-= 
-  match lxs with 
+=
+  match lxs with
   | [] -> True
-  | (_,x)::tl -> 
-    // children_depth tl <= children_depth lxs /\ 
-    // depth x <= children_depth lxs /\ 
+  | (_,x)::tl ->
+    // children_depth tl <= children_depth lxs /\
+    // depth x <= children_depth lxs /\
     f x /\ children_forall tl f
 
-let rec tree_invariant (x:tree) (h: mem): Tot Type0 (decreases (%[depth x]))= 
-  match x with 
+let rec tree_invariant (x:tree) (h: mem): Tot Type0 (decreases (%[depth x]))=
+  match x with
   | Leaf p -> Pkg?.package_invariant p h
-  | Node lxs p -> 
-    children_depth lxs < depth x /\ 
+  | Node lxs p ->
+    children_depth lxs < depth x /\
     Pkg?.package_invariant p h /\
-    children_forall lxs (fun x -> tree_invariant x h) /\ 
+    children_forall lxs (fun x -> tree_invariant x h) /\
     disjoint_children h lxs
 
-/// the rest of the invariant is more specific 
+/// the rest of the invariant is more specific
 
 //17-11-15 for testing; rename to aeadAlg_of_id ?
 assume val get_aeadAlg: i:id -> aeadAlg
@@ -1400,7 +1469,7 @@ let derive_aea
   get_aeadAlg (Derive i lbl Expand)
 
 
-let memoized (p:pkg ii) (l:local_pkg ii) = 
+let memoized (p:pkg ii) (l:local_pkg ii) =
   exists (t: mem_table l.key). p == memoization l t
   // a more specific spec, saving a quantifier but stuck on subtyping:
   // let t: mem_table l.key = p.define_table in
@@ -1409,92 +1478,92 @@ let memoized (p:pkg ii) (l:local_pkg ii) =
 let is_ae_p (p: pkg ii)           = memoized p (local_ae_pkg ii get_aeadAlg)
 let is_kdf_p (p: pkg ii) children = memoized p (local_kdf_pkg children)
 
-// this function should specify enough to call key derivations. 
-let rec is_secret (n:nat) (x: tree) = 
-  if n = 0 then 
+// this function should specify enough to call key derivations.
+let rec is_secret (n:nat) (x: tree) =
+  if n = 0 then
     match x with
     | Node [] p -> is_kdf_p p []
     | _ -> False
   else
-    match x with 
-    | Node ["AE",Leaf ae; "RE",re ] p -> 
+    match x with
+    | Node ["AE",Leaf ae; "RE",re ] p ->
       is_kdf_p p ["AE",Leaf ae; "RE",re ] /\
-      is_ae_p ae /\ 
+      is_ae_p ae /\
       is_secret (n-1) re
     | _ -> False
 
-// let is_secret_shape (n:nat) (x:tree {is_secret n x}): Lemma (Node? x) = 
+// let is_secret_shape (n:nat) (x:tree {is_secret n x}): Lemma (Node? x) =
 //   if n = 0 then () else ()
 
 
 assume val mk_kdf: u:children -> ST (pkg ii)
-  (requires fun h0 -> True) 
+  (requires fun h0 -> True)
   (ensures fun h0 p h1 -> is_kdf_p p u)
 
 // this function allocates all tables and (WIP) sets up the initial invariant.
-val mk_secret (n:nat): ST tree 
+val mk_secret (n:nat): ST tree
   (requires fun h0 -> True)
-  (ensures fun h0 x h1 -> 
+  (ensures fun h0 x h1 ->
     is_secret n x /\
-    True // tree_invariant x h1 // requires finer posts for mp pp etc 
+    True // tree_invariant x h1 // requires finer posts for mp pp etc
     )
 let rec mk_secret n =
-  if n = 0 then 
+  if n = 0 then
     let p = mk_kdf [] in
     Node [] p
   else (
-    let ae = mp ii get_aeadAlg in 
+    let ae = mp ii get_aeadAlg in
     assume(is_ae_p ae);// should be in the post of mp.
-    let re = mk_secret (n-1) in 
+    let re = mk_secret (n-1) in
     assert(is_secret (n-1) re);
-    let children = [ "AE",Leaf ae; "RE",re ] in 
+    let children = [ "AE",Leaf ae; "RE",re ] in
     let p = mk_kdf children in
-    assert(is_kdf_p p [ "AE",Leaf ae; "RE",re ]); 
+    assert(is_kdf_p p [ "AE",Leaf ae; "RE",re ]);
     Node children p )
- 
+
 //#set-options "--z3rlimit 100 --detail_errors"
-let test_rekey(): St unit 
-= 
-  let x0 = mk_secret 10 in 
+let test_rekey(): St unit
+=
+  let x0 = mk_secret 10 in
   let h0 = get() in
   assert(is_secret 10 x0);
   assume(tree_invariant x0 h0); // soon a post of mk_secret
-  // assert(Node? x0); 
-  match x0 with 
+  // assert(Node? x0);
+  match x0 with
   | Node ["AE",Leaf aepkg1; "RE",x1 ] pkg0 -> (
-    let children0 = ["AE",Leaf aepkg1; "RE",x1 ] in 
+    let children0 = ["AE",Leaf aepkg1; "RE",x1 ] in
     let a0 = Info Hashing.Spec.SHA1 None in
-    let i0: i:id {registered i /\ a0 = get_info i} = magic() in 
+    let i0: i:id {registered i /\ a0 = get_info i} = magic() in
     assert(is_kdf_p pkg0 children0);
     assert(pkg0.package_invariant h0 /\ tree_invariant x1 h0);
     // create's pre; should follow from pkg0's package invariant
-    assume(model /\ mem_fresh pkg0.define_table i0 h0); 
+    assume(model /\ mem_fresh pkg0.define_table i0 h0);
     assert(Pkg?.key pkg0 == secret children0);
-    
+
     let s0: secret children0 i0 = (Pkg?.create pkg0) i0 a0 in
     assert(is_secret 9 x1);
-    match x1 with 
+    match x1 with
     | Node ["AE",Leaf aepkg2; "RE",x2] pkg1  -> (
-      let children1 = ["AE",Leaf aepkg2; "RE",x2 ] in 
+      let children1 = ["AE",Leaf aepkg2; "RE",x2 ] in
       let a1 = Info Hashing.Spec.SHA1 None in
       let h1 = get() in
       assume(tree_invariant x0 h0 ==> tree_invariant x0 h1); //TODO framing of create
-      assume(all_pkg_invariant h1 /\ local_kdf_invariant s0 h1); 
+      assume(all_pkg_invariant h1 /\ local_kdf_invariant s0 h1);
 
-      let (|_,s1|) = derive s0 a0 "RE" Expand a1 in 
-      let i1: regid = Derive i0 "RE" Expand in 
-      let s1: secret children1 i1 = s1 in 
+      let (|_,s1|) = derive s0 a0 "RE" Expand a1 in
+      let i1: regid = Derive i0 "RE" Expand in
+      let s1: secret children1 i1 = s1 in
       let aea = derive_aea "AE" i1 a1 in
-      let h2 = get() in 
-      // derive's abusive pre; will follow from multi-pkg invariant 
-      assume(all_pkg_invariant h2 /\ local_kdf_invariant s1 h2); 
+      let h2 = get() in
+      // derive's abusive pre; will follow from multi-pkg invariant
+      assume(all_pkg_invariant h2 /\ local_kdf_invariant s1 h2);
 
-      let (|_,k1|) = derive s1 a1 "AE" Expand aea in 
+      let (|_,k1|) = derive s1 a1 "AE" Expand aea in
       let ik1: regid = Derive i1 "AE" Expand in
       let k1: key ii get_aeadAlg ik1 = k1 in
       let h3 = get() in assume(aead_inv k1 h3); // should follow from the multi-pkg invariant
 
-      let cipher = encrypt ii get_aeadAlg #ik1 k1 42 in 
+      let cipher = encrypt ii get_aeadAlg #ik1 k1 42 in
 
       // assert(tree_invariant x1);
       // assert(tree_invariant x0);
@@ -1505,33 +1574,33 @@ let test_rekey(): St unit
 
 
 
-(*    
-let modifies_instance 
-  (i: id {wellformed_id i}) 
-  (p: localpkg ii) 
+(*
+let modifies_instance
+  (i: id {wellformed_id i})
+  (p: localpkg ii)
   (k: key i)
   (h0 h1: mem)
   (modifies_local: modifies (p.local_footprint k) h0 h1)
   (inv0: inv_node u h0):
-  Lemma (inv_node u h1) = 
+  Lemma (inv_node u h1) =
 
-let rec step u j i = 
+let rec step u j i =
 
-// from the post of a key derivation, we should have our framing lemma. 
+// from the post of a key derivation, we should have our framing lemma.
 
 let rec descend u j i = // j decreases
-  j = i \/ 
-  match j with 
-  | Derive j0 lbl ctx -> derived j0 i 
-  | Preshared -> False 
-  
-  match j, i with 
-  | Preshared 
-  
+  j = i \/
+  match j with
+  | Derive j0 lbl ctx -> derived j0 i
+  | Preshared -> False
+
+  match j, i with
+  | Preshared
+
   i = j \/
-  exists (lbl, ctx). derived (Derive i lbl ctx) 
+  exists (lbl, ctx). derived (Derive i lbl ctx)
 *)
-  
+
 
 (* ---
 
@@ -1769,7 +1838,7 @@ assume val prf_leak:
   Hashing.Spec.hkey a.ha
 
 type ext1 (u:usage) (i:regid) (idh:id_dhe) =
-  _:unit{registered (Derive i "" (ExtractDH idh))} & 
+  _:unit{registered (Derive i "" (ExtractDH idh))} &
   secret u (Derive i "" (ExtractDH idh))
 
 val prf_extract1:
@@ -1800,20 +1869,20 @@ let prf_extract1 #u #i a s idh gZ =
     // informally, when calling [prf_extract1] we don't care about the
     // state of the KDF, as long as it meets its invariant.
     //
-    // The wide idealized variant is as follows: 
+    // The wide idealized variant is as follows:
     //
-    // let j0 = 
+    // let j0 =
     //   match Map.find !s.wide (i,gZ) with
     //   | Some j0 -> j0
     //   | None    -> s.wide := !s.wide ++ ((i,gZ), length !s.wide) in
-    // JKDF.create u j j0 a 
+    // JKDF.create u j j0 a
     //
     // or just
     // JKDF.create u j (i,gZ) a
   else
     let raw_salt = prf_leak #u #i #a s in
     let raw = HKDF.extract raw_salt gZ in
-    (| (), coerce u j a raw |) 
+    (| (), coerce u j a raw |)
     // we allocate a key at a narrow index, possibly re-using key
     // materials if there are collisions on gZ or raw_salt
 
@@ -2317,7 +2386,7 @@ let labels = list label
 
 (*
 let psk_tables depth = ...
-let pskp n u = 
+let pskp n u =
   memoization (local_pskp n u) psk_tables.[n]
   *)
 
