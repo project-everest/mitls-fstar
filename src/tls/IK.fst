@@ -1349,6 +1349,21 @@ and children_depth (lxs: children): nat  =
   | (l,x)::lxs -> max (depth x) (children_depth lxs)
   | [] -> 0
 
+(*
+/// SZ: An alternative way of defining [tree_invariant] without an ad-hoc termination measure
+
+(** Provable from [memP_precedes] *)
+assume val precedes_list: #a:Type -> l:list a -> list (x:a{x << l})
+
+val tree_invariant: mem -> tree -> Type0
+let rec tree_invariant h = function
+  | Leaf p -> Pkg?.package_invariant p h
+  | Node lxs p ->
+    Pkg?.package_invariant p h /\
+    list_forall (fun (p:(label * tree){p << lxs}) -> tree_invariant h (snd p)) (precedes_list lxs) /\
+    disjoint_children h lxs
+*)
+
 // another custom induction to get termination
 let rec children_forall
   (lxs: children)
@@ -1361,19 +1376,13 @@ let rec children_forall
     // depth x <= children_depth lxs /\
     f x /\ children_forall tl f
 
-let rec tree_invariant (x:tree) (h: mem): Tot Type0 (decreases (%[depth x]))=
+let rec tree_invariant (x:tree) (h:mem): Tot Type0 (decreases %[depth x]) =
   match x with
   | Leaf p -> Pkg?.package_invariant p h
   | Node lxs p ->
-    children_depth lxs < depth x /\
     Pkg?.package_invariant p h /\
     children_forall lxs (fun x -> tree_invariant x h) /\
     disjoint_children h lxs
-
-
-
-
-
 
 
 // We can frame the multi-pkg invariant for free when touching tls_honest_region
