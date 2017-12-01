@@ -17,6 +17,7 @@ open TLSError
 open TLSConstants
 open TLSInfo
 open Range
+module HS = FStar.HyperStack
 
 //--------- application data fragments ------------------------------
 
@@ -75,7 +76,10 @@ let final i d =
   | Close   -> true
   | Alert a -> isFatal a
 
-let finalized i s = Some? (List.Tot.find (final i) s)
+let rec finalized i s =
+  match s with 
+  | [] -> false
+  | hd::tl -> final i hd || finalized i tl
 
 val wellformed: i:id -> list (delta i) -> Tot bool
 let rec wellformed ki s =
@@ -101,25 +105,25 @@ type stream (i:id) = s: list (delta i) { wellformed i s }
 //* not much point sharing the two? is it re-implementing AppData?
 //* maybe the state is just an rref?
 
-noeq type state (i:id) =
-  | State: #region:rid ->
-           log: option (rref region (stream i)) { Some? log <==> authId i } ->
-           ctr: rref region nat ->
-           state i
+// noeq type state (i:id) =
+//   | State: #region:rid ->
+//            log: option (rref region (stream i)) { Some? log <==> authId i } ->
+//            ctr: rref region nat ->
+//            state i
 
-(*
- * AR: adding the is_eternal_region refinement to satify the precondition of new_region.
- *)
-val gen: r0:rid{is_eternal_region r0} -> i:id -> ML (state i * state i)
-let gen r0 (i:id) =
-  let r = new_region r0 in
-  empty_is_well_formed i;
-  let t = ralloc r [] in
-  let log = if authId i then Some t.ref else None in
-  let ctr = ralloc r 0 in
-  let enc = State #i #r log ctr.ref in
-  let dec = State #i #r log ctr.ref in
-  enc, dec
+// (*
+//  * AR: adding the is_eternal_region refinement to satify the precondition of new_region.
+//  *)
+// val gen: r0:rid{is_eternal_region r0} -> i:id -> ML (state i * state i)
+// let gen r0 (i:id) =
+//   let r = new_region r0 in
+//   empty_is_well_formed i;
+//   let t = ralloc r [] in
+//   let log = if authId i then Some (HS.mrref_of t) else None in
+//   let ctr = ralloc r 0 in
+//   let enc = State #i #r log (HS.mrref_of ctr) in
+//   let dec = State #i #r log (HS.mrref_of ctr) in
+//   enc, dec
 
 // -------------------------------------------------------------
 
