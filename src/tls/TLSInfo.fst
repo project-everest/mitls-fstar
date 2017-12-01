@@ -695,16 +695,18 @@ let safeKDF _ = unsafe_coerce false //TODO: THIS IS A PLACEHOLDER
 //let strongAEId i   = strongAEAlg   i.pv i.aeAlg
 
 // ``We are idealizing integrity/confidentiality for this id''
-abstract let authId = function
-  | PlaintextID _ -> false
-  | ID13 ki -> false // TODO
-  | ID12 pv msid kdf ae cr sr rw -> false // TODO
+// abstract let authId = function
+//   | PlaintextID _ -> false
+//   | ID13 ki -> false // TODO
+//   | ID12 pv msid kdf ae cr sr rw -> false // TODO
 
-abstract let safeId = function
-  | PlaintextID _ -> false
-  | ID13 ki -> false // TODO
-  | ID12 pv msid kdf ae cr sr rw -> false // TODO
+// abstract let safeId = function
+//   | PlaintextID _ -> false
+//   | ID13 ki -> false // TODO
+//   | ID12 pv msid kdf ae cr sr rw -> false // TODO
 
+let authId _ = false
+let safeId _ = false
 let plainText_is_not_auth (i:id)
   : Lemma (requires (PlaintextID? i))
           (ensures (not (authId i)))
