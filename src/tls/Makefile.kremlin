@@ -20,10 +20,11 @@ INCLUDE_PATHS= \
 FSTAR=fstar.exe $(OTHERFLAGS)
 MAIN_FILES=Test.TLSConstants.fst
 
-MORE ?= $(addsuffix .fst, Nonce RSAKey DHGroup ECGroup CommonDH PMS	\
-			  Hashing.Spec Hashing.OpenSSL Hashing		\
-			  HMAC $(FSTAR_HOME)/ulib/FStar.Monotonic.DependentMap \
-			  PSK TLSInfo StreamAE Crypto.Indexing StatefulLHAE)
+MORE ?= $(addsuffix .fst, Nonce RSAKey DHGroup ECGroup CommonDH PMS		\
+			  Hashing.Spec Hashing.OpenSSL Hashing HMAC		\
+			  $(FSTAR_HOME)/ulib/FStar.Monotonic.DependentMap	\
+			  PSK TLSInfo StreamAE Crypto.Indexing			\
+			  StatefulLHAE StAE)
 
 EXTRACT_DIR=extract
 KRML_DIR=$(EXTRACT_DIR)/krml_output

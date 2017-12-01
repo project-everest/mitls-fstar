@@ -704,9 +704,12 @@ let safeKDF _ = unsafe_coerce false //TODO: THIS IS A PLACEHOLDER
 //   | PlaintextID _ -> false
 //   | ID13 ki -> false // TODO
 //   | ID12 pv msid kdf ae cr sr rw -> false // TODO
-
+inline_for_extraction
 let authId _ = false
+
+inline_for_extraction
 let safeId _ = false
+
 let plainText_is_not_auth (i:id)
   : Lemma (requires (PlaintextID? i))
           (ensures (not (authId i)))

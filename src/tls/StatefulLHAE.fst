@@ -48,8 +48,20 @@ let counter #i #rw = AEAD_GCM.State?.counter #i #rw
 type reader i = state i Reader
 type writer i = state i Writer
 
-let gen = AEAD_GCM.gen
-let genReader = AEAD_GCM.genReader
+val gen: parent:rgn -> i:id -> ST (writer i)
+  (requires (fun h0 -> True))
+  (ensures  (genPost parent))
+let gen p i = AEAD_GCM.gen p i
+
+val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
+  (requires (fun h0 ->
+    HyperHeap.disjoint parent w.region /\
+    HyperHeap.disjoint parent (AEADProvider.region w.aead)))
+  (ensures  (fun h0 (r:reader i) h1 ->
+    True //TODO
+    ))
+let genReader p #i w = AEAD_GCM.genReader p #i w
+
 let coerce parent i kv iv = AEAD_GCM.coerce parent i kv iv
 let leak (#i:id{~(authId i)}) (#role:rw) state = AEAD_GCM.leak #i #role state
 

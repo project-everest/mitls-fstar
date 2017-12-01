@@ -137,6 +137,7 @@ let entry (i:id) =
      AEAD_GCM.entry i
    else False
 
+private
 let ptext (#i:id) (ent:entry i): Tot (C.fragment i) =
   if is_stream i then
     Stream.Entry?.p #i ent
