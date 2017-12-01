@@ -1412,17 +1412,58 @@ let test_rekey(): St unit =
 // refactoring needed, e.g. define derive_secret helper function to hide access to the tree
 
 
-(* WIP 
-
 /// Global invariant, rooted at the PSK
-/// (do we need the "static index"?)
-let inv_node (u: usage) (h: mem) = 
-  // children packages meet their invariants
-  (forall (l:label). (u l).package_invariant h) /\
+/// (do we need some "static index"?)
+ 
+// node footprints already recursively collect their children's footprints
+let tree_footprint (x:tree) h = 
+  match x with 
+  | Leaf p | Node _ p -> Pkg?.footprint p h 
 
-  // children packages have disjoint footprints 
-  (forall (l0 l1: label). l0 <> l1 ==> (u l0).footprint h `rset_disjoint` (u l1).footprint h)
-    
+// library??
+val list_forall: ('a -> Type0) -> list 'a -> Tot Type0
+let rec list_forall f l = match l with
+    | [] -> True
+    | hd::tl -> f hd /\ list_forall f tl 
+let max x y = if x <= y then y else x    
+
+val disjoint_children: mem -> children -> Type0
+let rec disjoint_children h = function
+  | [] -> True 
+  | (l0, x0) :: tail -> list_forall (fun (l1, x1) -> tree_footprint x0 h `Set.disjoint` tree_footprint x1 h) tail
+
+// induction on n-ary trees requires explicit termination
+let rec depth (x:tree): nat = 
+  match x with 
+  | Leaf _ -> 0 
+  | Node lxs _ -> 1 + children_depth lxs
+and children_depth (lxs: children): nat  = 
+  match lxs with 
+  | (l,x)::lxs -> max (depth x) (children_depth lxs)
+  | [] -> 0
+
+// another custom induction to get termination
+let rec children_forall 
+  (lxs: children)
+  (f: x:tree{depth x <= children_depth lxs} -> Type0): Type0
+= 
+  match lxs with 
+  | [] -> True
+  | (_,x)::tl -> 
+    // children_depth tl <= children_depth lxs /\ 
+    // depth x <= children_depth lxs /\ 
+    f x /\ children_forall tl f
+
+let rec tree_invariant (x:tree) (h: mem): Tot Type0 (decreases (%[depth x]))= 
+  match x with 
+  | Leaf p -> Pkg?.package_invariant p h
+  | Node lxs p -> 
+    children_depth lxs < depth x /\ 
+    Pkg?.package_invariant p h /\
+    children_forall lxs (fun x -> tree_invariant x h) /\ 
+    disjoint_children h lxs
+
+(*    
 let modifies_instance 
   (i: id {wellformed_id i}) 
   (p: localpkg ii) 
