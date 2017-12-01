@@ -61,16 +61,9 @@ let sample (len:UInt32.t): ST (lbytes len)
 /// parameters, such as algorithms or key length , and to define their
 /// "honesty", thereby controlling their conditional idealization.
 ///
-/// The "get_info" function ensures that all calls to the instance
-/// agree on their runtime parameters; we pass both the index and its
-/// info inasmuch as the index will be erased.
-
 /// We distinguish between "honest", which refers to the adversary's
 /// intent (and is considered public) and "safe", which controls
 /// fine-grained idealization: roughly safe i = Flags.ideal /\ honest i
-
-/// SZ: [get_info] is not part of the "package". Instead, it's defined below
-/// specifically for the [id] type used in the key derivation package [ii]
 
 noeq type ipkg = | Idx:
   t: Type0{hasEq t} (* abstract type for indexes *) ->
@@ -123,24 +116,30 @@ type keylen = l:UInt32.t {UInt32.v l <= 256}
 // rset are downward closed - if r is in s and r' extends r then r' is in s too
 // this allows us to prove disjointness with negation of set membership
 
-/// SZ: The quantification over [rgn] below must be a typo.
+/// SZ: changed the definition to quantify over [HH.rid] rather than [rgn]
 type rset = s:Set.set HH.rid{
-  (forall (r1:rgn). (Set.mem r1 s ==>
-     // Useless because [r1:rgn]
-     r1<>HH.root /\
+  (forall (r1:HH.rid). (Set.mem r1 s ==>
+     r1 <> HH.root /\
      (is_tls_rgn r1 ==> r1 `HH.extends` tls_tables_region) /\
-     (forall (r':HH.rid).{:pattern (r' `HH.extends` r1)} r' `HH.extends` r1 ==> Set.mem r' s) /\
-     // Useless because [r1:rgn]
+     (forall (r':HH.rid).{:pattern (r' `HH.includes` r1)} r' `is_below` r1 ==> Set.mem r' s) /\
      (forall (r':HH.rid).{:pattern is_eternal_region r'} r' `is_above` r1 ==> is_eternal_region r')))}
 
 let rset_union (s1:rset) (s2:rset)
   : Tot (s:rset{forall (r:HH.rid). Set.mem r s <==> (Set.mem r s1 \/ Set.mem r s2)})
   = Set.union s1 s2
 
-let lemma_rset_disjoint (s:rset) (r:HH.rid)
-  : Lemma (requires ~(Set.mem r s))
-          (ensures (forall (r':HH.rid). Set.mem r' s ==> r' `HH.disjoint` r))
-  = admit () // easy
+/// SZ: This is the strongest lemma that is provable
+/// Note that this old stronger version doesn't hold:
+///
+/// let lemma_rset_disjoint (s:rset) (r:HH.rid) (r':HH.rid)
+///  : Lemma (requires ~(Set.mem r s) /\ (Set.mem r' s))
+///          (ensures  r `HH.disjoint` r')
+///  = admit() // easy
+///
+let lemma_rset_disjoint (s:rset) (r:HH.rid) (r':HH.rid)
+  : Lemma (requires Set.mem r s /\ ~(Set.mem r' s) /\ r' `is_below` r)
+          (ensures  r `HH.disjoint` r')
+  = ()
 
 // We get from the definition of rset that define_region and tls_honest_region are disjoint
 let lemma_define_tls_honest_regions (s:rset)
@@ -1352,8 +1351,21 @@ and children_depth (lxs: children): nat  =
 (*
 /// SZ: An alternative way of defining [tree_invariant] without an ad-hoc termination measure
 
-(** Provable from [memP_precedes] *)
-assume val precedes_list: #a:Type -> l:list a -> list (x:a{x << l})
+val move_refinement: #a:Type -> #p:(a -> Type)
+  -> l:list a{forall z. List.Tot.memP z l ==> p z} -> list (x:a{p x})
+let rec move_refinement #a #p = function
+  | [] -> []
+  | hd :: tl -> hd :: move_refinement #a #p tl
+
+val forall_memP_precedes: #a:Type -> l:list a -> Lemma (forall x. List.Tot.memP x l ==> x << l)
+let forall_memP_precedes #a l =
+  let open FStar.Tactics in
+  let open FStar.List.Tot in
+  assert_by_tactic (forall x. memP x l ==> x << l)
+    (x <-- forall_intro; apply_lemma (quote memP_precedes))
+
+val precedes_list: #a:Type -> l:list a -> list (x:a{x << l})
+let precedes_list #a l = forall_memP_precedes l; move_refinement l
 
 val tree_invariant: mem -> tree -> Type0
 let rec tree_invariant h = function
