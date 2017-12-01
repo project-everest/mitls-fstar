@@ -6,7 +6,7 @@ module IK
 ///
 /// * captures resumption derivations via bounded-recursive instantiation.
 /// * captures PRF-ODH double game
-/// * applied to the full extract/expand key schedule of TLS 1.3
+/// * applicable to the full extract/expand key schedule of TLS 1.3
 /// * models partial key compromise, controlled by the adversary for each new key
 /// * features agility on hash algorithms and DH groups, and ideal-only indexes.
 ///
@@ -18,13 +18,9 @@ module IK
 ///
 /// * reliance on u_of_i in DH extraction (intuitive but hard to code)
 ///
-/// * key registration and discretionary compromise
-///
 /// * extraction: ensure all strongly-dependent types disappear and
 ///   (concretely) the key schedule directly allocates all key
 ///   instances.
-///
-/// * deal with create/coerce stateful pre- and post-condition.
 ///
 /// * usage restriction for KDFs, based on a generalization of wellformed_id
 ///   (starting with an example of hashed-log derivation)
@@ -55,19 +51,16 @@ let sample (len:UInt32.t): ST (lbytes len)
 
 //unfold let doubleton (#a:eqtype) (e1:a) (e2:a) : Set.set a = Set.union (Set.singleton e1) (Set.singleton e2)
 
-/// --------------------------------------------------------------------------------------------------
+/// ------------------------------------------------------------------------------------------
 /// module Pkg (stateless)
 /// We embed first-class modules as datatype "packages"
-///
+
+
 /// Index packages provide an abstract index for instances, with an
 /// interface to project (ghost) indexes to (concrete) runtime
 /// parameters, such as algorithms or key length , and to define their
 /// "honesty", thereby controlling their conditional idealization.
 ///
-/// The "get_info" function ensure that all calls to the instance
-/// agree on their runtime parameters; we pass both the index and its
-/// info inasmuch as the index will be erased.
-
 /// We distinguish between "honest", which refers to the adversarie's
 /// intent (and is considered public) and "safe", which controls
 /// fine-grained idealization: roughly safe i = Flags.ideal /\ honest i
@@ -81,21 +74,27 @@ noeq type ipkg = | Idx:
   get_honesty: (i:t{registered i} -> ST bool
     (requires (fun _ -> True))
     (ensures (fun h0 b h1 -> h0 == h1 /\ (b <==> honest i) /\ (not b <==> corrupt i))))
-    (* stateful reader, returning either honest or corrupt *) ->
   ipkg
 
-/// Derived key length restriction when using HKDF
-type keylen = l:UInt32.t {UInt32.v l <= 256}
 
 
 /// Keyed functionality define Key packages, parametric in their
-/// indexes, but concrete on their key randomness; instances may have
-/// any number of other functions (such a leak, for instance).
+/// indexes, but concrete on their key randomness. The package is
+/// meant to be used merely as a generic interface for
+/// creation/coercion; instances may have any number of other
+/// functions (such as leak, for instance).
 ///
-/// [info] represents runtime information, such as algorithms or key lengths;
-/// it is determined by the (ghost) index.
+/// [ip] defines the abstract indexes used in the package.
 ///
-/// [ip] defines abstract indexes used in the package.
+/// [info] represents creation-time information, such as algorithms or
+/// key lengths; it is largely determined by the (ghost) index, so
+/// that all users of the instance agree on them, with details left to
+/// each package definition. (For instance, parent regions for
+/// allocating ideal state may differ.) We pass both the index and its
+/// info inasmuch as the index will be erased.
+///
+/// [len] provides the concrete length of random key materials for
+/// creating a new instance, as a function of the creation-time info.
 ///
 /// [create] and [coerce] generate new instances; [create] requires
 /// `model`, whereas [coerce] requires corruption when idealizing;
@@ -103,6 +102,11 @@ type keylen = l:UInt32.t {UInt32.v l <= 256}
 ///
 /// We must have [create i a == coerce i a (sample (len a))]
 /// we currently check by hand that this follows from F* semantics.
+
+
+/// Derived key length restriction when using HKDF
+type keylen = l:UInt32.t {UInt32.v l <= 256}
+
 
 (* Definedness *)
 
@@ -350,7 +354,8 @@ unfold type mem_package (#ip:ipkg) (p:local_pkg ip) =
 // correlating its result with the source definitions.
 
 #set-options "--z3rlimit 100"
-unfold let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
+//unfold 
+let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
   let footprint (h:mem): GTot rset =
     if model then
       let map = MR.m_sel h (itable mtable) in
@@ -478,7 +483,7 @@ unfold let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): p
     package_invariant package_invariant_framing
     p.post post_framing
     create coerce)
-
+ 
 let memoization_ST (#ip:ipkg) (p:local_pkg ip)
   : ST (pkg ip)
   (requires fun h0 -> True)
@@ -493,7 +498,7 @@ let memoization_ST (#ip:ipkg) (p:local_pkg ip)
   let mtable: mem_table p.key = mem_alloc #(i:ip.t{ip.registered i}) p.key in
   let h1 = get() in
   let q = memoization #ip p mtable in
-  // assert(q == memoization #ip p mtable); // fails
+  assert(q == memoization #ip p mtable); // fails when unfolding memoization
   // assert_norm(q == memoization #ip p mtable);// fails with squashing error
   assert(modifies_mem_table mtable h0 h1);
   (if model then lemma_mm_forall_init (MR.m_sel h1 (itable mtable)) p.local_invariant h1);
