@@ -61,9 +61,16 @@ let sample (len:UInt32.t): ST (lbytes len)
 /// parameters, such as algorithms or key length , and to define their
 /// "honesty", thereby controlling their conditional idealization.
 ///
-/// We distinguish between "honest", which refers to the adversarie's
+/// The "get_info" function ensures that all calls to the instance
+/// agree on their runtime parameters; we pass both the index and its
+/// info inasmuch as the index will be erased.
+
+/// We distinguish between "honest", which refers to the adversary's
 /// intent (and is considered public) and "safe", which controls
 /// fine-grained idealization: roughly safe i = Flags.ideal /\ honest i
+
+/// SZ: [get_info] is not part of the "package". Instead, it's defined below
+/// specifically for the [id] type used in the key derivation package [ii]
 
 noeq type ipkg = | Idx:
   t: Type0{hasEq t} (* abstract type for indexes *) ->
@@ -115,16 +122,20 @@ type keylen = l:UInt32.t {UInt32.v l <= 256}
 // An rset can be thought of as a set of disjoint subtrees in the region tree
 // rset are downward closed - if r is in s and r' extends r then r' is in s too
 // this allows us to prove disjointness with negation of set membership
+
+/// SZ: The quantification over [rgn] below must be a typo.
 type rset = s:Set.set HH.rid{
   (forall (r1:rgn). (Set.mem r1 s ==>
+     // Useless because [r1:rgn]
      r1<>HH.root /\
      (is_tls_rgn r1 ==> r1 `HH.extends` tls_tables_region) /\
      (forall (r':HH.rid).{:pattern (r' `HH.extends` r1)} r' `HH.extends` r1 ==> Set.mem r' s) /\
+     // Useless because [r1:rgn]
      (forall (r':HH.rid).{:pattern is_eternal_region r'} r' `is_above` r1 ==> is_eternal_region r')))}
 
 let rset_union (s1:rset) (s2:rset)
   : Tot (s:rset{forall (r:HH.rid). Set.mem r s <==> (Set.mem r s1 \/ Set.mem r s2)})
-  = admit()
+  = Set.union s1 s2
 
 let lemma_rset_disjoint (s:rset) (r:HH.rid)
   : Lemma (requires ~(Set.mem r s))
