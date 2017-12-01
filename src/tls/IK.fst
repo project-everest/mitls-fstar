@@ -1090,7 +1090,7 @@ let corrupt_secret (#u: usage) (#i:id{registered i}) (t: real_secret i {corruptK
 
 /// Real KDF schemes, parameterized by an algorithm computed from the
 /// index (existing code).
-
+ 
 // For KDF, we require that being fresh in the KDF table implies being fresh
 // in the derived package's definition table
 type local_kdf_invariant (#u:usage) (#i:id{registered i}) (k:secret u i) (h:mem) =
@@ -1104,12 +1104,18 @@ type local_kdf_invariant (#u:usage) (#i:id{registered i}) (k:secret u i) (h:mem)
         let kdf : ideal_or_real (table u i) (real_secret i) = k in
         match kdf with
         | Ideal kdft ->
+          // the entries in the KDF table match those of the child's define_table
           let KDF_table r t : table u i = kdft in
           MM.sel (MR.m_sel h t) (Domain lbl ctx) == MM.sel (MR.m_sel h dt) i'
         | Real raw ->
+          // the child's define table has correctly-computed coerced entries
           (match MM.sel (MR.m_sel h dt) i' with
           | None -> True
           | Some k' ->
+            // we recompute the concrete key materials, and recall the
+            // existence of some prior info, which (by specification
+            // of coerceT) must yield exactly the same instance as the
+            // one recorded earlier.
             let raw' = hkdf_derive_label_spec (get_info i).ha raw lbl ctx in
             exists (a':Pkg?.info pkg' i').
             Pkg?.len pkg' a' == UInt32.uint_to_t (Hashing.Spec.tagLen (get_info i).ha) /\
@@ -1586,7 +1592,11 @@ let test_rekey(): St unit
       () ))
 //    | _ -> assert false) // excluded by is_secret 9
 //  |  _ -> assert false // excluded by is_secret 10
-// refactoring needed, e.g. define derive_secret helper function to hide access to the tree
+// ref
+
+
+
+actoring needed, e.g. define derive_secret helper function to hide access to the tree
 
 
 
