@@ -50,8 +50,8 @@ type writer i = state i Writer
 
 let gen = AEAD_GCM.gen
 let genReader = AEAD_GCM.genReader
-let coerce = AEAD_GCM.coerce
-let leak (#i:id{~(authId i)}) (#role:rw) = AEAD_GCM.leak #i #role
+let coerce parent i kv iv = AEAD_GCM.coerce parent i kv iv
+let leak (#i:id{~(authId i)}) (#role:rw) state = AEAD_GCM.leak #i #role state
 
 (*------------------------------------------------------------------*)
 #set-options "--z3rlimit 100 --max_ifuel 1 --initial_ifuel 0 --max_fuel 1 --initial_fuel 0"

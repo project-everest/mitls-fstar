@@ -23,7 +23,7 @@ MAIN_FILES=Test.TLSConstants.fst
 MORE ?= $(addsuffix .fst, Nonce RSAKey DHGroup ECGroup CommonDH PMS	\
 			  Hashing.Spec Hashing.OpenSSL Hashing		\
 			  HMAC $(FSTAR_HOME)/ulib/FStar.Monotonic.DependentMap \
-			  PSK TLSInfo StreamAE Crypto.Indexing)
+			  PSK TLSInfo StreamAE Crypto.Indexing StatefulLHAE)
 
 EXTRACT_DIR=extract
 KRML_DIR=$(EXTRACT_DIR)/krml_output
