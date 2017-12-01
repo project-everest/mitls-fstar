@@ -16,7 +16,7 @@ open FStar.Error
 
 //open TLSConstants
 open TLSError
-
+module HS = FStar.HyperStack
 // idealizing HMAC
 // for concreteness; the rest of the module is parametric in a:alg
 
@@ -58,7 +58,7 @@ noeq type key (i:id) (good: bytes -> Type) =
   | Key:
     #region: rgn -> // intuitively, the writer's region
     kv: keyrepr i ->
-    log: ref (seq (entry i good)){log.id = region} ->
+    log: ref (seq (entry i good)){HS.frameOf log = region} ->
     key i good
 
 val region: #i:id -> #good:(bytes -> Type) -> k:key i good -> GTot rid
@@ -117,6 +117,11 @@ let mac #i #good k p =
 abstract val matches: #i:id -> #good:(bytes -> Type) -> p:text -> entry i good -> Tot bool
 let matches #i #good p (Entry _ p') = p = p'
 
+let rec log_entry_matches_p #i #good (log:seq (entry i good)) (p:text) =
+  if Seq.length log = 0 then false
+  else matches p (Seq.head log)
+       || log_entry_matches_p (Seq.tail log) p
+       
 val verify: #i:id -> #good:(bytes -> Type) -> k:key i good -> p:bytes -> t:tag i -> ST bool
   (requires (fun _ -> True))
   (ensures (fun h0 b h1 -> modifies Set.empty h0 h1 /\ (b /\ authId i ==> good p)))
@@ -126,4 +131,4 @@ let verify #i #good k p t =
   let x = HMAC.hmacVerify (alg i) k.kv p t in
   let log = !k.log in
   x &&
-  ( not(authId i) || Some? (seq_find (matches p) log))
+  ( not(authId i) || log_entry_matches_p log p)

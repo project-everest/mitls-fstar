@@ -224,7 +224,7 @@ type ks_state =
  * AR: changing state from rref to ref, with region captured in the refinement.
  *)
 type ks =
-| KS: #region:rid -> state:(ref ks_state){HS.MkRef?.id state = region} -> ks
+| KS: #region:rid -> state:(ref ks_state){HS.frameOf state = region} -> ks
 //17-04-17 CF: expose it as a concrete ref?
 //17-04-17 CF: no need to keep the region, already in the ref.
 

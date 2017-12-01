@@ -87,7 +87,7 @@ noeq type hs' = | HS:
   log: HandshakeLog.t {HandshakeLog.region_of log = region} ->
   ks: KeySchedule.ks (*region*) ->
   epochs: epochs region (Nego.nonce nego) ->
-  state: ref machineState {state.HyperStack.id = region} -> // state machine; should be opaque and depend on r.
+  state: ref machineState {HyperStack.frameOf state = region} -> // state machine; should be opaque and depend on r.
   hs'
 
 let hs = hs' //17-04-08 interface limitation

@@ -1486,7 +1486,7 @@ let server_ServerShare #region ns ks =
         mode.n_cipher_suite
         None  // option (TI.cVerifyData*TI.sVerifyData)
         mode.n_pski
-        (Option.map CommonDH.ServerKeyShare ks)
+        (Option.mapTot CommonDH.ServerKeyShare ks)
         (mode_sessionID_eq_ch_sessionID mode) in
     match scrut with
     | Error z -> Error z
@@ -1502,7 +1502,7 @@ let server_ServerShare #region ns ks =
         mode.n_cipher_suite
         mode.n_pski
         sexts
-        (Option.map share_of_serverKeyShare ks)
+        (Option.mapTot share_of_serverKeyShare ks)
         mode.n_client_cert_request
         mode.n_server_cert
         mode.n_client_share
