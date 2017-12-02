@@ -102,6 +102,7 @@ StatefulPlain \
 LHAEPlain \
 AEAD_GCM \
 MAC \
+AEADProvider \
 StatefulLHAE \
 Record \
 StAE \

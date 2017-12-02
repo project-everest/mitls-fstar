@@ -1624,11 +1624,7 @@ let test_rekey(): St unit
       () ))
 //    | _ -> assert false) // excluded by is_secret 9
 //  |  _ -> assert false // excluded by is_secret 10
-// ref
-
-
-
-actoring needed, e.g. define derive_secret helper function to hide access to the tree
+// refactoring needed, e.g. define derive_secret helper function to hide access to the tree
 
 
 

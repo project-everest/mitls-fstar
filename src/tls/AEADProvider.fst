@@ -45,8 +45,8 @@ val to_bytes: l:nat -> buf:CB.lbuffer l -> STL (b:bytes{length b = l})
 let rec to_bytes l buf =
   if l = 0 then empty_bytes
   else
-    let b = UInt8.v (Buffer.index buf 0ul) in
-    let s = abyte (Char.char_of_int b) in
+    let b = Buffer.index buf 0ul in
+    let s = abyte b in
     let t = to_bytes (l - 1) (Buffer.sub buf 1ul (uint_to_t (l-1))) in
     let r = s @| t in
     (lemma_len_append s t; r)
@@ -57,7 +57,7 @@ val store_bytes: len:nat -> buf:CB.lbuffer len -> i:nat{i <= len} -> b:bytes{len
   (ensures (fun h0 r h1 -> Buffer.live h1 buf /\ Buffer.modifies_1 buf h0 h1))
 let rec store_bytes len buf i s =
   if i < len then
-    let () = Buffer.upd buf (uint_to_t i) (UInt8.uint_to_t (Char.int_of_char (Platform.Bytes.index s i))) in
+    let () = Buffer.upd buf (uint_to_t i) (Platform.Bytes.index s i) in
     store_bytes len buf (i + 1) s
 
 val from_bytes: b:bytes{FStar.UInt.fits (length b) 32} -> StackInline (CB.lbuffer (length b))

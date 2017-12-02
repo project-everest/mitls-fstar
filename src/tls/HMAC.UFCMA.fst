@@ -121,8 +121,9 @@ unfold let info1
 unfold let localpkg 
   (ip: ipkg) 
   (ha_of_i: i:ip.IK.t -> ha)
-  (good_of_i: ip.IK.t -> text -> bool)
-  : p: IK.local_pkg ip {IK.LocalPkg?.info #ip p == info1 ip ha_of_i good_of_i}
+  (good_of_i: ip.IK.t -> text -> bool) 
+  : 
+  p: IK.local_pkg ip {IK.LocalPkg?.info #ip p == info1 ip ha_of_i good_of_i}
 = 
     IK.LocalPkg
       (fun (i:ip.IK.t {ip.IK.registered i}) -> key ip i)
