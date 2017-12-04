@@ -113,7 +113,8 @@ type salt (i:id) = lbytes (salt_length i)
 noeq type state (i:id) (r:rw) =
 | OpenSSL: st:OAEAD.state i r -> salt:salt i -> state i r
 | LowC: st:CAEAD.aead_state -> key:key i -> salt:salt i -> state i r
-| LowLevel: st:AE.aead_state i (Crypto.Indexing.rw2rw r) -> salt: salt i -> state i r
+| LowLevel: 
+    st:AE.aead_state i (Crypto.Indexing.rw2rw r) -> salt: salt i -> state i r
 
 type writer i = s:state i Writer
 type reader i = s:state i Reader
@@ -202,20 +203,18 @@ let gen (i:id) (r:rgn) : ST (state i Writer)
   (requires (fun h -> True))
   (ensures (genPost r))
   =
+  let salt : salt i = CC.random (salt_length i) in
   match use_provider() with
   | OpenSSLProvider ->
-    let salt : salt i = CC.random (salt_length i) in
     let st : OAEAD.state i Writer = OAEAD.gen r i in
     OpenSSL st salt
   | LowCProvider ->
     assume false; // TODO
     let kv: key i = CC.random (CC.aeadKeySize (alg i)) in
-    let salt: salt i = CC.random (salt_length i) in
     let st = CAEAD.aead_create (alg i) CAEAD.ValeAES kv in
     LowC st kv salt
   | LowProvider ->
     assume false; // TODO
-    let salt : salt i = CC.random (salt_length i) in
     let st = AE.gen i tls_region r in
     LowLevel st salt
 
@@ -404,3 +403,56 @@ let decrypt (#i:id) (#l:plainlen) (st:reader i) (iv:iv i) (ad:adata i) (cipher:c
     else false in
   if r then plain else plain
  *)
+
+
+/// Agility:
+/// - for AEAD, we need a pair of algorithms for the cipher and for UFCMA---use Crypto.Indexing.fsti;
+/// - for StreamAE, we additionallly need the PV (to control the length of the static IV).
+///
+/// We keep these parameters in AEADProvider and StreamAE instances, respectively. 
+
+type aeadAlg // fixme.
+
+// TODO: add the two regions of AEAD.fsti, used only ideally (hence coerce is ~pure)
+type info (ip: ipkg) (aeadAlg_of_i: i:ip.IK.t -> aeadAlg) (i:ip.t) = a:aeadAlg {a = aeadAlg_of_i i} 
+
+open IK
+unfold let localpkg 
+  (ip: ipkg) 
+  (aeadAlg_of_i: i:ip.IK.t -> aeadAlg)
+  : 
+  p: IK.local_pkg ip {IK.LocalPkg?.info #ip p == info1 ip ha_of_i good_of_i}
+= 
+    IK.LocalPkg
+      (fun (i:ip.IK.t {ip.IK.registered i}) -> writer ip i)
+      (info ip aeadAlg_of_i)
+      (fun #_ u -> aeadLen u) 
+      Flags.ideal_aead  
+      // local footprint 
+      (fun #i (k:writer ip i) -> Set.empty (*17-11-24 regions for the PRF and the log *)  )
+      // local invariant 
+      (fun #_ k h -> True)
+      (fun r i h0 k h1 -> ())
+      // create/coerce postcondition
+      (fun #i u k h1 -> k.u == u (*17-11-24  /\ fresh_subregion (region k) u.parent h0 h1 *) )
+      (fun #i u k h1 r h2 -> ())
+      (create ip aeadAlg_of_i)
+      (coerceT ip aeadAlg_of_i)
+      (coerce ip aeadAlg_of_i)
+
+let mk_pkg (ip:ipkg) (aeadAlg_of_i: ip.t -> aeadAlg): ST (pkg ip)
+  (requires fun h0 -> True)
+  (ensures fun h0 p h1 ->
+    //17-12-01 we also need freshness and emptyness of the new table + local packaging
+    modifies_mem_table p.define_table h0 h1 /\
+    p.package_invariant h1)
+=
+  memoization_ST #ip (localpkg ip aeadAlg_of_i)
+
+// we may want to provide TLS-specific encrypt, decrypt... partially applied e.g. [encrypt ii aeadAlg_of_i]
+
+
+unfold let localpkg_IV
+// TODO adapting local_raw_pkg
+
+// TODO ensure the flag is set only when multiplexing to the verified implementation

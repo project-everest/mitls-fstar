@@ -86,6 +86,14 @@ let create ip _ _ i u =
   let kv: keyrepr u = CoreCrypto.random (Hashing.Spec.tagLen u.alg) in
   gen ip i u kv 
 
+// placeholder; will require allocating the sub-region only ideally.
+assume val coerceT: 
+  ip: ipkg -> ha_of_i: (ip.IK.t -> ha) -> good_of_i: (ip.IK.t -> text -> bool) ->
+  i: ip.IK.t {ip.IK.registered i} -> 
+  u: (u: info {u.alg = ha_of_i i /\ u.good == good_of_i i}) ->
+  kv: IK.lbytes (keylen u) -> 
+  key ip i
+
 val coerce: 
   ip: ipkg -> ha_of_i: (ip.IK.t -> ha) -> good_of_i: (ip.IK.t -> text -> bool) ->
   i: ip.IK.t {ip.IK.registered i} -> 
@@ -95,10 +103,14 @@ val coerce:
   (requires (fun _ -> ideal ==> ip.IK.corrupt i))
   (ensures (fun h0 k h1 ->
     modifies Set.empty h0 h1 /\
+    k == coerceT ip ha_of_i good_of_i i u kv /\
     k.u == u /\
     fresh_subregion (region k) u.parent h0 h1 ))
-let coerce ip _ _ i u kv = 
-  gen ip i u kv
+let coerce ip ha_of_i good_of_i i u kv = 
+  let k = gen ip i u kv in
+  assume (k == coerceT ip ha_of_i good_of_i i u kv);
+  k
+
 
 // not quite doable without reification?
 // assert_norm(forall ip i u. (create #ip i u == coerce #ip i u (CoreCrypto.random (UInt32.v (keylen u)))))
@@ -139,6 +151,7 @@ unfold let localpkg
       (fun #i u k h1 -> k.u == u (*17-11-24  /\ fresh_subregion (region k) u.parent h0 h1 *) )
       (fun #i u k h1 r h2 -> ())
       (create ip ha_of_i good_of_i)
+      (coerceT ip ha_of_i good_of_i)
       (coerce ip ha_of_i good_of_i)
 
 unfold 

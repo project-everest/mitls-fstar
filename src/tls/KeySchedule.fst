@@ -36,7 +36,7 @@ unfold let dbg : string -> ST unit (requires (fun _ -> True))
 #set-options "--lax"
 
 // move to CommonDH?
-let sprint_share (#g:CommonDH.group) (s:CommonDH.share g): string
+let sprint_share (#g:CommonDH.group) (s:CommonDH.pre_share g): string
   =
   let kb = CommonDH.serialize_raw #g s in
   let kh = Platform.Bytes.hex_of_bytes kb in
@@ -124,8 +124,15 @@ abstract type es (i:esId) = H.tag (esId_hash i)
 
 // Handshake secret (abstract)
 abstract type hs (i:hsId) = H.tag (hsId_hash i)
-type fink (i:finishedId) = HMAC.UFCMA.key (HMAC.UFCMA.HMAC_Finished i) (fun _ -> True)
-type binderKey (i:binderId) = HMAC.UFCMA.key (HMAC.UFCMA.HMAC_Binder i) (fun _ -> True)
+
+// only for TLS 1.3, will need refining 
+let fink (i:finishedId) = HMAC.UFCMA.key IK.ii IK.id
+let binderKey (i:binderId) = HMAC.UFCMA.key IK.ii IK.id
+//was:
+//type fink (i:finishedId)    = HMAC.UFCMA.key (HMAC.UFCMA.HMAC_Finished i) (fun _ -> True)
+//type binderKey (i:binderId) = HMAC.UFCMA.key (HMAC.UFCMA.HMAC_Binder i) (fun _ -> True)
+
+assume val upd: 'a -> IK.id 
 
 // TLS 1.3 master secret (abstract)
 abstract type ams (i:asId) = H.tag (asId_hash i)
@@ -178,7 +185,7 @@ type exportKey = (li:logInfo & i:exportId li & ems i)
 
 type ks_alpha12 = pv:protocolVersion * cs:cipherSuite * ems:bool
 type ks_alpha13 = ae:aeadAlg * h:hash_alg
-
+ 
 type ks_client_state =
 | C_Init: 
     cr:random -> ks_client_state
@@ -189,26 +196,26 @@ type ks_client_state =
     ms:ms -> ks_client_state
 //| C_12_Full_CH: 
 //    cr:random -> ks_client_state
-
+//
 // optional intermediate state within HS.client_ServerHelloDone 
 | C_12_wait_MS: 
     csr:csRands -> 
     alpha:ks_alpha12 -> 
     id:TLSInfo.pmsId -> 
     pms:pms -> ks_client_state
-
+//
 // state after HS.client_ServerHelloDone
 | C_12_has_MS: 
     csr:csRands -> 
     alpha:ks_alpha12 -> 
     id:TLSInfo.msId -> 
     ms:ms -> ks_client_state
-
+//
 // 17-11-15 ks_alpha13 holds concrete algorithms for i
 | C_13_wait_SH: 
     cr:random -> 
     esl: list (i:esId{~(NoPSK? i)} & es i) ->
-    gs:list (g:CommonDH.group & CommonDH.keyshare g) -> ks_client_state
+    gs:list CommonDH.dhi -> ks_client_state
 | C_13_wait_SF: 
     alpha:ks_alpha13 ->
     (i:finishedId & cfk:fink i) -> 
@@ -234,7 +241,7 @@ abstract type c13_wait_ServerHello
   esl: list (i:esId{~(NoPSK? i)} & es i) ->
   // *overwritten* when hello_retry
   // private exponents for the honestly-generated shares we are proposing
-  gxs: list (g:CommonDH.group & CommonDH.keyshare g) -> ks_client_state 
+  gxs: list CommonDH.dhi -> c13_wait_ServerHello psks groups
   // convenient? gxs = List.map df
 
 (*
@@ -256,7 +263,7 @@ type ks_server_state =
 | S_12_wait_CKE_DH: 
     csr:csRands -> 
     alpha:ks_alpha12 -> 
-    our_share:(g:CommonDH.group & CommonDH.keyshare g) -> ks_server_state
+    our_share:(g:CommonDH.group & CommonDH.pre_keyshare g) -> ks_server_state
 | S_12_wait_CKE_RSA: 
     csr: csRands -> 
     alpha:ks_alpha12 -> ks_server_state
@@ -296,8 +303,8 @@ type ks_state =
 (*
  * AR: changing state from rref to ref, with region captured in the refinement.
  *)
-type ks =
-| KS: #region:rid -> state:(ref ks_state){HS.MkRef?.id state = region} -> ks
+//type ks =
+//| KS: #region:rid -> state:(ref ks_state){HS.MkRef?.id state = region} -> ks
 //17-04-17 CF: expose it as a concrete ref?
 //17-04-17 CF: no need to keep the region, already in the ref.
 
@@ -310,15 +317,16 @@ type ks =
 /// regions?
 /// reader vs writer? 
 
-val derive_ae13:
-  // TODO usage
-  #i: secret_id -> 
-  s: KDF.secret i -> 
-  info: KDF.info i ->
-  parent: rgn ->
-  ST StreamAE.key #ii (ae_traffic i) // TODO welformedness?
+assume val derive_ae13:
+  #u: IK.usage -> // should be specific
+  #i: IK.id {IK.registered i} -> // should be refined
+  s: IK.secret u i -> 
+  info: IK.info {info = IK.get_info i} ->
+  ST bytes //TODO StreamAE.key (ae_traffic i) 
   (requires fun h0 -> True)
   (ensures fun h0 k h1 -> True)
+
+(*
 let derive_ae13 #i secret info parent = 
   let iv = KDF.derive ha secret "iv" Expand info.aea in
   let k  = KDF.derive ha secret "key" Expand (parent, info.aea, iv) in
@@ -331,12 +339,14 @@ private let keygen_13 h secret ae : St (bytes * bytes) =
   let kb = HKDF.hkdf_expand_label h secret "key" empty_bytes kS in
   let ib = HKDF.hkdf_expand_label h secret "iv" empty_bytes iS in
   (kb, ib)
-
+*)
 
 // Extract finished keys
-private let finished_13 h secret : St (bytes) =
-  HKDF.hkdf_expand_label h secret "finished" empty_bytes (H.tagLen h)
+private let derive_finished13 h secret: St bytes =
+  admit()
+//HKDF.hkdf_expand_label h secret "finished" empty_bytes (H.tagLen h)
 
+(* GONE: 
 // Create a fresh key schedule instance
 // We expect this to be called when the Handshake instance is created
 val create: #rid:rid -> role -> ST (ks * random)
@@ -356,6 +366,7 @@ let create #rid r =
     | Client -> C (C_Init nonce)
     | Server -> S (S_Init nonce) in
   (KS #ks_region (ralloc ks_region istate)), nonce
+*)
 
 private let group_of_valid_namedGroup
   (g:valid_namedGroup)
@@ -373,59 +384,63 @@ private let group_of_cks = function
   | CommonDH.Share g _ -> Some?.v (CommonDH.namedGroup_of_group g)
   | CommonDH.UnknownShare g _ -> g
 
+// 17-12-02 should call IK.initI, at least for TLS 1.3
 private let keygen (g:CommonDH.group)
-  : St (g:CommonDH.group & CommonDH.keyshare g)
+  : St (g:CommonDH.group & CommonDH.pre_keyshare g)
   = (| g, CommonDH.keygen g |)
 
-val ks_client_init: ks:ks -> ogl: option (list valid_namedGroup)
+assume val ks_client_init: ogl: option (list valid_namedGroup)
   -> ST (option CommonDH.clientKeyShare)
-  (requires fun h0 ->
-    let kss = sel h0 (KS?.state ks) in
-    C? kss /\ C_Init? (C?.s kss))
+  (requires fun h0 -> True)
   (ensures fun h0 ogxl h1 ->
-    let KS #rid st = ks in
     (None? ogl ==> None? ogxl) /\
     (Some? ogl ==> (Some? ogxl /\ Some?.v ogl == List.Tot.map group_of_cks (Some?.v ogxl))) /\
-    modifies (Set.singleton rid) h0 h1 /\
-    modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
+    modifies_none h0 h1)
 
-let ks_client_init ks ogl =
+(* 17-12-02 FIXME
+let ks_client_init ogl =
   dbg ("ks_client_init "^(if ogl=None then "1.2" else "1.3"));
-  let KS #rid st = ks in
-  let C (C_Init cr) = !st in
   match ogl with
-  | None -> // TLS 1.2
-    st := C (C_12_Full_CH cr);
-    None
-  | Some gl -> // TLS 1.3
+  | None -> None // TLS 1.2
+  | Some gl ->   // TLS 1.3
     let groups = List.Tot.map group_of_valid_namedGroup gl in
     let gs = map_ST keygen groups in
-    let serialize_share (gx:(g:CommonDH.group & CommonDH.keyshare g)) =
+    let serialize_share (gx: CommonDH.dhi) =
       let (| g, gx |) = gx in
       match CommonDH.namedGroup_of_group g with
       | None -> None // Impossible
       | Some ng -> Some (CommonDH.Share g (CommonDH.pubshare #g gx)) in
     let gxl = List.Tot.choose serialize_share gs in
-    st := C (C_13_wait_SH cr [] gs);
+    // st := C (C_13_wait_SH cr [] gs);
     Some gxl
+*)
 
-(* 17-11-25 functionally replacing the two functions below. *)
+
+(* 17-11-25 functionally replacing the two functions below *)
 
 // the digest comes with its logical payload, ready to be MACed.
 // we will need a full spec of the early index. 
 // we can re-use this code at the server, except that we verify instead of MACing
-private let compute_es_and_bfk (#rid:_) (pskid:PSK.pskid, _obfuscated_age):
-  ST (i:esId{~(NoPSK? i)} & es i * bfk i * info (*TBC*) )
+
+
+let esid_to_binder_id (i: esId{~(NoPSK? i)}) = 
+  Binder i ExtBinder
+  // will be Derive (Derive i ...) ...
+
+val compute_es_and_bfk:
+  #rid: rgn -> 
+  (pskid:PSK.pskid * PSK.obfuscated_ticket_age) -> 
+  ST (i:esId{~(NoPSK? i)} & es i * binderKey (esid_to_binder_id i) * IK.info (*TBC*) )
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
-=
+
+let compute_es_and_bfk #rid (pskid,_) =
   // 17-11-25 rediscuss this callback
   let i, pski, psk = read_psk pskid in
   let ha = pski.early_hash in
   dbg ("Loaded pre-shared key "^print_bytes pskid^": "^print_bytes psk);
 
-  // let es = extract0 psk ha
-  let es: es i = HKDF.hkdf_extract ha (H.zeroHash ha) psk in
+  let es: es i = magic() in // extract0 psk ha in
   dbg ("Early secret: "^print_bytes es);
 
   // // strange twist on usage; does it help re: salt collisions?
@@ -439,18 +454,20 @@ private let compute_es_and_bfk (#rid:_) (pskid:PSK.pskid, _obfuscated_age):
     then "ext binder" 
     else "res binder" in
 
+  let bk: binderKey (esid_to_binder_id i) = magic() in 
+  let es_info = magic() in
+  (*
   let bId = Binder i ll in
-  let bk: secret bId = KDF.derive_secret ha es lb (H.emptyHash h) in
+  let bk: secret bId = magic() in // KDF.derive_secret ha es lb (H.emptyHash ha) in
   dbg ("binder key["^lb^"]: "^print_bytes bk);
 
   let bkfId = binderKey bId in 
   let bfk: HMAC.UFCMA.key bkfId = KDF.derive bk ha "finished" in
   dbg ("binder Finished key: "^print_bytes bfk);
+  *)
+  (| i, (es, bk, es_info) |)
 
-  (| i, es, binder, ha |)
-
-(*---
-//WAS: 
+(* WAS:
 private let mk_binder (#rid) (pskid:PSK.pskid)
   : ST ((i:binderId & bk:binderKey i) * (i:esId{~(NoPSK? i)} & es i))
   (requires fun h0 -> True)
@@ -459,17 +476,17 @@ private let mk_binder (#rid) (pskid:PSK.pskid)
   let i, pski, psk = read_psk pskid in
   let h = pski.early_hash in
   dbg ("Loaded pre-shared key "^(print_bytes pskid)^": "^(print_bytes psk));
-  let es : es i = HKDF.hkdf_extract h (H.zeroHash h) psk in
+  let es : es i = HKDF.extract #h (H.zeroHash h) psk in
   dbg ("Early secret: "^(print_bytes es));
   let ll, lb =
     if ApplicationPSK? i then ExtBinder, "ext binder"
     else ResBinder, "res binder" in
   let bId = Binder i ll in
-  let bk = HKDF.derive_secret h es lb (H.emptyHash h) in
+  let bk = magic() in // HKDF.derive_secret h es lb (H.emptyHash h) in
   dbg ("Binder key["^lb^"]: "^(print_bytes bk));
-  let bk = finished_13 h bk in
+  let bk = derive_finished13 h bk in
   dbg ("Binder Finished key: "^(print_bytes bk));
-  let bk : binderKey bId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Binder bId) (fun _ -> True) rid bk in
+  let bk : binderKey bId = magic() in //HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Binder bId) (fun _ -> True) rid bk in
   (| bId, bk|), (| i, es |)
 
 let ks_client_13_get_binder_keys ks pskl =
@@ -479,26 +496,27 @@ let ks_client_13_get_binder_keys ks pskl =
   let (bkl, esl) = List.Tot.split pskl in
   st := C (C_13_wait_SH cr esl gs);
   bkl
+*)
 
-(*
 // 17-11-25 new state-passing variant; why do we resample? impact on
 // the KS proof? We suppose Nego does the filtering. 
 
-let client_HelloRetryRequest (g:CommonDH.group): ST0 (CommonDH.share g) =
+let client_HelloRetryRequest (g:CommonDH.group): ST0 (CommonDH.ikeyshare g) =
   // TODO: just call initI g 
-  let x: CommonDH.keyshare g = CommonDH.keygen g in
-  let gX = CommonDH.pubshare #g s in
-  [(| g, x|)], gX
-*)
+  admit()
+//let x: CommonDH.ikeyshare g = CommonDH.keygen g in
+//let gX = CommonDH.pubshare #g s in
+//[(| g, x|)], gX
 
+(*
 let ks_client_13_hello_retry ks (g:CommonDH.group)
-  : ST0 (CommonDH.share g) =
+  : ST0 (CommonDH.ikeyshare g) =
   let KS #rid st = ks in
   let C (C_13_wait_SH cr esl gs) = !st in
   let s : CommonDH.keyshare g = CommonDH.keygen g in
   st := C (C_13_wait_SH cr esl [(| g, s |)]);
   CommonDH.pubshare #g s
-
+*)
 
 
 // Derive the early data key from the first offered PSK
@@ -515,7 +533,7 @@ let client_0RTT (i:esId) (secret: es i) (log:bytes): ST (exportKey i * recordIns
     // except for the keys we derive
     )
   =
-  dbg ("ks_client_13_ch log="^(print_bytes log));
+  dbg ("ks_client_13_ch log="^print_bytes log);
   let ha = esId_hash i in
   let ae = esId_ae i in
   let li = LogInfo_CH0 ({
