@@ -70,10 +70,10 @@ noeq type ipkg = | Idx:
   // three abstract predicates implemented as witnesses, and a stateful reader.
   registered: (i:t -> GTot Type0) ->
   honest: (i:t -> GTot Type0) ->
-  corrupt: (i:t -> GTot Type0) ->
+  (* stateful reader, returning either honest or corrupt *)
   get_honesty: (i:t{registered i} -> ST bool
-    (requires (fun _ -> True))
-    (ensures (fun h0 b h1 -> h0 == h1 /\ (b <==> honest i) /\ (not b <==> corrupt i)))) ->
+    (requires fun _ -> True)
+    (ensures fun h0 b h1 -> h0 == h1 /\ (b <==> honest i))) ->
   ipkg
 
 
@@ -150,8 +150,9 @@ assume val lemma_disjoint_ancestors:
   r1:rgn -> r2:rgn -> p1:rgn{r1 `is_below` p1} -> p2:rgn{r2 `is_below` p2}
   -> Lemma (requires p1 <> p2) (ensures HH.disjoint r1 r2 /\ r1 <> r2)
 
+type trivial_inv (#it:eqtype) (#vt:it -> Type) (m:MM.map' it vt) = True
 type i_mem_table (#it:eqtype) (vt:it -> Type) =
-  MM.t tls_define_region it vt (fun _ -> True)
+  MM.t tls_define_region it vt trivial_inv
 type mem_table (#it:eqtype) (vt:it -> Type) =
   (if model then i_mem_table vt else unit)
 
@@ -161,45 +162,45 @@ let mem_addr (#it:eqtype) (#vt:it -> Type) (t:i_mem_table vt)
   : GTot nat = (HS.as_addr (MR.as_hsref t))
 
 type mem_fresh (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (i:it) (h:mem) =
-  (if model then MM.fresh (itable t) i h else True)
-let lemma_ifresh (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (i:it) (h:mem)
-  : Lemma (requires model /\ mem_fresh t i h) (ensures MM.fresh (itable t) i h) = ()
+  model ==> MM.fresh (itable t) i h
+//let lemma_ifresh (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (i:it) (h:mem)
+//  : Lemma (requires model /\ mem_fresh t i h) (ensures MM.fresh (itable t) i h) = ()
 
 type mem_stable (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (h0:mem) (h1:mem) =
-  (if model then MR.m_sel h0 (itable t) == MR.m_sel h1 (itable t) else True)
-let lemma_mem_stable (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (h0:mem) (h1:mem)
-  : Lemma (requires model /\ mem_stable t h0 h1) (ensures MR.m_sel h0 (itable t) == MR.m_sel h1 (itable t)) = ()
+  model ==> MR.m_sel h0 (itable t) == MR.m_sel h1 (itable t)
+//let lemma_mem_stable (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (h0:mem) (h1:mem)
+//  : Lemma (requires model /\ mem_stable t h0 h1) (ensures MR.m_sel h0 (itable t) == MR.m_sel h1 (itable t)) = ()
 
 type modifies_mem_table (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (h0:mem) (h1:mem) =
   (if model then
-     modifies_one tls_define_region h0 h1 /\
-     HS.modifies_ref tls_define_region (Set.singleton (mem_addr (itable t))) h0 h1
+     (modifies_one tls_define_region h0 h1 /\
+     HS.modifies_ref tls_define_region (Set.singleton (mem_addr (itable t))) h0 h1)
   else modifies_none h0 h1)
-let lemma_imodifies_mem (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (h0:mem) (h1:mem) : Lemma
-  (requires model /\ modifies_one tls_define_region h0 h1 /\
-    HS.modifies_ref tls_define_region (Set.singleton (mem_addr (itable t))) h0 h1)
-  (ensures modifies_mem_table t h0 h1) = ()
+//let lemma_imodifies_mem (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (h0:mem) (h1:mem) : Lemma
+//  (requires model /\ modifies_one tls_define_region h0 h1 /\
+//    HS.modifies_ref tls_define_region (Set.singleton (mem_addr (itable t))) h0 h1)
+//  (ensures modifies_mem_table t h0 h1) = ()
 
 type mem_defined (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (i:it) =
-  (if model then MR.witnessed (MM.defined (itable t) i) else True)
+  model ==> MR.witnessed (MM.defined (itable t) i)
 type mem_update (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (i:it) (v:vt i) (h0:mem) (h1:mem) =
   mem_defined t i /\
-  (if model then MR.m_sel h1 (itable t) == MM.upd (MR.m_sel h0 (itable t)) i v else True)
-let lemma_iupdate (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (i:it) (v:vt i) (h0:mem) (h1:mem) : Lemma
-  (requires model /\ MR.m_sel h1 (itable t) == MM.upd (MR.m_sel h0 (itable t)) i v /\ MR.witnessed (MM.defined (itable t) i))
-  (ensures mem_update t i v h0 h1) = ()
+  (model ==> MR.m_sel h1 (itable t) == MM.upd (MR.m_sel h0 (itable t)) i v)
+//let lemma_iupdate (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (i:it) (v:vt i) (h0:mem) (h1:mem) : Lemma
+//  (requires model /\ MR.m_sel h1 (itable t) == MM.upd (MR.m_sel h0 (itable t)) i v /\ MR.witnessed (MM.defined (itable t) i))
+//  (ensures mem_update t i v h0 h1) = ()
 
 type mem_empty (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (h1:mem) =
-  (if model then MR.m_sel h1 (itable t) == MM.empty_map it vt else True)
+  model ==> MR.m_sel h1 (itable t) == MM.empty_map it vt
 let mem_alloc (#it:eqtype) (vt:it -> Type) : ST (mem_table vt)
   (requires fun h0 -> True)
   (ensures fun h0 t h1 -> modifies_mem_table t h0 h1 /\ mem_empty t h1)
   =
-  if model then MM.alloc #tls_define_region #it #vt #(fun _ -> True) else ()
+  if model then MM.alloc #tls_define_region #it #vt #trivial_inv else ()
 
 type mem_disjoint (#it:eqtype) (#vt:it -> Type) (t:mem_table vt)
   (#it':eqtype) (#vt':it' -> Type) (t':mem_table vt') =
-  (if model then mem_addr (itable t) <> mem_addr (itable t') else True)
+  model ==> mem_addr (itable t) <> mem_addr (itable t')
 
 // Framing of package invariants can be done w.r.t either a region that is
 // disjoint from tls_define_region, or a define table that must be at a
@@ -214,10 +215,10 @@ type modifies_footprint (fp:mem->GTot rset) h0 h1 =
   forall (r:HH.rid). (Set.mem r (fp h0) /\ ~(Set.mem r (fp h1))) ==> stronger_fresh_region r h0 h1  //AR: 12/05: Could use the pattern {:pattern (Set.mem r (fp h0)); (Set.mem r (fp h1))}
 
 noeq type pkg (ip: ipkg) = | Pkg:
-  key: (i:ip.t {ip.registered i} -> Type0) (* indexed state of the functionality *) ->
+  key: (i:ip.t {ip.registered i} -> Type0)  (* indexed state of the functionality *) ->
   $info: (ip.t -> Type0)                    (* creation-time arguments, typically refined using i:ip.t *) ->
   len: (#i:ip.t -> info i -> keylen)        (* computes the key-material length from those arguments *) ->
-  ideal: Type0                            (* type-level access to the ideal flag of the package *) ->
+  ideal: Type0{ideal ==> model}             (* type-level access to the ideal flag of the package *) ->
   //17-11-13 do we need to know that ideal ==> model?
   //17-11-13 is type-level access enough?
 
@@ -260,10 +261,10 @@ noeq type pkg (ip: ipkg) = | Pkg:
       modifies_mem_table define_table h0 h1 /\
       modifies_footprint footprint h0 h1 /\
       mem_update define_table i k h0 h1)) ->
-  coerceT: (i:ip.t{ip.registered i} -> a:info i -> lbytes (len a) -> GTot (key i)) ->
-  coerce: (i:ip.t{ip.registered i} -> a:info i -> rk:lbytes (len a) -> ST (key i)
+
+  coerceT: (i:ip.t{ip.registered i /\ (ideal ==> ~(ip.honest i))} -> a:info i -> lbytes (len a) -> GTot (key i)) ->
+  coerce: (i:ip.t{ip.registered i /\ (ideal ==> ~(ip.honest i))} -> a:info i -> rk:lbytes (len a) -> ST (key i)
     (requires fun h0 ->
-      (ideal ==> ip.corrupt i) /\
       package_invariant h0 /\
       mem_fresh define_table i h0)
     (ensures fun h0 k h1 ->
@@ -286,7 +287,7 @@ noeq type local_pkg (ip: ipkg) =
   $key: (i:ip.t{ip.registered i} -> Type0) ->
   info: (ip.t -> Type0) ->
   len: (#i:ip.t -> info i -> keylen) ->
-  ideal: Type0 ->
+  ideal: Type0{ideal ==> model} ->
   local_footprint: (#i:ip.t{ip.registered i} -> key i -> GTot rset) (* instance footprint *) ->
   local_invariant: (#i:ip.t{ip.registered i} -> key i -> mem -> GTot Type0) (* instance invariant *) ->
   local_invariant_framing: (i:ip.t{ip.registered i} -> k:key i -> h0:mem -> r:HH.rid -> h1:mem -> Lemma
@@ -301,9 +302,9 @@ noeq type local_pkg (ip: ipkg) =
     (ensures fun h0 k h1 ->
        modifies_none h0 h1 /\ local_invariant k h1 /\
        post a k h1 /\ fresh_regions (local_footprint k) h0 h1)) ->
-  coerceT: (i:ip.t{ip.registered i} -> a:info i -> lbytes (len a) -> GTot (key i)) ->
-  coerce: (i:ip.t{ip.registered i} -> a:info i -> rk:lbytes (len a) -> ST (key i)
-    (requires fun h0 -> ideal ==> ip.corrupt i)
+  coerceT: (i:ip.t{ip.registered i /\ (ideal ==> ~(ip.honest i))} -> a:info i -> lbytes (len a) -> GTot (key i)) ->
+  coerce: (i:ip.t{ip.registered i /\ (ideal ==> ~(ip.honest i))} -> a:info i -> rk:lbytes (len a) -> ST (key i)
+    (requires fun h0 -> True)
     (ensures fun h0 k h1 -> k == coerceT i a rk /\
       modifies_none h0 h1 /\ local_invariant k h1 /\
       post a k h1 /\ fresh_regions (local_footprint k) h0 h1)) ->
@@ -348,7 +349,7 @@ let lemma_mm_forall_elim (#a:eqtype) (#b:a -> Type) (t:MM.map' a b)
           (ensures p v h)
   = admit()
 
-//AR: 12/05: The implicit annotations on i in the two forall quantifiers are not needed?
+(* obsolete
 unfold type mem_package (#ip:ipkg) (p:local_pkg ip) =
   p':pkg ip{
     Pkg?.key p' == LocalPkg?.key p /\
@@ -360,6 +361,7 @@ unfold type mem_package (#ip:ipkg) (p:local_pkg ip) =
     (forall (#i:ip.t{ip.registered i}) (a:p.info i) (k:p.key i) (h:mem).
       (Pkg?.post p') #i (a <: Pkg?.info p' i) (k <: Pkg?.key p' i) h ==> (LocalPkg?.post p) #i a k h)
   }
+*)
 
 // Memoization functor from local to global packages that memoize
 // instances produced by create/coerce and maintain their joint
@@ -370,7 +372,7 @@ unfold type mem_package (#ip:ipkg) (p:local_pkg ip) =
 // correlating its result with the source definitions.
 
 #set-options "--z3rlimit 100"
-//unfold 
+//unfold
 let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
   let footprint (h:mem): GTot rset =
     if model then
@@ -386,17 +388,13 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
   let footprint_framing (h0:mem) (h1:mem) : Lemma
     (requires mem_stable mtable h0 h1)
     (ensures footprint h0 == footprint h1)
-    =
-    if model then
-      let map0 = MR.m_sel h0 (itable mtable) in
-      let map1 = MR.m_sel h1 (itable mtable) in
-      lemma_mem_stable mtable h0 h1
+    = ()
   in
   let package_invariant h =
-    if model then
-      let log : i_mem_table p.key = itable mtable in
-      mm_forall (MR.m_sel h log) p.local_invariant h
-    else True in
+    (model ==>
+      (let log : i_mem_table p.key = itable mtable in
+      mm_forall (MR.m_sel h log) p.local_invariant h))
+    in
   let package_invariant_framing (h0:mem) (r:pkg_inv_r) (h1:mem) : Lemma
     (requires package_invariant h0 /\
       (match r with
@@ -446,8 +444,9 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
     lemma_imodifies_mem mtable h0 h2;
     footprint_grow h0 i k h2;
     k in
-  let coerce (i:ip.t{ip.registered i}) (a:p.info i) (k0:lbytes (p.len a)) : ST (p.key i)
-    (requires fun h0 -> package_invariant h0 /\ mem_fresh mtable i h0 /\ (p.ideal ==> ip.corrupt i))
+  let coerce (i:ip.t{ip.registered i /\ (p.ideal ==> ~(ip.honest i))}) (a:p.info i) (k0:lbytes (p.len a))
+    : ST (p.key i)
+    (requires fun h0 -> package_invariant h0 /\ mem_fresh mtable i h0)
     (ensures fun h0 k h1 -> k == p.coerceT i a k0
       /\ modifies_mem_table mtable h0 h1
       /\ modifies_footprint footprint h0 h1 /\ p.post a k h1
@@ -551,12 +550,13 @@ let create_raw (ip: ipkg) (len_of_i: ip.t -> keylen)
 
 let coerceT_raw (ip: ipkg) (len_of_i: ip.t -> keylen)
   (i: ip.t {ip.registered i}) (len:keylen {len = len_of_i i}) (r:lbytes len):
-  GTot (raw ip len_of_i i) = r
+  Ghost (raw ip len_of_i i) (requires idealRaw ==> ~(ip.honest i)) (ensures fun _ -> True)
+  = r
 
 let coerce_raw (ip: ipkg) (len_of_i: ip.t -> keylen)
   (i: ip.t {ip.registered i}) (len:keylen {len = len_of_i i}) (r:lbytes len):
   ST (raw ip len_of_i i)
-  (requires fun h0 -> idealRaw ==> ip.corrupt i)
+  (requires fun h0 -> idealRaw ==> ~(ip.honest i))
   (ensures fun h0 k h1 -> k == coerceT_raw ip len_of_i i len r /\ modifies_none h0 h1)
   = r
 
@@ -1101,7 +1101,7 @@ let corrupt_secret (#u: usage) (#i:id{registered i}) (t: real_secret i {corruptK
 
 /// Real KDF schemes, parameterized by an algorithm computed from the
 /// index (existing code).
- 
+
 // For KDF, we require that being fresh in the KDF table implies being fresh
 // in the derived package's definition table
 type local_kdf_invariant (#u:usage) (#i:id{registered i}) (k:secret u i) (h:mem) =
@@ -1417,7 +1417,7 @@ let restore_all_pkg_invariant h0 (p:pkg ii) h1
           (ensures all_pkg_invariant h1)
   = admit()
 
-// TODO 17-12-01 we need an hypothesis that captures that p is in the tree, e.g. only deal with the case where p is a child. 
+// TODO 17-12-01 we need an hypothesis that captures that p is in the tree, e.g. only deal with the case where p is a child.
 
 
 
@@ -1435,14 +1435,14 @@ val derive:
   a': Pkg?.info (child u lbl) (Derive i lbl ctx) ->
   ST (_:unit{registered (Derive i lbl ctx)} & ukey u lbl (Derive i lbl ctx))
   // the second pre-condition is redundant, but we don't know the package of k
-  (requires fun h0 -> 
-    all_pkg_invariant h0 /\ 
+  (requires fun h0 ->
+    all_pkg_invariant h0 /\
     local_kdf_invariant k h0 // 17-12-01 will hopefully follow from tree_invariant
     )
-  (ensures fun h0 r h1 -> 
-    modifies_derive k lbl ctx h0 h1 /\ 
+  (ensures fun h0 r h1 ->
+    modifies_derive k lbl ctx h0 h1 /\
     all_pkg_invariant h1 /\
-    local_kdf_invariant k h1 /\ 
+    local_kdf_invariant k h1 /\
     (Pkg?.post (child u lbl)) a' (dsnd r) h1)
 
 let derive #u #i k a lbl ctx a' =
@@ -1615,7 +1615,7 @@ let test_rekey(): St unit
       let (|_,k1|) = derive s1 a1 "AE" Expand aea in
       let ik1: regid = Derive i1 "AE" Expand in
       let k1: key ii get_aeadAlg ik1 = k1 in
-      let h3 = get() in 
+      let h3 = get() in
       assume(aead_inv k1 h3); // should follow from the multi-pkg invariant
 
       let cipher = encrypt ii get_aeadAlg #ik1 k1 42 in
@@ -1626,7 +1626,6 @@ let test_rekey(): St unit
 //    | _ -> assert false) // excluded by is_secret 9
 //  |  _ -> assert false // excluded by is_secret 10
 // refactoring needed, e.g. define derive_secret helper function to hide access to the tree
-
 
 
 (*
