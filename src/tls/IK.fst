@@ -66,7 +66,7 @@ let sample (len:UInt32.t): ST (lbytes len)
 /// fine-grained idealization: roughly safe i = Flags.ideal /\ honest i
 
 noeq type ipkg = | Idx:
-  t: Type0{hasEq t} (* abstract type for indexes *) ->
+  t: Type0{hasEq t} (* abstract type for indexes *) ->  //AR: 12/05: Could use the eqtype abbrev.
   // three abstract predicates implemented as witnesses, and a stateful reader.
   registered: (i:t -> GTot Type0) ->
   honest: (i:t -> GTot Type0) ->
@@ -118,14 +118,14 @@ type keylen = l:UInt32.t {UInt32.v l <= 256}
 
 /// SZ: changed the definition to quantify over [HH.rid] rather than [rgn]
 type rset = s:Set.set HH.rid{
-  (forall (r1:HH.rid). (Set.mem r1 s ==>
+  (forall (r1:HH.rid). (Set.mem r1 s ==>  //AR: 12/05: Add the pattern (Set.mem r1 s)?
      r1 <> HH.root /\
      (is_tls_rgn r1 ==> r1 `HH.extends` tls_tables_region) /\
      (forall (r':HH.rid).{:pattern (r' `HH.includes` r1)} r' `is_below` r1 ==> Set.mem r' s) /\
      (forall (r':HH.rid).{:pattern is_eternal_region r'} r' `is_above` r1 ==> is_eternal_region r')))}
 
 let rset_union (s1:rset) (s2:rset)
-  : Tot (s:rset{forall (r:HH.rid). Set.mem r s <==> (Set.mem r s1 \/ Set.mem r s2)})
+  : Tot (s:rset{forall (r:HH.rid). Set.mem r s <==> (Set.mem r s1 \/ Set.mem r s2)}) //AR: 12/05: The refinement is not needed, as Set.union provides this mem property already
   = Set.union s1 s2
 
 /// SZ: This is the strongest lemma that is provable
@@ -211,7 +211,7 @@ noeq type pkg_inv_r =
 // When calling create or coerce, the footprint of a package grows only with
 // fresh subregions
 type modifies_footprint (fp:mem->GTot rset) h0 h1 =
-  forall (r:HH.rid). (Set.mem r (fp h0) /\ ~(Set.mem r (fp h1))) ==> stronger_fresh_region r h0 h1
+  forall (r:HH.rid). (Set.mem r (fp h0) /\ ~(Set.mem r (fp h1))) ==> stronger_fresh_region r h0 h1  //AR: 12/05: Could use the pattern {:pattern (Set.mem r (fp h0)); (Set.mem r (fp h1))}
 
 noeq type pkg (ip: ipkg) = | Pkg:
   key: (i:ip.t {ip.registered i} -> Type0) (* indexed state of the functionality *) ->
@@ -348,6 +348,7 @@ let lemma_mm_forall_elim (#a:eqtype) (#b:a -> Type) (t:MM.map' a b)
           (ensures p v h)
   = admit()
 
+//AR: 12/05: The implicit annotations on i in the two forall quantifiers are not needed?
 unfold type mem_package (#ip:ipkg) (p:local_pkg ip) =
   p':pkg ip{
     Pkg?.key p' == LocalPkg?.key p /\
@@ -516,7 +517,7 @@ let memoization_ST (#ip:ipkg) (p:local_pkg ip)
   assert(mem_empty mtable h1);
   assume(model ==> MR.m_sel h1 (itable mtable) == MM.empty_map (i:ip.t{ip.registered i}) p.key);
   let q = memoization #ip p mtable in
-  assert(q == memoization #ip p mtable); // fails when unfolding memoization
+  //assert(q == memoization #ip p mtable); // fails when unfolding memoization AR: 12/05: this is no longer needed per the new inlining behavior
   // assert_norm(q == memoization #ip p mtable);// also fails, with squashing error
   assert(modifies_mem_table mtable h0 h1);
   (if model then lemma_mm_forall_init (MR.m_sel h1 (itable mtable)) p.local_invariant h1);
