@@ -8,7 +8,7 @@
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "9e1c806975db372eeaefcf3e3f9ad867"
+      "8ff64ac2e41252b0a34934ed4a159203"
     ],
     [
       "StreamPlain.pad",
@@ -17,14 +17,13 @@
       1,
       [
         "@MaxIFuel_assumption", "@query", "equation_Content.ctBytes",
-        "equation_FStar.Char.char", "equation_Platform.Bytes.byte",
-        "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
         "equation_Platform.Bytes.createBytes",
         "equation_Platform.Bytes.lbytes", "equation_Platform.Bytes.length",
         "equation_Platform.Bytes.op_At_Bar", "equation_Prims.nat",
         "equation_StreamPlain.plainLen", "equation_StreamPlain.plainLength",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
-        "int_inversion", "kinding_FStar.Char.char_@tok",
+        "function_token_typing_FStar.UInt8.t", "int_inversion",
         "lemma_FStar.Seq.Base.lemma_len_append",
         "primitive_Prims.op_Addition", "primitive_Prims.op_Subtraction",
         "projection_inverse_BoxInt_proj_0",
@@ -35,7 +34,7 @@
         "typing_Platform.Bytes.length"
       ],
       0,
-      "692f79bbb40d484b4bb429ea2c2f57ee"
+      "0d80aeaf8105531c47a84199d0bd5929"
     ],
     [
       "StreamPlain.ghost_repr",
@@ -47,7 +46,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "d1cbd03e763e2ac9f2633a465ebb3cdb"
+      "614cc0fa1f56176ae8df685c1b155603"
     ],
     [
       "StreamPlain.ghost_repr",
@@ -55,22 +54,27 @@
       0,
       0,
       [
-        "@MaxIFuel_assumption", "@query",
-        "data_typing_intro_FStar.Char.Char@tok", "equation_Content.ctBytes",
-        "equation_Content.ct_rg", "equation_Content.rg",
-        "equation_FStar.Char.char", "equation_FStar.Char.char_code",
-        "equation_FStar.Pervasives.Native.snd",
+        "@MaxIFuel_assumption",
+        "@fuel_correspondence_Prims.pow2.fuel_instrumented", "@query",
+        "b2t_def", "equation_Content.ctBytes", "equation_Content.ct_rg",
+        "equation_Content.rg", "equation_FStar.Pervasives.Native.snd",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "equation_FStar.UInt.uint_t", "equation_FStar.UInt8.n",
         "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
         "equation_Platform.Bytes.createBytes",
         "equation_Platform.Bytes.lbytes", "equation_Platform.Bytes.length",
         "equation_Platform.Bytes.op_At_Bar", "equation_Prims.nat",
-        "equation_Range.fragment_range", "equation_Range.frange",
-        "equation_Range.range", "equation_Range.rbytes",
-        "equation_Range.wider", "equation_Range.within",
-        "equation_StreamPlain.pad", "equation_StreamPlain.plain",
-        "equation_StreamPlain.plainLen", "equation_StreamPlain.plainRepr",
+        "equation_Prims.pos", "equation_Range.fragment_range",
+        "equation_Range.frange", "equation_Range.range",
+        "equation_Range.rbytes", "equation_Range.wider",
+        "equation_Range.within", "equation_StreamPlain.pad",
+        "equation_StreamPlain.plain", "equation_StreamPlain.plainLen",
+        "equation_StreamPlain.plainRepr",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
-        "int_inversion", "int_typing", "kinding_FStar.Char.char_@tok",
+        "function_token_typing_FStar.UInt8.n",
+        "function_token_typing_FStar.UInt8.t", "int_inversion", "int_typing",
+        "lemma_FStar.Seq.Base.lemma_create_len",
         "lemma_FStar.Seq.Base.lemma_len_append",
         "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
         "primitive_Prims.op_LessThanOrEqual",
@@ -80,20 +84,22 @@
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
-        "refinement_interpretation_FStar.Char_Tm_refine_0e3e560c796fef6df2d948e98bb1d5d6",
+        "refinement_interpretation_FStar.UInt8_Tm_refine_22871ed0ff70fd094ad3e8d742624d47",
+        "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
         "refinement_interpretation_Platform.Bytes_Tm_refine_3458b9f6f40fe62446cdc2c6d3755a94",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Prims_Tm_refine_f048236b5f8051f83b495ea5eaa6127b",
         "refinement_interpretation_Range_Tm_refine_0486d7c345fedcd664dfe7eac695bbd7",
         "refinement_interpretation_Range_Tm_refine_e48af6218e3040b64df43b6a7c255461",
         "refinement_interpretation_StreamPlain_Tm_refine_506952182e58cb9f48a820bf3c9b8c87",
         "refinement_interpretation_StreamPlain_Tm_refine_5578a0666d07a326e9829f08acb9cc9a",
         "refinement_interpretation_StreamPlain_Tm_refine_923fa03846ebb6ef4b538b7dfb7607cf",
         "typing_Content.ctBytes", "typing_FStar.Seq.Base.create",
-        "typing_Platform.Bytes.createBytes", "typing_Platform.Bytes.length",
-        "typing_Platform.Bytes.op_At_Bar"
+        "typing_FStar.UInt8.uint_to_t", "typing_Platform.Bytes.length",
+        "typing_Platform.Bytes.op_At_Bar", "typing_Prims.pow2"
       ],
       0,
-      "335eccd2dc2a86afb11b30307081745d"
+      "a197eff48b0fb94cfb1ab204f464bc3f"
     ],
     [
       "StreamPlain.repr",
@@ -112,7 +118,7 @@
         "refinement_interpretation_StreamPlain_Tm_refine_5578a0666d07a326e9829f08acb9cc9a"
       ],
       0,
-      "359ef9ca0a856fed941ef52d681920eb"
+      "ee3aed82e32ab5b412b09a5e341d1e62"
     ],
     [
       "StreamPlain.repr",
@@ -124,7 +130,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "332bf516f4b5107522d8b136e9d05492"
+      "cf7c391a203442118f032a590c414770"
     ],
     [
       "StreamPlain.repr",
@@ -132,31 +138,24 @@
       0,
       0,
       [
-        "@MaxIFuel_assumption", "@query",
-        "constructor_distinct_Content.CT_Data", "disc_equation_TLSInfo.ID13",
-        "equation_Content.ct_rg", "equation_Content.ghost_repr",
-        "equation_Content.repr", "equation_Content.rg",
-        "equation_DataStream.ghost_repr", "equation_DataStream.repr",
-        "equation_FStar.Pervasives.Native.snd",
+        "@MaxIFuel_assumption", "@query", "equation_Content.ct_rg",
+        "equation_Content.repr", "equation_FStar.Pervasives.Native.snd",
         "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.lbytes",
-        "equation_Platform.Bytes.length", "equation_Prims.nat",
-        "equation_Range.fragment_range", "equation_Range.frange",
-        "equation_Range.range", "equation_Range.rbytes",
-        "equation_Range.wider", "equation_Range.within",
-        "equation_StreamPlain.ghost_repr", "equation_StreamPlain.id",
-        "equation_StreamPlain.pad", "equation_StreamPlain.plain",
-        "equation_StreamPlain.plainLen",
+        "equation_Prims.nat", "equation_Range.fragment_range",
+        "equation_Range.frange", "equation_Range.range",
+        "equation_Range.rbytes", "equation_Range.wider",
+        "equation_Range.within", "equation_StreamPlain.ghost_repr",
+        "equation_StreamPlain.id", "equation_StreamPlain.pad",
+        "equation_StreamPlain.plain", "equation_StreamPlain.plainLen",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "int_inversion", "primitive_Prims.op_Addition",
         "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
         "proj_equation_FStar.Pervasives.Native.Mktuple2__2",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
-        "projection_inverse_Content.CT_Data_f",
-        "projection_inverse_Content.CT_Data_i",
-        "projection_inverse_Content.CT_Data_rg",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
+        "refinement_interpretation_Content_Tm_refine_b5893bf8c73d6c9bc6ea288b521feaae",
         "refinement_interpretation_Platform.Bytes_Tm_refine_3458b9f6f40fe62446cdc2c6d3755a94",
         "refinement_interpretation_Range_Tm_refine_0486d7c345fedcd664dfe7eac695bbd7",
         "refinement_interpretation_Range_Tm_refine_e48af6218e3040b64df43b6a7c255461",
@@ -167,7 +166,7 @@
         "typing_Content.ghost_repr", "typing_StreamPlain.ghost_repr"
       ],
       0,
-      "86bf95769455a789ba5f54e2c5c9ecd0"
+      "dedd5aae723a65189eb066f3016ada48"
     ],
     [
       "StreamPlain.min",
@@ -180,19 +179,16 @@
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "c4d5cad08f732c9795f823c6b20f929a"
+      "a25977654c9d415a898ac50de8367053"
     ],
     [
       "StreamPlain.scan",
       1,
       0,
       0,
-      [
-        "@query", "assumption_FStar.Char.char__haseq",
-        "equation_FStar.Char.char"
-      ],
+      [ "@query", "assumption_FStar.UInt8.t_haseq" ],
       0,
-      "a09aebd8c02956ca777adf6472226f26"
+      "95f95f0367bf93f386ea72c6788c1f19"
     ],
     [
       "StreamPlain.scan",
@@ -235,7 +231,7 @@
         "typing_FStar.Seq.Base.length"
       ],
       0,
-      "0df7477d17a8b60634792e7f560718d7"
+      "984008bf91ebfb14852c2b421f98b396"
     ],
     [
       "StreamPlain.scan",
@@ -243,101 +239,31 @@
       0,
       0,
       [
-        "@MaxIFuel_assumption",
-        "@fuel_correspondence_Prims.pow2.fuel_instrumented", "@query",
-        "Content_pretyping_b030e2c8e211c2e89c8f24e1774b7a05",
-        "TLSError_pretyping_ac8925de8f61cb7c5770d20ef8b62826", "b2t_def",
-        "binder_x_91e044810b1c1eeda4c2d9e2eb68505e_1",
+        "@MaxIFuel_assumption", "@query",
+        "binder_x_2c23054985f45f69c4b03d8a0378f00c_2",
         "binder_x_b3a2327fd03a18ee8231cee21c0d4c94_0",
-        "binder_x_ff1241abec6c13dea608804bbc10b4e3_2", "bool_inversion",
-        "bool_typing", "constructor_distinct_Content.CT_Alert",
-        "constructor_distinct_Content.CT_CCS",
-        "constructor_distinct_Content.CT_Data",
-        "constructor_distinct_Content.CT_Handshake",
-        "disc_equation_Platform.Error.Correct", "disc_equation_TLSInfo.ID13",
-        "equality_tok_Content.Change_cipher_spec@tok",
-        "equality_tok_Prims.LexTop@tok",
-        "equality_tok_TLSError.AD_close_notify@tok",
-        "equation_Content.ccsBytes", "equation_Content.ct",
-        "equation_Content.ct_rg", "equation_Content.ghost_repr",
-        "equation_Content.rg", "equation_FStar.Char.char",
-        "equation_FStar.Pervasives.Native.fst",
+        "disc_equation_TLSInfo.ID13", "equality_tok_Prims.LexTop@tok",
         "equation_FStar.Pervasives.Native.snd",
-        "equation_FStar.Seq.Properties.split", "equation_FStar.UInt.fits",
-        "equation_FStar.UInt.max_int", "equation_FStar.UInt.min_int",
-        "equation_FStar.UInt.size", "equation_FStar.UInt32.n",
-        "equation_Mem.epoch_color", "equation_Platform.Bytes.byte",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
-        "equation_Platform.Bytes.split", "equation_Prims.nat",
-        "equation_Prims.pos", "equation_Range.fragment_range",
-        "equation_Range.frange", "equation_Range.point",
-        "equation_Range.range", "equation_Range.wider",
-        "equation_Range.within", "equation_Range.zero",
-        "equation_StreamPlain.ghost_repr", "equation_StreamPlain.id",
-        "equation_StreamPlain.plainLength", "equation_StreamPlain.plainRepr",
-        "equation_TLSConstants.max_TLSCiphertext_fragment_length_13",
+        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.length",
+        "equation_Prims.nat", "equation_StreamPlain.id",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
-        "equation_TLSError.error", "equation_TLSError.result",
-        "function_token_typing_FStar.UInt32.n",
-        "function_token_typing_Mem.epoch_color",
-        "function_token_typing_Platform.Bytes.bytes",
-        "function_token_typing_Prims.nat",
-        "function_token_typing_Range.zero",
-        "function_token_typing_TLSError.error", "int_inversion",
-        "int_typing", "kinding_FStar.Char.char_@tok",
-        "kinding_TLSError.alertDescription@tok",
-        "lemma_FStar.Seq.Base.lemma_eq_elim",
-        "lemma_FStar.Seq.Base.lemma_len_slice",
-        "lemma_FStar.Seq.Properties.slice_length",
-        "lemma_Platform.Error.invertOptResult",
-        "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_GreaterThan",
-        "primitive_Prims.op_LessThan", "primitive_Prims.op_LessThanOrEqual",
+        "int_inversion", "int_typing", "primitive_Prims.op_Addition",
+        "primitive_Prims.op_GreaterThan", "primitive_Prims.op_LessThan",
         "primitive_Prims.op_Subtraction",
-        "proj_equation_FStar.Pervasives.Native.Mktuple2__1",
         "proj_equation_FStar.Pervasives.Native.Mktuple2__2",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
-        "projection_inverse_Content.CT_Alert__1",
-        "projection_inverse_Content.CT_Alert_i",
-        "projection_inverse_Content.CT_Alert_rg",
-        "projection_inverse_Content.CT_CCS_i",
-        "projection_inverse_Content.CT_CCS_rg",
-        "projection_inverse_Content.CT_Data_f",
-        "projection_inverse_Content.CT_Data_i",
-        "projection_inverse_Content.CT_Data_rg",
-        "projection_inverse_Content.CT_Handshake_f",
-        "projection_inverse_Content.CT_Handshake_i",
-        "projection_inverse_Content.CT_Handshake_rg",
-        "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
-        "projection_inverse_Platform.Error.Correct__0",
-        "refinement_interpretation_Alert_Tm_refine_b41505e505ccef101eef1a395ef814da",
-        "refinement_interpretation_FStar.Seq.Base_Tm_refine_aebc5aa9049e78f605051015a3436e68",
-        "refinement_interpretation_FStar.Seq.Base_Tm_refine_cd046bc4a887ee7e1b05946e0bf5772b",
-        "refinement_interpretation_Platform.Bytes_Tm_refine_df45e13378b64cfc3cd23f54e8657bfc",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "refinement_interpretation_Prims_Tm_refine_f048236b5f8051f83b495ea5eaa6127b",
-        "refinement_interpretation_Range_Tm_refine_9eec96cf9e7424057db89d430151765e",
         "refinement_interpretation_StreamPlain_Tm_refine_1e4c905847270ce3ff42b43978ca9bee",
+        "refinement_interpretation_StreamPlain_Tm_refine_23126a44acb048c2ab23b412940dbde8",
         "refinement_interpretation_StreamPlain_Tm_refine_329f7cdd508b70bf332607897e0b8a7b",
-        "refinement_interpretation_StreamPlain_Tm_refine_3a1ee480c2f2c0076c8d3467e6298181",
-        "refinement_interpretation_StreamPlain_Tm_refine_506952182e58cb9f48a820bf3c9b8c87",
-        "refinement_interpretation_StreamPlain_Tm_refine_6008349a61b477e11b0384fa181555dc",
-        "refinement_interpretation_StreamPlain_Tm_refine_986a5cfa04a6c387690c8f9373ae4883",
-        "refinement_interpretation_StreamPlain_Tm_refine_ce50390f7b50b49fdbc345e8137d1415",
-        "refinement_interpretation_StreamPlain_Tm_refine_d442790652a4c78dda32214cb34b7c27",
+        "refinement_interpretation_StreamPlain_Tm_refine_a016e4749efe7b073e035c690d293099",
         "refinement_interpretation_TLSInfo_Tm_refine_771d00c42e1fa557a792d8f0bf7b724d",
-        "typing_FStar.Pervasives.Native.fst",
-        "typing_FStar.Pervasives.Native.snd", "typing_FStar.Seq.Base.length",
-        "typing_FStar.UInt.fits", "typing_Platform.Bytes.length",
-        "typing_Platform.Bytes.split", "typing_Platform.Error.uu___is_Error",
-        "typing_Prims.pow2", "typing_tok_Content.Change_cipher_spec@tok",
-        "typing_tok_TLSError.AD_close_notify@tok",
         "well-founded-ordering-on-nat"
       ],
       0,
-      "fdae4426028a3031f45a40bf92ada812"
+      "fe610b3074d37ae6b4415f59f83a504f"
     ],
     [
       "StreamPlain.scan",
@@ -348,9 +274,9 @@
         "@MaxIFuel_assumption", "@query",
         "binder_x_91e044810b1c1eeda4c2d9e2eb68505e_1",
         "equation_FStar.Pervasives.Native.snd",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
-        "equation_Prims.nat", "equation_StreamPlain.plainLength",
-        "equation_StreamPlain.plainRepr",
+        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.length", "equation_Prims.nat",
+        "equation_StreamPlain.plainLength", "equation_StreamPlain.plainRepr",
         "equation_TLSConstants.max_TLSCiphertext_fragment_length_13",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "primitive_Prims.op_Addition", "primitive_Prims.op_LessThan",
@@ -360,7 +286,7 @@
         "refinement_interpretation_StreamPlain_Tm_refine_506952182e58cb9f48a820bf3c9b8c87"
       ],
       0,
-      "5402437ec6ea93dc1ce4aa6183993f06"
+      "e632fe05475e07c862d3111ec82867c6"
     ],
     [
       "StreamPlain.scan",
@@ -371,9 +297,9 @@
         "@MaxIFuel_assumption", "@query",
         "binder_x_91e044810b1c1eeda4c2d9e2eb68505e_1",
         "equation_FStar.Pervasives.Native.snd",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
-        "equation_Prims.nat", "equation_StreamPlain.plainLength",
-        "equation_StreamPlain.plainRepr",
+        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.length", "equation_Prims.nat",
+        "equation_StreamPlain.plainLength", "equation_StreamPlain.plainRepr",
         "equation_TLSConstants.max_TLSCiphertext_fragment_length_13",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "primitive_Prims.op_Addition", "primitive_Prims.op_LessThan",
@@ -383,7 +309,7 @@
         "refinement_interpretation_StreamPlain_Tm_refine_506952182e58cb9f48a820bf3c9b8c87"
       ],
       0,
-      "25b50e57517a10b4e12521cb055b2978"
+      "0df28a7db9cfb6767fc7ac8b04057a0b"
     ],
     [
       "StreamPlain.scan",
@@ -392,7 +318,7 @@
       0,
       [ "@query", "assumption_Platform.Bytes.HasEq_bytes" ],
       0,
-      "37f68b6069e0f73c72f3af3acdc65e7d"
+      "8d74969440eac100aa9bef2fa95b6d61"
     ],
     [
       "StreamPlain.scan",
@@ -403,9 +329,9 @@
         "@MaxIFuel_assumption", "@query",
         "binder_x_91e044810b1c1eeda4c2d9e2eb68505e_1",
         "equation_FStar.Pervasives.Native.snd",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
-        "equation_Prims.nat", "equation_StreamPlain.plainLength",
-        "equation_StreamPlain.plainRepr",
+        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.length", "equation_Prims.nat",
+        "equation_StreamPlain.plainLength", "equation_StreamPlain.plainRepr",
         "equation_TLSConstants.max_TLSCiphertext_fragment_length_13",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "primitive_Prims.op_Addition", "primitive_Prims.op_LessThan",
@@ -415,7 +341,7 @@
         "refinement_interpretation_StreamPlain_Tm_refine_506952182e58cb9f48a820bf3c9b8c87"
       ],
       0,
-      "9a2c1f13e0894b219235ec5af36e7441"
+      "b8aeae0ad3846e3ec3d9e7b818cfa4ed"
     ],
     [
       "StreamPlain.scan",
@@ -426,9 +352,9 @@
         "@MaxIFuel_assumption", "@query",
         "binder_x_91e044810b1c1eeda4c2d9e2eb68505e_1",
         "equation_FStar.Pervasives.Native.snd",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
-        "equation_Prims.nat", "equation_StreamPlain.plainLength",
-        "equation_StreamPlain.plainRepr",
+        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.length", "equation_Prims.nat",
+        "equation_StreamPlain.plainLength", "equation_StreamPlain.plainRepr",
         "equation_TLSConstants.max_TLSCiphertext_fragment_length_13",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "primitive_Prims.op_Addition", "primitive_Prims.op_LessThan",
@@ -438,7 +364,7 @@
         "refinement_interpretation_StreamPlain_Tm_refine_506952182e58cb9f48a820bf3c9b8c87"
       ],
       0,
-      "5eefd507bfa0005ed9f30d90c5628326"
+      "57065de66fe70750e3f30862870e3ae7"
     ],
     [
       "StreamPlain.scan",
@@ -449,9 +375,9 @@
         "@MaxIFuel_assumption", "@query",
         "binder_x_91e044810b1c1eeda4c2d9e2eb68505e_1",
         "equation_FStar.Pervasives.Native.snd",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
-        "equation_Prims.nat", "equation_StreamPlain.plainLength",
-        "equation_StreamPlain.plainRepr",
+        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.length", "equation_Prims.nat",
+        "equation_StreamPlain.plainLength", "equation_StreamPlain.plainRepr",
         "equation_TLSConstants.max_TLSCiphertext_fragment_length_13",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "primitive_Prims.op_Addition", "primitive_Prims.op_LessThan",
@@ -461,7 +387,7 @@
         "refinement_interpretation_StreamPlain_Tm_refine_506952182e58cb9f48a820bf3c9b8c87"
       ],
       0,
-      "4088900fc98283fa94f603b50f292cac"
+      "07267ab27c4111fa65c652aa82856d5a"
     ],
     [
       "StreamPlain.scan",
@@ -472,9 +398,9 @@
         "@MaxIFuel_assumption", "@query",
         "binder_x_91e044810b1c1eeda4c2d9e2eb68505e_1",
         "equation_FStar.Pervasives.Native.snd",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
-        "equation_Prims.nat", "equation_StreamPlain.plainLength",
-        "equation_StreamPlain.plainRepr",
+        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.length", "equation_Prims.nat",
+        "equation_StreamPlain.plainLength", "equation_StreamPlain.plainRepr",
         "equation_TLSConstants.max_TLSCiphertext_fragment_length_13",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "primitive_Prims.op_Addition", "primitive_Prims.op_LessThan",
@@ -484,7 +410,7 @@
         "refinement_interpretation_StreamPlain_Tm_refine_506952182e58cb9f48a820bf3c9b8c87"
       ],
       0,
-      "4dbaac21e5e550801a1209e19898deb3"
+      "2b25d1359ca590931139f7ac05d2eab8"
     ],
     [
       "StreamPlain.scan",
@@ -495,9 +421,9 @@
         "@MaxIFuel_assumption", "@query",
         "binder_x_91e044810b1c1eeda4c2d9e2eb68505e_1",
         "equation_FStar.Pervasives.Native.snd",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
-        "equation_Prims.nat", "equation_StreamPlain.plainLength",
-        "equation_StreamPlain.plainRepr",
+        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.length", "equation_Prims.nat",
+        "equation_StreamPlain.plainLength", "equation_StreamPlain.plainRepr",
         "equation_TLSConstants.max_TLSCiphertext_fragment_length_13",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "primitive_Prims.op_Addition", "primitive_Prims.op_LessThan",
@@ -507,7 +433,7 @@
         "refinement_interpretation_StreamPlain_Tm_refine_506952182e58cb9f48a820bf3c9b8c87"
       ],
       0,
-      "ddcb791a26cab41c1bb1f351a314c38e"
+      "e66a8a0cf299f10a1d6159bb43f82f3b"
     ],
     [
       "StreamPlain.scan",
@@ -518,9 +444,9 @@
         "@MaxIFuel_assumption", "@query",
         "binder_x_91e044810b1c1eeda4c2d9e2eb68505e_1",
         "equation_FStar.Pervasives.Native.snd",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
-        "equation_Prims.nat", "equation_StreamPlain.plainLength",
-        "equation_StreamPlain.plainRepr",
+        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.length", "equation_Prims.nat",
+        "equation_StreamPlain.plainLength", "equation_StreamPlain.plainRepr",
         "equation_TLSConstants.max_TLSCiphertext_fragment_length_13",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "primitive_Prims.op_Addition", "primitive_Prims.op_LessThan",
@@ -530,7 +456,7 @@
         "refinement_interpretation_StreamPlain_Tm_refine_506952182e58cb9f48a820bf3c9b8c87"
       ],
       0,
-      "b4c39f8b6505d02e7c4f0a5880eb5d44"
+      "b973233f8d95b5c2bbdea79a564ba521"
     ],
     [
       "StreamPlain.scan",
@@ -541,9 +467,9 @@
         "@MaxIFuel_assumption", "@query",
         "binder_x_91e044810b1c1eeda4c2d9e2eb68505e_1",
         "equation_FStar.Pervasives.Native.snd",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
-        "equation_Prims.nat", "equation_StreamPlain.plainLength",
-        "equation_StreamPlain.plainRepr",
+        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.length", "equation_Prims.nat",
+        "equation_StreamPlain.plainLength", "equation_StreamPlain.plainRepr",
         "equation_TLSConstants.max_TLSCiphertext_fragment_length_13",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "primitive_Prims.op_Addition", "primitive_Prims.op_LessThan",
@@ -553,7 +479,7 @@
         "refinement_interpretation_StreamPlain_Tm_refine_506952182e58cb9f48a820bf3c9b8c87"
       ],
       0,
-      "b407252a78b6ac4fe6efd4676c97ac76"
+      "5aa5590edb4f984323cf15b6de8a52b5"
     ],
     [
       "StreamPlain.scan",
@@ -564,9 +490,9 @@
         "@MaxIFuel_assumption", "@query",
         "binder_x_91e044810b1c1eeda4c2d9e2eb68505e_1",
         "equation_FStar.Pervasives.Native.snd",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
-        "equation_Prims.nat", "equation_StreamPlain.plainLength",
-        "equation_StreamPlain.plainRepr",
+        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.length", "equation_Prims.nat",
+        "equation_StreamPlain.plainLength", "equation_StreamPlain.plainRepr",
         "equation_TLSConstants.max_TLSCiphertext_fragment_length_13",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "primitive_Prims.op_Addition", "primitive_Prims.op_LessThan",
@@ -576,7 +502,7 @@
         "refinement_interpretation_StreamPlain_Tm_refine_506952182e58cb9f48a820bf3c9b8c87"
       ],
       0,
-      "fe71b88b2bd417676f30fd31290fbabe"
+      "89880f584e2a36ced208408c984c24f0"
     ],
     [
       "StreamPlain.scan",
@@ -585,7 +511,7 @@
       0,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "aa8ce39b26836f2e86d18e09e133ae69"
+      "99cd53199aee726f5a58d95574ff7f06"
     ],
     [
       "StreamPlain.scan",
@@ -596,9 +522,9 @@
         "@MaxIFuel_assumption", "@query",
         "binder_x_91e044810b1c1eeda4c2d9e2eb68505e_1",
         "equation_FStar.Pervasives.Native.snd",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
-        "equation_Prims.nat", "equation_StreamPlain.plainLength",
-        "equation_StreamPlain.plainRepr",
+        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.length", "equation_Prims.nat",
+        "equation_StreamPlain.plainLength", "equation_StreamPlain.plainRepr",
         "equation_TLSConstants.max_TLSCiphertext_fragment_length_13",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "primitive_Prims.op_Addition", "primitive_Prims.op_LessThan",
@@ -608,7 +534,7 @@
         "refinement_interpretation_StreamPlain_Tm_refine_506952182e58cb9f48a820bf3c9b8c87"
       ],
       0,
-      "e1465562cfe11ee38b7d8105529559e8"
+      "7754eb710247b8ca7c4637ded8eb240f"
     ],
     [
       "StreamPlain.scan",
@@ -619,9 +545,9 @@
         "@MaxIFuel_assumption", "@query",
         "binder_x_91e044810b1c1eeda4c2d9e2eb68505e_1",
         "equation_FStar.Pervasives.Native.snd",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
-        "equation_Prims.nat", "equation_StreamPlain.plainLength",
-        "equation_StreamPlain.plainRepr",
+        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.length", "equation_Prims.nat",
+        "equation_StreamPlain.plainLength", "equation_StreamPlain.plainRepr",
         "equation_TLSConstants.max_TLSCiphertext_fragment_length_13",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "primitive_Prims.op_Addition", "primitive_Prims.op_LessThan",
@@ -631,7 +557,7 @@
         "refinement_interpretation_StreamPlain_Tm_refine_506952182e58cb9f48a820bf3c9b8c87"
       ],
       0,
-      "d2f13f11419a908a7df05084d626e2ed"
+      "d527d9a1ce9216e5adfdb7a80facbed5"
     ],
     [
       "StreamPlain.scan",
@@ -642,9 +568,9 @@
         "@MaxIFuel_assumption", "@query",
         "binder_x_91e044810b1c1eeda4c2d9e2eb68505e_1",
         "equation_FStar.Pervasives.Native.snd",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
-        "equation_Prims.nat", "equation_StreamPlain.plainLength",
-        "equation_StreamPlain.plainRepr",
+        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.length", "equation_Prims.nat",
+        "equation_StreamPlain.plainLength", "equation_StreamPlain.plainRepr",
         "equation_TLSConstants.max_TLSCiphertext_fragment_length_13",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "primitive_Prims.op_Addition", "primitive_Prims.op_LessThan",
@@ -654,7 +580,7 @@
         "refinement_interpretation_StreamPlain_Tm_refine_506952182e58cb9f48a820bf3c9b8c87"
       ],
       0,
-      "e72ecf4b7f08159781eae6970601749c"
+      "0beb2c89a6a34a56fdd7e2d1f93ad28a"
     ],
     [
       "StreamPlain.scan",
@@ -665,9 +591,9 @@
         "@MaxIFuel_assumption", "@query",
         "binder_x_91e044810b1c1eeda4c2d9e2eb68505e_1",
         "equation_FStar.Pervasives.Native.snd",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
-        "equation_Prims.nat", "equation_StreamPlain.plainLength",
-        "equation_StreamPlain.plainRepr",
+        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.length", "equation_Prims.nat",
+        "equation_StreamPlain.plainLength", "equation_StreamPlain.plainRepr",
         "equation_TLSConstants.max_TLSCiphertext_fragment_length_13",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "primitive_Prims.op_Addition", "primitive_Prims.op_LessThan",
@@ -677,7 +603,7 @@
         "refinement_interpretation_StreamPlain_Tm_refine_506952182e58cb9f48a820bf3c9b8c87"
       ],
       0,
-      "23e4b2f404cad55236546015e63f3ce3"
+      "6b00415b58cb86f764075b600a31aa26"
     ],
     [
       "StreamPlain.scan",
@@ -688,9 +614,9 @@
         "@MaxIFuel_assumption", "@query",
         "binder_x_91e044810b1c1eeda4c2d9e2eb68505e_1",
         "equation_FStar.Pervasives.Native.snd",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
-        "equation_Prims.nat", "equation_StreamPlain.plainLength",
-        "equation_StreamPlain.plainRepr",
+        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.length", "equation_Prims.nat",
+        "equation_StreamPlain.plainLength", "equation_StreamPlain.plainRepr",
         "equation_TLSConstants.max_TLSCiphertext_fragment_length_13",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "primitive_Prims.op_Addition", "primitive_Prims.op_LessThan",
@@ -700,7 +626,7 @@
         "refinement_interpretation_StreamPlain_Tm_refine_506952182e58cb9f48a820bf3c9b8c87"
       ],
       0,
-      "74ba3ba11afe6a4e91ef2fa6ca9af9f2"
+      "c927eb629588d5be75e8fe7c555cef9c"
     ],
     [
       "StreamPlain.scan",
@@ -711,9 +637,9 @@
         "@MaxIFuel_assumption", "@query",
         "binder_x_91e044810b1c1eeda4c2d9e2eb68505e_1",
         "equation_FStar.Pervasives.Native.snd",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
-        "equation_Prims.nat", "equation_StreamPlain.plainLength",
-        "equation_StreamPlain.plainRepr",
+        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.length", "equation_Prims.nat",
+        "equation_StreamPlain.plainLength", "equation_StreamPlain.plainRepr",
         "equation_TLSConstants.max_TLSCiphertext_fragment_length_13",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "primitive_Prims.op_Addition", "primitive_Prims.op_LessThan",
@@ -723,7 +649,7 @@
         "refinement_interpretation_StreamPlain_Tm_refine_506952182e58cb9f48a820bf3c9b8c87"
       ],
       0,
-      "6617b1e4a8023deeb869e1db95f8a006"
+      "97e5a8d6573c60aa117cb0cf060e4126"
     ],
     [
       "StreamPlain.scan_pad_correct",
@@ -732,7 +658,7 @@
       0,
       [ "@query", "assumption_Content.contentType_haseq" ],
       0,
-      "21ce18e8dedb84fac489c58d104dbeda"
+      "c1b9a893acf5e185a154ba787e8ecbdd"
     ],
     [
       "StreamPlain.scan_pad_correct",
@@ -741,7 +667,7 @@
       0,
       [ "@query", "assumption_Content.contentType_haseq" ],
       0,
-      "5f18ebe3195776b46901b697a04334b9"
+      "7a3cf3470a1e35b8feaeb2ff38bb52ba"
     ],
     [
       "StreamPlain.scan_pad_correct",
@@ -750,7 +676,7 @@
       0,
       [ "@query", "assumption_Platform.Bytes.HasEq_bytes" ],
       0,
-      "11400cf5801745c697f0f25f453c40c2"
+      "48a305b7d5f5581cd853bf76e1a6313c"
     ],
     [
       "StreamPlain.scan_pad_correct",
@@ -759,7 +685,7 @@
       0,
       [ "@query", "assumption_Content.contentType_haseq" ],
       0,
-      "802ed61681c801c94c541ec734c802d5"
+      "ebbc229e2ccfd0485076c2b8a662328f"
     ],
     [
       "StreamPlain.scan_pad_correct",
@@ -768,7 +694,7 @@
       0,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "15a41d6d434cf19bbffeee7bc21faa31"
+      "03ebf03b514deffaf3c887dd21389534"
     ],
     [
       "StreamPlain.scan_pad_correct",
@@ -778,10 +704,10 @@
       [
         "@MaxIFuel_assumption", "@query",
         "equation_FStar.Pervasives.Native.snd",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
-        "equation_Prims.nat", "equation_StreamPlain.pad",
-        "equation_StreamPlain.plainLen", "equation_StreamPlain.plainLength",
-        "equation_StreamPlain.plainRepr",
+        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.length", "equation_Prims.nat",
+        "equation_StreamPlain.pad", "equation_StreamPlain.plainLen",
+        "equation_StreamPlain.plainLength", "equation_StreamPlain.plainRepr",
         "equation_TLSConstants.max_TLSCiphertext_fragment_length_13",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "int_inversion", "primitive_Prims.op_Addition",
@@ -795,7 +721,7 @@
         "typing_StreamPlain.pad"
       ],
       0,
-      "20f0eba0bcfd04dc5eb8973ec4305531"
+      "e1d0e9071a6219b770b9c4940fe6d157"
     ],
     [
       "StreamPlain.scan_pad_correct",
@@ -803,39 +729,56 @@
       0,
       0,
       [
-        "@MaxIFuel_assumption", "@query",
-        "FStar.Seq.Base_interpretation_Tm_arrow_dceef1ce025855f654db07d1adde13c9",
-        "data_typing_intro_FStar.Char.Char@tok", "equation_Content.ctBytes",
-        "equation_FStar.Char.char", "equation_FStar.Char.char_code",
-        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
+        "@MaxFuel_assumption", "@MaxIFuel_assumption",
+        "@fuel_correspondence_Prims.pow2.fuel_instrumented", "@query",
+        "b2t_def", "bool_inversion", "bool_typing",
+        "equation_Content.ctBytes",
+        "equation_FStar.Monotonic.HyperHeap.disjoint",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "equation_FStar.UInt.uint_t", "equation_FStar.UInt8.n",
+        "equation_Mem.disjoint", "equation_Mem.rgn",
+        "equation_Mem.tls_define_region", "equation_Mem.tls_rgn",
+        "equation_Mem.tls_tables_region", "equation_Platform.Bytes.byte",
+        "equation_Platform.Bytes.bytes",
         "equation_Platform.Bytes.createBytes",
         "equation_Platform.Bytes.index", "equation_Platform.Bytes.lbytes",
         "equation_Platform.Bytes.length",
         "equation_Platform.Bytes.op_At_Bar", "equation_Prims.nat",
         "equation_StreamPlain.pad", "equation_StreamPlain.plainLen",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
-        "function_token_typing_FStar.Seq.Base.create", "int_inversion",
-        "int_typing", "kinding_FStar.Char.char_@tok",
+        "function_token_typing_FStar.UInt8.n",
+        "function_token_typing_FStar.UInt8.t",
+        "function_token_typing_Mem.tls_define_region",
+        "function_token_typing_Mem.tls_tables_region", "int_inversion",
+        "int_typing", "lemma_FStar.Seq.Base.lemma_create_len",
         "lemma_FStar.Seq.Base.lemma_index_app2",
         "lemma_FStar.Seq.Base.lemma_index_create",
         "lemma_FStar.Seq.Base.lemma_len_append",
-        "primitive_Prims.op_Addition", "primitive_Prims.op_Subtraction",
+        "lemma_FStar.UInt.pow2_values", "primitive_Prims.op_Addition",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Negation", "primitive_Prims.op_Subtraction",
+        "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_FStar.Char_Tm_refine_0e3e560c796fef6df2d948e98bb1d5d6",
         "refinement_interpretation_FStar.Seq.Base_Tm_refine_03127b5d59ee3055620018693b4264e8",
         "refinement_interpretation_FStar.Seq.Base_Tm_refine_5514fbe9e08dfda40f950a7b9f1b2b98",
+        "refinement_interpretation_FStar.UInt8_Tm_refine_22871ed0ff70fd094ad3e8d742624d47",
+        "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
+        "refinement_interpretation_Mem_Tm_refine_827021888216ac6a501be14cd4b812c9",
+        "refinement_interpretation_Mem_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
+        "refinement_interpretation_Mem_Tm_refine_f70be9b0cc50942af80d22e44fc9b9c4",
         "refinement_interpretation_Platform.Bytes_Tm_refine_3458b9f6f40fe62446cdc2c6d3755a94",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "refinement_interpretation_StreamPlain_Tm_refine_2bcd772485ad7bfa8e45e115a8fddc17",
         "refinement_interpretation_StreamPlain_Tm_refine_520e6fe78600afd5df76731782f6a8d4",
         "refinement_interpretation_StreamPlain_Tm_refine_5578a0666d07a326e9829f08acb9cc9a",
         "refinement_interpretation_StreamPlain_Tm_refine_84bdb86aa88a35ec4987ac793f209aaa",
-        "token_correspondence_FStar.Seq.Base.create",
-        "typing_Content.ctBytes", "typing_Platform.Bytes.createBytes",
-        "typing_Platform.Bytes.op_At_Bar"
+        "typing_Content.ctBytes", "typing_FStar.Seq.Base.create",
+        "typing_FStar.UInt8.uint_to_t", "typing_Mem.disjoint",
+        "typing_Mem.tls_define_region", "typing_Platform.Bytes.op_At_Bar"
       ],
       0,
-      "0a45f545788d9d16fbb55cc0ae64a6eb"
+      "5d564185131ef90278b2c22a019849d4"
     ],
     [
       "StreamPlain.scan_pad_correct",
@@ -844,34 +787,39 @@
       0,
       [
         "@MaxFuel_assumption", "@MaxIFuel_assumption",
+        "@fuel_correspondence_Prims.pow2.fuel_instrumented",
         "@fuel_correspondence_StreamPlain.scan.fuel_instrumented",
+        "@fuel_irrelevance_Prims.pow2.fuel_instrumented",
         "@fuel_irrelevance_StreamPlain.scan.fuel_instrumented", "@query",
+        "FStar.Seq.Base_interpretation_Tm_arrow_dceef1ce025855f654db07d1adde13c9",
         "FStar.Seq.Base_pretyping_7efa52b424e80c83ad68a652aa3561e4",
-        "Prims_pretyping_f8666440faa91836cc5a13998af863fc",
-        "TLSError_pretyping_ac8925de8f61cb7c5770d20ef8b62826",
+        "Prims_pretyping_f8666440faa91836cc5a13998af863fc", "b2t_def",
         "binder_x_0a9d1b1b3361e340eb67f70e9c035eb7_4",
         "binder_x_1377d5c007cd42fd33e0c81ade242007_1",
         "binder_x_b030e2c8e211c2e89c8f24e1774b7a05_2",
         "binder_x_b3a2327fd03a18ee8231cee21c0d4c94_0",
-        "binder_x_e09aec4143aadbbb96239111dedc90e3_3",
-        "constructor_distinct_FStar.Seq.Base.seq",
+        "binder_x_e09aec4143aadbbb96239111dedc90e3_3", "bool_inversion",
+        "bool_typing", "constructor_distinct_FStar.Seq.Base.seq",
         "constructor_distinct_Platform.Error.Correct",
         "constructor_distinct_Prims.unit",
-        "data_typing_intro_FStar.Char.Char@tok",
         "disc_equation_Platform.Error.Correct", "disc_equation_TLSInfo.ID13",
         "equality_tok_Content.Alert@tok",
         "equality_tok_Content.Change_cipher_spec@tok",
         "equality_tok_Content.Handshake@tok",
-        "equality_tok_Prims.LexTop@tok",
-        "equality_tok_TLSError.AD_close_notify@tok",
-        "equation_Content.ccsBytes", "equation_Content.ctBytes",
-        "equation_FStar.Char.char", "equation_FStar.Char.char_code",
+        "equality_tok_Prims.LexTop@tok", "equation_Content.ccsBytes",
+        "equation_Content.ctBytes",
+        "equation_FStar.Monotonic.HyperHeap.disjoint",
         "equation_FStar.Monotonic.HyperHeap.test0",
         "equation_FStar.Pervasives.Native.fst",
         "equation_FStar.Pervasives.Native.snd",
-        "equation_FStar.Seq.Properties.split", "equation_Mem.epoch_color",
-        "equation_Platform.Bytes.abyte", "equation_Platform.Bytes.byte",
-        "equation_Platform.Bytes.bytes",
+        "equation_FStar.Seq.Properties.split", "equation_FStar.UInt.fits",
+        "equation_FStar.UInt.max_int", "equation_FStar.UInt.min_int",
+        "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
+        "equation_FStar.UInt8.n", "equation_Mem.disjoint",
+        "equation_Mem.epoch_color", "equation_Mem.rgn",
+        "equation_Mem.tls_define_region", "equation_Mem.tls_rgn",
+        "equation_Mem.tls_tables_region", "equation_Platform.Bytes.abyte",
+        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
         "equation_Platform.Bytes.createBytes",
         "equation_Platform.Bytes.index", "equation_Platform.Bytes.lbytes",
         "equation_Platform.Bytes.length",
@@ -880,50 +828,55 @@
         "equation_Range.point", "equation_Range.range",
         "equation_Range.zero", "equation_StreamPlain.id",
         "equation_StreamPlain.pad", "equation_StreamPlain.plainLen",
-        "equation_StreamPlain.plainRepr", "equation_TLSConstants.draft",
+        "equation_StreamPlain.plainLength", "equation_StreamPlain.plainRepr",
+        "equation_TLSConstants.draft",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "equation_TLSError.error",
         "equation_with_fuel_StreamPlain.scan.fuel_instrumented",
         "function_token_typing_Content.ccsBytes",
         "function_token_typing_FStar.Monotonic.HyperHeap.test0",
+        "function_token_typing_FStar.Seq.Base.create",
+        "function_token_typing_FStar.UInt8.n",
+        "function_token_typing_FStar.UInt8.t",
         "function_token_typing_Mem.epoch_color",
-        "function_token_typing_Platform.Bytes.bytes",
+        "function_token_typing_Mem.tls_define_region",
+        "function_token_typing_Mem.tls_tables_region",
         "function_token_typing_Prims.nat",
         "function_token_typing_Range.zero",
         "function_token_typing_TLSConstants.draft", "int_inversion",
-        "int_typing", "kinding_FStar.Char.char_@tok",
-        "lemma_FStar.Seq.Base.lemma_create_len",
+        "int_typing", "lemma_FStar.Seq.Base.lemma_create_len",
         "lemma_FStar.Seq.Base.lemma_eq_elim",
         "lemma_FStar.Seq.Base.lemma_index_app1",
         "lemma_FStar.Seq.Base.lemma_index_app2",
         "lemma_FStar.Seq.Base.lemma_index_create",
         "lemma_FStar.Seq.Base.lemma_index_slice",
         "lemma_FStar.Seq.Base.lemma_len_append",
-        "lemma_FStar.Seq.Base.lemma_len_slice",
-        "primitive_Prims.op_Addition", "primitive_Prims.op_Equality",
-        "primitive_Prims.op_GreaterThan",
-        "primitive_Prims.op_LessThanOrEqual",
+        "lemma_FStar.UInt.pow2_values", "lemma_FStar.UInt8.vu_inv",
+        "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_GreaterThan",
+        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Negation",
         "primitive_Prims.op_Subtraction",
         "proj_equation_FStar.Pervasives.Native.Mktuple2__1",
         "proj_equation_FStar.Pervasives.Native.Mktuple2__2",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
-        "projection_inverse_FStar.Char.Char__0",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
         "projection_inverse_Platform.Error.Correct__0",
         "projection_inverse_Platform.Error.Correct__a",
         "projection_inverse_Platform.Error.Correct__b",
-        "refinement_interpretation_FStar.Char_Tm_refine_0e3e560c796fef6df2d948e98bb1d5d6",
         "refinement_interpretation_FStar.Seq.Base_Tm_refine_03127b5d59ee3055620018693b4264e8",
         "refinement_interpretation_FStar.Seq.Base_Tm_refine_3321cbe2f573e3c988fd0895bf1f0cf9",
         "refinement_interpretation_FStar.Seq.Base_Tm_refine_36f208f2b1019ab7b5d9be73f4c89349",
         "refinement_interpretation_FStar.Seq.Base_Tm_refine_5514fbe9e08dfda40f950a7b9f1b2b98",
         "refinement_interpretation_FStar.Seq.Base_Tm_refine_559c261b1c3777929ea329abfe70ab33",
-        "refinement_interpretation_FStar.Seq.Base_Tm_refine_aebc5aa9049e78f605051015a3436e68",
         "refinement_interpretation_FStar.Seq.Base_Tm_refine_cd046bc4a887ee7e1b05946e0bf5772b",
+        "refinement_interpretation_FStar.UInt8_Tm_refine_22871ed0ff70fd094ad3e8d742624d47",
+        "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
+        "refinement_interpretation_Mem_Tm_refine_827021888216ac6a501be14cd4b812c9",
+        "refinement_interpretation_Mem_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
+        "refinement_interpretation_Mem_Tm_refine_f70be9b0cc50942af80d22e44fc9b9c4",
         "refinement_interpretation_Platform.Bytes_Tm_refine_3458b9f6f40fe62446cdc2c6d3755a94",
-        "refinement_interpretation_Platform.Bytes_Tm_refine_df45e13378b64cfc3cd23f54e8657bfc",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "refinement_interpretation_Range_Tm_refine_9eec96cf9e7424057db89d430151765e",
         "refinement_interpretation_StreamPlain_Tm_refine_0508e75ef801397d96996852fa511c29",
@@ -935,16 +888,16 @@
         "refinement_interpretation_StreamPlain_Tm_refine_95974c448c0050572e369774dfb12f30",
         "refinement_interpretation_StreamPlain_Tm_refine_c2a8a3cf354aba1c907285a60f0025a8",
         "refinement_interpretation_TLSInfo_Tm_refine_771d00c42e1fa557a792d8f0bf7b724d",
-        "typing_Content.ctBytes",
-        "typing_FStar.Pervasives.Native.__proj__Mktuple2__item___1",
-        "typing_FStar.Pervasives.Native.fst", "typing_FStar.Seq.Base.create",
-        "typing_Platform.Bytes.length", "typing_Platform.Bytes.op_At_Bar",
-        "typing_Platform.Bytes.split", "typing_StreamPlain.pad",
-        "typing_tok_TLSError.AD_close_notify@tok", "unit_inversion",
-        "unit_typing", "well-founded-ordering-on-nat"
+        "token_correspondence_FStar.Seq.Base.create",
+        "typing_Content.ctBytes", "typing_FStar.Pervasives.Native.fst",
+        "typing_FStar.UInt.fits", "typing_FStar.UInt8.uint_to_t",
+        "typing_Mem.disjoint", "typing_Mem.tls_define_region",
+        "typing_Platform.Bytes.createBytes", "typing_Platform.Bytes.length",
+        "typing_Platform.Bytes.op_At_Bar", "typing_StreamPlain.pad",
+        "unit_inversion", "unit_typing", "well-founded-ordering-on-nat"
       ],
       0,
-      "e3e6177cda66072c691926c5c2964501"
+      "a49bcbfdfeeb395bf53082a2dadf1058"
     ],
     [
       "StreamPlain.scan_pad_correct",
@@ -956,7 +909,7 @@
         "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "59e502502095ee36d1ee673aaf74fa5b"
+      "04a311f89ef8327baa8c66da96806773"
     ],
     [
       "StreamPlain.scan_pad_correct",
@@ -965,7 +918,7 @@
       0,
       [ "@query", "assumption_Platform.Bytes.HasEq_bytes" ],
       0,
-      "fb0df07a255432637cf1e292d8c4c2e6"
+      "476cb348d7e6d7a92383179031ed92fd"
     ],
     [
       "StreamPlain.scan_pad_correct",
@@ -974,7 +927,7 @@
       0,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "e0e17ecb10be85321fadd09c9f4594f8"
+      "b60768f132eb5bd31ec2206c2af28caa"
     ],
     [
       "StreamPlain.scan_pad_correct",
@@ -983,7 +936,7 @@
       0,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "0333fe7749217b682db20526e8048558"
+      "7ea671caeb9bbffad711c1b5920dbb92"
     ],
     [
       "StreamPlain.inverse_scan",
@@ -992,7 +945,7 @@
       0,
       [ "@query", "assumption_Content.contentType_haseq" ],
       0,
-      "df21ff32bc85d4c5393b2d78dbe44fa3"
+      "bd19747fa665b8e66609f8078fc1c8dc"
     ],
     [
       "StreamPlain.inverse_scan",
@@ -1001,7 +954,7 @@
       0,
       [ "@query", "assumption_Content.contentType_haseq" ],
       0,
-      "731d6ecc74873c62f138ca6d24271cfb"
+      "54f2db5d0c81872e256be2c50dca3267"
     ],
     [
       "StreamPlain.inverse_scan",
@@ -1010,7 +963,7 @@
       0,
       [ "@query", "assumption_Platform.Bytes.HasEq_bytes" ],
       0,
-      "ff9c767144eda97880fd4d05bf0ed080"
+      "72a89a1dee21ac4e390e36c95f5e3124"
     ],
     [
       "StreamPlain.inverse_scan",
@@ -1019,7 +972,7 @@
       0,
       [ "@query", "assumption_Content.contentType_haseq" ],
       0,
-      "96428c041f7616ddbe74abbe65d6b62f"
+      "74cbf09b6fd9d8495b7de302fb14deba"
     ],
     [
       "StreamPlain.inverse_scan",
@@ -1028,7 +981,7 @@
       0,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "64045eb4b3b3221f96aef9f735f7b871"
+      "d58eb5914788f7707c986a3f3200aabf"
     ],
     [
       "StreamPlain.inverse_scan",
@@ -1038,10 +991,11 @@
       [
         "@MaxIFuel_assumption", "@query", "disc_equation_TLSInfo.ID13",
         "equation_FStar.Pervasives.Native.snd",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.lbytes",
-        "equation_Platform.Bytes.length", "equation_Prims.nat",
-        "equation_StreamPlain.ghost_repr", "equation_StreamPlain.id",
-        "equation_StreamPlain.plainLen", "equation_StreamPlain.plainLength",
+        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.lbytes", "equation_Platform.Bytes.length",
+        "equation_Prims.nat", "equation_StreamPlain.ghost_repr",
+        "equation_StreamPlain.id", "equation_StreamPlain.plainLen",
+        "equation_StreamPlain.plainLength",
         "equation_TLSConstants.max_TLSCiphertext_fragment_length_13",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "int_inversion", "primitive_Prims.op_Addition",
@@ -1056,7 +1010,7 @@
         "refinement_interpretation_TLSInfo_Tm_refine_771d00c42e1fa557a792d8f0bf7b724d"
       ],
       0,
-      "15db5704ee165d43ee09feab35f5b766"
+      "ebdd821d88175c05736dae9908cb86fe"
     ],
     [
       "StreamPlain.inverse_scan",
@@ -1086,7 +1040,7 @@
         "typing_Platform.Bytes.length"
       ],
       0,
-      "e60c8fa41b10d4e65fbd16058035049c"
+      "15becd899d448aab71d0430b2bb90010"
     ],
     [
       "StreamPlain.inverse_scan",
@@ -1124,7 +1078,7 @@
         "typing_Platform.Bytes.length"
       ],
       0,
-      "a7eb1a9dbdb8574be642642bcd4f0ea2"
+      "31475f9ccdc51a3d0357469fb3ba8ef2"
     ],
     [
       "StreamPlain.goodrepr",
@@ -1140,7 +1094,7 @@
         "refinement_interpretation_StreamPlain_Tm_refine_a39cd27ab12f334d21d895d20c309db1"
       ],
       0,
-      "a48010fd09bdf65c03764ec4a85c5e9e"
+      "8dc61dfeca78f0e8bdb0ead0860d2322"
     ],
     [
       "StreamPlain.goodrepr",
@@ -1150,9 +1104,9 @@
       [
         "@MaxIFuel_assumption", "@query",
         "equation_FStar.Pervasives.Native.snd",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
-        "equation_Prims.nat", "equation_StreamPlain.plainLength",
-        "equation_StreamPlain.plainRepr",
+        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.length", "equation_Prims.nat",
+        "equation_StreamPlain.plainLength", "equation_StreamPlain.plainRepr",
         "equation_TLSConstants.max_TLSCiphertext_fragment_length_13",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "primitive_Prims.op_Addition", "primitive_Prims.op_LessThan",
@@ -1162,7 +1116,7 @@
         "refinement_interpretation_StreamPlain_Tm_refine_506952182e58cb9f48a820bf3c9b8c87"
       ],
       0,
-      "a001272593d5d0a5e670ee4defe1bd0b"
+      "bd9f0686d7ff3b710d574327562ced7a"
     ],
     [
       "StreamPlain.mk_plain",
@@ -1171,7 +1125,7 @@
       0,
       [ "@query", "assumption_Platform.Bytes.HasEq_bytes" ],
       0,
-      "bf5a6a90981206e1b7ccd900f98ac1b0"
+      "b3355cb2fda2a822e52f026261fe85b1"
     ],
     [
       "StreamPlain.mk_plain",
@@ -1215,7 +1169,7 @@
         "typing_FStar.Seq.Base.length"
       ],
       0,
-      "5148b871af521eb1e7a8a7b540924c7e"
+      "979fd417c41b5cf0afd3283d91772fc6"
     ],
     [
       "StreamPlain.mk_plain",
@@ -1253,7 +1207,7 @@
         "typing_Platform.Error.uu___is_Error"
       ],
       0,
-      "17f3461881a0e07d282cd3be130f6ce8"
+      "9c73f66e019e44cd8d4f97463f7b702f"
     ],
     [
       "StreamPlain.mk_plain",
@@ -1263,9 +1217,9 @@
       [
         "@MaxIFuel_assumption", "@query",
         "assumption_Platform.Bytes.HasEq_bytes",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.lbytes",
-        "equation_Platform.Bytes.length", "equation_StreamPlain.plainLen",
-        "equation_StreamPlain.plainLength",
+        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.lbytes", "equation_Platform.Bytes.length",
+        "equation_StreamPlain.plainLen", "equation_StreamPlain.plainLength",
         "equation_TLSConstants.max_TLSCiphertext_fragment_length_13",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "primitive_Prims.op_Addition", "primitive_Prims.op_LessThan",
@@ -1274,7 +1228,7 @@
         "refinement_interpretation_StreamPlain_Tm_refine_5578a0666d07a326e9829f08acb9cc9a"
       ],
       0,
-      "d010970f571668ca4b6721f09952182b"
+      "b76bdf7b3b0c8d0296b080b48d08bc72"
     ],
     [
       "StreamPlain.mk_plain",
@@ -1285,9 +1239,10 @@
         "@MaxIFuel_assumption", "@query",
         "assumption_Platform.Bytes.HasEq_bytes",
         "equation_FStar.Pervasives.Native.snd",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.lbytes",
-        "equation_Platform.Bytes.length", "equation_Prims.nat",
-        "equation_StreamPlain.plainLen", "equation_StreamPlain.plainLength",
+        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.lbytes", "equation_Platform.Bytes.length",
+        "equation_Prims.nat", "equation_StreamPlain.plainLen",
+        "equation_StreamPlain.plainLength",
         "equation_TLSConstants.max_TLSCiphertext_fragment_length_13",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "int_inversion", "primitive_Prims.op_Addition",
@@ -1299,7 +1254,7 @@
         "refinement_interpretation_StreamPlain_Tm_refine_5578a0666d07a326e9829f08acb9cc9a"
       ],
       0,
-      "82879b7973494993123cf9e28a946984"
+      "8025578300a293ad4a0f2fb6f84e8481"
     ]
   ]
 ]
