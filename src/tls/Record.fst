@@ -32,6 +32,7 @@ unfold let trace = if Flags.debug_Record then print else (fun _ -> ())
 // the "outer" header has the same format for all versions of TLS
 // but TLS 1.3 fakes its content type and protocol version.
 
+inline_for_extraction
 let x = Transport.recv
 
 type header = b:lbytes 5 // for all TLS versions

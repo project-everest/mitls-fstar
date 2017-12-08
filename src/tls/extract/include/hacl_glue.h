@@ -1,7 +1,7 @@
-// We can only include these files when we're in AEADProvider, or later.
-#ifdef __AEADProvider_H
-// But only at the last minute!
-#ifdef __AEADOpenssl_H
+// Use the new header mark that says "AEADOpenSSL has been fully defined".
+#ifdef __AEADOpenssl_H_DEFINED
+// That way, we can insert ourselves right after AEADOpenSSL in the include
+// sequence.
 #ifndef __HACL_GLUE
 #define __HACL_GLUE
 
@@ -10,6 +10,5 @@
 
 typedef Crypto_AEAD_Invariant_aead_state_______ Crypto_AEAD_Main_aead_state_______;
 
-#endif
 #endif
 #endif

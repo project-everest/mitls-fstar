@@ -300,6 +300,12 @@ let serialize_share (gx:(g:CommonDH.group & CommonDH.keyshare g)) =
       | None -> None // Impossible
       | Some ng -> Some (CommonDH.Share g (CommonDH.pubshare #g gx))
 
+private val map_ST_keygen: list CommonDH.group -> ST0 (list (g:CommonDH.group & CommonDH.keyshare g))
+private let rec map_ST_keygen l =
+  match l with
+  | [] -> []
+  | hd :: tl -> keygen hd :: map_ST_keygen tl
+
 let ks_client_init ks ogl =
   dbg ("ks_client_init "^(if ogl=None then "1.2" else "1.3"));
   let KS #rid st = ks in
@@ -310,7 +316,7 @@ let ks_client_init ks ogl =
     None
   | Some gl -> // TLS 1.3
     let groups = List.Tot.map group_of_valid_namedGroup gl in
-    let gs = map_ST keygen groups in
+    let gs = map_ST_keygen groups in
     let gxl = List.Tot.choose serialize_share gs in
     st := C (C_13_wait_SH cr [] gs);
     Some gxl
@@ -336,10 +342,16 @@ private let mk_binder (#rid) (pskid:PSK.pskid)
   let bk : binderKey bId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Binder bId) (fun _ -> True) rid bk in
   (| bId, bk|), (| i, es |)
 
+private val map_ST_mk_binder: #rid:rid -> list PSK.pskid -> ST0 (list ((i:binderId & bk:binderKey i) * (i:esId{~(NoPSK? i)} & es i)))
+let rec map_ST_mk_binder #rid l =
+  match l with
+  | [] -> []
+  | hd :: tl -> mk_binder #rid hd :: map_ST_mk_binder #rid tl
+
 let ks_client_13_get_binder_keys ks pskl =
   let KS #rid st = ks in
   let C (C_13_wait_SH cr [] gs) = !st in
-  let pskl = map_ST (mk_binder #rid) pskl in
+  let pskl = map_ST_mk_binder #rid pskl in
   let (bkl, esl) = List.Tot.split pskl in
   st := C (C_13_wait_SH cr esl gs);
   bkl

@@ -22,7 +22,7 @@ typedef void *Hashing_OpenSSL_hash_ctx_______;
 typedef void *LowCProvider_aead_state;
 typedef void *FStar_Pointer_Base_loc;
 
-typedef void *FStar_Tcp_networkStream, *FStar_Tcp_tcpListener;
+typedef void *FStar_Tcp_networkStream, *FStar_Tcp_tcpListener, *Transport_t;
 
 // Why is there no prefix?
 typedef const char *string;
