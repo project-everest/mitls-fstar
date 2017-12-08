@@ -578,17 +578,17 @@ type dishonest (i:index) =
     MR.witnessed (MM.contains log i false)
   else True)
 
-type esId = i:pre_esId{valid (I_ES i)}
-type binderId = i:pre_binderId{valid (I_BINDER i)}
-type hsId = i:pre_hsId{valid (I_HS i)}
-type asId = i:pre_asId{valid (I_AS i)}
+// type esId = i:pre_esId{valid (I_ES i)}
+// type binderId = i:pre_binderId{valid (I_BINDER i)}
+// type hsId = i:pre_hsId{valid (I_HS i)}
+// type asId = i:pre_asId{valid (I_AS i)}
 type saltId = i:pre_saltId{valid (I_SALT i)}
 type secretId = i:pre_secretId{valid (I_SECRET i)}
 type rmsId (li:logInfo) = i:pre_rmsId li{valid (I_RMS i)}
 type exportId (li:logInfo) = i:pre_exportId li{valid (I_EXPORT i)}
 type expandId (li:logInfo) = i:pre_expandId li{valid (I_EXPAND i)}
 type keyId = i:pre_keyId{valid (I_KEY i)}
-type finishedId = i:pre_finishedId{valid (I_FINISHED i)}
+// type finishedId = i:pre_finishedId{valid (I_FINISHED i)}
 
 // Top-level index type for version-agile record keys
 type id =

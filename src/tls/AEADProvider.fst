@@ -405,6 +405,7 @@ let decrypt (#i:id) (#l:plainlen) (st:reader i) (iv:iv i) (ad:adata i) (cipher:c
  *)
 
 
+(*
 /// Agility:
 /// - for AEAD, we need a pair of algorithms for the cipher and for UFCMA---use Crypto.Indexing.fsti;
 /// - for StreamAE, we additionallly need the PV (to control the length of the static IV).
@@ -456,3 +457,4 @@ unfold let localpkg_IV
 // TODO adapting local_raw_pkg
 
 // TODO ensure the flag is set only when multiplexing to the verified implementation
+*)

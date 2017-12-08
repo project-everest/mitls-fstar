@@ -1726,6 +1726,8 @@ let test_rekey(): St unit
 // refactoring needed, e.g. define derive_secret helper function to hide access to the tree
 
 
+
+(* --- 
 (*
 let modifies_instance
   (i: id {wellformed_id i})
@@ -1752,9 +1754,6 @@ let rec descend u j i = // j decreases
   i = j \/
   exists (lbl, ctx). derived (Derive i lbl ctx)
 *)
-
-
-(* ---
 
 
 
@@ -1813,12 +1812,12 @@ let real_psk (#u: usage) (#i:regid) (t: real_secret i{corruptKEF0 i}) : psk u i 
     let s : s:ideal_or_real (mref_secret u i) (real_secret i) {safeKEF0 i <==> Ideal? s} = Real t in s)
   else t
 
-type ext0 (u:usage) (i:ii.t {ii.registered i}) =
+type ext0 (u:usage) (i:regid) =
   _:unit{registered (Derive i "" Extract)} & psk u (Derive i "" Extract)
 
 val coerce_psk:
   #u: usage ->
-  i: ii.t {ii.registered i} ->
+  i: regid ->
   a: info {a == get_info i} ->
   raw: lbytes (secret_len a) ->
   ST (ext0 u i)
