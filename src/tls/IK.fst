@@ -1093,9 +1093,9 @@ let child (#p:Type0) (u:children p) (l:label{u `has_lbl` l})
 
 assume val flag_KDF: d:nat -> b:bool{b ==> model}
 type idealKDF d = b2t (flag_KDF d)
-assume val lemma_KDF_depth: d:nat{idealKDF d} -> Lemma (forall (d':nat). d' <= d ==> idealKDF d)
+assume val lemma_KDF_depth: d:nat{d>0} -> Lemma (idealKDF d ==> idealKDF (d-1))
 
-// Note that when model is off, safeKDF is False and corruptKDF is True
+// Note that when model is off, safeKDF is False
 type safeKDF (d:nat) (i:id{registered i}) = idealKDF d /\ honest i
 
 // KDF-specific usage: the parent property is idealKDF at level d
@@ -1504,13 +1504,14 @@ let restore_all_pkg_invariant h0 (p:pkg ii) h1
 
 // TODO 17-12-01 we need an hypothesis that captures that p is in the tree, e.g. only deal with the case where p is a child.
 
-type kdf_subtree (d:nat) = t:tree model{Node? t /\
-  (let Node p u = t in
+type kdf_subtree (d:nat) = t:tree (idealKDF d){
+  Node? t /\ (let Node p u = t in
   Pkg?.ideal p == idealKDF d /\
   Pkg?.key p == LocalPkg?.key (local_kdf_pkg d u) /\
   p == memoization (local_kdf_pkg d u) p.define_table)}
 
 let u_of_t (#d:nat) (t:kdf_subtree d) : usage d = Node?.children t
+let kdf_dt (#d:nat) (t:kdf_subtree d) : mem_table (secret d (u_of_t t)) = Pkg?.define_table (Node?.node t)
 
 /// The well-formedness condition on the derived label (opaque from
 /// the viewpoint of the KDF) enforces
@@ -1527,7 +1528,9 @@ val derive:
   a': Pkg?.info (child (u_of_t t) lbl) (Derive i lbl ctx) ->
   ST (_:unit{registered (Derive i lbl ctx)} & ukey d (u_of_t t) lbl (Derive i lbl ctx))
   // the second pre-condition is redundant, but we don't know the package of k
-  (requires fun h0 -> tree_invariant t h0)
+  (requires fun h0 ->
+    mem_defined (kdf_dt t) i /\ // Need a witness that k is defined to get local_kdf_invariant
+    tree_invariant t h0)
   (ensures fun h0 r h1 ->
     modifies_derive k lbl ctx h0 h1 /\
     tree_invariant t h1 /\
@@ -1535,7 +1538,8 @@ val derive:
 
 let derive #d #t #i k a lbl ctx a' =
   let u = u_of_t t in
-  let kdf_dt : mem_table (secret d u) = Pkg?.define_table (Node?.node t) in
+  let dt = kdf_dt t in
+
   let h0 = get() in
   let honest = get_honesty i in
   let i', honest' = register_derive i lbl ctx in  // register (Derive i lbl ctx) and return its honesty
@@ -1548,9 +1552,10 @@ let derive #d #t #i k a lbl ctx a' =
   // Deduce from tree_invariant that local_kdf_invariant k h1 holds
   if model then
    begin
-    let log = itable kdf_dt in
+    let log = itable dt in
+    MR.m_recall log;
     let m = MR.m_sel h1 log in
-    assume(m i == Some k); // to add, mem_defined i k
+    assume(m i == Some k); // testify
     lemma_mm_forall_elim m local_kdf_invariant i k h1;
     assert(local_kdf_invariant k h1)
    end;
@@ -1583,7 +1588,6 @@ let derive #d #t #i k a lbl ctx a' =
     assume(tree_invariant t h2);
     assert(Pkg?.ideal pkg ==> corrupt i');
     let dk = Pkg?.coerce pkg i' a' raw in
-    // FIXME
     (| (), dk |)
    end
 
@@ -1620,97 +1624,104 @@ let derive_aea
   //fixme! should be extracted from a
   get_aeadAlg (Derive i lbl Expand)
 
-
-let memoized (p:pkg ii) (l:local_pkg ii) =
-  exists (t: mem_table l.key). p == memoization l t
-  // a more specific spec, saving a quantifier but stuck on subtyping:
-  // let t: mem_table l.key = p.define_table in
-  // p == memoization l t
-
-let is_ae_p (p: pkg ii)           = memoized p (local_ae_pkg ii get_aeadAlg)
-let is_kdf_p (p: pkg ii) children = memoized p (local_kdf_pkg children)
+let is_ae_p (p: pkg ii) =
+  Pkg?.key p == key ii get_aeadAlg /\ p == memoization (local_ae_pkg ii get_aeadAlg) p.define_table
+let is_kdf_p (p: pkg ii) d children = // same as ksd_subtree
+  Pkg?.key p == secret d children /\ p == memoization (local_kdf_pkg d children) p.define_table
 
 // this function should specify enough to call key derivations.
-let rec is_secret (n:nat) (x: tree) =
+let rec is_secret (n:nat) (x:tree (idealKDF n)) =
   if n = 0 then
     match x with
-    | Node [] p -> is_kdf_p p []
+    | Node p [] -> is_kdf_p p 0 []
     | _ -> False
   else
     match x with
-    | Node ["AE",Leaf ae; "RE",re ] p ->
-      is_kdf_p p ["AE",Leaf ae; "RE",re ] /\
-      is_ae_p ae /\
-      is_secret (n-1) re
+    | Node p ["AE",Leaf ae; "RE",re ] ->
+      lemma_KDF_depth n;
+      is_kdf_p p n ["AE",Leaf ae; "RE", re] /\
+      is_ae_p ae /\ is_secret (n-1) re
     | _ -> False
 
 // let is_secret_shape (n:nat) (x:tree {is_secret n x}): Lemma (Node? x) =
 //   if n = 0 then () else ()
 
 
-assume val mk_kdf: u:children -> ST (pkg ii)
+assume val mk_kdf: d:nat -> u:usage d -> ST (pkg ii)
   (requires fun h0 -> True)
-  (ensures fun h0 p h1 -> is_kdf_p p u)
+  (ensures fun h0 p h1 -> is_kdf_p p d u)
 
 // this function allocates all tables and (WIP) sets up the initial invariant.
-val mk_secret (n:nat): ST tree
+val mk_secret (n:nat): ST (tree (idealKDF n))
   (requires fun h0 -> True)
   (ensures fun h0 x h1 ->
     is_secret n x /\
     True // tree_invariant x h1 // requires finer posts for mp pp etc
     )
+
 let rec mk_secret n =
-  if n = 0 then
-    let p = mk_kdf [] in
-    Node [] p
-  else (
+  if n = 0 then (
+    assume(valid_children (idealKDF 0) []);
+    let c : usage 0 = [] in
+    let p = mk_kdf 0 c in
+    Node p c
+  ) else (
     let ae = mp ii get_aeadAlg in
     assume(is_ae_p ae);// should be in the post of mp.
+    lemma_KDF_depth n;
     let re = mk_secret (n-1) in
     assert(is_secret (n-1) re);
     let children = [ "AE",Leaf ae; "RE",re ] in
-    let p = mk_kdf children in
-    assert(is_kdf_p p [ "AE",Leaf ae; "RE",re ]);
-    Node children p )
+    assume(valid_children (idealKDF n) children);
+    let p = mk_kdf n children in
+    assert(is_kdf_p p n [ "AE",Leaf ae; "RE",re ]);
+    Node p children)
 
-//#set-options "--z3rlimit 100 --detail_errors"
+//#set-options "--z3rlimit 200"
+#set-options "--lax"
 let test_rekey(): St unit
 =
   let x0 = mk_secret 10 in
   let h0 = get() in
   assert(is_secret 10 x0);
   assume(tree_invariant x0 h0); // soon a post of mk_secret
-  // assert(Node? x0);
+
   match x0 with
-  | Node ["AE",Leaf aepkg1; "RE",x1 ] pkg0 -> (
-    let children0 = ["AE",Leaf aepkg1; "RE",x1 ] in
+  | Node pkg0 ["AE",Leaf aepkg1; "RE",x1 ] -> (
+    let children0 : usage 10 = ["AE",Leaf aepkg1; "RE",x1 ] in
+    assert(u_of_t (x0 <: kdf_subtree 10) == children0);
+
     let a0 = Info Hashing.Spec.SHA1 None in
     let i0: i:id {registered i /\ a0 = get_info i} = magic() in
-    assert(is_kdf_p pkg0 children0);
+    assert(is_kdf_p pkg0 10 children0);
+
     assert(pkg0.package_invariant h0 /\ tree_invariant x1 h0);
     // create's pre; should follow from pkg0's package invariant
     assume(model /\ mem_fresh pkg0.define_table i0 h0);
-    assert(Pkg?.key pkg0 == secret children0);
+    assert(Pkg?.key pkg0 == secret 10 children0);
 
-    let s0: secret children0 i0 = (Pkg?.create pkg0) i0 a0 in
+    let s0: secret 10 children0 i0 = (Pkg?.create pkg0) i0 a0 in
+
     assert(is_secret 9 x1);
+
     match x1 with
-    | Node ["AE",Leaf aepkg2; "RE",x2] pkg1  -> (
-      let children1 = ["AE",Leaf aepkg2; "RE",x2 ] in
+    | Node pkg1 ["AE",Leaf aepkg2; "RE",x2] -> (
+      let children1 : usage 9 = ["AE",Leaf aepkg2; "RE",x2 ] in
       let a1 = Info Hashing.Spec.SHA1 None in
       let h1 = get() in
-      assume(tree_invariant x0 h0 ==> tree_invariant x0 h1); //TODO framing of create
-      assume(all_pkg_invariant h1 /\ local_kdf_invariant s0 h1);
 
-      let (|_,s1|) = derive s0 a0 "RE" Expand a1 in
+      assume(tree_invariant x0 h0 ==> tree_invariant x0 h1); // tree_invariant_frame
+
+      let (|_,s1|) = derive #10 #(x0 <: kdf_subtree 10) s0 a0 "RE" Expand a1 in
       let i1: regid = Derive i0 "RE" Expand in
-      let s1: secret children1 i1 = s1 in
+
+      let s1: secret 9 children1 i1 = s1 in
       let aea = derive_aea "AE" i1 a1 in
       let h2 = get() in
-      // derive's abusive pre; will follow from multi-pkg invariant
-      assume(all_pkg_invariant h2 /\ local_kdf_invariant s1 h2);
 
-      let (|_,k1|) = derive s1 a1 "AE" Expand aea in
+      assume(tree_invariant x1 h2);
+
+      let (|_,k1|) = derive #9 #(x1 <: kdf_subtree 9) s1 a1 "AE" Expand aea in
       let ik1: regid = Derive i1 "AE" Expand in
       let k1: key ii get_aeadAlg ik1 = k1 in
       let h3 = get() in
@@ -1725,9 +1736,6 @@ let test_rekey(): St unit
 //  |  _ -> assert false // excluded by is_secret 10
 // refactoring needed, e.g. define derive_secret helper function to hide access to the tree
 
-
-
-(* --- 
 (*
 let modifies_instance
   (i: id {wellformed_id i})
@@ -1756,16 +1764,15 @@ let rec descend u j i = // j decreases
 *)
 
 
-
 /// --------------------------------------------------------------------------------------------------
 /// PSKs, Salt, and Extraction (can we be more parametric?)
 
-assume val flag_KEF0: b:bool{b ==> model /\ flag_KDF ==> b}
-type idealKEF0 = b2t flag_KEF0
-assume val lemma_kdf_kef0: unit -> Lemma (idealKDF ==> idealKEF0)
+assume val flag_KEF0: d:nat -> b:bool{b ==> model /\ flag_KDF d ==> b}
+type idealKEF0 d = b2t (flag_KEF0 d)
+// to be refined. When exactly do we we switch KEF0? (after KDF0?)
+assume val lemma_kdf_kef0: d:nat -> Lemma (idealKDF d ==> idealKEF0 d)
 
-let safeKEF0 (i:regid) = idealKEF0 /\ honest i
-let corruptKEF0 (i:regid) = idealKEF0 ==> corrupt i
+let safeKEF0 (d:nat) (i:regid) = idealKEF0 d /\ honest i
 
 /// key-derivation table (memoizing create/coerce)
 
@@ -1782,117 +1789,133 @@ let ssa #a =
 let there = Mem.tls_tables_region
 
 // memoizing a single extracted secret
-private type mref_secret (u: usage) (i: regid) =
+private type mref_secret (d:nat) (u: usage d) (i: regid) =
   // would prefer: HyperStack.mref (option (secret u i)) (ssa #(secret u i))
-  MR.m_rref there (option (secret u i)) ssa
+  MR.m_rref there (option (secret d u i)) ssa
 
 /// covering two cases: application PSK and resumption PSK
 /// (the distinction follow from the value of i)
-type psk (u: usage) (i: (Idx?.t ii) {ii.registered i}) =
-  ir_key safeKEF0 (mref_secret u i) (real_secret i) i
+type psk (d:nat) (u: usage d) (i: (Idx?.t ii) {ii.registered i}) =
+  ir_key (safeKEF0 d) (mref_secret d u i) (real_secret i) i
 
-let psk_ideal (#u: usage) (#i:regid) (p:psk u i {safeKEF0 i}): mref_secret u i =
-  let t : s:ideal_or_real (mref_secret u i) (real_secret i) {safeKEF0 i <==> Ideal? s} = p in
+let psk_ideal (#d:nat) (#u: usage d) (#i:regid) (p:psk d u i {safeKEF0 d i}): mref_secret d u i =
+  let t : s:ideal_or_real (mref_secret d u i) (real_secret i) {safeKEF0 d i <==> Ideal? s} = p in
   Ideal?.v t
 
-let ideal_psk (#u: usage) (#i:regid) (t: mref_secret u i{safeKEF0 i}) : psk u i =
-  let t : s:ideal_or_real (mref_secret u i) (real_secret i) {safeKEF0 i <==> Ideal? s} = Ideal t in
+let ideal_psk (#d:nat) (#u: usage d) (#i:regid) (t: mref_secret d u i{safeKEF0 d i}) : psk d u i =
+  let t : s:ideal_or_real (mref_secret d u i) (real_secret i) {safeKEF0 d i <==> Ideal? s} = Ideal t in
   assert(model); t
 
-let psk_real (#u: usage) (#i:regid) (p:psk u i {corruptKEF0 i}): real_secret i =
+let psk_real (#d:nat) (#u: usage d) (#i:regid) (p:psk d u i {~(safeKEF0 d i)}): real_secret i =
   lemma_honest_corrupt i;
   if model then
-    let t : s:ideal_or_real (mref_secret u i) (real_secret i) {safeKEF0 i <==> Ideal? s} = p in
+    let t : s:ideal_or_real (mref_secret d u i) (real_secret i) {safeKEF0 d i <==> Ideal? s} = p in
     Real?.v t
   else p
 
-let real_psk (#u: usage) (#i:regid) (t: real_secret i{corruptKEF0 i}) : psk u i =
+let real_psk (#d:nat) (#u: usage d) (#i:regid) (t: real_secret i{~(safeKEF0 d i)}) : psk d u i =
   if model then
     (lemma_honest_corrupt i;
-    let s : s:ideal_or_real (mref_secret u i) (real_secret i) {safeKEF0 i <==> Ideal? s} = Real t in s)
+    let s : s:ideal_or_real (mref_secret d u i) (real_secret i) {safeKEF0 d i <==> Ideal? s} = Real t in s)
   else t
 
-type ext0 (u:usage) (i:regid) =
-  _:unit{registered (Derive i "" Extract)} & psk u (Derive i "" Extract)
+type ext0 (d:nat) (u:usage d) (i:id {registered i}) =
+  _:unit{registered (Derive i "" Extract)} & psk d u (Derive i "" Extract)
 
-val coerce_psk:
-  #u: usage ->
-  i: regid ->
+val coerceT_psk:
+  #d: nat ->
+  #u: usage d ->
+  i: id {registered i /\ ~(safeKEF0 d i)} ->
   a: info {a == get_info i} ->
   raw: lbytes (secret_len a) ->
-  ST (ext0 u i)
-  (requires fun h0 -> idealKEF0 ==> corrupt i)
-  (ensures fun h0 p h1 -> (*TBC*) True)
+  GTot (ext0 d u i)
+let coerceT_psk #d #u i a raw =
+  real_psk #d #u #(Derive i "" Extract) raw
 
-let coerce_psk #u i a raw =
+val coerce_psk:
+  #d: nat ->
+  #u: usage d ->
+  i: id {registered i /\ ~(safeKEF0 d i)} ->
+  a: info {a == get_info i} ->
+  raw: lbytes (secret_len a) ->
+  ST (ext0 d u i)
+  (requires fun h0 -> True)
+  (ensures fun h0 k h1 -> k == coerceT_psk #d #u i a raw)
+
+let coerce_psk #d #u i a raw =
   let i', honest' = register_derive i "" Extract in
   lemma_corrupt_invariant i "" Extract;
-  (| (), real_psk #u #i' raw |)
+  (| (), real_psk #d #u #i' raw |)
 
 val create_psk:
-  #u: usage ->
-  i: ii.t {ii.registered i} ->
+  #d: nat ->
+  #u: usage d ->
+  i: id {registered i} ->
   a: info {a == get_info i} ->
-  ST (ext0 u i)
+  ST (ext0 d u i)
   (requires fun h0 -> True)
   (ensures fun h0 p h1 -> (*TBC*) True)
-let create_psk #u i a =
+
+let create_psk #d #u i a =
   let i', honest' = register_derive i "" Extract in
   lemma_corrupt_invariant i "" Extract;
-  if flag_KEF0 && honest' then
-    let t' = secret u i' in
-    let r: mref_secret u i' = MR.m_alloc #(option t') #(ssa #t') there None in
-    (| (), ideal_psk #u #i' r |)
+  if flag_KEF0 d && honest' then
+    let t' = secret d u i' in
+    let r: mref_secret d u i' = MR.m_alloc #(option t') #(ssa #t') there None in
+    (| (), ideal_psk #d #u #i' r |)
   else
-    (| (), real_psk #u #i' (sample (secret_len a)) |)
+    (| (), real_psk #d #u #i' (sample (secret_len a)) |)
 
-let pskp (*ip:ipkg*) (u:usage): ST (pkg ii)
+let local_ext0_pkg (d:nat) (u:usage d) : local_pkg ii =
+  LocalPkg
+    (fun (i:id{registered i}) -> ext0 d u i)
+    (fun i -> a: info{a == get_info i})
+    (fun #_ a -> secret_len a)
+    (idealKEF0 d)
+    (Set.empty <: rset)
+    (fun #i (k:ext0 d u i) -> Set.empty)
+    // local invariant
+    (fun #_ k h -> True)
+    (fun r i h0 k h1 -> ())
+    // create/coerce postcondition
+    (fun #_ _ _ _ -> True) // no post-condition
+    (fun #_ _ _ _ _ _ -> ())
+    (create_psk #d #u)
+    (coerceT_psk #d #u)
+    (coerce_psk #d #u)
+
+let pskp (d:nat) (u:usage d): ST (pkg ii)
   (requires fun h0 -> True)
   (ensures fun h0 p h1 -> (*TBC*) True)
-=
-  let p =
-    LocalPkg
-      (fun (i:ii.t {ii.registered i}) -> ext0 u i)
-      (fun i -> a: info{a == get_info i})
-      (fun #_ a -> secret_len a)
-      idealKEF0
-      // local footprint
-      (fun #i (k:ext0 u i) -> Set.empty (*TBC*))
-      // local invariant
-      (fun #_ k h -> True)
-      (fun r i h0 k h1 -> ())
-      // create/coerce postcondition
-      (fun #i u h0 k h1 -> True) //TODO
-      (fun #i u h0 k h1 r h2 -> ())
-      create_psk
-      coerce_psk in
-  memoization_ST p
+  =
+  memoization_ST (local_ext0_pkg d u)
 
 /// HKDF.Extract(key=0, materials=k) idealized as a (single-use) PRF,
 /// possibly customized on the distribution of k.
 val extract0:
-  #u: usage ->
+  #d: nat ->
+  #u: usage d ->
   #i: regid ->
-  k: ext0 u i ->
+  k: ext0 d u i ->
   a: info {a == get_info i} ->
   ST
-    (secret u (Derive i "" Extract))
+    (secret d u (Derive i "" Extract))
     (requires fun h0 -> True)
     (ensures fun h0 p h1 -> (*TBC*) True)
 
-let extract0 #u #i k a =
+let extract0 #d #u #i k a =
   let (| _, p |) = k in
   let i':regid = Derive i "" Extract in
   let honest' = get_honesty i' in
-  lemma_kdf_kef0 (); // idealKDF ==> idealKEF0
-  if flag_KEF0 && honest'
+  lemma_kdf_kef0 d;
+  if flag_KEF0 d && honest'
   then
-    let k: mref_secret u i' = psk_ideal p in
+    let k: mref_secret d u i' = psk_ideal p in
     match MR.m_read k with
     | Some extract -> extract
     | None ->
-      let extract = create u i' a in
-      let mrel = ssa #(secret u i') in
+      let extract = create d u i' a in
+      let mrel = ssa #(secret d u i') in
       let () =
         MR.m_recall k;
         let h = get() in
@@ -1903,7 +1926,7 @@ let extract0 #u #i k a =
   else
     let k = psk_real p in
     let raw = HKDF.extract #(a.ha) (Hashing.zeroHash a.ha) k in
-    coerce u i' a raw
+    coerce d u i' a raw
 
 /// The "salt" is an optional secret used (exclusively) as HKDF
 /// extraction key. The absence of salt (e.g. when no PSK is used) is
@@ -1915,48 +1938,53 @@ let extract0 #u #i k a =
 /// We use separate code for salt1 and salt2 because they are
 /// separately idealized (salt1 is more complicated)
 
-assume val flag_PRF1: b:bool{flag_KDF ==> b /\ b ==> model /\ flag_KEF0 ==> b}
-let idealPRF1 = b2t flag_PRF1
-let lemma_kdf_prf1 (): Lemma (idealKDF ==> idealPRF1) = admit()
+assume val flag_PRF1: d:nat -> b:bool{flag_KEF0 d ==> b /\ b ==> model}
+let idealPRF1 (d:nat) = b2t (flag_PRF1 d)
+let lemma_kdf_prf1 (d:nat) : Lemma (idealKDF d ==> idealPRF1 d) = admit()
 
-type safePRF1 (i:regid) = idealPRF1 /\ honest i
-type corruptPRF1 (i:regid) = idealPRF1 ==> corrupt i
+type safePRF1 (d:nat) (i:regid) = idealPRF1 d /\ honest i
 
-assume type salt (u: usage) (i: id)
+assume type salt (d:nat) (u: usage d) (i: id)
 
 assume val create_salt:
-  #u: usage ->
+  #d: nat ->
+  #u: usage d ->
   i: id ->
   a: info ->
-  salt u i
+  salt d u i
 
 assume val coerce_salt:
-  #u: usage ->
+  #d: nat ->
+  #u: usage d ->
   i: id ->
   a: info ->
   raw: lbytes (secret_len a) ->
-  salt u i
+  salt d u i
 
-let saltp (*ip:ipkg*) (u:usage): ST (pkg ii)
-  (requires fun h0 -> True)
-  (ensures fun h0 s h1 -> True)
-=
-  let p = LocalPkg
-    (salt u)
-    (fun (i:ii.t) -> a:info{a == get_info i})
+let local_salt_pkg (d:nat) (u:usage d) : local_pkg ii =
+  LocalPkg
+    (salt d u)
+    (fun (i:id{registered i}) -> a:info{a == get_info i})
     (fun #_ a -> secret_len a)
-    idealPRF1
+    (idealPRF1 d)
     // local footprint
-    (fun #i (k:salt u i) -> Set.empty)
+    (Set.empty <: rset)
+    (fun #i (k:salt d u i) -> Set.empty)
     // local invariant
     (fun #_ k h -> True)
     (fun r i h0 k h1 -> ())
     // create/coerce postcondition
-    (fun #i u h0 k h1 -> True)
-    (fun #i u h0 k h1 r h2 -> ())
-    create_salt
-    coerce_salt in
-  memoization_ST #ii p
+    (fun #_ _ _ _ -> True) // no post-condition
+    (fun #_ _ _ _ _ _ -> ())
+    (create_salt #d #u)
+    (magic ())
+    (coerce_salt #d #u)
+
+let saltp (d:nat) (u:usage d) : ST (pkg ii)
+  (requires fun h0 -> True)
+  (ensures fun h0 s h1 -> True)
+  =
+  memoization_ST (local_salt_pkg d u)
 
 
 /// HKDF.Extract(key=s, materials=dh_secret) idealized as 2-step
@@ -1964,11 +1992,10 @@ let saltp (*ip:ipkg*) (u:usage): ST (pkg ii)
 /// and servers.
 
 /// two flags; we will idealize ODH first
-assume val flag_ODH: b:bool { (flag_PRF1 ==> b) /\ (b ==> model)}
-type idealODH = b2t flag_ODH
+assume val flag_ODH: d:nat -> b:bool { flag_PRF1 d ==> b /\ b ==> model}
+type idealODH (d:nat) = b2t (flag_ODH d)
+type safeODH (d:nat) (i:regid) = idealODH d /\ honest i
 
-type safeODH (i:regid) = idealODH /\ honest i
-type corruptODH (i:regid) = idealODH ==> corrupt i
 
 /// we write prf_ for the middle salt-keyed extraction, conditionally
 /// idealized as a PRF keyed by salt1 depending on flag_prf1
@@ -1980,40 +2007,42 @@ type corruptODH (i:regid) = idealODH ==> corrupt i
 /// Returns a narrow-indexed key,
 ///
 /// its internal state ensures sharing
-///
+
 assume val prf_leak:
-  #u: usage ->
+  #d: nat ->
+  #u: usage d ->
   #i: regid ->
   #a: info {a == get_info i} ->
-  s: salt u i {idealPRF1 ==> corrupt i} ->
+  s: salt d u i {~(safePRF1 d i)} ->
   Hashing.Spec.hkey a.ha
 
-type ext1 (u:usage) (i:regid) (idh:id_dhe) =
+type ext1 (d:nat) (u:usage d) (i:regid) (idh:id_dhe) =
   _:unit{registered (Derive i "" (ExtractDH idh))} &
-  secret u (Derive i "" (ExtractDH idh))
+  secret d u (Derive i "" (ExtractDH idh))
 
 val prf_extract1:
-  #u: usage ->
+  #d: nat ->
+  #u: usage d ->
   #i: regid ->
   a: info {a == get_info i} ->
-  s: salt u i ->
+  s: salt d u i ->
   idh: id_dhe{~(honest_idh (ExtractDH idh))} ->
   gZ: bytes ->
-  ST (ext1 u i idh)
+  ST (ext1 d u i idh)
   (requires fun h0 -> True)
   (ensures fun h0 k h1 -> True)
 
-let prf_extract1 #u #i a s idh gZ =
+let prf_extract1 #d #u #i a s idh gZ =
   let j, honest' = register_derive i "" (ExtractDH idh) in
   lemma_corrupt_invariant i "" (ExtractDH idh);
   let honest = get_honesty i in
-  lemma_kdf_prf1 ();
-  if flag_PRF1 && honest
+  lemma_kdf_prf1 d;
+  if flag_PRF1 d && honest
   then
     // This is the narrow idealized variant--see paper for additional
     // discussion. Note the algorithm is determined by the salt index.
     //
-    (| (), create u j a |)
+    (| (), create d u j a |)
     //
     // We use the define table of the derived KDF to represent the
     // state of the PRF.  todo: guard [create] with a table lookup;
@@ -2031,9 +2060,9 @@ let prf_extract1 #u #i a s idh gZ =
     // or just
     // JKDF.create u j (i,gZ) a
   else
-    let raw_salt = prf_leak #u #i #a s in
+    let raw_salt = prf_leak #d #u #i #a s in
     let raw = HKDF.extract raw_salt gZ in
-    (| (), coerce u j a raw |)
+    (| (), coerce d u j a raw |)
     // we allocate a key at a narrow index, possibly re-using key
     // materials if there are collisions on gZ or raw_salt
 
@@ -2057,7 +2086,7 @@ let prf_extract1 #u #i a s idh gZ =
 // should be entirely static. Intuitively, there is a function from
 // indexes to usage. Probably definable with the actual usage (big
 // mutual reduction?)
-assume val u_of_i: i:id -> usage
+assume val u_of_i: i:id -> d:nat & usage d
 
 type odhid = x:CommonDH.dhi{CommonDH.registered_dhi x}
 
@@ -2065,7 +2094,8 @@ type peer_index (x:odhid) =
   i:regid & y:CommonDH.dhr x {CommonDH.registered_dhr y /\ registered (Derive i "" (ExtractDH (IDH x y)))}
 
 type peer_instance (#x:odhid) (iy:peer_index x) =
-  secret (u_of_i (dfst iy)) (Derive (dfst iy) "" (ExtractDH (IDH x (dsnd iy))))
+  (let (| d, u |) = u_of_i (dfst iy) in
+  secret d u (Derive (dfst iy) "" (ExtractDH (IDH x (dsnd iy)))))
 
 let peer_table (x:odhid): Type0 =
   MM.t there (peer_index x) (peer_instance #x) (fun _ -> True)
@@ -2134,7 +2164,7 @@ let odh_init g =
     lemma_fresh_odh i h0;
     lemma_fresh_odh_framing i h0 h1;
     assert(MM.sel (MR.m_sel h1 log) i == None);
-    let peers = alloc() <: peer_table i in //17-11-22   MM.alloc #there #(peer_index i) #(peer_instance #i) #(fun _ -> True) in
+    let peers = alloc tls_tables_region <: peer_table i in //17-11-22   MM.alloc #there #(peer_index i) #(peer_instance #i) #(fun _ -> True) in
     let h2 = get () in
     assume(MM.sel (MR.m_sel h2 log) i == None); // FIXME allocate peers somewhere else !!
     MM.extend log i peers;
@@ -2175,10 +2205,11 @@ private let register_odh (i:regid) (gX:CommonDH.dhi) (gY:CommonDH.dhr gX)
   | Some b -> j
 
 val odh_test:
-  #u: usage ->
+  #d: nat ->
+  #u: usage d ->
   #i: regid ->
   a: info {a == get_info i} ->
-  s: salt u i ->
+  s: salt d u i ->
   gX: odhid{odh_defined gX} ->
   ST (j:peer_index gX{dfst j == i} & peer_instance j)
   (requires fun h0 -> model /\ CommonDH.honest_dhi gX)
@@ -2188,8 +2219,8 @@ val odh_test:
     // flag_odh ==> s == peer_gX gY
     True)
 
-let odh_test #u #i a s gX =
-  assume (u == u_of_i i); //17-11-01 TODO modelling
+let odh_test #d #u #i a s gX =
+  assume ((| d, u |) == u_of_i i); //17-11-01 TODO modelling
   (* we get the same code as in the game by unfolding dh_responder, e.g.
   let y = CommonDH.keygen g in
   let gY = CommonDH.pubshare y in
@@ -2204,13 +2235,13 @@ let odh_test #u #i a s gX =
   lemma_fresh_dhr_framing j' h0 h1;
   assert(odhr_fresh j' h1);
   assert(a == get_info j);
-  let k: secret u j =
-    if flag_ODH then create u j a (* narrow *)
+  let k: secret d u j =
+    if flag_ODH d then create d u j a (* narrow *)
     else (
-      assert(~idealPRF1);
+      assert(~(idealPRF1 d));
       let raw = HKDF.extract #a.ha (prf_leak s) gZ (* wide, concrete *) in
-      assume(~idealKDF); // FIXME(adl): fix the loop in the flag order dependency. See definition of usage for proposed solution
-      coerce u j a raw
+      assume(~(idealKDF d)); // FIXME(adl): fix the loop in the flag order dependency. See definition of usage for proposed solution
+      coerce d u j a raw
     ) in
   let h2 = get() in
   assume(odhr_fresh j' h2); // TODO framing of KDF
@@ -2225,14 +2256,16 @@ unfold let idh_of (#g:CommonDH.group) (x:CommonDH.ikeyshare g) (gY:CommonDH.rsha
 
 // the PRF-ODH oracle, computing with secret exponent x
 val odh_prf:
-  #u: usage ->
+  #d: nat ->
+  #u: usage d ->
   #i: regid ->
   a: info {a == get_info i}->
-  s: salt u i ->
+  s: salt d u i ->
   g: CommonDH.group ->
   x: CommonDH.ikeyshare g ->
   gY: CommonDH.rshare g (CommonDH.ipubshare x) ->
-  ST (_:unit{registered (Derive i "" (ExtractDH (idh_of x gY)))} & secret u (Derive i "" (ExtractDH (idh_of x gY))))
+  ST (_:unit{registered (Derive i "" (ExtractDH (idh_of x gY)))}
+   & secret d u (Derive i "" (ExtractDH (idh_of x gY))))
   (requires fun h0 ->
     let gX : CommonDH.dhi = (| g, CommonDH.ipubshare x |) in
     CommonDH.honest_dhi gX /\ odh_defined gX
@@ -2245,15 +2278,15 @@ let lemma_fresh_dhr_hinv (#x:CommonDH.dhi) (y:CommonDH.dhr x) (h:mem)
           (ensures ~(honest_idh (ExtractDH (IDH x y))))
   = admit()
 
-let odh_prf #u #i a s g x gY =
+let odh_prf #d #u #i a s g x gY =
   let h = get () in
   let gX : CommonDH.dhi = (| g, CommonDH.ipubshare x |) in
   let idh = IDH gX gY in
   assert_norm(idh == idh_of x gY);
   lemma_fresh_dhr_hinv #gX gY h;
   let gZ = CommonDH.dh_initiator g x gY in
-  let (| uu, k |) = prf_extract1 #u #i a s idh gZ in
-  let k' : secret u (Derive i "" (ExtractDH idh)) = k in
+  let (| uu, k |) = prf_extract1 #d #u #i a s idh gZ in
+  let k' : secret d u (Derive i "" (ExtractDH idh)) = k in
   (| (), k' |)
 
 
@@ -2270,16 +2303,17 @@ let initI (g:CommonDH.group) = odh_init g
 
 /// Responder computes DH secret material
 val extractR:
-  #u: usage ->
+  #d: nat ->
+  #u: usage d ->
   #i: regid ->
-  s: salt u i ->
+  s: salt d u i ->
   a: info {a == get_info i} ->
   gX: odhid ->
   ST (i_gY: peer_index gX{dfst i_gY == i} & peer_instance i_gY)
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> True)
 
-let extractR #u #i s a gX =
+let extractR #d #u #i s a gX =
   let b = if model then CommonDH.is_honest_dhi gX else false in
   if b then
    begin
@@ -2299,8 +2333,8 @@ let extractR #u #i s a gX =
     let gY, gZ = CommonDH.dh_responder (dfst gX) (dsnd gX) in
     let idh = IDH gX gY in
     assume(~(honest_idh (ExtractDH idh))); // FIXME
-    let (| _ , k |) : ext1 u i idh = prf_extract1 a s idh gZ in
-    let k : secret u (Derive i "" (ExtractDH idh)) = k in
+    let (| _ , k |) : ext1 d u i idh = prf_extract1 a s idh gZ in
+    let k : secret d u (Derive i "" (ExtractDH idh)) = k in
     let i_gY : peer_index gX = (| i, gY |) in
     let s : peer_instance #gX i_gY = admit() in
     (| i_gY, s |)
@@ -2314,20 +2348,22 @@ let extractR #u #i s a gX =
 
 /// Initiator computes DH secret material
 val extractI:
-  #u: usage ->
+  #d: nat ->
+  #u: usage d ->
   #i: regid ->
   a: info {a == get_info i} ->
-  s: salt u i ->
+  s: salt d u i ->
   g: CommonDH.group ->
   x: CommonDH.ikeyshare g ->
   gY: CommonDH.rshare g (CommonDH.ipubshare x) ->
-  ST(_:unit{registered (Derive i "" (ExtractDH (idh_of x gY)))} & secret u (Derive i "" (ExtractDH (idh_of x gY))))
+  ST(_:unit{registered (Derive i "" (ExtractDH (idh_of x gY)))}
+    & secret d u (Derive i "" (ExtractDH (idh_of x gY))))
   (requires fun h0 ->
     let gX : CommonDH.dhi = (| g, CommonDH.ipubshare x |) in
     CommonDH.honest_dhi gX /\ odh_defined gX)
   (ensures fun h0 k h1 -> True)
 
-let extractI #u #i a s g x gY =
+let extractI #d #u #i a s g x gY =
   let gX: CommonDH.dhi = (| g, CommonDH.ipubshare x |) in
   let b = if model then CommonDH.is_honest_dhi gX else false in
   if b then
@@ -2340,148 +2376,154 @@ let extractI #u #i a s g x gY =
     assert(wellformed_id i);
     assume(wellformed_id i'); //17-11-01 same as above?
     let i_gY : peer_index gX = (| i, gY |) in
-    let ot = secret u i' in
-    assume (u == u_of_i i); //17-11-01 indexing does not cover u yet
+    let ot = secret d u i' in
+    assume ((| d, u |) == u_of_i i); //17-11-01 indexing does not cover u yet
     let o : option ot = MM.lookup peers i_gY in
     match o with
     | Some k -> (| (), k |)
     | None -> assume false; //17-11-22 why?
-           odh_prf #u #i a s g x gY
-  else odh_prf #u #i a s g x gY
+           odh_prf #d #u #i a s g x gY
+  else odh_prf #d #u #i a s g x gY
 
 val extractP:
-  #u:usage ->
+  #d: nat ->
+  #u: usage d ->
   #i: regid ->
   a: info {a == get_info i} ->
-  s: salt u i ->
-  ST(_:unit{registered (Derive i "" (ExtractDH NoIDH))} & secret u (Derive i "" (ExtractDH NoIDH)))
+  s: salt d u i ->
+  ST(_:unit{registered (Derive i "" (ExtractDH NoIDH))}
+    & secret d u (Derive i "" (ExtractDH NoIDH)))
   (requires fun h0 -> True)
   (ensures fun h0 r h1 -> True)
-let extractP #u #i a s =
+
+let extractP #d #u #i a s =
   let gZ = Hashing.Spec.zeroHash a.ha in
    let (| _, k |) = prf_extract1 a s NoIDH gZ in
    assert(registered (Derive i "" (ExtractDH NoIDH)));
-   let k : secret u (Derive i "" (ExtractDH NoIDH)) = k in
+   let k : secret d u (Derive i "" (ExtractDH NoIDH)) = k in
    (| (), k |)
 
-assume val flag_KEF2: b:bool{flag_KDF ==> b}
-type idealKEF2 = b2t flag_KEF2
-
-type safeKEF2 i = idealKEF2 /\ honest i
-type corruptKEF2 i = idealKEF2 ==> corrupt i
-
 /// ---------------- final (useless) extraction --------------------
-///
-type salt2 (u: usage) (i:regid) =
-  ir_key safeKEF2 (mref_secret u i) (real_secret i) i
+
+assume val flag_KEF2: d:nat -> b:bool{flag_KDF d ==> b /\ b ==> model}
+type idealKEF2 d = b2t (flag_KEF2 d)
+type safeKEF2 d i = idealKEF2 d /\ honest i
+
+type salt2 (d:nat) (u: usage d) (i:regid) =
+  ir_key (safeKEF2 d) (mref_secret d u i) (real_secret i) i
 
 // same code as for PSKs; but extract0 and extract2 differ concretely
 
-let real_salt2 (#u: usage) (#i:regid) (t: real_secret i{corruptKEF2 i}) : salt2 u i =
+let real_salt2 (#d:nat) (#u: usage d) (#i:regid) (t: real_secret i{~(safeKEF2 d i)}) : salt2 d u i =
   if model then
     (lemma_honest_corrupt i;
-    let s : s:ideal_or_real (mref_secret u i) (real_secret i) {safeKEF2 i <==> Ideal? s} = Real t in s)
+    let s : s:ideal_or_real (mref_secret d u i) (real_secret i) {safeKEF2 d i <==> Ideal? s} = Real t in s)
   else t
 
-let salt2_real (#u: usage) (#i:regid) (p:salt2 u i {corruptKEF2 i}): real_secret i =
+let salt2_real (#d:nat) (#u: usage d) (#i:regid) (p:salt2 d u i {~(safeKEF2 d i)}): real_secret i =
   lemma_honest_corrupt i;
   if model then
-    let t : s:ideal_or_real (mref_secret u i) (real_secret i) {safeKEF2 i <==> Ideal? s} = p in
+    let t : s:ideal_or_real (mref_secret d u i) (real_secret i) {safeKEF2 d i <==> Ideal? s} = p in
     Real?.v t
   else p
 
-type ext2 (u: usage) (i: ii.t {ii.registered i}) =
-  _:unit{registered (Derive i "" Extract)} & salt2 u (Derive i "" Extract)
+type ext2 (d:nat) (u:usage d) (i:id{registered i}) =
+  _:unit{registered (Derive i "" Extract)} & salt2 d u (Derive i "" Extract)
 
 val coerce_salt2:
-  #u: usage ->
-  i: ii.t {ii.registered i} -> // using regid yields unification failures below
+  #d: nat ->
+  #u: usage d ->
+  i: id {registered i /\ ~(safeKEF2 d i)} ->
   a: info {a == get_info i} ->
   raw: lbytes (secret_len a) ->
-  ST (ext2 u i)
-  (requires fun h0 -> idealKEF2 ==> corrupt i)
-  (ensures fun h0 p h1 -> (*TBC*) True)
+  ST (ext2 d u i)
+  (requires fun h0 -> True)
+  (ensures fun h0 p h1 -> True)
 
-let coerce_salt2 #u i a raw =
+let coerce_salt2 #d #u i a raw =
   let i', honest' = register_derive i "" Extract in
   lemma_corrupt_invariant i "" Extract;
-  (| (), real_salt2 #u #i' raw |)
+  (| (), real_salt2 #d #u #i' raw |)
 
-let ideal_salt2 (#u: usage) (#i:regid) (t: mref_secret u i{safeKEF2 i}) : salt2 u i =
-  let t : s:ideal_or_real (mref_secret u i) (real_secret i) {safeKEF2 i <==> Ideal? s} = Ideal t in
+let ideal_salt2 (#d:nat) (#u:usage d) (#i:regid) (t: mref_secret d u i{safeKEF2 d i}) : salt2 d u i =
+  let t : s:ideal_or_real (mref_secret d u i) (real_secret i) {safeKEF2 d i <==> Ideal? s} = Ideal t in
   assert(model); t
 
-let salt2_ideal (#u: usage) (#i:regid) (p:salt2 u i {safeKEF2 i}): mref_secret u i =
-  let t : s:ideal_or_real (mref_secret u i) (real_secret i) {safeKEF2 i <==> Ideal? s} = p in
+let salt2_ideal (#d:nat) (#u:usage d) (#i:regid) (p:salt2 d u i {safeKEF2 d i}): mref_secret d u i =
+  let t : s:ideal_or_real (mref_secret d u i) (real_secret i) {safeKEF2 d i <==> Ideal? s} = p in
   Ideal?.v t
 
 val create_salt2:
-  #u: usage ->
-  i: ii.t {ii.registered i} -> // using regid yields unification failures below
+  #d: nat ->
+  #u: usage d ->
+  i: id {registered i} ->
   a: info {a == get_info i} ->
-  ST (ext2 u i)
+  ST (ext2 d u i)
   (requires fun h0 -> True)
-  (ensures fun h0 p h1 -> (*TBC*) True)
+  (ensures fun h0 p h1 -> True)
 
-let create_salt2 #u i a =
+let create_salt2 #d #u i a =
   let i', honest' = register_derive i "" Extract in
   let honest = get_honesty i in
   lemma_corrupt_invariant i "" Extract;
-  if flag_KEF2 && honest' then
-    let t' = secret u i' in
-    let r: mref_secret u i' = MR.m_alloc #(option t') #(ssa #t') there None in
-    (| (), ideal_salt2 #u #i' r |)
+  if flag_KEF2 d && honest' then
+    let t' = secret d u i' in
+    let r: mref_secret d u i' = MR.m_alloc #(option t') #(ssa #t') there None in
+    (| (), ideal_salt2 #d #u #i' r |)
   else
-    (| (), real_salt2 #u #i' (sample (secret_len a)) |)
+    (| (), real_salt2 #d #u #i' (sample (secret_len a)) |)
 
-let saltp2 (u:usage): ST (pkg ii)
+let saltp2 (d:nat) (u:usage d): ST (pkg ii)
   (requires fun h0 -> True)
   (ensures fun h0 s h1 -> True)
-=
+  =
   let p = LocalPkg
-    (ext2 u)
-    (fun (i:ii.t) -> a:info{a == get_info i})
+    (fun (i:id{registered i}) -> ext2 d u i)
+    (fun (i:id) -> a:info{a == get_info i})
     (fun #_ a -> secret_len a)
-    idealKEF2
+    (idealKEF2 d)
     // local footprint
-    (fun #i (k:ext2 u i) -> Set.empty)
+    (Set.empty <: rset)
+    (fun #i (k:ext2 d u i) -> Set.empty)
     // local invariant
     (fun #_ k h -> True)
     (fun r i h0 k h1 -> ())
     // create/coerce postcondition
-    (fun #i u h0 k h1 -> True)
-    (fun #i u h0 k h1 r h2 -> ())
-    create_salt2
-    coerce_salt2 in
-  memoization_ST #ii p
+    (fun #_ _ _ _ -> True) // no post-condition
+    (fun #_ _ _ _ _ _ -> ())
+    (create_salt2 #d #u)
+    (magic())
+    (coerce_salt2 #d #u) in
+  memoization_ST p
 
 
 /// HKDF.Extract(key=s, materials=0) idealized as a single-use PRF.
 /// The salt is used just for extraction, hence [u] here is for the extractee.
 /// Otherwise the code is similar to [derive], with different concrete details
 val extract2:
-  #u: usage ->
+  #d: nat ->
+  #u: usage d ->
   #i: regid ->
-  s: ext2 u i ->
+  s: ext2 d u i ->
   a: info {a == get_info i} ->
-  ST (secret u (Derive i "" Extract))
+  ST (secret d u (Derive i "" Extract))
     (requires fun h0 -> True)
     (ensures fun h0 p h1 -> (*TBC*) True)
 
-let extract2 #u #i e2 a =
+let extract2 #d #u #i e2 a =
   let (| _, s |) = e2 in
   let i' : regid = Derive i "" Extract in
   let honest' = get_honesty i' in
   assert(wellformed_id i');
   assert(a = get_info i');
-  assume(idealKDF ==> idealKEF2); // TODO
-  if flag_KEF2 && honest' then
-    let k: mref_secret u i' = salt2_ideal s in
+  assume(idealKDF d ==> idealKEF2 d); // TODO
+  if flag_KEF2 d && honest' then
+    let k: mref_secret d u i' = salt2_ideal s in
     match MR.m_read k with
     | Some extract -> extract
     | None ->
-        let extract = create u i' a in
-        let mrel = ssa #(secret u i') in
+        let extract = create d u i' a in
+        let mrel = ssa #(secret d u i') in
         let () =
           MR.m_recall k;
           let h = get() in
@@ -2492,8 +2534,7 @@ let extract2 #u #i e2 a =
   else
     let k = salt2_real s in
     let raw = HKDF.extract #(a.ha) (Hashing.zeroHash a.ha) k in
-    coerce u i' a raw
-
+    coerce d u i' a raw
 
 
 // not sure how to enforce label restrictions, e.g.
@@ -2501,6 +2542,8 @@ let extract2 #u #i e2 a =
 
 let some_keylen: keylen = 32ul
 let get_keylen (i:id) = some_keylen
+
+(* -- 08/12/17: see middle of the file for up to date usage example
 
 inline_for_extraction
 let u_default: usage = fun lbl -> rp ii get_keylen
