@@ -434,3 +434,24 @@ let memoization_ST (#ip:ipkg) (p:local_pkg ip)
   // assert_norm(q == memoization #ip p mtable);// also fails, with squashing error
   (if model then lemma_mm_forall_init (MR.m_sel h1 (itable mtable)) p.local_invariant h1);
   q
+
+(*
+Style for enforcing full normalization to enable erasure of `pkg` arguments:
+
+inline_for_extraction
+val derive: x:pkg -> bool -> x.t
+let derive x n =
+  normalize_term (x.f n)
+
+inline_for_extraction
+val create: bool -> ret
+let create n = B n
+
+(** Coercion to reveal the head of the implicit match in [derive] *)
+noextract
+val as_create: x:pkg{x.t == ret /\ x.f == create} -> y:pkg{x == y}
+let as_create x = Pkg create x.n
+
+val test: x:pkg{x.t == ret /\ x.f == create} -> ret
+let test x = derive (as_create x) true
+*)
