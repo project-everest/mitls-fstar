@@ -166,9 +166,13 @@ let lemma_define_tls_honest_regions (s:rset)
   : Lemma (~(Set.mem tls_define_region s) /\ ~(Set.mem tls_honest_region s))
   = ()
 
+/// SZ: commented out this lemma that is also false. E.g. consider
+/// p2 = new_region p1; r1 = new_region p2; r2 = new_region r1
+(*
 assume val lemma_disjoint_ancestors:
   r1:rgn -> r2:rgn -> p1:rgn{r1 `is_below` p1} -> p2:rgn{r2 `is_below` p2}
   -> Lemma (requires p1 <> p2) (ensures HH.disjoint r1 r2 /\ r1 <> r2)
+*)
 
 type trivial_inv (#it:eqtype) (#vt:it -> Type) (m:MM.map' it vt) = True
 type i_mem_table (#it:eqtype) (vt:it -> Type) =

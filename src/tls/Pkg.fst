@@ -33,7 +33,7 @@ let lbytes (len:UInt32.t) = Platform.Bytes.lbytes (UInt32.v len)
 
 /// Index packages provide an abstract index for instances, with an
 /// interface to project (ghost) indexes to (concrete) runtime
-/// parameters, such as algorithms or key length , and to define their
+/// parameters, such as algorithms or key length, and to define their
 /// "honesty", thereby controlling their conditional idealization.
 ///
 /// We distinguish between "honest", which refers to the adversary's
@@ -434,4 +434,3 @@ let memoization_ST (#ip:ipkg) (p:local_pkg ip)
   // assert_norm(q == memoization #ip p mtable);// also fails, with squashing error
   (if model then lemma_mm_forall_init (MR.m_sel h1 (itable mtable)) p.local_invariant h1);
   q
-
