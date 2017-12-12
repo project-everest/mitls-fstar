@@ -27,4 +27,6 @@ typedef void *FStar_Tcp_networkStream, *FStar_Tcp_tcpListener, *Transport_t;
 // Why is there no prefix?
 typedef const char *string;
 
+#define Prims_uu___is_Cons(X) ((X)->tag == Prims_Cons)
+
 #endif // __HACKS_H
