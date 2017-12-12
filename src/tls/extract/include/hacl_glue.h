@@ -8,7 +8,8 @@
 #include "Crypto_Indexing.h"
 #include "Crypto_AEAD_Main.h"
 
-typedef Crypto_AEAD_Invariant_aead_state_______ Crypto_AEAD_Main_aead_state_______;
+typedef Crypto_AEAD_Invariant_aead_state Crypto_AEAD_Main_aead_state;
+typedef Crypto_AEAD_Invariant_aead_state Crypto_AEAD_Main_aead_state_______;
 
 #endif
 #endif

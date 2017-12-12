@@ -129,7 +129,8 @@ abstract type es (i:esId) = H.tag (esId_hash i)
 // Handshake secret (abstract)
 abstract type hs (i:hsId) = H.tag (hsId_hash i)
 type fink (i:finishedId) = HMAC.UFCMA.key (HMAC.UFCMA.HMAC_Finished i) (fun _ -> True)
-type binderKey (i:binderId) = HMAC.UFCMA.key (HMAC.UFCMA.HMAC_Binder i) (fun _ -> True)
+let trivial (_: bytes) = True
+type binderKey (i:binderId) = HMAC.UFCMA.key (HMAC.UFCMA.HMAC_Binder i) trivial
 
 // TLS 1.3 master secret (abstract)
 abstract type ams (i:asId) = H.tag (asId_hash i)
@@ -339,7 +340,7 @@ private let mk_binder (#rid) (pskid:PSK.pskid)
   dbg ("Binder key["^lb^"]: "^(print_bytes bk));
   let bk = finished_13 h bk in
   dbg ("Binder Finished key: "^(print_bytes bk));
-  let bk : binderKey bId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Binder bId) (fun _ -> True) rid bk in
+  let bk : binderKey bId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Binder bId) trivial rid bk in
   (| bId, bk|), (| i, es |)
 
 private val map_ST_mk_binder: #rid:rid -> list PSK.pskid -> ST0 (list ((i:binderId & bk:binderKey i) * (i:esId{~(NoPSK? i)} & es i)))

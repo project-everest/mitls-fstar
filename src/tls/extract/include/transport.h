@@ -7,13 +7,13 @@
 FStar_Error_optResult__Prims_string___
 (*Transport___proj__Mkt__item__snd(Transport_t projectee))(FStar_Bytes_bytes x0);
 
-FStar_Tcp_recv_result____
+FStar_Tcp_recv_result
 (*Transport___proj__Mkt__item__rcv(Transport_t projectee))(Prims_nat x0);
 
 Transport_t
 Transport_callbacks(
   FStar_Error_optResult__Prims_string___ (*send1)(FStar_Bytes_bytes x0),
-  FStar_Tcp_recv_result____ (*recv1)(Prims_nat x0)
+  FStar_Tcp_recv_result (*recv1)(Prims_nat x0)
 );
 
 Transport_t Transport_wrap(FStar_Tcp_networkStream tcp);
@@ -30,14 +30,14 @@ extern void (*Transport_close)(FStar_Tcp_networkStream x0);
 
 FStar_Error_optResult__Prims_string___ Transport_send(Transport_t tcp, FStar_Bytes_bytes data);
 
-FStar_Tcp_recv_result____ Transport_recv(Transport_t tcp, Prims_nat len1);
+FStar_Tcp_recv_result Transport_recv(Transport_t tcp, Prims_nat len1);
 
 void Transport_test(Transport_t tcp, FStar_Bytes_bytes data);
 
-FStar_Tcp_recv_result____
+FStar_Tcp_recv_result
 Transport_really_read_rec(FStar_Bytes_bytes prev, Transport_t tcp, Prims_nat len1);
 
-extern FStar_Tcp_recv_result____ (*Transport_really_read)(Transport_t x0, Prims_nat x1);
+extern FStar_Tcp_recv_result (*Transport_really_read)(Transport_t x0, Prims_nat x1);
 
 #endif
 #endif
