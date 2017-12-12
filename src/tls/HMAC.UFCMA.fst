@@ -11,10 +11,11 @@ module MM = FStar.Monotonic.Map
 // idealizing HMAC
 // for concreteness; the rest of the module is parametric in a:alg
 
-// To be moved to Flags.
 let model = Flags.model
-private assume val ideal: b:bool{b ==> model}
 let ipkg = Pkg.ipkg
+
+// The secret idealization flag for the UFCMA assumption
+private assume val ideal: b:bool{b ==> model} // To be moved to Flags.
 type safe (#ip:ipkg) (i:ip.Pkg.t) = ideal /\ ip.Pkg.honest i
 
 private let is_safe (#ip:ipkg) (i:ip.Pkg.t{ip.Pkg.registered i})
@@ -24,8 +25,6 @@ private let is_safe (#ip:ipkg) (i:ip.Pkg.t{ip.Pkg.registered i})
   let b = ip.Pkg.get_honesty i in
   ideal && b
 
-//let _ = assert false
-
 #set-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 
 type ha = Hashing.Spec.alg
@@ -34,7 +33,8 @@ type text = bytes
 noeq type info: Type0 = {
   parent: r:rgn {~ (is_tls_rgn r)};
   alg: Hashing.Spec.alg; //too loose? Pkg.kdfa;
-  good: text -> bool (*TODO: should be Type0 *)}
+  good: text -> bool (*TODO: should be Type0 and erased *)
+}
 
 type tag (u:info) = lbytes (Hashing.Spec.tagLen u.alg)
 
@@ -44,18 +44,15 @@ type keyrepr (u:info) = Hashing.Spec.hkey u.alg
 let goodish (#ip:ipkg) (i:ip.Pkg.t) (u:info) (msg:text) =
   _: unit{~(safe i) \/ u.good msg}
 
-private type log_t
-  (#ip:ipkg)
-  (i:ip.Pkg.t)
-  (u:info)
-  (r:rgn)
-= MM.t r (tag u * text) (fun (t,v) -> goodish i u v) (fun _ -> True) // could constrain size
+private type log_t (#ip:ipkg) (i:ip.Pkg.t) (u:info) (r:rgn) =
+  MM.t r (tag u * text) (fun (t,v) -> goodish i u v) (fun _ -> True) // could constrain size
 
 // The runtime (concrete) type of MAC instances
 noeq abstract type concrete_key =
   | MAC: u:info -> k:keyrepr u -> concrete_key
 
 // The model type of instances - either ideal, or real
+// The real and concrete version are related by the functional correctness of HMAC
 noeq abstract type ir_key (ip:ipkg) (i:ip.Pkg.t) =
   | IdealKey:
     ck: concrete_key ->
@@ -125,7 +122,8 @@ let create ip _ _ i u =
   k <: key ip i
 
 let coerceT (ip: ipkg) (ha_of_i: ip.Pkg.t -> ha) (good_of_i: ip.Pkg.t -> text -> bool)
-  (i: ip.Pkg.t {ip.Pkg.registered i /\ ~(safe i)}) (u: u:info {u.alg = ha_of_i i /\ u.good == good_of_i i})
+  (i: ip.Pkg.t {ip.Pkg.registered i /\ ~(safe i)})
+  (u: u:info {u.alg = ha_of_i i /\ u.good == good_of_i i})
   (kv: Pkg.lbytes (keylen u)) : GTot (key ip i)
   =
   let ck = MAC u kv in
@@ -137,8 +135,7 @@ val coerce:
   ip: ipkg -> ha_of_i: (ip.Pkg.t -> ha) -> good_of_i: (ip.Pkg.t -> text -> bool) ->
   i: ip.Pkg.t {ip.Pkg.registered i /\ ~(safe i)} ->
   u: (u: info {u.alg = ha_of_i i /\ u.good == good_of_i i}) ->
-  kv: Pkg.lbytes (keylen u) ->
-  ST (k:key ip i)
+  kv: Pkg.lbytes (keylen u) -> ST (k:key ip i)
   (requires fun _ -> True)
   (ensures fun h0 k h1 ->
     modifies_none h0 h1 /\
@@ -183,17 +180,16 @@ let mac #ip #i k p =
 
 val verify:
   #ip:ipkg -> #i:ip.Pkg.t {ip.Pkg.registered i} -> k:key ip i ->
-  p:text -> t: tag (usage k) ->
-  ST bool
+  p:text -> t: tag (usage k) -> ST bool
   (requires fun _ -> True)
   (ensures fun h0 b h1 -> modifies_none h0 h1 /\
     (b /\ safe i ==> (usage k).good p))
 
-// We use the log to correct any verification errors
 let verify #ip #i k p t =
   let MAC u kv = get_key k in
   let verified = HMAC.hmacVerify u.alg kv p t in
   if is_safe i then
+    // We use the log to correct any verification errors
     let IdealKey _ _ log = k <: ir_key ip i in
     let valid = Some? (MM.lookup log (t,p)) in
     verified && valid
@@ -237,6 +233,8 @@ unfold let localpkg (ip: ipkg) (ha_of_i: i:ip.Pkg.t -> ha) (good_of_i: ip.Pkg.t 
     (coerceT ip ha_of_i good_of_i)
     (coerce ip ha_of_i good_of_i)
 
+(** The rest of the file is a unit test for the packaging of UFCMA **)
+
 /// TODOs:
 /// - Type0/Type1
 /// - how to pass key-generation-time usage parameters?
@@ -250,13 +248,13 @@ let coerce_eq2 _ _ v = v // this works; many similar variants did not.
 
 module MR = FStar.Monotonic.RRef
 
-#set-options "--initial_fuel 1 --max_fuel 4 --initial_ifuel 1 --max_ifuel 4"
+#set-options "--initial_fuel 1 --max_fuel 2 --initial_ifuel 1 --max_ifuel 2"
 open FStar.Tactics
 
-type id = nat
-let ip : ipkg = Pkg.Idx id (fun _ -> True) (fun _ -> True) (fun _ -> true)
+private type id = nat
+private let ip : ipkg = Pkg.Idx id (fun _ -> True) (fun _ -> True) (fun _ -> true)
 
-let test (r:rgn {~(is_tls_rgn r)}) (v': bytes) (t': Hashing.Spec.tag Hashing.SHA256)
+private let test (r:rgn {~(is_tls_rgn r)}) (v': bytes) (t': Hashing.Spec.tag Hashing.SHA256)
   : ST unit
   (requires fun h0 -> model)
   (ensures fun h0 _ h1 -> True)
