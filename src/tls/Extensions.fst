@@ -1494,7 +1494,7 @@ private val clientToServerExtension: protocolVersion
 let clientToServerExtension pv cfg cs ri pski ks resuming cext =
   match cext with
   | E_key_share _ ->
-    if pv = TLS_1p3 then Option.map E_key_share ks // ks should be in one of client's groups
+    if pv = TLS_1p3 then Option.mapTot E_key_share ks // ks should be in one of client's groups
     else None
   | E_alpn cal ->
     (match cfg.alpn with
