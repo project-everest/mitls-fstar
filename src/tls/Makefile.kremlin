@@ -24,7 +24,7 @@ MORE ?= $(addsuffix .fst, Nonce RSAKey DHGroup ECGroup CommonDH PMS		\
 			  Hashing.Spec Hashing.OpenSSL Hashing HMAC		\
 			  $(FSTAR_HOME)/ulib/FStar.Monotonic.DependentMap	\
 			  PSK TLSInfo StreamAE Crypto.Indexing			\
-			  StatefulLHAE StAE HandshakeLog TLS) \
+			  Handshake StatefulLHAE StAE HandshakeLog TLS) \
 # Next to try
 # KeySchedule
 # Negotiation
