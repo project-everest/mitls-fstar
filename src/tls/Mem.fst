@@ -51,7 +51,7 @@ type fresh_subregion child parent h0 h1 =
   stronger_fresh_region child h0 h1 /\
   HH.extends child parent
 
-type subrgn parent = r:rgn{HH.parent r = parent}
+type subrgn parent = r:rgn{HH.parent r == parent}
 
 /// Global top-level region for TLS ideal state.
 ///
