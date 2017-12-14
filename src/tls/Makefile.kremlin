@@ -82,7 +82,7 @@ clean:
 	rm -rf $(EXTRACT_DIR)/more
 
 .depend:
-	$(FSTAR) --lax --dep full $(addprefix --include , $(INCLUDE_PATHS)) TLS.fst Test.TLSConstants.fst > .depend
+	$(FSTAR) --lax --dep full $(addprefix --include , $(INCLUDE_PATHS)) TLS.fst Test.TLSConstants.fst QUIC.fst > .depend
 
 depend: .depend
 

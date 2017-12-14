@@ -26,7 +26,7 @@ type hostname = string
 type tlabel (h:hostname) = t:bytes
 private let tregion:rgn = new_region tls_tables_region
 private let tickets : MM.t tregion hostname tlabel (fun _ -> True) =
-  MM.alloc #tregion #hostname #tlabel #(fun _ -> True)
+  MM.alloc ()
 
 let lookup (h:hostname) = MM.lookup tickets h
 let extend (h:hostname) (t:tlabel h) = MM.extend tickets h t
@@ -35,7 +35,7 @@ let extend (h:hostname) (t:tlabel h) = MM.extend tickets h t
 // Note that this table also stores the master secret
 type session12 (tid:bytes) = protocolVersion * cipherSuite * ems:bool * ms:bytes
 private let sessions12 : MM.t tregion bytes session12 (fun _ -> True) =
-  MM.alloc #tregion #bytes #session12 #(fun _ -> True)
+  MM.alloc ()
 
 let s12_lookup (tid:bytes) = MM.lookup sessions12 tid
 let s12_extend (tid:bytes) (s:session12 tid) = MM.extend sessions12 tid s

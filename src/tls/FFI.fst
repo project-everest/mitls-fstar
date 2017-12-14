@@ -21,7 +21,7 @@ open TLS
 open FFICallbacks
 
 open FStar.HyperStack.All
-
+type cbytes = string
 #set-options "--lax"
 
 (* A flag for runtime debugging of ffi data.
@@ -287,7 +287,7 @@ let ffiSetALPN cfg x =
   let apl = if x = "" then [] else String.split [':'] x in
   if List.Tot.length apl > 255 then failwith "ffiSetALPN: too many entries";
   let apl = map (fun x ->
-    if String.length x < 256 then utf8 x
+    if String.length x < 256 then utf8_encode x
     else failwith ("ffiSetALPN: protocol <"^x^"> is too long")
   ) apl in
   { cfg with alpn = if apl=[] then None else Some apl }
@@ -303,13 +303,13 @@ val ffiSetTicketKey: a:string -> k:string -> ML bool
 let ffiSetTicketKey a k =
   (match findsetting a aeads with
   | None -> false
-  | Some a -> TLS.set_ticket_key a (abytes k))
+  | Some a -> TLS.set_ticket_key a (bytes_of_string k))
 
 type callbacks = FFICallbacks.callbacks
 
 val sendTcpPacket: callbacks:callbacks -> buf:bytes -> EXT (FStar.Error.optResult string unit)
 let sendTcpPacket callbacks buf =
-  let result = FFICallbacks.ocaml_send_tcp callbacks (get_cbytes buf) in
+  let result = FFICallbacks.ocaml_send_tcp callbacks (print_bytes buf) in
   if result < 0 then
     FStar.Error.Error ("socket send failure")
   else
@@ -319,7 +319,7 @@ val recvTcpPacket: callbacks:callbacks -> max:nat -> EXT (FStar.Tcp.recv_result 
 let recvTcpPacket callbacks max =
   let (result,str) = FFICallbacks.recvcb callbacks max in
   if result then
-    let b = abytes str in
+    let b = bytes_of_string str in
     if length b = 0
     then FStar.Tcp.RecvWouldBlock
     else FStar.Tcp.Received b
@@ -345,7 +345,7 @@ let install_ticket config ticket : ML (list PSK.psk_identifier) =
           ticket_nonce = Some empty_bytes;
           time_created = 0;
           // FIXME(adl): we should preserve the server flag somewhere
-          allow_early_data = config.enable_early_data;
+          allow_early_data = false ; //NS: FIXME!!! config.enable_early_data;
           allow_dhe_resumption = true;
           allow_psk_resumption = true;
           early_ae = ae;
@@ -368,13 +368,13 @@ let ffiAcceptConnected config cb =
 val ffiRecv: Connection.connection -> ML cbytes
 let ffiRecv c =
   match read c with
-    | Received response -> get_cbytes response
+    | Received response -> print_bytes response
     | WouldBlock
-    | Errno _ -> get_cbytes empty_bytes
+    | Errno _ -> print_bytes empty_bytes
 
 val ffiSend: Connection.connection -> cbytes -> ML int
 let ffiSend c b =
-  let msg = abytes b in
+  let msg = bytes_of_string b in
   write c msg
 
 let ffiSetTicketCallback (cfg:config) (cb:ticket_cb) =
@@ -410,7 +410,7 @@ let ffiGetTicket c: ML (option (ticket:bytes * rms:bytes)) =
 val ffiGetCert: Connection.connection -> ML cbytes
 let ffiGetCert c =
   let cert = getCert c in
-  get_cbytes cert
+  print_bytes cert
 
 // some basic sanity checks
 let ffiGetExporter (c:Connection.connection) (early:bool)

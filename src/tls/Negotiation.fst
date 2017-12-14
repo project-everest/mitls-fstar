@@ -735,7 +735,7 @@ let negotiate_version cfg offer =
   one and is a valid ciphersuite, or [None]
 *)
 private
-let is_cs_in_l (l1, sa) s = CipherSuite? s && List.Tot.mem s l1 && && CipherSuite?._1 s = Some sa
+let is_cs_in_l (l1, sa) s = CipherSuite? s && List.Tot.mem s l1 && CipherSuite?._1 s = Some sa
 val negotiate: l1:list valid_cipher_suite -> list valid_cipher_suite -> sigAlg
  -> Tot (option (c:valid_cipher_suite{CipherSuite? c && List.Tot.mem c l1}))
 let negotiate l1 l2 sa =
@@ -1141,7 +1141,7 @@ val compute_cs13:
   result (list (cs13 o) * option (namedGroup * cs:cipherSuite))
 let compute_cs13 cfg o psks shares server_cert =
   // pick acceptable record ciphersuites
-  let ncs =  TLSConstants.filter_aux cfg is_cs13_in_cfg o.ch_cipher_suites
+  let ncs =  TLSConstants.filter_aux cfg is_cs13_in_cfg o.ch_cipher_suites in
   // pick the (potential) group to use for DHE/ECDHE
   // also remember if there is a supported group with no share provided
   // in case we want to to a HRR
@@ -1300,7 +1300,7 @@ let computeServerMode cfg co serverRandom =
       then Error(AD_illegal_parameter, "Compression is deprecated") else
       let salgs =
         match find_signature_algorithms co with
-        | None -> [SIG_UNKNOWN (abyte2 (0xFFz, 0xFFz)); ECDSA_SHA1]
+        | None -> [SIG_UNKNOWN (twobytes (0xFFz, 0xFFz)); ECDSA_SHA1]
         | Some sigalgs -> List.Tot.filter (fun x -> List.Tot.mem x cfg.signature_algorithms) sigalgs
         in
       match cfg.cert_callbacks.cert_select_cb (get_sni co) salgs with

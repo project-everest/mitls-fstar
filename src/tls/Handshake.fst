@@ -542,6 +542,11 @@ let client_ServerFinished_13 hs ee ocr oc ocv (svd:bytes) digestCert digestCertV
             InAck true false // Client 1.3 ATK; next the client will read again to send Finished, writer++, and the Complete signal
           )) // moving to C_Complete
 
+let rec iutf8 (m:bytes) : St (s:string{String.length s < pow2 30 /\ utf8_encode s = m}) =
+    match iutf8_opt m with
+    | None -> trace ("Not a utf8 encoding of a string"); iutf8 m
+    | Some s -> s
+
 // Processing of the server CCS and optional NewSessionTicket
 // This is used both in full handshake and resumption
 let client_NewSessionTicket_12 (hs:hs) (resume:bool) (digest:Hashing.anyTag) (ost:option sticket)
@@ -569,11 +574,6 @@ let client_NewSessionTicket_12 (hs:hs) (resume:bool) (digest:Hashing.anyTag) (os
   | None, false -> InAck true false
   | Some t, false -> InError (AD_unexpected_message, "unexpected NewSessionTicket message")
   | None, true -> InError (AD_unexpected_message, "missing expected NewSessionTicket message")
-
-let rec iutf8 (m:bytes) : St (s:string{String.length s < pow2 30 /\ utf8_encode s = m}) =
-    match iutf8_opt m with
-    | None -> trace ("Not a utf8 encoding of a string"); iutf8 m
-    | Some s -> s
 
 // Process an incoming ticket (1.3)
 let client_NewSessionTicket_13 (hs:hs) (st13:sticket13)
@@ -984,7 +984,7 @@ let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinishe
           let ticket_ext =
             match cfg.max_early_data, cfg.quic_parameters with
             // QUIC: always enable 0-RTT data with max limit
-            | _, Some _ -> [Extensions.E_early_data (Some (FStar.UInt32.uint_to_t 0xfffffffful))]
+            | _, Some _ -> [Extensions.E_early_data (Some 0xfffffffful)]
             | Some max_ed, None -> [Extensions.E_early_data (Some (FStar.UInt32.uint_to_t max_ed))]
             | _ -> [] in
           let tnonce, _ = split tb 12 in

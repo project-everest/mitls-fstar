@@ -10,8 +10,8 @@ type cb_fun_ptr = callbacks
 type sigalg = FStar.UInt16.t
 type cert_ptr = callbacks
 
-assume val ocaml_send_tcp: cb_state -> cbytes -> Tot int
-assume val ocaml_recv_tcp: cb_state -> cbytes -> Tot int
+assume val ocaml_send_tcp: cb_state -> string -> Tot int
+assume val ocaml_recv_tcp: cb_state -> string -> Tot int
 
 // Ticket callback
 assume val ocaml_ticket_cb: cb_state -> cb_fun_ptr -> string -> bytes -> bytes -> EXT unit
@@ -27,4 +27,4 @@ assume val ocaml_cert_verify_cb: cb_state -> cb_fun_ptr -> bytes -> sigalg -> tb
    The F* compiler does not know that.  So implement FFI recv in ML to avoid
    exposing the String.Substring call to effects checking.  Same as
    Platform.Tcp.recv *)
-assume val recvcb: callbacks -> max:nat -> EXT (result:bool * b:cbytes {length (abytes b) <= max})
+assume val recvcb: callbacks -> max:nat -> EXT (result:bool * b:string {length (bytes_of_string b) <= max})

@@ -285,21 +285,6 @@ let namedGroupBytes ng =
     end
   | NG_UNKNOWN u	-> B.twobytes u
 
-let twobytes_inj x1 x2 : Lemma
-  (B.twobytes x1 == B.twobytes x2 ==> fst x1 = fst x2 /\ snd x1 = snd x2)
-  [SMTPat (B.twobytes x1); SMTPat (B.twobytes x2)]
-= let s1 = B.twobytes x1 in
-  let s2 = B.twobytes x2 in
-  assert (x1 == (Seq.index s1 0, Seq.index s1 1));
-  assert (x2 == (Seq.index s2 0, Seq.index s2 1))
-
-let namedGroupBytes_is_injective
-  (ng1 ng2: namedGroup)
-: Lemma
-  (requires (Seq.equal (namedGroupBytes ng1) (namedGroupBytes ng2)))
-  (ensures (ng1 == ng2))
-= ()
-
 (* TODO: move to FStar.Bytes *)
 let twobytes_inj x1 x2 : Lemma
   (B.twobytes x1 == B.twobytes x2 ==> x1 == x2)
@@ -318,7 +303,6 @@ let namedGroupBytes_is_injective ng1 ng2 =
 let cbyte2 (b:bytes{length b = 2}) : byte * byte =
   b.[0ul], b.[1ul]
   
->>>>>>> c_mitls2c
 (** Parsing function for (EC)DHE named groups *)
 val parseNamedGroup: pinverse_t namedGroupBytes
 let parseNamedGroup b =
