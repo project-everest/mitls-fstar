@@ -1,0 +1,106 @@
+# include Makefile
+include $(FSTAR_HOME)/ulib/ml/Makefile.include
+
+HACL_HOME=../../../hacl-star
+MITLS_HOME=../..
+
+INCLUDE_PATHS= \
+	$(FSTAR_HOME)/contrib/CoreCrypto/fst/ \
+	$(HACL_HOME)/secure_api \
+	$(HACL_HOME)/secure_api/utils \
+	$(HACL_HOME)/secure_api/concrete_specializations \
+	$(HACL_HOME)/secure_api/LowCProvider/fst \
+	$(HACL_HOME)/code/curve25519/api \
+	$(HACL_HOME)/code/lib \
+	$(KREMLIN_HOME)/kremlib \
+	$(MITLS_HOME)/libs/ffi \
+	./concrete-flags
+
+
+FSTAR=fstar.exe $(OTHERFLAGS)
+MAIN_FILES=Test.TLSConstants.fst
+
+MORE ?= $(addsuffix .fst, Nonce RSAKey DHGroup ECGroup CommonDH PMS		\
+			  Hashing.Spec Hashing.OpenSSL Hashing HMAC		\
+			  $(FSTAR_HOME)/ulib/FStar.Monotonic.DependentMap	\
+			  PSK TLSInfo StreamAE Crypto.Indexing			\
+			  Handshake StatefulLHAE StAE HandshakeLog TLS) \
+# Next to try
+# KeySchedule
+# Negotiation
+# Handshake
+# HandshakeLog
+# SessionDB
+# TLS
+
+EXTRACT_DIR=extract
+KRML_DIR=$(EXTRACT_DIR)/krml_output
+KRML_FILES = Test.TLSConstants.fst #TLSInfo.fst #$(wildcard *.fst)
+DROP_MODULES = $(addprefix -drop , FStar.Bytes MonotoneMap MonotoneMapNonDep Transport)
+C_DRIVER = $(EXTRACT_DIR)/src/main.c
+HEADERS = $(addprefix -add-include ,'"hacks.h"' '"transport.h"' '"krembytes.h"' '"kremstr.h"')
+KRML=krml
+KRML_COMMAND=$(KRML) $(addprefix -I , $(INCLUDE_PATHS)) -I extract/include \
+  $(DROP_MODULES) -I concrete-flags $(HEADERS) -fnoanonymous-unions \
+  -warn-error -9+11-7-6 -ccopt -Wno-unused-function KRML_HOME/kremlib/kremstr.c \
+  -fsopts --debug,yes -verbose extract/src/support.c $(KOPTS) \
+  -add-include '"hacl_glue.h"' -bundle \
+  'Crypto.AEAD.*,Crypto.Symmetric.*,Buffer.Utils,Crypto.Plain' -drop \
+  Crypto.AEAD.Main
+
+# # We can eventually unify these dependencies with the main Makefile
+# .depend-KRML:
+# 	@-$(FSTAR) $(FSTAR_INCLUDE_PATHS) --dep make $(KRML_FILES) > .depend-KRML
+
+# -include .depend-KRML
+all: $(addsuffix .checked.lax, $(KRML_FILES)) $(KRML_DIR)/out.krml
+	$(KRML_COMMAND) $(KRML_DIR)/out.krml -tmpdir $(KRML_DIR) $(C_DRIVER) -o test.exe
+	./test.exe
+
+more: $(EXTRACT_DIR)/more/out.krml
+	$(KRML_COMMAND) $^ -tmpdir $(EXTRACT_DIR)/more -skip-linking
+
+standalone: $(EXTRACT_DIR)/standalone/out.krml
+	$(KRML_COMMAND) $^ -tmpdir $(EXTRACT_DIR)/standalone -skip-linking
+
+READLINK=$(shell which greadlink >/dev/null 2>&1 && echo greadlink || echo readlink)
+KRML_BINARY=$(shell $(READLINK) -f $(shell which $(KRML)))
+
+$(KRML_DIR)/out.krml: $(KRML_FILES) $(KRML_BINARY)
+	$(KRML_COMMAND) $(KRML_FILES) -skip-translation -tmpdir $(KRML_DIR)
+
+$(EXTRACT_DIR)/more/out.krml: $(addsuffix .checked.lax, $(MORE)) $(KRML_BINARY)
+	mkdir -p $(EXTRACT_DIR)/more
+	$(KRML_COMMAND) $(MORE) -skip-translation -tmpdir extract/more
+
+$(EXTRACT_DIR)/standalone/out.krml: Standalone.fst.checked.lax
+	mkdir -p $(EXTRACT_DIR)/standlone
+	$(KRML_COMMAND) $(subst .checked.lax,, $^) -skip-translation -tmpdir extract/standalone
+
+clean:
+	rm -f $(KRML_DIR)/*.c $(KRML_DIR)/*.h $(KRML_DIR)/*.o $(KRML_DIR)/out.krml .depend *.checked.lax
+	rm -rf $(EXTRACT_DIR)/more
+
+.depend:
+	$(FSTAR) --lax --dep full $(addprefix --include , $(INCLUDE_PATHS)) TLS.fst Test.TLSConstants.fst > .depend
+
+depend: .depend
+
+include .depend
+
+lax-all: $(addsuffix .checked.lax, $(ALL_FST_FILES))
+
+%.checked.lax: %
+	$(FSTAR) --lax --cache_checked_modules $(addprefix --include , $(INCLUDE_PATHS)) $*
+	touch $@
+
+
+
+# Targets to get F* arguments in interactive mode
+%.fst-in:
+	@echo $(addprefix --include , $(INCLUDE_PATHS)) \
+	--lax --cache_checked_modules
+
+%.fsti-in:
+	@echo $(addprefix --include , $(INCLUDE_PATHS)) \
+	--lax --cache_checked_modules

@@ -2,7 +2,7 @@
 module RSAKey
 
 open CoreCrypto
-open Platform.Bytes
+open FStar.Bytes
 open FStar.HyperStack.All
 
 module TC = TLSConstants
@@ -13,7 +13,7 @@ type sk = CoreCrypto.rsa_key
 type pred = | SK_PK of sk * pk
 
 (* TODO: use the following to idealize *)
-//let honest_log = Platform.Error.if_ideal (fun _ -> ref [])
+//let honest_log = FStar.Error.if_ideal (fun _ -> ref [])
 
 //let honest (pk:pk): bool = failwith "only used in ideal implementation, unverified"
 let honest (pk:pk): bool = false

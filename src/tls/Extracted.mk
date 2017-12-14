@@ -30,7 +30,7 @@ $(ODIR)/Test%.ml: test/Test%.fst
 	--include concrete-flags --extract_module Test$(*F) $<
 
 # Special case for Crypto.AEAD.*: must look in hacl-star/secure_api/aead
-# Note that dependencies have absolute paths in the .depend so there is no need 
+# Note that dependencies have absolute paths in the .depend so there is no need
 # to specialize for other internal Hacl paths
 $(ODIR)/Crypto_AEAD_%.ml: $(LLDIR)/aead/Crypto.AEAD.%.fst
 	$(FSTAR) $(FSTAR_INCLUDE_PATHS) --lax --codegen OCaml \
@@ -108,7 +108,7 @@ test.out: mitls.cmxa $(ODIR)/TestKS.ml $(ODIR)/TestDH.ml $(ODIR)/TestGCM.ml test
 	mitls.cmxa \
 	$(ODIR)/TestKS.ml $(ODIR)/TestDH.ml $(ODIR)/TestGCM.ml test/parsing_test.ml test/test_hkdf.ml test/test_main.ml -o test.out
 
-# Extend path for running cmitls.exe 
+# Extend path for running cmitls.exe
 ifeq ($(OS),Windows_NT)
 else
 ifeq ($(UNAME_S),Darwin)
@@ -117,10 +117,21 @@ CEXE_PATH=LD_LIBRARY_PATH=./
 endif
 endif
 
+KRML_FILES = $(wildcard *.fst)
+# We should add back support for Platform.Bytes when we get the chance.
+DROP_MODULES = $(addprefix -drop ,MonotoneMap Platform.Bytes Curve25519)
+C_DRIVER = $(KRML_DIR)/main.c
+HACKS_HEADER = '"hacks.h"'
+
+kremlin:
+	FSTAR_HOME=$(FSTAR_HOME) $(KRML) $(KRML_INCLUDE_PATHS) $(KRML_FILES) $(C_DRIVER) \
+	           $(DROP_MODULES) -I concrete-flags -add-include $(HACKS_HEADER) -fnoanonymous-unions \
+			   -tmpdir $(KRML_DIR) $(KOPTS) -warn-error +9+11-7-6 -skip-compilation
+
 test: test.out mitls.exe cmitls.exe
 	# Unit tests from test/test_main.ml
 	$(EXTRA_PATH) ./test.out
-	# Run mitls.exe 
+	# Run mitls.exe
 	./mitls.exe  -v 1.2 -ffi www.google.com
 	./mitls.exe  -v 1.2 www.microsoft.com
 	#./mitls.exe -v 1.3. www.google.com failing due to different draft versions
@@ -182,7 +193,7 @@ $(LIBMITLS): mitls.cmxa
 else
 $(LIBMITLS): mitls.cmxa
     # pass "-z noexecstack" to better support Bash on Windows
-    # Use a version script to ensure that CoreCrypto calls to OpenSSL crypto are resolved by 
+    # Use a version script to ensure that CoreCrypto calls to OpenSSL crypto are resolved by
     #   libcrypt.a at link time, not against libcrypto*.so at run-time, as version mismatches
     #   can result in heap corruptions and crashes.
 	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
@@ -206,7 +217,7 @@ cmitls.o: cmitls.c $(FFI_HOME)/mitlsffi.h
 cmitls.exe: cmitls.o $(LIBMITLS)
 	$(NATIVE_C_COMPILER) -g -o cmitls.exe cmitls.o $(LIBMITLS) $(NATIVE_C_LIBRARIES)
 
-# our interactive tests; the baseline is make client{|12|13} vs make server 
+# our interactive tests; the baseline is make client{|12|13} vs make server
 
 
 serverQ::
@@ -239,13 +250,13 @@ cserver-psk::
 	OCAMLRUNPARAM=b $(CEXE_PATH) ./cmitls.exe -mv 1.3 -v 1.3 -s -psk TestPSK:00 -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 0.0.0.0 4443 -sigalgs ECDSA+SHA384
 
 client13::
-	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 127.0.0.1 4443 
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 127.0.0.1 4443
 client-psk::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 -psk TestPSK:00 -offerpsk TestPSK 127.0.0.1 4443
 client-0rtt::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 127.0.0.1 4443 -reconnect -0rtt
 client12::
-	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.2 127.0.0.1 4443 
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.2 127.0.0.1 4443
 client::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.3 127.0.0.1 4443
 cclient13::

@@ -6,8 +6,8 @@ open FStar.HyperStack
 open FStar.Seq
 open FStar.Set
 
-open Platform.Bytes
-open Platform.Error
+open FStar.Bytes
+open FStar.Error
 open TLSError
 open TLSConstants
 open Extensions
@@ -17,7 +17,7 @@ open StatefulLHAE
 open HKDF
 open PSK
 
-module MM = MonotoneMap
+module MM = FStar.Monotonic.DependentMap
 module MR = FStar.Monotonic.RRef
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
@@ -41,7 +41,7 @@ let print_share (#g:CommonDH.group) (s:CommonDH.share g) : ST unit
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
   let kb = CommonDH.serialize_raw #g s in
-  let kh = Platform.Bytes.hex_of_bytes kb in
+  let kh = FStar.Bytes.hex_of_bytes kb in
   dbg ("Share: "^kh)
 
 (********************************************
@@ -129,7 +129,8 @@ abstract type es (i:esId) = H.tag (esId_hash i)
 // Handshake secret (abstract)
 abstract type hs (i:hsId) = H.tag (hsId_hash i)
 type fink (i:finishedId) = HMAC.UFCMA.key (HMAC.UFCMA.HMAC_Finished i) (fun _ -> True)
-type binderKey (i:binderId) = HMAC.UFCMA.key (HMAC.UFCMA.HMAC_Binder i) (fun _ -> True)
+let trivial (_: bytes) = True
+type binderKey (i:binderId) = HMAC.UFCMA.key (HMAC.UFCMA.HMAC_Binder i) trivial
 
 // TLS 1.3 master secret (abstract)
 abstract type ams (i:asId) = H.tag (asId_hash i)
@@ -224,7 +225,7 @@ type ks_state =
  * AR: changing state from rref to ref, with region captured in the refinement.
  *)
 type ks =
-| KS: #region:rid -> state:(ref ks_state){HS.MkRef?.id state = region} -> ks
+| KS: #region:rid -> state:(ref ks_state){HS.frameOf state = region} -> ks
 //17-04-17 CF: expose it as a concrete ref?
 //17-04-17 CF: no need to keep the region, already in the ref.
 
@@ -292,6 +293,20 @@ val ks_client_init: ks:ks -> ogl: option (list valid_namedGroup)
     modifies (Set.singleton rid) h0 h1 /\
     modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
 
+
+private
+let serialize_share (gx:(g:CommonDH.group & CommonDH.keyshare g)) =
+    let (| g, gx |) = gx in
+    match CommonDH.namedGroup_of_group g with
+      | None -> None // Impossible
+      | Some ng -> Some (CommonDH.Share g (CommonDH.pubshare #g gx))
+
+private val map_ST_keygen: list CommonDH.group -> ST0 (list (g:CommonDH.group & CommonDH.keyshare g))
+private let rec map_ST_keygen l =
+  match l with
+  | [] -> []
+  | hd :: tl -> keygen hd :: map_ST_keygen tl
+
 let ks_client_init ks ogl =
   dbg ("ks_client_init "^(if ogl=None then "1.2" else "1.3"));
   let KS #rid st = ks in
@@ -302,12 +317,7 @@ let ks_client_init ks ogl =
     None
   | Some gl -> // TLS 1.3
     let groups = List.Tot.map group_of_valid_namedGroup gl in
-    let gs = map_ST keygen groups in
-    let serialize_share (gx:(g:CommonDH.group & CommonDH.keyshare g)) =
-      let (| g, gx |) = gx in
-      match CommonDH.namedGroup_of_group g with
-      | None -> None // Impossible
-      | Some ng -> Some (CommonDH.Share g (CommonDH.pubshare #g gx)) in
+    let gs = map_ST_keygen groups in
     let gxl = List.Tot.choose serialize_share gs in
     st := C (C_13_wait_SH cr [] gs);
     Some gxl
@@ -330,13 +340,19 @@ private let mk_binder (#rid) (pskid:PSK.pskid)
   dbg ("Binder key["^lb^"]: "^(print_bytes bk));
   let bk = finished_13 h bk in
   dbg ("Binder Finished key: "^(print_bytes bk));
-  let bk : binderKey bId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Binder bId) (fun _ -> True) rid bk in
+  let bk : binderKey bId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Binder bId) trivial rid bk in
   (| bId, bk|), (| i, es |)
+
+private val map_ST_mk_binder: #rid:rid -> list PSK.pskid -> ST0 (list ((i:binderId & bk:binderKey i) * (i:esId{~(NoPSK? i)} & es i)))
+let rec map_ST_mk_binder #rid l =
+  match l with
+  | [] -> []
+  | hd :: tl -> mk_binder #rid hd :: map_ST_mk_binder #rid tl
 
 let ks_client_13_get_binder_keys ks pskl =
   let KS #rid st = ks in
   let C (C_13_wait_SH cr [] gs) = !st in
-  let pskl = map_ST (mk_binder #rid) pskl in
+  let pskl = map_ST_mk_binder #rid pskl in
   let (bkl, esl) = List.Tot.split pskl in
   st := C (C_13_wait_SH cr esl gs);
   bkl
@@ -451,7 +467,7 @@ let ks_server_13_init ks cr cs pskid g_gx =
           dbg ("Ticket RMS: "^(print_bytes rms));
           let i = ResumptionPSK #li rmsId in
           let CipherSuite13 _ h = cs in
-          let nonce, _ = split id 12 in
+          let nonce, _ = split id 12ul in
           let psk = HKDF.derive_secret h rms "resumption" nonce in
           (i, psk, h)
         | None ->
@@ -654,7 +670,7 @@ let ks_12_record_key ks =
     match !st with
     | C (C_12_has_MS csr alpha msId ms) -> Client, csr, alpha, msId, ms
     | S (S_12_has_MS csr alpha msId ms) -> Server, csr, alpha, msId, ms in
-  let cr, sr = split csr 32 in
+  let cr, sr = split csr 32ul in
   let (pv, cs, ems) = alpha in
   let kdf = kdfAlg pv cs in
   let ae = get_aeAlg cs in
@@ -664,9 +680,9 @@ let ks_12_record_key ks =
   let slen = AEADProvider.salt_length id in
   let expand = TLSPRF.kdf kdf ms (sr @| cr) (klen + klen + slen + slen) in
   dbg ("keystring (CK, CIV, SK, SIV) = "^(print_bytes expand));
-  let k1, expand = split expand klen in
-  let k2, expand = split expand klen in
-  let iv1, iv2 = split expand slen in
+  let k1, expand = split_ expand klen in
+  let k2, expand = split_ expand klen in
+  let iv1, iv2 = split_ expand slen in
   let wk, wiv, rk, riv =
     match role with
     | Client -> k1, iv1, k2, iv2
@@ -735,7 +751,7 @@ let ks_server_12_cke_dh ks gy hashed_log =
   let msId, ms =
     if ems then
       begin
-      let ms = TLSPRF.prf (pv,cs) pmsb (utf8 "extended master secret") hashed_log 48 in
+      let ms = TLSPRF.prf (pv,cs) pmsb (utf8_encode "extended master secret") hashed_log 48 in
       dbg ("extended master secret:"^(print_bytes ms));
       let msId = ExtendedMS pmsId hashed_log kef in
       msId, ms
@@ -1142,7 +1158,7 @@ let ks_client_12_set_session_hash ks log =
       let msId, ms =
         if ems then
           begin
-          let ms = TLSPRF.prf (pv,cs) pms (utf8 "extended master secret") log 48 in
+          let ms = TLSPRF.prf (pv,cs) pms (utf8_encode "extended master secret") log 48 in
           dbg ("extended master secret:"^(print_bytes ms));
           let msId = ExtendedMS pmsId log kef in
           msId, ms

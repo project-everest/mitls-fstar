@@ -10,8 +10,8 @@ module FFI
 // TODO: guarantee (by typing) that we don't do stdio, and don't throw
 //       exceptions, notably for incomplete pattern matching
 
-open Platform.Bytes
-open Platform.Error
+open FStar.Bytes
+open FStar.Error
 
 open TLSConstants
 open TLSInfo
@@ -307,24 +307,24 @@ let ffiSetTicketKey a k =
 
 type callbacks = FFICallbacks.callbacks
 
-val sendTcpPacket: callbacks:callbacks -> buf:bytes -> EXT (Platform.Error.optResult string unit)
+val sendTcpPacket: callbacks:callbacks -> buf:bytes -> EXT (FStar.Error.optResult string unit)
 let sendTcpPacket callbacks buf =
   let result = FFICallbacks.ocaml_send_tcp callbacks (get_cbytes buf) in
   if result < 0 then
-    Platform.Error.Error ("socket send failure")
+    FStar.Error.Error ("socket send failure")
   else
-    Platform.Error.Correct ()
+    FStar.Error.Correct ()
 
-val recvTcpPacket: callbacks:callbacks -> max:nat -> EXT (Platform.Tcp.recv_result max)
+val recvTcpPacket: callbacks:callbacks -> max:nat -> EXT (FStar.Tcp.recv_result max)
 let recvTcpPacket callbacks max =
   let (result,str) = FFICallbacks.recvcb callbacks max in
   if result then
     let b = abytes str in
     if length b = 0
-    then Platform.Tcp.RecvWouldBlock
-    else Platform.Tcp.Received b
+    then FStar.Tcp.RecvWouldBlock
+    else FStar.Tcp.Received b
   else
-    Platform.Tcp.RecvError ("socket recv failure")
+    FStar.Tcp.RecvError ("socket recv failure")
 
 let install_ticket config ticket : ML (list PSK.psk_identifier) =
   match ticket with
@@ -417,9 +417,11 @@ let ffiGetExporter (c:Connection.connection) (early:bool)
   : ML (option (Hashing.Spec.alg * aeadAlg * bytes))
   =
   let keys = Handshake.xkeys_of c.Connection.hs in
-  if Seq.length keys = 0 then None
-  else
-    let i = if Seq.length keys = 2 && not early then 1 else 0 in
+  (* Rewrote this around broken `=` comparsion compilation, we should revisit - jroesch *)
+  match Seq.length keys with
+  | 0 -> None
+  | _ ->
+    let i = (match Seq.length keys with 2 when not early -> 1 | _ -> 0) in
     let (| li, expId, b|) = Seq.index keys i in
     let h = exportId_hash expId in
     let ae = logInfo_ae li in

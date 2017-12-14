@@ -10,9 +10,8 @@ module Encode
  *)
 
 open FStar.Seq
-open Platform
-open Platform.Bytes
-open Platform.Error
+open FStar.Bytes
+open FStar.Error
 open TLSError
 open TLSConstants
 open TLSInfo

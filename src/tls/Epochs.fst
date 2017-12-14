@@ -12,8 +12,8 @@ open FStar.Seq // DO NOT move further below, it would shadow `FStar.HyperStack.m
 open FStar.HyperStack
 open FStar.Monotonic.RRef
 open FStar.Monotonic.Seq
-open Platform.Error
-open Platform.Bytes
+open FStar.Error
+open FStar.Bytes
 
 open TLSError
 open TLSInfo
@@ -204,7 +204,7 @@ unfold let incr_post #r #n (es:epochs r n) (proj:(es:epochs r n -> Tot (epoch_ct
   let newr = m_sel h1 ctr in
   let ctr_as_hsref = MR.as_hsref ctr in
   modifies_one r h0 h1 /\
-  HH.modifies_rref r (Set.singleton (Heap.addr_of (HH.as_ref (MkRef?.ref ctr_as_hsref)))) (HS.HS?.h h0) (HS.HS?.h h1) /\
+  HH.modifies_rref r (Set.singleton (HS.as_addr ctr_as_hsref)) (HS.HS?.h h0) (HS.HS?.h h1) /\
   newr = oldr + 1
 
 val add_epoch :
@@ -214,7 +214,7 @@ val add_epoch :
     (ensures fun h0 x h1 ->
         let es = MkEpochs?.es es in
         let es_as_hsref = MR.as_hsref es in
-        modifies_one r h0 h1 /\ modifies_rref r (Set.singleton (Heap.addr_of (as_ref es_as_hsref))) (HS.HS?.h h0) (HS.HS?.h h1) /\
+        modifies_one r h0 h1 /\ modifies_rref r (Set.singleton (HS.as_addr es_as_hsref)) (HS.HS?.h h0) (HS.HS?.h h1) /\
         i_sel h1 es == Seq.snoc (i_sel h0 es) e)
 let add_epoch #r #n (MkEpochs es _ _ _) e = MS.i_write_at_end es e
 

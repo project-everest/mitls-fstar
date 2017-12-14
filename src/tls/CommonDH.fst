@@ -6,18 +6,19 @@ records the honesty of shares using two layers of types: pre_share
 is for syntactically valid shares (used in parsing modules) while
 share is for registered shares (for which is_honest is defined).
 *)
-﻿module CommonDH
+module CommonDH
 
 open FStar.HyperStack
-open Platform.Bytes
-open Platform.Error
+open FStar.Bytes
+open FStar.Error
 open CoreCrypto
 open Parse
 open TLSError
 open FStar.HyperStack.ST
 
 module MR = FStar.Monotonic.RRef
-module MM = MonotoneMap
+module MM = FStar.Monotonic.DependentMap
+module DM = FStar.DependentMap
 module ST = FStar.HyperStack.ST
 
 (* A flag for runtime debugging of cDH data.
@@ -111,7 +112,7 @@ private type share_table = (if Flags.ideal_KEF then ideal_log else unit)
 
 abstract let share_log: share_table =
   (if Flags.ideal_KEF then
-    MM.alloc #dh_region #id #honest #(fun _ -> True)
+    MM.alloc () <: ideal_log
   else
     ())
 
@@ -393,7 +394,7 @@ let keyShareEntryBytes = function
 (** Parsing function for a KeyShareEntry *)
 let parseKeyShareEntry b =
   assume false; // TODO registration
-  let ng, key_exchange = split b 2 in
+  let ng, key_exchange = split b 2ul in
   match parseNamedGroup ng with
   | Correct ng ->
     begin
@@ -438,8 +439,7 @@ let pinverse_keyShareEntry x = ()
 
 // Choice: truncate when maximum length is exceeded
 (** Serializing function for a list of KeyShareEntry *)
-let keyShareEntriesBytes kes =
-  let rec keyShareEntriesBytes_aux (b:bytes{length b < 65536}) (kes:list keyShareEntry): Tot (b:bytes{length b < 65536}) (decreases kes) =
+private let rec keyShareEntriesBytes_aux (b:bytes{length b < 65536}) (kes:list keyShareEntry): Tot (b:bytes{length b < 65536}) (decreases kes) =
   match kes with
   | [] -> b
   | ke::kes ->
@@ -447,29 +447,33 @@ let keyShareEntriesBytes kes =
     if length b' < 65536 then
       keyShareEntriesBytes_aux b' kes
     else b
-  in
+
+let keyShareEntriesBytes kes =
   let b = keyShareEntriesBytes_aux empty_bytes kes in
   lemma_repr_bytes_values (length b);
   vlbytes 2 b
 
 (** Parsing function for a list KeyShareEntry *)
-let parseKeyShareEntries b =
-  let rec (aux: b:bytes -> list keyShareEntry -> Tot (result (list keyShareEntry)) (decreases (length b))) = fun b entries ->
-    if length b > 0 then
+private let rec parseKeyShareEntries_aux (b:bytes) (entries:list keyShareEntry)
+   : Tot (result (list keyShareEntry)) 
+         (decreases (length b))
+   = if length b > 0 then
       if length b >= 4 then
-	let ng, data = split b 2 in
+	let ng, data = split b 2ul in
 	match vlsplit 2 data with
 	| Correct(kex, bytes) ->
 	  begin
 	  match parseKeyShareEntry (ng @| vlbytes 2 kex) with
-	  | Correct entry -> aux bytes (entries @ [entry])
+	  | Correct entry -> parseKeyShareEntries_aux bytes (entries @ [entry])
 	  | Error z -> Error z
 	  end
 	| Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry")
       else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse key share entries")
-    else Correct entries in
+    else Correct entries
+  
+let parseKeyShareEntries b =
   match vlparse 2 b with
-  | Correct b -> aux b []
+  | Correct b -> parseKeyShareEntries_aux b []
   | Error z   -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entries")
 
 (** Serializing function for a ClientKeyShare *)

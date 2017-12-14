@@ -1,8 +1,8 @@
 module StatefulPlain
 
 open FStar.Seq
-open Platform.Bytes
-open Platform.Error
+open FStar.Bytes
+open FStar.Error
 
 open TLSError
 open TLSConstants
@@ -35,7 +35,7 @@ val parseAD: i:id -> ad:adata i -> Tot contentType
 let parseAD i ad =
   lemma_12 i;
   let pv = pv_of_id i in
-  let bct, bver = Platform.Bytes.split ad 1 in
+  let bct, bver = FStar.Bytes.split ad 1ul in
   match parseCT bct, parseVersion bver with
   | Correct ct, Correct ver ->
     assert (ver = pv);

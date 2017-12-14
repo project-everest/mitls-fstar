@@ -5,12 +5,13 @@ open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.HyperStack.ST
 
-open Platform.Bytes
-open Platform.Error
+open FStar.Bytes
+open FStar.Error
 open TLSError
 open TLSConstants
 
-module MM = MonotoneMap
+module DM = FStar.DependentMap
+module MM = FStar.Monotonic.DependentMap
 module MR = FStar.Monotonic.RRef
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
@@ -62,23 +63,23 @@ type psk_identifier = identifier:bytes{length identifier < 65536}
 // We rule out all PSK that do not have at least one non-null byte
 // thus avoiding possible confusion with non-PSK for all possible hash algs
 type app_psk (i:psk_identifier) =
-  b:bytes{exists i.{:pattern index b i} index b i <> 0z}
+  b:bytes{exists i.{:pattern b.[i]} b.[i] <> 0z}
 
 type app_psk_entry (i:psk_identifier) =
   (app_psk i) * pskInfo * bool
 
 // Global invariant on the PSK idealization table
-// No longer necessary now that MonotoneMap uses eqtype
+// No longer necessary now that FStar.Monotonic.DependentMap uses eqtype
 //type app_psk_injective (m:MM.map' psk_identifier app_psk_entry) =
 //  forall i1 i2.{:pattern (MM.sel m i1); (MM.sel m i2)}
 //      Seq.equal i1 i2 <==> (match MM.sel m i1, MM.sel m i2 with
 //                  | Some (psk1, pski1, h1), Some (psk2, pski2, h2) -> Seq.equal psk1 psk2 /\ h1 == h2
 //                  | _ -> True)
-type psk_table_invariant (m:MM.map' psk_identifier app_psk_entry) = True
+type psk_table_invariant (m:MM.partial_dependent_map psk_identifier app_psk_entry) = True
 
 private let psk_region:rgn = new_region tls_tables_region
 private let app_psk_table : MM.t psk_region psk_identifier app_psk_entry psk_table_invariant =
-  MM.alloc #psk_region #psk_identifier #app_psk_entry #psk_table_invariant
+  MM.alloc ()
 
 type registered_psk (i:psk_identifier) =
   MR.witnessed (MM.defined app_psk_table i)
@@ -124,7 +125,7 @@ let psk_lookup (i:psk_identifier) : ST (option pskInfo)
 
 type honest_st (i:pskid) (h:mem) =
   (MM.defined app_psk_table i h /\
-  (let (_,_,b) = MM.value app_psk_table i h in b = true))
+  (let (_,_,b) = MM.value_of app_psk_table i h in b = true))
 
 type honest_psk (i:pskid) = MR.witnessed (honest_st i)
 
@@ -151,8 +152,9 @@ let gen_psk (i:psk_identifier) (ctx:pskInfo)
     honest_psk i))
   =
   MR.m_recall app_psk_table;
-  let psk = (abyte 1z) @| CoreCrypto.random 32 in
-  assume(index psk 0 = 1z);
+  let rand = CoreCrypto.random 32 in
+  let psk = (abyte 1z) @| rand in
+  assume(psk.[0ul] = 1z);
   let add : app_psk_entry i = (psk, ctx, true) in
   MM.extend app_psk_table i add;
   MM.contains_stable app_psk_table i add;
@@ -179,7 +181,7 @@ let coerce_psk (i:psk_identifier) (ctx:pskInfo) (k:app_psk i)
 
 let compatible_hash_ae_st (i:pskid) (ha:hash_alg) (ae:aeadAlg) (h:mem) =
   (MM.defined app_psk_table i h /\
-  (let (_,ctx,_) = MM.value app_psk_table i h in
+  (let (_,ctx,_) = MM.value_of app_psk_table i h in
   ha = pskInfo_hash ctx /\ ae = pskInfo_ae ctx))
 
 let compatible_hash_ae (i:pskid) (h:hash_alg) (a:aeadAlg) =
@@ -187,7 +189,7 @@ let compatible_hash_ae (i:pskid) (h:hash_alg) (a:aeadAlg) =
 
 let compatible_info_st (i:pskid) (c:pskInfo) (h:mem) =
   (MM.defined app_psk_table i h /\
-  (let (_,ctx,_) = MM.value app_psk_table i h in c = ctx))
+  (let (_,ctx,_) = MM.value_of app_psk_table i h in c = ctx))
 
 let compatible_info (i:pskid) (c:pskInfo) =
   MR.witnessed (compatible_info_st i c)
@@ -203,7 +205,7 @@ let verify_hash_ae (i:pskid) (ha:hash_alg) (ae:aeadAlg) : ST bool
   | Some x ->
     let h = get() in
     cut(MM.contains app_psk_table i x h);
-    cut(MM.value app_psk_table i h = x);
+    cut(MM.value_of app_psk_table i h = x);
     let (_, ctx, _) = x in
     if pskInfo_hash ctx = ha && pskInfo_ae ctx = ae then
      begin

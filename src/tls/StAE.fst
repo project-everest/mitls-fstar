@@ -7,7 +7,7 @@ module StAE
 
 open FStar.HyperHeap
 open FStar.HyperStack
-open Platform.Bytes
+open FStar.Bytes
 
 open TLSConstants
 open TLSInfo
@@ -20,7 +20,7 @@ module C    = Content
 
 module Stream = StreamAE
 module StLHAE = StatefulLHAE
-
+module Range = Range
 #set-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -102,7 +102,10 @@ let tolerate_decrypt_failure (#i:id) (r:reader i)
   | StLHAE _ _ -> false
   | Stream _ st ->
     let ctr = MR.m_read (StreamAE.ctr st.StreamAE.counter) in
-    let ID13 (KeyID #li (ExpandedSecret _ t _)) = i in
+    // let ID13 (KeyID #li (ExpandedSecret _ t _)) = i in (@jroesch) should be #58 again
+    let ID13 id = i in
+    let KeyID #li es = id in
+    let ExpandedSecret _ t _ = es in
     0 = ctr && ClientHandshakeTrafficSecret? t
 
 // our view to AE's ideal log (when idealized, ignoring ciphers) and counter
@@ -134,6 +137,7 @@ let entry (i:id) =
      AEAD_GCM.entry i
    else False
 
+private
 let ptext (#i:id) (ent:entry i): Tot (C.fragment i) =
   if is_stream i then
     Stream.Entry?.p #i ent
@@ -309,10 +313,10 @@ val coerce: parent:rgn -> i:stae_id{~(authId i)} -> keyBytes i -> ST (writer i)
 #set-options "--z3rlimit 100"
 let coerce parent i kiv =
   if is_stream i then
-    let kv,iv = Platform.Bytes.split kiv (CoreCrypto.aeadKeySize (Stream.alg i)) in
+    let kv,iv = FStar.Bytes.split_ kiv (CoreCrypto.aeadKeySize (Stream.alg i)) in
     Stream () (Stream.coerce parent i kv iv)
   else
-    let kv,iv = Platform.Bytes.split kiv (CoreCrypto.aeadKeySize (StLHAE.alg i)) in
+    let kv,iv = FStar.Bytes.split_ kiv (CoreCrypto.aeadKeySize (StLHAE.alg i)) in
     StLHAE () (StLHAE.coerce parent i kv iv)
 
 #reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 2 --max_ifuel 2"

@@ -1,8 +1,8 @@
 ﻿module DHGroup
 
 open FStar.HyperStack
-open Platform.Bytes
-open Platform.Error
+open FStar.Bytes
+open FStar.Error
 open CoreCrypto
 open TLSError
 open Parse
@@ -114,7 +114,7 @@ let serialize #g dh_Y =
 val serialize_public: #g:group -> s:share g -> len:nat{len < 65536 /\ length s <= len}
   -> Tot (lbytes len)
 let serialize_public #g dh_Y len =
-  let padded_dh_Y = createBytes (len - length dh_Y) 0z @| dh_Y in
+  let padded_dh_Y = create_ (len - length dh_Y) 0z @| dh_Y in
   lemma_repr_bytes_values len;
   padded_dh_Y
 

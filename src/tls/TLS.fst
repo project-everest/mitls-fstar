@@ -6,15 +6,15 @@ open FStar.HyperStack
 open FStar.Seq
 open FStar.Set
 
-open Platform
-open Platform.Bytes
-open Platform.Error
+open FStar.Bytes
+open FStar.Error
 
 open TLSError
 open TLSConstants
 open TLSInfo
 
 open Range
+module Range = Range
 //open Negotiation
 open Epochs
 //open Handshake
@@ -390,7 +390,7 @@ private let check_incrementable (#c:connection) (#i:id) (wopt:option (cwriter i 
 ////////////////////////////////////////////////////////////////////////////////
 // Sending fragments on a given writer (not necessarily the current one)
 ////////////////////////////////////////////////////////////////////////////////
-let opt_writer_regions (#i:id) (#c:connection) (wopt:option (cwriter i c)) : Tot (set HH.rid) =
+let opt_writer_regions (#i:id) (#c:connection) (wopt:option (cwriter i c)) : GTot (set HH.rid) =
   match wopt with
   | None -> Set.empty
   | Some wr -> Set.singleton (StAE.region wr)
@@ -565,7 +565,7 @@ let sendHandshake_post (#c:connection) (#i:id) (wopt:option (cwriter i c))
 		       then frags1==snoc frags0' (Content.CT_CCS #i (point 1))
 		       else frags1==frags0')))))
 
-#reset-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1 --using_facts_from FStar --using_facts_from Prims --using_facts_from Range --using_facts_from Parse --using_facts_from Connection --using_facts_from Handshake --using_facts_from TLS --using_facts_from TLSError --using_facts_from TLSConstants"
+#reset-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1 --using_facts_from 'FStar Prims Range Parse Connection Handshake TLS TLSError TLSConstants'"
 
 private let sendHandshake
   (#c:connection)
@@ -738,7 +738,7 @@ let rec writeHandshake h_init c new_writer =
           ( match next_keys with
             | Some b -> c.state := (str, (if b.HandshakeLog.out_appdata then Open else Ctrl))
             | None -> () );
-          if complete || new_writer = Some true || (None? om && not send_ccs)
+          if complete || (match new_writer with Some b -> b | _ -> false) || (None? om && not send_ccs)
           then WrittenHS new_writer complete // done, either to writable/completion or because there is nothing left to do
           else if Some? new_writer //splitting cases just to narrow in on the assertion failure that prompted the assume
           then (

@@ -1,6 +1,6 @@
 ﻿module HMAC
 
-open Platform.Bytes
+open FStar.Bytes
 open TLSConstants
 open Hashing.Spec // for the algorithm names, instead of CoreCrypto
 
@@ -26,17 +26,17 @@ val hmacVerify: a:alg -> k:hkey a -> m:data -> t:tag a -> ST (b:bool {b <==> (t 
 
 let hmacVerify a k p t =
     let result = hmac a k p in
-    equalBytes result t
+    result = t
 
 
 (* Historical constructions from SSL, still used in TLS 1.0, not that different from HMAC *)
 
 (* SSL/TLS constants *)
 
-private let ssl_pad1_md5  = createBytes 48 0x36z
-private let ssl_pad2_md5  = createBytes 48 0x5cz
-private let ssl_pad1_sha1 = createBytes 40 0x36z
-private let ssl_pad2_sha1 = createBytes 40 0x5cz
+private let ssl_pad1_md5  = create 48ul 0x36z
+private let ssl_pad2_md5  = create 48ul 0x5cz
+private let ssl_pad1_sha1 = create 40ul 0x36z
+private let ssl_pad2_sha1 = create 40ul 0x5cz
 
 (* SSL3 keyed hash *)
 type sslHashAlg = h:hashAlg { h = Hash MD5 \/ h = Hash SHA1 }
@@ -61,7 +61,7 @@ private val sslKeyedHashVerify: a:alg {a = MD5 \/ a = SHA1} -> k:hkey a -> bytes
   (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
 let sslKeyedHashVerify a k p t =
     let res = sslKeyedHash a k p in
-    equalBytes res t
+    res=t
 
 
 (* Agile MAC function *)

@@ -12,8 +12,8 @@ module QUIC
 /// Relying on FFI for accessing configs, callbacks, etc.
 /// Testing both in OCaml (TCP-based, TestQUIC ~ TestFFI) and in C.
 
-open Platform.Bytes
-open Platform.Error
+open FStar.Bytes
+open FStar.Error
 open TLSConstants
 open TLSInfo
 open Range

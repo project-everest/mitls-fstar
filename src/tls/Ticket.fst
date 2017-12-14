@@ -4,8 +4,8 @@ open FStar.Heap
 open FStar.HyperHeap
 open FStar.HyperStack
 
-open Platform.Bytes
-open Platform.Error
+open FStar.Bytes
+open FStar.Error
 open TLSError
 open TLSConstants
 open Parse
@@ -13,7 +13,8 @@ open TLSInfo
 
 module CC = CoreCrypto
 module AE = AEADOpenssl
-module MM = MonotoneMap
+module MM = FStar.Monotonic.DependentMap
+
 #set-options "--lax"
 
 private let region:rgn = new_region tls_tables_region
@@ -45,7 +46,7 @@ private let ticket_enc
 let set_ticket_key (a:aeadAlg) (kv:bytes) : St (bool) =
   let tid = ticketid a in
   if length kv = AE.keylen tid + AE.ivlen tid then
-    let k, s = split kv (AE.keylen tid) in
+    let k, s = split_ kv (AE.keylen tid) in
     let wr = AE.coerce region tid k in
     let rd = AE.genReader region wr in
     ticket_enc := Key tid s wr rd; true
@@ -94,11 +95,11 @@ let dummy_msId pv cs ems =
 let parse (b:bytes) =
   if length b < 8 then None
   else
-    let (pvb, r) = split b 2 in
+    let (pvb, r) = split b 2ul in
     match parseVersion pvb with
     | Error _ -> None
     | Correct pv ->
-      let (csb, r) = split r 2 in
+      let (csb, r) = split r 2ul in
       match parseCipherSuite csb, vlparse 2 r with
       | Error _, _ -> None
       | _, Error _ -> None
@@ -108,16 +109,16 @@ let parse (b:bytes) =
           let (| li, rmsId |) = dummy_rmsid ae h in
           Some (Ticket13 cs li rmsId rms)
         | TLS_1p2, CipherSuite _ _ _ ->
-          let (emsb, ms) = split rms 1 in
-          let ems = 0z <> cbyte emsb in
+          let (emsb, ms) = split rms 1ul in
+          let ems = 0z <> emsb.[0ul] in
           let msId = dummy_msId pv cs ems in
           Some (Ticket12 pv cs ems msId ms)
 
 let check_ticket (b:bytes{length b <= 65551}) =
   let Key tid salt _ rd = !ticket_enc in
   if length b < AE.ivlen tid + AE.taglen tid + 8 then None else
-  let (nb, b) = split b (AE.ivlen tid) in
-  let iv = xor (AE.ivlen tid) nb salt in
+  let (nb, b) = split_ b (AE.ivlen tid) in
+  let iv = xor_ #(AE.ivlen tid) nb salt in
   match AE.decrypt #tid #65535 rd iv empty_bytes b with
   | None -> None
   | Some plain -> parse plain
@@ -132,7 +133,7 @@ let create_ticket t =
   let Key tid salt wr _ = !ticket_enc in
   let plain = serialize t in
   let nb = CC.random 12 in
-  let iv = xor 12 nb salt in
+  let iv = xor 12ul nb salt in
   let ae = AE.encrypt #tid #65535 wr iv empty_bytes plain in
   nb @| ae
 
@@ -140,7 +141,7 @@ let check_ticket13 b =
   match check_ticket b with
   | Some (Ticket13 cs li _ _) ->
     let CipherSuite13 ae h = cs in
-    let nonce, _ = split b 12 in
+    let nonce, _ = split b 12ul in
     Some PSK.({
       ticket_nonce = Some nonce;
       time_created = 0;

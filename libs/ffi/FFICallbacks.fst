@@ -1,6 +1,6 @@
 module FFICallbacks
 
-open Platform.Bytes
+open FStar.Bytes
 
 type callbacks = UInt64.t
 

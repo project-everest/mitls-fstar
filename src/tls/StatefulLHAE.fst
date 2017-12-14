@@ -12,14 +12,14 @@ open FStar.Seq
 open FStar.Monotonic.RRef
 open FStar.Monotonic.Seq
 
-open Platform.Bytes
+open FStar.Bytes
 
 open TLSConstants
 open TLSInfo
 open Range
 open AEAD_GCM
 open StatefulPlain
-
+module Range = Range
 #set-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 
 // TODO: TEMPORARY, until we add back LHAE
@@ -36,21 +36,34 @@ type dplain (i:id) (ad:adata i) (c:cipher i) =
 type state (i:id) (rw:rw) =
   AEAD_GCM.state i rw
 
-let region = AEAD_GCM.State?.region
+let region #i #rw = AEAD_GCM.State?.region #i #rw
 
-let log_region = AEAD_GCM.State?.log_region
+noextract
+let log_region #i #rw = AEAD_GCM.State?.log_region #i #rw
 
-let log = AEAD_GCM.State?.log
+let log #i #rw = AEAD_GCM.State?.log #i #rw
 
-let counter = AEAD_GCM.State?.counter
+let counter #i #rw = AEAD_GCM.State?.counter #i #rw
 
 type reader i = state i Reader
 type writer i = state i Writer
 
-let gen = AEAD_GCM.gen
-let genReader = AEAD_GCM.genReader
-let coerce = AEAD_GCM.coerce
-let leak (#i:id{~(authId i)}) (#role:rw) = AEAD_GCM.leak #i #role
+val gen: parent:rgn -> i:id -> ST (writer i)
+  (requires (fun h0 -> True))
+  (ensures  (genPost parent))
+let gen p i = AEAD_GCM.gen p i
+
+val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
+  (requires (fun h0 ->
+    HyperHeap.disjoint parent w.region /\
+    HyperHeap.disjoint parent (AEADProvider.region w.aead)))
+  (ensures  (fun h0 (r:reader i) h1 ->
+    True //TODO
+    ))
+let genReader p #i w = AEAD_GCM.genReader p #i w
+
+let coerce parent i kv iv = AEAD_GCM.coerce parent i kv iv
+let leak (#i:id{~(authId i)}) (#role:rw) state = AEAD_GCM.leak #i #role state
 
 (*------------------------------------------------------------------*)
 #set-options "--z3rlimit 100 --max_ifuel 1 --initial_ifuel 0 --max_fuel 1 --initial_fuel 0"

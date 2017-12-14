@@ -13,10 +13,16 @@ module TLSConstants
 //NS, JP: TODO, this include should eventually move to TLSMem, when that module exists
 include FStar.HyperStack.All
 
+let type_of (#a : Type) (x : a) : Type = a
+
+(* Start Hacks *)
+// assume val empty_bytes : FStar.Bytes.lbytes 0
+(* End Hacks *)
+open FStar.String
 open FStar.Seq
-open Platform.Date
-open Platform.Bytes
-open Platform.Error
+open FStar.Date
+open FStar.Bytes
+open FStar.Error
 open TLSError
 //open CoreCrypto // avoid?!
 
@@ -25,7 +31,31 @@ module HS = FStar.HyperStack
 
 include Parse // carving out basic formatting code to break a dependency.
 
+(* Some basic utility functions for closure converting arguments
+   to the higher-order combinators in the list library ...
+   for use with KreMLin extraction *)
+let rec filter_aux (#a: Type)
+                   (#b:Type)
+                   (env:b)
+                   (f:(b -> a -> Tot bool))
+                   (l: list a)
+     : Tot (m:list a { forall u . FStar.List.Tot.mem_filter_spec (f env) m u } ) =
+  match l with
+  | [] -> []
+  | hd::tl -> if f env hd then hd::filter_aux env f tl else filter_aux env f tl
 
+let rec find_aux (#a:Type)
+                 (#b:Type)
+                 (env:b)
+                 (f:(b -> a -> Tot bool))
+                 (l:list a)
+       : (option (x:a{f env x})) =
+  match l with
+  | [] -> None #(x:a{f env x}) //These type annotations are only present because it makes bootstrapping go much faster
+  | hd::tl -> if f env hd then Some #(x:a{f env x}) hd else find_aux env f tl
+
+let exists_b_aux (#a:Type) (#b:Type) (env:b) (f:b -> a -> Tot bool) (l:list a) =
+  Some? (find_aux env f l)
 
 (** Polarity for reading and writing *)
 type rw =
@@ -52,6 +82,10 @@ type protocolVersion' =
   | UnknownVersion: a:byte -> b:byte{a <> 3z \/ (b <> 0z /\ b <> 1z /\ b <> 2z /\ b <> 3z /\ b <> 4z)} -> protocolVersion'
 
 type protocolVersion = pv:protocolVersion'{~(UnknownVersion? pv)}
+
+let is_pv_13 = function
+  | TLS_1p3 -> true
+  | _ -> false
 
 (* Key exchange algorithms *)
 type kexAlg =
@@ -210,34 +244,34 @@ let is_handshake13_signatureScheme = function
 
 val signatureSchemeBytes: s:signatureScheme -> lbytes 2
 let signatureSchemeBytes = function
-  | RSA_PKCS1_SHA256       -> abyte2 (0x04z, 0x01z)
-  | RSA_PKCS1_SHA384       -> abyte2 (0x05z, 0x01z)
-  | RSA_PKCS1_SHA512       -> abyte2 (0x06z, 0x01z)
-  | ECDSA_SECP256R1_SHA256 -> abyte2 (0x04z, 0x03z)
-  | ECDSA_SECP384R1_SHA384 -> abyte2 (0x05z, 0x03z)
-  | ECDSA_SECP521R1_SHA512 -> abyte2 (0x06z, 0x03z)
-  | RSA_PSS_SHA256         -> abyte2 (0x08z, 0x04z)
-  | RSA_PSS_SHA384         -> abyte2 (0x08z, 0x05z)
-  | RSA_PSS_SHA512         -> abyte2 (0x08z, 0x06z)
-  //| ED25519_SHA512         -> abyte2 (0x08z, 0x07z)
-  //| ED448_SHAKE256         -> abyte2 (0x08z, 0x08z)
-  | RSA_PKCS1_SHA1         -> abyte2 (0x02z, 0x01z)
-  | RSA_PKCS1_MD5SHA1      -> abyte2 (0xFFz, 0xFFz)
-  | ECDSA_SHA1             -> abyte2 (0x02z, 0x03z)
-  | DSA_SHA1               -> abyte2 (0x02z, 0x02z)
-  | DSA_SHA256             -> abyte2 (0x04z, 0x02z)
-  | DSA_SHA384             -> abyte2 (0x05z, 0x02z)
-  | DSA_SHA512             -> abyte2 (0x06z, 0x02z)
+  | RSA_PKCS1_SHA256       -> twobytes (0x04z, 0x01z)
+  | RSA_PKCS1_SHA384       -> twobytes (0x05z, 0x01z)
+  | RSA_PKCS1_SHA512       -> twobytes (0x06z, 0x01z)
+  | ECDSA_SECP256R1_SHA256 -> twobytes (0x04z, 0x03z)
+  | ECDSA_SECP384R1_SHA384 -> twobytes (0x05z, 0x03z)
+  | ECDSA_SECP521R1_SHA512 -> twobytes (0x06z, 0x03z)
+  | RSA_PSS_SHA256         -> twobytes (0x08z, 0x04z)
+  | RSA_PSS_SHA384         -> twobytes (0x08z, 0x05z)
+  | RSA_PSS_SHA512         -> twobytes (0x08z, 0x06z)
+  //| ED25519_SHA512         -> twobytes (0x08z, 0x07z)
+  //| ED448_SHAKE256         -> twobytes (0x08z, 0x08z)
+  | RSA_PKCS1_SHA1         -> twobytes (0x02z, 0x01z)
+  | RSA_PKCS1_MD5SHA1      -> twobytes (0xFFz, 0xFFz)
+  | ECDSA_SHA1             -> twobytes (0x02z, 0x03z)
+  | DSA_SHA1               -> twobytes (0x02z, 0x02z)
+  | DSA_SHA256             -> twobytes (0x04z, 0x02z)
+  | DSA_SHA384             -> twobytes (0x05z, 0x02z)
+  | DSA_SHA512             -> twobytes (0x06z, 0x02z)
   | SIG_UNKNOWN codepoint  -> codepoint
 
 let signatureSchemeBytes_is_injective
   (s1 s2: signatureScheme)
 : Lemma
-  (requires (Seq.equal (signatureSchemeBytes s1) (signatureSchemeBytes s2)))
+  (requires (signatureSchemeBytes s1 == signatureSchemeBytes s2))
   (ensures (s1 == s2))
 = if (SIG_UNKNOWN? s1) = (SIG_UNKNOWN? s2)
   then ()
-  else assume (s1 == s2) // TODO: strengthen int_of_bytes vs. abyte2
+  else assume (s1 == s2) // TODO: strengthen int_of_bytes vs. twobytes
 
 val parseSignatureScheme: pinverse_t signatureSchemeBytes
 let parseSignatureScheme b =
@@ -320,7 +354,8 @@ let signatureScheme_of_sigHashAlg sa ha =
   | (DSA,    Hash SHA512) -> DSA_SHA512
   | (RSASIG, MD5SHA1)     -> RSA_PKCS1_MD5SHA1
   | _ -> // Map everything else to OBSOLETE 0x0000
-    lemma_repr_bytes_values 0x0000; int_of_bytes_of_int 2 0x0000;
+    lemma_repr_bytes_values 0x0000;
+    int_of_bytes_of_int #2 0x0000;
     SIG_UNKNOWN (bytes_of_int 2 0)
 
 (** Encryption key sizes *)
@@ -413,9 +448,9 @@ let compressionBytes comp =
 
 (** Parsing function for compression algorithm *)
 val parseCompression: b:lbytes 1
-  -> Tot (cm:compression{Seq.equal (compressionBytes cm) b})
+  -> Tot (cm:compression{compressionBytes cm == b})
 let parseCompression b =
-  match cbyte b with
+  match b.[0ul] with
   | 0z -> NullCompression
   | b  -> UnknownCompression b
 
@@ -428,7 +463,7 @@ val parseCompressions: b:bytes -> Tot (list compression) (decreases (length b))
 let rec parseCompressions b =
   if length b > 0
   then
-    let cmB,b = split b 1 in
+    let cmB,b = split b 1ul in
     let cm = parseCompression cmB in
     cm::(parseCompressions b)
   else []
@@ -451,12 +486,12 @@ let rec compressionMethodsBytes cms =
 val versionBytes: protocolVersion' -> Tot (lbytes 2)
 let versionBytes pv =
   match pv with
-  | SSL_3p0 -> abyte2 ( 3z, 0z)
-  | TLS_1p0 -> abyte2 ( 3z, 1z)
-  | TLS_1p1 -> abyte2 ( 3z, 2z )
-  | TLS_1p2 -> abyte2 ( 3z, 3z )
-  | TLS_1p3 -> abyte2 ( 3z, 4z )
-  | UnknownVersion a b -> abyte2 ( a, b )
+  | SSL_3p0 -> twobytes ( 3z, 0z)
+  | TLS_1p0 -> twobytes ( 3z, 1z)
+  | TLS_1p1 -> twobytes ( 3z, 2z )
+  | TLS_1p2 -> twobytes ( 3z, 3z )
+  | TLS_1p3 -> twobytes ( 3z, 4z )
+  | UnknownVersion a b -> twobytes ( a, b )
 
 (** Parsing function for the protocol version *)
 val parseVersion: pinverse_t versionBytes
@@ -477,7 +512,7 @@ let inverse_version x = ()
 
 val pinverse_version: x:_ -> Lemma
   (requires True)
-  (ensures (lemma_pinverse_f_g Seq.equal versionBytes parseVersion x))
+  (ensures (lemma_pinverse_f_g Bytes.equal versionBytes parseVersion x))
   [SMTPat (versionBytes (Correct?._0 (parseVersion x)))]
 let pinverse_version x = ()
 
@@ -486,7 +521,7 @@ let pinverse_version x = ()
 // https://tlswg.github.io/tls13-spec/#rfc.section.4.2.1
 let draft = 21z
 let versionBytes_draft: protocolVersion -> Tot (lbytes 2) = function
-  | TLS_1p3 -> abyte2 ( 127z, draft )
+  | TLS_1p3 -> twobytes ( 127z, draft )
   | pv -> versionBytes pv
 val parseVersion_draft: pinverse_t versionBytes_draft
 let parseVersion_draft v =
@@ -511,7 +546,14 @@ let minPV (a:protocolVersion) (b:protocolVersion) =
   | TLS_1p2, _  | _, TLS_1p2 -> TLS_1p2
   | TLS_1p3, _  | _, TLS_1p3 -> TLS_1p3
 
-let geqPV a b = (b = minPV a b)
+let geqPV a b =
+match b, minPV a b with
+| SSL_3p0, SSL_3p0
+| TLS_1p0, TLS_1p1
+| TLS_1p2, TLS_1p2
+| TLS_1p3, TLS_1p3 -> true
+| UnknownVersion b1 b2, UnknownVersion b1' b2' ->
+  b1 = b2 && b2 = b2'
 
 let string_of_pv = function
   | SSL_3p0 -> "SSL3"
@@ -519,7 +561,7 @@ let string_of_pv = function
   | TLS_1p1 -> "1.1"
   | TLS_1p2 -> "1.2"
   | TLS_1p3 -> "1.3"
-  | UnknownVersion a b -> "Unknown protocol version: " ^ (print_bytes (abyte2 (a, b)))
+  | UnknownVersion a b -> "Unknown protocol version: " ^ (print_bytes (twobytes (a, b)))
 
 (* JK: injectivity proof requires extra specification for the UnknownCipherSuite objects as they
    have to be distinct from the 'correct' ones *)
@@ -527,108 +569,108 @@ val cipherSuiteBytesOpt: cipherSuite -> Tot (option (lbytes 2))
 let cipherSuiteBytesOpt cs =
   let open CoreCrypto in
   let open Hashing.Spec in
-  let abyte2 b: option (lbytes 2) = Some (abyte2 b) in
+  let twobytes b: option (lbytes 2) = Some (twobytes b) in
     match cs with
-    | UnknownCipherSuite b1 b2 -> abyte2 (b1,b2)
-    | NullCipherSuite                                              -> abyte2 ( 0x00z, 0x00z )
+    | UnknownCipherSuite b1 b2 -> twobytes (b1,b2)
+    | NullCipherSuite                                              -> twobytes ( 0x00z, 0x00z )
 
-    | CipherSuite13 AES_128_GCM       SHA256                       -> abyte2 ( 0x13z, 0x01z )
-    | CipherSuite13 AES_256_GCM       SHA384                       -> abyte2 ( 0x13z, 0x02z )
-    | CipherSuite13 CHACHA20_POLY1305 SHA256                       -> abyte2 ( 0x13z, 0x03z )
-    | CipherSuite13 AES_128_CCM       SHA256                       -> abyte2 ( 0x13z, 0x04z )
-    | CipherSuite13 AES_128_CCM_8     SHA256                       -> abyte2 ( 0x13z, 0x05z )
+    | CipherSuite13 AES_128_GCM       SHA256                       -> twobytes ( 0x13z, 0x01z )
+    | CipherSuite13 AES_256_GCM       SHA384                       -> twobytes ( 0x13z, 0x02z )
+    | CipherSuite13 CHACHA20_POLY1305 SHA256                       -> twobytes ( 0x13z, 0x03z )
+    | CipherSuite13 AES_128_CCM       SHA256                       -> twobytes ( 0x13z, 0x04z )
+    | CipherSuite13 AES_128_CCM_8     SHA256                       -> twobytes ( 0x13z, 0x05z )
 
-    | CipherSuite Kex_RSA None (MACOnly MD5)                       -> abyte2 ( 0x00z, 0x01z )
-    | CipherSuite Kex_RSA None (MACOnly SHA1)                      -> abyte2 ( 0x00z, 0x02z )
-    | CipherSuite Kex_RSA None (MACOnly SHA256)                    -> abyte2 ( 0x00z, 0x3Bz )
-    | CipherSuite Kex_RSA None(MtE (Stream RC4_128) MD5)           -> abyte2 ( 0x00z, 0x04z )
-    | CipherSuite Kex_RSA None(MtE (Stream RC4_128) SHA1)          -> abyte2 ( 0x00z, 0x05z )
+    | CipherSuite Kex_RSA None (MACOnly MD5)                       -> twobytes ( 0x00z, 0x01z )
+    | CipherSuite Kex_RSA None (MACOnly SHA1)                      -> twobytes ( 0x00z, 0x02z )
+    | CipherSuite Kex_RSA None (MACOnly SHA256)                    -> twobytes ( 0x00z, 0x3Bz )
+    | CipherSuite Kex_RSA None(MtE (Stream RC4_128) MD5)           -> twobytes ( 0x00z, 0x04z )
+    | CipherSuite Kex_RSA None(MtE (Stream RC4_128) SHA1)          -> twobytes ( 0x00z, 0x05z )
 
-    | CipherSuite Kex_RSA None(MtE (Block TDES_EDE_CBC) SHA1)      -> abyte2 ( 0x00z, 0x0Az )
-    | CipherSuite Kex_RSA None(MtE (Block AES_128_CBC) SHA1)       -> abyte2 ( 0x00z, 0x2Fz )
-    | CipherSuite Kex_RSA None(MtE (Block AES_256_CBC) SHA1)       -> abyte2 ( 0x00z, 0x35z )
-    | CipherSuite Kex_RSA None(MtE (Block AES_128_CBC) SHA256)     -> abyte2 ( 0x00z, 0x3Cz )
-    | CipherSuite Kex_RSA None(MtE (Block AES_256_CBC) SHA256)     -> abyte2 ( 0x00z, 0x3Dz )
-
-    (**************************************************************************)
-    | CipherSuite Kex_DH (Some DSA)     (MtE (Block TDES_EDE_CBC) SHA1)   -> abyte2 ( 0x00z, 0x0Dz )
-    | CipherSuite Kex_DH (Some RSASIG)  (MtE (Block TDES_EDE_CBC) SHA1)   -> abyte2 ( 0x00z, 0x10z )
-    | CipherSuite Kex_DHE (Some DSA)    (MtE (Block TDES_EDE_CBC) SHA1)   -> abyte2 ( 0x00z, 0x13z )
-    | CipherSuite Kex_DHE (Some RSASIG) (MtE (Block TDES_EDE_CBC) SHA1)   -> abyte2 ( 0x00z, 0x16z )
-
-    | CipherSuite Kex_DH (Some DSA)     (MtE (Block AES_128_CBC) SHA1)    -> abyte2 ( 0x00z, 0x30z )
-    | CipherSuite Kex_DH (Some RSASIG)  (MtE (Block AES_128_CBC) SHA1)    -> abyte2 ( 0x00z, 0x31z )
-    | CipherSuite Kex_DHE (Some DSA)    (MtE (Block AES_128_CBC) SHA1)    -> abyte2 ( 0x00z, 0x32z )
-    | CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES_128_CBC) SHA1)    -> abyte2 ( 0x00z, 0x33z )
-
-    | CipherSuite Kex_DH (Some DSA)     (MtE (Block AES_256_CBC) SHA1)    -> abyte2 ( 0x00z, 0x36z )
-    | CipherSuite Kex_DH (Some RSASIG)  (MtE (Block AES_256_CBC) SHA1)    -> abyte2 ( 0x00z, 0x37z )
-    | CipherSuite Kex_DHE (Some DSA)    (MtE (Block AES_256_CBC) SHA1)    -> abyte2 ( 0x00z, 0x38z )
-    | CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA1)    -> abyte2 ( 0x00z, 0x39z )
-
-    | CipherSuite Kex_DH (Some DSA)     (MtE (Block AES_128_CBC) SHA256)  -> abyte2 ( 0x00z, 0x3Ez )
-    | CipherSuite Kex_DH (Some RSASIG)  (MtE (Block AES_128_CBC) SHA256)  -> abyte2 ( 0x00z, 0x3Fz )
-    | CipherSuite Kex_DHE (Some DSA)    (MtE (Block AES_128_CBC) SHA256)  -> abyte2 ( 0x00z, 0x40z )
-    | CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES_128_CBC) SHA256)  -> abyte2 ( 0x00z, 0x67z )
-
-    | CipherSuite Kex_DH (Some DSA)     (MtE (Block AES_256_CBC) SHA256)  -> abyte2 ( 0x00z, 0x68z )
-    | CipherSuite Kex_DH (Some RSASIG)  (MtE (Block AES_256_CBC) SHA256)  -> abyte2 ( 0x00z, 0x69z )
-    | CipherSuite Kex_DHE (Some DSA)    (MtE (Block AES_256_CBC) SHA256)  -> abyte2 ( 0x00z, 0x6Az )
-    | CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA256)  -> abyte2 ( 0x00z, 0x6Bz )
+    | CipherSuite Kex_RSA None(MtE (Block TDES_EDE_CBC) SHA1)      -> twobytes ( 0x00z, 0x0Az )
+    | CipherSuite Kex_RSA None(MtE (Block AES_128_CBC) SHA1)       -> twobytes ( 0x00z, 0x2Fz )
+    | CipherSuite Kex_RSA None(MtE (Block AES_256_CBC) SHA1)       -> twobytes ( 0x00z, 0x35z )
+    | CipherSuite Kex_RSA None(MtE (Block AES_128_CBC) SHA256)     -> twobytes ( 0x00z, 0x3Cz )
+    | CipherSuite Kex_RSA None(MtE (Block AES_256_CBC) SHA256)     -> twobytes ( 0x00z, 0x3Dz )
 
     (**************************************************************************)
-    | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Stream RC4_128) SHA1)       -> abyte2 ( 0xc0z, 0x11z )
-    | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block TDES_EDE_CBC) SHA1)   -> abyte2 ( 0xc0z, 0x12z )
-    | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_128_CBC) SHA1)    -> abyte2 ( 0xc0z, 0x13z )
-    | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA1)    -> abyte2 ( 0xc0z, 0x14z )
-    | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_128_CBC) SHA256)  -> abyte2 ( 0xc0z, 0x27z )
-    | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA384)  -> abyte2 ( 0xc0z, 0x28z )
+    | CipherSuite Kex_DH (Some DSA)     (MtE (Block TDES_EDE_CBC) SHA1)   -> twobytes ( 0x00z, 0x0Dz )
+    | CipherSuite Kex_DH (Some RSASIG)  (MtE (Block TDES_EDE_CBC) SHA1)   -> twobytes ( 0x00z, 0x10z )
+    | CipherSuite Kex_DHE (Some DSA)    (MtE (Block TDES_EDE_CBC) SHA1)   -> twobytes ( 0x00z, 0x13z )
+    | CipherSuite Kex_DHE (Some RSASIG) (MtE (Block TDES_EDE_CBC) SHA1)   -> twobytes ( 0x00z, 0x16z )
 
-    | CipherSuite Kex_ECDHE (Some RSASIG) (AEAD AES_128_GCM SHA256) -> abyte2 ( 0xc0z, 0x2fz )
-    | CipherSuite Kex_ECDHE (Some ECDSA)  (AEAD AES_128_GCM SHA256) -> abyte2 ( 0xc0z, 0x2bz )
-    | CipherSuite Kex_ECDHE (Some RSASIG) (AEAD AES_256_GCM SHA384) -> abyte2 ( 0xc0z, 0x30z )
-    | CipherSuite Kex_ECDHE (Some ECDSA) (AEAD AES_256_GCM SHA384) -> abyte2 ( 0xc0z, 0x2cz )
+    | CipherSuite Kex_DH (Some DSA)     (MtE (Block AES_128_CBC) SHA1)    -> twobytes ( 0x00z, 0x30z )
+    | CipherSuite Kex_DH (Some RSASIG)  (MtE (Block AES_128_CBC) SHA1)    -> twobytes ( 0x00z, 0x31z )
+    | CipherSuite Kex_DHE (Some DSA)    (MtE (Block AES_128_CBC) SHA1)    -> twobytes ( 0x00z, 0x32z )
+    | CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES_128_CBC) SHA1)    -> twobytes ( 0x00z, 0x33z )
 
-    (**************************************************************************)
-    | CipherSuite Kex_PSK_DHE None (AEAD AES_128_GCM SHA256) -> abyte2 ( 0x00z, 0xaaz )
-    | CipherSuite Kex_PSK_DHE None (AEAD AES_256_GCM SHA384) -> abyte2 ( 0x00z, 0xabz )
-    | CipherSuite Kex_PSK_ECDHE None (AEAD AES_128_GCM SHA256) -> abyte2 ( 0xd0z, 0x01z )
-    | CipherSuite Kex_PSK_ECDHE None (AEAD AES_256_GCM SHA384) -> abyte2 ( 0xd0z, 0x02z )
+    | CipherSuite Kex_DH (Some DSA)     (MtE (Block AES_256_CBC) SHA1)    -> twobytes ( 0x00z, 0x36z )
+    | CipherSuite Kex_DH (Some RSASIG)  (MtE (Block AES_256_CBC) SHA1)    -> twobytes ( 0x00z, 0x37z )
+    | CipherSuite Kex_DHE (Some DSA)    (MtE (Block AES_256_CBC) SHA1)    -> twobytes ( 0x00z, 0x38z )
+    | CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA1)    -> twobytes ( 0x00z, 0x39z )
 
-    (**************************************************************************)
-    | CipherSuite Kex_DHE None   (MtE (Stream RC4_128) MD5)         -> abyte2 ( 0x00z, 0x18z )
-    | CipherSuite Kex_DHE None   (MtE (Block TDES_EDE_CBC) SHA1)    -> abyte2 ( 0x00z, 0x1Bz )
-    | CipherSuite Kex_DHE None   (MtE (Block AES_128_CBC) SHA1)     -> abyte2 ( 0x00z, 0x34z )
-    | CipherSuite Kex_DHE None   (MtE (Block AES_256_CBC) SHA1)     -> abyte2 ( 0x00z, 0x3Az )
-    | CipherSuite Kex_DHE None   (MtE (Block AES_128_CBC) SHA256)   -> abyte2 ( 0x00z, 0x6Cz )
-    | CipherSuite Kex_DHE None   (MtE (Block AES_256_CBC) SHA256)   -> abyte2 ( 0x00z, 0x6Dz )
+    | CipherSuite Kex_DH (Some DSA)     (MtE (Block AES_128_CBC) SHA256)  -> twobytes ( 0x00z, 0x3Ez )
+    | CipherSuite Kex_DH (Some RSASIG)  (MtE (Block AES_128_CBC) SHA256)  -> twobytes ( 0x00z, 0x3Fz )
+    | CipherSuite Kex_DHE (Some DSA)    (MtE (Block AES_128_CBC) SHA256)  -> twobytes ( 0x00z, 0x40z )
+    | CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES_128_CBC) SHA256)  -> twobytes ( 0x00z, 0x67z )
 
-    (**************************************************************************)
-    | CipherSuite Kex_RSA None     (AEAD AES_128_GCM SHA256) -> abyte2( 0x00z, 0x9Cz )
-    | CipherSuite Kex_RSA None     (AEAD AES_256_GCM SHA384) -> abyte2( 0x00z, 0x9Dz )
-
-    | CipherSuite Kex_DHE (Some RSASIG) (AEAD AES_128_GCM SHA256) -> abyte2( 0x00z, 0x9Ez )
-    | CipherSuite Kex_DHE (Some RSASIG) (AEAD AES_256_GCM SHA384) -> abyte2( 0x00z, 0x9Fz )
-    | CipherSuite Kex_DH (Some RSASIG)  (AEAD AES_128_GCM SHA256) -> abyte2( 0x00z, 0xA0z )
-    | CipherSuite Kex_DH (Some RSASIG)  (AEAD AES_256_GCM SHA384) -> abyte2( 0x00z, 0xA1z )
-
-    | CipherSuite Kex_DHE (Some DSA) (AEAD AES_128_GCM SHA256) -> abyte2( 0x00z, 0xA2z )
-    | CipherSuite Kex_DHE (Some DSA) (AEAD AES_256_GCM SHA384) -> abyte2( 0x00z, 0xA3z )
-    | CipherSuite Kex_DH (Some DSA)  (AEAD AES_128_GCM SHA256) -> abyte2( 0x00z, 0xA4z )
-    | CipherSuite Kex_DH (Some DSA)  (AEAD AES_256_GCM SHA384) -> abyte2( 0x00z, 0xA5z )
-
-    | CipherSuite Kex_DHE None (AEAD AES_128_GCM SHA256) -> abyte2( 0x00z, 0xA6z )
-    | CipherSuite Kex_DHE None (AEAD AES_256_GCM SHA384) -> abyte2( 0x00z, 0xA7z )
+    | CipherSuite Kex_DH (Some DSA)     (MtE (Block AES_256_CBC) SHA256)  -> twobytes ( 0x00z, 0x68z )
+    | CipherSuite Kex_DH (Some RSASIG)  (MtE (Block AES_256_CBC) SHA256)  -> twobytes ( 0x00z, 0x69z )
+    | CipherSuite Kex_DHE (Some DSA)    (MtE (Block AES_256_CBC) SHA256)  -> twobytes ( 0x00z, 0x6Az )
+    | CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA256)  -> twobytes ( 0x00z, 0x6Bz )
 
     (**************************************************************************)
-    | CipherSuite Kex_ECDHE (Some RSASIG) (AEAD CHACHA20_POLY1305 SHA256) -> abyte2( 0xccz, 0xa8z )
-    | CipherSuite Kex_ECDHE (Some ECDSA) (AEAD CHACHA20_POLY1305 SHA256)  -> abyte2( 0xccz, 0xa9z )
-    | CipherSuite Kex_DHE (Some RSASIG) (AEAD CHACHA20_POLY1305 SHA256)   -> abyte2( 0xccz, 0xaaz )
-    | CipherSuite Kex_PSK None (AEAD CHACHA20_POLY1305 SHA256)            -> abyte2( 0xccz, 0xabz )
-    | CipherSuite Kex_PSK_ECDHE None (AEAD CHACHA20_POLY1305 SHA256)      -> abyte2( 0xccz, 0xacz )
-    | CipherSuite Kex_PSK_DHE None (AEAD CHACHA20_POLY1305 SHA256)        -> abyte2( 0xccz, 0xadz )
+    | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Stream RC4_128) SHA1)       -> twobytes ( 0xc0z, 0x11z )
+    | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block TDES_EDE_CBC) SHA1)   -> twobytes ( 0xc0z, 0x12z )
+    | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_128_CBC) SHA1)    -> twobytes ( 0xc0z, 0x13z )
+    | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA1)    -> twobytes ( 0xc0z, 0x14z )
+    | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_128_CBC) SHA256)  -> twobytes ( 0xc0z, 0x27z )
+    | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA384)  -> twobytes ( 0xc0z, 0x28z )
 
-    | SCSV (TLS_EMPTY_RENEGOTIATION_INFO_SCSV)         -> abyte2 ( 0x00z, 0xFFz )
+    | CipherSuite Kex_ECDHE (Some RSASIG) (AEAD AES_128_GCM SHA256) -> twobytes ( 0xc0z, 0x2fz )
+    | CipherSuite Kex_ECDHE (Some ECDSA)  (AEAD AES_128_GCM SHA256) -> twobytes ( 0xc0z, 0x2bz )
+    | CipherSuite Kex_ECDHE (Some RSASIG) (AEAD AES_256_GCM SHA384) -> twobytes ( 0xc0z, 0x30z )
+    | CipherSuite Kex_ECDHE (Some ECDSA) (AEAD AES_256_GCM SHA384) -> twobytes ( 0xc0z, 0x2cz )
+
+    (**************************************************************************)
+    | CipherSuite Kex_PSK_DHE None (AEAD AES_128_GCM SHA256) -> twobytes ( 0x00z, 0xaaz )
+    | CipherSuite Kex_PSK_DHE None (AEAD AES_256_GCM SHA384) -> twobytes ( 0x00z, 0xabz )
+    | CipherSuite Kex_PSK_ECDHE None (AEAD AES_128_GCM SHA256) -> twobytes ( 0xd0z, 0x01z )
+    | CipherSuite Kex_PSK_ECDHE None (AEAD AES_256_GCM SHA384) -> twobytes ( 0xd0z, 0x02z )
+
+    (**************************************************************************)
+    | CipherSuite Kex_DHE None   (MtE (Stream RC4_128) MD5)         -> twobytes ( 0x00z, 0x18z )
+    | CipherSuite Kex_DHE None   (MtE (Block TDES_EDE_CBC) SHA1)    -> twobytes ( 0x00z, 0x1Bz )
+    | CipherSuite Kex_DHE None   (MtE (Block AES_128_CBC) SHA1)     -> twobytes ( 0x00z, 0x34z )
+    | CipherSuite Kex_DHE None   (MtE (Block AES_256_CBC) SHA1)     -> twobytes ( 0x00z, 0x3Az )
+    | CipherSuite Kex_DHE None   (MtE (Block AES_128_CBC) SHA256)   -> twobytes ( 0x00z, 0x6Cz )
+    | CipherSuite Kex_DHE None   (MtE (Block AES_256_CBC) SHA256)   -> twobytes ( 0x00z, 0x6Dz )
+
+    (**************************************************************************)
+    | CipherSuite Kex_RSA None     (AEAD AES_128_GCM SHA256) -> twobytes( 0x00z, 0x9Cz )
+    | CipherSuite Kex_RSA None     (AEAD AES_256_GCM SHA384) -> twobytes( 0x00z, 0x9Dz )
+
+    | CipherSuite Kex_DHE (Some RSASIG) (AEAD AES_128_GCM SHA256) -> twobytes( 0x00z, 0x9Ez )
+    | CipherSuite Kex_DHE (Some RSASIG) (AEAD AES_256_GCM SHA384) -> twobytes( 0x00z, 0x9Fz )
+    | CipherSuite Kex_DH (Some RSASIG)  (AEAD AES_128_GCM SHA256) -> twobytes( 0x00z, 0xA0z )
+    | CipherSuite Kex_DH (Some RSASIG)  (AEAD AES_256_GCM SHA384) -> twobytes( 0x00z, 0xA1z )
+
+    | CipherSuite Kex_DHE (Some DSA) (AEAD AES_128_GCM SHA256) -> twobytes( 0x00z, 0xA2z )
+    | CipherSuite Kex_DHE (Some DSA) (AEAD AES_256_GCM SHA384) -> twobytes( 0x00z, 0xA3z )
+    | CipherSuite Kex_DH (Some DSA)  (AEAD AES_128_GCM SHA256) -> twobytes( 0x00z, 0xA4z )
+    | CipherSuite Kex_DH (Some DSA)  (AEAD AES_256_GCM SHA384) -> twobytes( 0x00z, 0xA5z )
+
+    | CipherSuite Kex_DHE None (AEAD AES_128_GCM SHA256) -> twobytes( 0x00z, 0xA6z )
+    | CipherSuite Kex_DHE None (AEAD AES_256_GCM SHA384) -> twobytes( 0x00z, 0xA7z )
+
+    (**************************************************************************)
+    | CipherSuite Kex_ECDHE (Some RSASIG) (AEAD CHACHA20_POLY1305 SHA256) -> twobytes( 0xccz, 0xa8z )
+    | CipherSuite Kex_ECDHE (Some ECDSA) (AEAD CHACHA20_POLY1305 SHA256)  -> twobytes( 0xccz, 0xa9z )
+    | CipherSuite Kex_DHE (Some RSASIG) (AEAD CHACHA20_POLY1305 SHA256)   -> twobytes( 0xccz, 0xaaz )
+    | CipherSuite Kex_PSK None (AEAD CHACHA20_POLY1305 SHA256)            -> twobytes( 0xccz, 0xabz )
+    | CipherSuite Kex_PSK_ECDHE None (AEAD CHACHA20_POLY1305 SHA256)      -> twobytes( 0xccz, 0xacz )
+    | CipherSuite Kex_PSK_DHE None (AEAD CHACHA20_POLY1305 SHA256)        -> twobytes( 0xccz, 0xadz )
+
+    | SCSV (TLS_EMPTY_RENEGOTIATION_INFO_SCSV)         -> twobytes ( 0x00z, 0xFFz )
     | _ -> None
 
 let validCipherSuite (c:cipherSuite) = Some? (cipherSuiteBytesOpt c)
@@ -770,7 +812,7 @@ val inverse_cipherSuite: x:cipherSuite -> Lemma
   // parse (bytes (Unknown 0 0)) = NullCiphersuite
   // must exclude this case...
   (ensures (let y = cipherSuiteBytesOpt x in
-	(Some? y ==> parseCipherSuiteAux (Some?.v y) = Correct x)))
+  (Some? y ==> parseCipherSuiteAux (Some?.v y) = Correct x)))
   [SMTPat (parseCipherSuiteAux (Some?.v (cipherSuiteBytesOpt x)))]
 let inverse_cipherSuite x = ()
 
@@ -778,10 +820,10 @@ let inverse_cipherSuite x = ()
 val pinverse_cipherSuite : x:lbytes 2 -> Lemma
   (requires True)
   (ensures (let y = parseCipherSuiteAux x in
-	    (Correct? y ==>
+      (Correct? y ==>
               (if UnknownCipherSuite? (Correct?._0 y) then true
               else Some? (cipherSuiteBytesOpt (Correct?._0 y))
-               /\ Seq.equal x (Some?.v (cipherSuiteBytesOpt (Correct?._0 y)))))))
+               /\ Bytes.equal x (Some?.v (cipherSuiteBytesOpt (Correct?._0 y)))))))
   [SMTPat (cipherSuiteBytesOpt (Correct?._0 (parseCipherSuiteAux x)))]
 let pinverse_cipherSuite x = ()
 
@@ -803,12 +845,12 @@ let rec cipherSuitesBytes css =
 val parseCipherSuites: b:bytes -> Tot (result (list (c:cipherSuite{validCipherSuite c}))) (decreases (length b))
 let rec parseCipherSuites b =
   if length b > 1 then
-    let (b0,b1) = split b 2 in
+    let (b0,b1) = split b 2ul in
     match parseCipherSuites b1 with
       | Correct(css) ->
-	(match parseCipherSuite b0 with
-	 | Error z ->	Correct css
-	 | Correct cs -> Correct (cs::css))
+  (match parseCipherSuite b0 with
+   | Error z ->	Correct css
+   | Correct cs -> Correct (cs::css))
       | Error z -> Error z
   else
   if length b = 0 then Correct []
@@ -829,8 +871,8 @@ let rec inverse_cipherSuites x =
   | cs::css ->
      assume (~ (UnknownCipherSuite? cs)); // TODO enforce it
      let b = (cipherSuiteBytes cs) @| (cipherSuitesBytes css) in
-     let (b0,b1) = split b 2 in
-     lemma_append_inj b0 b1 (cipherSuiteBytes cs) (cipherSuitesBytes css);
+     let (b0,b1) = split b 2ul in
+     //lemma_append_inj b0 b1 (cipherSuiteBytes cs) (cipherSuitesBytes css); //TODO bytes NS 09/27
      inverse_cipherSuite cs;
      inverse_cipherSuites css
 
@@ -904,9 +946,9 @@ let sigAlg_of_ciphersuite cs =
 type prflabel = bytes
 
 (** Key schedule labels *)
-let extract_label          = utf8 "master secret"
-let extended_extract_label = utf8 "extended master secret"
-let kdf_label              = utf8 "key expansion"
+let extract_label          = utf8_encode "master secret"
+let extended_extract_label = utf8_encode "extended master secret"
+let kdf_label              = utf8_encode "key expansion"
 
 (** PRF definitions based on the protocol version *)
 type prePrfAlg =
@@ -1159,13 +1201,29 @@ let cipherSuite_of_name =
   | TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256    -> CipherSuite Kex_PSK_ECDHE None (AEAD CHACHA20_POLY1305 SHA256)
   | TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256      -> CipherSuite Kex_PSK_DHE None (AEAD CHACHA20_POLY1305 SHA256)
 
+(** Remove This after port, just trying to see if we can push it through Kremlin - JROESCH *)
+let rec tot_map_cipherSuiteName (f : cipherSuiteName -> Tot valid_cipher_suite) (xs : list cipherSuiteName) : valid_cipher_suites =
+match xs with
+| [] -> []
+| (x :: xs) -> f x :: tot_map_cipherSuiteName f xs
+
+let rec tot_map_cipherSuiteName_eq_List_Tot_map (f : cipherSuiteName -> Tot valid_cipher_suite) (xs : list cipherSuiteName) :
+  Lemma (tot_map_cipherSuiteName f xs == List.Tot.map f xs) =
+match xs with
+| [] -> ()
+| (x :: xs) ->
+  assert (f x == f x);
+  tot_map_cipherSuiteName_eq_List_Tot_map f xs
+
 (** Return valid ciphersuites according to a list of ciphersuite names *)
 val cipherSuites_of_nameList: l1:list cipherSuiteName
   -> Tot (l2:valid_cipher_suites{List.Tot.length l2 = List.Tot.length l1})
 let cipherSuites_of_nameList nameList =
   // REMARK: would trigger automatically if List.Tot.Properties is loaded
+  tot_map_cipherSuiteName_eq_List_Tot_map cipherSuite_of_name nameList;
   List.Tot.map_lemma cipherSuite_of_name nameList;
-  List.Tot.map cipherSuite_of_name nameList
+  tot_map_cipherSuiteName cipherSuite_of_name nameList
+  // This doesn't work: tot_map_cipherSuiteName' cipherSuite_of_name nameList
 
 (** Determine the name of a ciphersuite based on its construction *)
 let name_of_cipherSuite =
@@ -1246,7 +1304,7 @@ let name_of_cipherSuite =
 #set-options "--max_ifuel 5 --initial_ifuel 5 --max_fuel 1 --initial_fuel 1"
 
 (** Determine the names associated to a list of ciphersuite constructors *)
-val names_of_cipherSuites : cipherSuites -> Tot (result cipherSuiteNames)
+(* val names_of_cipherSuites : cipherSuites -> Tot (result cipherSuiteNames)
 let rec names_of_cipherSuites css =
   match css with
   | [] -> Correct []
@@ -1256,11 +1314,14 @@ let rec names_of_cipherSuites css =
     | Error(x,y) -> Error(x,y)
     | Correct n  ->
       begin
-	match names_of_cipherSuites t with
+  match names_of_cipherSuites t with
         | Error(x,y)  -> Error(x,y)
         | Correct rem -> Correct (n::rem)
       end
-    end
+    end *)
+
+// RESTORE ABOVE CODE - JROESCH
+assume val names_of_cipherSuites : cipherSuites -> Tot (result cipherSuiteNames)
 
 // Note:
 // Migrated contentType to Content.fst (this is internal to TLS)
@@ -1285,7 +1346,7 @@ let certTypeBytes ct =
 (** Parsing function for the certificate type *)
 val parseCertType: pinverse_t certTypeBytes
 let parseCertType b =
-  match cbyte b with
+  match b.[0ul] with
   | 1z -> Correct RSA_sign
   | 2z -> Correct DSA_sign
   | 3z -> Correct RSA_fixed_dh
@@ -1302,7 +1363,7 @@ let inverse_certType x = ()
 
 val pinverse_certType: x:_ -> Lemma
   (requires True)
-  (ensures (lemma_pinverse_f_g Seq.equal certTypeBytes parseCertType x))
+  (ensures (lemma_pinverse_f_g Bytes.equal certTypeBytes parseCertType x))
   [SMTPat (certTypeBytes (Correct?._0 (parseCertType x)))]
 let pinverse_certType x = ()
 
@@ -1323,7 +1384,7 @@ val parseCertificateTypeList: data:bytes -> Tot (list certType) (decreases (leng
 let rec parseCertificateTypeList data =
   if length data = 0 then []
   else
-    let (thisByte,data) = Platform.Bytes.split data 1 in
+    let (thisByte,data) = split data 1ul in
     match parseCertType thisByte with
     | Error z -> // we skip this one
       parseCertificateTypeList data
@@ -1356,7 +1417,7 @@ let defaultCertTypes sign cs =
 
 
 (** Type definition of the Distinguished Name of a certificate *)
-type dn = s:string{length(utf8 s) < 256}
+type dn = s:string{length(utf8_encode s) < 256}
 
 (** Serializing function for a list of Distinguished Names of certificates *)
 val distinguishedNameListBytes: names:list dn -> Tot (b:bytes{length b <= op_Multiply 258 (List.Tot.length names)})
@@ -1364,8 +1425,8 @@ let rec distinguishedNameListBytes names =
   match names with
   | [] -> empty_bytes
   | h::t ->
-    lemma_repr_bytes_values (length (utf8 h));
-    let name = vlbytes 2 (utf8 h) in
+    lemma_repr_bytes_values (length (utf8_encode h));
+    let name = vlbytes 2 (utf8_encode h) in
     name @| distinguishedNameListBytes t
 
 (** Parsing function for a list of Distinguished Names of certificates *)
@@ -1381,28 +1442,39 @@ let rec parseDistinguishedNameList data res =
       | Error z -> Error z
       | Correct (nameBytes,data) ->
         begin
-	match iutf8_opt nameBytes with
+  match iutf8_opt nameBytes with
         | None -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
         | Some name ->
-	  if length (utf8 name) < 256 then
+    if length (utf8_encode name) < 256 then
           let res = name :: res in
           parseDistinguishedNameList data res
-	  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
         end
+
+(* REMOVE jroesch *)
+let cipherSuite_eq (c1 c2:cipherSuite) : bool =
+match c1, c2 with
+| NullCipherSuite, NullCipherSuite -> false
+| CipherSuite ka osa aa, CipherSuite ka' osa' aa' -> false (* fixme *)
+| CipherSuite13 aa ha, CipherSuite13 aa' ha' -> false (* fixme *)
+| SCSV s, SCSV s' -> false
+| UnknownCipherSuite b1 b2, UnknownCipherSuite b1' b2' ->
+  b1 = b1' && b2 = b2'
+
+val mem_cipherSuite: cipherSuite -> list cipherSuite -> Tot bool
+let rec mem_cipherSuite x = function
+| [] -> false
+| hd::tl -> if cipherSuite_eq x hd then true else mem_cipherSuite x tl
 
 (** Determine if a ciphersuite list contains the SCSV ciphersuite *)
 let contains_TLS_EMPTY_RENEGOTIATION_INFO_SCSV (css: list cipherSuite) =
-  List.Tot.mem (SCSV (TLS_EMPTY_RENEGOTIATION_INFO_SCSV)) css
-
+  mem_cipherSuite (SCSV (TLS_EMPTY_RENEGOTIATION_INFO_SCSV)) css
 
 // TODO: move all the definitions below to a separate file / figure out whether
 // they belong here ?
 //
 // TODO: all occurrences of [pinverse] from there on have been replaced by calls
 // to [pinverse_t]; we should write corresponding inversion lemmas.
-
-
-
 
 (** Definition of the configuration identifier *)
 type configurationId = b:bytes{0 < length b /\ length b < 65536}
@@ -1430,7 +1502,7 @@ let inverse_configurationId x =
 
 val pinverse_configurationId: x:_ -> Lemma
   (requires True)
-  (ensures (lemma_pinverse_f_g Seq.equal configurationIdBytes parseConfigurationId x))
+  (ensures (lemma_pinverse_f_g Bytes.equal configurationIdBytes parseConfigurationId x))
   [SMTPat (configurationIdBytes (Correct?._0 (parseConfigurationId x)))]
 let pinverse_configurationId x = ()
 
@@ -1451,7 +1523,7 @@ let configurationExtensionBytes ce =
 val parseConfigurationExtension: pinverse_t configurationExtensionBytes
 let parseConfigurationExtension b =
   if length b >= 4 then
-    let (typ,payload) = split b 2 in
+    let (typ,payload) = split b 2ul in
     match vlparse 2 payload with
     | Correct payload -> Correct (UnknownConfigurationExtension typ payload)
     | Error z -> Error z
@@ -1467,56 +1539,58 @@ let inverse_configurationExtension x =
   match x with
   | UnknownConfigurationExtension typ payload ->
   let b = typ @| vlbytes 2 payload in
-  let b0,b1 = split b 2 in
-  let vl,b = split b1 2 in
+  let b0,b1 = split b 2ul in
+  let vl,b = split b1 2ul in
   vlparse_vlbytes 2 b;
-  assert (Seq.equal vl (bytes_of_int 2 (length b)));
-  assert (Seq.equal b0 typ);
-  assert (Seq.equal b payload)
+  assert (Bytes.equal vl (bytes_of_int 2 (length b)));
+  assert (Bytes.equal b0 typ);
+  assert (Bytes.equal b payload)
 
 val pinverse_configurationExtension: x:_ -> Lemma
   (requires True)
-  (ensures (lemma_pinverse_f_g Seq.equal configurationExtensionBytes parseConfigurationExtension x))
+  (ensures (lemma_pinverse_f_g Bytes.equal configurationExtensionBytes parseConfigurationExtension x))
   [SMTPat (configurationExtensionBytes (Correct?._0 (parseConfigurationExtension x)))]
 let pinverse_configurationExtension x = ()
 
 
 // TODO: Choice, truncate when maximum length is exceeded
 (** Serialization of the configuration extension list of values *)
-val configurationExtensionsBytes: list configurationExtension -> Tot bytes
-let configurationExtensionsBytes ce =
-  let rec configurationExtensionsBytes_aux (b:bytes{length b < 65536}) (ces:list configurationExtension): Tot (b:bytes{length b < 65536}) (decreases ces) =
+let rec configurationExtensionsBytes_aux (b:bytes{length b < 65536}) (ces:list configurationExtension): Tot (b:bytes{length b < 65536}) (decreases ces) =
   match ces with
   | [] -> b
   | ce::ces ->
     if length (b @| configurationExtensionBytes ce) < 65536 then
       configurationExtensionsBytes_aux (b @| configurationExtensionBytes ce) ces
     else b
-  in
+
+val configurationExtensionsBytes: list configurationExtension -> Tot bytes
+let configurationExtensionsBytes ce =
   let b = configurationExtensionsBytes_aux empty_bytes ce in
   lemma_repr_bytes_values (length b);
   vlbytes 2 b
 
 (** Parsing of the configuration extension list of values *)
+let rec parseConfigurationExtensions_aux (b:bytes) (exts:list configurationExtension)
+  : Tot (result (list configurationExtension)) (decreases (length b))
+  = if length b > 0 then
+      if length b >= 4 then
+        let typ, len_data = split b 2ul in
+        let len, data = split len_data 2ul in
+        let len = int_of_bytes len in
+        if length b >= 4 + len then
+          let ext, bytes = split_ b len in
+          match parseConfigurationExtension ext with
+          | Correct(ext') -> parseConfigurationExtensions_aux bytes (ext'::exts)
+          | Error(z) -> Error(z)
+        else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse configuration extension length")
+      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Configuration extension length should be at least 4")
+    else Correct(exts)
+  
 val parseConfigurationExtensions: pinverse_t configurationExtensionsBytes
 let parseConfigurationExtensions b =
-  let rec (aux: b:bytes -> list configurationExtension -> Tot (result (list configurationExtension)) (decreases (length b))) =
-    fun b exts ->
-    if length b > 0 then
-      if length b >= 4 then
-	let typ, len, data = split2 b 2 2 in
-	let len = int_of_bytes len in
-	if length b >= 4 + len then
-	  let ext, bytes = split b len in
-	  match parseConfigurationExtension ext with
-	  | Correct(ext') -> aux bytes (ext'::exts)
-	  | Error(z) -> Error(z)
-	else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse configuration extension length")
-      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Configuration extension length should be at least 4")
-    else Correct(exts) in
   if length b >= 2 then
   match vlparse 2 b with
-  | Correct (b) ->  aux b []
+  | Correct (b) ->  parseConfigurationExtensions_aux b []
   | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse configuration extension")
   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse configuration extension")
 
@@ -1546,7 +1620,7 @@ let rec signatureSchemeListBytes_aux_is_injective
   (b2: bytes { length b1 == length b2 } )
   (algs2': list signatureScheme{ length b2 + op_Multiply 2 (List.Tot.length algs2') == op_Multiply 2 (List.Tot.length algs2) })
 : Lemma
-  (requires (Seq.equal (signatureSchemeListBytes_aux algs1 b1 algs1') (signatureSchemeListBytes_aux algs2 b2 algs2')))
+  (requires (Bytes.equal (signatureSchemeListBytes_aux algs1 b1 algs1') (signatureSchemeListBytes_aux algs2 b2 algs2')))
   (ensures (b1 == b2 /\ algs1' == algs2'))
   (decreases algs1')
 = match algs1', algs2' with
@@ -1555,7 +1629,7 @@ let rec signatureSchemeListBytes_aux_is_injective
     let shb1 = signatureSchemeBytes alg1 in
     let shb2 = signatureSchemeBytes alg2 in
     signatureSchemeListBytes_aux_is_injective algs1 (shb1 @| b1) algs1_ algs2 (shb2 @| b2) algs2_;
-    lemma_append_inj shb1 b1 shb2 b2;
+    //lemma_append_inj shb1 b1 shb2 b2; //TODO bytes NS 09/27
     signatureSchemeBytes_is_injective alg1 alg2
 
 val signatureSchemeListBytes: algs:signatureSchemeList
@@ -1571,7 +1645,7 @@ let signatureSchemeListBytes_is_injective
   (algs2: signatureSchemeList)
   (s2: bytes)
 : Lemma
-  (requires (Seq.equal (signatureSchemeListBytes algs1 @| s1) (signatureSchemeListBytes algs2 @| s2)))
+  (requires (Bytes.equal (signatureSchemeListBytes algs1 @| s1) (signatureSchemeListBytes algs2 @| s2)))
   (ensures (algs1 == algs2 /\ s1 == s2))
 = let pl1 = signatureSchemeListBytes_aux algs1 empty_bytes algs1 in
   lemma_repr_bytes_values (length pl1);
@@ -1582,23 +1656,25 @@ let signatureSchemeListBytes_is_injective
 
 (** Parsing function for a SignatureScheme list *)
 val parseSignatureSchemeList: pinverse_t signatureSchemeListBytes
+   let rec parseSignatureSchemeList_aux: b:bytes -> algs:list signatureScheme -> b':bytes{length b' + op_Multiply 2 (List.Tot.length algs) == length b} ->
+    Tot
+      (result (algs:list signatureScheme{op_Multiply 2 (List.Tot.length algs) == length b}))
+      (decreases (length b')) = fun b algs b' ->
+    if length b' > 0 then
+      if length b' >= 2 then
+      let alg, bytes = split b' 2ul in
+      match parseSignatureScheme alg with
+      | Correct sha -> parseSignatureSchemeList_aux b (sha::algs) bytes
+      | Error z     -> Error z
+      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse sig hash algs")
+    else Correct algs
+ 
+
 let parseSignatureSchemeList b =
   match vlparse 2 b with
   | Correct b ->
-    let rec aux: algs:list signatureScheme -> b':bytes{length b' + op_Multiply 2 (List.Tot.length algs) == length b} ->
-    Tot
-      (result (algs:list signatureScheme{op_Multiply 2 (List.Tot.length algs) == length b}))
-      (decreases (length b')) = fun algs b' ->
-    if length b' > 0 then
-      if length b' >= 2 then
-      let alg, bytes = split b' 2 in
-      match parseSignatureScheme alg with
-      | Correct sha -> aux (sha::algs) bytes
-      | Error z     -> Error z
-      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse sig hash algs")
-    else Correct algs in
     begin
-    match aux [] b with // Silly, but necessary for typechecking
+    match parseSignatureSchemeList_aux b [] b with // Silly, but necessary for typechecking
     | Correct l -> Correct l
     | Error z -> Error z
     end
@@ -1722,16 +1798,20 @@ let string_of_quicParameter = function
   | Quic_truncate_connection_id -> "truncate_connection_id"
   | Quic_max_packet_size x -> "max_packet_size="^UInt16.to_string x
   | Quic_custom_parameter (n,b) -> "custom_parameter "^UInt16.to_string n^", "^print_bytes b
+let rec string_of_quicParameters_aux_fold a f sep p =
+  match p with
+  | [] -> a
+  | hd::tl -> string_of_quicParameters_aux_fold (a ^ f hd ^ sep) f sep tl
 let string_of_quicParameters = function
   | Some (QuicParametersClient n i p)  ->
     "QUIC client parameters\n" ^
     "negotiated version: "^string_of_quicVersion n^"\n"^
     "initial version: "^string_of_quicVersion i^"\n"^
-    List.Tot.fold_left (fun a p -> a^string_of_quicParameter p^"\n") "" p
+    string_of_quicParameters_aux_fold "" string_of_quicParameter "\n" p
   | Some (QuicParametersServer v p) ->
     "QUIC server parameters\n" ^
-    List.Tot.fold_left (fun a v -> a^string_of_quicVersion v^" ") "versions: " v ^ "\n" ^
-    List.Tot.fold_left (fun a p -> a^string_of_quicParameter p^"\n") "" p
+    string_of_quicParameters_aux_fold "versions:" string_of_quicVersion " " v ^ "\n" ^
+    string_of_quicParameters_aux_fold "" string_of_quicParameter "\n" p
   | None -> "(none)"
 
 type pskInfo = {

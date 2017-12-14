@@ -9,8 +9,8 @@ open FStar.HyperStack
 open FStar.Seq
  // for e.g. found
 
-open Platform.Bytes
-open Platform.Error
+open FStar.Bytes
+open FStar.Error
 //open CoreCrypto 
 
 open TLSConstants

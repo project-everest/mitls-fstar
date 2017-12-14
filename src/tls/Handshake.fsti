@@ -5,7 +5,7 @@ open FStar.HyperHeap
 open FStar.HyperStack
 
 open TLSConstants
-
+module Range = Range
 val hs: Type0
 
 // the handshake epochs internally maintains counters for the current reader and writer
@@ -150,7 +150,7 @@ let next_fragment_ensures (#i:TLSInfo.id) (s:hs) h0 (result: result (HandshakeLo
     mods s h0 h1 /\
     r1 == r0 /\
     Seq.length (logT s h1) >= Seq.length (logT s h0) /\
-    ( let open Platform.Error in
+    ( let open FStar.Error in
       match result with
       | Correct (HandshakeLog.Outgoing frg nextKeys complete) ->
           w1 == (if Some? nextKeys then w0 + 1 else w0) /\

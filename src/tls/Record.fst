@@ -3,8 +3,8 @@ module Record
 (* (optional) encryption and processing of the outer (untrusted) record format *)
 
 open FStar.Seq
-open Platform.Bytes
-open Platform.Error
+open FStar.Bytes
+open FStar.Error
 
 open TLSError
 open TLSInfo
@@ -32,6 +32,7 @@ unfold let trace = if Flags.debug_Record then print else (fun _ -> ())
 // the "outer" header has the same format for all versions of TLS
 // but TLS 1.3 fakes its content type and protocol version.
 
+inline_for_extraction
 let x = Transport.recv
 
 type header = b:lbytes 5 // for all TLS versions
@@ -41,7 +42,7 @@ let fake = ctBytes Application_data @| versionBytes TLS_1p0
 // this is the outer packet; the *caller* should switch from 1.3 to 1.0 whenever data is encrypted.
 let makePacket ct plain ver (data: b:bytes { repr_bytes (length b) <= 2}) =
   let header =
-    (if ver = TLS_1p3 then
+    (if is_pv_13 ver then
       (if plain then ctBytes ct @| versionBytes TLS_1p0
        else fake)
      else (ctBytes ct @| versionBytes ver))
@@ -56,8 +57,8 @@ val parseHeader: h5:header -> Tot (result (contentType
                                          * protocolVersion 
                                          * l:nat { l <= max_TLSCiphertext_fragment_length}))
 let parseHeader (h5:header) =
-    let (ct1,b4)   = Platform.Bytes.split h5 1 in
-    let (pv2,len2) = Platform.Bytes.split b4 2 in
+    let (ct1,b4)   = FStar.Bytes.split h5 1ul in
+    let (pv2,len2) = FStar.Bytes.split b4 2ul in
     match parseCT ct1 with
     | Error z -> Error z
     | Correct ct ->
@@ -131,9 +132,9 @@ val read: Transport.t -> s: HyperStack.ref input_state -> ST read_result
 let rec read tcp state =
   let State len prior partial = !state in 
   match Transport.recv tcp len with 
-  | Platform.Tcp.RecvWouldBlock -> trace "WouldBlock"; ReadWouldBlock
-  | Platform.Tcp.RecvError e -> ReadError (AD_internal_error, e) 
-  | Platform.Tcp.Received fresh -> (
+  | FStar.Tcp.RecvWouldBlock -> trace "WouldBlock"; ReadWouldBlock
+  | FStar.Tcp.RecvError e -> ReadError (AD_internal_error, e) 
+  | FStar.Tcp.Received fresh -> (
     let data = prior @| fresh in 
     if length fresh = 0 then 
       ReadError(AD_internal_error,"TCP close") // otherwise we loop...

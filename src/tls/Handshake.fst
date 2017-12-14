@@ -5,8 +5,8 @@ open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.Seq
 open FStar.Set
-open Platform.Error
-open Platform.Bytes
+open FStar.Error
+open FStar.Bytes
 open TLSError
 open TLSInfo
 open TLSConstants
@@ -87,7 +87,7 @@ noeq type hs' = | HS:
   log: HandshakeLog.t {HandshakeLog.region_of log = region} ->
   ks: KeySchedule.ks (*region*) ->
   epochs: epochs region (Nego.nonce nego) ->
-  state: ref machineState {state.HyperStack.id = region} -> // state machine; should be opaque and depend on r.
+  state: ref machineState {HyperStack.frameOf state = region} -> // state machine; should be opaque and depend on r.
   hs'
 
 let hs = hs' //17-04-08 interface limitation
@@ -255,6 +255,11 @@ let clientHello offer = // pure; shared by Client and Server
 type btag (binderKey: i:binderId & bk:KeySchedule.binderKey i) =
   HMAC.UFCMA.tag (HMAC.UFCMA.HMAC_Binder (let (|i,_|) = binderKey in i))
 
+val map_ST2: 'c -> ('c -> 'a -> KeySchedule.ST0 'b) -> list 'a -> KeySchedule.ST0 (list 'b)
+let rec map_ST2 env f x = match x with
+  | [] -> []
+  | a::tl -> f env a :: map_ST2 env f tl
+
 let compute_binder hs (bkey:(i:binderId & bk:KeySchedule.binderKey i)): ST (btag bkey)
     (requires fun h0 -> True)
     (ensures fun h0 _ h1 -> modifies_none h0 h1)  // we'll need a complete spec to determine the transcript
@@ -277,9 +282,9 @@ let client_Binders hs offer =
   match Nego.find_clientPske offer with
   | None -> () // No PSK, no binders
   | Some (pskl, tlen) -> // Nego may filter the PSKs
-    let pskl = List.Tot.map (fun (id, _) -> id) pskl in
+    let pskl = List.Tot.map fst pskl in
     let binderKeys = KeySchedule.ks_client_13_get_binder_keys hs.ks pskl in
-    let binders = KeySchedule.map_ST (compute_binder hs) binderKeys in
+    let binders = map_ST2 hs compute_binder binderKeys in
     HandshakeLog.send hs.log (Binders binders);
 
     // Nego ensures that EDI is not sent in a 2nd ClientHello
@@ -565,6 +570,11 @@ let client_NewSessionTicket_12 (hs:hs) (resume:bool) (digest:Hashing.anyTag) (os
   | Some t, false -> InError (AD_unexpected_message, "unexpected NewSessionTicket message")
   | None, true -> InError (AD_unexpected_message, "missing expected NewSessionTicket message")
 
+let rec iutf8 (m:bytes) : St (s:string{String.length s < pow2 30 /\ utf8_encode s = m}) =
+    match iutf8_opt m with
+    | None -> trace ("Not a utf8 encoding of a string"); iutf8 m
+    | Some s -> s
+
 // Process an incoming ticket (1.3)
 let client_NewSessionTicket_13 (hs:hs) (st13:sticket13)
   : St incoming =
@@ -600,7 +610,7 @@ let client_ServerFinished hs f digestClientFinished =
   let ha = verifyDataHashAlg_of_ciphersuite mode.Nego.n_cipher_suite in
   let expected_svd = TLSPRF.finished12 ha sfin_key Server digestClientFinished in
   //let expected_svd = TLSPRF.verifyData (mode.Nego.n_protocol_version,mode.Nego.n_cipher_suite) sfin_key Server digestClientFinished in
-  if equalBytes f.fin_vd expected_svd
+  if f.fin_vd = expected_svd
   then (
     hs.state := C_Complete; // ADL: TODO need a proper renego state Idle (Some (vd,svd)))};
     InAck false true // Client 1.2 ATK
@@ -616,7 +626,7 @@ let client_R_ServerFinished hs f digestNewSessionTicket digestServerFinished
   let mode = Nego.getMode hs.nego in
   let ha = verifyDataHashAlg_of_ciphersuite mode.Nego.n_cipher_suite in
   let expected_svd = TLSPRF.finished12 ha sfin_key Server digestNewSessionTicket in
-  if equalBytes f.fin_vd expected_svd
+  if f.fin_vd = expected_svd
   then (
     let cvd = TLSPRF.finished12 ha sfin_key Client digestServerFinished in
     let _ = HandshakeLog.send_CCS_tag #ha hs.log (Finished ({fin_vd = cvd})) true in
@@ -661,6 +671,7 @@ let server_ServerHelloDone hs =
       end
 
 // the ServerHello message is a simple function of the mode.
+let not_encryptedExtension e = not (Extensions.encryptedExtension e)
 let serverHello (m:Nego.mode) =
   let open Nego in
   let pv = m.n_protocol_version in
@@ -669,11 +680,11 @@ let serverHello (m:Nego.mode) =
     sh_server_random = m.n_server_random;
     sh_sessionID = m.n_sessionID;
     sh_cipher_suite = m.n_cipher_suite;
-    sh_compression = if pv = TLS_1p3 then None else Some NullCompression;
+    sh_compression = if is_pv_13 pv then None else Some NullCompression;
     sh_extensions =
       match pv, m.n_server_extensions with
       | TLS_1p3, Some exts ->
-        Some (List.Tot.filter (fun e -> not (Extensions.encryptedExtension e)) exts)
+        Some (List.Tot.filter not_encryptedExtension exts)
       | _ -> m.n_server_extensions
    })
 
@@ -850,7 +861,7 @@ let server_ClientFinished2 hs cvd digestSF digestCF =
   let cs = mode.Nego.n_cipher_suite in
   let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
   let expected_cvd = TLSPRF.finished12 ha fink Client digestSF in
-  if equalBytes cvd expected_cvd then
+  if cvd = expected_cvd then
     (hs.state := S_Complete; InAck false false)
   else
     InError (AD_decode_error, "Client Finished MAC did not verify: expected digest "^print_bytes digestSF)
@@ -869,7 +880,7 @@ let server_ClientFinished hs cvd digestCCS digestClientFinished =
     let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
     let expected_cvd = TLSPRF.finished12 ha fink Client digestCCS in
     //let expected_cvd = TLSPRF.verifyData alpha fink Client digestCCS in
-    if equalBytes cvd expected_cvd
+    if cvd = expected_cvd
     then
       //let svd = TLSPRF.verifyData alpha fink Server digestClientFinished in
       let digestTicket =
@@ -1019,15 +1030,15 @@ let create (parent:rid) cfg role resume =
   let x: hs = HS role nego log ks epochs state in //17-04-17 why needed?
   x
 
-let rehandshake s c = Platform.Error.unexpected "rehandshake: not yet implemented"
+let rehandshake s c = FStar.Error.unexpected "rehandshake: not yet implemented"
 
-let rekey s c = Platform.Error.unexpected "rekey: not yet implemented"
+let rekey s c = FStar.Error.unexpected "rekey: not yet implemented"
 
-let request s c = Platform.Error.unexpected "request: not yet implemented"
+let request s c = FStar.Error.unexpected "request: not yet implemented"
 
 let invalidateSession hs = ()
 // ADL: disabling this for top-level API testing purposes
-// Platform.Error.unexpected "invalidateSession: not yet implemented"
+// FStar.Error.unexpected "invalidateSession: not yet implemented"
 
 
 (* ------------------ Outgoing -----------------------*)
@@ -1167,4 +1178,4 @@ let recv_ccs (hs:hs) =
         InError(AD_unexpected_message, "CCS received at wrong time")
 
 
-let authorize s ch = Platform.Error.unexpected "authorize: not yet implemented"
+let authorize s ch = FStar.Error.unexpected "authorize: not yet implemented"

@@ -583,9 +583,6 @@ int TestQuicClient(void)
     SOCKET sockfd;
     struct hostent *peer;
     struct sockaddr_in addr;
-    callback_context ctx;
-    char *out_msg;
-    char *err_msg;
     int r;
 
     printf("CLIENT\n");
@@ -780,6 +777,8 @@ int main(int argc, char **argv)
 {
     int r;
 
+    printf("cmitls.exe ===================\n");
+
 #if _WIN32
 {
     WSADATA wsaData;
@@ -803,12 +802,14 @@ int main(int argc, char **argv)
         }
     }
 
+    printf("cmitls.exe calling FFI_mitls_init\n");
     r = FFI_mitls_init();
     if (r == 0) {
         printf("FFI_mitls_init() failed!\n");
         return 2;
     }
 
+    printf("cmitls.exe about to act as client or server\n");
     if (option_isserver) {
         if (option_quic) {
             r = TestQuicServer();

@@ -42,3 +42,6 @@ libs/ffi/FFIRegister.o
 libs/ffi/libFFIcallbacks.a
 src/tls/server13.exe
 src/tls/client13.exe
+
+src/tls/krml_output/*.c
+src/tls/krml_output/*.h

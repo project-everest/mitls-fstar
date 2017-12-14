@@ -9,14 +9,15 @@ module TLSInfo
    its implementation is typechecked.
 *)
 
-open Platform.Bytes
-open Platform.Date
+open FStar.Bytes
+open FStar.Date
 open TLSConstants
 //open PMS
 //open Cert
 
 module CC = CoreCrypto
-module MM = MonotoneMap
+module DM = FStar.DependentMap
+module MM = FStar.Monotonic.DependentMap
 module MR = FStar.Monotonic.RRef
 module HH = FStar.HyperHeap
 
@@ -394,12 +395,13 @@ type injective (#a:Type) (#b:Type)
 // and folds the perfect hashing assumption and log projection
 type hashed_log (li:logInfo) =
   b:bytes{exists (f: bytes -> Tot logInfo).{:pattern (f b)}
-  injective #bytes #logInfo #equalBytes #eq_logInfo f /\ f b = li}
+  injective #bytes #logInfo #op_Equality #eq_logInfo f /\ f b = li}
 
 type binderLabel =
   | ExtBinder
   | ResBinder
 
+[@ Gc ]
 type pre_esId : Type0 =
   | ApplicationPSK: #ha:hash_alg -> #ae:aeadAlg -> i:PSK.pskid{PSK.compatible_hash_ae i ha ae} -> pre_esId
   | ResumptionPSK: #li:logInfo{~(LogInfo_CH? li)} -> i:pre_rmsId li -> pre_esId
@@ -528,7 +530,7 @@ private type s_table = (if Flags.ideal_KEF then i_safety_log else unit)
 
 let safety_table : s_table =
   (if Flags.ideal_KEF then
-    MM.alloc #safe_region #pre_index #honest_index #(fun _ -> True)
+    MM.alloc () <: i_safety_log
   else ())
 
 type registered (i:pre_index) =
@@ -617,13 +619,16 @@ let peerLabel = function
   | ServerApplicationTrafficSecret -> ClientApplicationTrafficSecret
   | ApplicationTrafficSecret -> ApplicationTrafficSecret
 
+(* Seems related to https://github.com/FStarLang/kremlin/issues/59 @jroesch *)
 let peerId = function
   | PlaintextID r -> PlaintextID r
   | ID12 pv msid kdf ae cr sr rw -> ID12 pv msid kdf ae cr sr (dualRole rw)
-  | ID13 (KeyID #li (ExpandedSecret s t log)) ->
-      let kid = KeyID #li (ExpandedSecret s (peerLabel t) log) in
-      assume(valid (I_KEY kid)); // Annoying: registration of keys as pairs
-      ID13 kid
+  | ID13 keyid -> (match keyid with
+      | (KeyID #li es) -> (match es with
+        | (ExpandedSecret s t log) ->
+          let kid = KeyID #li (ExpandedSecret s (peerLabel t) log) in
+          assume(valid (I_KEY kid)); // Annoying: registration of keys as pairs
+          ID13 kid))
 
 val siId: si:sessionInfo{
   Some? (prfMacAlg_of_ciphersuite_aux (si.cipher_suite)) /\
@@ -631,7 +636,7 @@ val siId: si:sessionInfo{
   pvcs si.protocol_version si.cipher_suite } -> role -> Tot id
 
 let siId si r =
-  let cr, sr = split (csrands si) 32 in
+  let cr, sr = split (csrands si) 32ul in
   ID12 si.protocol_version (msid si) (kdfAlg si.protocol_version si.cipher_suite) (siAuthEncAlg si) cr sr r
 
 let pv_of_id (i:id{~(PlaintextID? i)}) = match i with
@@ -639,10 +644,11 @@ let pv_of_id (i:id{~(PlaintextID? i)}) = match i with
   | ID12 pv _ _ _ _ _ _ -> pv
 
 // Returns the local nonce
-let nonce_of_id = function
+let nonce_of_id (i : id) : random =
+  match i with
   | PlaintextID r -> r
-  | ID12 _ _ _ _ cr sr rw -> if rw = Client then cr else sr
   | ID13 (KeyID #li _) -> logInfo_nonce li
+  | ID12 _ _ _ _ cr sr rw -> if rw = Client then cr else sr
 
 val kdfAlg_of_id: i:id { ID12? i } -> Tot kdfAlg_t
 let kdfAlg_of_id = function
@@ -707,15 +713,20 @@ let safeKDF _ = unsafe_coerce false //TODO: THIS IS A PLACEHOLDER
 //let strongAEId i   = strongAEAlg   i.pv i.aeAlg
 
 // ``We are idealizing integrity/confidentiality for this id''
-abstract let authId = function
-  | PlaintextID _ -> false
-  | ID13 ki -> false // TODO
-  | ID12 pv msid kdf ae cr sr rw -> false // TODO
+// abstract let authId = function
+//   | PlaintextID _ -> false
+//   | ID13 ki -> false // TODO
+//   | ID12 pv msid kdf ae cr sr rw -> false // TODO
 
-abstract let safeId = function
-  | PlaintextID _ -> false
-  | ID13 ki -> false // TODO
-  | ID12 pv msid kdf ae cr sr rw -> false // TODO
+// abstract let safeId = function
+//   | PlaintextID _ -> false
+//   | ID13 ki -> false // TODO
+//   | ID12 pv msid kdf ae cr sr rw -> false // TODO
+inline_for_extraction
+let authId _ = false
+
+inline_for_extraction
+let safeId _ = false
 
 let plainText_is_not_auth (i:id)
   : Lemma (requires (PlaintextID? i))

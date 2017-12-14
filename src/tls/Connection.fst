@@ -10,8 +10,8 @@ open FStar.Seq
  // for e.g. found
 //open FStar.Set
  
-open Platform.Bytes
-open Platform.Error
+open FStar.Bytes
+open FStar.Error
 
 open TLSError
 open TLSConstants
@@ -24,6 +24,7 @@ open Handshake
 
 module MR = FStar.Monotonic.RRef
 module HH = FStar.HyperHeap
+module HS = FStar.HyperStack
 
 // using also Range, DataStream, TLSFragment, Record
 
@@ -66,8 +67,8 @@ noeq type connection = | C:
   #region: c_rgn ->
   hs:      hs {extends (region_of hs) region /\ is_hs_rgn (region_of hs)} (* providing role, config, and uid *) ->
   tcp:     Transport.t ->
-  recv: ref Record.input_state{recv.id = region} -> // added for buffering non-blocking reads
-  state:   ref tlsState {state.id = region} -> 
+  recv: ref Record.input_state{HS.frameOf recv = region} -> // added for buffering non-blocking reads
+  state:   ref tlsState {HS.frameOf state = region} -> 
   connection
 
 // 17-04-08 helpful or not? 

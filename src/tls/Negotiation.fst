@@ -1,7 +1,7 @@
 module Negotiation
 
-open Platform.Error
-open Platform.Bytes
+open FStar.Error
+open FStar.Bytes
 
 open TLSError
 open TLSInfo
@@ -295,12 +295,18 @@ let find_server_quic_parameters m =
   | Some (Extensions.E_quic_parameters qp) -> Some qp
   | _ -> None
 
-let is_resumption12 m =
-  m.n_protocol_version <> TLS_1p3  &&
-  m.n_sessionID = Some (m.n_offer.ch_sessionID)
+(* this equality check is not compiled currently - jroesch*)
+private let mode_sessionID_eq_ch_sessionID (m : mode) : bool =
+match m.n_sessionID, m.n_offer.ch_sessionID with
+| None, _ -> false
+| (Some id1), id2 -> id1 = id2
 
+let is_resumption12 m =
+  not (is_pv_13 m.n_protocol_version)  &&
+  mode_sessionID_eq_ch_sessionID m
+ 
 let is_cacheable12 m =
-  m.n_protocol_version <> TLS_1p3  &&
+  not (is_pv_13 m.n_protocol_version)  &&
   ( let Some sid = m.n_sessionID in
     sid <> m.n_offer.ch_sessionID &&
     sid <> empty_bytes)
@@ -400,7 +406,7 @@ let computeOffer r cfg resume nonce ks pskinfo =
     | (Some t, _), true, _ ->
       // FIXME Cannot compute hash in Tot
       //let sid = Hashing.compute Hashing.Spec.SHA256 t
-      let sid = if length t <= 32 then t else fst (split t 32) in
+      let sid = if length t <= 32 then t else fst (split t 32ul) in
       Some t, sid
     | (None, _), true, _ -> Some (empty_bytes), empty_bytes
     | _ -> None, empty_bytes in
@@ -466,7 +472,7 @@ let hashAlg m =
 
 val kexAlg: mode -> TLSConstants.kexAlg
 let kexAlg m =
-  if m.n_protocol_version = TLS_1p3 then
+  if is_pv_13 m.n_protocol_version then
     (match m.n_pski with
     | None -> Kex_ECDHE
     | Some _ ->
@@ -484,7 +490,7 @@ let aeAlg m =
 
 val emsFlag: mode -> bool
 let emsFlag mode =
-  if mode.n_protocol_version = TLS_1p3 then
+  if is_pv_13 mode.n_protocol_version then
     true
   else
     match mode.n_offer.ch_extensions with
@@ -523,11 +529,11 @@ let sendticket_12 mode =
 
 val resume_12: mode -> bool
 let resume_12 mode =
-  mode.n_protocol_version <> TLS_1p3 &&
+  is_pv_13 mode.n_protocol_version &&
   Some? (find_sessionTicket mode.n_offer) &&
   length mode.n_offer.ch_sessionID > 0 &&
   Some? mode.n_sessionID &&
-  equalBytes (Some?.v mode.n_sessionID) mode.n_offer.ch_sessionID
+  Some?.v mode.n_sessionID = mode.n_offer.ch_sessionID
 
 val local_config: #region:rgn -> #role:TLSConstants.role -> t region role -> config
 let local_config #region #role ns =
@@ -588,6 +594,9 @@ val sign: #region:rgn -> #role:TLSConstants.role -> t region role -> bytes ->
   ST (result HandshakeMessages.signature)
   (requires (fun h -> True))
   (ensures (fun h0 _ h1 -> True))
+private
+let const_true _ = true
+
 let sign #region #role ns tbs =
   // TODO(adl) make the pattern below a static pre-condition
   let S_Mode mode (Some (cert, sa)) = MR.m_read ns.state in
@@ -612,6 +621,8 @@ let rec map_ST f x = match x with
   | [] -> []
   | a::tl -> f a :: map_ST f tl
 
+let i_psk_info i = (i, PSK.psk_info i)
+
 val client_ClientHello: #region:rgn -> t region Client
   -> option CommonDH.clientKeyShare
   -> St offer
@@ -622,7 +633,7 @@ let client_ClientHello #region ns oks =
     | Some ks -> Some (CommonDH.ClientKeyShare ks)
     | None -> None in
   let _, pskid = ns.resume in
-  let pskinfo = map_ST (fun i -> (i, PSK.psk_info i)) pskid in
+  let pskinfo = map_ST i_psk_info pskid in
   match MR.m_read ns.state with
   | C_Init _ ->
       trace(if
@@ -706,7 +717,7 @@ let offered_versions min_pv (o: offer): result (l: list protocolVersion {l <> []
 
 let is_client13 (o:offer) =
   match offered_versions TLS_1p3 o with
-  | Correct vs -> List.Tot.existsb (fun v -> v = TLS_1p3) vs
+  | Correct vs -> List.Tot.existsb is_pv_13 vs
   | Error _ -> false
 
 let negotiate_version cfg offer =
@@ -723,10 +734,12 @@ let negotiate_version cfg offer =
   outputs the first ciphersuite in list2 that also is in list
   one and is a valid ciphersuite, or [None]
 *)
+private
+let is_cs_in_l (l1, sa) s = CipherSuite? s && List.Tot.mem s l1 && && CipherSuite?._1 s = Some sa
 val negotiate: l1:list valid_cipher_suite -> list valid_cipher_suite -> sigAlg
  -> Tot (option (c:valid_cipher_suite{CipherSuite? c && List.Tot.mem c l1}))
 let negotiate l1 l2 sa =
-  List.Tot.find #valid_cipher_suite (fun s -> CipherSuite? s && List.Tot.mem s l1 && CipherSuite?._1 s = Some sa) l2
+  TLSConstants.find_aux (l1, sa) is_cs_in_l l2
 
 (**
   For use in ensuring the result from negotiate is a Correct
@@ -805,8 +818,8 @@ let rec negotiateGroupKeyShare cfg pv exts =
 *)
 val isSentinelRandomValue: protocolVersion -> protocolVersion -> TLSInfo.random -> Tot bool
 let isSentinelRandomValue c_pv s_pv s_random =
-  geqPV c_pv TLS_1p3 && geqPV TLS_1p2 s_pv && equalBytes (abytes "DOWNGRD\x01") s_random ||
-  geqPV c_pv TLS_1p2 && geqPV TLS_1p1 s_pv && equalBytes (abytes "DOWNGRD\x00") s_random
+  geqPV c_pv TLS_1p3 && geqPV TLS_1p2 s_pv && bytes_of_string "DOWNGRD\x01" = s_random ||
+  geqPV c_pv TLS_1p2 && geqPV TLS_1p1 s_pv && bytes_of_string "DOWNGRD\x00" = s_random
 
 
 (** Confirms that the version negotiated by the server was:
@@ -831,8 +844,11 @@ let acceptableVersion cfg pv sr =
  of valid cipher suites in the client config
 *)
 val acceptableCipherSuite: config -> protocolVersion -> valid_cipher_suite -> Tot bool
+let is_cs (cs:valid_cipher_suite) x = x = cs
 let acceptableCipherSuite cfg spv cs =
-  List.Tot.existsb (fun x -> x = cs) cfg.cipher_suites
+  TLSConstants.exists_b_aux cs is_cs cfg.cipher_suites
+
+let is_share_eq (g:CommonDH.group) share = CommonDH.Share?.g share = g
 
 let matching_share
   (cext:option (ce:list extension{List.Tot.length ce < 256})) (g:CommonDH.group) :
@@ -843,7 +859,7 @@ let matching_share
     match List.Tot.find Extensions.E_key_share? cext with
     | Some (E_key_share (CommonDH.ClientKeyShare shares)) ->
       begin
-      match List.Tot.find (fun share -> CommonDH.Share?.g share = g) shares with
+      match TLSConstants.find_aux g is_share_eq shares with
       | Some (CommonDH.Share g gx) -> Some (|g, gx|)
       | _ -> None
       end
@@ -946,12 +962,12 @@ val to_be_signed: pv:protocolVersion -> role -> csr:option bytes{None? csr <==> 
 let to_be_signed pv role csr tbs =
   match pv, csr with
   | TLS_1p3, None ->
-      let pad = createBytes 64 32z in
+      let pad = Bytes.create_ 64 32uy in
       let ctx =
         match role with
         | Server -> "TLS 1.3, server CertificateVerify"
         | Client -> "TLS 1.3, client CertificateVerify"  in
-      pad @| abytes ctx @| abyte 0z @| tbs
+      pad @| bytes_of_string ctx @| abyte 0z @| tbs
   | TLS_1p2, Some csr -> csr @| tbs
   | _, Some csr -> csr @| tbs
 
@@ -1095,6 +1111,23 @@ private let rec compute_cs13_aux (i:nat) (o:offer)
     in
     choices @ (compute_cs13_aux (i+1) o psks g_gx ncs psk_kex server_cert)
 
+private 
+let is_cs13_in_cfg cfg cs =
+  CipherSuite13? cs && List.Tot.mem cs cfg.cipher_suites
+
+private 
+let is_in_cfg_named_groups cfg g =
+  List.Tot.mem g cfg.named_groups
+  
+private
+let group_of_named_group (x:_{Some? (CommonDH.group_of_namedGroup x)}) =
+  Some?.v (CommonDH.group_of_namedGroup x)
+  
+private 
+let share_in_named_group gl (x :share) =
+    let (| g, _ |) = x in
+    List.Tot.mem g gl
+  
 // returns a list of negotiable "core modes" for TLS 1.3
 // and an optional group and ciphersuite suitable for HRR
 // the key exchange can be derived from cs13
@@ -1108,9 +1141,7 @@ val compute_cs13:
   result (list (cs13 o) * option (namedGroup * cs:cipherSuite))
 let compute_cs13 cfg o psks shares server_cert =
   // pick acceptable record ciphersuites
-  let ncs = List.Tot.filter
-    (fun cs -> CipherSuite13? cs && List.Tot.mem cs cfg.cipher_suites)
-    o.ch_cipher_suites in
+  let ncs =  TLSConstants.filter_aux cfg is_cs13_in_cfg o.ch_cipher_suites
   // pick the (potential) group to use for DHE/ECDHE
   // also remember if there is a supported group with no share provided
   // in case we want to to a HRR
@@ -1118,12 +1149,12 @@ let compute_cs13 cfg o psks shares server_cert =
     match find_supported_groups o with
     | None -> None, None // No offered group, only PSK
     | Some gs ->
-      match List.Tot.filter (fun g -> List.Tot.mem g cfg.named_groups) gs with
+      match TLSConstants.filter_aux cfg is_in_cfg_named_groups gs with
       | [] -> None, None // No common group, only PSK
       | gl ->
         let csg = match ncs with | [] -> None | cs :: _ -> Some (List.Tot.hd gl, cs) in
-        let gl' = List.Tot.map (fun x -> Some?.v (CommonDH.group_of_namedGroup x)) gl in
-        let s = List.Tot.find (fun ((| g, _ |) : share) -> List.Tot.mem g gl') shares in
+        let gl' = List.Tot.map group_of_named_group gl in
+        let s = TLSConstants.find_aux gl' share_in_named_group shares in
         s, (if server_cert then csg else None) // Can't do HRR without a certificate
     in
   let psk_kex =
@@ -1140,13 +1171,18 @@ let rec filter_psk (l:list Extensions.pskIdentity)
   match l with
   | [] -> []
   | (id, _) :: t ->
-    let id = utf8 (iutf8 id) in // FIXME Platform.Bytes
-    match Ticket.check_ticket13 id with
-    | Some info -> (id, info) :: (filter_psk t)
-    | None ->
-      match PSK.psk_lookup id with
-      | Some info -> (id, info) :: (filter_psk t)
-      | None -> trace ("WARNING: the PSK <"^(print_bytes id)^"> has been filtered"); filter_psk t
+    let u_id = iutf8_opt id in
+    //TODO bytes ... audit ... NS 09/27
+    if None? u_id
+    then (trace ("WARNING: the PSK <"^(print_bytes id)^"> has been filtered because it was not decodable");
+          filter_psk t)
+    else let id = utf8_encode (Some?.v u_id) in // FIXME FStar.Bytes
+         match Ticket.check_ticket13 id with
+         | Some info -> (id, info) :: (filter_psk t)
+         | None ->
+           match PSK.psk_lookup id with
+           | Some info -> (id, info) :: (filter_psk t)
+           | None -> trace ("WARNING: the PSK <"^(print_bytes id)^"> has been filtered"); filter_psk t
 
 // Registration of DH shares
 let rec register_shares (l:list pre_share)
@@ -1310,7 +1346,7 @@ let server_ClientHello #region ns offer =
     let [Extensions.E_key_share (CommonDH.HRRKeyShare ng)] = hrr.hrr_extensions in
     if
       o1.ch_protocol_version = o2.ch_protocol_version &&
-      equalBytes o1.ch_client_random o2.ch_client_random &&
+      o1.ch_client_random = o2.ch_client_random &&
       o1.ch_sessionID = o2.ch_sessionID &&
       List.Tot.mem hrr.hrr_cipher_suite o2.ch_cipher_suites &&
       o1.ch_compressions = o2.ch_compressions &&
@@ -1375,17 +1411,17 @@ let server_ServerShare #region ns ks =
   | S_ClientHello mode cert ->
     let cexts = mode.n_offer.ch_extensions in
     trace ("processing client extensions " ^ string_of_option_extensions cexts);
-    match Extensions.negotiateServerExtensions
-      mode.n_protocol_version
-      cexts
-      mode.n_offer.ch_cipher_suites
-      ns.cfg
-      mode.n_cipher_suite
-      None  // option (TI.cVerifyData*TI.sVerifyData)
-      mode.n_pski
-      (Option.map CommonDH.ServerKeyShare ks)
-      (mode.n_sessionID = Some mode.n_offer.ch_sessionID)
-    with
+    let scrut = Extensions.negotiateServerExtensions
+        mode.n_protocol_version
+        cexts
+        mode.n_offer.ch_cipher_suites
+        ns.cfg
+        mode.n_cipher_suite
+        None  // option (TI.cVerifyData*TI.sVerifyData)
+        mode.n_pski
+        (Option.mapTot CommonDH.ServerKeyShare ks)
+        (mode_sessionID_eq_ch_sessionID mode) in
+    match scrut with
     | Error z -> Error z
     | Correct sexts ->
       begin
@@ -1399,7 +1435,7 @@ let server_ServerShare #region ns ks =
         mode.n_cipher_suite
         mode.n_pski
         sexts
-        (Option.map share_of_serverKeyShare ks)
+        (Option.mapTot share_of_serverKeyShare ks)
         mode.n_client_cert_request
         mode.n_server_cert
         mode.n_client_share

@@ -12,8 +12,8 @@ open FStar.Seq
 open FStar.Monotonic.RRef
 open FStar.Monotonic.Seq
 
-open Platform.Error
-open Platform.Bytes
+open FStar.Error
+open FStar.Bytes
 
 open TLSError
 open TLSConstants
@@ -220,7 +220,7 @@ let encrypt #i e l p =
   let h0 = get() in
   let ctr = ctr e.counter in
   m_recall ctr;
-  let text = if safeId i then createBytes l 0z else repr i l p in
+  let text = if safeId i then create_ l 0z else repr i l p in
   let n = m_read ctr in
   lemma_repr_bytes_values n;
   let nb = bytes_of_int (AEAD.noncelen i) n in
@@ -304,7 +304,7 @@ let decrypt #i d l c =
    | None -> None
    | Some pr ->
      begin
-       assert (Platform.Bytes.length pr == l);
+       assert (FStar.Bytes.length pr == l);
        let p = strip_refinement (mk_plain i l pr) in
        if Some? p then m_write ctr (j + 1);
        p
