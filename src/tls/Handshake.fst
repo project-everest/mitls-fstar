@@ -987,7 +987,7 @@ let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinishe
             | _, Some _ -> [Extensions.E_early_data (Some 0xfffffffful)]
             | Some max_ed, None -> [Extensions.E_early_data (Some (FStar.UInt32.uint_to_t max_ed))]
             | _ -> [] in
-          let tnonce, _ = split tb 12 in
+          let tnonce, _ = split_ tb 12 in
           HandshakeLog.send hs.log (NewSessionTicket13 ({
             ticket13_lifetime = FStar.UInt32.(uint_to_t 3600);
             ticket13_age_add = FStar.UInt32.(uint_to_t 0);

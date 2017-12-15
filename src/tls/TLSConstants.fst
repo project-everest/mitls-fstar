@@ -1585,7 +1585,7 @@ let rec parseConfigurationExtensions_aux (b:bytes) (exts:list configurationExten
         else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse configuration extension length")
       else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Configuration extension length should be at least 4")
     else Correct(exts)
-  
+
 val parseConfigurationExtensions: pinverse_t configurationExtensionsBytes
 let parseConfigurationExtensions b =
   if length b >= 2 then
@@ -1668,7 +1668,7 @@ val parseSignatureSchemeList: pinverse_t signatureSchemeListBytes
       | Error z     -> Error z
       else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse sig hash algs")
     else Correct algs
- 
+
 
 let parseSignatureSchemeList b =
   match vlparse 2 b with
@@ -1837,23 +1837,42 @@ type ticket_cb : Type0 =
 type cert_repr = b:bytes {length b < 16777216}
 type cert_type = FFICallbacks.callbacks
 
-noeq type cert_cb = {
+noeq
+abstract
+type cert_cb = {
+  app_context : FStar.Dyn.dyn;
+  cert_context: FStar.Dyn.dyn;
   cert_select_cb:
-    (sni:bytes -> sig:signatureSchemeList -> ST (option (cert_type * signatureScheme))
+    (FStar.Dyn.dyn -> FStar.Dyn.dyn -> sni:bytes -> sig:signatureSchemeList -> ST (option (cert_type * signatureScheme))
     (requires fun _ -> True)
     (ensures fun h0 _ h1 -> modifies_none h0 h1));
   cert_format_cb:
-    (cert_type -> ST (list cert_repr)
+    (FStar.Dyn.dyn -> FStar.Dyn.dyn -> cert_type -> ST (list cert_repr)
     (requires fun _ -> True)
     (ensures fun h0 _ h1 -> modifies_none h0 h1));
   cert_sign_cb:
-    (cert_type -> signatureScheme -> tbs:bytes -> ST (option bytes)
+    (FStar.Dyn.dyn -> FStar.Dyn.dyn -> cert_type -> signatureScheme -> tbs:bytes -> ST (option bytes)
     (requires fun _ -> True)
     (ensures fun h0 _ h1 -> modifies_none h0 h1));
   cert_verify_cb:
-    (list cert_repr -> signatureScheme -> tbs:bytes -> sigv:bytes -> ST bool
+    (FStar.Dyn.dyn -> FStar.Dyn.dyn -> list cert_repr -> signatureScheme -> tbs:bytes -> sigv:bytes -> ST bool
     (requires fun _ -> True)
     (ensures fun h0 _ h1 -> modifies_none h0 h1));
+}
+
+let mk_cert_cb
+      app_ctx
+      cert_ctx
+      cert_select_cb
+      cert_format_cb
+      cert_sign_cb
+      cert_verify_cb = {
+    app_context  = app_ctx;
+    cert_context = cert_ctx;
+    cert_select_cb = cert_select_cb;
+    cert_format_cb = cert_format_cb;
+    cert_sign_cb = cert_sign_cb;
+    cert_verify_cb = cert_verify_cb
 }
 
 noeq type config : Type0 = {
@@ -1886,6 +1905,46 @@ noeq type config : Type0 = {
     peer_name: option string;     // The expected name to match against the peer certificate
   }
 
+let cert_select_cb (c:config) (sni:bytes) (sig:signatureSchemeList)
+   : ST (option (cert_type * signatureScheme))
+        (requires fun _ -> True)
+        (ensures fun h0 _ h1 -> modifies_none h0 h1)
+   = c.cert_callbacks.cert_select_cb
+            c.cert_callbacks.app_context
+            c.cert_callbacks.cert_context
+            sni sig
+
+let cert_format_cb (c:config) (ct:cert_type)
+   : ST (list cert_repr)
+        (requires fun _ -> True)
+        (ensures fun h0 _ h1 -> modifies_none h0 h1)
+   = c.cert_callbacks.cert_format_cb
+            c.cert_callbacks.app_context
+            c.cert_callbacks.cert_context
+            ct
+
+let cert_sign_cb (c:config) (ct:cert_type) (ss:signatureScheme) (tbs:bytes)
+   : ST (option bytes)
+        (requires fun _ -> True)
+        (ensures fun h0 _ h1 -> modifies_none h0 h1)
+   = c.cert_callbacks.cert_sign_cb
+            c.cert_callbacks.app_context
+            c.cert_callbacks.cert_context
+            ct
+            ss
+            tbs
+
+let cert_verify_cb (c:config) (cl:list cert_repr) (ss:signatureScheme) (tbs:bytes) (sigv:bytes)
+   : ST bool
+        (requires fun _ -> True)
+        (ensures fun h0 _ h1 -> modifies_none h0 h1)
+   = c.cert_callbacks.cert_verify_cb
+            c.cert_callbacks.app_context
+            c.cert_callbacks.cert_context
+            cl
+            ss
+            tbs
+            sigv
 
 type cVerifyData = b:bytes{length b <= 64} (* ClientFinished payload *)
 type sVerifyData = b:bytes{length b <= 64} (* ServerFinished payload *)

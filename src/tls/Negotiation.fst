@@ -600,18 +600,11 @@ let const_true _ = true
 let sign #region #role ns tbs =
   // TODO(adl) make the pattern below a static pre-condition
   let S_Mode mode (Some (cert, sa)) = MR.m_read ns.state in
-  match ns.cfg.cert_callbacks.cert_sign_cb cert sa tbs with
+  match cert_sign_cb ns.cfg cert sa tbs with
   | None -> Error (AD_no_certificate, perror __SOURCE_FILE__ __LINE__ "Failed to sign with selected certificate.")
   | Some sigv ->
     let alg = if mode.n_protocol_version `geqPV` TLS_1p2 then Some sa else None in
     Correct ({sig_algorithm = alg; sig_signature = sigv})
-
-val verify: cfg:config -> signatureScheme -> list cert_repr -> bytes -> bytes -> ST bool
-  (requires (fun h -> True))
-  (ensures (fun h0 _ h1 -> True))
-let verify cfg scheme chain tbs sigv =
-  cfg.cert_callbacks.cert_verify_cb chain scheme tbs sigv
-
 
 (* CLIENT *)
 
@@ -1007,8 +1000,7 @@ let client_ServerKeyExchange #region ns crt ske ocr =
     | sa::_ ->
       let csr = ns.nonce @| mode.n_server_random in
       let tbs = to_be_signed mode.n_protocol_version Server (Some csr) ske_tbs in
-      let validator = ns.cfg.cert_callbacks.cert_verify_cb in
-      let valid = validator crt.crt_chain sa tbs ske.ske_signed_params.sig_signature in
+      let valid = cert_verify_cb ns.cfg crt.crt_chain sa tbs ske.ske_signed_params.sig_signature in
       trace ("ServerKeyExchange signature: " ^ (if valid then "Valid" else "Invalid"));
       if not valid then
         Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Failed to check SKE signature")
@@ -1047,10 +1039,9 @@ let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify d
         let Some sal = find_signature_algorithms mode.n_offer in
         let sa = Some?.v cv.sig_algorithm in
         let chain = Some (c, sa) in
-        let validator = ns.cfg.cert_callbacks.cert_verify_cb in
         if List.Tot.mem sa sal then
           let tbs = to_be_signed mode.n_protocol_version Server None digest in
-          validator (Cert.chain_down c) sa tbs cv.sig_signature, chain
+          cert_verify_cb ns.cfg (Cert.chain_down c) sa tbs cv.sig_signature, chain
         else false, None // The server signed with an algorithm we did not offer
       | Kex_PSK_ECDHE, None, None, None
       | Kex_PSK, None, None, None -> true, None // FIXME recall chain from PSK
@@ -1220,7 +1211,8 @@ let computeServerMode cfg co serverRandom =
     let scert =
       match find_signature_algorithms co with
       | None -> None
-      | Some sigalgs -> cfg.cert_callbacks.cert_select_cb (get_sni co) sigalgs
+      | Some sigalgs -> 
+        cert_select_cb cfg (get_sni co) sigalgs
       in
     match compute_cs13 cfg co pske shares (Some? scert) with
     | Error z -> Error z
@@ -1251,7 +1243,7 @@ let computeServerMode cfg co serverRandom =
     | Correct ((JUST_EDH gx cs) :: _, _) ->
       (trace "Negotiated Pure EDH key exchange";
       let Some (cert, sa) = scert in
-      let schain = cfg.cert_callbacks.cert_format_cb cert in
+      let schain = cert_format_cb cfg cert in
       trace ("Negotiated " ^ (string_of_signatureScheme sa));
       Correct
         (ServerMode
@@ -1303,10 +1295,10 @@ let computeServerMode cfg co serverRandom =
         | None -> [SIG_UNKNOWN (twobytes (0xFFz, 0xFFz)); ECDSA_SHA1]
         | Some sigalgs -> List.Tot.filter (fun x -> List.Tot.mem x cfg.signature_algorithms) sigalgs
         in
-      match cfg.cert_callbacks.cert_select_cb (get_sni co) salgs with
+      match cert_select_cb cfg (get_sni co) salgs with
       | None -> Error(AD_no_certificate, perror __SOURCE_FILE__ __LINE__ "No compatible certificate can be selected")
       | Some (cert, sa) ->
-        let schain = cfg.cert_callbacks.cert_format_cb cert in
+        let schain = cert_format_cb cfg cert in
         let sig, _ = sigHashAlg_of_signatureScheme sa in
         match negotiateCipherSuite cfg pv co.ch_cipher_suites sig with
         | Error z -> Error z

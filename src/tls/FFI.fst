@@ -43,8 +43,8 @@ private let fragment_1 i (b:bytes { length b <= max_TLSPlaintext_fragment_length
 
 // move to Bytes
 private let sub (buffer:bytes) (first:nat) (len:nat { first + len <= length buffer }) =
-  let before, now = split buffer first in
-  let now, after = split buffer len in
+  let before, now = split_ buffer first in
+  let now, after = split_ buffer len in
   now
 
 private val write_all': c:Connection.connection -> i:id -> buffer:bytes -> sent:nat {sent <= length buffer} -> St ioresult_w
@@ -70,7 +70,7 @@ private let errno description txt : ML int =
     | None    -> "(None)" in (
   trace ("returning error: "^txt0^" "^txt^"\n"); (
   match description with
-  | Some ad ->  let _, e = split (Alert.alertBytes ad) 2 in int_of_bytes e
+  | Some ad ->  let _, e = split_ (Alert.alertBytes ad) 2 in int_of_bytes e
   | None    -> -1 ))
 
 
