@@ -202,9 +202,9 @@ NATIVE_C_LIBRARIES=$(shell ocamlfind opt -config | grep native_c_libraries | sed
 
 # C test of the FFI
 cmitls.o: cmitls.c $(FFI_HOME)/mitlsffi.h
-	$(NATIVE_C_COMPILER) -g -c -I$(FFI_HOME) -g -Wall -O0 cmitls.c
+	$(NATIVE_C_COMPILER) -g -c -I$(FFI_HOME) -I../pki/ -g -Wall -O0 cmitls.c
 cmitls.exe: cmitls.o $(LIBMITLS)
-	$(NATIVE_C_COMPILER) -g -o cmitls.exe cmitls.o $(LIBMITLS) $(NATIVE_C_LIBRARIES)
+	$(NATIVE_C_COMPILER) -g -o cmitls.exe cmitls.o $(LIBMITLS) ../pki/libmipki.dll $(NATIVE_C_LIBRARIES)
 
 # our interactive tests; the baseline is make client{|12|13} vs make server 
 

@@ -12,7 +12,7 @@
 #include <openssl/x509v3.h>
 
 #include "mipki.h"
-#define DEBUG 1
+#define DEBUG 0
 
 /*
  DESIGN NOTES
@@ -102,7 +102,7 @@ int password_cb(char *buf, int size, int rwflag, void *p)
   return s->cb(buf, size, s->info);
 }
 
-void mipki_free(mipki_state *st)
+void MITLS_CALLCONV mipki_free(mipki_state *st)
 {
   if(!st) return;
 
@@ -119,7 +119,7 @@ void mipki_free(mipki_state *st)
   free(st);
 }
 
-mipki_state *mipki_init(const mipki_config_entry config[], size_t config_len, password_callback pcb, int *erridx)
+mipki_state* MITLS_CALLCONV mipki_init(const mipki_config_entry config[], size_t config_len, password_callback pcb, int *erridx)
 {
   *erridx = -1;
   X509_STORE *store = X509_STORE_new();
@@ -191,7 +191,7 @@ mipki_state *mipki_init(const mipki_config_entry config[], size_t config_len, pa
   return st;
 }
 
-int mipki_add_root_file_or_path(mipki_state *st, const char *ca_file)
+int MITLS_CALLCONV mipki_add_root_file_or_path(mipki_state *st, const char *ca_file)
 {
   assert(st != NULL);
   struct stat sb;
@@ -209,7 +209,7 @@ int mipki_add_root_file_or_path(mipki_state *st, const char *ca_file)
   return X509_STORE_load_locations(st->store, ca_file, NULL);
 }
 
-mipki_chain mipki_select_certificate(mipki_state *st, const char *sni, const mipki_signature *algs, size_t algs_len, mipki_signature *selected)
+mipki_chain MITLS_CALLCONV mipki_select_certificate(mipki_state *st, const char *sni, const mipki_signature *algs, size_t algs_len, mipki_signature *selected)
 {
   assert(st != NULL);
 
@@ -361,7 +361,7 @@ static int set_digest(mipki_signature sigalg, DIGEST* md)
   return 1;
 }
 
-int mipki_sign_verify(mipki_state *st, const mipki_chain cert_ptr, const mipki_signature sigalg, const char *tbs, size_t tbs_len, char *sig, size_t *sig_len, mipki_mode mode)
+int MITLS_CALLCONV mipki_sign_verify(mipki_state *st, const mipki_chain cert_ptr, const mipki_signature sigalg, const char *tbs, size_t tbs_len, char *sig, size_t *sig_len, mipki_mode mode)
 {
   assert(st != NULL);
   config_entry *cfg = (config_entry*)cert_ptr;
@@ -460,7 +460,7 @@ int mipki_sign_verify(mipki_state *st, const mipki_chain cert_ptr, const mipki_s
   return ret;
 }
 
-mipki_chain mipki_parse_chain(mipki_state *st, const char *chain, size_t chain_len)
+mipki_chain MITLS_CALLCONV mipki_parse_chain(mipki_state *st, const char *chain, size_t chain_len)
 {
   const char *cur = chain;
   const char *end = cur + chain_len;
@@ -527,7 +527,7 @@ mipki_chain mipki_parse_chain(mipki_state *st, const char *chain, size_t chain_l
     return NULL;
 }
 
-size_t mipki_format_chain(mipki_state *st, const mipki_chain chain, char *buffer, size_t buffer_len)
+size_t MITLS_CALLCONV mipki_format_chain(mipki_state *st, const mipki_chain chain, char *buffer, size_t buffer_len)
 {
   assert(st != NULL);
   config_entry *cfg = (config_entry*)chain;
@@ -576,7 +576,7 @@ size_t mipki_format_chain(mipki_state *st, const mipki_chain chain, char *buffer
   return (cur - buffer);
 }
 
-int mipki_validate_chain(mipki_state *st, const mipki_chain chain, const char *host)
+int MITLS_CALLCONV mipki_validate_chain(mipki_state *st, const mipki_chain chain, const char *host)
 {
   assert(st != NULL);
   config_entry *cfg = (config_entry*)chain;
@@ -608,7 +608,7 @@ int mipki_validate_chain(mipki_state *st, const mipki_chain chain, const char *h
   return r;
 }
 
-void mipki_free_chain(mipki_state *st, mipki_chain chain)
+void MITLS_CALLCONV mipki_free_chain(mipki_state *st, mipki_chain chain)
 {
   assert(st != NULL);
   config_entry *cfg = (config_entry*)chain;

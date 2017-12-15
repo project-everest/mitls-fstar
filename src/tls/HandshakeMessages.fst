@@ -146,15 +146,15 @@ let bindersLen_of_ch ch =
 noeq type sh = {
   sh_protocol_version: protocolVersion;
   sh_server_random: TLSInfo.random;
-  sh_sessionID: option sessionID;  // omitted in TLS 1.3
+  sh_sessionID: sessionID;  // omitted in TLS 1.3
   sh_cipher_suite: valid_cipher_suite;
-  sh_compression: option compression; // omitted in TLS 1.3
+  sh_compression: compression; // omitted in TLS 1.3
   sh_extensions: option (se:list extension{List.Tot.length se < 256});
 }
 
 (* Hello retry request *)
 noeq type hrr = {
-  hrr_protocol_version: protocolVersion;
+  hrr_sessionID: sessionID;
   hrr_cipher_suite: valid_cipher_suite;
   hrr_extensions: he:list extension{List.Tot.length he < 256};
 }
@@ -712,32 +712,21 @@ let parseClientHello data =
 val serverHelloBytes: sh -> Tot (b:bytes{length b >= 34 /\ hs_msg_bytes HT_server_hello b})
 let serverHelloBytes sh =
   // signalling the current draft version
-  let verB = versionBytes_draft sh.sh_protocol_version in
-  let sidB =
-    match sh.sh_sessionID with
-    | Some sid ->
-      lemma_repr_bytes_values (length sid);
-      vlbytes 1 sid
-    | _ -> empty_bytes  in
+  let pv = match sh.sh_protocol_version with | TLS_1p3 -> TLS_1p2 | v -> v in
+  let verB = versionBytes_draft pv in
+  lemma_repr_bytes_values (length sh.sh_sessionID);
+  let sidB = vlbytes 1 sh.sh_sessionID in
   let csB = cipherSuiteBytes sh.sh_cipher_suite in
-  let cmB =
-    match sh.sh_compression with
-    | Some compression -> compressionBytes compression
-    | _ -> empty_bytes  in
+  let cmB = compressionBytes sh.sh_compression in
   let extB =
     match sh.sh_extensions with
     | Some ext -> extensionsBytes ext
     | None -> empty_bytes in  // JK: in TLS1.3 case should be vlbytes 2 empty_bytes
-  let data:bytes =
-    match sh.sh_protocol_version with
-    | TLS_1p3 -> verB @| (sh.sh_server_random @| (csB @| extB))
-    | _       -> verB @| (sh.sh_server_random @| (sidB @| (csB @| (cmB @| extB)))) in
+  let data:bytes = verB @| (sh.sh_server_random @| (sidB @| (csB @| (cmB @| extB)))) in
   lemma_repr_bytes_values (length data);
   messageBytes HT_server_hello data
 
-let valid_sh : Type0 = s:sh{
-  (s.sh_protocol_version = TLS_1p3 ==> (None? s.sh_sessionID /\ None? s.sh_compression))
-  /\ (s.sh_protocol_version <> TLS_1p3 ==> (Some? s.sh_sessionID /\ Some? s.sh_compression)) }
+let valid_sh : Type0 = sh
 
 #reset-options "--z3rlimit 50"
 //#set-options "--lax"
@@ -749,13 +738,10 @@ let serverHelloBytes_is_injective msg1 msg2 =
   if serverHelloBytes msg1 = serverHelloBytes msg2 then
   begin
     let verB1 = versionBytes_draft msg1.sh_protocol_version in
-    let sidB1 = match msg1.sh_sessionID with
-      | Some sid -> lemma_repr_bytes_values (length sid); vlbytes 1 sid
-      | _ -> empty_bytes in
+    lemma_repr_bytes_values (length msg1.sh_sessionID);
+    let sidB1 = vlbytes 1 msg1.sh_sessionID in
       let csB1 = cipherSuiteBytes msg1.sh_cipher_suite in
-      let cmB1 =  match msg1.sh_compression with
-      | Some compression -> compressionBytes compression
-      | _ -> empty_bytes in
+      let cmB1 =  compressionBytes msg1.sh_compression in
       let extB1 = match msg1.sh_extensions with
       | Some ext -> extensionsBytes ext
       | None -> empty_bytes in
@@ -764,13 +750,10 @@ let serverHelloBytes_is_injective msg1 msg2 =
       | _       -> verB1 @| (msg1.sh_server_random @| (sidB1 @| (csB1 @| (cmB1 @| extB1)))) in
       lemma_repr_bytes_values (length data1);
       let verB2 = versionBytes_draft msg2.sh_protocol_version in
-      let sidB2 = match msg2.sh_sessionID with
-      | Some sid -> lemma_repr_bytes_values (length sid); vlbytes 1 sid
-      | _ -> empty_bytes in
+      lemma_repr_bytes_values (length msg2.sh_sessionID);
+      let sidB2 = vlbytes 1 msg2.sh_sessionID in
       let csB2 = cipherSuiteBytes msg2.sh_cipher_suite in
-      let cmB2 =  match msg2.sh_compression with
-      | Some compression -> compressionBytes compression
-      | _ -> empty_bytes in
+      let cmB2 = compressionBytes msg2.sh_compression in
       let extB2:bytes = match msg2.sh_extensions with
       | Some ext -> extensionsBytes ext
       | None -> empty_bytes in
@@ -817,7 +800,7 @@ let serverHelloBytes_is_injective msg1 msg2 =
   cut(Seq.equal l1 l2);
   cut(Seq.index sidB1 0 = Seq.index l1 0 /\ Seq.index sidB2 0 = Seq.index l2 0);
   cut(Seq.index sidB1 0 = Seq.index sidB2 0);
-  vlbytes_length_lemma 1 (Some?.v msg1.sh_sessionID) (Some?.v msg2.sh_sessionID);
+  vlbytes_length_lemma 1 (msg1.sh_sessionID) (msg2.sh_sessionID);
   cut (length sidB1 = length sidB2);
   lemma_append_inj sidB1 (csB1 @| (cmB1 @| extB1)) sidB2 (csB2 @| (cmB2 @| extB2));
   cut(length csB1 >= 2 /\ length csB2 >= 2);
@@ -834,7 +817,7 @@ let serverHelloBytes_is_injective msg1 msg2 =
   cut(msg1.sh_protocol_version = msg2.sh_protocol_version);
   cut(msg1.sh_server_random = msg2.sh_server_random);
   cut(Seq.equal sidB1 sidB2);
-  lemma_vlbytes_inj 1 (Some?.v msg1.sh_sessionID) (Some?.v msg2.sh_sessionID);
+  lemma_vlbytes_inj 1 msg1.sh_sessionID msg2.sh_sessionID;
   ()
       )
     end
@@ -872,69 +855,43 @@ let parseServerHello data =
     match parseVersion_draft serverVerBytes with
     | Error z -> Error z
     | Correct serverVer ->
-      (match serverVer with
-       | TLS_1p3 ->
-          if length data >= 2 then
-           let (csBytes, data) = split data 2 in
-           (match parseCipherSuite csBytes with
-            | Error z -> Error z
-            | Correct cs ->
-              (match parseOptExtensions EM_ServerHello data with
+     if length data >= 1 then
+       match vlsplit 1 data with
+       | Error z -> Error z
+       | Correct (sid,data) ->
+         if length sid <= 32 then
+           if length data >= 3 then
+             let (csBytes,cmBytes,data) = split2 data 2 1 in
+             (match parseCipherSuite csBytes with
                | Error z -> Error z
-               | Correct (exts, obinders) ->
-                 if (match exts with
-                     | None -> false
-                     | Some l -> List.Tot.length l < 256)
-                 then
-                   let exts = coercion_helper exts in
-                   correct ({
-                     sh_protocol_version = serverVer;
-                     sh_server_random = serverRandomBytes;
-                     sh_sessionID = None;
-                     sh_cipher_suite = cs;
-                     sh_compression = None;
-                     sh_extensions = exts})
-                 else
-                    Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")))
-         else
-           Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-
-       // TLS < 1.3
-       | _ ->
-         if length data >= 1 then
-           match vlsplit 1 data with
-           | Error z -> Error z
-           | Correct (sid,data) ->
-             if length sid <= 32 then
-               if length data >= 3 then
-                 let (csBytes,cmBytes,data) = split2 data 2 1 in
-                 (match parseCipherSuite csBytes with
-                   | Error z -> Error z
-                   | Correct cs ->
-                     let cm = parseCompression cmBytes in
-                     (match cm with
-                       | UnknownCompression _ ->
-                         Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "server selected a compression mode")
-                       | NullCompression ->
-                          (match parseOptExtensions EM_ServerHello data with
-                           | Error z -> Error z
-                           | Correct (exts,obinders) ->
-                             if (match exts with
-                                 | None -> true
-                                 | Some l -> List.Tot.length l < 256)
-                             then
-                               let exts = coercion_helper exts in
-                               correct ({
-                                 sh_protocol_version = serverVer;
-                                 sh_server_random = serverRandomBytes;
-                                 sh_sessionID = Some sid;
-                                 sh_cipher_suite = cs;
-                                 sh_compression = Some NullCompression;
-                                 sh_extensions = exts})
-                             else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))))
-               else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-             else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-         else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
+               | Correct cs ->
+                 let cm = parseCompression cmBytes in
+                 (match cm with
+                   | UnknownCompression _ ->
+                     Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "server selected a compression mode")
+                   | NullCompression ->
+                     let em = // FIXME what can we do about this horrible, atrocious hack?
+                       if bytes_of_hex "cf21ad74e59a6111be1d8c021e65b891c2a211167abb8c5e079e09e2c8a8339c" = serverRandomBytes
+                       then EM_HelloRetryRequest else EM_ServerHello in
+                      (match parseOptExtensions em data with
+                       | Error z -> Error z
+                       | Correct (exts,obinders) ->
+                         if (match exts with
+                             | None -> true
+                             | Some l -> List.Tot.length l < 256)
+                         then
+                           let exts = coercion_helper exts in
+                           correct ({
+                             sh_protocol_version = serverVer;
+                             sh_server_random = serverRandomBytes;
+                             sh_sessionID = sid;
+                             sh_cipher_suite = cs;
+                             sh_compression = NullCompression;
+                             sh_extensions = exts})
+                         else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))))
+           else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+         else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 val helloRequestBytes: b:lbytes 4{hs_msg_bytes HT_hello_request b}
 let helloRequestBytes =
@@ -1618,12 +1575,22 @@ let parseSessionTicket13 b =
 (* Hello retry request *)
 val helloRetryRequestBytes: hrr -> Tot (b:bytes{hs_msg_bytes HT_hello_retry_request b})
 let helloRetryRequestBytes hrr =
+  serverHelloBytes ({
+    sh_protocol_version = TLS_1p2;
+    sh_server_random = bytes_of_hex "cf21ad74e59a6111be1d8c021e65b891c2a211167abb8c5e079e09e2c8a8339c";
+    sh_sessionID = hrr.hrr_sessionID;
+    sh_cipher_suite = hrr.hrr_cipher_suite;
+    sh_compression = NullCompression;
+    sh_extensions = Some hrr.hrr_extensions
+  })
+  (*
   let pvb = versionBytes hrr.hrr_protocol_version in
   let csb = cipherSuiteBytes hrr.hrr_cipher_suite in
   let extb = extensionsBytes hrr.hrr_extensions in
   let data = pvb @| csb @| extb in
   lemma_repr_bytes_values (length data);
   messageBytes HT_hello_retry_request data
+  *)
 
 val namedGroupBytes_is_injective: n1:namedGroup -> n2:namedGroup ->
   Lemma (requires True)
@@ -1634,7 +1601,8 @@ let namedGroupBytes_is_injective n1 n2 =
 val helloRetryRequestBytes_is_injective: h1:hrr -> h2:hrr ->
   Lemma (requires True)
   (ensures (Seq.equal (helloRetryRequestBytes h1) (helloRetryRequestBytes h2) ==> h1 == h2))
-let helloRetryRequestBytes_is_injective h1 h2 =
+let helloRetryRequestBytes_is_injective h1 h2 = admit()
+(*
   if helloRetryRequestBytes h1 = helloRetryRequestBytes h2 then (
     let pv1 = versionBytes h1.hrr_protocol_version in
     let cs_bytes1 = cipherSuiteBytes h1.hrr_cipher_suite in
@@ -1653,10 +1621,12 @@ let helloRetryRequestBytes_is_injective h1 h2 =
     cipherSuiteBytes_is_injective h1.hrr_cipher_suite h2.hrr_cipher_suite;
     extensionsBytes_is_injective h1.hrr_extensions h2.hrr_extensions
   )
+*)
 
 (* TODO: inversion lemmas *)
 val parseHelloRetryRequest: bytes -> Tot (result hrr)
-let parseHelloRetryRequest b =
+let parseHelloRetryRequest b = Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "HRR message type is disabled since draft 22")
+(*
   if length b >= 4 then
     let pv, cs, data = split2 b 2 2 in
     (match TLSConstants.parseVersion pv with
@@ -1675,6 +1645,7 @@ let parseHelloRetryRequest b =
       | Error(z) -> Error(z))
     | Error(z) -> Error(z))
   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Wrong hello retry request format")
+*)
 
 (* Encrypted_extensions *)
 let valid_ee : Type0 = msg:ee{repr_bytes (length (extensionsBytes msg)) <= 3}
@@ -1781,10 +1752,6 @@ let valid_hs_msg_prop (pv:option protocolVersion) (msg:hs_msg): GTot bool =
   associated_to_pv pv msg && (
   match msg, pv with
   | EncryptedExtensions ee, _ -> repr_bytes (length (extensionsBytes ee)) <= 3
-  | ServerHello sh, _ -> (
-      if sh.sh_protocol_version = TLS_1p3
-      then (None? sh.sh_sessionID && None? sh.sh_compression)
-      else (Some? sh.sh_sessionID && Some? sh.sh_compression))
   | Certificate13 crt, _ -> length (Cert.certificateListBytes13 crt.crt_chain13) < 16777212
   | Certificate crt, _ -> length (Cert.certificateListBytes crt.crt_chain) < 16777212
   | ServerKeyExchange ske, Some pv ->
@@ -2068,7 +2035,17 @@ let parseHandshakeMessage pv kex hstype body =
     match hstype,pv,kex with
     | HT_hello_request,_,_              -> parseEmptyMessage HelloRequest body
   //| HT_client_hello,_,_               -> mapResult ClientHello (parseClientHello body)
-    | HT_server_hello,_,_               -> mapResult ServerHello (parseServerHello body)
+    | HT_server_hello,_,_               ->
+      (match parseServerHello body with
+      | Correct sh ->
+        if sh.sh_server_random = bytes_of_hex "cf21ad74e59a6111be1d8c021e65b891c2a211167abb8c5e079e09e2c8a8339c" then
+          Correct (HelloRetryRequest ({
+            hrr_sessionID = sh.sh_sessionID;
+            hrr_cipher_suite = sh.sh_cipher_suite;
+            hrr_extensions = Some?.v (sh.sh_extensions)
+          }))
+        else Correct (ServerHello sh)
+      | err -> error "failed to parse ServerHello/HRR")
     | HT_session_ticket, Some TLS_1p3,_ -> mapResult NewSessionTicket13 (parseSessionTicket13 body)
     | HT_session_ticket, Some _,_       -> mapResult NewSessionTicket (parseSessionTicket body)
     | HT_end_of_early_data, Some TLS_1p3,_ -> parseEmptyMessage EndOfEarlyData body

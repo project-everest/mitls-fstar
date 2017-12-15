@@ -105,6 +105,19 @@ let tolerate_decrypt_failure (#i:id) (r:reader i)
     let ID13 (KeyID #li (ExpandedSecret _ t _)) = i in
     0 = ctr && ClientHandshakeTrafficSecret? t
 
+let tolerate_ccs (#i:id) (r:reader i)
+  : ST bool
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 -> modifies_none h0 h1)
+  =
+  match r with
+  | StLHAE _ _ -> false
+  | Stream _ st ->
+    let ctr = MR.m_read (StreamAE.ctr st.StreamAE.counter) in
+    let ID13 (KeyID #li (ExpandedSecret _ t _)) = i in
+    0 = ctr && (ServerHandshakeTrafficSecret? t ||
+      ClientHandshakeTrafficSecret? t || ClientEarlyTrafficSecret? t)
+
 // our view to AE's ideal log (when idealized, ignoring ciphers) and counter
 // TODO: write down their joint monotonic specification: both are monotonic,
 // and seqn = length log when ideal

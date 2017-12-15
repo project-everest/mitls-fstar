@@ -264,7 +264,7 @@ noeq type mode =
     // more from SH (both TLS 1.2 and TLS 1.3)
     n_protocol_version: protocolVersion ->
     n_server_random: TLSInfo.random ->
-    n_sessionID: option sessionID {n_sessionID = None <==> n_protocol_version = TLS_1p3} ->
+    n_sessionID: sessionID ->
     n_cipher_suite: cipherSuite ->
 
     // redundant with the server extension response?
@@ -296,12 +296,11 @@ let find_server_quic_parameters m =
   | _ -> None
 
 let is_resumption12 m =
-  m.n_protocol_version <> TLS_1p3  &&
-  m.n_sessionID = Some (m.n_offer.ch_sessionID)
+  m.n_protocol_version <> TLS_1p3  && m.n_sessionID = m.n_offer.ch_sessionID
 
 let is_cacheable12 m =
   m.n_protocol_version <> TLS_1p3  &&
-  ( let Some sid = m.n_sessionID in
+  ( let sid = m.n_sessionID in
     sid <> m.n_offer.ch_sessionID &&
     sid <> empty_bytes)
 
@@ -411,7 +410,7 @@ let computeOffer r cfg resume nonce ks pskinfo =
     | _ -> false in
   let qp =
     match cfg.quic_parameters with
-    | Some (qv::_, qp) -> Some (QuicParametersClient qv qv qp)
+    | Some (qv::_, qp) -> Some (QuicParametersClient qv qp)
     | _ -> None in
   let extensions =
     Extensions.prepareExtensions
@@ -526,8 +525,7 @@ let resume_12 mode =
   mode.n_protocol_version <> TLS_1p3 &&
   Some? (find_sessionTicket mode.n_offer) &&
   length mode.n_offer.ch_sessionID > 0 &&
-  Some? mode.n_sessionID &&
-  equalBytes (Some?.v mode.n_sessionID) mode.n_offer.ch_sessionID
+  equalBytes mode.n_sessionID mode.n_offer.ch_sessionID
 
 val local_config: #region:rgn -> #role:TLSConstants.role -> t region role -> config
 let local_config #region #role ns =
@@ -574,6 +572,14 @@ let version #region #role ns =
   | S_ClientHello mode _
   | S_Mode mode _
   | S_Complete mode _ -> mode.n_protocol_version
+
+(** Returns cfg.max_versionsion or the negotiated version, when known *)
+val is_hrr: #region:rgn -> #role:TLSConstants.role -> t region role ->
+  ST bool
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+let is_hrr #region #role ns =
+  C_HRR? (MR.m_read ns.state)
 
 (*
 val getSigningKey: #a:Signature.alg -> #region:rgn -> #role:TLSConstants.role -> t region role ->
@@ -643,9 +649,7 @@ let group_of_hrr hrr : option CommonDH.group =
   | _ -> None
 
 let client_HelloRetryRequest #region (ns:t region Client) hrr (s:share) =
-  let { hrr_protocol_version = pv;
-        hrr_cipher_suite = cs;
-        hrr_extensions = el } = hrr in
+  let { hrr_sessionID = sid; hrr_cipher_suite = cs; hrr_extensions = el } = hrr in
   match MR.m_read ns.state with
   | C_Offer offer ->
     let old_shares = gs_of offer in
@@ -657,7 +661,9 @@ let client_HelloRetryRequest #region (ns:t region Client) hrr (s:share) =
 
     (match group_of_hrr hrr, find_supported_groups offer with
     | Some g', Some ngl ->
-      if g = g' && List.Tot.mem (Some?.v (CommonDH.namedGroup_of_group g')) ngl then
+      if sid <> offer.ch_sessionID then
+        Error(AD_illegal_parameter, "mismatched session ID in HelloRetryRequest")
+      else if g = g' && List.Tot.mem (Some?.v (CommonDH.namedGroup_of_group g')) ngl then
        begin
         // TODO early data not recorded in retryInfo
         let ext' = List.Tot.choose (fun (e:Extensions.extension) ->
@@ -692,8 +698,10 @@ let client_HelloRetryRequest #region (ns:t region Client) hrr (s:share) =
 // usable on both sides; following https://tlswg.github.io/tls13-spec/#rfc.section.4.2.1
 let offered_versions min_pv (o: offer): result (l: list protocolVersion {l <> []}) =
   match find_supported_versions o with
-  | Some []  -> Error(AD_protocol_version, "protocol version negotiation: empty proposal")
-  | Some vs -> Correct vs  // might check no proposal is below min_pv
+  | Some (ServerPV _)
+  | Some (Extensions.ClientPV []) ->
+    Error(AD_protocol_version, "protocol version negotiation: empty proposal")
+  | Some (ClientPV vs) -> Correct vs  // might check no proposal is below min_pv
   | None -> // use legacy offer
       match o.ch_protocol_version, min_pv with
       | TLS_1p0, TLS_1p0 -> Correct [TLS_1p0]
@@ -867,16 +875,16 @@ let client_ServerHello #region ns sh =
     let ssid = sh.sh_sessionID in
     let cext = offer.ch_extensions in
     let sig  = CoreCrypto.RSASIG in
-    let resume = ssid = Some offer.ch_sessionID && length offer.ch_sessionID > 0 in
+    let resume = ssid = offer.ch_sessionID && length offer.ch_sessionID > 0 in
     trace ("processing server extensions "^string_of_option_extensions sext);
-    if not (acceptableVersion ns.cfg spv sr) then
-      Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation")
-    else if not (acceptableCipherSuite ns.cfg spv cs) then
-      Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
-    else
-     match Extensions.negotiateClientExtensions spv ns.cfg cext sext cs None resume with
-      | Error z -> Error z
-      | Correct () ->
+    (match Extensions.negotiateClientExtensions spv ns.cfg cext sext cs None resume with
+    | Error z -> Error z
+    | Correct spv ->
+      if not (acceptableVersion ns.cfg spv sr) then
+        Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation")
+      else if not (acceptableCipherSuite ns.cfg spv cs) then
+        Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
+      else (
         trace ("negotiated "^string_of_pv spv^" "^string_of_ciphersuite cs);
         match cs with
         | CipherSuite13 ae ha ->
@@ -905,7 +913,7 @@ let client_ServerHello #region ns sh =
                 None // n_hrr
                 spv
                 sr
-                None // (Some ssid)
+                ssid
                 cs
                 pski
                 sext
@@ -937,7 +945,7 @@ let client_ServerHello #region ns sh =
           in
           MR.m_write ns.state (C_Mode mode);
           Correct mode
-        | _ -> Error (AD_decode_error, "ServerHello ciphersuite is not a real ciphersuite")
+        | _ -> Error (AD_decode_error, "ServerHello ciphersuite is not a real ciphersuite")))
 
 (* ---------------- signature stuff, to be removed from Handshake -------------------- *)
 
@@ -1191,10 +1199,12 @@ let computeServerMode cfg co serverRandom =
     | Correct ([], None) -> Error(AD_handshake_failure, "ciphersuite negotiation failed")
     | Correct ([], Some (ng, cs)) ->
       let hrr = {
-        hrr_protocol_version = TLS_1p3;
+        hrr_sessionID = co.ch_sessionID;
         hrr_cipher_suite = cs;
-        hrr_extensions = [Extensions.E_key_share (CommonDH.HRRKeyShare ng)]; // TODO cookie
-      } in
+        hrr_extensions = [
+          Extensions.E_supported_versions (Extensions.ServerPV TLS_1p3);
+          Extensions.E_key_share (CommonDH.HRRKeyShare ng)
+        ]; } in
       Correct(ServerHelloRetryRequest hrr)
     | Correct ((PSK_EDH j ogx cs)::_, _) ->
       (trace "Negotiated PSK_EDH key exchange";
@@ -1203,7 +1213,7 @@ let computeServerMode cfg co serverRandom =
         None
         TLS_1p3
         serverRandom
-        None
+        co.ch_sessionID
         cs
         (Some j)
         None // Extensions will be filled in next pass
@@ -1224,7 +1234,7 @@ let computeServerMode cfg co serverRandom =
           None
           TLS_1p3
           serverRandom
-          None
+          co.ch_sessionID
           cs
           None // No PSKs, pure (EC)DHE
           None // Extensions will be filled in next pass
@@ -1250,7 +1260,7 @@ let computeServerMode cfg co serverRandom =
         None // TODO: no HRR
         pv
         serverRandom
-        (Some co.ch_sessionID)
+        co.ch_sessionID
         cs
         None
         None // Extensions
@@ -1282,7 +1292,7 @@ let computeServerMode cfg co serverRandom =
                 None // no HRR before TLS 1.3
                 pv
                 serverRandom
-                (Some (CoreCrypto.random 32))
+                (CoreCrypto.random 32)
                 cs
                 None
                 None // Extensions will be filled later
@@ -1306,20 +1316,19 @@ let server_ClientHello #region ns offer =
   match MR.m_read ns.state with
   | S_HRR o1 hrr ->
     let o2 = offer in
-    // We only send HRR for KeyShare
-    let [Extensions.E_key_share (CommonDH.HRRKeyShare ng)] = hrr.hrr_extensions in
     if
       o1.ch_protocol_version = o2.ch_protocol_version &&
       equalBytes o1.ch_client_random o2.ch_client_random &&
       o1.ch_sessionID = o2.ch_sessionID &&
+      o1.ch_sessionID = hrr.hrr_sessionID &&
       List.Tot.mem hrr.hrr_cipher_suite o2.ch_cipher_suites &&
       o1.ch_compressions = o2.ch_compressions &&
       Some? o2.ch_extensions && Some? o1.ch_extensions &&
       List.Tot.for_all (fun (e:Extensions.extension) ->
         match e with
         | Extensions.E_key_share (CommonDH.ClientKeyShare ecl) ->
-          (match ecl with
-          | [CommonDH.Share g _] -> CommonDH.namedGroup_of_group g = Some ng
+          (match ecl, group_of_hrr hrr with
+          | [CommonDH.Share g _], Some g' -> g = g'
           | _ -> (IO.debug_print_string "Bad key_share\n") && false)
         | Extensions.E_early_data _ -> false // Forbidden
         | Extensions.E_cookie c -> true // FIXME we will send cookie
@@ -1384,7 +1393,7 @@ let server_ServerShare #region ns ks =
       None  // option (TI.cVerifyData*TI.sVerifyData)
       mode.n_pski
       (Option.map CommonDH.ServerKeyShare ks)
-      (mode.n_sessionID = Some mode.n_offer.ch_sessionID)
+      (mode.n_sessionID = mode.n_offer.ch_sessionID)
     with
     | Error z -> Error z
     | Correct sexts ->

@@ -190,8 +190,8 @@ val ffi_parameters: option TLSConstants.quicParameters -> ML (UInt32.t * UInt32.
 let ffi_parameters qpo =
   match qpo with
   | None -> failwith "no parameters available"
-  | Some (QuicParametersClient _ _ qp)
-  | Some (QuicParametersServer _ qp) ->  (
+  | Some (QuicParametersClient _ qp)
+  | Some (QuicParametersServer _ _ qp) ->  (
       ( match (List.Tot.find Quic_initial_max_stream_data? qp) with
         | Some (Quic_initial_max_stream_data v) -> v
         | None -> failwith "no Quic_initial_max_stream_data"),

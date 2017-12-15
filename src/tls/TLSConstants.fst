@@ -484,7 +484,7 @@ let pinverse_version x = ()
 // DRAFT#21
 // to be used *only* in ServerHello.version.
 // https://tlswg.github.io/tls13-spec/#rfc.section.4.2.1
-let draft = 21z
+let draft = 22z
 let versionBytes_draft: protocolVersion -> Tot (lbytes 2) = function
   | TLS_1p3 -> abyte2 ( 127z, draft )
   | pv -> versionBytes pv
@@ -1702,13 +1702,16 @@ type valid_quicVersions =
 // ADL would prefer to index this by extension message type
 type quicParameters =
   | QuicParametersClient:
-    negotiated_version: quicVersion ->
     initial_version: quicVersion ->
     parameters: valid_quicParameters ->
     quicParameters
   | QuicParametersServer:
+    negotiated_version: quicVersion ->
     versions: valid_quicVersions ->
     parameters: valid_quicParameters ->
+    quicParameters
+  | QuicParametersNewSessionTicket: // Allowed by RFC but not supported
+    raw: bytes ->
     quicParameters
 
 let string_of_quicVersion = function
@@ -1723,13 +1726,14 @@ let string_of_quicParameter = function
   | Quic_max_packet_size x -> "max_packet_size="^UInt16.to_string x
   | Quic_custom_parameter (n,b) -> "custom_parameter "^UInt16.to_string n^", "^print_bytes b
 let string_of_quicParameters = function
-  | Some (QuicParametersClient n i p)  ->
+  | Some (QuicParametersNewSessionTicket b)  -> "QUIC ticket parameters: " ^ (hex_of_bytes b)
+  | Some (QuicParametersClient i p)  ->
     "QUIC client parameters\n" ^
-    "negotiated version: "^string_of_quicVersion n^"\n"^
     "initial version: "^string_of_quicVersion i^"\n"^
     List.Tot.fold_left (fun a p -> a^string_of_quicParameter p^"\n") "" p
-  | Some (QuicParametersServer v p) ->
+  | Some (QuicParametersServer n v p) ->
     "QUIC server parameters\n" ^
+    "negotiated version: "^string_of_quicVersion n^"\n" ^
     List.Tot.fold_left (fun a v -> a^string_of_quicVersion v^" ") "versions: " v ^ "\n" ^
     List.Tot.fold_left (fun a p -> a^string_of_quicParameter p^"\n") "" p
   | None -> "(none)"
