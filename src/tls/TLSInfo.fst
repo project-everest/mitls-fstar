@@ -78,8 +78,11 @@ let defaultCertCB : cert_cb =
      (FStar.Dyn.mkdyn ())
      (FStar.Dyn.mkdyn ())
      (fun _ _ _ _ -> None)
+     (FStar.Dyn.mkdyn ())
      (fun _ _ _ -> [])
+     (FStar.Dyn.mkdyn ())
      (fun _ _ _ _ _ -> None)
+     (FStar.Dyn.mkdyn ())
      (fun _ _ _ _ _ _ -> false)
 
 val defaultConfig: config
@@ -733,11 +736,11 @@ let safeId _ = false
 let plainText_is_not_auth (i:id)
   : Lemma (requires (PlaintextID? i))
           (ensures (not (authId i)))
-	  [SMTPat (PlaintextID? i)]
+          [SMTPat (PlaintextID? i)]
   = ()
 
 let safe_implies_auth (i:id)
   : Lemma (requires (safeId i))
           (ensures (authId i))
-	  [SMTPat (authId i)]
+          [SMTPat (authId i)]
   = admit()	   //TODO: need to prove that strongAEAlg implies strongAuthAlg

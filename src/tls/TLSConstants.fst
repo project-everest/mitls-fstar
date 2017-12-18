@@ -1841,19 +1841,36 @@ noeq
 abstract
 type cert_cb = {
   app_context : FStar.Dyn.dyn;
-  cert_context: FStar.Dyn.dyn;
+  (* Each callback takes an application context (app_context)
+     and a function pointer to an application-provided functionality.
+
+     The callback is actually performed in FFI.fst, which calls into ffi.c
+     and takes care of marshalling miTLS parameters like signatureSchemeList
+     to the types expected by the application.
+
+     This explicit representation of closures is necessary for compiling this
+     to C via KreMLin. The representation is hidden from callers and the wrappers
+     are provided below to implement it.
+   *)
+  cert_select_ptr: FStar.Dyn.dyn;
   cert_select_cb:
     (FStar.Dyn.dyn -> FStar.Dyn.dyn -> sni:bytes -> sig:signatureSchemeList -> ST (option (cert_type * signatureScheme))
     (requires fun _ -> True)
     (ensures fun h0 _ h1 -> modifies_none h0 h1));
+
+  cert_format_ptr: FStar.Dyn.dyn;
   cert_format_cb:
     (FStar.Dyn.dyn -> FStar.Dyn.dyn -> cert_type -> ST (list cert_repr)
     (requires fun _ -> True)
     (ensures fun h0 _ h1 -> modifies_none h0 h1));
+
+  cert_sign_ptr: FStar.Dyn.dyn;
   cert_sign_cb:
     (FStar.Dyn.dyn -> FStar.Dyn.dyn -> cert_type -> signatureScheme -> tbs:bytes -> ST (option bytes)
     (requires fun _ -> True)
     (ensures fun h0 _ h1 -> modifies_none h0 h1));
+
+  cert_verify_ptr: FStar.Dyn.dyn;
   cert_verify_cb:
     (FStar.Dyn.dyn -> FStar.Dyn.dyn -> list cert_repr -> signatureScheme -> tbs:bytes -> sigv:bytes -> ST bool
     (requires fun _ -> True)
@@ -1862,16 +1879,22 @@ type cert_cb = {
 
 let mk_cert_cb
       app_ctx
-      cert_ctx
+      cert_select_ptr
       cert_select_cb
+      cert_format_ptr
       cert_format_cb
+      cert_sign_ptr
       cert_sign_cb
+      cert_verify_ptr
       cert_verify_cb = {
     app_context  = app_ctx;
-    cert_context = cert_ctx;
+    cert_select_ptr = cert_select_ptr;
     cert_select_cb = cert_select_cb;
+    cert_format_ptr = cert_format_ptr;
     cert_format_cb = cert_format_cb;
+    cert_sign_ptr = cert_sign_ptr;
     cert_sign_cb = cert_sign_cb;
+    cert_verify_ptr = cert_verify_ptr;
     cert_verify_cb = cert_verify_cb
 }
 
@@ -1911,8 +1934,9 @@ let cert_select_cb (c:config) (sni:bytes) (sig:signatureSchemeList)
         (ensures fun h0 _ h1 -> modifies_none h0 h1)
    = c.cert_callbacks.cert_select_cb
             c.cert_callbacks.app_context
-            c.cert_callbacks.cert_context
-            sni sig
+            c.cert_callbacks.cert_select_ptr
+            sni
+            sig
 
 let cert_format_cb (c:config) (ct:cert_type)
    : ST (list cert_repr)
@@ -1920,7 +1944,7 @@ let cert_format_cb (c:config) (ct:cert_type)
         (ensures fun h0 _ h1 -> modifies_none h0 h1)
    = c.cert_callbacks.cert_format_cb
             c.cert_callbacks.app_context
-            c.cert_callbacks.cert_context
+            c.cert_callbacks.cert_format_ptr
             ct
 
 let cert_sign_cb (c:config) (ct:cert_type) (ss:signatureScheme) (tbs:bytes)
@@ -1929,7 +1953,7 @@ let cert_sign_cb (c:config) (ct:cert_type) (ss:signatureScheme) (tbs:bytes)
         (ensures fun h0 _ h1 -> modifies_none h0 h1)
    = c.cert_callbacks.cert_sign_cb
             c.cert_callbacks.app_context
-            c.cert_callbacks.cert_context
+            c.cert_callbacks.cert_sign_ptr
             ct
             ss
             tbs
@@ -1940,7 +1964,7 @@ let cert_verify_cb (c:config) (cl:list cert_repr) (ss:signatureScheme) (tbs:byte
         (ensures fun h0 _ h1 -> modifies_none h0 h1)
    = c.cert_callbacks.cert_verify_cb
             c.cert_callbacks.app_context
-            c.cert_callbacks.cert_context
+            c.cert_callbacks.cert_verify_ptr
             cl
             ss
             tbs
