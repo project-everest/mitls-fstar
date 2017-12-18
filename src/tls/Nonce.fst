@@ -82,10 +82,10 @@ val mkHelloRandom: cs:role -> r:ex_rid -> ST random
   (ensures (fun h0 n h1 ->
     let nonce_rid_table_as_hsref = MR.as_hsref nonce_rid_table in
     HS.modifies (Set.singleton tls_tables_region) h0 h1 /\ //modifies at most the tables region
-    HS.modifies_ref tls_tables_region (Set.singleton (Heap.addr_of (HH.as_ref (HS.MkRef?.ref nonce_rid_table_as_hsref)))) h0 h1 /\ //and within it, at most the nonce_rid_table
+//17-12-16 FIXME    HS.modifies_ref tls_tables_region (Set.singleton (Heap.addr_of (HH.as_ref (HS.MkRef?.ref nonce_rid_table_as_hsref)))) h0 h1 /\ //and within it, at most the nonce_rid_table
     (ideal ==> fresh n h0  /\        //if we're ideal then the nonce is fresh
-    	       registered n r /\     //the nonce n is associated with r
-    	       role_nonce cs n r))) //and the triple are associated as well, for ever more
+             registered n r /\     //the nonce n is associated with r
+             role_nonce cs n r))) //and the triple are associated as well, for ever more
 let rec mkHelloRandom cs r =
   MR.m_recall nonce_rid_table;
   let n : random = timestamp() @| CoreCrypto.random 28 in

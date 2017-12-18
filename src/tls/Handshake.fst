@@ -88,7 +88,7 @@ type machineState =
   | S_Sent_ServerHello         // TLS 1.3, intermediate state to encryption
   | S_Wait_EOED                // Waiting for EOED
   | S_Wait_Finished2 of digest // TLS 1.3, digest to be MACed by client
-  | S_Wait_CCS1                   // TLS classic
+  | S_Wait_CCS1                // TLS classic
   | S_Wait_Finished1 of digest // TLS classic, digest to the MACed by client
   | S_Wait_CCS2 of digest      // TLS resume (CCS)
   | S_Wait_CF2 of digest       // TLS resume (CF)
@@ -884,7 +884,8 @@ let consistent_truncation x y =
   | Some (psks,_), Some binders -> List.length psks = List.length binders
 
 (* receive ClientHello, choose a protocol version and mode *)
-val server_ClientHello: hs -> HandshakeMessages.ch -> option Extensions.binders -> ST incoming
+val server_ClientHello: 
+  hs -> HandshakeMessages.ch -> option Extensions.binders -> ST incoming
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let server_ClientHello hs offer obinders =
@@ -975,7 +976,7 @@ let server_ClientHello hs offer obinders =
         match Nego.kexAlg mode with
           | Kex_DHE | Kex_ECDHE ->
             let Some g = Nego.chosenGroup mode in
-            let gy = Secret.server12_init_dh hs.ks cr pv cs (Nego.emsFlag mode) g in
+            let ks, gy = Secret.server12_init_dh cr sr pv cs (Nego.emsFlag mode) g in
             Correct (Some (CommonDH.Share g gy))
           | _ -> Error (AD_handshake_failure, "Unsupported RSA key exchange") in
 

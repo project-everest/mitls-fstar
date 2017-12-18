@@ -53,7 +53,7 @@ noeq abstract type concrete_key =
 
 // The model type of instances - either ideal, or real
 // The real and concrete version are related by the functional correctness of HMAC
-noeq abstract type ir_key (ip:ipkg) (i:ip.Pkg.t) =
+noeq (* abstract *) type ir_key (ip:ipkg) (i:ip.Pkg.t) =
   | IdealKey:
     ck: concrete_key ->
     region: Mem.subrgn ck.u.parent {~(is_tls_rgn region)} ->  // intuitively, the writer's region
