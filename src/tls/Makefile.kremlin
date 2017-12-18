@@ -24,7 +24,7 @@ MORE ?= $(addsuffix .fst, Nonce RSAKey DHGroup ECGroup CommonDH PMS		\
 			  Hashing.Spec Hashing.OpenSSL Hashing HMAC		\
 			  $(FSTAR_HOME)/ulib/FStar.Monotonic.DependentMap	\
 			  PSK TLSInfo StreamAE Crypto.Indexing			\
-			  Handshake StatefulLHAE StAE HandshakeLog TLS) \
+			  Handshake StatefulLHAE StAE TLS.fst)
 # Next to try
 # KeySchedule
 # Negotiation
@@ -53,36 +53,32 @@ KRML_COMMAND=$(KRML) $(addprefix -I , $(INCLUDE_PATHS)) -I extract/include \
 # 	@-$(FSTAR) $(FSTAR_INCLUDE_PATHS) --dep make $(KRML_FILES) > .depend-KRML
 
 # -include .depend-KRML
-all: $(addsuffix .checked.lax, $(KRML_FILES)) $(KRML_DIR)/out.krml
-	$(KRML_COMMAND) $(KRML_DIR)/out.krml -tmpdir $(KRML_DIR) $(C_DRIVER) -o test.exe
-	./test.exe
+# all: $(addsuffix .checked.lax, $(KRML_FILES)) $(KRML_DIR)/out.krml
+# 	$(KRML_COMMAND) $(KRML_DIR)/out.krml -tmpdir $(KRML_DIR) $(C_DRIVER) -o test.exe
+# 	./test.exe
 
-more: $(EXTRACT_DIR)/more/out.krml
-	$(KRML_COMMAND) $^ -tmpdir $(EXTRACT_DIR)/more -skip-linking
-
-standalone: $(EXTRACT_DIR)/standalone/out.krml
-	$(KRML_COMMAND) $^ -tmpdir $(EXTRACT_DIR)/standalone -skip-linking
+more: $(EXTRACT_DIR)/more/TLS.o
 
 READLINK=$(shell which greadlink >/dev/null 2>&1 && echo greadlink || echo readlink)
 KRML_BINARY=$(shell $(READLINK) -f $(shell which $(KRML)))
 
-$(KRML_DIR)/out.krml: $(KRML_FILES) $(KRML_BINARY)
-	$(KRML_COMMAND) $(KRML_FILES) -skip-translation -tmpdir $(KRML_DIR)
+# $(KRML_DIR)/out.krml: $(KRML_FILES) $(KRML_BINARY)
+# 	$(KRML_COMMAND) $(KRML_FILES) -skip-translation -tmpdir $(KRML_DIR)
 
-$(EXTRACT_DIR)/more/out.krml: $(addsuffix .checked.lax, $(MORE)) $(KRML_BINARY)
-	mkdir -p $(EXTRACT_DIR)/more
-	$(KRML_COMMAND) $(MORE) -skip-translation -tmpdir extract/more
-
-$(EXTRACT_DIR)/standalone/out.krml: Standalone.fst.checked.lax
-	mkdir -p $(EXTRACT_DIR)/standlone
-	$(KRML_COMMAND) $(subst .checked.lax,, $^) -skip-translation -tmpdir extract/standalone
+# $(EXTRACT_DIR)/more/out.krml: $(addsuffix .checked.lax, $(MORE)) $(KRML_BINARY)
+# 	mkdir -p $(EXTRACT_DIR)/more
+# 	$(KRML_COMMAND) $(MORE) -skip-translation -tmpdir extract/more
 
 clean:
-	rm -f $(KRML_DIR)/*.c $(KRML_DIR)/*.h $(KRML_DIR)/*.o $(KRML_DIR)/out.krml .depend *.checked.lax
+	rm -f $(KRML_DIR)/*.c $(KRML_DIR)/*.h $(KRML_DIR)/*.o $(KRML_DIR)/out.krml .depend *.checked.lax *.krml
 	rm -rf $(EXTRACT_DIR)/more
 
 .depend:
-	$(FSTAR) --lax --dep full $(addprefix --include , $(INCLUDE_PATHS)) TLS.fst Test.TLSConstants.fst QUIC.fst > .depend
+	$(FSTAR) --odir $(EXTRACT_DIR)/more \
+		 --lax \
+		 --dep full \
+		 $(addprefix --include , $(INCLUDE_PATHS)) \
+		 TLS.fst Test.TLSConstants.fst QUIC.fst > .depend
 
 depend: .depend
 
@@ -94,7 +90,19 @@ lax-all: $(addsuffix .checked.lax, $(ALL_FST_FILES))
 	$(FSTAR) --lax --cache_checked_modules $(addprefix --include , $(INCLUDE_PATHS)) $*
 	touch $@
 
+$(EXTRACT_DIR)/more/%.krml:
+	mkdir -p $(EXTRACT_DIR)/more
+	$(FSTAR) \
+		--codegen Kremlin \
+		--odir $(EXTRACT_DIR)/more \
+		--lax \
+		--cache_checked_modules \
+		$(addprefix --include , $(INCLUDE_PATHS)) \
+		--extract_module $(basename $(notdir $(subst .checked.lax,,$<))) \
+		$(subst .checked.lax,, $<)
 
+$(EXTRACT_DIR)/more/TLS.o: $(filter-out $(EXTRACT_DIR)/more/prims.krml,$(ALL_KRML_FILES))
+	$(KRML_COMMAND) $^ -tmpdir $(EXTRACT_DIR)/more -skip-linking
 
 # Targets to get F* arguments in interactive mode
 %.fst-in:
