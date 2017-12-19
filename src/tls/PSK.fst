@@ -65,7 +65,7 @@ private let psk_region:rgn = new_region tls_tables_region
 private let app_psk_table : MM.t psk_region psk_identifier app_psk_entry psk_table_invariant =
   MM.alloc #psk_region #psk_identifier #app_psk_entry #psk_table_invariant
 
-type registered_psk (i:psk_identifier) =
+abstract type registered_psk (i:psk_identifier) =
   MR.witnessed app_psk_table (MM.defined app_psk_table i)
 
 let valid_app_psk (ctx:pskInfo) (i:psk_identifier) (h:mem) =
@@ -162,7 +162,7 @@ let coerce_psk (i:psk_identifier) (ctx:pskInfo) (k:app_psk i)
   cut(MM.sel (MR.m_sel h app_psk_table) i == Some add);
   admit()
 
-let compatible_hash_ae_st (i:pskid) (ha:hash_alg) (ae:aeadAlg) (h:mem) =
+abstract let compatible_hash_ae_st (i:pskid) (ha:hash_alg) (ae:aeadAlg) (h:mem) =
   (MM.defined app_psk_table i h /\
   (let (_,ctx,_) = MM.value app_psk_table i h in
   ha = pskInfo_hash ctx /\ ae = pskInfo_ae ctx))
@@ -170,7 +170,7 @@ let compatible_hash_ae_st (i:pskid) (ha:hash_alg) (ae:aeadAlg) (h:mem) =
 let compatible_hash_ae (i:pskid) (h:hash_alg) (a:aeadAlg) =
   MR.witnessed app_psk_table (compatible_hash_ae_st i h a)
 
-let compatible_info_st (i:pskid) (c:pskInfo) (h:mem) =
+abstract let compatible_info_st (i:pskid) (c:pskInfo) (h:mem) =
   (MM.defined app_psk_table i h /\
   (let (_,ctx,_) = MM.value app_psk_table i h in c = ctx))
 

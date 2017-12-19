@@ -117,7 +117,7 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
 // (we might drop this spec, since F* will infer something at least as precise,
 // but we keep it for documentation)
 val gen: parent:rgn -> i:id -> ST (writer i)
-  (requires (fun h0 -> True))
+  (requires (fun h0 -> witnessed (region_contains_pred parent)))
   (ensures (genPost parent))
 
 #set-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
@@ -136,7 +136,7 @@ let gen parent i =
 
 #reset-options
 val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
-  (requires (fun h0 -> HyperHeap.disjoint parent w.region /\
+  (requires (fun h0 -> witnessed (region_contains_pred parent) /\ HyperHeap.disjoint parent w.region /\
   HyperHeap.disjoint parent (AEAD.region w.aead))) //16-04-25  we may need w.region's parent instead
   (ensures  (fun h0 (r:reader i) h1 ->
          modifies Set.empty h0 h1 /\
@@ -209,7 +209,7 @@ val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
 		    let ent = Entry l c p in
 		    let n = Seq.length (m_sel h0 log) in
 		    m_contains log h1 /\
-		    witnessed (at_least n ent log) /\
+		    Monotonic.RRef.witnessed log (at_least n ent log) /\
 		    m_sel h1 log == snoc (m_sel h0 log) ent))))
 
 (* we primarily model the ideal functionality, the concrete code that actually
