@@ -231,7 +231,7 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
   	      let ent = Entry c ad p in
   	      let n   = Seq.length (m_sel h0 log) in
   	      m_contains log h1 /\
-          witnessed (at_least n ent log) /\
+              witnessed log (at_least n ent log) /\
   	      m_sel h1 log == snoc (m_sel h0 log) ent)
   	   )
   ))

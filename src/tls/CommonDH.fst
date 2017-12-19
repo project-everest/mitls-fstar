@@ -119,20 +119,20 @@ abstract let share_log: share_table =
 let registered i =
   (if Flags.ideal_KEF then
     let log : ideal_log = share_log in
-    MR.witnessed (MM.defined log i)
+    MR.witnessed log (MM.defined log i)
   else
     True)
 
 let honest_share i =
   (if Flags.ideal_KEF then
     let log : ideal_log = share_log in
-    MR.witnessed (MM.contains log i true)
+    MR.witnessed log (MM.contains log i true)
   else False)
 
 let dishonest_share i =
   (if Flags.ideal_KEF then
     let log : ideal_log = share_log in
-    MR.witnessed (MM.contains log i false)
+    MR.witnessed log (MM.contains log i false)
   else True)
 
 let pre_pubshare #g ks =
@@ -150,7 +150,7 @@ let is_honest i =
     let log : ideal_log = share_log in
     let h = get () in
     MR.m_recall log;
-    MR.testify (MM.defined log i);
+    MR.testify log (MM.defined log i);
     cut(Some? (MM.sel (MR.m_sel h log) i));
     let b = Some?.v (MM.sel (MR.m_read log) i) in
     cut(MM.contains log i b h);
@@ -168,7 +168,7 @@ let lemma_honest_or_dishonest (i:id) : ST unit
     let log : ideal_log = share_log in
     let h = get () in
     MR.m_recall log;
-    MR.testify (MM.defined log i);
+    MR.testify log (MM.defined log i);
     cut(Some? (MM.sel (MR.m_sel h log) i));
     let b = Some?.v (MM.sel (MR.m_read log) i) in
     match b with
@@ -193,10 +193,10 @@ let lemma_honest_and_dishonest (i:id)
     let h = get () in
     let log : ideal_log = share_log in
     MR.m_recall log;
-    MR.testify (MM.defined log i);
-    MR.testify (MM.contains log i true);
+    MR.testify log (MM.defined log i);
+    MR.testify log (MM.contains log i true);
     cut(true = Some?.v (MM.sel (MR.m_sel h log) i));
-    MR.testify (MM.contains log i false);
+    MR.testify log (MM.contains log i false);
     cut(false = Some?.v (MM.sel (MR.m_sel h log) i));
     cut(False)
    end
@@ -292,7 +292,7 @@ let register #g gx =
       cut(dishonest_share i);
       gx
     | Some b ->
-      cut(MR.witnessed (MM.defined log i));
+      cut(MR.witnessed log (MM.defined log i));
       gx
    end
   else gx

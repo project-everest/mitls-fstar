@@ -38,7 +38,7 @@ abstract type hashed (a:alg) (b:bytes) =
   crf a ==> (
     let h = hash a b in
     let b: domain (Computed a h) = b in
-    MR.witnessed (MM.contains table (Computed a h) b))
+    MR.witnessed table (MM.contains table (Computed a h) b))
 
 val crf_injective (a:alg) (b0:bytes) (b1:bytes): ST unit  // should be STTot
   (requires (fun h0 -> hashed a b0 /\ hashed a b1 ))
@@ -49,8 +49,8 @@ let crf_injective a b0 b1 =
     let f = MR.m_read table in
     let h0 = hash a b0 in
     let h1 = hash a b1 in
-    MR.testify(MM.contains table (Computed a h0) b0);
-    MR.testify(MM.contains table (Computed a h1) b1);
+    MR.testify table (MM.contains table (Computed a h0) b0);
+    MR.testify table (MM.contains table (Computed a h1) b1);
   ())
 
 private val stop: s:string -> ST 'a

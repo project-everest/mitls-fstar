@@ -173,9 +173,28 @@ val fragments_prefix_stable: #i:id -> #rw:rw
 let fragments_prefix_stable #i #rw w h =
   let fs = fragments w h in
   let log = ilog w in
-  MS.seq_extension_reflexive fs;
+  // MS.seq_extension_reflexive fs; //NS:12/19/17 should be unnecessary following a change to Monotone.Seq
   MS.map_prefix_stable #_ #_ #(log_region w) log ptext fs
 
+let witnessed_ilog (#i:id) #rw (e:state i rw) (p:HS.mem -> Type) =
+    authId i /\
+    (match e with
+     | Stream u s ->
+       MR.witnessed (Stream.ilog (Stream.State?.log s)) p
+     | StLHAE u s -> 
+       MR.witnessed (AEAD_GCM.ilog (AEAD_GCM.State?.log s)) p)
+
+let recall_witnessed_ilog (#i:id) (#rw:_) (e:state i rw) (p:mem -> Type)
+    : ST unit (requires (fun _ -> witnessed_ilog e p))
+              (ensures (fun h0 _ h1 ->
+                          h0 == h1 /\
+                          p h1))
+    = match e with
+      | Stream u s ->
+        MR.testify (Stream.ilog (Stream.State?.log s)) p
+      | StLHAE u s -> 
+        MR.testify (AEAD_GCM.ilog (AEAD_GCM.State?.log s)) p
+    
 
 ////////////////////////////////////////////////////////////////////////////////
 //Projecting sequence numbers
@@ -345,7 +364,7 @@ val encrypt: #i:id -> e:writer i -> f:C.fragment i -> ST (C.encrypted f)
 	       /\ (authId i ==>
 		  fragments e h1 == Seq.snoc (fragments e h0) f
 		  /\ frame_f (fragments e) h1 (Set.singleton (log_region e))
-		  /\ MR.witnessed (fragments_prefix e (fragments e h1)))))
+		  /\ witnessed_ilog e (fragments_prefix e (fragments e h1)))))
 let encrypt #i e f =
   match e with
   | StLHAE u s ->
@@ -418,7 +437,7 @@ val decrypt: #i:id -> d:reader i -> c:C.decrypted i
    	             j < Seq.length written /\
   	             f = Seq.index written j /\
   	             frame_f (fragments d) h1 (Set.singleton (log_region d)) /\
-  	             MR.witnessed (fragment_at_j d j f)))))
+  	             witnessed_ilog d (fragment_at_j d j f)))))
 
 #set-options "--z3rlimit 100"
 

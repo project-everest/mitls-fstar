@@ -220,7 +220,8 @@ let add_epoch #r #n (MkEpochs es _ _ _) e = MS.i_write_at_end es e
 
 let get_epochs #r #n (es:epochs r n) = MkEpochs?.es es
 
-let ctr (#r:_) (#n:_) (e:epochs r n) (rw:rw) = match rw with
+let ctr (#r:_) (#n:_) (e:epochs r n) (rw:rw) : epoch_ctr r e.es =
+  match rw with
   | Reader -> e.read
   | Writer -> e.write
 
@@ -262,7 +263,7 @@ let get_ctr (#r:rgn) (#n:random) (es:epochs r n) (rw:rw)
 =
   let epochs = es.es in
   let n = m_read (ctr es rw) in
-  testify (MS.int_at_most n epochs);
+  testify (ctr es rw) (MS.int_at_most n epochs);
   n
 
 let get_reader (#r:rgn) (#n:random) (es:epochs r n) = get_ctr es Reader
