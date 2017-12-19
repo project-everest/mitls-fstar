@@ -7,6 +7,7 @@ module StreamAE
 open FStar.Heap
 open FStar.HyperHeap
 open FStar.HyperStack
+open FStar.HyperStack.ST
 open FStar.Seq
  // for e.g. found
 open FStar.Monotonic.RRef
