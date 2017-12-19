@@ -1,8 +1,30 @@
-FLAVOR=OCaml
-
 all: mitls.exe
 
+include $(FSTAR_HOME)/ulib/ml/Makefile.include
+
+#To include Makefile.common, you need to specify
+#the following three variables
+FLAVOR=OCaml
+EXTENSION=ml
+#Don't extract modules from fstarlib (NOEXTRACT_MODULES)
+#And also some specific ones from mitls that are implemented in C
+NO_EXTRACT=\
+	$(NOEXTRACT_MODULES) \
+	CoreCrypto \
+	DHDB \
+	LowCProvider \
+	FFICalbacks
 include Makefile.common
+################################################################################
+
+FFI_HOME=../../libs/ffi
 
 mitls.exe: $(ALL_ML_FILES)
+
+
+$(FFI_HOME)/FFICallbacks.cmxa: $(wildcard $(FFI_HOME)/*.ml) $(wildcard $(FFI_HOME)/*.c)
+	$(MAKE) -C $(FFI_HOME)
+
+%.cmx: %.ml
+	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -c $<
 

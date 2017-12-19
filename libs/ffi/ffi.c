@@ -363,16 +363,16 @@ static int ocaml_set_cert_callbacks(/* in */ mitls_state *state, void *cb_state,
     ocb = caml_alloc_tuple(9);
     Store_field(ocb, 0, cbs);
     Store_field(ocb, 1, PtrToValue(cb->select));
-    Store_field(ocb, 2, g_mitls_FFI_CertSelectCallback);
+    Store_field(ocb, 2, PtrToValue(g_mitls_FFI_CertSelectCallback));
 
     Store_field(ocb, 3, PtrToValue(cb->format));
-    Store_field(ocb, 4, g_mitls_FFI_CertSelectCallback);
+    Store_field(ocb, 4, PtrToValue(g_mitls_FFI_CertSelectCallback));
 
     Store_field(ocb, 5, PtrToValue(cb->format));
-    Store_field(ocb, 6, g_mitls_FFI_CertSignCallback);
+    Store_field(ocb, 6, PtrToValue(g_mitls_FFI_CertSignCallback));
 
     Store_field(ocb, 7, PtrToValue(cb->verify));
-    Store_field(ocb, 8, g_mitls_FFI_CertVerifyCallback);
+    Store_field(ocb, 8, PtrToValue(g_mitls_FFI_CertVerifyCallback));
 
     config = caml_callback2_exn(*g_mitls_FFI_SetCertCallbacks, state->fstar_state, ocb);
     if (!Is_exception_result(config)) {

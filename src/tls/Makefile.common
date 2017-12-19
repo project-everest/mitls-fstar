@@ -1,6 +1,3 @@
-# include Makefile
-include $(FSTAR_HOME)/ulib/ml/Makefile.include
-
 HACL_HOME=../../../hacl-star
 MITLS_HOME=../..
 
@@ -16,27 +13,23 @@ INCLUDE_PATHS= \
 	$(MITLS_HOME)/libs/ffi \
 	./concrete-flags
 
-NO_EXTRACT=\
-	$(NOEXTRACT_MODULES) \
-	CoreCrypto \
-	DHDB \
-	LowCProvider \
-	FFICalbacks
-
 FSTAR=fstar.exe $(OTHERFLAGS)
 
-EXTRACT_DIR=extract
+EXTRACT_DIR=extract/$(FLAVOR)
+
+ROOTS ?= TLS.fst Test.TLSConstants.fst QUIC.fst
 
 clean:
-	rm -f $(KRML_DIR) $(OCAML_DIR) .depend.ocaml .depend.krml *.checked.lax
+	rm -rf $(EXTRACT_DIR) .depend.$(FLAVOR) *.checked.lax
 
 .depend.$(FLAVOR):
-	$(FSTAR) --odir $(EXTRACT_DIR)/$(FLAVOR) \
+	mkdir -p $(EXTRACT_DIR)
+	$(FSTAR) --odir $(EXTRACT_DIR) \
 		 --lax \
 		 --dep full \
 		 $(addprefix --no_extract , $(NO_EXTRACT)) \
 		 $(addprefix --include , $(INCLUDE_PATHS)) \
-		 TLS.fst Test.TLSConstants.fst QUIC.fst > .depend.$(FLAVOR)
+		 $(ROOTS) > .depend.$(FLAVOR)
 
 depend: .depend.$(FLAVOR)
 
@@ -46,11 +39,10 @@ include .depend.$(FLAVOR)
 	$(FSTAR) --lax --cache_checked_modules $(addprefix --include , $(INCLUDE_PATHS)) $*
 	touch $@
 
-$(EXTRACT_DIR)/$(FLAVOR)/%.ml:
-	mkdir -p $(EXTRACT_DIR)/more
+$(EXTRACT_DIR)/%.$(EXTENSION):
 	$(FSTAR) \
 		--codegen $(FLAVOR) \
-		--odir $(EXTRACT_DIR)/$(FLAVOR) \
+		--odir $(EXTRACT_DIR) \
 		--lax \
 		--cache_checked_modules \
 		$(addprefix --include , $(INCLUDE_PATHS)) \
