@@ -1,0 +1,8 @@
+FLAVOR=OCaml
+
+all: mitls.exe
+
+include Makefile.common
+
+mitls.exe: $(ALL_ML_FILES)
+

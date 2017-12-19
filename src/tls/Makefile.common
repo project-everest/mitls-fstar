@@ -1,0 +1,59 @@
+# include Makefile
+include $(FSTAR_HOME)/ulib/ml/Makefile.include
+
+HACL_HOME=../../../hacl-star
+MITLS_HOME=../..
+
+INCLUDE_PATHS= \
+	$(FSTAR_HOME)/contrib/CoreCrypto/fst/ \
+	$(HACL_HOME)/secure_api \
+	$(HACL_HOME)/secure_api/utils \
+	$(HACL_HOME)/secure_api/concrete_specializations \
+	$(HACL_HOME)/secure_api/LowCProvider/fst \
+	$(HACL_HOME)/code/curve25519/api \
+	$(HACL_HOME)/code/lib \
+	$(KREMLIN_HOME)/kremlib \
+	$(MITLS_HOME)/libs/ffi \
+	./concrete-flags
+
+NO_EXTRACT=\
+	$(NOEXTRACT_MODULES) \
+	CoreCrypto \
+	DHDB \
+	LowCProvider \
+	FFICalbacks
+
+FSTAR=fstar.exe $(OTHERFLAGS)
+
+EXTRACT_DIR=extract
+
+clean:
+	rm -f $(KRML_DIR) $(OCAML_DIR) .depend.ocaml .depend.krml *.checked.lax
+
+.depend.$(FLAVOR):
+	$(FSTAR) --odir $(EXTRACT_DIR)/$(FLAVOR) \
+		 --lax \
+		 --dep full \
+		 $(addprefix --no_extract , $(NO_EXTRACT)) \
+		 $(addprefix --include , $(INCLUDE_PATHS)) \
+		 TLS.fst Test.TLSConstants.fst QUIC.fst > .depend.$(FLAVOR)
+
+depend: .depend.$(FLAVOR)
+
+include .depend.$(FLAVOR)
+
+%.checked.lax: %
+	$(FSTAR) --lax --cache_checked_modules $(addprefix --include , $(INCLUDE_PATHS)) $*
+	touch $@
+
+$(EXTRACT_DIR)/$(FLAVOR)/%.ml:
+	mkdir -p $(EXTRACT_DIR)/more
+	$(FSTAR) \
+		--codegen $(FLAVOR) \
+		--odir $(EXTRACT_DIR)/$(FLAVOR) \
+		--lax \
+		--cache_checked_modules \
+		$(addprefix --include , $(INCLUDE_PATHS)) \
+		--extract_module $(basename $(notdir $(subst .checked.lax,,$<))) \
+		$(subst .checked.lax,, $<)
+
