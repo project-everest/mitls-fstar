@@ -34,7 +34,9 @@ include Makefile.common
 DROP_MODULES = $(addprefix -drop , FStar.Bytes MonotoneMap MonotoneMapNonDep Transport)
 HEADERS = $(addprefix -add-include ,'"hacks.h"' '"transport.h"' '"krembytes.h"' '"kremstr.h"')
 KRML=krml
-KRML_COMMAND=$(KRML) $(addprefix -I , $(INCLUDE_PATHS)) -I extract/include \
+KRML_COMMAND=$(KRML) $(addprefix -I , $(INCLUDE_PATHS)) \
+  -I $(HACL_HOME)/secure_api/out/vale_aes_abstract_id \
+  -I extract/include \
   $(DROP_MODULES) -I concrete-flags $(HEADERS) -fnoanonymous-unions \
   -warn-error -9+11-7-6 -ccopt -Wno-unused-function KRML_HOME/kremlib/kremstr.c \
   -fsopts --debug,yes -verbose extract/src/support.c $(KOPTS) \
