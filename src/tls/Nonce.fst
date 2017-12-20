@@ -127,7 +127,7 @@ let new_region parent =
   MR.m_recall nonce_rid_table;
   let m0 = MR.m_read nonce_rid_table in 
   let tok : squash (nonce_rids_exists m0) = () in   
-  MR.testify_forall nonce_rid_table tok;
+  MR.testify_forall tok;
   MR.ex_rid_of_rid (new_region parent)
 
 // a constant value, with negligible probability of being sampled, excluded by idealization
