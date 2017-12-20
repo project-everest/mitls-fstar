@@ -1687,10 +1687,13 @@ type quicParameter =
 // TODO check for duplicates
 type valid_quicParameters =
   l:list quicParameter{ List.Tot.length l < 256 /\
+    True}
+(* No longer done in TLS
     List.Tot.existsb Quic_initial_max_stream_data? l /\
     List.Tot.existsb Quic_initial_max_data? l /\
     List.Tot.existsb Quic_initial_max_stream_id? l /\
     List.Tot.existsb Quic_idle_timeout? l}
+*)
 
 type quicVersion =
   | QuicVersion1

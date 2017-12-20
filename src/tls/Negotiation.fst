@@ -1192,7 +1192,10 @@ let computeServerMode cfg co serverRandom =
     let scert =
       match find_signature_algorithms co with
       | None -> None
-      | Some sigalgs -> cfg.cert_callbacks.cert_select_cb (get_sni co) sigalgs
+      | Some sigalgs ->
+        let sigalgs = List.Tot.filter (fun x -> List.Tot.mem x cfg.signature_algorithms) sigalgs in
+        if sigalgs = [] then None
+        else cfg.cert_callbacks.cert_select_cb (get_sni co) sigalgs
       in
     match compute_cs13 cfg co pske shares (Some? scert) with
     | Error z -> Error z

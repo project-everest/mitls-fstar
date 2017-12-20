@@ -430,7 +430,8 @@ let rec parseQuicVersions (b:bytes)
 let parseQuicParameters_valid (b:bytes) : Tot (result valid_quicParameters) =
   match parseQuicParameters_aux b with
   | Error z -> Error z
-  | Correct qpl ->
+  | Correct qpl -> Correct qpl
+(* No longer done in TLS, QUIC is responsible
     if not (List.Tot.existsb Quic_initial_max_stream_data? qpl) then
       error "parseQuicParameters: missing initial_max_stream_data"
     else if not (List.Tot.existsb Quic_initial_max_data? qpl) then
@@ -442,12 +443,13 @@ let parseQuicParameters_valid (b:bytes) : Tot (result valid_quicParameters) =
     else if List.Tot.length qpl >= 256 then // ADL FIXME: this should be ruled out statically
       error "parseQuicParameters: too many parameters"
     else Correct(qpl)
+*)
 
 let parseQuicParameters (mt:ext_msg) (b:bytes) =
   match mt with
   | EM_NewSessionTicket -> Correct (QuicParametersNewSessionTicket b)
   | EM_ClientHello ->
-    if length b < 34 then error "parseQuicParameters: too short"
+    if length b < 6 then error "parseQuicParameters: too short"
     else
      begin
       let iv, b = split b 4 in
@@ -463,7 +465,7 @@ let parseQuicParameters (mt:ext_msg) (b:bytes) =
      end
   | EM_EncryptedExtensions ->
    begin
-    if length b < 36 then error "parseQuicParameters: too short" else
+    if length b < 8 then error "parseQuicParameters: too short" else
     let nv, b = split b 4 in
     match parseQuicVersion nv with
     | Error z -> error "parseQuicParameters: bad negotiated version"
@@ -476,8 +478,8 @@ let parseQuicParameters (mt:ext_msg) (b:bytes) =
         | Correct vl ->
           if vl = [] || List.Tot.length vl >= 64 then
             error "parseQuicParameters: bad supported version list"
-          else if length b < 32 then
-            error "parseQuicParameters: parameters too short"
+//          else if length b < 32 then
+//            error "parseQuicParameters: parameters too short"
           else match vlparse 2 b with
           | Error z -> error "parseQuicParameters: bad server parameters"
           | Correct pb ->
@@ -1500,8 +1502,10 @@ let clientToServerExtension pv cfg cs ri pski ks resuming cext =
   | E_quic_parameters (QuicParametersClient qvi qp) ->
     (match cfg.quic_parameters, pv with
     | Some (sqvl, sqp), TLS_1p3 ->
-      // TODO client parameter validation?
-      Some (E_quic_parameters (QuicParametersServer qvi sqvl sqp))
+      let qvn =
+        if List.Tot.mem qvi sqvl then qvi
+        else List.Tot.hd sqvl in
+      Some (E_quic_parameters (QuicParametersServer qvn sqvl sqp))
     | _ -> None)
   | E_server_name server_name_list ->
     if resuming then None // RFC 6066 page 6

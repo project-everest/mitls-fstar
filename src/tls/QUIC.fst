@@ -186,53 +186,30 @@ let get_parameters c (r:role): ML (option TLSConstants.quicParameters) =
   else Negotiation.find_server_quic_parameters mode
 
 // extracting some QUIC parameters to C (a bit ad hoc)
-val ffi_parameters: option TLSConstants.quicParameters -> ML (UInt32.t * UInt32.t * UInt32.t * UInt16.t * bytes)
+val ffi_parameters: option TLSConstants.quicParameters -> ML (UInt32.t * bytes)
 let ffi_parameters qpo =
   match qpo with
   | None -> failwith "no parameters available"
-  | Some (QuicParametersClient _ qp)
-  | Some (QuicParametersServer _ _ qp) ->  (
-      ( match (List.Tot.find Quic_initial_max_stream_data? qp) with
-        | Some (Quic_initial_max_stream_data v) -> v
-        | None -> failwith "no Quic_initial_max_stream_data"),
-      ( match (List.Tot.find Quic_initial_max_data? qp) with
-        | Some (Quic_initial_max_data v) -> v
-        | None -> failwith "no Quic_initial_max_data"),
-      ( match (List.Tot.find Quic_initial_max_stream_id? qp) with
-        | Some (Quic_initial_max_stream_id v) -> v
-        | None -> failwith "no Quic_initial_max_stream_id"),
-      ( match (List.Tot.find Quic_idle_timeout? qp) with
-        | Some (Quic_idle_timeout v) -> v
-        | None -> failwith "no Quic_idle_timeout"),
-      ( let nondefault = function
-        | Quic_initial_max_stream_data _
-        | Quic_initial_max_data _
-        | Quic_initial_max_stream_id _
-        | Quic_idle_timeout _ -> false
-        | _ -> true in
-      Extensions.quicParametersBytes_aux (List.Tot.filter nondefault qp)))
+  | Some (QuicParametersClient v qp)
+  | Some (QuicParametersServer v _ qp) ->
+    let qv = match v with
+      | QuicVersion1 -> 1ul
+      | QuicCustomVersion n -> n in
+    let qp = Extensions.quicParametersBytes_aux qp in
+    qv, qp
 
 let get_peer_parameters c =
   let r = TLSConstants.dualRole (Connection.c_role c) in
   ffi_parameters (get_parameters c r)
 
-let ffiConfig
-  max_stream_data
-  max_data
-  max_stream_id
-  idle_timeout
-  (others: bytes)
-  (versions: list UInt32.t)
-  (host: string)  =
+let ffiConfig (qp: bytes) (versions: list UInt32.t) (host: string) =
   let ver = List.Tot.map (fun (n:UInt32.t) ->
     match UInt32.v n with
     | 1 -> QuicVersion1
     | _ -> QuicCustomVersion n) versions in
-  if length others > 0 then trace ("Other QUIC transport parameters: "^(hex_of_bytes others));
-  let others =
-    match Extensions.parseQuicParameters_aux others
-    with
-    | Error z -> trace "WARNING: ill-formed custom parameters "; []
+  let qpl =
+    match Extensions.parseQuicParameters_aux qp with
+    | Error z -> failwith "Invalid QUIC transport parameters"
     | Correct qpl -> qpl
     in
   { defaultConfig with
@@ -240,9 +217,5 @@ let ffiConfig
     max_version = TLS_1p3;
     peer_name = Some host;
     non_blocking_read = true;
-    quic_parameters = Some (ver, [
-      Quic_initial_max_stream_data max_stream_data;
-      Quic_initial_max_data max_data;
-      Quic_initial_max_stream_id max_stream_id;
-      Quic_idle_timeout idle_timeout] @ others)
+    quic_parameters = Some (ver, qpl)
   }

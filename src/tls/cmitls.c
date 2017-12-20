@@ -235,8 +235,8 @@ int ConfigureQuic(quic_state **pstate)
     // Server PKI configuration: one ECDSA certificate
     mipki_config_entry pki_config[1] = {
       {
-        .cert_file = "../../data/server-ecdsa.crt",
-        .key_file = "../../data/server-ecdsa.key",
+        .cert_file = option_cert ? option_cert : "../../data/server-ecdsa.crt",
+        .key_file = option_key ? option_key : "../../data/server-ecdsa.key",
         .is_universal = 1 // ignore SNI
       }
     };
@@ -310,8 +310,8 @@ int Configure(mitls_state **pstate)
     // Server PKI configuration: one ECDSA certificate
     mipki_config_entry pki_config[1] = {
       {
-        .cert_file = "../../data/server-ecdsa.crt",
-        .key_file = "../../data/server-ecdsa.key",
+        .cert_file = option_cert ? option_cert : "../../data/server-ecdsa.crt",
+        .key_file = option_key ? option_key : "../../data/server-ecdsa.key",
         .is_universal = 1 // ignore SNI
       }
     };

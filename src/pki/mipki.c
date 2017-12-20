@@ -368,10 +368,19 @@ int MITLS_CALLCONV mipki_sign_verify(mipki_state *st, const mipki_chain cert_ptr
   int ret = 0;
 
   #if DEBUG
-    if(mode == MIPKI_SIGN)
+    if(mode == MIPKI_SIGN) {
       printf("Signing %d bytes of data with %04x\n", tbs_len, sigalg);
-    else
+      printf("--- TBS ----\n");
+      dump(tbs, tbs_len);
+      printf("------------\n");
+    } else {
       printf("Verifying a %d bytes signature of %d bytes of data with %04x\n", *sig_len, tbs_len, sigalg);
+      printf("--- TBS ----\n");
+      dump(tbs, tbs_len);
+      printf("--- SIG ----\n");
+      dump(sig, *sig_len);
+      printf("------------\n");
+    }
   #endif
 
   // Special case: MD5+SHA1 signature
@@ -394,6 +403,11 @@ int MITLS_CALLCONV mipki_sign_verify(mipki_state *st, const mipki_chain cert_ptr
         return 0;
       }
       *sig_len = slen;
+      #if DEBUG
+      printf("--- SIG ----\n");
+      dump(sig, slen);
+      printf("------------\n");
+      #endif
       return 1;
     }
     else
@@ -441,15 +455,18 @@ int MITLS_CALLCONV mipki_sign_verify(mipki_state *st, const mipki_chain cert_ptr
   if(mode == MIPKI_SIGN)
   {
     ret = EVP_DigestSign(md_ctx, sig, sig_len, tbs, tbs_len);
-    if(ret != 1)
-    {
-      #if DEBUG
-        unsigned long err = ERR_peek_last_error();
-        char* err_string = ERR_error_string(err, NULL);
-        printf("mipki_sign DigestSign error: %s\n", err_string);
-        OPENSSL_free(err_string);
-      #endif
+    #if DEBUG
+    if(ret != 1) {
+      unsigned long err = ERR_peek_last_error();
+      char* err_string = ERR_error_string(err, NULL);
+      printf("mipki_sign DigestSign error: %s\n", err_string);
+      OPENSSL_free(err_string);
+    } else {
+      printf("--- SIG ----\n");
+      dump(sig, *sig_len);
+      printf("------------\n");
     }
+    #endif
   }
   else // MIPKI_VERIFY
   {
@@ -539,7 +556,7 @@ size_t MITLS_CALLCONV mipki_format_chain(mipki_state *st, const mipki_chain chai
     printf("Formatting the selected certificate chain.\n");
   #endif
 
-  for(int i = sk_X509_num(cfg->intermediates) - 1; i >= 0; i--)
+  for(int i = 0; i < sk_X509_num(cfg->intermediates); i++)
   {
     unsigned char *buf = NULL;
     X509 *x509 = sk_X509_value(cfg->intermediates, i);

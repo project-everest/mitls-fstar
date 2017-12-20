@@ -875,8 +875,8 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
     state->ffi_callbacks.recv = QUIC_recv;
     state->is_server = cfg->is_server;
 
-    others = caml_alloc_string(cfg->qp.others_len);
-    memcpy(String_val(others), cfg->qp.others, cfg->qp.others_len);
+    others = caml_alloc_string(cfg->qp.tp_len);
+    memcpy(String_val(others), cfg->qp.tp_data, cfg->qp.tp_len);
 
     if(cfg->host_name)
       host = caml_copy_string(cfg->host_name);
@@ -884,16 +884,12 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
       host = caml_alloc_string(0);
 
     value args[] = {
-      Val_int(cfg->qp.max_stream_data),
-      Val_int(cfg->qp.max_data),
-      Val_int(cfg->qp.max_stream_id),
-      Val_int(cfg->qp.idle_timeout),
       others,
       ocaml_alloc_version_list(cfg->supported_versions, cfg->supported_versions_len),
       host
     };
 
-    result = caml_callbackN_exn(*g_mitls_FFI_QuicConfig, 7, args);
+    result = caml_callbackN_exn(*g_mitls_FFI_QuicConfig, 3, args);
     if (Is_exception_result(result)) {
       report_caml_exception(result, errmsg);
       CAMLreturnT(int,0);
@@ -1074,11 +1070,13 @@ quic_result MITLS_CALLCONV FFI_mitls_quic_process(
 
 static int FFI_mitls_quic_get_peer_parameters_caml(
   /* in */ quic_state *state,
-  quic_transport_parameters *qp,
+  /* out */ uint32_t *ver,
+  /* out */ quic_transport_parameters *qp,
   /* out */ char **errmsg)
 {
   CAMLparam0();
   CAMLlocal2(result, tmp);
+  assert(qp);
 
   result = caml_callback_exn(*g_mitls_FFI_QuicGetPeerParameters, state->fstar_state);
 
@@ -1087,6 +1085,7 @@ static int FFI_mitls_quic_get_peer_parameters_caml(
       CAMLreturnT(int, 0);
   }
 
+/*
   tmp = Field(result, 4);
   size_t len = caml_string_length(tmp);
   qp->max_stream_data = Int_val(Field(result, 0));
@@ -1095,12 +1094,18 @@ static int FFI_mitls_quic_get_peer_parameters_caml(
   qp->idle_timeout = Int_val(Field(result, 3));
   qp->others_len = len;
   memcpy(qp->others, String_val(tmp), len);
+*/
+  *ver = Int_val(Field(result, 0));
+  tmp = Field(result, 1);
+  qp->tp_len = caml_string_length(tmp);
+  if(qp->tp_data) memcpy((char*)qp->tp_data, String_val(tmp), qp->tp_len);
 
   CAMLreturnT(int, 1);
 }
 
 int MITLS_CALLCONV FFI_mitls_quic_get_peer_parameters(
   /* in */ quic_state *state,
+  /* out */ uint32_t *ver,
   /* out */ quic_transport_parameters *qp,
   /* out */ char **errmsg)
 {
@@ -1108,7 +1113,7 @@ int MITLS_CALLCONV FFI_mitls_quic_get_peer_parameters(
     *errmsg = NULL;
 
     caml_acquire_runtime_system();
-    ret = FFI_mitls_quic_get_peer_parameters_caml(state, qp, errmsg);
+    ret = FFI_mitls_quic_get_peer_parameters_caml(state, ver, qp, errmsg);
     caml_release_runtime_system();
 
     return ret;
