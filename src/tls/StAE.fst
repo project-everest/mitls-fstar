@@ -173,7 +173,7 @@ val fragments_prefix_stable: #i:id -> #rw:rw
 let fragments_prefix_stable #i #rw w h =
   let fs = fragments w h in
   let log = ilog w in
-  MS.seq_extension_reflexive fs;
+  // MS.seq_extension_reflexive fs; //NS: seems no longer necessary
   MS.map_prefix_stable #_ #_ #(log_region w) log ptext fs
 
 

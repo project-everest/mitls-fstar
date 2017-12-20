@@ -220,7 +220,8 @@ let add_epoch #r #n (MkEpochs es _ _ _) e = MS.i_write_at_end es e
 
 let get_epochs #r #n (es:epochs r n) = MkEpochs?.es es
 
-let ctr (#r:_) (#n:_) (e:epochs r n) (rw:rw) = match rw with
+let ctr (#r:_) (#n:_) (e:epochs r n) (rw:rw) :  epoch_ctr r e.es =
+  match rw with
   | Reader -> e.read
   | Writer -> e.write
 

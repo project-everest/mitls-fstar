@@ -58,7 +58,7 @@ let project_fragment_deltas #i #rw s fs =
 			    ==> deltas_prefix s (project_deltas fs) h) =
 	  fun h -> MS.collect_grows project_one_frag fs (S.fragments s h) in
        let _ = FStar.Classical.forall_intro aux in
-       MR.weaken_witness (S.fragments_prefix s fs) (deltas_prefix s (project_deltas fs))
+       weaken_witness (S.fragments_prefix s fs) (deltas_prefix s (project_deltas fs))
   else ()
 
 let stream_deltas_snoc2 (#i:id) (#rw:rw) (s:StAE.state i rw) (h0:mem) (h1:mem) (f:Content.fragment i)

@@ -34,7 +34,7 @@ let ticketid (a:aeadAlg) : St (AE.id) =
 type ticket_key =
   | Key: i:AE.id -> iv:AE.iv i -> wr:AE.writer i -> rd:AE.reader i -> ticket_key
 
-private let ticket_enc
+private let ticket_enc : reference ticket_key
   =
   let id0 = ticketid CC.CHACHA20_POLY1305 in
   let salt : AE.iv id0 = CoreCrypto.random (AE.ivlen id0) in
