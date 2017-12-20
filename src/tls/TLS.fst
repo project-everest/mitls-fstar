@@ -419,7 +419,7 @@ let sendFragment_success (mods:set rid) (c:connection) (i:id) (wo:option (cwrite
      	     //delta was maybe snoc'd, if f is not a handshake fragment
 	     /\ SD.stream_deltas wr h1 == Seq.append (SD.stream_deltas wr h0) (SD.project_one_frag f)
 	     //and the deltas associated with wr will forever more contain deltas1 as a prefix
-             /\ StAE.witnessed_ilog wr (SD.deltas_prefix wr (SD.stream_deltas wr h1))))
+             /\ MR.witnessed (SD.deltas_prefix wr (SD.stream_deltas wr h1))))
 
 val sendFragment: c:connection -> #i:id -> wo:option (cwriter i c) -> f: Content.fragment i -> ST (result unit)
   (requires (sendFragment_inv wo))
@@ -640,7 +640,7 @@ let next_fragment i c =
 	         MR.witness ilog (MS.i_at_least w0 (MS.i_sel h0 ilog).(w0) ilog)) in
   trace ("HS.next_fragment "^(if ID12? i then "ID12" else (if ID13? i then "ID13" else "PlaintextID"))^"?");
   let res = Handshake.next_fragment s i in
-  if w0 >= 0 then MR.testify ilog (MS.i_at_least w0 (MS.i_sel h0 ilog).(w0) ilog);
+  if w0 >= 0 then MR.testify (MS.i_at_least w0 (MS.i_sel h0 ilog).(w0) ilog);
   res
 
 

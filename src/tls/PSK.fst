@@ -82,7 +82,7 @@ private let app_psk_table : MM.t psk_region psk_identifier app_psk_entry psk_tab
   MM.alloc ()
 
 type registered_psk (i:psk_identifier) =
-  MR.witnessed app_psk_table (MM.defined app_psk_table i)
+  MR.witnessed (MM.defined app_psk_table i)
 
 let valid_app_psk (ctx:pskInfo) (i:psk_identifier) (h:mem) =
   match MM.sel (MR.m_sel h app_psk_table) i with
@@ -96,7 +96,7 @@ let psk_value (i:pskid) : ST (app_psk i)
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
   MR.m_recall app_psk_table;
-  MR.testify app_psk_table (MM.defined app_psk_table i);
+  MR.testify (MM.defined app_psk_table i);
   match MM.lookup app_psk_table i with
   | Some (psk, _, _) -> psk
 
@@ -105,7 +105,7 @@ let psk_info (i:pskid) : ST (pskInfo)
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
   MR.m_recall app_psk_table;
-  MR.testify app_psk_table (MM.defined app_psk_table i);
+  MR.testify (MM.defined app_psk_table i);
   match MM.lookup app_psk_table i with
   | Some (_, ctx, _) -> ctx
 
@@ -127,7 +127,7 @@ type honest_st (i:pskid) (h:mem) =
   (MM.defined app_psk_table i h /\
   (let (_,_,b) = MM.value_of app_psk_table i h in b = true))
 
-type honest_psk (i:pskid) = MR.witnessed app_psk_table (honest_st i)
+type honest_psk (i:pskid) = MR.witnessed (honest_st i)
 
 // Generates a fresh PSK identity
 val fresh_psk_id: unit -> ST psk_identifier
@@ -185,14 +185,14 @@ let compatible_hash_ae_st (i:pskid) (ha:hash_alg) (ae:aeadAlg) (h:mem) =
   ha = pskInfo_hash ctx /\ ae = pskInfo_ae ctx))
 
 let compatible_hash_ae (i:pskid) (h:hash_alg) (a:aeadAlg) =
-  MR.witnessed app_psk_table (compatible_hash_ae_st i h a)
+  MR.witnessed (compatible_hash_ae_st i h a)
 
 let compatible_info_st (i:pskid) (c:pskInfo) (h:mem) =
   (MM.defined app_psk_table i h /\
   (let (_,ctx,_) = MM.value_of app_psk_table i h in c = ctx))
 
 let compatible_info (i:pskid) (c:pskInfo) =
-  MR.witnessed app_psk_table (compatible_info_st i c)
+  MR.witnessed (compatible_info_st i c)
 
 let verify_hash_ae (i:pskid) (ha:hash_alg) (ae:aeadAlg) : ST bool
   (requires (fun h0 -> True))
@@ -200,7 +200,7 @@ let verify_hash_ae (i:pskid) (ha:hash_alg) (ae:aeadAlg) : ST bool
     b ==> compatible_hash_ae i ha ae))
   =
   MR.m_recall app_psk_table;
-  MR.testify app_psk_table (MM.defined app_psk_table i);
+  MR.testify (MM.defined app_psk_table i);
   match MM.lookup app_psk_table i with
   | Some x ->
     let h = get() in
