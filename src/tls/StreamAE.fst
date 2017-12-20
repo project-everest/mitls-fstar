@@ -209,7 +209,7 @@ val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
 		    let ent = Entry l c p in
 		    let n = Seq.length (m_sel h0 log) in
 		    m_contains log h1 /\
-		    Monotonic.RRef.witnessed log (at_least n ent log) /\
+		    Monotonic.RRef.witnessed (at_least n ent log) /\
 		    m_sel h1 log == snoc (m_sel h0 log) ent))))
 
 (* we primarily model the ideal functionality, the concrete code that actually

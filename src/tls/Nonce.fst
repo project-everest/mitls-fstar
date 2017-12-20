@@ -59,8 +59,8 @@ let fresh_region (r:ex_rid) (h:HS.mem) =
 //A nonce n is registered to region r, if the table contains n -> Some r; 
 //This mapping is stable (that's what the MR.witnessed means)
 let registered (n:random) (r:MR.rid) = 
-  MR.witnessed nonce_rid_table (MR.rid_exists r) /\
-  MR.witnessed nonce_rid_table (MM.contains nonce_rid_table n r)
+  MR.witnessed (MR.rid_exists r) /\
+  MR.witnessed (MM.contains nonce_rid_table n r)
 
 let testify (n:random) (r:MR.rid)
   : ST unit (requires (fun h -> registered n r))
@@ -68,7 +68,7 @@ let testify (n:random) (r:MR.rid)
 		 h0==h1 /\
 	         registered n r /\ 
 		 MM.contains nonce_rid_table n r h1))
-  = MR.testify nonce_rid_table (MM.contains nonce_rid_table n r)
+  = MR.testify (MM.contains nonce_rid_table n r)
   
 //Although the table only maps nonces to rids, externally, we also 
 //want to associate the nonce with a role. Within this module
@@ -107,7 +107,7 @@ let lookup role n = MM.lookup nonce_rid_table n
 (* Would be nice to make this a local let in new_region.
    Except, implicit argument inference for testify_forall fails *)
 private let nonce_rids_exists  (m:MM.map' random n_rid) = 
-    forall (n:random{Some? (MM.sel m n)}). MR.witnessed nonce_rid_table (MR.rid_exists (Some?.v (MM.sel m n)))
+    forall (n:random{Some? (MM.sel m n)}). MR.witnessed (MR.rid_exists (Some?.v (MM.sel m n)))
 
 (* 
    A convenient wrapper around FStar.ST.new_region, 
