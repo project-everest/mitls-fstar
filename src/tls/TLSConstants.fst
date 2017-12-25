@@ -20,7 +20,6 @@ open Platform.Error
 open TLSError
 //open CoreCrypto // avoid?!
 
-module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 
 include Parse // carving out basic formatting code to break a dependency.

@@ -1,7 +1,6 @@
 module PSK
 
 open FStar.Heap
-open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.HyperStack.ST
 
@@ -12,7 +11,6 @@ open TLSConstants
 
 module MM = FStar.Monotonic.Map
 module MR = FStar.Monotonic.RRef
-module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
 

@@ -7,7 +7,6 @@ module DataStream
 //* now generalized to include signals; rename to Stream?
 
 open FStar.Heap
-open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.Seq
 open Platform.Bytes
@@ -109,8 +108,9 @@ type stream (i:id) = s: list (delta i) { wellformed i s }
 
 noeq type state (i:id) =
   | State: #region:rid ->
-           log: option (rref region (stream i)) { Some? log <==> authId i } ->
-           ctr: rref region nat ->
+           log: option (reference (stream i)) { (Some? log <==> authId i) /\
+	                                        (Some? log ==> frameOf (Some?.v log) == region) } ->
+           ctr: reference nat{frameOf ctr == region} ->
            state i
 
 (*
@@ -121,10 +121,10 @@ let gen r0 (i:id) =
   let r = new_region r0 in
   empty_is_well_formed i;
   let t = ralloc r [] in
-  let log = if authId i then Some (HS.mrref_of t) else None in
+  let log = if authId i then Some t else None in
   let ctr = ralloc r 0 in
-  let enc = State #i #r log (HS.mrref_of ctr) in
-  let dec = State #i #r log (HS.mrref_of ctr) in
+  let enc = State #i #r log ctr in
+  let dec = State #i #r log ctr in
   enc, dec
 
 // -------------------------------------------------------------

@@ -5,7 +5,6 @@ concretely, we use AES_GCM but any other AEAD algorithm would do.
 module StreamAE
 
 open FStar.Heap
-open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.HyperStack.ST
 open FStar.Seq
@@ -22,7 +21,6 @@ open TLSInfo
 open StreamPlain
 
 module AEAD = AEADProvider
-module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 
 type rid = FStar.Monotonic.RRef.rid
@@ -82,7 +80,7 @@ let ctr (#l:rid) (#r:rid) (#i:id) (#log:log_ref l i) (c:ctr_ref r i log)
 // kept concrete for log and counter, but the key and iv should be private.
 noeq type state (i:id) (rw:rw) =
   | State: #region: rgn
-         -> #log_region: rgn{if rw = Writer then region = log_region else HyperHeap.disjoint region log_region}
+         -> #log_region: rgn{if rw = Writer then region = log_region else HS.disjoint region log_region}
          -> aead: AEAD.state i rw
          -> log: log_ref log_region i // ghost, subject to cryptographic assumption
          -> counter: ctr_ref region i log // types are sufficient to anti-alias log and counter
@@ -100,7 +98,7 @@ type reader i = s:state i Reader
 // We generate first the writer, then the reader (possibly several of them)
 let genPost (#i:id) parent h0 (w:writer i) h1 =
   modifies Set.empty h0 h1 /\
-  HH.parent w.region = parent /\
+  HS.parent w.region = parent /\
   fresh_region w.region h0 h1 /\
   color w.region = color parent /\
   extends (AEAD.region w.aead) parent /\
@@ -136,12 +134,12 @@ let gen parent i =
 
 #reset-options
 val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
-  (requires (fun h0 -> witnessed (region_contains_pred parent) /\ HyperHeap.disjoint parent w.region /\
-  HyperHeap.disjoint parent (AEAD.region w.aead))) //16-04-25  we may need w.region's parent instead
+  (requires (fun h0 -> witnessed (region_contains_pred parent) /\ HS.disjoint parent w.region /\
+  HS.disjoint parent (AEAD.region w.aead))) //16-04-25  we may need w.region's parent instead
   (ensures  (fun h0 (r:reader i) h1 ->
          modifies Set.empty h0 h1 /\
          r.log_region = w.region /\
-         HH.parent r.region = parent /\
+         HS.parent r.region = parent /\
 	       color r.region = color parent /\
          fresh_region r.region h0 h1 /\
          w.log == r.log /\
@@ -155,7 +153,7 @@ val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
 let genReader parent #i w =
   let reader_r = new_region parent in
   let writer_r : rgn = w.region in
-  assert(HyperHeap.disjoint writer_r reader_r);
+  assert(HS.disjoint writer_r reader_r);
   lemma_ID13 i;
   let raead = AEAD.genReader parent #i w.aead in
   if authId i then
@@ -196,7 +194,7 @@ private abstract let noAD = empty_bytes
 val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
     (requires (fun h0 ->
       lemma_ID13 i;
-      HyperHeap.disjoint e.region (AEAD.log_region #i e.aead) /\
+      HS.disjoint e.region (AEAD.log_region #i e.aead) /\
       l <= max_TLSPlaintext_fragment_length /\ // FIXME ADL: why is plainLen <= max_TLSCiphertext_fragment_length_13 ?? Fix StreamPlain!
       m_sel h0 (ctr e.counter) < max_ctr))
     (ensures  (fun h0 c h1 ->
@@ -264,10 +262,10 @@ val decrypt: #i:id -> d:reader i -> l:plainLen -> c:cipher i l
     	 then res = Some (Entry?.p (Seq.index log j))
     	 else res = None)) /\
       (match res with
-       | None -> HH.modifies Set.empty h0.h h1.h
+       | None -> HS.modifies_transitively Set.empty h0 h1
        | _ -> let ctr_counter_as_hsref = as_hsref (ctr d.counter) in
-             HH.modifies_one d.region h0.h h1.h /\
-             modifies_rref d.region (Set.singleton (Heap.addr_of (as_ref ctr_counter_as_hsref))) h0.h h1.h /\
+             HS.modifies_one d.region h0 h1 /\
+             modifies_ref d.region (Set.singleton (Heap.addr_of (as_ref ctr_counter_as_hsref))) h0 h1 /\
              m_sel h1 (ctr d.counter) === j + 1)))
 
 val strip_refinement: #a:Type -> #p:(a -> Type0) -> o:option (x:a{p x}) -> option a

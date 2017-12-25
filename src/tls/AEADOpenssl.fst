@@ -1,7 +1,6 @@
 module AEADOpenssl
 
 open FStar.Heap
-open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.Seq
 open Platform.Bytes
@@ -61,7 +60,7 @@ noeq type state (i:id) (rw:rw) =
     #region: rgn ->
     #log_region:rgn{
        if rw = Writer then region = log_region
-       else HyperHeap.disjoint region log_region} ->
+       else disjoint region log_region} ->
     key: key i ->
     log: log_ref log_region i ->
     state i rw
@@ -104,7 +103,7 @@ type peered (#i:id) (w:writer i) =
   }
 
 val genReader: parent:rgn -> #i:id -> w:writer i -> ST (peered w)
-  (requires (fun h0 -> HyperHeap.disjoint parent w.region))
+  (requires (fun h0 -> disjoint parent w.region))
   (ensures (fun h0 r h1 ->
     modifies Set.empty h0 h1 /\
     extends r.region parent /\
