@@ -193,7 +193,7 @@ let st_inv (#i:id) (#rw:rw) (st:state i rw) h =
 let genPost (#i:id) (parent:rgn) h0 (w:writer i) h1 =
   modifies_none h0 h1 /\
   extends (region w) parent /\
-  stronger_fresh_region (region w) h0 h1 /\
+  fresh_region (region w) h0 h1 /\
   color (region w) = color parent /\
   empty_log w h1 /\
   st_inv w h1

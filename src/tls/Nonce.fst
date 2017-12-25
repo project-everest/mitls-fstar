@@ -4,7 +4,6 @@ open Platform.Bytes
 open Platform.Error
 open FStar.HyperStack.ST
 
-module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 module MM = FStar.Monotonic.Map
 module MR = FStar.Monotonic.RRef
@@ -120,8 +119,8 @@ private let nonce_rids_exists  (m:MM.map' random n_rid) =
 val new_region: parent:MR.rid -> ST ex_rid 
   (requires (fun h -> True))
   (ensures (fun h0 r h1 -> 
-	      HH.extends r parent /\
-	      ST.stronger_fresh_region r h0 h1 /\ //it's fresh with respect to the current heap
+	      HS.extends r parent /\
+	      HS.fresh_region r h0 h1 /\ //it's fresh with respect to the current heap
 	      fresh_region r h1)) //and it's not in the nonce table
 let new_region parent = 
   MR.m_recall nonce_rid_table;
@@ -141,5 +140,5 @@ let noCsr : bytes = CoreCrypto.random 64
    let noCsr : ST random
       (requires (fun h -> Mr.m_sel h nonce_rid_table = MM.empty_map random ex_rid))
       (ensures (fun h0 r h1 -> ~ (fresh r h1)))
-      = mkHelloRandom Client (new_region (FStar.ST.new_region HH.root))
+      = mkHelloRandom Client (new_region (FStar.ST.new_region HS.root))
 *)

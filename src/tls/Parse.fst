@@ -7,7 +7,6 @@ open Platform.Bytes
 open Platform.Error
 open TLSError
 
-module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
 
@@ -28,23 +27,23 @@ let tls_color = -1
 let epoch_color = 1
 let hs_color = 2
 
-let is_tls_rgn r   = HH.color r = tls_color
-let is_epoch_rgn r = HH.color r = epoch_color
-let is_hs_rgn r    = HH.color r = hs_color
+let is_tls_rgn r   = HS.color r = tls_color
+let is_epoch_rgn r = HS.color r = epoch_color
+let is_hs_rgn r    = HS.color r = hs_color
 
 (*
  * AR: Adding the eternal region predicate.
  * Strengthening the predicate because at some places, the code uses HH.parent.
  *)
-let rgn       = r:HH.rid{r<>HH.root
-                         /\ (forall (s:HH.rid).{:pattern HS.is_eternal_region s} HS.is_above s r ==> HS.is_eternal_region s)}
+let rgn       = r:HS.rid{r<>HS.root
+                         /\ (forall (s:HS.rid).{:pattern HS.is_eternal_region s} HS.is_above s r ==> HS.is_eternal_region s)}
 let tls_rgn   = r:rgn{is_tls_rgn r}
 let epoch_rgn = r:rgn{is_epoch_rgn r}
 let hs_rgn    = r:rgn{is_hs_rgn r}
 
-let tls_region : tls_rgn = new_colored_region HH.root tls_color
+let tls_region : tls_rgn = new_colored_region HS.root tls_color
 
-let tls_tables_region : (r:tls_rgn{HH.parent r = tls_region}) =
+let tls_tables_region : (r:tls_rgn{HS.parent r = tls_region}) =
     new_region tls_region
 
 

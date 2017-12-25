@@ -101,10 +101,10 @@ type reader i = s:state i Reader
 let genPost (#i:id) parent h0 (w:writer i) h1 =
   modifies Set.empty h0 h1 /\
   HH.parent w.region = parent /\
-  stronger_fresh_region w.region h0 h1 /\
+  fresh_region w.region h0 h1 /\
   color w.region = color parent /\
   extends (AEAD.region w.aead) parent /\
-  stronger_fresh_region (AEAD.region w.aead) h0 h1 /\
+  fresh_region (AEAD.region w.aead) h0 h1 /\
   color (AEAD.region w.aead) = color parent /\
   (authId i ==>
       (m_contains (ilog w.log) h1 /\
@@ -143,7 +143,7 @@ val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
          r.log_region = w.region /\
          HH.parent r.region = parent /\
 	       color r.region = color parent /\
-         stronger_fresh_region r.region h0 h1 /\
+         fresh_region r.region h0 h1 /\
          w.log == r.log /\
 	 m_contains (ctr r.counter) h1 /\
 	 m_sel h1 (ctr r.counter) === 0))

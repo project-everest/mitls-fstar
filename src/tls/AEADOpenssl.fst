@@ -75,9 +75,9 @@ type writer i = s:state i Writer
 type reader i = s:state i Reader
 
 let genPost (#i:id) (parent:rgn) h0 (w:writer i) h1 =
-  modifies Set.empty h0 h1 /\
-  extends w.region parent /\
-  stronger_fresh_region w.region h0 h1 /\
+  modifies Set.empty h0 h1      /\
+  extends w.region parent       /\
+  fresh_region w.region h0 h1   /\
   color w.region = color parent /\
   empty_log w h1
 
@@ -109,7 +109,7 @@ val genReader: parent:rgn -> #i:id -> w:writer i -> ST (peered w)
     modifies Set.empty h0 h1 /\
     extends r.region parent /\
     color r.region = color parent /\
-    stronger_fresh_region r.region h0 h1))
+    fresh_region r.region h0 h1))
 let genReader parent #i w =
   let reader_r = new_region parent in
   if authId i then
