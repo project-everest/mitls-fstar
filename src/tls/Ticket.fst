@@ -47,11 +47,11 @@ let ticketid (a:aeadAlg) : St (AE.id) =
 type ticket_key =
   | Key: i:AE.id -> iv:AE.iv i -> wr:AE.writer i -> rd:AE.reader i -> ticket_key
 
-private let ticket_enc
+private let ticket_enc: ref ticket_key
   =
   let id0 = ticketid CC.CHACHA20_POLY1305 in
-  let salt : AE.iv id0 = CoreCrypto.random (AE.ivlen id0) in
-  let key : AE.key id0 = CoreCrypto.random (AE.keylen id0) in
+  let salt: AE.iv id0 = CoreCrypto.random (AE.ivlen id0) in
+  let key: AE.key id0 = CoreCrypto.random (AE.keylen id0) in
   let wr = AE.coerce region id0 key in
   let rd = AE.genReader region #id0 wr in
   ralloc region (Key id0 salt wr rd)

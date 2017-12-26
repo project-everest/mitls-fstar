@@ -1,6 +1,8 @@
 module Handshake.Secret
 
-// used to be KeySchedule
+// This file provides all operations on TLS secrets for the handshake,
+// organized by message-processing stages (used to be in
+// KeySchedule.fst)
 
 open FStar.Heap
 open FStar.HyperHeap
@@ -17,6 +19,7 @@ open TLSInfo
 //open StatefulLHAE
 open HKDF
 open PSK
+open Idx
 
 module MM = FStar.Monotonic.Map
 module MR = FStar.Monotonic.RRef
@@ -41,7 +44,7 @@ unfold let dbg : string -> ST unit (requires (fun _ -> True))
 
 type transcript = HandshakeLog.hs_transcript // ghost 
 let digest (i:id) (t:transcript) = 
-  let ha = ha_of_id i in 
+  let ha = Idx.ha_of_id i in 
   let v = HandshakeLog.transcript_bytes t in 
   t: Hashing.Spec.anyTag {Hashing.CRF.hashed ha v /\ t = Hashing.hash ha v}
 
@@ -151,11 +154,8 @@ private let res_psk_value (i:rmsId{registered_res_psk i}) =
 // Note that application PSK is externally defined but should
 // be idealized together with KS
 
-
-/// 17-12-07 this is too abstract to recover packaged key types; the
-/// plan is to recover that information (using ==) for more specific
-/// types of secrets.
-type secret (i:id) = IK.secret (u_of_i i) i
+let u_of_i = Exttract1.ODH.u_of_i
+abstract type secret (i:id) = secret (u_of_i i) i
 
 /// for readability so far; we could be more specific
 type ems_id = id
@@ -193,6 +193,10 @@ let dummy_psk ha: psk (no_psk_id ha) =
 
 
 /// Move to PSK? DB lookup from concrete pskid to indexed abstract psk & info.
+
+
+
+
 
 let read_psk (pi:PSK.pskid): ST (i:esId & u:PSK.pskInfo {ha_of_id i = u.early_hash} * psk i)
   (requires fun h -> True)
@@ -962,7 +966,7 @@ val client12_resume:
   ST (ks12_state * recordInstance)
   (requires fun h0 -> True)
   (ensures fun h0 r h1 -> True)
-  =
+let client12_resume cr sr pv cs ems msId ms =
   dbg "client12_resume";
   dbg ("Recall MS: "^print_bytes ms);
   let ks = C_12_has_MS (cr @| sr) (pv, cs, ems) msId ms in
@@ -989,9 +993,9 @@ let server12_resume cr sr pv cs ems msId ms =
 
 // log is the raw HS log, used for EMS derivation
 val server12_cke_dh: 
-  ks:ks: ks12_state {C_12+wait_CKE_DH? ks} ) -> 
-  gy:(g:CommonDH.group & CommonDH.share g) ->
-  log:bytes -> 
+  ks: ks12_state {C_12_wait_CKE_DH? ks} -> 
+  gy: (g:CommonDH.group & CommonDH.share g) ->
+  log: bytes -> 
   ST (ks12_state * recordInstance)
   (requires fun h0 ->
     // Responder share must be over the same group as initiator's
@@ -1001,7 +1005,7 @@ val server12_cke_dh:
   (ensures fun h0 r h1 -> True)
 let server12_cke_dh ks gy hashed_log =
   dbg "server12_cke_dh";
-  let S_12_wait_CKE_DH csr alpha (| g, gx |)) = ks in
+  let S_12_wait_CKE_DH csr alpha (| g, gx |) = ks in
   let (pv, cs, ems) = alpha in
   let (| _, gy |) = gy in
   let _ = print_share gy in
@@ -1484,8 +1488,7 @@ let server12_server_finished ks
   st := S S_Done;
   TLSPRF.verifyData (pv,cs) ms Server log
 
-let client12_server_finished ks
-  : ST (svd:bytes)
+let client12_server_finished ks: ST (svd:bytes)
   (requires fun h0 ->
     let st = sel h0 (KS?.state ks) in
     C? st /\ C_12_has_MS? (C?.s st))

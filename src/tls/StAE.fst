@@ -169,7 +169,7 @@ val fragments_prefix_stable: #i:id -> #rw:rw
 let fragments_prefix_stable #i #rw w h =
   let fs = fragments w h in
   let log = ilog w in
-  MS.seq_extension_reflexive fs;
+  // MS.seq_extension_reflexive fs;
   MS.map_prefix_stable #_ #_ #(log_region w) log ptext fs
 
 
@@ -264,18 +264,20 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
 
 // Generate a fresh instance with index i in a fresh sub-region
 val gen: parent:rgn -> i:stae_id -> ST (writer i)
-  (requires (fun h0 -> True))
+  (requires (fun h0 -> witnessed (region_contains_pred parent)))
   (ensures (genPost parent))
-#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
+//#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 let gen parent i =
   if is_stream i then
     Stream () (StreamAE.gen parent i)
   else
     StLHAE () (StLHAE.gen parent i)
 
-#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
+//#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
-  (requires (fun h0 -> HyperHeap.disjoint parent (region #i #Writer w))) //16-04-25  we may need w.region's parent instead
+  (requires (fun h0 -> 
+    witnessed (region_contains_pred parent) /\
+    HyperHeap.disjoint parent (region #i #Writer w))) //16-04-25  we may need w.region's parent instead
   (ensures  (fun h0 (r:reader i) h1 ->
                modifies Set.empty h0 h1 /\
                log_region r = region #i #Writer w /\
