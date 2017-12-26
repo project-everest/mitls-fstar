@@ -18,8 +18,6 @@ module AEAD.Pkg
 open Mem
 open Pkg
 
-module HH = FStar.HyperHeap // I wish we could avoid it once Mem is open.
-
 module AE = AEAD
 module I  = Crypto.Indexing
 
@@ -149,7 +147,7 @@ val invariant_framing:
   #i:ip.t{ip.registered i} ->
   k:key ip index_of_i i ->
   h0:mem ->
-  r:HH.rid ->
+  r:rid ->
   h1:mem ->
   Lemma (requires invariant k h0 /\
          modifies_one r h0 h1 /\
@@ -182,7 +180,7 @@ val empty_log_framing:
   a:aeadAlg{a == aeadAlg_of_i i} ->
   k:key ip aeadAlg_of_i index_of_i i ->
   h0:mem ->
-  r:HH.rid ->
+  r:rid ->
   h1:mem ->
   Lemma
     (requires (empty_log a k h0 /\

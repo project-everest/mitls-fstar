@@ -5,7 +5,6 @@
 module AEAD
 
 module I = Crypto.Indexing
-module HH = FStar.HyperHeap
 module U32 = FStar.UInt32
 module U128 = FStar.UInt128
 module Plain = Crypto.Plain

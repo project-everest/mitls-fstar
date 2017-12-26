@@ -18,7 +18,6 @@ open Pkg.Tree
 
 module MR = FStar.Monotonic.RRef
 module MM = FStar.Monotonic.Map
-module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 
 let sample (len:UInt32.t): ST (lbytes len)
@@ -186,7 +185,7 @@ let kdf_footprint (#d:nat) (#u:usage d) (#i:id{registered i}) (k:secret d u i)
     | Real k -> Set.empty
   else Set.empty
 
-let local_kdf_invariant_framing (#d:nat) (#u:usage d) (i:id{registered i}) (k:secret d u i) (h0:mem) (r:HH.rid) (h1:mem)
+let local_kdf_invariant_framing (#d:nat) (#u:usage d) (i:id{registered i}) (k:secret d u i) (h0:mem) (r:rid) (h1:mem)
   : Lemma (requires local_kdf_invariant k h0 /\ modifies_one r h0 h1
             /\ ~(r `Set.mem` kdf_footprint k) /\ ~(r `Set.mem` kdf_shared_footprint u))
           (ensures local_kdf_invariant k h1)
@@ -206,7 +205,7 @@ type kdf_post (#d:nat) (#u:usage d) (#i:id{registered i}) (a: info {a == get_inf
 
 // Framing for the kdf_post depends only on kdf_footprint k
 let kdf_post_framing (#d:nat) (#u:usage d) (#i:id{registered i}) (a: info {a == get_info i})
-  (k:secret d u i) (h0:mem) (r:HH.rid) (h1:mem)
+  (k:secret d u i) (h0:mem) (r:rid) (h1:mem)
   : Lemma (requires (kdf_post a k h0 /\ modifies_one r h0 h1 /\ ~(r `Set.mem` kdf_footprint k)))
           (ensures (kdf_post a k h1))
   = admit()
@@ -251,12 +250,14 @@ let coerce d u i a repr =
 /// I added a unit here
 ///
 /// CF: Ok; I did not know. Is it a style bug in FStar.Monotonic.Map ?
-let alloc #a #b #inv (r:FStar.Monotonic.RRef.rid)
-  : ST (MM.t r a b inv)
-       (requires (fun h -> inv (MM.empty_map a b)))
-       (ensures (fun h0 x h1 ->
-    inv (MM.empty_map a b) /\
-    ralloc_post r (MM.empty_map a b) h0 (FStar.Monotonic.RRef.as_hsref x) h1))
+let alloc #a #b #inv (r:FStar.Monotonic.RRef.rid): 
+  ST (MM.t r a b inv)
+    (requires (fun h -> 
+      inv (MM.empty_map a b) /\ 
+      witnessed (region_contains_pred r) ))
+    (ensures (fun h0 x h1 ->
+      inv (MM.empty_map a b) /\
+      ralloc_post r (MM.empty_map a b) h0 (FStar.Monotonic.RRef.as_hsref x) h1))
   = MM.alloc #r #a #b #inv
 
 val create:
@@ -279,7 +280,7 @@ let create d u i a =
     assert(safeKDF d i);
     let r : subrgn kdf_tables_region = new_region kdf_tables_region in
     let h2 = get() in
-    assert(stronger_fresh_region r h1 h2);
+    assert(Mem.fresh_region r h1 h2);
     let t : table d u i = KDF_table r (alloc r) in
     let h3 = get() in
     let k : secret d u i = ideal_secret t in

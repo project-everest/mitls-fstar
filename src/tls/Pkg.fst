@@ -21,7 +21,6 @@ open Mem
 module MR = FStar.Monotonic.RRef
 module MM = FStar.Monotonic.Map
 module MH = FStar.Monotonic.Heap
-module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 
 let model = Flags.model
@@ -88,13 +87,14 @@ type keylen = l:UInt32.t {UInt32.v l <= 256}
 // disjoint from tls_define_region, or a define table that must be at a
 // different address than the package's define_table
 noeq type pkg_inv_r =
-  | Pinv_region: r:HH.rid{r `HH.disjoint` tls_define_region} -> pkg_inv_r
+  | Pinv_region: r:rid{r `disjoint` tls_define_region} -> pkg_inv_r
   | Pinv_define: #it:eqtype -> #vt:(it -> Type) -> t:mem_table vt -> pkg_inv_r
 
 // When calling create or coerce, the footprint of a package grows only with
 // fresh subregions
 type modifies_footprint (fp:mem->GTot rset) h0 h1 =
-  forall (r:HH.rid). (Set.mem r (fp h0) /\ ~(Set.mem r (fp h1))) ==> stronger_fresh_region r h0 h1  //AR: 12/05: Could use the pattern {:pattern (Set.mem r (fp h0)); (Set.mem r (fp h1))}
+  forall (r:rid). (Set.mem r (fp h0) /\ ~(Set.mem r (fp h1))) ==> fresh_region r h0 h1  
+  //AR: 12/05: Could use the pattern {:pattern (Set.mem r (fp h0)); (Set.mem r (fp h1))}
 
 noeq type pkg (ip: ipkg) = | Pkg:
   key: (i:ip.t {ip.registered i} -> Type0)  (* indexed state of the functionality *) ->
@@ -130,7 +130,7 @@ noeq type pkg (ip: ipkg) = | Pkg:
   // so that [derive] can pass the post-condition to its caller; the
   // concrete part of the postcondition is what we need in [derive].
   post: (#i:ip.t{ip.registered i} -> info i -> key i -> mem -> GTot Type0) ->
-  post_framing: (#i:ip.t{ip.registered i} -> a:info i -> k:key i ->  h0:mem -> r:HH.rid -> h1:mem -> Lemma
+  post_framing: (#i:ip.t{ip.registered i} -> a:info i -> k:key i ->  h0:mem -> r:rid -> h1:mem -> Lemma
      (requires (post a k h0 /\ modifies_one r h0 h1 /\ ~(r `Set.mem` footprint h0)))
      (ensures (post a k h1))) ->
 
@@ -159,8 +159,8 @@ noeq type pkg (ip: ipkg) = | Pkg:
   pkg ip
 
 type fresh_regions (s:rset) (h0:mem) (h1:mem) =
-  forall (r:HH.rid).{:pattern (Set.mem r s)} Set.mem r s ==>
-    (stronger_fresh_region r h0 h1 \/ is_tls_rgn r)
+  forall (r:rid).{:pattern (Set.mem r s)} Set.mem r s ==>
+    (fresh_region r h0 h1 \/ is_tls_rgn r)
 
 /// packages of instances with local private state, before ensuring
 /// their unique definition at every index and the disjointness of
@@ -176,12 +176,12 @@ noeq type local_pkg (ip: ipkg) =
   (* regions that are specific to each instance and freshly allocated when the instance is created *)
   local_footprint: (#i:ip.t{ip.registered i} -> key i -> GTot (s:rset{s `Set.disjoint` shared_footprint})) ->
   local_invariant: (#i:ip.t{ip.registered i} -> key i -> mem -> GTot Type0) (* instance invariant *) ->
-  local_invariant_framing: (i:ip.t{ip.registered i} -> k:key i -> h0:mem -> r:HH.rid -> h1:mem -> Lemma
+  local_invariant_framing: (i:ip.t{ip.registered i} -> k:key i -> h0:mem -> r:rid -> h1:mem -> Lemma
     (requires local_invariant k h0 /\ modifies_one r h0 h1
       /\ ~(r `Set.mem` local_footprint k) /\ ~(r `Set.mem` shared_footprint))
     (ensures local_invariant k h1)) ->
   post: (#i:ip.t{ip.registered i} -> info i -> key i -> mem -> GTot Type0) ->
-  post_framing: (#i:ip.t{ip.registered i} -> a:info i -> k:key i -> h0:mem -> r:HH.rid -> h1:mem -> Lemma
+  post_framing: (#i:ip.t{ip.registered i} -> a:info i -> k:key i -> h0:mem -> r:rid -> h1:mem -> Lemma
     (requires (post a k h0 /\ modifies_one r h0 h1 /\ ~(r `Set.mem` local_footprint k)))
     (ensures (post a k h1))) ->
   create: (i:ip.t{ip.registered i} -> a:info i -> ST (key i)
@@ -215,17 +215,17 @@ assume type mm_forall (#a:eqtype) (#b:a -> Type) (t:MM.map' a b)
 let lemma_mm_forall_frame (#a:eqtype) (#b:a -> Type) (t:MM.map' a b)
   (p: #i:a -> b i -> mem -> GTot Type0)
   (footprint: #i:a -> v:b i -> GTot rset)
-  (p_frame: i:a -> v:b i -> h0:mem -> r:HH.rid -> h1:mem ->
+  (p_frame: i:a -> v:b i -> h0:mem -> r:rid -> h1:mem ->
     Lemma (requires p v h0 /\ modifies_one r h0 h1 /\ ~(Set.mem r (footprint v)))
           (ensures p v h1))
-  (r:HH.rid) (h0:mem) (h1:mem)
+  (r:rid) (h0 h1:mem)
   : Lemma (requires mm_forall t p h0 /\ modifies_one r h0 h1 /\
             ~(Set.mem r (mm_fold t #rset Set.empty (fun s i k -> rset_union s (footprint k)))))
           (ensures mm_forall t p h1)
   = admit()
 
 let lemma_mm_forall_extend (#a:eqtype) (#b:a -> Type) (t:MM.map' a b) (t':MM.map' a b)
-  (p: #i:a -> b i -> mem -> GTot Type0) (i:a) (v:b i) (h0:mem) (h1:mem)
+  (p: #i:a -> b i -> mem -> GTot Type0) (i:a) (v:b i) (h0 h1:mem)
   : Lemma (requires mm_forall t p h1 /\ t' == MM.upd t i v /\ p v h1)
           (ensures mm_forall t' p h1)
   = admit()
@@ -296,7 +296,7 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
       assert(fp1 == rset_union p.shared_footprint (rset_union (mm_fold map #rset Set.empty footprint_extend) (p.local_footprint k)));
       lemma_union_com p.shared_footprint (mm_fold map #rset Set.empty footprint_extend) (p.local_footprint k);
       assert(fp1 == rset_union fp0 (p.local_footprint k));
-      assert(forall (r:HH.rid). (Set.mem r fp1 /\ ~(Set.mem r fp0)) ==> Set.mem r (p.local_footprint k));
+      assert(forall (r:rid). (Set.mem r fp1 /\ ~(Set.mem r fp0)) ==> Set.mem r (p.local_footprint k));
       assert(modifies_footprint footprint h0 h1)
      end
     else ()
@@ -314,7 +314,7 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
   let ls_footprint (#i:ip.t{ip.registered i}) (k:p.key i) =
     rset_union (p.local_footprint k) p.shared_footprint
     in
-  let ls_footprint_frame (i:ip.t{ip.registered i}) (k:p.key i) (h0:mem) (r:HH.rid) (h1:mem)
+  let ls_footprint_frame (i:ip.t{ip.registered i}) (k:p.key i) (h0:mem) (r:rid) (h1:mem)
     : Lemma (requires p.local_invariant k h0 /\ modifies_one r h0 h1
                       /\ ~(r `Set.mem` ls_footprint k))
             (ensures p.local_invariant k h1)
@@ -334,7 +334,7 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
       assert(mm_forall map p.local_invariant h0);
       (match r with
       | Pinv_region r ->
-        assert(modifies_one r h0 h1 /\ r `HH.disjoint` tls_define_region);
+        assert(modifies_one r h0 h1 /\ r `disjoint` tls_define_region);
         lemma_mm_forall_frame map p.local_invariant ls_footprint ls_footprint_frame r h0 h1;
         lemma_mem_frame mtable h0 r h1
       | Pinv_define t ->
@@ -394,7 +394,7 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
     ) else p.coerce i a k0
     in
   let post_framing (#i:ip.t{ip.registered i}) (a:p.info i) (k:p.key i)
-    (h0:mem) (r:HH.rid) (h1:mem) : Lemma
+    (h0:mem) (r:rid) (h1:mem) : Lemma
     (requires p.post a k h0 /\ modifies_one r h0 h1 /\ ~(Set.mem r (footprint h0)))
     (ensures p.post a k h1)
     =

@@ -11,7 +11,7 @@ module TLSConstants
 #set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1"
 
 //NS, JP: TODO, this include should eventually move to TLSMem, when that module exists
-include FStar.HyperStack.All
+//17-12-26 include FStar.HyperStack.All
 
 open FStar.Seq
 open Platform.Date
@@ -20,12 +20,9 @@ open Platform.Error
 open TLSError
 //open CoreCrypto // avoid?!
 
-module HH = FStar.HyperHeap
-module HS = FStar.HyperStack
-
-include Parse // carving out basic formatting code to break a dependency.
-
-
+include Parse 
+// carving out basic formatting code to break a dependency.
+// this includes Mem too
 
 (** Polarity for reading and writing *)
 type rw =
@@ -1336,7 +1333,9 @@ let rec parseCertificateTypeList data =
 
 
 (** Determine the certificate signature algorithms allowed according to the ciphersuite *)
-val defaultCertTypes: bool -> cipherSuite -> ML (l:list certType{List.Tot.length l <= 1})
+val defaultCertTypes: bool -> cipherSuite -> HyperStack.All.ML (l:list certType{List.Tot.length l <= 1})
+
+//17-12-26 TODO: get rid of this single use of ML
 let defaultCertTypes sign cs =
   let open CoreCrypto in
   let alg = sigAlg_of_ciphersuite cs in
@@ -1350,7 +1349,6 @@ let defaultCertTypes sign cs =
       | RSASIG -> [RSA_fixed_dh]
       | DSA -> [DSA_fixed_dh]
       | _ -> unexpected "[defaultCertTypes] invoked on an invalid ciphersuite"
-
 
 #set-options "--max_ifuel 2 --initial_ifuel 2 --max_fuel 1 --initial_fuel 1"
 

@@ -1,10 +1,9 @@
 ﻿module Nonce
+
 open TLSConstants
 open Platform.Bytes
 open Platform.Error
-open FStar.HyperStack.ST
 
-module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 module MM = FStar.Monotonic.Map
 module MR = FStar.Monotonic.RRef
@@ -120,13 +119,13 @@ private let nonce_rids_exists (m:MM.map' random n_rid) =
 val new_region: parent:MR.rid -> ST ex_rid 
   (requires (fun h -> True))
   (ensures (fun h0 r h1 -> 
-	      HH.extends r parent /\
-	      ST.stronger_fresh_region r h0 h1 /\ //it's fresh with respect to the current heap
+	      extends r parent /\
+	      HS.fresh_region r h0 h1 /\ //it's fresh with respect to the current heap
 	      fresh_region r h1)) //and it's not in the nonce table
 let new_region parent = 
   MR.m_recall nonce_rid_table;
   let m0 = MR.m_read nonce_rid_table in 
-  let tok : squash (nonce_rids_exists m0) = () in   
+  let tok: squash (nonce_rids_exists m0) = () in   
   MR.testify_forall tok;
   MR.ex_rid_of_rid (new_region parent)
 

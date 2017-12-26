@@ -1,16 +1,9 @@
 module Parse
 
-open FStar.HyperStack.All
-
 open FStar.Seq
 open Platform.Bytes
 open Platform.Error
 open TLSError
-
-module HH = FStar.HyperHeap
-module HS = FStar.HyperStack
-module ST = FStar.HyperStack.ST
-
 
 (** This file should be split in 3 different modules:
   - Regions: for global table regions [done in Mem] 

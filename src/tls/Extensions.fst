@@ -1575,7 +1575,7 @@ let negotiateServerExtensions pv cExtL csl cfg cs ri pski ks resuming =
 
 // https://tools.ietf.org/html/rfc5246#section-7.4.1.4.1
 private val default_signatureScheme_fromSig: protocolVersion -> sigAlg ->
-  ML (l:list signatureScheme{List.Tot.length l == 1})
+  HyperStack.All.ML (l:list signatureScheme{List.Tot.length l == 1})
 let default_signatureScheme_fromSig pv sigAlg =
   let open CoreCrypto in
   let open Hashing.Spec in
@@ -1591,6 +1591,6 @@ let default_signatureScheme_fromSig pv sigAlg =
   | _ -> unexpected "[default_signatureScheme_fromSig] invoked on an invalid signature algorithm"
 
 (* SI: API. Called by HandshakeMessages. *)
-val default_signatureScheme: protocolVersion -> cipherSuite -> ML signatureSchemeList
+val default_signatureScheme: protocolVersion -> cipherSuite -> HyperStack.All.ML signatureSchemeList
 let default_signatureScheme pv cs =
   default_signatureScheme_fromSig pv (sigAlg_of_ciphersuite cs)
