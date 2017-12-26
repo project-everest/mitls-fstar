@@ -15,13 +15,12 @@ open TLSError
 include FStar.HyperStack
 include FStar.HyperStack.ST
 
-module HH = FStar.HyperHeap // avoid if we can
 module HS = FStar.HyperStack
 //module ST = FStar.HyperStack.ST
 
 let model = Flags.model 
 
-let disjoint = HH.disjoint
+let disjoint = HS.disjoint
 
 //type fresh_subregion r0 r h0 h1 = ST.stronger_fresh_region r h0 h1 /\ ST.extends r r0
 
@@ -30,17 +29,24 @@ let tls_color = -1  //17-11-22 The color for all regions in the TLS global regio
 let epoch_color = 1 //17-11-22 This needs fixing: we are not on the stack yet.
 let hs_color = 2
 
-let is_tls_rgn r   = HH.color r = tls_color
-let is_epoch_rgn r = HH.color r = epoch_color
-let is_hs_rgn r    = HH.color r = hs_color
+let is_tls_rgn r   = HS.color r = tls_color
+let is_epoch_rgn r = HS.color r = epoch_color
+let is_hs_rgn r    = HS.color r = hs_color
 
 (*
- * AR: Adding the eternal region predicate.
- * Strengthening the predicate because at some places, the code uses HH.parent.
+ * AR: 12/26: Adding the witnessed (region_contains_pred)
+ *            This is required for allocation subregions
+ *            And is provided as a postcondition of allocation
+ *
+ *            Also, the predicate `is_above s r ==> is_eternal_region s` is not necessary
+ *            The shape of the memory provides it already
+ *            See the lemma just below
  *)
-let rgn = r:HH.rid{
-  r<>HH.root /\
-  (forall (s:HH.rid).{:pattern HS.is_eternal_region s} HS.is_above s r ==> HS.is_eternal_region s)}
+let rgn = r:HS.rid{r =!= HS.root /\ is_eternal_region r /\ witnessed (region_contains_pred r)}
+
+private let lemma_derive_eternal_for_regions_above (m:mem) (r:rgn{m.HS.h `Map.contains` r})
+  :Lemma (forall (s:HS.rid). HS.is_above s r ==> HS.is_eternal_region s)
+  = ()
 
 let tls_rgn   = r:rgn {is_tls_rgn r}
 let epoch_rgn = r:rgn {is_epoch_rgn r}
@@ -48,17 +54,17 @@ let hs_rgn    = r:rgn {is_hs_rgn r}
 
 type fresh_subregion child parent h0 h1 =
   (is_tls_rgn child <==> is_tls_rgn parent) /\
-  stronger_fresh_region child h0 h1 /\
-  HH.extends child parent
+  fresh_region child h0 h1 /\
+  HS.extends child parent
 
-type subrgn parent = r:rgn{HH.parent r == parent}
+type subrgn parent = r:rgn{HS.parent r == parent}
 
 /// Global top-level region for TLS ideal state.
 ///
 /// Top-level disjointness is awkward; we could instead maintain a
 /// private mutable set of regions known to be pairwise-distinct.
 ///
-let tls_region: tls_rgn = new_colored_region HH.root tls_color
+let tls_region: tls_rgn = new_colored_region HS.root tls_color
 
 type subtls = r: subrgn tls_region {is_tls_rgn r}
 
@@ -137,15 +143,15 @@ module MM = FStar.Monotonic.Map
 module MH = FStar.Monotonic.Heap
 
 /// SZ: changed the definition to quantify over [HH.rid] rather than [rgn]
-type rset = s:Set.set HH.rid{
-  (forall (r1:HH.rid). (Set.mem r1 s ==>  //AR: 12/05: Add the pattern (Set.mem r1 s)?
-     r1 <> HH.root /\
-     (is_tls_rgn r1 ==> r1 `HH.extends` tls_tables_region) /\
-     (forall (r':HH.rid).{:pattern (r' `HH.includes` r1)} r' `is_below` r1 ==> Set.mem r' s) /\
-     (forall (r':HH.rid).{:pattern is_eternal_region r'} r' `is_above` r1 ==> is_eternal_region r')))}
+type rset = s:Set.set HS.rid{
+  (forall (r1:HS.rid). (Set.mem r1 s ==>  //AR: 12/05: Add the pattern (Set.mem r1 s)?
+     r1 <> HS.root /\
+     (is_tls_rgn r1 ==> r1 `HS.extends` tls_tables_region) /\
+     (forall (r':HS.rid).{:pattern (r' `HS.includes` r1)} r' `is_below` r1 ==> Set.mem r' s) /\
+     (forall (r':HS.rid).{:pattern is_eternal_region r'} r' `is_above` r1 ==> is_eternal_region r')))}
 
 let rset_union (s1:rset) (s2:rset)
-  : Tot (s:rset{forall (r:HH.rid). Set.mem r s <==> (Set.mem r s1 \/ Set.mem r s2)}) //AR: 12/05: The refinement is not needed, as Set.union provides this mem property already
+  : Tot (s:rset{forall (r:HS.rid). Set.mem r s <==> (Set.mem r s1 \/ Set.mem r s2)}) //AR: 12/05: The refinement is not needed, as Set.union provides this mem property already
   = Set.union s1 s2
 
 /// SZ: This is the strongest lemma that is provable
@@ -156,9 +162,9 @@ let rset_union (s1:rset) (s2:rset)
 ///          (ensures  r `HH.disjoint` r')
 ///  = admit() // easy
 ///
-let lemma_rset_disjoint (s:rset) (r:HH.rid) (r':HH.rid)
+let lemma_rset_disjoint (s:rset) (r:HS.rid) (r':HS.rid)
   : Lemma (requires Set.mem r s /\ ~(Set.mem r' s) /\ r' `is_below` r)
-          (ensures  r `HH.disjoint` r')
+          (ensures  r `HS.disjoint` r')
   = ()
 
 // We get from the definition of rset that define_region and tls_honest_region are disjoint
@@ -219,6 +225,6 @@ let lemma_mem_disjoint_stable (#it:eqtype) (#vt:it -> Type) (t:mem_table vt)
   (#it':eqtype) (#vt':it' -> Type) (t':mem_table vt') (h0:mem) (h1:mem) : Lemma
   (requires modifies_mem_table t h0 h1 /\ mem_disjoint t t' /\ mem_contains t h0 /\ mem_contains t' h0)
   (ensures mem_stable t' h0 h1) = ()
-let lemma_mem_frame (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (h0:mem) (r:HH.rid) (h1:mem) : Lemma
-  (requires modifies_one r h0 h1 /\ tls_define_region `HH.disjoint` r /\ mem_contains t h0)
+let lemma_mem_frame (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (h0:mem) (r:HS.rid) (h1:mem) : Lemma
+  (requires modifies_one r h0 h1 /\ tls_define_region `HS.disjoint` r /\ mem_contains t h0)
   (ensures mem_stable t h0 h1) = ()
