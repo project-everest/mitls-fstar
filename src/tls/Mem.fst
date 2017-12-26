@@ -40,7 +40,8 @@ let is_hs_rgn r    = HS.color r = hs_color
  *
  *            Also, the predicate `is_above s r ==> is_eternal_region s` is not necessary
  *            The shape of the memory provides it already
- *            See the lemma just below
+ *            See the lemma just below rgn
+ *            Also see HyperStack.lemma_downward_closed that provides this from the memory model
  *)
 let rgn = r:HS.rid{r =!= HS.root /\ is_eternal_region r /\ witnessed (region_contains_pred r)}
 
