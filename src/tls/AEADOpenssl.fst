@@ -10,7 +10,6 @@ open TLSConstants
 open TLSInfo
 
 module MM = FStar.Monotonic.Map
-module MR = FStar.Monotonic.RRef
 module HS = FStar.HyperStack
 
 type id = i:id{~(PlaintextID? i) /\ AEAD? (aeAlg_of_id i)}

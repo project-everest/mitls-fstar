@@ -9,7 +9,6 @@ open FStar.HyperStack
 open FStar.HyperStack.ST
 open FStar.Seq
  // for e.g. found
-open FStar.Monotonic.RRef
 open FStar.Monotonic.Seq
 
 open Platform.Error
@@ -23,7 +22,7 @@ open StreamPlain
 module AEAD = AEADProvider
 module HS = FStar.HyperStack
 
-type rid = FStar.Monotonic.RRef.rid
+type rid = FStar.HyperStack.ST.erid
 
 type id = i:id { ID13? i }
 

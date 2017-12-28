@@ -6,7 +6,6 @@ open FStar.HyperStack.ST
 
 module HS = FStar.HyperStack
 module MM = FStar.Monotonic.Map
-module MR = FStar.Monotonic.RRef
 module ST = FStar.HyperStack.ST
 
 type random = lbytes 32
@@ -23,7 +22,7 @@ let timestamp () =
 
 // ex_rid: The type of a region id that is known 
 //         to exist in the current heap and in every future one
-type ex_rid = MR.ex_rid
+type ex_rid = ST.ex_rid
 
 // MM.map provide a dependent map type; 
 // In this case, we don't need the dependencey
@@ -56,18 +55,18 @@ let fresh_region (r:ex_rid) (h:HS.mem) =
   forall n. Some r <> MM.sel (HS.sel h nonce_rid_table) n 
 
 //A nonce n is registered to region r, if the table contains n -> Some r; 
-//This mapping is stable (that's what the MR.witnessed means)
-let registered (n:random) (r:MR.rid) = 
-  witnessed (MR.rid_exists r) /\
+//This mapping is stable (that's what the witnessed means)
+let registered (n:random) (r:ST.erid) = 
+  witnessed (ST.region_contains_pred r) /\
   witnessed (MM.contains nonce_rid_table n r)
 
-let testify (n:random) (r:MR.rid)
+let testify (n:random) (r:ST.erid)
   : ST unit (requires (fun h -> registered n r))
 	    (ensures (fun h0 _ h1 -> 
 		 h0==h1 /\
 	         registered n r /\ 
 		 MM.contains nonce_rid_table n r h1))
-  = MR.testify (MM.contains nonce_rid_table n r)
+  = testify (MM.contains nonce_rid_table n r)
   
 //Although the table only maps nonces to rids, externally, we also 
 //want to associate the nonce with a role. Within this module
@@ -105,7 +104,7 @@ let lookup role n = MM.lookup nonce_rid_table n
 (* Would be nice to make this a local let in new_region.
    Except, implicit argument inference for testify_forall fails *)
 private let nonce_rids_exists  (m:MM.map' random n_rid) = 
-    forall (n:random{Some? (MM.sel m n)}). witnessed (MR.rid_exists (Some?.v (MM.sel m n)))
+    forall (n:random{Some? (MM.sel m n)}). witnessed (ST.region_contains_pred (Some?.v (MM.sel m n)))
 
 (* 
    A convenient wrapper around FStar.ST.new_region, 
@@ -115,7 +114,7 @@ private let nonce_rids_exists  (m:MM.map' random n_rid) =
    underneath quantifiers. So, one should really use this version of new_region 
    for every dynamic region allocation in TLS.
 *)   
-val new_region: parent:MR.rid -> ST ex_rid 
+val new_region: parent:ST.erid -> ST ex_rid 
   (requires (fun h -> True))
   (ensures (fun h0 r h1 -> 
 	      HS.extends r parent /\
@@ -125,8 +124,10 @@ let new_region parent =
   recall nonce_rid_table;
   let m0 = !nonce_rid_table in 
   let tok : squash (nonce_rids_exists m0) = () in   
-  MR.testify_forall tok;
-  MR.ex_rid_of_rid (new_region parent)
+  testify_forall tok;
+  let r = new_region parent in
+  ST.witness_region r;
+  r
 
 // a constant value, with negligible probability of being sampled, excluded by idealization
 let noCsr : bytes = CoreCrypto.random 64 

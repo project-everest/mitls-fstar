@@ -17,7 +17,6 @@ open TLSConstants
 
 module CC = CoreCrypto
 module MM = FStar.Monotonic.Map
-module MR = FStar.Monotonic.RRef
 
 let default_cipherSuites = [
   TLS_AES_128_GCM_SHA256;

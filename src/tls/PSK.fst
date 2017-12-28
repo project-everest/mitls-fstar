@@ -10,7 +10,6 @@ open TLSError
 open TLSConstants
 
 module MM = FStar.Monotonic.Map
-module MR = FStar.Monotonic.RRef
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
 
@@ -78,7 +77,7 @@ let psk_value (i:pskid) : ST (app_psk i)
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
   recall app_psk_table;
-  MR.testify (MM.defined app_psk_table i);
+  testify (MM.defined app_psk_table i);
   match MM.lookup app_psk_table i with
   | Some (psk, _, _) -> psk
 
@@ -87,7 +86,7 @@ let psk_info (i:pskid) : ST (pskInfo)
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
   recall app_psk_table;
-  MR.testify (MM.defined app_psk_table i);
+  testify (MM.defined app_psk_table i);
   match MM.lookup app_psk_table i with
   | Some (_, ctx, _) -> ctx
 
@@ -100,8 +99,8 @@ let psk_lookup (i:psk_identifier) : ST (option pskInfo)
   recall app_psk_table;
   match MM.lookup app_psk_table i with
   | Some (_, ctx, _) ->
-    assume(MR.stable_on_t app_psk_table (MM.defined app_psk_table i));
-    MR.witness app_psk_table (MM.defined app_psk_table i);
+    assume(stable_on_t app_psk_table (MM.defined app_psk_table i));
+    mr_witness app_psk_table (MM.defined app_psk_table i);
     Some ctx
   | None -> None
 
@@ -141,8 +140,8 @@ let gen_psk (i:psk_identifier) (ctx:pskInfo)
   MM.contains_stable app_psk_table i add;
   let h = get () in
   cut(MM.sel (sel h app_psk_table) i == Some add);
-  assume(MR.stable_on_t app_psk_table (honest_st i));
-  MR.witness app_psk_table (honest_st i)
+  assume(stable_on_t app_psk_table (honest_st i));
+  mr_witness app_psk_table (honest_st i)
 
 let coerce_psk (i:psk_identifier) (ctx:pskInfo) (k:app_psk i)
   : ST unit
@@ -181,7 +180,7 @@ let verify_hash_ae (i:pskid) (ha:hash_alg) (ae:aeadAlg) : ST bool
     b ==> compatible_hash_ae i ha ae))
   =
   recall app_psk_table;
-  MR.testify (MM.defined app_psk_table i);
+  testify (MM.defined app_psk_table i);
   match MM.lookup app_psk_table i with
   | Some x ->
     let h = get() in
@@ -191,8 +190,8 @@ let verify_hash_ae (i:pskid) (ha:hash_alg) (ae:aeadAlg) : ST bool
     if pskInfo_hash ctx = ha && pskInfo_ae ctx = ae then
      begin
       cut(compatible_hash_ae_st i ha ae h);
-      assume(MR.stable_on_t app_psk_table (compatible_hash_ae_st i ha ae));
-      MR.witness app_psk_table (compatible_hash_ae_st i ha ae);
+      assume(stable_on_t app_psk_table (compatible_hash_ae_st i ha ae));
+      mr_witness app_psk_table (compatible_hash_ae_st i ha ae);
       true
      end
     else false
