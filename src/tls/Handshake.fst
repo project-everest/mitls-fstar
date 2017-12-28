@@ -57,18 +57,20 @@ type machineState =
     ks: Secret.c13_wait_ServerHello psks groups -> machineState 
 
   | C13_wait_Finished1: // TLS 1.3 waiting for encrypted handshake 
-    i: hsId -> 
+    i:   Secret.hsId -> 
     ams: Secret.ams (Secret.ams_of_hms i) ->
     cfk: Secret.fink (Secret.cfk_of_hms i) 
     sfk: Secret.fink (Secret.sfk_of_hms i) -> machineState
 
   | C13_sent_EOED: // TLS 1.3 #20 aggravation, optional from C13_wait_Finished1 
-    digest ->
-    option HandshakeMessages.cr13 ->
-    i: finishedId & cfk: Secret.fink i -> machineState 
+    i:   Secret.hsId -> 
+    ams: Secret.ams (Secret.ams_of_hms i) ->
+    cfk: Secret.fink (Secret.cfk_of_hms i) ->
+    digest_EOED -> 
+    option HandshakeMessages.cr13 -> machineState 
 
   | C13_complete: // TLS 1.3 waiting for post-handshake messages (TBC rekeying)
-    i: Secret.amsId -> 
+    i:   Secret.amsId -> 
     rms: Secret.secret (rms_of_ams i tr) (* for accepting resumption tickets *) ->
     machineState
 
@@ -677,26 +679,27 @@ let client_ServerHelloDone hs c ske ocr =
 (* completes the handshake; called either by client13_ServerFinished
    or after sending EOED *)
 private val client13_ClientFinished: 
-  i2:id -> 
-  secret: ams i2 -> 
-  cfk: Secret.fink i -> //17-12-28 wrong index; we probably need i1 instead of i2.
-  digest_ServerFinished -> 
+  i: Secret.hsId -> 
+  secret: ams (Secret.ams_of_hms i) -> 
+  cfk: Secret.fink (Secret.cfk_of_hms i) -> //17-12-28 wrong index; we probably need i1 instead of i2.
+  digest (* either ...ServerFinished or ...ServerFinished; EOED *) -> 
   option HandshakeMessages.cr13 -> 
   St unit
-let client13_ClientFinished i2 secret cfk digest_ServerFinished ocr =
+let client13_ClientFinished i secret cfk digest ocr =
   let mode = Nego.getMode hs.nego in
   let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
-  let digest =
+  let digest_cvd =
     match ocr with
     | Some cr -> HandshakeLog.send_tag #ha hs.log (Certificate13 ({crt_request_context = empty_bytes; crt_chain13 = []}))
-    | None -> digest_ServerFinished in
-  let cvd = HMAC.UFCMA.mac cfk digest_ServerFinished in
+    | None -> digest in
+  let cvd = HMAC.UFCMA.mac cfk digest_cvd in
   if not (Nego.zeroRTT mode) then Epochs.incr_writer hs.epochs; // to HSK, 0-RTT case is treated in EOED logic
   let digest_ClientFinished = HandshakeLog.send_tag #ha hs.log (Finished ({fin_vd = cvd})) in
+  let i2 = ams_of_hms i in 
   let rms = Secret.rms13_ClientFinished i2 ams digest_ClientFinished in // for Post-HS
   Epochs.incr_reader hs.epochs; // to ATK
   HandshakeLog.send_signals hs.log (Some (true, false)) true; //was: Epochs.incr_writer hs.epochs
-  hs.state := C_Complete rms // full_mode (cvd,svd); do we still need to keep those?
+  hs.state := C13_complete i2 rms // full_mode (cvd,svd); do we still need to keep those?
 
 (* receive EncryptedExtension...ServerFinished for TLS 1.3, 
    roughly mirroring client_ServerHelloDone; 
@@ -738,14 +741,13 @@ let client13_ServerFinished hs ee ocr oc_digest ocv (svd:bytes) digestCertVerify
         let ha = Nego.hashAlg mode in
         let digestEOED = HandshakeLog.send_tag #ha hs.log EndOfEarlyData in
         HandshakeLog.send_signals hs.log (Some (false, false)) false;
-        hs.state := C13_sent_EOED i2 digestEOED ocr cfin_key;
+        hs.state := C13_sent_EOED i digestEOED ocr cfin_key;
         // will call client13_ClientFinished next
         InAck false false )
       else (
         trace "Early data rejected";
         //17-12-28 missing parameters for resumption and ticketing. 
-        client13_ClientFinished hs digestServerFinished ocr cfk 
-
+        client13_ClientFinished i ams cfk digestServerFinished ocr 
 
         InAck true false // Client 1.3 ATK; next the client will read again to send Finished, writer++, and the Complete signal
       )) // moving to C_Complete

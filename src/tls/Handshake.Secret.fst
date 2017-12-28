@@ -179,7 +179,7 @@ type psk (i:id) //TODO from PSK and IK
 // We treat the absence of PSK using reserved, corrupt PSK identifiers
 // with all-zero coerced keys.
 
-assume val no_psk_id: IK.kdfa -> i:esId {match i with Preshared ha _ -> True | _ -> False}
+assume val no_psk_id: Idx.kdfa -> i:esId {match i with Preshared ha _ -> True | _ -> False}
 assume val no_psk (i:id): bool
 
 let dummy_psk ha: psk (no_psk_id ha) = 
@@ -241,8 +241,8 @@ type pms = bytes
 //17-12-07 can they also be products of IK? no immediate need
 
 // only for TLS 1.3, will need refining 
-let fink (i: id) = HMAC.UFCMA.key IK.ii i
-let binderKey (i: id) = HMAC.UFCMA.key IK.ii i
+let fink (i: id) = HMAC.UFCMA.key Idx.ii i
+let binderKey (i: id) = HMAC.UFCMA.key Idx.ii i
 //was:
 //type fink (i:finishedId)    = HMAC.UFCMA.key (HMAC.UFCMA.HMAC_Finished i) (fun _ -> True)
 //type binderKey (i:binderId) = HMAC.UFCMA.key (HMAC.UFCMA.HMAC_Binder i) (fun _ -> True)
@@ -366,10 +366,10 @@ type ks_state =
 /// reader vs writer? 
 
 val derive_ae13:
-  #u: IK.usage -> // should be specific
-  #i: IK.id {IK.registered i} -> // should be refined
-  s: IK.secret u i -> 
-  info: IK.info {info = IK.get_info i} ->
+  #u: Idx.usage -> // should be specific
+  #i: Idx.id {Idx.registered i} -> // should be refined
+  s: Idx.secret u i -> 
+  info: Idx.info {info = Idx.get_info i} ->
   parent: rgn -> 
   ST (StreamAE.key (ae_traffic i))
   (requires fun h0 -> True)
@@ -477,7 +477,7 @@ let binder_of_esid_id (i: esId{~(dummy i)}) =
 val compute_es_and_bfk:
   #rid: rgn -> 
   (pskid:PSK.pskid * PSK.obfuscated_ticket_age) -> 
-  ST (i:esId{~(dummy i)} & es i * binderKey (binder_of_esid_id i) * IK.info (*TBC*) )
+  ST (i:esId{~(dummy i)} & es i * binderKey (binder_of_esid_id i) * Idx.info (*TBC*) )
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
 
@@ -1197,9 +1197,9 @@ let client13_ServerFinished
   let exsId = exsId_of_as i2 transcript2 in 
 
   let info = magic() in 
-  let cts: secret ctsId = IK.derive h ams "c ap traffic" transcript2 info in
-  let sts: secret stsId = IK.derive h ams "s ap traffic" transcript2 info in
-  let exs: secret exsId = IK.derive h ams "exp master"   transcript2 info in
+  let cts: secret ctsId = Idx.derive h ams "c ap traffic" transcript2 info in
+  let sts: secret stsId = Idx.derive h ams "s ap traffic" transcript2 info in
+  let exs: secret exsId = Idx.derive h ams "exp master"   transcript2 info in
   let (ck,civ) = keygen_13 h cts ae in
   let (sk,siv) = keygen_13 h sts ae in
   dbg ("application traffic secret[C]:   "^print_bytes cts);
@@ -1512,3 +1512,4 @@ let client12_server_finished ks: ST (svd:bytes)
 
 val getId: recordInstance -> GTot id
 let getId (StAEInstance #i rd wr) = i
+

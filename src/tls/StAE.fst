@@ -6,14 +6,12 @@ For now, ciphertexts lengths and values are under-specified.
 *)
 module StAE
 
-open FStar.HyperHeap
-open FStar.HyperStack
+open Mem
 open Platform.Bytes
 
 open TLSConstants
 open TLSInfo
 
-module HH   = FStar.HyperHeap
 module HS   = FStar.HyperStack
 module MR   = FStar.Monotonic.RRef
 module MS   = FStar.Monotonic.Seq
@@ -219,10 +217,10 @@ let trigger_frame (h:mem) = True
 let frame_f (#a:Type) (f:mem -> GTot a) (h0:mem) (s:Set.set rid) =
   forall h1.{:pattern trigger_frame h1}
         trigger_frame h1
-        /\ (HH.equal_on s h0.h h1.h ==> f h0 == f h1)
+        /\ (HS.equal_on s h0.h h1.h ==> f h0 == f h1)
 
 val frame_seqT_auto: i:id -> rw:rw -> s:state i rw -> h0:mem -> h1:mem ->
-  Lemma (requires   HH.equal_on (Set.singleton (region s)) h0.h h1.h
+  Lemma (requires   HS.equal_on (Set.singleton (region s)) h0.h h1.h
 		  /\ Map.contains h0.h (region s))
         (ensures seqnT s h0 = seqnT s h1)
 	[SMTPat (seqnT s h0);
@@ -231,7 +229,7 @@ val frame_seqT_auto: i:id -> rw:rw -> s:state i rw -> h0:mem -> h1:mem ->
 let frame_seqT_auto i rw s h0 h1 = ()
 
 val frame_fragments_auto: i:id{authId i} -> rw:rw -> s:state i rw -> h0:mem -> h1:mem ->
-  Lemma (requires    HH.equal_on (Set.singleton (log_region s)) h0.h h1.h
+  Lemma (requires    HS.equal_on (Set.singleton (log_region s)) h0.h h1.h
 		  /\ Map.contains h0.h (log_region s))
         (ensures fragments s h0 == fragments s h1)
 	[SMTPat (fragments s h0);
@@ -244,7 +242,7 @@ let frame_fragments_auto i rw s h0 h1 = ()
 //Experimenting with reads clauses: probably unnecessary
 ////////////////////////////////////////////////////////////////////////////////
 let reads (s:Set.set rid) (a:Type) =
-    f: (h:mem -> GTot a){forall h1 h2. (HH.equal_on s h1.h h2.h /\ Set.subset s (Map.domain h1.h))
+    f: (h:mem -> GTot a){forall h1 h2. (HS.equal_on s h1.h h2.h /\ Set.subset s (Map.domain h1.h))
 				  ==> f h1 == f h2}
 
 (*
@@ -255,8 +253,8 @@ let fragments' #i #rw s = fun h -> fragments #i #rw s h
 (*------------------------------------------------------------------*)
 let genPost (#i:id) parent h0 (w:writer i) h1 =
   let r = region #i #Writer w in
-  HH.modifies Set.empty h0.h h1.h /\
-  HH.extends r parent /\
+  HS.modifies Set.empty h0.h h1.h /\
+  HS.extends r parent /\
   stronger_fresh_region r h0 h1 /\
   color r = color parent /\
   seqnT #i #Writer w h1 = 0 /\

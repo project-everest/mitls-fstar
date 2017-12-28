@@ -1,11 +1,9 @@
 module Ticket
 
-open FStar.Heap
-open FStar.HyperHeap
-open FStar.HyperStack
-
 open Platform.Bytes
 open Platform.Error
+
+open Mem
 open TLSError
 open TLSConstants
 open Parse

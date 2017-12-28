@@ -1,7 +1,5 @@
 module AEADProvider
 
-open FStar.Heap
-open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.Seq
 open Platform.Bytes
@@ -194,7 +192,7 @@ let st_inv (#i:id) (#rw:rw) (st:state i rw) h =
 let genPost (#i:id) (parent:rgn) h0 (w:writer i) h1 =
   modifies_none h0 h1 /\
   extends (region w) parent /\
-  stronger_fresh_region (region w) h0 h1 /\
+  fresh_region (region w) h0 h1 /\
   color (region w) = color parent /\
   empty_log w h1 /\
   st_inv w h1
@@ -238,7 +236,7 @@ let leak (#i:id) (#rw:rw) (st:state i rw)
 // the reader and writer (this is not sound for some buffers in that
 // region, for instance, the writer may write the the reader's key buffer)
 let genReader (parent:rgn) (#i:id) (st:writer i) : ST (reader i)
-  (requires (fun h -> HyperHeap.disjoint parent (region st)))
+  (requires (fun h -> HyperStack.disjoint parent (region st)))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
   match st with

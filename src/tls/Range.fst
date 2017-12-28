@@ -295,7 +295,7 @@ let targetLength_converges i r =
   | AEAD _ _ -> ()
 
 #reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
-val rangeClass: i:id2 -> r:range -> ML (r':range
+val rangeClass: i:id2 -> r:range -> HyperStack.All.ML (r':range
   { snd r <= max_TLSPlaintext_fragment_length
     /\ ((~(AEAD? (aeAlg_of_id i))
        /\ snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i)))

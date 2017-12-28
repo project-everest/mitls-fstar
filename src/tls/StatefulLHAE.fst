@@ -5,15 +5,13 @@ the underlying LHAE scheme
 *)
 module StatefulLHAE
 
-open FStar.Heap
-open FStar.HyperHeap
-open FStar.HyperStack
 open FStar.Seq
 open FStar.Monotonic.RRef
 open FStar.Monotonic.Seq
 
 open Platform.Bytes
 
+open Mem
 open TLSConstants
 open TLSInfo
 open AEAD_GCM
@@ -60,7 +58,7 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
   -> p:plain i ad r
   -> ST (cipher i)
      (requires (fun h0 ->
-       HyperHeap.disjoint e.region (AEADProvider.log_region e.aead) /\
+       HyperStack.disjoint e.region (AEADProvider.log_region e.aead) /\
        m_sel h0 (ctr e.counter) < max_ctr (alg i)))
      (ensures  (fun h0 c h1 ->
        modifies (Set.as_set [e.log_region; AEADProvider.log_region e.aead]) h0 h1
@@ -105,7 +103,7 @@ val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
        match res with
        | None -> modifies Set.empty h0 h1
        | _    -> modifies_one d.region h0 h1
-                /\ modifies_rref d.region (Set.singleton (Heap.addr_of (as_ref ctr_counter_as_hsref))) h0.h h1.h
+                /\ modifies_rref d.region (Set.singleton (HyperStack.addr_of (as_ref ctr_counter_as_hsref))) h0.h h1.h
 	        /\ m_sel h1 (ctr d.counter) === j + 1)))
 let decrypt #i d ad c =
   let seqn = m_read (ctr d.counter) in
