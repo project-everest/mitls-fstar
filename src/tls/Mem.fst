@@ -139,7 +139,6 @@ assume val lemma_disjoint_ancestors:
 // this allows us to prove disjointness with negation of set membership
 
 
-module MR = FStar.Monotonic.RRef
 module MM = FStar.Monotonic.Map
 module MH = FStar.Monotonic.Heap
 
@@ -190,20 +189,20 @@ type mem_table (#it:eqtype) (vt:it -> Type) =
 let itable (#it:eqtype) (#vt:it -> Type) (t:mem_table vt)
   : Pure (i_mem_table vt) (requires model) (ensures fun _ -> True) = t
 let mem_addr (#it:eqtype) (#vt:it -> Type) (t:i_mem_table vt)
-  : GTot nat = (HS.as_addr (MR.as_hsref t))
+  : GTot nat = HS.as_addr t  //AR: 12/29: as_hsref is no longer necessary
 
 type mem_fresh (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (i:it) (h:mem) =
   model ==> MM.fresh (itable t) i h
 type mem_defined (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (i:it) =
-  model ==> (MR.witnessed (MM.defined (itable t) i))
+  model ==> (witnessed (MM.defined (itable t) i))
 type mem_update (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (i:it) (v:vt i) (h0:mem) (h1:mem) =
   mem_defined t i /\
-  (model ==> MR.m_sel h1 (itable t) == MM.upd (MR.m_sel h0 (itable t)) i v)
+  (model ==> HS.sel h1 (itable t) == MM.upd (HS.sel h0 (itable t)) i v)
 
 type mem_stable (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (h0:mem) (h1:mem) =
-  model ==> MR.m_sel h0 (itable t) == MR.m_sel h1 (itable t)
+  model ==> HS.sel h0 (itable t) == HS.sel h1 (itable t)
 type mem_empty (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (h1:mem) =
-  model ==> MR.m_sel h1 (itable t) == MM.empty_map it vt
+  model ==> HS.sel h1 (itable t) == MM.empty_map it vt
 
 type modifies_mem_table (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (h0:mem) (h1:mem) =
   (if model then
@@ -221,7 +220,7 @@ let mem_alloc (#it:eqtype) (vt:it -> Type) : ST (mem_table vt)
   if model then MM.alloc #tls_define_region #it #vt #trivial_inv else ()
 
 type mem_contains (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (h:mem) =
-  model ==> h `contains` (MR.as_hsref (itable t))
+  model ==> h `contains` (itable t)  //AR: 12/29: the as_hsref coercion is no longer necessary
 let lemma_mem_disjoint_stable (#it:eqtype) (#vt:it -> Type) (t:mem_table vt)
   (#it':eqtype) (#vt':it' -> Type) (t':mem_table vt') (h0:mem) (h1:mem) : Lemma
   (requires modifies_mem_table t h0 h1 /\ mem_disjoint t t' /\ mem_contains t h0 /\ mem_contains t' h0)
