@@ -49,17 +49,17 @@ let nonce_rid_table : MM.t tls_tables_region random n_rid injective =
   MM.alloc #tls_tables_region #random #n_rid #injective
 
 //A nonce n is fresh in h if the nonce_rid_table doesn't contain it
-let fresh (n:random) (h:HS.mem) = MM.sel (MR.m_sel h nonce_rid_table) n = None
+let fresh (n:random) (h:HS.mem) = MM.sel (HS.sel h nonce_rid_table) n = None
 
 //A region is fresh if no nonce is associated with it
 let fresh_region (r:ex_rid) (h:HS.mem) =
-  forall n. Some r <> MM.sel (MR.m_sel h nonce_rid_table) n 
+  forall n. Some r <> MM.sel (HS.sel h nonce_rid_table) n 
 
 //A nonce n is registered to region r, if the table contains n -> Some r; 
 //This mapping is stable (that's what the MR.witnessed means)
 let registered (n:random) (r:MR.rid) = 
-  MR.witnessed (MR.rid_exists r) /\
-  MR.witnessed (MM.contains nonce_rid_table n r)
+  witnessed (MR.rid_exists r) /\
+  witnessed (MM.contains nonce_rid_table n r)
 
 let testify (n:random) (r:MR.rid)
   : ST unit (requires (fun h -> registered n r))
@@ -79,14 +79,13 @@ abstract let role_nonce (cs:role) (n:random) (r:ex_rid) = registered n r
 val mkHelloRandom: cs:role -> r:ex_rid -> ST random
   (requires (fun h -> fresh_region r h))
   (ensures (fun h0 n h1 ->
-    let nonce_rid_table_as_hsref = MR.as_hsref nonce_rid_table in
     HS.modifies (Set.singleton tls_tables_region) h0 h1 /\ //modifies at most the tables region
-    HS.modifies_ref tls_tables_region (Set.singleton (HS.as_addr nonce_rid_table_as_hsref)) h0 h1 /\ //and within it, at most the nonce_rid_table
+    HS.modifies_ref tls_tables_region (Set.singleton (HS.as_addr nonce_rid_table)) h0 h1 /\ //and within it, at most the nonce_rid_table
     (ideal ==> fresh n h0  /\        //if we're ideal then the nonce is fresh
     	       registered n r /\     //the nonce n is associated with r
     	       role_nonce cs n r))) //and the triple are associated as well, for ever more
 let rec mkHelloRandom cs r =
-  MR.m_recall nonce_rid_table;
+  recall nonce_rid_table;
   let n : random = timestamp() @| CoreCrypto.random 28 in
   if ideal then 
     match MM.lookup nonce_rid_table n with 
@@ -106,7 +105,7 @@ let lookup role n = MM.lookup nonce_rid_table n
 (* Would be nice to make this a local let in new_region.
    Except, implicit argument inference for testify_forall fails *)
 private let nonce_rids_exists  (m:MM.map' random n_rid) = 
-    forall (n:random{Some? (MM.sel m n)}). MR.witnessed (MR.rid_exists (Some?.v (MM.sel m n)))
+    forall (n:random{Some? (MM.sel m n)}). witnessed (MR.rid_exists (Some?.v (MM.sel m n)))
 
 (* 
    A convenient wrapper around FStar.ST.new_region, 
@@ -123,8 +122,8 @@ val new_region: parent:MR.rid -> ST ex_rid
 	      HS.fresh_region r h0 h1 /\ //it's fresh with respect to the current heap
 	      fresh_region r h1)) //and it's not in the nonce table
 let new_region parent = 
-  MR.m_recall nonce_rid_table;
-  let m0 = MR.m_read nonce_rid_table in 
+  recall nonce_rid_table;
+  let m0 = !nonce_rid_table in 
   let tok : squash (nonce_rids_exists m0) = () in   
   MR.testify_forall tok;
   MR.ex_rid_of_rid (new_region parent)
