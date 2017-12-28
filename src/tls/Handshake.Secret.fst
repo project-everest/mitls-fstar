@@ -4,8 +4,6 @@ module Handshake.Secret
 // organized by message-processing stages (used to be in
 // KeySchedule.fst)
 
-open FStar.Heap
-open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.Seq
 open FStar.Set
@@ -23,7 +21,6 @@ open Idx
 
 module MM = FStar.Monotonic.Map
 module MR = FStar.Monotonic.RRef
-module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
 module H = Hashing.Spec
@@ -107,7 +104,6 @@ let sfk_of_hms i transcript = fnk_of_s (sts_of_hms i transcript)
 
 #set-options "--lax"
 
-// move to CommonDH?
 let sprint_share (#g:CommonDH.group) (s:CommonDH.pre_share g): string
   =
   let kb = CommonDH.serialize_raw #g s in
@@ -154,7 +150,7 @@ private let res_psk_value (i:rmsId{registered_res_psk i}) =
 // Note that application PSK is externally defined but should
 // be idealized together with KS
 
-let u_of_i = Exttract1.ODH.u_of_i
+let u_of_i = Extract1.ODH.u_of_i
 abstract type secret (i:id) = secret (u_of_i i) i
 
 /// for readability so far; we could be more specific
@@ -280,34 +276,39 @@ type ks_alpha12 =
 /// to be similarly refactored. (The initial states holding just the
 /// nonce are gone.)
 type ks12_state = 
-// type ks_client_state = 
-| C_12_Resume_CH: 
+| C12_Resume_CH: 
     cr:random -> 
     si:sessionInfo -> 
     msId:TLSInfo.msId -> 
-    ms:ms -> ks_client_state
+    ms:ms -> ks_state
 // optional intermediate state within HS.client_ServerHelloDone 
-| C_12_wait_MS: 
-    csr:csRands -> alpha:ks_alpha12 -> 
-    id:TLSInfo.pmsId -> pms:pms -> ks_client_state
-//
+| C12_wait_MS: 
+    csr:csRands -> 
+    alpha:ks_alpha12 -> 
+    id:TLSInfo.pmsId -> 
+    pms:pms -> ks_state
 // state after HS.client_ServerHelloDone
-| C_12_has_MS: 
-    csr:csRands -> alpha:ks_alpha12 -> 
-    id:TLSInfo.msId -> ms:ms -> ks_client_state
+| C12_has_MS: 
+    csr:csRands -> 
+    alpha:ks_alpha12 -> 
+    id:TLSInfo.msId -> 
+    ms:ms -> ks_state
 //
 // type ks_server_state =
-| S_12_wait_CKE_DH: 
-    csr:csRands -> alpha:ks_alpha12 -> 
-    our_share:(g:CommonDH.group & CommonDH.pre_keyshare g) -> ks_server_state
-| S_12_wait_CKE_RSA: 
-    csr: csRands -> alpha:ks_alpha12 -> 
-    ks_server_state
-| S_12_has_MS: 
-    csr:csRands -> alpha:ks_alpha12 -> 
-    id:TLSInfo.msId -> ms:ms -> ks_server_state
+| S12_wait_CKE_DH: 
+    csr:csRands -> 
+    alpha:ks_alpha12 -> 
+    our_share:(g:CommonDH.group & CommonDH.pre_keyshare g) -> ks_state
+| S12_wait_CKE_RSA: 
+    csr: csRands -> 
+    alpha:ks_alpha12 -> ks_state
+| S12_has_MS: 
+    csr:csRands -> 
+    alpha:ks_alpha12 -> 
+    id:TLSInfo.msId -> 
+    ms:ms -> ks_state
 
-
+// state after sending ClientHello (for all protocol  versions)
 abstract type c13_wait_ServerHello 
   (psks  : list (i:esId{~(no_psk i)})) 
   (groups: list CommonDH.group) = 
@@ -665,7 +666,7 @@ let server12_init_dh cr sr pv cs ems g =
   let our_share = CommonDH.keygen g in
   let _ = print_share (CommonDH.pubshare our_share) in
   let csr = cr @| sr in
-  S_12_wait_CKE_DH csr (pv, cs, ems) (| g, our_share |),
+  S12_wait_CKE_DH csr (pv, cs, ems) (| g, our_share |),
   CommonDH.pubshare our_share
 
 
@@ -904,39 +905,39 @@ let server13_ServerHello ks log =
 // Will become private; public API will have
 // client12_keygen: ks -> (i:id * w:StatefulLHAE.writer i)
 // server12_keygen: ...
-val ks_12_finished_key: st: ks_state -> ST (key:TLSPRF.key)
+val ks12_finished_key: st: ks_state -> ST (key:TLSPRF.key)
   (requires fun h0 ->
     match st with
-    | C_12_has_MS _ _ _ _ | S_12_has_MS _ _ _ _ -> True
+    | C12_has_MS _ _ _ _ | S12_has_MS _ _ _ _ -> True
     | _ -> False)
   (ensures fun h0 r h1 -> modifies Set.empty h0 h1)
 
-let ks_12_finished_key st =
+let ks12_finished_key st =
   let ms = match st with
-  | C_12_has_MS _ _ _ ms -> ms
-  | S_12_has_MS _ _ _ ms -> ms in
+  | C12_has_MS _ _ _ ms -> ms
+  | S12_has_MS _ _ _ ms -> ms in
   TLSPRF.coerce ms
 
-let ks_12_ms st = 
+let ks12_ms st = 
   match st with 
-  | C_12_has_MS _ _ msId ms -> (msId, ms)
-  | S_12_has_MS _ _ msId ms -> (msId, ms)
+  | C12_has_MS _ _ msId ms -> (msId, ms)
+  | S12_has_MS _ _ msId ms -> (msId, ms)
 
-private val ks_12_record_key: st: ks12_state -> St recordInstance
-let ks_12_record_key st =
-  dbg "ks_12_record_key";
+private val ks12_record_key: st: ks12_state -> St recordInstance
+let ks12_record_key st =
+  dbg "ks12_record_key";
   let role, csr, alpha, msId, ms =
     match st with
-    | C_12_has_MS csr alpha msId ms -> Client, csr, alpha, msId, ms
-    | S_12_has_MS csr alpha msId ms -> Server, csr, alpha, msId, ms in
+    | C12_has_MS csr alpha msId ms -> Client, csr, alpha, msId, ms
+    | S12_has_MS csr alpha msId ms -> Server, csr, alpha, msId, ms in
   let cr, sr = split csr 32 in
   let (pv, cs, ems) = alpha in
   let kdf = kdfAlg pv cs in
   let ae = get_aeAlg cs in
   let id = ID12 pv msId kdf ae cr sr role in
   let AEAD alg _ = ae in (* 16-10-18 FIXME! only correct for AEAD *)
-  let klen = CoreCrypto.aeadKeySize alg in
-  let slen = AEADProvider.salt_length id in
+  let klen = admit() in //17-12-28 CoreCrypto.aeadKeySize alg in
+  let slen = admit() in //17-12-28  AEADProvider.salt_length id in
   let expand = TLSPRF.kdf kdf ms (sr @| cr) (klen + klen + slen + slen) in
   dbg ("keystring (CK, CIV, SK, SIV) = "^print_bytes expand);
   let k1, expand = split expand klen in
@@ -954,7 +955,7 @@ let ks_12_record_key st =
 (* 1.2 resumption *)
 
 // We can potentially 1.2 resume from 1.2 or 1.3 ClientHello
-// (used to be [C_12_Full_CH? \/ C_13_wait_SH?] now joined in Handshake)
+// (used to be [C12_Full_CH? \/ C_13_wait_SH?] now joined in Handshake)
 val client12_resume: 
   cr: random -> 
   sr: random -> 
@@ -969,8 +970,8 @@ val client12_resume:
 let client12_resume cr sr pv cs ems msId ms =
   dbg "client12_resume";
   dbg ("Recall MS: "^print_bytes ms);
-  let ks = C_12_has_MS (cr @| sr) (pv, cs, ems) msId ms in
-  ks, ks_12_record_key ks
+  let ks = C12_has_MS (cr @| sr) (pv, cs, ems) msId ms in
+  ks, ks12_record_key ks
 
 val server12_resume: 
   cr: random -> 
@@ -986,26 +987,26 @@ val server12_resume:
 let server12_resume cr sr pv cs ems msId ms =   
   dbg "server12_resume";
   dbg ("Recall MS: "^print_bytes ms);
-  let ks = S_12_has_MS (cr @| sr) (pv, cs, ems) msId ms in 
-  ks, ks_12_record_key ks
+  let ks = S12_has_MS (cr @| sr) (pv, cs, ems) msId ms in 
+  ks, ks12_record_key ks
 
 (******************************************************************)
 
 // log is the raw HS log, used for EMS derivation
 val server12_cke_dh: 
-  ks: ks12_state {C_12_wait_CKE_DH? ks} -> 
+  ks: ks12_state {C12_wait_CKE_DH? ks} -> 
   gy: (g:CommonDH.group & CommonDH.share g) ->
   log: bytes -> 
   ST (ks12_state * recordInstance)
   (requires fun h0 ->
     // Responder share must be over the same group as initiator's
     match ks with 
-    | S_12_wait_CKE_DH _ _ (| g', _ |) -> g' = dfst gy 
+    | S12_wait_CKE_DH _ _ (| g', _ |) -> g' = dfst gy 
     | _ -> False)
   (ensures fun h0 r h1 -> True)
 let server12_cke_dh ks gy hashed_log =
   dbg "server12_cke_dh";
-  let S_12_wait_CKE_DH csr alpha (| g, gx |) = ks in
+  let S12_wait_CKE_DH csr alpha (| g, gx |) = ks in
   let (pv, cs, ems) = alpha in
   let (| _, gy |) = gy in
   let _ = print_share gy in
@@ -1029,8 +1030,8 @@ let server12_cke_dh ks gy hashed_log =
       msId, ms
       end
     in
-  let ks = S_12_has_MS csr alpha msId ms in
-  ks, ks_12_record_key ks
+  let ks = S12_has_MS csr alpha msId ms in
+  ks, ks12_record_key ks
 
 (**
 // Called after receiving server hello; server accepts resumption proposal
@@ -1039,7 +1040,7 @@ let server12_cke_dh ks gy hashed_log =
 val client12_resume: ks:ks -> random -> pv:protocolVersion -> cs:cipherSuite -> ST unit
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
-    C? kss /\ C_12_Resume_CH? (C?.s kss))
+    C? kss /\ C12_Resume_CH? (C?.s kss))
   (ensures fun h0 r h1 ->
     let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
@@ -1047,10 +1048,10 @@ val client12_resume: ks:ks -> random -> pv:protocolVersion -> cs:cipherSuite -> 
 
 let client12_resume ks sr pv cs =
   let KS #region st = ks in
-  let C (C_12_Resume_CH cr si msId ms) = !st in
+  let C (C12_Resume_CH cr si msId ms) = !st in
   let csr = cr @| sr in
   let ems = si.extended_ms in
-  st := C (C_12_has_MS csr (pv, cs, ems) msId ms)
+  st := C (C12_has_MS csr (pv, cs, ems) msId ms)
 *)
 
 // The two functions below are similar but we decide not to factor them because:
@@ -1167,16 +1168,17 @@ let client13_ServerHello psks groups ks sr cs log accept_psk g gy =
 
 let client13_ServerFinished
   (i: amsId) 
-  (state: c13_wait_Finished1 i) // including [transcript1]
-  (transcript2: transcript): 
+  (s: ams i)
+  (transcript_Finished: transcript): 
   ST (
-    c13_wait_Finished2 i * 
-    MAC.UFCMA.key (cfkId_of_hs i transcript1) *
-    MAC.UFCMA.key (sfkId_of_hs i transcript1) *
-    StreamAE.reader (askId_of_hs i transcript2) *
-    StreamAE.writer (ackId_of_hs i transcript2)
-    exporter (ex1Id_of_hs i transcript2) )
-    
+//  c13_wait_Finished2 i * 
+//  MAC.UFCMA.key (cfkId_of_hs i transcript1) *
+//  MAC.UFCMA.key (sfkId_of_hs i transcript1) *
+    StreamAE.reader (askId_of_hs i transcript_Finished) *
+    StreamAE.writer (ackId_of_hs i transcript_Finished)
+    exporter (ex1Id_of_hs i transcript2) 
+// missing late materials    
+    )
   (requires fun h0 -> True)
   (ensures fun h0 r h1 -> modifies_none h0 h1 (*TBC*) )
 =
@@ -1189,7 +1191,7 @@ let client13_ServerFinished
   // let s_expandId = ExpandedSecret secretId ClientApplicationTrafficSecret log in
   // let emsId : exportId li = ExportID asId log in
 
-  let i2 = amdId_of_hs i in 
+  let i2 = ams_of_hs i in 
   let ctsId = ctsId_of_as i2 transcript2 in 
   let stsId = ctsId_of_as i2 transcript2 in 
   let exsId = exsId_of_as i2 transcript2 in 
@@ -1217,7 +1219,8 @@ let client13_ServerFinished
   let r = StAE.genReader HyperHeap.root rw in
 
   let next = C13_wait_Finished2 h ae ams (cts,sts) in
-  (next, cfk, sfk, r, w, exs)
+  // what to do with next?
+  (r, w, exs)
 
 
 /// Continues from the application master secret, now that we have the
@@ -1262,7 +1265,7 @@ let server13_ServerFinished #i ams ha aea tr tag =
 /// resumption master secret; the application master secret should
 /// then be discarded.
 
-val rms_of_ClientFinished: 
+val rms13_ClientFinished: 
   #i: amsId -> 
   s: ams i -> 
   ha: kdfa {ha = ha_of_id i} -> 
@@ -1276,7 +1279,7 @@ val rms_of_ClientFinished:
     // multi-functionality inv
     // modifies some KDF
     )
-let server13_ClientFinished #i ams ha tr tag =
+let rms13_ClientFinished #i ams ha tr tag =
   let rms = derive_secret ha ams "res master" tr tag ha in
   dbg ("resumption master secret:        "^print_bytes (leak_secret rms));
   rms
@@ -1329,7 +1332,7 @@ let rekey
 (******************************************************************)
 
 // Called by Hanshake when DH key echange is negotiated; 
-// 3 incoming states: was (C_12_Full_CH? (C?.s st) \/ C_12_Resume_CH? (C?.s st) \/ C_13_wait_SH? (C?.s st)))
+// 3 incoming states: was (C12_Full_CH? (C?.s st) \/ C12_Resume_CH? (C?.s st) \/ C_13_wait_SH? (C?.s st)))
 
 val client12_full_dh: 
   cr: random -> 
@@ -1340,7 +1343,7 @@ val client12_full_dh:
   gx:(g:CommonDH.group & CommonDH.share g) -> ST (ks12_state * CommonDH.share (dfst gx))
   (requires fun h0 -> True)
   (ensures fun h0 r h1 ->
-    (C_12_wait_MS? st \/ C_12_has_MS? st) /\ 
+    (C12_wait_MS? st \/ C12_has_MS? st) /\ 
     modifies_none h0 h1 // TODO modifies for DH
   )
 let client12_full_dh ks sr pv cs ems (|g,gx|) =
@@ -1354,18 +1357,18 @@ let client12_full_dh ks sr pv cs ems (|g,gx|) =
   let dhpmsId = PMS.DHPMS g gx gy (PMS.ConcreteDHPMS pmsb) in
   let ns =
     if ems then
-      C_12_wait_MS csr alpha dhpmsId pmsb
+      C12_wait_MS csr alpha dhpmsId pmsb
     else
       let kef = kefAlg pv cs false in
       let ms = TLSPRF.extract kef pmsb csr 48 in
       dbg ("master secret: "^print_bytes ms);
       let msId = StandardMS dhpmsId csr kef in
-      C_12_has_MS csr alpha msId ms in
+      C12_has_MS csr alpha msId ms in
   ns, gy
 
 // Called by Handshake after server hello when a full RSA key exchange is negotiated
 // returns the encrypted (currently disabled)
-// pre was: (C_12_Full_CH? (C?.s st) \/ C_12_Resume_CH? (C?.s st)))
+// pre was: (C12_Full_CH? (C?.s st) \/ C12_Resume_CH? (C?.s st)))
 val client12_full_rsa: 
   cr: random -> 
   sr:random -> 
@@ -1375,7 +1378,7 @@ val client12_full_rsa:
   RSAKey.pk -> ST (ks12_state * bytes)
   (requires fun h0 -> True)
   (ensures fun h0 (st,r) h1 -> 
-    (C_12_wait_MS? st \/ C_12_has_MS? st) /\ 
+    (C12_wait_MS? st \/ C12_has_MS? st) /\ 
     modifies_none h0 h1 // TODO modifies for RSA
   )
 let client12_full_rsa cr sr pv cs ems pk =
@@ -1387,13 +1390,13 @@ let client12_full_rsa cr sr pv cs ems pk =
   let rsapmsId = PMS.RSAPMS(pk, pv, rsapms) in
   let ns =
     if ems then
-      C_12_wait_MS csr alpha rsapmsId pmsb
+      C12_wait_MS csr alpha rsapmsId pmsb
     else
       let kef = kefAlg pv cs false in
       let ms = TLSPRF.extract kef pmsb csr 48 in
       dbg ("master secret: "^print_bytes ms);
       let msId = StandardMS rsapmsId csr kef in
-      C_12_has_MS csr alpha msId ms in
+      C12_has_MS csr alpha msId ms in
   ns, encrypted
 
 // second call from client_ServerHelloDone
@@ -1401,19 +1404,19 @@ val client12_set_session_hash:
   ks: ks12_state -> 
   h:bytes -> ST (ks12_state * TLSPRF.key * recordInstance)
   (requires fun h0 ->
-    C_12_wait_MS? st \/ C_12_has_MS? st)
+    C12_wait_MS? st \/ C12_has_MS? st)
   (ensures fun h0 (st,prfk,ak) h1 ->
-    C_12_has_MS? st /\ 
+    C12_has_MS? st /\ 
     modifies_none h0 h1)
 
 let client12_set_session_hash st log =
   dbg ("client12_set_session_hash hashed_log = "^print_bytes log);
   let st, ms =
     match st with
-    | C_12_has_MS csr alpha msId ms ->
+    | C12_has_MS csr alpha msId ms ->
       dbg ("master secret:"^print_bytes ms);
       st, ms
-    | C_12_wait_MS csr alpha pmsId pms ->
+    | C12_wait_MS csr alpha pmsId pms ->
       let (pv, cs, ems) = alpha in
       let kef = kefAlg pv cs ems in
       let h = verifyDataHashAlg_of_ciphersuite cs in
@@ -1428,9 +1431,9 @@ let client12_set_session_hash st log =
           dbg ("master secret:"^print_bytes ms);
           let msId = StandardMS pmsId csr kef in
           msId, ms ) in 
-      C_12_has_MS csr alpha msId ms, ms
+      C12_has_MS csr alpha msId ms, ms
     in
-  let appk = ks_12_record_key ks in
+  let appk = ks12_record_key ks in
   (st, TLSPRF.coerce ms, appk)
 
 // *********************************************************************************
@@ -1443,11 +1446,11 @@ let client12_client_finished ks
   : ST (cvd:bytes)
   (requires fun h0 ->
     let st = sel h0 (KS?.state ks) in
-    C? st /\ C_12_has_MS? (C?.s st))
+    C? st /\ C12_has_MS? (C?.s st))
   (ensures fun h0 r h1 -> h1 == h0)
   =
   let KS #region st = ks in
-  let C (C_12_has_MS csr alpha msId ms) = !st in
+  let C (C12_has_MS csr alpha msId ms) = !st in
   let (pv, cs, ems) = alpha in
 //  let h = verifyDataHashAlg_of_ciphersuite cs in
 //  let log = HandshakeLog.getHash hsl h in
@@ -1458,11 +1461,11 @@ let server12_client_finished ks
   : ST (cvd:bytes)
   (requires fun h0 ->
     let st = sel h0 (KS?.state ks) in
-    S? st /\ S_12_has_MS? (S?.s st))
+    S? st /\ S12_has_MS? (S?.s st))
   (ensures fun h0 r h1 -> h1 == h0)
   =
   let KS #region st = ks in
-  let S (S_12_has_MS csr alpha msId ms) = !st in
+  let S (S12_has_MS csr alpha msId ms) = !st in
   let (pv, cs, ems) = alpha in
 //  let h = verifyDataHashAlg_of_ciphersuite cs in
 //  let log = HandshakeLog.getHash hsl h in
@@ -1473,14 +1476,14 @@ let server12_server_finished ks
   : ST (svd:bytes)
   (requires fun h0 ->
     let st = sel h0 (KS?.state ks) in
-    S? st /\ S_12_has_MS? (S?.s st))
+    S? st /\ S12_has_MS? (S?.s st))
   (ensures fun h0 r h1 ->
     let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
   =
   let KS #region st = ks in
-  let S (S_12_has_MS csr alpha msId ms) = !st in
+  let S (S12_has_MS csr alpha msId ms) = !st in
   let (pv, cs, ems) = alpha in
 //  let h = verifyDataHashAlg_of_ciphersuite cs in
 //  let log = HandshakeLog.getHash hsl h in
@@ -1491,14 +1494,14 @@ let server12_server_finished ks
 let client12_server_finished ks: ST (svd:bytes)
   (requires fun h0 ->
     let st = sel h0 (KS?.state ks) in
-    C? st /\ C_12_has_MS? (C?.s st))
+    C? st /\ C12_has_MS? (C?.s st))
   (ensures fun h0 r h1 ->
     let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
   =
   let KS #region st = ks in
-  let C (C_12_has_MS csr alpha msId ms) = !st in
+  let C (C12_has_MS csr alpha msId ms) = !st in
   let (pv, cs, ems) = alpha in
 //  let h = verifyDataHashAlg_of_ciphersuite cs in
 //  let log = HandshakeLog.getHash hsl h in

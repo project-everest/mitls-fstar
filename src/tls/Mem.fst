@@ -87,7 +87,7 @@ let tls_honest_region: r:tls_rgn{r `disjoint` tls_tables_region /\ r `disjoint` 
 
 
 
-// used for defining 1-shot PRFs.
+// used for defining 1-shot PRFs and authenticators
 val ssa: #a:Type0 -> Preorder.preorder (option a)
 let ssa #a =
   let f x y =

@@ -183,7 +183,15 @@ QUIC
 
 all-ver: $(addsuffix .fst-ver, $(VERIFY))
 
-ik-ver: $(addsuffix .fst-ver, Mem Pkg HMAC.UFCMA IV AEAD.Pkg Idx Pkg.Tree KDF KDF.Rekey Extract0 Extract1.PRF Extract1.ODH Extract1 Extract2 KeySchedule)
+ik-ver: $(addsuffix .fst-ver, \
+Mem \
+Pkg \
+Token.UF1CMA HMAC.UFCMA \
+IV AEAD.Pkg \
+Idx Pkg.Tree \
+KDF KDF.Rekey \
+Extract0 Extract1.PRF Extract1.ODH Extract1 Extract2 \
+KeySchedule)
 
 
 # Sanity check
