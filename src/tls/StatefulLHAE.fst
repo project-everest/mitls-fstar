@@ -87,8 +87,8 @@ let encrypt #i e ad r p =
 (*------------------------------------------------------------------*)
 val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
   -> ST (option (dplain i ad c))
-  (requires (fun h0 -> m_sel h0 (ctr d.counter) < max_ctr (alg i)))
-  (ensures  (fun h0 res h1 ->
+  (requires fun h0 -> m_sel h0 (ctr d.counter) < max_ctr (alg i))
+  (ensures fun h0 res h1 ->
      let j = m_sel h0 (ctr d.counter) in
      (authId i ==>
        (let log = m_sel h0 (ilog d.log) in
@@ -102,9 +102,9 @@ val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
        let ctr_counter_as_hsref = as_hsref (ctr d.counter) in
        match res with
        | None -> modifies Set.empty h0 h1
-       | _    -> modifies_one d.region h0 h1
-                /\ modifies_rref d.region (Set.singleton (HyperStack.addr_of (as_ref ctr_counter_as_hsref))) h0.h h1.h
-	        /\ m_sel h1 (ctr d.counter) === j + 1)))
+       | _    -> modifies_one d.region h0 h1 /\
+                modifies_ref d.region (Set.singleton (Heap.addr_of (as_ref ctr_counter_as_hsref))) h0 h1 /\
+	        m_sel h1 (ctr d.counter) === j + 1))
 let decrypt #i d ad c =
   let seqn = m_read (ctr d.counter) in
   lemma_repr_bytes_values seqn;

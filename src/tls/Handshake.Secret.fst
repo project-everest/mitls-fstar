@@ -1,15 +1,16 @@
 module Handshake.Secret
 
-// This file provides all operations on TLS secrets for the handshake,
-// organized by message-processing stages (used to be in
-// KeySchedule.fst)
+// This file provides all operations on abstract TLS secrets for the
+// handshake, grouped by message-processing stages 
+// (used to be in KeySchedule.fst)
 
-open FStar.HyperStack
-open FStar.Seq
-open FStar.Set
+//open FStar.Seq
+//open FStar.Set
 
 open Platform.Bytes
 open Platform.Error
+
+open Mem
 open TLSError
 open TLSConstants
 //open Extensions
@@ -646,6 +647,7 @@ let ks_client_13_ch ks (log:bytes): ST (exportKey * recordInstance)
   exporter0, early_d
 *)
 
+//17-12-29 we don't use cr sr pv cs ems yet; simplify? 
 val server12_init_dh: 
   cr: random -> 
   sr: random -> 

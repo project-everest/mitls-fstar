@@ -1,7 +1,5 @@
 module IV
 
-//17-12-08 to be adjusted; not sure we need a flag for it.
-
 open Mem
 open Pkg 
 

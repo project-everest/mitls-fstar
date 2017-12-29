@@ -11,7 +11,7 @@
         "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "9b88c463a2eb02ad55e5530e575dda25"
+      "c376e818509406f1a7937da2978988c0"
     ],
     [
       "HMAC.hmac",
@@ -20,7 +20,7 @@
       1,
       [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
       0,
-      "a096b1b7542e6caceb44013589f04863"
+      "a5d381ae7a721815536739872b6e6c44"
     ],
     [
       "HMAC.hmac",
@@ -29,7 +29,7 @@
       1,
       [ "@query" ],
       0,
-      "1667dc64a4d78a7db345400df9bd776f"
+      "090fe3a0e9659f1363fa252e48a8f209"
     ],
     [
       "HMAC.hmacVerify",
@@ -41,7 +41,7 @@
         "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "6bb08db7a78ab7637b423bb14291addc"
+      "611c4ea40f39cc9731ae96bae9d19046"
     ],
     [
       "HMAC.hmacVerify",
@@ -50,7 +50,7 @@
       1,
       [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
       0,
-      "9f1cc65ed961e6ab7321fe9c387eb06c"
+      "c321ba9378fc1eb005b4233c190756e3"
     ],
     [
       "HMAC.hmacVerify",
@@ -65,7 +65,7 @@
         "refinement_interpretation_HMAC_Tm_refine_01ee375b43d95f601d1b2bb184dfa4f9"
       ],
       0,
-      "f2de8f3fa1091ddcb614e0f54ee2425a"
+      "6bcce437dc1b71add1f514f08cbf25a3"
     ],
     [
       "HMAC.sslHashAlg",
@@ -74,7 +74,7 @@
       1,
       [ "@query", "assumption_TLSConstants.hashAlg_haseq" ],
       0,
-      "1c9c705671908c4b3dfd204cca704a3d"
+      "8e875d45716d1bcd2e482039c895f452"
     ],
     [
       "HMAC.sslHashAlg",
@@ -83,7 +83,7 @@
       1,
       [ "@query", "assumption_TLSConstants.hashAlg_haseq" ],
       0,
-      "0f3327f86a886d64924e7438c87294bc"
+      "05062f19db18435dd9a8806beadab729"
     ],
     [
       "HMAC.sslKeyedHashPads",
@@ -104,7 +104,7 @@
         "refinement_interpretation_HMAC_Tm_refine_a7aeeec83e05f2e1d797d82dfd1d05e8"
       ],
       0,
-      "f21127951befc957bf871fed4a96e6aa"
+      "80350bc7bb37128bce26b186153b4efc"
     ],
     [
       "HMAC.sslKeyedHash",
@@ -113,7 +113,7 @@
       1,
       [ "@query", "assumption_Hashing.Spec.alg_haseq" ],
       0,
-      "a0949fcccc2d85c754a5301d12528fbb"
+      "651a4c9aa74eefc2f0dff82d4c957221"
     ],
     [
       "HMAC.sslKeyedHash",
@@ -122,7 +122,7 @@
       1,
       [ "@query", "assumption_Hashing.Spec.alg_haseq" ],
       0,
-      "cf70f78c65693359c8757b55de029b19"
+      "2fc4a1a8fc27da66c027a5fd88c42025"
     ],
     [
       "HMAC.sslKeyedHash",
@@ -131,7 +131,7 @@
       1,
       [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
       0,
-      "7d183dbf30434977777343b0bd952ff6"
+      "29a9b66deb77436efdcd6c2680fa7faa"
     ],
     [
       "HMAC.sslKeyedHash",
@@ -141,27 +141,27 @@
       [
         "@MaxIFuel_assumption", "@query",
         "assumption_FStar.Monotonic.HyperHeap.HasEq_rid", "bool_inversion",
-        "constructor_distinct_Hashing.Spec.MD5",
+        "bool_typing", "constructor_distinct_Hashing.Spec.MD5",
         "constructor_distinct_Hashing.Spec.SHA1",
-        "data_elim_FStar.Monotonic.HyperStack.HS",
         "disc_equation_Hashing.Spec.MD5", "disc_equation_Hashing.Spec.SHA1",
         "equality_tok_Hashing.Spec.MD5@tok",
         "equality_tok_Hashing.Spec.SHA1@tok",
+        "equation_FStar.Monotonic.HyperHeap.disjoint",
+        "equation_FStar.Monotonic.HyperHeap.hmap",
         "equation_FStar.Monotonic.HyperHeap.modifies_just",
-        "equation_FStar.Monotonic.HyperHeap.t",
-        "equation_FStar.Monotonic.HyperStack.equal_stack_domains",
         "equation_FStar.Monotonic.HyperStack.hh",
-        "equation_FStar.Monotonic.HyperStack.is_in",
+        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
         "equation_FStar.Monotonic.HyperStack.modifies",
         "equation_FStar.Set.eqtype", "equation_FStar.Set.subset",
-        "equation_Mem.is_tls_rgn", "equation_Mem.rgn", "equation_Mem.subrgn",
-        "equation_Mem.tls_rgn", "equation_Prims.eqtype",
+        "equation_Mem.disjoint", "equation_Mem.rgn",
+        "equation_Mem.tls_define_region", "equation_Mem.tls_rgn",
+        "equation_Mem.tls_tables_region", "equation_Prims.eqtype",
         "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
         "function_token_typing_FStar.Monotonic.Heap.heap",
         "function_token_typing_FStar.Monotonic.HyperHeap.rid",
-        "function_token_typing_FStar.Monotonic.HyperHeap.root",
-        "function_token_typing_Mem.honest_region",
+        "function_token_typing_Mem.tls_define_region",
         "function_token_typing_Mem.tls_region",
+        "function_token_typing_Mem.tls_tables_region",
         "lemma_FStar.Map.lemma_ContainsDom",
         "lemma_FStar.Map.lemma_InDomConcat",
         "lemma_FStar.Map.lemma_InDomRestrict",
@@ -172,27 +172,30 @@
         "lemma_FStar.Map.lemma_equal_intro",
         "lemma_FStar.Monotonic.HyperStack.lemma_equal_stack_domains_trans",
         "lemma_FStar.Set.mem_complement", "lemma_FStar.Set.mem_empty",
-        "lemma_FStar.Set.mem_subset", "primitive_Prims.op_AmpAmp",
-        "primitive_Prims.op_BarBar", "primitive_Prims.op_Negation",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_BarBar",
+        "primitive_Prims.op_Negation",
         "proj_equation_FStar.Monotonic.HyperStack.HS_h",
         "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_FStar.HyperStack.ST_Tm_refine_d52cae8b8e1ca91e1679b9bdc9938557",
+        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_30795607330a547b7d04fef9756b3d11",
         "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_38d52172626ad62ce3b0e4245dab71ed",
         "refinement_interpretation_HMAC_Tm_refine_5848cd2d4b8f3092109fb78df61e11e1",
         "refinement_interpretation_HMAC_Tm_refine_69f3f861207ac2c1ea3c0ac2679bdf86",
-        "refinement_interpretation_Mem_Tm_refine_827021888216ac6a501be14cd4b812c9",
-        "refinement_interpretation_Mem_Tm_refine_b9611c68854b3e8b5fcc372285b2bc8d",
+        "refinement_interpretation_Mem_Tm_refine_344af81a15dd72444dd3a7eeb4cce800",
         "refinement_interpretation_Mem_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
+        "refinement_interpretation_Mem_Tm_refine_f70be9b0cc50942af80d22e44fc9b9c4",
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "typing_FStar.Map.concat", "typing_FStar.Map.contains",
         "typing_FStar.Map.domain", "typing_FStar.Map.restrict",
+        "typing_FStar.Monotonic.HyperHeap.includes",
         "typing_FStar.Monotonic.HyperStack.__proj__HS__item__h",
-        "typing_FStar.Monotonic.HyperStack.is_in",
+        "typing_FStar.Monotonic.HyperStack.is_eternal_region",
         "typing_FStar.Set.complement", "typing_FStar.Set.empty",
-        "typing_FStar.Set.mem", "typing_Mem.is_tls_rgn"
+        "typing_FStar.Set.mem", "typing_Mem.disjoint",
+        "typing_Mem.tls_define_region"
       ],
       0,
-      "4e446a7bf472dd366bf32b0b8ba102d7"
+      "6ff817759b50fdfea79a0dd232249593"
     ],
     [
       "HMAC.sslKeyedHashVerify",
@@ -201,7 +204,7 @@
       1,
       [ "@query", "assumption_Hashing.Spec.alg_haseq" ],
       0,
-      "f057106c0aa62e3ee0b37cc07a4722df"
+      "d8a9a84f93bdb3a4544e3c581e58108e"
     ],
     [
       "HMAC.sslKeyedHashVerify",
@@ -210,7 +213,7 @@
       1,
       [ "@query", "assumption_Hashing.Spec.alg_haseq" ],
       0,
-      "a774f927e99642d6283f68dc45a34f64"
+      "e855c4fd5d2b456e8c7881f36fe6ef08"
     ],
     [
       "HMAC.sslKeyedHashVerify",
@@ -219,7 +222,7 @@
       1,
       [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
       0,
-      "362312f9e5ff16405eaba86cda20f91a"
+      "3c0993e41dc2d09fb1918a4969e5db4a"
     ],
     [
       "HMAC.sslKeyedHashVerify",
@@ -231,7 +234,7 @@
         "refinement_interpretation_Platform.Bytes_Tm_refine_ad9cde64c932cdae765806f65e24e93b"
       ],
       0,
-      "9b68f009b3cc063eca1fdb67034cee4a"
+      "400a65003c64fe26b18684e5323dbfd3"
     ],
     [
       "HMAC.tls_mac",
@@ -240,7 +243,7 @@
       1,
       [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
       0,
-      "e85392d2cc5a8e9dc92705c516363afb"
+      "a3b0ece3f5f5171c2602f35eb1641c72"
     ],
     [
       "HMAC.tls_mac",
@@ -266,7 +269,7 @@
         "refinement_interpretation_TLSConstants_Tm_refine_7779d0afc8f31db2f4cf37d6463dc39a"
       ],
       0,
-      "6d11c368c0bfb81664950ebf463b28c4"
+      "3c86b38877ffd5b658a112c89ce11740"
     ],
     [
       "HMAC.tls_macVerify",
@@ -275,7 +278,7 @@
       1,
       [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
       0,
-      "532f715ff41c21e3e39a89b85ba0cf66"
+      "fcb113834a7274678fe55cb0c227873d"
     ],
     [
       "HMAC.tls_macVerify",
@@ -306,7 +309,7 @@
         "typing_Mem.is_tls_rgn"
       ],
       0,
-      "6c37fb84c8097cec6638c4071c0e1de1"
+      "858df467cd196cfa71071683c668e1f1"
     ]
   ]
 ]

@@ -260,10 +260,10 @@ val decrypt: #i:id -> d:reader i -> l:plainLen -> c:cipher i l
     	 then res = Some (Entry?.p (Seq.index log j))
     	 else res = None)) /\
       (match res with
-       | None -> HS.modifies Set.empty h0.h h1.h
+       | None -> HS.modifies Set.empty h0 h1
        | _ -> let ctr_counter_as_hsref = as_hsref (ctr d.counter) in
-             HS.modifies_one d.region h0.h h1.h /\
-             modifies_ref d.region (Set.singleton (Heap.addr_of (as_ref ctr_counter_as_hsref))) h0.h h1.h /\
+             modifies_one d.region h0 h1 /\
+             modifies_ref d.region (Set.singleton (Heap.addr_of (as_ref ctr_counter_as_hsref))) h0 h1 /\
              m_sel h1 (ctr d.counter) === j + 1)))
 
 val strip_refinement: #a:Type -> #p:(a -> Type0) -> o:option (x:a{p x}) -> option a

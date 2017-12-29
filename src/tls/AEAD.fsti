@@ -1,5 +1,5 @@
 (**
-  This interfaces provides an abstraction for the verfieid Hacl* Crypto.AEAD.Main module,
+  This interfaces provides an abstraction for the verified Hacl* Crypto.AEAD.Main module,
   using Platform.Bytes rather than buffers.
 *)
 module AEAD
@@ -76,13 +76,13 @@ val log: #i:_ -> #rw:_ -> s:aead_state i rw{safeMac i} -> mem -> GTot (Seq.seq (
 
 let address = nat
 
-let addr_unused_in (rid:HH.rid) (a:address) (m0:mem) =
+let addr_unused_in (rid:rid) (a:address) (m0:mem) =
   Monotonic.Heap.addr_unused_in a (Map.sel m0.h rid)
 
-let contains_addr (rid:HH.rid) (a:address) (m:mem) =
+let contains_addr (rid:rid) (a:address) (m:mem) =
   ~(addr_unused_in rid a m)
 
-let fresh_addresses (rid:HH.rid) (addrs:Set.set address) (m0:mem) (m1:mem) =
+let fresh_addresses (rid:rid) (addrs:Set.set address) (m0:mem) (m1:mem) =
   forall a. a `Set.mem` addrs ==>
        addr_unused_in rid a m0 /\
        contains_addr  rid a m1
@@ -101,7 +101,7 @@ let ok_plain_len_32 (i:I.id) = l:U32.t{safelen i (v l)}
 
 val invariant : #i:_ -> #rw:_ -> aead_state i rw -> mem -> Type0
 
-val frame_invariant: #i:_ -> #rw:_ -> st:aead_state i rw -> h0:mem -> r:HH.rid -> h1:mem ->
+val frame_invariant: #i:_ -> #rw:_ -> st:aead_state i rw -> h0:mem -> r:rid -> h1:mem ->
     Lemma (requires (invariant st h0 /\
            modifies_one r h0 h1 /\
            ~(r `Set.mem` footprint st) /\
@@ -109,7 +109,7 @@ val frame_invariant: #i:_ -> #rw:_ -> st:aead_state i rw -> h0:mem -> r:HH.rid -
           (ensures invariant st h1)
 
 val frame_log: #i:_ -> #rw:_ -> st:aead_state i rw -> l:Seq.seq (entry i) ->
-  h0:mem -> r:HH.rid -> h1:mem ->
+  h0:mem -> r:rid -> h1:mem ->
   Lemma (requires
           safeMac i /\
           log st h0 == l /\
@@ -124,7 +124,7 @@ val gen (i:I.id)
         (prf_rgn:subrgn tls_tables_region)
         (log_rgn:subrgn tls_tables_region)
   : ST (aead_state i I.Writer)
-    (requires (fun h -> prf_rgn `HH.disjoint` log_rgn))
+    (requires (fun h -> prf_rgn `disjoint` log_rgn))
     (ensures  (fun h0 s h1 ->
                log_region s == log_rgn /\
                prf_region i == prf_rgn /\
