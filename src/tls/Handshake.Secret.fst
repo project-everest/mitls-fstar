@@ -647,7 +647,7 @@ let ks_client_13_ch ks (log:bytes): ST (exportKey * recordInstance)
   exporter0, early_d
 *)
 
-//17-12-29 we don't use cr sr pv cs ems yet; simplify? 
+//17-12-29 we don't use cr sr pv cs ems yet; simplify? This is just odh_init 
 val server12_init_dh: 
   cr: random -> 
   sr: random -> 
@@ -665,7 +665,7 @@ val server12_init_dh:
 
 let server12_init_dh cr sr pv cs ems g =
   dbg "server12_init_dh";
-  let our_share = CommonDH.keygen g in
+  let y = CommonDH.keygen g in
   let _ = print_share (CommonDH.pubshare our_share) in
   let csr = cr @| sr in
   S12_wait_CKE_DH csr (pv, cs, ems) (| g, our_share |),
@@ -907,11 +907,8 @@ let server13_ServerHello ks log =
 // Will become private; public API will have
 // client12_keygen: ks -> (i:id * w:StatefulLHAE.writer i)
 // server12_keygen: ...
-val ks12_finished_key: st: ks_state -> ST (key:TLSPRF.key)
-  (requires fun h0 ->
-    match st with
-    | C12_has_MS _ _ _ _ | S12_has_MS _ _ _ _ -> True
-    | _ -> False)
+val ks12_finished_key: st: ks_state -> ST TLSPRF.key
+  (requires fun h0 -> C12_has_MS? s \/ S12_has_MS? s)
   (ensures fun h0 r h1 -> modifies Set.empty h0 h1)
 
 let ks12_finished_key st =
@@ -933,15 +930,15 @@ let ks12_record_key st =
     | C12_has_MS csr alpha msId ms -> Client, csr, alpha, msId, ms
     | S12_has_MS csr alpha msId ms -> Server, csr, alpha, msId, ms in
   let cr, sr = split csr 32 in
-  let (pv, cs, ems) = alpha in
+  let pv, cs, ems = alpha in
   let kdf = kdfAlg pv cs in
   let ae = get_aeAlg cs in
   let id = ID12 pv msId kdf ae cr sr role in
   let AEAD alg _ = ae in (* 16-10-18 FIXME! only correct for AEAD *)
-  let klen = admit() in //17-12-28 CoreCrypto.aeadKeySize alg in
-  let slen = admit() in //17-12-28  AEADProvider.salt_length id in
+  let klen = CoreCrypto.aeadKeySize alg in
+  let slen = AEADProvider.salt_length id in
   let expand = TLSPRF.kdf kdf ms (sr @| cr) (klen + klen + slen + slen) in
-  dbg ("keystring (CK, CIV, SK, SIV) = "^print_bytes expand);
+  dbg ("keystring (CK, SK, CIV, SIV) = "^print_bytes expand);
   let k1, expand = split expand klen in
   let k2, expand = split expand klen in
   let iv1, iv2 = split expand slen in
@@ -1353,8 +1350,8 @@ let client12_full_dh ks sr pv cs ems (|g,gx|) =
   let csr = cr @| sr in
   let alpha = (pv, cs, ems) in
   let gy, pmsb = CommonDH.dh_responder #g gx in
-  dbg (sprint_share gx);
-  dbg (sprint_share gy);
+  dbg ("g^x: "^sprint_share gx);
+  dbg ("g^y: "^sprint_share gy);
   dbg ("PMS: "^print_bytes pmsb);
   let dhpmsId = PMS.DHPMS g gx gy (PMS.ConcreteDHPMS pmsb) in
   let ns =
@@ -1411,8 +1408,8 @@ val client12_set_session_hash:
     C12_has_MS? st /\ 
     modifies_none h0 h1)
 
-let client12_set_session_hash st log =
-  dbg ("client12_set_session_hash hashed_log = "^print_bytes log);
+let client12_set_session_hash st digest =
+  dbg ("client12_set_session_hash hashed_log = "^print_bytes digest);
   let st, ms =
     match st with
     | C12_has_MS csr alpha msId ms ->
@@ -1424,9 +1421,9 @@ let client12_set_session_hash st log =
       let h = verifyDataHashAlg_of_ciphersuite cs in
       let msId, ms =
         if ems then (
-          let ms = TLSPRF.prf (pv,cs) pms (utf8 "extended master secret") log 48 in
+          let ms = TLSPRF.prf (pv,cs) pms (utf8 "extended master secret") digest 48 in
           dbg ("extended master secret:"^print_bytes ms);
-          let msId = ExtendedMS pmsId log kef in
+          let msId = ExtendedMS pmsId digest kef in
           msId, ms )
         else (
           let ms = TLSPRF.extract kef pms csr 48 in
@@ -1436,7 +1433,8 @@ let client12_set_session_hash st log =
       C12_has_MS csr alpha msId ms, ms
     in
   let appk = ks12_record_key ks in
-  (st, TLSPRF.coerce ms, appk)
+  let fink = TLSPRF.coerce ms in 
+  (st, fink, appk)
 
 // *********************************************************************************
 //  All functions below assume that the MS is already computed (and thus they are

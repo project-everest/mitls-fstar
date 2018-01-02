@@ -9,7 +9,7 @@ assume val ideal_Sig: t
 assume val ideal_PMS: t
 assume val ideal_PRF: t
 assume val ideal_AEAD: t
-assume val ideal_HMAC: t
+assume val ideal_HMAC: t // see HMAC.UFCMA
 
 // debug printing flags, one per module; 
 // the refinement enables us to leak secrets for printing.

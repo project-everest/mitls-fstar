@@ -2,13 +2,46 @@
 (* STATUS : JK : assumed two arrays because, has to be fixed *)
 module TLSPRF
 
-(* Low-level (bytes -> byte) PRF implementations for TLS *)
+(* Low-level (bytes -> byte) PRF implementations for TLS
+   used by Handshake, Handshake.Secret, KEF, and PRF.
+*)
 
 open Platform.Bytes
 open Hashing.Spec
 open TLSConstants
 open TLSInfo
 //open CoreCrypto
+
+
+abstract type key = bytes
+let coerce (k:bytes) : key = k
+
+private val p_hash_int: 
+  a: macAlg -> 
+  secret: lbytes (macKeySize a) -> 
+  seed: bytes -> 
+  int -> int -> bytes -> bytes -> ST bytes
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> modifies Set.empty h0 h1))
+let rec p_hash_int alg secret seed len it aPrev acc =
+  let aCur = HMAC.tls_mac alg secret aPrev in
+  let pCur = HMAC.tls_mac alg secret (aCur @| seed) in
+  if it = 1 then
+    let hs = macSize alg in
+    let r = len % hs in
+    let (pCur,_) = split pCur r in
+    acc @| pCur
+  else
+    p_hash_int alg secret seed len (it-1) aCur (acc @| pCur)
+
+val p_hash: 
+  a: macAlg -> 
+  secret: lbytes (macKeySize a) -> 
+  seed: bytes -> len:nat -> St bytes // (lbytes len)
+let p_hash alg secret seed len =
+  let hs = macSize alg in
+  let it = (len/hs)+1 in
+  p_hash_int alg secret seed len it seed empty_bytes
 
 
 (* SSL3 *)
@@ -66,34 +99,13 @@ let ssl_verifyCertificate hashAlg ms log  =
   hash hashAlg forStep2
 *)
 
-abstract type key = bytes
-let coerce (k:bytes) : key = k
+(* TLS 1.0--1.1 *) 
 
-val p_hash_int: a:macAlg -> k:lbytes (macKeySize a) -> bytes -> int -> int -> bytes -> bytes -> ST bytes
-  (requires (fun _ -> True))
-  (ensures (fun h0 _ h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
-let rec p_hash_int alg secret seed len it aPrev acc =
-  let aCur = HMAC.tls_mac alg secret aPrev in
-  let pCur = HMAC.tls_mac alg secret (aCur @| seed) in
-  if it = 1 then
-    let hs = macSize alg in
-    let r = len % hs in
-    let (pCur,_) = split pCur r in
-    acc @| pCur
-  else
-    p_hash_int alg secret seed len (it-1) aCur (acc @| pCur)
-
-val p_hash: macAlg -> bytes -> bytes -> int -> St bytes
-let p_hash alg secret seed len =
-  let hs = macSize alg in
-  let it = (len/hs)+1 in
-  p_hash_int alg secret seed len it seed empty_bytes
-
-val tls_prf: bytes -> bytes -> bytes -> int -> St bytes
+val tls_prf: bytes -> bytes -> bytes -> nat -> St bytes
 let tls_prf secret label seed len =
   let l_s = length secret in
   let l_s1 = (l_s+1)/2 in
-  let secret1,secret2 = split secret l_s1 in
+  let secret1, secret2 = split secret l_s1 in //17-12-29 bad key sizes ???
   let newseed = label @| seed in
   let hmd5  = p_hash (HMac MD5) secret1 newseed len in
   let hsha1 = p_hash (HMac SHA1) secret2 newseed len in
@@ -134,6 +146,7 @@ let tls12VerifyData cs ms role data =
 let finished12 hAlg (ms:key) role log =
   p_hash (HMac hAlg) ms ((tls_finished_label role) @| log) verifyDataLen
 
+
 (* Internal agile implementation of PRF *)
 
 val verifyData: (protocolVersion * cipherSuite) -> key -> role -> bytes -> St bytes
@@ -150,8 +163,8 @@ let prf (pv,cs) secret (label:bytes) data len =
   | TLS_1p0 | TLS_1p1 -> tls_prf     secret label data len
   | TLS_1p2           -> tls12prf cs secret label data len
 
-// This is for Extended Master Secret
-// The data is hashed using the PV/CS-specific hash function
+// Extended Master Secret
+// data is hashed using the PV/CS-specific hash function
 val prf_hashed: (protocolVersion * cipherSuite) -> bytes -> bytes -> bytes -> int -> St bytes
 let prf_hashed (pv, cs) secret label data len =
   let data = match pv with
@@ -161,14 +174,17 @@ let prf_hashed (pv, cs) secret label data len =
     | _ -> data in
   prf (pv, cs) secret label data len
 
-let prf' a secret data len =
+let prf' a (secret: bytes) data len =
     match a with
     | PRF_TLS_1p2 label macAlg -> tls12prf' macAlg secret label data len  // typically SHA256 but may depend on CS
-    | PRF_TLS_1p01 label         -> tls_prf          secret label data len  // MD5 xor SHA1
-    //| PRF_SSL3_nested           -> ssl_prf          secret       data len  // MD5(SHA1(...)) for extraction and keygen
+    | PRF_TLS_1p01 label       -> tls_prf          secret label data len  // MD5 xor SHA1
+  //| PRF_SSL3_nested         -> ssl_prf          secret       data len  // MD5(SHA1(...)) for extraction and keygen
     | _ -> Platform.Error.unexpected "[prf'] unreachable pattern match"
 
 //let extract a secret data len = prf a secret extract_label data len
 
 let extract a secret data len = prf' a secret data len
 let kdf a secret data len = prf' a secret data len
+
+
+
