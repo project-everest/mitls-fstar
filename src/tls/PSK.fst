@@ -8,7 +8,6 @@ open TLSError
 open TLSConstants
 
 module MM = FStar.Monotonic.Map
-module MR = FStar.Monotonic.RRef
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
 
@@ -79,10 +78,10 @@ private let app_psk_table : MM.t psk_region psk_identifier app_psk_entry psk_tab
   MM.alloc #psk_region #psk_identifier #app_psk_entry #psk_table_invariant
 
 abstract type registered_psk (i:psk_identifier) =
-  MR.witnessed (MM.defined app_psk_table i)
+  witnessed (MM.defined app_psk_table i)
 
 let valid_app_psk (ctx:pskInfo) (i:psk_identifier) (h:mem) =
-  match MM.sel (MR.m_sel h app_psk_table) i with
+  match MM.sel (HS.sel h app_psk_table) i with
   | Some e -> b2t (e.info = ctx)
   | _ -> False
 
@@ -92,8 +91,8 @@ let psk_value (i:pskid) : ST (app_psk i)
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
-  MR.m_recall app_psk_table;
-  MR.testify (MM.defined app_psk_table i);
+  recall app_psk_table;
+  testify (MM.defined app_psk_table i);
   match MM.lookup app_psk_table i with
   | Some e -> e.keybytes
 
@@ -101,8 +100,8 @@ let psk_info (i:pskid) : ST pskInfo
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
-  MR.m_recall app_psk_table;
-  MR.testify (MM.defined app_psk_table i);
+  recall app_psk_table;
+  testify (MM.defined app_psk_table i);
   match MM.lookup app_psk_table i with
   | Some e -> e.info
 
@@ -112,11 +111,11 @@ let psk_lookup (i:psk_identifier) : ST (option pskInfo)
     modifies_none h0 h1
     /\ (Some? r ==> registered_psk i)))
   =
-  MR.m_recall app_psk_table;
+  recall app_psk_table;
   match MM.lookup app_psk_table i with
   | Some e ->
-    assume(MR.stable_on_t app_psk_table (MM.defined app_psk_table i));
-    MR.witness app_psk_table (MM.defined app_psk_table i);
+    assume(stable_on_t app_psk_table (MM.defined app_psk_table i));
+    mr_witness app_psk_table (MM.defined app_psk_table i);
     Some e.info
   | None -> None
 
@@ -124,7 +123,7 @@ type honest_st (i:pskid) (h:mem) =
   MM.defined app_psk_table i h /\
   (let Entry _ _ b = MM.value app_psk_table i h in b2t b)
 
-type honest_psk (i:pskid) = MR.witnessed (honest_st i)
+type honest_psk (i:pskid) = witnessed (honest_st i)
 
 /// Generates a fresh PSK identifier
 /// TODO: does this require idealization?
@@ -149,16 +148,16 @@ let gen_psk (i:psk_identifier) (ctx:pskInfo)
     registered_psk i /\
     honest_psk i))
   =
-  MR.m_recall app_psk_table;
+  recall app_psk_table;
   let psk = abyte 1z @| CoreCrypto.random 32 in
   assert(index psk 0 = 1z);
   let add = Entry psk ctx true in
   MM.extend app_psk_table i add;
   MM.contains_stable app_psk_table i add;
   let h = get () in
-  cut(MM.sel (MR.m_sel h app_psk_table) i == Some add);
-  assume(MR.stable_on_t app_psk_table (honest_st i));
-  MR.witness app_psk_table (honest_st i)
+  cut(MM.sel (HS.sel h app_psk_table) i == Some add);
+  assume(stable_on_t app_psk_table (honest_st i));
+  mr_witness app_psk_table (honest_st i)
 
 let coerce_psk (i:psk_identifier) (ctx:pskInfo) (k:app_psk i)
   : ST unit
@@ -168,12 +167,12 @@ let coerce_psk (i:psk_identifier) (ctx:pskInfo) (k:app_psk i)
     registered_psk i /\
     ~(honest_psk i)))
   =
-  MR.m_recall app_psk_table;
+  recall app_psk_table;
   let add: app_psk_entry i = Entry k ctx false in
   MM.extend app_psk_table i add;
   MM.contains_stable app_psk_table i add;
   let h = get () in
-  cut(MM.sel (MR.m_sel h app_psk_table) i == Some add);
+  cut(MM.sel (HS.sel h app_psk_table) i == Some add);
   admit()
 
 abstract let compatible_hash_ae_st (i:pskid) (ha:hash_alg) (ae:aeadAlg) (h:mem) =
@@ -182,22 +181,22 @@ abstract let compatible_hash_ae_st (i:pskid) (ha:hash_alg) (ae:aeadAlg) (h:mem) 
   ha = pskInfo_hash ctx /\ ae = pskInfo_ae ctx))
 
 let compatible_hash_ae (i:pskid) (h:hash_alg) (a:aeadAlg) =
-  MR.witnessed (compatible_hash_ae_st i h a)
+  witnessed (compatible_hash_ae_st i h a)
 
 abstract let compatible_info_st (i:pskid) (c:pskInfo) (h:mem) =
   MM.defined app_psk_table i h /\
   (MM.value app_psk_table i h).info = c
 
 let compatible_info (i:pskid) (c:pskInfo) =
-  MR.witnessed (compatible_info_st i c)
+  witnessed (compatible_info_st i c)
 
 let verify_hash_ae (i:pskid) (ha:hash_alg) (ae:aeadAlg) : ST bool
   (requires (fun h0 -> True))
   (ensures (fun h0 b h1 ->
     b ==> compatible_hash_ae i ha ae))
   =
-  MR.m_recall app_psk_table;
-  MR.testify (MM.defined app_psk_table i);
+  recall app_psk_table;
+  testify (MM.defined app_psk_table i);
   match MM.lookup app_psk_table i with
   | Some x ->
     let h = get() in
@@ -206,8 +205,8 @@ let verify_hash_ae (i:pskid) (ha:hash_alg) (ae:aeadAlg) : ST bool
     if pskInfo_hash x.info = ha && pskInfo_ae x.info = ae then
      begin
       cut(compatible_hash_ae_st i ha ae h);
-      assume(MR.stable_on_t app_psk_table (compatible_hash_ae_st i ha ae));
-      MR.witness app_psk_table (compatible_hash_ae_st i ha ae);
+      assume(stable_on_t app_psk_table (compatible_hash_ae_st i ha ae));
+      mr_witness app_psk_table (compatible_hash_ae_st i ha ae);
       true
      end
     else false

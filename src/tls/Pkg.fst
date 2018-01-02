@@ -18,7 +18,6 @@ module Pkg
 
 open Mem
 
-module MR = FStar.Monotonic.RRef
 module MM = FStar.Monotonic.Map
 module MH = FStar.Monotonic.Heap
 module HS = FStar.HyperStack
@@ -277,7 +276,7 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
   let footprint (h:mem): GTot rset =
     let instances_footprint =
       if model then
-        let map = MR.m_sel h (itable mtable) in
+        let map = HS.sel h (itable mtable) in
         mm_fold map #rset Set.empty footprint_extend
       else Set.empty in
     rset_union p.shared_footprint instances_footprint
@@ -288,8 +287,8 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
     =
     if model then
      begin
-      let map = MR.m_sel h0 (itable mtable) in
-      let map' = MR.m_sel h1 (itable mtable) in
+      let map = HS.sel h0 (itable mtable) in
+      let map' = HS.sel h1 (itable mtable) in
       let fp0 = footprint h0 in
       let fp1 = footprint h1 in
       mm_fold_grow map map' i k #rset Set.empty footprint_extend;
@@ -309,7 +308,7 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
   let package_invariant h =
     (model ==>
       (let log : i_mem_table p.key = itable mtable in
-      mm_forall (MR.m_sel h log) p.local_invariant h))
+      mm_forall (HS.sel h log) p.local_invariant h))
     in
   let ls_footprint (#i:ip.t{ip.registered i}) (k:p.key i) =
     rset_union (p.local_footprint k) p.shared_footprint
@@ -330,7 +329,7 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
     (ensures package_invariant h1)
   =
     if model then
-      let map = MR.m_sel h0 (itable mtable) in
+      let map = HS.sel h0 (itable mtable) in
       assert(mm_forall map p.local_invariant h0);
       (match r with
       | Pinv_region r ->
@@ -350,18 +349,18 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
     =
     let h0 = get () in
     let tbl : i_mem_table p.key = itable mtable in
-    MR.m_recall tbl;
+    recall tbl;
     let k : p.key i = p.create i a in
     let h1 = get() in
-    assert(MR.m_sel h0 tbl == MR.m_sel h1 tbl);
+    assert(HS.sel h0 tbl == HS.sel h1 tbl);
     package_invariant_framing h0 (Pinv_region tls_tables_region) h1;
     MM.extend tbl i k;
     let h2 = get () in
     lemma_define_tls_honest_regions (p.local_footprint k);
     p.post_framing #i a k h1 tls_define_region h2;
-    lemma_mm_forall_frame (MR.m_sel h1 tbl) p.local_invariant ls_footprint ls_footprint_frame tls_define_region h1 h2;
+    lemma_mm_forall_frame (HS.sel h1 tbl) p.local_invariant ls_footprint ls_footprint_frame tls_define_region h1 h2;
     p.local_invariant_framing i k h1 tls_define_region h2;
-    lemma_mm_forall_extend (MR.m_sel h1 tbl) (MR.m_sel h2 tbl) p.local_invariant i k h1 h2;
+    lemma_mm_forall_extend (HS.sel h1 tbl) (HS.sel h2 tbl) p.local_invariant i k h1 h2;
     assume(HS.modifies_ref tls_define_region (Set.singleton (mem_addr (itable mtable))) h0 h2); // How to prove?
     footprint_grow h0 i k h2;
     k in
@@ -376,18 +375,18 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
     if model then (
       let h0 = get () in
       let tbl : i_mem_table p.key = itable mtable in
-      MR.m_recall tbl;
+      recall tbl;
       let k : p.key i = p.coerce i a k0 in
       let h1 = get() in
-      assert(MR.m_sel h0 tbl == MR.m_sel h1 tbl);
+      assert(HS.sel h0 tbl == HS.sel h1 tbl);
       package_invariant_framing h0 (Pinv_region tls_tables_region) h1;
       MM.extend tbl i k;
       let h2 = get () in
       lemma_define_tls_honest_regions (p.local_footprint k);
       p.post_framing #i a k h1 tls_define_region h2;
-      lemma_mm_forall_frame (MR.m_sel h1 tbl) p.local_invariant ls_footprint ls_footprint_frame tls_define_region h1 h2;
+      lemma_mm_forall_frame (HS.sel h1 tbl) p.local_invariant ls_footprint ls_footprint_frame tls_define_region h1 h2;
       p.local_invariant_framing i k h1 tls_define_region h2;
-      lemma_mm_forall_extend (MR.m_sel h1 tbl) (MR.m_sel h2 tbl) p.local_invariant i k h1 h2;
+      lemma_mm_forall_extend (HS.sel h1 tbl) (HS.sel h2 tbl) p.local_invariant i k h1 h2;
       assume(HS.modifies_ref tls_define_region (Set.singleton (mem_addr (itable mtable))) h0 h2); // How to prove?
       footprint_grow h0 i k h2;
       k
@@ -432,7 +431,7 @@ let memoization_ST (#ip:ipkg) (p:local_pkg ip)
   let q = memoization #ip p mtable in
   //assert(q == memoization #ip p mtable); // fails when unfolding memoization AR: 12/05: this is no longer needed per the new inlining behavior
   // assert_norm(q == memoization #ip p mtable);// also fails, with squashing error
-  (if model then lemma_mm_forall_init (MR.m_sel h1 (itable mtable)) p.local_invariant h1);
+  (if model then lemma_mm_forall_init (HS.sel h1 (itable mtable)) p.local_invariant h1);
   q
 
 (*
