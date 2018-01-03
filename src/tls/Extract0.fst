@@ -6,7 +6,6 @@ open Idx
 open Pkg.Tree
 open KDF // avoid?
 
-module MR = FStar.Monotonic.RRef
 
 /// --------------------------------------------------------------------------------------------------
 /// PSKs, Salt, and Extraction (can we be more parametric?)
@@ -28,7 +27,7 @@ let there = Mem.tls_tables_region
 // now [private] anymore because of its reuse in Extract2.
 type mref_secret (d:nat) (u: usage d) (i: regid) =
   // would prefer: HyperStack.mref (option (secret u i)) (ssa #(secret u i))
-  MR.m_rref there (option (secret d u i)) ssa
+  m_rref there (option (secret d u i)) ssa
 
 /// covering two cases: application PSK and resumption PSK
 /// (the distinction follow from the value of i)

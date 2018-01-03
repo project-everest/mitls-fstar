@@ -15,7 +15,6 @@ assume val crf: alg -> Tot bool  // to be moved elsewhere, set to false for real
     This may depend on some prior flag to keep the hashed input in the
     incremental hash implementation. (This is always the case for now.)  *)
 
-module MR = FStar.Monotonic.RRef
 module MM = FStar.Monotonic.Map
 
 // the precise types guarantee that the table stays empty when crf _ = false
@@ -35,19 +34,19 @@ abstract type hashed (a:alg) (b:bytes) =
   crf a ==> (
     let h = hash a b in
     let b: domain (Computed a h) = b in
-    MR.witnessed (MM.contains table (Computed a h) b))
+    witnessed (MM.contains table (Computed a h) b))
 
 val crf_injective (a:alg) (b0:bytes) (b1:bytes): ST unit  // should be STTot
   (requires (fun h0 -> hashed a b0 /\ hashed a b1 ))
   (ensures (fun h0 _ h1 -> h0 == h1 /\ (crf a /\ hash a b0 =  hash a b1 ==> Seq.equal b0 b1)))
 let crf_injective a b0 b1 =
   if crf a then (
-    MR.m_recall table;
-    let f = MR.m_read table in
+    recall table;
+    let f = !table in
     let h0 = hash a b0 in
     let h1 = hash a b1 in
-    MR.testify(MM.contains table (Computed a h0) b0);
-    MR.testify(MM.contains table (Computed a h1) b1);
+    testify(MM.contains table (Computed a h0) b0);
+    testify(MM.contains table (Computed a h1) b1);
   ())
 
 private val stop: s:string -> ST 'a
@@ -61,8 +60,7 @@ val finalize: #a:alg -> v:accv a -> ST (tag a)
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 ->
     let b = content v in
-//17-04-12 broken by our switch to haclstar? older comment: precise enough? unclear where it goes in hacl*
-// modifies (Set.as_set [TLSConstants.tls_tables_region]) h0 h1 /\
+    //18-01-03 TODO modifies (Set.as_set [TLSConstants.tls_tables_region]) h0 h1 /\
     t = hash a b /\ hashed a b
   ))
 

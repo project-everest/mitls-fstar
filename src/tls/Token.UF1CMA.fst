@@ -236,8 +236,6 @@ val coerce_eq2: a: (nat -> Type0) -> b: (nat -> Type0) -> v:a 0 -> Pure (b 0)
   (requires a == b) (ensures fun _ -> True)
 let coerce_eq2 _ _ v = v // this works; many similar variants did not.
 
-module MR = FStar.Monotonic.RRef
-
 #set-options "--initial_fuel 1 --max_fuel 2 --initial_ifuel 1 --max_ifuel 2"
 open FStar.Tactics
 

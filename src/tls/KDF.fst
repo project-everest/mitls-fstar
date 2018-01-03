@@ -16,7 +16,6 @@ open Pkg
 open Idx 
 open Pkg.Tree
 
-module MR = FStar.Monotonic.RRef
 module MM = FStar.Monotonic.Map
 module HS = FStar.HyperStack
 
@@ -151,13 +150,13 @@ type local_kdf_invariant (#d:nat) (#u:usage d) (#i:id{registered i}) (k:secret d
         | Ideal kdft ->
           // the entries in the KDF table match those of the child's define_table
           let KDF_table r t : table d u i = kdft in
-          MM.sel (MR.m_sel h t) (Domain lbl ctx) == MM.sel (MR.m_sel h dt) i'
+          MM.sel (sel h t) (Domain lbl ctx) == MM.sel (sel h dt) i'
         | Real raw ->
           assert(~(safeKDF d i));
           assert(honest i' ==> honest i);
           assert(Pkg?.ideal pkg' ==> ~(honest i')); // to call coerceT
           // the child's define table has correctly-computed coerced entries
-          (match MM.sel (MR.m_sel h dt) i' with
+          (match MM.sel (m_sel h dt) i' with
           | None -> True
           | Some k' ->
             // we recompute the concrete key materials, and recall the

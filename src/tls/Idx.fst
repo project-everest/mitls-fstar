@@ -3,7 +3,6 @@ module Idx
 open Mem
 open Pkg
 
-module MR = FStar.Monotonic.RRef
 module MM = FStar.Monotonic.Map
 
 // 17-12-08 we considered separating "honesty" from the more ad hoc parts of this file.
@@ -122,7 +121,7 @@ let honesty_table: h_table =
 type registered (i:id) =
   (if model then
     let log : i_honesty_table = honesty_table in
-    MR.witnessed (MM.defined log i)
+    witnessed (MM.defined log i)
   else True)
 
 type regid = i:id{registered i}
@@ -130,13 +129,13 @@ type regid = i:id{registered i}
 type honest (i:id) =
   (if model then
     let log: i_honesty_table = honesty_table in
-    MR.witnessed (MM.contains log i true)
+    witnessed (MM.contains log i true)
   else False)
 
 type corrupt (i:id) =
   (if model then
     let log : i_honesty_table = honesty_table in
-    MR.witnessed (MM.contains log i false)
+    witnessed (MM.contains log i false)
   else True)
 
 // ADL: difficult to prove, relies on an axiom outside the current formalization of FStar.Monotonic
@@ -155,16 +154,16 @@ let lemma_corrupt_invariant (i:regid) (lbl:label)
   lemma_honest_corrupt (Derive i lbl ctx);
   if model then
     let log : i_honesty_table = honesty_table in
-    MR.m_recall log;
-    MR.testify (MM.defined log i);
+    recall log;
+    testify (MM.defined log i);
     match MM.lookup log i with
     | Some true -> ()
     | Some false ->
-      let m = MR.m_read log in
+      let m = !log in
       // No annotation, but the proof relies on the global log invariant
-      MR.testify (MM.defined log (Derive i lbl ctx));
+      testify (MM.defined log (Derive i lbl ctx));
       MM.contains_stable log (Derive i lbl ctx) false;
-      MR.witness log (MM.contains log (Derive i lbl ctx) false)
+      mr_witness log (MM.contains log (Derive i lbl ctx) false)
   else ()
 
 let get_honesty (i:id {registered i}) : ST bool
@@ -174,8 +173,8 @@ let get_honesty (i:id {registered i}) : ST bool
   lemma_honest_corrupt i;
   if model then
     let log : i_honesty_table = honesty_table in
-    MR.m_recall log;
-    MR.testify (MM.defined log i);
+    recall log;
+    testify (MM.defined log i);
     match MM.lookup log i with
     | Some b -> b
   else false
@@ -199,13 +198,13 @@ let register_derive (i:id{registered i}) (l:label) (c:context{wellformed_id (Der
   let i':id = Derive i l c in
   if model then
     let log : i_honesty_table = honesty_table in
-    MR.m_recall log;
+    recall log;
     match MM.lookup log i' with
     | Some b -> lemma_honest_corrupt i'; (i', b)
     | None ->
       let b = get_honesty i in
       let h = get () in
-      lemma_honesty_update (MR.m_sel h log) i l c b;
+      lemma_honesty_update (sel h log) i l c b;
       MM.extend log i' b;
       lemma_honest_corrupt i';
       (i', b)
