@@ -9,8 +9,6 @@ open Mem
 // random token is just 1/#tokens. (Do we need to enforce a single
 // verification attempt?)
 
-module MR = FStar.Monotonic.RRef
-
 let ipkg = Pkg.ipkg
 let model = Flags.model
 let ideal = Flags.ideal_HMAC 
@@ -46,7 +44,7 @@ type keyrepr (u:info) = Hashing.Spec.hkey u.alg
 let goodish (#ip:ipkg) (i:ip.Pkg.t) (u:info) = _: unit{~(safe i) \/ u.good}
 
 private type log_t (#ip:ipkg) (i:ip.Pkg.t) (u:info) (r:rgn) = 
-  MR.m_rref r (option (goodish #ip i u)) ssa
+  m_rref r (option (goodish #ip i u)) ssa
 
 // runtime (concrete) type of MAC instances
 noeq abstract type concrete_key =
