@@ -169,44 +169,46 @@ let lemma_corrupt_invariant (i:regid) (lbl:label)
 assume val bind_squash_st:
   #a:Type ->
   #b:Type ->
+  #pre:(mem -> Type) ->
   squash a ->
-  $f:(a -> ST (squash b) (requires (fun _ -> True)) (ensures (fun h0 _ h1 -> h0 == h1))) ->
-  ST (squash b) (requires (fun _ -> True)) (ensures (fun h0 _ h1 -> h0 == h1))
+  $f:(a -> ST (squash b) (requires (fun h0 -> pre h0)) (ensures (fun h0 _ h1 -> h0 == h1))) ->
+  ST (squash b) (requires (fun h0 -> pre h0)) (ensures (fun h0 _ h1 -> h0 == h1))
 
 let get_honesty (i:id {registered i}) : ST bool
   (requires fun h0 -> True)
   (ensures fun h0 b h1 -> h0 == h1 /\ (b <==> honest i))
-  =
-  lemma_honest_corrupt i;
-  if model then
-    let log : i_honesty_table = honesty_table in
-    recall log;
-    testify (MM.defined log i);
-    match MM.lookup log i with
-    | Some b ->
-      (*
-       * AR: 03/01
-       *     We need to show b <==> honest i
-       *     The direction b ==> honest i is straightforward, from the postcondition of MM.lookup
-       *     For the other direction, we need to do a recall on the witnessed predicate in honest i
-       *     One way is to go through squash types, using a bind_squash_st axiom above
-       *)
-      let aux () :ST (squash (honest i ==> b2t b)) (requires (fun _ -> True)) (ensures (fun h0 _ h1 -> h0 == h1))
-        = let f :(c_or (honest i) (~ (honest i))) -> ST (squash (honest i ==> b2t b))
-	                                               (requires (fun _ -> True))
-						       (ensures  (fun h0 _ h1 -> h0 == h1))
-	    = fun x ->
-	      match x with
-	      | Left h  -> Squash.return_squash h; testify (MM.contains log i true)
-	      | Right h -> Squash.return_squash h; assert (honest i ==> b2t b)
-	  in
-	  //y:l_or (honest i) (~ (honest i))
-	  let y = Squash.bind_squash (Squash.get_proof (l_or (honest i) (~ (honest i)))) (fun y -> y) in
-	  bind_squash_st y f
-      in
-      aux ();
-      b
-  else false
+  = if model then
+      let log : i_honesty_table = honesty_table in
+      recall log;
+      testify (MM.defined log i);
+      match MM.lookup log i with
+      | Some b ->
+        (*
+         * AR: 03/01
+         *     We need to show b <==> honest i
+         *     The direction b ==> honest i is straightforward, from the postcondition of MM.lookup
+         *     For the other direction, we need to do a recall on the witnessed predicate in honest i
+         *     One way is to go through squash types, using a bind_squash_st axiom above
+         *)
+        let aux (b:bool) :ST (squash (honest i ==> b2t b))
+                             (requires (fun h0     -> MM.contains log i b h0))
+	    		     (ensures (fun h0 _ h1 -> h0 == h1))
+          = let f :(b:bool) -> (c_or (honest i) (~ (honest i)))
+	           -> ST (squash (honest i ==> b2t b))
+	                (requires (fun h0      -> MM.contains log i b h0))
+                        (ensures  (fun h0 _ h1 -> h0 == h1))
+	      = fun _ x ->
+	        match x with
+	        | Left  h -> Squash.return_squash h; testify (MM.contains log i true)
+	        | Right h -> Squash.return_squash h; assert (~ (honest i))
+	    in
+	    //y:l_or (honest i) (~ (honest i))
+	    let y = Squash.bind_squash (Squash.get_proof (l_or (honest i) (~ (honest i)))) (fun y -> y) in
+	    bind_squash_st y (f b)
+        in
+        aux b;
+        b
+    else false
 
 // TODO(adl) preservation of the honesty table invariant
 let rec lemma_honesty_update (m:MM.map id (fun _ -> bool) honesty_invariant)
