@@ -22,12 +22,15 @@ let model = Flags.model
 
 let disjoint = HS.disjoint
 
+/// 18-01-04 We need to explicitly choose between using colors and
+/// using hierarchy & transitivity.
+/// 
 //type fresh_subregion r0 r h0 h1 = ST.stronger_fresh_region r h0 h1 /\ ST.extends r r0
 
-(** Regions and colors for objects in memory *)
-let tls_color = -1  //17-11-22 The color for all regions in the TLS global region.
-let epoch_color = 1 //17-11-22 This needs fixing: we are not on the stack yet.
-let hs_color = 2
+(** Regions and colors for objects in memory; negative numbers are for eternal regions *)
+let tls_color = -1   //17-11-22 The color for all regions in the TLS global region.
+let epoch_color = -2 //17-11-22 Unused so far.
+let hs_color = -3
 
 let is_tls_rgn r   = HS.color r = tls_color
 let is_epoch_rgn r = HS.color r = epoch_color
@@ -38,14 +41,17 @@ let is_hs_rgn r    = HS.color r = hs_color
  *            This is required for allocation subregions
  *            And is provided as a postcondition of allocation
  *
- *            Also, the predicate `is_above s r ==> is_eternal_region s` is not necessary
+ *            Also, the predicate `is_above s r ==> is_eternal_region s` was not necessary
  *            The shape of the memory provides it already
  *            See the lemma just below rgn
  *            Also see HyperStack.lemma_downward_closed that provides this from the memory model
  *)
 let rgn = r:HS.rid{r =!= HS.root /\ is_eternal_region r /\ witnessed (region_contains_pred r)}
 
-private let lemma_derive_eternal_for_regions_above (m:mem) (r:rgn{m.HS.h `Map.contains` r})
+// 18-01-04 we would prefer [is_live_region] to [region_contains_pred].
+
+// just for illustration purpose
+private let lemma_derive_eternal_for_regions_above (m:mem) (r:rgn{m `live_region` r})
   :Lemma (forall (s:HS.rid). HS.is_above s r ==> HS.is_eternal_region s)
   = ()
 
@@ -85,9 +91,8 @@ let tls_honest_region: r:tls_rgn{r `disjoint` tls_tables_region /\ r `disjoint` 
   match p with | (| _, _, r |) -> r
 
 
-
-
 // used for defining 1-shot PRFs and authenticators
+//18-01-04 could be promoted to Preorder 
 val ssa: #a:Type0 -> Preorder.preorder (option a)
 let ssa #a =
   let f x y =
@@ -96,8 +101,6 @@ let ssa #a =
     | Some v, Some v' -> v == v'
     | _ -> False in
   f
-
-
 
 
 (* An earlier variant of the code below, to be deleted 
@@ -131,28 +134,23 @@ assume val lemma_disjoint_ancestors:
   -> Lemma (requires p1 <> p2) (ensures HH.disjoint r1 r2 /\ r1 <> r2)
 *)
 
-// FIXME(adl) can't write Set.set rgn because unification fails in pkg!!
-// the second line embeds the definition of rgn because of the unification bug
-// FIXME(adl) overcomplicated type because of transitive modifications.
-// An rset can be thought of as a set of disjoint subtrees in the region tree
-// rset are downward closed - if r is in s and r' extends r then r' is in s too
-// this allows us to prove disjointness with negation of set membership
-
 
 module MM = FStar.Monotonic.Map
-module MH = FStar.Monotonic.Heap
 
-/// SZ: changed the definition to quantify over [HH.rid] rather than [rgn]
+// We use this instead of Set.set rgn because otherwise subtyping fails in pkg.
+// The second line embeds the definition of rgn because of the unification bug
+//
+// An rset can be thought of as a set of disjoint subtrees in the region tree
+// rset are downward closed - if r is in s and r' extends r then r' is in s too
+// this allows us to prove disjointness with negation of set membership.
+
 type rset = s:Set.set HS.rid{
-  (forall (r1:HS.rid). (Set.mem r1 s ==>  //AR: 12/05: Add the pattern (Set.mem r1 s)?
+  (forall (r1:HS.rid).{:pattern (Set.mem r1 s)} (Set.mem r1 s ==> 
      r1 <> HS.root /\
      (is_tls_rgn r1 ==> r1 `HS.extends` tls_tables_region) /\
-     (forall (r':HS.rid).{:pattern (r' `HS.includes` r1)} r' `is_below` r1 ==> Set.mem r' s) /\
-     (forall (r':HS.rid).{:pattern is_eternal_region r'} r' `is_above` r1 ==> is_eternal_region r')))}
+     (forall (r':HS.rid).{:pattern (r' `HS.includes` r1)} r' `is_below` r1 ==> Set.mem r' s)))}
 
-let rset_union (s1:rset) (s2:rset)
-  : Tot rset (* {forall (r:HS.rid). Set.mem r s <==> (Set.mem r s1 \/ Set.mem r s2)} *) //AR: 12/05: The refinement is not needed, as Set.union provides this mem property already
-  = Set.union s1 s2
+let rset_union (s1:rset) (s2:rset): Tot rset = Set.union s1 s2
 
 /// SZ: This is the strongest lemma that is provable
 /// Note that this old stronger version doesn't hold:
@@ -160,8 +158,7 @@ let rset_union (s1:rset) (s2:rset)
 /// let lemma_rset_disjoint (s:rset) (r:HH.rid) (r':HH.rid)
 ///  : Lemma (requires ~(Set.mem r s) /\ (Set.mem r' s))
 ///          (ensures  r `HH.disjoint` r')
-///  = admit() // easy
-///
+
 let lemma_rset_disjoint (s:rset) (r:HS.rid) (r':HS.rid)
   : Lemma (requires Set.mem r s /\ ~(Set.mem r' s) /\ r' `is_below` r)
           (ensures  r `HS.disjoint` r')
@@ -172,14 +169,8 @@ let lemma_define_tls_honest_regions (s:rset)
   : Lemma (~(Set.mem tls_define_region s) /\ ~(Set.mem tls_honest_region s))
   = ()
 
-/// SZ: commented out this lemma that is also false. E.g. consider
-/// p2 = new_region p1; r1 = new_region p2; r2 = new_region r1
-(*
-assume val lemma_disjoint_ancestors:
-  r1:rgn -> r2:rgn -> p1:rgn{r1 `is_below` p1} -> p2:rgn{r2 `is_below` p2}
-  -> Lemma (requires p1 <> p2) (ensures HH.disjoint r1 r2 /\ r1 <> r2)
-*)
 
+//18-01-04 Consider moving the rest to a separate library
 type trivial_inv (#it:eqtype) (#vt:it -> Type) (m:MM.map' it vt) = True
 type i_mem_table (#it:eqtype) (vt:it -> Type) =
   MM.t tls_define_region it vt trivial_inv
@@ -188,23 +179,23 @@ type mem_table (#it:eqtype) (vt:it -> Type) =
 
 let itable (#it:eqtype) (#vt:it -> Type) (t:mem_table vt)
   : Pure (i_mem_table vt) (requires model) (ensures fun _ -> True) = t
-let mem_addr (#it:eqtype) (#vt:it -> Type) (t:i_mem_table vt)
-  : GTot nat = HS.as_addr t
+
+let mem_addr (#it:eqtype) (#vt:it -> Type) (t:i_mem_table vt): GTot nat = HS.as_addr t
 
 type mem_fresh (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (i:it) (h:mem) =
   model ==> MM.fresh (itable t) i h
 type mem_defined (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (i:it) =
   model ==> witnessed (MM.defined (itable t) i)
-type mem_update (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (i:it) (v:vt i) (h0:mem) (h1:mem) =
+type mem_update (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (i:it) (v:vt i) (h0 h1:mem) =
   mem_defined t i /\
   (model ==> HS.sel h1 (itable t) == MM.upd (HS.sel h0 (itable t)) i v)
 
-type mem_stable (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (h0:mem) (h1:mem) =
+type mem_stable (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (h0 h1:mem) =
   model ==> HS.sel h0 (itable t) == HS.sel h1 (itable t)
 type mem_empty (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (h1:mem) =
   model ==> HS.sel h1 (itable t) == MM.empty_map it vt
 
-type modifies_mem_table (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (h0:mem) (h1:mem) =
+type modifies_mem_table (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (h0 h1:mem) =
   (if model then
      (modifies_one tls_define_region h0 h1 /\
      HS.modifies_ref tls_define_region (Set.singleton (mem_addr (itable t))) h0 h1)
