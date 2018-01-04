@@ -270,10 +270,8 @@ int ConfigureQuic(quic_state **pstate)
 
     memset(&quic_cfg, 0, sizeof(quic_cfg));
     quic_cfg.is_server = (option_isserver) ? 1 : 0;
-    quic_cfg.qp.max_stream_data = 65536;
-    quic_cfg.qp.max_data = 16777216;
-    quic_cfg.qp.max_stream_id = 256;
-    quic_cfg.qp.idle_timeout = 60;
+    quic_cfg.qp.tp_len = 9;
+    quic_cfg.qp.tp_data = "\xff\xff\x00\x05\x0a\x0b\x0c\x0d\x0e\x00";
     quic_cfg.cipher_suites = option_ciphers;
     quic_cfg.cert_callbacks = &cert_callbacks;
     quic_cfg.signature_algorithms = option_sigalgs;
