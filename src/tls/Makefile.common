@@ -1,4 +1,4 @@
-HACL_HOME=../../../hacl-star
+HACL_HOME?=../../../hacl-star
 MITLS_HOME=../..
 
 INCLUDE_PATHS= \

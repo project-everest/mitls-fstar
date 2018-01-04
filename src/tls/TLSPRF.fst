@@ -1,6 +1,7 @@
 ﻿(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 (* STATUS : JK : assumed two arrays because, has to be fixed *)
 module TLSPRF
+module HS = FStar.HyperStack //Added automatically
 
 (* Low-level (bytes -> byte) PRF implementations for TLS *)
 

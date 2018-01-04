@@ -1,4 +1,5 @@
 module Negotiation
+module HST = FStar.HyperStack.ST //Added automatically
 
 open FStar.Error
 open FStar.Bytes
@@ -8,9 +9,9 @@ open TLSInfo
 open TLSConstants
 open HandshakeMessages
 
-module HH = FStar.HyperHeap
+
 module HS = FStar.HyperStack
-module MR = FStar.Monotonic.RRef
+
 
 //16-05-31 these opens are implementation-only; overall we should open less
 open Extensions
@@ -383,14 +384,14 @@ let ns_rel (#r:role) (#cfg:config) (#resume:resumeInfo r)
   (exists ns0. ns_step ns ns0 /\ ns_step ns0 ns')
 
 assume val ns_rel_monotonic: #r:role -> #cfg:config -> #resume:resumeInfo r ->
-  Lemma (MR.monotonic (negotiationState r cfg resume) (ns_rel #r #cfg #resume))
+  Lemma (Preorder.preorder_rel (ns_rel #r #cfg #resume))
 
 noeq type t (region:rgn) (role:TLSConstants.role) : Type0 =
   | NS:
     cfg: config -> // local configuration
     resume: TLSInfo.resumeInfo role ->
     nonce: TLSInfo.random ->
-    state: MR.m_rref region (negotiationState role cfg resume) ns_rel ->
+    state: HST.m_rref region (negotiationState role cfg resume) ns_rel ->
     t region role
 
 #set-options "--lax"
@@ -453,15 +454,15 @@ val create:
 let create region r cfg resume nonce =
   match r with
   | Client ->
-    let state = MR.m_alloc region (C_Init nonce) in
+    let state = HST.ralloc region (C_Init nonce) in
     NS cfg resume nonce state
   | Server ->
-    let state = MR.m_alloc region (S_Init nonce) in
+    let state = HST.ralloc region (S_Init nonce) in
     NS cfg resume nonce state
 
 // For QUIC: we need a different signal when returning HRR (special packet type)
 let is_server_hrr (#region:rgn) (#role:TLSConstants.role) (ns:t region role) =
-  match MR.m_read ns.state with
+  match HST.op_Bang ns.state with
   | S_HRR _ _ -> true
   | _ -> false
 
@@ -552,7 +553,7 @@ val getMode: #region:rgn -> #role:TLSConstants.role -> t region role ->
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
 let getMode #region #role ns =
-  match MR.m_read ns.state with
+  match HST.op_Bang ns.state with
   | C_Mode mode
   | C_WaitFinished2 mode _
   | C_Complete mode _
@@ -567,7 +568,7 @@ val version: #region:rgn -> #role:TLSConstants.role -> t region role ->
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
 let version #region #role ns =
-  match MR.m_read ns.state with
+  match HST.op_Bang ns.state with
   | C_Init _ -> ns.cfg.max_version
   | C_Offer _ -> ns.cfg.max_version
   | C_HRR o _ -> ns.cfg.max_version
@@ -599,7 +600,7 @@ let const_true _ = true
 
 let sign #region #role ns tbs =
   // TODO(adl) make the pattern below a static pre-condition
-  let S_Mode mode (Some (cert, sa)) = MR.m_read ns.state in
+  let S_Mode mode (Some (cert, sa)) = HST.op_Bang ns.state in
   match cert_sign_cb ns.cfg cert sa tbs with
   | None -> Error (AD_no_certificate, perror __SOURCE_FILE__ __LINE__ "Failed to sign with selected certificate.")
   | Some sigv ->
@@ -627,7 +628,7 @@ let client_ClientHello #region ns oks =
     | None -> None in
   let _, pskid = ns.resume in
   let pskinfo = map_ST i_psk_info pskid in
-  match MR.m_read ns.state with
+  match HST.op_Bang ns.state with
   | C_Init _ ->
       trace(if
     (match pskinfo with
@@ -637,7 +638,7 @@ let client_ClientHello #region ns oks =
       trace(if Some? ns.cfg.max_early_data then "enabled" else "");
       let offer = computeOffer Client ns.cfg ns.resume ns.nonce oks' pskinfo in
       trace ("offering client extensions "^string_of_option_extensions offer.ch_extensions);
-      MR.m_write ns.state (C_Offer offer);
+      HST.op_Colon_Equals ns.state (C_Offer offer);
       offer
 
 let group_of_hrr hrr : option CommonDH.group =
@@ -650,7 +651,7 @@ let client_HelloRetryRequest #region (ns:t region Client) hrr (s:share) =
   let { hrr_protocol_version = pv;
         hrr_cipher_suite = cs;
         hrr_extensions = el } = hrr in
-  match MR.m_read ns.state with
+  match HST.op_Bang ns.state with
   | C_Offer offer ->
     let old_shares = gs_of offer in
     let old_psk =
@@ -679,7 +680,7 @@ let client_HelloRetryRequest #region (ns:t region Client) hrr (s:share) =
 
         let offer' = {offer with ch_extensions = Some ext'} in
         let ri = (hrr, old_shares, old_psk) in
-        MR.m_write ns.state (C_HRR offer' ri);
+        HST.op_Colon_Equals ns.state (C_HRR offer' ri);
         Correct(offer')
        end
       else
@@ -865,7 +866,7 @@ val client_ServerHello: #region:rgn -> t region Client ->
   HandshakeMessages.sh ->
   St (result mode) // it needs to be computed, whether returned or not
 let client_ServerHello #region ns sh =
-  match MR.m_read ns.state with
+  match HST.op_Bang ns.state with
   | C_HRR offer _ // -> FIXME validation
   //  .....
   | C_Offer offer ->
@@ -923,7 +924,7 @@ let client_ServerHello #region ns sh =
                 None // n_server_cert
                 client_share
                in
-               MR.m_write ns.state (C_Mode mode);
+               HST.op_Colon_Equals ns.state (C_Mode mode);
                Correct mode
             | _ -> // TODO: pure PSK mode
               Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
@@ -944,7 +945,7 @@ let client_ServerHello #region ns sh =
             None // n_server_cert
             None // n_client_share
           in
-          MR.m_write ns.state (C_Mode mode);
+          HST.op_Colon_Equals ns.state (C_Mode mode);
           Correct mode
         | _ -> Error (AD_decode_error, "ServerHello ciphersuite is not a real ciphersuite")
 
@@ -1009,7 +1010,7 @@ let client_ServerKeyExchange #region ns crt ske ocr =
         let scert = Some (Cert.chain_up crt.crt_chain, sa) in
         let mode = Mode offer hrr pv sr sid cs pski sext (Some gy) ocr scert gx in
         let ccert = None in // TODO
-        MR.m_write ns.state (C_WaitFinished2 mode ccert);
+        HST.op_Colon_Equals ns.state (C_WaitFinished2 mode ccert);
         Correct mode
 
 val clientComplete_13: #region:rgn -> t region Client ->
@@ -1021,7 +1022,7 @@ val clientComplete_13: #region:rgn -> t region Client ->
   St (result mode) // it needs to be computed, whether returned or not
 let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify digest =
   trace "Nego.clientComplete_13";
-  match MR.m_read ns.state with
+  match HST.op_Bang ns.state with
   | C_Mode mode ->
     let ccert = None in
     trace ("EE: "^(Extensions.string_of_extensions ee));
@@ -1063,7 +1064,7 @@ let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify d
         schain
         mode.n_client_share
       in
-      MR.m_write ns.state (C_Complete mode ccert);
+      HST.op_Colon_Equals ns.state (C_Complete mode ccert);
       Correct mode
     else
       Error(AD_bad_certificate_fatal, "Failed to validate signature or certificate")
@@ -1331,7 +1332,7 @@ let server_ClientHello #region ns offer =
   trace ("offered client extensions "^string_of_option_extensions offer.ch_extensions);
   trace ("offered cipher suites "^(string_of_ciphersuites offer.ch_cipher_suites));
   trace (string_of_result (List.Tot.fold_left (fun s pv -> s^" "^string_of_pv pv) "offered versions")  (offered_versions TLS_1p0 offer));
-  match MR.m_read ns.state with
+  match HST.op_Bang ns.state with
   | S_HRR o1 hrr ->
     let o2 = offer in
     // We only send HRR for KeyShare
@@ -1373,7 +1374,7 @@ let server_ClientHello #region ns offer =
         Error(AD_illegal_parameter, "client sent the same hello in response to hello retry")
       | Correct(ServerMode m cert) ->
         trace ("negotiated after HRR "^string_of_pv m.n_protocol_version^" "^string_of_ciphersuite m.n_cipher_suite);
-        MR.m_write ns.state (S_ClientHello m cert);
+        HST.op_Colon_Equals ns.state (S_ClientHello m cert);
         sm
     else
       Error(AD_illegal_parameter, "Inconsistant parameters between first and second client hello")
@@ -1385,11 +1386,11 @@ let server_ClientHello #region ns offer =
       Error z
     | Correct (ServerHelloRetryRequest hrr) ->
       // record the initial offer and return the HRR to HS
-      MR.m_write ns.state (S_HRR offer hrr);
+      HST.op_Colon_Equals ns.state (S_HRR offer hrr);
       sm
     | Correct (ServerMode m cert) ->
       trace ("negotiated "^string_of_pv m.n_protocol_version^" "^string_of_ciphersuite m.n_cipher_suite);
-      MR.m_write ns.state (S_ClientHello m cert);
+      HST.op_Colon_Equals ns.state (S_ClientHello m cert);
       sm
 
 
@@ -1399,7 +1400,7 @@ let share_of_serverKeyShare (ks:CommonDH.serverKeyShare) : share =
 val server_ServerShare: #region:rgn -> t region Server -> option CommonDH.serverKeyShare  ->
   St (result mode)
 let server_ServerShare #region ns ks =
-  match MR.m_read ns.state with
+  match HST.op_Bang ns.state with
   | S_ClientHello mode cert ->
     let cexts = mode.n_offer.ch_extensions in
     trace ("processing client extensions " ^ string_of_option_extensions cexts);
@@ -1432,7 +1433,7 @@ let server_ServerShare #region ns ks =
         mode.n_server_cert
         mode.n_client_share
       in
-      MR.m_write ns.state (S_Mode mode cert);
+      HST.op_Colon_Equals ns.state (S_Mode mode cert);
       Correct mode
       end
 

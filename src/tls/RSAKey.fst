@@ -1,5 +1,6 @@
 ﻿(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 module RSAKey
+module HS = FStar.HyperStack //Added automatically
 
 open CoreCrypto
 open FStar.Bytes

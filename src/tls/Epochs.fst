@@ -5,12 +5,13 @@ An elaboration would ensure that keys in old epochs are erased.
 (i.e. we only keep old epoch AE logs for specifying authentication)
 *)
 module Epochs
+module HST = FStar.HyperStack.ST //Added automatically
 
 open FStar.Heap
-open FStar.HyperHeap
+
 open FStar.Seq // DO NOT move further below, it would shadow `FStar.HyperStack.mem`
 open FStar.HyperStack
-open FStar.Monotonic.RRef
+
 open FStar.Monotonic.Seq
 open FStar.Error
 open FStar.Bytes
@@ -23,9 +24,9 @@ open Range
 open StAE
 //open Negotiation
 
-module HH = FStar.HyperHeap
+
 module HS = FStar.HyperStack
-module MR = FStar.Monotonic.RRef
+
 module MS = FStar.Monotonic.Seq
 type random = TLSInfo.random
 
@@ -43,8 +44,8 @@ unfold let trace = if Flags.debug_Epochs then print else (fun _ -> ())
 
 type epoch_region_inv (#i:id) (hs_rgn:rgn) (r:reader (peerId i)) (w:writer i) =
   disjoint hs_rgn (region w) /\
-  parent (region w) <> HH.root /\
-  parent (region r) <> HH.root /\
+  parent (region w) <> HS.root /\
+  parent (region r) <> HS.root /\
   // grandparent of each writer is a sibling of the handshake
   parent hs_rgn = parent (parent (region w))  /\
   disjoint (region w) (region r) /\
@@ -145,11 +146,11 @@ val alloc_log_and_ctrs: #a:Type0 -> #p:(seq a -> Type0) -> r:rgn ->
     (requires (fun h -> p Seq.createEmpty))
     (ensures (fun h0 x h1 ->
       modifies_one r h0 h1 /\
-      modifies_rref r Set.empty (HS.HS?.h h0) (HS.HS?.h h1) /\
+      HS.modifies_ref r Set.empty ( h0) ( h1) /\
       (let (| is, c1, c2 |) = x in
       i_contains is h1 /\
-      m_contains c1 h1 /\
-      m_contains c2 h1 /\
+      h1 `contains` c1 /\
+      h1 `contains` c2 /\
       i_sel h1 is == Seq.createEmpty)))
 
 #reset-options "--using_facts_from FStar --using_facts_from Prims --using_facts_from Epochs --using_facts_from Parse"
@@ -157,9 +158,9 @@ val alloc_log_and_ctrs: #a:Type0 -> #p:(seq a -> Type0) -> r:rgn ->
 let alloc_log_and_ctrs #a #p r =
   let init = Seq.createEmpty in
   let is = alloc_mref_iseq p r init in
-  witness is (int_at_most (-1) is);
-  let c1 : epoch_ctr #a #p r is = m_alloc r (-1) in
-  let c2 : epoch_ctr #a #p r is = m_alloc r (-1) in
+  HST.mr_witness is (int_at_most (-1) is);
+  let c1 : epoch_ctr #a #p r is = HST.ralloc r (-1) in
+  let c2 : epoch_ctr #a #p r is = HST.ralloc r (-1) in
   (| is, c1, c2 |)
 
 #reset-options
@@ -171,22 +172,22 @@ val incr_epoch_ctr :
   #is:MS.i_seq r a p ->
   ctr:epoch_ctr r is ->
   ST unit
-    (requires fun h -> 1 + m_sel h ctr < Seq.length (i_sel h is))
+    (requires fun h -> 1 + sel h ctr < Seq.length (i_sel h is))
     (ensures (fun h0 _ h1 ->
-      let ctr_as_hsref = MR.as_hsref ctr in
+      let ctr_as_hsref =  ctr in
       modifies_one r h0 h1 /\
-      modifies_rref r (Set.singleton (Heap.addr_of (as_ref ctr_as_hsref))) (HS.HS?.h h0) (HS.HS?.h h1) /\
-      m_sel h1 ctr = m_sel h0 ctr + 1))
+      HS.modifies_ref r (Set.singleton (Heap.addr_of (as_ref ctr_as_hsref))) ( h0) ( h1) /\
+      sel h1 ctr = sel h0 ctr + 1))
 let incr_epoch_ctr #a #p #r #is ctr =
-  m_recall ctr;
-  let cur = m_read ctr in
+  HST.recall ctr;
+  let cur = HST.op_Bang ctr in
   MS.int_at_most_is_stable is (cur + 1);
-  witness is (int_at_most (cur + 1) is);
-  m_write ctr (cur + 1)
+  HST.mr_witness is (int_at_most (cur + 1) is);
+  HST.op_Colon_Equals ctr (cur + 1)
 
 val create: r:rgn -> n:random -> ST (epochs r n)
     (requires (fun h -> True))
-    (ensures (fun h0 x h1 -> modifies_one r h0 h1 /\ modifies_rref r Set.empty (HS.HS?.h h0) (HS.HS?.h h1)))
+    (ensures (fun h0 x h1 -> modifies_one r h0 h1 /\ HS.modifies_ref r Set.empty ( h0) ( h1)))
 let create (r:rgn) (n:random) =
   let (| esref, c1, c2 |) = alloc_log_and_ctrs #(epoch r n) #(epochs_inv #r #n) r in
   let xkr = alloc_mref_iseq (fun s -> Seq.length s <= 2) r Seq.createEmpty in
@@ -195,16 +196,16 @@ let create (r:rgn) (n:random) =
 
 unfold let incr_pre #r #n (es:epochs r n) (proj:(es:epochs r n -> Tot (epoch_ctr r (MkEpochs?.es es)))) h : GTot Type0 =
   let ctr = proj es in
-  let cur = m_sel h ctr in
+  let cur = sel h ctr in
   cur + 1 < Seq.length (i_sel h (MkEpochs?.es es))
 
 unfold let incr_post #r #n (es:epochs r n) (proj:(es:epochs r n -> Tot (epoch_ctr r (MkEpochs?.es es)))) h0 (_:unit) h1 : GTot Type0 =
   let ctr = proj es in
-  let oldr = m_sel h0 ctr in
-  let newr = m_sel h1 ctr in
-  let ctr_as_hsref = MR.as_hsref ctr in
+  let oldr = sel h0 ctr in
+  let newr = sel h1 ctr in
+  let ctr_as_hsref =  ctr in
   modifies_one r h0 h1 /\
-  HH.modifies_rref r (Set.singleton (HS.as_addr ctr_as_hsref)) (HS.HS?.h h0) (HS.HS?.h h1) /\
+  HS.modifies_ref r (Set.singleton (HS.as_addr ctr_as_hsref)) ( h0) ( h1) /\
   newr = oldr + 1
 
 val add_epoch :
@@ -213,8 +214,8 @@ val add_epoch :
     (requires fun h -> let is = MkEpochs?.es es in epochs_inv #r #n (Seq.snoc (i_sel h is) e))
     (ensures fun h0 x h1 ->
         let es = MkEpochs?.es es in
-        let es_as_hsref = MR.as_hsref es in
-        modifies_one r h0 h1 /\ modifies_rref r (Set.singleton (HS.as_addr es_as_hsref)) (HS.HS?.h h0) (HS.HS?.h h1) /\
+        let es_as_hsref =  es in
+        modifies_one r h0 h1 /\ HS.modifies_ref r (Set.singleton (HS.as_addr es_as_hsref)) ( h0) ( h1) /\
         i_sel h1 es == Seq.snoc (i_sel h0 es) e)
 let add_epoch #r #n (MkEpochs es _ _ _) e = MS.i_write_at_end es e
 
@@ -226,8 +227,8 @@ let ctr (#r:_) (#n:_) (e:epochs r n) (rw:rw) :  epoch_ctr r e.es =
   | Writer -> e.write
 
 let string_of_es #r #n (es:epochs r n) =
-  let r = m_read (ctr es Reader) in
-  let w = m_read (ctr es Writer) in
+  let r = HST.op_Bang (ctr es Reader) in
+  let w = HST.op_Bang (ctr es Writer) in
   string_of_int r^"/"^string_of_int w
 
 let incr_reader #r #n (es:epochs r n) : ST unit
@@ -246,15 +247,15 @@ let incr_writer #r #n (es:epochs r n) : ST unit
 
 
 val readerT: #rid:rgn -> #n:random -> e:epochs rid n -> mem -> GTot (epoch_ctr_inv rid (get_epochs e))
-let readerT #rid #n (MkEpochs es r w _) (h:mem) = m_sel h r
+let readerT #rid #n (MkEpochs es r w _) (h:mem) = sel h r
 
 val writerT: #rid:rgn -> #n:random -> e:epochs rid n -> mem -> GTot (epoch_ctr_inv rid (get_epochs e))
-let writerT #rid #n (MkEpochs es r w _) (h:mem) = m_sel h w
+let writerT #rid #n (MkEpochs es r w _) (h:mem) = sel h w
 
 unfold let get_ctr_post (#r:rgn) (#n:random) (es:epochs r n) (rw:rw) h0 (i:int) h1 =
   let epochs = MkEpochs?.es es in
   h0 == h1 /\
-  i = m_sel h1 (ctr es rw) /\
+  i = sel h1 (ctr es rw) /\
   -1 <= i /\
   MS.int_at_most i epochs h1
 
@@ -262,7 +263,7 @@ let get_ctr (#r:rgn) (#n:random) (es:epochs r n) (rw:rw)
   : ST int (requires (fun h -> True)) (ensures (get_ctr_post es rw))
 =
   let epochs = es.es in
-  let n = m_read (ctr es rw) in
+  let n = HST.op_Bang (ctr es rw) in
   testify (MS.int_at_most n epochs);
   n
 
@@ -277,9 +278,9 @@ let get_current_epoch
   (e:epochs r n)
   (rw:rw)
   : ST (epoch r n)
-       (requires (fun h -> 0 <= m_sel h (ctr e rw)))
+       (requires (fun h -> 0 <= sel h (ctr e rw)))
        (ensures (fun h0 rd h1 ->
-           let j = m_sel h1 (ctr e rw) in
+           let j = sel h1 (ctr e rw) in
            let epochs = MS.i_sel h1 e.es in
            h0==h1 /\
            Seq.indexable epochs j /\

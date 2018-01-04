@@ -1,4 +1,6 @@
 module TLSInfo
+module HS = FStar.HyperStack //Added automatically
+module HST = FStar.HyperStack.ST //Added automatically
 
 #set-options "--max_fuel 3 --initial_fuel 3 --max_ifuel 1 --initial_ifuel 1"
 
@@ -18,8 +20,8 @@ open TLSConstants
 module CC = CoreCrypto
 module DM = FStar.DependentMap
 module MM = FStar.Monotonic.DependentMap
-module MR = FStar.Monotonic.RRef
-module HH = FStar.HyperHeap
+
+
 
 let default_cipherSuites = [
   TLS_AES_128_GCM_SHA256;
@@ -541,7 +543,7 @@ let safety_table : s_table =
 type registered (i:pre_index) =
   (if Flags.ideal_KEF then
     let log : i_safety_log = safety_table in
-    MR.witnessed (MM.defined log i)
+    HST.witnessed (MM.defined log i)
   else True)
 
 type valid (i:pre_index) =
@@ -589,13 +591,13 @@ type index = i:pre_index{valid i}
 type honest (i:index) =
   (if Flags.ideal_KEF then
     let log : i_safety_log = safety_table in
-    MR.witnessed (MM.contains log i true)
+    HST.witnessed (MM.contains log i true)
   else False)
 
 type dishonest (i:index) =
   (if Flags.ideal_KEF then
     let log : i_safety_log = safety_table in
-    MR.witnessed (MM.contains log i false)
+    HST.witnessed (MM.contains log i false)
   else True)
 
 type esId = i:pre_esId{valid (I_ES i)}

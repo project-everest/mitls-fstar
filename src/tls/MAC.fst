@@ -1,10 +1,10 @@
 ﻿module MAC
-
+module HS = FStar.HyperStack
 (* Idealizing HMAC for the TLS 1.2 record layer 
     TODO: review indexing *) 
 
 open FStar.Heap
-open FStar.HyperHeap
+
 open FStar.HyperStack
 open FStar.Seq
  // for e.g. found
@@ -29,7 +29,7 @@ type tag (i:id) = lbytes (macSize (alg i))
 type keyrepr (i:id) = lbytes (macSize (alg i))
 
 
-type fresh_subregion rg parent h0 h1 = stronger_fresh_region rg h0 h1 /\ extends rg parent
+type fresh_subregion rg parent h0 h1 = HS.fresh_region rg h0 h1 /\ extends rg parent
 
 // We keep the tag in case we later want to enforce tag authentication
 abstract type entry (i:id) (good: bytes -> Type) = 

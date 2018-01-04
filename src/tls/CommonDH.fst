@@ -7,6 +7,8 @@ is for syntactically valid shares (used in parsing modules) while
 share is for registered shares (for which is_honest is defined).
 *)
 module CommonDH
+module HS = FStar.HyperStack //Added automatically
+module HST = FStar.HyperStack.ST //Added automatically
 
 open FStar.HyperStack
 open FStar.Bytes
@@ -16,7 +18,7 @@ open Parse
 open TLSError
 open FStar.HyperStack.ST
 
-module MR = FStar.Monotonic.RRef
+
 module MM = FStar.Monotonic.DependentMap
 module DM = FStar.DependentMap
 module ST = FStar.HyperStack.ST
@@ -119,20 +121,20 @@ abstract let share_log: share_table =
 let registered i =
   (if Flags.ideal_KEF then
     let log : ideal_log = share_log in
-    MR.witnessed (MM.defined log i)
+    HST.witnessed (MM.defined log i)
   else
     True)
 
 let honest_share i =
   (if Flags.ideal_KEF then
     let log : ideal_log = share_log in
-    MR.witnessed (MM.contains log i true)
+    HST.witnessed (MM.contains log i true)
   else False)
 
 let dishonest_share i =
   (if Flags.ideal_KEF then
     let log : ideal_log = share_log in
-    MR.witnessed (MM.contains log i false)
+    HST.witnessed (MM.contains log i false)
   else True)
 
 let pre_pubshare #g ks =
@@ -149,13 +151,13 @@ let is_honest i =
    begin
     let log : ideal_log = share_log in
     let h = get () in
-    MR.m_recall log;
-    MR.testify (MM.defined log i);
-    cut(Some? (MM.sel (MR.m_sel h log) i));
-    let b = Some?.v (MM.sel (MR.m_read log) i) in
+    HST.recall log;
+    HST.testify (MM.defined log i);
+    cut(Some? (MM.sel (HS.sel h log) i));
+    let b = Some?.v (MM.sel (HST.op_Bang log) i) in
     cut(MM.contains log i b h);
     MM.contains_stable log i b;
-    MR.witness log (MM.contains log i b); b
+    HST.mr_witness log (MM.contains log i b); b
    end
   else false
 
@@ -167,19 +169,19 @@ let lemma_honest_or_dishonest (i:id) : ST unit
    begin
     let log : ideal_log = share_log in
     let h = get () in
-    MR.m_recall log;
-    MR.testify (MM.defined log i);
-    cut(Some? (MM.sel (MR.m_sel h log) i));
-    let b = Some?.v (MM.sel (MR.m_read log) i) in
+    HST.recall log;
+    HST.testify (MM.defined log i);
+    cut(Some? (MM.sel (HS.sel h log) i));
+    let b = Some?.v (MM.sel (HST.op_Bang log) i) in
     match b with
     | true ->
       cut(MM.contains log i true h);
       MM.contains_stable log i true;
-      MR.witness log (MM.contains log i true)
+      HST.mr_witness log (MM.contains log i true)
     | false ->
       cut(MM.contains log i false h);
       MM.contains_stable log i false;
-      MR.witness log (MM.contains log i false)
+      HST.mr_witness log (MM.contains log i false)
    end
   else ()
 
@@ -192,12 +194,12 @@ let lemma_honest_and_dishonest (i:id)
    begin
     let h = get () in
     let log : ideal_log = share_log in
-    MR.m_recall log;
-    MR.testify (MM.defined log i);
-    MR.testify (MM.contains log i true);
-    cut(true = Some?.v (MM.sel (MR.m_sel h log) i));
-    MR.testify (MM.contains log i false);
-    cut(false = Some?.v (MM.sel (MR.m_sel h log) i));
+    HST.recall log;
+    HST.testify (MM.defined log i);
+    HST.testify (MM.contains log i true);
+    cut(true = Some?.v (MM.sel (HS.sel h log) i));
+    HST.testify (MM.contains log i false);
+    cut(false = Some?.v (MM.sel (HS.sel h log) i));
     cut(False)
    end
   else ()
@@ -248,7 +250,7 @@ let rec keygen g =
     begin
      let log : ideal_log = share_log in
      let i : id = (| g, pre_pubshare gx |) in
-     MR.m_recall log;
+     HST.recall log;
      match MM.lookup log i with
      | None ->
        MM.extend log i true;
@@ -284,7 +286,7 @@ let register #g gx =
    begin
     let log : ideal_log = share_log in
     let i : id = (| g, gx |) in
-    MR.m_recall log;
+    HST.recall log;
     match MM.lookup log i with
     | None ->
       MM.extend log i false;
@@ -292,7 +294,7 @@ let register #g gx =
       cut(dishonest_share i);
       gx
     | Some b ->
-      cut(MR.witnessed (MM.defined log i));
+      cut(HST.witnessed (MM.defined log i));
       gx
    end
   else gx

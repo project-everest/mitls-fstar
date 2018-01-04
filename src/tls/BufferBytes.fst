@@ -1,10 +1,11 @@
 module BufferBytes
+module HS = FStar.HyperStack //Added automatically
 module ST = FStar.HyperStack.ST
 
 open FStar.HyperStack.All
 
 open FStar.Heap
-open FStar.HyperHeap
+
 open FStar.HyperStack
 open FStar.Seq
 open FStar.Bytes

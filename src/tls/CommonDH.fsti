@@ -7,12 +7,20 @@ open Parse
 open TLSError
 open FStar.HyperStack.ST
 
+module HS = FStar.HyperStack
+module HST = FStar.HyperStack.ST
+
+(* NS: Jan 3, 2018
+       JRoesch added the 6 lines below.
+       Not sure why it's needed any more.
+       Removing.
+*)       
 // tmp hack for depenency analysis bug
-module Req_FSTMRRef = FStar.Monotonic.RRef
-module Req_MM = FStar.Monotonic.DependentMap
-module IO = FStar.IO
-module Req_DHGroup = DHGroup
-module Req_ECGroup = ECGroup
+// module Req_FSTMRRef = FStar.Monotonic.RRef
+// module Req_MM = FStar.Monotonic.DependentMap
+// module IO = FStar.IO
+// module Req_DHGroup = DHGroup
+// module Req_ECGroup = ECGroup
 
 val group: t:Type0{hasEq t}
 val is_ec: group -> Tot bool

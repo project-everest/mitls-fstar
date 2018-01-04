@@ -1,7 +1,7 @@
 module Alert
 
 open FStar.Heap
-open FStar.HyperHeap
+
 open FStar.Seq
 
 open FStar.Error

@@ -1,11 +1,12 @@
 module Hashing.OpenSSL
+module HS = FStar.HyperStack //Added automatically
 
 // unverified, external implementation of our core hash algorithms 
 // for now we only support OpenSSL, so we skip multiplexing, Hashing.OpenSSL,  and fstis
 // (TODO: separate interface and implementation; disentangle from CoreCrypto)
 
 open FStar.Heap
-open FStar.HyperHeap
+
 open FStar.HyperStack
 open FStar.HyperStack.ST
 
@@ -35,7 +36,7 @@ val alloc: a:alg -> parent:rid -> ST (r:rid & hash_ctx a r)
   (ensures (fun h0 (r,v) h1 -> 
     modifies Set.empty h0 h1 /\
     extends r parent /\
-    stronger_fresh_region r h0 h1 /\
+    HS.fresh_region r h0 h1 /\
     accT v h1 == empty_bytes))
 
 val update: #a:alg -> #r:rgn -> v:hash_ctx a r -> b:bytes -> ST unit 

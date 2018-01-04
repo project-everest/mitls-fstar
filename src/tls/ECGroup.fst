@@ -1,4 +1,5 @@
 module ECGroup
+module HS = FStar.HyperStack //Added automatically
 
 open FStar.HyperStack
 open FStar.Bytes

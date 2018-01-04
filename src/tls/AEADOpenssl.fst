@@ -1,7 +1,9 @@
 module AEADOpenssl
+module HS = FStar.HyperStack //Added automatically
+module HST = FStar.HyperStack.ST //Added automatically
 
 open FStar.Heap
-open FStar.HyperHeap
+
 open FStar.HyperStack
 open FStar.Seq
 open FStar.Bytes
@@ -11,7 +13,7 @@ open TLSConstants
 open TLSInfo
 
 module MM = FStar.Monotonic.DependentMap
-module MR = FStar.Monotonic.RRef
+
 
 type id = i:id{~(PlaintextID? i) /\ AEAD? (aeAlg_of_id i)}
 let alg (i:id) = AEAD?._0 (aeAlg_of_id i)
@@ -67,15 +69,15 @@ noeq type state (i:id) (rw:rw) =
     region: rgn ->
     #log_region:rgn{
        if rw = Writer then region = log_region
-       else HyperHeap.disjoint region log_region} ->
+       else HS.disjoint region log_region} ->
     key: key i ->
     log: log_ref log_region i ->
     state i rw
 
 type empty_log (#i:id) (#rw:rw) (st:state i rw) h =
   authId i ==>
-    (MR.m_contains (ilog st.log) h /\
-     MR.m_sel h (ilog st.log) == MM.empty)
+    (h `HS.contains` (ilog st.log) /\
+     HS.sel h (ilog st.log) == MM.empty)
 
 type writer i = s:state i Writer
 type reader i = s:state i Reader
@@ -83,7 +85,7 @@ type reader i = s:state i Reader
 let genPost (#i:id) (parent:rgn) h0 (w:writer i) h1 =
   modifies Set.empty h0 h1 /\
   extends w.region parent /\
-  stronger_fresh_region w.region h0 h1 /\
+  HS.fresh_region w.region h0 h1 /\
   color w.region = color parent /\
   empty_log w h1
 
@@ -110,12 +112,12 @@ type peered (#i:id) (w:writer i) =
   }
 
 val genReader: parent:rgn -> #i:id -> w:writer i -> ST (peered w)
-  (requires (fun h0 -> HyperHeap.disjoint parent w.region))
+  (requires (fun h0 -> HS.disjoint parent w.region))
   (ensures (fun h0 r h1 ->
     modifies Set.empty h0 h1 /\
     extends r.region parent /\
     color r.region = color parent /\
-    stronger_fresh_region r.region h0 h1))
+    HS.fresh_region r.region h0 h1))
 let genReader parent #i w =
   let reader_r = new_region parent in
   if authId i then
@@ -157,7 +159,7 @@ let encrypt #i #l e iv ad p =
   if authId i then
     begin
       let log = ilog e.log in
-      MR.m_recall log;
+      HST.recall log;
       let c = CoreCrypto.random (cipherlen i l) in
       MM.extend log iv (Entry ad p c);
       c
@@ -166,7 +168,7 @@ let encrypt #i #l e iv ad p =
     aead_encrypt (alg i) (State?.key e) iv ad p
 
 type correct_decrypt (#i:id) (#l:plainlen) (r:reader i) (iv:iv i) (ad:adata i)
-                     (c:cipher i l) (po:option (plain i l)) (h:HyperStack.mem) =
+                     (c:cipher i l) (po:option (plain i l)) (h:HS.mem) =
   (authId i ==>
     (defined_iv #i r iv h ==>
       (let Entry ad' p c' = MM.value_of (ilog r.log) iv h in
@@ -188,7 +190,7 @@ let decrypt #i #l d iv ad c =
   if authId i then
    begin
     let log = ilog d.log in
-    MR.m_recall log;
+    HST.recall log;
     match MM.lookup log iv with
     | None -> assume false; None
     | Some (Entry ad' p c') ->

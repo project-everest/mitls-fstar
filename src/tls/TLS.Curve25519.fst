@@ -1,7 +1,8 @@
 module TLS.Curve25519
+module HS = FStar.HyperStack //Added automatically
 
 open FStar.Heap
-open FStar.HyperHeap
+
 open FStar.HyperStack
 open FStar.Seq
 open FStar.HyperStack.ST

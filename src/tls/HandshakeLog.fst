@@ -1,7 +1,7 @@
 module HandshakeLog
 
 open FStar.Heap
-open FStar.HyperHeap
+
 open FStar.HyperStack
 open FStar.Seq
  // for e.g. found
@@ -14,7 +14,7 @@ open TLSInfo
 open HandshakeMessages
 open Hashing
 open Hashing.CRF // now using incremental, collision-resistant, agile Hashing.
-module HH = FStar.HyperHeap
+
 module HS = FStar.HyperStack
 
 

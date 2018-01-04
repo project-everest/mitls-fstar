@@ -1,4 +1,5 @@
 module Transport
+module HS = FStar.HyperStack //Added automatically
 
 // adding an indirection to TCP for applications that prefer to take control of their IOs.
 

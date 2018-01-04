@@ -4,7 +4,7 @@ Idealizing HMAC for Finished message payloads and binders.
 module HMAC.UFCMA
 
 open FStar.Heap
-open FStar.HyperHeap
+
 open FStar.HyperStack
 open FStar.HyperStack.All
 open FStar.Seq
@@ -42,7 +42,7 @@ type tag (i:id) = lbytes (Hashing.Spec.tagLen (alg i))
 let keysize (i:id) = Hashing.Spec.tagLen (alg i)
 type keyrepr (i:id) = lbytes (keysize i)
 
-type fresh_subregion rg parent h0 h1 = stronger_fresh_region rg h0 h1 /\ extends rg parent
+type fresh_subregion rg parent h0 h1 = HS.fresh_region rg h0 h1 /\ extends rg parent
 
 // We keep the tag in case we later want to enforce tag authentication
 abstract type entry (i:id) (good: bytes -> Type) =

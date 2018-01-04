@@ -2,6 +2,7 @@
 TLS 1.3 HKDF extract and expand constructions, parametrized by their hash algorithm
 *)
 module HKDF
+module HS = FStar.HyperStack //Added automatically
 
 open FStar.Bytes
 open TLSConstants

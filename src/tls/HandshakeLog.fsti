@@ -9,7 +9,7 @@ open FStar.HyperStack
 open FStar.HyperStack.All
 open Hashing.CRF
 open HandshakeMessages // for pattern matching on messages
-module HH = FStar.HyperHeap
+
 module HS = FStar.HyperStack
 
 open FStar.Error

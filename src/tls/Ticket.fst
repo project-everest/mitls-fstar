@@ -1,7 +1,7 @@
 module Ticket
 
 open FStar.Heap
-open FStar.HyperHeap
+
 open FStar.HyperStack
 
 open FStar.Bytes
