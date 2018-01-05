@@ -138,6 +138,69 @@ type corrupt (i:id) =
     witnessed (MM.contains log i false)
   else True)
 
+assume val bind_squash_st:
+  #a:Type ->
+  #b:Type ->
+  #pre:(mem -> Type) ->
+  squash a ->
+  $f:(a -> ST (squash b) (requires (fun h0 -> pre h0)) (ensures (fun h0 _ h1 -> h0 == h1))) ->
+  ST (squash b) (requires (fun h0 -> pre h0)) (ensures (fun h0 _ h1 -> h0 == h1))
+
+module HS  = FStar.HyperStack
+module HST = FStar.HyperStack.ST
+
+private let lemma_honest_or_corrupt (i:regid)
+  :ST unit (requires (fun _ -> True)) (ensures (fun h0 _ h1 -> h0 == h1 /\ (honest i \/ corrupt i)))
+  = if model then begin
+      let log:i_honesty_table = honesty_table in
+      let aux :(h:mem) -> (c_or (MM.contains log i true h) (~ (MM.contains log i true h)))
+               -> ST (squash (honest i \/ corrupt i))
+	            (requires (fun h0     -> h == h0))
+		    (ensures (fun h0 _ h1 -> h0 == h1))
+        = fun _ x ->
+	  recall log;
+	  testify (MM.defined log i);
+	  match x with
+	  | Left  h ->
+	    MM.contains_stable log i true;
+	    mr_witness log (MM.contains log i true)
+	  | Right h ->
+	    MM.contains_stable log i false;
+	    mr_witness log (MM.contains log i false)
+      in
+      let h = HST.get () in
+      let y = Squash.bind_squash (Squash.get_proof (l_or (MM.contains log i true h) (~ (MM.contains log i true h)))) (fun y -> y) in
+      bind_squash_st y (aux h)
+    end
+    else ()
+
+private let lemma_not_honest_and_corrupt (i:regid)
+  :ST unit (requires (fun _ -> True)) (ensures (fun h0 _ h1 -> h0 == h1 /\ (~ (honest i /\ corrupt i))))
+  = if model then begin
+      let log:i_honesty_table = honesty_table in
+      let aux :(c_or (honest i /\ corrupt i) (~ (honest i /\ corrupt i)))
+               -> ST (squash (~ (honest i /\ corrupt i)))
+	            (requires (fun h0     -> True))
+		    (ensures (fun h0 _ h1 -> h0 == h1))
+        = fun x ->
+	  recall log;
+	  testify (MM.defined log i);
+	  match x with
+	  | Left  h -> testify (MM.contains log i true); testify (MM.contains log i false)
+	  | Right h -> ()
+      in
+      let y = Squash.bind_squash (Squash.get_proof (l_or (honest i /\ corrupt i) (~ (honest i /\ corrupt i)))) (fun y -> y) in
+      bind_squash_st y aux
+    end
+    else ()
+
+(*
+ * AR: 04/01: A stateful version of the lemma_honest_corrupt
+ *)
+let lemma_honest_corrupt_st (i:regid)
+  :ST unit (requires (fun _ -> True)) (ensures (fun h0 _ h1 -> h0 == h1 /\ (honest i <==> (~ (corrupt i)))))
+  = lemma_honest_or_corrupt i; lemma_not_honest_and_corrupt i
+
 // ADL: difficult to prove, relies on an axiom outside the current formalization of FStar.Monotonic
 let lemma_honest_corrupt (i:regid)
   : Lemma (honest i <==> ~(corrupt i)) =
@@ -169,15 +232,38 @@ let lemma_corrupt_invariant (i:regid) (lbl:label)
 let get_honesty (i:id {registered i}) : ST bool
   (requires fun h0 -> True)
   (ensures fun h0 b h1 -> h0 == h1 /\ (b <==> honest i))
-  =
-  lemma_honest_corrupt i;
-  if model then
-    let log : i_honesty_table = honesty_table in
-    recall log;
-    testify (MM.defined log i);
-    match MM.lookup log i with
-    | Some b -> b
-  else false
+  = if model then
+      let log : i_honesty_table = honesty_table in
+      recall log;
+      testify (MM.defined log i);
+      match MM.lookup log i with
+      | Some b ->
+        (*
+         * AR: 03/01
+         *     We need to show b <==> honest i
+         *     The direction b ==> honest i is straightforward, from the postcondition of MM.lookup
+         *     For the other direction, we need to do a recall on the witnessed predicate in honest i
+         *     One way is to go through squash types, using a bind_squash_st axiom above
+         *)
+        let aux (b:bool) :ST (squash (honest i ==> b2t b))
+                             (requires (fun h0     -> MM.contains log i b h0))
+	    		     (ensures (fun h0 _ h1 -> h0 == h1))
+          = let f :(b:bool) -> (c_or (honest i) (~ (honest i)))
+	           -> ST (squash (honest i ==> b2t b))
+	                (requires (fun h0      -> MM.contains log i b h0))
+                        (ensures  (fun h0 _ h1 -> h0 == h1))
+	      = fun _ x ->
+	        match x with
+	        | Left  h -> Squash.return_squash h; testify (MM.contains log i true)
+	        | Right h -> Squash.return_squash h; assert (~ (honest i))
+	    in
+	    //y:l_or (honest i) (~ (honest i))
+	    let y = Squash.bind_squash (Squash.get_proof (l_or (honest i) (~ (honest i)))) (fun y -> y) in
+	    bind_squash_st y (f b)
+        in
+        aux b;
+        b
+    else false
 
 // TODO(adl) preservation of the honesty table invariant
 let rec lemma_honesty_update (m:MM.map id (fun _ -> bool) honesty_invariant)
