@@ -16,7 +16,7 @@ module OAEAD = AEADOpenssl
 module CAEAD = LowCProvider
 
 module Plain = Crypto.Plain
-module AE = Crypto.AEAD.Main
+// module AE = Crypto.AEAD.Main
 module CB = Crypto.Symmetric.Bytes
 module U8 = FStar.UInt8
 
@@ -28,7 +28,7 @@ unfold let dbg : string -> ST unit (requires (fun _ -> True)) (ensures (fun h0 _
 
 type provider =
   | OpenSSLProvider
-  | LowProvider
+  // | LowProvider
   | LowCProvider
 
 inline_for_extraction let use_provider () : Tot provider =
@@ -38,7 +38,7 @@ let prov () =
   match use_provider() with
   | OpenSSLProvider -> "OpenSSLProvider"
   | LowCProvider -> "LowCProvider"
-  | LowProvider -> "LowProvider"
+  // | LowProvider -> "LowProvider"
 
 type u32 = FStar.UInt32.t
 
@@ -87,7 +87,7 @@ type salt (i:id) = lbytes (salt_length i)
 noeq type state (i:id) (r:rw) =
 | OpenSSL: st:OAEAD.state i r -> salt:salt i -> state i r
 | LowC: st:CAEAD.aead_state -> key:key i -> salt:salt i -> state i r
-| LowLevel: st:AE.aead_state i (Crypto.Indexing.rw2rw r) -> salt: salt i -> state i r
+// | LowLevel: st:AE.aead_state i (Crypto.Indexing.rw2rw r) -> salt: salt i -> state i r
 
 type writer i = s:state i Writer
 type reader i = s:state i Reader
@@ -106,7 +106,7 @@ let create_nonce (#i:id) (#rw:rw) (st:state i rw) (n:nonce i)
   : Tot (i:iv i) =
   let salt : salt i = match st with
     | OpenSSL _ s -> s
-    | LowLevel _ s -> s
+    // | LowLevel _ s -> s
     | LowC _ _ s -> s in
   match (pv_of_id i, alg i) with
   | (TLS_1p3, _) | (_, CC.CHACHA20_POLY1305) ->
@@ -123,7 +123,7 @@ let lemma_nonce_iv (#i:id) (#rw:rw) (st:state i rw) (n1:nonce i) (n2:nonce i)
   =
   let salt : salt i = match st with
     | OpenSSL _ s -> s
-    | LowLevel _ s -> s
+    // | LowLevel _ s -> s
     | LowC _ _ s -> s in
   match (pv_of_id i, alg i) with
   | (TLS_1p3, _) | (_, CC.CHACHA20_POLY1305) ->
@@ -137,19 +137,21 @@ type empty_log (#i:id) (#rw:rw) (st:state i rw) h =
   (match st with
   | OpenSSL s _ -> OAEAD.empty_log s h
   | LowC st _ _ -> True // TODO
-  | LowLevel st _ -> True) // TODO
+  // | LowLevel st _ -> True
+  ) // TODO
 
 let region (#i:id) (#rw:rw) (st:state i rw) =
   (match st with
   | OpenSSL st _ -> OAEAD.State?.region st
   | LowC st _ _ -> tls_region // TODO
-  | LowLevel st _ -> tls_region) // TODO
+  // | LowLevel st _ -> tls_region
+  ) // TODO
 
 let log_region (#i:id) (#rw:rw) (st:state i rw) =
   match st with
   | OpenSSL st _ -> OAEAD.State?.log_region st
   | LowC st _ _ -> let r:rgn = tls_region in r // TODO
-  | LowLevel st _ -> let r:rgn = tls_region in r // TODO
+  // | LowLevel st _ -> let r:rgn = tls_region in r // TODO
 (*
     assume(r<>root);
     assume(forall (s:rid).{:pattern is_eternal_region s} is_above s r ==> is_eternal_region s);
@@ -160,7 +162,7 @@ let st_inv (#i:id) (#rw:rw) (st:state i rw) h =
   match st with
   | OpenSSL st _ -> True
   | LowC st _ _ -> True
-  | LowLevel st _ -> True // TODO
+  // | LowLevel st _ -> True // TODO
 
 let genPost (#i:id) (parent:rgn) h0 (w:writer i) h1 =
   modifies_none h0 h1 /\
@@ -185,11 +187,11 @@ let gen (i:id) (r:rgn) : ST (state i Writer)
     let salt: salt i = CC.random (salt_length i) in
     let st = CAEAD.aead_create (alg i) CAEAD.ValeAES kv in
     LowC st kv salt
-  | LowProvider ->
-    assume false; // TODO
-    let salt : salt i = CC.random (salt_length i) in
-    let st = AE.gen i tls_region r in
-    LowLevel st salt
+  // | LowProvider ->
+  //   assume false; // TODO
+  //   let salt : salt i = CC.random (salt_length i) in
+  //   let st = AE.gen i tls_region r in
+  //   LowLevel st salt
 
 let leak (#i:id) (#rw:rw) (st:state i rw)
   : ST (key i * salt i)
@@ -199,11 +201,11 @@ let leak (#i:id) (#rw:rw) (st:state i rw)
   match st with
   | OpenSSL st s -> (OAEAD.leak st, s)
   | LowC st k s -> (k, s)
-  | LowLevel st s ->
-    assume (false);
-    assume(~(Flag.prf i));
-    let k = AE.leak #i st in
-    (BufferBytes.to_bytes (key_length i) k, s)
+  // | LowLevel st s ->
+  //   assume (false);
+  //   assume(~(Flag.prf i));
+  //   let k = AE.leak #i st in
+  //   (BufferBytes.to_bytes (key_length i) k, s)
 
 // ADL TODO
 // There is an issue connecting the stateful encryption in miTLS
@@ -218,10 +220,10 @@ let genReader (parent:rgn) (#i:id) (st:writer i) : ST (reader i)
   | OpenSSL w salt ->
     // CoreCrypto state is in an external region
     OpenSSL (OAEAD.genReader parent w) salt
-  | LowLevel st salt ->
-    assume false;
-    let st' : AE.aead_state i Crypto.Indexing.Reader = AE.genReader st in
-    LowLevel st' salt
+  // | LowLevel st salt ->
+  //   assume false;
+  //   let st' : AE.aead_state i Crypto.Indexing.Reader = AE.genReader st in
+  //   LowLevel st' salt
   | LowC st k s ->
     assume false;
     LowC st k s
@@ -238,9 +240,9 @@ let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
     | LowCProvider ->
       let st = CAEAD.aead_create (alg i) CAEAD.ValeAES k in
       LowC st k s
-    | LowProvider ->
-      let st = AE.coerce i r (BufferBytes.from_bytes k) in
-      LowLevel st s
+    // | LowProvider ->
+    //   let st = AE.coerce i r (BufferBytes.from_bytes k) in
+    //   LowLevel st s
     in
   dbg ((prov())^": COERCE(K="^(hex_of_bytes k)^")");
   w
@@ -269,7 +271,7 @@ let uint128_of_iv (#i:id) (iv:iv i)
 type fresh_iv (#i:id{authId i}) (w:writer i) (iv:iv i) h =
   (match w with
   | OpenSSL st _ -> OAEAD.fresh_iv #i st iv h
-  | LowLevel st _ -> True // TODO
+  // | LowLevel st _ -> True // TODO
   | _ -> True)
 
 let logged_iv (#i:id{authId i}) (#l:plainlen) (#rw:rw) (s:state i rw) (iv:iv i)
@@ -295,23 +297,23 @@ let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:pla
     | LowC st _ _ ->
       assume(CAEAD.alg st = alg i); // assume val in the .fst
       CAEAD.aead_encrypt st iv ad plain
-    | LowLevel st _ ->
-      let adlen = uint_to_t (length ad) in
-      let ad = BufferBytes.from_bytes ad in
-      let plainlen = uint_to_t l in
-      let cipherlen = uint_to_t (cipherlen i l) in
-      assume(AE.safelen i (v plainlen) = true); // TODO
-      let plainbuf = BufferBytes.from_bytes plain in
-      let plainba = CB.load_bytes plainlen plainbuf in
-      let plain = Plain.create i 0uy plainlen in
-      if not (Flag.safeId i) then begin
-        let pb = Plain.make #i l plainba in
-        Plain.store #i plainlen plain pb
-      end;
-      let cipher = Buffer.create 0uy cipherlen in
-      assume(v cipherlen = v plainlen + 12);
-      AE.encrypt i st (uint128_of_iv iv) adlen ad plainlen plain cipher;
-      BufferBytes.to_bytes l cipher
+    // | LowLevel st _ ->
+    //   let adlen = uint_to_t (length ad) in
+    //   let ad = BufferBytes.from_bytes ad in
+    //   let plainlen = uint_to_t l in
+    //   let cipherlen = uint_to_t (cipherlen i l) in
+    //   assume(AE.safelen i (v plainlen) = true); // TODO
+    //   let plainbuf = BufferBytes.from_bytes plain in
+    //   let plainba = CB.load_bytes plainlen plainbuf in
+    //   let plain = Plain.create i 0uy plainlen in
+    //   if not (Flag.safeId i) then begin
+    //     let pb = Plain.make #i l plainba in
+    //     Plain.store #i plainlen plain pb
+    //   end;
+    //   let cipher = Buffer.create 0uy cipherlen in
+    //   assume(v cipherlen = v plainlen + 12);
+    //   AE.encrypt i st (uint128_of_iv iv) adlen ad plainlen plain cipher;
+    //   BufferBytes.to_bytes l cipher
   in
   cipher
 
@@ -342,17 +344,17 @@ let decrypt (#i:id) (#l:plainlen) (st:reader i) (iv:iv i) (ad:adata i) (cipher:c
     match st with
     | OpenSSL st _ -> OAEAD.decrypt st iv ad cipher
     | LowC st _ _ -> CAEAD.aead_decrypt st iv ad cipher
-    | LowLevel st _->
-      let ivlen = uint_to_t (iv_length i) in
-      let iv = CB.load_uint128 ivlen (BufferBytes.from_bytes iv) in
-      let adlen = uint_to_t (length ad) in
-      let ad = BufferBytes.from_bytes ad in
-      let plainlen = uint_to_t l in
-      let cbuf = BufferBytes.from_bytes cipher in
-      let plain = Plain.create i 0uy plainlen in
-      if AE.decrypt i st iv adlen ad plainlen plain cbuf then
-        Some (BufferBytes.to_bytes l (Plain.bufferRepr #i plain))
-      else None
+    // | LowLevel st _->
+    //   let ivlen = uint_to_t (iv_length i) in
+    //   let iv = CB.load_uint128 ivlen (BufferBytes.from_bytes iv) in
+    //   let adlen = uint_to_t (length ad) in
+    //   let ad = BufferBytes.from_bytes ad in
+    //   let plainlen = uint_to_t l in
+    //   let cbuf = BufferBytes.from_bytes cipher in
+    //   let plain = Plain.create i 0uy plainlen in
+    //   if AE.decrypt i st iv adlen ad plainlen plain cbuf then
+    //     Some (BufferBytes.to_bytes l (Plain.bufferRepr #i plain))
+    //   else None
     in
   plain
 

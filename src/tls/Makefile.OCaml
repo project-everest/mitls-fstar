@@ -8,23 +8,61 @@ FLAVOR=OCaml
 EXTENSION=ml
 #Don't extract modules from fstarlib (NOEXTRACT_MODULES)
 #And also some specific ones from mitls that are implemented in C
-NO_EXTRACT=\
-	$(NOEXTRACT_MODULES) \
-	CoreCrypto \
-	DHDB \
-	LowCProvider \
-	FFICalbacks
+EXTRACT='* -Prims -FStar -CoreCrypto -CryptoTypes -DHDB -LowCProvider -FFICallbacks -Crypto.AEAD -Crypto.Symmetric -Crypto.Plain -C.Loops -Spec.Loops -Buffer.Utils'
 include Makefile.common
 ################################################################################
 
 FFI_HOME=../../libs/ffi
+MLCRYPTO_HOME?=$(FSTAR_HOME)/../../MLCrypto
+OCAMLOPTS=-package fstarlib,zarith -g \
+	  -I $(FSTAR_HOME)/ulib/ml \
+	  -I $(EXTRACT_DIR) \
+	  -I $(MLCRYPTO_HOME) \
+	  -I $(FFI_HOME) \
+	  -I $(HACL_HOME)/secure_api/LowCProvider
 
-mitls.exe: $(ALL_ML_FILES)
+LOWC_HOME=$(HACL_HOME)/secure_api/out/$(IMPL_CHOICE)
+OCAMLOPT=OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind opt $(OCAMLOPTS)
+OCAMLMKLIB=OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind mklib $(OCAMLOPTS)
+IMPL_CHOICE ?= runtime_switch
 
 
-$(FFI_HOME)/FFICallbacks.cmxa: $(wildcard $(FFI_HOME)/*.ml) $(wildcard $(FFI_HOME)/*.c)
+test: $(ALL_ML_FILES)
+	make -f Makefile.OCaml mitls.cmxa #specifically don't pass parallel flags downx
+
+mitls.exe: mitls.cmxa test/mitls.cmx
+	$(OCAMLOPT) -linkpkg -I test/ -g \
+	  $(MLCRYPTO_HOME)/CryptoTypes.cmx \
+	  $(MLCRYPTO_HOME)/CoreCrypto.cmxa \
+	  $(FFI_HOME)/FFICallbacks.cmxa \
+	  $(LOWC_HOME)/LowC.cmxa \
+	  $^ \
+	  -o $@
+
+.PHONY: $(FFI_HOME)/FFICallbacks.cmxa
+
+ffi: $(FFI_HOME)/FFICallbacks.cmxa
+
+$(FFI_HOME)/FFICallbacks.cmxa:
 	$(MAKE) -C $(FFI_HOME)
 
+.PHONY: $(LOWC_HOME)/LowC.cmxa
+
+$(LOWC_HOME)/LowC.cmxa:
+	IMPL_CHOICE=$(IMPL_CHOICE) $(MAKE) -f $(HACL_HOME)/secure_api/Makefile.extract $@
+
+$(EXTRACT_DIR)/Hacl_Curve25519.ml:
+	echo "type uint8_p = FStar_UInt8.t FStar_Buffer.buffer" > $@
+	echo "let crypto_scalarmult (x:uint8_p) (y:uint8_p) (z:uint8_p) : unit = failwith \"Hacl stub\"" >> $@
+
+mitls.cmxa: $(EXTRACT_DIR)/Hacl_Curve25519.cmx $(subst .ml,.cmx,$(ALL_ML_FILES))
+	$(OCAMLMKLIB) $^ -o mitls
+
+.PHONY: $(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa
+
+$(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa:
+	$(MAKE) -C $(FSTAR_HOME)/ulib/ml
+
 %.cmx: %.ml
-	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -c $<
+	$(OCAMLOPT) -w -8-11-26-20 -c $< -o $@
 

@@ -27,7 +27,7 @@ clean:
 	$(FSTAR) --odir $(EXTRACT_DIR) \
 		 --lax \
 		 --dep full \
-		 $(addprefix --no_extract , $(NO_EXTRACT)) \
+                 --extract $(EXTRACT) \
 		 $(addprefix --include , $(INCLUDE_PATHS)) \
 		 $(ROOTS) > .depend.$(FLAVOR)
 
