@@ -4,7 +4,6 @@ concretely, we use AES_GCM but any other AEAD algorithm would do.
 *)
 module StreamAE
 
-open FStar.Monotonic.RRef
 open FStar.Monotonic.Seq
 
 open Platform.Error
@@ -19,7 +18,6 @@ open StreamPlain
 module AEAD = AEADProvider
 module HS = FStar.HyperStack
 
-type rid = FStar.Monotonic.RRef.rid
 
 type id = i:id { ID13? i }
 
@@ -39,13 +37,13 @@ type entry (i:id) =
 // key materials (from the AEAD provider)
 type key (i:id) = AEAD.key i
 type iv  (i:id) = AEAD.salt i
+ 
+let ideal_log (r:erid) (i:id) = log_t r (entry i)
 
-let ideal_log (r:rid) (i:id) = log_t r (entry i)
-
-let log_ref (r:rid) (i:id) : Tot Type0 =
+let log_ref (r:erid) (i:id) : Tot Type0 =
   if authId i then ideal_log r i else unit
 
-let ilog (#r:rid) (#i:id) (l:log_ref r i{authId i}) : Tot (ideal_log r i) =
+let ilog (#r:erid) (#i:id) (l:log_ref r i{authId i}) : Tot (ideal_log r i) =
   l
 
 irreducible let max_ctr: n:nat{n = 18446744073709551615} =
@@ -54,19 +52,19 @@ irreducible let max_ctr: n:nat{n = 18446744073709551615} =
 
 type counter = c:nat{c <= max_ctr}
 
-let ideal_ctr (#l:rid) (r:rid) (i:id) (log:ideal_log l i) : Tot Type0 =
+let ideal_ctr (#l:erid) (r: erid) (i:id) (log:ideal_log l i) : Tot Type0 =
   FStar.Monotonic.Seq.seqn r log max_ctr
   // An increasing counter, at most min(length log, 2^64-1)
 
-let concrete_ctr (r:rid) (i:id) : Tot Type0 =
+let concrete_ctr (r:erid) (i:id) : Tot Type0 =
   m_rref r counter increases
 
-let ctr_ref (#l:rid) (r:rid) (i:id) (log:log_ref l i) : Tot Type0 =
+let ctr_ref (#l:erid) (r:erid) (i:id) (log:log_ref l i) : Tot Type0 =
   if authId i
   then ideal_ctr r i (log <: ideal_log l i)
   else m_rref r counter increases
 
-let ctr (#l:rid) (#r:rid) (#i:id) (#log:log_ref l i) (c:ctr_ref r i log)
+let ctr (#l:erid) (#r:erid) (#i:id) (#log:log_ref l i) (c:ctr_ref r i log)
   : Tot (m_rref r (if authId i
 		   then seqn_val #l #(entry i) r log max_ctr
 		   else counter)
@@ -101,10 +99,10 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
   fresh_region (AEAD.region w.aead) h0 h1 /\
   color (AEAD.region w.aead) = color parent /\
   (authId i ==>
-      (m_contains (ilog w.log) h1 /\
-       m_sel h1 (ilog w.log) == Seq.createEmpty)) /\
-  m_contains (ctr w.counter) h1 /\
-  m_sel h1 (ctr w.counter) === 0
+      (contains h1 (ilog w.log) /\
+       sel h1 (ilog w.log) == Seq.createEmpty)) /\
+  contains h1 (ctr w.counter) /\
+  sel h1 (ctr w.counter) === 0
 //16-04-30 how to share the whole ST ... instead of genPost?
 
 // Generate a fresh instance with index i in a fresh sub-region of r0
@@ -125,7 +123,7 @@ let gen parent i =
     let ectr: ideal_ctr #writer_r writer_r i log = new_seqn #writer_r #(entry i) #max_ctr writer_r 0 log in
     State #i #Writer #writer_r #writer_r aead log ectr
   else
-    let ectr: concrete_ctr writer_r i = m_alloc writer_r 0 in
+    let ectr: concrete_ctr writer_r i = ralloc writer_r 0 in
     State #i #Writer #writer_r #writer_r aead () ectr
 
 #reset-options
@@ -141,8 +139,8 @@ val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
 	       color r.region = color parent /\
          fresh_region r.region h0 h1 /\
          w.log == r.log /\
-	 m_contains (ctr r.counter) h1 /\
-	 m_sel h1 (ctr r.counter) === 0))
+	 contains h1 (ctr r.counter) /\
+	 sel h1 (ctr r.counter) === 0))
 // encryption (on concrete bytes), returns (cipher @| tag)
 // Keeps seqn and nonce implicit; requires the counter not to overflow
 // encryption of plaintexts; safe instances are idealized
@@ -158,7 +156,7 @@ let genReader parent #i w =
     let log : ideal_log w.region i = w.log in
     let dctr: ideal_ctr reader_r i log = new_seqn reader_r 0 log in
     State #i #Reader #reader_r #writer_r raead w.log dctr
-  else let dctr : concrete_ctr reader_r i = m_alloc reader_r 0 in
+  else let dctr : concrete_ctr reader_r i = ralloc reader_r 0 in
     State #i #Reader #reader_r #writer_r raead () dctr
 
 // Coerce a writer with index i in a fresh subregion of parent
@@ -170,7 +168,7 @@ val coerce: parent:rgn -> i:id{~(authId i)} -> kv:key i -> iv:iv i -> ST (writer
 let coerce parent i kv iv =
   assume false; // coerce missing post-condition
   let writer_r = new_region parent in
-  let ectr: concrete_ctr writer_r i = m_alloc writer_r 0 in
+  let ectr: concrete_ctr writer_r i = ralloc writer_r 0 in
   let aead = AEAD.coerce i parent kv iv in
   State #i #Writer #writer_r #writer_r aead () ectr
 
@@ -194,19 +192,19 @@ val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
       lemma_ID13 i;
       disjoint e.region (AEAD.log_region #i e.aead) /\
       l <= max_TLSPlaintext_fragment_length /\ // FIXME ADL: why is plainLen <= max_TLSCiphertext_fragment_length_13 ?? Fix StreamPlain!
-      m_sel h0 (ctr e.counter) < max_ctr))
+      sel h0 (ctr e.counter) < max_ctr))
     (ensures  (fun h0 c h1 ->
       lemma_ID13 i;
       modifies (Set.as_set [e.log_region; AEAD.log_region #i e.aead]) h0 h1 /\
-      m_contains (ctr e.counter) h1 /\
-      m_sel h1 (ctr e.counter) === m_sel h0 (ctr e.counter) + 1 /\
+      contains h1 (ctr e.counter) /\
+      sel h1 (ctr e.counter) === sel h0 (ctr e.counter) + 1 /\
 	    (authId i ==>
 		    (let log = ilog e.log in
 		    let ent = Entry l c p in
-		    let n = Seq.length (m_sel h0 log) in
-		    m_contains log h1 /\
-                    Monotonic.RRef.witnessed (at_least n ent log) /\
-		    m_sel h1 log == snoc (m_sel h0 log) ent))))
+		    let n = Seq.length (sel h0 log) in
+		    contains h1 log /\
+                    witnessed (at_least n ent log) /\
+		    sel h1 log == snoc (sel h0 log) ent))))
 
 (* we primarily model the ideal functionality, the concrete code that actually
    runs on the network is what remains after dead code elimination when
@@ -216,9 +214,9 @@ val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
 let encrypt #i e l p =
   let h0 = get() in
   let ctr = ctr e.counter in
-  m_recall ctr;
+  recall ctr;
   let text = if safeId i then createBytes l 0z else repr i l p in
-  let n = m_read ctr in
+  let n = !ctr in
   lemma_repr_bytes_values n;
   let nb = bytes_of_int (AEAD.noncelen i) n in
   let iv = AEAD.create_nonce e.aead nb in
@@ -229,16 +227,16 @@ let encrypt #i e l p =
   if authId i then
     begin
     let ilog = ilog e.log in
-    m_recall ilog;
+    recall ilog;
     let ictr: ideal_ctr e.region i ilog = e.counter in
     testify_seqn ictr;
     write_at_end ilog (Entry l c p); //need to extend the log first, before incrementing the counter for monotonicity; do this only if ideal
-    m_recall ictr;
+    recall ictr;
     increment_seqn ictr;
-    m_recall ictr
+    recall ictr
     end
   else
-    m_write ctr (n + 1);
+    ctr := n + 1;
   c
 
 (* val matches: #i:id -> l:plainLen -> cipher i l -> entry i -> Tot bool *)
@@ -251,20 +249,20 @@ val decrypt: #i:id -> d:reader i -> l:plainLen -> c:cipher i l
   -> ST (option (plain i (min l (max_TLSPlaintext_fragment_length + 1))))
   (requires (fun h0 ->
      l <= max_TLSPlaintext_fragment_length /\ // FIXME ADL: why is plainLen <= max_TLSCiphertext_fragment_length_13 ?? Fix StreamPlain!
-     m_sel h0 (ctr d.counter) < max_ctr))
+     sel h0 (ctr d.counter) < max_ctr))
   (ensures  (fun h0 res h1 ->
-      let j : nat = m_sel h0 (ctr d.counter) in
+      let j : nat = sel h0 (ctr d.counter) in
       (authId i ==>
-    	(let log = m_sel h0 (ilog d.log) in
+    	(let log = sel h0 (ilog d.log) in
     	 if j < Seq.length log && matches l c (Seq.index log j)
     	 then res = Some (Entry?.p (Seq.index log j))
     	 else res = None)) /\
       (match res with
        | None -> HS.modifies Set.empty h0 h1
-       | _ -> let ctr_counter_as_hsref = as_hsref (ctr d.counter) in
+       | _ -> let ctr_counter_as_hsref = ctr d.counter in
              modifies_one d.region h0 h1 /\
              modifies_ref d.region (Set.singleton (Heap.addr_of (as_ref ctr_counter_as_hsref))) h0 h1 /\
-             m_sel h1 (ctr d.counter) === j + 1)))
+             sel h1 (ctr d.counter) === j + 1)))
 
 val strip_refinement: #a:Type -> #p:(a -> Type0) -> o:option (x:a{p x}) -> option a
 let strip_refinement #a #p = function
@@ -275,21 +273,21 @@ let strip_refinement #a #p = function
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
 let decrypt #i d l c =
   let ctr = ctr d.counter in
-  m_recall ctr;
-  let j = m_read ctr in
+  recall ctr;
+  let j = !ctr in
   if authId i
-  then
+  then (
     let ilog = ilog d.log in
-    let log  = m_read ilog in
+    let log  = !ilog in
     let ictr: ideal_ctr d.region i ilog = d.counter in
-    let _ = testify_seqn ictr in //now we know that j <= Seq.length log
+    testify_seqn ictr; //now we know that j <= Seq.length log
     if j < Seq.length log && matches l c (Seq.index log j) then
       begin
       increment_seqn ictr;
-      m_recall ctr;
+      recall ctr;
       Some (Entry?.p (Seq.index log j))
       end
-    else None
+    else None )
   else //concrete
    begin
    lemma_ID13 i;
@@ -303,7 +301,7 @@ let decrypt #i d l c =
      begin
        assert (Platform.Bytes.length pr == l);
        let p = strip_refinement (mk_plain i l pr) in
-       if Some? p then m_write ctr (j + 1);
+       if Some? p then ctr := j + 1;
        p
      end
    end

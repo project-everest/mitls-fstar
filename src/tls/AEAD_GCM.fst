@@ -15,7 +15,6 @@ module Range = Range
 open Range
 
 open FStar.Monotonic.Seq
-open FStar.Monotonic.RRef
 
 module AEAD = AEADProvider
 
@@ -42,11 +41,10 @@ type entry (i:id) = // records that c is an encryption of p with ad
 
 let ideal_log (r:rgn) (i:id) = log_t r (entry i)
 
-let log_ref (r:rgn) (i:id) : Tot Type0 =
+let log_ref (r:rgn) (i:id): Tot Type0 =
   if authId i then ideal_log r i else unit
 
-let ilog (#r:rgn) (#i:id) (l:log_ref r i{authId i}) : Tot (ideal_log r i) =
-  l
+let ilog (#r:rgn) (#i:id) (l:log_ref r i{authId i}): ideal_log r i = l
 
 (** we have a counter, that's increasing, at most to the min(length log, 2^64-1) *)
 let ideal_ctr (#l:rgn) (r:rgn) (i:id) (log:ideal_log l i) : Tot Type0 =
@@ -102,9 +100,9 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
   fresh_region (AEAD.region w.aead) h0 h1 /\
   color (AEAD.region w.aead) = color parent /\
   AEAD.empty_log w.aead h1 /\
-  (authId i ==> (m_contains (ilog w.log) h1 /\ m_sel h1 (ilog w.log) == createEmpty)) /\
-  m_contains (ctr w.counter) h1 /\
-  m_sel h1 (ctr w.counter) === 0
+  (authId i ==> (contains h1 (ilog w.log) /\ sel h1 (ilog w.log) == createEmpty)) /\
+  contains h1 (ctr w.counter) /\
+  sel h1 (ctr w.counter) === 0
 
 // Generate a fresh instance with index i in a fresh sub-region of r0
 // (we can drop this spec, since F* will infer something at least as precise,
@@ -124,7 +122,7 @@ let gen parent i =
     let ectr: ideal_ctr #writer_r writer_r i log = new_seqn #writer_r #(entry i) #(max_ctr (alg i)) writer_r 0 log in
     State #i #Writer #writer_r #writer_r aead log ectr
   else
-    let ectr: concrete_ctr writer_r i = m_alloc writer_r 0 in
+    let ectr: concrete_ctr writer_r i = ralloc writer_r 0 in
     State #i #Writer #writer_r #writer_r aead () ectr
 
 val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
@@ -138,8 +136,8 @@ val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
     color r.region = color parent /\
     fresh_region r.region h0 h1 /\
     eq2 #(log_ref w.log_region i) w.log r.log /\
-    m_contains (ctr r.counter) h1 /\
-    m_sel h1 (ctr r.counter) === 0))
+    contains h1 (ctr r.counter) /\
+    sel h1 (ctr r.counter) === 0))
 let genReader parent #i w =
   let reader_r = new_region parent in
   let wr : rgn = w.region in
@@ -150,7 +148,7 @@ let genReader parent #i w =
     let dctr: ideal_ctr reader_r i log = new_seqn reader_r 0 log in
     State #i #Reader #reader_r #wr raead w.log dctr
   else
-    let dctr: concrete_ctr reader_r i = m_alloc reader_r 0 in
+    let dctr: concrete_ctr reader_r i = ralloc reader_r 0 in
     let wr : rgn = w.log_region in
     State #i #Reader #reader_r #wr raead () dctr
 
@@ -163,7 +161,7 @@ val coerce: parent:rgn -> i:id{~(authId i)} -> kv:key i -> iv:iv i -> ST (writer
 let coerce parent i kv iv =
   assume false; // coerce missing post-condition
   let writer_r = new_region parent in
-  let ectr: concrete_ctr writer_r i = m_alloc writer_r 0 in
+  let ectr: concrete_ctr writer_r i = ralloc writer_r 0 in
   let aead = AEAD.coerce i parent kv iv in
   State #i #Writer #writer_r #writer_r aead () ectr
 
@@ -219,19 +217,19 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
   -> ST (cipher i)
        (requires (fun h0 ->
          disjoint e.region (AEAD.log_region e.aead) /\
-         m_sel h0 (ctr e.counter) < max_ctr (alg i)))
+         sel h0 (ctr e.counter) < max_ctr (alg i)))
        (ensures  (fun h0 c h1 ->
         modifies (Set.as_set [e.log_region; AEAD.log_region e.aead]) h0 h1
-  	 /\ m_contains (ctr e.counter) h1
-  	 /\ m_sel h1 (ctr e.counter) === m_sel h0 (ctr e.counter) + 1
+  	 /\ contains h1 (ctr e.counter) 
+  	 /\ sel h1 (ctr e.counter) === sel h0 (ctr e.counter) + 1
   	 /\ length c = targetLength i r
       	 /\ (authId i ==>
   	     (let log = ilog e.log in
   	      let ent = Entry c ad p in
-  	      let n   = Seq.length (m_sel h0 log) in
-  	      m_contains log h1 /\
+  	      let n   = Seq.length (sel h0 log) in
+  	      contains h1 log  /\
           witnessed (at_least n ent log) /\
-  	      m_sel h1 log == snoc (m_sel h0 log) ent)
+  	      sel h1 log == snoc (sel h0 log) ent)
   	   )
   ))
 
@@ -239,26 +237,22 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
 let encrypt #i e ad rg p =
   let h0 = get () in
   let ctr = ctr e.counter in
-  m_recall ctr;
-  let n = m_read ctr in
+  recall ctr;
+  let n = ! ctr in
   assume(AEAD.st_inv e.aead h0);
   let c = concrete_encrypt e n ad rg p in
-  if authId i then
-    begin
+  if authId i then (
     let log = ilog e.log in
-    m_recall log;
+    recall log;
     let ictr: ideal_ctr e.region i log = e.counter in
     testify_seqn ictr;
     write_at_end log (Entry c ad p);
-    m_recall ictr;
+    recall ictr;
     increment_seqn ictr;
-    m_recall ictr
-    end
-  else
-    begin
-    m_recall ctr;
-    m_write ctr (n + 1)
-    end;
+    recall ictr)
+  else (
+    recall ctr;
+    ctr := n + 1 );
   c
 
 val matches: #i:id -> c:cipher i -> adata i -> entry i -> Tot bool
@@ -267,12 +261,12 @@ let matches #i c ad (Entry c' ad' _) = c = c' && ad = ad'
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
 val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
   -> ST (option (dplain i ad c))
-  (requires (fun h0 -> m_sel h0 (ctr d.counter) + 1 <= max_ctr (alg i)))
+  (requires (fun h0 -> sel h0 (ctr d.counter) + 1 <= max_ctr (alg i)))
   (ensures  (fun h0 res h1 ->
-     let ctr_counter_as_hsref = as_hsref (ctr d.counter) in
-     let j = m_sel h0 (ctr d.counter) in
+     let ctr_counter_as_hsref = ctr d.counter in
+     let j = sel h0 (ctr d.counter) in
      (authId i ==>
-       (let log = m_sel h0 (ilog d.log) in
+       (let log = sel h0 (ilog d.log) in
        if j < Seq.length log && matches c ad (Seq.index log j)
        then res = Some (Entry?.p (Seq.index log j))
        else res = None))
@@ -280,22 +274,22 @@ val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
        | None -> modifies Set.empty h0 h1
        | _    -> modifies_one d.region h0 h1
                 /\ modifies_ref d.region (Set.singleton (Heap.addr_of (as_ref ctr_counter_as_hsref))) h0 h1
-	        /\ m_sel h1 (ctr d.counter) === j + 1)))
+	        /\ sel h1 (ctr d.counter) === j + 1)))
 
 #set-options "--z3rlimit 100 --max_fuel 0 --initial_fuel 1 --initial_ifuel 0 --max_ifuel 1"
 let decrypt #i d ad c =
   let ctr = ctr d.counter in
-  m_recall ctr;
+  recall ctr;
   if authId i then
-    let j = m_read ctr in
+    let j = !ctr in
     let ilog = ilog d.log in
-    let log = m_read ilog in
+    let log = !ilog in
     let ictr: ideal_ctr d.region i ilog = d.counter in
     let _ = testify_seqn ictr in // now we know j <= Seq.length log
     if j < Seq.length log && matches c ad (Seq.index log j) then
       begin
       increment_seqn ictr;
-      m_recall ctr;
+      recall ctr;
       Some (Entry?.p (Seq.index log j))
       end
     else None
@@ -304,7 +298,7 @@ let decrypt #i d ad c =
     // (ChaCha20 doesn't use the explicit nonce)
     let nb, c' = split c (AEAD.explicit_iv_length i) in
     cut(length nb = AEAD.explicit_iv_length i);
-    let j : counter (alg i) = m_read ctr in
+    let j : counter (alg i) = !ctr in
     lemma_repr_bytes_values j;
     let iv =
       match AEAD.alg i with
@@ -336,7 +330,7 @@ let decrypt #i d ad c =
         None
       else
 	begin
-	m_write ctr (j + 1);
+	ctr := j + 1;
 	assert (within (Platform.Bytes.length text) r);
 	let plain = mk_plain i ad r text in
         Some plain

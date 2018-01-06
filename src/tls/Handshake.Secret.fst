@@ -21,7 +21,6 @@ open PSK
 open Idx
 
 module MM = FStar.Monotonic.Map
-module MR = FStar.Monotonic.RRef
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
 module H = Hashing.Spec
@@ -62,7 +61,7 @@ let ams_of_hms i     = Derive (salt_of_ms i) "" Extract
 
 assume val tmp: Hashing.Spec.anyTag 
 // the branch on the static label will require two UFCMA packages for binders 
-let bns_of_ems i transcript = Derive i (binder_label i) Expand
+let bns_of_ems i = Derive i (binder_label i) Expand
 let x0s_of_ems i transcript = Derive i "e exp master" (ExpandLog transcript tmp) 
 
 let x1s_of_ams i transcript = Derive i "exp master"   (ExpandLog transcript tmp) 
@@ -98,12 +97,10 @@ let ts_of_ts  (i: ts_id): ts_id = Derive i "traffic upd" Expand // post-handshak
 
 // we have three derived MACs for Binders for Finished messages. 
 let fnk_of_s i = Derive i "finished"    Expand // binder/finished MAC keying (not always a ts)
-let bfk_of_ems i transcript = fnk_of_s (bns_of_ems i transcript)
+let bfk_of_ems i = fnk_of_s (bns_of_ems i)
 let cfk_of_hms i transcript = fnk_of_s (cts_of_hms i transcript)
 let sfk_of_hms i transcript = fnk_of_s (sts_of_hms i transcript)
 
-
-#set-options "--lax"
 
 let sprint_share (#g:CommonDH.group) (s:CommonDH.pre_share g): string
   =
@@ -151,8 +148,13 @@ private let res_psk_value (i:rmsId{registered_res_psk i}) =
 // Note that application PSK is externally defined but should
 // be idealized together with KS
 
+//TODO indexing with depth and usage?
 let u_of_i = Extract1.ODH.u_of_i
-abstract type secret (i:id) = secret (u_of_i i) i
+abstract type secret (i:id) = (
+  let (|d, u|) = u_of_i i in 
+  assume(registered i);
+  KDF.secret d u i )
+
 
 /// for readability so far; we could be more specific
 type ems_id = id
@@ -180,7 +182,7 @@ type psk (i:id) //TODO from PSK and IK
 // We treat the absence of PSK using reserved, corrupt PSK identifiers
 // with all-zero coerced keys.
 
-assume val no_psk_id: Idx.kdfa -> i:esId {match i with Preshared ha _ -> True | _ -> False}
+assume val no_psk_id: Idx.kdfa -> i:id {match i with Preshared ha _ -> True | _ -> False}
 assume val no_psk (i:id): bool
 
 let dummy_psk ha: psk (no_psk_id ha) = 
@@ -192,10 +194,7 @@ let dummy_psk ha: psk (no_psk_id ha) =
 /// Move to PSK? DB lookup from concrete pskid to indexed abstract psk & info.
 
 
-
-
-
-let read_psk (pi:PSK.pskid): ST (i:esId & u:PSK.pskInfo {ha_of_id i = u.early_hash} * psk i)
+let read_psk (pi:PSK.pskid): ST (i:id & u:PSK.pskInfo {ha_of_id i = u.early_hash} * psk i)
   (requires fun h -> True)
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
 =
@@ -232,7 +231,8 @@ and secretId_rc : (secretId -> St bytes) = function
 *)
 
 
-// miTLS 0.9:
+// pre-master-secrets and secret for earlier versions of TLS
+// (not idealized in this branch)
 // ==========
 // PRF (type pms) -> TLSInfo (type id) -> KEF (extract pms)
 //                     \ StatefulLHAE (coerce id) /
@@ -281,42 +281,42 @@ type ks12_state =
     cr:random -> 
     si:sessionInfo -> 
     msId:TLSInfo.msId -> 
-    ms:ms -> ks_state
+    ms:ms -> ks12_state
 // optional intermediate state within HS.client_ServerHelloDone 
 | C12_wait_MS: 
     csr:csRands -> 
     alpha:ks_alpha12 -> 
     id:TLSInfo.pmsId -> 
-    pms:pms -> ks_state
+    pms:pms -> ks12_state
 // state after HS.client_ServerHelloDone
 | C12_has_MS: 
     csr:csRands -> 
     alpha:ks_alpha12 -> 
     id:TLSInfo.msId -> 
-    ms:ms -> ks_state
+    ms:ms -> ks12_state
 //
 // type ks_server_state =
 | S12_wait_CKE_DH: 
     csr:csRands -> 
     alpha:ks_alpha12 -> 
-    our_share:(g:CommonDH.group & CommonDH.pre_keyshare g) -> ks_state
+    our_share:(g:CommonDH.group & CommonDH.pre_keyshare g) -> ks12_state
 | S12_wait_CKE_RSA: 
     csr: csRands -> 
-    alpha:ks_alpha12 -> ks_state
+    alpha:ks_alpha12 -> ks12_state
 | S12_has_MS: 
     csr:csRands -> 
     alpha:ks_alpha12 -> 
     id:TLSInfo.msId -> 
-    ms:ms -> ks_state
+    ms:ms -> ks12_state
 
 // state after sending ClientHello (for all protocol  versions)
 abstract type c13_wait_ServerHello 
-  (psks  : list (i:esId{~(no_psk i)})) 
+  (psks  : list (i:id{~(no_psk i)})) 
   (groups: list CommonDH.group) = 
 | C13_wait_ServerHello:
   // symmetric extracts for the PSKs the client is proposing
   // (the indexes are a function of those of the PKSs)
-  esl: list (i:esId{~(no_psk i)} & es i) ->
+  esl: list (i:id{~(no_psk i)} & ems i) ->
   // private exponents for the honestly-generated shares the client is
   // proposing (overwritten on hello_retry)
   gxs: list CommonDH.dhi -> c13_wait_ServerHello psks groups
@@ -329,24 +329,21 @@ abstract type c13_wait_ServerHello
 /// secret, separately for the client and the server.
 abstract type next_ts (i: ts_id) = secret (ts_of_ts i) 
 
+//18-01-07 TODO AEAD packaging
+assume val aeadAlg_of_i: id -> aeAlg //18-01-07  should match AEAD.Pkg.aeadAlg?
 
 // intermediate state waiting for the the ...ServerHello digest
-abstract type s13_wait_ServerHello (i: esId) (z:idh) =
+abstract type s13_wait_ServerHello (i0: id (*esId*)) (z:id_dhe) =
 | S13_wait_SH: 
-    ha: kdfa {ha = ha_of_id i1} -> 
-    aea: option (a:aeAlg {a = get_aeadAlg i1}) -> // still undefined when there is no PSK
+    ha: kdfa {ha = ha_of_id i0} -> 
+    aea: option (a:aeAlg {a == aeadAlg_of_i i0}) -> // still undefined when there is no PSK
     cr:random -> 
     sr:random -> 
-    es i ->
-    hs (ems_to hms i z) -> ks_server_state i z
+    ems i0 ->
+    hms (hms_of_ems i0 z) -> s13_wait_ServerHello i0 z
 
-abstract type s13_wait_ServerFinished (i: amsId) = secret i 
+abstract type s13_wait_ServerFinished (i: id (*amsId*)) = secret i 
 
-
-// Reflecting state separation from HS; still used for TLS 1.2
-type ks_state =
-| C: s:ks_client_state -> ks_state
-| S: s:ks_server_state -> ks_state
 
 // KeySchedule instances
 (*
@@ -365,6 +362,8 @@ type ks_state =
 /// key-install invariant
 /// regions?
 /// reader vs writer? 
+
+(* 18-01-07 TODO AEAD 
 
 val derive_ae13:
   #u: Idx.usage -> // should be specific
@@ -389,6 +388,8 @@ private let keygen_13 h secret ae : St (bytes * bytes) =
   let ib = HKDF.hkdf_expand_label h secret "iv" empty_bytes iS in
   (kb, ib)
 *)
+*)
+
 
 // // Extract finished keys
 // private let derive_finished13 h secret: St bytes =
@@ -471,18 +472,14 @@ let ks_client_init ogl =
 // we can re-use this code at the server, except that we verify instead of MACing
 
 
-let binder_of_esid_id (i: esId{~(dummy i)}) = 
-  Binder i ExtBinder
-  // will be Derive (Derive i ...) ...
-
-val compute_es_and_bfk:
+val client13_compute_es_and_bfk:
   #rid: rgn -> 
   (pskid:PSK.pskid * PSK.obfuscated_ticket_age) -> 
-  ST (i:esId{~(dummy i)} & es i * binderKey (binder_of_esid_id i) * Idx.info (*TBC*) )
+  ST (i: id (*esId{~(dummy i)}*) & ems i * binderKey (bns_of_ems i) * Idx.info (*TBC*) )
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
 
-let compute_es_and_bfk #rid (pskid,_) =
+let client13_compute_es_and_bfk truncatedHello #rid (pskid,_) =
   // 17-11-25 rediscuss this callback
   let i, pski, psk = read_psk pskid in
   let ha = pski.early_hash in

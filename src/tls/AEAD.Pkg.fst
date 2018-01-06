@@ -212,7 +212,7 @@ val coerceT_key:
   ip:ipkg ->
   aeadAlg_of_i:(ip.t -> aeadAlg) ->
   index_of_i:(ip.t -> I.id) ->
-  i:ip.t{ip.registered i /\ (idealAEAD ==> ~(ip.honest i))} ->
+  i:ip.t{ip.registered i /\ (ideal ==> ~(ip.honest i))} ->
   a:aeadAlg{a == aeadAlg_of_i i} ->
   keyrepr a ->
   GTot (key ip aeadAlg_of_i i)
@@ -221,7 +221,7 @@ val coerceT_key:
 assume val coerce_key:
   ip:ipkg ->
   aeadAlg_of_i:(ip.t -> aeadAlg) ->
-  i:ip.t{ip.registered i /\ (idealAEAD ==> ~(ip.honest i))} ->
+  i:ip.t{ip.registered i /\ (ideal ==> ~(ip.honest i))} ->
   a:aeadAlg {a == aeadAlg_of_i i} ->
   k0:keyrepr a ->
   ST (key ip aeadAlg_of_i i)
@@ -235,7 +235,7 @@ let local_ae_pkg (ip:ipkg) (aeadAlg_of_i:ip.t -> aeadAlg) =
     (key ip aeadAlg_of_i)
     (info aeadAlg_of_i)
     keylen
-    idealAEAD
+    ideal
     (shared_footprint #ip #aeadAlg_of_i)
     (footprint #ip #aeadAlg_of_i)
     (invariant #ip #aeadAlg_of_i)

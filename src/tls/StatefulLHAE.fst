@@ -6,7 +6,6 @@ the underlying LHAE scheme
 module StatefulLHAE
 
 open FStar.Seq
-open FStar.Monotonic.RRef
 open FStar.Monotonic.Seq
 
 open Platform.Bytes
@@ -59,26 +58,26 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
   -> ST (cipher i)
      (requires (fun h0 ->
        HyperStack.disjoint e.region (AEADProvider.log_region e.aead) /\
-       m_sel h0 (ctr e.counter) < max_ctr (alg i)))
+       sel h0 (ctr e.counter) < max_ctr (alg i)))
      (ensures  (fun h0 c h1 ->
        modifies (Set.as_set [e.log_region; AEADProvider.log_region e.aead]) h0 h1
-       /\ m_contains (ctr e.counter) h1
-       /\ m_sel h1 (ctr e.counter) === m_sel h0 (ctr e.counter) + 1
+       /\ contains h1 (ctr e.counter) 
+       /\ sel h1 (ctr e.counter) === sel h0 (ctr e.counter) + 1
        /\ length c = Range.targetLength i r
        /\ (authId i ==>
 	     (let log = ilog e.log in
-	      let ilog = m_sel h0 log in
-	      let seqn = m_sel h0 (ctr e.counter) in
+	      let ilog = sel h0 log in
+	      let seqn = sel h0 (ctr e.counter) in
         lemma_repr_bytes_values seqn;
 	      let ad' = LHAEPlain.makeAD i seqn ad in
 	      let ent = Entry c ad' p in
 	      let n   = Seq.length ilog in
-	      m_contains log h1
+	      contains h1 log
         /\ witnessed (at_least n ent log)
-	      /\ m_sel h1 log == snoc ilog ent))))
+	      /\ sel h1 log == snoc ilog ent))))
 
 let encrypt #i e ad r p =
-  let seqn = m_read (ctr e.counter) in
+  let seqn = !(ctr e.counter) in
   lemma_repr_bytes_values seqn;
   let ad' = LHAEPlain.makeAD i seqn ad in
   AEAD_GCM.encrypt #i e ad' r p
@@ -87,26 +86,26 @@ let encrypt #i e ad r p =
 (*------------------------------------------------------------------*)
 val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
   -> ST (option (dplain i ad c))
-  (requires fun h0 -> m_sel h0 (ctr d.counter) < max_ctr (alg i))
+  (requires fun h0 -> sel h0 (ctr d.counter) < max_ctr (alg i))
   (ensures fun h0 res h1 ->
-     let j = m_sel h0 (ctr d.counter) in
+     let j = sel h0 (ctr d.counter) in
      (authId i ==>
-       (let log = m_sel h0 (ilog d.log) in
-	let seqn = m_sel h0 (ctr d.counter) in
+       (let log = sel h0 (ilog d.log) in
+	let seqn = sel h0 (ctr d.counter) in
         lemma_repr_bytes_values seqn;
         let ad' = LHAEPlain.makeAD i seqn ad in
        if j < Seq.length log && matches c ad' (Seq.index log j)
        then res = Some (Entry?.p (Seq.index log j))
        else res = None))
     /\ (
-       let ctr_counter_as_hsref = as_hsref (ctr d.counter) in
+       let ctr_counter_as_hsref = ctr d.counter in
        match res with
        | None -> modifies Set.empty h0 h1
        | _    -> modifies_one d.region h0 h1 /\
                 modifies_ref d.region (Set.singleton (Heap.addr_of (as_ref ctr_counter_as_hsref))) h0 h1 /\
-	        m_sel h1 (ctr d.counter) === j + 1))
+	        sel h1 (ctr d.counter) === j + 1))
 let decrypt #i d ad c =
-  let seqn = m_read (ctr d.counter) in
+  let seqn = !(ctr d.counter) in
   lemma_repr_bytes_values seqn;
   let ad' = LHAEPlain.makeAD i seqn ad in
   AEAD_GCM.decrypt d ad' c

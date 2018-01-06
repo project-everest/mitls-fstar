@@ -63,6 +63,7 @@ type key (ip:ipkg) (i:ip.Pkg.t{ip.Pkg.registered i}) =
     k:ir_key ip i{IdealKey? k <==> safe i}
   else concrete_key)
 
+
 let usage (#ip:ipkg) (#i:ip.Pkg.t{ip.Pkg.registered i}) (k:key ip i): GTot info =
   if model then
     match k <: ir_key ip i with
@@ -94,6 +95,16 @@ let footprint (#ip:ipkg) (#i:ip.Pkg.t {ip.Pkg.registered i}) (k:key ip i):
     | IdealKey _ r _ -> Set.singleton r
     | RealKey _ -> Set.empty
   else Set.empty
+
+private let get_key (#ip:ipkg) (#i:ip.Pkg.t{ip.Pkg.registered i}) (k:key ip i)
+  : concrete_key
+  =
+  if model then
+    match k <: ir_key ip i with
+    | IdealKey rk _ _ -> rk
+    | RealKey rk -> rk
+  else k
+
 
 val create:
   ip:ipkg -> ha_of_i: (ip.Pkg.t -> ha) -> good_of_i: (ip.Pkg.t -> text -> bool) ->
@@ -149,14 +160,6 @@ let coerce ip _ _ i u kv =
 // not quite doable without reification?
 // assert_norm(forall ip i u. (create #ip i u == coerce #ip i u (CoreCrypto.random (UInt32.v (keylen u)))))
 
-private let get_key (#ip:ipkg) (#i:ip.Pkg.t{ip.Pkg.registered i}) (k:key ip i)
-  : concrete_key
-  =
-  if model then
-    match k <: ir_key ip i with
-    | IdealKey rk _ _ -> rk
-    | RealKey rk -> rk
-  else k
 
 val mac:
   #ip:ipkg -> #i:ip.Pkg.t{ip.Pkg.registered i} -> k:key ip i ->
@@ -191,6 +194,8 @@ let verify #ip #i k p t =
     verified && valid
   else
     verified
+
+
 
 /// For TLS, we'll use something of the form
 ///
@@ -229,8 +234,13 @@ unfold let localpkg (ip: ipkg) (ha_of_i: i:ip.Pkg.t -> ha) (good_of_i: ip.Pkg.t 
 
 //TODO (later) support dynamic key compromise
 
+// 18-01-07 only for debugging; how to reliably disable this function otherwise?
+let string_of_key (#ip:ipkg) (#i:ip.Pkg.t{ip.Pkg.registered i}) (k:key ip i): string = 
+  let MAC u kv = get_key k in
+  "HMAC-"^Hashing.Spec.string_of_alg u.alg^" key="^print_bytes kv
 
-(** The rest of the file is a unit test for the packaging of UFCMA *)
+
+(**! Unit test for the packaging of UFCMA *)
 
 val coerce_eq2: a: (nat -> Type0) -> b: (nat -> Type0) -> v:a 0 -> Pure (b 0)
   (requires a == b) (ensures fun _ -> True)
@@ -242,13 +252,12 @@ open FStar.Tactics
 private type id = nat
 private let ip : ipkg = Pkg.Idx id (fun _ -> True) (fun _ -> True) (fun _ -> true)
 
-private let test (r:rgn {~(is_tls_rgn r)}) (v': bytes) (t': Hashing.Spec.tag Hashing.SHA256)
-  : ST unit
+private let test (a: ha) (r: rgn{~(is_tls_rgn r)}) (v': bytes) (t': Hashing.Spec.tag a)
+  : ST bool
   (requires fun h0 -> model)
   (ensures fun h0 _ h1 -> True)
   =
   // testing usability of local packages
-  let a = Hashing.SHA256 in
   let ha_of_i (i:ip.Pkg.t) = a in
   let good_of_i (i:ip.Pkg.t) (v:text) = length v = 0 in // a property worth MACing!
 
@@ -293,14 +302,34 @@ private let test (r:rgn {~(is_tls_rgn r)}) (v': bytes) (t': Hashing.Spec.tag Has
   assert(good_of_i 0 v);
   let t = mac #ip #0 k v in
 
-  let b = verify #ip #0 k v' t' in
-  assert(b /\ b2t ideal ==> length v' = 0);
+  let b0 = verify #ip #0 k v' t in
+  assert(b0 /\ b2t ideal ==> length v' = 0);
+
+  let b1 = verify #ip #0 k v' t' in
+  assert(b1 /\ b2t ideal ==> length v' = 0);
   //assert false; // sanity check
-  ()
 
-(*
+  // expected: 
+  let _ = IO.debug_print_string (string_of_key k^" tag="^print_bytes t^"\n") in
+  b0 && not b1 
 
-/// ------------ older, TLS-specific implementation
+let unit_test(): St bool = 
+  let _ = IO.debug_print_string "HMAC.UFCMA\n" in 
+  assume(model); //18-01-07 avoid?
+  let here = new_colored_region root hs_color in
+  let b0 = 
+    let a = Hashing.SHA1 in 
+    test a here empty_bytes (createBytes (Hashing.Spec.tagLen a) 42z) in
+  let b1 = 
+    let a = Hashing.SHA1 in 
+    test a here empty_bytes (createBytes (Hashing.Spec.tagLen a) 42z) in
+  let b2 = 
+    let a = Hashing.SHA1 in 
+    test a here empty_bytes (createBytes (Hashing.Spec.tagLen a) 42z) in
+  b0 && b1 && b2
+  // nothing bigger? 
+
+(* --------- older, TLS-specific implementation. 18-01-07 to be deleted
 
 //17-10-21 ADAPT: should depend only on agility parameter.
 

@@ -6,7 +6,6 @@ open Idx
 open Pkg.Tree
 open KDF // avoid?
 
-module MR = FStar.Monotonic.RRef
 module MM = FStar.Monotonic.Map
 
 // for now 
@@ -40,10 +39,10 @@ let extractR #d #u #i s a gX =
     (if None? (MM.lookup t gX) then
       let peers = MM.alloc #there #(peer_index gX) #(peer_instance #gX) #(fun _ -> True) in
       let h = get() in
-      assume(None? (MM.sel (MR.m_sel h t) gX));
+      assume(None? (MM.sel (sel h t) gX));
       MM.extend t gX peers;
-      assume(MR.stable_on_t t (MM.defined t gX));
-      MR.witness t (MM.defined t gX));
+      assume(stable_on_t t (MM.defined t gX));
+      mr_witness t (MM.defined t gX));
     odh_test a s gX
    end
   else
@@ -87,7 +86,7 @@ let extractI #d #u #i a s g x gY =
   let b = if model then CommonDH.is_honest_dhi gX else false in
   if b then
     let t: odh_table = odh_state in
-    MR.testify(MM.defined t gX);
+    testify(MM.defined t gX);
     let peers = Some?.v (MM.lookup t gX) in
     let idh = IDH gX gY in
     let i' = Derive i "" (ExtractDH idh) in

@@ -6,7 +6,6 @@ open Idx
 open Pkg.Tree
 open KDF // avoid?
 
-module MR = FStar.Monotonic.RRef
 module MM = FStar.Monotonic.Map
 
 open Extract0 // for now
@@ -78,7 +77,7 @@ let create_salt2 #d #u i a =
   lemma_corrupt_invariant i "" Extract;
   if flag_KEF2 d && honest' then
     let t' = secret d u i' in
-    let r: mref_secret d u i' = MR.m_alloc #(option t') #(ssa #t') there None in
+    let r: mref_secret d u i' = ralloc #(option t') #(ssa #t') there None in
     (| (), ideal_salt2 #d #u #i' r |)
   else
     (| (), real_salt2 #d #u #i' (sample (secret_len a)) |)
@@ -129,17 +128,17 @@ let extract2 #d #u #i e2 a =
   assume(idealKDF d ==> idealKEF2 d); // TODO
   if flag_KEF2 d && honest' then
     let k: mref_secret d u i' = salt2_ideal s in
-    match MR.m_read k with
+    match !k with
     | Some extract -> extract
     | None ->
         let extract = create d u i' a in
         let mrel = ssa #(secret d u i') in
         let () =
-          MR.m_recall k;
+          recall k;
           let h = get() in
-          assume (MR.m_sel h k == None); // TODO framing of call to create
+          assume (sel h k == None); // TODO framing of call to create
           assume (mrel None (Some extract)); // TODO Fix the monotonic relation
-          MR.m_write k (Some extract) in
+          k := Some extract in
         extract
   else
     let k = salt2_real s in

@@ -6,8 +6,6 @@ open Idx
 open Pkg.Tree
 open KDF // avoid?
 
-module MR = FStar.Monotonic.RRef
-
 /// The "salt" is an optional secret used (exclusively) as HKDF
 /// extraction key. The absence of salt (e.g. when no PSK is used) is
 /// handled using a special, constant salt marked as compromised.

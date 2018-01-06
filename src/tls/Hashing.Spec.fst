@@ -14,6 +14,14 @@ type alg = // CoreCrypto.hash_alg
 //  | SHAKE256 of (n:nat{n >= 16})
 // see e.g. https://en.wikipedia.org/wiki/SHA-1 for a global comparison and lengths
 
+let string_of_alg = function
+  | MD5 -> "MD5"
+  | SHA1 -> "SHA1"
+  | SHA224 -> "SHA224"
+  | SHA256 -> "SHA256"
+  | SHA384 -> "SHA384"
+  | SHA512 -> "SHA512"
+
 // length of the input blocks, in bytes (used for specifying the outer hash loop)
 let blockLen = function
   | MD5 | SHA1 | SHA224 | SHA256 -> 64
