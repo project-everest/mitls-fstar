@@ -27,7 +27,7 @@ OCAMLMKLIB=OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind mklib $(OCAMLOPTS)
 IMPL_CHOICE ?= runtime_switch
 
 
-test: $(ALL_ML_FILES)
+test: $(ALL_ML_FILES) $(LOWC_HOME)/LowC.cmxa mlcrypto
 	make -f Makefile.OCaml mitls.cmxa #specifically don't pass parallel flags downx
 
 mitls.exe: mitls.cmxa test/mitls.cmx
@@ -39,6 +39,9 @@ mitls.exe: mitls.cmxa test/mitls.cmx
 	  $^ \
 	  -o $@
 
+mlcrypto:
+	$(MAKE) -C $(MLCRYPTO_HOME)
+
 .PHONY: $(FFI_HOME)/FFICallbacks.cmxa
 
 ffi: $(FFI_HOME)/FFICallbacks.cmxa
@@ -49,7 +52,7 @@ $(FFI_HOME)/FFICallbacks.cmxa:
 .PHONY: $(LOWC_HOME)/LowC.cmxa
 
 $(LOWC_HOME)/LowC.cmxa:
-	IMPL_CHOICE=$(IMPL_CHOICE) $(MAKE) -f $(HACL_HOME)/secure_api/Makefile.extract $@
+	IMPL_CHOICE=$(IMPL_CHOICE) $(MAKE) -C $(HACL_HOME)/secure_api -f Makefile.extract out/$(IMPL_CHOICE)/LowC.cmxa
 
 $(EXTRACT_DIR)/Hacl_Curve25519.ml:
 	echo "type uint8_p = FStar_UInt8.t FStar_Buffer.buffer" > $@
