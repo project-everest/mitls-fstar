@@ -6,7 +6,6 @@ open Idx
 open Pkg.Tree
 open KDF // avoid?
 
-module MR = FStar.Monotonic.RRef
 module MM = FStar.Monotonic.Map
 
 open Extract1.PRF // for now
@@ -70,15 +69,15 @@ let lemma_fresh_odh_framing (i:CommonDH.dhi) (h0:mem) (h1:mem)
 type odh_defined (i:odhid) =
   (if model then
     let log : odh_table = odh_state in
-    MR.witnessed (MM.defined log i)
+    witnessed (MM.defined log i)
   else True)
 
 type odhr_fresh (#i:odhid) (r:peer_index i) (h:mem) =
   (if model then
     let log : odh_table = odh_state in
-    (match MM.sel (MR.m_sel h log) i with
+    (match MM.sel (sel h log) i with
     | Some t ->
-      (match MM.sel (MR.m_sel h t) r with
+      (match MM.sel (sel h t) r with
       | None -> True
       | _ -> False)
     | _ -> False)
@@ -111,13 +110,13 @@ let odh_init g =
     let i : CommonDH.dhi = (| g, CommonDH.ipubshare x |) in
     lemma_fresh_odh i h0;
     lemma_fresh_odh_framing i h0 h1;
-    assert(MM.sel (MR.m_sel h1 log) i == None);
+    assert(MM.sel (sel h1 log) i == None);
     let peers = alloc tls_tables_region <: peer_table i in //17-11-22   MM.alloc #there #(peer_index i) #(peer_instance #i) #(fun _ -> True) in
     let h2 = get () in
-    assume(MM.sel (MR.m_sel h2 log) i == None); // FIXME allocate peers somewhere else !!
+    assume(MM.sel (sel h2 log) i == None); // FIXME allocate peers somewhere else !!
     MM.extend log i peers;
-    assume(MR.stable_on_t log (MM.defined log i));
-    MR.witness log (MM.defined log i)
+    assume(stable_on_t log (MM.defined log i));
+    mr_witness log (MM.defined log i)
    end;
   x
 
@@ -142,14 +141,14 @@ private let register_odh (i:regid) (gX:CommonDH.dhi) (gY:CommonDH.dhr gX)
   assert(honest_idh ctx);
   let j = Derive i "" ctx in // N.B. this is the only case where i can be corrupt and j honest
   let hlog : i_honesty_table = honesty_table in
-  MR.m_recall hlog;
+  recall hlog;
   match MM.lookup hlog j with
   | None ->
-    let m = MR.m_read hlog in
+    let m = !hlog in
     assume(honesty_invariant (MM.upd m j true)); // Sepcial case: honest IDH
     MM.extend hlog j true;
     MM.contains_stable hlog j true;
-    MR.witness hlog (MM.contains hlog j true); j
+    mr_witness hlog (MM.contains hlog j true); j
   | Some b -> j
 
 val odh_test:
@@ -196,7 +195,7 @@ let odh_test #d #u #i a s gX =
   let h2 = get() in
   assume(odhr_fresh j' h2); // TODO framing of KDF
   let t: odh_table = odh_state in
-  MR.testify(MM.defined t gX);
+  testify(MM.defined t gX);
   let peers = Some?.v (MM.lookup t gX) in
   MM.extend peers j' k;
   (| j' , k |)

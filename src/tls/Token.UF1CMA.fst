@@ -114,7 +114,7 @@ let create ip _ _ i u =
     if is_safe i then
       let region: Mem.subrgn u.parent = new_region u.parent in
       assert(~(is_tls_rgn u.parent));
-      let log: log_t #ip i u region = MR.m_alloc region None in
+      let log: log_t #ip i u region = ralloc region None in
       IdealKey ck region log
     else
       RealKey ck in
@@ -187,21 +187,12 @@ let verify #ip #i k t =
     // We use the log to correct any verification errors
     let IdealKey _ _ log = k <: ir_key ip i in
     match !log with 
-    | Some () -> verified 
-    | None    -> false 
+    | Some () -> verified
+    | None    -> 
+      assume false; //18-01-04 TODO how can this fail otherwise?
+      false
   else
     verified
-
-/// For TLS, we'll use something of the form
-///
-/// let good =
-///   exists digest.
-///     hashed ha digest /\
-///     text = hash ha digest /\
-///     witnessed (fun h -> "this is the writer's state is ...")
-///
-/// - how to deal with agility here?
-/// - which level of abstraction?
 
 type info1 (ip: ipkg) (ha_of_i: ip.Pkg.t -> ha)
   (good_of_i: ip.Pkg.t -> bool) (i: ip.Pkg.t)

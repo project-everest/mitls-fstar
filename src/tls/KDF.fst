@@ -156,7 +156,7 @@ type local_kdf_invariant (#d:nat) (#u:usage d) (#i:id{registered i}) (k:secret d
           assert(honest i' ==> honest i);
           assert(Pkg?.ideal pkg' ==> ~(honest i')); // to call coerceT
           // the child's define table has correctly-computed coerced entries
-          (match MM.sel (m_sel h dt) i' with
+          (match MM.sel (sel h dt) i' with
           | None -> True
           | Some k' ->
             // we recompute the concrete key materials, and recall the
@@ -200,7 +200,7 @@ let local_kdf_invariant_framing (#d:nat) (#u:usage d) (i:id{registered i}) (k:se
 type kdf_post (#d:nat) (#u:usage d) (#i:id{registered i}) (a: info {a == get_info i}) (k:secret d u i) (h:mem) =
   (safeKDF d i ==>
     (let KDF_table r t = secret_ideal k in
-     MR.m_sel h t == MM.empty_map (domain d u i) (kdf_range d u i)))
+     sel h t == MM.empty_map (domain d u i) (kdf_range d u i)))
 
 // Framing for the kdf_post depends only on kdf_footprint k
 let kdf_post_framing (#d:nat) (#u:usage d) (#i:id{registered i}) (a: info {a == get_info i})
@@ -249,14 +249,14 @@ let coerce d u i a repr =
 /// I added a unit here
 ///
 /// CF: Ok; I did not know. Is it a style bug in FStar.Monotonic.Map ?
-let alloc #a #b #inv (r:FStar.Monotonic.RRef.rid): 
+let alloc #a #b #inv (r: erid): 
   ST (MM.t r a b inv)
     (requires (fun h -> 
       inv (MM.empty_map a b) /\ 
       witnessed (region_contains_pred r) ))
     (ensures (fun h0 x h1 ->
       inv (MM.empty_map a b) /\
-      ralloc_post r (MM.empty_map a b) h0 (FStar.Monotonic.RRef.as_hsref x) h1))
+      ralloc_post r (MM.empty_map a b) h0 x h1))
   = MM.alloc #r #a #b #inv
 
 val create:
@@ -490,8 +490,8 @@ let derive #d #t #i k a lbl ctx a' =
   if model then
    begin
     let log = itable dt in
-    MR.m_recall log;
-    let m = MR.m_sel h1 log in
+    recall log;
+    let m = sel h1 log in
     assume(m i == Some k); // testify
     lemma_mm_forall_elim m local_kdf_invariant i k h1;
     assert(local_kdf_invariant k h1)

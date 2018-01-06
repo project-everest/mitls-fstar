@@ -21,7 +21,6 @@ open PSK
 open Idx
 
 module MM = FStar.Monotonic.Map
-module MR = FStar.Monotonic.RRef
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
 module H = Hashing.Spec

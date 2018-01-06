@@ -9,7 +9,6 @@ open TLSConstants
 open TLSInfo
 
 module MM = FStar.Monotonic.Map
-module MR = FStar.Monotonic.RRef
 
 type id = i:id{~(PlaintextID? i) /\ AEAD? (aeAlg_of_id i)}
 let alg (i:id) = AEAD?._0 (aeAlg_of_id i)
@@ -66,8 +65,8 @@ noeq type state (i:id) (rw:rw) =
 
 type empty_log (#i:id) (#rw:rw) (st:state i rw) h =
   authId i ==>
-    (MR.m_contains (ilog st.log) h /\
-     MR.m_sel h (ilog st.log) == MM.empty_map (iv i) entry)
+    (contains h (ilog st.log) /\
+     sel h (ilog st.log) == MM.empty_map (iv i) entry)
 
 type writer i = s:state i Writer
 type reader i = s:state i Reader
@@ -149,7 +148,7 @@ let encrypt #i #l e iv ad p =
   if authId i then
     begin
       let log = ilog e.log in
-      MR.m_recall log;
+      recall log;
       let c = CoreCrypto.random (cipherlen i l) in
       MM.extend log iv (Entry ad p c);
       c
@@ -180,7 +179,7 @@ let decrypt #i #l d iv ad c =
   if authId i then
    begin
     let log = ilog d.log in
-    MR.m_recall log;
+    recall log;
     match MM.lookup log iv with
     | None -> assume false; None
     | Some (Entry ad' p c') ->
