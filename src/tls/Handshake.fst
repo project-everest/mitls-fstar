@@ -356,14 +356,13 @@ let client_ClientHello hs i =
 
 let client_HelloRetryRequest (hs:hs) (hrr:hrr) : St incoming =
   trace "client_HelloRetryRequest";
-  let g = match Nego.group_of_hrr hrr with
-  | None ->
-    // this case should only ever happen in QUIC stateless retry address validation
-    trace "Server did not specify a group in HRR, re-using the previous choice";
-    Some?.v (CommonDH.group_of_namedGroup (List.Tot.hd (config_of hs).offer_shares))
-  | Some g -> g in
-  let s = KeySchedule.ks_client_13_hello_retry hs.ks g in
-  match Nego.client_HelloRetryRequest hs.nego hrr (| g, s |) with
+  let s = match Nego.group_of_hrr hrr with
+    | None ->
+      // this case should only ever happen in QUIC stateless retry address validation
+      trace "Server did not specify a group in HRR, re-using the previous choice"; None
+    | Some g -> let s = KeySchedule.ks_client_13_hello_retry hs.ks g in Some (| g, s |)
+    in
+  match Nego.client_HelloRetryRequest hs.nego hrr s with
   | Error z -> InError z
   | Correct(ch) ->
     HandshakeLog.send hs.log (ClientHello ch);

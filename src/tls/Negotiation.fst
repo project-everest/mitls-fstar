@@ -648,7 +648,7 @@ let group_of_hrr hrr : option CommonDH.group =
     CommonDH.group_of_namedGroup ng
   | _ -> None
 
-let client_HelloRetryRequest #region (ns:t region Client) hrr (s:share) =
+let client_HelloRetryRequest #region (ns:t region Client) hrr (s:option share) =
   let { hrr_sessionID = sid; hrr_cipher_suite = cs; hrr_extensions = el } = hrr in
   match MR.m_read ns.state with
   | C_Offer offer ->
@@ -657,37 +657,34 @@ let client_HelloRetryRequest #region (ns:t region Client) hrr (s:share) =
       match find_pske offer with
       | None -> []
       | Some pskl -> pskl in
-    let (| g, gx |) = s in
 
-    (match group_of_hrr hrr, find_supported_groups offer with
-    | Some g', Some ngl ->
-      if sid <> offer.ch_sessionID then
-        Error(AD_illegal_parameter, "mismatched session ID in HelloRetryRequest")
-      else if g = g' && List.Tot.mem (Some?.v (CommonDH.namedGroup_of_group g')) ngl then
-       begin
-        // TODO early data not recorded in retryInfo
-        let ext' = List.Tot.choose (fun (e:Extensions.extension) ->
-          if Extensions.E_key_share? e then
-            Some (Extensions.E_key_share
-             (CommonDH.ClientKeyShare [CommonDH.Share g gx]))
-          else if Extensions.E_early_data? e then None
-          else Some e // TODO filter PSK
-          ) (Some?.v offer.ch_extensions) in
+    // TODO early data not recorded in retryInfo
+    let ext' = List.Tot.choose (fun (e:Extensions.extension) ->
+      match e with
+      | Extensions.E_key_share (CommonDH.ClientKeyShare sl) ->
+        (match s with
+        | Some (| g, gx |) -> Some (Extensions.E_key_share
+           (CommonDH.ClientKeyShare [CommonDH.Share g gx]))
+        | _ -> Some e)
+      | Extensions.E_early_data _ -> None
+      | e -> Some e) (Some?.v offer.ch_extensions) in
 
-        // Echo the cookie for QUIC stateless retry
-        let ext' = match List.Tot.find Extensions.E_cookie? el with
-          | Some cookie -> cookie :: ext'
-          | None -> ext' in
+    // Echo the cookie for QUIC stateless retry
+    let ext' = match List.Tot.find Extensions.E_cookie? el with
+      | Some cookie -> cookie :: ext'
+      | None -> ext' in
 
-        let offer' = {offer with ch_extensions = Some ext'} in
-        let ri = (hrr, old_shares, old_psk) in
-        MR.m_write ns.state (C_HRR offer' ri);
-        Correct(offer')
-       end
-      else
-        Error(AD_illegal_parameter, "server asked for an invalid group in HRR")
-    | _ ->
-      Error(AD_illegal_parameter, "only keyShare-based HRR is supported on client"))
+    if sid <> offer.ch_sessionID then
+      Error(AD_illegal_parameter, "mismatched session ID in HelloRetryRequest")
+    else if None? (group_of_hrr hrr) && None? ns.cfg.quic_parameters then
+      Error(AD_illegal_parameter, "only keyShare-based HRR is supported on client")
+    else
+     begin
+      let offer' = {offer with ch_extensions = Some ext'} in
+      let ri = (hrr, old_shares, old_psk) in
+      MR.m_write ns.state (C_HRR offer' ri);
+      Correct(offer')
+     end
 
 (**
   Checks that the protocol version in ClientHello is
