@@ -42,7 +42,7 @@ extract/copied/kremstr.c: $(KREMLIN_HOME)/kremlib/kremstr.c
 
 mitls.exe: $(MLCRYPTO_HOME)/CoreCrypto.cmxa $(LOWC_HOME)/LowC.cmxa \
 	  $(FFI_HOME)/FFICallbacks.cmxa $(subst .ml,.cmx,$(ALL_ML_FILES)) extract/copied/kremstr.o test/mitls.cmx
-	$(OCAMLOPT) -linkpkg -I test/ -g $^ -o $@
+	$(OCAMLOPT) -linkpkg -I test/ -g $^ -o $@ -thread
 
 .PHONY: $(MLCRYPTO_HOME)/CoreCrypto.cmxa
 
