@@ -68,7 +68,7 @@ $(FFI_HOME)/FFICallbacks.cmxa:
 $(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa:
 	$(MAKE) -C $(FSTAR_HOME)/ulib/ml
 
-test/mitls.cmx: test/mitls.ml
+test/mitls.cmx: test/mitls.ml $(subst .ml,.cmx,$(ALL_ML_FILES))
 
 %.cmx:
 	$(OCAMLOPT) -w -8-11-26-20 -c $< -o $@
