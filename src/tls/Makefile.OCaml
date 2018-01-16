@@ -27,6 +27,7 @@ OCAMLOPTS	=-package fstarlib,zarith -g \
 		  -I $(FFI_HOME) \
 		  -I $(HACL_HOME)/secure_api/LowCProvider \
 		  -I $(HACL_HOME)/secure_api/out/runtime_switch/ \
+		  -I $(KREMLIN_HOME)/kremlib \
 		  -I .
 
 OCAMLOPT	= OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind opt $(OCAMLOPTS)
@@ -67,5 +68,7 @@ $(FFI_HOME)/FFICallbacks.cmxa:
 $(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa:
 	$(MAKE) -C $(FSTAR_HOME)/ulib/ml
 
-%.cmx: %.ml
+test/mitls.cmx: test/mitls.ml
+
+%.cmx:
 	$(OCAMLOPT) -w -8-11-26-20 -c $< -o $@

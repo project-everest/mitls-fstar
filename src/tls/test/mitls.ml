@@ -217,3 +217,8 @@ let _ =
      else
        TestAPI.server !config host (Z.of_int port)
 *)
+
+let _ =
+  match Test_TLSConstants.main () with
+  | C.EXIT_SUCCESS -> print_string "ok!\n"
+  | C.EXIT_FAILURE -> failwith "non-success"

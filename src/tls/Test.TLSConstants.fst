@@ -3,7 +3,7 @@ open FStar.Error
 open TLSError
 open TLSConstants
 
-let test_signatureSchemeListBytes () 
+let test_signatureSchemeListBytes ()
   : Stack (option (either (FStar.Bytes.bytes * string * string)
                           (FStar.Bytes.bytes * FStar.Bytes.bytes)))
           (requires (fun _ -> True))
@@ -31,10 +31,30 @@ let test_signatureSchemeListBytes ()
   ; DSA_SHA512 ] in
   let bytes = signatureSchemeListBytes algs in
   match parseSignatureSchemeList bytes with
-  | Correct algs' -> 
+  | Correct algs' ->
     let bytes' = signatureSchemeListBytes algs' in
     if bytes = bytes'
     then None //all ok
     else Some (Inr (bytes, bytes')) //failed to round trip
   | Error (ad, msg) ->
     Some (Inl (bytes, string_of_ad ad, msg)) //failed to parse back
+
+let print s = FStar.HyperStack.IO.print_string s
+
+let main () : St C.exit_code =
+  match test_signatureSchemeListBytes() with
+  | None ->
+    C.EXIT_SUCCESS
+
+  | Some (Inr (b0, b1)) ->
+    print (Printf.sprintf "Failed to round trip: %s <> %s\n"
+                           (Bytes.hex_of_bytes b0)
+                           (Bytes.hex_of_bytes b1));
+    C.EXIT_FAILURE
+
+  | Some (Inl (b, ad, msg)) ->
+    print (Printf.sprintf "Failed to round trip: %s, ad=%s, msg=%s\n"
+                           (Bytes.hex_of_bytes b)
+                           ad
+                           msg);
+    C.EXIT_FAILURE
