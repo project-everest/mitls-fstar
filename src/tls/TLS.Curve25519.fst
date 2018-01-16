@@ -10,7 +10,6 @@ open FStar.HyperStack.ST
 open FStar.Bytes
 open FStar.Error
 
-module X = Hacl.Curve25519
 module CC = CoreCrypto
 module U32 = FStar.UInt32
 
@@ -28,11 +27,7 @@ let scalarmult (secret:Bytes.lbytes 32) (point:Bytes.lbytes 32)
   : ST (lbytes 32)
        (requires (fun h -> True))
        (ensures (fun h0 _ h1 -> modifies_none h0 h1)) = 
-  let out = Buffer.create 0uy 32ul in
-  let scalar = BufferBytes.from_bytes secret in
-  let point = BufferBytes.from_bytes point in
-  X.crypto_scalarmult out scalar point;
-  BufferBytes.to_bytes 32 out
+  LowCProvider.crypto_scalarmult secret point
 
 let keygen () : ST keyshare
   (requires (fun h0 -> True))
