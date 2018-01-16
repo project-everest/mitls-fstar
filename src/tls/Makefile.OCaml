@@ -1,5 +1,7 @@
 all: mitls.exe
 
+FSTAR_HOME	?= ../../../fstar
+
 include $(FSTAR_HOME)/ulib/ml/Makefile.include
 
 #To include Makefile.common, you need to specify
@@ -12,56 +14,53 @@ EXTRACT='* -Prims -FStar -CoreCrypto -CryptoTypes -DHDB -LowCProvider -FFICallba
 include Makefile.common
 ################################################################################
 
-FFI_HOME=../../libs/ffi
-MLCRYPTO_HOME?=../../../MLCrypto
-OCAMLOPTS=-package fstarlib,zarith -g \
-	  -I $(FSTAR_HOME)/ulib/ml \
-	  -I $(EXTRACT_DIR) \
-	  -I $(MLCRYPTO_HOME) \
-	  -I $(FFI_HOME) \
-	  -I $(HACL_HOME)/secure_api/LowCProvider \
-	  -I $(HACL_HOME)/secure_api/out/runtime_switch/ \
-	  -I .
+KREMLIN_HOME	?= ../../../kremlin
+MLCRYPTO_HOME	?= ../../../MLCrypto
+HACL_HOME	?= ../../../hacl-star
+FFI_HOME	= ../../libs/ffi
+LOWC_HOME	= $(HACL_HOME)/secure_api/out/$(IMPL_CHOICE)
 
-LOWC_HOME=$(HACL_HOME)/secure_api/out/$(IMPL_CHOICE)
-OCAMLOPT=OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind opt $(OCAMLOPTS)
-OCAMLMKLIB=OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind mklib $(OCAMLOPTS)
-IMPL_CHOICE ?= runtime_switch
+OCAMLOPTS	=-package fstarlib,zarith -g \
+		  -I $(FSTAR_HOME)/ulib/ml \
+		  -I $(EXTRACT_DIR) \
+		  -I $(MLCRYPTO_HOME) \
+		  -I $(FFI_HOME) \
+		  -I $(HACL_HOME)/secure_api/LowCProvider \
+		  -I $(HACL_HOME)/secure_api/out/runtime_switch/ \
+		  -I .
 
+OCAMLOPT	= OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind opt $(OCAMLOPTS)
+OCAMLMKLIB	= OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind mklib $(OCAMLOPTS)
+IMPL_CHOICE 	?= runtime_switch
 
-test: $(ALL_ML_FILES) $(LOWC_HOME)/LowC.cmxa mlcrypto
-	make -f Makefile.OCaml mitls.cmxa #specifically don't pass parallel flags downx
+extract/copied/kremstr.c: $(KREMLIN_HOME)/kremlib/kremstr.c
+	mkdir -p $(dir $@)
+	cp $< $@
 
-mitls.exe: mitls.cmxa test/mitls.cmx
-	$(OCAMLOPT) -linkpkg -I test/ -g \
-	  $(MLCRYPTO_HOME)/CoreCrypto.cmxa \
-	  $(LOWC_HOME)/LowC.cmxa \
-	  $(FFI_HOME)/FFICallbacks.cmxa \
-	  mitls.cmxa \
-	  test/mitls.cmx \
-	  -o $@
+%.o: %.c
+	$(CC) -I $(KREMLIN_HOME)/kremlib $^ -o $@ -c
 
-mlcrypto:
+mitls.exe: $(MLCRYPTO_HOME)/CoreCrypto.cmxa $(LOWC_HOME)/LowC.cmxa \
+	  $(FFI_HOME)/FFICallbacks.cmxa $(subst .ml,.cmx,$(ALL_ML_FILES)) extract/copied/kremstr.o test/mitls.cmx
+	$(OCAMLOPT) -linkpkg -I test/ -g $^ -o $@
+
+.PHONY: $(MLCRYPTO_HOME)/CoreCrypto.cmxa
+
+$(MLCRYPTO_HOME)/CoreCrypto.cmxa:
 	$(MAKE) -C $(MLCRYPTO_HOME)
 
 .PHONY: $(FFI_HOME)/FFICallbacks.cmxa
 
-ffi: $(FFI_HOME)/FFICallbacks.cmxa
-
 $(FFI_HOME)/FFICallbacks.cmxa:
 	$(MAKE) -C $(FFI_HOME)
 
-.PHONY: $(LOWC_HOME)/LowC.cmxa
+# Makefile difficulties: we just assume that the user has run "make" in
+# HACL*/secure_api
 
-$(LOWC_HOME)/LowC.cmxa:
-	IMPL_CHOICE=$(IMPL_CHOICE) $(MAKE) -C $(HACL_HOME)/secure_api -f Makefile.extract out/$(IMPL_CHOICE)/LowC.cmxa
+# .PHONY: $(LOWC_HOME)/LowC.cmxa
 
-$(EXTRACT_DIR)/Hacl_Curve25519.ml:
-	echo "type uint8_p = FStar_UInt8.t FStar_Buffer.buffer" > $@
-	echo "let crypto_scalarmult (x:uint8_p) (y:uint8_p) (z:uint8_p) : unit = failwith \"Hacl stub\"" >> $@
-
-mitls.cmxa: $(EXTRACT_DIR)/Hacl_Curve25519.cmx $(subst .ml,.cmx,$(ALL_ML_FILES))
-	$(OCAMLMKLIB) $^ -o mitls
+# $(LOWC_HOME)/LowC.cmxa:
+# 	IMPL_CHOICE=$(IMPL_CHOICE) $(MAKE) -C $(HACL_HOME)/secure_api -f Makefile.extract out/$(IMPL_CHOICE)/LowC.cmxa
 
 .PHONY: $(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa
 
@@ -70,4 +69,3 @@ $(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa:
 
 %.cmx: %.ml
 	$(OCAMLOPT) -w -8-11-26-20 -c $< -o $@
-
