@@ -10,4 +10,4 @@ kremlin:
 	$(MAKE) -f Makefile.kremlin
 
 %.fst-in %.fsti-in:
-	@echo $(addprefix --include , $(INCLUDE_PATHS)) --cache_checked_modules
+	@echo $(addprefix --include , $(INCLUDE_PATHS)) --cache_checked_modules --lax
