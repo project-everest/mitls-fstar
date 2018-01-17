@@ -263,8 +263,9 @@ val decrypt: #i:id -> d:reader i -> l:plainLen -> c:cipher i l
       (match res with
        | None -> HS.modifies_transitively Set.empty h0 h1
        | _ -> let ctr_counter_as_hsref = ctr d.counter in
-             HS.modifies_one d.region h0 h1 /\
-             modifies_ref d.region (Set.singleton (Heap.addr_of (as_ref ctr_counter_as_hsref))) h0 h1 /\
+             mods [ Ref (ctr d.counter) ] h0 h1 /\
+              //HS.modifies_one d.region h0 h1 /\
+              //modifies_ref d.region (Set.singleton (Heap.addr_of (as_ref ctr_counter_as_hsref))) h0 h1 /\
              HS.sel h1 (ctr d.counter) === j + 1)))
 
 val strip_refinement: #a:Type -> #p:(a -> Type0) -> o:option (x:a{p x}) -> option a
@@ -308,6 +309,25 @@ let decrypt #i d l c =
        p
      end
    end
+
+(*
+ * AR: 01/17: This is just a test to test `mods` functionality
+ *            decrypt spec now provides `mods` and this test function tests the older spec
+ *)
+let decrypt_test_mods (#i:id) (d:reader i) (l:plainLen) (c:cipher i l)
+  : ST (option (plain i (min l (max_TLSPlaintext_fragment_length + 1))))
+       (requires (fun h0 ->
+                  l <= max_TLSPlaintext_fragment_length /\ // FIXME ADL: why is plainLen <= max_TLSCiphertext_fragment_length_13 ?? Fix StreamPlain!
+                  HS.sel h0 (ctr d.counter) < max_ctr))
+       (ensures  (fun h0 res h1 ->
+                   (match res with
+                    | None -> HS.modifies_transitively Set.empty h0 h1
+                    | _ -> let ctr_counter_as_hsref = ctr d.counter in
+                      HS.modifies_one d.region h0 h1 /\
+                      modifies_ref d.region (Set.singleton (Heap.addr_of (as_ref ctr_counter_as_hsref))) h0 h1)))
+		      
+  = decrypt #i d l c
+
 
 (* TODO
 
