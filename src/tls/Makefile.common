@@ -33,7 +33,7 @@ clean:
 
 depend: .depend.$(FLAVOR)
 
-include .depend.$(FLAVOR)
+-include .depend.$(FLAVOR)
 
 %.checked.lax: %
 	$(FSTAR) --lax --cache_checked_modules $(addprefix --include , $(INCLUDE_PATHS)) $*

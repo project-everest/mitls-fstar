@@ -131,8 +131,11 @@ let string_of_signatureScheme = function
   | DSA_SHA512             -> "DSA_SHA512"
   | SIG_UNKNOWN codepoint  -> "UNKNOWN " ^ (print_bytes codepoint)
 
+private
+let accum_string_of_signatureSchemes s sa =
+    s^(string_of_signatureScheme sa)^" "
 let string_of_signatureSchemes sal =
-  List.Tot.fold_left (fun s sa -> s^(string_of_signatureScheme sa)^" ") "" sal
+  List.Tot.fold_left accum_string_of_signatureSchemes "" sal
 
 (* Negotiation: HELLO sub-module *)
 type ri = cVerifyData * sVerifyData
@@ -152,6 +155,11 @@ let find_client_extension filter o =
   match o.ch_extensions with
   | None -> None
   | Some es -> List.Tot.find filter es
+
+let find_client_extension_aux env filter o =
+  match o.ch_extensions with
+  | None -> None
+  | Some es -> TLSConstants.find_aux env filter es
 
 let find_supported_versions o =
   match find_client_extension Extensions.E_supported_versions? o with
@@ -647,6 +655,14 @@ let group_of_hrr hrr : option CommonDH.group =
     CommonDH.group_of_namedGroup ng
   | _ -> None
 
+private let choose_extension (kse: CommonDH.keyShareEntry)
+                             (e:Extensions.extension) =
+       if Extensions.E_key_share? e
+       then Some (Extensions.E_key_share (CommonDH.ClientKeyShare [kse]))
+       else if Extensions.E_early_data? e 
+       then None
+       else Some e // TODO filter PSK
+
 let client_HelloRetryRequest #region (ns:t region Client) hrr (s:share) =
   let { hrr_protocol_version = pv;
         hrr_cipher_suite = cs;
@@ -665,13 +681,7 @@ let client_HelloRetryRequest #region (ns:t region Client) hrr (s:share) =
       if g = g' && List.Tot.mem (Some?.v (CommonDH.namedGroup_of_group g')) ngl then
        begin
         // TODO early data not recorded in retryInfo
-        let ext' = List.Tot.choose (fun (e:Extensions.extension) ->
-          if Extensions.E_key_share? e then
-            Some (Extensions.E_key_share
-             (CommonDH.ClientKeyShare [CommonDH.Share g gx]))
-          else if Extensions.E_early_data? e then None
-          else Some e // TODO filter PSK
-          ) (Some?.v offer.ch_extensions) in
+        let ext' = TLSConstants.choose_aux (CommonDH.Share g gx) choose_extension (Some?.v offer.ch_extensions) in
 
         // Echo the cookie for QUIC stateless retry
         let ext' = match List.Tot.find Extensions.E_cookie? el with
@@ -714,12 +724,14 @@ let is_client13 (o:offer) =
   | Correct vs -> List.Tot.existsb is_pv_13 vs
   | Error _ -> false
 
+private let version_within cfg v = geqPV cfg.max_version v && geqPV v cfg.min_version
+
 let negotiate_version cfg offer =
   //17-04-26 TODO pass outer packet PV instead of TLS_1p0
   match offered_versions TLS_1p0 offer with
   | Error z -> Error z
   | Correct vs ->
-    match List.Tot.find (fun v -> geqPV cfg.max_version v && geqPV v cfg.min_version) vs with
+    match TLSConstants.find_aux cfg version_within vs with
     | Some v -> Correct v
     | None -> Error(AD_protocol_version, "protocol version negotiation: mismatch")
 
@@ -965,6 +977,10 @@ let to_be_signed pv role csr tbs =
   | TLS_1p2, Some csr -> csr @| tbs
   | _, Some csr -> csr @| tbs
 
+private let matches_sigHashAlg_of_signatureScheme sa alg =
+      let (sa',_) = sigHashAlg_of_signatureScheme alg in
+      sa' = sa
+
 // Used for clients to verify the server's signature scheme
 let supported_signatureSchemes_12 mode =
   let ha0 = sessionHashAlg mode.n_protocol_version mode.n_cipher_suite in
@@ -974,8 +990,7 @@ let supported_signatureSchemes_12 mode =
   | TLS_1p2 ->
     match find_signature_algorithms mode.n_offer with
     | None -> [signatureScheme_of_sigHashAlg sa ha0]
-    | Some algs -> List.Tot.filter (fun alg ->
-      let (sa',_) = sigHashAlg_of_signatureScheme alg in sa' = sa) algs
+    | Some algs -> TLSConstants.filter_aux sa matches_sigHashAlg_of_signatureScheme algs
 
 // TLS 1.2 only
 val client_ServerKeyExchange: #region:rgn -> t region Client ->
@@ -994,7 +1009,7 @@ let client_ServerKeyExchange #region ns crt ske ocr =
     let salgs =
       match ske.ske_signed_params.sig_algorithm with
       | None -> salgs
-      | Some sa' -> List.Tot.filter (fun x -> x = sa') salgs in
+      | Some sa' -> TLSConstants.filter_aux sa' op_Equality salgs in
     match salgs with
     | [] ->
       Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Signature algorithm negotiation failed")
@@ -1075,13 +1090,19 @@ type cs13 offer =
   | PSK_EDH: j:pski offer -> oks: option share -> cs: cipherSuite -> cs13 offer
   | JUST_EDH: oks: share -> cs: cipherSuite -> cs13 offer
 
+private
+let rec just_edh_x (o:offer) (oks:share) (l:list cipherSuite) : list (cs13 o) =
+  match l with
+  | [] -> []
+  | hd::tl -> JUST_EDH oks hd :: just_edh_x o oks tl
+
 // Work around #1016
 private let rec compute_cs13_aux (i:nat) (o:offer)
   (psks:list (PSK.pskid * PSK.pskInfo))
   (g_gx:option share) ncs psk_kex server_cert : list (cs13 o) =
   if i = List.length psks then
     match g_gx, server_cert with
-    | Some x, true -> List.Tot.map (fun cs -> JUST_EDH x cs) ncs
+    | Some x, true -> just_edh_x o x ncs
     | _ -> []
   else
     let choices =
@@ -1294,7 +1315,7 @@ let computeServerMode cfg co serverRandom =
       let salgs =
         match find_signature_algorithms co with
         | None -> [SIG_UNKNOWN (twobytes (0xFFz, 0xFFz)); ECDSA_SHA1]
-        | Some sigalgs -> List.Tot.filter (fun x -> List.Tot.mem x cfg.signature_algorithms) sigalgs
+        | Some sigalgs -> TLSConstants.filter_aux cfg.signature_algorithms TLSConstants.mem_rev sigalgs
         in
       match cert_select_cb cfg (get_sni co) salgs with
       | None -> Error(AD_no_certificate, perror __SOURCE_FILE__ __LINE__ "No compatible certificate can be selected")
@@ -1322,16 +1343,44 @@ let computeServerMode cfg co serverRandom =
               (Some(cert, sa))
             ))
 
+private
+let accum_string_of_ciphersuite s cs =
+    s ^ "; " ^ string_of_ciphersuite cs
+  
 let string_of_ciphersuites csl =
-  List.Tot.fold_left (fun s cs -> s^"; "^(string_of_ciphersuite cs)) "" csl
+  List.Tot.fold_left accum_string_of_ciphersuite "" csl
 
+private
+let accum_string_of_pv s pv = s ^ " " ^ string_of_pv pv
+
+private
+let aux_extension_ok (o1, ng) (e:Extensions.extension) =
+     match e with
+     | Extensions.E_key_share (CommonDH.ClientKeyShare ecl) ->
+          (match ecl with
+          | [CommonDH.Share g _] -> CommonDH.namedGroup_of_group g = Some ng
+          | _ -> (IO.debug_print_string "Bad key_share\n") && false)
+     | Extensions.E_early_data _ -> false // Forbidden
+     | Extensions.E_cookie c -> true // FIXME we will send cookie
+        // If we add cookie support we need to treat this case separately
+        // | Extensions.E_cookie c -> c = S_HRR?.cookie ns.state
+     | e ->
+         (match find_client_extension_aux e Extensions.sameExt o1 with
+          | None -> (IO.debug_print_string "Extra extension\n") && false
+          // This allows the client to send less extensions,
+          // but the ones that are sent must be exactly the same
+          | Some e' ->
+            //FIXME: Extensions.E_pre_shared_key "may be updated" 4.1.2
+            true) // FIXME
+            //equalBytes (extensionBytes e) (extensionBytes e'))
+        
 val server_ClientHello: #region:rgn -> t region Server ->
   HandshakeMessages.ch ->
   St (result serverMode)
 let server_ClientHello #region ns offer =
   trace ("offered client extensions "^string_of_option_extensions offer.ch_extensions);
   trace ("offered cipher suites "^(string_of_ciphersuites offer.ch_cipher_suites));
-  trace (string_of_result (List.Tot.fold_left (fun s pv -> s^" "^string_of_pv pv) "offered versions")  (offered_versions TLS_1p0 offer));
+  trace (string_of_result (List.Tot.fold_left accum_string_of_pv "offered versions")  (offered_versions TLS_1p0 offer));
   match HST.op_Bang ns.state with
   | S_HRR o1 hrr ->
     let o2 = offer in
@@ -1344,26 +1393,7 @@ let server_ClientHello #region ns offer =
       List.Tot.mem hrr.hrr_cipher_suite o2.ch_cipher_suites &&
       o1.ch_compressions = o2.ch_compressions &&
       Some? o2.ch_extensions && Some? o1.ch_extensions &&
-      List.Tot.for_all (fun (e:Extensions.extension) ->
-        match e with
-        | Extensions.E_key_share (CommonDH.ClientKeyShare ecl) ->
-          (match ecl with
-          | [CommonDH.Share g _] -> CommonDH.namedGroup_of_group g = Some ng
-          | _ -> (IO.debug_print_string "Bad key_share\n") && false)
-        | Extensions.E_early_data _ -> false // Forbidden
-        | Extensions.E_cookie c -> true // FIXME we will send cookie
-        // If we add cookie support we need to treat this case separately
-        // | Extensions.E_cookie c -> c = S_HRR?.cookie ns.state
-        | e ->
-          (match find_client_extension (Extensions.sameExt e) o1 with
-          | None -> (IO.debug_print_string "Extra extension\n") && false
-          // This allows the client to send less extensions,
-          // but the ones that are sent must be exactly the same
-          | Some e' ->
-            //FIXME: Extensions.E_pre_shared_key "may be updated" 4.1.2
-            true) // FIXME
-            //equalBytes (extensionBytes e) (extensionBytes e'))
-        ) (Some?.v o2.ch_extensions)
+      TLSConstants.forall_aux (o1, ng) aux_extension_ok (Some?.v o2.ch_extensions)
     then
       let sm = computeServerMode ns.cfg offer ns.nonce in
       match sm with

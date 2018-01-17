@@ -811,14 +811,18 @@ val ks_client_13_sh: ks:ks -> sr:random -> cs:cipherSuite -> h:bytes ->
     modifies (Set.singleton rid) h0 h1
     /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
 
+private let group_matches 
+              (g:CommonDH.group)
+              (gx:(x:CommonDH.group & CommonDH.keyshare g)) =
+    let (| g', _ |) = gx in
+    g=g'
+    
 // ServerHello log breakpoint (client)
 let ks_client_13_sh ks sr cs log (| g, gy|) accept_psk =
   dbg ("ks_client_13_sh hashed_log = "^(print_bytes log));
   let KS #region st = ks in
   let C (C_13_wait_SH cr esl gc) = !st in
-  let Some gx = List.Tot.find (
-      fun ((| g', _ |):(x:CommonDH.group & CommonDH.keyshare g)) -> g = g'
-    ) gc in
+  let Some gx = TLSConstants.find_aux g group_matches gc in
   let (| g, gx |) = gx in
   let b = print_share gy in
   let gxy = CommonDH.dh_initiator #g gx gy in
