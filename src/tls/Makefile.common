@@ -13,11 +13,11 @@ INCLUDE_PATHS= \
 	$(MITLS_HOME)/libs/ffi \
 	./concrete-flags
 
-FSTAR=fstar.exe $(OTHERFLAGS)
+FSTAR=$(FSTAR_HOME)/bin/fstar.exe $(OTHERFLAGS)
 
 EXTRACT_DIR=extract/$(FLAVOR)
 
-ROOTS ?= TLS.fst Test.TLSConstants.fst QUIC.fst
+ROOTS ?= TLS.fst Test.TLSConstants.fst QUIC.fst Test.StAE.fst
 
 clean:
 	rm -rf $(EXTRACT_DIR) .depend.$(FLAVOR) *.checked.lax
