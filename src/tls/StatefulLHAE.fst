@@ -38,14 +38,14 @@ type dplain (i:id) (ad:adata i) (c:cipher i) =
 type state (i:id) (rw:rw) =
   AEAD_GCM.state i rw
 
-let region #i #rw = AEAD_GCM.State?.region #i #rw
+let region #i #rw s = AEAD_GCM.State?.region #i #rw s
 
 noextract
-let log_region #i #rw = AEAD_GCM.State?.log_region #i #rw
+let log_region #i #rw s = AEAD_GCM.State?.log_region #i #rw s
 
-let log #i #rw = AEAD_GCM.State?.log #i #rw
+let log #i #rw s = AEAD_GCM.State?.log #i #rw s
 
-let counter #i #rw = AEAD_GCM.State?.counter #i #rw
+let counter #i #rw s = AEAD_GCM.State?.counter #i #rw s
 
 type reader i = state i Reader
 type writer i = state i Writer
