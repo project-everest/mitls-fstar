@@ -11,7 +11,7 @@ kremlin:
 
 test: ocaml kremlin
 	./mitls.exe
-	./mitls-c.exe
+	./mitls-c-test.exe
 
 
 %.fst-in %.fsti-in:

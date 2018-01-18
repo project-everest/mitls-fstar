@@ -1,4 +1,4 @@
-all: mitls-c.exe
+all: mitls-c-test.exe
 
 # include Makefile
 include $(FSTAR_HOME)/ulib/ml/Makefile.include
@@ -30,7 +30,13 @@ KRML_COMMAND=krml $(KRML_INCLUDES) \
   -ccopt -Wno-unused-function  \
   $(DROP_MODULES)  \
   -bundle 'Crypto.AEAD.*,Crypto.Symmetric.*,Buffer.Utils,Crypto.Plain' \
-  -no-prefix Test.Main $(KOPTS) 
+  $(KOPTS) 
+
+# Use the reachability analysis to drop anything NOT in the call-graph of the tests.
+mitls-c-test.exe: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES))
+	$(KRML_COMMAND) $^ -tmpdir $(EXTRACT_DIR) -o $@ -no-prefix Test.Main \
+	  -drop FFICallbacks,LowCProvider \
+	  -bundle Test.Main=Test.*,AEAD_GCM,AEADOpenssl,AEADProvider,Alert,BufferBytes,Cert,CommonDH,Connection,ConnInvariant,Content,Crypto.Indexing,DataStream,DHGroup,ECGroup,Encode,Epochs,Extensions,FFI,Handshake,HandshakeLog,HandshakeMessages,Hashing.CRF,Hashing,Hashing.OpenSSL,Hashing.Spec,HKDF,HMAC,HMAC.UFCMA,IdNonce,KDF.Common,KDF.Salt.ODH,KeySchedule,LHAEPlain,MAC,MAC_SHA1,MAC_SHA256,MasterSecret,Negotiation,Nonce,Parse,PMS,PSK,QUIC,Range,Record,RSAKey,Signature,StAE,Standalone,StatefulLHAE,StatefulPlain,StreamAE,StreamDeltas,StreamPlain,Ticket,TLSConstants,TLS.Curve25519,TLSError,TLS,TLSInfo,TLSPRF,Transport
 
 mitls-c.exe: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES))
 	$(KRML_COMMAND) $^ -tmpdir $(EXTRACT_DIR) -o $@
