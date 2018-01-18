@@ -126,7 +126,7 @@ let gen parent i =
   let aead = AEAD.gen i parent in
   if authId i then
     let log : ideal_log writer_r i = alloc_mref_seq writer_r Seq.createEmpty in
-    let ectr: ideal_ctr #writer_r writer_r i log = new_seqn #writer_r #(entry i) #(max_ctr (alg i)) writer_r 0 log in
+    let ectr: ideal_ctr writer_r i log = new_seqn writer_r 0 log in
     State #i #Writer #writer_r #writer_r aead log ectr
   else
     let ectr: concrete_ctr writer_r i = m_alloc writer_r 0 in
