@@ -143,15 +143,3 @@ let new_region parent =
 
 // a constant value, with negligible probability of being sampled, excluded by idealization
 let noCsr : bytes = CoreCrypto.random 64
-
-
-(* With the upcoming improved support for top-level effects,
-   we could  prove that noCsr is not fresh in the initial state.
-   For example:
-
-   let noCsr : ST random
-      (requires (fun h -> Mr.sel h nonce_rid_table = MM.empty_map random ex_rid))
-      (ensures (fun h0 r h1 -> ~ (fresh r h1)))
-      = mkHelloRandom Client (new_region (FStar.ST.new_region HS.root))
-*)
-let dummy () = Test.TLSConstants.test_signatureSchemeListBytes()

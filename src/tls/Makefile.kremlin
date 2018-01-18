@@ -18,7 +18,7 @@ DROP_MODULES = $(addprefix -drop , FStar.Bytes MonotoneMap MonotoneMapNonDep Tra
   Crypto.AEAD.Main)
 HEADERS = $(addprefix -add-include ,'"hacks.h"' '"transport.h"' '"krembytes.h"' '"kremstr.h"' \
   '"hacl_glue.h"')
-EXTRA_C_FILES = extract/copied/kremstr.c extract/src/support.c 
+EXTRA_C_FILES = extract/copied/kremstr.c extract/src/support.c extract/src/lowc_in_c.c
 KRML_INCLUDES=$(addprefix -I , $(INCLUDE_PATHS)) \
   -I $(HACL_HOME)/secure_api/out/vale_aes_abstract_id \
   -I extract/include -I concrete-flags
@@ -32,11 +32,13 @@ KRML_COMMAND=krml $(KRML_INCLUDES) \
   -bundle 'Crypto.AEAD.*,Crypto.Symmetric.*,Buffer.Utils,Crypto.Plain' \
   $(KOPTS) 
 
-# Use the reachability analysis to drop anything NOT in the call-graph of the tests.
+# The glue doesn't want a huge bundle, so we need to leave a few files outside of the bundle.
+# - Crypto.Indexing, for the lowc_in_c to be able to include it
+# - TLSInfo, for its id type
 mitls-c-test.exe: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES))
 	$(KRML_COMMAND) $^ -tmpdir $(EXTRACT_DIR) -o $@ -no-prefix Test.Main \
-	  -drop FFICallbacks,LowCProvider \
-	  -bundle Test.Main=Test.*,AEAD_GCM,AEADOpenssl,AEADProvider,Alert,BufferBytes,Cert,CommonDH,Connection,ConnInvariant,Content,Crypto.Indexing,DataStream,DHGroup,ECGroup,Encode,Epochs,Extensions,FFI,Handshake,HandshakeLog,HandshakeMessages,Hashing.CRF,Hashing,Hashing.OpenSSL,Hashing.Spec,HKDF,HMAC,HMAC.UFCMA,IdNonce,KDF.Common,KDF.Salt.ODH,KeySchedule,LHAEPlain,MAC,MAC_SHA1,MAC_SHA256,MasterSecret,Negotiation,Nonce,Parse,PMS,PSK,QUIC,Range,Record,RSAKey,Signature,StAE,Standalone,StatefulLHAE,StatefulPlain,StreamAE,StreamDeltas,StreamPlain,Ticket,TLSConstants,TLS.Curve25519,TLSError,TLS,TLSInfo,TLSPRF,Transport
+	  -drop FFICallbacks \
+	  -bundle Test.Main=Test.*,AEAD_GCM,AEADOpenssl,AEADProvider,Alert,BufferBytes,Connection,ConnInvariant,Content,DataStream,Encode,Epochs,FFI,Handshake,HandshakeLog,HandshakeMessages,Hashing.CRF,Hashing.OpenSSL,HKDF,HMAC,HMAC.UFCMA,IdNonce,KDF.Common,KDF.Salt.ODH,KeySchedule,LHAEPlain,MAC,MAC_SHA1,MAC_SHA256,MasterSecret,Negotiation,QUIC,Range,Record,Signature,StAE,Standalone,StatefulLHAE,StatefulPlain,StreamAE,StreamDeltas,StreamPlain,Ticket,TLS,TLSPRF,Transport
 
 mitls-c.exe: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES))
 	$(KRML_COMMAND) $^ -tmpdir $(EXTRACT_DIR) -o $@

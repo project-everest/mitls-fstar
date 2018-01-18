@@ -3,8 +3,8 @@ module FStar.Test
 open FStar.HyperStack.ST
 open FStar.HyperStack.IO
 
-(* Force enough monomorphizations to appear in FStar.h so that krembytes.h can successfully compile.
- * *)
+(* Force enough monomorphizations to appear in FStar.h so that hand-written headers have the right
+ * definitions in scope. *)
 let dummy (): St (
   // This one needed by krembytes.h
   option string *
