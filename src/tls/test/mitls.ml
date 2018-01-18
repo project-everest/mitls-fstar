@@ -219,6 +219,6 @@ let _ =
 *)
 
 let _ =
-  match Test_TLSConstants.main () with
-  | C.EXIT_SUCCESS -> print_string "ok!\n"
-  | C.EXIT_FAILURE -> failwith "non-success"
+  match Test_Main.main () with
+  | C.EXIT_SUCCESS -> ()
+  | C.EXIT_FAILURE -> exit 254

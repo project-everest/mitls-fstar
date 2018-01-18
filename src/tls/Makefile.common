@@ -17,7 +17,7 @@ FSTAR=$(FSTAR_HOME)/bin/fstar.exe $(OTHERFLAGS)
 
 EXTRACT_DIR=extract/$(FLAVOR)
 
-ROOTS ?= TLS.fst Test.TLSConstants.fst QUIC.fst Test.StAE.fst
+ROOTS ?= TLS.fst QUIC.fst Test.Main.fst
 
 clean:
 	rm -rf $(EXTRACT_DIR) .depend.$(FLAVOR) *.checked.lax

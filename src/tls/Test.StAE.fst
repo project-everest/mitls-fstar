@@ -143,10 +143,6 @@ let test id =
       else (eprint "wrong decrypted message"; false)
     | _ -> eprint ("decryption failed");  false )
 
-// will need to move to a Kremlin-specific driver
-let main() = 
+// Called from Test.Main
+let main () = 
   if test id12 && test id13 then C.EXIT_SUCCESS else C.EXIT_FAILURE 
-
-// will need to move to an Ocaml-specific driver
-let _ = 
-  if test id12 && test id13 then () else failwith prefix

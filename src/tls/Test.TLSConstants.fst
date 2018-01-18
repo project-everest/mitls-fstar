@@ -41,6 +41,7 @@ let test_signatureSchemeListBytes ()
 
 let print s = FStar.HyperStack.IO.print_string s
 
+// called from Test.Main
 let main () : St C.exit_code =
   match test_signatureSchemeListBytes() with
   | None ->
