@@ -27,7 +27,7 @@ let scalarmult (secret:Bytes.lbytes 32) (point:Bytes.lbytes 32)
   : ST (lbytes 32)
        (requires (fun h -> True))
        (ensures (fun h0 _ h1 -> modifies_none h0 h1)) = 
-  LowCProvider.crypto_scalarmult secret point
+  HaclProvider.crypto_scalarmult secret point
 
 let keygen () : ST keyshare
   (requires (fun h0 -> True))

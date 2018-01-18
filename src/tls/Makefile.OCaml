@@ -10,7 +10,7 @@ FLAVOR=OCaml
 EXTENSION=ml
 #Don't extract modules from fstarlib (NOEXTRACT_MODULES)
 #And also some specific ones from mitls that are implemented in C
-EXTRACT='* -Prims -FStar -CoreCrypto -CryptoTypes -DHDB -LowCProvider -FFICallbacks -Crypto.AEAD -Crypto.Symmetric -Crypto.Plain -C.Loops -Spec.Loops -Buffer.Utils'
+EXTRACT='* -Prims -FStar +FStar.Test -CoreCrypto -CryptoTypes -DHDB -LowCProvider -HaclProvider -FFICallbacks -Crypto.AEAD -Crypto.Symmetric -Crypto.Plain -C.Loops -Spec.Loops -Buffer.Utils -C'
 include Makefile.common
 ################################################################################
 
@@ -34,10 +34,20 @@ OCAMLOPT	= OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind opt $(OCAMLOPTS)
 OCAMLMKLIB	= OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind mklib $(OCAMLOPTS)
 IMPL_CHOICE 	?= runtime_switch
 
+# Sanity checks
+
+ifeq (,$(wildcard $(LOWC_HOME)/LowC.cmxa))
+  $(error LOWC_HOME is $(LOWC_HOME) and I cannot find $(LOWC_HOME)/LowC.cmxa -- please run make in secure_api!)
+endif
+
+ifeq (,$(wildcard $(KREMLIN_HOME)/kremlib/C.cmx))
+  $(error KREMLIN_HOME is $(KREMLIN_HOME) and I cannot find $(KREMLIN_HOME)/kremlib/C.cmx -- please run make in kremlib!)
+endif
+
 %.o: %.c
 	$(CC) -I $(KREMLIN_HOME)/kremlib $^ -o $@ -c
 
-mitls.exe: $(MLCRYPTO_HOME)/CoreCrypto.cmxa $(LOWC_HOME)/LowC.cmxa \
+mitls.exe: $(KREMLIN_HOME)/kremlib/C.cmx $(MLCRYPTO_HOME)/CoreCrypto.cmxa $(LOWC_HOME)/LowC.cmxa \
 	  $(FFI_HOME)/FFICallbacks.cmxa $(subst .ml,.cmx,$(ALL_ML_FILES)) extract/copied/kremstr.o test/mitls.cmx
 	$(OCAMLOPT) -linkpkg -I test/ -g $^ -o $@ -thread
 
@@ -50,14 +60,6 @@ $(MLCRYPTO_HOME)/CoreCrypto.cmxa:
 
 $(FFI_HOME)/FFICallbacks.cmxa:
 	$(MAKE) -C $(FFI_HOME)
-
-# Makefile difficulties: we just assume that the user has run "make" in
-# HACL*/secure_api
-
-# .PHONY: $(LOWC_HOME)/LowC.cmxa
-
-# $(LOWC_HOME)/LowC.cmxa:
-# 	IMPL_CHOICE=$(IMPL_CHOICE) $(MAKE) -C $(HACL_HOME)/secure_api -f Makefile.extract out/$(IMPL_CHOICE)/LowC.cmxa
 
 .PHONY: $(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa
 
