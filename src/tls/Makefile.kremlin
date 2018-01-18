@@ -18,7 +18,7 @@ DROP_MODULES = $(addprefix -drop , FStar.Bytes MonotoneMap MonotoneMapNonDep Tra
   Crypto.AEAD.Main)
 HEADERS = $(addprefix -add-include ,'"hacks.h"' '"transport.h"' '"krembytes.h"' '"kremstr.h"' \
   '"hacl_glue.h"')
-EXTRA_C_FILES = extract/copied/kremstr.c extract/src/support.c
+EXTRA_C_FILES = extract/copied/kremstr.c
 KRML_INCLUDES=$(addprefix -I , $(INCLUDE_PATHS)) \
   -I $(HACL_HOME)/secure_api/out/vale_aes_abstract_id \
   -I extract/include -I concrete-flags
