@@ -7,9 +7,9 @@ include $(FSTAR_HOME)/ulib/ml/Makefile.include
 #the following three variables
 FLAVOR=Kremlin
 EXTENSION=krml
-#Don't extract modules from fstarlib (NOEXTRACT_MODULES)
-#And also some specific ones from mitls that are implemented in C
-EXTRACT='* -CoreCrypto -DHDB -LowCProvider -FFICallbacks'
+# Don't extract modules from fstarlib (NOEXTRACT_MODULES)
+# And also some specific ones from mitls that are implemented in C
+EXTRACT='* -CoreCrypto -DHDB -LowCProvider -HaclProvider -FFICallbacks'
 include Makefile.common
 
 ################################################################################
@@ -18,7 +18,7 @@ DROP_MODULES = $(addprefix -drop , FStar.Bytes MonotoneMap MonotoneMapNonDep Tra
   Crypto.AEAD.Main)
 HEADERS = $(addprefix -add-include ,'"hacks.h"' '"transport.h"' '"krembytes.h"' '"kremstr.h"' \
   '"hacl_glue.h"')
-EXTRA_C_FILES = extract/copied/kremstr.c extract/src/support.c extract/src/lowc_in_c.c
+EXTRA_C_FILES = extract/copied/kremstr.c extract/src/support.c
 KRML_INCLUDES=$(addprefix -I , $(INCLUDE_PATHS)) \
   -I $(HACL_HOME)/secure_api/out/vale_aes_abstract_id \
   -I extract/include -I concrete-flags
@@ -26,19 +26,21 @@ KRML_COMMAND=krml $(KRML_INCLUDES) \
   -fnoanonymous-unions \
   -warn-error +3-9+11-7-6 \
   -fsopts --debug,yes -verbose \
-  $(HEADERS) $(EXTRA_C_FILES) \
+  $(HEADERS) \
   -ccopt -Wno-unused-function  \
   $(DROP_MODULES)  \
   -bundle 'Crypto.AEAD.*,Crypto.Symmetric.*,Buffer.Utils,Crypto.Plain' \
-  $(KOPTS) 
+  $(KOPTS)
 
 # The glue doesn't want a huge bundle, so we need to leave a few files outside of the bundle.
-# - Crypto.Indexing, for the lowc_in_c to be able to include it
-# - TLSInfo, for its id type
-mitls-c-test.exe: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES))
+# - Crypto.Indexing, for secure_api's Crypto_AEAD_Main.h to be happy and find
+#   the file
+# - TLSInfo, because Crypto.Indexing.id is TLSInfo.id
+# - all the files in the dependency graph of these two
+mitls-c-test.exe: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES)) $(EXTRA_C_FILES)
 	$(KRML_COMMAND) $^ -tmpdir $(EXTRACT_DIR) -o $@ -no-prefix Test.Main \
 	  -drop FFICallbacks \
 	  -bundle Test.Main=Test.*,AEAD_GCM,AEADOpenssl,AEADProvider,Alert,BufferBytes,Connection,ConnInvariant,Content,DataStream,Encode,Epochs,FFI,Handshake,HandshakeLog,HandshakeMessages,Hashing.CRF,Hashing.OpenSSL,HKDF,HMAC,HMAC.UFCMA,IdNonce,KDF.Common,KDF.Salt.ODH,KeySchedule,LHAEPlain,MAC,MAC_SHA1,MAC_SHA256,MasterSecret,Negotiation,QUIC,Range,Record,Signature,StAE,Standalone,StatefulLHAE,StatefulPlain,StreamAE,StreamDeltas,StreamPlain,Ticket,TLS,TLSPRF,Transport
 
-mitls-c.exe: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES))
+mitls-c.exe: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES)) $(EXTRA_C_FILES)
 	$(KRML_COMMAND) $^ -tmpdir $(EXTRACT_DIR) -o $@
