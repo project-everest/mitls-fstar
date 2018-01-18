@@ -19,7 +19,10 @@ let check s (f: unit -> St C.exit_code): St unit =
 let rec iter xs: St unit =
   match xs with
   | [] -> ()
-  | x :: xs -> check (fst x) (snd x); iter xs
+  | x :: xs ->
+      let s = fst x in
+      let f = snd x in
+      check s f; iter xs
 
 let main (): St C.exit_code =
   iter [

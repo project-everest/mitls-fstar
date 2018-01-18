@@ -49,3 +49,7 @@ $(EXTRACT_DIR)/%.$(EXTENSION):
 		--extract_module $(basename $(notdir $(subst .checked.lax,,$<))) \
 		$(subst .checked.lax,, $<)
 
+# Avoids polluting the KreMLin source tree with a random .o file
+extract/copied/kremstr.c: $(KREMLIN_HOME)/kremlib/kremstr.c
+	mkdir -p $(dir $@)
+	cp $< $@

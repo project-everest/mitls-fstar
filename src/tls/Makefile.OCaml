@@ -34,10 +34,6 @@ OCAMLOPT	= OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind opt $(OCAMLOPTS)
 OCAMLMKLIB	= OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind mklib $(OCAMLOPTS)
 IMPL_CHOICE 	?= runtime_switch
 
-extract/copied/kremstr.c: $(KREMLIN_HOME)/kremlib/kremstr.c
-	mkdir -p $(dir $@)
-	cp $< $@
-
 %.o: %.c
 	$(CC) -I $(KREMLIN_HOME)/kremlib $^ -o $@ -c
 
