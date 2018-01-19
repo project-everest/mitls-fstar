@@ -40,14 +40,14 @@ ifeq (,$(wildcard $(LOWC_HOME)/LowC.cmxa))
   $(error LOWC_HOME is $(LOWC_HOME) and I cannot find $(LOWC_HOME)/LowC.cmxa -- please run make in secure_api!)
 endif
 
-ifeq (,$(wildcard $(KREMLIN_HOME)/kremlib/C.cmx))
-  $(error KREMLIN_HOME is $(KREMLIN_HOME) and I cannot find $(KREMLIN_HOME)/kremlib/C.cmx -- please run make in kremlib!)
+ifeq (,$(wildcard $(KREMLIN_HOME)/_build/kremlib/C.cmx))
+  $(error KREMLIN_HOME is $(KREMLIN_HOME) and I cannot find $(KREMLIN_HOME)/_build/kremlib/C.cmx -- please run make in kremlin!)
 endif
 
 %.o: %.c
 	$(CC) -I $(KREMLIN_HOME)/kremlib $^ -o $@ -c
 
-mitls.exe: $(KREMLIN_HOME)/kremlib/C.cmx $(MLCRYPTO_HOME)/CoreCrypto.cmxa $(LOWC_HOME)/LowC.cmxa \
+mitls.exe: $(KREMLIN_HOME)/_build/kremlib/C.cmx $(MLCRYPTO_HOME)/CoreCrypto.cmxa $(LOWC_HOME)/LowC.cmxa \
 	  $(FFI_HOME)/FFICallbacks.cmxa $(subst .ml,.cmx,$(ALL_ML_FILES)) extract/copied/kremstr.o test/mitls.cmx
 	$(OCAMLOPT) -linkpkg -I test/ -g $^ -o $@ -thread
 
