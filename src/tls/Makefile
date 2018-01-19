@@ -1,3 +1,5 @@
+EXTRACT='Nothing'
+FLAVOR=generic
 include Makefile.common
 
 all: ocaml kremlin

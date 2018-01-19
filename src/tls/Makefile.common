@@ -11,7 +11,8 @@ INCLUDE_PATHS= \
 	$(HACL_HOME)/code/lib \
 	$(KREMLIN_HOME)/kremlib \
 	$(MITLS_HOME)/libs/ffi \
-	./concrete-flags
+	./concrete-flags \
+        ./concrete-flags/$(FLAVOR)
 
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe $(OTHERFLAGS)
 
