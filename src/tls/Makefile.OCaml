@@ -27,7 +27,9 @@ OCAMLOPTS	=-package fstarlib,zarith -g \
 		  -I $(FFI_HOME) \
 		  -I $(HACL_HOME)/secure_api/LowCProvider \
 		  -I $(HACL_HOME)/secure_api/out/runtime_switch/ \
-		  -I $(KREMLIN_HOME)/kremlib \
+		  -I $(KREMLIN_HOME)/_build/kremlib \
+		  -I test \
+		  -I extract/mlstubs \
 		  -I .
 
 OCAMLOPT	= OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind opt $(OCAMLOPTS)
@@ -47,9 +49,9 @@ endif
 %.o: %.c
 	$(CC) -I $(KREMLIN_HOME)/kremlib $^ -o $@ -c
 
-mitls.exe: $(KREMLIN_HOME)/_build/kremlib/C.cmx $(MLCRYPTO_HOME)/CoreCrypto.cmxa $(LOWC_HOME)/LowC.cmxa \
+mitls.exe: extract/mlstubs/Crypto_AEAD_Main.cmx $(KREMLIN_HOME)/_build/kremlib/C.cmx $(MLCRYPTO_HOME)/CoreCrypto.cmxa $(LOWC_HOME)/LowC.cmxa \
 	  $(FFI_HOME)/FFICallbacks.cmxa $(subst .ml,.cmx,$(ALL_ML_FILES)) extract/copied/kremstr.o test/mitls.cmx
-	$(OCAMLOPT) -linkpkg -I test/ -g $^ -o $@ -thread
+	$(OCAMLOPT) -linkpkg -g $^ -o $@ -thread
 
 .PHONY: $(MLCRYPTO_HOME)/CoreCrypto.cmxa
 
@@ -67,6 +69,10 @@ $(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa:
 	$(MAKE) -C $(FSTAR_HOME)/ulib/ml
 
 test/mitls.cmx: test/mitls.ml $(subst .ml,.cmx,$(ALL_ML_FILES))
+
+extract/mlstubs/Crypto_AEAD_Main.cmx: extract/mlstubs/Crypto_AEAD_Main.ml
+
+extract/OCaml/AEADProvider.cmx: extract/mlstubs/Crypto_AEAD_Main.cmx
 
 %.cmx:
 	$(OCAMLOPT) -w -8-11-26-20 -c $< -o $@
