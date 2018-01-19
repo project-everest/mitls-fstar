@@ -9,7 +9,7 @@ FLAVOR=Kremlin
 EXTENSION=krml
 # Don't extract modules from fstarlib (NOEXTRACT_MODULES)
 # And also some specific ones from mitls that are implemented in C
-EXTRACT='* -CoreCrypto -DHDB -LowCProvider -FFICallbacks'
+EXTRACT='* -DHDB -LowCProvider -FFICallbacks'
 include Makefile.common
 
 ################################################################################
@@ -36,7 +36,7 @@ DROP_MODULES = $(addprefix -drop , FStar.Bytes MonotoneMap MonotoneMapNonDep Tra
 HEADERS = $(addprefix -add-include ,'"hacks.h"' '"transport.h"' '"krembytes.h"' '"kremstr.h"' \
   '"hacl_glue.h"')
 EXTRA_C_FILES = extract/copied/kremstr.c extract/copied/kremdate.c \
-  $(HACL_HOME)/secure_api/out/vale_aes_abstract_id/Crypto_AEAD_Main.c
+  extract/cstubs/crypto_aead_main.c
 # Not including curve-FStar.o since we're making sure via some dummies that all the symbols that
 # Curve25519.c needs are kept.
 EXTRA_O_FILES = $(EXTRACT_DIR)/curve-Curve25519.o \
