@@ -9,8 +9,25 @@ FLAVOR=Kremlin
 EXTENSION=krml
 # Don't extract modules from fstarlib (NOEXTRACT_MODULES)
 # And also some specific ones from mitls that are implemented in C
-EXTRACT='* -CoreCrypto -DHDB -LowCProvider -HaclProvider -FFICallbacks'
+EXTRACT='* -CoreCrypto -DHDB -LowCProvider -FFICallbacks'
 include Makefile.common
+
+################################################################################
+
+# Bringing the curve from HACL* into the build
+
+CURVE_DIR=$(HACL_HOME)/code/curve25519/x25519-c/
+
+ifeq (,$(wildcard $(CURVE_DIR)/Curve25519.h))
+  $(error HACL_HOME is $(HACL_HOME) and I cannot find $(CURVE_DIR)/Curve25519.cmxa -- please run make extract-c in $(CURVE_DIR)/..)
+endif
+
+# Compiling these files "standalone" so that they don't "see" the FStar.h from miTLS
+$(EXTRACT_DIR)/curve-%.o: $(CURVE_DIR)/%.c
+	$(CC) -I $(CURVE_DIR) -I $(KREMLIN_HOME)/kremlib -c $< -o $@
+
+extract/cstubs/hacl_provider.o: extract/cstubs/hacl_provider.c
+	$(CC) -I $(CURVE_DIR) -I $(KREMLIN_HOME)/kremlib -c $< -o $@
 
 ################################################################################
 
@@ -18,7 +35,10 @@ DROP_MODULES = $(addprefix -drop , FStar.Bytes MonotoneMap MonotoneMapNonDep Tra
   Crypto.AEAD.Main)
 HEADERS = $(addprefix -add-include ,'"hacks.h"' '"transport.h"' '"krembytes.h"' '"kremstr.h"' \
   '"hacl_glue.h"')
-EXTRA_C_FILES = extract/copied/kremstr.c extract/copied/kremdate.c $(HACL_HOME)/secure_api/out/vale_aes_abstract_id/Crypto_AEAD_Main.c
+EXTRA_C_FILES = extract/copied/kremstr.c extract/copied/kremdate.c \
+  $(HACL_HOME)/secure_api/out/vale_aes_abstract_id/Crypto_AEAD_Main.c
+EXTRA_O_FILES = $(EXTRACT_DIR)/curve-Curve25519.o $(EXTRACT_DIR)/curve-FStar.o \
+  extract/cstubs/hacl_provider.o
 KRML_INCLUDES=$(addprefix -I , $(INCLUDE_PATHS)) \
   -I $(HACL_HOME)/secure_api/out/vale_aes_abstract_id \
   -I extract/include -I concrete-flags
@@ -37,7 +57,7 @@ KRML_COMMAND=krml $(KRML_INCLUDES) \
 #   the file
 # - TLSInfo, because Crypto.Indexing.id is TLSInfo.id
 # - all the files in the dependency graph of these two
-mitls-c-test.exe: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES)) $(EXTRA_C_FILES) $(HACL_HOME)/secure_api/out/vale.a
+mitls-c-test.exe: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES)) $(EXTRA_C_FILES) $(EXTRA_O_FILES) $(HACL_HOME)/secure_api/out/vale.a
 	$(KRML_COMMAND) $^ -tmpdir $(EXTRACT_DIR) -o $@ -no-prefix Test.Main \
 	  -drop FFICallbacks \
 	  -bundle Test.Main=Test.*,AEAD_GCM,AEADOpenssl,AEADProvider,Alert,BufferBytes,Connection,ConnInvariant,Content,DataStream,Encode,Epochs,FFI,Handshake,HandshakeLog,HandshakeMessages,Hashing.CRF,Hashing.OpenSSL,HKDF,HMAC,HMAC.UFCMA,IdNonce,KDF.Common,KDF.Salt.ODH,KeySchedule,LHAEPlain,MAC,MAC_SHA1,MAC_SHA256,MasterSecret,Negotiation,QUIC,Range,Record,Signature,StAE,Standalone,StatefulLHAE,StatefulPlain,StreamAE,StreamDeltas,StreamPlain,Ticket,TLS,TLSPRF,Transport
