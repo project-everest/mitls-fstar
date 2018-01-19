@@ -24,7 +24,7 @@ endif
 
 # Compiling these files "standalone" so that they don't "see" the FStar.h from miTLS
 $(EXTRACT_DIR)/curve-%.o: $(CURVE_DIR)/%.c
-	$(CC) -I $(CURVE_DIR) -I $(KREMLIN_HOME)/kremlib -c $< -o $@
+	$(CC) -I $(EXTRACT_DIR) -I $(KREMLIN_HOME)/kremlib -c $< -o $@
 
 extract/cstubs/hacl_provider.o: extract/cstubs/hacl_provider.c
 	$(CC) -I $(CURVE_DIR) -I $(KREMLIN_HOME)/kremlib -c $< -o $@
@@ -37,7 +37,9 @@ HEADERS = $(addprefix -add-include ,'"hacks.h"' '"transport.h"' '"krembytes.h"' 
   '"hacl_glue.h"')
 EXTRA_C_FILES = extract/copied/kremstr.c extract/copied/kremdate.c \
   $(HACL_HOME)/secure_api/out/vale_aes_abstract_id/Crypto_AEAD_Main.c
-EXTRA_O_FILES = $(EXTRACT_DIR)/curve-Curve25519.o $(EXTRACT_DIR)/curve-FStar.o \
+# Not including curve-FStar.o since we're making sure via some dummies that all the symbols that
+# Curve25519.c needs are kept.
+EXTRA_O_FILES = $(EXTRACT_DIR)/curve-Curve25519.o \
   extract/cstubs/hacl_provider.o
 KRML_INCLUDES=$(addprefix -I , $(INCLUDE_PATHS)) \
   -I $(HACL_HOME)/secure_api/out/vale_aes_abstract_id \
