@@ -51,6 +51,6 @@ $(EXTRACT_DIR)/%.$(EXTENSION):
 		$(subst .checked.lax,, $<)
 
 # Avoids polluting the KreMLin source tree with a random .o file
-extract/copied/kremstr.c: $(KREMLIN_HOME)/kremlib/kremstr.c
+extract/copied/%.c: $(KREMLIN_HOME)/kremlib/%.c
 	mkdir -p $(dir $@)
 	cp $< $@

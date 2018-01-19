@@ -1514,7 +1514,7 @@ let negotiateClientExtensions pv cfg cExtL sExtL cs ri resuming =
     Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "negotiation failed: missing extensions in TLS ClientHello (shouldn't happen)")
 #reset-options
 
-private assume val clientToServerExtension: protocolVersion
+private val clientToServerExtension: protocolVersion
   -> config
   -> cipherSuite
   -> option (cVerifyData * sVerifyData)
@@ -1523,10 +1523,10 @@ private assume val clientToServerExtension: protocolVersion
   -> bool
   -> extension
   -> option extension
-(* let clientToServerExtension pv cfg cs ri pski ks resuming cext =
+let clientToServerExtension pv cfg cs ri pski ks resuming cext =
   match cext with
   | E_key_share _ ->
-    if pv = TLS_1p3 then Option.map E_key_share ks // ks should be in one of client's groups
+    if pv = TLS_1p3 then Option.mapTot E_key_share ks // ks should be in one of client's groups
     else None
   | E_alpn cal ->
     (match cfg.alpn with
@@ -1572,7 +1572,7 @@ private assume val clientToServerExtension: protocolVersion
   | E_session_ticket b ->
      if pv = TLS_1p3 || not cfg.enable_tickets then None
      else Some (E_session_ticket empty_bytes) // TODO we may not always want to refresh the ticket
-  | _ -> None *)
+  | _ -> None
 
 (* SI: API. Called by Handshake. *)
 val negotiateServerExtensions: protocolVersion
