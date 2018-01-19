@@ -32,7 +32,7 @@ type provider =
   | LowCProvider
 
 inline_for_extraction let use_provider () : Tot provider =
-  LowProvider
+  LowCProvider
 
 let prov () =
   match use_provider() with
