@@ -32,7 +32,7 @@ let project_one_frag #i = function
     | C.CT_Alert _ ad -> singleton (DataStream.Alert ad)
     | _ -> Seq.createEmpty                 // other fragments are internal to TLS
 
-val project_deltas: #i:id -> fs:S.frags i -> Tot (deltas i)
+val project_deltas: #i:id -> fs:S.frags i -> GTot (deltas i)
 let project_deltas #i fs = MS.collect project_one_frag fs
 
 val stream_deltas: #i:id -> #rw:rw -> s:StAE.state i rw{authId i} -> mem -> GTot (deltas i)
