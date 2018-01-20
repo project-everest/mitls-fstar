@@ -1,8 +1,10 @@
 EXTRACT='Nothing'
 FLAVOR=generic
-include Makefile.common
 
 all: ocaml kremlin
+
+include Makefile.common
+
 
 ocaml:
 	$(MAKE) -f Makefile.OCaml
