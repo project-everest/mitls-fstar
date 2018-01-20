@@ -14,7 +14,9 @@ INCLUDE_PATHS= \
 	./concrete-flags \
         ./concrete-flags/$(FLAVOR)
 
-FSTAR=$(FSTAR_HOME)/bin/fstar.exe $(OTHERFLAGS)
+CACHE_DIR=cache.$(FLAVOR)
+
+FSTAR=$(FSTAR_HOME)/bin/fstar.exe --cache_dir $(CACHE_DIR) --cache_checked_modules $(OTHERFLAGS)
 
 EXTRACT_DIR=extract/$(FLAVOR)
 
@@ -36,8 +38,8 @@ depend: .depend.$(FLAVOR)
 
 -include .depend.$(FLAVOR)
 
-%.checked.lax: %
-	$(FSTAR) --lax --cache_checked_modules $(addprefix --include , $(INCLUDE_PATHS)) $*
+%.checked.lax:
+	$(FSTAR) --lax $(addprefix --include , $(INCLUDE_PATHS)) $<
 	touch $@
 
 $(EXTRACT_DIR)/%.$(EXTENSION):
@@ -45,10 +47,9 @@ $(EXTRACT_DIR)/%.$(EXTENSION):
 		--codegen $(FLAVOR) \
 		--odir $(EXTRACT_DIR) \
 		--lax \
-		--cache_checked_modules \
 		$(addprefix --include , $(INCLUDE_PATHS)) \
 		--extract_module $(basename $(notdir $(subst .checked.lax,,$<))) \
-		$(subst .checked.lax,, $<)
+		$(subst $(CACHE_DIR)/,,$(subst .checked.lax,, $<))
 
 # Avoids polluting the KreMLin source tree with a random .o file
 extract/copied/%.c: $(KREMLIN_HOME)/kremlib/%.c
