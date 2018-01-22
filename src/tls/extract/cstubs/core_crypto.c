@@ -115,8 +115,66 @@ FStar_Bytes_bytes CoreCrypto_ecdh_agreement(CoreCrypto_ec_key x0,
   TODO(FStar_Bytes_bytes);
 }
 
+uint32_t size_of_curve(CoreCrypto_ec_curve x) {
+  switch (x) {
+    case CoreCrypto_ECC_P256:
+      return 32;
+    case CoreCrypto_ECC_P384:
+      return 48;
+    case CoreCrypto_ECC_P521:
+      return 66;
+    case CoreCrypto_ECC_X25519:
+      return 32;
+    case CoreCrypto_ECC_X448:
+      return 56;
+  }
+  exit(255);
+}
+
 CoreCrypto_ec_key CoreCrypto_ec_gen_key(CoreCrypto_ec_params x0) {
-  TODO(CoreCrypto_ec_key);
+  EC_KEY *k = NULL;
+  switch (x0.curve) {
+    case CoreCrypto_ECC_P256:
+      k = EC_KEY_new_by_curve_name(OBJ_txt2nid(SN_X9_62_prime256v1));
+      break;
+    case CoreCrypto_ECC_P384:
+      k = EC_KEY_new_by_curve_name(OBJ_txt2nid(SN_secp384r1));
+      break;
+    case CoreCrypto_ECC_P521:
+      k = EC_KEY_new_by_curve_name(OBJ_txt2nid(SN_secp521r1));
+      break;
+    case CoreCrypto_ECC_X25519:
+      k = EC_KEY_new_by_curve_name(OBJ_txt2nid(SN_X25519));
+      break;
+    default:
+      FAIL_IF(true, "Unsupported curve");
+  }
+  FAIL_IF(EC_KEY_generate_key(k) == 1, "EC_KEY_generate_key failed");
+
+  EC_GROUP *g = EC_GROUP_dup(EC_KEY_get0_group(k));
+  if (x0.point_compression)
+    EC_GROUP_set_point_conversion_form(g, POINT_CONVERSION_COMPRESSED);
+  else
+    EC_GROUP_set_point_conversion_form(g, POINT_CONVERSION_UNCOMPRESSED);
+
+  const EC_POINT *p = EC_KEY_get0_public_key(k);
+  BIGNUM *x = BN_new(), *y = BN_new();
+  EC_POINT_get_affine_coordinates_GFp(g, p, x, y, NULL);
+  const BIGNUM *pr = EC_KEY_get0_private_key(k);
+
+  uint32_t n = size_of_curve(x0.curve);
+  CoreCrypto_ec_key ret = {
+    .ec_params = x0,
+    .ec_point = {
+      .ecx = FStar_Bytes_append(FStar_Bytes_create(n-BN_num_bytes(x), 0), bytes_of_bn(x)),
+      .ecy = FStar_Bytes_append(FStar_Bytes_create(n-BN_num_bytes(y), 0), bytes_of_bn(y))
+    },
+    .ec_priv = {
+      .tag = FStar_Pervasives_Native_Some,
+      .val = { .case_Some = { .v = bytes_of_bn(pr) } }
+    }
+  };
+  return ret;
 }
 
 bool CoreCrypto_ec_is_on_curve(CoreCrypto_ec_params x0,
