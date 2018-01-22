@@ -418,7 +418,7 @@ let ffiGetExporter (c:Connection.connection) (early:bool)
   : ML (option (Hashing.Spec.alg * aeadAlg * bytes))
   =
   let keys = Handshake.xkeys_of c.Connection.hs in
-  (* Rewrote this around broken `=` comparsion compilation, we should revisit - jroesch *)
+  (* Rewrote this around broken `=` comparison compilation, we should revisit - jroesch *)
   match Seq.length keys with
   | 0 -> None
   | _ ->

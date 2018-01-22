@@ -11,15 +11,16 @@ open FStar.Error
 open TLSError
 
 // make this type abstract?
-noeq type t = {
-  snd: bytes -> ST (optResult string unit) (fun _ -> True) (fun h0 _ h1 -> h0 == h1);
-  rcv: max:nat -> ST (recv_result max) (fun _ -> True) (fun h0 _ h1 -> h0 == h1) }
+noeq type t (ctx:Type0) = {
+  v: ctx;
+  snd: ctx -> bytes -> ST (optResult string unit) (fun _ -> True) (fun h0 _ h1 -> h0 == h1);
+  rcv: ctx -> max:nat -> ST (recv_result max) (fun _ -> True) (fun h0 _ h1 -> h0 == h1) }
 
-let callbacks send recv = { snd = send; rcv = recv }
+let callbacks v send recv = { v = v; snd = send; rcv = recv }
 
 // platform implementation
 
-let wrap tcp: t = callbacks (send tcp) (recv_async tcp)
+let wrap tcp: t networkStream = callbacks tcp send recv_async
 type tcpListener = tcpListener
 
 let listen domain port : ML tcpListener = listen domain port
@@ -29,13 +30,13 @@ let close = close
 
 // following the indirection
 
-let send tcp data = tcp.snd data
-let recv tcp len = tcp.rcv len
+let send tcp data = tcp.snd tcp.v data
+let recv tcp len = tcp.rcv tcp.v len
 
-val test: t -> bytes -> ML unit
-let test (tcp:t) (data:bytes) = 
+val test: t networkStream -> bytes -> ML unit
+let test (tcp:t networkStream) (data:bytes) = 
   let h0 = FStar.HyperStack.ST.get() in 
-  let _ = tcp.snd data in
+  let _ = tcp.snd tcp.v data in
   let h1 = FStar.HyperStack.ST.get() in 
   assert (h0==h1)
 
