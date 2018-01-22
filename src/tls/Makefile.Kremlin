@@ -1,10 +1,7 @@
 all: mitls-c-test.exe
 
-# include Makefile
-include $(FSTAR_HOME)/ulib/ml/Makefile.include
-
-#To include Makefile.common, you need to specify
-#the following three variables
+# To include Makefile.common, you need to specify
+# the following three variables
 FLAVOR=Kremlin
 EXTENSION=krml
 # Don't extract modules from fstarlib (NOEXTRACT_MODULES)
@@ -13,7 +10,6 @@ EXTRACT='* -DHDB -LowCProvider -FFICallbacks'
 include Makefile.common
 
 ################################################################################
-
 # Bringing the curve from HACL* into the build
 
 CURVE_DIR=$(HACL_HOME)/code/curve25519/x25519-c/

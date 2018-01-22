@@ -42,15 +42,18 @@ bool CoreCrypto_ec_is_on_curve(CoreCrypto_ec_params x0, CoreCrypto_ec_point x1) 
 
 FStar_Pervasives_Native_option__CoreCrypto_key
 CoreCrypto_get_key_from_cert(FStar_Bytes_bytes x0) {
+  // unused
   TODO(FStar_Pervasives_Native_option__CoreCrypto_key);
 }
 
 FStar_Bytes_bytes CoreCrypto_hash(CoreCrypto_hash_alg x0, FStar_Bytes_bytes x1) {
+  // use implementation based on quic_provider.c
   TODO(FStar_Bytes_bytes);
 }
 
 FStar_Pervasives_Native_option__Prims_list__FStar_Bytes_bytes
 CoreCrypto_load_chain(Prims_string x0) {
+  // unused
   TODO(FStar_Pervasives_Native_option__Prims_list__FStar_Bytes_bytes);
 }
 
@@ -95,11 +98,13 @@ FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
 #endif
 
 CoreCrypto_rsa_key CoreCrypto_rsa_gen_key(Prims_int x0) {
+  // unused
   TODO(CoreCrypto_rsa_key);
 }
 
 bool CoreCrypto_validate_chain(Prims_list__FStar_Bytes_bytes *x0, bool x1,
                                FStar_Pervasives_Native_option__Prims_string x2,
                                Prims_string x3) {
+  // unused
   TODO(bool);
 }
