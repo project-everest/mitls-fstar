@@ -48,7 +48,7 @@ EXTRA_C_FILES = extract/copied/kremstr.c extract/copied/kremdate.c \
 EXTRA_O_FILES = $(EXTRACT_DIR)/curve-Curve25519.o \
   extract/cstubs/hacl_provider.o extract/cstubs/core_crypto.c
 KRML_INCLUDES=$(addprefix -I , $(INCLUDE_PATHS)) \
-  -I $(SECURE_OUT) -I extract/include -I concrete-flags
+  -I $(SECURE_OUT) -I extract/include -I concrete-flags -I $(MLCRYPTO_HOME)/openssl/include
 KRML_COMMAND=krml $(KRML_INCLUDES) \
   -fnoanonymous-unions \
   -warn-error +3-9+11-7-6 \

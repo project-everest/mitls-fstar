@@ -1,5 +1,7 @@
 HACL_HOME?=../../../hacl-star
 MITLS_HOME=../..
+KREMLIN_HOME	?= ../../../kremlin
+MLCRYPTO_HOME	?= ../../../MLCrypto
 
 INCLUDE_PATHS= \
 	$(FSTAR_HOME)/contrib/CoreCrypto/fst/ \
