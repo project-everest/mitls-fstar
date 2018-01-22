@@ -1,6 +1,9 @@
 EXTRACT='Nothing'
 FLAVOR=generic
 
+# Resets the default goal to override any goals in Makefile.common
+.DEFAULT_GOAL :=
+
 all: ocaml kremlin
 
 include Makefile.common
