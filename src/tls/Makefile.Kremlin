@@ -48,6 +48,7 @@ KRML_COMMAND=krml $(KRML_INCLUDES) \
   -ccopt -Wno-unused-function  \
   $(DROP_MODULES)  \
   -bundle 'Crypto.AEAD.*,Crypto.Symmetric.*,Buffer.Utils,Crypto.Plain' \
+  -ldopts -lcrypto,-lssl \
   $(KOPTS)
 
 # The glue doesn't want a huge bundle, so we need to leave a few files outside of the bundle.
