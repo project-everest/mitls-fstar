@@ -1,10 +1,25 @@
 #include "CoreCrypto.h"
+#include "Crypto_HKDF_Crypto_HMAC.h"
+
+#include <fcntl.h>
 #include <stdio.h>
 #include <unistd.h>
-#include <fcntl.h>
 
-#define FAIL_IF(msg) do { fprintf(stderr, "%s %s\n", __FUNCTION__, msg); exit(253); } while (0)
-#define TODO(t) { t _x = { 0 }; fprintf(stderr, "%s TODO\n", __FUNCTION__); exit(252); return _x; }
+#define FAIL_IF(test, msg)                                                     \
+  do {                                                                         \
+    if (test)                                                                  \
+      continue;                                                                \
+    fprintf(stderr, "%s %s\n", __FUNCTION__, msg);                             \
+    exit(253);                                                                 \
+  } while (0)
+
+#define TODO(t)                                                                \
+  {                                                                            \
+    t _x = {0};                                                                \
+    fprintf(stderr, "%s TODO\n", __FUNCTION__);                                \
+    exit(252);                                                                 \
+    return _x;                                                                 \
+  }
 
 FStar_Bytes_bytes CoreCrypto_dh_agreement(CoreCrypto_dh_key x0,
                                           FStar_Bytes_bytes x1) {
@@ -12,11 +27,12 @@ FStar_Bytes_bytes CoreCrypto_dh_agreement(CoreCrypto_dh_key x0,
   BIGNUM *p = BN_bin2bn(x0.dh_params.dh_p.data, x0.dh_params.dh_p.length, NULL);
   BIGNUM *q = BN_bin2bn(x0.dh_params.dh_q.data, x0.dh_params.dh_q.length, NULL);
   BIGNUM *pub = BN_bin2bn(x0.dh_public.data, x0.dh_public.length, NULL);
-  FAIL_IF("OpenSSL allocation failure p/q/pub", p == NULL || q == NULL || pub == NULL);
-  BIGNUM *prv = NULL;
-  if (x0.dh_private.tag == FStar_Pervasives_Native_Some) {
-    prv = BN_bin2bn(x0.dh_private.val.case_Some.data, x0.dh_private.val.case_Some.length, NULL);
-    FAIL_IF("OpenSSL allocation failure prv", prv == NULL);
+  FAIL_IF("OpenSSL allocation failure p/q/pub", p == NULL || q == NULL || pub ==
+  NULL); BIGNUM *prv = NULL; if (x0.dh_private.tag ==
+  FStar_Pervasives_Native_Some) { prv =
+  BN_bin2bn(x0.dh_private.val.case_Some.data,
+  x0.dh_private.val.case_Some.length, NULL); FAIL_IF("OpenSSL allocation failure
+  prv", prv == NULL);
   }
   DH_set0_pqg(dh, p, NULL, g);
   DH_set0_key(dh, pub, prv); */
@@ -36,7 +52,8 @@ CoreCrypto_ec_key CoreCrypto_ec_gen_key(CoreCrypto_ec_params x0) {
   TODO(CoreCrypto_ec_key);
 }
 
-bool CoreCrypto_ec_is_on_curve(CoreCrypto_ec_params x0, CoreCrypto_ec_point x1) {
+bool CoreCrypto_ec_is_on_curve(CoreCrypto_ec_params x0,
+                               CoreCrypto_ec_point x1) {
   TODO(bool);
 }
 
@@ -46,9 +63,32 @@ CoreCrypto_get_key_from_cert(FStar_Bytes_bytes x0) {
   TODO(FStar_Pervasives_Native_option__CoreCrypto_key);
 }
 
-FStar_Bytes_bytes CoreCrypto_hash(CoreCrypto_hash_alg x0, FStar_Bytes_bytes x1) {
-  // use implementation based on quic_provider.c
-  TODO(FStar_Bytes_bytes);
+Crypto_HMAC_alg hacl_alg_of_corecrypto_alg(CoreCrypto_hash_alg h) {
+  switch (h) {
+  case CoreCrypto_SHA256:
+    return Crypto_HMAC_SHA256;
+  case CoreCrypto_SHA384:
+    return Crypto_HMAC_SHA384;
+  case CoreCrypto_SHA512:
+    return Crypto_HMAC_SHA512;
+  default:
+    return -1;
+  }
+}
+
+FStar_Bytes_bytes CoreCrypto_hash(CoreCrypto_hash_alg x0,
+                                  FStar_Bytes_bytes x1) {
+  Crypto_HMAC_alg a = hacl_alg_of_corecrypto_alg(x0);
+  FAIL_IF(a == -1, "CoreCrypto_hash implemented using HACL*, unsupported algorithm");
+  uint32_t len = Crypto_HMAC_hash_size(a);
+  char *out = malloc(len);
+  Crypto_HMAC_agile_hash(a, (uint8_t *) out, (uint8_t *) x1.data, x1.length);
+
+  FStar_Bytes_bytes ret = {
+    .length = len,
+    .data = out
+  };
+  return ret;
 }
 
 FStar_Pervasives_Native_option__Prims_list__FStar_Bytes_bytes
@@ -62,18 +102,19 @@ FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
   char *data = malloc(x0);
 
   HCRYPTPROV ctxt;
-  if (! (CryptAcquireContext(&ctxt, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT))) {
+  if (!(CryptAcquireContext(&ctxt, NULL, NULL, PROV_RSA_FULL,
+                            CRYPT_VERIFYCONTEXT))) {
     DWORD error = GetLastError();
     fprintf(e, "Cannot acquire crypto context: 0x%lx\n", error);
     exit(255);
   }
-  if (! (CryptGenRandom(ctxt, x0, data))) {
+  if (!(CryptGenRandom(ctxt, x0, data))) {
     fprintf(stderr, "Cannot read random bytes\n");
     exit(255);
   }
   CryptReleaseContext(ctxt, 0);
 
-  FStar_Bytes_bytes ret = { .length = x0, .data = data };
+  FStar_Bytes_bytes ret = {.length = x0, .data = data};
   return ret;
 }
 #else
@@ -87,12 +128,15 @@ FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
   }
   uint64_t res = read(fd, data, x0);
   if (res != x0) {
-    fprintf(stderr, "Error on reading, expected %" PRIi32 " bytes, got %" PRIu64 " bytes\n", x0, res);
+    fprintf(stderr,
+            "Error on reading, expected %" PRIi32 " bytes, got %" PRIu64
+            " bytes\n",
+            x0, res);
     exit(255);
   }
   close(fd);
 
-  FStar_Bytes_bytes ret = { .length = x0, .data = data };
+  FStar_Bytes_bytes ret = {.length = x0, .data = data};
   return ret;
 }
 #endif

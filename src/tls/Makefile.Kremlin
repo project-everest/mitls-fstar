@@ -13,6 +13,7 @@ include Makefile.common
 # Bringing the curve from HACL* into the build
 
 CURVE_DIR=$(HACL_HOME)/code/curve25519/x25519-c/
+SECURE_OUT=$(HACL_HOME)/secure_api/out/vale_aes_abstract_id
 
 ifeq (,$(wildcard $(CURVE_DIR)/Curve25519.h))
   $(error HACL_HOME is $(HACL_HOME) and I cannot find $(CURVE_DIR)/Curve25519.cmxa -- please run make extract-c in $(CURVE_DIR)/..)
@@ -32,14 +33,13 @@ DROP_MODULES = $(addprefix -drop , FStar.Bytes MonotoneMap MonotoneMapNonDep Tra
 HEADERS = $(addprefix -add-include ,'"hacks.h"' '"transport.h"' '"krembytes.h"' '"kremstr.h"' \
   '"hacl_glue.h"')
 EXTRA_C_FILES = extract/copied/kremstr.c extract/copied/kremdate.c \
-  extract/cstubs/hacl_aead.c
+  extract/cstubs/hacl_aead.c $(SECURE_OUT)/Crypto_HKDF_Crypto_HMAC.c
 # Not including curve-FStar.o since we're making sure via some dummies that all the symbols that
 # Curve25519.c needs are kept.
 EXTRA_O_FILES = $(EXTRACT_DIR)/curve-Curve25519.o \
   extract/cstubs/hacl_provider.o extract/cstubs/core_crypto.c
 KRML_INCLUDES=$(addprefix -I , $(INCLUDE_PATHS)) \
-  -I $(HACL_HOME)/secure_api/out/vale_aes_abstract_id \
-  -I extract/include -I concrete-flags
+  -I $(SECURE_OUT) -I extract/include -I concrete-flags
 KRML_COMMAND=krml $(KRML_INCLUDES) \
   -fnoanonymous-unions \
   -warn-error +3-9+11-7-6 \
