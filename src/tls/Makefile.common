@@ -30,7 +30,7 @@ clean:
 	$(FSTAR) --odir $(EXTRACT_DIR) \
 		 --lax \
 		 --dep full \
-                 --extract $(EXTRACT) \
+		 --extract $(EXTRACT) \
 		 $(addprefix --include , $(INCLUDE_PATHS)) \
 		 $(ROOTS) > .depend.$(FLAVOR)
 
