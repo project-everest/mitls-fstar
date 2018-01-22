@@ -14,9 +14,6 @@ EXTRACT='* -Prims -FStar +FStar.Test -CoreCrypto -CryptoTypes -DHDB -LowCProvide
 include Makefile.common
 ################################################################################
 
-KREMLIN_HOME	?= ../../../kremlin
-MLCRYPTO_HOME	?= ../../../MLCrypto
-HACL_HOME	?= ../../../hacl-star
 FFI_HOME	= ../../libs/ffi
 LOWC_HOME	= $(HACL_HOME)/secure_api/out/$(IMPL_CHOICE)
 

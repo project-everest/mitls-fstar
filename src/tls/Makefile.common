@@ -1,5 +1,7 @@
 HACL_HOME?=../../../hacl-star
 MITLS_HOME=../..
+KREMLIN_HOME	?= ../../../kremlin
+MLCRYPTO_HOME	?= ../../../MLCrypto
 
 INCLUDE_PATHS= \
 	$(FSTAR_HOME)/contrib/CoreCrypto/fst/ \
@@ -23,14 +25,14 @@ EXTRACT_DIR=extract/$(FLAVOR)
 ROOTS ?= TLS.fst QUIC.fst Test.Main.fst Test.TLS.fst
 
 clean:
-	rm -rf $(EXTRACT_DIR) .depend.$(FLAVOR) *.checked.lax
+	rm -rf $(EXTRACT_DIR)/Kremlin $(EXTRACT_DIR)/OCaml $(EXTRACT_DIR)/copied .depend.$(FLAVOR) *.checked.lax
 
 .depend.$(FLAVOR):
 	mkdir -p $(EXTRACT_DIR)
 	$(FSTAR) --odir $(EXTRACT_DIR) \
 		 --lax \
 		 --dep full \
-                 --extract $(EXTRACT) \
+		 --extract $(EXTRACT) \
 		 $(addprefix --include , $(INCLUDE_PATHS)) \
 		 $(ROOTS) > .depend.$(FLAVOR)
 
