@@ -5,6 +5,11 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#ifdef __WIN32
+#include <windows.h>
+#include <wincrypt.h>
+#endif
+
 #include <openssl/conf.h>
 #include <openssl/err.h>
 #include <openssl/bn.h>
@@ -276,15 +281,15 @@ CoreCrypto_load_chain(Prims_string x0) {
   TODO(FStar_Pervasives_Native_option__Prims_list__FStar_Bytes_bytes);
 }
 
-#ifdef __WINDOWS__
+#ifdef __WIN32
 FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
-  char *data = malloc(x0);
+  BYTE *data = malloc(x0);
 
   HCRYPTPROV ctxt;
   if (!(CryptAcquireContext(&ctxt, NULL, NULL, PROV_RSA_FULL,
                             CRYPT_VERIFYCONTEXT))) {
     DWORD error = GetLastError();
-    fprintf(e, "Cannot acquire crypto context: 0x%lx\n", error);
+    fprintf(stderr, "Cannot acquire crypto context: 0x%lx\n", error);
     exit(255);
   }
   if (!(CryptGenRandom(ctxt, x0, data))) {
@@ -293,7 +298,7 @@ FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
   }
   CryptReleaseContext(ctxt, 0);
 
-  FStar_Bytes_bytes ret = {.length = x0, .data = data};
+  FStar_Bytes_bytes ret = {.length = x0, .data = (char *)data};
   return ret;
 }
 #else
