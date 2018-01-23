@@ -306,7 +306,7 @@ let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:pla
       let cipher = Buffer.create 0uy cipherlen in
       assume(v cipherlen = v plainlen + 12);
       AE.encrypt i st (uint128_of_iv iv) adlen ad plainlen plain cipher;
-      BufferBytes.to_bytes l cipher
+      BufferBytes.to_bytes (FStar.UInt32.v cipherlen) cipher
   in
   cipher
 

@@ -54,7 +54,7 @@ KRML_COMMAND=krml $(KRML_INCLUDES) \
   -warn-error +3-9+11-7-6 \
   -fsopts --debug,yes -verbose \
   $(HEADERS) \
-  -ccopt -Wno-unused-function  \
+  -ccopts -Wno-unused-function,-O0 \
   $(DROP_MODULES)  \
   -bundle 'Crypto.AEAD.*,Crypto.Symmetric.*,Buffer.Utils,Crypto.Plain' \
   -ldopts -lcrypto,-lssl \
