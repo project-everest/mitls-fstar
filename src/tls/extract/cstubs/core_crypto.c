@@ -110,13 +110,126 @@ CoreCrypto_dh_key CoreCrypto_dh_gen_key(CoreCrypto_dh_params x0) {
     
 }
 
+EC_KEY *key_of_core_crypto_curve(CoreCrypto_ec_curve c) {
+  EC_KEY *k = NULL;
+  switch (c) {
+    case CoreCrypto_ECC_P256:
+      k = EC_KEY_new_by_curve_name(OBJ_txt2nid(SN_X9_62_prime256v1));
+      break;
+    case CoreCrypto_ECC_P384:
+      k = EC_KEY_new_by_curve_name(OBJ_txt2nid(SN_secp384r1));
+      break;
+    case CoreCrypto_ECC_P521:
+      k = EC_KEY_new_by_curve_name(OBJ_txt2nid(SN_secp521r1));
+      break;
+    case CoreCrypto_ECC_X25519:
+      k = EC_KEY_new_by_curve_name(OBJ_txt2nid(SN_X25519));
+      break;
+    default:
+      FAIL_IF(true, "Unsupported curve");
+  }
+  return k;
+}
+
+uint32_t size_of_curve(CoreCrypto_ec_curve x) {
+  switch (x) {
+    case CoreCrypto_ECC_P256:
+      return 32;
+    case CoreCrypto_ECC_P384:
+      return 48;
+    case CoreCrypto_ECC_P521:
+      return 66;
+    case CoreCrypto_ECC_X25519:
+      return 32;
+    case CoreCrypto_ECC_X448:
+      return 56;
+  }
+  exit(255);
+}
+
 FStar_Bytes_bytes CoreCrypto_ecdh_agreement(CoreCrypto_ec_key x0,
                                             CoreCrypto_ec_point x1) {
-  TODO(FStar_Bytes_bytes);
+  EC_KEY *k = key_of_core_crypto_curve(x0.ec_params.curve);
+  EC_GROUP *g = EC_GROUP_dup(EC_KEY_get0_group(k));
+  if (x0.ec_params.point_compression)
+    EC_GROUP_set_point_conversion_form(g, POINT_CONVERSION_COMPRESSED);
+  else
+    EC_GROUP_set_point_conversion_form(g, POINT_CONVERSION_UNCOMPRESSED);
+
+  EC_POINT *p = EC_POINT_new(g);
+  BIGNUM *px = BN_bin2bn((uint8_t *) x0.ec_point.ecx.data, x0.ec_point.ecx.length, NULL);
+  BIGNUM *py = BN_bin2bn((uint8_t *) x0.ec_point.ecy.data, x0.ec_point.ecy.length, NULL);
+  EC_POINT_set_affine_coordinates_GFp(g, p, px, py, NULL);
+  EC_KEY_set_public_key(k, p);
+
+  BIGNUM *pr = NULL;
+  if (x0.ec_priv.tag == FStar_Pervasives_Native_Some) {
+    BN_bin2bn((uint8_t *) x0.ec_priv.val.case_Some.v.data, x0.ec_priv.val.case_Some.v.length, NULL);
+    EC_KEY_set_private_key(k, pr);
+  }
+
+  size_t field_size = EC_GROUP_get_degree(g);
+  size_t len = (field_size + 7) / 8;
+  char *out = malloc(len);
+
+  EC_POINT *pp = EC_POINT_new(g);
+  BIGNUM *ppx = BN_bin2bn((uint8_t *) x1.ecx.data, x1.ecx.length, NULL);
+  BIGNUM *ppy = BN_bin2bn((uint8_t *) x1.ecy.data, x1.ecy.length, NULL);
+  EC_POINT_set_affine_coordinates_GFp(g, pp, ppx, ppy, NULL);
+
+  size_t olen = ECDH_compute_key((uint8_t*) out, len, pp, k, NULL);
+
+  BN_free(ppy);
+  BN_free(ppx);
+  EC_POINT_free(pp);
+  if (pr != NULL)
+    BN_free(pr);
+  BN_free(py);
+  BN_free(px);
+  EC_POINT_free(p);
+  EC_GROUP_free(g);
+  EC_KEY_free(k);
+
+  FStar_Bytes_bytes ret = {
+    .length = olen,
+    .data = out
+  };
+  return ret;
 }
 
 CoreCrypto_ec_key CoreCrypto_ec_gen_key(CoreCrypto_ec_params x0) {
-  TODO(CoreCrypto_ec_key);
+  EC_KEY *k = key_of_core_crypto_curve(x0.curve);
+  FAIL_IF(EC_KEY_generate_key(k) == 1, "EC_KEY_generate_key failed");
+
+  EC_GROUP *g = EC_GROUP_dup(EC_KEY_get0_group(k));
+  if (x0.point_compression)
+    EC_GROUP_set_point_conversion_form(g, POINT_CONVERSION_COMPRESSED);
+  else
+    EC_GROUP_set_point_conversion_form(g, POINT_CONVERSION_UNCOMPRESSED);
+
+  const EC_POINT *p = EC_KEY_get0_public_key(k);
+  BIGNUM *x = BN_new(), *y = BN_new();
+  EC_POINT_get_affine_coordinates_GFp(g, p, x, y, NULL);
+  const BIGNUM *pr = EC_KEY_get0_private_key(k);
+
+  uint32_t n = size_of_curve(x0.curve);
+  CoreCrypto_ec_key ret = {
+    .ec_params = x0,
+    .ec_point = {
+      .ecx = FStar_Bytes_append(FStar_Bytes_create(n-BN_num_bytes(x), 0), bytes_of_bn(x)),
+      .ecy = FStar_Bytes_append(FStar_Bytes_create(n-BN_num_bytes(y), 0), bytes_of_bn(y))
+    },
+    .ec_priv = {
+      .tag = FStar_Pervasives_Native_Some,
+      .val = { .case_Some = { .v = bytes_of_bn(pr) } }
+    }
+  };
+  return ret;
+
+  BN_free(y);
+  BN_free(x);
+  EC_GROUP_free(g);
+  EC_KEY_free(k);
 }
 
 bool CoreCrypto_ec_is_on_curve(CoreCrypto_ec_params x0,
