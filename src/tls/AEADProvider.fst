@@ -268,14 +268,13 @@ let logged_iv (#i:id{authId i}) (#l:plainlen) (#rw:rw) (s:state i rw) (iv:iv i)
 #set-options "--lax"
 
 let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:plain i l)
-  : StackInline (cipher:cipher i l)
+  : ST (cipher:cipher i l)
   (requires (fun h ->
     st_inv w h /\
     (authId i ==> (Flag.prf i /\ fresh_iv #i w iv h)) /\
     FStar.UInt.size (length ad) 32 /\ FStar.UInt.size l 32))
   (ensures (fun h0 cipher h1 -> modifies_one (log_region w) h0 h1))
   =
-  let cipher =
     match use_provider() with
     | OpenSSLProvider -> OAEAD.encrypt (as_openssl_state w) iv ad plain
     | LowCProvider ->
@@ -289,6 +288,7 @@ let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:pla
       let plainlen = uint_to_t l in
       let cipherlen = uint_to_t (cipherlen i l) in
       assume(AE.safelen i (v plainlen) = true); // TODO
+      push_frame ();
       let plain =
         if not (Flag.safeId i) then
           Plain.unsafe_hide_buffer i #l (BufferBytes.from_bytes plain)
@@ -298,9 +298,9 @@ let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:pla
       assume(v cipherlen = v plainlen + 12);
       let tmp = BufferBytes.from_bytes iv in
       AE.encrypt i st (Crypto.Symmetric.Bytes.load_uint128 12ul tmp) adlen ad plainlen plain cipher;
-      BufferBytes.to_bytes (FStar.UInt32.v cipherlen) cipher
-  in
-  cipher
+      let ret = BufferBytes.to_bytes (FStar.UInt32.v cipherlen) cipher in
+      pop_frame ();
+      ret
 
   (*
   let r =
