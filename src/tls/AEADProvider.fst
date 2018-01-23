@@ -253,15 +253,6 @@ let taglen i = CC.aeadTagSize (alg i)
 let cipherlen i (l:plainlen) : n:nat{n >= taglen i} = l + taglen i
 type cipher i (l:plainlen) = lbytes (cipherlen i l)
 
-let uint128_of_iv (#i:id) (iv:iv i)
-  : Tot (n:FStar.UInt128.t{FStar.UInt128.v n < pow2 96})
-  =
-  let ivn = int_of_bytes iv in
-  assume(FStar.UInt.size ivn 128); // PROVEME need stronger post-condition on int_of_bytes
-  let iv128 = FStar.UInt128.uint_to_t ivn in
-  assume(FStar.UInt128.v iv128 < pow2 96); // PROVEME
-  iv128
-
 let fresh_iv (#i:id{authId i}) (w:writer i) (iv:iv i) h =
   match use_provider() with
   | OpenSSLProvider -> OAEAD.fresh_iv #i (as_openssl_state w) iv h
@@ -305,7 +296,8 @@ let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:pla
       in
       let cipher = Buffer.create 0uy cipherlen in
       assume(v cipherlen = v plainlen + 12);
-      AE.encrypt i st (uint128_of_iv iv) adlen ad plainlen plain cipher;
+      let tmp = BufferBytes.from_bytes iv in
+      AE.encrypt i st (Crypto.Symmetric.Bytes.load_uint128 12ul tmp) adlen ad plainlen plain cipher;
       BufferBytes.to_bytes (FStar.UInt32.v cipherlen) cipher
   in
   cipher
