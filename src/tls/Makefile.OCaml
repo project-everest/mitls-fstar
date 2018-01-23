@@ -72,3 +72,6 @@ extract/OCaml/AEADProvider.cmx: extract/mlstubs/Crypto_AEAD_Main.cmx
 
 %.cmx:
 	$(OCAMLOPT) -w -8-11-26-20 -c $< -o $@
+
+test: mitls.exe
+	./$<
