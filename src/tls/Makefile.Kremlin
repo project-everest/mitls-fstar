@@ -28,6 +28,15 @@ extract/cstubs/hacl_provider.o: extract/cstubs/hacl_provider.c
 
 ################################################################################
 
+UNAME=$(shell uname)
+ifeq ($(OS),Windows_NT)
+  PATH := $(MLCRYPTO_HOME)/openssl:$(PATH)
+else ifeq ($(UNAME),Darwin)
+  DYLD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(DYLD_LIBRARY_PATH)
+else ifeq ($(UNAME),Linux)
+  LD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(LD_LIBRARY_PATH)
+endif
+
 DROP_MODULES = $(addprefix -drop , FStar.Bytes MonotoneMap MonotoneMapNonDep Transport \
   Crypto.AEAD.Main)
 HEADERS = $(addprefix -add-include ,'"hacks.h"' '"transport.h"' '"krembytes.h"' '"kremstr.h"' \
@@ -45,10 +54,11 @@ KRML_COMMAND=krml $(KRML_INCLUDES) \
   -warn-error +3-9+11-7-6 \
   -fsopts --debug,yes -verbose \
   $(HEADERS) \
-  -ccopt -Wno-unused-function  \
+  -ccopts -Wno-unused-function,-O0 \
   $(DROP_MODULES)  \
   -bundle 'Crypto.AEAD.*,Crypto.Symmetric.*,Buffer.Utils,Crypto.Plain' \
   -ldopts -lcrypto,-lssl \
+  -ldopts -L,$(MLCRYPTO_HOME)/openssl \
   $(KOPTS)
 
 # The glue doesn't want a huge bundle, so we need to leave a few files outside of the bundle.
@@ -60,6 +70,9 @@ mitls-c-test.exe: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES)) $(EX
 	$(KRML_COMMAND) $^ -tmpdir $(EXTRACT_DIR) -o $@ -no-prefix Test.Main \
 	  -drop FFICallbacks \
 	  -bundle Test.Main=Test.*,AEAD_GCM,AEADOpenssl,AEADProvider,Alert,BufferBytes,Connection,ConnInvariant,Content,DataStream,Encode,Epochs,FFI,Handshake,HandshakeLog,HandshakeMessages,Hashing.CRF,Hashing.OpenSSL,HKDF,HMAC,HMAC.UFCMA,IdNonce,KDF.Common,KDF.Salt.ODH,KeySchedule,LHAEPlain,MAC,MAC_SHA1,MAC_SHA256,MasterSecret,Negotiation,QUIC,Range,Record,Signature,StAE,Standalone,StatefulLHAE,StatefulPlain,StreamAE,StreamDeltas,StreamPlain,Ticket,TLS,TLSPRF,Transport
+
+test: mitls-c-test.exe
+	./$<
 
 mitls-c.exe: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES)) $(EXTRA_C_FILES)
 	$(KRML_COMMAND) $^ -tmpdir $(EXTRACT_DIR) -o $@

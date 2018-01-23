@@ -82,21 +82,21 @@ let pre_state (i:id) (r:rw) =
   match use_provider() with
   | OpenSSLProvider -> OAEAD.state i r
   | LowCProvider -> (CAEAD.aead_state * key i)
-  | LowProvider -> AE.aead_state i (Crypto.Indexing.rw2rw r)  
+  | LowProvider -> AE.aead_state i (Crypto.Indexing.rw2rw r)
 
 
 let state (i:id) (r:rw) =
     pre_state i r * salt i
 
-let as_openssl_state #i #r (s:state i r{use_provider()=OpenSSLProvider}) 
+let as_openssl_state #i #r (s:state i r{use_provider()=OpenSSLProvider})
   : OAEAD.state i r
   = fst s
 
-let as_lowc_state #i #r (s:state i r{use_provider()=LowCProvider}) 
+let as_lowc_state #i #r (s:state i r{use_provider()=LowCProvider})
   : CAEAD.aead_state * key i
   = fst s
 
-let as_low_state #i #r (s:state i r{use_provider()=LowProvider}) 
+let as_low_state #i #r (s:state i r{use_provider()=LowProvider})
   : AE.aead_state i (Crypto.Indexing.rw2rw r)
   = fst s
 
@@ -154,7 +154,7 @@ let log_region (#i:id) (#rw:rw) (st:state i rw) =
   match use_provider() with
   | OpenSSLProvider -> OAEAD.State?.log_region (as_openssl_state st)
   | _ -> tls_region
-  
+
 let st_inv (#i:id) (#rw:rw) (st:state i rw) h = True //TODO
 
 let genPost (#i:id) (parent:rgn) h0 (w:writer i) h1 =
@@ -241,7 +241,8 @@ let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
   w
 
 type plainlen = n:nat{n <= max_TLSPlaintext_fragment_length}
-(* irreducible *) type plain (i:id) (l:plainlen) = b:lbytes l
+(* irreducible *)
+type plain (i:id) (l:plainlen) = b:lbytes l
 let repr (#i:id) (#l:plainlen) (p:plain i l) : Tot (lbytes l) = p
 
 let adlen i = match pv_of_id i with
@@ -251,15 +252,6 @@ type adata i = lbytes (adlen i)
 let taglen i = CC.aeadTagSize (alg i)
 let cipherlen i (l:plainlen) : n:nat{n >= taglen i} = l + taglen i
 type cipher i (l:plainlen) = lbytes (cipherlen i l)
-
-let uint128_of_iv (#i:id) (iv:iv i)
-  : Tot (n:FStar.UInt128.t{FStar.UInt128.v n < pow2 96})
-  =
-  let ivn = int_of_bytes iv in
-  assume(FStar.UInt.size ivn 128); // PROVEME need stronger post-condition on int_of_bytes
-  let iv128 = FStar.UInt128.uint_to_t ivn in
-  assume(FStar.UInt128.v iv128 < pow2 96); // PROVEME
-  iv128
 
 let fresh_iv (#i:id{authId i}) (w:writer i) (iv:iv i) h =
   match use_provider() with
@@ -276,14 +268,13 @@ let logged_iv (#i:id{authId i}) (#l:plainlen) (#rw:rw) (s:state i rw) (iv:iv i)
 #set-options "--lax"
 
 let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:plain i l)
-  : StackInline (cipher:cipher i l)
+  : ST (cipher:cipher i l)
   (requires (fun h ->
     st_inv w h /\
     (authId i ==> (Flag.prf i /\ fresh_iv #i w iv h)) /\
     FStar.UInt.size (length ad) 32 /\ FStar.UInt.size l 32))
   (ensures (fun h0 cipher h1 -> modifies_one (log_region w) h0 h1))
   =
-  let cipher =
     match use_provider() with
     | OpenSSLProvider -> OAEAD.encrypt (as_openssl_state w) iv ad plain
     | LowCProvider ->
@@ -297,19 +288,19 @@ let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:pla
       let plainlen = uint_to_t l in
       let cipherlen = uint_to_t (cipherlen i l) in
       assume(AE.safelen i (v plainlen) = true); // TODO
-      let plainbuf = BufferBytes.from_bytes plain in
-      let plainba = CB.load_bytes plainlen plainbuf in
-      let plain = Plain.create i 0uy plainlen in
-      if not (Flag.safeId i) then begin
-        let pb = Plain.make #i l plainba in
-        Plain.store #i plainlen plain pb
-      end;
+      push_frame ();
+      let plain =
+        if not (Flag.safeId i) then
+          Plain.unsafe_hide_buffer i #l (BufferBytes.from_bytes plain)
+        else Plain.create i 0uy plainlen
+      in
       let cipher = Buffer.create 0uy cipherlen in
       assume(v cipherlen = v plainlen + 12);
-      AE.encrypt i st (uint128_of_iv iv) adlen ad plainlen plain cipher;
-      BufferBytes.to_bytes l cipher
-  in
-  cipher
+      let tmp = BufferBytes.from_bytes iv in
+      AE.encrypt i st (Crypto.Symmetric.Bytes.load_uint128 12ul tmp) adlen ad plainlen plain cipher;
+      let ret = BufferBytes.to_bytes (FStar.UInt32.v cipherlen) cipher in
+      pop_frame ();
+      ret
 
   (*
   let r =

@@ -3,6 +3,7 @@ module Test.StAE
 
 open FStar.Bytes // for @| 
 open FStar.Error
+open FStar.Printf
 open TLSError
 open TLSConstants
 open TLSInfo
@@ -74,7 +75,7 @@ private let id13 =
   ID13 kid
 
 private let encryptRecord (#id:StAE.stae_id) (wr:StAE.writer id) ct plain : St bytes =
-  let rg: Range.frange id = (0, length plain) in
+  let rg: Range.frange id = (length plain, length plain) in
   let f: DataStream.fragment id rg = plain in
   let f: Content.fragment id = Content.mk_fragment id ct rg f in
   StAE.encrypt #id wr f
@@ -106,8 +107,9 @@ let test id =
   let rd = StAE.genReader root #id wr in
    
   let c0 = encryptRecord #id wr Content.Application_data text0 in
-  // how to print bytes? nprint("first encryption is "^c0)
+  nprint (sprintf "c0 size=%ul data=%s" (Bytes.len c0) (Bytes.hex_of_bytes c0));
   let c1 = encryptRecord #id wr Content.Application_data text1 in
+  nprint (sprintf "c1 size=%ul data=%s" (Bytes.len c1) (Bytes.hex_of_bytes c1));
 
   nprint "start";
   (
