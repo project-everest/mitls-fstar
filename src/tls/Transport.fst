@@ -11,16 +11,33 @@ open FStar.Error
 open TLSError
 
 // make this type abstract?
-noeq type t (ctx:Type0) = {
-  v: ctx;
-  snd: ctx -> bytes -> ST (optResult string unit) (fun _ -> True) (fun h0 _ h1 -> h0 == h1);
-  rcv: ctx -> max:nat -> ST (recv_result max) (fun _ -> True) (fun h0 _ h1 -> h0 == h1) }
 
-let callbacks v send recv = { v = v; snd = send; rcv = recv }
+type external = FStar.Dyn.dyn
+noeq type t = {
+  app_context : external;
+  snd: external -> bytes -> ST (optResult string unit) (fun _ -> True) (fun h0 _ h1 -> h0 == h1);
+  rcv: external  -> max:nat -> ST (recv_result max) (fun _ -> True) (fun h0 _ h1 -> h0 == h1) }
+
+let callbacks v send recv = { app_context = v; snd = send; rcv = recv }
 
 // platform implementation
 
-let wrap tcp: t networkStream = callbacks tcp send recv_async
+/// 18-01-23 after hoisting for Kremlin extraction, we treat the
+/// explicit context as a dyn to avoid climbing in universes; this
+/// forces us to coerce FStar.Tcp.networkStream to dyn and back when
+/// using TCP instead of C-defined callbacks. Any better idea?
+
+#set-options "--lax" 
+private let send_tcp (x:external) (b:bytes): ST (optResult string unit) (fun _ -> True) (fun h0 _ h1 -> h0 == h1) = 
+  let n: networkStream = FStar.Dyn.undyn x in
+  send n b
+private let recv_tcp (x:external) (max:nat): ST (recv_result max) (fun _ -> True) (fun h0 _ h1 -> h0 == h1) = 
+  let n: networkStream = FStar.Dyn.undyn x in
+  recv_async n max
+#reset-options
+
+
+let wrap tcp: t = callbacks (FStar.Dyn.mkdyn tcp) send_tcp recv_tcp
 type tcpListener = tcpListener
 
 let listen domain port : ML tcpListener = listen domain port
@@ -47,7 +64,7 @@ let test (tcp:t networkStream) (data:bytes) =
 // forces read to complete, even if the socket is non-blocking.
 // this may cause spinning.
 
-private val really_read_rec: b:bytes -> t -> l:nat -> ST (recv_result (l+length b))
+private val really_read_rec: b:bytes -> t 'a -> l:nat -> ST (recv_result (l+length b))
   (fun _ -> True) (fun h0 _ h1 -> h0 == h1)
 let rec really_read_rec prev tcp len =
     if len = 0
