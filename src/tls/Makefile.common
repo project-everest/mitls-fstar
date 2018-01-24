@@ -23,7 +23,7 @@ FSTAR=$(FSTAR_HOME)/bin/fstar.exe --cache_dir $(CACHE_DIR) --cache_checked_modul
 
 EXTRACT_DIR=extract/$(FLAVOR)
 
-ROOTS ?= TLS.fst QUIC.fst Test.Main.fst Test.TLS.fst
+ROOTS ?= TLS.fst QUIC.fst Test.Main.fst 
 
 clean:
 	rm -rf $(EXTRACT_DIR)/Kremlin $(EXTRACT_DIR)/OCaml $(EXTRACT_DIR)/copied .depend.$(FLAVOR) *.checked.lax
