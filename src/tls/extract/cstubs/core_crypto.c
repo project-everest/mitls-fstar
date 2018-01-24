@@ -44,11 +44,13 @@ FStar_Bytes_bytes CoreCrypto_dh_agreement(CoreCrypto_dh_key x0,
                                           FStar_Bytes_bytes x1) {
   DH *dh = DH_new();
   FAIL_IF(dh == NULL, "OpenSSL allocation failure dh");
+
   BIGNUM *p = BN_bin2bn((uint8_t *) x0.dh_params.dh_p.data, x0.dh_params.dh_p.length, NULL);
   BIGNUM *g = BN_bin2bn((uint8_t *) x0.dh_params.dh_g.data, x0.dh_params.dh_g.length, NULL);
   BIGNUM *pub = BN_bin2bn((uint8_t *) x0.dh_public.data, x0.dh_public.length, NULL);
-  FAIL_IF(p == NULL || g == NULL || pub == NULL,
-          "OpenSSL allocation failure p/q/pub");
+  BIGNUM *opub = BN_bin2bn((uint8_t *) x1.data, x1.length, NULL);
+  FAIL_IF(p == NULL || g == NULL || pub == NULL || opub == NULL,
+          "OpenSSL allocation failure p/g/pub");
   BIGNUM *prv = NULL;
   if (x0.dh_private.tag == FStar_Pervasives_Native_Some) {
     prv = BN_bin2bn((uint8_t *) x0.dh_private.val.case_Some.v.data,
@@ -61,10 +63,11 @@ FStar_Bytes_bytes CoreCrypto_dh_agreement(CoreCrypto_dh_key x0,
   uint32_t len = DH_size(dh);
   char *out = malloc(len);
 
-  FAIL_IF(DH_compute_key((uint8_t *) out, pub, dh) < 0, "OpenSSL failure DH_compute_key");
+  FAIL_IF(DH_compute_key((uint8_t *) out, opub, dh) < 0, "OpenSSL failure DH_compute_key");
 
   // Memory management of p, g, pub, and prv has been transfered to dh
   DH_free(dh);
+  BN_free(opub);
 
   FStar_Bytes_bytes ret = {
     .length = len,
@@ -87,9 +90,6 @@ FStar_Bytes_bytes bytes_of_bn(const BIGNUM *bn) {
 
 CoreCrypto_dh_key CoreCrypto_dh_gen_key(CoreCrypto_dh_params x0) {
   DH *dh = DH_new();
-  if (dh == NULL) {
-    printf("Error %s\n", ERR_reason_error_string(ERR_get_error()));
-  };
   FAIL_IF(dh == NULL, "OpenSSL allocation failure dh");
   BIGNUM *p = BN_bin2bn((uint8_t *) x0.dh_p.data, x0.dh_p.length, NULL);
   BIGNUM *g = BN_bin2bn((uint8_t *) x0.dh_g.data, x0.dh_g.length, NULL);
@@ -100,8 +100,6 @@ CoreCrypto_dh_key CoreCrypto_dh_gen_key(CoreCrypto_dh_params x0) {
   const BIGNUM *pub, *prv;
   DH_get0_key(dh, &pub, &prv);
 
-  DH_free(dh);
-
   CoreCrypto_dh_key ret = {
     .dh_params = x0,
     .dh_public = bytes_of_bn(pub),
@@ -110,6 +108,9 @@ CoreCrypto_dh_key CoreCrypto_dh_gen_key(CoreCrypto_dh_params x0) {
       .val = { .case_Some = { .v = bytes_of_bn(prv) } }
     }
   };
+
+  DH_free(dh);
+
   return ret;
 }
 
