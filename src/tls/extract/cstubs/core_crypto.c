@@ -100,7 +100,7 @@ CoreCrypto_dh_key CoreCrypto_dh_gen_key(CoreCrypto_dh_params x0) {
   const BIGNUM *pub, *prv;
   DH_get0_key(dh, &pub, &prv);
 
-  size_t p_byte_len = BN_num_bytes(pub);
+  DH_free(dh);
 
   CoreCrypto_dh_key ret = {
     .dh_params = x0,
@@ -111,7 +111,6 @@ CoreCrypto_dh_key CoreCrypto_dh_gen_key(CoreCrypto_dh_params x0) {
     }
   };
   return ret;
-    
 }
 
 EC_KEY *key_of_core_crypto_curve(CoreCrypto_ec_curve c) {
