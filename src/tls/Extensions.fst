@@ -199,14 +199,16 @@ let client_psk_parse b =
     	| Error z -> error "client_psk_parse_binders")
     | Error z -> error "client_psk_parse_ids")
 
-val server_psk_parse : bytes -> psk
+val server_psk_parse : lbytes 2 -> psk
 let server_psk_parse b = ServerPSK (UInt16.uint_to_t (int_of_bytes b))
 
 val parse_psk: ext_msg -> bytes -> result (psk * option binders)
 let parse_psk mt b =
   match mt with
   | EM_ClientHello -> client_psk_parse b
-  | EM_ServerHello -> Correct (server_psk_parse b, None)
+  | EM_ServerHello ->
+    if length b = 2 then Correct (server_psk_parse b, None)
+    else error "Invalid format of server PSK"
   | _ -> error "PSK extension cannot appear in this message type"
 #reset-options
 
@@ -361,12 +363,12 @@ let rec quicParametersBytes_aux (pl:list quicParameter)
   | p :: t -> quicParameterBytes p @| (quicParametersBytes_aux t)
 
 let quicParametersBytes = function
-  | QuicParametersClient nv iv p ->
-    quicVersionBytes nv @| quicVersionBytes iv @|
+  | QuicParametersClient iv p ->
+    quicVersionBytes iv @| vlbytes2 (quicParametersBytes_aux p)
+  | QuicParametersServer nv sv p ->
+    quicVersionBytes nv @| vlbytes1 (quicVersionsBytes sv) @|
     vlbytes2 (quicParametersBytes_aux p)
-  | QuicParametersServer sv p ->
-    vlbytes1 (quicVersionsBytes sv) @|
-    vlbytes2 (quicParametersBytes_aux p)
+  | QuicParametersNewSessionTicket b -> b
 
 let parseQuicVersion: pinverse_t quicVersionBytes = fun b ->
   if length b = 4 then
@@ -443,7 +445,8 @@ let rec parseQuicVersions (b:bytes)
 let parseQuicParameters_valid (b:bytes) : Tot (result valid_quicParameters) =
   match parseQuicParameters_aux b with
   | Error z -> Error z
-  | Correct qpl ->
+  | Correct qpl -> Correct qpl
+(* No longer done in TLS, QUIC is responsible
     if not (List.Tot.existsb Quic_initial_max_stream_data? qpl) then
       error "parseQuicParameters: missing initial_max_stream_data"
     else if not (List.Tot.existsb Quic_initial_max_data? qpl) then
@@ -455,44 +458,49 @@ let parseQuicParameters_valid (b:bytes) : Tot (result valid_quicParameters) =
     else if List.Tot.length qpl >= 256 then // ADL FIXME: this should be ruled out statically
       error "parseQuicParameters: too many parameters"
     else Correct(qpl)
+*)
 
 let parseQuicParameters (mt:ext_msg) (b:bytes) =
   match mt with
+  | EM_NewSessionTicket -> Correct (QuicParametersNewSessionTicket b)
   | EM_ClientHello ->
-    if length b < 38 then error "parseQuicParameters: too short"
+    if length b < 6 then error "parseQuicParameters: too short"
     else
      begin
-      let nv, b = split b 4ul in
       let iv, b = split b 4ul in
-      match parseQuicVersion nv, parseQuicVersion iv with
-      | Error z, _ | _, Error z -> Error z
-      | Correct nv, Correct iv ->
+      match parseQuicVersion iv with
+      | Error z -> Error z
+      | Correct iv ->
         match vlparse 2 b with
         | Error z -> error "parseQuicParameters: bad client parameters"
         | Correct pb ->
           match parseQuicParameters_valid pb with
           | Error z -> Error z
-          | Correct qpl -> Correct(QuicParametersClient nv iv qpl)
+          | Correct qpl -> Correct(QuicParametersClient iv qpl)
      end
   | EM_EncryptedExtensions ->
    begin
-    if length b < 32 then error "parseQuicParameters: too short" else
-    match vlsplit 1 b with
-    | Error z -> error "parseQuicParameters: bad supported version list"
-    | Correct(vlb, b) ->
-      match parseQuicVersions vlb with
-      | Error z -> Error z
-      | Correct vl ->
-        if vl = [] || List.Tot.length vl >= 64 then
-          error "parseQuicParameters: bad supported version list"
-        else if length b < 32 then
-          error "parseQuicParameters: parameters too short"
-        else match vlparse 2 b with
-        | Error z -> error "parseQuicParameters: bad server parameters"
-        | Correct pb ->
-          match parseQuicParameters_valid pb with
-          | Error z -> Error z
-          | Correct qpl -> Correct(QuicParametersServer vl qpl)
+    if length b < 8 then error "parseQuicParameters: too short" else
+    let nv, b = split b 4ul in
+    match parseQuicVersion nv with
+    | Error z -> error "parseQuicParameters: bad negotiated version"
+    | Correct nv ->
+      match vlsplit 1 b with
+      | Error z -> error "parseQuicParameters: bad supported version list"
+      | Correct(vlb, b) ->
+        match parseQuicVersions vlb with
+        | Error z -> Error z
+        | Correct vl ->
+          if vl = [] || List.Tot.length vl >= 64 then
+            error "parseQuicParameters: bad supported version list"
+//          else if length b < 32 then
+//            error "parseQuicParameters: parameters too short"
+          else match vlparse 2 b with
+          | Error z -> error "parseQuicParameters: bad server parameters"
+          | Correct pb ->
+            match parseQuicParameters_valid pb with
+            | Error z -> Error z
+            | Correct qpl -> Correct(QuicParametersServer nv vl qpl)
    end
   | _ -> error "parseQuicParameters: extension appears in the wrong message type"
 
@@ -500,15 +508,17 @@ let parseQuicParameters (mt:ext_msg) (b:bytes) =
 
 // The length exactly reflects the RFC format constraint <2..254>
 type protocol_versions =
-  l:list protocolVersion {0 < List.Tot.length l /\ List.Tot.length l < 128}
+  | ServerPV of protocolVersion
+  | ClientPV of l:list protocolVersion {0 < List.Tot.length l /\ List.Tot.length l < 128}
 
 #set-options "--lax"
 // SI: dead code?
-private let protocol_versions_bytes_aux acc v = acc @| TLSConstants.versionBytes v
+private let protocol_versions_bytes_aux acc v = acc @| TLSConstants.versionBytes_draft v
 
 val protocol_versions_bytes: protocol_versions -> b:bytes {length b <= 255}
-let protocol_versions_bytes vs =
-  vlbytes 1 (List.Tot.fold_left protocol_versions_bytes_aux empty_bytes vs)
+let protocol_versions_bytes = function
+  | ServerPV pv -> versionBytes_draft pv
+  | ClientPV vs ->  vlbytes 1 (List.Tot.fold_left protocol_versions_bytes_aux empty_bytes vs)
   // todo length bound; do we need an ad hoc variant of fold?
 #reset-options
 
@@ -534,20 +544,25 @@ let rec parseVersions b =
           assert_norm (List.Tot.length (v::vs) == 1 + List.Tot.length vs);
           Correct r)
 
-val parseSupportedVersions: b:bytes{2 < length b /\ length b < 256} -> result protocol_versions
+val parseSupportedVersions: b:bytes{2 <= length b /\ length b < 256} -> result protocol_versions
 let parseSupportedVersions b =
-  match vlparse 1 b with
-  | Error z -> error "protocol versions"
-  | Correct b ->
-    begin
-    match parseVersions b with
+  if length b = 2 then
+    (match parseVersion_draft b with
     | Error z -> Error z
-    | Correct vs ->
-      let n = List.Tot.length vs in
-      if 1 <= n && n <= 127
-      then Correct vs
-      else  error "too many or too few protocol versions"
-    end
+    | Correct pv -> Correct (ServerPV pv))
+  else
+    (match vlparse 1 b with
+    | Error z -> error "protocol versions"
+    | Correct b ->
+      begin
+      match parseVersions b with
+      | Error z -> Error z
+      | Correct vs ->
+        let n = List.Tot.length vs in
+        if 1 <= n && n <= 127
+        then Correct (ClientPV vs)
+        else error "too many or too few protocol versions"
+      end)
 
 (* SERVER NAME INDICATION *)
 
@@ -779,11 +794,7 @@ let rec extensionPayloadBytes = function
     | ClientPSK ids len -> vlbytes_trunc 2 (pskBytes psk) (2 + len)
     | _ -> vlbytes 2 (pskBytes psk))
   | E_early_data edi           -> vlbytes 2 (earlyDataIndicationBytes edi)
-  | E_supported_versions vv    ->
-    // Sending TLS 1.3 draft versions, as other implementations are doing
-    vlbytes 2
-      (vlbytes 1
-        (List.Tot.fold_left extensionPayloadBytes_aux empty_bytes vv))
+  | E_supported_versions vs    -> vlbytes 2 (protocol_versions_bytes vs)
   | E_cookie c                 -> (lemma_repr_bytes_values (length c); vlbytes 2 (vlbytes 2 c))
   | E_psk_key_exchange_modes kex -> vlbytes 2 (client_psk_kexes_bytes kex)
   | E_extended_ms              -> vlbytes 2 empty_bytes
@@ -1123,7 +1134,7 @@ let parseExtension mt b =
     | (0x00z, 0x23z) -> // session_ticket
       Correct (E_session_ticket data, None)
 
-    | (0x00z, 0x28z) ->
+    | (0x00z, 0x28z) -> // key share
       mapResult (normallyNone E_key_share) (parseKeyShare mt data)
 
     | (0x00z, 0x29z) -> // PSK
@@ -1133,15 +1144,15 @@ let parseExtension mt b =
       | Correct (psk, None) -> Correct (E_pre_shared_key psk, None)
       | Correct (psk, Some binders) -> Correct (E_pre_shared_key psk, Some binders))
 
-    | (0x00z, 0x2az) ->
+    | (0x00z, 0x2az) -> // early data
       if length data <> 0 && length data <> 4 then error "early data indication" else
       mapResult (normallyNone E_early_data) (parseEarlyDataIndication data)
 
     | (0x00z, 0x2bz) ->
-      if length data <= 2 || length data >= 256 then error "supported versions" else
+      if length data < 2 || length data >= 256 then error "supported versions" else
       mapResult (normallyNone E_supported_versions) (parseSupportedVersions data)
 
-    | (0xffz, 0x2cz) -> // cookie
+    | (0x00z, 0x2cz) -> // cookie
       if length data <= 2 || length data >= 65538 then error "cookie" else
       Correct (E_cookie data,None)
 
@@ -1272,8 +1283,8 @@ assume val prepareExtensions:
     (* let res = [E_renegotiation_info(cri)] in *)
     let res =
       match minpv, pv with
-      | TLS_1p3, TLS_1p3 -> E_supported_versions [TLS_1p3] :: res
-      | TLS_1p2, TLS_1p3 -> E_supported_versions [TLS_1p3;TLS_1p2] :: res
+      | TLS_1p3, TLS_1p3 -> E_supported_versions (ClientPV [TLS_1p3]) :: res
+      | TLS_1p2, TLS_1p3 -> E_supported_versions (ClientPV [TLS_1p3; TLS_1p2]) :: res
       // REMARK: The case below is not mandatory. This behaviour should be configurable
       // | TLS_1p2, TLS_1p2 -> E_supported_versions [TLS_1p2] :: res
       | _ -> res
@@ -1426,10 +1437,14 @@ private val serverToNegotiatedExtension:
   cipherSuite ->
   option (cVerifyData * sVerifyData) ->
   bool ->
+  result protocolVersion ->
   extension ->
-  result unit
-let serverToNegotiatedExtension cfg cExtL cs ri resuming sExt =
-    if not (containsExt cExtL sExt) then
+  result protocolVersion
+let serverToNegotiatedExtension cfg cExtL cs ri resuming res sExt =
+  match res with
+  | Error z -> Error z
+  | Correct pv0 ->
+    if not (TLSConstants.exists_b_aux sExt sameExt cExtL) then
       Error(AD_unsupported_extension, perror __SOURCE_FILE__ __LINE__ "server sent an unexpected extension")
     else match sExt with
     (*
@@ -1446,33 +1461,39 @@ let serverToNegotiatedExtension cfg cExtL cs ri resuming sExt =
       | _ -> Error(AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Detected a renegotiation attack")
       end
       *)
+    | E_supported_versions v ->
+      (match pv0, v with
+      | _, ClientPV _ -> Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "list of protocol versions in ServerHello")
+      | TLS_1p2, ServerPV pv -> correct pv
+      | _ -> Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "failed extension-based version negotiation"))
     | E_server_name _ ->
       // RFC 6066, bottom of page 6
       //When resuming a session, the server MUST NOT include a server_name extension in the server hello
       if resuming then Error(AD_unsupported_extension, perror __SOURCE_FILE__ __LINE__ "server sent SNI acknowledge in resumption")
-      else correct ()
-    | E_session_ticket _ -> correct ()
-    | E_alpn sal -> if List.Tot.length sal = 1 then correct ()
+      else res
+    | E_session_ticket _ -> res
+    | E_alpn sal -> if List.Tot.length sal = 1 then res
       else Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Multiple ALPN selected by server")
-    | E_quic_parameters (QuicParametersServer qvl qp) -> correct ()
-    | E_extended_ms -> correct ()
-    | E_ec_point_format spf -> correct () // Can be sent in resumption, apparently (RFC 4492, 5.2)
-    | E_key_share (CommonDH.ServerKeyShare sks) -> correct ()
+    | E_quic_parameters (QuicParametersServer _ _ _) -> res
+    | E_extended_ms -> res
+    | E_ec_point_format spf -> res // Can be sent in resumption, apparently (RFC 4492, 5.2)
+    | E_key_share (CommonDH.ServerKeyShare sks) -> res
+    | E_pre_shared_key (ServerPSK pski) -> res // bound check in Nego
     | E_supported_groups named_group_list ->
       if resuming then Error(AD_unsupported_extension, perror __SOURCE_FILE__ __LINE__ "server sent supported groups in resumption")
-      else correct ()
+      else res
     | e ->
       Error(AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ ("unhandled server extension: "^(string_of_extension e)))
 
 private
-let rec serverToNegotiatedExtensions_aux cfg cExtL cs ri resuming sExtL =
+let rec serverToNegotiatedExtensions_aux cfg cExtL cs ri resuming rpv sExtL =
   match sExtL with
-  | [] -> correct ()
+  | [] -> rpv
   | hd::tl -> 
-    match serverToNegotiatedExtension cfg cExtL cs ri resuming hd with
-    | Correct _ ->
-      serverToNegotiatedExtensions_aux cfg cExtL cs ri resuming tl
-    | er -> er
+    match serverToNegotiatedExtension cfg cExtL cs ri resuming rpv hd with
+    | Error z -> Error z
+    | rpv ->
+      serverToNegotiatedExtensions_aux cfg cExtL cs ri resuming rpv tl
 
 val negotiateClientExtensions:
   protocolVersion ->
@@ -1482,36 +1503,16 @@ val negotiateClientExtensions:
   cipherSuite ->
   option (cVerifyData * sVerifyData) ->
   bool ->
-  result unit
+  result protocolVersion
 let negotiateClientExtensions pv cfg cExtL sExtL cs ri resuming =
   match pv, cExtL, sExtL with
-  | SSL_3p0, _, None ->
-    Correct ()
-  | SSL_3p0, _, Some _ ->
-    Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Received extensions in SSL 3.0 ServerHello")
-  | TLS_1p3, Some cExtL, Some sExtL ->
-    (*
-    match List.Tot.find E_psk_key_exchange_modes? cExtL,
-          List.Tot.find E_pre_shared_key? sExtL
-    with
-    | None, None -> Correct ()
-    | None, Some _ ->
-      Error(AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Received pre_shared_key extension but did not offer psk_key_exchange_modes")
-    | Some kexs, Some (ServerPSK idx) ->
-      match List.Tot.find E_pre_shared_key? cExtL with
-      | None ->
-        Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Sent psk_key_exchange_modes without pre_shared_key")
-      | Some (ClientPSK ids _) ->
-        if UInt16.v idx < List.Tot.length ids then Correct ()
-        else
-        Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Server sent an out of bounds PSK index")
-    *)
-    Correct ()
-  | _, Some cExtL, Some sExtL ->
-    serverToNegotiatedExtensions_aux cfg cExtL cs ri resuming sExtL
-  | _, _, None -> Correct ()
-  | _, None, Some sExtL ->
-    Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "negotiation failed: missing extensions in TLS ClientHello (shouldn't happen)")
+  | SSL_3p0, _, None -> Correct (SSL_3p0)
+  | SSL_3p0, _, Some _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Received extensions in SSL 3.0 ServerHello")
+  | _, None, _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "negotiation failed: missing extensions in TLS ClientHello (shouldn't happen)")
+  | pv, _, None -> if pv <> TLS_1p3 then Correct (pv) else Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Cannot negotiate TLS 1.3 explicitly")
+  | pv, Some cExtL, Some sExtL ->
+    serverToNegotiatedExtensions_aux cfg cExtL cs ri resuming (correct pv) sExtL
+
 #reset-options
 
 private val clientToServerExtension: protocolVersion
@@ -1525,6 +1526,9 @@ private val clientToServerExtension: protocolVersion
   -> option extension
 let clientToServerExtension pv cfg cs ri pski ks resuming cext =
   match cext with
+  | E_supported_versions _ ->
+    if pv = TLS_1p3 then Some (E_supported_versions (ServerPV pv))
+    else None
   | E_key_share _ ->
     if pv = TLS_1p3 then Option.mapTot E_key_share ks // ks should be in one of client's groups
     else None
@@ -1532,15 +1536,17 @@ let clientToServerExtension pv cfg cs ri pski ks resuming cext =
     (match cfg.alpn with
     | None -> None
     | Some sal ->
-      let common = List.Tot.filter (fun x -> List.Tot.mem x sal) cal in
+      let common = TLSConstants.filter_aux sal TLSConstants.mem_rev cal in
       match common with
       | a :: _ -> Some (E_alpn [a])
       | _ -> None)
-  | E_quic_parameters (QuicParametersClient qv qvi qp) ->
+  | E_quic_parameters (QuicParametersClient qvi qp) ->
     (match cfg.quic_parameters, pv with
     | Some (sqvl, sqp), TLS_1p3 ->
-      // TODO client parameter validation?
-      Some (E_quic_parameters (QuicParametersServer sqvl sqp))
+      let qvn =
+        if List.Tot.mem qvi sqvl then qvi
+        else List.Tot.hd sqvl in
+      Some (E_quic_parameters (QuicParametersServer qvn sqvl sqp))
     | _ -> None)
   | E_server_name server_name_list ->
     if resuming then None // RFC 6066 page 6

@@ -1070,11 +1070,18 @@ let rec readFragment c i =
       // payload decryption
       let e = Seq.index es j in
       let Epoch #r #n #i hs rd wr = e in
-      if not (valid_clen i (length payload))  // cache? check at a lower level?
-      then (
+      if payload = abyte 1z && StAE.tolerate_ccs #i rd then
+       begin
+        trace "Ignoring a CCS";
+        readFragment c i
+       end
+      else if not (valid_clen i (length payload))  // cache? check at a lower level?
+      then
+       begin
         // we might make an effort to parse plaintext alerts
         trace ("bad payload: "^print_bytes payload);
-        Error(AD_decryption_failed, "Invalid ciphertext length"))
+        Error(AD_decryption_failed, "Invalid ciphertext length")
+       end
       else
       match StAE.decrypt (reader_epoch e) (ct,payload) with
       | None ->
@@ -1153,6 +1160,7 @@ let readOne c i =
         trace "read CCS fragment";
         match Handshake.recv_ccs c.hs with
         | Handshake.InError (x,y) -> alertFlush c i x y
+        | Handshake.InAck false false -> ReadAgain // FIXME TLS 1.3 CCS with HRR (!!!)
         | Handshake.InAck true false -> ReadAgainFinishing // specialized for HS 1.2
       end
     | Content.CT_Data rg f ->

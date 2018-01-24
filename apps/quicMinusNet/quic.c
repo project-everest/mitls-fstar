@@ -30,11 +30,7 @@ void dump(const unsigned char *buffer, size_t len)
 
 void dump_parameters(quic_transport_parameters *qp)
 {
-  printf("max_stream_data = %d\n", qp->max_stream_data);
-  printf("max_data        = %d\n", qp->max_data);
-  printf("max_stream_id   = %d\n", qp->max_stream_id);
-  printf("idle_timeout    = %d\n", qp->idle_timeout);
-  if (qp->others_len) printf("custom parameters "); dump(qp->others, qp->others_len);
+  printf("transport parameters "); dump(qp->tp_data, qp->tp_len);
 }
 
 mitls_ticket *qt = NULL;
@@ -145,12 +141,8 @@ int main(int argc, char **argv)
 
   quic_transport_parameters client_qp =
     {
-      .max_stream_data = 32000,
-      .max_data = 64000,
-      .max_stream_id = 32,
-      .idle_timeout = 120,
-      .others_len = 6,
-      .others = "\x00\x05\x00\x02\x0f\xe4"
+      .tp_len = 6,
+      .tp_data = "\x00\x05\x00\x02\x0f\xe4"
     };
 
   mitls_cert_cb cert_callbacks =
@@ -163,13 +155,9 @@ int main(int argc, char **argv)
 
   quic_transport_parameters server_qp =
     {
-      .max_stream_data = 16000,
-      .max_data = 32000,
-      .max_stream_id = 16,
-      .idle_timeout = 60,
       // an example well-formed custom parameter
-      .others_len = 9,
-      .others = { 255,255,0,5,10,11,12,13,14,0 }
+      .tp_len = 9,
+      .tp_data = "\xff\xff\x00\x05\x0a\x0b\x0c\x0d\x0e\x00"
     };
 
   quic_config config = {
@@ -177,7 +165,7 @@ int main(int argc, char **argv)
     .supported_versions = NULL,
     .supported_versions_len = 0,
     .host_name = "",
-    .alpn = "hq-05",
+    .alpn = "hq-08",
     .qp = server_qp,
     .server_ticket = NULL,
     .callback_state = (void*)pki,
@@ -274,15 +262,21 @@ int main(int argc, char **argv)
       // showing how to get the peer's parameters
       // (available with the main exporter secret)
       quic_transport_parameters peer[1];
-      if (FFI_mitls_quic_get_peer_parameters(server, peer, &errmsg))
+      peer->tp_len = 0;
+      peer->tp_data = malloc(256);
+      uint32_t ver;
+
+      if (FFI_mitls_quic_get_peer_parameters(server, &ver, peer, &errmsg))
         {
           printf("   === server received client parameters === \n");
+          printf(" Client initial version: %x\n", ver);
           dump_parameters(peer);
         }
       else printf("Failed to get peer parameter: %s\n", errmsg);
-      if (FFI_mitls_quic_get_peer_parameters(client, peer, &errmsg))
+      if (FFI_mitls_quic_get_peer_parameters(client, &ver, peer, &errmsg))
         {
           printf("   === client received server parameters === \n");
+          printf(" Server negotiated version: %x\n", ver);
           dump_parameters(peer);
         }
       else printf("Failed to get peer parameter: %s\n", errmsg);

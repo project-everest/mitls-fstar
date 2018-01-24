@@ -294,7 +294,13 @@ let send l m =
       let acc = Hashing.extend #a acc mb in
       FixedHash a acc hl
     | OpenHash p ->
-      OpenHash (p @| mb)
+      (match m with
+      | HelloRetryRequest hrr ->
+        let ha = verifyDataHashAlg_of_ciphersuite hrr.hrr_cipher_suite in
+        let hmsg = Hashing.compute ha p in
+        let hht = (bytes_of_hex "fe0000") @| (bytes_of_int 1 (length hmsg)) @| hmsg in
+        OpenHash (hht @| mb)
+      | _ -> OpenHash (p @| mb))
     in
   let o = st.outgoing @| mb in
   let t = extend_hs_transcript st.transcript m in
@@ -470,19 +476,27 @@ val hashHandshakeMessages : t: erased_transcript ->
 let rec hashHandshakeMessages t p hs n nb =
     match n,nb with
     | [],[] -> hs
-    | m::mrest,mb::brest ->
-         (match hs with
-    | OpenHash b ->
-      let hs = OpenHash (b @| mb) in
-      hashHandshakeMessages t (p @ [m]) hs mrest brest
-    | FixedHash a acc tl ->
-      let acc = Hashing.extend #a acc mb in
-      let tl = if tagged m then
-             let t = Hashing.finalize #a acc in
-         tl @ [t]
-         else tl in
-      let hs = FixedHash a acc tl in
-      hashHandshakeMessages t (p @ [m]) hs mrest brest)
+    | m::mrest, mb::brest ->
+      (match hs with
+      | OpenHash b ->
+        let hs = match m with
+          | HelloRetryRequest hrr ->
+            let ha = verifyDataHashAlg_of_ciphersuite hrr.hrr_cipher_suite in
+            let hht = bytes_of_hex "fe0000" in // message_type
+            let hmsg = Hashing.compute ha b in
+            let hht = hht @| (bytes_of_int 1 (length hmsg)) @| hmsg in
+            OpenHash (hht @| mb)
+          | _ -> OpenHash (b @| mb)
+        in
+        hashHandshakeMessages t (p @ [m]) hs mrest brest
+      | FixedHash a acc tl ->
+        let acc = Hashing.extend #a acc mb in
+        let tl = if tagged m then
+               let t = Hashing.finalize #a acc in
+           tl @ [t]
+           else tl in
+        let hs = FixedHash a acc tl in
+        hashHandshakeMessages t (p @ [m]) hs mrest brest)
 
 let receive l mb =
   let st = !l in
