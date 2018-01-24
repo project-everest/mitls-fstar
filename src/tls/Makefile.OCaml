@@ -51,18 +51,22 @@ ifeq (,$(wildcard $(MLCRYPTO_HOME)/CoreCrypto.cmxa))
   $(error I cannot find $(MLCRYPTO_HOME)/CoreCrypto.cmxa -- please run make in $(MLCRYPTO_HOME))
 endif
 
+ifeq (,$(wildcard $(FFI_HOME)/FFICallbacks.cmxa))
+  $(error I cannot find $(FFI_HOME)/FFICallbacks.cmxa) -- please run make in $(FFI_HOME))
+endif
+
 %.o: %.c
 	$(CC) -I $(KREMLIN_HOME)/kremlib $^ -o $@ -c
 
-mitls.exe: extract/mlstubs/Crypto_AEAD_Main.cmx $(KREMLIN_HOME)/_build/kremlib/C.cmx $(MLCRYPTO_HOME)/CoreCrypto.cmxa $(LOWC_HOME)/LowC.cmxa \
-	  $(subst .ml,.cmx,$(ALL_ML_FILES)) extract/copied/kremstr.o test/mitls.cmx
+mitls.exe: extract/mlstubs/Crypto_AEAD_Main.cmx \
+	$(KREMLIN_HOME)/_build/kremlib/C.cmx \
+	$(MLCRYPTO_HOME)/CoreCrypto.cmxa \
+	$(LOWC_HOME)/LowC.cmxa \
+	$(FFI_HOME)/FFICallbacks.cmxa \
+	$(subst .ml,.cmx,$(ALL_ML_FILES)) \
+	extract/copied/kremstr.o \
+	test/mitls.cmx
 	$(OCAMLOPT) -linkpkg -g $^ -o $@ -thread
-
-
-.PHONY: $(FFI_HOME)/FFICallbacks.cmxa
-
-$(FFI_HOME)/FFICallbacks.cmxa:
-	$(MAKE) -C $(FFI_HOME)
 
 test/mitls.cmx: test/mitls.ml $(subst .ml,.cmx,$(ALL_ML_FILES))
 
