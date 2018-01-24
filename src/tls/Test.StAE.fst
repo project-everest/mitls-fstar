@@ -125,7 +125,7 @@ let test id =
     else (eprint "decryption should fail on wrong sequence number"; false)
   ) &&
   ( let d = decryptRecord #id rd Content.Alert c0 in
-    if None? d   
+    if id = id12 && None? d   // TLS 1.3 does not intend to provide outer CT authentication
     then (nprint "decryption fails on wrong CT"; true)
     else (eprint "decryption should fail on wrong CT"; false)
   ) &&

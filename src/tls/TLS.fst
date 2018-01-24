@@ -93,7 +93,7 @@ val create: r0:c_rgn -> tcp:Transport.t -> r:role -> cfg:config -> resume: resum
 let create parent tcp role cfg resume =
     let m = new_region parent in
     let hs = Handshake.create m cfg role resume in
-    let recv = ralloc m Record.wait_header in
+    let recv = Record.alloc_input_state m in
     let state = ralloc m (Ctrl,Ctrl) in
     assume (is_hs_rgn m);
     C #m hs tcp recv state
@@ -467,8 +467,7 @@ let sendFragment c #i wo f =
        lemma_repr_bytes_values (length payload);
        assume (repr_bytes (length payload) <= 2); //NS: How are we supposed to prove this?
        trace ("Sending fragment of length " ^ string_of_int (length payload));
-       let record = Record.makePacket ct (PlaintextID? i) pv payload in
-       let r  = Transport.send c.tcp record in
+       let r = Record.sendPacket c.tcp ct (PlaintextID? i) pv payload in
        match r with
        | Error(x)  -> Error(AD_internal_error,x)
        | Correct _ -> Correct()
