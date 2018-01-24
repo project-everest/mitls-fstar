@@ -167,6 +167,11 @@ let find_quic_parameters o: option TLSConstants.quicParameters =
   | Some (Extensions.E_quic_parameters qp) -> Some qp
   | _ -> None
 
+let find_cookie o =
+  match find_client_extension Extensions.E_cookie? o with
+  | None -> None
+  | Some (Extensions.E_cookie c) -> Some c
+
 // finding the pre-shared keys in ClientHello
 let find_pske o =
   match find_client_extension Extensions.E_pre_shared_key? o with
@@ -650,6 +655,7 @@ let group_of_hrr hrr : option CommonDH.group =
 
 let client_HelloRetryRequest #region (ns:t region Client) hrr (s:option share) =
   let { hrr_sessionID = sid; hrr_cipher_suite = cs; hrr_extensions = el } = hrr in
+  trace ("Got HRR, extensions: ["^(Extensions.string_of_extensions el)^"]");
   match MR.m_read ns.state with
   | C_Offer offer ->
     let old_shares = gs_of offer in
@@ -1176,7 +1182,6 @@ irreducible val computeServerMode:
   serverRandom: TLSInfo.random ->
   St (result serverMode)
 let computeServerMode cfg co serverRandom =
-  // for now, we set the version before negotiating the rest; this may lead to mismatches e.g. on tickets or certificates
   match negotiate_version cfg co with
   | Error z -> Error z
   | Correct TLS_1p3 ->
@@ -1203,7 +1208,8 @@ let computeServerMode cfg co serverRandom =
         hrr_cipher_suite = cs;
         hrr_extensions = [
           Extensions.E_supported_versions (Extensions.ServerPV TLS_1p3);
-          Extensions.E_key_share (CommonDH.HRRKeyShare ng)
+          Extensions.E_key_share (CommonDH.HRRKeyShare ng);
+          Extensions.E_cookie (CoreCrypto.random 32)
         ]; } in
       Correct(ServerHelloRetryRequest hrr)
     | Correct ((PSK_EDH j ogx cs)::_, _) ->
@@ -1329,7 +1335,11 @@ let server_ClientHello #region ns offer =
         | Extensions.E_key_share (CommonDH.ClientKeyShare ecl) ->
           (match ecl, group_of_hrr hrr with
           | [CommonDH.Share g _], Some g' -> g = g'
-          | _ -> (IO.debug_print_string "Bad key_share\n") && false)
+          | _, None ->
+            let shares1 = find_key_shares o1 in
+            Some? shares1 &&
+            CommonDH.clientKeyShareBytes (Some?.v shares1) = CommonDH.clientKeyShareBytes ecl
+          | _ -> false)
         | Extensions.E_early_data _ -> false // Forbidden
         | Extensions.E_cookie c -> true // FIXME we will send cookie
         // If we add cookie support we need to treat this case separately
@@ -1369,10 +1379,23 @@ let server_ClientHello #region ns offer =
       MR.m_write ns.state (S_HRR offer hrr);
       sm
     | Correct (ServerMode m cert) ->
-      trace ("negotiated "^string_of_pv m.n_protocol_version^" "^string_of_ciphersuite m.n_cipher_suite);
-      MR.m_write ns.state (S_ClientHello m cert);
-      sm
-
+      // Forcing HRR for source address validation
+      if ns.cfg.offer_shares = [] then
+        let hrr = ({
+          hrr_sessionID = offer.ch_sessionID;
+          hrr_cipher_suite = m.n_cipher_suite;
+          hrr_extensions = [
+            Extensions.E_supported_versions (Extensions.ServerPV TLS_1p3);
+            Extensions.E_cookie (CoreCrypto.random 32)
+          ]}) in
+        MR.m_write ns.state (S_HRR offer hrr);
+        Correct (ServerHelloRetryRequest hrr)
+      else
+       begin
+        trace ("negotiated "^string_of_pv m.n_protocol_version^" "^string_of_ciphersuite m.n_cipher_suite);
+        MR.m_write ns.state (S_ClientHello m cert);
+        sm
+       end
 
 let share_of_serverKeyShare (ks:CommonDH.serverKeyShare) : share =
   let CommonDH.Share g gy = ks in (| g, gy |)

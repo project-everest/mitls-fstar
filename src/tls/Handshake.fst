@@ -592,6 +592,7 @@ let client_NewSessionTicket_13 (hs:hs) (st13:sticket13)
   let valid_ed =
     if Some? cfg.quic_parameters then
       (match ed with
+      | None -> true
       | Some (Extensions.E_early_data (Some x)) -> x = 0xfffffffful
       | _ -> false)
     else true in

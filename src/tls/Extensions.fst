@@ -1129,7 +1129,7 @@ let parseExtension mt b =
       if length data < 2 || length data >= 256 then error "supported versions" else
       mapResult (normallyNone E_supported_versions) (parseSupportedVersions data)
 
-    | (0xffz, 0x2cz) -> // cookie
+    | (0x00z, 0x2cz) -> // cookie
       if length data <= 2 || length data >= 65538 then error "cookie" else
       Correct (E_cookie data,None)
 
