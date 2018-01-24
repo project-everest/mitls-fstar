@@ -26,7 +26,7 @@
 
 #define FAIL_IF(test, msg)                                                     \
   do {                                                                         \
-    if (test)                                                                  \
+    if (!(test))                                                               \
       continue;                                                                \
     fprintf(stderr, "%s %s\n", __FUNCTION__, msg);                             \
     exit(253);                                                                 \
@@ -63,11 +63,7 @@ FStar_Bytes_bytes CoreCrypto_dh_agreement(CoreCrypto_dh_key x0,
 
   FAIL_IF(DH_compute_key((uint8_t *) out, pub, dh) < 0, "OpenSSL failure DH_compute_key");
 
-  if (prv != NULL)
-    BN_free(prv);
-  BN_free(pub);
-  BN_free(g);
-  BN_free(p);
+  // Memory management of p, g, pub, and prv has been transfered to dh
   DH_free(dh);
 
   FStar_Bytes_bytes ret = {
@@ -91,6 +87,9 @@ FStar_Bytes_bytes bytes_of_bn(const BIGNUM *bn) {
 
 CoreCrypto_dh_key CoreCrypto_dh_gen_key(CoreCrypto_dh_params x0) {
   DH *dh = DH_new();
+  if (dh == NULL) {
+    printf("Error %s\n", ERR_reason_error_string(ERR_get_error()));
+  };
   FAIL_IF(dh == NULL, "OpenSSL allocation failure dh");
   BIGNUM *p = BN_bin2bn((uint8_t *) x0.dh_p.data, x0.dh_p.length, NULL);
   BIGNUM *g = BN_bin2bn((uint8_t *) x0.dh_g.data, x0.dh_g.length, NULL);
@@ -204,7 +203,7 @@ FStar_Bytes_bytes CoreCrypto_ecdh_agreement(CoreCrypto_ec_key x0,
 
 CoreCrypto_ec_key CoreCrypto_ec_gen_key(CoreCrypto_ec_params x0) {
   EC_KEY *k = key_of_core_crypto_curve(x0.curve);
-  FAIL_IF(EC_KEY_generate_key(k) == 1, "EC_KEY_generate_key failed");
+  FAIL_IF(EC_KEY_generate_key(k) == 0, "EC_KEY_generate_key failed");
 
   EC_GROUP *g = EC_GROUP_dup(EC_KEY_get0_group(k));
   if (x0.point_compression)
