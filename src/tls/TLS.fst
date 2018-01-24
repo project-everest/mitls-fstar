@@ -1069,7 +1069,7 @@ let rec readFragment c i =
     else
       // payload decryption
       let e = Seq.index es j in
-      let Epoch #r #n #i hs rd wr = e in
+      let Epoch hs rd wr = e in
       if payload = abyte 1z && StAE.tolerate_ccs #i rd then
        begin
         trace "Ignoring a CCS";
