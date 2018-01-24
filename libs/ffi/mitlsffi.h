@@ -94,17 +94,22 @@ extern int MITLS_CALLCONV FFI_mitls_configure_cert_callbacks(mitls_state *state,
 extern void MITLS_CALLCONV FFI_mitls_close(/* in */ mitls_state *state);
 
 // Callbacks from miTLS to the host application, to send and receive TCP
-typedef int (MITLS_CALLCONV *pfn_FFI_send)(void *ctx, const void *buffer, size_t buffer_size);
-typedef int (MITLS_CALLCONV *pfn_FFI_recv)(void *ctx, void *buffer, size_t buffer_size);
+struct _FFI_mitls_callbacks;
+typedef int (MITLS_CALLCONV *pfn_FFI_send)(struct _FFI_mitls_callbacks *callbacks, const void *buffer, size_t buffer_size);
+typedef int (MITLS_CALLCONV *pfn_FFI_recv)(struct _FFI_mitls_callbacks *callbacks, void *buffer, size_t buffer_size);
+struct _FFI_mitls_callbacks {
+    pfn_FFI_send send;
+    pfn_FFI_recv recv;
+};
 
 // Connect to a TLS server
-extern int MITLS_CALLCONV FFI_mitls_connect(void *ctx, pfn_FFI_send send, pfn_FFI_recv recv, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg);
+extern int MITLS_CALLCONV FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg);
 
 // Resume a previously-established ticket
-extern int MITLS_CALLCONV FFI_mitls_resume(void *ctx, pfn_FFI_send send, pfn_FFI_recv recv, /* in */ mitls_state *state, /* in */ mitls_ticket *ticket, /* out */ char **errmsg);
+extern int MITLS_CALLCONV FFI_mitls_resume(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* in */ mitls_ticket *ticket, /* out */ char **errmsg);
 
 // Act as a TLS server to a client
-extern int MITLS_CALLCONV FFI_mitls_accept_connected(void *ctx, pfn_FFI_send send, pfn_FFI_recv recv, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg);
+extern int MITLS_CALLCONV FFI_mitls_accept_connected(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg);
 
 // Get the exporter secret (set early to true for the early exporter secret). Returns 1 if a secret was written
 extern int MITLS_CALLCONV FFI_mitls_get_exporter(/* in */ mitls_state *state, int early, /* out */ mitls_secret *secret, /* out */ char **errmsg);
