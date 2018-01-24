@@ -31,10 +31,13 @@ extract/cstubs/hacl_provider.o: extract/cstubs/hacl_provider.c
 UNAME=$(shell uname)
 ifeq ($(OS),Windows_NT)
   PATH := $(MLCRYPTO_HOME)/openssl:$(PATH)
+  export PATH
 else ifeq ($(UNAME),Darwin)
   DYLD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(DYLD_LIBRARY_PATH)
+  export DYLD_LIBRARY_PATH
 else ifeq ($(UNAME),Linux)
   LD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(LD_LIBRARY_PATH)
+  export LD_LIBRARY_PATH
 endif
 
 DROP_MODULES = $(addprefix -drop , FStar.Bytes MonotoneMap MonotoneMapNonDep Transport \
