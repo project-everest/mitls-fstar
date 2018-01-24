@@ -1106,10 +1106,14 @@ private val readOne: c:connection -> i:id -> St (ioresult_i i)
 let readOne c i =
   assume false; //16-05-19
   match readFragment c i with
-  | Error (AD_internal_error, "TCP close") -> // If TCP died, no point trying to send an alert
-    disconnect c;
-    ReadError None "TCP close"
-  | Error (x,y) -> alertFlush c i x y
+  | Error (x, y) ->
+    (match x with
+     | AD_internal_error ->
+       if y = "TCP close" then  // If TCP died, no point trying to send an alert
+         (disconnect c;
+          ReadError None "TCP close")
+       else alertFlush c i x y
+     | _ -> alertFlush c i x y)
   | Correct None -> ReadWouldBlock
   | Correct (Some f) -> (
     match f with
