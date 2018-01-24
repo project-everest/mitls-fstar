@@ -55,7 +55,7 @@ endif
 	$(CC) -I $(KREMLIN_HOME)/kremlib $^ -o $@ -c
 
 mitls.exe: extract/mlstubs/Crypto_AEAD_Main.cmx $(KREMLIN_HOME)/_build/kremlib/C.cmx $(MLCRYPTO_HOME)/CoreCrypto.cmxa $(LOWC_HOME)/LowC.cmxa \
-	  $(FFI_HOME)/FFICallbacks.cmxa $(subst .ml,.cmx,$(ALL_ML_FILES)) extract/copied/kremstr.o test/mitls.cmx
+	  $(subst .ml,.cmx,$(ALL_ML_FILES)) extract/copied/kremstr.o test/mitls.cmx
 	$(OCAMLOPT) -linkpkg -g $^ -o $@ -thread
 
 
