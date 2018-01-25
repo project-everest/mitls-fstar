@@ -2,10 +2,17 @@
 open TLSConstants
 open TLSInfo
 
-(* let args = ref [] *)
+(*** CLI; most tests are now shared with Kremlin in Test.Main.fst *)
+
+let _ = Test_Handshake.main() 
+
+(* 18-01-24 
+
+let args = ref []
 let role = ref Client
 let ffi  = ref false
 let quic  = ref false
+let api = ref false 
 let reconnect = ref false
 let config = ref {defaultConfig with
   min_version = TLS_1p2;
@@ -151,7 +158,7 @@ let help = "A TLS test client.\n\n"
  ^ "Named groups for colon-separated priority string:\n    "
  ^ (List.fold_left prn "" ngs) ^ "\n"
 
-(*
+
 let _ =
   Arg.parse [
     ("-v", Arg.String (fun s -> let v = s2pv s in config := {!config with max_version = v;}), " sets maximum protocol version to <1.0 | 1.1 | 1.2 | 1.3> (default: 1.3)");
@@ -161,7 +168,7 @@ let _ =
     ("-psk", Arg.String (fun s -> load_psk false s), " L:K add an entry in the PSK database at label L with key K (in hex), associated with the fist current -cipher");
     ("-ticket", Arg.String (fun s -> load_psk true s), " T:K add ticket T in the PSK database with RMS K (in hex), associated with the first current -cipher");
     ("-offerpsk", Arg.String (fun s -> offer_psk s), "offer the given PSK identifier(s) (must be loaded first with -psk or -ticket, 1.3 client only)");
-    ("-tlsapi", Arg.Unit (fun () -> ()), "run through the TLS API (legacy, always on)");
+    ("-tls", Arg.Unit (fun () -> api:= true), "run through the TLS API");
 (*    ("-verify", Arg.Unit (fun () -> config := {!config with check_peer_certificate = true;}), "enforce peer certificate validation"); *)
     ("-ffi", Arg.Unit (fun () -> ffi := true), "test FFI instead of API");
     ("-noems", Arg.Unit (fun () -> config := {!config with extended_master_secret = false;}), "disable extended master secret support");
@@ -189,14 +196,16 @@ let _ =
     in
 
   match !role with
-  | Client ->
+  | Client -> (
+(*  
      if !ffi then
        TestFFI.client !config host (Z.of_int port)
      else (
        ( if !quic then
            TestQUIC.client !config host (Z.of_int port) !offered_psk
-         else
-           TestAPI.client !config host (Z.of_int port) None !offered_psk);
+         else   if !api then *)
+       Test_TLS.client !config host (Z.of_int port) None !offered_psk;
+(* 18-01-20 PSK lookup type mismatch? disapling client resumption for now
        match !reconnect, !config.peer_name with
        | true, Some h ->
           let (opsk, ot12) =
@@ -204,21 +213,24 @@ let _ =
             | None -> !offered_psk, None
             | Some (t, true) -> t :: !offered_psk, None
             | Some (t, false) -> !offered_psk, Some t in
+(*
           if !quic then
             TestQUIC.client !config host (Z.of_int port) opsk
-          else
-            TestAPI.client !config host (Z.of_int port) ot12 opsk
-       | _ -> ())
+          else 
+          if !api then *)
+            Test_TLS.client !config host (Z.of_int port) ot12 opsk
+       | _ ->  
+*)       
+       ())
   | Server ->
+  (*
      if !quic then
        TestQUIC.server !config host (Z.of_int port)
      else if !ffi then
        TestFFI.server !config host (Z.of_int port)
-     else
-       TestAPI.server !config host (Z.of_int port)
-*)
+     else if !api then *)
+       Test_TLS.server !config host (Z.of_int port)
 
-let _ =
-  match Test_Main.main () with
-  | C.EXIT_SUCCESS -> ()
-  | C.EXIT_FAILURE -> exit 254
+
+
+*)

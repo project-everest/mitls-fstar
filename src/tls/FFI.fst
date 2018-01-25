@@ -74,11 +74,10 @@ private let errno description txt : ML int =
   | Some ad ->  let _, e = split_ (Alert.alertBytes ad) 2 in int_of_bytes e
   | None    -> -1 ))
 
-
-let connect send recv config_1 psks : ML (Connection.connection * int) =
+let connect ctx send recv config_1 psks : ML (Connection.connection * int) =
   // we assume the configuration specifies the target SNI;
   // otherwise we should check after Complete that it matches the authenticated certificate chain.
-  let tcp = Transport.callbacks send recv in
+  let tcp = Transport.callbacks ctx send recv in
   let here = new_region HS.root in
   let c = TLS.resume here tcp config_1 None psks in
   let rec read_loop c : ML int =
@@ -100,10 +99,10 @@ let getCert c =
   | Some ((c,_)::_, _) -> c
   | _ -> empty_bytes
 
-let accept_connected send recv config_1 : ML (Connection.connection * int) =
+let accept_connected ctx send recv config_1 : ML (Connection.connection * int) =
   // we assume the configuration specifies the target SNI;
   // otherwise we should check after Complete that it matches the authenticated certificate chain.
-  let tcp = Transport.callbacks send recv in
+  let tcp = Transport.callbacks ctx send recv in
   let here = new_region HS.root in
   let c = TLS.accept_connected here tcp config_1 in
   let rec read_loop c : ML int =
@@ -358,14 +357,21 @@ let install_ticket config ticket : ML (list PSK.psk_identifier) =
     | _ -> failwith ("FFI: Cannot use the input ticket, session info failed to decode: "^(print_bytes si)))
   | None -> []
 
-val ffiConnect: config -> callbacks -> option (bytes * bytes) -> ML (Connection.connection * int)
-let ffiConnect config cb ticket =
-  connect (sendTcpPacket cb) (recvTcpPacket cb) config (install_ticket config ticket)
+// 18-01-24 changed calling convention; now almost like connect
+val ffiConnect: 
+  Transport.pvoid -> Transport.pfn_send -> Transport.pfn_recv -> 
+  config -> option (bytes * bytes) -> ML (Connection.connection * int)
+let ffiConnect ctx snd rcv config ticket =
+  connect ctx snd rcv config (install_ticket config ticket)
 
-val ffiAcceptConnected: config:config -> callbacks:callbacks -> ML (Connection.connection * int)
-let ffiAcceptConnected config cb =
-  accept_connected (sendTcpPacket cb) (recvTcpPacket cb) config
+// 18-01-24 changed calling convention; now just like accept_connected
+val ffiAcceptConnected: 
+  Transport.pvoid -> Transport.pfn_send -> Transport.pfn_recv -> 
+  config -> ML (Connection.connection * int)
+let ffiAcceptConnected ctx snd rcv config =
+  accept_connected ctx snd rcv config 
 
+// 18-01-24 not needed anymore?
 val ffiRecv: Connection.connection -> ML cbytes
 let ffiRecv c =
   match read c with
@@ -373,10 +379,12 @@ let ffiRecv c =
     | WouldBlock
     | Errno _ -> print_bytes empty_bytes
 
+// 18-01-24 not needed anymore?
 val ffiSend: Connection.connection -> cbytes -> ML int
 let ffiSend c b =
   let msg = bytes_of_string b in
   write c msg
+
 
 let ffiSetTicketCallback (cfg:config) (cb:ticket_cb) =
   trace "Setting a new ticket callback.";
@@ -418,7 +426,7 @@ let ffiGetExporter (c:Connection.connection) (early:bool)
   : ML (option (Hashing.Spec.alg * aeadAlg * bytes))
   =
   let keys = Handshake.xkeys_of c.Connection.hs in
-  (* Rewrote this around broken `=` comparsion compilation, we should revisit - jroesch *)
+  (* Rewrote this around broken `=` comparison compilation, we should revisit - jroesch *)
   match Seq.length keys with
   | 0 -> None
   | _ ->

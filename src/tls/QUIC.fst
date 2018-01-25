@@ -147,10 +147,10 @@ let quic_check config =
 /// [send] and [recv] are callbacks to operate on QUIC stream0 buffers
 /// [config] is a client configuration for QUIC (see above)
 /// [psks] is a list of proposed pre-shared-key identifiers and tickets
-let connect send recv config psks: ML Connection.connection =
+let connect ctx send recv config psks: ML Connection.connection =
   // we assume the configuration specifies the target SNI;
   // otherwise we must check the authenticated certificate chain.
-  let tcp = Transport.callbacks send recv in
+  let tcp = Transport.callbacks ctx send recv in
   let here = new_region HS.root in
   quic_check config;
   TLS.resume here tcp config None psks
@@ -158,8 +158,8 @@ let connect send recv config psks: ML Connection.connection =
 /// [send] and [recv] are callbacks to operate on QUIC stream0 buffers
 /// [config] is a server configuration for QUIC (see above)
 /// tickets are managed internally
-let accept send recv config : ML Connection.connection =
-  let tcp = Transport.callbacks send recv in
+let accept ctx send recv config : ML Connection.connection =
+  let tcp = Transport.callbacks ctx send recv in
   let here = new_region HS.root in
   quic_check config;
   TLS.accept_connected here tcp config
@@ -167,15 +167,16 @@ let accept send recv config : ML Connection.connection =
 // Ticket also includes the serialized session,
 // if it is not in the PSK database it will be installed
 // (allowing resumption across miTLS client processes)
-val ffiConnect: config:config -> ticket: option (bytes * bytes) -> callbacks:FFI.callbacks -> ML Connection.connection
-let ffiConnect config ticket cb =
-  let send = FFI.sendTcpPacket cb in
-  let recv = FFI.recvTcpPacket cb in
-  connect send recv config (FFI.install_ticket config ticket)
+val ffiConnect: 
+  Transport.pvoid -> Transport.pfn_send -> Transport.pfn_recv -> 
+  config:config -> ticket: option (bytes * bytes) -> ML Connection.connection
+let ffiConnect ctx snd rcv config ticket =
+  connect ctx snd rcv config (FFI.install_ticket config ticket)
 
-val ffiAcceptConnected: config:config -> callbacks:FFI.callbacks -> ML Connection.connection
-let ffiAcceptConnected config cb =
-  accept (FFI.sendTcpPacket cb) (FFI.recvTcpPacket cb) config
+val ffiAcceptConnected: 
+  Transport.pvoid -> Transport.pfn_send -> Transport.pfn_recv -> 
+  config:config -> ML Connection.connection
+let ffiAcceptConnected ctx snd rcv config = accept ctx snd rcv config
 
 
 /// new QUIC-specific properties

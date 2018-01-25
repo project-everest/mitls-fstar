@@ -45,6 +45,7 @@ let print s = discard (IO.debug_print_string (prefix^": "^s^".\n"))
 let eprint s = print ("ERROR: "^s)
 let nprint s = print s
 
+// used in other tests too
 private let pre_id (role:role) =
   let cr  = Bytes.create 32ul 0z in
   let sr  = Bytes.create 32ul 0z in
@@ -56,11 +57,11 @@ private let pre_id (role:role) =
   let msid = StandardMS pms (cr @| sr) kdf in
   ID12 TLS_1p2 msid kdf (AEAD CoreCrypto.AES_256_GCM Hashing.Spec.SHA256) cr sr role
 
-private let id12 = pre_id Client
+let id12 = pre_id Client
 
 #set-options "--lax"
 
-private let id13 = 
+let id13 = 
   let cr  = Bytes.create 32ul 0z in
   let ch0 = { 
     li_ch0_cr = cr; 
@@ -75,13 +76,14 @@ private let id13 =
   let kid: keyId = KeyID #li i in
   ID13 kid
 
-private let encryptRecord (#id:StAE.stae_id) (wr:StAE.writer id) ct plain : St bytes =
+
+let encryptRecord (#id:StAE.stae_id) (wr:StAE.writer id) ct plain : St bytes =
   let rg: Range.frange id = (length plain, length plain) in
   let f: DataStream.fragment id rg = plain in
   let f: Content.fragment id = Content.mk_fragment id ct rg f in
   StAE.encrypt #id wr f
 
-private let decryptRecord (#id:StAE.stae_id) (rd:StAE.reader id) ct cipher : St (option bytes) =
+let decryptRecord (#id:StAE.stae_id) (rd:StAE.reader id) ct cipher : St (option bytes) =
   let ctxt: Content.decrypted id = (ct, cipher) in
   match StAE.decrypt #id rd ctxt with
   | Some d -> Some (Content.repr id d)
@@ -126,7 +128,7 @@ let test id =
     else (eprint "decryption should fail on wrong sequence number"; false)
   ) &&
   ( let d = decryptRecord #id rd Content.Alert c0 in
-    if None? d   
+    if id = id12 && None? d   // TLS 1.3 does not intend to provide outer CT authentication
     then (nprint "decryption fails on wrong CT"; true)
     else (eprint "decryption should fail on wrong CT"; false)
   ) &&

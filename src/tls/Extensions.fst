@@ -1252,7 +1252,7 @@ vector is permitted.
 
 *)
 #set-options "--lax"
-assume val prepareExtensions:
+val prepareExtensions:
   protocolVersion ->
   protocolVersion ->
   k:valid_cipher_suites{List.Tot.length k < 256} ->
@@ -1272,7 +1272,21 @@ assume val prepareExtensions:
 (* SI: implement this using prep combinators, of type exts->data->exts, per ext group.
    For instance, PSK, HS, etc extensions should all be done in one function each.
    This seems to make this prepareExtensions more modular. *)
-(* let prepareExtensions minpv pv cs host alps qp ems sren edi ticket sigAlgs namedGroups ri ks psks =
+
+// We define these functions at top-level so that Kremlin can compute their pointers
+// when passed to higher-order functions.
+// REMARK: could use __proj__MkpskInfo__item__allow_psk_resumption, but it's a mouthful.
+private let allow_psk_resumption x = x.allow_psk_resumption
+private let allow_dhe_resumption x = x.allow_dhe_resumption
+private let allow_resumption ((_,x):PSK.pskid * pskInfo) =
+  x.allow_psk_resumption || x.allow_dhe_resumption
+private let send_supported_groups cs = isDHECipherSuite cs || CipherSuite13? cs
+private let add_default_obfuscated_age (x:bytes) = x, PSK.default_obfuscated_age
+private let compute_binder_len (ctr:nat) (pski:pskInfo) =
+  let h = PSK.pskInfo_hash pski in
+  ctr + 1 + Hashing.Spec.tagLen h
+
+let prepareExtensions minpv pv cs host alps qp ems sren edi ticket sigAlgs namedGroups ri ks psks =
     let res = [] in
     (* Always send supported extensions.
        The configuration options will influence how strict the tests will be *)
@@ -1296,7 +1310,7 @@ assume val prepareExtensions:
     in
     let res =
       match host with
-      | Some dns -> E_server_name [SNI_DNS (utf8 dns)] :: res
+      | Some dns -> E_server_name [] :: res //SNI_DNS (utf8 dns)] :: res
       | None -> res
     in
     let res =
@@ -1323,26 +1337,23 @@ assume val prepareExtensions:
       else res
     in
     let res =
-      if List.Tot.existsb (fun cs -> isDHECipherSuite cs || CipherSuite13? cs) (list_valid_cs_is_list_cs cs) then
+      if List.Tot.existsb send_supported_groups (list_valid_cs_is_list_cs cs) then
         E_supported_groups (list_valid_ng_is_list_ng namedGroups) :: res
       else res
     in
     let res =
-      let filter = (fun (_,x) -> x.allow_psk_resumption || x.allow_dhe_resumption) in
-      if pv = TLS_1p3 && List.Tot.filter filter psks <> [] then
+      if pv = TLS_1p3 && List.Tot.filter allow_resumption psks <> [] then
         let (pskids, pskinfos) : list PSK.pskid * list pskInfo = List.Tot.split psks in
         let psk_kex = [] in
         let psk_kex =
-          if List.Tot.existsb (fun x -> x.allow_psk_resumption) pskinfos
+          if List.Tot.existsb allow_psk_resumption pskinfos
           then PSK_KE :: psk_kex else psk_kex in
         let psk_kex =
-          if List.Tot.existsb (fun x -> x.allow_dhe_resumption) pskinfos
+          if List.Tot.existsb allow_dhe_resumption pskinfos
           then PSK_DHE_KE :: psk_kex else psk_kex in
         let res = E_psk_key_exchange_modes psk_kex :: res in
-        let binder_len = List.Tot.fold_left (fun ctr pski ->
-          let h = PSK.pskInfo_hash pski in
-          ctr + 1 + Hashing.Spec.tagLen h) 0 pskinfos in
-        let pskidentities = List.Tot.map (fun x -> x, PSK.default_obfuscated_age) pskids in
+        let binder_len = List.Tot.fold_left compute_binder_len 0 pskinfos in
+        let pskidentities = List.Tot.map add_default_obfuscated_age pskids in
         let res =
           if edi then (E_early_data None) :: res
           else res in
@@ -1352,7 +1363,7 @@ assume val prepareExtensions:
     let res = List.Tot.rev res in
     assume (List.Tot.length res < 256);  // JK: Specs in type config in TLSInfo unsufficient
     res
-#reset-options *)
+#reset-options
 
 (*
 // TODO the code above is too restrictive, should support further extensions

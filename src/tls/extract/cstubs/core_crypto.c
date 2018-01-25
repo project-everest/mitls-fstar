@@ -274,6 +274,22 @@ FStar_Bytes_bytes CoreCrypto_hash(CoreCrypto_hash_alg x0,
   return ret;
 }
 
+FStar_Bytes_bytes CoreCrypto_hmac(CoreCrypto_hash_alg x0,
+                                  FStar_Bytes_bytes x1,
+                                  FStar_Bytes_bytes x2) {
+  Crypto_HMAC_alg a = hacl_alg_of_corecrypto_alg(x0);
+  FAIL_IF(a == -1,
+          "CoreCrypto_hash implemented using HACL*, unsupported algorithm");
+
+  uint32_t len = Crypto_HMAC_hash_size(a);
+  char *out = malloc(len);
+  Crypto_HMAC_hmac(a, (uint8_t *)out, (uint8_t *)x1.data, x1.length,
+                   (uint8_t *)x2.data, x2.length);
+
+  FStar_Bytes_bytes ret = {.length = len, .data = out};
+  return ret;
+}
+
 FStar_Pervasives_Native_option__Prims_list__FStar_Bytes_bytes
 CoreCrypto_load_chain(Prims_string x0) {
   // unused
