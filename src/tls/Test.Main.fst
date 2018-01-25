@@ -34,8 +34,8 @@ let main (): St C.exit_code =
   iter [
     "TLSConstants", TLSConstants.main;
     "CommonDH", CommonDH.main;
+    "Handshake", Handshake.main;
     "StAE", StAE.main;
     (* ADD NEW TESTS HERE *)
-    "Handshake", Handshake.main;
   ];
   C.EXIT_SUCCESS
