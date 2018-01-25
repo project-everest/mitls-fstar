@@ -128,7 +128,8 @@ let test id =
     else (eprint "decryption should fail on wrong sequence number"; false)
   ) &&
   ( let d = decryptRecord #id rd Content.Alert c0 in
-    if id = id12 && None? d   // TLS 1.3 does not intend to provide outer CT authentication
+    if id = id13 then true else // TLS 1.3 does not intend to provide outer CT authentication
+    if None? d 
     then (nprint "decryption fails on wrong CT"; true)
     else (eprint "decryption should fail on wrong CT"; false)
   ) &&
@@ -138,7 +139,7 @@ let test id =
       if v = text0 
       then (nprint "first decryption succeeds"; true)
       else (eprint "wrong decrypted message"; false)
-    | _ -> eprint ("decryption failed");  false 
+    | _ -> (eprint ("first decryption failed");  false)
   ) &&
   ( let d = decryptRecord #id rd Content.Application_data c1 in 
     match d with 
@@ -146,7 +147,7 @@ let test id =
       if v = text1 
       then (nprint "second decryption succeeds"; true)
       else (eprint "wrong decrypted message"; false)
-    | _ -> eprint ("decryption failed");  false )
+    | _ -> (eprint ("second decryption failed");  false ))
 
 // Called from Test.Main
 let main () = 
