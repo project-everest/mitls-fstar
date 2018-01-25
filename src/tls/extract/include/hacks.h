@@ -28,4 +28,8 @@ typedef const char *string;
 
 #define Prims_uu___is_Cons(X) ((X)->tag == Prims_Cons)
 
+#include "TLSInfo.h"
+
+static bool __eq__TLSInfo_pre_secretId(TLSInfo_pre_secretId *y, TLSInfo_pre_secretId *x);
+
 #endif // __HACKS_H
