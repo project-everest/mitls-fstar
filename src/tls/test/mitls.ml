@@ -4,7 +4,7 @@ open TLSInfo
 
 (*** CLI; most tests are now shared with Kremlin in Test.Main.fst *)
 
-let _ = Test_Handshake.main() 
+let _ = Test_Main.main()
 
 (* 18-01-24 
 
