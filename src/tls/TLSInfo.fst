@@ -609,16 +609,13 @@ let peerLabel = function
   | ServerApplicationTrafficSecret -> ClientApplicationTrafficSecret
   | ApplicationTrafficSecret -> ApplicationTrafficSecret
 
-(* Seems related to https://github.com/FStarLang/kremlin/issues/59 @jroesch *)
 let peerId = function
   | PlaintextID r -> PlaintextID r
   | ID12 pv msid kdf ae cr sr rw -> ID12 pv msid kdf ae cr sr (dualRole rw)
-  | ID13 keyid -> (match keyid with
-      | (KeyID #li es) -> (match es with
-        | (ExpandedSecret s t log) ->
-          let kid = KeyID #li (ExpandedSecret s (peerLabel t) log) in
-          assume(valid (I_KEY kid)); // Annoying: registration of keys as pairs
-          ID13 kid))
+  | ID13 (KeyID #li (ExpandedSecret s t log)) ->
+      let kid = KeyID #li (ExpandedSecret s (peerLabel t) log) in
+      assume(valid (I_KEY kid)); // Annoying: registration of keys as pairs
+      ID13 kid
 
 val siId: si:sessionInfo{
   Some? (prfMacAlg_of_ciphersuite_aux (si.cipher_suite)) /\

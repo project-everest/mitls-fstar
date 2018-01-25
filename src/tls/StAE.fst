@@ -103,10 +103,7 @@ let tolerate_decrypt_failure (#i:id) (r:reader i)
   | StLHAE _ _ -> false
   | Stream _ st ->
     let ctr = HST.op_Bang (StreamAE.ctr st.StreamAE.counter) in
-    // let ID13 (KeyID #li (ExpandedSecret _ t _)) = i in (@jroesch) should be #58 again
-    let ID13 id = i in
-    let KeyID #li es = id in
-    let ExpandedSecret _ t _ = es in
+    let ID13 (KeyID #li (ExpandedSecret _ t _)) = i in
     0 = ctr && ClientHandshakeTrafficSecret? t
 
 let tolerate_ccs (#i:id) (r:reader i)

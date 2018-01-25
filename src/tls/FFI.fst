@@ -426,10 +426,8 @@ let ffiGetExporter (c:Connection.connection) (early:bool)
   : ML (option (Hashing.Spec.alg * aeadAlg * bytes))
   =
   let keys = Handshake.xkeys_of c.Connection.hs in
-  (* Rewrote this around broken `=` comparison compilation, we should revisit - jroesch *)
-  match Seq.length keys with
-  | 0 -> None
-  | _ ->
+  if Seq.length keys = 0 then None
+  else
     let i = (match Seq.length keys with 2 when not early -> 1 | _ -> 0) in
     let (| li, expId, b|) = Seq.index keys i in
     let h = exportId_hash expId in

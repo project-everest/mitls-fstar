@@ -1228,29 +1228,13 @@ let cipherSuite_of_name =
   | TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256    -> CipherSuite Kex_PSK_ECDHE None (AEAD CHACHA20_POLY1305 SHA256)
   | TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256      -> CipherSuite Kex_PSK_DHE None (AEAD CHACHA20_POLY1305 SHA256)
 
-(** Remove This after port, just trying to see if we can push it through Kremlin - JROESCH *)
-let rec tot_map_cipherSuiteName (f : cipherSuiteName -> Tot valid_cipher_suite) (xs : list cipherSuiteName) : valid_cipher_suites =
-match xs with
-| [] -> []
-| (x :: xs) -> f x :: tot_map_cipherSuiteName f xs
-
-let rec tot_map_cipherSuiteName_eq_List_Tot_map (f : cipherSuiteName -> Tot valid_cipher_suite) (xs : list cipherSuiteName) :
-  Lemma (tot_map_cipherSuiteName f xs == List.Tot.map f xs) =
-match xs with
-| [] -> ()
-| (x :: xs) ->
-  assert (f x == f x);
-  tot_map_cipherSuiteName_eq_List_Tot_map f xs
-
 (** Return valid ciphersuites according to a list of ciphersuite names *)
 val cipherSuites_of_nameList: l1:list cipherSuiteName
   -> Tot (l2:valid_cipher_suites{List.Tot.length l2 = List.Tot.length l1})
 let cipherSuites_of_nameList nameList =
   // REMARK: would trigger automatically if List.Tot.Properties is loaded
-  tot_map_cipherSuiteName_eq_List_Tot_map cipherSuite_of_name nameList;
   List.Tot.map_lemma cipherSuite_of_name nameList;
-  tot_map_cipherSuiteName cipherSuite_of_name nameList
-  // This doesn't work: tot_map_cipherSuiteName' cipherSuite_of_name nameList
+  List.Tot.map cipherSuite_of_name nameList
 
 (** Determine the name of a ciphersuite based on its construction *)
 let name_of_cipherSuite =
@@ -1331,7 +1315,7 @@ let name_of_cipherSuite =
 #set-options "--max_ifuel 5 --initial_ifuel 5 --max_fuel 1 --initial_fuel 1"
 
 (** Determine the names associated to a list of ciphersuite constructors *)
-(* val names_of_cipherSuites : cipherSuites -> Tot (result cipherSuiteNames)
+val names_of_cipherSuites : cipherSuites -> Tot (result cipherSuiteNames)
 let rec names_of_cipherSuites css =
   match css with
   | [] -> Correct []
@@ -1341,14 +1325,11 @@ let rec names_of_cipherSuites css =
     | Error(x,y) -> Error(x,y)
     | Correct n  ->
       begin
-  match names_of_cipherSuites t with
+        match names_of_cipherSuites t with
         | Error(x,y)  -> Error(x,y)
         | Correct rem -> Correct (n::rem)
       end
-    end *)
-
-// RESTORE ABOVE CODE - JROESCH
-assume val names_of_cipherSuites : cipherSuites -> Tot (result cipherSuiteNames)
+    end
 
 // Note:
 // Migrated contentType to Content.fst (this is internal to TLS)
@@ -1478,24 +1459,9 @@ let rec parseDistinguishedNameList data res =
     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
         end
 
-(* REMOVE jroesch *)
-let cipherSuite_eq (c1 c2:cipherSuite) : bool =
-match c1, c2 with
-| NullCipherSuite, NullCipherSuite -> false
-| CipherSuite ka osa aa, CipherSuite ka' osa' aa' -> false (* fixme *)
-| CipherSuite13 aa ha, CipherSuite13 aa' ha' -> false (* fixme *)
-| SCSV s, SCSV s' -> false
-| UnknownCipherSuite b1 b2, UnknownCipherSuite b1' b2' ->
-  b1 = b1' && b2 = b2'
-
-val mem_cipherSuite: cipherSuite -> list cipherSuite -> Tot bool
-let rec mem_cipherSuite x = function
-| [] -> false
-| hd::tl -> if cipherSuite_eq x hd then true else mem_cipherSuite x tl
-
 (** Determine if a ciphersuite list contains the SCSV ciphersuite *)
 let contains_TLS_EMPTY_RENEGOTIATION_INFO_SCSV (css: list cipherSuite) =
-  mem_cipherSuite (SCSV (TLS_EMPTY_RENEGOTIATION_INFO_SCSV)) css
+  List.Tot.mem (SCSV (TLS_EMPTY_RENEGOTIATION_INFO_SCSV)) css
 
 // TODO: move all the definitions below to a separate file / figure out whether
 // they belong here ?
