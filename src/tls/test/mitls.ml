@@ -4,6 +4,9 @@ open TLSInfo
 
 (*** CLI; most tests are now shared with Kremlin in Test.Main.fst *)
 
+let _ = Test_Handshake.main() 
+
+(* 18-01-24 
 
 let args = ref []
 let role = ref Client
@@ -155,6 +158,7 @@ let help = "A TLS test client.\n\n"
  ^ "Named groups for colon-separated priority string:\n    "
  ^ (List.fold_left prn "" ngs) ^ "\n"
 
+
 let _ =
   Arg.parse [
     ("-v", Arg.String (fun s -> let v = s2pv s in config := {!config with max_version = v;}), " sets maximum protocol version to <1.0 | 1.1 | 1.2 | 1.3> (default: 1.3)");
@@ -229,3 +233,4 @@ let _ =
 
 
 
+*)

@@ -35,5 +35,6 @@ let main (): St C.exit_code =
     "TLSConstants", TLSConstants.main;
     "StAE", StAE.main;
     (* ADD NEW TESTS HERE *)
+    "Handshake", Handshake.main;
   ];
   C.EXIT_SUCCESS

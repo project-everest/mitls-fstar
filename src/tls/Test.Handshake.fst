@@ -14,6 +14,9 @@ open Negotiation
 open FStar.HyperStack 
 open FStar.HyperStack.ST
 
+module StAE = StAE 
+module Range = Range
+module Handshake = Handshake
 
 // 
 let prefix = "Test.Handshake"
@@ -29,9 +32,22 @@ let print s = discard (IO.debug_print_string (prefix^": "^s^".\n"))
 let eprint s = print ("ERROR: "^s)
 let nprint s = print s
 
+type record_t = Record.input_state
 
-(*
-type record_t = HyperStack.ref Record.input_state
+
+// TLS mini Client
+let client config: St unit =
+  let rid = new_region root in
+  let i = Test.StAE.id12 in 
+  let resume = None, [] in 
+  let hs = Handshake.create rid config Client resume in 
+  let _ = Handshake.next_fragment hs i in
+  ()
+
+let main() = client defaultConfig; C.EXIT_SUCCESS // what else!
+
+
+(* now using Test.StAE code for those:
 
 private let pre_id (role:role) =
   let cr  = createBytes 32 0z in
@@ -44,7 +60,8 @@ private let pre_id (role:role) =
   let msid = StandardMS pms (cr @| sr) kdf in
   ID12 TLS_1p2 msid kdf (AEAD CoreCrypto.AES_128_GCM Hashing.Spec.SHA256) cr sr role
 
-private val encryptRecord : #id:StAE.stae_id -> wr:StAE.writer id -> ct:Content.contentType -> plain:bytes -> ML bytes
+private val encryptRecord : 
+  #id:StAE.stae_id -> wr:StAE.writer id -> ct:Content.contentType -> plain:bytes -> ML bytes
 private let encryptRecord (#id:StAE.stae_id) (wr:StAE.writer id) ct plain : ML bytes =
   let rg: Range.frange id = (0, length plain) in
   let f: DataStream.fragment id rg = plain in
@@ -56,18 +73,20 @@ private let decryptRecord (#id:StAE.stae_id) (rd:StAE.reader id) ct cipher : ML 
   let ctxt: Content.decrypted id = (ct, cipher) in
   let Some d = StAE.decrypt #id rd ctxt in
   Content.repr id d
+*)
+
+(* 18-01-24 most of the test predates the handshake rewriting... 
 
 private let sendRecordE encrypted tcp pv ct msg =
-  let r = Record.makePacket ct encrypted pv msg in
-  match Transport.send tcp r with
+  match Record.sendPacket tcp ct encrypted pv msg with
   | Error z -> failwith z
   | Correct _ -> ()
 private let sendRecord = sendRecordE false
-
 private let sendHSRecord tcp pv msg =
   sendRecord tcp pv Content.Handshake msg
 
-private let hsbuf = ralloc #(list (hs_msg * bytes)) root []
+// //18-01-24 avoid providing the preorder??
+// private let hsbuf = ralloc #(list (hs_msg * bytes)) #(fun _ _ -> True) root []
 
 private let recvHSRecord tcp (recv: record_t) pv kex =
   let (hs_msg, to_log) =
@@ -75,7 +94,7 @@ private let recvHSRecord tcp (recv: record_t) pv kex =
     | [] -> 
       let Record.Received ct rpv pl = Record.read tcp recv in
       let hsml =
-	match Handshake.parseHandshakeMessages (Some pv) (Some kex) pl with
+	match HandshakeMessages.parseHandshakeMessage (Some pv) (Some kex) pl with
       	| Correct (_,hsml) -> hsml
 	| Error (_,z)      -> failwith z in
       let (hs_msg, to_log) :: rem = hsml in
@@ -88,7 +107,7 @@ private let recvHSRecord tcp (recv: record_t) pv kex =
   IO.print_string ("Received HS(" ^ (string_of_handshakeMessage hs_msg) ^ ")\n");
   let logged = handshakeMessageBytes (Some pv) hs_msg in
   IO.print_string ("Logged message = Parsed message? ");
-  if (Platform.Bytes.equalBytes logged to_log) then IO.print_string "yes\n"
+  if logged = to_log) then IO.print_string "yes\n"
   else IO.print_string "no\n";
   hs_msg, to_log
 
@@ -125,20 +144,35 @@ private let recvEncAppDataRecord tcp (recv: record_t) pv rd =
 
 
 (*-----------------------------------------------------------------------------*)
+// test scaffolding
+
+let rec receive_flight tcp log = 
+  // over-simplifying assumption: each packet contains one flight
+  match 
+  let flight = HandshakeLog.receive ch_bytes in
+  if flight = Correct None then (
+    // we need more bytes!
+    
+
+  )
+  
+
+(*-----------------------------------------------------------------------------*)
 // TLS 1.2 Server
 private let rec server_loop_12 config sock : ML unit =
-  let raw_tcp = Platform.Tcp.accept sock in
+  let raw_tcp = Tcp.accept sock in
   let tcp = Transport.wrap raw_tcp in
   let rid = new_region root in
   let log = HandshakeLog.create #rid in
   let ks, sr = KeySchedule.create #rid Server log in
-  let recv = ralloc rid Record.wait_header in 
+  // let recv = ralloc rid Record.wait_header in 
 
   let kex = TLSConstants.Kex_ECDHE in
   let pv = TLS_1p2 in
 
   // Receive ClientHello
-  let ClientHello(ch), chb = recvHSRecord tcp recv pv kex in
+  let 
+  let [ClientHello ch], _ = HandshakeLog.receive ch_bytes in
 
   // Send ServerHello
   let (nego, None, (ServerHello sh, shb)) =
