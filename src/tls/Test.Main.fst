@@ -33,6 +33,7 @@ let main (): St C.exit_code =
   ignore (dummy ());
   iter [
     "TLSConstants", TLSConstants.main;
+    "CommonDH", CommonDH.main;
     "StAE", StAE.main;
     (* ADD NEW TESTS HERE *)
     "Handshake", Handshake.main;

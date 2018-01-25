@@ -11,6 +11,7 @@ open Range
 
 module StAE = StAE 
 module Range = Range
+module DH = CommonDH
 
 open FStar.HyperStack 
 open FStar.HyperStack.ST
@@ -49,10 +50,10 @@ private let pre_id (role:role) =
   let cr  = Bytes.create 32ul 0z in
   let sr  = Bytes.create 32ul 0z in
   let kdf = PRF_TLS_1p2 kdf_label (HMac Hashing.Spec.SHA256) in
-  let Some g = CommonDH.group_of_namedGroup (SEC CoreCrypto.ECC_P256) in
-  let gx  = CommonDH.keygen g in
-  let gy, gxy = CommonDH.dh_responder #g (CommonDH.pubshare gx) in
-  let pms = PMS.DHPMS g (CommonDH.pubshare gx) gy (PMS.ConcreteDHPMS gxy) in
+  let Some g = DH.group_of_namedGroup (SEC CoreCrypto.ECC_P256) in
+  let gx  = DH.keygen g in
+  let gy, gxy = DH.dh_responder #g (DH.pubshare gx) in
+  let pms = PMS.DHPMS g (DH.pubshare gx) gy (PMS.ConcreteDHPMS gxy) in
   let msid = StandardMS pms (cr @| sr) kdf in
   ID12 TLS_1p2 msid kdf (AEAD CoreCrypto.AES_256_GCM Hashing.Spec.SHA256) cr sr role
 

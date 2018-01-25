@@ -41,10 +41,10 @@ let rec store_bytes len buf i s =
     let () = Buffer.upd buf i_ul s.[i_ul] in
     store_bytes len buf (i + 1) s
 
-val from_bytes: b:bytes{FStar.UInt.fits (length b) 32} -> StackInline (lbuffer (length b))
+val from_bytes: b:bytes{FStar.UInt.fits (length b) 32} -> Stack (lbuffer (length b))
   (requires (fun h0 -> True))
   (ensures (fun h0 r h1 -> Buffer.modifies_0 h0 h1 /\ Buffer.live h1 r ))
 let from_bytes b =
-  let buf = Buffer.create 0uy (U32.uint_to_t (length b)) in
+  let buf = Buffer.rcreate root 0uy (U32.uint_to_t (length b)) in
   store_bytes (length b) buf 0 b;
   buf

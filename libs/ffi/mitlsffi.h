@@ -94,17 +94,22 @@ extern int MITLS_CALLCONV FFI_mitls_configure_cert_callbacks(mitls_state *state,
 extern void MITLS_CALLCONV FFI_mitls_close(/* in */ mitls_state *state);
 
 // Callbacks from miTLS to the host application, to send and receive TCP
-typedef int (MITLS_CALLCONV *pfn_FFI_send)(void *ctx, const void *buffer, size_t buffer_size);
-typedef int (MITLS_CALLCONV *pfn_FFI_recv)(void *ctx, void *buffer, size_t buffer_size);
+struct _FFI_mitls_callbacks;
+typedef int (MITLS_CALLCONV *pfn_FFI_send)(struct _FFI_mitls_callbacks *callbacks, const void *buffer, size_t buffer_size);
+typedef int (MITLS_CALLCONV *pfn_FFI_recv)(struct _FFI_mitls_callbacks *callbacks, void *buffer, size_t buffer_size);
+struct _FFI_mitls_callbacks {
+    pfn_FFI_send send;
+    pfn_FFI_recv recv;
+};
 
 // Connect to a TLS server
-extern int MITLS_CALLCONV FFI_mitls_connect(void *ctx, pfn_FFI_send send, pfn_FFI_recv recv, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg);
+extern int MITLS_CALLCONV FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg);
 
 // Resume a previously-established ticket
-extern int MITLS_CALLCONV FFI_mitls_resume(void *ctx, pfn_FFI_send send, pfn_FFI_recv recv, /* in */ mitls_state *state, /* in */ mitls_ticket *ticket, /* out */ char **errmsg);
+extern int MITLS_CALLCONV FFI_mitls_resume(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* in */ mitls_ticket *ticket, /* out */ char **errmsg);
 
 // Act as a TLS server to a client
-extern int MITLS_CALLCONV FFI_mitls_accept_connected(void *ctx, pfn_FFI_send send, pfn_FFI_recv recv, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg);
+extern int MITLS_CALLCONV FFI_mitls_accept_connected(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg);
 
 // Get the exporter secret (set early to true for the early exporter secret). Returns 1 if a secret was written
 extern int MITLS_CALLCONV FFI_mitls_get_exporter(/* in */ mitls_state *state, int early, /* out */ mitls_secret *secret, /* out */ char **errmsg);
@@ -161,15 +166,8 @@ typedef mitls_ticket quic_ticket;
 #define MAX_OTHERS_LEN 1024
 
 typedef struct {
-  unsigned int max_stream_data;
-  unsigned int max_data;
-  unsigned int max_stream_id;
-  unsigned short idle_timeout;
-
-  // The custom parameters are still in RFC wire format:
-  // a sequence of (descriptor: 2; len: 2; data: len) bytes
-  size_t others_len;
-  char others[MAX_OTHERS_LEN];
+  size_t tp_len;
+  const char* tp_data;
 } quic_transport_parameters;
 
 typedef struct {
@@ -204,7 +202,10 @@ extern int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, qu
 
 extern quic_result MITLS_CALLCONV FFI_mitls_quic_process(/* in */ quic_state *state, /*in*/ char* inBuf, /*inout*/ size_t *pInBufLen, /*out*/ char *outBuf, /*inout*/ size_t *pOutBufLen, /* out */ char **errmsg);
 
-extern int MITLS_CALLCONV FFI_mitls_quic_get_peer_parameters(/* in */ quic_state *state, /*out*/ quic_transport_parameters *qp, /* out */ char **errmsg);
+// If the peer is a client, version will be the initial version, otherwise it will be the negotiated version
+// If qp->tp_data is NULL, qp->tp_len will still be set to the size of the peer's transport parameters
+extern int MITLS_CALLCONV FFI_mitls_quic_get_peer_parameters(/* in */ quic_state *state, /*out*/ uint32_t *version, /*out*/ quic_transport_parameters *qp, /* out */ char **errmsg);
+
 extern int MITLS_CALLCONV FFI_mitls_quic_get_exporter(/* in */ quic_state *state, int early, /* out */ quic_secret *secret, /* out */ char **errmsg);
 extern void MITLS_CALLCONV FFI_mitls_quic_free(/* in */ quic_state *state);
 

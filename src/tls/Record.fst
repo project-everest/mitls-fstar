@@ -1,4 +1,5 @@
 module Record
+
 module HS = FStar.HyperStack 
 
 (* (optional) encryption and processing of the outer (untrusted) record format *)
@@ -34,24 +35,24 @@ unfold let trace = if Flags.debug_Record then print else (fun _ -> ())
 // but TLS 1.3 fakes its content type and protocol version.
 
 
-// inline_for_extractio let x = Transport.recv
+// inline_for_extraction let x = Transport.recv
 
 type header = b:lbytes 5 // for all TLS versions
 
-let fake = ctBytes Application_data @| versionBytes TLS_1p0 
+let fake = ctBytes Application_data @| versionBytes TLS_1p2
 
 // this is the outer packet; the *caller* should switch from 1.3 to 1.0 whenever data is encrypted.
 let makePacket ct plain ver (data: b:bytes { repr_bytes (length b) <= 2}) =
   let header =
     (if is_pv_13 ver then
-      (if plain then ctBytes ct @| versionBytes TLS_1p0
+      (if plain then ctBytes ct @| versionBytes TLS_1p2
        else fake)
      else (ctBytes ct @| versionBytes ver))
-//      ctBytes ct 
+//      ctBytes ct
 //   @| versionBytes ver
    @| bytes_of_int 2 (length data) in
   trace ("record headers: "^print_bytes header);
-  header @| data 
+  header @| data
 
 let sendPacket tcp ct plain ver (data: b:bytes { repr_bytes (length b) <= 2}) = 
   // some margin for progress to avoid intermediate copies
@@ -62,8 +63,8 @@ let sendPacket tcp ct plain ver (data: b:bytes { repr_bytes (length b) <= 2}) =
 
 
 
-val parseHeader: h5:header -> Tot (result (contentType 
-                                         * protocolVersion 
+val parseHeader: h5:header -> Tot (result (contentType
+                                         * protocolVersion
                                          * l:nat { l <= max_TLSCiphertext_fragment_length}))
 let parseHeader (h5:header) =
     let (ct1,b4)   = FStar.Bytes.split h5 1ul in
@@ -77,7 +78,7 @@ let parseHeader (h5:header) =
         Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Parsed unknown protocol version")
       | Correct pv ->
           let len = int_of_bytes len2 in
-          if len <= 0 || len > max_TLSCiphertext_fragment_length 
+          if len <= 0 || len > max_TLSCiphertext_fragment_length
           then Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Wrong fragment length")
           else correct(ct,pv,len)
 
@@ -105,8 +106,7 @@ let recordPacketOut (i:StatefulLHAE.id) (wr:StatefulLHAE.writer i) (pv: protocol
 // (see earlier versions for the checks we used to perform)
 
 // connectlon-local input state
-
-type partial = 
+type partial =
   | Header 
   | Body: ct: contentType -> pv: protocolVersion -> partial
 
@@ -138,19 +138,25 @@ let alloc_input_state r = {
   pos = ralloc r 0ul;
   b = Buffer.rcreate r 0uy maxlen }
 
-type read_result = 
+type read_result =
   | ReadError of TLSError.error
   | ReadWouldBlock
   | Received:
-      ct:contentType -> 
+      ct:contentType ->
       pv:protocolVersion ->
       b:bytes {length b <= max_TLSCiphertext_fragment_length} -> read_result
+
 
 val read: Transport.t -> s: input_state -> ST read_result
   (requires fun h0 -> HS.contains h0 s.pos /\ Buffer.live h0 s.b)
   (ensures fun h0 _ h1 -> 
-    let r = HS.frameOf s.pos in 
+    let r = HS.frameOf s.pos in
     HS.modifies_one r h0 h1)
+// Refine by adding this?
+//    Buffer.modifies_bufs_and_refs
+//      (Buffer.only s.b)
+//      (Set.singleton (Heap.addr_of (HS.as_ref s.pos)))
+//      h0 h1)
 
 let rec read tcp s =
   let waiting = waiting_len s in 
@@ -190,4 +196,3 @@ let rec read tcp s =
 //18-01-24 recheck async I
 //    if length fresh = 0 then 
 //      ReadError(AD_internal_error,"TCP close") // otherwise we loop...
-

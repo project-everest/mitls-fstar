@@ -546,7 +546,7 @@ let pinverse_version x = ()
 // DRAFT#21
 // to be used *only* in ServerHello.version.
 // https://tlswg.github.io/tls13-spec/#rfc.section.4.2.1
-let draft = 21z
+let draft = 22z
 let versionBytes_draft: protocolVersion -> Tot (lbytes 2) = function
   | TLS_1p3 -> twobytes ( 127z, draft )
   | pv -> versionBytes pv
@@ -1790,10 +1790,13 @@ type quicParameter =
 // TODO check for duplicates
 type valid_quicParameters =
   l:list quicParameter{ List.Tot.length l < 256 /\
+    True}
+(* No longer done in TLS
     List.Tot.existsb Quic_initial_max_stream_data? l /\
     List.Tot.existsb Quic_initial_max_data? l /\
     List.Tot.existsb Quic_initial_max_stream_id? l /\
     List.Tot.existsb Quic_idle_timeout? l}
+*)
 
 type quicVersion =
   | QuicVersion1
@@ -1805,13 +1808,16 @@ type valid_quicVersions =
 // ADL would prefer to index this by extension message type
 type quicParameters =
   | QuicParametersClient:
-    negotiated_version: quicVersion ->
     initial_version: quicVersion ->
     parameters: valid_quicParameters ->
     quicParameters
   | QuicParametersServer:
+    negotiated_version: quicVersion ->
     versions: valid_quicVersions ->
     parameters: valid_quicParameters ->
+    quicParameters
+  | QuicParametersNewSessionTicket: // Allowed by RFC but not supported
+    raw: bytes ->
     quicParameters
 
 let string_of_quicVersion = function
@@ -1830,14 +1836,15 @@ let rec string_of_quicParameters_aux_fold a f sep p =
   | [] -> a
   | hd::tl -> string_of_quicParameters_aux_fold (a ^ f hd ^ sep) f sep tl
 let string_of_quicParameters = function
-  | Some (QuicParametersClient n i p)  ->
+  | Some (QuicParametersNewSessionTicket b)  -> "QUIC ticket parameters: " ^ (hex_of_bytes b)
+  | Some (QuicParametersClient i p)  ->
     "QUIC client parameters\n" ^
-    "negotiated version: "^string_of_quicVersion n^"\n"^
     "initial version: "^string_of_quicVersion i^"\n"^
     string_of_quicParameters_aux_fold "" string_of_quicParameter "\n" p
-  | Some (QuicParametersServer v p) ->
+  | Some (QuicParametersServer n v p) ->
     "QUIC server parameters\n" ^
-    string_of_quicParameters_aux_fold "versions:" string_of_quicVersion " " v ^ "\n" ^
+    "negotiated version: "^string_of_quicVersion n^"\n" ^
+    string_of_quicParameters_aux_fold "versions: " string_of_quicVersion " " v ^ "\n" ^
     string_of_quicParameters_aux_fold "" string_of_quicParameter "\n" p
   | None -> "(none)"
 

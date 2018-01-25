@@ -16,8 +16,7 @@ open HandshakeMessages // for the message syntax
 open HandshakeLog // for Outgoing
 open Epochs
 
-
-
+module U32 = FStar.UInt32
 module MS = FStar.Monotonic.Seq
 module Nego = Negotiation
 // For readabililty, we try to open/abbreviate fewer modules
@@ -360,18 +359,21 @@ let client_ClientHello hs i =
   Correct(HandshakeLog.next_fragment hs.log i)
 
 let client_HelloRetryRequest (hs:hs) (hrr:hrr) : St incoming =
-  match Nego.group_of_hrr hrr with
-  | None -> InError(AD_handshake_failure, "server did not specify the requested group")
-  | Some g ->
-    let s = KeySchedule.ks_client_13_hello_retry hs.ks g in
-    match Nego.client_HelloRetryRequest hs.nego hrr (| g, s |) with
-    | Error z -> InError z
-    | Correct(ch) ->
-      HandshakeLog.send hs.log (ClientHello ch);
-      client_Binders hs ch;
-      // Note: we stay in Wait_ServerHello
-      // Only the Nego state machine was moved by HRR
-      InAck false false
+  trace "client_HelloRetryRequest";
+  let s = match Nego.group_of_hrr hrr with
+    | None ->
+      // this case should only ever happen in QUIC stateless retry address validation
+      trace "Server did not specify a group in HRR, re-using the previous choice"; None
+    | Some g -> let s = KeySchedule.ks_client_13_hello_retry hs.ks g in Some (| g, s |)
+    in
+  match Nego.client_HelloRetryRequest hs.nego hrr s with
+  | Error z -> InError z
+  | Correct(ch) ->
+    HandshakeLog.send hs.log (ClientHello ch);
+    client_Binders hs ch;
+    // Note: we stay in Wait_ServerHello
+    // Only the Nego state machine was moved by HRR
+    InAck false false
 
 // requires !hs.state = Wait_ServerHello
 // ensures TLS 1.3 ==> installed handshake keys
@@ -409,8 +411,7 @@ let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming 
     | _ ->
       begin
         trace "Running classic TLS";
-        let sid = match mode.Nego.n_sessionID with | Some v -> v | _ -> empty_bytes in
-        trace ("Offered SID="^(print_bytes mode.Nego.n_offer.ch_sessionID)^" Server SID="^(print_bytes sid));
+        trace ("Offered SID="^(print_bytes mode.Nego.n_offer.ch_sessionID)^" Server SID="^(print_bytes mode.Nego.n_sessionID));
         if Nego.resume_12 mode then
          begin // 1.2 resumption
           // Cannot fail if resume_12 is true
@@ -597,13 +598,17 @@ let client_NewSessionTicket_13 (hs:hs) (st13:sticket13)
   let psk = KeySchedule.ks_client_13_rms_psk hs.ks st13.ticket13_nonce in
   let sni = iutf8 (Nego.get_sni mode.Nego.n_offer) in
   let cfg = Nego.local_config hs.nego in
-  match ed, cfg.quic_parameters with
-  | Some (Extensions.E_early_data (Some 0xfffffffful)), Some _
-  | Some (Extensions.E_early_data (Some _)), None
-  | None, None ->
-    cfg.ticket_callback sni tid (TicketInfo_13 pskInfo) psk;
-    InAck false false
-  | _ -> InError (AD_illegal_parameter, "QUIC tickets must allow 0xFFFFFFFF bytes of ealy data")
+  let valid_ed =
+    if Some? cfg.quic_parameters then
+      (match ed with
+      | None -> true
+      | Some (Extensions.E_early_data (Some x)) -> x = 0xfffffffful
+      | _ -> false)
+    else true in
+  if valid_ed then
+    (cfg.ticket_callback sni tid (TicketInfo_13 pskInfo) psk;
+    InAck false false)
+  else InError (AD_illegal_parameter, "QUIC tickets must allow 0xFFFFFFFF bytes of ealy data")
 
 let client_ServerFinished hs f digestClientFinished =
   let sfin_key = KeySchedule.ks_12_finished_key hs.ks in
@@ -681,7 +686,7 @@ let serverHello (m:Nego.mode) =
     sh_server_random = m.n_server_random;
     sh_sessionID = m.n_sessionID;
     sh_cipher_suite = m.n_cipher_suite;
-    sh_compression = if is_pv_13 pv then None else Some NullCompression;
+    sh_compression = NullCompression;
     sh_extensions =
       match pv, m.n_server_extensions with
       | TLS_1p3, Some exts ->
@@ -1146,37 +1151,43 @@ let rec recv_fragment (hs:hs) #i rg f =
 // TODO check CCS once committed to TLS 1.3 yields an alert
 let recv_ccs (hs:hs) =
     trace "recv_ccs";
-    // assert pv <> TLS 1.3
-    // CCS triggers completion of the incoming flight of messages.
-    let mode = Nego.getMode hs.nego in
-    match HandshakeLog.receive_CCS #(Nego.hashAlg mode) hs.log with
-    | Error z -> InError z
-    | Correct (ms, digests, digestCCS) ->
-      match !hs.state, ms, digests with
-      // client resumption
-      | C_Wait_CCS1 _, [NewSessionTicket st], [digestNewSessionTicket] ->
-        client_NewSessionTicket_12 hs true digestNewSessionTicket (Some st)
-      | C_Wait_CCS1 digestServerHello, [], [] ->
-        client_NewSessionTicket_12 hs true digestServerHello None
-      // client full handshake
-      | C_Wait_CCS2 digest, [], [] ->
-        client_NewSessionTicket_12 hs false digest None
-      | C_Wait_CCS2 _, [NewSessionTicket st], [digestNewSessionTicket] ->
-        client_NewSessionTicket_12 hs false digestNewSessionTicket (Some st)
+    // Draft 22 CCS during HRR
+    if Nego.is_hrr hs.nego then
+     begin
+      trace "IGNORING CCS (workaround for implementations that send CCS after HRR)";
+      InAck false false
+     end
+    else
+      // CCS triggers completion of the incoming flight of messages.
+      let mode = Nego.getMode hs.nego in
+      match HandshakeLog.receive_CCS #(Nego.hashAlg mode) hs.log with
+      | Error z -> InError z
+      | Correct (ms, digests, digestCCS) ->
+        match !hs.state, ms, digests with
+        // client resumption
+        | C_Wait_CCS1 _, [NewSessionTicket st], [digestNewSessionTicket] ->
+          client_NewSessionTicket_12 hs true digestNewSessionTicket (Some st)
+        | C_Wait_CCS1 digestServerHello, [], [] ->
+          client_NewSessionTicket_12 hs true digestServerHello None
+        // client full handshake
+        | C_Wait_CCS2 digest, [], [] ->
+          client_NewSessionTicket_12 hs false digest None
+        | C_Wait_CCS2 _, [NewSessionTicket st], [digestNewSessionTicket] ->
+          client_NewSessionTicket_12 hs false digestNewSessionTicket (Some st)
 
-      | S_Wait_CCS2 digestServerFinished, [], [] -> (
-        Epochs.incr_reader hs.epochs;
-        hs.state := S_Wait_CF2 digestServerFinished;
-        InAck true false)
+        | S_Wait_CCS2 digestServerFinished, [], [] -> (
+          Epochs.incr_reader hs.epochs;
+          hs.state := S_Wait_CF2 digestServerFinished;
+          InAck true false)
 
-      | S_Wait_CCS1, [ClientKeyExchange cke], [digest_to_finish] ->
-        // assert (Some? pv && pv <> Some TLS_1p3 && (kex = Some Kex_DHE || kex = Some Kex_ECDHE))
-        // getting two copies of the same digest?
-        server_ClientCCS1 hs cke digestCCS
+        | S_Wait_CCS1, [ClientKeyExchange cke], [digest_to_finish] ->
+          // assert (Some? pv && pv <> Some TLS_1p3 && (kex = Some Kex_DHE || kex = Some Kex_ECDHE))
+          // getting two copies of the same digest?
+          server_ClientCCS1 hs cke digestCCS
 
-      | _, _, _ ->
-        trace "WARNING: bad CCS";
-        InError(AD_unexpected_message, "CCS received at wrong time")
+        | _, _, _ ->
+          trace "WARNING: bad CCS";
+          InError(AD_unexpected_message, "CCS received at wrong time")
 
 
 let authorize s ch = FStar.Error.unexpected "authorize: not yet implemented"

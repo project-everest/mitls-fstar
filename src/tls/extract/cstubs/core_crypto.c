@@ -26,7 +26,7 @@
 
 #define FAIL_IF(test, msg)                                                     \
   do {                                                                         \
-    if (test)                                                                  \
+    if (!(test))                                                               \
       continue;                                                                \
     fprintf(stderr, "%s %s\n", __FUNCTION__, msg);                             \
     exit(253);                                                                 \
@@ -44,11 +44,13 @@ FStar_Bytes_bytes CoreCrypto_dh_agreement(CoreCrypto_dh_key x0,
                                           FStar_Bytes_bytes x1) {
   DH *dh = DH_new();
   FAIL_IF(dh == NULL, "OpenSSL allocation failure dh");
+
   BIGNUM *p = BN_bin2bn((uint8_t *) x0.dh_params.dh_p.data, x0.dh_params.dh_p.length, NULL);
   BIGNUM *g = BN_bin2bn((uint8_t *) x0.dh_params.dh_g.data, x0.dh_params.dh_g.length, NULL);
   BIGNUM *pub = BN_bin2bn((uint8_t *) x0.dh_public.data, x0.dh_public.length, NULL);
-  FAIL_IF(p == NULL || g == NULL || pub == NULL,
-          "OpenSSL allocation failure p/q/pub");
+  BIGNUM *opub = BN_bin2bn((uint8_t *) x1.data, x1.length, NULL);
+  FAIL_IF(p == NULL || g == NULL || pub == NULL || opub == NULL,
+          "OpenSSL allocation failure p/g/pub");
   BIGNUM *prv = NULL;
   if (x0.dh_private.tag == FStar_Pervasives_Native_Some) {
     prv = BN_bin2bn((uint8_t *) x0.dh_private.val.case_Some.v.data,
@@ -61,14 +63,11 @@ FStar_Bytes_bytes CoreCrypto_dh_agreement(CoreCrypto_dh_key x0,
   uint32_t len = DH_size(dh);
   char *out = malloc(len);
 
-  FAIL_IF(DH_compute_key((uint8_t *) out, pub, dh) < 0, "OpenSSL failure DH_compute_key");
+  FAIL_IF(DH_compute_key((uint8_t *) out, opub, dh) < 0, "OpenSSL failure DH_compute_key");
 
-  if (prv != NULL)
-    BN_free(prv);
-  BN_free(pub);
-  BN_free(g);
-  BN_free(p);
+  // Memory management of p, g, pub, and prv has been transfered to dh
   DH_free(dh);
+  BN_free(opub);
 
   FStar_Bytes_bytes ret = {
     .length = len,
@@ -101,8 +100,6 @@ CoreCrypto_dh_key CoreCrypto_dh_gen_key(CoreCrypto_dh_params x0) {
   const BIGNUM *pub, *prv;
   DH_get0_key(dh, &pub, &prv);
 
-  size_t p_byte_len = BN_num_bytes(pub);
-
   CoreCrypto_dh_key ret = {
     .dh_params = x0,
     .dh_public = bytes_of_bn(pub),
@@ -111,8 +108,10 @@ CoreCrypto_dh_key CoreCrypto_dh_gen_key(CoreCrypto_dh_params x0) {
       .val = { .case_Some = { .v = bytes_of_bn(prv) } }
     }
   };
+
+  DH_free(dh);
+
   return ret;
-    
 }
 
 EC_KEY *key_of_core_crypto_curve(CoreCrypto_ec_curve c) {
@@ -204,7 +203,7 @@ FStar_Bytes_bytes CoreCrypto_ecdh_agreement(CoreCrypto_ec_key x0,
 
 CoreCrypto_ec_key CoreCrypto_ec_gen_key(CoreCrypto_ec_params x0) {
   EC_KEY *k = key_of_core_crypto_curve(x0.curve);
-  FAIL_IF(EC_KEY_generate_key(k) == 1, "EC_KEY_generate_key failed");
+  FAIL_IF(EC_KEY_generate_key(k) == 0, "EC_KEY_generate_key failed");
 
   EC_GROUP *g = EC_GROUP_dup(EC_KEY_get0_group(k));
   if (x0.point_compression)

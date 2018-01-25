@@ -1068,12 +1068,19 @@ let rec readFragment c i =
     else
       // payload decryption
       let e = Seq.index es j in
-      let Epoch #r #n #i hs rd wr = e in
-      if not (valid_clen i (length payload))  // cache? check at a lower level?
-      then (
+      let Epoch hs rd wr = e in
+      if payload = abyte 1z && StAE.tolerate_ccs #i rd then
+       begin
+        trace "Ignoring a CCS";
+        readFragment c i
+       end
+      else if not (valid_clen i (length payload))  // cache? check at a lower level?
+      then
+       begin
         // we might make an effort to parse plaintext alerts
         trace ("bad payload: "^print_bytes payload);
-        Error(AD_decryption_failed, "Invalid ciphertext length"))
+        Error(AD_decryption_failed, "Invalid ciphertext length")
+       end
       else
       match StAE.decrypt (reader_epoch e) (ct,payload) with
       | None ->
@@ -1098,10 +1105,14 @@ private val readOne: c:connection -> i:id -> St (ioresult_i i)
 let readOne c i =
   assume false; //16-05-19
   match readFragment c i with
-  | Error (AD_internal_error, "TCP close") -> // If TCP died, no point trying to send an alert
-    disconnect c;
-    ReadError None "TCP close"
-  | Error (x,y) -> alertFlush c i x y
+  | Error (x, y) ->
+    (match x with
+     | AD_internal_error ->
+       if y = "TCP close" then  // If TCP died, no point trying to send an alert
+         (disconnect c;
+          ReadError None "TCP close")
+       else alertFlush c i x y
+     | _ -> alertFlush c i x y)
   | Correct None -> ReadWouldBlock
   | Correct (Some f) -> (
     match f with
@@ -1152,6 +1163,7 @@ let readOne c i =
         trace "read CCS fragment";
         match Handshake.recv_ccs c.hs with
         | Handshake.InError (x,y) -> alertFlush c i x y
+        | Handshake.InAck false false -> ReadAgain // FIXME TLS 1.3 CCS with HRR (!!!)
         | Handshake.InAck true false -> ReadAgainFinishing // specialized for HS 1.2
       end
     | Content.CT_Data rg f ->

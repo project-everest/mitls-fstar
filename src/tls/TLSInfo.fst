@@ -407,13 +407,13 @@ and pre_hsId =
 and pre_asId =
   | ASID: pre_saltId -> pre_asId
 
-and pre_saltId =
-  | Salt: pre_secretId -> pre_saltId
-
 and pre_secretId =
   | EarlySecretID: pre_esId -> pre_secretId
   | HandshakeSecretID: pre_hsId -> pre_secretId
   | ApplicationSecretID: pre_asId -> pre_secretId
+
+and pre_saltId =
+  | Salt: pre_secretId -> pre_saltId
 
 and pre_rmsId (li:logInfo) =
   | RMSID: pre_asId -> hashed_log li -> pre_rmsId li

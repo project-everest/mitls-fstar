@@ -345,7 +345,7 @@ let install_ticket config ticket : ML (list PSK.psk_identifier) =
           ticket_nonce = Some empty_bytes;
           time_created = 0;
           // FIXME(adl): we should preserve the server flag somewhere
-          allow_early_data = false ; //NS: FIXME!!! config.enable_early_data;
+          allow_early_data = (Some? config.max_early_data);
           allow_dhe_resumption = true;
           allow_psk_resumption = true;
           early_ae = ae;
