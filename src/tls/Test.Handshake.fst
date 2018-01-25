@@ -18,8 +18,8 @@ module StAE = StAE
 module Range = Range
 module Handshake = Handshake
 
-// 
 let prefix = "Test.Handshake"
+let ok: ref bool = ralloc root true 
 
 val discard: bool -> ST unit
   (requires (fun _ -> True))
@@ -29,22 +29,51 @@ let print s = discard (IO.debug_print_string (prefix^": "^s^".\n"))
 // let print = C.String,print
 // let print = FStar.HyperStack.IO.print_string
 
-let eprint s = print ("ERROR: "^s)
-let nprint s = print s
+let eprint s : St unit = ok := false; print ("ERROR: "^s)
+let nprint s : St unit = print s
 
-type record_t = Record.input_state
+let first_bytes b = 
+  let open FStar.UInt32 in
+  let small = 10ul in
+  sprintf "%s (%ul bytes)" 
+    ( if Bytes.len b <=^ (small +^ small)
+      then Bytes.hex_of_bytes b 
+      else (
+        Bytes.hex_of_bytes (Bytes.sub b 0ul small) ^ 
+        "..." ^
+        Bytes.hex_of_bytes (Bytes.sub b (Bytes.len b -^ small) small)))
+    (len b)
 
 
-// TLS mini Client
-let client config: St unit =
+
+// TLS handshake prefix
+let test config: St unit =
   let rid = new_region root in
   let i = Test.StAE.id12 in 
   let resume = None, [] in 
-  let hs = Handshake.create rid config Client resume in 
-  let _ = Handshake.next_fragment hs i in
-  ()
+  let client = Handshake.create rid config Client resume in 
+  let out0 = Handshake.next_fragment client i in
+  match out0 with 
+  | Correct(HandshakeLog.Outgoing (Some f) _ _) ->
+    let (|rg, ch|) = f in 
+    nprint ("----client-hello---> "^first_bytes ch);
+    let server = Handshake.create rid config Server resume in 
+    let _ = Handshake.recv_fragment server rg ch in 
+    let out1 = Handshake.next_fragment server i in
+    ( match out0 with 
+      | Correct(HandshakeLog.Outgoing (Some f) _ _) ->
+        let (|rg, sh|) = f in 
+        nprint ("<---server-hello---- "^first_bytes sh)
+      | Error (_,s) -> eprint ("server failed to build second flight: "^s) 
+      | _ -> eprint ("server failed to return second flight."))
+  | Error (_,s) -> eprint ("client failed to build first flight: "^s) 
+  | _ -> eprint ("client failed to return first flight.") 
 
-let main() = client defaultConfig; C.EXIT_SUCCESS // what else!
+let main() = // could try with different client and server configs
+  test ({ defaultConfig with min_version = TLS_1p2; max_version = TLS_1p2; });
+  test ({ defaultConfig with min_version = TLS_1p2; max_version = TLS_1p3; });
+  test ({ defaultConfig with min_version = TLS_1p3; max_version = TLS_1p3; });
+  if !ok then C.EXIT_SUCCESS else C.EXIT_FAILURE
 
 
 (* now using Test.StAE code for those:
