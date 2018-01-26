@@ -33,6 +33,7 @@ open StAE
 *)
 
 let prefix = "Test.StAE"
+let ok: ref bool = ralloc root true 
 
 val discard: bool -> ST unit
   (requires (fun _ -> True))
@@ -42,8 +43,8 @@ let print s = discard (IO.debug_print_string (prefix^": "^s^".\n"))
 // let print = C.String,print
 // let print = FStar.HyperStack.IO.print_string
 
-let eprint s = print ("ERROR: "^s)
-let nprint s = print s
+let eprint s : St unit = ok := false; print ("ERROR: "^s)
+let nprint s : St unit = print s
 
 // used in other tests too
 private let pre_id (role:role) =
@@ -90,11 +91,10 @@ let decryptRecord (#id:StAE.stae_id) (rd:StAE.reader id) ct cipher : St (option 
   | _ -> None
 
 
-val test: id:StAE.stae_id -> St bool
+val test: id:StAE.stae_id -> St unit
 let test id = 
   let text0 = Bytes.utf8_encode "attack at" in 
   let text1 = Bytes.utf8_encode "dawn" in
-
   // For TLS 1.2, key materials consist of an AES256 key plus 4 bytes of IV salt.
   let key = 
     if ID13? id then 
@@ -108,47 +108,49 @@ let test id =
     in
   let wr = StAE.coerce root id key in
   let rd = StAE.genReader root #id wr in
-   
   let c0 = encryptRecord #id wr Content.Application_data text0 in
   nprint (sprintf "c0 size=%ul data=%s" (Bytes.len c0) (Bytes.hex_of_bytes c0));
   let c1 = encryptRecord #id wr Content.Application_data text1 in
   nprint (sprintf "c1 size=%ul data=%s" (Bytes.len c1) (Bytes.hex_of_bytes c1));
-
   nprint "start";
-  (
-    let c = Bytes.utf8_encode "we need a long-enough ciphertext (static pre)" in 
-    let d = decryptRecord #id rd Content.Application_data c in
-    if None? d   
-    then (nprint "decryption fails on wrong cipher"; true)
-    else (eprint "decryption should fail"; false)
-  ) &&
-  ( let d = decryptRecord #id rd Content.Application_data c1 in
-    if None? d   
-    then (nprint "decryption fails on wrong sequence number"; true)
-    else (eprint "decryption should fail on wrong sequence number"; false)
-  ) &&
-  ( let d = decryptRecord #id rd Content.Alert c0 in
-    if id = id13 then true else // TLS 1.3 does not intend to provide outer CT authentication
+  let c = Bytes.utf8_encode "we need a long-enough ciphertext (static pre)" in 
+  let d = decryptRecord #id rd Content.Application_data c in
+
+  if None? d   
+  then nprint "decryption fails on wrong cipher"
+  else eprint "decryption should fail";
+  
+  let d = decryptRecord #id rd Content.Application_data c1 in
+  if None? d   
+  then nprint "decryption fails on wrong sequence number"
+  else eprint "decryption should fail on wrong sequence number"; 
+
+  if id = id13 then 
+    nprint "TLS 1.3 does not intend to provide outer CT authentication"
+  else ( 
+    let d = decryptRecord #id rd Content.Alert c0 in
     if None? d 
-    then (nprint "decryption fails on wrong CT"; true)
-    else (eprint "decryption should fail on wrong CT"; false)
-  ) &&
-  ( let d = decryptRecord #id rd Content.Application_data c0 in 
-    match d with 
+    then nprint "decryption fails on wrong CT"
+    else eprint "decryption should fail on wrong CT" );
+
+  let d = decryptRecord #id rd Content.Application_data c0 in 
+  ( match d with 
     | Some v ->
       if v = text0 
-      then (nprint "first decryption succeeds"; true)
-      else (eprint "wrong decrypted message"; false)
-    | _ -> (eprint ("first decryption failed");  false)
-  ) &&
-  ( let d = decryptRecord #id rd Content.Application_data c1 in 
-    match d with 
+      then nprint "first decryption succeeds"
+      else eprint "wrong decrypted message"
+    | _ -> eprint "first decryption failed" );
+
+  let d = decryptRecord #id rd Content.Application_data c1 in 
+  ( match d with 
     | Some v ->
       if v = text1 
-      then (nprint "second decryption succeeds"; true)
-      else (eprint "wrong decrypted message"; false)
-    | _ -> (eprint ("second decryption failed");  false ))
+      then nprint "second decryption succeeds"
+      else eprint "wrong decrypted message"
+    | _ -> eprint "second decryption failed" )
 
 // Called from Test.Main
 let main () = 
-  if test id12 && test id13 then C.EXIT_SUCCESS else C.EXIT_FAILURE 
+  test id12;
+  test id13 ; 
+  if !ok then C.EXIT_SUCCESS else C.EXIT_FAILURE 
