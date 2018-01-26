@@ -1,6 +1,7 @@
 module Handshake
 module HS = FStar.HyperStack //Added automatically
 
+open FStar.String
 open FStar.Heap
 
 open FStar.HyperStack
@@ -707,12 +708,12 @@ val server_ClientHello: hs -> HandshakeMessages.ch -> option Extensions.binders 
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let server_ClientHello hs offer obinders =
-    trace (
-      (if Some? obinders
-       then "Processing ClientHello with "
-            ^string_of_int (List.length (Some?.v obinders))
-            ^" binder(s)"
-       else "Processing ClientHello"));
+    trace ("Processing ClientHello"
+           ^ (if Some? obinders
+              then " with "
+                   ^ string_of_int (List.length (Some?.v obinders))
+                   ^ " binder(s)"
+              else ""));
 
     // Check consistency across the truncated PSK extension (is is redundant?)
     let opsk = Nego.find_clientPske offer in

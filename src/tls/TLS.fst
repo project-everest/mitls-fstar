@@ -1,6 +1,6 @@
 module TLS
 module HS = FStar.HyperStack //Added automatically
-
+open FStar.String
 open FStar.Heap
 
 open FStar.HyperStack
