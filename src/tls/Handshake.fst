@@ -1124,8 +1124,8 @@ let rec recv_fragment (hs:hs) #i rg f =
       | S_Wait_Finished1 digest, [Finished f], [digestClientFinish] ->
         server_ClientFinished hs f.fin_vd digest digestClientFinish
       | S_Wait_Finished1 digest, [Finished f], tags ->
-        (trace (List.Tot.fold_left (fun a t -> a^" "^print_bytes t) "BAD TAGS: "tags);
-        server_ClientFinished hs f.fin_vd digest digest )
+        trace (TLSConstants.fold_string print_bytes "BAD TAGS: " " " tags);
+        server_ClientFinished hs f.fin_vd digest digest
 
       | S_Wait_CF2 digest, [Finished f], [digestClientFinished] -> // classic resumption
         server_ClientFinished2 hs f.fin_vd digest digestClientFinished

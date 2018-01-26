@@ -59,6 +59,7 @@ let ghost_bind
 : Tot (y: erased b { y == f (FStar.Ghost.reveal x) } )
 = f (FStar.Ghost.reveal x)
 
+inline_for_extraction
 let bind_log
   (l: erased_transcript)
   (f: (
@@ -73,8 +74,11 @@ let bind_log
 
 let empty_hs_transcript : erased_transcript = hide_log []
 
-let append_hs_transcript (l:erased_transcript) (ml:list msg { valid_transcript (reveal_log l @ ml) } ) : Tot erased_transcript =
-    bind_log l (fun l' -> hide_log (append_transcript l' ml))
+let append_hs_transcript 
+    (l:erased_transcript) 
+    (ml:list msg { valid_transcript (reveal_log l @ ml) } )
+    : Tot erased_transcript =
+      bind_log l (fun l' -> hide_log (append_transcript l' ml))
 
 let extend_hs_transcript (l:erased_transcript) (m:msg { valid_transcript (reveal_log l @ [m]) } ) : Tot erased_transcript =
     append_hs_transcript l [m]
