@@ -31,6 +31,16 @@ module HS = FStar.HyperStack
 
 include Parse // carving out basic formatting code to break a dependency.
 
+let rec fold_string (#a:Type)
+                    (f: a -> string)
+                    (accum:string)
+                    (sep:string)
+                    (al:list a) : Tot string (decreases al) =
+    match al with
+    | [] -> accum
+    | a::al -> let accum = accum ^ sep ^ f a in
+             fold_string f accum sep al
+             
 (* Some basic utility functions for closure converting arguments
    to the higher-order combinators in the list library ...
    for use with KreMLin extraction *)

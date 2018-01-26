@@ -54,7 +54,7 @@ KRML_INCLUDES=$(addprefix -I , $(INCLUDE_PATHS)) \
   -I $(SECURE_OUT) -I extract/include -I concrete-flags -I $(MLCRYPTO_HOME)/openssl/include
 KRML_COMMAND=krml $(KRML_INCLUDES) \
   -fnoanonymous-unions \
-  -warn-error +3-9+11-7-6 \
+  -warn-error +3-9-7-6 \
   -fsopts --debug,yes -verbose \
   $(HEADERS) \
   -ccopts -Wno-unused-function,-O0 \
@@ -77,5 +77,5 @@ mitls-c-test.exe: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES)) $(EX
 test: mitls-c-test.exe
 	./$<
 
-mitls-c.exe: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES)) $(EXTRA_C_FILES)
-	$(KRML_COMMAND) $^ -tmpdir $(EXTRACT_DIR) -o $@
+mitls-c.exe: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES)) $(EXTRA_C_FILES) $(EXTRA_O_FILES) $(HACL_HOME)/secure_api/out/vale.a
+	$(KRML_COMMAND) $^ -tmpdir $(EXTRACT_DIR) -o $@ -warn-error +11
