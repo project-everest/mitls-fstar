@@ -75,17 +75,22 @@ let defaultTicketCB sni ticket info psk =
     PSK.coerce_psk ticket pskInfo psk;
     PSK.extend sni ticket
 
+let none4 = fun _ _ _ _ -> None
+let empty3 = fun _ _ _ -> []
+let none5 = fun _ _ _ _ _ -> None
+let false6 = fun _ _ _ _ _ _ -> false
+
 let defaultCertCB : cert_cb =
   TLSConstants.mk_cert_cb
      (FStar.Dyn.mkdyn ())
      (FStar.Dyn.mkdyn ())
-     (fun _ _ _ _ -> None)
+     none4
      (FStar.Dyn.mkdyn ())
-     (fun _ _ _ -> [])
+     empty3
      (FStar.Dyn.mkdyn ())
-     (fun _ _ _ _ _ -> None)
+     none5
      (FStar.Dyn.mkdyn ())
-     (fun _ _ _ _ _ _ -> false)
+     false6
 
 val defaultConfig: config
 let defaultConfig =
