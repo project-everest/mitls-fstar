@@ -100,10 +100,11 @@ let tls_prf secret label seed len =
   let hsha1 = p_hash (HMac SHA1) secret2 newseed len in
   xor (UInt32.uint_to_t len) hmd5 hsha1
 
+let tls_client_label = utf8_encode "client finished"
+let tls_server_label = utf8_encode "server finished"
+
 val tls_finished_label: role -> Tot bytes
 let tls_finished_label =
-  let tls_client_label = utf8_encode "client finished" in
-  let tls_server_label = utf8_encode "server finished" in
   function
   | Client -> tls_client_label
   | Server -> tls_server_label
