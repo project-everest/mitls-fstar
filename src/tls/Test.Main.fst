@@ -7,10 +7,12 @@ inline_for_extraction
 let check s (f: unit -> St C.exit_code): St unit =
   match f () with
   | C.EXIT_SUCCESS ->
+      C.(fflush stdout; fflush stderr);
       print_string "✔ ";
       print_string s;
       print_string "\n"
   | C.EXIT_FAILURE ->
+      C.(fflush stdout; fflush stderr);
       print_string "✘ ";
       print_string s;
       print_string "\n";
