@@ -160,7 +160,9 @@ val read: Transport.t -> s: input_state -> ST read_result
 
 let rec read tcp s =
   let waiting = waiting_len s in 
-  let res = Transport.recv tcp (Buffer.sub s.b 0ul waiting) waiting in 
+  let p0 = !s.pos in 
+  let dest = Buffer.sub s.b p0 waiting in 
+  let res = Transport.recv tcp dest waiting in 
   if res = -1l 
   then ReadError (AD_internal_error, "Transport.recv") 
   else if res = 0l 
@@ -170,11 +172,11 @@ let rec read tcp s =
     s.pos := !s.pos +^ received; 
     if received <^ waiting 
       then 
-        read tcp s 
         // partial read 
         // should probably ReadWouldBlock instead when non-blocking
+        read tcp s 
       else 
-        if !s.pos = 5ul // we have received the header 
+        if !s.pos = 5ul // we have buffer the record header 
         then (
           match parseHeaderBuffer s.b with
           | Error e -> ReadError e
@@ -184,7 +186,7 @@ let rec read tcp s =
               ( s.pos := 0ul; Received ct pv empty_bytes )
             else read tcp s )
         else
-          // we have received the payload 
+          // we have buffered the whoe record 
           match parseHeaderBuffer s.b with 
           | Correct(ct,pv,length) -> (
             let len = UInt32.uint_to_t length in
