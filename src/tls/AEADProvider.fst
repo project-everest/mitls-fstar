@@ -88,14 +88,17 @@ let pre_state (i:id) (r:rw) =
 let state (i:id) (r:rw) =
     pre_state i r * salt i
 
+noextract inline_for_extraction
 let as_openssl_state #i #r (s:state i r{use_provider()=OpenSSLProvider})
   : OAEAD.state i r
   = fst s
 
+noextract inline_for_extraction
 let as_lowc_state #i #r (s:state i r{use_provider()=LowCProvider})
   : CAEAD.aead_state * key i
   = fst s
 
+noextract inline_for_extraction
 let as_low_state #i #r (s:state i r{use_provider()=LowProvider})
   : AE.aead_state i (Crypto.Indexing.rw2rw r)
   = fst s

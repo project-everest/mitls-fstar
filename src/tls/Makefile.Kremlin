@@ -77,5 +77,5 @@ mitls-c-test.exe: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES)) $(EX
 test: mitls-c-test.exe
 	./$<
 
-mitls-c.exe: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES)) $(EXTRA_C_FILES)
-	$(KRML_COMMAND) $^ -tmpdir $(EXTRACT_DIR) -o $@
+mitls-c.exe: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES)) $(EXTRA_C_FILES) $(EXTRA_O_FILES) $(HACL_HOME)/secure_api/out/vale.a
+	$(KRML_COMMAND) $^ -tmpdir $(EXTRACT_DIR) -o $@ -warn-error +11
