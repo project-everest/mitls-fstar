@@ -60,7 +60,7 @@ let test config: St unit =
     let server = Handshake.create rid config Server resume in 
     let _ = Handshake.recv_fragment server rg ch in 
     let out1 = Handshake.next_fragment server i in
-    ( match out0 with 
+    ( match out1 with 
       | Correct(HandshakeLog.Outgoing (Some f) _ _) ->
         let (|rg, sh|) = f in 
         nprint ("<---server-hello---- "^first_bytes sh)
