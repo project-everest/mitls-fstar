@@ -305,27 +305,6 @@ let ffiSetTicketKey a k =
   | None -> false
   | Some a -> TLS.set_ticket_key a (bytes_of_string k))
 
-type callbacks = FFICallbacks.callbacks
-
-val sendTcpPacket: callbacks:callbacks -> buf:bytes -> EXT (FStar.Error.optResult string unit)
-let sendTcpPacket callbacks buf =
-  let result = FFICallbacks.ocaml_send_tcp callbacks (print_bytes buf) in
-  if result < 0 then
-    FStar.Error.Error ("socket send failure")
-  else
-    FStar.Error.Correct ()
-
-val recvTcpPacket: callbacks:callbacks -> max:nat -> EXT (FStar.Tcp.recv_result max)
-let recvTcpPacket callbacks max =
-  let (result,str) = FFICallbacks.recvcb callbacks max in
-  if result then
-    let b = bytes_of_string str in
-    if length b = 0
-    then FStar.Tcp.RecvWouldBlock
-    else FStar.Tcp.Received b
-  else
-    FStar.Tcp.RecvError ("socket recv failure")
-
 let install_ticket config ticket : ML (list PSK.psk_identifier) =
   match ticket with
   | Some (t, si) ->
