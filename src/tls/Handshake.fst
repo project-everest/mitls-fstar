@@ -708,8 +708,11 @@ val server_ClientHello: hs -> HandshakeMessages.ch -> option Extensions.binders 
   (ensures (fun h0 i h1 -> True))
 let server_ClientHello hs offer obinders =
     trace (
-      "Processing ClientHello"^
-      (if Some? obinders then " with "^string_of_int (List.length (Some?.v obinders))^" binder(s)" else ""));
+      (if Some? obinders
+       then "Processing ClientHello with "
+            ^string_of_int (List.length (Some?.v obinders))
+            ^" binder(s)"
+       else "Processing ClientHello"));
 
     // Check consistency across the truncated PSK extension (is is redundant?)
     let opsk = Nego.find_clientPske offer in

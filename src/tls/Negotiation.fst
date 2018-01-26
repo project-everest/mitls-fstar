@@ -1400,7 +1400,9 @@ val server_ClientHello: #region:rgn -> t region Server ->
 let server_ClientHello #region ns offer =
   trace ("offered client extensions "^string_of_option_extensions offer.ch_extensions);
   trace ("offered cipher suites "^(string_of_ciphersuites offer.ch_cipher_suites));
-  trace (string_of_result (List.Tot.fold_left accum_string_of_pv "offered versions")  (offered_versions TLS_1p0 offer));
+  trace (match (offered_versions TLS_1p0 offer) with
+        | Error z -> "Error: "^string_of_error z
+        | Correct v -> List.Tot.fold_left accum_string_of_pv "offered versions" v);
   match HST.op_Bang ns.state with
   | S_HRR o1 hrr ->
     let o2 = offer in
