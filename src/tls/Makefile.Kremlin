@@ -12,11 +12,11 @@ include Makefile.common
 ################################################################################
 # Bringing the curve from HACL* into the build
 
-CURVE_DIR=$(HACL_HOME)/code/curve25519/x25519-c/
+CURVE_DIR=$(HACL_HOME)/code/curve25519/x25519-c
 SECURE_OUT=$(HACL_HOME)/secure_api/out/vale_aes_abstract_id
 
 ifeq (,$(wildcard $(CURVE_DIR)/Curve25519.h))
-  $(error HACL_HOME is $(HACL_HOME) and I cannot find $(CURVE_DIR)/Curve25519.cmxa -- please run make extract-c in $(CURVE_DIR)/..)
+  $(error HACL_HOME is $(HACL_HOME) and I cannot find $(CURVE_DIR)/Curve25519.h -- please run make extract-c -C $(CURVE_DIR)/.. -- thanks)
 endif
 
 # Compiling these files "standalone" so that they don't "see" the FStar.h from miTLS
