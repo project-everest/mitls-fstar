@@ -54,7 +54,7 @@ KRML_INCLUDES=$(addprefix -I , $(INCLUDE_PATHS)) \
   -I $(SECURE_OUT) -I extract/include -I concrete-flags -I $(MLCRYPTO_HOME)/openssl/include
 KRML_COMMAND=krml $(KRML_INCLUDES) \
   -fnoanonymous-unions \
-  -warn-error +3-9-7-6 \
+  -warn-error -9-7-6 \
   -fsopts --debug,yes -verbose \
   $(HEADERS) \
   -ccopts -Wno-unused-function,-O0 \
