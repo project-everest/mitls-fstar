@@ -457,61 +457,7 @@ void * copypacket(value packet, /* out */ size_t *packet_size)
     return p;
 }
 
-// Called from FStar code to send via TCP
-CAMLprim value ocaml_send_tcp(value cookie, value bytes)
-{
-    mlsize_t buffer_size;
-    char *buffer;
-    int retval;
-    struct _FFI_mitls_callbacks *callbacks;
-    char *localbuffer;
-
-    CAMLparam2(cookie, bytes);
-
-    callbacks = (struct _FFI_mitls_callbacks *)ValueToPtr(cookie);
-    buffer = Bp_val(bytes);
-    buffer_size = caml_string_length(bytes);
-    // Copy the buffer out of the OCaml heap into a local buffer on the stack
-    localbuffer = (char*)alloca(buffer_size);
-    memcpy(localbuffer, buffer, buffer_size);
-
-    caml_release_runtime_system();
-    // All pointers into the OCaml heap are now off-limits until the
-    // runtime_system lock has been re-aquired.
-    retval = (*callbacks->send)(callbacks, localbuffer, buffer_size);
-    caml_acquire_runtime_system();
-
-    CAMLreturn(Val_int(retval));
-}
-
-// Called from FStar code to receive via TCP
-CAMLprim value ocaml_recv_tcp(value cookie, value bytes)
-{
-    mlsize_t buffer_size;
-    char *buffer;
-    ssize_t retval;
-    struct _FFI_mitls_callbacks *callbacks;
-    char *localbuffer;
-
-    CAMLparam2(cookie, bytes);
-
-    callbacks = (struct _FFI_mitls_callbacks *)ValueToPtr(cookie);
-    buffer_size = caml_string_length(bytes);
-    localbuffer = (char*)alloca(buffer_size);
-
-    caml_release_runtime_system();
-    // All pointers into the OCaml heap are now off-limits until the
-    // runtime_system lock has been re-aquired.
-    retval = (*callbacks->recv)(callbacks, localbuffer, buffer_size);
-    caml_acquire_runtime_system();
-
-    buffer = Bp_val(bytes);
-    memcpy(buffer, localbuffer, buffer_size);
-
-    CAMLreturn(Val_int(retval));
-}
-
-static int FFI_mitls_connect_caml(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* in */ mitls_ticket *ticket, /* out */ char **errmsg)
+static int FFI_mitls_connect_caml(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state, /* in */ mitls_ticket *ticket, /* out */ char **errmsg)
 {
     CAMLparam0();
     CAMLlocal4(result, tticket, session, oticket);
@@ -535,12 +481,14 @@ static int FFI_mitls_connect_caml(struct _FFI_mitls_callbacks *callbacks, /* in 
     }
 
     value args[] = {
+      PtrToValue(send_recv_ctx),
+      PtrToValue(psend),
+      PtrToValue(precv),
       state->fstar_state,
-      PtrToValue(callbacks),
       oticket
     };
 
-    result = caml_callbackN_exn(*g_mitls_FFI_Connect, 3, args);
+    result = caml_callbackN_exn(*g_mitls_FFI_Connect, 5, args);
     if (Is_exception_result(result)) {
         report_caml_exception(result, errmsg);
         ret = 0;
@@ -559,7 +507,7 @@ static int FFI_mitls_connect_caml(struct _FFI_mitls_callbacks *callbacks, /* in 
 }
 
 // Called by the host app to create a TLS connection.
-int MITLS_CALLCONV FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
+int MITLS_CALLCONV FFI_mitls_connect(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
 {
     int ret;
     mitls_ticket ticket = {0};
@@ -568,29 +516,36 @@ int MITLS_CALLCONV FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* 
     *errmsg = NULL;
 
     caml_acquire_runtime_system();
-    ret = FFI_mitls_connect_caml(callbacks, state, &ticket, errmsg);
+    ret = FFI_mitls_connect_caml(send_recv_ctx, psend, precv, state, &ticket, errmsg);
     caml_release_runtime_system();
     return ret;
 }
 
-int MITLS_CALLCONV FFI_mitls_resume(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* in */ mitls_ticket *ticket, /* out */ char **errmsg)
+int MITLS_CALLCONV FFI_mitls_resume(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state, /* in */ mitls_ticket *ticket, /* out */ char **errmsg)
 {
     int ret;
     *errmsg = NULL;
 
     caml_acquire_runtime_system();
-    ret = FFI_mitls_connect_caml(callbacks, state, ticket, errmsg);
+    ret = FFI_mitls_connect_caml(send_recv_ctx, psend, precv, state, ticket, errmsg);
     caml_release_runtime_system();
     return ret;
 }
 
-static int FFI_mitls_accept_connected_caml(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
+static int FFI_mitls_accept_connected_caml(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
 {
     CAMLparam0();
     CAMLlocal1(result);
     int ret;
 
-    result = caml_callback2_exn(*g_mitls_FFI_AcceptConnected, state->fstar_state, PtrToValue(callbacks));
+    value args[] = {
+      PtrToValue(send_recv_ctx),
+      PtrToValue(psend),
+      PtrToValue(precv),
+      state->fstar_state
+    };
+    
+    result = caml_callbackN_exn(*g_mitls_FFI_AcceptConnected, 4, args);
     if (Is_exception_result(result)) {
         report_caml_exception(result, errmsg);
         ret = 0;
@@ -609,14 +564,14 @@ static int FFI_mitls_accept_connected_caml(struct _FFI_mitls_callbacks *callback
 }
 
 // Called by the host server app, after a client has connected to a socket and the calling server has accepted the TCP connection.
-int MITLS_CALLCONV FFI_mitls_accept_connected(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
+int MITLS_CALLCONV FFI_mitls_accept_connected(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
 {
     int ret;
     *outmsg = NULL;
     *errmsg = NULL;
 
     caml_acquire_runtime_system();
-    ret = FFI_mitls_accept_connected_caml(callbacks, state, outmsg, errmsg);
+    ret = FFI_mitls_accept_connected_caml(send_recv_ctx, psend, precv, state, outmsg, errmsg);
     caml_release_runtime_system();
     return ret;
 }
@@ -786,7 +741,6 @@ int MITLS_CALLCONV FFI_mitls_thread_unregister(void)
 
 typedef struct quic_state {
    value fstar_state; // a GC root representing an F*-side state object
-   struct _FFI_mitls_callbacks ffi_callbacks;
    int is_server;
    char* in_buffer;
    size_t in_buffer_size;
@@ -797,11 +751,11 @@ typedef struct quic_state {
    char *errmsg;
 } quic_state;
 
- int QUIC_send(struct _FFI_mitls_callbacks *cb, const void *buffer, size_t buffer_size)
+ int QUIC_send(void *ctx, const void *buffer, size_t buffer_size)
  {
 //   FILE *fp = fopen("send_log", "a");
 //   fprintf(fp, "CALLBACK: send %u\n", buffer_size);
-   quic_state* s = CONTAINING_RECORD(cb, quic_state, ffi_callbacks);
+   quic_state* s = (quic_state*)ctx;
 //   fprintf(fp, "Current %s state: IN=%u/%u OUT=%u/%u\n", s->is_server ? "server" : "client", s->in_buffer_used, s->in_buffer_size, s->out_buffer_used, s->out_buffer_size);
 //   fclose(fp);
    if(!s->out_buffer)
@@ -822,11 +776,11 @@ typedef struct quic_state {
    return -1;
  }
 
- int QUIC_recv(struct _FFI_mitls_callbacks *cb, void *buffer, size_t len)
+ int QUIC_recv(void *ctx, void *buffer, size_t len)
  {
 //   FILE *fp = fopen("recv_log", "a");
 //   fprintf(fp, "CALLBACK: recv %u\n", len);
-   quic_state* s = CONTAINING_RECORD(cb, quic_state, ffi_callbacks);
+   quic_state* s = (quic_state*)ctx;
 //   fprintf(fp, "Current %s state: IN=%u/%u OUT=%u/%u\n", s->is_server ? "server" : "client", s->in_buffer_used, s->in_buffer_size, s->out_buffer_used, s->out_buffer_size);
 //   fclose(fp);
 
@@ -879,8 +833,6 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
     memset(state, 0, sizeof(*state));
     *st = state;
 
-    state->ffi_callbacks.send = QUIC_send;
-    state->ffi_callbacks.recv = QUIC_recv;
     state->is_server = cfg->is_server;
 
     others = caml_alloc_string(cfg->qp.tp_len);
@@ -908,68 +860,80 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
     caml_register_generational_global_root(&state->fstar_state);
     mitls_state ms = {.fstar_state = result};
 
-    if(cfg->cipher_suites)
+    if(cfg->cipher_suites) {
        if(!configure_common_caml(&ms, cfg->cipher_suites, g_mitls_FFI_SetCipherSuites))
        {
          *errmsg = strdup("FFI_mitls_quic_create_caml: cipher suite list");
          CAMLreturnT(int, 0);
        }
+    }
 
-    if(cfg->named_groups)
+    if(cfg->named_groups) {
        if(!configure_common_caml(&ms, cfg->named_groups, g_mitls_FFI_SetNamedGroups))
        {
          *errmsg = strdup("FFI_mitls_quic_create_caml: supported groups list");
          CAMLreturnT(int, 0);
        }
+    }
 
-    if(cfg->signature_algorithms)
+    if(cfg->signature_algorithms) {
        if(!configure_common_caml(&ms, cfg->signature_algorithms, g_mitls_FFI_SetSignatureAlgorithms))
        {
          *errmsg = strdup("FFI_mitls_quic_create_caml: signature algorithms list");
          CAMLreturnT(int, 0);
        }
+    }
 
-    if(cfg->alpn)
+    if(cfg->alpn) {
       if(!configure_common_caml(&ms, cfg->alpn, g_mitls_FFI_SetALPN))
       {
         *errmsg = strdup("FFI_mitls_quic_create_caml: failed to set application-level protocols");
         CAMLreturnT(int, 0);
       }
+    }
 
-    if(cfg->ticket_enc_alg && cfg->ticket_key)
+    if(cfg->ticket_enc_alg && cfg->ticket_key) {
        if(!ocaml_set_ticket_key(cfg->ticket_enc_alg, cfg->ticket_key, cfg->ticket_key_len))
        {
          *errmsg = strdup("FFI_mitls_quic_create_caml: set ticket key");
          CAMLreturnT(int, 0);
        }
+    }
 
-    if(cfg->enable_0rtt)
+    if(cfg->enable_0rtt) {
        if(!configure_common_bool_caml(&ms, Val_int(0xFFFFFFFF), g_mitls_FFI_SetEarlyData))
        {
          *errmsg = strdup("FFI_mitls_quic_create_caml: can't enable early_data");
          CAMLreturnT(int, 0);
        }
+    }
 
-    if(cfg->ticket_callback)
+    if(cfg->ticket_callback) {
       if(!ocaml_set_ticket_callback(&ms, cfg->callback_state, cfg->ticket_callback))
       {
         *errmsg = strdup("FFI_mitls_quic_create_caml: failed to set ticket callback");
         CAMLreturnT(int, 0);
       }
+    }
 
-    if(cfg->cert_callbacks)
+    if(cfg->cert_callbacks) {
       if(!ocaml_set_cert_callbacks(&ms, cfg->callback_state, cfg->cert_callbacks))
       {
         *errmsg = strdup("FFI_mitls_quic_create_caml: failed to set certificate callbacks");
         CAMLreturnT(int, 0);
       }
+    }
 
-    if(cfg->is_server)
-      result = caml_callback2_exn(
-                                  *g_mitls_FFI_QuicCreateServer,
-                                  ms.fstar_state, // config
-                                  PtrToValue(&state->ffi_callbacks));
-    else {
+    if(cfg->is_server) {
+      value args[] = {
+        PtrToValue(state),
+        PtrToValue(QUIC_send),
+        PtrToValue(QUIC_recv),
+        ms.fstar_state // config
+      };
+      // call QUIC.ffiAcceptConnected
+      result = caml_callbackN_exn(*g_mitls_FFI_QuicCreateServer, 4, args);
+    } else {
 
       // Create ticket:option (t:bytes * si:bytes)
       if(cfg->server_ticket && cfg->server_ticket->ticket_len > 0) {
@@ -989,10 +953,14 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
       }
 
       value args[] = {
+        PtrToValue(state),
+        PtrToValue(QUIC_send),
+        PtrToValue(QUIC_recv),
         ms.fstar_state, // config
-        oticket,
-        PtrToValue(&state->ffi_callbacks) };
-      result = caml_callbackN_exn(*g_mitls_FFI_QuicCreateClient, 3, args);
+        oticket
+      };
+      // Call QUIC.ffiConnect
+      result = caml_callbackN_exn(*g_mitls_FFI_QuicCreateClient, 5, args);
     }
 
     if (Is_exception_result(result)) {
@@ -1039,6 +1007,7 @@ static quic_result FFI_mitls_quic_process_caml(
     state->out_buffer_size = *pOutBufLen;
     state->errmsg = NULL;
 
+    // Call QUIC.recv
     result = caml_callback_exn(*g_mitls_FFI_QuicProcess, state->fstar_state);
 
     if (Is_exception_result(result)) {

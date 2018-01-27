@@ -66,7 +66,6 @@ struct {
 #undef BOOL_OPTION
 
 typedef struct {
-  struct _FFI_mitls_callbacks cb;
   SOCKET sockfd;
 } callback_context;
 
@@ -163,11 +162,11 @@ void PrintErrors(char *out_msg, char *err_msg)
     }
 }
 
-void dump(const unsigned char *buffer, size_t len)
+void dump(const char *buffer, size_t len)
 {
   int i;
   for(i=0; i<len; i++) {
-    printf("%02x",buffer[i]);
+    printf("%02x",(unsigned char)buffer[i]);
     if (i % 32 == 31 || i == len-1) printf("\n");
   }
 }
@@ -191,7 +190,7 @@ size_t certificate_sign(void *cbs, const void *cert_ptr, const mitls_signature_s
   mipki_state *st = (mipki_state*)cbs;
   size_t ret = MAX_SIGNATURE_LEN;
 
-  printf("======== TO BE SIGNED <%04x>: (%d octets) ========\n", sigalg, tbs_len);
+  printf("======== TO BE SIGNED <%04x>: (%d octets) ========\n", sigalg, (int)tbs_len);
   dump(tbs, tbs_len);
   printf("===================================================\n");
 
@@ -395,9 +394,9 @@ int Configure(mitls_state **pstate)
 }
 
 // Callback from miTLS, when it is ready to send a message via the socket
-int SendCallback(struct _FFI_mitls_callbacks *callbacks, const void *buffer, size_t buffer_size)
+int SendCallback(void *pv, const void *buffer, size_t buffer_size)
 {
-    callback_context *ctx = (callback_context*)callbacks;
+    callback_context *ctx = (callback_context*)pv;
     ssize_t r;
 
     r = send(ctx->sockfd, buffer, buffer_size, 0);
@@ -408,9 +407,9 @@ int SendCallback(struct _FFI_mitls_callbacks *callbacks, const void *buffer, siz
 }
 
 // Callback from miTLS, when it is ready to receive a message via the socket
-int RecvCallback(struct _FFI_mitls_callbacks *callbacks, void *buffer, size_t buffer_size)
+int RecvCallback(void* pv, void *buffer, size_t buffer_size)
 {
-    callback_context *ctx = (callback_context*)callbacks;
+    callback_context *ctx = (callback_context*)pv;
     ssize_t r;
 
     r = recv(ctx->sockfd, buffer, buffer_size, 0);
@@ -437,10 +436,8 @@ int SingleServer(mitls_state *state, SOCKET clientfd)
     const char cpayload[] = "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length:%d\r\n"
                             "Content-Type: text/plain; charset=utf-8\r\n\r\n";
 
-    ctx.cb.send = SendCallback;
-    ctx.cb.recv = RecvCallback;
     ctx.sockfd = clientfd;
-    r = FFI_mitls_accept_connected(&ctx.cb, state, &out_msg, &err_msg);
+    r = FFI_mitls_accept_connected(&ctx, SendCallback, RecvCallback, state, &out_msg, &err_msg);
     PrintErrors(out_msg, err_msg);
     if (r == 0) {
         printf("FFI_mitls_accept_connected() failed\n");
@@ -824,10 +821,8 @@ int TestClient(void)
         return 1;
     }
 
-    ctx.cb.send = SendCallback;
-    ctx.cb.recv = RecvCallback;
     ctx.sockfd = sockfd;
-    r = FFI_mitls_connect(&ctx.cb, state, &out_msg, &err_msg);
+    r = FFI_mitls_connect(&ctx, SendCallback, RecvCallback, state, &out_msg, &err_msg);
     PrintErrors(out_msg, err_msg);
     if (r == 0) {
         printf("FFI_mitls_connect() failed\n");

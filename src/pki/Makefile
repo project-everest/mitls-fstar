@@ -1,7 +1,8 @@
 FSTAR_HOME = ../../../FStar
+MLCRYPTO_HOME = ../../../MLCrypto
 CONTRIB=ucontrib
 PLATFORM = $(FSTAR_HOME)/$(CONTRIB)/Platform/ml
-OPENSSL_HOME = $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/openssl
+OPENSSL_HOME = $(MLCRYPTO_HOME)/openssl
 INCLUDE=-package batteries,zarith -I $(PLATFORM)
 MARCH?=x86_64
 
@@ -42,6 +43,7 @@ ifeq ($(OS),Windows_NT)
       LIB_MACHINE=x86
       OPENSSL_CONF = CC=i686-w64-mingw32-gcc ./Configure mingw enable-tls1_3
     endif
+    LIBMIPKI := libmipki.dll
 else
     # On Unix-like systems, the library search path is LD_LIBRARY_PATH, which is
     # correctly setup to find libssleay.so and the like, but never includes the
@@ -60,6 +62,7 @@ else
         ARCH = x86_64
         OPENSSL_CONF = ./config enable-tls1_3 -fPIC
     endif
+    LIBMIPKI := libmipki.so
 endif
 
 ifeq ($(VS_BIN),)
@@ -74,7 +77,7 @@ endif
 
 .PHONY: test clean
 
-all: libmipki.dll $(LIBFILE)
+all: $(LIBMIPKI) $(LIBFILE)
 
 mipki.o: mipki.c
 	$(CC) $(CCOPTS) $(EXTRA_OPTS) -c mipki.c
@@ -102,10 +105,10 @@ $(OPENSSL_HOME)/libcrypto.a: $(OPENSSL_HOME)/Configure
 libcrypto.a: $(OPENSSL_HOME)/libcrypto.a
 	cp $(OPENSSL_HOME)/libcrypto.a .
 
-libmipki.dll: libcrypto.a mipki.o
-	$(CC) $(COPTS) -shared mipki.o libcrypto.a -lws2_32 -o $@
+$(LIBMIPKI): libcrypto.a mipki.o
+	$(CC) $(COPTS) -shared mipki.o libcrypto.a -o $@
 
-test.exe: libmipki.dll test.c
+test.exe: $(LIBMIPKI) test.c
 	$(CC) $(COPTS) -L. -lmipki test.c -o $@
 
 test: test.exe
