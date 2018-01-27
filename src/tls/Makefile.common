@@ -58,3 +58,7 @@ $(EXTRACT_DIR)/%.$(EXTENSION):
 extract/copied/%.c: $(KREMLIN_HOME)/kremlib/%.c
 	mkdir -p $(dir $@)
 	cp $< $@
+
+# Don't delete these files otherwise one can't run Makefile.OCaml and
+# Makefile.Kremlin in parallel
+.PRECIOUS: extract/copied/%.c
