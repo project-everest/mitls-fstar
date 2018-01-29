@@ -6,6 +6,6 @@ FStar_Bytes_bytes HaclProvider_crypto_scalarmult(FStar_Bytes_bytes secret, FStar
     .length = 32,
     .data = calloc(32, 1)
   };
-  Curve25519_crypto_scalarmult((char *) out.data, (char *) secret.data,  (char *) base.data);
+  Curve25519_crypto_scalarmult((uint8_t *) out.data, (uint8_t *) secret.data,  (uint8_t *) base.data);
   return out;
 }

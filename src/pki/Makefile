@@ -95,7 +95,7 @@ $(PLATFORM)/platform.cmx: $(PLATFORM)/platform.ml
 	$(MAKE) -C $(PLATFORM)
 
 $(OPENSSL_HOME)/Configure:
-	echo "openssl folder is empty, please update submodules in $(FSTAR_HOME)"
+	echo "openssl folder is empty, please update submodules in $(MLCRYPTO_HOME)"
 	false
 
 $(OPENSSL_HOME)/libcrypto.a: $(OPENSSL_HOME)/Configure

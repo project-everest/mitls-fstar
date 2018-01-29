@@ -5,7 +5,6 @@ all: ocaml-all kremlin-all
 
 include Makefile.common
 
-
 ocaml-%:
 	$(MAKE) -f Makefile.OCaml $*
 
