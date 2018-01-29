@@ -37,13 +37,10 @@ all: test.exe
 -include .depend
 
 .depend:
-	$(CC) -MM $(addsuffix .c,$(FILES)) > $@
+	$(CC) $(CFLAGS) -MM $(addsuffix .c,$(FILES)) > $@
 
 test.exe: $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
 	$(CC) $^ -o $@ -lcrypto -lssl -L$(MLCRYPTO_HOME)/openssl
 
 test: all
 	./test.exe
-
-clean:
-	find . -not -name Makefile | xargs rm

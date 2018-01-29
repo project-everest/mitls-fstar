@@ -13,5 +13,8 @@ kremlin-%:
 
 test: ocaml-test kremlin-test
 
+clean: kremlin-clean ocaml-clean
+	rm -rf extract/OCaml extract/Kremlin
+
 %.fst-in %.fsti-in:
 	@echo $(addprefix --include , $(INCLUDE_PATHS)) --cache_checked_modules --lax

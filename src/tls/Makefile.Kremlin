@@ -4,6 +4,8 @@ build: build-internal-test build-library build-external-test
 
 test: test-internal-test # test-library test-external-test
 
+clean: clean-internal-test clean-library clean-external-test
+
 # To include Makefile.common, you need to specify
 # the following three variables
 FLAVOR		= Kremlin
@@ -108,6 +110,9 @@ build-internal-test: output-internal-test
 test-internal-test: output-internal-test
 	$(MAKE) -C $(INTERNAL_TEST_DIR) test
 
+clean-internal-test:
+	-@find $(INTERNAL_TEST_DIR) -type f -and -not -name Makefile | xargs rm
+
 ################################################################################
 # The library does not perform bundling
 
@@ -133,6 +138,8 @@ build-library: output-library
 test-library: output-library
 	$(MAKE) -C $(LIBRARY_DIR) test
 
+clean-library:
+	-@find $(LIBRARY_DIR) -type f -and -not -name Makefile | xargs rm
 
 ################################################################################
 # An external test that uses "mitlsffi.h"
@@ -142,3 +149,5 @@ output-external-test:
 build-external-test:
 
 test-external-test:
+
+clean-external-test:

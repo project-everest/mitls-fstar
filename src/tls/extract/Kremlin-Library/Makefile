@@ -40,6 +40,11 @@ FILES 		= AEAD_GCM AEADOpenssl AEADProvider Alert BufferBytes Cert \
   TLSInfoFlags TLSPRF Transport vale/sha256_main_i vale/vale_aes_glue \
   vale/Vale_Hash_SHA2_256
 
+# FIXME: remove when all files compile
+BROKEN = QUIC Record Transport
+
+FILES := $(filter-out $(BROKEN),$(FILES))
+
 CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror -Wno-unused-variable -Wno-parentheses
 
 all: libmitls.$(SO)
@@ -47,14 +52,9 @@ all: libmitls.$(SO)
 -include .depend
 
 .depend:
-	$(CC) -MM $(addsuffix .c,$(FILES)) > $@
+	$(CC) $(CFLAGS) -MM $(addsuffix .c,$(FILES)) > $@
 
-BROKEN = QUIC Record Transport
-
-libmitls.$(SO): $(addsuffix .o,$(filter-out $(BROKEN),$(FILES))) vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
+libmitls.$(SO): $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
 	$(CC) $^ -shared -o $@ -lcrypto -lssl -L$(MLCRYPTO_HOME)/openssl
 
 test:
-
-clean:
-	find . -not -name Makefile | xargs rm
