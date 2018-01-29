@@ -12,7 +12,7 @@ open KDF // avoid?
 
 assume val flag_KEF0: d:nat -> b:bool{b ==> model /\ flag_KDF d ==> b}
 type idealKEF0 d = b2t (flag_KEF0 d)
-// to be refined. When exactly do we we switch KEF0? (after KDF0?)
+// to be refined. When exactly do we switch KEF0? (after KDF0?)
 assume val lemma_kdf_kef0: d:nat -> Lemma (idealKDF d ==> idealKEF0 d)
 
 let safeKEF0 (d:nat) (i:regid) = idealKEF0 d /\ honest i
@@ -24,7 +24,7 @@ let safeKEF0 (d:nat) (i:regid) = idealKEF0 d /\ honest i
 let there = Mem.tls_tables_region
 
 // memoizing a single extracted secret
-// now [private] anymore because of its reuse in Extract2.
+// not [private] anymore because of its reuse in Extract2.
 type mref_secret (d:nat) (u: usage d) (i: regid) =
   // would prefer: HyperStack.mref (option (secret u i)) (ssa #(secret u i))
   m_rref there (option (secret d u i)) ssa
