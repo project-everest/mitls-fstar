@@ -1,5 +1,5 @@
 FSTAR_HOME = ../../../FStar
-MLCRYPTO_HOME = ../../../MLCrypto
+MLCRYPTO_HOME ?= ../../../MLCrypto
 CONTRIB=ucontrib
 PLATFORM = $(FSTAR_HOME)/$(CONTRIB)/Platform/ml
 OPENSSL_HOME = $(MLCRYPTO_HOME)/openssl
