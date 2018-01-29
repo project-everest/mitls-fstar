@@ -44,11 +44,6 @@ FILES 		= AEAD_GCM AEADOpenssl AEADProvider Alert BufferBytes Cert \
   TLSInfoFlags TLSPRF Transport vale/sha256_main_i vale/vale_aes_glue \
   vale/Vale_Hash_SHA2_256
 
-# FIXME: remove when all files compile
-BROKEN = QUIC Record Transport
-
-FILES := $(filter-out $(BROKEN),$(FILES))
-
 CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror \
   -Wno-unused-variable -Wno-parentheses -Wno-unknown-warning-option \
   -Wno-unused-but-set-variable -g -fwrapv -fstack-check -D_BSD_SOURCE \
