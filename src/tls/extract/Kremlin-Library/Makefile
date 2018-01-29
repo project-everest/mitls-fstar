@@ -1,9 +1,7 @@
 UNAME		= $(shell uname)
 MARCH		?= x86_64
 
-ifeq (,$(MLCRYPTO_HOME))
-  $(error Please define MLCRYPTO_HOME)
-endif
+MLCRYPTO_HOME	?= ../../../../../MLCrypto
 
 ifeq ($(OS),Windows_NT)
   PATH := $(MLCRYPTO_HOME)/openssl:$(PATH)
