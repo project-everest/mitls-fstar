@@ -1,6 +1,10 @@
 UNAME		= $(shell uname)
 MARCH		?= x86_64
 
+ifeq (,$(MLCRYPTO_HOME))
+  $(error Please define MLCRYPTO_HOME)
+endif
+
 ifeq ($(OS),Windows_NT)
   PATH := $(MLCRYPTO_HOME)/openssl:$(PATH)
   CC ?= x86_64-w64-mingw32-gcc
@@ -33,7 +37,7 @@ FILES 		= Cert C_Loops_Spec_Loops CommonDH CoreCrypto \
 CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror \
   -Wno-unused-variable -Wno-parentheses -Wno-unknown-warning-option \
   -Wno-unused-but-set-variable -g -fwrapv -fstack-check -D_BSD_SOURCE \
-  -D_DEFAULT_SOURCE -D__USE_MINGW_ANSI_STDIO
+  -D_DEFAULT_SOURCE -D__USE_MINGW_ANSI_STDIO -I$(MLCRYPTO_HOME)/include
 
 all: test.exe
 
