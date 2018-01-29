@@ -105,7 +105,10 @@ $(OPENSSL_HOME)/libcrypto.a: $(OPENSSL_HOME)/Configure
 libcrypto.a: $(OPENSSL_HOME)/libcrypto.a
 	cp $(OPENSSL_HOME)/libcrypto.a .
 
-$(LIBMIPKI): libcrypto.a mipki.o
+libmipki.dll: libcrypto.a mipki.o
+	$(CC) $(COPTS) -shared mipki.o libcrypto.a -lws2_32 -o $@
+
+libmipki.so: libcrypto.a mipki.o
 	$(CC) $(COPTS) -shared mipki.o libcrypto.a -o $@
 
 test.exe: $(LIBMIPKI) test.c
