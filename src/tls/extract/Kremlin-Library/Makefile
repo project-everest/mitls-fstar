@@ -61,7 +61,10 @@ all: libmitls.$(SO)
 .depend:
 	$(CC) $(CFLAGS) -MM $(addsuffix .c,$(FILES)) > $@
 
-libmitls.$(SO): $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
+libmitls.so: $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
 	$(CC) $^ -shared -o $@ -lcrypto -lssl -L$(MLCRYPTO_HOME)/openssl
+
+libmitls.dll: $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
+	echo "Not generating a DLL yet because too many unresolved symbols"
 
 test:
