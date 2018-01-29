@@ -835,7 +835,8 @@ let rec negotiateGroupKeyShare cfg pv exts =
 val isSentinelRandomValue: protocolVersion -> protocolVersion -> TLSInfo.random -> Tot bool
 let isSentinelRandomValue c_pv s_pv s_random =
   geqPV c_pv TLS_1p3 && geqPV TLS_1p2 s_pv && bytes_of_string "DOWNGRD\x01" = s_random ||
-  geqPV c_pv TLS_1p2 && geqPV TLS_1p1 s_pv && bytes_of_string "DOWNGRD\x00" = s_random
+  geqPV c_pv TLS_1p2 && geqPV TLS_1p1 s_pv && bytes_of_hex "444f574e47524400" = s_random
+                                                       //  "444f574e47524400"="DOWNGRD\x00"
 
 
 (** Confirms that the version negotiated by the server was:

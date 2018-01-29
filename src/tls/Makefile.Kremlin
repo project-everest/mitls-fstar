@@ -40,9 +40,9 @@ else ifeq ($(UNAME),Linux)
   export LD_LIBRARY_PATH
 endif
 
-DROP_MODULES = $(addprefix -drop , FStar.Bytes MonotoneMap MonotoneMapNonDep Transport \
+DROP_MODULES = $(addprefix -drop , FStar.Bytes MonotoneMap MonotoneMapNonDep \
   Crypto.AEAD.Main)
-HEADERS = $(addprefix -add-include ,'"hacks.h"' '"transport.h"' '"krembytes.h"' '"kremstr.h"' \
+HEADERS = $(addprefix -add-include ,'"hacks.h"' '"krembytes.h"' '"kremstr.h"' \
   '"hacl_glue.h"')
 EXTRA_C_FILES = extract/copied/kremstr.c extract/copied/kremdate.c \
   extract/cstubs/hacl_aead.c $(SECURE_OUT)/Crypto_HKDF_Crypto_HMAC.c
@@ -78,4 +78,4 @@ test: mitls-c-test.exe
 	./$<
 
 mitls-c.exe: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES)) $(EXTRA_C_FILES) $(EXTRA_O_FILES) $(HACL_HOME)/secure_api/out/vale.a
-	$(KRML_COMMAND) $^ -tmpdir $(EXTRACT_DIR) -o $@ -warn-error +11
+	$(KRML_COMMAND) $^ -tmpdir $(EXTRACT_DIR) -o $@
