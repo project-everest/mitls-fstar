@@ -1,6 +1,6 @@
 module FFI
 module HS = FStar.HyperStack //Added automatically
-
+module HST = FStar.HyperStack.ST
 // A thin layer on top of TLS, adapting a bit our main API:
 // - for TCP send & receive, we use callbacks provided by the application
 // - for output traffic, we send fragment and send the whole message at once
@@ -64,32 +64,53 @@ private let write_all c i b : ML ioresult_w = write_all' c i b 0
 
 // an integer carrying the fatal alert descriptor
 // we could also write txt into the application error log
-private let errno description txt : ML int =
+private 
+let errno description txt : St int =
   let txt0 =
     match description with
     | Some ad -> TLSError.string_of_ad ad
-    | None    -> "(None)" in (
-  trace ("returning error: "^txt0^" "^txt^"\n"); (
+    | None    -> "(None)"
+  in  
+  trace ("returning error: "^txt0^" "^txt^"\n");
   match description with
   | Some ad ->  let _, e = split_ (Alert.alertBytes ad) 2 in int_of_bytes e
-  | None    -> -1 ))
+  | None    -> -1
 
 let connect ctx send recv config_1 psks : ML (Connection.connection * int) =
   // we assume the configuration specifies the target SNI;
   // otherwise we should check after Complete that it matches the authenticated certificate chain.
+  push_frame();
   let tcp = Transport.callbacks ctx send recv in
   let here = new_region HS.root in
   let c = TLS.resume here tcp config_1 None psks in
-  let rec read_loop c : ML int =
+  let err : stackref (option int) = HST.salloc None in
+  C.Loops.do_while 
+          (fun _ _ -> True)
+          (fun _ -> 
     let i = currentId c Reader in
-    match read c i with
-    | Complete -> 0
-    | ReadError description txt -> errno description txt
-    | Update false -> read_loop c
-    | Update true -> 0 // 0-RTT: ready to send early data
-    | _ -> failwith "FFI: Unexpected TLS read signal in connect"
-    in
-  let firstResult = read_loop c in
+    match TLS.read c i with
+    | Update false ->
+      true
+      
+    | Complete
+    | Update false ->
+      err := Some 0;
+      false
+
+    | ReadError description txt ->
+      err := Some (errno description txt);
+      false
+            
+    | _ ->
+      false);
+  let firstResult =
+    match !err with
+    | Some firstResult ->
+      firstResult
+    | _ ->
+      failwith "FFI: Unexpected TLS read signal in connect"
+  in
+  pop_frame();
   c, firstResult
 
 val getCert: Connection.connection -> ML bytes // bytes of the first certificate in the server-certificate chain.
@@ -102,19 +123,36 @@ let getCert c =
 let accept_connected ctx send recv config_1 : ML (Connection.connection * int) =
   // we assume the configuration specifies the target SNI;
   // otherwise we should check after Complete that it matches the authenticated certificate chain.
+  push_frame();
   let tcp = Transport.callbacks ctx send recv in
   let here = new_region HS.root in
   let c = TLS.accept_connected here tcp config_1 in
-  let rec read_loop c : ML int =
-    let i = currentId c Reader in
-    match read c i with
-    | Complete -> 0
-    | ReadError description txt -> errno description txt
-    | Update false -> read_loop c
-    | Update true -> 0 // 0.5-RTT: ready to write
-    | _ -> failwith "FFI: Unexpected TLS read signal in accept_connected"
-    in
-  let firstResult = read_loop c in
+  let err : HST.stackref (option int) = HST.salloc None in
+  C.Loops.do_while
+    (fun _ _ -> True)
+    (fun _ ->    
+      let i = currentId c Reader in
+      match read c i with
+      | Complete
+      | Update true -> // 0.5-RTT: ready to write
+        err := Some 0;
+        false
+
+      | ReadError description txt ->
+        err := Some (errno description txt);
+        false
+        
+      | Update false ->
+        true
+        
+      | _ -> 
+        false);
+  let firstResult =
+    match !err with
+    | Some i -> i
+    | None -> failwith "FFI: Unexpected TLS read signal in accept_connected"
+  in
+  pop_frame();
   c, firstResult
 
 type read_result = // is it convenient?
@@ -159,12 +197,12 @@ let close_extraction_bug c : ML int =
 
 (* ************** Native FFI support  ************** *)
 
-let s2pv = function
-  | "1.2" -> TLS_1p2
-  | "1.3" -> TLS_1p3
-  | "1.1" -> TLS_1p1
-  | "1.0" -> TLS_1p0
-  | s -> failwith ("Invalid protocol version specified: "^s)
+let s2pv s =
+  if      s = "1.2" then TLS_1p2
+  else if s = "1.3" then TLS_1p3
+  else if s = "1.1" then TLS_1p1
+  else if s = "1.0" then TLS_1p0
+  else failwith ("Invalid protocol version specified: "^s)
 
 let css = [
   ("TLS_AES_128_GCM_SHA256", TLS_AES_128_GCM_SHA256);
@@ -230,8 +268,10 @@ let rec findsetting f l =
 let rec updatecfg cfg l : ML config =
   match l with
   | [] -> cfg
-  | "EDI" :: t -> updatecfg ({cfg with max_early_data = Some 16384}) t
-  | r :: t -> failwith ("Unknown flag: "^r)
+  | hd::t ->
+    if hd = "EDI"
+    then updatecfg ({cfg with max_early_data = Some 16384}) t
+    else failwith ("Unknown flag: "^hd)
 
 (** SZ: FStar.List opens FStar.All.
     Should we have a version that uses FStar.HyperStack.All?
@@ -241,55 +281,66 @@ let rec map f x = match x with
   | [] -> []
   | a::tl -> f a::map f tl
 
+private
+let findSetting_css (x:string) =
+    match findsetting x css with
+    | None -> failwith ("Unknown ciphersuite: "^x)
+    | Some a -> a
+
 val ffiSetCipherSuites: cfg:config -> x:string -> ML config
 let ffiSetCipherSuites cfg x =
   let x :: t = String.split ['@'] x in
   let cfg = updatecfg cfg t in
   let csl = String.split [':'] x in
-  let csl = map (fun x -> match findsetting x css with
-    | None -> failwith ("Unknown ciphersuite: "^x)
-    | Some a -> a
-    ) csl in
+  let csl = map findSetting_css csl in
   { cfg with
   cipher_suites = cipherSuites_of_nameList csl
   }
 
+private
+let findSetting_sas (x:string) =
+    match findsetting x sas with
+    | None -> failwith ("Unknown signature algorithm: "^x)
+    | Some a -> a
+
 val ffiSetSignatureAlgorithms: cfg:config -> x:string -> ML config
 let ffiSetSignatureAlgorithms cfg x =
   let sal = String.split [':'] x in
-  let sal = map (fun x -> match findsetting x sas with
-    | None -> failwith ("Unknown signature algorithm: "^x)
-    | Some a -> a
-    ) sal in
+  let sal = map findSetting_sas sal in
   { cfg with
   signature_algorithms = sal
   }
 
+private
+let findSetting_ngs (x:string) =
+    match findsetting x ngs with
+    | None -> failwith ("Unknown named group: "^x)
+    | Some a -> a
+
 val ffiSetNamedGroups: cfg:config -> x:string -> ML config
 let ffiSetNamedGroups cfg x =
-  let ng_parse x = match findsetting x ngs with
-    | None -> failwith ("Unknown named group: "^x)
-    | Some a -> a in
   let supported :: offered = String.split ['@'] x in
   let ngl = String.split [':'] supported in
-  let ngl = map ng_parse ngl in
+  let ngl = map findSetting_ngs ngl in
   let ogl = match offered with
     | [] -> ngl
-    | [og] -> map ng_parse (String.split [':'] og)
+    | [og] -> map findSetting_ngs (String.split [':'] og)
     | _ -> failwith "Use @G1:..:Gn to set groups on which to offer shares" in
   { cfg with
     named_groups = ngl;
     offer_shares = ogl;
   }
 
+private
+let encodeALPN x =
+    if String.length x < 256 then utf8_encode x
+    else failwith ("ffiSetALPN: protocol <"^x^"> is too long")
+
 val ffiSetALPN: cfg:config -> x:string -> ML config
 let ffiSetALPN cfg x =
   let apl = if x = "" then [] else String.split [':'] x in
   if List.Tot.length apl > 255 then failwith "ffiSetALPN: too many entries";
-  let apl = map (fun x ->
-    if String.length x < 256 then utf8_encode x
-    else failwith ("ffiSetALPN: protocol <"^x^"> is too long")
-  ) apl in
+  let apl = map encodeALPN apl in
   { cfg with alpn = if apl=[] then None else Some apl }
 
 val ffiSetEarlyData: cfg:config -> x:nat -> ML config
@@ -407,7 +458,7 @@ let ffiGetExporter (c:Connection.connection) (early:bool)
   let keys = Handshake.xkeys_of c.Connection.hs in
   if Seq.length keys = 0 then None
   else
-    let i = (match Seq.length keys with 2 when not early -> 1 | _ -> 0) in
+    let i = if Seq.length keys = 2 && not early then 1 else 0 in
     let (| li, expId, b|) = Seq.index keys i in
     let h = exportId_hash expId in
     let ae = logInfo_ae li in

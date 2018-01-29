@@ -27,11 +27,11 @@ endif
 ################################################################################
 # A common KreMLin invocation
 #
-HEADERS 	= $(addprefix -add-include ,'"hacks.h"' '"transport.h"' \
-  '"krembytes.h"' '"kremstr.h"' '"hacl_glue.h"')
+HEADERS 	= $(addprefix -add-include ,'"hacks.h"' '"krembytes.h"' \
+  '"kremstr.h"' '"hacl_glue.h"')
 
 DROP_MODULES 	= $(addprefix -drop , FStar.Bytes MonotoneMap MonotoneMapNonDep \
-  Transport Crypto.AEAD.Main)
+  Crypto.AEAD.Main)
 
 KRML_COMMAND	= krml \
   -bundle 'Crypto.AEAD.*,Crypto.Symmetric.*,Buffer.Utils,Crypto.Plain' \
@@ -126,7 +126,7 @@ $(eval $(call COPY_template,$(LIBRARY_DIR)/stub,extract/cstubs))
 $(eval $(call COPY_template,$(LIBRARY_DIR)/vale,$(VALE_DIR)))
 
 $(LIBRARY_DIR)/TLS.c: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES))
-	$(KRML_COMMAND) $^ -tmpdir $(LIBRARY_DIR) -warn-error +11 -skip-compilation
+	$(KRML_COMMAND) $^ -tmpdir $(LIBRARY_DIR) -skip-compilation
 
 library-copy: $(addprefix $(LIBRARY_DIR)/,$(ALL_EXTERNAL_FILES))
 

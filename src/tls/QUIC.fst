@@ -12,7 +12,7 @@ module HS = FStar.HyperStack //Added automatically
 ///
 /// Relying on FFI for accessing configs, callbacks, etc.
 /// Testing both in OCaml (TCP-based, TestQUIC ~ TestFFI) and in C.
-
+open FStar.String
 open FStar.Bytes
 open FStar.Error
 open TLSConstants
@@ -204,11 +204,14 @@ let get_peer_parameters c =
   let r = TLSConstants.dualRole (Connection.c_role c) in
   ffi_parameters (get_parameters c r)
 
-let ffiConfig (qp: bytes) (versions: list UInt32.t) (host: string) =
-  let ver = List.Tot.map (fun (n:UInt32.t) ->
+private
+let quicVersion (n:UInt32.t) =
     match UInt32.v n with
     | 1 -> QuicVersion1
-    | _ -> QuicCustomVersion n) versions in
+    | _ -> QuicCustomVersion n
+    
+let ffiConfig (qp: bytes) (versions: list UInt32.t) (host: string) =
+  let ver = List.Tot.map quicVersion versions in
   let qpl =
     match Extensions.parseQuicParameters_aux qp with
     | Error z -> failwith "Invalid QUIC transport parameters"
