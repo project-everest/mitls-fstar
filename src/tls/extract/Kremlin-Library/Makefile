@@ -52,7 +52,7 @@ FILES := $(filter-out $(BROKEN),$(FILES))
 CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror \
   -Wno-unused-variable -Wno-parentheses -Wno-unknown-warning-option \
   -Wno-unused-but-set-variable -g -fwrapv -fstack-check -D_BSD_SOURCE \
-  -D_DEFAULT_SOURCE -D__USE_MINGW_ANSI_STDIO -I$(MLCRYPTO_HOME)/include
+  -D_DEFAULT_SOURCE -D__USE_MINGW_ANSI_STDIO -I$(MLCRYPTO_HOME)/openssl/include
 
 all: libmitls.$(SO)
 
