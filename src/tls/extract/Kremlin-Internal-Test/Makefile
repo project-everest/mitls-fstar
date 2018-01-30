@@ -1,7 +1,7 @@
 UNAME		= $(shell uname)
 MARCH		?= x86_64
 
-MITLS_HOME ?= ../../../..
+MITLS_HOME 	?= ../../../..
 MLCRYPTO_HOME	?= ../../../../../MLCrypto
 
 ifeq ($(OS),Windows_NT)
@@ -15,10 +15,12 @@ else ifeq ($(UNAME),Darwin)
 else ifeq ($(UNAME),Linux)
   VARIANT = -Linux
   LD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(MITLS_HOME)/src/pki:$(LD_LIBRARY_PATH)
+  LDOPTS := -lpthread $(LDOPTS)
   export LD_LIBRARY_PATH
 endif
 
-INCLUDE_DIRS 	= $(MITLS_HOME)/src/pki $(MITLS_HOME)/libs/ffi secure kremlib include stub vale curve .
+INCLUDE_DIRS 	= $(MITLS_HOME)/src/pki $(MITLS_HOME)/libs/ffi secure kremlib \
+  include stub vale curve .
 
 # ls *.c */*.c | sed 's/\.c//g' >> Makefile
 # then: remove Crypto_AEAD_Main because of the hacl_provider hack
@@ -47,7 +49,7 @@ all: test.exe
 	$(CC) $(CFLAGS) -MM $(addsuffix .c,$(FILES)) > $@
 
 test.exe: $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
-	$(CC) $^ -o $@ -lcrypto -lssl -lmipki -L$(MLCRYPTO_HOME)/openssl -L$(MITLS_HOME)/src/pki
+	$(CC) $^ -o $@ -lcrypto -lssl -lmipki $(LDOPTS) -L$(MLCRYPTO_HOME)/openssl -L$(MITLS_HOME)/src/pki
 
 test: all
 	./test.exe
