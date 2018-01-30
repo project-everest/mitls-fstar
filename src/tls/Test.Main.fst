@@ -27,8 +27,9 @@ let rec iter xs: St unit =
       check s f; iter xs
 
 // Curve25519.h wants this, but externally visible... make it a cross-module call.
-let dummy (): St (UInt128.t -> UInt64.t) =
-  FStar.Int.Cast.Full.uint128_to_uint64
+let dummy (): St UInt64.t =
+  let dummy = FStar.Int.Cast.Full.uint64_to_uint128 0UL in
+  FStar.Int.Cast.Full.uint128_to_uint64 dummy
 
 let main (): St C.exit_code =
   ignore (FStar.Test.dummy ());

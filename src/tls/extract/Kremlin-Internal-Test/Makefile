@@ -34,8 +34,9 @@ FILES 		= Cert C_Loops_Spec_Loops CommonDH CoreCrypto \
 
 CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror \
   -Wno-unused-variable -Wno-parentheses -Wno-unknown-warning-option \
-  -Wno-unused-but-set-variable -g -fwrapv -fstack-check -D_BSD_SOURCE \
-  -D_DEFAULT_SOURCE -D__USE_MINGW_ANSI_STDIO -I$(MLCRYPTO_HOME)/openssl/include
+  -Wno-unused-but-set-variable -Wno-infinite-recursion -g -fwrapv -fstack-check \
+  -D_BSD_SOURCE -D_DEFAULT_SOURCE -D__USE_MINGW_ANSI_STDIO \
+  -I$(MLCRYPTO_HOME)/openssl/include -Wno-missing-braces
 
 all: test.exe
 

@@ -264,7 +264,7 @@ Crypto_HMAC_alg hacl_alg_of_corecrypto_alg(CoreCrypto_hash_alg h) {
 FStar_Bytes_bytes CoreCrypto_hash(CoreCrypto_hash_alg x0,
                                   FStar_Bytes_bytes x1) {
   Crypto_HMAC_alg a = hacl_alg_of_corecrypto_alg(x0);
-  FAIL_IF(a == -1,
+  FAIL_IF(a == (Crypto_HMAC_alg) -1,
           "CoreCrypto_hash implemented using HACL*, unsupported algorithm");
   uint32_t len = Crypto_HMAC_hash_size(a);
   char *out = malloc(len);
@@ -278,7 +278,7 @@ FStar_Bytes_bytes CoreCrypto_hmac(CoreCrypto_hash_alg x0,
                                   FStar_Bytes_bytes x1,
                                   FStar_Bytes_bytes x2) {
   Crypto_HMAC_alg a = hacl_alg_of_corecrypto_alg(x0);
-  FAIL_IF(a == -1,
+  FAIL_IF(a == (Crypto_HMAC_alg)-1,
           "CoreCrypto_hash implemented using HACL*, unsupported algorithm");
 
   uint32_t len = Crypto_HMAC_hash_size(a);
