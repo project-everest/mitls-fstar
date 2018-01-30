@@ -396,18 +396,18 @@ let install_ticket config ticket : ML (list PSK.psk_identifier) =
   | None -> []
 
 // 18-01-24 changed calling convention; now almost like connect
-val ffiConnect: 
-  Transport.pvoid -> Transport.pfn_send -> Transport.pfn_recv -> 
+val ffiConnect:
+  Transport.pvoid -> Transport.pfn_send -> Transport.pfn_recv ->
   config -> option (bytes * bytes) -> ML (Connection.connection * int)
 let ffiConnect ctx snd rcv config ticket =
   connect ctx snd rcv config (install_ticket config ticket)
 
 // 18-01-24 changed calling convention; now just like accept_connected
-val ffiAcceptConnected: 
-  Transport.pvoid -> Transport.pfn_send -> Transport.pfn_recv -> 
+val ffiAcceptConnected:
+  Transport.pvoid -> Transport.pfn_send -> Transport.pfn_recv ->
   config -> ML (Connection.connection * int)
 let ffiAcceptConnected ctx snd rcv config =
-  accept_connected ctx snd rcv config 
+  accept_connected ctx snd rcv config
 
 // 18-01-24 not needed anymore?
 val ffiRecv: Connection.connection -> ML cbytes
@@ -476,6 +476,10 @@ let ffiGetExporter (c:Connection.connection) (early:bool)
     | _ -> None
 
 
+(*
+// Closures for stateful callbacks, these are now unnecessary
+//
+
 //   (sni:string -> ticket:bytes -> info:ticketInfo -> rawkey:bytes -> ST unit
 let ffiTicketCallback (cb_state:callbacks) (cb:callbacks) (sni:string) (ticket:bytes) (info:ticketInfo) (key:bytes) =
   let si = match info with
@@ -520,3 +524,4 @@ let ffiCertVerifyCallback (cb_state:callbacks) (cb:callbacks) (cert:list cert_re
   trace ("Certificate verify callback for "^(Negotiation.string_of_signatureScheme sig));
   let sa = UInt16.uint_to_t (int_of_bytes (signatureSchemeBytes sig)) in
   ocaml_cert_verify_cb cb_state cb (Cert.certificateListBytes cert) sa (tbs, sigv)
+*)
