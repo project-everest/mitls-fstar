@@ -78,9 +78,6 @@ ALL_EXTERNAL_FILES	= \
   $(addprefix vale/,sha256_main_i.c sha256_main_i.h sha256-$(MARCH)$(VARIANT).S \
     Vale_Hash_SHA2_256.c vale_aes_glue.c aes-$(MARCH)$(VARIANT).S DafnyLib.h)
 
-extract/cstubs/mipki.o: extract/cstubs/mipki.c
-	$(CC) -I ../pki -I ../../libs/ffi -I extract/include -I $(EXTRACT_DIR) -I $(SECURE_OUT) -I $(KREMLIN_HOME)/kremlib -c $< -o $@
-
 ################################################################################
 
 # The internal test pokes at the modules directly, without going through the

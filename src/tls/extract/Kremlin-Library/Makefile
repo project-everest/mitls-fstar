@@ -1,27 +1,32 @@
+# Note: please backport any changes here to ../Kremlin-Internal-Test/Makefile
+
 UNAME		= $(shell uname)
 MARCH		?= x86_64
 
+MITLS_HOME 	?= ../../../..
 MLCRYPTO_HOME	?= ../../../../../MLCrypto
 
 ifeq ($(OS),Windows_NT)
-  PATH := $(MLCRYPTO_HOME)/openssl:$(PATH)
+  PATH := $(MLCRYPTO_HOME)/openssl:$(MITLS_HOME)/src/pki:$(PATH)
   SO = dll
   CC ?= x86_64-w64-mingw32-gcc
   export PATH
 else ifeq ($(UNAME),Darwin)
   VARIANT = -Darwin
-  DYLD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(DYLD_LIBRARY_PATH)
+  DYLD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(MITLS_HOME)/src/pki:$(DYLD_LIBRARY_PATH)
   SO = so
   export DYLD_LIBRARY_PATH
 else ifeq ($(UNAME),Linux)
   VARIANT = -Linux
   CFLAGS := -fPIC $(CFLAGS)
-  LD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(LD_LIBRARY_PATH)
+  LD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(MITLS_HOME)/src/pki:$(LD_LIBRARY_PATH)
+  LDOPTS := -lpthread $(LDOPTS)
   SO = so
   export LD_LIBRARY_PATH
 endif
 
-INCLUDE_DIRS 	= secure kremlib include stub vale curve .
+INCLUDE_DIRS 	= $(MITLS_HOME)/src/pki $(MITLS_HOME)/libs/ffi secure kremlib \
+  include stub vale curve .
 
 # ls *.c */*.c | sed 's/\.c//g' >> Makefile
 # then: remove Crypto_AEAD_Main because of the hacl_provider hack
@@ -39,7 +44,7 @@ FILES 		= AEAD_GCM AEADProvider Alert BufferBytes Cert \
   LowCProvider Negotiation Nonce Parse PMS Prims PSK QUIC Range Record RSAKey \
   secure/Crypto_HKDF_Crypto_HMAC \
   Specializations_Providers_AEAD StAE StatefulLHAE \
-  StatefulPlain StreamAE StreamDeltas StreamPlain stub/core_crypto stub/hacl_aead \
+  StatefulPlain StreamAE StreamDeltas StreamPlain stub/mipki stub/core_crypto stub/hacl_aead \
   stub/hacl_provider Test_CommonDH Test_Handshake Test_Main Test_StAE \
   Test_TLSConstants Ticket TLS TLSConstants TLS_Curve25519 TLSError TLSInfo \
   TLSInfoFlags TLSPRF Transport vale/sha256_main_i vale/vale_aes_glue \
@@ -58,10 +63,8 @@ all: libmitls.$(SO)
 .depend:
 	$(CC) $(CFLAGS) -MM $(addsuffix .c,$(FILES)) > $@
 
-libmitls.so: $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
-	$(CC) $^ -shared -o $@ -lcrypto -lssl -L$(MLCRYPTO_HOME)/openssl
-
-libmitls.dll: $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
-	echo "Not generating a DLL yet because too many unresolved symbols"
+libmitls.$(SO): $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
+	# Disabled because of missing symbols
+	true || $(CC) $^ -shared -o $@ -lcrypto -lssl -lmpki $(LDOPTS) -L$(MLCRYPTO_HOME)/openssl -L$(MITLS_HOME)/src/pki
 
 test:

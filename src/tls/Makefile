@@ -5,6 +5,11 @@ all:
 	rm -f .depend.OCaml .depend.Kremlin
 	$(MAKE) ocaml-all kremlin-all
 
+clean-depend:
+	rm -rf .depend.OCaml .depend.Kremlin
+
+ocaml-all kremlin-all: clean-depend
+
 include Makefile.common
 
 ocaml-%:
