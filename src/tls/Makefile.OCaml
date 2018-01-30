@@ -57,8 +57,9 @@ endif
 
 %.o: %.c
 	$(CC) -I $(KREMLIN_HOME)/kremlib $^ -o $@ -c
-    
+
 MITLS_INPUTS=\
+    extract/mlstubs/PKI.cmx \
     extract/mlstubs/Crypto_AEAD_Main.cmx \
 	$(KREMLIN_HOME)/_build/kremlib/C.cmx \
 	$(MLCRYPTO_HOME)/CoreCrypto.cmxa \
@@ -70,7 +71,7 @@ MITLS_INPUTS=\
 mitls.exe: $(MITLS_INPUTS) \
 	test/mitls.cmx
 	$(OCAMLOPT) -linkpkg -g $^ -o $@ -thread
-    
+
 # FFI support - calling from C into miTLS. TODO: remove duplication somehow
 ifeq ($(OS),Windows_NT)
 LIBMITLS=libmitls.dll
@@ -139,6 +140,13 @@ test/mitls.cmx: test/mitls.ml $(subst .ml,.cmx,$(ALL_ML_FILES))
 extract/mlstubs/Crypto_AEAD_Main.cmx: extract/mlstubs/Crypto_AEAD_Main.ml
 
 extract/OCaml/AEADProvider.cmx: extract/mlstubs/Crypto_AEAD_Main.cmx
+
+# Because PKI is hand-written and is not part of the dependency graph (it's just
+# an fsti, so not extracted), we must insert it in the right spot *and* make it
+# take the proper dependencies.
+extract/OCaml/Test_Handshake.cmx: extract/mlstubs/PKI.cmx
+
+extract/mlstubs/PKI.cmx: extract/mlstubs/PKI.ml extract/OCaml/TLSConstants.cmx
 
 %.cmx:
 	$(OCAMLOPT) -w -8-11-26-20 -c $< -o $@
