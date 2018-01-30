@@ -1,7 +1,9 @@
 EXTRACT='Nothing'
 FLAVOR=generic
 
-all: ocaml-all kremlin-all
+all:
+	rm -f .depend.OCaml .depend.Kremlin
+	$(MAKE) ocaml-all kremlin-all
 
 include Makefile.common
 
