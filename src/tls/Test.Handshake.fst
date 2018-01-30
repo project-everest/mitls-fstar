@@ -75,7 +75,7 @@ let test config: St unit =
 let main() = // could try with different client and server configs
 //  test ({ defaultConfig with min_version = TLS_1p2; max_version = TLS_1p2; });
 //  test ({ defaultConfig with min_version = TLS_1p2; max_version = TLS_1p3; });
-  let pki = PKI.init "../../data/CAFile.pem" ["../../data/server-ecdsa.crt", "../../data/server-ecdsa.key", true] in
+  let pki = PKI.init "../../../../data/CAFile.pem" ["../../../../data/server-ecdsa.crt", "../../../../data/server-ecdsa.key", true] in
   test ({ defaultConfig with
     min_version = TLS_1p3;
     max_version = TLS_1p3;
