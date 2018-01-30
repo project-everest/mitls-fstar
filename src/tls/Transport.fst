@@ -5,7 +5,6 @@ module HS = FStar.HyperStack //Added automatically
 
 open FStar.HyperStack.All
 
-open FStar.Tcp
 open FStar.Bytes
 open FStar.Error
 open TLSError
@@ -52,48 +51,52 @@ let callbacks v send recv: t = { ptr = v; snd = send; rcv = recv }
 /// FStar.Tcp.networkStream to dyn and back when using TCP instead of
 /// C-defined callbacks, and to bridge the Low*/F* calling conventions.
 
-//#set-options "--lax" 
-private val send_tcp: pfn_send
-let send_tcp ptr buffer len =
-  let n: networkStream = FStar.Dyn.undyn ptr in
+private 
+let send_tcp : pfn_send = fun ptr buffer len ->
+  let n: FStar.Tcp.networkStream = FStar.Dyn.undyn ptr in
   let v = BufferBytes.to_bytes (UInt32.v len) buffer in 
-  match send n v with 
+  match FStar.Tcp.send n v with 
   | Correct () -> Int.Cast.uint32_to_int32 len
   | Error _ignored -> -1l
 
-private val recv_tcp: pfn_recv 
-let recv_tcp ptr buffer len = 
-  let n: networkStream = FStar.Dyn.undyn ptr in
-  match recv_async n (UInt32.v len) with 
-  | RecvWouldBlock -> 0l // return instead EAGAIN or EWOULDBLOCK?
-  | RecvError _ignored -> -1l 
-  | Received b -> 
+private
+let recv_tcp : pfn_recv = fun ptr buffer len ->
+  let n: FStar.Tcp.networkStream = FStar.Dyn.undyn ptr in
+  match FStar.Tcp.recv_async n (UInt32.v len) with 
+  | FStar.Tcp.RecvWouldBlock -> 0l // return instead EAGAIN or EWOULDBLOCK?
+  | FStar.Tcp.RecvError _ignored -> -1l 
+  | FStar.Tcp.Received b -> 
     let target = Buffer.sub buffer 0ul (Bytes.len b) in
     BufferBytes.store_bytes (length b) target 0 b;
     Int.Cast.uint32_to_int32 (Bytes.len b)
 //#reset-options
 
-
+private
 let wrap tcp: Dv t = callbacks (FStar.Dyn.mkdyn tcp) send_tcp recv_tcp
 
-type tcpListener = tcpListener
+[@ deprecated "tentative: why hardwire FStar.TCP here?"]
+let listen domain port : ML FStar.Tcp.tcpListener = FStar.Tcp.listen domain port
 
-let listen domain port : ML tcpListener = listen domain port
-let accept listener = wrap (accept listener)
-let connect domain port = wrap (connect domain port)
-let close = close
+[@ deprecated "tentative: why hardwire FStar.TCP here?"]
+let accept listener = wrap (FStar.Tcp.accept listener)
+
+[@ deprecated "tentative: why hardwire FStar.TCP here?"]
+let connect domain port = wrap (FStar.Tcp.connect domain port)
+
+[@ deprecated "tentative: why hardwire FStar.TCP here?"]
+let close = FStar.Tcp.close
 
 // following the indirection
 
-let send tcp buffer len = tcp.snd tcp.ptr buffer len 
-let recv tcp buffer len = tcp.rcv tcp.ptr buffer len 
+let send t buffer len = t.snd t.ptr buffer len 
+let recv t buffer len = t.rcv t.ptr buffer len 
 
-val test: t -> b: Buffer.buffer UInt8.t {Buffer.length b = 5} -> ST unit
-  (requires fun h0 -> Buffer.live h0 b)
-  (ensures fun h0 r h1 -> h0 == h1)
-let test tcp b =
-  let _ = send tcp b 5ul in
-  ()
+// val test: t -> b: Buffer.buffer UInt8.t {Buffer.length b = 5} -> ST unit
+//   (requires fun h0 -> Buffer.live h0 b)
+//   (ensures fun h0 r h1 -> h0 == h1)
+// let test t b =
+//   let _ = send t b 5ul in
+//   ()
 
 // for now we get a runtime error in case of partial write on an asynchronous socket
 

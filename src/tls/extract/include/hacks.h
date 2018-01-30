@@ -5,7 +5,7 @@
 typedef void *CoreCrypto_hash_ctx, *CoreCrypto_cipher_stream,
   *Platform_Date_dateTime, *Platform_Date_timeSpan;
 
-typedef uint32_t FStar_Char_char, FStar_Char_char_, FStar_Char;
+typedef uint32_t FStar_Char_char_, FStar_Char;
 
 /* #define FStar_Seq_Base_length(x) 0 */
 /* #define FStar_Seq_Base_init(x, y) 0 */
@@ -13,7 +13,6 @@ typedef uint32_t FStar_Char_char, FStar_Char_char_, FStar_Char;
 
 /* FStar_UInt16_t FStar_UInt16_uint_to_t(Prims_nat x); */
 /* FStar_UInt32_t FStar_UInt32_uint_to_t(Prims_nat x); */
-FStar_Char FStar_Char_char_of_int(krml_checked_int_t);
 
 #define FStar_HyperStack_ST_new_colored_region(X, Y) 0
 

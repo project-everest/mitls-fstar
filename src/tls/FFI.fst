@@ -287,11 +287,19 @@ let findSetting_css (x:string) =
     | None -> failwith ("Unknown ciphersuite: "^x)
     | Some a -> a
 
+let rec split_string (c:FStar.Char.char) (x:string) : list string =
+  let i = String.index_of x c in
+  if i < 0
+  then []
+  else let prefix = String.substring x 0 i in
+       let suffix = String.substring x (i + 1) (String.length x - (i + 1)) in
+       prefix :: split_string c suffix
+       
 val ffiSetCipherSuites: cfg:config -> x:string -> ML config
 let ffiSetCipherSuites cfg x =
-  let x :: t = String.split ['@'] x in
+  let x :: t = split_string '@' x in
   let cfg = updatecfg cfg t in
-  let csl = String.split [':'] x in
+  let csl = split_string ':' x in
   let csl = map findSetting_css csl in
   { cfg with
   cipher_suites = cipherSuites_of_nameList csl
@@ -305,7 +313,7 @@ let findSetting_sas (x:string) =
 
 val ffiSetSignatureAlgorithms: cfg:config -> x:string -> ML config
 let ffiSetSignatureAlgorithms cfg x =
-  let sal = String.split [':'] x in
+  let sal = split_string ':' x in
   let sal = map findSetting_sas sal in
   { cfg with
   signature_algorithms = sal
@@ -319,12 +327,12 @@ let findSetting_ngs (x:string) =
 
 val ffiSetNamedGroups: cfg:config -> x:string -> ML config
 let ffiSetNamedGroups cfg x =
-  let supported :: offered = String.split ['@'] x in
-  let ngl = String.split [':'] supported in
+  let supported :: offered = split_string '@' x in
+  let ngl = split_string ':' supported in
   let ngl = map findSetting_ngs ngl in
   let ogl = match offered with
     | [] -> ngl
-    | [og] -> map findSetting_ngs (String.split [':'] og)
+    | [og] -> map findSetting_ngs (split_string ':' og)
     | _ -> failwith "Use @G1:..:Gn to set groups on which to offer shares" in
   { cfg with
     named_groups = ngl;
@@ -338,7 +346,7 @@ let encodeALPN x =
 
 val ffiSetALPN: cfg:config -> x:string -> ML config
 let ffiSetALPN cfg x =
-  let apl = if x = "" then [] else String.split [':'] x in
+  let apl = if x = "" then [] else split_string ':' x in
   if List.Tot.length apl > 255 then failwith "ffiSetALPN: too many entries";
   let apl = map encodeALPN apl in
   { cfg with alpn = if apl=[] then None else Some apl }

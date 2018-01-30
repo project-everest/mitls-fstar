@@ -10,8 +10,7 @@ open FStar.HyperStack.ST
 
 open FStar.Bytes
 open Hashing.Spec
-
-assume val crf: alg -> Tot bool  // to be moved elsewhere, set to false for real extraction
+include Hashing.Flags
 
 (* Depending on a single, global idealization function, we keep a global
     inverse table for all (finalized) hash computations, and we use it to
