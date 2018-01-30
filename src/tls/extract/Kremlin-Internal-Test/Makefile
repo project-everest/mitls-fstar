@@ -1,3 +1,5 @@
+# Note: please backport any changes here to ../Kremlin-Library/Makefile
+
 UNAME		= $(shell uname)
 MARCH		?= x86_64
 
