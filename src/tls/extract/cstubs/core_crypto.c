@@ -345,6 +345,54 @@ CoreCrypto_rsa_key CoreCrypto_rsa_gen_key(Prims_int x0) {
   TODO(CoreCrypto_rsa_key);
 }
 
+FStar_Bytes_bytes CoreCrypto_rsa_encrypt(CoreCrypto_rsa_key key,
+                                         CoreCrypto_rsa_padding padding,
+                                         FStar_Bytes_bytes data) {
+  BIGNUM *mod = BN_bin2bn((uint8_t *) key.rsa_mod.data,     key.rsa_mod.length, NULL);
+  BIGNUM *exp = BN_bin2bn((uint8_t *) key.rsa_pub_exp.data, key.rsa_pub_exp.length, NULL);
+  RSA *rsa = RSA_new();
+  FAIL_IF(mod == NULL || exp == NULL || rsa == NULL, "OpenSSL allocation failure");
+
+  RSA_set0_key(rsa, mod, exp, NULL);
+
+  size_t pdsz = 0;
+  int openssl_padding = -1;
+  switch (padding) {
+    case CoreCrypto_Pad_none:
+      pdsz = 0;
+      openssl_padding = RSA_NO_PADDING;
+      break;
+
+    case CoreCrypto_Pad_PKCS1:
+      pdsz = 11;
+      openssl_padding = RSA_PKCS1_PADDING;
+      break;
+
+    default:
+      abort();
+  }
+
+  size_t rsasz = RSA_size(rsa);
+  FAIL_IF(data.length >= rsasz - pdsz, "Cannot encrypt as much data");
+
+  char *out = malloc(rsasz);
+  FAIL_IF(out == NULL, "Allocation failure");
+
+  if (RSA_public_encrypt(data.length, (uint8_t *)data.data, (uint8_t *)out, rsa, openssl_padding)) {
+      unsigned long err = ERR_peek_last_error();
+      char* err_string = ERR_error_string(err, NULL);
+      FAIL_IF(true, err_string);
+  }
+
+  RSA_free(rsa);
+
+  FStar_Bytes_bytes ret = {
+    .length = rsasz,
+    .data = out
+  };
+  return ret;
+}
+
 bool CoreCrypto_validate_chain(Prims_list__FStar_Bytes_bytes *x0, bool x1,
                                FStar_Pervasives_Native_option__Prims_string x2,
                                Prims_string x3) {

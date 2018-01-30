@@ -26,7 +26,10 @@ INCLUDE_DIRS 	= secure kremlib include stub vale curve .
 # ls *.c */*.c | sed 's/\.c//g' >> Makefile
 # then: remove Crypto_AEAD_Main because of the hacl_provider hack
 # then: remove Crypto_Symmetric_Bytes
-FILES 		= AEAD_GCM AEADOpenssl AEADProvider Alert BufferBytes Cert \
+# then: remove AEADOpenssl because no other modules refer to it
+# thanks to inlining and partial evaluation.
+# (except AEADProvider, which refers to AEADOpenssl_state in AEADOpenssl.h)
+FILES 		= AEAD_GCM AEADProvider Alert BufferBytes Cert \
   C_Loops_Spec_Loops CommonDH Connection Content CoreCrypto \
   Crypto_AEAD_Crypto_Symmetric_Buffer_Utils_Crypto_Plain Crypto_Indexing \
   CryptoTypes curve/Curve25519 DataStream DHGroup ECGroup Epochs Extensions FFI \
