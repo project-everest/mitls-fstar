@@ -73,7 +73,7 @@ ALL_EXTERNAL_FILES	= \
   $(addprefix curve/,Curve25519.c Curve25519.h) \
   $(addprefix kremlib/,kremstr.c kremstr.h kremdate.c krembytes.h kremlib.h \
     gcc_compat.h testlib.h) \
-  $(addprefix stub/,hacl_aead.c hacl_provider.c mipki.c core_crypto.c) \
+  $(addprefix stub/,hacl_aead.c hacl_provider.c mipki_wrapper.c core_crypto.c) \
   $(addprefix include/,hacl_glue.h hacks.h) \
   $(addprefix vale/,sha256_main_i.c sha256_main_i.h sha256-$(MARCH)$(VARIANT).S \
     Vale_Hash_SHA2_256.c vale_aes_glue.c aes-$(MARCH)$(VARIANT).S DafnyLib.h)
@@ -125,11 +125,13 @@ $(eval $(call COPY_template,$(LIBRARY_DIR)/kremlib,$(KREMLIN_HOME)/kremlib))
 $(eval $(call COPY_template,$(LIBRARY_DIR)/include,extract/include))
 $(eval $(call COPY_template,$(LIBRARY_DIR)/stub,extract/cstubs))
 $(eval $(call COPY_template,$(LIBRARY_DIR)/vale,$(VALE_DIR)))
+$(eval $(call COPY_template,$(LIBRARY_DIR)/ffi,$(MITLS_HOME)/libs/ffi))
 
 $(LIBRARY_DIR)/TLS.c: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES))
 	$(KRML_COMMAND) $^ -tmpdir $(LIBRARY_DIR) -skip-compilation
 
-library-copy: $(addprefix $(LIBRARY_DIR)/,$(ALL_EXTERNAL_FILES))
+library-copy: $(addprefix $(LIBRARY_DIR)/,$(ALL_EXTERNAL_FILES)) \
+  $(LIBRARY_DIR)/stub/mitlsffi.c $(LIBRARY_DIR)/ffi/mitlsffi.h
 
 output-library: library-copy $(LIBRARY_DIR)/TLS.c
 
