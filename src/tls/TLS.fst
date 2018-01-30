@@ -137,9 +137,11 @@ let accept_connected m0 tcp cfg = create m0 tcp Server cfg (None, [])
 //    modifies Set.empty h0 h1 /\
 //    (exists ns. initial Server ns c None cn h1)
 //  ))
-let accept m0 listener cfg =
-    let tcp = Transport.accept listener in
-    accept_connected m0 tcp cfg
+
+(* NS Jan 30, 2018: Removing this since uses of TCP should be from the application *)
+// let accept m0 listener cfg =
+//     let tcp = Transport.accept listener in
+//     accept_connected m0 tcp cfg
 
 //val rehandshake: cn:connection { c_role cn = Client } -> c:config -> ST unit
 //  (requires (fun h0 -> True))

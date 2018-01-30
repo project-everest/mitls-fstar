@@ -47,47 +47,7 @@ noeq type t = {
 
 let callbacks v send recv: t = { ptr = v; snd = send; rcv = recv }
 
-/// 18-01-23 FStar.Tcp implementation. We now have to coerce
-/// FStar.Tcp.networkStream to dyn and back when using TCP instead of
-/// C-defined callbacks, and to bridge the Low*/F* calling conventions.
-
-private 
-let send_tcp : pfn_send = fun ptr buffer len ->
-  let n: FStar.Tcp.networkStream = FStar.Dyn.undyn ptr in
-  let v = BufferBytes.to_bytes (UInt32.v len) buffer in 
-  match FStar.Tcp.send n v with 
-  | Correct () -> Int.Cast.uint32_to_int32 len
-  | Error _ignored -> -1l
-
-private
-let recv_tcp : pfn_recv = fun ptr buffer len ->
-  let n: FStar.Tcp.networkStream = FStar.Dyn.undyn ptr in
-  match FStar.Tcp.recv_async n (UInt32.v len) with 
-  | FStar.Tcp.RecvWouldBlock -> 0l // return instead EAGAIN or EWOULDBLOCK?
-  | FStar.Tcp.RecvError _ignored -> -1l 
-  | FStar.Tcp.Received b -> 
-    let target = Buffer.sub buffer 0ul (Bytes.len b) in
-    BufferBytes.store_bytes (length b) target 0 b;
-    Int.Cast.uint32_to_int32 (Bytes.len b)
-//#reset-options
-
-private
-let wrap tcp: Dv t = callbacks (FStar.Dyn.mkdyn tcp) send_tcp recv_tcp
-
-[@ deprecated "tentative: why hardwire FStar.TCP here?"]
-let listen domain port : ML FStar.Tcp.tcpListener = FStar.Tcp.listen domain port
-
-[@ deprecated "tentative: why hardwire FStar.TCP here?"]
-let accept listener = wrap (FStar.Tcp.accept listener)
-
-[@ deprecated "tentative: why hardwire FStar.TCP here?"]
-let connect domain port = wrap (FStar.Tcp.connect domain port)
-
-[@ deprecated "tentative: why hardwire FStar.TCP here?"]
-let close = FStar.Tcp.close
-
 // following the indirection
-
 let send t buffer len = t.snd t.ptr buffer len 
 let recv t buffer len = t.rcv t.ptr buffer len 
 
