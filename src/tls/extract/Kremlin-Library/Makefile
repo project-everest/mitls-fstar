@@ -25,6 +25,10 @@ else ifeq ($(UNAME),Linux)
   export LD_LIBRARY_PATH
 endif
 
+ifeq (,$(wildcard $(MITLS_HOME)/src/pki/libmipki.$(SO)))
+  $(error MITLS_HOME is $(MITLS_HOME) and I cannot find $(MITLS_HOME)/src/pki/libmipki.$(SO) -- please run make in $(MITLS_HOME)/src/pki)
+endif
+
 INCLUDE_DIRS 	= $(MITLS_HOME)/src/pki $(MITLS_HOME)/libs/ffi secure kremlib \
   include stub vale curve .
 
