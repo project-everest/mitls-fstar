@@ -37,7 +37,7 @@ FILES 		= Cert C_Loops_Spec_Loops CommonDH CoreCrypto \
   stub/hacl_provider Test_Main TLSConstants TLS_Curve25519 TLSError TLSInfo \
   TLSInfoFlags vale/sha256_main_i vale/vale_aes_glue vale/Vale_Hash_SHA2_256
 
-CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall \
+CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror \
   -Wno-unused-variable -Wno-parentheses -Wno-unknown-warning-option \
   -Wno-unused-but-set-variable -Wno-infinite-recursion -g -fwrapv -fstack-check \
   -D_BSD_SOURCE -D_DEFAULT_SOURCE -D__USE_MINGW_ANSI_STDIO \
