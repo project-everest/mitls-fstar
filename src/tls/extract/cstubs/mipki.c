@@ -12,20 +12,20 @@
 
 static size_t list_sa_len(Prims_list__TLSConstants_signatureScheme *l)
 {
-  if (l->tag == Prims_Nil) return 0;
-  else if (l->tag == Prims_Cons)
+  if (l->tag == Prims_Cons)
   {
     return 1 + list_sa_len(l->val.case_Cons.tl);
   }
+  return 0;
 }
 
 static size_t list_bytes_len(Prims_list__FStar_Bytes_bytes* l)
 {
-  if (l->tag == Prims_Nil) return 0;
-  else if (l->tag == Prims_Cons)
+  if (l->tag == Prims_Cons)
   {
     return 1 + list_bytes_len(l->val.case_Cons.tl);
   }
+  return 0;
 }
 
 static TLSConstants_signatureScheme_tags tls_of_pki(mitls_signature_scheme sa)
@@ -196,7 +196,10 @@ FStar_Pervasives_Native_option__FStar_Bytes_bytes PKI_sign(FStar_Dyn_dyn cbs, FS
 
   if(mipki_sign_verify(pki, chain, sigalg, tbs.data, tbs.length, sig, &slen, MIPKI_SIGN))
   {
-    printf("PKI| Success: produced %d bytes of signature.\n", pki, slen);
+    #if DEBUG
+      printf("PKI| Success: produced %d bytes of signature.\n", pki, slen);
+      fflush(stdout);
+    #endif
     res.tag = FStar_Pervasives_Native_Some;
     res.val.case_Some.v = (FStar_Bytes_bytes){.length = slen, .data = sig};
   }
@@ -255,8 +258,9 @@ bool PKI_verify(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
     fflush(stdout);
   #endif
 
+  const char* sigp = (const char *)sig.data;
   int r = mipki_sign_verify(pki, chain, sigalg, tbs.data, tbs.length,
-    (const char*)sig.data, &slen, MIPKI_VERIFY);
+    sigp, &slen, MIPKI_VERIFY);
 
   mipki_free_chain(pki, chain);
   return r;
@@ -264,11 +268,11 @@ bool PKI_verify(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
 
 static uint32_t config_len(Prims_list__K___Prims_string_Prims_string_bool *l)
 {
-  if (l->tag == Prims_Nil) return 0;
-  else if (l->tag == Prims_Cons)
+  if (l->tag == Prims_Cons)
   {
     return 1 + config_len(l->val.case_Cons.tl);
   }
+  return 0;
 }
 
 FStar_Dyn_dyn PKI_init(Prims_string cafile, Prims_list__K___Prims_string_Prims_string_bool *certs)
