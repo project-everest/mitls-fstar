@@ -68,7 +68,6 @@ all: libmitls.$(SO)
 	$(CC) $(CFLAGS) -MM $(addsuffix .c,$(FILES)) > $@
 
 libmitls.$(SO): $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
-	# Disabled because of missing symbols
-	true || $(CC) $^ -shared -o $@ -lcrypto -lssl -lmpki $(LDOPTS) -L$(MLCRYPTO_HOME)/openssl -L$(MITLS_HOME)/src/pki
+	$(CC) $^ -shared -o $@ -lcrypto -lssl -lmipki $(LDOPTS) -L$(MLCRYPTO_HOME)/openssl -L$(MITLS_HOME)/src/pki
 
 test:
