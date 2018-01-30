@@ -314,20 +314,20 @@ FStar_Dyn_dyn PKI_init(Prims_string cafile, Prims_list__K___Prims_string_Prims_s
   if(cafile[0] != '\0') mipki_add_root_file_or_path(pki, cafile);
 
   assert(pki != NULL);
-  return (intptr_t)pki;
+  return pki;
 }
 
 TLSConstants_cert_cb PKI_tls_callbacks(FStar_Dyn_dyn x0)
 {
   return (TLSConstants_cert_cb){
     .app_context = x0,
-    .cert_select_ptr = (intptr_t)0,
+    .cert_select_ptr = NULL,
     .cert_select_cb = PKI_select,
-    .cert_format_ptr = (intptr_t)0,
+    .cert_format_ptr = NULL,
     .cert_format_cb = PKI_format,
-    .cert_sign_ptr = (intptr_t)0,
+    .cert_sign_ptr = NULL,
     .cert_sign_cb = PKI_sign,
-    .cert_verify_ptr = (intptr_t)0,
+    .cert_verify_ptr = NULL,
     .cert_verify_cb = PKI_verify
   };
 }
