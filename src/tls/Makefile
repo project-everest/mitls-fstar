@@ -3,6 +3,11 @@ FLAVOR=generic
 
 all: ocaml-all kremlin-all
 
+clean-depend:
+	rm -rf .depend.OCaml .depend.Kremlin
+
+ocaml-all kremlin-all: clean-depend
+
 include Makefile.common
 
 ocaml-%:

@@ -3,6 +3,7 @@
 UNAME		= $(shell uname)
 MARCH		?= x86_64
 
+MITLS_HOME 	?= ../../../..
 MLCRYPTO_HOME	?= ../../../../../MLCrypto
 
 ifeq ($(OS),Windows_NT)

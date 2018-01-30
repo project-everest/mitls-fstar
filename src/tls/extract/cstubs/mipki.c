@@ -258,7 +258,7 @@ bool PKI_verify(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
     fflush(stdout);
   #endif
 
-  const char* sigp = (const char *)sig.data;
+  char* sigp = (char *)sig.data;
   int r = mipki_sign_verify(pki, chain, sigalg, tbs.data, tbs.length,
     sigp, &slen, MIPKI_VERIFY);
 
