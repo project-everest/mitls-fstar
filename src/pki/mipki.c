@@ -544,6 +544,52 @@ mipki_chain MITLS_CALLCONV mipki_parse_chain(mipki_state *st, const char *chain,
     return NULL;
 }
 
+mipki_chain MITLS_CALLCONV mipki_parse_list(mipki_state *st, const char **certs, const size_t* certs_len, size_t chain_len)
+{
+  // We delay allocation of a long-lived heap version until the whole chain is parsed
+  config_entry c = {
+    .endpoint = NULL,
+    .intermediates = sk_X509_new_null(),
+    .key = NULL,
+    .is_universal = 0,
+    .is_ephemeral = 1
+  };
+
+  for(size_t i = 0; i < chain_len; i++)
+  {
+    const unsigned char *cur = (const unsigned char*)certs[i];
+    X509 *x509 = d2i_X509(NULL, &cur, certs_len[i]);
+
+    if(x509 == NULL)
+    {
+      #if DEBUG
+        printf("mipki_parse_chain: failed to parse certificate");
+      #endif
+      goto fail;
+    }
+
+    if(c.endpoint == NULL) {
+      c.endpoint = x509;
+    } else {
+      sk_X509_push(c.intermediates, x509);
+    }
+  }
+
+  if(c.endpoint != NULL)
+  {
+    c.key = X509_get_pubkey(c.endpoint);
+    config_entry *res = malloc(sizeof(c));
+    *res = c;
+    return res;
+  }
+
+  // Ugly, but we really do not want memory leaks in this function
+  fail:
+    if(c.endpoint != NULL) X509_free(c.endpoint);
+    sk_X509_pop_free(c.intermediates, X509_free);
+    return NULL;
+}
+
 size_t MITLS_CALLCONV mipki_format_chain(mipki_state *st, const mipki_chain chain, char *buffer, size_t buffer_len)
 {
   assert(st != NULL);
@@ -591,6 +637,37 @@ size_t MITLS_CALLCONV mipki_format_chain(mipki_state *st, const mipki_chain chai
   #endif
   sk_X509_shift(cfg->intermediates);
   return (cur - buffer);
+}
+
+void MITLS_CALLCONV mipki_format_alloc(mipki_state *st, mipki_chain chain, void* init, alloc_callback cb)
+{
+  assert(st != NULL);
+  config_entry *cfg = (config_entry*)chain;
+  sk_X509_unshift(cfg->intermediates, cfg->endpoint);
+  void* list = init;
+
+  #if DEBUG
+    printf("Formatting the selected certificate chain.\n");
+  #endif
+
+  for(int i = 0; i < sk_X509_num(cfg->intermediates); i++)
+  {
+    unsigned char *buf = NULL;
+    X509 *x509 = sk_X509_value(cfg->intermediates, i);
+
+    #if DEBUG
+      char nb[256];
+      X509_NAME_oneline(X509_get_subject_name(x509), nb, 256);
+      printf(" - Adding: %s\n", nb);
+    #endif
+
+    size_t len = i2d_X509(x509, NULL);
+    list = cb(list, len, (char**)&buf);
+    assert(buf != NULL);
+    i2d_X509(x509, &buf);
+  }
+
+  sk_X509_shift(cfg->intermediates);
 }
 
 int MITLS_CALLCONV mipki_validate_chain(mipki_state *st, const mipki_chain chain, const char *host)

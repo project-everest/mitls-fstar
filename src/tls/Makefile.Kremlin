@@ -38,8 +38,9 @@ KRML_COMMAND	= krml \
   -fnoanonymous-unions -warn-error -9-7-6 \
   -fsopts --debug,yes -verbose \
   -ccopts -Wno-unused-function,-O0 \
-  -ldopts -lcrypto,-lssl \
+  -ldopts -lcrypto,-lssl,-lmipki \
   -ldopts -L,$(MLCRYPTO_HOME)/openssl \
+  -ldopts -L,../pki \
   $(DROP_MODULES) $(HEADERS) $(KOPTS)
 
 
@@ -72,10 +73,13 @@ ALL_EXTERNAL_FILES	= \
   $(addprefix curve/,Curve25519.c Curve25519.h) \
   $(addprefix kremlib/,kremstr.c kremstr.h kremdate.c krembytes.h kremlib.h \
     gcc_compat.h testlib.h) \
-  $(addprefix stub/,hacl_aead.c hacl_provider.c core_crypto.c) \
+  $(addprefix stub/,hacl_aead.c hacl_provider.c mipki.c core_crypto.c) \
   $(addprefix include/,hacl_glue.h hacks.h) \
   $(addprefix vale/,sha256_main_i.c sha256_main_i.h sha256-$(MARCH)$(VARIANT).S \
     Vale_Hash_SHA2_256.c vale_aes_glue.c aes-$(MARCH)$(VARIANT).S DafnyLib.h)
+
+extract/cstubs/mipki.o: extract/cstubs/mipki.c
+	$(CC) -I ../pki -I ../../libs/ffi -I extract/include -I $(EXTRACT_DIR) -I $(SECURE_OUT) -I $(KREMLIN_HOME)/kremlib -c $< -o $@
 
 ################################################################################
 

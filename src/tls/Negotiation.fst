@@ -661,7 +661,7 @@ let group_of_hrr hrr : option CommonDH.group =
     CommonDH.group_of_namedGroup ng
   | _ -> None
 
-private 
+private
 let choose_extension (s:option share)
                      (e:Extensions.extension) =
       match e with
@@ -673,7 +673,7 @@ let choose_extension (s:option share)
       | Extensions.E_early_data _ ->
         None
       | e -> Some e
-      
+
 let client_HelloRetryRequest #region (ns:t region Client) hrr (s:option share) =
   let { hrr_sessionID = sid;
         hrr_cipher_suite = cs;
@@ -834,9 +834,9 @@ let rec negotiateGroupKeyShare cfg pv exts =
 *)
 val isSentinelRandomValue: protocolVersion -> protocolVersion -> TLSInfo.random -> Tot bool
 let isSentinelRandomValue c_pv s_pv s_random =
-  geqPV c_pv TLS_1p3 && geqPV TLS_1p2 s_pv && bytes_of_string "DOWNGRD\x01" = s_random ||
-  geqPV c_pv TLS_1p2 && geqPV TLS_1p1 s_pv && bytes_of_hex "444f574e47524400" = s_random
-                                                       //  "444f574e47524400"="DOWNGRD\x00"
+  let down = bytes_of_string "DOWNGRD" in
+  geqPV c_pv TLS_1p3 && geqPV TLS_1p2 s_pv && (down @| abyte 1z) = s_random ||
+  geqPV c_pv TLS_1p2 && geqPV TLS_1p1 s_pv && (down @| abyte 0z) = s_random
 
 
 (** Confirms that the version negotiated by the server was:
@@ -1135,23 +1135,23 @@ private let rec compute_cs13_aux (i:nat) (o:offer)
     in
     choices @ (compute_cs13_aux (i+1) o psks g_gx ncs psk_kex server_cert)
 
-private 
+private
 let is_cs13_in_cfg cfg cs =
   CipherSuite13? cs && List.Tot.mem cs cfg.cipher_suites
 
-private 
+private
 let is_in_cfg_named_groups cfg g =
   List.Tot.mem g cfg.named_groups
-  
+
 private
 let group_of_named_group (x:_{Some? (CommonDH.group_of_namedGroup x)}) =
   Some?.v (CommonDH.group_of_namedGroup x)
-  
-private 
+
+private
 let share_in_named_group gl (x :share) =
     let (| g, _ |) = x in
     List.Tot.mem g gl
-  
+
 // returns a list of negotiable "core modes" for TLS 1.3
 // and an optional group and ciphersuite suitable for HRR
 // the key exchange can be derived from cs13
@@ -1363,7 +1363,7 @@ let computeServerMode cfg co serverRandom =
 private
 let accum_string_of_ciphersuite s cs =
     s ^ "; " ^ string_of_ciphersuite cs
-  
+
 let string_of_ciphersuites csl =
   List.Tot.fold_left accum_string_of_ciphersuite "" csl
 
@@ -1394,7 +1394,7 @@ let aux_extension_ok (o1, hrr) (e:Extensions.extension) =
             //FIXME: Extensions.E_pre_shared_key "may be updated" 4.1.2
             true) // FIXME
             //(extensionBytes e) = (extensionBytes e'))
-        
+
 val server_ClientHello: #region:rgn -> t region Server ->
   HandshakeMessages.ch ->
   St (result serverMode)

@@ -47,6 +47,9 @@ typedef const void* mipki_chain;
 // Should return the size of the written passphrase, or 0 on error
 typedef int (MITLS_CALLCONV *password_callback)(char *pass, int max_size, const char *key_file);
 
+// A callback to allocate a new buffer to write the chain element to
+typedef void* (MITLS_CALLCONV *alloc_callback)(void* cur, size_t len, /*out*/ char **buf);
+
 // Create a new instance of the PKI library using the provided server configuration
 // The configuration describes the selectable certificates as a server, and
 // their private keys. They are loaded in memory until mipki_free is called.
@@ -74,8 +77,14 @@ int MITLS_CALLCONV mipki_sign_verify(mipki_state *st, mipki_chain cert_ptr, cons
 // DER-encodeded structure over 3 bytes. The returned chain must be freed after use
 mipki_chain MITLS_CALLCONV mipki_parse_chain(mipki_state *st, const char *chain, size_t chain_len);
 
+// Parse an array of DER certificates into a chain object
+mipki_chain MITLS_CALLCONV mipki_parse_list(mipki_state *st, const char **certs, const size_t* certs_len, size_t chain_len);
+
 // Format an abstract chain into the TLS network format
 size_t MITLS_CALLCONV mipki_format_chain(mipki_state *st, mipki_chain chain, char *buffer, size_t buffer_len);
+
+// Format an abstract chain into a list of buffers allocated with a callback function
+void MITLS_CALLCONV mipki_format_alloc(mipki_state *st, mipki_chain chain, void* init, alloc_callback cb);
 
 // Certificate chain validation. This checks revocation, expiration, and matches the hostname
 int MITLS_CALLCONV mipki_validate_chain(mipki_state *st, mipki_chain chain, const char *host);
