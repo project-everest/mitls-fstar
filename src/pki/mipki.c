@@ -7,6 +7,9 @@
 #include <assert.h>
 #include <time.h>
 
+
+#ifdef HAVE_OPENSSL
+
 #include <openssl/err.h>
 #include <openssl/pem.h>
 #include <openssl/x509v3.h>
@@ -714,3 +717,28 @@ void MITLS_CALLCONV mipki_free_chain(mipki_state *st, mipki_chain chain)
 
   free(cfg);
 }
+
+
+#else // ! HAVE_OPENSSL
+
+#include "mipki.h"
+
+#ifdef DEBUG
+void D() { printf("No OpenSSL support.\n"); }
+#else
+void D() {};
+#endif
+
+void MITLS_CALLCONV mipki_free(mipki_state *st) { D(); }
+mipki_state* MITLS_CALLCONV mipki_init(const mipki_config_entry config[], size_t config_len, password_callback pcb, int *erridx) { D(); return NULL; }
+int MITLS_CALLCONV mipki_add_root_file_or_path(mipki_state *st, const char *ca_file) { D(); return 0; }
+mipki_chain MITLS_CALLCONV mipki_select_certificate(mipki_state *st, const char *sni, const mipki_signature *algs, size_t algs_len, mipki_signature *selected) { D(); return NULL; }
+int MITLS_CALLCONV mipki_sign_verify(mipki_state *st, const mipki_chain cert_ptr, const mipki_signature sigalg, const char *tbs, size_t tbs_len, char *sig, size_t *sig_len, mipki_mode mode) { D(); return 0; }
+mipki_chain MITLS_CALLCONV mipki_parse_chain(mipki_state *st, const char *chain, size_t chain_len) { D(); return NULL; }
+mipki_chain MITLS_CALLCONV mipki_parse_list(mipki_state *st, const char **certs, const size_t* certs_len, size_t chain_len) { D(); return NULL; }
+size_t MITLS_CALLCONV mipki_format_chain(mipki_state *st, const mipki_chain chain, char *buffer, size_t buffer_len) { D(); return 0; }
+void MITLS_CALLCONV mipki_format_alloc(mipki_state *st, mipki_chain chain, void* init, alloc_callback cb) { D(); }
+int MITLS_CALLCONV mipki_validate_chain(mipki_state *st, const mipki_chain chain, const char *host) { D(); return 0; }
+void MITLS_CALLCONV mipki_free_chain(mipki_state *st, mipki_chain chain) { D(); }
+
+#endif

@@ -11,7 +11,12 @@ OCAMLOPT = ocamlfind opt $(INCLUDE) -g -annot
 OCAMLMKLIB = ocamlfind mklib $(INCLUDE)
 OCAMLDEP = ocamlfind dep -slash
 
-CCOPTS = -std=c11 -D__USE_MINGW_ANSI_STDIO -Lopenssl -I$(OPENSSL_HOME)/include
+CCOPTS = -std=c11 -D__USE_MINGW_ANSI_STDIO 
+ifdef HAVE_OPENSSL
+CCOPTS += -Lopenssl -I$(OPENSSL_HOME)/include -DHAVE_OPENSSL
+else
+CCOPTS += -I$(MLCRYPTO_HOME)
+endif
 
 ifneq ($(VS140COMNTOOLS),)
         VS_BIN_DOSPATH=$(VS140COMNTOOLS)/../../VC/bin
@@ -94,6 +99,8 @@ mipki.o: mipki.c
 $(PLATFORM)/platform.cmx: $(PLATFORM)/platform.ml
 	$(MAKE) -C $(PLATFORM)
 
+
+ifdef HAVE_OPENSSL
 $(OPENSSL_HOME)/Configure:
 	echo "openssl folder is empty, please update submodules in $(MLCRYPTO_HOME)"
 	false
@@ -110,6 +117,16 @@ libmipki.dll: libcrypto.a mipki.o
 
 libmipki.so: libcrypto.a mipki.o
 	$(CC) $(COPTS) -shared mipki.o libcrypto.a -o $@
+
+else # !HAVE_OPENSSL
+
+libmipki.dll: mipki.o
+	$(CC) $(COPTS) -shared mipki.o -lws2_32 -o $@
+
+libmipki.so: mipki.o
+	$(CC) $(COPTS) -shared mipki.o -o $@
+endif
+
 
 test.exe: $(LIBMIPKI) test.c
 	$(CC) $(COPTS) -L. -lmipki test.c -o $@
