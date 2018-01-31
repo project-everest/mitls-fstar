@@ -1,6 +1,6 @@
 HACL_HOME?=../../../hacl-star
 FSTAR_HOME?=../../../FStar
-MITLS_HOME=../..
+MITLS_HOME?=../..
 KREMLIN_HOME	?= ../../../kremlin
 MLCRYPTO_HOME	?= ../../../MLCrypto
 
