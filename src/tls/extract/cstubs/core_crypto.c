@@ -473,7 +473,7 @@ CoreCrypto_rsa_decrypt(CoreCrypto_rsa_key key,
   char *out = malloc(rsasz);
   FAIL_IF(out == NULL, "Allocation failure");
 
-  size_t len;
+  int len;
   if ((len = RSA_private_decrypt(data.length, (uint8_t *)data.data, (uint8_t *)out, rsa, openssl_padding)) < 0) {
       unsigned long err = ERR_peek_last_error();
       char* err_string = ERR_error_string(err, NULL);
