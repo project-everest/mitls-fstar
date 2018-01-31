@@ -76,7 +76,9 @@ ALL_EXTERNAL_FILES	= \
   $(addprefix stub/,hacl_aead.c hacl_provider.c mipki_wrapper.c core_crypto.c) \
   $(addprefix include/,hacl_glue.h hacks.h) \
   $(addprefix vale/,sha256_main_i.c sha256_main_i.h sha256-$(MARCH)$(VARIANT).S \
-    Vale_Hash_SHA2_256.c vale_aes_glue.c aes-$(MARCH)$(VARIANT).S DafnyLib.h)
+    Vale_Hash_SHA2_256.c vale_aes_glue.c aes-$(MARCH)$(VARIANT).S DafnyLib.h) \
+  $(addprefix pki/,mipki.h) \
+  $(addprefix ffi/,mitlsffi.h)
 
 ################################################################################
 
@@ -93,6 +95,8 @@ $(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/kremlib,$(KREMLIN_HOME)/kremlib
 $(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/include,extract/include))
 $(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/stub,extract/cstubs))
 $(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/vale,$(VALE_DIR)))
+$(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/ffi,$(MITLS_HOME)/libs/ffi))
+$(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/pki,$(MITLS_HOME)/src/pki))
 
 # Leave Crypto_Indexing (which Crypto_AEAD_Main wants) standalone, and its
 # dependencies too.
@@ -133,8 +137,7 @@ $(LIBRARY_DIR)/TLS.c: $(filter-out $(EXTRACT_DIR)/prims.krml $(EXTRACT_DIR)/Test
 	$(KRML_COMMAND) $^ -tmpdir $(LIBRARY_DIR) -skip-compilation
 
 library-copy: $(addprefix $(LIBRARY_DIR)/,$(ALL_EXTERNAL_FILES)) \
-  $(LIBRARY_DIR)/stub/mitlsffi.c $(LIBRARY_DIR)/ffi/mitlsffi.h \
-  $(LIBRARY_DIR)/pki/mipki.h
+  $(LIBRARY_DIR)/stub/mitlsffi.c
 
 output-library: library-copy $(LIBRARY_DIR)/TLS.c
 
