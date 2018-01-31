@@ -28,7 +28,7 @@ ifeq (,$(wildcard $(MITLS_HOME)/src/pki/libmipki.$(SO)))
   $(error MITLS_HOME is $(MITLS_HOME) and I cannot find $(MITLS_HOME)/src/pki/libmipki.$(SO) -- please run make in $(MITLS_HOME)/src/pki)
 endif
 
-INCLUDE_DIRS 	= secure kremlib include stub vale curve .
+INCLUDE_DIRS 	= secure kremlib include stub vale curve pki ffi .
 
 # ls *.c */*.c | sed 's/\.c//g' >> Makefile
 # then: remove Crypto_AEAD_Main because of the hacl_provider hack
