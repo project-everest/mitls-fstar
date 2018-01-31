@@ -11,7 +11,7 @@
 #include <wincrypt.h>
 #endif
 
-#ifdef HAVE_OPENSSL
+#ifndef NO_OPENSSL
 
 #include <openssl/conf.h>
 #include <openssl/err.h>
@@ -496,7 +496,7 @@ bool CoreCrypto_validate_chain(Prims_list__FStar_Bytes_bytes *x0, bool x1,
   TODO(bool);
 }
 
-#else // !HAVE_OPENSSL
+#else // NO_OPENSSL
 
 // TODO.
 

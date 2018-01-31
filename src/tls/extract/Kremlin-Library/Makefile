@@ -25,7 +25,7 @@ else ifeq ($(UNAME),Linux)
   export LD_LIBRARY_PATH
 endif
 
-ifdef HAVE_OPENSSL
+ifndef NO_OPENSSL
 ifeq ($(OS),Windows_NT)
   PATH := $(MLCRYPTO_HOME)/openssl:$(PATH)
 else
@@ -67,9 +67,11 @@ CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror \
   -D_BSD_SOURCE -D_DEFAULT_SOURCE -D__USE_MINGW_ANSI_STDIO \
   -Wno-missing-braces
 
-ifdef HAVE_OPENSSL
-CFLAGS += -I$(MLCRYPTO_HOME)/openssl/include -DHAVE_OPENSSL
+ifndef NO_OPENSSL
+CFLAGS += -I$(MLCRYPTO_HOME)/openssl/include
 LDOPTS += -L$(MLCRYPTO_HOME)/openssl -lcrypto -lssl
+else
+CFLAGS += -DNO_OPENSSL
 endif
 
 all: libmitls.$(SO)

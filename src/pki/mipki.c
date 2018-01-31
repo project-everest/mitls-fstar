@@ -8,7 +8,7 @@
 #include <time.h>
 
 
-#ifdef HAVE_OPENSSL
+#ifndef NO_OPENSSL
 
 #include <openssl/err.h>
 #include <openssl/pem.h>
@@ -719,7 +719,7 @@ void MITLS_CALLCONV mipki_free_chain(mipki_state *st, mipki_chain chain)
 }
 
 
-#else // ! HAVE_OPENSSL
+#else // NO_OPENSSL
 
 #include "mipki.h"
 

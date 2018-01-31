@@ -41,7 +41,7 @@ KRML_COMMAND	= krml \
   -ldopts -L,../pki,-lmipki \
   $(DROP_MODULES) $(HEADERS) $(KOPTS)
 
-ifdef HAVE_OPENSSL
+ifndef NO_OPENSSL
   KRML_COMMAND += -ldopts -L,$(MLCRYPTO_HOME)/openssl,-lcrypto,-lssl
 endif
 
