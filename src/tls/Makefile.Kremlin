@@ -128,7 +128,8 @@ $(eval $(call COPY_template,$(LIBRARY_DIR)/vale,$(VALE_DIR)))
 $(eval $(call COPY_template,$(LIBRARY_DIR)/ffi,$(MITLS_HOME)/libs/ffi))
 $(eval $(call COPY_template,$(LIBRARY_DIR)/pki,$(MITLS_HOME)/src/mipki))
 
-$(LIBRARY_DIR)/TLS.c: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES))
+# Keeping Test_Main.krml around to produce FStar.h/c, will drop it when building the library
+$(LIBRARY_DIR)/TLS.c: $(filter-out $(EXTRACT_DIR)/prims.krml $(EXTRACT_DIR)/Test_RSA.krml $(EXTRACT_DIR)/Test_CommonDH.krml $(EXTRACT_DIR)/Test_Handshake.krml $(EXTRACT_DIR)/Test_StAE.krml,$(ALL_KRML_FILES))
 	$(KRML_COMMAND) $^ -tmpdir $(LIBRARY_DIR) -skip-compilation
 
 library-copy: $(addprefix $(LIBRARY_DIR)/,$(ALL_EXTERNAL_FILES)) \
