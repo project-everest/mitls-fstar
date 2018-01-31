@@ -1,5 +1,6 @@
 #include "CoreCrypto.h"
 #include "Crypto_HKDF_Crypto_HMAC.h"
+#include "kremlib.h"
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -61,7 +62,7 @@ FStar_Bytes_bytes CoreCrypto_dh_agreement(CoreCrypto_dh_key x0,
   DH_set0_key(dh, pub, prv);
 
   uint32_t len = DH_size(dh);
-  char *out = malloc(len);
+  char *out = KRML_HOST_MALLOC(len);
 
   FAIL_IF(DH_compute_key((uint8_t *) out, opub, dh) < 0, "OpenSSL failure DH_compute_key");
 
@@ -79,7 +80,7 @@ FStar_Bytes_bytes CoreCrypto_dh_agreement(CoreCrypto_dh_key x0,
 static inline
 FStar_Bytes_bytes bytes_of_bn(const BIGNUM *bn) {
   size_t len = BN_num_bytes(bn);
-  char *data = malloc(len);
+  char *data = KRML_HOST_MALLOC(len);
   BN_bn2bin(bn, (uint8_t *) data);
   FStar_Bytes_bytes ret = {
     .length = len,
@@ -174,7 +175,7 @@ FStar_Bytes_bytes CoreCrypto_ecdh_agreement(CoreCrypto_ec_key x0,
 
   size_t field_size = EC_GROUP_get_degree(g);
   size_t len = (field_size + 7) / 8;
-  char *out = malloc(len);
+  char *out = KRML_HOST_MALLOC(len);
 
   EC_POINT *pp = EC_POINT_new(g);
   BIGNUM *ppx = BN_bin2bn((uint8_t *) x1.ecx.data, x1.ecx.length, NULL);
@@ -228,12 +229,13 @@ CoreCrypto_ec_key CoreCrypto_ec_gen_key(CoreCrypto_ec_params x0) {
       .val = { .case_Some = { .v = bytes_of_bn(pr) } }
     }
   };
-  return ret;
 
   BN_free(y);
   BN_free(x);
   EC_GROUP_free(g);
   EC_KEY_free(k);
+
+  return ret;
 }
 
 bool CoreCrypto_ec_is_on_curve(CoreCrypto_ec_params x0,
@@ -267,7 +269,7 @@ FStar_Bytes_bytes CoreCrypto_hash(CoreCrypto_hash_alg x0,
   FAIL_IF(a == (Crypto_HMAC_alg) -1,
           "CoreCrypto_hash implemented using HACL*, unsupported algorithm");
   uint32_t len = Crypto_HMAC_hash_size(a);
-  char *out = malloc(len);
+  char *out = KRML_HOST_MALLOC(len);
   Crypto_HMAC_agile_hash(a, (uint8_t *)out, (uint8_t *)x1.data, x1.length);
 
   FStar_Bytes_bytes ret = {.length = len, .data = out};
@@ -282,7 +284,7 @@ FStar_Bytes_bytes CoreCrypto_hmac(CoreCrypto_hash_alg x0,
           "CoreCrypto_hash implemented using HACL*, unsupported algorithm");
 
   uint32_t len = Crypto_HMAC_hash_size(a);
-  char *out = malloc(len);
+  char *out = KRML_HOST_MALLOC(len);
   Crypto_HMAC_hmac(a, (uint8_t *)out, (uint8_t *)x1.data, x1.length,
                    (uint8_t *)x2.data, x2.length);
 
@@ -298,7 +300,7 @@ CoreCrypto_load_chain(Prims_string x0) {
 
 #ifdef __WIN32
 FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
-  BYTE *data = malloc(x0);
+  BYTE *data = KRML_HOST_MALLOC(x0);
 
   HCRYPTPROV ctxt;
   if (!(CryptAcquireContext(&ctxt, NULL, NULL, PROV_RSA_FULL,
@@ -318,7 +320,7 @@ FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
 }
 #else
 FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
-  char *data = malloc(x0);
+  char *data = KRML_HOST_MALLOC(x0);
 
   int fd = open("/dev/urandom", O_RDONLY);
   if (fd == -1) {
@@ -354,33 +356,22 @@ CoreCrypto_rsa_key CoreCrypto_rsa_gen_key(Prims_int size) {
   const BIGNUM *b_n, *b_e, *b_d;
   RSA_get0_key(rsa, &b_n, &b_e, &b_d);
 
-  size_t mod_len = BN_num_bytes(b_n);
-  char *mod = malloc(mod_len);
-  BN_bn2bin(b_n, (uint8_t *)mod);
-
-  size_t exp_len = BN_num_bytes(b_e);
-  char *exp = malloc(exp_len);
-  BN_bn2bin(b_e, (uint8_t *)exp);
-
-  size_t prv_len = BN_num_bytes(b_d);
-  char *prv = malloc(prv_len);
-  BN_bn2bin(b_d, (uint8_t *)prv);
-
-  RSA_free(rsa);
-  BN_free(e);
-
   CoreCrypto_rsa_key ret = {
-    .rsa_mod     = { .data = mod, .length = mod_len },
-    .rsa_pub_exp = { .data = exp, .length = exp_len },
+    .rsa_mod     = bytes_of_bn(b_n),
+    .rsa_pub_exp = bytes_of_bn(b_e),
     .rsa_prv_exp = {
       .tag = FStar_Pervasives_Native_Some,
       .val = {
         .case_Some = {
-          .v = { .data = prv, .length = prv_len }
+          .v = bytes_of_bn(b_d)
         }
       }
     }
   };
+
+  RSA_free(rsa);
+  BN_free(e);
+
   return ret;
 }
 
@@ -414,7 +405,7 @@ FStar_Bytes_bytes CoreCrypto_rsa_encrypt(CoreCrypto_rsa_key key,
   size_t rsasz = RSA_size(rsa);
   FAIL_IF(data.length > rsasz - pdsz, "Cannot encrypt as much data");
 
-  char *out = malloc(rsasz);
+  char *out = KRML_HOST_MALLOC(rsasz);
   FAIL_IF(out == NULL, "Allocation failure");
 
   if (RSA_public_encrypt(data.length, (uint8_t *)data.data, (uint8_t *)out, rsa, openssl_padding) < 0) {
@@ -470,7 +461,7 @@ CoreCrypto_rsa_decrypt(CoreCrypto_rsa_key key,
   size_t rsasz = RSA_size(rsa);
   FAIL_IF(data.length != rsasz, "Incorrect ciphertext length");
 
-  char *out = malloc(rsasz);
+  char *out = KRML_HOST_MALLOC(rsasz);
   FAIL_IF(out == NULL, "Allocation failure");
 
   int len;
