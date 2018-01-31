@@ -61,21 +61,45 @@ let test config: St unit =
     let server = Handshake.create rid config Server resume in
     let _ = Handshake.recv_fragment server rg ch in
     let out1 = Handshake.next_fragment server i in
-    ( match out1 with
+    (match out1 with
+    | Correct(HandshakeLog.Outgoing (Some f) _ _) ->
+      let (|rg, sh|) = f in
+      nprint ("<---server-hello---- "^first_bytes sh);
+      let _ = Handshake.recv_fragment client rg sh in
+      let out2 = Handshake.next_fragment server i in
+      (match out2 with
       | Correct(HandshakeLog.Outgoing (Some f) _ _) ->
-        let (|rg, sh|) = f in
-        nprint ("<---server-hello---- "^first_bytes sh);
-        let _ = Handshake.recv_fragment client rg sh in
-        nprint ("Done")
-      | Error (_,s) -> eprint ("server failed to build second flight: "^s)
-      | _ -> eprint ("server failed to return second flight."))
+        let (|rg, sf|) = f in
+        nprint ("<--server-finished-- "^first_bytes sf);
+        let _ = Handshake.recv_fragment client rg sf in
+        let out3 = Handshake.next_fragment client i in
+        (match out3 with
+        | Correct(HandshakeLog.Outgoing (Some f) _ _) ->
+          let (|rg, cf|) = f in
+          nprint ("--client-finished---> "^first_bytes cf);
+          let _ = Handshake.recv_fragment server rg cf in
+          let out4 = Handshake.next_fragment server i in
+          (match out4 with
+          | Correct(HandshakeLog.Outgoing (Some f) _ _) ->
+            let (|rg, nst|) = f in
+            nprint ("<--session-ticket-- "^first_bytes nst);
+            let _ = Handshake.recv_fragment client rg nst in
+            nprint "Done"
+          | _ -> eprint "client failed to emit session ticket")
+        | _ -> eprint "client failed to return finished flight")
+      | _ -> eprint "server failed to return end of second flight")
+    | Error (_,s) -> eprint ("server failed to build second flight: "^s)
+    | _ -> eprint ("server failed to return second flight."))
   | Error (_,s) -> eprint ("client failed to build first flight: "^s)
   | _ -> eprint ("client failed to return first flight.")
 
 let main() = // could try with different client and server configs
 //  test ({ defaultConfig with min_version = TLS_1p2; max_version = TLS_1p2; });
 //  test ({ defaultConfig with min_version = TLS_1p2; max_version = TLS_1p3; });
-  let pki = PKI.init "../../../../data/CAFile.pem" ["../../../../data/server-ecdsa.crt", "../../../../data/server-ecdsa.key", true] in
+  let pki = PKI.init "../../../../data/CAFile.pem" // CA file
+     ["../../../../data/server-ecdsa.crt", // Cert file
+      "../../../../data/server-ecdsa.key", // Private key file
+      true] in // Universal (use for any SNI)
   test ({ defaultConfig with
     min_version = TLS_1p3;
     max_version = TLS_1p3;

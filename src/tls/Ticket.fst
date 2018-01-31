@@ -136,7 +136,7 @@ let create_ticket t =
   let nb = CC.random 12 in
   let salt = AE.salt_of_state wr in
   let iv = AE.coerce_iv tid (xor 12ul nb salt) in
-  let ae = AE.encrypt #tid #65535 wr iv empty_bytes plain in
+  let ae = AE.encrypt #tid #(length plain) wr iv empty_bytes plain in
   nb @| ae
 
 let check_ticket13 b =
