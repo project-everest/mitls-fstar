@@ -340,9 +340,48 @@ FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
 }
 #endif
 
-CoreCrypto_rsa_key CoreCrypto_rsa_gen_key(Prims_int x0) {
-  // unused
-  TODO(CoreCrypto_rsa_key);
+// REMARK: used only in tests
+CoreCrypto_rsa_key CoreCrypto_rsa_gen_key(Prims_int size) {
+  RSA *rsa = RSA_new();
+  BIGNUM *e = BN_new();
+  FAIL_IF(e == NULL || rsa == NULL, "OpenSSL allocation failure");
+
+  BN_hex2bn(&e, "010001"); // 65537 
+  if (RSA_generate_key_ex(rsa, size, e, NULL) != 1) {
+    FAIL_IF(true, "Key generation failure");
+  }
+
+  const BIGNUM *b_n, *b_e, *b_d;
+  RSA_get0_key(rsa, &b_n, &b_e, &b_d);
+
+  size_t mod_len = BN_num_bytes(b_n);
+  char *mod = malloc(mod_len);
+  BN_bn2bin(b_n, (uint8_t *)mod);
+
+  size_t exp_len = BN_num_bytes(b_e);
+  char *exp = malloc(exp_len);
+  BN_bn2bin(b_e, (uint8_t *)exp);
+
+  size_t prv_len = BN_num_bytes(b_d);
+  char *prv = malloc(prv_len);
+  BN_bn2bin(b_d, (uint8_t *)prv);
+
+  RSA_free(rsa);
+  BN_free(e);
+
+  CoreCrypto_rsa_key ret = {
+    .rsa_mod     = { .data = mod, .length = mod_len },
+    .rsa_pub_exp = { .data = exp, .length = exp_len },
+    .rsa_prv_exp = {
+      .tag = FStar_Pervasives_Native_Some,
+      .val = {
+        .case_Some = {
+          .v = { .data = prv, .length = prv_len }
+        }
+      }
+    }
+  };
+  return ret;
 }
 
 FStar_Bytes_bytes CoreCrypto_rsa_encrypt(CoreCrypto_rsa_key key,
@@ -373,12 +412,12 @@ FStar_Bytes_bytes CoreCrypto_rsa_encrypt(CoreCrypto_rsa_key key,
   }
 
   size_t rsasz = RSA_size(rsa);
-  FAIL_IF(data.length >= rsasz - pdsz, "Cannot encrypt as much data");
+  FAIL_IF(data.length > rsasz - pdsz, "Cannot encrypt as much data");
 
   char *out = malloc(rsasz);
   FAIL_IF(out == NULL, "Allocation failure");
 
-  if (RSA_public_encrypt(data.length, (uint8_t *)data.data, (uint8_t *)out, rsa, openssl_padding)) {
+  if (RSA_public_encrypt(data.length, (uint8_t *)data.data, (uint8_t *)out, rsa, openssl_padding) < 0) {
       unsigned long err = ERR_peek_last_error();
       char* err_string = ERR_error_string(err, NULL);
       FAIL_IF(true, err_string);
@@ -389,6 +428,70 @@ FStar_Bytes_bytes CoreCrypto_rsa_encrypt(CoreCrypto_rsa_key key,
   FStar_Bytes_bytes ret = {
     .length = rsasz,
     .data = out
+  };
+  return ret;
+}
+
+// REMARK: used only in tests
+FStar_Pervasives_Native_option__FStar_Bytes_bytes
+CoreCrypto_rsa_decrypt(CoreCrypto_rsa_key key,
+                                         CoreCrypto_rsa_padding padding,
+                                         FStar_Bytes_bytes data) {
+  BIGNUM *mod = BN_bin2bn((uint8_t *) key.rsa_mod.data,     key.rsa_mod.length, NULL);
+  BIGNUM *pub = BN_bin2bn((uint8_t *) key.rsa_pub_exp.data, key.rsa_pub_exp.length, NULL);
+  BIGNUM *prv = NULL;
+  if (key.rsa_prv_exp.tag == FStar_Pervasives_Native_Some) {
+    prv = BN_bin2bn((uint8_t *) key.rsa_prv_exp.val.case_Some.v.data,
+                    key.rsa_prv_exp.val.case_Some.v.length, NULL);
+  }
+  else {
+    FAIL_IF(true, "Missing private exponent in RSA key");
+  }
+  RSA *rsa = RSA_new();
+  FAIL_IF(mod == NULL || pub == NULL || prv == NULL || rsa == NULL,
+          "OpenSSL allocation failure");
+
+  RSA_set0_key(rsa, mod, pub, prv);
+
+  int openssl_padding = -1;
+  switch (padding) {
+    case CoreCrypto_Pad_none:
+      openssl_padding = RSA_NO_PADDING;
+      break;
+
+    case CoreCrypto_Pad_PKCS1:
+      openssl_padding = RSA_PKCS1_PADDING;
+      break;
+
+    default:
+      abort();
+  }
+
+  size_t rsasz = RSA_size(rsa);
+  FAIL_IF(data.length != rsasz, "Incorrect ciphertext length");
+
+  char *out = malloc(rsasz);
+  FAIL_IF(out == NULL, "Allocation failure");
+
+  size_t len;
+  if ((len = RSA_private_decrypt(data.length, (uint8_t *)data.data, (uint8_t *)out, rsa, openssl_padding)) < 0) {
+      unsigned long err = ERR_peek_last_error();
+      char* err_string = ERR_error_string(err, NULL);
+      FAIL_IF(true, err_string);
+  }
+
+  RSA_free(rsa);
+
+  FStar_Pervasives_Native_option__FStar_Bytes_bytes ret = {
+    .tag = FStar_Pervasives_Native_Some,
+    .val = {
+      .case_Some = {
+        .v = {
+          .length = len,
+          .data = out
+        }
+      }
+    }
   };
   return ret;
 }

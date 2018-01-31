@@ -35,6 +35,7 @@ let main (): St C.exit_code =
   ignore (FStar.Test.dummy ());
   ignore (dummy ());
   iter [
+    "RSA", RSA.main;
     "TLSConstants", TLSConstants.main;
     "StAE", StAE.main;
     "CommonDH", CommonDH.main;
