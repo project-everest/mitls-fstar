@@ -17,8 +17,8 @@
 // support the same pluggable heap manager as the rest of miTLS.
 
 struct mitls_state {
-    TLSConstants_config cfg;
-    Connection_connection cxn;
+  TLSConstants_config cfg;
+  Connection_connection cxn;
 };
 
 static bool isRegistered;
@@ -103,12 +103,12 @@ int MITLS_CALLCONV FFI_mitls_configure(mitls_state **state, const char *tls_vers
     *state = NULL;
     *outmsg = NULL;
     *errmsg = NULL;
-    
+
     Prims_string host = CopyPrimsString(host_name);
     Prims_string version = CopyPrimsString(tls_version);
-    
+
     TLSConstants_config config = FFI_ffiConfig(version, host);
-    
+
     // Allocate space on the heap, to store an OCaml value
     mitls_state *s = (mitls_state*)KRML_HOST_MALLOC(sizeof(mitls_state));
     if (s) {
@@ -124,8 +124,9 @@ int MITLS_CALLCONV FFI_mitls_configure(mitls_state **state, const char *tls_vers
 
 int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *alg, const char *tk, size_t klen)
 {
-    // bugbug: pass klen once the type of the ticket is correct on the F* side.
-    bool b = FFI_ffiSetTicketKey(alg, tk);
+    FStar_Bytes_bytes key;
+    bool b = MakeFStar_Bytes_bytes(&key, tk, klen);
+    if(b) b = FFI_ffiSetTicketKey(alg, key);
     return (b) ? 1 : 0;
 }
 
@@ -196,10 +197,10 @@ int MITLS_CALLCONV FFI_mitls_connect(void *send_recv_ctx, pfn_FFI_send psend, pf
 {
     *outmsg = NULL;
     *errmsg = NULL;
-    
+
     // No psks this FFI_connect() call
     K___Connection_connection_Prims_int result = FFI_connect((FStar_Dyn_dyn)send_recv_ctx, psend, precv, state->cfg, NULL);
-    
+
     state->cxn = result.fst;
     return result.snd;
 }
@@ -208,7 +209,7 @@ int MITLS_CALLCONV FFI_mitls_resume(void *send_recv_ctx, pfn_FFI_send psend, pfn
 {
     *errmsg = NULL;
 
-    Prims_list__FStar_Bytes_bytes *head;    
+    Prims_list__FStar_Bytes_bytes *head;
     if (ticket->ticket_len) {
         head = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
         if (!head) {
@@ -219,7 +220,7 @@ int MITLS_CALLCONV FFI_mitls_resume(void *send_recv_ctx, pfn_FFI_send psend, pfn
             KRML_HOST_FREE(head);
             return 1;
         }
-    
+
         if (!MakeFStar_Bytes_bytes(&head->val.case_Cons.hd, ticket->ticket, ticket->ticket_len)) {
             KRML_HOST_FREE(head);
             KRML_HOST_FREE(tail);
@@ -230,7 +231,7 @@ int MITLS_CALLCONV FFI_mitls_resume(void *send_recv_ctx, pfn_FFI_send psend, pfn
             KRML_HOST_FREE(tail);
             KRML_HOST_FREE(head);
             return 1;
-        }        
+        }
         head->tag = Prims_Cons;
         head->val.case_Cons.tl = tail;
         tail->tag = Prims_Cons;
@@ -238,7 +239,7 @@ int MITLS_CALLCONV FFI_mitls_resume(void *send_recv_ctx, pfn_FFI_send psend, pfn
         head = NULL;
     }
     K___Connection_connection_Prims_int result = FFI_connect((FStar_Dyn_dyn)send_recv_ctx, psend, precv, state->cfg, head);
-    
+
     state->cxn = result.fst;
     return result.snd;
 }
@@ -260,7 +261,7 @@ int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const void* buffe
     int ret;
     *outmsg = NULL;
     *errmsg = NULL;
-    
+
     // bugbug: pass buffer_size when FFI_ffiSend() supports it
     ret = FFI_ffiSend(state->cxn, buffer);
     return 1;
@@ -281,9 +282,9 @@ void * MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ s
 static int get_exporter(Connection_connection cxn, int early, /* out */ mitls_secret *secret, /* out */ char **errmsg)
 {
   *errmsg = NULL;
-  
+
   FStar_Pervasives_Native_option__K___Hashing_Spec_alg_CryptoTypes_aead_cipher_FStar_Bytes_bytes ret;
-  
+
   ret = FFI_ffiGetExporter(cxn, (early) ? true : false);
   if (ret.tag != FStar_Pervasives_Native_Some) {
      *errmsg = strdup("the requested secret is not yet available");
@@ -307,7 +308,7 @@ void *MITLS_CALLCONV FFI_mitls_get_cert(/* in */ mitls_state *state, /* out */ s
 {
     *outmsg = NULL;
     *errmsg = NULL;
-    
+
     FStar_Bytes_bytes ret = FFI_getCert(state->cxn);
     *cert_size = ret.length;
     return (void*)ret.data; // bugbug: casting away const
@@ -434,7 +435,7 @@ static Prims_list__uint32_t *alloc_version_list(const uint32_t *list, size_t len
 int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_config *cfg, /* out */ char **errmsg)
 {
     *errmsg = NULL;
-    
+
     *state = NULL;
     quic_state* st = KRML_HOST_MALLOC(sizeof(quic_state));
     if (!st) {
@@ -518,12 +519,12 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
     } else {
 
       FStar_Pervasives_Native_option__K___FStar_Bytes_bytes_FStar_Bytes_bytes ticket;
-      
+
       if(cfg->server_ticket && cfg->server_ticket->ticket_len > 0) {
           ticket.tag = FStar_Pervasives_Native_Some;
-          
+
           // BUGBUG: Handle OOM
-          MakeFStar_Bytes_bytes(&ticket.val.case_Some.v.fst, cfg->server_ticket->ticket, cfg->server_ticket->ticket_len);          
+          MakeFStar_Bytes_bytes(&ticket.val.case_Some.v.fst, cfg->server_ticket->ticket, cfg->server_ticket->ticket_len);
           MakeFStar_Bytes_bytes(&ticket.val.case_Some.v.snd, cfg->server_ticket->session, cfg->server_ticket->session_len);
       }
       else {
@@ -546,7 +547,7 @@ quic_result MITLS_CALLCONV FFI_mitls_quic_process(
   /* out */ char **errmsg)
 {
     *errmsg = NULL;
-    
+
     quic_result ret = TLS_error_other;
 
     // Update the buffers for the QUIC_* callbacks
@@ -569,7 +570,7 @@ quic_result MITLS_CALLCONV FFI_mitls_quic_process(
     *pOutBufLen = state->out_buffer_used;
     *errmsg = state->errmsg;
     state->errmsg = NULL;
-    
+
     return ret;
 }
 

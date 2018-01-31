@@ -37,6 +37,7 @@ INCLUDE_DIRS 	= secure kremlib include stub vale curve ffi pki .
 # then: remove AEADOpenssl because no other modules refer to it
 # thanks to inlining and partial evaluation.
 # (except AEADProvider, which refers to AEADOpenssl_state in AEADOpenssl.h)
+# ADL: Do not include Test_* modules in this library please
 FILES 		= AEAD_GCM AEADProvider Alert BufferBytes Cert \
   C_Loops_Spec_Loops CommonDH Connection Content CoreCrypto \
   Crypto_AEAD_Crypto_Symmetric_Buffer_Utils_Crypto_Plain Crypto_Indexing \
@@ -48,10 +49,9 @@ FILES 		= AEAD_GCM AEADProvider Alert BufferBytes Cert \
   secure/Crypto_HKDF_Crypto_HMAC \
   Specializations_Providers_AEAD StAE StatefulLHAE \
   StatefulPlain StreamAE StreamDeltas StreamPlain stub/mipki_wrapper stub/core_crypto stub/hacl_aead \
-  stub/hacl_provider \
-  Ticket TLS TLSConstants TLS_Curve25519 TLSError TLSInfo \
+  stub/hacl_provider Ticket TLS TLSConstants TLS_Curve25519 TLSError TLSInfo \
   TLSInfoFlags TLSPRF Transport vale/sha256_main_i vale/vale_aes_glue \
-  vale/Vale_Hash_SHA2_256 # stub/mitlsffi
+  vale/Vale_Hash_SHA2_256 stub/mitlsffi
 
 CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror \
   -Wno-unused-variable -Wno-parentheses -Wno-unknown-warning-option \
@@ -68,5 +68,8 @@ all: libmitls.$(SO)
 
 libmitls.$(SO): $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
 	$(CC) $^ -shared -o $@ -lcrypto -lssl -lmipki $(LDOPTS) -L$(MLCRYPTO_HOME)/openssl -L$(MITLS_HOME)/src/pki
+
+clean:
+	rm -fr *.c *.o *.dll *.so *.a *.h *~
 
 test:

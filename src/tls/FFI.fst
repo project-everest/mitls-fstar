@@ -64,13 +64,13 @@ private let write_all c i b : ML ioresult_w = write_all' c i b 0
 
 // an integer carrying the fatal alert descriptor
 // we could also write txt into the application error log
-private 
+private
 let errno description txt : St int =
   let txt0 =
     match description with
     | Some ad -> TLSError.string_of_ad ad
     | None    -> "(None)"
-  in  
+  in
   trace ("returning error: "^txt0^" "^txt^"\n");
   match description with
   | Some ad ->  let _, e = split_ (Alert.alertBytes ad) 2 in int_of_bytes e
@@ -84,14 +84,14 @@ let connect ctx send recv config_1 psks : ML (Connection.connection * int) =
   let here = new_region HS.root in
   let c = TLS.resume here tcp config_1 None psks in
   let err : stackref (option int) = HST.salloc None in
-  C.Loops.do_while 
+  C.Loops.do_while
           (fun _ _ -> True)
-          (fun _ -> 
+          (fun _ ->
     let i = currentId c Reader in
     match TLS.read c i with
     | Update false ->
       true
-      
+
     | Complete
     | Update false ->
       err := Some 0;
@@ -100,7 +100,7 @@ let connect ctx send recv config_1 psks : ML (Connection.connection * int) =
     | ReadError description txt ->
       err := Some (errno description txt);
       false
-            
+
     | _ ->
       false);
   let firstResult =
@@ -130,7 +130,7 @@ let accept_connected ctx send recv config_1 : ML (Connection.connection * int) =
   let err : HST.stackref (option int) = HST.salloc None in
   C.Loops.do_while
     (fun _ _ -> True)
-    (fun _ ->    
+    (fun _ ->
       let i = currentId c Reader in
       match read c i with
       | Complete
@@ -141,11 +141,11 @@ let accept_connected ctx send recv config_1 : ML (Connection.connection * int) =
       | ReadError description txt ->
         err := Some (errno description txt);
         false
-        
+
       | Update false ->
         true
-        
-      | _ -> 
+
+      | _ ->
         false);
   let firstResult =
     match !err with
@@ -294,7 +294,7 @@ let rec split_string (c:FStar.Char.char) (x:string) : list string =
   else let prefix = String.substring x 0 i in
        let suffix = String.substring x (i + 1) (String.length x - (i + 1)) in
        prefix :: split_string c suffix
-       
+
 val ffiSetCipherSuites: cfg:config -> x:string -> ML config
 let ffiSetCipherSuites cfg x =
   let x :: t = split_string '@' x in
@@ -358,11 +358,11 @@ let ffiSetEarlyData cfg x =
   max_early_data = if x>0 then Some x else None;
   }
 
-val ffiSetTicketKey: a:string -> k:string -> ML bool
+val ffiSetTicketKey: a:string -> k:bytes -> ML bool
 let ffiSetTicketKey a k =
   (match findsetting a aeads with
   | None -> false
-  | Some a -> TLS.set_ticket_key a (bytes_of_string k))
+  | Some a -> TLS.set_ticket_key a k)
 
 let install_ticket config ticket : ML (list PSK.psk_identifier) =
   match ticket with
@@ -424,9 +424,9 @@ let ffiSend c b =
   write c msg
 
 
-let ffiSetTicketCallback (cfg:config) (cb:ticket_cb) =
+let ffiSetTicketCallback (cfg:config) (ctx:FStar.Dyn.dyn) (cb:ticket_cb_fun) =
   trace "Setting a new ticket callback.";
-  {cfg with ticket_callback = cb}
+  {cfg with ticket_callback = {ticket_context = ctx; new_ticket = cb}}
 
 let ffiSetCertCallbacks (cfg:config) (cb:cert_cb) =
   trace "Setting up certificate callbacks.";
