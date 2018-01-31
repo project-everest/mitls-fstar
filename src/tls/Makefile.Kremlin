@@ -48,7 +48,7 @@ KRML_COMMAND	= krml \
 # Sanity checks and shared directories definitions
 
 CURVE_DIR	= $(HACL_HOME)/code/curve25519/x25519-c
-SECURE_OUT	= $(HACL_HOME)/secure_api/out/vale_aes_abstract_id
+SECURE_OUT	= $(HACL_HOME)/secure_api/out/vale_aes_abstract_id/crypto
 VALE_DIR	= $(HACL_HOME)/secure_api/vale/asm
 
 ifeq (,$(wildcard $(CURVE_DIR)/Curve25519.h))
