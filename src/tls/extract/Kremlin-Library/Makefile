@@ -7,22 +7,30 @@ MITLS_HOME 	?= ../../../..
 MLCRYPTO_HOME	?= ../../../../../MLCrypto
 
 ifeq ($(OS),Windows_NT)
-  PATH := $(MLCRYPTO_HOME)/openssl:$(MITLS_HOME)/src/pki:$(PATH)
+  PATH := $(MITLS_HOME)/src/pki:$(PATH)
   SO = dll
   CC ?= x86_64-w64-mingw32-gcc
   export PATH
 else ifeq ($(UNAME),Darwin)
   VARIANT = -Darwin
-  DYLD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(MITLS_HOME)/src/pki:$(DYLD_LIBRARY_PATH)
+  DYLD_LIBRARY_PATH :=$(MITLS_HOME)/src/pki:$(DYLD_LIBRARY_PATH)
   SO = so
   export DYLD_LIBRARY_PATH
 else ifeq ($(UNAME),Linux)
   VARIANT = -Linux
   CFLAGS := -fPIC $(CFLAGS)
-  LD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(MITLS_HOME)/src/pki:$(LD_LIBRARY_PATH)
+  LD_LIBRARY_PATH :=  $(MITLS_HOME)/src/pki:$(LD_LIBRARY_PATH)
   LDOPTS := -lpthread $(LDOPTS)
   SO = so
   export LD_LIBRARY_PATH
+endif
+
+ifdef HAVE_OPENSSL
+ifeq ($(OS),Windows_NT)
+  PATH := $(MLCRYPTO_HOME)/openssl:$(PATH)
+else
+  LD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(LD_LIBRARY_PATH)
+endif
 endif
 
 ifeq (,$(wildcard $(MITLS_HOME)/src/pki/libmipki.$(SO)))
@@ -57,7 +65,12 @@ CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror \
   -Wno-unused-variable -Wno-parentheses -Wno-unknown-warning-option \
   -Wno-unused-but-set-variable -Wno-infinite-recursion -g -fwrapv -fstack-check \
   -D_BSD_SOURCE -D_DEFAULT_SOURCE -D__USE_MINGW_ANSI_STDIO \
-  -I$(MLCRYPTO_HOME)/openssl/include -Wno-missing-braces
+  -Wno-missing-braces
+
+ifdef HAVE_OPENSSL
+CFLAGS += -I$(MLCRYPTO_HOME)/openssl/include -DHAVE_OPENSSL
+LDOPTS += -L$(MLCRYPTO_HOME)/openssl -lcrypto -lssl
+endif
 
 all: libmitls.$(SO)
 
@@ -67,6 +80,6 @@ all: libmitls.$(SO)
 	$(CC) $(CFLAGS) -MM $(addsuffix .c,$(FILES)) > $@
 
 libmitls.$(SO): $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
-	$(CC) $^ -shared -o $@ -lcrypto -lssl -lmipki $(LDOPTS) -L$(MLCRYPTO_HOME)/openssl -L$(MITLS_HOME)/src/pki
+	$(CC) $^ -shared -o $@ -lmipki $(LDOPTS) -L$(MITLS_HOME)/src/pki
 
 test:
