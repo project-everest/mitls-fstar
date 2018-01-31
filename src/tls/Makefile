@@ -2,11 +2,11 @@ EXTRACT='Nothing'
 FLAVOR=generic
 
 all:
-	rm -f .depend.generic .depend.OCaml .depend.Kremlin
+	rm -f .depend.OCaml .depend.Kremlin
 	$(MAKE) ocaml-all kremlin-all
 
 clean-depend:
-	rm -rf .depend.generic .depend.OCaml .depend.Kremlin
+	rm -rf .depend.OCaml .depend.Kremlin
 
 ocaml-all kremlin-all: clean-depend
 
