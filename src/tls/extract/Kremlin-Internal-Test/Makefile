@@ -7,18 +7,18 @@ MITLS_HOME 	?= ../../../..
 MLCRYPTO_HOME	?= ../../../../../MLCrypto
 
 ifeq ($(OS),Windows_NT)
-  PATH := $(MLCRYPTO_HOME)/openssl:$(MITLS_HOME)/src/pki:$(PATH)
+  PATH := $(MITLS_HOME)/src/pki:$(PATH)
   SO = dll
   CC ?= x86_64-w64-mingw32-gcc
   export PATH
 else ifeq ($(UNAME),Darwin)
   VARIANT = -Darwin
-  DYLD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(MITLS_HOME)/src/pki:$(DYLD_LIBRARY_PATH)
+  DYLD_LIBRARY_PATH := $(MITLS_HOME)/src/pki:$(DYLD_LIBRARY_PATH)
   SO = so
   export DYLD_LIBRARY_PATH
 else ifeq ($(UNAME),Linux)
   VARIANT = -Linux
-  LD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(MITLS_HOME)/src/pki:$(LD_LIBRARY_PATH)
+  LD_LIBRARY_PATH := $(MITLS_HOME)/src/pki:$(LD_LIBRARY_PATH)
   LDOPTS := -lpthread $(LDOPTS)
   SO = so
   export LD_LIBRARY_PATH
@@ -26,6 +26,14 @@ endif
 
 ifeq (,$(wildcard $(MITLS_HOME)/src/pki/libmipki.$(SO)))
   $(error MITLS_HOME is $(MITLS_HOME) and I cannot find $(MITLS_HOME)/src/pki/libmipki.$(SO) -- please run make in $(MITLS_HOME)/src/pki)
+endif
+
+ifndef NO_OPENSSL
+ifeq ($(OS),Windows_NT)
+  PATH := $(MLCRYPTO_HOME)/openssl:$(PATH)
+else
+  LD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(LD_LIBRARY_PATH)
+endif
 endif
 
 INCLUDE_DIRS 	= secure kremlib include stub vale curve pki ffi .
@@ -48,6 +56,13 @@ CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror \
   -Wno-unused-but-set-variable -Wno-infinite-recursion -g -fwrapv -fstack-check \
   -D_BSD_SOURCE -D_DEFAULT_SOURCE -D__USE_MINGW_ANSI_STDIO \
   -I$(MLCRYPTO_HOME)/openssl/include -Wno-missing-braces
+
+ifndef NO_OPENSSL
+CFLAGS += -I$(MLCRYPTO_HOME)/openssl/include
+LDOPTS += -L$(MLCRYPTO_HOME)/openssl -lcrypto -lssl
+else
+CFLAGS += -DNO_OPENSSL
+endif
 
 all: test.exe
 
