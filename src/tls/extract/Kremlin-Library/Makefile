@@ -40,7 +40,7 @@ ifeq (,$(wildcard $(MITLS_HOME)/src/pki/libmipki.$(SO)))
   $(error MITLS_HOME is $(MITLS_HOME) and I cannot find $(MITLS_HOME)/src/pki/libmipki.$(SO) -- please run make in $(MITLS_HOME)/src/pki)
 endif
 
-INCLUDE_DIRS 	= secure kremlib include stub vale curve ffi pki .
+INCLUDE_DIRS 	= secure kremlib include stub vale curve ffi pki uint128 .
 
 # ls *.c */*.c | sed 's/\.c//g' >> Makefile
 # then: remove Crypto_AEAD_Main because of the hacl_provider hack
@@ -62,7 +62,7 @@ FILES 		= AEAD_GCM AEADProvider Alert BufferBytes Cert \
   StatefulPlain StreamAE StreamDeltas StreamPlain stub/core_crypto stub/hacl_aead \
   stub/hacl_provider Ticket TLS TLSConstants TLS_Curve25519 TLSError TLSInfo \
   TLSInfoFlags TLSPRF Transport vale/sha256_main_i vale/vale_aes_glue \
-  vale/Vale_Hash_SHA2_256 stub/mitlsffi
+  vale/Vale_Hash_SHA2_256 stub/mitlsffi uint128/uint128_wrapper
 
 CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall \
   -Wno-unused-variable -Wno-parentheses -Wno-unknown-warning-option \
