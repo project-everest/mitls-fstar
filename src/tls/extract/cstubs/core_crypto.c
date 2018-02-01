@@ -557,7 +557,22 @@ FStar_Bytes_bytes CoreCrypto_hmac(CoreCrypto_hash_alg x0,
 
 bool CoreCrypto_ec_is_on_curve(CoreCrypto_ec_params x0,
                                CoreCrypto_ec_point x1) {
-  TODO(bool);
+                                   
+  EC_KEY *k = key_of_core_crypto_curve(x0.curve);
+  EC_GROUP *group = EC_GROUP_dup(EC_KEY_get0_group(k));
+  
+  EC_POINT *point = EC_POINT_new(group);
+  BIGNUM *ppx = BN_bin2bn((uint8_t *) x1.ecx.data, x1.ecx.length, NULL);
+  BIGNUM *ppy = BN_bin2bn((uint8_t *) x1.ecy.data, x1.ecy.length, NULL);
+  EC_POINT_set_affine_coordinates_GFp(group, point, ppx, ppy, NULL);  
+
+  bool ret = EC_POINT_is_on_curve(group, point, NULL);
+  
+  BN_free(ppy);
+  BN_free(ppx);
+  EC_POINT_free(point);  
+  EC_KEY_free(k);
+  return ret;
 }
 
 #ifdef __WIN32
