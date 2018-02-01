@@ -1,5 +1,6 @@
 FSTAR_HOME ?= ../../../FStar
 HACL_HOME ?= ../../../hacl-star
+MLCRYPTO_HOME ?= ../../../MLCrypto
 
 include $(FSTAR_HOME)/ulib/ml/Makefile.include
 
@@ -12,6 +13,9 @@ ifeq ($(OS),Windows_NT)
   LIBPKI=libmipki.dll
   OPENSSL=libcrypto-*.dll
   CC?=$(MARCH)-w64-mingw32-gcc
+  ifeq ($(shell uname -o),Cygwin)
+    MLCRYPTO_HOME := $(shell cygpath -u ${MLCRYPTO_HOME})
+  endif
   PATH := $(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/extract/Kremlin-Library:$(HACL_HOME)/secure_api/out/runtime_switch:$(MLCRYPTO_HOME)/openssl:$(PATH)
   export PATH
 else ifeq ($(UNAME),Darwin)
