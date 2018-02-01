@@ -5,13 +5,15 @@ MARCH?=x86_64
 
 ifeq ($(OS),Windows_NT)
 LIBMITLS=libmitls.dll
-LIBQC=libquiccrypto.dll
+LIBQC=libquicprovider.dll
 LIBPKI=libmipki.dll
-CC=$(MARCH)-w64-mingw32-gcc
+OPENSSL=libcrypto-*.dll
+CC?=$(MARCH)-w64-mingw32-gcc
 else
 LIBMITLS=libmitls.so
-LIBQC=libquiccrypto.so
+LIBQC=libquicprovider.so
 LIBPKI=libmipki.so
+OPENSSL=libcrypto-*.so
 endif
 
 all: quic.exe
@@ -25,19 +27,19 @@ clean:
 ../../src/tls/extract/Kremlin-Library/$(LIBMITLS):
 	make -j8 -C ../../src/tls -f Makefile.Kremlin build-library
 
-$(HACL_HOME)/secure_api/QuicProvider/$(LIBQC):
+$(HACL_HOME)/secure_api/out/runtime_switch/$(LIBQC):
 	make -C $(HACL_HOME)/secure_api/QuicProvider
 
 $(LIBMITLS): ../../src/tls/extract/Kremlin-Library/$(LIBMITLS)
-	cp ../../../MLCrypto/openssl/libcrypto-*.dll .
+	cp ../../../MLCrypto/openssl/$(OPENSSL) .
 	cp ../../src/tls/extract/Kremlin-Library/$(LIBMITLS) .
 
-$(LIBQC): $(HACL_HOME)/secure_api/QuicProvider/$(LIBQC)
-	cp $(HACL_HOME)/secure_api/QuicProvider/$(LIBQC) .
+$(LIBQC): $(HACL_HOME)/secure_api/out/runtime_switch/$(LIBQC)
+	cp $(HACL_HOME)/secure_api/out/runtime_switch/$(LIBQC) .
 
 $(LIBPKI): ../../src/pki/$(LIBPKI)
 	cp ../../src/pki/$(LIBPKI) .
 
 quic.exe: quic.c $(LIBMITLS) $(LIBQC) $(LIBPKI)
-	$(CC) -fPIC -I ../../src/pki -I ../../libs/ffi -I $(HACL_HOME)/secure_api/QuicProvider -L. quic.c -lmitls -lquiccrypto -lmipki -o quic.exe
+	$(CC) -fPIC -I ../../src/pki -I ../../libs/ffi -I $(HACL_HOME)/secure_api/QuicProvider -L. quic.c -lmitls -lquicprovider -lmipki -o quic.exe
 

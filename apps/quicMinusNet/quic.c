@@ -166,7 +166,7 @@ int main(int argc, char **argv)
     };
 
 
-  uint32_t versions[1] = {0x0f000008};
+  uint32_t versions[1] = {0xff000008};
   quic_config config = {
     .is_server = 1,
     .supported_versions = versions,

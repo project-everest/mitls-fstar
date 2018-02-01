@@ -326,7 +326,7 @@ let parseAlpn : pinverse_t alpnBytes = fun b ->
 (* QUIC parameters *)
 
 let quicVersionBytes (v:quicVersion) : Tot (lbytes 4) =
-  bytes_of_uint32 (match v with
+  FStar.Bytes.bytes_of_int32 (match v with
     | QuicVersion1 -> 1ul
     | QuicCustomVersion n -> n)
 
