@@ -91,8 +91,13 @@ ALL_EXTERNAL_FILES	= \
     Vale_Hash_SHA2_256.c vale_aes_glue.c aes-$(MARCH)$(VARIANT).S DafnyLib.h) \
   $(addprefix pki/,mipki.h) \
   $(addprefix ffi/,mitlsffi.h) \
-  $(addprefix uint128/,kremlib0.h FStar_UInt128_FStar_Int_Cast_Full.h \
-    FStar_UInt128_FStar_Int_Cast_Full.c uint128_wrapper.c)
+  $(addprefix uint128/,uint128_wrapper.c)
+
+ifneq (,$(KRML_NOUINT128))
+  ALL_EXTERNAL_FILES +=
+    $(addprefix uint128/,kremlib0.h FStar_UInt128_FStar_Int_Cast_Full.h \
+      FStar_UInt128_FStar_Int_Cast_Full.c uint128_wrapper.c)
+endif
 
 ################################################################################
 
