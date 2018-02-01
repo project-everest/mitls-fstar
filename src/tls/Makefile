@@ -18,9 +18,12 @@ ocaml-%:
 kremlin-%:
 	$(MAKE) -f Makefile.Kremlin $*
 
-test: kremlin-test #ocaml-test -- broken until PKI is fixed
+quic-%:
+	$(MAKE) -C ../../apps/quicMinusNet $* -k
 
-clean: kremlin-clean ocaml-clean
+test: kremlin-test quic-test #ocaml-test -- broken until PKI is fixed
+
+clean: kremlin-clean ocaml-clean quic-clean
 	rm -rf extract/OCaml extract/Kremlin
 
 %.fst-in %.fsti-in:
