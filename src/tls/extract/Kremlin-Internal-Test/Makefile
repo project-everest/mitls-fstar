@@ -31,6 +31,8 @@ endif
 ifndef NO_OPENSSL
 ifeq ($(OS),Windows_NT)
   PATH := $(MLCRYPTO_HOME)/openssl:$(PATH)
+else ifeq ($(UNAME),Darwin)
+  DYLD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(DYLD_LIBRARY_PATH)
 else
   LD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(LD_LIBRARY_PATH)
 endif
@@ -55,7 +57,7 @@ CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror \
   -Wno-unused-variable -Wno-parentheses -Wno-unknown-warning-option \
   -Wno-unused-but-set-variable -Wno-infinite-recursion -g -fwrapv -fstack-check \
   -D_BSD_SOURCE -D_DEFAULT_SOURCE -D__USE_MINGW_ANSI_STDIO \
-  -I$(MLCRYPTO_HOME)/openssl/include -Wno-missing-braces
+  -Wno-missing-braces
 
 ifndef NO_OPENSSL
 CFLAGS += -I$(MLCRYPTO_HOME)/openssl/include
@@ -72,7 +74,7 @@ all: test.exe
 	$(CC) $(CFLAGS) -MM $(addsuffix .c,$(FILES)) > $@
 
 test.exe: $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
-	$(CC) $^ -o $@ -lcrypto -lssl -lmipki $(LDOPTS) -L$(MLCRYPTO_HOME)/openssl -L$(MITLS_HOME)/src/pki
+	$(CC) $^ -o $@ -lmipki $(LDOPTS) -L$(MITLS_HOME)/src/pki
 
 test: all
 	./test.exe
