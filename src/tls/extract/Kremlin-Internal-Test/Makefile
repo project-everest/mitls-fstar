@@ -41,7 +41,7 @@ else
 endif
 endif
 
-INCLUDE_DIRS 	= secure kremlib include stub vale curve pki ffi .
+INCLUDE_DIRS 	= secure kremlib include stub vale curve pki ffi uint128 .
 
 # ls *.c */*.c | sed 's/\.c//g' >> Makefile
 # then: remove Crypto_AEAD_Main because of the hacl_provider hack
@@ -54,7 +54,8 @@ FILES 		= Cert C_Loops_Spec_Loops CommonDH CoreCrypto \
   secure/Crypto_HKDF_Crypto_HMAC \
   Specializations_Providers_AEAD stub/mipki_wrapper stub/core_crypto stub/hacl_aead \
   stub/hacl_provider Test_Main TLSConstants TLS_Curve25519 TLSError TLSInfo \
-  TLSInfoFlags vale/sha256_main_i vale/vale_aes_glue vale/Vale_Hash_SHA2_256
+  TLSInfoFlags vale/sha256_main_i vale/vale_aes_glue vale/Vale_Hash_SHA2_256 \
+  uint128/uint128_wrapper
 
 CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror \
   -Wno-unused-variable -Wno-parentheses -Wno-unknown-warning-option \
