@@ -60,4 +60,7 @@ test.exe: $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(M
 	$(CC) $^ -o $@ -lcrypto -lssl -lmipki $(LDOPTS) -L$(MLCRYPTO_HOME)/openssl -L$(MITLS_HOME)/src/pki
 
 test: all
+	@echo $(PATH)
+	@echo $(MLCRYPTO_HOME)
+	@echo $(MITLS_HOME)
 	./test.exe
