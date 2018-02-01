@@ -2,9 +2,7 @@
 #include "Crypto_HKDF_Crypto_HMAC.h"
 #include "kremlib.h"
 
-#include <fcntl.h>
 #include <stdio.h>
-#include <unistd.h>
 
 #ifdef __WIN32
 #include <windows.h>
@@ -15,19 +13,21 @@
   do {                                                                         \
     if (!(test))                                                               \
       continue;                                                                \
-    fprintf(stderr, "%s %s\n", __FUNCTION__, msg);                             \
-    exit(253);                                                                 \
+    KRML_HOST_PRINTF("%s %s\n", __FUNCTION__, msg);                             \
+    KRML_HOST_EXIT(253);                                                                 \
   } while (0)
 
 #define TODO(t)                                                                \
   {                                                                            \
     t _x = {0};                                                                \
-    fprintf(stderr, "%s TODO\n", __FUNCTION__);                                \
-    exit(252);                                                                 \
+    KRML_HOST_PRINTF("%s TODO\n", __FUNCTION__);                                \
+    KRML_HOST_EXIT(252);                                                                 \
     return _x;                                                                 \
   }
 
 #ifndef NO_OPENSSL
+
+#include <fcntl.h>
 
 #include <openssl/conf.h>
 #include <openssl/err.h>
