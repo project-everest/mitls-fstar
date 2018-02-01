@@ -59,14 +59,14 @@ endif
 	$(CC) -I $(KREMLIN_HOME)/kremlib $^ -o $@ -c
 
 MITLS_INPUTS=\
-    extract/mlstubs/PKI.cmx \
-    extract/mlstubs/Crypto_AEAD_Main.cmx \
+    extract/OCaml/PKI.cmx \
+    extract/OCaml/Crypto_AEAD_Main.cmx \
 	$(KREMLIN_HOME)/_build/kremlib/C.cmx \
 	$(MLCRYPTO_HOME)/CoreCrypto.cmxa \
 	$(LOWC_HOME)/LowC.cmxa \
 	$(FFI_HOME)/FFICallbacks.cmxa \
 	$(subst .ml,.cmx,$(ALL_ML_FILES)) \
-    extract/mlstubs/FFIRegister.cmx \
+    extract/OCaml/FFIRegister.cmx \
 	extract/copied/kremstr.o \
 
 mitls.exe: $(MITLS_INPUTS) \
@@ -138,18 +138,18 @@ cmitls.exe: cmitls.o $(LIBMITLS)
 
 test/mitls.cmx: test/mitls.ml $(subst .ml,.cmx,$(ALL_ML_FILES))
 
-extract/mlstubs/Crypto_AEAD_Main.cmx: extract/mlstubs/Crypto_AEAD_Main.ml
+extract/OCaml/Crypto_AEAD_Main.cmx: extract/mlstubs/Crypto_AEAD_Main.ml
 
-extract/mlstubs/FFIRegister.cmx: extract/mlstubs/FFIRegister.ml
+extract/OCaml/FFIRegister.cmx: extract/mlstubs/FFIRegister.ml extract/OCaml/FFI.cmx extract/OCaml/QUIC.cmx
 
-extract/OCaml/AEADProvider.cmx: extract/mlstubs/Crypto_AEAD_Main.cmx
+extract/OCaml/AEADProvider.cmx: extract/OCaml/Crypto_AEAD_Main.cmx
 
 # Because PKI is hand-written and is not part of the dependency graph (it's just
 # an fsti, so not extracted), we must insert it in the right spot *and* make it
 # take the proper dependencies.
-extract/OCaml/Test_Handshake.cmx: extract/mlstubs/PKI.cmx
+extract/OCaml/Test_Handshake.cmx: extract/OCaml/PKI.cmx
 
-extract/mlstubs/PKI.cmx: extract/mlstubs/PKI.ml extract/OCaml/TLSConstants.cmx
+extract/OCaml/PKI.cmx: extract/mlstubs/PKI.ml extract/OCaml/TLSConstants.cmx
 
 %.cmx:
 	$(OCAMLOPT) -w -8-11-26-20 -c $< -o $@
