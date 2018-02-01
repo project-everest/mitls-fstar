@@ -19,7 +19,7 @@ open TLSInfo
 open Range
 open DataStream
 open TLS
-open FFICallbacks
+//open FFICallbacks
 
 open FStar.HyperStack.All
 type cbytes = string
@@ -411,18 +411,17 @@ let ffiAcceptConnected ctx snd rcv config =
   accept_connected ctx snd rcv config
 
 // 18-01-24 not needed anymore?
-val ffiRecv: Connection.connection -> ML cbytes
+val ffiRecv: Connection.connection -> ML bytes
 let ffiRecv c =
   match read c with
-    | Received response -> print_bytes response
+    | Received response -> response
     | WouldBlock
-    | Errno _ -> print_bytes empty_bytes
+    | Errno _ -> empty_bytes
 
 // 18-01-24 not needed anymore?
-val ffiSend: Connection.connection -> cbytes -> ML int
+val ffiSend: Connection.connection -> bytes -> ML int
 let ffiSend c b =
-  let msg = bytes_of_string b in
-  write c msg
+  write c b
 
 
 let ffiSetTicketCallback (cfg:config) (ctx:FStar.Dyn.dyn) (cb:ticket_cb_fun) =

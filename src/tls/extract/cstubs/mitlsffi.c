@@ -337,8 +337,18 @@ static bool wrapped_verify(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
   wrapped_cert_cb* s = (wrapped_cert_cb*)cbs;
   FStar_Bytes_bytes chain = Cert_certificateListBytes(certs);
   mitls_signature_scheme sigalg = pki_of_tls(sa.tag);
-  return (s->verify(s->cb_state, chain.data, chain.length, sigalg,
-    tbs.data, tbs.length, sig.data, sig.length) != 0);
+
+  // ADL the extra copy is a workaround for the const of sig.data
+  // FIXME should probably add a const in mitlsffi.h
+  char *sig0 = KRML_HOST_MALLOC(sig.length);
+  if(sig0 == NULL) return 0;
+  memcpy(sig0, sig.data, sig.length);
+
+  int r = (s->verify(s->cb_state, chain.data, chain.length, sigalg,
+    tbs.data, tbs.length, sig0, sig.length) != 0);
+
+  KRML_HOST_FREE(sig0);
+  return r;
 }
 
 int MITLS_CALLCONV FFI_mitls_configure_cert_callbacks(/* in */ mitls_state *state, void *cb_state, mitls_cert_cb *cert_cb)
@@ -507,8 +517,7 @@ int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const void* buffe
     *errmsg = NULL;
 
     pthread_mutex_lock(&lock);
-    // bugbug: pass buffer_size when FFI_ffiSend() supports it
-    ret = FFI_ffiSend(state->cxn, buffer);
+    ret = FFI_ffiSend(state->cxn, (FStar_Bytes_bytes){.data = buffer, .length = buffer_size});
     pthread_mutex_unlock(&lock);
 
     return 1;
@@ -520,13 +529,16 @@ void * MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ s
     void *p;
     *outmsg = NULL;
     *errmsg = NULL;
-
-    // bugbug: fill in packet_size once it is available from the FFI
     *packet_size = 0;
+
     pthread_mutex_lock(&lock);
-    void* ret = FFI_ffiRecv(state->cxn); // bugbug: casting away const
+    FStar_Bytes_bytes ret = FFI_ffiRecv(state->cxn);
     pthread_mutex_unlock(&lock);
-    return ret;
+
+    if(!ret.length) return NULL;
+    p = KRML_HOST_MALLOC(ret.length);
+    if(p != NULL) memcpy(p, ret.data, ret.length);
+    return p;
 }
 
 static int get_exporter(Connection_connection cxn, int early, /* out */ mitls_secret *secret, /* out */ char **errmsg)
@@ -829,7 +841,7 @@ quic_result MITLS_CALLCONV FFI_mitls_quic_process(
 
     QUIC_result r = QUIC_recv(state->cxn);
 
-    if (r.code <= TLS_server_complete) {
+    if ((int)r.code <= (int)TLS_server_complete) {
         ret = (quic_result) r.code;
     }
     // BUGBUG: the r.error value is currently discarded.
