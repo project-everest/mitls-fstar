@@ -97,9 +97,14 @@ int certificate_verify(void *cbs, const char* chain_bytes, size_t chain_len, con
   }
 
   size_t slen = sig_len;
-  int r = mipki_sign_verify(st, chain, sigalg, tbs, tbs_len, sig, &slen, MIPKI_VERIFY);
+  if(!mipki_sign_verify(st, chain, sigalg, tbs, tbs_len, sig, &slen, MIPKI_VERIFY))
+  {
+    printf("ERROR: invalid signature.\n");
+    return 0;
+  }
+
   mipki_free_chain(st, chain);
-  return r;
+  return 1;
 }
 
 char *quic_result_string(quic_result r){
@@ -160,10 +165,12 @@ int main(int argc, char **argv)
       .tp_data = "\xff\xff\x00\x05\x0a\x0b\x0c\x0d\x0e\x00"
     };
 
+
+  uint32_t versions[1] = {0x0f000008};
   quic_config config = {
     .is_server = 1,
-    .supported_versions = NULL,
-    .supported_versions_len = 0,
+    .supported_versions = versions,
+    .supported_versions_len = 1,
     .host_name = "",
     .alpn = "hq-08",
     .qp = server_qp,
@@ -171,8 +178,8 @@ int main(int argc, char **argv)
     .callback_state = (void*)pki,
     .ticket_callback = ticket_cb,
     .cert_callbacks = &cert_callbacks,
-    .cipher_suites = NULL, // Use defaults
-    .signature_algorithms = "ECDSA+SHA256",
+    .cipher_suites = "TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256",
+    .signature_algorithms = "ECDSA+SHA256:RSAPSS+SHA256",
     .named_groups = "X25519",
     .ticket_enc_alg = NULL,
     .ticket_key = NULL,
@@ -262,7 +269,7 @@ int main(int argc, char **argv)
       // showing how to get the peer's parameters
       // (available with the main exporter secret)
       quic_transport_parameters peer[1];
-      peer->tp_len = 0;
+      peer->tp_len = 256;
       peer->tp_data = malloc(256);
       uint32_t ver;
 
@@ -273,6 +280,8 @@ int main(int argc, char **argv)
           dump_parameters(peer);
         }
       else printf("Failed to get peer parameter: %s\n", errmsg);
+
+      peer->tp_len = 256;
       if (FFI_mitls_quic_get_peer_parameters(client, &ver, peer, &errmsg))
         {
           printf("   === client received server parameters === \n");

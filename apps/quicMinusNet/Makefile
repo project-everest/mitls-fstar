@@ -22,14 +22,15 @@ clean:
 ../../src/pki/$(LIBPKI):
 	make -C ../../src/pki
 
-../../src/tls/$(LIBMITLS):
-	make -C ../../src/tls tls-ffi
+../../src/tls/extract/Kremlin-Library/$(LIBMITLS):
+	make -j8 -C ../../src/tls -f Makefile.Kremlin build-library
 
 $(HACL_HOME)/secure_api/QuicProvider/$(LIBQC):
 	make -C $(HACL_HOME)/secure_api/QuicProvider
 
-$(LIBMITLS): ../../src/tls/$(LIBMITLS)
-	cp ../../src/tls/$(LIBMITLS) .
+$(LIBMITLS): ../../src/tls/extract/Kremlin-Library/$(LIBMITLS)
+	cp ../../../MLCrypto/openssl/libcrypto-*.dll .
+	cp ../../src/tls/extract/Kremlin-Library/$(LIBMITLS) .
 
 $(LIBQC): $(HACL_HOME)/secure_api/QuicProvider/$(LIBQC)
 	cp $(HACL_HOME)/secure_api/QuicProvider/$(LIBQC) .

@@ -254,10 +254,11 @@ let aeads = [
 
 let ffiConfig version host =
   let v = s2pv version in
+  let h = if length host = 0 then None else Some host in
   {defaultConfig with
     min_version = TLS_1p2;
     max_version = v;
-    peer_name = Some host;
+    peer_name = h;
   }
 
 let rec findsetting f l =
@@ -290,7 +291,7 @@ let findSetting_css (x:string) =
 let rec split_string (c:FStar.Char.char) (x:string) : list string =
   let i = String.index_of x c in
   if i < 0
-  then []
+  then [x]
   else let prefix = String.substring x 0 i in
        let suffix = String.substring x (i + 1) (String.length x - (i + 1)) in
        prefix :: split_string c suffix
@@ -475,6 +476,22 @@ let ffiGetExporter (c:Connection.connection) (early:bool)
     | true, EarlyExportID _ _ -> Some (h, ae, b)
     | _ -> None
 
+let ffiTicketInfoBytes (info:ticketInfo) (key:bytes) =
+  let si = match info with
+    | TicketInfo_13 ctx ->
+      let ae = ctx.early_ae in
+      let h = ctx.early_hash in
+      let (| li, rmsid |) = Ticket.dummy_rmsid ae h in
+      Ticket.Ticket13 (CipherSuite13 ae h) li rmsid key
+    | TicketInfo_12 (pv, cs, ems) ->
+      Ticket.Ticket12 pv cs ems (Ticket.dummy_msId pv cs ems) key
+    in
+  Ticket.serialize si
+
+let ffiSplitChain (chain:bytes) : ML (list cert_repr) =
+  match Cert.parseCertificateList chain with
+  | Error (_, msg) -> failwith ("ffiCertFormatCallback: formatted chain was invalid, "^msg)
+  | Correct chain -> chain
 
 (*
 // Closures for stateful callbacks, these are now unnecessary
@@ -491,7 +508,7 @@ let ffiTicketCallback (cb_state:callbacks) (cb:callbacks) (sni:string) (ticket:b
     | TicketInfo_12 (pv, cs, ems) ->
       Ticket.Ticket12 pv cs ems (Ticket.dummy_msId pv cs ems) key
     in
-  ocaml_ticket_cb cb_state cb sni ticket (Ticket.serialize si)
+  ocaml_ticket_cb cb_state cb sni ticket ()
 
 let ffiCertSelectCallback (cb_state:callbacks) (cb:callbacks) (sni:string) (sal:signatureSchemeList)
   : ML (option (cert_type * signatureScheme)) =

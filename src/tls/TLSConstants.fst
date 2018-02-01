@@ -583,14 +583,7 @@ let minPV (a:protocolVersion) (b:protocolVersion) =
   | TLS_1p2, _  | _, TLS_1p2 -> TLS_1p2
   | TLS_1p3, _  | _, TLS_1p3 -> TLS_1p3
 
-let geqPV a b =
-match b, minPV a b with
-| SSL_3p0, SSL_3p0
-| TLS_1p0, TLS_1p1
-| TLS_1p2, TLS_1p2
-| TLS_1p3, TLS_1p3 -> true
-| UnknownVersion b1 b2, UnknownVersion b1' b2' ->
-  b1 = b2 && b2 = b2'
+let geqPV a b = (b = minPV a b)
 
 let string_of_pv = function
   | SSL_3p0 -> "SSL3"
@@ -1940,7 +1933,7 @@ noeq type config : Type0 = {
     cert_callbacks: cert_cb;      // Certificate callbacks, called on all PKI-related operations
 
     alpn: option alpn;   // ALPN offers (for client) or preferences (for server)
-    peer_name: option string;     // The expected name to match against the peer certificate
+    peer_name: option bytes;     // The expected name to match against the peer certificate
   }
 
 let cert_select_cb (c:config) (sni:bytes) (sig:signatureSchemeList)

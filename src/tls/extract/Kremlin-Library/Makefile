@@ -53,7 +53,7 @@ FILES 		= AEAD_GCM AEADProvider Alert BufferBytes Cert \
   TLSInfoFlags TLSPRF Transport vale/sha256_main_i vale/vale_aes_glue \
   vale/Vale_Hash_SHA2_256 stub/mitlsffi
 
-CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror \
+CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall \
   -Wno-unused-variable -Wno-parentheses -Wno-unknown-warning-option \
   -Wno-unused-but-set-variable -Wno-infinite-recursion -g -fwrapv -fstack-check \
   -D_BSD_SOURCE -D_DEFAULT_SOURCE -D__USE_MINGW_ANSI_STDIO \
