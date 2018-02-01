@@ -1,45 +1,68 @@
 FSTAR_HOME ?= ../../../FStar
-include $(FSTAR_HOME)/ulib/ml/Makefile.include
 HACL_HOME ?= ../../../hacl-star
+MLCRYPTO_HOME ?= ../../../MLCrypto
+
+include $(FSTAR_HOME)/ulib/ml/Makefile.include
+
+UNAME=$(shell uname)
 MARCH?=x86_64
 
 ifeq ($(OS),Windows_NT)
-LIBMITLS=libmitls.dll
-LIBQC=libquicprovider.dll
-LIBPKI=libmipki.dll
-OPENSSL=libcrypto-*.dll
-CC?=$(MARCH)-w64-mingw32-gcc
-else
-LIBMITLS=libmitls.so
-LIBQC=libquicprovider.so
-LIBPKI=libmipki.so
-OPENSSL=libcrypto-*.so
+  LIBMITLS=libmitls.dll
+  LIBQC=libquicprovider.dll
+  LIBPKI=libmipki.dll
+  OPENSSL=libcrypto-*.dll
+  CC?=$(MARCH)-w64-mingw32-gcc
+  ifeq ($(shell uname -o),Cygwin)
+    MITLS_HOME := $(shell cygpath -u ${MITLS_HOME})
+    HACL_HOME := $(shell cygpath -u ${HACL_HOME})
+    MLCRYPTO_HOME := $(shell cygpath -u ${MLCRYPTO_HOME})
+  endif
+  PATH := $(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/extract/Kremlin-Library:$(HACL_HOME)/secure_api/out/runtime_switch:$(MLCRYPTO_HOME)/openssl:$(PATH)
+  export PATH
+else ifeq ($(UNAME),Darwin)
+  LIBMITLS=libmitls.so
+  LIBQC=libquicprovider.so
+  LIBPKI=libmipki.so
+  DYLD_LIBRARY_PATH := $(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/extract/Kremlin-Library:$(HACL_HOME)/secure_api/out/runtime_switch:$(DYLD_LIBRARY_PATH)
+  export DYLD_LIBRARY_PATH
+else ifeq ($(UNAME),Linux)
+  LIBMITLS=libmitls.so
+  LIBQC=libquicprovider.so
+  LIBPKI=libmipki.so
+  LD_LIBRARY_PATH := $(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/extract/Kremlin-Library:$(HACL_HOME)/secure_api/out/runtime_switch:$(MLCRYPTO_HOME)/openssl:$(LD_LIBRARY_PATH)
+  export LD_LIBRARY_PATH
 endif
 
-all: quic.exe
+all: test
 
 clean:
-	rm -rf *.o *.exe *.dll *~
+	rm -rf *.o *.exe *~
 
-../../src/pki/$(LIBPKI):
+$(MITLS_HOME)/src/pki/$(LIBPKI):
 	make -C ../../src/pki
 
-../../src/tls/extract/Kremlin-Library/$(LIBMITLS):
+$(MITLS_HOME)/src/tls/extract/Kremlin-Library/$(LIBMITLS):
 	make -j8 -C ../../src/tls -f Makefile.Kremlin build-library
 
 $(HACL_HOME)/secure_api/out/runtime_switch/$(LIBQC):
 	make -C $(HACL_HOME)/secure_api/QuicProvider
 
-$(LIBMITLS): ../../src/tls/extract/Kremlin-Library/$(LIBMITLS)
-	cp ../../../MLCrypto/openssl/$(OPENSSL) .
-	cp ../../src/tls/extract/Kremlin-Library/$(LIBMITLS) .
+quic.exe: quic.c \
+	$(MITLS_HOME)/src/pki/$(LIBPKI) \
+	$(HACL_HOME)/secure_api/out/runtime_switch/$(LIBQC) \
+	$(MITLS_HOME)/src/tls/extract/Kremlin-Library/$(LIBMITLS)
+	$(CC) -fPIC -I../../src/pki -I../../libs/ffi -I$(HACL_HOME)/secure_api/QuicProvider \
+	  -L$(MITLS_HOME)/src/pki \
+	  -L$(MITLS_HOME)/src/tls/extract/Kremlin-Library \
+	  -L$(HACL_HOME)/secure_api/out/runtime_switch \
+	  -L$(MLCRYPTO_HOME)/openssl \
+	  -lmitls -lquicprovider -lmipki quic.c -o quic.exe
 
-$(LIBQC): $(HACL_HOME)/secure_api/out/runtime_switch/$(LIBQC)
-	cp $(HACL_HOME)/secure_api/out/runtime_switch/$(LIBQC) .
-
-$(LIBPKI): ../../src/pki/$(LIBPKI)
-	cp ../../src/pki/$(LIBPKI) .
-
-quic.exe: quic.c $(LIBMITLS) $(LIBQC) $(LIBPKI)
-	$(CC) -fPIC -I ../../src/pki -I ../../libs/ffi -I $(HACL_HOME)/secure_api/QuicProvider -L. quic.c -lmitls -lquicprovider -lmipki -o quic.exe
-
+test: quic.exe
+	$(info $(MITLS_HOME))
+	$(info $(HACL_HOME))
+	$(info $(MLCRYPTO_HOME))
+	$(info $(PATH))
+	./quic.exe
+	./quic.exe t

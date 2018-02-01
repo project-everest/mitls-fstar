@@ -434,7 +434,7 @@ bool CoreCrypto_ec_is_on_curve(CoreCrypto_ec_params x0,
                                CoreCrypto_ec_point x1) {
                                    
   EC_KEY *k = key_of_core_crypto_curve(x0.curve);
-  EC_GROUP *group = EC_GROUP_dup(EC_KEY_get0_group(k));
+  const EC_GROUP *group = EC_KEY_get0_group(k);
   
   EC_POINT *point = EC_POINT_new(group);
   BIGNUM *ppx = BN_bin2bn((uint8_t *) x1.ecx.data, x1.ecx.length, NULL);
@@ -447,7 +447,6 @@ bool CoreCrypto_ec_is_on_curve(CoreCrypto_ec_params x0,
   BN_free(ppx);
   EC_POINT_free(point);  
   EC_KEY_free(k);
-  EC_GROUP_free(group);
   return ret;
 }
 
