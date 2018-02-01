@@ -4,12 +4,15 @@ UNAME		= $(shell uname)
 MARCH		?= x86_64
 
 MITLS_HOME 	= ../../../..
-MLCRYPTO_HOME	?= ../../../../MLCrypto
+MLCRYPTO_HOME	?= ../../../../../MLCrypto
 
 ifeq ($(OS),Windows_NT)
   PATH := $(MLCRYPTO_HOME)/openssl:$(MITLS_HOME)/src/pki:$(PATH)
   SO = dll
   CC ?= x86_64-w64-mingw32-gcc
+  ifeq ($(shell uname -o),Cygwin)
+    MLCRYPTO_HOME = $(shell cygpath -u "$(MLCRYPTO_HOME)")
+  endif
   export PATH
 else ifeq ($(UNAME),Darwin)
   VARIANT = -Darwin
@@ -60,7 +63,4 @@ test.exe: $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(M
 	$(CC) $^ -o $@ -lcrypto -lssl -lmipki $(LDOPTS) -L$(MLCRYPTO_HOME)/openssl -L$(MITLS_HOME)/src/pki
 
 test: all
-	@echo $(PATH)
-	@echo $(MLCRYPTO_HOME)
-	@echo $(MITLS_HOME)
 	./test.exe
