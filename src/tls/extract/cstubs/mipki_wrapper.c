@@ -103,7 +103,7 @@ PKI_select(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
   #endif
 
   size_t sigalgs_len = list_sa_len(sal);
-  mitls_signature_scheme sigalgs[sigalgs_len];
+  mitls_signature_scheme *sigalgs = alloca(sigalgs_len*sizeof(mitls_signature_scheme));
   Prims_list__TLSConstants_signatureScheme *cur = sal;
 
   for(size_t i = 0; i < sigalgs_len; i++)
@@ -207,8 +207,8 @@ bool PKI_verify(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
   #endif
 
   mipki_signature sigalg = pki_of_tls(sa.tag);
-  size_t lens[chain_len];
-  const char *ders[chain_len];
+  size_t *lens = alloca(chain_len*sizeof(size_t));
+  const char **ders = alloca(chain_len*sizeof(const char*));
   Prims_list__FStar_Bytes_bytes *cur = certs;
 
   for(size_t i = 0; i < chain_len; i++)
@@ -263,7 +263,7 @@ FStar_Dyn_dyn PKI_init(Prims_string cafile, Prims_list__K___Prims_string_Prims_s
 {
   uint32_t len = config_len(certs);
   Prims_list__K___Prims_string_Prims_string_bool* cur = certs;
-  mipki_config_entry pki_config[len];
+  mipki_config_entry *pki_config = alloca(len*sizeof(mipki_config_entry));
   int err;
 
   for(int i = 0; i<len; i++)

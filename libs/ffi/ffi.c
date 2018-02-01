@@ -37,12 +37,12 @@
   MITLS_FFI_ENTRY(QuicCreateClient) \
   MITLS_FFI_ENTRY(QuicCreateServer) \
   MITLS_FFI_ENTRY(QuicProcess) \
-  MITLS_FFI_ENTRY(QuicGetPeerParameters) \
-  MITLS_FFI_ENTRY(TicketCallback) \
-  MITLS_FFI_ENTRY(CertSelectCallback) \
-  MITLS_FFI_ENTRY(CertFormatCallback) \
-  MITLS_FFI_ENTRY(CertSignCallback) \
-  MITLS_FFI_ENTRY(CertVerifyCallback)
+  MITLS_FFI_ENTRY(QuicGetPeerParameters)
+  //MITLS_FFI_ENTRY(TicketCallback)
+  //MITLS_FFI_ENTRY(CertSelectCallback)
+  //MITLS_FFI_ENTRY(CertFormatCallback)
+  //MITLS_FFI_ENTRY(CertSignCallback)
+  //MITLS_FFI_ENTRY(CertVerifyCallback)
 
 // Pointers to ML code.  Initialized in FFI_mitls_init().  Invoke via caml_callback()
 #define MITLS_FFI_ENTRY(x) value* g_mitls_FFI_##x;
@@ -217,11 +217,13 @@ static int configure_common_caml(/* in */ mitls_state *state, const char * str, 
     CAMLparam0();
     CAMLlocal2(config, camlvalue);
     int ret = 0;
+    char *errmsg = NULL;
 
     camlvalue = caml_copy_string(str);
     config = caml_callback2_exn(*function, state->fstar_state, camlvalue);
     if (Is_exception_result(config)) {
-        report_caml_exception(config, NULL); // bugbug: pass in errmsg
+        report_caml_exception(config, &errmsg);
+        FFI_mitls_free_msg(errmsg);
     } else {
         state->fstar_state = config;
         ret = 1;
@@ -318,6 +320,7 @@ static int ocaml_set_ticket_callback(/* in */ mitls_state *state, void *cb_state
     CAMLlocal4(config, cb, cbs, ocb);
     int ret = 0;
 
+#if 0    // bugbug: ticket callbacks are no longer present in the OCaml build
     cb = PtrToValue(ticket_cb); // Address of the C callback
     cbs = PtrToValue(cb_state); // Callback state
 
@@ -332,6 +335,7 @@ static int ocaml_set_ticket_callback(/* in */ mitls_state *state, void *cb_state
         ret = 1;
       }
     }
+#endif    
 
     CAMLreturnT(int, ret);
 }
@@ -352,6 +356,7 @@ static int ocaml_set_cert_callbacks(/* in */ mitls_state *state, void *cb_state,
     CAMLlocal4(select, format, sign, verify);
     int ret = 0;
 
+#if 0    // BUGBUG:  cert callbacks are no longer implemented
     cbs = PtrToValue(cb_state);
 
     // These are partial applications and won't raise an exception
@@ -379,6 +384,7 @@ static int ocaml_set_cert_callbacks(/* in */ mitls_state *state, void *cb_state,
       state->fstar_state = config;
       ret = 1;
     }
+#endif
 
     CAMLreturnT(int, ret);
 }

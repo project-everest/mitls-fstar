@@ -25,8 +25,18 @@ else ifeq ($(UNAME),Linux)
 endif
 
 ################################################################################
+# Support for building without __int128
+
+ifneq (,$(KRML_NOUINT128))
+KOPTS+=-add-early-include '"FStar_UInt128_FStar_Int_Cast_Full.h"'
+KOPTS+=-fnouint128 -drop FStar.UInt128,FStar.Int.Cast.Full
+CFLAGS+=-DKRML_NOUINT128
+export CFLAGS
+endif
+
+################################################################################
 # A common KreMLin invocation
-#
+
 HEADERS 	= $(addprefix -add-include ,'"hacks.h"' '"krembytes.h"' \
   '"kremstr.h"' '"hacl_glue.h"')
 
@@ -51,6 +61,7 @@ endif
 CURVE_DIR	= $(HACL_HOME)/code/curve25519/x25519-c
 SECURE_OUT	= $(HACL_HOME)/secure_api/out/vale_aes_abstract_id/crypto
 VALE_DIR	= $(HACL_HOME)/secure_api/vale/asm
+UINT128_DIR	= $(HACL_HOME)/secure_api/out/runtime_switch/uint128
 
 ifeq (,$(wildcard $(CURVE_DIR)/Curve25519.h))
   $(error HACL_HOME is $(HACL_HOME) and I cannot find $(CURVE_DIR)/Curve25519.h -- please run make extract-c -C $(CURVE_DIR)/.. -- thanks)
@@ -74,12 +85,19 @@ ALL_EXTERNAL_FILES	= \
   $(addprefix curve/,Curve25519.c Curve25519.h) \
   $(addprefix kremlib/,kremstr.c kremstr.h kremdate.c krembytes.h kremlib.h \
     gcc_compat.h testlib.h) \
-  $(addprefix stub/,hacl_aead.c hacl_provider.c mipki_wrapper.c core_crypto.c) \
+  $(addprefix stub/,hacl_aead.c hacl_provider.c core_crypto.c) \
   $(addprefix include/,hacl_glue.h hacks.h) \
   $(addprefix vale/,sha256_main_i.c sha256_main_i.h sha256-$(MARCH)$(VARIANT).S \
     Vale_Hash_SHA2_256.c vale_aes_glue.c aes-$(MARCH)$(VARIANT).S DafnyLib.h) \
   $(addprefix pki/,mipki.h) \
-  $(addprefix ffi/,mitlsffi.h)
+  $(addprefix ffi/,mitlsffi.h) \
+  $(addprefix uint128/,uint128_wrapper.c)
+
+ifneq (,$(KRML_NOUINT128))
+  ALL_EXTERNAL_FILES += \
+    $(addprefix uint128/,kremlib0.h FStar_UInt128_FStar_Int_Cast_Full.h \
+      FStar_UInt128_FStar_Int_Cast_Full.c)
+endif
 
 ################################################################################
 
@@ -98,6 +116,7 @@ $(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/stub,extract/cstubs))
 $(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/vale,$(VALE_DIR)))
 $(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/ffi,$(MITLS_HOME)/libs/ffi))
 $(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/pki,$(MITLS_HOME)/src/pki))
+$(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/uint128,$(UINT128_DIR)))
 
 # Leave Crypto_Indexing (which Crypto_AEAD_Main wants) standalone, and its
 # dependencies too.
@@ -106,7 +125,7 @@ $(INTERNAL_TEST_DIR)/Test_Main.c: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_K
 	  -skip-compilation -drop FFICallbacks \
 	  -bundle Test.Main=Test.*,AEAD_GCM,AEADOpenssl,AEADProvider,Alert,BufferBytes,Connection,ConnInvariant,Content,DataStream,Encode,Epochs,FFI,Handshake,HandshakeLog,HandshakeMessages,Hashing,Hashing.CRF,Hashing.OpenSSL,HKDF,HMAC,HMAC.UFCMA,IdNonce,KDF.Common,KDF.Salt.ODH,KeySchedule,LHAEPlain,MAC,MAC_SHA1,MAC_SHA256,MasterSecret,Negotiation,QUIC,Range,Record,Signature,StAE,Standalone,StatefulLHAE,StatefulPlain,StreamAE,StreamDeltas,StreamPlain,Ticket,TLS,TLSPRF,Transport
 
-internal-test-copy: $(addprefix $(INTERNAL_TEST_DIR)/,$(ALL_EXTERNAL_FILES))
+internal-test-copy: $(addprefix $(INTERNAL_TEST_DIR)/,$(ALL_EXTERNAL_FILES)) $(INTERNAL_TEST_DIR)/stub/mipki_wrapper.c
 
 output-internal-test: internal-test-copy $(INTERNAL_TEST_DIR)/Test_Main.c
 
@@ -132,8 +151,9 @@ $(eval $(call COPY_template,$(LIBRARY_DIR)/stub,extract/cstubs))
 $(eval $(call COPY_template,$(LIBRARY_DIR)/vale,$(VALE_DIR)))
 $(eval $(call COPY_template,$(LIBRARY_DIR)/ffi,$(MITLS_HOME)/libs/ffi))
 $(eval $(call COPY_template,$(LIBRARY_DIR)/pki,$(MITLS_HOME)/src/pki))
+$(eval $(call COPY_template,$(LIBRARY_DIR)/uint128,$(UINT128_DIR)))
 
-$(LIBRARY_DIR)/TLS.c: $(filter-out $(EXTRACT_DIR)/prims.krml $(EXTRACT_DIR)/Test_%.krml,$(ALL_KRML_FILES))
+$(LIBRARY_DIR)/TLS.c: $(filter-out $(EXTRACT_DIR)/prims.krml $(EXTRACT_DIR)/PKI.krml $(EXTRACT_DIR)/Test_%.krml,$(ALL_KRML_FILES))
 	$(KRML_COMMAND) $^ -tmpdir $(LIBRARY_DIR) -skip-compilation
 
 library-copy: $(addprefix $(LIBRARY_DIR)/,$(ALL_EXTERNAL_FILES)) \

@@ -66,6 +66,7 @@ MITLS_INPUTS=\
 	$(LOWC_HOME)/LowC.cmxa \
 	$(FFI_HOME)/FFICallbacks.cmxa \
 	$(subst .ml,.cmx,$(ALL_ML_FILES)) \
+    extract/mlstubs/FFIRegister.cmx \
 	extract/copied/kremstr.o \
 
 mitls.exe: $(MITLS_INPUTS) \
@@ -138,6 +139,8 @@ cmitls.exe: cmitls.o $(LIBMITLS)
 test/mitls.cmx: test/mitls.ml $(subst .ml,.cmx,$(ALL_ML_FILES))
 
 extract/mlstubs/Crypto_AEAD_Main.cmx: extract/mlstubs/Crypto_AEAD_Main.ml
+
+extract/mlstubs/FFIRegister.cmx: extract/mlstubs/FFIRegister.ml
 
 extract/OCaml/AEADProvider.cmx: extract/mlstubs/Crypto_AEAD_Main.cmx
 

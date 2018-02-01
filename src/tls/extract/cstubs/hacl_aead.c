@@ -1,7 +1,10 @@
 #include "Crypto_AEAD_Main.h"
 
+#ifndef KRML_NOUINT128
 #define FStar_Int_Cast_Full_uint64_to_uint128 __noconflict_FStar_Int_Cast_Full_uint64_to_uint128
 #define FStar_Int_Cast_Full_uint128_to_uint64 __noconflict_FStar_Int_Cast_Full_uint128_to_uint64
+#endif
+
 #define FStar_Pervasives_Native_None __noconflict_FStar_Pervasives_Native_None
 #define FStar_Pervasives_Native_Some __noconflict_FStar_Pervasives_Native_Some
 
