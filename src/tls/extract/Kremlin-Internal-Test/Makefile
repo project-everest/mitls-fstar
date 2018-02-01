@@ -7,12 +7,12 @@ MITLS_HOME 	= ../../../..
 MLCRYPTO_HOME	?= ../../../../../MLCrypto
 
 ifeq ($(OS),Windows_NT)
+  ifeq ($(shell uname -o),Cygwin)
+    MLCRYPTO_HOME := $(shell cygpath -u ${MLCRYPTO_HOME})
+  endif
   PATH := $(MLCRYPTO_HOME)/openssl:$(MITLS_HOME)/src/pki:$(PATH)
   SO = dll
   CC ?= x86_64-w64-mingw32-gcc
-  ifeq ($(shell uname -o),Cygwin)
-    MLCRYPTO_HOME = $(shell cygpath -u "$(MLCRYPTO_HOME)")
-  endif
   export PATH
 else ifeq ($(UNAME),Darwin)
   VARIANT = -Darwin
