@@ -31,17 +31,18 @@ unfold val trace: s:string -> ST unit
   (ensures (fun h0 _ h1 -> h0 == h1))
 unfold let trace = if Flags.debug_HSL then print else (fun _ -> ())
 
+// FIXME(ADL): the ghost transcript is buggy in the Kremlin-extracted version
 
 let erased_transcript : Type0 =
-    if Flags.debug_HSL then hs_transcript
+    if false then hs_transcript
     else FStar.Ghost.erased hs_transcript
 
 let reveal_log (l:erased_transcript) : GTot (hs_transcript) =
-    if Flags.debug_HSL then l
+    if false then l
     else FStar.Ghost.reveal l
 
 let hide_log (l:hs_transcript) : Tot erased_transcript =
-    if Flags.debug_HSL then l
+    if false then l
     else FStar.Ghost.hide l
 
 (** TODO: move to FStar.Ghost (breach of abstraction)  *)
@@ -69,13 +70,13 @@ let bind_log
     (ensures (fun _ -> True))
   ))
 : Tot (y: erased_transcript { y == f (reveal_log l) } )
-= if Flags.debug_HSL then f l
+= if false then f l
   else ghost_bind #hs_transcript #hs_transcript l f
 
 let empty_hs_transcript : erased_transcript = hide_log []
 
-let append_hs_transcript 
-    (l:erased_transcript) 
+let append_hs_transcript
+    (l:erased_transcript)
     (ml:list msg { valid_transcript (reveal_log l @ ml) } )
     : Tot erased_transcript =
       bind_log l (fun l' -> hide_log (append_transcript l' ml))
@@ -84,7 +85,7 @@ let extend_hs_transcript (l:erased_transcript) (m:msg { valid_transcript (reveal
     append_hs_transcript l [m]
 
 let print_hsl (hsl:erased_transcript) : Tot bool =
-    if Flags.debug_HSL then
+    if false then
     let sl = List.Tot.map HandshakeMessages.string_of_handshakeMessage hsl in
     let s = List.Tot.fold_left (fun x y -> x^", "^y) "" sl in
     IO.debug_print_string ("Current log: " ^ s)
@@ -281,7 +282,7 @@ val getHash: #ha:hash_alg -> t:log -> ST (tag ha)
 let getHash #ha (LOG #reg st) =
     let cst = !st in
     let b =
-        if Flags.debug_HSL then
+        if false then
             print_hsl cst.transcript
         else false in
     Hashing.finalize #ha cst.hash

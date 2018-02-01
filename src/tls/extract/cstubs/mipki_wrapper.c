@@ -1,8 +1,4 @@
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <assert.h>
+#include <kremlib.h>
 #include <mipki.h>
 #include <mitlsffi.h>
 #include <PKI.h>
@@ -57,8 +53,8 @@ static TLSConstants_signatureScheme_tags tls_of_pki(mitls_signature_scheme sa)
     //  ed25519(0x0807),
     //  ed448(0x0808),
     default:
-      printf("tls_of_pki: unsupported (%04x)\n", sa);
-      exit(1);
+      KRML_HOST_PRINTF("tls_of_pki: unsupported (%04x)\n", sa);
+      KRML_EXIT;
   }
 }
 
@@ -90,8 +86,8 @@ static mitls_signature_scheme pki_of_tls(TLSConstants_signatureScheme_tags sa)
     case TLSConstants_ECDSA_SECP521R1_SHA512: return 0x0603;
     //  ed25519(0x0807), ed448(0x0808),
     default:
-      printf("pki_of_tls: unsupported (%d)\n", sa);
-      exit(1);
+      KRML_HOST_PRINTF("pki_of_tls: unsupported (%d)\n", sa);
+      KRML_EXIT;
   }
 }
 
@@ -103,8 +99,7 @@ PKI_select(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
   mipki_state *pki = (mipki_state*)cbs;
 
   #if DEBUG
-    printf("PKI| SELECT callback <%08x>\n", cbs);
-    fflush(stdout);
+    KRML_HOST_PRINTF("PKI| SELECT callback <%08x>\n", cbs);
   #endif
 
   size_t sigalgs_len = list_sa_len(sal);
@@ -121,8 +116,7 @@ PKI_select(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
   mipki_chain chain = mipki_select_certificate(pki, sni.data, sigalgs, sigalgs_len, &sel);
 
   #if DEBUG
-    printf("PKI| Selected chain <%08x>, sigalg = %04x\n", chain, sel);
-    fflush(stdout);
+    KRML_HOST_PRINTF("PKI| Selected chain <%08x>, sigalg = %04x\n", chain, sel);
   #endif
 
   if(chain == NULL)
@@ -145,15 +139,12 @@ static void* append(void* chain, size_t len, char **buf)
 {
   #if DEBUG
     printf("PKI| FORMAT::append adding %d bytes element\n", len);
-    fflush(stdout);
   #endif
 
   *buf = KRML_HOST_MALLOC(len);
-  assert(*buf != NULL);
 
   Prims_list__FStar_Bytes_bytes* cur = (Prims_list__FStar_Bytes_bytes*) chain;
   Prims_list__FStar_Bytes_bytes* new = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
-  assert(new != NULL);
 
   new->tag = Prims_Nil;
   cur->tag = Prims_Cons;
@@ -169,8 +160,7 @@ Prims_list__FStar_Bytes_bytes* PKI_format(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st, u
   mipki_chain chain = (mipki_chain)cert;
 
   #if DEBUG
-    printf("PKI| FORMAT <%08x> CHAIN <%08x>\n", pki, chain);
-    fflush(stdout);
+    KRML_HOST_PRINTF("PKI| FORMAT <%08x> CHAIN <%08x>\n", pki, chain);
   #endif
 
   Prims_list__FStar_Bytes_bytes *res = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
@@ -185,8 +175,7 @@ FStar_Pervasives_Native_option__FStar_Bytes_bytes PKI_sign(FStar_Dyn_dyn cbs, FS
   mipki_chain chain = (mipki_chain)cert;
 
   #if DEBUG
-    printf("PKI| SIGN <%08x> CHAIN <%08x>\n", pki, chain);
-    fflush(stdout);
+    KRML_HOST_PRINTF("PKI| SIGN <%08x> CHAIN <%08x>\n", pki, chain);
   #endif
 
   char* sig = KRML_HOST_MALLOC(MAX_SIGNATURE_LEN);
@@ -197,8 +186,7 @@ FStar_Pervasives_Native_option__FStar_Bytes_bytes PKI_sign(FStar_Dyn_dyn cbs, FS
   if(mipki_sign_verify(pki, chain, sigalg, tbs.data, tbs.length, sig, &slen, MIPKI_SIGN))
   {
     #if DEBUG
-      printf("PKI| Success: produced %d bytes of signature.\n", pki, slen);
-      fflush(stdout);
+      KRML_HOST_PRINTF("PKI| Success: produced %d bytes of signature.\n", pki, slen);
     #endif
     res.tag = FStar_Pervasives_Native_Some;
     res.val.case_Some.v = (FStar_Bytes_bytes){.length = slen, .data = sig};
@@ -215,8 +203,7 @@ bool PKI_verify(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
   size_t chain_len = list_bytes_len(certs);
 
   #if DEBUG
-    printf("PKI| VERIFY <%08x> (contains %d certificates)\n", pki, chain_len);
-    fflush(stdout);
+    KRML_HOST_PRINTF("PKI| VERIFY <%08x> (contains %d certificates)\n", pki, chain_len);
   #endif
 
   mipki_signature sigalg = pki_of_tls(sa.tag);
@@ -237,8 +224,7 @@ bool PKI_verify(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
   if(chain == NULL)
   {
     #if DEBUG
-      printf("PKI| Failed to parse certificate chain.\n");
-      fflush(stdout);
+      KRML_HOST_PRINTF("PKI| Failed to parse certificate chain.\n");
     #endif
     return false;
   }
@@ -247,15 +233,13 @@ bool PKI_verify(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
   if(!mipki_validate_chain(pki, chain, ""))
   {
     #if DEBUG
-      printf("PKI| WARNING: chain validation failed, ignoring.\n");
-      fflush(stdout);
+      KRML_HOST_PRINTF("PKI| WARNING: chain validation failed, ignoring.\n");
     #endif
     // return 0;
   }
 
   #if DEBUG
-    printf("PKI| Chain parsed, verifying %d bytes signature with %04x.\n", slen, sigalg);
-    fflush(stdout);
+    KRML_HOST_PRINTF("PKI| Chain parsed, verifying %d bytes signature with %04x.\n", slen, sigalg);
   #endif
 
   char* sigp = (char *)sig.data;
@@ -287,8 +271,7 @@ FStar_Dyn_dyn PKI_init(Prims_string cafile, Prims_list__K___Prims_string_Prims_s
     K___Prims_string_Prims_string_bool cfg = cur->val.case_Cons.hd;
 
     #if DEBUG
-      printf("PKI| Adding cert <%s> with key <%s>\n", cfg.fst, cfg.snd);
-      fflush(stdout);
+      KRML_HOST_PRINTF("PKI| Adding cert <%s> with key <%s>\n", cfg.fst, cfg.snd);
     #endif
 
     pki_config[i] = (mipki_config_entry){
@@ -300,20 +283,17 @@ FStar_Dyn_dyn PKI_init(Prims_string cafile, Prims_list__K___Prims_string_Prims_s
   };
 
   #if DEBUG
-    printf("PKI| INIT\n");
-    fflush(stdout);
+    KRML_HOST_PRINTF("PKI| INIT\n");
   #endif
 
   mipki_state *pki = mipki_init(pki_config, len, NULL, &err);
 
   #if DEBUG
-    printf("PKI| Created <%08x>, set CAFILE <%s>\n", pki, cafile);
-    fflush(stdout);
+    KRML_HOST_PRINTF("PKI| Created <%08x>, set CAFILE <%s>\n", pki, cafile);
   #endif
 
   if(cafile[0] != '\0') mipki_add_root_file_or_path(pki, cafile);
 
-  assert(pki != NULL);
   return pki;
 }
 

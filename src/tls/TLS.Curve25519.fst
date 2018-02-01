@@ -23,10 +23,10 @@ let pubshare (k:keyshare) : Tot point = fst k
 let rand: ref (n:nat -> ST (lbytes n) (requires fun h->True) (ensures fun h0 _ h1 -> modifies_none h0 h1)) =
   ralloc root CC.random
 
-let scalarmult (secret:Bytes.lbytes 32) (point:Bytes.lbytes 32) 
+let scalarmult (secret:Bytes.lbytes 32) (point:Bytes.lbytes 32)
   : ST (lbytes 32)
        (requires (fun h -> True))
-       (ensures (fun h0 _ h1 -> modifies_none h0 h1)) = 
+       (ensures (fun h0 _ h1 -> modifies_none h0 h1)) =
   HaclProvider.crypto_scalarmult secret point
 
 let keygen () : ST keyshare
@@ -36,8 +36,12 @@ let keygen () : ST keyshare
   let s : lbytes 32 = !rand 32 in
   let base_point = Bytes.set_byte (Bytes.create 32ul 0uy) 0ul 9uy in
   scalarmult s base_point, s
-  
+
 let mul (k:scalar) (p:point) : ST point
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   = scalarmult k p
+
+// Curve25519.h wants this, but externally visible... make it a cross-module call.
+let dummy (): St (UInt128.t -> UInt64.t) =
+  FStar.Int.Cast.Full.uint128_to_uint64

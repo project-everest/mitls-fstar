@@ -55,7 +55,7 @@ let pskiBytes (i,ot) =
   lemma_repr_bytes_values (UInt32.v ot);
   (vlbytes2 i @| bytes_of_int 4 (UInt32.v ot))
 
-private 
+private
 let pskiListBytes_aux acc pski = acc @| pskiBytes pski
 
 val pskiListBytes: list pskIdentity -> bytes
@@ -259,9 +259,7 @@ val earlyDataIndicationBytes: edi:earlyDataIndication -> Tot bytes
 let earlyDataIndicationBytes = function
   | None -> empty_bytes // ClientHello, EncryptedExtensions
   | Some max_early_data_size -> // NewSessionTicket
-    let n = UInt32.v max_early_data_size in
-    lemma_repr_bytes_values n;
-    bytes_of_int 4 n
+    FStar.Bytes.bytes_of_int32 max_early_data_size // avoids overflow in QUIC
 
 val parseEarlyDataIndication: bytes -> result earlyDataIndication
 let parseEarlyDataIndication data =
@@ -573,15 +571,15 @@ let rec serverNameBytes = function
   | SNI_UNKNOWN(t, x) :: r -> bytes_of_int 1 t @| bytes_of_int 2 (length x) @| x @| serverNameBytes r
 
 private
-let snidup: serverName -> serverName -> Tot bool 
+let snidup: serverName -> serverName -> Tot bool
     = fun cur x ->
         match x,cur with
         | SNI_DNS _, SNI_DNS _ -> true
       	| SNI_UNKNOWN(a,_), SNI_UNKNOWN(b,_) -> a = b
       	| _ -> false
 
-private let rec parseServerName_aux 
-  : b:bytes -> Tot (canFail serverName) (decreases (length b)) 
+private let rec parseServerName_aux
+  : b:bytes -> Tot (canFail serverName) (decreases (length b))
   = fun b ->
     if b = empty_bytes then ExOK []
     else if length b >= 3 then
@@ -607,31 +605,31 @@ private let rec parseServerName_aux
       	  else ExOK(cur :: l)
       	end
       end
-    else ExFail(AD_decode_error, "Failed to parse SNI")
+    else ExFail(AD_decode_error, "Failed to parse SNI (list header)")
 
 private val parseServerName: r:ext_msg -> b:bytes -> Tot (result (list serverName))
-let parseServerName mt b  =
-    match mt with
-    | EM_EncryptedExtensions
-    | EM_ServerHello ->
-      if length b = 0 then correct []
-      else
-      	let msg = "Failed to parse SNI list: should be empty in ServerHello, has size " ^ string_of_int (length b) in
-      	Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ msg)
-    | EM_ClientHello ->
-      if length b >= 2 then
-	begin
-	match vlparse 2 b with
-	| Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
-	| Correct b ->
-	match parseServerName_aux b with
-	| ExFail(x,y) -> Error(x,y)
-	| ExOK [] -> Error(AD_unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Empty SNI extension")
-	| ExOK l -> correct l
-	end
-      else
-	Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
-    | _ -> error "SNI extension cannot appear in this message type"
+let parseServerName mt b =
+  match mt with
+  | EM_EncryptedExtensions
+  | EM_ServerHello ->
+    if length b = 0 then correct []
+    else
+    	let msg = "Failed to parse SNI list: should be empty in ServerHello, has size " ^ string_of_int (length b) in
+    	Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ msg)
+  | EM_ClientHello ->
+    if length b >= 2 then
+    	begin
+    	match vlparse 2 b with
+    	| Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
+    	| Correct b ->
+      	(match parseServerName_aux b with
+      	| ExFail(x,y) -> Error(x,y)
+      	| ExOK [] -> Error(AD_unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Empty SNI extension")
+      	| ExOK l -> correct l)
+    	end
+    else
+      Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
+  | _ -> error "SNI extension cannot appear in this message type"
 
 // ExtensionType and Extension Table in https://tlswg.github.io/tls13-spec/#rfc.section.4.2.
 // M=Mandatory, AF=mandatory for Application Features in https://tlswg.github.io/tls13-spec/#rfc.section.8.2.
@@ -827,7 +825,7 @@ let extensionBytes_is_injective
   let payload2 = extensionPayloadBytes ext2 in
   //TODO bytes NS 09/27
   //append_assoc head1 payload1 s1;
-  //append_assoc head2 payload2 s2; 
+  //append_assoc head2 payload2 s2;
   //lemma_append_inj head1 (payload1 @| s1) head2 (payload2 @| s2);
   equal_extensionHeaderBytes_sameExt ext1 ext2;
   match ext1 with
@@ -1115,6 +1113,7 @@ let parseExtension mt b =
     | (0x00z, 0x00z) ->
 //      mapResult E_server_name (parseServerName mt data)
       mapResult (normallyNone E_server_name) (parseServerName mt data)
+
     | (0x00z, 0x0Az) -> // supported groups
       if length data < 2 || length data >= 65538 then error "supported groups" else
       mapResult (normallyNone E_supported_groups) (Parse.parseNamedGroups data)
@@ -1175,10 +1174,10 @@ let parseExtension mt b =
 
 //17-05-08 TODO precondition on bytes to prove length subtyping on the result
 // SI: simplify binder accumulation code. (Binders should be the last in the list.)
-private 
+private
 let rec parseExtensions_aux
         : mt:ext_msg -> b:bytes -> list extension * option binders -> Tot (result (list extension * option binders))
-          (decreases (length b)) 
+          (decreases (length b))
    = fun mt b (exts, obinders) ->
        if length b >= 4 then
          let ht, b = split b 2ul in
@@ -1256,7 +1255,7 @@ val prepareExtensions:
   protocolVersion ->
   protocolVersion ->
   k:valid_cipher_suites{List.Tot.length k < 256} ->
-  option string -> // SNI
+  option bytes -> // SNI
   option alpn -> // ALPN
   option quicParameters ->
   bool -> // EMS
@@ -1310,7 +1309,7 @@ let prepareExtensions minpv pv cs host alps qp ems sren edi ticket sigAlgs named
     in
     let res =
       match host with
-      | Some dns -> E_server_name [] :: res //SNI_DNS (utf8 dns)] :: res
+      | Some dns -> E_server_name [SNI_DNS dns] :: res
       | None -> res
     in
     let res =
@@ -1436,7 +1435,7 @@ let rec containsExt (l: list extension) (ext: extension): bool =
   match l with
   | [] -> false
   | ext' :: l' -> sameExt ext ext' || containsExt l' ext
-  
+
 (* TODO (adl):
    The negotiation of renegotiation indication is incorrect,
    Needs to be consistent with clientToNegotiatedExtension
@@ -1500,7 +1499,7 @@ private
 let rec serverToNegotiatedExtensions_aux cfg cExtL cs ri resuming rpv sExtL =
   match sExtL with
   | [] -> rpv
-  | hd::tl -> 
+  | hd::tl ->
     match serverToNegotiatedExtension cfg cExtL cs ri resuming rpv hd with
     | Error z -> Error z
     | rpv ->

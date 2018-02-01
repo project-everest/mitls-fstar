@@ -137,6 +137,12 @@ let accum_string_of_signatureSchemes s sa =
 let string_of_signatureSchemes sal =
   List.Tot.fold_left accum_string_of_signatureSchemes "" sal
 
+private
+let accum_string_of_ciphersuite s cs =
+    s ^ "; " ^ string_of_ciphersuite cs
+let string_of_ciphersuites csl =
+  List.Tot.fold_left accum_string_of_ciphersuite "" csl
+
 (* Negotiation: HELLO sub-module *)
 type ri = cVerifyData * sVerifyData
 
@@ -645,13 +651,13 @@ let client_ClientHello #region ns oks =
   match HST.op_Bang ns.state with
   | C_Init _ ->
       trace(if
-    (match pskinfo with
-    | (_, i) :: _ -> i.allow_early_data // Must be the first PSK
-    | _ -> false)
-      then "compatible" else "");
-      trace(if Some? ns.cfg.max_early_data then "enabled" else "");
+        (match pskinfo with
+        | (_, i) :: _ -> i.allow_early_data && Some? ns.cfg.max_early_data // Must be the first PSK
+        | _ -> false)
+      then "Offering a PSK compatible with 0-RTT" else "No PSK or 0-RTT disabled");
       let offer = computeOffer Client ns.cfg ns.resume ns.nonce oks' pskinfo in
       trace ("offering client extensions "^string_of_option_extensions offer.ch_extensions);
+      trace ("offering cipher suites "^string_of_ciphersuites offer.ch_cipher_suites);
       HST.op_Colon_Equals ns.state (C_Offer offer);
       offer
 
@@ -1359,13 +1365,6 @@ let computeServerMode cfg co serverRandom =
                 None) // no client key share yet for 1.2
               (Some(cert, sa))
             ))
-
-private
-let accum_string_of_ciphersuite s cs =
-    s ^ "; " ^ string_of_ciphersuite cs
-
-let string_of_ciphersuites csl =
-  List.Tot.fold_left accum_string_of_ciphersuite "" csl
 
 private
 let accum_string_of_pv s pv = s ^ " " ^ string_of_pv pv

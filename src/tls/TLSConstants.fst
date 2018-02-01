@@ -40,7 +40,7 @@ let rec fold_string (#a:Type)
     | [] -> accum
     | a::al -> let accum = accum ^ sep ^ f a in
              fold_string f accum sep al
-             
+
 (* Some basic utility functions for closure converting arguments
    to the higher-order combinators in the list library ...
    for use with KreMLin extraction *)
@@ -77,12 +77,12 @@ let rec choose_aux  (#a:Type)
          match f env hd with
          | Some i -> i :: choose_aux env f tl
          | None -> choose_aux env f tl
-       
+
 let exists_b_aux (#a:Type) (#b:Type) (env:b) (f:b -> a -> Tot bool) (l:list a) =
   Some? (find_aux env f l)
 
 let rec map_aux (#a:Type) (#b:Type) (#c:Type) (env:c) (f:c -> a -> Tot b) (l:list a)
-  : Tot (list b) 
+  : Tot (list b)
   = match l with
     | [] -> []
     | hd::tl -> f env hd :: map_aux env f tl
@@ -92,7 +92,7 @@ let rec forall_aux (#a:Type) (#b:Type) (env:b) (f: b -> a -> Tot bool) (l:list a
   = match l with
     | [] -> true
     | hd::tl -> if f env hd then forall_aux env f tl else false
-    
+
 let mem_rev (#a:eqtype) (l:list a) (x:a) = List.Tot.mem x l
 (** Polarity for reading and writing *)
 type rw =
@@ -1832,10 +1832,15 @@ type ticketInfo =
   | TicketInfo_12 of protocolVersion * cipherSuite * ems:bool
   | TicketInfo_13 of pskInfo
 
-type ticket_cb : Type0 =
-  (sni:string -> ticket:bytes -> info:ticketInfo -> rawkey:bytes -> ST unit
+type ticket_cb_fun =
+  (FStar.Dyn.dyn -> sni:string -> ticket:bytes -> info:ticketInfo -> rawkey:bytes -> ST unit
     (requires fun _ -> True)
     (ensures fun h0 _ h1 -> modifies_none h0 h1))
+
+noeq type ticket_cb = {
+  ticket_context: FStar.Dyn.dyn;
+  new_ticket: ticket_cb_fun;
+}
 
 type cert_repr = b:bytes {length b < 16777216}
 type cert_type = FFICallbacks.callbacks
@@ -1928,7 +1933,7 @@ noeq type config : Type0 = {
     cert_callbacks: cert_cb;      // Certificate callbacks, called on all PKI-related operations
 
     alpn: option alpn;   // ALPN offers (for client) or preferences (for server)
-    peer_name: option string;     // The expected name to match against the peer certificate
+    peer_name: option bytes;     // The expected name to match against the peer certificate
   }
 
 let cert_select_cb (c:config) (sni:bytes) (sig:signatureSchemeList)

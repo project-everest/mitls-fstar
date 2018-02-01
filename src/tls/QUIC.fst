@@ -167,14 +167,14 @@ let accept ctx send recv config : ML Connection.connection =
 // Ticket also includes the serialized session,
 // if it is not in the PSK database it will be installed
 // (allowing resumption across miTLS client processes)
-val ffiConnect: 
-  Transport.pvoid -> Transport.pfn_send -> Transport.pfn_recv -> 
+val ffiConnect:
+  Transport.pvoid -> Transport.pfn_send -> Transport.pfn_recv ->
   config:config -> ticket: option (bytes * bytes) -> ML Connection.connection
 let ffiConnect ctx snd rcv config ticket =
   connect ctx snd rcv config (FFI.install_ticket config ticket)
 
-val ffiAcceptConnected: 
-  Transport.pvoid -> Transport.pfn_send -> Transport.pfn_recv -> 
+val ffiAcceptConnected:
+  Transport.pvoid -> Transport.pfn_send -> Transport.pfn_recv ->
   config:config -> ML Connection.connection
 let ffiAcceptConnected ctx snd rcv config = accept ctx snd rcv config
 
@@ -204,14 +204,14 @@ let get_peer_parameters c =
   let r = TLSConstants.dualRole (Connection.c_role c) in
   ffi_parameters (get_parameters c r)
 
-private
-let quicVersion (n:UInt32.t) =
-    match UInt32.v n with
-    | 1 -> QuicVersion1
-    | _ -> QuicCustomVersion n
-    
-let ffiConfig (qp: bytes) (versions: list UInt32.t) (host: string) =
+private let quicVersion (n:UInt32.t) = QuicCustomVersion n // avoid overflow in .v
+//    match UInt32.v n with
+//    | 1 -> QuicVersion1
+//    | _ -> QuicCustomVersion n
+
+let ffiConfig (qp: bytes) (versions: list UInt32.t) (host:bytes) =
   let ver = List.Tot.map quicVersion versions in
+  let h = if length host = 0 then None else Some host in
   let qpl =
     match Extensions.parseQuicParameters_aux qp with
     | Error z -> failwith "Invalid QUIC transport parameters"
@@ -220,7 +220,7 @@ let ffiConfig (qp: bytes) (versions: list UInt32.t) (host: string) =
   { defaultConfig with
     min_version = TLS_1p3;
     max_version = TLS_1p3;
-    peer_name = Some host;
+    peer_name = h;
     non_blocking_read = true;
     quic_parameters = Some (ver, qpl)
   }

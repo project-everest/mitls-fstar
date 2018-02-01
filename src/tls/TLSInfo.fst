@@ -65,8 +65,8 @@ let default_groups : list valid_namedGroup = [
 
 // By default we use an in-memory ticket table
 // and the in-memory internal PSK database
-val defaultTicketCB: ticket_cb
-let defaultTicketCB sni ticket info psk =
+val defaultTicketCBFun: ticket_cb_fun
+let defaultTicketCBFun _ sni ticket info psk =
   assume false; // FIXME(adl) have to assume modifies_none...
   match info with
   | TicketInfo_12 (pv, cs, ems) ->
@@ -74,6 +74,12 @@ let defaultTicketCB sni ticket info psk =
   | TicketInfo_13 pskInfo ->
     PSK.coerce_psk ticket pskInfo psk;
     PSK.extend sni ticket
+
+val defaultTicketCB: ticket_cb
+let defaultTicketCB = {
+  ticket_context = (FStar.Dyn.mkdyn ());
+  new_ticket = defaultTicketCBFun;
+}
 
 let none4 = fun _ _ _ _ -> None
 let empty3 = fun _ _ _ -> []

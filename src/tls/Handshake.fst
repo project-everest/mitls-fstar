@@ -572,7 +572,8 @@ let client_NewSessionTicket_12 (hs:hs) (resume:bool) (digest:Hashing.anyTag) (os
     let (msId, ms) = KeySchedule.ks_12_ms hs.ks in
     let pv = mode.Nego.n_protocol_version in
     let cs = mode.Nego.n_cipher_suite in
-    cfg.ticket_callback sni tid (TicketInfo_12 (pv, cs, Nego.emsFlag mode)) ms;
+    let tcb = cfg.ticket_callback in
+    tcb.new_ticket tcb.ticket_context sni tid (TicketInfo_12 (pv, cs, Nego.emsFlag mode)) ms;
     InAck true false
   | None, false -> InAck true false
   | Some t, false -> InError (AD_unexpected_message, "unexpected NewSessionTicket message")
@@ -607,7 +608,8 @@ let client_NewSessionTicket_13 (hs:hs) (st13:sticket13)
       | _ -> false)
     else true in
   if valid_ed then
-    (cfg.ticket_callback sni tid (TicketInfo_13 pskInfo) psk;
+    (let tcb = cfg.ticket_callback in
+    tcb.new_ticket tcb.ticket_context sni tid (TicketInfo_13 pskInfo) psk;
     InAck false false)
   else InError (AD_illegal_parameter, "QUIC tickets must allow 0xFFFFFFFF bytes of ealy data")
 

@@ -64,13 +64,13 @@ private let write_all c i b : ML ioresult_w = write_all' c i b 0
 
 // an integer carrying the fatal alert descriptor
 // we could also write txt into the application error log
-private 
+private
 let errno description txt : St int =
   let txt0 =
     match description with
     | Some ad -> TLSError.string_of_ad ad
     | None    -> "(None)"
-  in  
+  in
   trace ("returning error: "^txt0^" "^txt^"\n");
   match description with
   | Some ad ->  let _, e = split_ (Alert.alertBytes ad) 2 in int_of_bytes e
@@ -84,14 +84,14 @@ let connect ctx send recv config_1 psks : ML (Connection.connection * int) =
   let here = new_region HS.root in
   let c = TLS.resume here tcp config_1 None psks in
   let err : stackref (option int) = HST.salloc None in
-  C.Loops.do_while 
+  C.Loops.do_while
           (fun _ _ -> True)
-          (fun _ -> 
+          (fun _ ->
     let i = currentId c Reader in
     match TLS.read c i with
     | Update false ->
       true
-      
+
     | Complete
     | Update false ->
       err := Some 0;
@@ -100,7 +100,7 @@ let connect ctx send recv config_1 psks : ML (Connection.connection * int) =
     | ReadError description txt ->
       err := Some (errno description txt);
       false
-            
+
     | _ ->
       false);
   let firstResult =
@@ -130,7 +130,7 @@ let accept_connected ctx send recv config_1 : ML (Connection.connection * int) =
   let err : HST.stackref (option int) = HST.salloc None in
   C.Loops.do_while
     (fun _ _ -> True)
-    (fun _ ->    
+    (fun _ ->
       let i = currentId c Reader in
       match read c i with
       | Complete
@@ -141,11 +141,11 @@ let accept_connected ctx send recv config_1 : ML (Connection.connection * int) =
       | ReadError description txt ->
         err := Some (errno description txt);
         false
-        
+
       | Update false ->
         true
-        
-      | _ -> 
+
+      | _ ->
         false);
   let firstResult =
     match !err with
@@ -254,10 +254,11 @@ let aeads = [
 
 let ffiConfig version host =
   let v = s2pv version in
+  let h = if length host = 0 then None else Some host in
   {defaultConfig with
     min_version = TLS_1p2;
     max_version = v;
-    peer_name = Some host;
+    peer_name = h;
   }
 
 let rec findsetting f l =
@@ -290,11 +291,11 @@ let findSetting_css (x:string) =
 let rec split_string (c:FStar.Char.char) (x:string) : list string =
   let i = String.index_of x c in
   if i < 0
-  then []
+  then [x]
   else let prefix = String.substring x 0 i in
        let suffix = String.substring x (i + 1) (String.length x - (i + 1)) in
        prefix :: split_string c suffix
-       
+
 val ffiSetCipherSuites: cfg:config -> x:string -> ML config
 let ffiSetCipherSuites cfg x =
   let x :: t = split_string '@' x in
@@ -358,11 +359,11 @@ let ffiSetEarlyData cfg x =
   max_early_data = if x>0 then Some x else None;
   }
 
-val ffiSetTicketKey: a:string -> k:string -> ML bool
+val ffiSetTicketKey: a:string -> k:bytes -> ML bool
 let ffiSetTicketKey a k =
   (match findsetting a aeads with
   | None -> false
-  | Some a -> TLS.set_ticket_key a (bytes_of_string k))
+  | Some a -> TLS.set_ticket_key a k)
 
 let install_ticket config ticket : ML (list PSK.psk_identifier) =
   match ticket with
@@ -424,9 +425,9 @@ let ffiSend c b =
   write c msg
 
 
-let ffiSetTicketCallback (cfg:config) (cb:ticket_cb) =
+let ffiSetTicketCallback (cfg:config) (ctx:FStar.Dyn.dyn) (cb:ticket_cb_fun) =
   trace "Setting a new ticket callback.";
-  {cfg with ticket_callback = cb}
+  {cfg with ticket_callback = {ticket_context = ctx; new_ticket = cb}}
 
 let ffiSetCertCallbacks (cfg:config) (cb:cert_cb) =
   trace "Setting up certificate callbacks.";
@@ -475,6 +476,22 @@ let ffiGetExporter (c:Connection.connection) (early:bool)
     | true, EarlyExportID _ _ -> Some (h, ae, b)
     | _ -> None
 
+let ffiTicketInfoBytes (info:ticketInfo) (key:bytes) =
+  let si = match info with
+    | TicketInfo_13 ctx ->
+      let ae = ctx.early_ae in
+      let h = ctx.early_hash in
+      let (| li, rmsid |) = Ticket.dummy_rmsid ae h in
+      Ticket.Ticket13 (CipherSuite13 ae h) li rmsid key
+    | TicketInfo_12 (pv, cs, ems) ->
+      Ticket.Ticket12 pv cs ems (Ticket.dummy_msId pv cs ems) key
+    in
+  Ticket.serialize si
+
+let ffiSplitChain (chain:bytes) : ML (list cert_repr) =
+  match Cert.parseCertificateList chain with
+  | Error (_, msg) -> failwith ("ffiCertFormatCallback: formatted chain was invalid, "^msg)
+  | Correct chain -> chain
 
 (*
 // Closures for stateful callbacks, these are now unnecessary
@@ -491,7 +508,7 @@ let ffiTicketCallback (cb_state:callbacks) (cb:callbacks) (sni:string) (ticket:b
     | TicketInfo_12 (pv, cs, ems) ->
       Ticket.Ticket12 pv cs ems (Ticket.dummy_msId pv cs ems) key
     in
-  ocaml_ticket_cb cb_state cb sni ticket (Ticket.serialize si)
+  ocaml_ticket_cb cb_state cb sni ticket ()
 
 let ffiCertSelectCallback (cb_state:callbacks) (cb:callbacks) (sni:string) (sal:signatureSchemeList)
   : ML (option (cert_type * signatureScheme)) =
