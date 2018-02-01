@@ -28,7 +28,7 @@ let rec iter xs: St unit =
 
 let main (): St C.exit_code =
   ignore (FStar.Test.dummy ());
-  ignore (dummy ());
+  ignore (TLS.Curve25519.dummy ());
   iter [
     "TLSConstants", TLSConstants.main;
     "StAE", StAE.main;
