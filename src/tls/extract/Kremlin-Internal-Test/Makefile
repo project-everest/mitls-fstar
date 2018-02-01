@@ -4,7 +4,7 @@ UNAME		= $(shell uname)
 MARCH		?= x86_64
 
 MITLS_HOME 	= ../../../..
-MLCRYPTO_HOME	?= ../../../../../MLCrypto
+MLCRYPTO_HOME	?= ../../../../MLCrypto
 
 ifeq ($(OS),Windows_NT)
   PATH := $(MLCRYPTO_HOME)/openssl:$(MITLS_HOME)/src/pki:$(PATH)
