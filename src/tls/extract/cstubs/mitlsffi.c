@@ -6,6 +6,7 @@
 #include <errno.h> // MinGW only provides include/errno.h
 #include <malloc.h>
 #endif
+#include <pthread.h>
 #include "FFI.h"    // Kremlin-extracted file
 #include "QUIC.h"   // Kremlin-extracted file
 #include "mitlsffi.h"
@@ -22,6 +23,7 @@ struct mitls_state {
 };
 
 static bool isRegistered;
+static pthread_mutex_t lock;
 
 static Prims_string CopyPrimsString(const char *src)
 {
@@ -57,6 +59,10 @@ int MITLS_CALLCONV FFI_mitls_init(void)
     return FFI_mitls_thread_register();
   }
 
+  if (pthread_mutex_init(&lock, NULL) != 0) {
+    return 0;
+  }
+
   kremlinit_globals();
   isRegistered = 1;
   return 1; // success
@@ -64,7 +70,7 @@ int MITLS_CALLCONV FFI_mitls_init(void)
 
 void MITLS_CALLCONV FFI_mitls_cleanup(void)
 {
-    // Nothing to do.
+    pthread_mutex_destroy(&lock);
     isRegistered = 0;
 }
 
@@ -408,6 +414,7 @@ int MITLS_CALLCONV FFI_mitls_connect(void *send_recv_ctx, pfn_FFI_send psend, pf
 {
    *outmsg = NULL;
    *errmsg = NULL;
+   pthread_mutex_lock(&lock);
 
    wrapped_transport_cb* tcb = KRML_HOST_MALLOC(sizeof(wrapped_transport_cb));
    tcb->send_recv_ctx = send_recv_ctx;
@@ -416,14 +423,16 @@ int MITLS_CALLCONV FFI_mitls_connect(void *send_recv_ctx, pfn_FFI_send psend, pf
 
     // No psks this FFI_connect() call
     K___Connection_connection_Prims_int result = FFI_connect((FStar_Dyn_dyn)tcb, wrapped_send, wrapped_recv, state->cfg, NULL);
-
     state->cxn = result.fst;
+
+    pthread_mutex_unlock(&lock);
     return result.snd;
 }
 
 int MITLS_CALLCONV FFI_mitls_resume(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state, /* in */ mitls_ticket *ticket, /* out */ char **errmsg)
 {
     *errmsg = NULL;
+    pthread_mutex_lock(&lock);
     wrapped_transport_cb* tcb = KRML_HOST_MALLOC(sizeof(wrapped_transport_cb));
     tcb->send_recv_ctx = send_recv_ctx;
     tcb->send = psend;
@@ -433,34 +442,41 @@ int MITLS_CALLCONV FFI_mitls_resume(void *send_recv_ctx, pfn_FFI_send psend, pfn
     if (ticket->ticket_len) {
         head = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
         if (!head) {
+            pthread_mutex_unlock(&lock);
             return 1;
         }
         Prims_list__FStar_Bytes_bytes *tail = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
         if (!tail) {
+            pthread_mutex_unlock(&lock);
             KRML_HOST_FREE(head);
             return 1;
         }
 
         if (!MakeFStar_Bytes_bytes(&head->val.case_Cons.hd, ticket->ticket, ticket->ticket_len)) {
+            pthread_mutex_unlock(&lock);
             KRML_HOST_FREE(head);
             KRML_HOST_FREE(tail);
             return 1;
         }
         if (!MakeFStar_Bytes_bytes(&tail->val.case_Cons.hd, ticket->session, ticket->session_len)) {
+            pthread_mutex_unlock(&lock);
             KRML_HOST_FREE((char*)head->val.case_Cons.hd.data);
             KRML_HOST_FREE(tail);
             KRML_HOST_FREE(head);
             return 1;
         }
+
         head->tag = Prims_Cons;
         head->val.case_Cons.tl = tail;
         tail->tag = Prims_Cons;
     } else {
         head = NULL;
     }
-    K___Connection_connection_Prims_int result = FFI_connect((FStar_Dyn_dyn)tcb, wrapped_send, wrapped_recv, state->cfg, head);
 
+    K___Connection_connection_Prims_int result = FFI_connect((FStar_Dyn_dyn)tcb, wrapped_send, wrapped_recv, state->cfg, head);
     state->cxn = result.fst;
+    pthread_mutex_unlock(&lock);
+
     return result.snd;
 }
 
@@ -469,6 +485,7 @@ int MITLS_CALLCONV FFI_mitls_accept_connected(void *send_recv_ctx, pfn_FFI_send 
 {
     *outmsg = NULL;
     *errmsg = NULL;
+    pthread_mutex_lock(&lock);
 
     wrapped_transport_cb* tcb = KRML_HOST_MALLOC(sizeof(wrapped_transport_cb));
     tcb->send_recv_ctx = send_recv_ctx;
@@ -477,6 +494,8 @@ int MITLS_CALLCONV FFI_mitls_accept_connected(void *send_recv_ctx, pfn_FFI_send 
 
     K___Connection_connection_Prims_int ret = FFI_ffiAcceptConnected((FStar_Dyn_dyn)tcb, wrapped_send, wrapped_recv, state->cfg);
     state->cxn = ret.fst;
+
+    pthread_mutex_unlock(&lock);
     return (ret.snd == 0) ? 1 : 0; // return success (1) if ret.snd is 0.
 }
 
@@ -487,8 +506,11 @@ int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const void* buffe
     *outmsg = NULL;
     *errmsg = NULL;
 
+    pthread_mutex_lock(&lock);
     // bugbug: pass buffer_size when FFI_ffiSend() supports it
     ret = FFI_ffiSend(state->cxn, buffer);
+    pthread_mutex_unlock(&lock);
+
     return 1;
 }
 
@@ -501,7 +523,10 @@ void * MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ s
 
     // bugbug: fill in packet_size once it is available from the FFI
     *packet_size = 0;
-    return (void*)FFI_ffiRecv(state->cxn); // bugbug: casting away const
+    pthread_mutex_lock(&lock);
+    void* ret = FFI_ffiRecv(state->cxn); // bugbug: casting away const
+    pthread_mutex_unlock(&lock);
+    return ret;
 }
 
 static int get_exporter(Connection_connection cxn, int early, /* out */ mitls_secret *secret, /* out */ char **errmsg)
@@ -724,7 +749,7 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
     }
 
     if (cfg->enable_0rtt) {
-       st->cfg = FFI_ffiSetEarlyData(st->cfg, 0xFFFFFFFF);
+       st->cfg = FFI_ffiSetEarlyData(st->cfg, 0x01000000);
     }
 
     if (cfg->ticket_callback) {
@@ -790,8 +815,8 @@ quic_result MITLS_CALLCONV FFI_mitls_quic_process(
   /* out */ char **errmsg)
 {
     *errmsg = NULL;
-
     quic_result ret = TLS_error_other;
+    pthread_mutex_lock(&lock);
 
     // Update the buffers for the QUIC_* callbacks
     state->in_buffer = inBuf;
@@ -814,6 +839,7 @@ quic_result MITLS_CALLCONV FFI_mitls_quic_process(
     *errmsg = state->errmsg;
     state->errmsg = NULL;
 
+    pthread_mutex_unlock(&lock);
     return ret;
 }
 

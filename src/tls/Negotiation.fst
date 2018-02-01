@@ -325,7 +325,7 @@ let is_cacheable12 m =
     sid <> m.n_offer.ch_sessionID &&
     sid <> empty_bytes)
 
-type certNego = option (FFICallbacks.callbacks * signatureScheme)
+type certNego = option (cert_type * signatureScheme)
 
 noeq type negotiationState (r:role) (cfg:config) (resume:resumeInfo r) : Type0 =
   // Have C_Offer_13 and C_Offer? Shares aren't available in C_Offer yet
@@ -1201,18 +1201,12 @@ let rec filter_psk (l:list Extensions.pskIdentity)
   match l with
   | [] -> []
   | (id, _) :: t ->
-    let u_id = iutf8_opt id in
-    //TODO bytes ... audit ... NS 09/27
-    if None? u_id
-    then (trace ("WARNING: the PSK <"^(print_bytes id)^"> has been filtered because it was not decodable");
-          filter_psk t)
-    else let id = utf8_encode (Some?.v u_id) in // FIXME FStar.Bytes
-         match Ticket.check_ticket13 id with
-         | Some info -> (id, info) :: (filter_psk t)
-         | None ->
-           match PSK.psk_lookup id with
-           | Some info -> (id, info) :: (filter_psk t)
-           | None -> trace ("WARNING: the PSK <"^(print_bytes id)^"> has been filtered"); filter_psk t
+    (match Ticket.check_ticket13 id with
+    | Some info -> (id, info) :: (filter_psk t)
+    | None ->
+      (match PSK.psk_lookup id with
+      | Some info -> trace ("Loaded PSK from ticket <"^(print_bytes id)^">"); (id, info) :: (filter_psk t)
+      | None -> trace ("WARNING: the PSK <"^(print_bytes id)^"> has been filtered"); filter_psk t))
 
 // Registration of DH shares
 let rec register_shares (l:list pre_share)

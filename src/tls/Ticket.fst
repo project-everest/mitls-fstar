@@ -120,7 +120,7 @@ let check_ticket (b:bytes{length b <= 65551}) =
   if length b < AE.iv_length tid + AE.taglen tid + 8 then None else
   let (nb, b) = split_ b (AE.iv_length tid) in
   let iv = AE.coerce_iv tid (xor_ #(AE.iv_length tid) nb salt) in
-  match AE.decrypt #tid #65535 rd iv empty_bytes b with
+  match AE.decrypt #tid #(length b) rd iv empty_bytes b with
   | None -> None
   | Some plain -> parse plain
 
