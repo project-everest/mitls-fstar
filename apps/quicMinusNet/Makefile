@@ -14,6 +14,7 @@ ifeq ($(OS),Windows_NT)
   OPENSSL=libcrypto-*.dll
   CC?=$(MARCH)-w64-mingw32-gcc
   ifeq ($(shell uname -o),Cygwin)
+    HACL_HOME := $(shell cygpath -u ${HACL_HOME})
     MLCRYPTO_HOME := $(shell cygpath -u ${MLCRYPTO_HOME})
   endif
   PATH := $(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/extract/Kremlin-Library:$(HACL_HOME)/secure_api/out/runtime_switch:$(MLCRYPTO_HOME)/openssl:$(PATH)
