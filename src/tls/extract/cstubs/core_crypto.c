@@ -572,6 +572,7 @@ bool CoreCrypto_ec_is_on_curve(CoreCrypto_ec_params x0,
   BN_free(ppx);
   EC_POINT_free(point);  
   EC_KEY_free(k);
+  EC_GROUP_free(g);
   return ret;
 }
 
