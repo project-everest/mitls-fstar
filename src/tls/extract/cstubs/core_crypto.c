@@ -11,22 +11,6 @@
 #include <wincrypt.h>
 #endif
 
-#ifdef HAVE_OPENSSL
-
-#include <openssl/conf.h>
-#include <openssl/err.h>
-#include <openssl/bn.h>
-#include <openssl/evp.h>
-#include <openssl/hmac.h>
-#include <openssl/rand.h>
-#include <openssl/rsa.h>
-#include <openssl/dsa.h>
-#include <openssl/dh.h>
-#include <openssl/pem.h>
-#include <openssl/ec.h>
-#include <openssl/objects.h>
-#include <openssl/obj_mac.h>
-
 #define FAIL_IF(test, msg)                                                     \
   do {                                                                         \
     if (!(test))                                                               \
@@ -42,6 +26,23 @@
     exit(252);                                                                 \
     return _x;                                                                 \
   }
+
+#ifndef NO_OPENSSL
+
+#include <openssl/conf.h>
+#include <openssl/err.h>
+#include <openssl/bn.h>
+#include <openssl/evp.h>
+#include <openssl/hmac.h>
+#include <openssl/rand.h>
+#include <openssl/rsa.h>
+#include <openssl/dsa.h>
+#include <openssl/dh.h>
+#include <openssl/pem.h>
+#include <openssl/ec.h>
+#include <openssl/objects.h>
+#include <openssl/obj_mac.h>
+
 
 FStar_Bytes_bytes CoreCrypto_dh_agreement(CoreCrypto_dh_key x0,
                                           FStar_Bytes_bytes x1) {
@@ -240,17 +241,6 @@ CoreCrypto_ec_key CoreCrypto_ec_gen_key(CoreCrypto_ec_params x0) {
   return ret;
 }
 
-bool CoreCrypto_ec_is_on_curve(CoreCrypto_ec_params x0,
-                               CoreCrypto_ec_point x1) {
-  TODO(bool);
-}
-
-FStar_Pervasives_Native_option__CoreCrypto_key
-CoreCrypto_get_key_from_cert(FStar_Bytes_bytes x0) {
-  // unused
-  TODO(FStar_Pervasives_Native_option__CoreCrypto_key);
-}
-
 static inline
 Crypto_HMAC_alg hacl_alg_of_corecrypto_alg(CoreCrypto_hash_alg h) {
   switch (h) {
@@ -293,56 +283,6 @@ FStar_Bytes_bytes CoreCrypto_hmac(CoreCrypto_hash_alg x0,
   FStar_Bytes_bytes ret = {.length = len, .data = out};
   return ret;
 }
-
-FStar_Pervasives_Native_option__Prims_list__FStar_Bytes_bytes
-CoreCrypto_load_chain(Prims_string x0) {
-  // unused
-  TODO(FStar_Pervasives_Native_option__Prims_list__FStar_Bytes_bytes);
-}
-
-#ifdef __WIN32
-FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
-  BYTE *data = KRML_HOST_MALLOC(x0);
-
-  HCRYPTPROV ctxt;
-  if (!(CryptAcquireContext(&ctxt, NULL, NULL, PROV_RSA_FULL,
-                            CRYPT_VERIFYCONTEXT))) {
-    DWORD error = GetLastError();
-    fprintf(stderr, "Cannot acquire crypto context: 0x%lx\n", error);
-    exit(255);
-  }
-  if (!(CryptGenRandom(ctxt, x0, data))) {
-    fprintf(stderr, "Cannot read random bytes\n");
-    exit(255);
-  }
-  CryptReleaseContext(ctxt, 0);
-
-  FStar_Bytes_bytes ret = {.length = x0, .data = (char *)data};
-  return ret;
-}
-#else
-FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
-  char *data = KRML_HOST_MALLOC(x0);
-
-  int fd = open("/dev/urandom", O_RDONLY);
-  if (fd == -1) {
-    fprintf(stderr, "Cannot open /dev/urandom\n");
-    exit(255);
-  }
-  uint64_t res = read(fd, data, x0);
-  if (res != x0) {
-    fprintf(stderr,
-            "Error on reading, expected %" PRIi32 " bytes, got %" PRIu64
-            " bytes\n",
-            x0, res);
-    exit(255);
-  }
-  close(fd);
-
-  FStar_Bytes_bytes ret = {.length = x0, .data = data};
-  return ret;
-}
-#endif
 
 // REMARK: used only in tests
 CoreCrypto_rsa_key CoreCrypto_rsa_gen_key(Prims_int size) {
@@ -489,6 +429,187 @@ CoreCrypto_rsa_decrypt(CoreCrypto_rsa_key key,
   return ret;
 }
 
+#else // NO_OPENSSL
+
+FStar_Bytes_bytes CoreCrypto_dh_agreement(CoreCrypto_dh_key x0,
+                                          FStar_Bytes_bytes x1) {
+  FAIL_IF(true, "No OpenSSL support.");
+  FStar_Bytes_bytes ret = {
+    .length = 0,
+    .data = 0
+  };
+  return ret;
+}
+
+FStar_Bytes_bytes CoreCrypto_rsa_encrypt(CoreCrypto_rsa_key key,
+                                         CoreCrypto_rsa_padding padding,
+                                         FStar_Bytes_bytes data) {
+  FAIL_IF(true, "No OpenSSL support.");
+  FStar_Bytes_bytes ret = {
+    .length = 0,
+    .data = 0
+  };
+  return ret;
+}
+
+static inline
+FStar_Bytes_bytes bytes_of_bn(const void *bn) {
+  FAIL_IF(true, "No OpenSSL support.");
+  FStar_Bytes_bytes ret = {
+    .length = 0,
+    .data = 0
+  };
+  return ret;
+}
+
+CoreCrypto_dh_key CoreCrypto_dh_gen_key(CoreCrypto_dh_params x0) {
+  FAIL_IF(true, "No OpenSSL support.");
+  CoreCrypto_dh_key ret = {
+    .dh_params = x0,
+    .dh_public = 0,
+    .dh_private = {
+      .tag = FStar_Pervasives_Native_Some,
+      .val = { .case_Some = { .v = { .length=0, .data=0 } } }
+    }
+  };
+  return ret;
+}
+
+CoreCrypto_ec_key CoreCrypto_ec_gen_key(CoreCrypto_ec_params x0) {
+  FAIL_IF(true, "No OpenSSL support.");
+  CoreCrypto_ec_key ret = {
+    .ec_params = x0,
+    .ec_point = {
+      .ecx = 0,
+      .ecy = 0
+    },
+    .ec_priv = {
+      .tag = FStar_Pervasives_Native_Some,
+      .val = { .case_Some = { .v = { .length=0, .data=0 } } }
+    }
+  };
+  return ret;
+}
+
+FStar_Bytes_bytes CoreCrypto_ecdh_agreement(CoreCrypto_ec_key x0,
+                                            CoreCrypto_ec_point x1) {
+  FAIL_IF(true, "No OpenSSL support.");
+  FStar_Bytes_bytes ret = {
+    .length = 0,
+    .data = 0
+  };
+  return ret;
+}
+
+CoreCrypto_rsa_key CoreCrypto_rsa_gen_key(Prims_int size) {
+  FAIL_IF(true, "No OpenSSL support.");
+  CoreCrypto_rsa_key ret = {
+    .rsa_mod     = 0,
+    .rsa_pub_exp = 0,
+    .rsa_prv_exp = {
+      .tag = FStar_Pervasives_Native_Some,
+      .val = {
+        .case_Some = { .v = 0 }
+      }
+    }
+  };
+
+  return ret;
+}
+
+// REMARK: used only in tests
+FStar_Pervasives_Native_option__FStar_Bytes_bytes
+CoreCrypto_rsa_decrypt(CoreCrypto_rsa_key key,
+                                         CoreCrypto_rsa_padding padding,
+                                         FStar_Bytes_bytes data) {
+  FAIL_IF(true, "No OpenSSL support.");
+  FStar_Pervasives_Native_option__FStar_Bytes_bytes ret = {
+    .tag = FStar_Pervasives_Native_Some,
+    .val = {
+      .case_Some = {
+        .v = {
+          .length = 0,
+          .data = 0
+        }
+      }
+    }
+  };
+  return ret;
+}
+
+FStar_Bytes_bytes CoreCrypto_hash(CoreCrypto_hash_alg x0,
+                                  FStar_Bytes_bytes x1) {
+  FAIL_IF(true, "No OpenSSL support.");
+  FStar_Bytes_bytes ret = {.length = 0, .data = 0};
+  return ret;
+}
+
+FStar_Bytes_bytes CoreCrypto_hmac(CoreCrypto_hash_alg x0,
+                                  FStar_Bytes_bytes x1,
+                                  FStar_Bytes_bytes x2) {
+  FAIL_IF(true, "No OpenSSL support.");
+  FStar_Bytes_bytes ret = {.length = 0, .data = 0};
+  return ret;
+}
+
+#endif // NO_OPENSSL
+
+
+bool CoreCrypto_ec_is_on_curve(CoreCrypto_ec_params x0,
+                               CoreCrypto_ec_point x1) {
+  TODO(bool);
+}
+
+#ifdef __WIN32
+FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
+  BYTE *data = KRML_HOST_MALLOC(x0);
+
+  HCRYPTPROV ctxt;
+  if (!(CryptAcquireContext(&ctxt, NULL, NULL, PROV_RSA_FULL,
+                            CRYPT_VERIFYCONTEXT))) {
+    DWORD error = GetLastError();
+    fprintf(stderr, "Cannot acquire crypto context: 0x%lx\n", error);
+    exit(255);
+  }
+  if (!(CryptGenRandom(ctxt, x0, data))) {
+    fprintf(stderr, "Cannot read random bytes\n");
+    exit(255);
+  }
+  CryptReleaseContext(ctxt, 0);
+
+  FStar_Bytes_bytes ret = {.length = x0, .data = (char *)data};
+  return ret;
+}
+#else
+FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
+  char *data = KRML_HOST_MALLOC(x0);
+
+  int fd = open("/dev/urandom", O_RDONLY);
+  if (fd == -1) {
+    fprintf(stderr, "Cannot open /dev/urandom\n");
+    exit(255);
+  }
+  uint64_t res = read(fd, data, x0);
+  if (res != x0) {
+    fprintf(stderr,
+            "Error on reading, expected %" PRIi32 " bytes, got %" PRIu64
+            " bytes\n",
+            x0, res);
+    exit(255);
+  }
+  close(fd);
+
+  FStar_Bytes_bytes ret = {.length = x0, .data = data};
+  return ret;
+}
+#endif
+
+FStar_Pervasives_Native_option__CoreCrypto_key
+CoreCrypto_get_key_from_cert(FStar_Bytes_bytes x0) {
+  // unused
+  TODO(FStar_Pervasives_Native_option__CoreCrypto_key);
+}
+
 bool CoreCrypto_validate_chain(Prims_list__FStar_Bytes_bytes *x0, bool x1,
                                FStar_Pervasives_Native_option__Prims_string x2,
                                Prims_string x3) {
@@ -496,8 +617,8 @@ bool CoreCrypto_validate_chain(Prims_list__FStar_Bytes_bytes *x0, bool x1,
   TODO(bool);
 }
 
-#else // !HAVE_OPENSSL
-
-// TODO.
-
-#endif
+FStar_Pervasives_Native_option__Prims_list__FStar_Bytes_bytes
+CoreCrypto_load_chain(Prims_string x0) {
+  // unused
+  TODO(FStar_Pervasives_Native_option__Prims_list__FStar_Bytes_bytes);
+}

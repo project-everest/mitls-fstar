@@ -25,9 +25,11 @@ else ifeq ($(UNAME),Linux)
   export LD_LIBRARY_PATH
 endif
 
-ifdef HAVE_OPENSSL
+ifndef NO_OPENSSL
 ifeq ($(OS),Windows_NT)
   PATH := $(MLCRYPTO_HOME)/openssl:$(PATH)
+else ifeq ($(UNAME),Darwin)
+  DYLD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(DYLD_LIBRARY_PATH)
 else
   LD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(LD_LIBRARY_PATH)
 endif
@@ -57,7 +59,6 @@ FILES 		= AEAD_GCM AEADProvider Alert BufferBytes Cert \
   Specializations_Providers_AEAD StAE StatefulLHAE \
   StatefulPlain StreamAE StreamDeltas StreamPlain stub/mipki_wrapper stub/core_crypto stub/hacl_aead \
   stub/hacl_provider \
-  Ticket TLS TLSConstants TLS_Curve25519 TLSError TLSInfo \
   TLSInfoFlags TLSPRF Transport vale/sha256_main_i vale/vale_aes_glue \
   vale/Vale_Hash_SHA2_256 # stub/mitlsffi
 
@@ -67,9 +68,11 @@ CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror \
   -D_BSD_SOURCE -D_DEFAULT_SOURCE -D__USE_MINGW_ANSI_STDIO \
   -Wno-missing-braces
 
-ifdef HAVE_OPENSSL
-CFLAGS += -I$(MLCRYPTO_HOME)/openssl/include -DHAVE_OPENSSL
+ifndef NO_OPENSSL
+CFLAGS += -I$(MLCRYPTO_HOME)/openssl/include
 LDOPTS += -L$(MLCRYPTO_HOME)/openssl -lcrypto -lssl
+else
+CFLAGS += -DNO_OPENSSL
 endif
 
 all: libmitls.$(SO)
