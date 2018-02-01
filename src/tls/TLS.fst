@@ -49,13 +49,6 @@ unfold let op_Array_Access (#a:Type) (s:Seq.seq a) n = Seq.index s n // s.[n]
 // using also DataStream, Content, Record
 #set-options "--initial_ifuel 0 --max_ifuel 0 --initial_fuel 0 --max_fuel 0"
 
-// too convenient; use sparingly. Should move to a library
-// JP: isn't failwith sufficient enough? CF: this one works in ST.
-val unexpected: #a:Type -> v:string -> ST a
-  (requires (fun h -> True))
-  (ensures (fun _ _ _ -> False ))
-let rec unexpected #a s = unexpected s
-
 
 (** misc ***)
 
