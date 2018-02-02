@@ -6,7 +6,14 @@
 #include <errno.h> // MinGW only provides include/errno.h
 #include <malloc.h>
 #endif
+#if defined(_MSC_VER) || defined(__MINGW32__)
+#define IS_WINDOWS 1
+#include <windows.h>
+#else
+#define IS_WINDOWS 0
 #include <pthread.h>
+#endif
+
 #include "FFI.h"    // Kremlin-extracted file
 #include "QUIC.h"   // Kremlin-extracted file
 #include "mitlsffi.h"
@@ -23,7 +30,19 @@ struct mitls_state {
 };
 
 static bool isRegistered;
+
+// BUGBUG: temporary global lock to protect global
+//         mutable variables in mitls.  Remove when
+//         the variables have their own protection.
+#if IS_WINDOWS
+CRITICAL_SECTION lock;
+#define LOCK_MUTEX(x) EnterCriticalSection(x)
+#define UNLOCK_MUTEX(x) LeaveCriticalSection(x)
+#else
 static pthread_mutex_t lock;
+#define LOCK_MUTEX(x) pthread_mutex_lock(x)
+#define UNLOCK_MUTEX(x) pthread_mutex_unlock(x)
+#endif
 
 static Prims_string CopyPrimsString(const char *src)
 {
@@ -59,9 +78,13 @@ int MITLS_CALLCONV FFI_mitls_init(void)
     return FFI_mitls_thread_register();
   }
 
+#if IS_WINDOWS
+  InitializeCriticalSection(&lock);
+#else  
   if (pthread_mutex_init(&lock, NULL) != 0) {
     return 0;
   }
+#endif
 
   kremlinit_globals();
   isRegistered = 1;
@@ -70,7 +93,11 @@ int MITLS_CALLCONV FFI_mitls_init(void)
 
 void MITLS_CALLCONV FFI_mitls_cleanup(void)
 {
+#if IS_WINDOWS
+    DeleteCriticalSection(&lock);
+#else
     pthread_mutex_destroy(&lock);
+#endif
     isRegistered = 0;
 }
 
@@ -278,7 +305,8 @@ static FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme
 {
   wrapped_cert_cb* s = (wrapped_cert_cb*)cbs;
   size_t sigalgs_len = list_sa_len(sal);
-  mitls_signature_scheme selected, sigalgs[sigalgs_len];
+  mitls_signature_scheme selected;
+  mitls_signature_scheme *sigalgs = alloca(sigalgs_len*sizeof(mitls_signature_scheme));
   Prims_list__TLSConstants_signatureScheme *cur = sal;
 
   for(size_t i = 0; i < sigalgs_len; i++)
@@ -424,7 +452,7 @@ int MITLS_CALLCONV FFI_mitls_connect(void *send_recv_ctx, pfn_FFI_send psend, pf
 {
    *outmsg = NULL;
    *errmsg = NULL;
-   pthread_mutex_lock(&lock);
+   LOCK_MUTEX(&lock);
 
    wrapped_transport_cb* tcb = KRML_HOST_MALLOC(sizeof(wrapped_transport_cb));
    tcb->send_recv_ctx = send_recv_ctx;
@@ -435,14 +463,14 @@ int MITLS_CALLCONV FFI_mitls_connect(void *send_recv_ctx, pfn_FFI_send psend, pf
     K___Connection_connection_Prims_int result = FFI_connect((FStar_Dyn_dyn)tcb, wrapped_send, wrapped_recv, state->cfg, NULL);
     state->cxn = result.fst;
 
-    pthread_mutex_unlock(&lock);
+    UNLOCK_MUTEX(&lock);
     return result.snd;
 }
 
 int MITLS_CALLCONV FFI_mitls_resume(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state, /* in */ mitls_ticket *ticket, /* out */ char **errmsg)
 {
     *errmsg = NULL;
-    pthread_mutex_lock(&lock);
+    LOCK_MUTEX(&lock);
     wrapped_transport_cb* tcb = KRML_HOST_MALLOC(sizeof(wrapped_transport_cb));
     tcb->send_recv_ctx = send_recv_ctx;
     tcb->send = psend;
@@ -452,24 +480,24 @@ int MITLS_CALLCONV FFI_mitls_resume(void *send_recv_ctx, pfn_FFI_send psend, pfn
     if (ticket->ticket_len) {
         head = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
         if (!head) {
-            pthread_mutex_unlock(&lock);
+            UNLOCK_MUTEX(&lock);
             return 1;
         }
         Prims_list__FStar_Bytes_bytes *tail = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
         if (!tail) {
-            pthread_mutex_unlock(&lock);
+            UNLOCK_MUTEX(&lock);
             KRML_HOST_FREE(head);
             return 1;
         }
 
         if (!MakeFStar_Bytes_bytes(&head->val.case_Cons.hd, ticket->ticket, ticket->ticket_len)) {
-            pthread_mutex_unlock(&lock);
+            UNLOCK_MUTEX(&lock);
             KRML_HOST_FREE(head);
             KRML_HOST_FREE(tail);
             return 1;
         }
         if (!MakeFStar_Bytes_bytes(&tail->val.case_Cons.hd, ticket->session, ticket->session_len)) {
-            pthread_mutex_unlock(&lock);
+            UNLOCK_MUTEX(&lock);
             KRML_HOST_FREE((char*)head->val.case_Cons.hd.data);
             KRML_HOST_FREE(tail);
             KRML_HOST_FREE(head);
@@ -485,7 +513,7 @@ int MITLS_CALLCONV FFI_mitls_resume(void *send_recv_ctx, pfn_FFI_send psend, pfn
 
     K___Connection_connection_Prims_int result = FFI_connect((FStar_Dyn_dyn)tcb, wrapped_send, wrapped_recv, state->cfg, head);
     state->cxn = result.fst;
-    pthread_mutex_unlock(&lock);
+    UNLOCK_MUTEX(&lock);
 
     return result.snd;
 }
@@ -495,7 +523,7 @@ int MITLS_CALLCONV FFI_mitls_accept_connected(void *send_recv_ctx, pfn_FFI_send 
 {
     *outmsg = NULL;
     *errmsg = NULL;
-    pthread_mutex_lock(&lock);
+    LOCK_MUTEX(&lock);
 
     wrapped_transport_cb* tcb = KRML_HOST_MALLOC(sizeof(wrapped_transport_cb));
     tcb->send_recv_ctx = send_recv_ctx;
@@ -505,7 +533,7 @@ int MITLS_CALLCONV FFI_mitls_accept_connected(void *send_recv_ctx, pfn_FFI_send 
     K___Connection_connection_Prims_int ret = FFI_ffiAcceptConnected((FStar_Dyn_dyn)tcb, wrapped_send, wrapped_recv, state->cfg);
     state->cxn = ret.fst;
 
-    pthread_mutex_unlock(&lock);
+    UNLOCK_MUTEX(&lock);
     return (ret.snd == 0) ? 1 : 0; // return success (1) if ret.snd is 0.
 }
 
@@ -516,9 +544,9 @@ int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const void* buffe
     *outmsg = NULL;
     *errmsg = NULL;
 
-    pthread_mutex_lock(&lock);
+    LOCK_MUTEX(&lock);
     ret = FFI_ffiSend(state->cxn, (FStar_Bytes_bytes){.data = buffer, .length = buffer_size});
-    pthread_mutex_unlock(&lock);
+    UNLOCK_MUTEX(&lock);
 
     return 1;
 }
@@ -531,9 +559,9 @@ void * MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ s
     *errmsg = NULL;
     *packet_size = 0;
 
-    pthread_mutex_lock(&lock);
+    LOCK_MUTEX(&lock);
     FStar_Bytes_bytes ret = FFI_ffiRecv(state->cxn);
-    pthread_mutex_unlock(&lock);
+    UNLOCK_MUTEX(&lock);
 
     if(!ret.length) return NULL;
     p = KRML_HOST_MALLOC(ret.length);
@@ -828,7 +856,7 @@ quic_result MITLS_CALLCONV FFI_mitls_quic_process(
 {
     *errmsg = NULL;
     quic_result ret = TLS_error_other;
-    pthread_mutex_lock(&lock);
+    LOCK_MUTEX(&lock);
 
     // Update the buffers for the QUIC_* callbacks
     state->in_buffer = inBuf;
@@ -851,7 +879,7 @@ quic_result MITLS_CALLCONV FFI_mitls_quic_process(
     *errmsg = state->errmsg;
     state->errmsg = NULL;
 
-    pthread_mutex_unlock(&lock);
+    UNLOCK_MUTEX(&lock);
     return ret;
 }
 
