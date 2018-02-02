@@ -31,6 +31,7 @@ else ifeq ($(UNAME),Linux)
   LIBMITLS=libmitls.so
   LIBQC=libquicprovider.so
   LIBPKI=libmipki.so
+  CFLAGS+=-lpthread
   LD_LIBRARY_PATH := $(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/extract/Kremlin-Library:$(HACL_HOME)/secure_api/out/runtime_switch:$(MLCRYPTO_HOME)/openssl:$(LD_LIBRARY_PATH)
   export LD_LIBRARY_PATH
 endif
@@ -58,7 +59,7 @@ quic.exe: quic.c \
 	  -L$(MITLS_HOME)/src/tls/extract/Kremlin-Library \
 	  -L$(HACL_HOME)/secure_api/out/runtime_switch \
 	  -L$(MLCRYPTO_HOME)/openssl \
-	  -lmitls -lquicprovider -lmipki quic.c -o quic.exe
+	  -lmitls -lquicprovider -lmipki quic.c $(CFLAGS) -o quic.exe
 
 test: quic.exe
 	./quic.exe
