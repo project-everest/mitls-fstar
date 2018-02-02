@@ -45,6 +45,14 @@
 #include <openssl/objects.h>
 #include <openssl/obj_mac.h>
 
+static void dump(const unsigned char *buffer, size_t len)
+{
+  int i;
+  for(i=0; i<len; i++) {
+    printf("%02x",buffer[i]);
+    if (i % 32 == 31 || i == len-1) printf("\n");
+  }
+}
 
 FStar_Bytes_bytes CoreCrypto_dh_agreement(CoreCrypto_dh_key x0,
                                           FStar_Bytes_bytes x1) {
@@ -161,26 +169,26 @@ FStar_Bytes_bytes CoreCrypto_ecdh_agreement(CoreCrypto_ec_key x0,
                                             CoreCrypto_ec_point x1) {
   EC_KEY *k = key_of_core_crypto_curve(x0.ec_params.curve);
   EC_GROUP *g = EC_GROUP_dup(EC_KEY_get0_group(k));
+  
   if (x0.ec_params.point_compression)
     EC_GROUP_set_point_conversion_form(g, POINT_CONVERSION_COMPRESSED);
   else
     EC_GROUP_set_point_conversion_form(g, POINT_CONVERSION_UNCOMPRESSED);
 
-  EC_POINT *p = EC_POINT_new(g);
   BIGNUM *px = BN_bin2bn((uint8_t *) x0.ec_point.ecx.data, x0.ec_point.ecx.length, NULL);
   BIGNUM *py = BN_bin2bn((uint8_t *) x0.ec_point.ecy.data, x0.ec_point.ecy.length, NULL);
-  EC_POINT_set_affine_coordinates_GFp(g, p, px, py, NULL);
-  EC_KEY_set_public_key(k, p);
+  EC_KEY_set_public_key_affine_coordinates(k, px, py);
 
   BIGNUM *pr = NULL;
   if (x0.ec_priv.tag == FStar_Pervasives_Native_Some) {
-    BN_bin2bn((uint8_t *) x0.ec_priv.val.case_Some.v.data, x0.ec_priv.val.case_Some.v.length, NULL);
+    pr = BN_bin2bn((uint8_t *) x0.ec_priv.val.case_Some.v.data, x0.ec_priv.val.case_Some.v.length, NULL);
     EC_KEY_set_private_key(k, pr);
   }
 
   size_t field_size = EC_GROUP_get_degree(g);
   size_t len = (field_size + 7) / 8;
   char *out = KRML_HOST_MALLOC(len);
+  memset(out, 0, len);
 
   EC_POINT *pp = EC_POINT_new(g);
   BIGNUM *ppx = BN_bin2bn((uint8_t *) x1.ecx.data, x1.ecx.length, NULL);
@@ -196,7 +204,6 @@ FStar_Bytes_bytes CoreCrypto_ecdh_agreement(CoreCrypto_ec_key x0,
     BN_free(pr);
   BN_free(py);
   BN_free(px);
-  EC_POINT_free(p);
   EC_GROUP_free(g);
   EC_KEY_free(k);
 
@@ -292,7 +299,7 @@ CoreCrypto_rsa_key CoreCrypto_rsa_gen_key(Prims_int size) {
   BIGNUM *e = BN_new();
   FAIL_IF(e == NULL || rsa == NULL, "OpenSSL allocation failure");
 
-  BN_hex2bn(&e, "010001"); // 65537 
+  BN_hex2bn(&e, "010001"); // 65537
   if (RSA_generate_key_ex(rsa, size, e, NULL) != 1) {
     FAIL_IF(true, "Key generation failure");
   }
@@ -434,20 +441,20 @@ CoreCrypto_rsa_decrypt(CoreCrypto_rsa_key key,
 
 bool CoreCrypto_ec_is_on_curve(CoreCrypto_ec_params x0,
                                CoreCrypto_ec_point x1) {
-                                   
+
   EC_KEY *k = key_of_core_crypto_curve(x0.curve);
   const EC_GROUP *group = EC_KEY_get0_group(k);
-  
+
   EC_POINT *point = EC_POINT_new(group);
   BIGNUM *ppx = BN_bin2bn((uint8_t *) x1.ecx.data, x1.ecx.length, NULL);
   BIGNUM *ppy = BN_bin2bn((uint8_t *) x1.ecy.data, x1.ecy.length, NULL);
-  EC_POINT_set_affine_coordinates_GFp(group, point, ppx, ppy, NULL);  
+  EC_POINT_set_affine_coordinates_GFp(group, point, ppx, ppy, NULL);
 
   bool ret = EC_POINT_is_on_curve(group, point, NULL);
-  
+
   BN_free(ppy);
   BN_free(ppx);
-  EC_POINT_free(point);  
+  EC_POINT_free(point);
   EC_KEY_free(k);
   return ret;
 }
@@ -577,7 +584,7 @@ FStar_Bytes_bytes CoreCrypto_hmac(CoreCrypto_hash_alg x0,
 
 bool CoreCrypto_ec_is_on_curve(CoreCrypto_ec_params x0,
                                CoreCrypto_ec_point x1) {
-                                   
+
   FAIL_IF(true, "No OpenSSL support.");
   return false;
 }
