@@ -45,15 +45,6 @@
 #include <openssl/objects.h>
 #include <openssl/obj_mac.h>
 
-static void dump(const unsigned char *buffer, size_t len)
-{
-  int i;
-  for(i=0; i<len; i++) {
-    printf("%02x",buffer[i]);
-    if (i % 32 == 31 || i == len-1) printf("\n");
-  }
-}
-
 FStar_Bytes_bytes CoreCrypto_dh_agreement(CoreCrypto_dh_key x0,
                                           FStar_Bytes_bytes x1) {
   DH *dh = DH_new();
@@ -169,7 +160,7 @@ FStar_Bytes_bytes CoreCrypto_ecdh_agreement(CoreCrypto_ec_key x0,
                                             CoreCrypto_ec_point x1) {
   EC_KEY *k = key_of_core_crypto_curve(x0.ec_params.curve);
   EC_GROUP *g = EC_GROUP_dup(EC_KEY_get0_group(k));
-  
+
   if (x0.ec_params.point_compression)
     EC_GROUP_set_point_conversion_form(g, POINT_CONVERSION_COMPRESSED);
   else
