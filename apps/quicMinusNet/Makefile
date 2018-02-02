@@ -47,7 +47,7 @@ $(MITLS_HOME)/src/tls/extract/Kremlin-Library/$(LIBMITLS):
 	make -j8 -C ../../src/tls -f Makefile.Kremlin build-library
 
 $(HACL_HOME)/secure_api/out/runtime_switch/$(LIBQC):
-	make -C $(HACL_HOME)/secure_api/QuicProvider
+	make -j8 -C $(HACL_HOME)/secure_api
 
 quic.exe: quic.c \
 	$(MITLS_HOME)/src/pki/$(LIBPKI) \
