@@ -1,3 +1,4 @@
+MITLS_HOME ?= ../..
 FSTAR_HOME ?= ../../../FStar
 HACL_HOME ?= ../../../hacl-star
 MLCRYPTO_HOME ?= ../../../MLCrypto
@@ -60,9 +61,5 @@ quic.exe: quic.c \
 	  -lmitls -lquicprovider -lmipki quic.c -o quic.exe
 
 test: quic.exe
-	$(info $(MITLS_HOME))
-	$(info $(HACL_HOME))
-	$(info $(MLCRYPTO_HOME))
-	$(info $(PATH))
 	./quic.exe
 	./quic.exe t
