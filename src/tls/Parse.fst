@@ -217,9 +217,7 @@ let uint32_of_bytes b =
   UInt32.uint_to_t n
 
 let bytes_of_uint32 (n:UInt32.t) : Tot (B.lbytes 4) =
-  let n = UInt32.v n in
-  B.lemma_repr_bytes_values n;
-  B.bytes_of_int 4 n
+  FStar.Bytes.bytes_of_int32 n
 
 let bytes_of_uint16 (n:UInt16.t) : Tot (B.lbytes 2) =
   let n = UInt16.v n in
@@ -302,7 +300,7 @@ let namedGroupBytes_is_injective ng1 ng2 =
 
 let cbyte2 (b:bytes{length b = 2}) : byte * byte =
   b.[0ul], b.[1ul]
-  
+
 (** Parsing function for (EC)DHE named groups *)
 val parseNamedGroup: pinverse_t namedGroupBytes
 let parseNamedGroup b =

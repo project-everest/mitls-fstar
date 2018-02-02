@@ -80,7 +80,7 @@ int MITLS_CALLCONV FFI_mitls_init(void)
 
 #if IS_WINDOWS
   InitializeCriticalSection(&lock);
-#else  
+#else
   if (pthread_mutex_init(&lock, NULL) != 0) {
     return 0;
   }
@@ -744,7 +744,7 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
         return 0; // failure
     }
 
-    Prims_string host_name = CopyPrimsString(cfg->host_name);
+    Prims_string host_name = CopyPrimsString(cfg->host_name != NULL ? cfg->host_name : "");
     if (host_name == NULL) {
         KRML_HOST_FREE((char*)qp.data);
         KRML_HOST_FREE(st);
