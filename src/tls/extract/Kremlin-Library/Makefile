@@ -36,11 +36,7 @@ else
 endif
 endif
 
-ifeq (,$(wildcard $(MITLS_HOME)/src/pki/libmipki.$(SO)))
-  $(error MITLS_HOME is $(MITLS_HOME) and I cannot find $(MITLS_HOME)/src/pki/libmipki.$(SO) -- please run make in $(MITLS_HOME)/src/pki)
-endif
-
-INCLUDE_DIRS 	= secure kremlib include stub vale curve ffi pki uint128 .
+INCLUDE_DIRS 	= secure kremlib include stub vale curve ffi uint128 .
 
 # ls *.c */*.c | sed 's/\.c//g' >> Makefile
 # then: remove Crypto_AEAD_Main because of the hacl_provider hack
@@ -72,7 +68,7 @@ CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall \
 
 ifndef NO_OPENSSL
 CFLAGS += -I$(MLCRYPTO_HOME)/openssl/include
-LDOPTS += -L$(MLCRYPTO_HOME)/openssl -lcrypto -lssl
+LDOPTS += -L$(MLCRYPTO_HOME)/openssl -lcrypto 
 else
 CFLAGS += -DNO_OPENSSL
 endif
@@ -85,7 +81,7 @@ all: libmitls.$(SO)
 	$(CC) $(CFLAGS) -MM $(addsuffix .c,$(FILES)) > $@
 
 libmitls.$(SO): $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
-	$(CC) $^ -shared -o $@ -lmipki $(LDOPTS) -L$(MITLS_HOME)/src/pki
+	$(CC) $^ -shared -o $@ $(LDOPTS)
 
 clean:
 	rm -fr *.c *.o *.dll *.so *.a *.h *~
