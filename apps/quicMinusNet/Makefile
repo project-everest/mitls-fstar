@@ -1,3 +1,4 @@
+MITLS_HOME ?= ../..
 FSTAR_HOME ?= ../../../FStar
 HACL_HOME ?= ../../../hacl-star
 MLCRYPTO_HOME ?= ../../../MLCrypto
