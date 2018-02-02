@@ -2,14 +2,15 @@
 #include "Crypto_HKDF_Crypto_HMAC.h"
 #include "kremlib.h"
 
-#ifdef __WIN32
+#if defined(_MSC_VER) || defined(__MINGW32__)
+#define IS_WINDOWS 1
 #include <windows.h>
 #include <wincrypt.h>
 #else
-#include <fcntl.h>
-#include <stdio.h>
-#include <unistd.h>
+#define IS_WINDOWS 0
 #endif
+#include <fcntl.h>
+
 
 #define FAIL_IF(test, msg)                                                     \
   do {                                                                         \
@@ -582,7 +583,7 @@ bool CoreCrypto_ec_is_on_curve(CoreCrypto_ec_params x0,
 
 #endif // NO_OPENSSL
 
-#ifdef __WIN32
+#if IS_WINDOWS
 FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
   BYTE *data = KRML_HOST_MALLOC(x0);
 
