@@ -22,7 +22,7 @@ val timestamp: unit -> ST (lbytes 4)
 let timestamp () =
   let time = FStar.Date.secondsFromDawn () in
   lemma_repr_bytes_values time;
-  bytes_of_int 4 time
+  bytes_of_int32 (UInt32.uint_to_t time)
 
 // ex_rid: The type of a region id that is known
 //         to exist in the current heap and in every future one

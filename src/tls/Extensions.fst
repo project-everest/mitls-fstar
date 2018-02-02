@@ -53,7 +53,7 @@ type pskIdentity = PSK.psk_identifier * PSK.obfuscated_ticket_age
 val pskiBytes: PSK.psk_identifier * PSK.obfuscated_ticket_age -> bytes
 let pskiBytes (i,ot) =
   lemma_repr_bytes_values (UInt32.v ot);
-  (vlbytes2 i @| bytes_of_int 4 (UInt32.v ot))
+  (vlbytes2 i @| bytes_of_int32 ot)
 
 private
 let pskiListBytes_aux acc pski = acc @| pskiBytes pski
