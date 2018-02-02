@@ -8,6 +8,7 @@
 #include <wincrypt.h>
 #else
 #define IS_WINDOWS 0
+#include <unistd.h>
 #endif
 #include <fcntl.h>
 
