@@ -80,7 +80,7 @@ int MITLS_CALLCONV FFI_mitls_init(void)
 
 #if IS_WINDOWS
   InitializeCriticalSection(&lock);
-#else  
+#else
   if (pthread_mutex_init(&lock, NULL) != 0) {
     return 0;
   }
@@ -294,7 +294,7 @@ static size_t list_sa_len(Prims_list__TLSConstants_signatureScheme *l)
 {
   if (l->tag == Prims_Cons)
   {
-    return 1 + list_sa_len(l->val.case_Cons.tl);
+    return 1 + list_sa_len(l->tl);
   }
   return 0;
 }
@@ -311,8 +311,8 @@ static FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme
 
   for(size_t i = 0; i < sigalgs_len; i++)
   {
-    sigalgs[i] = pki_of_tls(cur->val.case_Cons.hd.tag);
-    cur = cur->val.case_Cons.tl;
+    sigalgs[i] = pki_of_tls(cur->hd.tag);
+    cur = cur->tl;
   }
   FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme res;
   void* chain = s->select(s->cb_state, sni.data, sigalgs, sigalgs_len, &selected);
@@ -324,7 +324,7 @@ static FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme
     res.tag = FStar_Pervasives_Native_Some;
     sig.fst = (uint64_t)chain;
     sig.snd.tag = tls_of_pki(selected);
-    res.val.case_Some.v = sig;
+    res.v = sig;
   }
   return res;
 }
@@ -352,7 +352,7 @@ static FStar_Pervasives_Native_option__FStar_Bytes_bytes wrapped_sign(
 
   if(slen > 0) {
     res.tag = FStar_Pervasives_Native_Some;
-    res.val.case_Some.v = (FStar_Bytes_bytes){.length = slen, .data = sig};
+    res.v = (FStar_Bytes_bytes){.length = slen, .data = sig};
   }
 
   return res;
@@ -490,22 +490,22 @@ int MITLS_CALLCONV FFI_mitls_resume(void *send_recv_ctx, pfn_FFI_send psend, pfn
             return 1;
         }
 
-        if (!MakeFStar_Bytes_bytes(&head->val.case_Cons.hd, ticket->ticket, ticket->ticket_len)) {
+        if (!MakeFStar_Bytes_bytes(&head->hd, ticket->ticket, ticket->ticket_len)) {
             UNLOCK_MUTEX(&lock);
             KRML_HOST_FREE(head);
             KRML_HOST_FREE(tail);
             return 1;
         }
-        if (!MakeFStar_Bytes_bytes(&tail->val.case_Cons.hd, ticket->session, ticket->session_len)) {
+        if (!MakeFStar_Bytes_bytes(&tail->hd, ticket->session, ticket->session_len)) {
             UNLOCK_MUTEX(&lock);
-            KRML_HOST_FREE((char*)head->val.case_Cons.hd.data);
+            KRML_HOST_FREE((char*)head->hd.data);
             KRML_HOST_FREE(tail);
             KRML_HOST_FREE(head);
             return 1;
         }
 
         head->tag = Prims_Cons;
-        head->val.case_Cons.tl = tail;
+        head->tl = tail;
         tail->tag = Prims_Cons;
     } else {
         head = NULL;
@@ -580,11 +580,11 @@ static int get_exporter(Connection_connection cxn, int early, /* out */ mitls_se
      *errmsg = strdup("the requested secret is not yet available");
      return 0;
   }
-  secret->hash = ret.val.case_Some.v.fst;
-  secret->ae = ret.val.case_Some.v.snd;
-  size_t len=ret.val.case_Some.v.thd.length;
+  secret->hash = ret.v.fst;
+  secret->ae = ret.v.snd;
+  size_t len=ret.v.thd.length;
   assert(len <= sizeof(secret->secret));
-  memcpy(secret->secret, ret.val.case_Some.v.thd.data, len);
+  memcpy(secret->secret, ret.v.thd.data, len);
   return 1;
 }
 
@@ -675,12 +675,12 @@ static void free_last_version_element(Prims_list__uint32_t *l)
 {
     // Find the last element of the list
     Prims_list__uint32_t *prev = NULL;
-    while (l->val.case_Cons.tl) {
+    while (l->tl) {
         prev = l;
-        l = l->val.case_Cons.tl;
+        l = l->tl;
     }
     // Set the prev pointer to NULL
-    prev->val.case_Cons.tl = NULL;
+    prev->tl = NULL;
     // Free the last element
     KRML_HOST_FREE(l);
 }
@@ -688,7 +688,7 @@ static void free_last_version_element(Prims_list__uint32_t *l)
 static void free_version_list(Prims_list__uint32_t *l)
 {
     if (l) {
-        while (l->val.case_Cons.tl) {
+        while (l->tl) {
             free_last_version_element(l);
         }
         KRML_HOST_FREE(l);
@@ -709,8 +709,8 @@ static Prims_list__uint32_t *alloc_version_list(const uint32_t *list, size_t len
         return NULL;
     }
     r->tag = FStar_Pervasives_Native_Some;
-    r->val.case_Cons.hd = list[len - i - 1];
-    r->val.case_Cons.tl = result;
+    r->hd = list[len - i - 1];
+    r->tl = result;
     result = r;
   }
 
@@ -744,7 +744,7 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
         return 0; // failure
     }
 
-    Prims_string host_name = CopyPrimsString(cfg->host_name);
+    Prims_string host_name = CopyPrimsString(cfg->host_name != NULL ? cfg->host_name : "");
     if (host_name == NULL) {
         KRML_HOST_FREE((char*)qp.data);
         KRML_HOST_FREE(st);
@@ -832,8 +832,8 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
           ticket.tag = FStar_Pervasives_Native_Some;
 
           // BUGBUG: Handle OOM
-          MakeFStar_Bytes_bytes(&ticket.val.case_Some.v.fst, cfg->server_ticket->ticket, cfg->server_ticket->ticket_len);
-          MakeFStar_Bytes_bytes(&ticket.val.case_Some.v.snd, cfg->server_ticket->session, cfg->server_ticket->session_len);
+          MakeFStar_Bytes_bytes(&ticket.v.fst, cfg->server_ticket->ticket, cfg->server_ticket->ticket_len);
+          MakeFStar_Bytes_bytes(&ticket.v.snd, cfg->server_ticket->session, cfg->server_ticket->session_len);
       }
       else {
           ticket.tag = FStar_Pervasives_Native_None;

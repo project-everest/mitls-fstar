@@ -1213,7 +1213,7 @@ let rec read c i =
         match result with
         // TODO: specify which results imply that c.state & epochs are unchanged
         | ReadWouldBlock        -> ReadWouldBlock
-        | ReadAgain             -> read c i
+        | ReadAgain             -> let i' = currentId c Reader in read c i'
         | ReadAgainFinishing    -> read c i //was: readAllFinishing c
         | ReadError x y         -> ReadError x y
         | CertQuery q adv       -> CertQuery q adv
