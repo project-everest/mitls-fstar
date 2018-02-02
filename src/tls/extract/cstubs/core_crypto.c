@@ -4,8 +4,8 @@
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #define IS_WINDOWS 1
-#include <wincrypt.h>
 #include <windows.h>
+#include <wincrypt.h>
 #else
 #define IS_WINDOWS 0
 #include <unistd.h>
