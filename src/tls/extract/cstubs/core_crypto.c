@@ -44,15 +44,6 @@
 #include <openssl/rand.h>
 #include <openssl/rsa.h>
 
-/* static void dump(const unsigned char *buffer, size_t len) { */
-/*   int i; */
-/*   for (i = 0; i < len; i++) { */
-/*     printf("%02x", buffer[i]); */
-/*     if (i % 32 == 31 || i == len - 1) */
-/*       printf("\n"); */
-/*   } */
-/* } */
-
 FStar_Bytes_bytes CoreCrypto_dh_agreement(CoreCrypto_dh_key x0,
                                           FStar_Bytes_bytes x1) {
   DH *dh = DH_new();
