@@ -10,7 +10,7 @@ ifeq ($(OS),Windows_NT)
   PATH := $(MITLS_HOME)/src/pki:$(PATH)
   SO = dll
   CC ?= x86_64-w64-mingw32-gcc
-  CFLAGS := -pthread
+  CFLAGS := -pthread $(CFLAGS)
   export PATH
 else ifeq ($(UNAME),Darwin)
   VARIANT = -Darwin
