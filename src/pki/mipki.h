@@ -17,8 +17,8 @@ typedef struct {
 } mipki_config_entry;
 
 typedef enum {
-  MIPKI_SIGN,
-  MIPKI_VERIFY
+  MIPKI_SIGN = 0,
+  MIPKI_VERIFY = 1
 } mipki_mode;
 
 // Abstract state of the PKI library, implementation-specific

@@ -430,13 +430,25 @@ int MITLS_CALLCONV mipki_sign_verify(mipki_state *st, const mipki_chain cert_ptr
     printf("Using the message digest: %s\n", md ? OBJ_nid2sn(EVP_MD_type(md)) : "NULL");
   #endif
 
-  if(EVP_DigestSignInit(md_ctx, &key_ctx, md, NULL, cfg->key) != 1)
-  {
-    #if DEBUG
-      printf("mipki_sign: failed to initialize DigestSign\n");
-    #endif
-    return 0;
-  }
+  if(mode == MIPKI_SIGN)
+    {
+      if(EVP_DigestSignInit(md_ctx, NULL, md, NULL, cfg->key) != 1)
+        {
+#if DEBUG
+          printf("mipki_sign: failed to initialize DigestSign\n");
+#endif
+          return 0;
+        }
+    }
+  else
+    { if(EVP_DigestVerifyInit(md_ctx, NULL, md, NULL, cfg->key) != 1)
+        {
+#if DEBUG
+          printf("mipki_sign: failed to initialize DigestSign\n");
+#endif
+          return 0;
+        }
+    }
 
   // for RSA: set padding
   if(kt == EVP_PKEY_RSA)
@@ -474,6 +486,9 @@ int MITLS_CALLCONV mipki_sign_verify(mipki_state *st, const mipki_chain cert_ptr
   else // MIPKI_VERIFY
   {
     ret = EVP_DigestVerify(md_ctx, sig, *sig_len, tbs, tbs_len);
+    #if DEBUG
+      printf("mipki_verify: returned %d\n", ret);
+    #endif
   }
 
   EVP_MD_CTX_free(md_ctx);
