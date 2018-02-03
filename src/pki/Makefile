@@ -11,7 +11,7 @@ OCAMLOPT = ocamlfind opt $(INCLUDE) -g -annot
 OCAMLMKLIB = ocamlfind mklib $(INCLUDE)
 OCAMLDEP = ocamlfind dep -slash
 
-CCOPTS = -std=c11 -D__USE_MINGW_ANSI_STDIO 
+CCOPTS = -std=c11 -D__USE_MINGW_ANSI_STDIO -g
 ifndef NO_OPENSSL
 CCOPTS += -Lopenssl -I$(OPENSSL_HOME)/include
 else
@@ -84,7 +84,7 @@ endif
 
 all: $(LIBMIPKI) $(LIBFILE)
 
-mipki.o: mipki.c
+mipki.o: mipki.c mipki.h
 	$(CC) $(CCOPTS) $(EXTRA_OPTS) -c mipki.c
 
 %.cmi: %.mli
