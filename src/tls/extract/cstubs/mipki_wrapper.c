@@ -287,6 +287,10 @@ FStar_Dyn_dyn PKI_init(Prims_string cafile, Prims_list__K___Prims_string_Prims_s
   #endif
 
   mipki_state *pki = mipki_init(pki_config, len, NULL, &err);
+  if(pki == NULL) {
+     KRML_HOST_PRINTF("mipki_init failed at %s:%d\n", __FILE__, __LINE__);
+     KRML_HOST_EXIT(253);
+  }
 
   #if DEBUG
     KRML_HOST_PRINTF("PKI| Created <%08x>, set CAFILE <%s>\n", pki, cafile);
