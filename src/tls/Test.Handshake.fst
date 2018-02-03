@@ -93,12 +93,12 @@ let test config: St unit =
   | Error (_,s) -> eprint ("client failed to build first flight: "^s)
   | _ -> eprint ("client failed to return first flight.")
 
-let main() = // could try with different client and server configs
+let main cafile cert key () = // could try with different client and server configs
 //  test ({ defaultConfig with min_version = TLS_1p2; max_version = TLS_1p2; });
 //  test ({ defaultConfig with min_version = TLS_1p2; max_version = TLS_1p3; });
-  let pki = PKI.init "../../../../data/CAFile.pem" // CA file
-     ["../../../../data/server-ecdsa.crt", // Cert file
-      "../../../../data/server-ecdsa.key", // Private key file
+  let pki = PKI.init cafile // CA file
+     [cert, // Cert file
+      key,  // Private key file
       true] in // Universal (use for any SNI)
   test ({ defaultConfig with
     min_version = TLS_1p3;

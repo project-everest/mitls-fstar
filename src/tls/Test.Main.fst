@@ -26,6 +26,9 @@ let rec iter xs: St unit =
       let f = snd x in
       check s f; iter xs
 
+let handshake () =
+  Handshake.main "CAFile.pem" "server-ecdsa.crt" "server-ecdsa.key" ()
+
 let main (): St C.exit_code =
   ignore (FStar.Test.dummy ());
   ignore (TLS.Curve25519.dummy ());
@@ -33,7 +36,7 @@ let main (): St C.exit_code =
     "TLSConstants", TLSConstants.main;
     "StAE", StAE.main;
     "CommonDH", CommonDH.main;
-    "Handshake", Handshake.main;
+    "Handshake", handshake;
     (* ADD NEW TESTS HERE *)
   ];
   C.EXIT_SUCCESS
