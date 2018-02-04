@@ -151,13 +151,12 @@ $(eval $(call COPY_template,$(LIBRARY_DIR)/include,extract/include))
 $(eval $(call COPY_template,$(LIBRARY_DIR)/stub,extract/cstubs))
 $(eval $(call COPY_template,$(LIBRARY_DIR)/vale,$(VALE_DIR)))
 $(eval $(call COPY_template,$(LIBRARY_DIR)/ffi,$(MITLS_HOME)/libs/ffi))
-$(eval $(call COPY_template,$(LIBRARY_DIR)/pki,$(MITLS_HOME)/src/pki))
 $(eval $(call COPY_template,$(LIBRARY_DIR)/uint128,$(UINT128_DIR)))
 
 $(LIBRARY_DIR)/TLS.c: $(filter-out $(EXTRACT_DIR)/prims.krml $(EXTRACT_DIR)/PKI.krml $(EXTRACT_DIR)/Test_%.krml,$(ALL_KRML_FILES))
 	$(KRML_COMMAND) $^ -tmpdir $(LIBRARY_DIR) -skip-compilation
 
-library-copy: $(addprefix $(LIBRARY_DIR)/,$(ALL_EXTERNAL_FILES)) \
+library-copy: $(addprefix $(LIBRARY_DIR)/, $(filter-out pki/mipki.h, $(ALL_EXTERNAL_FILES))) \
   $(LIBRARY_DIR)/stub/mitlsffi.c
 
 output-library: library-copy $(LIBRARY_DIR)/TLS.c

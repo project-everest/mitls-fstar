@@ -10,7 +10,7 @@ static size_t list_sa_len(Prims_list__TLSConstants_signatureScheme *l)
 {
   if (l->tag == Prims_Cons)
   {
-    return 1 + list_sa_len(l->val.case_Cons.tl);
+    return 1 + list_sa_len(l->tl);
   }
   return 0;
 }
@@ -19,7 +19,7 @@ static size_t list_bytes_len(Prims_list__FStar_Bytes_bytes* l)
 {
   if (l->tag == Prims_Cons)
   {
-    return 1 + list_bytes_len(l->val.case_Cons.tl);
+    return 1 + list_bytes_len(l->tl);
   }
   return 0;
 }
@@ -108,8 +108,8 @@ PKI_select(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
 
   for(size_t i = 0; i < sigalgs_len; i++)
   {
-    sigalgs[i] = pki_of_tls(cur->val.case_Cons.hd.tag);
-    cur = cur->val.case_Cons.tl;
+    sigalgs[i] = pki_of_tls(cur->hd.tag);
+    cur = cur->tl;
   }
 
   FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme res;
@@ -130,7 +130,7 @@ PKI_select(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
     res.tag = FStar_Pervasives_Native_Some;
     sig.fst = (uint64_t)chain;
     sig.snd.tag = tls_of_pki(sel);
-    res.val.case_Some.v = sig;
+    res.v = sig;
   }
   return res;
 }
@@ -149,8 +149,8 @@ static void* append(void* chain, size_t len, char **buf)
   new->tag = Prims_Nil;
   cur->tag = Prims_Cons;
 
-  cur->val.case_Cons.hd = (FStar_Bytes_bytes){.length = len, .data = *buf};
-  cur->val.case_Cons.tl = new;
+  cur->hd = (FStar_Bytes_bytes){.length = len, .data = *buf};
+  cur->tl = new;
   return (void*)new;
 }
 
@@ -189,7 +189,7 @@ FStar_Pervasives_Native_option__FStar_Bytes_bytes PKI_sign(FStar_Dyn_dyn cbs, FS
       KRML_HOST_PRINTF("PKI| Success: produced %d bytes of signature.\n", pki, slen);
     #endif
     res.tag = FStar_Pervasives_Native_Some;
-    res.val.case_Some.v = (FStar_Bytes_bytes){.length = slen, .data = sig};
+    res.v = (FStar_Bytes_bytes){.length = slen, .data = sig};
   }
 
   return res;
@@ -213,9 +213,9 @@ bool PKI_verify(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
 
   for(size_t i = 0; i < chain_len; i++)
   {
-    lens[i] = cur->val.case_Cons.hd.length;
-    ders[i] = cur->val.case_Cons.hd.data;
-    cur = cur->val.case_Cons.tl;
+    lens[i] = cur->hd.length;
+    ders[i] = cur->hd.data;
+    cur = cur->tl;
   }
 
   mipki_chain chain = mipki_parse_list(pki, ders, lens, chain_len);
@@ -254,7 +254,7 @@ static uint32_t config_len(Prims_list__K___Prims_string_Prims_string_bool *l)
 {
   if (l->tag == Prims_Cons)
   {
-    return 1 + config_len(l->val.case_Cons.tl);
+    return 1 + config_len(l->tl);
   }
   return 0;
 }
@@ -268,7 +268,7 @@ FStar_Dyn_dyn PKI_init(Prims_string cafile, Prims_list__K___Prims_string_Prims_s
 
   for(int i = 0; i<len; i++)
   {
-    K___Prims_string_Prims_string_bool cfg = cur->val.case_Cons.hd;
+    K___Prims_string_Prims_string_bool cfg = cur->hd;
 
     #if DEBUG
       KRML_HOST_PRINTF("PKI| Adding cert <%s> with key <%s>\n", cfg.fst, cfg.snd);
@@ -279,7 +279,7 @@ FStar_Dyn_dyn PKI_init(Prims_string cafile, Prims_list__K___Prims_string_Prims_s
       .key_file = cfg.snd,
       .is_universal = cfg.thd
     };
-    cur = cur->val.case_Cons.tl;
+    cur = cur->tl;
   };
 
   #if DEBUG
