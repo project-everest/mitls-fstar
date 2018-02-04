@@ -77,8 +77,13 @@ all: test.exe
 .depend:
 	$(CC) $(CFLAGS) -MM $(addsuffix .c,$(FILES)) > $@
 
+CERT_FILES=CAFile.pem server-ecdsa.crt server-ecdsa.key
+
+$(CERT_FILES):
+	cp $(MITLS_HOME)/data/$@ .
+
 test.exe: $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
 	$(CC) $^ -o $@ -lmipki $(LDOPTS) -L$(MITLS_HOME)/src/pki
 
-test: all
+test: all $(CERT_FILES)
 	./test.exe

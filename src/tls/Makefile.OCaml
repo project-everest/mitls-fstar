@@ -155,5 +155,13 @@ extract/OCaml/PKI.cmx: extract/mlstubs/PKI.ml extract/OCaml/TLSConstants.cmx
 %.cmx:
 	$(OCAMLOPT) -w -8-11-26-20 -c $< -o $@
 
-test: mitls.exe
+CERT_FILES=CAFile.pem server-ecdsa.crt server-ecdsa.key
+
+$(CERT_FILES):
+	cp $(MITLS_HOME)/data/$@ .
+
+test: mitls.exe $(CERT_FILES)
 	./mitls.exe
+
+clean:
+	rm -rf $(CERT_FILES) mitls.exe test/mitls.cm? test/mitls.o .depend.OCaml extract/OCaml

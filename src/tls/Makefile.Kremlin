@@ -136,7 +136,8 @@ test-internal-test: output-internal-test
 	$(MAKE) -C $(INTERNAL_TEST_DIR) test
 
 clean-internal-test:
-	-@find $(INTERNAL_TEST_DIR) -type f -and -not -name Makefile | xargs rm
+	-@find $(INTERNAL_TEST_DIR) -type f -and -not -name Makefile -and -not name .gitignore \
+        | xargs rm
 
 ################################################################################
 # The library does not perform bundling
@@ -168,7 +169,8 @@ test-library: output-library
 	$(MAKE) -C $(LIBRARY_DIR) test
 
 clean-library:
-	-@find $(LIBRARY_DIR) -type f -and -not -name Makefile | xargs rm
+	-@find $(LIBRARY_DIR) -type f -and -not -name Makefile -and -not -name .gitignore \
+        | xargs rm
 
 ################################################################################
 # An external test that uses "mitlsffi.h"
