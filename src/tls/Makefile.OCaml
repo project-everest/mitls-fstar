@@ -17,7 +17,7 @@ include Makefile.common
 FFI_HOME	= ../../libs/ffi
 LOWC_HOME	= $(HACL_HOME)/secure_api/out/$(IMPL_CHOICE)
 
-OCAMLOPTS	=-package fstarlib,zarith -g \
+OCAMLOPTS	=-package fstarlib,zarith,ctypes,ctypes.foreign -g \
 		  -I $(FSTAR_HOME)/ulib/ml \
 		  -I $(EXTRACT_DIR) \
 		  -I $(MLCRYPTO_HOME) \
@@ -58,16 +58,17 @@ endif
 %.o: %.c
 	$(CC) -I $(KREMLIN_HOME)/kremlib $^ -o $@ -c
 
+# We must insert PKI.cmx at the right spot in the list of inputs
 MITLS_INPUTS=\
-    extract/OCaml/PKI.cmx \
-    extract/OCaml/Crypto_AEAD_Main.cmx \
-	$(KREMLIN_HOME)/_build/kremlib/C.cmx \
-	$(MLCRYPTO_HOME)/CoreCrypto.cmxa \
-	$(LOWC_HOME)/LowC.cmxa \
-	$(FFI_HOME)/FFICallbacks.cmxa \
-	$(subst .ml,.cmx,$(ALL_ML_FILES)) \
-    extract/OCaml/FFIRegister.cmx \
-	extract/copied/kremstr.o \
+    $(EXTRACT_DIR)/Crypto_AEAD_Main.cmx \
+    $(KREMLIN_HOME)/_build/kremlib/C.cmx \
+    $(MLCRYPTO_HOME)/CoreCrypto.cmxa \
+    $(LOWC_HOME)/LowC.cmxa \
+    $(FFI_HOME)/FFICallbacks.cmxa \
+    $(subst .ml,.cmx,$(subst TLSConstants.ml,TLSConstants.ml extract/OCaml/PKI.ml,$(ALL_ML_FILES))) \
+    $(EXTRACT_DIR)/FFIRegister.cmx \
+    extract/copied/kremstr.o \
+    ../pki/mipki.o
 
 mitls.exe: $(MITLS_INPUTS) \
 	test/mitls.cmx
