@@ -247,7 +247,7 @@ bool PKI_verify(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
     sigp, &slen, MIPKI_VERIFY);
 
   mipki_free_chain(pki, chain);
-  return r;
+  return (r == 1);
 }
 
 static uint32_t config_len(Prims_list__K___Prims_string_Prims_string_bool *l)
