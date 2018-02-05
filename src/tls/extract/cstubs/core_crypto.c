@@ -520,11 +520,11 @@ FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
   if (!(CryptAcquireContext(&ctxt, NULL, NULL, PROV_RSA_FULL,
                             CRYPT_VERIFYCONTEXT))) {
     DWORD error = GetLastError();
-    fprintf(stderr, "Cannot acquire crypto context: 0x%lx\n", error);
+    KRML_HOST_EPRINTF("Cannot acquire crypto context: 0x%lx\n", error);
     exit(255);
   }
   if (!(CryptGenRandom(ctxt, x0, data))) {
-    fprintf(stderr, "Cannot read random bytes\n");
+    KRML_HOST_EPRINTF("Cannot read random bytes\n");
     exit(255);
   }
   CryptReleaseContext(ctxt, 0);
@@ -538,12 +538,12 @@ FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
 
   int fd = open("/dev/urandom", O_RDONLY);
   if (fd == -1) {
-    fprintf(stderr, "Cannot open /dev/urandom\n");
+    KRML_HOST_EPRINTF("Cannot open /dev/urandom\n");
     exit(255);
   }
   uint64_t res = read(fd, data, x0);
   if (res != x0) {
-    fprintf(stderr,
+    KRML_HOST_EPRINTF(
             "Error on reading, expected %" PRIi32 " bytes, got %" PRIu64
             " bytes\n",
             x0, res);
