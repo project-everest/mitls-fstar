@@ -24,7 +24,7 @@ quic-%:
 test: kremlin-test quic-test #ocaml-test -- broken until PKI is fixed
 
 clean: kremlin-clean ocaml-clean quic-clean
-	rm -rf extract/OCaml extract/Kremlin
+	rm -rf extract/OCaml extract/Kremlin extract/Kremlin-{Internal-Test,Library}/{,*/}*.{c,h,o}
 
 %.fst-in %.fsti-in:
 	@echo $(addprefix --include , $(INCLUDE_PATHS)) --cache_checked_modules --lax
