@@ -455,16 +455,19 @@ int MITLS_CALLCONV FFI_mitls_connect(void *send_recv_ctx, pfn_FFI_send psend, pf
    LOCK_MUTEX(&lock);
 
    wrapped_transport_cb* tcb = KRML_HOST_MALLOC(sizeof(wrapped_transport_cb));
+   Prims_list__FStar_Bytes_bytes *psks = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
+
    tcb->send_recv_ctx = send_recv_ctx;
    tcb->send = psend;
    tcb->recv = precv;
+   psks->tag = Prims_Nil;
 
     // No psks this FFI_connect() call
-    K___Connection_connection_Prims_int result = FFI_connect((FStar_Dyn_dyn)tcb, wrapped_send, wrapped_recv, state->cfg, NULL);
+    K___Connection_connection_Prims_int result = FFI_connect((FStar_Dyn_dyn)tcb, wrapped_send, wrapped_recv, state->cfg, psks);
     state->cxn = result.fst;
 
     UNLOCK_MUTEX(&lock);
-    return result.snd;
+    return (result.snd == 0);
 }
 
 int MITLS_CALLCONV FFI_mitls_resume(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state, /* in */ mitls_ticket *ticket, /* out */ char **errmsg)
@@ -477,16 +480,19 @@ int MITLS_CALLCONV FFI_mitls_resume(void *send_recv_ctx, pfn_FFI_send psend, pfn
     tcb->recv = precv;
 
     Prims_list__FStar_Bytes_bytes *head;
+    head = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
+    if (!head) {
+        UNLOCK_MUTEX(&lock);
+        return 1;
+    }
+
     if (ticket->ticket_len) {
-        head = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
-        if (!head) {
-            UNLOCK_MUTEX(&lock);
-            return 1;
-        }
         Prims_list__FStar_Bytes_bytes *tail = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
-        if (!tail) {
+        Prims_list__FStar_Bytes_bytes *nil = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
+        if (!tail || !nil) {
             UNLOCK_MUTEX(&lock);
             KRML_HOST_FREE(head);
+            KRML_HOST_FREE(tail);
             return 1;
         }
 
@@ -507,15 +513,17 @@ int MITLS_CALLCONV FFI_mitls_resume(void *send_recv_ctx, pfn_FFI_send psend, pfn
         head->tag = Prims_Cons;
         head->tl = tail;
         tail->tag = Prims_Cons;
+        head->val.case_Cons.tl = nil;
+        nil->tag = Prims_Nil;
     } else {
-        head = NULL;
+        head->tag = Prims_Nil;
     }
 
     K___Connection_connection_Prims_int result = FFI_connect((FStar_Dyn_dyn)tcb, wrapped_send, wrapped_recv, state->cfg, head);
     state->cxn = result.fst;
     UNLOCK_MUTEX(&lock);
 
-    return result.snd;
+    return (result.snd == 0);
 }
 
 // Called by the host server app, after a client has connected to a socket and the calling server has accepted the TCP connection.

@@ -90,16 +90,16 @@ let connect ctx send recv config_1 psks : ML (Connection.connection * int) =
     let i = currentId c Reader in
     match TLS.read c i with
     | Update false ->
-      true
+      false
 
     | Complete
-    | Update false ->
+    | Update true ->
       err := Some 0;
-      false
+      true
 
     | ReadError description txt ->
       err := Some (errno description txt);
-      false
+      true
 
     | _ ->
       false);
