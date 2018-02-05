@@ -513,7 +513,7 @@ int MITLS_CALLCONV FFI_mitls_resume(void *send_recv_ctx, pfn_FFI_send psend, pfn
         head->tag = Prims_Cons;
         head->tl = tail;
         tail->tag = Prims_Cons;
-        head->val.case_Cons.tl = nil;
+        tail->tl = nil;
         nil->tag = Prims_Nil;
     } else {
         head->tag = Prims_Nil;
