@@ -6,7 +6,7 @@ open PosixTypes
 open Foreign
 
 (* Open libmipki explicitly to workaround problem with flexlink *)
-let _ = Dl.dlopen ~filename:"libmipki.dll" ~flags:[]
+let _ = Dl.dlopen ~filename:"libmipki.so" ~flags:[]
 
 type bytes = FStar_Bytes.bytes
 
