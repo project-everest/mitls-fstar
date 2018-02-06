@@ -5,11 +5,11 @@
 
 #include "mipki.h"
 
-void dump(const unsigned char *buffer, size_t len)
+static void dump(const unsigned char *buffer, size_t len)
 {
   int i;
   for(i=0; i<len; i++) {
-    printf("%02x",buffer[i]);
+    printf("%02x",buffer[i] & 0xFF);
     if (i % 32 == 31 || i == len-1) printf("\n");
   }
 }
@@ -69,6 +69,16 @@ int main(int argc, char **argv)
     if(mipki_sign_verify(st, s, selected, tbs, strlen(tbs), sig, &sig_len, MIPKI_VERIFY))
     {
       printf("Signature verification suceeded.\n");
+      for(int i=0; i<10; i++) sig[i] = 0xFF;
+      if(mipki_sign_verify(st, s, selected, tbs, strlen(tbs), sig, &sig_len, MIPKI_VERIFY))
+      {
+        printf("Tampered signature incorrectly accepted.\n");
+        return 1;
+      }
+      else
+      {
+        printf("Tampered signature rejected.\n");
+      }
     }
     else
     {

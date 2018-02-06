@@ -370,6 +370,8 @@ static int set_digest(mipki_signature sigalg, DIGEST* md)
   return 1;
 }
 
+typedef int (*pfn_init)(EVP_MD_CTX *ctx, EVP_PKEY_CTX **pctx, const EVP_MD *type, ENGINE *e, EVP_PKEY *pkey);
+
 int MITLS_CALLCONV mipki_sign_verify(mipki_state *st, const mipki_chain cert_ptr, const mipki_signature sigalg, const char *tbs, size_t tbs_len, char *sig, size_t *sig_len, mipki_mode mode)
 {
   assert(st != NULL);
@@ -436,7 +438,8 @@ int MITLS_CALLCONV mipki_sign_verify(mipki_state *st, const mipki_chain cert_ptr
     printf("Using the message digest: %s\n", md ? OBJ_nid2sn(EVP_MD_type(md)) : "NULL");
   #endif
 
-  if(EVP_DigestSignInit(md_ctx, &key_ctx, md, NULL, cfg->key) != 1)
+  pfn_init init = (mode == MIPKI_SIGN ? EVP_DigestSignInit : EVP_DigestVerifyInit);
+  if(init(md_ctx, &key_ctx, md, NULL, cfg->key) != 1)
   {
     #if DEBUG
       printf("mipki_sign: failed to initialize DigestSign\n");
@@ -479,7 +482,7 @@ int MITLS_CALLCONV mipki_sign_verify(mipki_state *st, const mipki_chain cert_ptr
   }
   else // MIPKI_VERIFY
   {
-    ret = EVP_DigestVerify(md_ctx, sig, *sig_len, tbs, tbs_len);
+    ret = (EVP_DigestVerify(md_ctx, sig, *sig_len, tbs, tbs_len) == 1);
   }
 
   EVP_MD_CTX_free(md_ctx);
