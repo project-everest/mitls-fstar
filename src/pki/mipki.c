@@ -5,8 +5,8 @@
 #include <stdint.h>
 #include <string.h>
 #include <assert.h>
-#include <time.h>
 
+#define DEBUG 0
 
 #ifndef NO_OPENSSL
 
@@ -15,7 +15,6 @@
 #include <openssl/x509v3.h>
 
 #include "mipki.h"
-#define DEBUG 0
 
 /*
  DESIGN NOTES
@@ -206,9 +205,16 @@ int MITLS_CALLCONV mipki_add_root_file_or_path(mipki_state *st, const char *ca_f
     return 0;
   }
 
-  if(S_ISDIR(sb.st_mode))
+  if(S_ISDIR(sb.st_mode)) {
+    #if DEBUG
+    printf("Adding %s as a root store directory.\n", ca_file);
+    #endif
     return X509_STORE_load_locations(st->store, NULL, ca_file);
+  }
 
+  #if DEBUG
+  printf("Adding %s as a root store file.\n", ca_file);
+  #endif
   return X509_STORE_load_locations(st->store, ca_file, NULL);
 }
 
@@ -364,6 +370,8 @@ static int set_digest(mipki_signature sigalg, DIGEST* md)
   return 1;
 }
 
+typedef int (*pfn_init)(EVP_MD_CTX *ctx, EVP_PKEY_CTX **pctx, const EVP_MD *type, ENGINE *e, EVP_PKEY *pkey);
+
 int MITLS_CALLCONV mipki_sign_verify(mipki_state *st, const mipki_chain cert_ptr, const mipki_signature sigalg, const char *tbs, size_t tbs_len, char *sig, size_t *sig_len, mipki_mode mode)
 {
   assert(st != NULL);
@@ -401,7 +409,6 @@ int MITLS_CALLCONV mipki_sign_verify(mipki_state *st, const mipki_chain cert_ptr
           unsigned long err = ERR_peek_last_error();
           char* err_string = ERR_error_string(err, NULL);
           printf("RSA MD5_SHA1 signing error: %s\n", err_string);
-          OPENSSL_free(err_string);
         #endif
         return 0;
       }
@@ -430,25 +437,14 @@ int MITLS_CALLCONV mipki_sign_verify(mipki_state *st, const mipki_chain cert_ptr
     printf("Using the message digest: %s\n", md ? OBJ_nid2sn(EVP_MD_type(md)) : "NULL");
   #endif
 
-  if(mode == MIPKI_SIGN)
-    {
-      if(EVP_DigestSignInit(md_ctx, NULL, md, NULL, cfg->key) != 1)
-        {
-#if DEBUG
-          printf("mipki_sign: failed to initialize DigestSign\n");
-#endif
-          return 0;
-        }
-    }
-  else
-    { if(EVP_DigestVerifyInit(md_ctx, NULL, md, NULL, cfg->key) != 1)
-        {
-#if DEBUG
-          printf("mipki_sign: failed to initialize DigestSign\n");
-#endif
-          return 0;
-        }
-    }
+  pfn_init init = (mode == MIPKI_SIGN ? EVP_DigestSignInit : EVP_DigestVerifyInit);
+  if(init(md_ctx, &key_ctx, md, NULL, cfg->key) != 1)
+  {
+    #if DEBUG
+      printf("mipki_sign_verify: failed to initialize DigestSign\n");
+    #endif
+    return 0;
+  }
 
   // for RSA: set padding
   if(kt == EVP_PKEY_RSA)
@@ -474,8 +470,7 @@ int MITLS_CALLCONV mipki_sign_verify(mipki_state *st, const mipki_chain cert_ptr
     if(ret != 1) {
       unsigned long err = ERR_peek_last_error();
       char* err_string = ERR_error_string(err, NULL);
-      printf("mipki_sign DigestSign error: %s\n", err_string);
-      OPENSSL_free(err_string);
+      printf("mipki_sign_verify DigestSign error: %s\n", err_string);
     } else {
       printf("--- SIG ----\n");
       dump(sig, *sig_len);
@@ -487,12 +482,16 @@ int MITLS_CALLCONV mipki_sign_verify(mipki_state *st, const mipki_chain cert_ptr
   {
     ret = EVP_DigestVerify(md_ctx, sig, *sig_len, tbs, tbs_len);
     #if DEBUG
-      printf("mipki_verify: returned %d\n", ret);
+    if(ret != 1) {
+      unsigned long err = ERR_peek_last_error();
+      char* err_string = ERR_error_string(err, NULL);
+      printf("mipki_sign_verify DigestVerify error: %s\n", err_string);
+    }
     #endif
   }
 
   EVP_MD_CTX_free(md_ctx);
-  return ret;
+  return (ret == 1);
 }
 
 mipki_chain MITLS_CALLCONV mipki_parse_chain(mipki_state *st, const char *chain, size_t chain_len)
@@ -539,6 +538,16 @@ mipki_chain MITLS_CALLCONV mipki_parse_chain(mipki_state *st, const char *chain,
       #endif
       goto fail;
     }
+
+    #if DEBUG
+      char buf[256];
+      printf(" === Parsing cert ===\n");
+      X509_NAME_oneline(X509_get_subject_name(x509), buf, 256);
+      printf(" + subject:\t%s\n",buf);
+      X509_NAME_oneline(X509_get_issuer_name(x509), buf, 256);
+      printf(" + issuer :\t%s\n",buf);
+      printf(" ====================\n");
+    #endif
 
     if(c.endpoint == NULL) {
       c.endpoint = x509;
@@ -688,13 +697,34 @@ void MITLS_CALLCONV mipki_format_alloc(mipki_state *st, mipki_chain chain, void*
   sk_X509_shift(cfg->intermediates);
 }
 
+#if DEBUG
+static void print_certificate(X509* cert) {
+	char subj[256];
+	char issuer[256];
+	X509_NAME_oneline(X509_get_subject_name(cert), subj, 256);
+	X509_NAME_oneline(X509_get_issuer_name(cert), issuer, 256);
+	printf(" + name  : %s\n", subj);
+	printf(" + issuer: %s\n", issuer);
+}
+
+static void print_stack(STACK_OF(X509)* sk)
+{
+	unsigned len = sk_X509_num(sk);
+	printf("Begin Certificate Stack:\n");
+	for(unsigned i=0; i<len; i++) {
+		X509 *cert = sk_X509_value(sk, i);
+		print_certificate(cert);
+	}
+	printf("End Certificate Stack\n");
+}
+#endif
+
 int MITLS_CALLCONV mipki_validate_chain(mipki_state *st, const mipki_chain chain, const char *host)
 {
   assert(st != NULL);
   config_entry *cfg = (config_entry*)chain;
   X509_STORE_CTX *ctx = X509_STORE_CTX_new();
   X509_VERIFY_PARAM *param = X509_VERIFY_PARAM_new();
-  time_t current_time = time(NULL);
 
   if(!ctx || !param)
   {
@@ -704,15 +734,26 @@ int MITLS_CALLCONV mipki_validate_chain(mipki_state *st, const mipki_chain chain
     return 0;
   }
 
-  X509_VERIFY_PARAM_set_flags(param, X509_V_FLAG_USE_CHECK_TIME | X509_V_FLAG_CRL_CHECK_ALL);
-  X509_VERIFY_PARAM_set_time(param, current_time);
+  #if DEBUG
+  printf("mipki_validate_chain<%s>: %d intermediates\n", host, sk_X509_num(cfg->intermediates));
+  print_certificate(cfg->endpoint);
+  printf("Intermediates:\n");
+  print_stack(cfg->intermediates);
+  #endif
+
+  unsigned long flags = X509_V_FLAG_TRUSTED_FIRST;
+  //flags |= X509_V_FLAG_CRL_CHECK;
+  //flags |= X509_V_FLAG_USE_DELTAS;
+
+  X509_VERIFY_PARAM_set_flags(param, flags);
   X509_VERIFY_PARAM_set1_host(param, host, 0);
   X509_STORE_set1_param(st->store, param);
   X509_STORE_CTX_init(ctx, st->store, cfg->endpoint, cfg->intermediates);
 
   int r = X509_verify_cert(ctx);
   #if DEBUG
-    printf("mipki_validate_chain = %d [%s]\n", r, X509_verify_cert_error_string(X509_STORE_CTX_get_error(ctx)));
+    const char *err = X509_verify_cert_error_string(X509_STORE_CTX_get_error(ctx));
+    printf("mipki_validate_chain = %d [%s]\n", r, err);
   #endif
 
   X509_STORE_CTX_free(ctx);

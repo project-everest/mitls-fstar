@@ -89,15 +89,6 @@ let rec certificateListBytes13_is_injective c1 c2 =
   // TODO: need injectivity lemmas for extensions
   admit()
 
-let endpoint_keytype (c:chain) : option CoreCrypto.key =
-  match c with
-  | [] -> None
-  | h :: _ -> CoreCrypto.get_key_from_cert h
-let endpoint_keytype13 (c:chain13) : option CoreCrypto.key =
-  match c with
-  | [] -> None
-  | (h,_) :: _ -> CoreCrypto.get_key_from_cert h
-
 abstract val parseCertificateList: b:bytes -> Tot (result chain) (decreases (length b))
 let rec parseCertificateList b =
   if length b = 0 then Correct [] else
@@ -152,37 +143,3 @@ let rec lemma_parseCertificateList_length b =
       | _ -> ()
       end
     | _ -> ()
-
-
-(* ------------------------------------------------------------------------ *)
-private let rec chain13_to_chain (c:chain13) : Tot chain = List.Tot.map fst c
-
-private let validate_chain_aux (x:cert) : bytes = x
-val validate_chain: chain -> bool -> option string -> string -> Tot bool
-let validate_chain c for_signing host cafile =
-  CoreCrypto.validate_chain (List.Tot.map #cert #bytes validate_chain_aux c) for_signing host cafile
-
-val validate_chain13: chain13 -> bool -> option string -> string -> Tot bool
-let validate_chain13 c for_signing host cafile =
-  CoreCrypto.validate_chain (List.Tot.map #(cert * _) #bytes fst c) for_signing host cafile
-
-private val check_length: list bytes -> chain -> option chain
-let rec check_length cs acc =
-  match cs with
-  | [] -> Some (List.Tot.rev acc)
-  | c :: cs' ->
-    lemma_repr_bytes_values 0;
-    if length c < 16777216 then check_length cs' (c::acc)
-    else None
-
-// TODO: we could retrieve sa from the subjectPublicKey field of
-// the end certificate. We could also honor any hash algorithm
-// specified in the params, if present.
-val lookup_chain: pemfile:string -> result chain
-let lookup_chain pemfile =
-  match CoreCrypto.load_chain pemfile with
-  | None -> Error(AD_no_certificate, "cannot find suitable server certificate")
-  | Some chain -> (
-    match check_length chain [] with
-    | None -> Error(AD_no_certificate, "cannot find suitable server certificate")
-    | Some chain -> Correct chain )
