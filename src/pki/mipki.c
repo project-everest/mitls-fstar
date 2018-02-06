@@ -409,7 +409,6 @@ int MITLS_CALLCONV mipki_sign_verify(mipki_state *st, const mipki_chain cert_ptr
           unsigned long err = ERR_peek_last_error();
           char* err_string = ERR_error_string(err, NULL);
           printf("RSA MD5_SHA1 signing error: %s\n", err_string);
-          OPENSSL_free(err_string);
         #endif
         return 0;
       }
@@ -442,7 +441,7 @@ int MITLS_CALLCONV mipki_sign_verify(mipki_state *st, const mipki_chain cert_ptr
   if(init(md_ctx, &key_ctx, md, NULL, cfg->key) != 1)
   {
     #if DEBUG
-      printf("mipki_sign: failed to initialize DigestSign\n");
+      printf("mipki_sign_verify: failed to initialize DigestSign\n");
     #endif
     return 0;
   }
@@ -471,8 +470,7 @@ int MITLS_CALLCONV mipki_sign_verify(mipki_state *st, const mipki_chain cert_ptr
     if(ret != 1) {
       unsigned long err = ERR_peek_last_error();
       char* err_string = ERR_error_string(err, NULL);
-      printf("mipki_sign DigestSign error: %s\n", err_string);
-      OPENSSL_free(err_string);
+      printf("mipki_sign_verify DigestSign error: %s\n", err_string);
     } else {
       printf("--- SIG ----\n");
       dump(sig, *sig_len);
@@ -482,11 +480,18 @@ int MITLS_CALLCONV mipki_sign_verify(mipki_state *st, const mipki_chain cert_ptr
   }
   else // MIPKI_VERIFY
   {
-    ret = (EVP_DigestVerify(md_ctx, sig, *sig_len, tbs, tbs_len) == 1);
+    ret = EVP_DigestVerify(md_ctx, sig, *sig_len, tbs, tbs_len);
+    #if DEBUG
+    if(ret != 1) {
+      unsigned long err = ERR_peek_last_error();
+      char* err_string = ERR_error_string(err, NULL);
+      printf("mipki_sign_verify DigestVerify error: %s\n", err_string);
+    }
+    #endif
   }
 
   EVP_MD_CTX_free(md_ctx);
-  return ret;
+  return (ret == 1);
 }
 
 mipki_chain MITLS_CALLCONV mipki_parse_chain(mipki_state *st, const char *chain, size_t chain_len)

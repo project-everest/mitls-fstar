@@ -69,7 +69,7 @@ int main(int argc, char **argv)
     if(mipki_sign_verify(st, s, selected, tbs, strlen(tbs), sig, &sig_len, MIPKI_VERIFY))
     {
       printf("Signature verification suceeded.\n");
-      for(int i=0; i<10; i++) sig[i] = 0xFF;
+      for(int i=32; i<64; i++) sig[i] = 0xFF;
       if(mipki_sign_verify(st, s, selected, tbs, strlen(tbs), sig, &sig_len, MIPKI_VERIFY))
       {
         printf("Tampered signature incorrectly accepted.\n");
