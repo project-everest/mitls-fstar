@@ -1,11 +1,11 @@
 module Hashing.OpenSSL
 module HS = FStar.HyperStack //Added automatically
 
-// unverified, external implementation of our core hash algorithms 
-// for now we only support OpenSSL, so we skip multiplexing, Hashing.OpenSSL,  and fstis
-// (TODO: separate interface and implementation; disentangle from CoreCrypto)
-
-open FStar.Heap
+// Multiplexing between hacl-star [Crypto] and external [CoreCrypto]
+// implementations for HMAC and hash algorithms. We still rely on an
+// external provider for legacy algorithms (MD5, SHA1) but otherwise
+// only use verified implementations
+// (TODO: separate interface and implementations; align specs)
 
 open FStar.HyperStack
 open FStar.HyperStack.ST
@@ -66,10 +66,55 @@ let toCC = function
   | SHA384 -> CoreCrypto.SHA384 
   | SHA512 -> CoreCrypto.SHA512
 
+
+let compute a b = CoreCrypto.hash (toCC a) b // for now claimed to be pure --- fix as we remove an indirection
+let hmac a k b =  CoreCrypto.hmac (toCC a) k b
+
+(* 18-02-06 TODO gain access to more Hacl* modules... 
+
+(* Hacl* implementation via Crypto.* without support for legacy algorithms. *)
+
+let toCrypto = function 
+  | SHA256 -> Some Crypto.Hash.SHA256 
+  | SHA384 -> Some Crypto.Hash.SHA384 
+  | SHA512 -> Some Crypto.Hash.SHA512
+  | _      -> None
+
 // *** by using this file, we assume CoreCrypto is functionally correct and safe ***
 #reset-options "--lax" 
-let compute a b = CoreCrypto.hash (toCC a) b   // for now claimed to be pure --- fix as we remove an indirection
-let hmac a k m = CoreCrypto.hmac (toCC a) k m
+let compute a b = 
+  match toCrypto a with 
+  | None -> 
+      CoreCrypto.hash (toCC a) b // for now claimed to be pure --- fix as we remove an indirection
+  | Some a' -> (
+      push_frame(); 
+      let len = length b in 
+      let input = BufferBytes.from_bytes b in // stack allocate instead? 
+      let output = Buffer.create 0uy (Crypto.hash_size a') in
+      Crypto.Hash.agile_hash a output input len;
+      Buffer.rfree input; 
+      let tag = to_bytes (Crypto.hash_size a') output in
+      pop_frame();  
+      tag )
+
+let hmac a k b = 
+  match toCrypto a with 
+  | None -> 
+      CoreCrypto.hmac (toCC a) k m
+  | Some a' -> (
+      push_frame(); 
+      let inputlen = length b in 
+      let input = BufferBytes.from_bytes b in // stack allocate instead? 
+      let keylen = len k in 
+      let key = Buffer.create 0uy keylen in
+      let output = Buffer.create 0uy (Crypto.hash_size a') in
+      Crypto.HMAC.hmac a output key keylen input inputlen;
+      Buffer.rfree input; 
+      let tag = to_bytes (Crypto.hash_size a') output in
+      pop_frame();  
+      tag )
+*)
+
 
 (*
 let alloc a parent = CoreCrypto.digest_create (toCC a) 

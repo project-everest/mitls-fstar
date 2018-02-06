@@ -1,14 +1,15 @@
 HACL_HOME?=../../../hacl-star
-FSTAR_HOME?=../../../FStar
+FSTAR_HOME=../../../FStar
 MITLS_HOME?=../..
 KREMLIN_HOME	?= ../../../kremlin
 MLCRYPTO_HOME	?= ../../../MLCrypto
 
 INCLUDE_PATHS= \
-	$(FSTAR_HOME)/contrib/CoreCrypto/fst/ \
+	$(FSTAR_HOME)/contrib/CoreCrypto/fst \
 	$(HACL_HOME)/secure_api \
 	$(HACL_HOME)/secure_api/utils \
 	$(HACL_HOME)/secure_api/concrete_specializations \
+	$(HACL_HOME)/secure_api/hkdf \
 	$(HACL_HOME)/secure_api/LowCProvider/fst \
 	$(HACL_HOME)/code/curve25519/api \
 	$(HACL_HOME)/code/lib \
@@ -25,8 +26,6 @@ EXTRACT_DIR=extract/$(FLAVOR)
 
 ROOTS ?= TLS.fst QUIC.fst Test.Main.fst 
 
-clean:
-	rm -rf $(EXTRACT_DIR)/Kremlin $(EXTRACT_DIR)/OCaml $(EXTRACT_DIR)/copied .depend.$(FLAVOR) *.checked.lax
 
 .depend.$(FLAVOR):
 	mkdir -p $(EXTRACT_DIR)
