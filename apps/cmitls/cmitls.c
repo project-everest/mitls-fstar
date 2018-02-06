@@ -140,7 +140,7 @@ int ParseArgs(int argc, char **argv)
     if (hostname_arg) {
         option_hostname = hostname_arg;
     } else {
-        option_hostname = (option_isserver) ? "0.0.0.0" : "127.0.0.1";
+        option_hostname = (option_isserver) ? "0.0.0.0" : "localhost";
     }
     if (port_arg) {
         option_port = atoi(port_arg);
@@ -212,7 +212,7 @@ int certificate_verify(void *cbs, const char* chain_bytes, size_t chain_len, con
   }
 
   // We don't validate hostname, but could with the callback state
-  if(!mipki_validate_chain(st, chain, ""))
+  if(!mipki_validate_chain(st, chain, option_hostname))
   {
     printf("WARNING: chain validation failed, ignoring.\n");
     // return 0;
@@ -321,6 +321,11 @@ int Configure(mitls_state **pstate)
         .sign = certificate_sign,
         .verify = certificate_verify
       };
+
+    if(!mipki_add_root_file_or_path(pki, option_cafile ? option_cafile : "../../data/CAFile.pem")) {
+      printf("Failed to set CAFile\n");
+      return 1;
+    }
 
     if (option_quic) {
         printf("Call ConfigureQuic() instead of Configure(), for QUIC connections.\n");

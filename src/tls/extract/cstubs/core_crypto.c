@@ -555,22 +555,3 @@ FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
   return ret;
 }
 #endif
-
-FStar_Pervasives_Native_option__CoreCrypto_key
-CoreCrypto_get_key_from_cert(FStar_Bytes_bytes x0) {
-  // unused
-  TODO(FStar_Pervasives_Native_option__CoreCrypto_key);
-}
-
-bool CoreCrypto_validate_chain(Prims_list__FStar_Bytes_bytes *x0, bool x1,
-                               FStar_Pervasives_Native_option__Prims_string x2,
-                               Prims_string x3) {
-  // unused
-  TODO(bool);
-}
-
-FStar_Pervasives_Native_option__Prims_list__FStar_Bytes_bytes
-CoreCrypto_load_chain(Prims_string x0) {
-  // unused
-  TODO(FStar_Pervasives_Native_option__Prims_list__FStar_Bytes_bytes);
-}
