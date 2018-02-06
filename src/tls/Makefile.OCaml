@@ -67,12 +67,10 @@ MITLS_INPUTS=\
     $(FFI_HOME)/FFICallbacks.cmxa \
     $(subst .ml,.cmx,$(subst TLSConstants.ml,TLSConstants.ml extract/OCaml/PKI.ml,$(ALL_ML_FILES))) \
     $(EXTRACT_DIR)/FFIRegister.cmx \
-    extract/copied/kremstr.o \
-    ../pki/mipki.o
+    extract/copied/kremstr.o
 
-mitls.exe: $(MITLS_INPUTS) \
-	test/mitls.cmx
-	$(OCAMLOPT) -linkpkg -g $^ -o $@ -thread
+mitls.exe: $(MITLS_INPUTS) test/mitls.cmx
+	$(OCAMLOPT) -cclib -I../pki -cclib -lmipki -linkall -linkpkg -g $^ -o $@ -thread
 
 # FFI support - calling from C into miTLS. TODO: remove duplication somehow
 ifeq ($(OS),Windows_NT)
@@ -159,6 +157,20 @@ CERT_FILES=CAFile.pem server-ecdsa.crt server-ecdsa.key
 
 $(CERT_FILES):
 	cp $(MITLS_HOME)/data/$@ .
+
+UNAME = $(shell uname)
+
+ifeq ($(OS),Windows_NT)
+  PATH := $(MITLS_HOME)/src/pki:$(PATH)
+  SO = dll
+  export PATH
+else ifeq ($(UNAME),Darwin)
+  DYLD_LIBRARY_PATH := $(MITLS_HOME)/src/pki:$(DYLD_LIBRARY_PATH)
+  export DYLD_LIBRARY_PATH
+else ifeq ($(UNAME),Linux)
+  LD_LIBRARY_PATH := $(MITLS_HOME)/src/pki:$(LD_LIBRARY_PATH)
+  export LD_LIBRARY_PATH
+endif
 
 test: mitls.exe $(CERT_FILES)
 	./mitls.exe
