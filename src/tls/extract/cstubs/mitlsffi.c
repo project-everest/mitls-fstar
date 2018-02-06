@@ -115,14 +115,15 @@ static void report_error(const char *msg, char **errmsg)
         return;
     }
     if (*errmsg == NULL) {
-        *errmsg = strdup(msg);
+        *errmsg = KRML_HOST_MALLOC(strlen(msg)+1);
+        strcpy(*errmsg, msg);
     } else {
-        char *newerrmsg = malloc(strlen(*errmsg) + strlen(msg) + 2);
+        char *newerrmsg = KRML_HOST_MALLOC(strlen(*errmsg) + strlen(msg) + 2);
         if (newerrmsg) {
             strcpy(newerrmsg, *errmsg);
             strcat(newerrmsg, "\n");
             strcat(newerrmsg, msg);
-            free(*errmsg);
+            KRML_HOST_FREE(*errmsg);
             *errmsg = newerrmsg;
         }
     }
@@ -252,8 +253,8 @@ static TLSConstants_signatureScheme_tags tls_of_pki(mitls_signature_scheme sa)
     //  ed25519(0x0807),
     //  ed448(0x0808),
     default:
-      printf("tls_of_pki: unsupported (%04x)\n", sa);
-      exit(1);
+      KRML_HOST_PRINTF("tls_of_pki: unsupported (%04x)\n", sa);
+      KRML_HOST_EXIT(1);
   }
 }
 
@@ -285,8 +286,8 @@ static mitls_signature_scheme pki_of_tls(TLSConstants_signatureScheme_tags sa)
     case TLSConstants_ECDSA_SECP521R1_SHA512: return 0x0603;
     //  ed25519(0x0807), ed448(0x0808),
     default:
-      printf("pki_of_tls: unsupported (%d)\n", sa);
-      exit(1);
+      KRML_HOST_PRINTF("pki_of_tls: unsupported (%d)\n", sa);
+      KRML_HOST_EXIT(1);
   }
 }
 
