@@ -137,6 +137,24 @@ let parser32_then_serializer32
   ))
 = serializer_correct_implies_complete p s
 
+let parser32_then_serializer32'
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (#s: serializer p)
+  (p32: parser32 p)
+  (s32: serializer32 s)
+  (input: bytes32)
+  (v: t)
+  (consumed: U32.t)
+: Lemma
+  (requires (p32 input == Some (v, consumed)))
+  (ensures (
+    B32.length (s32 v) == U32.v consumed /\
+    B32.reveal (s32 v) == Seq.slice (B32.reveal input) 0 (U32.v consumed)
+  ))
+= parser32_then_serializer32 s p32 s32 input
+
 let parser32_injective
   (#k: parser_kind)
   (#t: Type0)
@@ -179,6 +197,41 @@ let serializer32_injective
 : Lemma
   (requires (s32 input1 == s32 input2))
   (ensures (input1 == input2))
+= ()
+
+let parse32_size
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (p32: parser32 p)
+  (input: bytes32)
+  (data: t)
+  (consumed: U32.t)
+: Lemma
+  (requires (p32 input == Some (data, consumed)))
+  (ensures (
+    k.parser_kind_low <= U32.v consumed /\ (
+    Some? k.parser_kind_high ==> (
+    let (Some hi) = k.parser_kind_high in
+    U32.v consumed <= hi
+  ))))
+= ()
+
+let parse32_total
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (p32: parser32 p)
+  (input: bytes32)
+: Lemma
+  (requires (
+    k.parser_kind_high == Some k.parser_kind_low /\
+    k.parser_kind_total == true /\
+    k.parser_kind_low <= B32.length input
+  ))
+  (ensures (
+    Some? (p32 input)
+  ))
 = ()
   
 (* TODO: move to FStar.Bytes *)
