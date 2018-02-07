@@ -79,6 +79,8 @@ let parse_u16: parser parse_u16_kind U16.t =
   in
   p
 
+#set-options "--z3rlimit 64"
+
 let serialize_u16 : serializer parse_u16 =
   (fun (x: U16.t) -> E.n_to_be 2ul (U16.v x))
 
@@ -120,7 +122,7 @@ let parse_u32: parser parse_u32_kind U32.t =
   decode_u32_injective ();
   make_total_constant_size_parser 4 U32.t decode_u32
 
-#set-options "--z3rlimit 32"
+#set-options "--z3rlimit 128"
 
 let serialize_u32 : serializer parse_u32 =
   (fun (x: U32.t) -> E.n_to_be 4ul (U32.v x))

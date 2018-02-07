@@ -183,6 +183,13 @@ let serializer32_injective
   
 (* TODO: move to FStar.Bytes *)
 
+let b32_index_reveal
+  (b: B32.bytes)
+  (i: nat { i < B32.length b })
+: Lemma
+  (Seq.index (B32.reveal b) i == B32.index b i)
+= ()
+
 let b32_reveal_create
   (len: U32.t)
   (v: byte)
@@ -202,7 +209,7 @@ let b32_reveal_create
     (i: pty)
   : Lemma
     (post i)
-  = B32.index_reveal b (i <: nat)
+  = assert (B32.get b (U32.uint_to_t i) == v)
   in
   Classical.forall_intro #pty #post f;
   Seq.lemma_eq_intro lhs rhs;

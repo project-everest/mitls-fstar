@@ -20,7 +20,7 @@ let decode32_bounded_integer_1_correct
 =
   let r = B32.get b 0ul in
   assert (r == B32.index b 0);
-  B32.index_reveal b 0;
+  b32_index_reveal b 0;
   E.be_to_n_1_spec (B32.reveal b);
   let res : U32.t = Cast.uint8_to_uint32 r in
   assert (res == (decode_bounded_integer 1 (B32.reveal b) <: U32.t));

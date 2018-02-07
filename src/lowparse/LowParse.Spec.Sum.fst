@@ -34,6 +34,8 @@ let bare_serialize_tagged_union
   let (| t, u |) = x in
   Seq.append (st t) (serialize (s t) u)
 
+#set-options "--z3rlimit 16"
+
 let bare_serialize_tagged_union_correct
   (#kt: parser_kind)
   (#tag: Type0)
@@ -76,6 +78,8 @@ let bare_serialize_tagged_union_correct
     ()
   in
   Classical.forall_intro prf
+
+#reset-options
 
 let serialize_tagged_union
   (#kt: parser_kind)

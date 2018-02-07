@@ -17,16 +17,16 @@ let decode32_u32_correct
 : Lemma (decode32_u32' b == decode_u32 (B32.reveal b))
 =     let b3 = B32.get b 3ul in
       assert_norm (b3 == B32.index b 3);
-      B32.index_reveal b 3;
+      b32_index_reveal b 3;
       let b2 = B32.get b 2ul in
       assert_norm (b2 == B32.index b 2);
-      B32.index_reveal b 2;
+      b32_index_reveal b 2;
       let b1 = B32.get b 1ul in
       assert_norm (b1 == B32.index b 1);
-      B32.index_reveal b 1;
+      b32_index_reveal b 1;
       let b0 = B32.get b 0ul in
       assert_norm (b0 == B32.index b 0);
-      B32.index_reveal b 0;
+      b32_index_reveal b 0;
       assert_norm (pow2 8 == 256);
       let r =
         U32.add (Cast.uint8_to_uint32 b3) (U32.mul 256ul (

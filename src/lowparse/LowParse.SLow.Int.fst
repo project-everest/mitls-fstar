@@ -54,7 +54,7 @@ let parse32_u32 : parser32 parse_u32 =
         decode32_u32_correct input;
         (decode32_u32' input <: (res: U32.t { res == decode_u32 (B32.reveal input) } )))
 
-#set-options "--z3rlimit 32"
+#set-options "--z3rlimit 128"
 
 inline_for_extraction
 let parse32_u8 : parser32 parse_u8 =
@@ -63,6 +63,6 @@ let parse32_u8 : parser32 parse_u8 =
     ()
     (fun (b: B32.lbytes 1) ->
       let r = B32.get b 0ul in
-      assert (r == B32.index b 0);
-      B32.index_reveal b 0;
+      assert (r == Seq.index (B32.reveal b) 0);
+      b32_index_reveal b 0;
       (r <: (y: U8.t { y == decode_u8 (B32.reveal b) })))

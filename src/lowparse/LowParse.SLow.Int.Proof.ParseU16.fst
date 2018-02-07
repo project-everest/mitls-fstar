@@ -17,10 +17,10 @@ let decode32_u16_correct
 : Lemma (decode32_u16' b == decode_u16 (B32.reveal b))
 =     let b1 = B32.get b 1ul in
       assert_norm (b1 == B32.index b 1);
-      B32.index_reveal b 1;
+      b32_index_reveal b 1;
       let b0 = B32.get b 0ul in
       assert_norm (b0 == B32.index b 0);
-      B32.index_reveal b 0;
+      b32_index_reveal b 0;
       assert_norm (pow2 8 == 256);
       let r =
 	U16.add (Cast.uint8_to_uint16 b1) (U16.mul 256us (Cast.uint8_to_uint16 b0))
