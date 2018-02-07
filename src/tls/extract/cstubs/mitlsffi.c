@@ -8,7 +8,12 @@
 #endif
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #define IS_WINDOWS 1
-#include <windows.h>
+  #ifdef _KERNEL_MODE
+    #include <nt.h>
+    #include <ntrtl.h>
+  #else
+    #include <windows.h>
+  #endif
 #else
 #define IS_WINDOWS 0
 #include <pthread.h>
@@ -35,9 +40,15 @@ static bool isRegistered;
 //         mutable variables in mitls.  Remove when
 //         the variables have their own protection.
 #if IS_WINDOWS
-CRITICAL_SECTION lock;
-#define LOCK_MUTEX(x) EnterCriticalSection(x)
-#define UNLOCK_MUTEX(x) LeaveCriticalSection(x)
+  #ifdef _KERNEL_MODE
+    FAST_MUTEX lock;
+    #define LOCK_MUTEX(x) ExAcquireFastMutex (x)
+    #define UNLOCK_MUTEX(x) ExReleaseFastMutex (x)
+  #else
+    CRITICAL_SECTION lock;
+    #define LOCK_MUTEX(x) EnterCriticalSection(x)
+    #define UNLOCK_MUTEX(x) LeaveCriticalSection(x)
+  #endif
 #else
 static pthread_mutex_t lock;
 #define LOCK_MUTEX(x) pthread_mutex_lock(x)
@@ -79,7 +90,11 @@ int MITLS_CALLCONV FFI_mitls_init(void)
   }
 
 #if IS_WINDOWS
-  InitializeCriticalSection(&lock);
+  #ifdef _KERNEL_MODE
+    ExInitializeFastMutex(&lock);
+  #else
+    InitializeCriticalSection(&lock);
+  #endif
 #else
   if (pthread_mutex_init(&lock, NULL) != 0) {
     return 0;
@@ -94,7 +109,9 @@ int MITLS_CALLCONV FFI_mitls_init(void)
 void MITLS_CALLCONV FFI_mitls_cleanup(void)
 {
 #if IS_WINDOWS
+    #ifndef _KERNEL_MODE
     DeleteCriticalSection(&lock);
+    #endif
 #else
     pthread_mutex_destroy(&lock);
 #endif
