@@ -68,7 +68,7 @@ abstract
 let compress (#a:alg) (_:acc a) (l:lbytes (blockLen a)) = l //??
 
 abstract
-let truncate (#a:alg) (ac:acc a) = Bytes.slice ac (0ul) (FStar.UInt32.uint_to_t (tagLen a))  //?? just keeping the first tagLen bytes
+let truncate (#a:alg) (ac:acc a) : Tot (acc a) = Bytes.slice ac (0ul) (FStar.UInt32.uint_to_t (tagLen a))  //?? just keeping the first tagLen bytes
 (*
 let acc0 = function
   | MD5 ->  [0x67452301; 0xefcdab89; 0x98badcfe; 0x10325476] // A, B, C, D
