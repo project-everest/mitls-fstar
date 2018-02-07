@@ -4,7 +4,11 @@ open TLSInfo
 
 (*** CLI; most tests are now shared with Kremlin in Test.Main.fst *)
 
-let _ = Test_Main.main()
+let _ =
+  let res = Test_Main.main() in
+  match res with
+  | C.EXIT_SUCCESS -> exit 0
+  | C.EXIT_FAILURE -> exit 1
 
 (* 18-01-24 
 

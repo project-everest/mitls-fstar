@@ -4,8 +4,14 @@
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #define IS_WINDOWS 1
-#include <windows.h>
-#include <wincrypt.h>
+  #ifdef _KERNEL_MODE
+    #include <nt.h>
+    #include <ntrtl.h>
+    #include <bcrypt.h>
+  #else
+    #include <windows.h>
+    #include <wincrypt.h>
+  #endif
 #else
 #define IS_WINDOWS 0
 #include <unistd.h>
@@ -514,6 +520,14 @@ bool CoreCrypto_ec_is_on_curve(CoreCrypto_ec_params x0,
 
 #if IS_WINDOWS
 FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
+#ifdef _KERNEL_MODE
+  PUCHAR data = KRML_HOST_MALLOC(x0);
+  NTSTATUS st = BCryptGenRandom(NULL, data, x0, BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+  if (!NT_SUCCESS(st)) {
+    KRML_HOST_EPRINTF("Cannot read random bytes: 0x%lx\n", st);
+    KRML_HOST_EXIT(255);
+  }
+#else
   BYTE *data = KRML_HOST_MALLOC(x0);
 
   HCRYPTPROV ctxt;
@@ -521,13 +535,14 @@ FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
                             CRYPT_VERIFYCONTEXT))) {
     DWORD error = GetLastError();
     KRML_HOST_EPRINTF("Cannot acquire crypto context: 0x%lx\n", error);
-    exit(255);
+    KRML_HOST_EXIT(255);
   }
   if (!(CryptGenRandom(ctxt, x0, data))) {
     KRML_HOST_EPRINTF("Cannot read random bytes\n");
-    exit(255);
+    KRML_HOST_EXIT(255);
   }
   CryptReleaseContext(ctxt, 0);
+#endif
 
   FStar_Bytes_bytes ret = {.length = x0, .data = (char *)data};
   return ret;
