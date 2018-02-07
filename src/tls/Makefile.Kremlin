@@ -44,7 +44,7 @@ DROP_MODULES 	= $(addprefix -drop , FStar.Bytes MonotoneMap MonotoneMapNonDep \
   Crypto.AEAD.Main)
 
 KRML_COMMAND	= krml \
-  -bundle 'Crypto.AEAD.*,Crypto.Symmetric.*,Buffer.Utils,Crypto.Plain' \
+  -bundle 'Crypto.AEAD.*,Crypto.Symmetric.*,Buffer.Utils,Crypto.Plain,LowParse.*' \
   -fnoanonymous-unions -warn-error -9-7-6 \
   -fsopts --debug,yes -verbose \
   -ccopts -Wno-unused-function,-O0 \
