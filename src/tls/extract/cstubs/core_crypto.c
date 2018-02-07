@@ -1,5 +1,4 @@
 #include "CoreCrypto.h"
-#include "Crypto_HKDF_Crypto_HMAC.h"
 #include "kremlib.h"
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
@@ -235,45 +234,54 @@ CoreCrypto_ec_key CoreCrypto_ec_gen_key(CoreCrypto_ec_params x0) {
   return ret;
 }
 
-static inline Crypto_HMAC_alg
-hacl_alg_of_corecrypto_alg(CoreCrypto_hash_alg h) {
+static inline const EVP_MD *get_md(CoreCrypto_hash_alg h){
   switch (h) {
+  case CoreCrypto_MD5:
+    return EVP_md5();
+  case CoreCrypto_SHA1:
+    return EVP_sha1();
+  case CoreCrypto_SHA224:
+    return EVP_sha224();
   case CoreCrypto_SHA256:
-    return Crypto_HMAC_SHA256;
+    return EVP_sha256();
   case CoreCrypto_SHA384:
-    return Crypto_HMAC_SHA384;
+    return EVP_sha384();
   case CoreCrypto_SHA512:
-    return Crypto_HMAC_SHA512;
+    return EVP_sha512();
   default:
-    return -1;
+    return EVP_md_null();
   }
 }
 
-FStar_Bytes_bytes CoreCrypto_hash(CoreCrypto_hash_alg x0,
-                                  FStar_Bytes_bytes x1) {
-  Crypto_HMAC_alg a = hacl_alg_of_corecrypto_alg(x0);
-  FAIL_IF(a == (Crypto_HMAC_alg)-1,
-          "CoreCrypto_hash implemented using HACL*, unsupported algorithm");
-  uint32_t len = Crypto_HMAC_hash_size(a);
-  char *out = KRML_HOST_MALLOC(len);
-  Crypto_HMAC_agile_hash(a, (uint8_t *)out, (uint8_t *)x1.data, x1.length);
+FStar_Bytes_bytes CoreCrypto_hash(CoreCrypto_hash_alg x0, FStar_Bytes_bytes x1) {
+  const EVP_MD *md = get_md(x0);
+  EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
+  EVP_DigestInit_ex(mdctx, md, NULL);
+  size_t len = EVP_MD_CTX_size(mdctx);
 
-  FStar_Bytes_bytes ret = {.length = len, .data = out};
+  unsigned char *out = KRML_HOST_MALLOC(len);
+  FAIL_IF(out == NULL, "Allocation failure");
+  EVP_DigestUpdate(mdctx, x1.data, x1.length);
+  EVP_DigestFinal_ex(mdctx, out, NULL);
+
+  EVP_MD_CTX_free(mdctx);
+  FStar_Bytes_bytes ret = {.length = len, .data = (const char*)out};
   return ret;
 }
 
 FStar_Bytes_bytes CoreCrypto_hmac(CoreCrypto_hash_alg x0, FStar_Bytes_bytes x1,
                                   FStar_Bytes_bytes x2) {
-  Crypto_HMAC_alg a = hacl_alg_of_corecrypto_alg(x0);
-  FAIL_IF(a == (Crypto_HMAC_alg)-1,
-          "CoreCrypto_hash implemented using HACL*, unsupported algorithm");
+  const EVP_MD *md = get_md(x0);
+  EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
+  EVP_DigestInit_ex(mdctx, md, NULL);
+  size_t len = EVP_MD_CTX_size(mdctx);
 
-  uint32_t len = Crypto_HMAC_hash_size(a);
-  char *out = KRML_HOST_MALLOC(len);
-  Crypto_HMAC_hmac(a, (uint8_t *)out, (uint8_t *)x1.data, x1.length,
-                   (uint8_t *)x2.data, x2.length);
+  unsigned char *out = KRML_HOST_MALLOC(len);
+  FAIL_IF(out == NULL, "Allocation failure");
+  out = HMAC(md, x1.data, x1.length, (const unsigned char*)x2.data, x2.length, out, NULL);
+  FAIL_IF(out == NULL, "HMAC computation");
 
-  FStar_Bytes_bytes ret = {.length = len, .data = out};
+  FStar_Bytes_bytes ret = {.length = len, .data = (const char*)out};
   return ret;
 }
 

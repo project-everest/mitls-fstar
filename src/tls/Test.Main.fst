@@ -31,7 +31,6 @@ let handshake () =
 
 let main (): St C.exit_code =
   ignore (FStar.Test.dummy ());
-  ignore (TLS.Curve25519.dummy ());
   iter [
     "TLSConstants", TLSConstants.main;
     "StAE", StAE.main;
