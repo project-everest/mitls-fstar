@@ -635,74 +635,7 @@ let versionBytes (input: protocolVersion') : Tot (lbytes 2) =
   serialize32_protocolVersion' input <: LP.bytes32
 
 
-(** TODO: move to LowParse *)
-
-let get_parser_kind
-  (#k: LP.parser_kind)
-  (#t: Type0)
-  (p: LP.parser k t)
-: Tot LP.parser_kind
-= k
-
-let parse32_size
-  (#k: LP.parser_kind)
-  (#t: Type0)
-  (#p: LP.parser k t)
-  (p32: LP.parser32 p)
-  (input: bytes)
-  (data: t)
-  (consumed: UInt32.t)
-: Lemma
-  (requires (p32 input == Some (data, consumed)))
-  (ensures (
-    k.LP.parser_kind_low <= UInt32.v consumed /\ (
-    Some? k.LP.parser_kind_high ==> (
-    let (Some hi) = k.LP.parser_kind_high in
-    UInt32.v consumed <= hi
-  ))))
-= ()
-
-let parse32_total
-  (#k: LP.parser_kind)
-  (#t: Type0)
-  (#p: LP.parser k t)
-  (p32: LP.parser32 p)
-  (input: bytes)
-: Lemma
-  (requires (
-    k.LP.parser_kind_high == Some k.LP.parser_kind_low /\
-    k.LP.parser_kind_total == true /\
-    k.LP.parser_kind_low <= Bytes.length input
-  ))
-  (ensures (
-    Some? (p32 input)
-  ))
-= ()
-
-let bytes_equal_intro
-  (b1 b2: bytes)
-: Lemma
-  (requires (Bytes.reveal b1 == Bytes.reveal b2))
-  (ensures (Bytes.equal b1 b2))
-= ()
-
-let parser32_then_serializer32'
-  (#k: LP.parser_kind)
-  (#t: Type0)
-  (#p: LP.parser k t)
-  (#s: LP.serializer p)
-  (p32: LP.parser32 p)
-  (s32: LP.serializer32 s)
-  (input: bytes)
-  (v: t)
-  (consumed: UInt32.t)
-: Lemma
-  (requires (p32 input == Some (v, consumed)))
-  (ensures (
-    Bytes.length (s32 v) == UInt32.v consumed /\
-    Bytes.reveal (s32 v) == Seq.slice (Bytes.reveal input) 0 (UInt32.v consumed)
-  ))
-= admit ()
+(** TODO: move elsewhere (FStar.Math.Lemmas?) *)
 
 let le_antisym (x1 x2: int) : Lemma (requires (x1 <= x2 /\ x2 <= x1)) (ensures (x1 == x2)) = ()
 
@@ -716,7 +649,7 @@ let le_antisym (x1 x2: int) : Lemma (requires (x1 <= x2 /\ x2 <= x1)) (ensures (
 *)
 val parseVersion: pinverse_t versionBytes
 let parseVersion v =
-  parse32_total parse32_protocolVersion' v;
+  LP.parse32_total parse32_protocolVersion' v;
   let (Some (value, _)) = parse32_protocolVersion' v in
   Correct value
 
@@ -737,21 +670,21 @@ val pinverse_version: x: lbytes 2 -> Lemma
 (* We have to call an explicit lemma, albeit generic *)
 
 let pinverse_version x =
-  parse32_total parse32_protocolVersion' x;
+  LP.parse32_total parse32_protocolVersion' x;
   let (Correct c) = parseVersion x in
   let (Some (c', consumed)) = parse32_protocolVersion' x in
   assert (c == c');
   let f () : Lemma (2 <= UInt32.v consumed /\ UInt32.v consumed <= 2) =
-    let k = get_parser_kind parse_protocolVersion' in
+    let k = LP.get_parser_kind parse_protocolVersion' in
     assert (k.LP.parser_kind_low == 2);
     assert (k.LP.parser_kind_high == Some 2);
-    parse32_size #k #protocolVersion' #parse_protocolVersion' parse32_protocolVersion' x c consumed;
+    LP.parse32_size #k #protocolVersion' #parse_protocolVersion' parse32_protocolVersion' x c consumed;
     ()
   in
   f ();
   le_antisym (UInt32.v consumed) 2;
   assert (UInt32.v consumed == 2);
-  parser32_then_serializer32' parse32_protocolVersion' serialize32_protocolVersion' x c' consumed;
+  LP.parser32_then_serializer32' parse32_protocolVersion' serialize32_protocolVersion' x c' consumed;
   ()
 
 #set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1"
