@@ -428,7 +428,7 @@ void HeapRegionDestroy(HEAP_REGION rgn)
 }
 
 // Associate the current thread ID with the region
-void HeapRegionRegister(region_entry* pe, HEAP_REGION rgn)
+void HeapRegionCreateAndRegister(region_entry* pe, HEAP_REGION rgn)
 {
     pe->id = PsGetCurrentThread();
     pe->region = rgn;
