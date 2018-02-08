@@ -92,7 +92,7 @@ ALL_EXTERNAL_FILES	= \
   $(addprefix curve/,Curve25519.c Curve25519.h) \
   $(addprefix kremlib/,kremstr.c kremstr.h kremdate.c krembytes.h kremlib.h \
     gcc_compat.h testlib.h) \
-  $(addprefix stub/,hacl_aead.c hacl_provider.c core_crypto.c log_to_debugger.h \
+  $(addprefix stub/,hacl_aead.c hacl_provider.c core_crypto.c log_to_choice.h \
     buffer_bytes.c) \
   $(addprefix include/,hacl_glue.h hacks.h) \
   $(addprefix vale/,sha256_main_i.c sha256_main_i.h sha256-$(MARCH)$(VARIANT).S \

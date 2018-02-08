@@ -13,6 +13,7 @@
     #include <ntrtl.h>
   #else
     #include <windows.h>
+    extern void DbgPrint(const char *, ...);
   #endif
 #else
 #define IS_WINDOWS 0
@@ -29,6 +30,11 @@
 //
 // So it uses KRML_HOST_MALLOC and KRML_HOST_FREE in order to
 // support the same pluggable heap manager as the rest of miTLS.
+
+#if LOG_TO_CHOICE
+typedef void (*p_log)(const char *fmt, ...);
+p_log g_LogPrint;
+#endif
 
 struct mitls_state {
   HEAP_REGION rgn;
@@ -78,6 +84,10 @@ static bool MakeFStar_Bytes_bytes(FStar_Bytes_bytes *b, const char *data, uint32
     return true;
 }
 
+void NoPrintf(const char *fmt, ...)
+{
+}
+
 //
 // Initialize miTLS.
 //
@@ -90,21 +100,38 @@ int MITLS_CALLCONV FFI_mitls_init(void)
   if (isRegistered) {
     return FFI_mitls_thread_register();
   }
-  if (HeapRegionInitialize() == 0) {
-      return 0;
-  }
 #if IS_WINDOWS
   #ifdef _KERNEL_MODE
     ExInitializeFastMutex(&lock);
+    #if LOG_TO_CHOICE
+    g_LogPrint = DbgPrint;
+    #endif
   #else
     InitializeCriticalSection(&lock);
+    #if LOG_TO_CHOICE
+    if (GetEnvironmentVariableA("MITLS_LOG", NULL, 0) == 0) {
+        g_LogPrint = DbgPrint; // if not set, log to the debugger by default
+    } else {
+        g_LogPrint = printf;
+    }
+    #endif
   #endif
 #else
   if (pthread_mutex_init(&lock, NULL) != 0) {
     return 0;
   }
+  #if LOG_TO_CHOICE
+  if (getenv("MITLS_LOG") == NULL) {
+    g_LogPrint = NoPrintf; // default to no logging
+  } else {
+    g_LogPrint = printf;
+  }
+  #endif
 #endif
 
+  if (HeapRegionInitialize() == 0) {
+      return 0;
+  }
   kremlinit_globals();
   isRegistered = 1;
   return 1; // success
