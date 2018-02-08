@@ -7,7 +7,7 @@ open Foreign
 
 (* Open libmipki explicitly to workaround problem with flexlink *)
 let () =
-  if Sys.os_type = "win32" then
+  if Sys.os_type = "Win32" then
     ignore (Dl.dlopen ~filename:"libmipki.so" ~flags:[])
 
 type bytes = FStar_Bytes.bytes
