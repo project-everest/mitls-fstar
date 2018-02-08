@@ -139,7 +139,7 @@ let ptext (#i:id) (ent:entry i): Tot (Content.fragment i) =
 
 //A projection of fragments from StreamAE.entries
 let fragments (#i:id) (#rw:rw) (s:state i rw{authId i}) (h:mem): GTot (frags i) =
-  let entries = sel #_ #MS.grows h (ilog s) in
+  let entries = sel #(log_region s) #_ #MS.grows h (ilog s) in
   MS.map ptext entries
 
 val lemma_fragments_snoc_commutes: #i:id -> w:writer i{authId i}
@@ -160,9 +160,9 @@ let fragments_prefix (#i:id) (#rw:rw) (w:state i rw{authId i}) (fs:frags i) (h:m
 val fragments_prefix_stable: #i:id -> #rw:rw
   -> w:state i rw{authId i} -> h:mem
   -> Lemma (let fs = fragments w h in
-       MS.grows fs fs
-       /\ stable_on_t #(log_region w) #_ #(MS.grows #(entry i)) (ilog w)
-         (fragments_prefix w fs))
+	   MS.grows fs fs
+	   /\ stable_on_t #(log_region w) #_ #(MS.grows #(entry i)) (ilog w)
+	     (fragments_prefix w fs))
 let fragments_prefix_stable #i #rw w h =
   let fs = fragments w h in
   let log = ilog w in
@@ -362,7 +362,7 @@ let encrypt #i e f =
       lemma_fragments_snoc_commutes e h0 h1 ent;
       fragments_prefix_stable e h1;
       mr_witness #(log_region e) (AEAD_GCM.ilog (AEAD_GCM.State?.log s))
-         (fragments_prefix e (fragments e h1))
+		 (fragments_prefix e (fragments e h1))
       end;
     c
     end

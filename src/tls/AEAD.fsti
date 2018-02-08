@@ -196,9 +196,9 @@ let enc_dec_separation (#i:_) (#rw:_) (st:aead_state i rw)
     Buffer.frameOf cipher <> HH.root /\
     Buffer.frameOf aad <> HH.root /\
     Buffer.frameOf (Plain.as_buffer plain) <> HH.root
-    (* HS.is_eternal_region (Buffer.frameOf cipher) /\ // why? *)
-    (* HS.is_eternal_region (Buffer.frameOf (Plain.as_buffer plain)) /\ //why? *)
-    (* HS.is_eternal_region (Buffer.frameOf aad) /\ //why? *)
+    (* is_eternal_region (Buffer.frameOf cipher) /\ // why? *)
+    (* is_eternal_region (Buffer.frameOf (Plain.as_buffer plain)) /\ //why? *)
+    (* is_eternal_region (Buffer.frameOf aad) /\ //why? *)
 
 let enc_dec_liveness (#i:_) (#rw:_) (st:aead_state i rw)
                      (#aadlen:nat) (aad: lbuffer aadlen)

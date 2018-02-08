@@ -23,6 +23,8 @@ noeq type tree' =
   | Leaf: package:t -> tree'
   | Node: node:t -> children:children' -> tree'
 and children' = list (label * tree')
+// MK: would it simplify things to remove Leaf and use a Node with an empty children list to represent leaves? 
+
 
 // would prefer to use Map.t, but positivity check fails
 
