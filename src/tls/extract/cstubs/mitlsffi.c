@@ -13,7 +13,7 @@
     #include <ntrtl.h>
   #else
     #include <windows.h>
-    extern void DbgPrint(const char *, ...);
+    extern ULONG DbgPrint(const char *, ...);
   #endif
 #else
 #define IS_WINDOWS 0
@@ -104,13 +104,13 @@ int MITLS_CALLCONV FFI_mitls_init(void)
   #ifdef _KERNEL_MODE
     ExInitializeFastMutex(&lock);
     #if LOG_TO_CHOICE
-    g_LogPrint = DbgPrint;
+    g_LogPrint = (p_log)DbgPrint;
     #endif
   #else
     InitializeCriticalSection(&lock);
     #if LOG_TO_CHOICE
     if (GetEnvironmentVariableA("MITLS_LOG", NULL, 0) == 0) {
-        g_LogPrint = DbgPrint; // if not set, log to the debugger by default
+        g_LogPrint = (p_log)DbgPrint; // if not set, log to the debugger by default
     } else {
         g_LogPrint = printf;
     }
