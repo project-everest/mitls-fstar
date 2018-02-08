@@ -165,7 +165,8 @@ $(LIBRARY_DIR)/TLS.c: $(filter-out $(EXTRACT_DIR)/prims.krml $(EXTRACT_DIR)/PKI.
 	$(KRML_COMMAND) $^ -tmpdir $(LIBRARY_DIR) -skip-compilation
 
 library-copy: $(addprefix $(LIBRARY_DIR)/, $(filter-out pki/mipki.h, $(ALL_EXTERNAL_FILES))) \
-  $(LIBRARY_DIR)/stub/mitlsffi.c
+  $(LIBRARY_DIR)/stub/mitlsffi.c \
+  $(LIBRARY_DIR)/stub/RegionAllocator.c $(LIBRARY_DIR)/stub/RegionAllocator.h
 
 output-library: library-copy $(LIBRARY_DIR)/TLS.c
 

@@ -61,7 +61,8 @@ FILES 		= AEAD_GCM AEADProvider Alert BufferBytes Cert \
   StatefulPlain StreamAE StreamDeltas StreamPlain stub/core_crypto stub/hacl_aead \
   stub/hacl_provider Ticket TLS TLSConstants TLS_Curve25519 TLSError TLSInfo \
   TLSInfoFlags TLSPRF Transport vale/sha256_main_i vale/vale_aes_glue \
-  vale/Vale_Hash_SHA2_256 stub/mitlsffi stub/buffer_bytes uint128/uint128_wrapper
+  vale/Vale_Hash_SHA2_256 stub/mitlsffi stub/buffer_bytes uint128/uint128_wrapper \
+  stub/RegionAllocator
 
 CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall \
   -Wno-unused-variable -Wno-parentheses -Wno-unknown-warning-option \

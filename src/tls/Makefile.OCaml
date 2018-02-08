@@ -161,6 +161,9 @@ $(CERT_FILES):
 UNAME = $(shell uname)
 
 ifeq ($(OS),Windows_NT)
+  ifeq ($(shell uname -o),Cygwin)
+    MITLS_HOME := $(shell cygpath -u ${MITLS_HOME})
+  endif
   PATH := $(MITLS_HOME)/src/pki:$(PATH)
   SO = dll
   export PATH
