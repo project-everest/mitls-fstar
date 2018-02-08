@@ -39,16 +39,18 @@ endif
 
 INCLUDE_DIRS 	= secure kremlib include stub vale curve ffi uint128 .
 
+# Note: see comment in Makefile.Kremlin to see why we're re-extracting
+# Crypto.Symmetric.Bytes rather than using the one from secure/
+
 # ls *.c */*.c | sed 's/\.c//g' >> Makefile
 # then: remove Crypto_AEAD_Main because of the hacl_provider hack
-# then: remove Crypto_Symmetric_Bytes
 # then: remove AEADOpenssl because no other modules refer to it
 # thanks to inlining and partial evaluation.
 # (except AEADProvider, which refers to AEADOpenssl_state in AEADOpenssl.h)
 # ADL: Do not include Test_* modules in this library please
 FILES 		= AEAD_GCM AEADProvider Alert BufferBytes Cert \
   C_Loops_Spec_Loops CommonDH Connection Content CoreCrypto \
-  Crypto_AEAD_Crypto_Symmetric_Buffer_Utils_Crypto_Plain Crypto_Indexing \
+  Crypto_Indexing Crypto_Symmetric_Bytes Crypto_Plain \
   CryptoTypes curve/Curve25519 DataStream DHGroup ECGroup Epochs Extensions FFI \
   FFICallbacks Flag Flags FStar HaclProvider Handshake HandshakeLog \
   HandshakeMessages Hashing Hashing_CRF Hashing_OpenSSL Hashing_Spec HKDF HMAC \
@@ -69,7 +71,7 @@ CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall \
 
 ifndef NO_OPENSSL
 CFLAGS += -I$(MLCRYPTO_HOME)/openssl/include
-LDOPTS += -L$(MLCRYPTO_HOME)/openssl -lcrypto 
+LDOPTS += -L$(MLCRYPTO_HOME)/openssl -lcrypto
 else
 CFLAGS += -DNO_OPENSSL
 endif
