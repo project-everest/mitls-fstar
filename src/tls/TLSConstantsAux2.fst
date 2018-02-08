@@ -1,9 +1,6 @@
 module TLSConstantsAux2
 include TLSConstantsAux1
 
-(* Start Hacks *)
-// assume val empty_bytes : FStar.Bytes.lbytes 0
-(* End Hacks *)
 open FStar.String
 open FStar.Seq
 open FStar.Date
@@ -14,11 +11,10 @@ open Parse
 //open CoreCrypto // avoid?!
 
 
-#set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1"
-
 module LP = LowParse.SLow
 module L = FStar.List.Tot
 
+inline_for_extraction
 let protocolVersion_enum : LP.enum protocolVersion (byte * byte) =
   let e = [
     SSL_3p0, (3z, 0z);
@@ -32,8 +28,7 @@ let protocolVersion_enum : LP.enum protocolVersion (byte * byte) =
   assert_norm (L.noRepeats (L.map snd e));
   e
 
-#set-options "--z3rlimit 32 --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16"
-
+inline_for_extraction
 let synth_protocolVersion'
   (x: LP.maybe_enum_key protocolVersion_enum)
 : Tot protocolVersion'
@@ -42,6 +37,8 @@ let synth_protocolVersion'
   | LP.Unknown y ->
     let (a, b) = (y <: (byte * byte)) in
     UnknownVersion a b
+
+#set-options "--z3rlimit 16"
 
 let rec not_mem
   (#t: eqtype)
@@ -54,6 +51,7 @@ let rec not_mem
     let f = not_mem x q in
     (x <> a && f)
 
+inline_for_extraction
 let synth_protocolVersion'_recip
   (x: protocolVersion')
 : Tot (LP.maybe_enum_key protocolVersion_enum)
@@ -71,8 +69,6 @@ let synth_protocolVersion'_recip_correct () : Lemma
 let parse_maybe_protocolVersion_key : LP.parser _ (LP.maybe_enum_key protocolVersion_enum) =
   LP.parse_maybe_enum_key (LP.parse_u8 `LP.nondep_then` LP.parse_u8) protocolVersion_enum
 
-#set-options "--z3rlimit 64 --max_fuel 32 --initial_fuel 32 --max_ifuel 32 --initial_ifuel 32 --z3refresh"
-
 let synth_protocolVersion'_inj () : Lemma (forall (x1 x2: LP.maybe_enum_key protocolVersion_enum) .
   synth_protocolVersion' x1 == synth_protocolVersion' x2 ==> x1 == x2)
 = ()
@@ -89,14 +85,12 @@ let serialize_protocolVersion' : LP.serializer parse_protocolVersion' =
   synth_protocolVersion'_recip_correct ();
   LP.serialize_synth _ synth_protocolVersion'  serialize_maybe_protocolVersion_key synth_protocolVersion'_recip ()
 
-assume
-val parse32_maybe_protocolVersion_key : LP.parser32 parse_maybe_protocolVersion_key
-(*
+inline_for_extraction
+let parse32_maybe_protocolVersion_key : LP.parser32 parse_maybe_protocolVersion_key =
   LP.parse32_maybe_enum_key_gen
     (LP.parse32_u8 `LP.parse32_nondep_then` LP.parse32_u8)
     protocolVersion_enum
-    (norm [delta; iota; zeta] (LP.maybe_enum_key_of_repr' protocolVersion_enum))
-*)
+    (FStar.Tactics.synth_by_tactic (LP.maybe_enum_key_of_repr_tac protocolVersion_enum))
 
 inline_for_extraction
 let parse32_protocolVersion' : LP.parser32 parse_protocolVersion' =
@@ -108,9 +102,10 @@ let parse32_protocolVersion' : LP.parser32 parse_protocolVersion' =
     parse32_maybe_protocolVersion_key
     ()
 
-assume
-val serialize32_maybe_protocolVersion_key : LP.serializer32 serialize_maybe_protocolVersion_key
-(*
+
+inline_for_extraction
+let
+serialize32_maybe_protocolVersion_key : LP.serializer32 serialize_maybe_protocolVersion_key =
   let s = LP.serialize32_nondep_then #_ #_ #LP.parse_u8 #LP.serialize_u8 LP.serialize32_u8 () #_ #_ #LP.parse_u8 #LP.serialize_u8 LP.serialize32_u8 () in
   LP.serialize32_maybe_enum_key_gen
     s
@@ -118,9 +113,8 @@ val serialize32_maybe_protocolVersion_key : LP.serializer32 serialize_maybe_prot
     (LP.serialize32_enum_key_gen
       s
       protocolVersion_enum
-      (normalize_term (LP.enum_repr_of_key' protocolVersion_enum))
+      (FStar.Tactics.synth_by_tactic (LP.enum_repr_of_key_tac protocolVersion_enum))
     )
-*)
 
 inline_for_extraction
 let serialize32_protocolVersion' : LP.serializer32 serialize_protocolVersion' =

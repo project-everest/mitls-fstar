@@ -41,6 +41,7 @@ HEADERS 	= $(addprefix -add-include ,'"hacks.h"' '"krembytes.h"' \
   '"kremstr.h"' '"hacl_glue.h"')
 
 DROP_MODULES 	= $(addprefix -drop , FStar.Bytes MonotoneMap MonotoneMapNonDep \
+  FStar.Tactics.* FStar.Tactics \
   Crypto.AEAD.Main )
 
 KRML_COMMAND	= krml \
