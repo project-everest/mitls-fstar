@@ -16,6 +16,7 @@ module L = FStar.List.Tot
 
 inline_for_extraction
 let protocolVersion_enum : LP.enum protocolVersion (byte * byte) =
+  [@inline_let]
   let e = [
     SSL_3p0, (3z, 0z);
     TLS_1p0, (3z, 1z);
@@ -24,8 +25,11 @@ let protocolVersion_enum : LP.enum protocolVersion (byte * byte) =
     TLS_1p3, (3z, 4z);
   ]
   in
-  assert_norm (L.noRepeats (L.map fst e));
-  assert_norm (L.noRepeats (L.map snd e));
+  [@inline_let]
+  let prf : squash (L.noRepeats (L.map fst e) /\ L.noRepeats (L.map fst e)) =
+    assert_norm (L.noRepeats (L.map fst e));
+    assert_norm (L.noRepeats (L.map snd e))
+  in
   e
 
 inline_for_extraction

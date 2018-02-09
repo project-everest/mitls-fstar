@@ -507,8 +507,6 @@ let rec compressionMethodsBytes cms =
   | c::cs -> compressionBytes c @| compressionMethodsBytes cs
   | []   -> empty_bytes
 
-#set-options "--normalize_pure_terms_for_extraction"
-
 (** Serializing function for the protocol version *)
 let versionBytes : protocolVersion' -> Tot (lbytes 2) =
   TLSConstantsAux2.versionBytes
@@ -516,8 +514,6 @@ let versionBytes : protocolVersion' -> Tot (lbytes 2) =
 val parseVersion: pinverse_t versionBytes
 let parseVersion v = 
   TLSConstantsAux2.parseVersion v
-
-#reset-options
 
 #set-options "--max_fuel 1 --initial_fuel 1 --max_ifuel 1 --initial_ifuel 1"
 
