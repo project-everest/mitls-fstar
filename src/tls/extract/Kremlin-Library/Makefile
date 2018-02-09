@@ -10,7 +10,8 @@ ifeq ($(OS),Windows_NT)
   PATH := $(MITLS_HOME)/src/pki:$(PATH)
   SO = dll
   CC ?= x86_64-w64-mingw32-gcc
-  CFLAGS := -pthread $(CFLAGS)
+  CFLAGS := -pthread $(CFLAGS) -include log_to_debugger.h
+  LDOPTS := -lntdll $(LDOPTS)
   export PATH
 else ifeq ($(UNAME),Darwin)
   VARIANT = -Darwin
@@ -57,6 +58,7 @@ FILES 		= AEAD_GCM AEADProvider Alert BufferBytes Cert \
   Specializations_Providers_AEAD StAE StatefulLHAE \
   StatefulPlain StreamAE StreamDeltas StreamPlain stub/core_crypto stub/hacl_aead \
   stub/hacl_provider Ticket TLS TLSConstants TLS_Curve25519 TLSError TLSInfo \
+  TLSConstantsAux1 \
   TLSInfoFlags TLSPRF Transport vale/sha256_main_i vale/vale_aes_glue \
   vale/Vale_Hash_SHA2_256 stub/mitlsffi uint128/uint128_wrapper
 

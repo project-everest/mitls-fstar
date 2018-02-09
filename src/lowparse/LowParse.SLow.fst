@@ -8,3 +8,4 @@ include LowParse.SLow.VLData
 include LowParse.SLow.Array
 include LowParse.SLow.Bytes
 include LowParse.SLow.Enum
+include LowParse.SLow.Enum.Tac

@@ -8,7 +8,12 @@
 #endif
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #define IS_WINDOWS 1
-#include <windows.h>
+  #ifdef _KERNEL_MODE
+    #include <nt.h>
+    #include <ntrtl.h>
+  #else
+    #include <windows.h>
+  #endif
 #else
 #define IS_WINDOWS 0
 #include <pthread.h>
@@ -35,9 +40,15 @@ static bool isRegistered;
 //         mutable variables in mitls.  Remove when
 //         the variables have their own protection.
 #if IS_WINDOWS
-CRITICAL_SECTION lock;
-#define LOCK_MUTEX(x) EnterCriticalSection(x)
-#define UNLOCK_MUTEX(x) LeaveCriticalSection(x)
+  #ifdef _KERNEL_MODE
+    FAST_MUTEX lock;
+    #define LOCK_MUTEX(x) ExAcquireFastMutex (x)
+    #define UNLOCK_MUTEX(x) ExReleaseFastMutex (x)
+  #else
+    CRITICAL_SECTION lock;
+    #define LOCK_MUTEX(x) EnterCriticalSection(x)
+    #define UNLOCK_MUTEX(x) LeaveCriticalSection(x)
+  #endif
 #else
 static pthread_mutex_t lock;
 #define LOCK_MUTEX(x) pthread_mutex_lock(x)
@@ -79,7 +90,11 @@ int MITLS_CALLCONV FFI_mitls_init(void)
   }
 
 #if IS_WINDOWS
-  InitializeCriticalSection(&lock);
+  #ifdef _KERNEL_MODE
+    ExInitializeFastMutex(&lock);
+  #else
+    InitializeCriticalSection(&lock);
+  #endif
 #else
   if (pthread_mutex_init(&lock, NULL) != 0) {
     return 0;
@@ -94,7 +109,9 @@ int MITLS_CALLCONV FFI_mitls_init(void)
 void MITLS_CALLCONV FFI_mitls_cleanup(void)
 {
 #if IS_WINDOWS
+    #ifndef _KERNEL_MODE
     DeleteCriticalSection(&lock);
+    #endif
 #else
     pthread_mutex_destroy(&lock);
 #endif
@@ -115,14 +132,15 @@ static void report_error(const char *msg, char **errmsg)
         return;
     }
     if (*errmsg == NULL) {
-        *errmsg = strdup(msg);
+        *errmsg = KRML_HOST_MALLOC(strlen(msg)+1);
+        strcpy(*errmsg, msg);
     } else {
-        char *newerrmsg = malloc(strlen(*errmsg) + strlen(msg) + 2);
+        char *newerrmsg = KRML_HOST_MALLOC(strlen(*errmsg) + strlen(msg) + 2);
         if (newerrmsg) {
             strcpy(newerrmsg, *errmsg);
             strcat(newerrmsg, "\n");
             strcat(newerrmsg, msg);
-            free(*errmsg);
+            KRML_HOST_FREE(*errmsg);
             *errmsg = newerrmsg;
         }
     }
@@ -252,8 +270,8 @@ static TLSConstants_signatureScheme_tags tls_of_pki(mitls_signature_scheme sa)
     //  ed25519(0x0807),
     //  ed448(0x0808),
     default:
-      printf("tls_of_pki: unsupported (%04x)\n", sa);
-      exit(1);
+      KRML_HOST_PRINTF("tls_of_pki: unsupported (%04x)\n", sa);
+      KRML_HOST_EXIT(1);
   }
 }
 
@@ -285,8 +303,8 @@ static mitls_signature_scheme pki_of_tls(TLSConstants_signatureScheme_tags sa)
     case TLSConstants_ECDSA_SECP521R1_SHA512: return 0x0603;
     //  ed25519(0x0807), ed448(0x0808),
     default:
-      printf("pki_of_tls: unsupported (%d)\n", sa);
-      exit(1);
+      KRML_HOST_PRINTF("pki_of_tls: unsupported (%d)\n", sa);
+      KRML_HOST_EXIT(1);
   }
 }
 
