@@ -43,6 +43,3 @@ let mul (k:scalar) (p:point) : ST point
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   = scalarmult k p
 
-// Curve25519.h wants this, but externally visible... make it a cross-module call.
-let dummy () (x: UInt128.t) : St UInt64.t =
-  FStar.Int.Cast.Full.uint128_to_uint64 x

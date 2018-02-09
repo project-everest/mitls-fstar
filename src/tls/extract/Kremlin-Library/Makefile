@@ -10,7 +10,7 @@ ifeq ($(OS),Windows_NT)
   PATH := $(MITLS_HOME)/src/pki:$(PATH)
   SO = dll
   CC ?= x86_64-w64-mingw32-gcc
-  CFLAGS := -pthread $(CFLAGS) -include log_to_debugger.h
+  CFLAGS := -pthread $(CFLAGS) -include log_to_choice.h
   LDOPTS := -lntdll $(LDOPTS)
   export PATH
 else ifeq ($(UNAME),Darwin)
@@ -39,16 +39,18 @@ endif
 
 INCLUDE_DIRS 	= secure kremlib include stub vale curve ffi uint128 .
 
+# Note: see comment in Makefile.Kremlin to see why we're re-extracting
+# Crypto.Symmetric.Bytes rather than using the one from secure/
+
 # ls *.c */*.c | sed 's/\.c//g' >> Makefile
 # then: remove Crypto_AEAD_Main because of the hacl_provider hack
-# then: remove Crypto_Symmetric_Bytes
 # then: remove AEADOpenssl because no other modules refer to it
 # thanks to inlining and partial evaluation.
 # (except AEADProvider, which refers to AEADOpenssl_state in AEADOpenssl.h)
 # ADL: Do not include Test_* modules in this library please
 FILES 		= AEAD_GCM AEADProvider Alert BufferBytes Cert \
   C_Loops_Spec_Loops CommonDH Connection Content CoreCrypto \
-  Crypto_AEAD_Crypto_Symmetric_Buffer_Utils_Crypto_Plain Crypto_Indexing \
+  Crypto_Indexing Crypto_Symmetric_Bytes Crypto_Plain \
   CryptoTypes curve/Curve25519 DataStream DHGroup ECGroup Epochs Extensions FFI \
   FFICallbacks Flag Flags FStar HaclProvider Handshake HandshakeLog \
   HandshakeMessages Hashing Hashing_CRF Hashing_OpenSSL Hashing_Spec HKDF HMAC \
@@ -60,7 +62,8 @@ FILES 		= AEAD_GCM AEADProvider Alert BufferBytes Cert \
   stub/hacl_provider Ticket TLS TLSConstants TLS_Curve25519 TLSError TLSInfo \
   TLSConstantsAux1 \
   TLSInfoFlags TLSPRF Transport vale/sha256_main_i vale/vale_aes_glue \
-  vale/Vale_Hash_SHA2_256 stub/mitlsffi uint128/uint128_wrapper
+  vale/Vale_Hash_SHA2_256 stub/mitlsffi stub/buffer_bytes uint128/uint128_wrapper \
+  stub/RegionAllocator
 
 CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall \
   -Wno-unused-variable -Wno-parentheses -Wno-unknown-warning-option \
@@ -70,7 +73,7 @@ CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall \
 
 ifndef NO_OPENSSL
 CFLAGS += -I$(MLCRYPTO_HOME)/openssl/include
-LDOPTS += -L$(MLCRYPTO_HOME)/openssl -lcrypto 
+LDOPTS += -L$(MLCRYPTO_HOME)/openssl -lcrypto
 else
 CFLAGS += -DNO_OPENSSL
 endif
