@@ -1,4 +1,4 @@
-module LowParse.SLow.Enum.Tac
+module LowParse.SLow.Tac.Enum
 include LowParse.SLow.Enum
 
 module T = FStar.Tactics
