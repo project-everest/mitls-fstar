@@ -42,12 +42,19 @@ let enum_tail
 = match e with _ :: y -> y
 
 inline_for_extraction
-let maybe_enum_key_of_repr'_t_nil
+let maybe_enum_key_of_repr'_t_cons_nil
   (#key #repr: eqtype)
   (e: enum key repr)
-  (u: unit { Nil? e } )
+  (u: unit { Cons? e /\ Nil? (enum_tail e) } )
 : Tot (maybe_enum_key_of_repr'_t e)
-= fun x -> ((Unknown x) <: (k: maybe_enum_key e { k == maybe_enum_key_of_repr e x } ))
+= (fun (e' : list (key * repr) { e' == e } ) -> match e' with
+  | [(k, r)] ->
+    (fun x -> ((
+      if r = x
+      then Known k
+      else Unknown x
+    ) <: (k: maybe_enum_key e { k == maybe_enum_key_of_repr e x } ))))
+    e
 
 inline_for_extraction
 let maybe_enum_key_of_repr'_t_cons
@@ -188,11 +195,16 @@ let enum_repr_of_key_cons
      e
 
 inline_for_extraction
-let enum_repr_of_key'_t_nil
+let enum_repr_of_key_cons_nil
   (#key #repr: eqtype)
-  (e: enum key repr { Nil? e } )
+  (e: enum key repr)
+  (u: unit { Cons? e /\ Nil? (enum_tail e) } )
 : Tot (enum_repr_of_key'_t e)
-= (fun (x: enum_key e) -> ((false_elim ()) <: (r: enum_repr e { enum_repr_of_key e x == r } )))
+= (fun (e' : list (key * repr) { e' == e } ) -> match e' with
+     | [(k, r)] ->
+     (fun (x: enum_key e) ->
+      (r <: (r: enum_repr e { enum_repr_of_key e x == r } ))))
+     e
 
 inline_for_extraction
 let serialize32_maybe_enum_key_gen
