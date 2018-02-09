@@ -74,7 +74,7 @@ let is_ecffdhe (ng:named_group): Tot bool = is_ecdhe ng || is_ffdhe ng
 
 type ecffdhe_group = ng:named_group{is_ecffdhe ng}
 
-
+inline_for_extraction
 let named_group_of_u16 (x:U16.t): Tot named_group =
   match x with
   | 0x0017us -> SECP256R1
@@ -91,6 +91,7 @@ let named_group_of_u16 (x:U16.t): Tot named_group =
          else if U16.(0xFE00us <=^ u && u <=^ 0xFEFFus) then ECDHE_PRIVATE_USE u
          else UNKNOWN u
 
+inline_for_extraction
 let u16_of_named_group (ng:named_group): Tot U16.t =
   match ng with
   | SECP256R1           -> 0x0017us
@@ -127,6 +128,7 @@ let named_group_parser: LP.parser named_group_parser_kind named_group =
   lemma_named_group_of_u16_is_injective ();
   LP.parse_u16 `LP.parse_synth` named_group_of_u16 
 
+inline_for_extraction
 let named_group_parser32: LP.parser32 named_group_parser =
   lemma_named_group_of_u16_is_injective ();
   LP.parse32_synth LP.parse_u16 named_group_of_u16 named_group_of_u16 LP.parse32_u16 ()
@@ -141,6 +143,7 @@ let named_group_serializer: LP.serializer named_group_parser =
   LP.serialize_synth #named_group_parser_kind #U16.t #named_group
     LP.parse_u16 named_group_of_u16 LP.serialize_u16 u16_of_named_group ()
 
+inline_for_extraction
 let named_group_serializer32: LP.serializer32 named_group_serializer = 
   LP.serialize32_synth #named_group_parser_kind #U16.t #named_group
     LP.parse_u16 named_group_of_u16 LP.serialize_u16 LP.serialize32_u16 u16_of_named_group u16_of_named_group ()
