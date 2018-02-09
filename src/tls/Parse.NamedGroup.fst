@@ -108,7 +108,7 @@ let u16_of_named_group (ng:named_group): Tot U16.t =
   | ECDHE_PRIVATE_USE u -> u
   | UNKNOWN u           -> u
 
-#set-options "--z3rlimit 50"
+#reset-options "--using_facts_from '* -LowParse -FStar.Reflection -FStar.Tactics' --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16"
 let lemma_named_group_of_u16_is_injective () 
   : Lemma (is_injective named_group_of_u16) 
   = ()
@@ -131,7 +131,7 @@ let named_group_parser: LP.parser named_group_parser_kind named_group =
 inline_for_extraction
 let named_group_parser32: LP.parser32 named_group_parser =
   lemma_named_group_of_u16_is_injective ();
-  LP.parse32_synth LP.parse_u16 named_group_of_u16 named_group_of_u16 LP.parse32_u16 ()
+  LP.parse32_synth LP.parse_u16 named_group_of_u16 (fun x -> named_group_of_u16 x) LP.parse32_u16 ()
 
 
 (* Validators? *)
@@ -139,11 +139,21 @@ let named_group_parser32: LP.parser32 named_group_parser =
 
 (* Serialization *) 
 
+#reset-options "--using_facts_from '* -LowParse -FStar.Reflection -FStar.Tactics' --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16"
+let lemma_named_group_of_u16_of_named_group () 
+  : Lemma (forall x . named_group_of_u16 (u16_of_named_group x) == x)
+  = ()
+#reset-options
+
 let named_group_serializer: LP.serializer named_group_parser = 
+  lemma_named_group_of_u16_is_injective ();
+  lemma_named_group_of_u16_of_named_group ();
   LP.serialize_synth #named_group_parser_kind #U16.t #named_group
     LP.parse_u16 named_group_of_u16 LP.serialize_u16 u16_of_named_group ()
 
 inline_for_extraction
 let named_group_serializer32: LP.serializer32 named_group_serializer = 
+  lemma_named_group_of_u16_is_injective ();
+  lemma_named_group_of_u16_of_named_group ();
   LP.serialize32_synth #named_group_parser_kind #U16.t #named_group
-    LP.parse_u16 named_group_of_u16 LP.serialize_u16 LP.serialize32_u16 u16_of_named_group u16_of_named_group ()
+    LP.parse_u16 named_group_of_u16 LP.serialize_u16 LP.serialize32_u16 u16_of_named_group (fun x -> u16_of_named_group x) ()
