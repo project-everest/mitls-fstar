@@ -11,8 +11,10 @@ type enum (key: eqtype) (repr: eqtype) = (l: list (key * repr) {
   L.noRepeats (L.map snd l)
 })
 
+inline_for_extraction
 let enum_key (#key #repr: eqtype) (e: enum key repr) : Tot eqtype = (s: key { L.mem s (L.map fst e) } )
 
+inline_for_extraction
 let enum_repr (#key #repr: eqtype) (e: enum key repr) : Tot eqtype = (r: repr { L.mem r (L.map snd e) } )
 
 let flip (#a #b: Type) (c: (a * b)) : Tot (b * a) = let (ca, cb) = c in (cb, ca)
@@ -189,6 +191,7 @@ let serialize_enum_key
 = bare_serialize_enum_key_correct p s e;
   bare_serialize_enum_key p s e
 
+inline_for_extraction
 let unknown_enum_repr (#key #repr: eqtype) (e: enum key repr) : Tot Type0 =
   (r: repr { L.mem r (L.map snd e) == false } )
 
