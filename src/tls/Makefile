@@ -23,7 +23,7 @@ quic-%:
 
 test: kremlin-test ocaml-test quic-test
 
-clean: kremlin-clean ocaml-clean quic-clean
+-clean: kremlin-clean ocaml-clean quic-clean
 	rm -rf extract/OCaml extract/Kremlin extract/Kremlin-{Internal-Test,Library}/{,*/}*.{c,h,o}
 
 %.fst-in %.fsti-in:

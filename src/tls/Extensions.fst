@@ -637,6 +637,7 @@ noeq type extension' (p: (lbytes 2 -> GTot Type0)) =
   | E_server_name of list serverName (* M, AF *) (* RFC 6066 *)
   | E_supported_groups of list namedGroup (* M, AF *) (* RFC 7919 *)
   | E_signature_algorithms of signatureSchemeList (* M, AF *) (* RFC 5246 *)
+  | E_signature_algorithms_cert of signatureSchemeList (* TLS 1.3#23 addition; TLS 1.2 should also support it *)
   | E_key_share of CommonDH.keyShare (* M, AF *)
   | E_pre_shared_key of psk (* M, AF *)
   | E_session_ticket of bytes
@@ -673,6 +674,7 @@ let string_of_extension (#p: (lbytes 2 -> GTot Type0)) (e: extension' p) = match
   | E_server_name _ -> "server_name"
   | E_supported_groups _ -> "supported_groups"
   | E_signature_algorithms _ -> "signature_algorithms"
+  | E_signature_algorithms_cert _ -> "signature_algorithms_cert"
   | E_key_share _ -> "key_share"
   | E_pre_shared_key _ -> "pre_shared_key"
   | E_session_ticket _ -> "session_ticket"
@@ -697,6 +699,7 @@ let sameExt (#p: (lbytes 2 -> GTot Type0)) (e1: extension' p) (e2: extension' p)
   | E_server_name _, E_server_name _ -> true
   | E_supported_groups _, E_supported_groups _ -> true
   | E_signature_algorithms _, E_signature_algorithms _ -> true
+  | E_signature_algorithms_cert _, E_signature_algorithms_cert _ -> true
   | E_key_share _, E_key_share _ -> true
   | E_pre_shared_key _, E_pre_shared_key _ -> true
   | E_session_ticket _, E_session_ticket _ -> true
@@ -720,21 +723,22 @@ let sameExt (#p: (lbytes 2 -> GTot Type0)) (e1: extension' p) (e2: extension' p)
 val extensionHeaderBytes: (#p: (lbytes 2 -> GTot Type0)) -> extension' p -> lbytes 2
 let extensionHeaderBytes #p ext =
   match ext with             // 4.2 ExtensionType enum value
-  | E_server_name _            -> twobytes (0x00z, 0x00z)
-  | E_supported_groups _       -> twobytes (0x00z, 0x0Az) // 10
-  | E_signature_algorithms _   -> twobytes (0x00z, 0x0Dz) // 13
-  | E_quic_parameters _        -> twobytes (0x00z, 0x1Az) // 26
-  | E_session_ticket _         -> twobytes (0x00z, 0x23z) // 35
-  | E_key_share _              -> twobytes (0x00z, 0x28z) // 40
-  | E_pre_shared_key _         -> twobytes (0x00z, 0x29z) // 41
-  | E_early_data _             -> twobytes (0x00z, 0x2az) // 42
-  | E_supported_versions _     -> twobytes (0x00z, 0x2bz) // 43
-  | E_cookie _                 -> twobytes (0x00z, 0x2cz) // 44
-  | E_psk_key_exchange_modes _ -> twobytes (0x00z, 0x2dz) // 45
-  | E_extended_ms              -> twobytes (0x00z, 0x17z) // 45
-  | E_ec_point_format _        -> twobytes (0x00z, 0x0Bz) // 11
-  | E_alpn _                   -> twobytes (0x00z, 0x10z) // 16
-  | E_unknown_extension (h,b)  -> h
+  | E_server_name _               -> twobytes (0x00z, 0x00z)
+  | E_supported_groups _          -> twobytes (0x00z, 0x0Az) // 10
+  | E_signature_algorithms _      -> twobytes (0x00z, 0x0Dz) // 13
+  | E_signature_algorithms_cert _ -> twobytes (0x00z, 50z)   //
+  | E_quic_parameters _           -> twobytes (0x00z, 0x1Az) // 26
+  | E_session_ticket _            -> twobytes (0x00z, 0x23z) // 35
+  | E_key_share _                 -> twobytes (0x00z, 51z)   // (was 40)
+  | E_pre_shared_key _            -> twobytes (0x00z, 0x29z) // 41
+  | E_early_data _                -> twobytes (0x00z, 0x2az) // 42
+  | E_supported_versions _        -> twobytes (0x00z, 0x2bz) // 43
+  | E_cookie _                    -> twobytes (0x00z, 0x2cz) // 44
+  | E_psk_key_exchange_modes _    -> twobytes (0x00z, 0x2dz) // 45
+  | E_extended_ms                 -> twobytes (0x00z, 0x17z) // 45
+  | E_ec_point_format _           -> twobytes (0x00z, 0x0Bz) // 11
+  | E_alpn _                      -> twobytes (0x00z, 0x10z) // 16
+  | E_unknown_extension (h,b)     -> h
 
 // 17-05-19: We constrain unknown extensions to have headers different from known extensions.
 let unknown_extensions_unknown
@@ -781,25 +785,25 @@ let sameExt_equal_extensionHeaderBytes
 private let extensionPayloadBytes_aux acc v = acc @| versionBytes_draft v
 val extensionPayloadBytes: extension -> b:bytes { length b < 65536 - 4 }
 let rec extensionPayloadBytes = function
-  | E_server_name []           -> vlbytes 2 empty_bytes // ServerHello, EncryptedExtensions
-  | E_server_name l            -> vlbytes 2 (vlbytes 2 (serverNameBytes l)) // ClientHello
-  | E_supported_groups l       -> vlbytes 2 (namedGroupsBytes l)
-  | E_signature_algorithms sha -> vlbytes 2 (signatureSchemeListBytes sha)
-  | E_session_ticket b         -> vlbytes 2 b
-  | E_key_share ks             -> vlbytes 2 (CommonDH.keyShareBytes ks)
-  | E_pre_shared_key psk       ->
-    (match psk with
-    | ClientPSK ids len -> vlbytes_trunc 2 (pskBytes psk) (2 + len)
-    | _ -> vlbytes 2 (pskBytes psk))
-  | E_early_data edi           -> vlbytes 2 (earlyDataIndicationBytes edi)
-  | E_supported_versions vs    -> vlbytes 2 (protocol_versions_bytes vs)
-  | E_cookie c                 -> (lemma_repr_bytes_values (length c); vlbytes 2 (vlbytes 2 c))
-  | E_psk_key_exchange_modes kex -> vlbytes 2 (client_psk_kexes_bytes kex)
-  | E_extended_ms              -> vlbytes 2 empty_bytes
-  | E_ec_point_format l        -> vlbytes 2 (ecpfListBytes l)
-  | E_alpn l                   -> vlbytes 2 (alpnBytes l)
-  | E_quic_parameters qp       -> vlbytes 2 (quicParametersBytes qp)
-  | E_unknown_extension (_,b)  -> vlbytes 2 b
+  | E_server_name []                -> vlbytes 2 empty_bytes // ServerHello, EncryptedExtensions
+  | E_server_name l                 -> vlbytes 2 (vlbytes 2 (serverNameBytes l)) // ClientHello
+  | E_supported_groups l            -> vlbytes 2 (namedGroupsBytes l)
+  | E_signature_algorithms sha      -> vlbytes 2 (signatureSchemeListBytes sha)
+  | E_signature_algorithms_cert sha -> vlbytes 2 (signatureSchemeListBytes sha)
+  | E_session_ticket b              -> vlbytes 2 b
+  | E_key_share ks                  -> vlbytes 2 (CommonDH.keyShareBytes ks)
+  | E_pre_shared_key psk -> (match psk with
+    | ClientPSK ids len             -> vlbytes_trunc 2 (pskBytes psk) (2 + len)
+    | _                             -> vlbytes 2 (pskBytes psk))
+  | E_early_data edi                -> vlbytes 2 (earlyDataIndicationBytes edi)
+  | E_supported_versions vs         -> vlbytes 2 (protocol_versions_bytes vs)
+  | E_cookie c                      -> (lemma_repr_bytes_values (length c); vlbytes 2 (vlbytes 2 c))
+  | E_psk_key_exchange_modes kex    -> vlbytes 2 (client_psk_kexes_bytes kex)
+  | E_extended_ms                   -> vlbytes 2 empty_bytes
+  | E_ec_point_format l             -> vlbytes 2 (ecpfListBytes l)
+  | E_alpn l                        -> vlbytes 2 (alpnBytes l)
+  | E_quic_parameters qp            -> vlbytes 2 (quicParametersBytes qp)
+  | E_unknown_extension (_,b)       -> vlbytes 2 b
 #reset-options
 
 (** Serializes an extension *)
@@ -840,6 +844,14 @@ let extensionBytes_is_injective
     lemma_vlbytes_inj_strong 2 n1 s1 n2 s2;
     namedGroupsBytes_is_injective l1 empty_bytes l2 empty_bytes
   | E_signature_algorithms sha1 ->
+    let (E_signature_algorithms sha2) = ext2 in
+    let sg1 = signatureSchemeListBytes sha1 in
+    let sg2 = signatureSchemeListBytes sha2 in
+    assume (repr_bytes (length sg1) <= 2);
+    assume (repr_bytes (length sg2) <= 2);
+    lemma_vlbytes_inj_strong 2 sg1 s1 sg2 s2;
+    signatureSchemeListBytes_is_injective sha1 empty_bytes sha2 empty_bytes
+  | E_signature_algorithms_cert sha1 -> // duplicating the proof above
     let (E_signature_algorithms sha2) = ext2 in
     let sg1 = signatureSchemeListBytes sha1 in
     let sg2 = signatureSchemeListBytes sha2 in
@@ -1118,12 +1130,16 @@ let parseExtension mt b =
       if length data < 2 || length data >= 65538 then error "supported groups" else
       mapResult (normallyNone E_supported_groups) (Parse.parseNamedGroups data)
 
-    | (0x00z, 0x0Dz) -> // sigAlgs
-      if length data < 2 ||  length data >= 65538 then error "supported signature algorithms" else
+    | (0x00z, 13z) -> // sigAlgs
+      if length data < 2 || length data >= 65538 then error "supported signature algorithms" else
       mapResult (normallyNone E_signature_algorithms) (TLSConstants.parseSignatureSchemeList data)
 
+    | (0x00z, 50z) -> // sigAlgs_cert
+      if length data < 2 || length data >= 65538 then error "supported signature algorithms (cert)" else
+      mapResult (normallyNone E_signature_algorithms_cert) (TLSConstants.parseSignatureSchemeList data)
+
     | (0x00z, 0x10z) -> // application_layer_protocol_negotiation
-      if length data < 2 ||  length data >= 65538 then error "application layer protocol negotiation" else
+      if length data < 2 || length data >= 65538 then error "application layer protocol negotiation" else
       mapResult (normallyNone E_alpn) (parseAlpn data)
 
     | (0x00z, 0x1Az) -> // quic_transport_parameters
@@ -1133,7 +1149,7 @@ let parseExtension mt b =
     | (0x00z, 0x23z) -> // session_ticket
       Correct (E_session_ticket data, None)
 
-    | (0x00z, 0x28z) -> // key share
+    | (0x00z, 51z) -> // key share
       mapResult (normallyNone E_key_share) (parseKeyShare mt data)
 
     | (0x00z, 0x29z) -> // PSK
@@ -1329,6 +1345,9 @@ let prepareExtensions minpv pv cs host alps qp ems sren edi ticket sigAlgs named
     in
     // Include extended_master_secret when resuming
     let res = if ems then E_extended_ms :: res else res in
+    // TLS 1.3#23: we never include signature_algorithms_cert, as it
+    // is not yet enabled in our API; hence sigAlgs are used both for
+    // TLS signing and certificate signing.
     let res = E_signature_algorithms sigAlgs :: res in
     let res =
       if List.Tot.existsb isECDHECipherSuite (list_valid_cs_is_list_cs cs) then
