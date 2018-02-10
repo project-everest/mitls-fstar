@@ -14,6 +14,8 @@ open Parse
 module LP = LowParse.SLow
 module L = FStar.List.Tot
 
+#reset-options "--using_facts_from '* -Parse -FStar.Tactics -FStar.Reflection' --z3rlimit 16 --z3cliopt smt.arith.nl=false"
+
 inline_for_extraction
 let protocolVersion_enum : LP.enum protocolVersion (byte * byte) =
   [@inline_let]
@@ -41,8 +43,6 @@ let synth_protocolVersion'
   | LP.Unknown y ->
     let (a, b) = (y <: (byte * byte)) in
     UnknownVersion a b
-
-#set-options "--z3rlimit 16"
 
 let rec not_mem
   (#t: eqtype)
