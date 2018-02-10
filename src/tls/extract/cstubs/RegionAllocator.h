@@ -96,6 +96,11 @@ void HeapRegionDestroy(HEAP_REGION rgn);
 #else
 // Use the single process-wide heap.  All unfreed allocations will be leaked.
 
+#ifndef TRUE
+#include <stdbool.h>
+#define TRUE true
+#endif
+
 #define ENTER_HEAP_REGION(rgn)
 #define LEAVE_HEAP_REGION()
 #define CREATE_HEAP_REGION(prgn) *(prgn)=NULL
