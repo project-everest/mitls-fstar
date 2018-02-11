@@ -1,14 +1,14 @@
 module Signature
 
-open FStar.HyperHeap
-open FStar.HyperStack
-open FStar.Monotonic.RRef
+open Mem
 open FStar.Monotonic.Seq
+
+module HS = FStar.HyperStack //Added automatically
+module HST = FStar.HyperStack.ST //Added automatically
 
 open Platform.Bytes
 open CoreCrypto
 open Hashing.Spec // masking CoreCrypto's hashAlg
-
 open TLSConstants
 open Cert
 
@@ -88,9 +88,11 @@ abstract let evolves (#a:alg) (s1:state a) (s2:state a) =
   Corrupt? s2 \/
   (Signed? s1 /\ Signed? s2 /\ grows (Signed?.log s1) (Signed?.log s2))
 
+(*18-02-10 
 let lemma_evolves_monotone (#a:alg): Lemma (monotonic (state a) (evolves #a)) =
   FStar.Classical.forall_intro (seq_extension_reflexive #(signed a));
   FStar.Classical.forall_intro_3 (grows_transitive #(signed a))
+*)
 
 private val st_update: #a:alg
   -> s1:state a
@@ -130,12 +132,12 @@ val alloc_pubkey: #a:alg
   -> r:public_repr{sigAlg_of_public_repr r == a.core}
   -> ST (pubkey a)
     (requires (fun h0 -> True))
-    (ensures  (fun h0 p h1 -> ralloc_post keyRegion s h0 (as_hsref (PK?.log p)) h1
+    (ensures  (fun h0 p h1 -> ralloc_post keyRegion s h0 ((PK?.log p)) h1
                            /\ PK?.repr p == r
                            /\ m_fresh (PK?.log p) h0 h1))
 let alloc_pubkey #a s r =
   lemma_evolves_monotone #a;
-  let log = m_alloc keyRegion s in
+  let log = ralloc keyRegion s in
   PK log r
 
 

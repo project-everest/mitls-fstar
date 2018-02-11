@@ -6,7 +6,7 @@ module StreamAE
 
 open FStar.Monotonic.Seq
 
-open Platform.Error
+open FStar.Error
 open Platform.Bytes
 
 open Mem
@@ -120,7 +120,7 @@ let gen parent i =
   let _ = cut (is_eternal_region writer_r) in
   if authId i then
     let log : ideal_log writer_r i = alloc_mref_seq writer_r Seq.createEmpty in
-    let ectr: ideal_ctr #writer_r writer_r i log = new_seqn #writer_r #(entry i) #max_ctr writer_r 0 log in
+    let ectr: ideal_ctr #writer_r writer_r i log = new_seqn #(entry i) #writer_r #max_ctr writer_r 0 log in
     State #i #Writer #writer_r #writer_r aead log ectr
   else
     let ectr: concrete_ctr writer_r i = ralloc writer_r 0 in

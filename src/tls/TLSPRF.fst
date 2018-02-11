@@ -91,7 +91,7 @@ let ssl_verifyCertificate hashAlg ms log  =
       match hashAlg with
       | SHA1 -> (ssl_pad1_sha1, ssl_pad2_sha1)
       | MD5 -> (ssl_pad1_md5,  ssl_pad2_md5)
-      | _ -> Platform.Error.unexpected "[ssl_certificate_verify] invoked on a wrong hash algorithm"
+      | _ -> FStar.Error.unexpected "[ssl_certificate_verify] invoked on a wrong hash algorithm"
   in
   let forStep1 = log @| ms @| pad1 in
   let step1 = hash hashAlg forStep1 in
@@ -179,7 +179,7 @@ let prf' a (secret: bytes) data len =
     | PRF_TLS_1p2 label macAlg -> tls12prf' macAlg secret label data len  // typically SHA256 but may depend on CS
     | PRF_TLS_1p01 label       -> tls_prf          secret label data len  // MD5 xor SHA1
   //| PRF_SSL3_nested         -> ssl_prf          secret       data len  // MD5(SHA1(...)) for extraction and keygen
-    | _ -> Platform.Error.unexpected "[prf'] unreachable pattern match"
+    | _ -> FStar.Error.unexpected "[prf'] unreachable pattern match"
 
 //let extract a secret data len = prf a secret extract_label data len
 

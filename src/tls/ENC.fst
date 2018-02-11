@@ -9,18 +9,17 @@
 (* Instead, we could write a well-typed ideal functionality and reduce
    it to its non-agile underlying algorithms, e.g. AES-CBC *)
 
-open FStar.Heap
-open FStar.HyperHeap
-open FStar.HyperStack
 open FStar.Seq
 
 open Platform.Bytes
-open Platform.Error
+open FStar.Error
 
+open Mem
 open TLSError
 open TLSConstants
 open TLSInfo
 open LHAEPlain
+
 module Range = Range
 open Range
 

@@ -2,12 +2,13 @@ module Transport
 
 // adding an indirection to TCP for applications that prefer to take control of their IOs.
 
-open FStar.HyperStack.All
-
 open Platform.Tcp 
 open Platform.Bytes
-open Platform.Error
+open FStar.Error
 open TLSError
+
+open Mem
+
 
 // make this type abstract? 
 noeq type t = { 

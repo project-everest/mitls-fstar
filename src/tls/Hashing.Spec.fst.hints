@@ -1,5 +1,5 @@
 [
-  "ùƒ‰¶5»A\u00124zl4|z\u0019d",
+  "ñ§¯ïYE…ûæ,\u0005P\u0011È$ﬁ",
   [
     [
       "Hashing.Spec.uu___is_MD5",
@@ -8,7 +8,7 @@
       1,
       [ "@query" ],
       0,
-      "9f2d2c469da9039a40a3a5bf68462e57"
+      "00ad96fdcdcf8332e29980bfac695d06"
     ],
     [
       "Hashing.Spec.uu___is_SHA1",
@@ -17,7 +17,7 @@
       1,
       [ "@query" ],
       0,
-      "7fb9a3dfe717da9bad00b4dbfc43032d"
+      "bfa55c5b4f80ee8ec045aeb8d8d121d7"
     ],
     [
       "Hashing.Spec.uu___is_SHA224",
@@ -26,7 +26,7 @@
       1,
       [ "@query" ],
       0,
-      "5383f01560081d83d7688ead14a7df54"
+      "ae18fedcefdb5768c58928c372cdd19a"
     ],
     [
       "Hashing.Spec.uu___is_SHA256",
@@ -35,7 +35,7 @@
       1,
       [ "@query" ],
       0,
-      "ec0600e4ddefba315ad53230d93048a3"
+      "4d79c2acf4545da25dc367cf37ae9f4f"
     ],
     [
       "Hashing.Spec.uu___is_SHA384",
@@ -44,7 +44,7 @@
       1,
       [ "@query" ],
       0,
-      "d4234f2ef03d5733059cad4f8a06caad"
+      "7aa1e7a546faf82c5b689aaf2ec34e94"
     ],
     [
       "Hashing.Spec.uu___is_SHA512",
@@ -53,7 +53,24 @@
       1,
       [ "@query" ],
       0,
-      "ff31e5c33e92f367e8dd14292591b819"
+      "d8e6361cb89dda4677d8277cf7845bb3"
+    ],
+    [
+      "Hashing.Spec.string_of_alg",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_Hashing.Spec.MD5",
+        "disc_equation_Hashing.Spec.SHA1",
+        "disc_equation_Hashing.Spec.SHA224",
+        "disc_equation_Hashing.Spec.SHA256",
+        "disc_equation_Hashing.Spec.SHA384",
+        "disc_equation_Hashing.Spec.SHA512",
+        "fuel_guarded_inversion_Hashing.Spec.alg"
+      ],
+      0,
+      "44a00d96232c97e233263163571f410d"
     ],
     [
       "Hashing.Spec.blockLen",
@@ -71,7 +88,7 @@
         "fuel_guarded_inversion_Hashing.Spec.alg"
       ],
       0,
-      "4cfea942c7c63139e270816ce35f81ef"
+      "3593ba6be0ffdb80feda41621ec8b29c"
     ],
     [
       "Hashing.Spec.tagLen",
@@ -90,7 +107,7 @@
         "fuel_guarded_inversion_Hashing.Spec.alg"
       ],
       0,
-      "8b97907795ad8f6699741f74831221ba"
+      "1ee39ffa5dca2b7edc1cad2c985804a4"
     ],
     [
       "Hashing.Spec.anyTag",
@@ -102,7 +119,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "4b0d3d5bc34ceb66dbce87f52d6e02c5"
+      "13debfdc17043236d3e2af6f8f5154f2"
     ],
     [
       "Hashing.Spec.lemma_maxLen",
@@ -117,7 +134,7 @@
         "typing_Hashing.Spec.tagLen"
       ],
       0,
-      "eb9caa0fc08605d77ef42c6f76bf50b1"
+      "1d3ec2f7ac42083fc8daece6185b1578"
     ],
     [
       "Hashing.Spec.compress",
@@ -130,7 +147,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "2e84a5226aa98a20708a3a995df0082b"
+      "aaf6210a9b2e20f4cfaee463ef4f82c2"
     ],
     [
       "Hashing.Spec.hash2",
@@ -139,7 +156,7 @@
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "7f22ca63fb7f6b1362c8e925be792212"
+      "e407279e2e2b937ba8c541fb26bcc7fb"
     ],
     [
       "Hashing.Spec.hash2",
@@ -152,7 +169,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "6b472e9ba4f803d2721c505bd569ae32"
+      "15e1692677e1a71f34dd3bdb2663f003"
     ],
     [
       "Hashing.Spec.hash2",
@@ -205,7 +222,7 @@
         "well-founded-ordering-on-nat"
       ],
       0,
-      "209d97e077bf4079c123b5eac6691ae8"
+      "04d4e2a67ae41bfcef8e3257b899a2dc"
     ],
     [
       "Hashing.Spec.hash2",
@@ -214,7 +231,7 @@
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "0e8406b2a16487467a019299845af2ac"
+      "136068a098013103ce77a62035c06203"
     ],
     [
       "Hashing.Spec.suffixLen",
@@ -251,7 +268,7 @@
         "typing_Prims.pow2"
       ],
       0,
-      "ee126b31d9ee55e9783f165e2c8e8250"
+      "eeae0cf6a2723bc232fb6141cf213b38"
     ],
     [
       "Hashing.Spec.suffixLen",
@@ -260,7 +277,7 @@
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "f9149081d6ac968348ccc9439ca60c5e"
+      "565fdeffae5f3a2c9a9ca73c6cb912d4"
     ],
     [
       "Hashing.Spec.suffixLen",
@@ -269,7 +286,7 @@
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "fa70b442e281f38e39946bfc45bf2ec1"
+      "38b87bad97a05c18ce26c955c80dae1d"
     ],
     [
       "Hashing.Spec.hash",
@@ -290,7 +307,7 @@
         "typing_Platform.Bytes.length"
       ],
       0,
-      "952fb261f77a43a92363331f6855a202"
+      "9e693abc99e623f8b36232ca0509ac14"
     ],
     [
       "Hashing.Spec.hmac",
@@ -315,7 +332,7 @@
         "typing_Hashing.Spec.blockLen", "typing_Hashing.Spec.tagLen"
       ],
       0,
-      "8ce488ff4023e17aef4a702a8f8bf9a4"
+      "2efea4886cd107a25cd94344b9be243f"
     ],
     [
       "Hashing.Spec.hmac",
@@ -328,7 +345,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "ab3d4ae56881f835529aa92976c0309b"
+      "1a2e9d05320782f8086c76738b633e4e"
     ],
     [
       "Hashing.Spec.hmac",
@@ -346,7 +363,7 @@
         "typing_Platform.Bytes.length"
       ],
       0,
-      "e941e6dac4333354f2f0bec26bafdd0d"
+      "c3bfe2738c6d3728ba92160d5d1da418"
     ]
   ]
 ]

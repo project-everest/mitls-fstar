@@ -1,7 +1,7 @@
 module Ticket
 
 open Platform.Bytes
-open Platform.Error
+open FStar.Error
 
 open Mem
 open TLSError

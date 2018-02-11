@@ -7,7 +7,7 @@ open TLSInfo
 module Range = Range
 open Range
 open DataStream
-open Platform.Error
+open FStar.Error
 open TLSError
 
 #if ideal

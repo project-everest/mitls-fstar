@@ -107,18 +107,20 @@ type error = alertDescription * string
 
 let string_of_error (a,s)= string_of_ad a^" ("^s^")"
 
-type result 'a = Platform.Error.optResult error 'a
+type result 'a = FStar.Error.optResult error 'a
 
-open Platform.Error
+open FStar.Error
 let string_of_result f = function
   | Error z -> "Error: "^string_of_error z
   | Correct v -> f v
 
 
-val resT: r:result 'a { Platform.Error.Correct? r } -> Tot 'a
-let resT (Platform.Error.Correct v) = v
+val resT: r:result 'a { FStar.Error.Correct? r } -> Tot 'a
+let resT (FStar.Error.Correct v) = v
 
+inline_for_extraction
 val mapResult: ('a -> Tot 'b) -> result 'a -> Tot (result 'b)
+inline_for_extraction
 let mapResult f r =
    (match r with
     | Error z -> Error z

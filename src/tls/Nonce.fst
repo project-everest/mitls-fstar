@@ -2,7 +2,7 @@
 
 open TLSConstants
 open Platform.Bytes
-open Platform.Error
+open FStar.Error
 
 module HS = FStar.HyperStack
 module MM = FStar.Monotonic.Map
@@ -18,6 +18,7 @@ val timestamp: unit -> ST (lbytes 4)
 let timestamp () = 
   let time = Platform.Date.secondsFromDawn () in
   lemma_repr_bytes_values time;
+  assume(Platform.Bytes.repr_bytes time = FStar.Bytes.repr_bytes time);// temporary
   bytes_of_int 4 time
 
 // ex_rid: The type of a region id that is known 

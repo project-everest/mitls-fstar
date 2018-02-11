@@ -1,6 +1,6 @@
 module Negotiation
 
-open Platform.Error
+open FStar.Error
 open Platform.Bytes
 
 open TLSError

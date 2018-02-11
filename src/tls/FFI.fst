@@ -11,18 +11,18 @@ module FFI
 //       exceptions, notably for incomplete pattern matching
 
 open Platform.Bytes
-open Platform.Error
+open FStar.Error
 
 open TLSConstants
 open TLSInfo
 module Range = Range
 open Range
 
+open Mem
 open DataStream
 open TLS
 open FFICallbacks
 
-open FStar.HyperStack.All
 
 #set-options "--lax"
 

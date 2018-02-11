@@ -139,7 +139,7 @@ let ptext (#i:id) (ent:entry i): Tot (Content.fragment i) =
 
 //A projection of fragments from StreamAE.entries
 let fragments (#i:id) (#rw:rw) (s:state i rw{authId i}) (h:mem): GTot (frags i) =
-  let entries = sel #(log_region s) #_ #MS.grows h (ilog s) in
+  let entries = sel #_ #MS.grows h (ilog s) in
   MS.map ptext entries
 
 val lemma_fragments_snoc_commutes: #i:id -> w:writer i{authId i}

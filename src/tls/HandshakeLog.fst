@@ -9,7 +9,7 @@ open Mem
 open FStar.Seq
  // for e.g. found
 open FStar.Set
-open Platform.Error
+open FStar.Error
 open Platform.Bytes
 open TLSError
 open TLSConstants

@@ -10,7 +10,7 @@ module TLSInfo
 *)
 
 open Platform.Bytes
-open Platform.Date
+open FStar.Date
 open TLSConstants
 //open PMS
 //open Cert

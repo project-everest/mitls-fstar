@@ -1,12 +1,12 @@
 module ECGroup
 
-open FStar.HyperStack
 open Platform.Bytes
-open Platform.Error
+open FStar.Error
 open CoreCrypto
 open TLSError
+
+open Mem
 open Parse
-open FStar.HyperStack.ST
 
 module CC = CoreCrypto
 

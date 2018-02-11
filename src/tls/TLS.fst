@@ -1,15 +1,12 @@
 module TLS
 
-open FStar.Heap
-open FStar.HyperHeap
-open FStar.HyperStack
 open FStar.Seq
 open FStar.Set
 
-open Platform
 open Platform.Bytes
-open Platform.Error
+open FStar.Error
 
+open Mem
 open TLSError
 open TLSConstants
 open TLSInfo

@@ -29,7 +29,7 @@ open HandshakeMessages // for pattern matching on messages
 //module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 
-open Platform.Error
+open FStar.Error
 open TLSError
 
 type msg = HandshakeMessages.hs_msg

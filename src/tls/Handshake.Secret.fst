@@ -1,24 +1,19 @@
 module Handshake.Secret
 
-// This file provides all operations on abstract TLS secrets for the
-// handshake, grouped by message-processing stages 
-// (used to be in KeySchedule.fst)
-
-//open FStar.Seq
-//open FStar.Set
+/// This module implements all operations on abstract TLS secrets 
+/// for the handshake, grouped by message-processing stages.
+/// (It used to be named KeySchedule.)
 
 open Platform.Bytes
-open Platform.Error
+open FStar.Error
 
 open Mem
 open TLSError
 open TLSConstants
-//open Extensions
 open TLSInfo
-//open StatefulLHAE
-open HKDF
-open PSK
 open Idx
+open HKDF // avoid?
+open PSK  // avoid?
 
 module MM = FStar.Monotonic.Map
 module HS = FStar.HyperStack

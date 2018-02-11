@@ -3,7 +3,7 @@ module Alert
 open FStar.Seq
 open Mem
 
-open Platform.Error
+open FStar.Error
 open Platform.Bytes
 
 open TLSError

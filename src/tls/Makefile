@@ -144,16 +144,10 @@ QUIC
 # Verifying one file at a time
 # @echo -e  "\e[1;34m"Verifying $(basename $(notdir $@)) "\e[0m"; 
 %.fst-ver:
-	$(FSTAR) $(VERFLAGS) \
-	$(FSTAR_INCLUDE_PATHS) \
-	--include $(MITLS_HOME)/src/tls/ideal-flags \
-	$(basename $@).fst
+	$(FSTAR) $(VERFLAGS) $(FSTAR_INCLUDE_PATHS) --include $(MITLS_HOME)/src/tls/ideal-flags $(basename $@).fst
 
 %.fsti-ver:
-	$(FSTAR) $(VERFLAGS) \
-	$(FSTAR_INCLUDE_PATHS) \
-	--include $(MITLS_HOME)/src/tls/ideal-flags \
-	$(basename $@).fsti
+	$(FSTAR) $(VERFLAGS) $(FSTAR_INCLUDE_PATHS) --include $(MITLS_HOME)/src/tls/ideal-flags $(basename $@).fsti
 
 # Targets to get F* arguments in interactive mode
 %.fst-in: 

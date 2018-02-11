@@ -7,7 +7,7 @@ open Platform.Bytes
 open TLSInfo
 module Range = Range
 open Range
-open Platform.Error
+open FStar.Error
 open TLSError
 
 type fragment = {frag: rbytes}

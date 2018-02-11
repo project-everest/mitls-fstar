@@ -45,7 +45,7 @@ private type log_t (#ip:ipkg) (i:ip.Pkg.t) (u:info) (r:rgn) =
   MM.t r (tag u * text) (fun (t,v) -> goodish i u v) (fun _ -> True) // could constrain size
 
 // runtime (concrete) type of MAC instances
-noeq abstract type concrete_key =
+noeq (* abstract *) type concrete_key =
   | MAC: u:info -> k:keyrepr u -> concrete_key
 
 // The model type of instances - either ideal, or real

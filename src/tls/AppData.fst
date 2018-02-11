@@ -11,7 +11,7 @@ module AppData
 //* incoming (rg,f), how to move the reader pos?
 //* postconditions show the transition, callers restore their invariant
 
-open Platform.Error
+open FStar.Error
 open Platform.Bytes
 
 open TLSError

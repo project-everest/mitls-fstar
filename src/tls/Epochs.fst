@@ -6,13 +6,16 @@ An elaboration would ensure that keys in old epochs are erased.
 *)
 module Epochs
 
+(*
 open FStar.Heap //17-10-27 TODO remove!
 open FStar.HyperHeap //17-10-27 We'd like to remove it too. Conversely we miss HyperStack.ST 
 open FStar.Seq // DO NOT move further below, it would shadow `FStar.HyperStack.mem`
 open FStar.HyperStack
+*)
+open Mem 
 open FStar.Monotonic.RRef
 open FStar.Monotonic.Seq
-open Platform.Error
+open FStar.Error
 open Platform.Bytes
 
 open TLSError

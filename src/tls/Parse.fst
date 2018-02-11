@@ -1,18 +1,16 @@
 module Parse
 
-open FStar.Seq
-open Platform.Bytes
-open Platform.Error
+open FStar.Error
 open TLSError
+open Platform.Bytes
 
 (** This file should be split in 3 different modules:
-  - Regions: for global table regions [done in Mem] 
+  - Regions: for global table regions (now in Mem)
   - Format: for generic formatting functions
-  - DHFormat: for (EC)DHE-specific formatting
+  - DHFormat: for (EC)DHE-specific formatting (should go elsewhere)
 *)
 
-include Mem // temporary
-
+include Mem // temporary, for code opening only TLSConstants
 
 (** Begin Module Format *)
 
@@ -111,7 +109,6 @@ let vlbytes_length_lemma n a b =
 
 #set-options "--max_ifuel 1 --initial_ifuel 1 --max_fuel 0 --initial_fuel 0"   //need to reason about length
 
-
 val vlsplit: lSize:nat{lSize <= 4}
   -> vlb:bytes{lSize <= length vlb}
   -> Tot (result (b:(bytes * bytes){
@@ -123,7 +120,6 @@ let vlsplit lSize vlb =
   if l <= length b
   then Correct(Platform.Bytes.split b l)
   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-
 
 val vlparse: lSize:nat{lSize <= 4} -> vlb:bytes{lSize <= length vlb}
   -> Tot (result (b:bytes{repr_bytes (length b) <= lSize /\ Seq.equal vlb (vlbytes lSize b)}))
@@ -289,7 +285,7 @@ let rec namedGroupsBytes0 groups =
   match groups with
   | [] -> empty_bytes
   | g::gs ->
-    lemma_len_append (namedGroupBytes g) (namedGroupsBytes0 gs);
+    Seq.lemma_len_append (namedGroupBytes g) (namedGroupsBytes0 gs);
     namedGroupBytes g @| namedGroupsBytes0 gs
 #reset-options
 
@@ -319,7 +315,7 @@ let namedGroupsBytes_is_injective
   (groups2: list namedGroup { List.Tot.length groups2 < 65536/2 } )
   (s2: bytes)
 : Lemma
-  (requires (Seq.equal (namedGroupsBytes groups1 @| s1) (namedGroupsBytes groups2 @| s2)))
+  (requires ((namedGroupsBytes groups1 @| s1) == (namedGroupsBytes groups2 @| s2)))
   (ensures (groups1 == groups2 /\ s1 == s2))
 = let gs1 = namedGroupsBytes0 groups1 in
   lemma_repr_bytes_values (length gs1);
@@ -352,8 +348,7 @@ val parseNamedGroups: b:bytes { 2 <= length b /\ length b < 65538 }
   -> Tot (result (groups:list namedGroup{List.Tot.length groups = (length b - 2) / 2}))
 let parseNamedGroups b =
   match vlparse 2 b with
-  | Correct b -> parseNamedGroups0 b []
-  | Error z   ->
-    Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse named groups")
+  | Correct b' -> parseNamedGroups0 b' []
+  | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse named groups")
 
 (* End Module DHFormat *)
