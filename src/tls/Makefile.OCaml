@@ -10,7 +10,7 @@ FLAVOR=OCaml
 EXTENSION=ml
 #Don't extract modules from fstarlib (NOEXTRACT_MODULES)
 #And also some specific ones from mitls that are implemented in C
-EXTRACT='* -Prims -FStar +FStar.Test -CoreCrypto -CryptoTypes -DHDB -LowCProvider -HaclProvider -FFICallbacks -Crypto.AEAD -Crypto.Symmetric -Crypto.Plain -Spec.Loops -Buffer.Utils -C +C.Loops'
+EXTRACT='* -Prims -FStar +FStar.Test -CoreCrypto -CryptoTypes -DHDB -LowCProvider -HaclProvider -FFICallbacks -Crypto.AEAD -Crypto.Symmetric -Crypto.Plain -Spec.Loops -Buffer.Utils -C +C.Loops -BufferBytes'
 include Makefile.common
 ################################################################################
 
@@ -60,6 +60,7 @@ endif
 
 # We must insert PKI.cmx at the right spot in the list of inputs
 MITLS_INPUTS=\
+    $(EXTRACT_DIR)/BufferBytes.cmx \
     $(EXTRACT_DIR)/Crypto_AEAD_Main.cmx \
     $(KREMLIN_HOME)/_build/kremlib/C.cmx \
     $(MLCRYPTO_HOME)/CoreCrypto.cmxa \
@@ -149,6 +150,8 @@ extract/OCaml/AEADProvider.cmx: extract/OCaml/Crypto_AEAD_Main.cmx
 extract/OCaml/Test_Handshake.cmx: extract/OCaml/PKI.cmx
 
 extract/OCaml/PKI.cmx: extract/mlstubs/PKI.ml extract/OCaml/TLSConstants.cmx
+
+extract/OCaml/BufferBytes.cmx: extract/mlstubs/BufferBytes.ml
 
 %.cmx:
 	$(OCAMLOPT) -w -8-11-26-20 -c $< -o $@

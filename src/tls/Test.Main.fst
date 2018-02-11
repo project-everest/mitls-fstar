@@ -32,6 +32,7 @@ let handshake () =
 let main (): St C.exit_code =
   ignore (FStar.Test.dummy ());
   iter [
+    "BufferBytes", BufferBytes.main;
     "TLSConstants", TLSConstants.main;
     "StAE", StAE.main;
     "CommonDH", CommonDH.main;

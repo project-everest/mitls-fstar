@@ -85,7 +85,7 @@ void HeapRegionDestroy(HEAP_REGION rgn);
     
   #define DESTROY_HEAP_REGION(rgn) HeapRegionDestroy(rgn)
   
-  void HeapRegionCreateAndRegister(HEAP_REGION *prgn);
+  void HeapRegionCreateAndRegister(region_entry* pe, HEAP_REGION *prgn);
   void HeapRegionRegister(region_entry* pe, HEAP_REGION rgn);
   void HeapRegionUnregister(region_entry* pe);
   void HeapRegionDestroy(HEAP_REGION rgn);
@@ -95,6 +95,11 @@ void HeapRegionDestroy(HEAP_REGION rgn);
 
 #else
 // Use the single process-wide heap.  All unfreed allocations will be leaked.
+
+#ifndef TRUE
+#include <stdbool.h>
+#define TRUE true
+#endif
 
 #define ENTER_HEAP_REGION(rgn)
 #define LEAVE_HEAP_REGION()
