@@ -1,15 +1,11 @@
 (* This module maintains a injective monotonic map from nonces to ids *)
 module IdNonce
-module HST = FStar.HyperStack.ST //Added automatically
 open TLSConstants
 open FStar.Bytes
 open FStar.Error
 open TLSInfo
 
-module N=Nonce
 module MM = FStar.Monotonic.DependentMap
-
-
 module HS = FStar.HyperStack
 
 //The goal of the rest of the module is to provide id_of_nonce
@@ -21,17 +17,16 @@ type n_id (n:random) = i:id{nonce_of_id i = n}
 let nonce_id_table : MM.t tls_tables_region random n_id (fun x -> True) =
   MM.alloc ()
 
-let id_of_nonce (n:random) (i:n_id n) = HST.witnessed (MM.contains nonce_id_table n i)
+let id_of_nonce (n:random) (i:n_id n) = witnessed (MM.contains nonce_id_table n i)
 
 val insert: n:random -> i:n_id n -> ST unit
   (requires (fun h -> MM.fresh nonce_id_table n h))
   (ensures (fun h0 _ h1 ->
-      let nonce_id_table_as_hsref =  nonce_id_table in
       (HS.modifies (Set.singleton tls_tables_region) h0 h1 /\
-       HS.modifies_ref tls_tables_region (Set.singleton (Heap.addr_of (HH.as_ref (HS.MkRef?.ref nonce_id_table_as_hsref)))) h0 h1 /\
+       HS.modifies_ref tls_tables_region (Set.singleton (HS.as_addr nonce_id_table)) h0 h1 /\
        id_of_nonce n i)))
 let insert n i =
-  HST.recall nonce_id_table;
+  recall nonce_id_table;
   MM.extend nonce_id_table n i
 
 val lookup: n:random -> ST (option (n_id n))
@@ -48,5 +43,5 @@ val injectivity : n:random -> m:random -> i:n_id n -> j:n_id m ->  ST unit
   (requires (fun h -> i=!=j /\ id_of_nonce n i /\ id_of_nonce m j))
   (ensures (fun h0 _ h1 -> n<>m))
 let injectivity n m i j =
-  HST.testify (MM.contains nonce_id_table n i);
-  HST.testify (MM.contains nonce_id_table m j)
+  testify (MM.contains nonce_id_table n i);
+  testify (MM.contains nonce_id_table m j)

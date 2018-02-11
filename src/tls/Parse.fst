@@ -1,7 +1,5 @@
 module Parse
 
-open FStar.HyperStack.All
-
 open FStar.Error
 open TLSError
 open FStar.Bytes
@@ -12,43 +10,12 @@ module ST = FStar.HyperStack.ST
 module B = FStar.Bytes
 
 (** This file should be split in 3 different modules:
-  - Regions: for global table regions
+  - Regions: for global table regions (now in Mem)
   - Format: for generic formatting functions
-  - DHFormat: for (EC)DHE-specific formatting
+  - DHFormat: for (EC)DHE-specific formatting (should go elsewhere)
 *)
 
-
-(** Begin Module Regions *)
-
-//type fresh_subregion r0 r h0 h1 = ST.HS.fresh_region r h0 h1 /\ ST.extends r r0
-
-(** Regions and colors for objects in memory *)
-let tls_color = -1
-let epoch_color = 1
-let hs_color = 2
-
-let is_tls_rgn r   = HS.color r = tls_color
-let is_epoch_rgn r = HS.color r = epoch_color
-let is_hs_rgn r    = HS.color r = hs_color
-
-(*
- * AR: Adding the eternal region predicate.
- * Strengthening the predicate because at some places, the code uses HS.parent.
- *)
-let rgn       = r:HS.rid{r<>HS.root
-                         /\ (forall (s:HS.rid).{:pattern HS.is_eternal_region s} HS.is_above s r ==> HS.is_eternal_region s)}
-let tls_rgn   = r:rgn{is_tls_rgn r}
-let epoch_rgn = r:rgn{is_epoch_rgn r}
-let hs_rgn    = r:rgn{is_hs_rgn r}
-
-let tls_region : tls_rgn = new_colored_region HS.root tls_color
-
-let tls_tables_region : (r:tls_rgn{HS.parent r = tls_region}) =
-    new_region tls_region
-
-
-(** End Module Regions *)
-
+include Mem // temporary, for code opening only TLSConstants
 
 (** Begin Module Format *)
 

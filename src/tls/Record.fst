@@ -19,15 +19,15 @@ open Content
 (* A flag for runtime debugging of record data.
    The F* normalizer will erase debug prints at extraction
    when this flag is set to false. *)
-val discard: bool -> ST unit
+private val discard: bool -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
-let discard _ = ()
-let print s = discard (IO.debug_print_string ("REC| "^s^"\n"))
-unfold val trace: s:string -> ST unit
+private let discard _ = ()
+private let print s = discard (IO.debug_print_string ("REC| "^s^"\n"))
+private unfold val trace: s:string -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
-unfold let trace = if Flags.debug_Record then print else (fun _ -> ())
+private unfold let trace = if Flags.debug_Record then print else (fun _ -> ())
 
 // ------------------------outer packet format -------------------------------
 
@@ -37,33 +37,40 @@ unfold let trace = if Flags.debug_Record then print else (fun _ -> ())
 
 // inline_for_extraction let x = Transport.recv
 
-type header = b:lbytes 5 // for all TLS versions
+private type header = b:lbytes 5 // for all TLS versions
 
-let fake = ctBytes Application_data @| versionBytes TLS_1p2
+private let fake = ctBytes Application_data @| versionBytes TLS_1p2
 
 // this is the outer packet; the *caller* should switch from 1.3 to 1.0 whenever data is encrypted.
+private inline_for_extraction 
+let makeHeader ct plain ver (length:nat {repr_bytes length <= 2}): header =
+  let ct_ver = 
+    if is_pv_13 ver then if plain then 
+      (ctBytes ct @| versionBytes TLS_1p2) 
+    else 
+      fake 
+    else 
+      (ctBytes ct @| versionBytes ver) in
+  ct_ver @| bytes_of_int 2 length 
+
+// used only for testing
 let makePacket ct plain ver (data: b:bytes { repr_bytes (length b) <= 2}) =
-  let header =
-    (if is_pv_13 ver then
-      (if plain then ctBytes ct @| versionBytes TLS_1p2
-       else fake)
-     else (ctBytes ct @| versionBytes ver))
-//      ctBytes ct
-//   @| versionBytes ver
-   @| bytes_of_int 2 (length data) in
-  trace ("record headers: "^print_bytes header);
-  header @| data
+  makeHeader ct plain ver (length data) @| data
 
 let sendPacket tcp ct plain ver (data: b:bytes { repr_bytes (length b) <= 2}) =
   // some margin for progress to avoid intermediate copies
-  let packet = makePacket ct plain ver data in
-  let res = Transport.send tcp (BufferBytes.from_bytes packet) (len packet) in
-  if Int32.v res = Bytes.length packet then Correct()
-  else Error(Printf.sprintf "Transport.send returned %l" res)
+  let header = makeHeader ct plain ver (length data) in 
+  trace ("record headers: "^print_bytes header);
+  let res = Transport.send tcp (BufferBytes.from_bytes header) 5ul in
+  if res = 5l then 
+    let res = Transport.send tcp (BufferBytes.from_bytes data) (len data) in
+    if Int32.v res = length data
+    then Correct()
+    else Error(Printf.sprintf "Transport.send returned %l" res)
+  else   Error(Printf.sprintf "Transport.send returned %l" res)
 
 
-
-val parseHeader: h5:header -> Tot (result (contentType
+private val parseHeader: h5:header -> Tot (result (contentType
                                          * protocolVersion
                                          * l:nat { l <= max_TLSCiphertext_fragment_length}))
 let parseHeader (h5:header) =
@@ -82,6 +89,7 @@ let parseHeader (h5:header) =
           then Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Wrong fragment length")
           else correct(ct,pv,len)
 
+(*
 // hopefully we only care about the writer, not the cn state
 // the postcondition is of the form
 //   authId i ==> f is added to the writer log
@@ -96,7 +104,7 @@ let recordPacketOut (i:StatefulLHAE.id) (wr:StatefulLHAE.writer i) (pv: protocol
         StatefulLHAE.encrypt #i wr ad rg f
     in
     makePacket ct (PlaintextID? i) pv payload
-
+*)
 
 (*** networking (floating) ***)
 
@@ -122,11 +130,11 @@ type input_state = {
   pos: ref (len:UInt32.t {len <=^ maxlen});
   b: input_buffer }
 
-let parseHeaderBuffer (b: Buffer.buffer UInt8.t {Buffer.length b = 5}) =
+private let parseHeaderBuffer (b: Buffer.buffer UInt8.t {Buffer.length b = 5}) =
   // some margin for progress
   parseHeader (BufferBytes.to_bytes 5 b)
 
-let waiting_len (s: input_state) =
+private let waiting_len (s: input_state) =
   if !s.pos <^ 5ul
   then 5ul -^ !s.pos
   else

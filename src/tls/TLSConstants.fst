@@ -10,26 +10,23 @@ module TLSConstants
 
 #set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1"
 
-//NS, JP: TODO, this include should eventually move to TLSMem, when that module exists
-include FStar.HyperStack.All
-
-let type_of (#a : Type) (x : a) : Type = a
-
-(* Start Hacks *)
-// assume val empty_bytes : FStar.Bytes.lbytes 0
-(* End Hacks *)
-open FStar.String
+open FStar.String // avoid? must occur before Bytes
 open FStar.Seq
 open FStar.Date
 open FStar.Bytes
 open FStar.Error
 open TLSError
-//open CoreCrypto // avoid?!
+
+//NS, JP: TODO, this include should eventually move to TLSMem, when that module exists
+//CF it exists: Mem.fst on verify, but not with this include.
+include FStar.HyperStack.All
+include Parse 
+// carving out basic formatting code to break a dependency.
 
 
-module HS = FStar.HyperStack
+(*! Fresh library-like functions; relocate? *)
 
-include Parse // carving out basic formatting code to break a dependency.
+let type_of (#a : Type) (x : a) : Type = a
 
 let rec fold_string (#a:Type)
                     (f: a -> string)
@@ -94,6 +91,7 @@ let rec forall_aux (#a:Type) (#b:Type) (env:b) (f: b -> a -> Tot bool) (l:list a
     | hd::tl -> if f env hd then forall_aux env f tl else false
 
 let mem_rev (#a:eqtype) (l:list a) (x:a) = List.Tot.mem x l
+
 (** Polarity for reading and writing *)
 type rw =
   | Reader
@@ -120,6 +118,7 @@ type protocolVersion' =
 
 type protocolVersion = pv:protocolVersion'{~(UnknownVersion? pv)}
 
+// aka TLS_1p3?
 let is_pv_13 = function
   | TLS_1p3 -> true
   | _ -> false
@@ -842,7 +841,7 @@ val inverse_cipherSuite: x:cipherSuite -> Lemma
   // parse (bytes (Unknown 0 0)) = NullCiphersuite
   // must exclude this case...
   (ensures (let y = cipherSuiteBytesOpt x in
-  (Some? y ==> parseCipherSuiteAux (Some?.v y) = Correct x)))
+    (Some? y ==> parseCipherSuiteAux (Some?.v y) = Correct x)))
   [SMTPat (parseCipherSuiteAux (Some?.v (cipherSuiteBytesOpt x)))]
 let inverse_cipherSuite x = ()
 
@@ -879,7 +878,7 @@ let rec parseCipherSuites b =
     match parseCipherSuites b1 with
       | Correct(css) ->
   (match parseCipherSuite b0 with
-   | Error z ->	Correct css
+   | Error z ->    Correct css
    | Correct cs -> Correct (cs::css))
       | Error z -> Error z
   else
