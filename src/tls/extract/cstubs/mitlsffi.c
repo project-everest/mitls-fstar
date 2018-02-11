@@ -112,7 +112,7 @@ int MITLS_CALLCONV FFI_mitls_init(void)
     if (GetEnvironmentVariableA("MITLS_LOG", NULL, 0) == 0) {
         g_LogPrint = (p_log)DbgPrint; // if not set, log to the debugger by default
     } else {
-        g_LogPrint = printf;
+        g_LogPrint = (p_log)printf;
     }
     #endif
   #endif
@@ -124,7 +124,7 @@ int MITLS_CALLCONV FFI_mitls_init(void)
   if (getenv("MITLS_LOG") == NULL) {
     g_LogPrint = NoPrintf; // default to no logging
   } else {
-    g_LogPrint = printf;
+    g_LogPrint = (p_log)printf;
   }
   #endif
 #endif
@@ -914,6 +914,7 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
       st->cfg = FFI_ffiSetCertCallbacks(st->cfg, cb);
     }
 
+    LOCK_MUTEX(&lock);
     if(cfg->is_server) {
       st->cxn = QUIC_ffiAcceptConnected(st, quic_send, quic_recv, st->cfg);
     } else {
@@ -932,6 +933,7 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
 
       st->cxn = QUIC_ffiConnect((FStar_Dyn_dyn)st, quic_send, quic_recv, st->cfg, ticket);
     }
+    UNLOCK_MUTEX(&lock);
 
     LEAVE_HEAP_REGION();
     st->rgn = rgn;
