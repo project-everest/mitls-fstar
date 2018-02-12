@@ -67,3 +67,4 @@ cmitls.exe: cmitls.c \
 
 test: cmitls.exe
 	./cmitls.exe google.com 443
+	./cmitls.exe tls13.cloudflare.com 443
