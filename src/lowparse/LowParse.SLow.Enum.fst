@@ -238,3 +238,24 @@ let serialize32_maybe_enum_key_gen
     | Known k -> f k
     | Unknown r -> s32 r
    ) <: (r: bytes32 { serializer32_correct (serialize_maybe_enum_key p s e) input r } ))
+
+inline_for_extraction
+let serialize32_maybe_enum_key_gen'
+  (#k: parser_kind)
+  (#key #repr: eqtype)
+  (#p: parser k repr)
+  (#s: serializer p)
+  (s32: serializer32 s)
+  (e: enum key repr)
+  (#k' : parser_kind)
+  (#p' : parser k' (maybe_enum_key e))
+  (s' : serializer p')
+  (u: unit {
+    k == k' /\
+    p' == parse_maybe_enum_key p e /\
+    s' == serialize_maybe_enum_key p s e
+  })
+  (f: enum_repr_of_key'_t e)
+: Tot (serializer32 s')
+= serialize32_maybe_enum_key_gen s32 e
+    (serialize32_enum_key_gen s32 e f)
