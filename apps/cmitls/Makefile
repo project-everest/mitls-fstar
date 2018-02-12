@@ -30,7 +30,7 @@ else ifeq ($(UNAME),Darwin)
 else ifeq ($(UNAME),Linux)
   LIBMITLS=libmitls.so
   LIBPKI=libmipki.so
-  PIC=-fPIC
+  PIC=-fPIC -lpthread
   WINSOCK=
   LD_LIBRARY_PATH := $(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/extract/Kremlin-Library:$(MLCRYPTO_HOME)/openssl:$(LD_LIBRARY_PATH)
   export LD_LIBRARY_PATH
@@ -59,11 +59,12 @@ $(LIBPKI): $(MITLS_HOME)/src/pki/$(LIBPKI)
 cmitls.exe: cmitls.c \
 	$(MITLS_HOME)/src/pki/$(LIBPKI) \
 	$(MITLS_HOME)/src/tls/extract/Kremlin-Library/$(LIBMITLS)
-	$(CC) $(PIC) -I../../src/pki -I../../libs/ffi \
+	$(CC) -I../../src/pki -I../../libs/ffi \
 	  -L$(MITLS_HOME)/src/pki \
 	  -L$(MITLS_HOME)/src/tls/extract/Kremlin-Library \
 	  -L$(MLCRYPTO_HOME)/openssl \
-	  -lmitls -lmipki cmitls.c -o cmitls.exe $(WINSOCK)
+	  -lmitls -lmipki $(PIC) cmitls.c -o cmitls.exe $(WINSOCK)
 
 test: cmitls.exe
 	./cmitls.exe google.com 443
+	./cmitls.exe tls13.cloudflare.com 443
