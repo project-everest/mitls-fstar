@@ -45,3 +45,6 @@ verify-all: $(addsuffix .checked, $(LOWPARSE_FILES))
 verify-spec: $(addsuffix .checked, $(LOWPARSE_SPEC_FILES))
 
 verify-slow: $(addsuffix .checked, $(LOWPARSE_SLOW_FILES))
+
+extract-c: LowParseExample.fst.checked
+	$(KREMLIN_HOME)/krml -skip-linking -bundle 'LowParse.*' -bundle LowParseExample.Aux -drop 'FStar.Tactics.*' -drop 'FStar.Reflection.*' LowParseExample.fst
