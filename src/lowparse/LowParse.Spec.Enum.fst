@@ -3,8 +3,9 @@ include LowParse.Spec.Combinators
 
 module L = FStar.List.Tot
 
-unfold
-let eqtype : Type u#1 = eqtype u#0
+inline_for_extraction
+let eqtype : Type u#1 = (t: Type0 { hasEq t } )
+// eqtype u#0 // does not extract to OCaml
 
 type enum (key: eqtype) (repr: eqtype) = (l: list (key * repr) {
   L.noRepeats (L.map fst l) /\
