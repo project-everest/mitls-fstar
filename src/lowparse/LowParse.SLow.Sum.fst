@@ -33,37 +33,37 @@ let parse32_sum_gen
   <: (res: option (sum_type t * U32.t) { parser32_correct (parse_sum t p pc) input res } )
   )
 
-(*
-module Seq = FStar.Seq
+#reset-options
 
-#set-options "--z3rlimit 32"
+let serializer32_sum_gen_precond
+  (kt: parser_kind)
+  (k: parser_kind)
+: GTot Type0
+= kt.parser_kind_subkind == Some ParserStrong /\
+  Some? kt.parser_kind_high /\
+  Some? k.parser_kind_high /\ (
+  let (Some vt) = kt.parser_kind_high in
+  let (Some v) = k.parser_kind_high in
+  vt + v < 4294967296
+  )
 
-let parse32_sum_gen_correct
+inline_for_extraction
+let serialize32_sum_gen
   (#kt: parser_kind)
   (t: sum)
   (#p: parser kt (sum_repr_type t))
-  (p32: parser32 (parse_enum_key p (sum_enum t)))
+  (#s: serializer p)
+  (s32: serializer32 (serialize_enum_key _ s (sum_enum t)))
   (#k: parser_kind)
   (#pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
-  (pc32: ((x: sum_key t) -> Tot (parser32 (pc x))))
-  (input: bytes32)
-: Lemma
-  (parser32_correct (parse_sum t p pc) input (parse32_sum_gen' t p32 pc32 input))
-=  match p32 input with
-  | Some (tg, consumed_tg) ->
-    assert (parse (parse_enum_key p (sum_enum t)) (B32.reveal input) == Some (tg, U32.v consumed_tg));
-    let input' = b32slice input consumed_tg (B32.len input) in
-    assert (B32.reveal input' == Seq.slice (B32.reveal input) (U32.v consumed_tg) (B32.length input));
-    let ptg : parser k (refine_with_tag (sum_tag_of_data t) tg) = pc tg in
-    begin match pc32 tg input' with
-    | Some (d, consumed_d) ->
-      assert (parse ptg (B32.reveal input') == Some (d, U32.v consumed_d));
-      // FIXME: implicit arguments are not inferred because (synth_tagged_union_data ...) is Tot instead of GTot
-      assert (parse (parse_synth #_ #_ #(sum_type t) ptg  (synth_tagged_union_data (sum_tag_of_data t) tg)) (B32.reveal input') == Some (d, U32.v consumed_d));
-      ()
-    | None -> 
-      assert (parse ptg (B32.reveal input') == None);
-      ()
-    end
-  | None -> ()
-
+  (#sc: ((x: sum_key t) -> Tot (serializer (pc x))))
+  (sc32: ((x: sum_key t) -> Tot (serializer32 (sc x))))
+  (u: unit { serializer32_sum_gen_precond kt k } )
+  (tag_of_data: ((x: sum_type t) -> Tot (y: sum_key_type t { y == sum_tag_of_data t x} )))
+: Tot (serializer32 (serialize_sum t s sc))
+= fun (input: sum_type t) -> ((
+    let tg = tag_of_data input in
+    let stg = s32 tg in
+    let s = sc32 tg input in
+    b32append stg s
+  ) <: (res: bytes32 { serializer32_correct (serialize_sum t s sc) input res } ))
