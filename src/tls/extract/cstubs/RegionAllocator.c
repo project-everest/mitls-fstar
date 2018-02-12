@@ -9,7 +9,12 @@
 #endif
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #define IS_WINDOWS 1
-#include <windows.h>
+  #ifdef _KERNEL_MODE
+    #include <nt.h>
+    #include <ntrtl.h>
+  #else
+    #include <windows.h>
+  #endif
 #else
 #define IS_WINDOWS 0
 #include <pthread.h>
@@ -393,7 +398,7 @@ region g_global_region; // All allocations made at global scope go here
 
 // Global initialization
 // returns 0 for error, nonzero for success
-int HeapRegionInitialize(HEAP_REGION *prgn)
+int HeapRegionInitialize()
 {
     InitializeListHead(&g_mapping_list);
     ExInitializeFastMutex(&g_mapping_lock);
@@ -418,7 +423,7 @@ void HeapRegionDestroy(HEAP_REGION rgn)
     PrintRegionStatistics(rgn, &g_global_region.stats);
     // Free all of the entries in the linked-list
     while (!IsListEmpty(&heap->entries)) {
-        LIST_ENTRY *a = RemoveHeadList(heap);
+        LIST_ENTRY *a = RemoveHeadList(&heap->entries);
         ExFreePoolWithTag(a, MITLS_TAG);
     }
     if (rgn != &g_global_region) {
@@ -428,13 +433,17 @@ void HeapRegionDestroy(HEAP_REGION rgn)
 }
 
 // Associate the current thread ID with the region
-void HeapRegionRegister(region_entry* pe, HEAP_REGION rgn)
+void HeapRegionCreateAndRegister(region_entry* pe, HEAP_REGION *prgn)
 {
-    pe->id = PsGetCurrentThread();
-    pe->region = rgn;
-    ExAcquireFastMutex(&g_mapping_lock);
-    InsertHeadList(&g_mappingList, &pe->entry);
-    ExReleaseFastMutex(&g_mapping_lock);    
+    region *rgn = (region*)ExAllocatePoolWithTag(PagedPool, sizeof(region), MITLS_TAG);
+    if (rgn) {
+        pe->id = PsGetCurrentThread();
+        pe->region = rgn;
+        ExAcquireFastMutex(&g_mapping_lock);
+        InsertHeadList(&g_mapping_list, &pe->entry);
+        ExReleaseFastMutex(&g_mapping_lock);
+    }
+    *prgn = rgn;
 }
 
 // Find the region for this thread ID, or return NULL for
@@ -445,7 +454,7 @@ LIST_ENTRY *HeapRegionFind(void)
     LIST_ENTRY *p = g_mapping_list.Flink;
     while (p != &g_mapping_list) {
         region_entry *r = CONTAINING_RECORD(p, region_entry, entry);
-        if (r->id == GetCurrentThreadId()) {
+        if (r->id == PsGetCurrentThread()) {
             ExReleaseFastMutex(&g_mapping_lock);
             return r->region;
         }
@@ -478,7 +487,7 @@ void* HeapRegionMalloc(size_t cb)
     if (actual_cb < cb) {
         return NULL; // Integer overflow
     }
-    void *pv = ExAllocatePoolWithTag(PAGED_POOL, actual_cb, MITLS_TAG);
+    void *pv = ExAllocatePoolWithTag(PagedPool, actual_cb, MITLS_TAG);
     if (pv) {
         region_allocation *e = (region_allocation*)pv;
 #if REGION_STATISTICS
@@ -488,9 +497,9 @@ void* HeapRegionMalloc(size_t cb)
         if (heap == NULL) {
             KIRQL OldIrql;
             KeAcquireSpinLock(&global_region_lock, &OldIrql);
-            InsertHeadList(&g_global_region, &e->entry);
+            InsertHeadList(&g_global_region.entries, &e->entry);
             UpdateStatisticsAfterMalloc(&g_global_region.stats, pv, cb);
-            KeReleaseSpinLock((&global_region_lock, OldIrql);
+            KeReleaseSpinLock(&global_region_lock, OldIrql);
         } else {
             InsertHeadList(heap, &e->entry);
             UpdateStatisticsAfterMalloc(&heap->stats, pv, cb);
@@ -528,11 +537,11 @@ void HeapRegionFree(void* pv)
     if (heap == NULL) {
         KIRQL OldIrql;
         KeAcquireSpinLock(&global_region_lock, &OldIrql);
-        RemoveEntryList(e);
+        RemoveEntryList(&e->entry);
         UpdateStatisticsAfterFree(&g_global_region.stats, e->cb);
-        KeReleaseSpinLock((&global_region_lock, OldIrql);
+        KeReleaseSpinLock((global_region_lock, OldIrql);
     } else {
-        RemoveEntryList(e);
+        RemoveEntryList(&e->entry);
         UpdateStatisticsAfterFree(&heap->stats, e->cb);
     }
     ExFreePoolWithTag(e, MITLS_TAG);
