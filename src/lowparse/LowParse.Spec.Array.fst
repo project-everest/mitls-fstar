@@ -165,11 +165,12 @@ val parse_total_constant_size_elem_parse_array_total'
     Some? (parse (parse_array' p array_byte_size precond) b)
   ))
 
-#set-options "--z3rlimit 16"
+#reset-options "--z3rlimit 64 --z3cliopt smt.arith.nl=false"
 
 let parse_total_constant_size_elem_parse_array_total' #k #t p array_byte_size precond b =
   let b' = Seq.slice b 0 array_byte_size in
-  parse_total_constant_size_elem_parse_list_total p b'
+  parse_total_constant_size_elem_parse_list_total p b' ;
+  assert (Some? (parse (parse_fldata (parse_list p) array_byte_size) b))
 
 #reset-options
 
