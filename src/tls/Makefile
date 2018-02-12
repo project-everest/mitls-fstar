@@ -24,7 +24,10 @@ quic-%:
 test: kremlin-test ocaml-test quic-test
 
 clean: kremlin-clean ocaml-clean quic-clean
-	rm -rf extract/OCaml extract/Kremlin extract/Kremlin-{Internal-Test,Library}/{,*/}*.{c,h,o}
+	rm -rf $(EXTRACT_DIR)/Kremlin $(EXTRACT_DIR)/OCaml $(EXTRACT_DIR)/copied \
+	$(EXTRACT_DIR)/Kremlin-{Internal-Test,Library}/{,*/}*.{c,h,o} \
+	.depend.$(FLAVOR) *.checked.lax 
+
 
 %.fst-in %.fsti-in:
 	@echo $(addprefix --include , $(INCLUDE_PATHS)) --cache_checked_modules --lax
