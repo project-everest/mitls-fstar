@@ -52,7 +52,7 @@ let rgn = r:HS.rid{r =!= HS.root /\ is_eternal_region r /\ witnessed (region_con
 
 // just for illustration purpose
 private let lemma_derive_eternal_for_regions_above (m:mem) (r:rgn{m `live_region` r})
-  :Lemma (forall (s:HS.rid). HS.is_above s r ==> HS.is_eternal_region s)
+  :Lemma (forall (s:HS.rid). HS.is_above s r ==> is_eternal_region s)
   = ()
 
 let tls_rgn   = r:rgn {is_tls_rgn r}
