@@ -7,6 +7,16 @@ inline_for_extraction
 let refine_with_tag (#tag_t: Type0) (#data_t: Type0) (tag_of_data: (data_t -> GTot tag_t)) (x: tag_t) : Tot Type0 =
   (y: data_t { tag_of_data y == x } )
 
+inline_for_extraction
+let synth_tagged_union_data
+  (#tag_t: Type0)
+  (#data_t: Type0)
+  (tag_of_data: (data_t -> GTot tag_t))
+  (tg: tag_t)
+  (x: refine_with_tag tag_of_data tg)
+: Tot data_t
+= x
+
 val parse_tagged_union
   (#kt: parser_kind)
   (#tag_t: Type0)
@@ -19,9 +29,7 @@ val parse_tagged_union
 
 let parse_tagged_union #kt #tag_t pt #data_t tag_of_data #k p =
   pt `and_then` (fun (tg: tag_t) ->
-    let ptg : parser k (refine_with_tag tag_of_data tg) = p tg in
-    let synth : refine_with_tag tag_of_data tg -> Tot data_t = fun x -> x in
-    parse_synth #k #(refine_with_tag tag_of_data tg) ptg synth
+    parse_synth #k #(refine_with_tag tag_of_data tg) (p tg) (synth_tagged_union_data tag_of_data tg)
   )
 
 let bare_serialize_tagged_union

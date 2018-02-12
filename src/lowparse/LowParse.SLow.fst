@@ -9,3 +9,4 @@ include LowParse.SLow.Array
 include LowParse.SLow.Bytes
 include LowParse.SLow.Enum
 include LowParse.SLow.Tac.Enum
+include LowParse.SLow.Sum
