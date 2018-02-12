@@ -914,23 +914,3 @@ let serialize_filter
 let cond_true (cond: bool) : Tot Type0 = (u: unit { cond == true } )
 
 let cond_false (cond: bool) : Tot Type0 = (u: unit { cond == false } )
-
-let if_combinator
-  (t: Type0)
-: Tot Type0
-= (cond: bool) ->
-  (sv_true: (cond_true cond -> Tot t)) ->
-  (sv_false: (cond_false cond -> Tot t)) ->
-  Tot t
-
-inline_for_extraction
-let default_if
-  (t: Type0)
-: Tot (if_combinator t)
-= fun
-  (cond: bool)
-  (s_true: (cond_true cond -> Tot t))
-  (s_false: (cond_false cond -> Tot t))
--> if cond
-  then s_true ()
-  else s_false ()

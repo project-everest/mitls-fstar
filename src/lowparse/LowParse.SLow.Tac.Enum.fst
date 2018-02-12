@@ -59,6 +59,25 @@ let rec enum_repr_of_key_tac
   exact_guard (return g)
 
 noextract
+let parse32_maybe_enum_key_tac'
+  (#k: parser_kind)
+  (#key #repr: eqtype)
+  (#p: parser k repr)
+  (p32: parser32 p)
+  (e: enum key repr { Cons? e } )
+  (#k' : parser_kind)
+  (p' : parser k' (maybe_enum_key e))
+  (u: unit {
+    k' == k /\
+    p' == parse_maybe_enum_key p e
+  })
+: Tot (T.tactic T.term)
+= let open T in
+  ar <-- maybe_enum_key_of_repr_tac' e ;
+  fu <-- quote (parse32_maybe_enum_key_gen #k #key #repr #p p32 e #k' p' u);
+  (return (mk_app fu [ar, Q_Explicit]))
+
+noextract
 let parse32_maybe_enum_key_tac
   (#k: parser_kind)
   (#key #repr: eqtype)
@@ -73,9 +92,110 @@ let parse32_maybe_enum_key_tac
   })
 : Tot (T.tactic unit)
 = let open T in
-  ar <-- maybe_enum_key_of_repr_tac' e ;
-  fu <-- quote (parse32_maybe_enum_key_gen' #k #key #repr #p p32 e #k' p' u);
-  exact_guard (return (mk_app fu [ar, Q_Explicit]))
+  f <-- parse32_maybe_enum_key_tac' p32 e p' u ;
+  exact_guard (return f)
+
+noextract
+let parse32_enum_key_tac'
+  (#k: parser_kind)
+  (#key #repr: eqtype)
+  (#p: parser k repr)
+  (p32: parser32 p)
+  (e: enum key repr { Cons? e } )
+  (#k' : parser_kind)
+  (p' : parser k' (enum_key e))
+  (u: unit {
+    k' == parse_filter_kind k /\
+    p' == parse_enum_key p e
+  })
+: Tot (T.tactic T.term)
+= let open T in
+  ar <-- parse32_maybe_enum_key_tac' p32 e (parse_maybe_enum_key p e) () ;
+  fu <-- quote (parse32_enum_key_gen #k #key #repr p e #k' p' u) ;
+  return (mk_app fu [ar, Q_Explicit])
+
+noextract
+let parse32_enum_key_tac
+  (#k: parser_kind)
+  (#key #repr: eqtype)
+  (#p: parser k repr)
+  (p32: parser32 p)
+  (e: enum key repr { Cons? e } )
+  (#k' : parser_kind)
+  (p' : parser k' (enum_key e))
+  (u: unit {
+    k' == parse_filter_kind k /\
+    p' == parse_enum_key p e
+  })
+: Tot (T.tactic unit)
+= let open T in
+  f <-- parse32_enum_key_tac' p32 e p' u ;
+  exact_guard (return f)
+
+inline_for_extraction
+let serialize32_enum_key_gen_tac'
+  (#k: parser_kind)
+  (#key #repr: eqtype)
+  (#p: parser k repr)
+  (#s: serializer p)
+  (s32: serializer32 s)
+  (e: enum key repr { Cons? e } )
+  (#k' : parser_kind)
+  (#p' : parser k' (enum_key e))
+  (s' : serializer p')
+  (u: unit {
+    k' == parse_filter_kind k /\
+    p' == parse_enum_key p e /\
+    s' == serialize_enum_key p s e
+  })
+: Tot (T.tactic T.term)
+= let open T in
+  ar <-- enum_repr_of_key_tac' e ;
+  fu <-- quote (serialize32_enum_key_gen #k #key #repr #p #s s32 e #k' #p' s' u) ;
+  return (mk_app fu [ar, Q_Explicit])
+
+inline_for_extraction
+let serialize32_enum_key_gen_tac
+  (#k: parser_kind)
+  (#key #repr: eqtype)
+  (#p: parser k repr)
+  (#s: serializer p)
+  (s32: serializer32 s)
+  (e: enum key repr { Cons? e } )
+  (#k' : parser_kind)
+  (#p' : parser k' (enum_key e))
+  (s' : serializer p')
+  (u: unit {
+    k' == parse_filter_kind k /\
+    p' == parse_enum_key p e /\
+    s' == serialize_enum_key p s e
+  })
+: Tot (T.tactic unit)
+= let open T in
+  f <-- serialize32_enum_key_gen_tac' s32 e s' u ;
+  exact_guard (return f)
+
+noextract
+let serialize32_maybe_enum_key_tac'
+  (#k: parser_kind)
+  (#key #repr: eqtype)
+  (#p: parser k repr)
+  (#s: serializer p)
+  (s32: serializer32 s)
+  (e: enum key repr { Cons? e } )
+  (#k' : parser_kind)
+  (#p' : parser k' (maybe_enum_key e))
+  (s' : serializer p')
+  (u: unit {
+    k == k' /\
+    p' == parse_maybe_enum_key p e /\
+    s' == serialize_maybe_enum_key p s e
+  })
+: Tot (T.tactic T.term)
+= let open T in
+  ar <-- enum_repr_of_key_tac' e ;
+  fu <-- quote (serialize32_maybe_enum_key_gen #k #key #repr #p #s s32 e #k' #p' s' u) ;
+   (return (mk_app fu [ar, Q_Explicit]))
 
 noextract
 let serialize32_maybe_enum_key_tac
@@ -95,6 +215,5 @@ let serialize32_maybe_enum_key_tac
   })
 : Tot (T.tactic unit)
 = let open T in
-  ar <-- enum_repr_of_key_tac' e ;
-  fu <-- quote (serialize32_maybe_enum_key_gen' #k #key #repr #p #s s32 e #k' #p' s' u) ;
-  exact_guard (return (mk_app fu [ar, Q_Explicit]))
+  f <-- serialize32_maybe_enum_key_tac' s32 e s' u ;
+  exact_guard (return f)
