@@ -376,7 +376,7 @@ static Prims_list__FStar_Bytes_bytes* wrapped_format(FStar_Dyn_dyn cbs, FStar_Dy
 {
   wrapped_cert_cb* s = (wrapped_cert_cb*)cbs;
   char *buffer = KRML_HOST_MALLOC(MAX_CHAIN_LEN);
-  size_t r = s->format(s->cb_state, (const void *)cert, buffer);
+  size_t r = s->format(s->cb_state, (const void *)(size_t)cert, buffer);
   FStar_Bytes_bytes b = {.length = r, .data = buffer};
   return FFI_ffiSplitChain(b);
 }
@@ -391,7 +391,7 @@ static FStar_Pervasives_Native_option__FStar_Bytes_bytes wrapped_sign(
   FStar_Pervasives_Native_option__FStar_Bytes_bytes res = {.tag = FStar_Pervasives_Native_None};
   mitls_signature_scheme sigalg = pki_of_tls(sa.tag);
 
-  size_t slen = s->sign(s->cb_state, (const void *)cert, sigalg, tbs.data, tbs.length, sig);
+  size_t slen = s->sign(s->cb_state, (const void *)(size_t)cert, sigalg, tbs.data, tbs.length, sig);
 
   if(slen > 0) {
     res.tag = FStar_Pervasives_Native_Some;
@@ -799,6 +799,37 @@ static Prims_list__uint32_t *alloc_version_list(const uint32_t *list, size_t len
   return result;
 }
 
+#ifdef _KERNEL_MODE
+typedef struct {
+    quic_config *cfg;
+    quic_state* st;
+} quic_create_state;
+
+void quic_create_callout(PVOID Parameter)
+{
+    quic_create_state *s = (quic_create_state*)Parameter;
+    
+    if(s->cfg->is_server) {
+      s->st->cxn = QUIC_ffiAcceptConnected(s->st, quic_send, quic_recv, s->st->cfg);
+    } else {
+      FStar_Pervasives_Native_option__K___FStar_Bytes_bytes_FStar_Bytes_bytes ticket;
+
+      if(s->cfg->server_ticket && s->cfg->server_ticket->ticket_len > 0) {
+          ticket.tag = FStar_Pervasives_Native_Some;
+
+          // BUGBUG: Handle OOM
+          MakeFStar_Bytes_bytes(&ticket.v.fst, s->cfg->server_ticket->ticket, s->cfg->server_ticket->ticket_len);
+          MakeFStar_Bytes_bytes(&ticket.v.snd, s->cfg->server_ticket->session, s->cfg->server_ticket->session_len);
+      }
+      else {
+          ticket.tag = FStar_Pervasives_Native_None;
+      }
+
+      s->st->cxn = QUIC_ffiConnect((FStar_Dyn_dyn)s->st, quic_send, quic_recv, s->st->cfg, ticket);
+    }
+}
+#endif
+
 int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_config *cfg, /* out */ char **errmsg)
 {
     *errmsg = NULL;
@@ -914,7 +945,16 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
       st->cfg = FFI_ffiSetCertCallbacks(st->cfg, cb);
     }
 
-    LOCK_MUTEX(&lock);
+#ifdef _KERNEL_MODE
+    // A call to QUIC_ffiConnect() may consume 0x2400 bytes.
+    quic_create_state s = {.cfg = cfg, .st = st };
+    NTSTATUS status = KeExpandKernelStackAndCallout(quic_create_callout, &s, MAXIMUM_EXPANSION_SIZE);
+    if (!NT_SUCCESS(status)) {
+        KRML_HOST_PRINTF("KeExpandKernelCallstackAndCallout for quic_create_callout failed st=%x", status);
+        LEAVE_HEAP_REGION();
+        return 0;
+    }
+#else
     if(cfg->is_server) {
       st->cxn = QUIC_ffiAcceptConnected(st, quic_send, quic_recv, st->cfg);
     } else {
@@ -933,13 +973,27 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
 
       st->cxn = QUIC_ffiConnect((FStar_Dyn_dyn)st, quic_send, quic_recv, st->cfg, ticket);
     }
-    UNLOCK_MUTEX(&lock);
+#endif    
 
     LEAVE_HEAP_REGION();
     st->rgn = rgn;
     *state = st;
     return 1;
 }
+
+#ifdef _KERNEL_MODE
+typedef struct {
+    quic_state *state;
+    QUIC_result r;
+} quic_process_state;
+
+VOID quic_process_callout(PVOID Parameter)
+{
+    quic_process_state *s = (quic_process_state*)Parameter;
+    
+    s->r = QUIC_recv(s->state->cxn);
+}
+#endif
 
 quic_result MITLS_CALLCONV FFI_mitls_quic_process(
   /* in */ quic_state *state,
@@ -962,7 +1016,18 @@ quic_result MITLS_CALLCONV FFI_mitls_quic_process(
     state->out_buffer_used = 0;
     state->out_buffer_size = *pOutBufLen;
 
+#ifdef _KERNEL_MODE
+    // A call to QUIC_recv() may consume 0x4b00 bytes.
+    quic_process_state s = {.state = state, .r = TLS_error_other };
+    NTSTATUS status = KeExpandKernelStackAndCallout(quic_process_callout, &s, MAXIMUM_EXPANSION_SIZE);
+    QUIC_result r = s.r;
+    if (!NT_SUCCESS(status)) {
+        KRML_HOST_PRINTF("KeExpandKernelCallstackAndCallout for quic_process_callout failed st=%x", status);
+        r.code = TLS_error_other;
+    }
+#else
     QUIC_result r = QUIC_recv(state->cxn);
+#endif
 
     if ((int)r.code <= (int)TLS_server_complete) {
         ret = (quic_result) r.code;
