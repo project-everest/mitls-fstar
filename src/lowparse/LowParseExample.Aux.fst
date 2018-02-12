@@ -88,12 +88,12 @@ let parse_t : LP.parser _ t =
 
 inline_for_extraction
 let parse32_t
-: LP.parser32 (LP.parse_sum t_sum LP.parse_u8 parse_cases)
+: LP.parser32 parse_t
 = FStar.Tactics.synth_by_tactic
     (LP.parse32_sum_tac
       t_sum
       LP.parse32_u8
       parse32_cases
-      (LP.parse_sum t_sum LP.parse_u8 parse_cases) // parse_t
+      parse_t
       ()
     )

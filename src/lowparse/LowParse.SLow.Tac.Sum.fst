@@ -41,10 +41,12 @@ let parse32_sum_tac'
   (#pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
   (pc32: ((x: sum_key t) -> Tot (parser32 (pc x))))
   (#k' : parser_kind)
-  (p' : parser k' (sum_type t))
+  (#t' : Type0)
+  (p' : parser k' t')
   (u: unit {
     Cons? (sum_enum t) /\
     k' == and_then_kind (parse_filter_kind kt) k /\
+    t' == sum_type t /\
     p' == parse_sum t p pc
   })
 : Tot (T.tactic T.term)
@@ -66,7 +68,8 @@ let parse32_sum_tac'
       #k
       #pc
       pc32
-      k'
+      #k'
+      #t'
       p'
       ()
   ) ;
@@ -85,10 +88,12 @@ let parse32_sum_tac
   (#pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
   (pc32: ((x: sum_key t) -> Tot (parser32 (pc x))))
   (#k' : parser_kind)
-  (p' : parser k' (sum_type t))
+  (#t' : Type0)
+  (p' : parser k' t')
   (u: unit {
     Cons? (sum_enum t) /\
     k' == and_then_kind (parse_filter_kind kt) k /\
+    t' == sum_type t /\
     p' == parse_sum t p pc
   })
 : Tot (T.tactic unit)

@@ -199,10 +199,12 @@ let parse32_sum_gen
   (#k: parser_kind)
   (#pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
   (pc32: ((x: sum_key t) -> Tot (parser32 (pc x))))
-  (k' : parser_kind)
-  (p' : parser k' (sum_type t))
+  (#k' : parser_kind)
+  (#t' : Type0)
+  (p' : parser k' t')
   (u: unit {
     k' == and_then_kind (parse_filter_kind kt) k /\
+    t' == sum_type t /\
     p' == parse_sum t p pc
   })
   (p32: parser32 (parse_enum_key p (sum_enum t)))
