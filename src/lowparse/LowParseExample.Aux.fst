@@ -18,8 +18,8 @@ inline_for_extraction
 let case_enum : LP.enum cases U8.t =
   [@inline_let]
   let e : list (cases * U8.t) = [
-    Case_A, 0uy;
-    Case_B, 1uy;
+    Case_A, 18uy;
+    Case_B, 42uy;
   ]
   in
   [@inline_let]
@@ -39,19 +39,26 @@ let cases_of_t
 
 inline_for_extraction
 let t_sum
-= // LP.make_sum case_enum cases_of_t
-  LP.Sum _ _ case_enum _ cases_of_t
+= LP.make_sum case_enum cases_of_t
 
 inline_for_extraction
 let synth_case_A (z: (U8.t * U8.t)) : Tot (LP.sum_cases t_sum Case_A) =
+  [@inline_let]
   let res : t = A z in
-  assert_norm (LP.sum_tag_of_data t_sum res == Case_A);
-  A z
+  [@inline_let]
+  let _ : squash (LP.sum_tag_of_data t_sum res == Case_A) =
+    assert_norm (LP.sum_tag_of_data t_sum res == Case_A)
+  in
+  res
 
 inline_for_extraction
 let synth_case_B (z: (U16.t)) : Tot (LP.sum_cases t_sum Case_B) =
+  [@inline_let]
   let res : t = B z in
-  assert_norm (LP.sum_tag_of_data t_sum res == Case_B);
+  [@inline_let]
+  let _ : squash (LP.sum_tag_of_data t_sum res == Case_B) =
+    assert_norm (LP.sum_tag_of_data t_sum res == Case_B)
+  in
   res
   
 let parse_cases
