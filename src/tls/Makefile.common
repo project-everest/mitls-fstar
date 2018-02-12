@@ -26,9 +26,6 @@ EXTRACT_DIR=extract/$(FLAVOR)
 
 ROOTS ?= TLS.fst QUIC.fst Test.Main.fst 
 
-clean:
-	rm -rf $(EXTRACT_DIR)/Kremlin $(EXTRACT_DIR)/OCaml $(EXTRACT_DIR)/copied .depend.$(FLAVOR) *.checked.lax
-
 .depend.$(FLAVOR):
 	mkdir -p $(EXTRACT_DIR)
 	$(FSTAR) --odir $(EXTRACT_DIR) \
