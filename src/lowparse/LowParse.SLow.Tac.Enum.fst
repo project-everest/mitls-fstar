@@ -57,3 +57,22 @@ let rec enum_repr_of_key_tac
 = let open T in
   g <-- enum_repr_of_key_tac' e ;
   exact_guard (return g)
+
+noextract
+let parse32_maybe_enum_key_tac
+  (#k: parser_kind)
+  (#key #repr: eqtype)
+  (#p: parser k repr)
+  (p32: parser32 p)
+  (e: enum key repr { Cons? e } )
+  (#k' : parser_kind)
+  (p' : parser k' (maybe_enum_key e))
+  (u: unit {
+    k' == k /\
+    p' == parse_maybe_enum_key p e
+  })
+: Tot (T.tactic unit)
+= let open T in
+  ar <-- maybe_enum_key_of_repr_tac' e ;
+  fu <-- quote (parse32_maybe_enum_key_gen' #k #key #repr #p p32 e #k' p' u);
+  exact_guard (return (mk_app fu [ar, Q_Explicit]))

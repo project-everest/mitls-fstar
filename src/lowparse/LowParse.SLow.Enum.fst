@@ -92,6 +92,23 @@ let parse32_maybe_enum_key_gen
 = parse32_synth p (maybe_enum_key_of_repr e) f p32 ()
 
 inline_for_extraction
+let parse32_maybe_enum_key_gen'
+  (#k: parser_kind)
+  (#key #repr: eqtype)
+  (#p: parser k repr)
+  (p32: parser32 p)
+  (e: enum key repr)
+  (#k' : parser_kind)
+  (p' : parser k' (maybe_enum_key e))
+  (u: unit {
+    k' == k /\
+    p' == parse_maybe_enum_key p e
+  })
+  (f: maybe_enum_key_of_repr'_t e)
+: Tot (parser32 p')
+= parse32_synth p (maybe_enum_key_of_repr e) f p32 ()
+
+inline_for_extraction
 let parse32_maybe_enum_key
   (#k: parser_kind)
   (#key #repr: eqtype)
