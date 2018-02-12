@@ -112,21 +112,27 @@ let serialize_tagged_union
 = bare_serialize_tagged_union_correct st tag_of_data s;
   bare_serialize_tagged_union st tag_of_data s
 
-
-inline_for_extraction
-let sum = (key: eqtype & (repr: eqtype & (e: enum key repr & ((data: Type0) & (tag_of_data: (data -> GTot (enum_key e)))))))
+noeq
+type sum =
+| Sum:
+    (key: eqtype) ->
+    (repr: eqtype) ->
+    (e: enum key repr) ->
+    (data: Type0) ->
+    (tag_of_data: (data -> GTot (enum_key e))) ->
+    sum
 
 inline_for_extraction
 let sum_key_type (t: sum) : Tot eqtype =
-  let (| key,  _ |) = t in key
+  match t with (Sum key _ _ _ _) -> key
 
 inline_for_extraction
 let sum_repr_type (t: sum) : Tot eqtype =
-  let (| _, (| repr,  _ |) |) = t in repr
+  match t with (Sum _ repr _ _ _) -> repr
 
 inline_for_extraction
 let sum_enum (t: sum) : Tot (enum (sum_key_type t) (sum_repr_type t)) =
-  let (| _, (| _, (| e, _ |) |) |) = t in e
+  match t with (Sum _ _ e _ _) -> e
 
 inline_for_extraction
 let sum_key (t: sum) : Tot Type0 =
@@ -134,17 +140,17 @@ let sum_key (t: sum) : Tot Type0 =
 
 inline_for_extraction
 let sum_cases (t: sum) : Tot ((x: sum_key t) -> Tot Type0) =
-  let (|_, (| _, (| _, (| _, tag_of_data |) |) |) |) = t in
+  let (Sum _ _ _ _ tag_of_data) = t in
   (fun x -> refine_with_tag tag_of_data x)
 
 inline_for_extraction
 let sum_type (t: sum) : Tot Type0 =
-  let (|_, (| _, (| _, (| data, _ |) |) |) |) = t in
+  let (Sum _ _ _ data _) = t in
   data
 
 inline_for_extraction
 let sum_tag_of_data (t: sum) : Tot ((x: sum_type t) -> GTot (sum_key t)) =
-  let (|_, (| _, (| _, (| _, tag_of_data |) |) |) |) = t in
+  let (Sum _ _ _ _ tag_of_data) = t in
   tag_of_data
 
 let weaken_parse_cases_kind
@@ -211,7 +217,7 @@ let make_sum
   (#data: Type0)
   (tag_of_data: (data -> GTot (enum_key e)))
 : Tot sum
-= (| key, (| repr, (| e, (| data, tag_of_data |) |) |) |)
+= Sum key repr e data tag_of_data
 
 (* Sum with default case *)
 
