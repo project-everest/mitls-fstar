@@ -136,14 +136,12 @@ let parse32_protocolVersion' : LP.parser32 parse_protocolVersion' =
 inline_for_extraction
 let
 serialize32_maybe_protocolVersion_key : LP.serializer32 serialize_maybe_protocolVersion_key =
-  let s = LP.serialize32_nondep_then #_ #_ #LP.parse_u8 #LP.serialize_u8 LP.serialize32_u8 () #_ #_ #LP.parse_u8 #LP.serialize_u8 LP.serialize32_u8 () in
-  LP.serialize32_maybe_enum_key_gen
-    s
-    protocolVersion_enum
-    (LP.serialize32_enum_key_gen
-      s
+  FStar.Tactics.synth_by_tactic
+    (LP.serialize32_maybe_enum_key_tac
+      (LP.serialize32_nondep_then #_ #_ #LP.parse_u8 #LP.serialize_u8 LP.serialize32_u8 () #_ #_ #LP.parse_u8 #LP.serialize_u8 LP.serialize32_u8 ())
       protocolVersion_enum
-      (FStar.Tactics.synth_by_tactic (LP.enum_repr_of_key_tac protocolVersion_enum))
+      serialize_maybe_protocolVersion_key
+      ()
     )
 
 inline_for_extraction
