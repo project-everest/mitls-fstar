@@ -91,10 +91,36 @@ let serialize_protocolVersion' : LP.serializer parse_protocolVersion' =
 
 inline_for_extraction
 let parse32_maybe_protocolVersion_key : LP.parser32 parse_maybe_protocolVersion_key =
-  LP.parse32_maybe_enum_key_gen
-    (LP.parse32_u8 `LP.parse32_nondep_then` LP.parse32_u8)
-    protocolVersion_enum
-    (FStar.Tactics.synth_by_tactic (LP.maybe_enum_key_of_repr_tac protocolVersion_enum))
+  FStar.Tactics.synth_by_tactic
+    (LP.parse32_maybe_enum_key_tac
+      (LP.parse32_u8 `LP.parse32_nondep_then` LP.parse32_u8)
+      protocolVersion_enum
+      parse_maybe_protocolVersion_key
+      ()
+    )
+
+(* actual term generated:
+<<
+LowParse.SLow.Enum.parse32_maybe_enum_key_gen (LowParse.SLow.Combinators.parse32_nondep_then LowParse.SLow.Int.parse32_u8
+      LowParse.SLow.Int.parse32_u8)
+  protocolVersion_enum
+  (LowParse.SLow.Enum.maybe_enum_key_of_repr'_t_cons protocolVersion_enum
+      ()
+      (LowParse.SLow.Enum.maybe_enum_key_of_repr'_t_cons (LowParse.SLow.Enum.enum_tail protocolVersion_enum
+            )
+          ()
+          (LowParse.SLow.Enum.maybe_enum_key_of_repr'_t_cons (LowParse.SLow.Enum.enum_tail (LowParse.SLow.Enum.enum_tail 
+                      protocolVersion_enum))
+              ()
+              (LowParse.SLow.Enum.maybe_enum_key_of_repr'_t_cons (LowParse.SLow.Enum.enum_tail (LowParse.SLow.Enum.enum_tail 
+                          (LowParse.SLow.Enum.enum_tail protocolVersion_enum)))
+                  ()
+                  (LowParse.SLow.Enum.maybe_enum_key_of_repr'_t_cons_nil (LowParse.SLow.Enum.enum_tail 
+                          (LowParse.SLow.Enum.enum_tail (LowParse.SLow.Enum.enum_tail (LowParse.SLow.Enum.enum_tail 
+                                      protocolVersion_enum))))
+                      ())))))
+>>
+*)
 
 inline_for_extraction
 let parse32_protocolVersion' : LP.parser32 parse_protocolVersion' =
