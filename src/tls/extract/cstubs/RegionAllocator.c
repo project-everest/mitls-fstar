@@ -437,13 +437,18 @@ void HeapRegionCreateAndRegister(region_entry* pe, HEAP_REGION *prgn)
 {
     region *rgn = (region*)ExAllocatePoolWithTag(PagedPool, sizeof(region), MITLS_TAG);
     if (rgn) {
-        pe->id = PsGetCurrentThread();
-        pe->region = rgn;
-        ExAcquireFastMutex(&g_mapping_lock);
-        InsertHeadList(&g_mapping_list, &pe->entry);
-        ExReleaseFastMutex(&g_mapping_lock);
+        HeapRegionRegister(pe, rgn);
     }
     *prgn = rgn;
+}
+
+void HeapRegionRegister(region_entry* pe, HEAP_REGION rgn)
+{
+    pe->id = PsGetCurrentThread();
+    pe->region = rgn;
+    ExAcquireFastMutex(&g_mapping_lock);
+    InsertHeadList(&g_mapping_list, &pe->entry);
+    ExReleaseFastMutex(&g_mapping_lock);
 }
 
 // Find the region for this thread ID, or return NULL for
@@ -545,6 +550,56 @@ void HeapRegionFree(void* pv)
         UpdateStatisticsAfterFree(&heap->stats, e->cb);
     }
     ExFreePoolWithTag(e, MITLS_TAG);
+}
+
+// Non-region-based allocator, called by HACL*
+void *KrmlAlloc(size_t cb)
+{
+    return ExAllocatePoolWithTag(PagedPool, actual_cb, MITLS_TAG);   
+}
+
+// Non-region-based allocator, called by HACL*
+void* KrmlCAlloc(size_t num, size_t size)
+{
+    size_t cb = num*size;
+    if (num != 0 && (cb/num) != size) {
+        return NULL; // Integer overflow
+    }
+    void *pv = KrmlAlloc(cb);
+    if (pv) {
+        RtlZeroMemory(pv, cb);
+    }
+    return pv;
+}
+
+// Non-region-based allocator, called by HACL*
+void KrmlFree(void* pv)
+{
+    ExFreePoolWithTag(pv, MITLS_TAG);
+}
+
+__declspec(noreturn) KrmlExit(int n)
+{
+    CONTEXT ContextRecord;
+
+    RtlpCaptureContext(&ContextRecord);
+    e.ExceptionCode = STATUS_INTERNAL_ERROR;
+    e.ExceptionFlags = EXCEPTION_NONCONTINUABLE;
+    e.ExceptionAddress = (PVOID)KrmlExit;
+    e.ExceptionRecord = NULL;
+    e.NumberParameters = 1;
+    e.ExceptionInformation[0] = (ULONG_PTR)n;
+    RtlRaiseException(&e);
+}
+
+// return the time since Jan 1, 1970, in seconds.  Used by miTLS nonce code.
+time_t KremlTime(time_t *t)
+{
+    const __int64 EpochBias = 116444736000000000i64; // in milliseconds, from year 1600
+    LARGE_INTEGER li;
+    NtQuerySystemTime(&li);
+    __int64 Milliseconds = li.QuadPart / 10000;
+    return (time_t)((Milliseconds - EpochBias) / 1000i64);
 }
 
 // End of USE_KERNEL_REGIONS
