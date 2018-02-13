@@ -1,6 +1,7 @@
 (**! Idealizing agile HMAC; independent of TLS, used for TLS 1.3 Finished message payloads and Binders. *)
 module HMAC.UFCMA
 
+
 open Mem
 
 open Platform.Bytes
@@ -247,7 +248,6 @@ val coerce_eq2: a: (nat -> Type0) -> b: (nat -> Type0) -> v:a 0 -> Pure (b 0)
 let coerce_eq2 _ _ v = v // this works; many similar variants did not.
 
 #set-options "--initial_fuel 1 --max_fuel 2 --initial_ifuel 1 --max_ifuel 2"
-open FStar.Tactics
 
 private type id = nat
 private let ip : ipkg = Pkg.Idx id (fun _ -> True) (fun _ -> True) (fun _ -> true)

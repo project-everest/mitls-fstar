@@ -1,0 +1,76 @@
+HACL_HOME?=../../../hacl-star
+FSTAR_HOME?=../../../FStar
+MITLS_HOME?=../..
+KREMLIN_HOME	?= ../../../kremlin
+MLCRYPTO_HOME	?= ../../../MLCrypto
+
+INCLUDE_PATHS= \
+	$(FSTAR_HOME)/ucontrib/CoreCrypto/fst/ \
+	$(FSTAR_HOME)/ucontrib/Platform/fst/ \
+	$(MITLS_HOME)/libs/ffi \
+	./ideal-flags
+
+# NS, AD: regarding include paths:
+#  For now, we are still using Platform.Bytes and the old CoreCrypto.
+#  We should change it to use ulib/FStar.Bytes and
+#  contrib/fst/CoreCrypto (which contain F* bindings to MLCrypto)
+#  Also, it seems we have (so far) no dependence on HACL.
+#  But, this will probably change soon. At which point, we should figure
+#  out a way to use HACL:c_mitls2c and kremlin.
+
+# These are the additional paths used in quic2c
+	# $(KREMLIN_HOME)/kremlib \
+	# $(HACL_HOME)/secure_api \
+	# $(HACL_HOME)/secure_api/utils \
+	# $(HACL_HOME)/secure_api/concrete_specializations \
+	# $(HACL_HOME)/secure_api/LowCProvider/fst \
+	# $(HACL_HOME)/code/curve25519/api \
+	# $(HACL_HOME)/code/lib \
+
+CACHE_DIR=cache.$(FLAVOR)
+
+FSTAR=$(FSTAR_HOME)/bin/fstar.exe --cache_dir $(CACHE_DIR) --cache_checked_modules $(OTHERFLAGS) --use_hints --use_hint_hashes
+
+EXTRACT_DIR=extract/$(FLAVOR)
+
+# Add more roots here!
+ROOTS ?= HMAC.UFCMA.fst
+
+.depend.$(FLAVOR):
+	mkdir -p $(EXTRACT_DIR)
+	$(FSTAR) --odir $(EXTRACT_DIR) \
+		 --dep full \
+		 --extract $(EXTRACT) \
+		 $(addprefix --include , $(INCLUDE_PATHS)) \
+		 $(ROOTS) > .depend.$(FLAVOR)
+
+depend: .depend.$(FLAVOR)
+
+-include .depend.$(FLAVOR)
+
+%.checked.lax:
+	$(FSTAR) --lax $(addprefix --include , $(INCLUDE_PATHS)) $<
+	touch $@
+
+%.checked:
+	$(FSTAR) $(addprefix --include , $(INCLUDE_PATHS)) $<
+	touch $@
+
+verify-all: $(addprefix $(CACHE_DIR)/, $(addsuffix .checked, $(notdir $(ALL_FST_FILES))))
+
+$(EXTRACT_DIR)/%.$(EXTENSION):
+	$(FSTAR) \
+		--codegen $(FLAVOR) \
+		--odir $(EXTRACT_DIR) \
+		$(addprefix --include , $(INCLUDE_PATHS)) \
+		--extract_module $(basename $(notdir $(subst .checked,,$<))) \
+		$(subst $(CACHE_DIR)/,,$(subst .checked,, $<))
+
+# Avoids polluting the KreMLin source tree with a random .o file
+extract/copied/%.c: $(KREMLIN_HOME)/kremlib/%.c
+	mkdir -p $(dir $@)
+	cp $< $@
+
+# Don't delete these files otherwise one can't run Makefile.OCaml and
+# Makefile.Kremlin in parallel
+.PRECIOUS: extract/copied/%.c
