@@ -544,7 +544,7 @@ void HeapRegionFree(void* pv)
         KeAcquireSpinLock(&global_region_lock, &OldIrql);
         RemoveEntryList(&e->entry);
         UpdateStatisticsAfterFree(&g_global_region.stats, e->cb);
-        KeReleaseSpinLock(global_region_lock, OldIrql);
+        KeReleaseSpinLock(&global_region_lock, OldIrql);
     } else {
         RemoveEntryList(&e->entry);
         UpdateStatisticsAfterFree(&heap->stats, e->cb);
@@ -578,11 +578,10 @@ void KrmlFree(void* pv)
     ExFreePoolWithTag(pv, MITLS_TAG);
 }
 
-__declspec(noreturn) KrmlExit(int n)
+__declspec(noreturn) void KrmlExit(int n)
 {
-    CONTEXT ContextRecord;
+    EXCEPTION_RECORD e;
 
-    RtlpCaptureContext(&ContextRecord);
     e.ExceptionCode = STATUS_INTERNAL_ERROR;
     e.ExceptionFlags = EXCEPTION_NONCONTINUABLE;
     e.ExceptionAddress = (PVOID)KrmlExit;
@@ -593,13 +592,13 @@ __declspec(noreturn) KrmlExit(int n)
 }
 
 // return the time since Jan 1, 1970, in seconds.  Used by miTLS nonce code.
-time_t KremlTime(time_t *t)
+int KrmlTime(void)
 {
     const __int64 EpochBias = 116444736000000000i64; // in milliseconds, from year 1600
     LARGE_INTEGER li;
-    NtQuerySystemTime(&li);
+    KeQuerySystemTime(&li);
     __int64 Milliseconds = li.QuadPart / 10000;
-    return (time_t)((Milliseconds - EpochBias) / 1000i64);
+    return (int)((Milliseconds - EpochBias) / 1000i64);
 }
 
 // End of USE_KERNEL_REGIONS
