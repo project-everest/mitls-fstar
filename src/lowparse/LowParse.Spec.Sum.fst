@@ -219,6 +219,58 @@ let make_sum
 : Tot sum
 = Sum key repr e data tag_of_data
 
+(* Sum with a common non-dependent prefix (i.e. the input buffer is to be split in 3 parts: 1/ tag, 2/ non-dependent data, 3/ dependent data
+   We specify it as a special case, but it will have its own separate implementation *)
+
+let tag_of_data_with_nondep
+  (nondep_t: Type0)
+  (#tag_t: Type0)
+  (#data_t: Type0)
+  (tag_of_data: (data_t -> GTot tag_t))
+  (data_with_nondep: (nondep_t * data_t))
+: GTot tag_t
+= match data_with_nondep with
+  | (_, data) -> tag_of_data data
+
+inline_for_extraction
+let make_sum_with_nondep
+  (nondep_part: Type0)
+  (s: sum)
+= Sum (sum_key_type s) (sum_repr_type s) (sum_enum s) (nondep_part * sum_type s) (tag_of_data_with_nondep nondep_part (sum_tag_of_data s))
+
+let synth_sum_with_nondep_case
+  (nondep_part: Type0)
+  (t: sum)
+  (x: sum_key (make_sum_with_nondep nondep_part t))
+  (d: nondep_part * sum_cases t (x <: sum_key_type t))
+: Tot (sum_cases (make_sum_with_nondep nondep_part t) x)
+= match d with
+  | (df, ds) -> (df, (ds <: sum_type t))
+
+let parse_sum_with_nondep_cases
+  (#nondep_part: Type0)
+  (t: sum)
+  (#knd: parser_kind)
+  (pnd: parser knd nondep_part)
+  (#k: parser_kind)
+  (pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
+  (x: sum_key (make_sum_with_nondep nondep_part t))
+: Tot (parser _ (sum_cases (make_sum_with_nondep nondep_part t) x))
+= let (x' : sum_key t) = (x <: sum_key_type t) in
+  (pnd `nondep_then` (pc x')) `parse_synth` (synth_sum_with_nondep_case nondep_part t x)
+
+let parse_sum_with_nondep
+  (#kt: parser_kind)
+  (t: sum)
+  (p: parser kt (sum_repr_type t))
+  (#knd: parser_kind)
+  (#nondep_t: Type0)
+  (pnd: parser knd nondep_t)
+  (#k: parser_kind)
+  (pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
+: Tot (parser _ (sum_type (make_sum_with_nondep nondep_t t)))
+= parse_sum (make_sum_with_nondep nondep_t t) p (parse_sum_with_nondep_cases t pnd pc)
+
 (* Sum with default case *)
 
 inline_for_extraction
