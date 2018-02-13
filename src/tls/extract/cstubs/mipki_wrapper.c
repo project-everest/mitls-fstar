@@ -127,6 +127,9 @@ PKI_select(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
   {
     K___uint64_t_TLSConstants_signatureScheme sig;
 
+    // silence a GCC warning about sig.snd._0.length possibly uninitialized
+    memset(&sig, 0, sizeof(sig));
+
     res.tag = FStar_Pervasives_Native_Some;
     sig.fst = (uint64_t)chain;
     sig.snd.tag = tls_of_pki(sel);

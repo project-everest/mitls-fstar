@@ -355,6 +355,8 @@ static FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme
     res.tag = FStar_Pervasives_Native_None;
   } else {
     K___uint64_t_TLSConstants_signatureScheme sig;
+    // silence a GCC warning about sig.snd._0.length possibly uninitialized
+    memset(&sig, 0, sizeof(sig));
     res.tag = FStar_Pervasives_Native_Some;
     sig.fst = (uint64_t)chain;
     sig.snd.tag = tls_of_pki(selected);
