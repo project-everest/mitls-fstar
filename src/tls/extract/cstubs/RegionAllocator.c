@@ -544,7 +544,7 @@ void HeapRegionFree(void* pv)
         KeAcquireSpinLock(&global_region_lock, &OldIrql);
         RemoveEntryList(&e->entry);
         UpdateStatisticsAfterFree(&g_global_region.stats, e->cb);
-        KeReleaseSpinLock((global_region_lock, OldIrql);
+        KeReleaseSpinLock(global_region_lock, OldIrql);
     } else {
         RemoveEntryList(&e->entry);
         UpdateStatisticsAfterFree(&heap->stats, e->cb);
