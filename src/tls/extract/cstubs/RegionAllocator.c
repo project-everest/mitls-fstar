@@ -555,7 +555,7 @@ void HeapRegionFree(void* pv)
 // Non-region-based allocator, called by HACL*
 void *KrmlAlloc(size_t cb)
 {
-    return ExAllocatePoolWithTag(PagedPool, actual_cb, MITLS_TAG);   
+    return ExAllocatePoolWithTag(PagedPool, cb, MITLS_TAG);   
 }
 
 // Non-region-based allocator, called by HACL*
