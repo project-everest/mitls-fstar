@@ -84,7 +84,8 @@ static int isRegistered;
 int MITLS_CALLCONV FFI_mitls_init(void)
 {
     if (isRegistered) {
-        return FFI_mitls_thread_register();
+        caml_c_thread_register();
+        return 1;
     }
 
     char *Argv[2];
@@ -120,52 +121,26 @@ void MITLS_CALLCONV FFI_mitls_cleanup(void)
     // Nothing to do.  The OCaml runtime has no graceful shutdown.
 }
 
-// Input:  msg - an error message string to log
-//         errmsg - in/out pointer to the current error log string, may
-//                  point to NULL
-// Return:
-//         nothing
-//         *errmsg updated by realloc and appending the exception text.
-//                 On out-of-memory, the new message is discarded and
-//                 the current error log string is returned unmodified.
-static void report_error(const char *msg, char **errmsg)
+static void report_error(const char *msg)
 {
     if (msg == NULL) {
         return;
     }
-    if (*errmsg == NULL) {
-        *errmsg = strdup(msg);
-    } else {
-        char *newerrmsg = malloc(strlen(*errmsg) + strlen(msg) + 2);
-        if (newerrmsg) {
-            strcpy(newerrmsg, *errmsg);
-            strcat(newerrmsg, "\n");
-            strcat(newerrmsg, msg);
-            free(*errmsg);
-            *errmsg = newerrmsg;
-        }
-    }
+    printf("%s\n", msg);
 }
 
 // Input:  v - an OCaml exception
-//         errmsg - in/out pointer to the current error log string, may
-//                  point to NULL
 // Return:
 //         nothing
-//         *errmsg updated by realloc and appending the exception text.
-//                 On out-of-memory, the new exception is discarded and
-//                 the current error log string is returned unmodified.
-static void report_caml_exception(value v, char **errmsg)
+static void report_caml_exception(value v)
 {
-    if (errmsg) {
-        char * msg = caml_format_exception(Extract_exception(v));
-        report_error(msg, errmsg);
-        free(msg);
-    }
+    char * msg = caml_format_exception(Extract_exception(v));
+    report_error(msg);
+    free(msg);
 }
 
 // The OCaml runtime system must be acquired before calling this
-static int FFI_mitls_configure_caml(mitls_state **state, const char *tls_version, const char *host_name, char **outmsg, char **errmsg)
+static int FFI_mitls_configure_caml(mitls_state **state, const char *tls_version, const char *host_name)
 {
     CAMLparam0();
     CAMLlocal3(config, version, host);
@@ -175,7 +150,7 @@ static int FFI_mitls_configure_caml(mitls_state **state, const char *tls_version
     host = caml_copy_string(host_name);
     config = caml_callback2_exn(*g_mitls_FFI_Config, version, host);
     if (Is_exception_result(config)) {
-        report_caml_exception(config, errmsg);
+        report_caml_exception(config);
     } else {
         mitls_state * s;
 
@@ -195,18 +170,18 @@ static int FFI_mitls_configure_caml(mitls_state **state, const char *tls_version
 }
 
 // Called by the host app to configure miTLS ahead of creating a connection
-int MITLS_CALLCONV FFI_mitls_configure(mitls_state **state, const char *tls_version, const char *host_name, char **outmsg, char **errmsg)
+int MITLS_CALLCONV FFI_mitls_configure(mitls_state **state, const char *tls_version, const char *host_name)
 {
     int ret;
 
     *state = NULL;
-    *outmsg = NULL;
-    *errmsg = NULL;
 
+    caml_c_thread_register();
     caml_acquire_runtime_system();
-    ret = FFI_mitls_configure_caml(state, tls_version, host_name, outmsg, errmsg);
+    ret = FFI_mitls_configure_caml(state, tls_version, host_name);
     caml_release_runtime_system();
-
+    caml_c_thread_unregister();
+    
     return ret;
 }
 
@@ -217,13 +192,11 @@ static int configure_common_caml(/* in */ mitls_state *state, const char * str, 
     CAMLparam0();
     CAMLlocal2(config, camlvalue);
     int ret = 0;
-    char *errmsg = NULL;
 
     camlvalue = caml_copy_string(str);
     config = caml_callback2_exn(*function, state->fstar_state, camlvalue);
     if (Is_exception_result(config)) {
-        report_caml_exception(config, &errmsg);
-        FFI_mitls_free_msg(errmsg);
+        report_caml_exception(config);
     } else {
         state->fstar_state = config;
         ret = 1;
@@ -246,7 +219,7 @@ static int ocaml_set_ticket_key(const char *alg, const char *ticketkey, size_t k
     r = caml_callback2_exn(*g_mitls_FFI_SetTicketKey, a, tkey);
 
     if (Is_exception_result(r)) {
-      report_caml_exception(r, NULL); // bugbug: pass in errmsg
+      report_caml_exception(r);
       ret = 0;
     } else {
       ret = Int_val(r);
@@ -257,45 +230,55 @@ static int ocaml_set_ticket_key(const char *alg, const char *ticketkey, size_t k
 int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *alg, const char *tk, size_t klen)
 {
     int ret;
+    caml_c_thread_register();
     caml_acquire_runtime_system();
     ret = ocaml_set_ticket_key(alg, tk, klen);
     caml_release_runtime_system();
+    caml_c_thread_unregister();
     return ret;
 }
 
 int MITLS_CALLCONV FFI_mitls_configure_cipher_suites(/* in */ mitls_state *state, const char * cs)
 {
     int ret;
+    caml_c_thread_register();
     caml_acquire_runtime_system();
     ret = configure_common_caml(state, cs, g_mitls_FFI_SetCipherSuites);
     caml_release_runtime_system();
+    caml_c_thread_unregister();
     return ret;
 }
 
 int MITLS_CALLCONV FFI_mitls_configure_signature_algorithms(/* in */ mitls_state *state, const char * sa)
 {
     int ret;
+    caml_c_thread_register();
     caml_acquire_runtime_system();
     ret = configure_common_caml(state, sa, g_mitls_FFI_SetSignatureAlgorithms);
     caml_release_runtime_system();
+    caml_c_thread_unregister();
     return ret;
 }
 
 int MITLS_CALLCONV FFI_mitls_configure_named_groups(/* in */ mitls_state *state, const char * ng)
 {
     int ret;
+    caml_c_thread_register();
     caml_acquire_runtime_system();
     ret = configure_common_caml(state, ng, g_mitls_FFI_SetNamedGroups);
     caml_release_runtime_system();
+    caml_c_thread_unregister();
     return ret;
 }
 
 int MITLS_CALLCONV FFI_mitls_configure_alpn(/* in */ mitls_state *state, const char *apl)
 {
     int ret;
+    caml_c_thread_register();
     caml_acquire_runtime_system();
     ret = configure_common_caml(state, apl, g_mitls_FFI_SetALPN);
     caml_release_runtime_system();
+    caml_c_thread_unregister();
     return ret;
 }
 
@@ -343,9 +326,11 @@ static int ocaml_set_ticket_callback(/* in */ mitls_state *state, void *cb_state
 int MITLS_CALLCONV FFI_mitls_configure_ticket_callback(/* in */ mitls_state *state, void *cb_state, pfn_FFI_ticket_cb ticket_cb)
 {
     int ret;
+    caml_c_thread_register();
     caml_acquire_runtime_system();
     ret = ocaml_set_ticket_callback(state, cb_state, ticket_cb);
     caml_release_runtime_system();
+    caml_c_thread_unregister();
     return ret;
 }
 
@@ -392,9 +377,11 @@ static int ocaml_set_cert_callbacks(/* in */ mitls_state *state, void *cb_state,
 int MITLS_CALLCONV FFI_mitls_configure_cert_callbacks(/* in */ mitls_state *state, void *cb_state, mitls_cert_cb *cert_cb)
 {
     int ret;
+    caml_c_thread_register();
     caml_acquire_runtime_system();
     ret = ocaml_set_cert_callbacks(state, cb_state, cert_cb);
     caml_release_runtime_system();
+    caml_c_thread_unregister();
     return ret;
 }
 
@@ -408,7 +395,7 @@ static int configure_common_bool_caml(/* in */ mitls_state *state, value b, valu
     camlvalue = b;
     config = caml_callback2_exn(*function, state->fstar_state, camlvalue);
     if (Is_exception_result(config)) {
-        report_caml_exception(config, NULL); // bugbug: pass in errmsg
+        report_caml_exception(config);
     } else {
         state->fstar_state = config;
         ret = 1;
@@ -421,9 +408,11 @@ int MITLS_CALLCONV FFI_mitls_configure_early_data(/* in */ mitls_state *state, u
 {
     int ret;
     value max_ed = Val_int(max_early_data);
+    caml_c_thread_register();
     caml_acquire_runtime_system();
     ret = configure_common_bool_caml(state, max_ed, g_mitls_FFI_SetEarlyData);
     caml_release_runtime_system();
+    caml_c_thread_unregister();
     return ret;
 }
 
@@ -431,9 +420,11 @@ int MITLS_CALLCONV FFI_mitls_configure_early_data(/* in */ mitls_state *state, u
 void MITLS_CALLCONV FFI_mitls_close(mitls_state *state)
 {
     if (state) {
+        caml_c_thread_register();
         caml_acquire_runtime_system();
         caml_remove_generational_global_root(&state->fstar_state);
         caml_release_runtime_system();
+        caml_c_thread_unregister();
         state->fstar_state = 0;
         free(state);
     }
@@ -444,8 +435,9 @@ void MITLS_CALLCONV FFI_mitls_free_msg(char *msg)
     free(msg);
 }
 
-void MITLS_CALLCONV FFI_mitls_free_packet(void *packet)
+void MITLS_CALLCONV FFI_mitls_free_packet(mitls_state *state, void *packet)
 {
+    // state is ignored in the OCaml build
     free(packet);
 }
 
@@ -463,7 +455,7 @@ void * copypacket(value packet, /* out */ size_t *packet_size)
     return p;
 }
 
-static int FFI_mitls_connect_caml(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state, /* in */ mitls_ticket *ticket, /* out */ char **errmsg)
+static int FFI_mitls_connect_caml(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state, /* in */ mitls_ticket *ticket)
 {
     CAMLparam0();
     CAMLlocal4(result, tticket, session, oticket);
@@ -496,7 +488,7 @@ static int FFI_mitls_connect_caml(void *send_recv_ctx, pfn_FFI_send psend, pfn_F
 
     result = caml_callbackN_exn(*g_mitls_FFI_Connect, 5, args);
     if (Is_exception_result(result)) {
-        report_caml_exception(result, errmsg);
+        report_caml_exception(result);
         ret = 0;
     } else {
         // Connect returns back (Connection.connection * int)
@@ -513,32 +505,32 @@ static int FFI_mitls_connect_caml(void *send_recv_ctx, pfn_FFI_send psend, pfn_F
 }
 
 // Called by the host app to create a TLS connection.
-int MITLS_CALLCONV FFI_mitls_connect(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
+int MITLS_CALLCONV FFI_mitls_connect(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state)
 {
     int ret;
     mitls_ticket ticket = {0};
 
-    *outmsg = NULL;
-    *errmsg = NULL;
-
+    caml_c_thread_register();
     caml_acquire_runtime_system();
-    ret = FFI_mitls_connect_caml(send_recv_ctx, psend, precv, state, &ticket, errmsg);
+    ret = FFI_mitls_connect_caml(send_recv_ctx, psend, precv, state, &ticket);
     caml_release_runtime_system();
+    caml_c_thread_unregister();
     return ret;
 }
 
-int MITLS_CALLCONV FFI_mitls_resume(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state, /* in */ mitls_ticket *ticket, /* out */ char **errmsg)
+int MITLS_CALLCONV FFI_mitls_resume(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state, /* in */ mitls_ticket *ticket)
 {
     int ret;
-    *errmsg = NULL;
 
+    caml_c_thread_register();
     caml_acquire_runtime_system();
-    ret = FFI_mitls_connect_caml(send_recv_ctx, psend, precv, state, ticket, errmsg);
+    ret = FFI_mitls_connect_caml(send_recv_ctx, psend, precv, state, ticket);
     caml_release_runtime_system();
+    caml_c_thread_unregister();
     return ret;
 }
 
-static int FFI_mitls_accept_connected_caml(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
+static int FFI_mitls_accept_connected_caml(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state)
 {
     CAMLparam0();
     CAMLlocal1(result);
@@ -553,7 +545,7 @@ static int FFI_mitls_accept_connected_caml(void *send_recv_ctx, pfn_FFI_send pse
     
     result = caml_callbackN_exn(*g_mitls_FFI_AcceptConnected, 4, args);
     if (Is_exception_result(result)) {
-        report_caml_exception(result, errmsg);
+        report_caml_exception(result);
         ret = 0;
     } else {
         // AcceptConnected returns back (Connection.connection * int)
@@ -570,21 +562,21 @@ static int FFI_mitls_accept_connected_caml(void *send_recv_ctx, pfn_FFI_send pse
 }
 
 // Called by the host server app, after a client has connected to a socket and the calling server has accepted the TCP connection.
-int MITLS_CALLCONV FFI_mitls_accept_connected(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
+int MITLS_CALLCONV FFI_mitls_accept_connected(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state)
 {
     int ret;
-    *outmsg = NULL;
-    *errmsg = NULL;
 
+    caml_c_thread_register();
     caml_acquire_runtime_system();
-    ret = FFI_mitls_accept_connected_caml(send_recv_ctx, psend, precv, state, outmsg, errmsg);
+    ret = FFI_mitls_accept_connected_caml(send_recv_ctx, psend, precv, state);
     caml_release_runtime_system();
+    caml_c_thread_unregister();
     return ret;
 }
 
 
 
-static int FFI_mitls_send_caml(/* in */ mitls_state *state, const void* buffer, size_t buffer_size, /* out */ char **outmsg, /* out */ char **errmsg)
+static int FFI_mitls_send_caml(/* in */ mitls_state *state, const void* buffer, size_t buffer_size)
 {
     CAMLparam0();
     CAMLlocal2(buffer_value, result);
@@ -595,7 +587,7 @@ static int FFI_mitls_send_caml(/* in */ mitls_state *state, const void* buffer, 
 
     result = caml_callback2_exn(*g_mitls_FFI_Send, state->fstar_state, buffer_value);
     if (Is_exception_result(result)) {
-        report_caml_exception(result, errmsg);
+        report_caml_exception(result);
         ret = 0;
     } else {
         ret = 1;
@@ -605,19 +597,19 @@ static int FFI_mitls_send_caml(/* in */ mitls_state *state, const void* buffer, 
 }
 
 // Called by the host app transmit a packet
-int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const void* buffer, size_t buffer_size, /* out */ char **outmsg, /* out */ char **errmsg)
+int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const void* buffer, size_t buffer_size)
 {
     int ret;
-    *outmsg = NULL;
-    *errmsg = NULL;
 
+    caml_c_thread_register();
     caml_acquire_runtime_system();
-    ret = FFI_mitls_send_caml(state, buffer, buffer_size, outmsg, errmsg);
+    ret = FFI_mitls_send_caml(state, buffer, buffer_size);
     caml_release_runtime_system();
+    caml_c_thread_unregister();
     return ret;
 }
 
-static void * FFI_mitls_receive_caml(/* in */ mitls_state *state, /* out */ size_t *packet_size, /* out */ char **outmsg, /* out */ char **errmsg)
+static void * FFI_mitls_receive_caml(/* in */ mitls_state *state, /* out */ size_t *packet_size)
 {
     CAMLparam0();
     CAMLlocal1(result);
@@ -625,7 +617,7 @@ static void * FFI_mitls_receive_caml(/* in */ mitls_state *state, /* out */ size
 
     result = caml_callback_exn(*g_mitls_FFI_Recv, state->fstar_state);
     if (Is_exception_result(result)) {
-        report_caml_exception(result, errmsg);
+        report_caml_exception(result);
         p = NULL;
     } else {
         // Return the plaintext data
@@ -636,15 +628,15 @@ static void * FFI_mitls_receive_caml(/* in */ mitls_state *state, /* out */ size
 }
 
 // Called by the host app to receive a packet
-void * MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_size, /* out */ char **outmsg, /* out */ char **errmsg)
+void * MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_size)
 {
     void *p;
-    *outmsg = NULL;
-    *errmsg = NULL;
 
+    caml_c_thread_register();
     caml_acquire_runtime_system();
-    p = FFI_mitls_receive_caml(state, packet_size, outmsg, errmsg);
+    p = FFI_mitls_receive_caml(state, packet_size);
     caml_release_runtime_system();
+    caml_c_thread_unregister();
     return p;
 }
 
@@ -652,8 +644,7 @@ void * MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ s
 static int ocaml_get_exporter(
   /* in */ mitls_state *state,
   int early,
-  mitls_secret *secret,
-  /* out */ char **errmsg)
+  mitls_secret *secret)
 {
     CAMLparam0();
     CAMLlocal2(result, tmp);
@@ -663,14 +654,14 @@ static int ocaml_get_exporter(
                                 early ? Val_true : Val_false);
 
     if (Is_exception_result(result)) {
-        report_caml_exception(result, errmsg);
+        report_caml_exception(result);
         CAMLreturnT(int, 0);
     }
 
     // Secret not available
     if(result == Val_none)
     {
-      *errmsg = strdup("the requested secret is not yet available");
+      report_error("the requested secret is not yet available\n");
       CAMLreturnT(int, 0);
     }
 
@@ -685,18 +676,19 @@ static int ocaml_get_exporter(
     CAMLreturnT(int, 1);
 }
 
-int MITLS_CALLCONV FFI_mitls_get_exporter(/* in */ mitls_state *state, int early, /* out */ mitls_secret *secret, /* out */ char **errmsg)
+int MITLS_CALLCONV FFI_mitls_get_exporter(/* in */ mitls_state *state, int early, /* out */ mitls_secret *secret)
 {
   int ret;
-  *errmsg = NULL;
 
+  caml_c_thread_register();
   caml_acquire_runtime_system();
-  ret = ocaml_get_exporter(state, early, secret, errmsg);
+  ret = ocaml_get_exporter(state, early, secret);
   caml_release_runtime_system();
+  caml_c_thread_unregister();
   return ret;
 }
 
-static void * FFI_mitls_get_cert_caml(/* in */ mitls_state *state, /* out */ size_t *cert_size, /* out */ char **outmsg, /* out */ char **errmsg)
+static void * FFI_mitls_get_cert_caml(/* in */ mitls_state *state, /* out */ size_t *cert_size)
 {
     CAMLparam0();
     CAMLlocal1(result);
@@ -704,7 +696,7 @@ static void * FFI_mitls_get_cert_caml(/* in */ mitls_state *state, /* out */ siz
 
     result = caml_callback_exn(*g_mitls_FFI_GetCert, state->fstar_state);
     if (Is_exception_result(result)) {
-        report_caml_exception(result, errmsg);
+        report_caml_exception(result);
         p = NULL;
     } else {
         // Return the certificate bytes
@@ -714,28 +706,16 @@ static void * FFI_mitls_get_cert_caml(/* in */ mitls_state *state, /* out */ siz
     CAMLreturnT(void*, p);
 }
 
-void *MITLS_CALLCONV FFI_mitls_get_cert(/* in */ mitls_state *state, /* out */ size_t *cert_size, /* out */ char **outmsg, /* out */ char **errmsg)
+void *MITLS_CALLCONV FFI_mitls_get_cert(/* in */ mitls_state *state, /* out */ size_t *cert_size)
 {
     void *p;
-    *outmsg = NULL;
-    *errmsg = NULL;
 
+    caml_c_thread_register();
     caml_acquire_runtime_system();
-    p = FFI_mitls_get_cert_caml(state, cert_size, outmsg, errmsg);
+    p = FFI_mitls_get_cert_caml(state, cert_size);
     caml_release_runtime_system();
+    caml_c_thread_unregister();
     return p;
-}
-
-// Register the calling thread, so it can call miTLS.  Returns 1 for success, 0 for error.
-int MITLS_CALLCONV FFI_mitls_thread_register(void)
-{
-    return caml_c_thread_register();
-}
-
-// Unregister the calling thread, so it can no longer call miTLS.  Returns 1 for success, 0 for error.
-int MITLS_CALLCONV FFI_mitls_thread_unregister(void)
-{
-    return caml_c_thread_unregister();
 }
 
 /*************************************************************************
@@ -754,7 +734,6 @@ typedef struct quic_state {
    char* out_buffer;
    size_t out_buffer_size;
    size_t out_buffer_used;
-   char *errmsg;
 } quic_state;
 
  int QUIC_send(void *ctx, const void *buffer, size_t buffer_size)
@@ -766,7 +745,7 @@ typedef struct quic_state {
 //   fclose(fp);
    if(!s->out_buffer)
    {
-       report_error("QUIC_send():  out_buffer is NULL", &s->errmsg);
+       report_error("QUIC_send():  out_buffer is NULL");
        return -1;
    }
 
@@ -778,7 +757,7 @@ typedef struct quic_state {
      return buffer_size;
    }
 
-   report_error("QUIC_send():  Insufficient space in out_buffer", &s->errmsg);
+   report_error("QUIC_send():  Insufficient space in out_buffer");
    return -1;
  }
 
@@ -792,7 +771,7 @@ typedef struct quic_state {
 
    if(!s->in_buffer || buffer == NULL)
    {
-       report_error("QUIC_recv():  in_buffer or buffer is NULL", &s->errmsg);
+       report_error("QUIC_recv():  in_buffer or buffer is NULL");
        return -1;
    }
 
@@ -824,7 +803,7 @@ static value ocaml_alloc_version_list(const uint32_t *list, size_t len)
 }
 
 // The OCaml runtime system must be acquired before calling this
-static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **errmsg)
+static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg)
 {
     CAMLparam0();
     CAMLlocal4(result, host, others, versions);
@@ -833,7 +812,7 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
     *st = NULL;
     quic_state* state = malloc(sizeof(quic_state));
     if(!state) {
-      *errmsg = strdup("failed to allocate QUIC state");
+      report_error("failed to allocate QUIC state");
       CAMLreturnT(int, 0);
     }
     memset(state, 0, sizeof(*state));
@@ -857,7 +836,7 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
 
     result = caml_callbackN_exn(*g_mitls_FFI_QuicConfig, 3, args);
     if (Is_exception_result(result)) {
-      report_caml_exception(result, errmsg);
+      report_caml_exception(result);
       CAMLreturnT(int,0);
     }
 
@@ -869,7 +848,7 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
     if(cfg->cipher_suites) {
        if(!configure_common_caml(&ms, cfg->cipher_suites, g_mitls_FFI_SetCipherSuites))
        {
-         *errmsg = strdup("FFI_mitls_quic_create_caml: cipher suite list");
+         report_error("FFI_mitls_quic_create_caml: cipher suite list");
          CAMLreturnT(int, 0);
        }
     }
@@ -877,7 +856,7 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
     if(cfg->named_groups) {
        if(!configure_common_caml(&ms, cfg->named_groups, g_mitls_FFI_SetNamedGroups))
        {
-         *errmsg = strdup("FFI_mitls_quic_create_caml: supported groups list");
+         report_error("FFI_mitls_quic_create_caml: supported groups list");
          CAMLreturnT(int, 0);
        }
     }
@@ -885,7 +864,7 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
     if(cfg->signature_algorithms) {
        if(!configure_common_caml(&ms, cfg->signature_algorithms, g_mitls_FFI_SetSignatureAlgorithms))
        {
-         *errmsg = strdup("FFI_mitls_quic_create_caml: signature algorithms list");
+         report_error("FFI_mitls_quic_create_caml: signature algorithms list");
          CAMLreturnT(int, 0);
        }
     }
@@ -893,7 +872,7 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
     if(cfg->alpn) {
       if(!configure_common_caml(&ms, cfg->alpn, g_mitls_FFI_SetALPN))
       {
-        *errmsg = strdup("FFI_mitls_quic_create_caml: failed to set application-level protocols");
+        report_error("FFI_mitls_quic_create_caml: failed to set application-level protocols");
         CAMLreturnT(int, 0);
       }
     }
@@ -901,7 +880,7 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
     if(cfg->ticket_enc_alg && cfg->ticket_key) {
        if(!ocaml_set_ticket_key(cfg->ticket_enc_alg, cfg->ticket_key, cfg->ticket_key_len))
        {
-         *errmsg = strdup("FFI_mitls_quic_create_caml: set ticket key");
+         report_error("FFI_mitls_quic_create_caml: set ticket key");
          CAMLreturnT(int, 0);
        }
     }
@@ -909,7 +888,7 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
     if(cfg->enable_0rtt) {
        if(!configure_common_bool_caml(&ms, Val_int(0xFFFFFFFF), g_mitls_FFI_SetEarlyData))
        {
-         *errmsg = strdup("FFI_mitls_quic_create_caml: can't enable early_data");
+         report_error("FFI_mitls_quic_create_caml: can't enable early_data");
          CAMLreturnT(int, 0);
        }
     }
@@ -917,7 +896,7 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
     if(cfg->ticket_callback) {
       if(!ocaml_set_ticket_callback(&ms, cfg->callback_state, cfg->ticket_callback))
       {
-        *errmsg = strdup("FFI_mitls_quic_create_caml: failed to set ticket callback");
+        report_error("FFI_mitls_quic_create_caml: failed to set ticket callback");
         CAMLreturnT(int, 0);
       }
     }
@@ -925,7 +904,7 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
     if(cfg->cert_callbacks) {
       if(!ocaml_set_cert_callbacks(&ms, cfg->callback_state, cfg->cert_callbacks))
       {
-        *errmsg = strdup("FFI_mitls_quic_create_caml: failed to set certificate callbacks");
+        report_error("FFI_mitls_quic_create_caml: failed to set certificate callbacks");
         CAMLreturnT(int, 0);
       }
     }
@@ -970,7 +949,7 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
     }
 
     if (Is_exception_result(result)) {
-      report_caml_exception(result, errmsg);
+      report_caml_exception(result);
       CAMLreturnT(int, 0);
     }
 
@@ -980,13 +959,14 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
     CAMLreturnT(int, 1);
 }
 
-int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_config *cfg, /* out */ char **errmsg)
+int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_config *cfg)
 {
     int ret;
-    *errmsg = NULL;
+    caml_c_thread_register();
     caml_acquire_runtime_system();
-    ret = FFI_mitls_quic_create_caml(state, cfg, errmsg);
+    ret = FFI_mitls_quic_create_caml(state, cfg);
     caml_release_runtime_system();
+    caml_c_thread_unregister();
 
     return ret;
 }
@@ -997,8 +977,7 @@ static quic_result FFI_mitls_quic_process_caml(
   /*in*/ char* inBuf,
   /*inout*/ size_t *pInBufLen,
   /*out*/ char *outBuf,
-  /*inout*/ size_t *pOutBufLen,
-  /* out */ char **errmsg)
+  /*inout*/ size_t *pOutBufLen)
 {
     CAMLparam0();
     CAMLlocal1(result);
@@ -1011,13 +990,12 @@ static quic_result FFI_mitls_quic_process_caml(
     state->out_buffer = outBuf;
     state->out_buffer_used = 0;
     state->out_buffer_size = *pOutBufLen;
-    state->errmsg = NULL;
 
     // Call QUIC.recv
     result = caml_callback_exn(*g_mitls_FFI_QuicProcess, state->fstar_state);
 
     if (Is_exception_result(result)) {
-        report_caml_exception(result, &state->errmsg);
+        report_caml_exception(result);
     } else {
         int rc = Int_val(Field(result, 0));
         int errorcode = Int_val(Field(result, 1));
@@ -1028,8 +1006,6 @@ static quic_result FFI_mitls_quic_process_caml(
 
     *pInBufLen = state->in_buffer_used;
     *pOutBufLen = state->out_buffer_used;
-    *errmsg = state->errmsg;
-    state->errmsg = NULL;
     CAMLreturnT(quic_result, ret);
 }
 
@@ -1038,15 +1014,15 @@ quic_result MITLS_CALLCONV FFI_mitls_quic_process(
   /*in*/ char* inBuf,
   /*inout*/ size_t *pInBufLen,
   /*out*/ char *outBuf,
-  /*inout*/ size_t *pOutBufLen,
-  /* out */ char **errmsg)
+  /*inout*/ size_t *pOutBufLen)
 {
     quic_result ret;
-    *errmsg = NULL;
 
+    caml_c_thread_register();
     caml_acquire_runtime_system();
-    ret = FFI_mitls_quic_process_caml(state, inBuf, pInBufLen, outBuf, pOutBufLen, errmsg);
+    ret = FFI_mitls_quic_process_caml(state, inBuf, pInBufLen, outBuf, pOutBufLen);
     caml_release_runtime_system();
+    caml_c_thread_unregister();
 
     return ret;
 }
@@ -1054,8 +1030,7 @@ quic_result MITLS_CALLCONV FFI_mitls_quic_process(
 static int FFI_mitls_quic_get_peer_parameters_caml(
   /* in */ quic_state *state,
   /* out */ uint32_t *ver,
-  /* out */ quic_transport_parameters *qp,
-  /* out */ char **errmsg)
+  /* out */ quic_transport_parameters *qp)
 {
   CAMLparam0();
   CAMLlocal2(result, tmp);
@@ -1064,7 +1039,7 @@ static int FFI_mitls_quic_get_peer_parameters_caml(
   result = caml_callback_exn(*g_mitls_FFI_QuicGetPeerParameters, state->fstar_state);
 
   if (Is_exception_result(result)) {
-      report_caml_exception(result, errmsg);
+      report_caml_exception(result);
       CAMLreturnT(int, 0);
   }
 
@@ -1089,15 +1064,15 @@ static int FFI_mitls_quic_get_peer_parameters_caml(
 int MITLS_CALLCONV FFI_mitls_quic_get_peer_parameters(
   /* in */ quic_state *state,
   /* out */ uint32_t *ver,
-  /* out */ quic_transport_parameters *qp,
-  /* out */ char **errmsg)
+  /* out */ quic_transport_parameters *qp)
 {
     int ret;
-    *errmsg = NULL;
 
+    caml_c_thread_register();
     caml_acquire_runtime_system();
-    ret = FFI_mitls_quic_get_peer_parameters_caml(state, ver, qp, errmsg);
+    ret = FFI_mitls_quic_get_peer_parameters_caml(state, ver, qp);
     caml_release_runtime_system();
+    caml_c_thread_unregister();
 
     return ret;
 }
@@ -1105,16 +1080,16 @@ int MITLS_CALLCONV FFI_mitls_quic_get_peer_parameters(
 int MITLS_CALLCONV FFI_mitls_quic_get_exporter(
   /* in */ quic_state *state,
   int early,
-  quic_secret *secret,
-  /* out */ char **errmsg)
+  quic_secret *secret)
 {
     int ret;
     mitls_state tls_state = {.fstar_state = state->fstar_state};
-    *errmsg = NULL;
 
+    caml_c_thread_register();
     caml_acquire_runtime_system();
-    ret = ocaml_get_exporter(&tls_state, early, secret, errmsg);
+    ret = ocaml_get_exporter(&tls_state, early, secret);
     caml_release_runtime_system();
+    caml_c_thread_unregister();
 
     return ret;
 }
@@ -1122,9 +1097,11 @@ int MITLS_CALLCONV FFI_mitls_quic_get_exporter(
 void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state)
 {
     if (state != NULL) {
+        caml_c_thread_register();
         caml_acquire_runtime_system();
         caml_remove_generational_global_root(&state->fstar_state);
         caml_release_runtime_system();
+        caml_c_thread_unregister();
         state->fstar_state = 0;
         free(state);
     }

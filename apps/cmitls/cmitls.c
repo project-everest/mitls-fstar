@@ -150,18 +150,6 @@ int ParseArgs(int argc, char **argv)
     return 0;
 }
 
-void PrintErrors(char *out_msg, char *err_msg)
-{
-    if (out_msg) {
-        printf("MITLS: %s", out_msg);
-        FFI_mitls_free_msg(out_msg);
-    }
-    if (err_msg) {
-        fprintf(stderr, "MITLS: %s", err_msg);
-        FFI_mitls_free_msg(err_msg);
-    }
-}
-
 void dump(const char *buffer, size_t len)
 {
   int i;
@@ -226,7 +214,6 @@ int certificate_verify(void *cbs, const char* chain_bytes, size_t chain_len, con
 
 int ConfigureQuic(quic_state **pstate)
 {
-    char *err_msg;
     int erridx, r;
     quic_state *state;
     quic_config quic_cfg;
@@ -285,8 +272,7 @@ int ConfigureQuic(quic_state **pstate)
         quic_cfg.host_name = option_hostname;
     }
 
-    r = FFI_mitls_quic_create(&state, &quic_cfg, &err_msg);
-    PrintErrors(NULL, err_msg);
+    r = FFI_mitls_quic_create(&state, &quic_cfg);
     if (r == 0) {
         printf("FFI_mitls_quic_create() failed.\n");
         return 2;
@@ -298,7 +284,6 @@ int ConfigureQuic(quic_state **pstate)
 int Configure(mitls_state **pstate)
 {
     char *out_msg;
-    char *err_msg;
     mitls_state *state;
     int r, erridx;
 
@@ -332,10 +317,9 @@ int Configure(mitls_state **pstate)
         return 4;
     }
 
-    r = FFI_mitls_configure(&state, option_version, option_hostname, &out_msg, &err_msg);
+    r = FFI_mitls_configure(&state, option_version, option_hostname);
     if(r) r = FFI_mitls_configure_cert_callbacks(state, pki, &cert_callbacks);
 
-    PrintErrors(out_msg, err_msg);
     if (r == 0) {
         printf("FFI_mitls_configure(%s,%s) failed.\n", option_version, option_hostname);
         return 2;
@@ -429,7 +413,6 @@ int SingleServer(mitls_state *state, SOCKET clientfd)
 {
     callback_context ctx;
     char *out_msg;
-    char *err_msg;
     void *db;
     size_t db_length;
     int r;
@@ -442,13 +425,12 @@ int SingleServer(mitls_state *state, SOCKET clientfd)
                             "Content-Type: text/plain; charset=utf-8\r\n\r\n";
 
     ctx.sockfd = clientfd;
-    r = FFI_mitls_accept_connected(&ctx, SendCallback, RecvCallback, state, &out_msg, &err_msg);
-    PrintErrors(out_msg, err_msg);
+    r = FFI_mitls_accept_connected(&ctx, SendCallback, RecvCallback, state);
     if (r == 0) {
         printf("FFI_mitls_accept_connected() failed\n");
         return 1;
     }
-    db = FFI_mitls_receive(state, &db_length, &out_msg, &err_msg);
+    db = FFI_mitls_receive(state, &db_length);
     if (db == NULL) {
         printf("FFI_mitls_receive() failed\n");
         return 1;
@@ -470,10 +452,8 @@ int SingleServer(mitls_state *state, SOCKET clientfd)
     strcat(payload, ctext);
     strncat(payload, (const char*)db, db_length);
 
-    FFI_mitls_free_msg(db);
-
-    r = FFI_mitls_send(state, payload, strlen(payload), &out_msg, &err_msg);
-    PrintErrors(out_msg, err_msg);
+    FFI_mitls_free_packet(state, db);
+    r = FFI_mitls_send(state, payload, strlen(payload));
     if (r == 0) {
         printf("FFI_mitls_send() failed\n");
         return 1;
@@ -551,9 +531,7 @@ void quic_recv_until(quic_state *state, SOCKET fd, quic_result_check check)
 
     inbufsize = 0;
     do {
-        char *err_msg;
-        r = FFI_mitls_quic_process(state, inbuf, &inbufsize, outbuf, &outbufsize, &err_msg);
-        PrintErrors(NULL, err_msg);
+        r = FFI_mitls_quic_process(state, inbuf, &inbufsize, outbuf, &outbufsize);
         switch (r) {
         case TLS_would_block: printf("would block\n"); break;
         case TLS_error_local: printf("fatal error\n"); break;
@@ -619,12 +597,9 @@ void quic_dump(quic_state *state)
     quic_secret secret1;
     int ret0;
     int ret1;
-    char *err_msg;
 
-    ret0 = FFI_mitls_quic_get_exporter(state, 0, &secret0, &err_msg);
-    PrintErrors(NULL, err_msg);
-    ret1 = FFI_mitls_quic_get_exporter(state, 1, &secret1, &err_msg);
-    PrintErrors(NULL, err_msg);
+    ret0 = FFI_mitls_quic_get_exporter(state, 0, &secret0);
+    ret1 = FFI_mitls_quic_get_exporter(state, 1, &secret1);
 
     if (ret0) {
         printf("early secret: ");
@@ -785,7 +760,6 @@ int TestClient(void)
     ssize_t r;
     callback_context ctx;
     char *out_msg;
-    char *err_msg;
     char request[512];
     void *response;
     size_t response_length;
@@ -827,23 +801,21 @@ int TestClient(void)
     }
 
     ctx.sockfd = sockfd;
-    r = FFI_mitls_connect(&ctx, SendCallback, RecvCallback, state, &out_msg, &err_msg);
-    PrintErrors(out_msg, err_msg);
+    r = FFI_mitls_connect(&ctx, SendCallback, RecvCallback, state);
     if (r == 0) {
         printf("FFI_mitls_connect() failed\n");
         return 1;
     }
 
     printf("Read OK, sending HTTP request...\n");
-    r = FFI_mitls_send(state, request, requestlength, &out_msg, &err_msg);
-    PrintErrors(out_msg, err_msg);
+    r = FFI_mitls_send(state, request, requestlength);
     if (r == 0) {
         printf("FFI_mitls_send() failed\n");
         closesocket(sockfd);
         return 1;
     }
 
-    response = FFI_mitls_receive(state, &response_length, &out_msg, &err_msg);
+    response = FFI_mitls_receive(state, &response_length);
     if (response == NULL) {
         printf("FFI_mitls_receive() failed\n");
         closesocket(sockfd);
@@ -851,7 +823,7 @@ int TestClient(void)
     }
     printf("Received data:\n");
     puts((const char *)response);
-    FFI_mitls_free_msg(response);
+    FFI_mitls_free_packet(state, response);
 
     printf("Closing connection, irrespective of the response\n");
     FFI_mitls_close(state);

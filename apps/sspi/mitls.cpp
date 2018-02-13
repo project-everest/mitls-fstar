@@ -286,7 +286,7 @@ void ProcessRecv(TLS_RECV_WORK_ITEM* item)
     }
     if (!OutputBuffer) {
         _Print("Couldn't find a SECBUFFER_DATA to write into!");
-        FFI_mitls_free_packet(pvReceived);
+        FFI_mitls_free_packet(state->state, pvReceived);
         state->status = SEC_E_INTERNAL_ERROR;
         return;
     } else if (cbOutputBuffer < cbReceived) {
@@ -317,7 +317,7 @@ void ProcessRecv(TLS_RECV_WORK_ITEM* item)
         }
     }
 
-    FFI_mitls_free_packet(pvReceived);
+    FFI_mitls_free_packet(state->state, pvReceived);
     state->status = SEC_E_OK;
 }
 

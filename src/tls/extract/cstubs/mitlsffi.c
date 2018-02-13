@@ -42,8 +42,6 @@ struct mitls_state {
   Connection_connection cxn;
 };
 
-static bool isRegistered;
-
 // BUGBUG: temporary global lock to protect global
 //         mutable variables in mitls.  Remove when
 //         the variables have their own protection.
@@ -97,9 +95,6 @@ void NoPrintf(const char *fmt, ...)
 //
 int MITLS_CALLCONV FFI_mitls_init(void)
 {
-  if (isRegistered) {
-    return FFI_mitls_thread_register();
-  }
 #if IS_WINDOWS
   #ifdef _KERNEL_MODE
     ExInitializeFastMutex(&lock);
@@ -133,7 +128,6 @@ int MITLS_CALLCONV FFI_mitls_init(void)
       return 0;
   }
   kremlinit_globals();
-  isRegistered = 1;
   return 1; // success
 }
 
@@ -147,17 +141,14 @@ void MITLS_CALLCONV FFI_mitls_cleanup(void)
     pthread_mutex_destroy(&lock);
 #endif
     HeapRegionCleanup();
-    isRegistered = 0;
 }
 
 // Called by the host app to configure miTLS ahead of creating a connection
-int MITLS_CALLCONV FFI_mitls_configure(mitls_state **state, const char *tls_version, const char *host_name, char **outmsg, char **errmsg)
+int MITLS_CALLCONV FFI_mitls_configure(mitls_state **state, const char *tls_version, const char *host_name)
 {
     int ret;
     
     *state = NULL;
-    *outmsg = NULL;
-    *errmsg = NULL;
 
     HEAP_REGION rgn;
     CREATE_HEAP_REGION(&rgn);
@@ -364,6 +355,8 @@ static FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme
     res.tag = FStar_Pervasives_Native_None;
   } else {
     K___uint64_t_TLSConstants_signatureScheme sig;
+    // silence a GCC warning about sig.snd._0.length possibly uninitialized
+    memset(&sig, 0, sizeof(sig));
     res.tag = FStar_Pervasives_Native_Some;
     sig.fst = (uint64_t)chain;
     sig.snd.tag = tls_of_pki(selected);
@@ -376,7 +369,7 @@ static Prims_list__FStar_Bytes_bytes* wrapped_format(FStar_Dyn_dyn cbs, FStar_Dy
 {
   wrapped_cert_cb* s = (wrapped_cert_cb*)cbs;
   char *buffer = KRML_HOST_MALLOC(MAX_CHAIN_LEN);
-  size_t r = s->format(s->cb_state, (const void *)cert, buffer);
+  size_t r = s->format(s->cb_state, (const void *)(size_t)cert, buffer);
   FStar_Bytes_bytes b = {.length = r, .data = buffer};
   return FFI_ffiSplitChain(b);
 }
@@ -391,7 +384,7 @@ static FStar_Pervasives_Native_option__FStar_Bytes_bytes wrapped_sign(
   FStar_Pervasives_Native_option__FStar_Bytes_bytes res = {.tag = FStar_Pervasives_Native_None};
   mitls_signature_scheme sigalg = pki_of_tls(sa.tag);
 
-  size_t slen = s->sign(s->cb_state, (const void *)cert, sigalg, tbs.data, tbs.length, sig);
+  size_t slen = s->sign(s->cb_state, (const void *)(size_t)cert, sigalg, tbs.data, tbs.length, sig);
 
   if(slen > 0) {
     res.tag = FStar_Pervasives_Native_Some;
@@ -468,14 +461,11 @@ void MITLS_CALLCONV FFI_mitls_close(mitls_state *state)
     }
 }
 
-void MITLS_CALLCONV FFI_mitls_free_msg(char *msg)
+void MITLS_CALLCONV FFI_mitls_free_packet(/* in */ mitls_state *state, void *packet)
 {
-    // do nothing.  no msg is returned in the Kremlin build.
-}
-
-void MITLS_CALLCONV FFI_mitls_free_packet(void *packet)
-{
-    // bugbug: free the packet.
+    ENTER_HEAP_REGION(state->rgn);
+    KRML_HOST_FREE(packet);
+    LEAVE_HEAP_REGION();
 }
 
 typedef struct {
@@ -497,10 +487,8 @@ static int32_t wrapped_recv(void* ctx, uint8_t* buffer, uint32_t len)
 }
 
 // Called by the host app to create a TLS connection.
-int MITLS_CALLCONV FFI_mitls_connect(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
+int MITLS_CALLCONV FFI_mitls_connect(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state)
 {
-   *outmsg = NULL;
-   *errmsg = NULL;
    ENTER_HEAP_REGION(state->rgn);
    LOCK_MUTEX(&lock);
 
@@ -521,9 +509,8 @@ int MITLS_CALLCONV FFI_mitls_connect(void *send_recv_ctx, pfn_FFI_send psend, pf
     return (result.snd == 0);
 }
 
-int MITLS_CALLCONV FFI_mitls_resume(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state, /* in */ mitls_ticket *ticket, /* out */ char **errmsg)
+int MITLS_CALLCONV FFI_mitls_resume(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state, /* in */ mitls_ticket *ticket)
 {
-    *errmsg = NULL;
     ENTER_HEAP_REGION(state->rgn);
     LOCK_MUTEX(&lock);
     wrapped_transport_cb* tcb = KRML_HOST_MALLOC(sizeof(wrapped_transport_cb));
@@ -584,11 +571,8 @@ int MITLS_CALLCONV FFI_mitls_resume(void *send_recv_ctx, pfn_FFI_send psend, pfn
 }
 
 // Called by the host server app, after a client has connected to a socket and the calling server has accepted the TCP connection.
-int MITLS_CALLCONV FFI_mitls_accept_connected(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
+int MITLS_CALLCONV FFI_mitls_accept_connected(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state)
 {
-    *outmsg = NULL;
-    *errmsg = NULL;
-    
     ENTER_HEAP_REGION(state->rgn);
     LOCK_MUTEX(&lock);
 
@@ -606,11 +590,9 @@ int MITLS_CALLCONV FFI_mitls_accept_connected(void *send_recv_ctx, pfn_FFI_send 
 }
 
 // Called by the host app transmit a packet
-int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const void* buffer, size_t buffer_size, /* out */ char **outmsg, /* out */ char **errmsg)
+int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const void* buffer, size_t buffer_size)
 {
     int ret;
-    *outmsg = NULL;
-    *errmsg = NULL;
 
     ENTER_HEAP_REGION(state->rgn);
     LOCK_MUTEX(&lock);
@@ -622,11 +604,9 @@ int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const void* buffe
 }
 
 // Called by the host app to receive a packet
-void * MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_size, /* out */ char **outmsg, /* out */ char **errmsg)
+void * MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_size)
 {
     void *p;
-    *outmsg = NULL;
-    *errmsg = NULL;
     *packet_size = 0;
 
     ENTER_HEAP_REGION(state->rgn);
@@ -646,10 +626,8 @@ void * MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ s
     return p;
 }
 
-static int get_exporter(Connection_connection cxn, int early, /* out */ mitls_secret *secret, /* out */ char **errmsg)
+static int get_exporter(Connection_connection cxn, int early, /* out */ mitls_secret *secret)
 {
-  *errmsg = NULL;
-
   FStar_Pervasives_Native_option__K___Hashing_Spec_alg_CryptoTypes_aead_cipher_FStar_Bytes_bytes ret;
 
   ret = FFI_ffiGetExporter(cxn, (early) ? true : false);
@@ -666,36 +644,21 @@ static int get_exporter(Connection_connection cxn, int early, /* out */ mitls_se
 }
 
 
-int MITLS_CALLCONV FFI_mitls_get_exporter(/* in */ mitls_state *state, int early, /* out */ mitls_secret *secret, /* out */ char **errmsg)
+int MITLS_CALLCONV FFI_mitls_get_exporter(/* in */ mitls_state *state, int early, /* out */ mitls_secret *secret)
 {
   ENTER_HEAP_REGION(state->rgn);
-  int ret = get_exporter(state->cxn, early, secret, errmsg);
+  int ret = get_exporter(state->cxn, early, secret);
   LEAVE_HEAP_REGION();
   return ret;
 }
 
-void *MITLS_CALLCONV FFI_mitls_get_cert(/* in */ mitls_state *state, /* out */ size_t *cert_size, /* out */ char **outmsg, /* out */ char **errmsg)
+void *MITLS_CALLCONV FFI_mitls_get_cert(/* in */ mitls_state *state, /* out */ size_t *cert_size)
 {
-    *outmsg = NULL;
-    *errmsg = NULL;
-
     ENTER_HEAP_REGION(state->rgn);
     FStar_Bytes_bytes ret = FFI_getCert(state->cxn);
     *cert_size = ret.length;
     LEAVE_HEAP_REGION();
     return (void*)ret.data; // bugbug: casting away const
-}
-
-// Register the calling thread, so it can call miTLS.  Returns 1 for success, 0 for error.
-int MITLS_CALLCONV FFI_mitls_thread_register(void)
-{
-    return 1;
-}
-
-// Unregister the calling thread, so it can no longer call miTLS.  Returns 1 for success, 0 for error.
-int MITLS_CALLCONV FFI_mitls_thread_unregister(void)
-{
-    return 1;
 }
 
 /*************************************************************************
@@ -799,9 +762,39 @@ static Prims_list__uint32_t *alloc_version_list(const uint32_t *list, size_t len
   return result;
 }
 
-int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_config *cfg, /* out */ char **errmsg)
+#ifdef _KERNEL_MODE
+typedef struct {
+    quic_config *cfg;
+    quic_state* st;
+} quic_create_state;
+
+void quic_create_callout(PVOID Parameter)
 {
-    *errmsg = NULL;
+    quic_create_state *s = (quic_create_state*)Parameter;
+    
+    if(s->cfg->is_server) {
+      s->st->cxn = QUIC_ffiAcceptConnected(s->st, quic_send, quic_recv, s->st->cfg);
+    } else {
+      FStar_Pervasives_Native_option__K___FStar_Bytes_bytes_FStar_Bytes_bytes ticket;
+
+      if(s->cfg->server_ticket && s->cfg->server_ticket->ticket_len > 0) {
+          ticket.tag = FStar_Pervasives_Native_Some;
+
+          // BUGBUG: Handle OOM
+          MakeFStar_Bytes_bytes(&ticket.v.fst, s->cfg->server_ticket->ticket, s->cfg->server_ticket->ticket_len);
+          MakeFStar_Bytes_bytes(&ticket.v.snd, s->cfg->server_ticket->session, s->cfg->server_ticket->session_len);
+      }
+      else {
+          ticket.tag = FStar_Pervasives_Native_None;
+      }
+
+      s->st->cxn = QUIC_ffiConnect((FStar_Dyn_dyn)s->st, quic_send, quic_recv, s->st->cfg, ticket);
+    }
+}
+#endif
+
+int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_config *cfg)
+{
     *state = NULL;
     HEAP_REGION rgn;
     CREATE_HEAP_REGION(&rgn);
@@ -914,7 +907,16 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
       st->cfg = FFI_ffiSetCertCallbacks(st->cfg, cb);
     }
 
-    LOCK_MUTEX(&lock);
+#ifdef _KERNEL_MODE
+    // A call to QUIC_ffiConnect() may consume 0x2400 bytes.
+    quic_create_state s = {.cfg = cfg, .st = st };
+    NTSTATUS status = KeExpandKernelStackAndCallout(quic_create_callout, &s, MAXIMUM_EXPANSION_SIZE);
+    if (!NT_SUCCESS(status)) {
+        KRML_HOST_PRINTF("KeExpandKernelCallstackAndCallout for quic_create_callout failed st=%x", status);
+        LEAVE_HEAP_REGION();
+        return 0;
+    }
+#else
     if(cfg->is_server) {
       st->cxn = QUIC_ffiAcceptConnected(st, quic_send, quic_recv, st->cfg);
     } else {
@@ -933,7 +935,7 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
 
       st->cxn = QUIC_ffiConnect((FStar_Dyn_dyn)st, quic_send, quic_recv, st->cfg, ticket);
     }
-    UNLOCK_MUTEX(&lock);
+#endif    
 
     LEAVE_HEAP_REGION();
     st->rgn = rgn;
@@ -941,15 +943,27 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
     return 1;
 }
 
+#ifdef _KERNEL_MODE
+typedef struct {
+    quic_state *state;
+    QUIC_result r;
+} quic_process_state;
+
+VOID quic_process_callout(PVOID Parameter)
+{
+    quic_process_state *s = (quic_process_state*)Parameter;
+    
+    s->r = QUIC_recv(s->state->cxn);
+}
+#endif
+
 quic_result MITLS_CALLCONV FFI_mitls_quic_process(
   /* in */ quic_state *state,
   /*in*/ char* inBuf,
   /*inout*/ size_t *pInBufLen,
   /*out*/ char *outBuf,
-  /*inout*/ size_t *pOutBufLen,
-  /* out */ char **errmsg)
+  /*inout*/ size_t *pOutBufLen)
 {
-    *errmsg = NULL;
     quic_result ret = TLS_error_other;
     ENTER_HEAP_REGION(state->rgn);
     LOCK_MUTEX(&lock);
@@ -962,7 +976,18 @@ quic_result MITLS_CALLCONV FFI_mitls_quic_process(
     state->out_buffer_used = 0;
     state->out_buffer_size = *pOutBufLen;
 
+#ifdef _KERNEL_MODE
+    // A call to QUIC_recv() may consume 0x4b00 bytes.
+    quic_process_state s = {.state = state, .r = TLS_error_other };
+    NTSTATUS status = KeExpandKernelStackAndCallout(quic_process_callout, &s, MAXIMUM_EXPANSION_SIZE);
+    QUIC_result r = s.r;
+    if (!NT_SUCCESS(status)) {
+        KRML_HOST_PRINTF("KeExpandKernelCallstackAndCallout for quic_process_callout failed st=%x", status);
+        r.code = TLS_error_other;
+    }
+#else
     QUIC_result r = QUIC_recv(state->cxn);
+#endif
 
     if ((int)r.code <= (int)TLS_server_complete) {
         ret = (quic_result) r.code;
@@ -980,10 +1005,8 @@ quic_result MITLS_CALLCONV FFI_mitls_quic_process(
 int MITLS_CALLCONV FFI_mitls_quic_get_peer_parameters(
   /* in */ quic_state *state,
   /* out */ uint32_t *ver,
-  /* out */ quic_transport_parameters *qp,
-  /* out */ char **errmsg)
+  /* out */ quic_transport_parameters *qp)
 {
-  *errmsg = NULL;
   ENTER_HEAP_REGION(state->rgn);
   assert(qp);
 
@@ -1009,11 +1032,10 @@ int MITLS_CALLCONV FFI_mitls_quic_get_peer_parameters(
 int MITLS_CALLCONV FFI_mitls_quic_get_exporter(
   /* in */ quic_state *state,
   int early,
-  quic_secret *secret,
-  /* out */ char **errmsg)
+  quic_secret *secret)
 {
   ENTER_HEAP_REGION(state->rgn);
-  int ret = get_exporter(state->cxn, early, secret, errmsg);
+  int ret = get_exporter(state->cxn, early, secret);
   LEAVE_HEAP_REGION();
   return ret;
 }

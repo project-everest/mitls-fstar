@@ -534,10 +534,10 @@ let pinverse_version x = TLSConstantsAux2.pinverse_version x
 
 #set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1"
 
-// DRAFT#21
+// DRAFT#23
 // to be used *only* in ServerHello.version.
 // https://tlswg.github.io/tls13-spec/#rfc.section.4.2.1
-let draft = 22z
+let draft = 23z
 let versionBytes_draft: protocolVersion -> Tot (lbytes 2) = function
   | TLS_1p3 -> twobytes ( 127z, draft )
   | pv -> versionBytes pv
@@ -547,8 +547,8 @@ let parseVersion_draft v =
   | (127z, d) ->
       if d = draft
       then Correct TLS_1p3
-      else Error(AD_decode_error, "Refused to parse unknown draft "^print_bytes v)
-  | (3z, 4z) -> Error(AD_decode_error, "Refused to parse TLS 1.3 final version")
+      else Error(AD_decode_error, "Refused to parse unknown draft "^print_bytes v^": expected TLS 1.3#"^UInt8.to_string draft)
+  | (3z, 4z) -> Error(AD_decode_error, "Refused to parse TLS 1.3 final version: expected TLS 1.3#"^UInt8.to_string draft)
   | _ ->
     match parseVersion v with
     | Correct (UnknownVersion _ _) -> Error(AD_decode_error, "Parsed unknown version ")

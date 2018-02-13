@@ -28,6 +28,5 @@ clean: kremlin-clean ocaml-clean quic-clean
 	$(EXTRACT_DIR)/Kremlin-{Internal-Test,Library}/{,*/}*.{c,h,o} \
 	.depend.$(FLAVOR) *.checked.lax 
 
-
 %.fst-in %.fsti-in:
 	@echo $(addprefix --include , $(INCLUDE_PATHS)) --cache_checked_modules --lax
