@@ -121,7 +121,7 @@ extern int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const void
 extern void *MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_size);    
 
 // Free a packet returned FFI_mitls_receive();
-extern void MITLS_CALLCONV FFI_mitls_free_packet(void* packet);
+extern void MITLS_CALLCONV FFI_mitls_free_packet(/* in */ mitls_state *state, void* packet);
 
 /*************************************************************************
 * QUIC FFI

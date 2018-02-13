@@ -435,8 +435,9 @@ void MITLS_CALLCONV FFI_mitls_free_msg(char *msg)
     free(msg);
 }
 
-void MITLS_CALLCONV FFI_mitls_free_packet(void *packet)
+void MITLS_CALLCONV FFI_mitls_free_packet(mitls_state *state, void *packet)
 {
+    // state is ignored in the OCaml build
     free(packet);
 }
 

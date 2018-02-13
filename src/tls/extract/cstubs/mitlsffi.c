@@ -461,9 +461,11 @@ void MITLS_CALLCONV FFI_mitls_close(mitls_state *state)
     }
 }
 
-void MITLS_CALLCONV FFI_mitls_free_packet(void *packet)
+void MITLS_CALLCONV FFI_mitls_free_packet(/* in */ mitls_state *state, void *packet)
 {
-    // bugbug: free the packet.
+    ENTER_HEAP_REGION(state->rgn);
+    KRML_HOST_FREE(packet);
+    LEAVE_HEAP_REGION();
 }
 
 typedef struct {

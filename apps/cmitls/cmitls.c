@@ -452,7 +452,7 @@ int SingleServer(mitls_state *state, SOCKET clientfd)
     strcat(payload, ctext);
     strncat(payload, (const char*)db, db_length);
 
-    FFI_mitls_free_packet(db);
+    FFI_mitls_free_packet(state, db);
     r = FFI_mitls_send(state, payload, strlen(payload));
     if (r == 0) {
         printf("FFI_mitls_send() failed\n");
@@ -823,7 +823,7 @@ int TestClient(void)
     }
     printf("Received data:\n");
     puts((const char *)response);
-    FFI_mitls_free_packet(response);
+    FFI_mitls_free_packet(state, response);
 
     printf("Closing connection, irrespective of the response\n");
     FFI_mitls_close(state);
