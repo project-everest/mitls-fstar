@@ -17,7 +17,6 @@ open TLSInfo
 open HandshakeMessages
 open Hashing
 open Hashing.CRF // now using incremental, collision-resistant, agile Hashing.
-module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 
 

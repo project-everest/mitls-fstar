@@ -1,9 +1,6 @@
 module Handshake
 
-// provisional
-open FStar.HyperHeap
-open FStar.HyperStack
-
+open Mem
 open TLSConstants
 
 (*! abstract state of a handshake endpoint, 

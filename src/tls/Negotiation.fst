@@ -3,14 +3,12 @@ module Negotiation
 open FStar.Error
 open Platform.Bytes
 
+open Mem
 open TLSError
 open TLSInfo
 open TLSConstants
 open HandshakeMessages
 
-module HH = FStar.HyperHeap
-module HS = FStar.HyperStack
-module MR = FStar.Monotonic.RRef
 
 //16-05-31 these opens are implementation-only; overall we should open less
 open Extensions
@@ -374,7 +372,7 @@ noeq type t (region:rgn) (role:TLSConstants.role) =
     cfg: config -> // local configuration
     resume: TLSInfo.resumeInfo role ->
     nonce: TLSInfo.random ->
-    state: MR.m_rref region (negotiationState role cfg resume) ns_rel ->
+    state: m_rref region (negotiationState role cfg resume) ns_rel ->
     t region role
 
 val computeOffer: r:role -> cfg:config -> resume:TLSInfo.resumeInfo r -> nonce:TLSInfo.random
@@ -436,10 +434,10 @@ val create:
 let create region r cfg resume nonce =
   match r with
   | Client ->
-    let state = MR.m_alloc region (C_Init nonce) in
+    let state = m_alloc region (C_Init nonce) in
     NS cfg resume nonce state
   | Server ->
-    let state = MR.m_alloc region (S_Init nonce) in
+    let state = m_alloc region (S_Init nonce) in
     NS cfg resume nonce state
 
 // a bit too restrictive: use a single Hash in any given offer
@@ -528,7 +526,7 @@ val getMode: #region:rgn -> #role:TLSConstants.role -> t region role ->
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
 let getMode #region #role ns =
-  match MR.m_read ns.state with
+  match !ns.state with
   | C_Mode mode
   | C_WaitFinished2 mode _
   | C_Complete mode _
@@ -543,7 +541,7 @@ val version: #region:rgn -> #role:TLSConstants.role -> t region role ->
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
 let version #region #role ns =
-  match MR.m_read ns.state with
+  match !ns.state with
   | C_Init _ -> ns.cfg.max_version
   | C_Offer _ -> ns.cfg.max_version
   | C_HRR o _ -> ns.cfg.max_version
@@ -659,7 +657,7 @@ let client_ClientHello #region ns oks =
     | None -> None in
   let _, pskid = ns.resume in
   let pskinfo = map_ST (fun i -> (i, PSK.psk_info i)) pskid in
-  match MR.m_read ns.state with
+  match !ns.state with
   | C_Init _ ->
       trace(if
     (match pskinfo with
@@ -669,7 +667,7 @@ let client_ClientHello #region ns oks =
       trace(if ns.cfg.enable_early_data then "enabled" else "");
       let offer = computeOffer Client ns.cfg ns.resume ns.nonce oks' pskinfo in
       trace ("offering client extensions "^string_of_option_extensions offer.ch_extensions);
-      MR.m_write ns.state (C_Offer offer);
+      ns.state := C_Offer offer;
       offer
 
 let group_of_hrr hrr : option CommonDH.group =
@@ -682,7 +680,7 @@ let client_HelloRetryRequest #region (ns:t region Client) hrr (s:share) =
   let { hrr_protocol_version = pv;
         hrr_cipher_suite = cs;
         hrr_extensions = el } = hrr in
-  match MR.m_read ns.state with
+  match !ns.state with
   | C_Offer offer ->
     let old_shares = gs_of offer in
     let old_psk =
@@ -706,7 +704,7 @@ let client_HelloRetryRequest #region (ns:t region Client) hrr (s:share) =
 
         let offer' = {offer with ch_extensions = Some ext'} in
         let ri = (hrr, old_shares, old_psk) in
-        MR.m_write ns.state (C_HRR offer' ri);
+        ns.state := C_HRR offer' ri;
         Correct(offer')
        end
       else
@@ -886,7 +884,7 @@ val client_ServerHello: #region:rgn -> t region Client ->
   HandshakeMessages.sh ->
   St (result mode) // it needs to be computed, whether returned or not
 let client_ServerHello #region ns sh =
-  match MR.m_read ns.state with
+  match !ns.state with
   | C_HRR offer _ // -> FIXME validation
   //  .....
   | C_Offer offer ->
@@ -944,7 +942,7 @@ let client_ServerHello #region ns sh =
                 None // n_server_cert
                 client_share
                in
-               MR.m_write ns.state (C_Mode mode);
+               ns.state := C_Mode mode;
                Correct mode
             | _ -> // TODO: pure PSK mode
               Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
@@ -965,7 +963,7 @@ let client_ServerHello #region ns sh =
             None // n_server_cert
             None // n_client_share
           in
-          MR.m_write ns.state (C_Mode mode);
+          ns.state := C_Mode mode;
           Correct mode
         | _ -> Error (AD_decode_error, "ServerHello ciphersuite is not a real ciphersuite")
 
@@ -991,7 +989,7 @@ val client_ServerKeyExchange: #region:rgn -> t region Client ->
   ocr:option HandshakeMessages.cr ->
   St (result mode)
 let client_ServerKeyExchange #region ns crt ske ocr =
-  match MR.m_read ns.state with
+  match !ns.state with
   | C_Mode mode ->
     match ske.ske_kex_s with
     | KEX_S_RSA _ ->
@@ -1026,7 +1024,7 @@ let client_ServerKeyExchange #region ns crt ske ocr =
             let Mode offer hrr pv sr sid cs pski sext _ _ _ gx = mode in
             let mode = Mode offer hrr pv sr sid cs pski sext (Some gy) ocr (Some scert) gx in
             let ccert = None in // TODO
-            MR.m_write ns.state (C_WaitFinished2 mode ccert);
+            ns.state := C_WaitFinished2 mode ccert;
             Correct mode
           end
        else
@@ -1042,7 +1040,7 @@ val clientComplete_13: #region:rgn -> t region Client ->
   St (result mode) // it needs to be computed, whether returned or not
 let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify digest =
   trace "Nego.clientComplete_13";
-  match MR.m_read ns.state with
+  match !ns.state with
   | C_Mode mode ->
     let ccert = None in
     trace ("EE: "^(Extensions.string_of_extensions ee));
@@ -1096,7 +1094,7 @@ let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify d
         optServerCert
         mode.n_client_share
       in
-      MR.m_write ns.state (C_Complete mode ccert);
+      ns.state := C_Complete mode ccert;
       Correct mode
     else
       Error(AD_bad_certificate_fatal, "Failed to validate signature or certificate")
@@ -1390,7 +1388,7 @@ let server_ClientHello #region ns offer =
   trace ("offered client extensions "^string_of_option_extensions offer.ch_extensions);
   trace ("offered cipher suites "^(string_of_ciphersuites offer.ch_cipher_suites));
   trace (string_of_result (List.Tot.fold_left (fun s pv -> s^" "^string_of_pv pv) "offered versions")  (offered_versions TLS_1p0 offer));
-  match MR.m_read ns.state with
+  match !ns.state with
   | S_HRR o1 hrr ->
     let o2 = offer in
     // We only send HRR for KeyShare
@@ -1431,7 +1429,7 @@ let server_ClientHello #region ns offer =
         Error(AD_illegal_parameter, "client sent the same hello in response to hello retry")
       | Correct(ServerMode m) ->
         trace ("negotiated after HRR "^string_of_pv m.n_protocol_version^" "^string_of_ciphersuite m.n_cipher_suite);
-        MR.m_write ns.state (S_ClientHello m);
+        ns.state := S_ClientHello m;
         sm
     else
       Error(AD_illegal_parameter, "Inconsistant parameters between first and second client hello")
@@ -1443,11 +1441,11 @@ let server_ClientHello #region ns offer =
       Error z
     | Correct (ServerHelloRetryRequest hrr) ->
       // record the initial offer and return the HRR to HS
-      MR.m_write ns.state (S_HRR offer hrr);
+      ns.state := S_HRR offer hrr;
       sm
     | Correct (ServerMode m) ->
       trace ("negotiated "^string_of_pv m.n_protocol_version^" "^string_of_ciphersuite m.n_cipher_suite);
-      MR.m_write ns.state (S_ClientHello m);
+      ns.state := S_ClientHello m;
       sm
 
 
@@ -1457,7 +1455,7 @@ let share_of_serverKeyShare (ks:CommonDH.serverKeyShare) : share =
 val server_ServerShare: #region:rgn -> t region Server -> option CommonDH.serverKeyShare  ->
   St (result mode)
 let server_ServerShare #region ns ks =
-  match MR.m_read ns.state with
+  match !ns.state with
   | S_ClientHello mode ->
     let cexts = mode.n_offer.ch_extensions in
     trace ("processing client extensions " ^ string_of_option_extensions cexts);
@@ -1490,7 +1488,7 @@ let server_ServerShare #region ns ks =
         mode.n_server_cert
         mode.n_client_share
       in
-      MR.m_write ns.state (S_Mode mode);
+      ns.state := S_Mode mode;
       Correct mode
       end
 

@@ -1,11 +1,10 @@
 module Handshake
 
-open FStar.Heap
-open FStar.HyperHeap
-open FStar.HyperStack
 open FStar.Seq
 open FStar.Set
 open FStar.Error
+
+open Mem
 open Platform.Bytes
 open TLSError
 open TLSInfo
@@ -14,9 +13,6 @@ open HandshakeMessages // for the message syntax
 open HandshakeLog // for Outgoing
 open Epochs
 
-module HH = FStar.HyperHeap
-module MR = FStar.Monotonic.RRef
-module MS = FStar.Monotonic.Seq
 module Nego = Negotiation
 
 (* A flag for runtime debugging of Handshake data.
@@ -59,7 +55,7 @@ type machineState =
   | C13_wait_Finished1: // TLS 1.3 waiting for encrypted handshake 
     i:   Secret.hsId -> 
     ams: Secret.ams (Secret.ams_of_hms i) ->
-    cfk: Secret.fink (Secret.cfk_of_hms i) 
+    cfk: Secret.fink (Secret.cfk_of_hms i) ->
     sfk: Secret.fink (Secret.sfk_of_hms i) -> machineState
 
   | C13_sent_EOED: // TLS 1.3 #20 aggravation, optional from C13_wait_Finished1 
@@ -96,7 +92,7 @@ type machineState =
   
   | S13_sent_ServerHello:      // TLS 1.3, intermediate state to encryption
     i: Secret.esId -> 
-    idh: ->
+    //idh: ->
     ks: Secret.s13_wait_ServerHello i idh -> machineState
   
   | S_wait_EOED                // Waiting for EOED
@@ -288,7 +284,7 @@ let frame_iT_trivial  (s:hs) (rw:rw) (h0:HyperStack.mem) (h1:HyperStack.mem)
 let frame_stateT  (s:hs) (rw:rw) (h0:HyperStack.mem) (h1:HyperStack.mem) (mods:Set.set rid)
   : Lemma
     (requires
-      HH.modifies_just mods (HyperStack.HS?.h h0) (HyperStack.HS?.h h1) /\
+      modifies_just mods (HyperStack.HS?.h h0) (HyperStack.HS?.h h1) /\
       Map.contains (HyperStack.HS?.h h0) s.region /\
       not (Set.mem s.region mods))
     (ensures stateT s h0 = stateT s h1)
@@ -298,7 +294,7 @@ let frame_stateT  (s:hs) (rw:rw) (h0:HyperStack.mem) (h1:HyperStack.mem) (mods:S
 let frame_iT  (s:hs) (rw:rw) (h0:HyperStack.mem) (h1:HyperStack.mem) (mods:Set.set rid)
   : Lemma
     (requires
-      HH.modifies_just mods (HyperStack.HS?.h h0) (HyperStack.HS?.h h1) /\
+      modifies_just mods (HyperStack.HS?.h h0) (HyperStack.HS?.h h1) /\
       Map.contains (HyperStack.HS?.h h0) s.region /\
       not (Set.mem s.region mods))
     (ensures stateT s h0 = stateT s h1 /\ iT s rw h0 = iT s rw h1)
@@ -454,14 +450,14 @@ val client_ClientHello: s:hs -> i:id -> ST (result (HandshakeLog.outgoing i))
     let control = HyperStack.sel h0 s.state in
     control = C_Idle /\ (
     // 
-    let n = MR.m_sel h0 Nego.(s.nego.state) in
+    let n = sel h0 Nego.(s.nego.state) in
     let t = transcript h0 s.log in
     let k = HyperStack.sel h0 s.ks.Secret.state in
     match n with
     | Nego.C_Init nonce -> k = Secret.(C (C_Init nonce)) /\ t = []
     | _ -> False )))
   (ensures fun h0 r h1 ->
-    let n = MR.m_sel h0 Nego.(s.nego.state) in
+    let n = sel h0 Nego.(s.nego.state) in
     let t = transcript h0 s.log in
     let k = HyperStack.sel h1 s.ks.Secret.state in
     ( Correct? r ==>
@@ -747,10 +743,9 @@ let client13_ServerFinished hs ee ocr oc_digest ocv (svd:bytes) digestCertVerify
       else (
         trace "Early data rejected";
         //17-12-28 missing parameters for resumption and ticketing. 
-        client13_ClientFinished i ams cfk digestServerFinished ocr 
-
+        client13_ClientFinished i ams cfk digestServerFinished ocr;
         InAck true false // Client 1.3 ATK; next the client will read again to send Finished, writer++, and the Complete signal
-      )) // moving to C_Complete
+      ) // moving to C_Complete
 
 // Processing of the server CCS and optional NewSessionTicket
 // This is used both in full handshake and resumption

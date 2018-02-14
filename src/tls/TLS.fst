@@ -23,9 +23,8 @@ open Epochs
 //open Handshake
 open Connection
 
-module HH   = FStar.HyperHeap
+module ST   = FStar.HyperStack.ST
 module HST  = FStar.HyperStack
-module MR   = FStar.Monotonic.RRef
 module MS   = FStar.Monotonic.Seq
 module DS   = DataStream
 module SD   = StreamDeltas
@@ -51,13 +50,6 @@ unfold let op_Array_Access (#a:Type) (s:Seq.seq a) n = Seq.index s n // s.[n]
 // using also DataStream, Content, Record
 #set-options "--initial_ifuel 0 --max_ifuel 0 --initial_fuel 0 --max_fuel 0"
 
-// too convenient; use sparingly. Should move to a library
-// JP: isn't failwith sufficient enough? CF: this one works in ST.
-val unexpected: #a:Type -> v:string -> ST a
-  (requires (fun h -> True))
-  (ensures (fun _ _ _ -> False ))
-let rec unexpected #a s = unexpected s
-
 
 (** misc ***)
 
@@ -78,8 +70,8 @@ val create: r0:c_rgn -> tcp:Transport.t -> r:role -> cfg:config -> resume: resum
   (ensures (fun h0 c h1 ->
     modifies Set.empty h0 h1 /\
     extends c.region r0 /\
-    stronger_fresh_region c.region h0 h1 /\
-    Map.contains (HST.HS?.h h1) c.region /\ //NS: may be removeable: we should get it from fresh_region
+    fresh_region c.region h0 h1 /\
+    live_region h1 c.region /\ //NS: may be removeable: we should get it from fresh_region
     st_inv c h1 /\
     c_role c = r /\
 //17-04-08 commented out as their access is now stateful
@@ -89,13 +81,13 @@ val create: r0:c_rgn -> tcp:Transport.t -> r:role -> cfg:config -> resume: resum
     //17-04-07 went back to static refinements on resumeInfo r
     //(r = Server ==> resume = None) /\ //16-05-28 style: replacing a refinement under the option
     epochs c h1 == Seq.createEmpty /\ // we probably don't care---but we should say nothing written yet
-    HST.sel h1 c.state = (Ctrl,Ctrl) ))
+    HS.sel h1 c.state = (Ctrl,Ctrl) ))
 
 #set-options "--z3rlimit 50"
 let create parent tcp role cfg resume =
     let m = new_region parent in
     let hs = Handshake.create m cfg role resume in
-    let recv = ralloc m Record.wait_header in
+    let recv = Record.alloc_input_state m in
     let state = ralloc m (Ctrl,Ctrl) in
     assume (is_hs_rgn m);
     C #m hs tcp recv state
@@ -188,7 +180,7 @@ val no_seqn_overflow: c: connection -> rw:rw -> ST bool
     )))
 
 let no_seqn_overflow c rw =
-  let es = MS.i_read (Handshake.es_of c.hs) in //MR.m_read c.hs.log in
+  let es = MS.i_read (Handshake.es_of c.hs) in //ST.op_Bang c.hs.log in
   let j = Handshake.i c.hs rw in // -1 <= j < length es
   if j < 0 then //16-05-28 style: ghost constraint prevents using j < 0 || ...
     true
@@ -247,7 +239,7 @@ type ioresult_o = r:ioresult_w { Written? r \/ WriteError? r }
 
 // the connection fails now, and should not be resumed.
 val disconnect: c: connection -> ST unit
-  (requires (fun h0 -> st_inv c h0 /\ h0 `HST.contains` c.state))
+  (requires (fun h0 -> st_inv c h0 /\ h0 `HS.contains` c.state))
   (ensures (fun h0 _ h1 -> st_inv c h1 /\ modifies (Set.singleton (C?.region c)) h0 h1))
 
 let disconnect c =
@@ -258,7 +250,7 @@ let disconnect c =
 
 // on some errors, we locally give up the connection
 val unrecoverable: c: connection -> r:string -> ST ioresult_w
-  (requires (fun h0 -> st_inv c h0 /\ h0 `HST.contains` c.state))
+  (requires (fun h0 -> st_inv c h0 /\ h0 `HS.contains` c.state))
   (ensures (fun h0 i h1 -> st_inv c h1 /\
 		        modifies (Set.singleton (C?.region c)) h0 h1 /\
 			i = WriteError None r))
@@ -266,7 +258,7 @@ let unrecoverable c reason =
   disconnect c;
   WriteError None reason
 
-let currentId_T (c:connection) (rw:rw) (h:HST.mem) : GTot id =
+let currentId_T (c:connection) (rw:rw) (h:HS.mem) : GTot id =
   let j = Handshake.iT c.hs rw h in
   if j < 0
   then PlaintextID (c_nonce c)
@@ -325,7 +317,7 @@ let cwriter (i:id) (c:connection) =
   w:StAE.writer i{exists (r:StAE.reader (peerId i)).{:pattern (trigger_peer r)}
 		    epoch_region_inv' (Handshake.region_of c.hs) r w}
 
-let current_writer_pre (c:connection) (i:id) (h:HST.mem) : GTot bool =
+let current_writer_pre (c:connection) (i:id) (h:HS.mem) : GTot bool =
   let hs = c.hs in
   let ix = Handshake.iT hs Writer h in
   if ix < 0
@@ -334,7 +326,7 @@ let current_writer_pre (c:connection) (i:id) (h:HST.mem) : GTot bool =
     let epoch_i = Handshake.eT hs Writer h in
     i = epoch_id epoch_i
 
-let current_writer_T (c:connection) (i:id) (h:HST.mem{current_writer_pre c i h})
+let current_writer_T (c:connection) (i:id) (h:HS.mem{current_writer_pre c i h})
   : GTot (option (cwriter i c))
 =
   let i = Handshake.iT c.hs Writer h in
@@ -369,8 +361,8 @@ let recall_current_writer (c:connection)
     h0 == h1
     /\ (match wopt with
        | None -> True
-       | Some wr -> Map.contains (HST.HS?.h h0) (StAE.region wr)
-	         /\ Map.contains (HST.HS?.h h0) (StAE.log_region wr)))
+       | Some wr -> live_region h0 (StAE.region wr)
+	         /\ live_region h0 (StAE.log_region wr)))
   = let i = currentId c Writer in
     let wopt = current_writer c i in
     match wopt with
@@ -393,7 +385,7 @@ private let check_incrementable (#c:connection) (#i:id) (wopt:option (cwriter i 
 ////////////////////////////////////////////////////////////////////////////////
 // Sending fragments on a given writer (not necessarily the current one)
 ////////////////////////////////////////////////////////////////////////////////
-let opt_writer_regions (#i:id) (#c:connection) (wopt:option (cwriter i c)) : Tot (set HH.rid) =
+let opt_writer_regions (#i:id) (#c:connection) (wopt:option (cwriter i c)) : GTot (set rid) =
   match wopt with
   | None -> Set.empty
   | Some wr -> Set.singleton (StAE.region wr)
@@ -402,8 +394,8 @@ let sendFragment_inv (#c:connection) (#i:id) (wo:option(cwriter i c)) h =
      st_inv c h
   /\ (match wo with
      | None    -> PlaintextID? i
-     | Some wr ->  Map.contains (HST.HS?.h h) (StAE.region wr)
-	        /\ Map.contains (HST.HS?.h h) (StAE.log_region wr))
+     | Some wr ->  live_region h (StAE.region wr)
+	        /\ live_region h (StAE.log_region wr))
 
 #set-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
 
@@ -411,10 +403,10 @@ let sendFragment_inv (#c:connection) (#i:id) (wo:option(cwriter i c)) h =
 // let ad_overflow : result unit = Error (AD_internal_error, "seqn overflow")
 let ad_overflow : result unit = Error (AD_record_overflow, "seqn overflow")
 
-let sendFragment_success (mods:set rid) (c:connection) (i:id) (wo:option (cwriter i c)) (f: Content.fragment i) (h0:HST.mem) (h1:HST.mem) =
+let sendFragment_success (mods:set rid) (c:connection) (i:id) (wo:option (cwriter i c)) (f: Content.fragment i) (h0:HS.mem) (h1:HS.mem) =
       Some? wo ==>
       (let wr = Some?.v wo in
-       modifies_just (Set.union mods (Set.singleton (StAE.region wr))) (HST.HS?.h h0) (HST.HS?.h h1)
+       modifies (Set.union mods (Set.singleton (StAE.region wr))) h0 h1
      /\ StAE.seqnT wr h1 = StAE.seqnT wr h0 + 1
      /\ (authId i ==>
 	     //fragment was definitely snoc'd
@@ -422,7 +414,7 @@ let sendFragment_success (mods:set rid) (c:connection) (i:id) (wo:option (cwrite
      	     //delta was maybe snoc'd, if f is not a handshake fragment
 	     /\ SD.stream_deltas wr h1 == Seq.append (SD.stream_deltas wr h0) (SD.project_one_frag f)
 	     //and the deltas associated with wr will forever more contain deltas1 as a prefix
-             /\ MR.witnessed (SD.deltas_prefix wr (SD.stream_deltas wr h1))))
+             /\ ST.witnessed (SD.deltas_prefix wr (SD.stream_deltas wr h1))))
 
 val sendFragment: c:connection -> #i:id -> wo:option (cwriter i c) -> f: Content.fragment i -> ST (result unit)
   (requires (sendFragment_inv wo))
@@ -469,8 +461,7 @@ let sendFragment c #i wo f =
        lemma_repr_bytes_values (length payload);
        assume (repr_bytes (length payload) <= 2); //NS: How are we supposed to prove this?
        trace ("Sending fragment of length " ^ string_of_int (length payload));
-       let record = Record.makePacket ct (PlaintextID? i) pv payload in
-       let r  = Transport.send c.tcp record in
+       let r = Record.sendPacket c.tcp ct (PlaintextID? i) pv payload in
        match r with
        | Error(x)  -> Error(AD_internal_error,x)
        | Correct _ -> Correct()
@@ -538,8 +529,8 @@ private let sendAlert (c:connection) (ad:alertDescription) (reason:string)
 // Sending handshake messages on a given writer
 ////////////////////////////////////////////////////////////////////////////////
 let sendHandshake_post (#c:connection) (#i:id) (wopt:option (cwriter i c))
-		       (om:option (HandshakeLog.fragment i)) (send_ccs:bool) (h0:HST.mem) r (h1:HST.mem) =
-      modifies_just (opt_writer_regions wopt) (HST.HS?.h h0) (HST.HS?.h h1)    //didn't modify more than the writer's regions
+		       (om:option (HandshakeLog.fragment i)) (send_ccs:bool) (h0:HS.mem) r (h1:HS.mem) =
+      modifies (opt_writer_regions wopt) h0 h1   //didn't modify more than the writer's regions
       /\ (match wopt with
  	 | None -> True
 	 | Some wr ->
@@ -641,10 +632,10 @@ let next_fragment i c =
   let _  = if w0 >= 0
 	   then (MS.i_at_least_is_stable w0 (MS.i_sel h0 ilog).(w0) ilog;
 		 FStar.Seq.contains_intro (MS.i_sel h0 ilog) w0 (MS.i_sel h0 ilog).(w0);
-	         MR.witness ilog (MS.i_at_least w0 (MS.i_sel h0 ilog).(w0) ilog)) in
+	         ST.mr_witness ilog (MS.i_at_least w0 (MS.i_sel h0 ilog).(w0) ilog)) in
   trace ("HS.next_fragment "^(if ID12? i then "ID12" else (if ID13? i then "ID13" else "PlaintextID"))^"?");
   let res = Handshake.next_fragment s i in
-  if w0 >= 0 then MR.testify (MS.i_at_least w0 (MS.i_sel h0 ilog).(w0) ilog);
+  if w0 >= 0 then ST.testify (MS.i_at_least w0 (MS.i_sel h0 ilog).(w0) ilog);
   res
 
 
@@ -688,7 +679,7 @@ unfold let writeHandshake_ensures h_init c new_writer h0 r h1 =
       	   sendFragment_inv wopt h1)
 
 // Try to send a fragment for outgoing Handshake/CCS traffic, if any.
-val writeHandshake: h_init:HST.mem //initial heap, for stating an invariant on deltas
+val writeHandshake: h_init:HS.mem //initial heap, for stating an invariant on deltas
 		  -> c:connection
 		  -> new_writer:option bool
 		  -> ST ioresult_w
@@ -742,7 +733,7 @@ let rec writeHandshake h_init c new_writer =
           ( match next_keys with
             | Some b -> c.state := (str, (if b.HandshakeLog.out_appdata then Open else Ctrl))
             | None -> () );
-          if complete || new_writer = Some true || (None? om && not send_ccs)
+          if complete || (match new_writer with Some b -> b | _ -> false) || (None? om && not send_ccs)
           then WrittenHS new_writer complete // done, either to writable/completion or because there is nothing left to do
           else if Some? new_writer //splitting cases just to narrow in on the assertion failure that prompted the assume
           then (
@@ -808,8 +799,8 @@ let write c #i #rg data =
 //         to be share between writing functions (each returning a subset of results); still missing details.
 
 let write_ensures (c:connection) (i:id) (appdata: option (rg:frange i & DataStream.fragment i rg)) (r: ioresult_w) h0 h1 =
-  let st0 = HST.sel h0 c.state in
-  let st1 = HST.sel h1 c.state in
+  let st0 = HS.sel h0 c.state in
+  let st1 = HS.sel h1 c.state in
   let es0 = epochs c h0 in
   let es1 = epochs c h1 in
   let j = Handshake.iT c.hs Writer h0 in
@@ -996,7 +987,7 @@ let live_i e r = // is the connection still live?
 
 // let's specify reading d off the input DataStream (incrementing the reader pos)
 
-val sel_reader: h:HST.mem -> connection -> GTot (option ( i:id & StAE.reader i )) // self-specified
+val sel_reader: h:HS.mem -> connection -> GTot (option ( i:id & StAE.reader i )) // self-specified
 let sel_reader h c =
   let es = epochs c h in
   let j = Handshake.iT c.hs Reader h in
@@ -1062,7 +1053,7 @@ let rec readFragment c i =
   | Record.ReadError e -> Error e
   | Record.ReadWouldBlock -> Correct None
   | Record.Received ct pv payload ->
-    let es = MR.m_read (Handshake.es_of c.hs) in
+    let es = !(Handshake.es_of c.hs) in
     let j : Handshake.logIndex es = Handshake.i c.hs Reader in
     trace ("Read fragment at epoch index: " ^ string_of_int j ^
            " of length " ^ string_of_int (length payload));
@@ -1210,7 +1201,7 @@ let rec read c i =
         match result with
         // TODO: specify which results imply that c.state & epochs are unchanged
         | ReadWouldBlock        -> ReadWouldBlock
-        | ReadAgain             -> read c i
+        | ReadAgain             -> let i' = currentId c Reader in read c i'
         | ReadAgainFinishing    -> read c i //was: readAllFinishing c
         | ReadError x y         -> ReadError x y
         | CertQuery q adv       -> CertQuery q adv

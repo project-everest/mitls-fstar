@@ -1,1 +1,47 @@
-[ "˙3OûQœË=7ig∂i‘ b", [] ]
+[
+  "ΩˆòÙ@Ÿ>‘`y»t§/è2",
+  [
+    [
+      "Transport.pfn_send",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_Prims.HasEq_int",
+        "haseqFStar.Bytes_Tm_refine_1ec852aff28ab568526a8c54c3e853ec"
+      ],
+      0,
+      "ac140a2ff11f008b24f7237181a4517b"
+    ],
+    [
+      "Transport.pfn_send",
+      2,
+      2,
+      1,
+      [ "@query", "assumption_Prims.HasEq_int" ],
+      0,
+      "99a44365934a8d04d43ac9a4c1ae7124"
+    ],
+    [
+      "Transport.pfn_recv",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_Prims.HasEq_int",
+        "haseqFStar.Bytes_Tm_refine_1ec852aff28ab568526a8c54c3e853ec"
+      ],
+      0,
+      "89478d87f0a3068e5cce9b0bf5ebe4f0"
+    ],
+    [
+      "Transport.pfn_recv",
+      2,
+      2,
+      1,
+      [ "@query", "assumption_Prims.HasEq_int" ],
+      0,
+      "6057fa2522dbd35e3f996dbc49aa2bc0"
+    ]
+  ]
+]
