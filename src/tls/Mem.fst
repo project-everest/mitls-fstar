@@ -50,11 +50,6 @@ let rgn = r:HS.rid{r =!= HS.root /\ is_eternal_region r /\ witnessed (region_con
 
 // 18-01-04 we would prefer [is_live_region] to [region_contains_pred].
 
-// just for illustration purpose
-private let lemma_derive_eternal_for_regions_above (m:mem) (r:rgn{m `live_region` r})
-  :Lemma (forall (s:HS.rid). HS.is_above s r ==> is_eternal_region s)
-  = ()
-
 let tls_rgn   = r:rgn {is_tls_rgn r}
 let epoch_rgn = r:rgn {is_epoch_rgn r}
 let hs_rgn    = r:rgn {is_hs_rgn r}
