@@ -15,7 +15,8 @@ open CoreCrypto
 open Parse
 open TLSError
 
-module MM = FStar.Monotonic.Map
+module MM = FStar.Monotonic.DependentMap
+module DM = FStar.DependentMap
 module ST = FStar.HyperStack.ST
 
 (* A flag for runtime debugging of cDH data.
@@ -104,7 +105,7 @@ let lemma_group_of_namedGroup (ng:namedGroup)
   = ()
 
 let default_group = ECDH (CoreCrypto.ECC_P256)
-
+ 
 let dh_region = new_region tls_tables_region
 noeq type ilog_entry (i:pre_dhi) =
   | Honest of MM.t dh_region (pre_dhr i) (fun j -> bool) (fun _ -> True)
@@ -113,12 +114,12 @@ noeq type ilog_entry (i:pre_dhi) =
 private type i_ilog = MM.t dh_region pre_dhi ilog_entry (fun _ -> True)
 private type ishare_table = (if Flags.model then i_ilog else unit)
 abstract let ilog: ishare_table =
-  if Flags.model then MM.alloc #dh_region #pre_dhi #ilog_entry #(fun _ -> True) else ()
+  if Flags.model then MM.alloc () <: i_ilog else ()
 
 type registered_dhi i =
   (if Flags.model then
     let log: i_ilog = ilog in
-    MR.witnessed (MM.defined log i)
+    witnessed (MM.defined log i)
   else True)
 
 type fresh_dhi i h =
@@ -127,29 +128,29 @@ type fresh_dhi i h =
   else False)
 
 type honest_dhi_st (log:i_ilog) (i:pre_dhi) (h:mem) =
-  Some? (MM.sel (MR.m_sel h log) i) /\ Honest? (Some?.v (MM.sel (MR.m_sel h log) i))
+  Some? (MM.sel (sel h log) i) /\ Honest? (Some?.v (MM.sel (sel h log) i))
 
 let lemma_honest_dhi_stable (log:i_ilog) (i:pre_dhi)
-  : Lemma (MR.stable_on_t log (honest_dhi_st log i))
+  : Lemma (stable_on_t log (honest_dhi_st log i))
   = admit()
 
 type honest_dhi i =
   (if Flags.model then
     let log: i_ilog = ilog in
-    MR.witnessed (honest_dhi_st log i)
+    witnessed (honest_dhi_st log i)
   else False)
 
 type corrupt_dhi_st (log:i_ilog) (i:pre_dhi) (h:mem) =
-  Some? (MM.sel (MR.m_sel h log) i) /\ Corrupt? (Some?.v (MM.sel (MR.m_sel h log) i))
+  Some? (MM.sel (sel h log) i) /\ Corrupt? (Some?.v (MM.sel (sel h log) i))
 
 let lemma_corrupt_dhi_stable (log:i_ilog) (i:pre_dhi)
-  : Lemma (MR.stable_on_t log (corrupt_dhi_st log i))
+  : Lemma (stable_on_t log (corrupt_dhi_st log i))
   = admit()
 
 type corrupt_dhi i =
   (if Flags.model then
     let log: i_ilog = ilog in
-    MR.witnessed (corrupt_dhi_st log i)
+    witnessed (corrupt_dhi_st log i)
   else True)
 
 let lemma_honest_corrupt (i:pre_dhi{registered_dhi i})
@@ -159,17 +160,17 @@ let lemma_honest_corrupt (i:pre_dhi{registered_dhi i})
 let is_honest_dhi i =
   if Flags.model then
     let log: i_ilog = ilog in
-    MR.m_recall log;
-    MR.testify (MM.defined log i);
+    recall log;
+    testify (MM.defined log i);
     lemma_honest_corrupt i;
     match MM.lookup log i with
     | Some (Corrupt) ->
       lemma_corrupt_dhi_stable log i;
-      MR.witness log (corrupt_dhi_st log i);
+      mr_witness log (corrupt_dhi_st log i);
       false
     | Some (Honest _) ->
       lemma_honest_dhi_stable log i;
-      MR.witness log (honest_dhi_st log i);
+      mr_witness log (honest_dhi_st log i);
       true
   else false
 
@@ -178,46 +179,46 @@ let ipubshare #g gx = pre_pubshare gx
 type registered_dhr_st (#i:dhi) (log:i_ilog) (j:pre_dhr i) (h:mem) =
   corrupt_dhi_st log i h \/
   (honest_dhi_st log i h /\
-    (let Some (Honest log') = MM.sel (MR.m_sel h log) i in
-      Some? (MM.sel (MR.m_sel h log') j)))
+    (let Some (Honest log') = MM.sel (sel h log) i in
+      Some? (MM.sel (sel h log') j)))
 
 type registered_dhr #i j =
   (if Flags.model then
     let log: i_ilog = ilog in
-    MR.witnessed (registered_dhr_st log j)
+    witnessed (registered_dhr_st log j)
   else True)
 
 type fresh_dhr #i j h =
   (if Flags.model then
     let log: i_ilog = ilog in
     honest_dhi_st log i h
-    /\ (let Some (Honest log') = MM.sel (MR.m_sel h log) i in
-        None? (MM.sel (MR.m_sel h log') j))
+    /\ (let Some (Honest log') = MM.sel (sel h log) i in
+        None? (MM.sel (sel h log') j))
   else False)
 
 type honest_dhr_st (#i:dhi) (log:i_ilog) (j:pre_dhr i) (h:mem) =
   honest_dhi_st log i h
-  /\ (let Some (Honest log') = MM.sel (MR.m_sel h log) i in
-      Some? (MM.sel (MR.m_sel h log') j)
-      /\ Some?.v (MM.sel (MR.m_sel h log') j) = true)
+  /\ (let Some (Honest log') = MM.sel (sel h log) i in
+      Some? (MM.sel (sel h log') j)
+      /\ Some?.v (MM.sel (sel h log') j) = true)
 
 type honest_dhr #i j =
   (if Flags.model then
     let log: i_ilog = ilog in
-    MR.witnessed (honest_dhr_st log j)
+    witnessed (honest_dhr_st log j)
   else False)
 
 type corrupt_dhr_st (#i:dhi) (log:i_ilog) (j:pre_dhr i) (h:mem) =
   corrupt_dhi_st log i h \/
   (honest_dhi_st log i h /\
-    (let Some (Honest log') = MM.sel (MR.m_sel h log) i in
-      Some? (MM.sel (MR.m_sel h log') j)
-      /\ Some?.v (MM.sel (MR.m_sel h log') j) = false))
+    (let Some (Honest log') = MM.sel (sel h log) i in
+      Some? (MM.sel (sel h log') j)
+      /\ Some?.v (MM.sel (sel h log') j) = false))
 
 type corrupt_dhr #i j =
   (if Flags.model then
     let log: i_ilog = ilog in
-    MR.witnessed (corrupt_dhr_st log j)
+    witnessed (corrupt_dhr_st log j)
   else True)
 
 let lemma_honest_corrupt_dhr #i j = admit()
@@ -225,21 +226,21 @@ let lemma_honest_corrupt_dhr #i j = admit()
 let is_honest_dhr #i j =
   if Flags.model then
     let log: i_ilog = ilog in
-    MR.m_recall log;
+    recall log;
     lemma_honest_corrupt_dhr j;
-    MR.testify (registered_dhr_st log j);
+    testify (registered_dhr_st log j);
     (match MM.lookup log i with
     | Some Corrupt ->
-      assume(MR.stable_on_t log (corrupt_dhr_st log j));
-      MR.witness log (corrupt_dhr_st log j); false
+      assume(stable_on_t log (corrupt_dhr_st log j));
+      mr_witness log (corrupt_dhr_st log j); false
     | Some (Honest log') ->
       (match MM.lookup log' j with
       | Some true ->
-        assume(MR.stable_on_t log (honest_dhr_st log j));
-        MR.witness log (honest_dhr_st log j); true
+        assume(stable_on_t log (honest_dhr_st log j));
+        mr_witness log (honest_dhr_st log j); true
       | Some false ->
-        assume(MR.stable_on_t log (corrupt_dhr_st log j));
-        MR.witness log (corrupt_dhr_st log j); false))
+        assume(stable_on_t log (corrupt_dhr_st log j));
+        mr_witness log (corrupt_dhr_st log j); false))
   else false
 
 private let raw_keygen (g:group) : ST (pre_keyshare g)
@@ -256,16 +257,16 @@ let rec keygen g =
   let x = raw_keygen g in
   if Flags.model then
     let log: i_ilog = ilog in
-    MR.m_recall log;
+    recall log;
     let i : pre_dhi = (| g, pre_pubshare x |) in
     match MM.lookup log i with
     | Some _ -> keygen g
     | None ->
       assert(fresh_dhi i h0);
-      let rlog = MM.alloc #dh_region #(pre_dhr i) #(fun j -> bool) #(fun _ -> True) in
+      let rlog = MM.alloc () in
       MM.extend log i (Honest rlog);
       lemma_honest_dhi_stable log i;
-      MR.witness log (honest_dhi_st log i);
+      mr_witness log (honest_dhi_st log i);
       x
   else x
 
@@ -295,37 +296,37 @@ let rec dh_responder g gx =
   if Flags.model then
    begin
     let log: i_ilog = ilog in
-    MR.m_recall log;
-    MR.testify (MM.defined log i);
+    recall log;
+    testify (MM.defined log i);
     lemma_honest_corrupt i;
     match MM.lookup log i with
     | Some Corrupt ->
       assert(corrupt_dhi_st log i h);
       lemma_corrupt_dhi_stable log i;
-      MR.witness log (corrupt_dhi_st log i);
-      assume(MR.stable_on_t log (corrupt_dhr_st log gy));
-      MR.witness log (corrupt_dhr_st log gy);
-      assume(MR.stable_on_t log (registered_dhr_st log gy));
-      MR.witness log (registered_dhr_st log gy);
+      mr_witness log (corrupt_dhi_st log i);
+      assume(stable_on_t log (corrupt_dhr_st log gy));
+      mr_witness log (corrupt_dhr_st log gy);
+      assume(stable_on_t log (registered_dhr_st log gy));
+      mr_witness log (registered_dhr_st log gy);
       lemma_honest_corrupt_dhr gy;
       (gy, raw_dh_initiator g y gx)
     | Some (Honest log') ->
       assert(honest_dhi_st log i h);
       lemma_honest_dhi_stable log i;
-      MR.witness log (honest_dhi_st log i);
+      mr_witness log (honest_dhi_st log i);
       match MM.lookup log' gy with
       | Some _ -> dh_responder g gx // Responder share collision
       | None ->
         assert(fresh_dhr gy h);
         MM.extend log' gy true;
         let h1 = get () in
-        MR.testify (honest_dhi_st log i);
+        testify (honest_dhi_st log i);
         assert(honest_dhi_st log i h1);
         assume(honest_dhr_st log gy h1); // FIXME
-        assume(MR.stable_on_t log (honest_dhr_st log gy));
-        MR.witness log (honest_dhr_st log gy);
-        assume(MR.stable_on_t log (registered_dhr_st log gy));
-        MR.witness log (registered_dhr_st log gy);
+        assume(stable_on_t log (honest_dhr_st log gy));
+        mr_witness log (honest_dhr_st log gy);
+        assume(stable_on_t log (registered_dhr_st log gy));
+        mr_witness log (registered_dhr_st log gy);
         lemma_honest_corrupt_dhr gy;
         (gy, raw_dh_initiator g y gx)
    end
@@ -340,10 +341,10 @@ let register_dhi #g gx =
   if Flags.model then
     let log: i_ilog = ilog in
     let i = (| g, gx |) in
-    MR.m_recall log;
+    recall log;
     if None? (MM.lookup log i) then MM.extend log i Corrupt;
-    assume(MR.stable_on_t log (MM.defined log i));
-    MR.witness log (MM.defined log i); gx
+    assume(stable_on_t log (MM.defined log i));
+    mr_witness log (MM.defined log i); gx
   else gx
 
 let register_dhr #g gx gy =
@@ -351,19 +352,19 @@ let register_dhr #g gx gy =
     let log: i_ilog = ilog in
     let i : dhi = (| g, gx |) in
     let j : pre_dhr i = gx in
-    MR.m_recall log;
-    MR.testify (MM.defined log i);
-    assume(MR.stable_on_t log (registered_dhr_st log j));
+    recall log;
+    testify (MM.defined log i);
+    assume(stable_on_t log (registered_dhr_st log j));
     match is_honest_dhi i with
     | false ->
-      MR.testify (corrupt_dhi_st log i);
-      MR.witness log (registered_dhr_st log j); j
+      testify (corrupt_dhi_st log i);
+      mr_witness log (registered_dhr_st log j); j
     | true ->
-      MR.testify (honest_dhi_st log i);
+      testify (honest_dhi_st log i);
       let Some (Honest log') = MM.lookup log i in
-      MR.m_recall log';
+      recall log';
       if None? (MM.lookup log' j) then MM.extend log' j false;
-      MR.witness log (registered_dhr_st log j); j
+      mr_witness log (registered_dhr_st log j); j
   else gy
 
 (*
@@ -375,19 +376,19 @@ let lemma_honest_or_dishonest (i:id) : ST unit
    begin
     let log : ideal_log = share_log in
     let h = get () in
-    MR.m_recall log;
-    MR.testify (MM.defined log i);
-    cut(Some? (MM.sel (MR.m_sel h log) i));
-    let b = Some?.v (MM.sel (MR.m_read log) i) in
+    recall log;
+    testify (MM.defined log i);
+    cut(Some? (MM.sel (sel h log) i));
+    let b = Some?.v (MM.sel !log) i) in
     match b with
     | true ->
       cut(MM.contains log i true h);
       MM.contains_stable log i true;
-      MR.witness log (MM.contains log i true)
+      mr_witness log (MM.contains log i true)
     | false ->
       cut(MM.contains log i false h);
       MM.contains_stable log i false;
-      MR.witness log (MM.contains log i false)
+      mr_witness log (MM.contains log i false)
    end
   else ()
 
@@ -403,9 +404,9 @@ let lemma_honest_and_dishonest (i:id)
     MR.m_recall log;
     MR.testify (MM.defined log i);
     MR.testify (MM.contains log i true);
-    cut(true = Some?.v (MM.sel (MR.m_sel h log) i));
+    cut(true = Some?.v (MM.sel (sel h log) i));
     MR.testify (MM.contains log i false);
-    cut(false = Some?.v (MM.sel (MR.m_sel h log) i));
+    cut(false = Some?.v (MM.sel (sel h log) i));
     cut(False)
    end
   else ()
@@ -588,8 +589,7 @@ let pinverse_keyShareEntry x = ()
 
 // Choice: truncate when maximum length is exceeded
 (** Serializing function for a list of KeyShareEntry *)
-let keyShareEntriesBytes kes =
-  let rec keyShareEntriesBytes_aux (b:bytes{length b < 65536}) (kes:list keyShareEntry): Tot (b:bytes{length b < 65536}) (decreases kes) =
+private let rec keyShareEntriesBytes_aux (b:bytes{length b < 65536}) (kes:list keyShareEntry): Tot (b:bytes{length b < 65536}) (decreases kes) =
   match kes with
   | [] -> b
   | ke::kes ->
@@ -597,29 +597,33 @@ let keyShareEntriesBytes kes =
     if length b' < 65536 then
       keyShareEntriesBytes_aux b' kes
     else b
-  in
+
+let keyShareEntriesBytes kes =
   let b = keyShareEntriesBytes_aux empty_bytes kes in
   lemma_repr_bytes_values (length b);
   vlbytes 2 b
 
 (** Parsing function for a list KeyShareEntry *)
-let parseKeyShareEntries b =
-  let rec (aux: b:bytes -> list keyShareEntry -> Tot (result (list keyShareEntry)) (decreases (length b))) = fun b entries ->
-    if length b > 0 then
+private let rec parseKeyShareEntries_aux (b:bytes) (entries:list keyShareEntry)
+   : Tot (result (list keyShareEntry)) 
+         (decreases (length b))
+   = if length b > 0 then
       if length b >= 4 then
 	let ng, data = split b 2 in
 	match vlsplit 2 data with
 	| Correct(kex, bytes) ->
 	  begin
 	  match parseKeyShareEntry (ng @| vlbytes 2 kex) with
-	  | Correct entry -> aux bytes (entries @ [entry])
+	  | Correct entry -> parseKeyShareEntries_aux bytes (entries @ [entry])
 	  | Error z -> Error z
 	  end
 	| Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry")
       else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse key share entries")
-    else Correct entries in
+    else Correct entries
+  
+let parseKeyShareEntries b =
   match vlparse 2 b with
-  | Correct b -> aux b []
+  | Correct b -> parseKeyShareEntries_aux b []
   | Error z   -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entries")
 
 (** Serializing function for a ClientKeyShare *)

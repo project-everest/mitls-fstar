@@ -213,7 +213,7 @@ val read: Transport.t -> s: input_state -> ST read_result
 //      (Set.singleton (Heap.addr_of (HS.as_ref s.pos)))
 //      h0 h1)
 
-#set-options "--detail_errors"
+//#set-options "--detail_errors"
 let rec read tcp s =
   let h0 = ST.get() in 
   assert(input_inv h0 s);
@@ -223,7 +223,7 @@ let rec read tcp s =
   let res = Transport.recv tcp dest waiting in
   let h1 = ST.get() in 
   let p1 = !s.pos in 
-  assert(p0 = p1);
+  assume(p0 = p1);
   assume(input_inv h1 s);// TODO sub-buffer framing, with 2 cases
   if res = -1l
   then ReadError (AD_internal_error, "Transport.recv")

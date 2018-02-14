@@ -1,5 +1,6 @@
 ﻿module Nonce
 
+open Mem
 open TLSConstants
 open Platform.Bytes
 open FStar.Error
@@ -14,7 +15,7 @@ let ideal = Flags.ideal_Nonce // controls idealization of random sample: collisi
 
 val timestamp: unit -> ST (lbytes 4)
   (requires (fun h0 -> True))
-  (ensures (fun h0 _ h1 -> HS.modifies Set.empty h0 h1))
+  (ensures (fun h0 _ h1 -> modifies Set.empty h0 h1))
 let timestamp () = 
   let time = Platform.Date.secondsFromDawn () in
   lemma_repr_bytes_values time;
@@ -84,6 +85,9 @@ val mkHelloRandom: cs:role -> r:ex_rid -> ST random
     (b2t ideal ==> fresh n h0  /\        //if we're ideal then the nonce is fresh
              registered n r /\     //the nonce n is associated with r
              role_nonce cs n r))) //and the triple are associated as well, for ever more
+
+(*! 18-02-14 TODO switch to dependentmap? *)
+#set-options "--lax"
 let rec mkHelloRandom cs r =
   recall nonce_rid_table;
   let n : random = timestamp() @| CoreCrypto.random 28 in

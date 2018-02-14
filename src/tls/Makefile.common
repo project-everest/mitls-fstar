@@ -39,7 +39,7 @@ VFLAGS=--use_hints --use_hint_hashes --record_hints --warn_error -270
 EXTRACT_DIR=extract/$(FLAVOR)
 
 # Add more roots here!
-ROOTS ?= HMAC.UFCMA.fst TLS.fst Handshake.fst
+ROOTS ?= HMAC.UFCMA.fst TLS.fst Handshake.fst Handshake.Secret.fst HandshakeLog.fst
 
 # ik-ver was:
 #
@@ -127,13 +127,20 @@ depend: .depend.$(FLAVOR)
 
 -include .depend.$(FLAVOR)
 
+# the touch is needed because make may decide to invoke fstar on this
+# target because the timestamp on, say, the .fst file changed, and
+# then fstar may detect that there was no change in content and not
+# re-emit the .fst.checked file. Adding the touch ensures that the
+# timestamp on the .checked file is updated to avoid make running this
+# rule again.
+
 %.checked.lax:
-	$(FSTAR) --lax $(addprefix --include , $(INCLUDE_PATHS)) $<
-	touch $@
+	@$(FSTAR) --lax $(addprefix --include , $(INCLUDE_PATHS)) $<
+	@touch $@
 
 %.checked:
-	$(FSTAR) $(VFLAGS) $(addprefix --include , $(INCLUDE_PATHS)) $<
-	touch $@
+	@$(FSTAR) $(VFLAGS) $(addprefix --include , $(INCLUDE_PATHS)) $<
+	@touch $@
 
 verify-all: $(addprefix $(CACHE_DIR)/, $(addsuffix .checked, $(notdir $(ALL_FST_FILES))))
 

@@ -1,5 +1,5 @@
 [
-  "-Ö\u001fˆ\f\u0005ø«û}ñ>ŽiKÙ",
+  "½Ëþ\tâžžÏp”4Í\u0004Õ‹®",
   [
     [
       "Nonce.timestamp",
@@ -224,97 +224,6 @@
       [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
       0,
       "6923e0f2a5e1607963cb3749cd4bcbab"
-    ],
-    [
-      "Nonce.mkHelloRandom",
-      3,
-      0,
-      1,
-      [ "@query" ],
-      0,
-      "89f9320b0e32bd842a6fb36cae966c1a"
-    ],
-    [
-      "Nonce.mkHelloRandom",
-      4,
-      0,
-      1,
-      [
-        "@query", "assumption_Platform.Bytes.HasEq_bytes",
-        "equation_Nonce.random", "equation_Platform.Bytes.bytes",
-        "equation_Platform.Bytes.lbytes",
-        "haseqPlatform.Bytes_Tm_refine_3458b9f6f40fe62446cdc2c6d3755a94"
-      ],
-      0,
-      "4da0d2a2b78108e23b3351748748086e"
-    ],
-    [
-      "Nonce.mkHelloRandom",
-      5,
-      0,
-      1,
-      [
-        "@query", "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_Mem.is_tls_rgn", "equation_Mem.tls_color",
-        "equation_Mem.tls_tables_region", "primitive_Prims.op_Equality",
-        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Minus",
-        "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0"
-      ],
-      0,
-      "cce0acc6bf8b2186b6d5d687ba64a327"
-    ],
-    [
-      "Nonce.lookup",
-      1,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "disc_equation_FStar.Pervasives.Native.None",
-        "equation_FStar.HyperStack.ST.erid",
-        "equation_FStar.HyperStack.ST.ex_rid", "equation_Nonce.ex_rid",
-        "function_token_typing_FStar.HyperStack.ST.erid",
-        "lemma_FStar.Pervasives.invertOption",
-        "projection_inverse_BoxBool_proj_0",
-        "typing_FStar.Pervasives.Native.uu___is_Some"
-      ],
-      0,
-      "524f3e1bafc7a993706e025ad8a7bff9"
-    ],
-    [
-      "Nonce.lookup",
-      3,
-      0,
-      1,
-      [ "@query" ],
-      0,
-      "ae0f52010f4d6a19ec77f4991f0a9aab"
-    ],
-    [
-      "Nonce.nonce_rids_exists",
-      1,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query", "equation_Nonce.random",
-        "refinement_interpretation_Nonce_Tm_refine_857f5cf9df2328326ce1c3d461c622d2"
-      ],
-      0,
-      "1f4d7988d479252256e674b7c6e0e486"
-    ],
-    [
-      "Nonce.new_region",
-      2,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query", "equation_Nonce.random",
-        "refinement_interpretation_Nonce_Tm_refine_857f5cf9df2328326ce1c3d461c622d2"
-      ],
-      0,
-      "312d5e225e29a37c6296fe778e7dff9e"
     ]
   ]
 ]
