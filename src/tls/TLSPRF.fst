@@ -13,7 +13,7 @@ open TLSInfo
 //open CoreCrypto
 
 
-abstract type key = bytes
+abstract type key = bytes //18-02-14 TODO length
 let coerce (k:bytes) : key = k
 
 private val p_hash_int: 
@@ -37,12 +37,13 @@ let rec p_hash_int alg secret seed len it aPrev acc =
 val p_hash: 
   a: macAlg -> 
   secret: lbytes (macKeySize a) -> 
-  seed: bytes -> len:nat -> St bytes // (lbytes len)
+  seed: bytes -> len:nat -> St (lbytes len)
 let p_hash alg secret seed len =
   let hs = macSize alg in
   let it = (len/hs)+1 in
-  p_hash_int alg secret seed len it seed empty_bytes
-
+  let r = p_hash_int alg secret seed len it seed empty_bytes in
+  assume(length r = len); //18-02-14 TODO
+  r
 
 (* SSL3 *)
 (* 17-02-02 deprecated, and not quite typechecking...
@@ -101,14 +102,15 @@ let ssl_verifyCertificate hashAlg ms log  =
 
 (* TLS 1.0--1.1 *) 
 
-val tls_prf: bytes -> bytes -> bytes -> nat -> St bytes
+val tls_prf: lbytes (hashSize TLSConstants.MD5SHA1) -> bytes -> bytes -> len:nat -> St (lbytes len)
 let tls_prf secret label seed len =
+  //18-02-14 fixed broken implementation, but currently unused and untested. 
   let l_s = length secret in
-  let l_s1 = (l_s+1)/2 in
-  let secret1, secret2 = split secret l_s1 in //17-12-29 bad key sizes ???
+  let secret1, secret2 = split secret 16 in 
   let newseed = label @| seed in
   let hmd5  = p_hash (HMac MD5) secret1 newseed len in
   let hsha1 = p_hash (HMac SHA1) secret2 newseed len in
+  assume(length hmd5 = len /\ length hsha1 = len);
   xor len hmd5 hsha1
 
 val tls_finished_label: role -> Tot bytes
@@ -121,15 +123,19 @@ let tls_finished_label =
 
 let verifyDataLen = 12
 
-val tls_verifyData: bytes -> role -> bytes -> St (lbytes verifyDataLen)
+val tls_verifyData: lbytes (hashSize TLSConstants.MD5SHA1) -> role -> bytes -> St (lbytes verifyDataLen)
 let tls_verifyData ms role data =
   let md5hash  = Hashing.OpenSSL.compute MD5 data in
   let sha1hash = Hashing.OpenSSL.compute SHA1 data in
-  tls_prf ms (tls_finished_label role) (md5hash @| sha1hash) 12
+  tls_prf ms (tls_finished_label role) (md5hash @| sha1hash) verifyDataLen
+
 
 (* TLS 1.2 *)
 
-val tls12prf: cipherSuite -> bytes -> bytes -> bytes -> len:nat -> St (lbytes len)
+val tls12prf: 
+  cs: cipherSuite {Some? (prfMacAlg_of_ciphersuite_aux cs)} -> 
+  ms: lbytes (macKeySize (prfMacAlg_of_ciphersuite cs)) -> 
+  bytes -> bytes -> len:nat -> St (lbytes len)
 let tls12prf cs ms label data len =
   let prfMacAlg = prfMacAlg_of_ciphersuite cs in
   p_hash prfMacAlg ms (label @| data) len
@@ -137,7 +143,10 @@ let tls12prf cs ms label data len =
 let tls12prf' macAlg ms label data len =
   p_hash macAlg ms (label @| data) len
 
-val tls12VerifyData: cipherSuite -> bytes -> role -> bytes -> St (lbytes verifyDataLen)
+val tls12VerifyData: 
+  cs: cipherSuite {Some? (prfMacAlg_of_ciphersuite_aux cs)} -> 
+  ms: lbytes (macKeySize (prfMacAlg_of_ciphersuite cs)) -> 
+  role -> bytes -> St (lbytes verifyDataLen)
 let tls12VerifyData cs ms role data =
   let verifyDataHashAlg = verifyDataHashAlg_of_ciphersuite cs in
   let hashed = Hashing.OpenSSL.compute verifyDataHashAlg data in
@@ -148,6 +157,9 @@ let finished12 hAlg (ms:key) role log =
 
 
 (* Internal agile implementation of PRF *)
+
+//18-02-14 TODO specify key lengths 
+#set-options "--lax" 
 
 val verifyData: (protocolVersion * cipherSuite) -> key -> role -> bytes -> St bytes
 let verifyData (pv,cs) (secret:key) (role:role) (data:bytes) =
@@ -185,6 +197,3 @@ let prf' a (secret: bytes) data len =
 
 let extract a secret data len = prf' a secret data len
 let kdf a secret data len = prf' a secret data len
-
-
-

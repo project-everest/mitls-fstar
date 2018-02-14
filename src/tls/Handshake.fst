@@ -14,6 +14,7 @@ open HandshakeLog // for Outgoing
 open Epochs
 
 module Nego = Negotiation
+module Secret = Handshake.Secret
 
 (* A flag for runtime debugging of Handshake data.
    The F* normalizer will erase debug prints at extraction
