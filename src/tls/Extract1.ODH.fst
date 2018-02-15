@@ -1,4 +1,5 @@
 module Extract1.ODH 
+module HS = FStar.HyperStack //Added automatically
 
 open Mem
 open Pkg
@@ -64,7 +65,7 @@ let lemma_fresh_odh (i:CommonDH.dhi) (h:mem)
 
 let lemma_fresh_odh_framing (i:CommonDH.dhi) (h0:mem) (h1:mem)
   : Lemma (odh_fresh i h0 /\ modifies_one CommonDH.dh_region h0 h1 ==> odh_fresh i h1)
-  = admit() // assume(HH.disjoint there CommonDH.dh_region)
+  = admit() // assume(HS.disjoint there CommonDH.dh_region)
 
 type odh_defined (i:odhid) =
   (if model then
@@ -89,7 +90,7 @@ let lemma_fresh_dhr (#i:odhid) (r:peer_index i) (h:mem)
 
 let lemma_fresh_dhr_framing (#i:odhid) (r:peer_index i) (h0:mem) (h1:mem)
   : Lemma (odhr_fresh r h0 /\ modifies (Set.union (Set.singleton CommonDH.dh_region) (Set.singleton tls_honest_region)) h0 h1 ==> odhr_fresh r h1)
-  = admit() // assume(HH.disjoint there CommonDH.dh_region)
+  = admit() // assume(HS.disjoint there CommonDH.dh_region)
 
 /// Client-side instance creation
 /// (possibly used by many honest servers)

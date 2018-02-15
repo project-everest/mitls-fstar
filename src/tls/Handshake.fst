@@ -1,4 +1,5 @@
 module Handshake
+module HS = FStar.HyperStack //Added automatically
 
 open FStar.Seq
 open FStar.Set
@@ -269,7 +270,7 @@ let hs_inv (s:hs) (h: HyperStack.mem) = True
 (* 17-04-08 TODO deal with inferred logic qualifiers
   hs_invT s (logT s h) (sel h (HS?.state s))  //An abstract invariant of HS-internal state
   /\ Epochs.containsT s.epochs h                //Nothing deep about these next two, since they can always
-  /\ HyperHeap.contains_ref s.state.ref (HyperStack.HS?.h h)                 //be recovered by 'recall'; carrying them in the invariant saves the trouble
+  /\ HS.contains s.state.ref (HyperStack.HS?.h h)                 //be recovered by 'recall'; carrying them in the invariant saves the trouble
 
 //A framing lemma with a very trivial proof, because of the way stateT abstracts the state-dependent parts
 *)

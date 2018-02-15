@@ -3,6 +3,7 @@
   using Platform.Bytes rather than buffers.
 *)
 module AEAD
+module HS = FStar.HyperStack //Added automatically
 
 module I = Crypto.Indexing
 module U32 = FStar.UInt32
@@ -141,7 +142,7 @@ val gen (i:I.id)
 (** Building a reader from a writer **)
 (* A reader never writes to the log_region, but may write to the prf_region *)
 let read_footprint (#i:_) (wr:aead_state i I.Writer) : GTot fp =
-  FStar.TSet.filter (fun (rs:(HH.rid * refs_in_region)) -> fst rs == prf_region wr)
+  FStar.TSet.filter (fun (rs:(HS.rid * refs_in_region)) -> fst rs == prf_region wr)
                     (footprint wr)
 
 val genReader
@@ -188,14 +189,14 @@ let enc_dec_separation (#i:_) (#rw:_) (st:aead_state i rw)
     Buffer.disjoint aad cipher /\
     Buffer.disjoint (Plain.as_buffer plain) aad /\
     Buffer.disjoint (Plain.as_buffer plain) cipher /\
-    HH.disjoint_regions (Set.as_set [Buffer.frameOf (Plain.as_buffer plain);
+    HS.disjoint_regions (Set.as_set [Buffer.frameOf (Plain.as_buffer plain);
                                      Buffer.frameOf cipher;
                                      Buffer.frameOf aad])
                         (Set.as_set [log_region st;
                                      prf_region st]) /\
-    Buffer.frameOf cipher <> HH.root /\
-    Buffer.frameOf aad <> HH.root /\
-    Buffer.frameOf (Plain.as_buffer plain) <> HH.root
+    Buffer.frameOf cipher <> HS.root /\
+    Buffer.frameOf aad <> HS.root /\
+    Buffer.frameOf (Plain.as_buffer plain) <> HS.root
     (* is_eternal_region (Buffer.frameOf cipher) /\ // why? *)
     (* is_eternal_region (Buffer.frameOf (Plain.as_buffer plain)) /\ //why? *)
     (* is_eternal_region (Buffer.frameOf aad) /\ //why? *)

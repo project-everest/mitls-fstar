@@ -1,4 +1,5 @@
 module FFI
+module HS = FStar.HyperStack //Added automatically
 
 // A thin layer on top of TLS, adapting a bit our main API:
 // - for TCP send & receive, we use callbacks provided by the application
@@ -80,7 +81,7 @@ let connect send recv config_1 psks : ML (Connection.connection * int) =
   // we assume the configuration specifies the target SNI;
   // otherwise we should check after Complete that it matches the authenticated certificate chain.
   let tcp = Transport.callbacks send recv in
-  let here = new_region HyperHeap.root in
+  let here = new_region HS.root in
   let c = TLS.resume here tcp config_1 None psks in
   let rec read_loop c : ML int =
     let i = currentId c Reader in
@@ -105,7 +106,7 @@ let accept_connected send recv config_1 : ML (Connection.connection * int) =
   // we assume the configuration specifies the target SNI;
   // otherwise we should check after Complete that it matches the authenticated certificate chain.
   let tcp = Transport.callbacks send recv in
-  let here = new_region HyperHeap.root in
+  let here = new_region HS.root in
   let c = TLS.accept_connected here tcp config_1 in
   let rec read_loop c : ML int =
     let i = currentId c Reader in

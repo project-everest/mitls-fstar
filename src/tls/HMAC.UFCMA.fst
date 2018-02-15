@@ -1,5 +1,6 @@
 (**! Idealizing agile HMAC; independent of TLS, used for TLS 1.3 Finished message payloads and Binders. *)
 module HMAC.UFCMA
+module HS = FStar.HyperStack //Added automatically
 
 
 open Mem
@@ -276,7 +277,7 @@ private let test (a: ha) (r: rgn{~(is_tls_rgn r)}) (v': bytes) (t': Hashing.Spec
   // assert(
   //   let open Pkg in
   //   let log : i_mem_table p.key = itable q.define_table in
-  //   let v = MR.m_sel h0 log in
+  //   let v = HS.sel h0 log in
   //   lemma_mm_forall_init v p.local_invariant h0;
   //   mm_forall v p.local_invariant h0);
   // assert_norm(q.Pkg.package_invariant h0);

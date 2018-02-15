@@ -39,7 +39,7 @@ VFLAGS=--use_hints --use_hint_hashes --record_hints --warn_error -270
 EXTRACT_DIR=extract/$(FLAVOR)
 
 # Add more roots here!
-ROOTS ?= HMAC.UFCMA.fst TLS.fst Handshake.fst Handshake.Secret.fst HandshakeLog.fst
+ROOTS ?= HMAC.UFCMA.fst TLS.fst Handshake.fst Handshake.Secret.fst HandshakeLog.fst KDF.Rekey.fst
 
 # ik-ver was:
 #

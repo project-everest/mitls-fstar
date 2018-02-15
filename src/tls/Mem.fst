@@ -25,7 +25,7 @@ let disjoint = HS.disjoint
 /// 18-01-04 We need to explicitly choose between using colors and
 /// using hierarchy & transitivity.
 /// 
-//type fresh_subregion r0 r h0 h1 = ST.stronger_fresh_region r h0 h1 /\ ST.extends r r0
+//type fresh_subregion r0 r h0 h1 = ST.HS.fresh_region r h0 h1 /\ ST.extends r r0
 
 (** Regions and colors for objects in memory; negative numbers are for eternal regions *)
 let tls_color = -1   //17-11-22 The color for all regions in the TLS global region.
@@ -104,12 +104,12 @@ let ssa #a =
 // FIXME(adl) overcomplicated type because of transitive modifications.
 // An rset can be thought of as a set of disjoint subtrees in the region tree
 // the second line embeds the definition of rgn because of the unification bug
-type rset = s:Set.set HH.rid{
-  (forall (r1:rgn) (r2:rgn).{:pattern (Set.mem r1 s /\ Set.mem r2 s)} (Set.mem r1 s /\ Set.mem r2 s) ==> (r1 == r2 \/ HH.disjoint r1 r2)) /\
+type rset = s:Set.set HS.rid{
+  (forall (r1:rgn) (r2:rgn).{:pattern (Set.mem r1 s /\ Set.mem r2 s)} (Set.mem r1 s /\ Set.mem r2 s) ==> (r1 == r2 \/ HS.disjoint r1 r2)) /\
   (forall (r1:rgn). (Set.mem r1 s ==>
-     r1<>HH.root /\
-     (is_tls_rgn r1 ==> r1 `HH.extends` tls_tables_region) /\
-     (forall (s:HH.rid).{:pattern is_eternal_region s} s `is_above` r1 ==> is_eternal_region s)))}
+     r1<>HS.root /\
+     (is_tls_rgn r1 ==> r1 `HS.extends` tls_tables_region) /\
+     (forall (s:HS.rid).{:pattern is_eternal_region s} s `is_above` r1 ==> is_eternal_region s)))}
 
 // We get from the definition of rset that define_region and tls_honest_region are disjoint
 let lemma_define_tls_honest_regions (s:rset)
@@ -117,16 +117,16 @@ let lemma_define_tls_honest_regions (s:rset)
   = ()
 
 //  if Set.mem tls_define_region s then
-//    assert(tls_define_region `HH.extends` tls_)
+//    assert(tls_define_region `HS.extends` tls_)
 
 type disjoint_rset (s1:rset) (s2:rset) =
   Set.disjoint s1 s2 /\
   (forall (r1:rgn) (r2:rgn).{:pattern (Set.mem r1 s1 /\ Set.mem r2 s2)}
-   (Set.mem r1 s1 /\ Set.mem r2 s2) ==> HH.disjoint r1 r2)
+   (Set.mem r1 s1 /\ Set.mem r2 s2) ==> HS.disjoint r1 r2)
 
 assume val lemma_disjoint_ancestors:
   r1:rgn -> r2:rgn -> p1:rgn{r1 `is_below` p1} -> p2:rgn{r2 `is_below` p2}
-  -> Lemma (requires p1 <> p2) (ensures HH.disjoint r1 r2 /\ r1 <> r2)
+  -> Lemma (requires p1 <> p2) (ensures HS.disjoint r1 r2 /\ r1 <> r2)
 *)
 
 
@@ -150,9 +150,9 @@ let rset_union (s1:rset) (s2:rset): Tot rset = Set.union s1 s2
 /// SZ: This is the strongest lemma that is provable
 /// Note that this old stronger version doesn't hold:
 ///
-/// let lemma_rset_disjoint (s:rset) (r:HH.rid) (r':HH.rid)
+/// let lemma_rset_disjoint (s:rset) (r:HS.rid) (r':HS.rid)
 ///  : Lemma (requires ~(Set.mem r s) /\ (Set.mem r' s))
-///          (ensures  r `HH.disjoint` r')
+///          (ensures  r `HS.disjoint` r')
 
 let lemma_rset_disjoint (s:rset) (r:HS.rid) (r':HS.rid)
   : Lemma (requires Set.mem r s /\ ~(Set.mem r' s) /\ r' `is_below` r)

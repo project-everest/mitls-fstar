@@ -8,7 +8,7 @@ open FStar.Ghost // after HH so as not to shadow reveal :(
 open Hashing
 open Hashing.CRF // now using incremental, collision-resistant, agile Hashing.
 
-module HH = FStar.HyperHeap
+
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
 
@@ -154,7 +154,7 @@ val create: a:alg -> ST (t a)
     transcriptT h1 r == []))
 let create a = 
   let v = Hashing.start a in 
-  ST.ralloc HH.root (State [] [] [] v)
+  ST.ralloc HS.root (State [] [] [] v)
   
 // We send one message at a time (or in two steps for CH); 
 // for call-site simplicity we distinguish between tagged and untagged messages

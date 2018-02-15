@@ -1,4 +1,5 @@
 module Handshake
+module HS = FStar.HyperStack //Added automatically
 
 open Mem
 open TLSConstants
@@ -119,7 +120,7 @@ let modifies_internal h0 s h1 =
     hs_inv s h1 /\
     mods s h0 h1
     // can't say it abstractly:
-    // modifies_rref (region_of s)  !{as_ref s.state} (HyperStack.HS?.h h0) (HyperStack.HS?.h h1)
+    // HS.modifies_ref (region_of s)  !{as_ref s.state} (HyperStack.HS?.h h0) (HyperStack.HS?.h h1)
 
 // Idle client starts a full handshake on the current connection
 val rehandshake: s:hs -> config -> ST bool

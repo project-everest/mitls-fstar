@@ -6,11 +6,12 @@ but both cannot be implemented in a single module because
 of the cyclic dependency.
 *)
 module KDF.Common
+module HST = FStar.HyperStack.ST //Added automatically
 
 /// 17-09-20 This file is an early experiment---not currently used.
 /// 
 open FStar.Heap
-open FStar.HyperHeap
+
 open FStar.HyperStack
 
 open Platform.Bytes
@@ -20,8 +21,8 @@ open TLSConstants
 open TLSInfo
 
 module MM = FStar.Monotonic.Map
-module MR = FStar.Monotonic.RRef
-module HH = FStar.HyperHeap
+
+
 module HS = FStar.HyperStack
 
 (*)
@@ -107,11 +108,11 @@ let expand (#it:Type0) (#i:it) (prf:prf #it i) (input:PRF?.domain prf)
     let h0 = get() in
     cut((PRF?.pre prf) input (PRF?.log prf) h0);
     let log : ideal_log (PRF?.domain prf) (PRF?.range prf) (PRF?.r prf) = PRF?.log prf in
-    MR.m_recall log;
+    HST.recall log;
     match MM.lookup log input with
     | Some v -> v
     | None ->
-      cut(MM.sel (MR.m_sel h0 log) input == None);
+      cut(MM.sel (HS.sel h0 log) input == None);
       let h1 = get() in
       cut(h0 == h1);
       let key =
@@ -129,7 +130,7 @@ let expand (#it:Type0) (#i:it) (prf:prf #it i) (input:PRF?.domain prf)
         else (PRF?.coerce prf) input key in
       let h4 = get() in
       assume(h0 == h4);
-      cut(MM.sel (MR.m_sel h4 log) input == None);
+      cut(MM.sel (HS.sel h4 log) input == None);
       MM.extend log input output;
       output
   else

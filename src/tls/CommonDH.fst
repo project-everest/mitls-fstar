@@ -6,7 +6,8 @@ records the honesty of shares using two layers of types: pre_share
 is for syntactically valid shares (used in parsing modules) while
 share is for registered shares (for which is_honest is defined).
 *)
-﻿module CommonDH
+module CommonDH
+module HST = FStar.HyperStack.ST //Added automatically
 
 open Mem 
 open Platform.Bytes
@@ -401,11 +402,11 @@ let lemma_honest_and_dishonest (i:id)
    begin
     let h = get () in
     let log : ideal_log = share_log in
-    MR.m_recall log;
-    MR.testify (MM.defined log i);
-    MR.testify (MM.contains log i true);
+    HST.recall log;
+    HST.testify (MM.defined log i);
+    HST.testify (MM.contains log i true);
     cut(true = Some?.v (MM.sel (sel h log) i));
-    MR.testify (MM.contains log i false);
+    HST.testify (MM.contains log i false);
     cut(false = Some?.v (MM.sel (sel h log) i));
     cut(False)
    end
