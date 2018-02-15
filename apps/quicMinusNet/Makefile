@@ -39,7 +39,7 @@ endif
 all: test
 
 clean:
-	rm -rf *.o *.exe *~
+	rm -rf *.o *.exe *.dll *~
 
 $(MITLS_HOME)/src/pki/$(LIBPKI):
 	$(MAKE) -C ../../src/pki
@@ -49,6 +49,18 @@ $(MITLS_HOME)/src/tls/extract/Kremlin-Library/$(LIBMITLS):
 
 $(HACL_HOME)/secure_api/out/runtime_switch/$(LIBQC):
 	$(MAKE) -j8 -C $(HACL_HOME)/secure_api
+
+copy: $(LIBMITLS) $(LIBPKI) $(LIBQC)
+
+$(LIBMITLS): $(MITLS_HOME)/src/tls/extract/Kremlin-Library/$(LIBMITLS)
+	cp $(MITLS_HOME)/src/tls/extract/Kremlin-Library/$(LIBMITLS) .
+
+$(LIBPKI): $(MITLS_HOME)/src/pki/$(LIBPKI)
+	cp $(MITLS_HOME)/src/pki/$(LIBPKI) .
+	cp $(MLCRYPTO_HOME)/openssl/$(OPENSSL) .
+
+$(LIBQC): $(HACL_HOME)/secure_api/out/runtime_switch/$(LIBQC)
+	cp $(HACL_HOME)/secure_api/out/runtime_switch/$(LIBQC) .
 
 quic.exe: quic.c \
 	$(MITLS_HOME)/src/pki/$(LIBPKI) \

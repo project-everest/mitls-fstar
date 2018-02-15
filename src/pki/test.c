@@ -43,7 +43,7 @@ int main(int argc, char **argv)
   mipki_signature selected;
   mipki_signature offered[3] = {0x0403,0x0503,0x0401};
 
-  mipki_chain s = mipki_select_certificate(st, "localhost", offered, 3, &selected);
+  mipki_chain s = mipki_select_certificate(st, "localhost", 9, offered, 3, &selected);
 
   if(!s)
   {

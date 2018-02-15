@@ -50,7 +50,7 @@ typedef void (MITLS_CALLCONV *pfn_FFI_ticket_cb)(void *cb_state, const char *sni
 #define MAX_SIGNATURE_LEN 8192
 // Select a certificate based on the given SNI and list of signatures.
 // Signature algorithms are represented as 16-bit integers using the TLS 1.3 RFC code points
-typedef void* (MITLS_CALLCONV *pfn_FFI_cert_select_cb)(void *cb_state, const char *sni, const mitls_signature_scheme *sigalgs, size_t sigalgs_len, mitls_signature_scheme *selected);
+typedef void* (MITLS_CALLCONV *pfn_FFI_cert_select_cb)(void *cb_state, const char *sni, size_t sni_len, const mitls_signature_scheme *sigalgs, size_t sigalgs_len, mitls_signature_scheme *selected);
 // Write the certificate chain to buffer, returning the number of written bytes.
 // The chain should be written by prefixing each certificate by its length encoded over 3 bytes
 typedef size_t (MITLS_CALLCONV *pfn_FFI_cert_format_cb)(void *cb_state, const void *cert_ptr, char buffer[MAX_CHAIN_LEN]);
@@ -118,7 +118,7 @@ extern int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const void
 
 // Receive a message
 // Returns NULL for failure, a plaintext packet to be freed with FFI_mitls_free_packet()
-extern void *MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_size);    
+extern void *MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_size);
 
 // Free a packet returned FFI_mitls_receive();
 extern void MITLS_CALLCONV FFI_mitls_free_packet(/* in */ mitls_state *state, void* packet);
