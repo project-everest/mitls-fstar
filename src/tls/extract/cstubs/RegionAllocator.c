@@ -432,16 +432,18 @@ void HeapRegionDestroy(HEAP_REGION rgn)
     }
 }
 
-// Associate the current thread ID with the region
+// Create a new region-based heap and register it as the current region
 void HeapRegionCreateAndRegister(region_entry* pe, HEAP_REGION *prgn)
 {
     region *rgn = (region*)ExAllocatePoolWithTag(PagedPool, sizeof(region), MITLS_TAG);
     if (rgn) {
+        InitializeListHead(&rgn->entries);
         HeapRegionRegister(pe, rgn);
     }
     *prgn = rgn;
 }
 
+// Associate the current thread ID with the region
 void HeapRegionRegister(region_entry* pe, HEAP_REGION rgn)
 {
     pe->id = PsGetCurrentThread();
@@ -555,7 +557,7 @@ void HeapRegionFree(void* pv)
 // Non-region-based allocator, called by HACL*
 void *KrmlAlloc(size_t cb)
 {
-    return ExAllocatePoolWithTag(PagedPool, cb, MITLS_TAG);   
+    return ExAllocatePoolWithTag(PagedPool, cb, MITLS_TAG);
 }
 
 // Non-region-based allocator, called by HACL*
