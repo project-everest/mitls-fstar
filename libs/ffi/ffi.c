@@ -1123,7 +1123,8 @@ CAMLprim value ocaml_cert_select_cb(value st, value fp, value sni, value sal)
 
   // The callback returns a unspecified pointer to the selected certificate
   // and updates the selected signature algorithm (passed by reference)
-  void* cert = cb((void*)ValueToPtr(st), String_val(sni), sigalgs, n, &selected);
+  mlsize_t sni_size = caml_string_length(sni);
+  void* cert = cb((void*)ValueToPtr(st), String_val(sni), (size_t)sni_size, sigalgs, n, &selected);
   if(cert == NULL) CAMLreturn(Val_none);
 
   ret = caml_alloc_small(2, 0);
