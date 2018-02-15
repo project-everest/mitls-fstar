@@ -9,7 +9,7 @@ clean:
 FFICallbacks.cmo FFICallbacks.cmi: FFICallbacks.mli
 	$(OCAMLC) -package batteries,zarith -c FFICallbacks.mli
 
-ffi.o FFICallbacks.cmx: FFICallbacks.ml ffi.c FFICallbacks.cmi
+ffi.o FFICallbacks.cmx: FFICallbacks.ml ffi.c FFICallbacks.cmi ffi.c mitlsffi.h
 	$(OCAMLOPT) -package batteries,zarith -c FFICallbacks.ml -ccopt -Wall -ccopt -fPIC ffi.c
 
 FFICallbacks.cmxa: FFICallbacks.cmx ffi.o
