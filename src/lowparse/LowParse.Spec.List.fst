@@ -153,8 +153,8 @@ let rec bare_serialize_list
 unfold
 let serialize_list_precond
   (k: parser_kind)
-: GTot Type0
-= k.parser_kind_subkind == Some ParserStrong /\
+: GTot bool
+= k.parser_kind_subkind = Some ParserStrong &&
   k.parser_kind_low > 0
 
 let bare_serialize_list_correct

@@ -1,6 +1,7 @@
 # This file can be used elsewhere (e.g. in the miTLS makefile)
 
 LOWPARSE_SPEC_FILES= \
+        LowParse.Math.fst \
 	LowParse.Bytes.fst \
 	LowParse.Spec.Base.fst \
 	LowParse.Spec.Combinators.fst \
