@@ -7,7 +7,7 @@ module LHAE
    used by StatefulLHAE, parameterized by LHAEPlain. *)
 
 open FStar.Heap
-open FStar.HyperHeap
+
 open FStar.Seq
 
 open Platform.Bytes

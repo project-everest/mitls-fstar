@@ -1,4 +1,6 @@
-﻿module Nonce
+﻿
+module Nonce
+module HST = FStar.HyperStack.ST //Added automatically
 
 open Mem
 open TLSConstants
@@ -57,7 +59,7 @@ let fresh_region (r:ex_rid) (h:HS.mem) =
   forall n. Some r <> MM.sel (HS.sel h nonce_rid_table) n 
 
 //A nonce n is registered to region r, if the table contains n -> Some r; 
-//This mapping is stable (that's what the MR.witnessed means)
+//This mapping is stable (that's what the HST.witnessed means)
 let registered (n:random) (r:ST.erid) = 
   witnessed (region_contains_pred r) /\
   witnessed (MM.contains nonce_rid_table n r)
@@ -143,5 +145,5 @@ let noCsr : bytes = CoreCrypto.random 64
    let noCsr : ST random
       (requires (fun h -> Mr.m_sel h nonce_rid_table = MM.empty_map random ex_rid))
       (ensures (fun h0 r h1 -> ~ (fresh r h1)))
-      = mkHelloRandom Client (new_region (FStar.ST.new_region HH.root))
+      = mkHelloRandom Client (new_region (FStar.ST.new_region HS.root))
 *)

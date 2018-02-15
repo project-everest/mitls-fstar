@@ -1,5 +1,6 @@
 (* Idealizing derived authentication tokens; independent of TLS, used for TLS 1.2 Finished message payloads. *) 
 module Token.UF1CMA
+module HS = FStar.HyperStack //Added automatically
 
 //TODO use this file instead of TLSPRF
 open Mem
@@ -258,7 +259,7 @@ private let test (r:rgn {~(is_tls_rgn r)}) (t': Hashing.Spec.tag Hashing.SHA256)
   // assert(
   //   let open Pkg in
   //   let log : i_mem_table p.key = itable q.define_table in
-  //   let v = MR.m_sel h0 log in
+  //   let v = HS.sel h0 log in
   //   lemma_mm_forall_init v p.local_invariant h0;
   //   mm_forall v p.local_invariant h0);
   // assert_norm(q.Pkg.package_invariant h0);

@@ -365,7 +365,7 @@ let ns_rel (#r:role) (#cfg:config) (#resume:resumeInfo r)
   (exists ns0. ns_step ns ns0 /\ ns_step ns0 ns')
 
 assume val ns_rel_monotonic: #r:role -> #cfg:config -> #resume:resumeInfo r ->
-  Lemma (MR.monotonic (negotiationState r cfg resume) (ns_rel #r #cfg #resume))
+  Lemma (Preorder.preorder_rel (negotiationState r cfg resume) (ns_rel #r #cfg #resume))
 
 noeq type t (region:rgn) (role:TLSConstants.role) =
   | NS:

@@ -21,10 +21,10 @@ module IK
 
 open Mem
 
-module MR = FStar.Monotonic.RRef
+
 module MM = FStar.Monotonic.Map
 module MH = FStar.Monotonic.Heap
-module HH = FStar.HyperHeap
+
 module HS = FStar.HyperStack
 
 let model = Flags.model

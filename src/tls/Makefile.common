@@ -45,7 +45,6 @@ ROOTS ?= Record.fst
 # $(IKVER)
 # TLS.fst Handshake.Secret.fst HandshakeLog.fst Handshake.fst 
 
-
 # CF: unused, but tracking what we used to verify.
 OLD_VERIFY= \
 Flags \

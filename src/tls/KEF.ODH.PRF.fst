@@ -1,8 +1,9 @@
 (** Expansion of secrets into expanded secrets and salts *)
 module KEF.PRF_PSK
+module HST = FStar.HyperStack.ST //Added automatically
 
 open FStar.Heap
-open FStar.HyperHeap
+
 open FStar.HyperStack
 
 open Platform.Bytes
@@ -12,8 +13,8 @@ open TLSConstants
 open TLSInfo
 
 module MM = FStar.Monotonic.Map
-module MR = FStar.Monotonic.RRef
-module HH = FStar.HyperHeap
+
+
 module HS = FStar.HyperStack
 
 assume val ideal_KEF_PSK : bool
@@ -58,6 +59,6 @@ type state (i:id) =
   | State:
     r:rgn ->
     key: PSK.app_psk i ->
-    log: MR.m_rref r (log i) log_cmp ->
+    log: HST.m_rref r (log i) log_cmp ->
     state i
 *)

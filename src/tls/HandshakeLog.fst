@@ -4,7 +4,7 @@ module HandshakeLog
 
 open Mem 
 // open FStar.Heap
-// open FStar.HyperHeap
+// 
 // open FStar.HyperStack
 open FStar.Seq
  // for e.g. found

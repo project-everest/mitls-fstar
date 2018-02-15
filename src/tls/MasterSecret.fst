@@ -1,14 +1,16 @@
 (* An experiment towards the PRF in KeySchedule, collapsing master and key derivation *)
 module MasterSecret (* : ST _ _ _ *)
-open FStar.HyperHeap
+module HS = FStar.HyperStack //Added automatically
+module HST = FStar.HyperStack.ST //Added automatically
+
 open FStar.HyperStack
 open TLSConstants
 open StreamAE
 open TLSInfo
 module AE = StreamAE
 module MM = FStar.Monotonic.Map
-module MR = FStar.Monotonic.RRef
-module HH = FStar.HyperHeap
+
+
 module N = Nonce
 module I = IdNonce
 
@@ -16,11 +18,11 @@ module I = IdNonce
 //such that, w's region is known to be a child region of the 
 //region associated with i's nonce
 let writer (i:AE.id) = w:AE.writer i{
-  N.registered (nonce_of_id i) (HH.parent w.region) /\ 
-  HH.disjoint (HH.parent w.region) tls_region /\
-  MR.witnessed (MR.rid_exists w.region) /\
+  N.registered (nonce_of_id i) (HS.parent w.region) /\ 
+  HS.disjoint (HS.parent w.region) tls_region /\
+  HST.witnessed (HST.region_contains_pred w.region) /\
   is_epoch_rgn w.region /\
-  is_epoch_rgn (HH.parent w.region)
+  is_epoch_rgn (HS.parent w.region)
 }  
 
 // A partial map from i:id to w:writer i is region_injective
@@ -36,15 +38,15 @@ let ms_tab : MM.t tls_tables_region AE.id writer region_injective =
 
 //A region is fresh if no nonce is associated with it
 let fresh_in_ms_tab (r:rgn) (h:mem) = 
-  forall i. match MM.sel (MR.m_sel h ms_tab) i with 
+  forall i. match MM.sel (HS.sel h ms_tab) i with 
        | Some w -> w.region <> r
        | None -> True
 
 private let id_rgns_witnessed (m:MM.map' AE.id writer) = 
-    forall (i:AE.id{Some? (MM.sel m i)}). MR.witnessed (MR.rid_exists ((Some?.v (MM.sel m i)).region))
+    forall (i:AE.id{Some? (MM.sel m i)}). HST.witnessed (HST.region_contains_pred ((Some?.v (MM.sel m i)).region))
 
 private let contains_id_rgns (h:mem) =
-    let m = MR.m_sel h ms_tab in 
+    let m = HS.sel h ms_tab in 
     forall (i:AE.id{Some? (MM.sel m i)}). Map.contains h.h ((Some?.v (MM.sel m i)).region)
 
 
@@ -54,43 +56,43 @@ private let contains_id_rgns (h:mem) =
 (* 	      h0=h1 /\ *)
 (* 	      contains_id_rgns h1)) *)
 let all_ms_tab_regions_exists () = 
-  MR.m_recall ms_tab;
-  let m0 = MR.m_read ms_tab in
+  HST.recall ms_tab;
+  let m0 = HST.op_Bang ms_tab in
   let tok : squash (id_rgns_witnessed m0) = () in   
-  MR.testify_forall tok
+  HST.testify_forall tok
 
 let derive (r:rgn) (i:AE.id) 
   : ST (AE.writer i)
        (requires (fun h -> 
-	   HH.disjoint r tls_region /\
+	   HS.disjoint r tls_region /\
 	   is_epoch_rgn r /\
 	   N.registered (nonce_of_id i) r))
        (ensures (fun h0 w h1 ->
-	   let ms_tab_as_hsref = MR.as_hsref ms_tab in
-       	   HH.disjoint r tls_region 
+	   let ms_tab_as_hsref =  ms_tab in
+       	   HS.disjoint r tls_region 
 	   /\ is_epoch_rgn r
 	   /\ N.registered (nonce_of_id i) r
-	   /\ HH.parent w.region = r
+	   /\ HS.parent w.region = r
 	   /\ is_epoch_rgn w.region
 	   /\ modifies (Set.singleton tls_tables_region) h0 h1 //modifies at most the tls_tables region
-	   /\ modifies_rref tls_tables_region (Set.singleton (Heap.addr_of (HH.as_ref ms_tab_as_hsref.ref))) h0.h h1.h //and within it, at most ms_tab
-	   /\ MR.witnessed (MR.rid_exists w.region) //and the writer's region is witnessed to exists also
-	   /\ MR.witnessed (MM.contains ms_tab i w) //and the writer is witnessed to be in ms_tab
-	   /\ (let old_ms = MR.m_sel h0 ms_tab in
-	      let new_ms = MR.m_sel h1 ms_tab in
+	   /\ HS.modifies_ref tls_tables_region (Set.singleton (Heap.addr_of (HH.as_ref ms_tab_as_hsref.ref))) h0.h h1.h //and within it, at most ms_tab
+	   /\ HST.witnessed (HST.region_contains_pred w.region) //and the writer's region is witnessed to exists also
+	   /\ HST.witnessed (MM.contains ms_tab i w) //and the writer is witnessed to be in ms_tab
+	   /\ (let old_ms = HS.sel h0 ms_tab in
+	      let new_ms = HS.sel h1 ms_tab in
  	       old_ms == new_ms //either ms_tab didn't change at all
 	       \/ (MM.sel old_ms i == None
 		  /\ new_ms == MM.upd old_ms i w //or we just added w to it
-	   	  /\ (TLSInfo.authId i ==> MR.m_sel h1 (AE.ilog w.log) == Seq.createEmpty))))) //and it is a fresh log
-  = MR.m_recall ms_tab;
+	   	  /\ (TLSInfo.authId i ==> HS.sel h1 (AE.ilog w.log) == Seq.createEmpty))))) //and it is a fresh log
+  = HST.recall ms_tab;
     match MM.lookup ms_tab i with
     | None -> 
       all_ms_tab_regions_exists ();
       let w = AE.gen r i in 
-      let wr = MR.ex_rid_of_rid w.region in //witness that it always exists
+      let wr = HST.witness_region w.region in //witness that it always exists
       MM.extend ms_tab i w;
       w
     | Some w -> 
       N.testify (nonce_of_id i) r;   // n i -> r
-      N.testify (nonce_of_id i) (HH.parent w.region); //n i -> HH.parent w.region ==> r=w.region; 
+      N.testify (nonce_of_id i) (HS.parent w.region); //n i -> HS.parent w.region ==> r=w.region; 
       w

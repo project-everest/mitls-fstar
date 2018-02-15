@@ -1,4 +1,5 @@
 module QUIC
+module HS = FStar.HyperStack //Added automatically
 
 /// QUIC-specific interface on top of our main TLS API
 /// * establishes session & exported keys: no application-data traffic!
@@ -140,7 +141,7 @@ let connect send recv config psks: ML Connection.connection =
   // we assume the configuration specifies the target SNI;
   // otherwise we must check the authenticated certificate chain.
   let tcp = Transport.callbacks send recv in
-  let here = new_region HyperHeap.root in
+  let here = new_region HS.root in
   quic_check config;
   TLS.resume here tcp config None psks
 
@@ -149,7 +150,7 @@ let connect send recv config psks: ML Connection.connection =
 /// tickets are managed internally
 let accept send recv config : ML Connection.connection =
   let tcp = Transport.callbacks send recv in
-  let here = new_region HyperHeap.root in
+  let here = new_region HS.root in
   quic_check config;
   TLS.accept_connected here tcp config
 

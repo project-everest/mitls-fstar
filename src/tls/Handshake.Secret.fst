@@ -128,7 +128,7 @@ let res_psk_table : MM.t tls_tables_region rmsId res_psk_entry res_psk_injective
   MM.alloc #TLSConstants.tls_tables_region #rmsId #res_psk_entry #res_psk_injective
 
 let registered_res_psk (i:rmsId) (h:HH.t) =
-  b2t (Some? (MM.sel (MR.m_sel h res_psk_table) i))
+  b2t (Some? (MM.sel (HS.sel h res_psk_table) i))
 
 let res_psk_context (i:rmsId{registered_res_psk i}) =
   let (_, _, c, _) = Some.v (MM.sel res_psk_table i) in c
@@ -397,10 +397,10 @@ val create: #rid:rid -> role -> ST (ks * random)
   (requires fun h -> rid<>root)
   (ensures fun h0 (r,_) h1 ->
     let KS #ks_region state = r in
-    stronger_fresh_region ks_region h0 h1
+    HS.fresh_region ks_region h0 h1
     /\ extends ks_region rid
     /\ modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref state))) (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref state))) ( h0) ( h1))
 
 let create #rid r =
   ST.recall_region rid;
@@ -633,8 +633,8 @@ let ks_client_13_ch ks (log:bytes): ST (exportKey * recordInstance)
   let id = ID13 (KeyID expandId) in
   let ckv: StreamAE.key id = ck in
   let civ: StreamAE.iv id  = civ in
-  let rw = StAE.coerce HyperHeap.root id (ckv @| civ) in
-  let r = StAE.genReader HyperHeap.root rw in
+  let rw = StAE.coerce HS.root id (ckv @| civ) in
+  let r = StAE.genReader HS.root rw in
   let early_d = StAEInstance r rw in
   exporter0, early_d
 *)
@@ -938,9 +938,9 @@ let ks12_record_key st =
     match role with
     | Client -> k1, iv1, k2, iv2
     | Server -> k2, iv2, k1, iv1 in
-  let w = StAE.coerce HyperHeap.root id (wk @| wiv) in
-  let rw = StAE.coerce HyperHeap.root id (rk @| riv) in
-  let r = StAE.genReader HyperHeap.root rw in
+  let w = StAE.coerce HS.root id (wk @| wiv) in
+  let rw = StAE.coerce HS.root id (rk @| riv) in
+  let r = StAE.genReader HS.root rw in
   StAEInstance r w
 
 (* 1.2 resumption *)
@@ -1035,7 +1035,7 @@ val client12_resume: ks:ks -> random -> pv:protocolVersion -> cs:cipherSuite -> 
   (ensures fun h0 r h1 ->
     let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
 
 let client12_resume ks sr pv cs =
   let KS #region st = ks in
@@ -1141,9 +1141,9 @@ let client13_ServerHello psks groups ks sr cs log accept_psk g gy =
   let civ: StreamAE.iv id  = civ in
   let skv: StreamAE.key (peerId id) = sk in
   let siv: StreamAE.iv (peerId id)  = siv in
-  let w = StAE.coerce HyperHeap.root id (ckv @| civ) in
-  let rw = StAE.coerce HyperHeap.root id (skv @| siv) in
-  let r = StAE.genReader HyperHeap.root rw in
+  let w = StAE.coerce HS.root id (ckv @| civ) in
+  let rw = StAE.coerce HS.root id (skv @| siv) in
+  let r = StAE.genReader HS.root rw in
 
   let saltId = Salt (HandshakeSecretID hsId) in
   let salt = HKDF.derive_secret h hs "derived" (H.emptyHash h) in
@@ -1203,11 +1203,11 @@ let client13_ServerFinished
   assert_norm(peerId id = ID13 (KeyID s_expandId));
   let ckv: StreamAE.key id = ck in
   let civ: StreamAE.iv id  = civ in
-  let w = StAE.coerce HyperHeap.root id (ckv @| civ) in
+  let w = StAE.coerce HS.root id (ckv @| civ) in
   let skv: StreamAE.key (peerId id) = sk in
   let siv: StreamAE.iv (peerId id)  = siv in
-  let rw = StAE.coerce HyperHeap.root id (skv @| siv) in
-  let r = StAE.genReader HyperHeap.root rw in
+  let rw = StAE.coerce HS.root id (skv @| siv) in
+  let r = StAE.genReader HS.root rw in
 
   let next = C13_wait_Finished2 h ae ams (cts,sts) in
   // what to do with next?
@@ -1472,7 +1472,7 @@ let server12_server_finished ks
   (ensures fun h0 r h1 ->
     let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ HS.modifies_ref rid !{as_ref st} ( h0) ( h1))
   =
   let KS #region st = ks in
   let S (S12_has_MS csr alpha msId ms) = !st in
@@ -1490,7 +1490,7 @@ let client12_server_finished ks: ST (svd:bytes)
   (ensures fun h0 r h1 ->
     let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ HS.modifies_ref rid !{as_ref st} ( h0) ( h1))
   =
   let KS #region st = ks in
   let C (C12_has_MS csr alpha msId ms) = !st in
