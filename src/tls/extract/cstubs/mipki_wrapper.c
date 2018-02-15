@@ -113,7 +113,7 @@ PKI_select(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
   }
 
   FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme res;
-  mipki_chain chain = mipki_select_certificate(pki, sni.data, sigalgs, sigalgs_len, &sel);
+  mipki_chain chain = mipki_select_certificate(pki, sni.data, sni.length, sigalgs, sigalgs_len, &sel);
 
   #if DEBUG
     KRML_HOST_PRINTF("PKI| Selected chain <%08x>, sigalg = %04x\n", chain, sel);
