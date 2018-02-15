@@ -23,9 +23,9 @@ let case_enum : LP.enum cases U8.t =
   ]
   in
   [@inline_let]
-  let _ : squash (L.noRepeats (L.map fst e) /\ L.noRepeats (L.map snd e)) =
-    assert_norm (L.noRepeats (L.map fst e));
-    assert_norm (L.noRepeats (L.map snd e))
+  let _ : squash (L.noRepeats (LP.list_map fst e) /\ L.noRepeats (LP.list_map snd e)) =
+    assert_norm (L.noRepeats (LP.list_map fst e));
+    assert_norm (L.noRepeats (LP.list_map snd e))
   in
   e
 

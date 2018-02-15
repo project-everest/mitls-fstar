@@ -7,33 +7,60 @@ inline_for_extraction
 let eqtype : Type u#1 = (t: Type0 { hasEq t } )
 // eqtype u#0 // does not extract to OCaml
 
+noeq
+type norm_t : Type0 = | Norm
+
+[@Norm]
+let rec list_map
+  (#a #b: Type)
+  (f: (a -> Tot b))
+  (l: list a)
+: Tot (l' : list b { l' == L.map f l } )
+= match l with
+  | [] -> []
+  | a :: q -> f a :: list_map f q
+
 type enum (key: eqtype) (repr: eqtype) = (l: list (key * repr) {
-  L.noRepeats (L.map fst l) /\
-  L.noRepeats (L.map snd l)
+  L.noRepeats (list_map fst l) /\
+  L.noRepeats (list_map snd l)
 })
 
-inline_for_extraction
-let enum_key (#key #repr: eqtype) (e: enum key repr) : Tot eqtype = (s: key { L.mem s (L.map fst e) } )
+[@Norm]
+let rec list_mem
+  (#t: eqtype)
+  (x: t)
+  (l: list t)
+: Tot (y: bool { y == true <==> L.mem x l == true } )
+= match l with
+  | [] -> false
+  | a :: q -> (x = a || list_mem x q)
+
+unfold
+let norm_steps : list Prims.norm_step =
+  [Prims.delta_attr Norm; Prims.iota; Prims.zeta; Prims.primops]
 
 inline_for_extraction
-let enum_repr (#key #repr: eqtype) (e: enum key repr) : Tot eqtype = (r: repr { L.mem r (L.map snd e) } )
+let enum_key (#key #repr: eqtype) (e: enum key repr) : Tot eqtype = (s: key { list_mem s (list_map fst e) } )
+
+inline_for_extraction
+let enum_repr (#key #repr: eqtype) (e: enum key repr) : Tot eqtype = (r: repr { list_mem r (list_map snd e) } )
 
 let flip (#a #b: Type) (c: (a * b)) : Tot (b * a) = let (ca, cb) = c in (cb, ca)
 
 let rec map_flip_flip (#a #b: Type) (l: list (a * b)) : Lemma
-  (L.map flip (L.map flip l) == l)
+  (list_map flip (list_map flip l) == l)
 = match l with
   | [] -> ()
   | _ :: q -> map_flip_flip q
 
 let rec map_fst_flip (#a #b: Type) (l: list (a * b)) : Lemma
-  (L.map fst (L.map flip l) == L.map snd l)
+  (list_map fst (list_map flip l) == list_map snd l)
 = match l with
   | [] -> ()
   | _ :: q -> map_fst_flip q
 
 let rec map_snd_flip (#a #b: Type) (l: list (a * b)) : Lemma
-  (L.map snd (L.map flip l) == L.map fst l)
+  (list_map snd (list_map flip l) == list_map fst l)
 = match l with
   | [] -> ()
   | _ :: q -> map_snd_flip q
@@ -45,7 +72,7 @@ let rec assoc_mem_snd
   (y: b)
 : Lemma
   (requires (L.assoc x l == Some y))
-  (ensures (L.mem y (L.map snd l) == true))
+  (ensures (list_mem y (list_map snd l) == true))
   (decreases l)
 = let ((x', y') :: l') = l in
   if x' = x
@@ -59,9 +86,9 @@ let rec assoc_flip_elim
   (x: a)
 : Lemma
   (requires (
-    L.noRepeats (L.map fst l) /\
-    L.noRepeats (L.map snd l) /\
-    L.assoc y (L.map flip l) == Some x
+    L.noRepeats (list_map fst l) /\
+    L.noRepeats (list_map snd l) /\
+    L.assoc y (list_map flip l) == Some x
   ))
   (ensures (
     L.assoc x l == Some y
@@ -73,8 +100,8 @@ let rec assoc_flip_elim
   else begin
     if x' = x
     then begin
-      assert (L.mem x' (L.map fst l') == false);
-      assoc_mem_snd (L.map flip l') y x;
+      assert (list_mem x' (list_map fst l') == false);
+      assoc_mem_snd (list_map flip l') y x;
       map_snd_flip l';
       assert False
     end
@@ -89,17 +116,17 @@ let rec assoc_flip_intro
   (x: a)
 : Lemma
   (requires (
-    L.noRepeats (L.map fst l) /\
-    L.noRepeats (L.map snd l) /\
+    L.noRepeats (list_map fst l) /\
+    L.noRepeats (list_map snd l) /\
     L.assoc x l == Some y
   ))
   (ensures (
-    L.assoc y (L.map flip l) == Some x
+    L.assoc y (list_map flip l) == Some x
   ))
 = map_fst_flip l;
   map_snd_flip l;
   map_flip_flip l;
-  assoc_flip_elim (L.map flip l) x y
+  assoc_flip_elim (list_map flip l) x y
 
 let enum_key_of_repr
   (#key #repr: eqtype)
@@ -109,7 +136,7 @@ let enum_key_of_repr
   (requires True)
   (ensures (fun y -> L.assoc y e == Some r))
 = map_fst_flip e;
-  let e' = L.map flip e in
+  let e' = list_map flip e in
   L.assoc_mem r e';
   let k = Some?.v (L.assoc r e') in
   assoc_flip_elim e r k;
@@ -124,10 +151,10 @@ let parse_enum_key
 : Tot (parser (parse_filter_kind k) (enum_key e))
 = (p
     `parse_filter`
-    (fun (r: repr) -> L.mem r (L.map snd e))
+    (fun (r: repr) -> list_mem r (list_map snd e))
   )
   `parse_synth`
-  (fun (x: repr {L.mem x (L.map snd e) == true})  -> enum_key_of_repr e x)
+  (fun (x: repr {list_mem x (list_map snd e) == true})  -> enum_key_of_repr e x)
 
 let enum_repr_of_key
   (#key #repr: eqtype)
@@ -139,7 +166,7 @@ let enum_repr_of_key
 = L.assoc_mem k e;
   let r = Some?.v (L.assoc k e) in
   assoc_flip_intro e r k;
-  L.assoc_mem r (L.map flip e);
+  L.assoc_mem r (list_map flip e);
   map_fst_flip e;
   (r <: enum_repr e)
 
@@ -194,7 +221,7 @@ let serialize_enum_key
 
 inline_for_extraction
 let unknown_enum_repr (#key #repr: eqtype) (e: enum key repr) : Tot Type0 =
-  (r: repr { L.mem r (L.map snd e) == false } )
+  (r: repr { list_mem r (list_map snd e) == false } )
 
 type maybe_enum_key (#key #repr: eqtype) (e: enum key repr) =
 | Known of (enum_key e)
@@ -205,7 +232,7 @@ let maybe_enum_key_of_repr
   (e: enum key repr)
   (r: repr)
 : Tot (maybe_enum_key e)
-= if L.mem r (L.map snd e)
+= if list_mem r (list_map snd e)
   then Known (enum_key_of_repr e r)
   else Unknown r
 
@@ -238,7 +265,7 @@ let serialize_maybe_enum_key
 = serialize_synth p (maybe_enum_key_of_repr e) s (repr_of_maybe_enum_key e) ()
 
 let is_total_enum (#key: eqtype) (#repr: eqtype) (l: list (key * repr)) : GTot Type0 =
-  forall (k: key) . L.mem k (L.map fst l)
+  forall (k: key) . list_mem k (list_map fst l)
 
 let total_enum (key: eqtype) (repr: eqtype) : Tot eqtype =
   (l: enum key repr { is_total_enum l } )
@@ -288,7 +315,7 @@ let maybe_total_enum_key_of_repr
   (e: total_enum key repr)
   (r: repr)
 : Tot (maybe_total_enum_key e)
-= if L.mem r (L.map snd e)
+= if list_mem r (list_map snd e)
   then TotalKnown (enum_key_of_repr e r)
   else TotalUnknown r
 
