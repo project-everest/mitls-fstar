@@ -551,7 +551,7 @@ let parseVersion_draft v =
   | (3z, 4z) -> Error(AD_decode_error, "Refused to parse TLS 1.3 final version: expected TLS 1.3#"^UInt8.to_string draft)
   | _ ->
     match parseVersion v with
-    | Correct (UnknownVersion _ _) -> Error(AD_decode_error, "Parsed unknown version ")
+    | Correct (Unknown_protocolVersion _) -> Error(AD_decode_error, "Parsed unknown version ")
     | Correct pv -> Correct pv
     | Error z -> Error z
 
@@ -572,7 +572,7 @@ let string_of_pv = function
   | TLS_1p1 -> "1.1"
   | TLS_1p2 -> "1.2"
   | TLS_1p3 -> "1.3"
-  | UnknownVersion a b -> "Unknown protocol version: " ^ (print_bytes (twobytes (a, b)))
+  | Unknown_protocolVersion x -> "Unknown protocol version: " ^ string_of_int (UInt16.v x)
 
 (* JK: injectivity proof requires extra specification for the UnknownCipherSuite objects as they
    have to be distinct from the 'correct' ones *)
