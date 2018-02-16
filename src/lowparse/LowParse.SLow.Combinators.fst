@@ -117,7 +117,7 @@ let parse32_synth
   (f2': (x: t1) -> Tot (y: t2 { y == f2 x } )) 
   (p1' : parser32 p1)
   (u: unit {
-    forall (x x' : t1) . f2 x == f2 x' ==> x == x'
+    synth_injective f2
   })
 : Tot (parser32 (parse_synth p1 f2))
 = fun (input: bytes32) ->
@@ -139,8 +139,8 @@ let serialize32_synth
   (g1: t2 -> GTot t1)
   (g1': (x: t2) -> Tot (y: t1 { y == g1 x } ) )
   (u: unit {
-    (forall (x : t2) . f2 (g1 x) == x) /\
-    (forall (x x' : t1) . f2 x == f2 x' ==> x == x')
+    synth_inverse f2 g1 /\
+    synth_injective f2
   })
 : Tot (serializer32 (serialize_synth p1 f2 s1 g1 u))
 = fun (input: t2) ->

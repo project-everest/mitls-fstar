@@ -730,6 +730,13 @@ unfold
 let parse_fret (#t #t':Type) (f: t -> GTot t') (v:t) : Tot (parser parse_ret_kind t') =
   parse_fret' f v
 
+let synth_injective
+  (#t1: Type0)
+  (#t2: Type0)
+  (f: (t1 -> GTot t2))
+: GTot Type0
+= forall (x x' : t1) . f x == f x' ==> x == x'
+
 let parse_synth
   (#k: parser_kind)
   (#t1: Type0)
@@ -738,7 +745,7 @@ let parse_synth
   (f2: t1 -> GTot t2)
 : Pure (parser k t2)
   (requires (
-    forall (x x' : t1) . f2 x == f2 x' ==> x == x'
+    synth_injective f2
   ))
   (ensures (fun _ -> True))
 = coerce (parser k t2) (and_then p1 (fun v1 -> parse_fret f2 v1))
@@ -796,6 +803,14 @@ val bare_serialize_synth_correct
 let bare_serialize_synth_correct #k #t1 #t2 p1 f2 s1 g1 =
   ()
 
+let synth_inverse
+  (#t1: Type0)
+  (#t2: Type0)
+  (f2: (t1 -> GTot t2))
+  (g1: (t2 -> GTot t1))
+: GTot Type0
+= (forall (x : t2) . f2 (g1 x) == x)
+
 let serialize_synth
   (#k: parser_kind)
   (#t1: Type0)
@@ -805,8 +820,8 @@ let serialize_synth
   (s1: serializer p1)
   (g1: t2 -> GTot t1)
   (u: unit {
-    (forall (x : t2) . f2 (g1 x) == x) /\
-    (forall (x x' : t1) . f2 x == f2 x' ==> x == x')
+    synth_inverse f2 g1 /\
+    synth_injective f2
   })
 : Tot (serializer (parse_synth p1 f2))
 = bare_serialize_synth_correct p1 f2 s1 g1;
