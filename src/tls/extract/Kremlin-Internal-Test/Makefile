@@ -1,4 +1,5 @@
 # Note: please backport any changes here to ../Kremlin-Library/Makefile
+all: test.exe
 
 UNAME		= $(shell uname)
 MARCH		?= x86_64
@@ -72,20 +73,21 @@ else
 CFLAGS += -DNO_OPENSSL
 endif
 
-all: test.exe
+%.d: %.c
+	@set -e; rm -f $@; \
+	  $(CC) -MM $(CFLAGS) $< > $@.$$$$; \
+	  sed 's,\($(notdir $*)\)\.o[ :]*,$(dir $@)\1.o $@ : ,g' < $@.$$$$ > $@; \
+	  rm -f $@.$$$$
 
--include .depend
+-include $(addsuffix .d,$(FILES))
 
-.depend:
-	$(CC) $(CFLAGS) -MM $(addsuffix .c,$(FILES)) > $@
+test.exe: $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
+	$(CC) $^ -o $@ -lmipki $(LDOPTS) -L$(MITLS_HOME)/src/pki
 
 CERT_FILES=CAFile.pem server-ecdsa.crt server-ecdsa.key
 
 $(CERT_FILES):
 	cp $(MITLS_HOME)/data/$@ .
 
-test.exe: $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
-	$(CC) $^ -o $@ -lmipki $(LDOPTS) -L$(MITLS_HOME)/src/pki
-
-test: all $(CERT_FILES)
-	./test.exe
+test: test.exe $(CERT_FILES)
+	./$<
