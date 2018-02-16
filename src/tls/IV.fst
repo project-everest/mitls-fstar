@@ -14,12 +14,10 @@ let sample (len:UInt32.t): ST (lbytes len)
 /// parameter. We use this functionality e.g. for generating the
 /// static IV for TLS AEAD as part of the TLS key schedule.
 /// 
-/// There is no proper idealization flags here; the main
-/// (unconditional) property is that the vector is a function of the
-/// index; this vector is fresh whenever create is called instead of
-/// coerce.
+/// There is no need for an idealization flag: the main (unconditional)
+/// property is that the vector is a function of the index; this
+/// vector is fresh whenever create is called instead of coerce.
 
-// should be set together with its parent KDF.
 assume val flag_Raw: b:bool{b ==> model}
 
 type idealRaw = b2t flag_Raw
