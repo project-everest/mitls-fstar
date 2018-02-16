@@ -193,3 +193,12 @@ let parse_t_array : LP.parser _ (LP.array t 18) =
 inline_for_extraction
 let parse32_t_array : LP.parser32 parse_t_array =
   LP.parse32_array serialize_t parse32_t 54 54ul 18 ()
+
+// NOTE: in this example, byte-size bounds do not need to exactly match element-count bounds (which would be 15 and 21 respectively)
+
+let parse_t_vlarray : LP.parser _ (LP.vlarray t 5 7) =
+  LP.parse_vlarray 13 22 serialize_t 5 7 ()
+
+inline_for_extraction
+let parse32_t_vlarray : LP.parser32 parse_t_vlarray =
+  LP.parse32_vlarray 13 13ul 22 22ul serialize_t parse32_t 5 7 ()
