@@ -1045,5 +1045,6 @@ void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state)
     HEAP_REGION rgn = state->rgn;
     ENTER_HEAP_REGION(state->rgn);
     KRML_HOST_FREE(state);
+    LEAVE_HEAP_REGION();
     DESTROY_HEAP_REGION(rgn);
 }
