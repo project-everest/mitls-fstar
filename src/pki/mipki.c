@@ -218,14 +218,18 @@ int MITLS_CALLCONV mipki_add_root_file_or_path(mipki_state *st, const char *ca_f
   return X509_STORE_load_locations(st->store, ca_file, NULL);
 }
 
-mipki_chain MITLS_CALLCONV mipki_select_certificate(mipki_state *st, const char *sni, const mipki_signature *algs, size_t algs_len, mipki_signature *selected)
+mipki_chain MITLS_CALLCONV mipki_select_certificate(mipki_state *st, const char *sni, size_t sni_len, const mipki_signature *algs, size_t algs_len, mipki_signature *selected)
 {
   assert(st != NULL);
 
   #if DEBUG
-    printf("Selecting certificate for <%s>, signatures=", sni);
+    char *sni_str = malloc(sni_len+1);
+    memcpy(sni_str, sni, sni_len);
+    sni_str[sni_len] = 0;
+    printf("Selecting certificate for <%s>, signatures=", sni_str);
     for(size_t j = 0; j < algs_len; j++) printf("%04x ", algs[j]);
     printf("\n");
+    free(sni_str);
   #endif
 
   for(size_t i = 0; i < st->config_len; i++)
@@ -243,7 +247,7 @@ mipki_chain MITLS_CALLCONV mipki_select_certificate(mipki_state *st, const char 
     #endif
 
     // Server-side hostname validation to match wildcards, SAN, etc
-    if(cfg->is_universal || X509_check_host(cfg->endpoint, sni, strlen(sni), 0, peer))
+    if(cfg->is_universal || X509_check_host(cfg->endpoint, sni, sni_len, 0, peer))
     {
       #if DEBUG
       printf(" - Positive match for <%s>\n", peername);
@@ -788,7 +792,7 @@ void D() {};
 void MITLS_CALLCONV mipki_free(mipki_state *st) { D(); }
 mipki_state* MITLS_CALLCONV mipki_init(const mipki_config_entry config[], size_t config_len, password_callback pcb, int *erridx) { D(); return NULL; }
 int MITLS_CALLCONV mipki_add_root_file_or_path(mipki_state *st, const char *ca_file) { D(); return 0; }
-mipki_chain MITLS_CALLCONV mipki_select_certificate(mipki_state *st, const char *sni, const mipki_signature *algs, size_t algs_len, mipki_signature *selected) { D(); return NULL; }
+mipki_chain MITLS_CALLCONV mipki_select_certificate(mipki_state *st, const char *sni, size_t sni_len, const mipki_signature *algs, size_t algs_len, mipki_signature *selected) { D(); return NULL; }
 int MITLS_CALLCONV mipki_sign_verify(mipki_state *st, const mipki_chain cert_ptr, const mipki_signature sigalg, const char *tbs, size_t tbs_len, char *sig, size_t *sig_len, mipki_mode mode) { D(); return 0; }
 mipki_chain MITLS_CALLCONV mipki_parse_chain(mipki_state *st, const char *chain, size_t chain_len) { D(); return NULL; }
 mipki_chain MITLS_CALLCONV mipki_parse_list(mipki_state *st, const char **certs, const size_t* certs_len, size_t chain_len) { D(); return NULL; }

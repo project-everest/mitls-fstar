@@ -39,16 +39,28 @@ endif
 all: test
 
 clean:
-	rm -rf *.o *.exe *~
+	rm -rf *.o *.exe *.dll *~
 
 $(MITLS_HOME)/src/pki/$(LIBPKI):
-	make -C ../../src/pki
+	$(MAKE) -C ../../src/pki
 
 $(MITLS_HOME)/src/tls/extract/Kremlin-Library/$(LIBMITLS):
-	make -j8 -C ../../src/tls -f Makefile.Kremlin build-library
+	$(MAKE) -j8 -C ../../src/tls -f Makefile.Kremlin build-library
 
 $(HACL_HOME)/secure_api/out/runtime_switch/$(LIBQC):
-	make -j8 -C $(HACL_HOME)/secure_api
+	$(MAKE) -j8 -C $(HACL_HOME)/secure_api
+
+copy: $(LIBMITLS) $(LIBPKI) $(LIBQC)
+
+$(LIBMITLS): $(MITLS_HOME)/src/tls/extract/Kremlin-Library/$(LIBMITLS)
+	cp $(MITLS_HOME)/src/tls/extract/Kremlin-Library/$(LIBMITLS) .
+
+$(LIBPKI): $(MITLS_HOME)/src/pki/$(LIBPKI)
+	cp $(MITLS_HOME)/src/pki/$(LIBPKI) .
+	cp $(MLCRYPTO_HOME)/openssl/$(OPENSSL) .
+
+$(LIBQC): $(HACL_HOME)/secure_api/out/runtime_switch/$(LIBQC)
+	cp $(HACL_HOME)/secure_api/out/runtime_switch/$(LIBQC) .
 
 quic.exe: quic.c \
 	$(MITLS_HOME)/src/pki/$(LIBPKI) \

@@ -399,12 +399,13 @@ let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming 
           (Some?.v mode.Nego.n_server_share)
           mode.Nego.n_pski in
         register s hs_keys; // register new epoch
-        (match Nego.zeroRTToffer mode.Nego.n_offer, Some? mode.Nego.n_pski with
-        | true, true ->
-          (trace "0RTT potentially accepted (wait for EE to confirm)";
-          Epochs.incr_reader s.epochs)
-        | true, false -> trace "No 0RTT possible because of PSK refused"
-        | _ -> ());
+        if Nego.zeroRTToffer mode.Nego.n_offer then
+         begin
+          trace (if Some? mode.Nego.n_pski then "0RTT potentially accepted (wait for EE to confirm)"
+                 else "No 0RTT possible because of rejected PSK");
+          // Skip the 0-RTT epoch on the reading side
+          Epochs.incr_reader s.epochs
+         end;
         s.state := C_Wait_Finished1;
         Epochs.incr_reader s.epochs; // Client 1.3 HSK switch to handshake key for decrypting EE etc...
         InAck true false // Client 1.3 HSK

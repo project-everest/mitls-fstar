@@ -42,10 +42,10 @@ clean:
 	rm -rf *.o *.exe *.dll *~
 
 $(MITLS_HOME)/src/pki/$(LIBPKI):
-	make -C ../../src/pki
+	$(MAKE) -C ../../src/pki
 
 $(MITLS_HOME)/src/tls/extract/Kremlin-Library/$(LIBMITLS):
-	make -j8 -C ../../src/tls -f Makefile.Kremlin build-library
+	$(MAKE) -j8 -C ../../src/tls -f Makefile.Kremlin build-library
 
 copy: $(LIBMITLS) $(LIBPKI)
 
