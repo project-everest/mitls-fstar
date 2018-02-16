@@ -560,13 +560,14 @@ let serializer_correct
 
 let serializer_correct_ext
   (#k1: parser_kind)
-  (#t: Type0)
-  (p1: parser k1 t)
-  (f: bare_serializer t)
+  (#t1: Type0)
+  (p1: parser k1 t1)
+  (f: bare_serializer t1)
   (#k2: parser_kind)
-  (p2: parser k2 t)
+  (#t2: Type0)
+  (p2: parser k2 t2)
 : Lemma
-  (requires (forall (input: bytes) . parse p1 input == parse p2 input))
+  (requires (t1 == t2 /\ (forall (input: bytes) . parse p1 input == parse p2 input)))
   (ensures (serializer_correct p1 f <==> serializer_correct p2 f))
 = ()
 
@@ -626,16 +627,30 @@ let coerce_serializer
 
 let serialize_ext
   (#k1: parser_kind)
-  (#t: Type0)
-  (p1: parser k1 t)
+  (#t1: Type0)
+  (p1: parser k1 t1)
   (s1: serializer p1)
   (#k2: parser_kind)
-  (p2: parser k2 t)
+  (#t2: Type0)
+  (p2: parser k2 t2)
 : Pure (serializer p2)
-  (requires (forall (input: bytes) . parse p1 input == parse p2 input))
+  (requires (t1 == t2 /\ (forall (input: bytes) . parse p1 input == parse p2 input)))
   (ensures (fun _ -> True))
 = serializer_correct_ext p1 s1 p2;
-  (s1 <: bare_serializer t)
+  (s1 <: bare_serializer t2)
+
+let serialize_ext'
+  (#k1: parser_kind)
+  (#t1: Type0)
+  (p1: parser k1 t1)
+  (s1: serializer p1)
+  (#k2: parser_kind)
+  (#t2: Type0)
+  (p2: parser k2 t2)
+: Pure (serializer p2)
+  (requires (t1 == t2 /\ k1 == k2 /\ p1 == p2))
+  (ensures (fun _ -> True))
+= serialize_ext p1 s1 p2
 
 let serialize
   (#k: parser_kind)
