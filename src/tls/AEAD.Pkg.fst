@@ -166,7 +166,7 @@ val empty_log:
   #index_of_i:(ip.t -> I.id) ->
   #i:ip.t{ip.registered i} ->
   a:aeadAlg{a == aeadAlg_of_i i} ->
-  k:key ip aeadAlg_of_i index_of_i i ->
+  k:key ip index_of_i i ->
   h:mem ->
   GTot Type0
 let empty_log #ip #aeadAlg_of_i #index_of_i #i a k h =
@@ -178,7 +178,7 @@ val empty_log_framing:
   #index_of_i:(ip.t -> I.id) ->
   #i:ip.t{ip.registered i} ->
   a:aeadAlg{a == aeadAlg_of_i i} ->
-  k:key ip aeadAlg_of_i index_of_i i ->
+  k:key ip index_of_i i ->
   h0:mem ->
   r:rid ->
   h1:mem ->
@@ -196,7 +196,7 @@ val create_key:
   index_of_i:(ip.t -> I.id) ->
   i:ip.t{ip.registered i} ->
   a:aeadAlg{a == aeadAlg_of_i i} ->
-  ST (key ip aeadAlg_of_i index_of_i i)
+  ST (key ip index_of_i i)
      (requires fun h0 -> model /\ live_region h0 (AE.prf_region (index_of_i i)))
      (ensures  fun h0 k h1 ->
        modifies_none h0 h1 /\
@@ -215,7 +215,7 @@ assume val coerceT_key:
   i:ip.t{ip.registered i /\ (ideal ==> ~(ip.honest i))} ->
   a:aeadAlg{a == aeadAlg_of_i i} ->
   keyrepr a ->
-  GTot (key ip aeadAlg_of_i i)
+  GTot (key ip index_of_i i)
 
 
 assume val coerce_key:
@@ -228,7 +228,7 @@ assume val coerce_key:
     (requires fun h0 -> True)
     (ensures fun h0 k h1 -> k == coerceT_key ip aeadAlg_of_i i a k0
       /\ modifies_none h0 h1 /\ fresh_regions (footprint k) h0 h1
-      /\ aead_empty_log ip aeadAlg_of_i a k h1 /\ invariant k h1)
+      /\ empty_log ip aeadAlg_of_i a k h1 /\ invariant k h1)
 
 let local_ae_pkg (ip:ipkg) (aeadAlg_of_i:ip.t -> aeadAlg) =
   LocalPkg

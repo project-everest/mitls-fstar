@@ -24,7 +24,7 @@ private let hacl2bytes (s:Seq.seq UInt8.t) : Tot (b:bytes{length b = Seq.length 
   Platform.Bytes.initBytes (Seq.length s) (fun i ->
     FStar.Char.char_of_int (UInt8.v (Seq.index s i)))
 
-private let scalarmult k p = 
+private let scalarmult k p =
   let p = Spec.Curve25519.scalarmult (bytes2hacl k) (bytes2hacl p) in
   hacl2bytes p
 
@@ -34,10 +34,10 @@ let point_of_scalar (s:scalar) : Tot point =
   hacl2bytes p
 *)
 
-assume 
+assume
 val mul: secret:scalar -> point:point -> ST (lbytes 32)
   (requires fun h -> True)
-  (ensures fun h0 _ h1 -> modifies_none h0 h1) 
+  (ensures fun h0 _ h1 -> modifies_none h0 h1)
 
 let keygen () : ST keyshare
   (requires (fun h0 -> True))

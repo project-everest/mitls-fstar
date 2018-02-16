@@ -54,6 +54,7 @@ val is_honest_dhi: i:pre_dhi -> ST bool
   (ensures fun h0 b h1 -> h0 == h1 /\ (b <==> honest_dhi i) /\ (not b <==> corrupt_dhi i))
 type dhi = i:pre_dhi{registered_dhi i}
 
+type share (g:group) = pre_share g
 type ishare (g:group) = s:pre_share g{registered_dhi (| g, s |)}
 type ikeyshare (g:group) = s:pre_keyshare g{registered_dhi (|g, pre_pubshare s|)}
 val ipubshare: #g:group -> i:ikeyshare g -> Tot (s:ishare g{s == pre_pubshare i})

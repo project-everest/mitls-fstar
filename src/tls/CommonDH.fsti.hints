@@ -1,0 +1,253 @@
+[
+  "½.XmÈ \u000b\u0006µ”ßåiHÓ«",
+  [
+    [
+      "CommonDH.rshare",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_CommonDH.ishare",
+        "refinement_interpretation_CommonDH_Tm_refine_59e636272f909930c53ccc0e9facf997"
+      ],
+      0,
+      "60f29ba62ab0339259bf2be8becb6f28"
+    ],
+    [
+      "CommonDH.dh_responder",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_CommonDH.ishare",
+        "refinement_interpretation_CommonDH_Tm_refine_59e636272f909930c53ccc0e9facf997"
+      ],
+      0,
+      "f9de5b6e270a12ecce78825d457875ba"
+    ],
+    [
+      "CommonDH.dh_responder",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_CommonDH.ishare",
+        "refinement_interpretation_CommonDH_Tm_refine_59e636272f909930c53ccc0e9facf997"
+      ],
+      0,
+      "bd395b4f04c0f33f6de4c97a148af0f2"
+    ],
+    [
+      "CommonDH.dh_responder",
+      3,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_CommonDH.ishare",
+        "refinement_interpretation_CommonDH_Tm_refine_59e636272f909930c53ccc0e9facf997"
+      ],
+      0,
+      "1bfa1d716f6879b7ac24e4963b33b9be"
+    ],
+    [
+      "CommonDH.keyShareEntry",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_Parse.namedGroup_haseq",
+        "assumption_Platform.Bytes.HasEq_bytes",
+        "equation_Platform.Bytes.bytes",
+        "function_token_typing_CommonDH.group",
+        "haseqCommonDH_Tm_refine_62be46b5d65726c91e550691e3da999b",
+        "haseqCommonDH_Tm_refine_945444a71bf3ef6cdcc5e89639b43af9",
+        "haseqCommonDH_Tm_refine_eeebc2cf867d9a88a4079b66c946cb38",
+        "refinement_interpretation_CommonDH_Tm_refine_eeebc2cf867d9a88a4079b66c946cb38",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_CommonDH.pre_share"
+      ],
+      0,
+      "168aa7eb0242260a9c25e917d03b7142"
+    ],
+    [
+      "CommonDH.uu___is_Share",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "55d101ab9214f52be2f0e29fb11571cc"
+    ],
+    [
+      "CommonDH.__proj__Share__item__g",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_CommonDH.Share",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_CommonDH_Tm_refine_419290ad1633289796ca4faa3415e88c"
+      ],
+      0,
+      "fbe95515561f9e76c363b49a51b1d27d"
+    ],
+    [
+      "CommonDH.__proj__Share__item___1",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_CommonDH.Share",
+        "proj_equation_CommonDH.Share_g",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_CommonDH.Share_g",
+        "refinement_interpretation_CommonDH_Tm_refine_419290ad1633289796ca4faa3415e88c"
+      ],
+      0,
+      "f7bf1a337e3604cd419655d68e383e35"
+    ],
+    [
+      "CommonDH.uu___is_UnknownShare",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "86f5befcff8f1f8033fb430e813a13d9"
+    ],
+    [
+      "CommonDH.__proj__UnknownShare__item__ng",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_CommonDH.UnknownShare",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_CommonDH_Tm_refine_c024b0a21c9b8f09957845060b9823fc"
+      ],
+      0,
+      "419937fb5d77bcf9ee649431f33e2dbf"
+    ],
+    [
+      "CommonDH.__proj__UnknownShare__item__b",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_CommonDH.UnknownShare",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_CommonDH_Tm_refine_c024b0a21c9b8f09957845060b9823fc"
+      ],
+      0,
+      "429c2590e8ee3f353b1078a4894ff77d"
+    ],
+    [
+      "CommonDH.uu___is_ClientKeyShare",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "50a7a9780fbfc031eca8306ad4860cf0"
+    ],
+    [
+      "CommonDH.__proj__ClientKeyShare__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_CommonDH.ClientKeyShare",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_CommonDH_Tm_refine_6def7493d05b3fbcbe82678fc375d428"
+      ],
+      0,
+      "6ea0199a4e2c87d672ad203d3a738a18"
+    ],
+    [
+      "CommonDH.uu___is_ServerKeyShare",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "f332c3a8f21dcac3c3e693a0220dd181"
+    ],
+    [
+      "CommonDH.__proj__ServerKeyShare__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_CommonDH.ServerKeyShare",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_CommonDH_Tm_refine_9cc025d1d8ed93fe703d76a8ddd03286"
+      ],
+      0,
+      "168570c1d12356257a8e1d8fdc0aebed"
+    ],
+    [
+      "CommonDH.uu___is_HRRKeyShare",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "6a3123d3b6281c25d9db305f25c349a1"
+    ],
+    [
+      "CommonDH.__proj__HRRKeyShare__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_CommonDH.HRRKeyShare",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_CommonDH_Tm_refine_24f91d366aff84b0df73177175f3b8ef"
+      ],
+      0,
+      "e0dfa1e18ab857f5e6388b2c2e4fdca9"
+    ],
+    [
+      "CommonDH.keyShareBytes",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_Prims.HasEq_int" ],
+      0,
+      "6f59c72681c74b70e76c157fa4e5cc63"
+    ],
+    [
+      "CommonDH.uu___is_KS_ClientHello",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "e7462378a914cb7b413d46ddc00b65a7"
+    ],
+    [
+      "CommonDH.uu___is_KS_ServerHello",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "bed2f8c535d04e93e3f41e884a641eb4"
+    ],
+    [
+      "CommonDH.uu___is_KS_HRR",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "40792095ba871aa32096e77749aa2c6b"
+    ]
+  ]
+]

@@ -434,10 +434,10 @@ val create:
 let create region r cfg resume nonce =
   match r with
   | Client ->
-    let state = m_alloc region (C_Init nonce) in
+    let state = Mem.ralloc region (C_Init nonce) in
     NS cfg resume nonce state
   | Server ->
-    let state = m_alloc region (S_Init nonce) in
+    let state = Mem.ralloc region (S_Init nonce) in
     NS cfg resume nonce state
 
 // a bit too restrictive: use a single Hash in any given offer
@@ -639,13 +639,13 @@ let rec map_ST f x = match x with
 val client_ClientHello: #region:rgn -> n: t region Client
   -> option CommonDH.clientKeyShare
   -> St offer
-  // requires C_Init? i.e.  st = transcript_state client_config []  
-  // ensures C_offer? i.e. st = transcript_state client_config [ClientHello offer] 
+  // requires C_Init? i.e.  st = transcript_state client_config []
+  // ensures C_offer? i.e. st = transcript_state client_config [ClientHello offer]
   //                                /\ witnessed (fun h -> sel h st == offer)
 
-  (ensures fun h0 offer h1 -> 
-    let st0 = sel h0 n in 
-    let st1 = sel h1 n in 
+  (ensures fun h0 offer h1 ->
+    let st0 = sel h0 n in
+    let st1 = sel h1 n in
     offer_v st == offer /\ (* also use computeOffer here? *)
     replay_transcript st0.config [ClientHello offer] (*ghost*) == Correct st1)
 
