@@ -17,8 +17,8 @@ inline_for_extraction let protocolVersion_enum : LP.enum protocolVersion UInt16.
     TLS_1p3, 772us;
   ] in
   [@inline_let] let no_dups =
-    assert_norm (L.noRepeats (L.map fst e));
-    assert_norm (L.noRepeats (L.map snd e))
+    assert_norm (L.noRepeats (LP.list_map fst e));
+    assert_norm (L.noRepeats (LP.list_map snd e))
   in e
 
 inline_for_extraction let synth_protocolVersion' (x:LP.maybe_enum_key protocolVersion_enum) : Tot protocolVersion' = 
@@ -26,7 +26,7 @@ inline_for_extraction let synth_protocolVersion' (x:LP.maybe_enum_key protocolVe
   | LP.Known k -> k
   | LP.Unknown y ->
     [@inline_let] let v : UInt16.t = y in
-    [@inline_let] let _ = norm_spec LP.norm_steps (LP.list_mem v (LP.list_map snd protocolVersion_enum)) in
+    [@inline_let] let _ = LP.norm_spec (LP.list_mem v (LP.list_map snd protocolVersion_enum)) in
     Unknown_protocolVersion v
 
 let lemma_synth_protocolVersion'_inj () : Lemma
@@ -37,11 +37,11 @@ inline_for_extraction let synth_protocolVersion'_inv (x:protocolVersion') : Tot 
   match x with
   | Unknown_protocolVersion y ->
     [@inline_let] let v : UInt16.t = y in
-    [@inline_let] let _ = norm_spec LP.norm_steps (LP.list_mem v (LP.list_map snd protocolVersion_enum)) in
+    [@inline_let] let _ = LP.norm_spec (LP.list_mem v (LP.list_map snd protocolVersion_enum)) in
     LP.Unknown v
   | x ->
     [@inline_let] let x1 : protocolVersion = x in
-    [@inline_let] let _ = norm_spec LP.norm_steps (LP.list_mem x1 (LP.list_map fst protocolVersion_enum)) in
+    [@inline_let] let _ = LP.norm_spec (LP.list_mem x1 (LP.list_map fst protocolVersion_enum)) in
     LP.Known (x1 <: LP.enum_key protocolVersion_enum)
 
 let lemma_synth_protocolVersion'_inv () : Lemma
