@@ -181,7 +181,7 @@ int MITLS_CALLCONV FFI_mitls_configure(mitls_state **state, const char *tls_vers
     ret = FFI_mitls_configure_caml(state, tls_version, host_name);
     caml_release_runtime_system();
     caml_c_thread_unregister();
-    
+
     return ret;
 }
 
@@ -318,7 +318,7 @@ static int ocaml_set_ticket_callback(/* in */ mitls_state *state, void *cb_state
         ret = 1;
       }
     }
-#endif    
+#endif
 
     CAMLreturnT(int, ret);
 }
@@ -542,7 +542,7 @@ static int FFI_mitls_accept_connected_caml(void *send_recv_ctx, pfn_FFI_send pse
       PtrToValue(precv),
       state->fstar_state
     };
-    
+
     result = caml_callbackN_exn(*g_mitls_FFI_AcceptConnected, 4, args);
     if (Is_exception_result(result)) {
         report_caml_exception(result);
@@ -1123,7 +1123,7 @@ CAMLprim value ocaml_cert_select_cb(value st, value fp, value sni, value sal)
 
   // The callback returns a unspecified pointer to the selected certificate
   // and updates the selected signature algorithm (passed by reference)
-  void* cert = cb((void*)ValueToPtr(st), String_val(sni), sigalgs, n, &selected);
+  void* cert = cb((void*)ValueToPtr(st), String_val(sni), caml_string_length(sni), sigalgs, n, &selected);
   if(cert == NULL) CAMLreturn(Val_none);
 
   ret = caml_alloc_small(2, 0);

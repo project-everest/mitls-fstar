@@ -64,7 +64,7 @@ int MITLS_CALLCONV mipki_add_root_file_or_path(mipki_state *st, const char *ca_f
 
 // Find a certificate and signature algorithm compatible with the given SNI and list of offered signature algorithms
 // Returns a pointer to the selected entry or NULL if no certificate is suitable
-mipki_chain MITLS_CALLCONV mipki_select_certificate(mipki_state *st, const char *sni, const mipki_signature *algs, size_t algs_len, mipki_signature *selected);
+mipki_chain MITLS_CALLCONV mipki_select_certificate(mipki_state *st, const char *sni, size_t sni_len, const mipki_signature *algs, size_t algs_len, mipki_signature *selected);
 
 // A combined signature-and-verify function (depending on m)
 // Returns 0 on error. When signing, pass a reference to the size of the signature buffer to sig_len,

@@ -49,10 +49,10 @@ void ticket_cb(void *st, const char *sni, const mitls_ticket *ticket)
   printf(" ########################################\n");
 }
 
-void* certificate_select(void *cbs, const char *sni, const mitls_signature_scheme *sigalgs, size_t sigalgs_len, mitls_signature_scheme *selected)
+void* certificate_select(void *cbs, const char *sni, size_t sni_len, const mitls_signature_scheme *sigalgs, size_t sigalgs_len, mitls_signature_scheme *selected)
 {
   mipki_state *st = (mipki_state*)cbs;
-  mipki_chain r = mipki_select_certificate(st, sni, sigalgs, sigalgs_len, selected);
+  mipki_chain r = mipki_select_certificate(st, sni, sni_len, sigalgs, sigalgs_len, selected);
   return (void*)r;
 }
 

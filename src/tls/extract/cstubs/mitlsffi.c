@@ -147,7 +147,7 @@ void MITLS_CALLCONV FFI_mitls_cleanup(void)
 int MITLS_CALLCONV FFI_mitls_configure(mitls_state **state, const char *tls_version, const char *host_name)
 {
     int ret;
-    
+
     *state = NULL;
 
     HEAP_REGION rgn;
@@ -180,7 +180,7 @@ int MITLS_CALLCONV FFI_mitls_configure(mitls_state **state, const char *tls_vers
 int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *alg, const char *tk, size_t klen)
 {
     // bugbug: this uses the global region for heap allocations
-    
+
     FStar_Bytes_bytes key;
     bool b = MakeFStar_Bytes_bytes(&key, tk, klen);
     if(b) b = FFI_ffiSetTicketKey(alg, key);
@@ -349,7 +349,7 @@ static FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme
     cur = cur->tl;
   }
   FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme res;
-  void* chain = s->select(s->cb_state, sni.data, sigalgs, sigalgs_len, &selected);
+  void* chain = s->select(s->cb_state, sni.data, sni.length, sigalgs, sigalgs_len, &selected);
 
   if(chain == NULL) {
     res.tag = FStar_Pervasives_Native_None;
@@ -771,7 +771,7 @@ typedef struct {
 void quic_create_callout(PVOID Parameter)
 {
     quic_create_state *s = (quic_create_state*)Parameter;
-    
+
     if(s->cfg->is_server) {
       s->st->cxn = QUIC_ffiAcceptConnected(s->st, quic_send, quic_recv, s->st->cfg);
     } else {
@@ -935,7 +935,7 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
 
       st->cxn = QUIC_ffiConnect((FStar_Dyn_dyn)st, quic_send, quic_recv, st->cfg, ticket);
     }
-#endif    
+#endif
 
     LEAVE_HEAP_REGION();
     st->rgn = rgn;
@@ -952,7 +952,7 @@ typedef struct {
 VOID quic_process_callout(PVOID Parameter)
 {
     quic_process_state *s = (quic_process_state*)Parameter;
-    
+
     s->r = QUIC_recv(s->state->cxn);
 }
 #endif
@@ -1045,5 +1045,6 @@ void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state)
     HEAP_REGION rgn = state->rgn;
     ENTER_HEAP_REGION(state->rgn);
     KRML_HOST_FREE(state);
+    LEAVE_HEAP_REGION();
     DESTROY_HEAP_REGION(rgn);
 }
