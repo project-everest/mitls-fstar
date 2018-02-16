@@ -35,9 +35,12 @@ let rec list_mem
   | [] -> false
   | a :: q -> (x = a || list_mem x q)
 
-unfold
-let norm_steps : list Prims.norm_step =
-  [Prims.delta_attr Norm; Prims.iota; Prims.zeta; Prims.primops]
+let norm_spec
+  (#t: Type)
+  (x: t)
+: Lemma
+  (Prims.norm [Prims.delta_attr Norm; Prims.iota; Prims.zeta; Prims.primops] x == x)
+= Prims.norm_spec [Prims.delta_attr Norm; Prims.iota; Prims.zeta; Prims.primops] x
 
 inline_for_extraction
 let enum_key (#key #repr: eqtype) (e: enum key repr) : Tot eqtype = (s: key { list_mem s (list_map fst e) } )
