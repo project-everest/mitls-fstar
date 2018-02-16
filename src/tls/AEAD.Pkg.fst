@@ -56,10 +56,12 @@ let keylen = function
 
 type keyrepr (u:info) = lbytes (keylen u.alg)
 
-noeq abstract type concrete_key =
+// FIXME(adl) 16/02/18 had to remove abstract to avoid F* crash
+
+noeq (*abstract*) type concrete_key =
   | AEAD: u:info -> k:keyrepr u -> concrete_key
 
-noeq abstract type _key (#ip:ipkg) (index_of_i:ip.t -> I.id) (i:ip.t) =
+noeq (*abstract*) type _key (#ip:ipkg) (index_of_i:ip.t -> I.id) (i:ip.t) =
   | Ideal:
     ck: concrete_key ->
 //    region: subrgn ck.u.parent{~(is_tls_rgn region)} ->
@@ -68,7 +70,7 @@ noeq abstract type _key (#ip:ipkg) (index_of_i:ip.t -> I.id) (i:ip.t) =
   | Real:
     ck: concrete_key -> _key #ip index_of_i i
 
-type key (ip:ipkg)
+(*abstract*) type key (ip:ipkg)
   (index_of_i:ip.t -> I.id)
   (i:ip.t{ip.registered i}) =
   (if model then
@@ -102,24 +104,27 @@ let keyval #ip #index_of_i #i k =
     | Real ck -> ck.k
   else k.k
 
+#set-options "--lax"
+
 (** Downward closure of [prf_region i] *)
 val shared_footprint:
   #ip:ipkg ->
   index_of_i:(ip.t -> I.id) ->
-  i:ip.t{ip.registered i} ->
-  GTot rset
-let shared_footprint #ip index_of_i i =
-  if model then AE.shared_footprint (index_of_i i)
-  else Set.empty
+//  i:ip.t{ip.registered i} ->
+  rset
+let shared_footprint #ip index_of_i =
+  admit()
+//  if model then AE.shared_footprint (index_of_i i)
+//  else Set.empty
 
 val footprint:
   #ip:ipkg ->
   #index_of_i:(ip.t -> I.id) ->
   #i:ip.t{ip.registered i} ->
   k:key ip index_of_i i ->
-  GTot (s:rset{s `Set.disjoint` shared_footprint index_of_i i})
+  GTot (s:rset{s `Set.disjoint` shared_footprint #ip index_of_i})
 let footprint #ip #index_of_i #i k =
-  Set.lemma_equal_intro (Set.empty `Set.intersect` shared_footprint index_of_i i) Set.empty;
+  Set.lemma_equal_intro (Set.empty `Set.intersect` shared_footprint #ip index_of_i) Set.empty;
   if model then
     match k <: _key index_of_i i with
     | Ideal _ st -> AE.footprint st
@@ -144,7 +149,7 @@ let invariant #ip #index_of_i #i k h =
 val invariant_framing:
   #ip:ipkg ->
   #index_of_i:(ip.t -> I.id) ->
-  #i:ip.t{ip.registered i} ->
+  i:ip.t{ip.registered i} ->
   k:key ip index_of_i i ->
   h0:mem ->
   r:rid ->
@@ -152,9 +157,9 @@ val invariant_framing:
   Lemma (requires invariant k h0 /\
          modifies_one r h0 h1 /\
          ~(r `Set.mem` footprint k) /\
-         ~(r `Set.mem` shared_footprint index_of_i i))
+         ~(r `Set.mem` shared_footprint #ip index_of_i))
         (ensures invariant k h1)
-let invariant_framing #ip #index_of_i #i k h0 r h1 =
+let invariant_framing #ip #index_of_i i k h0 r h1 =
   if model then
     match k <: _key index_of_i i with
     | Ideal _ st -> AE.frame_invariant st h0 r h1
@@ -165,101 +170,127 @@ val empty_log:
   #aeadAlg_of_i:(ip.t -> aeadAlg) ->
   #index_of_i:(ip.t -> I.id) ->
   #i:ip.t{ip.registered i} ->
-  a:aeadAlg{a == aeadAlg_of_i i} ->
+  a:info1 #ip aeadAlg_of_i i ->
   k:key ip index_of_i i ->
   h:mem ->
   GTot Type0
 let empty_log #ip #aeadAlg_of_i #index_of_i #i a k h =
-  if AE.safeMac (index_of_i i) then AE.log k h == Seq.createEmpty else True
+  if model then
+    match k <: _key index_of_i i with
+    | Ideal _ st ->
+      assume(AE.safeMac (index_of_i i));
+      AE.log st h == Seq.createEmpty
+    | Real _ -> True
+  else True
+
+(* FIXME(ADL) was:
+  if AE.safeMac (index_of_i i) then
+   begin
+    assert(model /\ safe i);
+    AE.log (k <: ) h == Seq.createEmpty
+   end
+  else True
+*)
 
 val empty_log_framing:
   #ip:ipkg ->
   #aeadAlg_of_i:(ip.t -> aeadAlg) ->
   #index_of_i:(ip.t -> I.id) ->
   #i:ip.t{ip.registered i} ->
-  a:aeadAlg{a == aeadAlg_of_i i} ->
+  a:info1 #ip aeadAlg_of_i i ->
   k:key ip index_of_i i ->
   h0:mem ->
   r:rid ->
   h1:mem ->
   Lemma
-    (requires (empty_log a k h0 /\
+    (requires (empty_log #ip #aeadAlg_of_i #index_of_i #i a k h0 /\
                modifies_one r h0 h1 /\
                ~(r `Set.mem` footprint k)))
-    (ensures  (empty_log a k h1))
+    (ensures  (empty_log #ip #aeadAlg_of_i #index_of_i #i a k h1))
 let empty_log_framing #ip #aeadAlg_of_i #index_of_i #i a k h0 r h1 =
-  if AE.safeMac (index_of_i i) then AE.frame_log k Seq.createEmpty h0 r h1
+  admit()
+//  if AE.safeMac (index_of_i i) then AE.frame_log k Seq.createEmpty h0 r h1
 
 val create_key:
   ip:ipkg ->
   aeadAlg_of_i:(ip.t -> aeadAlg) ->
   index_of_i:(ip.t -> I.id) ->
   i:ip.t{ip.registered i} ->
-  a:aeadAlg{a == aeadAlg_of_i i} ->
+  a:info1 #ip aeadAlg_of_i i ->
   ST (key ip index_of_i i)
      (requires fun h0 -> model /\ live_region h0 (AE.prf_region (index_of_i i)))
      (ensures  fun h0 k h1 ->
        modifies_none h0 h1 /\
        fresh_regions (footprint k) h0 h1 /\
-       empty_log a k h1 /\
+       empty_log #ip #aeadAlg_of_i #index_of_i #i a k h1 /\
        invariant k h1)
 let create_key ip aeadAlg_of_i index_of_i i a =
   let id = index_of_i i in
-  let log_rgn = new_region tls_tables_region in
-  AE.gen id (AE.prf_region id) log_rgn
+  let log_rgn = new_region a.parent in
+//  let st = AE.gen id (AE.prf_region id) log_rgn in
+  admit() // Ideal/Real
 
 assume val coerceT_key:
   ip:ipkg ->
   aeadAlg_of_i:(ip.t -> aeadAlg) ->
   index_of_i:(ip.t -> I.id) ->
   i:ip.t{ip.registered i /\ (ideal ==> ~(ip.honest i))} ->
-  a:aeadAlg{a == aeadAlg_of_i i} ->
+  a:info1 #ip aeadAlg_of_i i ->
   keyrepr a ->
   GTot (key ip index_of_i i)
-
 
 assume val coerce_key:
   ip:ipkg ->
   aeadAlg_of_i:(ip.t -> aeadAlg) ->
+  index_of_i:(ip.t -> I.id) ->
   i:ip.t{ip.registered i /\ (ideal ==> ~(ip.honest i))} ->
-  a:aeadAlg {a == aeadAlg_of_i i} ->
+  a:info1 #ip aeadAlg_of_i i->
   k0:keyrepr a ->
-  ST (key ip aeadAlg_of_i i)
+  ST (key ip index_of_i i)
     (requires fun h0 -> True)
-    (ensures fun h0 k h1 -> k == coerceT_key ip aeadAlg_of_i i a k0
+    (ensures fun h0 k h1 -> k == coerceT_key ip aeadAlg_of_i index_of_i i a k0
       /\ modifies_none h0 h1 /\ fresh_regions (footprint k) h0 h1
-      /\ empty_log ip aeadAlg_of_i a k h1 /\ invariant k h1)
+      /\ empty_log #ip #aeadAlg_of_i #index_of_i #i a k h1 /\ invariant k h1)
 
-let local_ae_pkg (ip:ipkg) (aeadAlg_of_i:ip.t -> aeadAlg) =
+let len #ip #aeadAlg_of_i #i (u:info1 #ip aeadAlg_of_i i) =
+  keylen u.alg
+
+let local_ae_pkg (ip:ipkg) (aeadAlg_of_i:ip.t -> aeadAlg) (index_of_i: ip.t -> I.id)
+  : Tot (local_pkg ip)
+  =
   LocalPkg
-    (key ip aeadAlg_of_i)
-    (info aeadAlg_of_i)
-    keylen
+    (key ip index_of_i)
+    (info1 #ip aeadAlg_of_i)
+    (len #ip #aeadAlg_of_i)
     ideal
-    (shared_footprint #ip #aeadAlg_of_i)
-    (footprint #ip #aeadAlg_of_i)
-    (invariant #ip #aeadAlg_of_i)
-    (invariant_framing ip aeadAlg_of_i)
-    (empty_log ip aeadAlg_of_i)
-    (empty_log_framing ip aeadAlg_of_i)
-    (create_key ip aeadAlg_of_i)
-    (coerceT_key ip aeadAlg_of_i)
-    (coerce_key ip aeadAlg_of_i)
+    (shared_footprint #ip index_of_i)
+    (footprint #ip #index_of_i)
+    (invariant #ip #index_of_i)
+    (invariant_framing #ip #index_of_i)
+    (empty_log #ip #aeadAlg_of_i #index_of_i)
+    (empty_log_framing #ip #aeadAlg_of_i #index_of_i)
+    (create_key ip aeadAlg_of_i index_of_i)
+    (coerceT_key ip aeadAlg_of_i index_of_i)
+    (coerce_key ip aeadAlg_of_i index_of_i)
 
-let mp (ip:ipkg) (aeadAlg_of_i: ip.t -> aeadAlg): ST (pkg ip)
+let mp (ip:ipkg) (aeadAlg_of_i: ip.t -> aeadAlg) (index_of_i: ip.t -> I.id)
+  : ST (pkg ip)
   (requires fun h0 -> True)
   (ensures fun h0 p h1 ->
     //17-12-01 we need freshness and emptyness of the new table + local packaging
     modifies_mem_table p.define_table h0 h1 /\
     p.package_invariant h1)
 =
-  memoization_ST #ip (local_ae_pkg ip aeadAlg_of_i)
+  memoization_ST #ip (local_ae_pkg ip aeadAlg_of_i index_of_i)
 
 val encrypt:
-  ip:ipkg -> aeadAlg_of_i: (ip.t -> aeadAlg) -> #i:ip.t{ip.registered i} ->
-  k: key ip aeadAlg_of_i i -> nat -> ST nat
+  ip:ipkg ->
+  aeadAlg_of_i: (ip.t -> aeadAlg) ->
+  index_of_i: (ip.t -> I.id) ->
+  #i:ip.t{ip.registered i} ->
+  k: key ip index_of_i i -> nat -> ST nat
   (requires fun h0 -> invariant k h0)
   (ensures fun h0 c h1 ->
-    modifies (rset_union (footprint k) (shared_footprint #ip #aeadAlg_of_i)) h0 h1
+    modifies (rset_union (footprint k) (shared_footprint #ip index_of_i)) h0 h1
     /\ invariant k h1)
-let encrypt _ _ #_ k v = v + 1
+let encrypt _ _ _ #_ k v = v + 1

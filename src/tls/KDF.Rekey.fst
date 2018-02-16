@@ -2,11 +2,11 @@ module KDF.Rekey
 
 open Mem
 open Pkg
-open Idx 
+open Idx
 open Pkg.Tree
 
 include AEAD.Pkg
-include KDF 
+include KDF
 
 /// This file illustrates our use of indexes, packages, and KDF on a
 /// simple recursive subset of the TLS key-schedule: late rekeying. It
@@ -123,7 +123,7 @@ let test_rekey(): St unit
       let ik1: regid = Derive i1 "AE" Expand in
       let k1: key ii get_aeadAlg ik1 = k1 in
       let h3 = get() in
-      assume(aead_inv k1 h3); // should follow from the multi-pkg invariant
+      //assume(aead_inv k1 h3); // should follow from the multi-pkg invariant
 
       let cipher = encrypt ii get_aeadAlg #ik1 k1 42 in
 
@@ -160,4 +160,3 @@ let rec descend u j i = // j decreases
   i = j \/
   exists (lbl, ctx). derived (Derive i lbl ctx)
 *)
-
