@@ -203,43 +203,73 @@ val log256'
     n < pow2 (FStar.Mul.op_Star 8 l)
   ))
 
-#set-options "--z3rlimit 16"
+#reset-options "--z3rlimit 16 --z3cliopt smt.arith.nl=false"
 
 let log256' n =
-  assert (n < pow2 32);
+  [@inline_let]
+  let _ = assert_norm (pow2 32 == 4294967296) in
+  [@inline_let]
+  let _ = assert (n < pow2 32) in
+  [@inline_let]
   let z0 = 1 in
-  let z1 = Prims.op_Multiply 256 z0 in
+  [@inline_let]
+  let z1 = 256 in
+  [@inline_let]
+  let _ = assert_norm (z1 == Prims.op_Multiply 256 z0) in
+  [@inline_let]
   let l = 1 in
-  assert_norm (pow2 (Prims.op_Multiply 8 l) == z1);
-  assert_norm (pow2 (Prims.op_Multiply 8 (l - 1)) == z0);
+  [@inline_let]
+  let _ = assert_norm (pow2 (Prims.op_Multiply 8 l) == z1) in
+  [@inline_let]
+  let _ = assert_norm (pow2 (Prims.op_Multiply 8 (l - 1)) == z0) in
   if n < z1
   then begin
-    assert (normalize_term (pow2 (Prims.op_Multiply 8 (l - 1))) <= n);
-    assert (n < normalize_term (pow2 (Prims.op_Multiply 8 l)));
+    [@inline_let]
+    let _ = assert (pow2 (Prims.op_Multiply 8 (l - 1)) <= n) in
+    [@inline_let]
+    let _ = assert (n < pow2 (Prims.op_Multiply 8 l)) in
     l
   end else begin
-    let z2 = Prims.op_Multiply 256 z1 in
-    let l = l + 1 in
-    assert_norm (pow2 (Prims.op_Multiply 8 l) == z2);
+    [@inline_let]
+    let z2 = 65536 in
+    [@inline_let]
+    let _ = assert_norm (z2 == Prims.op_Multiply 256 z1) in
+    [@inline_let]
+    let l = 2 in
+    [@inline_let]
+    let _ = assert_norm (pow2 (Prims.op_Multiply 8 l) == z2) in
     if n < z2
     then begin
-      assert (normalize_term (pow2 (Prims.op_Multiply 8 (l - 1))) <= n);
-      assert (n < normalize_term (pow2 (Prims.op_Multiply 8 l)));
+      [@inline_let]
+      let _ = assert (pow2 (Prims.op_Multiply 8 (l - 1)) <= n) in
+      [@inline_let]
+      let _ = assert (n < pow2 (Prims.op_Multiply 8 l)) in
       l
     end else begin
-      let z3 = Prims.op_Multiply 256 z2 in
-      let l = l + 1 in
-      assert_norm (pow2 (Prims.op_Multiply 8 l) == z3);
+      [@inline_let]
+      let z3 = 16777216 in
+      [@inline_let]
+      let _ = assert_norm (z3 == Prims.op_Multiply 256 z2) in
+      [@inline_let]
+      let l = 3 in
+      [@inline_let]
+      let _ = assert_norm (pow2 (Prims.op_Multiply 8 l) == z3) in
       if n < z3
       then begin
-	assert (normalize_term (pow2 (Prims.op_Multiply 8 (l - 1))) <= n);
-	assert (n < normalize_term (pow2 (Prims.op_Multiply 8 l)));
+        [@inline_let]
+	let _ = assert (pow2 (Prims.op_Multiply 8 (l - 1)) <= n) in
+        [@inline_let]
+	let _ = assert (n < pow2 (Prims.op_Multiply 8 l)) in
         l    
       end else begin
-        let l = l + 1 in
-        assert_norm (pow2 (Prims.op_Multiply 8 l) == Prims.op_Multiply 256 z3);
-	assert (normalize_term (pow2 (Prims.op_Multiply 8 (l - 1))) <= n);
-	assert (n < normalize_term (pow2 (Prims.op_Multiply 8 l)));
+        [@inline_let]
+        let l = 4 in
+        [@inline_let]
+        let _ = assert_norm (pow2 (Prims.op_Multiply 8 l) == Prims.op_Multiply 256 z3) in
+        [@inline_let]
+	let _ = assert (pow2 (Prims.op_Multiply 8 (l - 1)) <= n) in
+        [@inline_let]
+	let _ = assert (n < pow2 (Prims.op_Multiply 8 l)) in
         l
       end
     end

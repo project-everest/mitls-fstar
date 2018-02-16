@@ -13,7 +13,8 @@ inline_for_extraction
 let serialize32_bounded_integer_1 : serializer32 (serialize_bounded_integer 1) =
   (fun (input: bounded_integer 1) -> ((
     let b = B32.create 1ul 42uy in
-    serialize32_bounded_integer_1_correct b input;
+    [@inline_let]
+    let _ = serialize32_bounded_integer_1_correct b input in
     serialize32_bounded_integer_1' b input
   ) <: (res: B32.bytes { serializer32_correct (serialize_bounded_integer 1) input res } )))
 
@@ -21,7 +22,8 @@ inline_for_extraction
 let serialize32_bounded_integer_2 : serializer32 (serialize_bounded_integer 2) =
   (fun (input: bounded_integer 2) -> ((
     let b = B32.create 2ul 42uy in
-    serialize32_bounded_integer_2_correct b input;
+    [@inline_let]
+    let _ = serialize32_bounded_integer_2_correct b input in
     serialize32_bounded_integer_2' b input
   ) <: (res: B32.bytes { serializer32_correct (serialize_bounded_integer 2) input res } )))
 
@@ -29,7 +31,8 @@ inline_for_extraction
 let serialize32_bounded_integer_3 : serializer32 (serialize_bounded_integer 3) =
   (fun (input: bounded_integer 3) -> ((
     let b = B32.create 3ul 42uy in
-    serialize32_bounded_integer_3_correct b input;
+    [@inline_let]
+    let _ = serialize32_bounded_integer_3_correct b input in
     serialize32_bounded_integer_3' b input
   ) <: (res: B32.bytes { serializer32_correct (serialize_bounded_integer 3) input res } )))
 
@@ -60,13 +63,16 @@ inline_for_extraction
 let decode32_bounded_integer_1
  (b: B32.lbytes 1)
 : Tot (y: bounded_integer 1 { y == decode_bounded_integer 1 (B32.reveal b) } )
-= let r = decode32_bounded_integer_1' b in
-  decode32_bounded_integer_1_correct b;
+= [@inline_let]
+  let r = decode32_bounded_integer_1' b in
+  [@inline_let]
+  let _ = decode32_bounded_integer_1_correct b in
   (r <: (r: bounded_integer 1 { r == decode_bounded_integer 1 (B32.reveal b) } ))
 
 inline_for_extraction
 let parse32_bounded_integer_1 : parser32 (parse_bounded_integer 1) =
-  decode_bounded_integer_injective 1;
+  [@inline_let]
+  let _ = decode_bounded_integer_injective 1 in
   make_total_constant_size_parser32 1 1ul
     (decode_bounded_integer 1)
     ()
@@ -75,6 +81,7 @@ let parse32_bounded_integer_1 : parser32 (parse_bounded_integer 1) =
 inline_for_extraction
 let parse32_bounded_integer_2 : parser32 (parse_bounded_integer 2) =
   fun (input: bytes32) -> (
+    [@inline_let]
     let res = parse32_synth parse_u16 synth_bounded_integer_2 (fun (x: U16.t) -> (Cast.uint16_to_uint32 x <: (y: bounded_integer 2 { y == synth_bounded_integer_2 x } ))) parse32_u16 () input in
     parse_bounded_integer_2_spec ();
     (res <: (res: option (bounded_integer 2 * U32.t) { parser32_correct (parse_bounded_integer 2) input res} ))
@@ -84,8 +91,10 @@ inline_for_extraction
 let decode32_bounded_integer_3
  (b: B32.lbytes 3)
 : Tot (y: bounded_integer 3 { y == decode_bounded_integer 3 (B32.reveal b) } )
-= let r = decode32_bounded_integer_3' b in
-  decode32_bounded_integer_3_correct b;
+= [@inline_let]
+  let r = decode32_bounded_integer_3' b in
+  [@inline_let]
+  let _ = decode32_bounded_integer_3_correct b in
   (r <: (r: bounded_integer 3 { r == decode_bounded_integer 3 (B32.reveal b) } ))
 
 inline_for_extraction
@@ -99,6 +108,7 @@ let parse32_bounded_integer_3 : parser32 (parse_bounded_integer 3) =
 inline_for_extraction
 let parse32_bounded_integer_4 : parser32 (parse_bounded_integer 4) =
   fun (input: bytes32) -> (
+    [@inline_let]
     let res = parse32_synth parse_u32 synth_bounded_integer_4 (fun (x: U32.t) -> (x <: (y: bounded_integer 4 { y == synth_bounded_integer_4 x } ))) parse32_u32 () input in
     parse_bounded_integer_4_spec ();
     (res <: (res: option (bounded_integer 4 * U32.t) { parser32_correct (parse_bounded_integer 4) input res} ))
@@ -117,7 +127,8 @@ inline_for_extraction
 let parse32_bounded_integer
   (i: integer_size)
 : Tot (parser32 (parse_bounded_integer i))
-= integer_size_values i;
+= [@inline_let]
+  let _ = integer_size_values i in
   match i with
   | 1 -> parse_bounded_integer_conv 1 i parse32_bounded_integer_1
   | 2 -> parse_bounded_integer_conv 2 i parse32_bounded_integer_2
@@ -148,8 +159,10 @@ let parse32_vldata_gen
   (#p: parser k t)
   (p32: parser32 p)
 : Tot (parser32 (parse_vldata_gen sz f p))
-= parse_fldata_and_then_cases_injective sz f p;
-  parse_vldata_gen_kind_correct sz;
+= [@inline_let]
+  let _ = parse_fldata_and_then_cases_injective sz f p in
+  [@inline_let]
+  let _ = parse_vldata_gen_kind_correct sz in
   parse32_and_then
     (parse32_filter (parse32_bounded_integer sz) f f')
     (parse_vldata_payload sz f p)
@@ -179,7 +192,9 @@ let parse32_bounded_vldata
   (#p: parser k t)
   (p32: parser32 p)
 : Tot (parser32 (parse_bounded_vldata min max p))
-= parse_bounded_vldata_correct min max p;
+= [@inline_let]
+  let _ = parse_bounded_vldata_correct min max p in
+  [@inline_let]
   let sz : integer_size = (log256' max) in
   (fun input -> parse32_vldata_gen sz (in_bounds min max) (fun i -> not (U32.lt i min32 || U32.lt max32 i)) p32 input)
 
