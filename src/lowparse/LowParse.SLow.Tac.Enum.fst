@@ -132,7 +132,7 @@ let parse32_enum_key_tac
   f <-- parse32_enum_key_tac' p32 e p' u ;
   exact_guard (return f)
 
-inline_for_extraction
+noextract
 let serialize32_enum_key_gen_tac'
   (#k: parser_kind)
   (#key #repr: eqtype)
@@ -154,7 +154,7 @@ let serialize32_enum_key_gen_tac'
   fu <-- quote (serialize32_enum_key_gen #k #key #repr #p #s s32 e #k' #p' s' u) ;
   return (mk_app fu [ar, Q_Explicit])
 
-inline_for_extraction
+noextract
 let serialize32_enum_key_gen_tac
   (#k: parser_kind)
   (#key #repr: eqtype)

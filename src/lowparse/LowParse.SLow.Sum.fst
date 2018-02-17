@@ -18,7 +18,7 @@ let serializer32_sum_gen_precond
   )
 
 inline_for_extraction
-let serialize32_sum_gen
+let serialize32_sum_gen'
   (#kt: parser_kind)
   (t: sum)
   (#p: parser kt (sum_repr_type t))
@@ -351,3 +351,123 @@ let parse32_sum_gen
   (destr: enum_destr_t (bytes32 -> Tot (option (sum_type t * U32.t))) (feq bytes32 _ (eq2 #(option (sum_type t * U32.t)))) (sum_enum t))
 : Tot (parser32 p')
 = parse32_sum_gen' t p pc32 p32 destr
+
+inline_for_extraction
+let enum_head_key
+  (#key #repr: eqtype)
+  (e: enum key repr)
+: Pure (enum_key e)
+  (requires (Cons? e))
+  (ensures (fun y -> Cons? e /\ (let ((k, _) :: _) = e in y == k)))
+= match e with ((k, _) :: _) -> k
+
+inline_for_extraction
+let sum_tail_type
+  (t: sum)
+: Pure Type0
+  (requires (Cons? (sum_enum t)))
+  (ensures (fun _ -> True))
+= (x: sum_type t { sum_tag_of_data t x <> enum_head_key (sum_enum t) } )
+
+let sum_tail_tag_of_data
+  (t: sum)
+  (u: unit { Cons? (sum_enum t) } )
+  (x: sum_tail_type t)
+: GTot (enum_key (enum_tail (sum_enum t)))
+= sum_tag_of_data t x
+
+inline_for_extraction
+let sum_tail
+  (t: sum)
+: Pure sum
+  (requires (Cons? (sum_enum t)))
+  (ensures (fun t' ->
+    Cons? (sum_enum t) /\
+    sum_key_type t' == sum_key_type t /\
+    sum_repr_type t' == sum_repr_type t /\
+    (sum_enum t' <: enum (sum_key_type t) (sum_repr_type t)) == enum_tail (sum_enum t) /\
+    sum_type t' == sum_tail_type t /\
+    (forall (x : sum_tail_type t) . (sum_tag_of_data t' x <: sum_key_type t) == (sum_tag_of_data t (x <: sum_type t) <: sum_key_type t))
+  ))
+= Sum
+    (sum_key_type t)
+    (sum_repr_type t)
+    (enum_tail (sum_enum t))
+    (sum_tail_type t)
+    (sum_tail_tag_of_data t ())
+
+inline_for_extraction
+let sum_destr
+  (v: Type)
+  (t: sum)
+: Tot Type
+= (f: ((k: sum_key t) -> (x: refine_with_tag (sum_tag_of_data t) k) -> Tot v)) ->
+  (k: sum_key t) ->
+  (x: refine_with_tag (sum_tag_of_data t) k) ->
+  Tot (y: v { y == f k x } )
+
+inline_for_extraction
+let sum_destr_cons
+  (v: Type)
+  (t: sum)
+  (u: unit { Cons? (sum_enum t) } )
+  (destr: sum_destr v (sum_tail t))
+: Tot (sum_destr v t)
+= match sum_enum t with
+  | ((k, _) :: _) ->
+    fun 
+      (f: ((k: sum_key t) -> (x: refine_with_tag (sum_tag_of_data t) k) -> Tot v))
+      (k' : sum_key t)
+      (x' : refine_with_tag (sum_tag_of_data t) k')
+    -> ((
+      if (k <: sum_key_type t) = (k' <: sum_key_type t)
+      then (f k x' <: v)
+      else
+        (destr (fun k x -> f (k <: sum_key_type t) (x <: sum_type t)) (k' <: sum_key_type t) (x' <: sum_tail_type t) <: v)
+    ) <: (y: v {y == f k' x' } ))
+
+inline_for_extraction
+let sum_destr_cons_nil
+  (v: Type)
+  (t: sum)
+  (u: unit { Cons? (sum_enum t) /\ Nil? (enum_tail (sum_enum t)) } )
+: Tot (sum_destr v t)
+= match sum_enum t with
+  | ((k, _) :: _) ->
+    fun 
+      (f: ((k: sum_key t) -> (x: refine_with_tag (sum_tag_of_data t) k) -> Tot v))
+      (k' : sum_key t)
+      (x' : refine_with_tag (sum_tag_of_data t) k')
+    ->
+      (f k x' <: (y: v { y == f k' x' } ))
+
+inline_for_extraction
+let serialize32_sum_gen
+  (#kt: parser_kind)
+  (t: sum)
+  (#p: parser kt (sum_repr_type t))
+  (s: serializer p)
+  (#k: parser_kind)
+  (#pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
+  (#sc: ((x: sum_key t) -> Tot (serializer (pc x))))
+  (sc32: ((x: sum_key t) -> Tot (serializer32 (sc x))))
+  (u: unit { serializer32_sum_gen_precond kt k } )
+  (tag_of_data: ((x: sum_type t) -> Tot (y: sum_key_type t { y == sum_tag_of_data t x} )))
+  (#k' : parser_kind)
+  (#t' : Type0)
+  (#p' : parser k' t')
+  (s' : serializer p')
+  (u: unit {
+    k' == and_then_kind (parse_filter_kind kt) k /\
+    t' == sum_type t /\
+    p' == parse_sum t p pc /\
+    s' == serialize_sum t s sc
+  })
+  (s32: serializer32 (serialize_enum_key _ s (sum_enum t)))
+  (destr: sum_destr bytes32 t)
+: Tot (serializer32 s')
+= [@inline_let]
+  let sc32' (k: sum_key t) : Tot (serializer32 (sc k)) =
+    (fun (x: refine_with_tag (sum_tag_of_data t) k) -> destr sc32 k x)
+  in
+  (serialize32_sum_gen' t s32 sc32' () tag_of_data <: serializer32 s')

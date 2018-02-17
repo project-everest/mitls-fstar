@@ -100,3 +100,114 @@ let parse32_sum_tac
 = let open T in
   f <-- parse32_sum_tac' t p32 pc32 p' u ;
   exact_guard (return f)
+
+noextract
+let rec sum_destr_tac
+  (v: Type)
+  (s: sum { Cons? (sum_enum s) } )
+: Tot (T.tactic T.term)
+  (decreases (sum_enum s))
+= let open T in
+  match sum_enum s with
+  | [_] ->
+    t <-- quote (sum_destr_cons_nil v s ()) ;
+    return t
+  | _ ->
+    let s' : sum = sum_tail s in
+    assert (Cons? (sum_enum s')) ;
+    let (s' : sum { Cons? (sum_enum s') } ) = s' in
+    fu <-- quote (sum_destr_cons v s ()) ;
+    ar <-- sum_destr_tac v s' ;
+    return (mk_app fu [ar, Q_Explicit])
+
+noextract
+let serialize32_sum_tac'
+  (#kt: parser_kind)
+  (t: sum  { Cons? (sum_enum t) })
+  (#p: parser kt (sum_repr_type t))
+  (#s: serializer p )
+  (s32: serializer32 s)
+  (#k: parser_kind)
+  (#pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
+  (#sc: ((x: sum_key t) -> Tot (serializer (pc x))))
+  (sc32: ((x: sum_key t) -> Tot (serializer32 (sc x))))
+  (u: unit { serializer32_sum_gen_precond kt k } )
+  (tag_of_data: ((x: sum_type t) -> Tot (y: sum_key_type t { y == sum_tag_of_data t x} )))
+  (#k' : parser_kind)
+  (#t' : Type0)
+  (#p' : parser k' t')
+  (s' : serializer p')
+  (u' : unit {
+    k' == and_then_kind (parse_filter_kind kt) k /\
+    t' == sum_type t /\
+    p' == parse_sum t p pc /\
+    s' == serialize_sum t s sc
+  })
+: Tot (T.tactic T.term)
+= let open T in
+  let (e: enum (sum_key_type t) (sum_repr_type t) { Cons? e } ) = sum_enum t in
+  ar1 <-- serialize32_enum_key_gen_tac'
+    #kt
+    #(sum_key_type t)
+    #(sum_repr_type t)
+    #p
+    #s
+    s32
+    e
+    #(parse_filter_kind kt)
+    #(parse_enum_key p e)
+    (serialize_enum_key p s e)
+    ()
+    ;
+  ar2 <-- sum_destr_tac bytes32 t ;
+  fu <-- quote (
+    serialize32_sum_gen
+      #kt
+      t
+      #p
+      s
+      #k
+      #pc
+      #sc
+      sc32
+      u
+      tag_of_data
+      #k'
+      #t'
+      #p'
+      s'
+      u'
+  ) ;
+  return (mk_app fu [
+    ar1, Q_Explicit;
+    ar2, Q_Explicit;
+  ])
+
+noextract
+let serialize32_sum_tac
+  (#kt: parser_kind)
+  (t: sum  { Cons? (sum_enum t) })
+  (#p: parser kt (sum_repr_type t))
+  (#s: serializer p )
+  (s32: serializer32 s)
+  (#k: parser_kind)
+  (#pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
+  (#sc: ((x: sum_key t) -> Tot (serializer (pc x))))
+  (sc32: ((x: sum_key t) -> Tot (serializer32 (sc x))))
+  (u: unit { serializer32_sum_gen_precond kt k } )
+  (tag_of_data: ((x: sum_type t) -> Tot (y: sum_key_type t { y == sum_tag_of_data t x} )))
+  (#k' : parser_kind)
+  (#t' : Type0)
+  (#p' : parser k' t')
+  (s' : serializer p')
+  (u' : unit {
+    k' == and_then_kind (parse_filter_kind kt) k /\
+    t' == sum_type t /\
+    p' == parse_sum t p pc /\
+    s' == serialize_sum t s sc
+  })
+: Tot (T.tactic unit)
+= let open T in
+  f <-- serialize32_sum_tac' #kt t #p #s s32 #k #pc #sc sc32 u tag_of_data s' u' ;
+  _ <-- print (term_to_string f) ;
+  exact_guard (return f)
