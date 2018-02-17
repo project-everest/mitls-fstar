@@ -529,10 +529,21 @@ bool CoreCrypto_ec_is_on_curve(CoreCrypto_ec_params x0,
 #if IS_WINDOWS
 FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
 #ifdef _KERNEL_MODE
+  BCRYPT_ALG_HANDLE hAlg;
+  NTSTATUS st;
+
   PUCHAR data = KRML_HOST_MALLOC(x0);
-  NTSTATUS st = BCryptGenRandom(NULL, data, x0, BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+
+  // This is called at APC_LEVEL, so the USE_SYSTEM_PREFERRED_RNG option isn't supported.
+  st = BCryptOpenAlgorithmProvider(&hAlg, BCRYPT_RNG_ALGORITHM, NULL, BCRYPT_PROV_DISPATCH);
   if (!NT_SUCCESS(st)) {
-    KRML_HOST_EPRINTF("Cannot read random bytes: 0x%lx\n", st);
+    KRML_HOST_EPRINTF("BCryptOpenAlgorithmProvider failed: 0x%x\n", st);
+    KRML_HOST_EXIT(255);
+  }
+  st = BCryptGenRandom(hAlg, data, x0, 0);
+  BCryptCloseAlgorithmProvider(hAlg, 0);
+  if (!NT_SUCCESS(st)) {
+    KRML_HOST_EPRINTF("Cannot read random bytes: 0x%x\n", st);
     KRML_HOST_EXIT(255);
   }
 #else
