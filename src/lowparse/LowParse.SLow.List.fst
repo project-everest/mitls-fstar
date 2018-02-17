@@ -87,6 +87,36 @@ let parse_list_tailrec'_correct
   end
 = parse_list_tailrec'_correct' p32 b []
 
+let list_rev_inv
+  (#t: Type)
+  (l: list t)
+  (b: bool)
+  (x: list t * list t)
+: GTot Type0
+= let (rem, acc) = x in
+  L.rev l == L.rev_acc rem acc /\
+  (b == false ==> rem == [])
+
+let list_rev
+  (#t: Type)
+  (l: list t)
+: Tot (l' : list t { l' == L.rev l } )
+= match l with
+  | [] -> []
+  | _ ->
+    let (_, l') =
+      CL.total_while
+        (fun (rem, _) -> L.length rem)
+        (list_rev_inv l)
+        (fun (rem, acc) ->
+          match rem with
+          | [] -> (false, (rem, acc))
+          | a :: q -> (true, (q, a :: acc))
+        )
+        (l, [])
+    in
+    l'
+
 let parse_list_tailrec_inv
   (#k: parser_kind)
   (#t: Type0)
@@ -139,7 +169,7 @@ let parse_list_tailrec_body
         let input'' = B32.slice input' consumed len in
         (true, Some (input'', v :: accu'))
     | None -> (false, None)
-   
+
 inline_for_extraction
 let parse_list_tailrec
   (#k: parser_kind)
@@ -157,7 +187,7 @@ let parse_list_tailrec
   in
   match accu with
   | None -> None
-  | Some (_, accu') -> Some (L.rev accu')
+  | Some (_, accu') -> Some (list_rev accu')
 
 inline_for_extraction
 let parse32_list
