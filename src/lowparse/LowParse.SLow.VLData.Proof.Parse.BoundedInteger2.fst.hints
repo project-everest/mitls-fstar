@@ -20,7 +20,7 @@
         "typing_FStar.Int.Cast.uint16_to_uint32", "typing_FStar.UInt16.v"
       ],
       0,
-      "51c5d93f641648c1fa811af1b22a4180"
+      "5ada8b3834a716f92d8711ce8ee83b45"
     ],
     [
       "LowParse.SLow.VLData.Proof.Parse.BoundedInteger2.parse_bounded_integer_2_spec",
@@ -30,16 +30,19 @@
       [
         "@MaxIFuel_assumption",
         "@fuel_correspondence_Prims.pow2.fuel_instrumented", "@query",
-        "b2t_def", "data_elim_LowParse.Spec.Base.Mkparser_kind_",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
+        "data_elim_LowParse.Spec.Base.Mkparser_kind_",
         "equation_FStar.Bytes.lbytes",
         "equation_FStar.Kremlin.Endianness.bytes",
         "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
         "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
-        "equation_FStar.UInt.uint_t", "equation_FStar.UInt8.byte",
-        "equation_LowParse.Bytes.byte", "equation_LowParse.Bytes.bytes",
+        "equation_FStar.UInt.uint_t", "equation_FStar.UInt32.n",
+        "equation_FStar.UInt8.byte", "equation_LowParse.Bytes.byte",
+        "equation_LowParse.Bytes.bytes",
         "equation_LowParse.SLow.VLData.Proof.Parse.BoundedInteger2.synth_bounded_integer_2",
         "equation_LowParse.Spec.Base.parser_kind",
         "equation_LowParse.Spec.Combinators.compose",
+        "equation_LowParse.Spec.Combinators.synth_injective",
         "equation_LowParse.Spec.Combinators.total_constant_size_parser_kind",
         "equation_LowParse.Spec.Int.decode_u16",
         "equation_LowParse.Spec.Int.parse_u16",
@@ -48,6 +51,7 @@
         "equation_LowParse.Spec.VLData.decode_bounded_integer",
         "equation_Prims.nat",
         "function_token_typing_FStar.Bytes.empty_bytes",
+        "function_token_typing_FStar.UInt32.n",
         "function_token_typing_FStar.UInt8.t",
         "function_token_typing_LowParse.Spec.Int.parse_u16_kind",
         "int_typing", "lemma_FStar.Bytes.length_reveal",
@@ -56,8 +60,10 @@
         "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
         "primitive_Prims.op_LessThan", "primitive_Prims.op_LessThanOrEqual",
         "primitive_Prims.op_Multiply", "primitive_Prims.op_Subtraction",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "refinement_interpretation_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
         "refinement_interpretation_FStar.Int.Cast_Tm_refine_575ccbaada7bcc4f75834a1c3bf15afc",
         "refinement_interpretation_FStar.Seq.Base_Tm_refine_aebc5aa9049e78f605051015a3436e68",
@@ -72,10 +78,11 @@
         "typing_FStar.Int.Cast.uint16_to_uint32",
         "typing_FStar.Kremlin.Endianness.be_to_n",
         "typing_FStar.Seq.Base.length", "typing_FStar.Seq.Base.slice",
-        "typing_LowParse.SLow.VLData.Proof.Parse.BoundedInteger2.synth_bounded_integer_2"
+        "typing_LowParse.SLow.VLData.Proof.Parse.BoundedInteger2.synth_bounded_integer_2",
+        "typing_LowParse.Spec.Base.__proj__Mkparser_kind___item__parser_kind_low"
       ],
       0,
-      "756a7fe136354ff70342c036b5f3949a"
+      "bf293781a70d8503b1815e4d2d085da9"
     ],
     [
       "LowParse.SLow.VLData.Proof.Parse.BoundedInteger2.parse_bounded_integer_2_spec",
@@ -84,7 +91,7 @@
       1,
       [ "@query" ],
       0,
-      "397d81a8a9d281d64b7b8670d31bf42b"
+      "ccc15d0ccc5b548a256d7766fd00097c"
     ]
   ]
 ]

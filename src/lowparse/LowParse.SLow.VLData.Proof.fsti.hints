@@ -13,7 +13,7 @@
         "refinement_interpretation_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4"
       ],
       0,
-      "6b13579adaa136886c6036b38a1bc51b"
+      "7a395c29bbef90dc6afba748e5f943d9"
     ],
     [
       "LowParse.SLow.VLData.Proof.synth_bounded_integer_2",
@@ -34,7 +34,7 @@
         "typing_FStar.Int.Cast.uint16_to_uint32", "typing_FStar.UInt16.v"
       ],
       0,
-      "7370a8613e43a762bcaeee53076a94b0"
+      "551cb396b3435da7e18ad4ef61f9c22c"
     ],
     [
       "LowParse.SLow.VLData.Proof.parse_bounded_integer_2_spec",
@@ -44,12 +44,14 @@
       [
         "@MaxIFuel_assumption", "@query",
         "equation_LowParse.SLow.VLData.Proof.synth_bounded_integer_2",
+        "equation_LowParse.Spec.Combinators.synth_injective",
         "lemma_FStar.UInt16.uv_inv",
         "refinement_interpretation_FStar.Int.Cast_Tm_refine_575ccbaada7bcc4f75834a1c3bf15afc",
+        "token_correspondence_LowParse.SLow.VLData.Proof.synth_bounded_integer_2",
         "typing_FStar.Int.Cast.uint16_to_uint32"
       ],
       0,
-      "64cd6ee46b370b522059ed012d5fbfb5"
+      "1cacd0a67c4afe3e2ba84d46fe3ab253"
     ],
     [
       "LowParse.SLow.VLData.Proof.decode32_bounded_integer_3_correct",
@@ -63,7 +65,7 @@
         "refinement_interpretation_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4"
       ],
       0,
-      "1ef7782540714c5d9e66497819c92cc9"
+      "872b51678710a2e603288c5025e7d399"
     ],
     [
       "LowParse.SLow.VLData.Proof.synth_bounded_integer_4",
@@ -83,7 +85,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "5420189db5d3ad2b7d1a29bb07be8844"
+      "99b063f8da02e69633eb129b73556950"
     ],
     [
       "LowParse.SLow.VLData.Proof.parse_bounded_integer_4_spec",
@@ -92,10 +94,12 @@
       1,
       [
         "@query",
-        "equation_LowParse.SLow.VLData.Proof.synth_bounded_integer_4"
+        "equation_LowParse.SLow.VLData.Proof.synth_bounded_integer_4",
+        "equation_LowParse.Spec.Combinators.synth_injective",
+        "token_correspondence_LowParse.SLow.VLData.Proof.synth_bounded_integer_4"
       ],
       0,
-      "6c30d49cf3894e9238a5f5507f50c3f5"
+      "af3ba519bd9296edc71970f8aa4a6d1e"
     ]
   ]
 ]

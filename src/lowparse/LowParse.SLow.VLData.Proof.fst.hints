@@ -13,7 +13,7 @@
         "refinement_interpretation_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4"
       ],
       0,
-      "cfaffb1dc21669c0fb49791507822a24"
+      "dae0ad226da316b1ceb5268a31d6c928"
     ],
     [
       "LowParse.SLow.VLData.Proof.synth_bounded_integer_2",
@@ -34,7 +34,7 @@
         "typing_FStar.Int.Cast.uint16_to_uint32", "typing_FStar.UInt16.v"
       ],
       0,
-      "08be0922fde8e0961bc96d7f213ec1bb"
+      "bfcf1b41aaa7774d91d0b195cbc75886"
     ],
     [
       "LowParse.SLow.VLData.Proof.parse_bounded_integer_2_spec",
@@ -44,12 +44,14 @@
       [
         "@MaxIFuel_assumption", "@query",
         "equation_LowParse.SLow.VLData.Proof.synth_bounded_integer_2",
+        "equation_LowParse.Spec.Combinators.synth_injective",
         "lemma_FStar.UInt16.uv_inv",
         "refinement_interpretation_FStar.Int.Cast_Tm_refine_575ccbaada7bcc4f75834a1c3bf15afc",
+        "token_correspondence_LowParse.SLow.VLData.Proof.synth_bounded_integer_2",
         "typing_FStar.Int.Cast.uint16_to_uint32"
       ],
       0,
-      "7ee259d86e096845f97ac11ed4021980"
+      "b80eeeedf73324a99ed64b6eba7f23a5"
     ],
     [
       "LowParse.SLow.VLData.Proof.parse_bounded_integer_2_spec",
@@ -62,7 +64,7 @@
         "equation_LowParse.SLow.VLData.Proof.synth_bounded_integer_2"
       ],
       0,
-      "87de18829032acfa492666cb445aae4b"
+      "42a1b3c333b8683017b64991df3d70e0"
     ],
     [
       "LowParse.SLow.VLData.Proof.decode32_bounded_integer_3_correct",
@@ -76,7 +78,7 @@
         "refinement_interpretation_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4"
       ],
       0,
-      "48c84cf7e9315eb60ae4cdc0c9786f2f"
+      "f665c570421326306b8b891adc4edb9b"
     ],
     [
       "LowParse.SLow.VLData.Proof.synth_bounded_integer_4",
@@ -96,7 +98,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "43a7371a1ce15a58a194ad49df37f873"
+      "47c903a62366e7cc3b5f979fa7973c96"
     ],
     [
       "LowParse.SLow.VLData.Proof.parse_bounded_integer_4_spec",
@@ -105,10 +107,12 @@
       1,
       [
         "@query",
-        "equation_LowParse.SLow.VLData.Proof.synth_bounded_integer_4"
+        "equation_LowParse.SLow.VLData.Proof.synth_bounded_integer_4",
+        "equation_LowParse.Spec.Combinators.synth_injective",
+        "token_correspondence_LowParse.SLow.VLData.Proof.synth_bounded_integer_4"
       ],
       0,
-      "e45806d231c2032e7b80636fe26ed26f"
+      "c48f04a4ba4e7117bb60bd0259cd23ea"
     ],
     [
       "LowParse.SLow.VLData.Proof.parse_bounded_integer_4_spec",
@@ -121,7 +125,7 @@
         "equation_LowParse.SLow.VLData.Proof.synth_bounded_integer_4"
       ],
       0,
-      "a8ce342da53ce294da0c31f55a6eefc4"
+      "0b47015aae6515b9dfe2c7c343c0858b"
     ]
   ]
 ]
