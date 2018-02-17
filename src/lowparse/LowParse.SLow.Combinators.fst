@@ -86,7 +86,11 @@ let serialize32_nondep_then
   })
 : Tot (serializer32 (serialize_nondep_then p1 s1 u p2 s2))
 = fun (input: t1 * t2) ->
-  ((B32.append (s1' (fst input)) (s2' (snd input))) <:
+  match input with
+  | (fs, sn) ->
+    let output1 = s1' fs in
+    let output2 = s2' sn in
+  ((B32.append output1 output2) <:
     (res: bytes32 { serializer32_correct (serialize_nondep_then p1 s1 u p2 s2) input res } ))
 
 inline_for_extraction
@@ -101,7 +105,9 @@ let parse32_strengthen
 = fun (xbytes: bytes32) -> ((
   match p1' xbytes with
   | Some (x, consumed) ->
-    prf (B32.reveal xbytes) (U32.v consumed) x;
+    [@inline_let]
+    let _ = prf (B32.reveal xbytes) (U32.v consumed) x in
+    [@inline_let]
     let (x' : t1 { p2 x' } ) = x in
     Some (x', consumed)
   | _ -> None
@@ -144,7 +150,8 @@ let serialize32_synth
   })
 : Tot (serializer32 (serialize_synth p1 f2 s1 g1 u))
 = fun (input: t2) ->
-  ((s1' (g1' input)) <: (res: bytes32 { serializer32_correct (serialize_synth p1 f2 s1 g1 u) input res } ))
+    let x = g1' input in
+    (s1' x <: (res: bytes32 { serializer32_correct (serialize_synth p1 f2 s1 g1 u) input res } ))
 
 inline_for_extraction
 let parse32_filter
@@ -161,8 +168,9 @@ let parse32_filter
     | Some (v, consumed) ->
       if g v
       then
+        [@inline_let]
         let (v' : t { f v' == true } ) = v in
-	Some (v, consumed)
+	Some (v', consumed)
       else
         None
     | _ -> None
