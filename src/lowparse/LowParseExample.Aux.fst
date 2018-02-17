@@ -187,12 +187,67 @@ let serialize_cases
 let serialize_t : LP.serializer parse_t =
   LP.serialize_sum t_sum LP.serialize_u8 serialize_cases
 
+inline_for_extraction
+let serialize32_cases
+  (x: LP.sum_key t_sum)
+: Tot (LP.serializer32 (serialize_cases x))
+= match x with
+  | Case_A ->
+      [@inline_let]
+      let _ = synth_case_A_inj () in
+      [@inline_let]
+      let _ = synth_case_A_inv_correct () in
+      LP.serialize32_synth
+        _
+        synth_case_A
+        _
+        (LP.serialize32_nondep_then #_ #_ #LP.parse_u8 #LP.serialize_u8 LP.serialize32_u8 () #_ #_ #LP.parse_u8 #LP.serialize_u8 LP.serialize32_u8 ())
+        synth_case_A_inv
+        (fun x -> synth_case_A_inv x)
+        ()
+  | Case_B ->
+      [@inline_let]
+      let _ = synth_case_B_inj () in
+      [@inline_let]
+      let _ = synth_case_B_inv_correct () in
+      LP.serialize32_synth
+        LP.parse_u16
+        synth_case_B
+        LP.serialize_u16
+        LP.serialize32_u16
+        synth_case_B_inv
+        (fun x -> synth_case_B_inv x)
+        ()
+
+inline_for_extraction
+let serialize32_t : LP.serializer32 serialize_t =
+  FStar.Tactics.synth_by_tactic (
+    LP.serialize32_sum_tac
+      t_sum
+      #_
+      #LP.serialize_u8
+      LP.serialize32_u8
+      #_
+      serialize32_cases
+      ()
+      (fun x -> cases_of_t x)
+      serialize_t
+      ()
+  )
+
 let parse_t_array : LP.parser _ (LP.array t 18) =
   LP.parse_array serialize_t 54 18
 
 inline_for_extraction
 let parse32_t_array : LP.parser32 parse_t_array =
   LP.parse32_array serialize_t parse32_t 54 54ul 18 ()
+
+let serialize_t_array : LP.serializer parse_t_array =
+  LP.serialize_array serialize_t 54 18 ()
+
+inline_for_extraction
+let serialize32_t_array : LP.serializer32 serialize_t_array =
+  LP.serialize32_array #_ #_ #parse_t #serialize_t serialize32_t 54 18 ()
 
 // NOTE: in this example, byte-size bounds do not need to exactly match element-count bounds (which would be 15 and 21 respectively)
 
@@ -202,3 +257,10 @@ let parse_t_vlarray : LP.parser _ (LP.vlarray t 5 7) =
 inline_for_extraction
 let parse32_t_vlarray : LP.parser32 parse_t_vlarray =
   LP.parse32_vlarray 13 13ul 22 22ul serialize_t parse32_t 5 7 ()
+
+let serialize_t_vlarray : LP.serializer parse_t_vlarray =
+  LP.serialize_vlarray 13 22 serialize_t 5 7 ()
+
+inline_for_extraction
+let serialize32_t_vlarray : LP.serializer32 serialize_t_vlarray =
+  LP.serialize32_vlarray 13 22 #_ #_ #parse_t #serialize_t serialize32_t 5 7 ()
