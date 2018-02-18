@@ -32,12 +32,12 @@ private unfold val trace: s:string -> ST unit
 private unfold let trace = if Flags.debug_Record then print else (fun _ -> ())
 
 
-assume val p_of_f: f:bytes -> p:Platform.Bytes.bytes { Platform.Bytes.length p = FStar.Bytes.length f } 
-assume val f_of_p: p:Platform.Bytes.bytes -> f:bytes { Platform.Bytes.length p = FStar.Bytes.length f } 
-let ctBytes x = f_of_p (ctBytes x)
-let parseCT (x: lbytes 1) = parseCT (p_of_f x)
-let versionBytes x = f_of_p (versionBytes x) 
-let parseVersion (x: lbytes 2) = parseVersion (p_of_f x)
+private assume val p_of_f: f:bytes -> p:Platform.Bytes.bytes { Platform.Bytes.length p = FStar.Bytes.length f } 
+private assume val f_of_p: p:Platform.Bytes.bytes -> f:bytes { Platform.Bytes.length p = FStar.Bytes.length f } 
+private let ctBytes x = f_of_p (ctBytes x)
+private let parseCT (x: lbytes 1) = parseCT (p_of_f x)
+private let versionBytes x = f_of_p (versionBytes x) 
+private let parseVersion (x: lbytes 2) = parseVersion (p_of_f x)
 
 // ------------------------outer packet format -------------------------------
 
@@ -79,7 +79,7 @@ let sendPacket tcp ct plain ver (data: b:bytes { repr_bytes (length b) <= 2}) =
     else Error(Printf.sprintf "Transport.send returned %l" res)
   else   Error(Printf.sprintf "Transport.send returned %l" res)
 
-type parsed_header = result (contentType
+private type parsed_header = result (contentType
                            * protocolVersion
                            * l:nat { l <= max_TLSCiphertext_fragment_length})
 private val parseHeader: h5:header -> Tot parsed_header
@@ -99,22 +99,6 @@ let parseHeader (h5:header) =
           then Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Wrong fragment length")
           else correct(ct,pv,len)
 
-(*
-// hopefully we only care about the writer, not the cn state
-// the postcondition is of the form
-//   authId i ==> f is added to the writer log
-let recordPacketOut (i:StatefulLHAE.id) (wr:StatefulLHAE.writer i) (pv: protocolVersion) f =
-    let ct, rg = Content.ct_rg i f in
-    let payload =
-      if PlaintextID? i
-      then Content.repr i f
-      else
-        let ad = StatefulPlain.makeAD i ct in
-        let f = StatefulPlain.assert_is_plain i ad rg f in
-        StatefulLHAE.encrypt #i wr ad rg f
-    in
-    makePacket ct (PlaintextID? i) pv payload
-*)
 
 (*** networking (floating) ***)
 
@@ -123,23 +107,15 @@ let recordPacketOut (i:StatefulLHAE.id) (wr:StatefulLHAE.writer i) (pv: protocol
 // our client never checks the consistency of the server's record pv.
 // (see earlier versions for the checks we used to perform)
 
-// connection-local input state
-type partial =
-  | Header
-  | Body: ct: contentType -> pv: protocolVersion -> partial
-
 open FStar.UInt32
 
 private let maxlen = UInt32.uint_to_t (5 + max_TLSCiphertext_fragment_length)
-
-private type input_buffer =
-  b: Buffer.buffer UInt8.t {Buffer.length b = v maxlen}
+private type input_buffer = b: Buffer.buffer UInt8.t {Buffer.length b = v maxlen}
 
 //TODO index by region
-noeq type input_state = | InputState:
+noeq abstract type input_state = | InputState:
   pos: ref (len:UInt32.t {len <=^ maxlen}) ->
-  b: input_buffer {Buffer.frameOf b = Mem.frameOf pos}
-  -> input_state
+  b: input_buffer {Buffer.frameOf b = Mem.frameOf pos} -> input_state
 
 private let parseHeaderBuffer (b: Buffer.buffer UInt8.t {Buffer.length b = 5}) : ST parsed_header
   (requires (fun h0 -> Buffer.live h0 b))
@@ -148,7 +124,7 @@ private let parseHeaderBuffer (b: Buffer.buffer UInt8.t {Buffer.length b = 5}) :
   // some margin for progress
   parseHeader (BufferBytes.to_bytes 5 b)
 
-private let input_inv h0 (s: input_state) = 
+abstract  let input_inv h0 (s: input_state) = 
   Mem.contains h0 s.pos /\
   Buffer.live h0 s.b /\
   ( let pv = UInt32.v (sel h0 s.pos) in 

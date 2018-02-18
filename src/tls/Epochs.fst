@@ -5,15 +5,9 @@ An elaboration would ensure that keys in old epochs are erased.
 (i.e. we only keep old epoch AE logs for specifying authentication)
 *)
 module Epochs
-module HST = FStar.HyperStack.ST //Added automatically
 
-(*
-open FStar.Heap //17-10-27 TODO remove!
- //17-10-27 We'd like to remove it too. Conversely we miss HyperStack.ST 
-open FStar.Seq // DO NOT move further below, it would shadow `FStar.HyperStack.mem`
-open FStar.HyperStack
-*)
 open Mem 
+module ST = FStar.HyperStack.ST 
 
 open FStar.Monotonic.Seq
 open FStar.Error
@@ -191,8 +185,8 @@ let alloc_log_and_ctrs #a #p r =
   let init = Seq.createEmpty in
   let is = alloc_mref_iseq p r init in
   witness is (int_at_most (-1) is);
-  let c1 : epoch_ctr #a #p r is = HST.ralloc r (-1) in
-  let c2 : epoch_ctr #a #p r is = HST.ralloc r (-1) in
+  let c1 : epoch_ctr #a #p r is = ST.ralloc r (-1) in
+  let c2 : epoch_ctr #a #p r is = ST.ralloc r (-1) in
   (| is, c1, c2 |)
 
 #reset-options
@@ -211,11 +205,11 @@ val incr_epoch_ctr :
       HS.modifies_ref r (Set.singleton (Heap.addr_of (as_ref ctr_as_hsref))) ( h0) ( h1) /\
       sel h1 ctr = sel h0 ctr + 1))
 let incr_epoch_ctr #a #p #r #is ctr =
-  HST.recall ctr;
-  let cur = HST.op_Bang ctr in
+  ST.recall ctr;
+  let cur = ST.op_Bang ctr in
   MS.int_at_most_is_stable is (cur + 1);
   witness is (int_at_most (cur + 1) is);
-  HST.op_Colon_Equals ctr (cur + 1)
+  ST.op_Colon_Equals ctr (cur + 1)
 
 val create: r:rgn -> n:random -> ST (epochs r n)
     (requires (fun h -> True))
@@ -258,8 +252,8 @@ let ctr (#r:_) (#n:_) (e:epochs r n) (rw:rw) = match rw with
   | Writer -> e.write
 
 let string_of_es #r #n (es:epochs r n) =
-  let r = HST.op_Bang (ctr es Reader) in
-  let w = HST.op_Bang (ctr es Writer) in
+  let r = ST.op_Bang (ctr es Reader) in
+  let w = ST.op_Bang (ctr es Writer) in
   string_of_int r^"/"^string_of_int w
 
 let incr_reader #r #n (es:epochs r n) : ST unit
@@ -294,7 +288,7 @@ let get_ctr (#r:rgn) (#n:random) (es:epochs r n) (rw:rw)
   : ST int (requires (fun h -> True)) (ensures (get_ctr_post es rw))
 =
   let epochs = es.es in
-  let n = HST.op_Bang (ctr es rw) in
+  let n = ST.op_Bang (ctr es rw) in
   testify (MS.int_at_most n epochs);
   n
 
