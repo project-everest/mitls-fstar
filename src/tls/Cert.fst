@@ -107,6 +107,7 @@ let rec parseCertificateList b =
     | Error z -> Error z 
     | Correct cs -> lemma_repr_bytes_values (length c); Correct (c::cs) )
 
+#set-options "--z3rlimit 50" 
 abstract val parseCertificateList13: b:bytes -> Tot (result chain13) (decreases (length b))
 let rec parseCertificateList13 b =
   if length b = 0 then Correct [] else

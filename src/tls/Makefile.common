@@ -41,7 +41,7 @@ EXTRACT_DIR=extract/$(FLAVOR)
 IKVER=$(addsuffix .fst,Mem Pkg Token.UF1CMA HMAC.UFCMA IV AEAD.Pkg Idx Pkg.Tree KDF KDF.Rekey Extract0 Extract1.PRF Extract1.ODH Extract1 Extract2 KeySchedule)
 
 # Add more roots here!
-ROOTS ?= Record.fst
+ROOTS ?= $(IKVER) Record.fst Handshake.fst 
 # $(IKVER)
 # TLS.fst Handshake.Secret.fst HandshakeLog.fst Handshake.fst 
 

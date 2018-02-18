@@ -84,6 +84,7 @@ private val expand_int:
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
 
+#set-options "--z3rlimit 50"
 let rec expand_int #ha prk info len count curr previous =
   if curr < len && count + 1 < 256 then
     let count = count + 1 in
@@ -93,6 +94,7 @@ let rec expand_int #ha prk info len count curr previous =
     let next = expand_int prk info len count curr block in
     block @| next
   else empty_bytes
+#reset-options
 
 /// Final truncation, possibly chopping of the end of the last block. 
 val expand: 

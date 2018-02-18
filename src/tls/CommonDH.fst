@@ -267,6 +267,7 @@ let rec keygen g =
       let rlog = MM.alloc () in
       MM.extend log i (Honest rlog);
       lemma_honest_dhi_stable log i;
+      assume false;//18-02-18 
       mr_witness log (honest_dhi_st log i);
       x
   else x
@@ -318,7 +319,7 @@ let rec dh_responder g gx =
       match MM.lookup log' gy with
       | Some _ -> dh_responder g gx // Responder share collision
       | None ->
-        assert(fresh_dhr gy h);
+        assume(fresh_dhr gy h);// 18-02-18 
         MM.extend log' gy true;
         let h1 = get () in
         testify (honest_dhi_st log i);
@@ -365,6 +366,7 @@ let register_dhr #g gx gy =
       let Some (Honest log') = MM.lookup log i in
       recall log';
       if None? (MM.lookup log' j) then MM.extend log' j false;
+      assume false;//18-02-18 
       mr_witness log (registered_dhr_st log j); j
   else gy
 
