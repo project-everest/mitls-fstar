@@ -282,44 +282,29 @@ let serialize32_cases
     serialize32_cases'
 
 inline_for_extraction
-let t_sum_destr
-: LP.sum_destr LP.bytes32 t_sum
-= let open FStar.Tactics in
-  synth_by_tactic
-  (u <-- LP.sum_destr_tac LP.bytes32 t_sum ;
-  exact_guard (return u))
-
-inline_for_extraction
-let serialize32_t_sum_enum
-: LP.serializer32 (LP.serialize_enum_key _ LP.serialize_u8 (LP.sum_enum t_sum))
-= FStar.Tactics.synth_by_tactic (
-    LP.serialize32_enum_key_gen_tac
-      #_ #_ #_ #LP.parse_u8 #LP.serialize_u8
-      LP.serialize32_u8
-      (LP.sum_enum t_sum)
-      (LP.serialize_enum_key _ LP.serialize_u8 (LP.sum_enum t_sum))
-      ()
-  )
-
-inline_for_extraction
 let serialize32_t : LP.serializer32 serialize_t =
   [@inline_let]
-  let _ = assert_norm (
+  let (u: unit {
+    LP.serializer32_sum_gen_precond
+      LP.parse_u8_kind
+      (LP.weaken_parse_cases_kind t_sum parse_cases')
+  }) = assert_norm (
     LP.serializer32_sum_gen_precond
       LP.parse_u8_kind
       (LP.weaken_parse_cases_kind t_sum parse_cases')
   )
   in
-  LP.serialize32_sum_gen
+  FStar.Tactics.synth_by_tactic (LP.serialize32_sum_tac
     t_sum
-    LP.serialize_u8
+    #_
+    #LP.serialize_u8
+    LP.serialize32_u8
     serialize32_cases
-    ()
+    u
     (fun x -> cases_of_t x)
     serialize_t
     ()
-    serialize32_t_sum_enum
-    t_sum_destr
+  )
 
 let parse_t_array_precond () : Lemma
   (LP.fldata_array_precond
