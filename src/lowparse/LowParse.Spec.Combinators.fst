@@ -920,7 +920,7 @@ let serialize_filter
   (#p: parser k t)
   (s: serializer p)
   (f: (t -> GTot bool))
-: Tot (bare_serializer (x: t { f x == true } ))
+: Tot (serializer (parse_filter p f))
 = serialize_filter_correct s f;
   serialize_filter' s f
 

@@ -471,3 +471,22 @@ let serialize32_sum_gen
     (fun (x: refine_with_tag (sum_tag_of_data t) k) -> destr sc32 k x)
   in
   (serialize32_sum_gen' t s32 sc32' () tag_of_data <: serializer32 s')
+
+inline_for_extraction
+let parse32_sum_cases
+  (t: sum)
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_cases t x))))
+  (pc32: ((x: sum_key t) -> Tot (parser32 (dsnd (pc x)))))
+  (x: sum_key t)
+: Tot (parser32 (parse_sum_cases t pc x))
+= (fun input -> pc32 x input)
+
+inline_for_extraction
+let serialize32_sum_cases
+  (s: sum)
+  (f: (x: sum_key s) -> Tot (k: parser_kind & parser k (sum_cases s x)))
+  (sr: (x: sum_key s) -> Tot (serializer (dsnd (f x))))
+  (sr32: (x: sum_key s) -> Tot (serializer32 (sr x)))
+  (x: sum_key s)
+: Tot (serializer32 (serialize_sum_cases s f sr x))
+= (fun input -> sr32 x input)

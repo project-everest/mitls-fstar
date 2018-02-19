@@ -183,6 +183,27 @@ let serialize32_sum_tac'
     ar2, Q_Explicit;
   ])
 
+let serialize32_sum_tac_precond
+  (#kt: parser_kind)
+  (t: sum  { Cons? (sum_enum t) })
+  (#p: parser kt (sum_repr_type t))
+  (#s: serializer p )
+  (s32: serializer32 s)
+  (#k: parser_kind)
+  (#pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
+  (#sc: ((x: sum_key t) -> Tot (serializer (pc x))))
+  (sc32: ((x: sum_key t) -> Tot (serializer32 (sc x))))
+  (u: unit { serializer32_sum_gen_precond kt k } )
+  (#k' : parser_kind)
+  (#t' : Type0)
+  (#p' : parser k' t')
+  (s' : serializer p')
+: GTot Type0
+=   k' == and_then_kind (parse_filter_kind kt) k /\
+    t' == sum_type t /\
+    p' == parse_sum t p pc /\
+    s' == serialize_sum t s sc
+
 noextract
 let serialize32_sum_tac
   (#kt: parser_kind)
@@ -201,10 +222,7 @@ let serialize32_sum_tac
   (#p' : parser k' t')
   (s' : serializer p')
   (u' : unit {
-    k' == and_then_kind (parse_filter_kind kt) k /\
-    t' == sum_type t /\
-    p' == parse_sum t p pc /\
-    s' == serialize_sum t s sc
+    serialize32_sum_tac_precond t s32 sc32 u s'
   })
 : Tot (T.tactic unit)
 = let open T in

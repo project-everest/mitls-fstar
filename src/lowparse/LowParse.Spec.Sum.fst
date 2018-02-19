@@ -188,6 +188,17 @@ let parse_sum
     #k
     pc
 
+let serialize_sum_cases
+  (s: sum)
+  (f: (x: sum_key s) -> Tot (k: parser_kind & parser k (sum_cases s x)))
+  (sr: (x: sum_key s) -> Tot (serializer (dsnd (f x))))
+  (x: sum_key s)
+: Tot (serializer (parse_sum_cases s f x))
+= serialize_ext
+    (dsnd (f x))
+    (sr x)
+    (parse_sum_cases s f x)
+
 let serialize_sum
   (#kt: parser_kind)
   (t: sum)
