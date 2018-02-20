@@ -36,7 +36,7 @@ else ifeq ($(UNAME),Linux)
   export LD_LIBRARY_PATH
 endif
 
-all: test
+all: cmitls.exe
 
 clean:
 	rm -rf *.o *.exe *.dll *~
