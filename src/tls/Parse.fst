@@ -173,10 +173,13 @@ let bytes_of_uint16 (n:UInt16.t) : Tot (lbytes 2) =
 
 (** End Module Format *)
 
+(*
+(** to be replaced by flat enum from QD's NamedGroup and NameGroupList 
+    (can we get a better name?)
+*)
 
-(** Begin Module DHFormat *)
-
-// floating crypto definitions
+// floating crypto definitions; 
+// these should come from the RFC, be hidden behind CommonDH.fsti
 
 (** Finite Field Diffie-Hellman group definitions *)
 type ffdhe =
@@ -185,170 +188,32 @@ type ffdhe =
   | FFDHE4096
   | FFDHE6144
   | FFDHE8192
-
-
 type unknownNG =
   u:(byte*byte){(let (b1,b2) = u in
     (b1 = 0x00z ==> b2 <> 0x17z /\ b2 <> 0x18z /\ b2 <> 0x19z
                  /\ b2 <> 0x1dz /\ b2 <> 0x1ez) /\
     (b1 = 0x01z ==> b2 <> 0x00z /\ b2 <> 0x01z /\ b2 <> 0x02z
                  /\ b2 <> 0x03z /\ b2 <> 0x04z))}
-
-(** TLS 1.3 named groups for (EC)DHE key exchanges *)
 type namedGroup =
   | SEC of CoreCrypto.ec_curve
   | FFDHE of ffdhe
   | NG_UNKNOWN of unknownNG
+
+type namedGroups = list namedGroup{List.Tot.length groups < 65536/2}
+(** Formatting and parsing (EC)DHE named groups *)
+
+val namedGroupBytes: namedGroup -> Tot (lbytes 2)
+val parseNamedGroup: pinverse_t namedGroupBytes
+
+(** Formatting and parsing lists of named groups *)
+val namedGroupsBytes: groups:list namedGroup{List.Tot.length groups < 65536/2}
+  -> Tot (b:bytes { length b = 2 + op_Multiply 2 (List.Tot.length groups)})
+val parseNamedGroups: b:bytes { 2 <= length b /\ length b < 65538 }
+  -> Tot (result (groups:list namedGroup{List.Tot.length groups = (length b - 2) / 2}))
 
 (*
  * We only seem to be using these two named groups
  * irrespective of whether it's TLS 12 or 13
  *)
 type valid_namedGroup = x:namedGroup{SEC? x \/ FFDHE? x}
-
-(** Serializing function for (EC)DHE named groups *)
-val namedGroupBytes: namedGroup -> Tot (lbytes 2)
-let namedGroupBytes ng =
-  let open CoreCrypto in
-  match ng with
-  | SEC ec ->
-    begin
-    match ec with
-    | ECC_P256		-> abyte2 (0x00z, 0x17z)
-    | ECC_P384		-> abyte2 (0x00z, 0x18z)
-    | ECC_P521		-> abyte2 (0x00z, 0x19z)
-    | ECC_X25519  -> abyte2 (0x00z, 0x1dz)
-    | ECC_X448    -> abyte2 (0x00z, 0x1ez)
-    end
-  | FFDHE dhe ->
-    begin
-    match dhe with
-    | FFDHE2048		-> abyte2 (0x01z, 0x00z)
-    | FFDHE3072		-> abyte2 (0x01z, 0x01z)
-    | FFDHE4096		-> abyte2 (0x01z, 0x02z)
-    | FFDHE6144		-> abyte2 (0x01z, 0x03z)
-    | FFDHE8192		-> abyte2 (0x01z, 0x04z)
-    end
-  | NG_UNKNOWN u	-> abyte2 u
-
-(* TODO: move to Platform.Bytes *)
-let abyte2_inj x1 x2 : Lemma
-  (abyte2 x1 == abyte2 x2 ==> x1 == x2)
-  [SMTPat (abyte2 x1); SMTPat (abyte2 x2)]
-= let s1 = abyte2 x1 in
-  let s2 = abyte2 x2 in
-  assert (x1 == (Seq.index s1 0, Seq.index s1 1));
-  assert (x2 == (Seq.index s2 0, Seq.index s2 1))
-
-let namedGroupBytes_is_injective
-  (ng1 ng2: namedGroup)
-: Lemma
-  (requires (Seq.equal (namedGroupBytes ng1) (namedGroupBytes ng2)))
-  (ensures (ng1 == ng2))
-= ()
-
-(** Parsing function for (EC)DHE named groups *)
-val parseNamedGroup: pinverse_t namedGroupBytes
-let parseNamedGroup b =
-  let open CoreCrypto in
-  match cbyte2 b with
-  | (0x00z, 0x17z) -> Correct (SEC ECC_P256)
-  | (0x00z, 0x18z) -> Correct (SEC ECC_P384)
-  | (0x00z, 0x19z) -> Correct (SEC ECC_P521)
-  | (0x00z, 0x1dz) -> Correct (SEC ECC_X25519)
-  | (0x00z, 0x1ez) -> Correct (SEC ECC_X448)
-  | (0x01z, 0x00z) -> Correct (FFDHE FFDHE2048)
-  | (0x01z, 0x01z) -> Correct (FFDHE FFDHE3072)
-  | (0x01z, 0x02z) -> Correct (FFDHE FFDHE4096)
-  | (0x01z, 0x03z) -> Correct (FFDHE FFDHE6144)
-  | (0x01z, 0x04z) -> Correct (FFDHE FFDHE8192)
-  | u -> Correct (NG_UNKNOWN u)
-
-(** Lemmas for named groups parsing/serializing inversions *)
-#set-options "--max_ifuel 10 --max_fuel 10"
-val inverse_namedGroup: x:_ -> Lemma
-  (requires True)
-  (ensures lemma_inverse_g_f namedGroupBytes parseNamedGroup x)
-  [SMTPat (parseNamedGroup (namedGroupBytes x))]
-let inverse_namedGroup x = ()
-
-val pinverse_namedGroup: x:_ -> Lemma
-  (requires True)
-  (ensures (lemma_pinverse_f_g Seq.equal namedGroupBytes parseNamedGroup x))
-  [SMTPat (namedGroupBytes (Correct?._0 (parseNamedGroup x)))]
-let pinverse_namedGroup x = ()
-
-#set-options "--max_ifuel 2 --max_fuel 2"
-private val namedGroupsBytes0: groups:list namedGroup
-  -> Tot (b:bytes { length b == op_Multiply 2 (List.Tot.length groups)})
-let rec namedGroupsBytes0 groups =
-  match groups with
-  | [] -> empty_bytes
-  | g::gs ->
-    Seq.lemma_len_append (namedGroupBytes g) (namedGroupsBytes0 gs);
-    namedGroupBytes g @| namedGroupsBytes0 gs
-#reset-options
-
-private
-let rec namedGroupsBytes0_is_injective
-  (groups1 groups2: list namedGroup)
-: Lemma
-  (requires (Seq.equal (namedGroupsBytes0 groups1) (namedGroupsBytes0 groups2)))
-  (ensures (groups1 == groups2))
-= match groups1, groups2 with
-  | [], [] -> ()
-  | g1::groups1', g2::groups2' ->
-    lemma_append_inj (namedGroupBytes g1) (namedGroupsBytes0 groups1') (namedGroupBytes g2) (namedGroupsBytes0 groups2');
-    namedGroupsBytes0_is_injective groups1' groups2'
-
-(** Serialization function for a list of named groups *)
-val namedGroupsBytes: groups:list namedGroup{List.Tot.length groups < 65536/2}
-  -> Tot (b:bytes { length b = 2 + op_Multiply 2 (List.Tot.length groups)})
-let namedGroupsBytes groups =
-  let gs = namedGroupsBytes0 groups in
-  lemma_repr_bytes_values (length gs);
-  vlbytes 2 gs
-
-let namedGroupsBytes_is_injective
-  (groups1: list namedGroup { List.Tot.length groups1 < 65536/2 } )
-  (s1: bytes)
-  (groups2: list namedGroup { List.Tot.length groups2 < 65536/2 } )
-  (s2: bytes)
-: Lemma
-  (requires ((namedGroupsBytes groups1 @| s1) == (namedGroupsBytes groups2 @| s2)))
-  (ensures (groups1 == groups2 /\ s1 == s2))
-= let gs1 = namedGroupsBytes0 groups1 in
-  lemma_repr_bytes_values (length gs1);
-  let gs2 = namedGroupsBytes0 groups2 in
-  lemma_repr_bytes_values (length gs2);
-  lemma_vlbytes_inj_strong 2 gs1 s1 gs2 s2;
-  namedGroupsBytes0_is_injective groups1 groups2
-
-private val parseNamedGroups0: b:bytes -> l:list namedGroup
-  -> Tot (result (groups:list namedGroup{List.Tot.length groups = List.Tot.length l + length b / 2}))
-  (decreases (length b))
-let rec parseNamedGroups0 b groups =
-  if length b > 0 then
-    if length b >= 2 then
-      let (ng, bytes) = split b 2 in
-      lemma_split b 2;
-      match parseNamedGroup ng with
-      |Correct ng ->
-        let groups' = ng :: groups in
-        parseNamedGroups0 bytes groups'
-      | Error z    -> Error z
-    else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-  else
-   let grev = List.Tot.rev groups in
-   assume (List.Tot.length grev == List.Tot.length groups);
-   Correct grev
-
-(** Parsing function for a list of named groups *)
-val parseNamedGroups: b:bytes { 2 <= length b /\ length b < 65538 }
-  -> Tot (result (groups:list namedGroup{List.Tot.length groups = (length b - 2) / 2}))
-let parseNamedGroups b =
-  match vlparse 2 b with
-  | Correct b' -> parseNamedGroups0 b' []
-  | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse named groups")
-
-(* End Module DHFormat *)
+*)

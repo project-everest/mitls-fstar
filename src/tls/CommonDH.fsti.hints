@@ -1,6 +1,15 @@
 [
-  "½.XmÈ \u000b\u0006µ”ßåiHÓ«",
+  "\r3ûÎÒW7’B¥bc:ÁMï",
   [
+    [
+      "CommonDH.is_supported_group",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "a80f0fb1dd8650b9d9fb5adc746c71e9"
+    ],
     [
       "CommonDH.rshare",
       1,
@@ -11,7 +20,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_59e636272f909930c53ccc0e9facf997"
       ],
       0,
-      "7ba3229d146a7a25275bb129685c4f26"
+      "132e00a06535d8d350529211c4acfc70"
     ],
     [
       "CommonDH.dh_responder",
@@ -23,7 +32,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_59e636272f909930c53ccc0e9facf997"
       ],
       0,
-      "84d36f63fa1a9df81a46b984dd5092fb"
+      "bd6ae19a33ff70db0a8ed5757e4dc78c"
     ],
     [
       "CommonDH.dh_responder",
@@ -35,7 +44,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_59e636272f909930c53ccc0e9facf997"
       ],
       0,
-      "e5fa233e696f5fcfc1b0ceb0addcb6c8"
+      "decc19a2c9adccf8f065a392653f563e"
     ],
     [
       "CommonDH.dh_responder",
@@ -47,7 +56,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_59e636272f909930c53ccc0e9facf997"
       ],
       0,
-      "92007b49cd287cc131c2383eb74a569b"
+      "3296df5624e1e0513f73eb8ec64e8855"
     ],
     [
       "CommonDH.keyShareEntry",
@@ -56,19 +65,19 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "assumption_Parse.namedGroup_haseq",
+        "assumption_Format.NamedGroup.namedGroup_haseq",
         "assumption_Platform.Bytes.HasEq_bytes",
         "equation_Platform.Bytes.bytes",
         "function_token_typing_CommonDH.group",
         "haseqCommonDH_Tm_refine_62be46b5d65726c91e550691e3da999b",
-        "haseqCommonDH_Tm_refine_945444a71bf3ef6cdcc5e89639b43af9",
-        "haseqCommonDH_Tm_refine_eeebc2cf867d9a88a4079b66c946cb38",
-        "refinement_interpretation_CommonDH_Tm_refine_eeebc2cf867d9a88a4079b66c946cb38",
+        "haseqCommonDH_Tm_refine_6fde0167c30d016cb7dd8551ecaf8b00",
+        "haseqCommonDH_Tm_refine_bbf9a30431f523920f9f7a7039267c58",
+        "refinement_interpretation_CommonDH_Tm_refine_6fde0167c30d016cb7dd8551ecaf8b00",
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "typing_CommonDH.pre_share"
       ],
       0,
-      "3110640d08f0bb63f8a923b9ee156aca"
+      "66b5b6e45536c60d53de8178ba014813"
     ],
     [
       "CommonDH.uu___is_Share",
@@ -77,7 +86,7 @@
       1,
       [ "@query" ],
       0,
-      "8c1ed0961dc78270319674196a2a5f2f"
+      "bdb17d9e8c5230d89a25847c16a8e0af"
     ],
     [
       "CommonDH.__proj__Share__item__g",
@@ -90,7 +99,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_419290ad1633289796ca4faa3415e88c"
       ],
       0,
-      "267fd3c0b8ccadb8dc35f2f6bd9d4e46"
+      "5e1862124a4ba977829b7416f31e37f2"
     ],
     [
       "CommonDH.__proj__Share__item___1",
@@ -105,7 +114,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_419290ad1633289796ca4faa3415e88c"
       ],
       0,
-      "c758343e9d8df5a5f335d9d561753ecf"
+      "e01105a84d51e853761208fb8539bef1"
     ],
     [
       "CommonDH.uu___is_UnknownShare",
@@ -114,7 +123,7 @@
       1,
       [ "@query" ],
       0,
-      "72944f9a98894bed9b0ba99ac4267fe1"
+      "fea5969d0f0c7fe5710984e735e23354"
     ],
     [
       "CommonDH.__proj__UnknownShare__item__ng",
@@ -128,7 +137,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_c024b0a21c9b8f09957845060b9823fc"
       ],
       0,
-      "658c239b8484b29740e93376c793427a"
+      "19d6f5ae45affe076ca64fe3db9c157c"
     ],
     [
       "CommonDH.__proj__UnknownShare__item__b",
@@ -142,7 +151,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_c024b0a21c9b8f09957845060b9823fc"
       ],
       0,
-      "6eee0f1bbfcc6a8eac8a69716a26d299"
+      "3370619296dec30b15e4be3dc265fa62"
     ],
     [
       "CommonDH.uu___is_ClientKeyShare",
@@ -151,7 +160,7 @@
       1,
       [ "@query" ],
       0,
-      "6c4075d4dbdf74ca45c91caaca70d893"
+      "f5f9893edb82c0fe87461e0cbddedea9"
     ],
     [
       "CommonDH.__proj__ClientKeyShare__item___0",
@@ -165,7 +174,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_6def7493d05b3fbcbe82678fc375d428"
       ],
       0,
-      "b31be20d1028810eabfdb4b2edd3fe88"
+      "23741cd0afd0e6863736b5fd6f64bcaa"
     ],
     [
       "CommonDH.uu___is_ServerKeyShare",
@@ -174,7 +183,7 @@
       1,
       [ "@query" ],
       0,
-      "b349da57a20e913acd881b58d9ddb16b"
+      "d87148a514fe946ef910990452a8a246"
     ],
     [
       "CommonDH.__proj__ServerKeyShare__item___0",
@@ -188,7 +197,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_9cc025d1d8ed93fe703d76a8ddd03286"
       ],
       0,
-      "846346d69b62d57e639367946f822a02"
+      "f54ccefe12606c17f3999f8552aa3db9"
     ],
     [
       "CommonDH.uu___is_HRRKeyShare",
@@ -197,7 +206,7 @@
       1,
       [ "@query" ],
       0,
-      "84fff6d609fddaaf995ea9e8860c67a3"
+      "f3b1c49de76fc4dee457125fc453b9b5"
     ],
     [
       "CommonDH.__proj__HRRKeyShare__item___0",
@@ -211,7 +220,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_24f91d366aff84b0df73177175f3b8ef"
       ],
       0,
-      "eab5e48d9e63bb0b59addc851f469dbd"
+      "5e2567754f935061f346e55c1500ba10"
     ],
     [
       "CommonDH.keyShareBytes",
@@ -220,7 +229,7 @@
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "c6c9cf14e126f7e234d1bb0466761c99"
+      "226982275c21692126141115dbf7e0c0"
     ],
     [
       "CommonDH.uu___is_KS_ClientHello",
@@ -229,7 +238,7 @@
       1,
       [ "@query" ],
       0,
-      "a18f3ca688da108fd83771926a38077c"
+      "bac0fe7c0bc24fb647fa6a1b728985ed"
     ],
     [
       "CommonDH.uu___is_KS_ServerHello",
@@ -238,7 +247,7 @@
       1,
       [ "@query" ],
       0,
-      "4a40b1062fb971c038098a78d1b0f77d"
+      "480ab731716eac1a3fd287f76636e5da"
     ],
     [
       "CommonDH.uu___is_KS_HRR",
@@ -247,7 +256,7 @@
       1,
       [ "@query" ],
       0,
-      "b94b1a7f6af24965c8e6ecd7dda40bd7"
+      "536f2690863b17e431c68f8ee1b327e9"
     ]
   ]
 ]

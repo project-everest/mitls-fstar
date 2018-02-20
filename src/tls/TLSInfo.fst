@@ -47,15 +47,16 @@ let default_signature_schemes = [
   RSA_PKCS1_SHA1
   ]
 
-let default_groups : list valid_namedGroup = [
+let default_groups : list CommonDH.supportedNamedGroups = 
+  let open CommonDH in [
   // SEC CC.ECC_X448
-  SEC CC.ECC_P521;
-  SEC CC.ECC_P384;
-  SEC CC.ECC_X25519;
-  SEC CC.ECC_P256;
-  FFDHE FFDHE4096;
-  FFDHE FFDHE3072;
-  FFDHE FFDHE2048;
+  SECP521R1;
+  SECP384R1;
+  X25519;
+  SECP256R1;
+  FFDHE4096;
+  FFDHE3072;
+  FFDHE2048;
   ]
 
 val defaultConfig: config

@@ -16,6 +16,26 @@ open Parse
 open TLSError
 open FStar.HyperStack.ST
 
+/// Groups named in the RFC
+
+include Format.NamedGroup // QD-generated interface, so that we get the constructors
+
+let namedGroups = list namedGroup
+// to be replaced with QD-generated vector
+// let namedGroups = NamedGroupList.namedGroupList 
+
+// to be rewritten defensively; was "valid", not "supported"; 
+// should probably be defined from the crypto provider.
+let is_supported_group = function 
+  | FFDHE_PRIVATE_USE _
+  | ECDHE_PRIVATE_USE _
+  | UNKNOWN _ -> false
+  | _ -> true
+type supportedNamedGroup = x:namedGroup{is_supported_group x}
+type supportedNamedGroups = xs:namedGroups //{List.Tot.forall is_supported_group xs} 
+
+
+
 /// Public key shares and private exponents are indexed by an abstract
 /// group descriptor (including its generator), ranging over both
 /// prime fields and elliptic curves for cryptographic agility.
