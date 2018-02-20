@@ -35,7 +35,6 @@ type supportedNamedGroup = x:namedGroup{is_supported_group x}
 type supportedNamedGroups = xs:namedGroups //{List.Tot.forall is_supported_group xs} 
 
 
-
 /// Public key shares and private exponents are indexed by an abstract
 /// group descriptor (including its generator), ranging over both
 /// prime fields and elliptic curves for cryptographic agility.

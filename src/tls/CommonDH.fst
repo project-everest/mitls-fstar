@@ -448,6 +448,9 @@ let lemma_honest_not_dishonest (i:id)
   else ()
 *)
 
+
+(**! agile formatting; could be put in some other file *) 
+
 #set-options "--z3rlimit 100"
 
 let parse g x =
@@ -527,12 +530,10 @@ let checkElement (p:parameters) (e:element) : option element  =
     | _ -> failwith "impossible"
 *)
 
-
-
-
 // TODO imported from TLSConstants, in a broken state
 // This may not belong to CommonDH.
 
+// 18-02-20 used in Extensions; to be replaced by QD 4.2.8 + group/namedGroup wrapper
 let keyShareEntryBytes = function
   | Share g s ->
     assume false; // TODO
