@@ -135,3 +135,41 @@ let serialize32_vlarray
     (vlarray_to_vldata array_byte_size_min array_byte_size_max s elem_count_min elem_count_max u)
     (fun x -> vlarray_to_vldata array_byte_size_min array_byte_size_max s elem_count_min elem_count_max u x)
     ()
+
+inline_for_extraction
+let size32_vlarray
+  (array_byte_size_min: nat)
+  (array_byte_size_max: nat { array_byte_size_max < 4294967292 } ) // NOTE here: max must be less than 2^32 - 4 to account for the size of the length header
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (elem_count_min: nat)
+  (elem_count_max: nat)
+  (u: unit {
+    vldata_vlarray_precond array_byte_size_min array_byte_size_max p elem_count_min elem_count_max == true  
+  })
+  (size_header_byte_size32: U32.t { U32.v size_header_byte_size32 == log256' array_byte_size_max } )
+  (elem_byte_size32: U32.t { U32.v elem_byte_size32 == k.parser_kind_low } )
+: Tot (size32 (serialize_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max u))
+= [@inline_let]
+  let _ =
+    vldata_to_vlarray_inj array_byte_size_min array_byte_size_max s elem_count_min elem_count_max u
+  in
+  [@inline_let]
+  let _ =
+    vlarray_to_vldata_to_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max u
+  in
+  size32_synth
+    _
+    (vldata_to_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max u)
+    _
+    (size32_bounded_vldata_strong
+      array_byte_size_min
+      array_byte_size_max
+      (size32_list #_ #_ #_ #s (size32_constant s elem_byte_size32 ()) ())
+      size_header_byte_size32
+    )
+    (vlarray_to_vldata array_byte_size_min array_byte_size_max s elem_count_min elem_count_max u)
+    (fun x -> vlarray_to_vldata array_byte_size_min array_byte_size_max s elem_count_min elem_count_max u x)
+    ()

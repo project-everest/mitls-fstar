@@ -227,3 +227,57 @@ let make_total_constant_size_parser32
       let s' = B32.slice input 0ul sz' in
       Some (f' s', sz')
   ) <: (res: option (t * U32.t) { parser32_correct (make_total_constant_size_parser sz t f) input res } ))
+
+inline_for_extraction
+let size32_nondep_then
+  (#k1: parser_kind)
+  (#t1: Type0)
+  (#p1: parser k1 t1)
+  (#s1: serializer p1)
+  (s1' : size32 s1)
+  (u: unit { k1.parser_kind_subkind == Some ParserStrong } )
+  (#k2: parser_kind)
+  (#t2: Type0)
+  (#p2: parser k2 t2)
+  (#s2: serializer p2)
+  (s2' : size32 s2)
+: Tot (size32 (serialize_nondep_then _ s1 u _ s2))
+= fun x ->
+  match x with
+  | (x1, x2) ->
+    let v1 = s1' x1 in
+    let v2 = s2' x2 in
+    let res = add_overflow v1 v2 in
+    (res <: (z : U32.t { size32_postcond (serialize_nondep_then _ s1 u _ s2) x z } ))
+
+inline_for_extraction
+let size32_filter
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (#s: serializer p)
+  (s32: size32 s)
+  (f: (t -> GTot bool))
+: Tot (size32 #_ #_ #(parse_filter p f) (serialize_filter s f))
+= fun x -> s32 x
+
+inline_for_extraction
+let size32_synth
+  (#k: parser_kind)
+  (#t1: Type0)
+  (#t2: Type0)
+  (p1: parser k t1)
+  (f2: t1 -> GTot t2)
+  (s1: serializer p1)
+  (s1' : size32 s1)
+  (g1: t2 -> GTot t1)
+  (g1': (x: t2) -> Tot (y: t1 { y == g1 x } ) )
+  (u: unit {
+    synth_inverse f2 g1 /\
+    synth_injective f2
+  })
+: Tot (size32 (serialize_synth p1 f2 s1 g1 u))
+= fun (input: t2) ->
+    let x = g1' input in
+    let y = s1' x in
+    (y <: (res: U32.t { size32_postcond (serialize_synth p1 f2 s1 g1 u) input res } ))

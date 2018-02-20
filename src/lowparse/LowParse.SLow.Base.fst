@@ -290,3 +290,68 @@ let lb32set
     B32.reveal y == Seq.upd (B32.reveal b) (U32.v i) x
   ))
 = B32.set_byte b i x
+
+let u32_max : (y: U32.t { forall (x: U32.t) . U32.v x <= U32.v y } ) =
+  4294967295ul
+
+inline_for_extraction
+let add_overflow
+  (x y: U32.t)
+: Pure U32.t
+  (requires True)
+  (ensures (fun z ->
+    if U32.v x + U32.v y > U32.v u32_max then
+    z == u32_max
+    else U32.v z == U32.v x + U32.v y
+  ))
+= if U32.lt (U32.sub u32_max y) x
+  then u32_max
+  else U32.add x y
+
+let size32_postcond
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (x: t)
+  (y: U32.t)
+: GTot Type0
+= let sz = Seq.length (serialize s x) in
+  if sz > U32.v u32_max
+  then y == u32_max
+  else U32.v y == sz
+
+let size32
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+: Tot Type0
+= (x: t) ->
+  Tot (y: U32.t {
+    size32_postcond s x y
+  })
+
+let size32_constant_precond
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (len32: U32.t)
+: GTot Type0
+= k.parser_kind_high == Some k.parser_kind_low /\
+  U32.v len32 == k.parser_kind_low
+
+inline_for_extraction
+let size32_constant
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (len32: U32.t)
+  (u: unit { size32_constant_precond s len32 } )
+: Tot (size32 s)
+= fun x -> 
+  [@inline_let]
+  let (z: U32.t { size32_postcond s x z } ) = len32 in
+  z

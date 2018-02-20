@@ -357,3 +357,83 @@ let partial_serialize32_list
     in
     res
   ) <: (res: bytes32 { serializer32_correct (serialize_list p s) input res }))
+
+let size32_list_inv
+  (#t: Type0)
+  (#k: parser_kind)
+  (#p: parser k t)
+  (#s: serializer p)
+  (s32: size32 s)
+  (u: unit {
+    serialize_list_precond k
+  })
+  (input: list t)
+  (continue: bool)
+  (accu: (U32.t * list t))
+: GTot Type0
+= let (len, rem) = accu in
+  let sz = Seq.length (serialize (serialize_list p s) input) in
+  if continue
+  then
+    U32.v len < U32.v u32_max /\
+    sz == U32.v len + Seq.length (serialize (serialize_list p s) rem)
+  else
+    size32_postcond (serialize_list p s) input len
+
+let size32_list_measure
+  (#t: Type0)
+  (accu: (U32.t * list t))
+: GTot nat
+= let (_, rem) = accu in
+  L.length rem
+
+inline_for_extraction
+let size32_list_body
+  (#t: Type0)
+  (#k: parser_kind)
+  (#p: parser k t)
+  (#s: serializer p)
+  (s32: size32 s)
+  (u: unit {
+    serialize_list_precond k
+  })
+  (input: list t)
+: (x: (U32.t * list t)) ->
+  Pure (bool * (U32.t * list t))
+  (requires (size32_list_inv s32 u input true x))
+  (ensures (fun (continue, y) ->
+    size32_list_inv s32 u input continue y /\
+    (continue == true ==> size32_list_measure y < size32_list_measure x)
+  ))
+= fun accu ->
+  let (len, rem) = accu in
+  match rem with
+    | [] -> (false, accu)
+    | a :: q ->
+      let sza = s32 a in
+      let len' = add_overflow len sza in
+      if len' = u32_max
+      then (false, (u32_max, []))
+      else (true, (len', q))
+
+inline_for_extraction
+let size32_list
+  (#t: Type0)
+  (#k: parser_kind)
+  (#p: parser k t)
+  (#s: serializer p)
+  (s32: size32 s)
+  (u: unit {
+    serialize_list_precond k
+  })
+: Tot (size32 (serialize_list p s))
+= fun input ->
+  [@inline_let]
+  let (len, _) =
+    CL.total_while
+      size32_list_measure
+      (size32_list_inv s32 u input)
+      (fun x -> size32_list_body s32 u input x)
+      (0ul, input)
+  in
+  (len <: (len : U32.t { size32_postcond (serialize_list p s) input len } ))

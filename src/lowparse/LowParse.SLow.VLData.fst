@@ -341,3 +341,63 @@ let serialize32_bounded_vldata_strong
 = fun (input: parse_bounded_vldata_strong_t min max s) ->
   serialize32_bounded_vldata_strong_correct min max s32 input;
   (serialize32_bounded_vldata_strong' min max s32 input <: (res: bytes32 { serializer32_correct (serialize_bounded_vldata_strong min max s) input res } ))
+
+#reset-options "--z3rlimit 32 --z3cliopt smt.arith.nl=false"
+
+inline_for_extraction
+let check_vldata_payload_size32
+  (min: nat)
+  (min32: U32.t { U32.v min32 == min } )
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967295 } ) // necessary to exclude the overflow case; enough to be compatible with serialize32
+  (max32: U32.t { U32.v max32 == max } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (#s: serializer p)
+  (s32: size32 s)
+  (input: t)
+: Tot (y: bool { y == true <==> parse_bounded_vldata_strong_pred min max s input } )
+= let sz : U32.t = s32 input in
+  [@inline_let]
+  let y : bool =
+    not (sz = u32_max || U32.lt sz min32 || U32.lt max32 sz)
+  in
+  [@inline_let]
+  let _ : squash (y == true <==> parse_bounded_vldata_strong_pred min max s input) =
+    if sz = u32_max
+    then
+      if Seq.length (serialize s input) > U32.v u32_max
+      then ()
+      else begin
+        assert (U32.v u32_max == Seq.length (serialize s input));
+        assert_norm (U32.v u32_max == 4294967295);
+        assert (Seq.length (serialize s input) > max);
+        assert (~ (parse_bounded_vldata_strong_pred min max s input))
+      end
+    else
+      if Seq.length (serialize s input) > U32.v u32_max
+      then ()
+      else ()
+  in
+  y
+
+inline_for_extraction
+let size32_bounded_vldata_strong
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967292 } ) // NOTE here: max must be less than 2^32 - 4, otherwise add overflows
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (#s: serializer p)
+  (s32: size32 s)
+  (sz32: U32.t { U32.v sz32 == log256' max } )
+: Tot (size32 (serialize_bounded_vldata_strong min max s))
+= (fun (input: parse_bounded_vldata_strong_t min max s) ->
+    let len = s32 input in
+    [@inline_let]
+    let _ = assert_norm (U32.v u32_max == 4294967295) in
+    [@inline_let]
+    let _ = assert (min <= U32.v len /\ U32.v len <= max) in
+    [@inline_let]
+    let res : U32.t = U32.add sz32 len in
+    (res <: (res: U32.t { size32_postcond (serialize_bounded_vldata_strong min max s) input res  } )))

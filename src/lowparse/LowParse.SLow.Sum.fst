@@ -490,3 +490,69 @@ let serialize32_sum_cases
   (x: sum_key s)
 : Tot (serializer32 (serialize_sum_cases s f sr x))
 = (fun input -> sr32 x input)
+
+inline_for_extraction
+let size32_sum_cases
+  (s: sum)
+  (f: (x: sum_key s) -> Tot (k: parser_kind & parser k (sum_cases s x)))
+  (sr: (x: sum_key s) -> Tot (serializer (dsnd (f x))))
+  (sr32: (x: sum_key s) -> Tot (size32 (sr x)))
+  (x: sum_key s)
+: Tot (size32 (serialize_sum_cases s f sr x))
+= (fun input -> sr32 x input)
+
+#set-options "--z3rlimit 16"
+
+inline_for_extraction
+let size32_sum_gen'
+  (#kt: parser_kind)
+  (t: sum)
+  (#p: parser kt (sum_repr_type t))
+  (#s: serializer p)
+  (s32: size32 (serialize_enum_key _ s (sum_enum t)))
+  (#k: parser_kind)
+  (#pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
+  (#sc: ((x: sum_key t) -> Tot (serializer (pc x))))
+  (sc32: ((x: sum_key t) -> Tot (size32 (sc x))))
+  (u: unit { serializer32_sum_gen_precond kt k } )
+  (tag_of_data: ((x: sum_type t) -> Tot (y: sum_key_type t { y == sum_tag_of_data t x} )))
+: Tot (size32 (serialize_sum t s sc))
+= fun (input: sum_type t) -> ((
+    let tg = tag_of_data input in
+    let stg = s32 tg in
+    let s = sc32 tg input in
+    U32.add stg s
+  ) <: (res: U32.t { size32_postcond (serialize_sum t s sc) input res } ))
+
+#reset-options
+
+inline_for_extraction
+let size32_sum_gen
+  (#kt: parser_kind)
+  (t: sum)
+  (#p: parser kt (sum_repr_type t))
+  (#s: serializer p)
+  (s32: size32 (serialize_enum_key _ s (sum_enum t)))
+  (#k: parser_kind)
+  (#pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
+  (#sc: ((x: sum_key t) -> Tot (serializer (pc x))))
+  (sc32: ((x: sum_key t) -> Tot (size32 (sc x))))
+  (u: unit { serializer32_sum_gen_precond kt k } )
+  (tag_of_data: ((x: sum_type t) -> Tot (y: sum_key_type t { y == sum_tag_of_data t x} )))
+  (#k' : parser_kind)
+  (#t' : Type0)
+  (#p' : parser k' t')
+  (s' : serializer p')
+  (u: unit {
+    k' == and_then_kind (parse_filter_kind kt) k /\
+    t' == sum_type t /\
+    p' == parse_sum t p pc /\
+    s' == serialize_sum t s sc
+  })
+  (destr: sum_destr U32.t t)
+: Tot (size32 s')
+= [@inline_let]
+  let sc32' (k: sum_key t) : Tot (size32 (sc k)) =
+    (fun (x: refine_with_tag (sum_tag_of_data t) k) -> destr sc32 k x)
+  in
+  (size32_sum_gen' t s32 sc32' () tag_of_data <: size32 s')
