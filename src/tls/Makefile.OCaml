@@ -79,18 +79,8 @@ LIBMITLS=libmitls.dll
 $(LIBMITLS): $(MITLS_INPUTS)
 	$(OCAMLOPT) $^ -thread -linkall -linkpkg -output-obj -g -o $(LIBMITLS)
 
-ifneq ($(VS140COMNTOOLS),)
-  VS_BIN_DOSPATH=$(VS140COMNTOOLS)/../../VC/bin
-else ifneq ($(VS120COMNTOOLS),)
-  VS_BIN_DOSPATH=$(VS120COMNTOOLS)/../../VC/bin
-else ifneq ($(VS120COMNTOOLS),)
-  VS_BIN_DOSPATH=$(VS120COMNTOOLS)/../../VC/bin
-else ifneq ($(VS110COMNTOOLS),)
-  VS_BIN_DOSPATH=$(VS110COMNTOOLS)/../../VC/bin
-else
-  VS_BIN_DOSPATH=
-endif
-VS_BIN = $(shell cygpath -u "$(VS_BIN_DOSPATH)")
+VS_BIN = $(shell ../../scripts/vsbin.sh)
+
 ifeq ($(PROCESSOR_ARCHITECTURE),AMD64)
 LIB_MACHINE=x64
 else

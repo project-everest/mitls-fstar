@@ -18,25 +18,13 @@ else
 CCOPTS += -DNO_OPENSSL
 endif
 
-ifneq ($(VS140COMNTOOLS),)
-        VS_BIN_DOSPATH=$(VS140COMNTOOLS)/../../VC/bin
-else ifneq ($(VS120COMNTOOLS),)
-        VS_BIN_DOSPATH=$(VS120COMNTOOLS)/../../VC/bin
-else ifneq ($(VS120COMNTOOLS),)
-        VS_BIN_DOSPATH=$(VS120COMNTOOLS)/../../VC/bin
-else ifneq ($(VS110COMNTOOLS),)
-        VS_BIN_DOSPATH=$(VS110COMNTOOLS)/../../VC/bin
-else
-        VS_BIN_DOSPATH=
-endif
-
 ifeq ($(OS),Windows_NT)
     # On cygwin + cygwinports, DLLs are searched in the PATH, which is not
     # altered to include by default the mingw64 native DLLs. We also need to
     # find dllcorecrypto.dll; it is in the current directory, which Windows
     # always uses to search for DLLs.
     EXTRA_PATH = PATH="/usr/$(MARCH)-w64-mingw32/sys-root/mingw/bin/:$(PATH)"
-    VS_BIN = $(shell cygpath -u "$(VS_BIN_DOSPATH)")
+    VS_BIN = $(shell ../../scripts/vsbin.sh)
     ARCH = win32
     EXTRA_OPTS =
     EXTRA_LIBS = -L.
