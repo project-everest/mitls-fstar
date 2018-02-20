@@ -85,26 +85,12 @@ inline_for_extraction let serialize32_protocolVersion' : LP.serializer32 seriali
 
 (* The remainder below is compatibility code only, might disappear soon *)
 
-open FStar.String
-open FStar.Seq
-open FStar.Date
-open FStar.Bytes
-open FStar.Error
-open TLSError
-open Parse
-//open CoreCrypto // avoid?!
+open LowParseWrappers
 
 (** Serializing function for the protocol version *)
 inline_for_extraction
 let versionBytes (input: protocolVersion') : Tot (lbytes 2) =
-  serialize32_protocolVersion' input <: LP.bytes32
-
-
-(** TODO: move elsewhere (FStar.Math.Lemmas?) *)
-
-let le_antisym (x1 x2: int) : Lemma (requires (x1 <= x2 /\ x2 <= x1)) (ensures (x1 == x2)) = ()
-
-(** END TODO: move *)
+  wrap_serializer32_constant_length serialize32_protocolVersion' 2 () input
 
 (** Parsing function for the protocol version *)
 (* NOTE: this interface (as well as versionBytes) is dubious, since:
@@ -112,18 +98,21 @@ let le_antisym (x1 x2: int) : Lemma (requires (x1 <= x2 /\ x2 <= x1)) (ensures (
    - nothing tells that all input bytes were actually consumed
    In particular, this interface means that the caller is responsible for correctly splitting the input buffer *before* calling the parser.
 *)
+
+inline_for_extraction
+let parseVersion_error_msg =
+  perror __SOURCE_FILE__ __LINE__ ""
+
 inline_for_extraction
 val parseVersion: pinverse_t versionBytes
 let parseVersion v =
-  LP.parse32_total parse32_protocolVersion' v;
-  let (Some (value, _)) = parse32_protocolVersion' v in
-  Correct value
+  wrap_parser32_constant_length serialize32_protocolVersion' 2 () parse32_protocolVersion' parseVersion_error_msg v
 
-(* The following surprisingly succeeds. *)
 val inverse_version: x:_ -> Lemma
   (requires True)
   (ensures lemma_inverse_g_f versionBytes parseVersion x)
-let inverse_version x = ()
+let inverse_version x =
+  lemma_inverse_serializer32_parser32_constant_length serialize32_protocolVersion' 2 () parse32_protocolVersion' parseVersion_error_msg x
 
 val pinverse_version: x: lbytes 2 -> Lemma
   (requires True)
@@ -134,19 +123,4 @@ val pinverse_version: x: lbytes 2 -> Lemma
 (* We have to call an explicit lemma, albeit generic *)
 
 let pinverse_version x =
-  LP.parse32_total parse32_protocolVersion' x;
-  let (Correct c) = parseVersion x in
-  let (Some (c', consumed)) = parse32_protocolVersion' x in
-  assert (c == c');
-  let f () : Lemma (2 <= UInt32.v consumed /\ UInt32.v consumed <= 2) =
-    let k = LP.get_parser_kind parse_protocolVersion' in
-    assert (k.LP.parser_kind_low == 2);
-    assert (k.LP.parser_kind_high == Some 2);
-    LP.parse32_size #k #protocolVersion' #parse_protocolVersion' parse32_protocolVersion' x c consumed;
-    ()
-  in
-  f ();
-  le_antisym (UInt32.v consumed) 2;
-  assert (UInt32.v consumed == 2);
-  LP.parser32_then_serializer32' parse32_protocolVersion' serialize32_protocolVersion' x c' consumed;
-  ()
+  lemma_pinverse_serializer32_parser32_constant_length serialize32_protocolVersion' 2 () parse32_protocolVersion' parseVersion_error_msg x
