@@ -71,6 +71,11 @@ typedef struct {
 // Functions exported from libmitls.dll
 //   Functions returning 'int' return 0 for failure, or nonzero for success
 
+// Redirect debug tracing to a callback function.  This is process-wide and can
+// be called before or after FFI_mitls_init().
+typedef void (MITLS_CALLCONV *pfn_mitls_trace_callback)(const char *msg);
+extern void MITLS_CALLCONV FFI_mitls_set_trace_callback(pfn_mitls_trace_callback cb);
+
 // Perform one-time initialization
 extern int MITLS_CALLCONV FFI_mitls_init(void);
 

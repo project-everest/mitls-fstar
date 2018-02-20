@@ -1,5 +1,6 @@
 #include <memory.h>
 #include <assert.h>
+#include <stdarg.h>
 #if __APPLE__
 #include <sys/errno.h> // OS/X only provides include/sys/errno.h
 #else
@@ -86,6 +87,36 @@ void NoPrintf(const char *fmt, ...)
 {
 }
 
+pfn_mitls_trace_callback trace_callback;
+
+void TracePrintf(const char *fmt, ...)
+{
+    va_list args;
+    va_start (args, fmt);
+    
+    char buffer[160];
+    vsprintf_s(buffer, sizeof(buffer), fmt, args);
+
+    // For WPP tracing, the trailing '\n' is undesirable, so remove.
+    char *c = strrchr(buffer, '\n');
+    if (c) {
+        *c = '\0';
+    }
+    
+    (*trace_callback)(buffer);    
+}
+
+//
+// Hosts may provide a callback function for debug tracing.
+//
+void MITLS_CALLCONV FFI_mitls_set_trace_callback(pfn_mitls_trace_callback cb)
+{
+    trace_callback = cb;
+#if LOG_TO_CHOICE    
+    g_LogPrint = TracePrintf;
+#endif
+}
+
 //
 // Initialize miTLS.
 //
@@ -99,15 +130,19 @@ int MITLS_CALLCONV FFI_mitls_init(void)
   #ifdef _KERNEL_MODE
     ExInitializeFastMutex(&lock);
     #if LOG_TO_CHOICE
-    g_LogPrint = (p_log)DbgPrint;
+    if (!g_LogPrint) {
+        g_LogPrint = (p_log)DbgPrint;
+    }
     #endif
   #else
     InitializeCriticalSection(&lock);
     #if LOG_TO_CHOICE
-    if (GetEnvironmentVariableA("MITLS_LOG", NULL, 0) == 0) {
-        g_LogPrint = (p_log)DbgPrint; // if not set, log to the debugger by default
-    } else {
-        g_LogPrint = (p_log)printf;
+    if (!g_LogPrint) {
+        if (GetEnvironmentVariableA("MITLS_LOG", NULL, 0) == 0) {
+            g_LogPrint = (p_log)DbgPrint; // if not set, log to the debugger by default
+        } else {
+            g_LogPrint = (p_log)printf;
+        }
     }
     #endif
   #endif
@@ -116,11 +151,13 @@ int MITLS_CALLCONV FFI_mitls_init(void)
     return 0;
   }
   #if LOG_TO_CHOICE
-  if (getenv("MITLS_LOG") == NULL) {
-    g_LogPrint = NoPrintf; // default to no logging
-  } else {
-    g_LogPrint = (p_log)printf;
-  }
+    if (!g_LogPrint) {
+      if (getenv("MITLS_LOG") == NULL) {
+        g_LogPrint = NoPrintf; // default to no logging
+      } else {
+        g_LogPrint = (p_log)printf;
+      }
+    }
   #endif
 #endif
 

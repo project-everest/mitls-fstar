@@ -74,6 +74,22 @@ typedef struct mitls_state {
 
 static int isRegistered;
 
+// A default print callback that logs to stdout
+void MITLS_CALLCONV default_trace(const char *msg)
+{
+    printf("%s\n", msg);
+}
+
+static pfn_mitls_trace_callback trace_callback = default_trace;
+
+//
+// Hosts may provide a callback function for debug tracing.
+//
+void MITLS_CALLCONV FFI_mitls_set_trace_callback(pfn_mitls_trace_callback cb)
+{
+    trace_callback = cb;
+}
+
 //
 // Initialize miTLS.
 //
@@ -126,7 +142,7 @@ static void report_error(const char *msg)
     if (msg == NULL) {
         return;
     }
-    printf("%s\n", msg);
+    (*default_trace)(msg);
 }
 
 // Input:  v - an OCaml exception

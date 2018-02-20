@@ -80,6 +80,7 @@ let mipki_signature = Ctypes.uint16_t
 (*
 mipki_chain MITLS_CALLCONV mipki_select_certificate(mipki_state *st,
                                                     const char *sni,
+                                                    size_t sni_len,
                                                     const mipki_signature *algs,
                                                     size_t algs_len,
                                                     mipki_signature *selected) *)
@@ -87,6 +88,7 @@ let mipki_select_certificate =
   foreign "mipki_select_certificate"
     (ptr void
      @-> string
+     @-> size_t
      @-> ptr mipki_signature
      @-> size_t
      @-> ptr mipki_signature
@@ -112,8 +114,11 @@ let cert_select pki _ sni algs =
   algs;
 
   let sni = FStar_Bytes.string_of_bytes sni in
+  let sni_len = String.length sni in
   let sel_ptr = allocate Ctypes.uint16_t (UInt16.of_int 0) in
-  let chain = mipki_select_certificate (undyn pki) sni (CArray.start sigalgs) (Size_t.of_int sigalgs_len) sel_ptr in
+  let chain = mipki_select_certificate (undyn pki)
+                sni (Size_t.of_int sni_len)
+                (CArray.start sigalgs) (Size_t.of_int sigalgs_len) sel_ptr in
 
   if is_null chain then FStar_Pervasives_Native.None
   else
