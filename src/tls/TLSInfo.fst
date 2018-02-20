@@ -98,7 +98,7 @@ let defaultConfig =
 
 // their first 4 bytes give the local time,
 // so that they are locally pairwise-distinct
-type random = lbytes 32
+type random = Nonce.random
 type crand = random
 type srand = random
 type csRands = lbytes 64

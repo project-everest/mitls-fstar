@@ -236,9 +236,10 @@ type ms = bytes
 type pms = bytes
 //17-12-07 can they also be products of IK? no immediate need
 
+#set-options "--z3rlimit 30"
 // only for TLS 1.3, will need refining 
-let fink (i: id) = HMAC.UFCMA.key Idx.ii i
-let binderKey (i: id) = HMAC.UFCMA.key Idx.ii i
+let fink i = HMAC.UFCMA.key Idx.ii i
+let binderKey i = HMAC.UFCMA.key Idx.ii i
 //was:
 //type fink (i:finishedId)    = HMAC.UFCMA.key (HMAC.UFCMA.HMAC_Finished i) (fun _ -> True)
 //type binderKey (i:binderId) = HMAC.UFCMA.key (HMAC.UFCMA.HMAC_Binder i) (fun _ -> True)
@@ -271,7 +272,7 @@ type ks_alpha12 =
 /// key-schedule states for TLS 1.2, now kept in the Handshake state;
 /// to be similarly refactored. (The initial states holding just the
 /// nonce are gone.)
-type ks12_state = 
+noeq type ks12_state = 
 | C12_Resume_CH: 
     cr:random -> 
     si:sessionInfo -> 
