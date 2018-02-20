@@ -1,11 +1,11 @@
 #include <memory.h>
 #include <assert.h>
 #include <stdio.h>
+#include <malloc.h>
 #if __APPLE__
 #include <sys/errno.h> // OS/X only provides include/sys/errno.h
 #else
 #include <errno.h> // MinGW only provides include/errno.h
-#include <malloc.h>
 #endif
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #define IS_WINDOWS 1
