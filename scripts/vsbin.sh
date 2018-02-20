@@ -1,5 +1,4 @@
 #!/bin/bash
-
 # Starting from Visual Studio 2017, version 15.2 or later,
 # we can determine the location of a VS install
 # using vswhere.exe, see:
