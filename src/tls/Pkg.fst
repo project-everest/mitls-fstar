@@ -199,24 +199,24 @@ noeq type local_pkg (ip: ipkg) =
 (* Iterators over Monotonic.Map, require a change of implementation *)
 
 let mm_fold (#a:eqtype) (#b:a -> Type) (t:MM.map' a b)
-  (#rt:Type) (init:rt) (folder:rt -> i:a -> b i -> GTot rt) : GTot rt
+  (#rt:Type) (init:rt) (folder:(rt -> i:a -> b i -> GTot rt)) : GTot rt
   = admit()
 
 let mm_fold_grow (#a:eqtype) (#b:a -> Type) (t:MM.map' a b) (t':MM.map' a b) (i:a) (v:b i)
-  (#rt:Type) (init:rt) (folder:rt -> i:a -> b i -> GTot rt) : Lemma
+  (#rt:Type) (init:rt) (folder:(rt -> i:a -> b i -> GTot rt)) : Lemma
   (requires t' == MM.upd t i v)
   (ensures mm_fold t' init folder == folder (mm_fold t init folder) i v)
   = admit()
 
 assume type mm_forall (#a:eqtype) (#b:a -> Type) (t:MM.map' a b)
-  (p: #i:a -> b i -> mem -> GTot Type0) (h:mem)
+  (p: (#i:a -> b i -> mem -> GTot Type0)) (h:mem)
 
 let lemma_mm_forall_frame (#a:eqtype) (#b:a -> Type) (t:MM.map' a b)
-  (p: #i:a -> b i -> mem -> GTot Type0)
-  (footprint: #i:a -> v:b i -> GTot rset)
-  (p_frame: i:a -> v:b i -> h0:mem -> r:rid -> h1:mem ->
+  (p: (#i:a -> b i -> mem -> GTot Type0))
+  (footprint: (#i:a -> v:b i -> GTot rset))
+  (p_frame: (i:a -> v:b i -> h0:mem -> r:rid -> h1:mem ->
     Lemma (requires p v h0 /\ modifies_one r h0 h1 /\ ~(Set.mem r (footprint v)))
-          (ensures p v h1))
+          (ensures p v h1)))
   (r:rid) (h0 h1:mem)
   : Lemma (requires mm_forall t p h0 /\ modifies_one r h0 h1 /\
             ~(Set.mem r (mm_fold t #rset Set.empty (fun s i k -> rset_union s (footprint k)))))
@@ -224,19 +224,19 @@ let lemma_mm_forall_frame (#a:eqtype) (#b:a -> Type) (t:MM.map' a b)
   = admit()
 
 let lemma_mm_forall_extend (#a:eqtype) (#b:a -> Type) (t:MM.map' a b) (t':MM.map' a b)
-  (p: #i:a -> b i -> mem -> GTot Type0) (i:a) (v:b i) (h0 h1:mem)
+  (p: (#i:a -> b i -> mem -> GTot Type0)) (i:a) (v:b i) (h0 h1:mem)
   : Lemma (requires mm_forall t p h1 /\ t' == MM.upd t i v /\ p v h1)
           (ensures mm_forall t' p h1)
   = admit()
 
 let lemma_mm_forall_init (#a:eqtype) (#b:a -> Type) (t:MM.map' a b)
-  (p: #i:a -> b i -> mem -> GTot Type0) (h:mem)
+  (p: (#i:a -> b i -> mem -> GTot Type0)) (h:mem)
   : Lemma (requires t == MM.empty_map a b)
           (ensures mm_forall t p h)
   = admit()
 
 let lemma_mm_forall_elim (#a:eqtype) (#b:a -> Type) (t:MM.map' a b)
-  (p: #i:a -> b i -> mem -> GTot Type0) (i:a) (v:b i) (h:mem)
+  (p: (#i:a -> b i -> mem -> GTot Type0)) (i:a) (v:b i) (h:mem)
   : Lemma (requires mm_forall t p h /\ t i == Some v)
           (ensures p v h)
   = admit()
