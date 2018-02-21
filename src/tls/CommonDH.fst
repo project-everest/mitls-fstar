@@ -1,14 +1,4 @@
-(**
-An abstract interface for Diffie-Hellman operations
-
-When the key extraction stack is idealized (ideal_KEF), this module
-records the honesty of shares using two layers of types: pre_share
-is for syntactically valid shares (used in parsing modules) while
-share is for registered shares (for which is_honest is defined).
-*)
 module CommonDH
-module HS = FStar.HyperStack //Added automatically
-module HST = FStar.HyperStack.ST //Added automatically
 
 open FStar.HyperStack
 open FStar.Bytes
@@ -18,10 +8,10 @@ open Parse
 open TLSError
 open FStar.HyperStack.ST
 
-
+module HS = FStar.HyperStack
+module HST = FStar.HyperStack.ST
 module MM = FStar.Monotonic.DependentMap
 module DM = FStar.DependentMap
-module ST = FStar.HyperStack.ST
 
 (* A flag for runtime debugging of cDH data.
    The F* normalizer will erase debug prints at extraction
@@ -81,11 +71,18 @@ let pre_share (g:group) =
   | FFDH dhg -> S_FF? s /\ S_FF?.g s = dhg
   | ECDH ecg -> S_EC? s /\ S_EC?.g s = ecg)}
 
-
-let namedGroup_of_group g =
+let namedGroup_of_group (g:group): Tot (option namedGroup) =
   match g with
-  | ECDH ec -> Some (SEC ec)
-  | FFDH (DHGroup.Named ng) -> Some (FFDHE ng)
+  | ECDH CoreCrypto.ECC_P256 -> Some SECP256R1
+  | ECDH CoreCrypto.ECC_P384 -> Some SECP384R1
+  | ECDH CoreCrypto.ECC_P521 -> Some SECP521R1
+  | ECDH CoreCrypto.ECC_X25519 -> Some X25519
+  | ECDH CoreCrypto.ECC_X448 -> Some X448
+  | FFDH (DHGroup.Named DHGroup.FFDHE2048) -> Some FFDHE2048
+  | FFDH (DHGroup.Named DHGroup.FFDHE3072) -> Some FFDHE3072
+  | FFDH (DHGroup.Named DHGroup.FFDHE4096) -> Some FFDHE4096
+  | FFDH (DHGroup.Named DHGroup.FFDHE6144) -> Some FFDHE6144
+  | FFDH (DHGroup.Named DHGroup.FFDHE8192) -> Some FFDHE8192
   | _ -> None
 
 let lemma_namedGroup_of_group (g:group)
@@ -93,16 +90,28 @@ let lemma_namedGroup_of_group (g:group)
   [SMTPat (namedGroup_of_group g)]
   = ()
 
-let group_of_namedGroup g =
-  match g with
-  | SEC ec    -> Some (ECDH ec)
-  | FFDHE dhe -> Some (FFDH (DHGroup.Named dhe))
-  | _ -> None
+let group_of_namedGroup (ng:namedGroup): Tot (option group) =
+  match ng with
+  | SECP256R1 -> Some (ECDH CoreCrypto.ECC_P256)
+  | SECP384R1 -> Some (ECDH CoreCrypto.ECC_P384)
+  | SECP521R1 -> Some (ECDH CoreCrypto.ECC_P521)
+  | X25519    -> Some (ECDH CoreCrypto.ECC_X25519)
+  | X448      -> Some (ECDH CoreCrypto.ECC_X448)
+  | FFDHE2048 -> Some (FFDH (DHGroup.Named DHGroup.FFDHE2048))
+  | FFDHE3072 -> Some (FFDH (DHGroup.Named DHGroup.FFDHE3072))
+  | FFDHE4096 -> Some (FFDH (DHGroup.Named DHGroup.FFDHE4096))
+  | FFDHE6144 -> Some (FFDH (DHGroup.Named DHGroup.FFDHE6144))
+  | FFDHE8192 -> Some (FFDH (DHGroup.Named DHGroup.FFDHE8192))
+  | _         -> None
 
-let lemma_group_of_namedGroup (ng:namedGroup)
-  : Lemma (Some? (group_of_namedGroup ng) <==> (SEC? ng \/ FFDHE? ng))
-  [SMTPat (group_of_namedGroup ng)]
-  = ()
+let is_ecdhe (ng:namedGroup): Tot bool = List.mem ng [ SECP256R1; SECP384R1; SECP521R1; X25519; X448 ]
+
+let is_ffdhe (ng:namedGroup): Tot bool = List.mem ng [ FFDHE2048; FFDHE3072; FFDHE4096; FFDHE6144; FFDHE8192 ]
+
+// let lemma_group_of_namedGroup (ng:namedGroup)
+//   : Lemma (Some? (group_of_namedGroup ng) <==> (SEC? ng \/ FFDHE? ng))
+//   [SMTPat (group_of_namedGroup ng)]
+//   = ()
 
 let default_group = ECDH (CoreCrypto.ECC_P256)
 
@@ -382,71 +391,46 @@ let checkElement (p:parameters) (e:element) : option element  =
 // TODO imported from TLSConstants, in a broken state
 // This may not belong to CommonDH.
 
-let keyShareEntryBytes = function
-  | Share g s ->
-    assume false; // TODO
-    let Some ng = namedGroup_of_group g in
-    let ng_bytes = namedGroupBytes ng in
-    let b = serialize_raw #g s in
-    ng_bytes @| vlbytes 2 b
+let keyShareEntryBytes (k:keyShareEntry): bytes = 
+  let open Format.KeyShareEntry in
+  match k with 
+  | Share g s -> (
+    // cwinter: | Share g s was was marked as TODO; registration is not guaranteed.
+    // assume false; // TODO
+    let nng = Some?.v (namedGroup_of_group g) in
+    let kex = (match s with | S_FF g x -> x) in
+    let kse = { group=nng; key_exchange=kex; } in
+    keyShareEntry_serializer32 kse)
   | UnknownShare ng b ->
-    let ng_bytes = namedGroupBytes ng in
-    ng_bytes @| vlbytes 2 b
+    let kse = { group=ng; key_exchange=b; } in
+    keyShareEntry_serializer32 kse
+ 
 
-module CC = CoreCrypto
-
-let new2old x = 
-  let open Parse.NamedGroup in
-  match x with
-  | SECP256R1 -> ECDH (CC.ECC_P256)
-  | SECP384R1 -> ECDH (CC.ECC_P384)
-  | SECP521R1 -> ECDH (CC.ECC_P521)
-  | X25519    -> ECDH (CC.ECC_X25519)
-  | X448      -> ECDH (CC.ECC_X448)
-  | FFDHE2048 -> FFDH (DHGroup.Named Parse.FFDHE2048)
-  | FFDHE3072 -> FFDH (DHGroup.Named Parse.FFDHE3072)
-  | FFDHE4096 -> FFDH (DHGroup.Named Parse.FFDHE4096)
-  | FFDHE6144 -> FFDH (DHGroup.Named Parse.FFDHE6144)
-  | FFDHE8192 -> FFDH (DHGroup.Named Parse.FFDHE8192)
-  | _ -> ECDH (CC.ECC_P256) // Will be ignored
-  
 (** Parsing function for a KeyShareEntry *)
 let parseKeyShareEntry b =
   // cwinter: this was marked as TODO?
   // assume false; // TODO registration
-  let open Parse.KeyShareEntry in
-  let open Parse.NamedGroup in
-  match key_share_entry_parser32 b with
+  let open Format.KeyShareEntry in
+  let open Format.NamedGroup in
+  let prsr = keyShareEntry_parser32 in
+  match prsr b with
   | Some (x, _) ->
-    let og = new2old x.group in
-    if is_ecdhe x.group || is_ffdhe x.group then
-      let (ps:(DHGroup.share og)) = x.key_exchange in
+    assert (Some? (group_of_namedGroup x.group));
+    let Some og = group_of_namedGroup x.group in
+    if is_ffdhe x.group then
+      let FFDH dhg = og in
+      let (q:DHGroup.share dhg) = x.key_exchange in 
+      let (ps:pre_share og) = S_FF dhg q in
+      Correct (Share og ps)
+    else if is_ecdhe x.group then
+      let ECDH ecg = og in
+      let Some (q:ECGroup.share ecg) = (ECGroup.parse_point ecg x.key_exchange) in
+      let (ps:pre_share og) = S_EC ecg q in
       Correct (Share og ps)
     else
-      Correct (UnknownShare og x.key_exchange)
+      Correct (UnknownShare x.group x.key_exchange)
   | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry")
-
-(* TODO
-(** Lemmas for KeyShare entries parsing/serializing inversions *)
-val inverse_keyShareEntry: x:_ -> Lemma
-  (requires True)
-  (ensures lemma_inverse_g_f keyShareEntryBytes parseKeyShareEntry x)
-  [SMTPat (parseKeyShareEntry (keyShareEntryBytes x))]
-let inverse_keyShareEntry (ng, x) =
-  let b = namedGroupBytes ng @| vlbytes 2 x in
-  let b0,b1 = split b 2 in
-  let vl,b = split b1 2 in
-  vlparse_vlbytes 2 b;
-  assert (Seq.equal vl (bytes_of_int 2 (length b)));
-  assert (Seq.equal b0 (namedGroupBytes ng));
-  assert (Seq.equal b x)
-
-val pinverse_keyShareEntry: x:_ -> Lemma
-  (requires True)
-  (ensures lemma_pinverse_f_g Seq.equal keyShareEntryBytes parseKeyShareEntry x)
-  [SMTPat (keyShareEntryBytes (Correct?._0 (parseKeyShareEntry x)))]
-let pinverse_keyShareEntry x = ()
-*)
+  
 
 // Choice: truncate when maximum length is exceeded
 (** Serializing function for a list of KeyShareEntry *)
@@ -495,7 +479,7 @@ let parseClientKeyShare b =
   match parseKeyShareEntries b with
   | Correct kes ->
     if List.Tot.length kes < 65536/4
-    then Correct kes
+    then Correct (ClientKeyShare kes)
     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse client key share entries")
   | Error z -> Error z
 
@@ -503,36 +487,23 @@ let parseClientKeyShare b =
 let serverKeyShareBytes sks = keyShareEntryBytes sks
 
 (** Parsing function for a ServerKeyShare *)
-let parseServerKeyShare b = parseKeyShareEntry b
+let parseServerKeyShare b =
+  match parseKeyShareEntry b with
+  | Correct ks -> Correct (ServerKeyShare ks)
+  | Error z -> Error z
+
+let helloRetryKeyShareBytes (k:keyShare): Tot (b:bytes) = 
+  let HRRKeyShare ng = k in
+  namedGroup_serializer32 ng
+  
+let parseHelloRetryKeyShare (bs:bytes): Tot (result keyShare) =
+  match namedGroup_parser32 bs with 
+  | Some (ng, _) -> Correct (HRRKeyShare ng)
+  | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse hello retry group")
+
 
 (** Serializing function for a KeyShare *)
 let keyShareBytes = function
   | ClientKeyShare cks -> clientKeyShareBytes cks
   | ServerKeyShare sks -> serverKeyShareBytes sks
   | HRRKeyShare ng -> namedGroupBytes ng
-
-(** Parsing function for a KeyShare *)
-let parseKeyShare msg b =
-  match msg with
-  | KS_HRR ->
-    if length b = 2 then
-      match parseNamedGroup b with
-      | Correct ng -> Correct (HRRKeyShare ng)
-      | Error z -> Error z
-    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "bad HRR key_share extension")
-  | KS_ClientHello ->
-    if 2 <= length b && length b < 65538 then
-      begin
-      match parseClientKeyShare b with
-      | Correct kse -> Correct (ClientKeyShare kse)
-      | Error z -> Error z
-      end
-    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse client key share list")
-  | KS_ServerHello ->
-    if 4 <= length b then
-      begin
-      match parseServerKeyShare b with
-      | Correct ks -> Correct (ServerKeyShare ks)
-      | Error z -> Error z
-      end
-    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse server key share")

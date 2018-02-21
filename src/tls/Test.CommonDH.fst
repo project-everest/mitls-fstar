@@ -6,10 +6,10 @@ open FStar.Printf
 open FStar.HyperStack
 open FStar.HyperStack.ST
 
-
-open Parse
 open TLSError
 open TLSConstants
+open Format.NamedGroup
+open Format.NamedGroupList
 
 module DH = CommonDH
 
@@ -38,24 +38,22 @@ let test group =
       false
     end
 
-let groups : list Parse.namedGroup =
-  let open CoreCrypto in
-  let open Parse in
+let groups : namedGroupList =
   [
-    FFDHE FFDHE2048;
-    FFDHE FFDHE3072;
-    FFDHE FFDHE4096;
-    FFDHE FFDHE6144;
-    FFDHE FFDHE8192;
-    SEC ECC_P256;
-    SEC ECC_P384;
-    SEC ECC_P521;
-    SEC ECC_X25519;
+    SECP256R1;
+    SECP384R1;
+    SECP521R1;
+    X25519;
+    FFDHE2048;
+    FFDHE3072;
+    FFDHE4096;
+    FFDHE6144;
+    FFDHE8192;
     // TODO: Not implemented; see ECGroup.fst
-    //SEC ECC_X448
+    //X448
   ]
 
-let rec test_groups (groups:list Parse.namedGroup) : St bool =
+let rec test_groups (groups:namedGroupList) : St bool =
   match groups with
   | g :: gs ->
     let Some group = DH.group_of_namedGroup g in

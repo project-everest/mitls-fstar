@@ -236,14 +236,14 @@ let sas = [
 ]
 
 let ngs = [
-  ("P-521", Parse.SEC CoreCrypto.ECC_P521);
-  ("P-384", Parse.SEC CoreCrypto.ECC_P384);
-  ("P-256", Parse.SEC CoreCrypto.ECC_P256);
-  ("X25519", Parse.SEC CoreCrypto.ECC_X25519);
-  ("X448",  Parse.SEC CoreCrypto.ECC_X448);
-  ("FFDHE4096", Parse.FFDHE Parse.FFDHE4096);
-  ("FFDHE3072", Parse.FFDHE Parse.FFDHE3072);
-  ("FFDHE2048", Parse.FFDHE Parse.FFDHE2048);
+  ("P-521",     CommonDH.SECP521R1);
+  ("P-384",     CommonDH.SECP384R1);
+  ("P-256",     CommonDH.SECP256R1);
+  ("X25519",    CommonDH.X25519);
+  ("X448",      CommonDH.X448);
+  ("FFDHE4096", CommonDH.FFDHE4096);
+  ("FFDHE3072", CommonDH.FFDHE3072);
+  ("FFDHE2048", CommonDH.FFDHE2048);
 ]
 
 let aeads = [

@@ -52,15 +52,16 @@ let default_signature_schemes = [
   RSA_PKCS1_SHA1
   ]
 
-let default_groups : list valid_namedGroup = [
-  // SEC CC.ECC_X448
-  SEC CC.ECC_P521;
-  SEC CC.ECC_P384;
-  SEC CC.ECC_X25519;
-  SEC CC.ECC_P256;
-  FFDHE FFDHE4096;
-  FFDHE FFDHE3072;
-  FFDHE FFDHE2048;
+let default_groups : CommonDH.namedGroupList = 
+  let open CommonDH in [
+  // X448
+  SECP521R1;
+  SECP384R1;
+  X25519;
+  SECP256R1;
+  FFDHE4096;
+  FFDHE3072;
+  FFDHE2048;
   ]
 
 // By default we use an in-memory ticket table
@@ -112,7 +113,7 @@ let defaultConfig =
 
   // Client
   hello_retry = true;
-  offer_shares = [SEC CC.ECC_X25519];
+  offer_shares = [Format.NamedGroup.X25519];
 
   // Server
   check_client_version_in_pms_for_old_tls = true;

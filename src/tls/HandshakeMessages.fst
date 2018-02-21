@@ -1618,12 +1618,6 @@ let helloRetryRequestBytes hrr =
   messageBytes HT_hello_retry_request data
   *)
 
-val namedGroupBytes_is_injective: n1:namedGroup -> n2:namedGroup ->
-  Lemma (requires True)
-  (ensures (Bytes.equal (namedGroupBytes n1) (namedGroupBytes n2) ==> n1 = n2))
-let namedGroupBytes_is_injective n1 n2 =
-  if namedGroupBytes n1 = namedGroupBytes n2 then pinverse_namedGroup (namedGroupBytes n1)
-
 val helloRetryRequestBytes_is_injective: h1:hrr -> h2:hrr ->
   Lemma (requires True)
   (ensures (Bytes.equal (helloRetryRequestBytes h1) (helloRetryRequestBytes h2) ==> h1 == h2))

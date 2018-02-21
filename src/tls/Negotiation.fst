@@ -527,9 +527,9 @@ val chosenGroup: mode -> option CommonDH.group
 let chosenGroup mode =
   match kexAlg mode with
   | Kex_PSK_DHE
-  | Kex_DHE -> CommonDH.group_of_namedGroup (FFDHE FFDHE2048)
+  | Kex_DHE -> CommonDH.group_of_namedGroup CommonDH.FFDHE2048
   | Kex_PSK_ECDHE
-  | Kex_ECDHE -> CommonDH.group_of_namedGroup (SEC CoreCrypto.ECC_P256)
+  | Kex_ECDHE -> CommonDH.group_of_namedGroup CommonDH.SECP256R1
 
 val zeroRTToffer: offer -> bool
 let zeroRTToffer o = Some? (find_early_data o)
@@ -1173,7 +1173,7 @@ val compute_cs13:
   psks: list (PSK.pskid * PSK.pskInfo) ->
   shares: list share (* pre-registered *) ->
   server_cert: bool (* is a certificate available for signing? *) ->
-  result (list (cs13 o) * option (namedGroup * cs:cipherSuite))
+  result (list (cs13 o) * option (CommonDH.namedGroup * cs:cipherSuite))
 let compute_cs13 cfg o psks shares server_cert =
   // pick acceptable record ciphersuites
   let ncs =  TLSConstants.filter_aux cfg is_cs13_in_cfg o.ch_cipher_suites in

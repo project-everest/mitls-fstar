@@ -56,7 +56,7 @@ HEADERS 	= $(addprefix -add-include ,'"hacks.h"' '"krembytes.h"' \
 KRML_COMMAND	= krml \
   -bundle TLSConstantsAux2 -bundle 'LowParse.*' \
   -bundle LowParseWrappers \
-  -bundle Parse.NamedGroup \
+  -bundle 'Format.*' \
   -fnoanonymous-unions -warn-error -9-7-6 \
   -fsopts --debug,yes -verbose \
   -ccopts -Wno-unused-function,-O0 \

@@ -1893,12 +1893,12 @@ noeq type config : Type0 = {
     max_version: protocolVersion;
     quic_parameters: option (valid_quicVersions * valid_quicParameters);
     cipher_suites: x:valid_cipher_suites{List.Tot.length x < 256};
-    named_groups: list valid_namedGroup;
+    named_groups: CommonDH.supportedNamedGroups;
     signature_algorithms: signatureSchemeList;
 
     (* Client side *)
     hello_retry: bool;          // honor hello retry requests from the server
-    offer_shares: list valid_namedGroup;
+    offer_shares: CommonDH.supportedNamedGroups;
 
     (* Server side *)
     check_client_version_in_pms_for_old_tls: bool;

@@ -261,8 +261,8 @@ let create #rid r =
     | Server -> S (S_Init nonce) in
   (KS #ks_region (ralloc ks_region istate)), nonce
 
-private let group_of_valid_namedGroup
-  (g:valid_namedGroup)
+private let group_of_supported_namedGroup
+  (g:CommonDH.supportedNamedGroup)
   : CommonDH.group
   = Some?.v (CommonDH.group_of_namedGroup g)
 
@@ -281,7 +281,7 @@ private let keygen (g:CommonDH.group)
   : St (g:CommonDH.group & CommonDH.keyshare g)
   = (| g, CommonDH.keygen g |)
 
-val ks_client_init: ks:ks -> ogl: option (list valid_namedGroup)
+val ks_client_init: ks:ks -> ogl: option (CommonDH.supportedNamedGroups)
   -> ST (option CommonDH.clientKeyShare)
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
@@ -316,7 +316,7 @@ let ks_client_init ks ogl =
     st := C (C_12_Full_CH cr);
     None
   | Some gl -> // TLS 1.3
-    let groups = List.Tot.map group_of_valid_namedGroup gl in
+    let groups = List.Tot.map group_of_supported_namedGroup gl in
     let gs = map_ST_keygen groups in
     let gxl = List.Tot.choose serialize_share gs in
     st := C (C_13_wait_SH cr [] gs);

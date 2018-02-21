@@ -39,11 +39,11 @@ unfold type is_injective_2 (#a:Type) (#b:Type) (f:a -> b) (x:a) (y:a)
  
 type namedGroup =
   (* Elliptic Curve Groups (ECDHE) *)
-  | SECP256R1 // == CC.ECC_P256
-  | SECP384R1 // == CC.ECC_P384
-  | SECP521R1 // == CC.ECC_P521
-  | X25519    // == CC.ECC_X25519
-  | X448      // == CC.ECC_X448
+  | SECP256R1
+  | SECP384R1
+  | SECP521R1
+  | X25519
+  | X448
 
   (* Finite Field Groups (DHE) *)
   | FFDHE2048
@@ -62,13 +62,7 @@ type namedGroup =
       not U16.(0x01FCus <=^ u && u <=^ 0x01FFus) /\
       not U16.(0xFE00us <=^ u && u <=^ 0xFEFFus)})
 
-let is_ecdhe (ng:namedGroup): Tot bool = List.mem ng [ SECP256R1; SECP384R1; SECP521R1; X25519; X448 ]
-
-let is_ffdhe (ng:namedGroup): Tot bool = List.mem ng [ FFDHE2048; FFDHE3072; FFDHE4096; FFDHE6144; FFDHE8192 ]
-
-let is_ecffdhe (ng:namedGroup): Tot bool = is_ecdhe ng || is_ffdhe ng
-
-type ecffdhe_group = ng:namedGroup{is_ecffdhe ng}
+let bytesize = 2
 
 inline_for_extraction
 let namedGroup_of_u16 (x:U16.t): Tot namedGroup =

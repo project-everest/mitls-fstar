@@ -635,7 +635,7 @@ let parseServerName mt b =
 // M=Mandatory, AF=mandatory for Application Features in https://tlswg.github.io/tls13-spec/#rfc.section.8.2.
 noeq type extension' (p: (lbytes 2 -> GTot Type0)) =
   | E_server_name of list serverName (* M, AF *) (* RFC 6066 *)
-  | E_supported_groups of list namedGroup (* M, AF *) (* RFC 7919 *)
+  | E_supported_groups of CommonDH.supportedNamedGroups (* M, AF *) (* RFC 7919 *)
   | E_signature_algorithms of signatureSchemeList (* M, AF *) (* RFC 5246 *)
   | E_signature_algorithms_cert of signatureSchemeList (* TLS 1.3#23 addition; TLS 1.2 should also support it *)
   | E_key_share of CommonDH.keyShare (* M, AF *)
@@ -787,7 +787,7 @@ val extensionPayloadBytes: extension -> b:bytes { length b < 65536 - 4 }
 let rec extensionPayloadBytes = function
   | E_server_name []                -> vlbytes 2 empty_bytes // ServerHello, EncryptedExtensions
   | E_server_name l                 -> vlbytes 2 (vlbytes 2 (serverNameBytes l)) // ClientHello
-  | E_supported_groups l            -> vlbytes 2 (namedGroupsBytes l)
+  | E_supported_groups l            -> vlbytes 2 (CommonDH.namedGroupsBytes l)
   | E_signature_algorithms sha      -> vlbytes 2 (signatureSchemeListBytes sha)
   | E_signature_algorithms_cert sha -> vlbytes 2 (signatureSchemeListBytes sha)
   | E_session_ticket b              -> vlbytes 2 b
@@ -836,13 +836,14 @@ let extensionBytes_is_injective
   | E_supported_groups l1 ->
     let (E_supported_groups l2) = ext2 in
     assume (List.Tot.length l1 < 65536/2 );
-    let n1 = namedGroupsBytes l1 in
+    let n1 = CommonDH.namedGroupsBytes l1 in
     assume (List.Tot.length l2 < 65536/2 );
-    let n2 = namedGroupsBytes l2 in
+    let n2 = CommonDH.namedGroupsBytes l2 in
     assume (repr_bytes (length n1) <= 2);
     assume (repr_bytes (length n2) <= 2);
-    lemma_vlbytes_inj_strong 2 n1 s1 n2 s2;
-    namedGroupsBytes_is_injective l1 empty_bytes l2 empty_bytes
+    lemma_vlbytes_inj_strong 2 n1 s1 n2 s2
+    //;
+    //namedGroupsBytes_is_injective l1 empty_bytes l2 empty_bytes
   | E_signature_algorithms sha1 ->
     let (E_signature_algorithms sha2) = ext2 in
     let sg1 = signatureSchemeListBytes sha1 in
@@ -1102,9 +1103,9 @@ let parseEcpfList b =
 
 let parseKeyShare mt data =
   match mt with
-  | EM_ClientHello -> CommonDH.(parseKeyShare KS_ClientHello data)
-  | EM_ServerHello -> CommonDH.(parseKeyShare KS_ServerHello data)
-  | EM_HelloRetryRequest -> CommonDH.(parseKeyShare KS_HRR data)
+  | EM_ClientHello -> CommonDH.parseClientKeyShare data
+  | EM_ServerHello -> CommonDH.parseServerKeyShare data
+  | EM_HelloRetryRequest -> CommonDH.parseHelloRetryKeyShare data
   | _ -> error "key_share extension cannot appear in this message type"
 
 (* We don't care about duplicates, not formally excluded. *)
@@ -1128,7 +1129,10 @@ let parseExtension mt b =
 
     | (0x00z, 0x0Az) -> // supported groups
       if length data < 2 || length data >= 65538 then error "supported groups" else
-      mapResult (normallyNone E_supported_groups) (Parse.parseNamedGroups data)
+      mapResult (normallyNone E_supported_groups) (
+        match (CommonDH.parseNamedGroups data) with 
+        | Some (x, _) -> Correct x 
+        | _ -> error "supported_groups parser error")
 
     | (0x00z, 13z) -> // sigAlgs
       if length data < 2 || length data >= 65538 then error "supported signature algorithms" else
@@ -1244,7 +1248,7 @@ private let rec list_valid_cs_is_list_cs (l:valid_cipher_suites): list cipherSui
   | hd :: tl -> hd :: list_valid_cs_is_list_cs tl
 
 #set-options "--lax"
-private let rec list_valid_ng_is_list_ng (l:list valid_namedGroup) : list namedGroup =
+private let rec list_valid_ng_is_list_ng (l:CommonDH.supportedNamedGroups) : CommonDH.namedGroups =
   match l with
   | [] -> []
   | hd :: tl -> hd :: list_valid_ng_is_list_ng tl
@@ -1279,7 +1283,7 @@ val prepareExtensions:
   bool -> // EDI (Nego checks that PSK is compatible)
   option bytes -> // session_ticket
   signatureSchemeList ->
-  list valid_namedGroup ->
+  CommonDH.supportedNamedGroups ->
   option (cVerifyData * sVerifyData) ->
   option CommonDH.keyShare ->
   list (PSK.pskid * pskInfo) ->
