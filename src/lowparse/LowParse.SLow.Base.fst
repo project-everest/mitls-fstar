@@ -133,6 +133,7 @@ let parser32_then_serializer32
   (requires (Some? (p32 input)))
   (ensures (
     let (Some (v, consumed)) = p32 input in
+    U32.v consumed <= B32.length input /\
     s32 v == b32slice input 0ul consumed
   ))
 = serializer_correct_implies_complete p s
@@ -151,6 +152,7 @@ let parser32_then_serializer32'
   (requires (p32 input == Some (v, consumed)))
   (ensures (
     B32.length (s32 v) == U32.v consumed /\
+    U32.v consumed <= B32.length input /\
     B32.reveal (s32 v) == Seq.slice (B32.reveal input) 0 (U32.v consumed)
   ))
 = parser32_then_serializer32 s p32 s32 input

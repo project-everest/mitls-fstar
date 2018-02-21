@@ -289,7 +289,9 @@ let serialize32_bounded_vldata_strong'
   (#s: serializer p)
   (s32: partial_serializer32 s)
 : Tot (parse_bounded_vldata_strong_t min max s -> Tot bytes32)
-= let sz : integer_size = log256' max in
+= [@inline_let]
+  let sz : integer_size = log256' max in
+  [@inline_let]
   let ser : serializer32 (serialize_bounded_integer sz) = serialize32_bounded_integer sz in
   (fun (input: parse_bounded_vldata_strong_t min max s) ->
     let pl = s32 input in

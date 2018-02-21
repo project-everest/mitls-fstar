@@ -46,5 +46,10 @@ verify-spec: $(addsuffix .checked, $(LOWPARSE_SPEC_FILES))
 
 verify-slow: $(addsuffix .checked, $(LOWPARSE_SLOW_FILES))
 
-extract-c: LowParseExample.fst.checked
-	$(KREMLIN_HOME)/krml -skip-linking -bundle 'LowParse.*' -bundle LowParseExample.Aux -drop 'FStar.Tactics.*' -drop 'FStar.Reflection.*' LowParseExample.fst
+extract-c: example/LowParseExample.c example2/LowParseExample2.c
+
+example/LowParseExample.c: LowParseExample.fst.checked
+	$(KREMLIN_HOME)/krml -skip-linking -tmpdir example -bundle 'LowParse.*' -bundle LowParseExample.Aux -drop 'FStar.Tactics.*' -drop 'FStar.Reflection.*' LowParseExample.fst
+
+example2/LowParseExample2.c: LowParseExample2.fst.checked
+	$(KREMLIN_HOME)/krml -skip-linking -tmpdir example2 -bundle 'LowParse.*' -drop 'FStar.Tactics.*' -drop 'FStar.Reflection.*' LowParseExample2.fst
