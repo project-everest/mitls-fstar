@@ -393,29 +393,38 @@ let keyShareEntryBytes = function
     let ng_bytes = namedGroupBytes ng in
     ng_bytes @| vlbytes 2 b
 
+module CC = CoreCrypto
+
+let new2old x = 
+  let open Parse.NamedGroup in
+  match x with
+  | SECP256R1 -> ECDH (CC.ECC_P256)
+  | SECP384R1 -> ECDH (CC.ECC_P384)
+  | SECP521R1 -> ECDH (CC.ECC_P521)
+  | X25519    -> ECDH (CC.ECC_X25519)
+  | X448      -> ECDH (CC.ECC_X448)
+  | FFDHE2048 -> FFDH (DHGroup.Named Parse.FFDHE2048)
+  | FFDHE3072 -> FFDH (DHGroup.Named Parse.FFDHE3072)
+  | FFDHE4096 -> FFDH (DHGroup.Named Parse.FFDHE4096)
+  | FFDHE6144 -> FFDH (DHGroup.Named Parse.FFDHE6144)
+  | FFDHE8192 -> FFDH (DHGroup.Named Parse.FFDHE8192)
+  | _ -> ECDH (CC.ECC_P256) // Will be ignored
+  
 (** Parsing function for a KeyShareEntry *)
 let parseKeyShareEntry b =
-  assume false; // TODO registration
-  let ng, key_exchange = split b 2ul in
-  match parseNamedGroup ng with
-  | Correct ng ->
-    begin
-      match vlparse 2 key_exchange with
-      | Correct ke ->
-        (if SEC? ng || FFDHE? ng then
-          let go = group_of_namedGroup ng in
-          assert(SEC? ng \/ FFDHE? ng);
-          assert(Some? go);
-          let Some g = go in
-          match parse g ke with
-          | Some s -> Correct (Share g s)
-          | None -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share value")
-        else
-          Correct (UnknownShare ng ke))
-      | Error z ->
-        Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry")
-    end
-  | Error z -> Error z
+  // cwinter: this was marked as TODO?
+  // assume false; // TODO registration
+  let open Parse.KeyShareEntry in
+  let open Parse.NamedGroup in
+  match key_share_entry_parser32 b with
+  | Some (x, _) ->
+    let og = new2old x.group in
+    if is_ecdhe x.group || is_ffdhe x.group then
+      let (ps:(DHGroup.share og)) = x.key_exchange in
+      Correct (Share og ps)
+    else
+      Correct (UnknownShare og x.key_exchange)
+  | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry")
 
 (* TODO
 (** Lemmas for KeyShare entries parsing/serializing inversions *)

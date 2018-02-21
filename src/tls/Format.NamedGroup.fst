@@ -1,4 +1,4 @@
-module Parse.NamedGroup
+module Format.NamedGroup
 
 module U16 = FStar.UInt16 
 module U32 = FStar.UInt32
@@ -6,10 +6,6 @@ module L = FStar.List.Tot
 module LP = LowParse.SLow
 module CC = CoreCrypto
 module B32 = FStar.Bytes
-
-// let bytes32 = B32.bytes
-// let bytes32_n (n:U32.t) = b:bytes32{B32.len b = n}
-// let index32 (b:bytes32) (i:U32.t{U32.lt i (B32.len b)}) = B32.get b i
 
 unfold type is_injective (#a:Type) (#b:Type) (f:a -> b) 
   = forall x y . f x == f y ==> x == y
@@ -41,7 +37,7 @@ unfold type is_injective_2 (#a:Type) (#b:Type) (f:a -> b) (x:a) (y:a)
 
 *)
  
-type named_group =
+type namedGroup =
   (* Elliptic Curve Groups (ECDHE) *)
   | SECP256R1 // == CC.ECC_P256
   | SECP384R1 // == CC.ECC_P384
@@ -66,16 +62,16 @@ type named_group =
       not U16.(0x01FCus <=^ u && u <=^ 0x01FFus) /\
       not U16.(0xFE00us <=^ u && u <=^ 0xFEFFus)})
 
-let is_ecdhe (ng:named_group): Tot bool = List.mem ng [ SECP256R1; SECP384R1; SECP521R1; X25519; X448 ]
+let is_ecdhe (ng:namedGroup): Tot bool = List.mem ng [ SECP256R1; SECP384R1; SECP521R1; X25519; X448 ]
 
-let is_ffdhe (ng:named_group): Tot bool = List.mem ng [ FFDHE2048; FFDHE3072; FFDHE4096; FFDHE6144; FFDHE8192 ]
+let is_ffdhe (ng:namedGroup): Tot bool = List.mem ng [ FFDHE2048; FFDHE3072; FFDHE4096; FFDHE6144; FFDHE8192 ]
 
-let is_ecffdhe (ng:named_group): Tot bool = is_ecdhe ng || is_ffdhe ng
+let is_ecffdhe (ng:namedGroup): Tot bool = is_ecdhe ng || is_ffdhe ng
 
-type ecffdhe_group = ng:named_group{is_ecffdhe ng}
+type ecffdhe_group = ng:namedGroup{is_ecffdhe ng}
 
 inline_for_extraction
-let named_group_of_u16 (x:U16.t): Tot named_group =
+let namedGroup_of_u16 (x:U16.t): Tot namedGroup =
   match x with
   | 0x0017us -> SECP256R1
   | 0x0018us -> SECP384R1
@@ -92,7 +88,7 @@ let named_group_of_u16 (x:U16.t): Tot named_group =
          else UNKNOWN u
 
 inline_for_extraction
-let u16_of_named_group (ng:named_group): Tot U16.t =
+let u16_of_namedGroup (ng:namedGroup): Tot U16.t =
   match ng with
   | SECP256R1           -> 0x0017us
   | SECP384R1           -> 0x0018us
@@ -109,51 +105,48 @@ let u16_of_named_group (ng:named_group): Tot U16.t =
   | UNKNOWN u           -> u
 
 #reset-options "--using_facts_from '* -LowParse -FStar.Reflection -FStar.Tactics' --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16"
-let lemma_named_group_of_u16_is_injective () 
-  : Lemma (is_injective named_group_of_u16) 
+let lemma_namedGroup_of_u16_is_injective () 
+  : Lemma (is_injective namedGroup_of_u16) 
   = ()
 
-let lemma_named_group_of_u16_is_injective_2 (x:U16.t) (y:U16.t)
-  : Lemma (is_injective_2 named_group_of_u16 x y) 
-    [SMTPat (named_group_of_u16 x); SMTPat (named_group_of_u16 y)]
+let lemma_namedGroup_of_u16_is_injective_2 (x:U16.t) (y:U16.t)
+  : Lemma (is_injective_2 namedGroup_of_u16 x y) 
+    [SMTPat (namedGroup_of_u16 x); SMTPat (namedGroup_of_u16 y)]
   = ()
 #reset-options
 
 
 (* Parsers *)
 
-let named_group_parser_kind = LP.parse_u16_kind
+let namedGroup_parser_kind = LP.parse_u16_kind
 
-let named_group_parser: LP.parser named_group_parser_kind named_group =
-  lemma_named_group_of_u16_is_injective ();
-  LP.parse_u16 `LP.parse_synth` named_group_of_u16 
+let namedGroup_parser: LP.parser namedGroup_parser_kind namedGroup =
+  lemma_namedGroup_of_u16_is_injective ();
+  LP.parse_u16 `LP.parse_synth` namedGroup_of_u16 
 
 inline_for_extraction
-let named_group_parser32: LP.parser32 named_group_parser =
-  lemma_named_group_of_u16_is_injective ();
-  LP.parse32_synth LP.parse_u16 named_group_of_u16 (fun x -> named_group_of_u16 x) LP.parse32_u16 ()
-
-
-(* Validators? *)
+let namedGroup_parser32: LP.parser32 namedGroup_parser =
+  lemma_namedGroup_of_u16_is_injective ();
+  LP.parse32_synth LP.parse_u16 namedGroup_of_u16 (fun x -> namedGroup_of_u16 x) LP.parse32_u16 ()
 
 
 (* Serialization *) 
 
 #reset-options "--using_facts_from '* -LowParse -FStar.Reflection -FStar.Tactics' --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16"
-let lemma_named_group_of_u16_of_named_group () 
-  : Lemma (forall x . named_group_of_u16 (u16_of_named_group x) == x)
+let lemma_namedGroup_of_u16_of_namedGroup () 
+  : Lemma (forall x . namedGroup_of_u16 (u16_of_namedGroup x) == x)
   = ()
 #reset-options
 
-let named_group_serializer: LP.serializer named_group_parser = 
-  lemma_named_group_of_u16_is_injective ();
-  lemma_named_group_of_u16_of_named_group ();
-  LP.serialize_synth #named_group_parser_kind #U16.t #named_group
-    LP.parse_u16 named_group_of_u16 LP.serialize_u16 u16_of_named_group ()
+let namedGroup_serializer: LP.serializer namedGroup_parser = 
+  lemma_namedGroup_of_u16_is_injective ();
+  lemma_namedGroup_of_u16_of_namedGroup ();
+  LP.serialize_synth #namedGroup_parser_kind #U16.t #namedGroup
+    LP.parse_u16 namedGroup_of_u16 LP.serialize_u16 u16_of_namedGroup ()
 
 inline_for_extraction
-let named_group_serializer32: LP.serializer32 named_group_serializer = 
-  lemma_named_group_of_u16_is_injective ();
-  lemma_named_group_of_u16_of_named_group ();
-  LP.serialize32_synth #named_group_parser_kind #U16.t #named_group
-    LP.parse_u16 named_group_of_u16 LP.serialize_u16 LP.serialize32_u16 u16_of_named_group (fun x -> u16_of_named_group x) ()
+let namedGroup_serializer32: LP.serializer32 namedGroup_serializer = 
+  lemma_namedGroup_of_u16_is_injective ();
+  lemma_namedGroup_of_u16_of_namedGroup ();
+  LP.serialize32_synth #namedGroup_parser_kind #U16.t #namedGroup
+    LP.parse_u16 namedGroup_of_u16 LP.serialize_u16 LP.serialize32_u16 u16_of_namedGroup (fun x -> u16_of_namedGroup x) ()
