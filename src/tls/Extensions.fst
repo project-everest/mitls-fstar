@@ -23,20 +23,6 @@ let rec existsb2 (f: 'a -> 'b -> bool) (x:'a) (y:list 'b) : bool =
 (*************************************************
  Define extension.
  *************************************************)
-// Extensions may appear in the following messages
-// The concrete message syntax
- type ext_msg =
-   | EM_ClientHello
-   | EM_ServerHello
-   | EM_EncryptedExtensions
-   | EM_Certificate
-   | EM_NewSessionTicket
-   | EM_HelloRetryRequest
-
-(* As a static invariant, we record that any intermediate, parsed
-extension and extension lists can be formatted into bytes without
-overflowing 2^16. This create dependencies on the formatting
-functions, at odd with recursive extensions. *)
 
 let error s = Error (AD_decode_error, ("Extensions parsing: "^s))
 
@@ -48,9 +34,7 @@ private type canFail (a:Type) =
 | ExOK of list a
 
 (* PRE-SHARED KEYS AND KEY EXCHANGES *)
-type pskIdentity = PSK.psk_identifier * PSK.obfuscated_ticket_age
 
-val pskiBytes: PSK.psk_identifier * PSK.obfuscated_ticket_age -> bytes
 let pskiBytes (i,ot) =
   lemma_repr_bytes_values (UInt32.v ot);
   (vlbytes2 i @| bytes_of_int 4 (UInt32.v ot))
@@ -58,27 +42,8 @@ let pskiBytes (i,ot) =
 private
 let pskiListBytes_aux acc pski = acc @| pskiBytes pski
 
-val pskiListBytes: list pskIdentity -> bytes
 let pskiListBytes ids =
   List.Tot.fold_left pskiListBytes_aux empty_bytes ids
-
-noeq type psk =
-  // this is the truncated PSK extension, without the list of binder tags.
-  | ClientPSK:
-    identities:list pskIdentity{
-      let n = length (pskiListBytes identities) in 6 < n /\ n < 65536} ->
-    binders_len:nat{binders_len <= 65535} ->
-    psk
-  // this is just an index in the client offer's PSK extension
-  | ServerPSK: UInt16.t -> psk
-
-// PSK binders, actually the truncated suffix of TLS 1.3 ClientHello
-// We statically enforce length requirements to ensure that formatting is total.
-type binder = b:bytes {32 <= length b /\ length b <= 255}
-
-(** REMARK: this is more restrictive than in the RFC, which allows up to 2047 binders *)
-type binders =
-  bs:list binder {1 <= List.Tot.length bs /\ List.Tot.length bs < 255}
 
 let rec binderListBytes_aux (bl:list binder)
     : Tot (b:bytes{length b <= op_Multiply (List.Tot.length bl) 256}) =
@@ -102,7 +67,7 @@ let binderListBytes bs =
     assert(length b0 >= 33);
     b0 @| b
 
-let bindersBytes (bs:binders): b:bytes{length b >= 35 /\ length b <= 65537} =
+let bindersBytes bs =
   let b = binderListBytes bs in
   Parse.vlbytes2 b
 
@@ -215,14 +180,6 @@ let parse_psk mt b =
 // https://tlswg.github.io/tls13-spec/#rfc.section.4.2.8
 // restricting both proposed PSKs and future ones sent by the server
 // will also be used in the PSK table, and possibly in the configs
-type psk_kex =
-  | PSK_KE
-  | PSK_DHE_KE
-
-type client_psk_kexes = l:list psk_kex
-  { l = [PSK_KE] \/ l = [PSK_DHE_KE] \/ l = [PSK_KE; PSK_DHE_KE] \/ l = [PSK_DHE_KE; PSK_KE] }
-
-let client_psk_kexes_length (l:client_psk_kexes): Lemma (List.Tot.length l < 3) = ()
 
 val psk_kex_bytes: psk_kex -> Tot (lbytes 1)
 let psk_kex_bytes = function
@@ -252,8 +209,6 @@ let parse_client_psk_kexes: pinverse_t client_psk_kexes_bytes = fun b ->
 #reset-options
 
 (* EARLY DATA INDICATION *)
-
-type earlyDataIndication = option UInt32.t // Some  max_early_data_size, only in  NewSessionTicket
 
 val earlyDataIndicationBytes: edi:earlyDataIndication -> Tot bytes
 let earlyDataIndicationBytes = function
@@ -504,11 +459,6 @@ let parseQuicParameters (mt:ext_msg) (b:bytes) =
 
 (* PROTOCOL VERSIONS *)
 
-// The length exactly reflects the RFC format constraint <2..254>
-type protocol_versions =
-  | ServerPV of protocolVersion
-  | ClientPV of l:list protocolVersion {0 < List.Tot.length l /\ List.Tot.length l < 128}
-
 #set-options "--lax"
 // SI: dead code?
 private let protocol_versions_bytes_aux acc v = acc @| TLSConstants.versionBytes_draft v
@@ -631,39 +581,6 @@ let parseServerName mt b =
       Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
   | _ -> error "SNI extension cannot appear in this message type"
 
-// ExtensionType and Extension Table in https://tlswg.github.io/tls13-spec/#rfc.section.4.2.
-// M=Mandatory, AF=mandatory for Application Features in https://tlswg.github.io/tls13-spec/#rfc.section.8.2.
-noeq type extension' (p: (lbytes 2 -> GTot Type0)) =
-  | E_server_name of list serverName (* M, AF *) (* RFC 6066 *)
-  | E_supported_groups of list namedGroup (* M, AF *) (* RFC 7919 *)
-  | E_signature_algorithms of signatureSchemeList (* M, AF *) (* RFC 5246 *)
-  | E_signature_algorithms_cert of signatureSchemeList (* TLS 1.3#23 addition; TLS 1.2 should also support it *)
-  | E_key_share of CommonDH.keyShare (* M, AF *)
-  | E_pre_shared_key of psk (* M, AF *)
-  | E_session_ticket of bytes
-  | E_early_data of earlyDataIndication
-  | E_supported_versions of protocol_versions   (* M, AF *)
-  | E_cookie of b:bytes {0 < length b /\ length b < 65536}  (* M *)
-  | E_psk_key_exchange_modes of client_psk_kexes (* client-only; mandatory when proposing PSKs *)
-  | E_extended_ms
-  | E_ec_point_format of list point_format
-  | E_alpn of alpn
-  | E_quic_parameters of quicParameters
-  | E_unknown_extension of ((x: lbytes 2 {p x}) * bytes) (* header, payload *)
-(*
-We do not yet support the extensions below (authenticated but ignored)
-  | E_max_fragment_length
-  | E_status_request
-  | E_use_srtp
-  | E_heartbeat
-  | E_signed_certifcate_timestamp
-  | E_client_certificate_type
-  | E_server_certificate_type
-  | E_certificate_authorities
-  | E_oid_filters
-  | E_post_handshake_auth
-  | E_renegotiation_info of renegotiationInfo
-*)
 
 let bindersLen (#p: (lbytes 2 -> GTot Type0)) (el: list (extension' p)) : nat =
   match List.Tot.find E_pre_shared_key? el with
@@ -692,7 +609,6 @@ let rec string_of_extensions (#p: (lbytes 2 -> GTot Type0)) (l: list (extension'
   | e0 :: es -> string_of_extension e0 ^ " " ^ string_of_extensions es
   | [] -> ""
 
-(** shallow equality *)
 let sameExt (#p: (lbytes 2 -> GTot Type0)) (e1: extension' p) (e2: extension' p) =
   let q : extension' p * extension' p = e1, e2 in
   match q with
@@ -720,7 +636,6 @@ let sameExt (#p: (lbytes 2 -> GTot Type0)) (e1: extension' p) (e2: extension' p)
  *************************************************)
 
 //17-05-05 no good reason to pattern match twice when formatting? follow the same structure as for parsing?
-val extensionHeaderBytes: (#p: (lbytes 2 -> GTot Type0)) -> extension' p -> lbytes 2
 let extensionHeaderBytes #p ext =
   match ext with             // 4.2 ExtensionType enum value
   | E_server_name _               -> twobytes (0x00z, 0x00z)
@@ -739,24 +654,6 @@ let extensionHeaderBytes #p ext =
   | E_ec_point_format _           -> twobytes (0x00z, 0x0Bz) // 11
   | E_alpn _                      -> twobytes (0x00z, 0x10z) // 16
   | E_unknown_extension (h,b)     -> h
-
-// 17-05-19: We constrain unknown extensions to have headers different from known extensions.
-let unknown_extensions_unknown
-  (h: lbytes 2)
-: GTot Type0
-= forall (p: (lbytes 2 -> GTot Type0)) (e' : extension' p { h=extensionHeaderBytes e' } ) . E_unknown_extension? e'
-
-type extension = extension' unknown_extensions_unknown
-
-val encryptedExtension: extension -> bool
-let encryptedExtension ext =
-  match ext with
-  | E_server_name _
-  | E_supported_groups _
-  | E_alpn _
-  | E_quic_parameters _
-  | E_early_data _ -> true
-  | _ -> false
 
 private
 let equal_extensionHeaderBytes_sameExt
@@ -806,8 +703,6 @@ let rec extensionPayloadBytes = function
   | E_unknown_extension (_,b)       -> vlbytes 2 b
 #reset-options
 
-(** Serializes an extension *)
-val extensionBytes: ext:extension -> b:bytes { 2 <= length b /\ length b < 65536 }
 let rec extensionBytes ext =
   let head = extensionHeaderBytes ext in
   let payload = extensionPayloadBytes ext in
@@ -871,7 +766,6 @@ let extensionBytes_is_injective
     assume (ext1 == ext2 /\ s1 == s2)
 
 private let extensionListBytes_aux l s = l @| extensionBytes s
-val extensionListBytes: exts: list extension -> bytes
 let extensionListBytes exts =
   List.Tot.fold_left extensionListBytes_aux empty_bytes exts
 
@@ -1018,21 +912,11 @@ let extensionListBytes_is_injective_strong
 = extensionListBytes_same_bindersLen exts1 s1 exts2 s2;
   extensionListBytes_is_injective_same_length_out exts1 s1 exts2 s2
 
-type extensions = exts:list extension {repr_bytes (length (extensionListBytes exts)) <= 2}
-
 val noExtensions: exts:extensions {exts == []}
 let noExtensions =
   lemma_repr_bytes_values (length (extensionListBytes []));
   []
 
-(** Serializes a list of extensions.
-  If there is a PreSharedKey client extension, then add the length of the PSK binders to
-  the total length. Note that the `E_pre_shared_key` argument includes the length of
-  binders in this case.
-*)
-val extensionsBytes:
-  exts:extensions {length (extensionListBytes exts) + bindersLen exts < 65536} ->
-  b:bytes { 2 <= length b /\ length b < 2 + 65536 }
 let extensionsBytes exts =
   let b = extensionListBytes exts in
   let binder_len = bindersLen exts in
@@ -1114,7 +998,6 @@ inline_for_extraction
 let normallyNone ctor r =
   (ctor r, None)
 
-val parseExtension: ext_msg -> bytes -> result (extension * option binders)
 let parseExtension mt b =
   if length b < 4 then error "extension type: not enough bytes" else
   let head, payload = split b 2ul in
@@ -1214,7 +1097,6 @@ let rec parseExtensions_aux
       	     | Error z -> Error z)
        else Correct (exts,obinders)
 
-val parseExtensions: ext_msg -> b:bytes -> result (extensions * option binders)
 let parseExtensions mt b =
   if length b < 2 then error "extensions" else
   match vlparse 2 b with
@@ -1223,7 +1105,6 @@ let parseExtensions mt b =
 
 (* SI: API. Called by HandshakeMessages. *)
 // returns either Some,Some or None,
-val parseOptExtensions: ext_msg -> data:bytes -> result (option (list extension) * option binders)
 let parseOptExtensions mt data =
   if length data = 0
   then Correct (None,None)
@@ -1250,6 +1131,7 @@ private let rec list_valid_ng_is_list_ng (l:list valid_namedGroup) : list namedG
   | hd :: tl -> hd :: list_valid_ng_is_list_ng tl
 #reset-options
 
+
 (* SI: API. Called by Nego. *)
 (* RFC 4.2:
 When multiple extensions of different types are present, the
@@ -1267,24 +1149,7 @@ vector is permitted.
 
 *)
 #set-options "--lax"
-val prepareExtensions:
-  protocolVersion ->
-  protocolVersion ->
-  k:valid_cipher_suites{List.Tot.length k < 256} ->
-  option bytes -> // SNI
-  option alpn -> // ALPN
-  option quicParameters ->
-  bool -> // EMS
-  bool ->
-  bool -> // EDI (Nego checks that PSK is compatible)
-  option bytes -> // session_ticket
-  signatureSchemeList ->
-  list valid_namedGroup ->
-  option (cVerifyData * sVerifyData) ->
-  option CommonDH.keyShare ->
-  list (PSK.pskid * pskInfo) ->
-  l:list extension{List.Tot.length l < 256}
-(* SI: implement this using prep combinators, of type exts->data->exts, per ext group.
+(* SI: implement prepareExtensions prep combinators, of type exts->data->exts, per ext group.
    For instance, PSK, HS, etc extensions should all be done in one function each.
    This seems to make this prepareExtensions more modular. *)
 
@@ -1528,15 +1393,6 @@ let rec serverToNegotiatedExtensions_aux cfg cExtL cs ri resuming rpv sExtL =
     | rpv ->
       serverToNegotiatedExtensions_aux cfg cExtL cs ri resuming rpv tl
 
-val negotiateClientExtensions:
-  protocolVersion ->
-  config ->
-  option (list extension) ->
-  option (list extension) ->
-  cipherSuite ->
-  option (cVerifyData * sVerifyData) ->
-  bool ->
-  result protocolVersion
 let negotiateClientExtensions pv cfg cExtL sExtL cs ri resuming =
   match pv, cExtL, sExtL with
   | SSL_3p0, _, None -> Correct (SSL_3p0)
@@ -1614,16 +1470,6 @@ let clientToServerExtension pv cfg cs ri pski ks resuming cext =
   | _ -> None
 
 (* SI: API. Called by Handshake. *)
-val negotiateServerExtensions: protocolVersion
-   -> option (list extension)
-   -> valid_cipher_suites
-   -> config
-   -> cipherSuite
-   -> option (cVerifyData * sVerifyData)
-   -> option nat
-   -> option CommonDH.keyShare
-   -> bool
-   -> result (option (list extension))
 let rec choose_clientToServerExtension pv cfg cs ri pski ks resuming cExtL =
   match cExtL with
   | [] -> []
@@ -1670,6 +1516,5 @@ let default_signatureScheme_fromSig pv sigAlg =
   | _ -> unexpected "[default_signatureScheme_fromSig] invoked on an invalid signature algorithm"
 
 (* SI: API. Called by HandshakeMessages. *)
-val default_signatureScheme: protocolVersion -> cipherSuite -> ML signatureSchemeList
 let default_signatureScheme pv cs =
   default_signatureScheme_fromSig pv (sigAlg_of_ciphersuite cs)
