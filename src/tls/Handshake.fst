@@ -396,7 +396,7 @@ let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming 
           mode.Nego.n_server_random
           mode.Nego.n_cipher_suite
           digest
-          (Some?.v mode.Nego.n_server_share)
+          mode.Nego.n_server_share
           mode.Nego.n_pski in
         register s hs_keys; // register new epoch
         if Nego.zeroRTToffer mode.Nego.n_offer then
@@ -985,34 +985,40 @@ let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinishe
         perror __SOURCE_FILE__ __LINE__ "Client CertificateVerify validation not implemented")
    | None ->
        let (| i, cfin_key |) = KeySchedule.ks_server_13_client_finished hs.ks in
+       let mode = Nego.getMode hs.nego in
        if HMAC.UFCMA.verify cfin_key digestBeforeClientFinished f
-       then (
-          let (| li, rmsid, rms |) = KeySchedule.ks_server_13_cf hs.ks digestClientFinished in
-          let cfg = Nego.local_config hs.nego in
-          let mode = Nego.getMode hs.nego in
-          let cs = mode.Nego.n_cipher_suite in
-          let ticket = Ticket.Ticket13 cs li rmsid rms in
-          let tb = Ticket.create_ticket ticket in
-          trace ("Sending ticket: "^(print_bytes tb));
-          let ticket_ext =
-            match cfg.max_early_data, cfg.quic_parameters with
-            // QUIC: always enable 0-RTT data with max limit
-            | _, Some _ -> [Extensions.E_early_data (Some 0xfffffffful)]
-            | Some max_ed, None -> [Extensions.E_early_data (Some (FStar.UInt32.uint_to_t max_ed))]
-            | _ -> [] in
-          let tnonce, _ = split_ tb 12 in
-          HandshakeLog.send hs.log (NewSessionTicket13 ({
-            ticket13_lifetime = FStar.UInt32.(uint_to_t 3600);
-            ticket13_age_add = FStar.UInt32.(uint_to_t 0);
-            ticket13_nonce = tnonce;
-            ticket13_ticket = tb;
-            ticket13_extensions = ticket_ext;
-          }));
+       then
+        begin
+         (* NewSessionTicket is sent if client advertised a PSK_KEX mode *)
+         (match Nego.find_psk_key_exchange_modes mode.Nego.n_offer with
+         | [] -> trace ("Not sending a ticket: no PSK key exchange mode advertised")
+         | psk_kex ->
+           let (| li, rmsid, rms |) = KeySchedule.ks_server_13_cf hs.ks digestClientFinished in
+           let cfg = Nego.local_config hs.nego in
+           let cs = mode.Nego.n_cipher_suite in
+           let ticket = Ticket.Ticket13 cs li rmsid rms in
+           let tb = Ticket.create_ticket ticket in
+
+           trace ("Sending ticket: "^(print_bytes tb));
+           let ticket_ext =
+             match cfg.max_early_data, cfg.quic_parameters with
+             // QUIC: always enable 0-RTT data with max limit
+             | _, Some _ -> [Extensions.E_early_data (Some 0xfffffffful)]
+             | Some max_ed, None -> [Extensions.E_early_data (Some (FStar.UInt32.uint_to_t max_ed))]
+             | _ -> [] in
+           let tnonce, _ = split_ tb 12 in
+           HandshakeLog.send hs.log (NewSessionTicket13 ({
+             ticket13_lifetime = FStar.UInt32.(uint_to_t 3600);
+             ticket13_age_add = FStar.UInt32.(uint_to_t 0);
+             ticket13_nonce = tnonce;
+             ticket13_ticket = tb;
+             ticket13_extensions = ticket_ext;
+           })));
 
           hs.state := S_Complete;
           Epochs.incr_reader hs.epochs; // finally start reading with AKTs
           InAck true true  // Server 1.3 ATK
-          )
+        end
        else InError (AD_decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestClientFinished)
 
 (* TODO: resumption *)

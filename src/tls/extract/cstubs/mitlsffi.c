@@ -93,7 +93,7 @@ void TracePrintf(const char *fmt, ...)
 {
     va_list args;
     va_start (args, fmt);
-    
+
     char buffer[160];
     vsprintf_s(buffer, sizeof(buffer), fmt, args);
 
@@ -102,8 +102,8 @@ void TracePrintf(const char *fmt, ...)
     if (c) {
         *c = '\0';
     }
-    
-    (*trace_callback)(buffer);    
+
+    (*trace_callback)(buffer);
 }
 
 //
@@ -112,7 +112,7 @@ void TracePrintf(const char *fmt, ...)
 void MITLS_CALLCONV FFI_mitls_set_trace_callback(pfn_mitls_trace_callback cb)
 {
     trace_callback = cb;
-#if LOG_TO_CHOICE    
+#if LOG_TO_CHOICE
     g_LogPrint = TracePrintf;
 #endif
 }
@@ -217,10 +217,11 @@ int MITLS_CALLCONV FFI_mitls_configure(mitls_state **state, const char *tls_vers
 int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *alg, const char *tk, size_t klen)
 {
     // bugbug: this uses the global region for heap allocations
-
+    LOCK_MUTEX(&lock);
     FStar_Bytes_bytes key;
     bool b = MakeFStar_Bytes_bytes(&key, tk, klen);
     if(b) b = FFI_ffiSetTicketKey(alg, key);
+    UNLOCK_MUTEX(&lock);
     return (b) ? 1 : 0;
 }
 
@@ -900,7 +901,9 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
     if(cfg->ticket_enc_alg && cfg->ticket_key) {
         FStar_Bytes_bytes key;
         bool b = MakeFStar_Bytes_bytes(&key, cfg->ticket_key, cfg->ticket_key_len);
+        LOCK_MUTEX(&lock);
         if(b) b = FFI_ffiSetTicketKey(cfg->ticket_enc_alg, key);
+        UNLOCK_MUTEX(&lock);
         if (!b) {
             KRML_HOST_FREE((char*)qp.data);
             KRML_HOST_FREE(st);
@@ -970,7 +973,10 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
           ticket.tag = FStar_Pervasives_Native_None;
       }
 
+      // Protect the write to the PSK table (WIP)
+      LOCK_MUTEX(&lock);
       st->cxn = QUIC_ffiConnect((FStar_Dyn_dyn)st, quic_send, quic_recv, st->cfg, ticket);
+      UNLOCK_MUTEX(&lock);
     }
 #endif
 

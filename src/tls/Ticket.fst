@@ -17,6 +17,16 @@ module MM = FStar.Monotonic.DependentMap
 
 #set-options "--lax"
 
+val discard: bool -> ST unit
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+let discard _ = ()
+let print s = discard (IO.debug_print_string ("TCK| "^s^"\n"))
+unfold val trace: s:string -> ST unit
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+unfold let trace = if Flags.debug_NGO then print else (fun _ -> ())
+
 private let region:rgn = new_region tls_tables_region
 
 let ticketid (a:aeadAlg) : St (AE.id) =
@@ -93,6 +103,7 @@ let dummy_msId pv cs ems =
   StandardMS PMS.DummyPMS (CC.random 64) (kefAlg pv cs ems)
 
 let parse (b:bytes) =
+  trace ("Parsing ticket "^(hex_of_bytes b));
   if length b < 8 then None
   else
     let (pvb, r) = split b 2ul in
@@ -117,11 +128,13 @@ let parse (b:bytes) =
 let check_ticket (b:bytes{length b <= 65551}) =
   let Key tid _ rd = !ticket_enc in
   let salt = AE.salt_of_state rd in
+  trace ("Decrypting ticket "^(hex_of_bytes b));
   if length b < AE.iv_length tid + AE.taglen tid + 8 then None else
   let (nb, b) = split_ b (AE.iv_length tid) in
+  let plain_len = length b - AE.taglen tid in
   let iv = AE.coerce_iv tid (xor_ #(AE.iv_length tid) nb salt) in
-  match AE.decrypt #tid #(length b) rd iv empty_bytes b with
-  | None -> None
+  match AE.decrypt #tid #plain_len rd iv empty_bytes b with
+  | None -> trace ("Ticket decryption failed."); None
   | Some plain -> parse plain
 
 let serialize t =
@@ -133,7 +146,7 @@ let serialize t =
 let create_ticket t =
   let Key tid wr _ = !ticket_enc in
   let plain = serialize t in
-  let nb = CC.random 12 in
+  let nb = CC.random (AE.iv_length tid) in
   let salt = AE.salt_of_state wr in
   let iv = AE.coerce_iv tid (xor 12ul nb salt) in
   let ae = AE.encrypt #tid #(length plain) wr iv empty_bytes plain in

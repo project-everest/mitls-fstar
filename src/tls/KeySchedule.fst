@@ -794,14 +794,17 @@ let ks_client_12_resume ks sr pv cs =
 //   3. they are called at different locations
 
 val ks_client_13_sh: ks:ks -> sr:random -> cs:cipherSuite -> h:bytes ->
-  gy:(g:CommonDH.group & CommonDH.share g) -> accept_psk:option nat ->
+  gy:option (g:CommonDH.group & CommonDH.share g) -> accept_psk:option nat ->
   ST (recordInstance)
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_13_wait_SH? (C?.s kss) /\
     // Ensure that the PSK accepted is one offered
     (let C_13_wait_SH _ ei gc = C?.s kss in
-     (List.Tot.existsb (fun gx -> dfst gy = dfst gx) gc) /\
+     (match gy with
+     | Some (| g, _ |) -> List.Tot.existsb (fun gx -> g = dfst gx) gc
+     | None -> True)
+     /\
      (match ei, accept_psk with
       | [], None -> True
       | _::_ , Some n -> n < List.Tot.length ei
@@ -811,24 +814,18 @@ val ks_client_13_sh: ks:ks -> sr:random -> cs:cipherSuite -> h:bytes ->
     modifies (Set.singleton rid) h0 h1
     /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
 
-private let group_matches 
+private let group_matches
               (g:CommonDH.group)
               (gx:(x:CommonDH.group & CommonDH.keyshare g)) =
     let (| g', _ |) = gx in
     g=g'
-    
+
 // ServerHello log breakpoint (client)
-let ks_client_13_sh ks sr cs log (| g, gy|) accept_psk =
+let ks_client_13_sh ks sr cs log gy accept_psk =
   dbg ("ks_client_13_sh hashed_log = "^(print_bytes log));
   let KS #region st = ks in
   let C (C_13_wait_SH cr esl gc) = !st in
-  let Some gx = TLSConstants.find_aux g group_matches gc in
-  let (| g, gx |) = gx in
-  let b = print_share gy in
-  let gxy = CommonDH.dh_initiator #g gx gy in
-  dbg ("DH shared secret: "^(print_bytes gxy));
   let CipherSuite13 ae h = cs in
-  let gx = CommonDH.pubshare gx in
 
   // Early secret: must derive zero here as hash is not known before
   let esId, es =
@@ -847,8 +844,20 @@ let ks_client_13_sh ks sr cs log (| g, gy|) accept_psk =
   let salt = HKDF.derive_secret h es "derived" (H.emptyHash h) in
   dbg ("handshake salt:                  "^print_bytes salt);
 
-  let hsId = HSID_DHE saltId g gx gy in
-  let hs : hs hsId = HKDF.hkdf_extract h salt gxy in
+  let hsId, hs =
+    match gy with
+    | Some (| g, gy |) -> (* (PSK-)DHE *)
+      let Some (| _, gx |) = TLSConstants.find_aux g group_matches gc in
+      let gxy = CommonDH.dh_initiator #g gx gy in
+      dbg ("DH shared secret: "^(print_bytes gxy));
+      let hsId = HSID_DHE saltId g (CommonDH.pubshare gx) gy in
+      let hs : hs hsId = HKDF.hkdf_extract h salt gxy in
+      hsId, hs
+    | None -> (* Pure PSK *)
+      let hsId = HSID_PSK saltId in
+      let hs : hs hsId = HKDF.hkdf_extract h salt (H.zeroHash h) in
+      hsId, hs
+    in
   dbg ("handshake secret:                "^print_bytes hs);
 
   let secretId = HandshakeSecretID hsId in

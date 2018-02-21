@@ -1360,23 +1360,27 @@ let prepareExtensions minpv pv cs host alps qp ems sren edi ticket sigAlgs named
       else res
     in
     let res =
-      if pv = TLS_1p3 && List.Tot.filter allow_resumption psks <> [] then
-        let (pskids, pskinfos) : list PSK.pskid * list pskInfo = List.Tot.split psks in
-        let psk_kex = [] in
-        let psk_kex =
-          if List.Tot.existsb allow_psk_resumption pskinfos
-          then PSK_KE :: psk_kex else psk_kex in
-        let psk_kex =
-          if List.Tot.existsb allow_dhe_resumption pskinfos
-          then PSK_DHE_KE :: psk_kex else psk_kex in
-        let res = E_psk_key_exchange_modes psk_kex :: res in
-        let binder_len = List.Tot.fold_left compute_binder_len 0 pskinfos in
-        let pskidentities = List.Tot.map add_default_obfuscated_age pskids in
-        let res =
-          if edi then (E_early_data None) :: res
-          else res in
-        E_pre_shared_key (ClientPSK pskidentities binder_len) :: res // MUST BE LAST
-      else res
+      match pv with
+      | TLS_1p3 ->
+        if List.Tot.filter allow_resumption psks <> [] then
+          let (pskids, pskinfos) : list PSK.pskid * list pskInfo = List.Tot.split psks in
+          let psk_kex = [] in
+          let psk_kex =
+            if List.Tot.existsb allow_psk_resumption pskinfos
+            then PSK_KE :: psk_kex else psk_kex in
+          let psk_kex =
+            if List.Tot.existsb allow_dhe_resumption pskinfos
+            then PSK_DHE_KE :: psk_kex else psk_kex in
+          let res = E_psk_key_exchange_modes psk_kex :: res in
+          let binder_len = List.Tot.fold_left compute_binder_len 0 pskinfos in
+          let pskidentities = List.Tot.map add_default_obfuscated_age pskids in
+          let res =
+            if edi then (E_early_data None) :: res
+            else res in
+          E_pre_shared_key (ClientPSK pskidentities binder_len) :: res // MUST BE LAST
+        else
+          E_psk_key_exchange_modes [PSK_KE; PSK_DHE_KE] :: res
+      | _ -> res
     in
     let res = List.Tot.rev res in
     assume (List.Tot.length res < 256);  // JK: Specs in type config in TLSInfo unsufficient
