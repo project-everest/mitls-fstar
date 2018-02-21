@@ -1538,7 +1538,7 @@ let configurationExtensionsBytes ce =
 (** Parsing of the configuration extension list of values *)
 val parseConfigurationExtensions: pinverse_t configurationExtensionsBytes
 let parseConfigurationExtensions b =
-  let rec (aux: b:bytes -> list configurationExtension -> Tot (result (list configurationExtension)) (decreases (length b))) =
+  let rec aux: b:bytes -> list configurationExtension -> Tot (result (list configurationExtension)) (decreases (length b)) =
     fun b exts ->
     if length b > 0 then
       if length b >= 4 then

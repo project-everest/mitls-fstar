@@ -96,7 +96,7 @@ let bindersBytes (bs:binders): b:bytes{length b >= 35 /\ length b <= 65537} =
   Parse.vlbytes2 b
 
 let parseBinderList (b:bytes{2 <= length b}) : result binders =
-  let rec (aux: b:bytes -> list binder -> Tot (result (list binder)) (decreases (length b))) =
+  let rec aux: b:bytes -> list binder -> Tot (result (list binder)) (decreases (length b)) =
    fun b binders ->
     if length b > 0 then
       if length b >= 5 then
@@ -149,7 +149,7 @@ let parsePskIdentity b =
 
 val parsePskIdentities: b:bytes{length b >= 2} -> result (list pskIdentity)
 let parsePskIdentities b =
-  let rec (aux: b:bytes -> list pskIdentity -> Tot (result (list pskIdentity)) (decreases (length b))) = fun b psks ->
+  let rec aux: b:bytes -> list pskIdentity -> Tot (result (list pskIdentity)) (decreases (length b)) = fun b psks ->
     if length b > 0 then
       if length b >= 2 then
         match vlsplit 2 b with
