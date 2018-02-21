@@ -837,7 +837,10 @@ void quic_create_callout(PVOID Parameter)
           ticket.tag = FStar_Pervasives_Native_None;
       }
 
+      // Protect the write to the PSK table (WIP)
+      LOCK_MUTEX(&lock);
       s->st->cxn = QUIC_ffiConnect((FStar_Dyn_dyn)s->st, quic_send, quic_recv, s->st->cfg, ticket);
+      UNLOCK_MUTEX(&lock);
     }
 }
 #endif
