@@ -32,6 +32,9 @@
 // So it uses KRML_HOST_MALLOC and KRML_HOST_FREE in order to
 // support the same pluggable heap manager as the rest of miTLS.
 
+extern int CoreCrypto_Initialize(void);
+extern void CoreCrypto_Terminate(void);
+
 #if LOG_TO_CHOICE
 typedef void (*p_log)(const char *fmt, ...);
 p_log g_LogPrint;
@@ -126,7 +129,15 @@ void MITLS_CALLCONV FFI_mitls_set_trace_callback(pfn_mitls_trace_callback cb)
 //
 int MITLS_CALLCONV FFI_mitls_init(void)
 {
-#if IS_WINDOWS
+  if (HeapRegionInitialize() == 0) {
+      return 0;
+  }
+  if (CoreCrypto_Initialize() == 0) {
+      HeapRegionCleanup();
+      return 0;
+  }
+
+  #if IS_WINDOWS
   #ifdef _KERNEL_MODE
     ExInitializeFastMutex(&lock);
     #if LOG_TO_CHOICE
@@ -148,6 +159,8 @@ int MITLS_CALLCONV FFI_mitls_init(void)
   #endif
 #else
   if (pthread_mutex_init(&lock, NULL) != 0) {
+    CoreCrypto_Terminate();
+    HeapRegionCleanup();
     return 0;
   }
   #if LOG_TO_CHOICE
@@ -161,15 +174,13 @@ int MITLS_CALLCONV FFI_mitls_init(void)
   #endif
 #endif
 
-  if (HeapRegionInitialize() == 0) {
-      return 0;
-  }
   kremlinit_globals();
   return 1; // success
 }
 
 void MITLS_CALLCONV FFI_mitls_cleanup(void)
 {
+    CoreCrypto_Terminate();
 #if IS_WINDOWS
     #ifndef _KERNEL_MODE
     DeleteCriticalSection(&lock);
@@ -826,7 +837,10 @@ void quic_create_callout(PVOID Parameter)
           ticket.tag = FStar_Pervasives_Native_None;
       }
 
+      // Protect the write to the PSK table (WIP)
+      LOCK_MUTEX(&lock);
       s->st->cxn = QUIC_ffiConnect((FStar_Dyn_dyn)s->st, quic_send, quic_recv, s->st->cfg, ticket);
+      UNLOCK_MUTEX(&lock);
     }
 }
 #endif
