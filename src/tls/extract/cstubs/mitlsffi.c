@@ -98,8 +98,11 @@ void TracePrintf(const char *fmt, ...)
     va_start (args, fmt);
 
     char buffer[160];
+#if __APPLE__
+    vsnprintf(buffer, sizeof(buffer), fmt, args);
+#else
     vsprintf_s(buffer, sizeof(buffer), fmt, args);
-
+#endif
     // For WPP tracing, the trailing '\n' is undesirable, so remove.
     char *c = strrchr(buffer, '\n');
     if (c) {
