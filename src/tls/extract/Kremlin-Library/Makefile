@@ -11,7 +11,7 @@ ifeq ($(OS),Windows_NT)
   SO = dll
   CC ?= x86_64-w64-mingw32-gcc
   CFLAGS := -pthread $(CFLAGS) -include log_to_choice.h
-  LDOPTS := -lntdll $(LDOPTS)
+  LDOPTS := -lntdll -lbcrypt $(LDOPTS)
   export PATH
 else ifeq ($(UNAME),Darwin)
   VARIANT = -Darwin
