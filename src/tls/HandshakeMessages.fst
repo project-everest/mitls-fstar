@@ -26,9 +26,9 @@ assume val split: b:bytes -> n:nat{length b >= n} -> Tot (x:(bytes*bytes){Seq.eq
 assume val split2: b:bytes -> n1:nat -> n2:nat{length b >= n1 + n2} -> Tot (x:(lbytes n1 * lbytes n2 * bytes){forall x1. forall x2. forall x3. x = (x1,x2,x3) ==> Seq.equal b (x1 @| x2 @| x3)})
 *)
 
-let split2 abc n1 n2 = 
+let split2 abc n1 n2 =
   let a, bc = split abc (FStar.UInt32.uint_to_t n1) in
-  let b, c = split bc (FStar.UInt32.uint_to_t n2) in  
+  let b, c = split bc (FStar.UInt32.uint_to_t n2) in
   a, b, c
 
 (*** Following RFC5246 A.4 *)
@@ -1078,7 +1078,7 @@ assume val utf8_is_injective: s:string -> s':string ->
 val distinguishedNameListBytes_is_injective: n1:list dn -> n2:list dn ->
   Lemma (requires True)
   (ensures (Bytes.equal (distinguishedNameListBytes n1) (distinguishedNameListBytes n2) ==> n1 = n2))
-let rec distinguishedNameListBytes_is_injective n1 n2 = admit () 
+let rec distinguishedNameListBytes_is_injective n1 n2 = admit ()
   //this is very stale now
   //TODO bytes NS 09/27
   // match n1, n2 with
@@ -1570,9 +1570,7 @@ let parseSessionTicket13 b =
     match vlsplit 1 rest with
     | Error _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: invalid nonce (check draft version 21 or greater)")
     | Correct(nonce, rest) ->
-      if length nonce = 0 then
-        Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: empty nonce")
-      else begin
+      begin
         match vlsplit 2 rest with
         | Correct (ticket, rest) ->
           begin
@@ -1982,7 +1980,7 @@ let rec handshakeMessagesBytes_is_injective pv l1 l2 =
       if payload1 = payload2 then (
   cut (Bytes.equal (Bytes.append (handshakeMessageBytes pv hd) (handshakeMessagesBytes pv tl))
                    (Bytes.append (handshakeMessageBytes pv hd') (handshakeMessagesBytes pv tl')));
-  cut (Bytes.equal  ((handshakeMessageBytes pv hd)  @| (handshakeMessagesBytes pv tl)) 
+  cut (Bytes.equal  ((handshakeMessageBytes pv hd)  @| (handshakeMessagesBytes pv tl))
                     ((handshakeMessageBytes pv hd') @| (handshakeMessagesBytes pv tl')));
   if length (handshakeMessageBytes pv hd) >= length (handshakeMessageBytes pv hd')
   then (

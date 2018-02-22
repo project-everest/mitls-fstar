@@ -198,6 +198,11 @@ let find_pske o =
   | Some (Extensions.E_pre_shared_key (Extensions.ClientPSK psks _)) -> Some psks
   | _ -> None
 
+let find_psk_key_exchange_modes o =
+  match find_client_extension Extensions.E_psk_key_exchange_modes? o with
+  | Some (Extensions.E_psk_key_exchange_modes l) -> l
+  | _ -> []
+
 let find_sessionTicket o =
   match find_client_extension Extensions.E_session_ticket? o with
   | None -> None
@@ -548,7 +553,7 @@ let sendticket_12 mode =
 
 val resume_12: mode -> bool
 let resume_12 mode =
-  is_pv_13 mode.n_protocol_version &&
+  not (is_pv_13 mode.n_protocol_version) &&
   Some? (find_sessionTicket mode.n_offer) &&
   length mode.n_offer.ch_sessionID > 0 &&
   mode.n_sessionID = mode.n_offer.ch_sessionID
@@ -960,8 +965,13 @@ let client_ServerHello #region ns sh =
                in
                HST.op_Colon_Equals ns.state (C_Mode mode);
                Correct mode
-            | _ -> // TODO: pure PSK mode
-              Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
+            | TLS_1p3, None ->
+              // Pure PSK
+              let mode = Mode offer None spv sr ssid cs pski sext None None None None in
+              HST.op_Colon_Equals ns.state (C_Mode mode);
+              Correct mode
+            | _ ->
+              Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Impossible: TLS 1.3 PSK")
             end
           end
         | CipherSuite kex sa ae ->
@@ -1192,11 +1202,7 @@ let compute_cs13 cfg o psks shares server_cert =
         let s = TLSConstants.find_aux gl' share_in_named_group shares in
         s, (if server_cert then csg else None) // Can't do HRR without a certificate
     in
-  let psk_kex =
-    match find_client_extension Extensions.E_psk_key_exchange_modes? o with
-    | Some (Extensions.E_psk_key_exchange_modes l) -> l
-    | _ -> []
-    in
+  let psk_kex = find_psk_key_exchange_modes o in
   Correct (compute_cs13_aux 0 o psks g_gx ncs psk_kex server_cert, g_hrr)
 
 // Registration and filtering of PSK identities

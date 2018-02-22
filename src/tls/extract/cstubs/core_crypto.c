@@ -6,11 +6,10 @@
   #ifdef _KERNEL_MODE
     #include <nt.h>
     #include <ntrtl.h>
-    #include <bcrypt.h>
   #else
     #include <windows.h>
-    #include <wincrypt.h>
   #endif
+  #include <bcrypt.h>
 #else
 #define IS_WINDOWS 0
 #include <unistd.h>
@@ -48,6 +47,7 @@
 #include <openssl/pem.h>
 #include <openssl/rand.h>
 #include <openssl/rsa.h>
+
 
 FStar_Bytes_bytes CoreCrypto_dh_agreement(CoreCrypto_dh_key x0,
                                           FStar_Bytes_bytes x1) {
@@ -527,46 +527,64 @@ bool CoreCrypto_ec_is_on_curve(CoreCrypto_ec_params x0,
 #endif // NO_OPENSSL
 
 #if IS_WINDOWS
-FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
+
+#ifndef _KERNEL_MODE
+#define NT_SUCCESS(Status)          (((NTSTATUS)(Status)) >= 0)
+#endif
+
+static BCRYPT_ALG_HANDLE g_hAlgRandom;
+
+// Perform per-process initialization, called from FFI_mitls_init.  Return 0 for failure.
+int CoreCrypto_Initialize(void)
+{
+
+  NTSTATUS st = BCryptOpenAlgorithmProvider(&g_hAlgRandom, BCRYPT_RNG_ALGORITHM, NULL, 
 #ifdef _KERNEL_MODE
-  BCRYPT_ALG_HANDLE hAlg;
+                    BCRYPT_PROV_DISPATCH
+#else
+                    0
+#endif
+                    );
+  if (!NT_SUCCESS(st)) {
+    KRML_HOST_EPRINTF("BCryptOpenAlgorithmProvider failed: 0x%x\n", (unsigned int)st);
+    return 0;
+  }    
+  return 1;
+}
+
+// Perform per-process termination, called from FFI_mitls_cleanup.
+void CoreCrypto_Terminate(void)
+{
+    BCryptCloseAlgorithmProvider(g_hAlgRandom, 0);
+}
+
+FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
   NTSTATUS st;
 
   PUCHAR data = KRML_HOST_MALLOC(x0);
 
-  // This is called at APC_LEVEL, so the USE_SYSTEM_PREFERRED_RNG option isn't supported.
-  st = BCryptOpenAlgorithmProvider(&hAlg, BCRYPT_RNG_ALGORITHM, NULL, BCRYPT_PROV_DISPATCH);
+  st = BCryptGenRandom(g_hAlgRandom, data, x0, 0);
   if (!NT_SUCCESS(st)) {
-    KRML_HOST_EPRINTF("BCryptOpenAlgorithmProvider failed: 0x%x\n", st);
+    KRML_HOST_EPRINTF("Cannot read random bytes: 0x%x\n", (unsigned int)st);
     KRML_HOST_EXIT(255);
   }
-  st = BCryptGenRandom(hAlg, data, x0, 0);
-  BCryptCloseAlgorithmProvider(hAlg, 0);
-  if (!NT_SUCCESS(st)) {
-    KRML_HOST_EPRINTF("Cannot read random bytes: 0x%x\n", st);
-    KRML_HOST_EXIT(255);
-  }
-#else
-  BYTE *data = KRML_HOST_MALLOC(x0);
-
-  HCRYPTPROV ctxt;
-  if (!(CryptAcquireContext(&ctxt, NULL, NULL, PROV_RSA_FULL,
-                            CRYPT_VERIFYCONTEXT))) {
-    DWORD error = GetLastError();
-    KRML_HOST_EPRINTF("Cannot acquire crypto context: 0x%lx\n", error);
-    KRML_HOST_EXIT(255);
-  }
-  if (!(CryptGenRandom(ctxt, x0, data))) {
-    KRML_HOST_EPRINTF("Cannot read random bytes\n");
-    KRML_HOST_EXIT(255);
-  }
-  CryptReleaseContext(ctxt, 0);
-#endif
 
   FStar_Bytes_bytes ret = {.length = x0, .data = (char *)data};
   return ret;
 }
 #else
+
+// Perform per-process initialization, called from FFI_mitls_init.  Return 0 for failure.
+int CoreCrypto_Initialize(void)
+{
+    return 1;
+}
+
+// Perform per-process termination, called from FFI_mitls_cleanup.
+void CoreCrypto_Terminate(void)
+{
+}
+
 FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
   char *data = KRML_HOST_MALLOC(x0);
 
@@ -589,3 +607,18 @@ FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
   return ret;
 }
 #endif
+
+FStar_Bytes_bytes CoreCrypto_zero(Prims_nat x0)
+{
+  char *data = KRML_HOST_MALLOC(x0);
+  memset(data, 0, x0);
+  FStar_Bytes_bytes ret = {.length = x0, .data = data};
+  return ret;
+}
+
+// We need this to expose CoreCrypto_Initialize from F* where
+// identifiers must start with lowercase
+int CoreCrypto_init(void)
+{
+  return CoreCrypto_Initialize();
+}

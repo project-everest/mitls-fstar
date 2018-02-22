@@ -148,7 +148,7 @@ test-internal-test: output-internal-test
 	$(MAKE) -C $(INTERNAL_TEST_DIR) test
 
 clean-internal-test:
-	-@find $(INTERNAL_TEST_DIR) -type f -and -not -name Makefile -and -not name .gitignore \
+	-@find $(INTERNAL_TEST_DIR) -type f -and -not -name Makefile -and -not -name .gitignore \
         | xargs rm
 
 ################################################################################

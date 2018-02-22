@@ -136,15 +136,10 @@ let accept_connected ctx send recv config_1 : ML (Connection.connection * int) =
       | Complete
       | Update true -> // 0.5-RTT: ready to write
         err := Some 0;
-        false
-
+        true
       | ReadError description txt ->
         err := Some (errno description txt);
-        false
-
-      | Update false ->
         true
-
       | _ ->
         false);
   let firstResult =
