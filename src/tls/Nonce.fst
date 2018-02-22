@@ -142,4 +142,4 @@ let new_region parent =
   
 
 // a constant value, with negligible probability of being sampled, excluded by idealization
-let noCsr : bytes = CoreCrypto.random 64
+// let noCsr : bytes = CoreCrypto.zero 64

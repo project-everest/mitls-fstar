@@ -253,7 +253,7 @@ let clientHello offer = // pure; shared by Client and Server
 
 (* -------------------- Handshake Client ------------------------ *)
 
-type btag (binderKey: i:binderId & bk:KeySchedule.binderKey i) =
+type btag (binderKey:(i:binderId & bk:KeySchedule.binderKey i)) =
   HMAC.UFCMA.tag (HMAC.UFCMA.HMAC_Binder (let (|i,_|) = binderKey in i))
 
 val map_ST2: 'c -> ('c -> 'a -> KeySchedule.ST0 'b) -> list 'a -> KeySchedule.ST0 (list 'b)
@@ -269,7 +269,7 @@ let compute_binder hs (bkey:(i:binderId & bk:KeySchedule.binderKey i)): ST (btag
   let digest_CH0 = HandshakeLog.hash_tag #(binderId_hash bid) hs.log in
   HMAC.UFCMA.mac bk digest_CH0
 
-let verify_binder hs (bkey: i:binderId & bk:KeySchedule.binderKey i) (tag:btag bkey) tlen: ST bool
+let verify_binder hs (bkey:(i:binderId & bk:KeySchedule.binderKey i)) (tag:btag bkey) tlen: ST bool
     (requires fun h0 -> True)
     (ensures fun h0 _ h1 -> modifies_none h0 h1)
   =

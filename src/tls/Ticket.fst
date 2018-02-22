@@ -44,11 +44,23 @@ let ticketid (a:aeadAlg) : St (AE.id) =
 type ticket_key =
   | Key: i:AE.id -> wr:AE.writer i -> rd:AE.reader i -> ticket_key
 
+private let dummy_id (a:aeadAlg) : St AE.id =
+  assume false;
+  let h = Hashing.Spec.SHA256 in
+  let li = LogInfo_CH0 ({
+    li_ch0_cr = CC.zero 32;
+    li_ch0_ed_psk = empty_bytes;
+    li_ch0_ed_ae = a;
+    li_ch0_ed_hash = h;
+  }) in
+  let log : hashed_log li = empty_bytes in
+  ID13 (KeyID #li (ExpandedSecret (EarlySecretID (NoPSK h)) ApplicationTrafficSecret log))
+
 private let ticket_enc : reference ticket_key
   =
-  let id0 = ticketid CC.CHACHA20_POLY1305 in
-  let salt : AE.salt id0 = CoreCrypto.random (AE.iv_length id0) in
-  let key : AE.key id0 = CoreCrypto.random (AE.key_length id0) in
+  let id0 = dummy_id CC.CHACHA20_POLY1305 in
+  let salt : AE.salt id0 = CC.zero (AE.iv_length id0) in
+  let key : AE.key id0 = CC.zero (AE.key_length id0) in
   let wr = AE.coerce id0 region key salt in
   let rd = AE.genReader region #id0 wr in
   ralloc region (Key id0 wr rd)

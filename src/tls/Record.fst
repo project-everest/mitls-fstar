@@ -42,7 +42,7 @@ type header = b:lbytes 5 // for all TLS versions
 let fake = ctBytes Application_data @| versionBytes TLS_1p2
 
 // this is the outer packet; the *caller* should switch from 1.3 to 1.0 whenever data is encrypted.
-let makePacket ct plain ver (data: b:bytes { repr_bytes (length b) <= 2}) =
+let makePacket ct plain ver (data:bytes{ repr_bytes (length data) <= 2}) =
   let header =
     (if is_pv_13 ver then
       (if plain then ctBytes ct @| versionBytes TLS_1p2
@@ -54,7 +54,7 @@ let makePacket ct plain ver (data: b:bytes { repr_bytes (length b) <= 2}) =
   trace ("record headers: "^print_bytes header);
   header @| data
 
-let sendPacket tcp ct plain ver (data: b:bytes { repr_bytes (length b) <= 2}) =
+let sendPacket tcp ct plain ver (data:bytes{ repr_bytes (length data) <= 2}) =
   // some margin for progress to avoid intermediate copies
   let packet = makePacket ct plain ver data in
   let res = Transport.send tcp (BufferBytes.from_bytes packet) (len packet) in
