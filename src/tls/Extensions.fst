@@ -14,6 +14,12 @@ open FStar.Error
 open TLSError
 open TLSConstants
 
+//NS: hoisting a convenient function to avoid a closure conversion
+let rec existsb2 (f: 'a -> 'b -> bool) (x:'a) (y:list 'b) : bool =
+  match y with
+  | [] -> false
+  | hd::tl -> f x hd || existsb2 f x tl
+
 (*************************************************
  Define extension.
  *************************************************)
@@ -49,9 +55,12 @@ let pskiBytes (i,ot) =
   lemma_repr_bytes_values (UInt32.v ot);
   (vlbytes2 i @| bytes_of_int 4 (UInt32.v ot))
 
+private
+let pskiListBytes_aux acc pski = acc @| pskiBytes pski
+
 val pskiListBytes: list pskIdentity -> bytes
 let pskiListBytes ids =
-  List.Tot.fold_left (fun acc pski -> acc @| pskiBytes pski) empty_bytes ids
+  List.Tot.fold_left pskiListBytes_aux empty_bytes ids
 
 noeq type psk =
   // this is the truncated PSK extension, without the list of binder tags.
@@ -444,40 +453,43 @@ let parseQuicParameters_valid (b:bytes) : Tot (result valid_quicParameters) =
 let parseQuicParameters (mt:ext_msg) (b:bytes) =
   match mt with
   | EM_ClientHello ->
-    if length b < 38 then error "parseQuicParameters: too short"
+    if length b < 6 then error "parseQuicParameters: too short"
     else
      begin
-      let nv, b = split b 4 in
-      let iv, b = split b 4 in
-      match parseQuicVersion nv, parseQuicVersion iv with
-      | Error z, _ | _, Error z -> Error z
-      | Correct nv, Correct iv ->
+      let iv, b = split b 4ul in
+      match parseQuicVersion iv with
+      | Error z -> Error z
+      | Correct iv ->
         match vlparse 2 b with
         | Error z -> error "parseQuicParameters: bad client parameters"
         | Correct pb ->
           match parseQuicParameters_valid pb with
           | Error z -> Error z
-          | Correct qpl -> Correct(QuicParametersClient nv iv qpl)
+          | Correct qpl -> Correct(QuicParametersClient iv qpl)
      end
   | EM_EncryptedExtensions ->
    begin
-    if length b < 32 then error "parseQuicParameters: too short" else
-    match vlsplit 1 b with
-    | Error z -> error "parseQuicParameters: bad supported version list"
-    | Correct(vlb, b) ->
-      match parseQuicVersions vlb with
-      | Error z -> Error z
-      | Correct vl ->
-        if vl = [] || List.Tot.length vl >= 64 then
-          error "parseQuicParameters: bad supported version list"
-        else if length b < 32 then
-          error "parseQuicParameters: parameters too short"
-        else match vlparse 2 b with
-        | Error z -> error "parseQuicParameters: bad server parameters"
-        | Correct pb ->
-          match parseQuicParameters_valid pb with
-          | Error z -> Error z
-          | Correct qpl -> Correct(QuicParametersServer vl qpl)
+    if length b < 8 then error "parseQuicParameters: too short" else
+    let nv, b = split b 4ul in
+    match parseQuicVersion nv with
+    | Error z -> error "parseQuicParameters: bad negotiated version"
+    | Correct nv ->
+      match vlsplit 1 b with
+      | Error z -> error "parseQuicParameters: bad supported version list"
+      | Correct(vlb, b) ->
+        match parseQuicVersions vlb with
+        | Error z -> Error z
+        | Correct vl ->
+          if vl = [] || List.Tot.length vl >= 64 then
+            error "parseQuicParameters: bad supported version list"
+//          else if length b < 32 then
+//            error "parseQuicParameters: parameters too short"
+          else match vlparse 2 b with
+          | Error z -> error "parseQuicParameters: bad server parameters"
+          | Correct pb ->
+            match parseQuicParameters_valid pb with
+            | Error z -> Error z
+            | Correct qpl -> Correct(QuicParametersServer nv vl qpl)
    end
   | _ -> error "parseQuicParameters: extension appears in the wrong message type"
 
@@ -485,7 +497,8 @@ let parseQuicParameters (mt:ext_msg) (b:bytes) =
 
 // The length exactly reflects the RFC format constraint <2..254>
 type protocol_versions =
-  l:list protocolVersion {0 < List.Tot.length l /\ List.Tot.length l < 128}
+  | ServerPV of protocolVersion
+  | ClientPV of l:list protocolVersion {0 < List.Tot.length l /\ List.Tot.length l < 128}
 
 #set-options "--lax"
 // SI: dead code?

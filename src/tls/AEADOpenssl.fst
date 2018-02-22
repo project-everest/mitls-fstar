@@ -175,6 +175,7 @@ val decrypt: #i:id -> #l:plainlen -> d:reader i ->
      correct_decrypt d iv ad c res h1
   ))
 
+#set-options "--lax" //18-02-18 
 let decrypt #i #l d iv ad c =
   if authId i then
    begin

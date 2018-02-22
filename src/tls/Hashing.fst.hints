@@ -1,1 +1,77 @@
-[ "ú\\N…Þ\u001f®SOçy\"ìå\u001ax", [] ]
+[
+  "ú\\N…Þ\u001f®SOçy\"ìå\u001ax",
+  [
+    [
+      "Hashing.accv'",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_Platform.Bytes.HasEq_bytes" ],
+      0,
+      "a6dce4195ebc6a1a4e673f097ffab640"
+    ],
+    [
+      "Hashing.finalize",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "assumption_Prims.HasEq_int", "equation_FStar.UInt32.n",
+        "equation_Prims.nat", "function_token_typing_FStar.UInt32.n",
+        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
+      ],
+      0,
+      "3af5353166f67fc0c537b8ad7bb8dcd6"
+    ],
+    [
+      "Hashing.finalize",
+      2,
+      2,
+      1,
+      [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
+      0,
+      "c6b95c3286c2bab42dee60871c5599b0"
+    ],
+    [
+      "Hashing.start",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_Hashing.content",
+        "equation_Platform.Bytes.empty_bytes",
+        "projection_inverse_Hashing.Inputs__0"
+      ],
+      0,
+      "8799cb164909d3482c438643bcda1a94"
+    ],
+    [
+      "Hashing.extend",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_Hashing.content",
+        "projection_inverse_Hashing.Inputs__0"
+      ],
+      0,
+      "3181bec3f08904a5b8d54ca7b958a0e5"
+    ],
+    [
+      "Hashing.finalize",
+      3,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Hashing.content",
+        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
+        "projection_inverse_Hashing.Inputs__0",
+        "refinement_interpretation_Hashing_Tm_refine_2d0a083fca364f25257ba01d7340ba1a"
+      ],
+      0,
+      "f19171f0c72851a6b41599dcbc9e6fdf"
+    ]
+  ]
+]
