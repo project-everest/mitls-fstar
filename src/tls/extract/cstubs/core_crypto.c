@@ -607,3 +607,18 @@ FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
   return ret;
 }
 #endif
+
+FStar_Bytes_bytes CoreCrypto_zero(Prims_nat x0)
+{
+  char *data = KRML_HOST_MALLOC(x0);
+  memset(data, 0, x0);
+  FStar_Bytes_bytes ret = {.length = x0, .data = data};
+  return ret;
+}
+
+// We need this to expose CoreCrypto_Initialize from F* where
+// identifiers must start with lowercase
+int CoreCrypto_init(void)
+{
+  return CoreCrypto_Initialize();
+}

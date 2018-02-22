@@ -144,7 +144,7 @@ type csRands = lbytes 64
 
 type sessionHash = bytes
 
-let noCsr:csRands = Nonce.noCsr
+//let noCsr:csRands = Nonce.noCsr
 
 include TLSInfoFlags
 

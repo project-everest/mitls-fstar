@@ -1599,7 +1599,7 @@ let parseSignatureSchemeList b =
   | Correct b ->
     begin
     match parseSignatureSchemeList_aux b [] b with // Silly, but necessary for typechecking
-    | Correct l -> Correct (List.Tot.rev l)
+    | Correct l -> Correct l
     | Error z -> Error z
     end
   | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse sig hash algs")
