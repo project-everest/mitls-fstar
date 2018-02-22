@@ -59,7 +59,7 @@ noeq type ipkg = | Idx:
 /// [ip] defines the abstract indexes used in the package.
 ///
 /// [info] represents creation-time information, such as algorithms or
-/// key lengths; it is largely determined by the (ghost) index, so
+/// key lengths; it is determined by the (ghost) index, so
 /// that all users of the instance agree on them, with details left to
 /// each package definition. (For instance, parent regions for
 /// allocating ideal state may differ.) We pass both the index and its
