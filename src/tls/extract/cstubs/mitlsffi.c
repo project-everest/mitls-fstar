@@ -98,7 +98,7 @@ void TracePrintf(const char *fmt, ...)
     va_start (args, fmt);
 
     char buffer[160];
-#if __APPLE__
+#if !IS_WINDOWS
     vsnprintf(buffer, sizeof(buffer), fmt, args);
 #else
     vsprintf_s(buffer, sizeof(buffer), fmt, args);
