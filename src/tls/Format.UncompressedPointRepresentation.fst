@@ -100,9 +100,7 @@ private
 inline_for_extraction
 let lbytes_pair_serializer32 (coordinate_length:nat)
   : LP.serializer32 (lbytes_pair_serializer coordinate_length) 
-  = let p = LP.parse_flbytes coordinate_length in
-    let s = LP.serialize_flbytes coordinate_length in
-    LP.serialize32_nondep_then
+  = LP.serialize32_nondep_then
       (LP.serialize32_flbytes coordinate_length) ()
       (LP.serialize32_flbytes coordinate_length) ()
 
