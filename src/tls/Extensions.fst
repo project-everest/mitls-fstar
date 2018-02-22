@@ -35,13 +35,14 @@ private type canFail (a:Type) =
 
 (* PRE-SHARED KEYS AND KEY EXCHANGES *)
 
+val pskiBytes: PSK.psk_identifier * PSK.obfuscated_ticket_age -> bytes
+
 let pskiBytes (i,ot) =
   lemma_repr_bytes_values (UInt32.v ot);
   (vlbytes2 i @| bytes_of_int 4 (UInt32.v ot))
 
 private
 let pskiListBytes_aux acc pski = acc @| pskiBytes pski
-
 let pskiListBytes ids =
   List.Tot.fold_left pskiListBytes_aux empty_bytes ids
 
@@ -603,7 +604,7 @@ let string_of_extension (#p: (lbytes 2 -> GTot Type0)) (e: extension' p) = match
   | E_ec_point_format _ -> "ec_point_formats"
   | E_alpn _ -> "alpn"
   | E_quic_parameters _ -> "quic_transport_parameters"
-  | E_unknown_extension (n,_) -> print_bytes n
+  | E_unknown_extension n _ -> print_bytes n
 
 let rec string_of_extensions (#p: (lbytes 2 -> GTot Type0)) (l: list (extension' p)) = match l with
   | e0 :: es -> string_of_extension e0 ^ " " ^ string_of_extensions es
@@ -628,7 +629,7 @@ let sameExt (#p: (lbytes 2 -> GTot Type0)) (e1: extension' p) (e2: extension' p)
   | E_alpn _, E_alpn _ -> true
   | E_quic_parameters _, E_quic_parameters _ -> true
   // same, if the header is the same: mimics the general behaviour
-  | E_unknown_extension(h1,_), E_unknown_extension(h2,_) -> h1 = h2
+  | E_unknown_extension h1 _, E_unknown_extension h2 _ -> h1 = h2
   | _ -> false
 
 (*************************************************
@@ -636,6 +637,7 @@ let sameExt (#p: (lbytes 2 -> GTot Type0)) (e1: extension' p) (e2: extension' p)
  *************************************************)
 
 //17-05-05 no good reason to pattern match twice when formatting? follow the same structure as for parsing?
+val extensionHeaderBytes: #p: unknownTag -> extension' p -> lbytes 2
 let extensionHeaderBytes #p ext =
   match ext with             // 4.2 ExtensionType enum value
   | E_server_name _               -> twobytes (0x00z, 0x00z)
@@ -653,7 +655,28 @@ let extensionHeaderBytes #p ext =
   | E_extended_ms                 -> twobytes (0x00z, 0x17z) // 45
   | E_ec_point_format _           -> twobytes (0x00z, 0x0Bz) // 11
   | E_alpn _                      -> twobytes (0x00z, 0x10z) // 16
-  | E_unknown_extension (h,b)     -> h
+  | E_unknown_extension h b       -> h
+
+let unknown: unknownTag = fun h ->
+  forall (p: unknownTag) (e: extension' p {h=extensionHeaderBytes e}) . E_unknown_extension? e
+
+//18-02-22 not sure how to avoid duplicating these constants
+let is_unknown x = 
+  x <> twobytes (0x00z, 0x00z) &&
+  x <> twobytes (0x00z, 0x0Az) &&
+  x <> twobytes (0x00z, 0x0Dz) &&
+  x <> twobytes (0x00z, 50z)   &&
+  x <> twobytes (0x00z, 0x1Az) &&
+  x <> twobytes (0x00z, 0x23z) &&
+  x <> twobytes (0x00z, 51z)   &&
+  x <> twobytes (0x00z, 0x29z) &&
+  x <> twobytes (0x00z, 0x2az) &&
+  x <> twobytes (0x00z, 0x2bz) &&
+  x <> twobytes (0x00z, 0x2cz) &&
+  x <> twobytes (0x00z, 0x2dz) &&
+  x <> twobytes (0x00z, 0x17z) &&
+  x <> twobytes (0x00z, 0x0Bz) &&
+  x <> twobytes (0x00z, 0x10z)
 
 private
 let equal_extensionHeaderBytes_sameExt
@@ -663,7 +686,7 @@ let equal_extensionHeaderBytes_sameExt
   (ensures (sameExt e1 e2))
 = assert (extensionHeaderBytes e1 == extensionHeaderBytes e2);
   match e1 with
-  | E_unknown_extension _ -> assert (E_unknown_extension? e2)
+  | E_unknown_extension _ _ -> assert (E_unknown_extension? e2)
   | _ -> ()
 
 private
@@ -700,7 +723,7 @@ let rec extensionPayloadBytes = function
   | E_ec_point_format l             -> vlbytes 2 (ecpfListBytes l)
   | E_alpn l                        -> vlbytes 2 (alpnBytes l)
   | E_quic_parameters qp            -> vlbytes 2 (quicParametersBytes qp)
-  | E_unknown_extension (_,b)       -> vlbytes 2 b
+  | E_unknown_extension _ b         -> vlbytes 2 b
 #reset-options
 
 let rec extensionBytes ext =
@@ -757,8 +780,8 @@ let extensionBytes_is_injective
   | E_extended_ms ->
     lemma_repr_bytes_values (length empty_bytes);
     lemma_vlbytes_inj_strong 2 empty_bytes s1 empty_bytes s2
-  | E_unknown_extension (h1, b1) ->
-    let (E_unknown_extension (h2, b2)) = ext2 in
+  | E_unknown_extension h1 b1 ->
+    let E_unknown_extension h2 b2 = ext2 in
     assume (repr_bytes (length b1) <= 2);
     assume (repr_bytes (length b2) <= 2);
     lemma_vlbytes_inj_strong 2 b1 s1 b2 s2
@@ -1069,7 +1092,7 @@ let parseExtension mt b =
       | Error z -> Error z
       | Correct ecpfs -> mapResult (normallyNone E_ec_point_format) (parseEcpfList ecpfs))
 
-    | _ -> Correct (E_unknown_extension (head,data), None))
+    | _ -> Correct (E_unknown_extension head data, None))
 
 //17-05-08 TODO precondition on bytes to prove length subtyping on the result
 // SI: simplify binder accumulation code. (Binders should be the last in the list.)

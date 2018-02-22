@@ -17,36 +17,35 @@ open TLSConstants
 (*************************************************
  Define extension.
  *************************************************)
-// Extensions may appear in the following messages
-// The concrete message syntax
-type ext_msg =
-  | EM_ClientHello
-  | EM_ServerHello
-  | EM_EncryptedExtensions
-  | EM_Certificate
-  | EM_NewSessionTicket
-  | EM_HelloRetryRequest
+
+// Extensions may (selectively) appear in the following messages
+ type ext_msg =
+   | EM_ClientHello
+   | EM_ServerHello
+   | EM_EncryptedExtensions
+   | EM_Certificate
+   | EM_NewSessionTicket
+   | EM_HelloRetryRequest
 
 (* As a static invariant, we record that any intermediate, parsed
-extension and extension lists can be formatted into bytes without
-overflowing 2^16. This create dependencies on the formatting
-functions, at odd with recursive extensions. *)
+   extension and extension lists can be formatted into bytes without
+   overflowing 2^16. This create dependencies on the formatting
+   functions, at odd with recursive extensions. *)
 
 (* PRE-SHARED KEYS AND KEY EXCHANGES *)
+
 type pskIdentity = PSK.psk_identifier * PSK.obfuscated_ticket_age
 
-val pskiBytes: PSK.psk_identifier * PSK.obfuscated_ticket_age -> bytes
+// used in a refinement below
 val pskiListBytes: list pskIdentity -> bytes
 
 noeq type psk =
-  // this is the truncated PSK extension, without the list of binder tags.
-  | ClientPSK:
-    identities:list pskIdentity{
-      let n = length (pskiListBytes identities) in 6 < n /\ n < 65536} ->
-    binders_len:nat{binders_len <= 65535} ->
-    psk
-  // this is just an index in the client offer's PSK extension
-  | ServerPSK: UInt16.t -> psk
+  | ClientPSK: 
+    // truncated PSK extension, without the list of binder tags.
+    identities: list pskIdentity {let n = length (pskiListBytes identities) in 6 < n /\ n < 65536} ->
+    binders_len: nat {binders_len <= 65535} -> psk
+  | ServerPSK of UInt16.t 
+    // index into the client offer's PSK extension
 
 // PSK binders, actually the truncated suffix of TLS 1.3 ClientHello
 // We statically enforce length requirements to ensure that formatting is total.
@@ -56,6 +55,7 @@ type binder = b:bytes {32 <= length b /\ length b <= 255}
 type binders =
   bs:list binder {1 <= List.Tot.length bs /\ List.Tot.length bs < 255}
 
+// used in HandshakeLog
 val bindersBytes: bs:binders -> b:bytes{length b >= 35 /\ length b <= 65537}
 
 // https://tlswg.github.io/tls13-spec/#rfc.section.4.2.8
@@ -73,6 +73,10 @@ let client_psk_kexes_length (l:client_psk_kexes): Lemma (List.Tot.length l < 3) 
 
 type earlyDataIndication = option UInt32.t // Some  max_early_data_size, only in  NewSessionTicket
 
+type point_format =
+  | ECP_UNCOMPRESSED
+  | ECP_UNKNOWN of (n:nat{repr_bytes n <= 1})
+
 // used by QUIC interface too
 val quicParametersBytes_aux: pl:list quicParameter -> b:bytes{length b <= op_Multiply (List.Tot.length pl) 256}
 val parseQuicParameters_aux: bytes -> result (list quicParameter)
@@ -82,10 +86,26 @@ type protocol_versions =
   | ServerPV of protocolVersion
   | ClientPV of l:list protocolVersion {0 < List.Tot.length l /\ List.Tot.length l < 128}
 
+(* 
+// we used to support renegotiation_info
+type ri_status =
+| RI_Unsupported
+| RI_Valid
+| RI_Invalid *)
+
+type serverName =
+  | SNI_DNS of b:bytes{repr_bytes (length b) <= 2}
+  | SNI_UNKNOWN of (n:nat{repr_bytes n <= 1}) * (b:bytes{repr_bytes (length b) <= 2})
+
+
+// We constrain unknown extensions to have headers different from
+// known extensions; we rely on parametricity to avoid recursion
+// between the datatype and its formatting property.
+type unknownTag = lbytes 2 -> Type0
 
 // ExtensionType and Extension Table in https://tlswg.github.io/tls13-spec/#rfc.section.4.2.
 // M=Mandatory, AF=mandatory for Application Features in https://tlswg.github.io/tls13-spec/#rfc.section.8.2.
-noeq type extension' (p: (lbytes 2 -> GTot Type0)) =
+noeq type extension' (p: unknownTag) =
   | E_server_name of list serverName (* M, AF *) (* RFC 6066 *)
   | E_supported_groups of list namedGroup (* M, AF *) (* RFC 7919 *)
   | E_signature_algorithms of signatureSchemeList (* M, AF *) (* RFC 5246 *)
@@ -101,7 +121,7 @@ noeq type extension' (p: (lbytes 2 -> GTot Type0)) =
   | E_ec_point_format of list point_format
   | E_alpn of alpn
   | E_quic_parameters of quicParameters
-  | E_unknown_extension of ((x: lbytes 2 {p x}) * bytes) (* header, payload *)
+  | E_unknown_extension: x: lbytes 2 {p x} -> bytes -> extension' p (* header, payload *)
 (*
 We do not yet support the extensions below (authenticated but ignored)
   | E_max_fragment_length
@@ -117,25 +137,24 @@ We do not yet support the extensions below (authenticated but ignored)
   | E_renegotiation_info of renegotiationInfo
 *)
 
-type knownTag = lbytes 2 -> GTot Type0
-val bindersLen: #p: knownTag -> el: list (extension' p) -> nat 
-val string_of_extension: #p: knownTag -> extension' p -> string 
-val string_of_extensions: #p: knownTag -> list (extension' p) -> string 
+
+
+val bindersLen: #p: unknownTag -> el: list (extension' p) -> nat 
+val string_of_extension: #p: unknownTag -> extension' p -> string 
+val string_of_extensions: #p: unknownTag -> list (extension' p) -> string 
 
 (** shallow equality, comparing just the extension tags *)
-val sameExt: #p: knownTag -> e1: extension' p -> e2: extension' p -> bool
+val sameExt: #p: unknownTag -> e1: extension' p -> e2: extension' p -> bool
 
 (*************************************************
  extension formatting
  *************************************************)
 
-val extensionHeaderBytes: #p: knownTag -> extension' p -> lbytes 2
+val unknown: unknownTag
+val is_unknown: x: lbytes 2 -> b:bool {b2t b <==> unknown x}
+type extension = extension' unknown
 
-// 17-05-19: We constrain unknown extensions to have headers different from known extensions.
-let unknown_extensions_unknown (h: lbytes 2): GTot Type0 = 
-  forall (p: knownTag) (e' : extension' p { h=extensionHeaderBytes e' } ) . E_unknown_extension? e'
-
-type extension = extension' unknown_extensions_unknown
+// let is_unknown_unknown: #p: knownTag -> lbytes 2 -> bytes -> b:bool {b <==> knownTag p}
 
 let encryptedExtension (ext: extension): bool =
   match ext with
