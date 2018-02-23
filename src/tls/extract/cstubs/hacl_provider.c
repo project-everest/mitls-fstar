@@ -1,4 +1,4 @@
-#include "kremlib.h"
+#include "kremlinit.h"
 #include "Crypto_HKDF_Crypto_HMAC.h"
 #include "Curve25519.h"
 
