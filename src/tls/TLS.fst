@@ -22,8 +22,7 @@ open Epochs
 open Connection
 
 
-module HST  = FStar.HyperStack.ST
-
+module ST   = FStar.HyperStack.ST
 module MS   = FStar.Monotonic.Seq
 module DS   = DataStream
 module SD   = StreamDeltas
@@ -181,7 +180,7 @@ val no_seqn_overflow: c: connection -> rw:rw -> ST bool
     )))
 
 let no_seqn_overflow c rw =
-  let es = MS.i_read (Handshake.es_of c.hs) in //HST.op_Bang c.hs.log in
+  let es = MS.i_read (Handshake.es_of c.hs) in //ST.op_Bang c.hs.log in
   let j = Handshake.i c.hs rw in // -1 <= j < length es
   if j < 0 then //16-05-28 style: ghost constraint prevents using j < 0 || ...
     true
@@ -415,7 +414,7 @@ let sendFragment_success (mods:set rid) (c:connection) (i:id) (wo:option (cwrite
      	     //delta was maybe snoc'd, if f is not a handshake fragment
 	     /\ SD.stream_deltas wr h1 == Seq.append (SD.stream_deltas wr h0) (SD.project_one_frag f)
 	     //and the deltas associated with wr will forever more contain deltas1 as a prefix
-             /\ HST.witnessed (SD.deltas_prefix wr (SD.stream_deltas wr h1))))
+             /\ ST.witnessed (SD.deltas_prefix wr (SD.stream_deltas wr h1))))
 
 val sendFragment: c:connection -> #i:id -> wo:option (cwriter i c) -> f: Content.fragment i -> ST (result unit)
   (requires (sendFragment_inv wo))
@@ -632,10 +631,10 @@ let next_fragment i c =
   let _  = if w0 >= 0
 	   then (MS.i_at_least_is_stable w0 (MS.i_sel h0 ilog).(w0) ilog;
 		 FStar.Seq.contains_intro (MS.i_sel h0 ilog) w0 (MS.i_sel h0 ilog).(w0);
-	         HST.mr_witness ilog (MS.i_at_least w0 (MS.i_sel h0 ilog).(w0) ilog)) in
+	         ST.mr_witness ilog (MS.i_at_least w0 (MS.i_sel h0 ilog).(w0) ilog)) in
   trace ("HS.next_fragment "^(if ID12? i then "ID12" else (if ID13? i then "ID13" else "PlaintextID"))^"?");
   let res = Handshake.next_fragment s i in
-  if w0 >= 0 then HST.testify (MS.i_at_least w0 (MS.i_sel h0 ilog).(w0) ilog);
+  if w0 >= 0 then ST.testify (MS.i_at_least w0 (MS.i_sel h0 ilog).(w0) ilog);
   res
 
 
@@ -1053,7 +1052,7 @@ let rec readFragment c i =
   | Record.ReadError e -> Error e
   | Record.ReadWouldBlock -> Correct None
   | Record.Received ct pv payload ->
-    let es = HST.op_Bang (Handshake.es_of c.hs) in
+    let es = ST.op_Bang (Handshake.es_of c.hs) in
     let j : Handshake.logIndex es = Handshake.i c.hs Reader in
     trace ("Read fragment at epoch index: " ^ string_of_int j ^
            " of length " ^ string_of_int (length payload));
