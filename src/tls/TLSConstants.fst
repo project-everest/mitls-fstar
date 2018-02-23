@@ -109,7 +109,7 @@ let dualRole = function
   | Client -> Server
   | Server -> Client
 
-include TLSConstantsAux1
+include QD.TLS_protocolVersion
 
 let is_pv_13 = function
   | TLS_1p3 -> true
@@ -509,28 +509,11 @@ let rec compressionMethodsBytes cms =
 
 (** Serializing function for the protocol version *)
 let versionBytes : protocolVersion' -> Tot (lbytes 2) =
-  TLSConstantsAux2.versionBytes
+  protocolVersion_bytes
 
 val parseVersion: pinverse_t versionBytes
-let parseVersion v = 
-  TLSConstantsAux2.parseVersion v
-
-#set-options "--max_fuel 1 --initial_fuel 1 --max_ifuel 1 --initial_ifuel 1"
-
-(* The following surprisingly succeeds. *)
-noextract
-val inverse_version: x:_ -> Lemma
-  (requires True)
-  (ensures lemma_inverse_g_f versionBytes parseVersion x)
-  [SMTPat (parseVersion (versionBytes x))]
-let inverse_version x = TLSConstantsAux2.inverse_version x
-
-noextract
-val pinverse_version: x: lbytes 2 -> Lemma
-  (requires True)
-  (ensures (lemma_pinverse_f_g Bytes.equal versionBytes parseVersion x))
-  [SMTPat (versionBytes (Correct?._0 (parseVersion x)))]
-let pinverse_version x = TLSConstantsAux2.pinverse_version x
+let parseVersion = parse_protocolVersion'
+  
 
 #set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1"
 
