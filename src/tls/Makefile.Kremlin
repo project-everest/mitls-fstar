@@ -39,8 +39,8 @@ endif
 
 # The Crypto.* modules have already been extracted (in hacl-star/secure_api).
 DROP_MODULES 	= $(addprefix -drop , FStar.Bytes MonotoneMap MonotoneMapNonDep \
-  'FStar.Tactics.*' FStar.Tactics \
-  'Crypto.AEAD.*' Crypto.HKDF Crypto.HMAC)
+  'FStar.Tactics.\*' FStar.Tactics \
+  'Crypto.AEAD.\*' Crypto.HKDF Crypto.HMAC)
 
 # But we ask for their headers to be in scope.
 HEADERS 	= $(addprefix -add-include ,'"hacks.h"' '"krembytes.h"' \
@@ -54,9 +54,9 @@ HEADERS 	= $(addprefix -add-include ,'"hacks.h"' '"krembytes.h"' \
 # Note: Crypto.Plain is not pre-extracted by secure_api.
 
 KRML_COMMAND	= krml \
-  -bundle TLSConstantsAux2 -bundle 'LowParse.*' \
+  -bundle TLSConstantsAux2 -bundle 'LowParse.\*' \
   -bundle LowParseWrappers \
-  -bundle 'Format.*' \
+  -bundle 'Format.\*' \
   -fnoanonymous-unions -warn-error -9-7-6 \
   -fsopts --debug,yes -verbose \
   -ccopts -Wno-unused-function,-O0 \
@@ -135,7 +135,7 @@ $(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/uint128,$(UINT128_DIR)))
 $(INTERNAL_TEST_DIR)/Test_Main.c: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES))
 	$(KRML_COMMAND) $^ -tmpdir $(INTERNAL_TEST_DIR) -no-prefix Test.Main \
 	  -skip-compilation -drop FFICallbacks \
-	  -bundle Test.Main='Test.*',AEAD_GCM,AEADOpenssl,AEADProvider,Alert,Connection,ConnInvariant,Content,DataStream,Encode,Epochs,FFI,Handshake,HandshakeLog,HandshakeMessages,Hashing,Hashing.CRF,Hashing.OpenSSL,HKDF,HMAC,HMAC.UFCMA,IdNonce,KDF.Common,KDF.Salt.ODH,KeySchedule,LHAEPlain,MAC,MAC_SHA1,MAC_SHA256,MasterSecret,Negotiation,QUIC,Range,Record,Signature,StAE,Standalone,StatefulLHAE,StatefulPlain,StreamAE,StreamDeltas,StreamPlain,Ticket,TLS,TLSPRF,Transport
+	  -bundle Test.Main='Test.\*',AEAD_GCM,AEADOpenssl,AEADProvider,Alert,Connection,ConnInvariant,Content,DataStream,Encode,Epochs,FFI,Handshake,HandshakeLog,HandshakeMessages,Hashing,Hashing.CRF,Hashing.OpenSSL,HKDF,HMAC,HMAC.UFCMA,IdNonce,KDF.Common,KDF.Salt.ODH,KeySchedule,LHAEPlain,MAC,MAC_SHA1,MAC_SHA256,MasterSecret,Negotiation,QUIC,Range,Record,Signature,StAE,Standalone,StatefulLHAE,StatefulPlain,StreamAE,StreamDeltas,StreamPlain,Ticket,TLS,TLSPRF,Transport
 
 internal-test-copy: $(addprefix $(INTERNAL_TEST_DIR)/,$(ALL_EXTERNAL_FILES)) $(INTERNAL_TEST_DIR)/stub/mipki_wrapper.c
 
