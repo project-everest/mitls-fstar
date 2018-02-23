@@ -107,7 +107,7 @@ type unknownTag = lbytes 2 -> Type0
 // M=Mandatory, AF=mandatory for Application Features in https://tlswg.github.io/tls13-spec/#rfc.section.8.2.
 noeq type extension' (p: unknownTag) =
   | E_server_name of list serverName (* M, AF *) (* RFC 6066 *)
-  | E_supported_groups of list namedGroup (* M, AF *) (* RFC 7919 *)
+  | E_supported_groups of list CommonDH.namedGroup (* M, AF *) (* RFC 7919 *)
   | E_signature_algorithms of signatureSchemeList (* M, AF *) (* RFC 5246 *)
   | E_signature_algorithms_cert of signatureSchemeList (* TLS 1.3#23 addition; TLS 1.2 should also support it *)
   | E_key_share of CommonDH.keyShare (* M, AF *)
