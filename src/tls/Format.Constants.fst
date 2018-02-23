@@ -6,6 +6,7 @@ module LP = LowParse.SLow
 module U8 = FStar.UInt8
 
 
+inline_for_extraction
 let is_constantByte (c:byte) (x:byte): Tot bool = x = c
 
 type constantByte (c:byte) = b:byte{is_constantByte c b}
