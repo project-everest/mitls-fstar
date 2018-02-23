@@ -1747,6 +1747,7 @@ request_client_certificate: single_assign ServerCertificateRequest // uses this 
 type alpn_entry = b:bytes{0 < length b /\ length b < 256}
 type alpn = l:list alpn_entry{List.Tot.length l < 256}
 
+(* TRANSPORT PARAMETERS ARE NOW MANAGED BY APPLICATION
 type quicParameter =
   | Quic_initial_max_stream_data of UInt32.t
   | Quic_initial_max_data of UInt32.t
@@ -1816,6 +1817,7 @@ let string_of_quicParameters = function
     string_of_quicParameters_aux_fold "versions: " string_of_quicVersion " " v ^ "\n" ^
     string_of_quicParameters_aux_fold "" string_of_quicParameter "\n" p
   | None -> "(none)"
+*)
 
 type pskInfo = {
   ticket_nonce: option bytes;

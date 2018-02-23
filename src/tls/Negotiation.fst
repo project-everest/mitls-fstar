@@ -182,10 +182,17 @@ let find_signature_algorithms_cert o : option signatureSchemeList =
   | None -> None
   | Some (Extensions.E_signature_algorithms_cert algs) -> Some algs
 
+(*
 let find_quic_parameters o: option TLSConstants.quicParameters =
   match find_client_extension Extensions.E_quic_parameters? o with
   | Some (Extensions.E_quic_parameters qp) -> Some qp
   | _ -> None
+
+let find_server_quic_parameters m =
+  match find_server_extension Extensions.E_quic_parameters? m with
+  | Some (Extensions.E_quic_parameters qp) -> Some qp
+  | _ -> None
+*)
 
 let find_cookie o =
   match find_client_extension Extensions.E_cookie? o with
@@ -319,11 +326,6 @@ let find_server_extension filter m =
   match m.n_server_extensions with
   | None -> None
   | Some es -> List.Tot.find filter es
-
-let find_server_quic_parameters m =
-  match find_server_extension Extensions.E_quic_parameters? m with
-  | Some (Extensions.E_quic_parameters qp) -> Some qp
-  | _ -> None
 
 let is_resumption12 m =
   not (is_pv_13 m.n_protocol_version)  &&

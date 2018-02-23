@@ -1164,7 +1164,8 @@ let rec recv_fragment (hs:hs) #i rg f =
 let recv_ccs (hs:hs) =
     trace "recv_ccs";
     // Draft 22 CCS during HRR
-    if Nego.is_hrr hs.nego then
+    // Because of stateless HRR, this may also happen as the very first message before CH (!!!)
+    if Nego.is_hrr hs.nego || !hs.state = S_Idle then
      begin
       trace "IGNORING CCS (workaround for implementations that send CCS after HRR)";
       InAck false false

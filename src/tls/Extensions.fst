@@ -324,7 +324,7 @@ let parseAlpn : pinverse_t alpnBytes = fun b ->
     | Error(z) -> Error z
   else error "parseAlpn: extension is too short"
 
-(* QUIC parameters *)
+(* QUIC parameters
 
 let quicVersionBytes (v:quicVersion) : Tot (lbytes 4) =
   FStar.Bytes.bytes_of_int32 (match v with
@@ -375,6 +375,7 @@ let parseQuicVersion: pinverse_t quicVersionBytes = fun b ->
     if n = 1ul then Correct QuicVersion1
     else Correct (QuicCustomVersion n)
   else error "invalid QUIC version"
+*)
 
 let parse_uint16 (b:bytes) : result UInt16.t =
   if length b = 2 then
@@ -385,6 +386,7 @@ let parse_uint32 (b:bytes) : result UInt32.t =
   if length b = 4 then Correct (uint32_of_bytes b)
   else error "invalid uint32 encoding"
 
+(*
 let rec parseQuicParameters_aux (b:bytes)
   : Tot (result (list quicParameter)) (decreases (length b))
   =
@@ -445,19 +447,17 @@ let parseQuicParameters_valid (b:bytes) : Tot (result valid_quicParameters) =
   match parseQuicParameters_aux b with
   | Error z -> Error z
   | Correct qpl -> Correct qpl
-(* No longer done in TLS, QUIC is responsible
-    if not (List.Tot.existsb Quic_initial_max_stream_data? qpl) then
-      error "parseQuicParameters: missing initial_max_stream_data"
-    else if not (List.Tot.existsb Quic_initial_max_data? qpl) then
-      error "parseQuicParameters: missing initial_max_data"
-    else if not (List.Tot.existsb Quic_initial_max_stream_id? qpl) then
-      error "parseQuicParameters: missing initial_max_stream_id"
-    else if not (List.Tot.existsb Quic_idle_timeout? qpl) then
-      error "parseQuicParameters: missing idle_timeout"
-    else if List.Tot.length qpl >= 256 then // ADL FIXME: this should be ruled out statically
-      error "parseQuicParameters: too many parameters"
-    else Correct(qpl)
-*)
+//    if not (List.Tot.existsb Quic_initial_max_stream_data? qpl) then
+//      error "parseQuicParameters: missing initial_max_stream_data"
+//    else if not (List.Tot.existsb Quic_initial_max_data? qpl) then
+//      error "parseQuicParameters: missing initial_max_data"
+//    else if not (List.Tot.existsb Quic_initial_max_stream_id? qpl) then
+//      error "parseQuicParameters: missing initial_max_stream_id"
+//    else if not (List.Tot.existsb Quic_idle_timeout? qpl) then
+//      error "parseQuicParameters: missing idle_timeout"
+//    else if List.Tot.length qpl >= 256 then // ADL FIXME: this should be ruled out statically
+//      error "parseQuicParameters: too many parameters"
+//    else Correct(qpl)
 
 let parseQuicParameters (mt:ext_msg) (b:bytes) =
   match mt with
@@ -502,6 +502,7 @@ let parseQuicParameters (mt:ext_msg) (b:bytes) =
             | Correct qpl -> Correct(QuicParametersServer nv vl qpl)
    end
   | _ -> error "parseQuicParameters: extension appears in the wrong message type"
+*)
 
 (* PROTOCOL VERSIONS *)
 
@@ -649,7 +650,7 @@ noeq type extension' (p: (lbytes 2 -> GTot Type0)) =
   | E_extended_ms
   | E_ec_point_format of list point_format
   | E_alpn of alpn
-  | E_quic_parameters of quicParameters
+  | E_quic_parameters of bytes //quicParameters
   | E_unknown_extension of ((x: lbytes 2 {p x}) * bytes) (* header, payload *)
 (*
 We do not yet support the extensions below (authenticated but ignored)
@@ -803,7 +804,7 @@ let rec extensionPayloadBytes = function
   | E_extended_ms                   -> vlbytes 2 empty_bytes
   | E_ec_point_format l             -> vlbytes 2 (ecpfListBytes l)
   | E_alpn l                        -> vlbytes 2 (alpnBytes l)
-  | E_quic_parameters qp            -> vlbytes 2 (quicParametersBytes qp)
+  | E_quic_parameters qp            -> vlbytes 2 qp //(quicParametersBytes qp)
   | E_unknown_extension (_,b)       -> vlbytes 2 b
 #reset-options
 
@@ -1145,8 +1146,9 @@ let parseExtension mt b =
       mapResult (normallyNone E_alpn) (parseAlpn data)
 
     | (0x00z, 0x1Az) -> // quic_transport_parameters
-      if length data < 2 || length data >= 65538 then error "quic transport parameters" else
-      mapResult (normallyNone E_quic_parameters) (parseQuicParameters mt data)
+      //if length data < 2 || length data >= 65538 then error "quic transport parameters" else
+      Correct (E_quic_parameters data, None)
+      //mapResult (normallyNone E_quic_parameters) (parseQuicParameters mt data)
 
     | (0x00z, 0x23z) -> // session_ticket
       Correct (E_session_ticket data, None)
@@ -1518,7 +1520,7 @@ let serverToNegotiatedExtension cfg cExtL cs ri resuming res sExt =
     | E_session_ticket _ -> res
     | E_alpn sal -> if List.Tot.length sal = 1 then res
       else Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Multiple ALPN selected by server")
-    | E_quic_parameters (QuicParametersServer _ _ _) -> res // managed by application by callback
+    | E_quic_parameters (*QuicParametersServer _ _ _*) _ -> res // managed by application by callback
     | E_extended_ms -> res
     | E_ec_point_format spf -> res // Can be sent in resumption, apparently (RFC 4492, 5.2)
     | E_key_share (CommonDH.ServerKeyShare sks) -> res
@@ -1584,7 +1586,7 @@ let clientToServerExtension pv cfg cs ri pski ks resuming cext =
       match common with
       | a :: _ -> Some (E_alpn [a])
       | _ -> None)
-  | E_quic_parameters (QuicParametersClient qvi qp) -> None
+  | E_quic_parameters (*QuicParametersClient qvi qp*) _ -> None
     // We now expect the application to respond to QTP by callback
     (* match cfg.quic_parameters, pv with
     | Some (sqvl, sqp), TLS_1p3 ->

@@ -205,4 +205,6 @@ extern quic_result MITLS_CALLCONV FFI_mitls_quic_process(/* in */ quic_state *st
 extern int MITLS_CALLCONV FFI_mitls_quic_get_exporter(/* in */ quic_state *state, int early, /* out */ quic_secret *secret);
 extern void MITLS_CALLCONV FFI_mitls_quic_free(/* in */ quic_state *state);
 
+extern int MITLS_CALLCONV FFI_mitls_get_transport_parameters(const char *cexts, size_t cexts_len, char **qtp, size_t *qtp_len);
+
 #endif // HEADER_MITLS_FFI_H

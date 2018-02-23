@@ -180,33 +180,13 @@ let ffiAcceptConnected ctx snd rcv config = accept ctx snd rcv config
 
 /// new QUIC-specific properties
 ///
-let get_parameters c (r:role): ML (option TLSConstants.quicParameters) =
-  let mode = Handshake.get_mode c.Connection.hs in
-  if r = Client
-  then Negotiation.find_quic_parameters mode.Negotiation.n_offer
-  else Negotiation.find_server_quic_parameters mode
-
-// extracting some QUIC parameters to C (a bit ad hoc)
-val ffi_parameters: option TLSConstants.quicParameters -> ML (UInt32.t * bytes)
-let ffi_parameters qpo =
-  match qpo with
-  | None -> failwith "no parameters available"
-  | Some (QuicParametersClient v qp)
-  | Some (QuicParametersServer v _ qp) ->
-    let qv = match v with
-      | QuicVersion1 -> 1ul
-      | QuicCustomVersion n -> n in
-    let qp = Extensions.quicParametersBytes_aux qp in
-    qv, qp
-
-let get_peer_parameters c =
-  let r = TLSConstants.dualRole (Connection.c_role c) in
-  ffi_parameters (get_parameters c r)
-
-private let quicVersion (n:UInt32.t) = QuicCustomVersion n // avoid overflow in .v
-//    match UInt32.v n with
-//    | 1 -> QuicVersion1
-//    | _ -> QuicCustomVersion n
+let get_transport_parameters (b:bytes) : ML (option bytes) =
+  match Extensions.parseOptExtensions Extensions.EM_ClientHello b with
+  | Correct (Some el, _) ->
+    (match List.Tot.find Extensions.E_quic_parameters? el with
+    | Some (Extensions.E_quic_parameters b) -> Some b
+    | _ -> None)
+  | Error _ -> trace ("Warning: bad extension list passed to get_transport_parameters"); None
 
 let ffiConfig (host:bytes) =
   let h = if length host = 0 then None else Some host in
