@@ -10,10 +10,7 @@ module TLSInfo
 *)
 
 open Platform.Bytes
-open FStar.Date
 open TLSConstants
-//open PMS
-//open Cert
 
 module CC = CoreCrypto
 module MM = FStar.Monotonic.Map
@@ -47,16 +44,15 @@ let default_signature_schemes = [
   RSA_PKCS1_SHA1
   ]
 
-let default_groups : list CommonDH.supportedNamedGroups = 
+let default_groups : CommonDH.supportedNamedGroups = 
   let open CommonDH in [
-  // SEC CC.ECC_X448
-  SECP521R1;
-  SECP384R1;
-  X25519;
-  SECP256R1;
-  FFDHE4096;
-  FFDHE3072;
-  FFDHE2048;
+    SECP521R1;
+    SECP384R1;
+    X25519;
+    SECP256R1;
+    FFDHE4096;
+    FFDHE3072;
+    FFDHE2048;
   ]
 
 val defaultConfig: config
@@ -73,7 +69,7 @@ let defaultConfig =
 
   // Client
   hello_retry = true;
-  offer_shares = [SEC CC.ECC_X25519];
+  offer_shares = [CommonDH.X25519];
 
   // Server
   check_client_version_in_pms_for_old_tls = true;
@@ -157,9 +153,9 @@ type abbrInfo =
      abbr_session_hash: sessionHash;
      abbr_vd: option (cVerifyData * sVerifyData) }
 
-type resumeInfo (r:role) =
+type resumeInfo (r:role): Type0 =
   //17-04-19  connect_time:lbytes 4  * // initial Nonce.timestamp() for the connection
-  o:option bytes {r=Server ==> o=None} * // 1.2 ticket
+  o:option bytes {r=Server ==> None? o} * // 1.2 ticket
   l:list PSK.pskid {r=Server ==> l = []} // assuming we do the PSK lookups locally
 
 // for sessionID. we treat empty bytes as the absence of identifier,
@@ -425,10 +421,9 @@ and pre_keyId =
   | KeyID: #li:logInfo{~(LogInfo_CH? li)} -> i:pre_expandId li -> pre_keyId
 and pre_finishedId =
   | FinishedID: #li:logInfo -> pre_expandId li -> pre_finishedId
-// all of those will be replaced by auxiliary functions and refinements in ID. 
+// 18-02-23 will all be replaced by auxiliary functions and refinements in ID. 
 
-// 17-11-15 all subsumed by *ghost* IK.ha_of_id 
-// hopefully not used too much?
+// 18-02-23 will all be subsumed by *ghost* ha_of_id 
 val esId_hash: i:pre_esId -> Tot hash_alg (decreases i)
 val binderId_hash: i:pre_binderId -> Tot hash_alg (decreases i)
 val hsId_hash: i:pre_hsId -> Tot hash_alg (decreases i)
@@ -642,7 +637,8 @@ let pv_of_id (i:id{~(PlaintextID? i)}) = match i with
   | ID12 pv _ _ _ _ _ _ -> pv
 
 // Returns the local nonce (used for accessing connection state)
-let nonce_of_id = function
+let nonce_of_id (i: id): random =
+  match i with
   | PlaintextID r -> r
   | ID12 _ _ _ _ cr sr rw -> if rw = Client then cr else sr
   | ID13 (KeyID #li _) -> logInfo_nonce li
@@ -734,5 +730,5 @@ let plainText_is_not_auth (i:id)
 let safe_implies_auth (i:id)
   : Lemma (requires (safeId i))
           (ensures (authId i))
-	  [SMTPat (authId i)]
+          [SMTPat (authId i)]
   = admit()	   //TODO: need to prove that strongAEAlg implies strongAuthAlg

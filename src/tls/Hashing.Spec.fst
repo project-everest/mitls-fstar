@@ -14,6 +14,8 @@ type alg = // CoreCrypto.hash_alg
 //  | SHAKE256 of (n:nat{n >= 16})
 // see e.g. https://en.wikipedia.org/wiki/SHA-1 for a global comparison and lengths
 
+type alg13  = a:alg {a=SHA256 \/ a=SHA384 \/ a=SHA512}
+
 let string_of_alg = function
   | MD5 -> "MD5"
   | SHA1 -> "SHA1"

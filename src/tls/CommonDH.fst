@@ -449,7 +449,7 @@ let lemma_honest_not_dishonest (i:id)
 *)
 
 
-(**! agile formatting; could be put in some other file *) 
+(* agile formatting; could be put in some other file *) 
 
 #set-options "--z3rlimit 100"
 
