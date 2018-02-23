@@ -228,7 +228,7 @@ val prepareExtensions:
   bool -> // EDI (Nego checks that PSK is compatible)
   option bytes -> // session_ticket
   signatureSchemeList ->
-  list valid_namedGroup ->
+  list CommonDH.namedGroup -> // FIXME: was: list valid_namedGroup, but the latter type disappeared
   option (cVerifyData * sVerifyData) ->
   option CommonDH.keyShare ->
   list (PSK.pskid * pskInfo) ->
