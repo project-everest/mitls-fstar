@@ -398,7 +398,9 @@ let keyShareEntryBytes (k:keyShareEntry): bytes =
     // cwinter: | Share g s was was marked as TODO; registration is not guaranteed.
     // assume false; // TODO
     let nng = Some?.v (namedGroup_of_group g) in
-    let kex = (match s with | S_FF g x -> x) in
+    let kex = (match s with 
+               | S_FF g x -> x 
+               | S_EC g x -> ECGroup.serialize x) in
     let kse = { group=nng; key_exchange=kex; } in
     keyShareEntry_serializer32 kse)
   | UnknownShare ng b ->
