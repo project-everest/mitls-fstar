@@ -97,7 +97,7 @@ void TracePrintf(const char *fmt, ...)
     va_list args;
     va_start (args, fmt);
 
-    char buffer[160];
+    char buffer[256];
 #if !IS_WINDOWS
     vsnprintf(buffer, sizeof(buffer), fmt, args);
 #else
