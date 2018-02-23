@@ -31,11 +31,15 @@ noeq type ecCurve = {
 
 (* Parsers *)
 
+private
+inline_for_extraction
 let ecCurve_of_lbytes (bs:lbytes_1 * lbytes_1)
   : Tot ecCurve
   = let b0, b1 = bs in
     { a = b0; b = b1 }
 
+private
+inline_for_extraction
 let lbytes_of_ecCurve (c:ecCurve)
   : Tot (lbytes_1 * lbytes_1)
   = c.a, c.b
