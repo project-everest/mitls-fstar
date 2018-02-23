@@ -1268,7 +1268,8 @@ let computeServerMode cfg co serverRandom =
           TLSConstants.filter_aux cfg.signature_algorithms TLSConstants.mem_rev sigalgs
         in
         if sigalgs = [] then None
-        else cert_select_cb cfg (get_sni co) sigalgs
+        // FIXME(adl) workaround for a bug in TLSConstants that causes signature schemes list to be parsed in reverse order
+        else cert_select_cb cfg (get_sni co) (List.Tot.rev sigalgs)
       in
     match compute_cs13 cfg co pske shares (Some? scert) with
     | Error z -> Error z

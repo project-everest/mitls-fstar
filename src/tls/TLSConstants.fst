@@ -1595,6 +1595,7 @@ let signatureSchemeList =
 
 (** Serializing function for a SignatureScheme list *)
 
+// FIXME(adl) this is serializing in reverse order (shb @| b)
 let rec signatureSchemeListBytes_aux
   (algs: signatureSchemeList)
   (b:bytes)
@@ -1651,6 +1652,7 @@ let signatureSchemeListBytes_is_injective
   signatureSchemeListBytes_aux_is_injective algs1 empty_bytes algs1 algs2 empty_bytes algs2
 
 (** Parsing function for a SignatureScheme list *)
+// FIXME(adl) this is parsing in reverse order (sha::algs)
 val parseSignatureSchemeList: pinverse_t signatureSchemeListBytes
    let rec parseSignatureSchemeList_aux: b:bytes -> algs:list signatureScheme -> b':bytes{length b' + op_Multiply 2 (List.Tot.length algs) == length b} ->
     Tot
