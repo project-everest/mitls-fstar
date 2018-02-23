@@ -137,15 +137,18 @@ let parse (b:bytes) =
           let msId = dummy_msId pv cs ems in
           Some (Ticket12 pv cs ems msId ms)
 
-let check_ticket (b:bytes{length b <= 65551}) =
+let ticket_decrypt cipher : St (option bytes) =
   let Key tid _ rd = !ticket_enc in
   let salt = AE.salt_of_state rd in
-  trace ("Decrypting ticket "^(hex_of_bytes b));
-  if length b < AE.iv_length tid + AE.taglen tid + 8 then None else
-  let (nb, b) = split_ b (AE.iv_length tid) in
+  let (nb, b) = split_ cipher (AE.iv_length tid) in
   let plain_len = length b - AE.taglen tid in
   let iv = AE.coerce_iv tid (xor_ #(AE.iv_length tid) nb salt) in
-  match AE.decrypt #tid #plain_len rd iv empty_bytes b with
+  AE.decrypt #tid #plain_len rd iv empty_bytes b
+
+let check_ticket (b:bytes{length b <= 65551}) =
+  trace ("Decrypting ticket "^(hex_of_bytes b));
+  if length b < 32 then None else
+  match ticket_decrypt b with
   | None -> trace ("Ticket decryption failed."); None
   | Some plain -> parse plain
 
@@ -155,14 +158,42 @@ let serialize t =
     | Ticket13 cs _ _ rms -> TLS_1p3, cs, rms in
   (versionBytes pv) @| (cipherSuiteBytes cs) @| (vlbytes 2 b)
 
-let create_ticket t =
+let ticket_encrypt plain =
   let Key tid wr _ = !ticket_enc in
-  let plain = serialize t in
   let nb = CC.random (AE.iv_length tid) in
   let salt = AE.salt_of_state wr in
   let iv = AE.coerce_iv tid (xor 12ul nb salt) in
   let ae = AE.encrypt #tid #(length plain) wr iv empty_bytes plain in
   nb @| ae
+
+let create_ticket t =
+  let plain = serialize t in
+  ticket_encrypt plain
+
+let create_cookie (hrr:HandshakeMessages.hrr) (digest:bytes) (extra:bytes) =
+  let hrb = (vlbytes 3 (HandshakeMessages.helloRetryRequestBytes hrr)) in
+  let plain = hrb @| (vlbytes 1 digest) @| (vlbytes 2 extra) in
+  ticket_encrypt plain
+
+let check_cookie b =
+  trace ("Decrypting cookie "^(hex_of_bytes b));
+  if length b < 32 then None else
+  match ticket_decrypt b with
+  | None -> trace ("Cookie decryption failed."); None
+  | Some plain ->
+    match vlsplit 3 plain with
+    | Error _ -> None
+    | Correct (hrb, b) ->
+      match HandshakeMessages.parseHelloRetryRequest hrb with
+      | Error _ -> None
+      | Correct hrr ->
+        match vlsplit 1 b with
+        | Error _ -> None
+        | Correct (digest, b) ->
+          match vlparse 2 b with
+          | Error _ -> None
+          | Correct extra ->
+            Some (hrr, digest, extra)
 
 let check_ticket13 b =
   match check_ticket b with

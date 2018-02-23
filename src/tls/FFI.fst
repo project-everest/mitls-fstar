@@ -266,7 +266,7 @@ let rec updatecfg cfg l : ML config =
   | [] -> cfg
   | hd::t ->
     if hd = "EDI"
-    then updatecfg ({cfg with max_early_data = Some 16384}) t
+    then updatecfg ({cfg with max_early_data = Some 0x1000ul}) t
     else failwith ("Unknown flag: "^hd)
 
 (** SZ: FStar.List opens FStar.All.
@@ -347,11 +347,11 @@ let ffiSetALPN cfg x =
   let apl = map encodeALPN apl in
   { cfg with alpn = if apl=[] then None else Some apl }
 
-val ffiSetEarlyData: cfg:config -> x:nat -> ML config
+val ffiSetEarlyData: cfg:config -> x:UInt32.t -> ML config
 let ffiSetEarlyData cfg x =
-  trace ("setting early data limit to "^(string_of_int x));
+  trace ("setting early data limit to "^(hex_of_bytes (bytes_of_int32 x)));
   { cfg with
-  max_early_data = if x>0 then Some x else None;
+  max_early_data = if x = 0ul then None else Some x;
   }
 
 val ffiSetTicketKey: a:string -> k:bytes -> ML bool
@@ -422,6 +422,10 @@ let ffiSend c b =
 let ffiSetTicketCallback (cfg:config) (ctx:FStar.Dyn.dyn) (cb:ticket_cb_fun) =
   trace "Setting a new ticket callback.";
   {cfg with ticket_callback = {ticket_context = ctx; new_ticket = cb}}
+
+let ffiSetNegoCallback (cfg:config) (ctx:FStar.Dyn.dyn) (cb:server_nego_cb_fun) =
+  trace "Setting a new server negotiation callback.";
+  {cfg with nego_callback = {server_nego_context = ctx; server_nego = cb}}
 
 let ffiSetCertCallbacks (cfg:config) (cb:cert_cb) =
   trace "Setting up certificate callbacks.";

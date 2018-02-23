@@ -32,6 +32,7 @@ let rec existsb2 (f: 'a -> 'b -> bool) (x:'a) (y:list 'b) : bool =
    | EM_Certificate
    | EM_NewSessionTicket
    | EM_HelloRetryRequest
+   | EM_ApplicationExtensions
 
 (* As a static invariant, we record that any intermediate, parsed
 extension and extension lists can be formatted into bytes without
@@ -1120,7 +1121,8 @@ let parseExtension mt b =
   let head, payload = split b 2ul in
   match vlparse 2 payload with
   | Error (_,s) -> error ("extension: "^s)
-  | Correct data -> (
+  | Correct data ->
+    let ext =
     match cbyte2 head with
     | (0x00z, 0x00z) ->
 //      mapResult E_server_name (parseServerName mt data)
@@ -1186,7 +1188,14 @@ let parseExtension mt b =
       | Error z -> Error z
       | Correct ecpfs -> mapResult (normallyNone E_ec_point_format) (parseEcpfList ecpfs))
 
-    | _ -> Correct (E_unknown_extension (head,data), None))
+    | _ -> Correct (E_unknown_extension (head,data), None)
+    in
+    if mt = EM_ApplicationExtensions then
+      (match ext with
+      | Error z -> Error z
+      | Correct (E_unknown_extension _, _) -> ext
+      | _ -> Error (AD_internal_error, ""))
+    else ext
 
 //17-05-08 TODO precondition on bytes to prove length subtyping on the result
 // SI: simplify binder accumulation code. (Binders should be the last in the list.)
@@ -1273,7 +1282,7 @@ val prepareExtensions:
   k:valid_cipher_suites{List.Tot.length k < 256} ->
   option bytes -> // SNI
   option alpn -> // ALPN
-  option quicParameters ->
+  // option quicParameters -> QTP now handled by callback
   bool -> // EMS
   bool ->
   bool -> // EDI (Nego checks that PSK is compatible)
@@ -1301,7 +1310,7 @@ private let compute_binder_len (ctr:nat) (pski:pskInfo) =
   let h = PSK.pskInfo_hash pski in
   ctr + 1 + Hashing.Spec.tagLen h
 
-let prepareExtensions minpv pv cs host alps qp ems sren edi ticket sigAlgs namedGroups ri ks psks =
+let prepareExtensions minpv pv cs host alps (*qp*) ems sren edi ticket sigAlgs namedGroups ri ks psks =
     let res = [] in
     (* Always send supported extensions.
        The configuration options will influence how strict the tests will be *)
@@ -1333,11 +1342,13 @@ let prepareExtensions minpv pv cs host alps qp ems sren edi ticket sigAlgs named
       | Some al -> E_alpn al :: res
       | None -> res
     in
+    (*
     let res =
       match qp with
       | Some qp -> E_quic_parameters qp :: res
       | None -> res
     in
+    *)
     let res =
       match ticket with
       | Some t -> E_session_ticket t :: res
@@ -1507,7 +1518,7 @@ let serverToNegotiatedExtension cfg cExtL cs ri resuming res sExt =
     | E_session_ticket _ -> res
     | E_alpn sal -> if List.Tot.length sal = 1 then res
       else Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Multiple ALPN selected by server")
-    | E_quic_parameters (QuicParametersServer _ _ _) -> res
+    | E_quic_parameters (QuicParametersServer _ _ _) -> res // managed by application by callback
     | E_extended_ms -> res
     | E_ec_point_format spf -> res // Can be sent in resumption, apparently (RFC 4492, 5.2)
     | E_key_share (CommonDH.ServerKeyShare sks) -> res
@@ -1573,14 +1584,15 @@ let clientToServerExtension pv cfg cs ri pski ks resuming cext =
       match common with
       | a :: _ -> Some (E_alpn [a])
       | _ -> None)
-  | E_quic_parameters (QuicParametersClient qvi qp) ->
-    (match cfg.quic_parameters, pv with
+  | E_quic_parameters (QuicParametersClient qvi qp) -> None
+    // We now expect the application to respond to QTP by callback
+    (* match cfg.quic_parameters, pv with
     | Some (sqvl, sqp), TLS_1p3 ->
       let qvn =
         if List.Tot.mem qvi sqvl then qvi
         else List.Tot.hd sqvl in
       Some (E_quic_parameters (QuicParametersServer qvn sqvl sqp))
-    | _ -> None)
+    | _ -> None *)
   | E_server_name server_name_list ->
     if resuming then None // RFC 6066 page 6
     else

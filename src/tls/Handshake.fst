@@ -602,7 +602,7 @@ let client_NewSessionTicket_13 (hs:hs) (st13:sticket13)
   let sni = iutf8 (Nego.get_sni mode.Nego.n_offer) in
   let cfg = Nego.local_config hs.nego in
   let valid_ed =
-    if Some? cfg.quic_parameters then
+    if cfg.max_early_data = Some 0xfffffffful then
       (match ed with
       | None -> true
       | Some (Extensions.E_early_data (Some x)) -> x = 0xfffffffful
@@ -729,13 +729,14 @@ let server_ClientHello hs offer obinders =
     // there is currently no S_Wait_CH2 state - the logic is all the same
     // except for this call to Nego that ensures the two CH are consistent with
     // the HRR group
-    match Nego.server_ClientHello hs.nego offer with
+    match Nego.server_ClientHello hs.nego offer hs.log with
     | Error z -> InError z
     | Correct (Nego.ServerHelloRetryRequest hrr) ->
       HandshakeLog.send hs.log (HelloRetryRequest hrr);
       // Note: no handshake state machine transition
       InAck false false
-    | Correct (Nego.ServerMode mode cert) ->
+
+    | Correct (Nego.ServerMode mode cert app_exts) ->
 
     let pv = mode.Nego.n_protocol_version in
     let cr = mode.Nego.n_offer.ch_client_random in
@@ -756,7 +757,7 @@ let server_ClientHello hs offer obinders =
       let adk = KeySchedule.ks_server_12_resume hs.ks cr pv cs ems msId ms in
       register hs adk;
 
-      match Nego.server_ServerShare hs.nego None with
+      match Nego.server_ServerShare hs.nego None app_exts with
       | Error z -> InError z
       | Correct mode ->
         let digestSessionTicket =
@@ -808,7 +809,7 @@ let server_ClientHello hs offer obinders =
       match key_share_result with
       | Error z -> InError z
       | Correct optional_server_share ->
-      match Nego.server_ServerShare hs.nego optional_server_share with
+      match Nego.server_ServerShare hs.nego optional_server_share app_exts with
       | Error z -> InError z
       | Correct mode ->
         let ka = Nego.kexAlg mode in
@@ -1001,11 +1002,9 @@ let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinishe
 
            trace ("Sending ticket: "^(print_bytes tb));
            let ticket_ext =
-             match cfg.max_early_data, cfg.quic_parameters with
-             // QUIC: always enable 0-RTT data with max limit
-             | _, Some _ -> [Extensions.E_early_data (Some 0xfffffffful)]
-             | Some max_ed, None -> [Extensions.E_early_data (Some (FStar.UInt32.uint_to_t max_ed))]
-             | _ -> [] in
+             match cfg.max_early_data with
+             | Some max_ed -> [Extensions.E_early_data (Some max_ed)]
+             | None -> [] in
            let tnonce, _ = split_ tb 12 in
            HandshakeLog.send hs.log (NewSessionTicket13 ({
              ticket13_lifetime = FStar.UInt32.(uint_to_t 3600);

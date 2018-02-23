@@ -140,7 +140,6 @@ let rec recv c =
 let quic_check config =
   if config.min_version <> TLS_1p3 then trace "WARNING: not TLS 1.3";
   if not config.non_blocking_read then trace "WARNING: reads are blocking";
-  if None? config.quic_parameters then trace "WARNING: missing parameters";
   if None? config.alpn            then trace "WARNING: missing ALPN"
 
 /// New client and server connections (without any  I/O yet)
@@ -209,18 +208,11 @@ private let quicVersion (n:UInt32.t) = QuicCustomVersion n // avoid overflow in 
 //    | 1 -> QuicVersion1
 //    | _ -> QuicCustomVersion n
 
-let ffiConfig (qp: bytes) (versions: list UInt32.t) (host:bytes) =
-  let ver = List.Tot.map quicVersion versions in
+let ffiConfig (host:bytes) =
   let h = if length host = 0 then None else Some host in
-  let qpl =
-    match Extensions.parseQuicParameters_aux qp with
-    | Error z -> failwith "Invalid QUIC transport parameters"
-    | Correct qpl -> qpl
-    in
   { defaultConfig with
     min_version = TLS_1p3;
     max_version = TLS_1p3;
     peer_name = h;
-    non_blocking_read = true;
-    quic_parameters = Some (ver, qpl)
+    non_blocking_read = true
   }

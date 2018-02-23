@@ -303,6 +303,79 @@ int MITLS_CALLCONV FFI_mitls_configure_ticket_callback(/* in */ mitls_state *sta
 
 typedef struct {
   void* cb_state;
+  pfn_FFI_server_nego_cb cb;
+} wrapped_nego_cb;
+
+static mitls_version convert_pv(TLSConstants_protocolVersion_ pv)
+{
+  switch(pv.tag)
+  {
+    case TLSConstants_SSL_3p0:
+      return TLS_SSL3;
+    case TLSConstants_TLS_1p0:
+      return TLS_1p0;
+    case TLSConstants_TLS_1p1:
+      return TLS_1p1;
+    case TLSConstants_TLS_1p2:
+      return TLS_1p2;
+    case TLSConstants_TLS_1p3:
+      return TLS_1p3;
+  }
+  return TLS_SSL3; // unreachable
+}
+
+static TLSConstants_server_nego_action nego_cb_proxy(FStar_Dyn_dyn cbs, TLSConstants_protocolVersion_ pv,
+  FStar_Bytes_bytes extb, FStar_Pervasives_Native_option__FStar_Bytes_bytes cookie)
+{
+  wrapped_nego_cb *cb = (wrapped_nego_cb*)cbs;
+  char *app_cookie = NULL, *extra_exts = NULL, *c;
+  size_t app_cookie_len = 0, extra_exts_len = 0;
+
+  if(cookie.tag == FStar_Pervasives_Native_Some)
+  {
+    app_cookie = cookie.v.data;
+    app_cookie_len = cookie.v.length;
+  }
+
+  TLSConstants_server_nego_action a;
+  mitls_nego_action r = cb->cb(cb->cb_state, convert_pv(pv), extb.data, extb.length,
+    &extra_exts, &extra_exts_len, &app_cookie, &app_cookie_len);
+
+  switch(r)
+  {
+    case TLS_nego_abort:
+      a.tag = TLSConstants_Nego_abort;
+      break;
+    case TLS_nego_accept:
+      a.tag = TLSConstants_Nego_accept;
+      c = KRML_HOST_MALLOC(extra_exts_len);
+      memcpy(c, extra_exts, extra_exts_len);
+      a.val.case_Nego_accept = (FStar_Bytes_bytes){.data = c, .length = extra_exts_len};
+      break;
+    case TLS_nego_retry:
+      a.tag = TLSConstants_Nego_retry;
+      c = KRML_HOST_MALLOC(app_cookie_len);
+      if(app_cookie != NULL) memcpy(c, *app_cookie, app_cookie_len);
+      a.val.case_Nego_retry = (FStar_Bytes_bytes){.data = c, .length = app_cookie_len};
+      break;
+  }
+
+  return a;
+}
+
+int MITLS_CALLCONV FFI_mitls_configure_server_nego_callback(mitls_state *state, void *cb_state, pfn_FFI_server_nego_cb nego_cb)
+{
+  ENTER_HEAP_REGION(state->rgn);
+  wrapped_nego_cb *cbs = KRML_HOST_MALLOC(sizeof(wrapped_nego_cb));
+  cbs->cb_state = cb_state;
+  cbs->cb = nego_cb;
+  state->cfg = FFI_ffiSetNegoCallback(state->cfg, (void*)cbs, nego_cb_proxy);
+  LEAVE_HEAP_REGION();
+  return 1;
+}
+
+typedef struct {
+  void* cb_state;
   pfn_FFI_cert_select_cb select;
   pfn_FFI_cert_format_cb format;
   pfn_FFI_cert_sign_cb sign;
@@ -889,7 +962,7 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
         return 0; // failure
     }
 
-    st->cfg = QUIC_ffiConfig(qp, versions, (FStar_Bytes_bytes){.data=host_name,.length=strlen(host_name)});
+    st->cfg = QUIC_ffiConfig((FStar_Bytes_bytes){.data=host_name,.length=strlen(host_name)});
 
     if (cfg->cipher_suites) {
        Prims_string str = CopyPrimsString(cfg->cipher_suites);
@@ -930,7 +1003,7 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
     }
 
     if (cfg->enable_0rtt) {
-       st->cfg = FFI_ffiSetEarlyData(st->cfg, 0x01000000);
+       st->cfg = FFI_ffiSetEarlyData(st->cfg, 0xffffffff);
     }
 
     if (cfg->ticket_callback) {
@@ -938,6 +1011,13 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
       cbs->cb_state = cfg->callback_state;
       cbs->cb = cfg->ticket_callback;
       st->cfg = FFI_ffiSetTicketCallback(st->cfg, (void*)cbs, ticket_cb_proxy);
+    }
+
+    if (cfg->nego_callback) {
+      wrapped_nego_cb *cbs = KRML_HOST_MALLOC(sizeof(wrapped_nego_cb));
+      cbs->cb_state = cfg->callback_state;
+      cbs->cb = cfg->nego_callback;
+      st->cfg = FFI_ffiSetNegoCallback(st->cfg, (void*)cbs, ticket_cb_proxy);
     }
 
     if(cfg->cert_callbacks) {

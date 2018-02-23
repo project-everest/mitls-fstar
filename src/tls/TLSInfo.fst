@@ -81,6 +81,15 @@ let defaultTicketCB = {
   new_ticket = defaultTicketCBFun;
 }
 
+val defaultServerNegoCBFun: server_nego_cb_fun
+let defaultServerNegoCBFun _ pv cext ocookie =
+  Nego_accept empty_bytes
+
+let defaultServerNegoCB : server_nego_cb = {
+  server_nego_context = FStar.Dyn.mkdyn ();
+  server_nego = defaultServerNegoCBFun;
+}
+
 let none4 = fun _ _ _ _ -> None
 let empty3 = fun _ _ _ -> []
 let none5 = fun _ _ _ _ _ -> None
@@ -105,7 +114,6 @@ let defaultConfig =
   {
   min_version = TLS_1p2;
   max_version = TLS_1p3;
-  quic_parameters = None;
   cipher_suites = cipherSuites_of_nameList default_cipherSuites;
   named_groups = default_groups;
   signature_algorithms = default_signature_schemes;
@@ -126,6 +134,7 @@ let defaultConfig =
   enable_tickets = true;
 
   ticket_callback = defaultTicketCB;
+  nego_callback = defaultServerNegoCB;
   cert_callbacks = defaultCertCB;
 
   alpn = None;

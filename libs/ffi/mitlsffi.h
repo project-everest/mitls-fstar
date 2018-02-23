@@ -21,6 +21,14 @@ typedef struct {
 } mitls_ticket;
 
 typedef enum {
+  TLS_SSL3 = 0,
+  TLS_1p0 = 1,
+  TLS_1p1 = 2,
+  TLS_1p2 = 3,
+  TLS_1p3 = 4
+} mitls_version;
+
+typedef enum {
   TLS_hash_MD5 = 0,
   TLS_hash_SHA1 = 1,
   TLS_hash_SHA224 = 2,
@@ -35,6 +43,12 @@ typedef enum {
   TLS_aead_CHACHA20_POLY1305 = 2
 } mitls_aead;
 
+typedef enum {
+  TLS_nego_abort = 0,
+  TLS_nego_accept = 1,
+  TLS_nego_retry = 2
+} mitls_nego_action;
+
 typedef uint16_t mitls_signature_scheme;
 
 // Agile secret with static allocation
@@ -44,7 +58,11 @@ typedef struct {
   char secret[64]; // Max possible size, flat allocation
 } mitls_secret;
 
+// Invoked when a TLS clients receives a new TLS ticket
 typedef void (MITLS_CALLCONV *pfn_FFI_ticket_cb)(void *cb_state, const char *sni, const mitls_ticket *ticket);
+
+// Invoked when a TLS server is negotiating extensions and stateless retry
+typedef mitls_nego_action (MITLS_CALLCONV *pfn_FFI_server_nego_cb)(void *cb_state, mitls_version ver, const char *cexts, size_t cexts_len, /*out*/ char **custom_exts, /*out*/size_t* custom_exs_len, /*inout*/ char **cookie, size_t *cookie_len);
 
 #define MAX_CHAIN_LEN 65536
 #define MAX_SIGNATURE_LEN 8192
@@ -93,6 +111,7 @@ extern int MITLS_CALLCONV FFI_mitls_configure_named_groups(/* in */ mitls_state 
 extern int MITLS_CALLCONV FFI_mitls_configure_alpn(/* in */ mitls_state *state, const char *apl);
 extern int MITLS_CALLCONV FFI_mitls_configure_early_data(/* in */ mitls_state *state, uint32_t max_early_data);
 extern int MITLS_CALLCONV FFI_mitls_configure_ticket_callback(mitls_state *state, void *cb_state, pfn_FFI_ticket_cb ticket_cb);
+extern int MITLS_CALLCONV FFI_mitls_configure_server_nego_callback(mitls_state *state, void *cb_state, pfn_FFI_server_nego_cb nego_cb);
 extern int MITLS_CALLCONV FFI_mitls_configure_cert_callbacks(mitls_state *state, void *cb_state, mitls_cert_cb *cert_cb);
 
 // Close a miTLS session - either after configure or connect
@@ -154,15 +173,9 @@ typedef mitls_secret quic_secret;
 typedef mitls_ticket quic_ticket;
 
 typedef struct {
-  size_t tp_len;
-  const char* tp_data;
-} quic_transport_parameters;
-
-typedef struct {
   int is_server;
   const uint32_t *supported_versions;
   size_t supported_versions_len;
-  quic_transport_parameters qp;
 
   const char *alpn; // Colon separated list of application-level protocols, or NULL
   const char *cipher_suites; // Colon separated list of ciphersuite or NULL
@@ -176,6 +189,7 @@ typedef struct {
 
   void *callback_state; // Passed back as the first argument of callbacks, may be NULL
   pfn_FFI_ticket_cb ticket_callback; // May be NULL
+  pfn_FFI_server_nego_cb nego_callback; // May be NULL
   mitls_cert_cb *cert_callbacks; // May be NULL
 
   // only used by the server
@@ -187,13 +201,7 @@ typedef struct {
 
 // pass 0 to leave any of the configuration values undefined
 extern int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_config *cfg);
-
 extern quic_result MITLS_CALLCONV FFI_mitls_quic_process(/* in */ quic_state *state, /*in*/ char* inBuf, /*inout*/ size_t *pInBufLen, /*out*/ char *outBuf, /*inout*/ size_t *pOutBufLen);
-
-// If the peer is a client, version will be the initial version, otherwise it will be the negotiated version
-// If qp->tp_data is NULL, qp->tp_len will still be set to the size of the peer's transport parameters
-extern int MITLS_CALLCONV FFI_mitls_quic_get_peer_parameters(/* in */ quic_state *state, /*out*/ uint32_t *version, /*out*/ quic_transport_parameters *qp);
-
 extern int MITLS_CALLCONV FFI_mitls_quic_get_exporter(/* in */ quic_state *state, int early, /* out */ quic_secret *secret);
 extern void MITLS_CALLCONV FFI_mitls_quic_free(/* in */ quic_state *state);
 

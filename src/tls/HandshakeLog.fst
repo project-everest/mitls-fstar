@@ -288,6 +288,13 @@ let getHash #ha (LOG #reg st) =
     Hashing.finalize #ha cst.hash
 *)
 
+let load_stateless_cookie l hrr digest =
+  let st = !l in
+  let fake_ch = (bytes_of_hex "fe0000") @| (vlbytes 1 digest) in
+  let h = OpenHash (fake_ch @| (helloRetryRequestBytes hrr)) in
+  l := State st.transcript st.outgoing st.outgoing_next_keys st.outgoing_complete
+             st.incoming st.parsed h st.pv st.kex st.dh_group
+
 (* SEND *)
 let send l m =
   trace ("emit "^HandshakeMessages.string_of_handshakeMessage m);

@@ -1842,6 +1842,21 @@ noeq type ticket_cb = {
   new_ticket: ticket_cb_fun;
 }
 
+type server_nego_action =
+  | Nego_abort: server_nego_action
+  | Nego_retry: cookie_extra:bytes -> server_nego_action
+  | Nego_accept: extra_ext:bytes -> server_nego_action
+
+type server_nego_cb_fun =
+  (FStar.Dyn.dyn -> pv: protocolVersion -> client_ext: bytes -> cookie: option bytes -> ST server_nego_action
+    (requires fun _ -> True)
+    (ensures fun h0 r h1 -> Nego_retry? r ==> None? cookie /\ modifies_none h0 h1))
+
+noeq type server_nego_cb = {
+  server_nego_context: FStar.Dyn.dyn;
+  server_nego: server_nego_cb_fun;
+}
+
 type cert_repr = b:bytes {length b < 16777216}
 type cert_type = FFICallbacks.callbacks
 
@@ -1910,7 +1925,6 @@ noeq type config : Type0 = {
     (* Supported versions, ciphersuites, groups, signature algorithms *)
     min_version: protocolVersion;
     max_version: protocolVersion;
-    quic_parameters: option (valid_quicVersions * valid_quicParameters);
     cipher_suites: x:valid_cipher_suites{List.Tot.length x < 256};
     named_groups: list valid_namedGroup;
     signature_algorithms: signatureSchemeList;
@@ -1925,11 +1939,14 @@ noeq type config : Type0 = {
 
     (* Common *)
     non_blocking_read: bool;
-    max_early_data: option nat;   // 0-RTT offer (client) and support (server), and data limit
+    max_early_data: option UInt32.t;   // 0-RTT offer (client) and support (server), and data limit
     safe_renegotiation: bool;     // demands this extension when renegotiating
     extended_master_secret: bool; // turn on RFC 7627 extended master secret support
     enable_tickets: bool;         // Client: offer ticket support; server: emit and accept tickets
+
+    (* Callbacks *)
     ticket_callback: ticket_cb;   // Ticket callback, called when issuing or receiving a new ticket
+    nego_callback: server_nego_cb;// Callback to decide stateless retry and negotiate extra extensions
     cert_callbacks: cert_cb;      // Certificate callbacks, called on all PKI-related operations
 
     alpn: option alpn;   // ALPN offers (for client) or preferences (for server)
