@@ -174,6 +174,8 @@ let token #ip #i k =
     log := Some ());
   t
 
+assume val equalBytes : b1:Bytes.bytes -> b2:Bytes.bytes -> Tot (b:bool{b = (b1=b2)})
+
 val verify:
   #ip:ipkg -> #i:ip.Pkg.t {ip.Pkg.registered i} -> k:key ip i ->
   t: tag (usage k) -> ST bool
@@ -183,7 +185,7 @@ val verify:
     (b /\ safe i ==> (usage k).good))
 let verify #ip #i k t =
   let MAC _ t' = get_key k in 
-  let verified = FStar.Bytes.equalBytes t t' in
+  let verified = equalBytes t t' in
   if is_safe i then
     // We use the log to correct any verification errors
     let IdealKey _ _ log = k <: ir_key ip i in

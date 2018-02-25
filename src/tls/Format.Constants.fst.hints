@@ -1,0 +1,76 @@
+[
+  "â¾Î\u0015H7üôáq\u0011Jí\u001aG¢",
+  [
+    [
+      "Format.Constants.is_constantByte",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt8.t_haseq" ],
+      0,
+      "d66ebe64564c3277eada309238038753"
+    ],
+    [
+      "Format.Constants.constantByte_parser",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "equation_Format.Constants.is_constantByte",
+        "projection_inverse_BoxBool_proj_0",
+        "typing_Format.Constants.is_constantByte"
+      ],
+      0,
+      "4d33e6cd0566ca28a97d3a20c763f877"
+    ],
+    [
+      "Format.Constants.constantByte_parser32",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "equation_Format.Constants.constantByte_parser",
+        "equation_Format.Constants.is_constantByte",
+        "projection_inverse_BoxBool_proj_0",
+        "typing_Format.Constants.is_constantByte"
+      ],
+      0,
+      "2ff846f0e6dcd3173a486a0fe63d6de4"
+    ],
+    [
+      "Format.Constants.constantByte_serializer",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "equation_Format.Constants.constantByte_parser",
+        "equation_Format.Constants.is_constantByte",
+        "equation_LowParse.Spec.Int.parse_u8_kind",
+        "projection_inverse_BoxBool_proj_0",
+        "typing_Format.Constants.is_constantByte"
+      ],
+      0,
+      "4c8b37877799a3145754e1642e662b3f"
+    ],
+    [
+      "Format.Constants.constantByte_serializer32",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "equation_Format.Constants.constantByte_parser",
+        "equation_Format.Constants.constantByte_serializer",
+        "equation_Format.Constants.is_constantByte",
+        "equation_LowParse.Spec.Int.parse_u8_kind",
+        "projection_inverse_BoxBool_proj_0",
+        "typing_Format.Constants.is_constantByte"
+      ],
+      0,
+      "7f93f8cac900bbd5094b0ea535601a4f"
+    ]
+  ]
+]

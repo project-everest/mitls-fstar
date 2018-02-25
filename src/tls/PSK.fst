@@ -17,38 +17,26 @@ module MM = FStar.Monotonic.DependentMap
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
 
-// cwinter: pskInfo moved to TLSConstants?
-// /// Pre-shared key materials for TLS 1.3 handshake  
-// ///
-// /// The constraints for PSK indexes are:
-// ///  - must be public (as psk index appears in hsId, msId and derived keys)
-// ///  - must support application-provided PSK as well as RMS-based PSK
-// ///  - must support dynamic compromise; we want to prove KI of 1RT keys in PSK_DHE
-// ///    even for leaked PSK (but not PSK-based auth obivously)
-// /// 
-// ///    17-09-20 we can dynamically compromise the Binder key but not the PSK itself.
-// ///
-// ///    17-09-20 we support resumption only by coercing across indexes. TODO
-// ///   
-// /// Implementation style:
-// ///  - pskid is the TLS PSK identifier, an internal index to the PSK table
-// ///  - for tickets, the encrypted serialized state is the PSK identifier
-// ///  - we store in the table the PSK context and compromise status
+// Has been moved to TLSConstants as it appears in config for ticket callbacks
+type pskInfo = TLSConstants.pskInfo
+  
+/// Pre-shared key materials for TLS 1.3 handshake  
+///
+/// The constraints for PSK indexes are:
+///  - must be public (as psk index appears in hsId, msId and derived keys)
+///  - must support application-provided PSK as well as RMS-based PSK
+///  - must support dynamic compromise; we want to prove KI of 1RT keys in PSK_DHE
+///    even for leaked PSK (but not PSK-based auth obivously)
+/// 
+///    17-09-20 we can dynamically compromise the Binder key but not the PSK itself.
+///
+///    17-09-20 we support resumption only by coercing across indexes. TODO
+///   
+/// Implementation style:
+///  - pskid is the TLS PSK identifier, an internal index to the PSK table
+///  - for tickets, the encrypted serialized state is the PSK identifier
+///  - we store in the table the PSK context and compromise status
 
-// /// Information recorded in the table.
-// ///
-// /// NB for now we use the same table as real & local, and ideal & shared.
-// /// we considered using two levels instead. 
-// type pskInfo = {
-//   ticket_nonce: option bytes;
-//   time_created: int;
-//   allow_early_data: bool; 
-//   allow_dhe_resumption: bool;
-//   allow_psk_resumption: bool;
-//   early_ae: aeadAlg;
-//   early_hash: Hashing.Spec.alg;  //CF could be more specific and use Hashing.alg
-//   identities: bytes * bytes;
-// }
 
 module DM = FStar.DependentMap
 module MM = FStar.Monotonic.DependentMap

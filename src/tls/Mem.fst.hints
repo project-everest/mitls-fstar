@@ -1,5 +1,5 @@
 [
-  "R\"BKÉ\t¬—„‚\"ÍZ\u000b=e",
+  "mÌt…»/ó∑u¯±ù\u000eÁQ&",
   [
     [
       "Mem.is_tls_rgn",
@@ -8,7 +8,7 @@
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "e12174a6df1368dfafe95580c5b1ece5"
+      "d18cbb9ccf5843e8ed0a81f190dd86a0"
     ],
     [
       "Mem.is_epoch_rgn",
@@ -17,7 +17,7 @@
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "b88dabcb9017095fea56a541bfe8ca9b"
+      "5a2c81938028be97f0260c6e1cc12498"
     ],
     [
       "Mem.is_hs_rgn",
@@ -26,7 +26,7 @@
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "f3a62ff5b4fe882da1f9266d2b4026ed"
+      "8d5bc70b7070dd58b1b5cf4a399368e6"
     ],
     [
       "Mem.subrgn",
@@ -35,7 +35,7 @@
       1,
       [ "@query" ],
       0,
-      "ef384ca447dafe38c840d0df461c96c9"
+      "3d6d5a5a9dedaafe67d4cf83bd5692a9"
     ],
     [
       "Mem.tls_region",
@@ -59,7 +59,7 @@
         "refinement_interpretation_Prims_Tm_refine_2fbd657fe85bcb2423f9c7e5f9b3bcb5"
       ],
       0,
-      "c0c813726f49fe47647cc89be195fd37"
+      "98265b940ab232e43335ee3066e01946"
     ],
     [
       "Mem.p",
@@ -115,7 +115,7 @@
         "typing_Mem.disjoint", "typing_Mem.is_tls_rgn"
       ],
       0,
-      "d77c559850b2b18133bb2c1b6f0a8f93"
+      "61537f790dd347dcf74f8fd42eac000a"
     ],
     [
       "Mem.tls_tables_region",
@@ -124,7 +124,7 @@
       1,
       [ "@query" ],
       0,
-      "649d24933cc326dee9426162e6943d51"
+      "977ae5080c35f62910f9ce427c74e68d"
     ],
     [
       "Mem.tls_define_region",
@@ -142,7 +142,7 @@
         "refinement_interpretation_Mem_Tm_refine_dd1cf5f48ae1a9e679fd7c75358fac7c"
       ],
       0,
-      "200fbaa1b5d1611bb02bbd2a85091977"
+      "eceda430f3bcb4d4c754e5eef273ec2a"
     ],
     [
       "Mem.tls_honest_region",
@@ -161,7 +161,7 @@
         "refinement_interpretation_Mem_Tm_refine_dd1cf5f48ae1a9e679fd7c75358fac7c"
       ],
       0,
-      "8eac020819a8f60037645388dd72e211"
+      "c45ec615c9158dc926fddaba98972a40"
     ],
     [
       "Mem.ssa",
@@ -179,52 +179,7 @@
         "true_interp"
       ],
       0,
-      "a7491c9e707c89623d7dcc540e59f8b0"
-    ],
-    [
-      "Mem.rset",
-      1,
-      2,
-      1,
-      [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
-      0,
-      "d8912556773f4895eb2406e087e65a83"
-    ],
-    [
-      "Mem.rset",
-      2,
-      2,
-      1,
-      [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
-      0,
-      "7639533be0f2aa2e341b1007e2f89a2d"
-    ],
-    [
-      "Mem.rset",
-      3,
-      2,
-      1,
-      [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
-      0,
-      "ca951cd205559208ff25f92281115e1c"
-    ],
-    [
-      "Mem.rset",
-      4,
-      2,
-      1,
-      [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
-      0,
-      "8d3f41789a0b999c90f9df21f2b78da6"
-    ],
-    [
-      "Mem.rset",
-      5,
-      2,
-      1,
-      [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
-      0,
-      "fbd33a99abeeedf3d99913b714e65948"
+      "8cc4bd6c4f69c6c59e0ef02ed2202a7b"
     ],
     [
       "Mem.rset_union",
@@ -232,27 +187,15 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query",
-        "assumption_FStar.Monotonic.HyperHeap.HasEq_rid",
-        "equation_Mem.rset", "equation_Mem.tls_tables_region",
-        "equation_Prims.eqtype",
+        "@MaxIFuel_assumption", "@query", "equation_Mem.rset",
+        "equation_Mem.tls_tables_region", "equation_Prims.eqtype",
         "function_token_typing_FStar.Monotonic.HyperHeap.rid",
         "lemma_FStar.Set.mem_union", "primitive_Prims.op_BarBar",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Mem_Tm_refine_6644b83922da4932ccf7a98cc0314800",
-        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+        "refinement_interpretation_Mem_Tm_refine_6644b83922da4932ccf7a98cc0314800"
       ],
       0,
-      "b05179724cc83de4b5d1363e0d81f699"
-    ],
-    [
-      "Mem.rset_union",
-      2,
-      2,
-      1,
-      [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
-      0,
-      "135c05c6a38ffed5f96ab09a6ffaef24"
+      "516ce29555551ca6ab6bfca3597d9e6e"
     ],
     [
       "Mem.lemma_rset_disjoint",
@@ -265,25 +208,7 @@
         "refinement_interpretation_Mem_Tm_refine_6644b83922da4932ccf7a98cc0314800"
       ],
       0,
-      "d4a5067ca988bc5fee884ed6294e5ffa"
-    ],
-    [
-      "Mem.lemma_rset_disjoint",
-      2,
-      2,
-      1,
-      [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
-      0,
-      "50993d9aafd5b79dcb1509f0806cfca3"
-    ],
-    [
-      "Mem.lemma_rset_disjoint",
-      3,
-      2,
-      1,
-      [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
-      0,
-      "931be86267f866f8d8bae6449da3e38b"
+      "748dcd4fe781675d072edd4e0fd61bf7"
     ],
     [
       "Mem.lemma_define_tls_honest_regions",
@@ -310,25 +235,7 @@
         "typing_Mem.tls_define_region", "typing_Mem.tls_honest_region"
       ],
       0,
-      "f45d328b5e600bb29402891310a6350d"
-    ],
-    [
-      "Mem.lemma_define_tls_honest_regions",
-      2,
-      2,
-      1,
-      [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
-      0,
-      "804a5e483c236344acf253ea91b01911"
-    ],
-    [
-      "Mem.lemma_define_tls_honest_regions",
-      3,
-      2,
-      1,
-      [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
-      0,
-      "fa21b9b5b91549490b895070d3b89bce"
+      "28a940d0908ada969826a383e53e944e"
     ],
     [
       "Mem.i_mem_table",
@@ -337,7 +244,7 @@
       1,
       [ "@query" ],
       0,
-      "e4cdf192ad3b493927ffeee5797bb856"
+      "e89cddc42205fc198739cac7f32e38c9"
     ],
     [
       "Mem.mem_table",
@@ -346,7 +253,7 @@
       1,
       [ "@query" ],
       0,
-      "cf6ed816b1d69b14f533dd87eeba0dc9"
+      "385f45625a052506638e160ff6121f74"
     ],
     [
       "Mem.itable",
@@ -359,7 +266,7 @@
         "function_token_typing_Flags.model"
       ],
       0,
-      "0723fa299609758858b0ff255c20ac43"
+      "dc1117157092c8b3a7339ce2165c9bf8"
     ],
     [
       "Mem.mem_fresh",
@@ -368,7 +275,7 @@
       1,
       [ "@query" ],
       0,
-      "a3b6bae757da662b0766a5cee84bc9bc"
+      "676fb4bb171c49f12a5994fd219ac99c"
     ],
     [
       "Mem.mem_defined",
@@ -377,7 +284,7 @@
       1,
       [ "@query" ],
       0,
-      "94ff7f0a3d74694bce3ea58c2830b8d3"
+      "7d2ebc3b5b8f6a80cd00f019e5f442a5"
     ],
     [
       "Mem.mem_update",
@@ -386,7 +293,7 @@
       1,
       [ "@query" ],
       0,
-      "4302edfe97542f26e4e6c1daa39fee89"
+      "54f4906653844101ebf12ab94a307a60"
     ],
     [
       "Mem.mem_stable",
@@ -395,7 +302,7 @@
       1,
       [ "@query" ],
       0,
-      "b96ce1d3a792542791302e56bc61bf58"
+      "247426c7743e0ed903c5e4a47baae0ce"
     ],
     [
       "Mem.modifies_mem_table",
@@ -411,7 +318,7 @@
         "typing_Mem.is_tls_rgn"
       ],
       0,
-      "8054106c7fa92b1de3303eb2a855c8d8"
+      "962677230ea4273f44da6d22c5c2b726"
     ],
     [
       "Mem.modifies_mem_table",
@@ -423,7 +330,7 @@
         "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "116c96c76b50187e222f3cb675af0f71"
+      "554d8e677f8961b21c1224b359424f2e"
     ],
     [
       "Mem.mem_disjoint",
@@ -432,7 +339,7 @@
       1,
       [ "@query" ],
       0,
-      "2b94885ec128bd395ec6bd30456cbf4f"
+      "86d6a8b203a132c0080d41d10cdee8c8"
     ],
     [
       "Mem.mem_disjoint",
@@ -444,7 +351,7 @@
         "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "40b3baf98e4f314726b796d006009f59"
+      "a71da0ada9a5a56b4440e69d829e3271"
     ],
     [
       "Mem.mem_alloc",
@@ -541,7 +448,7 @@
         "typing_Mem.tls_define_region", "unit_typing"
       ],
       0,
-      "fdfa6ade50739e9b26f459d56d235e0a"
+      "169d07f4a7076e8040f19c3dd62b30ba"
     ],
     [
       "Mem.lemma_mem_disjoint_stable",
@@ -604,7 +511,7 @@
         "typing_Mem.mem_addr", "typing_Mem.tls_define_region"
       ],
       0,
-      "2c55528eda77db30e1b57d5d4933e384"
+      "e048db3d48b5964927abc0bfc7134f90"
     ],
     [
       "Mem.lemma_mem_frame",
@@ -659,7 +566,7 @@
         "typing_Mem.tls_define_region"
       ],
       0,
-      "026e1b7d6cdc75172f3f90965ef5ed2e"
+      "c942d449d680b490715ec29815a9da90"
     ]
   ]
 ]

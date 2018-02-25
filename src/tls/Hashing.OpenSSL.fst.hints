@@ -1,5 +1,5 @@
 [
-  "^ÜÒ\u000f‰Â.Z∑3è≈]´•\u0019",
+  "ØÖπî⁄¿Í–7¥]Ä£r”@",
   [
     [
       "Hashing.OpenSSL.compute",
@@ -10,20 +10,11 @@
         "@MaxIFuel_assumption", "@query",
         "Prims_pretyping_ae567c2fb75be05905677af440075565",
         "assumption_Prims.HasEq_int", "equation_FStar.UInt32.n",
-        "equation_Prims.nat", "function_token_typing_FStar.UInt32.n",
-        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
+        "function_token_typing_FStar.UInt32.n",
+        "haseqFStar.Bytes_Tm_refine_1ec852aff28ab568526a8c54c3e853ec"
       ],
       0,
-      "4d22e223a912d5aa046c2dfe5d998adf"
-    ],
-    [
-      "Hashing.OpenSSL.compute",
-      2,
-      2,
-      1,
-      [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
-      0,
-      "e7f0f38f1e70b5ba060c6e9dca71bb58"
+      "c7b25301fc9dda2b5cee3a4e97cc6e00"
     ],
     [
       "Hashing.OpenSSL.hmac",
@@ -34,20 +25,11 @@
         "@MaxIFuel_assumption", "@query",
         "Prims_pretyping_ae567c2fb75be05905677af440075565",
         "assumption_Prims.HasEq_int", "equation_FStar.UInt32.n",
-        "equation_Prims.nat", "function_token_typing_FStar.UInt32.n",
-        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
+        "function_token_typing_FStar.UInt32.n",
+        "haseqFStar.Bytes_Tm_refine_1ec852aff28ab568526a8c54c3e853ec"
       ],
       0,
-      "6cbe25971633a158957462b731a5b93c"
-    ],
-    [
-      "Hashing.OpenSSL.hmac",
-      2,
-      2,
-      1,
-      [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
-      0,
-      "bc2ba64e547f738a44d95d817c822dba"
+      "4b2f8dda69a273e9ba9a51ee47a28725"
     ],
     [
       "Hashing.OpenSSL.toCC",
@@ -64,7 +46,16 @@
         "fuel_guarded_inversion_Hashing.Spec.alg"
       ],
       0,
-      "666379d5f0670f5c0eea26987e9f4cf1"
+      "7596e026cf297465525c9748502b3694"
+    ],
+    [
+      "Hashing.OpenSSL.toHacl",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "80844cc9090b1269a9293e69bd3d37ee"
     ]
   ]
 ]

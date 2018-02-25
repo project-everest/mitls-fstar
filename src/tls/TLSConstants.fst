@@ -1707,6 +1707,10 @@ let string_of_quicParameters = function
 
 
 
+/// Information recorded in the table.
+///
+/// NB for now we use the same table as real & local, and ideal & shared.
+/// we considered using two levels instead. 
 
 type pskInfo = {
   ticket_nonce: option bytes;

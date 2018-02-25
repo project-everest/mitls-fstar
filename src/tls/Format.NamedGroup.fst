@@ -126,11 +126,12 @@ let namedGroup_parser32: LP.parser32 namedGroup_parser =
 
 (* Serialization *) 
 
-#reset-options "--using_facts_from '* -LowParse -FStar.Reflection -FStar.Tactics' --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16"
+#reset-options "--using_facts_from '* -LowParse -FStar.Reflection -FStar.Tactics' --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16 --z3rlimit 10"
 let lemma_namedGroup_of_u16_of_namedGroup () 
   : Lemma (forall x . namedGroup_of_u16 (u16_of_namedGroup x) == x)
   = ()
 #reset-options
+
 
 let namedGroup_serializer: LP.serializer namedGroup_parser = 
   lemma_namedGroup_of_u16_is_injective ();

@@ -50,8 +50,6 @@ let byte_of_ecCurveType (c:ecCurveType)
   | RESERVED r     -> r
   | UNKNOWN r      -> r
 
-let is_named (t:ecCurveType): Tot bool = t = NAMED_CURVE
-
 #reset-options "--using_facts_from '* -LowParse -FStar.Reflection -FStar.Tactics' --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16"
 let lemma_ecCurveType_of_byte_is_injective () 
   : Lemma (is_injective ecCurveType_of_byte) 

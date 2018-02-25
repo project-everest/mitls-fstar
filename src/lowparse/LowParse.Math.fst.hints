@@ -7,11 +7,12 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "int_inversion",
-        "primitive_Prims.op_Multiply", "projection_inverse_BoxInt_proj_0"
+        "@MaxIFuel_assumption", "@query", "assumption_Prims.HasEq_int",
+        "int_inversion", "primitive_Prims.op_Multiply",
+        "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "a6ce026b2f95fedad8402df4742e7940"
+      "05cc35783159049930939c151645a69e"
     ],
     [
       "LowParse.Math.mul_reg_r",
@@ -20,7 +21,7 @@
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "91db4e3408f71c2c7d513a0e368b7448"
+      "e29ea0a194b6f7da7ff4c28620fe0ec7"
     ],
     [
       "LowParse.Math.mul_reg_l",
@@ -28,11 +29,12 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "int_inversion",
-        "primitive_Prims.op_Multiply", "projection_inverse_BoxInt_proj_0"
+        "@MaxIFuel_assumption", "@query", "assumption_Prims.HasEq_int",
+        "int_inversion", "primitive_Prims.op_Multiply",
+        "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "a5ef3a1c3d7042290764f77befcd0015"
+      "b534d74507c08a6fb1e37f94be76609f"
     ],
     [
       "LowParse.Math.mul_reg_l",
@@ -41,7 +43,7 @@
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "df6768d6135f95936864bdabc76ee329"
+      "3f2cd4ddf4f42f414b87ec1c808c3d31"
     ],
     [
       "LowParse.Math.lt_mul_add_reg_r",
@@ -50,14 +52,13 @@
       1,
       [
         "@MaxIFuel_assumption", "@query", "equation_Prims.nat",
-        "equation_Prims.pos", "int_inversion", "int_typing",
-        "primitive_Prims.op_Addition", "primitive_Prims.op_Multiply",
-        "projection_inverse_BoxInt_proj_0",
+        "equation_Prims.pos", "int_inversion", "primitive_Prims.op_Addition",
+        "primitive_Prims.op_Multiply", "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "refinement_interpretation_Prims_Tm_refine_f048236b5f8051f83b495ea5eaa6127b"
       ],
       0,
-      "ce86bfb20182011f2070a151f747fa29"
+      "1dae16fefa66255752bea9b4b927827d"
     ]
   ]
 ]

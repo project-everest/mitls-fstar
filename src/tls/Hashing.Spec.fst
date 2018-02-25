@@ -75,8 +75,11 @@ let acc0 (a:alg) : acc a = empty_bytes
 abstract
 let compress (#a:alg) (_:acc a) (l:lbytes (blockLen a)) = l //??
 
+private
 abstract
-let truncate (#a:alg) (ac:acc a) : Tot (acc a) = Bytes.slice ac (0ul) (FStar.UInt32.uint_to_t (tagLen a))  //?? just keeping the first tagLen bytes
+let truncate (#a:alg) (ac:acc a{Bytes.length ac >= tagLen a}) : Tot (acc a) = 
+  let l = UInt32.uint_to_t (tagLen a) in
+  Bytes.slice ac 0ul l  //?? just keeping the first tagLen bytes
 (*
 let acc0 = function
   | MD5 ->  [0x67452301; 0xefcdab89; 0x98badcfe; 0x10325476] // A, B, C, D
@@ -90,9 +93,11 @@ let acc0 = function
 val hash2: #a:alg -> acc a -> b:bytes { length b % blockLen a = 0 } -> Tot (acc a) (decreases (length b))
 let rec hash2 #a v b =
   if length b = 0 then v
-  else
+  else begin
+    assume (blockLen a < Bytes.length b);
     let c,b = split_ b (blockLen a) in
     hash2 (compress v c) b
+    end
 
 // for convenience, we treat inputs as sequences of bytes, not bits.
 // but note what's encoded in the suffix is the length in bits.
@@ -114,8 +119,11 @@ let suffix (a:alg) (len:nat): Tot (c:lbytes (suffixLen a len)) =
 // computed in one step (specification)
 val hash: a:alg -> bytes -> Tot (lbytes (tagLen a))
 let hash a b =
-  let padded = b @| suffix a (length b) in
+  let c = suffix a (length b) in
+  assume (UInt.fits (length b + length c) 32);
+  let padded = b @| c in
   let v = hash2 (acc0 a) padded in
+  assume (length v >= tagLen a);
   truncate v
 
 
@@ -130,4 +138,5 @@ let hmac a key message =
   let xkey = key @| create_ (blockLen a - tagLen a) 0x0z  in
   let outer_key_pad = xor_ #(blockLen a) xkey (create_ (blockLen a) 0x5cz) in
   let inner_key_pad = xor_ #(blockLen a) xkey (create_ (blockLen a) 0x36z) in
+  assume (UInt.fits (length inner_key_pad + length message) 32);
   hash a (outer_key_pad @| hash a (inner_key_pad @| message))

@@ -1,6 +1,5 @@
 ﻿(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 module Hashing
-module HS = FStar.HyperStack //Added automatically
 
 open FStar.Heap
 open FStar.HyperStack
@@ -21,13 +20,15 @@ let content #a v =
   match v with Inputs b -> b
 
 val start: a:alg -> Tot (v:accv a {content v == empty_bytes})
-val extend: #a:alg -> v:accv a -> b:bytes -> Tot (v':accv a {content v' == content v @| b})
+val extend: #a:alg -> v:accv a -> b:bytes -> Tot (v':accv a {
+  UInt.fits (length (content v) + length b) 32 /\
+  content v' == (content v) @| b})
 val finalize: #a:alg -> v:accv a -> ST (t:tag a {t == hash a (content v)})
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> modifies Set.empty h0 h1))
 
 let start a = Inputs empty_bytes
-let extend #a (Inputs b0) b1 = Inputs (b0 @| b1)
+let extend #a (Inputs b0) b1 = assume (UInt.fits (length b0 + length b1) 32); Inputs (b0 @| b1)
 let finalize #a (Inputs b) = Hashing.OpenSSL.compute a b
 
 let compute =  Hashing.OpenSSL.compute 
