@@ -106,14 +106,25 @@ ROOTS ?= TLS.fst QUIC.fst Test.Main.fst
 	@echo === Producing $@ ...
 	mkdir -p $(EXTRACT_DIR)
 	$(FSTAR) --odir $(EXTRACT_DIR) \
+         --lax \
 		 --dep full \
 		 --extract $(EXTRACT) \
 		 $(addprefix --include , $(INCLUDE_PATHS)) \
 		 $(ROOTS) > .depend.$(FLAVOR)
 
-depend: .depend.$(FLAVOR)
+.depend.verify.$(FLAVOR):
+	@echo === Producing $@ ...
+	mkdir -p $(EXTRACT_DIR)
+	$(FSTAR) --odir $(EXTRACT_DIR) \
+		 --dep full \
+		 $(addprefix --include , $(INCLUDE_PATHS)) \
+		 $(ROOTS) > .depend.verify.$(FLAVOR)
+	sed -e "s/source:/source.verify:/g" -i .depend.verify.$(FLAVOR) # cwinter: squelches warnings about re-defined .source dependency rules
 
--include .depend.$(FLAVOR)
+depend: .depend.$(FLAVOR) .depend.verify.$(FLAVOR)
+
+-include .depend.$(FLAVOR) 
+-include .depend.verify.$(FLAVOR)
 
 # the touch is needed because make may decide to invoke fstar on this
 # target because the timestamp on, say, the .fst file changed, and
@@ -127,12 +138,12 @@ depend: .depend.$(FLAVOR)
 	$(FSTAR) --lax $(addprefix --include , $(INCLUDE_PATHS)) $<
 	@touch $@
 
-%.checked:
+%.checked: 
 	@echo === Producing $@ ...
 	$(FSTAR) $(VFLAGS) $(addprefix --include , $(INCLUDE_PATHS)) $<
 	@touch $@
 
-verify-all: $(addprefix $(CACHE_DIR)/, $(addsuffix .checked, $(notdir $(ALL_FST_FILES))))
+verify-all: .depend.verify.$(FLAVOR) $(addprefix $(CACHE_DIR)/, $(addsuffix .checked, $(notdir $(ALL_FST_FILES))))
 
 verify-all-here: $(addsuffix -ver, $(wildcard *.fst))
 	@echo Done.
@@ -140,12 +151,14 @@ verify-all-here: $(addsuffix -ver, $(wildcard *.fst))
 # typechecks one specific  file (not its dependencies),
 # but still produces a .checked file; this is convenient but not safe.
 
-%.fsti-ver:
-	@echo === Verifying $*.fsti ...
-	$(FSTAR) $(VFLAGS) $(addprefix --include , $(INCLUDE_PATHS)) $*.fsti
-%.fst-ver:
-	@echo === Verifying $*.fst ...
-	$(FSTAR) $(VFLAGS) $(addprefix --include , $(INCLUDE_PATHS)) $*.fst
+# %.fsti-ver:
+# %.fst-ver: $(CACHE_DIR)/%.fst.checked:
+# 	@echo === Verifying $@ ...
+# 	$(FSTAR) $(VFLAGS) \
+# 		$(addprefix --include , $(INCLUDE_PATHS)) \
+# 		$(subst $(CACHE_DIR)/,,$(subst .lax,,$<)) \
+#         $(subst -ver,,$@)
+
 # too demanding?
 # %.fst-ver: $(addprefix $(CACHE_DIR)/, $(addsuffix .checked, %.fst))
 #	echo $%

@@ -1,6 +1,105 @@
 [
-  "›W\u0005/ì~@∫úV^¯d¶µD",
+  "¯\u001c±óèhÔ†üŸ“O,!Ni",
   [
+    [
+      "Format.ECCurveType.uu___is_EXPLICIT_PRIME",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "285497e37cf0040eeb2efbe8a9459157"
+    ],
+    [
+      "Format.ECCurveType.uu___is_EXPLICIT_CHAR2",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "a9d3ec1c01c4f99c8b5c7b481f7f37f8"
+    ],
+    [
+      "Format.ECCurveType.uu___is_NAMED_CURVE",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "b22fc049c7131a59a9a8146c0a8ad7dc"
+    ],
+    [
+      "Format.ECCurveType.uu___is_RESERVED",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "57588b6b8386d68e0648a370c09e6312"
+    ],
+    [
+      "Format.ECCurveType.__proj__RESERVED__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Format.ECCurveType.RESERVED",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Format.ECCurveType_Tm_refine_01a030ae38a402d3db21024ea97f8597"
+      ],
+      0,
+      "c1fd24a4d1889a98383a26b7969c3141"
+    ],
+    [
+      "Format.ECCurveType.uu___is_UNKNOWN",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "be8ff0d070de7d232276a8b337a426cc"
+    ],
+    [
+      "Format.ECCurveType.__proj__UNKNOWN__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Format.ECCurveType.UNKNOWN",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Format.ECCurveType_Tm_refine_c50fc0e99edad44b43e6212ca848e6e0"
+      ],
+      0,
+      "3e48ff22c1f8f0e135227401de54731f"
+    ],
+    [
+      "Format.ECCurveType.ecCurveType_of_byte",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "41e2759b36a10a08451091a0afbfb593"
+    ],
+    [
+      "Format.ECCurveType.byte_of_ecCurveType",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Format.ECCurveType.EXPLICIT_CHAR2",
+        "disc_equation_Format.ECCurveType.EXPLICIT_PRIME",
+        "disc_equation_Format.ECCurveType.NAMED_CURVE",
+        "disc_equation_Format.ECCurveType.RESERVED",
+        "disc_equation_Format.ECCurveType.UNKNOWN",
+        "fuel_guarded_inversion_Format.ECCurveType.ecCurveType"
+      ],
+      0,
+      "f58feb4a0b0c5f1aa9fefcd535d0a531"
+    ],
     [
       "Format.ECCurveType.lemma_ecCurveType_of_byte_is_injective",
       1,
@@ -23,7 +122,135 @@
         "typing_Format.ECCurveType.ecCurveType_of_byte"
       ],
       0,
-      "14b55d971023dacd115929bf52dad82c"
+      "e315b04838496f3df4d39c4507bdcfb4"
+    ],
+    [
+      "Format.ECCurveType.ecCurveType_parser",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_FStar.Bytes.byte", "equation_FStar.Bytes.u8",
+        "equation_Format.ECCurveType.byte",
+        "equation_LowParse.Spec.Combinators.synth_injective",
+        "token_correspondence_Format.ECCurveType.ecCurveType_of_byte"
+      ],
+      0,
+      "f8408d23d4f7e11cc1729f424df934c4"
+    ],
+    [
+      "Format.ECCurveType.ecCurveType_parser32",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_FStar.Bytes.byte", "equation_FStar.Bytes.u8",
+        "equation_Format.ECCurveType.byte",
+        "equation_Format.ECCurveType.ecCurveType_parser",
+        "equation_LowParse.Spec.Combinators.synth_injective",
+        "token_correspondence_Format.ECCurveType.ecCurveType_of_byte"
+      ],
+      0,
+      "53ffeabef4d5ffa64bb39f3b10aa39e0"
+    ],
+    [
+      "Format.ECCurveType.lemma_ecCurveType_of_byte_of_ecCurveType",
+      1,
+      16,
+      16,
+      [
+        "@MaxFuel_assumption", "@MaxIFuel_assumption",
+        "@fuel_correspondence_Prims.pow2.fuel_instrumented",
+        "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
+        "bool_inversion", "bool_typing",
+        "data_elim_Format.ECCurveType.RESERVED",
+        "data_elim_Format.ECCurveType.UNKNOWN",
+        "equality_tok_Format.ECCurveType.EXPLICIT_CHAR2@tok",
+        "equality_tok_Format.ECCurveType.EXPLICIT_PRIME@tok",
+        "equality_tok_Format.ECCurveType.NAMED_CURVE@tok",
+        "equation_FStar.Bytes.byte", "equation_FStar.Bytes.lbytes",
+        "equation_FStar.Bytes.u8", "equation_FStar.UInt.eq",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.lte",
+        "equation_FStar.UInt.max_int", "equation_FStar.UInt.min_int",
+        "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
+        "equation_FStar.UInt32.n", "equation_FStar.UInt8.eq",
+        "equation_FStar.UInt8.lte", "equation_FStar.UInt8.n",
+        "equation_Format.ECCurveType.byte",
+        "equation_Format.ECCurveType.byte_of_ecCurveType",
+        "equation_Format.ECCurveType.ecCurveType_of_byte",
+        "equation_Prims.nat", "equation_Prims.pos",
+        "equation_with_fuel_Prims.pow2.fuel_instrumented",
+        "fuel_guarded_inversion_Format.ECCurveType.ecCurveType",
+        "function_token_typing_FStar.Bytes.empty_bytes",
+        "function_token_typing_FStar.UInt32.n",
+        "function_token_typing_FStar.UInt8.n", "int_inversion", "int_typing",
+        "lemma_FStar.UInt.pow2_values", "lemma_FStar.UInt8.vu_inv",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_Equality",
+        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Multiply",
+        "primitive_Prims.op_Subtraction",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
+        "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
+        "refinement_interpretation_Format.ECCurveType_Tm_refine_d48a858136d5fa4b368f07b598a69b12",
+        "refinement_interpretation_Format.ECCurveType_Tm_refine_f09a01e37914358f2c1a714ca769c0f4",
+        "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Prims_Tm_refine_f048236b5f8051f83b495ea5eaa6127b",
+        "token_correspondence_Prims.pow2.fuel_instrumented",
+        "typing_FStar.Bytes.len", "typing_FStar.UInt.lte",
+        "typing_FStar.UInt.max_int", "typing_FStar.UInt32.v",
+        "typing_FStar.UInt8.v",
+        "typing_Format.ECCurveType.byte_of_ecCurveType",
+        "typing_Format.ECCurveType.ecCurveType_of_byte"
+      ],
+      0,
+      "e55c361e9de9ceb8c958765414db5234"
+    ],
+    [
+      "Format.ECCurveType.ecCurveType_serializer",
+      1,
+      2,
+      1,
+      [
+        "@query",
+        "Format.ECCurveType_pretyping_6b79b8178a7af0c62a175be803d36762",
+        "data_typing_intro_Format.ECCurveType.EXPLICIT_CHAR2@tok",
+        "equation_FStar.Bytes.byte", "equation_FStar.Bytes.u8",
+        "equation_Format.ECCurveType.byte",
+        "equation_Format.ECCurveType.ecCurveType_parser",
+        "equation_Format.ECCurveType.ecCurveType_parser_kind",
+        "equation_LowParse.Spec.Combinators.synth_injective",
+        "equation_LowParse.Spec.Combinators.synth_inverse",
+        "equation_LowParse.Spec.Int.parse_u8_kind",
+        "token_correspondence_Format.ECCurveType.byte_of_ecCurveType",
+        "token_correspondence_Format.ECCurveType.ecCurveType_of_byte"
+      ],
+      0,
+      "33a53f297c476bfcbf45ef29da05186a"
+    ],
+    [
+      "Format.ECCurveType.ecCurveType_serializer32",
+      1,
+      2,
+      1,
+      [
+        "@query",
+        "Format.ECCurveType_pretyping_6b79b8178a7af0c62a175be803d36762",
+        "data_typing_intro_Format.ECCurveType.EXPLICIT_CHAR2@tok",
+        "equation_FStar.Bytes.byte", "equation_FStar.Bytes.u8",
+        "equation_Format.ECCurveType.byte",
+        "equation_Format.ECCurveType.ecCurveType_parser",
+        "equation_Format.ECCurveType.ecCurveType_parser_kind",
+        "equation_Format.ECCurveType.ecCurveType_serializer",
+        "equation_LowParse.Spec.Combinators.synth_injective",
+        "equation_LowParse.Spec.Combinators.synth_inverse",
+        "equation_LowParse.Spec.Int.parse_u8_kind",
+        "token_correspondence_Format.ECCurveType.byte_of_ecCurveType",
+        "token_correspondence_Format.ECCurveType.ecCurveType_of_byte"
+      ],
+      0,
+      "d2cb1f759071adf56b9be7f09a1b72e5"
     ]
   ]
 ]

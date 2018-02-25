@@ -16,7 +16,7 @@ endif
 FSTAR_OPTIONS ?=
 #--use_two_phase_tc true
 
-MY_FSTAR=$(FSTAR_HOME)/bin/fstar.exe --use_hints --cache_checked_modules $(addprefix --include , $(INCLUDE_PATHS)) $(INCLUDE_KREMLIN)  $(FSTAR_OPTIONS)
+MY_FSTAR=$(FSTAR_HOME)/bin/fstar.exe --use_hints --cache_checked_modules $(addprefix --include , $(INCLUDE_PATHS)) $(INCLUDE_KREMLIN)  $(FSTAR_OPTIONS) $(OTHERFLAGS)
 
 all: verify-spec verify-slow
 
