@@ -1,9 +1,10 @@
 module StreamDeltas
 module HST = FStar.HyperStack.ST //Added automatically
-open Platform.Bytes
-open FStar.Error
 
+open FStar.Bytes
+open FStar.Error
 open Mem
+open FStar.HyperStack
 open TLSConstants
 open TLSInfo
 
@@ -31,7 +32,7 @@ let project_one_frag #i = function
     | C.CT_Alert _ ad -> singleton (DataStream.Alert ad)
     | _ -> Seq.createEmpty                 // other fragments are internal to TLS
 
-val project_deltas: #i:id -> fs:S.frags i -> Tot (deltas i)
+val project_deltas: #i:id -> fs:S.frags i -> GTot (deltas i)
 let project_deltas #i fs = MS.collect project_one_frag fs
 
 val stream_deltas: #i:id -> #rw:rw -> s:StAE.state i rw{authId i} -> mem -> GTot (deltas i)
@@ -58,7 +59,7 @@ let project_fragment_deltas #i #rw s fs =
 			    ==> deltas_prefix s (project_deltas fs) h) =
 	  fun h -> MS.collect_grows project_one_frag fs (S.fragments s h) in
        let _ = FStar.Classical.forall_intro aux in
-       MR.weaken_witness (S.fragments_prefix s fs) (deltas_prefix s (project_deltas fs))
+       weaken_witness (S.fragments_prefix s fs) (deltas_prefix s (project_deltas fs))
   else ()
 
 let stream_deltas_snoc2 (#i:id) (#rw:rw) (s:StAE.state i rw) (h0:mem) (h1:mem) (f:Content.fragment i)

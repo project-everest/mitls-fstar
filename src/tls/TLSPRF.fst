@@ -1,12 +1,13 @@
 ﻿(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 (* STATUS : JK : assumed two arrays because, has to be fixed *)
 module TLSPRF
+module HS = FStar.HyperStack //Added automatically
 
 (* Low-level (bytes -> byte) PRF implementations for TLS
    used by Handshake, Handshake.Secret, KEF, and PRF.
 *)
 
-open Platform.Bytes
+open FStar.Bytes
 open Hashing.Spec
 open TLSConstants
 open TLSInfo
@@ -50,7 +51,7 @@ let p_hash alg secret seed len =
 
 val ssl_prf_int: bytes -> string -> bytes -> Tot bytes
 let ssl_prf_int secret label seed =
-  let allData = utf8 label @| secret @| seed in
+  let allData = utf8_encode label @| secret @| seed in
   let step1 = hash SHA1 allData in
   let allData = secret @| step1 in
   hash MD5 allData
@@ -102,21 +103,46 @@ let ssl_verifyCertificate hashAlg ms log  =
 
 (* TLS 1.0--1.1 *) 
 
-val tls_prf: lbytes (hashSize TLSConstants.MD5SHA1) -> bytes -> bytes -> len:nat -> St (lbytes len)
+val p_hash_int: a:macAlg -> k:lbytes (macKeySize a) -> bytes -> int -> int -> bytes -> bytes -> ST bytes
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
+let rec p_hash_int alg secret seed len it aPrev acc =
+  let aCur = HMAC.tls_mac alg secret aPrev in
+  let pCur = HMAC.tls_mac alg secret (aCur @| seed) in
+  if it = 1 then
+    let hs = macSize alg in
+    let r = len % hs in
+    let (pCur,_) = split_ pCur r in
+    acc @| pCur
+  else
+    p_hash_int alg secret seed len (it-1) aCur (acc @| pCur)
+
+val p_hash: macAlg -> bytes -> bytes -> int -> St bytes
+let p_hash alg secret seed len =
+  let hs = macSize alg in
+  let it = (len/hs)+1 in
+  p_hash_int alg secret seed len it seed empty_bytes
+
+// cwinter: verify:
+// val tls_prf: lbytes (hashSize TLSConstants.MD5SHA1) -> bytes -> bytes -> len:nat -> St (lbytes len)
+val tls_prf: bytes -> bytes -> bytes -> int -> St bytes
 let tls_prf secret label seed len =
   //18-02-14 fixed broken implementation, but currently unused and untested. 
   let l_s = length secret in
-  let secret1, secret2 = split secret 16 in 
+  let l_s1 = (l_s+1)/2 in
+  let secret1,secret2 = split_ secret l_s1 in
   let newseed = label @| seed in
   let hmd5  = p_hash (HMac MD5) secret1 newseed len in
   let hsha1 = p_hash (HMac SHA1) secret2 newseed len in
-  assume(length hmd5 = len /\ length hsha1 = len);
-  xor len hmd5 hsha1
+  assume(length hmd5 = len /\ length hsha1 = len); // cwinter: verify
+  xor (UInt32.uint_to_t len) hmd5 hsha1
+
+let tls_client_label = utf8_encode "client finished"
+let tls_server_label = utf8_encode "server finished"
+
 
 val tls_finished_label: role -> Tot bytes
 let tls_finished_label =
-  let tls_client_label = utf8 "client finished" in
-  let tls_server_label = utf8 "server finished" in
   function
   | Client -> tls_client_label
   | Server -> tls_server_label

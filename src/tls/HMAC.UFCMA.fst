@@ -2,11 +2,17 @@
 module HMAC.UFCMA
 module HS = FStar.HyperStack //Added automatically
 
+open FStar.Heap
+open FStar.HyperStack
+open FStar.HyperStack.All
+open FStar.Seq
+open FStar.Bytes
+open FStar.Error
 
+open TLSError
 open Mem
 
-open Platform.Bytes
-
+module HS = FStar.HyperStack
 module MM = FStar.Monotonic.Map
 
 let ipkg = Pkg.ipkg
@@ -22,6 +28,10 @@ private let is_safe (#ip:ipkg) (i:ip.Pkg.t{ip.Pkg.registered i}): ST bool
   =
   let b = ip.Pkg.get_honesty i in
   ideal && b
+
+
+// idealizing HMAC
+// for concreteness; the rest of the module is parametric in a:alg
 
 #set-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 
@@ -133,7 +143,7 @@ let create ip _ _ i u =
 
 let coerceT (ip: ipkg) (ha_of_i: ip.Pkg.t -> ha) (good_of_i: ip.Pkg.t -> text -> bool)
   (i: ip.Pkg.t {ip.Pkg.registered i /\ ~(safe i)})
-  (u: u:info {u.alg = ha_of_i i /\ u.good == good_of_i i})
+  (u: (u:info {u.alg = ha_of_i i /\ u.good == good_of_i i}))
   (kv: Pkg.lbytes (keylen u)) : GTot (key ip i)
   =
   let ck = MAC u kv in
@@ -215,7 +225,7 @@ type info1 (ip: ipkg) (ha_of_i: ip.Pkg.t -> ha)
   =
   a:info{a.alg = ha_of_i i /\ a.good == good_of_i i}
 
-unfold let localpkg (ip: ipkg) (ha_of_i: i:ip.Pkg.t -> ha) (good_of_i: ip.Pkg.t -> text -> bool)
+unfold let localpkg (ip: ipkg) (ha_of_i: (i:ip.Pkg.t -> ha)) (good_of_i: ip.Pkg.t -> text -> bool)
   : Pure (Pkg.local_pkg ip)
   (requires True) (ensures fun p -> p.Pkg.key == key ip /\ p.Pkg.info == info1 ip ha_of_i good_of_i)
   =
@@ -349,11 +359,24 @@ let authId id = false // TODO: move to Flags
 type tag (i:id) = tag (alg i)
 
 
+type fresh_subregion rg parent h0 h1 = HS.fresh_region rg h0 h1 /\ extends rg parent
 
 // We keep the tag in case we later want to enforce tag authentication
 abstract type entry (i:id) (good: bytes -> Type) =
   | Entry: t:tag i -> p:bytes { authId i ==> good p } -> entry i good
 
+// readers and writers share the same private state: a log of MACed messages
+// TODO make it abstract
+(*
+ * AR: two changes: region is of type rgn.
+ * log is a hyperstack ref with refinement capturing its rid.
+ *)
+noeq type key (i:id) (good: bytes -> Type) =
+  | Key:
+    #region: rgn -> // intuitively, the writer's region
+    kv: keyrepr i ->
+    log: ref (seq (entry i good)){HS.frameOf log = region} ->
+    key i good
 
 val region: #i:id -> #good:(bytes -> Type) -> k:key i good -> GTot rid
 val keyval: #i:id -> #good:(bytes -> Type) -> k:key i good -> GTot (keyrepr i)
@@ -412,6 +435,11 @@ let mac #i #good k p =
 abstract val matches: #i:id -> #good:(bytes -> Type) -> p:text -> entry i good -> Tot bool
 let matches #i #good p (Entry _ p') = p = p'
 
+let rec log_entry_matches_p #i #good (log:seq (entry i good)) (p:text) =
+  if Seq.length log = 0 then false
+  else matches p (Seq.head log)
+       || log_entry_matches_p (Seq.tail log) p
+       
 val verify: #i:id -> #good:(bytes -> Type) -> k:key i good -> p:bytes -> t:tag i -> ST bool
   (requires (fun _ -> True))
   (ensures (fun h0 b h1 -> modifies Set.empty h0 h1 /\ (b /\ authId i ==> good p)))
@@ -422,4 +450,5 @@ let verify #i #good k p t =
   let log = !k.log in
   x &&
   ( not(authId i) || Some? (seq_find (matches p) log))
+  //  ( not(authId i) || log_entry_matches_p log p)
 *)

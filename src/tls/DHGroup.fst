@@ -1,12 +1,23 @@
 ﻿module DHGroup
 
-open Platform.Bytes
+// cwinter: this file will likely be removed.
+
+open FStar.HyperStack
+open FStar.Bytes
 open FStar.Error
+
 open CoreCrypto
 open TLSError
 open Mem
 open Parse
 
+type ffdhe =
+  | FFDHE2048
+  | FFDHE3072
+  | FFDHE4096
+  | FFDHE6144
+  | FFDHE8192
+  
 type params = dhp:CoreCrypto.dh_params{length dhp.dh_p < 65536 && length dhp.dh_g < 65536}
 
 val make_ffdhe: (p:string{length (bytes_of_hex p) < 65536}) -> string -> Tot params
@@ -99,57 +110,153 @@ val dh_initiator: #g:group -> keyshare g -> share g -> ST (secret g)
 let dh_initiator #g x gy =
   dh_agreement x gy
 
+module LP = LowParse.SLow
 
-/// Parsing and formatting (TODO: check against RFC)
-///
+private
+let dhparam_parser_kind = let vlpk = LP.parse_bounded_vldata_kind 0 65535 in
+                          LP.and_then_kind vlpk
+                            (LP.and_then_kind vlpk
+                              (LP.and_then_kind vlpk vlpk))
+
+private type vlb16 = b:bytes{length b < 65536}
+private type dhparams = vlb16 * vlb16 * vlb16 * vlb16
+
+private 
+inline_for_extraction
+let synth_vlb16 (x:LP.parse_bounded_vlbytes_t 0 65535)
+  : Tot vlb16
+  = assert (length x < 65536); let y:vlb16 = x in y
+
+private 
+inline_for_extraction
+let unsynth_vlb16 (x:vlb16)
+  : Tot (LP.parse_bounded_vlbytes_t 0 65535) 
+  = x
+
+private 
+let vlb16_parser: LP.parser (LP.parse_bounded_vldata_kind 0 65535) vlb16 =
+  let p = LP.parse_bounded_vlbytes 0 65535 in
+  LP.parse_synth p synth_vlb16
+
+private 
+inline_for_extraction
+let vlb16_parser32: LP.parser32 vlb16_parser =
+  let p32 = LP.parse32_bounded_vlbytes 0 0ul 65535 65535ul in
+  LP.parse32_synth _ synth_vlb16 (fun x -> synth_vlb16 x) p32 ()
+
+private
+let vlb16_serializer: LP.serializer vlb16_parser =
+  let vls = LP.serialize_bounded_vlbytes 0 65535 in
+  LP.serialize_synth _ synth_vlb16 vls unsynth_vlb16 ()
+
+private
+inline_for_extraction
+let vlb16_serializer32: LP.serializer32 vlb16_serializer =
+  let vls32 = LP.serialize32_bounded_vlbytes 0 65535 in
+  LP.serialize32_synth _ synth_vlb16 _ vls32 unsynth_vlb16 (fun x -> unsynth_vlb16 x) ()
+  
+ 
+private
+inline_for_extraction
+let synth_dhparams ((a:vlb16), ((b:vlb16), ((c:vlb16), (d:vlb16)))): dhparams = (a, b, c, d)
+
+private
+inline_for_extraction
+let unsynth_dhparams (x:dhparams): Tot (vlb16 * (vlb16 * (vlb16 * vlb16))) = 
+  let a, b, c, d = x in
+  (a, (b, (c, d)))
+
+private
+let dhparam_parser: LP.parser dhparam_parser_kind dhparams =
+  let vlp = vlb16_parser in
+  LP.parse_synth
+    (LP.nondep_then vlp
+      (LP.nondep_then vlp
+        (LP.nondep_then vlp vlp)))
+    synth_dhparams
+
+private 
+inline_for_extraction
+let dhparam_parser32: LP.parser32 dhparam_parser =
+  let vlp32 = vlb16_parser32 in
+  LP.parse32_synth
+    _ 
+    synth_dhparams
+    (fun x -> synth_dhparams x)
+    (LP.parse32_nondep_then vlp32    
+      (LP.parse32_nondep_then vlp32
+        (LP.parse32_nondep_then vlp32 vlp32)))
+    ()
+
+private
+let dhparam_serializer: LP.serializer dhparam_parser =
+  let vls = vlb16_serializer in
+  LP.serialize_synth
+    _ 
+    synth_dhparams
+    (LP.serialize_nondep_then _ vls () _
+      (LP.serialize_nondep_then _ vls () _
+        (LP.serialize_nondep_then _ vls () _ vls)))
+    unsynth_dhparams
+    ()
+
+private
+inline_for_extraction
+let dhparam_serializer32: LP.serializer32 dhparam_serializer =
+  let vls32 = vlb16_serializer32 in
+  LP.serialize32_synth
+    _
+    synth_dhparams
+    _
+    (LP.serialize32_nondep_then vls32 ()
+      (LP.serialize32_nondep_then vls32 ()
+        (LP.serialize32_nondep_then vls32 () vls32 ())
+      ())
+    ())
+    unsynth_dhparams
+    (fun x -> unsynth_dhparams x)
+    ()
+  
 val serialize: #g:group -> share g -> Tot (b:bytes{length b < 196612})
 let serialize #g dh_Y =
-  let dhp = params_of_group g in
-  lemma_repr_bytes_values (length (dhp.dh_p));
-  lemma_repr_bytes_values (length (dhp.dh_g));
-  lemma_repr_bytes_values (length dh_Y);
-  let pb  = vlbytes 2 dhp.dh_p in
-  let gb  = vlbytes 2 dhp.dh_g in
-  let pkb = vlbytes 2 dh_Y in
-  pb @| gb @| pkb
+  let dhp:params = params_of_group g in
+  let (x:CoreCrypto.dh_params{length x.dh_p < 65536 && length x.dh_g < 65536}) = dhp in
+  assert (length x.dh_p < 65536);
+  assert (length x.dh_g < 65536);
+  let r = dhparam_serializer32 (x.dh_p, x.dh_g, dh_Y, Bytes.empty_bytes) in
+  assume (length r < 196612);
+  r
 
 val serialize_public: #g:group -> s:share g -> len:nat{len < 65536 /\ length s <= len}
   -> Tot (lbytes len)
 let serialize_public #g dh_Y len =
-  let padded_dh_Y = createBytes (len - length dh_Y) 0z @| dh_Y in
+  let padded_dh_Y = create_ (len - length dh_Y) 0z @| dh_Y in
   lemma_repr_bytes_values len;
   padded_dh_Y
 
-val parse_public: g:group -> p:bytes{2 <= length p} -> Tot (result (share g))
-let parse_public g p =
-  match vlparse 2 p with
-  | Correct n ->
-    lemma_repr_bytes_values (length n);
-    let dhp = params_of_group g in
-    if length n <= length dhp.dh_p then Correct n
-    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "length of public share exceeds length of DH prime")
-  | Error z -> Error z
+// cwinter: unused?
+// val parse_public: g:group -> bs:bytes -> Tot (result (share g))
+// let parse_public g bs = ...
 
-val parse_partial: bytes -> Tot (result ((g:group & share g) * bytes))
-let parse_partial payload =
-  if length payload >= 2 then
-    match vlsplit 2 payload with
-    | Error(z) -> Error(z)
-    | Correct(p, payload) ->
-      if length payload >= 2 then
-        match vlsplit 2 payload with
-        | Error(z) -> Error(z)
-        | Correct(g, payload) ->
-          if length payload >= 2 then
-            match vlsplit 2 payload with
-            | Error(z) -> Error(z)
-            | Correct(gy, rem) ->
-              if length gy <= length p then
-                let dhp = {dh_p = p; dh_g = g; dh_q = None; safe_prime = false} in
-                lemma_repr_bytes_values (length p);
-                lemma_repr_bytes_values (length g);
-                Correct ((| Explicit dhp, gy |), rem)
-              else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-          else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+private 
+let lemma_dh_param_len_bound (bs:vlb16)
+  : Lemma 
+    (requires True)
+    (ensures (length bs < 65536))
+  = () // cwinter: this should come for free, no?
+
+val parse_partial: FStar.Bytes.bytes -> Tot (result ((g:group & share g) * bytes))
+let parse_partial bs =
+  let q = dhparam_parser32 bs in
+  match q with 
+  | Some ((p, g, gy, rem), _) -> 
+      // cwinter: I have no idea why these lemmas are needed or even why they are helpful.
+      lemma_dh_param_len_bound p;
+      lemma_dh_param_len_bound g;
+      if length gy <= length p then (
+        let dhp = { dh_p = p; dh_g = g; dh_q = None; safe_prime = false } in
+        Correct ((| Explicit dhp, gy |), rem)
+      ) 
+      else
+        Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+  | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")

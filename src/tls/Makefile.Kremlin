@@ -1,0 +1,196 @@
+all: build
+
+build: build-internal-test build-library build-external-test
+
+test: test-internal-test # test-library test-external-test
+
+clean: clean-internal-test clean-library clean-external-test
+
+# To include Makefile.common, you need to specify
+# the following three variables
+FLAVOR		= Kremlin
+EXTENSION	= krml
+# Don't extract modules from mitls that are implemented in C
+EXTRACT		= '* -DHDB -LowCProvider -FFICallbacks -BufferBytes'
+
+include Makefile.common
+
+# Tiny bit of autodetection to grab the right Vale files
+UNAME		= $(shell uname)
+MARCH		?= x86_64
+ifeq ($(UNAME),Darwin)
+  VARIANT=-Darwin
+else ifeq ($(UNAME),Linux)
+  VARIANT=-Linux
+endif
+
+################################################################################
+# Support for building without __int128
+
+ifneq (,$(KRML_NOUINT128))
+KOPTS+=-add-early-include '"FStar_UInt128.h"'
+KOPTS+=-fnouint128 -drop FStar.UInt128,FStar.Int.Cast.Full
+CFLAGS+=-DKRML_NOUINT128
+export CFLAGS
+endif
+
+################################################################################
+# A common KreMLin invocation
+
+# The Crypto.* modules have already been extracted (in hacl-star/secure_api).
+DROP_MODULES 	= $(addprefix -drop , FStar.Bytes MonotoneMap MonotoneMapNonDep \
+  'FStar.Tactics.\*' FStar.Tactics \
+  'Crypto.AEAD.\*' Crypto.HKDF Crypto.HMAC)
+
+# But we ask for their headers to be in scope.
+HEADERS 	= $(addprefix -add-include ,'"hacks.h"' '"krembytes.h"' \
+  '"kremstr.h"' '"hacl_glue.h"' '"Crypto_HKDF_Crypto_HMAC.h"')
+
+# Note: we could do the same with Crypto_Symmetric_Bytes, but it defines (hidden
+# behind the .h) the enum type for Option, which once again causes name clashes.
+# Rather than include it via a glue, we let it be extracted by kreMLin since
+# it's in the dependency graph of TLS anyhow.
+#
+# Note: Crypto.Plain is not pre-extracted by secure_api.
+
+KRML_COMMAND	= krml \
+  -bundle 'LowParse.\*' \
+  -bundle LowParseWrappers \
+  -bundle 'Format.\*' \
+  -fnoanonymous-unions -warn-error -9-7-6 \
+  -fsopts --debug,yes -verbose \
+  -ccopts -Wno-unused-function,-O0 \
+  -ldopts -L,../pki,-lmipki \
+  $(DROP_MODULES) $(HEADERS) $(KOPTS)
+
+ifndef NO_OPENSSL
+  KRML_COMMAND += -ldopts -L,$(MLCRYPTO_HOME)/openssl,-lcrypto,-lssl
+endif
+
+################################################################################
+# Sanity checks and shared directories definitions
+
+CURVE_DIR	= $(HACL_HOME)/code/curve25519/x25519-c
+SECURE_OUT	= $(HACL_HOME)/secure_api/out/vale_aes_abstract_id/crypto
+VALE_DIR	= $(HACL_HOME)/secure_api/vale/asm
+UINT128_DIR	= $(HACL_HOME)/secure_api/out/runtime_switch/uint128
+
+ifeq (,$(wildcard $(CURVE_DIR)/Curve25519.h))
+  $(error HACL_HOME is $(HACL_HOME) and I cannot find $(CURVE_DIR)/Curve25519.h -- please run make extract-c -C $(CURVE_DIR)/.. -- thanks)
+endif
+
+ifeq (,$(wildcard $(SECURE_OUT)/Crypto_AEAD_Main.h))
+  $(error HACL_HOME is $(HACL_HOME) and I cannot find $(SECURE_OUT)/Crypto_AEAD_Main.h -- please run make in $(HACL_HOME)/secure_api -- thanks)
+endif
+
+define COPY_template
+$(1)/%: $(2)/%
+	mkdir -p $$(dir $$@)
+	cp $$< $$@
+endef
+
+# All the files that we bring from external projects
+ALL_EXTERNAL_FILES	= \
+  $(addprefix secure/,Crypto_AEAD_Main.c Crypto_AEAD_Main.h \
+    Crypto_HKDF_Crypto_HMAC.c Crypto_HKDF_Crypto_HMAC.h) \
+  $(addprefix curve/,Curve25519.c Curve25519.h) \
+  $(addprefix kremlib/,kremstr.c kremstr.h kremdate.c krembytes.h kremlib.h \
+    gcc_compat.h testlib.h) \
+  $(addprefix stub/,hacl_aead.c hacl_provider.c core_crypto.c log_to_choice.h \
+    buffer_bytes.c) \
+  $(addprefix include/,hacl_glue.h hacks.h) \
+  $(addprefix vale/,sha256_main_i.c sha256_main_i.h sha256-$(MARCH)$(VARIANT).S \
+    Vale_Hash_SHA2_256.c vale_aes_glue.c aes-$(MARCH)$(VARIANT).S DafnyLib.h) \
+  $(addprefix pki/,mipki.h) \
+  $(addprefix ffi/,mitlsffi.h) \
+  $(addprefix uint128/,uint128_wrapper.c)
+
+ifneq (,$(KRML_NOUINT128))
+  ALL_EXTERNAL_FILES += \
+    $(addprefix uint128/,kremlib0.h FStar_UInt128.h \
+      FStar_UInt128.c)
+endif
+
+################################################################################
+
+# The internal test pokes at the modules directly, without going through the
+# FFI; the entry point is in Test.Main and the build outputs all the C files in
+# $(INTERNAL_TEST_DIR), which contains another Makefile to compile them and run
+# them
+
+INTERNAL_TEST_DIR=extract/Kremlin-Internal-Test
+
+$(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/secure,$(SECURE_OUT)))
+$(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/curve,$(CURVE_DIR)))
+$(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/kremlib,$(KREMLIN_HOME)/kremlib))
+$(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/include,extract/include))
+$(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/stub,extract/cstubs))
+$(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/vale,$(VALE_DIR)))
+$(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/ffi,$(MITLS_HOME)/libs/ffi))
+$(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/pki,$(MITLS_HOME)/src/pki))
+$(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/uint128,$(UINT128_DIR)))
+
+# Leave Crypto_Indexing (which Crypto_AEAD_Main wants) standalone, and its
+# dependencies too.
+$(INTERNAL_TEST_DIR)/Test_Main.c: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES))
+	$(KRML_COMMAND) $^ -tmpdir $(INTERNAL_TEST_DIR) -no-prefix Test.Main \
+	  -skip-compilation -drop FFICallbacks \
+	  -bundle Test.Main='Test.\*',AEAD_GCM,AEADOpenssl,AEADProvider,Alert,Connection,ConnInvariant,Content,DataStream,Encode,Epochs,FFI,Handshake,HandshakeLog,HandshakeMessages,Hashing,Hashing.CRF,Hashing.OpenSSL,HKDF,HMAC,HMAC.UFCMA,IdNonce,KDF.Common,KDF.Salt.ODH,KeySchedule,LHAEPlain,MAC,MAC_SHA1,MAC_SHA256,MasterSecret,Negotiation,QUIC,Range,Record,Signature,StAE,Standalone,StatefulLHAE,StatefulPlain,StreamAE,StreamDeltas,StreamPlain,Ticket,TLS,TLSPRF,Transport
+
+internal-test-copy: $(addprefix $(INTERNAL_TEST_DIR)/,$(ALL_EXTERNAL_FILES)) $(INTERNAL_TEST_DIR)/stub/mipki_wrapper.c
+
+output-internal-test: internal-test-copy $(INTERNAL_TEST_DIR)/Test_Main.c
+
+build-internal-test: output-internal-test
+	$(MAKE) -C $(INTERNAL_TEST_DIR)
+
+test-internal-test: output-internal-test
+	$(MAKE) -C $(INTERNAL_TEST_DIR) test
+
+clean-internal-test:
+	-@find $(INTERNAL_TEST_DIR) -type f -and -not -name Makefile -and -not -name .gitignore \
+        | xargs rm -f
+
+################################################################################
+# The library does not perform bundling
+
+LIBRARY_DIR=extract/Kremlin-Library
+
+$(eval $(call COPY_template,$(LIBRARY_DIR)/secure,$(SECURE_OUT)))
+$(eval $(call COPY_template,$(LIBRARY_DIR)/curve,$(CURVE_DIR)))
+$(eval $(call COPY_template,$(LIBRARY_DIR)/kremlib,$(KREMLIN_HOME)/kremlib))
+$(eval $(call COPY_template,$(LIBRARY_DIR)/include,extract/include))
+$(eval $(call COPY_template,$(LIBRARY_DIR)/stub,extract/cstubs))
+$(eval $(call COPY_template,$(LIBRARY_DIR)/vale,$(VALE_DIR)))
+$(eval $(call COPY_template,$(LIBRARY_DIR)/ffi,$(MITLS_HOME)/libs/ffi))
+$(eval $(call COPY_template,$(LIBRARY_DIR)/uint128,$(UINT128_DIR)))
+
+$(LIBRARY_DIR)/TLS.c: $(filter-out $(EXTRACT_DIR)/prims.krml $(EXTRACT_DIR)/PKI.krml $(EXTRACT_DIR)/Test_%.krml,$(ALL_KRML_FILES))
+	$(KRML_COMMAND) $^ -tmpdir $(LIBRARY_DIR) -skip-compilation
+
+library-copy: $(addprefix $(LIBRARY_DIR)/, $(filter-out pki/mipki.h, $(ALL_EXTERNAL_FILES))) \
+  $(LIBRARY_DIR)/stub/mitlsffi.c \
+  $(LIBRARY_DIR)/stub/RegionAllocator.c $(LIBRARY_DIR)/stub/RegionAllocator.h
+
+output-library: library-copy $(LIBRARY_DIR)/TLS.c
+
+build-library: output-library
+	$(MAKE) -C $(LIBRARY_DIR)
+
+test-library: output-library
+	$(MAKE) -C $(LIBRARY_DIR) test
+
+clean-library:
+	-@find $(LIBRARY_DIR) -type f -and -not -name Makefile -and -not -name .gitignore \
+        | xargs rm -f
+
+################################################################################
+# An external test that uses "mitlsffi.h"
+
+output-external-test:
+
+build-external-test:
+
+test-external-test:
+
+clean-external-test:

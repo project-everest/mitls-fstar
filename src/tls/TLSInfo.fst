@@ -1,4 +1,6 @@
 module TLSInfo
+module HS = FStar.HyperStack //Added automatically
+module HST = FStar.HyperStack.ST //Added automatically
 
 #set-options "--max_fuel 3 --initial_fuel 3 --max_ifuel 1 --initial_ifuel 1"
 
@@ -9,14 +11,16 @@ module TLSInfo
    its implementation is typechecked.
 *)
 
-open Platform.Bytes
+open FStar.Bytes
 open FStar.Date
 open TLSConstants
 //open PMS
 //open Cert
 
 module CC = CoreCrypto
-module MM = FStar.Monotonic.Map
+module DM = FStar.DependentMap
+module MM = FStar.Monotonic.DependentMap
+
 
 let default_cipherSuites = [
   TLS_AES_128_GCM_SHA256;
@@ -47,16 +51,52 @@ let default_signature_schemes = [
   RSA_PKCS1_SHA1
   ]
 
-let default_groups : list valid_namedGroup = [
-  // SEC CC.ECC_X448
-  SEC CC.ECC_P521;
-  SEC CC.ECC_P384;
-  SEC CC.ECC_X25519;
-  SEC CC.ECC_P256;
-  FFDHE FFDHE4096;
-  FFDHE FFDHE3072;
-  FFDHE FFDHE2048;
+let default_groups : CommonDH.namedGroupList = 
+  let open CommonDH in [
+  // X448
+  SECP521R1;
+  SECP384R1;
+  X25519;
+  SECP256R1;
+  FFDHE4096;
+  FFDHE3072;
+  FFDHE2048;
   ]
+
+// By default we use an in-memory ticket table
+// and the in-memory internal PSK database
+val defaultTicketCBFun: ticket_cb_fun
+let defaultTicketCBFun _ sni ticket info psk =
+  assume false; // FIXME(adl) have to assume modifies_none...
+  match info with
+  | TicketInfo_12 (pv, cs, ems) ->
+    PSK.s12_extend ticket (pv, cs, ems, psk)
+  | TicketInfo_13 pskInfo ->
+    PSK.coerce_psk ticket pskInfo psk;
+    PSK.extend sni ticket
+
+val defaultTicketCB: ticket_cb
+let defaultTicketCB = {
+  ticket_context = (FStar.Dyn.mkdyn ());
+  new_ticket = defaultTicketCBFun;
+}
+
+let none4 = fun _ _ _ _ -> None
+let empty3 = fun _ _ _ -> []
+let none5 = fun _ _ _ _ _ -> None
+let false6 = fun _ _ _ _ _ _ -> false
+
+let defaultCertCB : cert_cb =
+  TLSConstants.mk_cert_cb
+     (FStar.Dyn.mkdyn ())
+     (FStar.Dyn.mkdyn ())
+     none4
+     (FStar.Dyn.mkdyn ())
+     empty3
+     (FStar.Dyn.mkdyn ())
+     none5
+     (FStar.Dyn.mkdyn ())
+     false6
 
 val defaultConfig: config
 let defaultConfig =
@@ -72,25 +112,24 @@ let defaultConfig =
 
   // Client
   hello_retry = true;
-  offer_shares = [SEC CC.ECC_X25519];
+  offer_shares = [Format.NamedGroup.X25519];
 
   // Server
   check_client_version_in_pms_for_old_tls = true;
   request_client_certificate = false;
-  cert_chain_file = "server.pem";
-  private_key_file = "server.key";
 
   // Common
   non_blocking_read = false;
-  enable_early_data = false;
+  max_early_data = None;
   safe_renegotiation = true;
   extended_master_secret = true;
   enable_tickets = true;
 
+  ticket_callback = defaultTicketCB;
+  cert_callbacks = defaultCertCB;
+
   alpn = None;
   peer_name = None;
-  check_peer_certificate = true;
-  ca_file = "CAFile.pem";
   }
 
 // -------------------------------------------------------------------
@@ -105,26 +144,9 @@ type csRands = lbytes 64
 
 type sessionHash = bytes
 
-let noCsr:csRands = Nonce.noCsr
+//let noCsr:csRands = Nonce.noCsr
 
-// -------------------------------------------------------------------
-// Pre Master Secret indexes
-
-// Placeholder for overhaul of 1.2 indexes
-type pmsId = PMS.pms
-assume val strongKEX: pmsId -> Tot bool
-
-// -------------------------------------------------------------------
-// Master Secret indexes and their properties
-
-// CF postv1, move strength predicates --> TLSConstants
-// ``kefAlg is a strong randomness extractor, despite all other kefAlgs'', guarding idealization in KEF
-
-assume val strongKEF: kefAlg_t -> Tot bool
-
-// guarding idealizations for KDF and VerifyData (see PRF.fs)
-assume val strongKDF: kdfAlg_t -> Tot bool
-assume val strongVD: vdAlg_t -> Tot bool
+include TLSInfoFlags
 
 // -------------------------------------------------------------------
 // Session information (public immutable data)
@@ -156,9 +178,9 @@ type abbrInfo =
      abbr_session_hash: sessionHash;
      abbr_vd: option (cVerifyData * sVerifyData) }
 
-type resumeInfo (r:role) =
+type resumeInfo (r:role) : Type0 =
   //17-04-19  connect_time:lbytes 4  * // initial Nonce.timestamp() for the connection
-  o:option bytes {r=Server ==> o=None} * // 1.2 ticket
+  o:option bytes {r=Server ==> None? o} * // 1.2 ticket
   l:list PSK.pskid {r=Server ==> l = []} // assuming we do the PSK lookups locally
 
 // for sessionID. we treat empty bytes as the absence of identifier,
@@ -374,7 +396,7 @@ type injective (#a:Type) (#b:Type)
 // and folds the perfect hashing assumption and log projection
 type hashed_log (li:logInfo) =
   b:bytes{exists (f: bytes -> Tot logInfo).{:pattern (f b)}
-  injective #bytes #logInfo #equalBytes #eq_logInfo f /\ f b = li}
+  injective #bytes #logInfo #op_Equality #eq_logInfo f /\ f b = li}
 
 type binderLabel =
   | ExtBinder
@@ -386,6 +408,7 @@ type binderLabel =
 /// 3. its valid refinement, ensuring registration and its consistency (parents are also registered and at least as honest)
 
 /// early secrets (range of 1st extraction)
+[@ Gc ] // cwinter: quic2c
 type pre_esId : Type0 =
   | ApplicationPSK: #ha:hash_alg -> #ae:aeadAlg -> i:PSK.pskid{PSK.compatible_hash_ae i ha ae} -> pre_esId
   | ResumptionPSK: #li:logInfo{~(LogInfo_CH? li)} -> i:pre_rmsId li -> pre_esId
@@ -509,10 +532,10 @@ private let s_table =
   if Flags.ideal_KEF then i_safety_log else unit
 
 let safety_table: s_table =
-  if Flags.ideal_KEF then
-    MM.alloc #safe_region #pre_index #honest_index #(fun _ -> True)
-  else ()
-
+  (if Flags.ideal_KEF then
+      MM.alloc () <: i_safety_log
+  else ())
+      
 type registered (i:pre_index) =
   (if Flags.ideal_KEF then
     let log: i_safety_log = safety_table in
@@ -567,13 +590,13 @@ type index = i:pre_index{valid i}
 type honest (i:index) =
   (if Flags.ideal_KEF then
     let log : i_safety_log = safety_table in
-    witnessed (MM.contains log i true)
+    HST.witnessed (MM.contains log i true)
   else False)
 
 type dishonest (i:index) =
   (if Flags.ideal_KEF then
     let log : i_safety_log = safety_table in
-    witnessed (MM.contains log i false)
+    HST.witnessed (MM.contains log i false)
   else True)
 
 // type esId = i:pre_esId{valid (I_ES i)}
@@ -632,7 +655,7 @@ val siId: si:sessionInfo{
   pvcs si.protocol_version si.cipher_suite } -> role -> Tot id
 
 let siId si r =
-  let cr, sr = split (csrands si) 32 in
+  let cr, sr = split (csrands si) 32ul in
   ID12 si.protocol_version (msid si) (kdfAlg si.protocol_version si.cipher_suite) (siAuthEncAlg si) cr sr r
 
 // required e.g. to compute the actual algorithm to use 
@@ -640,11 +663,12 @@ let pv_of_id (i:id{~(PlaintextID? i)}) = match i with
   | ID13 _ -> TLS_1p3
   | ID12 pv _ _ _ _ _ _ -> pv
 
-// Returns the local nonce (used for accessing connection state)
-let nonce_of_id = function
+// Returns the local nonce
+let nonce_of_id (i : id) : random =
+  match i with
   | PlaintextID r -> r
-  | ID12 _ _ _ _ cr sr rw -> if rw = Client then cr else sr
   | ID13 (KeyID #li _) -> logInfo_nonce li
+  | ID12 _ _ _ _ cr sr rw -> if rw = Client then cr else sr
 
 val kdfAlg_of_id: i:id { ID12? i } -> Tot kdfAlg_t
 let kdfAlg_of_id = function
@@ -733,5 +757,5 @@ let plainText_is_not_auth (i:id)
 let safe_implies_auth (i:id)
   : Lemma (requires (safeId i))
           (ensures (authId i))
-	  [SMTPat (authId i)]
+          [SMTPat (authId i)]
   = admit()	   //TODO: need to prove that strongAEAlg implies strongAuthAlg

@@ -1,14 +1,16 @@
 ﻿module MAC_SHA1
 
-open FStar.Seq
- // for e.g. found
 
-open Mem
-open Platform.Bytes
+open FStar.Heap
+open FStar.HyperStack
+open FStar.Seq
+open FStar.Bytes
+open FStar.Error
+
 open TLSConstants
 open TLSInfo
-open FStar.Error
 open TLSError
+open Mem
 
 // idealizing HMAC
 // for concreteness; the rest of the module is parametric in a

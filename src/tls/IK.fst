@@ -24,15 +24,13 @@ open Mem
 
 module MM = FStar.Monotonic.Map
 module MH = FStar.Monotonic.Heap
-
 module HS = FStar.HyperStack
-
 let model = Flags.model
 
 // temporary imports
 
-type bytes = Platform.Bytes.bytes
-let lbytes (len:UInt32.t) = Platform.Bytes.lbytes (UInt32.v len)
+type bytes = FStar.Bytes.bytes
+let lbytes (len:UInt32.t) = FStar.Bytes.lbytes (UInt32.v len)
 
 let sample (len:UInt32.t): ST (lbytes len)
     (requires fun h0 -> True)

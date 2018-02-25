@@ -80,7 +80,7 @@ type ideal_or_real (it:Type0) (rt:Type0) =
   | Ideal: v:it -> ideal_or_real it rt
   | Real: v:rt -> ideal_or_real it rt
 
-unfold type ir_key (safe: i:id{registered i} -> GTot Type0) (it:Type0) (rt:Type0) (i:regid) =
+unfold type ir_key (safe: (i:id{registered i} -> GTot Type0)) (it:Type0) (rt:Type0) (i:regid) =
   (if model then
     s:ideal_or_real it rt{safe i <==> Ideal? s}
   else rt)
@@ -409,7 +409,7 @@ let rec tree_invariant h = function
 // another custom induction to get termination
 let rec children_forall
   (lxs: children')
-  (f: x:tree'{depth x <= children_depth lxs} -> Type0): Type0
+  (f: (x:tree'{depth x <= children_depth lxs} -> Type0)): Type0
 =
   match lxs with
   | [] -> True
@@ -519,7 +519,7 @@ let derive #d #t #i k a lbl ctx a' =
    end
   else
    begin
-    let raw = HKDF.expand #(a.ha) (secret_corrupt k) (Platform.Bytes.abytes lbl) (UInt32.v (Pkg?.len pkg a')) in
+    let raw = HKDF.expand #(a.ha) (secret_corrupt k) (FStar.Bytes.abytes lbl) (UInt32.v (Pkg?.len pkg a')) in
     let h2 = get() in
     assume(modifies_none h1 h2); // FIXME HKDF framing
     assume(tree_invariant t h2);

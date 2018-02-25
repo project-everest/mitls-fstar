@@ -1,16 +1,18 @@
 module TLS
 module HS = FStar.HyperStack //Added automatically
 
+open FStar.String
+open FStar.Heap
+open FStar.HyperStack
 open FStar.Seq
 open FStar.Set
-
-open Platform.Bytes
+open FStar.Bytes
 open FStar.Error
-
 open Mem
 open TLSError
 open TLSConstants
 open TLSInfo
+
 
 module Range = Range
 let range = Range.range
@@ -18,6 +20,8 @@ let point = Range.point
 let frange = Range.frange
 let valid_clen = Range.valid_clen
 let fragment_range = Range.fragment_range
+// open Range // cwinter: quic2c
+module Range = Range
 
 //open Negotiation
 open Epochs
@@ -71,8 +75,8 @@ val create: r0:c_rgn -> tcp:Transport.t -> r:role -> cfg:config -> resume: resum
   (ensures (fun h0 c h1 ->
     modifies Set.empty h0 h1 /\
     extends c.region r0 /\
-    fresh_region c.region h0 h1 /\
-    live_region h1 c.region /\ //NS: may be removeable: we should get it from fresh_region
+    HS.fresh_region c.region h0 h1 /\
+    HS.live_region h1 c.region /\ //NS: may be removeable: we should get it from fresh_region
     st_inv c h1 /\
     c_role c = r /\
 //17-04-08 commented out as their access is now stateful
@@ -132,9 +136,11 @@ let accept_connected m0 tcp cfg = create m0 tcp Server cfg (None, [])
 //    modifies Set.empty h0 h1 /\
 //    (exists ns. initial Server ns c None cn h1)
 //  ))
-let accept m0 listener cfg =
-    let tcp = Transport.accept listener in
-    accept_connected m0 tcp cfg
+
+(* NS Jan 30, 2018: Removing this since uses of TCP should be from the application *)
+// let accept m0 listener cfg =
+//     let tcp = Transport.accept listener in
+//     accept_connected m0 tcp cfg
 
 //val rehandshake: cn:connection { c_role cn = Client } -> c:config -> ST unit
 //  (requires (fun h0 -> True))
@@ -362,8 +368,8 @@ let recall_current_writer (c:connection)
     h0 == h1
     /\ (match wopt with
        | None -> True
-       | Some wr -> live_region h0 (StAE.region wr)
-	         /\ live_region h0 (StAE.log_region wr)))
+       | Some wr -> HS.live_region h0 (StAE.region wr)
+	         /\ HS.live_region h0 (StAE.log_region wr)))
   = let i = currentId c Writer in
     let wopt = current_writer c i in
     match wopt with
@@ -386,7 +392,7 @@ private let check_incrementable (#c:connection) (#i:id) (wopt:option (cwriter i 
 ////////////////////////////////////////////////////////////////////////////////
 // Sending fragments on a given writer (not necessarily the current one)
 ////////////////////////////////////////////////////////////////////////////////
-let opt_writer_regions (#i:id) (#c:connection) (wopt:option (cwriter i c)) : GTot (set rid) =
+let opt_writer_regions (#i:id) (#c:connection) (wopt:option (cwriter i c)) : GTot (set HS.rid) =
   match wopt with
   | None -> Set.empty
   | Some wr -> Set.singleton (StAE.region wr)
@@ -407,7 +413,7 @@ let ad_overflow : result unit = Error (AD_record_overflow, "seqn overflow")
 let sendFragment_success (mods:set rid) (c:connection) (i:id) (wo:option (cwriter i c)) (f: Content.fragment i) (h0:HS.mem) (h1:HS.mem) =
       Some? wo ==>
       (let wr = Some?.v wo in
-       modifies (Set.union mods (Set.singleton (StAE.region wr))) h0 h1
+       HS.modifies (Set.union mods (Set.singleton (StAE.region wr))) h0 h1
      /\ StAE.seqnT wr h1 = StAE.seqnT wr h0 + 1
      /\ (authId i ==>
 	     //fragment was definitely snoc'd
@@ -531,7 +537,7 @@ private let sendAlert (c:connection) (ad:alertDescription) (reason:string)
 ////////////////////////////////////////////////////////////////////////////////
 let sendHandshake_post (#c:connection) (#i:id) (wopt:option (cwriter i c))
 		       (om:option (HandshakeLog.fragment i)) (send_ccs:bool) (h0:HS.mem) r (h1:HS.mem) =
-      modifies (opt_writer_regions wopt) h0 h1   //didn't modify more than the writer's regions
+      HS.modifies (opt_writer_regions wopt) h0 h1   //didn't modify more than the writer's regions
       /\ (match wopt with
  	 | None -> True
 	 | Some wr ->
@@ -560,7 +566,7 @@ let sendHandshake_post (#c:connection) (#i:id) (wopt:option (cwriter i c))
 		       then frags1==snoc frags0' (Content.CT_CCS #i (point 1))
 		       else frags1==frags0')))))
 
-#reset-options "--using_facts_from FStar --using_facts_from Prims --using_facts_from Range --using_facts_from Parse --using_facts_from Connection --using_facts_from Handshake --using_facts_from TLS --using_facts_from TLSError --using_facts_from TLSConstants"
+#reset-options "--using_facts_from FStar --using_facts_from Prims --using_facts_from Range --using_facts_from Parse --using_facts_from Connection --using_facts_from Handshake --using_facts_from TLS --using_facts_from TLSError --using_facts_from TLSConstants --using_facts_from 'FStar Prims Range Parse Connection Handshake TLS TLSError TLSConstants'"
 #set-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 
 private let sendHandshake
@@ -1054,7 +1060,7 @@ let rec readFragment c i =
   | Record.ReadError e -> Error e
   | Record.ReadWouldBlock -> Correct None
   | Record.Received ct pv payload ->
-    let es = !(Handshake.es_of c.hs) in
+    let es = ST.op_Bang (Handshake.es_of c.hs) in
     let j : Handshake.logIndex es = Handshake.i c.hs Reader in
     trace ("Read fragment at epoch index: " ^ string_of_int j ^
            " of length " ^ string_of_int (length payload));
@@ -1064,12 +1070,19 @@ let rec readFragment c i =
     else
       // payload decryption
       let e = Seq.index es j in
-      let Epoch #r #n #i hs rd wr = e in
-      if not (valid_clen i (length payload))  // cache? check at a lower level?
-      then (
+      let Epoch hs rd wr = e in
+      if payload = abyte 1z && StAE.tolerate_ccs #i rd then
+       begin
+        trace "Ignoring a CCS";
+        readFragment c i
+       end
+      else if not (valid_clen i (length payload))  // cache? check at a lower level?
+      then
+       begin
         // we might make an effort to parse plaintext alerts
         trace ("bad payload: "^print_bytes payload);
-        Error(AD_decryption_failed, "Invalid ciphertext length"))
+        Error(AD_decryption_failed, "Invalid ciphertext length")
+       end
       else
       match StAE.decrypt (reader_epoch e) (ct,payload) with
       | None ->
@@ -1094,10 +1107,14 @@ private val readOne: c:connection -> i:id -> St (ioresult_i i)
 let readOne c i =
   assume false; //16-05-19
   match readFragment c i with
-  | Error (AD_internal_error, "TCP close") -> // If TCP died, no point trying to send an alert
-    disconnect c;
-    ReadError None "TCP close"
-  | Error (x,y) -> alertFlush c i x y
+  | Error (x, y) ->
+    (match x with
+     | AD_internal_error ->
+       if y = "TCP close" then  // If TCP died, no point trying to send an alert
+         (disconnect c;
+          ReadError None "TCP close")
+       else alertFlush c i x y
+     | _ -> alertFlush c i x y)
   | Correct None -> ReadWouldBlock
   | Correct (Some f) -> (
     match f with
@@ -1148,6 +1165,7 @@ let readOne c i =
         trace "read CCS fragment";
         match Handshake.recv_ccs c.hs with
         | Handshake.InError (x,y) -> alertFlush c i x y
+        | Handshake.InAck false false -> ReadAgain // FIXME TLS 1.3 CCS with HRR (!!!)
         | Handshake.InAck true false -> ReadAgainFinishing // specialized for HS 1.2
       end
     | Content.CT_Data rg f ->

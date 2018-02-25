@@ -10,17 +10,29 @@ records the honesty of shares using two layers of types
 module CommonDH
 
 open FStar.HyperStack
-open Platform.Bytes
-open Platform.Error
+open FStar.Bytes
+open FStar.Error
 open Parse
 open TLSError
 open FStar.HyperStack.ST
 
-/// Public key shares and private exponents are indexed by an abstract
-/// group descriptor (including its generator), ranging over both
-/// prime fields and elliptic curves for cryptographic agility.
-///
-/// DHGroup and ECGroup provide their concrete implementations.
+include Format.NamedGroup
+module FNGL = Format.NamedGroupList
+
+let namedGroups = Format.NamedGroupList.namedGroupList
+let namedGroupList = Format.NamedGroupList.namedGroupList
+
+let namedGroupBytes x = namedGroup_serializer32 x
+let parseNamedGroup x = namedGroup_parser32 x
+let namedGroupsBytes x = FNGL.namedGroupList_serializer32 x
+let parseNamedGroups x = FNGL.namedGroupList_parser32 x
+
+// was "valid", not "supported"; should probably be defined from the crypto provider.
+let is_supported_group x = List.Tot.mem x 
+  [ SECP256R1; SECP384R1; SECP521R1; X25519; X448; 
+    FFDHE2048; FFDHE3072; FFDHE4096; FFDHE6144; FFDHE8192 ]
+type supportedNamedGroup = x:namedGroup{is_supported_group x}
+type supportedNamedGroups = xs:namedGroups{List.Tot.for_all is_supported_group xs} 
 
 val group: t:Type0{hasEq t}
 val is_ec: group -> bool
@@ -153,12 +165,15 @@ val parseKeyShareEntry: pinverse_t keyShareEntryBytes
 val keyShareEntriesBytes: list keyShareEntry -> Tot (b:bytes{2 <= length b /\ length b < 65538})
 val parseKeyShareEntries: pinverse_t keyShareEntriesBytes
 val clientKeyShareBytes: clientKeyShare -> Tot (b:bytes{2 <= length b /\ length b < 65538})
-val parseClientKeyShare: b:bytes{2 <= length b /\ length b < 65538} -> Tot (result clientKeyShare)
-val serverKeyShareBytes: serverKeyShare -> Tot (b:bytes{ 4 <= length b })
-val parseServerKeyShare: pinverse_t serverKeyShareBytes
+val parseClientKeyShare: b:bytes{2 <= length b /\ length b < 65538} -> Tot (result keyShare)
+val serverKeyShareBytes: serverKeyShare -> Tot (b:bytes{4 <= length b})
+val parseServerKeyShare: bytes -> Tot (result keyShare)
+val helloRetryKeyShareBytes: keyShare -> Tot (b:bytes)
+val parseHelloRetryKeyShare: bytes -> Tot (result keyShare)
+
 val keyShareBytes: ks:keyShare -> Tot (b:bytes{
   ClientKeyShare? ks ==> (2 <= length b /\ length b < 65538) /\
   ServerKeyShare? ks ==> (4 <= length b) /\
   HRRKeyShare? ks ==> (2 = length b)})
-type ks_msg = | KS_ClientHello | KS_ServerHello | KS_HRR
-val parseKeyShare: ks_msg -> bytes -> Tot (result keyShare)
+
+

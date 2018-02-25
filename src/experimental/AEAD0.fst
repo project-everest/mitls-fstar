@@ -26,8 +26,8 @@ open TLSInfo
 let ideal = Flags.ideal_AEAD
 
 // floating
-private inline let min (a:int) (b:int) = if a < b then a else b
-private inline let max (a:int) (b:int) = if a < b then b else a
+private unfold let min (a:int) (b:int) = if a < b then a else b
+private unfold let max (a:int) (b:int) = if a < b then b else a
 
 // The index is treated abstractly, with
 // - a local restriction to ensure this is an AEAD index

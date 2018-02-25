@@ -1,14 +1,17 @@
 module AEADOpenssl
 
+open FStar.Heap
 open FStar.HyperStack
 open FStar.Seq
-open Platform.Bytes
+open FStar.Bytes
 open CoreCrypto
 
 open TLSConstants
 open TLSInfo
 
-module MM = FStar.Monotonic.Map
+module MM = FStar.Monotonic.DependentMap
+module HS = FStar.HyperStack
+module HST = FStar.HyperStack.ST
 
 type id = i:id{~(PlaintextID? i) /\ AEAD? (aeAlg_of_id i)}
 let alg (i:id) = AEAD?._0 (aeAlg_of_id i)
@@ -53,20 +56,26 @@ let log_ref (r:rgn) (i:id) : Tot Type0 =
 let ilog (#r:rgn) (#i:id) (l:log_ref r i{authId i})
  : Tot (ideal_log r i) = l
 
+let ilog_as_ref (#r:rgn) (#i:id) (l:ideal_log r i{authId i})
+ : Tot (log_ref r i) = l
+
+let unit_as_ref (r:rgn) (i:id{~ (authId i)})
+ : Tot (log_ref r i) = ()
+
 noeq type state (i:id) (rw:rw) =
   | State:
-    #region: rgn ->
+    region: rgn ->
     #log_region:rgn{
        if rw = Writer then region = log_region
-       else HyperStack.disjoint region log_region} ->
+       else HS.disjoint region log_region} ->
     key: key i ->
     log: log_ref log_region i ->
     state i rw
 
 type empty_log (#i:id) (#rw:rw) (st:state i rw) h =
   authId i ==>
-    (contains h (ilog st.log) /\
-     sel h (ilog st.log) == MM.empty_map (iv i) entry)
+    (h `HS.contains` (ilog st.log) /\
+     HS.sel h (ilog st.log) == MM.empty)
 
 type writer i = s:state i Writer
 type reader i = s:state i Reader
@@ -74,7 +83,7 @@ type reader i = s:state i Reader
 let genPost (#i:id) (parent:rgn) h0 (w:writer i) h1 =
   modifies Set.empty h0 h1 /\
   extends w.region parent /\
-  fresh_region w.region h0 h1 /\
+  HS.fresh_region w.region h0 h1 /\
   color w.region = color parent /\
   empty_log w h1
 
@@ -87,10 +96,10 @@ let gen parent i =
   let writer_r = new_region parent in
   cut (is_eternal_region writer_r);
   if authId i then
-    let log : ideal_log writer_r i = MM.alloc #writer_r #(iv i) #entry #no_inv in
-    let w : writer i = State #i #Writer #writer_r #writer_r kv log in w
+    let log : ideal_log writer_r i = MM.alloc () in
+    State writer_r kv (ilog_as_ref log)
   else
-    let w : writer i = State #i #Writer #writer_r #writer_r kv () in w
+    State writer_r kv (unit_as_ref writer_r i)
 
 // A reader r peered with the writer w
 type peered (#i:id) (w:writer i) =
@@ -101,26 +110,26 @@ type peered (#i:id) (w:writer i) =
   }
 
 val genReader: parent:rgn -> #i:id -> w:writer i -> ST (peered w)
-  (requires (fun h0 -> HyperStack.disjoint parent w.region))
+  (requires (fun h0 -> HS.disjoint parent w.region))
   (ensures (fun h0 r h1 ->
     modifies Set.empty h0 h1 /\
     extends r.region parent /\
     color r.region = color parent /\
-    fresh_region r.region h0 h1))
+    HS.fresh_region r.region h0 h1))
 let genReader parent #i w =
   let reader_r = new_region parent in
   if authId i then
     let log : ideal_log w.region i = w.log in
-    State #i #Reader #reader_r #w.region w.key log
+    State reader_r #w.region w.key log
   else
-    State #i #Reader #reader_r #w.region w.key ()
+    State reader_r #w.region w.key ()
 
 val coerce: parent:rgn -> i:id{~(authId i)} -> kv:key i -> ST (writer i)
   (requires (fun h0 -> True))
   (ensures  (genPost parent))
 let coerce parent i kv =
   let writer_r = new_region parent in
-  State #i #Writer #writer_r #writer_r kv ()
+  State writer_r kv (unit_as_ref writer_r i)
 
 val leak: #i:id -> #role:rw -> state i role -> ST (key i)
   (requires (fun h0 -> ~(authId i)))
@@ -148,7 +157,7 @@ let encrypt #i #l e iv ad p =
   if authId i then
     begin
       let log = ilog e.log in
-      recall log;
+      HST.recall log;
       let c = CoreCrypto.random (cipherlen i l) in
       MM.extend log iv (Entry ad p c);
       c
@@ -157,10 +166,10 @@ let encrypt #i #l e iv ad p =
     aead_encrypt (alg i) (State?.key e) iv ad p
 
 type correct_decrypt (#i:id) (#l:plainlen) (r:reader i) (iv:iv i) (ad:adata i)
-                     (c:cipher i l) (po:option (plain i l)) (h:HyperStack.mem) =
+                     (c:cipher i l) (po:option (plain i l)) (h:HS.mem) =
   (authId i ==>
     (defined_iv #i r iv h ==>
-      (let Entry ad' p c' = MM.value (ilog r.log) iv h in
+      (let Entry ad' p c' = MM.value_of (ilog r.log) iv h in
         ((ad'=ad /\ c'=c) ==> po = Some p)))) /\
   (~(authId i) ==>
     (forall (p:plain i l).{:pattern (aead_encryptT (alg i) (State?.key r) iv ad p)}
@@ -180,7 +189,7 @@ let decrypt #i #l d iv ad c =
   if authId i then
    begin
     let log = ilog d.log in
-    recall log;
+    HST.recall log;
     match MM.lookup log iv with
     | None -> assume false; None
     | Some (Entry ad' p c') ->

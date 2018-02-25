@@ -1,13 +1,16 @@
 module Signature
+module HS = FStar.HyperStack //Added automatically
+module HST = FStar.HyperStack.ST //Added automatically
 
-
-open Mem
+open FStar.HyperStack
 open FStar.Monotonic.Seq
-open Platform.Bytes
+open FStar.Bytes
+
 open CoreCrypto
 open Hashing.Spec // masking CoreCrypto's hashAlg
 open TLSConstants
 open Cert
+open Mem
 
 (* ------------------------------------------------------------------------ *)
 type text = bytes
@@ -134,8 +137,8 @@ val alloc_pubkey: #a:alg
                            //18-02-14 /\ m_fresh (PK?.log p) h0 h1)
                            ))
 let alloc_pubkey #a s r =
-  //lemma_evolves_monotone #a;
-  let log = ralloc keyRegion s in
+  lemma_evolves_monotone #a; // cwinter: not in verify
+  let log = HST.ralloc keyRegion s in
   PK log r
 
 
@@ -170,7 +173,7 @@ let add_key ks k = k::ks
 
 // FIXME: top-level effect
 val rkeys: m_rref keyRegion kset (mon_pkey)
-let rkeys = ralloc keyRegion []
+let rkeys = HST.ralloc keyRegion []
 
 type generated (k:pkey) (h:mem) : Type0 = List.Tot.memP k (sel h rkeys)
 
@@ -188,7 +191,7 @@ val sign: #a:alg
       if int_cma a h then
         let log = PK?.log pk in
         modifies_one keyRegion h0 h1 /\
-        modifies_ref keyRegion (Set.singleton (as_addr log)) h0 h1 /\
+        HS.modifies_ref keyRegion (Set.singleton (Heap.addr_of (as_ref log_ashsref))) h0.h h1.h /\
         sel h1 log == st_update (sel h0 log) t
       else modifies Set.empty h0 h1))
 
@@ -197,9 +200,9 @@ let sign #a h s t =
   begin
   if int_cma a h then
     let log = PK?.log pk in
-    let s0 = !log in
-    recall log;
-    log := st_update s0 t
+    let s0 = HST.op_Bang log in
+    HST.recall log;
+    HST.op_Colon_Equals log (st_update s0 t)
   end;
   let ho,t' = sig_digest h t in
   match sk with
@@ -224,7 +227,7 @@ val verify: #a:alg
 let verify #a h pk t s =
   let h0 = get() in
   let log = PK?.log pk in
-  recall log;
+  HST.recall log;
   let verified =
     let ho,t' = sig_digest h t in
     match PK?.repr pk with
@@ -235,10 +238,10 @@ let verify #a h pk t s =
   let h1 = get() in
   if int_cma a h then
     begin
-    match !(PK?.log pk) with
+    match HST.op_Bang (PK?.log pk) with
     | Signed ts ->
       begin
-      let keys = !rkeys in
+      let keys = HST.op_Bang rkeys in
       let signed = Some? (Seq.seq_find (fun (t':signed a) -> t = t') ts) in
       let find_pk pk' = pkey_repr pk' = PK?.repr pk in
       let honest = List.Tot.existsb find_pk keys in
@@ -274,29 +277,29 @@ let genrepr a =
   | DSA    -> let k = dsa_gen_key 1024 in (PK_DSA k, SK_DSA k)
   | ECDSA  -> let k = ec_gen_key ({curve = ECC_P256; point_compression = false}) in (PK_ECDSA k, SK_ECDSA k)
 
-val gen: a:alg -> HyperStack.All.All (skey a)
+val gen: a:alg -> All (skey a)
   (requires (fun h -> h `contains` rkeys))
   (ensures  (fun h0 (s:result (skey a)) h1 ->
 	         modifies_one keyRegion h0 h1
-               /\ modifies_ref keyRegion (Set.singleton (as_addr rkeys)) h0 h1
-               /\ h1 `contains ` rkeys
+               /\ HS.modifies_ref keyRegion (Set.singleton (Heap.addr_of (as_ref (as_hsref rkeys)))) h0.h h1.h
+               /\ h1 `contains` rkeys
 	       /\ (V? s ==>   witnessed (generated (| a, fst (V?.v s) |))
-			   //18-02-14 /\ m_fresh (PK?.log (fst (V?.v s))) h0 h1
+			   /\ m_fresh (PK?.log (fst (V?.v s))) h0 h1 // cwinter: this line not in verify
 			   /\ Signed? (sel h1 (PK?.log (fst (V?.v s)))))))
 
 #set-options "--z3rlimit 40"
 
 let rec gen a =
   let pkr,skr = genrepr a in // Could be inlined
-  let keys = !rkeys in
+  let keys = HST.op_Bang rkeys in
   match find_key pkr keys with
   | Some _ -> gen a // retry until distinct. SZ: why not just throw an exception?
   | None ->
     let p = alloc_pubkey (Signed Seq.createEmpty) pkr in
     let k = (| a, p |) in
     let keys' = add_key keys k in
-    rkeys := keys';
-    mr_witness rkeys (generated (| a, p |));
+    HST.op_Colon_Equals rkeys keys';
+    witness rkeys (generated (| a, p |));
     p, skr
 
 #set-options "--z3rlimit 20"
@@ -307,12 +310,12 @@ val leak: #a:alg -> s:skey a -> ST (public_repr * secret_repr)
   (requires (fun _ -> True))
   (ensures  (fun h0 r h1 ->
 	      modifies_one keyRegion h0 h1
-	      /\ modifies_ref keyRegion (Set.singleton (as_addr (PK?.log (fst s)))) h0 h1
+	      /\ HS.modifies_ref keyRegion (Set.singleton (Heap.addr_of (as_ref (as_hsref (PK?.log (fst s)))))) h0.h h1.h
 	      /\ Corrupt? (sel h1 (PK?.log (fst s)))
 	      /\ fst r == PK?.repr (fst s)))
 let leak #a (PK log pkr, skr) =
-  recall log;
-  log := Corrupt;
+  HST.recall log;
+  HST.op_Colon_Equals log Corrupt;
   pkr, skr
 
 
@@ -335,7 +338,7 @@ val endorse: #a:alg -> pkr:public_repr{sigAlg_of_public_repr pkr == a.core} -> S
              /\ (forall k'. generated k' h1 /\ pkey_repr k' = pkr /\ pkey_alg k' == a ==> (dfst k == dfst k' /\
 	                                                                            PK?.repr (dsnd k) == PK?.repr (dsnd k'))))) //AR: 04/27: we don't get equality of refs anymore, we can get their addresses are equal, if we can show that one of them is contained in the heap
 let endorse #a pkr =
-  let keys = !rkeys in
+  let keys = HST.op_Bang rkeys in
   match find_key pkr keys with
   | Some k ->
     if (pkey_alg k).core = a.core then begin
@@ -384,11 +387,11 @@ val lookup_key: #a:alg -> string -> ST (option (skey a))
     match o with
     | Some (p, skr) ->
       modifies_one keyRegion h0 h1 /\
-      modifies_ref keyRegion (Set.singleton (as_addr rkeys)) h0 h1 /\
+      HS.modifies_ref keyRegion (Set.singleton (Heap.addr_of (as_ref (as_hsref rkeys)))) h0.h h1.h /\
       witnessed (generated (|a,p|))
     | None -> h0 == h1))
 let lookup_key #a keyfile =
-  let keys = !rkeys in
+  let keys = HST.op_Bang rkeys in
   let sa = a.core in
   let key =
     match sa, foo (CoreCrypto.load_key keyfile) with
@@ -416,9 +419,9 @@ let lookup_key #a keyfile =
       let p = alloc_pubkey (Signed Seq.createEmpty) pkr in
       let k = (| a, p |) in
       let keys' = add_key keys k in
-      recall rkeys;
-      rkeys := keys';
-      mr_witness rkeys (generated k);
+      HST.recall rkeys;
+      HST.op_Colon_Equals rkeys keys';
+      witness rkeys (generated k);
       Some (p, skr)
       end
     end
@@ -428,8 +431,8 @@ let lookup_key #a keyfile =
 #reset-options
 #set-options "--initial_fuel 2 --max_fuel 2"
 
-noextract //why?
-val test: bytes -> bytes -> HyperStack.All.All unit
+noextract // why?
+val test: bytes -> bytes -> All unit
   (requires (fun h -> h `contains` rkeys))
   (ensures  (fun h0 _ h1 -> modifies_one keyRegion h0 h1))
 let test t0 t1 =

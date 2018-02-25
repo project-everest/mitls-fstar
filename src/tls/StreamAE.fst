@@ -3,12 +3,14 @@ Provides authenticated encryption for a stream of variable-length plaintexts;
 concretely, we use AES_GCM but any other AEAD algorithm would do.
 *)
 module StreamAE
+module HST = FStar.HyperStack.ST //Added automatically
 
+open FStar.HyperStack
+open FStar.Seq
 open FStar.Monotonic.Seq
-
 open FStar.Error
-open Platform.Bytes
-
+open FStar.Bytes
+open FStar.Heap
 open Mem
 open TLSError
 open TLSConstants
@@ -18,6 +20,7 @@ open StreamPlain
 module AEAD = AEADProvider
 module HS = FStar.HyperStack
 
+type rid = HST.erid
 
 type id = i:id { ID13? i }
 
@@ -74,7 +77,7 @@ let ctr (#l:erid) (#r:erid) (#i:id) (#log:log_ref l i) (c:ctr_ref r i log)
 // kept concrete for log and counter, but the key and iv should be private.
 noeq type state (i:id) (rw:rw) =
   | State: #region: rgn
-         -> #log_region: rgn{if rw = Writer then region = log_region else disjoint region log_region}
+         -> #log_region: rgn{if rw = Writer then region = log_region else HS.disjoint region log_region}
          -> aead: AEAD.state i rw
          -> log: log_ref log_region i // ghost, subject to cryptographic assumption
          -> counter: ctr_ref region i log // types are sufficient to anti-alias log and counter
@@ -93,15 +96,15 @@ type reader i = s:state i Reader
 let genPost (#i:id) parent h0 (w:writer i) h1 =
   modifies Set.empty h0 h1 /\
   HS.parent w.region = parent /\
-  fresh_region w.region h0 h1 /\
+  HS.fresh_region w.region h0 h1 /\
   color w.region = color parent /\
   extends (AEAD.region w.aead) parent /\
-  fresh_region (AEAD.region w.aead) h0 h1 /\
+  HS.fresh_region (AEAD.region w.aead) h0 h1 /\
   color (AEAD.region w.aead) = color parent /\
   (authId i ==>
-      (contains h1 (ilog w.log) /\
-       sel h1 (ilog w.log) == Seq.createEmpty)) /\
-  contains h1 (ctr w.counter) /\
+      (h1 `HS.contains` (ilog w.log) /\
+       sel h1 (ilog w.log) == createEmpty)) /\
+  h1 `HS.contains` (ctr w.counter) /\
   sel h1 (ctr w.counter) === 0
 //16-04-30 how to share the whole ST ... instead of genPost?
 
@@ -123,23 +126,27 @@ let gen parent i =
     let ectr: ideal_ctr #writer_r writer_r i log = new_seqn #(entry i) #writer_r #max_ctr writer_r 0 log in
     State #i #Writer #writer_r #writer_r aead log ectr
   else
-    let ectr: concrete_ctr writer_r i = ralloc writer_r 0 in
+    let ectr: concrete_ctr writer_r i = HST.ralloc writer_r 0 in
     State #i #Writer #writer_r #writer_r aead () ectr
 
 #reset-options
 val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
+
   (requires (fun h0 -> 
     witnessed (region_contains_pred parent) /\ 
     disjoint parent w.region /\
     disjoint parent (AEAD.region w.aead))) //16-04-25  we may need w.region's parent instead
+  // cwinter: quic2c
+  // (requires (fun h0 -> HS.disjoint parent w.region /\
+  // HS.disjoint parent (AEAD.region w.aead))) //16-04-25  we may need w.region's parent instead
   (ensures  (fun h0 (r:reader i) h1 ->
          modifies Set.empty h0 h1 /\
          r.log_region = w.region /\
          HS.parent r.region = parent /\
 	       color r.region = color parent /\
-         fresh_region r.region h0 h1 /\
+         HS.fresh_region r.region h0 h1 /\
          w.log == r.log /\
-	 contains h1 (ctr r.counter) /\
+	 h1 `HS.contains` (ctr r.counter) /\
 	 sel h1 (ctr r.counter) === 0))
 // encryption (on concrete bytes), returns (cipher @| tag)
 // Keeps seqn and nonce implicit; requires the counter not to overflow
@@ -149,14 +156,14 @@ val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
 let genReader parent #i w =
   let reader_r = new_region parent in
   let writer_r : rgn = w.region in
-  assert(disjoint writer_r reader_r);
+  assert(HS.disjoint writer_r reader_r);
   lemma_ID13 i;
   let raead = AEAD.genReader parent #i w.aead in
   if authId i then
     let log : ideal_log w.region i = w.log in
     let dctr: ideal_ctr reader_r i log = new_seqn reader_r 0 log in
     State #i #Reader #reader_r #writer_r raead w.log dctr
-  else let dctr : concrete_ctr reader_r i = ralloc reader_r 0 in
+  else let dctr : concrete_ctr reader_r i = HST.ralloc reader_r 0 in
     State #i #Reader #reader_r #writer_r raead () dctr
 
 // Coerce a writer with index i in a fresh subregion of parent
@@ -168,7 +175,7 @@ val coerce: parent:rgn -> i:id{~(authId i)} -> kv:key i -> iv:iv i -> ST (writer
 let coerce parent i kv iv =
   assume false; // coerce missing post-condition
   let writer_r = new_region parent in
-  let ectr: concrete_ctr writer_r i = ralloc writer_r 0 in
+  let ectr: concrete_ctr writer_r i = HST.ralloc writer_r 0 in
   let aead = AEAD.coerce i parent kv iv in
   State #i #Writer #writer_r #writer_r aead () ectr
 
@@ -190,20 +197,20 @@ private abstract let noAD = empty_bytes
 val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
     (requires (fun h0 ->
       lemma_ID13 i;
-      disjoint e.region (AEAD.log_region #i e.aead) /\
+      HS.disjoint e.region (AEAD.log_region #i e.aead) /\
       l <= max_TLSPlaintext_fragment_length /\ // FIXME ADL: why is plainLen <= max_TLSCiphertext_fragment_length_13 ?? Fix StreamPlain!
       sel h0 (ctr e.counter) < max_ctr))
     (ensures  (fun h0 c h1 ->
       lemma_ID13 i;
       modifies (Set.as_set [e.log_region; AEAD.log_region #i e.aead]) h0 h1 /\
-      contains h1 (ctr e.counter) /\
+      h1 `HS.contains` (ctr e.counter) /\
       sel h1 (ctr e.counter) === sel h0 (ctr e.counter) + 1 /\
 	    (authId i ==>
 		    (let log = ilog e.log in
 		    let ent = Entry l c p in
 		    let n = Seq.length (sel h0 log) in
-		    contains h1 log /\
-                    witnessed (at_least n ent log) /\
+		    h1 `HS.contains` log /\
+		    witnessed (at_least n ent log) /\
 		    sel h1 log == snoc (sel h0 log) ent))))
 
 (* we primarily model the ideal functionality, the concrete code that actually
@@ -214,9 +221,9 @@ val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
 let encrypt #i e l p =
   let h0 = get() in
   let ctr = ctr e.counter in
-  recall ctr;
-  let text = if safeId i then createBytes l 0z else repr i l p in
-  let n = !ctr in
+  HST.recall ctr;
+  let text = if safeId i then create_ l 0z else repr i l p in
+  let n = HST.op_Bang ctr in
   lemma_repr_bytes_values n;
   let nb = bytes_of_int (AEAD.noncelen i) n in
   let iv = AEAD.create_nonce e.aead nb in
@@ -227,16 +234,27 @@ let encrypt #i e l p =
   if authId i then
     begin
     let ilog = ilog e.log in
-    recall ilog;
+  // cwinter: verify
+  //   recall ilog;
+  //   let ictr: ideal_ctr e.region i ilog = e.counter in
+  //   testify_seqn ictr;
+  //   write_at_end ilog (Entry l c p); //need to extend the log first, before incrementing the counter for monotonicity; do this only if ideal
+  //   recall ictr;
+  //   increment_seqn ictr;
+  //   recall ictr
+  //   end
+  // else
+  //   ctr := n + 1;
+    HST.recall ilog;
     let ictr: ideal_ctr e.region i ilog = e.counter in
     testify_seqn ictr;
     write_at_end ilog (Entry l c p); //need to extend the log first, before incrementing the counter for monotonicity; do this only if ideal
-    recall ictr;
+    HST.recall ictr;
     increment_seqn ictr;
-    recall ictr
+    HST.recall ictr
     end
   else
-    ctr := n + 1;
+    HST.op_Colon_Equals ctr (n + 1);
   c
 
 (* val matches: #i:id -> l:plainLen -> cipher i l -> entry i -> Tot bool *)
@@ -258,10 +276,10 @@ val decrypt: #i:id -> d:reader i -> l:plainLen -> c:cipher i l
     	 then res = Some (Entry?.p (Seq.index log j))
     	 else res = None)) /\
       (match res with
-       | None -> HS.modifies Set.empty h0 h1
+       | None -> HS.modifies_transitively Set.empty h0 h1
        | _ -> let ctr_counter_as_hsref = ctr d.counter in
-             modifies_one d.region h0 h1 /\
-             modifies_ref d.region (Set.singleton (Heap.addr_of (as_ref ctr_counter_as_hsref))) h0 h1 /\
+             HS.modifies_one d.region h0 h1 /\
+             HS.modifies_ref d.region (Set.singleton (Heap.addr_of (as_ref ctr_counter_as_hsref))) h0 h1 /\
              sel h1 (ctr d.counter) === j + 1)))
 
 val strip_refinement: #a:Type -> #p:(a -> Type0) -> o:option (x:a{p x}) -> option a
@@ -273,18 +291,18 @@ let strip_refinement #a #p = function
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
 let decrypt #i d l c =
   let ctr = ctr d.counter in
-  recall ctr;
-  let j = !ctr in
+  HST.recall ctr;
+  let j = HST.op_Bang ctr in
   if authId i
   then (
     let ilog = ilog d.log in
-    let log  = !ilog in
+    let log  = HST.op_Bang ilog in
     let ictr: ideal_ctr d.region i ilog = d.counter in
     testify_seqn ictr; //now we know that j <= Seq.length log
     if j < Seq.length log && matches l c (Seq.index log j) then
       begin
       increment_seqn ictr;
-      recall ctr;
+      HST.recall ctr;
       Some (Entry?.p (Seq.index log j))
       end
     else None )
@@ -299,9 +317,9 @@ let decrypt #i d l c =
    | None -> None
    | Some pr ->
      begin
-       assert (Platform.Bytes.length pr == l);
+       assert (FStar.Bytes.length pr == l);
        let p = strip_refinement (mk_plain i l pr) in
-       if Some? p then ctr := j + 1;
+       if Some? p then HST.op_Colon_Equals ctr (j + 1);
        p
      end
    end

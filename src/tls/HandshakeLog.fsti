@@ -20,13 +20,12 @@ module HandshakeLog
 - support abstract plaintexts and multiple epochs
 *)
 
-open Platform.Bytes
+open FStar.Bytes
 open FStar.Ghost // after HH so as not to shadow reveal :(
 
 open Mem
 open Hashing.CRF
 open HandshakeMessages // for pattern matching on messages
-//
 module HS = FStar.HyperStack
 
 open FStar.Error
@@ -95,7 +94,7 @@ val transcript_bytes: hs_transcript -> GTot bytes
 
 // formatting of the whole transcript is injective (what about binders?)
 val transcript_format_injective: ms0:hs_transcript -> ms1:hs_transcript ->
-  Lemma(Seq.equal (transcript_bytes ms0) (transcript_bytes ms1) ==> ms0 == ms1)
+  Lemma(Bytes.equal (transcript_bytes ms0) (transcript_bytes ms1) ==> ms0 == ms1)
 
 //val transcript_bytes_append: ms0: hs_transcript -> ms1: list msg ->
 //  Lemma (transcript_bytes (ms0 @ ms1) = transcript_bytes ms0 @| transcript_bytes ms1)
@@ -224,7 +223,7 @@ val hash_tag_truncated: #a:alg -> s:log -> suffix_len:nat -> ST (tag a)
   (ensures fun h0 h h1 ->
     let bs = transcript_bytes (transcript h1 s)  in
     h0 == h1 /\ suffix_len <= length bs /\ (
-    let prefix, _ = split bs (length bs - suffix_len)  in
+    let prefix, _ = split_ bs (length bs - suffix_len)  in
     hashed a prefix /\ h == hash a prefix))
 
 val send_tag: #a:alg -> s:log -> m:msg -> ST (tag a)

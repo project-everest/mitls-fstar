@@ -1,7 +1,7 @@
 ﻿(** hash algorithms and providers *)
 module Hashing.Spec
 
-open Platform.Bytes
+open FStar.Bytes
 
 type alg = // CoreCrypto.hash_alg
   | MD5
@@ -55,7 +55,7 @@ let emptyHash : a:alg -> Tot (tag a) =
 
 // A "placeholder" hash whose bytes are all 0 (used in KS)
 let zeroHash (a:alg) : Tot (tag a) =
-  createBytes (tagLen a) 0uy
+  create_ (tagLen a) 0z
 
 let maxTagLen = 64
 type anyTag = lbytes maxTagLen
@@ -64,10 +64,19 @@ let lemma_maxLen (a:alg): Lemma (tagLen a <= maxTagLen) = ()
 // internal hash state for incremental computation
 // with initial value and core algorithm, accumulating an extra block into the current state
 
-assume type acc (a:alg)
-assume val acc0: a:alg -> Tot (acc a)
-assume val compress: #a:alg -> acc a -> lbytes (blockLen a) -> Tot (acc a)
-assume val truncate: #a:alg -> acc a -> Tot (tag a) // just keeping the first tagLen bytes
+//NS, JR: A very dubious change here, replacing an assumed type and functions on it
+//        Otherwise, this doesn't compile at all
+abstract
+let acc (a:alg) = bytes
+
+abstract
+let acc0 (a:alg) : acc a = empty_bytes
+
+abstract
+let compress (#a:alg) (_:acc a) (l:lbytes (blockLen a)) = l //??
+
+abstract
+let truncate (#a:alg) (ac:acc a) : Tot (acc a) = Bytes.slice ac (0ul) (FStar.UInt32.uint_to_t (tagLen a))  //?? just keeping the first tagLen bytes
 (*
 let acc0 = function
   | MD5 ->  [0x67452301; 0xefcdab89; 0x98badcfe; 0x10325476] // A, B, C, D
@@ -82,7 +91,7 @@ val hash2: #a:alg -> acc a -> b:bytes { length b % blockLen a = 0 } -> Tot (acc 
 let rec hash2 #a v b =
   if length b = 0 then v
   else
-    let c,b = split b (blockLen a) in
+    let c,b = split_ b (blockLen a) in
     hash2 (compress v c) b
 
 // for convenience, we treat inputs as sequences of bytes, not bits.
@@ -98,7 +107,9 @@ let suffixLen (a:alg) (len:nat) : n:nat {(n + len) % blockLen a = 0} =
 
 // injective encoding for variable-length inputs
 // we add either 8 or 16 bytes of length and 1+ bytes of padding
-assume val suffix: a:alg -> len:nat -> Tot (c:lbytes (suffixLen a len))
+let suffix (a:alg) (len:nat): Tot (c:lbytes (suffixLen a len)) =
+  //TODO: Placeholder!
+  Bytes.create (FStar.UInt32.uint_to_t (suffixLen a len)) 0uy
 
 // computed in one step (specification)
 val hash: a:alg -> bytes -> Tot (lbytes (tagLen a))
@@ -115,10 +126,8 @@ type hkey (a:alg) = tag a
 
 val hmac: a:alg -> k:hkey a -> message:bytes -> Tot (tag a)
 
-private let xor #l a b = xor l a b
-
 let hmac a key message =
-  let xkey = key @| createBytes (blockLen a - tagLen a) 0x0z  in
-  let outer_key_pad = xor xkey (createBytes (blockLen a) 0x5cz) in
-  let inner_key_pad = xor xkey (createBytes (blockLen a) 0x36z) in
+  let xkey = key @| create_ (blockLen a - tagLen a) 0x0z  in
+  let outer_key_pad = xor_ #(blockLen a) xkey (create_ (blockLen a) 0x5cz) in
+  let inner_key_pad = xor_ #(blockLen a) xkey (create_ (blockLen a) 0x36z) in
   hash a (outer_key_pad @| hash a (inner_key_pad @| message))

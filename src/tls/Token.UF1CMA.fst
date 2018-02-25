@@ -37,7 +37,7 @@ noeq type info = {
   good: bool //TODO: should be Type0 instead of bool, and erased, but hard to propagate
 }
 
-type tag (u:info) = Platform.Bytes.lbytes (Hashing.Spec.tagLen u.alg)
+type tag (u:info) = FStar.Bytes.lbytes (Hashing.Spec.tagLen u.alg)
 
 let keylen (u:info): Pkg.keylen = UInt32.uint_to_t (Hashing.Spec.tagLen u.alg)
 type keyrepr (u:info) = Hashing.Spec.hkey u.alg
@@ -123,7 +123,7 @@ let create ip _ _ i u =
 
 let coerceT (ip: ipkg) (ha_of_i: ip.Pkg.t -> ha) (good_of_i: ip.Pkg.t -> bool)
   (i: ip.Pkg.t {ip.Pkg.registered i /\ ~(safe i)})
-  (u: u:info {u.alg = ha_of_i i /\ u.good == good_of_i i})
+  (u: (u:info {u.alg = ha_of_i i /\ u.good == good_of_i i}))
   (kv: Pkg.lbytes (keylen u)) : GTot (key ip i)
   =
   let ck = MAC u kv in
@@ -183,7 +183,7 @@ val verify:
     (b /\ safe i ==> (usage k).good))
 let verify #ip #i k t =
   let MAC _ t' = get_key k in 
-  let verified = Platform.Bytes.equalBytes t t' in
+  let verified = FStar.Bytes.equalBytes t t' in
   if is_safe i then
     // We use the log to correct any verification errors
     let IdealKey _ _ log = k <: ir_key ip i in
@@ -200,7 +200,7 @@ type info1 (ip: ipkg) (ha_of_i: ip.Pkg.t -> ha)
   =
   a:info{a.alg = ha_of_i i /\ a.good == good_of_i i}
 
-unfold let localpkg (ip: ipkg) (ha_of_i: i:ip.Pkg.t -> ha) (good_of_i: ip.Pkg.t -> bool)
+unfold let localpkg (ip: ipkg) (ha_of_i: (i:ip.Pkg.t -> ha)) (good_of_i: ip.Pkg.t -> bool)
   : Pure (Pkg.local_pkg ip)
   (requires True) (ensures fun p -> p.Pkg.key == key ip /\ p.Pkg.info == info1 ip ha_of_i good_of_i)
   =

@@ -1,9 +1,13 @@
 ﻿(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 module Hashing
+module HS = FStar.HyperStack //Added automatically
 
+open FStar.Heap
+open FStar.HyperStack
+open FStar.HyperStack.ST
 open Mem
 
-open Platform.Bytes
+open FStar.Bytes
 include Hashing.Spec
 
 (* IMPLEMENTATION PLACEHOLDER, 

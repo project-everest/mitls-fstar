@@ -4,11 +4,14 @@ Implemented by appending a fragment sequence number to the additional data of
 the underlying LHAE scheme
 *)
 module StatefulLHAE
+module HS = FStar.HyperStack //Added automatically
+module HST = FStar.HyperStack.ST //Added automatically
 
+open FStar.Heap
+open FStar.HyperStack
 open FStar.Seq
 open FStar.Monotonic.Seq
-
-open Platform.Bytes
+open FStar.Bytes
 
 open Mem
 open TLSConstants
@@ -34,21 +37,34 @@ type dplain (i:id) (ad:adata i) (c:cipher i) =
 type state (i:id) (rw:rw) =
   AEAD_GCM.state i rw
 
-let region #i #rw = AEAD_GCM.State?.region #i #rw
+let region #i #rw s = AEAD_GCM.State?.region #i #rw s
 
-let log_region #i #rw = AEAD_GCM.State?.log_region #i #rw
+noextract
+let log_region #i #rw s = AEAD_GCM.State?.log_region #i #rw s
 
-let log #i #rw = AEAD_GCM.State?.log #i #rw
+let log #i #rw s = AEAD_GCM.State?.log #i #rw s
 
-let counter #i #rw = AEAD_GCM.State?.counter #i #rw
+let counter #i #rw s = AEAD_GCM.State?.counter #i #rw s
 
 type reader i = state i Reader
 type writer i = state i Writer
 
-let gen = AEAD_GCM.gen
-let genReader = AEAD_GCM.genReader
-let coerce = AEAD_GCM.coerce
-let leak (#i:id{~(authId i)}) (#role:rw) = AEAD_GCM.leak #i #role
+val gen: parent:rgn -> i:id -> ST (writer i)
+  (requires (fun h0 -> True))
+  (ensures  (genPost parent))
+let gen p i = AEAD_GCM.gen p i
+
+val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
+  (requires (fun h0 ->
+    HS.disjoint parent w.region /\
+    HS.disjoint parent (AEADProvider.region w.aead)))
+  (ensures  (fun h0 (r:reader i) h1 ->
+    True //TODO
+    ))
+let genReader p #i w = AEAD_GCM.genReader p #i w
+
+let coerce parent i kv iv = AEAD_GCM.coerce parent i kv iv
+let leak (#i:id{~(authId i)}) (#role:rw) state = AEAD_GCM.leak #i #role state
 
 (*------------------------------------------------------------------*)
 #set-options "--z3rlimit 100 --max_ifuel 1 --initial_ifuel 0 --max_fuel 1 --initial_fuel 0"
@@ -57,11 +73,11 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
   -> p:plain i ad r
   -> ST (cipher i)
      (requires (fun h0 ->
-       HyperStack.disjoint e.region (AEADProvider.log_region e.aead) /\
+       HS.disjoint e.region (AEADProvider.log_region e.aead) /\
        sel h0 (ctr e.counter) < max_ctr (alg i)))
      (ensures  (fun h0 c h1 ->
        modifies (Set.as_set [e.log_region; AEADProvider.log_region e.aead]) h0 h1
-       /\ contains h1 (ctr e.counter) 
+       /\ h1 `HS.contains` (ctr e.counter)
        /\ sel h1 (ctr e.counter) === sel h0 (ctr e.counter) + 1
        /\ length c = Range.targetLength i r
        /\ (authId i ==>
@@ -72,12 +88,12 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
 	      let ad' = LHAEPlain.makeAD i seqn ad in
 	      let ent = Entry c ad' p in
 	      let n   = Seq.length ilog in
-	      contains h1 log
+	      h1 `HS.contains` log
         /\ witnessed (at_least n ent log)
 	      /\ sel h1 log == snoc ilog ent))))
 
 let encrypt #i e ad r p =
-  let seqn = !(ctr e.counter) in
+  let seqn = HST.op_Bang (ctr e.counter) in
   lemma_repr_bytes_values seqn;
   let ad' = LHAEPlain.makeAD i seqn ad in
   AEAD_GCM.encrypt #i e ad' r p
@@ -86,8 +102,8 @@ let encrypt #i e ad r p =
 (*------------------------------------------------------------------*)
 val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
   -> ST (option (dplain i ad c))
-  (requires fun h0 -> sel h0 (ctr d.counter) < max_ctr (alg i))
-  (ensures fun h0 res h1 ->
+  (requires (fun h0 -> sel h0 (ctr d.counter) < max_ctr (alg i)))
+  (ensures  (fun h0 res h1 ->
      let j = sel h0 (ctr d.counter) in
      (authId i ==>
        (let log = sel h0 (ilog d.log) in
@@ -98,14 +114,13 @@ val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
        then res = Some (Entry?.p (Seq.index log j))
        else res = None))
     /\ (
-       let ctr_counter_as_hsref = ctr d.counter in
        match res with
        | None -> modifies Set.empty h0 h1
-       | _    -> modifies_one d.region h0 h1 /\
-                modifies_ref d.region (Set.singleton (Heap.addr_of (as_ref ctr_counter_as_hsref))) h0 h1 /\
-	        sel h1 (ctr d.counter) === j + 1))
+       | _    -> modifies_one d.region h0 h1
+                /\ HS.modifies_ref d.region (Set.singleton (HS.as_addr (ctr d.counter))) h0 h1
+	        /\ sel h1 (ctr d.counter) === j + 1)))
 let decrypt #i d ad c =
-  let seqn = !(ctr d.counter) in
+  let seqn = HST.op_Bang (ctr d.counter) in
   lemma_repr_bytes_values seqn;
   let ad' = LHAEPlain.makeAD i seqn ad in
   AEAD_GCM.decrypt d ad' c

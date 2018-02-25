@@ -24,8 +24,8 @@ module HS = FStar.HyperStack
 
 let model = Flags.model
 
-type bytes = Platform.Bytes.bytes
-let lbytes (len:UInt32.t) = Platform.Bytes.lbytes (UInt32.v len)
+type bytes = FStar.Bytes.bytes
+let lbytes (len:UInt32.t) = FStar.Bytes.lbytes (UInt32.v len)
 
 
 

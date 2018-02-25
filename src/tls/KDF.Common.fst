@@ -11,18 +11,15 @@ module HST = FStar.HyperStack.ST //Added automatically
 /// 17-09-20 This file is an early experiment---not currently used.
 /// 
 open FStar.Heap
-
 open FStar.HyperStack
-
-open Platform.Bytes
+open FStar.Bytes
 open FStar.Error
 open TLSError
 open TLSConstants
 open TLSInfo
 
-module MM = FStar.Monotonic.Map
-
-
+module DM = FStar.DependentMap
+module MM = FStar.Monotonic.DependentMap
 module HS = FStar.HyperStack
 
 (*)
@@ -82,9 +79,9 @@ abstract noeq type prf (#it:Type0) (i:it) =
 // Create an honest PRF instance at index i of type it
 let create (#it:Type0) (i:it) (r:rgn) (hashAlg: it -> Tot Hashing.Spec.alg)
   (domain:Type0{hasEq t}) (range:domain -> Tot Type0) (format: domain -> Tot bytes)
-  (pre: domain -> expand_log domain range r -> h:HS.mem -> GTot Type0)
-  (post: d:domain -> range d -> expand_log domain range r -> h0:HS.mem -> h1:HS.mem -> GTot Type0)
-  (honestT: p:(domain -> GTot Type0){not Flags.ideal_KEF ==> (forall (d:domain).~(p d))})
+  (pre: (domain -> expand_log domain range r -> h:HS.mem -> GTot Type0))
+  (post: (d:domain -> range d -> expand_log domain range r -> h0:HS.mem -> h1:HS.mem -> GTot Type0))
+  (honestT: (p:(domain -> GTot Type0){not Flags.ideal_KEF ==> (forall (d:domain).~(p d))}))
   : ST (prf #it i)
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> h0 == h1)

@@ -18,6 +18,7 @@ typedef int SOCKET;
 #define closesocket(fd) close(fd)
 #endif
 #include <mitlsffi.h>
+#include <mipki.h>
 
 const char *option_hostname;
 int option_port;
@@ -65,7 +66,6 @@ struct {
 #undef BOOL_OPTION
 
 typedef struct {
-  struct _FFI_mitls_callbacks cb;
   SOCKET sockfd;
 } callback_context;
 
@@ -140,7 +140,7 @@ int ParseArgs(int argc, char **argv)
     if (hostname_arg) {
         option_hostname = hostname_arg;
     } else {
-        option_hostname = (option_isserver) ? "0.0.0.0" : "127.0.0.1";
+        option_hostname = (option_isserver) ? "0.0.0.0" : "localhost";
     }
     if (port_arg) {
         option_port = atoi(port_arg);
@@ -150,57 +150,129 @@ int ParseArgs(int argc, char **argv)
     return 0;
 }
 
-void PrintErrors(char *out_msg, char *err_msg)
+void dump(const char *buffer, size_t len)
 {
-    if (out_msg) {
-        printf("MITLS: %s", out_msg);
-        FFI_mitls_free_msg(out_msg);
-    }
-    if (err_msg) {
-        fprintf(stderr, "MITLS: %s", err_msg);
-        FFI_mitls_free_msg(err_msg);
-    }
+  int i;
+  for(i=0; i<len; i++) {
+    printf("%02x",(unsigned char)buffer[i]);
+    if (i % 32 == 31 || i == len-1) printf("\n");
+  }
+}
+
+void* certificate_select(void *cbs, const char *sni, size_t sni_len, const mitls_signature_scheme *sigalgs, size_t sigalgs_len, mitls_signature_scheme *selected)
+{
+  mipki_state *st = (mipki_state*)cbs;
+  mipki_chain r = mipki_select_certificate(st, sni, sni_len, sigalgs, sigalgs_len, selected);
+  return (void*)r;
+}
+
+size_t certificate_format(void *cbs, const void *cert_ptr, char *buffer)
+{
+  mipki_state *st = (mipki_state*)cbs;
+  mipki_chain chain = (mipki_chain)cert_ptr;
+  return mipki_format_chain(st, cert_ptr, buffer, MAX_CHAIN_LEN);
+}
+
+size_t certificate_sign(void *cbs, const void *cert_ptr, const mitls_signature_scheme sigalg, const char *tbs, size_t tbs_len, char *sig)
+{
+  mipki_state *st = (mipki_state*)cbs;
+  size_t ret = MAX_SIGNATURE_LEN;
+
+  printf("======== TO BE SIGNED <%04x>: (%d octets) ========\n", sigalg, (int)tbs_len);
+  dump(tbs, tbs_len);
+  printf("===================================================\n");
+
+  if(mipki_sign_verify(st, cert_ptr, sigalg, tbs, tbs_len, sig, &ret, MIPKI_SIGN))
+    return ret;
+
+  return 0;
+}
+
+int certificate_verify(void *cbs, const char* chain_bytes, size_t chain_len, const mitls_signature_scheme sigalg, const char *tbs, size_t tbs_len, char *sig, size_t sig_len)
+{
+  mipki_state *st = (mipki_state*)cbs;
+  mipki_chain chain = mipki_parse_chain(st, chain_bytes, chain_len);
+
+  if(chain == NULL)
+  {
+    printf("ERROR: failed to parse certificate chain");
+    return 0;
+  }
+
+  // We don't validate hostname, but could with the callback state
+  if(!mipki_validate_chain(st, chain, option_hostname))
+  {
+    printf("WARNING: chain validation failed, ignoring.\n");
+    // return 0;
+  }
+
+  size_t slen = sig_len;
+  int r = mipki_sign_verify(st, chain, sigalg, tbs, tbs_len, sig, &slen, MIPKI_VERIFY);
+  mipki_free_chain(st, chain);
+  return r;
 }
 
 int ConfigureQuic(quic_state **pstate)
 {
-    char *err_msg;
-    int r;
+    int erridx, r;
     quic_state *state;
     quic_config quic_cfg;
-    
+
+    // Server PKI configuration: one ECDSA certificate
+    mipki_config_entry pki_config[1] = {
+      {
+        .cert_file = option_cert ? option_cert : "../../data/server-ecdsa.crt",
+        .key_file = option_key ? option_key : "../../data/server-ecdsa.key",
+        .is_universal = 1 // ignore SNI
+      }
+    };
+
+    mipki_state *pki = mipki_init(pki_config, 1, NULL, &erridx);
+    mitls_cert_cb cert_callbacks =
+      {
+        .select = certificate_select,
+        .format = certificate_format,
+        .sign = certificate_sign,
+        .verify = certificate_verify
+      };
+
+    if(!pki)
+    {
+      printf("Failed to initialize PKI library: errid=%d\n", erridx);
+      return 1;
+    }
+
+    if(!mipki_add_root_file_or_path(pki, option_cafile ? option_cafile : "../../data/CAFile.pem"))
+    {
+      printf("Failed to add CAFile\n");
+      return 1;
+    }
+
     *pstate = NULL;
     if (!option_quic) {
         printf("Call Configure() instead of ConfigureQuic(), for TLS connections.\n");
         return 4;
     }
-    
+
     memset(&quic_cfg, 0, sizeof(quic_cfg));
     quic_cfg.is_server = (option_isserver) ? 1 : 0;
-    quic_cfg.qp.max_stream_data = 65536;
-    quic_cfg.qp.max_data = 16777216;
-    quic_cfg.qp.max_stream_id = 256;
-    quic_cfg.qp.idle_timeout = 60;
+    quic_cfg.qp.tp_len = 9;
+    quic_cfg.qp.tp_data = "\xff\xff\x00\x05\x0a\x0b\x0c\x0d\x0e\x00";
     quic_cfg.cipher_suites = option_ciphers;
+    quic_cfg.cert_callbacks = &cert_callbacks;
     quic_cfg.signature_algorithms = option_sigalgs;
     quic_cfg.named_groups = option_groups;
     quic_cfg.enable_0rtt = (option_0rtt) ? 1 : 0;
-    
+
     if (option_isserver) {
-        quic_cfg.certificate_chain_file = option_cert;
-        quic_cfg.private_key_file = option_key;
         quic_cfg.ticket_enc_alg = NULL;
         quic_cfg.ticket_key = NULL;
         quic_cfg.ticket_key_len = 0;
     } else { // client
         quic_cfg.host_name = option_hostname;
-        quic_cfg.ca_file = option_cafile;
-        //quic_cfg.server_ticket.len
-        //quic_cfg.server_ticket.ticket
     }
-    
-    r = FFI_mitls_quic_create(&state, &quic_cfg, &err_msg);
-    PrintErrors(NULL, err_msg);
+
+    r = FFI_mitls_quic_create(&state, &quic_cfg);
     if (r == 0) {
         printf("FFI_mitls_quic_create() failed.\n");
         return 2;
@@ -212,44 +284,47 @@ int ConfigureQuic(quic_state **pstate)
 int Configure(mitls_state **pstate)
 {
     char *out_msg;
-    char *err_msg;
     mitls_state *state;
-    int r;
+    int r, erridx;
 
     *pstate = NULL;
+
+    // Server PKI configuration: one ECDSA certificate
+    mipki_config_entry pki_config[1] = {
+      {
+        .cert_file = option_cert ? option_cert : "../../data/server-ecdsa.crt",
+        .key_file = option_key ? option_key : "../../data/server-ecdsa.key",
+        .is_universal = 1 // ignore SNI
+      }
+    };
+
+    mipki_state *pki = mipki_init(pki_config, 1, NULL, &erridx);
+    mitls_cert_cb cert_callbacks =
+      {
+        .select = certificate_select,
+        .format = certificate_format,
+        .sign = certificate_sign,
+        .verify = certificate_verify
+      };
+
+    if(!mipki_add_root_file_or_path(pki, option_cafile ? option_cafile : "../../data/CAFile.pem")) {
+      printf("Failed to set CAFile\n");
+      return 1;
+    }
 
     if (option_quic) {
         printf("Call ConfigureQuic() instead of Configure(), for QUIC connections.\n");
         return 4;
     }
-    
-    r = FFI_mitls_configure(&state, option_version, option_hostname, &out_msg, &err_msg);
-    PrintErrors(out_msg, err_msg);
+
+    r = FFI_mitls_configure(&state, option_version, option_hostname);
+    if(r) r = FFI_mitls_configure_cert_callbacks(state, pki, &cert_callbacks);
+
     if (r == 0) {
         printf("FFI_mitls_configure(%s,%s) failed.\n", option_version, option_hostname);
         return 2;
     }
-    if (option_cert) {
-        r = FFI_mitls_configure_cert_chain_file(state, option_cert);
-        if (r == 0) {
-            printf("FFI_mitls_configure_cert_chain_file(%s) failed.\n", option_cert);
-            return 2;
-        }
-    }
-    if (option_key) {
-        r = FFI_mitls_configure_private_key_file(state, option_key);
-        if (r == 0) {
-            printf("FFI_mitls_configure_private_key_file(%s) failed.\n", option_key);
-            return 2;
-        }
-    }
-    if (option_cafile) {
-        r = FFI_mitls_configure_ca_file(state, option_cafile);
-        if (r == 0) {
-            printf("FFI_mitls_configure_ca_file(%s) failed.\n", option_cafile);
-            return 2;
-        }
-    }
+
     if (option_ciphers) {
         r = FFI_mitls_configure_cipher_suites(state, option_ciphers);
         if (r == 0) {
@@ -273,9 +348,9 @@ int Configure(mitls_state **pstate)
     }
 
     if (option_0rtt) {
-        r = FFI_mitls_configure_early_data(state, 1);
+        r = FFI_mitls_configure_early_data(state, 1024*16);
         if (r == 0) {
-            printf("FFI_mitls_configure_early_data(true) failed.\n");
+            printf("FFI_mitls_configure_early_data(1024*16) failed.\n");
             return 2;
         }
     }
@@ -308,9 +383,9 @@ int Configure(mitls_state **pstate)
 }
 
 // Callback from miTLS, when it is ready to send a message via the socket
-int SendCallback(struct _FFI_mitls_callbacks *callbacks, const void *buffer, size_t buffer_size)
+int SendCallback(void *pv, const void *buffer, size_t buffer_size)
 {
-    callback_context *ctx = (callback_context*)callbacks;
+    callback_context *ctx = (callback_context*)pv;
     ssize_t r;
 
     r = send(ctx->sockfd, buffer, buffer_size, 0);
@@ -321,9 +396,9 @@ int SendCallback(struct _FFI_mitls_callbacks *callbacks, const void *buffer, siz
 }
 
 // Callback from miTLS, when it is ready to receive a message via the socket
-int RecvCallback(struct _FFI_mitls_callbacks *callbacks, void *buffer, size_t buffer_size)
+int RecvCallback(void* pv, void *buffer, size_t buffer_size)
 {
-    callback_context *ctx = (callback_context*)callbacks;
+    callback_context *ctx = (callback_context*)pv;
     ssize_t r;
 
     r = recv(ctx->sockfd, buffer, buffer_size, 0);
@@ -338,7 +413,6 @@ int SingleServer(mitls_state *state, SOCKET clientfd)
 {
     callback_context ctx;
     char *out_msg;
-    char *err_msg;
     void *db;
     size_t db_length;
     int r;
@@ -350,16 +424,13 @@ int SingleServer(mitls_state *state, SOCKET clientfd)
     const char cpayload[] = "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length:%d\r\n"
                             "Content-Type: text/plain; charset=utf-8\r\n\r\n";
 
-    ctx.cb.send = SendCallback;
-    ctx.cb.recv = RecvCallback;
     ctx.sockfd = clientfd;
-    r = FFI_mitls_accept_connected(&ctx.cb, state, &out_msg, &err_msg);
-    PrintErrors(out_msg, err_msg);
+    r = FFI_mitls_accept_connected(&ctx, SendCallback, RecvCallback, state);
     if (r == 0) {
         printf("FFI_mitls_accept_connected() failed\n");
         return 1;
     }
-    db = FFI_mitls_receive(state, &db_length, &out_msg, &err_msg);
+    db = FFI_mitls_receive(state, &db_length);
     if (db == NULL) {
         printf("FFI_mitls_receive() failed\n");
         return 1;
@@ -381,10 +452,8 @@ int SingleServer(mitls_state *state, SOCKET clientfd)
     strcat(payload, ctext);
     strncat(payload, (const char*)db, db_length);
 
-    FFI_mitls_free_msg(db);
-
-    r = FFI_mitls_send(state, payload, strlen(payload), &out_msg, &err_msg);
-    PrintErrors(out_msg, err_msg);
+    FFI_mitls_free_packet(state, db);
+    r = FFI_mitls_send(state, payload, strlen(payload));
     if (r == 0) {
         printf("FFI_mitls_send() failed\n");
         return 1;
@@ -462,9 +531,7 @@ void quic_recv_until(quic_state *state, SOCKET fd, quic_result_check check)
 
     inbufsize = 0;
     do {
-        char *err_msg;
-        r = FFI_mitls_quic_process(state, inbuf, &inbufsize, outbuf, &outbufsize, &err_msg);
-        PrintErrors(NULL, err_msg);
+        r = FFI_mitls_quic_process(state, inbuf, &inbufsize, outbuf, &outbufsize);
         switch (r) {
         case TLS_would_block: printf("would block\n"); break;
         case TLS_error_local: printf("fatal error\n"); break;
@@ -505,7 +572,7 @@ void print_bytes(const void *buf, size_t len)
 }
 
 // Indexed by quic_hash enum
-const char *hash_names[] = 
+const char *hash_names[] =
 {
     "MD5", "SHA1", "SHA224", "SHA256", "SHA384", "SHA512"
 };
@@ -530,12 +597,9 @@ void quic_dump(quic_state *state)
     quic_secret secret1;
     int ret0;
     int ret1;
-    char *err_msg;
 
-    ret0 = FFI_mitls_quic_get_exporter(state, 0, &secret0, &err_msg);
-    PrintErrors(NULL, err_msg);
-    ret1 = FFI_mitls_quic_get_exporter(state, 1, &secret1, &err_msg);
-    PrintErrors(NULL, err_msg);
+    ret0 = FFI_mitls_quic_get_exporter(state, 0, &secret0);
+    ret1 = FFI_mitls_quic_get_exporter(state, 1, &secret1);
 
     if (ret0) {
         printf("early secret: ");
@@ -696,7 +760,6 @@ int TestClient(void)
     ssize_t r;
     callback_context ctx;
     char *out_msg;
-    char *err_msg;
     char request[512];
     void *response;
     size_t response_length;
@@ -737,26 +800,22 @@ int TestClient(void)
         return 1;
     }
 
-    ctx.cb.send = SendCallback;
-    ctx.cb.recv = RecvCallback;
     ctx.sockfd = sockfd;
-    r = FFI_mitls_connect(&ctx.cb, state, &out_msg, &err_msg);
-    PrintErrors(out_msg, err_msg);
+    r = FFI_mitls_connect(&ctx, SendCallback, RecvCallback, state);
     if (r == 0) {
         printf("FFI_mitls_connect() failed\n");
         return 1;
     }
 
     printf("Read OK, sending HTTP request...\n");
-    r = FFI_mitls_send(state, request, requestlength, &out_msg, &err_msg);
-    PrintErrors(out_msg, err_msg);
+    r = FFI_mitls_send(state, request, requestlength);
     if (r == 0) {
         printf("FFI_mitls_send() failed\n");
         closesocket(sockfd);
         return 1;
     }
 
-    response = FFI_mitls_receive(state, &response_length, &out_msg, &err_msg);
+    response = FFI_mitls_receive(state, &response_length);
     if (response == NULL) {
         printf("FFI_mitls_receive() failed\n");
         closesocket(sockfd);
@@ -764,7 +823,7 @@ int TestClient(void)
     }
     printf("Received data:\n");
     puts((const char *)response);
-    FFI_mitls_free_msg(response);
+    FFI_mitls_free_packet(state, response);
 
     printf("Closing connection, irrespective of the response\n");
     FFI_mitls_close(state);
@@ -821,17 +880,6 @@ int main(int argc, char **argv)
             r = TestQuicClient();
         } else {
             r = TestClient();
-        }
-        if (option_reconnect) {
-            // This needs access to Ticket.lookup
-            printf("-reconnect is not supported in cmitls\n");
-            r = 3;
-        } else {
-            if (option_quic) {
-                r = TestQuicClient();
-            } else {
-                r = TestClient();
-            }
         }
     }
     FFI_mitls_cleanup();

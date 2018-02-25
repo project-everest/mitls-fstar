@@ -5,14 +5,13 @@ open FStar.Heap
 
 open FStar.HyperStack
 
-open Platform.Bytes
-open FSTar.Error
+open FStar.Bytes
+open FStar.Error
 open TLSError
 open TLSConstants
 open TLSInfo
 
-module MM = FStar.Monotonic.Map
-
+module MM = FStar.Monotonic.DependentMap
 
 module HS = FStar.HyperStack
 

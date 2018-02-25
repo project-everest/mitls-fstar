@@ -1,5 +1,4 @@
 module QUIC
-module HS = FStar.HyperStack //Added automatically
 
 /// QUIC-specific interface on top of our main TLS API
 /// * establishes session & exported keys: no application-data traffic!
@@ -13,13 +12,18 @@ module HS = FStar.HyperStack //Added automatically
 /// Relying on FFI for accessing configs, callbacks, etc.
 /// Testing both in OCaml (TCP-based, TestQUIC ~ TestFFI) and in C.
 
-open Platform.Bytes
+open FStar.String
+open FStar.Bytes
 open FStar.Error
+open FStar.HyperStack.All
+
 open TLSConstants
 open TLSInfo
 open DataStream
 open TLS
 open FFICallbacks
+
+module HS = FStar.HyperStack
 
 #set-options "--lax"
 
@@ -92,6 +96,10 @@ type resultcode =
   // may have sent a resumption ticket (for future early data)
   | TLS_server_complete
 
+  // The server has sent a hello retry request.
+  // This message must be sent in a special QUIC packet
+  | TLS_server_stateless_retry
+
 type result = {
   code: resultcode;
   error: error; // we could keep more details
@@ -102,7 +110,10 @@ let rec recv c =
   let i = currentId c Reader in
   match read c i with
   | Update false     -> recv c // do not report intermediate, internal key changes
-  | ReadWouldBlock   -> {code=TLS_would_block; error=0us;}
+  | ReadWouldBlock   ->
+      if Handshake.is_server_hrr c.Connection.hs
+      then {code=TLS_server_stateless_retry; error=0us;}
+      else {code=TLS_would_block; error=0us;}
   | Update true -> (
        let keys = Handshake.xkeys_of c.Connection.hs in
        match Connection.c_role c, Seq.length keys with
@@ -137,10 +148,10 @@ let quic_check config =
 /// [send] and [recv] are callbacks to operate on QUIC stream0 buffers
 /// [config] is a client configuration for QUIC (see above)
 /// [psks] is a list of proposed pre-shared-key identifiers and tickets
-let connect send recv config psks: ML Connection.connection =
+let connect ctx send recv config psks: ML Connection.connection =
   // we assume the configuration specifies the target SNI;
   // otherwise we must check the authenticated certificate chain.
-  let tcp = Transport.callbacks send recv in
+  let tcp = Transport.callbacks ctx send recv in
   let here = new_region HS.root in
   quic_check config;
   TLS.resume here tcp config None psks
@@ -148,8 +159,8 @@ let connect send recv config psks: ML Connection.connection =
 /// [send] and [recv] are callbacks to operate on QUIC stream0 buffers
 /// [config] is a server configuration for QUIC (see above)
 /// tickets are managed internally
-let accept send recv config : ML Connection.connection =
-  let tcp = Transport.callbacks send recv in
+let accept ctx send recv config : ML Connection.connection =
+  let tcp = Transport.callbacks ctx send recv in
   let here = new_region HS.root in
   quic_check config;
   TLS.accept_connected here tcp config
@@ -157,15 +168,16 @@ let accept send recv config : ML Connection.connection =
 // Ticket also includes the serialized session,
 // if it is not in the PSK database it will be installed
 // (allowing resumption across miTLS client processes)
-val ffiConnect: config:config -> ticket: option (bytes * bytes) -> callbacks:FFI.callbacks -> ML Connection.connection
-let ffiConnect config ticket cb =
-  let send = FFI.sendTcpPacket cb in
-  let recv = FFI.recvTcpPacket cb in
-  connect send recv config (FFI.install_ticket config ticket)
+val ffiConnect:
+  Transport.pvoid -> Transport.pfn_send -> Transport.pfn_recv ->
+  config:config -> ticket: option (bytes * bytes) -> ML Connection.connection
+let ffiConnect ctx snd rcv config ticket =
+  connect ctx snd rcv config (FFI.install_ticket config ticket)
 
-val ffiAcceptConnected: config:config -> callbacks:FFI.callbacks -> ML Connection.connection
-let ffiAcceptConnected config cb =
-  accept (FFI.sendTcpPacket cb) (FFI.recvTcpPacket cb) config
+val ffiAcceptConnected:
+  Transport.pvoid -> Transport.pfn_send -> Transport.pfn_recv ->
+  config:config -> ML Connection.connection
+let ffiAcceptConnected ctx snd rcv config = accept ctx snd rcv config
 
 
 /// new QUIC-specific properties
@@ -177,59 +189,39 @@ let get_parameters c (r:role): ML (option TLSConstants.quicParameters) =
   else Negotiation.find_server_quic_parameters mode
 
 // extracting some QUIC parameters to C (a bit ad hoc)
-val ffi_parameters: option TLSConstants.quicParameters -> ML (UInt32.t * UInt32.t * UInt32.t * UInt16.t * bytes)
+val ffi_parameters: option TLSConstants.quicParameters -> ML (UInt32.t * bytes)
 let ffi_parameters qpo =
   match qpo with
   | None -> failwith "no parameters available"
-  | Some (QuicParametersClient _ _ qp)
-  | Some (QuicParametersServer _ qp) ->  (
-      ( match (List.Tot.find Quic_initial_max_stream_data? qp) with
-        | Some (Quic_initial_max_stream_data v) -> v
-        | None -> failwith "no Quic_initial_max_stream_data"),
-      ( match (List.Tot.find Quic_initial_max_data? qp) with
-        | Some (Quic_initial_max_data v) -> v
-        | None -> failwith "no Quic_initial_max_data"),
-      ( match (List.Tot.find Quic_initial_max_stream_id? qp) with
-        | Some (Quic_initial_max_stream_id v) -> v
-        | None -> failwith "no Quic_initial_max_stream_id"),
-      ( match (List.Tot.find Quic_idle_timeout? qp) with
-        | Some (Quic_idle_timeout v) -> v
-        | None -> failwith "no Quic_idle_timeout"),
-      Extensions.quicParametersBytes_aux (List.Tot.filter Quic_custom_parameter?  qp))
+  | Some (QuicParametersClient v qp)
+  | Some (QuicParametersServer v _ qp) ->
+    let qv = match v with
+      | QuicVersion1 -> 1ul
+      | QuicCustomVersion n -> n in
+    let qp = Extensions.quicParametersBytes_aux qp in
+    qv, qp
 
 let get_peer_parameters c =
   let r = TLSConstants.dualRole (Connection.c_role c) in
   ffi_parameters (get_parameters c r)
 
-let ffiConfig
-  max_stream_data
-  max_data
-  max_stream_id
-  idle_timeout
-  (others: bytes)
-  (versions: list UInt32.t)
-  (host: string)  =
-  let ver = List.Tot.map (fun (n:UInt32.t) ->
-    match UInt32.v n with
-    | 1 -> QuicVersion1
-    | _ -> QuicCustomVersion n) versions in
-  let others =
-    match Extensions.parseQuicParameters_aux others
-    with
-    | Error z -> trace "WARNING: ill-formed custom parameters "; []
-    | Correct qpl ->
-      if not (List.Tot.for_all Quic_custom_parameter? qpl) then (trace "WARNING: not a custom parameter"; [])
-      else qpl
+private let quicVersion (n:UInt32.t) = QuicCustomVersion n // avoid overflow in .v
+//    match UInt32.v n with
+//    | 1 -> QuicVersion1
+//    | _ -> QuicCustomVersion n
+
+let ffiConfig (qp: bytes) (versions: list UInt32.t) (host:bytes) =
+  let ver = List.Tot.map quicVersion versions in
+  let h = if length host = 0 then None else Some host in
+  let qpl =
+    match Extensions.parseQuicParameters_aux qp with
+    | Error z -> failwith "Invalid QUIC transport parameters"
+    | Correct qpl -> qpl
     in
   { defaultConfig with
     min_version = TLS_1p3;
     max_version = TLS_1p3;
-    peer_name = Some host;
-    check_peer_certificate = false;
+    peer_name = h;
     non_blocking_read = true;
-    quic_parameters = Some (ver, [
-      Quic_initial_max_stream_data max_stream_data;
-      Quic_initial_max_data max_data;
-      Quic_initial_max_stream_id max_stream_id;
-      Quic_idle_timeout idle_timeout] @ others)
+    quic_parameters = Some (ver, qpl)
   }

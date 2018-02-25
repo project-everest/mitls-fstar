@@ -1,12 +1,12 @@
 ﻿module MAC
 
-(* Idealizing HMAC for the TLS 1.2 record layer (not the handshake)
-   TODO: review indexing *) 
+(* Idealizing HMAC for the TLS 1.2 record layer 
+    TODO: review indexing *) 
 
+open FStar.Heap
+open FStar.HyperStack
 open FStar.Seq
- // for e.g. found
-
-open Platform.Bytes
+open FStar.Bytes
 open FStar.Error
 //open CoreCrypto 
 
@@ -14,6 +14,8 @@ open Mem
 open TLSConstants
 open TLSInfo
 open TLSError
+
+module HS = FStar.HyperStack
 
 // idealizing HMAC
 // for concreteness; the rest of the module is parametric in a:alg
@@ -25,6 +27,9 @@ let alg (i:id) = macAlg_of_id i
 type text = bytes
 type tag (i:id) = lbytes (macSize (alg i))
 type keyrepr (i:id) = lbytes (macSize (alg i))
+
+
+type fresh_subregion rg parent h0 h1 = HS.fresh_region rg h0 h1 /\ extends rg parent
 
 // We keep the tag in case we later want to enforce tag authentication
 abstract type entry (i:id) (good: bytes -> Type) = 
