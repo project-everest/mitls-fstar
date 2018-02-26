@@ -4,7 +4,7 @@
 
 module KEF
 
-open Platform.Bytes
+open FStar.Bytes
 open TLSConstants
 open TLSInfo
 open DHGroup // The trusted setup for Diffie-Hellman computations

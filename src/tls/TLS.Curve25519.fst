@@ -1,15 +1,10 @@
 module TLS.Curve25519
-module HS = FStar.HyperStack //Added automatically
-
-open FStar.Heap
-
-open FStar.HyperStack
-open FStar.Seq
-open FStar.HyperStack.ST
 
 open FStar.Bytes
 open FStar.Error
+open Mem
 
+module X = Hacl.Curve25519
 module CC = CoreCrypto
 module U32 = FStar.UInt32
 
@@ -42,4 +37,3 @@ let mul (k:scalar) (p:point) : ST point
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   = scalarmult k p
-

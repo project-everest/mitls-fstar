@@ -1,14 +1,13 @@
 module Ticket
 
-open FStar.Heap
-open FStar.HyperStack
 open FStar.Bytes
 open FStar.Error
+
+open Mem
+open Parse
 open TLSError
 open TLSConstants
-open Parse
 open TLSInfo
-open Mem
 
 module CC = CoreCrypto
 

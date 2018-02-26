@@ -39,6 +39,7 @@ type pskIdentity = PSK.psk_identifier * PSK.obfuscated_ticket_age
 // used in a refinement below
 val pskiListBytes: list pskIdentity -> bytes
 
+// how to build this type without overflows?? 
 noeq type psk =
   | ClientPSK: 
     // truncated PSK extension, without the list of binder tags.
@@ -49,6 +50,9 @@ noeq type psk =
 
 // PSK binders, actually the truncated suffix of TLS 1.3 ClientHello
 // We statically enforce length requirements to ensure that formatting is total.
+
+//18-02-20 This should be defined in Hashing 
+//18-02-20 We'll need a lemma on HMAC tag lengths. 
 type binder = b:bytes {32 <= length b /\ length b <= 255}
 
 (** REMARK: this is more restrictive than in the RFC, which allows up to 2047 binders *)
@@ -70,28 +74,35 @@ type client_psk_kexes = l:list psk_kex
 
 let client_psk_kexes_length (l:client_psk_kexes): Lemma (List.Tot.length l < 3) = ()
 
+(* EARLY DATA INDICATION *)
 
-type earlyDataIndication = option UInt32.t // Some  max_early_data_size, only in  NewSessionTicket
+type earlyDataIndication = option UInt32.t // Some max_early_data_size, only in NewSessionTicket
+
+(* EC POINT FORMATS *)
 
 type point_format =
   | ECP_UNCOMPRESSED
   | ECP_UNKNOWN of (n:nat{repr_bytes n <= 1})
 
+(* ALPN *)
+
+// defined in TLSConstants
+
+(* QUIC parameters *)
+
+// defined in TLSConstants
 // used by QUIC interface too
 val quicParametersBytes_aux: pl:list quicParameter -> b:bytes{length b <= op_Multiply (List.Tot.length pl) 256}
 val parseQuicParameters_aux: bytes -> result (list quicParameter)
 
+(* PROTOCOL VERSIONS *)
+
 // The length exactly reflects the RFC format constraint <2..254>
 type protocol_versions =
-  | ServerPV of protocolVersion
   | ClientPV of l:list protocolVersion {0 < List.Tot.length l /\ List.Tot.length l < 128}
+  | ServerPV of protocolVersion
 
-(* 
-// we used to support renegotiation_info
-type ri_status =
-| RI_Unsupported
-| RI_Valid
-| RI_Invalid *)
+(* SERVER NAME INDICATION *)
 
 type serverName =
   | SNI_DNS of b:bytes{repr_bytes (length b) <= 2}
@@ -137,8 +148,6 @@ We do not yet support the extensions below (authenticated but ignored)
   | E_renegotiation_info of renegotiationInfo
 *)
 
-
-
 val bindersLen: #p: unknownTag -> el: list (extension' p) -> nat 
 val string_of_extension: #p: unknownTag -> extension' p -> string 
 val string_of_extensions: #p: unknownTag -> list (extension' p) -> string 
@@ -165,13 +174,12 @@ let encryptedExtension (ext: extension): bool =
   | E_early_data _ -> true
   | _ -> false
 
-
 (** Serializes an extension *)
 val extensionBytes: ext:extension -> b:bytes { 2 <= length b /\ length b < 65536 }
 val extensionBytes_is_injective: 
   ext1: extension -> s1: bytes ->
   ext2: extension -> s2: bytes -> Lemma
-  (requires (Bytes.equal (extensionBytes ext1 @| s1) (extensionBytes ext2 @| s2)))
+  (requires (extensionBytes ext1 @| s1 = extensionBytes ext2 @| s2))
   (ensures (ext1 == ext2 /\ s1 == s2))
 
 // we'll need to reveal more to build extensions...
@@ -192,13 +200,13 @@ val extensionsBytes:
 val extensionsBytes_is_injective_strong:
   exts1:valid_extensions -> s1: bytes ->
   exts2:valid_extensions -> s2: bytes -> Lemma
-  (requires Bytes.equal (extensionsBytes exts1 @| s1) (extensionsBytes exts2 @| s2))
+  (requires extensionsBytes exts1 @| s1 = extensionsBytes exts2 @| s2)
   (ensures exts1 == exts2 /\ s1 == s2)
 
 val extensionsBytes_is_injective:
   ext1:valid_extensions ->
   ext2:valid_extensions -> Lemma 
-  (requires Bytes.equal (extensionsBytes ext1) (extensionsBytes ext2))
+  (requires extensionsBytes ext1 = extensionsBytes ext2)
   (ensures ext1 == ext2)
 
 (*************************************************
@@ -207,6 +215,8 @@ val extensionsBytes_is_injective:
 
 val parseExtension:     ext_msg -> bytes -> result (extension * option binders)
 val parseExtensions:    ext_msg -> bytes -> result (extensions * option binders)
+
+(** Called by HandshakeMessages; returns either Some,Some or None; why not using extensions here too? *)
 val parseOptExtensions: ext_msg -> bytes -> result (option (list extension) * option binders)
 
 (*************************************************
@@ -228,7 +238,9 @@ val prepareExtensions:
   bool -> // EDI (Nego checks that PSK is compatible)
   option bytes -> // session_ticket
   signatureSchemeList ->
-  list CommonDH.namedGroup -> // FIXME: was: list valid_namedGroup, but the latter type disappeared
+  //18-02-26 
+  // list CommonDH.namedGroup -> // FIXME: was: list valid_namedGroup, but the latter type disappeared
+  list CommonDH.supportedNamedGroup ->
   option (cVerifyData * sVerifyData) ->
   option CommonDH.keyShare ->
   list (PSK.pskid * pskInfo) ->
@@ -257,4 +269,4 @@ val negotiateServerExtensions:
   result (option (list extension))
 
 val default_signatureScheme: 
-  protocolVersion -> cipherSuite -> ML signatureSchemeList
+  protocolVersion -> cipherSuite -> HyperStack.All.ML signatureSchemeList

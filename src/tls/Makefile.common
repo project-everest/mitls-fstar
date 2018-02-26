@@ -6,7 +6,7 @@ MLCRYPTO_HOME	?= ../../../MLCrypto
 
 # CF: we will need to switch from ideal-flags to concrete-flags for Kremlin extraction.
 INCLUDE_PATHS= \
-	$(FSTAR_HOME)/contrib/CoreCrypto/fst/ \
+	$(FSTAR_HOME)/ucontrib/CoreCrypto/fst/ \
 	$(HACL_HOME)/secure_api \
 	$(HACL_HOME)/secure_api/utils \
 	$(HACL_HOME)/secure_api/concrete_specializations \

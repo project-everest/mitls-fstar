@@ -2,17 +2,9 @@
 module HMAC.UFCMA
 module HS = FStar.HyperStack //Added automatically
 
-open FStar.Heap
-open FStar.HyperStack
-open FStar.HyperStack.All
-open FStar.Seq
 open FStar.Bytes
-open FStar.Error
-
-open TLSError
 open Mem
 
-module HS = FStar.HyperStack
 module MM = FStar.Monotonic.Map
 
 let ipkg = Pkg.ipkg
@@ -29,32 +21,29 @@ private let is_safe (#ip:ipkg) (i:ip.Pkg.t{ip.Pkg.registered i}): ST bool
   let b = ip.Pkg.get_honesty i in
   ideal && b
 
-
-// idealizing HMAC
-// for concreteness; the rest of the module is parametric in a:alg
-
 #set-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 
-type ha = Hashing.Spec.alg
-type text = bytes
+type ha = Hashing.alg
 
 // initial parameters
-noeq type info = {
-  parent: r:rgn {~ (is_tls_rgn r)};
-  alg: Hashing.Spec.alg; //too loose? Pkg.kdfa;
-  good: text -> bool //TODO: should be Type0 instead of bool, and erased, but hard to propagate
-}
+noeq type info = | Info: 
+  parent: rgn {~ (is_tls_rgn parent)} -> 
+  alg: Hashing.alg -> //too loose? Pkg.kdfa;
+  good: (Hashing.macable alg -> bool) ->  //TODO: should be Type0 instead of bool, and erased, but hard to propagate
+  info
 
-type tag (u:info) = lbytes (Hashing.Spec.tagLen u.alg)
+//18-02-25 should we index by i instead?
+type text (u:info) = Hashing.macable u.alg
+type tag (u:info) = lbytes32 (Hashing.tagLen u.alg)
 
-let keylen (u:info): Pkg.keylen = UInt32.uint_to_t (Hashing.Spec.tagLen u.alg)
-type keyrepr (u:info) = Hashing.Spec.hkey u.alg
+let keylen (u:info): Pkg.keylen = Hashing.tagLen u.alg
+type keyrepr (u:info) = Hashing.hkey u.alg
 
-let goodish (#ip:ipkg) (i:ip.Pkg.t) (u:info) (msg:text) =
+let goodish (#ip:ipkg) (i:ip.Pkg.t) (u:info) (msg:text u) =
   _: unit{~(safe i) \/ u.good msg}
 
 private type log_t (#ip:ipkg) (i:ip.Pkg.t) (u:info) (r:rgn) =
-  MM.t r (tag u * text) (fun (t,v) -> goodish i u v) (fun _ -> True) // could constrain size
+  MM.t r (tag u * text u) (fun (t,v) -> goodish i u v) (fun _ -> True) // could constrain size
 
 // runtime (concrete) type of MAC instances
 noeq (* abstract *) type concrete_key =
@@ -75,12 +64,12 @@ type key (ip:ipkg) (i:ip.Pkg.t{ip.Pkg.registered i}) =
     k:ir_key ip i{IdealKey? k <==> safe i}
   else concrete_key)
 
-
+// 18-02-25 we probably miss indexing by ha_of_i and good_of_i...
 let usage (#ip:ipkg) (#i:ip.Pkg.t{ip.Pkg.registered i}) (k:key ip i): GTot info =
   if model then
     match k <: ir_key ip i with
     | IdealKey ck _ _ -> ck.u
-    | RealKey ck -> ck.u
+    | RealKey ck      -> ck.u
   else k.u
 
 let keyval (#ip:ipkg) (#i:ip.Pkg.t{ip.Pkg.registered i}) (k:key ip i): GTot (keyrepr (usage k)) =
@@ -117,9 +106,8 @@ private let get_key (#ip:ipkg) (#i:ip.Pkg.t{ip.Pkg.registered i}) (k:key ip i)
     | RealKey rk -> rk
   else k
 
-
 val create:
-  ip:ipkg -> ha_of_i: (ip.Pkg.t -> ha) -> good_of_i: (ip.Pkg.t -> text -> bool) ->
+  ip:ipkg -> ha_of_i: (ip.Pkg.t -> ha) -> good_of_i: (i:ip.Pkg.t -> Hashing.macable (ha_of_i i) -> bool) ->
   i:ip.Pkg.t {ip.Pkg.registered i} ->
   u:info {u.alg = ha_of_i i /\ u.good == good_of_i i} -> ST (k:key ip i)
   (requires fun _ -> model)
@@ -129,7 +117,7 @@ val create:
     Pkg.fresh_regions (footprint k) h0 h1)
 
 let create ip _ _ i u =
-  let kv: keyrepr u = CoreCrypto.random (Hashing.Spec.tagLen u.alg) in
+  let kv: keyrepr u = CoreCrypto.random32 (Hashing.tagLen u.alg) in
   let ck = MAC u kv in
   let k : ir_key ip i =
     if is_safe i then
@@ -141,68 +129,99 @@ let create ip _ _ i u =
       RealKey ck in
   k <: key ip i
 
-let coerceT (ip: ipkg) (ha_of_i: ip.Pkg.t -> ha) (good_of_i: ip.Pkg.t -> text -> bool)
+let coerceT (ip: ipkg) (ha_of_i: ip.Pkg.t -> ha) (good_of_i: (i:ip.Pkg.t -> Hashing.macable (ha_of_i i) -> bool))
   (i: ip.Pkg.t {ip.Pkg.registered i /\ ~(safe i)})
-  (u: (u:info {u.alg = ha_of_i i /\ u.good == good_of_i i}))
-  (kv: Pkg.lbytes (keylen u)) : GTot (key ip i)
+  (u: info {u.alg = ha_of_i i /\ u.good == good_of_i i})
+  (kv: lbytes32 (keylen u)) : GTot (key ip i)
   =
   let ck = MAC u kv in
   if model then
-    let k : ir_key ip i = RealKey ck in k
+    let k: ir_key ip i = RealKey ck in k
   else ck
 
+(* 18-02-25 not sure what's wrong with this variant: 
+val coerceT':
+  ip:ipkg -> ha_of_i: (ip.Pkg.t -> ha) -> good_of_i: (i:ip.Pkg.t -> Hashing.macable (ha_of_i i) -> bool) ->
+  i:ip.Pkg.t {ip.Pkg.registered i} ->
+  u:info {u.alg = ha_of_i i /\ u.good == good_of_i i} ->
+  kv: lbytes32 (keylen u) -> GTot (key ip i)
+let coerceT' ip _ _ i u kv =  
+  let ck = MAC u kv in
+  if model then
+    let k: ir_key ip i = RealKey ck in k
+  else ck
+*)
+
 val coerce:
-  ip: ipkg -> ha_of_i: (ip.Pkg.t -> ha) -> good_of_i: (ip.Pkg.t -> text -> bool) ->
+  ip: ipkg -> ha_of_i: (ip.Pkg.t -> ha) -> good_of_i: (i:ip.Pkg.t -> Hashing.macable (ha_of_i i) -> bool) ->
   i: ip.Pkg.t {ip.Pkg.registered i /\ ~(safe i)} ->
-  u: (u: info {u.alg = ha_of_i i /\ u.good == good_of_i i}) ->
-  kv: Pkg.lbytes (keylen u) -> ST (k:key ip i)
+  u: info {u.alg = ha_of_i i /\ u.good == good_of_i i} ->
+  kv: lbytes32 (keylen u) -> ST (k:key ip i)
   (requires fun _ -> True)
   (ensures fun h0 k h1 ->
     modifies_none h0 h1 /\
     k == coerceT ip ha_of_i good_of_i i u kv /\
     usage k == u /\
     Pkg.fresh_regions (footprint k) h0 h1)
-
 let coerce ip _ _ i u kv =
   let ck = MAC u kv in
   if model then
-    let k : ir_key ip i = RealKey ck in k
+    let k: ir_key ip i = RealKey ck in k
   else ck
 
 // not quite doable without reification?
 // assert_norm(forall ip i u. (create #ip i u == coerce #ip i u (CoreCrypto.random (UInt32.v (keylen u)))))
 
-
 val mac:
-  #ip:ipkg -> #i:ip.Pkg.t{ip.Pkg.registered i} -> k:key ip i ->
-  p:text {(usage k).good p \/ ~(safe i)} ->
+  ip: ipkg -> ha_of_i: (ip.Pkg.t -> ha) -> good_of_i: (i:ip.Pkg.t -> Hashing.macable (ha_of_i i) -> bool) ->
+  #i:ip.Pkg.t{ip.Pkg.registered i} -> 
+  k: key ip i ->
+  p: Hashing.macable (ha_of_i i) { 
+    let u = usage k in 
+    u.alg = ha_of_i i /\ u.good == good_of_i i /\
+    (u.good p \/ ~(safe i)) } ->
   ST (tag (usage k))
   (requires fun _ -> True)
   (ensures fun h0 t h1 -> modifies (footprint k) h0 h1)
   // we may be more precise to prove ideal functional correctness,
   // e,g,  /\ sel h1 k.log = snoc (sel h0 k.log) (Entry t p)
-let mac #ip #i k p =
-  let MAC u kv = get_key k in
-  let t = HMAC.hmac u.alg kv p in
-  if is_safe i then
-    (let IdealKey _ _ log = k <: ir_key ip i in
-    if None? (MM.lookup log (t, p)) then MM.extend log (t,p) ());
-  t
+let mac ip ha_of_i good_of_i #i k p =
+  admit() //18-02-25 TODO extra indexing?
+  // let MAC u kv = get_key k in
+  // let t = HMAC.hmac u.alg kv p in
+  // if is_safe i then
+  //   (let IdealKey _ _ log = k <: ir_key ip i in
+  //   if None? (MM.lookup log (t, p)) then MM.extend log (t,p) ());
+  // t
 
 val verify:
-  #ip:ipkg -> #i:ip.Pkg.t {ip.Pkg.registered i} -> k:key ip i ->
-  p:text -> t: tag (usage k) -> ST bool
-  (requires fun _ -> True)
+  ip: ipkg -> ha_of_i: (ip.Pkg.t -> ha) -> good_of_i: (i:ip.Pkg.t -> Hashing.macable (ha_of_i i) -> bool) ->
+  #i:ip.Pkg.t{ip.Pkg.registered i} -> 
+  k: key ip i ->
+  p: Hashing.macable (ha_of_i i) 
+    // { 
+    // let u = usage k in 
+    // u.alg = ha_of_i i /\ u.good == good_of_i i 
+    // } 
+    ->
+  tag (usage k) -> 
+  ST bool
+  (requires fun _ -> let u = usage k in u.alg = ha_of_i i /\ u.good == good_of_i i)
   (ensures fun h0 b h1 -> 
     modifies_none h0 h1 /\
     (b /\ safe i ==> (usage k).good p))
-let verify #ip #i k p t =
+
+let verify ip ha_of_i good_of_i #i k p t =
+  assert(let u = usage k in u.alg = ha_of_i i /\ u.good == good_of_i i);
   let MAC u kv = get_key k in
   let verified = HMAC.hmacVerify u.alg kv p t in
   if is_safe i then
     // We use the log to correct any verification errors
     let IdealKey _ _ log = k <: ir_key ip i in
-    let valid = Some? (MM.lookup log (t,p)) in
+    let valid = 
+      admit() in
+      //18-02-25 TODO, should be:
+      // Some? (MM.lookup log (t,p)) in
     verified && valid
   else
     verified
@@ -220,14 +239,19 @@ let verify #ip #i k p t =
 /// - how to deal with agility here?
 /// - which level of abstraction?
 
-type info1 (ip: ipkg) (ha_of_i: ip.Pkg.t -> ha)
-  (good_of_i: ip.Pkg.t -> text -> bool) (i: ip.Pkg.t)
+type info1 
+  (ip: ipkg) (ha_of_i: ip.Pkg.t -> ha)
+  (good_of_i: (i:ip.Pkg.t -> Hashing.macable (ha_of_i i) -> bool)) 
+  (i: ip.Pkg.t)
   =
   a:info{a.alg = ha_of_i i /\ a.good == good_of_i i}
 
-unfold let localpkg (ip: ipkg) (ha_of_i: (i:ip.Pkg.t -> ha)) (good_of_i: ip.Pkg.t -> text -> bool)
-  : Pure (Pkg.local_pkg ip)
-  (requires True) (ensures fun p -> p.Pkg.key == key ip /\ p.Pkg.info == info1 ip ha_of_i good_of_i)
+unfold let localpkg 
+  (ip: ipkg) (ha_of_i: ip.Pkg.t -> ha) 
+  (good_of_i: (i:ip.Pkg.t -> Hashing.macable (ha_of_i i) -> bool)): 
+  Pure (Pkg.local_pkg ip)
+  (requires True) 
+  (ensures fun p -> p.Pkg.key == key ip /\ p.Pkg.info == info1 ip ha_of_i good_of_i)
   =
   Pkg.LocalPkg
     (key ip)
@@ -263,14 +287,14 @@ let coerce_eq2 _ _ v = v // this works; many similar variants did not.
 private type id = nat
 private let ip : ipkg = Pkg.Idx id (fun _ -> True) (fun _ -> True) (fun _ -> true)
 
-private let test (a: ha) (r: rgn{~(is_tls_rgn r)}) (v': bytes) (t': Hashing.Spec.tag a)
+private let test (a: ha) (r: rgn{~(is_tls_rgn r)}) (v': Hashing.macable a) (t': Hashing.Spec.tag a)
   : ST bool
   (requires fun h0 -> model)
   (ensures fun h0 _ h1 -> True)
   =
   // testing usability of local packages
   let ha_of_i (i:ip.Pkg.t) = a in
-  let good_of_i (i:ip.Pkg.t) (v:text) = length v = 0 in // a property worth MACing!
+  let good_of_i (i:ip.Pkg.t) (v:Hashing.macable  a) = length v = 0 in // a property worth MACing!
 
   let p = localpkg ip ha_of_i good_of_i in
   let table = mem_alloc (key ip) in
@@ -280,7 +304,7 @@ private let test (a: ha) (r: rgn{~(is_tls_rgn r)}) (v': bytes) (t': Hashing.Spec
   assert(Pkg.Pkg?.key q == key ip);
   assert(Pkg.Pkg?.info q == info1 ip ha_of_i good_of_i);
 
-  let u : info1 ip ha_of_i good_of_i 0 = {parent=r; alg=a; good=good_of_i 0} in
+  let u : info1 ip ha_of_i good_of_i 0 = Info r a (good_of_i 0) in
   let u = coerce_eq2 (info1 ip ha_of_i good_of_i) (Pkg.Pkg?.info q) u in
 
   let h0 = Mem.get() in
@@ -311,14 +335,14 @@ private let test (a: ha) (r: rgn{~(is_tls_rgn r)}) (v': bytes) (t': Hashing.Spec
   // testing usability of logical payloads
   let v = empty_bytes in
   assert(good_of_i 0 v);
-  let t = mac #ip #0 k v in
+  let t = mac ip ha_of_i good_of_i #0 k v in
 
-  let b0 = verify #ip #0 k v' t in
+  let b0 = verify ip ha_of_i good_of_i #0 k v' t in
   assert(b0 /\ b2t ideal ==> length v' = 0);
 
-  let b1 = verify #ip #0 k v' t' in
+  let b1 = verify ip ha_of_i good_of_i #0 k v' t' in
   assert(b1 /\ b2t ideal ==> length v' = 0);
-  //assert false; // sanity check
+  // assert false; // sanity check
 
   // expected: 
   let _ = IO.debug_print_string (string_of_key k^" tag="^print_bytes t^"\n") in
@@ -330,13 +354,13 @@ let unit_test(): St bool =
   let here = new_colored_region root hs_color in
   let b0 = 
     let a = Hashing.SHA1 in 
-    test a here empty_bytes (Bytes.create_ (Hashing.Spec.tagLen a) 42z) in
+    test a here empty_bytes (Bytes.create (Hashing.tagLen a) 42z) in
   let b1 = 
     let a = Hashing.SHA1 in 
-    test a here empty_bytes (Bytes.create_ (Hashing.Spec.tagLen a) 42z) in
+    test a here empty_bytes (Bytes.create (Hashing.tagLen a) 42z) in
   let b2 = 
     let a = Hashing.SHA1 in 
-    test a here empty_bytes (Bytes.create_ (Hashing.Spec.tagLen a) 42z) in
+    test a here empty_bytes (Bytes.create (Hashing.tagLen a) 42z) in
   b0 && b1 && b2
   // nothing bigger? 
 
@@ -359,24 +383,11 @@ let authId id = false // TODO: move to Flags
 type tag (i:id) = tag (alg i)
 
 
-type fresh_subregion rg parent h0 h1 = HS.fresh_region rg h0 h1 /\ extends rg parent
 
 // We keep the tag in case we later want to enforce tag authentication
 abstract type entry (i:id) (good: bytes -> Type) =
   | Entry: t:tag i -> p:bytes { authId i ==> good p } -> entry i good
 
-// readers and writers share the same private state: a log of MACed messages
-// TODO make it abstract
-(*
- * AR: two changes: region is of type rgn.
- * log is a hyperstack ref with refinement capturing its rid.
- *)
-noeq type key (i:id) (good: bytes -> Type) =
-  | Key:
-    #region: rgn -> // intuitively, the writer's region
-    kv: keyrepr i ->
-    log: ref (seq (entry i good)){HS.frameOf log = region} ->
-    key i good
 
 val region: #i:id -> #good:(bytes -> Type) -> k:key i good -> GTot rid
 val keyval: #i:id -> #good:(bytes -> Type) -> k:key i good -> GTot (keyrepr i)
@@ -435,11 +446,6 @@ let mac #i #good k p =
 abstract val matches: #i:id -> #good:(bytes -> Type) -> p:text -> entry i good -> Tot bool
 let matches #i #good p (Entry _ p') = p = p'
 
-let rec log_entry_matches_p #i #good (log:seq (entry i good)) (p:text) =
-  if Seq.length log = 0 then false
-  else matches p (Seq.head log)
-       || log_entry_matches_p (Seq.tail log) p
-       
 val verify: #i:id -> #good:(bytes -> Type) -> k:key i good -> p:bytes -> t:tag i -> ST bool
   (requires (fun _ -> True))
   (ensures (fun h0 b h1 -> modifies Set.empty h0 h1 /\ (b /\ authId i ==> good p)))
@@ -450,5 +456,4 @@ let verify #i #good k p t =
   let log = !k.log in
   x &&
   ( not(authId i) || Some? (seq_find (matches p) log))
-  //  ( not(authId i) || log_entry_matches_p log p)
 *)

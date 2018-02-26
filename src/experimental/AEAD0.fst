@@ -16,7 +16,7 @@ open FStar.Seq
 open FStar.Monotonic.Seq
 
 open Fstar.Error
-open Platform.Bytes
+open FStar.Bytes
 
 open TLSError
 open TLSConstants

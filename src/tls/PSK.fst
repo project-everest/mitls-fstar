@@ -1,11 +1,9 @@
 module PSK
-module HST = FStar.HyperStack.ST //Added automatically
 
-open FStar.Heap
-open FStar.HyperStack
-open FStar.HyperStack.ST
 open FStar.Bytes
 open FStar.Error
+
+open Mem
 
 open TLSError
 open TLSConstants
@@ -120,7 +118,7 @@ private let app_psk_table : MM.t psk_region psk_identifier app_psk_entry psk_tab
   MM.alloc ()
 
 type registered_psk (i:psk_identifier) =
-  HST.witnessed (MM.defined app_psk_table i)
+  witnessed (MM.defined app_psk_table i)
 
 let valid_app_psk (ctx:pskInfo) (i:psk_identifier) (h:mem) =
   match MM.sel (HS.sel h app_psk_table) i with
@@ -133,8 +131,8 @@ let psk_value (i:pskid) : ST (app_psk i)
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
-  HST.recall app_psk_table;
-  HST.testify (MM.defined app_psk_table i);
+  recall app_psk_table;
+  testify (MM.defined app_psk_table i);
   match MM.lookup app_psk_table i with
   | Some e -> e.keybytes
 
@@ -142,8 +140,8 @@ let psk_info (i:pskid) : ST pskInfo
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
-  HST.recall app_psk_table;
-  HST.testify (MM.defined app_psk_table i);
+  recall app_psk_table;
+  testify (MM.defined app_psk_table i);
   match MM.lookup app_psk_table i with
   | Some e -> e.info
 
@@ -165,11 +163,11 @@ let psk_lookup (i:psk_identifier) : ST (option pskInfo)
 //   MM.defined app_psk_table i h /\
 //   (let Entry _ _ b = MM.value app_psk_table i h in b2t b)
 // type honest_psk (i:pskid) = witnessed (honest_st i)
-  HST.recall app_psk_table;
+  recall app_psk_table;
   match MM.lookup app_psk_table i with
   | Some (Entry _ ctx _) ->
-    assume(HST.stable_on_t app_psk_table (MM.defined app_psk_table i));
-    HST.mr_witness app_psk_table (MM.defined app_psk_table i);
+    assume(stable_on_t app_psk_table (MM.defined app_psk_table i));
+    mr_witness app_psk_table (MM.defined app_psk_table i);
     Some ctx
   | None -> None
 
@@ -177,7 +175,7 @@ type honest_st (i:pskid) (h:mem) =
   (MM.defined app_psk_table i h /\
   (let (Entry _ _ b) = MM.value_of app_psk_table i h in b = true))
 
-type honest_psk (i:pskid) = HST.witnessed (honest_st i)
+type honest_psk (i:pskid) = witnessed (honest_st i)
 
 /// Generates a fresh PSK identifier
 /// TODO: does this require idealization?
@@ -202,7 +200,7 @@ let gen_psk (i:psk_identifier) (ctx:pskInfo)
     registered_psk i /\
     honest_psk i))
   =
-  HST.recall app_psk_table;
+  recall app_psk_table;
   let rand = CoreCrypto.random 32 in
   let psk = (abyte 1z) @| rand in
   assume(psk.[0ul] = 1z);
@@ -211,8 +209,8 @@ let gen_psk (i:psk_identifier) (ctx:pskInfo)
   MM.contains_stable app_psk_table i add;
   let h = get () in
   cut(MM.sel (HS.sel h app_psk_table) i == Some add);
-  assume(HST.stable_on_t app_psk_table (honest_st i));
-  HST.mr_witness app_psk_table (honest_st i)
+  assume(stable_on_t app_psk_table (honest_st i));
+  mr_witness app_psk_table (honest_st i)
 
 let coerce_psk (i:psk_identifier) (ctx:pskInfo) (k:app_psk i)
   : ST unit
@@ -222,7 +220,7 @@ let coerce_psk (i:psk_identifier) (ctx:pskInfo) (k:app_psk i)
     registered_psk i /\
     ~(honest_psk i)))
   =
-  HST.recall app_psk_table;
+  recall app_psk_table;
   let add : app_psk_entry i = Entry k ctx false in
   MM.extend app_psk_table i add;
   MM.contains_stable app_psk_table i add;
@@ -236,22 +234,22 @@ abstract let compatible_hash_ae_st (i:pskid) (ha:hash_alg) (ae:aeadAlg) (h:mem) 
   ha = pskInfo_hash ctx /\ ae = pskInfo_ae ctx))
 
 let compatible_hash_ae (i:pskid) (h:hash_alg) (a:aeadAlg) =
-  HST.witnessed (compatible_hash_ae_st i h a)
+  witnessed (compatible_hash_ae_st i h a)
 
 let compatible_info_st (i:pskid) (c:pskInfo) (h:mem) =
   (MM.defined app_psk_table i h /\
   (let (Entry _ ctx _) = MM.value_of app_psk_table i h in c = ctx))
 
 let compatible_info (i:pskid) (c:pskInfo) =
-  HST.witnessed (compatible_info_st i c)
+  witnessed (compatible_info_st i c)
 
 let verify_hash_ae (i:pskid) (ha:hash_alg) (ae:aeadAlg) : ST bool
   (requires (fun h0 -> True))
   (ensures (fun h0 b h1 ->
     b ==> compatible_hash_ae i ha ae))
   =
-  HST.recall app_psk_table;
-  HST.testify (MM.defined app_psk_table i);
+  recall app_psk_table;
+  testify (MM.defined app_psk_table i);
   match MM.lookup app_psk_table i with
   | Some x ->
     let h = get() in
@@ -261,8 +259,8 @@ let verify_hash_ae (i:pskid) (ha:hash_alg) (ae:aeadAlg) : ST bool
     if pskInfo_hash ctx = ha && pskInfo_ae ctx = ae then
      begin
       cut(compatible_hash_ae_st i ha ae h);
-      assume(HST.stable_on_t app_psk_table (compatible_hash_ae_st i ha ae));
-      HST.mr_witness app_psk_table (compatible_hash_ae_st i ha ae);
+      assume(stable_on_t app_psk_table (compatible_hash_ae_st i ha ae));
+      mr_witness app_psk_table (compatible_hash_ae_st i ha ae);
       true
      end
     else false

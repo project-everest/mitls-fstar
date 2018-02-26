@@ -50,7 +50,7 @@ val inverse_ht: x:_ -> Lemma
   [SMTPat (parseHt (htBytes x))]
 val pinverse_ht: x:_ -> Lemma
   (requires True)
-  (ensures (lemma_pinverse_f_g Bytes.equal htBytes parseHt x))
+  (ensures (lemma_pinverse_f_g equal htBytes parseHt x))
   [SMTPat (htBytes (Correct?._0 (parseHt x)))]
 
 
@@ -98,6 +98,8 @@ noeq type kex_s =
 | KEX_S_RSA of (pk:CoreCrypto.rsa_key{False}) // Unimplemented
 noeq type kex_s_priv =
 | KEX_S_PRIV_DHE of (g:CommonDH.group & CommonDH.keyshare g)
+// 18-02-26 should it be this one for verification?
+//| KEX_S_PRIV_DHE of (g:CommonDH.group & CommonDH.ikeyshare g)
 | KEX_S_PRIV_RSA of CoreCrypto.rsa_key
 type kex_c =
 | KEX_C_DHE of b:bytes{length b < 65536}
@@ -161,8 +163,8 @@ type sticket = {
 noeq type sticket13 = {
   ticket13_lifetime: UInt32.t;
   ticket13_age_add: UInt32.t;
-  ticket13_nonce: b:bytes{length b > 0 /\ length b < 256};
-  ticket13_ticket: b:bytes{length b < 65535};
+  ticket13_nonce: (b:bytes{length b > 0 /\ length b < 256});
+  ticket13_ticket: (b:bytes{length b < 65535});
   ticket13_extensions: es: list extension; }
 
 
@@ -204,33 +206,33 @@ val messageBytes:
   Tot (lbytes (4 + length data))
 
 let hs_msg_bytes (ht:handshakeType) (b:bytes) =
-  length b >= 4
-  /\ (let b' = snd (split_ b 4) in
-    repr_bytes (length b') <= 3
-    /\ b = messageBytes ht b')
+  length b >= 4 /\ 
+  ( let b' = snd (split b 4ul) in
+    repr_bytes (length b') <= 3 /\ 
+    b = messageBytes ht b')
 
 val messageBytes_is_injective_strong:
   ht1:handshakeType -> data1:bytes{ repr_bytes (length data1) <= 3 } -> s1:bytes ->
   ht2:handshakeType -> data2:bytes{ repr_bytes (length data2) <= 3 } -> s2:bytes ->
   Lemma 
   (ensures 
-    Bytes.equal (messageBytes ht1 data1 @| s1) (messageBytes ht2 data2 @| s2) ==> 
-    ht1 = ht2 /\ Bytes.equal data1 data2 /\ Bytes.equal s1 s2)
+    equal (messageBytes ht1 data1 @| s1) (messageBytes ht2 data2 @| s2) ==> 
+    ht1 = ht2 /\ equal data1 data2 /\ equal s1 s2)
 
 val messageBytes_is_injective:
   ht1:handshakeType -> data1:bytes{ repr_bytes (length data1) <= 3 } ->
   ht2:handshakeType -> data2:bytes{ repr_bytes (length data2) <= 3 } ->
   Lemma
   (ensures 
-    Bytes.equal (messageBytes ht1 data1) (messageBytes ht2 data2) ==> 
-    ht1 = ht2 /\ Bytes.equal data1 data2)
+    equal (messageBytes ht1 data1) (messageBytes ht2 data2) ==> 
+    ht1 = ht2 /\ equal data1 data2)
   [SMTPat (messageBytes ht1 data1); SMTPat (messageBytes ht2 data2)]
 
 val parseMessage: buf:bytes -> Tot (result (option (
   rem: bytes &
   hstype: handshakeType &
   payload: bytes {repr_bytes (length payload) <= 3} &
-  to_log: bytes {to_log = messageBytes hstype payload /\ Bytes.equal buf (to_log @| rem) })))
+  to_log: bytes {to_log = messageBytes hstype payload /\ equal buf (to_log @| rem) })))
 
 val clientHelloBytes: ch -> Tot (b:bytes{length b >= 41 /\ hs_msg_bytes HT_client_hello b}) 
 // JK: used to be 42 but cannot prove it with current specs. Is there
@@ -247,7 +249,7 @@ val clientHelloBytes_is_injective_strong:
   msg2:ch -> s2:bytes ->
   Lemma
   (ensures (
-    Bytes.equal (clientHelloBytes msg1 @| s1) (clientHelloBytes msg2 @| s2) ==> 
+    equal (clientHelloBytes msg1 @| s1) (clientHelloBytes msg2 @| s2) ==> 
     msg1 == msg2 /\ s1 == s2))
 
 (* This function adds a "first connection" renegotiation info *)
@@ -262,10 +264,12 @@ val parseClientHello: body:bytes -> Pure (result (ch * option binders))
     | Error _ -> True
     | Correct(ch, None) -> clientHelloBytes ch == htBytes HT_client_hello @| body
     | Correct(ch, Some binders) ->
-        let truncated_body, suffix = split_ body (length body - bindersLen_of_ch ch) in
-        clientHelloBytes ch == htBytes HT_client_hello @| truncated_body /\
-        bindersBytes binders == suffix // ADL: FIXME must strip the length from binders
-  ))
+        let len = length body - bindersLen_of_ch ch in 
+        0 <= len /\
+        ( let truncated_body, suffix = split body len in
+          clientHelloBytes ch == htBytes HT_client_hello @| truncated_body /\
+          bindersBytes binders == suffix // ADL: FIXME must strip the length from binders
+  )))
 
 val serverHelloBytes: sh -> Tot (b:bytes{length b >= 34 /\ hs_msg_bytes HT_server_hello b})
 
@@ -273,12 +277,12 @@ let valid_sh: Type0 = sh
 
 val serverHelloBytes_is_injective: 
   msg1:valid_sh -> msg2:valid_sh -> Lemma 
-  (requires Bytes.equal (serverHelloBytes msg1) (serverHelloBytes msg2))
+  (requires equal (serverHelloBytes msg1) (serverHelloBytes msg2))
   (ensures msg1 == msg2)
 
 val serverHelloBytes_is_injective_strong: 
   msg1:valid_sh -> s1: bytes -> msg2:valid_sh -> s2: bytes -> Lemma
-  (requires Bytes.equal (serverHelloBytes msg1 @| s1) (serverHelloBytes msg2 @| s2))
+  (requires equal (serverHelloBytes msg1 @| s1) (serverHelloBytes msg2 @| s2))
   (ensures msg1 == msg2 /\ s1 == s2)
 
 (* JK: should return a valid_sh to match the serialization function *)
@@ -286,7 +290,7 @@ val serverHelloBytes_is_injective_strong:
 val parseServerHello: 
   data:bytes{repr_bytes(length data) <= 3} -> Tot (result (x:valid_sh))
 (* val parseServerHello: data:bytes{repr_bytes(length data) <= 3}   *)
-(*   -> Tot (result (x:sh{Bytes.equal (serverHelloBytes x) (messageBytes HT_server_hello data)})) *)
+(*   -> Tot (result (x:sh{equal (serverHelloBytes x) (messageBytes HT_server_hello data)})) *)
 
 val helloRequestBytes: b:lbytes 4{hs_msg_bytes HT_hello_request b}
 
@@ -315,7 +319,9 @@ let associated_to_pv (pv:option protocolVersion) (msg:hs_msg) : GTot bool  =
 let valid_hs_msg_prop (pv:option protocolVersion) (msg:hs_msg): GTot bool =
   associated_to_pv pv msg && (
   match msg, pv with
-  | EncryptedExtensions ee, _ -> repr_bytes (length (extensionsBytes ee)) <= 3
+  | EncryptedExtensions ee, _ -> 
+      length (extensionListBytes ee) + bindersLen ee < 65536 /\
+      repr_bytes (length (extensionsBytes ee)) <= 3
   | Certificate13 crt, _ -> length (Cert.certificateListBytes13 crt.crt_chain13) < 16777212
   | Certificate crt, _ -> length (Cert.certificateListBytes crt.crt_chain) < 16777212
   | ServerKeyExchange ske, Some pv ->
@@ -328,9 +334,11 @@ let valid_hs_msg_prop (pv:option protocolVersion) (msg:hs_msg): GTot bool =
     else None? cv.sig_algorithm
   | _ -> true )
 
+(** is this message valid? ad hoc value dependency *)
 let valid_hs_msg (pv:option protocolVersion): Type0 = 
   msg: hs_msg{valid_hs_msg_prop pv msg}
 
+(** is this message parsed? *)
 let parsed = function
   | Binders _ | MessageHash _ -> false
   | _ -> true
@@ -344,7 +352,7 @@ val handshakeMessageBytes_is_injective:
   pv:option protocolVersion -> 
   msg1:valid_hs_msg pv -> 
   msg2:valid_hs_msg pv -> Lemma 
-  (requires Bytes.equal (handshakeMessageBytes pv msg1) (handshakeMessageBytes pv msg2))
+  (requires equal (handshakeMessageBytes pv msg1) (handshakeMessageBytes pv msg2))
   (ensures msg1 == msg2)
 
 val handshakeMessagesBytes: pv:option protocolVersion -> list (msg:valid_hs_msg pv) -> bytes
@@ -354,7 +362,7 @@ val handshakeMessagesBytes_is_injective:
   pv: option protocolVersion -> 
   l1: list (msg:valid_hs_msg pv) -> 
   l2: list (msg:valid_hs_msg pv) -> Lemma 
-  (requires Bytes.equal (handshakeMessagesBytes pv l1) (handshakeMessagesBytes pv l2))
+  (requires equal (handshakeMessagesBytes pv l1) (handshakeMessagesBytes pv l2))
   (ensures l1 = l2)
 
 val string_of_handshakeMessage: hs_msg -> Tot string

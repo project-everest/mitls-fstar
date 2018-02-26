@@ -2,10 +2,10 @@ module Curve25519
 
 open FStar.Heap
 
-open FStar.HyperStack
 open FStar.Seq
-open FStar.HyperStack.ST
+
 open FStar.Bytes
+open Mem
 
 type scalar = lbytes 32
 type point = lbytes 32
@@ -43,5 +43,7 @@ let keygen () : ST keyshare
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
   let s: lbytes 32 = CoreCrypto.random 32 in
-  let base: point = Bytes.set_byte (Bytes.create 32ul 0uy) 0ul 9uy in
+  let base: point = 
+    Bytes.create  1ul 9uy @| 
+    Bytes.create 31ul 0uy in
   mul s base, s

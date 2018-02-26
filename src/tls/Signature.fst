@@ -2,15 +2,14 @@ module Signature
 module HS = FStar.HyperStack //Added automatically
 module HST = FStar.HyperStack.ST //Added automatically
 
-open FStar.HyperStack
 open FStar.Monotonic.Seq
 open FStar.Bytes
 
+open Mem
 open CoreCrypto
 open Hashing.Spec // masking CoreCrypto's hashAlg
 open TLSConstants
 open Cert
-open Mem
 
 (* ------------------------------------------------------------------------ *)
 type text = bytes

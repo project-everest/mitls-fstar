@@ -4,11 +4,10 @@ Implemented by appending a fragment sequence number to the additional data of
 the underlying LHAE scheme
 *)
 module StatefulLHAE
+
 module HS = FStar.HyperStack //Added automatically
 module HST = FStar.HyperStack.ST //Added automatically
 
-open FStar.Heap
-open FStar.HyperStack
 open FStar.Seq
 open FStar.Monotonic.Seq
 open FStar.Bytes

@@ -2,9 +2,7 @@
 
 (* Split from KEF *)
 
-open FStar.HyperStack.All
 open FStar.Bytes
-
 open TLSConstants
 open CoreCrypto
 

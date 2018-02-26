@@ -3,58 +3,69 @@ module MultiStream.AE
 (*! refactoring Epochs, with a narrower, more abstract
     interface. WIP. *)
 
+// Consider switching to Low*? Intuitively is does not change much
+// crypto modelling, which will remain based on ghost/ideal bytes.
+
+/// Multistreams provide authenticated encryption with rekeying.
+///
+/// Although they are not TLS-specific, they provide the AE interface
+/// for TLS record protection: each connection uses one multistream
+/// for reading and one for writing; its handshake extends them with
+/// fresh derived keys, and separately signals when to switch to the
+/// next key.
+/// 
+/// Each multistream instance is specified
+/// using two ghost monotonic views:
+///
+/// * a sequence of authenticated ghost bytes sent/received, grouped
+///   by successive keys; no abstraction, no indexing, possibly no
+///   need for range.
+///
+///   Logs grow either by appending an empty sequence (as we start
+///   using the next key) or by appending a record in the last
+///   sub-sequence (as we send/receive).
+/// 
+///   It seems convenient to have both reader and writer logs, but
+///   that's a global choice.
+/// 
+///   The TLS API will specify a projection of that log.
+
+// Use lists instead of sequences?
+// Revert them for syntactic convenience? 
 
 type ghost_record = (rg:Range.range & b:bytes{Bytes.length b <= snd rg})
-
-/// To avoid dependent lists, the log records concrete bytes;
-/// we may also record parsed records.
-
 type logs = Seq.seq (Seq.seq ghost_record) 
-type idxs = Seq.seq id 
-
-// use sequences or lists? 
-
-/// Indexes grow adding fresh StAE instances.
-/// 
-/// Logs grow either by adding an empty sequence, or by extending
-///
-/// register: xs ~> xs ++ [] 
-/// install:  
 
 let empty_logs xs = Seq.forall (fun x -> x == []) xs 
-  
-let rec extends_logs xs ys = 
-  if Seq.length xs = 0 then empty_logs ys
-  else if Seq.length xs > 1 then 
+let rec extends_logs xs ys =
+  let open Seq in 
+  match length xs with 
+  | 0 -> empty_logs ys
+  | 1 -> head xs `prefix_of` head ys /\ empty_logs ys
+  | _ -> head xs = head ys /\ extends_logs (tail xs) (tail ys)
 
-  Seq.length xs <= Seq.length ys /\
+// clarify ghost vs ideal for [logs]
 
+/// * a sequence of StAE indexes, controlling idealization and plaintext
+///   abstraction; since keys are added before being used, [idxs] is
+///   at least as long as [logs]. It grows by appending StAE keys in
+///   their initial state.
+///
+///   TLS will maintain an invariant relating these indexes to the
+///   connection, enabling reasoning about their conditional safety.
 
-  if Seq.length xs > 1 
-  then Seq.head xs = Seq.head ys /\ extends_log (Seq.tail xs) (Seq.tail ys) 
-  else if Seq.length
-
-  if Seq.length xs > 1 then 
-  Seq.length ys 
-  Seq.head 
-  
-  if Seq.length xs = 1 then 
-    Seq.length ys >= 1 /\
-    Seq.prefix xs (Seq.head ys) /\
-    Seq.forall 
+type idxs = Seq.seq id 
 
 
-  match v0, v1 with 
-  | x::v 
+noeq type t (role:rw) (* stateful, monotonic, intuitively indexed by [idxs] *)
 
+// footprint
+val region:   #role:rw -> x:t role -> rid 
+val sel_logs: #role:rw -> x:t role -> mem -> logs 
+val sel_idxs: #role:rw -> x:t role -> mem -> idxs
 
-val region: #role:rw -> x:t role -> rid 
-val sel_logs: mem -> #role:rw -> x:t role -> logs 
-val sel_idxs: mem -> #role:rw -> x:t role -> indexes
-
-// TODO framing and monotonicity; clarify where AE states vs AE logs are allocated. 
-
-
+// TODO framing and monotonicity; clarify where AE states vs AE logs
+// are allocated.
 
 /// We use multiple regions:
 /// - one for local control (modified by installing or changing keys)
@@ -73,24 +84,21 @@ val sel_idxs: mem -> #role:rw -> x:t role -> indexes
 /// The whole memory shape is recorded as a strong invariant (see epochs)
 /// with a special case for remotely-allocated writers. 
 
-// - region x is the footprint for all writing of allthe reregion is the footprint for both  logs and indexes 
 
 
-
-/// We could statically bound the difference of the two lengths,
-/// i.e. the number of live keys (3 for TLS), so that the concrete
-/// state may be represented as a buffer of keys.
-
-type t (role:rw) (* stateful, monotonic *)
-
-/// The state consists of
+/// Internally, the state consists of
 /// - a list of (| i, StAE role i |)
-/// - a current index within the list (starting at -1)
+/// - a current integer index within the list (starting at -1)
 /// 
 /// The list *before* the current index is ghost.
+// TODO extract [logs] and [idxs] from those.
 
-/// The concrete state consists of sequence of (i: id & StreamAE role i ) 
+/// Concretely, we only keep one current key and a few future
+/// keys. This matters for forward secrecy.  We may statically bound
+/// the number of live keys (3 for TLS?) so that future keys can be
+/// stored in a small buffer.
 
+/// registering a future key
 val extend: #role:rw -> x:t role -> i:id -> k:StAE.t role -> ST unit 
   (requires fun h0 -> StAE.sel h0 k = [])
   (ensures fun h0 _ h1 -> 
@@ -98,7 +106,7 @@ val extend: #role:rw -> x:t role -> i:id -> k:StAE.t role -> ST unit
     sel_idxs h1 x == sel_idxs h0 x ++ i /\ 
     sel_logs h1 x == sel_logs h0 x)
 
-/// guaranteeing local forward secrecy
+/// ensuring local forward secrecy
 val next: #role:rw -> x:t role -> i:id -> k:StAE.t role -> ST unit 
   (requires fun h0 -> 
     length (sel_logs h0 x) < length (sel_idxs h0 x))
@@ -156,16 +164,10 @@ val free: #role: rw -> x:t role -> ST unit
     sel_idxs h1 x == sel_idxs h0 x /\
     sel_logs h1 x == sel_logs h0 x)
     
-
-
-
 // what about closure and forward-secrecy for the last key? 
-
 // we do not represent failure or termination (client-specific)
 
-// it seems convenient to use the same ghost state for readers and writers.
-
-/// Integrity as a stateful lemma:
+/// Multistream integrity as a stateful lemma:
 ///
 /// 1. for each rw, sel_idxs are pairwise-distinct, *ordered*, and
 ///    associated with the enclosing connection (by its local nonce).
@@ -176,8 +178,6 @@ val free: #role: rw -> x:t role -> ST unit
 /// Shall we have NULL streamAEs for uniformity? unclear. 
 /// How to deal with the log type dependency? Record only the actual plaintexts!
 ///
-/// Consider immediately switching to Low* ?
-
 /// Honest instances can be trusted to install keys in a synchronized
 /// manner; for TLS, the indexes are clearly ordered, and the stream
 /// contents are clearly terminated, hence the whole AppData

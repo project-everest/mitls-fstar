@@ -12,7 +12,6 @@ open FStar.Error
 open TLSError
 open TLSConstants
 open TLSInfo
-module Range = Range
 open Range
 open DataStream
 module Range = Range

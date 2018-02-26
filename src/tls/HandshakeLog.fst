@@ -2,21 +2,18 @@ module HandshakeLog
 
 (* see als comments in Handshake.fsti *) 
 
-open FStar.Heap
-open FStar.HyperStack
-
 open FStar.Seq
 open FStar.Set
 open FStar.Error
 open FStar.Bytes
 
+open Mem 
 open TLSError
 open TLSConstants
 open TLSInfo
 open HandshakeMessages
 open Hashing
 open Hashing.CRF // now using incremental, collision-resistant, agile Hashing.
-open Mem 
 
 module HS = FStar.HyperStack
 

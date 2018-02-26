@@ -3,13 +3,11 @@ module HS = FStar.HyperStack //Added automatically
 
 // cwinter: this file will likely be removed.
 
-open FStar.HyperStack
 open FStar.Bytes
 open FStar.Error
 
 open CoreCrypto
 open TLSError
-
 open Mem
 open Parse
 

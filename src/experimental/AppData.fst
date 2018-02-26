@@ -12,7 +12,7 @@ module AppData
 //* postconditions show the transition, callers restore their invariant
 
 open FStar.Error
-open Platform.Bytes
+open FStar.Bytes
 
 open TLSError
 open TLSInfo

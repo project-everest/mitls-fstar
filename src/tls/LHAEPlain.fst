@@ -37,6 +37,7 @@ let makeAD i seqn (ad:StatefulPlain.adata i) : adata i =
 
 val seqN: i:id -> adata i -> Tot seqn
 let seqN i ad =
+//18-02-26 review?
 //    let snb,ad = FStar.Bytes.split_eq ad 8 in //TODO bytes NS 09/27
     let snb,ad = FStar.Bytes.split ad 8ul in    
     seq_of_bytes snb

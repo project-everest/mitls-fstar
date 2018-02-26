@@ -12,10 +12,7 @@ module HST = FStar.HyperStack.ST //Added automatically
 *)
 
 open FStar.Bytes
-open FStar.Date
 open TLSConstants
-//open PMS
-//open Cert
 
 module CC = CoreCrypto
 module DM = FStar.DependentMap
@@ -53,14 +50,14 @@ let default_signature_schemes = [
 
 let default_groups : CommonDH.namedGroupList = 
   let open CommonDH in [
-  // X448
-  SECP521R1;
-  SECP384R1;
-  X25519;
-  SECP256R1;
-  FFDHE4096;
-  FFDHE3072;
-  FFDHE2048;
+    // X448
+    SECP521R1;
+    SECP384R1;
+    X25519;
+    SECP256R1;
+    FFDHE4096;
+    FFDHE3072;
+    FFDHE2048;
   ]
 
 // By default we use an in-memory ticket table
@@ -178,7 +175,7 @@ type abbrInfo =
      abbr_session_hash: sessionHash;
      abbr_vd: option (cVerifyData * sVerifyData) }
 
-type resumeInfo (r:role) : Type0 =
+type resumeInfo (r:role): Type0 =
   //17-04-19  connect_time:lbytes 4  * // initial Nonce.timestamp() for the connection
   o:option bytes {r=Server ==> None? o} * // 1.2 ticket
   l:list PSK.pskid {r=Server ==> l = []} // assuming we do the PSK lookups locally
@@ -447,10 +444,9 @@ and pre_keyId =
   | KeyID: #li:logInfo{~(LogInfo_CH? li)} -> i:pre_expandId li -> pre_keyId
 and pre_finishedId =
   | FinishedID: #li:logInfo -> pre_expandId li -> pre_finishedId
-// all of those will be replaced by auxiliary functions and refinements in ID. 
+// 18-02-23 will all be replaced by auxiliary functions and refinements in ID. 
 
-// 17-11-15 all subsumed by *ghost* IK.ha_of_id 
-// hopefully not used too much?
+// 18-02-23 will all be subsumed by *ghost* ha_of_id 
 val esId_hash: i:pre_esId -> Tot hash_alg (decreases i)
 val binderId_hash: i:pre_binderId -> Tot hash_alg (decreases i)
 val hsId_hash: i:pre_hsId -> Tot hash_alg (decreases i)
@@ -663,8 +659,8 @@ let pv_of_id (i:id{~(PlaintextID? i)}) = match i with
   | ID13 _ -> TLS_1p3
   | ID12 pv _ _ _ _ _ _ -> pv
 
-// Returns the local nonce
-let nonce_of_id (i : id) : random =
+// Returns the local nonce (used for accessing connection state)
+let nonce_of_id (i: id): random =
   match i with
   | PlaintextID r -> r
   | ID13 (KeyID #li _) -> logInfo_nonce li

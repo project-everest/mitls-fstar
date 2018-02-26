@@ -1,15 +1,12 @@
 ﻿module MAC_SHA256
 
-open FStar.Heap
-open FStar.HyperStack
 open FStar.Seq
-open FStar.Bytes
 open FStar.Error
 
+open Mem
 open TLSConstants
 open TLSInfo
 open TLSError
-open Mem
 
 // idealizing HMAC
 // for concreteness; the rest of the module is parametric in a

@@ -2,7 +2,6 @@
 
 open FStar.Bytes
 open FStar.Error
-open FStar.HyperStack.ST
 
 open Mem
 open TLSConstants

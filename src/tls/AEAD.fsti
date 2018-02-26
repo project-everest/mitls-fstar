@@ -1,6 +1,6 @@
 (**
   This interfaces provides an abstraction for the verified Hacl* Crypto.AEAD.Main module,
-  using Platform.Bytes rather than buffers.
+  using FStar.Bytes rather than buffers.
 *)
 module AEAD
 module HS = FStar.HyperStack //Added automatically

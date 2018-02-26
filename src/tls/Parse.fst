@@ -1,19 +1,14 @@
 module Parse
 
 open FStar.Error
+open TLSError
 open FStar.Bytes
-open FStar.HyperStack.All
 
 open TLSError
 
 include Mem // temporary, for code opening only TLSConstants
 
-module B = FStar.Bytes
-module HS = FStar.HyperStack
-module ST = FStar.HyperStack.ST
-
-(** This file will go away when all parsers have been ported to LowParse *)
-
+(** Begin Module Format *)
 
 // basic parsing and formatting---an attempt at splitting TLSConstant.
 
@@ -27,188 +22,182 @@ unfold type lemma_pinverse_f_g (#a:Type) (#b:Type) (r:b -> b -> Type) ($f:a -> T
 
 
 (** Transforms a sequence of natural numbers into bytes *)
-val bytes_of_seq: n:nat{B.repr_bytes n <= 8 } -> Tot (b:B.bytes{B.length b <= 8})
-let bytes_of_seq sn = B.bytes_of_int 8 sn
+val bytes_of_seq: n:nat{ repr_bytes n <= 8 } -> Tot (b:bytes{length b <= 8})
+let bytes_of_seq sn = bytes_of_int 8 sn
 
 (** Transforms bytes into a sequence of natural numbers *)
-val seq_of_bytes: b:B.bytes{ B.length b <= 8 } -> Tot nat
-let seq_of_bytes b = B.int_of_bytes b
+val seq_of_bytes: b:bytes{ length b <= 8 } -> Tot nat
+let seq_of_bytes b = int_of_bytes b
 
 (** Transform and concatenate a natural number to bytes *)
-val vlbytes: lSize:nat{lSize <= 32} -> b:B.bytes{B.repr_bytes (B.length b) <= lSize} -> Tot (r:B.bytes{B.length r = lSize + B.length b})
-let vlbytes lSize b = 
-  let (i:nat) = B.length b in
-  let bi = B.bytes_of_int lSize i in
-  assume (UInt.fits (length bi + length b) 32);
-  bi @| b
+val vlbytes: 
+  lSize:nat {lSize <= 3} -> 
+  b:bytes{repr_bytes (length b) <= lSize} -> Tot (lbytes (lSize + length b))
+let vlbytes lSize b = bytes_of_int lSize (Bytes.length b) @| b
 
 // avoiding explicit applications of the representation lemmas
-let vlbytes1 (b:B.bytes {B.length b < pow2 8}) = B.lemma_repr_bytes_values (B.length b); vlbytes 1 b
-let vlbytes2 (b:B.bytes {B.length b < pow2 16}) = B.lemma_repr_bytes_values (B.length b); vlbytes 2 b
+let vlbytes1 (b:bytes {length b < pow2 8}) = lemma_repr_bytes_values (length b); vlbytes 1 b
+let vlbytes2 (b:bytes {length b < pow2 16}) = lemma_repr_bytes_values (length b); vlbytes 2 b
 
-val vlbytes_trunc: lSize:nat{lSize <= 32} -> b:B.bytes ->
-  extra:nat{B.repr_bytes (B.length b + extra) <= lSize} ->
-  r:B.bytes{B.length r == lSize + B.length b}
+val vlbytes_trunc: 
+  lSize:nat {lSize <= 3} -> b:bytes -> 
+  extra:nat {repr_bytes (length b + extra) <= lSize} ->
+  r: lbytes (lSize + length b)
 let vlbytes_trunc lSize b extra =
-  let bex = B.length b + extra in
-  let q = B.bytes_of_int lSize bex in
-  assume (UInt.fits (length q + length b) 32);
-  q @| b
+  bytes_of_int lSize (length b + extra) @| b
 
 let vlbytes_trunc_injective
-  (lSize: nat)
-  (b1: B.bytes)
-  (extra1: nat { B.repr_bytes (B.length b1 + extra1) <= lSize } )
-  (s1: B.bytes)
-  (b2: B.bytes)
-  (extra2: nat { B.repr_bytes (B.length b2 + extra2) <= lSize } )
-  (s2: B.bytes)
+  (lSize: nat {lSize <= 3})
+  (b1: bytes)
+  (extra1: nat {repr_bytes (length b1 + extra1) <= lSize} )
+  (s1: bytes {UInt.size (lSize + length b1 + length s1) UInt32.n})
+  (b2: bytes)
+  (extra2: nat {repr_bytes (length b2 + extra2) <= lSize} )
+  (s2: bytes {UInt.size (lSize + length b2 + length s2) UInt32.n})
 : Lemma
-  (requires (lSize <= 32 /\ (let q = vlbytes_trunc lSize b1 extra1 in 
-                             UInt.fits (length q + length s1) 32 /\
-                             (let q2 = vlbytes_trunc lSize b2 extra2 in
-                              UInt.fits (length q2 + length s2) 32 /\
-                              (q @| s1) = q2 @| s2))))
-  (ensures (B.length b1 + extra1 == B.length b2 + extra2 /\ b1 @| s1 == b2 @| s2))
+  (requires (vlbytes_trunc lSize b1 extra1 @| s1 = vlbytes_trunc lSize b2 extra2 @| s2))
+  (ensures (length b1 + extra1 == length b2 + extra2 /\ b1 @| s1 == b2 @| s2))
 = admit()
-  // let l1 = B.bytes_of_int lSize (B.length b1 + extra1) in
-  // let l2 = B.bytes_of_int lSize (B.length b2 + extra2) in
-  // B.append_assoc l1 b1 s1;
-  // B.append_assoc l2 b2 s2;
-  // B.lemma_append_inj l1 (b1 @| s1) l2 (b2 @| s2);
-  // B.int_of_bytes_of_int lSize (B.length b1 + extra1);
-  // B.int_of_bytes_of_int lSize (B.length b2 + extra2)
+  // let l1 = bytes_of_int lSize (length b1 + extra1) in
+  // let l2 = bytes_of_int lSize (length b2 + extra2) in
+  // append_assoc l1 b1 s1;
+  // append_assoc l2 b2 s2;
+  // lemma_append_inj l1 (b1 @| s1) l2 (b2 @| s2);
+  // int_of_bytes_of_int lSize (length b1 + extra1);
+  // int_of_bytes_of_int lSize (length b2 + extra2)
 
 (** Lemmas associated to bytes manipulations *)
-val lemma_vlbytes_len : i:nat{i <= 32} -> b:B.bytes{B.repr_bytes (B.length b) <= i}
-  -> Lemma (ensures (B.length (vlbytes i b) = i + B.length b))
+val lemma_vlbytes_len : lSize:nat {lSize <= 3} -> b:bytes{repr_bytes (length b) <= lSize}
+  -> Lemma (ensures (length (vlbytes lSize b) = lSize + length b))
 let lemma_vlbytes_len i b = ()
 
-
-val lemma_vlbytes_inj_strong : i:nat{i <= 32}
-  -> b:B.bytes{B.repr_bytes (B.length b) <= i}
-  -> s:B.bytes
-  -> b':B.bytes{B.repr_bytes (B.length b') <= i}
-  -> s':B.bytes
-  -> Lemma (requires (let vb = vlbytes i b in 
-                      let vb' = vlbytes i b' in
-                      (UInt.fits (length vb + length s) 32) /\ 
-                      (UInt.fits (length vb' + length s') 32) /\ 
-                      (vb @| s) = (vb' @| s')))
+val lemma_vlbytes_inj_strong : i:nat {i <= 3}
+  -> b:bytes {repr_bytes (length b) <= i}
+  -> s:bytes {UInt.size (i + length b + length s) UInt32.n} 
+  -> b':bytes {repr_bytes (length b') <= i}
+  -> s':bytes {UInt.size (i + length b' + length s') UInt32.n} 
+  -> Lemma (requires (vlbytes i b @| s = vlbytes i b' @| s'))
           (ensures (b == b' /\ s == s'))
-
 let lemma_vlbytes_inj_strong i b s b' s' = admit()
-  // let l = B.bytes_of_int i (B.length b) in
-  // let l' = B.bytes_of_int i (B.length b') in
-  // B.append_assoc l b s;
-  // B.append_assoc l' b' s';
-  // B.lemma_append_inj l (b @| s) l' (b' @| s');
-  // B.int_of_bytes_of_int i (B.length b);
-  // B.int_of_bytes_of_int i (B.length b');
-  // B.lemma_append_inj b s b' s'
+  // let l = bytes_of_int i (length b) in
+  // let l' = bytes_of_int i (length b') in
+  // Seq.append_assoc l b s;
+  // Seq.append_assoc l' b' s';
+  // Seq.lemma_append_inj l (b @| s) l' (b' @| s');
+  // int_of_bytes_of_int i (length b);
+  // int_of_bytes_of_int i (length b');
+  // Seq.lemma_append_inj b s b' s'
 
-val lemma_vlbytes_inj : i:nat{i <= 32}
-  -> b:B.bytes{B.repr_bytes (B.length b) <= i}
-  -> b':B.bytes{B.repr_bytes (B.length b') <= i}
-  -> Lemma (requires ((vlbytes i b) = (vlbytes i b')))
+val lemma_vlbytes_inj : i:nat {i <= 3}
+  -> b:bytes{repr_bytes (length b) <= i}
+  -> b':bytes{repr_bytes (length b') <= i}
+  -> Lemma (requires (vlbytes i b = vlbytes i b'))
           (ensures (b == b'))
-
 let lemma_vlbytes_inj i b b' =
-  lemma_vlbytes_inj_strong i b B.empty_bytes b' B.empty_bytes
+  lemma_vlbytes_inj_strong i b empty_bytes b' empty_bytes
 
-val vlbytes_length_lemma: n:nat{n <= 32} -> a:B.bytes{B.repr_bytes (B.length a) <= n} -> b:B.bytes{B.repr_bytes (B.length b) <= n} ->
-  Lemma (requires ((B.slice (vlbytes n a) 0ul (FStar.UInt32.uint_to_t n)) = (B.slice (vlbytes n b) 0ul (FStar.UInt32.uint_to_t n))))
-        (ensures (B.length a = B.length b))
-
+val vlbytes_length_lemma: 
+  n: nat {n <= 3} -> 
+  a: bytes{repr_bytes (length a) <= n} -> 
+  b: bytes{repr_bytes (length b) <= n} -> Lemma 
+  (requires 
+    slice (vlbytes n a) 0ul (UInt32.uint_to_t n) =  
+    slice (vlbytes n b) 0ul (UInt32.uint_to_t n))
+  (ensures length a = length b)
 let vlbytes_length_lemma n a b = admit()
+  // let lena = Seq.slice (vlbytes n a) 0 n in
+  // let lenb = Seq.slice (vlbytes n b) 0 n in
+  // assert(Seq.equal lena (bytes_of_int n (length a)));
+  // assert(Seq.equal lenb (bytes_of_int n (length b)));
+  // int_of_bytes_of_int n (length a); int_of_bytes_of_int n (length b)
+
 
 #set-options "--max_ifuel 1 --initial_ifuel 1 --max_fuel 0 --initial_fuel 0"   //need to reason about length
 
-val vlsplit: lSize:nat{lSize <= 4}
-  -> vlb:B.bytes{lSize <= B.length vlb}
-  -> Tot (result (b:(B.bytes * B.bytes){
-        B.repr_bytes (B.length (fst b)) <= lSize /\
-        (let vb = vlbytes lSize (fst b) in
-         (UInt.fits (length vb + length (snd b)) 32) /\         
-         vlb == (vb @| (snd b)))}))
+val vlsplit: 
+  lSize: nat {lSize <= 3} -> 
+  vlb: bytes {lSize <= length vlb} -> 
+  result (b:(bytes * bytes){
+    let b0, b1 = b in 
+    repr_bytes (length b0) <= lSize /\ 
+    length vlb = lSize + length b0 + length b1 /\ 
+    vlb = vlbytes lSize b0 @| b1
+    })
 
-#set-options "--max_ifuel 2 --initial_ifuel 2"
+//18-02-23 the three assumptions on Bytes should be (triggered) lemmas
 let vlsplit lSize vlb =
-  let (vl,b) = B.split vlb (FStar.UInt32.uint_to_t lSize) in
-  let l = B.int_of_bytes vl in
-  if l <= B.length b
-  then begin
-    let ln = B.len b in
-    assert (l <= B.length b);
-    let (u, v) = B.split b ln in
-//    B.append_assoc vl u v; //TODO
-    assume (length u < length b);
-    assume (length v < length b);
-   Correct (u,v)
-   end
+  let vl,b = split vlb (UInt32.uint_to_t lSize) in
+  assume(vlb = vl @| b); 
+  let l = int_of_bytes vl in
+  if l <= length b
+  then 
+    let b0, b1 = split b (UInt32.uint_to_t l) in 
+    assume(b = b0 @| b1);
+    assume(vl @| b0 @| b1 = (vl @| b0) @| b1);
+    //assert(repr_bytes (length b0) <= lSize);
+    //assert(length vlb = lSize + length b0 + length b1);
+    //assert(vl @| b0 = vlbytes lSize b0);
+    //assert(vlb = vl @| b0 @| b1);
+    Correct(b0,b1)
   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
-val vlparse: lSize:nat{lSize <= 4} -> vlb:B.bytes{lSize <= B.length vlb}
-  -> Pure (r:result B.bytes)
-  (requires (True))
-  (ensures fun r -> Correct? r ==>
-    (let b = Correct?._0 r in 
-     B.repr_bytes (B.length b) <= lSize ///\ 
-     //vlb = (vlbytes lSize b)
-     ))
+val vlparse: 
+  lSize: nat {lSize <= 3} -> 
+  vlb: bytes{lSize <= length vlb} -> 
+  result (b:bytes{repr_bytes (length b) <= lSize /\ vlb = vlbytes lSize b})
 let vlparse lSize vlb =
-  let vl,b = B.split vlb (FStar.UInt32.uint_to_t lSize) in
-  if B.int_of_bytes vl = B.length b then Correct b
+  assume false;//18-02-23 
+  let vl,b = split_ vlb lSize in
+  if int_of_bytes vl = length b
+  then Correct b
   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
-val vlparse_vlbytes: lSize:nat{lSize <= 4} -> vlb:B.bytes{B.repr_bytes (B.length vlb) <= lSize} -> Lemma
-  (requires (True))
-  (ensures (vlparse lSize (vlbytes lSize vlb) == Correct vlb))
+val vlparse_vlbytes: 
+  lSize:nat{lSize <= 3} -> 
+  vlb:bytes{repr_bytes (length vlb) <= lSize} -> Lemma
+  (ensures vlparse lSize (vlbytes lSize vlb) == Correct vlb)
   [SMTPat (vlparse lSize (vlbytes lSize vlb))]
 #reset-options "--initial_ifuel 2 --initial_fuel 2"
 let vlparse_vlbytes lSize vlb =
-  let b' = vlbytes lSize vlb in
-  assert(b' = B.bytes_of_int lSize (B.length vlb) @| vlb);
-  let vl, b = B.split b' (FStar.UInt32.uint_to_t lSize) in
-//  B.lemma_append_inj vl b (B.bytes_of_int lSize (B.length vlb)) vlb; //TODO
-  assume (vl = (B.bytes_of_int lSize (B.length vlb)));
-//  B.int_of_bytes_of_int lSize (B.length vlb); //TODO
-  let x = vlparse lSize b' in
-//  let b'' = Correct?._0 x in
-  assert(x == vlparse lSize (vlbytes lSize vlb));
-  admit()
+  assume false; //18-02-23 
+  let vl,b = split_ (vlbytes lSize vlb) lSize in
+  assert (vl = bytes_of_int lSize (length vlb));
+  int_of_bytes_of_int #lSize (length vlb);
+  match vlparse lSize (vlbytes lSize vlb) with
+  | Error z   -> ()
+  | Correct b -> lemma_vlbytes_inj lSize vlb b
 
 val uint16_of_bytes:
-  b:B.bytes{B.length b == 2} ->
-  n:UInt16.t{B.repr_bytes (UInt16.v n) <= 2 /\ B.bytes_of_int 2 (UInt16.v n) == b}
+  b:bytes{length b == 2} ->
+  n:UInt16.t{repr_bytes (UInt16.v n) <= 2 /\ bytes_of_int 2 (UInt16.v n) == b}
 
 let uint16_of_bytes b =
-  let n = B.int_of_bytes b in
+  let n = int_of_bytes b in
   assert_norm (pow2 16 == 65536);
-  B.lemma_repr_bytes_values n;
-  // B.int_of_bytes_of_int 2 n; //TODO
-  let r = UInt16.uint_to_t n in
-  assert(UInt16.v r = n);
-  assert(B.repr_bytes (UInt16.v r) <= 2);
-  r
+  lemma_repr_bytes_values n;
+  int_of_bytes_of_int n;
+  UInt16.uint_to_t n
 
 val uint32_of_bytes:
-  b:B.bytes{B.length b == 4} ->
-  n:UInt32.t{B.repr_bytes (UInt32.v n) <= 4 /\ B.bytes_of_int 4 (UInt32.v n) == b}
+  b:bytes{length b == 4} ->
+  n:UInt32.t{repr_bytes (UInt32.v n) <= 4 /\ bytes_of_int 4 (UInt32.v n) == b}
 
 let uint32_of_bytes b =
-  let n = B.int_of_bytes b in
+  let n = int_of_bytes b in
   assert_norm (pow2 32 == 4294967296);
-  B.lemma_repr_bytes_values n;
+  lemma_repr_bytes_values n;
   UInt32.uint_to_t n
 
-let bytes_of_uint32 (n:UInt32.t) : Tot (B.lbytes 4) =
-  FStar.Bytes.bytes_of_int32 n
+let bytes_of_uint32 (n:UInt32.t) : Tot (lbytes 4) =
+  let n = UInt32.v n in
+  lemma_repr_bytes_values n;
+  bytes_of_int 4 n
 
-let bytes_of_uint16 (n:UInt16.t) : Tot (B.lbytes 2) =
+let bytes_of_uint16 (n:UInt16.t) : Tot (lbytes 2) =
   let n = UInt16.v n in
-  B.lemma_repr_bytes_values n;
-  B.bytes_of_int 2 n
+  lemma_repr_bytes_values n;
+  bytes_of_int 2 n
 
+// 18-02-26 to be eliminated
 let cbyte (b:bytes{length b >= 1}) = FStar.Bytes.index b 0
 let cbyte2 (b:bytes{length b >= 2}) = (FStar.Bytes.index b 0, FStar.Bytes.index b 1)

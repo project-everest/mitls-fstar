@@ -25,8 +25,7 @@ module HS = FStar.HyperStack
 let model = Flags.model
 
 type bytes = FStar.Bytes.bytes
-let lbytes (len:UInt32.t) = FStar.Bytes.lbytes (UInt32.v len)
-
+let lbytes32 = FStar.Bytes.lbytes32
 
 
 /// Index packages provide an abstract index for instances, with an
@@ -59,7 +58,7 @@ noeq type ipkg = | Idx:
 /// [ip] defines the abstract indexes used in the package.
 ///
 /// [info] represents creation-time information, such as algorithms or
-/// key lengths; it is determined by the (ghost) index, so
+/// key lengths; it is largely determined by the (ghost) index, so
 /// that all users of the instance agree on them, with details left to
 /// each package definition. (For instance, parent regions for
 /// allocating ideal state may differ.) We pass both the index and its
@@ -144,8 +143,8 @@ noeq type pkg (ip: ipkg) = | Pkg:
       modifies_footprint footprint h0 h1 /\
       mem_update define_table i k h0 h1)) ->
 
-  coerceT: (i:ip.t{ip.registered i /\ (ideal ==> ~(ip.honest i))} -> a:info i -> lbytes (len a) -> GTot (key i)) ->
-  coerce: (i:ip.t{ip.registered i /\ (ideal ==> ~(ip.honest i))} -> a:info i -> rk:lbytes (len a) -> ST (key i)
+  coerceT: (i:ip.t{ip.registered i /\ (ideal ==> ~(ip.honest i))} -> a:info i -> lbytes32 (len a) -> GTot (key i)) ->
+  coerce: (i:ip.t{ip.registered i /\ (ideal ==> ~(ip.honest i))} -> a:info i -> rk: lbytes32 (len a) -> ST (key i)
     (requires fun h0 ->
       package_invariant h0 /\
       mem_fresh define_table i h0)
@@ -188,8 +187,8 @@ noeq type local_pkg (ip: ipkg) =
     (ensures fun h0 k h1 ->
        modifies_none h0 h1 /\ local_invariant k h1 /\
        post a k h1 /\ fresh_regions (local_footprint k) h0 h1)) ->
-  coerceT: (i:ip.t{ip.registered i /\ (ideal ==> ~(ip.honest i))} -> a:info i -> lbytes (len a) -> GTot (key i)) ->
-  coerce: (i:ip.t{ip.registered i /\ (ideal ==> ~(ip.honest i))} -> a:info i -> rk:lbytes (len a) -> ST (key i)
+  coerceT: (i:ip.t{ip.registered i /\ (ideal ==> ~(ip.honest i))} -> a:info i -> lbytes32 (len a) -> GTot (key i)) ->
+  coerce: (i:ip.t{ip.registered i /\ (ideal ==> ~(ip.honest i))} -> a:info i -> rk:lbytes32 (len a) -> ST (key i)
     (requires fun h0 -> True)
     (ensures fun h0 k h1 -> k == coerceT i a rk /\
       modifies_none h0 h1 /\ local_invariant k h1 /\
@@ -364,7 +363,7 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
     assume(HS.modifies_ref tls_define_region (Set.singleton (mem_addr (itable mtable))) h0 h2); // How to prove?
     footprint_grow h0 i k h2;
     k in
-  let coerce (i:ip.t{ip.registered i /\ (p.ideal ==> ~(ip.honest i))}) (a:p.info i) (k0:lbytes (p.len a))
+  let coerce (i:ip.t{ip.registered i /\ (p.ideal ==> ~(ip.honest i))}) (a:p.info i) (k0:lbytes32 (p.len a))
     : ST (p.key i)
     (requires fun h0 -> package_invariant h0 /\ mem_fresh mtable i h0)
     (ensures fun h0 k h1 -> k == p.coerceT i a k0

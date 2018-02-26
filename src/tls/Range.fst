@@ -3,13 +3,14 @@ module Range
 (* This module defines all range computations for the lengths of
    plaintext messages exchanged over TLS, in order to construct
    length-hiding authenticated encryption. *)
+
 open FStar.Bytes
 open TLSConstants
 open TLSInfo
 
 module AE = AEADProvider
 
-let hashLen = Hashing.Spec.tagLen
+let hashLen = Hashing.tagLen
 
 #reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 2"
 

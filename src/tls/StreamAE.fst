@@ -10,7 +10,7 @@ open FStar.Seq
 open FStar.Monotonic.Seq
 open FStar.Error
 open FStar.Bytes
-open FStar.Heap
+
 open Mem
 open TLSError
 open TLSConstants

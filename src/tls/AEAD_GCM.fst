@@ -338,8 +338,8 @@ let decrypt #i d ad c =
         None
       else
 	begin
-	HST.op_Colon_Equals ctr (j + 1);
-	assert (Range.within (FStar.Bytes.length text) r);
+	ctr := j + 1;
+	assert (FStar.Bytes.length text `within` r);
 	let plain = mk_plain i ad r text in
         Some plain
 	end

@@ -1290,12 +1290,14 @@ let rec filter_psk (l:list Extensions.pskIdentity)
   match l with
   | [] -> []
   | (id, _) :: t ->
-    (match Ticket.check_ticket13 id with
+    //18-02-26 ?? review
+    let id = utf8 (iutf8 id) in // FIXME FStar.Bytes
+    match Ticket.check_ticket13 id with
     | Some info -> (id, info) :: (filter_psk t)
     | None ->
       (match PSK.psk_lookup id with
-      | Some info -> trace ("Loaded PSK from ticket <"^(print_bytes id)^">"); (id, info) :: (filter_psk t)
-      | None -> trace ("WARNING: the PSK <"^(print_bytes id)^"> has been filtered"); filter_psk t))
+      | Some info -> trace ("Loaded PSK from ticket <"^print_bytes id^">"); (id, info) :: (filter_psk t)
+      | None -> trace ("WARNING: the PSK <"^print_bytes id^"> has been filtered"); filter_psk t)
 
 // Registration of DH shares
 let rec register_shares (l:list pre_share)

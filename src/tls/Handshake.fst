@@ -1,13 +1,11 @@
 module Handshake
 
-open FStar.String
-open FStar.Heap
-open FStar.HyperStack
 open FStar.Seq
 open FStar.Set
 open FStar.Error
 open FStar.Bytes
 
+open Mem
 open TLSError
 open TLSInfo
 open TLSConstants

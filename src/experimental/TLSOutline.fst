@@ -18,7 +18,7 @@ open FStar.Seq
 
 open FStar.Ghost
 
-open Platform.Bytes
+open FStar.Bytes
 open Platform.Error
 open Platform.Tcp
 
