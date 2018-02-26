@@ -1,6 +1,6 @@
 ﻿module DHGroup
 
-open Platform.Bytes
+open FStar.Bytes
 open FStar.Error
 open CoreCrypto
 open TLSError

@@ -4,7 +4,7 @@ module Handshake.Secret
 /// for the handshake, grouped by message-processing stages.
 /// (It used to be named KeySchedule.)
 
-open Platform.Bytes
+open FStar.Bytes
 open FStar.Error
 
 open Mem
@@ -100,7 +100,7 @@ let sfk_of_hms i transcript = fnk_of_s (sts_of_hms i transcript)
 let sprint_share (#g:CommonDH.group) (s:CommonDH.pre_share g): string
   =
   let kb = CommonDH.serialize_raw #g s in
-  let kh = Platform.Bytes.hex_of_bytes kb in
+  let kh = FStar.Bytes.hex_of_bytes kb in
   "Share: "^kh
 
 

@@ -11,7 +11,7 @@ module ST = FStar.HyperStack.ST
 
 open FStar.Monotonic.Seq
 open FStar.Error
-open Platform.Bytes
+open FStar.Bytes
 
 open TLSError
 open TLSInfo

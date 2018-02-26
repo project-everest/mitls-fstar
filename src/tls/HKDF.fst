@@ -3,7 +3,8 @@ TLS 1.3 HKDF extract and expand constructions, parametrized by their hash algori
 *)
 module HKDF
 
-open Platform.Bytes
+open FStar.UInt32
+open FStar.Bytes
 open TLSConstants
 open Hashing.Spec
 
@@ -28,8 +29,8 @@ HKDF-Extract(salt, IKM) -> PRK
 *)
 
 val extract: 
-  #ha:hash_alg -> salt:hkey ha -> 
-  ikm:bytes -> 
+  #ha: hash_alg -> salt: hkey ha -> 
+  ikm: macable ha -> 
   ST (hkey ha)
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
@@ -74,23 +75,26 @@ HKDF-Expand(PRK, info, L) -> OKM
 /// hand, the truncation length is not explicitly encoded here.
 /// 
 private val expand_int: 
-  #ha:hash_alg -> prk: hkey ha ->
-  info:bytes ->
-  len:nat{len <= op_Multiply 255 (tagLen ha)} ->
-  count:nat{count < 256 } ->
-  curr:nat{curr = op_Multiply count (tagLen ha)} ->
-  previous:bytes {length previous = (if count = 0 then 0 else tagLen ha)} -> 
-  ST (b:bytes{len - curr <= length b}) (decreases (max 0 (len - curr)))
-  (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
+  #ha: hash_alg -> prk: hkey ha ->
+  info: bytes ->
+  len: UInt32.t {UInt32.v len <= op_Multiply 255 (tagLength ha)} ->
+  count: UInt8.t ->
+  curr: UInt32.t {curr = Int.Cast.uint8_to_uint32 count *^ tagLen ha} ->
+  previous: lbytes32 (if count = 0uy then 0ul else tagLen ha) -> 
+  ST (b: bytes{
+    v len - v curr <= length b /\
+    length b <= op_Multiply (UInt8.v count) (blockLength ha)
+    }) (decreases (max 0 (v len - v curr)))
+  (requires (fun h0 -> length previous + length info + 1 + Hashing.blockLength ha <= Hashing.maxLength ha))
+  (ensures (fun h0 t h1 -> modifies_none h0 h1))
 
 #set-options "--z3rlimit 50"
 let rec expand_int #ha prk info len count curr previous =
-  if curr < len && count + 1 < 256 then
-    let count = count + 1 in
-    let curr = curr + tagLen ha in
-    lemma_repr_bytes_values count;
-    let block = HMAC.hmac ha prk (previous @| info @| bytes_of_int 1 count) in
+  if curr <^ len && FStar.UInt8.(count <^ 255uy) then
+    let count = FStar.UInt8.(count +^ 1uy) in
+    let curr = curr +^ tagLen ha in
+    lemma_repr_bytes_values (UInt8.v count);
+    let block = HMAC.hmac ha prk (previous @| info @| bytes_of_int8 count) in
     let next = expand_int prk info len count curr block in
     block @| next
   else empty_bytes
@@ -130,7 +134,7 @@ HKDF-Expand-Label(Secret, Label, Messages, Length) =
 *)
 
 let tls13_prefix : lbytes 6 =
-  let s = abytes "tls13 " in 
+  let s = bytes_of_string "tls13 " in 
   assume(length s = 6); s
 
 val format:
@@ -155,7 +159,7 @@ let format ha label hv len =
 val expand_label: 
   #ha: hash_alg
   -> prk: hkey ha
-  -> label: string{length (abytes label) < 256 - 6}
+  -> label: string{length (bytes_of_string label) < 256 - 6} // -9?
   -> hv: bytes{length hv < 256}
   -> len: nat{len <= op_Multiply 255 (tagLen ha)}
   -> ST (lbytes len)
@@ -176,7 +180,7 @@ let expand_label #ha prk label hv len =
 val expand_secret:
   #ha:hash_alg ->
   secret: hkey ha ->
-  label: string{length (abytes label) < 256 - 6} ->
+  label: string{length (bytes_of_string label) < 256 - 6} ->
   hs_hash: bytes{length hs_hash < 256} ->
   ST (hkey ha)
   (requires fun h -> True)

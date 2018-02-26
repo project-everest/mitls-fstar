@@ -4,7 +4,7 @@ module HS = FStar.HyperStack //Added automatically
 open FStar.Seq
 open FStar.Set
 
-open Platform.Bytes
+open FStar.Bytes
 open FStar.Error
 
 open Mem

@@ -6,12 +6,12 @@ module HS = FStar.HyperStack //Added automatically
 // (TODO: separate interface and implementation; disentangle from CoreCrypto)
 
 open Mem
-open Platform.Bytes
+open FStar.Bytes
 open Hashing.Spec
 
 (* shared, stateful interface, still quite high level *)
 
-val compute: a:alg -> b:bytes -> ST (t:tag a {t == hash a b})
+val compute: a:alg -> b:bytes {length b <= maxLength a} -> ST (t:tag a {t == hash a b})
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> modifies Set.empty h0 h1))
 
@@ -47,7 +47,7 @@ val finalize: #a:alg -> #r:rgn -> v:hash_ctx a r -> ST (tag a)
     t = hash a (accT v h0))) // not specifying the post accT makes v non-reusable
 *)
 
-val hmac: a:alg -> k:hkey a -> m:bytes -> ST (t:tag a {t == Hashing.Spec.hmac a k m})
+val hmac: a:alg -> k:hkey a -> m:bytes {length m + blockLength a <= maxLength a } -> ST (t:tag a {t == Hashing.Spec.hmac a k m})
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> modifies Set.empty h0 h1))
 

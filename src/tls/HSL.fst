@@ -2,7 +2,7 @@
 (* recording semantics, a trade-off to have fewer transitions. *)
 module HSL // an outline of Handshake.Log
 
-open Platform.Bytes
+open FStar.Bytes
 open FStar.Ghost // after HH so as not to shadow reveal :( 
 
 open Hashing

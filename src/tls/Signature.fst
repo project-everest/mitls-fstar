@@ -3,7 +3,7 @@ module Signature
 
 open Mem
 open FStar.Monotonic.Seq
-open Platform.Bytes
+open FStar.Bytes
 open CoreCrypto
 open Hashing.Spec // masking CoreCrypto's hashAlg
 open TLSConstants

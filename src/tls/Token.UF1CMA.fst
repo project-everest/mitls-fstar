@@ -1,8 +1,9 @@
 (* Idealizing derived authentication tokens; independent of TLS, used for TLS 1.2 Finished message payloads. *) 
 module Token.UF1CMA
-module HS = FStar.HyperStack //Added automatically
 
 //TODO use this file instead of TLSPRF
+
+open FStar.Bytes
 open Mem
 
 // this file is adapted from HMAC.UFCMA but simpler, and yield
@@ -37,9 +38,9 @@ noeq type info = {
   good: bool //TODO: should be Type0 instead of bool, and erased, but hard to propagate
 }
 
-type tag (u:info) = Platform.Bytes.lbytes (Hashing.Spec.tagLen u.alg)
+type tag (u:info) = lbytes32 (Hashing.Spec.tagLen u.alg)
 
-let keylen (u:info): Pkg.keylen = UInt32.uint_to_t (Hashing.Spec.tagLen u.alg)
+let keylen (u:info): Pkg.keylen = Hashing.Spec.tagLen u.alg
 type keyrepr (u:info) = Hashing.Spec.hkey u.alg
 
 let goodish (#ip:ipkg) (i:ip.Pkg.t) (u:info) = _: unit{~(safe i) \/ u.good}
@@ -109,7 +110,7 @@ val create:
     Pkg.fresh_regions (footprint k) h0 h1)
 
 let create ip _ _ i u =
-  let kv: keyrepr u = CoreCrypto.random (Hashing.Spec.tagLen u.alg) in
+  let kv: keyrepr u = CoreCrypto.random32 (Hashing.tagLen u.alg) in
   let ck = MAC u kv in
   let k : ir_key ip i =
     if is_safe i then
@@ -124,7 +125,7 @@ let create ip _ _ i u =
 let coerceT (ip: ipkg) (ha_of_i: ip.Pkg.t -> ha) (good_of_i: ip.Pkg.t -> bool)
   (i: ip.Pkg.t {ip.Pkg.registered i /\ ~(safe i)})
   (u: u:info {u.alg = ha_of_i i /\ u.good == good_of_i i})
-  (kv: Pkg.lbytes (keylen u)) : GTot (key ip i)
+  (kv: lbytes32 (keylen u)) : GTot (key ip i)
   =
   let ck = MAC u kv in
   if model then
@@ -135,7 +136,7 @@ val coerce:
   ip: ipkg -> ha_of_i: (ip.Pkg.t -> ha) -> good_of_i: (ip.Pkg.t -> bool) ->
   i: ip.Pkg.t {ip.Pkg.registered i /\ ~(safe i)} ->
   u: (u: info {u.alg = ha_of_i i /\ u.good == good_of_i i}) ->
-  kv: Pkg.lbytes (keylen u) -> ST (k:key ip i)
+  kv: lbytes32 (keylen u) -> ST (k:key ip i)
   (requires fun _ -> True)
   (ensures fun h0 k h1 ->
     modifies_none h0 h1 /\
@@ -183,7 +184,7 @@ val verify:
     (b /\ safe i ==> (usage k).good))
 let verify #ip #i k t =
   let MAC _ t' = get_key k in 
-  let verified = Platform.Bytes.equalBytes t t' in
+  let verified = (t = t') in
   if is_safe i then
     // We use the log to correct any verification errors
     let IdealKey _ _ log = k <: ir_key ip i in

@@ -1,7 +1,7 @@
 module Crypto.Plain
 
 open Crypto.Indexing
-open Platform.Bytes
+open FStar.Bytes
 open Flag
 
 type plainLen = nat

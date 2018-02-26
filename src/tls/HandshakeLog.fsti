@@ -20,7 +20,7 @@ module HandshakeLog
 - support abstract plaintexts and multiple epochs
 *)
 
-open Platform.Bytes
+open FStar.Bytes
 open FStar.Ghost // after HH so as not to shadow reveal :(
 
 open Mem

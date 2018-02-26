@@ -11,7 +11,7 @@ module HS = FStar.HyperStack //Added automatically
 // TODO: guarantee (by typing) that we don't do stdio, and don't throw
 //       exceptions, notably for incomplete pattern matching
 
-open Platform.Bytes
+open FStar.Bytes
 open FStar.Error
 
 open TLSConstants

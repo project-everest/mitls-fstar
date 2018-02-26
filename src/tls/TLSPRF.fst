@@ -6,7 +6,7 @@ module TLSPRF
    used by Handshake, Handshake.Secret, KEF, and PRF.
 *)
 
-open Platform.Bytes
+open FStar.Bytes
 open Hashing.Spec
 open TLSConstants
 open TLSInfo

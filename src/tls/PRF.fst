@@ -3,7 +3,7 @@
 (* 16-05-17 removed precompilation flags, commenting out ideal code still to be upgraded to F* *)
 
 open FStar.Seq
-open Platform.Bytes
+open FStar.Bytes
 open TLSConstants
 open TLSInfo
 open CoreCrypto

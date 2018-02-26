@@ -4,7 +4,7 @@ open FStar.Seq
 open Mem
 
 open FStar.Error
-open Platform.Bytes
+open FStar.Bytes
 
 open TLSError
 open TLSConstants

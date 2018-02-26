@@ -2,7 +2,7 @@
 
 (* Split from KEF *)
 
-open Platform.Bytes
+open FStar.Bytes
 open TLSConstants
 open CoreCrypto
 

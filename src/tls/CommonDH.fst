@@ -10,7 +10,7 @@ module CommonDH
 module HST = FStar.HyperStack.ST //Added automatically
 
 open Mem 
-open Platform.Bytes
+open FStar.Bytes
 open FStar.Error
 open CoreCrypto
 open Parse

@@ -11,7 +11,7 @@ open FStar.Seq
  // for e.g. found
 //open FStar.Set
  
-open Platform.Bytes
+open FStar.Bytes
 open FStar.Error
 
 open TLSError

@@ -1,7 +1,7 @@
 module LHAEPlain
 
 open FStar.Seq
-open Platform.Bytes
+open FStar.Bytes
 open FStar.Error
 
 open TLSError
@@ -37,7 +37,7 @@ let makeAD i seqn (ad:StatefulPlain.adata i) : adata i =
 
 val seqN: i:id -> adata i -> Tot seqn
 let seqN i ad =
-    let snb,ad = Platform.Bytes.split_eq ad 8 in
+    let snb,ad = FStar.Bytes.split_eq ad 8 in
     seq_of_bytes snb
 
 val lemma_makeAD_seqN: i:id -> n:seqn -> ad:StatefulPlain.adata i

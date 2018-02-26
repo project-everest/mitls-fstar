@@ -2,7 +2,7 @@
 #light "off"
 
 module AppFragment
-open Platform.Bytes
+open FStar.Bytes
 open TLSInfo
 module Range = Range
 open Range

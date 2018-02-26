@@ -2,7 +2,7 @@ module AEADOpenssl
 
 open FStar.HyperStack
 open FStar.Seq
-open Platform.Bytes
+open FStar.Bytes
 open CoreCrypto
 
 open TLSConstants

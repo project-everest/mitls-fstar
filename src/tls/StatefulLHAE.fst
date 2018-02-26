@@ -8,7 +8,7 @@ module StatefulLHAE
 open FStar.Seq
 open FStar.Monotonic.Seq
 
-open Platform.Bytes
+open FStar.Bytes
 
 open Mem
 open TLSConstants

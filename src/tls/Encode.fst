@@ -10,7 +10,7 @@ module Encode
  *)
 
 open FStar.Seq
-open Platform.Bytes
+open FStar.Bytes
 open FStar.Error
 open TLSError
 open TLSConstants

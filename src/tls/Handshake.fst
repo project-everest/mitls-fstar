@@ -6,7 +6,7 @@ open FStar.Set
 open FStar.Error
 
 open Mem
-open Platform.Bytes
+open FStar.Bytes
 open TLSError
 open TLSInfo
 open TLSConstants

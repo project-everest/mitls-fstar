@@ -7,7 +7,7 @@ module StreamAE
 open FStar.Monotonic.Seq
 
 open FStar.Error
-open Platform.Bytes
+open FStar.Bytes
 
 open Mem
 open TLSError
@@ -299,7 +299,7 @@ let decrypt #i d l c =
    | None -> None
    | Some pr ->
      begin
-       assert (Platform.Bytes.length pr == l);
+       assert (FStar.Bytes.length pr == l);
        let p = strip_refinement (mk_plain i l pr) in
        if Some? p then ctr := j + 1;
        p

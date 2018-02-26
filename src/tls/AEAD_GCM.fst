@@ -3,7 +3,7 @@ module AEAD_GCM
 // We support both AES_128_GCM and AES_256_GCM, differing only in their key sizes
 
 open FStar.Seq
-open Platform.Bytes
+open FStar.Bytes
 open CoreCrypto
 
 open Mem
@@ -331,7 +331,7 @@ let decrypt #i d ad c =
       else
 	begin
 	ctr := j + 1;
-	assert (within (Platform.Bytes.length text) r);
+	assert (within (FStar.Bytes.length text) r);
 	let plain = mk_plain i ad r text in
         Some plain
 	end

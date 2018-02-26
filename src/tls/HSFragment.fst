@@ -3,7 +3,7 @@
 #light "off"
 
 module HSFragment
-open Platform.Bytes
+open FStar.Bytes
 open TLSInfo
 module Range = Range
 open Range

@@ -4,7 +4,7 @@ module Range
    plaintext messages exchanged over TLS, in order to construct
    length-hiding authenticated encryption. *)
 open Platform
-open Platform.Bytes
+open FStar.Bytes
 open TLSConstants
 open TLSInfo
 

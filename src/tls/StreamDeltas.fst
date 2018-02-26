@@ -1,6 +1,6 @@
 module StreamDeltas
 module HST = FStar.HyperStack.ST //Added automatically
-open Platform.Bytes
+open FStar.Bytes
 open FStar.Error
 
 open Mem

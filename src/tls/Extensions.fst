@@ -9,7 +9,7 @@ This modules defines TLS 1.3 Extensions.
 *)
 module Extensions
 
-open Platform.Bytes
+open FStar.Bytes
 open FStar.Error
 open TLSError
 open TLSConstants
@@ -565,7 +565,7 @@ let parseServerName mt b  =
       begin
       match vlsplit 2 v with
       | Error(x,y) ->
-	      ExFail(x, "Failed to parse SNI length: "^ (Platform.Bytes.print_bytes b))
+	      ExFail(x, "Failed to parse SNI length: "^ (FStar.Bytes.print_bytes b))
       | Correct(cur, next) ->
       	begin
       	match aux next with

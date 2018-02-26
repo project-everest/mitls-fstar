@@ -6,7 +6,7 @@ open FStar.HyperStack
 open FStar.Seq
 open FStar.HyperStack.ST
 
-open Platform.Bytes
+open FStar.Bytes
 
 type scalar = lbytes 32
 type point = lbytes 32
@@ -18,10 +18,10 @@ let pubshare (k:keyshare): Tot point = fst k
 // FIXME: Convert between Platform bytes (Seq.seq Char.char) and Hacl.Spec.Lib.bytes (Seq.seq UInt8.t)
 private let bytes2hacl (b:bytes) : Tot (s:Seq.seq UInt8.t{Seq.length s = Seq.length b}) =
   Seq.init (length b) (fun i ->
-    UInt8.uint_to_t (FStar.Char.int_of_char (Platform.Bytes.index b i)))
+    UInt8.uint_to_t (FStar.Char.int_of_char (FStar.Bytes.index b i)))
 
 private let hacl2bytes (s:Seq.seq UInt8.t) : Tot (b:bytes{length b = Seq.length s}) =
-  Platform.Bytes.initBytes (Seq.length s) (fun i ->
+  FStar.Bytes.initBytes (Seq.length s) (fun i ->
     FStar.Char.char_of_int (UInt8.v (Seq.index s i)))
 
 private let scalarmult k p =
@@ -44,5 +44,7 @@ let keygen () : ST keyshare
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
   let s: lbytes 32 = CoreCrypto.random 32 in
-  let base: point = Seq.upd (Seq.create 32 0uy) 0 9uy in
+  let base: point = 
+    Bytes.create  1ul 9uy @| 
+    Bytes.create 31ul 0uy in
   mul s base, s

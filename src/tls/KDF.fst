@@ -519,7 +519,7 @@ let derive #d #t #i k a lbl ctx a' =
    end
   else
    begin
-    let raw = HKDF.expand #(a.ha) (secret_corrupt k) (Platform.Bytes.abytes lbl) (UInt32.v (Pkg?.len pkg a')) in
+    let raw = HKDF.expand #(a.ha) (secret_corrupt k) (FStar.Bytes.abytes lbl) (UInt32.v (Pkg?.len pkg a')) in
     let h2 = get() in
     assume(modifies_none h1 h2); // FIXME HKDF framing
     assume(tree_invariant t h2);

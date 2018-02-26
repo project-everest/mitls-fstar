@@ -1,6 +1,6 @@
 module Ticket
 
-open Platform.Bytes
+open FStar.Bytes
 open FStar.Error
 
 open Mem

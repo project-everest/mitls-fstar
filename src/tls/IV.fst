@@ -3,7 +3,7 @@ module IV
 open Mem
 open Pkg 
 
-let sample (len:UInt32.t): ST (lbytes len)
+let sample (len:UInt32.t): ST (Bytes.lbytes32 len)
     (requires fun h0 -> True)
     (ensures fun h0 r h1 -> h0 == h1)
   = CoreCrypto.random (UInt32.v len)
@@ -25,7 +25,7 @@ type idealRaw = b2t flag_Raw
 // SZ: [len_of_i] was implicit, but it can't be inferred from [i]. Made it explicit
 type rawlen (#ip:ipkg) (len_of_i:ip.t -> keylen) (i:ip.t) = len:keylen {len == len_of_i i}
 
-type raw (ip:ipkg) (len_of_i:ip.t -> keylen) (i:ip.t{ip.registered i}) = lbytes (len_of_i i)
+type raw (ip:ipkg) (len_of_i:ip.t -> keylen) (i:ip.t{ip.registered i}) = Bytes.lbytes32 (len_of_i i)
 
 let shared_footprint_raw (ip:ipkg) (len_of_i:ip.t -> keylen): rset = Set.empty
 
@@ -47,12 +47,12 @@ let create_raw (ip:ipkg) (len_of_i:ip.t -> keylen)
 
 let coerceT_raw (ip:ipkg) (len_of_i:ip.t -> keylen)
   (i: ip.t {ip.registered i /\ (idealRaw ==> ~(ip.honest i))})
-  (len:keylen{len == len_of_i i}) (r:lbytes len):
+  (len:keylen{len == len_of_i i}) (r: Bytes.lbytes32 len):
   GTot (raw ip len_of_i i) = r
 
 let coerce_raw (ip: ipkg) (len_of_i: ip.t -> keylen)
   (i: ip.t {ip.registered i /\ (idealRaw ==> ~(ip.honest i))})
-  (len:keylen {len == len_of_i i}) (r:lbytes len):
+  (len:keylen {len == len_of_i i}) (r: Bytes.lbytes32 len):
   ST (raw ip len_of_i i)
   (requires fun h0 -> True)
   (ensures fun h0 k h1 -> k == coerceT_raw ip len_of_i i len r /\ modifies_none h0 h1)

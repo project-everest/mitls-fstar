@@ -32,8 +32,8 @@ private unfold val trace: s:string -> ST unit
 private unfold let trace = if Flags.debug_Record then print else (fun _ -> ())
 
 
-private assume val p_of_f: f:bytes -> p:Platform.Bytes.bytes { Platform.Bytes.length p = FStar.Bytes.length f } 
-private assume val f_of_p: p:Platform.Bytes.bytes -> f:bytes { Platform.Bytes.length p = FStar.Bytes.length f } 
+private assume val p_of_f: f:bytes -> p:FStar.Bytes.bytes { FStar.Bytes.length p = FStar.Bytes.length f } 
+private assume val f_of_p: p:FStar.Bytes.bytes -> f:bytes { FStar.Bytes.length p = FStar.Bytes.length f } 
 private let ctBytes x = f_of_p (ctBytes x)
 private let parseCT (x: lbytes 1) = parseCT (p_of_f x)
 private let versionBytes x = f_of_p (versionBytes x) 
