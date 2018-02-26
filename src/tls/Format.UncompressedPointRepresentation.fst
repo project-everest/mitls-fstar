@@ -53,7 +53,7 @@ let lbytes_pair_parser (coordinate_length:U32.t)
       (LP.parse_flbytes l)
       (LP.parse_flbytes l)
 
-#reset-options "--using_facts_from '* -LowParse -FStar.Reflection -FStar.Tactics' --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16"
+#reset-options "--using_facts_from '* -FStar.Reflection -FStar.Tactics' --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16"
 private
 inline_for_extraction
 let lbytes_pair_parser32 (coordinate_length:U32.t)
@@ -113,31 +113,32 @@ let uncompressedPointRepresentation_parser32 (coordinate_length:U32.t)
 
 (* Serializers *)
 
-#reset-options "--using_facts_from '* -LowParse -FStar.Reflection -FStar.Tactics' --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16 --z3rlimit 10"
+#reset-options "--using_facts_from '* -FStar.Reflection -FStar.Tactics' --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16 --z3rlimit 10"
 private
 let lbytes_pair_serializer (coordinate_length:U32.t)
   : LP.serializer (lbytes_pair_parser coordinate_length) 
   = let l = U32.v coordinate_length in
-    // lemma_ucp_of_uv_is_injective #coordinate_length;
-    // lemma_ucp_of_uv_of_ucp #coordinate_length;
     let p = LP.parse_flbytes l in
     let s = LP.serialize_flbytes l in
-    assert (LP.Mkparser_kind'?.parser_kind_subkind (LP.get_parser_kind p) == Some LP.ParserStrong);
     LP.serialize_nondep_then p s () p s
 
+#reset-options "--using_facts_from '* -FStar.Reflection -FStar.Tactics' --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16 --z3rlimit 10"
 private
 inline_for_extraction
 let lbytes_pair_serializer32 (coordinate_length:U32.t)
   : LP.serializer32 (lbytes_pair_serializer coordinate_length) 
   = let l = U32.v coordinate_length in
-    LP.serialize32_nondep_then
-      (LP.serialize32_flbytes l) ()
-      (LP.serialize32_flbytes l) ()
+      LP.serialize32_nondep_then
+        (LP.serialize32_flbytes l) ()
+        (LP.serialize32_flbytes l) ()
+#reset-options
 
 
 let uncompressedPointRepresentation_serializer (coordinate_length:U32.t) 
   : LP.serializer (uncompressedPointRepresentation_parser coordinate_length)
-  = let l = U32.v coordinate_length in
+  = lemma_ucp_of_uv_is_injective #coordinate_length;
+    lemma_ucp_of_uv_of_ucp #coordinate_length;
+    let l = U32.v coordinate_length in
     LP.serialize_synth
       (LP.nondep_then (constantByte_parser 4uy) (lbytes_pair_parser coordinate_length))
       (fun (c, uv) -> ucp_of_uv uv)
@@ -150,10 +151,13 @@ let uncompressedPointRepresentation_serializer (coordinate_length:U32.t)
       (fun ucp -> (ucp.legacy_form, (ucp.x, ucp.y)))
       ()
 
+#reset-options "--using_facts_from '* -FStar.Reflection -FStar.Tactics' --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16 --z3rlimit 10"
 inline_for_extraction
 let uncompressedPointRepresentation_serializer32 (coordinate_length:U32.t) 
   : LP.serializer32 (uncompressedPointRepresentation_serializer coordinate_length)
-  = LP.serialize32_synth
+  = lemma_ucp_of_uv_is_injective #coordinate_length;
+    lemma_ucp_of_uv_of_ucp #coordinate_length;
+    LP.serialize32_synth
       _
       (fun (c, uv) -> ucp_of_uv uv)
       _
