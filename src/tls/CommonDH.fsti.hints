@@ -1,14 +1,14 @@
 [
-  "\u000eíh>Æ+ü◊3m'ˆg8\u0012ï",
+  "f=H$Á\u0017∑T” #pç[µ.",
   [
     [
       "CommonDH.is_supported_group",
       1,
       2,
       1,
-      [ "@query" ],
+      [ "@query", "assumption_Format.NamedGroup.namedGroup_haseq" ],
       0,
-      "c8a11fe17c4a112e16f7e4d125656958"
+      "2e3a262d585ffdd9cd7798623663dc56"
     ],
     [
       "CommonDH.rshare",
@@ -20,7 +20,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_59e636272f909930c53ccc0e9facf997"
       ],
       0,
-      "121212c7d4fbd4deb1066996c88c2229"
+      "20804e67b938a563ffe6ea4b845f5263"
     ],
     [
       "CommonDH.dh_responder",
@@ -32,7 +32,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_59e636272f909930c53ccc0e9facf997"
       ],
       0,
-      "52929807ba5832c57b2918473197b1de"
+      "8ab01ab37effef83a91e6fb6f40735ca"
     ],
     [
       "CommonDH.dh_responder",
@@ -44,7 +44,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_59e636272f909930c53ccc0e9facf997"
       ],
       0,
-      "5bc36aeb5bda3e04c231bdfdd5819145"
+      "414e19380e8e7adea49fb5b6aca1ed0f"
     ],
     [
       "CommonDH.dh_responder",
@@ -56,7 +56,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_59e636272f909930c53ccc0e9facf997"
       ],
       0,
-      "ec2d81c00df75f76e1c74ac1d6473e79"
+      "1363aea5146e8007ab2fc3eb79d6e3d9"
     ],
     [
       "CommonDH.keyShareEntry",
@@ -74,7 +74,7 @@
         "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length"
       ],
       0,
-      "fef09af80cecc83e1becd269b16ea542"
+      "6e17b7d1ead88da72400890d6a22e0ff"
     ],
     [
       "CommonDH.keyShareEntry",
@@ -92,7 +92,7 @@
         "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length"
       ],
       0,
-      "8a654d77695b0654710a7c244101c4c0"
+      "0a17677a18524a5cf3313f9198355350"
     ],
     [
       "CommonDH.keyShareEntry",
@@ -110,7 +110,7 @@
         "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length"
       ],
       0,
-      "c156ad126c6105c9c202070a09c228c7"
+      "9030b555244270edf1e2e2fba639c893"
     ],
     [
       "CommonDH.keyShareEntry",
@@ -130,7 +130,7 @@
         "typing_CommonDH.pre_share"
       ],
       0,
-      "ddb89d842a3a30edd2406afa1d37674b"
+      "bf7ffddd501e0e83d9f93dafd7b66378"
     ],
     [
       "CommonDH.uu___is_Share",
@@ -139,7 +139,7 @@
       1,
       [ "@query" ],
       0,
-      "46c12643c7d7871d3b680d12f58e7c96"
+      "49c3c385cb65b68d5d42565d80c0b666"
     ],
     [
       "CommonDH.__proj__Share__item__g",
@@ -152,7 +152,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_419290ad1633289796ca4faa3415e88c"
       ],
       0,
-      "bc057cca43151e42fb36fef988da523d"
+      "92d5f992089101f1edfde26a6827669f"
     ],
     [
       "CommonDH.__proj__Share__item___1",
@@ -167,7 +167,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_419290ad1633289796ca4faa3415e88c"
       ],
       0,
-      "d405bcf1c5f1d2651bc524ab5d5432ca"
+      "593d0827339c95e17b20c46576598e92"
     ],
     [
       "CommonDH.uu___is_UnknownShare",
@@ -176,7 +176,7 @@
       1,
       [ "@query" ],
       0,
-      "f1e79963f9a43b14c4905cc269fe1f50"
+      "4a8000bcbd749986a3f16cf9708cec8e"
     ],
     [
       "CommonDH.__proj__UnknownShare__item__ng",
@@ -190,7 +190,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_c024b0a21c9b8f09957845060b9823fc"
       ],
       0,
-      "c95e40fe5aecd3b125bf4affd8068a34"
+      "9b2cc2a1b21d010b2f2909a32f6467e3"
     ],
     [
       "CommonDH.__proj__UnknownShare__item__b",
@@ -208,7 +208,7 @@
         "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length"
       ],
       0,
-      "e132ca1cfd32d16eab240964a07bbe8e"
+      "b23a95690fc11adc630c2644dbc236bd"
     ],
     [
       "CommonDH.__proj__UnknownShare__item__b",
@@ -222,7 +222,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_c024b0a21c9b8f09957845060b9823fc"
       ],
       0,
-      "a41346a900d5038635357075b7c64c16"
+      "7760e2427133b4f24d25b10366e7faed"
     ],
     [
       "CommonDH.uu___is_ClientKeyShare",
@@ -231,7 +231,7 @@
       1,
       [ "@query" ],
       0,
-      "6da338451e34e299b06c10ee86345090"
+      "d3863e9afaf4c7c128f3942844761846"
     ],
     [
       "CommonDH.__proj__ClientKeyShare__item___0",
@@ -245,7 +245,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_6def7493d05b3fbcbe82678fc375d428"
       ],
       0,
-      "9cb16b64e085e016a7d1d07aec00d0f8"
+      "aadf877f710d9dbff116dfc730f9b6cd"
     ],
     [
       "CommonDH.uu___is_ServerKeyShare",
@@ -254,7 +254,7 @@
       1,
       [ "@query" ],
       0,
-      "73418bac9849f7a59ed51b610a3f74f6"
+      "f57f0ecd587b1d5a81558a09e8ed6ec0"
     ],
     [
       "CommonDH.__proj__ServerKeyShare__item___0",
@@ -268,7 +268,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_9cc025d1d8ed93fe703d76a8ddd03286"
       ],
       0,
-      "8fd436570d594abc7c4b3494aecbcab8"
+      "2607a386ae6fd1b56d3045bc854cf09f"
     ],
     [
       "CommonDH.uu___is_HRRKeyShare",
@@ -277,7 +277,7 @@
       1,
       [ "@query" ],
       0,
-      "3f24e38d8a2d3ef6a318759b900e1dce"
+      "f6b92c898c7838890dbd817ecf490535"
     ],
     [
       "CommonDH.__proj__HRRKeyShare__item___0",
@@ -291,7 +291,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_24f91d366aff84b0df73177175f3b8ef"
       ],
       0,
-      "0045a7a336f90c325a1149d313aa5cd2"
+      "160a7a89a613da54fb44b378b02d3229"
     ],
     [
       "CommonDH.keyShareBytes",
@@ -300,34 +300,7 @@
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "9756e7a139c901c70c9e306130870943"
-    ],
-    [
-      "CommonDH.uu___is_KS_ClientHello",
-      1,
-      2,
-      1,
-      [ "@query" ],
-      0,
-      "8b20ce17f778ef854198c9373d930360"
-    ],
-    [
-      "CommonDH.uu___is_KS_ServerHello",
-      1,
-      2,
-      1,
-      [ "@query" ],
-      0,
-      "170afc05b3814422166f68cb89f55e4b"
-    ],
-    [
-      "CommonDH.uu___is_KS_HRR",
-      1,
-      2,
-      1,
-      [ "@query" ],
-      0,
-      "6243c4fcae3e361a4af3731039864cd0"
+      "f7d7776a40a87c727777e3e3829b7df1"
     ]
   ]
 ]
