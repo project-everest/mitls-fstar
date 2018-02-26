@@ -16,9 +16,6 @@ module MM = FStar.Monotonic.DependentMap
 // module MM = FStar.Monotonic.Map // cwinter: verify
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
-
-// Has been moved to TLSConstants as it appears in config for ticket callbacks
-type pskInfo = TLSConstants.pskInfo
   
 /// Pre-shared key materials for TLS 1.3 handshake  
 ///

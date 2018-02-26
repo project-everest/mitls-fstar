@@ -39,7 +39,7 @@ val entry : i:I.id -> Type0
 
 let nonce (i:I.id) = iv (I.cipherAlg_of_id i)
 
-type adata = b:bytes{Seq.length b <= v aadmax}
+type adata = b:bytes{Bytes.length b <= v aadmax}
 
 type plainLen = l:Plain.plainLen{l + v taglen < pow2 32}
 
@@ -48,7 +48,7 @@ val mk_entry (#i:I.id) :
     ad:adata ->
     #l:plainLen ->
     p:Plain.plain i l ->
-    c:cipher i (Seq.length (Plain.as_bytes p)) ->
+    c:cipher i (Bytes.length (Plain.as_bytes p)) ->
     entry i
 
 val entry_injective (#i:I.id)
@@ -56,7 +56,7 @@ val entry_injective (#i:I.id)
                     (ad:adata) (ad':adata)
                     (#l:plainLen) (#l':plainLen)
                     (p:Plain.plain i l) (p':Plain.plain i l')
-                    (c:cipher i (Seq.length (Plain.as_bytes p))) (c':cipher i (Seq.length (Plain.as_bytes p')))
+                      (c:cipher i (Bytes.length (Plain.as_bytes p))) (c':cipher i (Bytes.length (Plain.as_bytes p')))
   : Lemma (let e  = mk_entry n ad p c in
            let e' = mk_entry n' ad' p' c' in
            (e == e' <==> (n == n' /\ ad == ad' /\ l == l' /\ p == p' /\ c == c')))

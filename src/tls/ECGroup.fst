@@ -176,7 +176,7 @@ let parse_point g b =
   | _ ->
       let open Format.UncompressedPointRepresentation in
       let (bl:UInt32.t) =  UInt32.uint_to_t (op_Multiply 2 (ec_bytelen g)) in
-      match (uncompressedPointRepresentation_parser32 (UInt32.v bl)) b with
+      match (uncompressedPointRepresentation_parser32 bl) b with
       | Some (ucpr, _) -> 
           let e = { ecx = ucpr.x; ecy = ucpr.y } in
           if CoreCrypto.ec_is_on_curve (params_of_group g false) e then
@@ -221,8 +221,8 @@ let serialize_point #g s =
   | _ ->
     let S_CC e = s in
     let open Format.UncompressedPointRepresentation in
-    let l = length e.ecx in
-    assert (length e.ecx = length e.ecy);
+    let l = len e.ecx in
+    assert (len e.ecx = len e.ecy);
     let ucp = { legacy_form = 4uy; x = e.ecx; y = e.ecy} in
     let x = (uncompressedPointRepresentation_serializer32 l) ucp in
     assert (length x = ec_bytelen g);
