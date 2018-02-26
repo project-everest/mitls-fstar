@@ -177,14 +177,17 @@ val ffiAcceptConnected:
   config:config -> ML Connection.connection
 let ffiAcceptConnected ctx snd rcv config = accept ctx snd rcv config
 
-
 /// new QUIC-specific properties
-///
+private let qp_filter (e:Extensions.extension) =
+  match e with
+  | Extensions.E_unknown_extension (hd, _) -> uint16_of_bytes hd = 0x1Aus
+  | _ -> false
+
 let get_transport_parameters (b:bytes) : ML (option bytes) =
   match Extensions.parseOptExtensions Extensions.EM_ClientHello b with
   | Correct (Some el, _) ->
-    (match List.Tot.find Extensions.E_quic_parameters? el with
-    | Some (Extensions.E_quic_parameters b) -> Some b
+    (match List.Tot.find qp_filter el with
+    | Some (Extensions.E_unknown_extension (_, b)) -> Some b
     | _ -> None)
   | Error _ -> trace ("Warning: bad extension list passed to get_transport_parameters"); None
 

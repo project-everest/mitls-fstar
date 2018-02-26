@@ -1080,7 +1080,7 @@ let rec readFragment c i =
       match StAE.decrypt (reader_epoch e) (ct,payload) with
       | None ->
         trace "StAE decrypt failed.";
-        if StAE.tolerate_decrypt_failure #i rd then
+        if Handshake.is_0rtt_offered c.hs && StAE.tolerate_decrypt_failure #i rd then
          begin
           trace "Ignoring the decryption failure (rejected 0-RTT data)";
           readFragment c i

@@ -650,7 +650,7 @@ noeq type extension' (p: (lbytes 2 -> GTot Type0)) =
   | E_extended_ms
   | E_ec_point_format of list point_format
   | E_alpn of alpn
-  | E_quic_parameters of bytes //quicParameters
+//  | E_quic_parameters of bytes //quicParameters
   | E_unknown_extension of ((x: lbytes 2 {p x}) * bytes) (* header, payload *)
 (*
 We do not yet support the extensions below (authenticated but ignored)
@@ -687,7 +687,7 @@ let string_of_extension (#p: (lbytes 2 -> GTot Type0)) (e: extension' p) = match
   | E_extended_ms -> "extended_master_secret"
   | E_ec_point_format _ -> "ec_point_formats"
   | E_alpn _ -> "alpn"
-  | E_quic_parameters _ -> "quic_transport_parameters"
+//  | E_quic_parameters _ -> "quic_transport_parameters"
   | E_unknown_extension (n,_) -> print_bytes n
 
 let rec string_of_extensions (#p: (lbytes 2 -> GTot Type0)) (l: list (extension' p)) = match l with
@@ -712,7 +712,7 @@ let sameExt (#p: (lbytes 2 -> GTot Type0)) (e1: extension' p) (e2: extension' p)
   | E_extended_ms, E_extended_ms -> true
   | E_ec_point_format _, E_ec_point_format _ -> true
   | E_alpn _, E_alpn _ -> true
-  | E_quic_parameters _, E_quic_parameters _ -> true
+//  | E_quic_parameters _, E_quic_parameters _ -> true
   // same, if the header is the same: mimics the general behaviour
   | E_unknown_extension(h1,_), E_unknown_extension(h2,_) -> h1 = h2
   | _ -> false
@@ -729,7 +729,7 @@ let extensionHeaderBytes #p ext =
   | E_supported_groups _          -> twobytes (0x00z, 0x0Az) // 10
   | E_signature_algorithms _      -> twobytes (0x00z, 0x0Dz) // 13
   | E_signature_algorithms_cert _ -> twobytes (0x00z, 50z)   //
-  | E_quic_parameters _           -> twobytes (0x00z, 0x1Az) // 26
+//  | E_quic_parameters _           -> twobytes (0x00z, 0x1Az) // 26
   | E_session_ticket _            -> twobytes (0x00z, 0x23z) // 35
   | E_key_share _                 -> twobytes (0x00z, 51z)   // (was 40)
   | E_pre_shared_key _            -> twobytes (0x00z, 0x29z) // 41
@@ -750,13 +750,46 @@ let unknown_extensions_unknown
 
 type extension = extension' unknown_extensions_unknown
 
+(* Application extensions *)
+private val ext_of_custom_aux: acc:list extension -> el:custom_extensions -> Tot (l:list extension)
+let rec ext_of_custom_aux acc = function
+  | [] -> acc
+  | (h, b) :: t -> ext_of_custom_aux (E_unknown_extension (bytes_of_uint16 h, b) :: acc) t
+
+let ext_of_custom el = List.Tot.rev (ext_of_custom_aux [] el)
+
+private val custom_of_ext_aux: acc:custom_extensions -> l:list extension -> Tot (el:custom_extensions)
+let rec custom_of_ext_aux acc = function
+  | [] -> acc
+  | E_unknown_extension (hd, b) :: t -> custom_of_ext_aux ((uint16_of_bytes hd, b) :: acc) t
+  | _ :: t -> custom_of_ext_aux acc t
+
+let custom_of_ext el = List.Tot.rev (custom_of_ext_aux [] el)
+
+private let app_filter (e:extension) =
+  match e with
+  | E_server_name _
+  | E_signature_algorithms _
+  | E_signature_algorithms_cert _
+  | E_alpn _
+  | E_supported_groups _
+  | E_unknown_extension _ -> true
+  | _ -> false
+
+// Filter for extensions that we expose to the application by nego callback
+let app_ext_filter (ol:option (list extension)) : option (list extension) =
+  match ol with
+  | None -> None
+  | Some l -> Some (List.Tot.filter app_filter l)
+
 val encryptedExtension: extension -> bool
 let encryptedExtension ext =
   match ext with
   | E_server_name _
   | E_supported_groups _
   | E_alpn _
-  | E_quic_parameters _
+//  | E_quic_parameters _
+  | E_unknown_extension _
   | E_early_data _ -> true
   | _ -> false
 
@@ -804,7 +837,7 @@ let rec extensionPayloadBytes = function
   | E_extended_ms                   -> vlbytes 2 empty_bytes
   | E_ec_point_format l             -> vlbytes 2 (ecpfListBytes l)
   | E_alpn l                        -> vlbytes 2 (alpnBytes l)
-  | E_quic_parameters qp            -> vlbytes 2 qp //(quicParametersBytes qp)
+//  | E_quic_parameters qp            -> vlbytes 2 qp //(quicParametersBytes qp)
   | E_unknown_extension (_,b)       -> vlbytes 2 b
 #reset-options
 
@@ -1145,9 +1178,8 @@ let parseExtension mt b =
       if length data < 2 || length data >= 65538 then error "application layer protocol negotiation" else
       mapResult (normallyNone E_alpn) (parseAlpn data)
 
-    | (0x00z, 0x1Az) -> // quic_transport_parameters
+//    | (0x00z, 0x1Az) -> // quic_transport_parameters
       //if length data < 2 || length data >= 65538 then error "quic transport parameters" else
-      Correct (E_quic_parameters data, None)
       //mapResult (normallyNone E_quic_parameters) (parseQuicParameters mt data)
 
     | (0x00z, 0x23z) -> // session_ticket
@@ -1173,7 +1205,9 @@ let parseExtension mt b =
 
     | (0x00z, 0x2cz) -> // cookie
       if length data <= 2 || length data >= 65538 then error "cookie" else
-      Correct (E_cookie data,None)
+      (match vlparse 2 data with
+      | Error z -> Error z
+      | Correct data -> Correct (E_cookie data, None))
 
     | (0x00z, 0x2dz) -> // key ex
       if length data < 2 then error "psk_key_exchange_modes" else
@@ -1284,6 +1318,7 @@ val prepareExtensions:
   k:valid_cipher_suites{List.Tot.length k < 256} ->
   option bytes -> // SNI
   option alpn -> // ALPN
+  custom_extensions ->
   // option quicParameters -> QTP now handled by callback
   bool -> // EMS
   bool ->
@@ -1312,8 +1347,8 @@ private let compute_binder_len (ctr:nat) (pski:pskInfo) =
   let h = PSK.pskInfo_hash pski in
   ctr + 1 + Hashing.Spec.tagLen h
 
-let prepareExtensions minpv pv cs host alps (*qp*) ems sren edi ticket sigAlgs namedGroups ri ks psks =
-    let res = [] in
+let prepareExtensions minpv pv cs host alps custom (*qp*) ems sren edi ticket sigAlgs namedGroups ri ks psks =
+    let res = ext_of_custom custom in
     (* Always send supported extensions.
        The configuration options will influence how strict the tests will be *)
     (* let cri = *)
@@ -1520,7 +1555,7 @@ let serverToNegotiatedExtension cfg cExtL cs ri resuming res sExt =
     | E_session_ticket _ -> res
     | E_alpn sal -> if List.Tot.length sal = 1 then res
       else Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Multiple ALPN selected by server")
-    | E_quic_parameters (*QuicParametersServer _ _ _*) _ -> res // managed by application by callback
+//    | E_quic_parameters (*QuicParametersServer _ _ _*) _ -> res // managed by application by callback
     | E_extended_ms -> res
     | E_ec_point_format spf -> res // Can be sent in resumption, apparently (RFC 4492, 5.2)
     | E_key_share (CommonDH.ServerKeyShare sks) -> res
@@ -1586,7 +1621,7 @@ let clientToServerExtension pv cfg cs ri pski ks resuming cext =
       match common with
       | a :: _ -> Some (E_alpn [a])
       | _ -> None)
-  | E_quic_parameters (*QuicParametersClient qvi qp*) _ -> None
+//  | E_quic_parameters (*QuicParametersClient qvi qp*) _ -> None
     // We now expect the application to respond to QTP by callback
     (* match cfg.quic_parameters, pv with
     | Some (sqvl, sqp), TLS_1p3 ->

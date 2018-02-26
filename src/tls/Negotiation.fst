@@ -454,6 +454,7 @@ let computeOffer r cfg resume nonce ks pskinfo =
       cfg.cipher_suites
       cfg.peer_name
       cfg.alpn
+      cfg.custom_extensions
       // qp
       cfg.extended_master_secret
       cfg.safe_renegotiation
@@ -1083,42 +1084,50 @@ let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify d
       | None, [] -> None
       | None, ee -> Some ee
       in
-    let validSig, schain =
-      match kexAlg mode, optServerCert, optCertVerify, digest with
-      | Kex_DHE, Some c, Some cv, Some digest
-      | Kex_ECDHE, Some c, Some cv, Some digest ->
-        // TODO ensure that valid_offer mandates signature extensions for 1.3
-        let Some sal = find_signature_algorithms mode.n_offer in
-        let sa = Some?.v cv.sig_algorithm in
-        let chain = Some (c, sa) in
-        if List.Tot.mem sa sal then
-          let tbs = to_be_signed mode.n_protocol_version Server None digest in
-          cert_verify_cb ns.cfg (Cert.chain_down c) sa tbs cv.sig_signature, chain
-        else false, None // The server signed with an algorithm we did not offer
-      | Kex_PSK_ECDHE, None, None, None
-      | Kex_PSK, None, None, None -> true, None // FIXME recall chain from PSK
-      | _ -> false, None
-      in
-    trace ("Certificate & signature 1.3 callback result: " ^ (if validSig then "valid" else "invalid"));
-    if validSig then
-      let mode = Mode
-        mode.n_offer
-        mode.n_hrr
-        mode.n_protocol_version
-        mode.n_server_random
-        mode.n_sessionID
-        mode.n_cipher_suite
-        mode.n_pski
-        sexts
-        mode.n_server_share
-        optCertRequest
-        schain
-        mode.n_client_share
-      in
-      HST.op_Colon_Equals ns.state (C_Complete mode ccert);
-      Correct mode
-    else
-      Error(AD_bad_certificate_fatal, "Failed to validate signature or certificate")
+    let nego_cb = ns.cfg.nego_callback in
+    let exts = Extensions.app_ext_filter sexts in
+    let exts_bytes = HandshakeMessages.optionExtensionsBytes exts in
+    trace ("Negotiation callback to process application extensions.");
+    match nego_cb.negotiate nego_cb.nego_context mode.n_protocol_version exts_bytes None with
+    | Nego_abort -> Error(AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "application requested to abort the handshake")
+    | Nego_retry _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "client application requested a server retry")
+    | Nego_accept _ ->
+      let validSig, schain =
+        match kexAlg mode, optServerCert, optCertVerify, digest with
+        | Kex_DHE, Some c, Some cv, Some digest
+        | Kex_ECDHE, Some c, Some cv, Some digest ->
+          // TODO ensure that valid_offer mandates signature extensions for 1.3
+          let Some sal = find_signature_algorithms mode.n_offer in
+          let sa = Some?.v cv.sig_algorithm in
+          let chain = Some (c, sa) in
+          if List.Tot.mem sa sal then
+            let tbs = to_be_signed mode.n_protocol_version Server None digest in
+            cert_verify_cb ns.cfg (Cert.chain_down c) sa tbs cv.sig_signature, chain
+          else false, None // The server signed with an algorithm we did not offer
+        | Kex_PSK_ECDHE, None, None, None
+        | Kex_PSK, None, None, None -> true, None // FIXME recall chain from PSK
+        | _ -> false, None
+        in
+      trace ("Certificate & signature 1.3 callback result: " ^ (if validSig then "valid" else "invalid"));
+      if validSig then
+        let mode = Mode
+          mode.n_offer
+          mode.n_hrr
+          mode.n_protocol_version
+          mode.n_server_random
+          mode.n_sessionID
+          mode.n_cipher_suite
+          mode.n_pski
+          sexts
+          mode.n_server_share
+          optCertRequest
+          schain
+          mode.n_client_share
+        in
+        HST.op_Colon_Equals ns.state (C_Complete mode ccert);
+        Correct mode
+      else
+        Error(AD_bad_certificate_fatal, "Failed to validate signature or certificate")
 
 (* SERVER *)
 
@@ -1419,6 +1428,7 @@ let server_ClientHello #region ns offer log =
         | Correct v -> List.Tot.fold_left accum_string_of_pv "offered versions" v);
   match HST.op_Bang ns.state with
   | S_HRR o1 hrr ->
+    trace ("Processing second offer based on existing HRR state (staeful HRR).");
     let o2 = offer in
     if
       o1.ch_protocol_version = o2.ch_protocol_version &&
@@ -1440,16 +1450,14 @@ let server_ClientHello #region ns offer log =
       | Correct (ServerMode m cert _) ->
         trace ("negotiated after HRR "^string_of_pv m.n_protocol_version^" "^string_of_ciphersuite m.n_cipher_suite);
         let nego_cb = ns.cfg.nego_callback in
-        let unk_ext = (* List.Tot.filter Extensions.E_unknown_extension? *) o2.ch_extensions in
-        let ext_bytes = HandshakeMessages.optionExtensionsBytes unk_ext in
-        match nego_cb.server_nego nego_cb.server_nego_context m.n_protocol_version ext_bytes (Some empty_bytes) with
+        let exts = Extensions.app_ext_filter offer.ch_extensions in
+        let exts_bytes = HandshakeMessages.optionExtensionsBytes exts in
+        trace ("Negotiation callback to handle extra extensions.");
+        match nego_cb.negotiate nego_cb.nego_context m.n_protocol_version exts_bytes (Some empty_bytes) with
         | Nego_accept sexts ->
-          (match Extensions.parseOptExtensions Extensions.EM_ServerHello sexts with
-          | Error z -> Error (AD_internal_error, "server negotiation callback returned ill-formatted extra extensions")
-          | Correct (el, _) ->
-            let el = match el with | None -> [] | Some l -> l in
-            HST.op_Colon_Equals ns.state (S_ClientHello m cert);
-            Correct (ServerMode m cert el))
+          let el = Extensions.ext_of_custom sexts in
+          HST.op_Colon_Equals ns.state (S_ClientHello m cert);
+          Correct (ServerMode m cert el)
         | _ ->
           trace ("Application requested to abort the handshake after internal HRR.");
           Error (AD_handshake_failure, "application aborted the handshake by callback")
@@ -1464,10 +1472,11 @@ let server_ClientHello #region ns offer log =
         match Ticket.check_cookie c with
         | None -> trace ("WARNING: ignorning invalid cookie "^(hex_of_bytes c)); None
         | Some (hrr, digest, extra) ->
-          trace ("Loading cookie "^(hex_of_bytes c));
+          trace ("Loaded stateless retry cookie "^(hex_of_bytes c));
           let hrr = { hrr with hrr_extensions =
             (Extensions.E_cookie c) :: hrr.hrr_extensions; } in
           // Overwrite the current transcript digest with values from cookie
+          trace ("Overwriting the transcript digest with CH1 hash "^(hex_of_bytes digest));
           HandshakeLog.load_stateless_cookie log hrr digest;
           Some extra // for the server nego callback
       in
@@ -1488,9 +1497,11 @@ let server_ClientHello #region ns offer log =
       sm
     | Correct (ServerMode m cert _) ->
       let nego_cb = ns.cfg.nego_callback in
-      let unk_ext = (* List.Tot.filter Extensions.E_unknown_extension? *) offer.ch_extensions in
-      let ext_bytes = HandshakeMessages.optionExtensionsBytes unk_ext in
-      match nego_cb.server_nego nego_cb.server_nego_context m.n_protocol_version ext_bytes previous_cookie with
+      let exts = Extensions.app_ext_filter offer.ch_extensions in
+      let exts_bytes = HandshakeMessages.optionExtensionsBytes exts in
+      trace ("Negotiation callback to handle extra extensions and query for stateless retry.");
+      trace ("Application data in cookie: "^(match previous_cookie with | Some c -> hex_of_bytes c | _ -> "none"));
+      match nego_cb.negotiate nego_cb.nego_context m.n_protocol_version exts_bytes previous_cookie with
       | Nego_abort ->
         trace ("Application requested to abort the handshake.");
         Error (AD_handshake_failure, "application aborted the handshake by callback")
@@ -1508,14 +1519,10 @@ let server_ClientHello #region ns offer log =
           (Extensions.E_cookie cookie) :: hrr.hrr_extensions; } in
         ns.state := (S_HRR offer hrr);
         Correct (ServerHelloRetryRequest hrr)
-      | Nego_accept sext ->
+      | Nego_accept sexts ->
         trace ("negotiated "^string_of_pv m.n_protocol_version^" "^string_of_ciphersuite m.n_cipher_suite);
-        match Extensions.parseOptExtensions Extensions.EM_ServerHello sext with
-        | Error z -> Error (AD_internal_error, "server negotiation callback returned ill-formatted extra extensions")
-        | Correct (el, _) ->
-          let el = match el with | None -> [] | Some l -> l in
-          ns.state := S_ClientHello m cert;
-          Correct (ServerMode m cert el)
+        ns.state := S_ClientHello m cert;
+        Correct (ServerMode m cert (Extensions.ext_of_custom sexts))
 
 let share_of_serverKeyShare (ks:CommonDH.serverKeyShare) : share =
   let CommonDH.Share g gy = ks in (| g, gy |)

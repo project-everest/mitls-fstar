@@ -173,7 +173,10 @@ let create_ticket t =
 let create_cookie (hrr:HandshakeMessages.hrr) (digest:bytes) (extra:bytes) =
   let hrb = (vlbytes 3 (HandshakeMessages.helloRetryRequestBytes hrr)) in
   let plain = hrb @| (vlbytes 1 digest) @| (vlbytes 2 extra) in
-  ticket_encrypt plain
+  let cipher = ticket_encrypt plain in
+  trace ("Encrypting cookie: "^(hex_of_bytes plain));
+  trace ("Encrypted cookie:  "^(hex_of_bytes cipher));
+  cipher
 
 let check_cookie b =
   trace ("Decrypting cookie "^(hex_of_bytes b));
@@ -181,17 +184,19 @@ let check_cookie b =
   match ticket_decrypt b with
   | None -> trace ("Cookie decryption failed."); None
   | Some plain ->
+    trace ("Plain cookie: "^(hex_of_bytes plain));
     match vlsplit 3 plain with
-    | Error _ -> None
+    | Error _ -> trace ("Cookie decode error: HRR"); None
     | Correct (hrb, b) ->
+      let (_, hrb) = split hrb 4ul in // Skip handshake tag and vlbytes 3
       match HandshakeMessages.parseHelloRetryRequest hrb with
-      | Error _ -> None
+      | Error (_, m) -> trace ("Cookie decode error: parse HRR, "^m); None
       | Correct hrr ->
         match vlsplit 1 b with
-        | Error _ -> None
+        | Error _ -> trace ("Cookie decode error: digest"); None
         | Correct (digest, b) ->
           match vlparse 2 b with
-          | Error _ -> None
+          | Error _ -> trace ("Cookie decode error: application data"); None
           | Correct extra ->
             Some (hrr, digest, extra)
 

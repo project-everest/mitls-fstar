@@ -28,6 +28,12 @@ typedef enum {
   TLS_1p3 = 4
 } mitls_version;
 
+typedef struct {
+  uint16_t ext_type;
+  const char *ext_data;
+  size_t ext_data_len;
+} mitls_extension;
+
 typedef enum {
   TLS_hash_MD5 = 0,
   TLS_hash_SHA1 = 1,
@@ -61,8 +67,9 @@ typedef struct {
 // Invoked when a TLS clients receives a new TLS ticket
 typedef void (MITLS_CALLCONV *pfn_FFI_ticket_cb)(void *cb_state, const char *sni, const mitls_ticket *ticket);
 
-// Invoked when a TLS server is negotiating extensions and stateless retry
-typedef mitls_nego_action (MITLS_CALLCONV *pfn_FFI_server_nego_cb)(void *cb_state, mitls_version ver, const char *cexts, size_t cexts_len, /*out*/ char **custom_exts, /*out*/size_t* custom_exs_len, /*inout*/ char **cookie, size_t *cookie_len);
+// Invoked when a TLS server is negotiating extensions and stateless retry,
+// and when a TLS client is validating the server's negotiated extensions
+typedef mitls_nego_action (MITLS_CALLCONV *pfn_FFI_nego_cb)(void *cb_state, mitls_version ver, const char *exts, size_t exts_len, /*out*/ mitls_extension **custom_exts, /*out*/size_t *custom_exts_len, /*inout*/ char **cookie, size_t *cookie_len);
 
 #define MAX_CHAIN_LEN 65536
 #define MAX_SIGNATURE_LEN 8192
@@ -110,8 +117,9 @@ extern int MITLS_CALLCONV FFI_mitls_configure_signature_algorithms(/* in */ mitl
 extern int MITLS_CALLCONV FFI_mitls_configure_named_groups(/* in */ mitls_state *state, const char * ng);
 extern int MITLS_CALLCONV FFI_mitls_configure_alpn(/* in */ mitls_state *state, const char *apl);
 extern int MITLS_CALLCONV FFI_mitls_configure_early_data(/* in */ mitls_state *state, uint32_t max_early_data);
+extern int MITLS_CALLCONV FFI_mitls_configure_custom_extensions(/* in */ mitls_state *state, const mitls_extension *exts, size_t exts_len);
 extern int MITLS_CALLCONV FFI_mitls_configure_ticket_callback(mitls_state *state, void *cb_state, pfn_FFI_ticket_cb ticket_cb);
-extern int MITLS_CALLCONV FFI_mitls_configure_server_nego_callback(mitls_state *state, void *cb_state, pfn_FFI_server_nego_cb nego_cb);
+extern int MITLS_CALLCONV FFI_mitls_configure_nego_callback(mitls_state *state, void *cb_state, pfn_FFI_nego_cb nego_cb);
 extern int MITLS_CALLCONV FFI_mitls_configure_cert_callbacks(mitls_state *state, void *cb_state, mitls_cert_cb *cert_cb);
 
 // Close a miTLS session - either after configure or connect
@@ -174,8 +182,6 @@ typedef mitls_ticket quic_ticket;
 
 typedef struct {
   int is_server;
-  const uint32_t *supported_versions;
-  size_t supported_versions_len;
 
   const char *alpn; // Colon separated list of application-level protocols, or NULL
   const char *cipher_suites; // Colon separated list of ciphersuite or NULL
@@ -186,10 +192,12 @@ typedef struct {
   // only used by the client
   const char *host_name; // Client only, sent in SNI. Can pass NULL for server
   const quic_ticket *server_ticket; // May be NULL
+  const mitls_extension *exts; // Array of custom extensions to offer, may be NULL
+  size_t exts_len;
 
   void *callback_state; // Passed back as the first argument of callbacks, may be NULL
   pfn_FFI_ticket_cb ticket_callback; // May be NULL
-  pfn_FFI_server_nego_cb nego_callback; // May be NULL
+  pfn_FFI_nego_cb nego_callback; // May be NULL
   mitls_cert_cb *cert_callbacks; // May be NULL
 
   // only used by the server

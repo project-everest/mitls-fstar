@@ -1846,19 +1846,27 @@ noeq type ticket_cb = {
   new_ticket: ticket_cb_fun;
 }
 
-type server_nego_action =
-  | Nego_abort: server_nego_action
-  | Nego_retry: cookie_extra:bytes -> server_nego_action
-  | Nego_accept: extra_ext:bytes -> server_nego_action
+type custom_extension = UInt16.t * b:bytes {length b < 65533}
+type custom_extensions = l:list custom_extension{List.Tot.length l < 32}
 
-type server_nego_cb_fun =
-  (FStar.Dyn.dyn -> pv: protocolVersion -> client_ext: bytes -> cookie: option bytes -> ST server_nego_action
+(* Helper functions for the C API to construct the list from array *)
+let empty_custom_extensions () : list custom_extension = []
+let add_custom_extension (l:list custom_extension) (hd:UInt16.t) (b:bytes {length b < 65533}) =
+  (hd, b) :: l
+
+type nego_action =
+  | Nego_abort: nego_action
+  | Nego_retry: cookie_extra: bytes -> nego_action
+  | Nego_accept: extra_ext: custom_extensions -> nego_action
+
+type nego_cb_fun =
+  (FStar.Dyn.dyn -> pv: protocolVersion -> client_ext: bytes -> cookie: option bytes -> ST nego_action
     (requires fun _ -> True)
     (ensures fun h0 r h1 -> Nego_retry? r ==> None? cookie /\ modifies_none h0 h1))
 
-noeq type server_nego_cb = {
-  server_nego_context: FStar.Dyn.dyn;
-  server_nego: server_nego_cb_fun;
+noeq type nego_cb = {
+  nego_context: FStar.Dyn.dyn;
+  negotiate: nego_cb_fun;
 }
 
 type cert_repr = b:bytes {length b < 16777216}
@@ -1936,6 +1944,7 @@ noeq type config : Type0 = {
     (* Client side *)
     hello_retry: bool;          // honor hello retry requests from the server
     offer_shares: list valid_namedGroup;
+    custom_extensions: custom_extensions;
 
     (* Server side *)
     check_client_version_in_pms_for_old_tls: bool;
@@ -1950,7 +1959,7 @@ noeq type config : Type0 = {
 
     (* Callbacks *)
     ticket_callback: ticket_cb;   // Ticket callback, called when issuing or receiving a new ticket
-    nego_callback: server_nego_cb;// Callback to decide stateless retry and negotiate extra extensions
+    nego_callback: nego_cb;// Callback to decide stateless retry and negotiate extra extensions
     cert_callbacks: cert_cb;      // Certificate callbacks, called on all PKI-related operations
 
     alpn: option alpn;   // ALPN offers (for client) or preferences (for server)

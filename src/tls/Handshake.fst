@@ -102,6 +102,8 @@ let version_of (s:hs) = Nego.version s.nego
 let resumeInfo_of (s:hs) = Nego.resume s.nego
 let get_mode (s:hs) = Nego.getMode s.nego
 let is_server_hrr (s:hs) = Nego.is_server_hrr s.nego
+let is_0rtt_offered (s:hs) =
+  let mode = get_mode s in Nego.zeroRTToffer mode.Nego.n_offer
 let epochs_of (s:hs) = s.epochs
 
 (* WIP on the handshake invariant
@@ -1165,7 +1167,7 @@ let recv_ccs (hs:hs) =
     trace "recv_ccs";
     // Draft 22 CCS during HRR
     // Because of stateless HRR, this may also happen as the very first message before CH (!!!)
-    if Nego.is_hrr hs.nego || !hs.state = S_Idle then
+    if Nego.is_hrr hs.nego || S_Idle? !hs.state then
      begin
       trace "IGNORING CCS (workaround for implementations that send CCS after HRR)";
       InAck false false

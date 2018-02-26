@@ -354,6 +354,14 @@ let ffiSetEarlyData cfg x =
   max_early_data = if x = 0ul then None else Some x;
   }
 
+val ffiAddCustomExtension: cfg:config -> UInt16.t -> bytes -> ML config
+let ffiAddCustomExtension cfg h b =
+  trace ("offering custom extension "^(hex_of_bytes (bytes_of_uint16 h)));
+  trace ("extension contents: "^(hex_of_bytes b));
+  { cfg with
+  custom_extensions = (h, b) :: cfg.custom_extensions
+  }
+
 val ffiSetTicketKey: a:string -> k:bytes -> ML bool
 let ffiSetTicketKey a k =
   (match findsetting a aeads with
@@ -423,9 +431,9 @@ let ffiSetTicketCallback (cfg:config) (ctx:FStar.Dyn.dyn) (cb:ticket_cb_fun) =
   trace "Setting a new ticket callback.";
   {cfg with ticket_callback = {ticket_context = ctx; new_ticket = cb}}
 
-let ffiSetNegoCallback (cfg:config) (ctx:FStar.Dyn.dyn) (cb:server_nego_cb_fun) =
+let ffiSetNegoCallback (cfg:config) (ctx:FStar.Dyn.dyn) (cb:nego_cb_fun) =
   trace "Setting a new server negotiation callback.";
-  {cfg with nego_callback = {server_nego_context = ctx; server_nego = cb}}
+  {cfg with nego_callback = {nego_context = ctx; negotiate = cb}}
 
 let ffiSetCertCallbacks (cfg:config) (cb:cert_cb) =
   trace "Setting up certificate callbacks.";
