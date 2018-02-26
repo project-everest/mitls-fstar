@@ -17,34 +17,6 @@ open TLSInfo
 abstract type key = bytes //18-02-14 TODO length
 let coerce (k:bytes) : key = k
 
-private val p_hash_int: 
-  a: macAlg -> 
-  secret: lbytes (macKeySize a) -> 
-  seed: bytes -> 
-  int -> int -> bytes -> bytes -> ST bytes
-  (requires (fun _ -> True))
-  (ensures (fun h0 _ h1 -> modifies Set.empty h0 h1))
-let rec p_hash_int alg secret seed len it aPrev acc =
-  let aCur = HMAC.tls_mac alg secret aPrev in
-  let pCur = HMAC.tls_mac alg secret (aCur @| seed) in
-  if it = 1 then
-    let hs = macSize alg in
-    let r = len % hs in
-    let (pCur,_) = split pCur r in
-    acc @| pCur
-  else
-    p_hash_int alg secret seed len (it-1) aCur (acc @| pCur)
-
-val p_hash: 
-  a: macAlg -> 
-  secret: lbytes (macKeySize a) -> 
-  seed: bytes -> len:nat -> St (lbytes len)
-let p_hash alg secret seed len =
-  let hs = macSize alg in
-  let it = (len/hs)+1 in
-  let r = p_hash_int alg secret seed len it seed empty_bytes in
-  assume(length r = len); //18-02-14 TODO
-  r
 
 (* SSL3 *)
 (* 17-02-02 deprecated, and not quite typechecking...
@@ -103,9 +75,13 @@ let ssl_verifyCertificate hashAlg ms log  =
 
 (* TLS 1.0--1.1 *) 
 
-val p_hash_int: a:macAlg -> k:lbytes (macKeySize a) -> bytes -> int -> int -> bytes -> bytes -> ST bytes
+private val p_hash_int: 
+  a: macAlg -> 
+  secret: lbytes (macKeySize a) -> 
+  seed: bytes -> 
+  int -> int -> bytes -> bytes -> ST bytes
   (requires (fun _ -> True))
-  (ensures (fun h0 _ h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
+  (ensures (fun h0 _ h1 -> modifies Set.empty h0 h1))
 let rec p_hash_int alg secret seed len it aPrev acc =
   let aCur = HMAC.tls_mac alg secret aPrev in
   let pCur = HMAC.tls_mac alg secret (aCur @| seed) in
@@ -117,11 +93,37 @@ let rec p_hash_int alg secret seed len it aPrev acc =
   else
     p_hash_int alg secret seed len (it-1) aCur (acc @| pCur)
 
-val p_hash: macAlg -> bytes -> bytes -> int -> St bytes
+val p_hash: 
+  a: macAlg -> 
+  secret: lbytes (macKeySize a) -> 
+  seed: bytes -> len:nat -> St (lbytes len)
 let p_hash alg secret seed len =
   let hs = macSize alg in
   let it = (len/hs)+1 in
-  p_hash_int alg secret seed len it seed empty_bytes
+  let r = p_hash_int alg secret seed len it seed empty_bytes in
+  assume(length r = len); //18-02-14 TODO
+  r
+
+// cwinter: verify?
+// val p_hash_int: a:macAlg -> k:lbytes (macKeySize a) -> bytes -> int -> int -> bytes -> bytes -> ST bytes
+//   (requires (fun _ -> True))
+//   (ensures (fun h0 _ h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
+// let rec p_hash_int alg secret seed len it aPrev acc =
+//   let aCur = HMAC.tls_mac alg secret aPrev in
+//   let pCur = HMAC.tls_mac alg secret (aCur @| seed) in
+//   if it = 1 then
+//     let hs = macSize alg in
+//     let r = len % hs in
+//     let (pCur,_) = split_ pCur r in
+//     acc @| pCur
+//   else
+//     p_hash_int alg secret seed len (it-1) aCur (acc @| pCur)
+
+// val p_hash: macAlg -> bytes -> bytes -> int -> St bytes
+// let p_hash alg secret seed len =
+//   let hs = macSize alg in
+//   let it = (len/hs)+1 in
+//   p_hash_int alg secret seed len it seed empty_bytes
 
 // cwinter: verify:
 // val tls_prf: lbytes (hashSize TLSConstants.MD5SHA1) -> bytes -> bytes -> len:nat -> St (lbytes len)

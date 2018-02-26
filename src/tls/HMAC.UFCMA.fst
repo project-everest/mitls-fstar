@@ -330,13 +330,13 @@ let unit_test(): St bool =
   let here = new_colored_region root hs_color in
   let b0 = 
     let a = Hashing.SHA1 in 
-    test a here empty_bytes (createBytes (Hashing.Spec.tagLen a) 42z) in
+    test a here empty_bytes (Bytes.create_ (Hashing.Spec.tagLen a) 42z) in
   let b1 = 
     let a = Hashing.SHA1 in 
-    test a here empty_bytes (createBytes (Hashing.Spec.tagLen a) 42z) in
+    test a here empty_bytes (Bytes.create_ (Hashing.Spec.tagLen a) 42z) in
   let b2 = 
     let a = Hashing.SHA1 in 
-    test a here empty_bytes (createBytes (Hashing.Spec.tagLen a) 42z) in
+    test a here empty_bytes (Bytes.create_ (Hashing.Spec.tagLen a) 42z) in
   b0 && b1 && b2
   // nothing bigger? 
 

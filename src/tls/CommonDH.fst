@@ -204,9 +204,9 @@ type corrupt_dhi i =
 //     HST.witnessed (MM.contains log i false)
 //   else True)
 
-// let lemma_honest_corrupt (i:pre_dhi{registered_dhi i})
-//   : Lemma (honest_dhi i <==> ~(corrupt_dhi i))
-//   = admit()
+let lemma_honest_corrupt (i:pre_dhi{registered_dhi i})
+  : Lemma (honest_dhi i <==> ~(corrupt_dhi i))
+  = admit()
 
 let is_honest_dhi i =
   if Flags.model then
@@ -506,7 +506,6 @@ let lemma_honest_not_dishonest (i:id)
     cut(dishonest_share i ==> False)
    end
   else ()
-*)
 
 #set-options "--z3rlimit 100"
 
@@ -570,6 +569,7 @@ let register #g gx =
       gx
    end
   else gx
+*)
 
 let parse g x =
   match g with
