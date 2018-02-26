@@ -14,6 +14,8 @@ open TLSInfo
 //open CoreCrypto
 
 
+module U32 = FStar.UInt32
+
 abstract type key = bytes //18-02-14 TODO length
 let coerce (k:bytes) : key = k
 
@@ -77,57 +79,34 @@ let ssl_verifyCertificate hashAlg ms log  =
 
 private val p_hash_int: 
   a: macAlg -> 
-  secret: lbytes (macKeySize a) -> 
+  secret: lbytes32 (macKeySize a) -> 
   seed: bytes -> 
-  int -> int -> bytes -> bytes -> ST bytes
+  U32.t -> U32.t -> bytes -> bytes -> ST bytes
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> modifies Set.empty h0 h1))
 let rec p_hash_int alg secret seed len it aPrev acc =
   let aCur = HMAC.tls_mac alg secret aPrev in
   let pCur = HMAC.tls_mac alg secret (aCur @| seed) in
-  if it = 1 then
+  if it = 1ul then
     let hs = macSize alg in
-    let r = len % hs in
-    let (pCur,_) = split_ pCur r in
+    let r = U32.(len %^ hs) in
+    let (pCur,_) = split pCur r in
     acc @| pCur
   else
-    p_hash_int alg secret seed len (it-1) aCur (acc @| pCur)
+    p_hash_int alg secret seed len U32.(it -^ 1ul) aCur (acc @| pCur)
 
 val p_hash: 
   a: macAlg -> 
-  secret: lbytes (macKeySize a) -> 
-  seed: bytes -> len:nat -> St (lbytes len)
+  secret: lbytes32 (macKeySize a) -> 
+  seed: bytes -> len:U32.t -> St (lbytes32 len)
 let p_hash alg secret seed len =
   let hs = macSize alg in
-  let it = (len/hs)+1 in
+  let it = U32.((len /^ hs) +^ 1ul) in
   let r = p_hash_int alg secret seed len it seed empty_bytes in
-  assume(length r = len); //18-02-14 TODO
+  assume(Bytes.len r = len); //18-02-14 TODO
   r
-
-// cwinter: verify?
-// val p_hash_int: a:macAlg -> k:lbytes (macKeySize a) -> bytes -> int -> int -> bytes -> bytes -> ST bytes
-//   (requires (fun _ -> True))
-//   (ensures (fun h0 _ h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
-// let rec p_hash_int alg secret seed len it aPrev acc =
-//   let aCur = HMAC.tls_mac alg secret aPrev in
-//   let pCur = HMAC.tls_mac alg secret (aCur @| seed) in
-//   if it = 1 then
-//     let hs = macSize alg in
-//     let r = len % hs in
-//     let (pCur,_) = split_ pCur r in
-//     acc @| pCur
-//   else
-//     p_hash_int alg secret seed len (it-1) aCur (acc @| pCur)
-
-// val p_hash: macAlg -> bytes -> bytes -> int -> St bytes
-// let p_hash alg secret seed len =
-//   let hs = macSize alg in
-//   let it = (len/hs)+1 in
-//   p_hash_int alg secret seed len it seed empty_bytes
-
-// cwinter: verify:
-// val tls_prf: lbytes (hashSize TLSConstants.MD5SHA1) -> bytes -> bytes -> len:nat -> St (lbytes len)
-val tls_prf: bytes -> bytes -> bytes -> int -> St bytes
+  
+val tls_prf: lbytes32 (hashSize TLSConstants.MD5SHA1) -> bytes -> bytes -> len:U32.t -> St (lbytes32 len)
 let tls_prf secret label seed len =
   //18-02-14 fixed broken implementation, but currently unused and untested. 
   let l_s = length secret in
@@ -136,8 +115,8 @@ let tls_prf secret label seed len =
   let newseed = label @| seed in
   let hmd5  = p_hash (HMac MD5) secret1 newseed len in
   let hsha1 = p_hash (HMac SHA1) secret2 newseed len in
-  assume(length hmd5 = len /\ length hsha1 = len); // cwinter: verify
-  xor (UInt32.uint_to_t len) hmd5 hsha1
+  assume(Bytes.len hmd5 = len /\ Bytes.len hsha1 = len);
+  xor len hmd5 hsha1
 
 let tls_client_label = utf8_encode "client finished"
 let tls_server_label = utf8_encode "server finished"
@@ -149,9 +128,9 @@ let tls_finished_label =
   | Client -> tls_client_label
   | Server -> tls_server_label
 
-let verifyDataLen = 12
+let verifyDataLen = 12ul
 
-val tls_verifyData: lbytes (hashSize TLSConstants.MD5SHA1) -> role -> bytes -> St (lbytes verifyDataLen)
+val tls_verifyData: lbytes32 (hashSize TLSConstants.MD5SHA1) -> role -> bytes -> St (lbytes32 verifyDataLen)
 let tls_verifyData ms role data =
   let md5hash  = Hashing.OpenSSL.compute MD5 data in
   let sha1hash = Hashing.OpenSSL.compute SHA1 data in
@@ -162,8 +141,8 @@ let tls_verifyData ms role data =
 
 val tls12prf: 
   cs: cipherSuite {Some? (prfMacAlg_of_ciphersuite_aux cs)} -> 
-  ms: lbytes (macKeySize (prfMacAlg_of_ciphersuite cs)) -> 
-  bytes -> bytes -> len:nat -> St (lbytes len)
+  ms: lbytes32 (macKeySize (prfMacAlg_of_ciphersuite cs)) -> 
+  bytes -> bytes -> len:U32.t -> St (lbytes32 len)
 let tls12prf cs ms label data len =
   let prfMacAlg = prfMacAlg_of_ciphersuite cs in
   p_hash prfMacAlg ms (label @| data) len
@@ -173,8 +152,8 @@ let tls12prf' macAlg ms label data len =
 
 val tls12VerifyData: 
   cs: cipherSuite {Some? (prfMacAlg_of_ciphersuite_aux cs)} -> 
-  ms: lbytes (macKeySize (prfMacAlg_of_ciphersuite cs)) -> 
-  role -> bytes -> St (lbytes verifyDataLen)
+  ms: lbytes32 (macKeySize (prfMacAlg_of_ciphersuite cs)) -> 
+  role -> bytes -> St (lbytes32 verifyDataLen)
 let tls12VerifyData cs ms role data =
   let verifyDataHashAlg = verifyDataHashAlg_of_ciphersuite cs in
   let hashed = Hashing.OpenSSL.compute verifyDataHashAlg data in
@@ -196,7 +175,7 @@ let verifyData (pv,cs) (secret:key) (role:role) (data:bytes) =
     | TLS_1p0 | TLS_1p1 -> tls_verifyData     secret role data
     | TLS_1p2           -> tls12VerifyData cs secret role data
 
-val prf: (protocolVersion * cipherSuite) -> bytes -> bytes -> bytes -> int -> St bytes
+val prf: (protocolVersion * cipherSuite) -> bytes -> bytes -> bytes -> U32.t -> St bytes
 let prf (pv,cs) secret (label:bytes) data len =
   match pv with
   //| SSL_3p0           -> ssl_prf     secret       data len
@@ -205,7 +184,7 @@ let prf (pv,cs) secret (label:bytes) data len =
 
 // Extended Master Secret
 // data is hashed using the PV/CS-specific hash function
-val prf_hashed: (protocolVersion * cipherSuite) -> bytes -> bytes -> bytes -> int -> St bytes
+val prf_hashed: (protocolVersion * cipherSuite) -> bytes -> bytes -> bytes -> U32.t -> St bytes
 let prf_hashed (pv, cs) secret label data len =
   let data = match pv with
     | TLS_1p2 ->
