@@ -94,8 +94,8 @@ type ticket =
 // Currently we use dummy indexes until we can serialize them properly
 let dummy_rmsid ae h =
   let li = {
-    li_sh_cr = CC.random 32;
-    li_sh_sr = CC.random 32;
+    li_sh_cr = Bytes.create 32ul 0z;
+    li_sh_sr = Bytes.create 32ul 0z;
     li_sh_ae = ae;
     li_sh_hash = h;
     li_sh_psk = None;
@@ -110,7 +110,7 @@ let dummy_rmsid ae h =
 
 // Dummy msId TODO serialize and encrypt them properly
 let dummy_msId pv cs ems =
-  StandardMS PMS.DummyPMS (CC.random 64) (kefAlg pv cs ems)
+  StandardMS PMS.DummyPMS (Bytes.create 64ul 0z) (kefAlg pv cs ems)
 
 let parse (b:bytes) =
   trace ("Parsing ticket "^(hex_of_bytes b));
