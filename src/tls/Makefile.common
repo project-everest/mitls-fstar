@@ -25,7 +25,7 @@ CACHE_DIR=cache.$(FLAVOR)
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe --cache_dir $(CACHE_DIR) --cache_checked_modules $(OTHERFLAGS)
 
 # --use_two_phase_tc true
-VFLAGS=--use_hints --use_hint_hashes --record_hints --warn_error -271 --cache_dir cache.verify
+VFSTAR=$(FSTAR_HOME)/bin/fstar.exe --cache_dir cache.verify --cache_checked_modules $(OTHERFLAGS) --use_hints --use_hint_hashes --record_hints --warn_error -271
 # in the past, we also used --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection
 
 EXTRACT_DIR=extract/$(FLAVOR)
@@ -143,10 +143,10 @@ depend: .depend.$(FLAVOR) .depend.verify
 
 %.checked: 
 	@echo === Producing $@ ...
-	$(FSTAR) $(VFLAGS) $(addprefix --include , $(INCLUDE_PATHS)) $<
+	$(VFSTAR) $(addprefix --include , $(INCLUDE_PATHS)) $<
 	@touch $@
 
-verify-all: .depend.verify $(addprefix $(CACHE_DIR)/, $(addsuffix .checked, $(notdir $(ALL_FST_FILES))))
+verify-all: .depend.verify $(addprefix cache.verify/, $(addsuffix .checked, $(notdir $(ALL_FST_FILES))))
 
 verify-all-here: $(addsuffix -ver, $(wildcard *.fst))
 	@echo Done.
@@ -156,7 +156,7 @@ verify-all-here: $(addsuffix -ver, $(wildcard *.fst))
 # %.fsti-ver:
 # %.fst-ver: $(CACHE_DIR)/%.fst.checked:
 # 	@echo === Verifying $@ ...
-# 	$(FSTAR) $(VFLAGS) \
+# 	$(V	FSTAR) \
 # 		$(addprefix --include , $(INCLUDE_PATHS)) \
 # 		$(subst $(CACHE_DIR)/,,$(subst .lax,,$<)) \
 #         $(subst -ver,,$@)
