@@ -2,19 +2,17 @@ EXTRACT='Nothing'
 FLAVOR=generic
 
 all:
-	rm -f .depend.$(FLAVOR)
 	$(MAKE) verify-all 
 	$(MAKE) ocaml-all 
 	$(MAKE) kremlin-all
 
 ocaml-clean-depend:
-	rm -f .depend.OCaml 
+	rm -f .depend.OCaml
 
 kremlin-clean-depend:
 	rm -f .depend.Kremlin
 
 ocaml-all: ocaml-clean-depend
-
 kremlin-all: kremlin-clean-depend
 
 include Makefile.common
@@ -30,7 +28,7 @@ quic-%:
 
 test: ocaml-test kremlin-test ocaml-test quic-test
 
-clean: ocaml-clean kremlin-clean quic-clean
+clean: ocaml-clean kremlin-clean quic-clean ocaml-clean-depend kremlin-clean-depend
 	rm -rf $(EXTRACT_DIR)/OCaml $(EXTRACT_DIR)/copied \
 	rm -rf $(EXTRACT_DIR)/Kremlin $(EXTRACT_DIR)/OCaml $(EXTRACT_DIR)/copied \
 	$(EXTRACT_DIR)/Kremlin-{Internal-Test,Library}/{,*/}*.{c,h,o} \

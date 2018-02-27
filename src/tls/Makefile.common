@@ -4,7 +4,6 @@ MITLS_HOME?=../..
 KREMLIN_HOME	?= ../../../kremlin
 MLCRYPTO_HOME	?= ../../../MLCrypto
 
-# CF: we will need to switch from ideal-flags to concrete-flags for Kremlin extraction.
 INCLUDE_PATHS= \
 	$(FSTAR_HOME)/contrib/CoreCrypto/fst/ \
 	$(HACL_HOME)/secure_api \
@@ -16,9 +15,13 @@ INCLUDE_PATHS= \
 	$(KREMLIN_HOME)/kremlib \
 	$(MITLS_HOME)/libs/ffi \
     $(MITLS_HOME)/src/lowparse \
-	./ideal-flags \
-	./concrete-flags \
-    ./concrete-flags/$(FLAVOR)
+	concrete-flags/$(FLAVOR)
+
+ifeq ($(FLAVOR),generic)
+INCLUDE_PATHS+=ideal-flags
+else 
+INCLUDE_PATHS+=concrete-flags 
+endif
 
 CACHE_DIR=cache
 
@@ -104,7 +107,7 @@ EXTRACT_DIR=extract/$(FLAVOR)
 ROOTS ?= TLS.fst QUIC.fst Test.Main.fst 
 
 .depend.$(FLAVOR):
-	@echo === Producing $@ ...
+	@echo === Calculating $(FLAVOR) dependencies ...
 	mkdir -p $(EXTRACT_DIR)
 	$(FSTAR) --cache_dir $(CACHE_DIR) --odir $(EXTRACT_DIR) \
 		 --dep full \
