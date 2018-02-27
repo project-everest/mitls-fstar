@@ -64,6 +64,7 @@ val namedGroup_parser_kind: LP.parser_kind
 
 val namedGroup_parser: LP.parser namedGroup_parser_kind namedGroup
 
+inline_for_extraction
 val namedGroup_parser32: LP.parser32 namedGroup_parser
 
 
@@ -71,4 +72,5 @@ val namedGroup_parser32: LP.parser32 namedGroup_parser
 
 val namedGroup_serializer: LP.serializer namedGroup_parser
 
+inline_for_extraction
 val namedGroup_serializer32: LP.serializer32 namedGroup_serializer
