@@ -170,8 +170,8 @@ val targetLength : i:id2 -> r:range -> Pure nat
   (requires
     fst r >= 0 /\ snd r <= max_TLSPlaintext_fragment_length /\
     (match aeAlg_of_id i with
-    | MACOnly hash -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + hashLen hash)
-    | MtE a _ -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i))
+    | MACOnly hash -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + UInt32.v (hashLen hash))
+    | MtE a _ -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + UInt32.v (macSize (macAlg_of_id i)))
     | AEAD _ _ -> fst r = snd r))
   (ensures (fun clen ->
     valid_clen i clen /\
@@ -184,8 +184,8 @@ let targetLength i (l,h) =
     cut(l <= h); cut(l >= 0);
     cut(h <= max_TLSPlaintext_fragment_length);
     let hLen = hashLen hash in
-    cut(hLen >= 0);
-    let prePad = h + hLen in
+    cut(UInt32.v hLen >= 0);
+    let prePad = h + UInt32.v hLen in
     cut(prePad >= h); cut(prePad >= 0);
     let padLen = minimalPadding i prePad in
     prePad + padLen
@@ -193,16 +193,16 @@ let targetLength i (l,h) =
     let ivL = ivSize i in
     cut(ivL >= 0);
     let macLen = macSize (macAlg_of_id i) in
-    cut(macLen >= 0);
-    let prePad = h + macLen in
+    cut(UInt32.v macLen >= 0);
+    let prePad = h + UInt32.v macLen in
     let padLen = minimalPadding i prePad in
     minimalPadding_at_least_fixedPadSize i prePad;
-    let clen = ivL + macLen + padLen + h in
-    cut(clen - ivL - macLen - maxPadSize i <= h);
+    let clen = ivL + UInt32.v macLen + padLen + h in
+    cut(clen - ivL - UInt32.v macLen - maxPadSize i <= h);
     cut(h <= max_TLSPlaintext_fragment_length);
-    cut(clen - ivL - macLen >= fixedPadSize i + l);
+    cut(clen - ivL - UInt32.v macLen >= fixedPadSize i + l);
     cut(l >= 0);
-    cut(clen - ivL - macLen - fixedPadSize i >= 0);
+    cut(clen - ivL - UInt32.v macLen - fixedPadSize i >= 0);
     cut(valid_clen i clen);
     clen
   | AEAD aeadAlg _ ->
@@ -267,8 +267,8 @@ val targetLength_at_most_max_TLSCiphertext_fragment_length: i:id2
    -> r:range{
        snd r <= max_TLSPlaintext_fragment_length /\
        (match aeAlg_of_id i with
-       | MACOnly hash -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + hashLen hash)
-       | MtE a _ -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i))
+       | MACOnly hash -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + UInt32.v (hashLen hash))
+       | MtE a _ -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + UInt32.v (macSize (macAlg_of_id i)))
        | AEAD _ _ -> fst r = snd r)}
    -> Lemma (targetLength i r <= max_TLSCiphertext_fragment_length)
 #set-options "--z3rlimit 60"
@@ -282,8 +282,8 @@ val targetLength_converges: i:id2
   -> r:range{
       snd r <= max_TLSPlaintext_fragment_length /\
       (match aeAlg_of_id i with
-      | MACOnly hash -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + hashLen hash)
-      | MtE a _ -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i))
+      | MACOnly hash -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + UInt32.v (hashLen hash))
+      | MtE a _ -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + UInt32.v (macSize (macAlg_of_id i)))
       | AEAD _ _ -> fst r = snd r)}
   -> Lemma (targetLength i r = targetLength i (cipherRangeClass i (targetLength i r)))
 // SZ: This used to be slow without hints, see Issue #164
@@ -298,7 +298,7 @@ let targetLength_converges i r =
 val rangeClass: i:id2 -> r:range -> HyperStack.All.ML (r':range
   { snd r <= max_TLSPlaintext_fragment_length
     /\ ((~(AEAD? (aeAlg_of_id i))
-       /\ snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i)))
+       /\ snd r - fst r <= maxPadSize i - minimalPadding i (snd r + UInt32.v (macSize (macAlg_of_id i))))
     \/ (AEAD? (aeAlg_of_id i) /\ fst r = snd r))
     /\ r' = cipherRangeClass i (targetLength i r) })
 let rangeClass i (r:range) =
@@ -306,7 +306,7 @@ let rangeClass i (r:range) =
         Error.unexpected "[rangeClass] given an invalid algorithm identifier"
     else
         if (snd r <= max_TLSPlaintext_fragment_length &&
-            (not(AEAD? (aeAlg_of_id i)) && snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i))
+            (not(AEAD? (aeAlg_of_id i)) && snd r - fst r <= maxPadSize i - minimalPadding i (snd r + UInt32.v (macSize (macAlg_of_id i)))
             || (AEAD? (aeAlg_of_id i) && fst r = snd r)))
         then
             let tlen = targetLength i r in
@@ -315,7 +315,7 @@ let rangeClass i (r:range) =
             | MtE (Stream _) _
             | MtE (Block _) _ ->
                 let ivL = ivSize i in
-                let macLen = macSize (macAlg_of_id i) in
+                let macLen = UInt32.v (macSize (macAlg_of_id i)) in
                 let minPad, maxPad = minMaxPad i in
                 let max = tlen - ivL - macLen - minPad in
                 if tlen <= max_TLSCiphertext_fragment_length then
