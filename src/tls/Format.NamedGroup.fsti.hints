@@ -1,0 +1,214 @@
+[
+  "\u001bBÈXÎ*Ã˜\u001fò\u0011ÿÖHQ$",
+  [
+    [
+      "Format.NamedGroup.namedGroup",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt16.t_haseq" ],
+      0,
+      "d75102aa8418d42c2c0984056a5c9936"
+    ],
+    [
+      "Format.NamedGroup.namedGroup",
+      2,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt16.t_haseq" ],
+      0,
+      "39406f433426ef97d18adc5846efc638"
+    ],
+    [
+      "Format.NamedGroup.namedGroup",
+      3,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt16.t_haseq" ],
+      0,
+      "d2250a61e5a49dc600b7d1af82a1b701"
+    ],
+    [
+      "Format.NamedGroup.namedGroup",
+      4,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t_haseq",
+        "haseqFormat.NamedGroup_Tm_refine_309007fede2e6280af138bf4d7b7716c",
+        "haseqFormat.NamedGroup_Tm_refine_6c2e8ca2b11524e51167718c61d7ccfe",
+        "haseqFormat.NamedGroup_Tm_refine_9ae3c9ac57ad5e44cdb3bb7614447a7f"
+      ],
+      0,
+      "3259ddd6661acffe19d964e5b8b0ba77"
+    ],
+    [
+      "Format.NamedGroup.uu___is_SECP256R1",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "31d6eec6835f6734573aefb256600221"
+    ],
+    [
+      "Format.NamedGroup.uu___is_SECP384R1",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "c4c2555bf2dee22a7e29428009c807f9"
+    ],
+    [
+      "Format.NamedGroup.uu___is_SECP521R1",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "6e27a9a0207352205bc975c9c075a57d"
+    ],
+    [
+      "Format.NamedGroup.uu___is_X25519",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "6da148e70146e7a24e431a52987dd009"
+    ],
+    [
+      "Format.NamedGroup.uu___is_X448",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "b47247ae55efd5aaddfcb1cc9f670df0"
+    ],
+    [
+      "Format.NamedGroup.uu___is_FFDHE2048",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "41ca7f205d234831cbd1105bfa56750e"
+    ],
+    [
+      "Format.NamedGroup.uu___is_FFDHE3072",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "0cf5e1431bdca96e966f364af43c782f"
+    ],
+    [
+      "Format.NamedGroup.uu___is_FFDHE4096",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "50ffd9c75d3c749289f335b02e7859a1"
+    ],
+    [
+      "Format.NamedGroup.uu___is_FFDHE6144",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "57dc99ef69ff7d1158366221c704fb59"
+    ],
+    [
+      "Format.NamedGroup.uu___is_FFDHE8192",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "31205cc460d1dbe8f0bfed1a1233b44c"
+    ],
+    [
+      "Format.NamedGroup.uu___is_FFDHE_PRIVATE_USE",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "f3fed9eed618293d9c5d4fe7880fa862"
+    ],
+    [
+      "Format.NamedGroup.__proj__FFDHE_PRIVATE_USE__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Format.NamedGroup.FFDHE_PRIVATE_USE",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Format.NamedGroup_Tm_refine_d1f5a2381ef75c2a9f61e17bda93e690"
+      ],
+      0,
+      "5d281e08394e54420f2e572636e3dc83"
+    ],
+    [
+      "Format.NamedGroup.uu___is_ECDHE_PRIVATE_USE",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "724ee8c92f42ade82e977f9ba739ad3c"
+    ],
+    [
+      "Format.NamedGroup.__proj__ECDHE_PRIVATE_USE__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Format.NamedGroup.ECDHE_PRIVATE_USE",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Format.NamedGroup_Tm_refine_db417a3ade6cf95714f1f1ef30b2b1ee"
+      ],
+      0,
+      "c6f491c5a1d69b8abdefdc159be0af7e"
+    ],
+    [
+      "Format.NamedGroup.uu___is_UNKNOWN",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "145fc359aa08d038e67f8c42abee37b0"
+    ],
+    [
+      "Format.NamedGroup.__proj__UNKNOWN__item___0",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt16.t_haseq" ],
+      0,
+      "7c3614aac51c372274d0007cd37a8332"
+    ],
+    [
+      "Format.NamedGroup.__proj__UNKNOWN__item___0",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Format.NamedGroup.UNKNOWN",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Format.NamedGroup_Tm_refine_a54bdafe09cd84d95e70ab4c7b8306f3"
+      ],
+      0,
+      "d118594e56531d2739d554fdb7b73875"
+    ]
+  ]
+]

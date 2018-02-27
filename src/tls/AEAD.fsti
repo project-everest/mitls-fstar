@@ -10,6 +10,7 @@ module U32 = FStar.UInt32
 module U128 = FStar.UInt128
 module Plain = Crypto.Plain
 
+open FStar.Bytes
 open FStar.UInt32
 open Mem
 open Pkg
@@ -32,14 +33,16 @@ val keylen   : I.id -> U32.t
 
 val statelen : I.id -> U32.t
 
-type cipher (i:I.id) (l:nat{l + v taglen < pow2 32}) = lbytes (uint_to_t l +^ taglen)
+type cipher (i:I.id) (l:nat{l + v taglen < pow2 32}) = lbytes (l + (UInt32.v taglen))
+
+type cipher32 (i:I.id) (l:U32.t) = lbytes32 (l +^ taglen)
 
 inline_for_extraction
 val entry : i:I.id -> Type0
 
 let nonce (i:I.id) = iv (I.cipherAlg_of_id i)
 
-type adata = b:bytes{Bytes.length b <= v aadmax}
+type adata = b:bytes{length b <= v aadmax}
 
 type plainLen = l:Plain.plainLen{l + v taglen < pow2 32}
 
@@ -48,7 +51,7 @@ val mk_entry (#i:I.id) :
     ad:adata ->
     #l:plainLen ->
     p:Plain.plain i l ->
-    c:cipher i (Bytes.length (Plain.as_bytes p)) ->
+    c:cipher i (length (Plain.as_bytes p)) ->
     entry i
 
 val entry_injective (#i:I.id)
@@ -56,7 +59,7 @@ val entry_injective (#i:I.id)
                     (ad:adata) (ad':adata)
                     (#l:plainLen) (#l':plainLen)
                     (p:Plain.plain i l) (p':Plain.plain i l')
-                      (c:cipher i (Bytes.length (Plain.as_bytes p))) (c':cipher i (Bytes.length (Plain.as_bytes p')))
+                      (c:cipher i (length (Plain.as_bytes p))) (c':cipher i (length (Plain.as_bytes p')))
   : Lemma (let e  = mk_entry n ad p c in
            let e' = mk_entry n' ad' p' c' in
            (e == e' <==> (n == n' /\ ad == ad' /\ l == l' /\ p == p' /\ c == c')))

@@ -6,7 +6,7 @@ MLCRYPTO_HOME	?= ../../../MLCrypto
 
 # CF: we will need to switch from ideal-flags to concrete-flags for Kremlin extraction.
 INCLUDE_PATHS= \
-	$(FSTAR_HOME)/ucontrib/CoreCrypto/fst/ \
+	$(FSTAR_HOME)/contrib/CoreCrypto/fst/ \
 	$(HACL_HOME)/secure_api \
 	$(HACL_HOME)/secure_api/utils \
 	$(HACL_HOME)/secure_api/concrete_specializations \
@@ -22,15 +22,22 @@ INCLUDE_PATHS= \
 
 CACHE_DIR=cache.$(FLAVOR)
 
+<<<<<<< HEAD
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe --silent --cache_dir $(CACHE_DIR) --cache_checked_modules $(OTHERFLAGS)
 # cwinter: add this? --use_two_phase_tc true 
 VFLAGS=--use_hints --use_hint_hashes --record_hints
 # --warn-error -240 --warn_error -271
+=======
+FSTAR=$(FSTAR_HOME)/bin/fstar.exe --cache_dir $(CACHE_DIR) --cache_checked_modules $(OTHERFLAGS)
+
+# --use_two_phase_tc true
+VFSTAR=$(FSTAR_HOME)/bin/fstar.exe --cache_dir cache.verify --cache_checked_modules $(OTHERFLAGS) --use_hints --use_hint_hashes --record_hints --warn_error -271
+>>>>>>> e2582af07424d8188ff1699dcefec3f1ad4affc8
 # in the past, we also used --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection
 
 EXTRACT_DIR=extract/$(FLAVOR)
 
-IKVER=$(addsuffix .fst,Mem Pkg Token.UF1CMA HMAC.UFCMA IV AEAD.Pkg Idx Pkg.Tree KDF KDF.Rekey Extract0 Extract1.PRF Extract1.ODH Extract1 Extract2 KeySchedule)
+IKVER=$(addsuffix .fst,Mem Pkg Token.UF1CMA HMAC.UFCMA IV AEAD.Pkg Idx Pkg.Tree KDF KDF.Rekey Extract0 Extract1.PRF Extract1.ODH Extract1 Extract2)
 
 # Add more roots here!
 ROOTS ?= $(IKVER) Record.fst Handshake.fst 
@@ -108,16 +115,32 @@ ROOTS ?= TLS.fst QUIC.fst Test.Main.fst
 	mkdir -p $(EXTRACT_DIR)
 	$(FSTAR) --odir $(EXTRACT_DIR) --lax --dep full --extract $(EXTRACT) $(addprefix --include , $(INCLUDE_PATHS)) $(ROOTS) > .depend.$(FLAVOR)
 
+<<<<<<< HEAD
 .depend.verify.$(FLAVOR):
 #	@echo === Producing $@ ...
 	mkdir -p $(EXTRACT_DIR)
 	$(FSTAR) --odir $(EXTRACT_DIR) --dep full $(addprefix --include , $(INCLUDE_PATHS)) $(ROOTS) > .depend.verify.$(FLAVOR)
 	sed -e "s/source:/source.verify:/g" -i .depend.verify.$(FLAVOR) # cwinter: squelches warnings about re-defined .source dependency rules
+=======
+.depend.verify:
+	@echo === Producing $@ ...
+	mkdir -p cache.verify
+	$(FSTAR) --cache_dir cache.verify --odir cache.verify \
+		 --dep full \
+		 $(addprefix --include , $(INCLUDE_PATHS)) \
+		 $(ROOTS) > .depend.verify
+	sed -e "s/source/source.verify/g" -i.bak .depend.verify # cwinter: squelches warnings about re-defined .source dependency rules
+	sed -e "s/\.krml:/\.nokrml:/g" -i.bak .depend.verify # cwinter: avoid overwriting kremlin-dependencies
+	sed -e "s/\.ml:/\.noml:/g" -i.bak .depend.verify # cwinter: avoid overwriting OCaml-dependencies
+	sed -e "s/ALL_FST_FILES/ALL_FST_FILES_VERIFY/g" -i.bak .depend.verify
+	sed -e "s/ALL_ML_FILES/ALL_ML_FILES_VERIFY/g" -i.bak .depend.verify
+	sed -e "s/ALL_KRML_FILES/ALL_KRML_FILES_VERIFY/g" -i.bak .depend.verify
+>>>>>>> e2582af07424d8188ff1699dcefec3f1ad4affc8
 
-depend: .depend.$(FLAVOR) .depend.verify.$(FLAVOR)
+depend: .depend.$(FLAVOR) .depend.verify
 
 -include .depend.$(FLAVOR) 
--include .depend.verify.$(FLAVOR)
+-include .depend.verify
 
 # the touch is needed because make may decide to invoke fstar on this
 # target because the timestamp on, say, the .fst file changed, and
@@ -134,22 +157,26 @@ depend: .depend.$(FLAVOR) .depend.verify.$(FLAVOR)
 	@touch $@
 
 %.checked: 
+<<<<<<< HEAD
 #	@echo === Producing $@ ...
 	$(FSTAR) $(VFLAGS) $(addprefix --include , $(INCLUDE_PATHS)) $<
+=======
+	@echo === Producing $@ ...
+	$(VFSTAR) $(addprefix --include , $(INCLUDE_PATHS)) $<
+>>>>>>> e2582af07424d8188ff1699dcefec3f1ad4affc8
 	@touch $@
 
-verify-all: .depend.verify.$(FLAVOR) $(addprefix $(CACHE_DIR)/, $(addsuffix .checked, $(notdir $(ALL_FST_FILES))))
+verify-all: .depend.verify $(addprefix cache.verify/, $(addsuffix .checked, $(notdir $(ALL_FST_FILES_VERIFY))))
 
 verify-all-here: $(addsuffix -ver, $(wildcard *.fst))
 	@echo Done.
 
 # typechecks one specific  file (not its dependencies),
 # but still produces a .checked file; this is convenient but not safe.
-
 # %.fsti-ver:
 # %.fst-ver: $(CACHE_DIR)/%.fst.checked:
 # 	@echo === Verifying $@ ...
-# 	$(FSTAR) $(VFLAGS) \
+# 	$(V	FSTAR) \
 # 		$(addprefix --include , $(INCLUDE_PATHS)) \
 # 		$(subst $(CACHE_DIR)/,,$(subst .lax,,$<)) \
 #         $(subst -ver,,$@)

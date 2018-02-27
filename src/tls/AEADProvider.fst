@@ -187,12 +187,10 @@ let gen (i:id) (r:rgn) : ST (state i Writer)
   | LowCProvider ->
     assume false; // TODO
     let kv: key i = CC.random (CC.aeadKeySize (alg i)) in
-    let salt: salt i = CC.random (salt_length i) in
     let st = CAEAD.aead_create (alg i) CAEAD.ValeAES kv in
     (st, kv), salt
   | LowProvider ->
     assume false; // TODO
-    let salt : salt i = CC.random (salt_length i) in
     let st = AE.gen i tls_region r in
     st, salt
 

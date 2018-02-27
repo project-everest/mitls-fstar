@@ -414,7 +414,7 @@ let create #rid r =
 *)
 
 private let group_of_valid_namedGroup
-  (g:valid_namedGroup)
+  (g:CommonDH.supportedNamedGroup)
   : CommonDH.group
   = Some?.v (CommonDH.group_of_namedGroup g)
 
@@ -434,7 +434,7 @@ private let keygen (g:CommonDH.group)
   : St (g:CommonDH.group & CommonDH.pre_keyshare g)
   = (| g, CommonDH.keygen g |)
 
-assume val ks_client_init: ogl: option (list valid_namedGroup)
+assume val ks_client_init: ogl: option (CommonDH.supportedNamedGroups)
   -> ST (option CommonDH.clientKeyShare)
   (requires fun h0 -> True)
   (ensures fun h0 ogxl h1 ->

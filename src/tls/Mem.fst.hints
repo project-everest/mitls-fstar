@@ -310,15 +310,11 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "equation_Mem.is_tls_rgn", "equation_Mem.rgn",
-        "equation_Mem.tls_rgn", "function_token_typing_Mem.tls_region",
-        "refinement_interpretation_Mem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
-        "refinement_interpretation_Mem_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
-        "typing_Mem.is_tls_rgn"
+        "@query", "equation_Flags.model", "equation_Mem.model",
+        "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "693edd79e25640b4f5bc90dc5abf5872"
+      "a2fe47f2083528129ec083674d9a2087"
     ],
     [
       "Mem.modifies_mem_table",
@@ -337,9 +333,12 @@
       1,
       2,
       1,
-      [ "@query" ],
+      [
+        "@query", "equation_Flags.model", "equation_Mem.model",
+        "projection_inverse_BoxBool_proj_0"
+      ],
       0,
-      "a8f25a2ed02f49969a4a5b0eb7c19158"
+      "ff23ead05431490d76437a631e8a7389"
     ],
     [
       "Mem.mem_disjoint",

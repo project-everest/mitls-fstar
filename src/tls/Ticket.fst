@@ -24,7 +24,7 @@ type hostname = string
 type tlabel (h:hostname) = t:bytes * tls13:bool
 private let region:rgn = new_region tls_tables_region
 private let tickets : MM.t region hostname tlabel (fun _ -> True) =
-  MM.alloc #region #hostname #tlabel #(fun _ -> True)
+  MM.alloc () // #region #hostname #tlabel #(fun _ -> True)
 
 #set-options "--lax"
 
@@ -37,8 +37,6 @@ unfold val trace: s:string -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
 unfold let trace = if Flags.debug_NGO then print else (fun _ -> ())
-
-private let region:rgn = new_region tls_tables_region
 
 let ticketid (a:aeadAlg) : St (AE.id) =
   assume false;

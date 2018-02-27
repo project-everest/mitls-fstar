@@ -15,6 +15,8 @@
 *)
 module AEAD.Pkg
 
+open FStar.Bytes
+
 open Mem
 open Pkg
 
@@ -54,7 +56,7 @@ let keylen = function
   | AES_GCM128 -> 32ul
   | AES_GCM256 -> 48ul
 
-type keyrepr (u:info) = lbytes (keylen u.alg)
+type keyrepr (u:info) = lbytes32 (keylen u.alg)
 
 // FIXME(adl) 16/02/18 had to remove abstract to avoid F* crash
 

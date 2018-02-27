@@ -36,7 +36,7 @@ assume val coerce_salt:
   #u: usage d ->
   i: id ->
   a: info ->
-  raw: lbytes (secret_len a) ->
+  raw: lbytes32 (secret_len a) ->
   salt d u i
 
 #set-options "--lax" 

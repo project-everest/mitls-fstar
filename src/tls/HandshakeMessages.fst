@@ -91,124 +91,17 @@ let pinverse_ht x = ()
 
 /// Messages
 
-//  https://tlswg.github.io/tls13-spec/#rfc.section.4.1.2
-noeq type ch = {
-  ch_protocol_version: protocolVersion;  // max supported version up to TLS_1p2 (TLS 1.3 uses the supported_versions extension)
-  ch_client_random: TLSInfo.random;
-  ch_sessionID: sessionID;
-  ch_cipher_suites: k:valid_cipher_suites{List.Tot.length k < 256};
-  ch_compressions: cl:list compression{List.Tot.length cl > 0 /\ List.Tot.length cl < 256};
-  ch_extensions: option (ce:list extension{List.Tot.length ce < 256});
-}
-
 let ch_is_resumption {ch_sessionID = sid} = length sid > 0
-let bindersLen_of_ch ch =
-  match ch.ch_extensions with
-  | None -> 0
-  | Some el -> Extensions.bindersLen el
 
-// ServerHello: supporting two different syntaxes depending on the embedded pv
-// https://tools.ietf.org/html/rfc5246#section-7.4.1.2
-// https://tlswg.github.io/tls13-spec/#rfc.section.4.1.3
-noeq type sh = {
-  sh_protocol_version: protocolVersion;
-  sh_server_random: TLSInfo.random;
-  sh_sessionID: option sessionID;  // omitted in TLS 1.3
-  sh_cipher_suite: valid_cipher_suite;
-  sh_compression: option compression; // omitted in TLS 1.3
-  sh_extensions: option (se:list extension{List.Tot.length se < 256});
-}
-
-(* Hello retry request *)
-noeq type hrr = {
-  hrr_protocol_version: protocolVersion;
-  hrr_cipher_suite: valid_cipher_suite;
-  hrr_extensions: he:list extension{List.Tot.length he < 256};
-}
-
-// NewSessionTicket payload for RFC5077 (https://tools.ietf.org/html/rfc5077)
-type sticket = {
-  sticket_lifetime: UInt32.t;
-  sticket_ticket: b:bytes{length b < 65536};
-}
-
-// NewSessionTicket payload for TLS 1.3 (https://tlswg.github.io/tls13-spec/#NSTMessage)
-noeq type sticket13 = {
-  ticket13_lifetime: UInt32.t;
-  ticket13_age_add: UInt32.t;
-  ticket13_nonce: b:bytes{length b > 0 /\ length b < 256};
-  ticket13_ticket: b:bytes{length b < 65535};
-  ticket13_extensions: es: list extension;
-}
-
-type ee = l:list extension{List.Tot.length l < 256}
-
-
-(** CertificateRequest for TLS 1.0-1.2
- https://tools.ietf.org/html/rfc2246#section-7.4.4
- https://tools.ietf.org/html/rfc4346#section-7.4.4
- https://tools.ietf.org/html/rfc5246#section-7.4.4
-*)
-type cr = {
-  cr_cert_types: cl:list certType{0 < List.Tot.length cl /\ List.Tot.length cl < 256};
-  cr_sig_algorithms: option signatureSchemeList; // None for 1.0,1.1; Some for 1.2
-  cr_certificate_authorities: dl:list dn{List.Tot.length dl < 65536};
-}
-type cr13 = cr //17-05-05 TBC
-
-// Certificate payloads (the format changed deeply)
-noeq type crt = {
-  crt_chain: Cert.chain
-}
-noeq type crt13 = {
-  crt_request_context: b:bytes {length b <= 255};
-  crt_chain13: Cert.chain13;
-}
-
-noeq type kex_s =
-| KEX_S_DHE of (g:CommonDH.group & CommonDH.pre_share g)
-| KEX_S_RSA of (pk:CoreCrypto.rsa_key{False}) // Unimplemented
-
-noeq type kex_s_priv =
-| KEX_S_PRIV_DHE of (g:CommonDH.group & CommonDH.ikeyshare g)
-| KEX_S_PRIV_RSA of CoreCrypto.rsa_key
-
-// REMARK: The signature algorithm field is absent in digitally-signed structs in TLS < 1.2
-type signature = {
-  sig_algorithm: option signatureScheme;
-  sig_signature: b:bytes{length b < 65536}
-}
-
-noeq type ske = {
-  ske_kex_s: kex_s;
-  ske_signed_params: signature
-}
-
-type kex_c =
-| KEX_C_DHE of b:bytes{length b < 65536}
-| KEX_C_ECDHE of b:bytes{length b < 256}
-| KEX_C_RSA of b:bytes{length b < 4096}
-| KEX_C_DH
-
-noeq type cke = {
-  cke_kex_c: kex_c
-}
-
-type cv = sig:signature
-
-noeq type sc = {
-  sc_configuration_id: configurationId;
-  sc_expiration_date: lbytes 4; // SZ: TODO: Use UInt32.t
-  sc_named_group: namedGroup;
-  sc_server_key: kex_c; // JK : use another type ?
-  sc_early_data_type: earlyDataType;
-  sc_configuration_extensions: (l:list configurationExtension{List.Tot.length l < 65536});
-}
-
-//17-03-11 Finished payload, carrying a fixed-length MAC; share with binders?
-type fin = {
-  fin_vd: b:bytes{length b < 65536};
-}
+// cwinter: sc is unused?
+// noeq type sc = {
+//   sc_configuration_id: configurationId;
+//   sc_expiration_date: lbytes 4; // SZ: TODO: Use UInt32.t
+//   sc_named_group: namedGroup;
+//   sc_server_key: kex_c; // JK : use another type ?
+//   sc_early_data_type: earlyDataType;
+//   sc_configuration_extensions: (l:list configurationExtension{List.Tot.length l < 65536});
+// }
 
 /// Post-Handshake Messages 
 

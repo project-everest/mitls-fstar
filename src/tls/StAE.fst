@@ -144,7 +144,7 @@ let entry (i:id) =
    else False
 
 private
-let ptext (#i:id) (ent:entry i): Tot (C.fragment i) =
+let ptext (#i:id) (ent:entry i): Tot (Content.fragment i) =
   if is_stream i then
     StreamAE.Entry?.p #i ent
   else
@@ -326,8 +326,8 @@ val coerce: parent:rgn -> i:stae_id{~(authId i)} -> keyBytes i -> ST (writer i)
 #set-options "--z3rlimit 100"
 let coerce parent i kiv =
   if is_stream i then
-    let kv,iv = FStar.Bytes.split_ kiv (CoreCrypto.aeadKeySize (Stream.alg i)) in
-    Stream () (Stream.coerce parent i kv iv)
+    let kv,iv = FStar.Bytes.split_ kiv (CoreCrypto.aeadKeySize (StreamAE.alg i)) in
+    Stream () (StreamAE.coerce parent i kv iv)
   else
     let kv,iv = FStar.Bytes.split_ kiv (CoreCrypto.aeadKeySize (StLHAE.alg i)) in
     StLHAE () (StLHAE.coerce parent i kv iv)
@@ -391,7 +391,7 @@ let encrypt #i e f =
       begin
       lemma_fragments_snoc_commutes e h0 h1 (StreamAE.Entry l c f);
       fragments_prefix_stable e h1;
-      mr_witness #(log_region e) (Stream.ilog (StreamAE.State?.log s))
+      mr_witness #(log_region e) (StreamAE.ilog (StreamAE.State?.log s))
 		 (fragments_prefix e (fragments e h1))
       end;
     c

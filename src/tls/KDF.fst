@@ -19,7 +19,7 @@ open Pkg.Tree
 module MM = FStar.Monotonic.Map
 module HS = FStar.HyperStack
 
-let sample (len:UInt32.t): ST (lbytes len)
+let sample (len:UInt32.t): ST (lbytes32 len)
     (requires fun h0 -> True)
     (ensures fun h0 r h1 -> h0 == h1)
   = CoreCrypto.random (UInt32.v len)
@@ -91,8 +91,8 @@ noeq private type table (d:nat) (u:usage d) (i:id{registered i}) =
     t:MM.t r (domain d u i) (kdf_range d u i) (fun _ -> True) ->
     table d u i
 
-let secret_len (a:info) : keylen = UInt32.uint_to_t (Hashing.Spec.tagLen a.ha)
-type real_secret (i:id{registered i}) = lbytes (secret_len (get_info i))
+let secret_len (a:info) : keylen = Hashing.Spec.tagLen a.ha
+type real_secret (i:id{registered i}) = lbytes32 (secret_len (get_info i))
 
 // id vs regid?
 type secret (d:nat) (u:usage d) (i:id{registered i}) =
@@ -166,7 +166,7 @@ type local_kdf_invariant (#d:nat) (#u:usage d) (#i:id{registered i}) (k:secret d
             let i'': i:id{registered i /\ (Pkg?.ideal pkg' ==> ~(honest i))} = i' in
             let raw' = hkdf_derive_label_spec (get_info i).ha raw lbl ctx in
             exists (a':Pkg?.info pkg' i').
-            Pkg?.len pkg' a' == UInt32.uint_to_t (Hashing.Spec.tagLen (get_info i).ha) /\
+            Pkg?.len pkg' a' == Hashing.Spec.tagLen (get_info i).ha /\
             k' == Pkg?.coerceT pkg' i'' a' raw')
       else True)))
 
@@ -214,7 +214,7 @@ val coerceT:
   u: usage d ->
   i: id{registered i /\ ~(safeKDF d i)} ->
   a: info {a == get_info i} (* run-time *) ->
-  repr: lbytes (secret_len a) ->
+  repr: lbytes32 (secret_len a) ->
   GTot (secret d u i)
 let coerceT d u i a repr =
   corrupt_secret #d #u #i repr
@@ -224,7 +224,7 @@ val coerce:
   u: usage d ->
   i: id{registered i /\ ~(safeKDF d i)} ->
   a: info {a == get_info i} (* run-time *) ->
-  repr: lbytes (secret_len a) ->
+  repr: lbytes32 (secret_len a) ->
   ST (secret d u i)
   (requires fun h0 -> True)
   (ensures fun h0 k h1 -> modifies_none h0 h1
@@ -519,7 +519,7 @@ let derive #d #t #i k a lbl ctx a' =
    end
   else
    begin
-    let raw = HKDF.expand #(a.ha) (secret_corrupt k) (FStar.Bytes.abytes lbl) (UInt32.v (Pkg?.len pkg a')) in
+    let raw = HKDF.expand #(a.ha) (secret_corrupt k) (FStar.Bytes.bytes_of_string lbl) (Pkg?.len pkg a') in
     let h2 = get() in
     assume(modifies_none h1 h2); // FIXME HKDF framing
     assume(tree_invariant t h2);

@@ -111,13 +111,21 @@ let rec expand_int #ha prk info len count curr previous =
 val expand: 
   #ha:Hashing.alg -> prk: hkey ha ->
   info: bytes -> 
+<<<<<<< HEAD
   len: UInt32.t {v len <= op_Multiply 255 (tagLength ha)} ->
+=======
+  len: FStar.UInt32.t{FStar.UInt32.v len <= (op_Multiply 255  (FStar.UInt32.v (tagLen ha)))} ->
+>>>>>>> e2582af07424d8188ff1699dcefec3f1ad4affc8
   ST (lbytes32 len)
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
 
 let expand #ha prk info len =
+<<<<<<< HEAD
   lemma_repr_bytes_values (v len);
+=======
+  lemma_repr_bytes_values (FStar.UInt32.v len);
+>>>>>>> e2582af07424d8188ff1699dcefec3f1ad4affc8
   let rawbytes = expand_int prk info len 0uy 0ul empty_bytes in
   fst (split rawbytes len) 
 
@@ -148,7 +156,11 @@ val format:
   ha: Hashing.alg -> 
   label: string{length (bytes_of_string label) < 256 - 6} -> 
   hv: bytes{length hv < 256} -> 
+<<<<<<< HEAD
   len: UInt32.t {v len <= op_Multiply 255 (tagLength ha)} ->
+=======
+  len: nat{len <= op_Multiply 255 (UInt32.v (tagLen ha))} ->
+>>>>>>> e2582af07424d8188ff1699dcefec3f1ad4affc8
   Tot bytes
 
 let format ha label hv len = 
@@ -168,13 +180,18 @@ val expand_label:
   -> prk: hkey ha
   -> label: string{length (bytes_of_string label) < 256 - 6} // -9?
   -> hv: bytes{length hv < 256}
+<<<<<<< HEAD
   -> len: UInt32.t {v len <= op_Multiply 255 (tagLength ha)}
   -> ST (lbytes32 len)
+=======
+  -> len: nat{len <= op_Multiply 255 (UInt32.v (tagLen ha))}
+  -> ST (lbytes len)
+>>>>>>> e2582af07424d8188ff1699dcefec3f1ad4affc8
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> modifies_none h0 h1))
 
 let expand_label #ha prk label hv len =
-  expand prk (format ha label hv len) len
+  expand prk (format ha label hv len) (UInt32.uint_to_t len)
 
 (*-------------------------------------------------------------------*)
 (*
@@ -194,5 +211,5 @@ val expand_secret:
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
 
 let expand_secret #ha prk label hv =
-  expand_label prk label hv (Hashing.Spec.tagLen ha)
+  expand_label prk label hv (UInt32.v (Hashing.Spec.tagLen ha))
   

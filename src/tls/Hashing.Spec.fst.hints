@@ -265,8 +265,9 @@
         "@MaxFuel_assumption", "@MaxIFuel_assumption",
         "@fuel_correspondence_Prims.pow2.fuel_instrumented",
         "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
-        "binder_x_6bd13337f40c95987ad771c834309f6a_2",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "assumption_FStar.UInt32.t_haseq", "assumption_Prims.HasEq_int",
+        "b2t_def", "binder_x_6bd13337f40c95987ad771c834309f6a_2",
         "binder_x_d5eef529b835ea7a6ccf477d2abeeebf_0", "bool_inversion",
         "bool_typing", "equality_tok_Prims.LexTop@tok",
         "equation_FStar.Bytes.lbytes", "equation_FStar.Seq.Properties.split",
@@ -297,12 +298,12 @@
         "refinement_interpretation_Hashing.Spec_Tm_refine_b0d9932eba617940a04e2d9a9c5b1a8d",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "typing_FStar.Bytes.len", "typing_FStar.Bytes.reveal",
-        "typing_FStar.Seq.Base.length", "typing_FStar.UInt.fits",
-        "typing_FStar.UInt32.v", "typing_Hashing.Spec.blockLen",
-        "typing_Hashing.Spec.blockLength", "well-founded-ordering-on-nat"
+        "typing_FStar.Seq.Base.length", "typing_FStar.UInt32.v",
+        "typing_Hashing.Spec.blockLen", "typing_Hashing.Spec.blockLength",
+        "well-founded-ordering-on-nat"
       ],
       0,
-      "00b795a7be770490b21b7d9b53dd0141"
+      "c9122a4c94340f470c4fdccbc05ab71a"
     ],
     [
       "Hashing.Spec.hash2",
@@ -352,9 +353,9 @@
         "@MaxFuel_assumption", "@MaxIFuel_assumption",
         "@fuel_correspondence_Prims.pow2.fuel_instrumented",
         "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
-        "bool_inversion", "bool_typing",
-        "constructor_distinct_Hashing.Spec.SHA384",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "assumption_Prims.HasEq_int", "b2t_def", "bool_inversion",
+        "bool_typing", "constructor_distinct_Hashing.Spec.SHA384",
         "constructor_distinct_Hashing.Spec.SHA512",
         "disc_equation_Hashing.Spec.SHA384",
         "equality_tok_Hashing.Spec.SHA384@tok",
@@ -383,7 +384,7 @@
         "typing_Hashing.Spec.blockLength"
       ],
       0,
-      "430c46e4509ad82d3519681f3c0ced78"
+      "7f13576c7e420da3fa3c79fb8154c35d"
     ],
     [
       "Hashing.Spec.suffixLength",
@@ -454,8 +455,9 @@
         "@MaxFuel_assumption", "@MaxIFuel_assumption",
         "@fuel_correspondence_Prims.pow2.fuel_instrumented",
         "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
-        "bool_inversion", "bool_typing", "equation_FStar.Bytes.lbytes",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "assumption_FStar.UInt32.t_haseq", "b2t_def", "bool_inversion",
+        "bool_typing", "equation_FStar.Bytes.lbytes",
         "equation_FStar.Bytes.lbytes32", "equation_FStar.UInt.fits",
         "equation_FStar.UInt.lte", "equation_FStar.UInt.max_int",
         "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
@@ -493,7 +495,7 @@
         "typing_Hashing.Spec.tagLen"
       ],
       0,
-      "78b71993d530e0eaca2057b84dd5969c"
+      "3ba93b2da9fbe85887115948ac130c84"
     ]
   ]
 ]
