@@ -97,9 +97,7 @@ noeq type kex_s =
 | KEX_S_DHE of (g:CommonDH.group & CommonDH.pre_share g)
 | KEX_S_RSA of (pk:CoreCrypto.rsa_key{False}) // Unimplemented
 noeq type kex_s_priv =
-| KEX_S_PRIV_DHE of (g:CommonDH.group & CommonDH.keyshare g)
-// 18-02-26 should it be this one for verification?
-//| KEX_S_PRIV_DHE of (g:CommonDH.group & CommonDH.ikeyshare g)
+| KEX_S_PRIV_DHE of (g:CommonDH.group & CommonDH.ikeyshare g)
 | KEX_S_PRIV_RSA of CoreCrypto.rsa_key
 type kex_c =
 | KEX_C_DHE of b:bytes{length b < 65536}
@@ -266,7 +264,7 @@ val parseClientHello: body:bytes -> Pure (result (ch * option binders))
     | Correct(ch, Some binders) ->
         let len = length body - bindersLen_of_ch ch in 
         0 <= len /\
-        ( let truncated_body, suffix = split body len in
+        ( let truncated_body, suffix = split_ body len in
           clientHelloBytes ch == htBytes HT_client_hello @| truncated_body /\
           bindersBytes binders == suffix // ADL: FIXME must strip the length from binders
   )))
@@ -320,8 +318,8 @@ let valid_hs_msg_prop (pv:option protocolVersion) (msg:hs_msg): GTot bool =
   associated_to_pv pv msg && (
   match msg, pv with
   | EncryptedExtensions ee, _ -> 
-      length (extensionListBytes ee) + bindersLen ee < 65536 /\
-      repr_bytes (length (extensionsBytes ee)) <= 3
+      length (extensionListBytes ee) + bindersLen ee < 65536 &&
+       repr_bytes (length (extensionsBytes ee)) <= 3
   | Certificate13 crt, _ -> length (Cert.certificateListBytes13 crt.crt_chain13) < 16777212
   | Certificate crt, _ -> length (Cert.certificateListBytes crt.crt_chain) < 16777212
   | ServerKeyExchange ske, Some pv ->
