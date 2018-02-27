@@ -123,6 +123,9 @@ ROOTS ?= TLS.fst QUIC.fst Test.Main.fst
 	sed -e "s/source/source.verify/g" -i.bak .depend.verify # cwinter: squelches warnings about re-defined .source dependency rules
 	sed -e "s/\.krml:/\.nokrml:/g" -i.bak .depend.verify # cwinter: avoid overwriting kremlin-dependencies
 	sed -e "s/\.ml:/\.noml:/g" -i.bak .depend.verify # cwinter: avoid overwriting OCaml-dependencies
+	sed -e "s/ALL_FST_FILES/ALL_FST_FILES_VERIFY/g" -i.bak .depend.verify
+	sed -e "s/ALL_ML_FILES/ALL_ML_FILES_VERIFY/g" -i.bak .depend.verify
+	sed -e "s/ALL_KRML_FILES/ALL_KRML_FILES_VERIFY/g" -i.bak .depend.verify
 
 depend: .depend.$(FLAVOR) .depend.verify
 
@@ -146,7 +149,7 @@ depend: .depend.$(FLAVOR) .depend.verify
 	$(VFSTAR) $(addprefix --include , $(INCLUDE_PATHS)) $<
 	@touch $@
 
-verify-all: .depend.verify $(addprefix cache.verify/, $(addsuffix .checked, $(notdir $(ALL_FST_FILES))))
+verify-all: .depend.verify $(addprefix cache.verify/, $(addsuffix .checked, $(notdir $(ALL_FST_FILES_VERIFY))))
 
 verify-all-here: $(addsuffix -ver, $(wildcard *.fst))
 	@echo Done.
