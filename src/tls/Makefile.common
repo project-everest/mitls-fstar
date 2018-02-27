@@ -119,7 +119,7 @@ ROOTS ?= TLS.fst QUIC.fst Test.Main.fst
 		 --dep full \
 		 $(addprefix --include , $(INCLUDE_PATHS)) \
 		 $(ROOTS) > .depend.verify.$(FLAVOR)
-	sed -e "s/source:/source.verify:/g" -i .depend.verify.$(FLAVOR) # cwinter: squelches warnings about re-defined .source dependency rules
+	sed -e "s/source:/source.verify:/g" -i.bak .depend.verify.$(FLAVOR) # cwinter: squelches warnings about re-defined .source dependency rules
 
 depend: .depend.$(FLAVOR) .depend.verify.$(FLAVOR)
 
