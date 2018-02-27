@@ -189,17 +189,26 @@ mitls_nego_action nego_callback(void *cb_state, mitls_version ver,
     dump(qtp, qtp_len);
   }
 
-  *custom_exts = malloc(sizeof(mitls_extension));
-  *custom_exts_len = 1;
-  custom_exts[0]->ext_type = (uint16_t)0x1a;
-  custom_exts[0]->ext_data = "\x00\x01\x02";
-  custom_exts[0]->ext_data_len = 3;
-  printf("Adding server transport parameters:\n");
-  dump(custom_exts[0]->ext_data, custom_exts[0]->ext_data_len);
+  if(option_quic)
+  {
+    *custom_exts = malloc(sizeof(mitls_extension));
+    *custom_exts_len = 1;
+    custom_exts[0]->ext_type = (uint16_t)0x1a;
+    custom_exts[0]->ext_data = "\x00\x01\x02";
+    custom_exts[0]->ext_data_len = 3;
+    printf("Adding server transport parameters:\n");
+    dump(custom_exts[0]->ext_data, custom_exts[0]->ext_data_len);
+  }
+  else {
+    *custom_exts_len = 0;
+    *custom_exts = NULL;
+  }
 
-  if(*cookie != NULL && *cookie_len > 0) {
-    printf("Stateless cookie found, application contents:\n");
-    dump(*cookie, *cookie_len);
+  if(*cookie != NULL) {
+    if(*cookie_len) {
+      printf("Stateless cookie found, application contents:\n");
+      dump(*cookie, *cookie_len);
+    } else printf("Empty application contents (stateful HRR).\n");
   } else {
     printf("No application cookie (fist connection).\n");
     // only used when TLS_nego_retry is returned, but it's safe to set anyway
@@ -438,6 +447,12 @@ int Configure(mitls_state **pstate)
             printf("FFI_mitls_configure_alpn(%s) failed.\n", option_alpn);
             return 2;
         }
+    }
+
+    r = FFI_mitls_configure_nego_callback(state, NULL, nego_callback);
+    if(!r) {
+      printf("FFI_mitls_configure_nego_callback(%p)\n", nego_callback);
+      return 2;
     }
 
     *pstate = state;

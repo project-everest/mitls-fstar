@@ -354,6 +354,7 @@ static TLSConstants_nego_action nego_cb_proxy(FStar_Dyn_dyn cbs, TLSConstants_pr
   if(cookie.tag == FStar_Pervasives_Native_Some)
   {
     app_cookie = (unsigned char *)cookie.v.data;
+    if(app_cookie == NULL) app_cookie = (unsigned char*)""; // None vs Some empty_bytes / NULL
     app_cookie_len = cookie.v.length;
   }
 
@@ -390,7 +391,7 @@ static TLSConstants_nego_action nego_cb_proxy(FStar_Dyn_dyn cbs, TLSConstants_pr
   return a;
 }
 
-int MITLS_CALLCONV FFI_mitls_configure_server_nego_callback(mitls_state *state, void *cb_state, pfn_FFI_nego_cb nego_cb)
+int MITLS_CALLCONV FFI_mitls_configure_nego_callback(mitls_state *state, void *cb_state, pfn_FFI_nego_cb nego_cb)
 {
   ENTER_HEAP_REGION(state->rgn);
   wrapped_nego_cb *cbs = KRML_HOST_MALLOC(sizeof(wrapped_nego_cb));
