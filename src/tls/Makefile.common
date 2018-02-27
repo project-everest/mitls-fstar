@@ -120,7 +120,7 @@ ROOTS ?= TLS.fst QUIC.fst Test.Main.fst
 		 --dep full \
 		 $(addprefix --include , $(INCLUDE_PATHS)) \
 		 $(ROOTS) > .depend.verify
-	sed -e "s/source:/source.verify:/g" -i.bak .depend.verify # cwinter: squelches warnings about re-defined .source dependency rules
+	sed -e "s/source/source.verify/g" -i.bak .depend.verify # cwinter: squelches warnings about re-defined .source dependency rules
 	sed -e "s/\.krml:/\.nokrml:/g" -i.bak .depend.verify # cwinter: avoid overwriting kremlin-dependencies
 	sed -e "s/\.ml:/\.noml:/g" -i.bak .depend.verify # cwinter: avoid overwriting OCaml-dependencies
 
