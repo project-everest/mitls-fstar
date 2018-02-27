@@ -271,10 +271,10 @@ int MITLS_CALLCONV FFI_mitls_configure_alpn(/* in */ mitls_state *state, const c
     return 1;
 }
 
-int MITLS_CALLCONV FFI_mitls_configure_custom_extensions(/* in */ mitls_state *state, const mitls_extension *exts, size_t exts_len)
+int MITLS_CALLCONV FFI_mitls_configure_custom_extensions(/* in */ mitls_state *state, const mitls_extension *exts, size_t exts_count)
 {
   ENTER_HEAP_REGION(state->rgn);
-  for(size_t i = 0; i < exts_len; i++)
+  for(size_t i = 0; i < exts_count; i++)
   {
     char *c = KRML_HOST_MALLOC(exts->ext_data_len);
     memcpy(c, exts->ext_data, exts->ext_data_len);
