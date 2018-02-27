@@ -2,11 +2,11 @@ EXTRACT='Nothing'
 FLAVOR=generic
 
 all:
-	rm -f .depend.$(FLAVOR) .depend.verify.$(FLAVOR) .depend.OCaml .depend.Kremlin
+	rm -f .depend.$(FLAVOR) .depend.verify .depend.OCaml .depend.Kremlin
 	$(MAKE) verify-all ocaml-all kremlin-all
 
 clean-depend:
-	rm -rf .depend.$(FLAVOR) .depend.verify.$(FLAVOR) .depend.OCaml .depend.Kremlin
+	rm -rf .depend.$(FLAVOR) .depend.verify .depend.OCaml .depend.Kremlin
 
 ocaml-all kremlin-all: clean-depend
 
@@ -27,7 +27,7 @@ clean: ocaml-clean kremlin-clean quic-clean
 	rm -rf $(EXTRACT_DIR)/OCaml $(EXTRACT_DIR)/copied \
 	rm -rf $(EXTRACT_DIR)/Kremlin $(EXTRACT_DIR)/OCaml $(EXTRACT_DIR)/copied \
 	$(EXTRACT_DIR)/Kremlin-{Internal-Test,Library}/{,*/}*.{c,h,o} \
-	.depend.$(FLAVOR) .depend.verify.$(FLAVOR) *.checked.lax *.checked
+	.depend.$(FLAVOR) .depend.verify *.checked.lax *.checked
 
 %.fst-in %.fsti-in:
 	@echo $(addprefix --include , $(INCLUDE_PATHS)) --cache_dir $(CACHE_DIR) --cache_checked_modules $(OTHERFLAGS) --use_hints --use_hint_hashes

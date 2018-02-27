@@ -107,12 +107,12 @@ let valid_clen (i:id) (clen:nat) =
       clen - AE.explicit_iv_length i - tlen >= 0 &&
       clen - AE.explicit_iv_length i - tlen <= max_TLSPlaintext_fragment_length
     else if MtE? (aeAlg_of_id i) then
-      clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i >= 0 &&
-      clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i <= max_TLSPlaintext_fragment_length
+      clen - ivSize i - UInt32.v (macSize (macAlg_of_id i)) - fixedPadSize i >= 0 &&
+      clen - ivSize i - UInt32.v (macSize (macAlg_of_id i)) - maxPadSize i <= max_TLSPlaintext_fragment_length
     else // MACOnly
       let MACOnly h = aeAlg_of_id i in
-      clen - hashLen h >= 0 &&
-      clen - hashLen h <= max_TLSPlaintext_fragment_length
+      clen - UInt32.v (hashLen h) >= 0 &&
+      clen - UInt32.v (hashLen h) <= max_TLSPlaintext_fragment_length
     end)
 
 let min0 (i:int) : Tot (n:nat) = if i >= 0 then i else 0
@@ -130,25 +130,25 @@ val cipherRangeClass: i:id2 -> clen:nat -> Pure range
       | AEAD a _ ->
         let x = clen - AE.explicit_iv_length i - CoreCrypto.aeadTagSize a in (x,x)
       | MtE enc _ ->
-        let m0 = clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i in
-        let m1 = clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i in
+        let m0 = clen - ivSize i - UInt32.v (macSize (macAlg_of_id i)) - maxPadSize i in
+        let m1 = clen - ivSize i - UInt32.v (macSize (macAlg_of_id i)) - fixedPadSize i in
         (min0 m0, minP m1)
       | MACOnly h ->
-        let x = clen - hashLen h in (x,x) in
+        let x = clen - UInt32.v (hashLen h) in (x,x) in
     0 <= min /\ max <= max_TLSPlaintext_fragment_length /\ r == (min, max))
 
 let cipherRangeClass i clen =
   match aeAlg_of_id i with
   | MACOnly h ->
     let hLen = hashLen h in
-    let minmax = clen - hLen in
+    let minmax = clen - UInt32.v hLen in
     minmax, minmax
   | MtE _ _ ->
     let ivL = ivSize i in
     let macLen = macSize (macAlg_of_id i) in
     let minPad, maxPad = minMaxPad i in
-    let max = clen - ivL - macLen - minPad in
-    let min = clen - ivL - macLen - maxPad in
+    let max = clen - ivL - UInt32.v macLen - minPad in
+    let min = clen - ivL - UInt32.v macLen - maxPad in
     min0 min, minP max
   | AEAD aeadAlg _ ->
     let ivL = AE.explicit_iv_length i in

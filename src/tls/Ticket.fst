@@ -38,8 +38,6 @@ unfold val trace: s:string -> ST unit
   (ensures (fun h0 _ h1 -> h0 == h1))
 unfold let trace = if Flags.debug_NGO then print else (fun _ -> ())
 
-private let region:rgn = new_region tls_tables_region
-
 let ticketid (a:aeadAlg) : St (AE.id) =
   assume false;
   let h = Hashing.Spec.SHA256 in

@@ -113,19 +113,21 @@ ROOTS ?= TLS.fst QUIC.fst Test.Main.fst
 		 $(addprefix --include , $(INCLUDE_PATHS)) \
 		 $(ROOTS) > .depend.$(FLAVOR)
 
-.depend.verify.$(FLAVOR):
+.depend.verify:
 	@echo === Producing $@ ...
 	mkdir -p $(EXTRACT_DIR)
 	$(FSTAR) --odir $(EXTRACT_DIR) \
 		 --dep full \
 		 $(addprefix --include , $(INCLUDE_PATHS)) \
-		 $(ROOTS) > .depend.verify.$(FLAVOR)
-	sed -e "s/source:/source.verify:/g" -i.bak .depend.verify.$(FLAVOR) # cwinter: squelches warnings about re-defined .source dependency rules
+		 $(ROOTS) > .depend.verify
+	sed -e "s/source:/source.verify:/g" -i.bak .depend.verify # cwinter: squelches warnings about re-defined .source dependency rules
+	sed -e "s/\.krml:/\.nokrml:/g" -i.bak .depend.verify # cwinter: avoid overwriting kremlin-dependencies
+	sed -e "s/\.ml:/\.noml:/g" -i.bak .depend.verify # cwinter: avoid overwriting OCaml-dependencies
 
-depend: .depend.$(FLAVOR) .depend.verify.$(FLAVOR)
+depend: .depend.$(FLAVOR) .depend.verify
 
 -include .depend.$(FLAVOR) 
--include .depend.verify.$(FLAVOR)
+-include .depend.verify
 
 # the touch is needed because make may decide to invoke fstar on this
 # target because the timestamp on, say, the .fst file changed, and
@@ -144,14 +146,13 @@ depend: .depend.$(FLAVOR) .depend.verify.$(FLAVOR)
 	$(FSTAR) $(VFLAGS) $(addprefix --include , $(INCLUDE_PATHS)) $<
 	@touch $@
 
-verify-all: .depend.verify.$(FLAVOR) $(addprefix $(CACHE_DIR)/, $(addsuffix .checked, $(notdir $(ALL_FST_FILES))))
+verify-all: .depend.verify $(addprefix $(CACHE_DIR)/, $(addsuffix .checked, $(notdir $(ALL_FST_FILES))))
 
 verify-all-here: $(addsuffix -ver, $(wildcard *.fst))
 	@echo Done.
 
 # typechecks one specific  file (not its dependencies),
 # but still produces a .checked file; this is convenient but not safe.
-
 # %.fsti-ver:
 # %.fst-ver: $(CACHE_DIR)/%.fst.checked:
 # 	@echo === Verifying $@ ...
