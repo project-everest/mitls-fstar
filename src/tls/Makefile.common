@@ -25,7 +25,7 @@ CACHE_DIR=cache.$(FLAVOR)
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe --cache_dir $(CACHE_DIR) --cache_checked_modules $(OTHERFLAGS)
 
 # --use_two_phase_tc true
-VFLAGS=--use_hints --use_hint_hashes --record_hints --warn_error -271 
+VFLAGS=--use_hints --use_hint_hashes --record_hints --warn_error -271 --cache_dir cache.verify
 # in the past, we also used --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection
 
 EXTRACT_DIR=extract/$(FLAVOR)
@@ -115,8 +115,8 @@ ROOTS ?= TLS.fst QUIC.fst Test.Main.fst
 
 .depend.verify:
 	@echo === Producing $@ ...
-	mkdir -p $(EXTRACT_DIR)
-	$(FSTAR) --odir $(EXTRACT_DIR) \
+	mkdir -p cache.verify
+	$(FSTAR) --cache_dir cache.verify --odir cache.verify \
 		 --dep full \
 		 $(addprefix --include , $(INCLUDE_PATHS)) \
 		 $(ROOTS) > .depend.verify
