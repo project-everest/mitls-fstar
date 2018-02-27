@@ -1375,8 +1375,8 @@ let serverToNegotiatedExtension cfg cExtL cs ri resuming res sExt =
   | Error z -> Error z
   | Correct pv0 ->
     let exists_b_aux (#a:Type) (#b:Type) (env:b) (f:b -> a -> Tot bool) (l:list a) =
-      Some? (find_aux env f l) in
-    if not (TLSConstants.exists_b_aux sExt sameExt cExtL) then
+      Some? (List.Helpers.find_aux env f l) in
+    if not (List.Helpers.exists_b_aux sExt sameExt cExtL) then
       Error(AD_unsupported_extension, perror __SOURCE_FILE__ __LINE__ "server sent an unexpected extension")
     else match sExt with
     (*
@@ -1459,7 +1459,7 @@ let clientToServerExtension pv cfg cs ri pski ks resuming cext =
     (match cfg.alpn with
     | None -> None
     | Some sal ->
-      let common = TLSConstants.filter_aux sal TLSConstants.mem_rev cal in
+      let common = List.Helpers.filter_aux sal List.Helpers.mem_rev cal in
       match common with
       | a :: _ -> Some (E_alpn [a])
       | _ -> None)

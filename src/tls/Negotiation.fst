@@ -793,7 +793,7 @@ let negotiate_version cfg offer =
   match offered_versions TLS_1p0 offer with
   | Error z -> Error z
   | Correct vs ->
-    match TLSConstants.find_aux cfg version_within vs with
+    match List.Helpers.find_aux cfg version_within vs with
     | Some v -> Correct v
     | None -> Error(AD_protocol_version, "protocol version negotiation: mismatch")
 
@@ -807,7 +807,7 @@ let is_cs_in_l (l1, sa) s = CipherSuite? s && List.Tot.mem s l1 && CipherSuite?.
 val negotiate: l1:list valid_cipher_suite -> list valid_cipher_suite -> sigAlg
  -> Tot (option (c:valid_cipher_suite{CipherSuite? c && List.Tot.mem c l1}))
 let negotiate l1 l2 sa =
-  TLSConstants.find_aux (l1, sa) is_cs_in_l l2
+  List.Helpers.find_aux (l1, sa) is_cs_in_l l2
 
 (**
   For use in ensuring the result from negotiate is a Correct
@@ -915,7 +915,7 @@ let acceptableVersion cfg pv sr =
 val acceptableCipherSuite: config -> protocolVersion -> valid_cipher_suite -> Tot bool
 let is_cs (cs:valid_cipher_suite) x = x = cs
 let acceptableCipherSuite cfg spv cs =
-  TLSConstants.exists_b_aux cs is_cs cfg.cipher_suites
+  List.Helpers.exists_b_aux cs is_cs cfg.cipher_suites
 
 let is_share_eq (g:CommonDH.group) share = CommonDH.Share?.g share = g
 
@@ -928,7 +928,7 @@ let matching_share
     match List.Tot.find Extensions.E_key_share? cext with
     | Some (E_key_share (CommonDH.ClientKeyShare shares)) ->
       begin
-      match TLSConstants.find_aux g is_share_eq shares with
+      match List.Helpers.find_aux g is_share_eq shares with
       | Some (CommonDH.Share g gx) -> Some (|g, gx|)
       | _ -> None
       end
@@ -1058,7 +1058,7 @@ let supported_signatureSchemes_12 mode =
   | TLS_1p2 ->
     match find_signature_algorithms mode.n_offer with
     | None -> [signatureScheme_of_sigHashAlg sa ha0]
-    | Some algs -> TLSConstants.filter_aux sa matches_sigHashAlg_of_signatureScheme algs
+    | Some algs -> List.Helpers.filter_aux sa matches_sigHashAlg_of_signatureScheme algs
 
 // TLS 1.2 only
 val client_ServerKeyExchange: #region:rgn -> t region Client ->
@@ -1119,7 +1119,7 @@ let client_ServerKeyExchange #region ns crt ske ocr =
   //   let salgs =
   //     match ske.ske_signed_params.sig_algorithm with
   //     | None -> salgs
-  //     | Some sa' -> TLSConstants.filter_aux sa' op_Equality salgs in
+  //     | Some sa' -> List.Helpers.filter_aux sa' op_Equality salgs in
   //   match salgs with
   //   | [] ->
   //     Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Signature algorithm negotiation failed")
@@ -1264,7 +1264,7 @@ val compute_cs13:
   result (list (cs13 o) * option (CommonDH.namedGroup * cs:cipherSuite))
 let compute_cs13 cfg o psks shares server_cert =
   // pick acceptable record ciphersuites
-  let ncs =  TLSConstants.filter_aux cfg is_cs13_in_cfg o.ch_cipher_suites in
+  let ncs =  List.Helpers.filter_aux cfg is_cs13_in_cfg o.ch_cipher_suites in
   // pick the (potential) group to use for DHE/ECDHE
   // also remember if there is a supported group with no share provided
   // in case we want to to a HRR
@@ -1272,12 +1272,12 @@ let compute_cs13 cfg o psks shares server_cert =
     match find_supported_groups o with
     | None -> None, None // No offered group, only PSK
     | Some gs ->
-      match TLSConstants.filter_aux cfg is_in_cfg_named_groups gs with
+      match List.Helpers.filter_aux cfg is_in_cfg_named_groups gs with
       | [] -> None, None // No common group, only PSK
       | gl ->
         let csg = match ncs with | [] -> None | cs :: _ -> Some (List.Tot.hd gl, cs) in
         let gl' = List.Tot.map group_of_named_group gl in
-        let s = TLSConstants.find_aux gl' share_in_named_group shares in
+        let s = List.Helpers.find_aux gl' share_in_named_group shares in
         s, (if server_cert then csg else None) // Can't do HRR without a certificate
     in
   let psk_kex = find_psk_key_exchange_modes o in
@@ -1336,7 +1336,7 @@ let computeServerMode cfg co serverRandom =
       | None -> None
       | Some sigalgs ->
         let sigalgs =
-          TLSConstants.filter_aux cfg.signature_algorithms TLSConstants.mem_rev sigalgs
+          List.Helpers.filter_aux cfg.signature_algorithms List.Helpers.mem_rev sigalgs
         in
         if sigalgs = [] then None
         else cert_select_cb cfg (get_sni co) sigalgs
@@ -1423,7 +1423,7 @@ let computeServerMode cfg co serverRandom =
       let salgs =
         match find_signature_algorithms co with
         | None -> [SIG_UNKNOWN (twobytes (0xFFz, 0xFFz)); ECDSA_SHA1]
-        | Some sigalgs -> TLSConstants.filter_aux cfg.signature_algorithms TLSConstants.mem_rev sigalgs
+        | Some sigalgs -> List.Helpers.filter_aux cfg.signature_algorithms List.Helpers.mem_rev sigalgs
         in
       match cert_select_cb cfg (get_sni co) salgs with
       | None -> Error(AD_no_certificate, perror __SOURCE_FILE__ __LINE__ "No compatible certificate can be selected")
