@@ -164,7 +164,7 @@ let find_client_extension filter o =
 let find_client_extension_aux env filter o =
   match o.ch_extensions with
   | None -> None
-  | Some es -> TLSConstants.find_aux env filter es
+  | Some es -> List.Helpers.find_aux env filter es
 
 let find_supported_versions o =
   match find_client_extension Extensions.E_supported_versions? o with
