@@ -42,7 +42,7 @@ val coerce_salt2:
   #u: usage d ->
   i: id {registered i /\ ~(safeKEF2 d i)} ->
   a: info {a == get_info i} ->
-  raw: lbytes (secret_len a) ->
+  raw: lbytes32 (secret_len a) ->
   ST (ext2 d u i)
   (requires fun h0 -> True)
   (ensures fun h0 p h1 -> True)

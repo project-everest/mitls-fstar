@@ -66,7 +66,7 @@ val coerceT_psk:
   #u: usage d ->
   i: id {registered i /\ ~(safeKEF0 d i)} ->
   a: info {a == get_info i} ->
-  raw: lbytes (secret_len a) ->
+  raw: lbytes32 (secret_len a) ->
   GTot (ext0 d u i)
 let coerceT_psk #d #u i a raw =
   real_psk #d #u #(Derive i "" Extract) raw
@@ -76,7 +76,7 @@ val coerce_psk:
   #u: usage d ->
   i: id {registered i /\ ~(safeKEF0 d i)} ->
   a: info {a == get_info i} ->
-  raw: lbytes (secret_len a) ->
+  raw: lbytes32 (secret_len a) ->
   ST (ext0 d u i)
   (requires fun h0 -> True)
   (ensures fun h0 k h1 -> k == coerceT_psk #d #u i a raw)
