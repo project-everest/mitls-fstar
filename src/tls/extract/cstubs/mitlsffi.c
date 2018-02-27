@@ -675,6 +675,7 @@ void * MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ s
         memcpy(p, ret.data, ret.length);
     }
     LEAVE_HEAP_REGION();
+    *packet_size = ret.length;
     return p;
 }
 

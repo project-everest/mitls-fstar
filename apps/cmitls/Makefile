@@ -63,7 +63,7 @@ cmitls.exe: cmitls.c \
 	  -L$(MITLS_HOME)/src/pki \
 	  -L$(MITLS_HOME)/src/tls/extract/Kremlin-Library \
 	  -L$(MLCRYPTO_HOME)/openssl \
-	  -lmitls -lmipki $(PIC) cmitls.c -o cmitls.exe $(WINSOCK)
+	  -Wall -lmitls -lmipki $(PIC) cmitls.c -o cmitls.exe $(WINSOCK)
 
 test: cmitls.exe
 	./cmitls.exe google.com 443
