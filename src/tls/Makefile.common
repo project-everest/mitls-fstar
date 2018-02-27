@@ -14,14 +14,7 @@ INCLUDE_PATHS= \
 	$(HACL_HOME)/code/lib \
 	$(KREMLIN_HOME)/kremlib \
 	$(MITLS_HOME)/libs/ffi \
-    $(MITLS_HOME)/src/lowparse \
-	concrete-flags/$(FLAVOR)
-
-ifeq ($(FLAVOR),generic)
-INCLUDE_PATHS+=ideal-flags
-else 
-INCLUDE_PATHS+=concrete-flags 
-endif
+    $(MITLS_HOME)/src/lowparse 
 
 CACHE_DIR=cache
 
@@ -113,6 +106,7 @@ ROOTS ?= TLS.fst QUIC.fst Test.Main.fst
 		 --dep full \
 		 --extract $(EXTRACT) \
 		 $(addprefix --include , $(INCLUDE_PATHS)) \
+	     --include ideal-flags --include concrete-flags/generic \
 		 $(ROOTS) > .depend.$(FLAVOR)
 
 depend: .depend.$(FLAVOR)
@@ -128,7 +122,9 @@ depend: .depend.$(FLAVOR)
 
 %.checked:
 	@echo === Producing $@ ...
-	$(FSTAR) $(VFLAGS) $(addprefix --include , $(INCLUDE_PATHS)) $<
+	$(FSTAR) $(VFLAGS) $(addprefix --include , $(INCLUDE_PATHS)) \
+		--include ideal-flags --include concrete-flags/$(FLAVOR) \
+		$<
 	@touch $@
 
 verify-all: $(addprefix $(CACHE_DIR)/, $(addsuffix .checked, $(notdir $(ALL_FST_FILES))))
@@ -153,6 +149,7 @@ $(EXTRACT_DIR)/%.$(EXTENSION):
 		--cache_dir $(CACHE_DIR) \
 		--odir $(EXTRACT_DIR) \
 		$(addprefix --include , $(INCLUDE_PATHS)) \
+		--include concrete-flags --include concrete-flags/$(FLAVOR) \
 		--extract_module $(basename $(notdir $(subst .checked,,$<))) \
 		$(subst $(CACHE_DIR)/,,$(subst .checked,, $<))
 
