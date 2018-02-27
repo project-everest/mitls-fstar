@@ -2,13 +2,20 @@ EXTRACT='Nothing'
 FLAVOR=generic
 
 all:
-	rm -f .depend.$(FLAVOR) .depend.verify .depend.OCaml .depend.Kremlin
-	$(MAKE) verify-all ocaml-all kremlin-all
+	rm -f .depend.$(FLAVOR)
+	$(MAKE) verify-all 
+	$(MAKE) ocaml-all 
+	$(MAKE) kremlin-all
 
-clean-depend:
-	rm -rf .depend.$(FLAVOR) .depend.verify .depend.OCaml .depend.Kremlin
+ocaml-clean-depend:
+	rm -f .depend.OCaml 
 
-ocaml-all kremlin-all: clean-depend
+kremlin-clean-depend:
+	rm -f .depend.Kremlin
+
+ocaml-all: ocaml-clean-depend
+
+kremlin-all: kremlin-clean-depend
 
 include Makefile.common
 
@@ -27,11 +34,7 @@ clean: ocaml-clean kremlin-clean quic-clean
 	rm -rf $(EXTRACT_DIR)/OCaml $(EXTRACT_DIR)/copied \
 	rm -rf $(EXTRACT_DIR)/Kremlin $(EXTRACT_DIR)/OCaml $(EXTRACT_DIR)/copied \
 	$(EXTRACT_DIR)/Kremlin-{Internal-Test,Library}/{,*/}*.{c,h,o} \
-	.depend.$(FLAVOR) .depend.verify *.checked.lax *.checked
+	.depend.$(FLAVOR) *.checked
 
 %.fst-in %.fsti-in:
 	@echo $(addprefix --include , $(INCLUDE_PATHS)) --cache_dir $(CACHE_DIR) --cache_checked_modules $(OTHERFLAGS) --use_hints --use_hint_hashes
-
-# cwinter: should this use lax?
-# %.fst-in %.fsti-in:
-#	@echo $(addprefix --include , $(INCLUDE_PATHS)) --cache_checked_modules --lax

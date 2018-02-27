@@ -172,4 +172,4 @@ test: mitls.exe $(CERT_FILES)
 	./mitls.exe
 
 clean:
-	rm -rf $(CERT_FILES) mitls.exe test/mitls.cm? test/mitls.o .depend.OCaml extract/OCaml
+	rm -rf $(CERT_FILES) mitls.exe test/mitls.cm? test/mitls.o .depend extract/OCaml

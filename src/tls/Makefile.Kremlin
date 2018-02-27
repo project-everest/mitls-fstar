@@ -5,6 +5,7 @@ build: build-internal-test build-library build-external-test
 test: test-internal-test # test-library test-external-test
 
 clean: clean-internal-test clean-library clean-external-test
+	rm -f .depend.Kremlin
 
 # To include Makefile.common, you need to specify
 # the following three variables
