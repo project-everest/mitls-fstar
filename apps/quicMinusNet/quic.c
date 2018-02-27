@@ -50,16 +50,17 @@ const char* pvname(mitls_version pv)
 mitls_nego_action def_action = TLS_nego_accept;
 
 mitls_nego_action nego_cb(void *cb_state, mitls_version ver,
-  const char *cexts, size_t cexts_len, mitls_extension **custom_exts,
-  size_t *custom_exts_len, char **cookie, size_t *cookie_len)
+  const unsigned char *cexts, size_t cexts_len, mitls_extension **custom_exts,
+  size_t *custom_exts_len, unsigned char **cookie, size_t *cookie_len)
 {
   printf(" @@@@ Nego callback for %s @@@@\n", pvname(ver));
   printf("Offered extensions:\n");
   dump(cexts, cexts_len);
 
-  char *qtp = NULL; size_t qtp_len;
-  int r = FFI_mitls_get_transport_parameters(cexts, cexts_len, &qtp, &qtp_len);
-  assert(qtp != NULL && qtp_len > 0);
+  unsigned char *qtp = NULL;
+  size_t qtp_len;
+  int r = FFI_mitls_find_custom_extension(0, cexts, cexts_len, (uint16_t)0x1A, &qtp, &qtp_len);
+  assert(r && qtp != NULL && qtp_len > 0);
   printf("Transport parameters offered:\n");
   dump(qtp, qtp_len);
 
@@ -103,21 +104,21 @@ void ticket_cb(void *st, const char *sni, const mitls_ticket *ticket)
   printf(" ########################################\n");
 }
 
-void* certificate_select(void *cbs, const char *sni, size_t sni_len, const mitls_signature_scheme *sigalgs, size_t sigalgs_len, mitls_signature_scheme *selected)
+void* certificate_select(void *cbs, const unsigned char *sni, size_t sni_len, const mitls_signature_scheme *sigalgs, size_t sigalgs_len, mitls_signature_scheme *selected)
 {
   mipki_state *st = (mipki_state*)cbs;
   mipki_chain r = mipki_select_certificate(st, sni, sni_len, sigalgs, sigalgs_len, selected);
   return (void*)r;
 }
 
-size_t certificate_format(void *cbs, const void *cert_ptr, char *buffer)
+size_t certificate_format(void *cbs, const void *cert_ptr, unsigned char *buffer)
 {
   mipki_state *st = (mipki_state*)cbs;
   mipki_chain chain = (mipki_chain)cert_ptr;
   return mipki_format_chain(st, cert_ptr, buffer, MAX_CHAIN_LEN);
 }
 
-size_t certificate_sign(void *cbs, const void *cert_ptr, const mitls_signature_scheme sigalg, const char *tbs, size_t tbs_len, char *sig)
+size_t certificate_sign(void *cbs, const void *cert_ptr, const mitls_signature_scheme sigalg, const unsigned char *tbs, size_t tbs_len, unsigned char *sig)
 {
   mipki_state *st = (mipki_state*)cbs;
   size_t ret = MAX_SIGNATURE_LEN;
@@ -132,7 +133,7 @@ size_t certificate_sign(void *cbs, const void *cert_ptr, const mitls_signature_s
   return 0;
 }
 
-int certificate_verify(void *cbs, const char* chain_bytes, size_t chain_len, const mitls_signature_scheme sigalg, const char *tbs, size_t tbs_len, char *sig, size_t sig_len)
+int certificate_verify(void *cbs, const unsigned char* chain_bytes, size_t chain_len, const mitls_signature_scheme sigalg, const unsigned char *tbs, size_t tbs_len, const unsigned char *sig, size_t sig_len)
 {
   mipki_state *st = (mipki_state*)cbs;
   mipki_chain chain = mipki_parse_chain(st, chain_bytes, chain_len);
@@ -151,7 +152,7 @@ int certificate_verify(void *cbs, const char* chain_bytes, size_t chain_len, con
   }
 
   size_t slen = sig_len;
-  if(!mipki_sign_verify(st, chain, sigalg, tbs, tbs_len, sig, &slen, MIPKI_VERIFY))
+  if(!mipki_sign_verify(st, chain, sigalg, tbs, tbs_len, (char*)sig, &slen, MIPKI_VERIFY))
   {
     printf("ERROR: invalid signature.\n");
     return 0;
@@ -230,7 +231,7 @@ int main(int argc, char **argv)
     .alpn = "hq-08",
     .server_ticket = NULL,
     .exts = client_qtp,
-    .exts_len = 1,
+    .exts_count = 1,
     .callback_state = (void*)pki,
     .ticket_callback = ticket_cb,
     .nego_callback = nego_cb,

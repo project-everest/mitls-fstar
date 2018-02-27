@@ -29,18 +29,6 @@ unfold let trace = if Flags.debug_NGO then print else (fun _ -> ())
 
 private let region:rgn = new_region tls_tables_region
 
-let ticketid (a:aeadAlg) : St (AE.id) =
-  assume false;
-  let h = Hashing.Spec.SHA256 in
-  let li = LogInfo_CH0 ({
-    li_ch0_cr = CC.random 32;
-    li_ch0_ed_psk = empty_bytes;
-    li_ch0_ed_ae = a;
-    li_ch0_ed_hash = h;
-  }) in
-  let log : hashed_log li = empty_bytes in
-  ID13 (KeyID #li (ExpandedSecret (EarlySecretID (NoPSK h)) ApplicationTrafficSecret log))
-
 type ticket_key =
   | Key: i:AE.id -> wr:AE.writer i -> rd:AE.reader i -> ticket_key
 
@@ -48,7 +36,7 @@ private let dummy_id (a:aeadAlg) : St AE.id =
   assume false;
   let h = Hashing.Spec.SHA256 in
   let li = LogInfo_CH0 ({
-    li_ch0_cr = CC.random 32;
+    li_ch0_cr = Bytes.create 32ul 0z;
     li_ch0_ed_psk = empty_bytes;
     li_ch0_ed_ae = a;
     li_ch0_ed_hash = h;
@@ -56,22 +44,32 @@ private let dummy_id (a:aeadAlg) : St AE.id =
   let log : hashed_log li = empty_bytes in
   ID13 (KeyID #li (ExpandedSecret (EarlySecretID (NoPSK h)) ApplicationTrafficSecret log))
 
-private let ticket_enc : reference ticket_key
-  =
+// The ticket encryption key is a module global, but it must be lazily initialized
+// because the RNG may not yet be seeded when kremlinit_globals is called
+private let ticket_enc : reference (option ticket_key) = ralloc region None
+
+private let keygen () : St ticket_key =
   let id0 = dummy_id CC.CHACHA20_POLY1305 in
   let salt : AE.salt id0 = CC.random (AE.iv_length id0) in
   let key : AE.key id0 = CC.random (AE.key_length id0) in
   let wr = AE.coerce id0 region key salt in
   let rd = AE.genReader region #id0 wr in
-  ralloc region (Key id0 wr rd)
+  Key id0 wr rd
 
-let set_ticket_key (a:aeadAlg) (kv:bytes) : St (bool) =
-  let tid = ticketid a in
+let get_ticket_key () : St ticket_key =
+  match !ticket_enc with
+  | Some k -> k
+  | None ->
+    let k = keygen () in
+    ticket_enc := Some k; k
+
+let set_ticket_key (a:aeadAlg) (kv:bytes) : St bool =
+  let tid = dummy_id a in
   if length kv = AE.key_length tid + AE.iv_length tid then
     let k, s = split_ kv (AE.key_length tid) in
     let wr = AE.coerce tid region k s in
     let rd = AE.genReader region wr in
-    ticket_enc := Key tid wr rd; true
+    ticket_enc := Some (Key tid wr rd); true
   else false
 
 // TODO absolute bare bone for functionality
@@ -138,7 +136,7 @@ let parse (b:bytes) =
           Some (Ticket12 pv cs ems msId ms)
 
 let ticket_decrypt cipher : St (option bytes) =
-  let Key tid _ rd = !ticket_enc in
+  let Key tid _ rd = get_ticket_key () in
   let salt = AE.salt_of_state rd in
   let (nb, b) = split_ cipher (AE.iv_length tid) in
   let plain_len = length b - AE.taglen tid in
@@ -159,7 +157,7 @@ let serialize t =
   (versionBytes pv) @| (cipherSuiteBytes cs) @| (vlbytes 2 b)
 
 let ticket_encrypt plain =
-  let Key tid wr _ = !ticket_enc in
+  let Key tid wr _ = get_ticket_key () in
   let nb = CC.random (AE.iv_length tid) in
   let salt = AE.salt_of_state wr in
   let iv = AE.coerce_iv tid (xor 12ul nb salt) in

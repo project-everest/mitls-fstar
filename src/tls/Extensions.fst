@@ -832,7 +832,7 @@ let rec extensionPayloadBytes = function
     | _                             -> vlbytes 2 (pskBytes psk))
   | E_early_data edi                -> vlbytes 2 (earlyDataIndicationBytes edi)
   | E_supported_versions vs         -> vlbytes 2 (protocol_versions_bytes vs)
-  | E_cookie c                      -> (lemma_repr_bytes_values (length c); vlbytes 2 (vlbytes 2 c))
+  | E_cookie c                      -> (lemma_repr_bytes_values (length c); vlbytes 2 c)
   | E_psk_key_exchange_modes kex    -> vlbytes 2 (client_psk_kexes_bytes kex)
   | E_extended_ms                   -> vlbytes 2 empty_bytes
   | E_ec_point_format l             -> vlbytes 2 (ecpfListBytes l)
@@ -1205,9 +1205,7 @@ let parseExtension mt b =
 
     | (0x00z, 0x2cz) -> // cookie
       if length data <= 2 || length data >= 65538 then error "cookie" else
-      (match vlparse 2 data with
-      | Error z -> Error z
-      | Correct data -> Correct (E_cookie data, None))
+      Correct (E_cookie data, None)
 
     | (0x00z, 0x2dz) -> // key ex
       if length data < 2 then error "psk_key_exchange_modes" else

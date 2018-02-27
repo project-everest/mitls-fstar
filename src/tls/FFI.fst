@@ -328,7 +328,7 @@ let ffiSetNamedGroups cfg x =
   let ngl = map findSetting_ngs ngl in
   let ogl = match offered with
     | [] -> ngl
-    | [og] -> map findSetting_ngs (split_string ':' og)
+    | [og] -> if String.length og = 0 then [] else map findSetting_ngs (split_string ':' og)
     | _ -> failwith "Use @G1:..:Gn to set groups on which to offer shares" in
   { cfg with
     named_groups = ngl;
@@ -498,6 +498,35 @@ let ffiSplitChain (chain:bytes) : ML (list cert_repr) =
   match Cert.parseCertificateList chain with
   | Error (_, msg) -> failwith ("ffiCertFormatCallback: formatted chain was invalid, "^msg)
   | Correct chain -> chain
+
+private let rec ext_filter (ext_type:UInt16.t) (e:list Extensions.extension) : option bytes =
+  match e with
+  | [] -> None
+  | Extensions.E_unknown_extension (hd, b) :: t ->
+    if uint16_of_bytes hd = ext_type then Some b else ext_filter ext_type t
+  | _ :: t -> ext_filter ext_type t
+
+let ffiFindCustomExtension (server:bool) (exts:bytes) (ext_type:UInt16.t) : ML (option bytes) =
+  let mt = if server then Extensions.EM_EncryptedExtensions else Extensions.EM_ClientHello in
+  match Extensions.parseOptExtensions mt exts with
+  | Correct (Some el, _) -> ext_filter ext_type el
+  | Error _ -> trace ("Warning: bad extension list passed to get_transport_parameters"); None
+
+let ffiFindSNI (exts:bytes) : ML (option bytes) =
+  match Extensions.parseOptExtensions Extensions.EM_ClientHello exts with
+  | Correct (Some el, _) ->
+    (match List.Tot.find Extensions.E_server_name? el with
+    | Some (Extensions.E_server_name ((SNI_DNS b)::_)) -> Some b
+    | _ -> None)
+  | Error _ -> trace ("Warning: bad extension list passed to get_transport_parameters"); None
+
+let ffiFindALPN (exts:bytes) : ML (option bytes) =
+  match Extensions.parseOptExtensions Extensions.EM_ClientHello exts with
+  | Correct (Some el, _) ->
+    (match List.Tot.find Extensions.E_alpn? el with
+    | Some (Extensions.E_alpn a) -> Some (Extensions.alpnBytes a)
+    | _ -> None)
+  | Error _ -> trace ("Warning: bad extension list passed to get_transport_parameters"); None
 
 (*
 // Closures for stateful callbacks, these are now unnecessary

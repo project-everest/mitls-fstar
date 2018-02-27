@@ -75,7 +75,7 @@ static Prims_string CopyPrimsString(const char *src)
     return dst;
 }
 
-static bool MakeFStar_Bytes_bytes(FStar_Bytes_bytes *b, const char *data, uint32_t length)
+static bool MakeFStar_Bytes_bytes(FStar_Bytes_bytes *b, const unsigned char *data, uint32_t length)
 {
     b->data = KRML_HOST_MALLOC(length);
     if (!b->data) {
@@ -228,7 +228,7 @@ int MITLS_CALLCONV FFI_mitls_configure(mitls_state **state, const char *tls_vers
     return ret;
 }
 
-int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *alg, const char *tk, size_t klen)
+int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *alg, const unsigned char *tk, size_t klen)
 {
     // bugbug: this uses the global region for heap allocations
     LOCK_MUTEX(&lock);
@@ -297,9 +297,9 @@ static void ticket_cb_proxy(FStar_Dyn_dyn cbs, Prims_string sni, FStar_Bytes_byt
   FStar_Bytes_bytes session = FFI_ffiTicketInfoBytes(info, rawkey);
   mitls_ticket t = {
     .ticket_len = ticket.length,
-    .ticket = ticket.data,
+    .ticket = (unsigned char*)ticket.data,
     .session_len = session.length,
-    .session = session.data
+    .session = (unsigned char*)session.data
   };
 
   cb->cb(cb->cb_state, sni, &t);
@@ -345,7 +345,7 @@ static TLSConstants_nego_action nego_cb_proxy(FStar_Dyn_dyn cbs, TLSConstants_pr
   FStar_Bytes_bytes extb, FStar_Pervasives_Native_option__FStar_Bytes_bytes cookie)
 {
   wrapped_nego_cb *cb = (wrapped_nego_cb*)cbs;
-  char *app_cookie = NULL, *c;
+  unsigned char *app_cookie = NULL, *c;
   mitls_extension *extra_exts = NULL;
   size_t i, app_cookie_len = 0, extra_exts_len = 0;
   TLSConstants_nego_action a;
@@ -353,11 +353,11 @@ static TLSConstants_nego_action nego_cb_proxy(FStar_Dyn_dyn cbs, TLSConstants_pr
 
   if(cookie.tag == FStar_Pervasives_Native_Some)
   {
-    app_cookie = (char *)cookie.v.data;
+    app_cookie = (unsigned char *)cookie.v.data;
     app_cookie_len = cookie.v.length;
   }
 
-  mitls_nego_action r = cb->cb(cb->cb_state, convert_pv(pv), extb.data, extb.length,
+  mitls_nego_action r = cb->cb(cb->cb_state, convert_pv(pv), (const unsigned char*)extb.data, extb.length,
     &extra_exts, &extra_exts_len, &app_cookie, &app_cookie_len);
 
   switch(r)
@@ -373,7 +373,7 @@ static TLSConstants_nego_action nego_cb_proxy(FStar_Dyn_dyn cbs, TLSConstants_pr
         for(i=0; i<extra_exts_len; i++)
         {
           cexts = TLSConstants_add_custom_extension(cexts, extra_exts->ext_type,
-            (FStar_Bytes_bytes){.data = extra_exts->ext_data, .length = extra_exts->ext_data_len});
+            (FStar_Bytes_bytes){.data = (const char*)extra_exts->ext_data, .length = extra_exts->ext_data_len});
           extra_exts++;
         }
       }
@@ -383,7 +383,7 @@ static TLSConstants_nego_action nego_cb_proxy(FStar_Dyn_dyn cbs, TLSConstants_pr
       a.tag = TLSConstants_Nego_retry;
       c = KRML_HOST_MALLOC(app_cookie_len);
       if(app_cookie != NULL) memcpy(c, app_cookie, app_cookie_len);
-      a.val.case_Nego_retry = (FStar_Bytes_bytes){.data = c, .length = app_cookie_len};
+      a.val.case_Nego_retry = (FStar_Bytes_bytes){.data = (const char*)c, .length = app_cookie_len};
       break;
   }
 
@@ -501,7 +501,8 @@ static FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme
     cur = cur->tl;
   }
   FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme res;
-  void* chain = s->select(s->cb_state, sni.data, sni.length, sigalgs, sigalgs_len, &selected);
+  void* chain = s->select(s->cb_state, (const unsigned char*)sni.data, sni.length,
+    sigalgs, sigalgs_len, &selected);
 
   if(chain == NULL) {
     res.tag = FStar_Pervasives_Native_None;
@@ -520,9 +521,9 @@ static FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme
 static Prims_list__FStar_Bytes_bytes* wrapped_format(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st, uint64_t cert)
 {
   wrapped_cert_cb* s = (wrapped_cert_cb*)cbs;
-  char *buffer = KRML_HOST_MALLOC(MAX_CHAIN_LEN);
+  unsigned char *buffer = KRML_HOST_MALLOC(MAX_CHAIN_LEN);
   size_t r = s->format(s->cb_state, (const void *)(size_t)cert, buffer);
-  FStar_Bytes_bytes b = {.length = r, .data = buffer};
+  FStar_Bytes_bytes b = {.length = r, .data = (const char*)buffer};
   return FFI_ffiSplitChain(b);
 }
 
@@ -532,15 +533,16 @@ static FStar_Pervasives_Native_option__FStar_Bytes_bytes wrapped_sign(
   TLSConstants_signatureScheme sa, FStar_Bytes_bytes tbs)
 {
   wrapped_cert_cb* s = (wrapped_cert_cb*)cbs;
-  char* sig = KRML_HOST_MALLOC(MAX_SIGNATURE_LEN);
+  unsigned char* sig = KRML_HOST_MALLOC(MAX_SIGNATURE_LEN);
   FStar_Pervasives_Native_option__FStar_Bytes_bytes res = {.tag = FStar_Pervasives_Native_None};
   mitls_signature_scheme sigalg = pki_of_tls(sa.tag);
 
-  size_t slen = s->sign(s->cb_state, (const void *)(size_t)cert, sigalg, tbs.data, tbs.length, sig);
+  size_t slen = s->sign(s->cb_state, (const void *)(size_t)cert, sigalg,
+    (const unsigned char*)tbs.data, tbs.length, sig);
 
   if(slen > 0) {
     res.tag = FStar_Pervasives_Native_Some;
-    res.v = (FStar_Bytes_bytes){.length = slen, .data = sig};
+    res.v = (FStar_Bytes_bytes){.length = slen, .data = (const char*)sig};
   }
 
   return res;
@@ -554,16 +556,11 @@ static bool wrapped_verify(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
   FStar_Bytes_bytes chain = Cert_certificateListBytes(certs);
   mitls_signature_scheme sigalg = pki_of_tls(sa.tag);
 
-  // ADL the extra copy is a workaround for the const of sig.data
-  // FIXME should probably add a const in mitlsffi.h
-  char *sig0 = KRML_HOST_MALLOC(sig.length);
-  if(sig0 == NULL) return 0;
-  memcpy(sig0, sig.data, sig.length);
+  int r = (s->verify(s->cb_state,
+    (const unsigned char*)chain.data, chain.length, sigalg,
+    (const unsigned char*)tbs.data, tbs.length,
+    (const unsigned char*)sig.data, sig.length) != 0);
 
-  int r = (s->verify(s->cb_state, chain.data, chain.length, sigalg,
-    tbs.data, tbs.length, sig0, sig.length) != 0);
-
-  KRML_HOST_FREE(sig0);
   return r;
 }
 
@@ -613,7 +610,7 @@ void MITLS_CALLCONV FFI_mitls_close(mitls_state *state)
     }
 }
 
-void MITLS_CALLCONV FFI_mitls_free_packet(/* in */ mitls_state *state, void *packet)
+void MITLS_CALLCONV FFI_mitls_free_packet(/* in */ mitls_state *state, unsigned char *packet)
 {
     ENTER_HEAP_REGION(state->rgn);
     KRML_HOST_FREE(packet);
@@ -742,13 +739,13 @@ int MITLS_CALLCONV FFI_mitls_accept_connected(void *send_recv_ctx, pfn_FFI_send 
 }
 
 // Called by the host app transmit a packet
-int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const void* buffer, size_t buffer_size)
+int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const unsigned char *buffer, size_t buffer_size)
 {
     int ret;
 
     ENTER_HEAP_REGION(state->rgn);
     LOCK_MUTEX(&lock);
-    ret = FFI_ffiSend(state->cxn, (FStar_Bytes_bytes){.data = buffer, .length = buffer_size});
+    ret = FFI_ffiSend(state->cxn, (FStar_Bytes_bytes){.data = (const char*)buffer, .length = buffer_size});
     UNLOCK_MUTEX(&lock);
     LEAVE_HEAP_REGION();
 
@@ -756,9 +753,9 @@ int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const void* buffe
 }
 
 // Called by the host app to receive a packet
-void * MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_size)
+unsigned char *MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_size)
 {
-    void *p;
+    unsigned char *p;
     *packet_size = 0;
 
     ENTER_HEAP_REGION(state->rgn);
@@ -772,7 +769,7 @@ void * MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ s
     }
     p = KRML_HOST_MALLOC(ret.length);
     if(p != NULL) {
-        memcpy(p, ret.data, ret.length);
+        memcpy((char*)p, ret.data, ret.length);
     }
     LEAVE_HEAP_REGION();
     return p;
@@ -820,7 +817,7 @@ void *MITLS_CALLCONV FFI_mitls_get_cert(/* in */ mitls_state *state, /* out */ s
 typedef struct quic_state {
    HEAP_REGION rgn;
    int is_server;
-   char* in_buffer;
+   const char* in_buffer;
    uint32_t in_buffer_size;
    uint32_t in_buffer_used;
    char* out_buffer;
@@ -953,10 +950,10 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
        st->cfg = FFI_ffiSetALPN(st->cfg, str);
     }
 
-    if(cfg->exts != NULL && cfg->exts_len > 0)
+    if(cfg->exts != NULL && cfg->exts_count > 0)
     {
       mitls_extension *cur = (mitls_extension*)cfg->exts;
-      for(size_t i = 0; i < cfg->exts_len; i++, cur++)
+      for(size_t i = 0; i < cfg->exts_count; i++, cur++)
       {
         char *c = KRML_HOST_MALLOC(cur->ext_data_len);
         memcpy(c, cur->ext_data, cur->ext_data_len);
@@ -1075,9 +1072,9 @@ VOID quic_process_callout(PVOID Parameter)
 
 quic_result MITLS_CALLCONV FFI_mitls_quic_process(
   /* in */ quic_state *state,
-  /*in*/ char* inBuf,
+  /*in*/ const unsigned char* inBuf,
   /*inout*/ size_t *pInBufLen,
-  /*out*/ char *outBuf,
+  /*out*/ unsigned char *outBuf,
   /*inout*/ size_t *pOutBufLen)
 {
     quic_result ret = TLS_error_other;
@@ -1085,10 +1082,10 @@ quic_result MITLS_CALLCONV FFI_mitls_quic_process(
     LOCK_MUTEX(&lock);
 
     // Update the buffers for the QUIC_* callbacks
-    state->in_buffer = inBuf;
+    state->in_buffer = (const char*)inBuf;
     state->in_buffer_used = 0;
     state->in_buffer_size = *pInBufLen;
-    state->out_buffer = outBuf;
+    state->out_buffer = (char*)outBuf;
     state->out_buffer_used = 0;
     state->out_buffer_size = *pOutBufLen;
 
@@ -1138,18 +1135,37 @@ void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state)
     DESTROY_HEAP_REGION(rgn);
 }
 
-int MITLS_CALLCONV FFI_mitls_get_transport_parameters(const char *cexts, size_t cexts_len, char **qtp, size_t *qtp_len)
+int MITLS_CALLCONV FFI_mitls_find_custom_extension(int is_server, const unsigned char *exts, size_t exts_len, uint16_t ext_type, unsigned char **ext_data, size_t *ext_data_len)
 {
-  FStar_Bytes_bytes b = {.data = cexts, .length = cexts_len};
-  FStar_Pervasives_Native_option__FStar_Bytes_bytes ob = QUIC_get_transport_parameters(b);
-  *qtp = NULL; *qtp_len = 0;
+  FStar_Bytes_bytes b = {.data = (const char*)exts, .length = exts_len};
+  FStar_Pervasives_Native_option__FStar_Bytes_bytes ob;
+  ob = FFI_ffiFindCustomExtension((bool)is_server, b, ext_type);
+  *ext_data = NULL; *ext_data_len = 0;
 
   if(ob.tag == FStar_Pervasives_Native_Some)
   {
-    *qtp_len = ob.v.length;
-    *qtp = KRML_HOST_MALLOC(*qtp_len);
-    memcpy(*qtp, ob.v.data, *qtp_len);
+    *ext_data_len = ob.v.length;
+    *ext_data = KRML_HOST_MALLOC(*ext_data_len);
+    memcpy(*ext_data, ob.v.data, *ext_data_len);
     return 1;
   }
+
+  return 0;
+}
+
+int MITLS_CALLCONV FFI_mitls_find_server_name(const unsigned char *exts, size_t exts_len, unsigned char **sni, size_t *sni_len)
+{
+  FStar_Bytes_bytes b = {.data = (const char*)exts, .length = exts_len};
+  FStar_Pervasives_Native_option__FStar_Bytes_bytes ob = FFI_ffiFindSNI(b);
+  *sni = NULL; *sni_len = 0;
+
+  if(ob.tag == FStar_Pervasives_Native_Some)
+  {
+    *sni_len = ob.v.length;
+    *sni = KRML_HOST_MALLOC(*sni_len);
+    memcpy(*sni, ob.v.data, *sni_len);
+    return 1;
+  }
+
   return 0;
 }
