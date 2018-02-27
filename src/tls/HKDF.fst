@@ -5,8 +5,8 @@ module HKDF
 
 open FStar.UInt32
 open FStar.Bytes
-open TLSConstants
 open Hashing.Spec
+open Parse
 
 private let max (a:int) (b:int) = if a < b then b else a
 
@@ -29,7 +29,7 @@ HKDF-Extract(salt, IKM) -> PRK
 *)
 
 val extract: 
-  #ha: hash_alg -> salt: hkey ha -> 
+  #ha: Hashing.alg -> salt: hkey ha -> 
   ikm: macable ha -> 
   ST (hkey ha)
   (requires (fun h0 -> True))
@@ -75,11 +75,11 @@ HKDF-Expand(PRK, info, L) -> OKM
 /// hand, the truncation length is not explicitly encoded here.
 /// 
 private val expand_int: 
-  #ha: hash_alg -> prk: hkey ha ->
+  #ha: Hashing.alg -> prk: hkey ha ->
   info: bytes ->
   len: UInt32.t {UInt32.v len <= op_Multiply 255 (tagLength ha)} ->
   count: UInt8.t ->
-//  curr: UInt32.t {curr = Int.Cast.uint8_to_uint32 count *^ tagLen ha} ->
+//curr: UInt32.t {curr = Int.Cast.uint8_to_uint32 count *^ tagLen ha} ->
   curr: UInt32.t {v curr = op_Multiply (UInt8.v count) (tagLength ha)} ->
   previous: lbytes32 (if count = 0uy then 0ul else tagLen ha) -> 
   ST (b: bytes{
@@ -89,30 +89,36 @@ private val expand_int:
   (requires fun h0 -> length previous + length info + 1 + Hashing.blockLength ha <= Hashing.maxLength ha)
   (ensures (fun h0 t h1 -> modifies_none h0 h1))
 
-#set-options "--z3rlimit 50"
+#set-options "--z3rlimit 10 --detail_errors"
 let rec expand_int #ha prk info len count curr previous =
-  if curr <^ len && FStar.UInt8.(count <^ 255uy) then
+  if curr <^ len && FStar.UInt8.(count <^ 255uy) then (
+    assert(FStar.UInt8.(count <^ 255uy));
+    assert(UInt8.v count < 255);
     let count = FStar.UInt8.(count +^ 1uy) in
     let curr = curr +^ tagLen ha in
     lemma_repr_bytes_values (UInt8.v count);
     let block = HMAC.hmac ha prk (previous @| info @| bytes_of_int8 count) in
     let next = expand_int prk info len count curr block in
-    block @| next
+    block @| next )
   else empty_bytes
 #reset-options
 
-/// Final truncation, possibly chopping of the end of the last block. 
+
+// let c32 = FStar.Int.Cast.uint8_to_uint32 count in 
+//assert (c32 <^ 256ul)
+
+/// Final truncation, possibly chopping of the end of the last block.  
 val expand: 
-  #ha:hash_alg -> prk: hkey ha ->
+  #ha:Hashing.alg -> prk: hkey ha ->
   info: bytes -> 
-  len: nat{len <= op_Multiply 255 (tagLen ha)} ->
-  ST (lbytes len)
+  len: UInt32.t {v len <= op_Multiply 255 (tagLength ha)} ->
+  ST (lbytes32 len)
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
 
 let expand #ha prk info len =
-  lemma_repr_bytes_values len;
-  let rawbytes = expand_int prk info len 0 0 empty_bytes in
+  lemma_repr_bytes_values (v len);
+  let rawbytes = expand_int prk info len 0uy 0ul empty_bytes in
   fst (split rawbytes len) 
 
 
@@ -139,18 +145,18 @@ let tls13_prefix : lbytes 6 =
   assume(length s = 6); s
 
 val format:
-  ha: hash_alg -> 
+  ha: Hashing.alg -> 
   label: string{length (bytes_of_string label) < 256 - 6} -> 
   hv: bytes{length hv < 256} -> 
-  len: nat{len <= op_Multiply 255 (tagLen ha)} ->
+  len: UInt32.t {v len <= op_Multiply 255 (tagLength ha)} ->
   Tot bytes
 
 let format ha label hv len = 
   let label_bytes = tls13_prefix @| bytes_of_string label in
-  lemma_repr_bytes_values len;
+  lemma_repr_bytes_values (v len);
   lemma_repr_bytes_values (length label_bytes);
   lemma_repr_bytes_values (length hv);
-  bytes_of_int 2 len @|
+  bytes_of_int 2 (v len) @|
   vlbytes 1 label_bytes @|
   vlbytes 1 hv 
 
@@ -158,12 +164,12 @@ let format ha label hv len =
 /// we will need to prove format injective. 
 
 val expand_label: 
-  #ha: hash_alg
+  #ha: Hashing.alg
   -> prk: hkey ha
   -> label: string{length (bytes_of_string label) < 256 - 6} // -9?
   -> hv: bytes{length hv < 256}
-  -> len: nat{len <= op_Multiply 255 (tagLen ha)}
-  -> ST (lbytes len)
+  -> len: UInt32.t {v len <= op_Multiply 255 (tagLength ha)}
+  -> ST (lbytes32 len)
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> modifies_none h0 h1))
 
@@ -179,7 +185,7 @@ let expand_label #ha prk label hv len =
 /// renamed to expand_secret for uniformity
 
 val expand_secret:
-  #ha:hash_alg ->
+  #ha:Hashing.alg ->
   secret: hkey ha ->
   label: string{length (bytes_of_string label) < 256-6} ->
   hs_hash: bytes{length hs_hash < 256} ->

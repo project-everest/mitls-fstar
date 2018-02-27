@@ -8,16 +8,7 @@
       1,
       [ "@query", "assumption_FStar.UInt32.t_haseq" ],
       0,
-      "723adc471cf4528de4608024c53fd38e"
-    ],
-    [
-      "Hashing.OpenSSL.compute",
-      2,
-      2,
-      1,
-      [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
-      0,
-      "730591c7d4eec8928b3615e139bd4665"
+      "c871f3e02d917c159466da1f7af428b6"
     ],
     [
       "Hashing.OpenSSL.hmac",
@@ -26,16 +17,7 @@
       1,
       [ "@query", "assumption_FStar.UInt32.t_haseq" ],
       0,
-      "2b7f18853d68a3898721d25fa62bdaa8"
-    ],
-    [
-      "Hashing.OpenSSL.hmac",
-      2,
-      2,
-      1,
-      [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
-      0,
-      "9d05e3cf9c5b50743eacba06de084efb"
+      "df452a8d6df9e375052e42873694dd2c"
     ],
     [
       "Hashing.OpenSSL.toCC",
@@ -52,7 +34,7 @@
         "fuel_guarded_inversion_Hashing.Spec.alg"
       ],
       0,
-      "f8687e03e75332a93bd831e171c9b158"
+      "d0eac08645de893d3bc5b1c168f77602"
     ]
   ]
 ]

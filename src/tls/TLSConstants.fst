@@ -8,7 +8,8 @@ hash algorithm etc.
 *)
 module TLSConstants
 
-#set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1"
+//18-02-27 not a reasonable default? 
+//#set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1"
 
 open FStar.Seq
 open FStar.UInt32
@@ -16,9 +17,11 @@ open FStar.Bytes
 open FStar.Error
 open TLSError
 
-include Mem
-include Parse // still used in this file, to be deleted once we QD.
-
+// should now be explicitly used
+//include Mem
+//include Parse // still used in this file, to be deleted once we QD.
+open Mem
+open Parse 
 
 /// HIGH-LEVEL DECLARATIONS
 
@@ -46,9 +49,7 @@ include QD.TLS_protocolVersion
 // aka TLS_1p3
 let is_pv_13 = function
   | TLS_1p3 -> true
-  | _ -> false
-
-#set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1"
+  | _       -> false
 
 (** Serializing function for the protocol version *)
 let versionBytes : protocolVersion' -> Tot (lbytes 2) =
@@ -435,7 +436,7 @@ let compressionBytes comp =
 val parseCompression: b:lbytes 1
   -> Tot (cm:compression{compressionBytes cm == b})
 let parseCompression b =
-  // assume false; //18-02-23 to get the refinement above with FStar.Bytes
+  assume false; //18-02-23 to get the refinement above with FStar.Bytes
   match b.[0ul] with
   | 0z -> Seq.lemma_eq_intro (Bytes.reveal (abyte 0z)) (Bytes.reveal b);
          NullCompression
@@ -465,7 +466,7 @@ let rec parseCompressions b =
     assert_norm(List.length cms = 1 + List.length cms'); //library?
     cms )
 
-#set-options "--max_fuel 1 --initial_fuel 1 --max_ifuel 1 --initial_ifuel 1"
+//#set-options "--max_fuel 1 --initial_fuel 1 --max_ifuel 1 --initial_ifuel 1"
 
 (** Serializing function for lists of compression algorithms *)
 val compressionMethodsBytes: 
@@ -1762,3 +1763,5 @@ let cert_verify_cb (c:config) (cl:list cert_repr) (ss:signatureScheme) (tbs:byte
 
 type cVerifyData = b:bytes{length b <= 64} (* ClientFinished payload *)
 type sVerifyData = b:bytes{length b <= 64} (* ServerFinished payload *)
+
+private let max (a:int) (b:int) = if a < b then b else a

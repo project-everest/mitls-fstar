@@ -1,14 +1,14 @@
 [
-  "\u000eíh>Æ+ü◊3m'ˆg8\u0012ï",
+  "f=H$Á\u0017∑T” #pç[µ.",
   [
     [
       "CommonDH.is_supported_group",
       1,
       2,
       1,
-      [ "@query" ],
+      [ "@query", "assumption_Format.NamedGroup.namedGroup_haseq" ],
       0,
-      "c8a11fe17c4a112e16f7e4d125656958"
+      "3a340f37b4d3579ea72a7de65bb366b7"
     ],
     [
       "CommonDH.rshare",
@@ -20,7 +20,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_59e636272f909930c53ccc0e9facf997"
       ],
       0,
-      "121212c7d4fbd4deb1066996c88c2229"
+      "ae120ca3a3436c6053c5e1f58702180d"
     ],
     [
       "CommonDH.dh_responder",
@@ -32,7 +32,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_59e636272f909930c53ccc0e9facf997"
       ],
       0,
-      "52929807ba5832c57b2918473197b1de"
+      "a7a65c332c6cd655e7a9acdc2ddffdcb"
     ],
     [
       "CommonDH.dh_responder",
@@ -44,7 +44,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_59e636272f909930c53ccc0e9facf997"
       ],
       0,
-      "5bc36aeb5bda3e04c231bdfdd5819145"
+      "cc49b2f8abff257ea9aa3f5a22c1d964"
     ],
     [
       "CommonDH.dh_responder",
@@ -56,7 +56,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_59e636272f909930c53ccc0e9facf997"
       ],
       0,
-      "ec2d81c00df75f76e1c74ac1d6473e79"
+      "8e6ae49bc45a87fd2801d9114b609bd0"
     ],
     [
       "CommonDH.keyShareEntry",
@@ -74,7 +74,7 @@
         "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length"
       ],
       0,
-      "fef09af80cecc83e1becd269b16ea542"
+      "a3d1d3b8c744a096074f932e1592239b"
     ],
     [
       "CommonDH.keyShareEntry",
@@ -92,7 +92,7 @@
         "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length"
       ],
       0,
-      "8a654d77695b0654710a7c244101c4c0"
+      "ea7bc909128a003775169cbf429be66f"
     ],
     [
       "CommonDH.keyShareEntry",
@@ -110,7 +110,7 @@
         "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length"
       ],
       0,
-      "c156ad126c6105c9c202070a09c228c7"
+      "7494336c093781fa8b9fc5896719d938"
     ],
     [
       "CommonDH.keyShareEntry",
@@ -130,7 +130,7 @@
         "typing_CommonDH.pre_share"
       ],
       0,
-      "ddb89d842a3a30edd2406afa1d37674b"
+      "c15bc4530856be3fb2e4b0a9f8e8c22b"
     ],
     [
       "CommonDH.uu___is_Share",
@@ -139,7 +139,7 @@
       1,
       [ "@query" ],
       0,
-      "46c12643c7d7871d3b680d12f58e7c96"
+      "12a25fd32858d8bb1c6bbc19f3469918"
     ],
     [
       "CommonDH.__proj__Share__item__g",
@@ -152,7 +152,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_419290ad1633289796ca4faa3415e88c"
       ],
       0,
-      "bc057cca43151e42fb36fef988da523d"
+      "594907292836eeaf39dcdda99553daf8"
     ],
     [
       "CommonDH.__proj__Share__item___1",
@@ -167,7 +167,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_419290ad1633289796ca4faa3415e88c"
       ],
       0,
-      "d405bcf1c5f1d2651bc524ab5d5432ca"
+      "38483d3b4a4fa4623a1f909af8d7f7ad"
     ],
     [
       "CommonDH.uu___is_UnknownShare",
@@ -176,7 +176,7 @@
       1,
       [ "@query" ],
       0,
-      "f1e79963f9a43b14c4905cc269fe1f50"
+      "81028fd6d188179b1db4935c68f1e4dd"
     ],
     [
       "CommonDH.__proj__UnknownShare__item__ng",
@@ -190,7 +190,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_c024b0a21c9b8f09957845060b9823fc"
       ],
       0,
-      "c95e40fe5aecd3b125bf4affd8068a34"
+      "578be1a1be03948eee4d932c74811d16"
     ],
     [
       "CommonDH.__proj__UnknownShare__item__b",
@@ -208,7 +208,7 @@
         "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length"
       ],
       0,
-      "e132ca1cfd32d16eab240964a07bbe8e"
+      "5d1d1c912bbecfdee5e47c3225f12828"
     ],
     [
       "CommonDH.__proj__UnknownShare__item__b",
@@ -222,7 +222,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_c024b0a21c9b8f09957845060b9823fc"
       ],
       0,
-      "a41346a900d5038635357075b7c64c16"
+      "a2ede3a519c10e5a450cd52f43d3b370"
     ],
     [
       "CommonDH.uu___is_ClientKeyShare",
@@ -231,7 +231,7 @@
       1,
       [ "@query" ],
       0,
-      "6da338451e34e299b06c10ee86345090"
+      "de55e67f39f6ae96d6fe83cb2ff7ae6c"
     ],
     [
       "CommonDH.__proj__ClientKeyShare__item___0",
@@ -245,7 +245,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_6def7493d05b3fbcbe82678fc375d428"
       ],
       0,
-      "9cb16b64e085e016a7d1d07aec00d0f8"
+      "ffef3d2a2b988511b8d27db03b864e82"
     ],
     [
       "CommonDH.uu___is_ServerKeyShare",
@@ -254,7 +254,7 @@
       1,
       [ "@query" ],
       0,
-      "73418bac9849f7a59ed51b610a3f74f6"
+      "2dd4dcf15ffd17d2bbb360377bb17bde"
     ],
     [
       "CommonDH.__proj__ServerKeyShare__item___0",
@@ -268,7 +268,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_9cc025d1d8ed93fe703d76a8ddd03286"
       ],
       0,
-      "8fd436570d594abc7c4b3494aecbcab8"
+      "b85ef447551b42e30bf2f4587f80c8dd"
     ],
     [
       "CommonDH.uu___is_HRRKeyShare",
@@ -277,7 +277,7 @@
       1,
       [ "@query" ],
       0,
-      "3f24e38d8a2d3ef6a318759b900e1dce"
+      "d014df5b6bef78239b1fce0c1fbb564c"
     ],
     [
       "CommonDH.__proj__HRRKeyShare__item___0",
@@ -291,7 +291,7 @@
         "refinement_interpretation_CommonDH_Tm_refine_24f91d366aff84b0df73177175f3b8ef"
       ],
       0,
-      "0045a7a336f90c325a1149d313aa5cd2"
+      "95616ef929d239cf0186b64f435786a9"
     ],
     [
       "CommonDH.keyShareBytes",
@@ -300,34 +300,7 @@
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "9756e7a139c901c70c9e306130870943"
-    ],
-    [
-      "CommonDH.uu___is_KS_ClientHello",
-      1,
-      2,
-      1,
-      [ "@query" ],
-      0,
-      "8b20ce17f778ef854198c9373d930360"
-    ],
-    [
-      "CommonDH.uu___is_KS_ServerHello",
-      1,
-      2,
-      1,
-      [ "@query" ],
-      0,
-      "170afc05b3814422166f68cb89f55e4b"
-    ],
-    [
-      "CommonDH.uu___is_KS_HRR",
-      1,
-      2,
-      1,
-      [ "@query" ],
-      0,
-      "6243c4fcae3e361a4af3731039864cd0"
+      "5bed71f5c030dc9c93865fc383baed4c"
     ]
   ]
 ]
