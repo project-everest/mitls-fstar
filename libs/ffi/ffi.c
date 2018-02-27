@@ -36,8 +36,8 @@
   MITLS_FFI_ENTRY(QuicConfig) \
   MITLS_FFI_ENTRY(QuicCreateClient) \
   MITLS_FFI_ENTRY(QuicCreateServer) \
-  MITLS_FFI_ENTRY(QuicProcess) \
-  MITLS_FFI_ENTRY(QuicGetPeerParameters)
+  MITLS_FFI_ENTRY(QuicProcess)
+  //MITLS_FFI_ENTRY(QuicGetPeerParameters)
   //MITLS_FFI_ENTRY(TicketCallback)
   //MITLS_FFI_ENTRY(CertSelectCallback)
   //MITLS_FFI_ENTRY(CertFormatCallback)
@@ -223,7 +223,7 @@ static int configure_common_caml(/* in */ mitls_state *state, const char * str, 
 }
 
 // The OCaml runtime system must be acquired before calling this
-static int ocaml_set_ticket_key(const char *alg, const char *ticketkey, size_t klen)
+static int ocaml_set_ticket_key(const char *alg, const unsigned char *ticketkey, size_t klen)
 {
     int ret;
     CAMLparam0();
@@ -243,7 +243,7 @@ static int ocaml_set_ticket_key(const char *alg, const char *ticketkey, size_t k
     CAMLreturnT(int, ret);
 }
 
-int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *alg, const char *tk, size_t klen)
+int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *alg, const unsigned char *tk, size_t klen)
 {
     int ret;
     caml_c_thread_register();
@@ -307,8 +307,8 @@ CAMLprim value ocaml_ticket_cb(value st, value fp, value sni, value ticket, valu
   mitls_ticket t;
   t.ticket_len = caml_string_length(ticket);
   t.session_len = caml_string_length(session);
-  t.ticket = String_val(ticket);
-  t.session = String_val(session);
+  t.ticket = (unsigned char*)String_val(ticket);
+  t.session = (unsigned char*)String_val(session);
   cb((void*)ValueToPtr(st), String_val(sni), &t);
   CAMLreturn(Val_unit);
 }
@@ -451,7 +451,7 @@ void MITLS_CALLCONV FFI_mitls_free_msg(char *msg)
     free(msg);
 }
 
-void MITLS_CALLCONV FFI_mitls_free_packet(mitls_state *state, void *packet)
+void MITLS_CALLCONV FFI_mitls_free_packet(mitls_state *state, unsigned char *packet)
 {
     // state is ignored in the OCaml build
     free(packet);
@@ -613,7 +613,7 @@ static int FFI_mitls_send_caml(/* in */ mitls_state *state, const void* buffer, 
 }
 
 // Called by the host app transmit a packet
-int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const void* buffer, size_t buffer_size)
+int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const unsigned char *buffer, size_t buffer_size)
 {
     int ret;
 
@@ -625,7 +625,7 @@ int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const void* buffe
     return ret;
 }
 
-static void * FFI_mitls_receive_caml(/* in */ mitls_state *state, /* out */ size_t *packet_size)
+static unsigned char *FFI_mitls_receive_caml(/* in */ mitls_state *state, /* out */ size_t *packet_size)
 {
     CAMLparam0();
     CAMLlocal1(result);
@@ -644,7 +644,7 @@ static void * FFI_mitls_receive_caml(/* in */ mitls_state *state, /* out */ size
 }
 
 // Called by the host app to receive a packet
-void * MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_size)
+unsigned char *MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_size)
 {
     void *p;
 
@@ -744,10 +744,10 @@ void *MITLS_CALLCONV FFI_mitls_get_cert(/* in */ mitls_state *state, /* out */ s
 typedef struct quic_state {
    value fstar_state; // a GC root representing an F*-side state object
    int is_server;
-   char* in_buffer;
+   const unsigned char* in_buffer;
    size_t in_buffer_size;
    size_t in_buffer_used;
-   char* out_buffer;
+   unsigned char* out_buffer;
    size_t out_buffer_size;
    size_t out_buffer_used;
 } quic_state;
@@ -799,25 +799,6 @@ typedef struct quic_state {
    return len;
  }
 
-static value ocaml_alloc_version_list(const uint32_t *list, size_t len)
-{
-  CAMLparam0 ();
-  CAMLlocal2 (result, r);
-
-  uint32_t default_ver[] = {0xff000005}; // DRAFT 5
-  if(!list || !len){ list = default_ver; len = 1; }
-  result = Val_int(0);
-
-  for(size_t i = 0; i < len; i++) {
-    r = caml_alloc_small(2, 0);
-    Field(r, 0) = Val_int(list[len - i - 1]);
-    Field(r, 1) = result;
-    result = r;
-  }
-
-  CAMLreturn(result);
-}
-
 // The OCaml runtime system must be acquired before calling this
 static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg)
 {
@@ -836,21 +817,12 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg)
 
     state->is_server = cfg->is_server;
 
-    others = caml_alloc_string(cfg->qp.tp_len);
-    memcpy(String_val(others), cfg->qp.tp_data, cfg->qp.tp_len);
-
     if(cfg->host_name)
       host = caml_copy_string(cfg->host_name);
     else
       host = caml_alloc_string(0);
 
-    value args[] = {
-      others,
-      ocaml_alloc_version_list(cfg->supported_versions, cfg->supported_versions_len),
-      host
-    };
-
-    result = caml_callbackN_exn(*g_mitls_FFI_QuicConfig, 3, args);
+    result = caml_callback_exn(*g_mitls_FFI_QuicConfig, host);
     if (Is_exception_result(result)) {
       report_caml_exception(result);
       CAMLreturnT(int,0);
@@ -990,9 +962,9 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
 // The OCaml runtime system must be acquired before calling this
 static quic_result FFI_mitls_quic_process_caml(
   /* in */ quic_state *state,
-  /*in*/ char* inBuf,
+  /*in*/ const unsigned char* inBuf,
   /*inout*/ size_t *pInBufLen,
-  /*out*/ char *outBuf,
+  /*out*/ unsigned char *outBuf,
   /*inout*/ size_t *pOutBufLen)
 {
     CAMLparam0();
@@ -1027,9 +999,9 @@ static quic_result FFI_mitls_quic_process_caml(
 
 quic_result MITLS_CALLCONV FFI_mitls_quic_process(
   /* in */ quic_state *state,
-  /*in*/ char* inBuf,
+  /*in*/ const unsigned char* inBuf,
   /*inout*/ size_t *pInBufLen,
-  /*out*/ char *outBuf,
+  /*out*/ unsigned char *outBuf,
   /*inout*/ size_t *pOutBufLen)
 {
     quic_result ret;
@@ -1037,56 +1009,6 @@ quic_result MITLS_CALLCONV FFI_mitls_quic_process(
     caml_c_thread_register();
     caml_acquire_runtime_system();
     ret = FFI_mitls_quic_process_caml(state, inBuf, pInBufLen, outBuf, pOutBufLen);
-    caml_release_runtime_system();
-    caml_c_thread_unregister();
-
-    return ret;
-}
-
-static int FFI_mitls_quic_get_peer_parameters_caml(
-  /* in */ quic_state *state,
-  /* out */ uint32_t *ver,
-  /* out */ quic_transport_parameters *qp)
-{
-  CAMLparam0();
-  CAMLlocal2(result, tmp);
-  assert(qp);
-
-  result = caml_callback_exn(*g_mitls_FFI_QuicGetPeerParameters, state->fstar_state);
-
-  if (Is_exception_result(result)) {
-      report_caml_exception(result);
-      CAMLreturnT(int, 0);
-  }
-
-/*
-  tmp = Field(result, 4);
-  size_t len = caml_string_length(tmp);
-  qp->max_stream_data = Int_val(Field(result, 0));
-  qp->max_data = Int_val(Field(result, 1));
-  qp->max_stream_id = Int_val(Field(result, 2));
-  qp->idle_timeout = Int_val(Field(result, 3));
-  qp->others_len = len;
-  memcpy(qp->others, String_val(tmp), len);
-*/
-  *ver = Int_val(Field(result, 0));
-  tmp = Field(result, 1);
-  qp->tp_len = caml_string_length(tmp);
-  if(qp->tp_data) memcpy((char*)qp->tp_data, String_val(tmp), qp->tp_len);
-
-  CAMLreturnT(int, 1);
-}
-
-int MITLS_CALLCONV FFI_mitls_quic_get_peer_parameters(
-  /* in */ quic_state *state,
-  /* out */ uint32_t *ver,
-  /* out */ quic_transport_parameters *qp)
-{
-    int ret;
-
-    caml_c_thread_register();
-    caml_acquire_runtime_system();
-    ret = FFI_mitls_quic_get_peer_parameters_caml(state, ver, qp);
     caml_release_runtime_system();
     caml_c_thread_unregister();
 
@@ -1139,7 +1061,9 @@ CAMLprim value ocaml_cert_select_cb(value st, value fp, value sni, value sal)
 
   // The callback returns a unspecified pointer to the selected certificate
   // and updates the selected signature algorithm (passed by reference)
-  void* cert = cb((void*)ValueToPtr(st), String_val(sni), caml_string_length(sni), sigalgs, n, &selected);
+  void* cert = cb((void*)ValueToPtr(st), (unsigned char*)String_val(sni),
+    caml_string_length(sni), sigalgs, n, &selected);
+
   if(cert == NULL) CAMLreturn(Val_none);
 
   ret = caml_alloc_small(2, 0);
@@ -1157,7 +1081,7 @@ CAMLprim value ocaml_cert_format_cb(value st, value fp, value cert)
   CAMLlocal1(ret);
   pfn_FFI_cert_format_cb cb = (pfn_FFI_cert_format_cb)ValueToPtr(fp);
 
-  char *buffer = malloc(MAX_CHAIN_LEN);
+  unsigned char *buffer = malloc(MAX_CHAIN_LEN);
   if(buffer == NULL) caml_failwith("ocaml_cert_format_cb: failed to allocate certificate chain buffer");
 
   size_t len = cb((void*)ValueToPtr(st), (void*)ValueToPtr(cert), buffer);
@@ -1177,10 +1101,11 @@ CAMLprim value ocaml_cert_sign_cb(value st, value fp, value cert, value sigalg, 
   CAMLlocal1(ret);
   pfn_FFI_cert_sign_cb cb = (pfn_FFI_cert_sign_cb)ValueToPtr(fp);
 
-  char *buffer = malloc(MAX_SIGNATURE_LEN);
+  unsigned char *buffer = malloc(MAX_SIGNATURE_LEN);
   if(buffer == NULL) CAMLreturn(Val_none);
 
-  size_t len = cb((void*)ValueToPtr(st), (void*)ValueToPtr(cert), (uint16_t)Int_val(sigalg), String_val(tbs), caml_string_length(tbs), buffer);
+  size_t len = cb((void*)ValueToPtr(st), (void*)ValueToPtr(cert), (uint16_t)Int_val(sigalg),
+    (const unsigned char*)String_val(tbs), caml_string_length(tbs), buffer);
   if(!len) CAMLreturn(Val_none);
 
   ret = caml_alloc_string(len);
@@ -1202,9 +1127,11 @@ CAMLprim value ocaml_cert_verify_cb(value st, value fp, value chain, value sigal
   value tbs = Field(tbs_sig, 0);
   value sig = Field(tbs_sig, 1);
 
-  int success = cb((void*)ValueToPtr(st), String_val(chain), caml_string_length(chain),
-    (uint16_t)Int_val(sigalg),  String_val(tbs), caml_string_length(tbs),
-    String_val(sig), caml_string_length(sig));
+  int success = cb((void*)ValueToPtr(st),
+    (const unsigned char*)String_val(chain), caml_string_length(chain),
+    (uint16_t)Int_val(sigalg),
+    (const unsigned char*)String_val(tbs), caml_string_length(tbs),
+    (const unsigned char*)String_val(sig), caml_string_length(sig));
 
   CAMLreturn(success ? Val_true : Val_false);
 }
