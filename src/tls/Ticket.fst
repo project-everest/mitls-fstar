@@ -24,7 +24,7 @@ type hostname = string
 type tlabel (h:hostname) = t:bytes * tls13:bool
 private let region:rgn = new_region tls_tables_region
 private let tickets : MM.t region hostname tlabel (fun _ -> True) =
-  MM.alloc #region #hostname #tlabel #(fun _ -> True)
+  MM.alloc () // #region #hostname #tlabel #(fun _ -> True)
 
 #set-options "--lax"
 
