@@ -273,7 +273,7 @@ void HeapRegionDestroy(HEAP_REGION rgn)
     
     // Free all of the entries in the linked-list
     region *p = (region *)rgn;   
-    PrintRegionStatistics(p, p->stats);
+    PrintRegionStatistics(p, &p->stats);
     while (p->entries.lh_first) {
         struct region_allocation *a = p->entries.lh_first;
         LIST_REMOVE(a, entry);
@@ -320,7 +320,7 @@ void* HeapRegionMalloc(size_t cb)
 #endif
         if (heap == NULL) {
             pthread_mutex_lock(&g_global_region_lock);
-            LIST_INSERT_HEAD(&heap->entries, e, entry);
+            LIST_INSERT_HEAD(&g_global_region.entries, e, entry);
             UpdateStatisticsAfterMalloc(&g_global_region.stats, pv, cb);
             pthread_mutex_unlock(&g_global_region_lock);
         } else {
