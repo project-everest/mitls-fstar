@@ -61,6 +61,7 @@ cmitls.exe: cmitls.c \
 	$(MITLS_HOME)/src/tls/extract/Kremlin-Library/$(LIBMITLS)
 	$(CC) $(CFLAGS) -I../../src/pki -I../../libs/ffi \
 	  -I$(MITLS_HOME)/src/tls/extract/Kremlin-Library/stub \
+	  -I$(MITLS_HOME)/src/tls/extract/Kremlin-Library/include \
 	  -L$(MITLS_HOME)/src/pki \
 	  -L$(MITLS_HOME)/src/tls/extract/Kremlin-Library \
 	  -L$(MLCRYPTO_HOME)/openssl \
