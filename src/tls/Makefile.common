@@ -154,8 +154,9 @@ $(EXTRACT_DIR)/%.$(EXTENSION):
 		--cache_dir $(CACHE_DIR) \
 		--odir $(EXTRACT_DIR) \
 		$(addprefix --include , $(INCLUDE_PATHS)) \
-		--extract_module $(basename $(notdir $(subst .lax,,$(subst .checked,,$<)))) \
-		$(subst $(CACHE_DIR)/,,$(subst .lax,,$(subst .checked,,$<)))
+		--lax \
+		--extract_module $(basename $(notdir $(subst .checked.lax,,$<))) \
+		$(subst $(CACHE_DIR)/,,$(subst .checked.lax,,$<))
 
 # Avoids polluting the KreMLin source tree with a random .o file
 extract/copied/%.c: $(KREMLIN_HOME)/kremlib/%.c
