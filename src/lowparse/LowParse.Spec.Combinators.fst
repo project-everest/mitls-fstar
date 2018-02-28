@@ -737,6 +737,15 @@ let synth_injective
 : GTot Type0
 = forall (x x' : t1) . f x == f x' ==> x == x'
 
+let synth_injective_intro
+  (#t1: Type0)
+  (#t2: Type0)
+  (f: (t1 -> GTot t2))
+: Lemma
+  (requires (forall (x x' : t1) . f x == f x' ==> x == x'))
+  (ensures (synth_injective f))
+= ()
+
 let parse_synth
   (#k: parser_kind)
   (#t1: Type0)
@@ -810,6 +819,16 @@ let synth_inverse
   (g1: (t2 -> GTot t1))
 : GTot Type0
 = (forall (x : t2) . f2 (g1 x) == x)
+
+let synth_inverse_intro
+  (#t1: Type0)
+  (#t2: Type0)
+  (f2: (t1 -> GTot t2))
+  (g1: (t2 -> GTot t1))
+: Lemma
+  (requires (forall (x : t2) . f2 (g1 x) == x))
+  (ensures (synth_inverse f2 g1))
+= ()
 
 let serialize_synth
   (#k: parser_kind)
