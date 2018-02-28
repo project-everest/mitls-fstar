@@ -3,8 +3,8 @@ all: model
 FLAVOR    = Model
 EXTENSION = checked
 EXTRACT   = Nothing
-DEPFLAGS  =
 SPECINC   = $(MITLS_HOME)/src/tls/ideal-flags $(MITLS_HOME)/src/tls/concrete-flags/generic
+# default VFLAGS
 
 include Makefile.common
 

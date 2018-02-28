@@ -103,10 +103,13 @@ ROOTS ?= TLS.fst QUIC.fst Test.Main.fst
 EVERYTHING= $(wildcard *.fst *.fsti Make* ../pki* ../../libs/ffi/* ideal-flags/* concrete-flags/* concrete-flags/$(FLAVOR)/*)
 
 $(CACHE_DIR)/.depend: $(EVERYTHING)
+ifdef VERBOSE
+	@echo "\033[1;33mComputing $(FLAVOR) dependencies ...\033[;37m"
+endif
 	mkdir -p $(EXTRACT_DIR)
 	mkdir -p $(CACHE_DIR)
 	$(FSTAR) --cache_dir $(CACHE_DIR) --odir $(EXTRACT_DIR) --extract $(EXTRACT) \
-		$(DEPFLAGS) --dep full \
+		--dep full \
 		$(addprefix --include , $(INCLUDE_PATHS)) \
 		$(ROOTS) > $(CACHE_DIR)/.depend
 
@@ -121,14 +124,10 @@ depend: $(CACHE_DIR)/.depend
 # timestamp on the .checked file is updated to avoid make running this
 # rule again.
 
-%.checked.lax:
-	@echo === Producing $@ ...
-	$(FSTAR) --lax $(addprefix --include , $(INCLUDE_PATHS)) \
-		$<
-	@touch $@
-
 %.checked:
-	@echo === Producing $@ ...
+ifdef VERBOSE
+	@echo "\033[1;35m=== Producing $@ ...\033[;37m"
+endif
 	$(FSTAR) $(VFLAGS) $(addprefix --include , $(INCLUDE_PATHS)) \
 		$<
 	@touch $@
@@ -136,7 +135,6 @@ depend: $(CACHE_DIR)/.depend
 # typechecks one specific  file (not its dependencies),
 # but still produces a .checked file; this is convenient but not safe.
 # %.fsti-ver %.fst-ver: $(CACHE_DIR)/%.fst.checked:
-# 	@echo === Verifying $@ ...
 # 	$(V	FSTAR) \
 # 		$(addprefix --include , $(INCLUDE_PATHS)) \
 # 		$(subst $(CACHE_DIR)/,,$(subst .lax,,$<)) \
@@ -147,15 +145,16 @@ depend: $(CACHE_DIR)/.depend
 #	echo $%
 
 $(EXTRACT_DIR)/%.$(EXTENSION):
-	@echo === Extracting $@ ...
-	$(FSTAR) \
+ifdef VERBOSE
+	@echo "\033[1;32m=== Extracting $@ ...\033[;37m"
+endif
+	$(FSTAR) $(VFLAGS) \
 		--codegen $(FLAVOR) \
 		--cache_dir $(CACHE_DIR) \
 		--odir $(EXTRACT_DIR) \
 		$(addprefix --include , $(INCLUDE_PATHS)) \
-		--lax \
-		--extract_module $(basename $(notdir $(subst .checked.lax,,$<))) \
-		$(subst $(CACHE_DIR)/,,$(subst .checked.lax,,$<))
+		--extract_module $(basename $(notdir $(subst .checked,,$<))) \
+		$(subst $(CACHE_DIR)/,,$(subst .checked,,$<))
 
 # Avoids polluting the KreMLin source tree with a random .o file
 extract/copied/%.c: $(KREMLIN_HOME)/kremlib/%.c
