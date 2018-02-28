@@ -165,3 +165,6 @@ extract/copied/%.c: $(KREMLIN_HOME)/kremlib/%.c
 # Don't delete these files otherwise one can't run Makefile.OCaml and
 # Makefile.Kremlin in parallel
 .PRECIOUS: extract/copied/%.c
+
+%.fst-in %.fsti-in:
+	@echo $(addprefix --include , $(INCLUDE_PATHS)) --cache_dir $(CACHE_DIR) --cache_checked_modules $(OTHERFLAGS) --use_hints --use_hint_hashes

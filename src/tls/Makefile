@@ -24,4 +24,4 @@ clean: ocaml-clean kremlin-clean quic-clean
 	*.checked *.checked.lax
 
 %.fst-in %.fsti-in:
-	@echo $(addprefix --include , $(INCLUDE_PATHS)) --cache_dir $(CACHE_DIR) --cache_checked_modules $(OTHERFLAGS) --use_hints --use_hint_hashes
+	$(MAKE) -f Makefile.$(FLAVOR) $@
