@@ -11,8 +11,8 @@ EXTENSION=ml
 #Don't extract modules from fstarlib (NOEXTRACT_MODULES)
 #And also some specific ones from mitls that are implemented in C
 EXTRACT='* -Prims -FStar +FStar.Kremlin.Endianness +FStar.Test -CoreCrypto -CryptoTypes -DHDB -LowCProvider -HaclProvider -FFICallbacks -Crypto.AEAD -Crypto.Symmetric -Crypto.Plain -Spec.Loops -Buffer.Utils -C +C.Loops -LowParse.SLow.Tac -BufferBytes'
-DEPFLAGS=--lax
 SPECINC=$(MITLS_HOME)/src/tls/concrete-flags  $(MITLS_HOME)/src/tls/concrete-flags/OCaml
+VFLAGS?=--admit_smt_queries true
 include Makefile.common
 ################################################################################
 
@@ -146,7 +146,9 @@ extract/OCaml/PKI.cmx: extract/mlstubs/PKI.ml extract/OCaml/TLSConstants.cmx
 extract/OCaml/BufferBytes.cmx: extract/mlstubs/BufferBytes.ml
 
 %.cmx:
-#	@echo === Compiling $@ ...
+ifdef VERBOSE
+	@echo "\033[0;32m=== Compiling $@ ...\033[;37m"
+endif
 	$(OCAMLOPT) -w -8-11-26-20 -c $< -o $@
 
 CERT_FILES=CAFile.pem server-ecdsa.crt server-ecdsa.key
