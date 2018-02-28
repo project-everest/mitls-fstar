@@ -66,7 +66,7 @@ quic.exe: quic.c \
 	$(MITLS_HOME)/src/pki/$(LIBPKI) \
 	$(HACL_HOME)/secure_api/out/runtime_switch/$(LIBQC) \
 	$(MITLS_HOME)/src/tls/extract/Kremlin-Library/$(LIBMITLS)
-	$(CC) -fPIC -I../../src/pki -I../../libs/ffi -I$(HACL_HOME)/secure_api/QuicProvider \
+	$(CC) -fPIC -I../../src/tls/extract/Kremlin-Library/stub -I../../src/pki -I../../libs/ffi -I$(HACL_HOME)/secure_api/QuicProvider \
 	  -L$(MITLS_HOME)/src/pki \
 	  -L$(MITLS_HOME)/src/tls/extract/Kremlin-Library \
 	  -L$(HACL_HOME)/secure_api/out/runtime_switch \

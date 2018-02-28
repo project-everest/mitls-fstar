@@ -43,7 +43,8 @@ const char *option_file;
     STRING_OPTION("-groups", groups, "colon-separated list of named groups; see above for valid values") \
     STRING_OPTION("-cert", cert, "PEM file containing certificate chain to send") \
     STRING_OPTION("-key", key, "PEM file containing private key of endpoint certificate in chain") \
-    STRING_OPTION("-CAFile", cafile, "set openssl root cert file to <path>")
+    STRING_OPTION("-CAFile", cafile, "set openssl root cert file to <path>") \
+    BOOL_OPTION("-quiet", quiet, "disable logging")
 
 // Declare global variables representing the options
 #define STRING_OPTION(n, var, help) const char *option_##var;
@@ -836,10 +837,12 @@ int TestClient(void)
           closesocket(sockfd);
           return 1;
       }
-      printf("Received %zu bytes of data:\n", response_length);
       total_length += response_length;
       t = time(NULL);
-      printf("Download speed: %fkB/s\n", (double) total_length / 1024 / (t - t0));
+      if (!option_quiet) {
+        printf("Received %zu bytes of data:\n", response_length);
+        printf("Download speed: %fkB/s\n", (double) total_length / 1024 / (t - t0));
+      }
       // If the file is empty (i.e. GET / HTTP/1.1) then print on stdout;
       // otherwise, don't.
       if (!*option_file)
