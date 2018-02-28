@@ -21,6 +21,7 @@ module U32 = FStar.UInt32
 inline_for_extraction
 let consumed_length (b: bytes) : Tot Type0 = (n: nat { n <= Seq.length b } )
 
+inline_for_extraction
 let bare_parser (t:Type0) : Tot Type0 = (b: bytes) -> GTot (option (t * consumed_length b))
 
 let parse
@@ -405,6 +406,7 @@ let parser_kind_prop_ext
   no_lookahead_weak_ext f1 f2;
   injective_ext f1 f2
 
+inline_for_extraction
 let parser
   (k: parser_kind)
   (t: Type0)
@@ -545,6 +547,7 @@ let coerce_parser
 
 (* Pure serializers *)
 
+inline_for_extraction
 let bare_serializer
   (t: Type0)
 : Tot Type0
@@ -607,6 +610,7 @@ let serializer_correct_implies_complete
   in
   Classical.forall_intro (Classical.move_requires prf)
 
+inline_for_extraction
 let serializer
   (#k: parser_kind)
   (#t: Type0)

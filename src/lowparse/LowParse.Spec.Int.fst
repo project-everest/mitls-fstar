@@ -67,6 +67,7 @@ let decode_u16_injective
   (make_total_constant_size_parser_precond 2 U16.t decode_u16)
 = Classical.forall_intro_2 decode_u16_injective'
 
+inline_for_extraction
 let parse_u16_kind : parser_kind =
   total_constant_size_parser_kind 2
 

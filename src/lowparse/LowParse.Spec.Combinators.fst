@@ -113,6 +113,7 @@ let make_total_constant_size_parser_precond
 = forall (s1: bytes {Seq.length s1 == sz}) (s2: bytes {Seq.length s2 == sz}) .
   f s1 == f s2 ==> Seq.equal s1 s2
 
+inline_for_extraction
 let total_constant_size_parser_kind
   (sz: nat)
 : Tot parser_kind
