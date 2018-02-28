@@ -4,7 +4,7 @@ FLAVOR    = Model
 EXTENSION = checked
 EXTRACT   = Nothing
 DEPFLAGS  =
-SPECINC   = ideal-flags concrete-flags/generic
+SPECINC   = $(MITLS_HOME)/ideal-flags $(MITLS_HOME)/concrete-flags/generic
 
 include Makefile.common
 

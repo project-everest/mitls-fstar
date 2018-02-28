@@ -12,7 +12,7 @@ EXTENSION=ml
 #And also some specific ones from mitls that are implemented in C
 EXTRACT='* -Prims -FStar +FStar.Kremlin.Endianness +FStar.Test -CoreCrypto -CryptoTypes -DHDB -LowCProvider -HaclProvider -FFICallbacks -Crypto.AEAD -Crypto.Symmetric -Crypto.Plain -Spec.Loops -Buffer.Utils -C +C.Loops -LowParse.SLow.Tac -BufferBytes'
 DEPFLAGS=--lax
-SPECINC=concrete-flags  concrete-flags/OCaml
+SPECINC=$(MITLS_HOME)/concrete-flags  $(MITLS_HOME)/concrete-flags/OCaml
 include Makefile.common
 ################################################################################
 
@@ -146,6 +146,7 @@ extract/OCaml/PKI.cmx: extract/mlstubs/PKI.ml extract/OCaml/TLSConstants.cmx
 extract/OCaml/BufferBytes.cmx: extract/mlstubs/BufferBytes.ml
 
 %.cmx:
+	@echo === Compiling $@ ...
 	$(OCAMLOPT) -w -8-11-26-20 -c $< -o $@
 
 CERT_FILES=CAFile.pem server-ecdsa.crt server-ecdsa.key
