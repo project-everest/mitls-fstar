@@ -4,6 +4,19 @@ MITLS_HOME    ?= ../..
 KREMLIN_HOME  ?= ../../../kremlin
 MLCRYPTO_HOME ?= ../../../MLCrypto
 
+ifeq ($(OS),Windows_NT)
+  LIB_EXT?=.dll
+else
+  LIB_EXT?=.so
+endif
+
+$(MITLS_HOME)/libs/ffi/FFICallbacks.cmxa $(MITLS_HOME)/src/pki/libmipki.$(LIB_EXT):
+	$(MAKE) -C $(dir $@)
+
+prerequisites: \
+	$(MITLS_HOME)/libs/ffi/FFICallbacks.cmxa \
+	$(MITLS_HOME)/src/pki/libmipki.$(LIB_EXT)
+
 INCLUDE_PATHS= \
 	$(FSTAR_HOME)/contrib/CoreCrypto/fst/ \
 	$(HACL_HOME)/secure_api \
