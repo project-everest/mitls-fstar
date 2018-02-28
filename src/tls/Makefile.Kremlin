@@ -54,7 +54,7 @@ HEADERS 	= $(addprefix -add-include ,'"hacks.h"' '"krembytes.h"' \
 # Note: Crypto.Plain is not pre-extracted by secure_api.
 
 KRML_COMMAND	= krml \
-  -bundle TLSConstantsAux2 -bundle 'LowParse.\*' \
+  -bundle 'LowParse.\*' \
   -bundle LowParseWrappers \
   -bundle 'Format.\*' \
   -fnoanonymous-unions -warn-error -9-7-6 \
