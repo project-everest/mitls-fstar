@@ -1,21 +1,7 @@
 EXTRACT='Nothing'
-FLAVOR=generic
+FLAVOR?=Model
 
-all:
-	$(MAKE) verify-all 
-	$(MAKE) ocaml-all 
-	$(MAKE) kremlin-all
-
-ocaml-clean-depend:
-	rm -f .depend.OCaml
-
-kremlin-clean-depend:
-	rm -f .depend.Kremlin
-
-ocaml-all: ocaml-clean-depend
-kremlin-all: kremlin-clean-depend
-
-include Makefile.common
+all: model-all ocaml-all kremlin-all
 
 ocaml-%:
 	$(MAKE) -f Makefile.OCaml $*
@@ -23,16 +9,19 @@ ocaml-%:
 kremlin-%:
 	$(MAKE) -f Makefile.Kremlin $*
 
+model-% verify-%:
+	$(MAKE) -f Makefile.Model $*
+
 quic-%:
 	$(MAKE) -C ../../apps/quicMinusNet $* -k
 
 test: ocaml-test kremlin-test ocaml-test quic-test
 
-clean: ocaml-clean kremlin-clean quic-clean ocaml-clean-depend kremlin-clean-depend
+clean: ocaml-clean kremlin-clean quic-clean
 	rm -rf $(EXTRACT_DIR)/OCaml $(EXTRACT_DIR)/copied \
 	rm -rf $(EXTRACT_DIR)/Kremlin $(EXTRACT_DIR)/OCaml $(EXTRACT_DIR)/copied \
 	$(EXTRACT_DIR)/Kremlin-{Internal-Test,Library}/{,*/}*.{c,h,o} \
-	.depend.$(FLAVOR) *.checked
+	*.checked *.checked.lax
 
 %.fst-in %.fsti-in:
 	@echo $(addprefix --include , $(INCLUDE_PATHS)) --cache_dir $(CACHE_DIR) --cache_checked_modules $(OTHERFLAGS) --use_hints --use_hint_hashes

@@ -1,0 +1,14 @@
+all: model
+
+FLAVOR    = Model
+EXTENSION = checked
+EXTRACT   = Nothing
+DEPFLAGS  =
+SPECINC   = ideal-flags concrete-flags/generic
+
+include Makefile.common
+
+model verify: $(addprefix $(CACHE_DIR)/, $(addsuffix .checked, $(notdir $(ALL_FST_FILES))))
+
+clean:
+	rm -rf $(CACHE_DIR).depend
