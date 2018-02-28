@@ -4,11 +4,11 @@ FLAVOR    = Model
 EXTENSION = checked
 EXTRACT   = Nothing
 DEPFLAGS  =
-SPECINC   = ideal-flags concrete-flags/generic
+SPECINC   = $(MITLS_HOME)/src/tls/ideal-flags $(MITLS_HOME)/src/tls/concrete-flags/generic
 
 include Makefile.common
 
 model verify: $(addprefix $(CACHE_DIR)/, $(addsuffix .checked, $(notdir $(ALL_FST_FILES))))
 
 clean:
-	rm -rf $(CACHE_DIR).depend
+	rm -rf $(CACHE_DIR)/.depend

@@ -103,7 +103,6 @@ ROOTS ?= TLS.fst QUIC.fst Test.Main.fst
 EVERYTHING= $(wildcard *.fst *.fsti Make* ../pki* ../../libs/ffi/* ideal-flags/* concrete-flags/* concrete-flags/$(FLAVOR)/*)
 
 $(CACHE_DIR)/.depend: $(EVERYTHING)
-	@echo === Calculating $(FLAVOR) dependencies ...
 	mkdir -p $(EXTRACT_DIR)
 	mkdir -p $(CACHE_DIR)
 	$(FSTAR) --cache_dir $(CACHE_DIR) --odir $(EXTRACT_DIR) --extract $(EXTRACT) \
