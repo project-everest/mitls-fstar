@@ -7,11 +7,16 @@ module HandshakeLog
 /// Private state is held in a single reference (with a local
 /// specification expressed using refinements) so we don't need an
 /// external stateful invariant.
-/// 
-/// 17-11-11 Partly verified, but we are still missing regions and modifies clauses
 ///
-/// 17-11-11 We are planning a rewrite of this interface from lists of
-/// messages to constructed flights, to facilitate its low-level extraction.
+/// 18-02-28 To support stateless HelloRetryRequests, we will now
+///          tolerate updates on the server in the initial "open"
+///          state (and hence need a stateful invariant) until the
+///          hash algorithm is fixed.
+/// 
+/// 17-11-11 Partly verified, still missing regions and modifies
+///          clauses.  We are planning a rewrite of this interface
+///          from lists of messages to constructed flights, to
+///          facilitate its low-level extraction.
 
 (* TODO
 - add subregion discipline and the corresponding framing conditions
@@ -21,11 +26,11 @@ module HandshakeLog
 *)
 
 open FStar.Bytes
-open FStar.Ghost // after HH so as not to shadow reveal :(
+open FStar.Ghost 
 
 open Mem
-open Hashing.CRF
 open HandshakeMessages // for pattern matching on messages
+
 module HS = FStar.HyperStack
 
 open FStar.Error
