@@ -4,17 +4,19 @@ build: build-internal-test build-library build-external-test
 
 test: test-internal-test # test-library test-external-test
 
-clean: clean-internal-test clean-library clean-external-test
-	rm -f .depend.Kremlin
-
 # To include Makefile.common, you need to specify
-# the following three variables
+# the following five variables
 FLAVOR		= Kremlin
 EXTENSION	= krml
 # Don't extract modules from mitls that are implemented in C
 EXTRACT		= '* -DHDB -LowCProvider -FFICallbacks -BufferBytes'
+DEPFLAGS    = --lax
+SPECINC     = concrete-flags concrete-flags/Kremlin
 
 include Makefile.common
+
+clean: clean-internal-test clean-library clean-external-test
+	rm -f $(CACHE_DIR)/.depend
 
 # Tiny bit of autodetection to grab the right Vale files
 UNAME		= $(shell uname)

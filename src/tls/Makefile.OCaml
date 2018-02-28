@@ -5,12 +5,14 @@ FSTAR_HOME	?= ../../../fstar
 include $(FSTAR_HOME)/ulib/ml/Makefile.include
 
 #To include Makefile.common, you need to specify
-#the following three variables
+#the following five variables
 FLAVOR=OCaml
 EXTENSION=ml
 #Don't extract modules from fstarlib (NOEXTRACT_MODULES)
 #And also some specific ones from mitls that are implemented in C
 EXTRACT='* -Prims -FStar +FStar.Kremlin.Endianness +FStar.Test -CoreCrypto -CryptoTypes -DHDB -LowCProvider -HaclProvider -FFICallbacks -Crypto.AEAD -Crypto.Symmetric -Crypto.Plain -Spec.Loops -Buffer.Utils -C +C.Loops -LowParse.SLow.Tac -BufferBytes'
+DEPFLAGS=--lax
+SPECINC=concrete-flags  concrete-flags/OCaml
 include Makefile.common
 ################################################################################
 
@@ -172,4 +174,4 @@ test: mitls.exe $(CERT_FILES)
 	./mitls.exe
 
 clean:
-	rm -rf $(CERT_FILES) mitls.exe test/mitls.cm? test/mitls.o .depend.OCaml extract/OCaml
+	rm -rf $(CERT_FILES) mitls.exe test/mitls.cm? test/mitls.o $(CACHE_DIR)/.depend extract/OCaml
