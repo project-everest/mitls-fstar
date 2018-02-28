@@ -4,7 +4,7 @@ FLAVOR    = Model
 EXTENSION = checked
 EXTRACT   = Nothing
 DEPFLAGS  =
-SPECINC   = $(MITLS_HOME)/ideal-flags $(MITLS_HOME)/concrete-flags/generic
+SPECINC   = $(MITLS_HOME)/src/tls/ideal-flags $(MITLS_HOME)/src/tls/concrete-flags/generic
 
 include Makefile.common
 

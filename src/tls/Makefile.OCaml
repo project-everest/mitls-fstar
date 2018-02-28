@@ -12,7 +12,7 @@ EXTENSION=ml
 #And also some specific ones from mitls that are implemented in C
 EXTRACT='* -Prims -FStar +FStar.Kremlin.Endianness +FStar.Test -CoreCrypto -CryptoTypes -DHDB -LowCProvider -HaclProvider -FFICallbacks -Crypto.AEAD -Crypto.Symmetric -Crypto.Plain -Spec.Loops -Buffer.Utils -C +C.Loops -LowParse.SLow.Tac -BufferBytes'
 DEPFLAGS=--lax
-SPECINC=$(MITLS_HOME)/concrete-flags  $(MITLS_HOME)/concrete-flags/OCaml
+SPECINC=$(MITLS_HOME)/src/tls/concrete-flags  $(MITLS_HOME)/src/tls/concrete-flags/OCaml
 include Makefile.common
 ################################################################################
 
