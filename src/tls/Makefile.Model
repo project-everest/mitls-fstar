@@ -8,7 +8,7 @@ SPECINC   = $(MITLS_HOME)/src/tls/ideal-flags $(MITLS_HOME)/src/tls/concrete-fla
 
 include Makefile.common
 
-model verify: $(addprefix $(CACHE_DIR)/, $(addsuffix .checked, $(notdir $(ALL_FST_FILES))))
+model verify: prerequisites $(addprefix $(CACHE_DIR)/, $(addsuffix .checked, $(notdir $(ALL_FST_FILES))))
 
 clean:
 	rm -rf $(CACHE_DIR)/.depend

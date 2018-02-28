@@ -5,7 +5,7 @@ module LP = LowParse.SLow
 module U8 = FStar.UInt8
 module U16 = FStar.UInt16
 
-open Parse.LBytes1
+open Format.LBytes1
 
 unfold type is_injective (#a:Type) (#b:Type) (f:a -> b) 
   = forall x y . f x == f y ==> x == y
