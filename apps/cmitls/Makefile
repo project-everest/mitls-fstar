@@ -59,7 +59,7 @@ $(LIBPKI): $(MITLS_HOME)/src/pki/$(LIBPKI)
 cmitls.exe: cmitls.c \
 	$(MITLS_HOME)/src/pki/$(LIBPKI) \
 	$(MITLS_HOME)/src/tls/extract/Kremlin-Library/$(LIBMITLS)
-	$(CC) -I../../src/pki -I../../libs/ffi \
+	$(CC) $(CFLAGS) -I../../src/pki -I../../libs/ffi \
 	  -L$(MITLS_HOME)/src/pki \
 	  -L$(MITLS_HOME)/src/tls/extract/Kremlin-Library \
 	  -L$(MLCRYPTO_HOME)/openssl \

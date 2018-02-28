@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <time.h>
 #if _WIN32 // Windows 32-bit or 64-bit... mingw
 #include <winsock2.h>
 typedef int socklen_t;
@@ -824,6 +825,10 @@ int TestClient(void)
         return 1;
     }
 
+    time_t t0 = time(NULL);
+    time_t t = t0;
+    size_t total_length = 0;
+
     while (1) {
       response = FFI_mitls_receive(state, &response_length);
       if (response == NULL) {
@@ -832,6 +837,9 @@ int TestClient(void)
           return 1;
       }
       printf("Received %zu bytes of data:\n", response_length);
+      total_length += response_length;
+      t = time(NULL);
+      printf("Download speed: %fkB/s\n", (double) total_length / 1024 / (t - t0));
       // If the file is empty (i.e. GET / HTTP/1.1) then print on stdout;
       // otherwise, don't.
       if (!*option_file)
