@@ -8,24 +8,90 @@ module E = LowParse.BigEndianImpl
 module B32 = FStar.Bytes
 
 inline_for_extraction
+let serialize32_bounded_integer_1
+: (serializer32 (serialize_bounded_integer 1))
+= (fun (input: bounded_integer 1) ->
+    let b = E.n_to_be_1 _ _ (E.u32 ()) input in
+    (b <: (res: B32.bytes { serializer32_correct (serialize_bounded_integer 1) input res } ))
+  )
+
+inline_for_extraction
+let serialize32_bounded_integer_2
+: (serializer32 (serialize_bounded_integer 2))
+= (fun (input: bounded_integer 2) ->
+    let b = E.n_to_be_2 _ _ (E.u32 ()) input in
+    (b <: (res: B32.bytes { serializer32_correct (serialize_bounded_integer 2) input res } ))
+  )
+
+inline_for_extraction
+let serialize32_bounded_integer_3
+: (serializer32 (serialize_bounded_integer 3))
+= (fun (input: bounded_integer 3) ->
+    let b = E.n_to_be_3 _ _ (E.u32 ()) input in
+    (b <: (res: B32.bytes { serializer32_correct (serialize_bounded_integer 3) input res } ))
+  )
+
+inline_for_extraction
+let serialize32_bounded_integer_4
+: (serializer32 (serialize_bounded_integer 4))
+= (fun (input: bounded_integer 4) ->
+    let b = E.n_to_be_4 _ _ (E.u32 ()) input in
+    (b <: (res: B32.bytes { serializer32_correct (serialize_bounded_integer 4) input res } ))
+  )
+
+inline_for_extraction
 let serialize32_bounded_integer
   (sz: integer_size)
 : Tot (serializer32 (serialize_bounded_integer sz))
-= [@inline_let]
-  let sz32 = U32.uint_to_t sz in
-  (fun (input: bounded_integer sz) ->
-    let b = E.n_to_be_impl _ _ E.u32 sz32 input () in
-    (b <: (res: B32.bytes { serializer32_correct (serialize_bounded_integer sz) input res } ))
-  )
+= match sz with
+  | 1 -> serialize32_bounded_integer_1
+  | 2 -> serialize32_bounded_integer_2
+  | 3 -> serialize32_bounded_integer_3
+  | 4 -> serialize32_bounded_integer_4
+
+inline_for_extraction
+let decode32_bounded_integer_1
+  (b: B32.lbytes 1)
+: Tot (y: bounded_integer 1 { y == decode_bounded_integer 1 (B32.reveal b) } )
+= let r = E.be_to_n_1 _ _ (E.u32 ()) b in
+  E.lemma_be_to_n_is_bounded (B32.reveal b);
+  (r <: (r: bounded_integer 1 { r == decode_bounded_integer 1 (B32.reveal b) } ))
+
+inline_for_extraction
+let decode32_bounded_integer_2
+  (b: B32.lbytes 2)
+: Tot (y: bounded_integer 2 { y == decode_bounded_integer 2 (B32.reveal b) } )
+= let r = E.be_to_n_2 _ _ (E.u32 ()) b in
+  E.lemma_be_to_n_is_bounded (B32.reveal b);
+  (r <: (r: bounded_integer 2 { r == decode_bounded_integer 2 (B32.reveal b) } ))
+
+inline_for_extraction
+let decode32_bounded_integer_3
+  (b: B32.lbytes 3)
+: Tot (y: bounded_integer 3 { y == decode_bounded_integer 3 (B32.reveal b) } )
+= let r = E.be_to_n_3 _ _ (E.u32 ()) b in
+  E.lemma_be_to_n_is_bounded (B32.reveal b);
+  (r <: (r: bounded_integer 3 { r == decode_bounded_integer 3 (B32.reveal b) } ))
+
+inline_for_extraction
+let decode32_bounded_integer_4
+  (b: B32.lbytes 4)
+: Tot (y: bounded_integer 4 { y == decode_bounded_integer 4 (B32.reveal b) } )
+= let r = E.be_to_n_4 _ _ (E.u32 ()) b in
+  E.lemma_be_to_n_is_bounded (B32.reveal b);
+  (r <: (r: bounded_integer 4 { r == decode_bounded_integer 4 (B32.reveal b) } ))
 
 inline_for_extraction
 let decode32_bounded_integer
   (sz: integer_size)
-  (b: B32.lbytes sz)
-: Tot (y: bounded_integer sz { y == decode_bounded_integer sz (B32.reveal b) } )
-= let r = E.be_to_n_impl _ _ E.u32 b in
-  E.lemma_be_to_n_is_bounded (B32.reveal b);
-  (r <: (r: bounded_integer sz { r == decode_bounded_integer sz (B32.reveal b) } ))
+: Tot ((b: B32.lbytes sz) ->
+    Tot (y: bounded_integer sz { y == decode_bounded_integer sz (B32.reveal b) } )
+  )
+= match sz with
+  | 1 -> decode32_bounded_integer_1
+  | 2 -> decode32_bounded_integer_2
+  | 3 -> decode32_bounded_integer_3
+  | 4 -> decode32_bounded_integer_4
 
 inline_for_extraction
 let parse32_bounded_integer (sz: integer_size) : Tot (parser32 (parse_bounded_integer sz)) =

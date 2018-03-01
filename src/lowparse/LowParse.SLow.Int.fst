@@ -20,13 +20,15 @@ let serialize32_u8
 inline_for_extraction
 let serialize32_u16 : serializer32 #_ #_ #parse_u16 serialize_u16 =
   (fun (input: U16.t) ->
-    let b = E.n_to_be_impl _ _ E.u16 2ul input () in
+    let b = E.n_to_be_2 _ _ (E.u16 ()) input in
+    assert (E.n_to_be 2ul (U16.v input) == B32.reveal b);
     (b <: (res: B32.bytes { serializer32_correct #_ #_ #parse_u16 serialize_u16 input res } )))
 
 inline_for_extraction
 let serialize32_u32 : serializer32 #_ #_ #parse_u32 serialize_u32 =
   (fun (input: U32.t) ->
-    let b = E.n_to_be_impl _ _ E.u32 4ul input () in
+    let b = E.n_to_be_4 _ _ (E.u32 ()) input in
+    assert (E.n_to_be 4ul (U32.v input) == B32.reveal b);
     (b <: (res: B32.bytes { serializer32_correct #_ #_ #parse_u32 serialize_u32 input res } )))
 
 inline_for_extraction
@@ -37,7 +39,7 @@ let parse32_u16 : parser32 parse_u16 =
       decode_u16
       ()
       (fun (input: B32.lbytes 2) ->
-        let res = E.be_to_n_impl _ _ E.u16 input in
+        let res = E.be_to_n_2 _ _ (E.u16 ()) input in
         (res <: (res: U16.t { res == decode_u16 (B32.reveal input) } )))
 
 inline_for_extraction
@@ -48,7 +50,7 @@ let parse32_u32 : parser32 parse_u32 =
       decode_u32
       ()
       (fun (input: B32.lbytes 4) ->
-        let res = E.be_to_n_impl _ _ E.u32 input in
+        let res = E.be_to_n_4 _ _ (E.u32 ()) input in
         (res <: (res: U32.t { res == decode_u32 (B32.reveal input) } )))
 
 inline_for_extraction
