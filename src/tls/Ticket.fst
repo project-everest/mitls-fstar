@@ -89,6 +89,8 @@ type ticket =
     li: logInfo ->
     rmsId: pre_rmsId li ->
     rms: bytes ->
+    ticket_created: UInt32.t ->
+    ticket_age_add: UInt32.t ->
     ticket
 
 // Currently we use dummy indexes until we can serialize them properly
@@ -122,18 +124,23 @@ let parse (b:bytes) =
     | Correct pv ->
       let (csb, r) = split r 2ul in
       match parseCipherSuite csb, vlparse 2 r with
+      | _, Error _
       | Error _, _ -> None
-      | _, Error _ -> None
       | Correct cs, Correct rms ->
         match pv, cs with
         | TLS_1p3, CipherSuite13 ae h ->
-          let (| li, rmsId |) = dummy_rmsid ae h in
-          Some (Ticket13 cs li rmsId rms)
-        | TLS_1p2, CipherSuite _ _ _ ->
-          let (emsb, ms) = split rms 1ul in
-          let ems = 0z <> emsb.[0ul] in
-          let msId = dummy_msId pv cs ems in
-          Some (Ticket12 pv cs ems msId ms)
+            let created, rms = split rms 4ul in
+            let age_add, rms = split rms 4ul in
+            let (| li, rmsId |) = dummy_rmsid ae h in
+            let age_add = uint32_of_bytes age_add in
+            let created = uint32_of_bytes created in
+            Some (Ticket13 cs li rmsId rms created age_add)
+        | _, CipherSuite _ _ _ ->
+            let emsb, ms = split rms 1ul in
+            let ems = 0z <> emsb.[0ul] in
+            let msId = dummy_msId pv cs ems in
+            Some (Ticket12 pv cs ems msId ms)
+        | _ -> None
 
 let ticket_decrypt cipher : St (option bytes) =
   let Key tid _ rd = get_ticket_key () in
@@ -152,8 +159,11 @@ let check_ticket (b:bytes{length b <= 65551}) =
 
 let serialize t =
   let pv, cs, b = match t with
-    | Ticket12 pv cs ems _ ms -> pv, cs, abyte (if ems then 1z else 0z) @| ms
-    | Ticket13 cs _ _ rms -> TLS_1p3, cs, rms in
+    | Ticket12 pv cs ems _ ms ->
+      pv, cs, abyte (if ems then 1z else 0z) @| ms
+    | Ticket13 cs _ _ rms created age ->
+      TLS_1p3, cs, (bytes_of_int32 created @| bytes_of_int32 age @| rms)
+    in
   (versionBytes pv) @| (cipherSuiteBytes cs) @| (vlbytes 2 b)
 
 let ticket_encrypt plain =
@@ -200,12 +210,13 @@ let check_cookie b =
 
 let check_ticket13 b =
   match check_ticket b with
-  | Some (Ticket13 cs li _ _) ->
+  | Some (Ticket13 cs li _ _ created age_add) ->
     let CipherSuite13 ae h = cs in
     let nonce, _ = split b 12ul in
-    Some PSK.({
+    Some ({
       ticket_nonce = Some nonce;
-      time_created = 0;
+      time_created = created;
+      ticket_age_add = age_add;
       allow_early_data = true;
       allow_dhe_resumption = true;
       allow_psk_resumption = true;

@@ -1823,7 +1823,8 @@ let string_of_quicParameters = function
 
 type pskInfo = {
   ticket_nonce: option bytes;
-  time_created: int;
+  time_created: UInt32.t;
+  ticket_age_add: UInt32.t;
   allow_early_data: bool;      // New draft 13 flag
   allow_dhe_resumption: bool;  // New draft 13 flag
   allow_psk_resumption: bool;  // New draft 13 flag

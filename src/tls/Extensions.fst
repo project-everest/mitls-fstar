@@ -54,7 +54,7 @@ type pskIdentity = PSK.psk_identifier * PSK.obfuscated_ticket_age
 val pskiBytes: PSK.psk_identifier * PSK.obfuscated_ticket_age -> bytes
 let pskiBytes (i,ot) =
   lemma_repr_bytes_values (UInt32.v ot);
-  (vlbytes2 i @| bytes_of_int 4 (UInt32.v ot))
+  (vlbytes2 i @| bytes_of_int32 ot)
 
 private
 let pskiListBytes_aux acc pski = acc @| pskiBytes pski
@@ -1148,6 +1148,7 @@ val prepareExtensions:
   option (cVerifyData * sVerifyData) ->
   option CommonDH.keyShare ->
   list (PSK.pskid * pskInfo) ->
+  now: UInt32.t ->
   l:list extension{List.Tot.length l < 256}
 (* SI: implement this using prep combinators, of type exts->data->exts, per ext group.
    For instance, PSK, HS, etc extensions should all be done in one function each.
@@ -1161,12 +1162,18 @@ private let allow_dhe_resumption x = x.allow_dhe_resumption
 private let allow_resumption ((_,x):PSK.pskid * pskInfo) =
   x.allow_psk_resumption || x.allow_dhe_resumption
 private let send_supported_groups cs = isDHECipherSuite cs || CipherSuite13? cs
-private let add_default_obfuscated_age (x:bytes) = x, PSK.default_obfuscated_age
 private let compute_binder_len (ctr:nat) (pski:pskInfo) =
   let h = PSK.pskInfo_hash pski in
   ctr + 1 + Hashing.Spec.tagLen h
 
-let prepareExtensions minpv pv cs host alps custom (*qp*) ems sren edi ticket sigAlgs namedGroups ri ks psks =
+private val obfuscate_age: UInt32.t -> list (PSK.pskid * pskInfo) -> list pskIdentity
+let rec obfuscate_age now = function
+  | [] -> []
+  | (id, ctx) :: t ->
+    let age = FStar.UInt32.((now -%^ ctx.time_created) *%^ 1000ul) in
+    (id, PSK.encode_age age ctx.ticket_age_add) :: (obfuscate_age now t)
+
+let prepareExtensions minpv pv cs host alps custom (*qp*) ems sren edi ticket sigAlgs namedGroups ri ks psks now =
     let res = ext_of_custom custom in
     (* Always send supported extensions.
        The configuration options will influence how strict the tests will be *)
@@ -1233,7 +1240,7 @@ let prepareExtensions minpv pv cs host alps custom (*qp*) ems sren edi ticket si
             then PSK_DHE_KE :: psk_kex else psk_kex in
           let res = E_psk_key_exchange_modes psk_kex :: res in
           let binder_len = List.Tot.fold_left compute_binder_len 0 pskinfos in
-          let pskidentities = List.Tot.map add_default_obfuscated_age pskids in
+          let pskidentities = obfuscate_age now psks in
           let res =
             if edi then (E_early_data None) :: res
             else res in

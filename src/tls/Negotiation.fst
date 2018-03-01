@@ -421,9 +421,9 @@ noeq type t (region:rgn) (role:TLSConstants.role) : Type0 =
 
 #set-options "--lax"
 val computeOffer: r:role -> cfg:config -> resume:TLSInfo.resumeInfo r -> nonce:TLSInfo.random
-  -> ks:option CommonDH.keyShare -> list (PSK.pskid * PSK.pskInfo)
+  -> ks:option CommonDH.keyShare -> list (PSK.pskid * PSK.pskInfo) -> UInt32.t
   -> Tot offer
-let computeOffer r cfg resume nonce ks pskinfo =
+let computeOffer r cfg resume nonce ks pskinfo now =
   let ticket12, sid =
     match resume, cfg.enable_tickets, cfg.min_version with
     | _, _, TLS_1p3 -> None, empty_bytes // Don't bother sending session_ticket
@@ -465,6 +465,7 @@ let computeOffer r cfg resume nonce ks pskinfo =
       None // : option (cVerifyData * sVerifyData)
       ks
       pskinfo
+      now
   in
   {
     ch_protocol_version = minPV TLS_1p2 cfg.max_version; // legacy for 1.3
@@ -670,7 +671,8 @@ let client_ClientHello #region ns oks =
         | (_, i) :: _ -> i.allow_early_data && Some? ns.cfg.max_early_data // Must be the first PSK
         | _ -> false)
       then "Offering a PSK compatible with 0-RTT" else "No PSK or 0-RTT disabled");
-      let offer = computeOffer Client ns.cfg ns.resume ns.nonce oks' pskinfo in
+      let now = CoreCrypto.now () in
+      let offer = computeOffer Client ns.cfg ns.resume ns.nonce oks' pskinfo now in
       trace ("offering client extensions "^string_of_option_extensions offer.ch_extensions);
       trace ("offering cipher suites "^string_of_ciphersuites offer.ch_cipher_suites);
       HST.op_Colon_Equals ns.state (C_Offer offer);

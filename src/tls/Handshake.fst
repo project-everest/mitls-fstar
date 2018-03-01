@@ -593,7 +593,8 @@ let client_NewSessionTicket_13 (hs:hs) (st13:sticket13)
   let ed = List.Tot.find Extensions.E_early_data? t_ext in
   let pskInfo = PSK.({
     ticket_nonce = Some st13.ticket13_nonce;
-    time_created = 0; // TODO
+    time_created = CoreCrypto.now (); // TODO
+    ticket_age_add = st13.ticket13_age_add;
     allow_early_data = Some? ed;
     allow_dhe_resumption = true;
     allow_psk_resumption = true;
@@ -999,7 +1000,10 @@ let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinishe
            let (| li, rmsid, rms |) = KeySchedule.ks_server_13_cf hs.ks digestClientFinished in
            let cfg = Nego.local_config hs.nego in
            let cs = mode.Nego.n_cipher_suite in
-           let ticket = Ticket.Ticket13 cs li rmsid rms in
+           let age_add = CoreCrypto.random 4 in
+           let age_add = uint32_of_bytes age_add in
+           let now = CoreCrypto.now () in
+           let ticket = Ticket.Ticket13 cs li rmsid rms now age_add in
            let tb = Ticket.create_ticket ticket in
 
            trace ("Sending ticket: "^(print_bytes tb));
@@ -1010,7 +1014,7 @@ let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinishe
            let tnonce, _ = split_ tb 12 in
            HandshakeLog.send hs.log (NewSessionTicket13 ({
              ticket13_lifetime = FStar.UInt32.(uint_to_t 3600);
-             ticket13_age_add = FStar.UInt32.(uint_to_t 0);
+             ticket13_age_add = age_add;
              ticket13_nonce = tnonce;
              ticket13_ticket = tb;
              ticket13_extensions = ticket_ext;

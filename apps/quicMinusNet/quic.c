@@ -59,7 +59,7 @@ mitls_nego_action nego_cb(void *cb_state, mitls_version ver,
 
   unsigned char *qtp = NULL;
   size_t qtp_len;
-  int r = FFI_mitls_find_custom_extension(0, cexts, cexts_len, (uint16_t)0x1A, &qtp, &qtp_len);
+  int r = FFI_mitls_find_custom_extension(1, cexts, cexts_len, (uint16_t)0x1A, &qtp, &qtp_len);
   assert(r && qtp != NULL && qtp_len > 0);
   printf("Transport parameters offered:\n");
   dump(qtp, qtp_len);

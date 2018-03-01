@@ -183,13 +183,13 @@ mitls_nego_action nego_callback(void *cb_state, mitls_version ver,
 
   unsigned char *qtp = NULL;
   size_t qtp_len;
-  if(FFI_mitls_find_custom_extension(0, cexts, cexts_len, (uint16_t)0x1A, &qtp, &qtp_len))
+  if(FFI_mitls_find_custom_extension(option_isserver, cexts, cexts_len, (uint16_t)0x1A, &qtp, &qtp_len))
   {
-    printf("Transport parameters offered:\n");
+    printf("Transport parameters:\n");
     dump(qtp, qtp_len);
   }
 
-  if(option_quic)
+  if(option_quic && option_isserver)
   {
     *custom_exts = malloc(sizeof(mitls_extension));
     *custom_exts_len = 1;

@@ -1511,8 +1511,8 @@ let sessionTicketBytes t =
 val sessionTicketBytes13: sticket13 -> Tot (b:bytes{hs_msg_bytes HT_session_ticket b})
 let sessionTicketBytes13 t =
   let payload =
-    bytes_of_int 4 (UInt32.v t.ticket13_lifetime) @|
-    bytes_of_int 4 (UInt32.v t.ticket13_age_add) @|
+    bytes_of_int32 t.ticket13_lifetime @|
+    bytes_of_int32 t.ticket13_age_add @|
     vlbytes 1 t.ticket13_nonce @|
     vlbytes 2 t.ticket13_ticket @|
     extensionsBytes t.ticket13_extensions in

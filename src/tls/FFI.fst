@@ -73,7 +73,7 @@ let errno description txt : St int =
   in
   trace ("returning error: "^txt0^" "^txt^"\n");
   match description with
-  | Some ad ->  let _, e = split_ (Alert.alertBytes ad) 2 in int_of_bytes e
+  | Some ad -> int_of_bytes (Alert.alertBytes ad)
   | None    -> -1
 
 let connect ctx send recv config_1 psks : ML (Connection.connection * int) =
@@ -88,21 +88,23 @@ let connect ctx send recv config_1 psks : ML (Connection.connection * int) =
           (fun _ _ -> True)
           (fun _ ->
     let i = currentId c Reader in
-    match TLS.read c i with
-    | Update false ->
-      false
-
+    let read_r = TLS.read c i in
+    trace ("Read returned "^(TLS.string_of_ioresult_i read_r));
+    match read_r with
+    | Update false
+    | ReadAgain | ReadAgainFinishing
+    | ReadWouldBlock -> false
     | Complete
     | Update true ->
       err := Some 0;
       true
-
+    | Read (DataStream.Alert a) ->
+      err := Some (errno (Some a) ("received "^(TLSError.string_of_ad a)^" alert from peer"));
+      true
     | ReadError description txt ->
       err := Some (errno description txt);
       true
-
-    | _ ->
-      false);
+    | _ -> err := Some (errno None "unhandled ioresult_i"); true);
   let firstResult =
     match !err with
     | Some firstResult ->
@@ -132,16 +134,23 @@ let accept_connected ctx send recv config_1 : ML (Connection.connection * int) =
     (fun _ _ -> True)
     (fun _ ->
       let i = currentId c Reader in
-      match read c i with
+      let read_r = TLS.read c i in
+      trace ("Read returned "^(TLS.string_of_ioresult_i read_r));
+      match read_r with
+      | Update false
+      | ReadAgain | ReadAgainFinishing
+      | ReadWouldBlock -> false
       | Complete
       | Update true -> // 0.5-RTT: ready to write
         err := Some 0;
         true
+      | Read (DataStream.Alert a) ->
+        err := Some (errno (Some a) ("received "^(TLSError.string_of_ad a)^" alert from peer"));
+        true
       | ReadError description txt ->
         err := Some (errno description txt);
         true
-      | _ ->
-        false);
+      | _ -> err := Some (errno None "unhandled ioresult_i"); true);
   let firstResult =
     match !err with
     | Some i -> i
@@ -374,18 +383,22 @@ let install_ticket config ticket : ML (list PSK.psk_identifier) =
     (match Ticket.parse si with
     | Some (Ticket.Ticket12 pv cs ems msId ms) ->
       PSK.s12_extend t (pv, cs, ems, ms); [t]
-    | Some (Ticket.Ticket13 cs li rmsId rms) ->
+    | Some (Ticket.Ticket13 cs li rmsId rms created age_add) ->
       (match PSK.psk_lookup t with
       | Some _ ->
         trace ("input ticket "^(print_bytes t)^" is in PSK database")
       | None ->
         trace ("installing ticket "^(print_bytes t)^" in PSK database");
+        let ct = print_bytes (bytes_of_int32 created) in
+        let add = print_bytes (bytes_of_int32 age_add) in
+        trace ("Ticket created "^ct^", age mask "^add);
         let CipherSuite13 ae h = cs in
         PSK.coerce_psk t PSK.({
           // TODO(adl) store in session info
           // N.B. FFi.ffiGetTicket returns the PSK - no need to derive RMS again
           ticket_nonce = Some empty_bytes;
-          time_created = 0;
+          time_created = created;
+          ticket_age_add = age_add;
           // FIXME(adl): we should preserve the server flag somewhere
           allow_early_data = (Some? config.max_early_data);
           allow_dhe_resumption = true;
@@ -488,7 +501,7 @@ let ffiTicketInfoBytes (info:ticketInfo) (key:bytes) =
       let ae = ctx.early_ae in
       let h = ctx.early_hash in
       let (| li, rmsid |) = Ticket.dummy_rmsid ae h in
-      Ticket.Ticket13 (CipherSuite13 ae h) li rmsid key
+      Ticket.Ticket13 (CipherSuite13 ae h) li rmsid key ctx.time_created ctx.ticket_age_add
     | TicketInfo_12 (pv, cs, ems) ->
       Ticket.Ticket12 pv cs ems (Ticket.dummy_msId pv cs ems) key
     in
@@ -507,10 +520,10 @@ private let rec ext_filter (ext_type:UInt16.t) (e:list Extensions.extension) : o
   | _ :: t -> ext_filter ext_type t
 
 let ffiFindCustomExtension (server:bool) (exts:bytes) (ext_type:UInt16.t) : ML (option bytes) =
-  let mt = if server then Extensions.EM_EncryptedExtensions else Extensions.EM_ClientHello in
+  let mt = if server then Extensions.EM_ClientHello else Extensions.EM_EncryptedExtensions in
   match Extensions.parseOptExtensions mt exts with
   | Correct (Some el, _) -> ext_filter ext_type el
-  | Error _ -> trace ("Warning: bad extension list passed to get_transport_parameters"); None
+  | Error (_, txt) -> trace ("Warning: error "^txt^"while parsing extensions"); None
 
 let ffiFindSNI (exts:bytes) : ML (option bytes) =
   match Extensions.parseOptExtensions Extensions.EM_ClientHello exts with

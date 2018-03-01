@@ -32,6 +32,14 @@
     return _x;                                                                 \
   }
 
+// For ticket age, currently using C runtime <time.h> with second resolution
+// FIXME(adl) switch to milisecond timers, after we check the Windows options
+#include <time.h>
+uint32_t CoreCrypto_now()
+{
+  return (uint32_t)time(NULL);
+}
+
 #ifndef NO_OPENSSL
 
 #include <openssl/bn.h>
@@ -47,7 +55,6 @@
 #include <openssl/pem.h>
 #include <openssl/rand.h>
 #include <openssl/rsa.h>
-
 
 FStar_Bytes_bytes CoreCrypto_dh_agreement(CoreCrypto_dh_key x0,
                                           FStar_Bytes_bytes x1) {
@@ -538,7 +545,7 @@ static BCRYPT_ALG_HANDLE g_hAlgRandom;
 int CoreCrypto_Initialize(void)
 {
 
-  NTSTATUS st = BCryptOpenAlgorithmProvider(&g_hAlgRandom, BCRYPT_RNG_ALGORITHM, NULL, 
+  NTSTATUS st = BCryptOpenAlgorithmProvider(&g_hAlgRandom, BCRYPT_RNG_ALGORITHM, NULL,
 #ifdef _KERNEL_MODE
                     BCRYPT_PROV_DISPATCH
 #else
@@ -548,7 +555,7 @@ int CoreCrypto_Initialize(void)
   if (!NT_SUCCESS(st)) {
     KRML_HOST_EPRINTF("BCryptOpenAlgorithmProvider failed: 0x%x\n", (unsigned int)st);
     return 0;
-  }    
+  }
   return 1;
 }
 
