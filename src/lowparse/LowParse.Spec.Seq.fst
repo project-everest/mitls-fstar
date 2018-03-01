@@ -41,15 +41,7 @@ let parse_seq'
   (#k: parser_kind)
   (#t: Type0)
   (p: parser k t)
-: Tot (parser
-    ({
-      parser_kind_low = 0;
-      parser_kind_high = None;
-      parser_kind_total = false;
-      parser_kind_subkind = Some ParserConsumesAll;
-    })
-    (Seq.seq t)
-  )
+: Tot (parser PL.parse_list_kind (Seq.seq t))
 = seq_of_list_inj t;
   parse_synth (PL.parse_list p) (Seq.seq_of_list)
 
@@ -85,15 +77,7 @@ let parse_seq
   (#k: parser_kind)
   (#t: Type0)
   (p: parser k t)
-: Tot (parser
-    ({
-      parser_kind_low = 0;
-      parser_kind_high = None;
-      parser_kind_total = false;
-      parser_kind_subkind = Some ParserConsumesAll;
-    })
-    (Seq.seq t)
-  )
+: Tot (parser PL.parse_list_kind (Seq.seq t))
 = Classical.forall_intro (parse_seq_aux_correct p);
   no_lookahead_weak_ext (parse_seq' p) (parse_seq_aux p);
   injective_ext (parse_seq' p) (parse_seq_aux p);

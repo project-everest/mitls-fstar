@@ -273,7 +273,7 @@ void HeapRegionDestroy(HEAP_REGION rgn)
     
     // Free all of the entries in the linked-list
     region *p = (region *)rgn;   
-    PrintRegionStatistics(p, p->stats);
+    PrintRegionStatistics(p, &p->stats);
     while (p->entries.lh_first) {
         struct region_allocation *a = p->entries.lh_first;
         LIST_REMOVE(a, entry);
@@ -320,7 +320,7 @@ void* HeapRegionMalloc(size_t cb)
 #endif
         if (heap == NULL) {
             pthread_mutex_lock(&g_global_region_lock);
-            LIST_INSERT_HEAD(&heap->entries, e, entry);
+            LIST_INSERT_HEAD(&g_global_region.entries, e, entry);
             UpdateStatisticsAfterMalloc(&g_global_region.stats, pv, cb);
             pthread_mutex_unlock(&g_global_region_lock);
         } else {
@@ -394,7 +394,7 @@ typedef struct _region_allocation {
 #endif
 } region_allocation;
 
-KSPIN_LOCK global_region_lock;
+EX_PUSH_LOCK global_region_lock;
 region g_global_region; // All allocations made at global scope go here
 
 // Global initialization
@@ -403,7 +403,7 @@ int HeapRegionInitialize()
 {
     InitializeListHead(&g_mapping_list);
     ExInitializeFastMutex(&g_mapping_lock);
-    KeInitializeSpinLock(&global_region_lock);
+    ExInitializePushLock(&global_region_lock);
     RtlZeroMemory(&g_global_region, sizeof(g_global_region));
     InitializeListHead(&g_global_region.entries);
     return 1;
@@ -503,11 +503,10 @@ void* HeapRegionMalloc(size_t cb)
 #endif
         LIST_ENTRY *heap = HeapRegionFind();
         if (heap == NULL) {
-            KIRQL OldIrql;
-            KeAcquireSpinLock(&global_region_lock, &OldIrql);
+            ExfAcquirePushLockExclusive(&global_region_lock);
             InsertHeadList(&g_global_region.entries, &e->entry);
             UpdateStatisticsAfterMalloc(&g_global_region.stats, pv, cb);
-            KeReleaseSpinLock(&global_region_lock, OldIrql);
+            ExfReleasePushLockExclusive(&global_region_lock);
         } else {
             InsertHeadList(heap, &e->entry);
             UpdateStatisticsAfterMalloc(&heap->stats, pv, cb);
@@ -543,11 +542,10 @@ void HeapRegionFree(void* pv)
     LIST_ENTRY *heap = HeapRegionFind();
 
     if (heap == NULL) {
-        KIRQL OldIrql;
-        KeAcquireSpinLock(&global_region_lock, &OldIrql);
+        ExfAcquirePushLockExclusive(&global_region_lock);
         RemoveEntryList(&e->entry);
         UpdateStatisticsAfterFree(&g_global_region.stats, e->cb);
-        KeReleaseSpinLock(&global_region_lock, OldIrql);
+        ExfReleasePushLockExclusive(&global_region_lock);
     } else {
         RemoveEntryList(&e->entry);
         UpdateStatisticsAfterFree(&heap->stats, e->cb);

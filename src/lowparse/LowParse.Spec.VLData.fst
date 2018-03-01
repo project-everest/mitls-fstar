@@ -1,17 +1,14 @@
 module LowParse.Spec.VLData
 include LowParse.Spec.FLData
-include LowParse.Spec.Int
 
 module Seq = FStar.Seq
-module U8 = FStar.UInt8
-module U16 = FStar.UInt16
 module U32 = FStar.UInt32
-module E = FStar.Kremlin.Endianness
-module Cast = FStar.Int.Cast
+module E = LowParse.BigEndian
+module M = LowParse.Math
 
 let integer_size : Type0 = (sz: nat { 1 <= sz /\ sz <= 4 } )
 
-#reset-options "--z3cliopt smt.arith.nl=false --z3rlimit 32"
+#reset-options "--z3cliopt smt.arith.nl=false --using_facts_from '*  -FStar.UInt8 -FStar.UInt16' --z3rlimit 32"
 
 let integer_size_values (i: integer_size) : Lemma
   (i == 1 \/ i == 2 \/ i == 3 \/ i == 4)
@@ -25,16 +22,12 @@ let bounded_integer
 : Tot Type0
 = (u: U32.t { U32.v u < pow2 (FStar.Mul.op_Star 8 i) } )
 
-#reset-options "--z3rlimit 64 --z3cliopt smt.arith.nl=false --z3refresh"
-
 let decode_bounded_integer
   (i: integer_size)
   (b: bytes { Seq.length b == i } )
 : GTot (bounded_integer i)
 = E.lemma_be_to_n_is_bounded b;
   U32.uint_to_t (E.be_to_n b)
-
-#reset-options "--z3rlimit 128 --z3cliopt smt.arith.nl=false --z3refresh"
 
 let decode_bounded_integer_injective'
   (i: integer_size)
@@ -49,10 +42,8 @@ let decode_bounded_integer_injective'
     assert (U32.v (U32.uint_to_t (E.be_to_n b1)) == E.be_to_n b1);
     assert (U32.v (U32.uint_to_t (E.be_to_n b2)) == E.be_to_n b2);
     assert (E.be_to_n b1 == E.be_to_n b2);
-    be_to_n_inj b1 b2
+    E.be_to_n_inj b1 b2
   end else ()
-
-#reset-options
 
 let decode_bounded_integer_injective
   (i: integer_size)
@@ -64,12 +55,7 @@ let decode_bounded_integer_injective
 let parse_bounded_integer_kind
   (i: integer_size)
 : Tot parser_kind
-= {
-    parser_kind_low = i;
-    parser_kind_high = Some i;
-    parser_kind_total = true;
-    parser_kind_subkind = Some ParserStrong;
-  }
+= total_constant_size_parser_kind i
 
 let parse_bounded_integer
   (i: integer_size)
@@ -96,12 +82,9 @@ let parse_vldata_payload_size
 let parse_vldata_payload_kind
   (sz: integer_size)
 : parser_kind
-= {
-    parser_kind_low = 0;
-    parser_kind_high = Some (parse_vldata_payload_size sz);
-    parser_kind_total = false;
-    parser_kind_subkind = Some ParserStrong;
-  }
+= strong_parser_kind 0 (parse_vldata_payload_size sz) ({
+    parser_kind_metadata_total = false;
+  })
 
 let parse_vldata_payload
   (sz: integer_size)
@@ -148,12 +131,9 @@ let parse_fldata_and_then_cases_injective
 let parse_vldata_gen_kind
   (sz: integer_size)
 : Tot parser_kind
-= {
-    parser_kind_low = sz;
-    parser_kind_high = Some (sz + parse_vldata_payload_size sz);
-    parser_kind_total = false;
-    parser_kind_subkind = Some ParserStrong;
-  }
+= strong_parser_kind sz (sz + parse_vldata_payload_size sz) ({
+    parser_kind_metadata_total = false;
+  })
 
 let parse_vldata_gen_kind_correct
   (sz: integer_size)
@@ -291,12 +271,9 @@ let parse_bounded_vldata_kind
 : Pure parser_kind
   (requires (min <= max /\ max > 0 /\ max < 4294967296 ))
   (ensures (fun _ -> True))
-= {
-    parser_kind_low = log256' max + min;
-    parser_kind_high = Some (log256' max + max);
-    parser_kind_total = false;
-    parser_kind_subkind = Some ParserStrong;
-  }
+= strong_parser_kind (log256' max + min) (log256' max + max) ({
+    parser_kind_metadata_total = false;
+  })
 
 #reset-options "--z3rlimit 128 --z3cliopt smt.arith.nl=false --z3refresh"
 

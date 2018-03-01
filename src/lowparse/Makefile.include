@@ -3,6 +3,7 @@
 LOWPARSE_SPEC_FILES= \
         LowParse.Math.fst \
 	LowParse.Bytes.fst \
+        LowParse.BigEndian.fst \
 	LowParse.Spec.Base.fst \
 	LowParse.Spec.Combinators.fst \
 	LowParse.Spec.Int.fst \
@@ -22,25 +23,8 @@ LOWPARSE_SLOW_FILES= \
 	LowParse.SLow.Combinators.fst \
 	LowParse.SLow.List.fst \
 	LowParse.SLow.FLData.fst \
-        LowParse.BigEndian.fst \
-        LowParse.SLow.Int.Code.fst \
-        LowParse.SLow.Int.Proof.SerializeU16.fst \
-        LowParse.SLow.Int.Proof.SerializeU32.fst \
-        LowParse.SLow.Int.Proof.ParseU16.fst \
-        LowParse.SLow.Int.Proof.ParseU32.fst \
-        LowParse.SLow.Int.Proof.fsti \
-        LowParse.SLow.Int.Proof.fst \
+        LowParse.BigEndianImpl.fst \
         LowParse.SLow.Int.fst \
-        LowParse.SLow.VLData.Code.fst \
-        LowParse.SLow.VLData.Proof.fsti \
-        LowParse.SLow.VLData.Proof.Parse.BoundedInteger1.fst \
-        LowParse.SLow.VLData.Proof.Parse.BoundedInteger2.fst \
-        LowParse.SLow.VLData.Proof.Parse.BoundedInteger3.fst \
-        LowParse.SLow.VLData.Proof.Parse.BoundedInteger4.fst \
-        LowParse.SLow.VLData.Proof.Serialize.BoundedInteger1.fst \
-        LowParse.SLow.VLData.Proof.Serialize.BoundedInteger2.fst \
-        LowParse.SLow.VLData.Proof.Serialize.BoundedInteger3.fst \
-        LowParse.SLow.VLData.Proof.fst \
 	LowParse.SLow.VLData.fst \
         LowParse.SLow.Array.fst \
         LowParse.SLow.Bytes.fst \

@@ -265,7 +265,7 @@ let parse_sum_with_nondep_aux_correct
 
 #reset-options
 
-#set-options "--z3rlimit 32"
+#reset-options "--z3rlimit 64 --max_fuel 16 --max_ifuel 16 --z3cliopt smt.arith.nl=false"
 
 inline_for_extraction
 let parse32_sum_with_nondep_aux
@@ -293,6 +293,8 @@ let parse32_sum_with_nondep_aux
         destr (fun (x: sum_key t) (input: bytes32) -> match pc32 x input with | Some (d, consumed_d) -> Some ((d <: sum_type t), consumed_d) | _ -> None) tg input2
       with
       | Some (d, consumed_d) ->
+        [@inline_let]
+        let _ = assert (U32.v consumed_tg + (U32.v consumed_nd + U32.v consumed_d) < 4294967296) in
         Some ((nd, d), U32.add consumed_tg (U32.add consumed_nd consumed_d))
       | _ -> None
     end
