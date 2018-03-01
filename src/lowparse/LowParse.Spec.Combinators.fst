@@ -81,12 +81,9 @@ let make_constant_size_parser_injective
 let constant_size_parser_kind
   (sz: nat)
 : Tot parser_kind
-= {
-    parser_kind_low = sz;
-    parser_kind_high = Some sz;
-    parser_kind_total = false;
-    parser_kind_subkind = Some ParserStrong;
-  }
+= strong_parser_kind sz sz ({
+    parser_kind_metadata_total = false;
+  })
 
 let make_constant_size_parser
   (sz: nat)
@@ -117,12 +114,9 @@ inline_for_extraction
 let total_constant_size_parser_kind
   (sz: nat)
 : Tot parser_kind
-= {
-    parser_kind_low = sz;
-    parser_kind_high = Some sz;
-    parser_kind_total = true;
-    parser_kind_subkind = Some ParserStrong;
-  }
+= strong_parser_kind sz sz ({
+    parser_kind_metadata_total = true;
+  })
 
 let make_total_constant_size_parser
   (sz: nat)
@@ -149,12 +143,10 @@ let parse_ret' (#t:Type) (v:t) : Tot (bare_parser t) =
   fun (b: bytes) -> Some (v, (0 <: consumed_length b))
 
 // unfold
-let parse_ret_kind : parser_kind = {
-  parser_kind_low = 0;
-  parser_kind_high = Some 0;
-  parser_kind_total = true;
-  parser_kind_subkind = Some ParserStrong;
-}
+let parse_ret_kind : parser_kind =
+  strong_parser_kind 0 0 ({
+    parser_kind_metadata_total = true;
+  })
 
 unfold
 let parse_ret (#t:Type) (v:t) : Tot (parser parse_ret_kind t) =
@@ -171,7 +163,7 @@ let serialize_empty : serializer parse_empty =
 let fail_parser_kind_precond
   (k: parser_kind)
 : GTot Type0
-= k.parser_kind_total == false /\
+= k.parser_kind_metadata.parser_kind_metadata_total == false /\
   (Some? k.parser_kind_high ==> k.parser_kind_low <= Some?.v k.parser_kind_high)
 
 let fail_parser'
@@ -416,6 +408,13 @@ let and_then_no_lookahead_on #t #t' p p' x x' =
       else ()
     | _ -> ()
 
+let and_then_metadata
+  (k1 k2: parser_kind_metadata_t)
+: Tot parser_kind_metadata_t
+= {
+    parser_kind_metadata_total = k1.parser_kind_metadata_total && k2.parser_kind_metadata_total;
+  }
+
 // unfold
 let and_then_kind
   (k1 k2: parser_kind)
@@ -428,7 +427,7 @@ let and_then_kind
 	then Some (Some?.v k1.parser_kind_high + Some?.v k2.parser_kind_high)
 	else None
       end;
-    parser_kind_total = k1.parser_kind_total && k2.parser_kind_total;
+    parser_kind_metadata = and_then_metadata k1.parser_kind_metadata k2.parser_kind_metadata;
     parser_kind_subkind =
       begin
         if k2.parser_kind_subkind = Some ParserConsumesAll
@@ -881,18 +880,17 @@ let parse_filter_kind (k: parser_kind) : Tot parser_kind =
   {
     parser_kind_low = k.parser_kind_low;
     parser_kind_high = k.parser_kind_high;
-    parser_kind_total = false;
+    parser_kind_metadata = {
+      parser_kind_metadata_total = false;
+    };
     parser_kind_subkind = k.parser_kind_subkind;
   }
 
 // unfold
 let parse_filter_payload_kind : parser_kind =
-  {
-    parser_kind_low = 0;
-    parser_kind_high = Some 0;
-    parser_kind_total = false;
-    parser_kind_subkind = Some ParserStrong;
-  }
+  strong_parser_kind 0 0 ({
+    parser_kind_metadata_total = false;
+  })
 
 let parse_filter_payload
   (#t: Type0)

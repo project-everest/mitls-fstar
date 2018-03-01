@@ -5,6 +5,19 @@ open FStar.Mul
 module Seq = FStar.Seq
 module U8 = FStar.UInt8
 module U32 = FStar.UInt32
+module U = FStar.UInt
+module M = LowParse.Math
+
+#set-options "--z3rlimit 16"
+
+let lemma_be_to_n_is_bounded'
+  (b:bytes)
+  (l: nat)
+: Lemma
+  (requires (8 * Seq.length b <= l))
+  (ensures (U.fits (be_to_n b) l))
+= lemma_be_to_n_is_bounded b;
+  M.pow2_le_compat l (8 * Seq.length b)
 
 let be_to_n_1_spec
   (s: Seq.seq U8.t { Seq.length s == 1 } )
@@ -145,3 +158,17 @@ let lemma_u8_eq_intro
   in
   Classical.forall_intro g;
   Seq.lemma_eq_intro s1 s2
+
+let rec be_to_n_inj
+  (b1 b2: bytes)
+: Lemma
+  (requires (Seq.length b1 == Seq.length b2 /\ be_to_n b1 == be_to_n b2))
+  (ensures (Seq.equal b1 b2))
+  (decreases (Seq.length b1))
+= if Seq.length b1 = 0
+  then ()
+  else begin
+    be_to_n_inj (Seq.slice b1 0 (Seq.length b1 - 1)) (Seq.slice b2 0 (Seq.length b2 - 1));
+    Seq.lemma_split b1 (Seq.length b1 - 1);
+    Seq.lemma_split b2 (Seq.length b2 - 1)
+  end
