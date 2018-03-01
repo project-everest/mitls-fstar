@@ -15,28 +15,34 @@ INCLUDE_PATHS= \
 	$(KREMLIN_HOME)/kremlib \
 	$(MITLS_HOME)/libs/ffi \
 	./concrete-flags \
-        ./concrete-flags/$(FLAVOR)
+        ./concrete-flags/$(FLAVOR)$(CONCRETE_FLAVOR)
 
-CACHE_DIR=cache.$(FLAVOR)
+ifeq (,$(MITLS_NODEBUG))
+  INCLUDE_PATHS += ./concrete-flags/Debug
+else
+  INCLUDE_PATHS += ./concrete-flags/NoDebug
+endif
+
+CACHE_DIR=cache.$(FLAVOR)$(CONCRETE_FLAVOR)
 
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe --cache_dir $(CACHE_DIR) --cache_checked_modules $(OTHERFLAGS)
 
-EXTRACT_DIR=extract/$(FLAVOR)
+EXTRACT_DIR=extract/$(FLAVOR)$(CONCRETE_FLAVOR)
 
-ROOTS ?= TLS.fst QUIC.fst Test.Main.fst 
+ROOTS ?= TLS.fst QUIC.fst Test.Main.fst
 
-.depend.$(FLAVOR):
+.depend.$(FLAVOR)$(CONCRETE_FLAVOR):
 	mkdir -p $(EXTRACT_DIR)
 	$(FSTAR) --odir $(EXTRACT_DIR) \
 		 --lax \
 		 --dep full \
 		 --extract $(EXTRACT) \
 		 $(addprefix --include , $(INCLUDE_PATHS)) \
-		 $(ROOTS) > .depend.$(FLAVOR)
+		 $(ROOTS) > $@
 
-depend: .depend.$(FLAVOR)
+depend: .depend.$(FLAVOR)$(CONCRETE_FLAVOR)
 
--include .depend.$(FLAVOR)
+-include .depend.$(FLAVOR)$(CONCRETE_FLAVOR)
 
 %.checked.lax:
 	$(FSTAR) --lax $(addprefix --include , $(INCLUDE_PATHS)) $<

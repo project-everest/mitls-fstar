@@ -34,7 +34,7 @@ let print s = discard (IO.debug_print_string ("HS | "^s^"\n"))
 unfold val trace: s:string -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
-unfold let trace = if Flags.debug_HS then print else (fun _ -> ())
+unfold let trace = if DebugFlags.debug_HS then print else (fun _ -> ())
 
 
 // TODO : implement resumption

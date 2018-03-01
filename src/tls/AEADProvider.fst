@@ -29,7 +29,7 @@ let discard (b:bool) : ST unit (requires (fun _ -> True)) (ensures (fun h0 _ h1 
 let print (s:string) : ST unit (requires fun _ -> True) (ensures (fun h0 _ h1 -> h0 == h1)) =
   discard (IO.debug_print_string ("AEP| "^s^"\n"))
 unfold let dbg : string -> ST unit (requires (fun _ -> True)) (ensures (fun h0 _ h1 -> h0 == h1)) =
-  if Flags.debug_AEP then print else (fun _ -> ())
+  if DebugFlags.debug_AEP then print else (fun _ -> ())
 
 include Specializations.Providers.AEAD
 

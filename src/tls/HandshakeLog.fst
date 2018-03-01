@@ -29,7 +29,7 @@ let print s = discard (IO.debug_print_string ("HSL| "^s^"\n"))
 unfold val trace: s:string -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
-unfold let trace = if Flags.debug_HSL then print else (fun _ -> ())
+unfold let trace = if DebugFlags.debug_HSL then print else (fun _ -> ())
 
 // FIXME(ADL): the ghost transcript is buggy in the Kremlin-extracted version
 
