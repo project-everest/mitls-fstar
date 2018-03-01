@@ -1,0 +1,44 @@
+[
+  "m—öNëuE—ŠB;œ*E&e",
+  [
+    [
+      "LowParse.SLow.VLData.Code.decode32_bounded_integer_1'",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_FStar.Bytes.lbytes",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4"
+      ],
+      0,
+      "4ad970adf7bd65ff6dc8de2b05f9708e"
+    ],
+    [
+      "LowParse.SLow.VLData.Code.decode32_bounded_integer_3'",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
+        "bool_typing", "equation_FStar.Bytes.lbytes",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "equation_FStar.UInt.uint_t",
+        "function_token_typing_FStar.Bytes.empty_bytes",
+        "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Multiply",
+        "primitive_Prims.op_Subtraction",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
+        "refinement_interpretation_FStar.Int.Cast_Tm_refine_1e811ff056fdf42f0c9e14828e81e67c",
+        "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
+        "typing_FStar.Bytes.len", "typing_FStar.Int.Cast.uint8_to_uint32",
+        "typing_FStar.UInt32.v", "typing_FStar.UInt8.v"
+      ],
+      0,
+      "86d2dde387a68ae3b05445de2dd55367"
+    ]
+  ]
+]
