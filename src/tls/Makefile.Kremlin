@@ -4,19 +4,23 @@ build: prerequisites build-internal-test build-library build-external-test
 
 test: test-internal-test # test-library test-external-test
 
+ifneq (,$(MITLS_USE_OPENSSL))
+CONCRETE_FLAVOR	= -OpenSSL
+endif
+
 # To include Makefile.common, you need to specify
 # the following five variables
-FLAVOR		= Kremlin
+FLAVOR		= Kremlin$(CONCRETE_FLAVOR)
 EXTENSION	= krml
 # Don't extract modules from mitls that are implemented in C
 EXTRACT		= '* -DHDB -LowCProvider -FFICallbacks -BufferBytes'
-SPECINC     = $(MITLS_HOME)/src/tls/concrete-flags $(MITLS_HOME)/src/tls/concrete-flags/Kremlin
+SPECINC     = $(MITLS_HOME)/src/tls/concrete-flags $(MITLS_HOME)/src/tls/concrete-flags/$(FLAVOR)
 VFLAGS     ?= --admit_smt_queries true
 
 include Makefile.common
 
 clean: clean-internal-test clean-library clean-external-test
-	rm -f $(CACHE_DIR)/.depend
+	rm -f $(DEP_FILE)
 
 # Tiny bit of autodetection to grab the right Vale files
 UNAME		= $(shell uname)
