@@ -34,10 +34,9 @@
 
 // For ticket age, currently using C runtime <time.h> with second resolution
 // FIXME(adl) switch to milisecond timers, after we check the Windows options
-#include <time.h>
 uint32_t CoreCrypto_now()
 {
-  return (uint32_t)time(NULL);
+  return (uint32_t)KRML_HOST_TIME();
 }
 
 #ifndef NO_OPENSSL
