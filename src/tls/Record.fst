@@ -82,20 +82,22 @@ let parseHeader (h5:header) =
           then Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Wrong fragment length")
           else correct(ct,pv,len)
 
-// hopefully we only care about the writer, not the cn state
-// the postcondition is of the form
-//   authId i ==> f is added to the writer log
-let recordPacketOut (i:StatefulLHAE.id) (wr:StatefulLHAE.writer i) (pv: protocolVersion) f =
-    let ct, rg = Content.ct_rg i f in
-    let payload =
-      if PlaintextID? i
-      then Content.repr i f
-      else
-        let ad = StatefulPlain.makeAD i ct in
-        let f = StatefulPlain.assert_is_plain i ad rg f in
-        StatefulLHAE.encrypt #i wr ad rg f
-    in
-    makePacket ct (PlaintextID? i) pv payload
+
+// cwinter: recordPacketOut fails verification but is not used anyway?
+// // hopefully we only care about the writer, not the cn state
+// // the postcondition is of the form
+// //   authId i ==> f is added to the writer log
+// let recordPacketOut (i:StatefulLHAE.id) (wr:StatefulLHAE.writer i) (pv: protocolVersion) f =
+//     let ct, rg = Content.ct_rg i f in
+//     let payload =
+//       if PlaintextID? i
+//       then Content.repr i f
+//       else
+//         let ad = StatefulPlain.makeAD i ct in
+//         let f = StatefulPlain.assert_is_plain i ad rg f in
+//         StatefulLHAE.encrypt #i wr ad rg f
+//     in
+//     makePacket ct (PlaintextID? i) pv payload
 
 
 (*** networking (floating) ***)
