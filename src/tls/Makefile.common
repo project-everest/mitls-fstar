@@ -1,12 +1,11 @@
-HACL_HOME       ?= ../../../hacl-star
-FSTAR_HOME      ?= ../../../FStar
-MITLS_HOME      ?= ../..
-KREMLIN_HOME    ?= ../../../kremlin
-MLCRYPTO_HOME   ?= ../../../MLCrypto
-FLAVOR          ?= Model
-CONCRETE_FLAVOR ?=
+HACL_HOME     ?= ../../../hacl-star
+FSTAR_HOME    ?= ../../../FStar
+MITLS_HOME    ?= ../..
+KREMLIN_HOME  ?= ../../../kremlin
+MLCRYPTO_HOME ?= ../../../MLCrypto
 
 SHELL=/bin/sh
+
 
 # Project-wide Prerequisites
 
@@ -16,13 +15,12 @@ else
   LIB_EXT?=.so
 endif
 
-# PREREQUISITES= \
-# 	$(MITLS_HOME)/libs/ffi/FFICallbacks.cmxa \
-# 	$(MITLS_HOME)/src/pki/libmipki.$(LIB_EXT)
+$(MITLS_HOME)/libs/ffi/FFICallbacks.cmxa $(MITLS_HOME)/src/pki/libmipki.$(LIB_EXT):
+	$(MAKE) -C $(dir $@)
 
-# $(PREREQUISITES):
-# 	$(MAKE) -C $(MITLS_HOME)/libs/ffi
-# 	$(MAKE) -C $(MITLS_HOME)/src/pki
+prerequisites: \
+	$(MITLS_HOME)/libs/ffi/FFICallbacks.cmxa \
+	$(MITLS_HOME)/src/pki/libmipki.$(LIB_EXT)
 
 
 # Paths and Commands
@@ -37,7 +35,6 @@ INCLUDE_PATHS = \
 	$(HACL_HOME)/code/lib \
 	$(KREMLIN_HOME)/kremlib \
 	$(MITLS_HOME)/libs/ffi \
-	$(MITLS_HOME)/src/lowparse \
 	$(SPECINC)
 
 ifeq (,$(MITLS_NODEBUG))
@@ -50,10 +47,9 @@ FSTAR=$(FSTAR_HOME)/bin/fstar.exe --cache_dir $(CACHE_DIR) --cache_checked_modul
 
 VFLAGS?=--use_hints --use_hint_hashes --record_hints --warn_error -271
 
-HINTS_DIR  ?= .
-CACHE_DIR   = cache/$(FLAVOR)$(CONCRETE_FLAVOR)
-EXTRACT_DIR = extract/$(FLAVOR)$(CONCRETE_FLAVOR)
-DEP_FILE    = $(CACHE_DIR)/.depend
+CACHE_DIR   = cache/$(FLAVOR)
+EXTRACT_DIR = extract/$(FLAVOR)
+DEP_FILE=$(CACHE_DIR)/.depend
 
 
 # Project Files
@@ -61,23 +57,21 @@ DEP_FILE    = $(CACHE_DIR)/.depend
 # Add more roots here!
 ROOTS ?= TLS.fst QUIC.fst Test.Main.fst 
 
-EVERYTHING=$(wildcard *.fst *.fsti Make* $(MITLS_HOME)/src/pki/* $(MITLS_HOME)/libs/ffi/* ideal-flags/* concrete-flags/* concrete-flags/$(FLAVOR)$(CONCRETE_FLAVOR)/*)
+EVERYTHING=$(wildcard *.fst *.fsti Make* ../pki* ../../libs/ffi/* ideal-flags/* concrete-flags/* concrete-flags/$(FLAVOR)/*)
+
 
 # Production Rules
 
-$(DEP_FILE): $(EVERYTHING) 
+$(DEP_FILE): $(EVERYTHING)
 ifdef VERBOSE
-	@echo "\033[1;33m=== Computing $(FLAVOR)$(CONCRETE_FLAVOR) dependencies ...\033[;37m"
+	@echo "\033[1;33mComputing $(FLAVOR) dependencies ...\033[;37m"
 endif
-	@mkdir -p $(EXTRACT_DIR)
-	@mkdir -p $(CACHE_DIR)
-	@mkdir -p $(HINTS_DIR)
-	$(subst \\,, \
-		$(FSTAR) --cache_dir $(CACHE_DIR) --odir $(EXTRACT_DIR) --extract $(EXTRACT) \
-			--dep full \
-			$(addprefix --include , $(INCLUDE_PATHS)) \
-			$(ROOTS) > $(DEP_FILE) \
-	)
+	mkdir -p $(EXTRACT_DIR)
+	mkdir -p $(CACHE_DIR)
+	$(FSTAR) --cache_dir $(CACHE_DIR) --odir $(EXTRACT_DIR) --extract $(EXTRACT) \
+		--dep full \
+		$(addprefix --include , $(INCLUDE_PATHS)) \
+		$(ROOTS) > $(DEP_FILE)
 
 depend: $(DEP_FILE)
 
@@ -94,25 +88,20 @@ depend: $(DEP_FILE)
 ifdef VERBOSE
 	@echo "\033[1;35m=== Producing $@ ...\033[;37m"
 endif
-	$(subst \\,, \
-		$(FSTAR) $(VFLAGS) --hint_file $(HINTS_DIR)/$<.hints $(addprefix --include , $(INCLUDE_PATHS)) $< \
-	)
+	$(FSTAR) $(VFLAGS) $(addprefix --include , $(INCLUDE_PATHS)) $<
 	@touch $@
 
 $(EXTRACT_DIR)/%.$(EXTENSION):
 ifdef VERBOSE
 	@echo "\033[1;32m=== Extracting $@ ...\033[;37m"
 endif
-	$(subst \\,, \
-		$(FSTAR) $(VFLAGS) \
-			--codegen $(FLAVOR) \
-			--cache_dir $(CACHE_DIR) \
-			--hint_file $(HINTS_DIR)/$(subst .lax,,$(subst .checked,,$<)).hints \
-			--odir $(EXTRACT_DIR) \
-			$(addprefix --include , $(INCLUDE_PATHS)) \
-			--extract_module $(basename $(notdir $(subst .lax,,$(subst .checked,,$<)))) \
-			$(subst $(CACHE_DIR)/,,$(subst .lax,,$(subst .checked,,$<))) \
-	)
+	$(FSTAR) $(VFLAGS) \
+		--codegen $(FLAVOR) \
+		--cache_dir $(CACHE_DIR) \
+		--odir $(EXTRACT_DIR) \
+		$(addprefix --include , $(INCLUDE_PATHS)) \
+		--extract_module $(basename $(notdir $(subst .lax,,$(subst .checked,,$<)))) \
+		$(subst $(CACHE_DIR)/,,$(subst .lax,,$(subst .checked,,$<)))
 
 # Avoids polluting the KreMLin source tree with a random .o file
 extract/copied/%.c: $(KREMLIN_HOME)/kremlib/%.c
