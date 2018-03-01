@@ -7,9 +7,6 @@ module U16 = FStar.UInt16
 
 open Format.LBytes1
 
-unfold type is_injective (#a:Type) (#b:Type) (f:a -> b) 
-  = forall x y . f x == f y ==> x == y
-
 
 (* Types *)
 
@@ -22,11 +19,6 @@ unfold type is_injective (#a:Type) (#b:Type) (f:a -> b)
     } ECCurve;
 
 *)
-
-noeq type ecCurve = {
-  a : lbytes_1;
-  b : lbytes_1;
-}
 
 
 (* Parsers *)
@@ -44,23 +36,26 @@ let lbytes_of_ecCurve (c:ecCurve)
   : Tot (lbytes_1 * lbytes_1)
   = c.a, c.b
 
-#reset-options "--using_facts_from '* -LowParse -FStar.Reflection -FStar.Tactics' --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16"
+#reset-options "--using_facts_from '* -FStar.Reflection -FStar.Tactics' --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16"
 let lemma_ecCurve_of_lbytes_is_injective () 
-  : Lemma (is_injective ecCurve_of_lbytes) 
+  : Lemma (LP.synth_injective ecCurve_of_lbytes) 
   = ()
 #reset-options
 
 
 (* Parsers *)
 
-let ecCurve_parser_kind = LP.default_parser_kind
+inline_for_extraction
+let ecCurve_parser_kind' = 
+  LP.and_then_kind lbytes_1_parser_kind lbytes_1_parser_kind
 
-let ecCurve_parser: LP.parser ecCurve_parser_kind ecCurve =
+let ecCurve_parser_kind_metadata = ecCurve_parser_kind'.LP.parser_kind_metadata
+
+let ecCurve_parser =
   lemma_ecCurve_of_lbytes_is_injective ();
   lbytes_1_parser `LP.nondep_then` lbytes_1_parser `LP.parse_synth` (fun xy -> ecCurve_of_lbytes xy)
 
-inline_for_extraction
-let ecCurve_parser32: LP.parser32 ecCurve_parser =
+let ecCurve_parser32 =
   lemma_ecCurve_of_lbytes_is_injective ();
   let pu8u8 = LP.nondep_then lbytes_1_parser lbytes_1_parser in
   let pu8u832 = LP.parse32_nondep_then lbytes_1_parser32 lbytes_1_parser32 in
@@ -69,27 +64,28 @@ let ecCurve_parser32: LP.parser32 ecCurve_parser =
 
 (* Serialization *) 
 
-#reset-options "--using_facts_from '* -LowParse -FStar.Reflection -FStar.Tactics' --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16"
+#reset-options "--using_facts_from '* -FStar.Reflection -FStar.Tactics' --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16"
 let lemma_ecCurve_of_lbytes_of_ecCurve () 
-  : Lemma (forall x . ecCurve_of_lbytes (lbytes_of_ecCurve x) == x)
+  : Lemma (LP.synth_inverse ecCurve_of_lbytes lbytes_of_ecCurve)
   = ()
 #reset-options
 
-let ecCurve_serializer: LP.serializer ecCurve_parser = 
+let ecCurve_serializer =
   lemma_ecCurve_of_lbytes_is_injective ();
   lemma_ecCurve_of_lbytes_of_ecCurve ();
-  let pu8u8 = LP.nondep_then lbytes_1_parser lbytes_1_parser in
-  let su8u8 = LP.serialize_nondep_then LP.parse_u8 LP.serialize_u8 () LP.parse_u8 LP.serialize_u8 in
-  LP.serialize_synth #ecCurve_parser_kind #(lbytes_1 * lbytes_1) #ecCurve
+  assert_norm (ecCurve_parser_kind'  == ecCurve_parser_kind);
+  let pu8u8 : LP.parser ecCurve_parser_kind' _ = LP.nondep_then lbytes_1_parser lbytes_1_parser in
+  let su8u8 : LP.serializer pu8u8 = LP.serialize_nondep_then lbytes_1_parser lbytes_1_serializer () lbytes_1_parser lbytes_1_serializer in
+  LP.serialize_synth #ecCurve_parser_kind' #(lbytes_1 * lbytes_1) #ecCurve
     pu8u8 ecCurve_of_lbytes su8u8 lbytes_of_ecCurve ()
 
-inline_for_extraction
-let ecCurve_serializer32: LP.serializer32 ecCurve_serializer = 
+let ecCurve_serializer32 =
   lemma_ecCurve_of_lbytes_is_injective ();
   lemma_ecCurve_of_lbytes_of_ecCurve ();
+  assert_norm (ecCurve_parser_kind'  == ecCurve_parser_kind);
   let pu8u8 = LP.nondep_then lbytes_1_parser lbytes_1_parser in
   let pu8u832 = LP.parse32_nondep_then lbytes_1_parser32 lbytes_1_parser32 in
   let su8u8 = LP.serialize_nondep_then lbytes_1_parser lbytes_1_serializer () lbytes_1_parser lbytes_1_serializer in
   let su8u832 = LP.serialize32_nondep_then lbytes_1_serializer32 () lbytes_1_serializer32 () in
-  LP.serialize32_synth #ecCurve_parser_kind #(lbytes_1 * lbytes_1) #ecCurve
-    pu8u8 ecCurve_of_lbytes su8u8 su8u832 lbytes_of_ecCurve lbytes_of_ecCurve ()
+  LP.serialize32_synth #ecCurve_parser_kind' #(lbytes_1 * lbytes_1) #ecCurve
+    pu8u8 ecCurve_of_lbytes su8u8 su8u832 lbytes_of_ecCurve (fun x -> lbytes_of_ecCurve x) ()

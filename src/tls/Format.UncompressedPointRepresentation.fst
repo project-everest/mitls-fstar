@@ -24,14 +24,6 @@ unfold type is_injective_2 (#a:Type) (#b:Type) (f:a -> b) (x:a) (y:a)
     } UncompressedPointRepresentation;
 *)
 
-type lbytes32 (l:U32.t) = B.lbytes (UInt32.v l)
-
-type uncompressedPointRepresentation (coordinate_length:U32.t) = {
-    legacy_form : l:B.byte{l = 4uy};
-    x           : b:lbytes32 coordinate_length;
-    y           : b:lbytes32 coordinate_length;
-}
-
 private 
 type lbytes_pair (coordinate_length:U32.t) = (lbytes32 coordinate_length) * (lbytes32 coordinate_length)
 

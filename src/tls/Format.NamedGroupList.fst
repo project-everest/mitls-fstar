@@ -33,15 +33,20 @@ let synth_namedGroupList_recip
 
 (* Parsers *)
 
-let namedGroupList_parser_kind = LP.parse_bounded_vldata_kind 2 65535
+inline_for_extraction
+let namedGroupList_parser_kind' = LP.parse_bounded_vldata_kind 2 65535
 
-let namedGroupList_parser: LP.parser namedGroupList_parser_kind _ =
+let namedGroupList_parser_kind_metadata = namedGroupList_parser_kind'.LP.parser_kind_metadata
+
+let namedGroupList_parser =
+  assert_norm (namedGroupList_parser_kind' == namedGroupList_parser_kind);
   LP.parse_synth
     (LP.parse_bounded_vldata_strong 2 65535 nglist_serializer)
     synth_namedGroupList
 
 inline_for_extraction
 let namedGroupList_parser32: LP.parser32 namedGroupList_parser =
+  assert_norm (namedGroupList_parser_kind' == namedGroupList_parser_kind);
   LP.parse32_synth
     _
     synth_namedGroupList
@@ -53,6 +58,7 @@ let namedGroupList_parser32: LP.parser32 namedGroupList_parser =
 (* Serialization *) 
 
 let namedGroupList_serializer: LP.serializer namedGroupList_parser =
+  assert_norm (namedGroupList_parser_kind' == namedGroupList_parser_kind);
   LP.serialize_synth
     _
     synth_namedGroupList
@@ -62,6 +68,7 @@ let namedGroupList_serializer: LP.serializer namedGroupList_parser =
 
 inline_for_extraction
 let namedGroupList_serializer32: LP.serializer32 namedGroupList_serializer =
+  assert_norm (namedGroupList_parser_kind' == namedGroupList_parser_kind);
   LP.serialize32_synth
     _
     synth_namedGroupList

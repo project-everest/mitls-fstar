@@ -16,35 +16,37 @@ unfold type is_injective (#a:Type) (#b:Type) (f:a -> b)
 
 (* Types *)
 
-let is_lbytes_1 (b:bytes) = 0 < B.length b && B.length b < 256
-
-type lbytes_1 = b:bytes{is_lbytes_1 b}
-
 
 (* Parsers *)
 
 inline_for_extraction 
-let lbytes_1_of_bytes (b:bytes{is_lbytes_1 b}): Tot lbytes_1 = b
+let lbytes_1_of_bytes (b: LP.parse_bounded_vlbytes_t 1 255): Tot lbytes_1 = b
 
 inline_for_extraction
-let bytes_of_lbytes_1 (p:lbytes_1): Tot lbytes_1 = p
+let bytes_of_lbytes_1 (p:lbytes_1): Tot (LP.parse_bounded_vlbytes_t 1 255) = p
 
 let lemma_lbytes_1_of_bytes_is_injective () 
   : Lemma (is_injective lbytes_1_of_bytes) 
   = ()
 
-let lbytes_1_parser_kind = LP.parse_bounded_vldata_kind 1 255
+let lbytes_1_parser_kind' = LP.parse_bounded_vldata_kind 1 255
+
+let lbytes_1_parser_kind_metadata = lbytes_1_parser_kind'.LP.parser_kind_metadata
 
 let lbytes_1_parser
-  : LP.parser lbytes_1_parser_kind lbytes_1 
-  = lemma_lbytes_1_of_bytes_is_injective ();
-    LP.parse_bounded_vldata 1 255 LP.parse_u8
+  = assert_norm (lbytes_1_parser_kind' == lbytes_1_parser_kind);
+    lemma_lbytes_1_of_bytes_is_injective ();
+    LP.parse_bounded_vlbytes 1 255 `LP.parse_synth` lbytes_1_of_bytes
 
-inline_for_extraction 
 let lbytes_1_parser32
-  : LP.parser32 lbytes_1_parser 
-  = lemma_lbytes_1_of_bytes_is_injective ();
-    LP.parse32_bounded_vldata 1 1ul 255 255ul LP.parse32_u8
+  = assert_norm (lbytes_1_parser_kind' == lbytes_1_parser_kind);
+    lemma_lbytes_1_of_bytes_is_injective ();
+    LP.parse32_synth
+      _
+      lbytes_1_of_bytes
+      (fun x -> lbytes_1_of_bytes x)
+      (LP.parse32_bounded_vlbytes 1 1ul 255 255ul)
+      ()
 
 
 (* Serialization *)
@@ -54,14 +56,23 @@ let lemma_lbytes_1_of_bytes_of_lbytes_1 ()
   = ()
 
 let lbytes_1_serializer
-  : LP.serializer lbytes_1_parser 
   = lemma_lbytes_1_of_bytes_is_injective ();
     lemma_lbytes_1_of_bytes_of_lbytes_1 ();
-    LP.serialize_bounded_vldata_strong 1 255 LP.serialize_u8
+    LP.serialize_synth
+      _
+      lbytes_1_of_bytes
+      (LP.serialize_bounded_vlbytes 1 255)
+      bytes_of_lbytes_1
+      ()
 
-inline_for_extraction 
 let lbytes_1_serializer32
-  : LP.serializer32 lbytes_1_serializer 
   = lemma_lbytes_1_of_bytes_is_injective ();
     lemma_lbytes_1_of_bytes_of_lbytes_1 ();
-    LP.serialize32_bounded_vldata_strong 1 255 LP.serialize32_u8
+    LP.serialize32_synth
+      _
+      lbytes_1_of_bytes
+      _
+      (LP.serialize32_bounded_vlbytes 1 255)
+      bytes_of_lbytes_1
+      (fun x -> bytes_of_lbytes_1 x)
+      ()
