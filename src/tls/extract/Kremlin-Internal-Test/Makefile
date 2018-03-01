@@ -60,7 +60,7 @@ FILES 		= Cert C_Loops_Spec_Loops CommonDH CoreCrypto \
   QD_TLS_protocolVersion \
   stub/hacl_provider stub/buffer_bytes Test_Main TLSConstants TLS_Curve25519 TLSError TLSInfo \
   TLSInfoFlags vale/sha256_main_i vale/vale_aes_glue vale/Vale_Hash_SHA2_256 \
-  uint128/uint128_wrapper
+  uint128/uint128_wrapper stub/RegionAllocator
 
 CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror \
   -Wno-unused-variable -Wno-parentheses -Wno-unknown-warning-option \

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <time.h>
 #if _WIN32 // Windows 32-bit or 64-bit... mingw
 #include <winsock2.h>
 typedef int socklen_t;
@@ -22,6 +23,7 @@ typedef int SOCKET;
 
 const char *option_hostname;
 int option_port;
+const char *option_file;
 
 #define OPTION_LIST \
     STRING_OPTION("-v", version, "sets maximum protocol version to <1.0 | 1.1 | 1.2 | 1.3> (default: 1.3)") \
@@ -41,7 +43,8 @@ int option_port;
     STRING_OPTION("-groups", groups, "colon-separated list of named groups; see above for valid values") \
     STRING_OPTION("-cert", cert, "PEM file containing certificate chain to send") \
     STRING_OPTION("-key", key, "PEM file containing private key of endpoint certificate in chain") \
-    STRING_OPTION("-CAFile", cafile, "set openssl root cert file to <path>")
+    STRING_OPTION("-CAFile", cafile, "set openssl root cert file to <path>") \
+    BOOL_OPTION("-quiet", quiet, "disable logging")
 
 // Declare global variables representing the options
 #define STRING_OPTION(n, var, help) const char *option_##var;
@@ -74,7 +77,7 @@ void PrintUsage(void)
 {
     size_t i=0;
 
-    printf("Usage:  cmitls.exe [options] hostname port\n");
+    printf("Usage:  cmitls.exe [options] [[hostname=localhost/0.0.0.0] [[port=443] [file=""]]]\n");
     for (i=0; Options[i].OptionName; ++i) {
         printf("  %-10s %s\n", Options[i].OptionName, Options[i].HelpText);
     }
@@ -82,6 +85,7 @@ void PrintUsage(void)
 
 const char *hostname_arg;
 const char *port_arg;
+const char *file_arg;
 
 // Parse one argument, prefixed by "-"
 //  Name - the argument name, including the "-"
@@ -131,6 +135,8 @@ int ParseArgs(int argc, char **argv)
             hostname_arg = argv[i++];
         } else if (port_arg == NULL) {
             port_arg = argv[i++];
+        } else if (file_arg == NULL) {
+            file_arg = argv[i++];
         } else {
             printf("Unknown argument: %s\n", argv[i]);
             return -1;
@@ -146,6 +152,11 @@ int ParseArgs(int argc, char **argv)
         option_port = atoi(port_arg);
     } else {
         option_port = 443;
+    }
+    if (file_arg) {
+        option_file = file_arg;
+    } else {
+        option_file = "";
     }
     return 0;
 }
@@ -767,13 +778,13 @@ int TestClient(void)
     printf("===============================================\n");
     printf("Starting test client...\n");
 
-    const char request_template[] = "GET / HTTP/1.1\r\nHost: %s\r\n\r\n";
-    if (sizeof(request_template) + strlen(option_hostname) >= sizeof(request)) {
+    const char request_template[] = "GET /%s HTTP/1.1\r\nHost: %s\r\n\r\n";
+    if (sizeof(request_template) + strlen(option_hostname) + strlen(option_file) >= sizeof(request)) {
         // Host name is too long
         printf("Host name is too long.\n");
         return 1;
     }
-    requestlength = sprintf(request, request_template, option_hostname);
+    requestlength = sprintf(request, request_template, option_file, option_hostname);
 
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) {
@@ -815,15 +826,32 @@ int TestClient(void)
         return 1;
     }
 
-    response = FFI_mitls_receive(state, &response_length);
-    if (response == NULL) {
-        printf("FFI_mitls_receive() failed\n");
-        closesocket(sockfd);
-        return 1;
+    time_t t0 = time(NULL);
+    time_t t = t0;
+    size_t total_length = 0;
+
+    while (1) {
+      response = FFI_mitls_receive(state, &response_length);
+      if (response == NULL) {
+          printf("FFI_mitls_receive() failed\n");
+          closesocket(sockfd);
+          return 1;
+      }
+      total_length += response_length;
+      t = time(NULL);
+      if (!option_quiet) {
+        printf("Received %zu bytes of data:\n", response_length);
+        printf("Download speed: %fkB/s\n", (double) total_length / 1024 / (t - t0));
+      }
+      // If the file is empty (i.e. GET / HTTP/1.1) then print on stdout;
+      // otherwise, don't.
+      if (!*option_file)
+        puts((const char *)response);
+      FFI_mitls_free_packet(state, response);
+      // JP: TODO: how to determine when we have nothing left to read?
+      if (response_length < 16384)
+        break;
     }
-    printf("Received data:\n");
-    puts((const char *)response);
-    FFI_mitls_free_packet(state, response);
 
     printf("Closing connection, irrespective of the response\n");
     FFI_mitls_close(state);
