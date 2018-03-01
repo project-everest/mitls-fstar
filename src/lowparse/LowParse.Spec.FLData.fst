@@ -46,12 +46,9 @@ let parse_fldata_injective
 let parse_fldata_kind
   (sz: nat)
 : Tot parser_kind
-= {
-    parser_kind_low = sz;
-    parser_kind_high = Some sz;
-    parser_kind_total = false;
-    parser_kind_subkind = Some ParserStrong
-  }
+= strong_parser_kind sz sz ({
+    parser_kind_metadata_total = false;
+  })
 
 inline_for_extraction
 val parse_fldata

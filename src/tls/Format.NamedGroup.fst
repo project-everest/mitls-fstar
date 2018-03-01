@@ -63,14 +63,13 @@ let lemma_namedGroup_of_u16_is_injective_2 (x:U16.t) (y:U16.t)
 
 (* Parsers *)
 
-let namedGroup_parser_kind = LP.parse_u16_kind
+let namedGroup_parser_kind_metadata = LP.parse_u16_kind.LP.parser_kind_metadata
 
-let namedGroup_parser: LP.parser namedGroup_parser_kind namedGroup =
+let namedGroup_parser =
   lemma_namedGroup_of_u16_is_injective ();
   LP.parse_u16 `LP.parse_synth` namedGroup_of_u16 
 
-inline_for_extraction
-let namedGroup_parser32: LP.parser32 namedGroup_parser =
+let namedGroup_parser32 =
   lemma_namedGroup_of_u16_is_injective ();
   LP.parse32_synth LP.parse_u16 namedGroup_of_u16 (fun x -> namedGroup_of_u16 x) LP.parse32_u16 ()
 
@@ -84,14 +83,13 @@ let lemma_namedGroup_of_u16_of_namedGroup ()
 #reset-options
 
 
-let namedGroup_serializer: LP.serializer namedGroup_parser = 
+let namedGroup_serializer =
   lemma_namedGroup_of_u16_is_injective ();
   lemma_namedGroup_of_u16_of_namedGroup ();
   LP.serialize_synth #namedGroup_parser_kind #U16.t #namedGroup
     LP.parse_u16 namedGroup_of_u16 LP.serialize_u16 u16_of_namedGroup ()
 
-inline_for_extraction
-let namedGroup_serializer32: LP.serializer32 namedGroup_serializer = 
+let namedGroup_serializer32 =
   lemma_namedGroup_of_u16_is_injective ();
   lemma_namedGroup_of_u16_of_namedGroup ();
   LP.serialize32_synth #namedGroup_parser_kind #U16.t #namedGroup

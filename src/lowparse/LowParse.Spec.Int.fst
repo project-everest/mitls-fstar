@@ -2,7 +2,7 @@ module LowParse.Spec.Int
 include LowParse.Spec.Combinators
 
 module Seq = FStar.Seq
-module E = FStar.Kremlin.Endianness
+module E = LowParse.BigEndian
 module U8  = FStar.UInt8
 module U16 = FStar.UInt16
 module U32 = FStar.UInt32
@@ -13,8 +13,13 @@ let decode_u8
   (b: bytes { Seq.length b == 1 } )
 : GTot U8.t
 = Seq.index b 0
-  
+
+let decode_u8_injective () : Lemma
+  (make_total_constant_size_parser_precond 1 U8.t decode_u8)
+= ()
+
 let parse_u8: parser parse_u8_kind U8.t =
+  decode_u8_injective ();
   make_total_constant_size_parser 1 U8.t decode_u8
 
 let serialize_u8 : serializer parse_u8 =
@@ -25,26 +30,6 @@ let decode_u16
 : GTot U16.t
 = E.lemma_be_to_n_is_bounded b;
   U16.uint_to_t (E.be_to_n b)
-
-(* TODO: move to FStar.Kremlin.Endianness *)
-
-#set-options "--z3rlimit 32"
-
-let rec be_to_n_inj
-  (b1 b2: bytes)
-: Lemma
-  (requires (Seq.length b1 == Seq.length b2 /\ E.be_to_n b1 == E.be_to_n b2))
-  (ensures (Seq.equal b1 b2))
-  (decreases (Seq.length b1))
-= if Seq.length b1 = 0
-  then ()
-  else begin
-    be_to_n_inj (Seq.slice b1 0 (Seq.length b1 - 1)) (Seq.slice b2 0 (Seq.length b2 - 1));
-    Seq.lemma_split b1 (Seq.length b1 - 1);
-    Seq.lemma_split b2 (Seq.length b2 - 1)
-  end
-
-#reset-options
 
 let decode_u16_injective'
   (b1: bytes { Seq.length b1 == 2 } )
@@ -58,7 +43,7 @@ let decode_u16_injective'
     assert (U32.v (U32.uint_to_t (E.be_to_n b1)) == E.be_to_n b1);
     assert (U32.v (U32.uint_to_t (E.be_to_n b2)) == E.be_to_n b2);
     assert (E.be_to_n b1 == E.be_to_n b2);
-    be_to_n_inj b1 b2
+    E.be_to_n_inj b1 b2
   end else ()
 
 let decode_u16_injective
@@ -67,6 +52,7 @@ let decode_u16_injective
   (make_total_constant_size_parser_precond 2 U16.t decode_u16)
 = Classical.forall_intro_2 decode_u16_injective'
 
+inline_for_extraction
 let parse_u16_kind : parser_kind =
   total_constant_size_parser_kind 2
 
@@ -106,7 +92,7 @@ let decode_u32_injective'
     assert (U32.v (U32.uint_to_t (E.be_to_n b1)) == E.be_to_n b1);
     assert (U32.v (U32.uint_to_t (E.be_to_n b2)) == E.be_to_n b2);
     assert (E.be_to_n b1 == E.be_to_n b2);
-    be_to_n_inj b1 b2
+    E.be_to_n_inj b1 b2
   end else ()
 
 #reset-options

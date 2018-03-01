@@ -100,8 +100,8 @@ ALL_EXTERNAL_FILES	= \
   $(addprefix kremlib/,kremstr.c kremstr.h kremdate.c krembytes.h kremlib.h \
     gcc_compat.h testlib.h) \
   $(addprefix stub/,hacl_aead.c hacl_provider.c core_crypto.c log_to_choice.h \
-    buffer_bytes.c) \
-  $(addprefix include/,hacl_glue.h hacks.h) \
+    buffer_bytes.c RegionAllocator.c RegionAllocator.h) \
+  $(addprefix include/,hacl_glue.h hacks.h regions.h) \
   $(addprefix vale/,sha256_main_i.c sha256_main_i.h sha256-$(MARCH)$(VARIANT).S \
     Vale_Hash_SHA2_256.c vale_aes_glue.c aes-$(MARCH)$(VARIANT).S DafnyLib.h) \
   $(addprefix pki/,mipki.h) \

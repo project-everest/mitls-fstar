@@ -2,7 +2,7 @@ module Format.NamedGroupList
 
 open Format.NamedGroup
 
-module LP = LowParse.SLow
+module LP = LowParse.SLow.Base
 module L = FStar.List.Tot
 
 
@@ -22,7 +22,12 @@ val bytesize (gs:namedGroupList): Tot nat
 
 (* Parsers *)
 
-val namedGroupList_parser_kind: LP.parser_kind
+inline_for_extraction
+val namedGroupList_parser_kind_metadata: LP.parser_kind_metadata_t
+
+inline_for_extraction
+let namedGroupList_parser_kind =
+  LP.strong_parser_kind 4 65537 namedGroupList_parser_kind_metadata
 
 val namedGroupList_parser: LP.parser namedGroupList_parser_kind namedGroupList
 

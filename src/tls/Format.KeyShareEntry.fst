@@ -43,13 +43,6 @@ module U32 = FStar.UInt32
 
 *)
 
-
-type keyShareEntry = {
-  group        : namedGroup; 
-  key_exchange : B.bytes; // (bs:B.bytes{1 <= B.length bs && B.length bs <= 65535});
-}
-
-
 (* Parsers, validators *)
 
 inline_for_extraction
@@ -58,23 +51,30 @@ let synth_keyShareEntry (r:namedGroup * B.bytes): Tot keyShareEntry = { group=(f
 inline_for_extraction
 let unsynth_keyShareEntry (e:keyShareEntry): Tot (namedGroup * B.bytes) = e.group, e.key_exchange
 
-#reset-options "--using_facts_from '* -LowParse -FStar.Reflection -FStar.Tactics' --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16"
+#reset-options "--using_facts_from '* -LowParse -FStar.Reflection -FStar.Tactics'"
 let lemma_synth_keyShareEntry_is_injective () 
-  : Lemma (is_injective synth_keyShareEntry) 
-  = ()
+  : Lemma (LP.synth_injective synth_keyShareEntry) 
+  = LP.synth_injective_intro synth_keyShareEntry
 #reset-options
 
-let keyShareEntry_parser_kind = LP.and_then_kind namedGroup_parser_kind (LP.parse_bounded_vldata_kind 1 65535)
+inline_for_extraction
+let keyShareEntry_parser_kind' =
+  LP.and_then_kind namedGroup_parser_kind (LP.parse_bounded_vldata_kind 1 65535)
 
-let keyShareEntry_parser: LP.parser keyShareEntry_parser_kind keyShareEntry =
+let keyShareEntry_parser_kind_metadata = keyShareEntry_parser_kind'.LP.parser_kind_metadata
+
+#reset-options "--using_facts_from '* -LowParse -FStar.Reflection -FStar.Tactics'"
+
+let keyShareEntry_parser =
   lemma_synth_keyShareEntry_is_injective ();
+  assert_norm (keyShareEntry_parser_kind' == keyShareEntry_parser_kind);
   LP.parse_synth 
     (namedGroup_parser `LP.nondep_then` (LP.parse_bounded_vlbytes 1 65535))
     synth_keyShareEntry
 
-inline_for_extraction
-let keyShareEntry_parser32: LP.parser32 keyShareEntry_parser =
+let keyShareEntry_parser32 =
   lemma_synth_keyShareEntry_is_injective ();
+  assert_norm (keyShareEntry_parser_kind' == keyShareEntry_parser_kind);
   LP.parse32_synth
     _
     synth_keyShareEntry
@@ -85,15 +85,16 @@ let keyShareEntry_parser32: LP.parser32 keyShareEntry_parser =
 
 (* Serialization *)
 
-#reset-options "--using_facts_from '* -LowParse -FStar.Reflection -FStar.Tactics' --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16"
+#reset-options "--using_facts_from '* -LowParse -FStar.Reflection -FStar.Tactics'"
 let lemma_synth_keyShareEntry_of_unsynth_keyShareEntry () 
-  : Lemma (forall x . synth_keyShareEntry (unsynth_keyShareEntry x) == x)
-  = ()
+  : Lemma (LP.synth_inverse synth_keyShareEntry unsynth_keyShareEntry)
+  = LP.synth_inverse_intro synth_keyShareEntry unsynth_keyShareEntry
 #reset-options
 
-let keyShareEntry_serializer: LP.serializer keyShareEntry_parser =
+let keyShareEntry_serializer =
   lemma_synth_keyShareEntry_is_injective ();
   lemma_synth_keyShareEntry_of_unsynth_keyShareEntry ();
+  assert_norm (keyShareEntry_parser_kind' == keyShareEntry_parser_kind);
   LP.serialize_synth
     _
     synth_keyShareEntry
@@ -102,10 +103,10 @@ let keyShareEntry_serializer: LP.serializer keyShareEntry_parser =
     unsynth_keyShareEntry
     ()
 
-inline_for_extraction
-let keyShareEntry_serializer32: LP.serializer32 keyShareEntry_serializer =
+let keyShareEntry_serializer32 =
   lemma_synth_keyShareEntry_is_injective ();
   lemma_synth_keyShareEntry_of_unsynth_keyShareEntry ();
+  assert_norm (keyShareEntry_parser_kind' == keyShareEntry_parser_kind);
   LP.serialize32_synth
     _
     synth_keyShareEntry

@@ -3,7 +3,7 @@ module Format.NamedGroup
 module U16 = FStar.UInt16 
 module U32 = FStar.UInt32
 module L = FStar.List.Tot
-module LP = LowParse.SLow
+module LP = LowParse.SLow.Base
 module CC = CoreCrypto
 module B32 = FStar.Bytes
 
@@ -60,7 +60,12 @@ let bytesize = 2
 
 (* Parsers *)
 
-val namedGroup_parser_kind: LP.parser_kind
+inline_for_extraction
+val namedGroup_parser_kind_metadata: LP.parser_kind_metadata_t
+
+inline_for_extraction
+let namedGroup_parser_kind =
+  LP.strong_parser_kind 2 2 namedGroup_parser_kind_metadata
 
 val namedGroup_parser: LP.parser namedGroup_parser_kind namedGroup
 

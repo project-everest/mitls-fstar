@@ -68,7 +68,9 @@ let parse_all_bytes_kind =
   {
     parser_kind_low = 0;
     parser_kind_high = None;
-    parser_kind_total = false;
+    parser_kind_metadata = {
+      parser_kind_metadata_total = false;
+    };
     parser_kind_subkind = Some ParserConsumesAll;
   }
 
