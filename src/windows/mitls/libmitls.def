@@ -12,6 +12,7 @@ EXPORTS
     FFI_mitls_configure_early_data
     FFI_mitls_configure_named_groups
     FFI_mitls_configure_signature_algorithms
+    FFI_mitls_configure_nego_callback
     FFI_mitls_configure_ticket_callback
     FFI_mitls_connect
     FFI_mitls_free_packet
