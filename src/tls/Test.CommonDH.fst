@@ -58,7 +58,7 @@ let rec test_groups (groups:namedGroupList) : St bool =
   | g :: gs ->
     let Some group = DH.group_of_namedGroup g in
     print ("Testing " ^ DH.string_of_group group);
-    test group && test_groups gs
+    if not (test group) then false else test_groups gs
   | _ -> true
 
 // Called from Test.Main

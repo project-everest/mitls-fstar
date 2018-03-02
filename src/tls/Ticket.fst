@@ -36,7 +36,7 @@ let print s = discard (IO.debug_print_string ("TCK| "^s^"\n"))
 unfold val trace: s:string -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
-unfold let trace = if Flags.debug_NGO then print else (fun _ -> ())
+unfold let trace = if DebugFlags.debug_NGO then print else (fun _ -> ())
 
 let ticketid (a:aeadAlg) : St (AE.id) =
   assume false;
@@ -154,7 +154,7 @@ let parse (b:bytes) =
           let msId = dummy_msId pv cs ems in
           Some (Ticket12 pv cs ems msId ms)
 
-let check_ticket (b:bytes{length b <= 65551}) =
+let check_ticket (b:bytes{length b <= 65551}): St (option ticket) =
   let Key tid _ rd = !ticket_enc in
   let salt = AE.salt_of_state rd in
   trace ("Decrypting ticket "^(hex_of_bytes b));
@@ -172,7 +172,7 @@ let serialize t =
     | Ticket13 cs _ _ rms -> TLS_1p3, cs, rms in
   (versionBytes pv) @| (cipherSuiteBytes cs) @| (vlbytes 2 b)
 
-let create_ticket t =
+let create_ticket t: St bytes =
   let Key tid wr _ = !ticket_enc in
   let plain = serialize t in
   let nb = CC.random (AE.iv_length tid) in

@@ -65,6 +65,10 @@ FILES 		= AEAD_GCM AEADProvider Alert BufferBytes Cert \
   vale/Vale_Hash_SHA2_256 stub/mitlsffi stub/buffer_bytes uint128/uint128_wrapper \
   stub/RegionAllocator
 
+ifdef MITLS_USE_OPENSSL
+FILES += AEADOpenssl
+endif
+
 CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall \
   -Wno-unused-variable -Wno-parentheses -Wno-unknown-warning-option \
   -Wno-unused-but-set-variable -Wno-infinite-recursion -g -fwrapv -fstack-check \

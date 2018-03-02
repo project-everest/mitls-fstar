@@ -42,6 +42,9 @@ private let parseCT (x: lbytes 1) = parseCT (p_of_f x)
 private let versionBytes x = f_of_p (versionBytes x) 
 private let parseVersion (x: lbytes 2) = parseVersion (p_of_f x)
 
+//cwinter: remove?
+//unfold let trace = if DebugFlags.debug_Record then print else (fun _ -> ())
+
 // ------------------------outer packet format -------------------------------
 
 // the "outer" header has the same format for all versions of TLS

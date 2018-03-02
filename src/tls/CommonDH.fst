@@ -31,7 +31,7 @@ let discard (b:bool): ST unit (requires (fun _ -> True))
 let print s = discard (IO.debug_print_string ("CDH| "^s^"\n"))
 unfold let dbg : string -> ST unit (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1)) =
-  if Flags.debug_CDH then print else (fun _ -> ())
+  if DebugFlags.debug_CDH then print else (fun _ -> ())
 
 type group' =
   | FFDH of DHGroup.group

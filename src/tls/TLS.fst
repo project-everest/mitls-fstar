@@ -45,7 +45,7 @@ let print s = discard (IO.debug_print_string ("TLS| "^s^"\n"))
 unfold val trace: s:string -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
-unfold let trace = if Flags.debug_TLS then print else (fun _ -> ())
+unfold let trace = if DebugFlags.debug_TLS then print else (fun _ -> ())
 
 
 unfold let op_Array_Access (#a:Type) (s:Seq.seq a) n = Seq.index s n // s.[n]
@@ -1069,7 +1069,8 @@ let rec readFragment c i =
       // payload decryption
       let e = Seq.index es j in
       let Epoch hs rd wr = e in
-      if payload = abyte 1z && StAE.tolerate_ccs #i rd then
+      let tccs = StAE.tolerate_ccs #i rd in
+      if payload = abyte 1z && tccs then
        begin
         trace "Ignoring a CCS";
         readFragment c i

@@ -68,30 +68,35 @@ let zeroHash (a:alg): Tot (tag a) = Bytes.create (tagLen a) 0uy
 // internal hash state for incremental computation
 // with initial value and core algorithm, accumulating an extra block into the current state
 
-assume type acc (a:alg)
-assume val acc0: a:alg -> Tot (acc a)
-assume val compress: #a:alg -> acc a -> lbytes32 (blockLen a) -> Tot (acc a)
-assume val truncate: #a:alg -> acc a -> Tot (tag a) // just keeping the first tagLen bytes
+// cwinter: keeping implementation so as not to break extraction.
+// assume type acc (a:alg)
+// assume val acc0: a:alg -> Tot (acc a)
+// assume val compress: #a:alg -> acc a -> lbytes32 (blockLen a) -> Tot (acc a)
+// assume val truncate: #a:alg -> acc a -> Tot (tag a) // just keeping the first tagLen bytes
 
 //18-02-26 TODO reconcile with fake abstract implementation in quic2c, which was:
 
-// //NS, JR: A very dubious change here, replacing an assumed type and functions on it
-// //        Otherwise, this doesn't compile at all
-// abstract
-// let acc (a:alg) = bytes
+//NS, JR: A very dubious change here, replacing an assumed type and functions on it
+//        Otherwise, this doesn't compile at all
+abstract
+let acc (a:alg) = bytes
 
-// abstract
-// let acc0 (a:alg) : acc a = empty_bytes
+abstract
+let acc0 (a:alg) : acc a = empty_bytes
 
-// abstract
-// let compress (#a:alg) (_:acc a) (l:lbytes (blockLen a)) = l //??
+abstract
+let compress (#a:alg) (_:acc a) (l:lbytes (blockLen a)) = l //??
 
-// private
-// abstract
-// let truncate (#a:alg) (ac:acc a{Bytes.length ac >= tagLen a}) : Tot (acc a) = 
-//   let l = UInt32.uint_to_t (tagLen a) in
-//   Bytes.slice ac 0ul l  //?? just keeping the first tagLen bytes
+private
+abstract
+let truncate (#a:alg) (ac:acc a{Bytes.length ac >= tagLen a}) : Tot (acc a) = 
+  let l = UInt32.uint_to_t (tagLen a) in
+  Bytes.slice ac 0ul l  //?? just keeping the first tagLen bytes
 
+
+abstract
+let truncate (#a:alg) (ac:acc a): Tot bytes =
+  Bytes.slice ac 0ul (FStar.UInt32.uint_to_t (tagLen a)) //?? just keeping the first tagLen bytes
 
 (*
 let acc0 = function

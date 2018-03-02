@@ -178,7 +178,7 @@ type abbrInfo =
 type resumeInfo (r:role): Type0 =
   //17-04-19  connect_time:lbytes 4  * // initial Nonce.timestamp() for the connection
   o:option bytes {r=Server ==> None? o} * // 1.2 ticket
-  l:list PSK.pskid {r=Server ==> l = []} // assuming we do the PSK lookups locally
+  l:list PSK.pskid {r=Server ==> List.Tot.isEmpty l} // assuming we do the PSK lookups locally
 
 // for sessionID. we treat empty bytes as the absence of identifier,
 // i.e. the session is not resumable.
