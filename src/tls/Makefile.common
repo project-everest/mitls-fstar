@@ -47,6 +47,7 @@ FSTAR=$(FSTAR_HOME)/bin/fstar.exe --cache_dir $(CACHE_DIR) --cache_checked_modul
 
 VFLAGS?=--use_hints --use_hint_hashes --record_hints --warn_error -271
 
+HINTS_DIR  ?= .
 CACHE_DIR   = cache/$(FLAVOR)$(CONCRETE_FLAVOR)
 EXTRACT_DIR = extract/$(FLAVOR)$(CONCRETE_FLAVOR)
 DEP_FILE    = $(CACHE_DIR)/.depend
@@ -57,7 +58,7 @@ DEP_FILE    = $(CACHE_DIR)/.depend
 # Add more roots here!
 ROOTS ?= TLS.fst QUIC.fst Test.Main.fst 
 
-EVERYTHING=$(wildcard *.fst *.fsti Make* ../pki* ../../libs/ffi/* ideal-flags/* concrete-flags/* concrete-flags/$(FLAVOR)$(CONCRETE_FLAVOR)/*)
+EVERYTHING=$(wildcard *.fst *.fsti Make* $(MITLS_HOME)/src/pki/* $(MITLS_HOME)/libs/ffi/* ideal-flags/* concrete-flags/* concrete-flags/$(FLAVOR)$(CONCRETE_FLAVOR)/*)
 
 
 # Production Rules
@@ -68,6 +69,7 @@ ifdef VERBOSE
 endif
 	@mkdir -p $(EXTRACT_DIR)
 	@mkdir -p $(CACHE_DIR)
+	@mkdir -p $(HINTS_DIR)
 	$(subst \\,, \
 		$(FSTAR) --cache_dir $(CACHE_DIR) --odir $(EXTRACT_DIR) --extract $(EXTRACT) \
 			--dep full \
@@ -91,7 +93,7 @@ ifdef VERBOSE
 	@echo "\033[1;35m=== Producing $@ ...\033[;37m"
 endif
 	$(subst \\,, \
-		$(FSTAR) $(VFLAGS) $(addprefix --include , $(INCLUDE_PATHS)) $< \
+		$(FSTAR) $(VFLAGS) --hint_file $(HINTS_DIR)/$<.hints $(addprefix --include , $(INCLUDE_PATHS)) $< \
 	)
 	@touch $@
 
@@ -103,6 +105,7 @@ endif
 		$(FSTAR) $(VFLAGS) \
 			--codegen $(FLAVOR) \
 			--cache_dir $(CACHE_DIR) \
+			--hint_file $(HINTS_DIR)/$(subst .lax,,$(subst .checked,,$<)).hints \
 			--odir $(EXTRACT_DIR) \
 			$(addprefix --include , $(INCLUDE_PATHS)) \
 			--extract_module $(basename $(notdir $(subst .lax,,$(subst .checked,,$<)))) \

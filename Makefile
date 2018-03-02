@@ -7,10 +7,10 @@ MITLS_HOME    ?= .
 all: model-all ocaml-all kremlin-all test
 
 model-% verify-% ocaml-% kremlin-% quic-%:
-	$(MAKE) -C src/tls -f Makefile $*
+	$(MAKE) -C src/tls $*
 
 test clean:
-	$(MAKE) -C src/tls -f Makefile $*
+	$(MAKE) -C src/tls $*
 
 ci: ocaml-all kremlin-all test
 
