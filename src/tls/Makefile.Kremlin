@@ -1,6 +1,6 @@
 all: build
 
-build: prerequisites build-internal-test build-library build-external-test
+build: build-internal-test build-library build-external-test
 
 test: test-internal-test # test-library test-external-test
 
