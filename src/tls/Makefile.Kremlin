@@ -1,6 +1,6 @@
 all: build
 
-build: prerequisites build-internal-test build-library build-external-test
+build: build-internal-test build-library build-external-test
 
 test: test-internal-test # test-library test-external-test
 
@@ -10,11 +10,11 @@ endif
 
 # To include Makefile.common, you need to specify
 # the following five variables
-FLAVOR		= Kremlin$(CONCRETE_FLAVOR)
+FLAVOR		= Kremlin
 EXTENSION	= krml
 # Don't extract modules from mitls that are implemented in C
 EXTRACT		= '* -DHDB -LowCProvider -FFICallbacks -BufferBytes'
-SPECINC     = $(MITLS_HOME)/src/tls/concrete-flags $(MITLS_HOME)/src/tls/concrete-flags/$(FLAVOR)
+SPECINC     = $(MITLS_HOME)/src/tls/concrete-flags $(MITLS_HOME)/src/tls/concrete-flags/$(FLAVOR)$(CONCRETE_FLAVOR)
 VFLAGS     ?= --admit_smt_queries true
 
 include Makefile.common
