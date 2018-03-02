@@ -463,7 +463,7 @@ let ks_server_13_init ks cr cs pskid g_gx =
       dbg ("Using negotiated PSK identity: "^(print_bytes id));
       let i, psk, h : esId * bytes * Hashing.Spec.alg =
         match Ticket.check_ticket id with
-        | Some (Ticket.Ticket13 cs li rmsId rms) ->
+        | Some (Ticket.Ticket13 cs li rmsId rms _ _) ->
           dbg ("Ticket RMS: "^(print_bytes rms));
           let i = ResumptionPSK #li rmsId in
           let CipherSuite13 _ h = cs in

@@ -288,6 +288,20 @@ let getHash #ha (LOG #reg st) =
     Hashing.finalize #ha cst.hash
 *)
 
+// Must be called after receiving a CH in the Init state of nego, indicating
+// that the retry is stateless.
+let load_stateless_cookie l hrr digest =
+  let st = !l in
+  // The cookie is loaded after CH2 is written to the hash buffer
+  let OpenHash ch2b = st.hashes in
+  let fake_ch = (bytes_of_hex "fe0000") @| (vlbytes 1 digest) in
+  trace ("Installing prefix to transcript: "^(hex_of_bytes fake_ch));
+  let hrb = helloRetryRequestBytes hrr in
+  trace ("HRR bytes: "^(hex_of_bytes hrb));
+  let h = OpenHash (fake_ch @| hrb @| ch2b) in
+  l := State st.transcript st.outgoing st.outgoing_next_keys st.outgoing_complete
+             st.incoming st.parsed h st.pv st.kex st.dh_group
+
 (* SEND *)
 let send l m =
   trace ("emit "^HandshakeMessages.string_of_handshakeMessage m);
@@ -487,9 +501,10 @@ let rec hashHandshakeMessages t p hs n nb =
         let hs = match m with
           | HelloRetryRequest hrr ->
             let ha = verifyDataHashAlg_of_ciphersuite hrr.hrr_cipher_suite in
-            let hht = bytes_of_hex "fe0000" in // message_type
             let hmsg = Hashing.compute ha b in
-            let hht = hht @| (bytes_of_int 1 (length hmsg)) @| hmsg in
+            let hht = (bytes_of_hex "fe0000") @| (vlbytes 1 hmsg) in
+            trace ("Replacing CH1 in transcript with "^(hex_of_bytes hht));
+            trace ("HRR bytes: "^(hex_of_bytes mb));
             OpenHash (hht @| mb)
           | _ -> OpenHash (b @| mb)
         in

@@ -1595,6 +1595,7 @@ let signatureSchemeList =
 
 (** Serializing function for a SignatureScheme list *)
 
+// FIXME(adl) this is serializing in reverse order (shb @| b)
 let rec signatureSchemeListBytes_aux
   (algs: signatureSchemeList)
   (b:bytes)
@@ -1651,6 +1652,7 @@ let signatureSchemeListBytes_is_injective
   signatureSchemeListBytes_aux_is_injective algs1 empty_bytes algs1 algs2 empty_bytes algs2
 
 (** Parsing function for a SignatureScheme list *)
+// FIXME(adl) this is parsing in reverse order (sha::algs)
 val parseSignatureSchemeList: pinverse_t signatureSchemeListBytes
    let rec parseSignatureSchemeList_aux: b:bytes -> algs:list signatureScheme -> b':bytes{length b' + op_Multiply 2 (List.Tot.length algs) == length b} ->
     Tot
@@ -1747,6 +1749,7 @@ request_client_certificate: single_assign ServerCertificateRequest // uses this 
 type alpn_entry = b:bytes{0 < length b /\ length b < 256}
 type alpn = l:list alpn_entry{List.Tot.length l < 256}
 
+(* TRANSPORT PARAMETERS ARE NOW MANAGED BY APPLICATION
 type quicParameter =
   | Quic_initial_max_stream_data of UInt32.t
   | Quic_initial_max_data of UInt32.t
@@ -1816,10 +1819,12 @@ let string_of_quicParameters = function
     string_of_quicParameters_aux_fold "versions: " string_of_quicVersion " " v ^ "\n" ^
     string_of_quicParameters_aux_fold "" string_of_quicParameter "\n" p
   | None -> "(none)"
+*)
 
 type pskInfo = {
   ticket_nonce: option bytes;
-  time_created: int;
+  time_created: UInt32.t;
+  ticket_age_add: UInt32.t;
   allow_early_data: bool;      // New draft 13 flag
   allow_dhe_resumption: bool;  // New draft 13 flag
   allow_psk_resumption: bool;  // New draft 13 flag
@@ -1840,6 +1845,29 @@ type ticket_cb_fun =
 noeq type ticket_cb = {
   ticket_context: FStar.Dyn.dyn;
   new_ticket: ticket_cb_fun;
+}
+
+type custom_extension = UInt16.t * b:bytes {length b < 65533}
+type custom_extensions = l:list custom_extension{List.Tot.length l < 32}
+
+(* Helper functions for the C API to construct the list from array *)
+let empty_custom_extensions () : list custom_extension = []
+let add_custom_extension (l:list custom_extension) (hd:UInt16.t) (b:bytes {length b < 65533}) =
+  (hd, b) :: l
+
+type nego_action =
+  | Nego_abort: nego_action
+  | Nego_retry: cookie_extra: bytes -> nego_action
+  | Nego_accept: extra_ext: custom_extensions -> nego_action
+
+type nego_cb_fun =
+  (FStar.Dyn.dyn -> pv: protocolVersion -> client_ext: bytes -> cookie: option bytes -> ST nego_action
+    (requires fun _ -> True)
+    (ensures fun h0 r h1 -> Nego_retry? r ==> None? cookie /\ modifies_none h0 h1))
+
+noeq type nego_cb = {
+  nego_context: FStar.Dyn.dyn;
+  negotiate: nego_cb_fun;
 }
 
 type cert_repr = b:bytes {length b < 16777216}
@@ -1910,7 +1938,6 @@ noeq type config : Type0 = {
     (* Supported versions, ciphersuites, groups, signature algorithms *)
     min_version: protocolVersion;
     max_version: protocolVersion;
-    quic_parameters: option (valid_quicVersions * valid_quicParameters);
     cipher_suites: x:valid_cipher_suites{List.Tot.length x < 256};
     named_groups: list valid_namedGroup;
     signature_algorithms: signatureSchemeList;
@@ -1918,6 +1945,7 @@ noeq type config : Type0 = {
     (* Client side *)
     hello_retry: bool;          // honor hello retry requests from the server
     offer_shares: list valid_namedGroup;
+    custom_extensions: custom_extensions;
 
     (* Server side *)
     check_client_version_in_pms_for_old_tls: bool;
@@ -1925,11 +1953,14 @@ noeq type config : Type0 = {
 
     (* Common *)
     non_blocking_read: bool;
-    max_early_data: option nat;   // 0-RTT offer (client) and support (server), and data limit
+    max_early_data: option UInt32.t;   // 0-RTT offer (client) and support (server), and data limit
     safe_renegotiation: bool;     // demands this extension when renegotiating
     extended_master_secret: bool; // turn on RFC 7627 extended master secret support
     enable_tickets: bool;         // Client: offer ticket support; server: emit and accept tickets
+
+    (* Callbacks *)
     ticket_callback: ticket_cb;   // Ticket callback, called when issuing or receiving a new ticket
+    nego_callback: nego_cb;// Callback to decide stateless retry and negotiate extra extensions
     cert_callbacks: cert_cb;      // Certificate callbacks, called on all PKI-related operations
 
     alpn: option alpn;   // ALPN offers (for client) or preferences (for server)

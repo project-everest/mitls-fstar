@@ -49,7 +49,7 @@ type handshakeType =
   | HT_server_hello
   | HT_session_ticket
   | HT_end_of_early_data
-  | HT_hello_retry_request
+//  | HT_hello_retry_request
   | HT_encrypted_extensions
   | HT_certificate
   | HT_server_key_exchange
@@ -72,7 +72,7 @@ let htBytes t =
   | HT_server_hello         -> 2z
   | HT_session_ticket       -> 4z
   | HT_end_of_early_data -> 5z
-  | HT_hello_retry_request  -> 6z
+//  | HT_hello_retry_request  -> 6z
   | HT_encrypted_extensions -> 8z
   | HT_certificate          -> 11z
   | HT_server_key_exchange  -> 12z
@@ -99,7 +99,7 @@ let parseHt b =
   |  2z -> Correct HT_server_hello
   |  4z -> Correct HT_session_ticket
   |  5z -> Correct HT_end_of_early_data
-  |  6z -> Correct HT_hello_retry_request
+//  |  6z -> Correct HT_hello_retry_request
   |  8z -> Correct HT_encrypted_extensions
   | 11z -> Correct HT_certificate
   | 12z -> Correct HT_server_key_exchange
@@ -1511,8 +1511,8 @@ let sessionTicketBytes t =
 val sessionTicketBytes13: sticket13 -> Tot (b:bytes{hs_msg_bytes HT_session_ticket b})
 let sessionTicketBytes13 t =
   let payload =
-    bytes_of_int 4 (UInt32.v t.ticket13_lifetime) @|
-    bytes_of_int 4 (UInt32.v t.ticket13_age_add) @|
+    bytes_of_int32 t.ticket13_lifetime @|
+    bytes_of_int32 t.ticket13_age_add @|
     vlbytes 1 t.ticket13_nonce @|
     vlbytes 2 t.ticket13_ticket @|
     extensionsBytes t.ticket13_extensions in
@@ -1597,7 +1597,7 @@ let parseSessionTicket13 b =
 
 
 (* Hello retry request *)
-val helloRetryRequestBytes: hrr -> Tot (b:bytes{hs_msg_bytes HT_hello_retry_request b})
+val helloRetryRequestBytes: hrr -> Tot (b:bytes{hs_msg_bytes HT_server_hello b})
 let helloRetryRequestBytes hrr =
   serverHelloBytes ({
     sh_protocol_version = TLS_1p2;
@@ -1650,7 +1650,18 @@ let helloRetryRequestBytes_is_injective h1 h2 = admit()
 
 (* TODO: inversion lemmas *)
 val parseHelloRetryRequest: bytes -> Tot (result hrr)
-let parseHelloRetryRequest b = Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "HRR message type is disabled since draft 22")
+let parseHelloRetryRequest b =
+  match parseServerHello b with
+  | Correct sh ->
+    if sh.sh_server_random = bytes_of_hex "cf21ad74e59a6111be1d8c021e65b891c2a211167abb8c5e079e09e2c8a8339c" then
+      Correct ({
+        hrr_sessionID = sh.sh_sessionID;
+        hrr_cipher_suite = sh.sh_cipher_suite;
+        hrr_extensions = Some?.v (sh.sh_extensions)
+      })
+    else error "not a proper HRR (magic nonce does not match)"
+  | Error z -> Error z
+
 (*
   if length b >= 4 then
     let pv, cs, data = split2 b 2 2 in
@@ -1887,7 +1898,7 @@ let handshakeMessageBytes_is_injective pv msg1 msg2 =
     | HT_certificate_request -> certificateRequestBytes_is_injective (CertificateRequest?._0 msg1) (CertificateRequest?._0 msg2)
     | HT_certificate_verify -> certificateVerifyBytes_is_injective (CertificateVerify?._0 msg1) (CertificateVerify?._0 msg2)
     | HT_hello_request -> ()
-    | HT_hello_retry_request -> helloRetryRequestBytes_is_injective (HelloRetryRequest?._0 msg1) (HelloRetryRequest?._0 msg2)
+    //| HT_hello_retry_request -> helloRetryRequestBytes_is_injective (HelloRetryRequest?._0 msg1) (HelloRetryRequest?._0 msg2)
     (* | HT_server_configuration -> serverConfigurationBytes_is_injective (ServerConfiguration?._0 msg1) (ServerConfiguration?._0 msg2) *)
     //| HT_next_protocol -> nextProtocolBytes_is_injective (NextProtocol?._0 msg1) (NextProtocol?._0 msg2)
   )
@@ -2079,7 +2090,7 @@ let parseHandshakeMessage pv kex hstype body =
     | HT_session_ticket, Some TLS_1p3,_ -> mapResult NewSessionTicket13 (parseSessionTicket13 body)
     | HT_session_ticket, Some _,_       -> mapResult NewSessionTicket (parseSessionTicket body)
     | HT_end_of_early_data, Some TLS_1p3,_ -> parseEmptyMessage EndOfEarlyData body
-    | HT_hello_retry_request,_,_        -> mapResult HelloRetryRequest (parseHelloRetryRequest body)
+//    | HT_hello_retry_request,_,_        -> mapResult HelloRetryRequest (parseHelloRetryRequest body)
     | HT_encrypted_extensions,_,_       -> mapResult EncryptedExtensions (parseEncryptedExtensions body)
     | HT_certificate, Some TLS_1p3,_    -> mapResult Certificate13 (parseCertificate13 body)
     | HT_certificate, Some _,_          -> mapResult Certificate (parseCertificate body)
