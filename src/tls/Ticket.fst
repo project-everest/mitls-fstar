@@ -114,7 +114,8 @@ let dummy_rmsid ae h =
 let dummy_msId pv cs ems =
   StandardMS PMS.DummyPMS (Bytes.create 64ul 0z) (kefAlg pv cs ems)
 
-let parse (b:bytes) : option ticket =
+// not pure because of trace, but should be
+let parse (b:bytes) : St (option ticket) =
   trace ("Parsing ticket "^(hex_of_bytes b));
   if length b < 8 then None
   else
