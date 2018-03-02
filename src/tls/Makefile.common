@@ -5,7 +5,7 @@ KREMLIN_HOME  ?= ../../../kremlin
 MLCRYPTO_HOME ?= ../../../MLCrypto
 
 SHELL=/bin/sh
-
+CONCRETE_FLAVOR?= 
 
 # Project-wide Prerequisites
 
@@ -47,9 +47,9 @@ FSTAR=$(FSTAR_HOME)/bin/fstar.exe --cache_dir $(CACHE_DIR) --cache_checked_modul
 
 VFLAGS?=--use_hints --use_hint_hashes --record_hints --warn_error -271
 
-CACHE_DIR   = cache/$(FLAVOR)
-EXTRACT_DIR = extract/$(FLAVOR)
-DEP_FILE=$(CACHE_DIR)/.depend
+CACHE_DIR   = cache/$(FLAVOR)$(CONCRETE_FLAVOR)
+EXTRACT_DIR = extract/$(FLAVOR)$(CONCRETE_FLAVOR)
+DEP_FILE    = $(CACHE_DIR)/.depend
 
 
 # Project Files
@@ -57,14 +57,14 @@ DEP_FILE=$(CACHE_DIR)/.depend
 # Add more roots here!
 ROOTS ?= TLS.fst QUIC.fst Test.Main.fst 
 
-EVERYTHING=$(wildcard *.fst *.fsti Make* ../pki* ../../libs/ffi/* ideal-flags/* concrete-flags/* concrete-flags/$(FLAVOR)/*)
+EVERYTHING=$(wildcard *.fst *.fsti Make* ../pki* ../../libs/ffi/* ideal-flags/* concrete-flags/* concrete-flags/$(FLAVOR)$(CONCRETE_FLAVOR)/*)
 
 
 # Production Rules
 
 $(DEP_FILE): $(EVERYTHING)
 ifdef VERBOSE
-	@echo "\033[1;33mComputing $(FLAVOR) dependencies ...\033[;37m"
+	@echo "\033[1;33mComputing $(FLAVOR)$(CONCRETE_FLAVOR) dependencies ...\033[;37m"
 endif
 	mkdir -p $(EXTRACT_DIR)
 	mkdir -p $(CACHE_DIR)
