@@ -4,6 +4,8 @@ module Hashing.Spec
 open FStar.UInt32
 open FStar.Bytes
 
+type lbytes32 n = lbytes (UInt32.v n)
+
 type alg = // CoreCrypto.hash_alg
   | MD5
   | SHA1
@@ -78,6 +80,7 @@ let zeroHash (a:alg): Tot (tag a) = Bytes.create (tagLen a) 0uy
 
 //NS, JR: A very dubious change here, replacing an assumed type and functions on it
 //        Otherwise, this doesn't compile at all
+
 abstract
 let acc (a:alg) = bytes
 
@@ -85,18 +88,11 @@ abstract
 let acc0 (a:alg) : acc a = empty_bytes
 
 abstract
-let compress (#a:alg) (_:acc a) (l:lbytes (blockLen a)) = l //??
-
-private
-abstract
-let truncate (#a:alg) (ac:acc a{Bytes.length ac >= tagLen a}) : Tot (acc a) = 
-  let l = UInt32.uint_to_t (tagLen a) in
-  Bytes.slice ac 0ul l  //?? just keeping the first tagLen bytes
-
+let compress (#a:alg) (_:acc a) (l:lbytes32 (blockLen a)) = l //??
 
 abstract
 let truncate (#a:alg) (ac:acc a): Tot bytes =
-  Bytes.slice ac 0ul (FStar.UInt32.uint_to_t (tagLen a)) //?? just keeping the first tagLen bytes
+  Bytes.slice ac 0ul (tagLen a) //?? just keeping the first tagLen bytes
 
 (*
 let acc0 = function

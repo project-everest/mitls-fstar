@@ -53,11 +53,13 @@ let ticketid (a:aeadAlg) : St (AE.id) =
 type ticket_key =
   | Key: i:AE.id -> wr:AE.writer i -> rd:AE.reader i -> ticket_key
 
+let cc_zero x = create (UInt32.uint_to_t x) 0uy // cwinter: was CC.zero, which is not available in OCaml
+
 private let dummy_id (a:aeadAlg) : St AE.id =
   assume false;
   let h = Hashing.Spec.SHA256 in
   let li = LogInfo_CH0 ({
-    li_ch0_cr = CC.zero 32;
+    li_ch0_cr = cc_zero 32;
     li_ch0_ed_psk = empty_bytes;
     li_ch0_ed_ae = a;
     li_ch0_ed_hash = h;
@@ -76,8 +78,8 @@ private let dummy_id (a:aeadAlg) : St AE.id =
 private let ticket_enc : reference ticket_key
   =
   let id0 = dummy_id CC.CHACHA20_POLY1305 in
-  let salt : AE.salt id0 = CC.zero (AE.iv_length id0) in
-  let key : AE.key id0 = CC.zero (AE.key_length id0) in
+  let salt : AE.salt id0 = cc_zero (AE.iv_length id0) in
+  let key : AE.key id0 = cc_zero (AE.key_length id0) in
   let wr = AE.coerce id0 region key salt in
   let rd = AE.genReader region #id0 wr in
   ralloc region (Key id0 wr rd)

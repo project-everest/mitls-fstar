@@ -52,8 +52,8 @@ private let pre_id (role:role) =
   let kdf = PRF_TLS_1p2 kdf_label (HMac Hashing.Spec.SHA256) in
   let Some g = DH.group_of_namedGroup DH.SECP256R1 in
   let gx  = DH.keygen g in
-  let gy, gxy = DH.dh_responder #g (DH.pubshare gx) in
-  let pms = PMS.DHPMS g (DH.pubshare gx) gy (PMS.ConcreteDHPMS gxy) in
+  let gy, gxy = DH.dh_responder g (DH.ipubshare gx) in
+  let pms = PMS.DHPMS g (DH.ipubshare gx) gy (PMS.ConcreteDHPMS gxy) in
   let msid = StandardMS pms (cr @| sr) kdf in
   ID12 TLS_1p2 msid kdf (AEAD CoreCrypto.AES_256_GCM Hashing.Spec.SHA256) cr sr role
 

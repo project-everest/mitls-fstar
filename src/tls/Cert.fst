@@ -96,7 +96,8 @@ let rec parseCertificateList b =
   if length b < 3 then Error(AD_bad_certificate_fatal, "not enough bytes (certificate length)") else
   match vlsplit 3 b with
   | Error _ -> Error(AD_bad_certificate_fatal, "not enough bytes (certificate)")
-  | Correct (c,r) -> (
+  | Correct (x) -> (
+    let c, r = x in
     match parseCertificateList r with
     | Error z -> Error z
     | Correct cs -> lemma_repr_bytes_values (length c); Correct (c::cs) )
@@ -108,11 +109,13 @@ let rec parseCertificateList13 b =
   if length b < 3 then Error(AD_bad_certificate_fatal, "not enough bytes (certificate length)") else
   match vlsplit 3 b with
   | Error _ -> Error(AD_bad_certificate_fatal, "not enough bytes (certificate)")
-  | Correct (c,r) -> (
+  | Correct (x) -> (
+    let c, r = x in 
     if length r < 2 then Error(AD_bad_certificate_fatal, "not enough bytes (extension length") else
     match vlsplit 2 r with
     | Error _ -> Error(AD_bad_certificate_fatal, "not enough bytes (extension list)")
-    | Correct (e,r) -> (
+    | Correct (x) -> (
+      let e, r = x in
       match parseExtensions EM_Certificate (vlbytes 2 e) with
       | Error z -> Error z
       | Correct (exts,_) -> (
@@ -141,7 +144,9 @@ let rec lemma_parseCertificateList_length b =
     | Correct (hd::tl) ->
       begin
       match vlsplit 3 b with
-      | Correct (c, r) -> lemma_parseCertificateList_length r
+      | Correct (x) -> 
+        let c, r = x in
+        lemma_parseCertificateList_length r
       | _ -> ()
       end
     | _ -> ()

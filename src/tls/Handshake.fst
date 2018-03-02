@@ -990,7 +990,7 @@ let server_ClientHello hs offer obinders =
         if pv = TLS_1p3  then
         match mode.Nego.n_pski with
         | None ->
-            let server_share, None = Secret.server13_init cr sr cs None g_gx in
+            let server_share, None = Secret.server13_init cr sr cs None g_gx (HandshakeLog.transcript h1 hs.log) in
             Correct server_share
         | Some i -> (
             trace ("accepted TLS 1.3 psk #"^string_of_int i);
@@ -999,7 +999,7 @@ let server_ClientHello hs offer obinders =
             let Some (id, _) = List.Tot.nth psks i in
             let Some tag = List.Tot.nth (Some?.v obinders) i in
             assume(PSK.registered_psk id);
-            let server_share, Some binderKey = Secret.server13_init cr cs (Some id) g_gx in
+            let server_share, Some binderKey = Secret.server13_init cr cs (Some id) g_gx (HandshakeLog.transcript h1 hs.log) in
             if verify_binder hs binderKey tag tlen
             then Correct server_share
             else

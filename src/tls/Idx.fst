@@ -5,6 +5,8 @@ open Pkg
 
 module MM = FStar.Monotonic.Map
 
+type info = TLSInfo.logInfo
+
 // 17-12-08 we considered separating "honesty" from the more ad hoc parts of this file.
 
 /// TLS-SPECIFIC KEY INDICES

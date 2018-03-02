@@ -26,9 +26,9 @@ let print s = discard (IO.debug_print_string (prefix^": "^s^".\n"))
 val test: DH.group -> St bool
 let test group =
   let initiator_key_and_share = DH.keygen group in
-  let gx = DH.pubshare initiator_key_and_share in
-  let gy, gxy = DH.dh_responder gx in
-  let gxy' = DH.dh_initiator initiator_key_and_share gy in
+  let gx = DH.ipubshare initiator_key_and_share in
+  let gy, gxy = DH.dh_responder group gx in
+  let gxy' = DH.dh_initiator group initiator_key_and_share gy in
   let gxy  = hex_of_bytes gxy in
   let gxy' = hex_of_bytes gxy' in
   if gxy = gxy' then true

@@ -82,7 +82,8 @@ let rec parseBinderList_aux (b:bytes) (binders:list binder)
       if length b >= 5 then
         match vlsplit 1 b with
         | Error z -> error "parseBinderList failed to parse a binder"
-        | Correct (binder, bytes) ->
+        | Correct (x) ->
+          let binder, bytes = x in
           if length binder < 32 then error "parseBinderList: binder too short"
             else (assume (length bytes < length b);
                   parseBinderList_aux bytes (binders @ [binder]))
@@ -123,7 +124,8 @@ let parsePskIdentity b =
   else
     match vlsplit 2 b with
     | Error z -> error "malformed PskIdentity"
-    | Correct (id, ota) ->
+    | Correct (x) ->
+      let id, ota = x in
       if length ota = 4 then
         let ota = uint32_of_bytes ota in
         lemma_repr_bytes_values (length id);
@@ -136,7 +138,8 @@ let rec parsePskIdentities_aux : b:bytes -> list pskIdentity -> Tot (result (lis
       if length b >= 2 then
         match vlsplit 2 b with
         | Error z -> error "parsePskIdentities failed to parse id"
-        | Correct (id,bytes) ->
+        | Correct (x) ->
+          let id, bytes = x in
           lemma_repr_bytes_values (length id);
           if length bytes >= 4 then
             let ot, bytes = split bytes 4ul in
@@ -265,7 +268,8 @@ let rec parseAlpn_aux (al:alpn) (b:bytes) : Tot (result alpn) (decreases (length
   else
     if List.Tot.length al < 255 then
       match vlsplit 1 b with
-      | Correct(cur, r) ->
+      | Correct(x) ->
+        let cur, r = x in
         if length cur > 0 then
           begin
           List.Tot.append_length al [cur];
@@ -353,7 +357,8 @@ let rec parseQuicParameters_aux (b:bytes)
     let (pt, pv) = split b 2ul in
     match vlsplit 2 pv with
     | Error z -> error "parseQuicParameters_aux: bad variable length encoding"
-    | Correct (pv, rest) ->
+    | Correct (x) ->
+      let pv, rest = x in
       let param =
         match cbyte2 pt with
         | (0z, 0z) ->
@@ -445,7 +450,8 @@ let parseQuicParameters (mt:ext_msg) (b:bytes) =
     | Correct nv ->
       match vlsplit 1 b with
       | Error z -> error "parseQuicParameters: bad supported version list"
-      | Correct(vlb, b) ->
+      | Correct(x) ->
+        let vlb, b = x in
         match parseQuicVersions vlb with
         | Error z -> Error z
         | Correct vl ->
@@ -541,9 +547,11 @@ private let rec parseServerName_aux
       let ty,v = split b 1ul in
       begin
       match vlsplit 2 v with
-      | Error(x,y) ->
+      | Error(q) ->
+          let x, y = q in
 	      ExFail(x, "Failed to parse SNI length: "^ (FStar.Bytes.print_bytes b))
-      | Correct(cur, next) ->
+      | Correct(x) ->
+        let cur, next = x in
       	begin
       	match parseServerName_aux next with
       	| ExFail(x,y) -> ExFail(x,y)

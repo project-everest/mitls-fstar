@@ -12,17 +12,9 @@ unfold type is_injective (#a:Type) (#b:Type) (f:a -> b)
 
 unfold type is_injective_2 (#a:Type) (#b:Type) (f:a -> b) (x:a) (y:a)
   = f x == f y ==> x == y
-(* Types *)
 
-(*
-    https://tlswg.github.io/tls13-spec/draft-ietf-tls-tls13.html#rfc.section.4.2.8.2
-    
-    struct {
-        uint8 legacy_form = 4;
-        opaque X[coordinate_length];
-        opaque Y[coordinate_length];
-    } UncompressedPointRepresentation;
-*)
+
+(* Types *)
 
 private 
 type lbytes_pair (coordinate_length:U32.t) = (lbytes32 coordinate_length) * (lbytes32 coordinate_length)
@@ -70,7 +62,7 @@ let ucp_of_uv (#n:U32.t) (p:(lbytes32 n) * (lbytes32 n))
 private
 inline_for_extraction
 let uv_of_ucp (#n:U32.t) (x:uncompressedPointRepresentation n)
-  : Tot (lbytes32 n * lbytes32 n)
+  : Tot (lbytes32 n * lbytes32  n)
   = (x.x, x.y)
 
 #reset-options "--using_facts_from '* -LowParse -FStar.Reflection -FStar.Tactics' --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16"

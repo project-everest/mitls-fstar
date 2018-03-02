@@ -196,7 +196,8 @@ let parse_partial payload =
       | Some(ecp) ->
         match vlsplit 1 point with
         | Error(z) -> Error(z)
-        | Correct(rawpoint, rem) ->
+        | Correct(x) ->
+           let rawpoint, rem = x in
            match parse_point ecp rawpoint with
            | None -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ("Invalid EC point received:"^(FStar.Bytes.print_bytes rawpoint)))
            | Some p -> Correct ((| ecp, p |),rem)

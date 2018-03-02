@@ -86,7 +86,7 @@ val mkHelloRandom: cs:role -> r:ex_rid -> ST random
     let nonce_rid_table_as_hsref =  nonce_rid_table in
     HS.modifies (Set.singleton tls_tables_region) h0 h1 /\ //modifies at most the tables region
     HS.modifies_ref tls_tables_region (Set.singleton (HS.as_addr nonce_rid_table_as_hsref)) h0 h1 /\ //and within it, at most the nonce_rid_table
-    (ideal ==> fresh n h0  /\        //if we're ideal then the nonce is fresh
+    ((ideal == true) ==> fresh n h0  /\        //if we're ideal then the nonce is fresh
              registered n r /\     //the nonce n is associated with r
              role_nonce cs n r))) //and the triple are associated as well, for ever more
 let rec mkHelloRandom cs r =

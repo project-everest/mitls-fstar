@@ -721,7 +721,8 @@ private let rec parseKeyShareEntries_aux (b:bytes) (entries:list keyShareEntry)
       if length b >= 4 then
 	let ng, data = split b 2ul in
 	match vlsplit 2 data with
-	| Correct(kex, bytes) ->
+	| Correct(x) ->
+      let kex, bytes = x in
 	  begin
 	  match parseKeyShareEntry (ng @| vlbytes 2 kex) with
 	  | Correct entry -> parseKeyShareEntries_aux bytes (entries @ [entry])

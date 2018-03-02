@@ -28,7 +28,7 @@ let discard (b:bool): ST unit (requires (fun _ -> True))
 let print s = discard (IO.debug_print_string ("KS | "^s^"\n"))
 unfold let dbg : string -> ST unit (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1)) =
-  if Flags.debug_KS then print else (fun _ -> ())
+  if DebugFlags.debug_KS then print else (fun _ -> ())
 
 
 // parsed handshake message transcript; essentially opaque/ghost to
@@ -475,38 +475,39 @@ val client13_compute_es_and_bfk:
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
 
-let client13_compute_es_and_bfk truncatedHello #rid (pskid,_) =
-  // 17-11-25 rediscuss this callback
-  let i, pski, psk = read_psk pskid in
-  let ha = pski.early_hash in
-  dbg ("Loaded pre-shared key "^print_bytes pskid^": "^print_bytes psk);
+// cwinter: broken, but unused?
+// let client13_compute_es_and_bfk truncatedHello #rid (pskid,_) =
+//   // 17-11-25 rediscuss this callback
+//   let i, pski, psk = read_psk pskid in
+//   let ha = pski.early_hash in
+//   dbg ("Loaded pre-shared key "^print_bytes pskid^": "^print_bytes psk);
 
-  let es: es i = magic() in // extract0 psk ha in
-  dbg ("Early secret: "^print_bytes es);
+//   let es: es i = magic() in // extract0 psk ha in
+//   dbg ("Early secret: "^print_bytes es);
 
-  // // strange twist on usage; does it help re: salt collisions?
-  //
-  // let binder_key = 
-  //   if ApplicationPSK? i 
-  //   then derive_secret "ext binder" es ha 
-  //   else derive_secret "res binder" es ha
-  let lb = 
-    if ApplicationPSK? i //17-11-26 we need to know at run-time
-    then "ext binder" 
-    else "res binder" in
+//   // // strange twist on usage; does it help re: salt collisions?
+//   //
+//   // let binder_key = 
+//   //   if ApplicationPSK? i 
+//   //   then derive_secret "ext binder" es ha 
+//   //   else derive_secret "res binder" es ha
+//   let lb = 
+//     if ApplicationPSK? i //17-11-26 we need to know at run-time
+//     then "ext binder" 
+//     else "res binder" in
 
-  let bk: binderKey (binder_of_esid_id i) = magic() in 
-  let es_info = magic() in
-  (*
-  let bId = Binder i ll in
-  let bk: secret bId = magic() in // KDF.derive_secret ha es lb (H.emptyHash ha) in
-  dbg ("binder key["^lb^"]: "^print_bytes bk);
+//   let bk: binderKey (binder_of_esid_id i) = magic() in 
+//   let es_info = magic() in
+//   (*
+//   let bId = Binder i ll in
+//   let bk: secret bId = magic() in // KDF.derive_secret ha es lb (H.emptyHash ha) in
+//   dbg ("binder key["^lb^"]: "^print_bytes bk);
 
-  let bkfId = binderKey bId in 
-  let bfk: HMAC.UFCMA.key bkfId = KDF.derive bk ha "finished" in
-  dbg ("binder Finished key: "^print_bytes bfk);
-  *)
-  (| i, (es, bk, es_info) |)
+//   let bkfId = binderKey bId in 
+//   let bfk: HMAC.UFCMA.key bkfId = KDF.derive bk ha "finished" in
+//   dbg ("binder Finished key: "^print_bytes bfk);
+//   *)
+//   (| i, (es, bk, es_info) |)
 
 (* WAS:
 private let mk_binder (#rid) (pskid:PSK.pskid)
@@ -563,38 +564,39 @@ let ks_client_13_hello_retry ks (g:CommonDH.group)
 /// When 0-RTT is offered, derive the early data key and exporter
 /// secret from the early secret of the first offered PSK.
 
-let client13_0RTT 
-  (i: emsi) 
-  (es: secret i) //TODO does the secret embed its info? otherwise [ha,aea] required
-  (truncated_ClientHello: transcript) // ghost
-  (digest: Hashing.Spec.anyTag) // to be refined
-  (writer_parent: rgn) 
-  : ST (
-    secret (x0s_of_ems i truncated_ClientHello) * 
-    StreamAE.writer (ets_of_ems i truncated_ClientHello))
-  (requires fun h0 -> True 
-    // freshness of this transcript (from freshness of its nonce)
-    )
-  (ensures fun h0 r h1 ->
-    modifies_none h0 h1 
-    // except for the keys we derive
-    )
-  =
-  dbg ("client13_0RTT log="^print_bytes digest);
-  let ha = esId_hash i in
-  let aea = esId_ae i in
-  let info = (ha,aea) in
+// cwinter: broken, but unused?
+// let client13_0RTT 
+//   (i: emsi) 
+//   (es: secret i) //TODO does the secret embed its info? otherwise [ha,aea] required
+//   (truncated_ClientHello: transcript) // ghost
+//   (digest: Hashing.Spec.anyTag) // to be refined
+//   (writer_parent: rgn) 
+//   : ST (
+//     secret (x0s_of_ems i truncated_ClientHello) * 
+//     StreamAE.writer (ets_of_ems i truncated_ClientHello))
+//   (requires fun h0 -> True 
+//     // freshness of this transcript (from freshness of its nonce)
+//     )
+//   (ensures fun h0 r h1 ->
+//     modifies_none h0 h1 
+//     // except for the keys we derive
+//     )
+//   =
+//   dbg ("client13_0RTT log="^print_bytes digest);
+//   let ha = esId_hash i in
+//   let aea = esId_ae i in
+//   let info = (ha,aea) in
 
-  let x0si = x0s_of_ems i transcript in 
-  let x0s: secret x0si = derive es ha "e exp master" transcript digest info in
-  dbg ("Early exporter master secret:    "^print_bytes (leak_secret x0s));
+//   let x0si = x0s_of_ems i transcript in 
+//   let x0s: secret x0si = derive es ha "e exp master" transcript digest info in
+//   dbg ("Early exporter master secret:    "^print_bytes (leak_secret x0s));
 
-  let etsi = ets_of_ems i transcript in
-  let ets: secret etsi = derive es ha "c e traffic" transcript digest info in
-  dbg ("Client early traffic secret:     "^print_bytes (leak_secret ets));
+//   let etsi = ets_of_ems i transcript in
+//   let ets: secret etsi = derive es ha "c e traffic" transcript digest info in
+//   dbg ("Client early traffic secret:     "^print_bytes (leak_secret ets));
 
-  let key0 = derive_streamAE #etsi ets Writer writer_parent in 
-  x0s, key0
+//   let key0 = derive_streamAE #etsi ets Writer writer_parent in 
+//   x0s, key0
 
 (* WAS: 
 let ks_client_13_ch ks (log:bytes): ST (exportKey * recordInstance)
@@ -648,7 +650,7 @@ val server12_init_dh:
   cs: cipherSuite -> 
   ems: bool -> 
   g: CommonDH.group -> 
-  ST (ks_server_state * CommonDH.share g)
+  ST (ks12_state * CommonDH.share g)
   (requires fun h0 ->
     match cs with 
     | CipherSuite Kex_DHE _ _ 
@@ -659,10 +661,10 @@ val server12_init_dh:
 let server12_init_dh cr sr pv cs ems g =
   dbg "server12_init_dh";
   let y = CommonDH.keygen g in
-  let _ = print_share (CommonDH.pubshare our_share) in
+  let _ = sprint_share (CommonDH.ipubshare y) in
   let csr = cr @| sr in
-  S12_wait_CKE_DH csr (pv, cs, ems) (| g, our_share |),
-  CommonDH.pubshare our_share
+  S12_wait_CKE_DH csr (pv, cs, ems) (| g, y |),
+  CommonDH.ipubshare y
 
 
 /// Once TLS 1.3 is accepted, compute all keys up to the handshake
@@ -675,11 +677,13 @@ val server13_init:
   cs: cipherSuite ->
   pskid: option PSK.pskid ->
   g_gx: option (g:CommonDH.group & CommonDH.share g) ->
+  transcript: _ ->
   ST (
-    i: esId (* TODO: carefully relate i to pskid *) &
-    
-    option CommonDH.serverKeyShare * 
-    option (binderKey (fnk_of_ts (ets_of_ems i))))
+    i: id (* TODO: carefully relate i to pskid *) &
+    (option CommonDH.serverKeyShare * 
+    // option (binderKey (fnk_of_ts (ets_of_ems i)))) // cwinter: no fnk_of_ts?
+    (let tsid = ets_of_ems i transcript in
+     option (binderKey (fnk_of_s tsid)))))
   (requires fun h0 -> 
     // stateless conditions: 
     (Some? g_gx \/ Some? pskid) /\
@@ -687,23 +691,26 @@ val server13_init:
     CipherSuite13? cs
     // will also require the global keyed invariant
     )
-  (ensures fun h0 (gy, bk) h1 ->
+  (ensures fun h0 (|i, (gy, bk)|) h1 ->
     // will modify the global keyed footprint and restore its invariant;
     // any more details required? 
     modifies_none h0 h1 /\
     (Some? bk <==> Some? pskid) /\
     (Some? gy \/ Some? bk) )
 
-let server13_init cr sr cs pskid g_gx =
+let leak_secret es = es 
+let leak_psk psk = psk
+
+let server13_init cr sr cs pskid g_gx tr =
   dbg "server13_init";
   let CipherSuite13 aea ha = cs in
 
   // retrieve optional pre-shared key; should the index be pski instead?
-  let (| i, psk0, ha |): ( i:esId & psk i * ha: Hashing.Spec.alg {ha = ha_of_id i} ) =
+  let (| i, (psk0, ha) |): ( i:id & psk i * ha: Hashing.Spec.alg {ha = ha_of_id i} ) =
     match pskid with 
     | None ->
       dbg "No PSK selected.";
-      (| i, psk_dummy ha, ha |) 
+      (| no_psk_id ha, (dummy_psk ha, ha) |) 
     | Some id -> 
       dbg ("Using negotiated PSK identity: "^print_bytes id);
         //17-11-26 should this branch move to PSK? 
@@ -712,17 +719,17 @@ let server13_init cr sr cs pskid g_gx =
           dbg ("Ticket RMS: "^print_bytes rms);
           let i = ResumptionPSK #li rmsId in
           let CipherSuite13 _ ha = cs in //17-11-26 no consistency check? 
-          let nonce, _ = split id 12 in  //17-11-26 what's this nonce? 
-          let psk0 = KDF.derive_secret ha rms "resumption" nonce in
-          (i, psk, ha)
+          let nonce, _ = split_ id 12 in  //17-11-26 what's this nonce? 
+          let psk0 = HKDF.derive_secret ha rms "resumption" nonce in
+          (|i, (psk, ha)|)
         | None ->
-          let i, pski, psk = read_psk id in //17-11-26 no consistency check?
-          (i, psk, pski.early_hash) in
+          let (| i, (pski, psk) |) = read_psk id in //17-11-26 no consistency check?
+          (| i, (psk, pski.early_hash) |) in
   if Some? pskid then dbg ("Pre-shared key: "^leak_psk psk);
 
   // extract early master secret
   let i0 = ems_of_psk i in 
-  let es: secret i0 = extract0 psk0 ha in 
+  let es: secret i0 = Extract0.extract0 psk0 ha in 
   dbg ("Computed early secret:           "^leak_secret es);
   let bfko =
     match pskid with 
@@ -730,29 +737,29 @@ let server13_init cr sr cs pskid g_gx =
     | Some _ -> // optionally compute the binder-verification key
       let lbl = binder_label i in
       let bnsi = bns_of_ems i0 in
-      let bns: secret bnsi = derive es ha lbl Expand info in
+      let bns: secret bnsi = KDF.derive es ha lbl Expand info in
       let bfkId = binderKey i in
       let info0 = magic() in // missing region and logical payload
-      let bfk: HMAC.UFCMA.key i = derive bns ha "finished" Expand info0 in
-      dbg ("binder key:                      "^print_bytes bk);
-      dbg ("binder Finished key:             "^print_bytes bk);
+      let bfk: HMAC.UFCMA.key i = KDF.derive bns ha "finished" Expand info0 in
+      dbg ("binder key:                      "^print_bytes bfkId);
+      dbg ("binder Finished key:             "^print_bytes bfk);
       Some bfk in
 
   // TODO optionally compute the 0RTT key too? 
 
   // extract handshake secret, mixing-in the optional DH secret. 
-  let salt1: salt (salt_of_ms i0) = derive es ha "derived" Expand () in
+  let salt1: Extract1.PRF.salt (salt_of_ms i0) = KDF.derive es ha "derived" Expand () in
   let idh, hs =
     match g_gx with
     | None -> 
-        let hs = extractP ha salt1 in
+        let hs = Extract1.extractP ha salt1 in
         NoIDH, hs
     | Some (| g, gX |) ->
-        let gY, hs = extractR ha g gX in 
+        let gY, hs = Extract1.extractR ha g gX in 
         IDH gX gY, hs in
-  dbg ("Handshake salt:                  "^print_bytes salt);
+  dbg ("Handshake salt:                  "^print_bytes salt1);
   dbg ("Handshake secret:                "^print_bytes hs);
-  gY, bfko, (*local state:*) hs 
+  (| idh, (bfko, (*local state:*) hs)|)
 
 (* WAS:
 let ks_server_13_init ks cr cs pskid g_gx =
