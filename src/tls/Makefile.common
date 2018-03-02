@@ -1,11 +1,12 @@
-HACL_HOME     ?= ../../../hacl-star
-FSTAR_HOME    ?= ../../../FStar
-MITLS_HOME    ?= ../..
-KREMLIN_HOME  ?= ../../../kremlin
-MLCRYPTO_HOME ?= ../../../MLCrypto
+HACL_HOME       ?= ../../../hacl-star
+FSTAR_HOME      ?= ../../../FStar
+MITLS_HOME      ?= ../..
+KREMLIN_HOME    ?= ../../../kremlin
+MLCRYPTO_HOME   ?= ../../../MLCrypto
+FLAVOR          ?= Model
+CONCRETE_FLAVOR ?=
 
 SHELL=/bin/sh
-CONCRETE_FLAVOR?= 
 
 # Project-wide Prerequisites
 
@@ -15,12 +16,13 @@ else
   LIB_EXT?=.so
 endif
 
-$(MITLS_HOME)/libs/ffi/FFICallbacks.cmxa $(MITLS_HOME)/src/pki/libmipki.$(LIB_EXT):
-	$(MAKE) -C $(dir $@)
-
-prerequisites: \
+PREREQUISITES= \
 	$(MITLS_HOME)/libs/ffi/FFICallbacks.cmxa \
 	$(MITLS_HOME)/src/pki/libmipki.$(LIB_EXT)
+
+$(PREREQUISITES):
+	$(MAKE) -C $(MITLS_HOME)/libs/ffi
+	$(MAKE) -C $(MITLS_HOME)/src/pki
 
 
 # Paths and Commands
@@ -58,12 +60,12 @@ DEP_FILE    = $(CACHE_DIR)/.depend
 # Add more roots here!
 ROOTS ?= TLS.fst QUIC.fst Test.Main.fst 
 
-EVERYTHING=$(wildcard *.fst *.fsti Make* $(MITLS_HOME)/src/pki/* $(MITLS_HOME)/libs/ffi/* ideal-flags/* concrete-flags/* concrete-flags/$(FLAVOR)$(CONCRETE_FLAVOR)/*)
+EVERYTHING=$(wildcard *.fst *.fsti Make* $(MITLS_HOME)/src/pki/* $(MITLS_HOME)/libs/ffi/* ideal-flags/* concrete-flags/* concrete-flags/$(FLAVOR)$(CONCRETE_FLAVOR)/* $(PREREQUISITES))
 
 
 # Production Rules
 
-$(DEP_FILE): $(EVERYTHING)
+$(DEP_FILE): $(EVERYTHING) 
 ifdef VERBOSE
 	@echo "\033[1;33mComputing $(FLAVOR)$(CONCRETE_FLAVOR) dependencies ...\033[;37m"
 endif
