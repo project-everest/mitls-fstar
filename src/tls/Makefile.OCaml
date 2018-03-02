@@ -1,6 +1,6 @@
 all: mitls.exe
 
-FSTAR_HOME	?= ../../../fstar
+FSTAR_HOME	?= ../../../FStar
 
 include $(FSTAR_HOME)/ulib/ml/Makefile.include
 
@@ -145,7 +145,9 @@ extract/OCaml/BufferBytes.cmx: extract/mlstubs/BufferBytes.ml
 ifdef VERBOSE
 	@echo "\033[0;32m=== Compiling $@ ...\033[;37m"
 endif
-	$(OCAMLOPT) -w -8-11-26-20 -c $< -o $@
+	$(subst \\,, \
+		$(OCAMLOPT) -w -8-11-26-20 -c $< -o $@ \
+	)
 
 CERT_FILES=CAFile.pem server-ecdsa.crt server-ecdsa.key
 
