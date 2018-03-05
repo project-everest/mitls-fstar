@@ -45,14 +45,12 @@ else
   INCLUDE_PATHS += ./concrete-flags/NoDebug
 endif
 
-FSTAR=$(FSTAR_HOME)/bin/fstar.exe --cache_dir $(CACHE_DIR) --cache_checked_modules $(OTHERFLAGS)
-
-VFLAGS?=--use_hints --use_hint_hashes --record_hints --warn_error -271
-
 HINTS_DIR  ?= 
 CACHE_DIR   = cache/$(FLAVOR)$(CONCRETE_FLAVOR)
 EXTRACT_DIR = extract/$(FLAVOR)$(CONCRETE_FLAVOR)
 DEP_FILE    = $(CACHE_DIR)/.depend
+FSTAR       = $(FSTAR_HOME)/bin/fstar.exe --cache_dir $(CACHE_DIR) --cache_checked_modules $(OTHERFLAGS)
+VFLAGS     ?= --use_hints --use_hint_hashes --record_hints --warn_error -271
 
 
 # Project Files
