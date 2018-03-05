@@ -90,9 +90,16 @@ let acc0 (a:alg) : acc a = empty_bytes
 abstract
 let compress (#a:alg) (_:acc a) (l:lbytes32 (blockLen a)) = l //??
 
+module U32 = FStar.UInt32 
+
 abstract
-let truncate (#a:alg) (ac:acc a): Tot bytes =
-  Bytes.slice ac 0ul (tagLen a) //?? just keeping the first tagLen bytes
+let truncate (#a:alg) (ac:acc a): Tot (lbytes (tagLen a)) =
+  let l = FStar.UInt32.uint_to_t (tagLen a) in
+  assume (Bytes.length ac <= tagLen a);
+  assume (U32.(l <=^ Bytes.len ac));
+  let r = Bytes.slice ac 0ul l in
+  assume (U32.(len r =^ l));
+  r //?? just keeping the first tagLen bytes
 
 (*
 let acc0 = function
@@ -108,7 +115,9 @@ val hash2: #a:alg -> acc a -> b:bytes {length b % blockLength a = 0} -> Tot (acc
 let rec hash2 #a v b =
   if len b = 0ul then v
   else
-    let c,b = split b (blockLen a) in
+    let bl = blockLen a in
+    assume (0 <= bl && bl < length b);
+    let c,b = split_ b bl in
     hash2 (compress v c) b
 
 (** maximal input lengths for hashing and hmac, overly limited by our UInt32 of bytes lengths *)
@@ -143,9 +152,13 @@ assume val suffix: a:alg -> len:UInt32.t {v len <= maxLength a} -> Tot (lbytes (
 // computed in one step (specification)
 val hash: a:alg -> b:hashable a -> Tot (lbytes32 (tagLen a))
 let hash a b =
-  let padded = b @| suffix a (len b) in
+  let q = suffix a (length b) in
+  assume (FStar.UInt.fits (length b + length q) 32);
+  let padded = b @| q in
   let v = hash2 (acc0 a) padded in
-  truncate v
+  let r = truncate v in
+  assert (length r <= tagLen a);
+  r
 
 // HMAC specification
 // in contrast with RFC 2104 (which take any key length),
@@ -154,7 +167,8 @@ type hkey (a:alg) = tag a
 
 val hmac: a:alg -> k:hkey a -> text:macable a -> Tot (tag a)
 let hmac a key message =
-  let xkey = key @| create (blockLen a -^ tagLen a) 0x0z  in
-  let outer_key_pad = xor (blockLen a) xkey (create (blockLen a) 0x5cz) in
-  let inner_key_pad = xor (blockLen a) xkey (create (blockLen a) 0x36z) in
+  let xkey = key @| create_ (blockLen a - tagLen a) 0x0z  in
+  let outer_key_pad = xor_ #(blockLen a) xkey (create_ (blockLen a) 0x5cz) in
+  let inner_key_pad = xor_ #(blockLen a) xkey (create_ (blockLen a) 0x36z) in
+  assume (FStar.UInt.fits (length inner_key_pad + length message) 32);
   hash a (outer_key_pad @| hash a (inner_key_pad @| message))
