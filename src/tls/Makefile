@@ -1,10 +1,10 @@
 EXTRACT='Nothing'
 FLAVOR?=Model
 
+all: clean-depend ocaml-all kremlin-all
+
 clean-depend:
 	rm -f cache/OCaml/.depend cache/Kremlin.depend cache/Model/.depend
-
-all: clean-depend ocaml-all kremlin-all
 
 ocaml-%: clean-depend
 	$(MAKE) -f Makefile.OCaml $*
