@@ -6,7 +6,10 @@ LOWPARSE_SPEC_FILES= \
         LowParse.BigEndian.fst \
 	LowParse.Spec.Base.fst \
 	LowParse.Spec.Combinators.fst \
+        LowParse.Spec.Int.fsti \
+        LowParse.Spec.Int.Aux.fst \
 	LowParse.Spec.Int.fst \
+        LowParse.Spec.Int.Unique.fst \
 	LowParse.Spec.FLData.fst \
 	LowParse.Spec.VLData.fst \
 	LowParse.Spec.Bytes.fst \
@@ -24,6 +27,8 @@ LOWPARSE_SLOW_FILES= \
 	LowParse.SLow.List.fst \
 	LowParse.SLow.FLData.fst \
         LowParse.BigEndianImpl.fst \
+        LowParse.SLow.Int.fsti \
+        LowParse.SLow.Int.Aux.fst \
         LowParse.SLow.Int.fst \
 	LowParse.SLow.VLData.fst \
         LowParse.SLow.Array.fst \
