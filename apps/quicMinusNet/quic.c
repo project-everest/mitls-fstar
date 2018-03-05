@@ -177,9 +177,9 @@ int main(int argc, char **argv)
   hs_type mode = handshake_simple;
   if(argc > 1)
   {
-    if(!stricmp(argv[1], "0rtt"))
+    if(!strcasecmp(argv[1], "0rtt"))
       mode = handshake_0rtt;
-    if(!stricmp(argv[1], "hrr"))
+    if(!strcasecmp(argv[1], "hrr"))
       mode = handshake_stateless_retry;
   }
 

@@ -67,9 +67,16 @@ let acc0 (a:alg) : acc a = empty_bytes
 abstract
 let compress (#a:alg) (_:acc a) (l:lbytes (blockLen a)) = l //??
 
+module U32 = FStar.UInt32 
+
 abstract
-let truncate (#a:alg) (ac:acc a): Tot bytes =
-  Bytes.slice ac 0ul (FStar.UInt32.uint_to_t (tagLen a)) //?? just keeping the first tagLen bytes
+let truncate (#a:alg) (ac:acc a): Tot (lbytes (tagLen a)) =
+  let l = FStar.UInt32.uint_to_t (tagLen a) in
+  assume (Bytes.length ac <= tagLen a);
+  assume (U32.(l <=^ Bytes.len ac));
+  let r = Bytes.slice ac 0ul l in
+  assume (U32.(len r =^ l));
+  r //?? just keeping the first tagLen bytes
 
 (*
 let acc0 = function
@@ -85,7 +92,9 @@ val hash2: #a:alg -> acc a -> b:bytes { length b % blockLen a = 0 } -> Tot (acc 
 let rec hash2 #a v b =
   if length b = 0 then v
   else
-    let c,b = split_ b (blockLen a) in
+    let bl = blockLen a in
+    assume (0 <= bl && bl < length b);
+    let c,b = split_ b bl in
     hash2 (compress v c) b
 
 // for convenience, we treat inputs as sequences of bytes, not bits.
@@ -108,9 +117,13 @@ let suffix (a:alg) (len:nat): Tot (c:lbytes (suffixLen a len)) =
 // computed in one step (specification)
 val hash: a:alg -> bytes -> Tot (lbytes (tagLen a))
 let hash a b =
-  let padded = b @| suffix a (length b) in
+  let q = suffix a (length b) in
+  assume (FStar.UInt.fits (length b + length q) 32);
+  let padded = b @| q in
   let v = hash2 (acc0 a) padded in
-  truncate v
+  let r = truncate v in
+  assert (length r <= tagLen a);
+  r
 
 
 // HMAC specification
@@ -124,4 +137,5 @@ let hmac a key message =
   let xkey = key @| create_ (blockLen a - tagLen a) 0x0z  in
   let outer_key_pad = xor_ #(blockLen a) xkey (create_ (blockLen a) 0x5cz) in
   let inner_key_pad = xor_ #(blockLen a) xkey (create_ (blockLen a) 0x36z) in
+  assume (FStar.UInt.fits (length inner_key_pad + length message) 32);
   hash a (outer_key_pad @| hash a (inner_key_pad @| message))
