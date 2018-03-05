@@ -57,6 +57,7 @@ FILES 		= Cert C_Loops_Spec_Loops CommonDH CoreCrypto \
   LowCProvider Nonce Parse PMS Prims PSK RSAKey \
   secure/Crypto_HKDF_Crypto_HMAC \
   Specializations_Providers_AEAD stub/mipki_wrapper stub/core_crypto stub/hacl_aead \
+  LowParse \
   QD_TLS_protocolVersion \
   stub/hacl_provider stub/buffer_bytes Test_Main TLSConstants TLS_Curve25519 TLSError TLSInfo \
   TLSInfoFlags vale/sha256_main_i vale/vale_aes_glue vale/Vale_Hash_SHA2_256 \
