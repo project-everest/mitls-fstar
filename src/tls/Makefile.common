@@ -112,7 +112,7 @@ ifdef VERBOSE
 endif
 	$(subst \\,, \
 		$(FSTAR) $(VFLAGS) \
-			--codegen $(FLAVOR) \
+			--codegen $(patsubst -%,,$(FLAVOR)) \
 			--cache_dir $(CACHE_DIR) \
 			$(HINTS_OPTS) \
 			--odir $(EXTRACT_DIR) \
