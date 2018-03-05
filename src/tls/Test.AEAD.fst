@@ -26,6 +26,8 @@ let test v =
   let aad = Bytes.bytes_of_hex v.aad in
   let plaintext = Bytes.bytes_of_hex v.plaintext in
   let ciphertext = Bytes.bytes_of_hex (v.ciphertext ^ v.tag) in
+  assume (length key = aeadKeySize v.cipher);
+  assume (length iv = aeadRealIVSize v.cipher);
   let encrypted = aead_encrypt v.cipher key iv aad plaintext in
   if encrypted <> ciphertext then
     begin

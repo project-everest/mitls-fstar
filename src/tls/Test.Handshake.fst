@@ -108,35 +108,6 @@ let main cafile cert key () = // could try with different client and server conf
   PKI.free pki;
   if !ok then C.EXIT_SUCCESS else C.EXIT_FAILURE
 
-
-(* now using Test.StAE code for those:
-
-private let pre_id (role:role) =
-  let cr  = createBytes 32 0z in
-  let sr  = createBytes 32 0z in
-  let kdf = PRF_TLS_1p2 kdf_label (HMAC Hashing.Spec.SHA256) in
-  let g = CommonDH.ECDH CoreCrypto.ECC_P256 in
-  let gx  = CommonDH.keygen g in
-  let gy, gxy = CommonDH.dh_responder #g gx in
-  let pms = PMS.DHPMS g (CommonDH.pubshare gx) gy (PMS.ConcreteDHPMS gxy) in
-  let msid = StandardMS pms (cr @| sr) kdf in
-  ID12 TLS_1p2 msid kdf (AEAD CoreCrypto.AES_128_GCM Hashing.Spec.SHA256) cr sr role
-
-private val encryptRecord :
-  #id:StAE.stae_id -> wr:StAE.writer id -> ct:Content.contentType -> plain:bytes -> ML bytes
-private let encryptRecord (#id:StAE.stae_id) (wr:StAE.writer id) ct plain : ML bytes =
-  let rg: Range.frange id = (0, length plain) in
-  let f: DataStream.fragment id rg = plain in
-  let f: Content.fragment id = Content.mk_fragment id ct rg f in
-  StAE.encrypt #id wr f
-
-private val decryptRecord : #id:StAE.stae_id -> rd:StAE.reader id -> ct:Content.contentType -> cipher:bytes -> ML bytes
-private let decryptRecord (#id:StAE.stae_id) (rd:StAE.reader id) ct cipher : ML bytes =
-  let ctxt: Content.decrypted id = (ct, cipher) in
-  let Some d = StAE.decrypt #id rd ctxt in
-  Content.repr id d
-*)
-
 (* 18-01-24 most of the test predates the handshake rewriting...
 
 private let sendRecordE encrypted tcp pv ct msg =

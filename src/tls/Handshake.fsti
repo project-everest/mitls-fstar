@@ -29,6 +29,9 @@ val get_mode: hs -> ST Negotiation.mode
 val is_server_hrr: hs -> ST bool
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> h0 == h1)
+val is_0rtt_offered: hs -> ST bool
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 -> h0 == h1)
 
 // annoyingly, we will need specification-level variants too.
 
