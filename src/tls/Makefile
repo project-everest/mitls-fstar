@@ -1,21 +1,24 @@
 EXTRACT='Nothing'
 FLAVOR?=Model
 
-all: ocaml-all kremlin-all
+clean-depend:
+	rm -f cache/OCaml/.depend cache/Kremlin.depend cache/Model/.depend
 
-ocaml-%:
+all: clean-depend ocaml-all kremlin-all
+
+ocaml-%: clean-depend
 	$(MAKE) -f Makefile.OCaml $*
 
-kremlin-%:
+kremlin-%: clean-depend
 	$(MAKE) -f Makefile.Kremlin $*
 
-model-% verify-%:
+model-% verify-%: clean-depend
 	$(MAKE) -f Makefile.Model $*
 
-quic-%:
+quic-%: clean-depend
 	$(MAKE) -C ../../apps/quicMinusNet $* -k
 
-test: kremlin-test ocaml-test quic-test
+test: clean-depend kremlin-test ocaml-test quic-test
 
 clean: ocaml-clean kremlin-clean quic-clean model-clean
 	rm -rf $(EXTRACT_DIR)/Kremlin $(EXTRACT_DIR)/OCaml $(EXTRACT_DIR)/copied \
