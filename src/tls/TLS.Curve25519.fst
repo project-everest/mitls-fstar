@@ -35,7 +35,9 @@ let keygen () : ST keyshare
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
   let s : lbytes 32 = CC.random 32 in
-  let base_point = Bytes.set_byte (Bytes.create 32ul 0uy) 0ul 9uy in
+  let base_point =
+    Bytes.bytes_of_hex
+      "0900000000000000000000000000000000000000000000000000000000000000" in
   scalarmult s base_point, s
 
 let mul (k:scalar) (p:point) : ST point
