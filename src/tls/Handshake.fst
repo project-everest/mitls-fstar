@@ -251,7 +251,7 @@ let clientHello offer = // pure; shared by Client and Server
 
 (* -------------------- Handshake Client ------------------------ *)
 
-type btag (binderKey: i:binderId & bk:KeySchedule.binderKey i) =
+type btag (binderKey: (i:binderId & bk:KeySchedule.binderKey i)) =
   HMAC.UFCMA.tag (HMAC.UFCMA.HMAC_Binder (let (|i,_|) = binderKey in i))
 
 let compute_binder hs (bkey:(i:binderId & bk:KeySchedule.binderKey i)): ST (btag bkey)

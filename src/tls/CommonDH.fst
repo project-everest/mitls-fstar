@@ -454,7 +454,7 @@ let keyShareEntriesBytes kes =
 
 (** Parsing function for a list KeyShareEntry *)
 let parseKeyShareEntries b =
-  let rec (aux: b:bytes -> list keyShareEntry -> Tot (result (list keyShareEntry)) (decreases (length b))) = fun b entries ->
+  let rec (aux: (b:bytes -> list keyShareEntry -> Tot (result (list keyShareEntry)) (decreases (length b)))) = fun b entries ->
     if length b > 0 then
       if length b >= 4 then
 	let ng, data = split b 2 in

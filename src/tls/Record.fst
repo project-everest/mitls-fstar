@@ -39,7 +39,7 @@ type header = b:lbytes 5 // for all TLS versions
 let fake = ctBytes Application_data @| versionBytes TLS_1p0 
 
 // this is the outer packet; the *caller* should switch from 1.3 to 1.0 whenever data is encrypted.
-let makePacket ct plain ver (data: b:bytes { repr_bytes (length b) <= 2}) =
+let makePacket ct plain ver (data: (b:bytes { repr_bytes (length b) <= 2})) =
   let header =
     (if ver = TLS_1p3 then
       (if plain then ctBytes ct @| versionBytes TLS_1p0
