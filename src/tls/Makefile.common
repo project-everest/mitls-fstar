@@ -7,6 +7,22 @@ FLAVOR          ?= Model
 
 SHELL=/bin/bash
 
+# Project-wide Prerequisites
+
+ifeq ($(OS),Windows_NT)
+  LIB_EXT?=.dll
+else
+  LIB_EXT?=.so
+endif
+
+# PREREQUISITES= \
+#	$(MITLS_HOME)/libs/ffi/FFICallbacks.cmxa \
+#	$(MITLS_HOME)/src/pki/libmipki.$(LIB_EXT)
+
+#$(PREREQUISITES):
+#	$(MAKE) -C $(MITLS_HOME)/libs/ffi
+#	$(MAKE) -C $(MITLS_HOME)/src/pki
+
 
 # Paths and Commands
 
