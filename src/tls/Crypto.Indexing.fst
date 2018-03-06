@@ -46,7 +46,7 @@ let aeadAlg_of_id (i:id) =
   | CC.AES_128_GCM -> AES_128_GCM
   | CC.AES_256_GCM -> AES_256_GCM
   | CC.CHACHA20_POLY1305 -> CHACHA20_POLY1305
-  | _ -> admit()
+  | _ -> magic()
 
 let macAlg_of_id (i:id) =
   match aeadAlg_of_id i with
