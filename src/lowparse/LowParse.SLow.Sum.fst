@@ -117,15 +117,16 @@ let enum_destr_cons
   (eq: (t -> t -> GTot Type0))
   (ift: if_combinator t eq)
   (e: enum key repr)
-  (u: unit { Cons? e /\ r_reflexive t eq /\ r_transitive t eq } )
-  (g: enum_destr_t t eq (enum_tail e))
-: Tot (enum_destr_t t eq e)
+  (g: enum_destr_t t eq (enum_tail' e))
+: Pure (enum_destr_t t eq e)
+  (requires (Cons? e /\ r_reflexive t eq /\ r_transitive t eq))
+  (ensures (fun _ -> True))
 = (fun (e' : list (key * repr) { e' == e } ) -> match e' with
      | (k, _) :: _ ->
      (fun (f: (enum_key e -> Tot t)) (x: enum_key e) -> ((
        [@inline_let]
-       let f' : (enum_key (enum_tail e) -> Tot t) =
-         (fun (x' : enum_key (enum_tail e)) ->
+       let f' : (enum_key (enum_tail' e) -> Tot t) =
+         (fun (x' : enum_key (enum_tail' e)) ->
            [@inline_let]
            let (x_ : enum_key e) = (x' <: key) in
            f x_
@@ -138,7 +139,7 @@ let enum_destr_cons
          (fun h -> f k)
          (fun h ->
            [@inline_let]
-           let x' : enum_key (enum_tail e) = (x <: key) in
+           let x' : enum_key (enum_tail' e) = (x <: key) in
            (g f' x' <: t))
        in
        y
@@ -151,8 +152,9 @@ let enum_destr_cons_nil
   (#t: Type)
   (eq: (t -> t -> GTot Type0))
   (e: enum key repr)
-  (u: unit { Cons? e /\ Nil? (enum_tail e) /\ r_reflexive t eq } )
-: Tot (enum_destr_t t eq e)
+: Pure (enum_destr_t t eq e)
+  (requires (Cons? e /\ Nil? (enum_tail' e) /\ r_reflexive t eq))
+  (ensures (fun _ -> True))
 = (fun (e' : list (key * repr) { e' == e } ) -> match e' with
      | (k, _) :: _ ->
      (fun (f: (enum_key e -> Tot t)) (x: enum_key e) -> ((
@@ -366,37 +368,36 @@ let enum_head_key
 inline_for_extraction
 let sum_tail_type
   (t: sum)
-: Pure Type0
-  (requires (Cons? (sum_enum t)))
-  (ensures (fun _ -> True))
-= (x: sum_type t { sum_tag_of_data t x <> enum_head_key (sum_enum t) } )
+: Tot Type0
+= (x: sum_type t { Cons? (sum_enum t) /\ sum_tag_of_data t x <> enum_head_key (sum_enum t) } )
 
 let sum_tail_tag_of_data
   (t: sum)
-  (u: unit { Cons? (sum_enum t) } )
   (x: sum_tail_type t)
-: GTot (enum_key (enum_tail (sum_enum t)))
+: Ghost (enum_key (enum_tail' (sum_enum t)))
+  (requires (Cons? (sum_enum t)))
+  (ensures (fun _ -> True))
 = sum_tag_of_data t x
 
 inline_for_extraction
 let sum_tail
   (t: sum)
 : Pure sum
-  (requires (Cons? (sum_enum t)))
+  (requires True)
   (ensures (fun t' ->
-    Cons? (sum_enum t) /\
+    Cons? (sum_enum t) ==> (
     sum_key_type t' == sum_key_type t /\
     sum_repr_type t' == sum_repr_type t /\
-    (sum_enum t' <: enum (sum_key_type t) (sum_repr_type t)) == enum_tail (sum_enum t) /\
+    (sum_enum t' <: enum (sum_key_type t) (sum_repr_type t)) == enum_tail' (sum_enum t) /\
     sum_type t' == sum_tail_type t /\
     (forall (x : sum_tail_type t) . (sum_tag_of_data t' x <: sum_key_type t) == (sum_tag_of_data t (x <: sum_type t) <: sum_key_type t))
-  ))
+  )))
 = Sum
     (sum_key_type t)
     (sum_repr_type t)
-    (enum_tail (sum_enum t))
+    (enum_tail' (sum_enum t))
     (sum_tail_type t)
-    (sum_tail_tag_of_data t ())
+    (sum_tail_tag_of_data t)
 
 inline_for_extraction
 let sum_destr
@@ -412,9 +413,10 @@ inline_for_extraction
 let sum_destr_cons
   (v: Type)
   (t: sum)
-  (u: unit { Cons? (sum_enum t) } )
   (destr: sum_destr v (sum_tail t))
-: Tot (sum_destr v t)
+: Pure (sum_destr v t)
+  (requires (Cons? (sum_enum t)))
+  (ensures (fun _ -> True))
 = match sum_enum t with
   | ((k, _) :: _) ->
     fun 
@@ -432,8 +434,9 @@ inline_for_extraction
 let sum_destr_cons_nil
   (v: Type)
   (t: sum)
-  (u: unit { Cons? (sum_enum t) /\ Nil? (enum_tail (sum_enum t)) } )
-: Tot (sum_destr v t)
+: Pure (sum_destr v t)
+  (requires (Cons? (sum_enum t) /\ Nil? (enum_tail' (sum_enum t))))
+  (ensures (fun _ -> True))
 = match sum_enum t with
   | ((k, _) :: _) ->
     fun 

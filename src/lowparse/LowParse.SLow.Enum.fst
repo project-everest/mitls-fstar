@@ -17,20 +17,21 @@ let maybe_enum_key_of_repr'_t
 #set-options "--z3rlimit 32"
 
 inline_for_extraction
-let enum_tail
+let enum_tail'
   (#key #repr: eqtype)
   (e: enum key repr)
 : Pure (enum key repr)
-  (requires (Cons? e))
-  (ensures (fun y -> Cons? e /\ (let (_ :: y') = e in y == y')))
-= match e with _ :: y -> y
+  (requires True)
+  (ensures (fun y -> Cons? e ==> (let (_ :: y') = e in y == y')))
+= match e with _ :: y -> y | _ -> []
 
 inline_for_extraction
 let maybe_enum_key_of_repr'_t_cons_nil
   (#key #repr: eqtype)
   (e: enum key repr)
-  (u: unit { Cons? e /\ Nil? (enum_tail e) } )
-: Tot (maybe_enum_key_of_repr'_t e)
+: Pure (maybe_enum_key_of_repr'_t e)
+  (requires (Cons? e /\ Nil? (enum_tail' e)))
+  (ensures (fun _ -> True))
 = (fun (e' : list (key * repr) { e' == e } ) -> match e' with
   | [(k, r)] ->
     (fun x -> ((
@@ -44,18 +45,17 @@ inline_for_extraction
 let maybe_enum_key_of_repr'_t_cons
   (#key #repr: eqtype)
   (e: enum key repr )
-  (u: unit {
-    Cons? e
-  })
-  (g : maybe_enum_key_of_repr'_t (enum_tail e))
-: Tot (maybe_enum_key_of_repr'_t e)
+  (g : maybe_enum_key_of_repr'_t (enum_tail' e))
+: Pure (maybe_enum_key_of_repr'_t e)
+  (requires (Cons? e))
+  (ensures (fun _ -> True))
 = (fun (e' : list (key * repr) { e' == e } ) -> match e' with
      | (k, r) :: _ ->
      (fun x -> ((
         if r = x
         then Known k
         else
-        let y : maybe_enum_key (enum_tail e) = g x in
+        let y : maybe_enum_key (enum_tail' e) = g x in
         match y with
         | Known k' -> Known (k' <: key)
         | Unknown x' -> Unknown x
@@ -140,9 +140,10 @@ inline_for_extraction
 let enum_repr_of_key_cons
   (#key #repr: eqtype)
   (e: enum key repr)
-  (u: unit { Cons? e } )
-  (f : enum_repr_of_key'_t (enum_tail e))
-: Tot (enum_repr_of_key'_t e)
+  (f : enum_repr_of_key'_t (enum_tail' e))
+: Pure (enum_repr_of_key'_t e)
+  (requires (Cons? e))
+  (ensures (fun _ -> True))
 = (fun (e' : list (key * repr) { e' == e } ) -> match e' with
      | (k, r) :: _ ->
      (fun (x: enum_key e) -> (
@@ -156,8 +157,9 @@ inline_for_extraction
 let enum_repr_of_key_cons_nil
   (#key #repr: eqtype)
   (e: enum key repr)
-  (u: unit { Cons? e /\ Nil? (enum_tail e) } )
-: Tot (enum_repr_of_key'_t e)
+: Pure (enum_repr_of_key'_t e)
+  (requires (Cons? e /\ Nil? (enum_tail' e)))
+  (ensures (fun _ -> True))
 = (fun (e' : list (key * repr) { e' == e } ) -> match e' with
      | [(k, r)] ->
      (fun (x: enum_key e) ->
