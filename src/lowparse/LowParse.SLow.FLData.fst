@@ -2,7 +2,7 @@ module LowParse.SLow.FLData
 include LowParse.Spec.FLData
 include LowParse.SLow.Combinators
 
-module B32 = FStar.Bytes
+module B32 = LowParse.Bytes32
 module U32 = FStar.UInt32
 
 inline_for_extraction
@@ -19,7 +19,7 @@ let parse32_fldata
     then
       None
     else
-      match p32 (b32slice input 0ul sz32) with
+      match p32 (B32.b32slice input 0ul sz32) with
       | Some (v, consumed) ->
 	if consumed = sz32
 	then begin

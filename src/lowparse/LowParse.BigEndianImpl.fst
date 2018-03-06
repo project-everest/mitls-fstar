@@ -18,7 +18,7 @@ type uinttype (t: Type0) (n: nat) =
     uinttype t n
 
 module Seq = FStar.Seq
-module B32 = FStar.Bytes
+module B32 = LowParse.Bytes32
 module U32 = FStar.UInt32
 module M = LowParse.Math
 module G = FStar.Ghost
@@ -163,38 +163,38 @@ let n_to_be_body'
   (t: Type0)
   (n: nat)
   (u: uinttype t n)
+  (len: U32.t)
   (x0: t)
   (i: U32.t)
   (x: t)
   (accu: B32.bytes)
 : Pure B32.bytes
   (requires (
-    8 `Prims.op_Multiply` B32.length accu <= n /\
-    U32.v i <= B32.length accu /\
+    8 `Prims.op_Multiply` (U32.v len) <= n /\
+    B32.length accu + U32.v i == U32.v len /\
     0 < U32.v i /\
-    u.v x0 < pow2 (8 `Prims.op_Multiply` B32.length accu) /\
+    u.v x0 < pow2 (8 `Prims.op_Multiply` U32.v len) /\
     u.v x < pow2 (8 `Prims.op_Multiply` U32.v i) /\
-    n_to_be (B32.len accu) (u.v x0) == Seq.append (n_to_be i (u.v x)) (Seq.slice (B32.reveal accu) (U32.v i) (B32.length accu))
+    n_to_be len (u.v x0) == Seq.append (n_to_be i (u.v x)) (B32.reveal accu)
   ))
   (ensures (fun accu' ->
-    B32.length accu' == B32.length accu /\ (
     let x' = u.div256 x in
     let i' = U32.sub i 1ul in
+    B32.length accu' + U32.v i' == U32.v len /\
     u.v x' < pow2 (8 `Prims.op_Multiply` U32.v i') /\
-    n_to_be (B32.len accu') (u.v x0) == Seq.append (n_to_be i' (u.v x')) (Seq.slice (B32.reveal accu') (U32.v i') (B32.length accu'))
-  )))
+    n_to_be len (u.v x0) == Seq.append (n_to_be i' (u.v x')) (B32.reveal accu')
+  ))
 = match u with
   | UIntType u_v u_to_byte _ _ _ _ _ u_div256 ->
   let b = u_to_byte x in
   let i' = U32.sub i 1ul in
-  let accu' = B32.set_byte accu i' b in
+  let accu' = B32.append (B32.create 1ul b) accu in
   M.pow2_plus 8 (8 `Prims.op_Multiply` U32.v i');
   let x' = G.hide (u_div256 x) in
   assert (u_v (G.reveal x') < pow2 (8 `Prims.op_Multiply` U32.v i'));
   assert (n_to_be i (u_v x) == Seq.append (n_to_be i' (u_v (G.reveal x'))) (Seq.create 1 b));
-  assert (Seq.slice (B32.reveal accu') (U32.v i) (B32.length accu') == Seq.slice (B32.reveal accu) (U32.v i) (B32.length accu));
-  assert (Seq.slice (B32.reveal accu') (U32.v i') (B32.length accu') `Seq.equal` Seq.append (Seq.create 1 b) (Seq.slice (B32.reveal accu') (U32.v i) (B32.length accu')));
-  Seq.append_assoc (n_to_be i' (u_v (G.reveal x'))) (Seq.create 1 b) (Seq.slice (B32.reveal accu') (U32.v i) (B32.length accu'));
+  assert (B32.reveal accu' == Seq.append (Seq.create 1 b) (B32.reveal accu));
+  Seq.append_assoc (n_to_be i' (u_v (G.reveal x'))) (Seq.create 1 b) (B32.reveal accu);
   accu'
 
 inline_for_extraction
@@ -212,9 +212,10 @@ let n_to_be_1
     B32.length accu' == 1 /\
     n_to_be 1ul (u.v x0) == B32.reveal accu'
   ))
-= let accu = B32.create 1ul 42uy in
+= let accu = B32.empty_bytes in
+  B32.reveal_empty ();
   Seq.append_empty_r (n_to_be 1ul (u.v x0));
-  let res = n_to_be_body' t n u x0 1ul x0 accu in
+  let res = n_to_be_body' t n u 1ul x0 1ul x0 accu in
   Seq.append_empty_l (B32.reveal res);
   res
 
@@ -235,11 +236,12 @@ let n_to_be_2
   ))
 = match u with
   | UIntType u_v u_to_byte _ _ _ _ _ u_div256 ->
-  let accu = B32.create 2ul 42uy in
+  let accu = B32.empty_bytes in
+  B32.reveal_empty ();
   Seq.append_empty_r (n_to_be 2ul (u.v x0));
-  let accu1 = n_to_be_body' t n u x0 2ul x0 accu in
+  let accu1 = n_to_be_body' t n u 2ul x0 2ul x0 accu in
   let x1 = u_div256 x0 in
-  let res = n_to_be_body' t n u x0 1ul x1 accu1 in
+  let res = n_to_be_body' t n u 2ul x0 1ul x1 accu1 in
   Seq.append_empty_l (B32.reveal res);
   res
 
@@ -260,13 +262,14 @@ let n_to_be_3
   ))
 = match u with
   | UIntType u_v u_to_byte _ _ _ _ _ u_div256 ->
-  let accu = B32.create 3ul 42uy in
+  let accu = B32.empty_bytes in
+  B32.reveal_empty ();
   Seq.append_empty_r (n_to_be 3ul (u.v x0));
-  let accu2 = n_to_be_body' t n u x0 3ul x0 accu in
+  let accu2 = n_to_be_body' t n u 3ul x0 3ul x0 accu in
   let x2 = u_div256 x0 in
-  let accu1 = n_to_be_body' t n u x0 2ul x2 accu2 in
+  let accu1 = n_to_be_body' t n u 3ul x0 2ul x2 accu2 in
   let x1 = u_div256 x2 in
-  let res = n_to_be_body' t n u x0 1ul x1 accu1 in
+  let res = n_to_be_body' t n u 3ul x0 1ul x1 accu1 in
   Seq.append_empty_l (B32.reveal res);
   res
 
@@ -287,15 +290,16 @@ let n_to_be_4
   ))
 = match u with
   | UIntType u_v u_to_byte _ _ _ _ _ u_div256 ->
-  let accu = B32.create 4ul 42uy in
+  let accu = B32.empty_bytes in
+  B32.reveal_empty ();
   Seq.append_empty_r (n_to_be 4ul (u.v x0));
-  let accu3 = n_to_be_body' t n u x0 4ul x0 accu in
+  let accu3 = n_to_be_body' t n u 4ul x0 4ul x0 accu in
   let x3 = u_div256 x0 in
-  let accu2 = n_to_be_body' t n u x0 3ul x3 accu3 in
+  let accu2 = n_to_be_body' t n u 4ul x0 3ul x3 accu3 in
   let x2 = u_div256 x3 in
-  let accu1 = n_to_be_body' t n u x0 2ul x2 accu2 in
+  let accu1 = n_to_be_body' t n u 4ul x0 2ul x2 accu2 in
   let x1 = u_div256 x2 in
-  let res = n_to_be_body' t n u x0 1ul x1 accu1 in
+  let res = n_to_be_body' t n u 4ul x0 1ul x1 accu1 in
   Seq.append_empty_l (B32.reveal res);
   res
 

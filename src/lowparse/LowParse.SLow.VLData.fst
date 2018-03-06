@@ -5,7 +5,7 @@ include LowParse.SLow.FLData
 module Seq = FStar.Seq
 module U32 = FStar.UInt32
 module E = LowParse.BigEndianImpl
-module B32 = FStar.Bytes
+module B32 = LowParse.Bytes32
 
 inline_for_extraction
 let serialize32_bounded_integer_1
@@ -267,7 +267,7 @@ let serialize32_bounded_vldata_strong'
     let slen = ser (len <: bounded_integer sz) in
     seq_slice_append_l (B32.reveal slen) (B32.reveal pl);
     seq_slice_append_r (B32.reveal slen) (B32.reveal pl);
-    let res : bytes32 = b32append slen pl in
+    let res : bytes32 = B32.b32append slen pl in
     res)
 
 let serialize32_bounded_vldata_strong_correct
@@ -292,7 +292,7 @@ let serialize32_bounded_vldata_strong_correct
   assert (B32.reveal slen == serialize (serialize_bounded_integer sz) len);
   seq_slice_append_l (B32.reveal slen) (B32.reveal pl);
   seq_slice_append_r (B32.reveal slen) (B32.reveal pl);
-  let res : bytes32 = b32append slen pl in
+  let res : bytes32 = B32.b32append slen pl in
   assert (B32.reveal res == Seq.append (B32.reveal slen) (B32.reveal pl));
   assert (B32.reveal res == serialize_bounded_vldata_strong' min max s input);
   assert (serializer32_correct (serialize_bounded_vldata_strong min max s) input res)
