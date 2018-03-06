@@ -296,7 +296,7 @@ let load_stateless_cookie l hrr digest =
   let OpenHash ch2b = st.hashes in
   let fake_ch = (bytes_of_hex "fe0000") @| (vlbytes 1 digest) in
   trace ("Installing prefix to transcript: "^(hex_of_bytes fake_ch));
-  let hrb = helloRetryRequestBytes hrr in
+  let hrb = handshakeMessageBytes None (HelloRetryRequest hrr) in
   trace ("HRR bytes: "^(hex_of_bytes hrb));
   let h = OpenHash (fake_ch @| hrb @| ch2b) in
   l := State st.transcript st.outgoing st.outgoing_next_keys st.outgoing_complete
