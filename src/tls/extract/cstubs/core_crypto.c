@@ -32,6 +32,13 @@
     return _x;                                                                 \
   }
 
+// For ticket age, currently using C runtime <time.h> with second resolution
+// FIXME(adl) switch to milisecond timers, after we check the Windows options
+uint32_t CoreCrypto_now()
+{
+  return (uint32_t)KRML_HOST_TIME();
+}
+
 #ifndef NO_OPENSSL
 
 #include <openssl/bn.h>
@@ -47,7 +54,6 @@
 #include <openssl/pem.h>
 #include <openssl/rand.h>
 #include <openssl/rsa.h>
-
 
 FStar_Bytes_bytes CoreCrypto_dh_agreement(CoreCrypto_dh_key x0,
                                           FStar_Bytes_bytes x1) {
@@ -435,6 +441,170 @@ bool CoreCrypto_ec_is_on_curve(CoreCrypto_ec_params x0,
   return ret;
 }
 
+FStar_Bytes_bytes
+CoreCrypto_aead_encrypt(CryptoTypes_aead_cipher x0,
+                        FStar_Bytes_bytes x1,
+                        FStar_Bytes_bytes x2,
+                        FStar_Bytes_bytes x3,
+                        FStar_Bytes_bytes x4) {
+  // Hardcoded tag length, may need to be revised for other ciphers
+  int olen, tlen = 16;
+  EVP_CIPHER_CTX *ctx = NULL;
+  const EVP_CIPHER *cipher = NULL;
+
+  switch (x0) {
+  case CryptoTypes_AES_128_GCM:
+    cipher = EVP_aes_128_gcm();
+    break;
+  case CryptoTypes_AES_256_GCM:
+    cipher = EVP_aes_256_gcm();
+    break;
+  case CryptoTypes_CHACHA20_POLY1305:
+    cipher = EVP_chacha20_poly1305();
+    break;
+  default:
+    FAIL_IF(true, "Unsupported AEAD cipher");
+  }
+
+  ctx = EVP_CIPHER_CTX_new();
+  FAIL_IF(ctx == NULL, "OpenSSL allocation failure: EVP_CIPHER_CTX_new");
+
+  // Set all parameters to NULL except the cipher type in this initial call
+  // Give remaining parameters in subsequent calls (e.g. EVP_CIPHER_set_key),
+  // all of which have cipher type set to NULL
+  if (EVP_CipherInit_ex(ctx, cipher, NULL, NULL, NULL, 1) == 0)
+    FAIL_IF(true, "Cannot initialize cipher context");
+
+  // Disable padding: total amount of data encrypted or decrypted must be a
+  // multiple of the block size or an error will occur
+  EVP_CIPHER_CTX_set_padding(ctx, 0);
+
+  if (EVP_CIPHER_CTX_set_key_length(ctx, x1.length) == 0)
+    FAIL_IF(true, "cannot set CIPHER_CTX key length");
+
+  if (EVP_CipherInit_ex(ctx, NULL, NULL, (uint8_t*) x1.data, NULL, -1) == 0)
+    FAIL_IF(true, "cannot set CIPHER_CTX key");
+
+  if(EVP_CIPHER_iv_length(cipher) != x2.length)
+    FAIL_IF(true, "wrong IV length");
+
+  if (EVP_CipherInit_ex(ctx, NULL, NULL, NULL, (uint8_t*) x2.data, -1) == 0)
+    FAIL_IF(true, "cannot set CIPHER_CTX IV");
+
+  // To specify additional authenticated data a call to EVP_CipherUpdate()
+  // should be made with the output parameter out set to NULL.
+  if (EVP_CipherUpdate(ctx, NULL, &olen, (uint8_t*) x3.data, x3.length) == 0)
+    FAIL_IF(true, "failed to set additional data");
+
+  if (olen != x3.length)
+    FAIL_IF(true, "failed to set complete additional data");
+
+  unsigned char *output = KRML_HOST_MALLOC(x4.length + tlen);
+
+  if (EVP_CipherUpdate(ctx, output, &olen, (uint8_t*) x4.data, x4.length) == 0)
+    FAIL_IF(true, "encryption failed");
+
+  if (olen != x4.length)
+    FAIL_IF(true, "failed to encrypt all data");
+
+  if ((EVP_EncryptFinal_ex(ctx, output, &olen) != 1) || (olen != 0))
+    FAIL_IF(true, "final encryption failed");
+
+  unsigned char* tag = output + x4.length;
+  if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_GET_TAG, tlen, tag) != 1)
+    FAIL_IF(true, "failed to get AEAD tag");
+
+  EVP_CIPHER_CTX_free(ctx);
+
+  FStar_Bytes_bytes ret = {.length = x4.length + tlen, .data = (const char*)output};
+  return ret;
+}
+
+FStar_Pervasives_Native_option__FStar_Bytes_bytes
+CoreCrypto_aead_decrypt(CryptoTypes_aead_cipher x0,
+                        FStar_Bytes_bytes x1,
+                        FStar_Bytes_bytes x2,
+                        FStar_Bytes_bytes x3,
+                        FStar_Bytes_bytes x4) {
+  // Hardcoded tag length, may need to be revised for other ciphers
+  int olen, tlen = 16;
+  EVP_CIPHER_CTX *ctx = NULL;
+  const EVP_CIPHER *cipher = NULL;
+
+  switch (x0) {
+  case CryptoTypes_AES_128_GCM:
+    cipher = EVP_aes_128_gcm();
+    break;
+  case CryptoTypes_AES_256_GCM:
+    cipher = EVP_aes_256_gcm();
+    break;
+  case CryptoTypes_CHACHA20_POLY1305:
+    cipher = EVP_chacha20_poly1305();
+    break;
+  default:
+    FAIL_IF(true, "Unsupported AEAD cipher");
+  }
+
+  ctx = EVP_CIPHER_CTX_new();
+  FAIL_IF(ctx == NULL, "OpenSSL allocation failure: EVP_CIPHER_CTX_new");
+
+  // Set all parameters to NULL except the cipher type in this initial call
+  // Give remaining parameters in subsequent calls (e.g. EVP_CIPHER_CTX_set_key),
+  // all of which have cipher type set to NULL
+  if (EVP_CipherInit_ex(ctx, cipher, NULL, NULL, NULL, 0) == 0)
+    FAIL_IF(true, "Cannot initialize cipher context");
+
+  // Disable padding: total amount of data encrypted or decrypted must be a
+  // multiple of the block size or an error will occur
+  EVP_CIPHER_CTX_set_padding(ctx, 0);
+
+  if (EVP_CIPHER_CTX_set_key_length(ctx, x1.length) == 0)
+    FAIL_IF(true, "cannot set CIPHER_CTX key length");
+
+  if (EVP_CipherInit_ex(ctx, NULL, NULL, (uint8_t*) x1.data, NULL, -1) == 0)
+    FAIL_IF(true, "cannot set CIPHER_CTX key");
+
+  if(EVP_CIPHER_iv_length(cipher) != x2.length)
+    FAIL_IF(true, "wrong IV length");
+
+  if (EVP_CipherInit_ex(ctx, NULL, NULL, NULL, (uint8_t*) x2.data, -1) == 0)
+    FAIL_IF(true, "cannot set CIPHER_CTX IV");
+
+  // To specify additional authenticated data a call to EVP_CipherUpdate()
+  // should be made with the output parameter out set to NULL.
+  if (EVP_CipherUpdate(ctx, NULL, &olen, (uint8_t*) x3.data, x3.length) == 0)
+    FAIL_IF(true, "failed to set additional data");
+
+  if (olen != x3.length)
+    FAIL_IF(true, "failed to set complete additional data");
+
+  unsigned char *output = KRML_HOST_MALLOC(x4.length);
+
+  if (EVP_CipherUpdate(ctx, output, &olen, (uint8_t*) x4.data, x4.length - tlen) == 0)
+    FAIL_IF(true, "decryption failed");
+
+  if (olen != x4.length - tlen)
+    FAIL_IF(true, "failed to decrypt all data");
+
+  unsigned char* tag = (unsigned char *)x4.data + x4.length - tlen;
+  if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG, tlen, tag) != 1)
+    FAIL_IF(true, "failed to set AEAD tag");
+
+  if ((EVP_DecryptFinal_ex(ctx, output, &olen) != 1)) {
+    FStar_Pervasives_Native_option__FStar_Bytes_bytes ret = {
+      .tag = FStar_Pervasives_Native_None,
+      .v = {.length = 0, .data = 0}};
+    return ret;
+  }
+
+  EVP_CIPHER_CTX_free(ctx);
+
+  FStar_Pervasives_Native_option__FStar_Bytes_bytes ret = {
+    .tag = FStar_Pervasives_Native_Some,
+    .v = {.length = x4.length - tlen, .data = (const char*)output}};
+  return ret;
+}
+
 #else // NO_OPENSSL
 
 FStar_Bytes_bytes CoreCrypto_dh_agreement(CoreCrypto_dh_key x0,
@@ -462,7 +632,7 @@ CoreCrypto_dh_key CoreCrypto_dh_gen_key(CoreCrypto_dh_params x0) {
   FAIL_IF(true, "No OpenSSL support.");
   CoreCrypto_dh_key ret = {.dh_params = x0,
                            .dh_public = 0,
-                           .dh_private = {.tag = FStar_Pervasives_Native_Some,
+                           .dh_private = {.tag = FStar_Pervasives_Native_None,
                                           .v = {.length = 0, .data = 0}}};
   return ret;
 }
@@ -471,7 +641,7 @@ CoreCrypto_ec_key CoreCrypto_ec_gen_key(CoreCrypto_ec_params x0) {
   FAIL_IF(true, "No OpenSSL support.");
   CoreCrypto_ec_key ret = {.ec_params = x0,
                            .ec_point = {.ecx = 0, .ecy = 0},
-                           .ec_priv = {.tag = FStar_Pervasives_Native_Some,
+                           .ec_priv = {.tag = FStar_Pervasives_Native_None,
                                        .v = {.length = 0, .data = 0}}};
   return ret;
 }
@@ -488,7 +658,7 @@ CoreCrypto_rsa_key CoreCrypto_rsa_gen_key(Prims_int size) {
   CoreCrypto_rsa_key ret = {
       .rsa_mod = 0,
       .rsa_pub_exp = 0,
-      .rsa_prv_exp = {.tag = FStar_Pervasives_Native_Some, .v = 0}};
+      .rsa_prv_exp = {.tag = FStar_Pervasives_Native_None, .v = 0}};
 
   return ret;
 }
@@ -499,7 +669,7 @@ CoreCrypto_rsa_decrypt(CoreCrypto_rsa_key key, CoreCrypto_rsa_padding padding,
                        FStar_Bytes_bytes data) {
   FAIL_IF(true, "No OpenSSL support.");
   FStar_Pervasives_Native_option__FStar_Bytes_bytes ret = {
-      .tag = FStar_Pervasives_Native_Some, .v = {.length = 0, .data = 0}};
+      .tag = FStar_Pervasives_Native_None, .v = {.length = 0, .data = 0}};
   return ret;
 }
 
@@ -524,6 +694,27 @@ bool CoreCrypto_ec_is_on_curve(CoreCrypto_ec_params x0,
   return false;
 }
 
+FStar_Bytes_bytes CoreCrypto_aead_encrypt(CryptoTypes_aead_cipher x0,
+                                          FStar_Bytes_bytes x1,
+                                          FStar_Bytes_bytes x2,
+                                          FStar_Bytes_bytes x3,
+                                          FStar_Bytes_bytes x4) {
+  FAIL_IF(true, "No OpenSSL support.");
+  FStar_Bytes_bytes ret = {.length = 0, .data = 0};
+  return ret;
+}
+
+FStar_Pervasives_Native_option__FStar_Bytes_bytes
+CoreCrypto_aead_decrypt(CryptoTypes_aead_cipher x0,
+                        FStar_Bytes_bytes x1,
+                        FStar_Bytes_bytes x2,
+                        FStar_Bytes_bytes x3,
+                        FStar_Bytes_bytes x4) {
+  FAIL_IF(true, "No OpenSSL support.");
+  FStar_Pervasives_Native_option__FStar_Bytes_bytes ret = {
+    .tag = FStar_Pervasives_Native_None, .v = {.length = 0, .data = 0}};
+  return ret;
+}
 #endif // NO_OPENSSL
 
 #if IS_WINDOWS
@@ -538,7 +729,7 @@ static BCRYPT_ALG_HANDLE g_hAlgRandom;
 int CoreCrypto_Initialize(void)
 {
 
-  NTSTATUS st = BCryptOpenAlgorithmProvider(&g_hAlgRandom, BCRYPT_RNG_ALGORITHM, NULL, 
+  NTSTATUS st = BCryptOpenAlgorithmProvider(&g_hAlgRandom, BCRYPT_RNG_ALGORITHM, NULL,
 #ifdef _KERNEL_MODE
                     BCRYPT_PROV_DISPATCH
 #else
@@ -548,7 +739,7 @@ int CoreCrypto_Initialize(void)
   if (!NT_SUCCESS(st)) {
     KRML_HOST_EPRINTF("BCryptOpenAlgorithmProvider failed: 0x%x\n", (unsigned int)st);
     return 0;
-  }    
+  }
   return 1;
 }
 

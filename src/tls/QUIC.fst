@@ -37,7 +37,7 @@ let print s = discard (IO.debug_print_string ("QIC| "^s^"\n"))
 unfold val trace: s:string -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
-unfold let trace = if Flags.debug_QUIC then print else (fun _ -> ())
+unfold let trace = if DebugFlags.debug_QUIC then print else (fun _ -> ())
 
 
 // an integer carrying the fatal alert descriptor
@@ -140,7 +140,6 @@ let rec recv c =
 let quic_check config =
   if config.min_version <> TLS_1p3 then trace "WARNING: not TLS 1.3";
   if not config.non_blocking_read then trace "WARNING: reads are blocking";
-  if None? config.quic_parameters then trace "WARNING: missing parameters";
   if None? config.alpn            then trace "WARNING: missing ALPN"
 
 /// New client and server connections (without any  I/O yet)
@@ -178,49 +177,11 @@ val ffiAcceptConnected:
   config:config -> ML Connection.connection
 let ffiAcceptConnected ctx snd rcv config = accept ctx snd rcv config
 
-
-/// new QUIC-specific properties
-///
-let get_parameters c (r:role): ML (option TLSConstants.quicParameters) =
-  let mode = Handshake.get_mode c.Connection.hs in
-  if r = Client
-  then Negotiation.find_quic_parameters mode.Negotiation.n_offer
-  else Negotiation.find_server_quic_parameters mode
-
-// extracting some QUIC parameters to C (a bit ad hoc)
-val ffi_parameters: option TLSConstants.quicParameters -> ML (UInt32.t * bytes)
-let ffi_parameters qpo =
-  match qpo with
-  | None -> failwith "no parameters available"
-  | Some (QuicParametersClient v qp)
-  | Some (QuicParametersServer v _ qp) ->
-    let qv = match v with
-      | QuicVersion1 -> 1ul
-      | QuicCustomVersion n -> n in
-    let qp = Extensions.quicParametersBytes_aux qp in
-    qv, qp
-
-let get_peer_parameters c =
-  let r = TLSConstants.dualRole (Connection.c_role c) in
-  ffi_parameters (get_parameters c r)
-
-private let quicVersion (n:UInt32.t) = QuicCustomVersion n // avoid overflow in .v
-//    match UInt32.v n with
-//    | 1 -> QuicVersion1
-//    | _ -> QuicCustomVersion n
-
-let ffiConfig (qp: bytes) (versions: list UInt32.t) (host:bytes) =
-  let ver = List.Tot.map quicVersion versions in
+let ffiConfig (host:bytes) =
   let h = if length host = 0 then None else Some host in
-  let qpl =
-    match Extensions.parseQuicParameters_aux qp with
-    | Error z -> failwith "Invalid QUIC transport parameters"
-    | Correct qpl -> qpl
-    in
   { defaultConfig with
     min_version = TLS_1p3;
     max_version = TLS_1p3;
     peer_name = h;
-    non_blocking_read = true;
-    quic_parameters = Some (ver, qpl)
+    non_blocking_read = true
   }

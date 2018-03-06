@@ -20,11 +20,16 @@ module AE = Crypto.AEAD.Main
 module CB = Crypto.Symmetric.Bytes
 module U8 = FStar.UInt8
 
+(* Forcing a dependency so that when building with the OpenSSL provider the
+ * Crypto_Indexing module is in scope at this stage, henceby allowing us to
+ * define Crypto_AEAD_Main_aead_state____. *)
+let _ = Crypto.Indexing.rw2rw
+
 let discard (b:bool) : ST unit (requires (fun _ -> True)) (ensures (fun h0 _ h1 -> h0 == h1)) = ()
 let print (s:string) : ST unit (requires fun _ -> True) (ensures (fun h0 _ h1 -> h0 == h1)) =
   discard (IO.debug_print_string ("AEP| "^s^"\n"))
 unfold let dbg : string -> ST unit (requires (fun _ -> True)) (ensures (fun h0 _ h1 -> h0 == h1)) =
-  if Flags.debug_AEP then print else (fun _ -> ())
+  if DebugFlags.debug_AEP then print else (fun _ -> ())
 
 include Specializations.Providers.AEAD
 

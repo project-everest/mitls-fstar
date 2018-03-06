@@ -30,6 +30,7 @@ const char *option_file;
     STRING_OPTION("-mv", minversion, "sets minimum protocol version to <1.0 | 1.1 | 1.2 | 1.3> (default: 1.2)") \
     BOOL_OPTION("-s", isserver, "run as server instead of client") \
     BOOL_OPTION("-0rtt", 0rtt, "enable early data (server support and client offer)") \
+    BOOL_OPTION("-hrr", hrr, "always send a hello retry as a server") \
     STRING_OPTION("-psk", psk, "L:K add an entry in the PSK database at label L with key K (in hex), associtated with the fist current -cipher") \
     STRING_OPTION("-ticket", ticket, "T:K add ticket T in the PSK database with RMS K (in hex), associated with the first current -cipher") \
     STRING_OPTION("-offerpsk", offerpsk, "offer the given PSK identifier(s) (must be loaded first with --psk). Client only.") \
@@ -161,7 +162,7 @@ int ParseArgs(int argc, char **argv)
     return 0;
 }
 
-void dump(const char *buffer, size_t len)
+void dump(const unsigned char *buffer, size_t len)
 {
   int i;
   for(i=0; i<len; i++) {
@@ -170,21 +171,82 @@ void dump(const char *buffer, size_t len)
   }
 }
 
-void* certificate_select(void *cbs, const char *sni, size_t sni_len, const mitls_signature_scheme *sigalgs, size_t sigalgs_len, mitls_signature_scheme *selected)
+const char* pvname(mitls_version pv)
+{
+  switch(pv)
+  {
+    case TLS_SSL3: return "SSL 3.0";
+    case TLS_1p0: return "TLS 1.0";
+    case TLS_1p1: return "TLS 1.1";
+    case TLS_1p2: return "TLS 1.2";
+    case TLS_1p3: return "TLS 1.3";
+  }
+  return "(unknown)";
+}
+
+mitls_nego_action nego_callback(void *cb_state, mitls_version ver,
+  const unsigned char *cexts, size_t cexts_len, mitls_extension **custom_exts,
+  size_t *custom_exts_len, unsigned char **cookie, size_t *cookie_len)
+{
+  printf(" @@@@ Nego callback for %s @@@@\n", pvname(ver));
+  printf("Offered extensions:\n");
+  dump(cexts, cexts_len);
+
+  unsigned char *qtp = NULL;
+  size_t qtp_len;
+  if(FFI_mitls_find_custom_extension(option_isserver, cexts, cexts_len, (uint16_t)0x1A, &qtp, &qtp_len))
+  {
+    printf("Transport parameters:\n");
+    dump(qtp, qtp_len);
+  }
+
+  if(option_quic && option_isserver)
+  {
+    *custom_exts = malloc(sizeof(mitls_extension));
+    *custom_exts_len = 1;
+    custom_exts[0]->ext_type = (uint16_t)0x1a;
+    custom_exts[0]->ext_data = (const unsigned char*)"\x00\x01\x02";
+    custom_exts[0]->ext_data_len = 3;
+    printf("Adding server transport parameters:\n");
+    dump(custom_exts[0]->ext_data, custom_exts[0]->ext_data_len);
+  }
+  else {
+    *custom_exts_len = 0;
+    *custom_exts = NULL;
+  }
+
+  if(*cookie != NULL) {
+    if(*cookie_len) {
+      printf("Stateless cookie found, application contents:\n");
+      dump(*cookie, *cookie_len);
+    } else printf("Empty application contents (stateful HRR).\n");
+  } else {
+    printf("No application cookie (fist connection).\n");
+    // only used when TLS_nego_retry is returned, but it's safe to set anyway
+    *cookie = (unsigned char*)"Hello World";
+    *cookie_len = 11;
+    if(option_hrr) return TLS_nego_retry;
+  }
+
+  printf(" @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n");
+  return TLS_nego_accept;
+}
+
+void* certificate_select(void *cbs, const unsigned char *sni, size_t sni_len, const mitls_signature_scheme *sigalgs, size_t sigalgs_len, mitls_signature_scheme *selected)
 {
   mipki_state *st = (mipki_state*)cbs;
-  mipki_chain r = mipki_select_certificate(st, sni, sni_len, sigalgs, sigalgs_len, selected);
+  mipki_chain r = mipki_select_certificate(st, (char*)sni, sni_len, sigalgs, sigalgs_len, selected);
   return (void*)r;
 }
 
-size_t certificate_format(void *cbs, const void *cert_ptr, char *buffer)
+size_t certificate_format(void *cbs, const void *cert_ptr, unsigned char *buffer)
 {
   mipki_state *st = (mipki_state*)cbs;
   mipki_chain chain = (mipki_chain)cert_ptr;
-  return mipki_format_chain(st, cert_ptr, buffer, MAX_CHAIN_LEN);
+  return mipki_format_chain(st, chain, (char*)buffer, MAX_CHAIN_LEN);
 }
 
-size_t certificate_sign(void *cbs, const void *cert_ptr, const mitls_signature_scheme sigalg, const char *tbs, size_t tbs_len, char *sig)
+size_t certificate_sign(void *cbs, const void *cert_ptr, const mitls_signature_scheme sigalg, const unsigned char *tbs, size_t tbs_len, unsigned char *sig)
 {
   mipki_state *st = (mipki_state*)cbs;
   size_t ret = MAX_SIGNATURE_LEN;
@@ -193,16 +255,16 @@ size_t certificate_sign(void *cbs, const void *cert_ptr, const mitls_signature_s
   dump(tbs, tbs_len);
   printf("===================================================\n");
 
-  if(mipki_sign_verify(st, cert_ptr, sigalg, tbs, tbs_len, sig, &ret, MIPKI_SIGN))
+  if(mipki_sign_verify(st, cert_ptr, sigalg, (char*)tbs, tbs_len, (char*)sig, &ret, MIPKI_SIGN))
     return ret;
 
   return 0;
 }
 
-int certificate_verify(void *cbs, const char* chain_bytes, size_t chain_len, const mitls_signature_scheme sigalg, const char *tbs, size_t tbs_len, char *sig, size_t sig_len)
+int certificate_verify(void *cbs, const unsigned char* chain_bytes, size_t chain_len, const mitls_signature_scheme sigalg, const unsigned char *tbs, size_t tbs_len, const unsigned char *sig, size_t sig_len)
 {
   mipki_state *st = (mipki_state*)cbs;
-  mipki_chain chain = mipki_parse_chain(st, chain_bytes, chain_len);
+  mipki_chain chain = mipki_parse_chain(st, (char*)chain_bytes, chain_len);
 
   if(chain == NULL)
   {
@@ -218,7 +280,7 @@ int certificate_verify(void *cbs, const char* chain_bytes, size_t chain_len, con
   }
 
   size_t slen = sig_len;
-  int r = mipki_sign_verify(st, chain, sigalg, tbs, tbs_len, sig, &slen, MIPKI_VERIFY);
+  int r = mipki_sign_verify(st, chain, sigalg, (char*)tbs, tbs_len, (char*)sig, &slen, MIPKI_VERIFY);
   mipki_free_chain(st, chain);
   return r;
 }
@@ -265,15 +327,24 @@ int ConfigureQuic(quic_state **pstate)
         return 4;
     }
 
+    mitls_extension client_qtp[1] = {
+      { // QUIC transport parameters (client)
+        .ext_type = (uint16_t)0x1A,
+        .ext_data = (const unsigned char*)"\xff\xff\x00\x05\x0a\x0b\x0c\x0d\x0e\x00",
+        .ext_data_len = 9
+      }
+    };
+
     memset(&quic_cfg, 0, sizeof(quic_cfg));
     quic_cfg.is_server = (option_isserver) ? 1 : 0;
-    quic_cfg.qp.tp_len = 9;
-    quic_cfg.qp.tp_data = "\xff\xff\x00\x05\x0a\x0b\x0c\x0d\x0e\x00";
     quic_cfg.cipher_suites = option_ciphers;
     quic_cfg.cert_callbacks = &cert_callbacks;
+    quic_cfg.nego_callback = &nego_callback;
     quic_cfg.signature_algorithms = option_sigalgs;
     quic_cfg.named_groups = option_groups;
     quic_cfg.enable_0rtt = (option_0rtt) ? 1 : 0;
+    quic_cfg.exts = client_qtp;
+    quic_cfg.exts_count = 1;
 
     if (option_isserver) {
         quic_cfg.ticket_enc_alg = NULL;
@@ -294,11 +365,8 @@ int ConfigureQuic(quic_state **pstate)
 
 int Configure(mitls_state **pstate)
 {
-    char *out_msg;
-    mitls_state *state;
+    mitls_state *state = NULL;
     int r, erridx;
-
-    *pstate = NULL;
 
     // Server PKI configuration: one ECDSA certificate
     mipki_config_entry pki_config[1] = {
@@ -389,17 +457,23 @@ int Configure(mitls_state **pstate)
         }
     }
 
+    r = FFI_mitls_configure_nego_callback(state, NULL, nego_callback);
+    if(!r) {
+      printf("FFI_mitls_configure_nego_callback(%p)\n", nego_callback);
+      return 2;
+    }
+
     *pstate = state;
     return 0;
 }
 
 // Callback from miTLS, when it is ready to send a message via the socket
-int SendCallback(void *pv, const void *buffer, size_t buffer_size)
+int SendCallback(void *pv, const unsigned char *buffer, size_t buffer_size)
 {
     callback_context *ctx = (callback_context*)pv;
     ssize_t r;
 
-    r = send(ctx->sockfd, buffer, buffer_size, 0);
+    r = send(ctx->sockfd, (char*)buffer, buffer_size, 0);
     if (r != buffer_size) {
         printf("Error %d returned from socket send()\n", WSAGetLastError());
     }
@@ -407,12 +481,12 @@ int SendCallback(void *pv, const void *buffer, size_t buffer_size)
 }
 
 // Callback from miTLS, when it is ready to receive a message via the socket
-int RecvCallback(void* pv, void *buffer, size_t buffer_size)
+int RecvCallback(void* pv, unsigned char *buffer, size_t buffer_size)
 {
     callback_context *ctx = (callback_context*)pv;
     ssize_t r;
 
-    r = recv(ctx->sockfd, buffer, buffer_size, 0);
+    r = recv(ctx->sockfd, (char*)buffer, buffer_size, 0);
     if (r != buffer_size) {
         printf("Error %d returned from socket recv()\n", WSAGetLastError());
     }
@@ -423,8 +497,7 @@ int RecvCallback(void* pv, void *buffer, size_t buffer_size)
 int SingleServer(mitls_state *state, SOCKET clientfd)
 {
     callback_context ctx;
-    char *out_msg;
-    void *db;
+    unsigned char *db;
     size_t db_length;
     int r;
     size_t payload_length;
@@ -464,7 +537,7 @@ int SingleServer(mitls_state *state, SOCKET clientfd)
     strncat(payload, (const char*)db, db_length);
 
     FFI_mitls_free_packet(state, db);
-    r = FFI_mitls_send(state, payload, strlen(payload));
+    r = FFI_mitls_send(state, (unsigned char*)payload, strlen(payload));
     if (r == 0) {
         printf("FFI_mitls_send() failed\n");
         return 1;
@@ -534,9 +607,9 @@ typedef int (*quic_result_check)(quic_result r);
 void quic_recv_until(quic_state *state, SOCKET fd, quic_result_check check)
 {
     quic_result r;
-    char inbuf[8192];
+    unsigned char inbuf[8192];
     size_t inbufsize;
-    char outbuf[8192];
+    unsigned char outbuf[8192];
     size_t outbufsize;
     int sockresult;
 
@@ -557,14 +630,14 @@ void quic_recv_until(quic_state *state, SOCKET fd, quic_result_check check)
         default: printf("Unknown return %d from FFI_mitls_quic_process\n", r); return;
         }
         if (outbufsize) {
-            sockresult = send(fd, outbuf, (int)outbufsize, 0);
+            sockresult = send(fd, (char*)outbuf, (int)outbufsize, 0);
             if (sockresult != outbufsize) {
                 printf("Socket send failed\n");
                 return;
             }
         }
         if (inbufsize) {
-            sockresult = recv(fd, inbuf, inbufsize, 0);
+            sockresult = recv(fd, (char*)inbuf, inbufsize, 0);
             if (sockresult != inbufsize) {
                 printf("Socket recv failed\n");
                 return;
@@ -770,7 +843,6 @@ int TestClient(void)
     int requestlength;
     ssize_t r;
     callback_context ctx;
-    char *out_msg;
     char request[512];
     void *response;
     size_t response_length;
@@ -819,7 +891,7 @@ int TestClient(void)
     }
 
     printf("Read OK, sending HTTP request...\n");
-    r = FFI_mitls_send(state, request, requestlength);
+    r = FFI_mitls_send(state, (unsigned char*)request, requestlength);
     if (r == 0) {
         printf("FFI_mitls_send() failed\n");
         closesocket(sockfd);
@@ -840,7 +912,7 @@ int TestClient(void)
       total_length += response_length;
       t = time(NULL);
       if (!option_quiet) {
-        printf("Received %zu bytes of data:\n", response_length);
+        printf("Received %u bytes of data:\n", (uint32_t)response_length);
         printf("Download speed: %fkB/s\n", (double) total_length / 1024 / (t - t0));
       }
       // If the file is empty (i.e. GET / HTTP/1.1) then print on stdout;

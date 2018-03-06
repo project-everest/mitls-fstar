@@ -36,7 +36,7 @@ let print s = discard (IO.debug_print_string ("FFI| "^s^"\n"))
 unfold val trace: s:string -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
-unfold let trace = if Flags.debug_FFI then print else (fun _ -> ())
+unfold let trace = if DebugFlags.debug_FFI then print else (fun _ -> ())
 
 private let fragment_1 i (b:bytes { length b <= max_TLSPlaintext_fragment_length }) : fragment i (point (length b)) =
   let rg : frange i = point(length b) in
@@ -73,7 +73,7 @@ let errno description txt : St int =
   in
   trace ("returning error: "^txt0^" "^txt^"\n");
   match description with
-  | Some ad ->  let _, e = split_ (Alert.alertBytes ad) 2 in int_of_bytes e
+  | Some ad -> int_of_bytes (Alert.alertBytes ad)
   | None    -> -1
 
 let connect ctx send recv config_1 psks : ML (Connection.connection * int) =
@@ -88,21 +88,23 @@ let connect ctx send recv config_1 psks : ML (Connection.connection * int) =
           (fun _ _ -> True)
           (fun _ ->
     let i = currentId c Reader in
-    match TLS.read c i with
-    | Update false ->
-      false
-
+    let read_r = TLS.read c i in
+    trace ("Read returned "^(TLS.string_of_ioresult_i read_r));
+    match read_r with
+    | Update false
+    | ReadAgain | ReadAgainFinishing
+    | ReadWouldBlock -> false
     | Complete
     | Update true ->
       err := Some 0;
       true
-
+    | Read (DataStream.Alert a) ->
+      err := Some (errno (Some a) ("received "^(TLSError.string_of_ad a)^" alert from peer"));
+      true
     | ReadError description txt ->
       err := Some (errno description txt);
       true
-
-    | _ ->
-      false);
+    | _ -> err := Some (errno None "unhandled ioresult_i"); true);
   let firstResult =
     match !err with
     | Some firstResult ->
@@ -132,16 +134,23 @@ let accept_connected ctx send recv config_1 : ML (Connection.connection * int) =
     (fun _ _ -> True)
     (fun _ ->
       let i = currentId c Reader in
-      match read c i with
+      let read_r = TLS.read c i in
+      trace ("Read returned "^(TLS.string_of_ioresult_i read_r));
+      match read_r with
+      | Update false
+      | ReadAgain | ReadAgainFinishing
+      | ReadWouldBlock -> false
       | Complete
       | Update true -> // 0.5-RTT: ready to write
         err := Some 0;
         true
+      | Read (DataStream.Alert a) ->
+        err := Some (errno (Some a) ("received "^(TLSError.string_of_ad a)^" alert from peer"));
+        true
       | ReadError description txt ->
         err := Some (errno description txt);
         true
-      | _ ->
-        false);
+      | _ -> err := Some (errno None "unhandled ioresult_i"); true);
   let firstResult =
     match !err with
     | Some i -> i
@@ -266,7 +275,7 @@ let rec updatecfg cfg l : ML config =
   | [] -> cfg
   | hd::t ->
     if hd = "EDI"
-    then updatecfg ({cfg with max_early_data = Some 16384}) t
+    then updatecfg ({cfg with max_early_data = Some 0x1000ul}) t
     else failwith ("Unknown flag: "^hd)
 
 (** SZ: FStar.List opens FStar.All.
@@ -328,7 +337,7 @@ let ffiSetNamedGroups cfg x =
   let ngl = map findSetting_ngs ngl in
   let ogl = match offered with
     | [] -> ngl
-    | [og] -> map findSetting_ngs (split_string ':' og)
+    | [og] -> if String.length og = 0 then [] else map findSetting_ngs (split_string ':' og)
     | _ -> failwith "Use @G1:..:Gn to set groups on which to offer shares" in
   { cfg with
     named_groups = ngl;
@@ -347,11 +356,19 @@ let ffiSetALPN cfg x =
   let apl = map encodeALPN apl in
   { cfg with alpn = if apl=[] then None else Some apl }
 
-val ffiSetEarlyData: cfg:config -> x:nat -> ML config
+val ffiSetEarlyData: cfg:config -> x:UInt32.t -> ML config
 let ffiSetEarlyData cfg x =
-  trace ("setting early data limit to "^(string_of_int x));
+  trace ("setting early data limit to "^(hex_of_bytes (bytes_of_int32 x)));
   { cfg with
-  max_early_data = if x>0 then Some x else None;
+  max_early_data = if x = 0ul then None else Some x;
+  }
+
+val ffiAddCustomExtension: cfg:config -> UInt16.t -> bytes -> ML config
+let ffiAddCustomExtension cfg h b =
+  trace ("offering custom extension "^(hex_of_bytes (bytes_of_uint16 h)));
+  trace ("extension contents: "^(hex_of_bytes b));
+  { cfg with
+  custom_extensions = (h, b) :: cfg.custom_extensions
   }
 
 val ffiSetTicketKey: a:string -> k:bytes -> ML bool
@@ -366,18 +383,22 @@ let install_ticket config ticket : ML (list PSK.psk_identifier) =
     (match Ticket.parse si with
     | Some (Ticket.Ticket12 pv cs ems msId ms) ->
       PSK.s12_extend t (pv, cs, ems, ms); [t]
-    | Some (Ticket.Ticket13 cs li rmsId rms) ->
+    | Some (Ticket.Ticket13 cs li rmsId rms created age_add) ->
       (match PSK.psk_lookup t with
       | Some _ ->
         trace ("input ticket "^(print_bytes t)^" is in PSK database")
       | None ->
         trace ("installing ticket "^(print_bytes t)^" in PSK database");
+        let ct = print_bytes (bytes_of_int32 created) in
+        let add = print_bytes (bytes_of_int32 age_add) in
+        trace ("Ticket created "^ct^", age mask "^add);
         let CipherSuite13 ae h = cs in
         PSK.coerce_psk t PSK.({
           // TODO(adl) store in session info
           // N.B. FFi.ffiGetTicket returns the PSK - no need to derive RMS again
           ticket_nonce = Some empty_bytes;
-          time_created = 0;
+          time_created = created;
+          ticket_age_add = age_add;
           // FIXME(adl): we should preserve the server flag somewhere
           allow_early_data = (Some? config.max_early_data);
           allow_dhe_resumption = true;
@@ -422,6 +443,10 @@ let ffiSend c b =
 let ffiSetTicketCallback (cfg:config) (ctx:FStar.Dyn.dyn) (cb:ticket_cb_fun) =
   trace "Setting a new ticket callback.";
   {cfg with ticket_callback = {ticket_context = ctx; new_ticket = cb}}
+
+let ffiSetNegoCallback (cfg:config) (ctx:FStar.Dyn.dyn) (cb:nego_cb_fun) =
+  trace "Setting a new server negotiation callback.";
+  {cfg with nego_callback = {nego_context = ctx; negotiate = cb}}
 
 let ffiSetCertCallbacks (cfg:config) (cb:cert_cb) =
   trace "Setting up certificate callbacks.";
@@ -476,7 +501,7 @@ let ffiTicketInfoBytes (info:ticketInfo) (key:bytes) =
       let ae = ctx.early_ae in
       let h = ctx.early_hash in
       let (| li, rmsid |) = Ticket.dummy_rmsid ae h in
-      Ticket.Ticket13 (CipherSuite13 ae h) li rmsid key
+      Ticket.Ticket13 (CipherSuite13 ae h) li rmsid key ctx.time_created ctx.ticket_age_add
     | TicketInfo_12 (pv, cs, ems) ->
       Ticket.Ticket12 pv cs ems (Ticket.dummy_msId pv cs ems) key
     in
@@ -486,6 +511,35 @@ let ffiSplitChain (chain:bytes) : ML (list cert_repr) =
   match Cert.parseCertificateList chain with
   | Error (_, msg) -> failwith ("ffiCertFormatCallback: formatted chain was invalid, "^msg)
   | Correct chain -> chain
+
+private let rec ext_filter (ext_type:UInt16.t) (e:list Extensions.extension) : option bytes =
+  match e with
+  | [] -> None
+  | Extensions.E_unknown_extension hd b :: t ->
+    if uint16_of_bytes hd = ext_type then Some b else ext_filter ext_type t
+  | _ :: t -> ext_filter ext_type t
+
+let ffiFindCustomExtension (server:bool) (exts:bytes) (ext_type:UInt16.t) : ML (option bytes) =
+  let mt = if server then Extensions.EM_ClientHello else Extensions.EM_EncryptedExtensions in
+  match Extensions.parseOptExtensions mt exts with
+  | Correct (Some el, _) -> ext_filter ext_type el
+  | Error (_, txt) -> trace ("Warning: error "^txt^"while parsing extensions"); None
+
+let ffiFindSNI (exts:bytes) : ML (option bytes) =
+  match Extensions.parseOptExtensions Extensions.EM_ClientHello exts with
+  | Correct (Some el, _) ->
+    (match List.Tot.find Extensions.E_server_name? el with
+    | Some (Extensions.E_server_name ((SNI_DNS b)::_)) -> Some b
+    | _ -> None)
+  | Error _ -> trace ("Warning: bad extension list passed to get_transport_parameters"); None
+
+let ffiFindALPN (exts:bytes) : ML (option bytes) =
+  match Extensions.parseOptExtensions Extensions.EM_ClientHello exts with
+  | Correct (Some el, _) ->
+    (match List.Tot.find Extensions.E_alpn? el with
+    | Some (Extensions.E_alpn a) -> Some (Extensions.alpnBytes a)
+    | _ -> None)
+  | Error _ -> trace ("Warning: bad extension list passed to get_transport_parameters"); None
 
 (*
 // Closures for stateful callbacks, these are now unnecessary

@@ -7,5 +7,5 @@ type provider =
 
 inline_for_extraction
 let use_provider () : Tot provider =
-  LowProvider
+  OpenSSLProvider
 

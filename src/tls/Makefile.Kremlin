@@ -13,6 +13,10 @@ EXTENSION	= krml
 # Don't extract modules from mitls that are implemented in C
 EXTRACT		= '* -DHDB -LowCProvider -FFICallbacks -BufferBytes'
 
+ifneq (,$(MITLS_USE_OPENSSL))
+CONCRETE_FLAVOR	= -OpenSSL
+endif
+
 include Makefile.common
 
 # Tiny bit of autodetection to grab the right Vale files

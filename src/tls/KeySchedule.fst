@@ -32,7 +32,7 @@ let discard (b:bool): ST unit (requires (fun _ -> True))
 let print s = discard (IO.debug_print_string ("KS | "^s^"\n"))
 unfold let dbg : string -> ST unit (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1)) =
-  if Flags.debug_KS then print else (fun _ -> ())
+  if DebugFlags.debug_KS then print else (fun _ -> ())
 
 #set-options "--lax"
 
@@ -463,7 +463,7 @@ let ks_server_13_init ks cr cs pskid g_gx =
       dbg ("Using negotiated PSK identity: "^(print_bytes id));
       let i, psk, h : esId * bytes * Hashing.Spec.alg =
         match Ticket.check_ticket id with
-        | Some (Ticket.Ticket13 cs li rmsId rms) ->
+        | Some (Ticket.Ticket13 cs li rmsId rms _ _) ->
           dbg ("Ticket RMS: "^(print_bytes rms));
           let i = ResumptionPSK #li rmsId in
           let CipherSuite13 _ h = cs in
