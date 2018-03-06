@@ -7,56 +7,55 @@ noextract
 let rec maybe_enum_key_of_repr_tac'
   (#key #repr: eqtype)
   (e: enum key repr { Cons? e } )
-: Tot (T.tactic T.term)
-= let open T in
-  match e with
+: T.Tac T.term
+  (decreases e)
+= match e with
   | [_] ->
-    q <-- quote (maybe_enum_key_of_repr'_t_cons_nil e ()) ;
-    return q
+    quote (maybe_enum_key_of_repr'_t_cons_nil e ())
   |  _ ->
     assert (Cons? e /\ Cons? (enum_tail e));
     (fun (e_ : enum key repr { Cons? e_ /\ Cons? (enum_tail e_) /\ e_ == e } ) ->
-      ar <-- maybe_enum_key_of_repr_tac' (enum_tail e_) ;
-      fu <-- quote (maybe_enum_key_of_repr'_t_cons #key #repr e_ ()) ;
-      return (mk_app fu [ ar, Q_Explicit ])
+      let (e' : enum key repr { Cons? e' } ) = enum_tail e_ in
+      let ar = maybe_enum_key_of_repr_tac' e' in
+      let fu = quote (maybe_enum_key_of_repr'_t_cons #key #repr e_ ()) in
+      (T.mk_app fu [ ar, T.Q_Explicit ])
     ) e
 
 noextract
-let rec maybe_enum_key_of_repr_tac
+let maybe_enum_key_of_repr_tac
   (#key #repr: eqtype)
   (e: enum key repr { Cons? e } )
-: Tot (T.tactic unit)
-= let open T in
-  g <-- maybe_enum_key_of_repr_tac' e ;
-  _ <-- print (term_to_string g) ;
-  exact_guard (return g)
+  ()
+: T.Tac unit
+= let g = maybe_enum_key_of_repr_tac' e in
+  T.print (T.term_to_string g) ;
+  T.exact_guard g
 
 noextract
 let rec enum_repr_of_key_tac'
   (#key #repr: eqtype)
   (e: enum key repr { Cons? e } )
-: Tot (T.tactic T.term)
-= let open T in
-  match e with
+: T.Tac T.term
+= match e with
   | [_] ->
-    q <-- quote (enum_repr_of_key_cons_nil e ()) ;
-    return q
+    quote (enum_repr_of_key_cons_nil e ())
   | (k, r) :: e' ->
     assert (Cons? e);
     (fun (e_ : enum key repr { Cons? e_ /\ Cons? (enum_tail e_) /\ e_ == e } ) ->
-      ar <-- enum_repr_of_key_tac' (enum_tail e_) ;
-      fu <-- quote (enum_repr_of_key_cons #key #repr e_ ()) ;
-      return (mk_app fu [ ar, Q_Explicit ] )
+      let (e' : enum key repr { Cons? e' } ) = enum_tail e_ in
+      let ar = enum_repr_of_key_tac' e' in
+      let fu = quote (enum_repr_of_key_cons #key #repr e_ ()) in
+      T.mk_app fu [ ar, T.Q_Explicit ]
     ) e
 
 noextract
-let rec enum_repr_of_key_tac
+let enum_repr_of_key_tac
   (#key #repr: eqtype)
   (e: enum key repr { Cons? e } )
-: Tot (T.tactic unit)
-= let open T in
-  g <-- enum_repr_of_key_tac' e ;
-  exact_guard (return g)
+  ()
+: T.Tac unit
+= let g = enum_repr_of_key_tac' e in
+  T.exact_guard g
 
 noextract
 let parse32_maybe_enum_key_tac'
@@ -71,11 +70,10 @@ let parse32_maybe_enum_key_tac'
     k' == k /\
     p' == parse_maybe_enum_key p e
   })
-: Tot (T.tactic T.term)
-= let open T in
-  ar <-- maybe_enum_key_of_repr_tac' e ;
-  fu <-- quote (parse32_maybe_enum_key_gen #k #key #repr #p p32 e #k' p' u);
-  (return (mk_app fu [ar, Q_Explicit]))
+: T.Tac T.term
+= let ar = maybe_enum_key_of_repr_tac' e in
+  let fu = quote (parse32_maybe_enum_key_gen #k #key #repr #p p32 e #k' p' u) in
+  T.mk_app fu [ar, T.Q_Explicit]
 
 noextract
 let parse32_maybe_enum_key_tac
@@ -90,10 +88,10 @@ let parse32_maybe_enum_key_tac
     k' == k /\
     p' == parse_maybe_enum_key p e
   })
-: Tot (T.tactic unit)
-= let open T in
-  f <-- parse32_maybe_enum_key_tac' p32 e p' u ;
-  exact_guard (return f)
+  ()
+: T.Tac unit
+= let f = parse32_maybe_enum_key_tac' p32 e p' u in
+  T.exact_guard f
 
 noextract
 let parse32_enum_key_tac'
@@ -108,11 +106,10 @@ let parse32_enum_key_tac'
     k' == parse_filter_kind k /\
     p' == parse_enum_key p e
   })
-: Tot (T.tactic T.term)
-= let open T in
-  ar <-- parse32_maybe_enum_key_tac' p32 e (parse_maybe_enum_key p e) () ;
-  fu <-- quote (parse32_enum_key_gen #k #key #repr p e #k' p' u) ;
-  return (mk_app fu [ar, Q_Explicit])
+: T.Tac T.term
+= let ar = parse32_maybe_enum_key_tac' p32 e (parse_maybe_enum_key p e) () in
+  let fu = quote (parse32_enum_key_gen #k #key #repr p e #k' p' u) in
+  T.mk_app fu [ar, T.Q_Explicit]
 
 noextract
 let parse32_enum_key_tac
@@ -127,10 +124,10 @@ let parse32_enum_key_tac
     k' == parse_filter_kind k /\
     p' == parse_enum_key p e
   })
-: Tot (T.tactic unit)
-= let open T in
-  f <-- parse32_enum_key_tac' p32 e p' u ;
-  exact_guard (return f)
+  ()
+: T.Tac unit
+= let f = parse32_enum_key_tac' p32 e p' u in
+  T.exact_guard f
 
 noextract
 let serialize32_enum_key_gen_tac'
@@ -148,11 +145,10 @@ let serialize32_enum_key_gen_tac'
     p' == parse_enum_key p e /\
     s' == serialize_enum_key p s e
   })
-: Tot (T.tactic T.term)
-= let open T in
-  ar <-- enum_repr_of_key_tac' e ;
-  fu <-- quote (serialize32_enum_key_gen #k #key #repr #p #s s32 e #k' #p' s' u) ;
-  return (mk_app fu [ar, Q_Explicit])
+: T.Tac T.term
+= let ar = enum_repr_of_key_tac' e in
+  let fu = quote (serialize32_enum_key_gen #k #key #repr #p #s s32 e #k' #p' s' u) in
+  T.mk_app fu [ar, T.Q_Explicit]
 
 noextract
 let serialize32_enum_key_gen_tac
@@ -170,10 +166,10 @@ let serialize32_enum_key_gen_tac
     p' == parse_enum_key p e /\
     s' == serialize_enum_key p s e
   })
-: Tot (T.tactic unit)
-= let open T in
-  f <-- serialize32_enum_key_gen_tac' s32 e s' u ;
-  exact_guard (return f)
+  ()
+: T.Tac unit
+= let f = serialize32_enum_key_gen_tac' s32 e s' u in
+  T.exact_guard f
 
 noextract
 let serialize32_maybe_enum_key_tac'
@@ -191,11 +187,10 @@ let serialize32_maybe_enum_key_tac'
     p' == parse_maybe_enum_key p e /\
     s' == serialize_maybe_enum_key p s e
   })
-: Tot (T.tactic T.term)
-= let open T in
-  ar <-- enum_repr_of_key_tac' e ;
-  fu <-- quote (serialize32_maybe_enum_key_gen #k #key #repr #p #s s32 e #k' #p' s' u) ;
-   (return (mk_app fu [ar, Q_Explicit]))
+: T.Tac T.term
+= let ar = enum_repr_of_key_tac' e in
+  let fu = quote (serialize32_maybe_enum_key_gen #k #key #repr #p #s s32 e #k' #p' s' u) in
+  T.mk_app fu [ar, T.Q_Explicit]
 
 noextract
 let serialize32_maybe_enum_key_tac
@@ -213,7 +208,7 @@ let serialize32_maybe_enum_key_tac
     p' == parse_maybe_enum_key p e /\
     s' == serialize_maybe_enum_key p s e
   })
-: Tot (T.tactic unit)
-= let open T in
-  f <-- serialize32_maybe_enum_key_tac' s32 e s' u ;
-  exact_guard (return f)
+  ()
+: T.Tac unit
+= let f = serialize32_maybe_enum_key_tac' s32 e s' u in
+  T.exact_guard f

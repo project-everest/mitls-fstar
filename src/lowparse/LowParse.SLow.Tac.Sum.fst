@@ -15,21 +15,22 @@ let rec enum_destr_tac'
   (u: unit { r_reflexive _ eq /\ r_transitive _ eq } )
   (#key #repr: eqtype)
   (e: enum key repr { Cons? e } )
-: Tot (T.tactic T.term)
-= let open T in
-  match e with
+: T.Tac T.term
+= match e with
   | [_] ->
-    q <-- quote (enum_destr_cons_nil #key #repr #t eq e ()) ;
-    return q
+    quote (enum_destr_cons_nil #key #repr #t eq e ())
   | _ ->
     assert (Cons? e /\ Cons? (enum_tail e));
     (fun (e_: enum key repr { Cons? e_ /\ Cons? (enum_tail e_) /\ e_ == e } ) ->
-      ar <-- enum_destr_tac' t eq ifc u (enum_tail e_) ;
-      fu <-- quote (enum_destr_cons #key #repr #t eq ifc e ()) ;
-      return (mk_app fu [ar, Q_Explicit])
+      let (e' : enum key repr { Cons? e' } ) = enum_tail e_ in
+      let ar = enum_destr_tac' t eq ifc u e' in
+      let fu = quote (enum_destr_cons #key #repr #t eq ifc e ()) in
+      T.mk_app fu [ar, T.Q_Explicit]
     ) e
 
 (* Parser *)
+
+#set-options "--z3rlimit 64"
 
 noextract
 let parse32_sum_tac'
@@ -49,18 +50,19 @@ let parse32_sum_tac'
     t' == sum_type t /\
     p' == parse_sum t p pc
   })
-: Tot (T.tactic T.term)
-= let open T in
-  ar1 <-- parse32_enum_key_tac' p32 (sum_enum t) (parse_enum_key p (sum_enum t)) () ;
-  ar2 <--
+: T.Tac T.term
+= let eq = feq bytes32 (option (sum_type t * U32.t)) (eq2 #_) in
+  let (eq_refl : unit { r_reflexive _ eq /\ r_transitive _ eq } ) = () in
+  let ar1 = parse32_enum_key_tac' p32 (sum_enum t) (parse_enum_key p (sum_enum t)) () in
+  let ar2 =
     enum_destr_tac'
       (bytes32 -> Tot (option (sum_type t * U32.t)))
       (feq bytes32 (option (sum_type t * U32.t)) (eq2 #_))
       (fif _ _ (eq2 #_) (default_if _))
-      ()
+      eq_refl
       (sum_enum t)
-  ;
-  fu <-- quote (
+  in
+  let fu = quote (
     parse32_sum_gen
       #kt
       t
@@ -71,12 +73,15 @@ let parse32_sum_tac'
       #k'
       #t'
       p'
-      ()
-  ) ;
-  return (mk_app fu [
-    ar1, Q_Explicit;
-    ar2, Q_Explicit;
-  ])
+      u
+  )
+  in
+  T.mk_app fu [
+    ar1, T.Q_Explicit;
+    ar2, T.Q_Explicit;
+  ]
+
+#reset-options
 
 noextract
 let parse32_sum_tac
@@ -96,29 +101,29 @@ let parse32_sum_tac
     t' == sum_type t /\
     p' == parse_sum t p pc
   })
-: Tot (T.tactic unit)
-= let open T in
-  f <-- parse32_sum_tac' t p32 pc32 p' u ;
-  exact_guard (return f)
+  ()
+: T.Tac unit
+= let f = parse32_sum_tac' t p32 pc32 p' u in
+  T.print (T.term_to_string f);
+  T.exact_guard f
 
 noextract
 let rec sum_destr_tac
   (v: Type)
   (s: sum { Cons? (sum_enum s) } )
-: Tot (T.tactic T.term)
+: T.Tac T.term
   (decreases (sum_enum s))
 = let open T in
   match sum_enum s with
   | [_] ->
-    t <-- quote (sum_destr_cons_nil v s ()) ;
-    return t
+    quote (sum_destr_cons_nil v s ())
   | _ ->
     let s' : sum = sum_tail s in
     assert (Cons? (sum_enum s')) ;
     let (s' : sum { Cons? (sum_enum s') } ) = s' in
-    fu <-- quote (sum_destr_cons v s ()) ;
-    ar <-- sum_destr_tac v s' ;
-    return (mk_app fu [ar, Q_Explicit])
+    let fu = quote (sum_destr_cons v s ()) in
+    let ar = sum_destr_tac v s' in
+    T.mk_app fu [ar, T.Q_Explicit]
 
 noextract
 let serialize32_sum_tac'
@@ -143,10 +148,9 @@ let serialize32_sum_tac'
     p' == parse_sum t p pc /\
     s' == serialize_sum t s sc
   })
-: Tot (T.tactic T.term)
-= let open T in
-  let (e: enum (sum_key_type t) (sum_repr_type t) { Cons? e } ) = sum_enum t in
-  ar1 <-- serialize32_enum_key_gen_tac'
+: T.Tac T.term
+= let (e: enum (sum_key_type t) (sum_repr_type t) { Cons? e } ) = sum_enum t in
+  let ar1 = serialize32_enum_key_gen_tac'
     #kt
     #(sum_key_type t)
     #(sum_repr_type t)
@@ -158,9 +162,9 @@ let serialize32_sum_tac'
     #(parse_enum_key p e)
     (serialize_enum_key p s e)
     ()
-    ;
-  ar2 <-- sum_destr_tac bytes32 t ;
-  fu <-- quote (
+  in
+  let ar2 = sum_destr_tac bytes32 t in
+  let fu = quote (
     serialize32_sum_gen
       #kt
       t
@@ -177,11 +181,12 @@ let serialize32_sum_tac'
       #p'
       s'
       u'
-  ) ;
-  return (mk_app fu [
-    ar1, Q_Explicit;
-    ar2, Q_Explicit;
-  ])
+  )
+  in
+  T.mk_app fu [
+    ar1, T.Q_Explicit;
+    ar2, T.Q_Explicit;
+  ]
 
 let serialize32_sum_tac_precond
   (#kt: parser_kind)
@@ -224,11 +229,11 @@ let serialize32_sum_tac
   (u' : unit {
     serialize32_sum_tac_precond t s32 sc32 u s'
   })
-: Tot (T.tactic unit)
-= let open T in
-  f <-- serialize32_sum_tac' #kt t #p #s s32 #k #pc #sc sc32 u tag_of_data s' u' ;
-  _ <-- print (term_to_string f) ;
-  exact_guard (return f)
+  ()
+: T.Tac unit
+= let f = serialize32_sum_tac' #kt t #p #s s32 #k #pc #sc sc32 u tag_of_data s' u' in
+  T.print (T.term_to_string f);
+  T.exact_guard f
 
 noextract
 let size32_sum_tac'
@@ -253,11 +258,10 @@ let size32_sum_tac'
     p' == parse_sum t p pc /\
     s' == serialize_sum t s sc
   })
-: Tot (T.tactic T.term)
-= let open T in
-  let (e: enum (sum_key_type t) (sum_repr_type t) { Cons? e } ) = sum_enum t in
-  ar2 <-- sum_destr_tac U32.t t ;
-  fu <-- quote (
+: T.Tac T.term
+= let (e: enum (sum_key_type t) (sum_repr_type t) { Cons? e } ) = sum_enum t in
+  let ar2 = sum_destr_tac U32.t t in
+  let fu = quote (
     size32_sum_gen
       #kt
       t
@@ -275,7 +279,8 @@ let size32_sum_tac'
       #p'
       s'
       u'
-  ) ;
-  return (mk_app fu [
-    ar2, Q_Explicit;
-  ])
+  )
+  in
+  T.mk_app fu [
+    ar2, T.Q_Explicit;
+  ]
