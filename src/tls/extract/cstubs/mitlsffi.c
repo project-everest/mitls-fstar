@@ -321,19 +321,19 @@ typedef struct {
   pfn_FFI_nego_cb cb;
 } wrapped_nego_cb;
 
-static mitls_version convert_pv(TLSConstants_protocolVersion_ pv)
+static mitls_version convert_pv(QD_TLS_protocolVersion_protocolVersion_ pv)
 {
   switch(pv.tag)
   {
-    case TLSConstants_SSL_3p0:
+    case QD_TLS_protocolVersion_SSL_3p0:
       return TLS_SSL3;
-    case TLSConstants_TLS_1p0:
+    case QD_TLS_protocolVersion_TLS_1p0:
       return TLS_1p0;
-    case TLSConstants_TLS_1p1:
+    case QD_TLS_protocolVersion_TLS_1p1:
       return TLS_1p1;
-    case TLSConstants_TLS_1p2:
+    case QD_TLS_protocolVersion_TLS_1p2:
       return TLS_1p2;
-    case TLSConstants_TLS_1p3:
+    case QD_TLS_protocolVersion_TLS_1p3:
       return TLS_1p3;
     default:
       return TLS_SSL3;
@@ -341,7 +341,7 @@ static mitls_version convert_pv(TLSConstants_protocolVersion_ pv)
   return TLS_SSL3; // unreachable
 }
 
-static TLSConstants_nego_action nego_cb_proxy(FStar_Dyn_dyn cbs, TLSConstants_protocolVersion_ pv,
+static TLSConstants_nego_action nego_cb_proxy(FStar_Dyn_dyn cbs, QD_TLS_protocolVersion_protocolVersion_ pv,
   FStar_Bytes_bytes extb, FStar_Pervasives_Native_option__FStar_Bytes_bytes cookie)
 {
   wrapped_nego_cb *cb = (wrapped_nego_cb*)cbs;
