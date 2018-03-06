@@ -2,7 +2,7 @@ module LowParse.SLow.Sum
 include LowParse.Spec.Sum
 include LowParse.SLow.Enum
 
-module B32 = FStar.Bytes
+module B32 = LowParse.Bytes32
 module U32 = FStar.UInt32
 
 let serializer32_sum_gen_precond
@@ -35,7 +35,7 @@ let serialize32_sum_gen'
     let tg = tag_of_data input in
     let stg = s32 tg in
     let s = sc32 tg input in
-    b32append stg s
+    B32.b32append stg s
   ) <: (res: bytes32 { serializer32_correct (serialize_sum t s sc) input res } ))
 
 (* Universal destructor *)
@@ -178,7 +178,7 @@ let parse32_sum_gen'
 = fun (input: bytes32) -> ((
     match p32 input with
     | Some (tg, consumed_tg) ->
-      let input' = b32slice input consumed_tg (B32.len input) in
+      let input' = B32.b32slice input consumed_tg (B32.len input) in
       begin match destr (fun (x: sum_key t) (input: bytes32) -> match pc32 x input with | Some (d, consumed_d) -> Some ((d <: sum_type t), consumed_d) | _ -> None) tg input' with
       | Some (d, consumed_d) ->
         // FIXME: implicit arguments are not inferred because (synth_tagged_union_data ...) is Tot instead of GTot
@@ -287,10 +287,10 @@ let parse32_sum_with_nondep_aux
 : Tot (option ((nondep_t * sum_type t) * U32.t))
 = match p32 input with
   | Some (tg, consumed_tg) ->
-    let input1 = b32slice input consumed_tg (B32.len input) in
+    let input1 = B32.b32slice input consumed_tg (B32.len input) in
     begin match pnd32 input1 with
     | Some (nd, consumed_nd) ->
-      let input2 = b32slice input1 consumed_nd (B32.len input1) in
+      let input2 = B32.b32slice input1 consumed_nd (B32.len input1) in
       begin match 
         destr (fun (x: sum_key t) (input: bytes32) -> match pc32 x input with | Some (d, consumed_d) -> Some ((d <: sum_type t), consumed_d) | _ -> None) tg input2
       with

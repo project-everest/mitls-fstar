@@ -7,14 +7,14 @@ module E = LowParse.BigEndianImpl
 module U8  = FStar.UInt8
 module U16 = FStar.UInt16
 module U32 = FStar.UInt32
-module B32 = FStar.Bytes
+module B32 = LowParse.Bytes32
 
 inline_for_extraction
 let serialize32_u8
 : serializer32 serialize_u8
 = (fun (input: U8.t) ->
     let b = B32.create 1ul input in
-    b32_reveal_create 1ul input;
+    B32.b32_reveal_create 1ul input;
     (b <: (res: bytes32 { serializer32_correct #_ #_ #parse_u8 serialize_u8 input res } )))
 
 inline_for_extraction
@@ -62,5 +62,5 @@ let parse32_u8 : parser32 parse_u8 =
     (fun (b: B32.lbytes 1) ->
       let r = B32.get b 0ul in
       assert (r == Seq.index (B32.reveal b) 0);
-      b32_index_reveal b 0;
+      B32.b32_index_reveal b 0;
       (r <: (y: U8.t { y == decode_u8 (B32.reveal b) })))

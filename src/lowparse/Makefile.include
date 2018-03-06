@@ -26,6 +26,7 @@ LOWPARSE_SLOW_FILES= \
 	LowParse.SLow.Combinators.fst \
 	LowParse.SLow.List.fst \
 	LowParse.SLow.FLData.fst \
+        LowParse.Bytes32.fst \
         LowParse.BigEndianImpl.fst \
         LowParse.SLow.Int.fsti \
         LowParse.SLow.Int.Aux.fst \
