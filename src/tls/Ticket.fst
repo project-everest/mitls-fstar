@@ -180,7 +180,8 @@ let create_ticket t =
   ticket_encrypt plain
 
 let create_cookie (hrr:HandshakeMessages.hrr) (digest:bytes) (extra:bytes) =
-  let hrb = (vlbytes 3 (HandshakeMessages.helloRetryRequestBytes hrr)) in
+  let hrm = HandshakeMessages.HelloRetryRequest hrr in
+  let hrb = vlbytes 3 (HandshakeMessages.handshakeMessageBytes None hrm) in
   let plain = hrb @| (vlbytes 1 digest) @| (vlbytes 2 extra) in
   let cipher = ticket_encrypt plain in
   trace ("Encrypting cookie: "^(hex_of_bytes plain));
