@@ -162,9 +162,9 @@ UNAME = $(shell uname)
 
 ifeq ($(OS),Windows_NT)
   ifeq ($(shell uname -o),Cygwin)
-    MITLS_HOME := $(shell cygpath -u ${MITLS_HOME})
+    MITLS_HOME_RUN := $(shell cygpath -u ${MITLS_HOME})
   endif
-  PATH := $(MITLS_HOME)/src/pki:$(PATH)
+  PATH := $(MITLS_HOME_RUN)/src/pki:$(PATH)
   SO = dll
   export PATH
 else ifeq ($(UNAME),Darwin)
