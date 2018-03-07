@@ -1360,7 +1360,7 @@ let parseSessionTicket13 b =
 
 
 (* Hello retry request *)
-val helloRetryRequestBytes: hrr -> Tot (b:bytes{hs_msg_bytes HT_hello_retry_request b})
+// val helloRetryRequestBytes: hrr -> Tot (b:bytes{hs_msg_bytes HT_hello_retry_request b})
 let helloRetryRequestBytes hrr =
   serverHelloBytes ({
     sh_protocol_version = TLS_1p2;
@@ -1406,7 +1406,7 @@ let helloRetryRequestBytes_is_injective h1 h2 = admit()
 *)
 
 (* TODO: inversion lemmas *)
-val parseHelloRetryRequest: bytes -> Tot (result hrr)
+// val parseHelloRetryRequest: bytes -> Tot (result hrr)
 let parseHelloRetryRequest b = Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "HRR message type is disabled since draft 22")
 (*
   if length b >= 4 then
