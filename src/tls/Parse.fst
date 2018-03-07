@@ -1,8 +1,7 @@
 module Parse
 
-open FStar.Error
-open TLSError
 open FStar.Bytes
+open FStar.Error
 
 open TLSError
 
@@ -198,6 +197,6 @@ let bytes_of_uint16 (n:UInt16.t) : Tot (lbytes 2) =
   lemma_repr_bytes_values n;
   bytes_of_int 2 n
 
-// 18-02-26 to be eliminated
-let cbyte (b:bytes{length b >= 1}) = FStar.Bytes.index b 0
-let cbyte2 (b:bytes{length b >= 2}) = (FStar.Bytes.index b 0, FStar.Bytes.index b 1)
+// 18-02-26 to be inlined in the source
+let cbyte (b:bytes{length b >= 1}) = b.[0ul]
+let cbyte2 (b:bytes{length b >= 2}) = b.[0ul], b.[1ul]

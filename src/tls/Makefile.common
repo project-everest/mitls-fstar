@@ -7,22 +7,6 @@ FLAVOR          ?= Model
 
 SHELL=/bin/bash
 
-# Project-wide Prerequisites
-
-ifeq ($(OS),Windows_NT)
-  LIB_EXT?=.dll
-else
-  LIB_EXT?=.so
-endif
-
-# PREREQUISITES= \
-#	$(MITLS_HOME)/libs/ffi/FFICallbacks.cmxa \
-#	$(MITLS_HOME)/src/pki/libmipki.$(LIB_EXT)
-
-#$(PREREQUISITES):
-#	$(MAKE) -C $(MITLS_HOME)/libs/ffi
-#	$(MAKE) -C $(MITLS_HOME)/src/pki
-
 
 # Paths and Commands
 
@@ -101,10 +85,6 @@ depend: $(DEP_FILE)
 # If F* doesn't write a .checked file beacause it hasn't verified a
 # dependency, then an empty (invalid) file will be created.
 
-ifneq (,$(HINTS_DIR))
-	HINTS_OPTS=--hint_file $(HINTS_DIR)/$(basename $(notdir $(subst .lax,,$(subst .checked,,$<)))).hints
-endif
-
 $(CACHE_DIR)/FStar.%.checked: | $(DEP_FILE)
 ifdef VERBOSE
 	@echo -e "\033[1;35m=== Producing $@ ...\033[;37m"
@@ -115,6 +95,10 @@ endif
 		$(addprefix --include , $(INCLUDE_PATHS)) $< \
 		)
 	@touch $@
+
+ifneq (,$(HINTS_DIR))
+	HINTS_OPTS=--hint_file $(HINTS_DIR)/$(basename $(notdir $(subst .lax,,$(subst .checked,,$<)))).hints
+endif
 
 %.checked: | $(DEP_FILE)
 ifdef VERBOSE

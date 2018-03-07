@@ -8,7 +8,8 @@ open TLSError
 open TLSConstants
 open CoreCrypto
 open Extensions // defining cert, cert13, chain
-
+open Parse
+ 
 (* The chain format changes between TLS 1.2 and TLS 1.3; we separate
 then in messages, but at least for now, we merge the two in
 Negotiation and in the main TLS API (with no extensions when using TLS
