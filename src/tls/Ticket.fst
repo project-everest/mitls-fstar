@@ -165,8 +165,9 @@ let ticket_decrypt cipher : St (option bytes) =
   let iv = AE.coerce_iv tid (xor_ #(AE.iv_length tid) nb salt) in
   AE.decrypt #tid #plain_len rd iv empty_bytes b
 
-let check_ticket (b:bytes{length b <= 65551}) : St (option bytes) =
+let check_ticket (b:bytes{length b <= 65551}) : St (option ticket) =
   trace ("Decrypting ticket "^(hex_of_bytes b));
+  let Key tid _ rd = get_ticket_key () in
   if length b < AE.iv_length tid + AE.taglen tid + 8 (*was: 32*) 
   then None 
   else
@@ -203,27 +204,28 @@ let create_cookie (hrr:HandshakeMessages.hrr) (digest:bytes) (extra:bytes) =
   trace ("Encrypted cookie:  "^(hex_of_bytes cipher));
   cipher
 
-let check_cookie b =
-  trace ("Decrypting cookie "^(hex_of_bytes b));
-  if length b < 32 then None else
-  match ticket_decrypt b with
-  | None -> trace ("Cookie decryption failed."); None
-  | Some plain ->
-    trace ("Plain cookie: "^(hex_of_bytes plain));
-    match vlsplit 3 plain with
-    | Error _ -> trace ("Cookie decode error: HRR"); None
-    | Correct (hrb, b) ->
-      let (_, hrb) = split hrb 4ul in // Skip handshake tag and vlbytes 3
-      match HandshakeMessages.parseHelloRetryRequest hrb with
-      | Error (_, m) -> trace ("Cookie decode error: parse HRR, "^m); None
-      | Correct hrr ->
-        match vlsplit 1 b with
-        | Error _ -> trace ("Cookie decode error: digest"); None
-        | Correct (digest, b) ->
-          match vlparse 2 b with
-          | Error _ -> trace ("Cookie decode error: application data"); None
-          | Correct extra ->
-            Some (hrr, digest, extra)
+// cwinter: unused?
+// let check_cookie b =
+//   trace ("Decrypting cookie "^(hex_of_bytes b));
+//   if length b < 32 then None else
+//   match ticket_decrypt b with
+//   | None -> trace ("Cookie decryption failed."); None
+//   | Some plain ->
+//     trace ("Plain cookie: "^(hex_of_bytes plain));
+//     match vlsplit 3 plain with
+//     | Error _ -> trace ("Cookie decode error: HRR"); None
+//     | Correct (hrb, b) ->
+//       let (_, hrb) = split hrb 4ul in // Skip handshake tag and vlbytes 3
+//       match HandshakeMessages.parseHelloRetryRequest hrb with
+//       | Error (_, m) -> trace ("Cookie decode error: parse HRR, "^m); None
+//       | Correct hrr ->
+//         match vlsplit 1 b with
+//         | Error _ -> trace ("Cookie decode error: digest"); None
+//         | Correct (digest, b) ->
+//           match vlparse 2 b with
+//           | Error _ -> trace ("Cookie decode error: application data"); None
+//           | Correct extra ->
+//             Some (hrr, digest, extra)
 
 let check_ticket13 b =
   match check_ticket b with
@@ -232,8 +234,8 @@ let check_ticket13 b =
     let nonce, _ = split b 12ul in
     Some PSK.({
       ticket_nonce = Some nonce;
-      time_created = created;
-      ticket_age_add = age_add;
+      time_created = UInt32.v created;
+      // ticket_age_add = age_add;
       allow_early_data = true;
       allow_dhe_resumption = true;
       allow_psk_resumption = true;
