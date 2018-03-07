@@ -1,6 +1,5 @@
 module QUIC
-module HS = FStar.HyperStack //Added automatically
-
+ 
 /// QUIC-specific interface on top of our main TLS API
 /// * establishes session & exported keys: no application-data traffic!
 /// * simplified configuration, with reasonable defaults
@@ -23,6 +22,7 @@ open TLS
 open FFICallbacks
 
 open FStar.HyperStack.All
+module HS = FStar.HyperStack
 
 #set-options "--lax"
 

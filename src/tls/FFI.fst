@@ -515,7 +515,7 @@ let ffiSplitChain (chain:bytes) : ML (list cert_repr) =
 private let rec ext_filter (ext_type:UInt16.t) (e:list Extensions.extension) : option bytes =
   match e with
   | [] -> None
-  | Extensions.E_unknown_extension (hd, b) :: t ->
+  | Extensions.E_unknown_extension hd b :: t ->
     if uint16_of_bytes hd = ext_type then Some b else ext_filter ext_type t
   | _ :: t -> ext_filter ext_type t
 
