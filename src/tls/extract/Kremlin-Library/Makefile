@@ -97,6 +97,8 @@ libmitls.$(SO): $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/a
 	$(CC) $^ -shared -o $@ $(LDOPTS)
 
 clean:
-	rm -fr *.c *.o *.dll *.so *.a *.h *~
+	rm -fr $(addsuffix .o,$(FILES)) $(addsuffix .c,$(FILES)) libmitls.$(SO)
+	rm -fr vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
+	rm -fr *.a *.h *~
 
 test:

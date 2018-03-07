@@ -92,5 +92,9 @@ CERT_FILES=CAFile.pem server-ecdsa.crt server-ecdsa.key
 $(CERT_FILES):
 	cp $(MITLS_HOME)/data/$@ .
 
+clean:
+	rm -fr $(addsuffix .o,$(FILES)) $(addsuffix .c,$(FILES)) test.exe
+	rm -fr vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
+
 test: test.exe $(CERT_FILES)
 	./$<

@@ -1,20 +1,22 @@
 all: mitls.exe
 
-FSTAR_HOME	?= ../../../fstar
+FSTAR_HOME	?= ../../../FStar
 
 include $(FSTAR_HOME)/ulib/ml/Makefile.include
 
 #To include Makefile.common, you need to specify
-#the following three variables
+#the following five variables
 FLAVOR=OCaml
 EXTENSION=ml
 #Don't extract modules from fstarlib (NOEXTRACT_MODULES)
 #And also some specific ones from mitls that are implemented in C
-EXTRACT='* -Prims -FStar +FStar.Kremlin.Endianness +FStar.Test -CoreCrypto -CryptoTypes -DHDB -LowCProvider -HaclProvider -FFICallbacks -Crypto.AEAD -Crypto.Symmetric -Crypto.Plain -Spec.Loops -Buffer.Utils -C +C.Loops -LowParse.SLow.Tac -BufferBytes'
+EXTRACT='* -Prims -FStar +FStar.Test +FStar.Kremlin.Endianness -CoreCrypto -CryptoTypes -DHDB -LowCProvider -HaclProvider -FFICallbacks -Crypto.AEAD -Crypto.Symmetric -Crypto.Plain -Spec.Loops -Buffer.Utils -C +C.Loops -LowParse.SLow.Tac -BufferBytes'
+SPECINC=$(MITLS_HOME)/src/tls/concrete-flags  $(MITLS_HOME)/src/tls/concrete-flags/OCaml
+VFLAGS?=--admit_smt_queries true
 include Makefile.common
 ################################################################################
 
-FFI_HOME	= ../../libs/ffi
+FFI_HOME	= $(MITLS_HOME)/libs/ffi
 LOWC_HOME	= $(HACL_HOME)/secure_api/out/$(IMPL_CHOICE)
 
 OCAMLOPTS	=-package fstarlib,zarith,ctypes,ctypes.foreign -g \
@@ -51,9 +53,9 @@ ifeq (,$(wildcard $(MLCRYPTO_HOME)/CoreCrypto.cmxa))
   $(error I cannot find $(MLCRYPTO_HOME)/CoreCrypto.cmxa -- please run make in $(MLCRYPTO_HOME))
 endif
 
-ifeq (,$(wildcard $(FFI_HOME)/FFICallbacks.cmxa))
-  $(error I cannot find $(FFI_HOME)/FFICallbacks.cmxa) -- please run make in $(FFI_HOME))
-endif
+ifeq (,$(wildcard $(FFI_HOME)/FFICallbacks.cmxa)) 
+  $(error I cannot find $(FFI_HOME)/FFICallbacks.cmxa -- please run make in $(FFI_HOME))
+endif 
 
 %.o: %.c
 	$(CC) -I $(KREMLIN_HOME)/kremlib $^ -o $@ -c
@@ -144,7 +146,12 @@ extract/OCaml/PKI.cmx: extract/mlstubs/PKI.ml extract/OCaml/TLSConstants.cmx
 extract/OCaml/BufferBytes.cmx: extract/mlstubs/BufferBytes.ml
 
 %.cmx:
-	$(OCAMLOPT) -w -8-11-26-20 -c $< -o $@
+ifdef VERBOSE
+	@echo -e "\033[0;32m=== Compiling $@ ...\033[;37m"
+endif
+	$(subst \\,, \
+		$(OCAMLOPT) -w -8-11-26-20 -c $< -o $@ \
+	)
 
 CERT_FILES=CAFile.pem server-ecdsa.crt server-ecdsa.key
 
@@ -155,9 +162,9 @@ UNAME = $(shell uname)
 
 ifeq ($(OS),Windows_NT)
   ifeq ($(shell uname -o),Cygwin)
-    MITLS_HOME := $(shell cygpath -u ${MITLS_HOME})
+    MITLS_HOME_RUN := $(shell cygpath -u ${MITLS_HOME})
   endif
-  PATH := $(MITLS_HOME)/src/pki:$(PATH)
+  PATH := $(MITLS_HOME_RUN)/src/pki:$(PATH)
   SO = dll
   export PATH
 else ifeq ($(UNAME),Darwin)
@@ -172,4 +179,4 @@ test: mitls.exe $(CERT_FILES)
 	./mitls.exe
 
 clean:
-	rm -rf $(CERT_FILES) mitls.exe test/mitls.cm? test/mitls.o .depend.OCaml extract/OCaml
+	rm -rf $(CERT_FILES) mitls.exe test/mitls.cm? test/mitls.o $(DEP_FILE) extract/OCaml

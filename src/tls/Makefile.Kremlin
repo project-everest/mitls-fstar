@@ -4,20 +4,23 @@ build: build-internal-test build-library build-external-test
 
 test: test-internal-test # test-library test-external-test
 
-clean: clean-internal-test clean-library clean-external-test
+ifneq (,$(MITLS_USE_OPENSSL))
+CONCRETE_FLAVOR = -OpenSSL
+endif
 
 # To include Makefile.common, you need to specify
-# the following three variables
-FLAVOR		= Kremlin
+# the following five variables
+FLAVOR		= Kremlin$(CONCRETE_FLAVOR)
 EXTENSION	= krml
 # Don't extract modules from mitls that are implemented in C
 EXTRACT		= '* -DHDB -LowCProvider -FFICallbacks -BufferBytes'
-
-ifneq (,$(MITLS_USE_OPENSSL))
-CONCRETE_FLAVOR	= -OpenSSL
-endif
+SPECINC     = $(MITLS_HOME)/src/tls/concrete-flags $(MITLS_HOME)/src/tls/concrete-flags/$(FLAVOR)
+VFLAGS     ?= --admit_smt_queries true
 
 include Makefile.common
+
+clean: clean-internal-test clean-library clean-external-test
+	rm -f $(DEP_FILE)
 
 # Tiny bit of autodetection to grab the right Vale files
 UNAME		= $(shell uname)
@@ -153,7 +156,7 @@ test-internal-test: output-internal-test
 
 clean-internal-test:
 	-@find $(INTERNAL_TEST_DIR) -type f -and -not -name Makefile -and -not -name .gitignore \
-        | xargs rm
+        | xargs rm -f
 
 ################################################################################
 # The library does not perform bundling
@@ -186,7 +189,7 @@ test-library: output-library
 
 clean-library:
 	-@find $(LIBRARY_DIR) -type f -and -not -name Makefile -and -not -name .gitignore \
-        | xargs rm
+        | xargs rm -f
 
 ################################################################################
 # An external test that uses "mitlsffi.h"
