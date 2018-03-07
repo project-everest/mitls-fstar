@@ -5,7 +5,9 @@ module HKDF
 
 open FStar.UInt32
 open FStar.Bytes
+
 open Hashing.Spec
+open TLSConstants
 open Parse
 
 private let max (a:int) (b:int) = if a < b then b else a
@@ -174,7 +176,7 @@ val expand_label:
   (ensures (fun h0 t h1 -> modifies_none h0 h1))
 
 let expand_label #ha prk label hv len =
-  expand prk (format ha label hv len) (UInt32.uint_to_t len)
+  expand prk (format ha label hv len) len
 
 (*-------------------------------------------------------------------*)
 (*
@@ -194,7 +196,7 @@ val expand_secret:
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
 
 let expand_secret #ha prk label hv =
-  expand_label prk label hv (UInt32.v (Hashing.Spec.tagLen ha))
+  expand_label prk label hv (Hashing.Spec.tagLen ha)
   
 (*-------------------------------------------------------------------*)
 (*

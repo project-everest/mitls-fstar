@@ -12,6 +12,7 @@ open Extensions
 open TLSInfo
 open Range
 open CommonDH
+open Parse
 
 // e18-02-21 carved out an interface, far from perfect...  
 // In particular, it exposes the separate parsing of message headers
@@ -341,6 +342,10 @@ let parsed = function
   | Binders _ | MessageHash _ -> false
   | _ -> true
 
+// cwinter: Ticket.fst wants the following two, not sure they should be here.
+val helloRetryRequestBytes: hrr -> Tot (b:bytes{hs_msg_bytes HT_hello_retry_request b})
+val parseHelloRetryRequest: bytes -> Tot (result hrr)
+
 val handshakeMessageBytes:
   pvo:option protocolVersion ->
   msg:valid_hs_msg pvo ->
@@ -372,3 +377,5 @@ val parseHandshakeMessage:
   ht:handshakeType ->
   b:bytes{repr_bytes (length b) <= 3} ->
   Tot (result hs_msg)
+
+

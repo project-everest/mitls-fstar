@@ -8,6 +8,7 @@ open FStar.Bytes
 open TLSError
 open TLSConstants
 open TLSInfo
+open Parse
 open Mem
 
 module Range = Range

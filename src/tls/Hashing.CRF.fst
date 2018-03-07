@@ -22,7 +22,7 @@ private type domain (r:range) =
   b:bytes {let Computed a t = r in length b <= maxLength a /\ hash a b = t}
 
 private let inv (f:MM.partial_dependent_map range domain) = True // a bit overkill?
-private let table : MM.t TLSConstants.tls_tables_region range domain inv = MM.alloc()
+private let table : MM.t tls_tables_region range domain inv = MM.alloc()
 
 // witnessing that we hashed this particular content (for collision detection)
 // to be replaced by a witness of inclusion in a global table of all hash computations.

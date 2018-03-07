@@ -8,6 +8,9 @@ module HS = FStar.HyperStack //Added automatically
 *)
 
 open FStar.Bytes
+open FStar.HyperStack.ST
+
+open Mem
 open Hashing.Spec
 open TLSConstants
 open TLSInfo

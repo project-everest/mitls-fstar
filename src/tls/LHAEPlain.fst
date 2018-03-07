@@ -7,6 +7,7 @@ open FStar.Error
 open TLSError
 open TLSConstants
 open TLSInfo
+open Parse
 
 module Range = Range
 let range = Range.range

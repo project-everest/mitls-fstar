@@ -1,5 +1,8 @@
 module Test.TLSConstants
+
 open FStar.Error
+open FStar.HyperStack.ST
+
 open TLSError
 open TLSConstants
 

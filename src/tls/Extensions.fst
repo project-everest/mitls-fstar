@@ -14,6 +14,7 @@ open FStar.Error
 
 open TLSError
 open TLSConstants
+open Parse
 
 //NS: hoisting a convenient function to avoid a closure conversion
 let rec existsb2 (f: 'a -> 'b -> bool) (x:'a) (y:list 'b) : bool =

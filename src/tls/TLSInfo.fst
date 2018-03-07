@@ -12,6 +12,7 @@ module HST = FStar.HyperStack.ST //Added automatically
 *)
 
 open FStar.Bytes
+open Mem
 open TLSConstants
 
 module CC = CoreCrypto

@@ -6,6 +6,7 @@ open FStar.Seq
 open FStar.Bytes
 open CoreCrypto
 
+open Mem
 open TLSConstants
 open TLSInfo
 

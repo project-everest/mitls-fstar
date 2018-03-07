@@ -2,9 +2,11 @@ module AEADProvider
 
 open FStar.Heap
 open FStar.HyperStack
+open FStar.HyperStack.ST
 open FStar.Seq
 open FStar.Bytes
 
+open Mem
 open TLSConstants
 open TLSInfo
 open FStar.UInt32

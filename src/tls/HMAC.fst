@@ -1,8 +1,11 @@
 ﻿module HMAC
 
 open FStar.Bytes
+open FStar.HyperStack.ST
+
+open Mem
 open TLSConstants
-open Hashing.Spec // for the algorithm names, instead of CoreCrypto
+open Hashing.Spec // for the algorithm names, instead of CoreCrypt
 
 type key = bytes
 type mac (a:macAlg) = lbytes32 (macSize a)

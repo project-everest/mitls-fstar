@@ -35,6 +35,8 @@ module HS = FStar.HyperStack
 
 open FStar.Error
 open TLSError
+open Hashing
+open Hashing.CRF
 
 type msg = HandshakeMessages.hs_msg
 
@@ -171,7 +173,7 @@ val hashAlg: h:HS.mem -> log -> GTot (option Hashing.alg)
 val transcript: h:HS.mem -> log -> GTot hs_transcript
 
 //17-04-12 for now always called with pv = None.
-val create: reg:TLSConstants.rgn -> pv:option TLSConstants.protocolVersion -> ST log
+val create: reg:rgn -> pv:option TLSConstants.protocolVersion -> ST log
   (requires (fun h -> True))
   (ensures (fun h0 out h1 ->
     HS.modifies (Set.singleton reg) h0 h1 /\ // todo: we just allocate (ref_of out)
