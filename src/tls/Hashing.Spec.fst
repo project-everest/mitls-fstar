@@ -110,7 +110,7 @@ let rec hash2 #a v b =
     let c,b = split b (blockLen a) in
     hash2 (compress v c) b
 
-(** maximal input length for hashing and hmac, overly limited by our UInt32 of bytes lengths *)
+(** maximal input lengths for hashing and hmac, overly limited by our UInt32 of bytes lengths *)
 let maxLength a: nat = pow2 32 - blockLength a - 9
 let hashable a = b: bytes {length b <= maxLength a}
 let macable a = b: bytes {length b + blockLength a <= maxLength a}

@@ -126,4 +126,3 @@ let final #a content v =
   hash2_append (acc0 a) b0 b1; 
   truncate (hash2 v.v b1)
 
-
