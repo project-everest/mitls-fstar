@@ -1,0 +1,78 @@
+[
+  "9√s÷[Á‘Œ≥]âx\u0013«î^",
+  [
+    [
+      "Format.ECCurveType.uu___is_EXPLICIT_PRIME",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "9ad3163afb5cb9a76cc02bd98ad16585"
+    ],
+    [
+      "Format.ECCurveType.uu___is_EXPLICIT_CHAR2",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "fbdf9de12a5c42c60322804a9960e7d1"
+    ],
+    [
+      "Format.ECCurveType.uu___is_NAMED_CURVE",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "f3beb76bd2d3cc6d0b8997ae2b6955f7"
+    ],
+    [
+      "Format.ECCurveType.uu___is_RESERVED",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "1450e2a702346c49bab4661311cd3aa7"
+    ],
+    [
+      "Format.ECCurveType.__proj__RESERVED__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Format.ECCurveType.RESERVED",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Format.ECCurveType_Tm_refine_01a030ae38a402d3db21024ea97f8597"
+      ],
+      0,
+      "0bf0bccf10e91f3bc856f9270b7b391b"
+    ],
+    [
+      "Format.ECCurveType.uu___is_UNKNOWN",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "3359d75e93c5a3cd130ba11633ca8179"
+    ],
+    [
+      "Format.ECCurveType.__proj__UNKNOWN__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Format.ECCurveType.UNKNOWN",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Format.ECCurveType_Tm_refine_c50fc0e99edad44b43e6212ca848e6e0"
+      ],
+      0,
+      "43ddc46d724bec75ea2ccc838bc261fb"
+    ]
+  ]
+]

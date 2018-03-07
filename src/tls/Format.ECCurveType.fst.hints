@@ -1,5 +1,5 @@
 [
-  "¯\u001c±óèhÔ†üŸ“O,!Ni",
+  "\u0005±À˜Ó√\u001axA√≈!◊∞≠ƒ",
   [
     [
       "Format.ECCurveType.uu___is_EXPLICIT_PRIME",
@@ -8,7 +8,7 @@
       1,
       [ "@query" ],
       0,
-      "285497e37cf0040eeb2efbe8a9459157"
+      "ca8c95875cf69d8bb63936121076840b"
     ],
     [
       "Format.ECCurveType.uu___is_EXPLICIT_CHAR2",
@@ -17,7 +17,7 @@
       1,
       [ "@query" ],
       0,
-      "a9d3ec1c01c4f99c8b5c7b481f7f37f8"
+      "29552b040709264c40f8838569817bee"
     ],
     [
       "Format.ECCurveType.uu___is_NAMED_CURVE",
@@ -26,7 +26,7 @@
       1,
       [ "@query" ],
       0,
-      "b22fc049c7131a59a9a8146c0a8ad7dc"
+      "eb47d33e04bc1bf344609e899600f792"
     ],
     [
       "Format.ECCurveType.uu___is_RESERVED",
@@ -35,7 +35,7 @@
       1,
       [ "@query" ],
       0,
-      "57588b6b8386d68e0648a370c09e6312"
+      "a7fb1974a58886ae6b9b9cbf9870d73c"
     ],
     [
       "Format.ECCurveType.__proj__RESERVED__item___0",
@@ -49,7 +49,7 @@
         "refinement_interpretation_Format.ECCurveType_Tm_refine_01a030ae38a402d3db21024ea97f8597"
       ],
       0,
-      "c1fd24a4d1889a98383a26b7969c3141"
+      "4598d34487050326fe93c9f6d5a8b6e3"
     ],
     [
       "Format.ECCurveType.uu___is_UNKNOWN",
@@ -58,7 +58,7 @@
       1,
       [ "@query" ],
       0,
-      "be8ff0d070de7d232276a8b337a426cc"
+      "ba044d94026f2a59f2687d330bf032ce"
     ],
     [
       "Format.ECCurveType.__proj__UNKNOWN__item___0",
@@ -72,7 +72,7 @@
         "refinement_interpretation_Format.ECCurveType_Tm_refine_c50fc0e99edad44b43e6212ca848e6e0"
       ],
       0,
-      "3e48ff22c1f8f0e135227401de54731f"
+      "a959a94b204de56f674a653865b5f5e2"
     ],
     [
       "Format.ECCurveType.ecCurveType_of_byte",
@@ -81,7 +81,7 @@
       1,
       [ "@query" ],
       0,
-      "41e2759b36a10a08451091a0afbfb593"
+      "47dc094e987dfd4816880d6b2818b573"
     ],
     [
       "Format.ECCurveType.byte_of_ecCurveType",
@@ -98,7 +98,7 @@
         "fuel_guarded_inversion_Format.ECCurveType.ecCurveType"
       ],
       0,
-      "f58feb4a0b0c5f1aa9fefcd535d0a531"
+      "80edb98c26acb723f85fa2db92203b00"
     ],
     [
       "Format.ECCurveType.lemma_ecCurveType_of_byte_is_injective",
@@ -122,7 +122,7 @@
         "typing_Format.ECCurveType.ecCurveType_of_byte"
       ],
       0,
-      "e315b04838496f3df4d39c4507bdcfb4"
+      "0f2c8c719e2afef2216a88753f3b4c21"
     ],
     [
       "Format.ECCurveType.ecCurveType_parser",
@@ -132,11 +132,16 @@
       [
         "@query", "equation_FStar.Bytes.byte", "equation_FStar.Bytes.u8",
         "equation_Format.ECCurveType.byte",
-        "equation_LowParse.Spec.Combinators.synth_injective",
-        "token_correspondence_Format.ECCurveType.ecCurveType_of_byte"
+        "equation_Format.ECCurveType.ecCurveType_parser_kind_",
+        "equation_Format.ECCurveType.ecCurveType_parser_kind_metadata",
+        "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_LowParse.Spec.Combinators.total_constant_size_parser_kind",
+        "equation_LowParse.Spec.Int.parse_u8_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "f8408d23d4f7e11cc1729f424df934c4"
+      "3786853d948a48ba2d7e68fc8db6e0ce"
     ],
     [
       "Format.ECCurveType.ecCurveType_parser32",
@@ -147,11 +152,16 @@
         "@query", "equation_FStar.Bytes.byte", "equation_FStar.Bytes.u8",
         "equation_Format.ECCurveType.byte",
         "equation_Format.ECCurveType.ecCurveType_parser",
-        "equation_LowParse.Spec.Combinators.synth_injective",
-        "token_correspondence_Format.ECCurveType.ecCurveType_of_byte"
+        "equation_Format.ECCurveType.ecCurveType_parser_kind_",
+        "equation_Format.ECCurveType.ecCurveType_parser_kind_metadata",
+        "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_LowParse.Spec.Combinators.total_constant_size_parser_kind",
+        "equation_LowParse.Spec.Int.parse_u8_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "53ffeabef4d5ffa64bb39f3b10aa39e0"
+      "ed7daa8db0574caf4ea43240b2259124"
     ],
     [
       "Format.ECCurveType.lemma_ecCurveType_of_byte_of_ecCurveType",
@@ -205,7 +215,7 @@
         "typing_Format.ECCurveType.ecCurveType_of_byte"
       ],
       0,
-      "e55c361e9de9ceb8c958765414db5234"
+      "d6327c2d1f3ed661a8b0f8fa29d9bb02"
     ],
     [
       "Format.ECCurveType.ecCurveType_serializer",
@@ -213,21 +223,20 @@
       2,
       1,
       [
-        "@query",
-        "Format.ECCurveType_pretyping_6b79b8178a7af0c62a175be803d36762",
-        "data_typing_intro_Format.ECCurveType.EXPLICIT_CHAR2@tok",
-        "equation_FStar.Bytes.byte", "equation_FStar.Bytes.u8",
+        "@query", "equation_FStar.Bytes.byte", "equation_FStar.Bytes.u8",
         "equation_Format.ECCurveType.byte",
         "equation_Format.ECCurveType.ecCurveType_parser",
         "equation_Format.ECCurveType.ecCurveType_parser_kind",
-        "equation_LowParse.Spec.Combinators.synth_injective",
-        "equation_LowParse.Spec.Combinators.synth_inverse",
+        "equation_Format.ECCurveType.ecCurveType_parser_kind_",
+        "equation_Format.ECCurveType.ecCurveType_parser_kind_metadata",
+        "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_LowParse.Spec.Combinators.total_constant_size_parser_kind",
         "equation_LowParse.Spec.Int.parse_u8_kind",
-        "token_correspondence_Format.ECCurveType.byte_of_ecCurveType",
-        "token_correspondence_Format.ECCurveType.ecCurveType_of_byte"
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "33a53f297c476bfcbf45ef29da05186a"
+      "584944f7b5efaad08f6862a265fc532b"
     ],
     [
       "Format.ECCurveType.ecCurveType_serializer32",
@@ -235,22 +244,21 @@
       2,
       1,
       [
-        "@query",
-        "Format.ECCurveType_pretyping_6b79b8178a7af0c62a175be803d36762",
-        "data_typing_intro_Format.ECCurveType.EXPLICIT_CHAR2@tok",
-        "equation_FStar.Bytes.byte", "equation_FStar.Bytes.u8",
+        "@query", "equation_FStar.Bytes.byte", "equation_FStar.Bytes.u8",
         "equation_Format.ECCurveType.byte",
         "equation_Format.ECCurveType.ecCurveType_parser",
         "equation_Format.ECCurveType.ecCurveType_parser_kind",
+        "equation_Format.ECCurveType.ecCurveType_parser_kind_",
+        "equation_Format.ECCurveType.ecCurveType_parser_kind_metadata",
         "equation_Format.ECCurveType.ecCurveType_serializer",
-        "equation_LowParse.Spec.Combinators.synth_injective",
-        "equation_LowParse.Spec.Combinators.synth_inverse",
+        "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_LowParse.Spec.Combinators.total_constant_size_parser_kind",
         "equation_LowParse.Spec.Int.parse_u8_kind",
-        "token_correspondence_Format.ECCurveType.byte_of_ecCurveType",
-        "token_correspondence_Format.ECCurveType.ecCurveType_of_byte"
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "d2cb1f759071adf56b9be7f09a1b72e5"
+      "90dfe5149f815b4ef8a9e4ce1a0ec7e8"
     ]
   ]
 ]
