@@ -39,6 +39,7 @@ let main (): St C.exit_code =
     iter [
       "BufferBytes", BufferBytes.main;
       "TLSConstants", TLSConstants.main;
+      "AEAD", AEAD.main;
       "StAE", StAE.main;
       "CommonDH", CommonDH.main;
       "Handshake", handshake;

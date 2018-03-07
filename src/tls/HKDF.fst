@@ -196,3 +196,30 @@ val expand_secret:
 let expand_secret #ha prk label hv =
   expand_label prk label hv (UInt32.v (Hashing.Spec.tagLen ha))
   
+(*-------------------------------------------------------------------*)
+(*
+  Derive-Secret(Secret, Label, Messages) =
+      HKDF-Expand-Label(Secret, Label,
+             Transcript-Hash(Messages), Hash.length)
+             *)
+
+val derive_secret:
+  ha:hash_alg ->
+  secret: hkey ha ->
+  label: string{length (bytes_of_string label) < 256-6} ->
+  hs_hash: bytes{length hs_hash < 256} ->
+  ST (lbytes32 (Hashing.Spec.tagLen ha))
+  (requires fun h -> True)
+  (ensures fun h0 _ h1 -> modifies_none h0 h1)
+
+let derive_secret ha secret label hashed_log =
+  let lbl = tls13_prefix @| bytes_of_string label in
+  cut(length lbl < 256);
+  lemma_repr_bytes_values (Hashing.Spec.tagLength ha);
+  lemma_repr_bytes_values (length lbl);
+  lemma_repr_bytes_values (length hashed_log);
+  let info =
+  bytes_of_int 2 (Hashing.Spec.tagLength ha) @|
+  vlbytes 1 lbl @|
+  vlbytes 1 hashed_log in
+  expand #ha secret info (Hashing.Spec.tagLen ha)

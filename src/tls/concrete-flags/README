@@ -1,0 +1,7 @@
+To get a complete set of flags, one needs:
+- Debug or NoDebug, as well as
+- one of Kremlin, OCaml, generic or OpenSSL, and
+- the file present in this directory.
+
+Makefile.common knows how to switch on MITLS_NODEBUG; this is set by the Everest
+script.

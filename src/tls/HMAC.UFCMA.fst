@@ -7,6 +7,8 @@ open Mem
 
 module MM = FStar.Monotonic.Map
 
+type lbytes32 n = FStar.Bytes.lbytes (UInt32.v n)
+
 let ipkg = Pkg.ipkg
 
 let model = Flags.model

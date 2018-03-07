@@ -28,7 +28,7 @@ let print s = discard (IO.debug_print_string ("NGO| "^s^"\n"))
 unfold val trace: s:string -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
-unfold let trace = if Flags.debug_NGO then print else (fun _ -> ())
+unfold let trace = if DebugFlags.debug_NGO then print else (fun _ -> ())
 
 
 //17-05-01 relocate these printing functions?!
@@ -406,7 +406,7 @@ let ns_rel (#r:role) (#cfg:config) (#resume:resumeInfo r)
   (exists ns0. ns_step ns ns0 /\ ns_step ns0 ns')
 
 assume val ns_rel_monotonic: #r:role -> #cfg:config -> #resume:resumeInfo r ->
-  Lemma (Preorder.preorder_rel (negotiationState r cfg resume) (ns_rel #r #cfg #resume))
+  Lemma (Preorder.preorder_rel (* (negotiationState r cfg resume) *) (ns_rel #r #cfg #resume))
 
 noeq type t (region:rgn) (role:TLSConstants.role) : Type0 =
   | NS:
@@ -646,39 +646,40 @@ let rec map_ST f x = match x with
 
 let i_psk_info i = (i, PSK.psk_info i)
 
-val client_ClientHello: #region:rgn -> t region Client
-  -> option CommonDH.clientKeyShare
-  -> St offer
-  // requires C_Init? i.e.  st = transcript_state client_config []
-  // ensures C_offer? i.e. st = transcript_state client_config [ClientHello offer]
-  //                                /\ witnessed (fun h -> sel h st == offer)
+// cwinter: unused?
+// val client_ClientHello: #region:rgn -> t region Client
+//   -> option CommonDH.clientKeyShare
+//   -> St offer
+//   // requires C_Init? i.e.  st = transcript_state client_config []
+//   // ensures C_offer? i.e. st = transcript_state client_config [ClientHello offer]
+//   //                                /\ witnessed (fun h -> sel h st == offer)
 
-  (ensures fun h0 offer h1 ->
-    let st0 = sel h0 n in
-    let st1 = sel h1 n in
-    offer_v st == offer /\ (* also use computeOffer here? *)
-    replay_transcript st0.config [ClientHello offer] (*ghost*) == Correct st1)
+//   (ensures fun h0 offer h1 ->
+//     let st0 = sel h0 n in
+//     let st1 = sel h1 n in
+//     offer_v st == offer /\ (* also use computeOffer here? *)
+//     replay_transcript st0.config [ClientHello offer] (*ghost*) == Correct st1)
 
-let client_ClientHello #region ns oks =
-  //17-04-22 fix this in the definition of offer?
-  let oks' =
-    match oks with
-    | Some ks -> Some (CommonDH.ClientKeyShare ks)
-    | None -> None in
-  let _, pskid = ns.resume in
-  let pskinfo = map_ST i_psk_info pskid in
-  match HST.op_Bang ns.state with
-  | C_Init _ ->
-      trace(if
-        (match pskinfo with
-        | (_, i) :: _ -> i.allow_early_data && Some? ns.cfg.max_early_data // Must be the first PSK
-        | _ -> false)
-      then "Offering a PSK compatible with 0-RTT" else "No PSK or 0-RTT disabled");
-      let offer = computeOffer Client ns.cfg ns.resume ns.nonce oks' pskinfo in
-      trace ("offering client extensions "^string_of_option_extensions offer.ch_extensions);
-      trace ("offering cipher suites "^string_of_ciphersuites offer.ch_cipher_suites);
-      HST.op_Colon_Equals ns.state (C_Offer offer);
-      offer
+// let client_ClientHello #region ns oks =
+//   //17-04-22 fix this in the definition of offer?
+//   let oks' =
+//     match oks with
+//     | Some ks -> Some (CommonDH.ClientKeyShare ks)
+//     | None -> None in
+//   let _, pskid = ns.resume in
+//   let pskinfo = map_ST i_psk_info pskid in
+//   match HST.op_Bang ns.state with
+//   | C_Init _ ->
+//       trace(if
+//         (match pskinfo with
+//         | (_, i) :: _ -> i.allow_early_data && Some? ns.cfg.max_early_data // Must be the first PSK
+//         | _ -> false)
+//       then "Offering a PSK compatible with 0-RTT" else "No PSK or 0-RTT disabled");
+//       let offer = computeOffer Client ns.cfg ns.resume ns.nonce oks' pskinfo in
+//       trace ("offering client extensions "^string_of_option_extensions offer.ch_extensions);
+//       trace ("offering cipher suites "^string_of_ciphersuites offer.ch_cipher_suites);
+//       HST.op_Colon_Equals ns.state (C_Offer offer);
+//       offer
 
 let group_of_hrr hrr : option CommonDH.group =
   match List.Tot.find (Extensions.E_key_share?) hrr.hrr_extensions with
@@ -711,7 +712,7 @@ let client_HelloRetryRequest #region (ns:t region Client) hrr (s:option share) =
       match find_pske offer with
       | None -> []
       | Some pskl -> pskl in
-    let (| g, gx |) = s in
+    let Some (| g, gx |) = s in
 
     (match group_of_hrr hrr, find_supported_groups offer with
     | Some g', Some ngl ->
@@ -1067,76 +1068,34 @@ val client_ServerKeyExchange: #region:rgn -> t region Client ->
   ocr:option HandshakeMessages.cr ->
   St (result mode)
 let client_ServerKeyExchange #region ns crt ske ocr =
-  match !ns.state with
-  | C_Mode mode ->
-    match ske.ske_kex_s with
-    | KEX_S_RSA _ ->
-      Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Illegal message")
-    | KEX_S_DHE gy ->
-      let scert = Cert.chain_up crt.crt_chain in
-      if (not ns.cfg.check_peer_certificate) ||
-         Cert.validate_chain crt.crt_chain true ns.cfg.peer_name ns.cfg.ca_file
-      then
-        let ske_tbs = kex_s_to_bytes ske.ske_kex_s in
-        let sa =
-          match ske.ske_signed_params.sig_algorithm with
-          | None -> signatureScheme_of_mode mode [] // TLS < 1.2
-          | Some sa' -> // TLS 1.2 or 1.3
-            match signatureScheme_of_mode mode [sa'] with
-            | None -> None
-            | Some sa -> if sa = sa' then Some sa else None
-        in
-        match sa with
-        | None ->
-          Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Signature algorithm negotiation failed")
-        | Some sa ->
-          begin
-          let csr = ns.nonce @| mode.n_server_random in
-          let tbs = to_be_signed mode.n_protocol_version Server (Some csr) ske_tbs in
-          let chain = Cert.chain_down scert in
-          let valid = verify sa chain tbs ske.ske_signed_params.sig_signature in
-          trace ("ServerKeyExchange signature: " ^ (if valid then "Valid" else "Invalid"));
-          if not valid then
-            Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Failed to check SKE signature")
-          else
-            let Mode offer hrr pv sr sid cs pski sext _ _ _ gx = mode in
-            let mode = Mode offer hrr pv sr sid cs pski sext (Some gy) ocr (Some scert) gx in
-            let ccert = None in // TODO
-            ns.state := C_WaitFinished2 mode ccert;
-            Correct mode
-          end
-       else
-         Error (AD_certificate_unknown_fatal, perror __SOURCE_FILE__ __LINE__ "Certificate validation failed")
-
-// cwinter: quic2c
-  // let mode = getMode ns in
-  // match ske.ske_kex_s with
-  // | KEX_S_RSA _ ->
-  //   Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Illegal message")
-  // | KEX_S_DHE gy ->
-  //   let ske_tbs = kex_s_to_bytes ske.ske_kex_s in
-  //   let salgs = supported_signatureSchemes_12 mode in
-  //   let salgs =
-  //     match ske.ske_signed_params.sig_algorithm with
-  //     | None -> salgs
-  //     | Some sa' -> List.Helpers.filter_aux sa' op_Equality salgs in
-  //   match salgs with
-  //   | [] ->
-  //     Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Signature algorithm negotiation failed")
-  //   | sa::_ ->
-  //     let csr = ns.nonce @| mode.n_server_random in
-  //     let tbs = to_be_signed mode.n_protocol_version Server (Some csr) ske_tbs in
-  //     let valid = cert_verify_cb ns.cfg crt.crt_chain sa tbs ske.ske_signed_params.sig_signature in
-  //     trace ("ServerKeyExchange signature: " ^ (if valid then "Valid" else "Invalid"));
-  //     if not valid then
-  //       Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Failed to check SKE signature")
-  //     else
-  //       let Mode offer hrr pv sr sid cs pski sext _ _ _ gx = mode in
-  //       let scert = Some (Cert.chain_up crt.crt_chain, sa) in
-  //       let mode = Mode offer hrr pv sr sid cs pski sext (Some gy) ocr scert gx in
-  //       let ccert = None in // TODO
-  //       HST.op_Colon_Equals ns.state (C_WaitFinished2 mode ccert);
-  //       Correct mode
+  let mode = getMode ns in
+  match ske.ske_kex_s with
+  | KEX_S_RSA _ ->
+    Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Illegal message")
+  | KEX_S_DHE gy ->
+    let ske_tbs = kex_s_to_bytes ske.ske_kex_s in
+    let salgs = supported_signatureSchemes_12 mode in
+    let salgs =
+      match ske.ske_signed_params.sig_algorithm with
+      | None -> salgs
+      | Some sa' -> List.Helpers.filter_aux sa' op_Equality salgs in
+    match salgs with
+    | [] ->
+      Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Signature algorithm negotiation failed")
+    | sa::_ ->
+      let csr = ns.nonce @| mode.n_server_random in
+      let tbs = to_be_signed mode.n_protocol_version Server (Some csr) ske_tbs in
+      let valid = cert_verify_cb ns.cfg crt.crt_chain sa tbs ske.ske_signed_params.sig_signature in
+      trace ("ServerKeyExchange signature: " ^ (if valid then "Valid" else "Invalid"));
+      if not valid then
+        Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Failed to check SKE signature")
+      else
+        let Mode offer hrr pv sr sid cs pski sext _ _ _ gx = mode in
+        let scert = Some (Cert.chain_up crt.crt_chain, sa) in
+        let mode = Mode offer hrr pv sr sid cs pski sext (Some gy) ocr scert gx in
+        let ccert = None in // TODO
+        HST.op_Colon_Equals ns.state (C_WaitFinished2 mode ccert);
+        Correct mode
 
 val clientComplete_13: #region:rgn -> t region Client ->
   HandshakeMessages.ee ->
@@ -1283,6 +1242,11 @@ let compute_cs13 cfg o psks shares server_cert =
   let psk_kex = find_psk_key_exchange_modes o in
   Correct (compute_cs13_aux 0 o psks g_gx ncs psk_kex server_cert, g_hrr)
 
+let rec iutf8 (m:bytes) : St (s:string{String.length s < pow2 30 /\ utf8_encode s = m}) =
+    match iutf8_opt m with
+    | None -> trace ("Not a utf8 encoding of a string"); iutf8 m
+    | Some s -> s
+
 // Registration and filtering of PSK identities
 let rec filter_psk (l:list Extensions.pskIdentity)
   : St (list (PSK.pskid * PSK.pskInfo))
@@ -1291,7 +1255,8 @@ let rec filter_psk (l:list Extensions.pskIdentity)
   | [] -> []
   | (id, _) :: t ->
     //18-02-26 ?? review
-    let id = utf8 (iutf8 id) in // FIXME FStar.Bytes
+    let id8 = iutf8 id in
+    let id = utf8_encode id8 in // FIXME FStar.Bytes
     match Ticket.check_ticket13 id with
     | Some info -> (id, info) :: (filter_psk t)
     | None ->
@@ -1304,7 +1269,7 @@ let rec register_shares (l:list pre_share)
   : St (list share) =
   match l with
   | [] -> []
-  | (| g, gx |) :: t -> (| g, CommonDH.register #g gx |) :: (register_shares t)
+  | (| g, gx |) :: t -> (| g, CommonDH.register_dhi #g gx |) :: (register_shares t)
 
 //17-03-30 still missing a few for servers.
 type serverMode =
@@ -1479,6 +1444,12 @@ let aux_extension_ok (o1, hrr) (e:Extensions.extension) =
             true) // FIXME
             //(extensionBytes e) = (extensionBytes e'))
 
+let rec forall_aux (#a:Type) (#b:Type) (env:b) (f: b -> a -> Tot bool) (l:list a)
+  : Tot bool
+  = match l with
+    | [] -> true
+    | hd::tl -> if f env hd then forall_aux env f tl else false
+            
 val server_ClientHello: #region:rgn -> t region Server ->
   HandshakeMessages.ch ->
   St (result serverMode)
@@ -1499,7 +1470,7 @@ let server_ClientHello #region ns offer =
       List.Tot.mem hrr.hrr_cipher_suite o2.ch_cipher_suites &&
       o1.ch_compressions = o2.ch_compressions &&
       Some? o2.ch_extensions && Some? o1.ch_extensions &&
-      TLSConstants.forall_aux (o1, hrr) aux_extension_ok (Some?.v o2.ch_extensions)
+      forall_aux (o1, hrr) aux_extension_ok (Some?.v o2.ch_extensions)
     then
       let sm = computeServerMode ns.cfg offer ns.nonce in
       match sm with
@@ -1524,9 +1495,10 @@ let server_ClientHello #region ns offer =
       // record the initial offer and return the HRR to HS
       ns.state := S_HRR offer hrr;
       sm
-    | Correct (ServerMode m) ->
-      trace ("negotiated "^string_of_pv m.n_protocol_version^" "^string_of_ciphersuite m.n_cipher_suite);
-      HST.op_Colon_Equals ns.state (S_HRR offer hrr);
+    | Correct (ServerMode m certNego) ->
+      trace ("negotiated "^string_of_pv m.n_protocol_version^" "^string_of_ciphersuite m.n_cipher_suite);      
+      // cwinter: does this belong here?
+      // ns.state := S_HRR offer hrr;
       sm
     | Correct (ServerMode m cert) ->
       // Forcing HRR for source address validation
@@ -1538,7 +1510,7 @@ let server_ClientHello #region ns offer =
             Extensions.E_supported_versions (Extensions.ServerPV TLS_1p3);
             Extensions.E_cookie (CoreCrypto.random 32)
           ]}) in
-        ns.state := (S_HRR offer hrr);
+        ns.state := S_HRR offer hrr;
         Correct (ServerHelloRetryRequest hrr)
       else
        begin

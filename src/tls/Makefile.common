@@ -1,8 +1,14 @@
-HACL_HOME     ?= ../../../hacl-star
-FSTAR_HOME    ?= ../../../FStar
-MITLS_HOME    ?= ../..
-KREMLIN_HOME  ?= ../../../kremlin
-MLCRYPTO_HOME ?= ../../../MLCrypto
+HACL_HOME       ?= ../../../hacl-star
+FSTAR_HOME      ?= ../../../FStar
+MITLS_HOME      ?= ../..
+KREMLIN_HOME    ?= ../../../kremlin
+MLCRYPTO_HOME   ?= ../../../MLCrypto
+FLAVOR          ?= Model
+CONCRETE_FLAVOR ?=
+
+SHELL=/bin/sh
+
+# Project-wide Prerequisites
 
 ifeq ($(OS),Windows_NT)
   LIB_EXT?=.dll
@@ -10,14 +16,18 @@ else
   LIB_EXT?=.so
 endif
 
-$(MITLS_HOME)/libs/ffi/FFICallbacks.cmxa $(MITLS_HOME)/src/pki/libmipki.$(LIB_EXT):
-	$(MAKE) -C $(dir $@)
+# PREREQUISITES= \
+# 	$(MITLS_HOME)/libs/ffi/FFICallbacks.cmxa \
+# 	$(MITLS_HOME)/src/pki/libmipki.$(LIB_EXT)
 
-prerequisites: \
-	$(MITLS_HOME)/libs/ffi/FFICallbacks.cmxa \
-	$(MITLS_HOME)/src/pki/libmipki.$(LIB_EXT)
+# $(PREREQUISITES):
+# 	$(MAKE) -C $(MITLS_HOME)/libs/ffi
+# 	$(MAKE) -C $(MITLS_HOME)/src/pki
 
-INCLUDE_PATHS= \
+
+# Paths and Commands
+
+INCLUDE_PATHS = \
 	$(FSTAR_HOME)/contrib/CoreCrypto/fst/ \
 	$(HACL_HOME)/secure_api \
 	$(HACL_HOME)/secure_api/utils \
@@ -30,102 +40,48 @@ INCLUDE_PATHS= \
 	$(MITLS_HOME)/src/lowparse \
 	$(SPECINC)
 
-CACHE_DIR=cache/$(FLAVOR)
+ifeq (,$(MITLS_NODEBUG))
+  INCLUDE_PATHS += ./concrete-flags/Debug
+else
+  INCLUDE_PATHS += ./concrete-flags/NoDebug
+endif
 
-FSTAR=$(FSTAR_HOME)/bin/fstar.exe --cache_dir $(CACHE_DIR) --cache_checked_modules --warn_error -271 --warn_error -240 --silent $(OTHERFLAGS)
+FSTAR=$(FSTAR_HOME)/bin/fstar.exe --cache_dir $(CACHE_DIR) --cache_checked_modules $(OTHERFLAGS)
 
-VFLAGS?=--use_hints --use_hint_hashes --record_hints
-# --use_two_phase_tc true
-# in the past, we also used --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection
+VFLAGS?=--use_hints --use_hint_hashes --record_hints --warn_error -271
 
-EXTRACT_DIR=extract/$(FLAVOR)
+HINTS_DIR  ?= .
+CACHE_DIR   = cache/$(FLAVOR)$(CONCRETE_FLAVOR)
+EXTRACT_DIR = extract/$(FLAVOR)$(CONCRETE_FLAVOR)
+DEP_FILE    = $(CACHE_DIR)/.depend
 
-IKVER=$(addsuffix .fst,Mem Pkg Token.UF1CMA HMAC.UFCMA IV AEAD.Pkg Idx Pkg.Tree KDF KDF.Rekey Extract0 Extract1.PRF Extract1.ODH Extract1 Extract2)
+
+# Project Files
 
 # Add more roots here!
-ROOTS ?= $(IKVER) Record.fst Handshake.fst 
-# $(IKVER)
-# TLS.fst Handshake.Secret.fst HandshakeLog.fst Handshake.fst 
-
-# CF: unused, but tracking what we used to verify.
-OLD_VERIFY= \
-Flags \
-Mem \
-TLSError \
-TLSConstants \
-Transport \
-Nonce \
-RSAKey \
-DHGroup \
-ECGroup \
-CommonDH \
-PMS \
-Hashing.Spec \
-Hashing.OpenSSL \
-Hashing \
-Hashing.CRF \
-HMAC \
-Cert \
-Signature \
-TLSInfo \
-IdNonce \
-Extensions \
-Range \
-DataStream \
-Alert \
-Content \
-StreamPlain \
-StreamAE \
-MasterSecret \
-StatefulPlain \
-LHAEPlain \
-AEAD_GCM \
-MAC \
-AEADProvider \
-StatefulLHAE \
-Record \
-StAE \
-HandshakeLog \
-Pkg \
-Idx \
-Pkg.Tree \
-IV \
-KDF \
-KDF.Rekey \
-Extract0 \
-Extract1.PRF \
-Extract1.ODH \
-Extract1 \
-Extract2 \
-KeySchedule \
-Handshake.Secret \
-Handshake \
-StreamDeltas \
-HKDF \
-Epochs \
-Connection \
-ConnInvariant \
-TLS \
-FFI \
-QUIC
-
-EXTRACT_DIR=extract/$(FLAVOR)
-
 ROOTS ?= TLS.fst QUIC.fst Test.Main.fst 
 
-EVERYTHING= $(wildcard *.fst *.fsti Make* ../pki* ../../libs/ffi/* ideal-flags/* concrete-flags/* concrete-flags/$(FLAVOR)/*)
+EVERYTHING=$(wildcard *.fst *.fsti Make* $(MITLS_HOME)/src/pki/* $(MITLS_HOME)/libs/ffi/* ideal-flags/* concrete-flags/* concrete-flags/$(FLAVOR)$(CONCRETE_FLAVOR)/*)
 
-$(CACHE_DIR)/.depend: $(EVERYTHING)
+# Production Rules
+
+$(DEP_FILE): $(EVERYTHING) 
 ifdef VERBOSE
-	@echo -e "\033[1;33m=== Computing $(FLAVOR) dependencies ...\033[;37m"
+	@echo "\033[1;33m=== Computing $(FLAVOR)$(CONCRETE_FLAVOR) dependencies ...\033[;37m"
 endif
-	mkdir -p $(EXTRACT_DIR)
-	mkdir -p $(CACHE_DIR)
-	$(FSTAR) --cache_dir $(CACHE_DIR) --odir $(EXTRACT_DIR) --extract $(EXTRACT) --dep full $(addprefix --include , $(INCLUDE_PATHS)) $(ROOTS) > $(CACHE_DIR)/.depend
+	@mkdir -p $(EXTRACT_DIR)
+	@mkdir -p $(CACHE_DIR)
+	@mkdir -p $(HINTS_DIR)
+	$(subst \\,, \
+		$(FSTAR) --cache_dir $(CACHE_DIR) --odir $(EXTRACT_DIR) --extract $(EXTRACT) \
+			--dep full \
+			$(addprefix --include , $(INCLUDE_PATHS)) \
+			$(ROOTS) > $(DEP_FILE) \
+	)
 
-depend: $(CACHE_DIR)/.depend
+depend: $(DEP_FILE)
 
--include $(CACHE_DIR)/.depend
+-include $(DEP_FILE)
 
 # the touch is needed because make may decide to invoke fstar on this
 # target because the timestamp on, say, the .fst file changed, and
@@ -134,31 +90,29 @@ depend: $(CACHE_DIR)/.depend
 # timestamp on the .checked file is updated to avoid make running this
 # rule again.
 
-%.checked:
+%.checked: | $(DEP_FILE)
 ifdef VERBOSE
-	@echo -e "\033[0;35m=== Producing $@ ...\033[0;37m"
+	@echo "\033[1;35m=== Producing $@ ...\033[;37m"
 endif
-	$(FSTAR) $(VFLAGS) $(addprefix --include , $(INCLUDE_PATHS)) $<
+	$(subst \\,, \
+		$(FSTAR) $(VFLAGS) --hint_file $(HINTS_DIR)/$<.hints $(addprefix --include , $(INCLUDE_PATHS)) $< \
+	)
 	@touch $@
-
-
-# typechecks one specific  file (not its dependencies),
-# but still produces a .checked file; this is convenient but not safe.
-# %.fsti-ver %.fst-ver: $(CACHE_DIR)/%.fst.checked:
-# 	$(V	FSTAR) \
-# 		$(addprefix --include , $(INCLUDE_PATHS)) \
-# 		$(subst $(CACHE_DIR)/,,$(subst .lax,,$<)) \
-#         $(subst -ver,,$@)
-
-# too demanding?
-# %.fst-ver: $(addprefix $(CACHE_DIR)/, $(addsuffix .checked, %.fst))
-#	echo -e $%
 
 $(EXTRACT_DIR)/%.$(EXTENSION):
 ifdef VERBOSE
-	@echo -e "\033[1;32m=== Extracting $@ ...\033[;37m"
+	@echo "\033[1;32m=== Extracting $@ ...\033[;37m"
 endif
-	$(FSTAR) $(VFLAGS) --codegen $(FLAVOR) --cache_dir $(CACHE_DIR) --odir $(EXTRACT_DIR) $(addprefix --include , $(INCLUDE_PATHS)) --extract_module $(basename $(notdir $(subst .checked,,$<))) $(subst $(CACHE_DIR)/,,$(subst .checked,,$<))
+	$(subst \\,, \
+		$(FSTAR) $(VFLAGS) \
+			--codegen $(FLAVOR) \
+			--cache_dir $(CACHE_DIR) \
+			--hint_file $(HINTS_DIR)/$(subst .lax,,$(subst .checked,,$<)).hints \
+			--odir $(EXTRACT_DIR) \
+			$(addprefix --include , $(INCLUDE_PATHS)) \
+			--extract_module $(basename $(notdir $(subst .lax,,$(subst .checked,,$<)))) \
+			$(subst $(CACHE_DIR)/,,$(subst .lax,,$(subst .checked,,$<))) \
+	)
 
 # Avoids polluting the KreMLin source tree with a random .o file
 extract/copied/%.c: $(KREMLIN_HOME)/kremlib/%.c
@@ -169,5 +123,7 @@ extract/copied/%.c: $(KREMLIN_HOME)/kremlib/%.c
 # Makefile.Kremlin in parallel
 .PRECIOUS: extract/copied/%.c
 
+
+# Rules for Interactive Mode
 %.fst-in %.fsti-in:
 	@echo $(addprefix --include , $(INCLUDE_PATHS)) --cache_dir $(CACHE_DIR) --cache_checked_modules $(OTHERFLAGS) --use_hints --use_hint_hashes

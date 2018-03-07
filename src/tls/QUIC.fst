@@ -37,7 +37,7 @@ let print s = discard (IO.debug_print_string ("QIC| "^s^"\n"))
 unfold val trace: s:string -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
-unfold let trace = if Flags.debug_QUIC then print else (fun _ -> ())
+unfold let trace = if DebugFlags.debug_QUIC then print else (fun _ -> ())
 
 
 // an integer carrying the fatal alert descriptor

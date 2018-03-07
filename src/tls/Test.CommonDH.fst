@@ -26,9 +26,9 @@ let print s = discard (IO.debug_print_string (prefix^": "^s^".\n"))
 val test: DH.group -> St bool
 let test group =
   let initiator_key_and_share = DH.keygen group in
-  let gx = DH.pubshare initiator_key_and_share in
-  let gy, gxy = DH.dh_responder gx in
-  let gxy' = DH.dh_initiator initiator_key_and_share gy in
+  let gx = DH.ipubshare initiator_key_and_share in
+  let gy, gxy = DH.dh_responder group gx in
+  let gxy' = DH.dh_initiator group initiator_key_and_share gy in
   let gxy  = hex_of_bytes gxy in
   let gxy' = hex_of_bytes gxy' in
   if gxy = gxy' then true
@@ -58,7 +58,7 @@ let rec test_groups (groups:namedGroupList) : St bool =
   | g :: gs ->
     let Some group = DH.group_of_namedGroup g in
     print ("Testing " ^ DH.string_of_group group);
-    test group && test_groups gs
+    if not (test group) then false else test_groups gs
   | _ -> true
 
 // Called from Test.Main

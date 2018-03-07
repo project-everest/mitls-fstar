@@ -25,8 +25,8 @@ module HS = FStar.HyperStack
 let model = Flags.model
 
 type bytes = FStar.Bytes.bytes
-let lbytes32 = FStar.Bytes.lbytes32
-
+//let lbytes32 = FStar.Bytes.lbytes32
+type lbytes32 n = FStar.Bytes.lbytes (UInt32.v n)
 
 /// Index packages provide an abstract index for instances, with an
 /// interface to project (ghost) indexes to (concrete) runtime

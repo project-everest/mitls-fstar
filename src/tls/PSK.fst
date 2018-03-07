@@ -125,7 +125,7 @@ let valid_app_psk (ctx:pskInfo) (i:psk_identifier) (h:mem) =
   | Some (Entry _ c _) -> b2t (c = ctx)
   | _ -> False
 
-type pskid = i:psk_identifier{registered_psk i}
+type pskid = i:psk_identifier //{registered_psk i} //cwinter: refinement causes segfault in TLSInfo.fst
 
 let psk_value (i:pskid) : ST (app_psk i)
   (requires (fun h0 -> True))

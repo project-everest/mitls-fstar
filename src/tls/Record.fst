@@ -32,7 +32,7 @@ private let print s = discard (IO.debug_print_string ("REC| "^s^"\n"))
 private unfold val trace: s:string -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
-private unfold let trace = if Flags.debug_Record then print else (fun _ -> ())
+private unfold let trace = if DebugFlags.debug_Record then print else (fun _ -> ())
 
 
 private assume val p_of_f: f:bytes -> p:FStar.Bytes.bytes { FStar.Bytes.length p = FStar.Bytes.length f } 
@@ -41,6 +41,7 @@ private let ctBytes x = f_of_p (ctBytes x)
 private let parseCT (x: lbytes 1) = parseCT (p_of_f x)
 private let versionBytes x = f_of_p (versionBytes x) 
 private let parseVersion (x: lbytes 2) = parseVersion (p_of_f x)
+
 
 // ------------------------outer packet format -------------------------------
 

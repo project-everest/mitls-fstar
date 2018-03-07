@@ -178,7 +178,7 @@ type abbrInfo =
 type resumeInfo (r:role): Type0 =
   //17-04-19  connect_time:lbytes 4  * // initial Nonce.timestamp() for the connection
   o:option bytes {r=Server ==> None? o} * // 1.2 ticket
-  l:list PSK.pskid {r=Server ==> l = []} // assuming we do the PSK lookups locally
+  l:list PSK.pskid {r=Server ==> List.Tot.isEmpty l} // assuming we do the PSK lookups locally
 
 // for sessionID. we treat empty bytes as the absence of identifier,
 // i.e. the session is not resumable.
@@ -279,7 +279,7 @@ let safeVD si = honestMS (msid si) && strongVD(vdAlg si)
 assume val int_cma: macAlg -> Tot bool
 let strongAuthSI si = true //TODO: fix
 
-assume val strongAESI: sessionInfo -> Tot bool
+// assume val strongAESI: sessionInfo -> Tot bool
 
 // -------------------------------------------------------------------
 // Indexing instances of derived keys for AE etc.
@@ -595,7 +595,7 @@ type dishonest (i:index) =
     HST.witnessed (MM.contains log i false)
   else True)
 
-// type esId = i:pre_esId{valid (I_ES i)}
+type esId = i:pre_esId{valid (I_ES i)}
 // type binderId = i:pre_binderId{valid (I_BINDER i)}
 // type hsId = i:pre_hsId{valid (I_HS i)}
 // type asId = i:pre_asId{valid (I_AS i)}
@@ -705,22 +705,22 @@ let sinfo_to_string (si:sessionInfo) = "TODO"
 
 (* ADL commenting until 1.2 stateful idealization is restored
 
-assume logic type keyCommit   : csRands -> protocolVersion -> aeAlg -> negotiatedExtensions -> Type
-assume logic type keyGenClient: csRands -> protocolVersion -> aeAlg -> negotiatedExtensions -> Type
-assume logic type sentCCS     : role -> sessionInfo -> Type
-assume logic type sentCCSAbbr : role -> abbrInfo -> Type
+// assume logic type keyCommit   : csRands -> protocolVersion -> aeAlg -> negotiatedExtensions -> Type
+// assume logic type keyGenClient: csRands -> protocolVersion -> aeAlg -> negotiatedExtensions -> Type
+// assume logic type sentCCS     : role -> sessionInfo -> Type
+// assume logic type sentCCSAbbr : role -> abbrInfo -> Type
 
-// ``the honest participants of handshake with this csr use matching aeAlgs''
-type matches_id (i:id) =
-    keyCommit i.csrConn i.pv i.aeAlg i.ext
-    /\ keyGenClient i.csrConn i.pv i.aeAlg i.ext
+// // ``the honest participants of handshake with this csr use matching aeAlgs''
+// type matches_id (i:id) =
+//     keyCommit i.csrConn i.pv i.aeAlg i.ext
+//     /\ keyGenClient i.csrConn i.pv i.aeAlg i.ext
 
-// This index is safe for MS-based key derivation
-val safeKDF: i:id -> Tot (b:bool { b=true <==> ((honestMS i.msId && strongKDF i.kdfAlg) /\ matches_id i) })
-//defining this as true makes the context inconsitent!
-let safeKDF _ = unsafe_coerce false //TODO: THIS IS A PLACEHOLDER
+// // This index is safe for MS-based key derivation
+// val safeKDF: i:id -> Tot (b:bool { b=true <==> ((honestMS i.msId && strongKDF i.kdfAlg) /\ matches_id i) })
+// //defining this as true makes the context inconsitent!
+// let safeKDF _ = unsafe_coerce false //TODO: THIS IS A PLACEHOLDER
 
-*)
+// *)
 
 // -----------------------------------------------------------------------
 // The two main safety properties for the record layer

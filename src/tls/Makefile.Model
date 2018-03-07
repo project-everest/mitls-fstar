@@ -5,10 +5,80 @@ EXTENSION = checked
 EXTRACT   = Nothing
 SPECINC   = $(MITLS_HOME)/src/tls/ideal-flags $(MITLS_HOME)/src/tls/concrete-flags/generic
 # default VFLAGS
+# in the past, we also used --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection
 
 include Makefile.common
 
-model verify: prerequisites $(addprefix $(CACHE_DIR)/, $(addsuffix .checked, $(notdir $(ALL_FST_FILES))))
+model verify: $(addprefix $(CACHE_DIR)/, $(addsuffix .checked, $(notdir $(ALL_FST_FILES))))
 
 clean:
-	rm -rf $(CACHE_DIR)/.depend
+	rm -rf $(DEP_FILE)
+
+
+# IKVER=$(addsuffix .fst,Mem Pkg Token.UF1CMA Token HMAC.UFCMA IV AEAD.Pkg Idx Pkg.Tree KDF KDF.Rekey Extract0 Extract1.PRF Extract1.ODH Extract1 Extract2)
+# ROOTS ?= $(IKVER) Record.fst Handshake.fst 
+# $(IKVER)
+# TLS.fst Handshake.Secret.fst HandshakeLog.fst Handshake.fst 
+
+
+# # CF: unused, but tracking what we used to verify.
+# OLD_VERIFY= \
+# Flags \
+# Mem \
+# TLSError \
+# TLSConstants \
+# Transport \
+# Nonce \
+# RSAKey \
+# DHGroup \
+# ECGroup \
+# CommonDH \
+# PMS \
+# Hashing.Spec \
+# Hashing.OpenSSL \
+# Hashing \
+# Hashing.CRF \
+# HMAC \
+# Cert \
+# Signature \
+# TLSInfo \
+# IdNonce \
+# Extensions \
+# Range \
+# DataStream \
+# Alert \
+# Content \
+# StreamPlain \
+# StreamAE \
+# MasterSecret \
+# StatefulPlain \
+# LHAEPlain \
+# AEAD_GCM \
+# MAC \
+# AEADProvider \
+# StatefulLHAE \
+# Record \
+# StAE \
+# HandshakeLog \
+# Pkg \
+# Idx \
+# Pkg.Tree \
+# IV \
+# KDF \
+# KDF.Rekey \
+# Extract0 \
+# Extract1.PRF \
+# Extract1.ODH \
+# Extract1 \
+# Extract2 \
+# KeySchedule \
+# Handshake.Secret \
+# Handshake \
+# StreamDeltas \
+# HKDF \
+# Epochs \
+# Connection \
+# ConnInvariant \
+# TLS \
+# FFI \
+# QUIC

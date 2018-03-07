@@ -31,7 +31,7 @@ let print s = discard (IO.debug_print_string ("HS | "^s^"\n"))
 unfold val trace: s:string -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
-unfold let trace = if Flags.debug_HS then print else (fun _ -> ())
+unfold let trace = if DebugFlags.debug_HS then print else (fun _ -> ())
 
 
 // TODO : implement resumption
@@ -990,7 +990,7 @@ let server_ClientHello hs offer obinders =
         if pv = TLS_1p3  then
         match mode.Nego.n_pski with
         | None ->
-            let server_share, None = Secret.server13_init cr sr cs None g_gx in
+            let server_share, None = Secret.server13_init cr sr cs None g_gx (HandshakeLog.transcript h1 hs.log) in
             Correct server_share
         | Some i -> (
             trace ("accepted TLS 1.3 psk #"^string_of_int i);
@@ -999,7 +999,7 @@ let server_ClientHello hs offer obinders =
             let Some (id, _) = List.Tot.nth psks i in
             let Some tag = List.Tot.nth (Some?.v obinders) i in
             assume(PSK.registered_psk id);
-            let server_share, Some binderKey = Secret.server13_init cr cs (Some id) g_gx in
+            let server_share, Some binderKey = Secret.server13_init cr cs (Some id) g_gx (HandshakeLog.transcript h1 hs.log) in
             if verify_binder hs binderKey tag tlen
             then Correct server_share
             else
