@@ -77,23 +77,44 @@ endif
 			$(addprefix --include , $(INCLUDE_PATHS)) \
 			$(ROOTS) > $(DEP_FILE) \
 	)
+	#sed -i.bak '/FStar./s/.checked/.checked.lax/g' $(DEP_FILE)
 
 depend: $(DEP_FILE)
 
 -include $(DEP_FILE)
 
-# Note: The $(subst ...) turns command strings into single-line strings, so they are easier to read/follow.
+# REMARK:
+# $(subst ...) turns command strings into single-line strings, so they are
+# easier to read/follow.
 
-# the touch is needed because make may decide to invoke fstar on this
+# REMARK:
+# These rules have an implicit prerequisite, coming from $(DEP_FILE),
+# on the source fst/fsti file
+
+# REMARK
+# "@touch $@" is needed because make may decide to invoke fstar on this
 # target because the timestamp on, say, the .fst file changed, and
 # then fstar may detect that there was no change in content and not
 # re-emit the .fst.checked file. Adding the touch ensures that the
 # timestamp on the .checked file is updated to avoid make running this
 # rule again.
+# If F* doesn't write a .checked file beacause it hasn't verified a
+# dependency, then an empty (invalid) file will be created.
 
 ifneq (,$(HINTS_DIR))
 	HINTS_OPTS=--hint_file $(HINTS_DIR)/$(basename $(notdir $(subst .lax,,$(subst .checked,,$<)))).hints
 endif
+
+$(CACHE_DIR)/FStar.%.checked: | $(DEP_FILE)
+ifdef VERBOSE
+	@echo -e "\033[1;35m=== Producing $@ ...\033[;37m"
+endif
+	$(subst \\,, \
+		$(FSTAR) $(VFLAGS) --admit_smt_queries true \
+		$(HINTS_OPTS) \
+		$(addprefix --include , $(INCLUDE_PATHS)) $< \
+		)
+	@touch $@
 
 %.checked: | $(DEP_FILE)
 ifdef VERBOSE
