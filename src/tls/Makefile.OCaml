@@ -54,7 +54,7 @@ ifeq (,$(wildcard $(MLCRYPTO_HOME)/CoreCrypto.cmxa))
 endif
 
 ifeq (,$(wildcard $(FFI_HOME)/FFICallbacks.cmxa)) 
-  $(error I cannot find $(FFI_HOME)/FFICallbacks.cmxa) -- please run make in $(FFI_HOME)) 
+  $(error I cannot find $(FFI_HOME)/FFICallbacks.cmxa -- please run make in $(FFI_HOME))
 endif 
 
 %.o: %.c
