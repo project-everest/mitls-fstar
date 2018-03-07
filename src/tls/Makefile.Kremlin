@@ -5,16 +5,16 @@ build: build-internal-test build-library build-external-test
 test: test-internal-test # test-library test-external-test
 
 ifneq (,$(MITLS_USE_OPENSSL))
-CONCRETE_FLAVOR	= -OpenSSL
+CONCRETE_FLAVOR = -OpenSSL
 endif
 
 # To include Makefile.common, you need to specify
 # the following five variables
-FLAVOR		= Kremlin
+FLAVOR		= Kremlin$(CONCRETE_FLAVOR)
 EXTENSION	= krml
 # Don't extract modules from mitls that are implemented in C
 EXTRACT		= '* -DHDB -LowCProvider -FFICallbacks -BufferBytes'
-SPECINC     = $(MITLS_HOME)/src/tls/concrete-flags $(MITLS_HOME)/src/tls/concrete-flags/$(FLAVOR)$(CONCRETE_FLAVOR)
+SPECINC     = $(MITLS_HOME)/src/tls/concrete-flags $(MITLS_HOME)/src/tls/concrete-flags/$(FLAVOR)
 VFLAGS     ?= --admit_smt_queries true
 
 include Makefile.common
@@ -142,7 +142,7 @@ $(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/uint128,$(UINT128_DIR)))
 $(INTERNAL_TEST_DIR)/Test_Main.c: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES))
 	$(KRML_COMMAND) $^ -tmpdir $(INTERNAL_TEST_DIR) -no-prefix Test.Main \
 	  -skip-compilation -drop FFICallbacks \
-	  -bundle Test.Main='Test.\*',AEAD_GCM,AEADOpenssl,AEADProvider,Alert,Connection,ConnInvariant,Content,DataStream,Encode,Epochs,FFI,Handshake,HandshakeLog,HandshakeMessages,Hashing,Hashing.CRF,Hashing.OpenSSL,HKDF,HMAC,HMAC.UFCMA,IdNonce,KDF.Common,KDF.Salt.ODH,KeySchedule,LHAEPlain,MAC,MAC_SHA1,MAC_SHA256,MasterSecret,Negotiation,QUIC,Range,Record,Signature,StAE,Standalone,StatefulLHAE,StatefulPlain,StreamAE,StreamDeltas,StreamPlain,Ticket,TLS,TLSPRF,Transport
+	  -bundle Test.Main=Test.*,AEAD_GCM,AEADOpenssl,AEADProvider,Alert,Connection,ConnInvariant,Content,DataStream,Encode,Epochs,FFI,Handshake,HandshakeLog,HandshakeMessages,Hashing,Hashing.CRF,Hashing.OpenSSL,HKDF,HMAC,HMAC.UFCMA,IdNonce,KDF.Common,KDF.Salt.ODH,KeySchedule,LHAEPlain,MAC,MAC_SHA1,MAC_SHA256,MasterSecret,Negotiation,QUIC,Range,Record,Signature,StAE,Standalone,StatefulLHAE,StatefulPlain,StreamAE,StreamDeltas,StreamPlain,Ticket,TLS,TLSPRF,Transport
 
 internal-test-copy: $(addprefix $(INTERNAL_TEST_DIR)/,$(ALL_EXTERNAL_FILES)) $(INTERNAL_TEST_DIR)/stub/mipki_wrapper.c
 

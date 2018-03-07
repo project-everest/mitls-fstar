@@ -1,27 +1,27 @@
 EXTRACT='Nothing'
 FLAVOR?=Model
 
-all: model-all
-# to be selected depending on the branch, e.g. just model-all for verify.
-#all: model-all ocaml-all kremlin-all
+all: clean-depend ocaml-all kremlin-all
 
-ocaml-%:
+clean-depend:
+	rm -f cache/OCaml/.depend cache/Kremlin.depend cache/Model/.depend
+
+ocaml-%: clean-depend
 	$(MAKE) -f Makefile.OCaml $*
 
-kremlin-%:
+kremlin-%: clean-depend
 	$(MAKE) -f Makefile.Kremlin $*
 
-model-% verify-%:
+model-% verify-%: clean-depend
 	$(MAKE) -f Makefile.Model $*
 
-quic-%:
+quic-%: clean-depend
 	$(MAKE) -C ../../apps/quicMinusNet $* -k
 
-test: kremlin-test ocaml-test quic-test
+test: clean-depend kremlin-test ocaml-test quic-test
 
 clean: ocaml-clean kremlin-clean quic-clean model-clean
-	rm -rf $(EXTRACT_DIR)/Kremlin $(EXTRACT_DIR)/OCaml $(EXTRACT_DIR)/copied \
-	*.checked *.checked.lax
+	rm -rf $(EXTRACT_DIR)/Kremlin $(EXTRACT_DIR)/OCaml $(EXTRACT_DIR)/copied
 
 %.fst-in %.fsti-in:
 	$(MAKE) -f Makefile.$(FLAVOR) $@
