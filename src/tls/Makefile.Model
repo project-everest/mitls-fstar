@@ -1,0 +1,13 @@
+all: model
+
+FLAVOR    = Model
+EXTENSION = checked
+EXTRACT   = Nothing
+SPECINC   = $(MITLS_HOME)/src/tls/ideal-flags $(MITLS_HOME)/src/tls/concrete-flags/generic
+
+include Makefile.common
+
+model verify: $(addprefix $(CACHE_DIR)/, $(addsuffix .checked, $(notdir $(ALL_FST_FILES))))
+
+clean:
+	rm -rf $(DEP_FILE)
