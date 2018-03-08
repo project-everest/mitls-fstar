@@ -824,6 +824,7 @@ let ks_server_13_init ks cr cs pskid g_gx =
   gy, bk
 *)
 
+(* 2018.03.08 Sbroken, but unused?
 let server13_0RTT 
   (i: esId) 
   (idh:_) 
@@ -832,16 +833,16 @@ let server13_0RTT
   (digest: Hashing.Spec.anyTag) 
   (reader_parent: rgn):
   ST (
-    secret (x0s_of_ems i transcript_ClientHello) * 
-    StreamAE.reader (ets_of_ems i transcript_ClientHello))
+    secret (x0s_of_ems i truncated_ClientHello) *
+    StreamAE.reader (ets_of_ems i truncated_ClientHello))
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
 =
   dbg "server13_0rtt_key";
-  let S13_wait_ServerHello ha aea _ _ es _ = ks in 
+  let S13_wait_SH ha aea _ _ es _ = ks in
   let info = (ha, aea) in
 
-  let x0si = x0s_of_ems i transcript_ClientHello in
+  let x0si = x0s_of_ems i truncated_ClientHello in
   let x0s = secret x0si = derive es ha "e exp master" truncated_ClientHello digest info in
   dbg ("Early exporter master secret:    "^leak_secret x0s);
 
@@ -850,6 +851,7 @@ let server13_0RTT
 
   let key0 = derive_streamAE #etsi ets Reader reader_parent in
   (x0s, key0)
+*)
 
 /// Continues from the handshake secret, now that we have the handshake
 /// digest up to ServerHello. We stop at the application master secret
@@ -862,7 +864,7 @@ val server13_ServerHello:
   tr: transcript ->
   digest: Hashing.Spec.anyTag ->
   ST (
-    i: hsid {i = hms_of_ems i idh} &
+    i: hsId {i = hms_of_ems i idh} &
     s13_wait_ServerFinished (ams_of_hms i) *
     StreamAE.reader (cts_of_hms i) *
     StreamAE.writer (sts_of_hms i)  
@@ -873,7 +875,7 @@ val server13_ServerHello:
 let server13_ServerHello ks log =
   dbg ("server13_ServerHello, hashed log = "^print_bytes digest);
 
-  let S13_wait_ServerHello ha aea _ _ es hs = ks in
+  let S13_wait_SH ha aea _ _ es hs = ks in
   // Derived handshake traffic secrets and keys 
   let cts = derive ha hs "c hs traffic" log info in
   let sts = derive ha hs "s hs traffic" log info in 
