@@ -23,7 +23,10 @@ val finalize: #a:alg -> v:accv a -> ST (t:tag a {t == hash a (content v)})
   (ensures (fun h0 t h1 -> modifies Set.empty h0 h1))
 
 let start a = Inputs empty_bytes
-let extend #a (Inputs b0) b1 = assume (FStar.UInt.fits (length b0 + length b1) 32); Inputs (b0 @| b1)
+let extend #a (Inputs b0) b1 = 
+  assume (FStar.UInt.fits (length b0 + length b1) 32); 
+  assume (length b0 + length b1 < Hashing.Spec.maxLength a); 
+  Inputs (b0 @| b1)
 let finalize #a (Inputs b) = Hashing.OpenSSL.compute a b
 
 let compute =  Hashing.OpenSSL.compute 
