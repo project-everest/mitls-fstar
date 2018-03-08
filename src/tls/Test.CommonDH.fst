@@ -13,6 +13,8 @@ open Format.NamedGroupList
 
 module DH = CommonDH
 
+#set-options "--lax"
+
 let prefix = "Test.CommonDH"
 
 val discard: bool -> ST unit

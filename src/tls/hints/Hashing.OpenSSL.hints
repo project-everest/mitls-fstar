@@ -1,0 +1,52 @@
+[
+  "Œ\u0013fàÙ\u0015K\u0003¥y=Å,äı8",
+  [
+    [
+      "Hashing.OpenSSL.compute",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "assumption_Prims.HasEq_int", "equation_FStar.UInt32.n",
+        "function_token_typing_FStar.UInt32.n",
+        "haseqFStar.Bytes_Tm_refine_1ec852aff28ab568526a8c54c3e853ec"
+      ],
+      0,
+      "612eae0de4a2a3df4fe88175f649a25f"
+    ],
+    [
+      "Hashing.OpenSSL.hmac",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "assumption_Prims.HasEq_int", "equation_FStar.UInt32.n",
+        "function_token_typing_FStar.UInt32.n",
+        "haseqFStar.Bytes_Tm_refine_1ec852aff28ab568526a8c54c3e853ec"
+      ],
+      0,
+      "471f3b97cbf2b44c69614cd68b5d0350"
+    ],
+    [
+      "Hashing.OpenSSL.toCC",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_Hashing.Spec.MD5",
+        "disc_equation_Hashing.Spec.SHA1",
+        "disc_equation_Hashing.Spec.SHA224",
+        "disc_equation_Hashing.Spec.SHA256",
+        "disc_equation_Hashing.Spec.SHA384",
+        "disc_equation_Hashing.Spec.SHA512",
+        "fuel_guarded_inversion_Hashing.Spec.alg"
+      ],
+      0,
+      "adac9a77afb3f0c24691ebdf42490d10"
+    ]
+  ]
+]

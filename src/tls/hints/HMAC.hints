@@ -1,0 +1,261 @@
+[
+  "Û4\u000f¡BÌÅwaª'\\\u007f+\u0004Ê",
+  [
+    [
+      "HMAC.hmac",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "assumption_Prims.HasEq_int", "equation_FStar.UInt32.n",
+        "function_token_typing_FStar.UInt32.n",
+        "haseqFStar.Bytes_Tm_refine_1ec852aff28ab568526a8c54c3e853ec"
+      ],
+      0,
+      "8376e76f3c6e6202c0f9a4b1fe28179c"
+    ],
+    [
+      "HMAC.hmac",
+      2,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "e7664afab29bbbc0b8a94c6fda9c92a3"
+    ],
+    [
+      "HMAC.hmacVerify",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "assumption_Prims.HasEq_int", "equation_FStar.UInt32.n",
+        "function_token_typing_FStar.UInt32.n",
+        "haseqFStar.Bytes_Tm_refine_1ec852aff28ab568526a8c54c3e853ec"
+      ],
+      0,
+      "0a2e74b78f4b0545baf915465de7edd6"
+    ],
+    [
+      "HMAC.hmacVerify",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
+        "refinement_interpretation_HMAC_Tm_refine_01ee375b43d95f601d1b2bb184dfa4f9"
+      ],
+      0,
+      "4abc6f1b239d23dc2704ea2817f47d88"
+    ],
+    [
+      "HMAC.hmacVerify",
+      3,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_FStar.Bytes.lbytes",
+        "equation_Hashing.Spec.lbytes32", "equation_Hashing.Spec.tag",
+        "equation_Hashing.Spec.tagLen",
+        "function_token_typing_FStar.Bytes.bytes",
+        "haseqFStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "8e6cd1a549452e92a37164b3aeb12487"
+    ],
+    [
+      "HMAC.sslHashAlg",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_TLSConstants.hashAlg__uu___haseq" ],
+      0,
+      "7ebfa28e517cac8d649b4bd9c6d87c0e"
+    ],
+    [
+      "HMAC.sslHashAlg",
+      2,
+      2,
+      1,
+      [ "@query", "assumption_TLSConstants.hashAlg__uu___haseq" ],
+      0,
+      "9207a0c0cb6a355d728a2a836ce65363"
+    ],
+    [
+      "HMAC.sslKeyedHashPads",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "constructor_distinct_Hashing.Spec.MD5",
+        "constructor_distinct_Hashing.Spec.SHA1",
+        "constructor_distinct_TLSConstants.Hash",
+        "disc_equation_Hashing.Spec.MD5", "disc_equation_Hashing.Spec.SHA1",
+        "disc_equation_TLSConstants.Hash",
+        "equality_tok_Hashing.Spec.MD5@tok",
+        "equality_tok_Hashing.Spec.SHA1@tok",
+        "equation_FStar.HyperStack.ST.is_eternal_region",
+        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
+        "equation_HMAC.sslHashAlg", "equation_Mem.rgn",
+        "function_token_typing_CommonDH.dh_region",
+        "proj_equation_TLSConstants.Hash__0",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_TLSConstants.Hash__0",
+        "refinement_interpretation_HMAC_Tm_refine_a7aeeec83e05f2e1d797d82dfd1d05e8",
+        "refinement_interpretation_Mem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
+        "typing_FStar.Monotonic.HyperHeap.color",
+        "typing_FStar.Monotonic.HyperStack.is_eternal_color"
+      ],
+      0,
+      "0f1650dd0678c29cc7b6dc96b3943083"
+    ],
+    [
+      "HMAC.sslKeyedHash",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_Hashing.Spec.alg__uu___haseq" ],
+      0,
+      "8fa64fd4012be573c86d03e4b98515e8"
+    ],
+    [
+      "HMAC.sslKeyedHash",
+      2,
+      2,
+      1,
+      [ "@query", "assumption_Hashing.Spec.alg__uu___haseq" ],
+      0,
+      "910913b57cccb72a55e2880a509b6795"
+    ],
+    [
+      "HMAC.sslKeyedHashVerify",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_Hashing.Spec.alg__uu___haseq" ],
+      0,
+      "a9ee4564f69f0e7554bcba7162595be4"
+    ],
+    [
+      "HMAC.sslKeyedHashVerify",
+      2,
+      2,
+      1,
+      [ "@query", "assumption_Hashing.Spec.alg__uu___haseq" ],
+      0,
+      "d468d048cc60046ebddfc7430bec1d00"
+    ],
+    [
+      "HMAC.sslKeyedHashVerify",
+      3,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "311f53a7c1034b23e7d32b95ed018b63"
+    ],
+    [
+      "HMAC.sslKeyedHashVerify",
+      4,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "assumption_Prims.HasEq_int", "equation_FStar.UInt32.n",
+        "function_token_typing_FStar.Bytes.bytes",
+        "function_token_typing_FStar.UInt32.n",
+        "haseqFStar.Bytes_Tm_refine_1ec852aff28ab568526a8c54c3e853ec",
+        "haseqHMAC_Tm_refine_8027d330919c05f1eabbecd9070001e7",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "bf7d76b2571a2b4469c2a731667f12df"
+    ],
+    [
+      "HMAC.tls_mac",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_TLSConstants.HMac",
+        "disc_equation_TLSConstants.SSLKHash",
+        "fuel_guarded_inversion_TLSConstants.macAlg"
+      ],
+      0,
+      "f9a86b6bc807efc41c1d6b6411482d67"
+    ],
+    [
+      "HMAC.tls_mac",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_TLSConstants.HMac",
+        "constructor_distinct_TLSConstants.Hash",
+        "disc_equation_TLSConstants.HMac",
+        "disc_equation_TLSConstants.SSLKHash", "equation_FStar.Bytes.lbytes",
+        "equation_HMAC.mac", "equation_Hashing.Spec.lbytes32",
+        "equation_Hashing.Spec.tag", "equation_TLSConstants.hashSize",
+        "equation_TLSConstants.macKeySize", "equation_TLSConstants.macSize",
+        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
+        "fuel_guarded_inversion_TLSConstants.macAlg",
+        "projection_inverse_TLSConstants.HMac__0",
+        "projection_inverse_TLSConstants.Hash__0",
+        "projection_inverse_TLSConstants.SSLKHash__0",
+        "refinement_interpretation_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
+        "refinement_interpretation_HMAC_Tm_refine_01ee375b43d95f601d1b2bb184dfa4f9",
+        "refinement_interpretation_HMAC_Tm_refine_a073fc3a5a6c4fda35a4e600669a969f"
+      ],
+      0,
+      "7a77001a797663624feb5ca322344877"
+    ],
+    [
+      "HMAC.tls_macVerify",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_TLSConstants.HMac",
+        "disc_equation_TLSConstants.SSLKHash",
+        "fuel_guarded_inversion_TLSConstants.macAlg"
+      ],
+      0,
+      "c18245fc96855404cdbc92f61dc32554"
+    ],
+    [
+      "HMAC.tls_macVerify",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_f537159ed795b314b4e58c260361ae86",
+        "constructor_distinct_TLSConstants.HMac",
+        "constructor_distinct_TLSConstants.Hash",
+        "disc_equation_TLSConstants.HMac",
+        "disc_equation_TLSConstants.SSLKHash",
+        "equation_TLSConstants.hashSize", "equation_TLSConstants.macKeySize",
+        "equation_TLSConstants.macSize",
+        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
+        "fuel_guarded_inversion_TLSConstants.macAlg",
+        "function_token_typing_Flags.model",
+        "projection_inverse_TLSConstants.HMac__0",
+        "projection_inverse_TLSConstants.Hash__0",
+        "projection_inverse_TLSConstants.SSLKHash__0",
+        "refinement_interpretation_HMAC_Tm_refine_62c6191187e0f5fa485f599d26a626e8",
+        "refinement_interpretation_HMAC_Tm_refine_a073fc3a5a6c4fda35a4e600669a969f"
+      ],
+      0,
+      "aa3a45694cd529699eb77a3c7fdd0351"
+    ]
+  ]
+]

@@ -1,0 +1,73 @@
+[
+  "Þsê×Òý÷L›\r™T\u001e–w\"",
+  [
+    [
+      "HaclProvider.uu___is_HACL_SHA256",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "393ea0d66ebdeb85ec575487f9923404"
+    ],
+    [
+      "HaclProvider.uu___is_HACL_SHA384",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "4a3f0b6cf28ad6b9e9cbcf8d67526f76"
+    ],
+    [
+      "HaclProvider.uu___is_HACL_SHA512",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "151d9d7ac6b06d778fed3061a6e76ca9"
+    ],
+    [
+      "HaclProvider.hash_size",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HaclProvider.HACL_SHA256",
+        "disc_equation_HaclProvider.HACL_SHA384",
+        "disc_equation_HaclProvider.HACL_SHA512",
+        "fuel_guarded_inversion_HaclProvider.hash_alg"
+      ],
+      0,
+      "2717209dcb69c16c33ab8f98f9f275af"
+    ],
+    [
+      "HaclProvider.crypto_hash",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_HaclProvider.hash_size",
+        "fuel_guarded_inversion_HaclProvider.hash_alg",
+        "projection_inverse_BoxInt_proj_0"
+      ],
+      0,
+      "dc6c3823b6b6aa8af20325f9006def3e"
+    ],
+    [
+      "HaclProvider.crypto_hmac",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_HaclProvider.hash_size",
+        "fuel_guarded_inversion_HaclProvider.hash_alg",
+        "projection_inverse_BoxInt_proj_0"
+      ],
+      0,
+      "a62841da6c7800377f48560bc8866f4b"
+    ]
+  ]
+]

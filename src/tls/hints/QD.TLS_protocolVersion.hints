@@ -1,0 +1,157 @@
+[
+  "\u001a'“\u001bB&\u001drDL’¨Q@{Í",
+  [
+    [
+      "QD.TLS_protocolVersion.protocolVersion'",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
+      0,
+      "955182ebddaa413c6d222408288a19b7"
+    ],
+    [
+      "QD.TLS_protocolVersion.protocolVersion'",
+      2,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
+      0,
+      "f779c52cdbc505e789810c837535a25b"
+    ],
+    [
+      "QD.TLS_protocolVersion.protocolVersion'",
+      3,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
+      0,
+      "0c53330658c996d82ff4f23fcbb2748c"
+    ],
+    [
+      "QD.TLS_protocolVersion.protocolVersion'",
+      4,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
+      0,
+      "c1c73e0dc967b7f0a129b945e7efdb4e"
+    ],
+    [
+      "QD.TLS_protocolVersion.protocolVersion'",
+      5,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
+      0,
+      "818f0cf3b29025c5bf58dde2dae8e371"
+    ],
+    [
+      "QD.TLS_protocolVersion.protocolVersion'",
+      6,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
+      0,
+      "489a12de6f9590bb075d77d1720e45b9"
+    ],
+    [
+      "QD.TLS_protocolVersion.protocolVersion'",
+      7,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
+      0,
+      "53a34f67a7235d717fec2097fe13a190"
+    ],
+    [
+      "QD.TLS_protocolVersion.protocolVersion'",
+      8,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "haseqQD.TLS_protocolVersion_Tm_refine_2ab6d721c075aeb40c856c89b64e8454"
+      ],
+      0,
+      "a2493ca34aa8b9372e13f5ec4a7d5e14"
+    ],
+    [
+      "QD.TLS_protocolVersion.uu___is_SSL_3p0",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "e1e94dbdb1d886dfb6b9844cae35e15c"
+    ],
+    [
+      "QD.TLS_protocolVersion.uu___is_TLS_1p0",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "4dbb69f5cc405ce7b64aee8e87f11897"
+    ],
+    [
+      "QD.TLS_protocolVersion.uu___is_TLS_1p1",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "600101900c9ec2cb70a43f4b9d8c6228"
+    ],
+    [
+      "QD.TLS_protocolVersion.uu___is_TLS_1p2",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "2c894ca6259f7030725ec3f1332745d5"
+    ],
+    [
+      "QD.TLS_protocolVersion.uu___is_TLS_1p3",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "9a4a5de9202cb4882578ddf3a92c3545"
+    ],
+    [
+      "QD.TLS_protocolVersion.uu___is_Unknown_protocolVersion",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "79f5b3669e87dedd801877a1dff0869b"
+    ],
+    [
+      "QD.TLS_protocolVersion.__proj__Unknown_protocolVersion__item___0",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
+      0,
+      "da1bdf6448f8308533d00993234ea83d"
+    ],
+    [
+      "QD.TLS_protocolVersion.__proj__Unknown_protocolVersion__item___0",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_QD.TLS_protocolVersion.Unknown_protocolVersion",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_QD.TLS_protocolVersion_Tm_refine_9430b73604139044684bf6f6c4b75d40"
+      ],
+      0,
+      "8cd2bfa8cf6e39226fe02700df36880f"
+    ]
+  ]
+]
