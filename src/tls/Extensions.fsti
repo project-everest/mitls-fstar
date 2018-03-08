@@ -257,4 +257,4 @@ val negotiateServerExtensions:
   result (option (list extension))
 
 val default_signatureScheme:
-  protocolVersion -> cipherSuite -> ML signatureSchemeList
+  protocolVersion -> cipherSuite -> HyperStack.All.ML signatureSchemeList

@@ -5,6 +5,7 @@ module KeySchedule
 open FStar.Bytes
 
 open TLSInfo
+open TLSConstants
 
 type ms = FStar.Bytes.bytes
 type pms = FStar.Bytes.bytes
@@ -14,6 +15,8 @@ type recordInstance =
   | StAEInstance: #id:TLSInfo.id -> StAE.reader (peerId id) -> StAE.writer id -> recordInstance
 
 type exportKey = (li:logInfo & i:exportId li & ems i)
+
+(* 2018.03.08 SZ: The rest was in quic2c:
 
 // Note from old miTLS (in TLSInfo.fst)
 // type id = {
@@ -1112,3 +1115,4 @@ let ks_client_12_server_finished ks
 
 val getId: recordInstance -> GTot id
 let getId (StAEInstance #i rd wr) = i
+*)

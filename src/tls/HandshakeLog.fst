@@ -294,7 +294,7 @@ let load_stateless_cookie l hrr digest =
   let st = !l in
   // The cookie is loaded after CH2 is written to the hash buffer
   let OpenHash ch2b = st.hashes in
-  let fake_ch = (bytes_of_hex "fe0000") @| (vlbytes 1 digest) in
+  let fake_ch = (bytes_of_hex "fe0000") @| (Parse.vlbytes 1 digest) in
   trace ("Installing prefix to transcript: "^(hex_of_bytes fake_ch));
   let hrb = handshakeMessageBytes None (HelloRetryRequest hrr) in
   trace ("HRR bytes: "^(hex_of_bytes hrb));
@@ -502,7 +502,7 @@ let rec hashHandshakeMessages t p hs n nb =
           | HelloRetryRequest hrr ->
             let ha = verifyDataHashAlg_of_ciphersuite hrr.hrr_cipher_suite in
             let hmsg = Hashing.compute ha b in
-            let hht = (bytes_of_hex "fe0000") @| (vlbytes 1 hmsg) in
+            let hht = (bytes_of_hex "fe0000") @| (Parse.vlbytes 1 hmsg) in
             trace ("Replacing CH1 in transcript with "^(hex_of_bytes hht));
             trace ("HRR bytes: "^(hex_of_bytes mb));
             OpenHash (hht @| mb)

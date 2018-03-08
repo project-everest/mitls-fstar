@@ -691,7 +691,7 @@ let client_HelloRetryRequest #region (ns:t region Client) hrr (s:option share) =
       | None -> []
       | Some pskl -> pskl in
     // TODO early data not recorded in retryInfo
-    let ext' = TLSConstants.choose_aux s choose_extension (Some?.v offer.ch_extensions) in
+    let ext' = List.Helpers.choose_aux s choose_extension (Some?.v offer.ch_extensions) in
 
     // Echo the cookie for QUIC stateless retry
     let ext', no_cookie = match List.Tot.find Extensions.E_cookie? el with
@@ -1415,7 +1415,7 @@ let rec forall_aux (#a:Type) (#b:Type) (env:b) (f: b -> a -> Tot bool) (l:list a
   = match l with
     | [] -> true
     | hd::tl -> if f env hd then forall_aux env f tl else false
-            
+
 val server_ClientHello: #region:rgn -> t region Server ->
   HandshakeMessages.ch -> log:HandshakeLog.t ->
   St (result serverMode)
@@ -1487,10 +1487,6 @@ let server_ClientHello #region ns offer log =
       // Internal HRR caused by group negotiation
       // We do not invoke the server nego callback in this case
       // record the initial offer and return the HRR to HS
-      ns.state := S_HRR offer hrr;
-      sm
-    | Correct (ServerMode m certNego) ->
-      trace ("negotiated "^string_of_pv m.n_protocol_version^" "^string_of_ciphersuite m.n_cipher_suite);      
       let ha = verifyDataHashAlg_of_ciphersuite hrr.hrr_cipher_suite in
       let digest = HandshakeLog.hash_tag #ha log in
       let cookie = Ticket.create_cookie hrr digest empty_bytes in

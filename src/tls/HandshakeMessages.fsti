@@ -347,7 +347,6 @@ let parsed = function
 
 // cwinter: Ticket.fst wants the following two, not sure they should be here.
 val helloRetryRequestBytes: hrr -> Tot (b:bytes{hs_msg_bytes HT_hello_retry_request b})
-val parseHelloRetryRequest: bytes -> Tot (result hrr)
 
 val handshakeMessageBytes:
   pvo:option protocolVersion ->
@@ -372,6 +371,8 @@ val handshakeMessagesBytes_is_injective:
   (ensures l1 = l2)
 
 val string_of_handshakeMessage: hs_msg -> Tot string
+
+val parseHelloRetryRequest: bytes -> Tot (result hrr)
 
 // underspecified?
 val parseHandshakeMessage:

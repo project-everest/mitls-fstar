@@ -192,6 +192,7 @@ let create_cookie (hrr:HandshakeMessages.hrr) (digest:bytes) (extra:bytes) =
   trace ("Encrypted cookie:  "^(hex_of_bytes cipher));
   cipher
 
+val check_cookie: b:bytes -> St (option (HandshakeMessages.hrr * bytes * bytes))
 let check_cookie b =
   trace ("Decrypting cookie "^(hex_of_bytes b));
   if length b < 32 then None else
