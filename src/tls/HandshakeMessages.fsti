@@ -14,7 +14,7 @@ open Range
 open CommonDH
 open Parse
 
-// e18-02-21 carved out an interface, far from perfect...  
+// e18-02-21 carved out an interface, far from perfect...
 // In particular, it exposes the separate parsing of message headers
 // and payloads; I would prefer entirely avoid [handshakeType] or at
 // least keep it private
@@ -40,8 +40,8 @@ type handshakeType =
   | HT_message_hash
 
 val htBytes: handshakeType -> Tot (lbytes 1)
-val htBytes_is_injective: 
-  ht1:handshakeType -> ht2:handshakeType -> 
+val htBytes_is_injective:
+  ht1:handshakeType -> ht2:handshakeType ->
   Lemma (requires (True)) (ensures (htBytes ht1 = htBytes ht2 ==> ht1 = ht2))
   [SMTPat (htBytes ht1); SMTPat (htBytes ht2)]
 val parseHt: pinverse_t htBytes
@@ -55,7 +55,7 @@ val pinverse_ht: x:_ -> Lemma
   [SMTPat (htBytes (Correct?._0 (parseHt x)))]
 
 
-// We follow the structure of the TLS 1.3 RFC, 
+// We follow the structure of the TLS 1.3 RFC,
 // but we also include prior TLS messages
 
 /// Key Exchange Messages
@@ -93,7 +93,7 @@ noeq type hrr = {
   hrr_extensions: he:list extension{List.Tot.length he < 256};
 }
 
-// TLS 1.2 KeyExchange 
+// TLS 1.2 KeyExchange
 noeq type kex_s =
 | KEX_S_DHE of (g:CommonDH.group & CommonDH.pre_share g)
 | KEX_S_RSA of (pk:CoreCrypto.rsa_key{False}) // Unimplemented
@@ -150,7 +150,7 @@ type cv = sig:signature
 type fin = { fin_vd: b:bytes{length b < 65536}; }
 
 
-/// Post-Handshake Messages 
+/// Post-Handshake Messages
 /// https://tlswg.github.io/tls13-spec/draft-ietf-tls-tls13.html#rfc.section.4.6
 
 // NewSessionTicket payload for RFC5077 (https://tools.ietf.org/html/rfc5077)
@@ -200,8 +200,8 @@ noeq type hs_msg =
 /// Handshake message format (minimized)
 
 val messageBytes:
-  ht:handshakeType -> 
-  data:bytes {repr_bytes (length data) <= 3} -> 
+  ht:handshakeType ->
+  data:bytes {repr_bytes (length data) <= 3} ->
   Tot (lbytes (4 + length data))
 
 let hs_msg_bytes (ht:handshakeType) (b:bytes) =
@@ -213,7 +213,7 @@ let hs_msg_bytes (ht:handshakeType) (b:bytes) =
 val messageBytes_is_injective_strong:
   ht1:handshakeType -> data1:bytes{ repr_bytes (length data1) <= 3 } -> s1:bytes ->
   ht2:handshakeType -> data2:bytes{ repr_bytes (length data2) <= 3 } -> s2:bytes ->
-  Lemma 
+  Lemma
   (ensures 
     equal (messageBytes ht1 data1 @| s1) (messageBytes ht2 data2 @| s2) ==> 
     ht1 = ht2 /\ equal data1 data2 /\ equal s1 s2)
@@ -222,7 +222,7 @@ val messageBytes_is_injective:
   ht1:handshakeType -> data1:bytes{ repr_bytes (length data1) <= 3 } ->
   ht2:handshakeType -> data2:bytes{ repr_bytes (length data2) <= 3 } ->
   Lemma
-  (ensures 
+  (ensures
     equal (messageBytes ht1 data1) (messageBytes ht2 data2) ==> 
     ht1 = ht2 /\ equal data1 data2)
   [SMTPat (messageBytes ht1 data1); SMTPat (messageBytes ht2 data2)]
@@ -233,22 +233,25 @@ val parseMessage: buf:bytes -> Tot (result (option (
   payload: bytes {repr_bytes (length payload) <= 3} &
   to_log: bytes {to_log = messageBytes hstype payload /\ equal buf (to_log @| rem) })))
 
-val clientHelloBytes: ch -> Tot (b:bytes{length b >= 41 /\ hs_msg_bytes HT_client_hello b}) 
+val clientHelloBytes: ch -> Tot (b:bytes{length b >= 41 /\ hs_msg_bytes HT_client_hello b})
 // JK: used to be 42 but cannot prove it with current specs. Is there
 // a minimal length of 1 for the session ID maybe ?
 
 // should this be in TLSConstants?
-val versionBytes_is_injective: 
-  pv1:protocolVersion -> 
+val versionBytes_is_injective:
+  pv1:protocolVersion ->
   pv2:protocolVersion ->
   Lemma (versionBytes pv1 = versionBytes pv2 ==> pv1 = pv2)
 
+// To expose extensions to application, we switch to network format
+val optionExtensionsBytes: exts:option (ce:list extension{List.Tot.length ce < 256}) -> Tot (b:bytes{length b <= 2 + 65535})
+
 val clientHelloBytes_is_injective_strong:
-  msg1:ch -> s1:bytes -> 
+  msg1:ch -> s1:bytes ->
   msg2:ch -> s2:bytes ->
   Lemma
   (ensures (
-    equal (clientHelloBytes msg1 @| s1) (clientHelloBytes msg2 @| s2) ==> 
+    equal (clientHelloBytes msg1 @| s1) (clientHelloBytes msg2 @| s2) ==>
     msg1 == msg2 /\ s1 == s2))
 
 (* This function adds a "first connection" renegotiation info *)
@@ -274,19 +277,19 @@ val serverHelloBytes: sh -> Tot (b:bytes{length b >= 34 /\ hs_msg_bytes HT_serve
 
 let valid_sh: Type0 = sh
 
-val serverHelloBytes_is_injective: 
+val serverHelloBytes_is_injective:
   msg1:valid_sh -> msg2:valid_sh -> Lemma 
   (requires equal (serverHelloBytes msg1) (serverHelloBytes msg2))
   (ensures msg1 == msg2)
 
-val serverHelloBytes_is_injective_strong: 
+val serverHelloBytes_is_injective_strong:
   msg1:valid_sh -> s1: bytes -> msg2:valid_sh -> s2: bytes -> Lemma
   (requires equal (serverHelloBytes msg1 @| s1) (serverHelloBytes msg2 @| s2))
   (ensures msg1 == msg2 /\ s1 == s2)
 
 (* JK: should return a valid_sh to match the serialization function *)
 (* JK: same as parseClientHello, weakening spec to get verification *)
-val parseServerHello: 
+val parseServerHello:
   data:bytes{repr_bytes(length data) <= 3} -> Tot (result (x:valid_sh))
 (* val parseServerHello: data:bytes{repr_bytes(length data) <= 3}   *)
 (*   -> Tot (result (x:sh{equal (serverHelloBytes x) (messageBytes HT_server_hello data)})) *)
@@ -298,15 +301,15 @@ val ccsBytes: lbytes 1
 val serverHelloDoneBytes: b:lbytes 4{hs_msg_bytes HT_server_hello_done b}
 
 
-// TLS 1.2 ServerKeyExchange 
+// TLS 1.2 ServerKeyExchange
 
 // used in Handshake
 // ADL: this is silly, we have uniform support of EC now
 val kex_c_of_dh_key: #g:CommonDH.group -> CommonDH.pre_share g -> Tot kex_c
 
 // used in Negotiation
-val kex_s_to_bytes: 
-  kex_s -> Tot (b:bytes{length b < 16777216 - 65540}) 
+val kex_s_to_bytes:
+  kex_s -> Tot (b:bytes{length b < 16777216 - 65540})
   // JK: required for serverKeyExchangeBytes
 
 
@@ -324,11 +327,11 @@ let valid_hs_msg_prop (pv:option protocolVersion) (msg:hs_msg): GTot bool =
   | Certificate13 crt, _ -> length (Cert.certificateListBytes13 crt.crt_chain13) < 16777212
   | Certificate crt, _ -> length (Cert.certificateListBytes crt.crt_chain) < 16777212
   | ServerKeyExchange ske, Some pv ->
-    if pv `geqPV` TLS_1p2 
+    if pv `geqPV` TLS_1p2
     then Some? ske.ske_signed_params.sig_algorithm
     else None? ske.ske_signed_params.sig_algorithm
   | CertificateVerify cv, Some pv ->
-    if pv `geqPV` TLS_1p2 
+    if pv `geqPV` TLS_1p2
     then Some? cv.sig_algorithm
     else None? cv.sig_algorithm
   | _ -> true )
@@ -351,7 +354,7 @@ val handshakeMessageBytes:
   msg:valid_hs_msg pvo ->
   Tot (b:bytes {parsed msg ==> (exists (ht:handshakeType). hs_msg_bytes ht b)})
 
-val handshakeMessageBytes_is_injective: 
+val handshakeMessageBytes_is_injective:
   pv:option protocolVersion -> 
   msg1:valid_hs_msg pv -> 
   msg2:valid_hs_msg pv -> Lemma 
@@ -361,7 +364,7 @@ val handshakeMessageBytes_is_injective:
 val handshakeMessagesBytes: pv:option protocolVersion -> list (msg:valid_hs_msg pv) -> bytes
 // we may need to expose its definition to HandshakeLog
 
-val handshakeMessagesBytes_is_injective: 
+val handshakeMessagesBytes_is_injective:
   pv: option protocolVersion -> 
   l1: list (msg:valid_hs_msg pv) -> 
   l2: list (msg:valid_hs_msg pv) -> Lemma 
@@ -377,5 +380,3 @@ val parseHandshakeMessage:
   ht:handshakeType ->
   b:bytes{repr_bytes (length b) <= 3} ->
   Tot (result hs_msg)
-
-

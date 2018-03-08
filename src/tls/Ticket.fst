@@ -29,8 +29,6 @@ unfold let trace = if DebugFlags.debug_NGO then print else (fun _ -> ())
 type hostname = string
 type tlabel (h:hostname) = t:bytes * tls13:bool
 private let region:rgn = new_region tls_tables_region
-private let tickets : MM.t region hostname tlabel (fun _ -> True) =
-  MM.alloc () // #region #hostname #tlabel #(fun _ -> True)
 
 type ticket_key =
   | Key: i:AE.id -> wr:AE.writer i -> rd:AE.reader i -> ticket_key
@@ -223,7 +221,7 @@ let check_ticket13 b =
     let nonce, _ = split b 12ul in
     Some ({
       ticket_nonce = Some nonce;
-      time_created = UInt32.v created;
+      time_created = created;
       ticket_age_add = age_add;
       allow_early_data = true;
       allow_dhe_resumption = true;
