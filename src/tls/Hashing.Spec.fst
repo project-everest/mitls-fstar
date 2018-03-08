@@ -92,6 +92,8 @@ let compress (#a:alg) (_:acc a) (l:lbytes32 (blockLen a)) = l //??
 
 module U32 = FStar.UInt32 
 
+module U32 = FStar.UInt32 
+
 abstract
 let truncate (#a:alg) (ac:acc a): Tot (lbytes32 (tagLen a)) =
   let l = tagLen a in
