@@ -41,11 +41,11 @@ val pskiListBytes: list pskIdentity -> bytes
 
 // how to build this type without overflows?? 
 noeq type psk =
-  | ClientPSK: 
+  | ClientPSK:
     // truncated PSK extension, without the list of binder tags.
     identities: list pskIdentity {let n = length (pskiListBytes identities) in 6 < n /\ n < 65536} ->
     binders_len: nat {binders_len <= 65535} -> psk
-  | ServerPSK of UInt16.t 
+  | ServerPSK of UInt16.t
     // index into the client offer's PSK extension
 
 // PSK binders, actually the truncated suffix of TLS 1.3 ClientHello
@@ -84,30 +84,13 @@ type point_format =
   | ECP_UNCOMPRESSED
   | ECP_UNKNOWN of (n:nat{repr_bytes n <= 1})
 
-(* ALPN *)
-
-// defined in TLSConstants
-
-(* QUIC parameters *)
-
-// defined in TLSConstants
-// used by QUIC interface too
-val quicParametersBytes_aux: pl:list quicParameter -> b:bytes{length b <= op_Multiply (List.Tot.length pl) 256}
-val parseQuicParameters_aux: bytes -> result (list quicParameter)
-
-(* PROTOCOL VERSIONS *)
+// Move TLSConstants?
+val alpnBytes : alpn -> b:bytes{length b < 65536}
 
 // The length exactly reflects the RFC format constraint <2..254>
 type protocol_versions =
-  | ClientPV of l:list protocolVersion {0 < List.Tot.length l /\ List.Tot.length l < 128}
   | ServerPV of protocolVersion
-
-(* SERVER NAME INDICATION *)
-
-type serverName =
-  | SNI_DNS of b:bytes{repr_bytes (length b) <= 2}
-  | SNI_UNKNOWN of (n:nat{repr_bytes n <= 1}) * (b:bytes{repr_bytes (length b) <= 2})
-
+  | ClientPV of l:list protocolVersion {0 < List.Tot.length l /\ List.Tot.length l < 128}
 
 // We constrain unknown extensions to have headers different from
 // known extensions; we rely on parametricity to avoid recursion
@@ -131,7 +114,6 @@ noeq type extension' (p: unknownTag) =
   | E_extended_ms
   | E_ec_point_format of list point_format
   | E_alpn of alpn
-  | E_quic_parameters of quicParameters
   | E_unknown_extension: x: lbytes 2 {p x} -> bytes -> extension' p (* header, payload *)
 (*
 We do not yet support the extensions below (authenticated but ignored)
@@ -148,9 +130,11 @@ We do not yet support the extensions below (authenticated but ignored)
   | E_renegotiation_info of renegotiationInfo
 *)
 
-val bindersLen: #p: unknownTag -> el: list (extension' p) -> nat 
-val string_of_extension: #p: unknownTag -> extension' p -> string 
-val string_of_extensions: #p: unknownTag -> list (extension' p) -> string 
+
+
+val bindersLen: #p: unknownTag -> el: list (extension' p) -> nat
+val string_of_extension: #p: unknownTag -> extension' p -> string
+val string_of_extensions: #p: unknownTag -> list (extension' p) -> string
 
 (** shallow equality, comparing just the extension tags *)
 val sameExt: #p: unknownTag -> e1: extension' p -> e2: extension' p -> bool
@@ -163,20 +147,23 @@ val unknown: unknownTag
 val is_unknown: x: lbytes 2 -> b:bool {b2t b <==> unknown x}
 type extension = extension' unknown
 
-// let is_unknown_unknown: #p: knownTag -> lbytes 2 -> bytes -> b:bool {b <==> knownTag p}
+// TLSConstants defines the application-level type for custom extensions
+val ext_of_custom: custom_extensions -> list extension
+val custom_of_ext: list extension -> custom_extensions
+val app_ext_filter: option (list extension) -> option (list extension)
 
-let encryptedExtension (ext: extension): bool =
+let encryptedExtension (ext: extension) : bool =
   match ext with
   | E_server_name _
   | E_supported_groups _
   | E_alpn _
-  | E_quic_parameters _
+  | E_unknown_extension _ _
   | E_early_data _ -> true
   | _ -> false
 
 (** Serializes an extension *)
 val extensionBytes: ext:extension -> b:bytes { 2 <= length b /\ length b < 65536 }
-val extensionBytes_is_injective: 
+val extensionBytes_is_injective:
   ext1: extension -> s1: bytes ->
   ext2: extension -> s2: bytes -> Lemma
   (requires (extensionBytes ext1 @| s1 = extensionBytes ext2 @| s2))
@@ -205,8 +192,8 @@ val extensionsBytes_is_injective_strong:
 
 val extensionsBytes_is_injective:
   ext1:valid_extensions ->
-  ext2:valid_extensions -> Lemma 
-  (requires extensionsBytes ext1 = extensionsBytes ext2)
+  ext2:valid_extensions -> Lemma
+  (requires Bytes.equal (extensionsBytes ext1) (extensionsBytes ext2))
   (ensures ext1 == ext2)
 
 (*************************************************
@@ -232,7 +219,7 @@ val prepareExtensions:
   k:valid_cipher_suites{List.Tot.length k < 256} ->
   option bytes -> // SNI
   option alpn -> // ALPN
-  option quicParameters ->
+  custom_extensions -> // application-handled extensions
   bool -> // EMS
   bool ->
   bool -> // EDI (Nego checks that PSK is compatible)
@@ -244,6 +231,7 @@ val prepareExtensions:
   option (cVerifyData * sVerifyData) ->
   option CommonDH.keyShare ->
   list (PSK.pskid * pskInfo) ->
+  now: UInt32.t -> // for obfuscated ticket age
   l:list extension{List.Tot.length l < 256}
 
 val negotiateClientExtensions:
@@ -256,17 +244,17 @@ val negotiateClientExtensions:
   bool ->
   result protocolVersion
 
-val negotiateServerExtensions: 
-  protocolVersion -> 
-  option (list extension) -> 
-  valid_cipher_suites -> 
-  config -> 
-  cipherSuite -> 
-  option (cVerifyData * sVerifyData) -> 
-  option nat -> 
-  option CommonDH.keyShare -> 
-  bool -> 
+val negotiateServerExtensions:
+  protocolVersion ->
+  option (list extension) ->
+  valid_cipher_suites ->
+  config ->
+  cipherSuite ->
+  option (cVerifyData * sVerifyData) ->
+  option nat ->
+  option CommonDH.keyShare ->
+  bool ->
   result (option (list extension))
 
-val default_signatureScheme: 
-  protocolVersion -> cipherSuite -> HyperStack.All.ML signatureSchemeList
+val default_signatureScheme:
+  protocolVersion -> cipherSuite -> ML signatureSchemeList
