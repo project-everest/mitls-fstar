@@ -22,7 +22,7 @@ let keygen () : ST keyshare
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
   let s : lbytes 32 = CoreCrypto.random 32 in
-  let base_point = Bytes.create  1ul 9uy @| Bytes.create 31ul 0uy in
+  let base_point = Bytes.create 1ul 9uy @| Bytes.create 31ul 0uy in
   scalarmult s base_point, s
 
 let mul (k:scalar) (p:point) : ST point
