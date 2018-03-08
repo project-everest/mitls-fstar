@@ -32,18 +32,6 @@ private let region:rgn = new_region tls_tables_region
 private let tickets : MM.t region hostname tlabel (fun _ -> True) =
   MM.alloc () // #region #hostname #tlabel #(fun _ -> True)
 
-let ticketid (a:aeadAlg) : St AE.id =
-  assume false;
-  let h = Hashing.Spec.SHA256 in
-  let li = LogInfo_CH0 ({
-    li_ch0_cr = CC.random 32;
-    li_ch0_ed_psk = empty_bytes;
-    li_ch0_ed_ae = a;
-    li_ch0_ed_hash = h;
-  }) in
-  let log : hashed_log li = empty_bytes in
-  ID13 (KeyID #li (ExpandedSecret (EarlySecretID (NoPSK h)) ApplicationTrafficSecret log))
-
 type ticket_key =
   | Key: i:AE.id -> wr:AE.writer i -> rd:AE.reader i -> ticket_key
 
@@ -63,7 +51,7 @@ private let dummy_id (a:aeadAlg) : St AE.id =
 // because the RNG may not yet be seeded when kremlinit_globals is called
 private let ticket_enc : reference (option ticket_key) = ralloc region None
 
-private let keygen(): St ticket_key  =
+private let keygen () : St ticket_key =
   let id0 = dummy_id CC.CHACHA20_POLY1305 in
   let salt : AE.salt id0 = CC.random (AE.iv_length id0) in
   let key : AE.key id0 = CC.random (AE.key_length id0) in
@@ -79,7 +67,7 @@ let get_ticket_key () : St ticket_key =
     ticket_enc := Some k; k
 
 let set_ticket_key (a:aeadAlg) (kv:bytes) : St bool =
-  let tid = ticketid a in
+  let tid = dummy_id a in
   if length kv = AE.key_length tid + AE.iv_length tid then
     let k, s = split_ kv (AE.key_length tid) in
     let wr = AE.coerce tid region k s in
@@ -129,7 +117,8 @@ let dummy_rmsid ae h =
 let dummy_msId pv cs ems =
   StandardMS PMS.DummyPMS (Bytes.create 64ul 0z) (kefAlg pv cs ems)
 
-let parse (b:bytes) =
+// not pure because of trace, but should be
+let parse (b:bytes) : St (option ticket) =
   trace ("Parsing ticket "^(hex_of_bytes b));
   if length b < 8 then None
   else
@@ -139,7 +128,7 @@ let parse (b:bytes) =
     | Correct pv ->
       let (csb, r) = split r 2ul in
       match parseCipherSuite csb, vlparse 2 r with
-      | _, Error _ -> None
+      | _, Error _
       | Error _, _ -> None
       | Correct cs, Correct rms ->
         match pv, cs with
@@ -184,7 +173,7 @@ let serialize t =
     in
   (versionBytes pv) @| (cipherSuiteBytes cs) @| (vlbytes 2 b)
 
-let ticket_encrypt plain =
+let ticket_encrypt plain : St bytes =
   let Key tid wr _ = get_ticket_key () in
   let nb = CC.random (AE.iv_length tid) in
   let salt = AE.salt_of_state wr in
@@ -197,45 +186,45 @@ let create_ticket t =
   ticket_encrypt plain
 
 let create_cookie (hrr:HandshakeMessages.hrr) (digest:bytes) (extra:bytes) =
-  let hrb = (vlbytes 3 (HandshakeMessages.helloRetryRequestBytes hrr)) in
+  let hrm = HandshakeMessages.HelloRetryRequest hrr in
+  let hrb = vlbytes 3 (HandshakeMessages.handshakeMessageBytes None hrm) in
   let plain = hrb @| (vlbytes 1 digest) @| (vlbytes 2 extra) in
   let cipher = ticket_encrypt plain in
   trace ("Encrypting cookie: "^(hex_of_bytes plain));
   trace ("Encrypted cookie:  "^(hex_of_bytes cipher));
   cipher
 
-// cwinter: unused?
-// let check_cookie b =
-//   trace ("Decrypting cookie "^(hex_of_bytes b));
-//   if length b < 32 then None else
-//   match ticket_decrypt b with
-//   | None -> trace ("Cookie decryption failed."); None
-//   | Some plain ->
-//     trace ("Plain cookie: "^(hex_of_bytes plain));
-//     match vlsplit 3 plain with
-//     | Error _ -> trace ("Cookie decode error: HRR"); None
-//     | Correct (hrb, b) ->
-//       let (_, hrb) = split hrb 4ul in // Skip handshake tag and vlbytes 3
-//       match HandshakeMessages.parseHelloRetryRequest hrb with
-//       | Error (_, m) -> trace ("Cookie decode error: parse HRR, "^m); None
-//       | Correct hrr ->
-//         match vlsplit 1 b with
-//         | Error _ -> trace ("Cookie decode error: digest"); None
-//         | Correct (digest, b) ->
-//           match vlparse 2 b with
-//           | Error _ -> trace ("Cookie decode error: application data"); None
-//           | Correct extra ->
-//             Some (hrr, digest, extra)
+let check_cookie b =
+  trace ("Decrypting cookie "^(hex_of_bytes b));
+  if length b < 32 then None else
+  match ticket_decrypt b with
+  | None -> trace ("Cookie decryption failed."); None
+  | Some plain ->
+    trace ("Plain cookie: "^(hex_of_bytes plain));
+    match vlsplit 3 plain with
+    | Error _ -> trace ("Cookie decode error: HRR"); None
+    | Correct (hrb, b) ->
+      let (_, hrb) = split hrb 4ul in // Skip handshake tag and vlbytes 3
+      match HandshakeMessages.parseHelloRetryRequest hrb with
+      | Error (_, m) -> trace ("Cookie decode error: parse HRR, "^m); None
+      | Correct hrr ->
+        match vlsplit 1 b with
+        | Error _ -> trace ("Cookie decode error: digest"); None
+        | Correct (digest, b) ->
+          match vlparse 2 b with
+          | Error _ -> trace ("Cookie decode error: application data"); None
+          | Correct extra ->
+            Some (hrr, digest, extra)
 
 let check_ticket13 b =
   match check_ticket b with
   | Some (Ticket13 cs li _ _ created age_add) ->
     let CipherSuite13 ae h = cs in
     let nonce, _ = split b 12ul in
-    Some PSK.({
+    Some ({
       ticket_nonce = Some nonce;
       time_created = UInt32.v created;
-      // ticket_age_add = age_add;
+      ticket_age_add = age_add;
       allow_early_data = true;
       allow_dhe_resumption = true;
       allow_psk_resumption = true;
