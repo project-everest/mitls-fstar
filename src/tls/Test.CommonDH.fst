@@ -40,8 +40,8 @@ let test group =
       false
     end
  
-let groups : namedGroupList = 
-  let (r:list namedGroup) = [
+let groups : namedGroupList =
+  [
     SECP256R1;
     SECP384R1;
     SECP521R1;
@@ -53,19 +53,12 @@ let groups : namedGroupList =
     FFDHE8192;
     // TODO: Not implemented; see ECGroup.fst
     //X448
-  ] in
-  let l = List.length r in
-  assert (0 < l);
-  assume (l = 9); // cwinter: it can't prove this?
-  assume (l <= maxCount);
-  r
+  ]
   
 let rec test_groups (groups:list namedGroup) : St bool =
   match groups with
   | g :: gs ->
-    let ogroup = DH.group_of_namedGroup g in
-    assume (Some? ogroup);
-    let Some group = ogroup in
+    let Some group = DH.group_of_namedGroup g in
     print ("Testing " ^ DH.string_of_group group);
     if not (test group) then false else test_groups gs
   | _ -> true
