@@ -77,4 +77,5 @@ quic.exe: quic.c \
 
 test: quic.exe
 	./quic.exe
-	./quic.exe t
+	./quic.exe 0rtt
+	./quic.exe hrr

@@ -209,6 +209,10 @@ let write_transcript h0 h1 (s:log) (m:msg) =
     hashAlg h1 s == hashAlg h0 s /\
     transcript h1 s == transcript h0 s @ [m]
 
+val load_stateless_cookie: s:log -> h:hrr -> digest:bytes -> ST unit
+  (requires (fun h0 -> writing h0 s /\ valid_transcript (transcript h0 s)))
+  (ensures (fun h0 _ h1 -> modifies_one s h0 h1 /\ writing h1 s))
+
 val send: s:log -> m:msg -> ST unit
   (requires (fun h0 ->
     writing h0 s /\

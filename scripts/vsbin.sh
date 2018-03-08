@@ -8,7 +8,7 @@ if
     VSWHERE_WINDOWS="$(cmd.exe /C 'echo %ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe' | sed 's!\r!!g')" &&
     VSWHERE=$(cygpath -u "$VSWHERE_WINDOWS") &&
     VS_HOME=$("$VSWHERE" -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format value -property InstallationPath | sed 's!\r!!g') &&
-    VC_VERSION=$(cat "$VS_HOME"/VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt | sed 's!\r!!g') &&
+    VC_VERSION=$(cat "$VS_HOME"/VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt | sed 's!\r!!g' | sed 's![[:space:]]*$!!') &&
     [[ -n "$VS_HOME" ]]
 then
   VS_BIN_DOSPATH="$VS_HOME"/VC/Tools/MSVC/"$VC_VERSION"/bin/Hostx64/x64

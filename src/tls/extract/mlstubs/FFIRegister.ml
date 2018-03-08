@@ -17,7 +17,6 @@ let _ = Callback.register "MITLS_FFI_Config" FFI.ffiConfig;
         Callback.register "MITLS_FFI_QuicCreateClient" QUIC.ffiConnect;
         Callback.register "MITLS_FFI_QuicCreateServer" QUIC.ffiAcceptConnected;
         Callback.register "MITLS_FFI_QuicProcess" QUIC.recv;
-        Callback.register "MITLS_FFI_QuicGetPeerParameters" QUIC.get_peer_parameters;
         (* Callback.register "MITLS_FFI_TicketCallback" FFI.ffiTicketCallback;
         Callback.register "MITLS_FFI_CertSelectCallback" FFI.ffiCertSelectCallback;
         Callback.register "MITLS_FFI_CertFormatCallback" FFI.ffiCertFormatCallback;

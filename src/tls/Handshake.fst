@@ -136,6 +136,8 @@ let version_of    (s:hs) = Nego.version s.nego
 let resumeInfo_of (s:hs) = Nego.resume s.nego
 let get_mode (s:hs) = Nego.getMode s.nego
 let is_server_hrr (s:hs) = Nego.is_server_hrr s.nego
+let is_0rtt_offered (s:hs) =
+  let mode = get_mode s in Nego.zeroRTToffer mode.Nego.n_offer
 let epochs_of (s:hs) = s.epochs
 
 (* WIP on the handshake invariant
@@ -798,7 +800,8 @@ let client13_NewSessionTicket (hs:hs) (st13:sticket13)
   let ed = List.Tot.find Extensions.E_early_data? t_ext in
   let pskInfo = PSK.({
     ticket_nonce = Some st13.ticket13_nonce;
-    time_created = 0; // TODO
+    time_created = CoreCrypto.now (); // TODO
+    ticket_age_add = st13.ticket13_age_add;
     allow_early_data = Some? ed;
     allow_dhe_resumption = true;
     allow_psk_resumption = true;
@@ -809,7 +812,7 @@ let client13_NewSessionTicket (hs:hs) (st13:sticket13)
   let sni = iutf8 (Nego.get_sni mode.Nego.n_offer) in
   let cfg = Nego.local_config hs.nego in
   let valid_ed =
-    if Some? cfg.quic_parameters then
+    if cfg.max_early_data = Some 0xfffffffful then
       (match ed with
       | None -> true
       | Some (Extensions.E_early_data (Some x)) -> x = 0xfffffffful
@@ -937,13 +940,14 @@ let server_ClientHello hs offer obinders =
     // there is currently no S_wait_CH2 state - the logic is all the same
     // except for this call to Nego that ensures the two CH are consistent with
     // the HRR group
-    match Nego.server_ClientHello hs.nego offer with
+    match Nego.server_ClientHello hs.nego offer hs.log with
     | Error z -> InError z
     | Correct (Nego.ServerHelloRetryRequest hrr) ->
       HandshakeLog.send hs.log (HelloRetryRequest hrr);
       // Note: no handshake state machine transition
       InAck false false
-    | Correct (Nego.ServerMode mode cert) ->
+
+    | Correct (Nego.ServerMode mode cert app_exts) ->
 
     let pv = mode.Nego.n_protocol_version in
     let cr = mode.Nego.n_offer.ch_client_random in
@@ -964,7 +968,7 @@ let server_ClientHello hs offer obinders =
       let adk = Secret.server12_resume hs.ks cr pv cs ems msId ms in
       register hs adk;
 
-      match Nego.server_ServerShare hs.nego None with
+      match Nego.server_ServerShare hs.nego None app_exts with
       | Error z -> InError z
       | Correct mode ->
         let digestSessionTicket =
@@ -1016,7 +1020,7 @@ let server_ClientHello hs offer obinders =
       match key_share_result with
       | Error z -> InError z
       | Correct optional_server_share ->
-      match Nego.server_ServerShare hs.nego optional_server_share with
+      match Nego.server_ServerShare hs.nego optional_server_share app_exts with
       | Error z -> InError z
       | Correct mode ->
         let ka = Nego.kexAlg mode in
@@ -1205,20 +1209,21 @@ let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinishe
            let (| li, rmsid, rms |) = KeySchedule.ks_server_13_cf hs.ks digestClientFinished in
            let cfg = Nego.local_config hs.nego in
            let cs = mode.Nego.n_cipher_suite in
-           let ticket = Ticket.Ticket13 cs li rmsid rms in
+           let age_add = CoreCrypto.random 4 in
+           let age_add = uint32_of_bytes age_add in
+           let now = CoreCrypto.now () in
+           let ticket = Ticket.Ticket13 cs li rmsid rms now age_add in
            let tb = Ticket.create_ticket ticket in
 
            trace ("Sending ticket: "^(print_bytes tb));
            let ticket_ext =
-             match cfg.max_early_data, cfg.quic_parameters with
-             // QUIC: always enable 0-RTT data with max limit
-             | _, Some _ -> [Extensions.E_early_data (Some 0xfffffffful)]
-             | Some max_ed, None -> [Extensions.E_early_data (Some (FStar.UInt32.uint_to_t max_ed))]
-             | _ -> [] in
+             match cfg.max_early_data with
+             | Some max_ed -> [Extensions.E_early_data (Some max_ed)]
+             | None -> [] in
            let tnonce, _ = split_ tb 12 in
            HandshakeLog.send hs.log (NewSessionTicket13 ({
              ticket13_lifetime = FStar.UInt32.(uint_to_t 3600);
-             ticket13_age_add = FStar.UInt32.(uint_to_t 0);
+             ticket13_age_add = age_add;
              ticket13_nonce = tnonce;
              ticket13_ticket = tb;
              ticket13_extensions = ticket_ext;
@@ -1380,7 +1385,10 @@ let rec recv_fragment (hs:hs) #i rg f =
 let recv_ccs (hs:hs) =
     trace "recv_ccs";
     // Draft 22 CCS during HRR
-    if Nego.is_hrr hs.nego then
+    // Because of stateless HRR, this may also happen as the very first message before CH (!!!)
+    let ishrr = Nego.is_hrr hs.nego in
+    let isidle = S_Idle? !hs.state in
+    if ishrr || isidle  then
      begin
       trace "IGNORING CCS (workaround for implementations that send CCS after HRR)";
       InAck false false
