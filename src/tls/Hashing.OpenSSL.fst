@@ -13,7 +13,7 @@ open Hashing.Spec
 
 val compute: a:alg -> b:bytes {length b <= maxLength a} -> ST (t:tag a {t == hash a b})
   (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> modifies Set.empty h0 h1))
+  (ensures (fun h0 t h1 -> modifies_none h0 h1))
 
 assume type hash_ctx (a:alg) (r:rid): Type0 // externally-allocated
 

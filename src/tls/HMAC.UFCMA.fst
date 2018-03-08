@@ -114,12 +114,13 @@ val create:
   u:info {u.alg = ha_of_i i /\ u.good == good_of_i i} -> ST (k:key ip i)
   (requires fun _ -> model)
   (ensures fun h0 k h1 ->
-    modifies Set.empty h0 h1 /\
+    modifies_none h0 h1 /\
     usage k == u /\
     Pkg.fresh_regions (footprint k) h0 h1)
 
 // cwinter: should go into $FSTAR_HOME/contrib/CoreCrypto/... ?
-assume val random32 : l:UInt32.t -> EXT (lbytes32 l)
+val random32 : l:UInt32.t -> EXT (lbytes32 l)
+let random32 l = CoreCrypto.random (UInt32.v l)
 
 let create ip _ _ i u =
   let kv: keyrepr u = random32 (Hashing.tagLen u.alg) in

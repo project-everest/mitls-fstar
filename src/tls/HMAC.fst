@@ -48,18 +48,34 @@ let sslKeyedHashPads = function
     | Hash MD5 -> (ssl_pad1_md5, ssl_pad2_md5)
     | Hash SHA1 -> (ssl_pad1_sha1, ssl_pad2_sha1)
 
+(*
+2018.03.08 SZ: Surprised I need this (and to apply it explicitly) below.
+Looks like loading TLSConstants blows up the context
+TODO: remove once this is fixed
+*)
+val modifies_none_trans: m0:mem -> m1:mem -> m2:mem -> Lemma
+  (requires modifies_none m0 m1 /\ modifies_none m1 m2)
+  (ensures  modifies_none m0 m2)
+  [SMTPat (modifies_none m0 m1); SMTPat (modifies_none m1 m2) ]
+let modifies_none_trans m0 m1 m2 = ()
+
 private val sslKeyedHash: 
   a:alg {a=MD5 \/ a=SHA1} -> 
   k:hkey a -> text a -> ST (tag a)
   (requires fun h0 -> True)
-  (ensures fun h0 t h1 -> modifies Set.empty h0 h1)
+  (ensures fun h0 t h1 -> modifies_none h0 h1)
 let sslKeyedHash a k p =
     let (inner, outer) = 
       match a with 
       | MD5 -> ssl_pad1_md5, ssl_pad2_md5
       | SHA1 -> ssl_pad1_sha1, ssl_pad2_sha1 in
+    let m0 = get() in
     let h = Hashing.compute a (k @| inner @| p) in
-    Hashing.compute a (k @| outer @| h)
+    let m1 = get() in
+    let h = Hashing.compute a (k @| outer @| h) in
+    let m2 = get() in
+    modifies_none_trans m0 m1 m2;
+    h
 
 private val sslKeyedHashVerify: 
   a:alg {a=MD5 \/ a=SHA1} -> 
@@ -88,5 +104,3 @@ let tls_macVerify a k d t =
     match a with
     | HMac alg -> hmacVerify alg k d t
     | SSLKHash alg -> sslKeyedHashVerify alg k d t
-
- 
