@@ -11,11 +11,6 @@ type keyshare = point * scalar
 
 let pubshare (k:keyshare) : Tot point = fst k
 
-//NS: 2/2 See issue #21 and #14
-// Test files replace the rand function with a deterministic variant.
-// let rand: ref (n:nat -> ST (lbytes n) (requires fun h->True) (ensures fun h0 _ h1 -> modifies_none h0 h1)) =
-//   ralloc root CoreCrypto.random
-
 let scalarmult (secret:Bytes.lbytes 32) (point:Bytes.lbytes 32)
   : ST (lbytes 32)
        (requires (fun h -> True))
@@ -27,10 +22,7 @@ let keygen () : ST keyshare
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
   let s : lbytes 32 = CoreCrypto.random 32 in
-  let base_point =
-    Bytes.bytes_of_hex
-      "0900000000000000000000000000000000000000000000000000000000000000" in
-  assume (Bytes.length base_point == 32);
+  let base_point = Bytes.create  1ul 9uy @| Bytes.create 31ul 0uy in
   scalarmult s base_point, s
 
 let mul (k:scalar) (p:point) : ST point
