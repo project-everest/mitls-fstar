@@ -17,11 +17,20 @@ open FStar.Bytes
 open FStar.Error
 open TLSError
 
-// should now be explicitly used
-//include Mem
-//include Parse // still used in this file, to be deleted once we QD.
 open Mem
 open Parse 
+//include Parse
+
+(* Relocate? *)
+let rec fold_string (#a:Type)
+                    (f: a -> string)
+                    (accum:string)
+                    (sep:string)
+                    (al:list a) : Tot string (decreases al) =
+    match al with
+    | [] -> accum
+    | a::al -> let accum = accum ^ sep ^ f a in
+             fold_string f accum sep al
 
 /// HIGH-LEVEL DECLARATIONS
 
@@ -37,11 +46,6 @@ let dualRole = function
 type rw =
   | Reader
   | Writer
-
-
-
-/// PROTOCOL VERSIONS
-/// 18-02-22 QD fodder?
 
 (** Protocol version negotiated values *)
 include QD.TLS_protocolVersion
@@ -99,6 +103,7 @@ let string_of_pv = function
   | Unknown_protocolVersion x -> "Unknown protocol version: " ^ string_of_int (UInt16.v x)
 
 
+/// Various elements used in ciphersuites
 
 (* Key exchange algorithms *)
 type kexAlg =
@@ -238,7 +243,7 @@ let max_TLSCiphertext_fragment_length_13 = max_TLSPlaintext_fragment_length + 25
 
 /// SIGNATURE ALGORITHMS
 /// 18-02-22 QD fodder
-/// 
+///
 (** Signature algorithms *)
 type sigAlg = CoreCrypto.sig_alg
 
@@ -417,7 +422,7 @@ let signatureScheme_of_sigHashAlg sa ha =
 
 /// COMPRESSION (LARGELY DEPRECATED IN TLS 1.3)
 /// QD fodder
-/// 
+///
 (** Compression definition *)
 type compression =
   | NullCompression
@@ -558,7 +563,7 @@ let contains_SCSV (css: list cipherSuite) = List.Tot.mem SCSV css
 (* JK: injectivity proof requires extra specification for the
    UnknownCipherSuite objects as they have to be distinct from the
    'correct' ones *)
-   
+
 val cipherSuiteBytesOpt: cipherSuite -> Tot (option (lbytes 2))
 let cipherSuiteBytesOpt cs =
   let open CoreCrypto in
@@ -685,7 +690,7 @@ let cipherSuiteBytes c = Some?.v (cipherSuiteBytesOpt c)
 #reset-options "--z3rlimit 60 --max_fuel 1 --initial_fuel 1 --max_ifuel 2 --initial_ifuel 2"
 
 (** Auxillary parsing function for ciphersuites *)
-private 
+private
 val parseCipherSuiteAux : lbytes 2 -> Tot (result (c:cipherSuite{validCipherSuite c}))
 let parseCipherSuiteAux b =
   let open CoreCrypto in
@@ -866,7 +871,7 @@ assume val parseCipherSuites: b:bytes -> Tot cipherSuites
 /// 18-02-22 QD fodder? An auxiliary (largely redundant) enum for
 /// ciphersuites, closer to the RFC and used for configuration in the
 /// TLS APIs.
-/// 
+///
 (** Ciphersuite names definition *)
 type cipherSuiteName =
   | TLS_NULL_WITH_NULL_NULL
@@ -1181,7 +1186,7 @@ let prfMacAlg_of_ciphersuite : require_some prfMacAlg_of_ciphersuite_aux =
 
 // Only to be invoked with TLS 1.2 (hardcoded in previous versions
 // BB.TODO: Documentation ? Confirm that it is used with TLS 1.3 !
-private 
+private
 let verifyDataHashAlg_of_ciphersuite_aux =
   let open Hashing.Spec in function
   | CipherSuite _ _ (MtE  _ _) -> Some SHA256
@@ -1238,7 +1243,7 @@ let macAlg_of_aeAlg pv ae =
 
 
 /// 18-02-22 QD fodder
-/// 
+///
 (** Certificate type definition *)
 type certType =
   | RSA_sign
@@ -1375,12 +1380,14 @@ let rec parseDistinguishedNameList data res =
 
 /// SIGNATURES
 /// 18-02-22 QD fodder
-/// 
+///
 let signatureSchemeList =
   algs:list signatureScheme{0 < List.Tot.length algs /\ op_Multiply 2 (List.Tot.length algs) < 65536}
 
 // used in FFI
 (** Serializing function for a SignatureScheme list *)
+
+// FIXME(adl) this is serializing in reverse order (shb @| b)
 let rec signatureSchemeListBytes_aux
   (algs: signatureSchemeList)
   (b:bytes)
@@ -1439,6 +1446,7 @@ let signatureSchemeListBytes algs =
 //   signatureSchemeListBytes_aux_is_injective algs1 empty_bytes algs1 algs2 empty_bytes algs2
 
 (** Parsing function for a SignatureScheme list *)
+// FIXME(adl) this is parsing in reverse order (sha::algs)
 val parseSignatureSchemeList: pinverse_t signatureSchemeListBytes
 let rec parseSignatureSchemeList_aux: b:bytes -> algs:list signatureScheme -> b':bytes{length b' + op_Multiply 2 (List.Tot.length algs) == length b} ->
     Tot
@@ -1513,96 +1521,18 @@ request_client_certificate: single_assign ServerCertificateRequest // uses this 
 
 
 /// 18-02-22 QD fodder; their formatting is in Extensions.
-/// 
+///
+type serverName =
+  | SNI_DNS of b:bytes{repr_bytes (length b) <= 2}
+  | SNI_UNKNOWN of (n:nat{repr_bytes n <= 1}) * (b:bytes{repr_bytes (length b) <= 2})
+
 type alpn_entry = b:bytes{0 < length b /\ length b < 256}
 type alpn = l:list alpn_entry{List.Tot.length l < 256}
 
-
-
-
-
-/// 18-02-22 QD fodder; their formatting is in Extensions.
-/// 
-type quicParameter =
-  | Quic_initial_max_stream_data of UInt32.t
-  | Quic_initial_max_data of UInt32.t
-  | Quic_initial_max_stream_id of UInt32.t
-  | Quic_idle_timeout of UInt16.t
-  | Quic_truncate_connection_id
-  | Quic_max_packet_size of UInt16.t
-  | Quic_custom_parameter of (n:UInt16.t{UInt16.v n > 5}) * b:bytes{length b < 252}
-
-// TODO check for duplicates
-type valid_quicParameters =
-  l:list quicParameter{ List.Tot.length l < 256 /\
-    True}
-(* No longer done in TLS
-    List.Tot.existsb Quic_initial_max_stream_data? l /\
-    List.Tot.existsb Quic_initial_max_data? l /\
-    List.Tot.existsb Quic_initial_max_stream_id? l /\
-    List.Tot.existsb Quic_idle_timeout? l}
-*)
-
-type quicVersion =
-  | QuicVersion1
-  | QuicCustomVersion of n:UInt32.t{UInt32.v n <> 1}
-
-type valid_quicVersions =
-  l:list quicVersion{l <> [] /\ List.Tot.length l < 64}
-
-// ADL would prefer to index this by extension message type
-type quicParameters =
-  | QuicParametersClient:
-    initial_version: quicVersion ->
-    parameters: valid_quicParameters ->
-    quicParameters
-  | QuicParametersServer:
-    negotiated_version: quicVersion ->
-    versions: valid_quicVersions ->
-    parameters: valid_quicParameters ->
-    quicParameters
-  | QuicParametersNewSessionTicket: // Allowed by RFC but not supported
-    raw: bytes ->
-    quicParameters
-
-let string_of_quicVersion = function
-  | QuicVersion1 -> "v1"
-  | QuicCustomVersion n -> "v"^UInt32.to_string n
-let string_of_quicParameter = function
-  | Quic_initial_max_stream_data x -> "initial_max_stream_data="^UInt32.to_string x
-  | Quic_initial_max_data x -> "initial_max_data="^UInt32.to_string x
-  | Quic_initial_max_stream_id x -> "initial_max_stream="^UInt32.to_string x
-  | Quic_idle_timeout x -> "idle_timeout="^UInt16.to_string x
-  | Quic_truncate_connection_id -> "truncate_connection_id"
-  | Quic_max_packet_size x -> "max_packet_size="^UInt16.to_string x
-  | Quic_custom_parameter (n,b) -> "custom_parameter "^UInt16.to_string n^", "^print_bytes b
-let rec string_of_quicParameters_aux_fold #t a (f: t -> string) sep (p: list t): Tot string (decreases p) =
-  match p with
-  | [] -> a
-  | hd::tl -> string_of_quicParameters_aux_fold (a ^ f hd ^ sep) f sep tl
-let string_of_quicParameters = function
-  | Some (QuicParametersNewSessionTicket b)  -> "QUIC ticket parameters: " ^ (hex_of_bytes b)
-  | Some (QuicParametersClient i p)  ->
-    "QUIC client parameters\n" ^
-    "initial version: "^string_of_quicVersion i^"\n"^
-    string_of_quicParameters_aux_fold "" string_of_quicParameter "\n" p
-  | Some (QuicParametersServer n v p) ->
-    "QUIC server parameters\n" ^
-    "negotiated version: "^string_of_quicVersion n^"\n" ^
-    string_of_quicParameters_aux_fold "versions: " string_of_quicVersion " " v ^ "\n" ^
-    string_of_quicParameters_aux_fold "" string_of_quicParameter "\n" p
-  | None -> "(none)"
-
-
-
-/// Information recorded in the table.
-///
-/// NB for now we use the same table as real & local, and ideal & shared.
-/// we considered using two levels instead. 
-
 type pskInfo = {
   ticket_nonce: option bytes;
-  time_created: int;
+  time_created: UInt32.t;
+  ticket_age_add: UInt32.t;
   allow_early_data: bool;      // New draft 13 flag
   allow_dhe_resumption: bool;  // New draft 13 flag
   allow_psk_resumption: bool;  // New draft 13 flag
@@ -1623,6 +1553,29 @@ type ticket_cb_fun =
 noeq type ticket_cb = {
   ticket_context: FStar.Dyn.dyn;
   new_ticket: ticket_cb_fun;
+}
+
+type custom_extension = UInt16.t * b:bytes {length b < 65533}
+type custom_extensions = l:list custom_extension{List.Tot.length l < 32}
+
+(* Helper functions for the C API to construct the list from array *)
+let empty_custom_extensions () : list custom_extension = []
+let add_custom_extension (l:list custom_extension) (hd:UInt16.t) (b:bytes {length b < 65533}) =
+  (hd, b) :: l
+
+type nego_action =
+  | Nego_abort: nego_action
+  | Nego_retry: cookie_extra: bytes -> nego_action
+  | Nego_accept: extra_ext: custom_extensions -> nego_action
+
+type nego_cb_fun =
+  (FStar.Dyn.dyn -> pv: protocolVersion -> client_ext: bytes -> cookie: option bytes -> ST nego_action
+    (requires fun _ -> True)
+    (ensures fun h0 r h1 -> Nego_retry? r ==> None? cookie /\ modifies_none h0 h1))
+
+noeq type nego_cb = {
+  nego_context: FStar.Dyn.dyn;
+  negotiate: nego_cb_fun;
 }
 
 type cert_repr = b:bytes {length b < 16777216}
@@ -1692,15 +1645,15 @@ noeq type config : Type0 = {
     (* Supported versions, ciphersuites, groups, signature algorithms *)
     min_version: protocolVersion;
     max_version: protocolVersion;
-    quic_parameters: option (valid_quicVersions * valid_quicParameters);
     cipher_suites: x:valid_cipher_suites{List.Tot.length x < 256};
     named_groups: CommonDH.supportedNamedGroups;
     signature_algorithms: signatureSchemeList;
 
     (* Client side *)
     hello_retry: bool;          // honor hello retry requests from the server
-    offer_shares: CommonDH.supportedNamedGroups; 
-    //18-02-20 should it be a subset of named_groups? 
+    offer_shares: CommonDH.supportedNamedGroups;
+    //18-02-20 should it be a subset of named_groups?
+    custom_extensions: custom_extensions;
 
     (* Server side *)
     check_client_version_in_pms_for_old_tls: bool;
@@ -1708,11 +1661,14 @@ noeq type config : Type0 = {
 
     (* Common *)
     non_blocking_read: bool;
-    max_early_data: option nat;   // 0-RTT offer (client) and support (server), and data limit
+    max_early_data: option UInt32.t;   // 0-RTT offer (client) and support (server), and data limit
     safe_renegotiation: bool;     // demands this extension when renegotiating
     extended_master_secret: bool; // turn on RFC 7627 extended master secret support
     enable_tickets: bool;         // Client: offer ticket support; server: emit and accept tickets
+
+    (* Callbacks *)
     ticket_callback: ticket_cb;   // Ticket callback, called when issuing or receiving a new ticket
+    nego_callback: nego_cb;// Callback to decide stateless retry and negotiate extra extensions
     cert_callbacks: cert_cb;      // Certificate callbacks, called on all PKI-related operations
 
     alpn: option alpn;   // ALPN offers (for client) or preferences (for server)
@@ -1763,5 +1719,3 @@ let cert_verify_cb (c:config) (cl:list cert_repr) (ss:signatureScheme) (tbs:byte
 
 type cVerifyData = b:bytes{length b <= 64} (* ClientFinished payload *)
 type sVerifyData = b:bytes{length b <= 64} (* ServerFinished payload *)
-
-private let max (a:int) (b:int) = if a < b then b else a
