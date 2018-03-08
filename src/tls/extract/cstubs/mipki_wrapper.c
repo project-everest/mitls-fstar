@@ -91,9 +91,10 @@ static mitls_signature_scheme pki_of_tls(TLSConstants_signatureScheme_tags sa)
   }
 }
 
-FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme
-PKI_select(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
-  FStar_Bytes_bytes sni, Prims_list__TLSConstants_signatureScheme *sal)
+void
+PKI_select_(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
+  FStar_Bytes_bytes sni, Prims_list__TLSConstants_signatureScheme *sal,
+  FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme *res)
 {
   mitls_signature_scheme sel;
   mipki_state *pki = (mipki_state*)cbs;
@@ -112,7 +113,6 @@ PKI_select(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
     cur = cur->tl;
   }
 
-  FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme res;
   mipki_chain chain = mipki_select_certificate(pki, sni.data, sni.length, sigalgs, sigalgs_len, &sel);
 
   #if DEBUG
@@ -121,7 +121,7 @@ PKI_select(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
 
   if(chain == NULL)
   {
-    res.tag = FStar_Pervasives_Native_None;
+    res->tag = FStar_Pervasives_Native_None;
   }
   else
   {
@@ -130,12 +130,20 @@ PKI_select(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
     // silence a GCC warning about sig.snd._0.length possibly uninitialized
     memset(&sig, 0, sizeof(sig));
 
-    res.tag = FStar_Pervasives_Native_Some;
+    res->tag = FStar_Pervasives_Native_Some;
     sig.fst = (uint64_t)chain;
     sig.snd.tag = tls_of_pki(sel);
-    res.v = sig;
+    res->v = sig;
   }
-  return res;
+}
+
+FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme
+PKI_select(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
+  FStar_Bytes_bytes sni, Prims_list__TLSConstants_signatureScheme *sal)
+{
+  FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme dst;
+  PKI_select_(cbs, st, sni, sal, &dst);
+  return dst;
 }
 
 static void* append(void* chain, size_t len, char **buf)
@@ -171,8 +179,9 @@ Prims_list__FStar_Bytes_bytes* PKI_format(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st, u
   return res;
 }
 
-FStar_Pervasives_Native_option__FStar_Bytes_bytes PKI_sign(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
-  uint64_t cert, TLSConstants_signatureScheme sa, FStar_Bytes_bytes tbs)
+void PKI_sign_(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
+  uint64_t cert, TLSConstants_signatureScheme *sa, FStar_Bytes_bytes tbs,
+  FStar_Pervasives_Native_option__FStar_Bytes_bytes *res)
 {
   mipki_state *pki = (mipki_state*)cbs;
   mipki_chain chain = (mipki_chain)cert;
@@ -183,23 +192,29 @@ FStar_Pervasives_Native_option__FStar_Bytes_bytes PKI_sign(FStar_Dyn_dyn cbs, FS
 
   char* sig = KRML_HOST_MALLOC(MAX_SIGNATURE_LEN);
   size_t slen = MAX_SIGNATURE_LEN;
-  FStar_Pervasives_Native_option__FStar_Bytes_bytes res = {.tag = FStar_Pervasives_Native_None};
-  mipki_signature sigalg = pki_of_tls(sa.tag);
+  res->tag = FStar_Pervasives_Native_None;
+  mipki_signature sigalg = pki_of_tls(sa->tag);
 
   if(mipki_sign_verify(pki, chain, sigalg, tbs.data, tbs.length, sig, &slen, MIPKI_SIGN))
   {
     #if DEBUG
       KRML_HOST_PRINTF("PKI| Success: produced %d bytes of signature.\n", pki, slen);
     #endif
-    res.tag = FStar_Pervasives_Native_Some;
-    res.v = (FStar_Bytes_bytes){.length = slen, .data = sig};
+    res->tag = FStar_Pervasives_Native_Some;
+    res->v = (FStar_Bytes_bytes){.length = slen, .data = sig};
   }
+}
 
+FStar_Pervasives_Native_option__FStar_Bytes_bytes PKI_sign(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
+  uint64_t cert, TLSConstants_signatureScheme sa, FStar_Bytes_bytes tbs)
+{
+  FStar_Pervasives_Native_option__FStar_Bytes_bytes res;
+  PKI_sign_(cbs, st, cert, &sa, tbs, &res);
   return res;
 }
 
-bool PKI_verify(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
-  Prims_list__FStar_Bytes_bytes *certs, TLSConstants_signatureScheme sa,
+bool PKI_verify_(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
+  Prims_list__FStar_Bytes_bytes *certs, TLSConstants_signatureScheme *sa,
   FStar_Bytes_bytes tbs, FStar_Bytes_bytes sig)
 {
   mipki_state *pki = (mipki_state*)cbs;
@@ -209,7 +224,7 @@ bool PKI_verify(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
     KRML_HOST_PRINTF("PKI| VERIFY <%08x> (contains %d certificates)\n", pki, chain_len);
   #endif
 
-  mipki_signature sigalg = pki_of_tls(sa.tag);
+  mipki_signature sigalg = pki_of_tls(sa->tag);
   size_t *lens = alloca(chain_len*sizeof(size_t));
   const char **ders = alloca(chain_len*sizeof(const char*));
   Prims_list__FStar_Bytes_bytes *cur = certs;
@@ -251,6 +266,12 @@ bool PKI_verify(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
 
   mipki_free_chain(pki, chain);
   return (r == 1);
+}
+
+bool PKI_verify(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
+  Prims_list__FStar_Bytes_bytes *certs, TLSConstants_signatureScheme sa,
+  FStar_Bytes_bytes tbs, FStar_Bytes_bytes sig) {
+  return PKI_verify_(cbs, st, certs, &sa, tbs, sig);
 }
 
 static uint32_t config_len(Prims_list__K___Prims_string_Prims_string_bool *l)
@@ -304,6 +325,20 @@ FStar_Dyn_dyn PKI_init(Prims_string cafile, Prims_list__K___Prims_string_Prims_s
   return pki;
 }
 
+#ifdef KRML_NOSTRUCT_PASSING
+void PKI_tls_callbacks(FStar_Dyn_dyn x0, TLSConstants_cert_cb *dst)
+{
+  dst->app_context = x0;
+  dst->cert_select_ptr = NULL;
+  dst->cert_select_cb = PKI_select_;
+  dst->cert_format_ptr = NULL;
+  dst->cert_format_cb = PKI_format;
+  dst->cert_sign_ptr = NULL;
+  dst->cert_sign_cb = PKI_sign_;
+  dst->cert_verify_ptr = NULL;
+  dst->cert_verify_cb = PKI_verify_;
+}
+#else
 TLSConstants_cert_cb PKI_tls_callbacks(FStar_Dyn_dyn x0)
 {
   return (TLSConstants_cert_cb){
@@ -318,6 +353,7 @@ TLSConstants_cert_cb PKI_tls_callbacks(FStar_Dyn_dyn x0)
     .cert_verify_cb = PKI_verify
   };
 }
+#endif
 
 void PKI_free(FStar_Dyn_dyn pki)
 {
