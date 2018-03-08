@@ -64,7 +64,6 @@ endif
 			$(addprefix --include , $(INCLUDE_PATHS)) \
 			$(ROOTS) > $(DEP_FILE) \
 	)
-	#sed -i.bak '/FStar./s/.checked/.checked.lax/g' $(DEP_FILE)
 
 depend: $(DEP_FILE)
 
