@@ -492,7 +492,9 @@ CoreCrypto_rsa_decrypt_(CoreCrypto_rsa_key *key, CoreCrypto_rsa_padding padding,
 FStar_Pervasives_Native_option__FStar_Bytes_bytes
 CoreCrypto_rsa_decrypt(CoreCrypto_rsa_key key, CoreCrypto_rsa_padding padding,
                        FStar_Bytes_bytes data) {
-  return CoreCrypto_rsa_decrypt_(&key, padding, data);
+  FStar_Pervasives_Native_option__FStar_Bytes_bytes dst;
+  CoreCrypto_rsa_decrypt_(&key, padding, data, &dst);
+  return dst;
 }
 #endif
 
