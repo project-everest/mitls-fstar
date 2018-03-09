@@ -27,7 +27,8 @@ let timestamp () =
 
 // ex_rid: The type of a region id that is known
 //         to exist in the current heap and in every future one
-type ex_rid = HST.ex_rid
+//2018.03.09 SZ: Excluded the case r = root
+type ex_rid = r:HST.ex_rid{r <> root}
 
 // MM.map provide a dependent map type;
 // In this case, we don't need the dependencey
@@ -61,11 +62,11 @@ let fresh_region (r:ex_rid) (h:HS.mem) =
 
 //A nonce n is registered to region r, if the table contains n -> Some r;
 //This mapping is stable (that's what the HST.witnessed means)
-let registered (n:random) (r:HST.erid) =
+let registered (n:random) (r:ex_rid) =
   HST.witnessed (HST.region_contains_pred r) /\
   HST.witnessed (MM.contains nonce_rid_table n r)
 
-let testify (n:random) (r:HST.erid)
+let testify (n:random) (r:ex_rid)
   : ST unit (requires (fun h -> registered n r))
       (ensures (fun h0 _ h1 ->
      h0==h1 /\
@@ -80,6 +81,8 @@ let testify (n:random) (r:HST.erid)
 //"event" that mkHelloRandom was called for particular triple of values
 abstract let role_nonce (cs:role) (n:random) (r:ex_rid) = registered n r
 
+#reset-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1 --z3rlimit 10"
+
 val mkHelloRandom: cs:role -> r:ex_rid -> ST random
   (requires (fun h -> fresh_region r h))
   (ensures (fun h0 n h1 ->
@@ -87,7 +90,7 @@ val mkHelloRandom: cs:role -> r:ex_rid -> ST random
     HS.modifies (Set.singleton tls_tables_region) h0 h1 /\ //modifies at most the tables region
     HS.modifies_ref tls_tables_region (Set.singleton (HS.as_addr nonce_rid_table_as_hsref)) h0 h1 /\ //and within it, at most the nonce_rid_table
     (b2t ideal ==> 
-      fresh n h0  /\        //if we're ideal then the nonce is fresh
+      fresh n h0 /\        //if we're ideal then the nonce is fresh
       registered n r /\     //the nonce n is associated with r
       role_nonce cs n r))) //and the triple are associated as well, for ever more
 let rec mkHelloRandom cs r =
@@ -97,7 +100,7 @@ let rec mkHelloRandom cs r =
   let n : random = ts @| rand in
   if ideal then
     match MM.lookup nonce_rid_table n with
-      | None -> MM.extend nonce_rid_table n r; n
+      | None   -> MM.extend nonce_rid_table n r; n
       | Some _ -> mkHelloRandom cs r // formally retry to exclude collisions.
   else n
 
@@ -117,7 +120,8 @@ let lookup role n = MM.lookup nonce_rid_table n
 (* Would be nice to make this a local let in new_region.
    Except, implicit argument inference for testify_forall fails *)
 private let nonce_rids_exists (m:MM.map random n_rid) =
-    forall (n:random{Some? (MM.sel m n)}). HST.witnessed (HST.region_contains_pred (Some?.v (MM.sel m n)))
+    forall (n:random{Some? (MM.sel m n)}). 
+      HST.witnessed (HST.region_contains_pred (Some?.v (MM.sel m n)))
 
 (*
    A convenient wrapper around FStar.ST.new_region,
@@ -137,12 +141,8 @@ val new_region: parent:HST.erid -> ST ex_rid
 let new_region parent =
   HST.recall nonce_rid_table;
   let m0 = HST.op_Bang nonce_rid_table in
-  let tok : squash (nonce_rids_exists m0) = () in
-  HST.testify_forall tok;
+  HST.testify_forall_region_contains_pred 
+    #(n:random{Some? (MM.sel m0 n)}) #(fun n -> Some?.v (MM.sel m0 n)) ();
   let r = new_region parent in
   HST.witness_region r;
   r
-  
-
-// a constant value, with negligible probability of being sampled, excluded by idealization
-// let noCsr : bytes = CoreCrypto.zero 64
