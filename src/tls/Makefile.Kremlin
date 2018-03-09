@@ -64,7 +64,7 @@ KRML_COMMAND	= krml \
   -bundle 'LowParse.\*' \
   -bundle LowParseWrappers \
   -bundle 'Format.\*' \
-  -fnoanonymous-unions -warn-error -9@2-7-6@4 \
+  -fnoanonymous-unions -warn-error -9-7-6@4 \
   -fsopts --debug,yes -verbose \
   -ccopts -Wno-unused-function,-O0 \
   -ldopts -L,../pki,-lmipki \
