@@ -364,14 +364,14 @@ let ffiSetALPN cfg x =
 
 val ffiSetEarlyData: cfg:config -> x:UInt32.t -> ML config
 let ffiSetEarlyData cfg x =
-  trace ("setting early data limit to "^(hex_of_bytes (bytes_of_int32 x)));
+  trace ("setting early data limit to "^(hex_of_bytes (Bytes.bytes_of_int32 x)));
   { cfg with
   max_early_data = if x = 0ul then None else Some x;
   }
 
 val ffiAddCustomExtension: cfg:config -> UInt16.t -> bytes -> ML config
 let ffiAddCustomExtension cfg h b =
-  trace ("offering custom extension "^(hex_of_bytes (bytes_of_uint16 h)));
+  trace ("offering custom extension "^(hex_of_bytes (Parse.bytes_of_uint16 h)));
   trace ("extension contents: "^(hex_of_bytes b));
   { cfg with
   custom_extensions = (h, b) :: cfg.custom_extensions
@@ -522,7 +522,7 @@ private let rec ext_filter (ext_type:UInt16.t) (e:list Extensions.extension) : o
   match e with
   | [] -> None
   | Extensions.E_unknown_extension hd b :: t ->
-    if uint16_of_bytes hd = ext_type then Some b else ext_filter ext_type t
+    if Parse.uint16_of_bytes hd = ext_type then Some b else ext_filter ext_type t
   | _ :: t -> ext_filter ext_type t
 
 let ffiFindCustomExtension (server:bool) (exts:bytes) (ext_type:UInt16.t) : ML (option bytes) =
