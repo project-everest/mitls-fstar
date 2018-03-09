@@ -7,6 +7,8 @@ open Mem
 open TLSConstants
 open Hashing.Spec // for the algorithm names, instead of CoreCrypt
 
+#reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0"
+
 type key = bytes
 type mac (a:macAlg) = lbytes32 (macSize a)
 //18-02-25 should instead be derived from Hashing
@@ -48,17 +50,6 @@ let sslKeyedHashPads = function
     | Hash MD5 -> (ssl_pad1_md5, ssl_pad2_md5)
     | Hash SHA1 -> (ssl_pad1_sha1, ssl_pad2_sha1)
 
-(*
-2018.03.08 SZ: Surprised I need this (and to apply it explicitly) below.
-Looks like loading TLSConstants blows up the context
-TODO: remove once this is fixed
-*)
-val modifies_none_trans: m0:mem -> m1:mem -> m2:mem -> Lemma
-  (requires modifies_none m0 m1 /\ modifies_none m1 m2)
-  (ensures  modifies_none m0 m2)
-  [SMTPat (modifies_none m0 m1); SMTPat (modifies_none m1 m2) ]
-let modifies_none_trans m0 m1 m2 = ()
-
 private val sslKeyedHash: 
   a:alg {a=MD5 \/ a=SHA1} -> 
   k:hkey a -> text a -> ST (tag a)
@@ -69,13 +60,8 @@ let sslKeyedHash a k p =
       match a with 
       | MD5 -> ssl_pad1_md5, ssl_pad2_md5
       | SHA1 -> ssl_pad1_sha1, ssl_pad2_sha1 in
-    let m0 = get() in
     let h = Hashing.compute a (k @| inner @| p) in
-    let m1 = get() in
-    let h = Hashing.compute a (k @| outer @| h) in
-    let m2 = get() in
-    modifies_none_trans m0 m1 m2;
-    h
+    Hashing.compute a (k @| outer @| h)
 
 private val sslKeyedHashVerify: 
   a:alg {a=MD5 \/ a=SHA1} -> 

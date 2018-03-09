@@ -7,6 +7,8 @@ open Mem
 
 module MM = FStar.Monotonic.Map
 
+#set-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
+
 type lbytes32 n = FStar.Bytes.lbytes (UInt32.v n)
 
 let ipkg = Pkg.ipkg
@@ -22,8 +24,6 @@ private let is_safe (#ip:ipkg) (i:ip.Pkg.t{ip.Pkg.registered i}): ST bool
   =
   let b = ip.Pkg.get_honesty i in
   ideal && b
-
-#set-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 
 type ha = Hashing.alg
 
@@ -121,6 +121,8 @@ val create:
 // cwinter: should go into $FSTAR_HOME/contrib/CoreCrypto/... ?
 val random32 : l:UInt32.t -> EXT (lbytes32 l)
 let random32 l = CoreCrypto.random (UInt32.v l)
+
+#reset-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 0 --max_ifuel 0"
 
 let create ip _ _ i u =
   let kv: keyrepr u = random32 (Hashing.tagLen u.alg) in
@@ -288,10 +290,10 @@ val coerce_eq2: a: (nat -> Type0) -> b: (nat -> Type0) -> v:a 0 -> Pure (b 0)
   (requires a == b) (ensures fun _ -> True)
 let coerce_eq2 _ _ v = v // this works; many similar variants did not.
 
-#set-options "--initial_fuel 1 --max_fuel 2 --initial_ifuel 1 --max_ifuel 2"
-
 private type id = nat
 private let ip : ipkg = Pkg.Idx id (fun _ -> True) (fun _ -> True) (fun _ -> true)
+
+#set-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1 --z3rlimit 10"
 
 private let test (a: ha) (r: rgn{~(is_tls_rgn r)}) (v': Hashing.macable a) (t': Hashing.Spec.tag a)
   : ST bool
