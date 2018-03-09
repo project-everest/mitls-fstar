@@ -36,7 +36,8 @@ endif
 
 ifneq (,$(KRML_NOUINT128))
 KOPTS+=-add-early-include '"FStar_UInt128.h"'
-KOPTS+=-fnouint128 -drop FStar.UInt128,FStar.Int.Cast.Full
+KOPTS+=-fnouint128 -drop FStar.UInt128 -by-ref Crypto.AEAD.Main.aead_state \
+  -by-ref Crypto.AEAD.Invariant.aead_state
 CFLAGS+=-DKRML_NOUINT128 -DKRML_NOSTRUCT_PASSING
 export CFLAGS
 endif

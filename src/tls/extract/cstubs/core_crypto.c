@@ -55,6 +55,10 @@ uint32_t CoreCrypto_now()
 #include <openssl/rand.h>
 #include <openssl/rsa.h>
 
+#ifdef KRML_NOSTRUCT_PASSING
+#define CoreCrypto_dh_agreement_ CoreCrypto_dh_agreement
+#endif
+
 FStar_Bytes_bytes CoreCrypto_dh_agreement_(CoreCrypto_dh_key *x0,
                                           FStar_Bytes_bytes x1) {
   DH *dh = DH_new();
@@ -91,9 +95,8 @@ FStar_Bytes_bytes CoreCrypto_dh_agreement_(CoreCrypto_dh_key *x0,
   FStar_Bytes_bytes ret = {.length = len, .data = out};
   return ret;
 }
-#ifdef KRML_NOSTRUCT_PASSING
-#define CoreCrypto_dh_agreement CoreCrypto_dh_agreement_
-#else
+
+#ifndef KRML_NOSTRUCT_PASSING
 FStar_Bytes_bytes CoreCrypto_dh_agreement(CoreCrypto_dh_key x0,
                                           FStar_Bytes_bytes x1) {
   return CoreCrypto_dh_agreement_(&x0, x1);
@@ -107,6 +110,10 @@ static inline FStar_Bytes_bytes bytes_of_bn(const BIGNUM *bn) {
   FStar_Bytes_bytes ret = {.length = len, .data = data};
   return ret;
 }
+
+#ifdef KRML_NOSTRUCT_PASSING
+#define CoreCrypto_dh_gen_key_ CoreCrypto_dh_gen_key
+#endif
 
 void CoreCrypto_dh_gen_key_(CoreCrypto_dh_params *x0, CoreCrypto_dh_key *ret) {
   DH *dh = DH_new();
@@ -127,9 +134,8 @@ void CoreCrypto_dh_gen_key_(CoreCrypto_dh_params *x0, CoreCrypto_dh_key *ret) {
 
   DH_free(dh);
 }
-#ifdef KRML_NOSTRUCT_PASSING
-#define CoreCrypto_dh_gen_key CoreCrypto_dh_gen_key_
-#else
+
+#ifndef KRML_NOSTRUCT_PASSING
 CoreCrypto_dh_key CoreCrypto_dh_gen_key(CoreCrypto_dh_params x0) {
   CoreCrypto_dh_key ret;
   CoreCrypto_dh_gen_key_(&x0, &ret);
@@ -173,6 +179,10 @@ uint32_t size_of_curve(CoreCrypto_ec_curve x) {
   }
   exit(255);
 }
+
+#ifdef KRML_NOSTRUCT_PASSING
+#define CoreCrypto_ecdh_agreement_ CoreCrypto_ecdh_agreement
+#endif
 
 FStar_Bytes_bytes CoreCrypto_ecdh_agreement_(CoreCrypto_ec_key *x0,
                                             CoreCrypto_ec_point *x1) {
@@ -221,13 +231,16 @@ FStar_Bytes_bytes CoreCrypto_ecdh_agreement_(CoreCrypto_ec_key *x0,
   FStar_Bytes_bytes ret = {.length = olen, .data = out};
   return ret;
 }
-#ifdef KRML_NOSTRUCT_PASSING
-#define CoreCrypto_ecdh_agreement CoreCrypto_ecdh_agreement_
-#else
+
+#ifndef KRML_NOSTRUCT_PASSING
 FStar_Bytes_bytes CoreCrypto_ecdh_agreement(CoreCrypto_ec_key x0,
                                             CoreCrypto_ec_point x1) {
   return CoreCrypto_ecdh_agreement_(&x0, &x1);
 }
+#endif
+
+#ifdef KRML_NOSTRUCT_PASSING
+#define CoreCrypto_ec_gen_key_ CoreCrypto_ec_gen_key
 #endif
 
 void CoreCrypto_ec_gen_key_(CoreCrypto_ec_params *x0, CoreCrypto_ec_key *ret) {
@@ -260,9 +273,8 @@ void CoreCrypto_ec_gen_key_(CoreCrypto_ec_params *x0, CoreCrypto_ec_key *ret) {
   EC_GROUP_free(g);
   EC_KEY_free(k);
 }
-#ifdef KRML_NOSTRUCT_PASSING
-#define CoreCrypto_ec_gen_key CoreCrypto_ec_gen_key_
-#else
+
+#ifndef KRML_NOSTRUCT_PASSING
 CoreCrypto_ec_key CoreCrypto_ec_gen_key(CoreCrypto_ec_params x0) {
   CoreCrypto_ec_key ret;
   CoreCrypto_ec_gen_key_(&x0, &ret);
@@ -321,6 +333,10 @@ FStar_Bytes_bytes CoreCrypto_hmac(CoreCrypto_hash_alg x0, FStar_Bytes_bytes x1,
   return ret;
 }
 
+#ifdef KRML_NOSTRUCT_PASSING
+#define CoreCrypto_rsa_gen_key_ CoreCrypto_rsa_gen_key
+#endif
+
 // REMARK: used only in tests
 void CoreCrypto_rsa_gen_key_(Prims_int size, CoreCrypto_rsa_key *ret) {
   RSA *rsa = RSA_new();
@@ -343,14 +359,17 @@ void CoreCrypto_rsa_gen_key_(Prims_int size, CoreCrypto_rsa_key *ret) {
   RSA_free(rsa);
   BN_free(e);
 }
-#ifdef KRML_NOSTRUCT_PASSING
-#define CoreCrypto_rsa_gen_key CoreCrypto_rsa_gen_key_
-#else
+
+#ifndef KRML_NOSTRUCT_PASSING
 CoreCrypto_rsa_key CoreCrypto_rsa_gen_key(Prims_int size) {
   CoreCrypto_rsa_key ret;
   CoreCrypto_rsa_gen_key_(size, &ret);
   return ret;
 }
+#endif
+
+#ifdef KRML_NOSTRUCT_PASSING
+#define CoreCrypto_rsa_encrypt_ CoreCrypto_rsa_encrypt
 #endif
 
 FStar_Bytes_bytes CoreCrypto_rsa_encrypt_(CoreCrypto_rsa_key *key,
@@ -402,9 +421,7 @@ FStar_Bytes_bytes CoreCrypto_rsa_encrypt_(CoreCrypto_rsa_key *key,
   return ret;
 }
 
-#ifdef KRML_NOSTRUCT_PASSING
-#define CoreCrypto_rsa_encrypt CoreCrypto_rsa_encrypt_
-#else
+#ifndef KRML_NOSTRUCT_PASSING
 FStar_Bytes_bytes CoreCrypto_rsa_encrypt(CoreCrypto_rsa_key key,
                                          CoreCrypto_rsa_padding padding,
                                          FStar_Bytes_bytes data) {
@@ -412,10 +429,14 @@ FStar_Bytes_bytes CoreCrypto_rsa_encrypt(CoreCrypto_rsa_key key,
 }
 #endif
 
+#ifdef KRML_NOSTRUCT_PASSING
+#define CoreCrypto_rsa_decrypt_ CoreCrypto_rsa_decrypt
+#endif
+
 // REMARK: used only in tests
-FStar_Pervasives_Native_option__FStar_Bytes_bytes
+void
 CoreCrypto_rsa_decrypt_(CoreCrypto_rsa_key *key, CoreCrypto_rsa_padding padding,
-                       FStar_Bytes_bytes data) {
+                       FStar_Bytes_bytes data, FStar_Pervasives_Native_option__FStar_Bytes_bytes *ret) {
   BIGNUM *mod =
       BN_bin2bn((uint8_t *)key->rsa_mod.data, key->rsa_mod.length, NULL);
   BIGNUM *pub =
@@ -463,19 +484,20 @@ CoreCrypto_rsa_decrypt_(CoreCrypto_rsa_key *key, CoreCrypto_rsa_padding padding,
 
   RSA_free(rsa);
 
-  FStar_Pervasives_Native_option__FStar_Bytes_bytes ret = {
-      .tag = FStar_Pervasives_Native_Some, .v = {.length = len, .data = out}};
-  return ret;
+  *ret = ((FStar_Pervasives_Native_option__FStar_Bytes_bytes ){
+      .tag = FStar_Pervasives_Native_Some, .v = {.length = len, .data = out}});
 }
 
-#ifdef KRML_NOSTRUCT_PASSING
-#define CoreCrypto_rsa_decrypt CoreCrypto_rsa_decrypt_
-#else
+#ifndef KRML_NOSTRUCT_PASSING
 FStar_Pervasives_Native_option__FStar_Bytes_bytes
 CoreCrypto_rsa_decrypt(CoreCrypto_rsa_key key, CoreCrypto_rsa_padding padding,
                        FStar_Bytes_bytes data) {
   return CoreCrypto_rsa_decrypt_(&key, padding, data);
 }
+#endif
+
+#ifdef KRML_NOSTRUCT_PASSING
+#define CoreCrypto_ec_is_on_curve_ CoreCrypto_ec_is_on_curve
 #endif
 
 bool CoreCrypto_ec_is_on_curve_(CoreCrypto_ec_params *x0,
@@ -497,9 +519,8 @@ bool CoreCrypto_ec_is_on_curve_(CoreCrypto_ec_params *x0,
   EC_KEY_free(k);
   return ret;
 }
-#ifdef KRML_NOSTRUCT_PASSING
-#define CoreCrypto_ec_is_on_curve CoreCrypto_ec_is_on_curve_
-#else
+
+#ifndef KRML_NOSTRUCT_PASSING
 bool CoreCrypto_ec_is_on_curve(CoreCrypto_ec_params x0,
                                CoreCrypto_ec_point x1) {
   return CoreCrypto_ec_is_on_curve_(&x0, &x1);
@@ -586,6 +607,10 @@ CoreCrypto_aead_encrypt(CryptoTypes_aead_cipher x0,
 }
 
 
+#ifdef KRML_NOSTRUCT_PASSING
+#define CoreCrypto_aead_decrypt_ CoreCrypto_aead_decrypt
+#endif
+
 void
 CoreCrypto_aead_decrypt_(CryptoTypes_aead_cipher x0,
                         FStar_Bytes_bytes x1,
@@ -668,9 +693,7 @@ CoreCrypto_aead_decrypt_(CryptoTypes_aead_cipher x0,
   }
 }
 
-#ifdef KRML_NOSTRUCT_PASSING
-#define CoreCrypto_aead_decrypt CoreCrypto_aead_decrypt_
-#else
+#ifndef KRML_NOSTRUCT_PASSING
 FStar_Pervasives_Native_option__FStar_Bytes_bytes
 CoreCrypto_aead_decrypt(CryptoTypes_aead_cipher x0,
                         FStar_Bytes_bytes x1,
