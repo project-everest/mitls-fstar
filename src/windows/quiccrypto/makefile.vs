@@ -1,6 +1,6 @@
 CCOPTS = /nologo /O2 /Gy /GF /Gw /GA /MD /Zi -I. -I.. -FI.\CommonInclude.h /DNO_OPENSSL
 
-all: libquiccrypto.dll
+all: libquiccrypto_code.lib
 
 # 'dir /b *.c' then replace "^(.*)" by "  \1 \\"
 SOURCES = \
