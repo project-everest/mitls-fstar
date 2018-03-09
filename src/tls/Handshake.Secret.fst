@@ -715,7 +715,7 @@ let server13_init cr sr cs pskid g_gx tr =
       dbg ("Using negotiated PSK identity: "^print_bytes id);
         //17-11-26 should this branch move to PSK? 
         match Ticket.check_ticket id with
-        | Some (Ticket.Ticket13 cs li rmsId rms) ->
+        | Some (Ticket.Ticket13 cs li rmsId rms _ _) ->
           dbg ("Ticket RMS: "^print_bytes rms);
           let i = ResumptionPSK #li rmsId in
           let CipherSuite13 _ ha = cs in //17-11-26 no consistency check? 
