@@ -20,7 +20,7 @@ INCLUDE_PATHS = \
 	$(HACL_HOME)/code/lib \
 	$(KREMLIN_HOME)/kremlib \
 	$(MITLS_HOME)/libs/ffi \
-	$(MITLS_HOME)/src/lowparse \
+#	$(MITLS_HOME)/src/lowparse \
 	$(SPECINC)
 
 ifeq (,$(MITLS_NODEBUG))
