@@ -142,7 +142,7 @@ let parse (b:bytes) : St (option ticket) =
               let (| li, rmsId |) = dummy_rmsid ae h in
               let age_add = uint32_of_bytes age_add in
               let created = uint32_of_bytes created in
-              Some (Ticket13 cs li rmsId rms created age_add app)
+              Some (Ticket13 cs li rmsId rms created age_add custom)
          end
         | _ , CipherSuite _ _ _ ->
          begin
@@ -150,7 +150,7 @@ let parse (b:bytes) : St (option ticket) =
           match vlparse 2 ms with
           | Error _ -> None
           | Correct rms ->
-            let ems = 0z <> emsb in
+            let ems = 0z <> emsb.[0ul] in
             let msId = dummy_msId pv cs ems in
             Some (Ticket12 pv cs ems msId ms)
          end
@@ -174,7 +174,7 @@ let check_ticket (b:bytes{length b <= 65551}) : St (option ticket) =
 let serialize = function
   | Ticket12 pv cs ems _ ms ->
     (versionBytes pv) @| (cipherSuiteBytes cs)
-    @| (if ems then 1z else 0z) @| (vlbytes 2 ms)
+    @| abyte (if ems then 1z else 0z) @| (vlbytes 2 ms)
   | Ticket13 cs _ _ rms created age custom ->
     (versionBytes TLS_1p3) @| (cipherSuiteBytes cs)
     @| (bytes_of_int32 created) @| (bytes_of_int32 age)

@@ -75,7 +75,7 @@ typedef mitls_nego_action (MITLS_CALLCONV *pfn_FFI_nego_cb)(void *cb_state, mitl
 #define MAX_SIGNATURE_LEN 8192
 // Select a certificate based on the given SNI and list of signatures.
 // Signature algorithms are represented as 16-bit integers using the TLS 1.3 RFC code points
-typedef void* (MITLS_CALLCONV *pfn_FFI_cert_select_cb)(void *cb_state, const unsigned char *sni, size_t sni_len, const mitls_signature_scheme *sigalgs, size_t sigalgs_len, mitls_signature_scheme *selected);
+typedef void* (MITLS_CALLCONV *pfn_FFI_cert_select_cb)(void *cb_state, mitls_version ver, const unsigned char *sni, size_t sni_len, const unsigned char *alpn, size_t alpn_len, const mitls_signature_scheme *sigalgs, size_t sigalgs_len, mitls_signature_scheme *selected);
 // Write the certificate chain to buffer, returning the number of written bytes.
 // The chain should be written by prefixing each certificate by its length encoded over 3 bytes
 typedef size_t (MITLS_CALLCONV *pfn_FFI_cert_format_cb)(void *cb_state, const void *cert_ptr, unsigned char buffer[MAX_CHAIN_LEN]);
