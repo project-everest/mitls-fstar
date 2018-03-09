@@ -364,7 +364,7 @@ let ffiSetALPN cfg x =
 
 val ffiSetEarlyData: cfg:config -> x:UInt32.t -> ML config
 let ffiSetEarlyData cfg x =
-  trace ("setting early data limit to "^(hex_of_bytes (Bytes.bytes_of_int32 x)));
+  trace ("setting early data limit to "^(hex_of_bytes (Parse.bytes_of_uint32 x)));
   { cfg with
   max_early_data = if x = 0ul then None else Some x;
   }
