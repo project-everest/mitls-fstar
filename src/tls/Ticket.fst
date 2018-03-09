@@ -129,7 +129,7 @@ let parse (b:bytes) : St (option ticket) =
       | Error _ -> None
       | Correct cs ->
         match pv, cs with
-        | TLS_1p3 , CipherSuite13 ae h ->
+        | TLS_1p3, CipherSuite13 ae h ->
          begin
           let created, r = split r 4ul in
           let age_add, r = split r 4ul in
@@ -143,6 +143,7 @@ let parse (b:bytes) : St (option ticket) =
               let age_add = uint32_of_bytes age_add in
               let created = uint32_of_bytes created in
               Some (Ticket13 cs li rmsId rms created age_add app)
+         end
         | _ , CipherSuite _ _ _ ->
          begin
           let (emsb, ms) = split r 1ul in
