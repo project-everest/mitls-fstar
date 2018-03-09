@@ -383,7 +383,7 @@ let install_ticket config ticket : ML (list PSK.psk_identifier) =
     (match Ticket.parse si with
     | Some (Ticket.Ticket12 pv cs ems msId ms) ->
       PSK.s12_extend t (pv, cs, ems, ms); [t]
-    | Some (Ticket.Ticket13 cs li rmsId rms created age_add) ->
+    | Some (Ticket.Ticket13 cs li rmsId rms created age_add _) ->
       (match PSK.psk_lookup t with
       | Some _ ->
         trace ("input ticket "^(print_bytes t)^" is in PSK database")
@@ -501,7 +501,7 @@ let ffiTicketInfoBytes (info:ticketInfo) (key:bytes) =
       let ae = ctx.early_ae in
       let h = ctx.early_hash in
       let (| li, rmsid |) = Ticket.dummy_rmsid ae h in
-      Ticket.Ticket13 (CipherSuite13 ae h) li rmsid key ctx.time_created ctx.ticket_age_add
+      Ticket.Ticket13 (CipherSuite13 ae h) li rmsid key ctx.time_created ctx.ticket_age_add empty_bytes
     | TicketInfo_12 (pv, cs, ems) ->
       Ticket.Ticket12 pv cs ems (Ticket.dummy_msId pv cs ems) key
     in

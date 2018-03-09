@@ -1003,7 +1003,7 @@ let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinishe
            let age_add = CoreCrypto.random 4 in
            let age_add = uint32_of_bytes age_add in
            let now = CoreCrypto.now () in
-           let ticket = Ticket.Ticket13 cs li rmsid rms now age_add in
+           let ticket = Ticket.Ticket13 cs li rmsid rms now age_add empty_bytes in
            let tb = Ticket.create_ticket ticket in
 
            trace ("Sending ticket: "^(print_bytes tb));
@@ -1171,9 +1171,7 @@ let recv_ccs (hs:hs) =
     trace "recv_ccs";
     // Draft 22 CCS during HRR
     // Because of stateless HRR, this may also happen as the very first message before CH (!!!)
-    let ishrr = Nego.is_hrr hs.nego in
-    let isidle = S_Idle? !hs.state in
-    if ishrr || isidle  then
+    if Nego.is_hrr hs.nego || S_Idle? !hs.state then
      begin
       trace "IGNORING CCS (workaround for implementations that send CCS after HRR)";
       InAck false false
