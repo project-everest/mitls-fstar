@@ -164,10 +164,11 @@ let encryptedExtension (ext: extension) : bool =
 (** Serializes an extension *)
 val extensionBytes: ext:extension -> b:bytes { 2 <= length b /\ length b < 65536 }
 val extensionBytes_is_injective:
-  ext1: extension -> s1: bytes ->
-  ext2: extension -> s2: bytes -> Lemma
+  ext1: extension -> s1: bytes{ UInt.size (length (extensionBytes ext1) + length s1) UInt32.n } ->
+  ext2: extension -> s2: bytes{ UInt.size (length (extensionBytes ext2) + length s2) UInt32.n } -> 
+  Lemma
   (requires (extensionBytes ext1 @| s1 = extensionBytes ext2 @| s2))
-  (ensures (ext1 == ext2 /\ s1 == s2))
+  (ensures  (ext1 == ext2 /\ s1 == s2))
 
 // we'll need to reveal more to build extensions...
 val extensionListBytes: exts: list extension -> bytes
@@ -185,8 +186,8 @@ val extensionsBytes:
   exts:valid_extensions -> b:bytes {2 <= length b /\ length b < 2 + 65536}
 
 val extensionsBytes_is_injective_strong:
-  exts1:valid_extensions -> s1: bytes ->
-  exts2:valid_extensions -> s2: bytes -> Lemma
+  exts1:valid_extensions -> s1: bytes{ UInt.size (length (extensionsBytes exts1) + length s1) UInt32.n } ->
+  exts2:valid_extensions -> s2: bytes{ UInt.size (length (extensionsBytes exts2) + length s2) UInt32.n } -> Lemma
   (requires extensionsBytes exts1 @| s1 = extensionsBytes exts2 @| s2)
   (ensures exts1 == exts2 /\ s1 == s2)
 
