@@ -125,11 +125,12 @@ let valid_app_psk (ctx:pskInfo) (i:psk_identifier) (h:mem) =
   | Some (Entry _ c _) -> b2t (c = ctx)
   | _ -> False
 
-type pskid = i:psk_identifier //{registered_psk i} //cwinter: refinement causes segfault in TLSInfo.fst
+//cwinter: refinement causes segfault in TLSInfo.fst
+type pskid = i:psk_identifier{registered_psk i} 
 
 let psk_value (i:pskid) : ST (app_psk i)
   (requires (fun h0 -> True))
-  (ensures (fun h0 _ h1 -> modifies_none h0 h1))
+  (ensures  (fun h0 _ h1 -> modifies_none h0 h1))
   =
   recall app_psk_table;
   testify (MM.defined app_psk_table i);
@@ -151,18 +152,6 @@ let psk_lookup (i:psk_identifier) : ST (option pskInfo)
     modifies_none h0 h1
     /\ (Some? r ==> registered_psk i)))
   =
-// cwinter: verify
-//   recall app_psk_table;
-//   match MM.lookup app_psk_table i with
-//   | Some e ->
-//     assume(stable_on_t app_psk_table (MM.defined app_psk_table i));
-//     mr_witness app_psk_table (MM.defined app_psk_table i);
-//     Some e.info
-//   | None -> None
-// type honest_st (i:pskid) (h:mem) =
-//   MM.defined app_psk_table i h /\
-//   (let Entry _ _ b = MM.value app_psk_table i h in b2t b)
-// type honest_psk (i:pskid) = witnessed (honest_st i)
   recall app_psk_table;
   match MM.lookup app_psk_table i with
   | Some (Entry _ ctx _) ->
@@ -209,6 +198,8 @@ let gen_psk (i:psk_identifier) (ctx:pskInfo)
   MM.contains_stable app_psk_table i add;
   let h = get () in
   cut(MM.sel (HS.sel h app_psk_table) i == Some add);
+  assume(stable_on_t app_psk_table (MM.defined app_psk_table i));
+  mr_witness app_psk_table (MM.defined app_psk_table i);
   assume(stable_on_t app_psk_table (honest_st i));
   mr_witness app_psk_table (honest_st i)
 
