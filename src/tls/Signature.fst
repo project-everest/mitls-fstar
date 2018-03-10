@@ -135,7 +135,7 @@ val alloc_pubkey: #a:alg
                            //18-02-14 /\ m_fresh (PK?.log p) h0 h1)
                            ))
 let alloc_pubkey #a s r =
-  lemma_evolves_monotone #a; // cwinter: not in verify
+  // lemma_evolves_monotone #a; // cwinter: not in verify
   let log = HST.ralloc keyRegion s in
   PK log r
 
@@ -189,7 +189,7 @@ val sign: #a:alg
       if int_cma a h then
         let log = PK?.log pk in
         modifies_one keyRegion h0 h1 /\
-        HS.modifies_ref keyRegion (Set.singleton (Heap.addr_of (as_ref log_ashsref))) h0.h h1.h /\
+        HS.modifies_ref keyRegion (Set.singleton (Heap.addr_of (as_ref log))) h0 h1 /\
         sel h1 log == st_update (sel h0 log) t
       else modifies Set.empty h0 h1))
 
@@ -275,14 +275,16 @@ let genrepr a =
   | DSA    -> let k = dsa_gen_key 1024 in (PK_DSA k, SK_DSA k)
   | ECDSA  -> let k = ec_gen_key ({curve = ECC_P256; point_compression = false}) in (PK_ECDSA k, SK_ECDSA k)
 
+open FStar.HyperStack.All
+
 val gen: a:alg -> All (skey a)
   (requires (fun h -> h `contains` rkeys))
   (ensures  (fun h0 (s:result (skey a)) h1 ->
 	         modifies_one keyRegion h0 h1
-               /\ HS.modifies_ref keyRegion (Set.singleton (Heap.addr_of (as_ref (as_hsref rkeys)))) h0.h h1.h
+               /\ HS.modifies_ref keyRegion (Set.singleton (Heap.addr_of (as_ref rkeys))) h0 h1
                /\ h1 `contains` rkeys
 	       /\ (V? s ==>   witnessed (generated (| a, fst (V?.v s) |))
-			   /\ m_fresh (PK?.log (fst (V?.v s))) h0 h1 // cwinter: this line not in verify
+			   // /\ m_fresh (PK?.log (fst (V?.v s))) h0 h1 // cwinter: this line only in quic2c
 			   /\ Signed? (sel h1 (PK?.log (fst (V?.v s)))))))
 
 #set-options "--z3rlimit 40"
@@ -297,7 +299,7 @@ let rec gen a =
     let k = (| a, p |) in
     let keys' = add_key keys k in
     HST.op_Colon_Equals rkeys keys';
-    witness rkeys (generated (| a, p |));
+    mr_witness rkeys (generated (| a, p |));
     p, skr
 
 #set-options "--z3rlimit 20"
@@ -308,7 +310,7 @@ val leak: #a:alg -> s:skey a -> ST (public_repr * secret_repr)
   (requires (fun _ -> True))
   (ensures  (fun h0 r h1 ->
 	      modifies_one keyRegion h0 h1
-	      /\ HS.modifies_ref keyRegion (Set.singleton (Heap.addr_of (as_ref (as_hsref (PK?.log (fst s)))))) h0.h h1.h
+	      /\ HS.modifies_ref keyRegion (Set.singleton (Heap.addr_of (as_ref (PK?.log (fst s))))) h0 h1
 	      /\ Corrupt? (sel h1 (PK?.log (fst s)))
 	      /\ fst r == PK?.repr (fst s)))
 let leak #a (PK log pkr, skr) =
@@ -385,7 +387,7 @@ val lookup_key: #a:alg -> string -> ST (option (skey a))
     match o with
     | Some (p, skr) ->
       modifies_one keyRegion h0 h1 /\
-      HS.modifies_ref keyRegion (Set.singleton (Heap.addr_of (as_ref (as_hsref rkeys)))) h0.h h1.h /\
+      HS.modifies_ref keyRegion (Set.singleton (Heap.addr_of (as_ref rkeys))) h0 h1 /\
       witnessed (generated (|a,p|))
     | None -> h0 == h1))
 let lookup_key #a keyfile =
@@ -419,7 +421,7 @@ let lookup_key #a keyfile =
       let keys' = add_key keys k in
       HST.recall rkeys;
       HST.op_Colon_Equals rkeys keys';
-      witness rkeys (generated k);
+      mr_witness rkeys (generated k);
       Some (p, skr)
       end
     end
