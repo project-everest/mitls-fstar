@@ -1545,8 +1545,10 @@ type ticketInfo =
   | TicketInfo_12 of protocolVersion * cipherSuite * ems:bool
   | TicketInfo_13 of pskInfo
 
+// 2018.03.10 SZ: Allow it to modify [psk_region]?
+// Missing refinements on arguments from types in PSK
 type ticket_cb_fun =
-  (FStar.Dyn.dyn -> sni:string -> ticket:bytes -> info:ticketInfo -> rawkey:bytes -> ST unit
+  (FStar.Dyn.dyn -> sni:string -> ticket:bytes{length ticket < 65536} -> info:ticketInfo -> rawkey:bytes -> ST unit
     (requires fun _ -> True)
     (ensures fun h0 _ h1 -> modifies_none h0 h1))
 
