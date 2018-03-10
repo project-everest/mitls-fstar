@@ -1,4 +1,5 @@
 module TLSInfo
+
 module HS = FStar.HyperStack //Added automatically
 module HST = FStar.HyperStack.ST //Added automatically
 
@@ -49,8 +50,9 @@ let default_signature_schemes = [
   RSA_PKCS1_SHA1
   ]
 
-let default_groups : CommonDH.namedGroupList = 
-  let open CommonDH in [
+let default_groups : CommonDH.supportedNamedGroups =
+  let open CommonDH in
+  let groups = [
     // X448
     SECP521R1;
     SECP384R1;
@@ -59,19 +61,33 @@ let default_groups : CommonDH.namedGroupList =
     FFDHE4096;
     FFDHE3072;
     FFDHE2048;
-  ]
+  ] in
+  assert_norm (List.Tot.length groups <= Format.NamedGroupList.maxCount);
+  assert_norm (List.Tot.for_all is_supported_group groups);
+  groups
 
 // By default we use an in-memory ticket table
 // and the in-memory internal PSK database
 val defaultTicketCBFun: ticket_cb_fun
 let defaultTicketCBFun _ sni ticket info psk =
-  assume false; // FIXME(adl) have to assume modifies_none...
+  let h0 = get() in
+  begin
   match info with
   | TicketInfo_12 (pv, cs, ems) ->
-    PSK.s12_extend ticket (pv, cs, ems, psk)
+    // 2018.03.10 SZ: The ticket must be fresh
+    assume False;
+    PSK.s12_extend ticket (pv, cs, ems, psk) // modifies PSK.tregion
   | TicketInfo_13 pskInfo ->
-    PSK.coerce_psk ticket pskInfo psk;
-    PSK.extend sni ticket
+    // 2018.03.10 SZ: Missing refinement in ticket_cb_fun
+    assume (exists i.{:pattern index psk i} index psk i <> 0z);
+    // 2018.03.10 SZ: The ticket must be fresh
+    assume False;
+    PSK.coerce_psk ticket pskInfo psk;      // modifies psk_region
+    PSK.extend sni ticket                   // modifies PSK.tregion
+  end;
+  let h1 = HST.get() in
+  // 2018.03.10 SZ: [ticket_cb_fun] ensures [modifies_none]
+  assume (modifies_none h0 h1)
 
 val defaultTicketCB: ticket_cb
 let defaultTicketCB = {
