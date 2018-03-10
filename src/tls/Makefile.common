@@ -36,7 +36,7 @@ FSTAR       = $(FSTAR_HOME)/bin/fstar.exe --cache_dir $(CACHE_DIR) --cache_check
 VFLAGS     ?= --use_hints --use_hint_hashes --record_hints --warn_error -271
 
 ifneq (,$(HINTS_DIR))
-	HINTS_OPTS=--hint_file $(HINTS_DIR)/$(basename $(notdir $(subst .lax,,$(subst .checked,,$<)))).hints
+	HINTS_OPTS=--hint_file $(HINTS_DIR)/$(notdir $(subst .lax,,$(subst .checked,,$<))).hints
 endif
 
 # Project Files
@@ -83,7 +83,7 @@ depend: $(DEP_FILE)
 # re-emit the .fst.checked file. Adding the touch ensures that the
 # timestamp on the .checked file is updated to avoid make running this
 # rule again.
-# If F* doesn't write a .checked file beacause it hasn't verified a
+# If F* doesn't write a .checked file because it hasn't verified a
 # dependency, then an empty (invalid) file will be created.
 
 $(CACHE_DIR)/FStar.%.checked: | $(DEP_FILE)
@@ -133,5 +133,5 @@ extract/copied/%.c: $(KREMLIN_HOME)/kremlib/%.c
 
 
 # Rules for Interactive Mode
-%.fst-in %.fsti-in:
-	@echo $(addprefix --include , $(INCLUDE_PATHS)) --cache_dir $(CACHE_DIR) --cache_checked_modules $(OTHERFLAGS) --use_hints --use_hint_hashes $(HINTS_OPTS)
+%.fst-in %.fsti-in: 
+	@echo $(addprefix --include , $(INCLUDE_PATHS)) --cache_dir $(CACHE_DIR) --cache_checked_modules $(OTHERFLAGS) --use_hints --use_hint_hashes --hint_file $(HINTS_DIR)/$(notdir $(subst -in,,$@)).hints
