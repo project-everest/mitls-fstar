@@ -68,7 +68,7 @@ assume val summary: bytes -> TLSInfo.logInfo
 
 // concrete transcript digest
 let digest_info (a:kdfa) (info:TLSInfo.logInfo) (hv: Hashing.Spec.anyTag) =
-  exists (transcript: bytes).
+  exists (transcript: Hashing.Spec.hashable a).
     // Bytes.length hv = tagLen a /\
     hv = Hashing.Spec.hash a transcript /\
     Hashing.CRF.hashed a transcript /\
