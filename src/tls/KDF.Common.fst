@@ -99,12 +99,12 @@ let random (len:nat) : ST (lbytes len)
 let expand (#it:Type0) (#i:it) (prf:prf #it i) (input:PRF?.domain prf)
   : ST (output: (PRF?.range prf) input)
   (requires (fun h0 ->
-    Flags.ideal_KEF ==> (PRF?.pre prf) input (PRF?.log prf) h0))
+    (Flags.ideal_KEF == true) ==> (PRF?.pre prf) input (PRF?.log prf) h0))
   (ensures (fun h0 r h1 -> True))
   =
   let ha = (PRF?.hashAlg prf) i in
   if Flags.ideal_KEF then
-    let h0 = get() in
+    let h0 = HST.get() in
     cut((PRF?.pre prf) input (PRF?.log prf) h0);
     let log : ideal_log (PRF?.domain prf) (PRF?.range prf) (PRF?.r prf) = PRF?.log prf in
     HST.recall log;
@@ -112,26 +112,26 @@ let expand (#it:Type0) (#i:it) (prf:prf #it i) (input:PRF?.domain prf)
     | Some v -> v
     | None ->
       cut(MM.sel (HS.sel h0 log) input == None);
-      let h1 = get() in
+      let h1 = HST.get() in
       cut(h0 == h1);
       let key =
-        if PRF?.honest_prf prf then random (Hashing.Spec.tagLen ha)
-        else HKDF.expand ha (PRF?.key prf) ((PRF?.format prf) input) (Hashing.Spec.tagLen ha) in
-      let h2 = get() in
+        if PRF?.honest_prf prf then random (UInt32.v (Hashing.Spec.tagLen ha))
+        else HKDF.expand (PRF?.key prf) ((PRF?.format prf) input) (Hashing.Spec.tagLen ha) in
+      let h2 = HST.get() in
       assume(h2 == h1);
       cut((PRF?.pre prf) input (PRF?.log prf) h2);
-      let h5 = get () in
+      let h5 = HST.get () in
       let b = (PRF?.is_honest prf) input in
-      let h3 = get() in
+      let h3 = HST.get() in
       assume (h3 == h5); // Why?
       let output =
         if b then (PRF?.gen prf) input
         else (PRF?.coerce prf) input key in
-      let h4 = get() in
+      let h4 = HST.get() in
       assume(h0 == h4);
       cut(MM.sel (HS.sel h4 log) input == None);
       MM.extend log input output;
       output
   else
-    let k = HKDF.expand ha (PRF?.key prf) ((PRF?.format prf) input) (Hashing.Spec.tagLen ha) in
+    let k = HKDF.expand (PRF?.key prf) ((PRF?.format prf) input) (Hashing.Spec.tagLen ha) in
     (PRF?.coerce prf) input k
