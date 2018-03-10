@@ -112,9 +112,9 @@ inline_for_extraction
 let lbytes_pair_serializer32 (coordinate_length:U32.t)
   : LP.serializer32 (lbytes_pair_serializer coordinate_length) 
   = let l = U32.v coordinate_length in
-      LP.serialize32_nondep_then
-        (LP.serialize32_flbytes l) ()
-        (LP.serialize32_flbytes l) ()
+    LP.serialize32_nondep_then
+      (LP.serialize32_flbytes l) ()
+      (LP.serialize32_flbytes l) ()
 #reset-options
 
 

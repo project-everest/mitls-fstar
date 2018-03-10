@@ -51,7 +51,7 @@ val mk_entry (#i:I.id) :
     ad:adata ->
     #l:plainLen ->
     p:Plain.plain i l ->
-    c:cipher i (length (Plain.as_bytes p)) ->
+    c:cipher i (Seq.length (Plain.as_bytes p)) ->
     entry i
 
 val entry_injective (#i:I.id)
@@ -59,7 +59,7 @@ val entry_injective (#i:I.id)
                     (ad:adata) (ad':adata)
                     (#l:plainLen) (#l':plainLen)
                     (p:Plain.plain i l) (p':Plain.plain i l')
-                      (c:cipher i (length (Plain.as_bytes p))) (c':cipher i (length (Plain.as_bytes p')))
+                      (c:cipher i (Seq.length (Plain.as_bytes p))) (c':cipher i (Seq.length (Plain.as_bytes p')))
   : Lemma (let e  = mk_entry n ad p c in
            let e' = mk_entry n' ad' p' c' in
            (e == e' <==> (n == n' /\ ad == ad' /\ l == l' /\ p == p' /\ c == c')))

@@ -1,9 +1,11 @@
 (* This module maintains a injective monotonic map from nonces to ids *)
 module IdNonce
 
-open TLSConstants
 open FStar.Bytes
 open FStar.Error
+
+open Mem
+open TLSConstants
 open TLSInfo
 
 module N=Nonce

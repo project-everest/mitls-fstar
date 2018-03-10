@@ -1,18 +1,17 @@
 (* An experiment towards the PRF in KeySchedule, collapsing master and key derivation *)
 module MasterSecret (* : ST _ _ _ *)
-module HS = FStar.HyperStack //Added automatically
-module HST = FStar.HyperStack.ST //Added automatically
 
-open FStar.HyperStack
+open Mem
 open TLSConstants
 open StreamAE
 open TLSInfo
-module AE = StreamAE
+open FStar.HyperStack
 
+module AE = StreamAE
 module DM = FStar.DependentMap
 module MM = FStar.Monotonic.DependentMap
-
-
+module HS = FStar.HyperStack
+module HST = FStar.HyperStack.ST
 module N = Nonce
 module I = IdNonce
 
@@ -70,14 +69,14 @@ let derive (r:rgn) (i:AE.id)
            is_epoch_rgn r /\
            N.registered (nonce_of_id i) r))
        (ensures (fun h0 w h1 ->
-           let ms_tab_as_hsref =  ms_tab in
+           let ms_tab_as_hsref = ms_tab in
            HS.disjoint r tls_region
            /\ is_epoch_rgn r
            /\ N.registered (nonce_of_id i) r
            /\ HS.parent w.region = r
            /\ is_epoch_rgn w.region
            /\ modifies (Set.singleton tls_tables_region) h0 h1 //modifies at most the tls_tables region
-           /\ HS.modifies_ref tls_tables_region (Set.singleton (Heap.addr_of (HH.as_ref ms_tab_as_hsref.ref))) h0.h h1.h //and within it, at most ms_tab
+           /\ HS.modifies_ref tls_tables_region (Set.singleton (as_addr ms_tab_as_hsref)) h0 h1 //and within it, at most ms_tab
            /\ HST.witnessed (HST.region_contains_pred w.region) //and the writer's region is witnessed to exists also
            /\ HST.witnessed (MM.contains ms_tab i w) //and the writer is witnessed to be in ms_tab
            /\ (let old_ms = HS.sel h0 ms_tab in

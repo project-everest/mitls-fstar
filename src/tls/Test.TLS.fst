@@ -3,6 +3,8 @@ module Test.TLS
 
 open FStar.Seq
 open FStar.HyperStack
+open FStar.HyperStack.ST
+open FStar.HyperStack.All
 open FStar.Error
 open TLSError
 open TLSInfo
@@ -32,7 +34,7 @@ private let rec tcp_read_loop tcp: St unit =
 
 let tcp_client host port: St unit = 
   trace "tcp client"; 
-  let tcp = Transport.connect host port in
+  let tcp = TCP.Transport.connect host port in
   let b = Bytes.utf8_encode "not much" in
   match Transport.send tcp b with 
   | Error s -> trace ("send error: "^s)
@@ -41,7 +43,7 @@ let tcp_client host port: St unit =
 let tcp_server host port: St unit = 
   trace "tcp server";
   let listener = Tcp.listen host port in
-  let tcp = Transport.accept listener in 
+  let tcp = TCP.Transport.accept listener in 
   tcp_read_loop tcp 
 
 open TLS 
@@ -88,7 +90,7 @@ let rec client_read con host: ML unit =
 
 let client config host port offerticket offerpsk =
   trace "*** Starting miTLS client...";
-  let tcp = Transport.connect host port in
+  let tcp = TCP.Transport.connect host port in
   let rid = new_region root in
   let con = TLS.resume rid tcp config offerticket offerpsk in
   client_read con host
@@ -141,7 +143,7 @@ private let rec server_read con: ML unit =
     | r -> trace ("unexpected read result: "^string_of_ioresult_i #id r)
 
 private let rec server_loop rid sock config: ML unit =
-  let c = TLS.accept rid sock config in
+  let c = TCP.Transport.accept rid sock config in
   server_read c;
   server_loop rid sock config
 

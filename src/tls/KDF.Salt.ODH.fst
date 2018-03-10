@@ -2,11 +2,11 @@
 module KDF.Salt.ODH
 
 open FStar.Heap
-
 open FStar.HyperStack
-
 open FStar.Bytes
 open FStar.Error
+
+open Mem
 open TLSError
 open TLSConstants
 open TLSInfo

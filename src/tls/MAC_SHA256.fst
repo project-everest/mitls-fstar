@@ -8,6 +8,10 @@ open TLSConstants
 open TLSInfo
 open TLSError
 
+module B = FStar.Bytes
+
+type lbytes32 n = B.lbytes (UInt32.v n)
+
 // idealizing HMAC
 // for concreteness; the rest of the module is parametric in a
 
@@ -17,17 +21,17 @@ type id = i:id { ID12? i /\ ~(AEAD? (aeAlg_of_id i)) }
 
 let alg (i:id) = macAlg_of_id i
 
-type text = bytes
-type tag (i:id) = lbytes (macSize (alg i))
-type keyrepr (i:id) = lbytes (macSize (alg i))
+type text = B.bytes
+type tag (i:id) = lbytes32 (macSize (alg i))
+type keyrepr (i:id) = lbytes32 (macSize (alg i))
 type key (i:id) = keyrepr i
 
 // TBD in Encode?
-type good (i:id) (b:bytes) = True
+type good (i:id) (b:B.bytes) = True
 
 
 // we keep the tag in case we want to enforce tag authentication
-type entry (i:id) = | Entry: t:tag i -> p:bytes { good i p } -> entry i
+type entry (i:id) = | Entry: t:tag i -> p:B.bytes { good i p } -> entry i
 
 // readers and writers share the same state: a log of MACed messages
 (*

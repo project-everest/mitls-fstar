@@ -2,7 +2,7 @@ module Format.ECPointFormatList
 
 open Format.ECPointFormat
 
-module L = List.Tot
+module L = FStar.List.Tot
 
 (*
     https://tools.ietf.org/html/rfc4492#section-5.1.2
@@ -13,4 +13,4 @@ module L = List.Tot
 
 *)
 
-type ecPointFormatList = (l:list ecPointFormat{1 <= List.length l && L.length l <= 255})
+type ecPointFormatList = (l:list ecPointFormat{1 <= L.length l && L.length l <= 255})

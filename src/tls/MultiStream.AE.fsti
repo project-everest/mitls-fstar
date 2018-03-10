@@ -1,5 +1,8 @@
 module MultiStream.AE
 
+open Range // cwinter: module name clash with FStar.Range when referring to Range.*
+
+
 (*! refactoring Epochs, with a narrower, more abstract
     interface. WIP. *)
 
@@ -33,12 +36,12 @@ module MultiStream.AE
 // Use lists instead of sequences?
 // Revert them for syntactic convenience? 
 
-type ghost_record = (rg:Range.range & b:bytes{Bytes.length b <= snd rg})
+type ghost_record = (rg:range & b:Bytes.bytes{Bytes.length b <= snd rg})
 type logs = Seq.seq (Seq.seq ghost_record) 
 
-let empty_logs xs = Seq.forall (fun x -> x == []) xs 
+let empty_logs xs = Seq.for_all (fun x -> x == []) xs 
 let rec extends_logs xs ys =
-  let open Seq in 
+  let open FStar.Seq in 
   match length xs with 
   | 0 -> empty_logs ys
   | 1 -> head xs `prefix_of` head ys /\ empty_logs ys
@@ -124,11 +127,11 @@ val read: x: t Reader -> i: id -> ST (result (rg:Range.range & Plain.t i rg))
     live h1 x /\ 
     modifies_one h0 h1 (region x) /\
     sel_idxs h1 x == sel_idxs h0 x /\
-    let l0 = sel_logs h0 x in 
-    let l1 = sel_logs h1 x in 
-    match r with 
-    | Correct (| rg, p |) -> l1 == snoc2 l0 (Plain.v p)
-    | Error _             -> l1 == l0 )
+    (let l0 = sel_logs h0 x in 
+     let l1 = sel_logs h1 x in 
+     match r with 
+     | Correct (| rg, p |) -> l1 == snoc2 l0 (Plain.v p)
+     | Error _             -> l1 == l0))
 
 val write: x: t Writer -> i: id -> rg: Range.range -> plain:Plain.t i rg -> ST (result cipher)
   (requires fun h0 -> 
@@ -139,12 +142,12 @@ val write: x: t Writer -> i: id -> rg: Range.range -> plain:Plain.t i rg -> ST (
     live h1 x /\ // although write errors should be fatal
     modifies_one h0 h1 (region x) /\
     sel_idxs h1 x == sel_idxs h0 x /\
-    let logs0 = sel_logs h0 x in 
-    let logs1 = sel_logs h1 x in 
-    let logs_correct = snoc2 (sel_logs h0 x) (Plain.v p) in 
-    match r with 
-    | Correct cipher -> logs1 == logs_correct 
-    | Error _    -> logs1 == logs_correct \/ logs1 == logs0)
+    (let logs0 = sel_logs h0 x in 
+     let logs1 = sel_logs h1 x in 
+     let logs_correct = snoc2 (sel_logs h0 x) (Plain.v p) in 
+     match r with 
+     | Correct cipher -> logs1 == logs_correct 
+     | Error _    -> logs1 == logs_correct \/ logs1 == logs0))
 
 val create: role: rw -> r:rid -> ST (t role) 
   (requires fun h0 -> True)

@@ -105,8 +105,7 @@ let st_update #a st t =
 
 (* ------------------------------------------------------------------------ *)
 
-(* TODO: this region should be created in TLSConstants *)
-let keyRegion:TLSConstants.rgn = new_region TLSConstants.tls_region
+let keyRegion:rgn = new_region tls_region
 
 type log_t (a:alg) = m_rref keyRegion (state a) evolves
 
