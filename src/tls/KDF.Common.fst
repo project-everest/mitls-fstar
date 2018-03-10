@@ -71,16 +71,16 @@ abstract noeq type prf (#it:Type0) (i:it) =
       (requires fun h0 -> True)
       (ensures fun h0 b h1 -> h0 == h1 /\ b <==> honestT d)) ->
     gen: (d:domain -> ST (range d)
-      (requires fun h -> honestT d /\ (Flags.ideal_KEF ==> pre d log h))
-      (ensures fun h0 o h1 -> Flags.ideal_KEF ==> post d o log h0 h1)) ->
+      (requires fun h -> honestT d /\ ((Flags.ideal_KEF == true) ==> pre d log h))
+      (ensures fun h0 o h1 -> (Flags.ideal_KEF == true) ==> post d o log h0 h1)) ->
     coerce: (d:domain -> Hashing.Spec.tag (hashAlg i) -> ST (range d)
-      (requires fun h -> ~(honestT d) /\ (Flags.ideal_KEF ==> pre d log h))
-      (ensures fun h0 o h1 -> Flags.ideal_KEF ==> post d o log h0 h1)) ->
+      (requires fun h -> ~(honestT d) /\ ((Flags.ideal_KEF == true) ==> pre d log h))
+      (ensures fun h0 o h1 -> (Flags.ideal_KEF == true) ==> post d o log h0 h1)) ->
     prf #it i
 
 // Create an honest PRF instance at index i of type it
 let create (#it:Type0) (i:it) (r:rgn) (hashAlg: it -> Tot Hashing.Spec.alg)
-  (domain:Type0{hasEq t}) (range:domain -> Tot Type0) (format: domain -> Tot bytes)
+  (domain:Type0{hasEq domain}) (range:domain -> Tot Type0) (format: domain -> Tot bytes)
   (pre: (domain -> expand_log domain range r -> h:HS.mem -> GTot Type0))
   (post: (d:domain -> range d -> expand_log domain range r -> h0:HS.mem -> h1:HS.mem -> GTot Type0))
   (honestT: (p:(domain -> GTot Type0){not Flags.ideal_KEF ==> (forall (d:domain).~(p d))}))
