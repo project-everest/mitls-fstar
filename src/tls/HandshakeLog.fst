@@ -14,6 +14,7 @@ open TLSInfo
 open HandshakeMessages
 open Hashing
 open Hashing.CRF // now using incremental, collision-resistant, agile Hashing.
+open Range  // cwinter: the extracted OCaml file contains a reference to this, which is not reflected in the .depend file?
 
 module HS = FStar.HyperStack
 
