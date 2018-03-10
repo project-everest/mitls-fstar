@@ -66,24 +66,28 @@ type subrgn parent = r:rgn{HS.parent r == parent}
 /// Top-level disjointness is awkward; we could instead maintain a
 /// private mutable set of regions known to be pairwise-distinct.
 ///
-let tls_region: tls_rgn = new_colored_region HS.root tls_color
 
-type subtls = r: subrgn tls_region {is_tls_rgn r}
-
-private let p : r0: subtls & r1: subtls & r2: subtls
-  {r1 `disjoint` r0 /\ r2 `disjoint` r0 /\ r2 `disjoint` r1} =
+private let p :
+  tls_region:tls_rgn &
+  r0:subrgn tls_region &
+  r1:subrgn tls_region &
+  r2:subrgn tls_region
+  {is_tls_rgn r0 /\ is_tls_rgn r1 /\ is_tls_rgn r2 /\ r1 `disjoint` r0 /\ r2 `disjoint` r0 /\ r2 `disjoint` r1} =
+  let tls_region: tls_rgn = new_colored_region HS.root tls_color in
   let r0 = new_colored_region tls_region tls_color in
   let r1 = new_colored_region tls_region tls_color in
   let r2 = new_colored_region tls_region tls_color in
-  (| r0, r1, r2 |)
+  (| tls_region, r0, r1, r2 |)
 
 // consider dropping the tls_ prefix
+let tls_region: r:tls_rgn =
+  match p with | (| r, _, _, _ |) -> r
 let tls_tables_region: r:tls_rgn =
-  match p with | (| r, _, _ |) -> r
+  match p with | (| _, r, _, _ |) -> r
 let tls_define_region: r:tls_rgn{r `disjoint` tls_tables_region} =
-  match p with | (| _, r, _ |) -> r
+  match p with | (| _, _, r, _ |) -> r
 let tls_honest_region: r:tls_rgn{r `disjoint` tls_tables_region /\ r `disjoint` tls_define_region} =
-  match p with | (| _, _, r |) -> r
+  match p with | (| _, _, _, r |) -> r
 
 
 // used for defining 1-shot PRFs and authenticators

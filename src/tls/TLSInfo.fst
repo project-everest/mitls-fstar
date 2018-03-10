@@ -335,28 +335,24 @@ let strongAuthSI si = true //TODO: fix
 // logInfo_CH is ONLY used with 0-RTT
 // for the soundness of the *_of_id functions it can only
 // be extracted from a log with EarlyDataIndication
-
-// cwinter: this refinement triggers a segfault in FStar when used in the record types below. 
-let my_pskid = i:PSK.psk_identifier (* {PSK.registered_psk i} *) 
-
 type logInfo_CH = {
   li_ch_cr: crand;
-  li_ch_psk: list my_pskid;
+  li_ch_psk: list PSK.pskid;
 }
 
 type logInfo_CH0 = {
   li_ch0_cr: crand;
-  li_ch0_ed_psk: my_pskid;        // 0-RT PSK
-  li_ch0_ed_ae: a:aeadAlg;  // 0-RT AEAD alg
-  li_ch0_ed_hash: h:hash_alg;      // 0-RT hash
+  li_ch0_ed_psk: PSK.pskid;   // 0-RT PSK
+  li_ch0_ed_ae: a:aeadAlg;    // 0-RT AEAD alg
+  li_ch0_ed_hash: h:hash_alg; // 0-RT hash
 }
 
 type logInfo_SH = {
   li_sh_cr: crand;
   li_sh_sr: srand;
-  li_sh_ae: a:aeadAlg; // AEAD alg selected by the server
+  li_sh_ae: a:aeadAlg;        // AEAD alg selected by the server
   li_sh_hash: h:hash_alg;     // Handshake hash selected by the server
-  li_sh_psk: option my_pskid;// PSK selected by the server
+  li_sh_psk: option PSK.pskid;// PSK selected by the server
 }
 
 type logInfo_SF = {
@@ -438,7 +434,7 @@ type binderLabel =
 /// early secrets (range of 1st extraction)
 [@ Gc ] // cwinter: quic2c
 type pre_esId : Type0 =
-  | ApplicationPSK: #ha:hash_alg -> #ae:aeadAlg -> i:my_pskid{PSK.compatible_hash_ae i ha ae} -> pre_esId
+  | ApplicationPSK: #ha:hash_alg -> #ae:aeadAlg -> i:PSK.pskid{PSK.compatible_hash_ae i ha ae} -> pre_esId
   | ResumptionPSK: #li:logInfo{~(LogInfo_CH? li)} -> i:pre_rmsId li -> pre_esId
   | NoPSK: ha:hash_alg -> pre_esId
 and pre_binderId =
