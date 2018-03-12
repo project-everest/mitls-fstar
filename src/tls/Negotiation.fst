@@ -1259,7 +1259,7 @@ let get_sni (o:offer) : bytes =
 let nego_alpn (o:offer) (cfg:config) : bytes =
   match cfg.alpn with
   | None -> empty_bytes
-  | Some sal -> empty_bytes
+  | Some sal ->
     match find_client_extension Extensions.E_alpn? o with
     | None -> empty_bytes
     | Some (Extensions.E_alpn cal) ->
