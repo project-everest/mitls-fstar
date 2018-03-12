@@ -1046,10 +1046,10 @@ void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state)
 }
 
 // Certificate selection callback
-CAMLprim value ocaml_cert_select_cb(value st, value fp, value sni, value sal)
+CAMLprim value ocaml_cert_select_cb(value st, value fp, value pv, value sni_alpn, value sal)
 {
-  CAMLparam4(st, fp, sni, sal);
-  CAMLlocal1(ret);
+  CAMLparam5(st, fp, pv, sni_alpn, sal);
+  CAMLlocal3(sni, alpn, ret);
   pfn_FFI_cert_select_cb cb = (pfn_FFI_cert_select_cb)ValueToPtr(fp);
 
   // We get the list of of offered signature schemes in network format
@@ -1059,10 +1059,15 @@ CAMLprim value ocaml_cert_select_cb(value st, value fp, value sni, value sal)
   uint16_t selected, sigalgs[n];
   for(i=0; i<n; i++) sigalgs[i] = (b[2*i] << 8) + b[2*i+1];
 
+  sni = Field(sni_alpn, 0);
+  alpn = Field(sni_alpn, 1);
+
   // The callback returns a unspecified pointer to the selected certificate
   // and updates the selected signature algorithm (passed by reference)
-  void* cert = cb((void*)ValueToPtr(st), (unsigned char*)String_val(sni),
-    caml_string_length(sni), sigalgs, n, &selected);
+  void* cert = cb((void*)ValueToPtr(st), (mitls_version)Int_val(pv),
+    (unsigned char*)String_val(sni), caml_string_length(sni),
+    (unsigned char*)String_val(alpn), caml_string_length(alpn),
+    sigalgs, n, &selected);
 
   if(cert == NULL) CAMLreturn(Val_none);
 
