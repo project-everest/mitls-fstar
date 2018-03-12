@@ -105,7 +105,7 @@ libmipki.dll: libcrypto.a mipki.o
 	$(CC) $(COPTS) -shared mipki.o libcrypto.a -lws2_32 -o $@
 
 libmipki.so: libcrypto.a mipki.o
-	$(CC) $(COPTS) -shared mipki.o libcrypto.a -o $@
+	$(CC) $(COPTS) -shared mipki.o libcrypto.a -lpthread -ldl -Wl,-z,defs -o $@
 
 else # NO_OPENSSL
 
@@ -113,7 +113,7 @@ libmipki.dll: mipki.o
 	$(CC) $(COPTS) -DNO_OPENSSL -shared mipki.o -lws2_32 -o $@
 
 libmipki.so: mipki.o
-	$(CC) $(COPTS) -DNO_OPENSSL -shared mipki.o -o $@
+	$(CC) $(COPTS) -DNO_OPENSSL -shared mipki.o -lpthread -ldl -Wl,-z,defs -o $@
 
 endif
 
