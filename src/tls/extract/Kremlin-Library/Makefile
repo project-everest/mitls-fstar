@@ -92,7 +92,7 @@ all: libmitls.$(SO)
 -include $(addsuffix .d,$(FILES))
 
 libmitls.$(SO): $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
-	$(CC) $^ -shared -o $@ $(LDOPTS)
+	$(CC) $^ -shared -o $@ -Wl,-z,defs $(LDOPTS)
 
 clean:
 	rm -fr $(addsuffix .o,$(FILES)) $(addsuffix .c,$(FILES)) libmitls.$(SO)
