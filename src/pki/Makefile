@@ -28,6 +28,7 @@ ifeq ($(OS),Windows_NT)
     ARCH = win32
     EXTRA_OPTS =
     EXTRA_LIBS = -L.
+    SO_OPTS =
     CC = $(MARCH)-w64-mingw32-gcc
     ifeq ($(MARCH),x86_64)
       LIB_MACHINE=x64
@@ -47,11 +48,13 @@ else
     ifeq ($(UNAME_S),Darwin)
         EXTRA_OPTS =
         EXTRA_LIBS = -L.
+        SO_OPTS =
         ARCH = osx
         OPENSSL_CONF = ./config enable-tls1_3
     else
         EXTRA_OPTS = -fPIC
         EXTRA_LIBS = -L.
+        SO_OPTS = -Wl,-z,defs 
         ARCH = x86_64
         OPENSSL_CONF = ./config enable-tls1_3 -fPIC
     endif
@@ -105,7 +108,7 @@ libmipki.dll: libcrypto.a mipki.o
 	$(CC) $(COPTS) -shared mipki.o libcrypto.a -lws2_32 -o $@
 
 libmipki.so: libcrypto.a mipki.o
-	$(CC) $(COPTS) -shared mipki.o libcrypto.a -lpthread -ldl -Wl,-z,defs -o $@
+	$(CC) $(COPTS) -shared mipki.o libcrypto.a -lpthread -ldl $(SO_OPTS) -o $@
 
 else # NO_OPENSSL
 
@@ -113,7 +116,7 @@ libmipki.dll: mipki.o
 	$(CC) $(COPTS) -DNO_OPENSSL -shared mipki.o -lws2_32 -o $@
 
 libmipki.so: mipki.o
-	$(CC) $(COPTS) -DNO_OPENSSL -shared mipki.o -lpthread -ldl -Wl,-z,defs -o $@
+	$(CC) $(COPTS) -DNO_OPENSSL -shared mipki.o -lpthread -ldl $(SO_OPTS) -o $@
 
 endif
 
