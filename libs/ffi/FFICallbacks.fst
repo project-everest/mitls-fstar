@@ -17,7 +17,7 @@ assume val ocaml_recv_tcp: cb_state -> string -> Tot int
 assume val ocaml_ticket_cb: cb_state -> cb_fun_ptr -> string -> bytes -> bytes -> EXT unit
 
 // Certificate callbacks
-assume val ocaml_cert_select_cb: cb_state -> cb_fun_ptr -> string -> sigalgs:bytes -> EXT (option (cert_ptr * sigalg))
+assume val ocaml_cert_select_cb: cb_state -> cb_fun_ptr -> pv:int -> sni:string * alpn:bytes -> sigalgs:bytes -> EXT (option (cert_ptr * sigalg))
 assume val ocaml_cert_format_cb: cb_state -> cb_fun_ptr -> cert_ptr -> EXT bytes
 assume val ocaml_cert_sign_cb: cb_state -> cb_fun_ptr -> cert_ptr -> sigalg -> tbs:bytes -> EXT (option bytes)
 assume val ocaml_cert_verify_cb: cb_state -> cb_fun_ptr -> bytes -> sigalg -> tbs:bytes * sigv:bytes -> EXT bool

@@ -92,8 +92,8 @@ static mitls_signature_scheme pki_of_tls(TLSConstants_signatureScheme_tags sa)
 }
 
 void
-PKI_select_(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
-  FStar_Bytes_bytes sni, Prims_list__TLSConstants_signatureScheme *sal,
+PKI_select_(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st, TLSConstants_protocolVersion_ pv,
+  FStar_Bytes_bytes sni, FStar_Bytes_bytes alpn, Prims_list__TLSConstants_signatureScheme *sal,
   FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme *res)
 {
   mitls_signature_scheme sel;
@@ -138,11 +138,12 @@ PKI_select_(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
 }
 
 FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme
-PKI_select(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
-  FStar_Bytes_bytes sni, Prims_list__TLSConstants_signatureScheme *sal)
+PKI_select(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st, TLSConstants_protocolVersion_ pv,
+  FStar_Bytes_bytes sni, FStar_Bytes_bytes alpn,
+  Prims_list__TLSConstants_signatureScheme *sal)
 {
   FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme dst;
-  PKI_select_(cbs, st, sni, sal, &dst);
+  PKI_select_(cbs, st, pv, sni, alpn, sal, &dst);
   return dst;
 }
 

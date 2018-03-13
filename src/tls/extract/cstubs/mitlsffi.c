@@ -487,7 +487,8 @@ static size_t list_sa_len(Prims_list__TLSConstants_signatureScheme *l)
 }
 
 static FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme
-  wrapped_select(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st, FStar_Bytes_bytes sni,
+  wrapped_select(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st, TLSConstants_protocolVersion_ pv,
+    FStar_Bytes_bytes sni, FStar_Bytes_bytes alpn,
     Prims_list__TLSConstants_signatureScheme *sal)
 {
   wrapped_cert_cb* s = (wrapped_cert_cb*)cbs;
@@ -501,8 +502,11 @@ static FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme
     sigalgs[i] = pki_of_tls(cur->hd.tag);
     cur = cur->tl;
   }
+
   FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme res;
-  void* chain = s->select(s->cb_state, (const unsigned char*)sni.data, sni.length,
+  void* chain = s->select(s->cb_state, convert_pv(pv),
+    (const unsigned char*)sni.data, sni.length,
+    (const unsigned char*)alpn.data, alpn.length,
     sigalgs, sigalgs_len, &selected);
 
   if(chain == NULL) {
