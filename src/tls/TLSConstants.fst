@@ -1599,7 +1599,7 @@ type cert_cb = {
    *)
   cert_select_ptr: FStar.Dyn.dyn;
   cert_select_cb:
-    (FStar.Dyn.dyn -> FStar.Dyn.dyn -> sni:bytes -> sig:signatureSchemeList -> ST (option (cert_type * signatureScheme))
+    (FStar.Dyn.dyn -> FStar.Dyn.dyn -> pv:protocolVersion -> sni:bytes -> alpn:bytes -> sig:signatureSchemeList -> ST (option (cert_type * signatureScheme))
     (requires fun _ -> True)
     (ensures fun h0 _ h1 -> modifies_none h0 h1));
 
@@ -1677,14 +1677,16 @@ noeq type config : Type0 = {
     peer_name: option bytes;     // The expected name to match against the peer certificate
   }
 
-let cert_select_cb (c:config) (sni:bytes) (sig:signatureSchemeList)
+let cert_select_cb (c:config) (pv:protocolVersion) (sni:bytes) (alpn:bytes) (sig:signatureSchemeList)
    : ST (option (cert_type * signatureScheme))
         (requires fun _ -> True)
         (ensures fun h0 _ h1 -> modifies_none h0 h1)
    = c.cert_callbacks.cert_select_cb
             c.cert_callbacks.app_context
             c.cert_callbacks.cert_select_ptr
+            pv
             sni
+            alpn
             sig
 
 let cert_format_cb (c:config) (ct:cert_type)

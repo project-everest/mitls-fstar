@@ -104,7 +104,7 @@ let defaultServerNegoCB : nego_cb = {
   negotiate = defaultServerNegoCBFun;
 }
 
-let none4 = fun _ _ _ _ -> None
+let none6 = fun _ _ _ _ _ _ -> None
 let empty3 = fun _ _ _ -> []
 let none5 = fun _ _ _ _ _ -> None
 let false6 = fun _ _ _ _ _ _ -> false
@@ -113,7 +113,7 @@ let defaultCertCB : cert_cb =
   TLSConstants.mk_cert_cb
      (FStar.Dyn.mkdyn ())
      (FStar.Dyn.mkdyn ())
-     none4
+     none6
      (FStar.Dyn.mkdyn ())
      empty3
      (FStar.Dyn.mkdyn ())

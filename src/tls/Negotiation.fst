@@ -1247,6 +1247,17 @@ let get_sni (o:offer) : bytes =
   | Some (Extensions.E_server_name ((SNI_DNS sni)::_)) -> sni
   | _ -> empty_bytes
 
+let nego_alpn (o:offer) (cfg:config) : bytes =
+  match cfg.alpn with
+  | None -> empty_bytes
+  | Some sal ->
+    match find_client_extension Extensions.E_alpn? o with
+    | None -> empty_bytes
+    | Some (Extensions.E_alpn cal) ->
+      match TLSConstants.filter_aux sal List.Helpers.mem_rev cal with
+      | a :: _ -> a
+      | _ -> empty_bytes
+
 irreducible val computeServerMode:
   cfg: config ->
   co: offer ->
@@ -1271,7 +1282,7 @@ let computeServerMode cfg co serverRandom =
         in
         if sigalgs = [] then None
         // FIXME(adl) workaround for a bug in TLSConstants that causes signature schemes list to be parsed in reverse order
-        else cert_select_cb cfg (get_sni co) (List.Tot.rev sigalgs)
+        else cert_select_cb cfg TLS_1p3 (get_sni co) (nego_alpn co cfg) (List.Tot.rev sigalgs)
       in
     match compute_cs13 cfg co pske shares (Some? scert) with
     | Error z -> Error z
@@ -1356,7 +1367,7 @@ let computeServerMode cfg co serverRandom =
         | None -> [SIG_UNKNOWN (twobytes (0xFFz, 0xFFz)); ECDSA_SHA1]
         | Some sigalgs -> List.Helpers.filter_aux cfg.signature_algorithms List.Helpers.mem_rev sigalgs
         in
-      match cert_select_cb cfg (get_sni co) salgs with
+      match cert_select_cb cfg pv (get_sni co) (nego_alpn co cfg) salgs with
       | None -> Error(AD_no_certificate, perror __SOURCE_FILE__ __LINE__ "No compatible certificate can be selected")
       | Some (cert, sa) ->
         let schain = cert_format_cb cfg cert in
