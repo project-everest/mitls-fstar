@@ -1254,7 +1254,7 @@ let nego_alpn (o:offer) (cfg:config) : bytes =
     match find_client_extension Extensions.E_alpn? o with
     | None -> empty_bytes
     | Some (Extensions.E_alpn cal) ->
-      match TLSConstants.filter_aux sal List.Helpers.mem_rev cal with
+      match List.Helpers.filter_aux sal List.Helpers.mem_rev cal with
       | a :: _ -> a
       | _ -> empty_bytes
 
