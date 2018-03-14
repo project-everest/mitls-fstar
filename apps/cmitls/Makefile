@@ -5,9 +5,6 @@ MLCRYPTO_HOME ?= ../../../MLCrypto
 UNAME=$(shell uname)
 MARCH?=x86_64
 
-nullstring := #empty variable
-space := $(nullstring) $(nullstring) #one space
-
 ifeq ($(OS),Windows_NT)
   LIBMITLS=libmitls.dll
   LIBPKI=libmipki.dll
