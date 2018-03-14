@@ -1,7 +1,6 @@
 module Signature
-module HS = FStar.HyperStack //Added automatically
-module HST = FStar.HyperStack.ST //Added automatically
 
+open FStar.HyperStack.All
 open FStar.Monotonic.Seq
 open FStar.Bytes
 
@@ -10,6 +9,9 @@ open CoreCrypto
 open Hashing.Spec // masking CoreCrypto's hashAlg
 open TLSConstants
 open Cert
+
+module HS = FStar.HyperStack
+module HST = FStar.HyperStack.ST
 
 (* ------------------------------------------------------------------------ *)
 type text = bytes
@@ -132,10 +134,9 @@ val alloc_pubkey: #a:alg
     (requires (fun h0 -> True))
     (ensures  (fun h0 p h1 -> ralloc_post keyRegion s h0 (PK?.log p) h1
                            /\ PK?.repr p == r
-                           //18-02-14 /\ m_fresh (PK?.log p) h0 h1)
                            ))
 let alloc_pubkey #a s r =
-  // lemma_evolves_monotone #a; // cwinter: not in verify
+  // lemma_evolves_monotone #a;
   let log = HST.ralloc keyRegion s in
   PK log r
 
@@ -275,8 +276,6 @@ let genrepr a =
   | DSA    -> let k = dsa_gen_key 1024 in (PK_DSA k, SK_DSA k)
   | ECDSA  -> let k = ec_gen_key ({curve = ECC_P256; point_compression = false}) in (PK_ECDSA k, SK_ECDSA k)
 
-open FStar.HyperStack.All
-
 val gen: a:alg -> All (skey a)
   (requires (fun h -> h `contains` rkeys))
   (ensures  (fun h0 (s:result (skey a)) h1 ->
@@ -284,7 +283,6 @@ val gen: a:alg -> All (skey a)
                /\ HS.modifies_ref keyRegion (Set.singleton (Heap.addr_of (as_ref rkeys))) h0 h1
                /\ h1 `contains` rkeys
 	       /\ (V? s ==>   witnessed (generated (| a, fst (V?.v s) |))
-			   // /\ m_fresh (PK?.log (fst (V?.v s))) h0 h1 // cwinter: this line only in quic2c
 			   /\ Signed? (sel h1 (PK?.log (fst (V?.v s)))))))
 
 #set-options "--z3rlimit 40"

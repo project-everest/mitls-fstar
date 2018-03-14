@@ -80,22 +80,10 @@ let sendPacket tcp ct plain ver (data: (b:bytes { repr_bytes (length b) <= 2})) 
     else Error(Printf.sprintf "Transport.send returned %l" res)
   else   Error(Printf.sprintf "Transport.send returned %l" res)
 
-// cwinter: quic2c
-// let sendPacket tcp ct plain ver (data:bytes{ repr_bytes (length data) <= 2}) =
-//   // some margin for progress to avoid intermediate copies
-//   let packet = makePacket ct plain ver data in
-//   let res = Transport.send tcp (BufferBytes.from_bytes packet) (len packet) in
-//   if Int32.v res = Bytes.length packet then Correct()
-//   else Error(Printf.sprintf "Transport.send returned %l" res)
-
 private type parsed_header = result (contentType
                            * protocolVersion
                            * l:nat { l <= max_TLSCiphertext_fragment_length})
 private val parseHeader: h5:header -> Tot parsed_header
-// cwinter: quic2c
-// val parseHeader: h5:header -> Tot (result (contentType
-//                                          * protocolVersion
-//                                          * l:nat { l <= max_TLSCiphertext_fragment_length}))
 
 let parseHeader (h5:header) =
     let (ct1,b4)   = FStar.Bytes.split h5 1ul in
@@ -145,12 +133,7 @@ private let parseHeaderBuffer (b: Buffer.buffer UInt8.t {Buffer.length b = 5}) :
   // some margin for progress
   parseHeader (BufferBytes.to_bytes 5 b)
 
-// cwinter: quic2c
-// let parseHeaderBuffer (b: Buffer.buffer UInt8.t {Buffer.length b = 5}) =
-//   // some margin for progress
-//   parseHeader (BufferBytes.to_bytes 5 b)
-
-abstract  let input_inv h0 (s: input_state) = 
+abstract let input_inv h0 (s: input_state) = 
   Mem.contains h0 s.pos /\
   Buffer.live h0 s.b /\
   ( let pv = UInt32.v (sel h0 s.pos) in 
@@ -183,15 +166,6 @@ let waiting_len s =
       //assert(FStar.UInt.size(length + 5 - pv) 32);
      // other case is statically excluded
 
-// cwinter: quic2c
-// let waiting_len (s: input_state) =
-//   if !s.pos <^ 5ul
-//   then 5ul -^ !s.pos
-//   else
-//      match parseHeaderBuffer (Buffer.sub s.b 0ul 5ul) with
-//      | Correct (_,_,length) -> uint_to_t length +^ 5ul -^ (!s.pos)
-//      // other case to be statically excluded
-
 val alloc_input_state: r:_ -> ST input_state 
   (requires (fun h0 -> is_eternal_region r))
   (ensures (fun h0 s h1 ->
@@ -202,12 +176,6 @@ let alloc_input_state r =
   let pos = ralloc r 0ul in 
   let b = Buffer.rcreate r 0uy maxlen in
   InputState pos b
-
-// cwinter: quic2c
-// let alloc_input_state r = {
-//   pos = ralloc r 0ul;
-//   b = Buffer.rcreate r 0uy maxlen }
-
 
 type read_result =
   | ReadError of TLSError.error
@@ -275,55 +243,6 @@ let rec read tcp s =
             let payload = BufferBytes.to_bytes length b in
             s.pos := 0ul;
             Received ct pv payload ))
-
-// cwinter: quic2c
-// val read: Transport.t -> s: input_state -> ST read_result
-//   (requires fun h0 -> HS.contains h0 s.pos /\ Buffer.live h0 s.b)
-//   (ensures fun h0 _ h1 ->
-//     let r = HS.frameOf s.pos in
-//     HS.modifies_one r h0 h1)
-// // Refine by adding this?
-// //    Buffer.modifies_bufs_and_refs
-// //      (Buffer.only s.b)
-// //      (Set.singleton (Heap.addr_of (HS.as_ref s.pos)))
-// //      h0 h1)
-
-// let rec read tcp s =
-//   let waiting = waiting_len s in
-//   let p0 = !s.pos in
-//   let dest = Buffer.sub s.b p0 waiting in
-//   let res = Transport.recv tcp dest waiting in
-//   if res = -1l
-//   then ReadError (AD_internal_error, "Transport.recv")
-//   else if res = 0l
-//   then (trace "WouldBlock"; ReadWouldBlock)
-//   else (
-//     let received = Int.Cast.int32_to_uint32 res in
-//     s.pos := !s.pos +^ received;
-//     if received <^ waiting
-//       then
-//         // partial read
-//         // should probably ReadWouldBlock instead when non-blocking
-//         read tcp s
-//       else
-//         if !s.pos = 5ul // we have buffer the record header
-//         then (
-//           match parseHeaderBuffer s.b with
-//           | Error e -> ReadError e
-//           | Correct(ct,pv,length) ->
-//             if length = 0 then
-//               // corner case, possibly excluded by the RFC
-//               ( s.pos := 0ul; Received ct pv empty_bytes )
-//             else read tcp s )
-//         else
-//           // we have buffered the whoe record
-//           match parseHeaderBuffer s.b with
-//           | Correct(ct,pv,length) -> (
-//             let len = UInt32.uint_to_t length in
-//             let b = Buffer.sub s.b 5ul len in
-//             let payload = BufferBytes.to_bytes length b in
-//             s.pos := 0ul;
-//             Received ct pv payload ))
 
 //18-01-24 recheck async I
 //    if length fresh = 0 then

@@ -109,11 +109,8 @@ val create:
     usage k == u /\
     Pkg.fresh_regions (footprint k) h0 h1)
 
-// cwinter: should go into $FSTAR_HOME/contrib/CoreCrypto/... ?
-assume val random32 : l:UInt32.t -> EXT (lbytes32 l)
-
 let create ip _ _ i u =
-  let kv: keyrepr u = random32 (Hashing.tagLen u.alg) in
+  let kv: keyrepr u = CoreCrypto.random32 (Hashing.tagLen u.alg) in
   let ck = MAC u kv in
   let k : ir_key ip i =
     if is_safe i then

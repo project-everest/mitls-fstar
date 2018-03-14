@@ -131,14 +131,10 @@ let gen parent i =
 
 #reset-options
 val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
-
   (requires (fun h0 -> 
     witnessed (region_contains_pred parent) /\ 
     disjoint parent w.region /\
     disjoint parent (AEAD.region w.aead))) //16-04-25  we may need w.region's parent instead
-  // cwinter: quic2c
-  // (requires (fun h0 -> HS.disjoint parent w.region /\
-  // HS.disjoint parent (AEAD.region w.aead))) //16-04-25  we may need w.region's parent instead
   (ensures  (fun h0 (r:reader i) h1 ->
          modifies Set.empty h0 h1 /\
          r.log_region = w.region /\
@@ -234,17 +230,6 @@ let encrypt #i e l p =
   if authId i then
     begin
     let ilog = ilog e.log in
-  // cwinter: verify
-  //   recall ilog;
-  //   let ictr: ideal_ctr e.region i ilog = e.counter in
-  //   testify_seqn ictr;
-  //   write_at_end ilog (Entry l c p); //need to extend the log first, before incrementing the counter for monotonicity; do this only if ideal
-  //   recall ictr;
-  //   increment_seqn ictr;
-  //   recall ictr
-  //   end
-  // else
-  //   ctr := n + 1;
     HST.recall ilog;
     let ictr: ideal_ctr e.region i ilog = e.counter in
     testify_seqn ictr;

@@ -267,7 +267,6 @@ let fragments' #i #rw s = fun h -> fragments #i #rw s h
 (*------------------------------------------------------------------*)
 let genPost (#i:id) parent h0 (w:writer i) h1 =
   let r = region #i #Writer w in
-  // HS.modifies_transitively Set.empty h0 h1 /\ // cwinter: quic2c
   HS.modifies Set.empty h0 h1 /\
   HS.extends r parent /\
   fresh_region r h0 h1 /\
@@ -291,8 +290,6 @@ val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
   (requires (fun h0 -> 
     witnessed (region_contains_pred parent) /\
     disjoint parent (region #i #Writer w))) //16-04-25  we may need w.region's parent instead
-  // cwinter: quic2c
-  // (requires (fun h0 -> HS.disjoint parent (region #i #Writer w))) //16-04-25  we may need w.region's parent instead
   (ensures  (fun h0 (r:reader i) h1 ->
                modifies Set.empty h0 h1 /\
                log_region r = region #i #Writer w /\

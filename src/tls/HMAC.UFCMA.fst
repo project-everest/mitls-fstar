@@ -118,10 +118,6 @@ val create:
     usage k == u /\
     Pkg.fresh_regions (footprint k) h0 h1)
 
-// cwinter: should go into $FSTAR_HOME/contrib/CoreCrypto/... ?
-val random32 : l:UInt32.t -> EXT (lbytes32 l)
-let random32 l = CoreCrypto.random (UInt32.v l)
-
 #reset-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 0 --max_ifuel 0"
 
 let create ip _ _ i u =

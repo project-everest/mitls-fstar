@@ -381,16 +381,6 @@ let rec dh_responder g gx =
         mr_witness log (registered_dhr_st log gy);
         lemma_honest_corrupt_dhr gy;
         (gy, raw_dh_initiator g y gx)
-    // cwinter: quic2c
-    // let log : ideal_log = share_log in
-    // let h = get () in
-    // HST.recall log;
-    // HST.testify (MM.defined log i);
-    // cut(Some? (MM.sel (HS.sel h log) i));
-    // let b = Some?.v (MM.sel (HST.op_Bang log) i) in
-    // cut(MM.contains log i b h);
-    // MM.contains_stable log i b;
-    // HST.mr_witness log (MM.contains log i b); b
    end
   else (gy, raw_dh_initiator g y gx)
 

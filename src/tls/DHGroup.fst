@@ -1,7 +1,5 @@
 ﻿module DHGroup
 
-// cwinter: this file will likely be removed.
-
 open FStar.Bytes
 open FStar.Error
 
@@ -233,10 +231,6 @@ let serialize_public #g dh_Y len =
   lemma_repr_bytes_values len;
   padded_dh_Y
 
-// cwinter: unused?
-// val parse_public: g:group -> bs:bytes -> Tot (result (share g))
-// let parse_public g bs = ...
-
 private 
 let lemma_dh_param_len_bound (bs:vlb16)
   : Lemma 
@@ -246,10 +240,9 @@ let lemma_dh_param_len_bound (bs:vlb16)
 
 val parse_partial: FStar.Bytes.bytes -> Tot (result ((g:group & share g) * bytes))
 let parse_partial bs =
-  let q = dhparam_parser32 bs in
-  match q with 
+  match dhparam_parser32 bs with 
   | Some ((p, g, gy, rem), _) -> 
-      // cwinter: I have no idea why these lemmas are needed or even why they are helpful.
+      // cwinter: I have no idea why these lemmas are needed, this should really be automatic.
       lemma_dh_param_len_bound p;
       lemma_dh_param_len_bound g;
       if length gy <= length p then (

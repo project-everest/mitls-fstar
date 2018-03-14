@@ -11,15 +11,10 @@ open TLSConstants
 open TLSInfo
 open FStar.UInt32
 
+module HS = FStar.HyperStack
 module CC = CoreCrypto
 module OAEAD = AEADOpenssl
-module HS = FStar.HyperStack
-
-// cwinter: verify
-// type provider =
-//   | OpenSSLProvider
 module CAEAD = LowCProvider
-
 module Plain = Crypto.Plain
 module AE = Crypto.AEAD.Main
 module CB = Crypto.Symmetric.Bytes
@@ -87,10 +82,6 @@ let explicit_iv_length (i:id) =
 
 type key  (i:id) = lbytes (key_length i)
 type salt (i:id) = lbytes (salt_length i)
-
-// cwinter: verify
-// noeq type state (i:id) (r:rw) =
-// | OpenSSL: st:OAEAD.state i r -> salt:salt i -> state i r
 
 let pre_state (i:id) (r:rw) =
   match use_provider() with

@@ -18,8 +18,6 @@ let point = Range.point
 let frange = Range.frange
 let valid_clen = Range.valid_clen
 let fragment_range = Range.fragment_range
-// open Range // cwinter: quic2c
-module Range = Range
 
 //open Negotiation
 open Epochs

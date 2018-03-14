@@ -11,7 +11,6 @@ open Mem
 
 module DM = FStar.DependentMap
 module MM = FStar.Monotonic.DependentMap
-// module MM = FStar.Monotonic.Map // cwinter: verify
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
   
@@ -118,7 +117,6 @@ let valid_app_psk (ctx:pskInfo) (i:psk_identifier) (h:mem) =
   | Some (Entry _ c _) -> b2t (c = ctx)
   | _ -> False
 
-//cwinter: refinement causes segfault in TLSInfo.fst
 type pskid = i:psk_identifier{registered_psk i} 
 
 let psk_value (i:pskid) : ST (app_psk i)
