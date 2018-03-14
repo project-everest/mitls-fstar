@@ -147,7 +147,7 @@ let cipherLen i f =
   else if is_stlhae i then
     Range.targetLength i r
   else
-    admit () // FIXME: after generalizing StLHAE beyond AEAD ciphers
+    magic () // FIXME: after generalizing StLHAE beyond AEAD ciphers
 
 type encrypted (#i:id) (f:fragment i) = lbytes (cipherLen i f)
 type decrypted (i:id) = contentType * (b:bytes{ Range.valid_clen i (length b) })
