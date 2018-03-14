@@ -23,7 +23,10 @@ let derive_aea
   get_aeadAlg (Derive i lbl Expand)
 
 let is_ae_p (p: pkg ii) =
-  Pkg?.key p == key ii get_aeadAlg /\ p == memoization (local_ae_pkg ii get_aeadAlg) p.define_table
+//  let ioi = get_aeadAlg in
+  let (ioi:pkg ii -> Crypto.Indexing.id) = magic() in
+  let q = local_ae_pkg ii get_aeadAlg ioi in
+  Pkg?.key p == key ii ioi /\ p == memoization q p.define_table
 let is_kdf_p (p: pkg ii) d children = // same as ksd_subtree
   Pkg?.key p == secret d children /\ p == memoization (local_kdf_pkg d children) p.define_table
 
@@ -64,7 +67,8 @@ let rec mk_secret n =
     let p = mk_kdf 0 c in
     Node p c
   ) else (
-    let ae = mp ii get_aeadAlg in
+    let ioi = magic() in
+    let ae = mp ii get_aeadAlg ioi in
     assume(is_ae_p ae);// should be in the post of mp.
     lemma_KDF_depth n;
     let re = mk_secret (n-1) in
@@ -121,11 +125,12 @@ let test_rekey(): St unit
 
       let (|_,k1|) = derive #9 #(x1 <: kdf_subtree 9) s1 a1 "AE" Expand aea in
       let ik1: regid = Derive i1 "AE" Expand in
-      let k1: key ii get_aeadAlg ik1 = k1 in
+      let ioi = magic() in
+      let k1: key ii ioi ik1 = k1 in
       let h3 = get() in
       //assume(aead_inv k1 h3); // should follow from the multi-pkg invariant
 
-      let cipher = encrypt ii get_aeadAlg #ik1 k1 42 in
+      let cipher = encrypt ii get_aeadAlg ioi k1 42 in
 
       // assert(tree_invariant x1);
       // assert(tree_invariant x0);

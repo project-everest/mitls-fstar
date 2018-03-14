@@ -53,7 +53,7 @@ type digest = Hashing.anyTag //  l:bytes{length l <= 32}
 type machineState =
   | C_Idle
   | C_wait_ServerHello: // waiting for plaintext handshake 
-    psks: list (i:esId{~(no_psk i)}) -> 
+    psks: list (i:esId{~(Secret.no_psk i)}) -> 
     groups: list CommonDH.group -> // ghost summary of our offer
     ks: Secret.c13_wait_ServerHello psks groups -> machineState 
 
