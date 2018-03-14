@@ -12,12 +12,13 @@ module Encode
 open FStar.Seq
 open FStar.Bytes
 open FStar.Error
+open FStar.HyperStack.ST
 
 open TLSError
 open TLSConstants
 open TLSInfo
-module Range = Range
 open Range
+
 
 // for now, we *exclude* MACOnly
 
@@ -47,7 +48,7 @@ let plainLength i clen = clen - ivSize i
 (* Interface towards LHAE *)
 
 //private val zeros: r:range -> rbytes r
-let zeros (rg:range) = createBytes (snd rg) 0z
+let zeros (rg:range) = Bytes.create_ (snd rg) 0uy
 
 val payload: i:id -> r:frange i -> ad:LHAEPlain.adata i->
   LHAEPlain.plain i ad r -> Tot (rbytes r) //$ we had?: { SafeId e }
@@ -66,7 +67,7 @@ val macPlain_bytes:
 
 let macPlain_bytes i rg ad b = 
   lemma_repr_bytes_values (length b); 
-  ad @| vlbytes 2 b
+  ad @| Parse.vlbytes 2 b
 
 val macPlain: i:id -> r:frange i ->
   $ad:LHAEPlain.adata i ->
@@ -213,7 +214,7 @@ val pad: l:nat { 0 < l /\ l <= 256 } -> Tot(lbytes l)
 // we may need a more precise refinement for the MEE proof:
 // the last byte of padding determines the padding
 
-let pad p  = createBytes p (Bytes.byte_of_int (p-1)) //TODO: NS REVIEW!
+let pad p  = Bytes.create_ p (Bytes.bytes_of_int (p-1) 1).[0ul] //TODO: NS REVIEW!
 
 
 // plain record ---encode---> plaintext bytes
@@ -222,7 +223,7 @@ val encode:
       ad: LHAEPlain.adata i ->
       rg:range {
         snd rg <= max_TLSPlaintext_fragment_length /\ 
-        snd rg - fst rg <= maxPadSize i - minimalPadding i (snd rg + macSize (macAlg_of_id i)) } ->
+        snd rg - fst rg <= maxPadSize i - minimalPadding i (snd rg + (UInt32.v (macSize (macAlg_of_id i)))) } ->
       pl: LHAEPlain.plain i ad rg ->
       tag: MAC.tag i ->
       Tot (lbytes (plainLength i (targetLength i rg)))
@@ -253,17 +254,17 @@ val decode:
       ad: LHAEPlain.adata i ->
       tlen: nat{
         valid_clen i tlen /\
-        tlen - ivSize i >= macKeySize(macAlg_of_id i) + fixedPadSize i /\
+        tlen - ivSize i >= (UInt32.v (macKeySize (macAlg_of_id i))) + fixedPadSize i /\
         ( let rg = cipherRangeClass i tlen in
 //          StatefulPlain.wf_ad_rg i (LHAEPlain.parseAD ad) rg /\
-          snd rg - fst rg <= maxPadSize i - minimalPadding i (snd rg + macSize (macAlg_of_id i))) } ->
+          snd rg - fst rg <= maxPadSize i - minimalPadding i (snd rg + (UInt32.v (macSize (macAlg_of_id i))))) } ->
       payload: lbytes (plainLength i tlen) ->
       St (p: plain i ad (cipherRangeClass i tlen)
 	 { pv_of_id i <> SSL_3p0 ==> (b2t (p.ok) <==> (payload == encode i ad (cipherRangeClass i tlen) p.f p.tag ))})
 
 
 assume val lemma_pad: lx: nat { lx < 256 } ->
-  Lemma ((createBytes lx (Bytes.byte_of_int lx) @| createBytes 1 (Bytes.byte_of_int lx)) = pad (lx+1))
+  Lemma ((Bytes.create_ lx (Bytes.bytes_of_int lx 1).[0ul] @| Bytes.create_ 1 (Bytes.bytes_of_int lx 1).[0ul]) = pad (lx+1))
   
 
 let decode i ad tlen payload =
@@ -278,9 +279,9 @@ let decode i ad tlen payload =
     | MACOnly hashAlg
     | MtE (Stream CoreCrypto.RC4_128) hashAlg ->
         assert(tlen = l + ivSize i);
-        let lf = l - lt in
-        let (fragment, tag) = Bytes.split payload lf in
-        lemma_split payload lf; // could be automated!
+        let lf = l - (UInt32.v lt) in
+        let (fragment, tag) = Bytes.split_ payload lf in
+        lemma_split (Bytes.reveal payload) lf; // could be automated!
         let p = LHAEPlain.mk_plain i ad rg fragment in
         assume( ~ (safeId i)); // should follow from their definitions
         assert(payload = encode i ad rg p tag);
@@ -290,22 +291,22 @@ let decode i ad tlen payload =
     | MtE (Block encAlg) hashAlg ->
         let lp = fixedPadSize i in
         assert(lp = 1);
-        let (ftx,b) = Bytes.split payload (l - lp) in
-        lemma_split payload (l - lp); // could be automated!
+        let (ftx,b) = Bytes.split_ payload (l - lp) in
+        lemma_split (Bytes.reveal payload) (l - lp); // could be automated!
         let lx = int_of_bytes b in
         assert( lx >= 0 /\ lx < 256);
         let lft = l - (lx + lp) in
-        let lf  = lft - lt in
+        let lf  = lft - (UInt32.v lt) in
         if lf < 0 then
             (*@ Evidently padding has been corrupted, or has been incorrectly generated;
                 following TLS1.1 we fail later (see RFC5246 6.2.3.2 Implementation Note) *)
-            let (f, tag) = split ftx (l - lt - lp) in
-            lemma_split ftx (l - lt - lp);
+            let (f, tag) = split_ ftx (l - (UInt32.v lt) - lp) in
+            lemma_split (Bytes.reveal ftx) (l - (UInt32.v lt) - lp);
             let p = LHAEPlain.mk_plain i ad rg f in
             assume(~(payload == encode i ad rg p tag ));
             Plain p tag false
         else
-            let (ft,x) = split ftx lft in
+            let (ft,x) = split_ ftx lft in
             let correctPadding: c:bool { c /\ pv <> SSL_3p0 ==> (x @| b) = pad (lx+1) } =
               match pv with
               | SSL_3p0 ->
@@ -318,10 +319,10 @@ let decode i ad tlen payload =
                 (*@ We note a small timing leak here: the run time of the following two
                     lines depends on padding length. We could mitigate it by implementing
                     constant time comparison up to maximum padding length.*)
-                  let expected = createBytes lx (Bytes.byte_of_int lx) in
+                  let expected = Bytes.create_ lx (Bytes.bytes_of_int lx 1).[0ul] in
                   if x = expected then
                     ( lemma_pad lx;
-                      assume(b = createBytes 1 (Bytes.byte_of_int lx));
+                      assume(b = Bytes.create_ 1 (Bytes.bytes_of_int lx 1).[0ul]);
                       assert((x @| b) = pad (lx+1));
                       true )
                   else false
@@ -329,8 +330,8 @@ let decode i ad tlen payload =
                | _ -> false in
 
             if correctPadding then (
-                let (f, tag) = split ft lf in
-                lemma_split ft lf;
+                let (f, tag) = split_ ft lf in
+                lemma_split (Bytes.reveal ft) lf;
                 assume(within lf rg);
                 let p = LHAEPlain.mk_plain i ad rg f in
                 assume (safeId i ==> authId i);
@@ -340,10 +341,10 @@ let decode i ad tlen payload =
                   payload = encode i ad rg p tag);
                 Plain p tag true )
             else (
-                let lf = l - lt - lp in  // faking minimal padding (lx = 0)
+                let lf = l - (UInt32.v lt) - lp in  // faking minimal padding (lx = 0)
                 assume(within lf rg);
-                let (f, tag) = split ftx lf in
-                lemma_split ftx lf;
+                let (f, tag) = split_ ftx lf in
+                lemma_split (Bytes.reveal ftx) lf;
                 let p = LHAEPlain.mk_plain i ad rg f in
                 assume(payload <> encode i ad rg p tag );
                 Plain p tag false )
@@ -387,7 +388,7 @@ val repr:
   i:id{ ~ (authId i) } -> // was { ~ (safeId i) }
   ad: LHAEPlain.adata i ->
   rg:range { snd rg <= max_TLSPlaintext_fragment_length /\
-             snd rg - fst rg <= maxPadSize i - minimalPadding i (snd rg + macSize (macAlg_of_id i)) } ->
+             snd rg - fst rg <= maxPadSize i - minimalPadding i (snd rg + (UInt32.v (macSize (macAlg_of_id i)))) } ->
   plain i ad rg ->
   St (b: lbytes (plainLength i (targetLength i rg))
 	 { targetLength i rg <= max_TLSCiphertext_fragment_length })
