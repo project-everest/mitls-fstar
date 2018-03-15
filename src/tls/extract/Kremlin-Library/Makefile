@@ -22,7 +22,7 @@ else ifeq ($(UNAME),Linux)
   VARIANT = -Linux
   CFLAGS := -fPIC $(CFLAGS)
   LD_LIBRARY_PATH :=  $(MITLS_HOME)/src/pki:$(LD_LIBRARY_PATH)
-  LDOPTS := -lpthread -Xlinker -z -Xlinker noexecstack -Xlinker --version-script -Xlinker $(MITLS_HOME)/src/tls/libmitls_version_script $(LDOPTS)
+  LDOPTS := -lpthread -Xlinker -z -Xlinker noexecstack -Xlinker --version-script -Xlinker $(MITLS_HOME)/src/tls/libmitls_version_script -Wl,-z,defs $(LDOPTS)
   SO = so
   export LD_LIBRARY_PATH
 endif
