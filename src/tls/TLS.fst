@@ -21,7 +21,6 @@ let fragment_range = Range.fragment_range
 
 //open Negotiation
 open Epochs
-//open Handshake
 open Connection
 
 module ST   = FStar.HyperStack.ST
@@ -31,6 +30,8 @@ module DS   = DataStream
 module SD   = StreamDeltas
 module Conn = Connection
 module EP   = Epochs
+
+module Handshake = Old.Handshake
 
 (* A flag for runtime debugging of TLS data.
    The F* normalizer will erase debug prints at extraction

@@ -1,5 +1,5 @@
 (**
-This modules implements the mutable state for the successive StAE epochs allocated by KeySchedule and used by TLS.
+This modules implements the mutable state for the successive StAE epochs which is used by TLS.
 Its separation from Handshake and coding is somewhat arbitrary.
 An elaboration would ensure that keys in old epochs are erased.
 (i.e. we only keep old epoch AE logs for specifying authentication)
@@ -19,7 +19,6 @@ open TLSInfo
 open TLSConstants
 module Range = Range
 open Range
-//open HandshakeMessages
 open StAE
 //open Negotiation
 open Mem
@@ -27,6 +26,7 @@ open Mem
 module ST = FStar.HyperStack.ST 
 module HS = FStar.HyperStack
 module MS = FStar.Monotonic.Seq
+module Secret = Handshake.Secret
 
 type random = TLSInfo.random
 
@@ -135,7 +135,7 @@ noeq type epochs (r:rgn) (n:random) = | MkEpochs:
   es: MS.i_seq r (epoch r n) (epochs_inv #r #n) ->
   read: epoch_ctr r es ->
   write: epoch_ctr r es ->
-  exporter: MS.i_seq r KeySchedule.exportKey (fun s -> Seq.length s <= 2)  ->
+  exporter: MS.i_seq r Secret.exportKey (fun s -> Seq.length s <= 2)  ->
   epochs r n
 
 /// Epochs stores all keys produced by the HS and used by TLS.
@@ -320,9 +320,9 @@ let get_current_epoch
 
 val recordInstanceToEpoch:
   #r:rgn -> #n:random -> hs:Negotiation.handshake ->
-  ks:KeySchedule.recordInstance -> Tot (epoch r n)
+  ks:Secret.recordInstance -> Tot (epoch r n)
 let recordInstanceToEpoch #hs_rgn #n hs ri =
-  let KeySchedule.StAEInstance #i rd wr = ri in
+  let Secret.StAEInstance #i rd wr = ri in
   assume(nonce_of_id i = n); // ADL: KS will need to provove this
   assume(epoch_region_inv' hs_rgn rd wr);
   Epoch #hs_rgn #n #i hs rd wr

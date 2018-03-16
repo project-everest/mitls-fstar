@@ -20,6 +20,10 @@ module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
 module H = Hashing.Spec
 
+// cwinter: Epochs.fst still depends on these (previously in KeySchedule.fst)
+type exportKey = (li:logInfo & i:exportId li & H.tag (exportId_hash i))
+type recordInstance = | StAEInstance: #id:TLSInfo.id -> StAE.reader (TLSInfo.peerId id) -> StAE.writer id -> recordInstance  
+
 (* A flag for runtime debugging of computed keys.
    The F* normalizer will erase debug prints at extraction
    when this flag is set to false *)
@@ -162,6 +166,8 @@ type ems (i:ems_id) = secret i
 type hms (i:hms_id) = secret i
 type ams (i:ams_id) = secret i
 
+type hs_id = id
+
 (*
 type hsId       = i: id {labelled i ""}
 type asId       = i: id {labelled i ""}
@@ -244,8 +250,6 @@ let binderKey i = HMAC.UFCMA.key Idx.ii i
 //type fink (i:finishedId)    = HMAC.UFCMA.key (HMAC.UFCMA.HMAC_Finished i) (fun _ -> True)
 //type binderKey (i:binderId) = HMAC.UFCMA.key (HMAC.UFCMA.HMAC_Binder i) (fun _ -> True)
 
-
-// type exportKey = (i:id & ems i * logInfo)
 
 // Note from old miTLS (in TLSInfo.fst)
 // type id = {
@@ -701,65 +705,65 @@ val server13_init:
 let leak_secret es = es 
 let leak_psk psk = psk
 
-let server13_init cr sr cs pskid g_gx tr =
-  dbg "server13_init";
-  let CipherSuite13 aea ha = cs in
+// let server13_init cr sr cs pskid g_gx tr =
+//   dbg "server13_init";
+//   let CipherSuite13 aea ha = cs in
 
-  // retrieve optional pre-shared key; should the index be pski instead?
-  let (| i, (psk0, ha) |): ( i:id & psk i * ha: Hashing.Spec.alg {ha = ha_of_id i} ) =
-    match pskid with 
-    | None ->
-      dbg "No PSK selected.";
-      (| no_psk_id ha, (dummy_psk ha, ha) |) 
-    | Some id -> 
-      dbg ("Using negotiated PSK identity: "^print_bytes id);
-        //17-11-26 should this branch move to PSK? 
-        match Ticket.check_ticket id with
-        | Some (Ticket.Ticket13 cs li rmsId rms _ _) ->
-          dbg ("Ticket RMS: "^print_bytes rms);
-          let i = ResumptionPSK #li rmsId in
-          let CipherSuite13 _ ha = cs in //17-11-26 no consistency check? 
-          let nonce, _ = split_ id 12 in  //17-11-26 what's this nonce? 
-          let psk0 = HKDF.derive_secret ha rms "resumption" nonce in
-          (|i, (psk, ha)|)
-        | None ->
-          let (| i, (pski, psk) |) = read_psk id in //17-11-26 no consistency check?
-          (| i, (psk, pski.early_hash) |) in
-  if Some? pskid then dbg ("Pre-shared key: "^leak_psk psk);
+//   // retrieve optional pre-shared key; should the index be pski instead?
+//   let (| i, (psk0, ha) |): ( i:id & psk i * ha: Hashing.Spec.alg {ha = ha_of_id i} ) =
+//     match pskid with 
+//     | None ->
+//       dbg "No PSK selected.";
+//       (| no_psk_id ha, (dummy_psk ha, ha) |) 
+//     | Some id -> 
+//       dbg ("Using negotiated PSK identity: "^print_bytes id);
+//         //17-11-26 should this branch move to PSK? 
+//         match Ticket.check_ticket id with
+//         | Some (Ticket.Ticket13 cs li rmsId rms _ _ _) ->
+//           dbg ("Ticket RMS: "^print_bytes rms);
+//           let i = ResumptionPSK #li rmsId in
+//           let CipherSuite13 _ ha = cs in //17-11-26 no consistency check? 
+//           let nonce, _ = split_ id 12 in  //17-11-26 what's this nonce? 
+//           let psk0 = HKDF.derive_secret ha rms "resumption" nonce in
+//           (|i, (psk, ha)|)
+//         | None ->
+//           let (| i, (pski, psk) |) = read_psk id in //17-11-26 no consistency check?
+//           (| i, (psk, pski.early_hash) |) in
+//   if Some? pskid then dbg ("Pre-shared key: "^leak_psk psk);
 
-  // extract early master secret
-  let i0 = ems_of_psk i in 
-  let es: secret i0 = Extract0.extract0 psk0 ha in 
-  dbg ("Computed early secret:           "^leak_secret es);
-  let bfko =
-    match pskid with 
-    | None -> None
-    | Some _ -> // optionally compute the binder-verification key
-      let lbl = binder_label i in
-      let bnsi = bns_of_ems i0 in
-      let bns: secret bnsi = KDF.derive es ha lbl Expand info in
-      let bfkId = binderKey i in
-      let info0 = magic() in // missing region and logical payload
-      let bfk: HMAC.UFCMA.key i = KDF.derive bns ha "finished" Expand info0 in
-      dbg ("binder key:                      "^print_bytes bfkId);
-      dbg ("binder Finished key:             "^print_bytes bfk);
-      Some bfk in
+//   // extract early master secret
+//   let i0 = ems_of_psk i in 
+//   let es: secret i0 = Extract0.extract0 psk0 ha in 
+//   dbg ("Computed early secret:           "^leak_secret es);
+//   let bfko =
+//     match pskid with 
+//     | None -> None
+//     | Some _ -> // optionally compute the binder-verification key
+//       let lbl = binder_label i in
+//       let bnsi = bns_of_ems i0 in
+//       let bns: secret bnsi = KDF.derive es ha lbl Expand info in
+//       let bfkId = binderKey i in
+//       let info0 = magic() in // missing region and logical payload
+//       let bfk: HMAC.UFCMA.key i = KDF.derive bns ha "finished" Expand info0 in
+//       dbg ("binder key:                      "^print_bytes bfkId);
+//       dbg ("binder Finished key:             "^print_bytes bfk);
+//       Some bfk in
 
-  // TODO optionally compute the 0RTT key too? 
+//   // TODO optionally compute the 0RTT key too? 
 
-  // extract handshake secret, mixing-in the optional DH secret. 
-  let salt1: Extract1.PRF.salt (salt_of_ms i0) = KDF.derive es ha "derived" Expand () in
-  let idh, hs =
-    match g_gx with
-    | None -> 
-        let hs = Extract1.extractP ha salt1 in
-        NoIDH, hs
-    | Some (| g, gX |) ->
-        let gY, hs = Extract1.extractR ha g gX in 
-        IDH gX gY, hs in
-  dbg ("Handshake salt:                  "^print_bytes salt1);
-  dbg ("Handshake secret:                "^print_bytes hs);
-  (| idh, (bfko, (*local state:*) hs)|)
+//   // extract handshake secret, mixing-in the optional DH secret. 
+//   let salt1: Extract1.PRF.salt (salt_of_ms i0) = KDF.derive es ha "derived" Expand () in
+//   let idh, hs =
+//     match g_gx with
+//     | None -> 
+//         let hs = Extract1.extractP ha salt1 in
+//         NoIDH, hs
+//     | Some (| g, gX |) ->
+//         let gY, hs = Extract1.extractR ha g gX in 
+//         IDH gX gY, hs in
+//   dbg ("Handshake salt:                  "^print_bytes salt1);
+//   dbg ("Handshake secret:                "^print_bytes hs);
+//   (| idh, (bfko, (*local state:*) hs)|)
 
 (* WAS:
 let ks_server_13_init ks cr cs pskid g_gx =
@@ -853,665 +857,665 @@ let server13_0RTT
   (x0s, key0)
 *)
 
-/// Continues from the handshake secret, now that we have the handshake
-/// digest up to ServerHello. We stop at the application master secret
-/// and return the handshake AE keys to install and the Finished keys.
+// /// Continues from the handshake secret, now that we have the handshake
+// /// digest up to ServerHello. We stop at the application master secret
+// /// and return the handshake AE keys to install and the Finished keys.
 
-val server13_ServerHello: 
-  i: esId ->
-  idh:_ ->
-  ks: s13_wait_ServerHello i idh ->
-  tr: transcript ->
-  digest: Hashing.Spec.anyTag ->
-  ST (
-    i: hsId {i = hms_of_ems i idh} &
-    s13_wait_ServerFinished (ams_of_hms i) *
-    StreamAE.reader (cts_of_hms i) *
-    StreamAE.writer (sts_of_hms i)  
-    )
-  (requires fun h0 -> True)
-  (ensures fun h0 r h1 -> modifies_none h0 h1)
+// val server13_ServerHello: 
+//   i: esId ->
+//   idh:_ ->
+//   ks: s13_wait_ServerHello i idh ->
+//   tr: transcript ->
+//   digest: Hashing.Spec.anyTag ->
+//   ST (
+//     i: id (* hsId *) {i = hms_of_ems i idh} &
+//     s13_wait_ServerFinished (ams_of_hms i) *
+//     StreamAE.reader (cts_of_hms i) *
+//     StreamAE.writer (sts_of_hms i)  
+//     )
+//   (requires fun h0 -> True)
+//   (ensures fun h0 r h1 -> modifies_none h0 h1)
 
-let server13_ServerHello ks log =
-  dbg ("server13_ServerHello, hashed log = "^print_bytes digest);
+// let server13_ServerHello ks log =
+//   dbg ("server13_ServerHello, hashed log = "^print_bytes digest);
 
-  let S13_wait_SH ha aea _ _ es hs = ks in
-  // Derived handshake traffic secrets and keys 
-  let cts = derive ha hs "c hs traffic" log info in
-  let sts = derive ha hs "s hs traffic" log info in 
+//   let S13_wait_SH ha aea _ _ es hs = ks in
+//   // Derived handshake traffic secrets and keys 
+//   let cts = Derive ha hs "c hs traffic" log info in
+//   let sts = Derive ha hs "s hs traffic" log info in 
 
-  // Handshake traffic keys
-  let w = derive_streamAE sts info Writer writer_parent in 
-  let r = derive_streamAE cts info Reader reader_parent in 
+//   // Handshake traffic keys
+//   let w = derive_streamAE sts info Writer writer_parent in 
+//   let r = derive_streamAE cts info Reader reader_parent in 
 
-  // Finished keys (hiding too much their regions and logical payloads)
-  let cfk1 = finished_13 h cts in
-  let sfk1 = finished_13 h sts in
+//   // Finished keys (hiding too much their regions and logical payloads)
+//   let cfk1 = finished_13 h cts in
+//   let sfk1 = finished_13 h sts in
 
-  dbg ("handshake traffic secret[C]:     "^sprint_secret cts);
-  dbg ("handshake traffic secret[S]:     "^sprint_secret sts);
-  dbg ("finished key[C]:                 "^sprint_secret cfk1);
-  dbg ("finished key[S]:                 "^sprint_secret sfk1);
-  //dbg ("handshake key[C]:                "^print_bytes ck^", IV="^print_bytes civ);
-  //dbg ("handshake key[S]:                "^print_bytes sk^", IV="^print_bytes siv);
+//   dbg ("handshake traffic secret[C]:     "^sprint_secret cts);
+//   dbg ("handshake traffic secret[S]:     "^sprint_secret sts);
+//   dbg ("finished key[C]:                 "^sprint_secret cfk1);
+//   dbg ("finished key[S]:                 "^sprint_secret sfk1);
+//   //dbg ("handshake key[C]:                "^print_bytes ck^", IV="^print_bytes civ);
+//   //dbg ("handshake key[S]:                "^print_bytes sk^", IV="^print_bytes siv);
 
-  let saltId = Salt (HandshakeSecretID hsId) in
-  let salt = derive_secret hs ha "derived" Expand in
-  //dbg ("Application salt:                "^print_bytes salt);
-  let amsi = ams_of_hms hmsi in
-  let ams: secret amsi = extract2 salt ha in
-  dbg ("Application secret:              "^sprint_secret ams);
+//   let saltId = Salt (HandshakeSecretID hsId) in
+//   let salt = derive_secret hs ha "derived" Expand in
+//   //dbg ("Application salt:                "^print_bytes salt);
+//   let amsi = ams_of_hms hmsi in
+//   let ams: secret amsi = extract2 salt ha in
+//   dbg ("Application secret:              "^sprint_secret ams);
 
-  let next = S13_wait_ServerFinished #amsi ha aea ams in
-  (| hmsi, (next, r, w) |)
-
-
-// Will become private; public API will have
-// client12_keygen: ks -> (i:id * w:StatefulLHAE.writer i)
-// server12_keygen: ...
-val ks12_finished_key: st: ks_state -> ST TLSPRF.key
-  (requires fun h0 -> C12_has_MS? s \/ S12_has_MS? s)
-  (ensures fun h0 r h1 -> modifies Set.empty h0 h1)
-
-let ks12_finished_key st =
-  let ms = match st with
-  | C12_has_MS _ _ _ ms -> ms
-  | S12_has_MS _ _ _ ms -> ms in
-  TLSPRF.coerce ms
-
-let ks12_ms st = 
-  match st with 
-  | C12_has_MS _ _ msId ms -> (msId, ms)
-  | S12_has_MS _ _ msId ms -> (msId, ms)
-
-private val ks12_record_key: st: ks12_state -> St recordInstance
-let ks12_record_key st =
-  dbg "ks12_record_key";
-  let role, csr, alpha, msId, ms =
-    match st with
-    | C12_has_MS csr alpha msId ms -> Client, csr, alpha, msId, ms
-    | S12_has_MS csr alpha msId ms -> Server, csr, alpha, msId, ms in
-  let cr, sr = split csr 32 in
-  let pv, cs, ems = alpha in
-  let kdf = kdfAlg pv cs in
-  let ae = get_aeAlg cs in
-  let id = ID12 pv msId kdf ae cr sr role in
-  let AEAD alg _ = ae in (* 16-10-18 FIXME! only correct for AEAD *)
-  let klen = CoreCrypto.aeadKeySize alg in
-  let slen = AEADProvider.salt_length id in
-  let expand = TLSPRF.kdf kdf ms (sr @| cr) (klen + klen + slen + slen) in
-  dbg ("keystring (CK, SK, CIV, SIV) = "^print_bytes expand);
-  let k1, expand = split expand klen in
-  let k2, expand = split expand klen in
-  let iv1, iv2 = split expand slen in
-  let wk, wiv, rk, riv =
-    match role with
-    | Client -> k1, iv1, k2, iv2
-    | Server -> k2, iv2, k1, iv1 in
-  let w = StAE.coerce HS.root id (wk @| wiv) in
-  let rw = StAE.coerce HS.root id (rk @| riv) in
-  let r = StAE.genReader HS.root rw in
-  StAEInstance r w
-
-(* 1.2 resumption *)
-
-// We can potentially 1.2 resume from 1.2 or 1.3 ClientHello
-// (used to be [C12_Full_CH? \/ C_13_wait_SH?] now joined in Handshake)
-val client12_resume: 
-  cr: random -> 
-  sr: random -> 
-  pv: protocolVersion -> 
-  cs: cipherSuite ->
-  ems: bool ->
-  msId:TLSInfo.msId ->
-  ms:bytes -> 
-  ST (ks12_state * recordInstance)
-  (requires fun h0 -> True)
-  (ensures fun h0 r h1 -> True)
-let client12_resume cr sr pv cs ems msId ms =
-  dbg "client12_resume";
-  dbg ("Recall MS: "^print_bytes ms);
-  let ks = C12_has_MS (cr @| sr) (pv, cs, ems) msId ms in
-  ks, ks12_record_key ks
-
-val server12_resume: 
-  cr: random -> 
-  sr: random -> 
-  pv: protocolVersion -> 
-  cs: cipherSuite -> 
-  ems: bool -> 
-  msId: msId -> 
-  ms:bytes ->
-  ST (ks12_state * recordInstance)
-  (requires fun h0 -> True)
-  (ensures fun h0 s h1 -> True)
-let server12_resume cr sr pv cs ems msId ms =   
-  dbg "server12_resume";
-  dbg ("Recall MS: "^print_bytes ms);
-  let ks = S12_has_MS (cr @| sr) (pv, cs, ems) msId ms in 
-  ks, ks12_record_key ks
-
-(******************************************************************)
-
-// log is the raw HS log, used for EMS derivation
-val server12_cke_dh: 
-  ks: ks12_state {C12_wait_CKE_DH? ks} -> 
-  gy: (g:CommonDH.group & CommonDH.share g) ->
-  log: bytes -> 
-  ST (ks12_state * recordInstance)
-  (requires fun h0 ->
-    // Responder share must be over the same group as initiator's
-    match ks with 
-    | S12_wait_CKE_DH _ _ (| g', _ |) -> g' = dfst gy 
-    | _ -> False)
-  (ensures fun h0 r h1 -> True)
-let server12_cke_dh ks gy hashed_log =
-  dbg "server12_cke_dh";
-  let S12_wait_CKE_DH csr alpha (| g, gx |) = ks in
-  let (pv, cs, ems) = alpha in
-  let (| _, gy |) = gy in
-  let _ = print_share gy in
-  let pmsb = CommonDH.dh_initiator #g gx gy in
-  dbg ("PMS: "^print_bytes pmsb);
-  let pmsId = PMS.DHPMS g (CommonDH.pubshare gx) gy (PMS.ConcreteDHPMS pmsb) in
-  let kef = kefAlg pv cs ems in
-  let msId, ms =
-    if ems then
-      begin
-      let ms = TLSPRF.prf (pv,cs) pmsb (utf8 "extended master secret") hashed_log 48 in
-      dbg ("extended master secret:"^(print_bytes ms));
-      let msId = ExtendedMS pmsId hashed_log kef in
-      msId, ms
-      end
-    else
-      begin
-      let ms = TLSPRF.extract kef pmsb csr 48 in
-      dbg ("master secret:"^print_bytes ms);
-      let msId = StandardMS pmsId csr kef in
-      msId, ms
-      end
-    in
-  let ks = S12_has_MS csr alpha msId ms in
-  ks, ks12_record_key ks
-
-(**
-// Called after receiving server hello; server accepts resumption proposal
-// This function only checks the agility paramaters compared to the resumed sessionInfo
-// and returns to the handshake whether the resumption is permissible
-val client12_resume: ks:ks -> random -> pv:protocolVersion -> cs:cipherSuite -> ST unit
-  (requires fun h0 ->
-    let kss = sel h0 (KS?.state ks) in
-    C? kss /\ C12_Resume_CH? (C?.s kss))
-  (ensures fun h0 r h1 ->
-    let KS #rid st = ks in
-    modifies (Set.singleton rid) h0 h1
-    /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
-
-let client12_resume ks sr pv cs =
-  let KS #region st = ks in
-  let C (C12_Resume_CH cr si msId ms) = !st in
-  let csr = cr @| sr in
-  let ems = si.extended_ms in
-  st := C (C12_has_MS csr (pv, cs, ems) msId ms)
-*)
-
-// The two functions below are similar but we decide not to factor them because:
-//   1. they use different arguments
-//   2. they use different return types
-//   3. they are called at different locations
-
-val client13_ServerHello:
-  psks: list (i:esId{~(no_psk i)}) -> groups: list CommonDH.group -> // ghosts indexing ks
-  ks: c13_wait_ServerHello psks groups -> 
-  sr: random -> 
-  cs: cipherSuite -> 
-  transcript: bytes ->
-  accepted_psk: option (n:nat{n < length psks}) -> 
-  accepted_group: CommonDH.group {List.mem g groups} -> 
-  gy: CommonDH.share g -> 
-  ST ( 
-    i: hsId {i = hsId_of_es i} & // next caller index, for convenience
-    (*ks':*) c13_wait_finished1 (amsId_of_hs i) *
-    (*cfk:*) MAC.UFCMA.key (cfkId_of_hs i transcript) *
-    (*sfk:*) MAC.UFCMA.key (sfkId_of_hs i transcript) *
-    (*hsw:*) StreamAE.writer (ctsId_of_hs i) *
-    (*hsr:*) StreamAE.reader (stsID_of_hs i) )
-  (requires fun h0 -> True)
-  (ensures fun h0 r h1 -> modifies_none h0 h1)
-
-let client13_ServerHello psks groups ks sr cs log accept_psk g gy =
-  dbg ("ks_client_13_sh hashed_log = "^print_bytes log);
-  let C13_wait_ServerHello esl gxs = ks in
-  let Some gx = List.Tot.find (
-      fun ((| g', _ |):(x:CommonDH.group & CommonDH.keyshare g)) -> g = g'
-    ) gc in
-  let (| g, gx |) = gx in
-  let b = print_share gy in
-  let gxy = CommonDH.dh_initiator #g gx gy in
-  dbg ("DH shared secret: "^print_bytes gxy);
-  let CipherSuite13 ae h = cs in
-  let gx = CommonDH.pubshare gx in
-
-  // Early secret: must derive zero here as hash is not known before
-  let esId, es =
-    match esl, accept_psk with
-    | l, Some n ->
-      let Some (| i, es |) : option (i:esId & es i) = List.Tot.nth l n in
-      dbg ("recallPSK early secret:          "^print_bytes es);
-      i, es
-    | _, None ->
-      let es = HKDF.hkdf_extract h (H.zeroHash h) (H.zeroHash h) in
-      dbg ("no PSK negotiated. Early secret: "^print_bytes (leak_secret es));
-      NoPSK h, es in
-
-  let saltId = Salt (EarlySecretID esId) in
-  let salt = HKDF.derive_secret h es "derived" (H.emptyHash h) in
-  dbg ("handshake salt:                  "^print_bytes (leak_salt salt));
-
-  let hsId = HSID_DHE saltId g gx gy in
-  let hs : hs hsId = HKDF.hkdf_extract h salt gxy in
-  dbg ("handshake secret:                "^print_bytes (leak_secret hs));
-
-  let secretId = HandshakeSecretID hsId in
-  let li = LogInfo_SH ({
-    li_sh_cr = cr;
-    li_sh_sr = sr;
-    li_sh_ae = ae;
-    li_sh_hash = h;
-    li_sh_psk = None;
-  }) in
-  let log: hashed_log li = log in
-  let c_expandId = ExpandedSecret secretId ClientHandshakeTrafficSecret log in
-  let s_expandId = ExpandedSecret secretId ServerHandshakeTrafficSecret log in
-
-  let cts = HKDF.derive_secret h hs "c hs traffic" log in
-  let sts = HKDF.derive_secret h hs "s hs traffic" log in
-  let (ck,civ) = keygen_13 h cts ae in
-  let (sk,siv) = keygen_13 h sts ae in
-  dbg ("handshake traffic secret[C]:     "^print_bytes cts);
-  dbg ("handshake traffic secret[S]:     "^print_bytes sts);
-  dbg ("handshake key[C]:                "^print_bytes ck^", IV="^print_bytes civ);
-  dbg ("handshake key[S]:                "^print_bytes sk^", IV="^print_bytes siv);
-
-  // Finished keys
-  let cfkId = FinishedID c_expandId in
-  let sfkId = FinishedID s_expandId in
-  let cfk1 = finished_13 h cts in
-  dbg ("finished key[C]: "^(print_bytes cfk1));
-  let sfk1 = finished_13 h sts in
-  dbg ("finished key[S]: "^(print_bytes sfk1));
-
-  let cfk1 : fink cfkId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Finished cfkId) (fun _ -> True) region cfk1 in
-  let sfk1 : fink sfkId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Finished sfkId) (fun _ -> True) region sfk1 in
-
-  (*TODO factor out *)
-  let id = ID13 (KeyID c_expandId) in
-  assert_norm(ID13 (KeyID s_expandId) = peerId id);
-  let ckv: StreamAE.key id = ck in
-  let civ: StreamAE.iv id  = civ in
-  let skv: StreamAE.key (peerId id) = sk in
-  let siv: StreamAE.iv (peerId id)  = siv in
-  let w = StAE.coerce HS.root id (ckv @| civ) in
-  let rw = StAE.coerce HS.root id (skv @| siv) in
-  let r = StAE.genReader HS.root rw in
-
-  let saltId = Salt (HandshakeSecretID hsId) in
-  let salt = HKDF.derive_secret h hs "derived" (H.emptyHash h) in
-  let asId = ASID saltId in
-  let ams: ams asId = HKDF.hkdf_extract h salt (H.zeroHash h) in
-  dbg ("application salt:                "^print_bytes (leak_salt salt));
-  dbg ("application secret:              "^print_bytes (leak_secret ams));
-
-  let next = C13_wait_ServerFinished ae h ams in
-  (next, cfk1, sfk1, hs_wr, hs_rd)
-
-(******************************************************************)
-
-let client13_ServerFinished
-  (i: amsId) 
-  (s: ams i)
-  (transcript_Finished: transcript): 
-  ST (
-//  c13_wait_Finished2 i * 
-//  MAC.UFCMA.key (cfkId_of_hs i transcript1) *
-//  MAC.UFCMA.key (sfkId_of_hs i transcript1) *
-    StreamAE.reader (askId_of_hs i transcript_Finished) *
-    StreamAE.writer (ackId_of_hs i transcript_Finished)
-    exporter (ex1Id_of_hs i transcript2) 
-// missing late materials    
-    )
-  (requires fun h0 -> True)
-  (ensures fun h0 r h1 -> modifies_none h0 h1 (*TBC*) )
-=
-  dbg ("ks_client_13_sf hashed_log = "^print_bytes transcript1);
-  let C13_wait_Finished1 h ae transcript_fk cfk sfk ams = state in
-
-  // let FinishedID #li _ = dfst cfk in // TODO loginfo
-  // let secretId = ApplicationSecretID asId in
-  // let c_expandId = ExpandedSecret secretId ClientApplicationTrafficSecret log in
-  // let s_expandId = ExpandedSecret secretId ClientApplicationTrafficSecret log in
-  // let emsId : exportId li = ExportID asId log in
-
-  let i2 = ams_of_hs i in 
-  let ctsId = ctsId_of_as i2 transcript2 in 
-  let stsId = ctsId_of_as i2 transcript2 in 
-  let exsId = exsId_of_as i2 transcript2 in 
-
-  let info = magic() in 
-  let cts: secret ctsId = Idx.derive h ams "c ap traffic" transcript2 info in
-  let sts: secret stsId = Idx.derive h ams "s ap traffic" transcript2 info in
-  let exs: secret exsId = Idx.derive h ams "exp master"   transcript2 info in
-  let (ck,civ) = keygen_13 h cts ae in
-  let (sk,siv) = keygen_13 h sts ae in
-  dbg ("application traffic secret[C]:   "^print_bytes cts);
-  dbg ("application traffic secret[S]:   "^print_bytes sts);
-  dbg ("exporter master secret:          "^print_bytes ems);
-  dbg ("application key[C]:              "^print_bytes ck^", IV="^print_bytes civ);
-  dbg ("application key[S]:              "^print_bytes sk^", IV="^print_bytes siv);
-
-  let id = ID13 (KeyID c_expandId) in
-  assert_norm(peerId id = ID13 (KeyID s_expandId));
-  let ckv: StreamAE.key id = ck in
-  let civ: StreamAE.iv id  = civ in
-  let w = StAE.coerce HS.root id (ckv @| civ) in
-  let skv: StreamAE.key (peerId id) = sk in
-  let siv: StreamAE.iv (peerId id)  = siv in
-  let rw = StAE.coerce HS.root id (skv @| siv) in
-  let r = StAE.genReader HS.root rw in
-
-  let next = C13_wait_Finished2 h ae ams (cts,sts) in
-  // what to do with next?
-  (r, w, exs)
+//   let next = S13_wait_ServerFinished #amsi ha aea ams in
+//   (| hmsi, (next, r, w) |)
 
 
-/// Continues from the application master secret, now that we have the
-/// digest of the complete handshake. We keep this secret (required to
-/// compute the RMS) and return the application AE keys to install. We
-/// also immediately derive and return the next transport secrets, to
-/// help with forward secrecy.
-/// 
-val server13_ServerFinished: 
-  #i: amsId -> 
-  s: ams i ->
-  ha: kdfa {ha = ha_of_id i} -> 
-  aea: option (a: aeAlg {a = get_aeadAlg i}) -> 
-  tr: transcript -> 
-  tag: digest i tr -> 
-  ST (
-    StreamAE.reader (cts_of_ams i) * 
-    StreamAE.writer (sts_of_ams i) *
-    secret (x1s_of_ams i) *
-    next_ts (cts_of_ams i) *
-    next_ts (sts_of_ams i) )
-  (requires fun h0 -> True)
-  (ensures fun h0 r h1 -> True)
+// // Will become private; public API will have
+// // client12_keygen: ks -> (i:id * w:StatefulLHAE.writer i)
+// // server12_keygen: ...
+// val ks12_finished_key: st: ks_state -> ST TLSPRF.key
+//   (requires fun h0 -> C12_has_MS? s \/ S12_has_MS? s)
+//   (ensures fun h0 r h1 -> modifies Set.empty h0 h1)
 
-let server13_ServerFinished #i ams ha aea tr tag =   
-  let ems = derive_secret ams h "exp master" tr tag in
-  let cts = derive ha ams "c ap traffic" tr tag ha in
-  let sts = derive ha ams "s ap traffic" tr tag ha in
-  let r   = derive_streamAE ha ae cts parent in
-  let w   = derive_streamAE ha ae sts parent in 
-  let cts'= derive ha cts "traffic upd" Expand ha in
-  let sts'= derive ha cts "traffic upd" Expand ha in 
-  dbg ("server13_ServerFinished hash   = "^print_bytes tag);
-  dbg ("exporter master secret:          "^print_bytes (leak_secret ems));
-  dbg ("application traffic secret[C,0]: "^print_bytes (leak_secret cts));
-  dbg ("application traffic secret[S,0]: "^print_bytes (leak_secret sts));
-  dbg ("application traffic secret[C,1]: "^print_bytes (leak_secret cts'));
-  dbg ("application traffic secret[S,1]: "^print_bytes (leak_secret sts'));
-  r, w, ems, cts', sts'
+// let ks12_finished_key st =
+//   let ms = match st with
+//   | C12_has_MS _ _ _ ms -> ms
+//   | S12_has_MS _ _ _ ms -> ms in
+//   TLSPRF.coerce ms
 
-/// Final step for both client13 and server13, returning the
-/// resumption master secret; the application master secret should
-/// then be discarded.
+// let ks12_ms st = 
+//   match st with 
+//   | C12_has_MS _ _ msId ms -> (msId, ms)
+//   | S12_has_MS _ _ msId ms -> (msId, ms)
 
-val rms13_ClientFinished: 
-  #i: amsId -> 
-  s: ams i -> 
-  ha: kdfa {ha = ha_of_id i} -> 
-  tr: transcript -> // [ClientHello; ...; ClientFinished]
-  tag: digest i tr -> 
-  ST (secret (rms_of_ams i tr))
-  (requires fun h0 -> True 
-    // multi-functionality inv
-    )
-  (ensures fun h0 r h1 -> True 
-    // multi-functionality inv
-    // modifies some KDF
-    )
-let rms13_ClientFinished #i ams ha tr tag =
-  let rms = derive_secret ha ams "res master" tr tag ha in
-  dbg ("resumption master secret:        "^print_bytes (leak_secret rms));
-  rms
+// private val ks12_record_key: st: ks12_state -> St recordInstance
+// let ks12_record_key st =
+//   dbg "ks12_record_key";
+//   let role, csr, alpha, msId, ms =
+//     match st with
+//     | C12_has_MS csr alpha msId ms -> Client, csr, alpha, msId, ms
+//     | S12_has_MS csr alpha msId ms -> Server, csr, alpha, msId, ms in
+//   let cr, sr = split csr 32 in
+//   let pv, cs, ems = alpha in
+//   let kdf = kdfAlg pv cs in
+//   let ae = get_aeAlg cs in
+//   let id = ID12 pv msId kdf ae cr sr role in
+//   let AEAD alg _ = ae in (* 16-10-18 FIXME! only correct for AEAD *)
+//   let klen = CoreCrypto.aeadKeySize alg in
+//   let slen = AEADProvider.salt_length id in
+//   let expand = TLSPRF.kdf kdf ms (sr @| cr) (klen + klen + slen + slen) in
+//   dbg ("keystring (CK, SK, CIV, SIV) = "^print_bytes expand);
+//   let k1, expand = split expand klen in
+//   let k2, expand = split expand klen in
+//   let iv1, iv2 = split expand slen in
+//   let wk, wiv, rk, riv =
+//     match role with
+//     | Client -> k1, iv1, k2, iv2
+//     | Server -> k2, iv2, k1, iv1 in
+//   let w = StAE.coerce HS.root id (wk @| wiv) in
+//   let rw = StAE.coerce HS.root id (rk @| riv) in
+//   let r = StAE.genReader HS.root rw in
+//   StAEInstance r w
 
-/// For each ticket received from the server,
-/// generate a PSK from the current RMS and incoming ticket nonce
-/// (may be called several times).
-///
-/// Sharable between client13 and server13
+// (* 1.2 resumption *)
 
-// problem: there is no transcript associated with nonce, so we will
-// probably need to add some ExpandNonce.
+// // We can potentially 1.2 resume from 1.2 or 1.3 ClientHello
+// // (used to be [C12_Full_CH? \/ C_13_wait_SH?] now joined in Handshake)
+// val client12_resume: 
+//   cr: random -> 
+//   sr: random -> 
+//   pv: protocolVersion -> 
+//   cs: cipherSuite ->
+//   ems: bool ->
+//   msId:TLSInfo.msId ->
+//   ms:bytes -> 
+//   ST (ks12_state * recordInstance)
+//   (requires fun h0 -> True)
+//   (ensures fun h0 r h1 -> True)
+// let client12_resume cr sr pv cs ems msId ms =
+//   dbg "client12_resume";
+//   dbg ("Recall MS: "^print_bytes ms);
+//   let ks = C12_has_MS (cr @| sr) (pv, cs, ems) msId ms in
+//   ks, ks12_record_key ks
 
-val derive_resumption_secret:
-  i: id ->
-  s: secret i ->
-  ha: kdfa {ha = ha_of_id i} -> 
-  nonce: bytes -> // really?
-  ST (secret (psk_of_rms i i))
-  (requires fun h0 -> True)
-  (ensures fun h0 r h1 -> modifies_none h0 h1)
+// val server12_resume: 
+//   cr: random -> 
+//   sr: random -> 
+//   pv: protocolVersion -> 
+//   cs: cipherSuite -> 
+//   ems: bool -> 
+//   msId: msId -> 
+//   ms:bytes ->
+//   ST (ks12_state * recordInstance)
+//   (requires fun h0 -> True)
+//   (ensures fun h0 s h1 -> True)
+// let server12_resume cr sr pv cs ems msId ms =   
+//   dbg "server12_resume";
+//   dbg ("Recall MS: "^print_bytes ms);
+//   let ks = S12_has_MS (cr @| sr) (pv, cs, ems) msId ms in 
+//   ks, ks12_record_key ks
 
-let derive_resumption_secret i s ha nonce = 
-  dbg "ks_client_13_rms";
-  dbg ("Recall RMS: "^hex_of_bytes rms);
-  derive ha rms "resumption" (ExpandLog nonce) ha 
+// (******************************************************************)
 
-/// Rekeying for both client13 and server13, also returning the next
-/// transport secret.
-/// 
-let rekey 
-  (#i: ts_id) 
-  (ha: prfa {ha = ha_of_i i})
-  (aea: aeadAlg {aea = aeadAlg_of_i i}) 
-  (ts: next_transport_secret i) 
-  (rw: TLSConstants.rw {rw = rw_of_i i})
-  (parent: rgn): 
-  ST( 
-    StreamAE.key (ts_of_ts i) ) rw *
-    next_transport_secret (ts_of_ts i) 
-  (requires fun h0 -> True)
-  (ensures fun h0 r h1 -> True)
-=
-  let k  = derive_streamAE #i ts rw (aea,parent) in 
-  let j: ts_id = ts_of_ts i in 
-  let ts: secret j = derive ts ha "traffic upd" Expand in 
-  k, ts
+// // log is the raw HS log, used for EMS derivation
+// val server12_cke_dh: 
+//   ks: ks12_state {C12_wait_CKE_DH? ks} -> 
+//   gy: (g:CommonDH.group & CommonDH.share g) ->
+//   log: bytes -> 
+//   ST (ks12_state * recordInstance)
+//   (requires fun h0 ->
+//     // Responder share must be over the same group as initiator's
+//     match ks with 
+//     | S12_wait_CKE_DH _ _ (| g', _ |) -> g' = dfst gy 
+//     | _ -> False)
+//   (ensures fun h0 r h1 -> True)
+// let server12_cke_dh ks gy hashed_log =
+//   dbg "server12_cke_dh";
+//   let S12_wait_CKE_DH csr alpha (| g, gx |) = ks in
+//   let (pv, cs, ems) = alpha in
+//   let (| _, gy |) = gy in
+//   let _ = print_share gy in
+//   let pmsb = CommonDH.dh_initiator #g gx gy in
+//   dbg ("PMS: "^print_bytes pmsb);
+//   let pmsId = PMS.DHPMS g (CommonDH.pubshare gx) gy (PMS.ConcreteDHPMS pmsb) in
+//   let kef = kefAlg pv cs ems in
+//   let msId, ms =
+//     if ems then
+//       begin
+//       let ms = TLSPRF.prf (pv,cs) pmsb (utf8 "extended master secret") hashed_log 48 in
+//       dbg ("extended master secret:"^(print_bytes ms));
+//       let msId = ExtendedMS pmsId hashed_log kef in
+//       msId, ms
+//       end
+//     else
+//       begin
+//       let ms = TLSPRF.extract kef pmsb csr 48 in
+//       dbg ("master secret:"^print_bytes ms);
+//       let msId = StandardMS pmsId csr kef in
+//       msId, ms
+//       end
+//     in
+//   let ks = S12_has_MS csr alpha msId ms in
+//   ks, ks12_record_key ks
+
+// (**
+// // Called after receiving server hello; server accepts resumption proposal
+// // This function only checks the agility paramaters compared to the resumed sessionInfo
+// // and returns to the handshake whether the resumption is permissible
+// val client12_resume: ks:ks -> random -> pv:protocolVersion -> cs:cipherSuite -> ST unit
+//   (requires fun h0 ->
+//     let kss = sel h0 (KS?.state ks) in
+//     C? kss /\ C12_Resume_CH? (C?.s kss))
+//   (ensures fun h0 r h1 ->
+//     let KS #rid st = ks in
+//     modifies (Set.singleton rid) h0 h1
+//     /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
+
+// let client12_resume ks sr pv cs =
+//   let KS #region st = ks in
+//   let C (C12_Resume_CH cr si msId ms) = !st in
+//   let csr = cr @| sr in
+//   let ems = si.extended_ms in
+//   st := C (C12_has_MS csr (pv, cs, ems) msId ms)
+// *)
+
+// // The two functions below are similar but we decide not to factor them because:
+// //   1. they use different arguments
+// //   2. they use different return types
+// //   3. they are called at different locations
+
+// val client13_ServerHello:
+//   psks: list (i:esId{~(no_psk i)}) -> groups: list CommonDH.group -> // ghosts indexing ks
+//   ks: c13_wait_ServerHello psks groups -> 
+//   sr: random -> 
+//   cs: cipherSuite -> 
+//   transcript: bytes ->
+//   accepted_psk: option (n:nat{n < length psks}) -> 
+//   accepted_group: CommonDH.group {List.mem g groups} -> 
+//   gy: CommonDH.share g -> 
+//   ST ( 
+//     i: hsId {i = hsId_of_es i} & // next caller index, for convenience
+//     (*ks':*) c13_wait_finished1 (amsId_of_hs i) *
+//     (*cfk:*) MAC.UFCMA.key (cfkId_of_hs i transcript) *
+//     (*sfk:*) MAC.UFCMA.key (sfkId_of_hs i transcript) *
+//     (*hsw:*) StreamAE.writer (ctsId_of_hs i) *
+//     (*hsr:*) StreamAE.reader (stsID_of_hs i) )
+//   (requires fun h0 -> True)
+//   (ensures fun h0 r h1 -> modifies_none h0 h1)
+
+// let client13_ServerHello psks groups ks sr cs log accept_psk g gy =
+//   dbg ("ks_client_13_sh hashed_log = "^print_bytes log);
+//   let C13_wait_ServerHello esl gxs = ks in
+//   let Some gx = List.Tot.find (
+//       fun ((| g', _ |):(x:CommonDH.group & CommonDH.keyshare g)) -> g = g'
+//     ) gc in
+//   let (| g, gx |) = gx in
+//   let b = print_share gy in
+//   let gxy = CommonDH.dh_initiator #g gx gy in
+//   dbg ("DH shared secret: "^print_bytes gxy);
+//   let CipherSuite13 ae h = cs in
+//   let gx = CommonDH.pubshare gx in
+
+//   // Early secret: must derive zero here as hash is not known before
+//   let esId, es =
+//     match esl, accept_psk with
+//     | l, Some n ->
+//       let Some (| i, es |) : option (i:esId & es i) = List.Tot.nth l n in
+//       dbg ("recallPSK early secret:          "^print_bytes es);
+//       i, es
+//     | _, None ->
+//       let es = HKDF.hkdf_extract h (H.zeroHash h) (H.zeroHash h) in
+//       dbg ("no PSK negotiated. Early secret: "^print_bytes (leak_secret es));
+//       NoPSK h, es in
+
+//   let saltId = Salt (EarlySecretID esId) in
+//   let salt = HKDF.derive_secret h es "derived" (H.emptyHash h) in
+//   dbg ("handshake salt:                  "^print_bytes (leak_salt salt));
+
+//   let hsId = HSID_DHE saltId g gx gy in
+//   let hs : hs hsId = HKDF.hkdf_extract h salt gxy in
+//   dbg ("handshake secret:                "^print_bytes (leak_secret hs));
+
+//   let secretId = HandshakeSecretID hsId in
+//   let li = LogInfo_SH ({
+//     li_sh_cr = cr;
+//     li_sh_sr = sr;
+//     li_sh_ae = ae;
+//     li_sh_hash = h;
+//     li_sh_psk = None;
+//   }) in
+//   let log: hashed_log li = log in
+//   let c_expandId = ExpandedSecret secretId ClientHandshakeTrafficSecret log in
+//   let s_expandId = ExpandedSecret secretId ServerHandshakeTrafficSecret log in
+
+//   let cts = HKDF.derive_secret h hs "c hs traffic" log in
+//   let sts = HKDF.derive_secret h hs "s hs traffic" log in
+//   let (ck,civ) = keygen_13 h cts ae in
+//   let (sk,siv) = keygen_13 h sts ae in
+//   dbg ("handshake traffic secret[C]:     "^print_bytes cts);
+//   dbg ("handshake traffic secret[S]:     "^print_bytes sts);
+//   dbg ("handshake key[C]:                "^print_bytes ck^", IV="^print_bytes civ);
+//   dbg ("handshake key[S]:                "^print_bytes sk^", IV="^print_bytes siv);
+
+//   // Finished keys
+//   let cfkId = FinishedID c_expandId in
+//   let sfkId = FinishedID s_expandId in
+//   let cfk1 = finished_13 h cts in
+//   dbg ("finished key[C]: "^(print_bytes cfk1));
+//   let sfk1 = finished_13 h sts in
+//   dbg ("finished key[S]: "^(print_bytes sfk1));
+
+//   let cfk1 : fink cfkId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Finished cfkId) (fun _ -> True) region cfk1 in
+//   let sfk1 : fink sfkId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Finished sfkId) (fun _ -> True) region sfk1 in
+
+//   (*TODO factor out *)
+//   let id = ID13 (KeyID c_expandId) in
+//   assert_norm(ID13 (KeyID s_expandId) = peerId id);
+//   let ckv: StreamAE.key id = ck in
+//   let civ: StreamAE.iv id  = civ in
+//   let skv: StreamAE.key (peerId id) = sk in
+//   let siv: StreamAE.iv (peerId id)  = siv in
+//   let w = StAE.coerce HS.root id (ckv @| civ) in
+//   let rw = StAE.coerce HS.root id (skv @| siv) in
+//   let r = StAE.genReader HS.root rw in
+
+//   let saltId = Salt (HandshakeSecretID hsId) in
+//   let salt = HKDF.derive_secret h hs "derived" (H.emptyHash h) in
+//   let asId = ASID saltId in
+//   let ams: ams asId = HKDF.hkdf_extract h salt (H.zeroHash h) in
+//   dbg ("application salt:                "^print_bytes (leak_salt salt));
+//   dbg ("application secret:              "^print_bytes (leak_secret ams));
+
+//   let next = C13_wait_ServerFinished ae h ams in
+//   (next, cfk1, sfk1, hs_wr, hs_rd)
+
+// (******************************************************************)
+
+// let client13_ServerFinished
+//   (i: amsId) 
+//   (s: ams i)
+//   (transcript_Finished: transcript): 
+//   ST (
+// //  c13_wait_Finished2 i * 
+// //  MAC.UFCMA.key (cfkId_of_hs i transcript1) *
+// //  MAC.UFCMA.key (sfkId_of_hs i transcript1) *
+//     StreamAE.reader (askId_of_hs i transcript_Finished) *
+//     StreamAE.writer (ackId_of_hs i transcript_Finished)
+//     exporter (ex1Id_of_hs i transcript2) 
+// // missing late materials    
+//     )
+//   (requires fun h0 -> True)
+//   (ensures fun h0 r h1 -> modifies_none h0 h1 (*TBC*) )
+// =
+//   dbg ("ks_client_13_sf hashed_log = "^print_bytes transcript1);
+//   let C13_wait_Finished1 h ae transcript_fk cfk sfk ams = state in
+
+//   // let FinishedID #li _ = dfst cfk in // TODO loginfo
+//   // let secretId = ApplicationSecretID asId in
+//   // let c_expandId = ExpandedSecret secretId ClientApplicationTrafficSecret log in
+//   // let s_expandId = ExpandedSecret secretId ClientApplicationTrafficSecret log in
+//   // let emsId : exportId li = ExportID asId log in
+
+//   let i2 = ams_of_hs i in 
+//   let ctsId = ctsId_of_as i2 transcript2 in 
+//   let stsId = ctsId_of_as i2 transcript2 in 
+//   let exsId = exsId_of_as i2 transcript2 in 
+
+//   let info = magic() in 
+//   let cts: secret ctsId = Idx.derive h ams "c ap traffic" transcript2 info in
+//   let sts: secret stsId = Idx.derive h ams "s ap traffic" transcript2 info in
+//   let exs: secret exsId = Idx.derive h ams "exp master"   transcript2 info in
+//   let (ck,civ) = keygen_13 h cts ae in
+//   let (sk,siv) = keygen_13 h sts ae in
+//   dbg ("application traffic secret[C]:   "^print_bytes cts);
+//   dbg ("application traffic secret[S]:   "^print_bytes sts);
+//   dbg ("exporter master secret:          "^print_bytes ems);
+//   dbg ("application key[C]:              "^print_bytes ck^", IV="^print_bytes civ);
+//   dbg ("application key[S]:              "^print_bytes sk^", IV="^print_bytes siv);
+
+//   let id = ID13 (KeyID c_expandId) in
+//   assert_norm(peerId id = ID13 (KeyID s_expandId));
+//   let ckv: StreamAE.key id = ck in
+//   let civ: StreamAE.iv id  = civ in
+//   let w = StAE.coerce HS.root id (ckv @| civ) in
+//   let skv: StreamAE.key (peerId id) = sk in
+//   let siv: StreamAE.iv (peerId id)  = siv in
+//   let rw = StAE.coerce HS.root id (skv @| siv) in
+//   let r = StAE.genReader HS.root rw in
+
+//   let next = C13_wait_Finished2 h ae ams (cts,sts) in
+//   // what to do with next?
+//   (r, w, exs)
+
+
+// /// Continues from the application master secret, now that we have the
+// /// digest of the complete handshake. We keep this secret (required to
+// /// compute the RMS) and return the application AE keys to install. We
+// /// also immediately derive and return the next transport secrets, to
+// /// help with forward secrecy.
+// /// 
+// val server13_ServerFinished: 
+//   #i: amsId -> 
+//   s: ams i ->
+//   ha: kdfa {ha = ha_of_id i} -> 
+//   aea: option (a: aeAlg {a = get_aeadAlg i}) -> 
+//   tr: transcript -> 
+//   tag: digest i tr -> 
+//   ST (
+//     StreamAE.reader (cts_of_ams i) * 
+//     StreamAE.writer (sts_of_ams i) *
+//     secret (x1s_of_ams i) *
+//     next_ts (cts_of_ams i) *
+//     next_ts (sts_of_ams i) )
+//   (requires fun h0 -> True)
+//   (ensures fun h0 r h1 -> True)
+
+// let server13_ServerFinished #i ams ha aea tr tag =   
+//   let ems = derive_secret ams h "exp master" tr tag in
+//   let cts = derive ha ams "c ap traffic" tr tag ha in
+//   let sts = derive ha ams "s ap traffic" tr tag ha in
+//   let r   = derive_streamAE ha ae cts parent in
+//   let w   = derive_streamAE ha ae sts parent in 
+//   let cts'= derive ha cts "traffic upd" Expand ha in
+//   let sts'= derive ha cts "traffic upd" Expand ha in 
+//   dbg ("server13_ServerFinished hash   = "^print_bytes tag);
+//   dbg ("exporter master secret:          "^print_bytes (leak_secret ems));
+//   dbg ("application traffic secret[C,0]: "^print_bytes (leak_secret cts));
+//   dbg ("application traffic secret[S,0]: "^print_bytes (leak_secret sts));
+//   dbg ("application traffic secret[C,1]: "^print_bytes (leak_secret cts'));
+//   dbg ("application traffic secret[S,1]: "^print_bytes (leak_secret sts'));
+//   r, w, ems, cts', sts'
+
+// /// Final step for both client13 and server13, returning the
+// /// resumption master secret; the application master secret should
+// /// then be discarded.
+
+// val rms13_ClientFinished: 
+//   #i: amsId -> 
+//   s: ams i -> 
+//   ha: kdfa {ha = ha_of_id i} -> 
+//   tr: transcript -> // [ClientHello; ...; ClientFinished]
+//   tag: digest i tr -> 
+//   ST (secret (rms_of_ams i tr))
+//   (requires fun h0 -> True 
+//     // multi-functionality inv
+//     )
+//   (ensures fun h0 r h1 -> True 
+//     // multi-functionality inv
+//     // modifies some KDF
+//     )
+// let rms13_ClientFinished #i ams ha tr tag =
+//   let rms = derive_secret ha ams "res master" tr tag ha in
+//   dbg ("resumption master secret:        "^print_bytes (leak_secret rms));
+//   rms
+
+// /// For each ticket received from the server,
+// /// generate a PSK from the current RMS and incoming ticket nonce
+// /// (may be called several times).
+// ///
+// /// Sharable between client13 and server13
+
+// // problem: there is no transcript associated with nonce, so we will
+// // probably need to add some ExpandNonce.
+
+// val derive_resumption_secret:
+//   i: id ->
+//   s: secret i ->
+//   ha: kdfa {ha = ha_of_id i} -> 
+//   nonce: bytes -> // really?
+//   ST (secret (psk_of_rms i i))
+//   (requires fun h0 -> True)
+//   (ensures fun h0 r h1 -> modifies_none h0 h1)
+
+// let derive_resumption_secret i s ha nonce = 
+//   dbg "ks_client_13_rms";
+//   dbg ("Recall RMS: "^hex_of_bytes rms);
+//   derive ha rms "resumption" (ExpandLog nonce) ha 
+
+// /// Rekeying for both client13 and server13, also returning the next
+// /// transport secret.
+// /// 
+// let rekey 
+//   (#i: ts_id) 
+//   (ha: prfa {ha = ha_of_i i})
+//   (aea: aeadAlg {aea = aeadAlg_of_i i}) 
+//   (ts: next_transport_secret i) 
+//   (rw: TLSConstants.rw {rw = rw_of_i i})
+//   (parent: rgn): 
+//   ST( 
+//     StreamAE.key (ts_of_ts i) ) rw *
+//     next_transport_secret (ts_of_ts i) 
+//   (requires fun h0 -> True)
+//   (ensures fun h0 r h1 -> True)
+// =
+//   let k  = derive_streamAE #i ts rw (aea,parent) in 
+//   let j: ts_id = ts_of_ts i in 
+//   let ts: secret j = derive ts ha "traffic upd" Expand in 
+//   k, ts
     
 
-(******************************************************************)
+// (******************************************************************)
 
-// Called by Hanshake when DH key echange is negotiated; 
-// 3 incoming states: was (C12_Full_CH? (C?.s st) \/ C12_Resume_CH? (C?.s st) \/ C_13_wait_SH? (C?.s st)))
+// // Called by Hanshake when DH key echange is negotiated; 
+// // 3 incoming states: was (C12_Full_CH? (C?.s st) \/ C12_Resume_CH? (C?.s st) \/ C_13_wait_SH? (C?.s st)))
 
-val client12_full_dh: 
-  cr: random -> 
-  sr: random -> 
-  pv: protocolVersion ->
-  cs: cipherSuite -> 
-  ems: bool -> 
-  gx:(g:CommonDH.group & CommonDH.share g) -> ST (ks12_state * CommonDH.share (dfst gx))
-  (requires fun h0 -> True)
-  (ensures fun h0 r h1 ->
-    (C12_wait_MS? st \/ C12_has_MS? st) /\ 
-    modifies_none h0 h1 // TODO modifies for DH
-  )
-let client12_full_dh ks sr pv cs ems (|g,gx|) =
-  let KS #region st = ks in
-  let csr = cr @| sr in
-  let alpha = (pv, cs, ems) in
-  let gy, pmsb = CommonDH.dh_responder #g gx in
-  dbg ("g^x: "^sprint_share gx);
-  dbg ("g^y: "^sprint_share gy);
-  dbg ("PMS: "^print_bytes pmsb);
-  let dhpmsId = PMS.DHPMS g gx gy (PMS.ConcreteDHPMS pmsb) in
-  let ns =
-    if ems then
-      C12_wait_MS csr alpha dhpmsId pmsb
-    else
-      let kef = kefAlg pv cs false in
-      let ms = TLSPRF.extract kef pmsb csr 48 in
-      dbg ("master secret: "^print_bytes ms);
-      let msId = StandardMS dhpmsId csr kef in
-      C12_has_MS csr alpha msId ms in
-  ns, gy
+// val client12_full_dh: 
+//   cr: random -> 
+//   sr: random -> 
+//   pv: protocolVersion ->
+//   cs: cipherSuite -> 
+//   ems: bool -> 
+//   gx:(g:CommonDH.group & CommonDH.share g) -> ST (ks12_state * CommonDH.share (dfst gx))
+//   (requires fun h0 -> True)
+//   (ensures fun h0 r h1 ->
+//     (C12_wait_MS? st \/ C12_has_MS? st) /\ 
+//     modifies_none h0 h1 // TODO modifies for DH
+//   )
+// let client12_full_dh ks sr pv cs ems (|g,gx|) =
+//   let KS #region st = ks in
+//   let csr = cr @| sr in
+//   let alpha = (pv, cs, ems) in
+//   let gy, pmsb = CommonDH.dh_responder #g gx in
+//   dbg ("g^x: "^sprint_share gx);
+//   dbg ("g^y: "^sprint_share gy);
+//   dbg ("PMS: "^print_bytes pmsb);
+//   let dhpmsId = PMS.DHPMS g gx gy (PMS.ConcreteDHPMS pmsb) in
+//   let ns =
+//     if ems then
+//       C12_wait_MS csr alpha dhpmsId pmsb
+//     else
+//       let kef = kefAlg pv cs false in
+//       let ms = TLSPRF.extract kef pmsb csr 48 in
+//       dbg ("master secret: "^print_bytes ms);
+//       let msId = StandardMS dhpmsId csr kef in
+//       C12_has_MS csr alpha msId ms in
+//   ns, gy
 
-// Called by Handshake after server hello when a full RSA key exchange is negotiated
-// returns the encrypted (currently disabled)
-// pre was: (C12_Full_CH? (C?.s st) \/ C12_Resume_CH? (C?.s st)))
-val client12_full_rsa: 
-  cr: random -> 
-  sr:random -> 
-  pv:protocolVersion -> 
-  cs:cipherSuite -> 
-  ems:bool -> 
-  RSAKey.pk -> ST (ks12_state * bytes)
-  (requires fun h0 -> True)
-  (ensures fun h0 (st,r) h1 -> 
-    (C12_wait_MS? st \/ C12_has_MS? st) /\ 
-    modifies_none h0 h1 // TODO modifies for RSA
-  )
-let client12_full_rsa cr sr pv cs ems pk =
-  let alpha = (pv, cs, ems) in
-  let csr = cr @| sr in
-  let rsapms = PMS.genRSA pk pv in
-  let pmsb = PMS.leakRSA pk pv rsapms in
-  let encrypted = CoreCrypto.rsa_encrypt (RSAKey.repr_of_rsapkey pk) CoreCrypto.Pad_PKCS1 pmsb in
-  let rsapmsId = PMS.RSAPMS(pk, pv, rsapms) in
-  let ns =
-    if ems then
-      C12_wait_MS csr alpha rsapmsId pmsb
-    else
-      let kef = kefAlg pv cs false in
-      let ms = TLSPRF.extract kef pmsb csr 48 in
-      dbg ("master secret: "^print_bytes ms);
-      let msId = StandardMS rsapmsId csr kef in
-      C12_has_MS csr alpha msId ms in
-  ns, encrypted
+// // Called by Handshake after server hello when a full RSA key exchange is negotiated
+// // returns the encrypted (currently disabled)
+// // pre was: (C12_Full_CH? (C?.s st) \/ C12_Resume_CH? (C?.s st)))
+// val client12_full_rsa: 
+//   cr: random -> 
+//   sr:random -> 
+//   pv:protocolVersion -> 
+//   cs:cipherSuite -> 
+//   ems:bool -> 
+//   RSAKey.pk -> ST (ks12_state * bytes)
+//   (requires fun h0 -> True)
+//   (ensures fun h0 (st,r) h1 -> 
+//     (C12_wait_MS? st \/ C12_has_MS? st) /\ 
+//     modifies_none h0 h1 // TODO modifies for RSA
+//   )
+// let client12_full_rsa cr sr pv cs ems pk =
+//   let alpha = (pv, cs, ems) in
+//   let csr = cr @| sr in
+//   let rsapms = PMS.genRSA pk pv in
+//   let pmsb = PMS.leakRSA pk pv rsapms in
+//   let encrypted = CoreCrypto.rsa_encrypt (RSAKey.repr_of_rsapkey pk) CoreCrypto.Pad_PKCS1 pmsb in
+//   let rsapmsId = PMS.RSAPMS(pk, pv, rsapms) in
+//   let ns =
+//     if ems then
+//       C12_wait_MS csr alpha rsapmsId pmsb
+//     else
+//       let kef = kefAlg pv cs false in
+//       let ms = TLSPRF.extract kef pmsb csr 48 in
+//       dbg ("master secret: "^print_bytes ms);
+//       let msId = StandardMS rsapmsId csr kef in
+//       C12_has_MS csr alpha msId ms in
+//   ns, encrypted
 
-// second call from client_ServerHelloDone
-val client12_set_session_hash: 
-  ks: ks12_state -> 
-  h:bytes -> ST (ks12_state * TLSPRF.key * recordInstance)
-  (requires fun h0 ->
-    C12_wait_MS? st \/ C12_has_MS? st)
-  (ensures fun h0 (st,prfk,ak) h1 ->
-    C12_has_MS? st /\ 
-    modifies_none h0 h1)
+// // second call from client_ServerHelloDone
+// val client12_set_session_hash: 
+//   ks: ks12_state -> 
+//   h:bytes -> ST (ks12_state * TLSPRF.key * recordInstance)
+//   (requires fun h0 ->
+//     C12_wait_MS? st \/ C12_has_MS? st)
+//   (ensures fun h0 (st,prfk,ak) h1 ->
+//     C12_has_MS? st /\ 
+//     modifies_none h0 h1)
 
-let client12_set_session_hash st digest =
-  dbg ("client12_set_session_hash hashed_log = "^print_bytes digest);
-  let st, ms =
-    match st with
-    | C12_has_MS csr alpha msId ms ->
-      dbg ("master secret:"^print_bytes ms);
-      st, ms
-    | C12_wait_MS csr alpha pmsId pms ->
-      let (pv, cs, ems) = alpha in
-      let kef = kefAlg pv cs ems in
-      let h = verifyDataHashAlg_of_ciphersuite cs in
-      let msId, ms =
-        if ems then (
-          let ms = TLSPRF.prf (pv,cs) pms (utf8 "extended master secret") digest 48 in
-          dbg ("extended master secret:"^print_bytes ms);
-          let msId = ExtendedMS pmsId digest kef in
-          msId, ms )
-        else (
-          let ms = TLSPRF.extract kef pms csr 48 in
-          dbg ("master secret:"^print_bytes ms);
-          let msId = StandardMS pmsId csr kef in
-          msId, ms ) in 
-      C12_has_MS csr alpha msId ms, ms
-    in
-  let appk = ks12_record_key ks in
-  let fink = TLSPRF.coerce ms in 
-  (st, fink, appk)
+// let client12_set_session_hash st digest =
+//   dbg ("client12_set_session_hash hashed_log = "^print_bytes digest);
+//   let st, ms =
+//     match st with
+//     | C12_has_MS csr alpha msId ms ->
+//       dbg ("master secret:"^print_bytes ms);
+//       st, ms
+//     | C12_wait_MS csr alpha pmsId pms ->
+//       let (pv, cs, ems) = alpha in
+//       let kef = kefAlg pv cs ems in
+//       let h = verifyDataHashAlg_of_ciphersuite cs in
+//       let msId, ms =
+//         if ems then (
+//           let ms = TLSPRF.prf (pv,cs) pms (utf8 "extended master secret") digest 48 in
+//           dbg ("extended master secret:"^print_bytes ms);
+//           let msId = ExtendedMS pmsId digest kef in
+//           msId, ms )
+//         else (
+//           let ms = TLSPRF.extract kef pms csr 48 in
+//           dbg ("master secret:"^print_bytes ms);
+//           let msId = StandardMS pmsId csr kef in
+//           msId, ms ) in 
+//       C12_has_MS csr alpha msId ms, ms
+//     in
+//   let appk = ks12_record_key ks in
+//   let fink = TLSPRF.coerce ms in 
+//   (st, fink, appk)
 
-// *********************************************************************************
-//  All functions below assume that the MS is already computed (and thus they are
-//  shared accross role, key exchange, handshake mode...)
-// *********************************************************************************
+// // *********************************************************************************
+// //  All functions below assume that the MS is already computed (and thus they are
+// //  shared accross role, key exchange, handshake mode...)
+// // *********************************************************************************
 
-(*)
-let client12_client_finished ks
-  : ST (cvd:bytes)
-  (requires fun h0 ->
-    let st = sel h0 (KS?.state ks) in
-    C? st /\ C12_has_MS? (C?.s st))
-  (ensures fun h0 r h1 -> h1 == h0)
-  =
-  let KS #region st = ks in
-  let C (C12_has_MS csr alpha msId ms) = !st in
-  let (pv, cs, ems) = alpha in
-//  let h = verifyDataHashAlg_of_ciphersuite cs in
-//  let log = HandshakeLog.getHash hsl h in
-  let log = HandshakeLog.getBytes hsl in
-  TLSPRF.verifyData (pv,cs) ms Client log
+// (*)
+// let client12_client_finished ks
+//   : ST (cvd:bytes)
+//   (requires fun h0 ->
+//     let st = sel h0 (KS?.state ks) in
+//     C? st /\ C12_has_MS? (C?.s st))
+//   (ensures fun h0 r h1 -> h1 == h0)
+//   =
+//   let KS #region st = ks in
+//   let C (C12_has_MS csr alpha msId ms) = !st in
+//   let (pv, cs, ems) = alpha in
+// //  let h = verifyDataHashAlg_of_ciphersuite cs in
+// //  let log = HandshakeLog.getHash hsl h in
+//   let log = HandshakeLog.getBytes hsl in
+//   TLSPRF.verifyData (pv,cs) ms Client log
 
-let server12_client_finished ks
-  : ST (cvd:bytes)
-  (requires fun h0 ->
-    let st = sel h0 (KS?.state ks) in
-    S? st /\ S12_has_MS? (S?.s st))
-  (ensures fun h0 r h1 -> h1 == h0)
-  =
-  let KS #region st = ks in
-  let S (S12_has_MS csr alpha msId ms) = !st in
-  let (pv, cs, ems) = alpha in
-//  let h = verifyDataHashAlg_of_ciphersuite cs in
-//  let log = HandshakeLog.getHash hsl h in
-  let log = HandshakeLog.getBytes hsl in
-  TLSPRF.verifyData (pv,cs) ms Client log
+// let server12_client_finished ks
+//   : ST (cvd:bytes)
+//   (requires fun h0 ->
+//     let st = sel h0 (KS?.state ks) in
+//     S? st /\ S12_has_MS? (S?.s st))
+//   (ensures fun h0 r h1 -> h1 == h0)
+//   =
+//   let KS #region st = ks in
+//   let S (S12_has_MS csr alpha msId ms) = !st in
+//   let (pv, cs, ems) = alpha in
+// //  let h = verifyDataHashAlg_of_ciphersuite cs in
+// //  let log = HandshakeLog.getHash hsl h in
+//   let log = HandshakeLog.getBytes hsl in
+//   TLSPRF.verifyData (pv,cs) ms Client log
 
-let server12_server_finished ks
-  : ST (svd:bytes)
-  (requires fun h0 ->
-    let st = sel h0 (KS?.state ks) in
-    S? st /\ S12_has_MS? (S?.s st))
-  (ensures fun h0 r h1 ->
-    let KS #rid st = ks in
-    modifies (Set.singleton rid) h0 h1
-    /\ HS.modifies_ref rid !{as_ref st} ( h0) ( h1))
-  =
-  let KS #region st = ks in
-  let S (S12_has_MS csr alpha msId ms) = !st in
-  let (pv, cs, ems) = alpha in
-//  let h = verifyDataHashAlg_of_ciphersuite cs in
-//  let log = HandshakeLog.getHash hsl h in
-  let log = HandshakeLog.getBytes hsl in
-  st := S S_Done;
-  TLSPRF.verifyData (pv,cs) ms Server log
+// let server12_server_finished ks
+//   : ST (svd:bytes)
+//   (requires fun h0 ->
+//     let st = sel h0 (KS?.state ks) in
+//     S? st /\ S12_has_MS? (S?.s st))
+//   (ensures fun h0 r h1 ->
+//     let KS #rid st = ks in
+//     modifies (Set.singleton rid) h0 h1
+//     /\ HS.modifies_ref rid !{as_ref st} ( h0) ( h1))
+//   =
+//   let KS #region st = ks in
+//   let S (S12_has_MS csr alpha msId ms) = !st in
+//   let (pv, cs, ems) = alpha in
+// //  let h = verifyDataHashAlg_of_ciphersuite cs in
+// //  let log = HandshakeLog.getHash hsl h in
+//   let log = HandshakeLog.getBytes hsl in
+//   st := S S_Done;
+//   TLSPRF.verifyData (pv,cs) ms Server log
 
-let client12_server_finished ks: ST (svd:bytes)
-  (requires fun h0 ->
-    let st = sel h0 (KS?.state ks) in
-    C? st /\ C12_has_MS? (C?.s st))
-  (ensures fun h0 r h1 ->
-    let KS #rid st = ks in
-    modifies (Set.singleton rid) h0 h1
-    /\ HS.modifies_ref rid !{as_ref st} ( h0) ( h1))
-  =
-  let KS #region st = ks in
-  let C (C12_has_MS csr alpha msId ms) = !st in
-  let (pv, cs, ems) = alpha in
-//  let h = verifyDataHashAlg_of_ciphersuite cs in
-//  let log = HandshakeLog.getHash hsl h in
-  let log = HandshakeLog.getBytes hsl in
-  st := C C_Done;
-  TLSPRF.verifyData (pv,cs) ms Server log
-*)
+// let client12_server_finished ks: ST (svd:bytes)
+//   (requires fun h0 ->
+//     let st = sel h0 (KS?.state ks) in
+//     C? st /\ C12_has_MS? (C?.s st))
+//   (ensures fun h0 r h1 ->
+//     let KS #rid st = ks in
+//     modifies (Set.singleton rid) h0 h1
+//     /\ HS.modifies_ref rid !{as_ref st} ( h0) ( h1))
+//   =
+//   let KS #region st = ks in
+//   let C (C12_has_MS csr alpha msId ms) = !st in
+//   let (pv, cs, ems) = alpha in
+// //  let h = verifyDataHashAlg_of_ciphersuite cs in
+// //  let log = HandshakeLog.getHash hsl h in
+//   let log = HandshakeLog.getBytes hsl in
+//   st := C C_Done;
+//   TLSPRF.verifyData (pv,cs) ms Server log
+// *)
 
-val getId: recordInstance -> GTot id
-let getId (StAEInstance #i rd wr) = i
+// val getId: recordInstance -> GTot id
+// let getId (StAEInstance #i rd wr) = i
 
