@@ -24,7 +24,7 @@ let rec iter xs: St unit =
   | (s,f) :: xs -> check s f; iter xs
 
 let handshake () =
-  Handshake.main "CAFile.pem" "server-ecdsa.crt" "server-ecdsa.key" ()
+  Test.Handshake.main "CAFile.pem" "server-ecdsa.crt" "server-ecdsa.key" ()
 
 let main (): St C.exit_code =
   ignore (FStar.Test.dummy ());
