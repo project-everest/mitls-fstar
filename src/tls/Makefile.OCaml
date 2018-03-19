@@ -12,8 +12,8 @@ EXTENSION=ml
 #And also some specific ones from mitls that are implemented in C
 EXTRACT='* -Prims -FStar +FStar.Test +FStar.Kremlin.Endianness -CoreCrypto -CryptoTypes -DHDB -LowCProvider -HaclProvider -FFICallbacks -Crypto.AEAD -Crypto.Symmetric -Crypto.Plain -Spec.Loops -Buffer.Utils -C +C.Loops -LowParse.SLow.Tac -BufferBytes'
 SPECINC=$(MITLS_HOME)/src/tls/concrete-flags  $(MITLS_HOME)/src/tls/concrete-flags/OCaml
-VFLAGS?=--admit_smt_queries true
 include Makefile.common
+VFLAGS+=--admit_smt_queries true
 ################################################################################
 
 FFI_HOME	= $(MITLS_HOME)/libs/ffi
