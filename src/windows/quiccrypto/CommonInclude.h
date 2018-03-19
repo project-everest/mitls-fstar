@@ -22,12 +22,12 @@
 #endif
 __declspec(noreturn) extern void KremlExit(int n);
 
-extern void* KrmlHostMalloc(size_t cb);
-extern void* KrmlHostCalloc(size_t n, size_t cb);
-extern void KrmlHostFree(void *pv);
-#define KRML_HOST_MALLOC KrmlHostMalloc
-#define KRML_HOST_CALLOC KrmlHostCalloc
-#define KRML_HOST_FREE   KrmlHostFree
+//extern void* KrmlHostMalloc(size_t cb);
+//extern void* KrmlHostCalloc(size_t n, size_t cb);
+//extern void KrmlHostFree(void *pv);
+//#define KRML_HOST_MALLOC KrmlHostMalloc
+//#define KRML_HOST_CALLOC KrmlHostCalloc
+//#define KRML_HOST_FREE   KrmlHostFree
 
 #define KRML_HOST_PRINTF DbgPrint
 #define KRML_HOST_EPRINTF DbgPrint
