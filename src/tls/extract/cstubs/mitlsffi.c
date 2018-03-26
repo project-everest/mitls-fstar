@@ -386,6 +386,9 @@ static TLSConstants_nego_action nego_cb_proxy(FStar_Dyn_dyn cbs, TLSConstants_pr
       if(app_cookie != NULL) memcpy(c, app_cookie, app_cookie_len);
       a.val.case_Nego_retry = (FStar_Bytes_bytes){.data = (const char*)c, .length = app_cookie_len};
       break;
+    default:
+      KRML_HOST_PRINTF("mitls_nego_action: unsupported (%04x)\n", r);
+      KRML_HOST_EXIT(1);
   }
 
   return a;

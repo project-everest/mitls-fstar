@@ -413,7 +413,7 @@ int HeapRegionInitialize()
 void HeapRegionCleanup(void)
 {
     // The mapping list should be empty
-    NT_ASSERT(IsListEmpty(&g_mapping_list.entries));
+    NT_ASSERT(IsListEmpty(&g_mapping_list));
     HeapRegionDestroy(&g_global_region);
 }
 
