@@ -1,5 +1,4 @@
 #include <memory.h>
-#include <assert.h>
 #include <stdio.h>
 #if __APPLE__
 #include <sys/errno.h> // OS/X only provides include/sys/errno.h

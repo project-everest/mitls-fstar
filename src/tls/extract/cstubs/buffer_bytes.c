@@ -1,8 +1,6 @@
 #include "FStar.h"
 #include "krembytes.h"
 
-#include <assert.h>
-
 FStar_Bytes_bytes BufferBytes_to_bytes(Prims_nat l, uint8_t *buf) {
   if (buf == NULL || l == 0)
     return FStar_Bytes_empty_bytes;
