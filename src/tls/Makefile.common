@@ -87,6 +87,14 @@ depend: $(DEP_FILE)
 # If F* doesn't write a .checked file because it hasn't verified a
 # dependency, then an empty (invalid) file will be created.
 
+# REMARK
+# cwinter: The order-only dependency makes sure that F* will not run until 
+# $(DEP_FILE) is regenerated. Otherwise it can happen that this rule is 
+# executed in parallel with the $(DEP_FILE) rule, where this rule uses an 
+# outdated $(DEP_FILE) on the disc. Alternatively, secondary expansion could
+# solve this problem too. If there is an up to date $(DEP_FILE), or none at 
+# all, then the dependency can be ignored. 
+
 $(CACHE_DIR)/FStar.%.checked: | $(DEP_FILE)
 ifdef VERBOSE
 	@echo -e "\033[1;35m=== Producing $@ ...\033[;37m"
