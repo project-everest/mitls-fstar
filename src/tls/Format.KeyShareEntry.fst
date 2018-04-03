@@ -46,7 +46,7 @@ module U32 = FStar.UInt32
 (* Parsers, validators *)
 
 inline_for_extraction
-let synth_keyShareEntry (r:namedGroup * B.bytes): Tot keyShareEntry = { group=(fst r); key_exchange=(snd r) }
+let synth_keyShareEntry (r:namedGroup * (LowParse.Spec.Bytes.parse_bounded_vlbytes_t 1 65535)): Tot keyShareEntry = { group=(fst r); key_exchange=(snd r) }
 
 inline_for_extraction
 let unsynth_keyShareEntry (e:keyShareEntry): Tot (namedGroup * B.bytes) = e.group, e.key_exchange
@@ -65,7 +65,7 @@ let keyShareEntry_parser_kind_metadata = keyShareEntry_parser_kind'.LP.parser_ki
 
 #reset-options "--using_facts_from '* -LowParse -FStar.Reflection -FStar.Tactics'"
 
-let keyShareEntry_parser =
+let keyShareEntry_parser: LP.parser keyShareEntry_parser_kind keyShareEntry =
   lemma_synth_keyShareEntry_is_injective ();
   assert_norm (keyShareEntry_parser_kind' == keyShareEntry_parser_kind);
   LP.parse_synth 

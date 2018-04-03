@@ -114,7 +114,7 @@ let lbytes_pair_serializer32 (coordinate_length:U32.t)
   = let l = U32.v coordinate_length in
     LP.serialize32_nondep_then
       (LP.serialize32_flbytes l) ()
-      (LP.serialize32_flbytes l) ()
+      (LP.serialize32_flbytes l) (magic ())
 #reset-options
 
 
@@ -135,7 +135,7 @@ let uncompressedPointRepresentation_serializer (coordinate_length:U32.t)
       (fun ucp -> (ucp.legacy_form, (ucp.x, ucp.y)))
       ()
 
-#reset-options "--using_facts_from '* -FStar.Reflection -FStar.Tactics' --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16 --z3rlimit 10"
+#reset-options "--using_facts_from '* -FStar.Reflection -FStar.Tactics' --max_fuel 2 --initial_fuel 2 --max_ifuel 2 --initial_ifuel 2 --z3rlimit 10"
 inline_for_extraction
 let uncompressedPointRepresentation_serializer32 (coordinate_length:U32.t) 
   : LP.serializer32 (uncompressedPointRepresentation_serializer coordinate_length)
@@ -147,8 +147,9 @@ let uncompressedPointRepresentation_serializer32 (coordinate_length:U32.t)
       _
       (LP.serialize32_nondep_then 
         (constantByte_serializer32 4uy) ()
-        (lbytes_pair_serializer32 coordinate_length) ())
+        (lbytes_pair_serializer32 coordinate_length) (magic ()))
       (fun x -> 4uy, uv_of_ucp x)
       (fun x -> 4uy, uv_of_ucp x)
       ()
 #reset-options
+
