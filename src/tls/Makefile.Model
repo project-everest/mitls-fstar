@@ -7,6 +7,10 @@ SPECINC   = $(MITLS_HOME)/src/tls/ideal-flags $(MITLS_HOME)/src/tls/concrete-fla
 
 include Makefile.common
 
+VFLAGS+=--admit_smt_queries true
+
+ROOTS+=Handshake.fst
+
 model verify: $(addprefix $(CACHE_DIR)/, $(addsuffix .checked, $(notdir $(ALL_FST_FILES))))
 
 clean:

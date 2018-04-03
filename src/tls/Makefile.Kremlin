@@ -19,6 +19,8 @@ VFLAGS     ?= --admit_smt_queries true
 
 include Makefile.common
 
+VFLAGS      = --admit_smt_queries true
+
 clean: clean-internal-test clean-library clean-external-test
 	rm -f $(DEP_FILE)
 
