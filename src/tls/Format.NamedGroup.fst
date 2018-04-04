@@ -94,3 +94,7 @@ let namedGroup_serializer32 =
   lemma_namedGroup_of_u16_of_namedGroup ();
   LP.serialize32_synth #namedGroup_parser_kind #U16.t #namedGroup
     LP.parse_u16 namedGroup_of_u16 LP.serialize_u16 LP.serialize32_u16 u16_of_namedGroup (fun x -> u16_of_namedGroup x) ()
+
+let lemma_namedGroup_parser_is_strong ()
+  : Lemma (LP.is_strong namedGroup_parser)
+  = ()

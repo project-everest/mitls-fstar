@@ -26,3 +26,7 @@ let constantByte_serializer32 c
       #LP.parse_u8_kind #U8.t #LP.parse_u8 #LP.serialize_u8
       LP.serialize32_u8
       (is_constantByte c)
+
+let lemma_constantByte_parser_is_strong ()
+  : Lemma (LP.is_strong constantByte_parser)
+  = ()

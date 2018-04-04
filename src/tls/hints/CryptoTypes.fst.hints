@@ -1,1 +1,43 @@
-[ "ªý „{®]”wÒ¤Egí¸Š", [] ]
+[
+  "ªý „{®]”wÒ¤Egí¸Š",
+  [
+    [
+      "CryptoTypes.aeadKeySize",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_CryptoTypes.AES_128_CCM",
+        "disc_equation_CryptoTypes.AES_128_CCM_8",
+        "disc_equation_CryptoTypes.AES_128_GCM",
+        "disc_equation_CryptoTypes.AES_256_CCM",
+        "disc_equation_CryptoTypes.AES_256_CCM_8",
+        "disc_equation_CryptoTypes.AES_256_GCM",
+        "disc_equation_CryptoTypes.CHACHA20_POLY1305",
+        "fuel_guarded_inversion_CryptoTypes.aead_cipher"
+      ],
+      0,
+      "8c0f119ae582c530e00687ab0f7fe4b3"
+    ],
+    [
+      "CryptoTypes.aeadTagSize",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_CryptoTypes.AES_128_CCM",
+        "disc_equation_CryptoTypes.AES_128_CCM_8",
+        "disc_equation_CryptoTypes.AES_128_GCM",
+        "disc_equation_CryptoTypes.AES_256_CCM",
+        "disc_equation_CryptoTypes.AES_256_CCM_8",
+        "disc_equation_CryptoTypes.AES_256_GCM",
+        "disc_equation_CryptoTypes.CHACHA20_POLY1305",
+        "fuel_guarded_inversion_CryptoTypes.aead_cipher"
+      ],
+      0,
+      "3c4013fa7d7bd4f2b0f52be28ec06163"
+    ]
+  ]
+]

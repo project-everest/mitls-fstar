@@ -16,26 +16,26 @@ module LP = LowParse.SLow
     } UncompressedPointRepresentation;
 *)
 
-type lbytes32 n = B.lbytes (UInt32.v n)
+type coordinate_length_type = (r:U32.t{UInt.fits (U32.v r) 8}) // cwinter: assumption, not clearly specified by RFC.
 
-type uncompressedPointRepresentation (coordinate_length:U32.t) = {
+type uncompressedPointRepresentation (coordinate_length:coordinate_length_type) = {
     legacy_form : l:B.byte{l = 4uy};
-    x           : lbytes32 coordinate_length;
-    y           : lbytes32 coordinate_length
+    x           : B.lbytes32 coordinate_length;
+    y           : B.lbytes32 coordinate_length;
 }
 
-val uncompressedPointRepresentation_parser_kind (coordinate_length:U32.t): LP.parser_kind
+val uncompressedPointRepresentation_parser_kind (coordinate_length:coordinate_length_type): LP.parser_kind
 
-val uncompressedPointRepresentation_parser (coordinate_length:U32.t)
+val uncompressedPointRepresentation_parser (coordinate_length:coordinate_length_type)
   : LP.parser (uncompressedPointRepresentation_parser_kind coordinate_length) (uncompressedPointRepresentation coordinate_length) 
 
 inline_for_extraction
-val uncompressedPointRepresentation_parser32 (coordinate_length:U32.t) 
+val uncompressedPointRepresentation_parser32 (coordinate_length:coordinate_length_type) 
   : LP.parser32 (uncompressedPointRepresentation_parser coordinate_length)
 
-val uncompressedPointRepresentation_serializer (coordinate_length:U32.t) 
+val uncompressedPointRepresentation_serializer (coordinate_length:coordinate_length_type) 
   : LP.serializer (uncompressedPointRepresentation_parser coordinate_length)
 
 inline_for_extraction
-val uncompressedPointRepresentation_serializer32 (coordinate_length:U32.t) 
+val uncompressedPointRepresentation_serializer32 (coordinate_length:coordinate_length_type) 
   : LP.serializer32 (uncompressedPointRepresentation_serializer coordinate_length)
