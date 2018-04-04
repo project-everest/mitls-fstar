@@ -65,7 +65,7 @@ quic.exe: quic.c \
 	  -I../../libs/ffi -I$(HACL_HOME)/secure_api/QuicProvider \
 	  quic.c \
           -L$(subst :, -L,$(LIBPATHS)) \
-	  $(CFLAGS) -lmitls -lquicprovider -lmipki -o quic.exe
+	  -lmitls -lquicprovider -lmipki $(CFLAGS) -o quic.exe
 
 test: quic.exe
 	./quic.exe
