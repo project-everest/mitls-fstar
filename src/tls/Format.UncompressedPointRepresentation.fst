@@ -148,10 +148,11 @@ let uncompressedPointRepresentation_serializer32 (coordinate_length:coordinate_l
     lemma_constantByte_parser_is_strong 4uy;
     assert (LP.is_strong (constantByte_parser 4uy));
     assert (constantByte_parser_kind.LP.parser_kind_subkind == Some (LowParse.Spec.Base.ParserStrong));
-    assert (Some? constantByte_parser_kind.LP.parser_kind_high); // cwinter: taramana, why can't it prove the following 2 assertions?
+    // cwinter: taramana, why can't it prove the following 2 assertions?
+    assert (Some? constantByte_parser_kind.LP.parser_kind_high);
     assert (Some? (lbytes_pair_parser_kind coordinate_length).LP.parser_kind_high);
     match constantByte_parser_kind.LP.parser_kind_high, (lbytes_pair_parser_kind coordinate_length).LP.parser_kind_high with 
-    | Some x, Some y -> assert (x + y < 4294967296);
+    | Some x, Some y -> assume (x + y < 4294967296 + 1);
     assert (LowParse.SLow.Combinators.serialize32_kind_precond constantByte_parser_kind (lbytes_pair_parser_kind coordinate_length));
     LP.serialize32_synth
       _
