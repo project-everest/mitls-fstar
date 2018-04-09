@@ -387,7 +387,7 @@ let encrypt #i e f =
     let h0 = get() in
     let l = frag_plain_len f in
     let cl = frag_cipher_len f in
-    let ad = C.ctBytes C.Application_data @| versionBytes TLS_1p2 @| bytes_of_int 2 cl
+    let ad = C.ctBytes C.Application_data @| versionBytes TLS_1p2 @| bytes_of_int 2 cl in
     let c = Stream.encrypt s ad l f in
     let h1 = get() in
     if authId i then
@@ -444,7 +444,6 @@ let decrypt #i d (ct,c) =
   match d with
   | Stream _ s ->
     begin
-    let cl = frag_cipher_len f in
     let ad = C.ctBytes ct @| versionBytes TLS_1p2 @| bytes_of_int 2 (length c) in
     match Stream.decrypt s ad (Stream.lenCipher i c) c with
     | None -> None
