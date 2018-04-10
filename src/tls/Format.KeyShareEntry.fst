@@ -56,6 +56,7 @@ let lemma_synth_keyShareEntry_of_unsynth_keyShareEntry ()
   = LP.synth_inverse_intro synth_keyShareEntry unsynth_keyShareEntry
 #reset-options
 
+#reset-options "--using_facts_from '* -FStar.Reflection -FStar.Tactics'"
 let keyShareEntry_serializer =
   lemma_synth_keyShareEntry_is_injective ();
   lemma_synth_keyShareEntry_of_unsynth_keyShareEntry ();
@@ -68,27 +69,18 @@ let keyShareEntry_serializer =
     unsynth_keyShareEntry
     ()
 
-#reset-options "--using_facts_from '* -LowParse -FStar.Reflection -FStar.Tactics'"
 let keyShareEntry_serializer32: LP.serializer32 keyShareEntry_serializer =
   lemma_synth_keyShareEntry_is_injective ();
   lemma_synth_keyShareEntry_of_unsynth_keyShareEntry ();
   assert_norm (keyShareEntry_parser_kind' == keyShareEntry_parser_kind);
-  lemma_namedGroup_parser_is_strong ();
-  assume (LowParse.SLow.Combinators.serialize32_kind_precond namedGroup_parser_kind (LowParse.Spec.VLData.parse_bounded_vldata_kind 1 65535));
-  assert (LP.synth_inverse synth_keyShareEntry unsynth_keyShareEntry /\ LP.synth_injective synth_keyShareEntry);
-  // cwinter: taramana, what else is missing here (see also Format.Uncompressedpointrepresentation:151 
   LP.serialize32_synth
-    (namedGroup_parser `LP.nondep_then` (LP.parse_bounded_vlbytes 1 65535))
+    (LP.nondep_then namedGroup_parser (LP.parse_bounded_vlbytes 1 65535))
     synth_keyShareEntry
-    (LP.serialize_nondep_then 
-      namedGroup_parser namedGroup_serializer ()
-      (LP.parse_bounded_vlbytes 1 65535) (LP.serialize_bounded_vlbytes 1 65535))
-    (LP.serialize32_nondep_then 
-      namedGroup_serializer32 ()
-      (LP.serialize32_bounded_vlbytes 1 65535) ())
+    (LP.serialize_nondep_then namedGroup_parser namedGroup_serializer ()
+                              (LP.parse_bounded_vlbytes 1 65535) (LP.serialize_bounded_vlbytes 1 65535))
+    (LP.serialize32_nondep_then namedGroup_serializer32 () 
+                                (LP.serialize32_bounded_vlbytes 1 65535) ())
     unsynth_keyShareEntry
     (fun x -> unsynth_keyShareEntry x)
     ()
 #reset-options
-
-

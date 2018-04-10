@@ -132,7 +132,7 @@ let lbytes_pair_serializer32 (coordinate_length:coordinate_length_type)
       (LP.serialize32_flbytes l) ()
 #reset-options
 
-#reset-options "--using_facts_from '* -FStar.Reflection -FStar.Tactics' --max_fuel 2 --initial_fuel 2 --max_ifuel 2 --initial_ifuel 2"
+#reset-options "--using_facts_from '* -FStar.Reflection -FStar.Tactics'"
 let uncompressedPointRepresentation_serializer (coordinate_length:coordinate_length_type) 
   : LP.serializer (uncompressedPointRepresentation_parser coordinate_length)
   = let l = coordinate_length in
