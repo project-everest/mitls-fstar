@@ -60,6 +60,7 @@ type group =
   | Named    of ffdhe
   | Explicit of params
 
+#reset-options "--z3rlimit 20"
 val params_of_group: group -> Tot params
 let params_of_group = function
   | Named FFDHE2048 -> ffdhe2048
@@ -67,7 +68,8 @@ let params_of_group = function
   | Named FFDHE4096 -> ffdhe4096
   | Named FFDHE6144 -> ffdhe6144
   | Named FFDHE8192 -> ffdhe8192
-  | Explicit params -> params
+  | Explicit ps     -> ps
+#reset-options
 
 type share (g:group) = b:bytes{
   length b < 65536 /\
@@ -84,28 +86,20 @@ type secret (g:group) = bytes
 val pubshare: #g:group -> keyshare g -> Tot (share g)
 let pubshare #g k = k.dh_public
 
+#reset-options "--z3rlimit 20"
 val keygen: g:group -> ST (keyshare g)
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
 let keygen g =
-  let params = params_of_group g in
-  dh_gen_key params
-
-(* Unused, implemented in CommonDH
-val dh_responder: #g:group -> share g -> ST (keyshare g * secret g)
-  (requires (fun h0 -> True))
-  (ensures (fun h0 _ h1 -> modifies_none h0 h1))
-let dh_responder #g gx =
-  let y = keygen g in
-  let shared = dh_agreement y gx in
-  y, shared
-*)
+  dh_gen_key (params_of_group g)
 
 val dh_initiator: #g:group -> keyshare g -> share g -> ST (secret g)
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
 let dh_initiator #g x gy =
   dh_agreement x gy
+#reset-options
+
 
 module LP = LowParse.SLow
 
@@ -224,12 +218,16 @@ let serialize #g dh_Y =
   assume (length r < 196612);
   r
 
-val serialize_public: #g:group -> s:share g -> len:nat{len < 65536 /\ length s <= len}
-  -> Tot (lbytes len)
-let serialize_public #g dh_Y len =
-  let padded_dh_Y = create_ (len - length dh_Y) 0z @| dh_Y in
-  lemma_repr_bytes_values len;
-  padded_dh_Y
+#reset-options "--using_facts_from '* -LowParse'"
+val serialize_public: #g:group -> s:share g -> l:nat{l < 65536 /\ length s <= l}
+  -> Tot (lbytes l)
+let serialize_public #g s l =
+  lemma_repr_bytes_values l;
+  let pad_len = l - length s in
+  let (pad:lbytes pad_len) = Bytes.create_ pad_len 0z in
+  let (r:lbytes l) = Bytes.append pad s in
+  r
+#reset-options
 
 private 
 let lemma_dh_param_len_bound (bs:vlb16)
@@ -238,6 +236,7 @@ let lemma_dh_param_len_bound (bs:vlb16)
     (ensures (length bs < 65536))
   = () // cwinter: this should come for free, no?
 
+#reset-options "--using_facts_from '* -LowParse'"
 val parse_partial: FStar.Bytes.bytes -> Tot (result ((g:group & share g) * bytes))
 let parse_partial bs =
   match dhparam_parser32 bs with 
@@ -252,3 +251,4 @@ let parse_partial bs =
       else
         Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
   | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+#reset-options
