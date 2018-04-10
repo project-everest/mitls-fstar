@@ -1,7 +1,4 @@
 module ECGroup
-module HS = FStar.HyperStack //Added automatically
-
-// cwinter: this file will likely be removed.
 
 open FStar.Bytes
 open FStar.Error
@@ -67,6 +64,7 @@ let pubshare #g k =
   | _ ->
     let KS_CC ks = k in S_CC ks.ec_point
 
+#reset-options "--using_facts_from '* -LowParse'"
 val keygen: g:group -> ST (keyshare g)
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
@@ -81,28 +79,6 @@ let keygen g =
     let params = params_of_group g false in
     let s = ec_gen_key params in
     KS_CC s
-
-(* Unused, implemented in CommonDH
-val dh_responder: #g:group -> s:share g -> ST (keyshare g * secret g)
-  (requires (fun h0 -> True))
-  (ensures (fun h0 _ h1 -> modifies_none h0 h1))
-let dh_responder #g gx =
-  let gy = keygen g in
-  match g with
-  | ECC_X25519 ->
-    let S_X25519 gx = gx in
-    let KS_X25519 (p,s) = gy in
-    let shared = TLS.Curve25519.mul s gx in
-    (gy, shared)
-  | ECC_X448 ->
-    let KS_X448 (p,s) = gy in
-    (gy, s) // FAKE ! LEAKS SECRET !
-  | _ ->
-    let S_CC gx = gx in
-    let KS_CC gy' = gy in
-    let shared = ecdh_agreement gy' gx in
-    gy, shared
-*)
 
 val dh_initiator: #g:group -> gx:keyshare g -> gy:share g -> ST (secret g)
   (requires (fun h0 -> True))
@@ -120,7 +96,7 @@ let dh_initiator #g gx gy =
     let KS_CC gx = gx in
     let S_CC gy = gy in
     ecdh_agreement gx gy
-
+#reset-options
 
 // cwinter: parse_curve, parse_point, and parse_partial really describe
 // one parser for one datatype of the shape
@@ -128,12 +104,14 @@ let dh_initiator #g gx gy =
 // but I can't figure out whether that type has a name in the RFCs
 // (I don't think so, because 'namedcurve' in ECParameters only contains the 
 // curve name, no further parameters).
+#reset-options "--z3rlimit 20"
 val parse_curve: bytes -> Tot (option group)
 let parse_curve b =
-  let open Format.ECCurveType in  
-  let open Format.NamedGroup in
-  match ecCurveType_parser32 b with // <- parse_curve == ecCurveType_parser and-then named_group_parser
-  | Some (Format.ECCurveType.NAMED_CURVE, _) -> 
+  if (length b < 1) then None else (
+    let open Format.ECCurveType in  
+    let open Format.NamedGroup in
+    match ecCurveType_parser32 b with // <- parse_curve == ecCurveType_parser and-then named_group_parser
+    | Some (Format.ECCurveType.NAMED_CURVE, _) -> 
       let ty, id = split b 1ul in
       match namedGroup_parser32 id with
       | Some (SECP256R1, _) -> Some CC.ECC_P256
@@ -142,7 +120,8 @@ let parse_curve b =
       | Some (X25519, _   ) -> Some CC.ECC_X25519
       | Some (X448, _     ) -> Some CC.ECC_X448
       | _                   -> None
-  | _ -> None
+    | _ -> None)
+#reset-options
 
 val curve_id: group -> Tot (lbytes 2)
 let curve_id g =
@@ -156,7 +135,8 @@ let curve_id g =
     | ECC_X448   -> X448) in
   assume (length r = 2);
   r
-  
+
+#reset-options "--using_facts_from '* -LowParse'"
 val parse_point: g:group -> bytes -> Tot (option (share g))
 let parse_point g b =
   // parser for flat bytes or uncompressedPointPepresentation
@@ -173,8 +153,8 @@ let parse_point g b =
       | _ -> None)
   | _ ->
       let open Format.UncompressedPointRepresentation in
-      let (bl:UInt32.t) =  UInt32.uint_to_t (op_Multiply 2 (ec_bytelen g)) in
-      match (uncompressedPointRepresentation_parser32 bl) b with
+      let cl = UInt32.uint_to_t (ec_bytelen g) in
+      match (uncompressedPointRepresentation_parser32 cl) b with
       | Some (ucpr, _) -> 
           let e = { ecx = ucpr.x; ecy = ucpr.y } in
           if CoreCrypto.ec_is_on_curve (params_of_group g false) e then
@@ -210,23 +190,25 @@ val serialize_point: #g:group -> e:share g -> Tot (b:bytes{length b <= 255})
 let serialize_point #g s =
   match g with
   | ECC_X25519 ->
-    let S_X25519 p = s in 
-    assert (length p = ec_bytelen g);
-    LowParse.SLow.serialize32_flbytes (ec_bytelen g) p
+    let S_X25519 p = s in     
+    let r = LowParse.SLow.serialize32_flbytes (ec_bytelen g) p in
+    assume (length r = ec_bytelen g);
+    r
   | ECC_X448 ->
-    let S_X448 p = s in
-    assert (length p = ec_bytelen g);
-    LowParse.SLow.serialize32_flbytes (ec_bytelen g) p
+    let S_X448 p = s in    
+    let r = LowParse.SLow.serialize32_flbytes (ec_bytelen g) p in
+    assume (length r = ec_bytelen g);
+    r
   | _ ->
     let S_CC e = s in
-    let open Format.UncompressedPointRepresentation in
-    let l = len e.ecx in
-    assert (len e.ecx = len e.ecy);
-    let ucp = { legacy_form = 4uy; x = e.ecx; y = e.ecy} in
-    let x = (uncompressedPointRepresentation_serializer32 l) ucp in
-    assert (length x = ec_bytelen g);
+    let open Format.UncompressedPointRepresentation in    
+    let l = length e.ecx in
+    let (l32:coordinate_length_type) = UInt32.uint_to_t l in
+    let (ucp:uncompressedPointRepresentation l32) = { legacy_form = 4uy; x = e.ecx; y = e.ecy } in
+    let x = (uncompressedPointRepresentation_serializer32 l32) ucp in
+    assume (length x = 2 * (ec_bytelen g) + 1);
     x
-    
+
 val serialize: #g:group -> e:share g -> Tot (b:bytes{length b <= 259})
 let serialize #g ecdh_Y =
   // Similar to parse_partial, we should rewrite this using serializer combinators
@@ -236,6 +218,7 @@ let serialize #g ecdh_Y =
   lemma_repr_bytes_values (FStar.Bytes.length e);
   let ve = vlbytes 1 e in
   ty @| id @| ve
+#reset-options
 
 (* KB: older more general code below
 let getParams (c : ec_curve) : ec_params =
