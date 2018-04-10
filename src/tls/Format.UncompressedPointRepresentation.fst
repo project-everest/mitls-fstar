@@ -73,12 +73,23 @@ let uv_of_ucp (#n:coordinate_length_type) (x:uncompressedPointRepresentation n)
 let lemma_ucp_of_uv_is_injective #l
   : Lemma (is_injective (ucp_of_uv #l))
   = ()
-#reset-options
 
-#reset-options "--using_facts_from '* -LowParse -FStar.Reflection -FStar.Tactics' --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16 --z3rlimit 10"
 let lemma_ucp_of_uv_of_ucp #l 
   : Lemma (forall x . ucp_of_uv #l (uv_of_ucp #l x) == x)
   = lemma_ucp_of_uv_is_injective #l
+#reset-options
+
+let ucp_of_cuv #l (cuv:constantByte 4uy * lbytes_pair l): Tot (ucp:uncompressedPointRepresentation l) = let c, uv = cuv in ucp_of_uv uv
+let cuv_of_ucp #l (ucp:uncompressedPointRepresentation l): Tot (cuv:constantByte 4uy * lbytes_pair l) = 4uy, (ucp.x, ucp.y)
+
+#reset-options "--using_facts_from '* -LowParse -FStar.Reflection -FStar.Tactics' --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16"
+let lemma_ucp_of_cuv_is_injective #l
+  : Lemma (is_injective (ucp_of_cuv #l))
+  = ()
+
+let lemma_ucp_of_cuv_of_ucp #l 
+  : Lemma (forall x . ucp_of_cuv #l (cuv_of_ucp #l x) == x)
+  = lemma_ucp_of_cuv_is_injective #l
 #reset-options
 
 
@@ -86,15 +97,15 @@ let uncompressedPointRepresentation_parser (coordinate_length:coordinate_length_
   : LP.parser (uncompressedPointRepresentation_parser_kind coordinate_length) (uncompressedPointRepresentation coordinate_length) 
   = LP.parse_synth
       (LP.nondep_then (constantByte_parser 4uy) (lbytes_pair_parser coordinate_length))
-      (fun (c, uv) -> ucp_of_uv uv)
+      ucp_of_cuv
 
 inline_for_extraction
 let uncompressedPointRepresentation_parser32 (coordinate_length:coordinate_length_type)
   : LP.parser32 (uncompressedPointRepresentation_parser coordinate_length)
   = LP.parse32_synth
       (LP.nondep_then (constantByte_parser 4uy) (lbytes_pair_parser coordinate_length))
-      (fun (c, uv) -> ucp_of_uv uv)
-      (fun (c, uv) -> ucp_of_uv uv)
+      ucp_of_cuv
+      (fun x -> ucp_of_cuv x)
       (LP.parse32_nondep_then (constantByte_parser32 4uy) (lbytes_pair_parser32 coordinate_length))
       ()
 
@@ -121,47 +132,38 @@ let lbytes_pair_serializer32 (coordinate_length:coordinate_length_type)
       (LP.serialize32_flbytes l) ()
 #reset-options
 
-
+#reset-options "--using_facts_from '* -FStar.Reflection -FStar.Tactics' --max_fuel 2 --initial_fuel 2 --max_ifuel 2 --initial_ifuel 2"
 let uncompressedPointRepresentation_serializer (coordinate_length:coordinate_length_type) 
   : LP.serializer (uncompressedPointRepresentation_parser coordinate_length)
-  = lemma_ucp_of_uv_is_injective #coordinate_length;
-    lemma_ucp_of_uv_of_ucp #coordinate_length;
-    let l = U32.v coordinate_length in
+  = let l = coordinate_length in
+    lemma_ucp_of_cuv_is_injective #l;
+    lemma_ucp_of_cuv_of_ucp #l;
     LP.serialize_synth
-      (LP.nondep_then (constantByte_parser 4uy) (lbytes_pair_parser coordinate_length))
-      (fun (c, uv) -> ucp_of_uv uv)
+      (LP.nondep_then (constantByte_parser 4uy) (lbytes_pair_parser l))
+      ucp_of_cuv
       (LP.serialize_nondep_then 
         (constantByte_parser 4uy)
         (constantByte_serializer 4uy) 
         ()
-        (lbytes_pair_parser coordinate_length)
-        (lbytes_pair_serializer coordinate_length))
-      (fun ucp -> (ucp.legacy_form, (ucp.x, ucp.y)))
+        (lbytes_pair_parser l)
+        (lbytes_pair_serializer l))
+      cuv_of_ucp
       ()
 
-#reset-options "--using_facts_from '* -LowParse -FStar.Reflection -FStar.Tactics' --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16 --z3rlimit 10"
 inline_for_extraction
 let uncompressedPointRepresentation_serializer32 (coordinate_length:coordinate_length_type) 
   : LP.serializer32 (uncompressedPointRepresentation_serializer coordinate_length)
-  = lemma_ucp_of_uv_is_injective #coordinate_length;
-    lemma_ucp_of_uv_of_ucp #coordinate_length;
-    lemma_constantByte_parser_is_strong 4uy;
-    assert (LP.is_strong (constantByte_parser 4uy));
-    assert (constantByte_parser_kind.LP.parser_kind_subkind == Some (LowParse.Spec.Base.ParserStrong));
-    // cwinter: taramana, why can't it prove the following 2 assertions?
-    assert (Some? constantByte_parser_kind.LP.parser_kind_high);
-    assert (Some? (lbytes_pair_parser_kind coordinate_length).LP.parser_kind_high);
-    match constantByte_parser_kind.LP.parser_kind_high, (lbytes_pair_parser_kind coordinate_length).LP.parser_kind_high with 
-    | Some x, Some y -> assume (x + y < 4294967296 + 1);
-    assert (LowParse.SLow.Combinators.serialize32_kind_precond constantByte_parser_kind (lbytes_pair_parser_kind coordinate_length));
-    LP.serialize32_synth
-      _
-      (fun (c, uv) -> ucp_of_uv uv)
-      _
-      (LP.serialize32_nondep_then 
-        (constantByte_serializer32 4uy) ()
-        (lbytes_pair_serializer32 coordinate_length) ())
-      (fun x -> 4uy, uv_of_ucp x)
-      (fun x -> 4uy, uv_of_ucp x)
+  = let l = coordinate_length in
+    lemma_ucp_of_cuv_is_injective #l;
+    lemma_ucp_of_cuv_of_ucp #l;
+    LP.serialize32_synth 
+      (LP.nondep_then (constantByte_parser 4uy) (lbytes_pair_parser l))      
+      ucp_of_cuv
+      (LP.serialize_nondep_then (constantByte_parser 4uy) (constantByte_serializer 4uy) ()
+                                (lbytes_pair_parser l) (lbytes_pair_serializer l))
+      (LP.serialize32_nondep_then (constantByte_serializer32 4uy) ()
+                                  (lbytes_pair_serializer32 l) ())
+      cuv_of_ucp
+      (fun x -> cuv_of_ucp x)
       ()
 #reset-options
