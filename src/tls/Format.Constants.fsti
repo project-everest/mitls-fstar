@@ -28,10 +28,3 @@ val constantByte_serializer (c:byte)
 inline_for_extraction
 val constantByte_serializer32 (c:byte)
   : Tot (LP.serializer32 #constantByte_parser_kind #(constantByte c) #(constantByte_parser c) (constantByte_serializer c))
-
-
-(* Lemmas *)
-
-val lemma_constantByte_parser_is_strong (b:byte): 
-  Lemma (LP.is_strong (constantByte_parser b) /\
-         constantByte_parser_kind.LP.parser_kind_subkind == Some (LowParse.Spec.Base.ParserStrong))

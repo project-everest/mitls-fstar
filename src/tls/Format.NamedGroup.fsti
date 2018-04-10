@@ -78,10 +78,3 @@ val namedGroup_serializer: LP.serializer namedGroup_parser
 
 inline_for_extraction
 val namedGroup_serializer32: LP.serializer32 namedGroup_serializer
-
-
-(* Lemmas *)
-
-val lemma_namedGroup_parser_is_strong (u:unit): 
-  Lemma (LP.is_strong namedGroup_parser /\
-         namedGroup_parser_kind.LP.parser_kind_subkind == Some (LowParse.Spec.Base.ParserStrong))
