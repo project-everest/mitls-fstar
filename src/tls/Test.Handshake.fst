@@ -16,7 +16,7 @@ open FStar.HyperStack.ST
 
 module StAE = StAE
 module Range = Range
-module Handshake = Handshake
+module Handshake = Old.Handshake
 module PKI = PKI
 
 let prefix = "Test.Handshake"

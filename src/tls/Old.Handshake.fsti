@@ -1,16 +1,14 @@
-module Handshake
-module HS = FStar.HyperStack //Added automatically
+module Old.Handshake
+
+// provisional
 
 open FStar.HyperStack
+open FStar.HyperStack.ST
 
-open TLSConstants
-open TLSConstants
 open Mem
+open TLSConstants
 
-(*! abstract state of a handshake endpoint, 
-     with various property readers. *)
-
-module Range = Range
+module HS = FStar.HyperStack 
 
 val hs: Type0
 
@@ -50,8 +48,7 @@ let logT (s:hs) (h:HS.mem) = Epochs.epochsT (epochs_of s) h
 
 let non_empty h s = Seq.length (logT s h) > 0
 
-// can we hide further details?
-let logIndex (#t: Type) (log: Seq.seq t) = n:int { -1 <= n /\ n < Seq.length log }
+let logIndex (#t:Type) (log: Seq.seq t) = n:int { -1 <= n /\ n < Seq.length log }
 
 val completed: #region:rgn -> #nonce:TLSInfo.random -> Epochs.epoch region nonce -> Type0
 
@@ -88,11 +85,10 @@ let readerT s h = eT s Reader h
 let writerT s h = eT s Writer h
 
 // returns the current exporter keys
-val xkeys_of: s:hs -> ST (Seq.seq Handshake.Secret.exportKey)
+val xkeys_of: s:hs -> ST (Seq.seq KeySchedule.exportKey)
   (requires fun h0 -> True)
   (ensures fun h0 r h1 -> h0 == h1 /\ Seq.length r <= 2)
 
-/// result type after handshake reading 
 
 type incoming =
   | InAck: // the fragment is accepted, and...
@@ -105,22 +101,18 @@ type incoming =
 let in_next_keys (r:incoming) = InAck? r && InAck?.next_keys r
 let in_complete (r:incoming)  = InAck? r && InAck?.complete r
 
+(* ----------------------- Control Interface -------------------------*)
 
-(*! Control Interface *)
-
-// Create handshake instance for a fresh connection, 
-// with optional resumption for clients
-val create: 
-  r0:rid -> cfg:config -> r:role -> resume:TLSInfo.resumeInfo r -> ST hs
+// Create instance for a fresh connection, with optional resumption for clients
+val create: r0:rid -> cfg:config -> r:role -> resume:TLSInfo.resumeInfo r -> ST hs
   (requires (fun h -> True))
   (ensures (fun h0 s h1 ->
     modifies Set.empty h0 h1 /\
-    fresh_subregion r0 (region_of s) h0 h1 /\
-    hs_inv s h1 /\
-    role_of s = r /\
-// cwinter: this needs fixing.
-//    resumeInfo_of s = resume /\
-//    config_of s = cfg /\
+    //fresh_subregion r0 (HS?.region s) h0 h1 /\
+    // hs_inv s h1 /\
+    // HS?.r s = r /\
+    // HS?.resume s = resume /\
+    // HS?.cfg s = cfg /\
     logT s h1 == Seq.createEmpty ))
 
 let mods s h0 h1 = HS.modifies_one (region_of s) h0 h1
@@ -151,11 +143,11 @@ val invalidateSession: s:hs -> ST unit
   (ensures (fun h0 _ h1 -> modifies_internal h0 s h1)) // underspecified
 
 
-(*! Outgoing messages *)
+(* ------------------ Outgoing -----------------------*)
 
 open TLSError //17-04-07 necessary to TC the | Correct pattern?
-let next_fragment_ensures 
-  (#i:TLSInfo.id) (s:hs) h0 (result: result (HandshakeLog.outgoing i)) h1 =
+//val next_fragment: see .fsti
+let next_fragment_ensures (#i:TLSInfo.id) (s:hs) h0 (result: result (HandshakeLog.outgoing i)) h1 =
     let es = logT s h0 in
     let w0 = iT s Writer h0 in
     let w1 = iT s Writer h1 in
@@ -172,19 +164,17 @@ let next_fragment_ensures
           (b2t complete ==> r1 = w1 /\ Seq.indexable (logT s h1) w1 (*/\ completed (eT s Writer h1)*) )
       | _ -> True )
 
-val next_fragment: 
-  s:hs -> i:TLSInfo.id -> ST (result (HandshakeLog.outgoing i))
+val next_fragment: s:hs -> i:TLSInfo.id -> ST (result (HandshakeLog.outgoing i))
   (requires (fun h0 ->
     let es = logT s h0 in
     let j = iT s Writer h0 in
-    j < Seq.length es /\ //verification hint
+    j < Seq.length es /\ //17-04-08 added verification hint
     hs_inv s h0 /\
     (if j < 0 then TLSInfo.PlaintextID? i else let e = Seq.index es j in i = Epochs.epoch_id e)
   ))
   (ensures (fun h0 r h1 -> next_fragment_ensures #i s h0 r h1))
 
-
-(*! Processing incoming packets *)
+(* ----------------------- Incoming ----------------------- *)
 
 let recv_ensures (s:hs) (h0:HS.mem) (result:incoming) (h1:HS.mem) =
     let w0 = iT s Writer h0 in
@@ -197,28 +187,20 @@ let recv_ensures (s:hs) (h0:HS.mem) (result:incoming) (h1:HS.mem) =
     r1 == (if in_next_keys result then r0 + 1 else r0) /\
     (b2t (in_complete result) ==> r1 >= 0 /\ r1 = w1 /\ iT s Reader h1 >= 0 (*/\ completed (eT s Reader h1)*) )
 
-val recv_fragment: 
-  s: hs -> 
-  #i: TLSInfo.id -> 
-  rg: Range.frange i -> 
-  f: Range.rbytes rg -> 
-  ST incoming (* incoming transitions for our state machine *)
+module Range = Range
+val recv_fragment: s:hs -> #i:TLSInfo.id -> rg:Range.frange i -> f:Range.rbytes rg -> ST incoming (* incoming transitions for our state machine *)
   (requires (hs_inv s))
   (ensures (recv_ensures s))
 
 // special case: CCS before 1p3; could merge with recv_fragment
-val recv_ccs: 
-  s:hs -> 
-  ST incoming
+val recv_ccs: s:hs -> ST incoming
   (requires (hs_inv s))
   (ensures (fun h0 result h1 ->
     recv_ensures s h0 result h1 /\
-    (InError? result \/ result = InAck true false)))
+    (InError? result \/ result = InAck true false))
+    )
 
-val authorize: 
-  s: hs -> 
-  Cert.chain -> 
-  ST incoming // special case: explicit authorize (needed?)
+val authorize: s:hs -> Cert.chain -> ST incoming // special case: explicit authorize (needed?)
   (requires (hs_inv s))
   (ensures (fun h0 result h1 ->
     (InAck? result \/ InError? result) /\ recv_ensures s h0 result h1 ))

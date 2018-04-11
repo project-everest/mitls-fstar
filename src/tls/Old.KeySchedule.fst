@@ -1,22 +1,181 @@
-module KeySchedule
+module Old.KeySchedule
 
-// cwinter: this file should be removed, but Epochs.fst still depends on these remaining definitions.
-
+open FStar.Heap
+open FStar.HyperStack
+open FStar.HyperStack.ST
+open FStar.Seq
+open FStar.Set
 open FStar.Bytes
+open FStar.Error
 
-open TLSInfo
+open TLSError
 open TLSConstants
+open Extensions
+open TLSInfo
+open Range
+open StatefulLHAE
+open HKDF
+open PSK
 
-type ms = FStar.Bytes.bytes
-type pms = FStar.Bytes.bytes
-type ems #li (i:exportId li) = Hashing.Spec.tag (exportId_hash i)
+module MM = FStar.Monotonic.DependentMap
+module HS = FStar.HyperStack
+module ST = FStar.HyperStack.ST
+module H = Hashing.Spec
 
+module HMAC_UFCMA = Old.HMAC.UFCMA
+module HKDF = Old.HKDF
+
+type finishedId = HMAC_UFCMA.finishedId
+
+(* A flag for runtime debugging of computed keys.
+   The F* normalizer will erase debug prints at extraction
+   when this flag is set to false *)
+let discard (b:bool): ST unit (requires (fun _ -> True))
+ (ensures (fun h0 _ h1 -> h0 == h1)) = ()
+let print s = discard (IO.debug_print_string ("KS | "^s^"\n"))
+unfold let dbg : string -> ST unit (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1)) =
+  if DebugFlags.debug_KS then print else (fun _ -> ())
+
+#set-options "--lax"
+
+let print_share (#g:CommonDH.group) (s:CommonDH.share g) : ST unit
+  (requires (fun h0 -> True))
+  (ensures (fun h0 _ h1 -> modifies_none h0 h1))
+  =
+  let kb = CommonDH.serialize_raw #g s in
+  let kh = FStar.Bytes.hex_of_bytes kb in
+  dbg ("Share: "^kh)
+
+(********************************************
+*    Resumption PSK is disabled for now     *
+*********************************************
+
+abstract type res_psk (i:rmsId) =
+  b:bytes{exists i.{:pattern index b i} index b i <> 0z}
+
+abstract type res_context (i:rmsId) =
+  b:bytes{length b = CoreCrypto.H.tagLen (rmsId_hash i)}
+
+private type res_psk_entry (i:rmsId) =
+  (res_psk i) * (res_context i) * ctx:psk_context * leaked:(rref tls_tables_region bool)
+
+let res_psk_injective (m:MM.map' rmsId res_psk_entry) =
+  forall i1 i2.{:pattern (MM.sel m i1); (MM.sel m i2)}
+       i1 = i2 <==> (match MM.sel m i1, MM.sel m i2 with
+                  | Some (psk1, _, _, _), Some (psk2, _, _, _) -> b2t (equalBytes psk1 psk2)
+                  | _ -> True)
+
+let res_psk_table : MM.t tls_tables_region rmsId res_psk_entry res_psk_injective =
+  MM.alloc #TLSConstants.tls_tables_region #rmsId #res_psk_entry #res_psk_injective
+
+let registered_res_psk (i:rmsId) (h:HH.t) =
+  b2t (Some? (MM.sel (HS.sel h res_psk_table) i))
+
+let res_psk_context (i:rmsId{registered_res_psk i}) =
+  let (_, _, c, _) = Some.v (MM.sel res_psk_table i) in c
+
+private let res_psk_value (i:rmsId{registered_res_psk i}) =
+  let (psk, _, _, _) = Some.v (MM.sel res_psk_table i) in psk
+
+**)
+
+// PSK (internal/external multiplex, abstract)
+// Note that application PSK is externally defined but should
+// be idealized together with KS
+abstract let psk (i:esId) =
+  b:bytes{len b = H.tagLen (esId_hash i)}
+
+let read_psk (i:PSK.pskid)
+  : ST (esId * pskInfo * PSK.app_psk i)
+  (requires fun h -> True)
+  (ensures fun h0 _ h1 -> modifies_none h0 h1)
+  =
+  let c = PSK.psk_info i in
+  let id =
+    if Some? c.ticket_nonce then
+      let (| li, rmsid |) = Ticket.dummy_rmsid c.early_ae c.early_hash in
+      ResumptionPSK #li rmsid
+    else
+      ApplicationPSK #(c.early_hash) #(c.early_ae) i
+    in
+  (id, c, PSK.psk_value i)
+
+type binderId = i:pre_binderId{valid (I_BINDER i)}
+type hsId = i:TLSInfo.pre_hsId{valid (I_HS i)}
+type asId = i:pre_asId{valid (I_AS i)}
+
+// Resumption context
+let rec esId_rc : (esId -> St bytes) =
+  function
+  | NoPSK h -> H.zeroHash h
+
+and hsId_rc : (hsId -> St bytes) = function
+  | HSID_DHE (Salt i) _ _ _ -> secretId_rc i
+  | HSID_PSK (Salt i) -> secretId_rc i
+
+and asId_rc : (asId -> St bytes) = function
+  | ASID (Salt i) -> secretId_rc i
+
+and secretId_rc : (secretId -> St bytes) = function
+  | EarlySecretID i -> esId_rc i
+  | HandshakeSecretID i -> hsId_rc i
+  | ApplicationSecretID i -> asId_rc i
+
+// miTLS 0.9:
+// ==========
+// PRF (type pms) -> TLSInfo (type id) -> KEF (extract pms)
+//                     \ StatefulLHAE (coerce id) /
+// TODO rework old 1.2 types
+type ms = bytes
+type pms = bytes
+
+// Early secret (abstract)
+abstract type es (i:esId) = H.tag (esId_hash i)
+
+// Handshake secret (abstract)
+abstract type hs (i:hsId) = H.tag (hsId_hash i)
+type fink (i:finishedId) = HMAC_UFCMA.key (HMAC_UFCMA.HMAC_Finished i) (fun _ -> True)
+let trivial (_: bytes) = True
+type binderKey (i:binderId) = HMAC_UFCMA.key (HMAC_UFCMA.HMAC_Binder i) trivial
+
+// TLS 1.3 master secret (abstract)
+abstract type ams (i:asId) = H.tag (asId_hash i)
+
+type rekeyId (li:logInfo) = i:expandId li{
+  (let ExpandedSecret _ t _ = i in
+    ApplicationTrafficSecret? t \/
+    ClientApplicationTrafficSecret? t \/
+    ServerApplicationTrafficSecret? t)}
+
+abstract type rekey_secrets #li (i:expandId li) =
+  H.tag (expandId_hash i) * H.tag (expandId_hash i)
+
+// Leaked to HS for tickets
+(*abstract*) type rms #li (i:rmsId li) = H.tag (rmsId_hash i)
+
+type ems #li (i:exportId li) = H.tag (exportId_hash i)
+
+// TODO this is superseeded by StAE.state i
+// but I'm waiting for it to be tested to switch over
+// TODO use the newer index types
 type recordInstance =
   | StAEInstance: #id:TLSInfo.id -> StAE.reader (peerId id) -> StAE.writer id -> recordInstance
 
-type exportKey = (li:logInfo & i:exportId li & ems i)
+(* 2 choices - I prefer the second:
+     (1) replace recordInstance in this module with Epochs.epoch, but that requires dependence on more than just $id
+   (2) redefine recordInstance as follows, and then import epoch_region_inv over here from Epochs:
+type recordInstance (rgn:rid) (n:TLSInfo.random) =
+| RI: #id:StAE.id -> r:StAE.reader (peerId id) -> w:StAE.writer id{epoch_region_inv' rgn r w /\ I.nonce_of_id id = n} -> recordInstance rgn n
 
-(* 2018.03.08 SZ: The rest was in quic2c:
+In (2) we would define Epochs.epoch as:
+type epoch (hs_rgn:rgn) (n:TLSInfo.random) =
+  | Epoch: h:handshake ->
+           r:recordInstance hs_rgn n ->
+           epich hs_rgn n
+*)
+
+type exportKey = (li:logInfo & i:exportId li & ems i)
 
 // Note from old miTLS (in TLSInfo.fst)
 // type id = {
@@ -39,7 +198,7 @@ type ks_client_state =
 | C_12_wait_MS: csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.pmsId -> pms:pms -> ks_client_state
 | C_12_has_MS: csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.msId -> ms:ms -> ks_client_state
 | C_13_wait_SH: cr:random -> esl: list (i:esId{~(NoPSK? i)} & es i) ->
-                gs:list (g:CommonDH.group & CommonDH.keyshare g) -> ks_client_state
+                gs:list (g:CommonDH.group & CommonDH.ikeyshare g) -> ks_client_state
 | C_13_wait_SF: alpha:ks_alpha13 -> (i:finishedId & cfk:fink i) -> (i:finishedId & sfk:fink i) ->
                 (i:asId & ams:ams i) -> ks_client_state
 | C_13_wait_CF: alpha:ks_alpha13 -> (i:finishedId & cfk:fink i) -> (i:asId & ams:ams i) ->
@@ -50,7 +209,7 @@ type ks_client_state =
 
 type ks_server_state =
 | S_Init: sr:random -> ks_server_state
-| S_12_wait_CKE_DH: csr:csRands -> alpha:ks_alpha12 -> our_share:(g:CommonDH.group & CommonDH.keyshare g) -> ks_server_state
+| S_12_wait_CKE_DH: csr:csRands -> alpha:ks_alpha12 -> our_share:(g:CommonDH.group & CommonDH.ikeyshare g) -> ks_server_state
 | S_12_wait_CKE_RSA: csr: csRands -> alpha:ks_alpha12 -> ks_server_state
 | S_12_has_MS: csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.msId -> ms:ms -> ks_server_state
 | S_13_wait_SH: alpha:ks_alpha13 -> cr:random -> sr:random -> es:(i:esId & es i) ->
@@ -87,7 +246,7 @@ private let keygen_13 h secret ae : St (bytes * bytes) =
 
 // Extract finished keys
 private let finished_13 h secret : St (bytes) =
-  HKDF.hkdf_expand_label h secret "finished" empty_bytes (H.tagLen h)
+  HKDF.hkdf_expand_label h secret "finished" empty_bytes (UInt32.v (H.tagLen h))
 
 // Create a fresh key schedule instance
 // We expect this to be called when the Handshake instance is created
@@ -110,7 +269,7 @@ let create #rid r =
   (KS #ks_region (ralloc ks_region istate)), nonce
 
 private let group_of_valid_namedGroup
-  (g:valid_namedGroup)
+  (g:CommonDH.supportedNamedGroup)
   : CommonDH.group
   = Some?.v (CommonDH.group_of_namedGroup g)
 
@@ -126,10 +285,10 @@ private let group_of_cks = function
   | CommonDH.UnknownShare g _ -> g
 
 private let keygen (g:CommonDH.group)
-  : St (g:CommonDH.group & CommonDH.keyshare g)
+  : St (g:CommonDH.group & CommonDH.ikeyshare g)
   = (| g, CommonDH.keygen g |)
 
-val ks_client_init: ks:ks -> ogl: option (list valid_namedGroup)
+val ks_client_init: ks:ks -> ogl: option CommonDH.supportedNamedGroups
   -> ST (option CommonDH.clientKeyShare)
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
@@ -143,13 +302,13 @@ val ks_client_init: ks:ks -> ogl: option (list valid_namedGroup)
 
 
 private
-let serialize_share (gx:(g:CommonDH.group & CommonDH.keyshare g)) =
+let serialize_share (gx:(g:CommonDH.group & CommonDH.ikeyshare g)) =
     let (| g, gx |) = gx in
     match CommonDH.namedGroup_of_group g with
       | None -> None // Impossible
-      | Some ng -> Some (CommonDH.Share g (CommonDH.pubshare #g gx))
+      | Some ng -> Some (CommonDH.Share g (CommonDH.ipubshare #g gx))
 
-private val map_ST_keygen: list CommonDH.group -> ST0 (list (g:CommonDH.group & CommonDH.keyshare g))
+private val map_ST_keygen: list CommonDH.group -> ST0 (list (g:CommonDH.group & CommonDH.ikeyshare g))
 private let rec map_ST_keygen l =
   match l with
   | [] -> []
@@ -188,7 +347,7 @@ private let mk_binder (#rid) (pskid:PSK.pskid)
   dbg ("Binder key["^lb^"]: "^(print_bytes bk));
   let bk = finished_13 h bk in
   dbg ("Binder Finished key: "^(print_bytes bk));
-  let bk : binderKey bId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Binder bId) trivial rid bk in
+  let bk : binderKey bId = HMAC_UFCMA.coerce (HMAC_UFCMA.HMAC_Binder bId) trivial rid bk in
   (| bId, bk|), (| i, es |)
 
 private val map_ST_mk_binder: #rid:rid -> list PSK.pskid -> ST0 (list ((i:binderId & bk:binderKey i) * (i:esId{~(NoPSK? i)} & es i)))
@@ -209,9 +368,9 @@ let ks_client_13_hello_retry ks (g:CommonDH.group)
   : ST0 (CommonDH.share g) =
   let KS #rid st = ks in
   let C (C_13_wait_SH cr esl gs) = !st in
-  let s : CommonDH.keyshare g = CommonDH.keygen g in
+  let s : CommonDH.ikeyshare g = CommonDH.keygen g in
   st := C (C_13_wait_SH cr esl [(| g, s |)]);
-  CommonDH.pubshare #g s
+  CommonDH.ipubshare #g s
 
 // Derive the early data key from the first offered PSK
 // Only called if 0-RTT is enabled on the client
@@ -275,11 +434,11 @@ let ks_server_12_init_dh ks cr pv cs ems g =
   let S (S_Init sr) = !st in
   let CipherSuite kex sa ae = cs in
   let our_share = CommonDH.keygen g in
-  let _ = print_share (CommonDH.pubshare our_share) in
+  let _ = print_share (CommonDH.ipubshare our_share) in
   let csr = cr @| sr in
   st := S (S_12_wait_CKE_DH csr (pv, cs, ems) (| g, our_share |));
-  CommonDH.pubshare our_share
-
+  CommonDH.ipubshare our_share
+  
 val ks_server_13_init:
   ks:ks ->
   cr:random ->
@@ -332,7 +491,7 @@ let ks_server_13_init ks cr cs pskid g_gx =
       dbg ("binder key:                      "^print_bytes bk);
       let bk = finished_13 h bk in
       dbg ("binder Finished key:             "^print_bytes bk);
-      let bk : binderKey bId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Binder bId) (fun _ -> True) region bk in
+      let bk : binderKey bId = HMAC_UFCMA.coerce (HMAC_UFCMA.HMAC_Binder bId) (fun _ -> True) region bk in
       i, es, Some (| bId, bk |)
     | None ->
       dbg "No PSK selected.";
@@ -347,7 +506,7 @@ let ks_server_13_init ks cr cs pskid g_gx =
   let gy, hsId, hs =
     match g_gx with
     | Some (| g, gx |) ->
-      let gy, gxy = CommonDH.dh_responder gx in
+      let gy, gxy = CommonDH.dh_responder g gx in
       dbg ("DH shared secret: "^(print_bytes gxy));
       let hsId = HSID_DHE saltId g gx gy in
       let hs : hs hsId = HKDF.hkdf_extract h salt gxy in
@@ -452,8 +611,8 @@ let ks_server_13_sh ks log =
   let sfk1 = finished_13 h sts in
   dbg ("finished key[S]:                 "^print_bytes sfk1);
 
-  let cfk1 : fink cfkId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Finished cfkId) (fun _ -> True) region cfk1 in
-  let sfk1 : fink sfkId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Finished sfkId) (fun _ -> True) region sfk1 in
+  let cfk1 : fink cfkId = HMAC_UFCMA.coerce (HMAC_UFCMA.HMAC_Finished cfkId) (fun _ -> True) region cfk1 in
+  let sfk1 : fink sfkId = HMAC_UFCMA.coerce (HMAC_UFCMA.HMAC_Finished sfkId) (fun _ -> True) region sfk1 in
 
   let saltId = Salt (HandshakeSecretID hsId) in
   let salt = HKDF.derive_secret h hs "derived" (H.emptyHash h) in
@@ -526,7 +685,7 @@ let ks_12_record_key ks =
   let AEAD alg _ = ae in (* 16-10-18 FIXME! only correct for AEAD *)
   let klen = CoreCrypto.aeadKeySize alg in
   let slen = AEADProvider.salt_length id in
-  let expand = TLSPRF.kdf kdf ms (sr @| cr) (klen + klen + slen + slen) in
+  let expand = TLSPRF.kdf kdf ms (sr @| cr) (UInt32.uint_to_t (klen + klen + slen + slen)) in
   dbg ("keystring (CK, CIV, SK, SIV) = "^(print_bytes expand));
   let k1, expand = split_ expand klen in
   let k2, expand = split_ expand klen in
@@ -592,21 +751,21 @@ let ks_server_12_cke_dh ks gy hashed_log =
   let (pv, cs, ems) = alpha in
   let (| _, gy |) = gy in
   let _ = print_share gy in
-  let pmsb = CommonDH.dh_initiator #g gx gy in
+  let pmsb = CommonDH.dh_initiator g gx gy in
   dbg ("PMS: "^(print_bytes pmsb));
-  let pmsId = PMS.DHPMS g (CommonDH.pubshare gx) gy (PMS.ConcreteDHPMS pmsb) in
+  let pmsId = PMS.DHPMS g (CommonDH.ipubshare gx) gy (PMS.ConcreteDHPMS pmsb) in
   let kef = kefAlg pv cs ems in
   let msId, ms =
     if ems then
       begin
-      let ms = TLSPRF.prf (pv,cs) pmsb (utf8_encode "extended master secret") hashed_log 48 in
+      let ms = TLSPRF.prf (pv,cs) pmsb (utf8_encode "extended master secret") hashed_log 48ul in
       dbg ("extended master secret:"^(print_bytes ms));
       let msId = ExtendedMS pmsId hashed_log kef in
       msId, ms
       end
     else
       begin
-      let ms = TLSPRF.extract kef pmsb csr 48 in
+      let ms = TLSPRF.extract kef pmsb csr 48ul in
       dbg ("master secret:"^(print_bytes ms));
       let msId = StandardMS pmsId csr kef in
       msId, ms
@@ -664,7 +823,7 @@ val ks_client_13_sh: ks:ks -> sr:random -> cs:cipherSuite -> h:bytes ->
 
 private let group_matches
               (g:CommonDH.group)
-              (gx:(x:CommonDH.group & CommonDH.keyshare g)) =
+              (gx:(x:CommonDH.group & CommonDH.ikeyshare g)) =
     let (| g', _ |) = gx in
     g=g'
 
@@ -695,10 +854,10 @@ let ks_client_13_sh ks sr cs log gy accept_psk =
   let hsId, hs =
     match gy with
     | Some (| g, gy |) -> (* (PSK-)DHE *)
-      let Some (| _, gx |) = TLSConstants.find_aux g group_matches gc in
-      let gxy = CommonDH.dh_initiator #g gx gy in
+      let Some (| _, gx |) = List.Helpers.find_aux g group_matches gc in
+      let gxy = CommonDH.dh_initiator g gx gy in
       dbg ("DH shared secret: "^(print_bytes gxy));
-      let hsId = HSID_DHE saltId g (CommonDH.pubshare gx) gy in
+      let hsId = HSID_DHE saltId g (CommonDH.ipubshare gx) gy in
       let hs : hs hsId = HKDF.hkdf_extract h salt gxy in
       hsId, hs
     | None -> (* Pure PSK *)
@@ -737,8 +896,8 @@ let ks_client_13_sh ks sr cs log gy accept_psk =
   let sfk1 = finished_13 h sts in
   dbg ("finished key[S]: "^(print_bytes sfk1));
 
-  let cfk1 : fink cfkId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Finished cfkId) (fun _ -> True) region cfk1 in
-  let sfk1 : fink sfkId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Finished sfkId) (fun _ -> True) region sfk1 in
+  let cfk1 : fink cfkId = HMAC_UFCMA.coerce (HMAC_UFCMA.HMAC_Finished cfkId) (fun _ -> True) region cfk1 in
+  let sfk1 : fink sfkId = HMAC_UFCMA.coerce (HMAC_UFCMA.HMAC_Finished sfkId) (fun _ -> True) region sfk1 in
 
   let saltId = Salt (HandshakeSecretID hsId) in
   let salt = HKDF.derive_secret h hs "derived" (H.emptyHash h) in
@@ -946,7 +1105,7 @@ let ks_client_12_full_dh ks sr pv cs ems (|g,gx|) =
     | C (C_13_wait_SH cr _ _ ) -> cr in
   let csr = cr @| sr in
   let alpha = (pv, cs, ems) in
-  let gy, pmsb = CommonDH.dh_responder #g gx in
+  let gy, pmsb = CommonDH.dh_responder g gx in
   let _ = print_share gx in
   let _ = print_share gy in
   dbg ("PMS: "^(print_bytes pmsb));
@@ -956,7 +1115,7 @@ let ks_client_12_full_dh ks sr pv cs ems (|g,gx|) =
       C_12_wait_MS csr alpha dhpmsId pmsb
     else
       let kef = kefAlg pv cs false in
-      let ms = TLSPRF.extract kef pmsb csr 48 in
+      let ms = TLSPRF.extract kef pmsb csr 48ul in
       dbg ("master secret: "^(print_bytes ms));
       let msId = StandardMS dhpmsId csr kef in
       C_12_has_MS csr alpha msId ms in
@@ -989,7 +1148,7 @@ let ks_client_12_full_rsa ks sr pv cs ems pk =
       C_12_wait_MS csr alpha rsapmsId pmsb
     else
       let kef = kefAlg pv cs false in
-      let ms = TLSPRF.extract kef pmsb csr 48 in
+      let ms = TLSPRF.extract kef pmsb csr 48ul in
       let msId = StandardMS rsapmsId csr kef in
       C_12_has_MS csr alpha msId ms in
   st := C ns; encrypted
@@ -1019,14 +1178,14 @@ let ks_client_12_set_session_hash ks log =
       let msId, ms =
         if ems then
           begin
-          let ms = TLSPRF.prf (pv,cs) pms (utf8_encode "extended master secret") log 48 in
+          let ms = TLSPRF.prf (pv,cs) pms (utf8_encode "extended master secret") log 48ul in
           dbg ("extended master secret:"^(print_bytes ms));
           let msId = ExtendedMS pmsId log kef in
           msId, ms
           end
         else
           begin
-          let ms = TLSPRF.extract kef pms csr 48 in
+          let ms = TLSPRF.extract kef pms csr 48ul in
           dbg ("master secret:"^(print_bytes ms));
           let msId = StandardMS pmsId csr kef in
           msId, ms
@@ -1115,4 +1274,3 @@ let ks_client_12_server_finished ks
 
 val getId: recordInstance -> GTot id
 let getId (StAEInstance #i rd wr) = i
-*)

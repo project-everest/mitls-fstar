@@ -15,9 +15,8 @@ EXTENSION	= krml
 # Don't extract modules from mitls that are implemented in C
 EXTRACT		= '* -DHDB -LowCProvider -FFICallbacks -BufferBytes'
 SPECINC     = $(MITLS_HOME)/src/tls/concrete-flags $(MITLS_HOME)/src/tls/concrete-flags/$(FLAVOR)
-VFLAGS     ?= --admit_smt_queries true
-
 include Makefile.common
+VFLAGS     += --admit_smt_queries true
 
 clean: clean-internal-test clean-library clean-external-test
 	rm -f $(DEP_FILE)
@@ -140,9 +139,12 @@ $(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/uint128,$(UINT128_DIR)))
 # Leave Crypto_Indexing (which Crypto_AEAD_Main wants) standalone, and its
 # dependencies too.
 $(INTERNAL_TEST_DIR)/Test_Main.c: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES))
+ifdef VERBOSE
+	@echo -e "\033[1;32m=== Extracting $@ ...\033[;37m"
+endif
 	$(KRML_COMMAND) $^ -tmpdir $(INTERNAL_TEST_DIR) -no-prefix Test.Main \
 	  -skip-compilation -drop FFICallbacks \
-	  -bundle Test.Main=Test.*,AEAD_GCM,AEADOpenssl,AEADProvider,Alert,Connection,ConnInvariant,Content,DataStream,Encode,Epochs,FFI,Handshake,HandshakeLog,HandshakeMessages,Hashing,Hashing.CRF,Hashing.OpenSSL,HKDF,HMAC,HMAC.UFCMA,IdNonce,KDF.Common,KDF.Salt.ODH,KeySchedule,LHAEPlain,MAC,MAC_SHA1,MAC_SHA256,MasterSecret,Negotiation,QUIC,Range,Record,Signature,StAE,Standalone,StatefulLHAE,StatefulPlain,StreamAE,StreamDeltas,StreamPlain,Ticket,TLS,TLSPRF,Transport
+	  -bundle Test.Main=Test.*,AEAD_GCM,AEADOpenssl,AEADProvider,Alert,Connection,ConnInvariant,Content,DataStream,Encode,Epochs,FFI,Handshake,HandshakeLog,HandshakeMessages,Hashing,Hashing.CRF,Hashing.OpenSSL,HKDF,HMAC,HMAC.UFCMA,IdNonce,KDF.Common,KDF.Salt.ODH,KeySchedule,LHAEPlain,MAC,MAC_SHA1,MAC_SHA256,MasterSecret,Negotiation,QUIC,Range,Record,Signature,StAE,Standalone,StatefulLHAE,StatefulPlain,StreamAE,StreamDeltas,StreamPlain,Ticket,TLS,TLSPRF,Transport,KDF,Extract1,Handshake.Secret,Old.Handshake,Old.HMAC.UFCMA,Old.HKDF,Old.KeySchedule
 
 internal-test-copy: $(addprefix $(INTERNAL_TEST_DIR)/,$(ALL_EXTERNAL_FILES)) $(INTERNAL_TEST_DIR)/stub/mipki_wrapper.c
 
@@ -173,6 +175,9 @@ $(eval $(call COPY_template,$(LIBRARY_DIR)/ffi,$(MITLS_HOME)/libs/ffi))
 $(eval $(call COPY_template,$(LIBRARY_DIR)/uint128,$(UINT128_DIR)))
 
 $(LIBRARY_DIR)/TLS.c: $(filter-out $(EXTRACT_DIR)/prims.krml $(EXTRACT_DIR)/PKI.krml $(EXTRACT_DIR)/Test_%.krml,$(ALL_KRML_FILES))
+ifdef VERBOSE
+	@echo -e "\033[1;32m=== Extracting $@ ...\033[;37m"
+endif
 	$(KRML_COMMAND) $^ -tmpdir $(LIBRARY_DIR) -skip-compilation
 
 library-copy: $(addprefix $(LIBRARY_DIR)/, $(filter-out pki/mipki.h, $(ALL_EXTERNAL_FILES))) \

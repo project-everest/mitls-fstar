@@ -104,6 +104,8 @@ type result = {
   error: error; // we could keep more details
 }
 
+module Handshake = Old.Handshake
+
 val recv: Connection.connection -> St result
 let rec recv c =
   let i = currentId c Reader in
