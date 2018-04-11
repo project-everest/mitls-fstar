@@ -489,7 +489,7 @@ let ffiGetCert c =
 let ffiGetExporter (c:Connection.connection) (early:bool)
   : ML (option (Hashing.Spec.alg * aeadAlg * bytes))
   =
-  let keys = Old.Handshake.xkeys_of c.Connection.hs in
+  let keys = Handshake.xkeys_of c.Connection.hs in
   if Seq.length keys = 0 then None
   else
     let i = if Seq.length keys = 2 && not early then 1 else 0 in
