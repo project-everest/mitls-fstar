@@ -1,1 +1,55 @@
-[ "\u0010³²%ˆTý³ ù=¶Î¼rþ", [] ]
+[
+  "\u0010³²%ˆTý³ ù=¶Î¼rþ",
+  [
+    [
+      "TLSPRF.p_hash_int",
+      2,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt32.t__uu___haseq" ],
+      0,
+      "e6c7e046d60f69d6e38a4a2a63c03c6e"
+    ],
+    [
+      "TLSPRF.p_hash",
+      2,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt32.t__uu___haseq" ],
+      0,
+      "9ed4c825b90818543e906ba7da3bc673"
+    ],
+    [
+      "TLSPRF.tls_prf",
+      2,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt32.t__uu___haseq" ],
+      0,
+      "cb136adf602e465c79feb3654dac6d68"
+    ],
+    [
+      "TLSPRF.tls_prf",
+      3,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt32.t__uu___haseq" ],
+      0,
+      "294e5a67cdf9b791a3d7a7701ad83d3f"
+    ],
+    [
+      "TLSPRF.tls_finished_label",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_TLSConstants.Client",
+        "disc_equation_TLSConstants.Server",
+        "fuel_guarded_inversion_TLSConstants.role"
+      ],
+      0,
+      "a408c3ff4111ff014ba04ede1cddc142"
+    ]
+  ]
+]

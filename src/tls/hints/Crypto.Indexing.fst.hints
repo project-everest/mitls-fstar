@@ -1,1 +1,84 @@
-[ "Dπ\u001e\u001cVqöl>ê°ºé3ﬂá", [] ]
+[
+  "Dπ\u001e\u001cVqöl>ê°ºé3ﬂá",
+  [
+    [
+      "Crypto.Indexing.rw2rw",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_TLSConstants.Reader",
+        "disc_equation_TLSConstants.Writer",
+        "fuel_guarded_inversion_TLSConstants.rw"
+      ],
+      0,
+      "caca4465aa52e5545de624efb07ee61d"
+    ],
+    [
+      "Crypto.Indexing.aeadAlg_of_id",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_TLSConstants.AEAD", "equation_Crypto.Indexing.id",
+        "refinement_interpretation_Crypto.Indexing_Tm_refine_15bf079f4ce5823e739071012326443f",
+        "typing_TLSConstants.uu___is_AEAD"
+      ],
+      0,
+      "b43d79439373e4956d202e806f30af6f"
+    ],
+    [
+      "Crypto.Indexing.macAlg_of_id",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Crypto.Indexing.AES_128_GCM",
+        "disc_equation_Crypto.Indexing.AES_256_GCM",
+        "disc_equation_Crypto.Indexing.CHACHA20_POLY1305",
+        "equation_Crypto.Indexing.aeadAlg_of_id",
+        "fuel_guarded_inversion_Crypto.Indexing.aeadAlg",
+        "typing_Crypto.Indexing.aeadAlg_of_id"
+      ],
+      0,
+      "eb785d6958b8aa462909e2e5b5db8fb5"
+    ],
+    [
+      "Crypto.Indexing.cipherAlg_of_id",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Crypto.Indexing.AES_128_GCM",
+        "disc_equation_Crypto.Indexing.AES_256_GCM",
+        "disc_equation_Crypto.Indexing.CHACHA20_POLY1305",
+        "equation_Crypto.Indexing.aeadAlg_of_id",
+        "fuel_guarded_inversion_Crypto.Indexing.aeadAlg",
+        "typing_Crypto.Indexing.aeadAlg_of_id"
+      ],
+      0,
+      "843092c12da24942624ec18623700029"
+    ],
+    [
+      "Crypto.Indexing.aeadAlg_cipherAlg",
+      1,
+      2,
+      1,
+      [
+        "@query", "constructor_distinct_Crypto.Indexing.AES_128_GCM",
+        "constructor_distinct_Crypto.Indexing.AES_256_GCM",
+        "constructor_distinct_Crypto.Indexing.CHACHA20_POLY1305",
+        "equality_tok_Crypto.Indexing.AES_128_GCM@tok",
+        "equality_tok_Crypto.Indexing.AES_256_GCM@tok",
+        "equality_tok_Crypto.Indexing.CHACHA20_POLY1305@tok",
+        "equation_Crypto.Indexing.cipherAlg_of_id"
+      ],
+      0,
+      "b02eb8045db70d83c7ae7ac3b1ed9edd"
+    ]
+  ]
+]
