@@ -52,7 +52,7 @@ FILES 		= AEAD_GCM AEADProvider Alert BufferBytes Cert \
   C_Loops_Spec_Loops CommonDH Connection Content CoreCrypto \
   Crypto_Indexing Crypto_Symmetric_Bytes Crypto_Plain \
   CryptoTypes curve/Curve25519 DataStream DHGroup ECGroup Epochs Extensions FFI \
-  FFICallbacks Flag Flags FStar HaclProvider Handshake HandshakeLog \
+  FFICallbacks Flag Flags FStar HaclProvider Old.Handshake HandshakeLog \
   HandshakeMessages Hashing Hashing_CRF Hashing_OpenSSL Hashing_Spec HKDF HMAC \
   HMAC_UFCMA KeySchedule kremlib/kremdate kremlib/kremstr kremlinit LHAEPlain \
   LowCProvider Negotiation Nonce Parse PMS Prims PSK QUIC Range Record RSAKey \

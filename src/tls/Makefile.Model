@@ -7,6 +7,10 @@ SPECINC   = $(MITLS_HOME)/src/tls/ideal-flags $(MITLS_HOME)/src/tls/concrete-fla
 
 include Makefile.common
 
+# Verification is performed in dependency order too. If we want to verify 
+# something that nothing depends on yet, we need to add it to ROOTS here.
+ROOTS    += Handshake.fst
+
 model verify: $(addprefix $(CACHE_DIR)/, $(addsuffix .checked, $(notdir $(ALL_FST_FILES))))
 
 clean:
