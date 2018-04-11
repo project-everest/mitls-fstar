@@ -1,5 +1,4 @@
 #include <memory.h>
-#include <assert.h>
 #include <stdarg.h>
 #if __APPLE__
 #include <sys/errno.h> // OS/X only provides include/sys/errno.h
@@ -386,6 +385,9 @@ static TLSConstants_nego_action nego_cb_proxy(FStar_Dyn_dyn cbs, TLSConstants_pr
       if(app_cookie != NULL) memcpy(c, app_cookie, app_cookie_len);
       a.val.case_Nego_retry = (FStar_Bytes_bytes){.data = (const char*)c, .length = app_cookie_len};
       break;
+    default:
+      KRML_HOST_PRINTF("mitls_nego_action: unsupported (%04x)\n", r);
+      KRML_HOST_EXIT(1);
   }
 
   return a;
@@ -793,7 +795,10 @@ static int get_exporter(Connection_connection cxn, int early, /* out */ mitls_se
   secret->hash = ret.v.fst;
   secret->ae = ret.v.snd;
   size_t len=ret.v.thd.length;
-  assert(len <= sizeof(secret->secret));
+  if (len > sizeof(secret->secret)) {
+    KRML_HOST_PRINTF("Unexpected secret length");
+    KRML_HOST_EXIT(1);
+  }
   memcpy(secret->secret, ret.v.thd.data, len);
   return 1;
 }

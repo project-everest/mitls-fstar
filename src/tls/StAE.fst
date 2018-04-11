@@ -42,6 +42,9 @@ type stae_id = i:id {is_stream i \/ is_stlhae i}
 let frag_plain_len (#i:id{is_stream i}) (f:Content.fragment i): StreamPlain.plainLen =
   snd (Content.rg i f) + 1
 
+let frag_cipher_len (#i:id{is_stream i}) (f:C.fragment i) =
+  frag_plain_len f + Stream.ltag i
+
 // CONCRETE KEY MATERIALS, for leaking & coercing.
 // (each implementation splits it into encryption keys, IVs, MAC keys, etc)
 // ADL: this can now be factored going through the common AEADProvider interface
@@ -382,7 +385,9 @@ let encrypt #i e f =
     begin
     let h0 = get() in
     let l = frag_plain_len f in
-    let c = StreamAE.encrypt s l f in
+    let cl = frag_cipher_len f in
+    let ad = C.ctBytes C.Application_data @| versionBytes TLS_1p2 @| bytes_of_int 2 cl in
+    let c = Stream.encrypt s ad l f in
     let h1 = get() in
     if authId i then
       begin
@@ -438,7 +443,8 @@ let decrypt #i d (ct,c) =
   match d with
   | Stream _ s ->
     begin
-    match StreamAE.decrypt s (StreamAE.lenCipher i c) c with
+    let ad = C.ctBytes ct @| versionBytes TLS_1p2 @| bytes_of_int 2 (length c) in
+    match Stream.decrypt s ad (Stream.lenCipher i c) c with
     | None -> None
     | Some f ->
       if authId i then

@@ -77,7 +77,7 @@ endif
 # Sanity checks and shared directories definitions
 
 CURVE_DIR	= $(HACL_HOME)/code/curve25519/x25519-c
-SECURE_OUT	= $(HACL_HOME)/secure_api/out/vale_aes_abstract_id/crypto
+SECURE_OUT	= $(HACL_HOME)/secure_api/out/hacl_aes_abstract_id/crypto
 VALE_DIR	= $(HACL_HOME)/secure_api/vale/asm
 UINT128_DIR	= $(HACL_HOME)/secure_api/out/runtime_switch/uint128
 

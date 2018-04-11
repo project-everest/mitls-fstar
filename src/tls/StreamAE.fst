@@ -183,18 +183,11 @@ let leak #i #role s =
   lemma_ID13 i;
   AEAD.leak #i #role (State?.aead s)
 
-// ADL WIP Jan. 15 2017
-// Requires the same changes as AEAD_GCM
-//#set-options "--lax"
-
-// we are not relying on additional data
-private abstract let noAD = empty_bytes
-
-val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
+val encrypt: #i:id -> e:writer i -> ad:bytes -> l:plainLen -> p:plain i l -> ST (cipher i l)
     (requires (fun h0 ->
       lemma_ID13 i;
       HS.disjoint e.region (AEAD.log_region #i e.aead) /\
-      l <= max_TLSPlaintext_fragment_length /\ // FIXME ADL: why is plainLen <= max_TLSCiphertext_fragment_length_13 ?? Fix StreamPlain!
+      l <= max_TLSPlaintext_fragment_length /\
       sel h0 (ctr e.counter) < max_ctr))
     (ensures  (fun h0 c h1 ->
       lemma_ID13 i;
@@ -214,7 +207,7 @@ val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
    safeId i is fixed to false and after removal of the cryptographic ghost log,
    i.e. all idealization is turned off *)
 #set-options "--z3rlimit 150 --max_ifuel 2 --initial_ifuel 0 --max_fuel 2 --initial_fuel 0"
-let encrypt #i e l p =
+let encrypt #i e ad l p =
   let h0 = get() in
   let ctr = ctr e.counter in
   HST.recall ctr;
@@ -226,7 +219,7 @@ let encrypt #i e l p =
   lemma_repr_bytes_values (length text);
   assume(AEAD.st_inv e.aead h0); // TODO
   assume(authId i ==> (Flag.prf i /\ AEAD.fresh_iv #i e.aead iv h0)); // TODO
-  let c = AEAD.encrypt #i #l e.aead iv noAD text in
+  let c = AEAD.encrypt #i #l e.aead iv ad text in
   if authId i then
     begin
     let ilog = ilog e.log in
@@ -248,7 +241,7 @@ let matches (#i:id) (l:plainLen) (c:cipher i l) (e:entry i) : Tot bool =
   l = l' && c = c'
 
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
-val decrypt: #i:id -> d:reader i -> l:plainLen -> c:cipher i l
+val decrypt: #i:id -> d:reader i -> ad:bytes -> l:plainLen -> c:cipher i l
   -> ST (option (plain i (min l (max_TLSPlaintext_fragment_length + 1))))
   (requires (fun h0 ->
      l <= max_TLSPlaintext_fragment_length /\ // FIXME ADL: why is plainLen <= max_TLSCiphertext_fragment_length_13 ?? Fix StreamPlain!
@@ -274,7 +267,7 @@ let strip_refinement #a #p = function
 
 #set-options "--z3rlimit 100 --initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
-let decrypt #i d l c =
+let decrypt #i d ad l c =
   let ctr = ctr d.counter in
   HST.recall ctr;
   let j = HST.op_Bang ctr in
@@ -298,7 +291,7 @@ let decrypt #i d l c =
    lemma_repr_bytes_values j;
    let nb = bytes_of_int (AEAD.noncelen i) j in
    let iv = AEAD.create_nonce d.aead nb in
-   match AEAD.decrypt #i #l d.aead iv noAD c with
+   match AEAD.decrypt #i #l d.aead iv ad c with
    | None -> None
    | Some pr ->
      begin
