@@ -15,7 +15,6 @@ open Idx
 open HKDF // avoid?
 open PSK  // avoid?
 
-module MM = FStar.Monotonic.Map
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
 module H = Hashing.Spec

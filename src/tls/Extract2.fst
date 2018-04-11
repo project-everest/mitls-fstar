@@ -6,8 +6,6 @@ open Idx
 open Pkg.Tree
 open KDF // avoid?
 
-module MM = FStar.Monotonic.Map
-
 open Extract0 // for now
 
 /// ---------------- final (useless) extraction --------------------
