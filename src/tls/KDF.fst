@@ -16,7 +16,7 @@ open Pkg
 open Idx 
 open Pkg.Tree
 
-module DM = FStar.Monotonic.DependentMap
+module MDM = FStar.Monotonic.DependentMap
 module HS = FStar.HyperStack
 
 let sample (len:UInt32.t): ST (lbytes32 len)
@@ -88,7 +88,7 @@ unfold type ir_key (safe: (i:id{registered i} -> GTot Type0)) (it:Type0) (rt:Typ
 noeq private type table (d:nat) (u:usage d) (i:id{registered i}) =
   | KDF_table:
     r:subrgn kdf_tables_region ->
-    t:DM.t r (domain d u i) (kdf_range d u i) (fun _ -> True) ->
+    t:MDM.t r (domain d u i) (kdf_range d u i) (fun _ -> True) ->
     table d u i
 
 let secret_len (a:info) : keylen = Hashing.Spec.tagLen a.ha
@@ -150,13 +150,13 @@ type local_kdf_invariant (#d:nat) (#u:usage d) (#i:id{registered i}) (k:secret d
         | Ideal kdft ->
           // the entries in the KDF table match those of the child's define_table
           let KDF_table r t : table d u i = kdft in
-          DM.sel (sel h t) (Domain lbl ctx) == DM.sel (sel h dt) i'
+          MDM.sel (sel h t) (Domain lbl ctx) == MDM.sel (sel h dt) i'
         | Real raw ->
           assert(~(safeKDF d i));
           assert(honest i' ==> honest i);
           assert(Pkg?.ideal pkg' ==> ~(honest i')); // to call coerceT
           // the child's define table has correctly-computed coerced entries
-          (match DM.sel (sel h dt) i' with
+          (match MDM.sel (sel h dt) i' with
           | None -> True
           | Some k' ->
             // we recompute the concrete key materials, and recall the
@@ -200,7 +200,7 @@ let local_kdf_invariant_framing (#d:nat) (#u:usage d) (i:id{registered i}) (k:se
 type kdf_post (#d:nat) (#u:usage d) (#i:id{registered i}) (a: info {a == get_info i}) (k:secret d u i) (h:mem) =
   (safeKDF d i ==>
     (let KDF_table r t = secret_ideal k in
-     sel h t == DM.empty_map (domain d u i) (kdf_range d u i)))
+     sel h t == MDM.empty #(domain d u i) #(kdf_range d u i)))
 
 // Framing for the kdf_post depends only on kdf_footprint k
 let kdf_post_framing (#d:nat) (#u:usage d) (#i:id{registered i}) (a: info {a == get_info i})
@@ -240,7 +240,7 @@ let coerce d u i a repr =
   k
 
 /// NS:
-/// DM.alloc is a stateful function with all implicit arguments
+/// MDM.alloc is a stateful function with all implicit arguments
 /// F* will refuse to instantiate all those arguments, since implicit
 /// instantiation in F* should never result in an effect.
 ///
@@ -250,14 +250,14 @@ let coerce d u i a repr =
 ///
 /// CF: Ok; I did not know. Is it a style bug in FStar.Monotonic.Map ?
 let alloc #a #b #inv (r: erid): 
-  ST (DM.t r a b inv)
+  ST (MDM.t r a b inv)
     (requires (fun h -> 
-      inv (DM.empty_map a b) /\ 
+      inv (MDM.empty_partial_dependent_map #a #b) /\ 
       witnessed (region_contains_pred r) ))
     (ensures (fun h0 x h1 ->
-      inv (DM.empty_map a b) /\
-      ralloc_post r (DM.empty_map a b) h0 x h1))
-  = DM.alloc #r #a #b #inv
+      inv (MDM.empty_partial_dependent_map #a #b) /\
+      ralloc_post r (MDM.empty #a #b) h0 x h1))
+  = MDM.alloc #a #b #inv #r ()
 
 val create:
   d: nat ->
@@ -492,7 +492,7 @@ let derive #d #t #i k a lbl ctx a' =
     let log = itable dt in
     recall log;
     let m = sel h1 log in
-    assume(m i == Some k); // testify
+    assume(MDM.sel m i == Some k); // testify
     lemma_mm_forall_elim m local_kdf_invariant i k h1;
     assert(local_kdf_invariant k h1)
    end;
@@ -505,16 +505,16 @@ let derive #d #t #i k a lbl ctx a' =
   if flag_KDF d && honest then
    begin
     let KDF_table kdf_r kdf_t : table d u i = secret_ideal k in
-    let v: option (derived_key d u i lbl ctx) = DM.lookup kdf_t x in
+    let v: option (derived_key d u i lbl ctx) = MDM.lookup kdf_t x in
     match v with
-    //17-10-30 was failing with scrutiny error: match DM.lookup (secret_ideal k) x
+    //17-10-30 was failing with scrutiny error: match MDM.lookup (secret_ideal k) x
     | Some dk -> (| (), dk |)
     | None ->
       let dk = Pkg?.create pkg i' a' in
       let h2 = get() in
       assume(tree_invariant t h2);
       assert(mem_fresh pkg.define_table i' h2); // from kdf_local_inv
-      DM.extend kdf_t x dk;
+      MDM.extend kdf_t x dk;
       (| (), dk |)
    end
   else
