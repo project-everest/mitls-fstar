@@ -59,7 +59,7 @@ HEADERS 	= $(addprefix -add-include ,'"hacks.h"' '"krembytes.h"' \
 #
 # Note: Crypto.Plain is not pre-extracted by secure_api.
 
-KRML_COMMAND	= krml \
+KRML_COMMAND	= $(KREMLIN_HOME)/krml \
   -bundle 'LowParse.\*' \
   -bundle LowParseWrappers \
   -bundle 'Format.\*' \
