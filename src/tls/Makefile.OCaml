@@ -29,6 +29,7 @@ OCAMLOPTS	=-package fstarlib,zarith,ctypes,ctypes.foreign -g \
 		  -I $(KREMLIN_HOME)/_build/kremlib \
 		  -I test \
 		  -I extract/mlstubs \
+		  -I $(EVERCRYPT_HOME)/multiplexer/ml \
 		  -I .
 
 OCAMLOPT	= OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind opt $(OCAMLOPTS)
@@ -53,9 +54,9 @@ ifeq (,$(wildcard $(MLCRYPTO_HOME)/CoreCrypto.cmxa))
   $(error I cannot find $(MLCRYPTO_HOME)/CoreCrypto.cmxa -- please run make in $(MLCRYPTO_HOME))
 endif
 
-ifeq (,$(wildcard $(FFI_HOME)/FFICallbacks.cmxa)) 
+ifeq (,$(wildcard $(FFI_HOME)/FFICallbacks.cmxa))
   $(error I cannot find $(FFI_HOME)/FFICallbacks.cmxa -- please run make in $(FFI_HOME))
-endif 
+endif
 
 %.o: %.c
 	$(CC) -I $(KREMLIN_HOME)/kremlib $^ -o $@ -c
@@ -68,12 +69,15 @@ MITLS_INPUTS=\
     $(MLCRYPTO_HOME)/CoreCrypto.cmxa \
     $(LOWC_HOME)/LowC.cmxa \
     $(FFI_HOME)/FFICallbacks.cmxa \
+    $(EVERCRYPT_HOME)/out/evercrypt.cmxa \
     $(subst .ml,.cmx,$(subst TLSConstants.ml,TLSConstants.ml extract/OCaml/PKI.ml,$(ALL_ML_FILES))) \
     $(EXTRACT_DIR)/FFIRegister.cmx \
     extract/copied/kremstr.o
 
 mitls.exe: $(MITLS_INPUTS) test/mitls.cmx
-	$(OCAMLOPT) -cclib -L../pki -cclib -lmipki -linkall -linkpkg -g $^ -o $@ -thread
+	$(OCAMLOPT) -cclib -L../pki -cclib -lmipki \
+	  -cclib -L$(EVERCRYPT_HOME)/out -cclib -levercrypt -linkall \
+	  -linkpkg -g $^ -o $@ -thread
 
 # FFI support - calling from C into miTLS. TODO: remove duplication somehow
 ifeq ($(OS),Windows_NT)
@@ -163,12 +167,13 @@ UNAME = $(shell uname)
 ifeq ($(OS),Windows_NT)
   ifeq ($(shell uname -o),Cygwin)
     MITLS_HOME_RUN := $(shell cygpath -u ${MITLS_HOME})
+    EVERCRYPT_HOME_RUN := $(shell cygpath -u ${EVERCRYPT_HOME})
   endif
-  export PATH := $(MITLS_HOME_RUN)/src/pki:$(PATH)
+  export PATH := $(EVERCRYPT_HOME_RUN)/out:$(MITLS_HOME_RUN)/src/pki:$(PATH)
 else ifeq ($(UNAME),Darwin)
-  PREFIX = DYLD_LIBRARY_PATH=$(MITLS_HOME)/src/pki:$(DYLD_LIBRARY_PATH)
+  PREFIX = DYLD_LIBRARY_PATH=$(EVERCRYPT_HOME)/out:$(MITLS_HOME)/src/pki:$(DYLD_LIBRARY_PATH)
 else ifeq ($(UNAME),Linux)
-  export LD_LIBRARY_PATH := $(MITLS_HOME)/src/pki:$(LD_LIBRARY_PATH)
+  export LD_LIBRARY_PATH := $(EVERCRYPT_HOME)/out:$(MITLS_HOME)/src/pki:$(LD_LIBRARY_PATH)
 endif
 
 test: mitls.exe $(CERT_FILES)

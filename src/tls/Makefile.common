@@ -3,6 +3,7 @@ FSTAR_HOME      ?= ../../../FStar
 MITLS_HOME      ?= ../..
 KREMLIN_HOME    ?= ../../../kremlin
 MLCRYPTO_HOME   ?= ../../../MLCrypto
+EVERCRYPT_HOME	?= ../../../evercrypt
 FLAVOR          ?= Model
 
 SHELL=/bin/bash
@@ -20,6 +21,7 @@ INCLUDE_PATHS = \
 	$(HACL_HOME)/code/lib \
 	$(KREMLIN_HOME)/kremlib \
 	$(MITLS_HOME)/libs/ffi \
+	$(EVERCRYPT_HOME)/multiplexer \
 	$(SPECINC)
 
 ifeq (,$(MITLS_NODEBUG))
@@ -42,7 +44,7 @@ endif
 # Project Files
 
 # Add more roots here!
-ROOTS ?= TLS.fst QUIC.fst Test.Main.fst 
+ROOTS ?= TLS.fst QUIC.fst Test.Main.fst
 
 EVERYTHING=$(wildcard *.fst *.fsti Make* $(MITLS_HOME)/src/pki/* $(MITLS_HOME)/libs/ffi/* ideal-flags/* concrete-flags/* concrete-flags/$(FLAVOR)/*)
 

@@ -66,8 +66,6 @@ KRML_COMMAND	= krml \
   -bundle 'Format.\*' \
   -fnoanonymous-unions -warn-error -9-7-6@4 \
   -fsopts --debug,yes -verbose \
-  -ccopts -Wno-unused-function,-O0 \
-  -ldopts -L,../pki,-lmipki \
   $(DROP_MODULES) $(HEADERS) $(KOPTS)
 
 ifndef NO_OPENSSL
