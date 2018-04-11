@@ -8,7 +8,7 @@ open TLSConstants
 
 module HS = FStar.HyperStack
 module DM = FStar.DependentMap
-module MM = FStar.Monotonic.DependentMap
+module MDM = FStar.Monotonic.DependentMap
 module HST = FStar.HyperStack.ST
 
 type random = lbytes 32
@@ -30,14 +30,14 @@ let timestamp () =
 //2018.03.09 SZ: Excluded the case r = root
 type ex_rid = r:HST.ex_rid{r <> root}
 
-// MM.map provide a dependent map type;
+// MDM.map provide a dependent map type;
 // In this case, we don't need the dependencey
 // The n_rid type has a trivial depdendence on (n:random)
 let n_rid = fun (n:random) -> ex_rid
 
 // A partial map from nonces to rid is injective,
 // if it maps distinct nonces to distinct rids
-let injective (n:MM.partial_dependent_map random n_rid) =
+let injective (n:MDM.partial_dependent_map random n_rid) =
   forall n1 n2. n1=!=n2 ==> (match DM.sel n n1, DM.sel n n2 with
         | Some r1, Some r2 -> r1 <> r2
         | _ -> True)
@@ -50,29 +50,29 @@ let injective (n:MM.partial_dependent_map random n_rid) =
 //See the style, e.g., in StreamAE
 //However, in this case, we have just a single global table and the additional
 //allocation seems rather mild. Still, would be nice to do remove this allocation someday.
-let nonce_rid_table : MM.t tls_tables_region random n_rid injective =
-  MM.alloc ()
+let nonce_rid_table : MDM.t tls_tables_region random n_rid injective =
+  MDM.alloc ()
 
 //A nonce n is fresh in h if the nonce_rid_table doesn't contain it
-let fresh (n:random) (h:HS.mem) = MM.sel (HS.sel h nonce_rid_table) n = None
+let fresh (n:random) (h:HS.mem) = MDM.sel (HS.sel h nonce_rid_table) n = None
 
 //A region is fresh if no nonce is associated with it
 let fresh_region (r:ex_rid) (h:HS.mem) =
-  forall n. Some r <> MM.sel (HS.sel h nonce_rid_table) n
+  forall n. Some r <> MDM.sel (HS.sel h nonce_rid_table) n
 
 //A nonce n is registered to region r, if the table contains n -> Some r;
 //This mapping is stable (that's what the HST.witnessed means)
 let registered (n:random) (r:ex_rid) =
   HST.witnessed (HST.region_contains_pred r) /\
-  HST.witnessed (MM.contains nonce_rid_table n r)
+  HST.witnessed (MDM.contains nonce_rid_table n r)
 
 let testify (n:random) (r:ex_rid)
   : ST unit (requires (fun h -> registered n r))
       (ensures (fun h0 _ h1 ->
      h0==h1 /\
            registered n r /\
-     MM.contains nonce_rid_table n r h1))
-  = HST.testify (MM.contains nonce_rid_table n r)
+     MDM.contains nonce_rid_table n r h1))
+  = HST.testify (MDM.contains nonce_rid_table n r)
 
 //Although the table only maps nonces to rids, externally, we also
 //want to associate the nonce with a role. Within this module
@@ -99,8 +99,8 @@ let rec mkHelloRandom cs r =
   let ts = timestamp() in
   let n : random = ts @| rand in
   if ideal then
-    match MM.lookup nonce_rid_table n with
-      | None   -> MM.extend nonce_rid_table n r; n
+    match MDM.lookup nonce_rid_table n with
+      | None   -> MDM.extend nonce_rid_table n r; n
       | Some _ -> mkHelloRandom cs r // formally retry to exclude collisions.
   else n
 
@@ -115,13 +115,13 @@ val lookup: cs:role -> n:random -> ST (option ex_rid)
      | Some r -> registered n r /\ role_nonce cs n r
      | None -> fresh n h0))) *)
 
-let lookup role n = MM.lookup nonce_rid_table n
+let lookup role n = MDM.lookup nonce_rid_table n
 
 (* Would be nice to make this a local let in new_region.
    Except, implicit argument inference for testify_forall fails *)
-private let nonce_rids_exists (m:MM.map random n_rid) =
-    forall (n:random{Some? (MM.sel m n)}). 
-      HST.witnessed (HST.region_contains_pred (Some?.v (MM.sel m n)))
+private let nonce_rids_exists (m:MDM.map random n_rid) =
+    forall (n:random{Some? (MDM.sel m n)}). 
+      HST.witnessed (HST.region_contains_pred (Some?.v (MDM.sel m n)))
 
 (*
    A convenient wrapper around FStar.ST.new_region,
@@ -142,7 +142,7 @@ let new_region parent =
   HST.recall nonce_rid_table;
   let m0 = HST.op_Bang nonce_rid_table in
   HST.testify_forall_region_contains_pred 
-    #(n:random{Some? (MM.sel m0 n)}) #(fun n -> Some?.v (MM.sel m0 n)) ();
+    #(n:random{Some? (MDM.sel m0 n)}) #(fun n -> Some?.v (MDM.sel m0 n)) ();
   let r = new_region parent in
   HST.witness_region r;
   r

@@ -11,7 +11,6 @@ open TLSInfo
 
 module CC = CoreCrypto
 module AE = AEADProvider
-module MM = FStar.Monotonic.DependentMap
 
 #set-options "--lax"
 

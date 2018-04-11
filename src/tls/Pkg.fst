@@ -18,7 +18,7 @@ module Pkg
 
 open Mem
 
-module MM = FStar.Monotonic.Map
+module MDM = FStar.Monotonic.DependentMap
 module MH = FStar.Monotonic.Heap
 module HS = FStar.HyperStack
 
@@ -196,21 +196,22 @@ noeq type local_pkg (ip: ipkg) =
   local_pkg ip
 
 (* Iterators over Monotonic.Map, require a change of implementation *)
+(* cwinter: this is now a Monotonic.DependentMap *)
 
-let mm_fold (#a:eqtype) (#b:a -> Type) (t:MM.map' a b)
+let mm_fold (#a:eqtype) (#b:a -> Type) (t:MDM.map a b)
   (#rt:Type) (init:rt) (folder:(rt -> i:a -> b i -> GTot rt)) : GTot rt
   = admit()
 
-let mm_fold_grow (#a:eqtype) (#b:a -> Type) (t:MM.map' a b) (t':MM.map' a b) (i:a) (v:b i)
+let mm_fold_grow (#a:eqtype) (#b:a -> Type) (t:MDM.map a b) (t':MDM.map a b) (i:a) (v:b i)
   (#rt:Type) (init:rt) (folder:(rt -> i:a -> b i -> GTot rt)) : Lemma
-  (requires t' == MM.upd t i v)
+  (requires t' == MDM.upd t i v)
   (ensures mm_fold t' init folder == folder (mm_fold t init folder) i v)
   = admit()
 
-assume type mm_forall (#a:eqtype) (#b:a -> Type) (t:MM.map' a b)
+assume type mm_forall (#a:eqtype) (#b:a -> Type) (t:MDM.map a b)
   (p: (#i:a -> b i -> mem -> GTot Type0)) (h:mem)
 
-let lemma_mm_forall_frame (#a:eqtype) (#b:a -> Type) (t:MM.map' a b)
+let lemma_mm_forall_frame (#a:eqtype) (#b:a -> Type) (t:MDM.map a b)
   (p: (#i:a -> b i -> mem -> GTot Type0))
   (footprint: (#i:a -> v:b i -> GTot rset))
   (p_frame: (i:a -> v:b i -> h0:mem -> r:rid -> h1:mem ->
@@ -222,21 +223,21 @@ let lemma_mm_forall_frame (#a:eqtype) (#b:a -> Type) (t:MM.map' a b)
           (ensures mm_forall t p h1)
   = admit()
 
-let lemma_mm_forall_extend (#a:eqtype) (#b:a -> Type) (t:MM.map' a b) (t':MM.map' a b)
+let lemma_mm_forall_extend (#a:eqtype) (#b:a -> Type) (t:MDM.map a b) (t':MDM.map a b)
   (p: (#i:a -> b i -> mem -> GTot Type0)) (i:a) (v:b i) (h0 h1:mem)
-  : Lemma (requires mm_forall t p h1 /\ t' == MM.upd t i v /\ p v h1)
+  : Lemma (requires mm_forall t p h1 /\ t' == MDM.upd t i v /\ p v h1)
           (ensures mm_forall t' p h1)
   = admit()
 
-let lemma_mm_forall_init (#a:eqtype) (#b:a -> Type) (t:MM.map' a b)
+let lemma_mm_forall_init (#a:eqtype) (#b:a -> Type) (t:MDM.map a b)
   (p: (#i:a -> b i -> mem -> GTot Type0)) (h:mem)
-  : Lemma (requires t == MM.empty_map a b)
+  : Lemma (requires t == MDM.empty)
           (ensures mm_forall t p h)
   = admit()
 
-let lemma_mm_forall_elim (#a:eqtype) (#b:a -> Type) (t:MM.map' a b)
+let lemma_mm_forall_elim (#a:eqtype) (#b:a -> Type) (t:MDM.map a b)
   (p: (#i:a -> b i -> mem -> GTot Type0)) (i:a) (v:b i) (h:mem)
-  : Lemma (requires mm_forall t p h /\ t i == Some v)
+  : Lemma (requires mm_forall t p h /\ MDM.sel t i == Some v)
           (ensures p v h)
   = admit()
 
@@ -287,10 +288,10 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
     if model then
      begin
       let map = HS.sel h0 (itable mtable) in
-      let map' = HS.sel h1 (itable mtable) in
+      let map = HS.sel h1 (itable mtable) in
       let fp0 = footprint h0 in
       let fp1 = footprint h1 in
-      mm_fold_grow map map' i k #rset Set.empty footprint_extend;
+      mm_fold_grow map map i k #rset Set.empty footprint_extend;
       assert(fp1 == rset_union p.shared_footprint (rset_union (mm_fold map #rset Set.empty footprint_extend) (p.local_footprint k)));
       lemma_union_com p.shared_footprint (mm_fold map #rset Set.empty footprint_extend) (p.local_footprint k);
       assert(fp1 == rset_union fp0 (p.local_footprint k));
@@ -353,7 +354,7 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
     let h1 = get() in
     assert(HS.sel h0 tbl == HS.sel h1 tbl);
     package_invariant_framing h0 (Pinv_region tls_tables_region) h1;
-    MM.extend tbl i k;
+    MDM.extend tbl i k;
     let h2 = get () in
     lemma_define_tls_honest_regions (p.local_footprint k);
     p.post_framing #i a k h1 tls_define_region h2;
@@ -379,7 +380,7 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
       let h1 = get() in
       assert(HS.sel h0 tbl == HS.sel h1 tbl);
       package_invariant_framing h0 (Pinv_region tls_tables_region) h1;
-      MM.extend tbl i k;
+      MDM.extend tbl i k;
       let h2 = get () in
       lemma_define_tls_honest_regions (p.local_footprint k);
       p.post_framing #i a k h1 tls_define_region h2;

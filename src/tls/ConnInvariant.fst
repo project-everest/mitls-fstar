@@ -9,7 +9,7 @@ open Handshake
 open Connection
 
 module DM = FStar.DependentMap
-module MM = FStar.Monotonic.DependentMap
+module MDM = FStar.Monotonic.DependentMap
 module MonSeq = FStar.Monotonic.Seq
 
 module HS = FStar.HyperStack
@@ -87,17 +87,17 @@ type i_conn (i:id) = r_conn (nonce_of_id i)
       table that connections associated with distinct nonces
       live in distinct regions.
   -------------------------------------------------------------------------------- *)
-let pairwise_disjoint (m:MM.partial_dependent_map random r_conn) =
+let pairwise_disjoint (m:MDM.partial_dependent_map random r_conn) =
     forall r1 r2.{:pattern (Some? (DM.sel m r1));
                       (Some? (DM.sel m r2))}
         r1<>r2 /\ Some? (DM.sel m r1) /\ Some? (DM.sel m r2)
              ==> HH.disjoint (Some?.v (DM.sel m r1)).region
                               (Some?.v (DM.sel m r2)).region
 
-type conn_tab_t = MM.t tls_tables_region random r_conn pairwise_disjoint
+type conn_tab_t = MDM.t tls_tables_region random r_conn pairwise_disjoint
 
 let conn_tab : conn_tab_t =
-  MM.alloc ()
+  MDM.alloc ()
 
 (*** DEFINING MAIN STATEFUL INVARIANT ***)
 (* --------------------------------------------------------------------------------
@@ -113,10 +113,10 @@ let conn_tab : conn_tab_t =
   -------------------------------------------------------------------------------- *)
 
 //MS.ms_tab is a monontonic reference to an ms_t
-type ms_t = MM.map AE.id MS.writer
+type ms_t = MDM.map AE.id MS.writer
 
 //conn_tab is a monotonic reference to a c_t
-type c_t  = MM.map random r_conn
+type c_t  = MDM.map random r_conn
 
 //w is registered with c, in state h
 let registered (i:id{StAE.is_stream i}) (w:StreamAE.writer i) (c:connection) (h:HS.mem) =
@@ -131,7 +131,7 @@ let ms_conn_inv (ms:ms_t)
                 (h:HS.mem)
                 (i:id)
    = authId i /\ StAE.is_stream i ==>  //Focused only on TLS-1.3 for now, hence the is_stream guard
-     (match MM.sel ms i with
+     (match MDM.sel ms i with
       | None -> True
       | Some w ->
         let log_as_hsref =  (StreamAE.ilog (StreamAE.State?.log w)) in
@@ -141,21 +141,21 @@ let ms_conn_inv (ms:ms_t)
         (authId i ==> HMS.contains h log_as_hsref) /\
         //main application invariant:
         (HS.sel h (StreamAE.ilog (StreamAE.State?.log w)) == Seq.createEmpty  \/   //the writer is either still unused; or
-                     (let copt = MM.sel conn (nonce_of_id i) in
+                     (let copt = MDM.sel conn (nonce_of_id i) in
                       Some? copt /\ registered i w (Some?.v copt) h)))            //it's been registered with the connection associated with its nonce
 
 //The main invariant, for all AE.ids
 let ms_conn_invariant (ms:ms_t)
                       (conn:c_t)
                       (h:HS.mem)
-  = forall (i:id) .{:pattern (MM.sel ms i)} ms_conn_inv ms conn h i
+  = forall (i:id) .{:pattern (MDM.sel ms i)} ms_conn_inv ms conn h i
 
 //A technical condition for framing:
 //    Every handshake region exists in the current heap
 let handshake_regions_exists (conn:c_t) (h:HH.hmap) =
-  forall n.{:pattern (Some? (MM.sel conn n))}
-      Some? (MM.sel conn n)
-       ==> (let hs_rgn = region_of (C?.hs (Some?.v (MM.sel conn n))) in
+  forall n.{:pattern (Some? (MDM.sel conn n))}
+      Some? (MDM.sel conn n)
+       ==> (let hs_rgn = region_of (C?.hs (Some?.v (MDM.sel conn n))) in
             Map.contains h hs_rgn /\
             HS.disjoint hs_rgn tls_tables_region)
 
@@ -196,8 +196,8 @@ val ms_derive_is_ok: h0:HS.mem -> h1:HS.mem -> i:AE.id -> w:MS.writer i
                  HS.modifies_transitively (Set.singleton tls_tables_region) h0 h1 /\ //we just changed the tls_tables_region
                  HS.modifies_ref tls_tables_region (Set.singleton (Heap.addr_of (HS.as_ref ms_tab_as_hsref))) h0 h1 /\ //and within it, at most the ms_tab
                  (old_ms == new_ms //either ms_tab didn't change at all  (because we found w in the table already)
-                  \/ (MM.sel old_ms i == None /\ //or, we had to generate a fresh writer w
-                     new_ms == MM.upd old_ms i w /\ //and we just added w to the table
+                  \/ (MDM.sel old_ms i == None /\ //or, we had to generate a fresh writer w
+                     new_ms == MDM.upd old_ms i w /\ //and we just added w to the table
                      (TLSInfo.authId i ==>  //and if we're idealizing i
                          (let log_as_hsref =  (StreamAE.ilog (StreamAE.State?.log w)) in
                           HS.contains h1 log_as_hsref /\  //the log exists in h1
@@ -218,12 +218,12 @@ let ms_derive_is_ok h0 h1 i w =
       let old_ms = HS.sel h0 MS.ms_tab in
       let new_ms = HS.sel h1 MS.ms_tab in
       if authId j && StAE.is_stream j
-      then match MM.sel new_ms j with
+      then match MDM.sel new_ms j with
            | None -> ()
            | Some ww ->
              if i=j
              then ()
-             else assert (Some ww==MM.sel old_ms j)
+             else assert (Some ww==MDM.sel old_ms j)
       else () in
   FStar.Classical.forall_intro aux
 
@@ -295,8 +295,8 @@ val register_writer_in_epoch_ok: h0:HS.mem -> h1:HS.mem -> i:AE.id{authId i}
               HS.disjoint (HS.parent (StreamAE.State?.region w)) tls_region /\          //technical: ... needed just for well-formedness of the rest of the formula
               HST.witnessed (HST.region_contains_pred (StreamAE.State?.region w)) /\                //technical: ... needed just for well-formedness of the rest of the formula
               (forall e. epochs `Seq.contains` e ==> Epochs.epoch_id e <> i) /\            //i is fresh for c
-              MM.sel mstab i == Some w /\ //we found the writer in the ms_tab
-              MM.sel ctab (nonce_of_id i) == Some c /\ //we found the connection in the conn_table
+              MDM.sel mstab i == Some w /\ //we found the writer in the ms_tab
+              MDM.sel ctab (nonce_of_id i) == Some c /\ //we found the connection in the conn_table
               HS.modifies_one (region_of c.hs) h0 h1 /\ //we just modified this connection's handshake region
               HS.modifies_ref (region_of c.hs) (Set.singleton (Heap.addr_of (HS.as_ref es_log_as_hsref))) h0 h1 /\ //and within it, just the epochs log
               new_hs_log == Seq.snoc old_hs_log e))) //and we modified it by adding this epoch to it
@@ -321,9 +321,9 @@ let register_writer_in_epoch_ok h0 h1 i c e =
       Seq.contains_snoc old_hs_log e; //this lemma shows that everything that was registered to c remains registered to it
       assert (old_ms == new_ms);
       assert (old_conn == new_conn);
-      cut (Some? (MM.sel old_conn nonce)); //this cut is useful for triggering the pairwise_disjointness quantifier
+      cut (Some? (MDM.sel old_conn nonce)); //this cut is useful for triggering the pairwise_disjointness quantifier
       if (authId j && StAE.is_stream j)
-      then match MM.sel new_ms j with
+      then match MDM.sel new_ms j with
            | None -> () //nothing allocated at id j yet; easy
            | Some wj ->
              let log_ref = StreamAE.ilog (StreamAE.State?.log wj) in
@@ -339,7 +339,7 @@ let register_writer_in_epoch_ok h0 h1 i c e =
                      ==> (let nonce_j = nonce_of_id j in
                           if nonce_j = nonce
                           then registered j wj c h0 //if j and i share the same nonce, then j is registered to c and c's registered writers only grows
-                          else (match MM.sel old_conn nonce_j with
+                          else (match MDM.sel old_conn nonce_j with
                                 | None -> False //we've already established that the log is non-empty; so j must be registered and this case says that it is not
                                 | Some c' ->
                                   (registered j wj c' h0) //it's registered initially
@@ -357,8 +357,8 @@ val mutate_registered_writer_ok : h0:HS.mem -> h1:HS.mem -> i:AE.id{authId i} ->
     (requires (mc_inv h0 /\                                       //initially in the invariant
                HS.modifies_one (StreamAE.State?.region w) h0 h1 /\ //we modified at most the writer's region
                registered i w c h0 /\                             //the writer is registered in c
-               MM.sel (HS.sel h0 MS.ms_tab) i == Some w   /\     //the writer is logged in the ms_tab
-               MM.sel (HS.sel h0 conn_tab) (nonce_of_id i) == Some c /\ //the connection is logged in the conn_table
+               MDM.sel (HS.sel h0 MS.ms_tab) i == Some w   /\     //the writer is logged in the ms_tab
+               MDM.sel (HS.sel h0 conn_tab) (nonce_of_id i) == Some c /\ //the connection is logged in the conn_table
                (let ilog_log_as_hsref =  (StreamAE.ilog (StreamAE.State?.log w)) in
                 HS.contains h1 ilog_log_as_hsref))) //We say that we changed the w.region; but that doesn't necessarily mean that its log remains
     (ensures (mc_inv h1))
@@ -370,7 +370,7 @@ let mutate_registered_writer_ok h0 h1 i w c = (* () *)
     let aux :  j:id -> Lemma (ms_conn_inv new_ms new_conn h1 j) =
       fun j ->
         if (authId j && StAE.is_stream j)
-        then match MM.sel new_ms j with //the case analysis is to trigger the pattern guarding MasterSecret.region_injective
+        then match MDM.sel new_ms j with //the case analysis is to trigger the pattern guarding MasterSecret.region_injective
              | None -> ()
              | Some wj -> () //basically, when i=j, the proof is easy as i remains registered; if i<>j then j didn't change since their regions are distinct
         else () in
@@ -400,8 +400,8 @@ val add_connection_ok: h0:HS.mem -> h1:HS.mem -> i:id -> c:i_conn i -> Lemma
              (let old_conn = HS.sel h0 conn_tab in
               let new_conn = HS.sel h1 conn_tab in
               let nonce = nonce_of_id i in
-              MM.sel old_conn nonce == None /\        //c wasn't in the table initially
-              new_conn == MM.upd old_conn nonce c))) //and the conn_tab changed just by adding c
+              MDM.sel old_conn nonce == None /\        //c wasn't in the table initially
+              new_conn == MDM.upd old_conn nonce c))) //and the conn_tab changed just by adding c
   (ensures (mc_inv h1))
 #reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1 --z3rlimit 100" //NS: this one seems to require an inversion somewhere, but not sure exactly where
 let add_connection_ok h0 h1 i c =
@@ -410,13 +410,13 @@ let add_connection_ok h0 h1 i c =
     let old_conn = HS.sel h0 conn_tab in
     let new_conn = HS.sel h1 conn_tab in
     let hs_region_exists : n:random -> Lemma
-        (match MM.sel new_conn n with
+        (match MDM.sel new_conn n with
          | None -> True
          | Some v -> conn_hs_region_exists v h1) =
-      fun n -> match MM.sel new_conn n with
+      fun n -> match MDM.sel new_conn n with
             | None -> ()
             | Some c' ->
-              assert (c =!= c' ==> (match MM.sel old_conn n with
+              assert (c =!= c' ==> (match MDM.sel old_conn n with
                                      | None -> True
                                      | Some c'' -> c' == c'')) in
     FStar.Classical.forall_intro hs_region_exists;

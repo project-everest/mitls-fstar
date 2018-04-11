@@ -16,7 +16,8 @@ include FStar.HyperStack
 include FStar.HyperStack.ST
 
 module HS = FStar.HyperStack
-//module ST = FStar.HyperStack.ST
+module DM = FStar.DependentMap
+module MDM = FStar.Monotonic.DependentMap
 
 let model = Flags.model 
 
@@ -134,8 +135,6 @@ assume val lemma_disjoint_ancestors:
 *)
 
 
-module MM = FStar.Monotonic.Map
-
 // We use this instead of Set.set rgn because otherwise subtyping fails in pkg.
 // The second line embeds the definition of rgn because of the unification bug
 //
@@ -168,11 +167,10 @@ let lemma_define_tls_honest_regions (s:rset)
   : Lemma (~(Set.mem tls_define_region s) /\ ~(Set.mem tls_honest_region s))
   = ()
 
-
 //18-01-04 Consider moving the rest to a separate library
-type trivial_inv (#it:eqtype) (#vt:it -> Type) (m:MM.map' it vt) = True
+type trivial_inv #it #vt: DM.t it (MDM.opt vt) -> Tot Type = fun _ -> True
 type i_mem_table (#it:eqtype) (vt:it -> Type) =
-  MM.t tls_define_region it vt trivial_inv
+  MDM.t tls_define_region it vt trivial_inv
 type mem_table (#it:eqtype) (vt:it -> Type) =
   (if model then i_mem_table vt else unit)
 
@@ -182,17 +180,17 @@ let itable (#it:eqtype) (#vt:it -> Type) (t:mem_table vt)
 let mem_addr (#it:eqtype) (#vt:it -> Type) (t:i_mem_table vt): GTot nat = HS.as_addr t
 
 type mem_fresh (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (i:it) (h:mem) =
-  model ==> MM.fresh (itable t) i h
+  model ==> MDM.fresh (itable t) i h
 type mem_defined (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (i:it) =
-  model ==> witnessed (MM.defined (itable t) i)
+  model ==> witnessed (MDM.defined (itable t) i)
 type mem_update (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (i:it) (v:vt i) (h0 h1:mem) =
   mem_defined t i /\
-  (model ==> HS.sel h1 (itable t) == MM.upd (HS.sel h0 (itable t)) i v)
+  (model ==> HS.sel h1 (itable t) == MDM.upd (HS.sel h0 (itable t)) i v)
 
 type mem_stable (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (h0 h1:mem) =
   model ==> HS.sel h0 (itable t) == HS.sel h1 (itable t)
 type mem_empty (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (h1:mem) =
-  model ==> HS.sel h1 (itable t) == MM.empty_map it vt
+  model ==> HS.sel h1 (itable t) == MDM.empty
 
 type modifies_mem_table (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (h0 h1:mem) =
   (if model then
@@ -207,7 +205,7 @@ let mem_alloc (#it:eqtype) (vt:it -> Type) : ST (mem_table vt)
   (requires fun h0 -> True)
   (ensures fun h0 t h1 -> modifies_mem_table t h0 h1 /\ mem_empty t h1)
   =
-  if model then MM.alloc #tls_define_region #it #vt #trivial_inv else ()
+  if model then (MDM.alloc #it #vt #trivial_inv #tls_define_region ())  else ()
 
 type mem_contains (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (h:mem) =
   model ==> h `contains` (itable t)

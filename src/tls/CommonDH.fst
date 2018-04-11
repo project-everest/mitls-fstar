@@ -20,7 +20,7 @@ open Mem
 
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
-module MM = FStar.Monotonic.DependentMap
+module MDM = FStar.Monotonic.DependentMap
 module DM = FStar.DependentMap
 
 (* A flag for runtime debugging of cDH data.
@@ -133,27 +133,27 @@ let default_group = ECDH (CoreCrypto.ECC_P256)
  
 let dh_region = new_region tls_tables_region
 noeq type ilog_entry (i:pre_dhi) =
-  | Honest of MM.t dh_region (pre_dhr i) (fun j -> bool) (fun _ -> True)
+  | Honest of MDM.t dh_region (pre_dhr i) (fun j -> bool) (fun _ -> True)
   | Corrupt
 
-private type i_ilog = MM.t dh_region pre_dhi ilog_entry (fun _ -> True)
+private type i_ilog = MDM.t dh_region pre_dhi ilog_entry (fun _ -> True)
 private type ishare_table = (if Flags.model then i_ilog else unit)
 abstract let ilog: ishare_table =
-  if Flags.model then MM.alloc () <: i_ilog else ()
+  if Flags.model then MDM.alloc () <: i_ilog else ()
 
 type registered_dhi i =
   (if Flags.model then
     let log: i_ilog = ilog in
-    witnessed (MM.defined log i)
+    witnessed (MDM.defined log i)
   else True)
 
 type fresh_dhi i h =
   (if Flags.model then
-    let log: i_ilog = ilog in MM.fresh log i h
+    let log: i_ilog = ilog in MDM.fresh log i h
   else False)
 
 type honest_dhi_st (log:i_ilog) (i:pre_dhi) (h:mem) =
-  Some? (MM.sel (sel h log) i) /\ Honest? (Some?.v (MM.sel (sel h log) i))
+  Some? (MDM.sel (sel h log) i) /\ Honest? (Some?.v (MDM.sel (sel h log) i))
 
 let lemma_honest_dhi_stable (log:i_ilog) (i:pre_dhi)
   : Lemma (stable_on_t log (honest_dhi_st log i))
@@ -166,7 +166,7 @@ type honest_dhi i =
   else False)
 
 type corrupt_dhi_st (log:i_ilog) (i:pre_dhi) (h:mem) =
-  Some? (MM.sel (sel h log) i) /\ Corrupt? (Some?.v (MM.sel (sel h log) i))
+  Some? (MDM.sel (sel h log) i) /\ Corrupt? (Some?.v (MDM.sel (sel h log) i))
 
 let lemma_corrupt_dhi_stable (log:i_ilog) (i:pre_dhi)
   : Lemma (stable_on_t log (corrupt_dhi_st log i))
@@ -181,27 +181,27 @@ type corrupt_dhi i =
 // cwinter: quic2c
 // abstract let share_log: share_table =
 //   (if Flags.ideal_KEF then
-//     MM.alloc () <: ideal_log
+//     MDM.alloc () <: ideal_log
 //   else
 //     ())
 
 // let registered i =
 //   (if Flags.ideal_KEF then
 //     let log : ideal_log = share_log in
-//     HST.witnessed (MM.defined log i)
+//     HST.witnessed (MDM.defined log i)
 //   else
 //     True)
 
 // let honest_share i =
 //   (if Flags.ideal_KEF then
 //     let log : ideal_log = share_log in
-//     HST.witnessed (MM.contains log i true)
+//     HST.witnessed (MDM.contains log i true)
 //   else False)
 
 // let dishonest_share i =
 //   (if Flags.ideal_KEF then
 //     let log : ideal_log = share_log in
-//     HST.witnessed (MM.contains log i false)
+//     HST.witnessed (MDM.contains log i false)
 //   else True)
 
 let lemma_honest_corrupt (i:pre_dhi{registered_dhi i})
@@ -212,9 +212,9 @@ let is_honest_dhi i =
   if Flags.model then
     let log: i_ilog = ilog in
     recall log;
-    testify (MM.defined log i);
+    testify (MDM.defined log i);
     lemma_honest_corrupt i;
-    match MM.lookup log i with
+    match MDM.lookup log i with
     | Some (Corrupt) ->
       lemma_corrupt_dhi_stable log i;
       mr_witness log (corrupt_dhi_st log i);
@@ -230,8 +230,8 @@ let ipubshare #g gx = pre_pubshare gx
 type registered_dhr_st (#i:dhi) (log:i_ilog) (j:pre_dhr i) (h:mem) =
   corrupt_dhi_st log i h \/
   (honest_dhi_st log i h /\
-    (let Some (Honest log') = MM.sel (sel h log) i in
-      Some? (MM.sel (sel h log') j)))
+    (let Some (Honest log') = MDM.sel (sel h log) i in
+      Some? (MDM.sel (sel h log') j)))
 
 type registered_dhr #i j =
   (if Flags.model then
@@ -243,15 +243,15 @@ type fresh_dhr #i j h =
   (if Flags.model then
     let log: i_ilog = ilog in
     honest_dhi_st log i h
-    /\ (let Some (Honest log') = MM.sel (sel h log) i in
-        None? (MM.sel (sel h log') j))
+    /\ (let Some (Honest log') = MDM.sel (sel h log) i in
+        None? (MDM.sel (sel h log') j))
   else False)
 
 type honest_dhr_st (#i:dhi) (log:i_ilog) (j:pre_dhr i) (h:mem) =
   honest_dhi_st log i h
-  /\ (let Some (Honest log') = MM.sel (sel h log) i in
-      Some? (MM.sel (sel h log') j)
-      /\ Some?.v (MM.sel (sel h log') j) = true)
+  /\ (let Some (Honest log') = MDM.sel (sel h log) i in
+      Some? (MDM.sel (sel h log') j)
+      /\ Some?.v (MDM.sel (sel h log') j) = true)
 
 type honest_dhr #i j =
   (if Flags.model then
@@ -262,9 +262,9 @@ type honest_dhr #i j =
 type corrupt_dhr_st (#i:dhi) (log:i_ilog) (j:pre_dhr i) (h:mem) =
   corrupt_dhi_st log i h \/
   (honest_dhi_st log i h /\
-    (let Some (Honest log') = MM.sel (sel h log) i in
-      Some? (MM.sel (sel h log') j)
-      /\ Some?.v (MM.sel (sel h log') j) = false))
+    (let Some (Honest log') = MDM.sel (sel h log) i in
+      Some? (MDM.sel (sel h log') j)
+      /\ Some?.v (MDM.sel (sel h log') j) = false))
 
 type corrupt_dhr #i j =
   (if Flags.model then
@@ -280,12 +280,12 @@ let is_honest_dhr #i j =
     recall log;
     lemma_honest_corrupt_dhr j;
     testify (registered_dhr_st log j);
-    (match MM.lookup log i with
+    (match MDM.lookup log i with
     | Some Corrupt ->
       assume(stable_on_t log (corrupt_dhr_st log j));
       mr_witness log (corrupt_dhr_st log j); false
     | Some (Honest log') ->
-      (match MM.lookup log' j with
+      (match MDM.lookup log' j with
       | Some true ->
         assume(stable_on_t log (honest_dhr_st log j));
         mr_witness log (honest_dhr_st log j); true
@@ -310,12 +310,12 @@ let rec keygen g =
     let log: i_ilog = ilog in
     recall log;
     let i : pre_dhi = (| g, pre_pubshare x |) in
-    match MM.lookup log i with
+    match MDM.lookup log i with
     | Some _ -> keygen g
     | None ->
       assert(fresh_dhi i h0);
-      let rlog = MM.alloc () in
-      MM.extend log i (Honest rlog);
+      let rlog = MDM.alloc () in
+      MDM.extend log i (Honest rlog);
       lemma_honest_dhi_stable log i;
       assume false;//18-02-18 
       mr_witness log (honest_dhi_st log i);
@@ -349,9 +349,9 @@ let rec dh_responder g gx =
    begin
     let log: i_ilog = ilog in
     recall log;
-    testify (MM.defined log i);
+    testify (MDM.defined log i);
     lemma_honest_corrupt i;
-    match MM.lookup log i with
+    match MDM.lookup log i with
     | Some Corrupt ->
       assert(corrupt_dhi_st log i h);
       lemma_corrupt_dhi_stable log i;
@@ -366,11 +366,11 @@ let rec dh_responder g gx =
       assert(honest_dhi_st log i h);
       lemma_honest_dhi_stable log i;
       mr_witness log (honest_dhi_st log i);
-      match MM.lookup log' gy with
+      match MDM.lookup log' gy with
       | Some _ -> dh_responder g gx // Responder share collision
       | None ->
         assume(fresh_dhr gy h);// 18-02-18 
-        MM.extend log' gy true;
+        MDM.extend log' gy true;
         let h1 = get () in
         testify (honest_dhi_st log i);
         assert(honest_dhi_st log i h1);
@@ -394,9 +394,9 @@ let register_dhi #g gx =
     let log: i_ilog = ilog in
     let i = (| g, gx |) in
     recall log;
-    if None? (MM.lookup log i) then MM.extend log i Corrupt;
-    assume(stable_on_t log (MM.defined log i));
-    mr_witness log (MM.defined log i); gx
+    if None? (MDM.lookup log i) then MDM.extend log i Corrupt;
+    assume(stable_on_t log (MDM.defined log i));
+    mr_witness log (MDM.defined log i); gx
   else gx
 
 let register_dhr #g gx gy =
@@ -405,7 +405,7 @@ let register_dhr #g gx gy =
     let i : dhi = (| g, gx |) in
     let j : pre_dhr i = gx in
     recall log;
-    testify (MM.defined log i);
+    testify (MDM.defined log i);
     assume(stable_on_t log (registered_dhr_st log j));
     match is_honest_dhi i with
     | false ->
@@ -413,9 +413,9 @@ let register_dhr #g gx gy =
       mr_witness log (registered_dhr_st log j); j
     | true ->
       testify (honest_dhi_st log i);
-      let Some (Honest log') = MM.lookup log i in
+      let Some (Honest log') = MDM.lookup log i in
       recall log';
-      if None? (MM.lookup log' j) then MM.extend log' j false;
+      if None? (MDM.lookup log' j) then MDM.extend log' j false;
       assume false;//18-02-18 
       mr_witness log (registered_dhr_st log j); j
   else gy
@@ -430,18 +430,18 @@ let lemma_honest_or_dishonest (i:id) : ST unit
     let log : ideal_log = share_log in
     let h = get () in
     HST.recall log;
-    HST.testify (MM.defined log i);
-    cut(Some? (MM.sel (HS.sel h log) i));
-    let b = Some?.v (MM.sel (HST.op_Bang log) i) in
+    HST.testify (MDM.defined log i);
+    cut(Some? (MDM.sel (HS.sel h log) i));
+    let b = Some?.v (MDM.sel (HST.op_Bang log) i) in
     match b with
     | true ->
-      cut(MM.contains log i true h);
-      MM.contains_stable log i true;
-      HST.mr_witness log (MM.contains log i true)
+      cut(MDM.contains log i true h);
+      MDM.contains_stable log i true;
+      HST.mr_witness log (MDM.contains log i true)
     | false ->
-      cut(MM.contains log i false h);
-      MM.contains_stable log i false;
-      HST.mr_witness log (MM.contains log i false)
+      cut(MDM.contains log i false h);
+      MDM.contains_stable log i false;
+      HST.mr_witness log (MDM.contains log i false)
    end
   else ()
 
@@ -455,11 +455,11 @@ let lemma_honest_and_dishonest (i:id)
     let h = get () in
     let log : ideal_log = share_log in
     HST.recall log;
-    HST.testify (MM.defined log i);
-    HST.testify (MM.contains log i true);
-    cut(true = Some?.v (MM.sel (HS.sel h log) i));
-    HST.testify (MM.contains log i false);
-    cut(false = Some?.v (MM.sel (HS.sel h log) i));
+    HST.testify (MDM.defined log i);
+    HST.testify (MDM.contains log i true);
+    cut(true = Some?.v (MDM.sel (HS.sel h log) i));
+    HST.testify (MDM.contains log i false);
+    cut(false = Some?.v (MDM.sel (HS.sel h log) i));
     cut(False)
    end
   else ()
@@ -512,9 +512,9 @@ let rec keygen g =
      let log : ideal_log = share_log in
      let i : id = (| g, pre_pubshare gx |) in
      HST.recall log;
-     match MM.lookup log i with
+     match MDM.lookup log i with
      | None ->
-       MM.extend log i true;
+       MDM.extend log i true;
        cut(registered i); cut(honest_share i);
        let gx : keyshare g = gx in gx
      | Some _ -> // Bad luck, we generated the same share twice
@@ -548,14 +548,14 @@ let register #g gx =
     let log : ideal_log = share_log in
     let i : id = (| g, gx |) in
     HST.recall log;
-    match MM.lookup log i with
+    match MDM.lookup log i with
     | None ->
-      MM.extend log i false;
+      MDM.extend log i false;
       cut(registered i);
       cut(dishonest_share i);
       gx
     | Some b ->
-      cut(HST.witnessed (MM.defined log i));
+      cut(HST.witnessed (MDM.defined log i));
       gx
    end
   else gx

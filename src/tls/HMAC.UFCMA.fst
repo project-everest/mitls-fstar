@@ -1,11 +1,10 @@
 (**! Idealizing agile HMAC; independent of TLS, used for TLS 1.3 Finished message payloads and Binders. *)
 module HMAC.UFCMA
-module HS = FStar.HyperStack //Added automatically
 
 open FStar.Bytes
 open Mem
 
-module MM = FStar.Monotonic.Map
+module MDM = FStar.Monotonic.DependentMap
 
 #set-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 
@@ -45,7 +44,7 @@ let goodish (#ip:ipkg) (i:ip.Pkg.t) (u:info) (msg:text u) =
   _: unit{~(safe i) \/ u.good msg}
 
 private type log_t (#ip:ipkg) (i:ip.Pkg.t) (u:info) (r:rgn) =
-  MM.t r (tag u * text u) (fun (t,v) -> goodish i u v) (fun _ -> True) // could constrain size
+  MDM.t r (tag u * text u) (fun (t,v) -> goodish i u v) (fun _ -> True) // could constrain size
 
 // runtime (concrete) type of MAC instances
 noeq (* abstract *) type concrete_key =
@@ -127,7 +126,7 @@ let create ip _ _ i u =
     if is_safe i then
       let region: Mem.subrgn u.parent = new_region u.parent in
       assert(~(is_tls_rgn u.parent));
-      let log: log_t #ip i u region = MM.alloc #_ #_ #_ #_ in
+      let log: log_t #ip i u region = MDM.alloc #_ #_ #_ #_ () in
       IdealKey ck region log
     else
       RealKey ck in
@@ -195,7 +194,7 @@ let mac ip ha_of_i good_of_i #i k p =
   // let t = HMAC.hmac u.alg kv p in
   // if is_safe i then
   //   (let IdealKey _ _ log = k <: ir_key ip i in
-  //   if None? (MM.lookup log (t, p)) then MM.extend log (t,p) ());
+  //   if None? (MDM.lookup log (t, p)) then MDM.extend log (t,p) ());
   // t
 
 val verify:
@@ -225,7 +224,7 @@ let verify ip ha_of_i good_of_i #i k p t =
     let valid = 
       admit() in
       //18-02-25 TODO, should be:
-      // Some? (MM.lookup log (t,p)) in
+      // Some? (MDM.lookup log (t,p)) in
     verified && valid
   else
     verified
@@ -326,8 +325,8 @@ private let test (a: ha) (r: rgn{~(is_tls_rgn r)}) (v': Hashing.macable a) (t': 
   assume(q.Pkg.package_invariant h0);
 
   //TODO superficial but hard to prove...
-  // assume(Monotonic.RRef.m_sel h0 (Pkg.itable table) == MM.empty_map ip.Pkg.t (key ip));
-  // assert(MM.fresh (Pkg.itable table) 0 h0);
+  // assume(Monotonic.RRef.m_sel h0 (Pkg.itable table) == MDM.empty_map ip.Pkg.t (key ip));
+  // assert(MDM.fresh (Pkg.itable table) 0 h0);
   // assert(q.Pkg.define_table == table);
   assert(mem_fresh q.Pkg.define_table 0 h0);
 

@@ -17,7 +17,7 @@ open StatefulLHAE
 open HKDF
 open PSK
 
-module MM = FStar.Monotonic.DependentMap
+module MDM = FStar.Monotonic.DependentMap
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
 module H = Hashing.Spec
@@ -60,23 +60,23 @@ abstract type res_context (i:rmsId) =
 private type res_psk_entry (i:rmsId) =
   (res_psk i) * (res_context i) * ctx:psk_context * leaked:(rref tls_tables_region bool)
 
-let res_psk_injective (m:MM.map' rmsId res_psk_entry) =
-  forall i1 i2.{:pattern (MM.sel m i1); (MM.sel m i2)}
-       i1 = i2 <==> (match MM.sel m i1, MM.sel m i2 with
+let res_psk_injective (m:MDM.map' rmsId res_psk_entry) =
+  forall i1 i2.{:pattern (MDM.sel m i1); (MDM.sel m i2)}
+       i1 = i2 <==> (match MDM.sel m i1, MDM.sel m i2 with
                   | Some (psk1, _, _, _), Some (psk2, _, _, _) -> b2t (equalBytes psk1 psk2)
                   | _ -> True)
 
-let res_psk_table : MM.t tls_tables_region rmsId res_psk_entry res_psk_injective =
-  MM.alloc #TLSConstants.tls_tables_region #rmsId #res_psk_entry #res_psk_injective
+let res_psk_table : MDM.t tls_tables_region rmsId res_psk_entry res_psk_injective =
+  MDM.alloc #TLSConstants.tls_tables_region #rmsId #res_psk_entry #res_psk_injective
 
 let registered_res_psk (i:rmsId) (h:HH.t) =
-  b2t (Some? (MM.sel (HS.sel h res_psk_table) i))
+  b2t (Some? (MDM.sel (HS.sel h res_psk_table) i))
 
 let res_psk_context (i:rmsId{registered_res_psk i}) =
-  let (_, _, c, _) = Some.v (MM.sel res_psk_table i) in c
+  let (_, _, c, _) = Some.v (MDM.sel res_psk_table i) in c
 
 private let res_psk_value (i:rmsId{registered_res_psk i}) =
-  let (psk, _, _, _) = Some.v (MM.sel res_psk_table i) in psk
+  let (psk, _, _, _) = Some.v (MDM.sel res_psk_table i) in psk
 
 **)
 

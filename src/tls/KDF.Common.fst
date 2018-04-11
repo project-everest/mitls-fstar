@@ -21,7 +21,7 @@ open TLSConstants
 open TLSInfo
 
 module DM = FStar.DependentMap
-module MM = FStar.Monotonic.DependentMap
+module MDM = FStar.Monotonic.DependentMap
 module HS = FStar.HyperStack
 
 (*)
@@ -50,7 +50,7 @@ type extracted_secret (#i:id) (x:expand_kind i) =
 *)
 
 type ideal_log (dt:Type0) (rt:dt -> Tot Type0) (r:rgn) =
-  MM.t r dt rt (fun _ -> True)
+  MDM.t r dt rt (fun _ -> True)
 type expand_log (dt:Type0) (rt:dt -> Tot Type0) (r:rgn) =
   (if Flags.ideal_KEF then ideal_log dt rt r else unit)
 
@@ -108,10 +108,10 @@ let expand (#it:Type0) (#i:it) (prf:prf #it i) (input:PRF?.domain prf)
     cut((PRF?.pre prf) input (PRF?.log prf) h0);
     let log : ideal_log (PRF?.domain prf) (PRF?.range prf) (PRF?.r prf) = PRF?.log prf in
     HST.recall log;
-    match MM.lookup log input with
+    match MDM.lookup log input with
     | Some v -> v
     | None ->
-      cut(MM.sel (HS.sel h0 log) input == None);
+      cut(MDM.sel (HS.sel h0 log) input == None);
       let h1 = HST.get() in
       cut(h0 == h1);
       let key =
@@ -129,8 +129,8 @@ let expand (#it:Type0) (#i:it) (prf:prf #it i) (input:PRF?.domain prf)
         else (PRF?.coerce prf) input key in
       let h4 = HST.get() in
       assume(h0 == h4);
-      cut(MM.sel (HS.sel h4 log) input == None);
-      MM.extend log input output;
+      cut(MDM.sel (HS.sel h4 log) input == None);
+      MDM.extend log input output;
       output
   else
     let k = HKDF.expand (PRF?.key prf) ((PRF?.format prf) input) (Hashing.Spec.tagLen ha) in

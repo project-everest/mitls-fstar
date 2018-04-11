@@ -1,8 +1,5 @@
 module TLSInfo
 
-module HS = FStar.HyperStack //Added automatically
-module HST = FStar.HyperStack.ST //Added automatically
-
 #set-options "--max_fuel 3 --initial_fuel 3 --max_ifuel 1 --initial_ifuel 1"
 
 (* This module gathers the definitions of
@@ -18,8 +15,8 @@ open TLSConstants
 
 module CC = CoreCrypto
 module DM = FStar.DependentMap
-module MM = FStar.Monotonic.DependentMap
-
+module MDM = FStar.Monotonic.DependentMap
+module HST = FStar.HyperStack.ST
 
 let default_cipherSuites = [
   TLS_AES_128_GCM_SHA256;
@@ -550,19 +547,19 @@ type pre_index =
 type honest_index (i:pre_index) = bool
 
 let safe_region:rgn = new_region tls_tables_region
-private type i_safety_log = MM.t safe_region pre_index honest_index (fun _ -> True)
+private type i_safety_log = MDM.t safe_region pre_index honest_index (fun _ -> True)
 private let s_table =
   if Flags.ideal_KEF then i_safety_log else unit
 
 let safety_table: s_table =
   (if Flags.ideal_KEF then
-      MM.alloc () <: i_safety_log
+      MDM.alloc () <: i_safety_log
   else ())
       
 type registered (i:pre_index) =
   (if Flags.ideal_KEF then
     let log: i_safety_log = safety_table in
-    witnessed (MM.defined log i)
+    witnessed (MDM.defined log i)
   else True)
 
 type valid (i:pre_index) =
@@ -613,13 +610,13 @@ type index = i:pre_index{valid i}
 type honest (i:index) =
   (if Flags.ideal_KEF then
     let log : i_safety_log = safety_table in
-    HST.witnessed (MM.contains log i true)
+    HST.witnessed (MDM.contains log i true)
   else False)
 
 type dishonest (i:index) =
   (if Flags.ideal_KEF then
     let log : i_safety_log = safety_table in
-    HST.witnessed (MM.contains log i false)
+    HST.witnessed (MDM.contains log i false)
   else True)
 
 type esId = i:pre_esId{valid (I_ES i)}

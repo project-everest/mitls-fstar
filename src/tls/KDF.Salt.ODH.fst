@@ -11,8 +11,6 @@ open TLSError
 open TLSConstants
 open TLSInfo
 
-module MM = FStar.Monotonic.DependentMap
-
 module HS = FStar.HyperStack
 
 (* Source index is a secret index *)

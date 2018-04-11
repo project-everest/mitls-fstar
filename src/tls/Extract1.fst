@@ -6,7 +6,7 @@ open Idx
 open Pkg.Tree
 open KDF // avoid?
 
-module MM = FStar.Monotonic.Map
+module MDM = FStar.Monotonic.DependentMap
 
 // for now 
 open Extract1.PRF
@@ -36,13 +36,13 @@ let extractR #d #u #i s a gX =
   if b then
    begin
     let t: odh_table = odh_state in
-    (if None? (MM.lookup t gX) then
-      let peers = MM.alloc #there #(peer_index gX) #(peer_instance #gX) #(fun _ -> True) in
+    (if None? (MDM.lookup t gX) then
+      let peers = MDM.alloc #(peer_index gX) #(peer_instance #gX) #(fun _ -> True) #there () in
       let h = get() in
-      assume(None? (MM.sel (sel h t) gX));
-      MM.extend t gX peers;
-      assume(stable_on_t t (MM.defined t gX));
-      mr_witness t (MM.defined t gX));
+      assume(None? (MDM.sel (sel h t) gX));
+      MDM.extend t gX peers;
+      assume(stable_on_t t (MDM.defined t gX));
+      mr_witness t (MDM.defined t gX));
     odh_test a s gX
    end
   else
@@ -86,8 +86,8 @@ let extractI #d #u #i a s g x gY =
   let b = if model then CommonDH.is_honest_dhi gX else false in
   if b then
     let t: odh_table = odh_state in
-    testify(MM.defined t gX);
-    let peers = Some?.v (MM.lookup t gX) in
+    testify(MDM.defined t gX);
+    let peers = Some?.v (MDM.lookup t gX) in
     let idh = IDH gX gY in
     let i' = Derive i "" (ExtractDH idh) in
     assume(registered i');
@@ -96,7 +96,7 @@ let extractI #d #u #i a s g x gY =
     let i_gY : peer_index gX = (| i, gY |) in
     let ot = secret d u i' in
     assume ((| d, u |) == u_of_i i); //17-11-01 indexing does not cover u yet
-    let o : option ot = MM.lookup peers i_gY in
+    let o : option ot = MDM.lookup peers i_gY in
     match o with
     | Some k -> (| (), k |)
     | None -> assume false; //17-11-22 why?

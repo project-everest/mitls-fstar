@@ -14,15 +14,15 @@ assume val crf: alg -> Tot bool  // to be moved elsewhere, set to false for real
     This may depend on some prior flag to keep the hashed input in the
     incremental hash implementation. (This is always the case for now.)  *)
 
-module MM = FStar.Monotonic.DependentMap 
+module MDM = FStar.Monotonic.DependentMap 
 
 // the precise types guarantee that the table stays empty when crf _ = false
 private type range = | Computed: a: alg {crf a} -> t: tag a -> range
 private type domain (r:range) =
   b:bytes {let Computed a t = r in length b <= maxLength a /\ hash a b = t}
 
-private let inv (f:MM.partial_dependent_map range domain) = True // a bit overkill?
-private let table : MM.t tls_tables_region range domain inv = MM.alloc()
+private let inv (f:MDM.partial_dependent_map range domain) = True // a bit overkill?
+private let table : MDM.t tls_tables_region range domain inv = MDM.alloc()
 
 // witnessing that we hashed this particular content (for collision detection)
 // to be replaced by a witness of inclusion in a global table of all hash computations.
@@ -33,7 +33,7 @@ abstract type hashed (a:alg) (b:hashable a) =
   crf a ==> (
     let h = hash a b in
     let b: domain (Computed a h) = b in
-    witnessed (MM.contains table (Computed a h) b))
+    witnessed (MDM.contains table (Computed a h) b))
 
 val crf_injective (a:alg) (b0 b1:hashable a): ST unit  // should be STTot
   (requires fun h0 -> hashed a b0 /\ hashed a b1)
@@ -44,8 +44,8 @@ let crf_injective a b0 b1 =
     let f = !table in
     let h0 = hash a b0 in
     let h1 = hash a b1 in
-    testify(MM.contains table (Computed a h0) b0);
-    testify(MM.contains table (Computed a h1) b1);
+    testify(MDM.contains table (Computed a h0) b0);
+    testify(MDM.contains table (Computed a h1) b1);
     assume false //18-02-26 TODO this verified with FStar.Monotonic.Map
   )
 
@@ -73,8 +73,8 @@ let finalize #a v =
   if crf a then (
     let x = Computed a h in
     let b = Hashing.content v in
-    match MM.lookup table x with
-      | None -> MM.extend table x b
+    match MDM.lookup table x with
+      | None -> MDM.extend table x b
       | Some b' -> if b <> b' then stop "hash collision detected");
   h
 #reset-options 
