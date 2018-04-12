@@ -1,5 +1,4 @@
 module Extract1.ODH 
-module HS = FStar.HyperStack //Added automatically
 
 open Mem
 open Pkg
@@ -7,6 +6,7 @@ open Idx
 open Pkg.Tree
 open KDF // avoid?
 
+module DM = FStar.DependentMap
 module MDM = FStar.Monotonic.DependentMap
 
 open Extract1.PRF // for now
@@ -50,7 +50,7 @@ let peer_table (x:odhid): Type0 =
 type odh_table = MDM.t there odhid peer_table (fun _ -> True)
 
 let odh_state : (if model then odh_table else unit) =
-  if model then MDM.alloc #there #odhid #peer_table #(fun _ -> True)
+  if model then MDM.alloc #odhid #peer_table #(fun _ -> True) #there ()
   else ()
 
 type odh_fresh (i:odhid) (h:mem) =
@@ -146,7 +146,7 @@ private let register_odh (i:regid) (gX:CommonDH.dhi) (gY:CommonDH.dhr gX)
   match MDM.lookup hlog j with
   | None ->
     let m = !hlog in
-    assume(honesty_invariant (MDM.upd m j true)); // Sepcial case: honest IDH
+    assume(honesty_invariant (MDM.repr (MDM.upd m j true))); // Sepcial case: honest IDH
     MDM.extend hlog j true;
     MDM.contains_stable hlog j true;
     mr_witness hlog (MDM.contains hlog j true); j

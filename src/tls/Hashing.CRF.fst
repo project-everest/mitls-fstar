@@ -45,8 +45,7 @@ let crf_injective a b0 b1 =
     let h0 = hash a b0 in
     let h1 = hash a b1 in
     testify(MDM.contains table (Computed a h0) b0);
-    testify(MDM.contains table (Computed a h1) b1);
-    assume false //18-02-26 TODO this verified with FStar.Monotonic.Map
+    testify(MDM.contains table (Computed a h1) b1)
   )
 
 /// We use [stop] to model the exclusion of "bad" events, in this case

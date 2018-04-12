@@ -3,7 +3,8 @@ module Idx
 open Mem
 open Pkg
 
-module MM = FStar.Monotonic.Map
+module DM = FStar.DependentMap
+module MDM = FStar.Monotonic.DependentMap
 
 type info = TLSInfo.logInfo
 
@@ -103,27 +104,27 @@ type honest_idh (c:context) =
 /// derived from i are also corrupt
 /// ---EXCEPT if ctx is ExtractDH g gx gy with CommonDH.honest_dhr gy
 ///
-type honesty_invariant (m:MM.map' id (fun _ -> bool)) =
+type honesty_invariant (m:DM.t id (MDM.opt (fun _ -> bool))) =
   (forall (i:id) (l:label) (c:context{wellformed_id (Derive i l c)}).
-  {:pattern (m (Derive i l c))}
-  Some? (m (Derive i l c)) ==> Some? (m i) /\
-  (m i = Some false ==> (honest_idh c \/ m (Derive i l c) = Some false)))
+  {:pattern (DM.sel m (Derive i l c))}
+  Some? (DM.sel m (Derive i l c)) ==> Some? (DM.sel m i) /\
+  (DM.sel m i = Some false ==> (honest_idh c \/ DM.sel m (Derive i l c) = Some false)))
 
 //17-12-08 removed [private] twice, as we need to recall it in ODH :(
 type i_honesty_table =
-  MM.t tls_honest_region id (fun (t:id) -> bool) honesty_invariant
+  MDM.t tls_honest_region id (fun (t:id) -> bool) honesty_invariant
 let h_table = if model then i_honesty_table else unit
 
 let honesty_table: h_table =
   if model then
-    MM.alloc #tls_honest_region #id #(fun _ -> bool) #honesty_invariant
+    MDM.alloc #id #(fun _ -> bool) #honesty_invariant #tls_honest_region ()
   else ()
 
 // Registered is monotonic
 type registered (i:id) =
   (if model then
     let log : i_honesty_table = honesty_table in
-    witnessed (MM.defined log i)
+    witnessed (MDM.defined log i)
   else True)
 
 type regid = i:id{registered i}
@@ -131,13 +132,13 @@ type regid = i:id{registered i}
 type honest (i:id) =
   (if model then
     let log: i_honesty_table = honesty_table in
-    witnessed (MM.contains log i true)
+    witnessed (MDM.contains log i true)
   else False)
 
 type corrupt (i:id) =
   (if model then
     let log : i_honesty_table = honesty_table in
-    witnessed (MM.contains log i false)
+    witnessed (MDM.contains log i false)
   else True)
 
 assume val bind_squash_st:
@@ -148,30 +149,27 @@ assume val bind_squash_st:
   $f:(a -> ST (squash b) (requires (fun h0 -> pre h0)) (ensures (fun h0 _ h1 -> h0 == h1))) ->
   ST (squash b) (requires (fun h0 -> pre h0)) (ensures (fun h0 _ h1 -> h0 == h1))
 
-module HS  = FStar.HyperStack
-module HST = FStar.HyperStack.ST
-
 private let lemma_honest_or_corrupt (i:regid)
   :ST unit (requires (fun _ -> True)) (ensures (fun h0 _ h1 -> h0 == h1 /\ (honest i \/ corrupt i)))
   = if model then begin
       let log:i_honesty_table = honesty_table in
-      let aux :(h:mem) -> (c_or (MM.contains log i true h) (~ (MM.contains log i true h)))
+      let aux :(h:mem) -> (c_or (MDM.contains log i true h) (~ (MDM.contains log i true h)))
                -> ST (squash (honest i \/ corrupt i))
 	            (requires (fun h0     -> h == h0))
 		    (ensures (fun h0 _ h1 -> h0 == h1))
         = fun _ x ->
 	  recall log;
-	  testify (MM.defined log i);
+	  testify (MDM.defined log i);
 	  match x with
 	  | Left  h ->
-	    MM.contains_stable log i true;
-	    mr_witness log (MM.contains log i true)
+	    MDM.contains_stable log i true;
+	    mr_witness log (MDM.contains log i true)
 	  | Right h ->
-	    MM.contains_stable log i false;
-	    mr_witness log (MM.contains log i false)
+	    MDM.contains_stable log i false;
+	    mr_witness log (MDM.contains log i false)
       in
-      let h = HST.get () in
-      let y = Squash.bind_squash (Squash.get_proof (l_or (MM.contains log i true h) (~ (MM.contains log i true h)))) (fun y -> y) in
+      let h = get () in
+      let y = Squash.bind_squash (Squash.get_proof (l_or (MDM.contains log i true h) (~ (MDM.contains log i true h)))) (fun y -> y) in
       bind_squash_st y (aux h)
     end
     else ()
@@ -186,9 +184,9 @@ private let lemma_not_honest_and_corrupt (i:regid)
 		    (ensures (fun h0 _ h1 -> h0 == h1))
         = fun x ->
 	  recall log;
-	  testify (MM.defined log i);
+	  testify (MDM.defined log i);
 	  match x with
-	  | Left  h -> testify (MM.contains log i true); testify (MM.contains log i false)
+	  | Left  h -> testify (MDM.contains log i true); testify (MDM.contains log i false)
 	  | Right h -> ()
       in
       let y = Squash.bind_squash (Squash.get_proof (l_or (honest i /\ corrupt i) (~ (honest i /\ corrupt i)))) (fun y -> y) in
@@ -220,15 +218,15 @@ let lemma_corrupt_invariant (i:regid) (lbl:label)
   if model then
     let log : i_honesty_table = honesty_table in
     recall log;
-    testify (MM.defined log i);
-    match MM.lookup log i with
+    testify (MDM.defined log i);
+    match MDM.lookup log i with
     | Some true -> ()
     | Some false ->
       let m = !log in
       // No annotation, but the proof relies on the global log invariant
-      testify (MM.defined log (Derive i lbl ctx));
-      MM.contains_stable log (Derive i lbl ctx) false;
-      mr_witness log (MM.contains log (Derive i lbl ctx) false)
+      testify (MDM.defined log (Derive i lbl ctx));
+      MDM.contains_stable log (Derive i lbl ctx) false;
+      mr_witness log (MDM.contains log (Derive i lbl ctx) false)
   else ()
 
 let get_honesty (i:id {registered i}) : ST bool
@@ -237,26 +235,26 @@ let get_honesty (i:id {registered i}) : ST bool
   = if model then
       let log : i_honesty_table = honesty_table in
       recall log;
-      testify (MM.defined log i);
-      match MM.lookup log i with
+      testify (MDM.defined log i);
+      match MDM.lookup log i with
       | Some b ->
         (*
          * AR: 03/01
          *     We need to show b <==> honest i
-         *     The direction b ==> honest i is straightforward, from the postcondition of MM.lookup
+         *     The direction b ==> honest i is straightforward, from the postcondition of MDM.lookup
          *     For the other direction, we need to do a recall on the witnessed predicate in honest i
          *     One way is to go through squash types, using a bind_squash_st axiom above
          *)
         let aux (b:bool) :ST (squash (honest i ==> b2t b))
-                             (requires (fun h0     -> MM.contains log i b h0))
+                             (requires (fun h0     -> MDM.contains log i b h0))
 	    		     (ensures (fun h0 _ h1 -> h0 == h1))
           = let f :(b:bool) -> (c_or (honest i) (~ (honest i)))
 	           -> ST (squash (honest i ==> b2t b))
-	                (requires (fun h0      -> MM.contains log i b h0))
+	                (requires (fun h0      -> MDM.contains log i b h0))
                         (ensures  (fun h0 _ h1 -> h0 == h1))
 	      = fun _ x ->
 	        match x with
-	        | Left  h -> Squash.return_squash h; testify (MM.contains log i true)
+	        | Left  h -> Squash.return_squash h; testify (MDM.contains log i true)
 	        | Right h -> Squash.return_squash h; assert (~ (honest i))
 	    in
 	    //y:l_or (honest i) (~ (honest i))
@@ -268,11 +266,11 @@ let get_honesty (i:id {registered i}) : ST bool
     else false
 
 // TODO(adl) preservation of the honesty table invariant
-let rec lemma_honesty_update (m:MM.map id (fun _ -> bool) honesty_invariant)
+let rec lemma_honesty_update (m:DM.t id (MDM.opt (fun _ -> bool)))
   (i:regid) (l:label) (c:context{wellformed_id (Derive i l c)}) (b:bool{b <==> honest i})
-  : Lemma (honesty_invariant (MM.upd m (Derive i l c) b))
+  : Lemma (honesty_invariant (DM.upd m (Derive i l c) (Some b)))
 // : Lemma (requires Some? (m i ) /\ None? (m (Derive i l c)) /\ m i == Some false ==> not b)
-//         (ensures honesty_invariant (MM.upd m (Derive i l c) b))
+//         (ensures honesty_invariant (MDM.upd m (Derive i l c) b))
   = admit() // easy
 
 let register_derive (i:id{registered i}) (l:label) (c:context{wellformed_id (Derive i l c)})
@@ -287,13 +285,13 @@ let register_derive (i:id{registered i}) (l:label) (c:context{wellformed_id (Der
   if model then
     let log : i_honesty_table = honesty_table in
     recall log;
-    match MM.lookup log i' with
+    match MDM.lookup log i' with
     | Some b -> lemma_honest_corrupt i'; (i', b)
     | None ->
       let b = get_honesty i in
       let h = get () in
-      lemma_honesty_update (sel h log) i l c b;
-      MM.extend log i' b;
+      // lemma_honesty_update log i l c b;
+      MDM.extend log i' b;
       lemma_honest_corrupt i';
       (i', b)
   else (i', false)
