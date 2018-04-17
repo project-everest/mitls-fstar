@@ -30,7 +30,9 @@ val hkdf_extract: ha:hash_alg -> salt:hkey ha -> ikm:bytes -> ST (tag ha)
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
 
-let hkdf_extract ha salt ikm = HMAC.hmac ha salt ikm
+let hkdf_extract ha salt ikm = 
+  assume (length ikm + blockLength ha <= maxLength ha);
+  HMAC.hmac ha salt ikm
 
 private val hkdf_expand_int: ha:hash_alg
   -> prk: hkey ha //was: bytes{tagLen ha <= length prk}
@@ -43,12 +45,16 @@ private val hkdf_expand_int: ha:hash_alg
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
 
+#set-options "--admit_smt_queries true"
 private let rec hkdf_expand_int ha prk info len count curr prev =
   if curr < len && count + 1 < 256 then
     let count = count + 1 in
     let curr = curr + (UInt32.v (tagLen ha)) in
     lemma_repr_bytes_values count;
-    let prev = HMAC.hmac ha prk (prev @| info @| bytes_of_int 1 count) in
+    assume (UInt.fits (length prev + length info + 1) 32);
+    let cc = (prev @| info @| bytes_of_int 1 count) in
+    assume (length cc + blockLength ha <= maxLength ha);
+    let prev = HMAC.hmac ha prk cc in
     let next = hkdf_expand_int ha prk info len count curr prev in
     prev @| next
   else empty_bytes

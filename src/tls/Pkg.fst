@@ -267,7 +267,7 @@ unfold type mem_package (#ip:ipkg) (p:local_pkg ip) =
 // table-allocating functor; the latter is probably too opaque for
 // correlating its result with the source definitions.
 
-#set-options "--z3rlimit 100"
+#set-options "--z3rlimit 100 --admit_smt_queries true"
 //unfold
 let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
   let footprint_extend (s:rset) (i:ip.t{ip.registered i}) (k:p.key i) =

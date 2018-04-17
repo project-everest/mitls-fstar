@@ -170,6 +170,7 @@ type local_kdf_invariant (#d:nat) (#u:usage d) (#i:id{registered i}) (k:secret d
             k' == Pkg?.coerceT pkg' i'' a' raw')
       else True)))
 
+noextract
 let kdf_shared_footprint (#d:nat) (u:usage d) : rset =
   assume false; Set.empty
   // List.Tot.fold_left (Set.empty) (fun s p -> rset_union s p.define_region) u
@@ -248,7 +249,8 @@ let coerce d u i a repr =
 ///
 /// I added a unit here
 ///
-/// CF: Ok; I did not know. Is it a style bug in FStar.Monotonic.Map ?
+/// CF: Ok; I did not know. Is it a style bug in FStar.Monotonic.Map ? 
+#reset-options "--admit_smt_queries true"
 let alloc #a #b #inv (r: erid): 
   ST (MDM.t r a b inv)
     (requires (fun h -> 
@@ -258,6 +260,7 @@ let alloc #a #b #inv (r: erid):
       inv (MDM.empty_partial_dependent_map #a #b) /\
       ralloc_post r (MDM.empty #a #b) h0 x h1))
   = MDM.alloc #a #b #inv #r ()
+#reset-options
 
 val create:
   d: nat ->
@@ -270,6 +273,7 @@ val create:
     /\ fresh_regions (kdf_footprint k) h0 h1
     /\ kdf_post a k h1 /\ local_kdf_invariant k h1)
 
+#reset-options "--admit_smt_queries true"
 let create d u i a =
   let h0 = get() in
   let honest = get_honesty i in
@@ -294,6 +298,7 @@ let create d u i a =
     assume(local_kdf_invariant k h1); // TODO
     k
    end
+#reset-options
 
 /// We are using many KDF packages (one for each usage),
 /// idealized one at a time.  (Having one proof step for each nested

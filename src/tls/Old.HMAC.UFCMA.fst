@@ -109,6 +109,7 @@ val mac: #i:id -> #good:(bytes -> Type) -> k:key i good -> p:bytes { authId i ==
 
 // We log every authenticated texts, with their index and resulting tag
 let mac #i #good k p =
+  assume (length p + Hashing.Spec.blockLength (alg i) <= Hashing.Spec.maxLength (alg i)) ;
   let p : p:bytes { authId i ==> good p } = p in
   let t = HMAC.hmac (alg i) k.kv p in
   let e : entry i good = Entry t p in
@@ -119,6 +120,7 @@ let mac #i #good k p =
 abstract val matches: #i:id -> #good:(bytes -> Type) -> p:text -> entry i good -> Tot bool
 let matches #i #good p (Entry _ p') = p = p'
 
+#set-options "--admit_smt_queries true"
 let rec log_entry_matches_p #i #good (log:seq (entry i good)) (p:text) =
   if Seq.length log = 0 then false
   else matches p (Seq.head log)

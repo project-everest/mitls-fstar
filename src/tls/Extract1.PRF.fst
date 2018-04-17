@@ -41,6 +41,7 @@ assume val coerce_salt:
 
 #set-options "--lax" 
 
+noextract
 let local_salt_pkg (d:nat) (u:usage d) : local_pkg ii =
   LocalPkg
     (salt d u)

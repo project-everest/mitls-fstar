@@ -86,8 +86,10 @@ let region (#ip:ipkg) (#i:ip.Pkg.t{ip.Pkg.registered i}) (k:key ip i):
   (ensures fun _ -> True)
   = let IdealKey _ r _ = k <: ir_key ip i in r
 
+noextract
 let shared_footprint: rset = Set.empty
 
+noextract
 let footprint (#ip:ipkg) (#i:ip.Pkg.t {ip.Pkg.registered i}) (k:key ip i): 
   s:rset{s `Set.disjoint` shared_footprint}
   =
@@ -249,6 +251,7 @@ type info1
   =
   a:info{a.alg = ha_of_i i /\ a.good == good_of_i i}
 
+noextract
 unfold let localpkg 
   (ip: ipkg) (ha_of_i: ip.Pkg.t -> ha) 
   (good_of_i: (i:ip.Pkg.t -> Hashing.macable (ha_of_i i) -> bool)): 

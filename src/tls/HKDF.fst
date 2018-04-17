@@ -91,7 +91,7 @@ private val expand_int:
   (requires fun h0 -> length previous + length info + 1 + Hashing.blockLength ha <= Hashing.maxLength ha)
   (ensures (fun h0 t h1 -> modifies_none h0 h1))
 
-#set-options "--z3rlimit 10 --detail_errors"
+#set-options "--z3rlimit 10 --admit_smt_queries true"
 let rec expand_int #ha prk info len count curr previous =
   if curr <^ len && FStar.UInt8.(count <^ 255uy) then (
     assert(FStar.UInt8.(count <^ 255uy));
@@ -99,7 +99,9 @@ let rec expand_int #ha prk info len count curr previous =
     let count = FStar.UInt8.(count +^ 1uy) in
     let curr = curr +^ tagLen ha in
     lemma_repr_bytes_values (UInt8.v count);
+    assume (UInt.fits (length previous + length info + 1) 32);
     let block = HMAC.hmac ha prk (previous @| info @| bytes_of_int8 count) in
+    assume (v curr = Mul.op_Star (FStar.UInt8.v count) (tagLength ha));
     let next = expand_int prk info len count curr block in
     block @| next )
   else empty_bytes
@@ -118,11 +120,12 @@ val expand:
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
 
+#reset-options "--admit_smt_queries true"
 let expand #ha prk info len =
   lemma_repr_bytes_values (v len);
   let rawbytes = expand_int prk info len 0uy 0ul empty_bytes in
   fst (split rawbytes len) 
-
+#reset-options
 
 (*-------------------------------------------------------------------*)
 (*
