@@ -6,9 +6,6 @@ open FStar.Heap
 open FStar.HyperStack
 // JP: please stop using opening so much stuff in scope srsly
 open FStar.Seq
- // for e.g. found
-//open FStar.Set
- 
 open FStar.Bytes
 open FStar.Error
 

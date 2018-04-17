@@ -3,7 +3,6 @@ module HandshakeLog
 (* see als comments in Handshake.fsti *) 
 
 open FStar.Seq
-open FStar.Set
 open FStar.Error
 open FStar.Bytes
 

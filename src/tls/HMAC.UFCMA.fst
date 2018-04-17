@@ -86,17 +86,17 @@ let region (#ip:ipkg) (#i:ip.Pkg.t{ip.Pkg.registered i}) (k:key ip i):
   (ensures fun _ -> True)
   = let IdealKey _ r _ = k <: ir_key ip i in r
 
-let shared_footprint: rset = Set.empty
+let shared_footprint: rset = rset_empty ()
 
 let footprint (#ip:ipkg) (#i:ip.Pkg.t {ip.Pkg.registered i}) (k:key ip i): 
-  s:rset{s `Set.disjoint` shared_footprint}
+  GTot (s:rset{s `Set.disjoint` shared_footprint})
   =
   assume false; //TODO downwards closed set
   if model then
     match k <: ir_key ip i with
     | IdealKey _ r _ -> Set.singleton r
-    | RealKey _ -> Set.empty
-  else Set.empty
+    | RealKey _ -> rset_empty ()
+  else rset_empty ()
 
 private let get_key (#ip:ipkg) (#i:ip.Pkg.t{ip.Pkg.registered i}) (k:key ip i)
   : concrete_key

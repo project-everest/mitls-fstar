@@ -1,7 +1,6 @@
 module Handshake
 
 open FStar.Seq
-open FStar.Set
 open FStar.Error
 open FStar.Bytes
 

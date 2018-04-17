@@ -4,7 +4,6 @@ open FStar.Heap
 open FStar.HyperStack
 open FStar.HyperStack.ST
 open FStar.Seq
-open FStar.Set
 open FStar.Bytes
 open FStar.Error
 

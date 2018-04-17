@@ -49,7 +49,8 @@ private
 inline_for_extraction
 let lbytes_pair_parser32 (coordinate_length:coordinate_length_type)
   : LP.parser32 (lbytes_pair_parser coordinate_length) 
-  = let l = UInt32.v coordinate_length in
+  = [@inline_let]
+    let l = UInt32.v coordinate_length in
     LP.parse32_nondep_then
       (LP.parse32_flbytes l coordinate_length)
       (LP.parse32_flbytes l coordinate_length)

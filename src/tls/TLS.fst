@@ -2,7 +2,6 @@ module TLS
 module HS = FStar.HyperStack //Added automatically
 
 open FStar.Seq
-open FStar.Set
 open FStar.Bytes
 open FStar.Error
 
@@ -389,7 +388,7 @@ private let check_incrementable (#c:connection) (#i:id) (wopt:option (cwriter i 
 ////////////////////////////////////////////////////////////////////////////////
 // Sending fragments on a given writer (not necessarily the current one)
 ////////////////////////////////////////////////////////////////////////////////
-let opt_writer_regions (#i:id) (#c:connection) (wopt:option (cwriter i c)) : GTot (set HS.rid) =
+let opt_writer_regions (#i:id) (#c:connection) (wopt:option (cwriter i c)) : GTot (FStar.Set.set HS.rid) =
   match wopt with
   | None -> Set.empty
   | Some wr -> Set.singleton (StAE.region wr)
@@ -407,7 +406,7 @@ let sendFragment_inv (#c:connection) (#i:id) (wo:option(cwriter i c)) h =
 // let ad_overflow : result unit = Error (AD_internal_error, "seqn overflow")
 let ad_overflow : result unit = Error (AD_record_overflow, "seqn overflow")
 
-let sendFragment_success (mods:set rid) (c:connection) (i:id) (wo:option (cwriter i c)) (f: Content.fragment i) (h0:HS.mem) (h1:HS.mem) =
+let sendFragment_success (mods:FStar.Set.set rid) (c:connection) (i:id) (wo:option (cwriter i c)) (f: Content.fragment i) (h0:HS.mem) (h1:HS.mem) =
       Some? wo ==>
       (let wr = Some?.v wo in
        HS.modifies (Set.union mods (Set.singleton (StAE.region wr))) h0 h1
