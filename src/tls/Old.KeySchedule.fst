@@ -37,7 +37,7 @@ unfold let dbg : string -> ST unit (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1)) =
   if DebugFlags.debug_KS then print else (fun _ -> ())
 
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 
 let print_share (#g:CommonDH.group) (s:CommonDH.share g) : ST unit
   (requires (fun h0 -> True))

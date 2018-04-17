@@ -509,7 +509,7 @@ let serverHelloBytes sh =
 #reset-options "--z3rlimit 50"
 
 // 18-02-15 disabling verification attemps (150', 44 errors) till the new parsers.
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 
 let serverHelloBytes_is_injective msg1 msg2 =
   if serverHelloBytes msg1 = serverHelloBytes msg2 then
@@ -616,7 +616,7 @@ let serverHelloBytes_is_injective_strong msg1 s1 msg2 s2 =
   serverHelloBytes_is_injective msg1 msg2
 
 #reset-options
-//#set-options "--lax"
+//#set-options "--admit_smt_queries true"
 
 let parseServerHello data =
   if length data < 34 then
@@ -876,7 +876,7 @@ let rec distinguishedNameListBytes_is_injective n1 n2 = admit ()
   //     cut (length (distinguishedNameListBytes n2) = 0)
   //     )
 
-//#set-options "--lax"
+//#set-options "--admit_smt_queries true"
 
 val certificateRequestBytes_is_injective: c1:cr -> c2:cr ->
   Lemma (requires True)
@@ -1546,7 +1546,7 @@ let splitHandshakeMessage b =
     (ht, data)
 
 #reset-options "--z3rlimit 100"
-//#set-options "--lax"
+//#set-options "--admit_smt_queries true"
 
 //17-05-05 update this proof, relying on pv to disambiguate messages with the same header
 let handshakeMessageBytes_is_injective pv msg1 msg2 =
@@ -1593,7 +1593,7 @@ val lemma_handshakeMessageBytes_aux: pv:option protocolVersion -> msg1:valid_hs_
   (ensures (Bytes.equal (handshakeMessageBytes pv msg1) (handshakeMessageBytes pv msg2)))
 
 #reset-options "--z3rlimit 50"
-//#set-options "--lax"
+//#set-options "--admit_smt_queries true"
 
 let lemma_handshakeMessageBytes_aux pv msg1 msg2 = admit()
   //TODO bytes NS 09/27 : stale

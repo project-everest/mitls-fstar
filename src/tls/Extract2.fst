@@ -45,7 +45,7 @@ val coerce_salt2:
   (requires fun h0 -> True)
   (ensures fun h0 p h1 -> True)
 
-#set-options "--lax" //17-12-08 
+#set-options "--admit_smt_queries true" //17-12-08 
 
 let coerce_salt2 #d #u i a raw =
   let i', honest' = register_derive i "" Extract in

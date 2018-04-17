@@ -39,7 +39,7 @@ assume val coerce_salt:
   raw: lbytes32 (secret_len a) ->
   salt d u i
 
-#set-options "--lax" 
+#set-options "--admit_smt_queries true" 
 
 noextract
 let local_salt_pkg (d:nat) (u:usage d) : local_pkg ii =

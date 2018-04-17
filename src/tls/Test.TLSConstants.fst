@@ -6,7 +6,7 @@ open FStar.HyperStack.ST
 open TLSError
 open TLSConstants
 
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 
 let test_signatureSchemeListBytes ()
   : Stack (option (either (FStar.Bytes.bytes * string * string)

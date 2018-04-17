@@ -80,7 +80,7 @@ let rec mk_secret n =
     Node p children)
 
 //#set-options "--z3rlimit 200"
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 let test_rekey(): St unit
 =
   let x0 = mk_secret 10 in

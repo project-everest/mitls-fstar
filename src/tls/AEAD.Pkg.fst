@@ -106,7 +106,7 @@ let keyval #ip #index_of_i #i k =
     | Real ck -> ck.k
   else k.k
 
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 
 (** Downward closure of [prf_region i] *)
 val shared_footprint:

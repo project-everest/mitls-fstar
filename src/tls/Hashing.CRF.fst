@@ -66,7 +66,7 @@ val finalize: #a:alg -> v:accv a -> ST (tag a)
     t = hash a b /\ hashed a b
   ))
 
-#set-options "--lax" //18-02-26 was verified with MonotonicMap
+#set-options "--admit_smt_queries true" //18-02-26 was verified with MonotonicMap
 let finalize #a v =
   let h = Hashing.finalize v in
   if crf a then (

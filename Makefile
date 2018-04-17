@@ -7,12 +7,19 @@ MITLS_HOME    ?= .
 all: model-all ocaml-all kremlin-all test
 
 model-% verify-% ocaml-% kremlin-% quic-%:
-	$(MAKE) -C src/tls $*
+	$(MAKE) -C $(MITLS_HOME)/src/tls $*
 
 test clean:
-	$(MAKE) -C src/tls $*
+	$(MAKE) -C $(MITLS_HOME)/src/tls $*
 
-ci: ocaml-all kremlin-all test
+
+# cwinter: todo; put the CI commands here instead of everest-ci/ci?
+ci: 
+	$(MAKE) -C $(HACL_HOME)/secure_api/LowCProvider
+	$(MAKE) -C $(MITLS_HOME)/libs/ffi
+	$(MAKE) -C $(MITLS_HOME)/src/pki
+	$(MAKE) -C $(MITLS_HOME)/src/tls all -k
+	$(MAKE) -C $(MITLS_HOME)/src/tls test -k
 
 %.fst-in %.fsti-in:
-	$(MAKE) -C src/tls -f Makefile $@
+	$(MAKE) -C $(MITLS_HOME)/src/tls -f Makefile $@

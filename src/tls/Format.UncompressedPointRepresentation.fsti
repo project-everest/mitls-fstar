@@ -24,6 +24,7 @@ type uncompressedPointRepresentation (coordinate_length:coordinate_length_type) 
     y           : B.lbytes32 coordinate_length;
 }
 
+inline_for_extraction
 val uncompressedPointRepresentation_parser_kind (coordinate_length:coordinate_length_type): LP.parser_kind
 
 val uncompressedPointRepresentation_parser (coordinate_length:coordinate_length_type)

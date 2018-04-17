@@ -37,7 +37,7 @@ FSTAR       = $(FSTAR_HOME)/bin/fstar.exe --cache_dir $(CACHE_DIR) --cache_check
 VFLAGS     ?= --use_hints --use_hint_hashes --record_hints --warn_error -271
 
 ifneq (,$(HINTS_DIR))
-	HINTS_OPTS=--hint_file $(HINTS_DIR)/$(notdir $(subst .lax,,$(subst .checked,,$<))).hints
+	HINTS_OPTS=--hint_file $(HINTS_DIR)/$(notdir $(subst .checked,,$<)).hints
 endif
 
 # Project Files
@@ -127,8 +127,8 @@ endif
 			$(HINTS_OPTS) \
 			--odir $(EXTRACT_DIR) \
 			$(addprefix --include , $(INCLUDE_PATHS)) \
-			--extract_module $(basename $(notdir $(subst .lax,,$(subst .checked,,$<)))) \
-			$(subst $(CACHE_DIR)/,,$(subst .lax,,$(subst .checked,,$<))) \
+			--extract_module $(basename $(notdir $(subst .checked,,$<))) \
+			$(subst $(CACHE_DIR)/,,$(subst .checked,,$<)) \
 	)
 
 # Avoids polluting the KreMLin source tree with a random .o file

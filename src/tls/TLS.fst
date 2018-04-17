@@ -788,7 +788,7 @@ let write c #i #rg data =
 ////////////////////////////////////////////////////////////////////////////////
 // NOT DESIGNED TO BE VERIFIED BEYOND THIS POINT
 ////////////////////////////////////////////////////////////////////////////////
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 // (old) outcomes?
 // | WriteAgain -> sent any higher-priority fragment, same index, same app-level log (except warning)
 // | Written    -> sent application fragment (when Some? appdata)

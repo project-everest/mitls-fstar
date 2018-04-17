@@ -19,7 +19,7 @@ open TLSInfo
 
 module U32 = FStar.UInt32
 
-abstract type key = bytes //18-02-14 TODO length
+type key = bytes //18-02-14 TODO length
 let coerce (k:bytes) : key = k
 
 
@@ -169,7 +169,7 @@ let finished12 hAlg (ms:key) role log =
 (* Internal agile implementation of PRF *)
 
 //18-02-14 TODO specify key lengths 
-#set-options "--lax" 
+#set-options "--admit_smt_queries true" 
 
 val verifyData: (protocolVersion * cipherSuite) -> key -> role -> bytes -> St bytes
 let verifyData (pv,cs) (secret:key) (role:role) (data:bytes) =

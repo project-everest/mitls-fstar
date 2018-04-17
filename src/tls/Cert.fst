@@ -31,7 +31,7 @@ let is_classic_chain (l:chain13): bool =
 type chain12 = l:chain13 {is_classic_chain l}
 
 // 2018.03.10 SZ: The types in Extensions.fsti are too weak to prove the refinement in [certes]
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 // todo: prove it is a chain12
 let chain_up_aux (c:cert) : certes = c, []
 #reset-options
@@ -62,7 +62,7 @@ let rec certificateListBytes13 = function
 val certificateListBytes_is_injective: c1:chain -> c2:chain ->
   Lemma (Bytes.equal (certificateListBytes c1) (certificateListBytes c2) ==> c1 == c2)
 
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 // 2018.03.10: Lax-typecheck for now; this will be reimplemented in LowParse anyway
 let rec certificateListBytes_is_injective c1 c2 =
   match c1, c2 with

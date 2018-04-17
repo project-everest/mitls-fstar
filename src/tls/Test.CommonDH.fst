@@ -13,7 +13,7 @@ open Format.NamedGroupList
 
 module DH = CommonDH
 
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 
 let prefix = "Test.CommonDH"
 

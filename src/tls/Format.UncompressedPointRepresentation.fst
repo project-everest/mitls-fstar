@@ -14,7 +14,7 @@ unfold type is_injective_2 (#a:Type) (#b:Type) (f:a -> b) (x:a) (y:a)
 
 (* Types *)
 
-private 
+private unfold
 type lbytes_pair (coordinate_length:coordinate_length_type) 
   = B.lbytes32 coordinate_length * B.lbytes32 coordinate_length
   // = (p:(B.lbytes32 coordinate_length * B.lbytes32 coordinate_length)
@@ -27,6 +27,7 @@ type lbytes_pair (coordinate_length:coordinate_length_type)
 (* Parsers *)
 
 private
+inline_for_extraction
 let lbytes_pair_parser_kind (coordinate_length:coordinate_length_type)
   : LP.parser_kind
   = let l = (UInt32.v coordinate_length) in
@@ -34,6 +35,8 @@ let lbytes_pair_parser_kind (coordinate_length:coordinate_length_type)
       (LP.total_constant_size_parser_kind l)
       (LP.total_constant_size_parser_kind l)
 
+private
+inline_for_extraction
 let lbytes_pair_parser (coordinate_length:coordinate_length_type)
   : LP.parser (lbytes_pair_parser_kind coordinate_length) (lbytes_pair coordinate_length)
   = let l = U32.v coordinate_length in
@@ -52,6 +55,7 @@ let lbytes_pair_parser32 (coordinate_length:coordinate_length_type)
       (LP.parse32_flbytes l coordinate_length)
 #reset-options
 
+inline_for_extraction
 let uncompressedPointRepresentation_parser_kind (coordinate_length:coordinate_length_type) 
   = LP.and_then_kind
       constantByte_parser_kind

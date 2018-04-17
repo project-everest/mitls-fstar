@@ -345,7 +345,7 @@ let leak #i #role s =
 
 
 // ADL Jan 19. Made some progress on encrypt but need to merge lowlevel now
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 
 ////////////////////////////////////////////////////////////////////////////////
 //Encryption

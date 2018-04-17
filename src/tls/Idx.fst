@@ -149,6 +149,7 @@ assume val bind_squash_st:
   $f:(a -> ST (squash b) (requires (fun h0 -> pre h0)) (ensures (fun h0 _ h1 -> h0 == h1))) ->
   ST (squash b) (requires (fun h0 -> pre h0)) (ensures (fun h0 _ h1 -> h0 == h1))
 
+noextract
 private let lemma_honest_or_corrupt (i:regid)
   :ST unit (requires (fun _ -> True)) (ensures (fun h0 _ h1 -> h0 == h1 /\ (honest i \/ corrupt i)))
   = if model then begin
@@ -156,7 +157,7 @@ private let lemma_honest_or_corrupt (i:regid)
       let aux :(h:mem) -> (c_or (MDM.contains log i true h) (~ (MDM.contains log i true h)))
                -> ST (squash (honest i \/ corrupt i))
 	            (requires (fun h0     -> h == h0))
-		    (ensures (fun h0 _ h1 -> h0 == h1))
+		        (ensures (fun h0 _ h1 -> h0 == h1))
         = fun _ x ->
 	  recall log;
 	  testify (MDM.defined log i);
@@ -174,6 +175,7 @@ private let lemma_honest_or_corrupt (i:regid)
     end
     else ()
 
+noextract
 private let lemma_not_honest_and_corrupt (i:regid)
   :ST unit (requires (fun _ -> True)) (ensures (fun h0 _ h1 -> h0 == h1 /\ (~ (honest i /\ corrupt i))))
   = if model then begin
@@ -229,6 +231,7 @@ let lemma_corrupt_invariant (i:regid) (lbl:label)
       mr_witness log (MDM.contains log (Derive i lbl ctx) false)
   else ()
 
+noextract
 let get_honesty (i:id {registered i}) : ST bool
   (requires fun h0 -> True)
   (ensures fun h0 b h1 -> h0 == h1 /\ (b <==> honest i))
@@ -273,6 +276,7 @@ let rec lemma_honesty_update (m:DM.t id (MDM.opt (fun _ -> bool)))
 //         (ensures honesty_invariant (MDM.upd m (Derive i l c) b))
   = admit() // easy
 
+#reset-options "--admit_smt_queries true"
 let register_derive (i:id{registered i}) (l:label) (c:context{wellformed_id (Derive i l c)})
   : ST (i:id{registered i} * bool)
   (requires fun h0 -> True)
@@ -295,6 +299,7 @@ let register_derive (i:id{registered i}) (l:label) (c:context{wellformed_id (Der
       lemma_honest_corrupt i';
       (i', b)
   else (i', false)
+#reset-options
 
 // 17-10-21 WIDE/NARROW INDEXES (old)
 //

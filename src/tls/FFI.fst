@@ -29,7 +29,7 @@ open TLS
 
 open FStar.HyperStack.All
 type cbytes = string
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 
 (* A flag for runtime debugging of ffi data.
    The F* normalizer will erase debug prints at extraction

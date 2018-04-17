@@ -1132,7 +1132,7 @@ type prflabel = bytes
 
 //18-02-23 stuck on bounding lengths of string constants
 (** Key schedule labels *)
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 let extract_label = utf8_encode "master secret"
 let extended_extract_label = utf8_encode "extended master secret"
 let kdf_label = utf8_encode "key expansion"

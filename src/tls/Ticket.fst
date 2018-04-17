@@ -12,7 +12,7 @@ open TLSInfo
 module CC = CoreCrypto
 module AE = AEADProvider
 
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 
 val discard: bool -> ST unit
   (requires (fun _ -> True))

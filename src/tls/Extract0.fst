@@ -58,7 +58,7 @@ let real_psk (#d:nat) (#u: usage d) (#i:regid) (t: real_secret i{~(safeKEF0 d i)
 type ext0 (d:nat) (u:usage d) (i:id {registered i}) =
   _:unit{registered (Derive i "" Extract)} & psk d u (Derive i "" Extract)
 
-#set-options "--lax" //17-12-08 until KDF converges
+#set-options "--admit_smt_queries true" //17-12-08 until KDF converges
 
 
 val coerceT_psk:
@@ -105,6 +105,7 @@ let create_psk #d #u i a =
   else
     (| (), real_psk #d #u #i' (sample (secret_len a)) |)
 
+noextract
 let local_ext0_pkg (d:nat) (u:usage d) : local_pkg ii =
   LocalPkg
     (fun (i:id{registered i}) -> ext0 d u i)

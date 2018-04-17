@@ -167,7 +167,7 @@ val odh_test:
     // flag_odh ==> s == peer_gX gY
     True)
 
-#set-options "--lax" //17-12-08 
+#set-options "--admit_smt_queries true" //17-12-08 
 
 let odh_test #d #u #i a s gX =
   assume ((| d, u |) == u_of_i i); //17-11-01 TODO modelling

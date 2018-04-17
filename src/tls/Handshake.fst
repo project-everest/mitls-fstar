@@ -50,7 +50,7 @@ unfold let trace = if DebugFlags.debug_HS then print else (fun _ -> ())
 
 type digest = Hashing.anyTag //  l:bytes{length l <= 32}
 
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 type machineState =
   | C_Idle
   | C_wait_ServerHello: // waiting for plaintext handshake 
@@ -167,7 +167,7 @@ let forall_epochs (s:hs) h (p:(epoch s.region (nonce s) -> Type)) =
 //epochs in h1 extends epochs in h0 by one
 
 (*
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 let fresh_epoch h0 s h1 =
   let es0 = logT s h0 in
   let es1 = logT s h1 in
@@ -296,7 +296,7 @@ let hs_inv (s:hs) (h: HS.mem) = True
 
 
 
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 let frame_iT_trivial  (s:hs) (rw:rw) (h0:HS.mem) (h1:HS.mem)
   : Lemma (stateT s h0 = stateT s h1  ==>  iT s rw h0 = iT s rw h1)
   = ()
@@ -679,7 +679,7 @@ let client_ServerHelloDone hs c ske ocr =
       hs.state := C12_wait_CCS2 ks digestClientFinished;
       InAck false false)
 
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 
 (* completes the handshake; called either by client13_ServerFinished
    or after sending EOED *)

@@ -44,7 +44,10 @@ let pskiBytes (i,ot) =
   (vlbytes2 i @| bytes_of_int32 ot)
 
 private
-let pskiListBytes_aux acc pski = acc @| pskiBytes pski
+let pskiListBytes_aux acc pski = 
+  let pb = pskiBytes pski in
+  assume (UInt.fits (length acc + length pb) 32);
+  acc @| pb
 
 //val pskiListBytes: list pskIdentity -> bytes
 let pskiListBytes ids =
@@ -60,7 +63,9 @@ let rec binderListBytes_aux (bl:list binder)
       assert(length bt <= op_Multiply (List.Tot.length bl - 1) 256);
       let b0 = Parse.vlbytes1 b in
       assert(length b0 <= 256);
-      b0 @| binderListBytes_aux t
+      let bt = binderListBytes_aux t in
+      assume (UInt.fits (length b0 + length bt) 32);
+      b0 @| bt
 
 val binderListBytes: binders -> Pure (b:bytes)
   (requires True)
@@ -71,6 +76,7 @@ let binderListBytes bs =
     let b = binderListBytes_aux t in
     let b0 = Parse.vlbytes1 h in
     assert(length b0 >= 33);
+    assume (UInt.fits (length b0 + length b) 32);
     b0 @| b
 
 let bindersBytes bs =
@@ -133,6 +139,7 @@ let parsePskIdentity b =
         Correct (id, ota)
       else error "malformed PskIdentity"
 
+#reset-options "--admit_smt_queries true"
 let rec parsePskIdentities_aux : b:bytes -> list pskIdentity -> Tot (result (list pskIdentity)) (decreases (length b))
   = fun b psks ->
     if length b > 0 then
@@ -150,6 +157,7 @@ let rec parsePskIdentities_aux : b:bytes -> list pskIdentity -> Tot (result (lis
           else error "parsePSKIdentities too few bytes"
       else error "parsePSKIdentities too few bytes"
     else Correct psks
+#reset-options
 
 val parsePskIdentities: b:bytes{length b >= 2} -> result (list pskIdentity)
 let parsePskIdentities b =
@@ -159,7 +167,7 @@ let parsePskIdentities b =
     else error "parsePskIdentities: too short"
   | Error z -> error "parsePskIdentities: failed to parse"
 
-#set-options "--lax"
+#reset-options "--admit_smt_queries true"
 val client_psk_parse : bytes -> result (psk * option binders)
 let client_psk_parse b =
   match vlsplit 2 b with
@@ -172,6 +180,7 @@ let client_psk_parse b =
     	| Correct bl -> Correct (ClientPSK ids (length binders_bytes), Some bl)
     	| Error z -> error "client_psk_parse_binders")
     | Error z -> error "client_psk_parse_ids")
+#reset-options
 
 val server_psk_parse : lbytes 2 -> psk
 let server_psk_parse b = ServerPSK (UInt16.uint_to_t (int_of_bytes b))
@@ -207,7 +216,7 @@ let client_psk_kexes_bytes (ckxs: client_psk_kexes): b:bytes {length b <= 3} =
   lemma_repr_bytes_values (length content);
   vlbytes 1 content
 
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 let parse_client_psk_kexes: pinverse_t client_psk_kexes_bytes = fun b ->
   if b = client_psk_kexes_bytes [PSK_KE] then Correct [PSK_KE] else
   if b = client_psk_kexes_bytes [PSK_DHE_KE] then Correct [PSK_DHE_KE] else
@@ -240,8 +249,16 @@ let parseEarlyDataIndication data =
 
 let rec ecpfListBytes_aux: list point_format -> bytes = function
   | [] -> empty_bytes
-  | ECP_UNCOMPRESSED :: r -> abyte 0z @| ecpfListBytes_aux r
-  | ECP_UNKNOWN t :: r -> bytes_of_int 1 t @| ecpfListBytes_aux r
+  | ECP_UNCOMPRESSED :: r -> 
+    let a = abyte 0z in 
+    let b = ecpfListBytes_aux r in
+    assume (UInt.fits (length a + length b) 32);
+    a @| b
+  | ECP_UNKNOWN t :: r -> 
+    let a = bytes_of_int 1 t in
+    let b = ecpfListBytes_aux r in
+    assume (UInt.fits (length a + length b) 32);
+    a @| b
 
 val ecpfListBytes: l:list point_format{length (ecpfListBytes_aux l) < 256} -> Tot bytes
 let ecpfListBytes l =
@@ -299,7 +316,7 @@ let parse_uint32 (b:bytes) : result UInt32.t =
 
 (* PROTOCOL VERSIONS *)
 
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 private let protocol_versions_bytes_aux acc v = acc @| TLSConstants.versionBytes_draft v
 
 val protocol_versions_bytes: protocol_versions -> b:bytes {length b <= 255}
@@ -353,11 +370,13 @@ let parseSupportedVersions b =
 
 (* SERVER NAME INDICATION *)
 
+#reset-options "--admit_smt_queries true"
 private val serverNameBytes: list serverName -> Tot bytes
 let rec serverNameBytes = function
   | [] -> empty_bytes
   | SNI_DNS x :: r -> abyte 0z @| bytes_of_int 2 (length x) @| x @| serverNameBytes r
   | SNI_UNKNOWN(t, x) :: r -> bytes_of_int 1 t @| bytes_of_int 2 (length x) @| x @| serverNameBytes r
+#reset-options
 
 private
 let snidup: serverName -> serverName -> Tot bool
@@ -367,6 +386,7 @@ let snidup: serverName -> serverName -> Tot bool
       	| SNI_UNKNOWN(a,_), SNI_UNKNOWN(b,_) -> a = b
       	| _ -> false
 
+#reset-options "--admit_smt_queries true"
 private let rec parseServerName_aux
   : b:bytes -> Tot (canFail serverName) (decreases (length b))
   = fun b ->
@@ -421,7 +441,7 @@ let parseServerName mt b =
     else
       Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
   | _ -> error "SNI extension cannot appear in this message type"
-
+#reset-options
 
 let bindersLen (#p: (lbytes 2 -> GTot Type0)) (el: list (extension' p)) : nat =
   match List.Tot.find E_pre_shared_key? el with
@@ -499,6 +519,7 @@ let unknown: unknownTag = fun h ->
   forall (p: unknownTag) (e: extension' p {h=extensionHeaderBytes e}) . E_unknown_extension? e
 
 //18-02-22 not sure how to avoid duplicating these constants
+#reset-options "--admit_smt_queries true"
 let is_unknown x =
   x <> twobytes (0x00z, 0x00z) &&
   x <> twobytes (0x00z, 0x0Az) &&
@@ -520,10 +541,15 @@ let is_unknown x =
 private val ext_of_custom_aux: acc:list extension -> el:custom_extensions -> Tot (l:list extension)
 let rec ext_of_custom_aux acc = function
   | [] -> acc
-  | (h, b) :: t -> ext_of_custom_aux (E_unknown_extension (bytes_of_uint16 h) b :: acc) t
+  | (h, b) :: t -> 
+  let bh = bytes_of_uint16 h in
+  assume (unknown bh);
+  ext_of_custom_aux (E_unknown_extension bh b :: acc) t
+#reset-options
 
 let ext_of_custom el = List.Tot.rev (ext_of_custom_aux [] el)
 
+#reset-options "--admit_smt_queries true"
 private val custom_of_ext_aux: acc:custom_extensions -> l:list extension -> Tot (el:custom_extensions)
 let rec custom_of_ext_aux acc = function
   | [] -> acc
@@ -531,6 +557,7 @@ let rec custom_of_ext_aux acc = function
   | _ :: t -> custom_of_ext_aux acc t
 
 let custom_of_ext el = List.Tot.rev (custom_of_ext_aux [] el)
+#reset-options
 
 private let app_filter (e:extension) =
   match e with
@@ -548,6 +575,7 @@ let app_ext_filter =
   | None -> None
   | Some l -> Some (List.Tot.filter app_filter l)
 
+#reset-options "--admit_smt_queries true"
 private
 let equal_extensionHeaderBytes_sameExt
   (e1 e2: extension)
@@ -566,11 +594,12 @@ let sameExt_equal_extensionHeaderBytes
   (requires (sameExt e1 e2))
   (ensures (extensionHeaderBytes e1 = extensionHeaderBytes e2))
 = ()
+#reset-options
 
 (* API *)
 
 // Missing refinements in `extension` type constructors to be able to prove the length bound
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 (** Serializes an extension payload *)
 private let extensionPayloadBytes_aux acc v = acc @| versionBytes_draft v
 val extensionPayloadBytes: extension -> b:bytes { length b < 65536 - 4 }
@@ -602,6 +631,7 @@ let rec extensionBytes ext =
   //let payload = vlbytes 2 payload in
   head @| payload
 
+#reset-options "--admit_smt_queries true"
 let extensionBytes_is_injective
   (ext1: extension)
   (s1: bytes)
@@ -658,11 +688,17 @@ let extensionBytes_is_injective
     lemma_vlbytes_inj_strong 2 b1 s1 b2 s2
   | _ ->
     assume (ext1 == ext2 /\ s1 == s2)
+#reset-options
 
-private let extensionListBytes_aux l s = l @| extensionBytes s
+private let extensionListBytes_aux l s = 
+  let es = extensionBytes s in
+  assume (UInt.fits (length l + length es) 32);
+  l @| es
+  
 let extensionListBytes exts =
   List.Tot.fold_left extensionListBytes_aux empty_bytes exts
 
+#reset-options "--admit_smt_queries true"
 private let rec extensionListBytes_eq exts accu :
   Lemma (List.Tot.fold_left (fun l s -> l @| extensionBytes s) accu exts ==
   accu @| extensionListBytes exts)
@@ -886,7 +922,7 @@ let parseKeyShare mt data =
   | _ -> error "key_share extension cannot appear in this message type"
 
 (* We don't care about duplicates, not formally excluded. *)
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 
 inline_for_extraction
 let normallyNone ctor r =
@@ -1009,7 +1045,6 @@ let parseOptExtensions mt data =
     match parseExtensions mt data with
     | Error z -> Error z
     | Correct (ee,obinders) -> Correct (Some ee, obinders))
-#reset-options
 
 (*************************************************
  Other extension functionality
@@ -1021,7 +1056,7 @@ private let rec list_valid_cs_is_list_cs (l:valid_cipher_suites): list cipherSui
   | [] -> []
   | hd :: tl -> hd :: list_valid_cs_is_list_cs tl
 
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 private let rec list_valid_ng_is_list_ng (l:CommonDH.supportedNamedGroups) : CommonDH.namedGroups =
   match l with
   | [] -> []
@@ -1045,7 +1080,7 @@ If containing a “supported_groups” extension, it MUST also contain a
 vector is permitted.
 
 *)
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 (* SI: implement prepareExtensions prep combinators, of type exts->data->exts, per ext group.
    For instance, PSK, HS, etc extensions should all be done in one function each.
    This seems to make this prepareExtensions more modular. *)
@@ -1226,7 +1261,7 @@ let rec containsExt (l: list extension) (ext: extension): bool =
    The negotiation of renegotiation indication is incorrect,
    Needs to be consistent with clientToNegotiatedExtension
 *)
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 private val serverToNegotiatedExtension:
   config ->
   list extension ->
@@ -1409,3 +1444,4 @@ let default_signatureScheme_fromSig pv sigAlg =
 (* SI: API. Called by HandshakeMessages. *)
 let default_signatureScheme pv cs =
   default_signatureScheme_fromSig pv (sigAlg_of_ciphersuite cs)
+#reset-options

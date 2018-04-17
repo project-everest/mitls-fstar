@@ -24,7 +24,7 @@ open FFICallbacks
 
 module HS = FStar.HyperStack
 
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 
 (* A flag for runtime debugging of ffi data.
    The F* normalizer will erase debug prints at extraction

@@ -406,7 +406,7 @@ noeq type t (region:rgn) (role:TLSConstants.role) : Type0 =
     state: HST.m_rref region (negotiationState role cfg resume) ns_rel ->
     t region role
 
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 val computeOffer: r:role -> cfg:config -> resume:TLSInfo.resumeInfo r -> nonce:TLSInfo.random
   -> ks:option CommonDH.keyShare -> list (PSK.pskid * PSK.pskInfo) -> UInt32.t
   -> Tot offer

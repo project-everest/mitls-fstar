@@ -148,7 +148,7 @@ type rset = s:Set.set HS.rid{
      (is_tls_rgn r1 ==> r1 `HS.extends` tls_tables_region) /\
      (forall (r':HS.rid).{:pattern (r' `HS.includes` r1)} r' `is_below` r1 ==> Set.mem r' s)))}
 
-let rset_union (s1:rset) (s2:rset): Tot rset = Set.union s1 s2
+let rset_union (s1:rset) (s2:rset): GTot rset = let r = (Set.union s1 s2) in r
 
 /// SZ: This is the strongest lemma that is provable
 /// Note that this old stronger version doesn't hold:
@@ -174,6 +174,7 @@ type i_mem_table (#it:eqtype) (vt:it -> Type) =
 type mem_table (#it:eqtype) (vt:it -> Type) =
   (if model then i_mem_table vt else unit)
 
+noextract
 let itable (#it:eqtype) (#vt:it -> Type) (t:mem_table vt)
   : Pure (i_mem_table vt) (requires model) (ensures fun _ -> True) = t
 

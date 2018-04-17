@@ -23,6 +23,7 @@ let parser32_correct
       U32.v consumed == (consumed' <: nat)
     )
 
+inline_for_extraction
 let parser32
   (#k: parser_kind)
   (#t: Type0)
@@ -83,6 +84,7 @@ let serializer32_correct
 : GTot Type0
 = B32.reveal res == s input
 
+inline_for_extraction
 let serializer32
   (#k: parser_kind)
   (#t: Type0)
@@ -91,6 +93,7 @@ let serializer32
 : Tot Type0
 = (input: t) -> Tot (res: bytes32 { serializer32_correct s input res } )
 
+inline_for_extraction
 let partial_serializer32
   (#k: parser_kind)
   (#t: Type0)
@@ -257,6 +260,7 @@ let size32_postcond
   then y == u32_max
   else U32.v y == sz
 
+inline_for_extraction
 let size32
   (#k: parser_kind)
   (#t: Type0)

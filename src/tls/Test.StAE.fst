@@ -40,7 +40,7 @@ private let pre_id (role:role) =
 
 let id12 = pre_id Client
 
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 
 let id13 =
   let cr  = Bytes.create 32ul 0z in

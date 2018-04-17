@@ -269,6 +269,7 @@ unfold type mem_package (#ip:ipkg) (p:local_pkg ip) =
 
 #set-options "--z3rlimit 100 --admit_smt_queries true"
 //unfold
+noextract
 let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
   let footprint_extend (s:rset) (i:ip.t{ip.registered i}) (k:p.key i) =
     rset_union s (p.local_footprint k)

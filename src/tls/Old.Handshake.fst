@@ -53,7 +53,7 @@ type digest = l:bytes{length l <= 32}
 
 type finishedId = i:pre_finishedId{valid (I_FINISHED i)}
 
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 type machineState =
   | C_Idle
   | C_Wait_ServerHello
@@ -136,7 +136,7 @@ let forall_epochs (s:hs) h (p:(epoch s.region (nonce s) -> Type)) =
 //epochs in h1 extends epochs in h0 by one
 
 (*
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 let fresh_epoch h0 s h1 =
   let es0 = logT s h0 in
   let es1 = logT s h1 in
@@ -184,7 +184,7 @@ let hs_inv (s:hs) (h: HS.mem) = True
 //A framing lemma with a very trivial proof, because of the way stateT abstracts the state-dependent parts
 *)
 
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 let frame_iT_trivial  (s:hs) (rw:rw) (h0:HS.mem) (h1:HS.mem)
   : Lemma (stateT s h0 = stateT s h1  ==>  iT s rw h0 = iT s rw h1)
   = ()
@@ -498,7 +498,7 @@ let client_ServerHelloDone hs c ske ocr =
       hs.state := C_Wait_CCS2 digestClientFinished;
       InAck false false)
 
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 private val client_ClientFinished_13: hs -> digest -> option HandshakeMessages.cr13 -> (i:finishedId & cfk:KeySchedule.fink i) -> St unit
 let client_ClientFinished_13 hs digestServerFinished ocr cfin_key =
   let mode = Nego.getMode hs.nego in

@@ -43,17 +43,18 @@ let lemma_ecCurveType_of_byte_is_injective ()
 
 (* Parsers *)
 
-inline_for_extraction
 let ecCurveType_parser_kind' = LP.parse_u8_kind
 
 let ecCurveType_parser_kind_metadata = ecCurveType_parser_kind'.LP.parser_kind_metadata
 
-let ecCurveType_parser =
+let ecCurveType_parser: LP.parser ecCurveType_parser_kind ecCurveType =
   lemma_ecCurveType_of_byte_is_injective ();
   LP.parse_u8 `LP.parse_synth` ecCurveType_of_byte 
 
-let ecCurveType_parser32 =
-  lemma_ecCurveType_of_byte_is_injective ();
+inline_for_extraction
+let ecCurveType_parser32: LP.parser32 ecCurveType_parser =
+  [@inline_let]
+  let _ = lemma_ecCurveType_of_byte_is_injective () in
   LP.parse32_synth LP.parse_u8 ecCurveType_of_byte (fun x -> ecCurveType_of_byte x) LP.parse32_u8 ()
 
 
@@ -68,13 +69,14 @@ let lemma_ecCurveType_of_byte_of_ecCurveType ()
   = LP.synth_inverse_intro ecCurveType_of_byte byte_of_ecCurveType
 #reset-options
 
-let ecCurveType_serializer =
+let ecCurveType_serializer: LP.serializer ecCurveType_parser =
   lemma_ecCurveType_of_byte_is_injective ();
   lemma_ecCurveType_of_byte_of_ecCurveType ();
   LP.serialize_synth #ecCurveType_parser_kind #byte #ecCurveType
     LP.parse_u8 ecCurveType_of_byte LP.serialize_u8 byte_of_ecCurveType ()
 
-let ecCurveType_serializer32 =
+inline_for_extraction
+let ecCurveType_serializer32: LP.serializer32 ecCurveType_serializer =
   lemma_ecCurveType_of_byte_is_injective ();
   lemma_ecCurveType_of_byte_of_ecCurveType ();
   LP.serialize32_synth #ecCurveType_parser_kind #byte #ecCurveType

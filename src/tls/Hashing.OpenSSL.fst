@@ -62,7 +62,7 @@ let toCC = function
   | SHA512 -> CoreCrypto.SHA512
 
 // *** by using this file, we assume CoreCrypto is functionally correct and safe ***
-#reset-options "--lax" 
+#reset-options "--admit_smt_queries true" 
 let compute a b = CoreCrypto.hash (toCC a) b   // for now claimed to be pure --- fix as we remove an indirection
 let hmac a k m = CoreCrypto.hmac (toCC a) k m
 

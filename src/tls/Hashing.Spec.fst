@@ -52,7 +52,7 @@ type anyTag = lbytes32 maxTagLen
 let lemma_maxLen (a:alg): Lemma (tagLen a <=^ maxTagLen) = ()
 
 // The hash of the empty string, used in KS
-#set-options "--lax" //17-05-08 TODO size of bytes constants.
+#set-options "--admit_smt_queries true" //17-05-08 TODO size of bytes constants.
 let emptyHash : a:alg -> Tot (tag a) =
   function
   | MD5 -> bytes_of_hex "d41d8cd98f00b204e9800998ecf8427e"
