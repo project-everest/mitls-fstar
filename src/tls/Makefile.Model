@@ -13,23 +13,26 @@ ROOTS    += Handshake.fst
 
 model verify: $(addprefix $(CACHE_DIR)/, $(addsuffix .checked, $(notdir $(ALL_FST_FILES))))
 
+test: model
+	echo No verification-specific tests as of yet.
+
 clean:
 	rm -rf $(DEP_FILE)
 
-ik: $(addprefix $(CACHE_DIR)/, $(addsuffix .fst.checked, \
-Mem \
-Pkg \
-Token.UF1CMA \
-HMAC.UFCMA \
-IV \
-AEAD.Pkg \
-Idx \
-Pkg.Tree \
-KDF \
-KDF.Rekey \
-Extract0 \
-Extract1.PRF \
-Extract1.ODH \
-Extract1 \
-Extract2 \
-KeySchedule))
+# ik: $(addprefix $(CACHE_DIR)/, $(addsuffix .fst.checked, \
+# Mem \
+# Pkg \
+# Token.UF1CMA \
+# HMAC.UFCMA \
+# IV \
+# AEAD.Pkg \
+# Idx \
+# Pkg.Tree \
+# KDF \
+# KDF.Rekey \
+# Extract0 \
+# Extract1.PRF \
+# Extract1.ODH \
+# Extract1 \
+# Extract2 \
+# KeySchedule))

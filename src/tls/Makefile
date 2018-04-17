@@ -18,7 +18,7 @@ model-% verify-%: clean-depend
 quic-%: clean-depend
 	$(MAKE) -C ../../apps/quicMinusNet $* -k
 
-test: clean-depend kremlin-test ocaml-test quic-test
+test: clean-depend model-test kremlin-test ocaml-test quic-test
 
 clean: ocaml-clean kremlin-clean quic-clean model-clean
 	rm -rf $(EXTRACT_DIR)/Kremlin $(EXTRACT_DIR)/OCaml $(EXTRACT_DIR)/copied
