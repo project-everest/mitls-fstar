@@ -735,13 +735,15 @@ let client_HelloRetryRequest #region (ns:t region Client) hrr (s:option share) =
   and outputs the negotiated version if true
 *)
 
+private let not_unknown_version x = not (UnknownVersion? x)
+
 // usable on both sides; following https://tlswg.github.io/tls13-spec/#rfc.section.4.2.1
 let offered_versions min_pv (o: offer): result (l: list protocolVersion {l <> []}) =
   match find_supported_versions o with
   | Some (ServerPV _)
   | Some (Extensions.ClientPV []) ->
     Error(AD_protocol_version, "protocol version negotiation: empty proposal")
-  | Some (ClientPV vs) -> Correct vs  // might check no proposal is below min_pv
+  | Some (ClientPV vs) -> Correct (List.Tot.filter not_unknown_version vs) // might check no proposal is below min_pv
   | None -> // use legacy offer
       match o.ch_protocol_version, min_pv with
       | TLS_1p0, TLS_1p0 -> Correct [TLS_1p0]
@@ -1256,16 +1258,18 @@ let get_sni (o:offer) : bytes =
   | Some (Extensions.E_server_name ((SNI_DNS sni)::_)) -> sni
   | _ -> empty_bytes
 
+let get_alpn (o:offer) : alpn =
+  match find_client_extension Extensions.E_alpn? o with
+  | None -> []
+  | Some (Extensions.E_alpn cal) -> cal
+
 let nego_alpn (o:offer) (cfg:config) : bytes =
   match cfg.alpn with
   | None -> empty_bytes
   | Some sal ->
-    match find_client_extension Extensions.E_alpn? o with
-    | None -> empty_bytes
-    | Some (Extensions.E_alpn cal) ->
-      match TLSConstants.filter_aux sal TLSConstants.mem_rev cal with
-      | a :: _ -> a
-      | _ -> empty_bytes
+    match TLSConstants.filter_aux sal TLSConstants.mem_rev (get_alpn o) with
+    | a :: _ -> a
+    | _ -> empty_bytes
 
 irreducible val computeServerMode:
   cfg: config ->

@@ -213,6 +213,18 @@ extern quic_result MITLS_CALLCONV FFI_mitls_quic_process(quic_state *state, cons
 extern int MITLS_CALLCONV FFI_mitls_quic_get_exporter(quic_state *state, int early, /* out */ quic_secret *secret);
 extern void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state);
 
+typedef struct {
+  const unsigned char *sni;
+  size_t sni_len;
+  const unsigned char *alpn;
+  size_t alpn_len;
+  const unsigned char *extensions;
+  size_t extensions_len;
+  const unsigned char *hrr_cookie;
+  size_t hrr_cookie_len;
+} mitls_hello_summary;
+
+extern int MITLS_CALLCONV FFI_mitls_get_hello_summary(const unsigned char *buffer, size_t buffer_len, mitls_hello_summary *summary);
 extern int MITLS_CALLCONV FFI_mitls_find_custom_extension(int is_server, const unsigned char *exts, size_t exts_len, uint16_t ext_type, /*out*/ unsigned char **ext_data, /*out*/ size_t *ext_data_len);
 
 // The functions below should only be used on client extensions

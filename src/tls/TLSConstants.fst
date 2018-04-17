@@ -117,12 +117,6 @@ type rw =
   | Reader
   | Writer
 
-
-
-
-
-
-
 /// 18-02-22 QD fodder?
 ///
 (** Protocol version negotiated values *)
@@ -178,18 +172,21 @@ val pinverse_version: x:_ -> Lemma
 let pinverse_version x = ()
 
 // DRAFT#28
-// to be used *only* in ServerHello.version.
-// https://tlswg.github.io/tls13-spec/#rfc.section.4.2.1
+// to be used *only* in supported_versions extension
 let draft = 28z
 let versionBytes_draft: protocolVersion -> Tot (lbytes 2) = function
   | TLS_1p3 -> twobytes ( 127z, draft )
   | pv -> versionBytes pv
+
+let parseVersion_drafts v =
+  if cbyte2 v = (127z, draft) then Correct TLS_1p3
+  else parseVersion v
+
 val parseVersion_draft: pinverse_t versionBytes_draft
 let parseVersion_draft v =
   match cbyte2 v with
   | (127z, d) ->
-      if d = draft
-      then Correct TLS_1p3
+      if d = draft then Correct TLS_1p3
       else Error(AD_decode_error, "Refused to parse unknown draft "^print_bytes v^": expected TLS 1.3#"^UInt8.to_string draft)
   | (3z, 4z) -> Error(AD_decode_error, "Refused to parse TLS 1.3 final version: expected TLS 1.3#"^UInt8.to_string draft)
   | _ ->
