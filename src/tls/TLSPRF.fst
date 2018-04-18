@@ -22,6 +22,7 @@ module U32 = FStar.UInt32
 type key = bytes //18-02-14 TODO length
 let coerce (k:bytes) : key = k
 
+#set-options "--admit_smt_queries true"
 
 (* SSL3 *)
 (* 17-02-02 deprecated, and not quite typechecking...
