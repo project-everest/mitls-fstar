@@ -212,6 +212,7 @@ let leak (#i:id) (#rw:rw) (st:state i rw)
 // to the low-level crypto which currently shares the region between
 // the reader and writer (this is not sound for some buffers in that
 // region, for instance, the writer may write the the reader's key buffer)
+#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1 --admit_smt_queries true"
 let genReader (parent:rgn) (#i:id) (st:writer i) : ST (reader i)
   (requires (fun h -> HS.disjoint parent (region st)))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
@@ -228,7 +229,6 @@ let genReader (parent:rgn) (#i:id) (st:writer i) : ST (reader i)
     assume false;
     as_lowc_state st, salt_of_state st
 
-#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1 --admit_smt_queries true"
 let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
   : ST (state i Writer)
   (requires (fun h -> ~(authId i)))
