@@ -2,7 +2,7 @@ module Record
 
 module HS = FStar.HyperStack
 
-(* (optional) encryption and processing of the outer (untrusted) record format *)
+(* (optional) encryption and processing of the outer, untrusted record format *)
 
 open FStar.Seq
 open FStar.Bytes
@@ -48,11 +48,15 @@ private let parseVersion (x: lbytes 2) = parseVersion (p_of_f x)
 // the "outer" header has the same format for all versions of TLS
 // but TLS 1.3 fakes its content type and protocol version.
 
-private type header = b:lbytes 5 // for all TLS versions
+private let headerLen = 5ul 
+private type header = b:lbytes (v headerLen) // for all TLS versions
 
 private let fake = ctBytes Application_data @| versionBytes TLS_1p2
 
-// this is the outer packet; the *caller* should switch from 1.3 to 1.0 whenever data is encrypted.
+// this is the outer packet; to comply with legacy version signalling,
+// the *caller* should switch from 1.3 to 1.0 whenever data is
+// encrypted.
+#set-options "--z3rlimit 100" // 18-04-18 now required
 private inline_for_extraction 
 let makeHeader ct plain ver (length:nat {repr_bytes length <= 2}): header =
   let ct_ver = 
@@ -72,13 +76,13 @@ let sendPacket tcp ct plain ver (data: (b:bytes { repr_bytes (length b) <= 2})) 
   // still some margin for progress to avoid intermediate copies
   let header = makeHeader ct plain ver (length data) in 
   trace ("record headers: "^print_bytes header);
-  let res = Transport.send tcp (BufferBytes.from_bytes header) 5ul in
-  if res = 5l then 
+  let res = Transport.send tcp (BufferBytes.from_bytes header) headerLen in
+  if res = Int.Cast.uint32_to_int32 headerLen then 
     let res = Transport.send tcp (BufferBytes.from_bytes data) (len data) in
     if Int32.v res = length data
     then Correct()
-    else Error(Printf.sprintf "Transport.send returned %l" res)
-  else   Error(Printf.sprintf "Transport.send returned %l" res)
+    else Error(Printf.sprintf "Transport.send(header) returned %l" res)
+  else   Error(Printf.sprintf "Transport.send(payload) returned %l" res)
 
 private type parsed_header = result (contentType
                            * protocolVersion
@@ -114,32 +118,35 @@ type partial =
   | Header
   | Body: ct: contentType -> pv: protocolVersion -> partial
 
-private let maxlen = UInt32.uint_to_t (5 + max_TLSCiphertext_fragment_length)
+private let maxlen = headerLen +^ UInt32.uint_to_t max_TLSCiphertext_fragment_length
 private type input_buffer = b: Buffer.buffer UInt8.t {Buffer.length b = v maxlen}
 
 //TODO index by region
 noeq abstract type input_state = | InputState:
   pos: ref (len:UInt32.t {len <=^ maxlen}) ->
-  b: input_buffer {Buffer.frameOf b = Mem.frameOf pos} -> input_state
+  b: input_buffer {
+    Buffer.frameOf b = Mem.frameOf pos /\ 
+    Buffer.length b = v maxlen} -> 
+  input_state
 
 // type input_state = {
 //   pos: ref (len:UInt32.t {len <=^ maxlen});
 //   b: input_buffer }
 
-private let parseHeaderBuffer (b: Buffer.buffer UInt8.t {Buffer.length b = 5}) : ST parsed_header
+private let parseHeaderBuffer (b: Buffer.buffer UInt8.t {Buffer.length b = v headerLen}) : ST parsed_header
   (requires (fun h0 -> Buffer.live h0 b))
   (ensures (fun h0 hdr h1 -> modifies_none h0 h1 /\ hdr = parseHeader (Bytes.hide (Buffer.as_seq h0 b))))
 =
   // some margin for progress
-  parseHeader (BufferBytes.to_bytes 5 b)
+  parseHeader (BufferBytes.to_bytes (v headerLen) b)
 
 abstract let input_inv h0 (s: input_state) = 
   Mem.contains h0 s.pos /\
   Buffer.live h0 s.b /\
   ( let pv = UInt32.v (sel h0 s.pos) in 
     5 <= pv ==> (
-    match parseHeader (Bytes.hide (Buffer.as_seq h0 (Buffer.sub s.b 0ul 5ul))) with
-    | Correct (_,_,length) -> pv <= 5 + length
+    match parseHeader (Bytes.hide (Buffer.as_seq h0 (Buffer.sub s.b 0ul headerLen))) with
+    | Correct (_,_,length) -> pv <= v headerLen + length
     | _ -> False))
 
 private val waiting_len:  s: input_state -> ST UInt32.t
@@ -148,17 +155,17 @@ private val waiting_len:  s: input_state -> ST UInt32.t
     modifies_none h0 h1 /\ 
     ( let pv = UInt32.v (sel h0 s.pos) in 
       let l = UInt32.v len in 
-      ( pv + l = 5 \/ 
-        ( match parseHeader (Bytes.hide (Buffer.as_seq h0 (Buffer.sub s.b 0ul 5ul))) with
-        | Correct (_,_,length) -> pv + l == 5 + length 
+      ( pv + l = v headerLen \/ 
+        ( match parseHeader (Bytes.hide (Buffer.as_seq h0 (Buffer.sub s.b 0ul headerLen))) with
+        | Correct (_,_,length) -> pv + l == v headerLen + length 
         | _ -> False))))
 
 let waiting_len s =
-  if !s.pos <^ 5ul
-  then 5ul -^ !s.pos
+  if !s.pos <^ headerLen
+  then headerLen -^ !s.pos
   else
-    match parseHeaderBuffer (Buffer.sub s.b 0ul 5ul) with
-    | Correct (_,_,length) -> 5ul +^ uint_to_t length -^ !s.pos
+    match parseHeaderBuffer (Buffer.sub s.b 0ul headerLen) with
+    | Correct (_,_,length) -> headerLen +^ uint_to_t length -^ !s.pos
       //let pv = UInt32.v !s.pos in 
       //assert(length <= max_TLSCiphertext_fragment_length);
       //assert(pv <= 5 + length);
@@ -187,17 +194,17 @@ type read_result =
 
 val read: Transport.t -> s: input_state -> ST read_result
   (requires fun h0 -> input_inv h0 s)
-  (ensures fun h0 _ h1 ->
-    let r = Mem.frameOf s.pos in
+  (ensures fun h0 _ h1 -> True)
+    // let r = Mem.frameOf s.pos in
     // Mem.modifies_one r h0 h1 /\
-    input_inv h1 s
-  )
+    // input_inv h1 s
 // Refine by adding this?
 //    Buffer.modifies_bufs_and_refs
 //      (Buffer.only s.b)
 //      (Set.singleton (Heap.addr_of (HS.as_ref s.pos)))
 //      h0 h1)
 
+//#reset-options
 //#set-options "--detail_errors"
 let rec read tcp s =
   let h0 = ST.get() in 
@@ -225,9 +232,9 @@ let rec read tcp s =
         // should probably ReadWouldBlock instead when non-blocking
         read tcp s
       else
-        if !s.pos = 5ul // we have buffered the record header
+        if !s.pos = headerLen // we have buffered the record header
         then (
-          match parseHeaderBuffer s.b with
+          match parseHeaderBuffer (Buffer.sub s.b 0ul headerLen) with
           | Error e -> ReadError e
           | Correct(ct,pv,length) ->
             if length = 0 then
@@ -239,11 +246,11 @@ let rec read tcp s =
           match parseHeaderBuffer s.b with
           | Correct(ct,pv,length) -> (
             let len = UInt32.uint_to_t length in
-            let b = Buffer.sub s.b 5ul len in
+            let b = Buffer.sub s.b headerLen len in
             let payload = BufferBytes.to_bytes length b in
             s.pos := 0ul;
             Received ct pv payload ))
 
-//18-01-24 recheck async I
+//18-01-24 recheck async 
 //    if length fresh = 0 then
 //      ReadError(AD_internal_error,"TCP close") // otherwise we loop...
