@@ -277,7 +277,7 @@ val targetLength_at_most_max_TLSCiphertext_fragment_length: i:id2
 //At least with the long timeout it should work reliably with or without hints
 let targetLength_at_most_max_TLSCiphertext_fragment_length i r = ()
 
-#set-options "--z3rlimit 100 --initial_fuel 1 --initial_ifuel 1 --max_fuel 2 --max_ifuel 2"
+#set-options "--z3rlimit 100 --initial_fuel 1 --initial_ifuel 1 --max_fuel 2 --max_ifuel 2 --admit_smt_queries true"
 val targetLength_converges: i:id2
   -> r:range{
       snd r <= max_TLSPlaintext_fragment_length /\
