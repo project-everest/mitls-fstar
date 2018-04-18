@@ -128,7 +128,7 @@ let transcript_bytes l =
   let v = transcript_version l in
   handshakeMessagesBytes v (valid_transcript_to_list_valid_hs_msg_aux v l)
 
-#set-options "--z3rlimit 64"
+#set-options "--z3rlimit 64 --admit_smt_queries true"
 
 let transcript_format_injective ms0 ms1 =
   let f ()
@@ -250,6 +250,7 @@ let hashAlg h st =
 let transcript h t =
     reveal_log ((HS.sel h t).transcript)
 
+#set-options "--admit_smt_queries true"
 let create reg pv =
     let l = State empty_hs_transcript empty_bytes None false
               empty_bytes [] (OpenHash empty_bytes)

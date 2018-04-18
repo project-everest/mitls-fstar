@@ -56,7 +56,7 @@ let alertBytes ad =
     | AD_unsupported_extension ->              twobytes (2z, 110z)
     | AD_no_application_protocol ->            twobytes (2z, 120z)
 
-#set-options "--z3rlimit 64"
+#set-options "--z3rlimit 64 --admit_smt_queries true"
 
 val parse: b:lbytes 2 -> Tot
   (r: result alertDescription { forall ad. (r = Correct ad ==> b == alertBytes ad) })

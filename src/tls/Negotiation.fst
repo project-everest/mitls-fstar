@@ -36,6 +36,7 @@ let string_of_option_extensions (o: option extensions) = match o with
   | None -> "None"
   | Some es -> "[ "^Extensions.string_of_extensions es^"]"
 
+#reset-options "--admit_smt_queries true"
 let string_of_ciphersuite (cs:cipherSuite) =
   match name_of_cipherSuite cs with
   | Correct TLS_NULL_WITH_NULL_NULL -> "TLS_NULL_WITH_NULL_NULL"
@@ -108,6 +109,7 @@ let string_of_ciphersuite (cs:cipherSuite) =
   | Correct TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256"
 
   | Error z -> "Unknown ciphersuite"
+#reset-options
 
 let string_of_signatureScheme = function
   | RSA_PKCS1_SHA256       -> "RSA_PKCS1_SHA256"
@@ -398,6 +400,7 @@ let ns_rel (#r:role) (#cfg:config) (#resume:resumeInfo r)
 assume val ns_rel_monotonic: #r:role -> #cfg:config -> #resume:resumeInfo r ->
   Lemma (Preorder.preorder_rel (* (negotiationState r cfg resume) *) (ns_rel #r #cfg #resume))
 
+#reset-options "--admit_smt_queries true"
 noeq type t (region:rgn) (role:TLSConstants.role) : Type0 =
   | NS:
     cfg: config -> // local configuration
@@ -406,7 +409,6 @@ noeq type t (region:rgn) (role:TLSConstants.role) : Type0 =
     state: HST.m_rref region (negotiationState role cfg resume) ns_rel ->
     t region role
 
-#set-options "--admit_smt_queries true"
 val computeOffer: r:role -> cfg:config -> resume:TLSInfo.resumeInfo r -> nonce:TLSInfo.random
   -> ks:option CommonDH.keyShare -> list (PSK.pskid * PSK.pskInfo) -> UInt32.t
   -> Tot offer
