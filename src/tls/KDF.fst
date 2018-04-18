@@ -458,7 +458,7 @@ let kdf_dt (#d:nat) (t:kdf_subtree d) : mem_table (secret d (u_of_t t)) = Pkg?.d
 /// The well-formedness condition on the derived label (opaque from
 /// the viewpoint of the KDF) enforces
 ///
-inline_for_extraction
+noextract
 val derive:
   #d: nat ->
   #t: kdf_subtree d ->
@@ -478,6 +478,7 @@ val derive:
     tree_invariant t h1 /\
     (Pkg?.post (child (u_of_t t) lbl)) a' (dsnd r) h1)
 
+noextract
 let derive #d #t #i k a lbl ctx a' =
   let u = u_of_t t in
   let dt = kdf_dt t in

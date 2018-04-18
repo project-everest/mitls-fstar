@@ -17,6 +17,7 @@ let ideal = Flags.ideal_HMAC // secret idealization flag for the UFCMA assumptio
 
 type safe (#ip:ipkg) (i:ip.Pkg.t) = b2t ideal /\ ip.Pkg.honest i
 
+noextract
 private let is_safe (#ip:ipkg) (i:ip.Pkg.t{ip.Pkg.registered i}): ST bool 
   (requires fun h0 -> True)
   (ensures fun h0 b h1 -> modifies_none h0 h1 /\ (b <==> safe i))
@@ -98,6 +99,7 @@ let footprint (#ip:ipkg) (#i:ip.Pkg.t {ip.Pkg.registered i}) (k:key ip i):
     | RealKey _ -> rset_empty ()
   else rset_empty ()
 
+noextract
 private let get_key (#ip:ipkg) (#i:ip.Pkg.t{ip.Pkg.registered i}) (k:key ip i)
   : concrete_key
   =

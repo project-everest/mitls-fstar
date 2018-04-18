@@ -135,7 +135,7 @@ let create_nonce (#i:id) (#rw:rw) (st:state i rw) (n:nonce i)
     r
 
 (* Necessary for injectivity of the nonce-to-IV construction in TLS 1.3 *)
-#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
+#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1 --admit_smt_queries true"
 let lemma_nonce_iv (#i:id) (#rw:rw) (st:state i rw) (n1:nonce i) (n2:nonce i)
   : Lemma (create_nonce st n1 = create_nonce st n2 ==> n1 = n2)
   =
@@ -147,6 +147,7 @@ let lemma_nonce_iv (#i:id) (#rw:rw) (st:state i rw) (n1:nonce i) (n2:nonce i)
   | _ ->
     if (salt @| n1) = (salt @| n2) then
       () //lemma_append_inj salt n1 salt n2 //TODO bytes NS 09/27
+#reset-options
 
 let empty_log (#i:id) (#rw:rw) (st:state i rw) h =
   match use_provider() with
@@ -227,6 +228,7 @@ let genReader (parent:rgn) (#i:id) (st:writer i) : ST (reader i)
     assume false;
     as_lowc_state st, salt_of_state st
 
+#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1 --admit_smt_queries true"
 let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
   : ST (state i Writer)
   (requires (fun h -> ~(authId i)))
@@ -245,6 +247,7 @@ let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
     in
   dbg ((prov())^": COERCE(K="^(hex_of_bytes k)^")");
   w
+#reset-options
 
 type plainlen = n:nat{n <= max_TLSPlaintext_fragment_length}
 (* irreducible *)
