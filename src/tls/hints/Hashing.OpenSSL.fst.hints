@@ -6,30 +6,18 @@
       1,
       2,
       1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "assumption_Prims.HasEq_int", "equation_FStar.UInt32.n",
-        "function_token_typing_FStar.UInt32.n",
-        "haseqFStar.Bytes_Tm_refine_1ec852aff28ab568526a8c54c3e853ec"
-      ],
+      [ "@query", "assumption_FStar.UInt32.t__uu___haseq" ],
       0,
-      "71a9bc13d6bbc50374713b639647e591"
+      "b287b6655acf8943c4f20fa46bb4b59f"
     ],
     [
       "Hashing.OpenSSL.hmac",
       1,
       2,
       1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "assumption_Prims.HasEq_int", "equation_FStar.UInt32.n",
-        "function_token_typing_FStar.UInt32.n",
-        "haseqFStar.Bytes_Tm_refine_1ec852aff28ab568526a8c54c3e853ec"
-      ],
+      [ "@query", "assumption_FStar.UInt32.t__uu___haseq" ],
       0,
-      "471f3b97cbf2b44c69614cd68b5d0350"
+      "9e828fb489c50b9f040479b530cad9dc"
     ],
     [
       "Hashing.OpenSSL.toCC",
@@ -46,7 +34,7 @@
         "fuel_guarded_inversion_Hashing.Spec.alg"
       ],
       0,
-      "fffdf7d7a63e8f758c223e1ffdbad63c"
+      "c46b330fbe1b588093a7b8624d0de717"
     ]
   ]
 ]

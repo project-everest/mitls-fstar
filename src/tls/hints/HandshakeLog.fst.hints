@@ -1,5 +1,5 @@
 [
-  "0!ê\u0019\u0019·˙7Uß\u001ce¥^\u0012\u000f",
+  "çVyˆ>æ˙ûÂ⁄=VW∏èµ",
   [
     [
       "HandshakeLog.gforall",
@@ -13,7 +13,7 @@
         "fuel_guarded_inversion_Prims.list", "subterm_ordering_Prims.Cons"
       ],
       0,
-      "a03ea489fa4e5d3e5df49669b104d0fb"
+      "3e3ce1aaace15b944dbf0ad6a13b7760"
     ],
     [
       "HandshakeLog.append_transcript",
@@ -25,7 +25,7 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_fb118621c0b0f2173d7d8e9b92378a43"
       ],
       0,
-      "1b6889a8211e32bdef5fd0264c335a2a"
+      "cd9316aaa42539e904edd783bf517804"
     ],
     [
       "HandshakeLog.discard",
@@ -40,7 +40,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "d3bfaa39794333c5e4a0b3e8fd56f4c6"
+      "fc95539402575035ccbf9035d11db08f"
     ],
     [
       "HandshakeLog.trace",
@@ -52,7 +52,7 @@
         "equation_DebugFlags.debug_HSL"
       ],
       0,
-      "c2f7459603e3814993cce1bd9b1d4a4d"
+      "7f68af195a06a017468fa3aee9f1056a"
     ],
     [
       "HandshakeLog.reveal_log",
@@ -64,7 +64,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "2bdeb96d4f0a733d92f1c5925a36a729"
+      "3cd202b83a99dd0a3d9fb9f1b31a2f7d"
     ],
     [
       "HandshakeLog.hide_log",
@@ -76,7 +76,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "58217e2bae9183c3112cd796ad50eb52"
+      "d6150cb0bb974297e31e0e44437e0dcd"
     ],
     [
       "HandshakeLog.elift1_def",
@@ -89,7 +89,7 @@
         "typing_FStar.Ghost.elift1"
       ],
       0,
-      "245ebcbf40824bd0d27c9c6daa1b9177"
+      "5e8333162ce2a1eb42d5baf6e011b0c2"
     ],
     [
       "HandshakeLog.bind_log",
@@ -106,7 +106,7 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_18fbdb889da7f69d8cab334b86ce9cfa"
       ],
       0,
-      "0f3cb69c8c3cd01b7c9136cc6ab49465"
+      "ddcd645de5f79489078bb3e1c19a582c"
     ],
     [
       "HandshakeLog.empty_hs_transcript",
@@ -125,7 +125,7 @@
         "projection_inverse_Prims.Nil_a"
       ],
       0,
-      "0ce3d04ca37e28387d4bbc0f0d29b73f"
+      "066710fff3a1cd67e4856f865b2eade4"
     ],
     [
       "HandshakeLog.append_hs_transcript",
@@ -137,7 +137,7 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_3e2c9291fd3b066a107ccf5a30cfc03a"
       ],
       0,
-      "224040bedcac20384b33c5845f4774c3"
+      "ca156412142e1e1009089a04961c264d"
     ],
     [
       "HandshakeLog.extend_hs_transcript",
@@ -149,7 +149,7 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_cc2d11896931b330efd1e867bcf17db1"
       ],
       0,
-      "12a102b1ef84a7ba9c34520f7d645b65"
+      "21cc941ac600cb2d6bd51f67e979765b"
     ],
     [
       "HandshakeLog.gforall_list_to_list_refined",
@@ -173,7 +173,7 @@
         "subterm_ordering_Prims.Cons"
       ],
       0,
-      "564379341c7ab04b8c9958122ff35ec3"
+      "c2a75fe23cb3692758eb1a7faaadb671"
     ],
     [
       "HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux",
@@ -198,7 +198,7 @@
         "token_correspondence_HandshakeMessages.valid_hs_msg_prop"
       ],
       0,
-      "ae20b63ca4299939b54c0346e164f70e"
+      "fae3578edb8179af14de27fa06564c1d"
     ],
     [
       "HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux_inj",
@@ -232,7 +232,7 @@
         "subterm_ordering_Prims.Cons"
       ],
       0,
-      "59beca07901b077ada42d1e488b36cda"
+      "df180074c410323eb8f438896e1286e0"
     ],
     [
       "HandshakeLog.transcript_bytes",
@@ -247,49 +247,7 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_7913c46ed823df5e60659625cd966658"
       ],
       0,
-      "6afa0f7f8734ceb2fa39e955f07df811"
-    ],
-    [
-      "HandshakeLog.narrowTag",
-      1,
-      2,
-      1,
-      [ "@query" ],
-      0,
-      "6867227460103a5237f5bb87be7c0722"
-    ],
-    [
-      "HandshakeLog.narrowTag",
-      2,
-      2,
-      1,
-      [ "@query", "assumption_FStar.UInt32.t__uu___haseq" ],
-      0,
-      "c8a9b2a4d1f1787e33c86313d21e61ba"
-    ],
-    [
-      "HandshakeLog.tags",
-      2,
-      2,
-      1,
-      [ "@query", "assumption_FStar.UInt32.t__uu___haseq" ],
-      0,
-      "2c5402d7d8fd5860841122c29a647007"
-    ],
-    [
-      "HandshakeLog.tags",
-      3,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "assumption_Prims.HasEq_int", "equation_FStar.UInt32.n",
-        "function_token_typing_FStar.UInt32.n",
-        "haseqFStar.Bytes_Tm_refine_1ec852aff28ab568526a8c54c3e853ec"
-      ],
-      0,
-      "ee57e913b700b927e8984c3b0dcd341c"
+      "a66ad3c32d7d0214fb54eb1bcedaae9f"
     ],
     [
       "HandshakeLog.tags_append_aux",
@@ -341,7 +299,7 @@
         "unit_typing"
       ],
       0,
-      "7d23b7d0c3ed709cbb8db5eb715c7735"
+      "f6526628f73e4718faac5fc5ae6c5721"
     ],
     [
       "HandshakeLog.hashState",
@@ -350,7 +308,7 @@
       1,
       [ "@query" ],
       0,
-      "217e725b444f4ba4875241e667220aea"
+      "76eb587fa9484ae7db41d8204d8e7f42"
     ],
     [
       "HandshakeLog.hashState",
@@ -359,7 +317,7 @@
       1,
       [ "@query" ],
       0,
-      "45b8c56d7174d8979d168614bc884b36"
+      "2450402d16a5e5a2722fa559b9f234c8"
     ],
     [
       "HandshakeLog.__proj__OpenHash__item__b",
@@ -368,7 +326,7 @@
       1,
       [ "@query" ],
       0,
-      "456bdfe46060c5e047efcca5a75bed1e"
+      "1f1e11d32b437fac541074bbce8c5b6e"
     ],
     [
       "HandshakeLog.__proj__OpenHash__item__b",
@@ -382,7 +340,7 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_bc7866f3b5c800699baeb12639b77402"
       ],
       0,
-      "4ed00e246f664bc7d1f7ea74424c7364"
+      "49734a7d973de4c74465175d27c81f4e"
     ],
     [
       "HandshakeLog.__proj__FixedHash__item__a",
@@ -396,7 +354,7 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_329949ec8234fbec70abbe9f98e44044"
       ],
       0,
-      "d0da85c0f93db28cd0cc99cad6b78d3e"
+      "dc0fb7a6b2acd28c13e3e54e18459297"
     ],
     [
       "HandshakeLog.__proj__FixedHash__item__state",
@@ -405,7 +363,7 @@
       1,
       [ "@query" ],
       0,
-      "f6db5c6d65bb56b3904279c9037a2ed4"
+      "a4f3f3ed3a7b2864a6e5b6667b32844c"
     ],
     [
       "HandshakeLog.__proj__FixedHash__item__state",
@@ -422,7 +380,7 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_9c63bcef68bdfe52b68de2c53625096a"
       ],
       0,
-      "780a3ff43ccecad1e245929fda4433ca"
+      "e971ddeb994cabf46a50d199adf74492"
     ],
     [
       "HandshakeLog.__proj__FixedHash__item__hashes",
@@ -438,7 +396,7 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_329949ec8234fbec70abbe9f98e44044"
       ],
       0,
-      "d8b71cc02e4b68965020afe70dabe816"
+      "83f9e92596602bfdca6ec17dd640b13e"
     ],
     [
       "HandshakeLog.__proj__State__item__parsed",
@@ -451,7 +409,7 @@
         "projection_inverse_HandshakeLog.State_transcript"
       ],
       0,
-      "62ce8b2246a59afac1a32744b42e68df"
+      "7798ca695aaa0943c92c4925e915439c"
     ],
     [
       "HandshakeLog.__proj__State__item__hashes",
@@ -465,7 +423,7 @@
         "projection_inverse_HandshakeLog.State_transcript"
       ],
       0,
-      "c5b20b2ebc9bc078d1b5f911fba40dee"
+      "f7424da1b076e68702366997af1339a0"
     ],
     [
       "HandshakeLog.modifies_one",
@@ -477,7 +435,7 @@
         "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "eb2f0f04983a569085773d16ae9fb850"
+      "c1f1252d46a3bdb06f8fd6c5662949e5"
     ],
     [
       "HandshakeLog.init",
@@ -497,7 +455,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "28a5689bcc8b412245eaf24defd2cd55"
+      "703f7132be81c38491d6d3bebe25121e"
     ],
     [
       "HandshakeLog.init",
@@ -512,7 +470,7 @@
         "refinement_kinding_QD.TLS_protocolVersion_Tm_refine_e48704b6086454f6959d561c0b2bcd8b"
       ],
       0,
-      "6ff072f3458289378bae81c74ee071e9"
+      "fa87d3a9de61872581071197c63d3388"
     ],
     [
       "HandshakeLog.init",
@@ -525,7 +483,7 @@
         "kinding_TLSConstants.kexAlg@tok"
       ],
       0,
-      "a88c4f31feb32f037838a75b5fe6427b"
+      "f5eec76a91dd3e7ada34227aa217e51f"
     ],
     [
       "HandshakeLog.init",
@@ -540,7 +498,7 @@
         "typing_CommonDH.group"
       ],
       0,
-      "43d8cd66e5ff6a5b5799e73b9eb85038"
+      "41ccffadc55e7c4f909ee83537349fe4"
     ],
     [
       "HandshakeLog.hashAlg",
@@ -558,25 +516,83 @@
         "typing_HandshakeLog.__proj__State__item__hashes"
       ],
       0,
-      "1b90cd01fece86724df52f165c1476dc"
+      "21f506e7d3e14f3b7bd61718768d3918"
     ],
     [
-      "HandshakeLog.setParams",
+      "HandshakeLog.next_fragment",
       2,
       2,
       1,
-      [ "@query" ],
+      [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "c6b8f0576e5fd25aa67abe7d499b56c1"
+      "d41f22e54a072ae894cb2a0868297882"
     ],
     [
-      "HandshakeLog.setParams",
+      "HandshakeLog.next_fragment",
       3,
       2,
       1,
-      [ "@query" ],
+      [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "68163b99d9a9a822c19e9bfc9bc30ecc"
+      "e290c1cd078586411b5da323a0b5da0c"
+    ],
+    [
+      "HandshakeLog.parseMessages",
+      2,
+      2,
+      1,
+      [ "@query", "assumption_HandshakeMessages.handshakeType__uu___haseq" ],
+      0,
+      "bc25e7967afbfc4ef99e058b60472eb5"
+    ],
+    [
+      "HandshakeLog.receive",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion", "bool_typing",
+        "data_elim_FStar.Error.Correct", "disc_equation_FStar.Error.Correct",
+        "disc_equation_FStar.Error.Error",
+        "disc_equation_FStar.Pervasives.Native.None",
+        "disc_equation_FStar.Pervasives.Native.Some",
+        "equation_HandshakeLog.msg", "equation_Hashing.Spec.anyTag",
+        "equation_TLSError.error", "equation_TLSError.result",
+        "function_token_typing_Hashing.Spec.anyTag",
+        "function_token_typing_TLSError.error",
+        "kinding_FStar.Pervasives.Native.option@tok",
+        "kinding_FStar.Pervasives.Native.tuple2@tok",
+        "kinding_HandshakeMessages.hs_msg@tok",
+        "kinding_Hashing.Spec.alg@tok", "kinding_Prims.list@tok",
+        "lemma_FStar.Error.invertOptResult",
+        "lemma_FStar.Pervasives.invertOption",
+        "proj_equation_FStar.Error.Correct__0",
+        "projection_inverse_BoxBool_proj_0",
+        "typing_FStar.Error.uu___is_Correct",
+        "typing_FStar.Pervasives.Native.uu___is_Some"
+      ],
+      0,
+      "be2c16ec26cbf6d12cf289886674ca76"
+    ],
+    [
+      "HandshakeLog.receive_CCS",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion", "bool_typing",
+        "disc_equation_FStar.Error.Correct",
+        "disc_equation_FStar.Error.Error", "equation_HandshakeLog.msg",
+        "equation_Hashing.Spec.anyTag", "equation_TLSError.error",
+        "equation_TLSError.result",
+        "function_token_typing_Hashing.Spec.anyTag",
+        "function_token_typing_TLSError.error",
+        "kinding_FStar.Pervasives.Native.tuple3@tok",
+        "kinding_HandshakeMessages.hs_msg@tok", "kinding_Prims.list@tok",
+        "lemma_FStar.Error.invertOptResult"
+      ],
+      0,
+      "079e9c9e9d8bfa8e059465b8a48b64f8"
     ]
   ]
 ]

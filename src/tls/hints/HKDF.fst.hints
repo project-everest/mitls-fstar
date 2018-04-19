@@ -8,7 +8,7 @@
       1,
       [ "@query" ],
       0,
-      "ef468046728ab9445abbbc3d51eebe05"
+      "cf2eb07d87ce92ee0f8fcdca62e8bea0"
     ],
     [
       "HKDF.expand_int",
@@ -17,7 +17,7 @@
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "0495a4c5a964a228fbb2a93ad9c32209"
+      "a07de27bec3bb3bdda2d547cd7fa9817"
     ],
     [
       "HKDF.expand_int",
@@ -26,7 +26,7 @@
       1,
       [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
       0,
-      "a454b904124f13c39f1416ab01fd00ca"
+      "ec0dfccad4f95d63e8e4af41fd3e35de"
     ],
     [
       "HKDF.tls13_prefix",
@@ -35,7 +35,7 @@
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "ded5ebf3d407ce274333720e611bf959"
+      "4e543bb23b1f2566e6978b48951f3a39"
     ],
     [
       "HKDF.tls13_prefix",
@@ -44,7 +44,7 @@
       1,
       [ "@query" ],
       0,
-      "156993e7882a09a6b1232c3b28d88373"
+      "c4af29f53d569ece079b745de69d4e79"
     ],
     [
       "HKDF.format",
@@ -110,7 +110,7 @@
         "typing_Mem.tls_define_region"
       ],
       0,
-      "4ac0e55bf1e571107f265deba5eaa360"
+      "d048eaf330a5b3b9152fb1796219cc1d"
     ],
     [
       "HKDF.expand_label",
@@ -119,7 +119,7 @@
       1,
       [ "@query", "equation_FStar.HyperStack.ST.modifies_none" ],
       0,
-      "14cba612cf3810c56af0a1dd2b09f2db"
+      "b083e66f211c9faf373cccdc833dbe2b"
     ],
     [
       "HKDF.expand_secret",
@@ -129,20 +129,19 @@
       [
         "@MaxIFuel_assumption", "@query",
         "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "equation_FStar.Bytes.lbytes", "equation_FStar.UInt32.n",
-        "equation_Hashing.Spec.hkey", "equation_Hashing.Spec.lbytes32",
-        "equation_Hashing.Spec.tag", "equation_Hashing.Spec.tagLen",
-        "equation_Hashing.Spec.tagLength", "equation_Prims.nat",
-        "function_token_typing_FStar.UInt32.n",
+        "equation_FStar.Bytes.lbytes32", "equation_FStar.UInt32.n",
+        "equation_Hashing.Spec.hkey", "equation_Hashing.Spec.tag",
+        "equation_Hashing.Spec.tagLen", "equation_Hashing.Spec.tagLength",
+        "equation_Prims.nat", "function_token_typing_FStar.UInt32.n",
         "function_token_typing_FStar.UInt8.t",
         "lemma_FStar.Bytes.length_reveal", "primitive_Prims.op_Multiply",
         "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
+        "refinement_interpretation_FStar.Bytes_Tm_refine_78e6c490611dc4c555ca11ffbdccfc9c",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length"
       ],
       0,
-      "10c7527c99ce81591a98141f8b92a988"
+      "00bfe7cba376e4b20f0d9d35544ccff8"
     ],
     [
       "HKDF.derive_secret",
@@ -214,7 +213,7 @@
         "typing_Mem.tls_define_region"
       ],
       0,
-      "661c794867041a0b3f04fb0013ddfcf0"
+      "d13cb07f83b3c55df0c9a58a74770656"
     ]
   ]
 ]

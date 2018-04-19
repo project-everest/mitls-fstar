@@ -9,15 +9,15 @@
       [
         "@MaxIFuel_assumption", "@query",
         "assumption_Hashing.Spec.alg__uu___haseq",
-        "equation_FStar.Bytes.lbytes", "equation_Hashing.Spec.lbytes32",
-        "equation_Hashing.Spec.tag", "equation_Hashing.Spec.tagLen",
+        "equation_FStar.Bytes.lbytes32", "equation_Hashing.Spec.tag",
+        "equation_Hashing.Spec.tagLen",
         "function_token_typing_FStar.Bytes.bytes",
-        "haseqFStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
+        "haseqFStar.Bytes_Tm_refine_78e6c490611dc4c555ca11ffbdccfc9c",
         "haseqHashing.CRF_Tm_refine_bf005c25f22d9b7d2013cde25556e517",
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "aa15e10bfb526626eb65036ea05ab711"
+      "9c6df5eda3c97e515763d912c4d1237b"
     ],
     [
       "Hashing.CRF.__proj__Computed__item__t",
@@ -29,7 +29,7 @@
         "projection_inverse_Hashing.CRF.Computed_a"
       ],
       0,
-      "2341d18157edcbbcf9dd74d81e9eae4f"
+      "138cb1f2c543abf523ab9efa508599da"
     ],
     [
       "Hashing.CRF.domain",
@@ -38,16 +38,13 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "assumption_Prims.HasEq_int", "equation_FStar.UInt32.n",
+        "assumption_FStar.UInt32.t__uu___haseq",
         "function_token_typing_FStar.Bytes.bytes",
-        "function_token_typing_FStar.UInt32.n",
-        "haseqFStar.Bytes_Tm_refine_1ec852aff28ab568526a8c54c3e853ec",
-        "haseqHashing.CRF_Tm_refine_8027d330919c05f1eabbecd9070001e7",
+        "haseqHashing.CRF_Tm_refine_31fb089f16042d0ab13f590e7b800939",
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "5fe0c5c2e181e9ce6ba8f09f22f6f233"
+      "f2e8cfeb2662c73aad4393750ce16100"
     ],
     [
       "Hashing.CRF.inv",
@@ -56,7 +53,7 @@
       1,
       [ "@query", "assumption_Hashing.CRF.range__uu___haseq" ],
       0,
-      "740605bb64be01ee09b1e20662bf5a23"
+      "c3f313a8784794266c64f01a62ff69de"
     ],
     [
       "Hashing.CRF.table",
@@ -65,7 +62,7 @@
       1,
       [ "@query" ],
       0,
-      "5f5fde0bd7a36683bed9833caf4b277d"
+      "af59ba9eeef8bf948e27f9bf0bfcfcf9"
     ],
     [
       "Hashing.CRF.table",
@@ -74,7 +71,7 @@
       1,
       [ "@query", "assumption_Hashing.CRF.range__uu___haseq" ],
       0,
-      "b916649df17d9c201354d876aad7b7a3"
+      "2d7b9827ac7e3431e40ccbbef1ff95ab"
     ],
     [
       "Hashing.CRF.table",
@@ -92,7 +89,7 @@
         "true_interp"
       ],
       0,
-      "ac5361f621bfbef2197d1a8b06bcdc28"
+      "656fc9a54d13f6bcb8f181d3a9b961cb"
     ],
     [
       "Hashing.CRF.hashed",
@@ -101,7 +98,7 @@
       1,
       [ "@query" ],
       0,
-      "c3532154836e338ae6be9e75919ad5e8"
+      "f8d08b7ece33886eea8294330f83d3bf"
     ],
     [
       "Hashing.CRF.hashed",
@@ -110,7 +107,7 @@
       1,
       [ "@query" ],
       0,
-      "ea89a7b22f30c8180ab63814347f1388"
+      "7f1acf3c47466083be314d8dcc0fb274"
     ],
     [
       "Hashing.CRF.hashed",
@@ -119,7 +116,7 @@
       1,
       [ "@query", "assumption_Hashing.CRF.range__uu___haseq" ],
       0,
-      "e99062803bcbee7b809427408eadf7ed"
+      "db8fcfe8142052c5769947ff4e77e7e3"
     ],
     [
       "Hashing.CRF.crf_injective",
@@ -128,16 +125,13 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "assumption_Prims.HasEq_int", "equation_FStar.UInt32.n",
+        "assumption_FStar.UInt32.t__uu___haseq",
         "function_token_typing_FStar.Bytes.bytes",
-        "function_token_typing_FStar.UInt32.n",
-        "haseqFStar.Bytes_Tm_refine_1ec852aff28ab568526a8c54c3e853ec",
-        "haseqHashing.CRF_Tm_refine_8027d330919c05f1eabbecd9070001e7",
+        "haseqHashing.CRF_Tm_refine_31fb089f16042d0ab13f590e7b800939",
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "863b45031e4debcc32ff695126c71f13"
+      "e87f460f831c6d8dcc7976780bc8bca7"
     ],
     [
       "Hashing.CRF.crf_injective",
@@ -151,7 +145,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "8cababcf7e3b98c393cf860b5251ffa9"
+      "f027386d3838b241b7498fa0d902d8fc"
     ],
     [
       "Hashing.CRF.crf_injective",
@@ -190,7 +184,7 @@
         "typing_Mem.is_tls_rgn", "unit_inversion", "unit_typing"
       ],
       0,
-      "ea1bd78085bd411db125bb9fb759f7ab"
+      "698b5d1d2928b048e22a4154c2d594cd"
     ],
     [
       "Hashing.CRF.crf_injective",
@@ -199,7 +193,7 @@
       1,
       [ "@query", "assumption_Hashing.CRF.range__uu___haseq" ],
       0,
-      "217202538f41611f9abf4fda695fe50e"
+      "4cc994bbe3926110eb7780b30b423050"
     ],
     [
       "Hashing.CRF.crf_injective",
@@ -208,7 +202,7 @@
       1,
       [ "@query", "assumption_Hashing.CRF.range__uu___haseq" ],
       0,
-      "a0a30ec38c995caa4e80bd90fb99fd58"
+      "45dcec2d2f7a5f6fcd7a7b5dacdd5115"
     ],
     [
       "Hashing.CRF.crf_injective",
@@ -217,7 +211,7 @@
       1,
       [ "@query", "assumption_Hashing.CRF.range__uu___haseq" ],
       0,
-      "4821fdc4ddd0c22561fd6dc9f3d68c8a"
+      "ff37ae12cc3f22e1944e734c50758010"
     ],
     [
       "Hashing.CRF.crf_injective",
@@ -226,7 +220,7 @@
       1,
       [ "@query", "assumption_Hashing.CRF.range__uu___haseq" ],
       0,
-      "be21692279d44ac4c7d796c28e37fee4"
+      "e928ab1d1ae5432cb196c9f237246e66"
     ],
     [
       "Hashing.CRF.crf_injective",
@@ -235,7 +229,7 @@
       1,
       [ "@query" ],
       0,
-      "9ef450fe92be583ca4f53aa8c78b2cc1"
+      "d9bbaf21af609a52096fcc72ce1dc444"
     ],
     [
       "Hashing.CRF.crf_injective",
@@ -244,7 +238,7 @@
       1,
       [ "@query", "assumption_Hashing.CRF.range__uu___haseq" ],
       0,
-      "75fd25f62c032645c3cde39e70a7efd4"
+      "303ea5642b9fa461e823fd58fad04009"
     ],
     [
       "Hashing.CRF.crf_injective",
@@ -253,7 +247,7 @@
       1,
       [ "@query" ],
       0,
-      "7b00a4e8d6cb8ee5421ecbc4db022a4e"
+      "e161ab4e070805889d49c8b1fcc1c0c5"
     ],
     [
       "Hashing.CRF.crf_injective",
@@ -262,7 +256,7 @@
       1,
       [ "@query", "assumption_Hashing.CRF.range__uu___haseq" ],
       0,
-      "1614b5e58a8969186299926a1182fdad"
+      "07ccfaeae64867fd9d06fcda85515122"
     ],
     [
       "Hashing.CRF.finalize",
@@ -271,16 +265,13 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "assumption_Prims.HasEq_int", "equation_FStar.UInt32.n",
+        "assumption_FStar.UInt32.t__uu___haseq",
         "function_token_typing_FStar.Bytes.bytes",
-        "function_token_typing_FStar.UInt32.n",
-        "haseqFStar.Bytes_Tm_refine_1ec852aff28ab568526a8c54c3e853ec",
-        "haseqHashing.CRF_Tm_refine_8027d330919c05f1eabbecd9070001e7",
+        "haseqHashing.CRF_Tm_refine_31fb089f16042d0ab13f590e7b800939",
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "e486a2e31ddc9f3578c15a67ba7a4347"
+      "0b0232715745ecf1f0aecf789898924f"
     ],
     [
       "Hashing.CRF.test",
@@ -344,7 +335,7 @@
         "typing_Mem.tls_define_region"
       ],
       0,
-      "dfb61d106957560b58b36a23187def4e"
+      "c76daf47aa3feec7fb0352a2f130a896"
     ],
     [
       "Hashing.CRF.test",
@@ -353,16 +344,13 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "assumption_Prims.HasEq_int", "equation_FStar.UInt32.n",
+        "assumption_FStar.UInt32.t__uu___haseq",
         "function_token_typing_FStar.Bytes.bytes",
-        "function_token_typing_FStar.UInt32.n",
-        "haseqFStar.Bytes_Tm_refine_1ec852aff28ab568526a8c54c3e853ec",
-        "haseqHashing.CRF_Tm_refine_8027d330919c05f1eabbecd9070001e7",
+        "haseqHashing.CRF_Tm_refine_31fb089f16042d0ab13f590e7b800939",
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "189fcb720164245b92e9ff08f6262441"
+      "1a6939ba3ec9875887c34f63f627abfb"
     ],
     [
       "Hashing.CRF.test",
@@ -371,16 +359,13 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "assumption_Prims.HasEq_int", "equation_FStar.UInt32.n",
+        "assumption_FStar.UInt32.t__uu___haseq",
         "function_token_typing_FStar.Bytes.bytes",
-        "function_token_typing_FStar.UInt32.n",
-        "haseqFStar.Bytes_Tm_refine_1ec852aff28ab568526a8c54c3e853ec",
-        "haseqHashing.CRF_Tm_refine_8027d330919c05f1eabbecd9070001e7",
+        "haseqHashing.CRF_Tm_refine_31fb089f16042d0ab13f590e7b800939",
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "7015375735b910bedc9b80c51a11d56c"
+      "d67432d2bfecfafc207347d67aa824ea"
     ]
   ]
 ]
