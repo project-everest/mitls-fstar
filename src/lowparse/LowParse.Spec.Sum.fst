@@ -27,10 +27,12 @@ val parse_tagged_union
   (p: (t: tag_t) -> Tot (parser k (refine_with_tag tag_of_data t)))
 : Tot (parser (and_then_kind kt k) data_t)
 
+#set-options "--z3rlimit 16"
 let parse_tagged_union #kt #tag_t pt #data_t tag_of_data #k p =
   pt `and_then` (fun (tg: tag_t) ->
     parse_synth #k #(refine_with_tag tag_of_data tg) (p tg) (synth_tagged_union_data tag_of_data tg)
   )
+#reset-options
 
 let bare_serialize_tagged_union
   (#kt: parser_kind)

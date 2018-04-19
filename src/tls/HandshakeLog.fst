@@ -382,6 +382,7 @@ let send_CCS_tag #a l m cf =
   l := State t st.outgoing nk cf st.incoming st.parsed h st.pv st.kex st.dh_group;
   tg
 
+#set-options "--admit_smt_queries true" 
 // TODO require or check that both flags are clear before the call
 let send_signals l next_keys1 complete1 =
   let State transcript outgoing outgoing_next_keys0 outgoing_complete0 incoming parsed hashes pv kex dh_group = !l in
@@ -392,7 +393,8 @@ let send_signals l next_keys1 complete1 =
     | Some (enable_appdata,skip_0rtt) -> Some (enable_appdata, None, skip_0rtt)
     | None -> None in
   l := State transcript outgoing outgoing_next_keys1 complete1  incoming parsed hashes pv kex dh_group
- 
+#reset-options
+
 let next_fragment l (i:id) =
   let st = !l in
   // do we have a fragment to send?

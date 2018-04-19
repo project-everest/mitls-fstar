@@ -1,6 +1,4 @@
 module AEAD_GCM
-module HST = FStar.HyperStack.ST //Added automatically
-module HS = FStar.HyperStack //Added automatically
 // AEAD-GCM mode for the TLS record layer, as specified in RFC 5288.
 // We support both AES_128_GCM and AES_256_GCM, differing only in their key sizes
 
@@ -22,6 +20,8 @@ open FStar.Monotonic.Seq
 
 module Range = Range
 module AEAD = AEADProvider
+module HST = FStar.HyperStack.ST
+module HS = FStar.HyperStack
 
 type id = i:id{ ID12? i /\ AEAD? (aeAlg_of_id i) }
 let alg (i:id) = let AEAD ae _ = aeAlg_of_id i in ae
