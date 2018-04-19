@@ -10,8 +10,7 @@
         "@MaxIFuel_assumption", "@query",
         "Prims_pretyping_ae567c2fb75be05905677af440075565", "bool_inversion",
         "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_FStar.UInt32.n", "equation_FStar.UInt8.byte",
-        "equation_LowParse.Bytes.byte",
+        "equation_FStar.UInt32.n", "equation_LowParse.Bytes.byte",
         "equation_LowParse.Spec.Base.consumed_length", "equation_Prims.nat",
         "function_token_typing_FStar.UInt32.n",
         "kinding_FStar.Pervasives.Native.tuple2@tok",
@@ -23,7 +22,7 @@
         "typing_LowParse.Spec.Base.consumed_length"
       ],
       0,
-      "a6466bcdfe56994a6d24a5b47633f04c"
+      "0d42c2809f9e8b8590324846e740f485"
     ],
     [
       "LowParse.Spec.Base.no_lookahead_weak_on_ext",
@@ -77,8 +76,7 @@
         "@MaxIFuel_assumption", "@query",
         "Prims_pretyping_ae567c2fb75be05905677af440075565", "bool_inversion",
         "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_FStar.UInt32.n", "equation_FStar.UInt8.byte",
-        "equation_LowParse.Bytes.byte",
+        "equation_FStar.UInt32.n", "equation_LowParse.Bytes.byte",
         "equation_LowParse.Spec.Base.consumed_length", "equation_Prims.nat",
         "function_token_typing_FStar.UInt32.n",
         "kinding_FStar.Pervasives.Native.tuple2@tok",
@@ -120,8 +118,7 @@
         "@MaxIFuel_assumption", "@query",
         "Prims_pretyping_ae567c2fb75be05905677af440075565", "bool_inversion",
         "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_FStar.UInt32.n", "equation_FStar.UInt8.byte",
-        "equation_LowParse.Bytes.byte",
+        "equation_FStar.UInt32.n", "equation_LowParse.Bytes.byte",
         "equation_LowParse.Spec.Base.consumed_length", "equation_Prims.nat",
         "function_token_typing_FStar.UInt32.n",
         "kinding_FStar.Pervasives.Native.tuple2@tok",
@@ -203,8 +200,8 @@
         "@MaxIFuel_assumption", "@query",
         "Prims_pretyping_ae567c2fb75be05905677af440075565",
         "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_FStar.UInt32.n", "equation_FStar.UInt8.byte",
-        "equation_LowParse.Bytes.byte", "equation_LowParse.Bytes.bytes",
+        "equation_FStar.UInt32.n", "equation_LowParse.Bytes.byte",
+        "equation_LowParse.Bytes.bytes",
         "equation_LowParse.Spec.Base.consumes_all",
         "equation_LowParse.Spec.Base.no_lookahead_weak",
         "equation_LowParse.Spec.Base.no_lookahead_weak_on",
@@ -238,8 +235,7 @@
         "data_elim_FStar.Pervasives.Native.Mktuple2",
         "data_elim_FStar.Pervasives.Native.Some",
         "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_FStar.UInt32.n", "equation_FStar.UInt8.byte",
-        "equation_LowParse.Bytes.byte",
+        "equation_FStar.UInt32.n", "equation_LowParse.Bytes.byte",
         "equation_LowParse.Spec.Base.consumed_length",
         "equation_LowParse.Spec.Base.parse",
         "equation_LowParse.Spec.Base.parses_at_least", "equation_Prims.nat",
@@ -277,8 +273,8 @@
         "Prims_pretyping_ae567c2fb75be05905677af440075565", "bool_inversion",
         "data_elim_FStar.Pervasives.Native.Some",
         "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_FStar.UInt32.n", "equation_FStar.UInt8.byte",
-        "equation_LowParse.Bytes.byte", "equation_LowParse.Bytes.bytes",
+        "equation_FStar.UInt32.n", "equation_LowParse.Bytes.byte",
+        "equation_LowParse.Bytes.bytes",
         "equation_LowParse.Spec.Base.consumed_length",
         "equation_LowParse.Spec.Base.injective",
         "equation_LowParse.Spec.Base.injective_postcond",
@@ -373,8 +369,7 @@
         "data_elim_FStar.Pervasives.Native.Mktuple2",
         "data_elim_FStar.Pervasives.Native.Some",
         "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_FStar.UInt32.n", "equation_FStar.UInt8.byte",
-        "equation_LowParse.Bytes.byte",
+        "equation_FStar.UInt32.n", "equation_LowParse.Bytes.byte",
         "equation_LowParse.Spec.Base.consumed_length",
         "equation_LowParse.Spec.Base.is_constant_size_parser",
         "equation_LowParse.Spec.Base.parse",
@@ -407,7 +402,7 @@
         "fuel_guarded_inversion_LowParse.Spec.Base.parser_subkind"
       ],
       0,
-      "b6c3ada8e0e39a9ca64eeeffab352355"
+      "579e87afd350fc3e88431fd362573fbe"
     ],
     [
       "LowParse.Spec.Base.parser_kind_metadata_t",
@@ -416,7 +411,7 @@
       1,
       [ "@query", "assumption_Prims.HasEq_bool" ],
       0,
-      "4462574ac0c18ab34d64491bafb423b0"
+      "7739e277e441f00be20009cb7a6eb373"
     ],
     [
       "LowParse.Spec.Base.parser_kind'",
@@ -439,7 +434,7 @@
         "kinding_LowParse.Spec.Base.parser_subkind@tok"
       ],
       0,
-      "862d8bb6df446e32c1a263e2562963bb"
+      "15150d9821b85a27bbf3db858ff532e1"
     ],
     [
       "LowParse.Spec.Base.strong_parser_kind",
@@ -456,7 +451,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "2a02c76a171ffae1da7489ddc702d26b"
+      "7a91833ec377d0e7d111a6831ec7fb7c"
     ],
     [
       "LowParse.Spec.Base.parser_kind_prop_ext",
@@ -555,12 +550,11 @@
         "LowParse.Spec.Base_pretyping_e24e8cabdb5c58cdc1d812d5f6f285ec",
         "Prims_pretyping_ae567c2fb75be05905677af440075565", "bool_inversion",
         "constructor_distinct_FStar.Pervasives.Native.Some",
-        "data_elim_FStar.Pervasives.Native.Some",
         "data_typing_intro_LowParse.Spec.Base.ParserConsumesAll@tok",
         "disc_equation_FStar.Pervasives.Native.None",
         "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_FStar.UInt32.n", "equation_FStar.UInt8.byte",
-        "equation_LowParse.Bytes.byte", "equation_LowParse.Bytes.bytes",
+        "equation_FStar.UInt32.n", "equation_LowParse.Bytes.byte",
+        "equation_LowParse.Bytes.bytes",
         "equation_LowParse.Spec.Base.bare_parser",
         "equation_LowParse.Spec.Base.is_total_constant_size_parser",
         "equation_LowParse.Spec.Base.is_weaker_than",
@@ -604,7 +598,7 @@
       1,
       [ "@query" ],
       0,
-      "c1f4f7ddbacc1ce3eb5d17752aeb4f59"
+      "41dbff37c1d6376caf63ceb4b0156731"
     ],
     [
       "LowParse.Spec.Base.glb",
@@ -683,8 +677,7 @@
         "data_typing_intro_LowParse.Spec.Base.ParserConsumesAll@tok",
         "disc_equation_FStar.Pervasives.Native.None",
         "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_FStar.UInt32.n", "equation_FStar.UInt8.byte",
-        "equation_LowParse.Bytes.byte",
+        "equation_FStar.UInt32.n", "equation_LowParse.Bytes.byte",
         "equation_LowParse.Spec.Base.consumed_length",
         "equation_LowParse.Spec.Base.parse",
         "equation_LowParse.Spec.Base.parser_kind_prop",
@@ -772,7 +765,7 @@
         "equation_LowParse.Spec.Base.parser_kind"
       ],
       0,
-      "b22abe87190ec25bc5d1b6e6b9770dcb"
+      "6878a431f70468ce086feeac12f3083f"
     ],
     [
       "LowParse.Spec.Base.glb_list",
@@ -872,8 +865,7 @@
         "@MaxIFuel_assumption", "@query",
         "Prims_pretyping_ae567c2fb75be05905677af440075565", "bool_inversion",
         "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_FStar.UInt32.n", "equation_FStar.UInt8.byte",
-        "equation_LowParse.Bytes.byte",
+        "equation_FStar.UInt32.n", "equation_LowParse.Bytes.byte",
         "equation_LowParse.Spec.Base.consumed_length", "equation_Prims.nat",
         "function_token_typing_FStar.UInt32.n",
         "kinding_FStar.Pervasives.Native.tuple2@tok",
@@ -898,8 +890,8 @@
         "Prims_pretyping_ae567c2fb75be05905677af440075565", "bool_inversion",
         "constructor_distinct_FStar.Pervasives.Native.Some",
         "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_FStar.UInt32.n", "equation_FStar.UInt8.byte",
-        "equation_LowParse.Bytes.byte", "equation_LowParse.Bytes.bytes",
+        "equation_FStar.UInt32.n", "equation_LowParse.Bytes.byte",
+        "equation_LowParse.Bytes.bytes",
         "equation_LowParse.Spec.Base.bare_serializer",
         "equation_LowParse.Spec.Base.consumed_length",
         "equation_LowParse.Spec.Base.injective",
@@ -942,8 +934,7 @@
         "@MaxIFuel_assumption", "@query",
         "Prims_pretyping_ae567c2fb75be05905677af440075565", "bool_inversion",
         "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_FStar.UInt32.n", "equation_FStar.UInt8.byte",
-        "equation_LowParse.Bytes.byte",
+        "equation_FStar.UInt32.n", "equation_LowParse.Bytes.byte",
         "equation_LowParse.Spec.Base.consumed_length", "equation_Prims.nat",
         "function_token_typing_FStar.UInt32.n",
         "kinding_FStar.Pervasives.Native.tuple2@tok",
@@ -966,8 +957,7 @@
         "@MaxIFuel_assumption", "@query",
         "Prims_pretyping_ae567c2fb75be05905677af440075565", "bool_inversion",
         "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_FStar.UInt32.n", "equation_FStar.UInt8.byte",
-        "equation_LowParse.Bytes.byte",
+        "equation_FStar.UInt32.n", "equation_LowParse.Bytes.byte",
         "equation_LowParse.Spec.Base.consumed_length", "equation_Prims.nat",
         "function_token_typing_FStar.UInt32.n",
         "kinding_FStar.Pervasives.Native.tuple2@tok",
@@ -1025,8 +1015,7 @@
         "Prims_interpretation_Tm_arrow_9cb3c953faf527c316d427b2ce8bd81b",
         "constructor_distinct_FStar.Pervasives.Native.Some",
         "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_FStar.UInt8.byte", "equation_LowParse.Bytes.byte",
-        "equation_LowParse.Bytes.bytes",
+        "equation_LowParse.Bytes.byte", "equation_LowParse.Bytes.bytes",
         "equation_LowParse.Spec.Base.bare_serializer",
         "equation_LowParse.Spec.Base.parser_kind",
         "equation_LowParse.Spec.Base.serializer",
@@ -1081,8 +1070,8 @@
         "data_elim_FStar.Pervasives.Native.Some",
         "disc_equation_FStar.Pervasives.Native.Some",
         "equality_tok_LowParse.Spec.Base.ParserStrong@tok",
-        "equation_FStar.UInt32.n", "equation_FStar.UInt8.byte",
-        "equation_LowParse.Bytes.byte", "equation_LowParse.Bytes.bytes",
+        "equation_FStar.UInt32.n", "equation_LowParse.Bytes.byte",
+        "equation_LowParse.Bytes.bytes",
         "equation_LowParse.Spec.Base.bare_serializer",
         "equation_LowParse.Spec.Base.consumed_length",
         "equation_LowParse.Spec.Base.default_parser_kind",

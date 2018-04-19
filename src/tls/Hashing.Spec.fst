@@ -4,8 +4,6 @@ module Hashing.Spec
 open FStar.UInt32
 open FStar.Bytes
 
-type lbytes32 n = lbytes (UInt32.v n)
-
 type alg = // CoreCrypto.hash_alg
   | MD5
   | SHA1
@@ -88,9 +86,7 @@ abstract
 let acc0 (a:alg) : acc a = empty_bytes
 
 abstract
-let compress (#a:alg) (_:acc a) (l:lbytes32 (blockLen a)) = l //??
-
-module U32 = FStar.UInt32 
+let compress (#a:alg) (_:acc a) (l:lbytes32 (blockLen a)) = l <: acc a //??
 
 module U32 = FStar.UInt32 
 

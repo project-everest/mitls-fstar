@@ -88,7 +88,7 @@ let genPost (#i:id) (parent:rgn) h0 (w:writer i) h1 =
   color w.region = color parent /\
   empty_log w h1
 
-#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
+#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1 --use_two_phase_tc true"
 val gen: parent:rgn -> i:id -> ST (writer i)
   (requires (fun h0 -> True))
   (ensures  (genPost parent))

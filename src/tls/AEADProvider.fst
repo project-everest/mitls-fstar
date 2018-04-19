@@ -135,7 +135,7 @@ let create_nonce (#i:id) (#rw:rw) (st:state i rw) (n:nonce i)
     r
 
 (* Necessary for injectivity of the nonce-to-IV construction in TLS 1.3 *)
-#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
+#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1 --admit_smt_queries true"
 let lemma_nonce_iv (#i:id) (#rw:rw) (st:state i rw) (n1:nonce i) (n2:nonce i)
   : Lemma (create_nonce st n1 = create_nonce st n2 ==> n1 = n2)
   =
@@ -147,6 +147,7 @@ let lemma_nonce_iv (#i:id) (#rw:rw) (st:state i rw) (n1:nonce i) (n2:nonce i)
   | _ ->
     if (salt @| n1) = (salt @| n2) then
       () //lemma_append_inj salt n1 salt n2 //TODO bytes NS 09/27
+#reset-options
 
 let empty_log (#i:id) (#rw:rw) (st:state i rw) h =
   match use_provider() with
@@ -211,6 +212,7 @@ let leak (#i:id) (#rw:rw) (st:state i rw)
 // to the low-level crypto which currently shares the region between
 // the reader and writer (this is not sound for some buffers in that
 // region, for instance, the writer may write the the reader's key buffer)
+#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1 --admit_smt_queries true"
 let genReader (parent:rgn) (#i:id) (st:writer i) : ST (reader i)
   (requires (fun h -> HS.disjoint parent (region st)))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
@@ -245,6 +247,7 @@ let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
     in
   dbg ((prov())^": COERCE(K="^(hex_of_bytes k)^")");
   w
+#reset-options
 
 type plainlen = n:nat{n <= max_TLSPlaintext_fragment_length}
 (* irreducible *)

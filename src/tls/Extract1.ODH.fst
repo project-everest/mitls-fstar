@@ -101,6 +101,7 @@ val odh_init: g: CommonDH.group -> ST (CommonDH.ikeyshare g)
     modifies (Set.union (Set.singleton CommonDH.dh_region) (Set.singleton there)) h0 h1
     /\ model ==> (odh_fresh gx h0 /\ odh_defined gx /\ CommonDH.honest_dhi gx))
 
+#set-options "--admit_smt_queries true"
 let odh_init g =
   let h0 = get () in
   let x = CommonDH.keygen g in

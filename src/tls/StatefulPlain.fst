@@ -33,6 +33,7 @@ type adata (i:id) = b:bytes { exists ct. b == makeAD i ct }
 
 let lemma_12 (i:id) : Lemma (~(PlaintextID? i)) = ()
 
+#set-options "--admit_smt_queries true"
 val parseAD: i:id -> ad:adata i -> Tot contentType
 let parseAD i ad =
   lemma_12 i;
@@ -42,13 +43,15 @@ let parseAD i ad =
   | Correct ct, Correct ver ->
     assert (ver = pv);
     ct
+#reset-options
 
-#set-options "--z3rlimit 10 --initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0"
+#set-options "--z3rlimit 10 --initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0 --admit_smt_queries true"
 val lemma_makeAD_parseAD: i:id -> ct:contentType -> Lemma
   (requires (True))
   (ensures (parseAD i (makeAD i ct) = ct))
   [SMTPat (makeAD i ct)]
 let lemma_makeAD_parseAD i ct = ()
+#reset-options
 
 (*** plaintext fragments ***)
 

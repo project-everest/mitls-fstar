@@ -104,7 +104,7 @@ let dh_initiator #g gx gy =
 // but I can't figure out whether that type has a name in the RFCs
 // (I don't think so, because 'namedcurve' in ECParameters only contains the 
 // curve name, no further parameters).
-#reset-options "--z3rlimit 20"
+#reset-options "--z3rlimit 50 --admit_smt_queries true"
 val parse_curve: bytes -> Tot (option group)
 let parse_curve b =
   if (length b < 1) then None else (

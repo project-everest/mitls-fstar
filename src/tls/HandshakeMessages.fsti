@@ -210,6 +210,7 @@ let hs_msg_bytes (ht:handshakeType) (b:bytes) =
     repr_bytes (length b') <= 3 /\ 
     b = messageBytes ht b')
 
+#set-options "--admit_smt_queries true"
 val messageBytes_is_injective_strong:
   ht1:handshakeType -> data1:bytes{ repr_bytes (length data1) <= 3 } -> s1:bytes ->
   ht2:handshakeType -> data2:bytes{ repr_bytes (length data2) <= 3 } -> s2:bytes ->
@@ -217,6 +218,7 @@ val messageBytes_is_injective_strong:
   (ensures 
     equal (messageBytes ht1 data1 @| s1) (messageBytes ht2 data2 @| s2) ==> 
     ht1 = ht2 /\ equal data1 data2 /\ equal s1 s2)
+#reset-options
 
 val messageBytes_is_injective:
   ht1:handshakeType -> data1:bytes{ repr_bytes (length data1) <= 3 } ->
@@ -227,11 +229,13 @@ val messageBytes_is_injective:
     ht1 = ht2 /\ equal data1 data2)
   [SMTPat (messageBytes ht1 data1); SMTPat (messageBytes ht2 data2)]
 
+#set-options "--admit_smt_queries true"
 val parseMessage: buf:bytes -> Tot (result (option (
   rem: bytes &
   hstype: handshakeType &
   payload: bytes {repr_bytes (length payload) <= 3} &
   to_log: bytes {to_log = messageBytes hstype payload /\ equal buf (to_log @| rem) })))
+#reset-options
 
 val clientHelloBytes: ch -> Tot (b:bytes{length b >= 41 /\ hs_msg_bytes HT_client_hello b})
 // JK: used to be 42 but cannot prove it with current specs. Is there
@@ -246,6 +250,7 @@ val versionBytes_is_injective:
 // To expose extensions to application, we switch to network format
 val optionExtensionsBytes: exts:option (ce:list extension{List.Tot.length ce < 256}) -> Tot (b:bytes{length b <= 2 + 65535})
 
+#set-options "--admit_smt_queries true"
 val clientHelloBytes_is_injective_strong:
   msg1:ch -> s1:bytes ->
   msg2:ch -> s2:bytes ->
@@ -272,6 +277,7 @@ val parseClientHello: body:bytes -> Pure (result (ch * option binders))
           clientHelloBytes ch == htBytes HT_client_hello @| truncated_body /\
           bindersBytes binders == suffix // ADL: FIXME must strip the length from binders
   )))
+#reset-options
 
 val serverHelloBytes: sh -> Tot (b:bytes{length b >= 34 /\ hs_msg_bytes HT_server_hello b})
 
@@ -282,10 +288,12 @@ val serverHelloBytes_is_injective:
   (requires equal (serverHelloBytes msg1) (serverHelloBytes msg2))
   (ensures msg1 == msg2)
 
+#set-options "--admit_smt_queries true"
 val serverHelloBytes_is_injective_strong:
   msg1:valid_sh -> s1: bytes -> msg2:valid_sh -> s2: bytes -> Lemma
   (requires equal (serverHelloBytes msg1 @| s1) (serverHelloBytes msg2 @| s2))
   (ensures msg1 == msg2 /\ s1 == s2)
+#reset-options 
 
 (* JK: should return a valid_sh to match the serialization function *)
 (* JK: same as parseClientHello, weakening spec to get verification *)
@@ -363,12 +371,14 @@ val handshakeMessageBytes_is_injective:
 val handshakeMessagesBytes: pv:option protocolVersion -> list (msg:valid_hs_msg pv) -> bytes
 // we may need to expose its definition to HandshakeLog
 
+#set-options "--admit_smt_queries true"
 val handshakeMessagesBytes_is_injective:
   pv: option protocolVersion -> 
   l1: list (msg:valid_hs_msg pv) -> 
   l2: list (msg:valid_hs_msg pv) -> Lemma 
   (requires equal (handshakeMessagesBytes pv l1) (handshakeMessagesBytes pv l2))
   (ensures l1 = l2)
+#reset-options
 
 val string_of_handshakeMessage: hs_msg -> Tot string
 

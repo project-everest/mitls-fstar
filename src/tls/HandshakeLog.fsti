@@ -112,6 +112,7 @@ let tagLength (b:anyTag) = len b
 // full specification of the hashed-prefix tags required for a given flight
 // (in relational style to capture computational-hashed)
 //val tags: a:alg -> prior: list msg -> ms: list msg -> hs: list anyTag(tag a) -> Tot Type0 (decreases ms)
+#set-options "--admit_smt_queries true"
 let rec tags (a:alg) (prior: list msg) (ms: list msg) (hs:list anyTag) : Tot Type0 (decreases ms) =
   match ms with
   | [] -> hs == []
@@ -128,6 +129,7 @@ let rec tags (a:alg) (prior: list msg) (ms: list msg) (hs:list anyTag) : Tot Typ
           )
       | false, hs -> tags a prior ms hs
       | _ -> False
+#reset-options
 
 val tags_append: 
   a:alg -> 
@@ -219,6 +221,7 @@ val send: s:log -> m:msg -> ST unit
     valid_transcript (transcript h0 s @ [m])))
   (ensures (fun h0 _ h1 -> write_transcript h0 h1 s m))
 
+#set-options "--admit_smt_queries true"
 val hash_tag: #a:alg -> s:log -> ST (tag a)
   (requires fun h0 -> True)
   (ensures fun h0 h h1 ->
@@ -258,6 +261,7 @@ val send_CCS_tag: #a:alg -> s:log -> m:msg -> complete:bool -> ST (tag a)
     let bs = transcript_bytes (transcript h1 s)  in
     write_transcript h0 h1 s m /\
     hashed a bs /\ h == hash a bs ))
+#reset-options
 
 // Setting signals 'drops' the writing state, to prevent further writings until the signals have been transmitted
 val send_signals: s:log -> next_keys:option (bool * bool) -> complete:bool -> ST unit

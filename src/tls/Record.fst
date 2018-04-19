@@ -53,6 +53,7 @@ private type header = b:lbytes 5 // for all TLS versions
 private let fake = ctBytes Application_data @| versionBytes TLS_1p2
 
 // this is the outer packet; the *caller* should switch from 1.3 to 1.0 whenever data is encrypted.
+#reset-options "--admit_smt_queries true"
 private inline_for_extraction 
 let makeHeader ct plain ver (length:nat {repr_bytes length <= 2}): header =
   let ct_ver = 
@@ -63,6 +64,7 @@ let makeHeader ct plain ver (length:nat {repr_bytes length <= 2}): header =
     else 
       (ctBytes ct @| versionBytes ver) in
   ct_ver @| bytes_of_int 2 length 
+#reset-options
 
 // used only for testing
 let makePacket ct plain ver (data: (b:bytes { repr_bytes (length b) <= 2})) =

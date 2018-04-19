@@ -31,10 +31,12 @@ let parseAD b = snd(split b 8ul)
 type adata (i:id) = b:lbytes (ad_Length i)
   { exists (ad:StatefulPlain.adata i). ad == parseAD b}
 
+#set-options "--admit_smt_queries true"
 let makeAD i seqn (ad:StatefulPlain.adata i) : adata i =
   let b = bytes_of_seq seqn @| ad in
   cut(Bytes.equal ad (parseAD b));
   b
+#reset-options
 
 val seqN: i:id -> adata i -> Tot seqn
 let seqN i ad =
@@ -53,11 +55,13 @@ let lemma_makeAD_seqN i n ad = admit()
     // cut (Seq.equal (fst (Seq.split_eq (bytes_of_seq n @| ad) 8)) (bytes_of_seq n));
     // int_of_bytes_of_int (Seq.length (bytes_of_seq n)) n
 
+#set-options "--admit_smt_queries true"
 val lemma_makeAD_parseAD: i:id -> n:seqn -> ad:StatefulPlain.adata i
           -> Lemma (requires (True))
                    (ensures (parseAD (makeAD i n ad) = ad))
                    [SMTPat (makeAD i n ad)]
 let lemma_makeAD_parseAD i n ad = cut (Bytes.equal ad (parseAD (makeAD i n ad)))
+#reset-options
 
 // let test i (n:seqn) (m:seqn{m<>n}) (ad:adata i) =
 //   assert (makeAD i n ad <> makeAD i m ad)

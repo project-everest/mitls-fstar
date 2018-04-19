@@ -22,6 +22,7 @@ module U32 = FStar.UInt32
 type key = bytes //18-02-14 TODO length
 let coerce (k:bytes) : key = k
 
+#set-options "--admit_smt_queries true"
 
 (* SSL3 *)
 (* 17-02-02 deprecated, and not quite typechecking...
@@ -121,6 +122,7 @@ let tls_prf secret label seed len =
   assume(Bytes.len hmd5 = len /\ Bytes.len hsha1 = len);
   xor len hmd5 hsha1
 
+#set-options "--admit_smt_queries true"
 let tls_client_label = utf8_encode "client finished"
 let tls_server_label = utf8_encode "server finished"
 
