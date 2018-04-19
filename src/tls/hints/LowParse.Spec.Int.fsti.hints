@@ -8,9 +8,8 @@
       1,
       [
         "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
-        "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_LowParse.Bytes.byte", "equation_Prims.squash",
-        "function_token_typing_FStar.UInt8.t",
+        "bool_typing", "disc_equation_FStar.Pervasives.Native.Some",
+        "equation_Prims.squash", "function_token_typing_FStar.UInt8.t",
         "kinding_FStar.Pervasives.Native.tuple2@tok",
         "primitive_Prims.op_GreaterThanOrEqual",
         "primitive_Prims.op_LessThanOrEqual",
@@ -20,7 +19,7 @@
         "typing_LowParse.Spec.Base.consumed_length"
       ],
       0,
-      "de2b6bd2e87b7b7fbf7961120cee7577"
+      "38910af9b7b9bc7d708047537264f5cc"
     ],
     [
       "LowParse.Spec.Int.parse_u16_spec",
@@ -29,9 +28,8 @@
       1,
       [
         "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
-        "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_LowParse.Bytes.byte", "equation_Prims.squash",
-        "function_token_typing_FStar.UInt16.t",
+        "bool_typing", "disc_equation_FStar.Pervasives.Native.Some",
+        "equation_Prims.squash", "function_token_typing_FStar.UInt16.t",
         "kinding_FStar.Pervasives.Native.tuple2@tok",
         "primitive_Prims.op_GreaterThanOrEqual",
         "primitive_Prims.op_LessThanOrEqual",
@@ -50,9 +48,8 @@
       1,
       [
         "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
-        "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_LowParse.Bytes.byte", "equation_Prims.squash",
-        "function_token_typing_FStar.UInt32.t",
+        "bool_typing", "disc_equation_FStar.Pervasives.Native.Some",
+        "equation_Prims.squash", "function_token_typing_FStar.UInt32.t",
         "kinding_FStar.Pervasives.Native.tuple2@tok",
         "primitive_Prims.op_GreaterThanOrEqual",
         "primitive_Prims.op_LessThanOrEqual",

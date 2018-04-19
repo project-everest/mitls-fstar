@@ -35,7 +35,7 @@ val statelen : I.id -> U32.t
 
 type cipher (i:I.id) (l:nat{l + v taglen < pow2 32}) = lbytes (l + (UInt32.v taglen))
 
-type cipher32 (i:I.id) (l:U32.t) = lbytes32 (l +^ taglen)
+type cipher32 (i:I.id) (l:U32.t{UInt.size (v l + 16) 32}) = lbytes32 (l +^ taglen)
 
 inline_for_extraction
 val entry : i:I.id -> Type0
