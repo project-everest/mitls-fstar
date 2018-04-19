@@ -1,0 +1,12 @@
+# Echoes the list of all KRML files from $(EXAMPLE).depend file
+
+ifndef EXAMPLE
+  $(error EXAMPLE must be defined.)
+endif
+
+all: echo-krml-files
+
+include $(EXAMPLE).depend
+
+echo-krml-files:
+	echo $(EXAMPLE): $(filter-out $(EXCLUDE_KRML_FILES), $(ALL_KRML_FILES)) >> .depend
