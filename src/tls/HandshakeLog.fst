@@ -250,7 +250,6 @@ let hashAlg h st =
 let transcript h t =
     reveal_log ((HS.sel h t).transcript)
 
-#set-options "--admit_smt_queries true"
 let create reg pv =
     let l = State empty_hs_transcript empty_bytes None false
               empty_bytes [] (OpenHash empty_bytes)
@@ -393,7 +392,6 @@ let send_signals l next_keys1 complete1 =
     | Some (enable_appdata,skip_0rtt) -> Some (enable_appdata, None, skip_0rtt)
     | None -> None in
   l := State transcript outgoing outgoing_next_keys1 complete1  incoming parsed hashes pv kex dh_group
-#reset-options
 
 let next_fragment l (i:id) =
   let st = !l in
@@ -438,7 +436,7 @@ let next_fragment l (i:id) =
               st.transcript outgoing' st.outgoing_next_keys st.outgoing_complete
               st.incoming st.parsed st.hashes st.pv st.kex st.dh_group;
       Outgoing fragment None false )
- 
+#reset-options 
 (* RECEIVE *)
 
 //17-04-24 avoid parsing loop? may be simpler at the level of receive.
@@ -453,6 +451,7 @@ val parseMessages:
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> modifies_none h0 h1))
 
+#reset-options "--admit_smt_queries true"
 let rec parseMessages pvo kexo buf =
   match HandshakeMessages.parseMessage buf with
   | Error z -> Error z
@@ -550,7 +549,6 @@ let receive l mb =
           r ml hs st.pv st.kex st.dh_group;
         Correct None )
 
-
 // We receive CCS as external end-of-flight signals;
 // we return the messages processed so far, and their final tag;
 // we still can't write.
@@ -574,3 +572,4 @@ let receive_CCS #a l =
           st.incoming [] hs' st.pv st.kex st.dh_group;
       Correct (st.parsed, tl, h)
     end
+#reset-options
