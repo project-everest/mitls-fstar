@@ -21,7 +21,7 @@ FSTAR_OPTIONS += --use_hints --use_two_phase_tc true # --use_extracted_interface
 
 MY_FSTAR=$(FSTAR_HOME)/bin/fstar.exe --cache_checked_modules --cache_dir $(FSTAR_OUT_DIR) --odir $(FSTAR_OUT_DIR) $(addprefix --include , $(INCLUDE_PATHS)) $(INCLUDE_KREMLIN)
 
-MY_KREMLIN=$(KREMLIN_HOME)/krml -bundle 'LowParse.\*'
+MY_KREMLIN=$(KREMLIN_HOME)/krml -bundle 'LowParse.\*' krembytes.c
 
 EXAMPLES=Example Example2
 ROOT_FILES=LowParse.SLow.fst $(addprefix LowParse, $(addsuffix .fst, $(EXAMPLES)))
@@ -35,7 +35,7 @@ clean:
 	$(MY_FSTAR) $(FSTAR_OPTIONS) $(OTHERFLAGS) --dep full $(ROOT_FILES) > $@
 	for f in $(EXAMPLES) ; do \
 	  $(MY_FSTAR) $(FSTAR_OPTIONS) $(OTHERFLAGS) --dep full LowParse$$f.fst > $$f.depend ; \
-	  $(MAKE) EXCLUDE_KRML_FILES=$(EXCLUDE_KRML_FILES) EXAMPLE=$$f -f Makefile.example ; \
+	  $(MAKE) EXCLUDE_KRML_FILES='$(EXCLUDE_KRML_FILES)' EXAMPLE=$$f -f Makefile.example ; \
 	done
 
 include .depend
