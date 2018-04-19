@@ -14,3 +14,5 @@ let m (x: LowParseExample.Aux.t) : Tot FStar.Bytes.bytes =
 
 let s (x: LowParse.SLow.array LowParseExample.Aux.t 18) : Tot FStar.Bytes.bytes =
   LowParseExample.Aux.serialize32_t_array x
+
+let main () : Tot FStar.Int32.t = 0l
