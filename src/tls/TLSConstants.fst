@@ -1130,13 +1130,10 @@ let rec names_of_cipherSuites css =
 (** Definition for the PRF label type *)
 type prflabel = bytes
 
-//18-02-23 stuck on bounding lengths of string constants
 (** Key schedule labels *)
-#set-options "--admit_smt_queries true"
-let extract_label = utf8_encode "master secret"
+let extract_label          = utf8_encode "master secret"
 let extended_extract_label = utf8_encode "extended master secret"
-let kdf_label = utf8_encode "key expansion"
-#reset-options 
+let kdf_label              = utf8_encode "key expansion"
 
 (** PRF definitions based on the protocol version *)
 type prePrfAlg =
