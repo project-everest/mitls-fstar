@@ -9,4 +9,7 @@ all: echo-krml-files
 include $(EXAMPLE).depend
 
 echo-krml-files:
-	echo $(EXAMPLE): $(filter-out $(EXCLUDE_KRML_FILES), $(ALL_KRML_FILES)) >> .depend
+	echo EX_$(EXAMPLE)_KRML_FILES = $(filter-out $(EXCLUDE_KRML_FILES), $(ALL_KRML_FILES)) >> .depend
+	echo $(EXAMPLE)/a.out: EXAMPLE_KRML_FILES = '$$(EX_$(EXAMPLE)_KRML_FILES)' >> .depend
+	echo $(EXAMPLE)/a.out: '$$(EX_$(EXAMPLE)_KRML_FILES)' >> .depend
+	echo $(EXAMPLE)/a.out: EXAMPLE = $(EXAMPLE) >> .depend

@@ -1,5 +1,3 @@
-.PHONY: all verify-all clean extract-all
-
 all: verify-all extract-all
 
 FSTAR_OUT_DIR?=.fstar-out
@@ -58,7 +56,11 @@ $(FSTAR_OUT_DIR)/%.krml:
 	$(MY_FSTAR) $(FSTAR_OPTIONS) $(OTHERFLAGS) --codegen Kremlin $(notdir $(basename $<)) --extract_module $(notdir $(basename $(basename $<))) --warn_error '@241'
 	touch $@
 
-$(EXAMPLES): %:
-	$(MY_KREMLIN) -tmpdir $@ -bundle LowParse$@'.Aux' -no-prefix LowParse$@ $^
+$(EXAMPLES): %: %/a.out
+
+%/a.out:
+	$(MY_KREMLIN) -tmpdir $(EXAMPLE) -bundle LowParse$(EXAMPLE)'.Aux' -no-prefix LowParse$(EXAMPLE) $(EXAMPLE_KRML_FILES) -o $@
 
 extract-all: $(EXAMPLES)
+
+.PHONY: all verify-all clean extract-all $(EXAMPLES)
