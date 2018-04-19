@@ -145,15 +145,15 @@ extern int MITLS_CALLCONV FFI_mitls_get_exporter(/* in */ mitls_state *state, in
 extern void *MITLS_CALLCONV FFI_mitls_get_cert(/* in */ mitls_state *state, /* out */ size_t *cert_size);
 
 // Send a message
-// Returns -1 for failure, or a TCP packet to be sent then freed with FFI_mitls_free_packet()
+// Returns -1 for failure, or a TCP packet to be sent then freed with FFI_mitls_free()
 extern int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const unsigned char *buffer, size_t buffer_size);
 
 // Receive a message
 // Returns NULL for failure, a plaintext packet to be freed with FFI_mitls_free_packet()
 extern unsigned char *MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_size);
 
-// Free a packet returned FFI_mitls_receive();
-extern void MITLS_CALLCONV FFI_mitls_free_packet(/* in */ mitls_state *state, unsigned char *packet);
+// Free a packet returned FFI_mitls_*() family of APIs
+extern void MITLS_CALLCONV FFI_mitls_free(/* in */ mitls_state *state, void* pv);
 
 /*************************************************************************
 * QUIC FFI
@@ -211,12 +211,16 @@ typedef struct {
 extern int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_config *cfg);
 extern quic_result MITLS_CALLCONV FFI_mitls_quic_process(quic_state *state, const unsigned char* inBuf, /*inout*/ size_t *pInBufLen, /*out*/ unsigned char *outBuf, /*inout*/ size_t *pOutBufLen);
 extern int MITLS_CALLCONV FFI_mitls_quic_get_exporter(quic_state *state, int early, /* out */ quic_secret *secret);
-extern void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state);
+extern void MITLS_CALLCONV FFI_mitls_quic_close(quic_state *state);
 
-extern int MITLS_CALLCONV FFI_mitls_find_custom_extension(int is_server, const unsigned char *exts, size_t exts_len, uint16_t ext_type, /*out*/ unsigned char **ext_data, /*out*/ size_t *ext_data_len);
+extern int MITLS_CALLCONV FFI_mitls_find_custom_extension(mitls_state *state, int is_server, const unsigned char *exts, size_t exts_len, uint16_t ext_type, unsigned char **ext_data, size_t *ext_data_len);
+extern int MITLS_CALLCONV FFI_mitls_quic_find_custom_extension(quic_state *state, const unsigned char *exts, size_t exts_len, uint16_t ext_type, unsigned char **ext_data, size_t *ext_data_len);
 
 // The functions below should only be used on client extensions
-extern int MITLS_CALLCONV FFI_mitls_find_server_name(const unsigned char *exts, size_t exts_len, unsigned char **sni, size_t *sni_len);
-extern int MITLS_CALLCONV FFI_mitls_find_alpn(const unsigned char *exts, size_t exts_len, unsigned char **alpn, size_t *alpn_len);
+extern int MITLS_CALLCONV FFI_mitls_find_server_name(mitls_state *state, const unsigned char *exts, size_t exts_len, unsigned char **sni, size_t *sni_len);
+extern int MITLS_CALLCONV FFI_mitls_quic_find_server_name(quic_state *state, const unsigned char *exts, size_t exts_len, unsigned char **sni, size_t *sni_len);
+
+// Free 'out' variables returned by the FFI_mitls_quic*() family of functions.
+extern void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state, void* pv);
 
 #endif // HEADER_MITLS_FFI_H
