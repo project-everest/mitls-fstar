@@ -84,7 +84,8 @@ let sendPacket tcp ct plain ver (data: (b:bytes { repr_bytes (length b) <= 2})) 
 private type parsed_header = result (contentType
                            * protocolVersion
                            * l:nat { l <= max_TLSCiphertext_fragment_length})
-private val parseHeader: h5:header -> Tot parsed_header
+// private // QUIC.fst needs access to this definition
+val parseHeader: h5:header -> Tot parsed_header
 
 let parseHeader (h5:header) =
     let (ct1,b4)   = FStar.Bytes.split h5 1ul in
