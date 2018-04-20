@@ -679,7 +679,7 @@ let valid_cipher_suite = c:cipherSuite{validCipherSuite c}
 
 (** List of ciphersuite *)
 type cipherSuites = cs: list valid_cipher_suite
-  { let l = List.length cs in 1 <= l /\ l <= (65536/2 - 2)}
+  { let l = List.length cs in 0 <= l /\ l <= (65536/2 - 2)}
 
 (** List of valid ciphersuite (redundant) *)
 let valid_cipher_suites = cipherSuites 
@@ -848,11 +848,26 @@ let rec cipherSuitesBytes cs =
 // Called by the server handshake;
 // ciphersuites that we do not understand are parsed, but ignored
 
-(** Parsing function for a list of ciphersuites *)
-assume val parseCipherSuites: b:bytes -> Tot cipherSuites 
+// type cipherSuites = cs: list valid_cipher_suite
+//   { let l = List.length cs in 1 <= l /\ l <= (65536/2 - 2)}
 
-#reset-options
-#set-options "--max_ifuel 2 --initial_ifuel 2 --max_fuel 2 --initial_fuel 2"
+(** Parsing function for a list of ciphersuites *)
+val parseCipherSuites: b:bytes -> Tot cipherSuites (decreases (length b))
+let rec parseCipherSuites b =
+  if length b > 1 then
+    let (b0, b1) = split b 2ul in
+    let rest = parseCipherSuites b1 in
+    match parseCipherSuite b0 with
+    | Correct cs -> 
+      if List.length rest < 65536/2 - 3 
+      then cs :: rest 
+      else rest
+    | _ -> rest
+  else
+   []
+
+
+#reset-options "--max_ifuel 2 --initial_ifuel 2 --max_fuel 2 --initial_fuel 2"
 
 // (** Lemma for ciphersuite lists serializing/parsing inversions *)
 // val inverse_cipherSuites: x:list (c:cipherSuite{validCipherSuite c}) -> Lemma
