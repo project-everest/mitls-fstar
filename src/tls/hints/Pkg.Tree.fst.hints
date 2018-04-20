@@ -1,1 +1,44 @@
-[ "r\"\u0006Ð\b¿É/þ.¦kzÚ\u000fq", [] ]
+[
+  "r\"\u0006Ð\b¿É/þ.¦kzÚ\u000fq",
+  [
+    [
+      "Pkg.Tree.__proj__Leaf__item__package",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_Pkg.Tree.Leaf",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Pkg.Tree_Tm_refine_55297a7ddab6c531a997baa31405fc49"
+      ],
+      0,
+      "cb9751b5e9341b320e1aa920c5094ff4"
+    ],
+    [
+      "Pkg.Tree.__proj__Node__item__node",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_Pkg.Tree.Node",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Pkg.Tree_Tm_refine_bf1dc22d97e7686bb05419611825dae9"
+      ],
+      0,
+      "3b1a7002466b5c7256a3fb6cc613b7a9"
+    ],
+    [
+      "Pkg.Tree.__proj__Node__item__children",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_Pkg.Tree.Node",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Pkg.Tree_Tm_refine_bf1dc22d97e7686bb05419611825dae9"
+      ],
+      0,
+      "dd7c3370c7fa0595345d5825d5da95b5"
+    ]
+  ]
+]
