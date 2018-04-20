@@ -320,7 +320,7 @@ typedef struct {
   pfn_FFI_nego_cb cb;
 } wrapped_nego_cb;
 
-static mitls_version convert_pv(TLSConstants_protocolVersion_ pv)
+static mitls_version convert_pv(QD_TLS_protocolVersion_protocolVersion_ pv)
 {
   switch(pv.tag)
   {
@@ -340,7 +340,7 @@ static mitls_version convert_pv(TLSConstants_protocolVersion_ pv)
   return TLS_SSL3; // unreachable
 }
 
-static TLSConstants_nego_action nego_cb_proxy(FStar_Dyn_dyn cbs, TLSConstants_protocolVersion_ pv,
+static TLSConstants_nego_action nego_cb_proxy(FStar_Dyn_dyn cbs, QD_TLS_protocolVersion_protocolVersion_ pv,
   FStar_Bytes_bytes extb, FStar_Pervasives_Native_option__FStar_Bytes_bytes cookie)
 {
   wrapped_nego_cb *cb = (wrapped_nego_cb*)cbs;
@@ -489,7 +489,7 @@ static size_t list_sa_len(Prims_list__TLSConstants_signatureScheme *l)
 }
 
 static FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme
-  wrapped_select(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st, TLSConstants_protocolVersion_ pv,
+  wrapped_select(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st, QD_TLS_protocolVersion_protocolVersion_ pv,
     FStar_Bytes_bytes sni, FStar_Bytes_bytes alpn,
     Prims_list__TLSConstants_signatureScheme *sal)
 {
