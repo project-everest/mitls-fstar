@@ -64,7 +64,6 @@ let makeHeader ct plain ver (length:nat {repr_bytes length <= 2}): header =
     else 
       (ctBytes ct @| versionBytes ver) in
   ct_ver @| bytes_of_int 2 length 
-#reset-options
 
 // used only for testing
 let makePacket ct plain ver (data: (b:bytes { repr_bytes (length b) <= 2})) =
@@ -245,6 +244,7 @@ let rec read tcp s =
             let payload = BufferBytes.to_bytes length b in
             s.pos := 0ul;
             Received ct pv payload ))
+#reset-options
 
 //18-01-24 recheck async I
 //    if length fresh = 0 then

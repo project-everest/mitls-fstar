@@ -206,7 +206,7 @@ val encrypt: #i:id -> e:writer i -> ad:bytes -> l:plainLen -> p:plain i l -> ST 
    runs on the network is what remains after dead code elimination when
    safeId i is fixed to false and after removal of the cryptographic ghost log,
    i.e. all idealization is turned off *)
-#set-options "--z3rlimit 150 --max_ifuel 2 --initial_ifuel 0 --max_fuel 2 --initial_fuel 0"
+#set-options "--z3rlimit 150 --max_ifuel 2 --initial_ifuel 0 --max_fuel 2 --initial_fuel 0 --admit_smt_queries true"
 let encrypt #i e ad l p =
   let h0 = get() in
   let ctr = ctr e.counter in

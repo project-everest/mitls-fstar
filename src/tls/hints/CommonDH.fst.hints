@@ -1,1 +1,2318 @@
-[ "\u0013úÀ¶©\u001eE®¨à\t¬\"5‚1", [] ]
+[
+  "\u0013úÀ¶©\u001eE®¨à\t¬\"5‚1",
+  [
+    [
+      "CommonDH.is_supported_group",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_Format.NamedGroup.namedGroup__uu___haseq" ],
+      0,
+      "47c87fe26c82870cfc316ae1ef09e3f6"
+    ],
+    [
+      "CommonDH.discard",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "equation_FStar.Monotonic.Heap.equal_dom",
+        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
+        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
+      ],
+      0,
+      "2ba34b859a2d2e35cc0fccaa8294e924"
+    ],
+    [
+      "CommonDH.dbg",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_DebugFlags.debug",
+        "equation_DebugFlags.debug_CDH"
+      ],
+      0,
+      "93839c1b52ca4a3b43dc2ae7980c4120"
+    ],
+    [
+      "CommonDH.group'",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_CoreCrypto.ec_curve__uu___haseq",
+        "assumption_DHGroup.group__uu___haseq", "equation_ECGroup.group"
+      ],
+      0,
+      "cffbdb38da23d47fd1758345b49e9f77"
+    ],
+    [
+      "CommonDH.__proj__FFDH__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_CommonDH.FFDH",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_CommonDH_Tm_refine_58066f49daf8dc204d13d6f149205410"
+      ],
+      0,
+      "37fae5e2931bf0a6e1235950e7268d40"
+    ],
+    [
+      "CommonDH.__proj__ECDH__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_CommonDH.ECDH",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_CommonDH_Tm_refine_60e79e51ec8062f18e3801bebe96f4b0"
+      ],
+      0,
+      "ee1cbdbc4090267a07e73d274461bec3"
+    ],
+    [
+      "CommonDH.group",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_CommonDH.group___uu___haseq" ],
+      0,
+      "28998e057b61e010c46fd6a269a0ee7e"
+    ],
+    [
+      "CommonDH.pre_keyshare'",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_CoreCrypto.dh_key__uu___haseq",
+        "assumption_CoreCrypto.ec_curve__uu___haseq",
+        "assumption_DHGroup.group__uu___haseq",
+        "assumption_ECGroup.pre_keyshare__uu___haseq",
+        "equation_DHGroup.keyshare", "equation_ECGroup.group",
+        "equation_ECGroup.keyshare",
+        "haseqDHGroup_Tm_refine_19d1311d89c80108e6969c71ab06f0fa",
+        "haseqECGroup_Tm_refine_223a3f9d04052c2f458fa52d10222c62"
+      ],
+      0,
+      "fedcf9a3e12d801f5b5d957fe0d8dc4b"
+    ],
+    [
+      "CommonDH.__proj__KS_FF__item__g",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_CommonDH.KS_FF",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_CommonDH_Tm_refine_c2299b50409481fc34ed9bd8770d93f3"
+      ],
+      0,
+      "69668b8b8ea5086ad948e3d9f88667ae"
+    ],
+    [
+      "CommonDH.__proj__KS_FF__item___1",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_CommonDH.KS_FF",
+        "proj_equation_CommonDH.KS_FF_g",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_CommonDH.KS_FF_g",
+        "refinement_interpretation_CommonDH_Tm_refine_c2299b50409481fc34ed9bd8770d93f3"
+      ],
+      0,
+      "9a1945243898ff9f57e8bdd2878f6dfe"
+    ],
+    [
+      "CommonDH.__proj__KS_EC__item__g",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_CommonDH.KS_EC",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_CommonDH_Tm_refine_dbcac6db93db07a87f47fddba7b72416"
+      ],
+      0,
+      "abbbbf389ff99e27ec76f3971bbacb27"
+    ],
+    [
+      "CommonDH.__proj__KS_EC__item___1",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_CommonDH.KS_EC",
+        "proj_equation_CommonDH.KS_EC_g",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_CommonDH.KS_EC_g",
+        "refinement_interpretation_CommonDH_Tm_refine_dbcac6db93db07a87f47fddba7b72416"
+      ],
+      0,
+      "6db7657d14de4469a76fd08c4d71c00f"
+    ],
+    [
+      "CommonDH.pre_keyshare",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_CommonDH.pre_keyshare___uu___haseq",
+        "disc_equation_CommonDH.ECDH", "disc_equation_CommonDH.FFDH",
+        "equation_CommonDH.group", "fuel_guarded_inversion_CommonDH.group_",
+        "haseqCommonDH_Tm_refine_af7b2a4e75585748ccc678dc9682c676"
+      ],
+      0,
+      "41c9c1723d9ae1da55cf8ade96346074"
+    ],
+    [
+      "CommonDH.pre_keyshare",
+      2,
+      2,
+      1,
+      [ "@query", "assumption_DHGroup.group__uu___haseq" ],
+      0,
+      "113c04a50f1971e3b7e2cc6d9fee3d85"
+    ],
+    [
+      "CommonDH.pre_keyshare",
+      3,
+      2,
+      1,
+      [
+        "@query", "assumption_CoreCrypto.ec_curve__uu___haseq",
+        "equation_ECGroup.group"
+      ],
+      0,
+      "303dacda5c3b6b94cc4dc45712f26bf1"
+    ],
+    [
+      "CommonDH.pre_share'",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_CoreCrypto.ec_curve__uu___haseq",
+        "assumption_DHGroup.group__uu___haseq",
+        "assumption_ECGroup.pre_share__uu___haseq", "equation_DHGroup.share",
+        "equation_ECGroup.group", "equation_ECGroup.share",
+        "function_token_typing_FStar.Bytes.bytes",
+        "haseqDHGroup_Tm_refine_efba4956af2036c105a5a1197207aa75",
+        "haseqECGroup_Tm_refine_5c4b11534dc9ca49609d382bdd2a17c9",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "ad15734553e8bb101480f3b8f8644f41"
+    ],
+    [
+      "CommonDH.__proj__S_FF__item__g",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_CommonDH.S_FF",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_CommonDH_Tm_refine_73643e91ad48fb2a1012bc11f1d85642"
+      ],
+      0,
+      "be2dea06c128e72d7c129e5662b253dd"
+    ],
+    [
+      "CommonDH.__proj__S_FF__item___1",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_CommonDH.S_FF",
+        "proj_equation_CommonDH.S_FF_g", "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_CommonDH.S_FF_g",
+        "refinement_interpretation_CommonDH_Tm_refine_73643e91ad48fb2a1012bc11f1d85642"
+      ],
+      0,
+      "963e1ff7668c0c6863c5ab437a6a4780"
+    ],
+    [
+      "CommonDH.__proj__S_EC__item__g",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_CommonDH.S_EC",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_CommonDH_Tm_refine_7f5bbb9fca41a14e3bdecd1f55fd77ad"
+      ],
+      0,
+      "d22e0795b99e213c24ad100fa24adf6d"
+    ],
+    [
+      "CommonDH.__proj__S_EC__item___1",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_CommonDH.S_EC",
+        "proj_equation_CommonDH.S_EC_g", "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_CommonDH.S_EC_g",
+        "refinement_interpretation_CommonDH_Tm_refine_7f5bbb9fca41a14e3bdecd1f55fd77ad"
+      ],
+      0,
+      "e06f62203f48f60d96dbc4d13a173b19"
+    ],
+    [
+      "CommonDH.pre_share",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_CommonDH.pre_share___uu___haseq",
+        "disc_equation_CommonDH.ECDH", "disc_equation_CommonDH.FFDH",
+        "equation_CommonDH.group", "fuel_guarded_inversion_CommonDH.group_",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "a1a7866993aa88ae44798684dc986745"
+    ],
+    [
+      "CommonDH.pre_share",
+      2,
+      2,
+      1,
+      [ "@query", "assumption_DHGroup.group__uu___haseq" ],
+      0,
+      "3cd95f0b0f7ca83aa2438a1d57f151ce"
+    ],
+    [
+      "CommonDH.pre_share",
+      3,
+      2,
+      1,
+      [
+        "@query", "assumption_CoreCrypto.ec_curve__uu___haseq",
+        "equation_ECGroup.group"
+      ],
+      0,
+      "d6e41b7c6734bb6e0ecc05f466b0af2f"
+    ],
+    [
+      "CommonDH.pre_pubshare",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_CommonDH.FFDH",
+        "constructor_distinct_CommonDH.S_EC",
+        "constructor_distinct_CommonDH.S_FF", "disc_equation_CommonDH.ECDH",
+        "disc_equation_CommonDH.FFDH", "disc_equation_CommonDH.KS_EC",
+        "disc_equation_CommonDH.KS_FF", "disc_equation_CommonDH.S_EC",
+        "disc_equation_CommonDH.S_FF", "equation_CommonDH.group",
+        "equation_CommonDH.pre_keyshare",
+        "fuel_guarded_inversion_CommonDH.group_",
+        "proj_equation_CommonDH.KS_EC_g", "proj_equation_CommonDH.KS_FF_g",
+        "proj_equation_CommonDH.S_EC_g", "proj_equation_CommonDH.S_FF_g",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_CommonDH.ECDH__0",
+        "projection_inverse_CommonDH.FFDH__0",
+        "projection_inverse_CommonDH.KS_EC_g",
+        "projection_inverse_CommonDH.KS_FF_g",
+        "projection_inverse_CommonDH.S_EC__1",
+        "projection_inverse_CommonDH.S_EC_g",
+        "projection_inverse_CommonDH.S_FF__1",
+        "projection_inverse_CommonDH.S_FF_g",
+        "refinement_interpretation_CommonDH_Tm_refine_af7b2a4e75585748ccc678dc9682c676"
+      ],
+      0,
+      "f10b313f5c59fd0f9f5af02b209f7209"
+    ],
+    [
+      "CommonDH.is_ecdhe",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_Format.NamedGroup.namedGroup__uu___haseq" ],
+      0,
+      "8b9604bb2af8479ceb17c421d61f32d4"
+    ],
+    [
+      "CommonDH.is_ffdhe",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_Format.NamedGroup.namedGroup__uu___haseq" ],
+      0,
+      "256925cca78dafe43589848ec4984f92"
+    ],
+    [
+      "CommonDH.dh_region",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "data_elim_FStar.Monotonic.HyperStack.HS",
+        "equation_FStar.HyperStack.ST.is_eternal_region",
+        "equation_FStar.Monotonic.HyperHeap.hmap",
+        "equation_FStar.Monotonic.HyperStack.fresh_region",
+        "equation_FStar.Monotonic.HyperStack.is_wf_with_ctr_and_tip",
+        "equation_FStar.Set.eqtype",
+        "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_LowParse.Spec.VLData.parse_bounded_vldata_kind",
+        "equation_Mem.rgn", "equation_Mem.tls_rgn",
+        "equation_Mem.tls_tables_region",
+        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
+        "function_token_typing_FStar.Monotonic.Heap.heap",
+        "function_token_typing_FStar.Monotonic.HyperHeap.rid",
+        "function_token_typing_FStar.Monotonic.HyperHeap.root",
+        "function_token_typing_Mem.tls_tables_region", "int_inversion",
+        "lemma_FStar.Map.lemma_ContainsDom", "primitive_Prims.op_Addition",
+        "proj_equation_FStar.Monotonic.HyperStack.HS_h",
+        "proj_equation_FStar.Monotonic.HyperStack.HS_tip",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind_metadata_t_parser_kind_metadata_total",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind_metadata_t_parser_kind_metadata_total",
+        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_e4e6aa39833c3650925e47e88cf250f9",
+        "refinement_interpretation_Mem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
+        "refinement_interpretation_Mem_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
+        "typing_FStar.Map.contains",
+        "typing_FStar.Monotonic.HyperStack.__proj__HS__item__h"
+      ],
+      0,
+      "ef8fe4e1ded8c557d34e86c5e3a1f57f"
+    ],
+    [
+      "CommonDH.ilog_entry",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "10032ec5b530ab4d458f5a6e5fe5785d"
+    ],
+    [
+      "CommonDH.__proj__Honest__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhi",
+        "equation_CommonDH.pre_dhr", "equation_CommonDH.pre_share",
+        "equation_FStar.Pervasives.dfst",
+        "fuel_guarded_inversion_Prims.dtuple2",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "7abb7bff31efc335477d9fcd7d21b22c"
+    ],
+    [
+      "CommonDH.__proj__Honest__item___0",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_CommonDH.Honest",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_CommonDH_Tm_refine_e48b72c4d9e2afe77f36010d23871d6e"
+      ],
+      0,
+      "923bcd772346109b81c1e0d00856b36d"
+    ],
+    [
+      "CommonDH.i_ilog",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "CommonDH_interpretation_Tm_arrow_9c338dc3cf2c78d0b0b3430d531a5180",
+        "Prims_interpretation_Tm_arrow_e06752ba152f81447b312efcdf8f0e23",
+        "assumption_CommonDH.group___uu___haseq",
+        "assumption_Prims.dtuple2__uu___haseq", "equation_CommonDH.group",
+        "equation_CommonDH.pre_dhi",
+        "function_token_typing_CommonDH.pre_share",
+        "kinding_CommonDH.group_@tok",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "token_correspondence_CommonDH.pre_share"
+      ],
+      0,
+      "5eee88d630ba67ff292a839699e7db65"
+    ],
+    [
+      "CommonDH.ilog",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "7c28af2b1c797de90e5a5a2942db1bfa"
+    ],
+    [
+      "CommonDH.ilog",
+      3,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "CommonDH_interpretation_Tm_arrow_9c338dc3cf2c78d0b0b3430d531a5180",
+        "Prims_interpretation_Tm_arrow_e06752ba152f81447b312efcdf8f0e23",
+        "assumption_CommonDH.group___uu___haseq",
+        "assumption_Prims.dtuple2__uu___haseq", "equation_CommonDH.group",
+        "equation_CommonDH.pre_dhi",
+        "function_token_typing_CommonDH.pre_share",
+        "kinding_CommonDH.group_@tok",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "token_correspondence_CommonDH.pre_share"
+      ],
+      0,
+      "6b7c43d26ffd0e06e1f7dbd31bf20e16"
+    ],
+    [
+      "CommonDH.ilog",
+      4,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_CommonDH.i_ilog",
+        "equation_CommonDH.ishare_table", "equation_Mem.rgn",
+        "function_token_typing_CommonDH.dh_region",
+        "refinement_interpretation_Mem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
+        "unit_typing"
+      ],
+      0,
+      "e12e04012305e38508fd4f80533d08f9"
+    ],
+    [
+      "CommonDH.registered_dhi",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "6ec206eb0d2a07cb4414a1c3c4a67639"
+    ],
+    [
+      "CommonDH.registered_dhi",
+      3,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "CommonDH_interpretation_Tm_arrow_9c338dc3cf2c78d0b0b3430d531a5180",
+        "assumption_CommonDH.group___uu___haseq",
+        "assumption_Prims.dtuple2__uu___haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhi",
+        "fuel_guarded_inversion_Prims.dtuple2",
+        "function_token_typing_CommonDH.pre_share",
+        "kinding_CommonDH.group_@tok",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "c933b21b0071c54862ffee7916864fce"
+    ],
+    [
+      "CommonDH.registered_dhi",
+      4,
+      2,
+      1,
+      [
+        "@query", "equation_CommonDH.ishare_table",
+        "function_token_typing_CommonDH.ilog"
+      ],
+      0,
+      "93706bad3f031650be601c6487936b9e"
+    ],
+    [
+      "CommonDH.fresh_dhi",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "794ab4a912036fd0b4f9ef3bca1c4776"
+    ],
+    [
+      "CommonDH.fresh_dhi",
+      3,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "CommonDH_interpretation_Tm_arrow_9c338dc3cf2c78d0b0b3430d531a5180",
+        "assumption_CommonDH.group___uu___haseq",
+        "assumption_Prims.dtuple2__uu___haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhi",
+        "fuel_guarded_inversion_Prims.dtuple2",
+        "function_token_typing_CommonDH.pre_share",
+        "kinding_CommonDH.group_@tok",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "6f60f07aa3cd69680d4ecfa241c45980"
+    ],
+    [
+      "CommonDH.fresh_dhi",
+      4,
+      2,
+      1,
+      [
+        "@query", "equation_CommonDH.ishare_table",
+        "function_token_typing_CommonDH.ilog"
+      ],
+      0,
+      "058e792a963a0ca529dfda443f286e95"
+    ],
+    [
+      "CommonDH.honest_dhi_st",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "4abe7bc0cb3615668387be4e54750997"
+    ],
+    [
+      "CommonDH.honest_dhi_st",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "CommonDH_interpretation_Tm_arrow_9c338dc3cf2c78d0b0b3430d531a5180",
+        "assumption_CommonDH.group___uu___haseq",
+        "assumption_Prims.dtuple2__uu___haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhi",
+        "fuel_guarded_inversion_Prims.dtuple2",
+        "function_token_typing_CommonDH.pre_share",
+        "kinding_CommonDH.group_@tok",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "dc6687025eab9037ea733315c11c6098"
+    ],
+    [
+      "CommonDH.honest_dhi_st",
+      5,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "CommonDH_interpretation_Tm_arrow_9c338dc3cf2c78d0b0b3430d531a5180",
+        "assumption_CommonDH.group___uu___haseq",
+        "assumption_Prims.dtuple2__uu___haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhi",
+        "fuel_guarded_inversion_Prims.dtuple2",
+        "function_token_typing_CommonDH.pre_share",
+        "kinding_CommonDH.group_@tok",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "bc3bfd969e58d5f068360517de6b8d89"
+    ],
+    [
+      "CommonDH.lemma_honest_dhi_stable",
+      3,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "5277113d57ba91b50223d180bee2afa0"
+    ],
+    [
+      "CommonDH.honest_dhi",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_CommonDH.ishare_table",
+        "function_token_typing_CommonDH.ilog"
+      ],
+      0,
+      "d53d7ab293872dc5ee8ce9c2ae1e5ba5"
+    ],
+    [
+      "CommonDH.corrupt_dhi_st",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "5dc5ccd986f01e1350493133305d32dd"
+    ],
+    [
+      "CommonDH.corrupt_dhi_st",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "CommonDH_interpretation_Tm_arrow_9c338dc3cf2c78d0b0b3430d531a5180",
+        "assumption_CommonDH.group___uu___haseq",
+        "assumption_Prims.dtuple2__uu___haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhi",
+        "fuel_guarded_inversion_Prims.dtuple2",
+        "function_token_typing_CommonDH.pre_share",
+        "kinding_CommonDH.group_@tok",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "796f1e54fe4c79db819ffd28ee097794"
+    ],
+    [
+      "CommonDH.corrupt_dhi_st",
+      5,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "CommonDH_interpretation_Tm_arrow_9c338dc3cf2c78d0b0b3430d531a5180",
+        "assumption_CommonDH.group___uu___haseq",
+        "assumption_Prims.dtuple2__uu___haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhi",
+        "fuel_guarded_inversion_Prims.dtuple2",
+        "function_token_typing_CommonDH.pre_share",
+        "kinding_CommonDH.group_@tok",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "46d53a9ede3327e067aeda8c8607f9bc"
+    ],
+    [
+      "CommonDH.lemma_corrupt_dhi_stable",
+      3,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "cacebb880cb87225632d4035be3f7e55"
+    ],
+    [
+      "CommonDH.corrupt_dhi",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_CommonDH.ishare_table",
+        "function_token_typing_CommonDH.ilog"
+      ],
+      0,
+      "43419a86d181e46d671e72f9a8fb4d56"
+    ],
+    [
+      "CommonDH.is_honest_dhi",
+      4,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "e105dbc8a366aba0d2f869fbd2e05e7d"
+    ],
+    [
+      "CommonDH.is_honest_dhi",
+      6,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "CommonDH_interpretation_Tm_arrow_9c338dc3cf2c78d0b0b3430d531a5180",
+        "assumption_CommonDH.group___uu___haseq",
+        "assumption_Prims.dtuple2__uu___haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhi",
+        "fuel_guarded_inversion_Prims.dtuple2",
+        "function_token_typing_CommonDH.pre_share",
+        "kinding_CommonDH.group_@tok",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "ce50a5988186779af289b55d7790b097"
+    ],
+    [
+      "CommonDH.is_honest_dhi",
+      7,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "8f212dcd09954b87ca3a181e55c56eb6"
+    ],
+    [
+      "CommonDH.is_honest_dhi",
+      9,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "CommonDH_interpretation_Tm_arrow_9c338dc3cf2c78d0b0b3430d531a5180",
+        "assumption_CommonDH.group___uu___haseq",
+        "assumption_Prims.dtuple2__uu___haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhi",
+        "fuel_guarded_inversion_Prims.dtuple2",
+        "function_token_typing_CommonDH.pre_share",
+        "kinding_CommonDH.group_@tok",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "84483a7d34ea1d4ff9f921f27e4b8607"
+    ],
+    [
+      "CommonDH.is_honest_dhi",
+      12,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "2f5b16380575e83319d212af9e6f0aae"
+    ],
+    [
+      "CommonDH.is_honest_dhi",
+      15,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "8bdd48844dbee470ca943e1e77745ffd"
+    ],
+    [
+      "CommonDH.ipubshare",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_CommonDH.group",
+        "equation_CommonDH.ikeyshare", "equation_CommonDH.pre_share",
+        "fuel_guarded_inversion_CommonDH.group_",
+        "refinement_interpretation_CommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e",
+        "refinement_interpretation_CommonDH_Tm_refine_d63eb55c3265ce734061425ebbf47198",
+        "typing_CommonDH.pre_pubshare"
+      ],
+      0,
+      "4ab10b3064b186e497b65beb45030ca8"
+    ],
+    [
+      "CommonDH.registered_dhr_st",
+      1,
+      2,
+      1,
+      [
+        "@query", "disc_equation_CommonDH.Honest",
+        "disc_equation_FStar.Pervasives.Native.Some",
+        "equation_CommonDH.honest_dhi_st",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "0c9406e295c924b592941a43db60e819"
+    ],
+    [
+      "CommonDH.registered_dhr_st",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "CommonDH_interpretation_Tm_arrow_9c338dc3cf2c78d0b0b3430d531a5180",
+        "assumption_CommonDH.group___uu___haseq",
+        "assumption_Prims.dtuple2__uu___haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_CommonDH.dhi", "equation_CommonDH.group",
+        "equation_CommonDH.pre_dhi", "fuel_guarded_inversion_Prims.dtuple2",
+        "function_token_typing_CommonDH.pre_share",
+        "kinding_CommonDH.group_@tok", "proj_equation_Prims.Mkdtuple2__1",
+        "refinement_interpretation_CommonDH_Tm_refine_fc5e1cc76afecc8de6524ba676ca6221",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "76047e73abd619938989a45fe8c6f580"
+    ],
+    [
+      "CommonDH.registered_dhr_st",
+      5,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "961f4124a00b1dd7564044e2d0365e9f"
+    ],
+    [
+      "CommonDH.registered_dhr_st",
+      6,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "d6d4b731557a4bfe01b401a5195f35e3"
+    ],
+    [
+      "CommonDH.registered_dhr_st",
+      7,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "19055ed4cbf8a8c2277d2f5777c2d587"
+    ],
+    [
+      "CommonDH.registered_dhr",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_CommonDH.ishare_table",
+        "function_token_typing_CommonDH.ilog"
+      ],
+      0,
+      "b47e76bd6c3954bdddc9c9e68ee33eef"
+    ],
+    [
+      "CommonDH.fresh_dhr",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "CommonDH_interpretation_Tm_arrow_9c338dc3cf2c78d0b0b3430d531a5180",
+        "assumption_CommonDH.group___uu___haseq",
+        "assumption_Prims.dtuple2__uu___haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhi",
+        "fuel_guarded_inversion_Prims.dtuple2",
+        "function_token_typing_CommonDH.pre_share",
+        "kinding_CommonDH.group_@tok",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "6cf272d59e3cd58bef0502ea9c78fd2a"
+    ],
+    [
+      "CommonDH.fresh_dhr",
+      4,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "efb71ff898a2113e08c74459b2cdd21f"
+    ],
+    [
+      "CommonDH.fresh_dhr",
+      5,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "183bf5aa137863a1d8ea04e55ebaabe4"
+    ],
+    [
+      "CommonDH.fresh_dhr",
+      6,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "3471895d2a3a2f1c1ebfb5b9153eef69"
+    ],
+    [
+      "CommonDH.fresh_dhr",
+      7,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_CommonDH.Honest", "equation_CommonDH.group",
+        "equation_CommonDH.honest_dhi_st", "equation_CommonDH.ishare_table",
+        "equation_CommonDH.pre_dhi", "fuel_guarded_inversion_Prims.dtuple2",
+        "function_token_typing_CommonDH.ilog",
+        "kinding_CommonDH.ilog_entry@tok",
+        "projection_inverse_BoxBool_proj_0",
+        "typing_FStar.Pervasives.Native.uu___is_Some"
+      ],
+      0,
+      "ea3bb72ffde46a063f34d4a587f259b9"
+    ],
+    [
+      "CommonDH.honest_dhr_st",
+      1,
+      2,
+      1,
+      [
+        "@query", "disc_equation_CommonDH.Honest",
+        "disc_equation_FStar.Pervasives.Native.Some",
+        "equation_CommonDH.honest_dhi_st",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "1440f55a86f2aaedd65209452f7eb176"
+    ],
+    [
+      "CommonDH.honest_dhr_st",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "CommonDH_interpretation_Tm_arrow_9c338dc3cf2c78d0b0b3430d531a5180",
+        "assumption_CommonDH.group___uu___haseq",
+        "assumption_Prims.dtuple2__uu___haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_CommonDH.dhi", "equation_CommonDH.group",
+        "equation_CommonDH.pre_dhi", "fuel_guarded_inversion_Prims.dtuple2",
+        "function_token_typing_CommonDH.pre_share",
+        "kinding_CommonDH.group_@tok", "proj_equation_Prims.Mkdtuple2__1",
+        "refinement_interpretation_CommonDH_Tm_refine_fc5e1cc76afecc8de6524ba676ca6221",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "c17209b723bcbb49e929c5f8b3f5aa78"
+    ],
+    [
+      "CommonDH.honest_dhr_st",
+      5,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "f222325d3cde638476741576bd0964ec"
+    ],
+    [
+      "CommonDH.honest_dhr_st",
+      6,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "0e7288cfc78b3dca208af8f98bf26db5"
+    ],
+    [
+      "CommonDH.honest_dhr_st",
+      7,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "6793f2f8dca670d6aa91b07bc29ee2c6"
+    ],
+    [
+      "CommonDH.honest_dhr_st",
+      8,
+      2,
+      1,
+      [ "@query", "assumption_Prims.HasEq_bool" ],
+      0,
+      "6b436d30b92a5cdfc04e2506d3e79df4"
+    ],
+    [
+      "CommonDH.honest_dhr_st",
+      9,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "832e4ca8cf643f0b893197a0510f5269"
+    ],
+    [
+      "CommonDH.honest_dhr_st",
+      10,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "1c069a15f94b6ecbc3655ef00a3f8685"
+    ],
+    [
+      "CommonDH.honest_dhr_st",
+      11,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "916181b55e499fbe0afe2a194bc68d96"
+    ],
+    [
+      "CommonDH.honest_dhr",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_CommonDH.ishare_table",
+        "function_token_typing_CommonDH.ilog"
+      ],
+      0,
+      "4fe7ffda637b67fef0dc283dc37dac27"
+    ],
+    [
+      "CommonDH.corrupt_dhr_st",
+      1,
+      2,
+      1,
+      [
+        "@query", "disc_equation_CommonDH.Honest",
+        "disc_equation_FStar.Pervasives.Native.Some",
+        "equation_CommonDH.honest_dhi_st",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "be5e58f9217e9d3ba7b57d3d52067517"
+    ],
+    [
+      "CommonDH.corrupt_dhr_st",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "CommonDH_interpretation_Tm_arrow_9c338dc3cf2c78d0b0b3430d531a5180",
+        "assumption_CommonDH.group___uu___haseq",
+        "assumption_Prims.dtuple2__uu___haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_CommonDH.dhi", "equation_CommonDH.group",
+        "equation_CommonDH.pre_dhi", "fuel_guarded_inversion_Prims.dtuple2",
+        "function_token_typing_CommonDH.pre_share",
+        "kinding_CommonDH.group_@tok", "proj_equation_Prims.Mkdtuple2__1",
+        "refinement_interpretation_CommonDH_Tm_refine_fc5e1cc76afecc8de6524ba676ca6221",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "0da3b3489a96dea0366536068c75592e"
+    ],
+    [
+      "CommonDH.corrupt_dhr_st",
+      5,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "6e645524aab0e79209aab9f25d3a4d9f"
+    ],
+    [
+      "CommonDH.corrupt_dhr_st",
+      6,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "0b8c5e7a58047c82a44d0281e1ce1cb8"
+    ],
+    [
+      "CommonDH.corrupt_dhr_st",
+      7,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "f4e58c5ddeb05fd2e1e1158a45a288b4"
+    ],
+    [
+      "CommonDH.corrupt_dhr_st",
+      8,
+      2,
+      1,
+      [ "@query", "assumption_Prims.HasEq_bool" ],
+      0,
+      "00b5b20a6d3207e1ae5af4e941c3d541"
+    ],
+    [
+      "CommonDH.corrupt_dhr_st",
+      9,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "d49267815f8779c38c7b396340e7c58e"
+    ],
+    [
+      "CommonDH.corrupt_dhr_st",
+      10,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "f8b3c7089222cd87908ed3a723501a5e"
+    ],
+    [
+      "CommonDH.corrupt_dhr_st",
+      11,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "bedfcf226582fa8fcdfa5e7892e6fbf2"
+    ],
+    [
+      "CommonDH.corrupt_dhr",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_CommonDH.ishare_table",
+        "function_token_typing_CommonDH.ilog"
+      ],
+      0,
+      "90b77691471ad6735068a07c00eaa97c"
+    ],
+    [
+      "CommonDH.is_honest_dhr",
+      4,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "ee549c95cb48908512559befff64b17d"
+    ],
+    [
+      "CommonDH.is_honest_dhr",
+      6,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "CommonDH_interpretation_Tm_arrow_9c338dc3cf2c78d0b0b3430d531a5180",
+        "assumption_CommonDH.group___uu___haseq",
+        "assumption_Prims.dtuple2__uu___haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_CommonDH.dhi", "equation_CommonDH.group",
+        "equation_CommonDH.pre_dhi", "fuel_guarded_inversion_Prims.dtuple2",
+        "function_token_typing_CommonDH.pre_share",
+        "kinding_CommonDH.group_@tok", "proj_equation_Prims.Mkdtuple2__1",
+        "refinement_interpretation_CommonDH_Tm_refine_fc5e1cc76afecc8de6524ba676ca6221",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "d716f8c6bbeb505e79836e326da6831c"
+    ],
+    [
+      "CommonDH.is_honest_dhr",
+      9,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "1212e4218c935a7fa5b7a45259bbfba5"
+    ],
+    [
+      "CommonDH.is_honest_dhr",
+      12,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "d802a72b1fe5eac719b85b222e463994"
+    ],
+    [
+      "CommonDH.is_honest_dhr",
+      13,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "2933ed425b3842825028b1d0c8e12e6f"
+    ],
+    [
+      "CommonDH.is_honest_dhr",
+      14,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "7eeb2bd169a793cc1fdd042fcae940ca"
+    ],
+    [
+      "CommonDH.is_honest_dhr",
+      15,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "375b31baf55c630318b57cc8f49d3890"
+    ],
+    [
+      "CommonDH.is_honest_dhr",
+      18,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "a757948323dc1f85541029084f9e61d7"
+    ],
+    [
+      "CommonDH.is_honest_dhr",
+      21,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "810ef7558b2d3df4105c32f43f884e23"
+    ],
+    [
+      "CommonDH.is_honest_dhr",
+      24,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "63441eb949a59f8ddfae84f49a0dca28"
+    ],
+    [
+      "CommonDH.is_honest_dhr",
+      27,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "49c11464a3e170739a55c604d9bb7a7b"
+    ],
+    [
+      "CommonDH.rshare",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_CommonDH.group",
+        "equation_CommonDH.ishare",
+        "refinement_interpretation_CommonDH_Tm_refine_59e636272f909930c53ccc0e9facf997"
+      ],
+      0,
+      "80f2b1946fdf48e887905f33c7e68680"
+    ],
+    [
+      "CommonDH.keygen",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_CommonDH.group",
+        "equation_CommonDH.ikeyshare", "equation_CommonDH.pre_share",
+        "fuel_guarded_inversion_CommonDH.group_",
+        "refinement_interpretation_CommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e",
+        "refinement_interpretation_CommonDH_Tm_refine_d63eb55c3265ce734061425ebbf47198",
+        "typing_CommonDH.pre_pubshare"
+      ],
+      0,
+      "5ed16e5dbe145881e91efab7cf8e8d59"
+    ],
+    [
+      "CommonDH.keygen",
+      5,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "78d3a37bb10b341457c4171d727deddc"
+    ],
+    [
+      "CommonDH.keygen",
+      7,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "CommonDH_interpretation_Tm_arrow_9c338dc3cf2c78d0b0b3430d531a5180",
+        "assumption_CommonDH.group___uu___haseq",
+        "assumption_Prims.dtuple2__uu___haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhi",
+        "fuel_guarded_inversion_Prims.dtuple2",
+        "function_token_typing_CommonDH.pre_share",
+        "kinding_CommonDH.group_@tok",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "ede358a73e24e6cd1749e000e1e2f510"
+    ],
+    [
+      "CommonDH.keygen",
+      8,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "03ba4fec50a6bf25ca29a310f8708567"
+    ],
+    [
+      "CommonDH.keygen",
+      9,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "a439b608e07987fca78ed4209a2448a7"
+    ],
+    [
+      "CommonDH.keygen",
+      10,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "066d47dc32c0c789a14970bc3f64dc32"
+    ],
+    [
+      "CommonDH.keygen",
+      11,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "1fa284d109a273808ba967cf6df5b89d"
+    ],
+    [
+      "CommonDH.keygen",
+      13,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "CommonDH_interpretation_Tm_arrow_9c338dc3cf2c78d0b0b3430d531a5180",
+        "assumption_CommonDH.group___uu___haseq",
+        "assumption_Prims.dtuple2__uu___haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhi",
+        "fuel_guarded_inversion_Prims.dtuple2",
+        "function_token_typing_CommonDH.pre_share",
+        "kinding_CommonDH.group_@tok",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "2899ed5bf040aebbef7a744490f3cf1f"
+    ],
+    [
+      "CommonDH.keygen",
+      16,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "15cf4fbe2f305340473b41a17ea108fd"
+    ],
+    [
+      "CommonDH.dh_responder",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_CommonDH.group",
+        "equation_CommonDH.ishare",
+        "refinement_interpretation_CommonDH_Tm_refine_59e636272f909930c53ccc0e9facf997"
+      ],
+      0,
+      "0bf6291be8f93baba6e2dd641f5f99aa"
+    ],
+    [
+      "CommonDH.dh_responder",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_CommonDH.group",
+        "equation_CommonDH.ishare",
+        "refinement_interpretation_CommonDH_Tm_refine_59e636272f909930c53ccc0e9facf997"
+      ],
+      0,
+      "69c4fe76805c844fdedea214b0e972e6"
+    ],
+    [
+      "CommonDH.dh_responder",
+      6,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "c358866bfb0bc729698768bc8bc297de"
+    ],
+    [
+      "CommonDH.dh_responder",
+      8,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "CommonDH_interpretation_Tm_arrow_9c338dc3cf2c78d0b0b3430d531a5180",
+        "assumption_CommonDH.group___uu___haseq",
+        "assumption_Prims.dtuple2__uu___haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_CommonDH.dhi", "equation_CommonDH.group",
+        "equation_CommonDH.pre_dhi", "fuel_guarded_inversion_Prims.dtuple2",
+        "function_token_typing_CommonDH.pre_share",
+        "kinding_CommonDH.group_@tok", "proj_equation_Prims.Mkdtuple2__1",
+        "refinement_interpretation_CommonDH_Tm_refine_fc5e1cc76afecc8de6524ba676ca6221",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "token_correspondence_CommonDH.pre_share"
+      ],
+      0,
+      "e66e0a1ac17d72eab0b743906c5714ee"
+    ],
+    [
+      "CommonDH.dh_responder",
+      9,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "a2d147bf5c202ca5d695fbc6f8c676c6"
+    ],
+    [
+      "CommonDH.dh_responder",
+      11,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "CommonDH_interpretation_Tm_arrow_9c338dc3cf2c78d0b0b3430d531a5180",
+        "assumption_CommonDH.group___uu___haseq",
+        "assumption_Prims.dtuple2__uu___haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_CommonDH.dhi", "equation_CommonDH.group",
+        "equation_CommonDH.pre_dhi", "fuel_guarded_inversion_Prims.dtuple2",
+        "function_token_typing_CommonDH.pre_share",
+        "kinding_CommonDH.group_@tok", "proj_equation_Prims.Mkdtuple2__1",
+        "refinement_interpretation_CommonDH_Tm_refine_fc5e1cc76afecc8de6524ba676ca6221",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "token_correspondence_CommonDH.pre_share"
+      ],
+      0,
+      "f3f265bf58307f035c0ac099daf27a74"
+    ],
+    [
+      "CommonDH.dh_responder",
+      14,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "8a9c11e551957f64a398a4cd006cfbbf"
+    ],
+    [
+      "CommonDH.dh_responder",
+      17,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "e88265e0f1123ab2f0412f8b19a14837"
+    ],
+    [
+      "CommonDH.dh_responder",
+      20,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "898c8ba99895c2ecc2f2e97193fe8431"
+    ],
+    [
+      "CommonDH.dh_responder",
+      23,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "ac9aad20bee1911565965dc73210d22c"
+    ],
+    [
+      "CommonDH.dh_responder",
+      26,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "6e7ce9c719e4395821579b49ad2687b8"
+    ],
+    [
+      "CommonDH.dh_responder",
+      29,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "f0adbabe4435f4aa439d8e2b7782e1fb"
+    ],
+    [
+      "CommonDH.dh_responder",
+      30,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "e6de5a5ca9f6221c29263c55cf9d8d1f"
+    ],
+    [
+      "CommonDH.dh_responder",
+      31,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "35a258fa6c1b590f5f468fc8f020af60"
+    ],
+    [
+      "CommonDH.dh_responder",
+      32,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "ccbdc6c209bf32b9bbd1d046504e06e4"
+    ],
+    [
+      "CommonDH.dh_responder",
+      33,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "694181c140956b9ffd7791b3d5792bef"
+    ],
+    [
+      "CommonDH.dh_responder",
+      34,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "08f68ba53649cceff9804df2da383bf6"
+    ],
+    [
+      "CommonDH.dh_responder",
+      35,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "34f8e6d475e1ddba072cc35371f328e4"
+    ],
+    [
+      "CommonDH.dh_responder",
+      38,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "3ca079d4abebe0822befe2887fa9384e"
+    ],
+    [
+      "CommonDH.dh_responder",
+      41,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "0f03b10ea915c5e7b583e2dee97908fa"
+    ],
+    [
+      "CommonDH.dh_responder",
+      44,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "e294ca2363b2b26b9b167553f37cf798"
+    ],
+    [
+      "CommonDH.dh_responder",
+      47,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "860c9fbcdc381fbcc62c558b6daa1f36"
+    ],
+    [
+      "CommonDH.register_dhi",
+      4,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "9c97541a62cb34690952ec3ef78f258a"
+    ],
+    [
+      "CommonDH.register_dhi",
+      6,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "CommonDH_interpretation_Tm_arrow_9c338dc3cf2c78d0b0b3430d531a5180",
+        "assumption_CommonDH.group___uu___haseq",
+        "assumption_Prims.dtuple2__uu___haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhi",
+        "fuel_guarded_inversion_Prims.dtuple2",
+        "function_token_typing_CommonDH.pre_share",
+        "kinding_CommonDH.group_@tok",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "155f12edfa503f8169fcbd61a32c4a38"
+    ],
+    [
+      "CommonDH.register_dhi",
+      7,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "793f736eb1b016472362e74e0c971189"
+    ],
+    [
+      "CommonDH.register_dhi",
+      9,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "CommonDH_interpretation_Tm_arrow_9c338dc3cf2c78d0b0b3430d531a5180",
+        "assumption_CommonDH.group___uu___haseq",
+        "assumption_Prims.dtuple2__uu___haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhi",
+        "fuel_guarded_inversion_Prims.dtuple2",
+        "function_token_typing_CommonDH.pre_share",
+        "kinding_CommonDH.group_@tok",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "f0f0fd6d6eeff0ff44a929189d0e80b0"
+    ],
+    [
+      "CommonDH.register_dhi",
+      12,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "160e4a183e5802b0e226f3dea54d71e7"
+    ],
+    [
+      "CommonDH.register_dhi",
+      13,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "be7418ccbccfb219ac00e036d1ca62fa"
+    ],
+    [
+      "CommonDH.register_dhi",
+      15,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "CommonDH_interpretation_Tm_arrow_9c338dc3cf2c78d0b0b3430d531a5180",
+        "assumption_CommonDH.group___uu___haseq",
+        "assumption_Prims.dtuple2__uu___haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhi",
+        "fuel_guarded_inversion_Prims.dtuple2",
+        "function_token_typing_CommonDH.pre_share",
+        "kinding_CommonDH.group_@tok",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "ae67dbb8604e3599a2700cd08970dd4d"
+    ],
+    [
+      "CommonDH.register_dhi",
+      18,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "824b3c65827541ff3c8a83592c0462eb"
+    ],
+    [
+      "CommonDH.register_dhi",
+      19,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "a85eae09f1674b002765ed3cfbaa5784"
+    ],
+    [
+      "CommonDH.register_dhi",
+      21,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "CommonDH_interpretation_Tm_arrow_9c338dc3cf2c78d0b0b3430d531a5180",
+        "assumption_CommonDH.group___uu___haseq",
+        "assumption_Prims.dtuple2__uu___haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhi",
+        "fuel_guarded_inversion_Prims.dtuple2",
+        "function_token_typing_CommonDH.pre_share",
+        "kinding_CommonDH.group_@tok",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "de0927e1bee4737a963ee6b56037cd7d"
+    ],
+    [
+      "CommonDH.register_dhr",
+      4,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "d5bbf1572a14d38d14c3d2fa738b0760"
+    ],
+    [
+      "CommonDH.register_dhr",
+      6,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "CommonDH_interpretation_Tm_arrow_9c338dc3cf2c78d0b0b3430d531a5180",
+        "assumption_CommonDH.group___uu___haseq",
+        "assumption_Prims.dtuple2__uu___haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_CommonDH.dhi", "equation_CommonDH.group",
+        "equation_CommonDH.pre_dhi", "fuel_guarded_inversion_Prims.dtuple2",
+        "function_token_typing_CommonDH.pre_share",
+        "kinding_CommonDH.group_@tok", "proj_equation_Prims.Mkdtuple2__1",
+        "refinement_interpretation_CommonDH_Tm_refine_fc5e1cc76afecc8de6524ba676ca6221",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "token_correspondence_CommonDH.pre_share"
+      ],
+      0,
+      "0bedceb15472f05b98919380236e7ee5"
+    ],
+    [
+      "CommonDH.register_dhr",
+      9,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "fe93c9861ac05ce2211002a84526f962"
+    ],
+    [
+      "CommonDH.register_dhr",
+      12,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "91747906ccbfd084e70c756fcfe3133f"
+    ],
+    [
+      "CommonDH.register_dhr",
+      13,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "c8b9001fcca5bf4a1db388ead78fee8f"
+    ],
+    [
+      "CommonDH.register_dhr",
+      15,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "CommonDH_interpretation_Tm_arrow_9c338dc3cf2c78d0b0b3430d531a5180",
+        "assumption_CommonDH.group___uu___haseq",
+        "assumption_Prims.dtuple2__uu___haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_CommonDH.dhi", "equation_CommonDH.group",
+        "equation_CommonDH.pre_dhi", "fuel_guarded_inversion_Prims.dtuple2",
+        "function_token_typing_CommonDH.pre_share",
+        "kinding_CommonDH.group_@tok", "proj_equation_Prims.Mkdtuple2__1",
+        "refinement_interpretation_CommonDH_Tm_refine_fc5e1cc76afecc8de6524ba676ca6221",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "token_correspondence_CommonDH.pre_share"
+      ],
+      0,
+      "8bd06a8c9e320fdcd9f37ffb75f274ce"
+    ],
+    [
+      "CommonDH.register_dhr",
+      16,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "4175206b140ce48e88ce59dcc1e47338"
+    ],
+    [
+      "CommonDH.register_dhr",
+      17,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "5711bff500e3ea7c84fcd4ca4ae2bffc"
+    ],
+    [
+      "CommonDH.register_dhr",
+      18,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "5dd12bc345cc59068c4dae7ff21a9200"
+    ],
+    [
+      "CommonDH.register_dhr",
+      19,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "756bf1e1b5f48bd3df4f966940809c34"
+    ],
+    [
+      "CommonDH.register_dhr",
+      20,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "670e888e867cc22edfd17a632bdf97c9"
+    ],
+    [
+      "CommonDH.register_dhr",
+      21,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "37abf4ce05bfc9a5e1693d25ae68491d"
+    ],
+    [
+      "CommonDH.register_dhr",
+      22,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "679aa83023523e59f7362bfe8ec587d1"
+    ],
+    [
+      "CommonDH.register_dhr",
+      23,
+      2,
+      1,
+      [
+        "@query", "assumption_CommonDH.pre_share___uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_dhr",
+        "equation_CommonDH.pre_share", "equation_FStar.Pervasives.dfst",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e"
+      ],
+      0,
+      "d81b042d41fda3a922c5ee28ec48684d"
+    ],
+    [
+      "CommonDH.register_dhr",
+      26,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "1f4f295b55117fffdd2cfda6c94dcae0"
+    ],
+    [
+      "CommonDH.parse",
+      2,
+      2,
+      1,
+      [
+        "@query", "assumption_Prims.HasEq_int",
+        "haseqFStar.UInt32_Tm_refine_dc181b56999d84c95c280557dd2cc2d2"
+      ],
+      0,
+      "0a58774ceccf0784aa2a060ec3ebb6ed"
+    ],
+    [
+      "CommonDH.keyShareEntry",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "equation_FStar.UInt32.n", "equation_Prims.nat",
+        "function_token_typing_FStar.UInt32.n",
+        "function_token_typing_FStar.UInt8.t",
+        "lemma_FStar.Bytes.length_reveal",
+        "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length"
+      ],
+      0,
+      "1c32d23826e341a370751d144e2dee0c"
+    ],
+    [
+      "CommonDH.keyShareEntry",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "equation_FStar.UInt32.n", "equation_Prims.nat",
+        "function_token_typing_FStar.UInt32.n",
+        "function_token_typing_FStar.UInt8.t",
+        "lemma_FStar.Bytes.length_reveal",
+        "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length"
+      ],
+      0,
+      "f201030a6ae36c379e493879407f0b5e"
+    ],
+    [
+      "CommonDH.keyShareEntry",
+      3,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "equation_FStar.UInt.uint_t", "equation_FStar.UInt32.n",
+        "function_token_typing_FStar.UInt32.n",
+        "lemma_FStar.Buffer.lemma_size",
+        "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
+        "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
+      ],
+      0,
+      "f2089e735c688f58402736c5745af2a4"
+    ],
+    [
+      "CommonDH.keyShareEntry",
+      4,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_CommonDH.group___uu___haseq",
+        "assumption_CommonDH.pre_share___uu___haseq",
+        "assumption_Format.NamedGroup.namedGroup__uu___haseq",
+        "equation_CommonDH.group", "equation_CommonDH.pre_share",
+        "function_token_typing_FStar.Bytes.bytes",
+        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e",
+        "haseqCommonDH_Tm_refine_5691a0fe2a9eb7e3fef526212e527985",
+        "haseqCommonDH_Tm_refine_6fde0167c30d016cb7dd8551ecaf8b00",
+        "haseqCommonDH_Tm_refine_bbf9a30431f523920f9f7a7039267c58",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "3a0dd948864ff1cfc5fdfb47c45ef80d"
+    ],
+    [
+      "CommonDH.__proj__Share__item__g",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_CommonDH.Share",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_CommonDH_Tm_refine_419290ad1633289796ca4faa3415e88c"
+      ],
+      0,
+      "eb593cb3917b0f92ad4453c8b6fa24aa"
+    ],
+    [
+      "CommonDH.__proj__Share__item___1",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_CommonDH.Share",
+        "proj_equation_CommonDH.Share_g",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_CommonDH.Share_g",
+        "refinement_interpretation_CommonDH_Tm_refine_419290ad1633289796ca4faa3415e88c"
+      ],
+      0,
+      "1afd581785d3c8f8efa302d4a0f09cb6"
+    ],
+    [
+      "CommonDH.__proj__UnknownShare__item__ng",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_CommonDH.UnknownShare",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_CommonDH_Tm_refine_c024b0a21c9b8f09957845060b9823fc"
+      ],
+      0,
+      "f3f814e54c00efed20fe7b9751e25525"
+    ],
+    [
+      "CommonDH.__proj__UnknownShare__item__b",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "equation_FStar.UInt32.n", "equation_Prims.nat",
+        "function_token_typing_FStar.UInt32.n",
+        "function_token_typing_FStar.UInt8.t",
+        "lemma_FStar.Bytes.length_reveal",
+        "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length"
+      ],
+      0,
+      "b59a48cd416b30caee40847edcf14527"
+    ],
+    [
+      "CommonDH.__proj__UnknownShare__item__b",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_CommonDH.UnknownShare",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_CommonDH_Tm_refine_c024b0a21c9b8f09957845060b9823fc"
+      ],
+      0,
+      "00f7e9026261a1b5b68fef3b1f00ecd2"
+    ],
+    [
+      "CommonDH.__proj__ClientKeyShare__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_CommonDH.ClientKeyShare",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_CommonDH_Tm_refine_6def7493d05b3fbcbe82678fc375d428"
+      ],
+      0,
+      "e3b1dceb02970e8ad8bccf73c0a9ae1d"
+    ],
+    [
+      "CommonDH.__proj__ServerKeyShare__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_CommonDH.ServerKeyShare",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_CommonDH_Tm_refine_9cc025d1d8ed93fe703d76a8ddd03286"
+      ],
+      0,
+      "88f24bd5a0e2a067a32c059226804739"
+    ],
+    [
+      "CommonDH.__proj__HRRKeyShare__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_CommonDH.HRRKeyShare",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_CommonDH_Tm_refine_24f91d366aff84b0df73177175f3b8ef"
+      ],
+      0,
+      "6f64e1c7cce515aa0e939eaf67526fb3"
+    ],
+    [
+      "CommonDH.parseKeyShareEntries",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_FStar.Error.Correct",
+        "disc_equation_FStar.Error.Error", "equation_Parse.vlparse",
+        "equation_TLSError.error", "equation_TLSError.result",
+        "fuel_guarded_inversion_FStar.Error.optResult"
+      ],
+      0,
+      "d60d3917c264bc4bb40f6ce9867d93d3"
+    ],
+    [
+      "CommonDH.keyShareBytes",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_Prims.HasEq_int" ],
+      0,
+      "056f3fb7afaa025ebf16d0c297caf0fc"
+    ],
+    [
+      "CommonDH.keyShareBytes",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "constructor_distinct_CommonDH.ClientKeyShare",
+        "disc_equation_CommonDH.ClientKeyShare",
+        "disc_equation_CommonDH.HRRKeyShare",
+        "disc_equation_CommonDH.ServerKeyShare",
+        "fuel_guarded_inversion_CommonDH.keyShare",
+        "projection_inverse_BoxBool_proj_0",
+        "typing_CommonDH.uu___is_ClientKeyShare"
+      ],
+      0,
+      "81a6b7f572b23d737d0ae44882f2cfe9"
+    ]
+  ]
+]

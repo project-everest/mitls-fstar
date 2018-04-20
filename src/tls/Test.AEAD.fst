@@ -196,7 +196,7 @@ let test_vectors = [
   };
   ]
 
-let rec iter vs: St C.exit_code =
+let rec iter (vs:list vector): St C.exit_code =
   match vs with
   | [] -> C.EXIT_SUCCESS
   | v :: vs -> if test v then iter vs else C.EXIT_FAILURE

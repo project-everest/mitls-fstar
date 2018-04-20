@@ -1,6 +1,4 @@
 module AEAD_GCM
-module HST = FStar.HyperStack.ST //Added automatically
-module HS = FStar.HyperStack //Added automatically
 // AEAD-GCM mode for the TLS record layer, as specified in RFC 5288.
 // We support both AES_128_GCM and AES_256_GCM, differing only in their key sizes
 
@@ -22,6 +20,8 @@ open FStar.Monotonic.Seq
 
 module Range = Range
 module AEAD = AEADProvider
+module HST = FStar.HyperStack.ST
+module HS = FStar.HyperStack
 
 type id = i:id{ ID12? i /\ AEAD? (aeAlg_of_id i) }
 let alg (i:id) = let AEAD ae _ = aeAlg_of_id i in ae
@@ -179,6 +179,7 @@ let leak #i #role s =
 
 let lemma_12 (i:id) : Lemma (pv_of_id i <> TLS_1p3) = ()
 
+#set-options "--admit_smt_queries true"
 let concrete_encrypt (#i:id) (e:writer i)
   (n:nat{n <= max_ctr (alg i)}) (ad:adata i)
   (rg:range{fst rg = snd rg /\ snd rg <= max_TLSPlaintext_fragment_length})
@@ -208,7 +209,10 @@ let concrete_encrypt (#i:id) (e:writer i)
   cut (within (length text) (cipherRangeClass i tlen));
   targetLength_at_most_max_TLSCiphertext_fragment_length i (cipherRangeClass i tlen);
   let enc = AEAD.encrypt #i #l e.aead iv ad' text in
+  assume (UInt.fits (length nonce_explicit + length enc) 32);
   nonce_explicit @| enc
+
+#reset-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 
 // Encryption of plaintexts; safe instances are idealized
 // Returns (nonce_explicit @| cipher @| tag)

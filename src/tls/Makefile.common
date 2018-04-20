@@ -143,4 +143,4 @@ extract/copied/%.c: $(KREMLIN_HOME)/kremlib/%.c
 
 # Rules for Interactive Mode
 %.fst-in %.fsti-in: 
-	@echo $(addprefix --include , $(INCLUDE_PATHS)) --cache_dir $(CACHE_DIR) --cache_checked_modules $(OTHERFLAGS) --use_hints --use_hint_hashes --hint_file $(HINTS_DIR)/$(notdir $(subst -in,,$@)).hints
+	@echo $(addprefix --include , $(INCLUDE_PATHS)) --cache_dir $(CACHE_DIR) --cache_checked_modules $(OTHERFLAGS) --hint_file $(HINTS_DIR)/$(notdir $(subst -in,,$@)).hints $(VFLAGS)
