@@ -122,10 +122,8 @@ let tls_prf secret label seed len =
   assume(Bytes.len hmd5 = len /\ Bytes.len hsha1 = len);
   xor len hmd5 hsha1
 
-#set-options "--admit_smt_queries true"
 let tls_client_label = utf8_encode "client finished"
 let tls_server_label = utf8_encode "server finished"
-
 
 val tls_finished_label: role -> Tot bytes
 let tls_finished_label =
