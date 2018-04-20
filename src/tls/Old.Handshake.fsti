@@ -10,6 +10,8 @@ open TLSConstants
 
 module HS = FStar.HyperStack 
 
+#set-options "--admit_smt_queries true"
+
 val hs: Type0
 
 // the handshake epochs internally maintains counters for the current reader and writer

@@ -8,7 +8,7 @@
       1,
       [ "@query" ],
       0,
-      "a2f9c1f5369f00fe2139ad463342c718"
+      "5e4c4f2f43fa4dd844eb005c4d322201"
     ],
     [
       "HKDF.expand_int",
@@ -35,7 +35,7 @@
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "5a696cfe2006d7fe134c44143b63b729"
+      "0034fadc368100604fa3f90049e1aba5"
     ],
     [
       "HKDF.tls13_prefix",
@@ -44,7 +44,7 @@
       1,
       [ "@query" ],
       0,
-      "a9b5ebe83ca74fb719b562ed393e4986"
+      "68d4e7f48a95a3f34359223fb877bf6c"
     ],
     [
       "HKDF.format",
@@ -70,6 +70,7 @@
         "equation_Mem.disjoint", "equation_Mem.rgn",
         "equation_Mem.tls_define_region", "equation_Mem.tls_rgn",
         "equation_Mem.tls_tables_region", "equation_Prims.nat",
+        "equation_with_fuel_Prims.pow2.fuel_instrumented",
         "function_token_typing_CommonDH.dh_region",
         "function_token_typing_FStar.UInt32.n",
         "function_token_typing_FStar.UInt64.n",
@@ -78,7 +79,7 @@
         "function_token_typing_HKDF.tls13_prefix",
         "function_token_typing_Mem.tls_define_region",
         "function_token_typing_Mem.tls_tables_region", "int_inversion",
-        "lemma_FStar.Bytes.length_reveal",
+        "int_typing", "lemma_FStar.Bytes.length_reveal",
         "lemma_FStar.Seq.Base.lemma_len_append",
         "lemma_FStar.UInt.pow2_values", "lemma_FStar.UInt32.vu_inv",
         "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
@@ -106,7 +107,7 @@
         "typing_Mem.disjoint", "typing_Mem.tls_define_region"
       ],
       0,
-      "cf0c99c824fc9ff9359a0ac63e3ce98f"
+      "789ebdb6656fab4c5c652a7391e195ab"
     ],
     [
       "HKDF.expand_label",
@@ -167,6 +168,7 @@
         "equation_Mem.tls_define_region", "equation_Mem.tls_rgn",
         "equation_Mem.tls_tables_region", "equation_Prims.nat",
         "equation_TLSConstants.hash_alg",
+        "equation_with_fuel_Prims.pow2.fuel_instrumented",
         "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
         "function_token_typing_CommonDH.dh_region",
         "function_token_typing_FStar.UInt32.n",
@@ -176,7 +178,7 @@
         "function_token_typing_HKDF.tls13_prefix",
         "function_token_typing_Mem.tls_define_region",
         "function_token_typing_Mem.tls_tables_region", "int_inversion",
-        "lemma_FStar.Bytes.length_reveal",
+        "int_typing", "lemma_FStar.Bytes.length_reveal",
         "lemma_FStar.Seq.Base.lemma_len_append",
         "lemma_FStar.UInt.pow2_values", "lemma_FStar.UInt32.vu_inv",
         "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",

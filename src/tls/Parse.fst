@@ -9,6 +9,9 @@ include Mem // temporary, for code opening only TLSConstants
 
 (** Begin Module Format *)
 
+
+#reset-options "--admit_smt_queries true"
+
 // basic parsing and formatting---an attempt at splitting TLSConstant.
 
 type pinverse_t (#a:Type) (#b:Type) ($f:(a -> Tot b)) = b -> Tot (result a)

@@ -2,30 +2,13 @@
   "[鲯赵Q㤘鬨u0004\u0000�3�9�",
   [
     [
-      "Old.Handshake.iT",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "disc_equation_TLSConstants.Reader",
-        "disc_equation_TLSConstants.Writer", "equation_Epochs.get_epochs",
-        "equation_Old.Handshake.es_of",
-        "fuel_guarded_inversion_Epochs.epochs",
-        "fuel_guarded_inversion_TLSConstants.rw",
-        "typing_Old.Handshake.epochs_of"
-      ],
-      0,
-      "9c73a91186c5d9e42a3557a392f53503"
-    ],
-    [
       "Old.Handshake.i",
       1,
       2,
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "6372bf549fcc1bb5544fa69b82209b08"
+      "a822a26ed3e8b6e4204937f6803e988c"
     ],
     [
       "Old.Handshake.eT",
@@ -37,102 +20,7 @@
         "refinement_interpretation_Old.Handshake_Tm_refine_8ecdbde98557a7966bf87bf8d12f8ab1"
       ],
       0,
-      "4c6b38683d7522867e77fd761f2edef9"
-    ],
-    [
-      "Old.Handshake.incoming",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "TLSError_pretyping_ac8925de8f61cb7c5770d20ef8b62826",
-        "assumption_FStar.Pervasives.Native.tuple2__uu___haseq",
-        "assumption_Prims.HasEq_bool", "assumption_Prims.HasEq_string",
-        "assumption_Prims.list__uu___haseq",
-        "assumption_TLSError.alertDescription__uu___haseq",
-        "data_typing_intro_TLSError.AD_unexpected_message@tok",
-        "equation_Cert.cert", "equation_Cert.chain",
-        "equation_TLSConstants.cert_repr", "equation_TLSError.error",
-        "function_token_typing_FStar.Bytes.bytes",
-        "function_token_typing_Prims.string",
-        "function_token_typing_TLSConstants.cert_repr",
-        "haseqTLSConstants_Tm_refine_382d41670ce6c14f0c287be14a4a6347",
-        "kinding_TLSError.alertDescription@tok",
-        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
-      ],
-      0,
-      "cc12a6789ddf48f01b1cf0e459794d60"
-    ],
-    [
-      "Old.Handshake.__proj__InAck__item__next_keys",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "disc_equation_Old.Handshake.InAck",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Old.Handshake_Tm_refine_34fd456387d495ffd87d7327da9ea3af"
-      ],
-      0,
-      "73cfa1f1aaa0b6c36c8b060d8440a046"
-    ],
-    [
-      "Old.Handshake.__proj__InAck__item__complete",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "disc_equation_Old.Handshake.InAck",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Old.Handshake_Tm_refine_34fd456387d495ffd87d7327da9ea3af"
-      ],
-      0,
-      "e85e937531a1419edd97bf282de40340"
-    ],
-    [
-      "Old.Handshake.__proj__InQuery__item___0",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "disc_equation_Old.Handshake.InQuery",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Old.Handshake_Tm_refine_c7ca6de54f51db558130464cf56c930c"
-      ],
-      0,
-      "87bfbde6edd2b6a7af72f890312a5a9d"
-    ],
-    [
-      "Old.Handshake.__proj__InQuery__item___1",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "disc_equation_Old.Handshake.InQuery",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Old.Handshake_Tm_refine_c7ca6de54f51db558130464cf56c930c"
-      ],
-      0,
-      "a12add7077e974006e1d404b48771a93"
-    ],
-    [
-      "Old.Handshake.__proj__InError__item___0",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "disc_equation_Old.Handshake.InError",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Old.Handshake_Tm_refine_bf7882de0a6da0946c1ec13eba8198d6"
-      ],
-      0,
-      "86a2122f7b8d6c359ef2e1caed69fc65"
+      "27934a822086766300b624ce901e7349"
     ],
     [
       "Old.Handshake.create",
@@ -141,34 +29,7 @@
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "533383c9f5a719ccc5f56c435ce385e7"
-    ],
-    [
-      "Old.Handshake.rehandshake",
-      1,
-      2,
-      1,
-      [ "@query", "assumption_TLSConstants.role__uu___haseq" ],
-      0,
-      "7e77b4bb279ef00b0fc4e20faec659c1"
-    ],
-    [
-      "Old.Handshake.rekey",
-      1,
-      2,
-      1,
-      [ "@query", "assumption_TLSConstants.role__uu___haseq" ],
-      0,
-      "3715d5f81cabda694b5d49231af97f93"
-    ],
-    [
-      "Old.Handshake.request",
-      1,
-      2,
-      1,
-      [ "@query", "assumption_TLSConstants.role__uu___haseq" ],
-      0,
-      "e48f55f3ccdd5cd8603cb0f7e94bbb46"
+      "ad32468e079b97744dcbbc831e2d33a4"
     ],
     [
       "Old.Handshake.next_fragment_ensures",
@@ -177,7 +38,7 @@
       1,
       [ "@query" ],
       0,
-      "83f68eaa311f2205d953ab8003bcdd67"
+      "eb7551899bbbec7a2a8046f42fe00274"
     ],
     [
       "Old.Handshake.next_fragment_ensures",
@@ -189,16 +50,7 @@
         "haseqOld.Handshake_Tm_refine_342c59bed7a76f5ffef7977543f023b3"
       ],
       0,
-      "53fcbf030b697a6f5d6bb2167a37262b"
-    ],
-    [
-      "Old.Handshake.next_fragment",
-      1,
-      2,
-      1,
-      [ "@query", "assumption_TLSInfo.id__uu___haseq" ],
-      0,
-      "787bf2fa57dc41c5c5a1bade1c0bfc70"
+      "aeccbe32df28f2ada7fc41078d30f9cb"
     ],
     [
       "Old.Handshake.next_fragment",
@@ -207,7 +59,7 @@
       1,
       [ "@query", "primitive_Prims.op_LessThan" ],
       0,
-      "2c7203b66bc5bfca32df3ec8e8e793e6"
+      "7974db31324d2b31cfef9fa3f37bffda"
     ],
     [
       "Old.Handshake.recv_ensures",
@@ -216,7 +68,7 @@
       1,
       [ "@query" ],
       0,
-      "38fd95210c053c9cf556a8015eef3a13"
+      "a649f283462552cd4bdac8323f3b2984"
     ],
     [
       "Old.Handshake.recv_ensures",
@@ -228,16 +80,7 @@
         "haseqOld.Handshake_Tm_refine_342c59bed7a76f5ffef7977543f023b3"
       ],
       0,
-      "f6f3cdbad0ee7ec26f812810773d2e7f"
-    ],
-    [
-      "Old.Handshake.recv_ccs",
-      1,
-      2,
-      1,
-      [ "@query", "assumption_Old.Handshake.incoming__uu___haseq" ],
-      0,
-      "a93333b21185afce1d68a2a9ba218cab"
+      "ad7fd673c9e0d27f4b98a3451bf86bad"
     ]
   ]
 ]

@@ -720,7 +720,7 @@ let client_HelloRetryRequest #region (ns:t region Client) hrr (s:option share) =
   and outputs the negotiated version if true
 *)
 
-private let not_unknown_version x = not (UnknownVersion? x)
+private let not_unknown_version x = not (Unknown_protocolVersion? x)
 
 // usable on both sides; following https://tlswg.github.io/tls13-spec/#rfc.section.4.2.1
 let offered_versions min_pv (o: offer): result (l: list protocolVersion {l <> []}) =

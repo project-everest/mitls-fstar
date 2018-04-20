@@ -160,6 +160,8 @@ let transcript_format_injective ms0 ms1 =
 //In particular: pv+kex+hash_alg can be read from CH/SH, dh_group can be read from SKE
 //TODO: decide whether to keep these parameters explicit or compute them from the log
 
+#reset-options "--admit_smt_queries true"
+
 private
 let rec tags_append_aux
   (a: alg)
