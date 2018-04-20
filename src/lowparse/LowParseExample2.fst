@@ -166,3 +166,5 @@ let serialize_then_parse_t' x =
 
 let parse_then_serialize_t' x y consumed =
   LP.parser32_then_serializer32 _ parse_t'_impl serialize_t'_impl x
+
+let main () : Tot FStar.Int32.t = 0l

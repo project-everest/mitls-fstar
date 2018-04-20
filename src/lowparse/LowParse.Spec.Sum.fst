@@ -251,14 +251,24 @@ let make_sum_with_nondep
   (s: sum)
 = Sum (sum_key_type s) (sum_repr_type s) (sum_enum s) (nondep_part * sum_type s) (tag_of_data_with_nondep nondep_part (sum_tag_of_data s))
 
-let synth_sum_with_nondep_case
+#set-options "--use_two_phase_tc false"
+
+inline_for_extraction
+val synth_sum_with_nondep_case
   (nondep_part: Type0)
   (t: sum)
   (x: sum_key (make_sum_with_nondep nondep_part t))
-  (d: nondep_part * sum_cases t (x <: sum_key_type t))
-: Tot (sum_cases (make_sum_with_nondep nondep_part t) x)
+  (d: nondep_part * sum_cases t (let x : sum_key_type t = x in x))
+: Tot (sum_cases (make_sum_with_nondep nondep_part t) (let x : sum_key_type t = x in x))
+
+let synth_sum_with_nondep_case nondep_part t x d
 = match d with
-  | (df, ds) -> (df, (ds <: sum_type t))
+  | (df, ds) -> 
+    [@inline_let]
+    let ds : sum_type t = ds in
+    (df, ds)
+
+#reset-options
 
 let parse_sum_with_nondep_cases
   (#nondep_part: Type0)

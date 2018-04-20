@@ -126,7 +126,6 @@ let tls_prf secret label seed len =
 let tls_client_label = utf8_encode "client finished"
 let tls_server_label = utf8_encode "server finished"
 
-
 val tls_finished_label: role -> Tot bytes
 let tls_finished_label =
   function

@@ -35,7 +35,7 @@ val statelen : I.id -> U32.t
 
 type cipher (i:I.id) (l:nat{l + v taglen < pow2 32}) = lbytes (l + (UInt32.v taglen))
 
-type cipher32 (i:I.id) (l:U32.t) = lbytes32 (l +^ taglen)
+type cipher32 (i:I.id) (l:U32.t{UInt.size (v l + 16) 32}) = lbytes32 (l +^ taglen)
 
 inline_for_extraction
 val entry : i:I.id -> Type0
@@ -92,11 +92,11 @@ let fresh_addresses (rid:rid) (addrs:Set.set address) (m0:mem) (m1:mem) =
        contains_addr  rid a m1
 
 (** Downward closure of [prf_region i] *)
-val shared_footprint: i:I.id -> GTot rset
+val shared_footprint: rset
 
 (** Downward closure of [log_region i] *)
 val footprint: #i:I.id -> #rw:_ -> aead_state i rw -> 
-  GTot (s:rset{s `Set.disjoint` shared_footprint i})
+  GTot (s:rset{s `Set.disjoint` shared_footprint})
 
 //Leaving this abstract for now; but it should imply Crypto.AEAD.Invariant.safelen i len (otp_offset i)
 val safelen: I.id -> nat -> bool
@@ -109,7 +109,7 @@ val frame_invariant: #i:_ -> #rw:_ -> st:aead_state i rw -> h0:mem -> r:rid -> h
     Lemma (requires (invariant st h0 /\
            modifies_one r h0 h1 /\
            ~(r `Set.mem` footprint st) /\
-           ~(r `Set.mem` shared_footprint i)))
+           ~(r `Set.mem` shared_footprint)))
           (ensures invariant st h1)
 
 val frame_log: #i:_ -> #rw:_ -> st:aead_state i rw -> l:Seq.seq (entry i) ->
@@ -136,7 +136,7 @@ val gen (i:I.id)
                (exists fresh.
                   fresh_addresses prf_rgn fresh h0 h1 /\
                   footprint s == Set.singleton log_rgn /\
-                  shared_footprint i == Set.singleton prf_rgn) /\
+                  shared_footprint == Set.singleton prf_rgn) /\
                (safeMac i ==> log s h1 == Seq.createEmpty) /\
                invariant s h1
               ))
