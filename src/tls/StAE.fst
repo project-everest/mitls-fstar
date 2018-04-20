@@ -46,7 +46,9 @@ type stae_id = i:id {is_stream i \/ is_stlhae i}
 ////////////////////////////////////////////////////////////////////////////////
 
 let frag_plain_len (#i:id{is_stream i}) (f:C.fragment i): StreamPlain.plainLen =
-  snd (C.rg i f) + 1
+  let r = snd (C.rg i f) + 1 in
+  assume (StreamPlain.plainLength r);
+  r
 
 let frag_cipher_len (#i:id{is_stream i}) (f:C.fragment i) =
   frag_plain_len f + Stream.ltag i
@@ -69,6 +71,7 @@ type keyBytes (i:stae_id) = lbytes (aeKeySize i)
 ////////////////////////////////////////////////////////////////////////////////
 //`state i rw`, a sum to cover StreamAE (1.3) and StatefulLHAE (1.2)
 ////////////////////////////////////////////////////////////////////////////////
+#set-options "--admit_smt_queries true"
 noeq type state (i:id) (rw:rw) =
   | Stream: u:unit{is_stream i} -> Stream.state i rw -> state i rw
   | StLHAE: u:unit{is_stlhae i} -> StLHAE.state i rw -> state i rw
@@ -334,7 +337,7 @@ let coerce parent i kiv =
     let kv,iv = FStar.Bytes.split_ kiv (CoreCrypto.aeadKeySize (StLHAE.alg i)) in
     StLHAE () (StLHAE.coerce parent i kv iv)
 
-#reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 2 --max_ifuel 2"
+#reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 2 --max_ifuel 2 --admit_smt_queries true"
 val leak: #i:id{~(authId i)} -> #role:rw -> s:state i role -> ST (keyBytes i) //with 2 units of i_fuel, we can invert s and prove that i must be an stae_id
   (requires (fun h0 -> True))
   (ensures  (fun h0 r h1 -> modifies Set.empty h0 h1 ))

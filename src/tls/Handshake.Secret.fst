@@ -19,6 +19,8 @@ module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
 module H = Hashing.Spec
 
+#set-options "--admit_smt_queries true" 
+
 // cwinter: Epochs.fst still depends on these (previously in KeySchedule.fst)
 type exportKey = (li:logInfo & i:exportId li & H.tag (exportId_hash i))
 type recordInstance = | StAEInstance: #id:TLSInfo.id -> StAE.reader (TLSInfo.peerId id) -> StAE.writer id -> recordInstance  

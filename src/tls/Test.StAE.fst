@@ -30,6 +30,8 @@ let print s = discard (IO.debug_print_string (prefix^": "^s^".\n"))
 let eprint s : St unit = ok := false; print ("ERROR: "^s)
 let nprint s : St unit = print s
 
+#set-options "--admit_smt_queries true"
+
 // used in other tests too
 private let pre_id (role:role) =
   let cr  = Bytes.create 32ul 0z in
@@ -39,8 +41,6 @@ private let pre_id (role:role) =
   ID12 TLS_1p2 msid kdf (AEAD CoreCrypto.AES_256_GCM Hashing.Spec.SHA256) cr sr role
 
 let id12 = pre_id Client
-
-#set-options "--admit_smt_queries true"
 
 let id13 =
   let cr  = Bytes.create 32ul 0z in

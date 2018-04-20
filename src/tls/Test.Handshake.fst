@@ -19,6 +19,8 @@ module Range = Range
 module Handshake = Old.Handshake
 module PKI = PKI
 
+#set-options "--admit_smt_queries true"
+
 let prefix = "Test.Handshake"
 let ok: ref bool = ralloc root true
 

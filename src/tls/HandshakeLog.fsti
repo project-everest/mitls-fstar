@@ -261,7 +261,6 @@ val send_CCS_tag: #a:alg -> s:log -> m:msg -> complete:bool -> ST (tag a)
     let bs = transcript_bytes (transcript h1 s)  in
     write_transcript h0 h1 s m /\
     hashed a bs /\ h == hash a bs ))
-#reset-options
 
 // Setting signals 'drops' the writing state, to prevent further writings until the signals have been transmitted
 val send_signals: s:log -> next_keys:option (bool * bool) -> complete:bool -> ST unit
@@ -302,7 +301,6 @@ type outgoing (i:id) (* initial index *) =
       next_keys : option next_keys_use -> // the writer index increases; details included
       complete: bool                   -> // the handshake is complete!
       outgoing i
-
 
 //17-03-26 now return an outgoing result, for uniformity
 // | OutError: error -> outgoing i       // usage? send a polite Alert in case something goes wrong when preparing messages

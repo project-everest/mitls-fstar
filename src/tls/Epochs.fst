@@ -28,6 +28,8 @@ module HS = FStar.HyperStack
 module MS = FStar.Monotonic.Seq
 module Secret = Handshake.Secret
 
+#set-options "--admit_smt_queries true"
+
 type random = TLSInfo.random
 
 (* debug printing *)
@@ -181,7 +183,7 @@ val alloc_log_and_ctrs: #a:Type0 -> #p:(seq a -> Type0) -> r:rgn ->
       h1 `contains` c2 /\
       i_sel h1 is == Seq.createEmpty)))
 
-#reset-options "--using_facts_from FStar --using_facts_from Prims --using_facts_from Epochs --using_facts_from Parse"
+#reset-options "--using_facts_from FStar --using_facts_from Prims --using_facts_from Epochs --using_facts_from Parse --admit_smt_queries true"
 
 let alloc_log_and_ctrs #a #p r =
   let init = Seq.createEmpty in
@@ -191,7 +193,7 @@ let alloc_log_and_ctrs #a #p r =
   let c2 : epoch_ctr #a #p r is = HST.ralloc r (-1) in
   (| is, c1, c2 |)
 
-#reset-options
+// #reset-options
 
 val incr_epoch_ctr :
   #a:Type0 ->

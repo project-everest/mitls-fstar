@@ -39,6 +39,8 @@ type handshakeType =
   | HT_key_update
   | HT_message_hash
 
+#reset-options "--admit_smt_queries true"
+
 val htBytes: handshakeType -> Tot (lbytes 1)
 val htBytes_is_injective:
   ht1:handshakeType -> ht2:handshakeType ->

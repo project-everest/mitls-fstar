@@ -22,7 +22,7 @@ module U32 = FStar.UInt32
 type key = bytes //18-02-14 TODO length
 let coerce (k:bytes) : key = k
 
-#set-options "--admit_smt_queries true"
+// #set-options "--admit_smt_queries true"
 
 (* SSL3 *)
 (* 17-02-02 deprecated, and not quite typechecking...
@@ -81,6 +81,7 @@ let ssl_verifyCertificate hashAlg ms log  =
 
 (* TLS 1.0--1.1 *) 
 
+#reset-options "--admit_smt_queries true"
 private val p_hash_int: 
   a: macAlg -> 
   secret: lbytes32 (macKeySize a) -> 
@@ -122,7 +123,6 @@ let tls_prf secret label seed len =
   assume(Bytes.len hmd5 = len /\ Bytes.len hsha1 = len);
   xor len hmd5 hsha1
 
-#set-options "--admit_smt_queries true"
 let tls_client_label = utf8_encode "client finished"
 let tls_server_label = utf8_encode "server finished"
 

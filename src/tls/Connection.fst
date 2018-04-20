@@ -21,6 +21,8 @@ open Range
 module HS = FStar.HyperStack
 module Handshake = Old.Handshake
 
+#set-options "--admit_smt_queries true"
+
 // using also Range, DataStream, TLSFragment, Record
 
 (*

@@ -20,6 +20,8 @@ module Nego = Negotiation
 module Secret = Handshake.Secret
 module KeySchedule = Handshake.Secret
 
+#set-options "--admit_smt_queries true"
+
 (* A flag for runtime debugging of Handshake data.
    The F* normalizer will erase debug prints at extraction
    when this flag is set to false. *)
@@ -49,11 +51,10 @@ unfold let trace = if DebugFlags.debug_HS then print else (fun _ -> ())
 
 type digest = Hashing.anyTag //  l:bytes{length l <= 32}
 
-#set-options "--admit_smt_queries true"
 type machineState =
   | C_Idle
   | C_wait_ServerHello: // waiting for plaintext handshake 
-    psks: list (i:esId{~(Secret.no_psk i)}) -> 
+    psks: list (i:Idx.id{~(Secret.no_psk i)}) -> 
     groups: list CommonDH.group -> // ghost summary of our offer
     ks: Secret.c13_wait_ServerHello psks groups -> machineState 
 
@@ -72,7 +73,7 @@ type machineState =
 
   | C13_complete: // TLS 1.3 waiting for post-handshake messages (TBC rekeying)
     i:   Secret.ams_id -> 
-    rms: Secret.secret (rms_of_ams i tr) (* for accepting resumption tickets *) ->
+//    rms: Secret.secret (rms_of_ams i tr) (* for accepting resumption tickets *) ->
     machineState
 
   | C12_wait_CCS1 of digest      // TLS resume, digest to be authenticated by server
@@ -96,9 +97,10 @@ type machineState =
   | S_Idle
   
   | S13_sent_ServerHello:      // TLS 1.3, intermediate state to encryption
-    i: Secret.esId -> 
-    //idh: ->
+    i: Idx.id -> // Secret.esId -> 
+    idh: Idx.id_dhe ->
     ks: Secret.s13_wait_ServerHello i idh -> machineState
+      
   
   | S_wait_EOED                // Waiting for EOED
   | S_wait_Finished2 of digest // TLS 1.3, digest to be MACed by client
@@ -205,50 +207,50 @@ let completed #rgn #nonce e = True
 /// defined once the transcript is big enough.
 /// 
 // WIP on the handshake invariant; see also hs_inv below!
-let inv (s:hs) (h:HyperStack.mem) =
-  let n = Negotiation.state h hs.nego in // let context = Negotiation.context h hs.nego in
-  let tr = HandshakeLog.transcript h hs.log in
-  let control = HyperStack.sel h s.state in 
-  let kst = Secret.state h hs.ks in 
-  (Correct nego = Nego.replay transcript /\ 
-  (match control with
-  | C_Idle -> 
-      // create...client_ClientHello
-      hs.role = Client /\ 
-      tr = [] /\ 
-      writing h hs.nego /\ 
-      C_Init? kst // unclear we care about its nonce, otherwise see client_ClientHello
+// let inv (s:hs) (h:HyperStack.mem) =
+//   let n = Negotiation.negotiationState h hs.nego in // let context = Negotiation.context h hs.nego in
+//   let tr = HandshakeLog.transcript h hs.log in
+//   let control = HyperStack.sel h s.state in 
+//   let kst = Secret.state h hs.ks in 
+//   (Correct nego = Nego.replay transcript /\ 
+//   (match control with
+//   | C_Idle -> 
+//       // create...client_ClientHello
+//       hs.role = Client /\ 
+//       tr = [] /\ 
+//       writing h hs.nego /\ 
+//       C_Init? kst // unclear we care about its nonce, otherwise see client_ClientHello
 
-  | C_wait_ServerHello ->
-      // client_ClientHello...(client_HelloRetryRequest \/ client_ServerHello)
-      // with a branch on proposing TLS 1.3 or not 
-      hs.role = Client /\
-      tr = [clientHello hs.nonce (Negotiation.offer_of nego)] /\
-      ( match kst with 
-        | C_13_wait_SH (*cr*) esl gs -> "esl and gs compatible with offer" 
-        | _ -> False )
-(*
-  | C13_wait_Finished1 -> 
-      hs.role = Client /\ 
-      tr = [clientHello hs.nonce (Negotiation.offer_of nego); ServerHello ...] /\ 
-      // When do we care about precise indexes? We plan to sync
-      // with Secret on indexes, rather than transcripts
-      // (abstract for Secret).  we'll need to keep around at
-      // least the PSK index in addition to the log
-      match kst with 
-      | C_13_wait_SF (*subsumed by i?: alpha*) i1 transcript_sh (*for deriving the indexes of*) cfk sfk ams -> 
-          i1 = i_hs_secret_of_transcript tr /\ 
-          transcript_sh = tr `up_to` ServerHello?
-          "something about local writers?"  
-      | _ -> False
-*)
-  | S_Idle -> 
-      hs.role = Server /\ 
-      tr = [] /\ 
-      S_Init? kst
+//   | C_wait_ServerHello ->
+//       // client_ClientHello...(client_HelloRetryRequest \/ client_ServerHello)
+//       // with a branch on proposing TLS 1.3 or not 
+//       hs.role = Client /\
+//       tr = [clientHello hs.nonce (Negotiation.offer_of nego)] /\
+//       ( match kst with 
+//         | C_13_wait_SH (*cr*) esl gs -> "esl and gs compatible with offer" 
+//         | _ -> False )
+// (*
+//   | C13_wait_Finished1 -> 
+//       hs.role = Client /\ 
+//       tr = [clientHello hs.nonce (Negotiation.offer_of nego); ServerHello ...] /\ 
+//       // When do we care about precise indexes? We plan to sync
+//       // with Secret on indexes, rather than transcripts
+//       // (abstract for Secret).  we'll need to keep around at
+//       // least the PSK index in addition to the log
+//       match kst with 
+//       | C_13_wait_SF (*subsumed by i?: alpha*) i1 transcript_sh (*for deriving the indexes of*) cfk sfk ams -> 
+//           i1 = i_hs_secret_of_transcript tr /\ 
+//           transcript_sh = tr `up_to` ServerHello?
+//           "something about local writers?"  
+//       | _ -> False
+// *)
+//   | S_Idle -> 
+//       hs.role = Server /\ 
+//       tr = [] /\ 
+//       S_Init? kst
 
-  | _ -> True
-  ))
+//   | _ -> True
+//   ))
   
 (*
 /// i.e. we expect this definition in Secret

@@ -23,6 +23,8 @@ module HST = FStar.HyperStack.ST
 module MDM = FStar.Monotonic.DependentMap
 module DM = FStar.DependentMap
 
+#set-options "--admit_smt_queries true"
+
 (* A flag for runtime debugging of cDH data.
    The F* normalizer will erase debug prints at extraction
    when this flag is set to false. *)

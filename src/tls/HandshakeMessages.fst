@@ -14,6 +14,8 @@ open Extensions
 open TLSInfo
 open CommonDH
 
+#reset-options "--admit_smt_queries true"
+
 (* External functions, locally annotated for speed *)
 (*
 assume val vlsplit: lSize:nat{lSize <= 4}
@@ -59,7 +61,7 @@ let htBytes t =
     in
   abyte z
 
-#reset-options "--z3rlimit 100"
+// #reset-options "--z3rlimit 100"
 let htBytes_is_injective ht1 ht2 = ()
 
 let parseHt b =
@@ -84,7 +86,7 @@ let parseHt b =
   //| 67z -> Correct HT_next_protocol
   | _   -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
-#reset-options "--z3rlimit 600 --initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0"
+//#reset-options "--z3rlimit 600 --initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0"
 let inverse_ht x = admit ()
 let pinverse_ht x = ()
 
@@ -116,6 +118,7 @@ let messageBytes_is_injective_strong ht1 data1 s1 ht2 data2 s2 = admit()
   //   end
   // else ()
 
+#reset-options "--admit_smt_queries true"
 let messageBytes_is_injective ht1 data1 ht2 data2 =
   messageBytes_is_injective_strong ht1 data1 empty_bytes ht2 data2 empty_bytes
 
@@ -141,9 +144,9 @@ let parseMessage buf =
         let to_log = messageBytes ht payload in
         Correct (Some (| rem', ht, payload, to_log |))
 
+#reset-options "--admit_smt_queries true"
 (** A.4.1 Hello Messages *)
-
-#reset-options
+//#reset-options
 val list_valid_to_valid_list: l:valid_cipher_suites -> Tot (l':list (c:cipherSuite{validCipherSuite c}){List.Tot.length l == List.Tot.length l'})
 let rec list_valid_to_valid_list l =
   match l with
@@ -156,7 +159,7 @@ let rec valid_list_to_list_valid l =
   match l with
   | hd::tl -> hd::(valid_list_to_list_valid tl)
   | [] -> []
-#reset-options "--z3rlimit 600 --initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0"
+//#reset-options "--z3rlimit 600 --initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0"
 
 val messageBytes_extra:
   ht:handshakeType ->
@@ -230,7 +233,7 @@ let optionExtensionsBytes exts =
     extensionsBytes ext
   | None -> empty_bytes
 
-#reset-options
+//#reset-options
 val list_valid_to_valid_list_lemma: cs1:valid_cipher_suites{List.Tot.length cs1 < 256} ->
   cs2:valid_cipher_suites{List.Tot.length cs2 < 256} ->
   Lemma (requires True)
@@ -256,7 +259,7 @@ let cipherSuiteBytes_is_injective cs cs' =
       let b1, b2 = cbyte2 b in
       assert (a1 <> b1 \/ a2 <> b2)
 
-#reset-options "--z3rlimit 600" // necessary to reset fuel
+//#reset-options "--z3rlimit 600" // necessary to reset fuel
 
 val cipherSuitesBytes_is_injective_aux: css1:list (c:cipherSuite{validCipherSuite c}) -> css2:list (c:cipherSuite{validCipherSuite c}) ->
   Lemma (requires True)
@@ -490,6 +493,7 @@ let parseClientHello data =
                   ch_compressions = cm;
                   ch_extensions = exts; }, obinders)))))
 
+#reset-options "--admit_smt_queries true"
 let serverHelloBytes sh =
   // signalling the current draft version
   let pv = match sh.sh_protocol_version with | TLS_1p3 -> TLS_1p2 | v -> v in
@@ -506,11 +510,9 @@ let serverHelloBytes sh =
   lemma_repr_bytes_values (length data);
   messageBytes HT_server_hello data
 
-#reset-options "--z3rlimit 50"
+//#reset-options "--z3rlimit 50"
 
 // 18-02-15 disabling verification attemps (150', 44 errors) till the new parsers.
-#set-options "--admit_smt_queries true"
-
 let serverHelloBytes_is_injective msg1 msg2 =
   if serverHelloBytes msg1 = serverHelloBytes msg2 then
   begin
@@ -615,9 +617,7 @@ let serverHelloBytes_is_injective_strong msg1 s1 msg2 s2 =
   messageBytes_is_injective_strong HT_server_hello b1' s1 HT_server_hello b2' s2;
   serverHelloBytes_is_injective msg1 msg2
 
-#reset-options
-//#set-options "--admit_smt_queries true"
-
+#reset-options "--admit_smt_queries true"
 let parseServerHello data =
   if length data < 34 then
     Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
@@ -813,7 +813,7 @@ let rec certificateTypeListBytes_is_injective ctl1 ctl2 =
     )
   | _, _ -> ()
 
-#reset-options
+//#reset-options
 
 let lemma_distinguishedNameListBytes_def (n:list dn{Cons? n /\ repr_bytes (length (utf8_encode (Cons?.hd n))) <= 2}) : Lemma
   (distinguishedNameListBytes n = (vlbytes 2 (utf8_encode (Cons?.hd n)) @| distinguishedNameListBytes (Cons?.tl n))) = ()
@@ -1239,7 +1239,7 @@ let finishedBytes_is_injective f1 f2 =
     messageBytes_is_injective HT_finished f1.fin_vd HT_finished f2.fin_vd
   )
 
-#reset-options
+//#reset-options
 
 val parseFinished: data:bytes{repr_bytes(length data) <= 3} ->
   result(f:fin{Bytes.equal (finishedBytes f) (messageBytes HT_finished data)})
@@ -1545,8 +1545,7 @@ let splitHandshakeMessage b =
     assert(Bytes.equal b (messageBytes ht data));
     (ht, data)
 
-#reset-options "--z3rlimit 100"
-//#set-options "--admit_smt_queries true"
+//#reset-options "--z3rlimit 100 --admit_smt_queries true"
 
 //17-05-05 update this proof, relying on pv to disambiguate messages with the same header
 let handshakeMessageBytes_is_injective pv msg1 msg2 =
@@ -1579,7 +1578,7 @@ let rec handshakeMessagesBytes pv = function
   | [] -> empty_bytes
   | h::t -> handshakeMessageBytes pv h @| handshakeMessagesBytes pv t
 
-#reset-options
+//#reset-options
 
 let lemma_handshakeMessagesBytes_def (pv:option protocolVersion) (li:list (msg:valid_hs_msg pv){Cons? li}) : Lemma (handshakeMessagesBytes pv li = ((handshakeMessageBytes pv (Cons?.hd li)) @| (handshakeMessagesBytes pv (Cons?.tl li)))) = ()
 
@@ -1592,8 +1591,7 @@ val lemma_handshakeMessageBytes_aux: pv:option protocolVersion -> msg1:valid_hs_
            /\ Bytes.equal b1 (slice_ b2 0 (length b1))))
   (ensures (Bytes.equal (handshakeMessageBytes pv msg1) (handshakeMessageBytes pv msg2)))
 
-#reset-options "--z3rlimit 50"
-//#set-options "--admit_smt_queries true"
+//#reset-options "--z3rlimit 50 --admit_smt_queries true"
 
 let lemma_handshakeMessageBytes_aux pv msg1 msg2 = admit()
   //TODO bytes NS 09/27 : stale
@@ -1617,7 +1615,7 @@ let lemma_handshakeMessageBytes_aux pv msg1 msg2 = admit()
   // Seq.lemma_eq_intro (Seq.slice payload2 0 (length payload1)) payload2;
   // lemma_append_inj (htBytes ht1) (vlbytes 3 data1) (htBytes ht2) (vlbytes 3 data2)
 
-#reset-options
+//#reset-options
 
 let lemma_aux_1 (a:bytes) (b:bytes) (c:bytes) (d:bytes) : Lemma
   (requires (Bytes.equal (a @| b) (c @| d)))
@@ -1726,6 +1724,8 @@ let parseBoolean (body: bytes): result bool =
   if body = abyte 1z then Correct true
   else if body = abyte 0z then Correct false
   else error "not a boolean"
+
+#reset-options "--admit_smt_queries true"
 
 // Special case for ticket internal encoding
 let parseHelloRetryRequest b =

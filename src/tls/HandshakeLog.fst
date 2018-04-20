@@ -250,6 +250,7 @@ let hashAlg h st =
 let transcript h t =
     reveal_log ((HS.sel h t).transcript)
 
+#set-options "--admit_smt_queries true" 
 let create reg pv =
     let l = State empty_hs_transcript empty_bytes None false
               empty_bytes [] (OpenHash empty_bytes)
