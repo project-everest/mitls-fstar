@@ -131,7 +131,8 @@ private
 inline_for_extraction
 let lbytes_pair_serializer32 (coordinate_length:coordinate_length_type)
   : LP.serializer32 (lbytes_pair_serializer coordinate_length) 
-  = let l = U32.v coordinate_length in
+  = [@inline_let]
+    let l = U32.v coordinate_length in
     LP.serialize32_nondep_then
       (LP.serialize32_flbytes l) ()
       (LP.serialize32_flbytes l) ()
@@ -158,7 +159,8 @@ let uncompressedPointRepresentation_serializer (coordinate_length:coordinate_len
 inline_for_extraction
 let uncompressedPointRepresentation_serializer32 (coordinate_length:coordinate_length_type) 
   : LP.serializer32 (uncompressedPointRepresentation_serializer coordinate_length)
-  = let l = coordinate_length in
+  = [@inline_let]
+    let l = coordinate_length in
     lemma_ucp_of_cuv_is_injective #l;
     lemma_ucp_of_cuv_of_ucp #l;
     LP.serialize32_synth 
