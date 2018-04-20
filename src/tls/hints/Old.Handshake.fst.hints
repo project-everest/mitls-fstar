@@ -1,1 +1,31 @@
-[ "ÙX½ç\u0004Çnx\u001e±U‚wy\u0015ë", [] ]
+[
+  "ÙX½ç\u0004Çnx\u001e±U‚wy\u0015ë",
+  [
+    [
+      "Old.Handshake.discard",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "equation_FStar.Monotonic.Heap.equal_dom",
+        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
+        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
+      ],
+      0,
+      "3d597cc48845959e35a006f14594895a"
+    ],
+    [
+      "Old.Handshake.trace",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_DebugFlags.debug", "equation_DebugFlags.debug_HS"
+      ],
+      0,
+      "807680533384df8654b19bf8b192f0c6"
+    ]
+  ]
+]

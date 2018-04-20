@@ -1,5 +1,5 @@
 [
-  "çVyˆ>æ˙ûÂ⁄=VW∏èµ",
+  "ò≈\u0000\u0015≥S1≠\u001e%k“%}\u0010`",
   [
     [
       "HandshakeLog.gforall",
@@ -517,82 +517,6 @@
       ],
       0,
       "21f506e7d3e14f3b7bd61718768d3918"
-    ],
-    [
-      "HandshakeLog.next_fragment",
-      2,
-      2,
-      1,
-      [ "@query", "assumption_Prims.HasEq_int" ],
-      0,
-      "d41f22e54a072ae894cb2a0868297882"
-    ],
-    [
-      "HandshakeLog.next_fragment",
-      3,
-      2,
-      1,
-      [ "@query", "assumption_Prims.HasEq_int" ],
-      0,
-      "e290c1cd078586411b5da323a0b5da0c"
-    ],
-    [
-      "HandshakeLog.parseMessages",
-      2,
-      2,
-      1,
-      [ "@query", "assumption_HandshakeMessages.handshakeType__uu___haseq" ],
-      0,
-      "bc25e7967afbfc4ef99e058b60472eb5"
-    ],
-    [
-      "HandshakeLog.receive",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query", "bool_inversion", "bool_typing",
-        "data_elim_FStar.Error.Correct", "disc_equation_FStar.Error.Correct",
-        "disc_equation_FStar.Error.Error",
-        "disc_equation_FStar.Pervasives.Native.None",
-        "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_HandshakeLog.msg", "equation_Hashing.Spec.anyTag",
-        "equation_TLSError.error", "equation_TLSError.result",
-        "function_token_typing_Hashing.Spec.anyTag",
-        "function_token_typing_TLSError.error",
-        "kinding_FStar.Pervasives.Native.option@tok",
-        "kinding_FStar.Pervasives.Native.tuple2@tok",
-        "kinding_HandshakeMessages.hs_msg@tok",
-        "kinding_Hashing.Spec.alg@tok", "kinding_Prims.list@tok",
-        "lemma_FStar.Error.invertOptResult",
-        "lemma_FStar.Pervasives.invertOption",
-        "proj_equation_FStar.Error.Correct__0",
-        "projection_inverse_BoxBool_proj_0",
-        "typing_FStar.Error.uu___is_Correct",
-        "typing_FStar.Pervasives.Native.uu___is_Some"
-      ],
-      0,
-      "be2c16ec26cbf6d12cf289886674ca76"
-    ],
-    [
-      "HandshakeLog.receive_CCS",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query", "bool_inversion", "bool_typing",
-        "disc_equation_FStar.Error.Correct",
-        "disc_equation_FStar.Error.Error", "equation_HandshakeLog.msg",
-        "equation_Hashing.Spec.anyTag", "equation_TLSError.error",
-        "equation_TLSError.result",
-        "function_token_typing_Hashing.Spec.anyTag",
-        "function_token_typing_TLSError.error",
-        "kinding_FStar.Pervasives.Native.tuple3@tok",
-        "kinding_HandshakeMessages.hs_msg@tok", "kinding_Prims.list@tok",
-        "lemma_FStar.Error.invertOptResult"
-      ],
-      0,
-      "079e9c9e9d8bfa8e059465b8a48b64f8"
     ]
   ]
 ]
