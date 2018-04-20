@@ -338,7 +338,7 @@ let rec parseVersions b =
   | 1 -> Error (AD_decode_error, "malformed version list")
   | _ ->
     let b2, b' = split b 2ul in
-    match TLSConstants.parseVersion_drafts b2 with
+    match TLSConstants.parseVersion_draft b2 with
     | Error z -> Error z
     | Correct v ->
       match parseVersions b' with

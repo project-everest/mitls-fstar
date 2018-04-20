@@ -13,7 +13,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "e73782164d6071f0167bed99616eb86b"
+      "56c828315eec3aa8cd89f8cda2215d6a"
     ],
     [
       "HMAC.UFCMA.is_safe",
@@ -481,7 +481,7 @@
         "typing_Mem.tls_define_region"
       ],
       0,
-      "290f91e7a5a2937a05506b1d0a9a8c5a"
+      "2fdc2ee58984e55e8dc6708d48b86dc1"
     ],
     [
       "HMAC.UFCMA.create",
@@ -1165,7 +1165,6 @@
         "equation_Mem.tls_color", "equation_Mem.tls_define_region",
         "equation_Mem.tls_rgn", "equation_Mem.tls_tables_region",
         "equation_Prims.nat",
-        "equation_with_fuel_Prims.pow2.fuel_instrumented",
         "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
         "function_token_typing_FStar.Bytes.empty_bytes",
         "function_token_typing_FStar.Monotonic.Heap.emp",
@@ -1189,8 +1188,8 @@
         "lemma_FStar.UInt32.vu_inv", "primitive_Prims.op_Addition",
         "primitive_Prims.op_AmpAmp", "primitive_Prims.op_BarBar",
         "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "primitive_Prims.op_Minus", "primitive_Prims.op_Multiply",
-        "primitive_Prims.op_Negation", "primitive_Prims.op_Subtraction",
+        "primitive_Prims.op_Minus", "primitive_Prims.op_Negation",
+        "primitive_Prims.op_Subtraction",
         "proj_equation_FStar.Monotonic.HyperStack.HS_h",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
