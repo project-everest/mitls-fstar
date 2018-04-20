@@ -47,6 +47,8 @@ type rw =
   | Reader
   | Writer
 
+/// 18-02-22 QD fodder?
+///
 (** Protocol version negotiated values *)
 include QD.TLS_protocolVersion
 
@@ -63,12 +65,16 @@ val parseVersion: pinverse_t versionBytes
 let parseVersion = parse_protocolVersion'
 
 // DRAFT#28
-// to be used *only* in ServerHello.version.
-// https://tlswg.github.io/tls13-spec/#rfc.section.4.2.1
+// to be used *only* in supported_versions extension
 let draft = 28z
 let versionBytes_draft: protocolVersion -> Tot (lbytes 2) = function
   | TLS_1p3 -> twobytes ( 127z, draft )
   | pv -> versionBytes pv
+
+let parseVersion_drafts v =
+  if cbyte2 v = (127z, draft) then Correct TLS_1p3
+  else parseVersion v
+
 val parseVersion_draft: pinverse_t versionBytes_draft
 let parseVersion_draft v =
   match v.[0ul], v.[1ul] with

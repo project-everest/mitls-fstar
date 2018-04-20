@@ -90,7 +90,7 @@ val alpnBytes : alpn -> b:bytes{length b < 65536}
 // The length exactly reflects the RFC format constraint <2..254>
 type protocol_versions =
   | ServerPV of protocolVersion
-  | ClientPV of l:list protocolVersion {0 < List.Tot.length l /\ List.Tot.length l < 128}
+  | ClientPV of l:list protocolVersion' {0 < List.Tot.length l /\ List.Tot.length l < 128}
 
 // We constrain unknown extensions to have headers different from
 // known extensions; we rely on parametricity to avoid recursion

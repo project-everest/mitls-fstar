@@ -187,3 +187,47 @@ let ffiConfig (host:bytes) =
     peer_name = h;
     non_blocking_read = true
   }
+
+private let rec join_alpn acc = function
+  | [] -> acc
+  | h::t -> join_alpn (if length acc = 0 then h else acc @| abyte 58z @| h) t
+
+type chSummary = {
+  ch_sni: bytes;
+  ch_alpn: bytes;
+  ch_extensions: bytes;
+  ch_cookie: option bytes;
+}
+
+let peekClientHello (ch:bytes) : ML (option chSummary) =
+  if length ch < 40 then (trace "peekClientHello: too short"; None) else
+  let hdr, ch = split ch 5ul in
+  match Record.parseHeader hdr with
+  | Error (_, msg) -> trace ("peekClientHello: bad record header"); None
+  | Correct(ct, pv, len) ->
+    if ct <> Content.Handshake || len <> length ch then
+      (trace "peekClientHello: bad CT or length"; None)
+    else
+      match HandshakeMessages.parseMessage ch with
+      | Error _
+      | Correct None -> trace ("peekClientHello: bad handshake header"); None
+      | Correct (Some (| _, hst, ch, _ |)) ->
+        if hst <> HandshakeMessages.HT_client_hello then
+          (trace "peekClientHello: not a client hello"; None)
+        else
+          match HandshakeMessages.parseClientHello ch with
+          | Error (_, msg) -> trace ("peekClientHello: bad client hello: "^msg); None
+          | Correct (ch, _) ->
+            let sni = Negotiation.get_sni ch in
+            let alpn = join_alpn empty_bytes (Negotiation.get_alpn ch) in
+            let cext = Extensions.app_ext_filter ch.HandshakeMessages.ch_extensions in
+            let ext = HandshakeMessages.optionExtensionsBytes cext in
+            let cookie =
+              match Negotiation.find_cookie ch with
+              | None -> None
+              | Some c ->
+                match Ticket.check_cookie c with
+                | None -> None
+                | Some (hrr, digest, extra) -> Some extra
+              in
+            Some ({ch_sni = sni; ch_alpn = alpn; ch_extensions = ext; ch_cookie = cookie; })
