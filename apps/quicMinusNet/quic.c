@@ -52,6 +52,19 @@ const char* pvname(mitls_version pv)
   return "(unknown)";
 }
 
+void print_hello_summary(mitls_hello_summary *ch)
+{
+  printf("~~~~~~~~~ Client Hello Summary ~~~~~~~~~~~\n");
+  printf("~ SNI = %s\n", ch->sni);
+  printf("~ ALPN = %s\n", ch->alpn);
+  printf("~ Cookie = ");
+  if(ch->hrr_cookie) dump(ch->hrr_cookie, ch->hrr_cookie_len);
+  else printf("NULL\n");
+  printf("~ Extensions:\n");
+  dump(ch->extensions, ch->extensions_len);
+  printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
+}
+
 mitls_nego_action def_action = TLS_nego_accept;
 
 mitls_nego_action nego_cb(void *cb_state, mitls_version ver,
@@ -543,7 +556,7 @@ int main(int argc, char **argv)
   else if(mode == handshake_stateless_retry)
   {
     // STATELESS RETRY HANDSHAKE
-
+    mitls_hello_summary ch;
     printf("\n     STATELESS RETRY TEST\n\n");
 
     printf("server create\n");
@@ -571,6 +584,9 @@ int main(int argc, char **argv)
     printf("client returns %s clen=%zd slen=%zd\n", quic_result_string(rc), clen, slen);
     printf("ClientHello[%4zd] ---->\n\n",clen);
 
+    assert(FFI_mitls_get_hello_summary(c_buffer, clen, &ch) == 1);
+    print_hello_summary(&ch);
+
     def_action = TLS_nego_retry; // Force server to ask for retry
     s_buffer += slen; smax -= slen; slen = smax;
     rs = FFI_mitls_quic_process(server.quic_state, c_buffer, &clen, s_buffer, &slen);
@@ -594,6 +610,9 @@ int main(int argc, char **argv)
     assert(rc == TLS_would_block);
     printf("client returns %s clen=%zd slen=%zd\n", quic_result_string(rc), clen, slen);
     printf("ClientHello2[%4zd] ---->\n\n",clen);
+
+    assert(FFI_mitls_get_hello_summary(c_buffer, clen, &ch) == 1);
+    print_hello_summary(&ch);
 
     s_buffer += slen; smax -= slen; slen = smax;
     rs = FFI_mitls_quic_process(server.quic_state, c_buffer, &clen, s_buffer, &slen);

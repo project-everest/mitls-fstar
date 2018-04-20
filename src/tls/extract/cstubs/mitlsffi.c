@@ -1181,7 +1181,37 @@ void MITLS_CALLCONV FFI_mitls_quic_close(quic_state *state)
     DESTROY_HEAP_REGION(rgn);
 }
 
-// bugbug: this leaks the returned ext_data.
+int MITLS_CALLCONV FFI_mitls_get_hello_summary(const unsigned char *buffer, size_t buffer_len, mitls_hello_summary *summary)
+{
+  FStar_Bytes_bytes b = {.data = (const char*)buffer, .length = buffer_len};
+  FStar_Pervasives_Native_option__QUIC_chSummary ch = QUIC_peekClientHello(b);
+
+  if(ch.tag == FStar_Pervasives_Native_Some)
+  {
+    QUIC_chSummary s = ch.v;
+    summary->sni = (const unsigned char*)s.ch_sni.data;
+    summary->sni_len = s.ch_sni.length;
+
+    summary->alpn = (const unsigned char*)s.ch_alpn.data;
+    summary->alpn_len = s.ch_alpn.length;
+
+    summary->extensions = (const unsigned char*)s.ch_extensions.data;
+    summary->extensions_len = s.ch_extensions.length;
+
+    if(s.ch_cookie.tag == FStar_Pervasives_Native_Some) {
+      summary->hrr_cookie = (const unsigned char*)s.ch_cookie.v.data;
+      summary->hrr_cookie_len = s.ch_cookie.v.length;
+    } else {
+      summary->hrr_cookie = NULL;
+      summary->hrr_cookie_len = 0;
+    }
+
+    return 1;
+  }
+
+  return 0;
+}
+
 int FFI_mitls_find_custom_extension_common(HEAP_REGION rgn, int is_server, const unsigned char *exts, size_t exts_len, uint16_t ext_type, unsigned char **ext_data, size_t *ext_data_len)
 {
   int ret = 0;

@@ -216,6 +216,20 @@ extern void MITLS_CALLCONV FFI_mitls_quic_close(quic_state *state);
 extern int MITLS_CALLCONV FFI_mitls_find_custom_extension(mitls_state *state, int is_server, const unsigned char *exts, size_t exts_len, uint16_t ext_type, unsigned char **ext_data, size_t *ext_data_len);
 extern int MITLS_CALLCONV FFI_mitls_quic_find_custom_extension(quic_state *state, const unsigned char *exts, size_t exts_len, uint16_t ext_type, unsigned char **ext_data, size_t *ext_data_len);
 
+typedef struct {
+  const unsigned char *sni;
+  size_t sni_len;
+  const unsigned char *alpn;
+  size_t alpn_len;
+  const unsigned char *extensions;
+  size_t extensions_len;
+  const unsigned char *hrr_cookie;
+  size_t hrr_cookie_len;
+} mitls_hello_summary;
+
+extern int MITLS_CALLCONV FFI_mitls_get_hello_summary(const unsigned char *buffer, size_t buffer_len, mitls_hello_summary *summary);
+extern int MITLS_CALLCONV FFI_mitls_find_custom_extension(int is_server, const unsigned char *exts, size_t exts_len, uint16_t ext_type, /*out*/ unsigned char **ext_data, /*out*/ size_t *ext_data_len);
+
 // The functions below should only be used on client extensions
 extern int MITLS_CALLCONV FFI_mitls_find_server_name(mitls_state *state, const unsigned char *exts, size_t exts_len, unsigned char **sni, size_t *sni_len);
 extern int MITLS_CALLCONV FFI_mitls_quic_find_server_name(quic_state *state, const unsigned char *exts, size_t exts_len, unsigned char **sni, size_t *sni_len);
