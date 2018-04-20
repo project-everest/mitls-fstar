@@ -199,6 +199,7 @@ let mac ip ha_of_i good_of_i #i k p =
   //   if None? (MDM.lookup log (t, p)) then MDM.extend log (t,p) ());
   // t
 
+noextract
 val verify:
   ip: ipkg -> ha_of_i: (ip.Pkg.t -> ha) -> good_of_i: (i:ip.Pkg.t -> Hashing.macable (ha_of_i i) -> bool) ->
   #i:ip.Pkg.t{ip.Pkg.registered i} -> 
@@ -276,6 +277,7 @@ unfold let localpkg
 //TODO (later) support dynamic key compromise
 
 // 18-01-07 only for debugging; how to reliably disable this function otherwise?
+noextract 
 let string_of_key (#ip:ipkg) (#i:ip.Pkg.t{ip.Pkg.registered i}) (k:key ip i): string = 
   let MAC u kv = get_key k in
   "HMAC-"^Hashing.Spec.string_of_alg u.alg^" key="^print_bytes kv

@@ -21,6 +21,7 @@ module Nego = Negotiation
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 module KeySchedule = Old.KeySchedule
+module HMAC_UFCMA = Old.HMAC.UFCMA
 // For readabililty, we try to open/abbreviate fewer modules
 
 
@@ -262,7 +263,7 @@ let clientHello offer = // pure; shared by Client and Server
 type binderId = KeySchedule.binderId
 
 type btag (binderKey:(i:binderId & bk:KeySchedule.binderKey i)) =
-  HMAC.UFCMA.tag (HMAC.UFCMA.HMAC_Binder (let (|i,_|) = binderKey in i))
+  HMAC_UFCMA.tag (HMAC_UFCMA.HMAC_Binder (let (|i,_|) = binderKey in i))
 
 val map_ST2: 'c -> ('c -> 'a -> KeySchedule.ST0 'b) -> list 'a -> KeySchedule.ST0 (list 'b)
 let rec map_ST2 env f x = match x with
@@ -275,7 +276,7 @@ let compute_binder hs (bkey:(i:binderId & bk:KeySchedule.binderKey i)): ST (btag
   =
   let (| bid, bk |) = bkey in
   let digest_CH0 = HandshakeLog.hash_tag #(binderId_hash bid) hs.log in
-  HMAC.UFCMA.mac bk digest_CH0
+  HMAC_UFCMA.mac bk digest_CH0
 
 let verify_binder hs (bkey:(i:binderId & bk:KeySchedule.binderKey i)) (tag:btag bkey) tlen: ST bool
     (requires fun h0 -> True)
@@ -283,7 +284,7 @@ let verify_binder hs (bkey:(i:binderId & bk:KeySchedule.binderKey i)) (tag:btag 
   =
   let (| bid, bk |) = bkey in
   let digest_CH0 = HandshakeLog.hash_tag_truncated #(binderId_hash bid) hs.log tlen in
-  HMAC.UFCMA.verify bk digest_CH0 tag
+  HMAC_UFCMA.verify bk digest_CH0 tag
 
 // Compute and send the PSK binders if necessary
 // may be called both by client_ClientHello and client_HelloRetryRequest
@@ -507,7 +508,7 @@ let client_ClientFinished_13 hs digestServerFinished ocr cfin_key =
     | Some cr -> HandshakeLog.send_tag #ha hs.log (Certificate13 ({crt_request_context = empty_bytes; crt_chain13 = []}))
     | None -> digestServerFinished in
   let (| finId, cfin_key |) = cfin_key in
-  let cvd = HMAC.UFCMA.mac cfin_key digest in
+  let cvd = HMAC_UFCMA.mac cfin_key digest in
   if not (Nego.zeroRTT mode) then Epochs.incr_writer hs.epochs; // to HSK, 0-RTT case is treated in EOED logic
   let digest_CF = HandshakeLog.send_tag #ha hs.log (Finished ({fin_vd = cvd})) in
   KeySchedule.ks_client_13_cf hs.ks digest_CF; // For Post-HS
@@ -536,7 +537,7 @@ let client_ServerFinished_13 hs ee ocr oc ocv (svd:bytes) digestCert digestCertV
         // should be passed to application somehow --- store in Nego? We need agreement.
         let (sfin_key, cfin_key, app_keys, exporter_master_secret) = KeySchedule.ks_client_13_sf hs.ks digestServerFinished in
         let (| finId, sfin_key |) = sfin_key in
-        if not (HMAC.UFCMA.verify sfin_key digestCertVerify svd)
+        if not (HMAC_UFCMA.verify sfin_key digestCertVerify svd)
         then InError (AD_decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestCertVerify )
         else (
           export hs exporter_master_secret;
@@ -958,7 +959,7 @@ let server_ServerFinished_13 hs i =
     match digestFinished with
     | Correct digestFinished ->
       let (| sfinId, sfin_key |) = KeySchedule.ks_server_13_server_finished hs.ks in
-      let svd = HMAC.UFCMA.mac sfin_key digestFinished in
+      let svd = HMAC_UFCMA.mac sfin_key digestFinished in
       let digestServerFinished = HandshakeLog.send_tag #halg hs.log (Finished ({fin_vd = svd})) in
       // we need to call KeyScheduke twice, to pass this digest
       let app_keys, exporter_master_secret = KeySchedule.ks_server_13_sf hs.ks digestServerFinished in
@@ -996,7 +997,7 @@ let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinishe
    | None ->
        let (| i, cfin_key |) = KeySchedule.ks_server_13_client_finished hs.ks in
        let mode = Nego.getMode hs.nego in
-       if HMAC.UFCMA.verify cfin_key digestBeforeClientFinished f
+       if HMAC_UFCMA.verify cfin_key digestBeforeClientFinished f
        then
         begin
          (* NewSessionTicket is sent if client advertised a PSK_KEX mode *)
