@@ -199,15 +199,18 @@ private let lemma_not_honest_and_corrupt (i:regid)
 (*
  * AR: 04/01: A stateful version of the lemma_honest_corrupt
  *)
+noextract
 let lemma_honest_corrupt_st (i:regid)
   :ST unit (requires (fun _ -> True)) (ensures (fun h0 _ h1 -> h0 == h1 /\ (honest i <==> (~ (corrupt i)))))
   = lemma_honest_or_corrupt i; lemma_not_honest_and_corrupt i
 
 // ADL: difficult to prove, relies on an axiom outside the current formalization of FStar.Monotonic
+noextract 
 let lemma_honest_corrupt (i:regid)
   : Lemma (honest i <==> ~(corrupt i)) =
   admit()
 
+noextract
 let lemma_corrupt_invariant (i:regid) (lbl:label)
   (ctx:context {wellformed_id (Derive i lbl ctx) /\ registered (Derive i lbl ctx)})
   : ST unit
@@ -269,6 +272,7 @@ let get_honesty (i:id {registered i}) : ST bool
     else false
 
 // TODO(adl) preservation of the honesty table invariant
+noextract
 let rec lemma_honesty_update (m:DM.t id (MDM.opt (fun _ -> bool)))
   (i:regid) (l:label) (c:context{wellformed_id (Derive i l c)}) (b:bool{b <==> honest i})
   : Lemma (honesty_invariant (DM.upd m (Derive i l c) (Some b)))

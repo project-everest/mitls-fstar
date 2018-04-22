@@ -1,8 +1,6 @@
 module Record
 
-module HS = FStar.HyperStack
-
-(* (optional) encryption and processing of the outer (untrusted) record format *)
+(* (optional) encryption and processing of the outer, untrusted record format *)
 
 open FStar.Seq
 open FStar.Bytes
@@ -48,12 +46,16 @@ private let parseVersion (x: lbytes 2) = parseVersion (p_of_f x)
 // the "outer" header has the same format for all versions of TLS
 // but TLS 1.3 fakes its content type and protocol version.
 
-private type header = b:lbytes 5 // for all TLS versions
+private let headerLen = 5ul 
+private (* noextract *) let headerLength = v headerLen 
+private type header = b:lbytes headerLength // for all TLS versions
 
 private let fake = ctBytes Application_data @| versionBytes TLS_1p2
 
-// this is the outer packet; the *caller* should switch from 1.3 to 1.0 whenever data is encrypted.
-#reset-options "--admit_smt_queries true"
+// this is the outer packet; to comply with legacy version signalling,
+// the *caller* should switch from 1.3 to 1.0 whenever data is
+// encrypted.
+#set-options "--z3rlimit 10" //18-04-20 now required; why?
 private inline_for_extraction 
 let makeHeader ct plain ver (length:nat {repr_bytes length <= 2}): header =
   let ct_ver = 
@@ -73,13 +75,13 @@ let sendPacket tcp ct plain ver (data: (b:bytes { repr_bytes (length b) <= 2})) 
   // still some margin for progress to avoid intermediate copies
   let header = makeHeader ct plain ver (length data) in 
   trace ("record headers: "^print_bytes header);
-  let res = Transport.send tcp (BufferBytes.from_bytes header) 5ul in
-  if res = 5l then 
+  let res = Transport.send tcp (BufferBytes.from_bytes header) headerLen in
+  if res = Int.Cast.uint32_to_int32 headerLen then 
     let res = Transport.send tcp (BufferBytes.from_bytes data) (len data) in
     if Int32.v res = length data
     then Correct()
-    else Error(Printf.sprintf "Transport.send returned %l" res)
-  else   Error(Printf.sprintf "Transport.send returned %l" res)
+    else Error(Printf.sprintf "Transport.send(header) returned %l" res)
+  else   Error(Printf.sprintf "Transport.send(payload) returned %l" res)
 
 private type parsed_header = result (contentType
                            * protocolVersion
@@ -104,7 +106,7 @@ let parseHeader (h5:header) =
           else correct(ct,pv,len)
 
 
-(*** networking (floating) ***)
+(*** networking ***)
 
 // in the spirit of TLS 1.3, we ignore the outer protocol version (see appendix C):
 // our server never treats the ClientHello's record pv as its minimum supported pv;
@@ -116,62 +118,65 @@ type partial =
   | Header
   | Body: ct: contentType -> pv: protocolVersion -> partial
 
-private let maxlen = UInt32.uint_to_t (5 + max_TLSCiphertext_fragment_length)
+private let maxlen = headerLen +^ UInt32.uint_to_t max_TLSCiphertext_fragment_length
 private type input_buffer = b: Buffer.buffer UInt8.t {Buffer.length b = v maxlen}
 
-//TODO index by region
+//TODO index by region. // number of bytes already buffered
 noeq abstract type input_state = | InputState:
   pos: ref (len:UInt32.t {len <=^ maxlen}) ->
-  b: input_buffer {Buffer.frameOf b = Mem.frameOf pos} -> input_state
+  b: input_buffer {
+    Buffer.frameOf b = Mem.frameOf pos /\ 
+    Buffer.length b = v maxlen} -> 
+  input_state
 
 // type input_state = {
 //   pos: ref (len:UInt32.t {len <=^ maxlen});
 //   b: input_buffer }
 
-private let parseHeaderBuffer (b: Buffer.buffer UInt8.t {Buffer.length b = 5}) : ST parsed_header
+private let parseHeaderBuffer (b: Buffer.buffer UInt8.t {Buffer.length b = headerLength}) : ST parsed_header
   (requires (fun h0 -> Buffer.live h0 b))
   (ensures (fun h0 hdr h1 -> modifies_none h0 h1 /\ hdr = parseHeader (Bytes.hide (Buffer.as_seq h0 b))))
 =
   // some margin for progress
-  parseHeader (BufferBytes.to_bytes 5 b)
+  parseHeader (BufferBytes.to_bytes headerLength b)
 
 abstract let input_inv h0 (s: input_state) = 
   Mem.contains h0 s.pos /\
   Buffer.live h0 s.b /\
-  ( let pv = UInt32.v (sel h0 s.pos) in 
-    5 <= pv ==> (
-    match parseHeader (Bytes.hide (Buffer.as_seq h0 (Buffer.sub s.b 0ul 5ul))) with
-    | Correct (_,_,length) -> pv <= 5 + length
-    | _ -> False))
+  ( let p0 = UInt32.v (sel h0 s.pos) in 
+    p0 < headerLength \/ 
+    ( let hdr = parseHeader (Bytes.hide (Buffer.as_seq h0 (Buffer.sub s.b 0ul headerLen))) in
+      match hdr with  
+      | Correct (_,_,length) -> p0 < headerLength + length 
+      | _                    -> False ))
+// we are waiting either for header bytes or payload bytes
 
-private val waiting_len:  s: input_state -> ST UInt32.t
+private unfold val waiting_len:  s: input_state -> ST UInt32.t
   (requires fun h0 -> input_inv h0 s)
   (ensures fun h0 len h1 -> 
     modifies_none h0 h1 /\ 
     ( let pv = UInt32.v (sel h0 s.pos) in 
       let l = UInt32.v len in 
-      ( pv + l = 5 \/ 
-        ( match parseHeader (Bytes.hide (Buffer.as_seq h0 (Buffer.sub s.b 0ul 5ul))) with
-        | Correct (_,_,length) -> pv + l == 5 + length 
-        | _ -> False))))
+      ( if pv < headerLength 
+        then pv + l = headerLength
+        else 
+        match parseHeader (Bytes.hide (Buffer.as_seq h0 (Buffer.sub s.b 0ul headerLen))) with
+        | Correct (_,_,length) -> pv + l == headerLength + length 
+        | _                    -> False)))
 
+#set-options "--z3rlimit 20" //18-04-20 now required; why?
 let waiting_len s =
-  if !s.pos <^ 5ul
-  then 5ul -^ !s.pos
+  if !s.pos <^ headerLen
+  then headerLen -^ !s.pos
   else
-    match parseHeaderBuffer (Buffer.sub s.b 0ul 5ul) with
-    | Correct (_,_,length) -> 5ul +^ uint_to_t length -^ !s.pos
-      //let pv = UInt32.v !s.pos in 
-      //assert(length <= max_TLSCiphertext_fragment_length);
-      //assert(pv <= 5 + length);
-      //assert(FStar.UInt.size(length + 5) 32);
-      //assert(FStar.UInt.size(length + 5 - pv) 32);
-     // other case is statically excluded
+    match parseHeaderBuffer (Buffer.sub s.b 0ul headerLen) with
+    | Correct (_,_,length) -> headerLen +^ uint_to_t length -^ !s.pos
+// TODO later, use a length-field accessor instead of a header parser
 
 val alloc_input_state: r:_ -> ST input_state 
   (requires (fun h0 -> is_eternal_region r))
   (ensures (fun h0 s h1 ->
-    //TODO modifies? h0 h1 /\ 
+    //18-04-20 TODO post-condition for allocating a ref and a buffer?
     Mem.frameOf s.pos = r /\ 
     input_inv h1 s))
 let alloc_input_state r = 
@@ -188,65 +193,106 @@ type read_result =
       b:bytes {length b <= max_TLSCiphertext_fragment_length} -> read_result
 
 val read: Transport.t -> s: input_state -> ST read_result
-  (requires fun h0 -> input_inv h0 s)
-  (ensures fun h0 _ h1 ->
-    let r = Mem.frameOf s.pos in
-    // Mem.modifies_one r h0 h1 /\
+  (requires fun h0 -> 
+    input_inv h0 s)
+  (ensures fun h0 _ h1 -> 
     input_inv h1 s
-  )
-// Refine by adding this?
-//    Buffer.modifies_bufs_and_refs
-//      (Buffer.only s.b)
-//      (Set.singleton (Heap.addr_of (HS.as_ref s.pos)))
-//      h0 h1)
+    )
+//18-04-20 TODO modifies clause on a ref + a buffer
+// let r = Mem.frameOf s.pos in
+// Mem.modifies_one r h0 h1 
+// Buffer.modifies_bufs_and_refs
+//   (Buffer.only s.b)
+//   (Set.singleton (Heap.addr_of (HS.as_ref s.pos)))
+//   h0 h1)
 
-//#set-options "--detail_errors"
+//18-04-20 TBC, how to speed up verification attempts?
+#set-options "--z3rlimit 100 --detail_errors"
+//#set-options "--admit_smt_queries true" 
 let rec read tcp s =
   let h0 = ST.get() in 
-  assert(input_inv h0 s);
-  let waiting = waiting_len s in
+  let header = Buffer.sub s.b 0ul headerLen in 
   let p0 = !s.pos in
+  let waiting = waiting_len s in
   let dest = Buffer.sub s.b p0 waiting in
+
+  let h0' = ST.get() in 
   let res = Transport.recv tcp dest waiting in
   let h1 = ST.get() in 
-  let p1 = !s.pos in 
-  assume(p0 = p1);
-  assume(input_inv h1 s);// TODO sub-buffer framing, with 2 cases
-  if res = -1l
-  then ReadError (AD_internal_error, "Transport.recv")
+  // framing, with two cases depending on the input state.
+  assert(Buffer.modifies_1 dest h0' h1); 
+  Buffer.lemma_intro_modifies_0 h0 h0'; //18-04-21 required? botched transitivity?
+  assume(Buffer.modifies_1 dest h0 h1); //18-04-21 why does the assert fail?? 
+  Buffer.lemma_reveal_modifies_1 dest h0 h1; 
+  assert(sel h1 s.pos = p0); 
+  assert(p0 <^ headerLen \/ Buffer.disjoint header dest); 
+  assume(p0 <^ headerLen \/ Buffer.as_seq h0 header == Buffer.as_seq h1 header); 
+  if res = -1l then 
+    ReadError (AD_internal_error, "Transport.recv")
   else if res = 0l
-  then (trace "WouldBlock"; ReadWouldBlock)
+  then (
+    trace "WouldBlock"; 
+    ReadWouldBlock )
   else (
     let received = Int.Cast.int32_to_uint32 res in
     assert(received <=^ waiting);
-    assert(UInt32.v p0 + UInt32.v waiting <= UInt32.v maxlen);
-    s.pos := p0 +^ received;
+    assert(p0 +^ waiting <=^ maxlen);
+    let p1 = p0 +^ received in 
+    s.pos := p1;
+    let h2 = ST.get() in 
+    assert(p0 <^ headerLen \/ Buffer.as_seq h0 header == Buffer.as_seq h2 header);
     if received <^ waiting
-      then
-        // partial read
-        // should probably ReadWouldBlock instead when non-blocking
-        read tcp s
-      else
-        if !s.pos = 5ul // we have buffered the record header
-        then (
-          match parseHeaderBuffer s.b with
-          | Error e -> ReadError e
-          | Correct(ct,pv,length) ->
-            if length = 0 then
-              // corner case, possibly excluded by the RFC
-              ( s.pos := 0ul; Received ct pv empty_bytes )
-            else read tcp s )
-        else
-          // we have buffered the whole record
-          match parseHeaderBuffer s.b with
-          | Correct(ct,pv,length) -> (
-            let len = UInt32.uint_to_t length in
-            let b = Buffer.sub s.b 5ul len in
-            let payload = BufferBytes.to_bytes length b in
+    then (
+      // partial read; we remain in the same logical state
+      // we should probably return ReadWouldBlock instead when non-blocking
+      assert(input_inv h2 s);
+      read tcp s )
+    else (
+      if p1 = headerLen 
+      then (
+        // we have just buffered the record header
+        match parseHeaderBuffer header with
+        | Error e -> ReadError e
+        | Correct(ct,pv,length) ->
+          if length = 0 then (
+            // zero-length packet, a corner case possibly excluded by the RFC
             s.pos := 0ul;
-            Received ct pv payload ))
-#reset-options
-
-//18-01-24 recheck async I
+            let h3 = get() in 
+            assert(input_inv h3 s);
+            Received ct pv empty_bytes )
+          else (
+            assume(input_inv h2 s);
+            read tcp s ))
+      else (
+        // we have just buffered the whole record
+        assert(headerLen <=^ p0); 
+        let hdr = parseHeaderBuffer header in 
+        assert(Correct? hdr); //18-04-19 why do I need this? is it a new problem?
+        match hdr with
+        | Correct(ct,pv,length) -> (
+          let len = UInt32.uint_to_t length in
+          let b = Buffer.sub s.b headerLen len in
+          let payload = BufferBytes.to_bytes length b in
+          s.pos := 0ul;
+          Received ct pv payload )
+      )))
+(*        
+//18-01-24 recheck async 
 //    if length fresh = 0 then
 //      ReadError(AD_internal_error,"TCP close") // otherwise we loop...
+
+assert( Mem.contains h2 s.pos /\ Buffer.live h2 s.b )
+
+assert(
+  if v p0 < headerLength 
+  then v p1 = headerLength 
+  else 
+    match parseHeader (Bytes.hide (Buffer.as_seq h0 (Buffer.sub s.b 0ul headerLen))) with
+    | Correct (_,_,length) -> v p1 = headerLength + length 
+    | _                    -> False)
+
+assert(
+  match parseHeader (Bytes.hide (Buffer.as_seq h1 (Buffer.sub s.b 0ul headerLen))) with
+  | Correct (_,_,length) -> v p1 = headerLength + length 
+  | _                    -> False)
+*)
