@@ -11,7 +11,7 @@
         "refinement_interpretation_AEADOpenssl_Tm_refine_15bf079f4ce5823e739071012326443f"
       ],
       0,
-      "7a5f319b99121cdd881828896562c879"
+      "d15b8128953a2ec7fb6849b4a8e240fc"
     ],
     [
       "AEADOpenssl.key",
@@ -89,7 +89,7 @@
       1,
       [ "@query" ],
       0,
-      "be8e040bb349e1d395da12a2030ef1cf"
+      "712fe8505d49eb60f0a62e774163aadd"
     ],
     [
       "AEADOpenssl.entry",
@@ -131,7 +131,7 @@
       1,
       [ "@query" ],
       0,
-      "c526019fe9771e3629a96e8e7a8741d5"
+      "5ab851b97172fdb1254de0de8ebd0c43"
     ],
     [
       "AEADOpenssl.__proj__Entry__item__p",
@@ -200,7 +200,7 @@
         "typing_TLSInfo.authId"
       ],
       0,
-      "b5a910e2612406e761e36e272a2f7785"
+      "25e893f8535d774423235db87d929a35"
     ],
     [
       "AEADOpenssl.ilog_as_ref",
@@ -266,7 +266,7 @@
         "haseqMem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e"
       ],
       0,
-      "226e0ba0509a212ead6cff7f4bc5a2dc"
+      "6266b0c0a18d92a5c3d07ece8910ce8a"
     ],
     [
       "AEADOpenssl.__proj__State__item__log_region",
@@ -299,7 +299,7 @@
       1,
       [ "@query" ],
       0,
-      "b1172d44de7a2bec053cfc28c3113a8a"
+      "3b421de2873b27d08b84cbb9c92dc3e2"
     ],
     [
       "AEADOpenssl.empty_log",
@@ -347,7 +347,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "ef3369217e508b682f6f9c11f0902541"
+      "2e6fe10b93efd4feedc6974a5e3dfada"
     ],
     [
       "AEADOpenssl.empty_log",
@@ -403,7 +403,7 @@
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "37ee364b72765caebd185ca64d43f4c1"
+      "15e54a48168e7afa7024136be517a231"
     ],
     [
       "AEADOpenssl.gen",
@@ -553,7 +553,7 @@
         "typing_Mem.disjoint", "typing_Mem.tls_define_region"
       ],
       0,
-      "012a9107d1fec20adc30d265fab635e0"
+      "1c8e712088a761883c9c59fb9b222e06"
     ],
     [
       "AEADOpenssl.peered",
@@ -816,7 +816,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "494a548d748388432c4479501199a69c"
+      "8fce930d77c0f89e14100fc6fea214da"
     ],
     [
       "AEADOpenssl.defined_iv",
@@ -833,7 +833,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "55b4a7ee3ee3d4065c88d22cc73d90d8"
+      "6d266027bd45ebf918116f5b62a5b0d2"
     ],
     [
       "AEADOpenssl.logged_iv",
@@ -850,7 +850,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "8199b5924793e95e315e9a6fa94a958d"
+      "c6dfe693e9c91d3ac4f14e84847d6ee2"
     ],
     [
       "AEADOpenssl.encrypt",
@@ -876,7 +876,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "15f63c65deb5c0751108a7d46698b6b0"
+      "6b6ac51ed37ffeefe470b1ee51d5e368"
     ],
     [
       "AEADOpenssl.encrypt",
@@ -985,7 +985,7 @@
         "typing_TLSInfo.authId", "typing_tok_TLSConstants.Writer@tok"
       ],
       0,
-      "27f6fd2c2c18924005c3da7dde04e891"
+      "c914e884122b40a823bca62da145b8ed"
     ],
     [
       "AEADOpenssl.correct_decrypt",
@@ -1007,7 +1007,7 @@
         "equation_AEADOpenssl.taglen", "equation_FStar.Bytes.lbytes",
         "equation_FStar.UInt.fits", "equation_FStar.UInt.size",
         "equation_FStar.UInt.uint_t", "equation_FStar.UInt32.n",
-        "equation_Prims.nat", "equation_TLSConstants.extract_label",
+        "equation_Prims.nat", "equation_TLSConstants.extended_extract_label",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "fuel_guarded_inversion_AEADOpenssl.state",
         "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
@@ -1019,9 +1019,7 @@
         "haseqFStar.Bytes_Tm_refine_1ec852aff28ab568526a8c54c3e853ec",
         "haseqFStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
         "int_inversion", "primitive_Prims.op_Addition",
-        "primitive_Prims.op_AmpAmp",
-        "projection_inverse_AEADOpenssl.Entry_p",
-        "projection_inverse_BoxBool_proj_0",
+        "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
         "refinement_interpretation_FStar.UInt_Tm_refine_8ae4abcfc6bc8d4903b7e1f40e070ec2",
@@ -1029,10 +1027,10 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "typing_AEADOpenssl.plain", "typing_FStar.Bytes.len",
-        "typing_FStar.UInt32.v", "typing_TLSConstants.extract_label"
+        "typing_FStar.UInt32.v", "typing_TLSConstants.extended_extract_label"
       ],
       0,
-      "38d73cf01d328f362333cc0860d5f616"
+      "1adeea3b7dd6c66581d18b657a1b5dfb"
     ],
     [
       "AEADOpenssl.correct_decrypt",
@@ -1050,7 +1048,7 @@
       1,
       [ "@query" ],
       0,
-      "e4da98cb7791c00d93ffb69b88431634"
+      "960323eb1f42681dfc19a61f9134ae20"
     ]
   ]
 ]

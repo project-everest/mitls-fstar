@@ -46,6 +46,10 @@ type context =
 /// [HKDF.format #ha label digest len]
 
 type id_psk = nat // external application PSKs only; we may also set the usage's maximal recursive depth here.
+
+// The `[@ Gc]` attribute instructs Kremlin to translate the `pre_id` field as a pointer,
+// otherwise it would generate an invalid type definition.
+[@ Gc]
 type pre_id =
   | Preshared:
       a: kdfa (* fixing the hash algorithm *) ->

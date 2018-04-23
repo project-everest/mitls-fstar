@@ -21,7 +21,8 @@ let lemma_kdf_prf1 (d:nat) : Lemma (idealKDF d ==> idealPRF1 d) = admit()
 
 type safePRF1 (d:nat) (i:regid) = idealPRF1 d /\ honest i
 
-assume type salt (d:nat) (u: usage d) (i: id)
+// 2018.04.23 SZ: this used to be assumed; this is a dummy definition
+type salt (d:nat) (u:usage d) (i:id) = bytes
 
 assume val create_salt:
   #d: nat ->

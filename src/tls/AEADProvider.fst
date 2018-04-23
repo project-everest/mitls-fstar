@@ -276,7 +276,6 @@ let logged_iv (#i:id{authId i}) (#l:plainlen) (#rw:rw) (s:state i rw) (iv:iv i)
 // ADL Jan 3: PlanA changes TODO
 #set-options "--admit_smt_queries true"
 
-noextract
 let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:plain i l)
   : ST (cipher:cipher i l)
   (requires (fun h ->

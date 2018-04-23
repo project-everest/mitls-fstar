@@ -19,6 +19,9 @@ noeq type tree' (par_ideal:Type0) =
 and children (par_ideal:Type0) = list (label * tree' par_ideal)
 *)
 
+// The `[@ Gc]` attribute instructs Kremlin to translate the `pre_id` field as a pointer,
+// otherwise it would generate an invalid type definition.
+[@ Gc]
 noeq type tree' =
   | Leaf: package:t -> tree'
   | Node: node:t -> children:children' -> tree'
