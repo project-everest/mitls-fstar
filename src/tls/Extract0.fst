@@ -6,19 +6,16 @@ open Idx
 open Pkg.Tree
 open KDF // avoid?
 
-
-/// --------------------------------------------------------------------------------------------------
 /// PSKs, Salt, and Extraction (can we be more parametric?)
 
-assume val flag_KEF0: d:nat -> b:bool{b ==> model /\ flag_KDF d ==> b}
-type idealKEF0 d = b2t (flag_KEF0 d)
+type idealKEF0 d = b2t (Flags.flag_KEF0 d)
+
 // to be refined. When exactly do we switch KEF0? (after KDF0?)
 assume val lemma_kdf_kef0: d:nat -> Lemma (idealKDF d ==> idealKEF0 d)
 
 let safeKEF0 (d:nat) (i:regid) = idealKEF0 d /\ honest i
 
 /// key-derivation table (memoizing create/coerce)
-
 
 // temporary
 let there = Mem.tls_tables_region
@@ -98,7 +95,7 @@ val create_psk:
 let create_psk #d #u i a =
   let i', honest' = register_derive i "" Extract in
   lemma_corrupt_invariant i "" Extract;
-  if flag_KEF0 d && honest' then
+  if Flags.flag_KEF0 d && honest' then
     let t' = secret d u i' in
     let r: mref_secret d u i' = ralloc #(option t') #(ssa #t') there None in
     (| (), ideal_psk #d #u #i' r |)
@@ -146,9 +143,9 @@ val extract0:
 let extract0 #d #u #i k a =
   let (| _, p |) = k in
   let i':regid = Derive i "" Extract in
-  let honest' = get_honesty i' in
+  let honest' = true in // get_honesty i' in
   lemma_kdf_kef0 d;
-  if flag_KEF0 d && honest'
+  if Flags.flag_KEF0 d && honest'
   then
     let k: mref_secret d u i' = psk_ideal p in
     match !k with

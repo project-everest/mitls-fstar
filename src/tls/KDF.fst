@@ -25,9 +25,7 @@ let sample (len:UInt32.t): ST (lbytes32 len)
   = CoreCrypto.random (UInt32.v len)
 
 
-
-assume val flag_KDF: d:nat -> b:bool{b ==> model}
-type idealKDF d = b2t (flag_KDF d)
+type idealKDF d = b2t (Flags.flag_KDF d)
 assume val lemma_KDF_depth: d:nat{d>0} -> Lemma (idealKDF d ==> idealKDF (d-1))
 
 // Note that when model is off, safeKDF is False
@@ -278,7 +276,7 @@ let create d u i a =
   let h0 = get() in
   let honest = get_honesty i in
   let h1 = get() in
-  if flag_KDF d && honest then
+  if Flags.flag_KDF d && honest then
    begin
     assert(safeKDF d i);
     let r : subrgn kdf_tables_region = new_region kdf_tables_region in
@@ -508,7 +506,7 @@ let derive #d #t #i k a lbl ctx a' =
   let pkg = child u lbl in
   assert(Pkg?.ideal pkg ==> idealKDF d); // Nice!
 
-  if flag_KDF d && honest then
+  if Flags.flag_KDF d && honest then
    begin
     let KDF_table kdf_r kdf_t : table d u i = secret_ideal k in
     let v: option (derived_key d u i lbl ctx) = MDM.lookup kdf_t x in

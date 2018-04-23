@@ -1007,7 +1007,7 @@
         "equation_AEADOpenssl.taglen", "equation_FStar.Bytes.lbytes",
         "equation_FStar.UInt.fits", "equation_FStar.UInt.size",
         "equation_FStar.UInt.uint_t", "equation_FStar.UInt32.n",
-        "equation_Prims.nat", "equation_TLSConstants.extended_extract_label",
+        "equation_Prims.nat", "equation_TLSConstants.extract_label",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "fuel_guarded_inversion_AEADOpenssl.state",
         "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
@@ -1029,7 +1029,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "typing_AEADOpenssl.plain", "typing_FStar.Bytes.len",
-        "typing_FStar.UInt32.v", "typing_TLSConstants.extended_extract_label"
+        "typing_FStar.UInt32.v", "typing_TLSConstants.extract_label"
       ],
       0,
       "38d73cf01d328f362333cc0860d5f616"

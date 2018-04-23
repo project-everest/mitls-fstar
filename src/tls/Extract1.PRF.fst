@@ -16,8 +16,7 @@ open KDF // avoid?
 /// We use separate code for salt1 and salt2 because they are
 /// separately idealized (salt1 is more complicated)
 
-assume val flag_PRF1: d:nat -> b:bool{Extract0.flag_KEF0 d ==> b /\ b ==> model}
-let idealPRF1 (d:nat) = b2t (flag_PRF1 d)
+let idealPRF1 (d:nat) = b2t (Flags.flag_PRF1 d)
 let lemma_kdf_prf1 (d:nat) : Lemma (idealKDF d ==> idealPRF1 d) = admit()
 
 type safePRF1 (d:nat) (i:regid) = idealPRF1 d /\ honest i
@@ -73,10 +72,9 @@ let saltp (d:nat) (u:usage d) : ST (pkg ii)
 /// and servers.
 
 /// two flags; we will idealize ODH first
-assume val flag_ODH: d:nat -> b:bool { flag_PRF1 d ==> b /\ b ==> model}
-type idealODH (d:nat) = b2t (flag_ODH d)
+///
+type idealODH (d:nat) = b2t (Flags.flag_ODH d)
 type safeODH (d:nat) (i:regid) = idealODH d /\ honest i
-
 
 /// we write prf_ for the middle salt-keyed extraction, conditionally
 /// idealized as a PRF keyed by salt1 depending on flag_prf1
@@ -118,7 +116,7 @@ let prf_extract1 #d #u #i a s idh gZ =
   lemma_corrupt_invariant i "" (ExtractDH idh);
   let honest = get_honesty i in
   lemma_kdf_prf1 d;
-  if flag_PRF1 d && honest
+  if Flags.flag_PRF1 d && honest
   then
     // This is the narrow idealized variant--see paper for additional
     // discussion. Note the algorithm is determined by the salt index.

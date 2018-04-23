@@ -10,8 +10,7 @@ open Extract0 // for now
 
 /// ---------------- final (useless) extraction --------------------
 
-assume val flag_KEF2: d:nat -> b:bool{flag_KDF d ==> b /\ b ==> model}
-type idealKEF2 d = b2t (flag_KEF2 d)
+type idealKEF2 d = b2t (Flags.flag_KEF2 d)
 type safeKEF2 d i = idealKEF2 d /\ honest i
 
 type salt2 (d:nat) (u: usage d) (i:regid) =
@@ -73,7 +72,7 @@ let create_salt2 #d #u i a =
   let i', honest' = register_derive i "" Extract in
   let honest = get_honesty i in
   lemma_corrupt_invariant i "" Extract;
-  if flag_KEF2 d && honest' then
+  if Flags.flag_KEF2 d && honest' then
     let t' = secret d u i' in
     let r: mref_secret d u i' = ralloc #(option t') #(ssa #t') there None in
     (| (), ideal_salt2 #d #u #i' r |)
@@ -124,7 +123,7 @@ let extract2 #d #u #i e2 a =
   assert(wellformed_id i');
   assert(a = get_info i');
   assume(idealKDF d ==> idealKEF2 d); // TODO
-  if flag_KEF2 d && honest' then
+  if Flags.flag_KEF2 d && honest' then
     let k: mref_secret d u i' = salt2_ideal s in
     match !k with
     | Some extract -> extract

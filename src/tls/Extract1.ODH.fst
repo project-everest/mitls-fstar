@@ -187,7 +187,7 @@ let odh_test #d #u #i a s gX =
   assert(odhr_fresh j' h1);
   assert(a == get_info j);
   let k: secret d u j =
-    if flag_ODH d then create d u j a (* narrow *)
+    if Flags.flag_ODH d then create d u j a (* narrow *)
     else (
       assert(~(idealPRF1 d));
       let raw = HKDF.extract #a.ha (prf_leak s) gZ (* wide, concrete *) in

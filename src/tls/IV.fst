@@ -17,10 +17,7 @@ let sample (len:UInt32.t): ST (Bytes.lbytes32 len)
 /// There is no need for an idealization flag: the main (unconditional)
 /// property is that the vector is a function of the index; this
 /// vector is fresh whenever create is called instead of coerce.
-
-assume val flag_Raw: b:bool{b ==> model}
-
-type idealRaw = b2t flag_Raw
+type idealRaw = b2t Flags.flag_Raw
 
 // SZ: [len_of_i] was implicit, but it can't be inferred from [i]. Made it explicit
 type rawlen (#ip:ipkg) (len_of_i:ip.t -> keylen) (i:ip.t) = len:keylen {len == len_of_i i}

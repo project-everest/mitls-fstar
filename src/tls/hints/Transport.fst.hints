@@ -1,1 +1,68 @@
-[ "e€∏+£ïâ’\b\u001fçC\u000f}\u0014Ë", [] ]
+[
+  "lÛìC9:üX…t=ä\u0016¶\u0013‚",
+  [
+    [
+      "Transport.pfn_send",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_Prims.HasEq_int",
+        "haseqFStar.Bytes_Tm_refine_1ec852aff28ab568526a8c54c3e853ec"
+      ],
+      0,
+      "05773eafc9c6777c2573d050cdc26861"
+    ],
+    [
+      "Transport.pfn_send",
+      2,
+      2,
+      1,
+      [ "@query", "assumption_Prims.HasEq_int" ],
+      0,
+      "99a44365934a8d04d43ac9a4c1ae7124"
+    ],
+    [
+      "Transport.recv_t",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_Prims.HasEq_int",
+        "haseqFStar.Bytes_Tm_refine_1ec852aff28ab568526a8c54c3e853ec"
+      ],
+      0,
+      "2fa0d2ca0482839f0178cdba79e1727a"
+    ],
+    [
+      "Transport.recv_t",
+      2,
+      2,
+      1,
+      [ "@query", "assumption_Prims.HasEq_int" ],
+      0,
+      "c2c56e84cc719576abfa503a7e3bc117"
+    ],
+    [
+      "Transport.recv",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_Prims.HasEq_int",
+        "haseqFStar.Bytes_Tm_refine_1ec852aff28ab568526a8c54c3e853ec"
+      ],
+      0,
+      "bbb1027bc7683032deda7b46def64c43"
+    ],
+    [
+      "Transport.recv",
+      2,
+      2,
+      1,
+      [ "@query", "assumption_Prims.HasEq_int" ],
+      0,
+      "b76cdccfa3ca849ef5355017e412255b"
+    ]
+  ]
+]
