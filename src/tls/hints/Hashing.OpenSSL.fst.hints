@@ -1,1 +1,40 @@
-[ ")(¸˜Hi\u0017‰Å¤%\u0010'u\u0019o", [] ]
+[
+  ")(¸˜Hi\u0017‰Å¤%\u0010'u\u0019o",
+  [
+    [
+      "Hashing.OpenSSL.compute",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt32.t__uu___haseq" ],
+      0,
+      "9b1dfda9e5542bd6951e8560a00535ba"
+    ],
+    [
+      "Hashing.OpenSSL.hmac",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt32.t__uu___haseq" ],
+      0,
+      "5ab1881e2830fc03355f067139e0d66f"
+    ],
+    [
+      "Hashing.OpenSSL.toCC",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_Hashing.Spec.MD5",
+        "disc_equation_Hashing.Spec.SHA1",
+        "disc_equation_Hashing.Spec.SHA224",
+        "disc_equation_Hashing.Spec.SHA256",
+        "disc_equation_Hashing.Spec.SHA384",
+        "disc_equation_Hashing.Spec.SHA512",
+        "fuel_guarded_inversion_Hashing.Spec.alg"
+      ],
+      0,
+      "7859bbbed935452ce929a31ae784c997"
+    ]
+  ]
+]

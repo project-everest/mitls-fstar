@@ -16,6 +16,8 @@ open TLSError
 open TLSConstants
 open Parse
 
+#set-options "--initial_fuel 2 --max_fuel 2 --initial_ifuel 1 --max_ifuel 1 --z3rlimit 10"
+
 //NS: hoisting a convenient function to avoid a closure conversion
 let rec existsb2 (f: 'a -> 'b -> bool) (x:'a) (y:list 'b) : bool =
   match y with

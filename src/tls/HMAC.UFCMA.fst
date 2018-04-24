@@ -207,35 +207,28 @@ val verify:
   ip: ipkg -> ha_of_i: (ip.Pkg.t -> ha) -> good_of_i: (i:ip.Pkg.t -> Hashing.macable (ha_of_i i) -> bool) ->
   #i:ip.Pkg.t{ip.Pkg.registered i} -> 
   k: key ip i ->
-  p: Hashing.macable (ha_of_i i) 
-    // { 
-    // let u = usage k in 
-    // u.alg = ha_of_i i /\ u.good == good_of_i i 
-    // } 
-    ->
+  p: Hashing.macable (ha_of_i i) ->
   tag (usage k) -> 
   ST bool
   (requires fun _ -> let u = usage k in u.alg = ha_of_i i /\ u.good == good_of_i i)
   (ensures fun h0 b h1 -> 
     modifies_none h0 h1 /\
-    (b /\ safe i ==> (usage k).good p))
-
+    ((b /\ safe i) ==> (usage k).good p))
+ 
+#set-options "--initial_ifuel 1 --max_ifuel 1 --z3rlimit 20"
 let verify ip ha_of_i good_of_i #i k p t =
-  assert(let u = usage k in u.alg = ha_of_i i /\ u.good == good_of_i i);
   let MAC u kv = get_key k in
   let verified = HMAC.hmacVerify u.alg kv p t in
   if is_safe i then
     // We use the log to correct any verification errors
     let IdealKey _ _ log = k <: ir_key ip i in
-    let valid = 
-      admit() in
-      //18-02-25 TODO, should be:
-      // Some? (MDM.lookup log (t,p)) in
+    let tp : tag u * text u = (t,p) in
+    let valid = Some? (MDM.lookup log tp) in
     verified && valid
   else
     verified
 
-
+#reset-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 0 --max_ifuel 0"
 
 /// For TLS, we'll use something of the form
 ///
@@ -243,7 +236,7 @@ let verify ip ha_of_i good_of_i #i k p t =
 ///   exists digest.
 ///     hashed ha digest /\
 ///     text = hash ha digest /\
-///     witnessed (fun h -> "this is the writer's state is ...")
+///     witnessed (fun h -> "this is the writer's state ...")
 ///
 /// - how to deal with agility here?
 /// - which level of abstraction?
