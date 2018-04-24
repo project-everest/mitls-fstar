@@ -13,12 +13,14 @@ open Mem
 open TLSError
 open TLSConstants
 open TLSInfo
-open Epochs
+open Old.Epochs
 
 module Range = Range
 open Range
 
 module HS = FStar.HyperStack
+
+module Epochs = Old.Epochs
 module Handshake = Old.Handshake
 
 #set-options "--admit_smt_queries true"

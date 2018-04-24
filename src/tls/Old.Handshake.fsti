@@ -10,6 +10,8 @@ open TLSConstants
 
 module HS = FStar.HyperStack 
 
+module Epochs = Old.Epochs
+
 #set-options "--admit_smt_queries true"
 
 val hs: Type0

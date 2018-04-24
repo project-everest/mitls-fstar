@@ -19,7 +19,7 @@ let valid_clen = Range.valid_clen
 let fragment_range = Range.fragment_range
 
 //open Negotiation
-open Epochs
+open Old.Epochs
 open Connection
 
 module ST   = FStar.HyperStack.ST
@@ -28,8 +28,8 @@ module MS   = FStar.Monotonic.Seq
 module DS   = DataStream
 module SD   = StreamDeltas
 module Conn = Connection
-module EP   = Epochs
 
+module Epochs    = Old.Epochs
 module Handshake = Old.Handshake
 
 (* A flag for runtime debugging of TLS data.
