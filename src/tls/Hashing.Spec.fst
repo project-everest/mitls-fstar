@@ -140,12 +140,10 @@ let suffixLength (a:alg) (len:UInt32.t {v len <= maxLength a}): n:nat {(n + v le
 // injective encoding for variable-length inputs
 // we add either 8 or 16 bytes of length and 1+ bytes of padding
 private 
-assume val suffix: a:alg -> len:UInt32.t {v len <= maxLength a} -> Tot (lbytes (suffixLength a len))
-
-// 18-02-26 on quic2c, was:
-// let suffix (a:alg) (len:nat): Tot (c:lbytes (suffixLen a len)) =
-//   //TODO: Placeholder!
-//   Bytes.create (FStar.UInt32.uint_to_t (suffixLen a len)) 0uy
+val suffix: a:alg -> len:UInt32.t {v len <= maxLength a} -> Tot (lbytes (suffixLength a len))
+// 2018.04.23 SZ: TODO: this is a placeholder, define properly
+let suffix a len =
+ Bytes.create (FStar.UInt32.uint_to_t (suffixLength a len)) 0uy
 
 // computed in one step (specification)
 val hash: a:alg -> b:hashable a -> Tot (lbytes32 (tagLen a))
