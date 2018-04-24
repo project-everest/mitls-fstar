@@ -55,6 +55,8 @@ val default_group: group
 
 type pre_dhi = g:group & s:pre_share g
 type pre_dhr (i:pre_dhi) = s:pre_share (dfst i)
+
+noextract
 val dh_region : rgn
 
 val registered_dhi: pre_dhi -> GTot Type0

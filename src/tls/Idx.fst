@@ -322,5 +322,6 @@ let register_derive (i:id{registered i}) (l:label) (c:context{wellformed_id (Der
 // this does not matter because security does not depend on their
 // sharing.
 
+noextract
 let ii: ipkg = // (#info:Type0) (get_info: id -> info) =
   Idx id registered honest get_honesty

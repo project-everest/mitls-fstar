@@ -22,6 +22,7 @@ module MDM = FStar.Monotonic.DependentMap
 module MH = FStar.Monotonic.Heap
 module HS = FStar.HyperStack
 
+inline_for_extraction
 let model = Flags.model
 
 type bytes = FStar.Bytes.bytes

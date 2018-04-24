@@ -232,7 +232,7 @@ let encrypt #i e ad l p =
     HST.recall ictr
     end
   else
-    HST.op_Colon_Equals ctr (n + 1);
+    ctr := n + 1;
   c
 
 (* val matches: #i:id -> l:plainLen -> cipher i l -> entry i -> Tot bool *)
@@ -297,7 +297,7 @@ let decrypt #i d ad l c =
      begin
        assert (FStar.Bytes.length pr == l);
        let p = strip_refinement (mk_plain i l pr) in
-       if Some? p then HST.op_Colon_Equals ctr (j + 1);
+       if Some? p then ctr := (j + 1);
        p
      end
    end

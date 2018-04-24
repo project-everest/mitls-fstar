@@ -546,7 +546,9 @@ type pre_index =
 
 type honest_index (i:pre_index) = bool
 
+noextract
 let safe_region:rgn = new_region tls_tables_region
+
 private type i_safety_log = MDM.t safe_region pre_index honest_index (fun _ -> True)
 private let s_table =
   if Flags.ideal_KEF then i_safety_log else unit
@@ -757,16 +759,27 @@ let sinfo_to_string (si:sessionInfo) = "TODO"
 // these functions are still used to control idealization in somes
 // files, so for now we keep them as `bool`
 
+inline_for_extraction
+let safeId (i:id) = false
+
+(* 2018.04.23 SZ: This can't be a match or abstract to fully normalize during extraction *)
+(*
 abstract let safeId: id -> bool = function
   | PlaintextID _ -> false
   | ID13 ki -> false // TODO
   | ID12 pv msid kdf ae cr sr rw -> false //TODO 1.2
+*)
 
+inline_for_extraction
+let authId (i:id) = false
+
+(* 2018.04.23 SZ: This can't be a match or abstract to fully normalize during extraction *)
+(*
 abstract let authId: id -> bool = function
   | PlaintextID _ -> false 
   | ID13 ki -> false // TODO
   | ID12 pv msid kdf ae cr sr rw -> false //TODO 1.2
-
+*)
 
 let plainText_is_not_auth (i:id)
   : Lemma (requires (PlaintextID? i))

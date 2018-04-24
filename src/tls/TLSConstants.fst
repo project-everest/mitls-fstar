@@ -1360,10 +1360,9 @@ let rec distinguishedNameListBytes names =
   | h::t -> vlbytes2 (utf8_encode h) @| distinguishedNameListBytes t
 
 (** Parsing function for a list of Distinguished Names of certificates *)
-assume val parseDistinguishedNameList: 
+val parseDistinguishedNameList:
   data:bytes -> res:list dn -> Tot (result (list dn)) (decreases (length data))
-
-(* 18-02-24 I don't understand this error in pattern matching
+//(* 18-02-24 I don't understand this error in pattern matching
 let rec parseDistinguishedNameList data res =
   if length data = 0 then
     Correct res
@@ -1383,7 +1382,6 @@ let rec parseDistinguishedNameList data res =
               parseDistinguishedNameList data res
             else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
         end
-*)
 
 // TODO: move all the definitions below to a separate file / figure out whether
 // they belong here ?

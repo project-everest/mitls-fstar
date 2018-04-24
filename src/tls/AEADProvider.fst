@@ -298,15 +298,17 @@ let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:pla
       let cipherlen = uint_to_t (cipherlen i l) in
       assume(AE.safelen i (v plainlen) = true); // TODO
       push_frame ();
-      let plain =
-        if not (Flag.safeId i) then
-          Plain.unsafe_hide_buffer i #l (BufferBytes.from_bytes plain)
-        else Plain.create i 0uy plainlen
-      in
       let cipher = Buffer.create 0uy cipherlen in
       assume(v cipherlen = v plainlen + 12);
       let tmp = BufferBytes.from_bytes iv in
-      AE.encrypt i st (Crypto.Symmetric.Bytes.load_uint128 12ul tmp) adlen ad plainlen plain cipher;
+      begin
+      if not (TLSInfo.safeId i) then
+        let plain = Plain.unsafe_hide_buffer i #l (BufferBytes.from_bytes plain) in
+        AE.encrypt i st (Crypto.Symmetric.Bytes.load_uint128 12ul tmp) adlen ad plainlen plain cipher
+      else
+        let plain = Plain.create i 0uy plainlen in
+        AE.encrypt i st (Crypto.Symmetric.Bytes.load_uint128 12ul tmp) adlen ad plainlen plain cipher
+      end;
       let ret = BufferBytes.to_bytes (FStar.UInt32.v cipherlen) cipher in
       pop_frame ();
       ret

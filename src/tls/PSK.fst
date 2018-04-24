@@ -36,6 +36,7 @@ type pskInfo = TLSConstants.pskInfo
 // Note that the associated PSK are stored in the PSK table defined below in this file
 type hostname = string
 type tlabel (h:hostname) = t:bytes
+noextract
 private let tregion:rgn = new_region tls_tables_region
 private let tickets : MDM.t tregion hostname tlabel (fun _ -> True) =
   MDM.alloc ()
@@ -96,7 +97,8 @@ type app_psk_entry (i:psk_identifier) =
 type psk_table_invariant (m:MDM.partial_dependent_map psk_identifier app_psk_entry) = True
 
 /// Ideal table for application PSKs
-/// 
+
+noextract
 private let psk_region:rgn = new_region tls_tables_region
 private let app_psk_table : MDM.t psk_region psk_identifier app_psk_entry psk_table_invariant =
   MDM.alloc ()

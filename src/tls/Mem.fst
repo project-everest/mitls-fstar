@@ -68,6 +68,7 @@ type subrgn parent = r:rgn{HS.parent r == parent}
 /// private mutable set of regions known to be pairwise-distinct.
 ///
 
+noextract
 private let p :
   tls_region:tls_rgn &
   r0:subrgn tls_region &
@@ -81,12 +82,19 @@ private let p :
   (| tls_region, r0, r1, r2 |)
 
 // consider dropping the tls_ prefix
+noextract
 let tls_region: r:tls_rgn =
   match p with | (| r, _, _, _ |) -> r
+
+noextract
 let tls_tables_region: r:tls_rgn =
   match p with | (| _, r, _, _ |) -> r
+
+noextract
 let tls_define_region: r:tls_rgn{r `disjoint` tls_tables_region} =
   match p with | (| _, _, r, _ |) -> r
+
+noextract
 let tls_honest_region: r:tls_rgn{r `disjoint` tls_tables_region /\ r `disjoint` tls_define_region} =
   match p with | (| _, _, _, r |) -> r
 

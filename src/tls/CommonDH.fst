@@ -132,8 +132,10 @@ let is_ffdhe (ng:namedGroup): Tot bool = List.mem ng [ FFDHE2048; FFDHE3072; FFD
 //   = ()
 
 let default_group = ECDH (CoreCrypto.ECC_P256)
- 
+
+noextract
 let dh_region = new_region tls_tables_region
+
 noeq type ilog_entry (i:pre_dhi) =
   | Honest of MDM.t dh_region (pre_dhr i) (fun j -> bool) (fun _ -> True)
   | Corrupt

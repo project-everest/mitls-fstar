@@ -64,6 +64,7 @@ let ctr_ref (#l:rgn) (r:rgn) (i:id) (log:log_ref l i) : Tot Type0 =
   else m_rref r (counter (alg i)) increases
 
 #set-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
+inline_for_extraction
 let ctr (#l:rgn) (#r:rgn) (#i:id) (#log:log_ref l i) (c:ctr_ref r i log)
   : Tot (m_rref r (if authId i
 		   then seqn_val #l #(entry i) r log (max_ctr (alg i))
@@ -263,7 +264,7 @@ let encrypt #i e ad rg p =
   else
     begin
     HST.recall ctr;
-    HST.op_Colon_Equals ctr (n + 1)
+    ctr := n + 1
     end;
   c
 
