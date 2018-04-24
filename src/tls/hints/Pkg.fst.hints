@@ -1,1 +1,808 @@
-[ "©êù‰'¤GååÏc§å¶Å3", [] ]
+[
+  "©êù‰'¤GååÏc§å¶Å3",
+  [
+    [
+      "Pkg.lbytes32",
+      1,
+      2,
+      1,
+      [
+        "@query", "b2t_def", "equation_FStar.UInt.fits",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "64572a0a83f00051f65f235cb540c9fc"
+    ],
+    [
+      "Pkg.__proj__Idx__item__registered",
+      1,
+      2,
+      1,
+      [ "@query", "proj_equation_Pkg.Idx_t", "projection_inverse_Pkg.Idx_t" ],
+      0,
+      "d74f48c3682ca760e90674083d4d3903"
+    ],
+    [
+      "Pkg.__proj__Idx__item__honest",
+      1,
+      2,
+      1,
+      [ "@query", "proj_equation_Pkg.Idx_t", "projection_inverse_Pkg.Idx_t" ],
+      0,
+      "62fd8b9a1a1fb8997e7d1b3c8b90bc2f"
+    ],
+    [
+      "Pkg.__proj__Idx__item__get_honesty",
+      1,
+      2,
+      1,
+      [
+        "@query", "proj_equation_Pkg.Idx_honest",
+        "proj_equation_Pkg.Idx_registered", "proj_equation_Pkg.Idx_t",
+        "projection_inverse_Pkg.Idx_honest",
+        "projection_inverse_Pkg.Idx_registered",
+        "projection_inverse_Pkg.Idx_t",
+        "token_correspondence_Pkg.__proj__Idx__item__honest",
+        "token_correspondence_Pkg.__proj__Idx__item__registered"
+      ],
+      0,
+      "29151cb2de91b8be1615a1c7972f591e"
+    ],
+    [
+      "Pkg.__proj__Pinv_region__item__r",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_Pkg.Pinv_region",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Pkg_Tm_refine_fa69a6835849eb789fda80fb5d58d49d"
+      ],
+      0,
+      "2216b0e4a7392727f8069684536b6751"
+    ],
+    [
+      "Pkg.__proj__Pinv_define__item__it",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_Pkg.Pinv_define",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Pkg_Tm_refine_f5f232e1a365d739444cb5bbb0bbb87a"
+      ],
+      0,
+      "3135ef65798c56604953b34af1ffd948"
+    ],
+    [
+      "Pkg.__proj__Pinv_define__item__vt",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_Pkg.Pinv_define",
+        "proj_equation_Pkg.Pinv_define_it",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Pkg.Pinv_define_it",
+        "refinement_interpretation_Pkg_Tm_refine_f5f232e1a365d739444cb5bbb0bbb87a"
+      ],
+      0,
+      "0b305e74c6d8ce6a740d4eceb0811636"
+    ],
+    [
+      "Pkg.__proj__Pinv_define__item__t",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_Pkg.Pinv_define",
+        "proj_equation_Pkg.Pinv_define_it",
+        "proj_equation_Pkg.Pinv_define_vt",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Pkg.Pinv_define_it",
+        "projection_inverse_Pkg.Pinv_define_vt",
+        "refinement_interpretation_Pkg_Tm_refine_f5f232e1a365d739444cb5bbb0bbb87a"
+      ],
+      0,
+      "d7979bbc686554a4b81584e217172959"
+    ],
+    [
+      "Pkg.pkg",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_Pkg.__proj__Idx__item__t"
+      ],
+      0,
+      "f4a515bd2482b12ef556aa835f0c0c0f"
+    ],
+    [
+      "Pkg.pkg",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_Pkg.__proj__Idx__item__t"
+      ],
+      0,
+      "584680f757d19d425921d3c2a692c10f"
+    ],
+    [
+      "Pkg.pkg",
+      3,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_Pkg.__proj__Idx__item__t"
+      ],
+      0,
+      "46ae729a24da1cc00d8c8e14643a0f60"
+    ],
+    [
+      "Pkg.pkg",
+      4,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_Pkg.__proj__Idx__item__t"
+      ],
+      0,
+      "c835c16fc3471cf999a0d2af1a04d9d2"
+    ],
+    [
+      "Pkg.pkg",
+      5,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_Pkg.__proj__Idx__item__t"
+      ],
+      0,
+      "62bd89170510c7420c5dd2803bb09d2f"
+    ],
+    [
+      "Pkg.pkg",
+      6,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_Pkg.__proj__Idx__item__t"
+      ],
+      0,
+      "ad5b6928c3589838fb192a25cfc96d90"
+    ],
+    [
+      "Pkg.pkg",
+      7,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_Pkg.__proj__Idx__item__t"
+      ],
+      0,
+      "723370f1cd443afcccaceef9642dd817"
+    ],
+    [
+      "Pkg.pkg",
+      8,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "db84fc4b57f30e7302e84cd78f7711a2"
+    ],
+    [
+      "Pkg.pkg",
+      9,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "d65adaff5d7dc7e5dd999960a0ec5072"
+    ],
+    [
+      "Pkg.pkg",
+      10,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_Pkg.__proj__Idx__item__t"
+      ],
+      0,
+      "d8d083c5a352ba17638320e75d0ba616"
+    ],
+    [
+      "Pkg.pkg",
+      11,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_Pkg.__proj__Idx__item__t"
+      ],
+      0,
+      "b38c0aca31ed22e867327f1cd311a42e"
+    ],
+    [
+      "Pkg.pkg",
+      12,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "data_elim_Pkg.Idx",
+        "disc_equation_Pkg.Pinv_define", "disc_equation_Pkg.Pinv_region",
+        "equation_Prims.eqtype", "fuel_guarded_inversion_Pkg.ipkg",
+        "fuel_guarded_inversion_Pkg.pkg_inv_r",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "74af05f01e948a3be154317dec6c7ac5"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__len",
+      1,
+      2,
+      1,
+      [
+        "@query", "proj_equation_Pkg.Pkg_info",
+        "projection_inverse_Pkg.Pkg_info",
+        "token_correspondence_Pkg.__proj__Pkg__item__info"
+      ],
+      0,
+      "5e1088b878767b82247ecbf8eb7c51c0"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__define_table",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_Pkg.__proj__Idx__item__t"
+      ],
+      0,
+      "faf9c905164219e956879b2c8b5d33b1"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__define_table",
+      2,
+      2,
+      1,
+      [
+        "@query", "proj_equation_Pkg.Pkg_key",
+        "projection_inverse_Pkg.Pkg_key"
+      ],
+      0,
+      "3c46cf35fa0156d3a29dcd1a8d378a70"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__footprint_framing",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "data_elim_Pkg.Idx",
+        "equation_Prims.eqtype", "fuel_guarded_inversion_Pkg.ipkg",
+        "fuel_guarded_inversion_Pkg.pkg",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "7f24845017bec25fbdaff1b37f7dbe2d"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__footprint_framing",
+      2,
+      2,
+      1,
+      [
+        "@query", "proj_equation_Pkg.Pkg_define_table",
+        "proj_equation_Pkg.Pkg_footprint", "proj_equation_Pkg.Pkg_key",
+        "projection_inverse_Pkg.Pkg_define_table",
+        "projection_inverse_Pkg.Pkg_footprint",
+        "projection_inverse_Pkg.Pkg_key",
+        "token_correspondence_Pkg.__proj__Pkg__item__footprint"
+      ],
+      0,
+      "5b846a84eb5b2b95088333531078c20c"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__package_invariant_framing",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "data_elim_Pkg.Idx",
+        "disc_equation_Pkg.Pinv_define", "disc_equation_Pkg.Pinv_region",
+        "equation_Prims.eqtype", "fuel_guarded_inversion_Pkg.ipkg",
+        "fuel_guarded_inversion_Pkg.pkg",
+        "fuel_guarded_inversion_Pkg.pkg_inv_r",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "34f5090270ad1effd890d9bd844ac3de"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__package_invariant_framing",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "fuel_guarded_inversion_Pkg.pkg_inv_r",
+        "proj_equation_Pkg.Pkg_define_table",
+        "proj_equation_Pkg.Pkg_footprint", "proj_equation_Pkg.Pkg_key",
+        "proj_equation_Pkg.Pkg_package_invariant",
+        "projection_inverse_Pkg.Pkg_define_table",
+        "projection_inverse_Pkg.Pkg_footprint",
+        "projection_inverse_Pkg.Pkg_key",
+        "projection_inverse_Pkg.Pkg_package_invariant",
+        "token_correspondence_Pkg.__proj__Pkg__item__footprint",
+        "token_correspondence_Pkg.__proj__Pkg__item__package_invariant"
+      ],
+      0,
+      "3159eeee1d28a654fec6b112a6905a60"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__post",
+      1,
+      2,
+      1,
+      [
+        "@query", "proj_equation_Pkg.Pkg_info", "proj_equation_Pkg.Pkg_key",
+        "projection_inverse_Pkg.Pkg_info", "projection_inverse_Pkg.Pkg_key",
+        "token_correspondence_Pkg.__proj__Pkg__item__info",
+        "token_correspondence_Pkg.__proj__Pkg__item__key"
+      ],
+      0,
+      "32d6deaf734e4ea55fad8d752571f679"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__post_framing",
+      1,
+      2,
+      1,
+      [
+        "@query", "proj_equation_Pkg.Pkg_footprint",
+        "proj_equation_Pkg.Pkg_info", "proj_equation_Pkg.Pkg_key",
+        "proj_equation_Pkg.Pkg_post", "projection_inverse_Pkg.Pkg_footprint",
+        "projection_inverse_Pkg.Pkg_info", "projection_inverse_Pkg.Pkg_key",
+        "projection_inverse_Pkg.Pkg_post",
+        "token_correspondence_Pkg.__proj__Pkg__item__footprint",
+        "token_correspondence_Pkg.__proj__Pkg__item__info",
+        "token_correspondence_Pkg.__proj__Pkg__item__key",
+        "token_correspondence_Pkg.__proj__Pkg__item__post"
+      ],
+      0,
+      "c90f09ee0d09b7c2d5386342bde1f03b"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__create",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
+        "fuel_guarded_inversion_Pkg.pkg",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_Pkg.__proj__Idx__item__t"
+      ],
+      0,
+      "b49e7f541487de403732b93ffb3813ae"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__create",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "equation_Mem.is_tls_rgn", "equation_Mem.rgn",
+        "equation_Mem.tls_region", "equation_Mem.tls_rgn",
+        "equation_Pkg.model",
+        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
+        "function_token_typing_Flags.model",
+        "function_token_typing_Mem.tls_region",
+        "proj_equation_Pkg.Pkg_define_table",
+        "proj_equation_Pkg.Pkg_footprint", "proj_equation_Pkg.Pkg_info",
+        "proj_equation_Pkg.Pkg_key",
+        "proj_equation_Pkg.Pkg_package_invariant",
+        "proj_equation_Pkg.Pkg_post",
+        "projection_inverse_Pkg.Pkg_define_table",
+        "projection_inverse_Pkg.Pkg_footprint",
+        "projection_inverse_Pkg.Pkg_info", "projection_inverse_Pkg.Pkg_key",
+        "projection_inverse_Pkg.Pkg_package_invariant",
+        "projection_inverse_Pkg.Pkg_post",
+        "refinement_interpretation_Mem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
+        "refinement_interpretation_Mem_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
+        "refinement_interpretation_Pkg_Tm_refine_2777959a7e96b6b406961ca910813be6",
+        "refinement_interpretation_Pkg_Tm_refine_39c167c57bd82e65242f3f56914954d2",
+        "token_correspondence_Pkg.__proj__Pkg__item__info",
+        "token_correspondence_Pkg.__proj__Pkg__item__key",
+        "token_correspondence_Pkg.__proj__Pkg__item__package_invariant",
+        "token_correspondence_Pkg.__proj__Pkg__item__post",
+        "typing_Mem.is_tls_rgn"
+      ],
+      0,
+      "4b1ff2223273b3243f83e8c376133a24"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__coerceT",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "8468bf57de07ae8fd8b113f6e531671a"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__coerceT",
+      2,
+      2,
+      1,
+      [
+        "@query", "proj_equation_Pkg.Pkg_ideal",
+        "proj_equation_Pkg.Pkg_info", "proj_equation_Pkg.Pkg_key",
+        "proj_equation_Pkg.Pkg_len", "projection_inverse_Pkg.Pkg_ideal",
+        "projection_inverse_Pkg.Pkg_info", "projection_inverse_Pkg.Pkg_key",
+        "projection_inverse_Pkg.Pkg_len",
+        "token_correspondence_Pkg.__proj__Pkg__item__info",
+        "token_correspondence_Pkg.__proj__Pkg__item__key",
+        "token_correspondence_Pkg.__proj__Pkg__item__len"
+      ],
+      0,
+      "3b6d2dcce7103ecc5ee8f1cf042e1d5b"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__coerce",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
+        "fuel_guarded_inversion_Pkg.pkg",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_Pkg.__proj__Idx__item__t"
+      ],
+      0,
+      "99cae9ea5c7245bd0c30b7977e47c918"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__coerce",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
+        "proj_equation_Pkg.Pkg_coerceT",
+        "proj_equation_Pkg.Pkg_define_table",
+        "proj_equation_Pkg.Pkg_footprint", "proj_equation_Pkg.Pkg_ideal",
+        "proj_equation_Pkg.Pkg_info", "proj_equation_Pkg.Pkg_key",
+        "proj_equation_Pkg.Pkg_len",
+        "proj_equation_Pkg.Pkg_package_invariant",
+        "proj_equation_Pkg.Pkg_post", "projection_inverse_Pkg.Pkg_coerceT",
+        "projection_inverse_Pkg.Pkg_define_table",
+        "projection_inverse_Pkg.Pkg_footprint",
+        "projection_inverse_Pkg.Pkg_ideal",
+        "projection_inverse_Pkg.Pkg_info", "projection_inverse_Pkg.Pkg_key",
+        "projection_inverse_Pkg.Pkg_len",
+        "projection_inverse_Pkg.Pkg_package_invariant",
+        "projection_inverse_Pkg.Pkg_post",
+        "refinement_interpretation_Pkg_Tm_refine_7d93f9e4ed73ce68c639a89d48c50efd",
+        "refinement_interpretation_Pkg_Tm_refine_94b2291dae068e159b252f3c9388ae60",
+        "token_correspondence_Pkg.__proj__Pkg__item__coerceT",
+        "token_correspondence_Pkg.__proj__Pkg__item__info",
+        "token_correspondence_Pkg.__proj__Pkg__item__key",
+        "token_correspondence_Pkg.__proj__Pkg__item__len",
+        "token_correspondence_Pkg.__proj__Pkg__item__package_invariant",
+        "token_correspondence_Pkg.__proj__Pkg__item__post"
+      ],
+      0,
+      "49874ff02ca5ef2ae8005b7bc78d3f9f"
+    ],
+    [
+      "Pkg.local_pkg",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "8f5d9d2ba299b3a06cee3494728cdd8d"
+    ],
+    [
+      "Pkg.local_pkg",
+      2,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "bba8f782ffe44d92bd9fb33d358b115e"
+    ],
+    [
+      "Pkg.local_pkg",
+      3,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "3b5d1e249b36c25cf68f04cab6673ffc"
+    ],
+    [
+      "Pkg.local_pkg",
+      4,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "7d2a1dc78a9256587d828993e93c3030"
+    ],
+    [
+      "Pkg.local_pkg",
+      5,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "7e588532c4386aac18c9f962bfc2077d"
+    ],
+    [
+      "Pkg.__proj__LocalPkg__item__len",
+      1,
+      2,
+      1,
+      [
+        "@query", "proj_equation_Pkg.LocalPkg_info",
+        "projection_inverse_Pkg.LocalPkg_info",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__info"
+      ],
+      0,
+      "375228d92a9502303c55fadfe2cd0b6a"
+    ],
+    [
+      "Pkg.__proj__LocalPkg__item__local_footprint",
+      1,
+      2,
+      1,
+      [
+        "@query", "proj_equation_Pkg.LocalPkg_key",
+        "proj_equation_Pkg.LocalPkg_shared_footprint",
+        "projection_inverse_Pkg.LocalPkg_key",
+        "projection_inverse_Pkg.LocalPkg_shared_footprint",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__key"
+      ],
+      0,
+      "0f318f1e5a9b199a3b578845c562a588"
+    ],
+    [
+      "Pkg.__proj__LocalPkg__item__local_invariant",
+      1,
+      2,
+      1,
+      [
+        "@query", "proj_equation_Pkg.LocalPkg_key",
+        "projection_inverse_Pkg.LocalPkg_key",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__key"
+      ],
+      0,
+      "75589b6e672c0dca39a337d8e0fa2177"
+    ],
+    [
+      "Pkg.__proj__LocalPkg__item__local_invariant_framing",
+      1,
+      2,
+      1,
+      [
+        "@query", "proj_equation_Pkg.LocalPkg_key",
+        "proj_equation_Pkg.LocalPkg_local_footprint",
+        "proj_equation_Pkg.LocalPkg_local_invariant",
+        "proj_equation_Pkg.LocalPkg_shared_footprint",
+        "projection_inverse_Pkg.LocalPkg_key",
+        "projection_inverse_Pkg.LocalPkg_local_footprint",
+        "projection_inverse_Pkg.LocalPkg_local_invariant",
+        "projection_inverse_Pkg.LocalPkg_shared_footprint",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__key",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__local_footprint",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__local_invariant"
+      ],
+      0,
+      "ab4a9388dbb19d282d2fc2949686499f"
+    ],
+    [
+      "Pkg.__proj__LocalPkg__item__post",
+      1,
+      2,
+      1,
+      [
+        "@query", "proj_equation_Pkg.LocalPkg_info",
+        "proj_equation_Pkg.LocalPkg_key",
+        "projection_inverse_Pkg.LocalPkg_info",
+        "projection_inverse_Pkg.LocalPkg_key",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__info",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__key"
+      ],
+      0,
+      "1b7a98946df952514d9b09257073c645"
+    ],
+    [
+      "Pkg.__proj__LocalPkg__item__post_framing",
+      1,
+      2,
+      1,
+      [
+        "@query", "proj_equation_Pkg.LocalPkg_info",
+        "proj_equation_Pkg.LocalPkg_key",
+        "proj_equation_Pkg.LocalPkg_local_footprint",
+        "proj_equation_Pkg.LocalPkg_post",
+        "projection_inverse_Pkg.LocalPkg_info",
+        "projection_inverse_Pkg.LocalPkg_key",
+        "projection_inverse_Pkg.LocalPkg_local_footprint",
+        "projection_inverse_Pkg.LocalPkg_post",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__info",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__key",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__local_footprint",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__post"
+      ],
+      0,
+      "9f0ca60de564be0a042663633bc0ff99"
+    ],
+    [
+      "Pkg.__proj__LocalPkg__item__create",
+      1,
+      2,
+      1,
+      [
+        "@query", "proj_equation_Pkg.LocalPkg_info",
+        "proj_equation_Pkg.LocalPkg_key",
+        "proj_equation_Pkg.LocalPkg_local_footprint",
+        "proj_equation_Pkg.LocalPkg_local_invariant",
+        "proj_equation_Pkg.LocalPkg_post",
+        "projection_inverse_Pkg.LocalPkg_info",
+        "projection_inverse_Pkg.LocalPkg_key",
+        "projection_inverse_Pkg.LocalPkg_local_footprint",
+        "projection_inverse_Pkg.LocalPkg_local_invariant",
+        "projection_inverse_Pkg.LocalPkg_post",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__info",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__key",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__local_footprint",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__local_invariant",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__post"
+      ],
+      0,
+      "f710447e173dbda1bb3601663511985c"
+    ],
+    [
+      "Pkg.__proj__LocalPkg__item__coerceT",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "cac01363f97f3d3c32807408ba3235bd"
+    ],
+    [
+      "Pkg.__proj__LocalPkg__item__coerceT",
+      2,
+      2,
+      1,
+      [
+        "@query", "proj_equation_Pkg.LocalPkg_ideal",
+        "proj_equation_Pkg.LocalPkg_info", "proj_equation_Pkg.LocalPkg_key",
+        "proj_equation_Pkg.LocalPkg_len",
+        "projection_inverse_Pkg.LocalPkg_ideal",
+        "projection_inverse_Pkg.LocalPkg_info",
+        "projection_inverse_Pkg.LocalPkg_key",
+        "projection_inverse_Pkg.LocalPkg_len",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__info",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__key",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__len"
+      ],
+      0,
+      "dbb9c5444dfac4f38c7267600fdfd408"
+    ],
+    [
+      "Pkg.__proj__LocalPkg__item__coerce",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "cb3a91681e351d2d55ea4be98197179f"
+    ],
+    [
+      "Pkg.__proj__LocalPkg__item__coerce",
+      2,
+      2,
+      1,
+      [
+        "@query", "proj_equation_Pkg.LocalPkg_coerceT",
+        "proj_equation_Pkg.LocalPkg_ideal",
+        "proj_equation_Pkg.LocalPkg_info", "proj_equation_Pkg.LocalPkg_key",
+        "proj_equation_Pkg.LocalPkg_len",
+        "proj_equation_Pkg.LocalPkg_local_footprint",
+        "proj_equation_Pkg.LocalPkg_local_invariant",
+        "proj_equation_Pkg.LocalPkg_post",
+        "projection_inverse_Pkg.LocalPkg_coerceT",
+        "projection_inverse_Pkg.LocalPkg_ideal",
+        "projection_inverse_Pkg.LocalPkg_info",
+        "projection_inverse_Pkg.LocalPkg_key",
+        "projection_inverse_Pkg.LocalPkg_len",
+        "projection_inverse_Pkg.LocalPkg_local_footprint",
+        "projection_inverse_Pkg.LocalPkg_local_invariant",
+        "projection_inverse_Pkg.LocalPkg_post",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__coerceT",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__info",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__key",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__len",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__local_footprint",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__local_invariant",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__post"
+      ],
+      0,
+      "3c28b296f19d5e3e4e1f201fb4840a9b"
+    ],
+    [
+      "Pkg.lemma_mm_forall_frame",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_Prims.eqtype",
+        "function_token_typing_FStar.Monotonic.HyperHeap.rid",
+        "lemma_FStar.Set.mem_empty"
+      ],
+      0,
+      "999355dccecb67413246f97fc6bdc14a"
+    ]
+  ]
+]
