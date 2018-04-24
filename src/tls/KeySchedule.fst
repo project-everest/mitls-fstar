@@ -322,12 +322,16 @@ let ks_client_init ks ogl =
     st := C (C_13_wait_SH cr [] gs);
     Some gxl
 
-private let mk_binder (#rid) (pskid:PSK.pskid)
+type ticket13 = t:Ticket.ticket{Ticket.Ticket13? t}
+
+private let mk_binder (#rid) (pskid:psk_identifier) (t:ticket13)
   : ST ((i:binderId & bk:binderKey i) * (i:esId{~(NoPSK? i)} & es i))
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
   =
-  let i, pski, psk = read_psk pskid in
+  let i : esId = ResumptionPSK (Ticket.Ticket13?.rmsId t) in
+  let pski = Some?.v (Ticket.ticket_pskinfo t) in
+  let psk = Ticket.Ticket13?.rms t in
   let h = pski.early_hash in
   dbg ("Loaded pre-shared key "^(print_bytes pskid)^": "^(print_bytes psk));
   let es : es i = HKDF.hkdf_extract h (H.zeroHash h) psk in
@@ -343,17 +347,16 @@ private let mk_binder (#rid) (pskid:PSK.pskid)
   let bk : binderKey bId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Binder bId) trivial rid bk in
   (| bId, bk|), (| i, es |)
 
-private val map_ST_mk_binder: #rid:rid -> list PSK.pskid -> ST0 (list ((i:binderId & bk:binderKey i) * (i:esId{~(NoPSK? i)} & es i)))
-let rec map_ST_mk_binder #rid l =
-  match l with
-  | [] -> []
-  | hd :: tl -> mk_binder #rid hd :: map_ST_mk_binder #rid tl
+private let rec tickets13 #rid acc (l:list (psk_identifier * Ticket.ticket))
+  : ST0 (list ((i:binderId & bk:binderKey i) * (i:esId{~(NoPSK? i)} & es i)))
+  = match l with
+  | [] -> List.Tot.rev acc
+  | (pskid, t) :: r -> tickets13 #rid (if Ticket.Ticket13? t then (mk_binder #rid pskid t)::acc else acc) r
 
-let ks_client_13_get_binder_keys ks pskl =
+let ks_client_13_get_binder_keys ks l =
   let KS #rid st = ks in
   let C (C_13_wait_SH cr [] gs) = !st in
-  let pskl = map_ST_mk_binder #rid pskl in
-  let (bkl, esl) = List.Tot.split pskl in
+  let (bkl, esl) = List.Tot.split (tickets13 #rid [] l) in
   st := C (C_13_wait_SH cr esl gs);
   bkl
 
@@ -463,7 +466,7 @@ let ks_server_13_init ks cr cs pskid g_gx =
       dbg ("Using negotiated PSK identity: "^(print_bytes id));
       let i, psk, h : esId * bytes * Hashing.Spec.alg =
         match Ticket.check_ticket id with
-        | Some (Ticket.Ticket13 cs li rmsId rms _ _ _) ->
+        | Some (Ticket.Ticket13 cs li rmsId rms _ _ _ _) ->
           dbg ("Ticket RMS: "^(print_bytes rms));
           let i = ResumptionPSK #li rmsId in
           let CipherSuite13 _ h = cs in

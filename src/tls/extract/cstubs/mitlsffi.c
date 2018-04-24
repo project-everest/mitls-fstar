@@ -242,6 +242,23 @@ int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *alg, const unsigned char
     return (b) ? 1 : 0;
 }
 
+int MITLS_CALLCONV FFI_mitls_configure_ticket(mitls_state *state, const mitls_ticket *ticket)
+{
+    int b = 0;
+    LOCK_MUTEX(&lock);
+    ENTER_GLOBAL_HEAP_REGION();
+    FStar_Bytes_bytes tid, si;
+    MakeFStar_Bytes_bytes(&tid, ticket->ticket, ticket->ticket_len);
+    MakeFStar_Bytes_bytes(&si, ticket->session, ticket->session_len);
+    state->cfg = FFI_ffiSetTicket(state->cfg, tid, si);
+    LEAVE_GLOBAL_HEAP_REGION();
+    UNLOCK_MUTEX(&lock);
+    if (HAD_OUT_OF_MEMORY) {
+        return 0;
+    }
+    return (b) ? 1 : 0;
+}
+
 int MITLS_CALLCONV FFI_mitls_configure_cipher_suites(/* in */ mitls_state *state, const char * cs)
 {
     ENTER_HEAP_REGION(state->rgn);
@@ -676,74 +693,24 @@ static int32_t wrapped_recv(void* ctx, uint8_t* buffer, uint32_t len)
 // Called by the host app to create a TLS connection.
 int MITLS_CALLCONV FFI_mitls_connect(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state)
 {
-   int ret = 0;
-   LOCK_MUTEX(&lock);
-   ENTER_HEAP_REGION(state->rgn);
-
-   wrapped_transport_cb* tcb = KRML_HOST_MALLOC(sizeof(wrapped_transport_cb));
-   Prims_list__FStar_Bytes_bytes *psks = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
-
-   tcb->send_recv_ctx = send_recv_ctx;
-   tcb->send = psend;
-   tcb->recv = precv;
-   psks->tag = Prims_Nil;
-
-    // No psks this FFI_connect() call
-    K___Connection_connection_Prims_int result = FFI_connect((FStar_Dyn_dyn)tcb, wrapped_send, wrapped_recv, state->cfg, psks);
-    state->cxn = result.fst;
-    ret = (result.snd == 0);
-
-    LEAVE_HEAP_REGION();
-    UNLOCK_MUTEX(&lock);
-    if (HAD_OUT_OF_MEMORY) {
-        return 0;
-    }
-    return ret;
-}
-
-int MITLS_CALLCONV FFI_mitls_resume(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state, /* in */ mitls_ticket *ticket)
-{
     int ret = 0;
     LOCK_MUTEX(&lock);
     ENTER_HEAP_REGION(state->rgn);
+
     wrapped_transport_cb* tcb = KRML_HOST_MALLOC(sizeof(wrapped_transport_cb));
     tcb->send_recv_ctx = send_recv_ctx;
     tcb->send = psend;
     tcb->recv = precv;
 
-    Prims_list__FStar_Bytes_bytes *head;
-    head = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
-    if (!head) {
-        UNLOCK_MUTEX(&lock);
-        return 1;
-    }
-
-    if (ticket->ticket_len) {
-
-        Prims_list__FStar_Bytes_bytes *tail = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
-        Prims_list__FStar_Bytes_bytes *nil = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
-
-        MakeFStar_Bytes_bytes(&head->hd, ticket->ticket, ticket->ticket_len);
-        MakeFStar_Bytes_bytes(&tail->hd, ticket->session, ticket->session_len);
-
-        head->tag = Prims_Cons;
-        head->tl = tail;
-        tail->tag = Prims_Cons;
-        tail->tl = nil;
-        nil->tag = Prims_Nil;
-    } else {
-        head->tag = Prims_Nil;
-    }
-
-    K___Connection_connection_Prims_int result = FFI_connect((FStar_Dyn_dyn)tcb, wrapped_send, wrapped_recv, state->cfg, head);
+    K___Connection_connection_Prims_int result = FFI_connect((FStar_Dyn_dyn)tcb, wrapped_send, wrapped_recv, state->cfg);
     state->cxn = result.fst;
     ret = (result.snd == 0);
+
     LEAVE_HEAP_REGION();
     UNLOCK_MUTEX(&lock);
     if (HAD_OUT_OF_MEMORY) {
         return 0;
     }
-
     return ret;
 }
 
@@ -926,22 +893,9 @@ void quic_create_callout(PVOID Parameter)
     if(s->cfg->is_server) {
       s->st->cxn = QUIC_ffiAcceptConnected(s->st, quic_send, quic_recv, s->st->cfg);
     } else {
-      FStar_Pervasives_Native_option__K___FStar_Bytes_bytes_FStar_Bytes_bytes ticket;
-
-      if(s->cfg->server_ticket && s->cfg->server_ticket->ticket_len > 0) {
-          ticket.tag = FStar_Pervasives_Native_Some;
-
-          // BUGBUG: Handle OOM
-          MakeFStar_Bytes_bytes(&ticket.v.fst, s->cfg->server_ticket->ticket, s->cfg->server_ticket->ticket_len);
-          MakeFStar_Bytes_bytes(&ticket.v.snd, s->cfg->server_ticket->session, s->cfg->server_ticket->session_len);
-      }
-      else {
-          ticket.tag = FStar_Pervasives_Native_None;
-      }
-
       // Protect the write to the PSK table (WIP)
       LOCK_MUTEX(&lock);
-      s->st->cxn = QUIC_ffiConnect((FStar_Dyn_dyn)s->st, quic_send, quic_recv, s->st->cfg, ticket);
+      s->st->cxn = QUIC_ffiConnect((FStar_Dyn_dyn)s->st, quic_send, quic_recv, s->st->cfg);
       UNLOCK_MUTEX(&lock);
     }
 }
@@ -952,7 +906,7 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
     quic_state* st = NULL;
     *state = NULL;
     HEAP_REGION rgn;
-    
+
     CREATE_HEAP_REGION(&rgn);
     if (!VALID_HEAP_REGION(rgn)) {
         return 0; // out of memory
@@ -1016,6 +970,13 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
        st->cfg = FFI_ffiSetEarlyData(st->cfg, 0xffffffff);
     }
 
+    if(cfg->server_ticket && cfg->server_ticket->ticket_len > 0) {
+      FStar_Bytes_bytes tid, si;
+      MakeFStar_Bytes_bytes(&tid, cfg->server_ticket->ticket, cfg->server_ticket->ticket_len);
+      MakeFStar_Bytes_bytes(&si, cfg->server_ticket->session, cfg->server_ticket->session_len);
+      st->cfg = FFI_ffiSetTicket(st->cfg, tid, si);
+    }
+
     if (cfg->ticket_callback) {
       wrapped_ticket_cb *cbs = KRML_HOST_MALLOC(sizeof(wrapped_ticket_cb));
       cbs->cb_state = cfg->callback_state;
@@ -1066,21 +1027,9 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
     if(cfg->is_server) {
       st->cxn = QUIC_ffiAcceptConnected(st, quic_send, quic_recv, st->cfg);
     } else {
-      FStar_Pervasives_Native_option__K___FStar_Bytes_bytes_FStar_Bytes_bytes ticket;
-
-      if(cfg->server_ticket && cfg->server_ticket->ticket_len > 0) {
-          ticket.tag = FStar_Pervasives_Native_Some;
-
-          MakeFStar_Bytes_bytes(&ticket.v.fst, cfg->server_ticket->ticket, cfg->server_ticket->ticket_len);
-          MakeFStar_Bytes_bytes(&ticket.v.snd, cfg->server_ticket->session, cfg->server_ticket->session_len);
-      }
-      else {
-          ticket.tag = FStar_Pervasives_Native_None;
-      }
-
       // Protect the write to the PSK table (WIP)
       LOCK_MUTEX(&lock);
-      st->cxn = QUIC_ffiConnect((FStar_Dyn_dyn)st, quic_send, quic_recv, st->cfg, ticket);
+      st->cxn = QUIC_ffiConnect((FStar_Dyn_dyn)st, quic_send, quic_recv, st->cfg);
       UNLOCK_MUTEX(&lock);
     }
 #endif
@@ -1284,4 +1233,3 @@ void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state, void* pv)
     KRML_HOST_FREE(pv);
     LEAVE_HEAP_REGION();
 }
-

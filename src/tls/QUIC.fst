@@ -23,6 +23,7 @@ open FFICallbacks
 
 open FStar.HyperStack.All
 module HS = FStar.HyperStack
+module FFI = FFI
 
 #set-options "--lax"
 
@@ -146,13 +147,13 @@ let quic_check config =
 /// [send] and [recv] are callbacks to operate on QUIC stream0 buffers
 /// [config] is a client configuration for QUIC (see above)
 /// [psks] is a list of proposed pre-shared-key identifiers and tickets
-let connect ctx send recv config psks: ML Connection.connection =
+let connect ctx send recv config : ML Connection.connection =
   // we assume the configuration specifies the target SNI;
   // otherwise we must check the authenticated certificate chain.
   let tcp = Transport.callbacks ctx send recv in
   let here = new_region HS.root in
   quic_check config;
-  TLS.resume here tcp config None psks
+  TLS.connect here tcp config
 
 /// [send] and [recv] are callbacks to operate on QUIC stream0 buffers
 /// [config] is a server configuration for QUIC (see above)
@@ -168,9 +169,8 @@ let accept ctx send recv config : ML Connection.connection =
 // (allowing resumption across miTLS client processes)
 val ffiConnect:
   Transport.pvoid -> Transport.pfn_send -> Transport.pfn_recv ->
-  config:config -> ticket: option (bytes * bytes) -> ML Connection.connection
-let ffiConnect ctx snd rcv config ticket =
-  connect ctx snd rcv config (FFI.install_ticket config ticket)
+  config:config -> ML Connection.connection
+let ffiConnect ctx snd rcv config = connect ctx snd rcv config
 
 val ffiAcceptConnected:
   Transport.pvoid -> Transport.pfn_send -> Transport.pfn_recv ->

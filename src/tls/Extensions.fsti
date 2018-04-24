@@ -34,7 +34,7 @@ open TLSConstants
 
 (* PRE-SHARED KEYS AND KEY EXCHANGES *)
 
-type pskIdentity = PSK.psk_identifier * PSK.obfuscated_ticket_age
+type pskIdentity = psk_identifier * PSK.obfuscated_ticket_age
 
 // used in a refinement below
 val pskiListBytes: list pskIdentity -> bytes

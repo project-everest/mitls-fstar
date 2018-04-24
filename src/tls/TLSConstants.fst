@@ -1661,6 +1661,8 @@ type serverName =
 type alpn_entry = b:bytes{0 < length b /\ length b < 256}
 type alpn = l:list alpn_entry{List.Tot.length l < 256}
 
+type psk_identifier = identifier:bytes{length identifier < 65536}
+
 type pskInfo = {
   ticket_nonce: option bytes;
   time_created: UInt32.t;
@@ -1676,6 +1678,8 @@ type pskInfo = {
 type ticketInfo =
   | TicketInfo_12 of protocolVersion * cipherSuite * ems:bool
   | TicketInfo_13 of pskInfo
+
+type ticket_seal = b:bytes{length b < 65536}
 
 type ticket_cb_fun =
   (FStar.Dyn.dyn -> sni:string -> ticket:bytes -> info:ticketInfo -> rawkey:bytes -> ST unit
@@ -1785,6 +1789,7 @@ noeq type config : Type0 = {
     hello_retry: bool;          // honor hello retry requests from the server
     offer_shares: list valid_namedGroup;
     custom_extensions: custom_extensions;
+    use_tickets: list (psk_identifier * ticket_seal);
 
     (* Server side *)
     check_client_version_in_pms_for_old_tls: bool;

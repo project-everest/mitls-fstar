@@ -76,13 +76,13 @@ let errno description txt : St int =
   | Some ad -> int_of_bytes (Alert.alertBytes ad)
   | None    -> -1
 
-let connect ctx send recv config_1 psks : ML (Connection.connection * int) =
+let connect ctx send recv config_1 : ML (Connection.connection * int) =
   // we assume the configuration specifies the target SNI;
   // otherwise we should check after Complete that it matches the authenticated certificate chain.
   push_frame();
   let tcp = Transport.callbacks ctx send recv in
   let here = new_region HS.root in
-  let c = TLS.resume here tcp config_1 None psks in
+  let c = TLS.connect here tcp config_1 in
   let err : stackref (option int) = HST.salloc None in
   C.Loops.do_while
           (fun _ _ -> True)
@@ -377,47 +377,15 @@ let ffiSetTicketKey a k =
   | None -> false
   | Some a -> TLS.set_ticket_key a k)
 
-let install_ticket config ticket : ML (list PSK.psk_identifier) =
-  match ticket with
-  | Some (t, si) ->
-    (match Ticket.parse si with
-    | Some (Ticket.Ticket12 pv cs ems msId ms) ->
-      PSK.s12_extend t (pv, cs, ems, ms); [t]
-    | Some (Ticket.Ticket13 cs li rmsId rms created age_add _) ->
-      (match PSK.psk_lookup t with
-      | Some _ ->
-        trace ("input ticket "^(print_bytes t)^" is in PSK database")
-      | None ->
-        trace ("installing ticket "^(print_bytes t)^" in PSK database");
-        let ct = print_bytes (bytes_of_int32 created) in
-        let add = print_bytes (bytes_of_int32 age_add) in
-        trace ("Ticket created "^ct^", age mask "^add);
-        let CipherSuite13 ae h = cs in
-        PSK.coerce_psk t PSK.({
-          // TODO(adl) store in session info
-          // N.B. FFi.ffiGetTicket returns the PSK - no need to derive RMS again
-          ticket_nonce = Some empty_bytes;
-          time_created = created;
-          ticket_age_add = age_add;
-          // FIXME(adl): we should preserve the server flag somewhere
-          allow_early_data = (Some? config.max_early_data);
-          allow_dhe_resumption = true;
-          allow_psk_resumption = true;
-          early_ae = ae;
-          early_hash = h;
-          // TODO(adl) store identities
-          identities = (empty_bytes, empty_bytes)
-        }) rms);
-      [t]
-    | _ -> failwith ("FFI: Cannot use the input ticket, session info failed to decode: "^(print_bytes si)))
-  | None -> []
+let ffiSetTicket (cfg:config) (tid:bytes) (si:bytes) : ML config =
+  {cfg with use_tickets = (tid,si) :: cfg.use_tickets}
 
 // 18-01-24 changed calling convention; now almost like connect
 val ffiConnect:
   Transport.pvoid -> Transport.pfn_send -> Transport.pfn_recv ->
-  config -> option (bytes * bytes) -> ML (Connection.connection * int)
-let ffiConnect ctx snd rcv config ticket =
-  connect ctx snd rcv config (install_ticket config ticket)
+  config -> ML (Connection.connection * int)
+let ffiConnect ctx snd rcv config =
+  connect ctx snd rcv config
 
 // 18-01-24 changed calling convention; now just like accept_connected
 val ffiAcceptConnected:
@@ -501,11 +469,11 @@ let ffiTicketInfoBytes (info:ticketInfo) (key:bytes) =
       let ae = ctx.early_ae in
       let h = ctx.early_hash in
       let (| li, rmsid |) = Ticket.dummy_rmsid ae h in
-      Ticket.Ticket13 (CipherSuite13 ae h) li rmsid key ctx.time_created ctx.ticket_age_add empty_bytes
+      Ticket.Ticket13 (CipherSuite13 ae h) li rmsid key empty_bytes ctx.time_created ctx.ticket_age_add empty_bytes
     | TicketInfo_12 (pv, cs, ems) ->
       Ticket.Ticket12 pv cs ems (Ticket.dummy_msId pv cs ems) key
     in
-  Ticket.serialize si
+  Ticket.ticket_encrypt (Ticket.serialize si)
 
 let ffiSplitChain (chain:bytes) : ML (list cert_repr) =
   match Cert.parseCertificateList chain with

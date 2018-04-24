@@ -211,7 +211,7 @@ int main(int argc, char **argv)
     }
   };
 
-  char *errmsg;
+  char *errmsg = NULL;
   int erridx;
 
   mipki_state *pki = mipki_init(pki_config, 1, NULL, &erridx);
@@ -419,6 +419,7 @@ int main(int argc, char **argv)
     printf("\n     INITIAL ECDHE HANDSHAKE (NO EARLY SECRET)\n\n");
 
     printf("server create\n");
+    config.callback_state = &server;
     if(!FFI_mitls_quic_create(&server.quic_state, &config))
       {
         printf("quic_create server failed: %s\n", errmsg);
@@ -598,6 +599,7 @@ int main(int argc, char **argv)
     // Kill the server (otherwise it defaults to stateful HRR)
     FFI_mitls_quic_close(server.quic_state);
     config.is_server = 1;
+    config.callback_state = &server;
     printf("server re-create\n");
     if(!FFI_mitls_quic_create(&server.quic_state, &config))
       {

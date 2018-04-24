@@ -59,8 +59,6 @@ let s12_extend (tid:bytes) (s:session12 tid) = MM.extend sessions12 tid s
 let pskInfo_hash pi = pi.early_hash
 let pskInfo_ae pi = pi.early_ae
 
-type psk_identifier = identifier:bytes{length identifier < 65536}
-
 // We rule out all PSK that do not have at least one non-null byte
 // thus avoiding possible confusion with non-PSK for all possible hash algs
 type app_psk (i:psk_identifier) =
