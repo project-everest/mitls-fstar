@@ -5,7 +5,10 @@ open FStar.Bytes
 open Mem
 include Hashing
 
-assume val crf: alg -> Tot bool  // to be moved elsewhere, set to false for real extraction
+//2018.04.24 SZ: to be moved elsewhere, set to false for real extraction
+inline_for_extraction
+val crf: alg -> Tot bool
+let crf _ = false
 
 (* Depending on a single, global idealization function, we keep a global
     inverse table for all (finalized) hash computations, and we use it to

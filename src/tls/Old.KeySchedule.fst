@@ -13,7 +13,7 @@ open Extensions
 open TLSInfo
 open Range
 open StatefulLHAE
-open HKDF
+open Old.HKDF
 open PSK
 
 module MDM = FStar.Monotonic.DependentMap

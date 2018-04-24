@@ -53,7 +53,7 @@ FILES 		= AEAD_GCM AEADProvider Alert BufferBytes Cert \
   Crypto_Indexing Crypto_Symmetric_Bytes Crypto_Plain \
   CryptoTypes curve/Curve25519 DataStream DHGroup ECGroup Old_Epochs Extensions FFI \
   FFICallbacks Flags Format FStar HaclProvider Old_Handshake HandshakeLog \
-  HandshakeMessages Hashing Hashing_OpenSSL Hashing_Spec Old_HKDF HMAC \
+  HandshakeMessages Hashing Hashing_CRF Hashing_OpenSSL Hashing_Spec Old_HKDF HMAC \
   Old_HMAC_UFCMA Old_KeySchedule kremlib/kremdate kremlib/kremstr kremlinit LHAEPlain \
   LowCProvider LowParse Negotiation Nonce Parse PMS Prims PSK QUIC Range Record RSAKey \
   secure/Crypto_HKDF_Crypto_HMAC \
