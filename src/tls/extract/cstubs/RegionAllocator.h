@@ -107,9 +107,7 @@ void HeapRegionDestroy(HEAP_REGION rgn);
 // holds allocations made outside of ENTER/LEAVE.  It will be freed when
 // the region allocator is cleaned up.
 #if IS_WINDOWS
-  #define FACILITY_EVEREST 255
-  #define CODE_OUT_OF_MEMORY 5
-  #define MITLS_OUT_OF_MEMORY_EXCEPTION MAKE_HRESULT(1,FACILITY_EVEREST,CODE_OUT_OF_MEMORY)
+  #define MITLS_OUT_OF_MEMORY_EXCEPTION 0x80ff0005
   
   typedef struct {
     LIST_ENTRY entry; // dlist of region_entry
@@ -122,7 +120,7 @@ void HeapRegionDestroy(HEAP_REGION rgn);
     __try {
 
   #define LEAVE_GLOBAL_HEAP_REGION() \
-    __except (GetExceptionCode() == MITLS_OUT_OF_MEMORY_EXCEPTION) { \
+    } __except (GetExceptionCode() == MITLS_OUT_OF_MEMORY_EXCEPTION) { \
         HadHeapException = 1; \
     }
 
@@ -140,7 +138,9 @@ void HeapRegionDestroy(HEAP_REGION rgn);
 
   #define CREATE_HEAP_REGION(prgn) \
     region_entry e; \
-    HeapRegionCreateAndRegister(&e, (prgn));
+    HeapRegionCreateAndRegister(&e, (prgn)); \
+    char HadHeapException = 0; \
+    __try {
 
   #define VALID_HEAP_REGION(rgn)    ((rgn) != NULL)
 
