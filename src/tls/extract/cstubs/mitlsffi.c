@@ -196,7 +196,7 @@ void MITLS_CALLCONV FFI_mitls_cleanup(void)
 // Called by the host app to configure miTLS ahead of creating a connection
 int MITLS_CALLCONV FFI_mitls_configure(mitls_state **state, const char *tls_version, const char *host_name)
 {
-    int ret;
+    int ret = 0;
 
     *state = NULL;
 
