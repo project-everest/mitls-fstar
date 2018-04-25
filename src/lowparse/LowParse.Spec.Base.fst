@@ -443,6 +443,13 @@ let parser_kind_prop_intro
   (parser_kind_prop k f)
 = ()
 
+let is_strong
+  (#k:parser_kind)
+  (#t:Type0)
+  (p:parser k t)
+: Tot (r:bool{r ==> k.parser_kind_subkind == Some (ParserStrong)})
+= k.parser_kind_subkind = Some (ParserStrong)
+
 let is_weaker_than
   (k1 k2: parser_kind)
 : GTot Type0
@@ -715,7 +722,8 @@ let serializer_parser_unique'
   (x: bytes)
 : Lemma
   (requires (
-    k2.parser_kind_subkind == Some ParserStrong /\
+    is_strong p1 /\
+    is_strong p2 /\
     serializer_correct p1 s /\
     serializer_correct p2 s /\
     Some? (p1 x)
@@ -745,8 +753,8 @@ let serializer_parser_unique
   (x: bytes)
 : Lemma
   (requires (
-    k1.parser_kind_subkind == Some ParserStrong /\
-    k2.parser_kind_subkind == Some ParserStrong /\
+    is_strong p1 /\
+    is_strong p2 /\
     serializer_correct p1 s /\
     serializer_correct p2 s
   ))
