@@ -1133,8 +1133,15 @@ void MITLS_CALLCONV FFI_mitls_quic_close(quic_state *state)
 int MITLS_CALLCONV FFI_mitls_get_hello_summary(const unsigned char *buffer, size_t buffer_len, mitls_hello_summary *summary)
 {
   FStar_Bytes_bytes b = {.data = (const char*)buffer, .length = buffer_len};
-  FStar_Pervasives_Native_option__QUIC_chSummary ch = QUIC_peekClientHello(b);
+  int ret = 0;
 
+  HEAP_REGION rgn;
+  CREATE_HEAP_REGION(&rgn);
+  if (!VALID_HEAP_REGION(rgn)) {
+      return 0;
+  }
+
+  FStar_Pervasives_Native_option__QUIC_chSummary ch = QUIC_peekClientHello(b);
   if(ch.tag == FStar_Pervasives_Native_Some)
   {
     QUIC_chSummary s = ch.v;
@@ -1155,10 +1162,16 @@ int MITLS_CALLCONV FFI_mitls_get_hello_summary(const unsigned char *buffer, size
       summary->hrr_cookie_len = 0;
     }
 
-    return 1;
+    ret = 1;
   }
 
-  return 0;
+  LEAVE_HEAP_REGION();
+  DESTROY_HEAP_REGION(rgn);
+  if (HAD_OUT_OF_MEMORY) {
+    return 0;
+  }
+
+  return ret;
 }
 
 int FFI_mitls_find_custom_extension_common(HEAP_REGION rgn, int is_server, const unsigned char *exts, size_t exts_len, uint16_t ext_type, unsigned char **ext_data, size_t *ext_data_len)
