@@ -89,8 +89,10 @@ type ticket =
     li: logInfo ->
     rmsId: pre_rmsId li ->
     rms: bytes ->
+    nonce: bytes ->
     ticket_created: UInt32.t ->
     ticket_age_add: UInt32.t ->
+    custom: bytes ->
     ticket
 
 // Currently we use dummy indexes until we can serialize them properly
@@ -115,7 +117,7 @@ let dummy_msId pv cs ems =
   StandardMS PMS.DummyPMS (Bytes.create 64ul 0z) (kefAlg pv cs ems)
 
 // not pure because of trace, but should be
-let parse (b:bytes) : St (option ticket) =
+let parse (b:bytes) (nonce:bytes) : St (option ticket) =
   trace ("Parsing ticket "^(hex_of_bytes b));
   if length b < 8 then None
   else
@@ -124,23 +126,35 @@ let parse (b:bytes) : St (option ticket) =
     | Error _ -> None
     | Correct pv ->
       let (csb, r) = split r 2ul in
-      match parseCipherSuite csb, vlparse 2 r with
-      | _, Error _
-      | Error _, _ -> None
-      | Correct cs, Correct rms ->
+      match parseCipherSuite csb with
+      | Error _ -> None
+      | Correct cs ->
         match pv, cs with
         | TLS_1p3, CipherSuite13 ae h ->
-            let created, rms = split rms 4ul in
-            let age_add, rms = split rms 4ul in
-            let (| li, rmsId |) = dummy_rmsid ae h in
-            let age_add = uint32_of_bytes age_add in
-            let created = uint32_of_bytes created in
-            Some (Ticket13 cs li rmsId rms created age_add)
-        | _, CipherSuite _ _ _ ->
-            let emsb, ms = split rms 1ul in
+         begin
+          let created, r = split r 4ul in
+          let age_add, r = split r 4ul in
+          match vlsplit 2 r with
+          | Error _ -> None
+          | Correct (custom, rms) ->
+            match vlparse 2 rms with
+            | Error _ -> None
+            | Correct rms ->
+              let (| li, rmsId |) = dummy_rmsid ae h in
+              let age_add = uint32_of_bytes age_add in
+              let created = uint32_of_bytes created in
+              Some (Ticket13 cs li rmsId rms nonce created age_add custom)
+         end
+        | _ , CipherSuite _ _ _ ->
+         begin
+          let (emsb, ms) = split r 1ul in
+          match vlparse 2 ms with
+          | Error _ -> None
+          | Correct rms ->
             let ems = 0z <> emsb.[0ul] in
             let msId = dummy_msId pv cs ems in
             Some (Ticket12 pv cs ems msId ms)
+         end
         | _ -> None
 
 let ticket_decrypt cipher : St (option bytes) =
@@ -156,16 +170,18 @@ let check_ticket (b:bytes{length b <= 65551}) : St (option ticket) =
   if length b < 32 then None else
   match ticket_decrypt b with
   | None -> trace ("Ticket decryption failed."); None
-  | Some plain -> parse plain
+  | Some plain ->
+    let nonce, _ = split b 12ul in
+    parse plain nonce
 
-let serialize t =
-  let pv, cs, b = match t with
-    | Ticket12 pv cs ems _ ms ->
-      pv, cs, abyte (if ems then 1z else 0z) @| ms
-    | Ticket13 cs _ _ rms created age ->
-      TLS_1p3, cs, (bytes_of_int32 created @| bytes_of_int32 age @| rms)
-    in
-  (versionBytes pv) @| (cipherSuiteBytes cs) @| (vlbytes 2 b)
+let serialize = function
+  | Ticket12 pv cs ems _ ms ->
+    (versionBytes pv) @| (cipherSuiteBytes cs)
+    @| abyte (if ems then 1z else 0z) @| (vlbytes 2 ms)
+  | Ticket13 cs _ _ rms _ created age custom ->
+    (versionBytes TLS_1p3) @| (cipherSuiteBytes cs)
+    @| (bytes_of_int32 created) @| (bytes_of_int32 age)
+    @| (vlbytes 2 custom) @| (vlbytes 2 rms)
 
 let ticket_encrypt plain : St bytes =
   let Key tid wr _ = get_ticket_key () in
@@ -210,11 +226,10 @@ let check_cookie b =
           | Correct extra ->
             Some (hrr, digest, extra)
 
-let check_ticket13 b =
-  match check_ticket b with
-  | Some (Ticket13 cs li _ _ created age_add) ->
+let ticket_pskinfo (t:ticket) =
+  match t with
+  | Ticket13 cs li _ _ nonce created age_add custom ->
     let CipherSuite13 ae h = cs in
-    let nonce, _ = split b 12ul in
     Some ({
       ticket_nonce = Some nonce;
       time_created = created;
@@ -226,6 +241,11 @@ let check_ticket13 b =
       early_hash = h;
       identities = (empty_bytes, empty_bytes);
     })
+  | _ -> None
+
+let check_ticket13 b =
+  match check_ticket b with
+  | Some t -> ticket_pskinfo t
   | _ -> None
 
 let check_ticket12 b =

@@ -91,7 +91,7 @@ let defaultServerNegoCB : nego_cb = {
   negotiate = defaultServerNegoCBFun;
 }
 
-let none4 = fun _ _ _ _ -> None
+let none6 = fun _ _ _ _ _ _ -> None
 let empty3 = fun _ _ _ -> []
 let none5 = fun _ _ _ _ _ -> None
 let false6 = fun _ _ _ _ _ _ -> false
@@ -100,7 +100,7 @@ let defaultCertCB : cert_cb =
   TLSConstants.mk_cert_cb
      (FStar.Dyn.mkdyn ())
      (FStar.Dyn.mkdyn ())
-     none4
+     none6
      (FStar.Dyn.mkdyn ())
      empty3
      (FStar.Dyn.mkdyn ())
@@ -123,6 +123,7 @@ let defaultConfig =
   hello_retry = true;
   offer_shares = [Format.NamedGroup.X25519];
   custom_extensions = [];
+  use_tickets = [];
 
   // Server
   check_client_version_in_pms_for_old_tls = true;
@@ -188,11 +189,6 @@ type abbrInfo =
      abbr_srand: srand;
      abbr_session_hash: sessionHash;
      abbr_vd: option (cVerifyData * sVerifyData) }
-
-type resumeInfo (r:role) : Type0 =
-  //17-04-19  connect_time:lbytes 4  * // initial Nonce.timestamp() for the connection
-  o:option bytes {r=Server ==> None? o} * // 1.2 ticket
-  l:list PSK.pskid {r=Server ==> List.Tot.isEmpty l} // assuming we do the PSK lookups locally
 
 // for sessionID. we treat empty bytes as the absence of identifier,
 // i.e. the session is not resumable.

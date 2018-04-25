@@ -9,14 +9,14 @@ open FStar.HyperStack
 open FStar.Seq
  // for e.g. found
 //open FStar.Set
- 
+
 open FStar.Bytes
 open FStar.Error
 
 open TLSError
 open TLSConstants
 open TLSInfo
-  
+
 open Range
 
 open Epochs
@@ -29,15 +29,15 @@ module HS = FStar.HyperStack
 // using also Range, DataStream, TLSFragment, Record
 
 (*
-type tlsState = 
-//| Early       // TLS 1.3 0RTT in 
+type tlsState =
+//| Early       // TLS 1.3 0RTT in
 //| KeyUpdate   // TLS 1.3 after sending first KeyUpdate
 //| Regeno      // TLS old after sending CCS
 //| FalseStart  // TLS old client, between finished.
-  | BC          // Before Completion of handshake 
+  | BC          // Before Completion of handshake
   | AD          // Application Data (duplex), once the connection is established
   | Half of rw  // the other direction is closed (reachable from BC?)
-  | Close 
+  | Close
 // translation:
 // BC ~ Ctrl Ctrl
 // AD ~ Open Open
@@ -58,7 +58,7 @@ let string_of_halfState = function
 let string_of_state (r,w) =
   string_of_halfState r^"/"^string_of_halfState w
 
-type c_rgn = r:TLSConstants.rgn { HS.disjoint r TLSConstants.tls_region } 
+type c_rgn = r:TLSConstants.rgn { HS.disjoint r TLSConstants.tls_region }
 
 (*
  * AR: changing the type of state from rref to ref, with region captured in the refinement.
@@ -68,14 +68,13 @@ noeq type connection = | C:
   hs:      hs {extends (region_of hs) region /\ is_hs_rgn (region_of hs)} (* providing role, config, and uid *) ->
   tcp:     Transport.t ->
   recv: Record.input_state -> //TODO {HS.frameOf recv = region} -> // added for buffering non-blocking reads
-  state:   ref tlsState {HS.frameOf state = region} -> 
+  state:   ref tlsState {HS.frameOf state = region} ->
   connection
 
-// 17-04-08 helpful or not? 
+// 17-04-08 helpful or not?
 let c_role c = Handshake.role_of c.hs
 let c_nonce c = Handshake.random_of c.hs
 let c_cfg c = Handshake.config_of c.hs
-let c_resume c = Handshake.resumeInfo_of c.hs
 let c_log c = Handshake.epochs_of c.hs
 
 (* val reader_epoch: #region:rgn -> #nonce:_ -> e:epoch region nonce -> Tot (StAE.reader (peerId(hsId e.h))) *)
@@ -98,7 +97,7 @@ let epochs c h = logT c.hs h
 // //NS: 18-01-30: commenting out
 // val frame_epochs: c:connection -> h0:HS.mem -> h1:HS.mem -> Lemma
 //   (requires (
-//     HS.live_region h0 (region_of c.hs) /\ 
+//     HS.live_region h0 (region_of c.hs) /\
 //     equal_on (Set.singleton (region_of c.hs)) ( h0) ( h1)))
 //   (ensures (epochs c h0 == epochs c h1))
 // let frame_epochs c h0 h1 = ()
@@ -121,20 +120,19 @@ let epoch_i c h i = Seq.index (epochs c h) i
      where the r:StatefulLHAE.reader
                w:StatefulLHAE.writer
      are each one end of a key pair (their peers are in a some other connection).
-     
+
      The h field is the state of the handshake state machine and is
      irrelevant for this framing lemma.
 
    In the lemma below, we modify the writer of epoch j
    and aim to show that the invariant of some arbitrary k is preserved.
-   
+
    Later, we generalize over k, using the ghost_lemma combinator to introduce the quantifier.
 *)
 
-val equal_on_disjoint: 
-  s1:Set.set rid -> 
-  s2:Set.set rid{disjoint_regions s1 s2} -> 
-  r:rid{Set.mem r s1} -> 
+val equal_on_disjoint:
+  s1:Set.set rid ->
+  s2:Set.set rid{disjoint_regions s1 s2} ->
+  r:rid{Set.mem r s1} ->
   h0:HS.mem -> h1:HS.mem{modifies (Set.singleton r) h0 h1} -> Lemma (HS.(equal_on s2 h0.h h1.h))
 let equal_on_disjoint s1 s2 r h0 h1 = ()
-

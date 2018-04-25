@@ -1,8 +1,6 @@
 #include "FStar.h"
 #include "krembytes.h"
 
-#include <assert.h>
-
 FStar_Bytes_bytes BufferBytes_to_bytes(Prims_nat l, uint8_t *buf) {
   if (buf == NULL || l == 0)
     return FStar_Bytes_empty_bytes;
@@ -15,7 +13,10 @@ FStar_Bytes_bytes BufferBytes_to_bytes(Prims_nat l, uint8_t *buf) {
 
 void BufferBytes_store_bytes(Prims_nat len, uint8_t *buf, Prims_nat i,
                              FStar_Bytes_bytes b) {
-  assert(i <= len);
+  if (i > len) {
+      KRML_HOST_PRINTF("BufferBytes_store_bytes i must be <= len (i=%d len=%d)\n", i, len);
+      KRML_HOST_EXIT(252);
+  }
   if (b.length > 0 && i < len)
     memcpy(buf + i, b.data + i, len - i);
 }

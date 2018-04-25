@@ -102,7 +102,7 @@ val cert_select:
   signatureSchemeList ->
   (cert_type * signatureScheme) FStar_Pervasives_Native.option
 *)
-let cert_select pki _ sni algs =
+let cert_select pki _ pv sni alpn algs =
   let open Unsigned in
   let sigalgs_len = List.length algs in
 

@@ -229,7 +229,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <ModuleDefinitionFile>miTLS_SSP.def</ModuleDefinitionFile>
-      <AdditionalDependencies>kernel32.lib;advapi32.lib;ntdll.lib;user32.lib;secur32.lib;crypt32.lib;wintrust.lib;$(SolutionDir)..\..\src\tls\libmitls.lib;$(ProjectDir)\Detours\lib.X64\detours.lib</AdditionalDependencies>
+      <AdditionalDependencies>kernel32.lib;advapi32.lib;ntdll.lib;user32.lib;secur32.lib;crypt32.lib;wintrust.lib;$(SolutionDir)..\..\src\windows\mitls\libmitls.lib;$(SolutionDir)..\..\src\pki\libmipki.lib;$(ProjectDir)\Detours\lib.X64\detours.lib</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">

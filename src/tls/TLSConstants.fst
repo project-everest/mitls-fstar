@@ -117,12 +117,6 @@ type rw =
   | Reader
   | Writer
 
-
-
-
-
-
-
 /// 18-02-22 QD fodder?
 ///
 (** Protocol version negotiated values *)
@@ -142,19 +136,22 @@ let versionBytes : protocolVersion' -> Tot (lbytes 2) =
 val parseVersion: pinverse_t versionBytes
 let parseVersion = parse_protocolVersion'
 
-// DRAFT#23
-// to be used *only* in ServerHello.version.
-// https://tlswg.github.io/tls13-spec/#rfc.section.4.2.1
-let draft = 23z
+// DRAFT#28
+// to be used *only* in supported_versions extension
+let draft = 28z
 let versionBytes_draft: protocolVersion -> Tot (lbytes 2) = function
   | TLS_1p3 -> twobytes ( 127z, draft )
   | pv -> versionBytes pv
+
+let parseVersion_drafts v =
+  if cbyte2 v = (127z, draft) then Correct TLS_1p3
+  else parseVersion v
+
 val parseVersion_draft: pinverse_t versionBytes_draft
 let parseVersion_draft v =
   match cbyte2 v with
   | (127z, d) ->
-      if d = draft
-      then Correct TLS_1p3
+      if d = draft then Correct TLS_1p3
       else Error(AD_decode_error, "Refused to parse unknown draft "^print_bytes v^": expected TLS 1.3#"^UInt8.to_string draft)
   | (3z, 4z) -> Error(AD_decode_error, "Refused to parse TLS 1.3 final version: expected TLS 1.3#"^UInt8.to_string draft)
   | _ ->
@@ -1629,6 +1626,8 @@ type serverName =
 type alpn_entry = b:bytes{0 < length b /\ length b < 256}
 type alpn = l:list alpn_entry{List.Tot.length l < 256}
 
+type psk_identifier = identifier:bytes{length identifier < 65536}
+
 type pskInfo = {
   ticket_nonce: option bytes;
   time_created: UInt32.t;
@@ -1644,6 +1643,8 @@ type pskInfo = {
 type ticketInfo =
   | TicketInfo_12 of protocolVersion * cipherSuite * ems:bool
   | TicketInfo_13 of pskInfo
+
+type ticket_seal = b:bytes{length b < 65536}
 
 type ticket_cb_fun =
   (FStar.Dyn.dyn -> sni:string -> ticket:bytes -> info:ticketInfo -> rawkey:bytes -> ST unit
@@ -1697,7 +1698,7 @@ type cert_cb = {
    *)
   cert_select_ptr: FStar.Dyn.dyn;
   cert_select_cb:
-    (FStar.Dyn.dyn -> FStar.Dyn.dyn -> sni:bytes -> sig:signatureSchemeList -> ST (option (cert_type * signatureScheme))
+    (FStar.Dyn.dyn -> FStar.Dyn.dyn -> pv:protocolVersion -> sni:bytes -> alpn:bytes -> sig:signatureSchemeList -> ST (option (cert_type * signatureScheme))
     (requires fun _ -> True)
     (ensures fun h0 _ h1 -> modifies_none h0 h1));
 
@@ -1753,6 +1754,7 @@ noeq type config : Type0 = {
     hello_retry: bool;          // honor hello retry requests from the server
     offer_shares: CommonDH.supportedNamedGroups;
     custom_extensions: custom_extensions;
+    use_tickets: list (psk_identifier * ticket_seal);
 
     (* Server side *)
     check_client_version_in_pms_for_old_tls: bool;
@@ -1774,14 +1776,16 @@ noeq type config : Type0 = {
     peer_name: option bytes;     // The expected name to match against the peer certificate
   }
 
-let cert_select_cb (c:config) (sni:bytes) (sig:signatureSchemeList)
+let cert_select_cb (c:config) (pv:protocolVersion) (sni:bytes) (alpn:bytes) (sig:signatureSchemeList)
    : ST (option (cert_type * signatureScheme))
         (requires fun _ -> True)
         (ensures fun h0 _ h1 -> modifies_none h0 h1)
    = c.cert_callbacks.cert_select_cb
             c.cert_callbacks.app_context
             c.cert_callbacks.cert_select_ptr
+            pv
             sni
+            alpn
             sig
 
 let cert_format_cb (c:config) (ct:cert_type)

@@ -55,23 +55,23 @@ uint32_t CoreCrypto_now()
 #include <openssl/rand.h>
 #include <openssl/rsa.h>
 
-FStar_Bytes_bytes CoreCrypto_dh_agreement(CoreCrypto_dh_key x0,
+FStar_Bytes_bytes CoreCrypto_dh_agreement_(CoreCrypto_dh_key *x0,
                                           FStar_Bytes_bytes x1) {
   DH *dh = DH_new();
   FAIL_IF(dh == NULL, "OpenSSL allocation failure dh");
 
-  BIGNUM *p = BN_bin2bn((uint8_t *)x0.dh_params.dh_p.data,
-                        x0.dh_params.dh_p.length, NULL);
-  BIGNUM *g = BN_bin2bn((uint8_t *)x0.dh_params.dh_g.data,
-                        x0.dh_params.dh_g.length, NULL);
+  BIGNUM *p = BN_bin2bn((uint8_t *)x0->dh_params.dh_p.data,
+                        x0->dh_params.dh_p.length, NULL);
+  BIGNUM *g = BN_bin2bn((uint8_t *)x0->dh_params.dh_g.data,
+                        x0->dh_params.dh_g.length, NULL);
   BIGNUM *pub =
-      BN_bin2bn((uint8_t *)x0.dh_public.data, x0.dh_public.length, NULL);
+      BN_bin2bn((uint8_t *)x0->dh_public.data, x0->dh_public.length, NULL);
   BIGNUM *opub = BN_bin2bn((uint8_t *)x1.data, x1.length, NULL);
   FAIL_IF(p == NULL || g == NULL || pub == NULL || opub == NULL,
           "OpenSSL allocation failure p/g/pub");
   BIGNUM *prv = NULL;
-  if (x0.dh_private.tag == FStar_Pervasives_Native_Some) {
-    prv = BN_bin2bn((uint8_t *)x0.dh_private.v.data, x0.dh_private.v.length,
+  if (x0->dh_private.tag == FStar_Pervasives_Native_Some) {
+    prv = BN_bin2bn((uint8_t *)x0->dh_private.v.data, x0->dh_private.v.length,
                     NULL);
     FAIL_IF(prv == NULL, "OpenSSL allocation failure prv");
   }
@@ -91,6 +91,14 @@ FStar_Bytes_bytes CoreCrypto_dh_agreement(CoreCrypto_dh_key x0,
   FStar_Bytes_bytes ret = {.length = len, .data = out};
   return ret;
 }
+#ifdef KRML_NOSTRUCT_PASSING
+#define CoreCrypto_dh_agreement CoreCrypto_dh_agreement_
+#else
+FStar_Bytes_bytes CoreCrypto_dh_agreement(CoreCrypto_dh_key x0,
+                                          FStar_Bytes_bytes x1) {
+  return CoreCrypto_dh_agreement_(&x0, x1);
+}
+#endif
 
 static inline FStar_Bytes_bytes bytes_of_bn(const BIGNUM *bn) {
   size_t len = BN_num_bytes(bn);
@@ -100,11 +108,11 @@ static inline FStar_Bytes_bytes bytes_of_bn(const BIGNUM *bn) {
   return ret;
 }
 
-CoreCrypto_dh_key CoreCrypto_dh_gen_key(CoreCrypto_dh_params x0) {
+void CoreCrypto_dh_gen_key_(CoreCrypto_dh_params *x0, CoreCrypto_dh_key *ret) {
   DH *dh = DH_new();
   FAIL_IF(dh == NULL, "OpenSSL allocation failure dh");
-  BIGNUM *p = BN_bin2bn((uint8_t *)x0.dh_p.data, x0.dh_p.length, NULL);
-  BIGNUM *g = BN_bin2bn((uint8_t *)x0.dh_g.data, x0.dh_g.length, NULL);
+  BIGNUM *p = BN_bin2bn((uint8_t *)x0->dh_p.data, x0->dh_p.length, NULL);
+  BIGNUM *g = BN_bin2bn((uint8_t *)x0->dh_g.data, x0->dh_g.length, NULL);
   FAIL_IF(p == NULL || g == NULL, "OpenSSL allocation failure p/g");
   DH_set0_pqg(dh, p, NULL, g);
   FAIL_IF(DH_generate_key(dh) == 0, "OpenSSL failure DH_generate_key");
@@ -112,15 +120,22 @@ CoreCrypto_dh_key CoreCrypto_dh_gen_key(CoreCrypto_dh_params x0) {
   const BIGNUM *pub, *prv;
   DH_get0_key(dh, &pub, &prv);
 
-  CoreCrypto_dh_key ret = {.dh_params = x0,
+  *ret = ((CoreCrypto_dh_key){.dh_params = *x0,
                            .dh_public = bytes_of_bn(pub),
                            .dh_private = {.tag = FStar_Pervasives_Native_Some,
-                                          .v = bytes_of_bn(prv)}};
+                                          .v = bytes_of_bn(prv)}});
 
   DH_free(dh);
-
+}
+#ifdef KRML_NOSTRUCT_PASSING
+#define CoreCrypto_dh_gen_key CoreCrypto_dh_gen_key_
+#else
+CoreCrypto_dh_key CoreCrypto_dh_gen_key(CoreCrypto_dh_params x0) {
+  CoreCrypto_dh_key ret;
+  CoreCrypto_dh_gen_key_(&x0, &ret);
   return ret;
 }
+#endif
 
 EC_KEY *key_of_core_crypto_curve(CoreCrypto_ec_curve c) {
   EC_KEY *k = NULL;
@@ -159,25 +174,25 @@ uint32_t size_of_curve(CoreCrypto_ec_curve x) {
   exit(255);
 }
 
-FStar_Bytes_bytes CoreCrypto_ecdh_agreement(CoreCrypto_ec_key x0,
-                                            CoreCrypto_ec_point x1) {
-  EC_KEY *k = key_of_core_crypto_curve(x0.ec_params.curve);
+FStar_Bytes_bytes CoreCrypto_ecdh_agreement_(CoreCrypto_ec_key *x0,
+                                            CoreCrypto_ec_point *x1) {
+  EC_KEY *k = key_of_core_crypto_curve(x0->ec_params.curve);
   EC_GROUP *g = EC_GROUP_dup(EC_KEY_get0_group(k));
 
-  if (x0.ec_params.point_compression)
+  if (x0->ec_params.point_compression)
     EC_GROUP_set_point_conversion_form(g, POINT_CONVERSION_COMPRESSED);
   else
     EC_GROUP_set_point_conversion_form(g, POINT_CONVERSION_UNCOMPRESSED);
 
   BIGNUM *px =
-      BN_bin2bn((uint8_t *)x0.ec_point.ecx.data, x0.ec_point.ecx.length, NULL);
+      BN_bin2bn((uint8_t *)x0->ec_point.ecx.data, x0->ec_point.ecx.length, NULL);
   BIGNUM *py =
-      BN_bin2bn((uint8_t *)x0.ec_point.ecy.data, x0.ec_point.ecy.length, NULL);
+      BN_bin2bn((uint8_t *)x0->ec_point.ecy.data, x0->ec_point.ecy.length, NULL);
   EC_KEY_set_public_key_affine_coordinates(k, px, py);
 
   BIGNUM *pr = NULL;
-  if (x0.ec_priv.tag == FStar_Pervasives_Native_Some) {
-    pr = BN_bin2bn((uint8_t *)x0.ec_priv.v.data, x0.ec_priv.v.length, NULL);
+  if (x0->ec_priv.tag == FStar_Pervasives_Native_Some) {
+    pr = BN_bin2bn((uint8_t *)x0->ec_priv.v.data, x0->ec_priv.v.length, NULL);
     EC_KEY_set_private_key(k, pr);
   }
 
@@ -187,8 +202,8 @@ FStar_Bytes_bytes CoreCrypto_ecdh_agreement(CoreCrypto_ec_key x0,
   memset(out, 0, len);
 
   EC_POINT *pp = EC_POINT_new(g);
-  BIGNUM *ppx = BN_bin2bn((uint8_t *)x1.ecx.data, x1.ecx.length, NULL);
-  BIGNUM *ppy = BN_bin2bn((uint8_t *)x1.ecy.data, x1.ecy.length, NULL);
+  BIGNUM *ppx = BN_bin2bn((uint8_t *)x1->ecx.data, x1->ecx.length, NULL);
+  BIGNUM *ppy = BN_bin2bn((uint8_t *)x1->ecy.data, x1->ecy.length, NULL);
   EC_POINT_set_affine_coordinates_GFp(g, pp, ppx, ppy, NULL);
 
   size_t olen = ECDH_compute_key((uint8_t *)out, len, pp, k, NULL);
@@ -206,13 +221,21 @@ FStar_Bytes_bytes CoreCrypto_ecdh_agreement(CoreCrypto_ec_key x0,
   FStar_Bytes_bytes ret = {.length = olen, .data = out};
   return ret;
 }
+#ifdef KRML_NOSTRUCT_PASSING
+#define CoreCrypto_ecdh_agreement CoreCrypto_ecdh_agreement_
+#else
+FStar_Bytes_bytes CoreCrypto_ecdh_agreement(CoreCrypto_ec_key x0,
+                                            CoreCrypto_ec_point x1) {
+  return CoreCrypto_ecdh_agreement_(&x0, &x1);
+}
+#endif
 
-CoreCrypto_ec_key CoreCrypto_ec_gen_key(CoreCrypto_ec_params x0) {
-  EC_KEY *k = key_of_core_crypto_curve(x0.curve);
+void CoreCrypto_ec_gen_key_(CoreCrypto_ec_params *x0, CoreCrypto_ec_key *ret) {
+  EC_KEY *k = key_of_core_crypto_curve(x0->curve);
   FAIL_IF(EC_KEY_generate_key(k) == 0, "EC_KEY_generate_key failed");
 
   EC_GROUP *g = EC_GROUP_dup(EC_KEY_get0_group(k));
-  if (x0.point_compression)
+  if (x0->point_compression)
     EC_GROUP_set_point_conversion_form(g, POINT_CONVERSION_COMPRESSED);
   else
     EC_GROUP_set_point_conversion_form(g, POINT_CONVERSION_UNCOMPRESSED);
@@ -222,23 +245,30 @@ CoreCrypto_ec_key CoreCrypto_ec_gen_key(CoreCrypto_ec_params x0) {
   EC_POINT_get_affine_coordinates_GFp(g, p, x, y, NULL);
   const BIGNUM *pr = EC_KEY_get0_private_key(k);
 
-  uint32_t n = size_of_curve(x0.curve);
-  CoreCrypto_ec_key ret = {
-      .ec_params = x0,
+  uint32_t n = size_of_curve(x0->curve);
+  *ret = ((CoreCrypto_ec_key){
+      .ec_params = *x0,
       .ec_point =
           {.ecx = FStar_Bytes_append(FStar_Bytes_create(n - BN_num_bytes(x), 0),
                                      bytes_of_bn(x)),
            .ecy = FStar_Bytes_append(FStar_Bytes_create(n - BN_num_bytes(y), 0),
                                      bytes_of_bn(y))},
-      .ec_priv = {.tag = FStar_Pervasives_Native_Some, .v = bytes_of_bn(pr)}};
+      .ec_priv = {.tag = FStar_Pervasives_Native_Some, .v = bytes_of_bn(pr)}});
 
   BN_free(y);
   BN_free(x);
   EC_GROUP_free(g);
   EC_KEY_free(k);
-
+}
+#ifdef KRML_NOSTRUCT_PASSING
+#define CoreCrypto_ec_gen_key CoreCrypto_ec_gen_key_
+#else
+CoreCrypto_ec_key CoreCrypto_ec_gen_key(CoreCrypto_ec_params x0) {
+  CoreCrypto_ec_key ret;
+  CoreCrypto_ec_gen_key_(&x0, &ret);
   return ret;
 }
+#endif
 
 static inline const EVP_MD *get_md(CoreCrypto_hash_alg h){
   switch (h) {
@@ -292,7 +322,7 @@ FStar_Bytes_bytes CoreCrypto_hmac(CoreCrypto_hash_alg x0, FStar_Bytes_bytes x1,
 }
 
 // REMARK: used only in tests
-CoreCrypto_rsa_key CoreCrypto_rsa_gen_key(Prims_int size) {
+void CoreCrypto_rsa_gen_key_(Prims_int size, CoreCrypto_rsa_key *ret) {
   RSA *rsa = RSA_new();
   BIGNUM *e = BN_new();
   FAIL_IF(e == NULL || rsa == NULL, "OpenSSL allocation failure");
@@ -305,24 +335,31 @@ CoreCrypto_rsa_key CoreCrypto_rsa_gen_key(Prims_int size) {
   const BIGNUM *b_n, *b_e, *b_d;
   RSA_get0_key(rsa, &b_n, &b_e, &b_d);
 
-  CoreCrypto_rsa_key ret = {.rsa_mod = bytes_of_bn(b_n),
+  *ret = ((CoreCrypto_rsa_key ) {.rsa_mod = bytes_of_bn(b_n),
                             .rsa_pub_exp = bytes_of_bn(b_e),
                             .rsa_prv_exp = {.tag = FStar_Pervasives_Native_Some,
-                                            .v = bytes_of_bn(b_d)}};
+                                            .v = bytes_of_bn(b_d)}});
 
   RSA_free(rsa);
   BN_free(e);
-
+}
+#ifdef KRML_NOSTRUCT_PASSING
+#define CoreCrypto_rsa_gen_key CoreCrypto_rsa_gen_key_
+#else
+CoreCrypto_rsa_key CoreCrypto_rsa_gen_key(Prims_int size) {
+  CoreCrypto_rsa_key ret;
+  CoreCrypto_rsa_gen_key_(size, &ret);
   return ret;
 }
+#endif
 
-FStar_Bytes_bytes CoreCrypto_rsa_encrypt(CoreCrypto_rsa_key key,
+FStar_Bytes_bytes CoreCrypto_rsa_encrypt_(CoreCrypto_rsa_key *key,
                                          CoreCrypto_rsa_padding padding,
                                          FStar_Bytes_bytes data) {
   BIGNUM *mod =
-      BN_bin2bn((uint8_t *)key.rsa_mod.data, key.rsa_mod.length, NULL);
+      BN_bin2bn((uint8_t *)key->rsa_mod.data, key->rsa_mod.length, NULL);
   BIGNUM *exp =
-      BN_bin2bn((uint8_t *)key.rsa_pub_exp.data, key.rsa_pub_exp.length, NULL);
+      BN_bin2bn((uint8_t *)key->rsa_pub_exp.data, key->rsa_pub_exp.length, NULL);
   RSA *rsa = RSA_new();
   FAIL_IF(mod == NULL || exp == NULL || rsa == NULL,
           "OpenSSL allocation failure");
@@ -365,17 +402,27 @@ FStar_Bytes_bytes CoreCrypto_rsa_encrypt(CoreCrypto_rsa_key key,
   return ret;
 }
 
+#ifdef KRML_NOSTRUCT_PASSING
+#define CoreCrypto_rsa_encrypt CoreCrypto_rsa_encrypt_
+#else
+FStar_Bytes_bytes CoreCrypto_rsa_encrypt(CoreCrypto_rsa_key key,
+                                         CoreCrypto_rsa_padding padding,
+                                         FStar_Bytes_bytes data) {
+  return CoreCrypto_rsa_encrypt_(&key, padding, data);
+}
+#endif
+
 // REMARK: used only in tests
 FStar_Pervasives_Native_option__FStar_Bytes_bytes
-CoreCrypto_rsa_decrypt(CoreCrypto_rsa_key key, CoreCrypto_rsa_padding padding,
+CoreCrypto_rsa_decrypt_(CoreCrypto_rsa_key *key, CoreCrypto_rsa_padding padding,
                        FStar_Bytes_bytes data) {
   BIGNUM *mod =
-      BN_bin2bn((uint8_t *)key.rsa_mod.data, key.rsa_mod.length, NULL);
+      BN_bin2bn((uint8_t *)key->rsa_mod.data, key->rsa_mod.length, NULL);
   BIGNUM *pub =
-      BN_bin2bn((uint8_t *)key.rsa_pub_exp.data, key.rsa_pub_exp.length, NULL);
+      BN_bin2bn((uint8_t *)key->rsa_pub_exp.data, key->rsa_pub_exp.length, NULL);
   BIGNUM *prv = NULL;
-  if (key.rsa_prv_exp.tag == FStar_Pervasives_Native_Some) {
-    prv = BN_bin2bn((uint8_t *)key.rsa_prv_exp.v.data, key.rsa_prv_exp.v.length,
+  if (key->rsa_prv_exp.tag == FStar_Pervasives_Native_Some) {
+    prv = BN_bin2bn((uint8_t *)key->rsa_prv_exp.v.data, key->rsa_prv_exp.v.length,
                     NULL);
   } else {
     FAIL_IF(true, "Missing private exponent in RSA key");
@@ -421,15 +468,25 @@ CoreCrypto_rsa_decrypt(CoreCrypto_rsa_key key, CoreCrypto_rsa_padding padding,
   return ret;
 }
 
-bool CoreCrypto_ec_is_on_curve(CoreCrypto_ec_params x0,
-                               CoreCrypto_ec_point x1) {
+#ifdef KRML_NOSTRUCT_PASSING
+#define CoreCrypto_rsa_decrypt CoreCrypto_rsa_decrypt_
+#else
+FStar_Pervasives_Native_option__FStar_Bytes_bytes
+CoreCrypto_rsa_decrypt(CoreCrypto_rsa_key key, CoreCrypto_rsa_padding padding,
+                       FStar_Bytes_bytes data) {
+  return CoreCrypto_rsa_decrypt_(&key, padding, data);
+}
+#endif
 
-  EC_KEY *k = key_of_core_crypto_curve(x0.curve);
+bool CoreCrypto_ec_is_on_curve_(CoreCrypto_ec_params *x0,
+                               CoreCrypto_ec_point *x1) {
+
+  EC_KEY *k = key_of_core_crypto_curve(x0->curve);
   const EC_GROUP *group = EC_KEY_get0_group(k);
 
   EC_POINT *point = EC_POINT_new(group);
-  BIGNUM *ppx = BN_bin2bn((uint8_t *)x1.ecx.data, x1.ecx.length, NULL);
-  BIGNUM *ppy = BN_bin2bn((uint8_t *)x1.ecy.data, x1.ecy.length, NULL);
+  BIGNUM *ppx = BN_bin2bn((uint8_t *)x1->ecx.data, x1->ecx.length, NULL);
+  BIGNUM *ppy = BN_bin2bn((uint8_t *)x1->ecy.data, x1->ecy.length, NULL);
   EC_POINT_set_affine_coordinates_GFp(group, point, ppx, ppy, NULL);
 
   bool ret = EC_POINT_is_on_curve(group, point, NULL);
@@ -440,6 +497,14 @@ bool CoreCrypto_ec_is_on_curve(CoreCrypto_ec_params x0,
   EC_KEY_free(k);
   return ret;
 }
+#ifdef KRML_NOSTRUCT_PASSING
+#define CoreCrypto_ec_is_on_curve CoreCrypto_ec_is_on_curve_
+#else
+bool CoreCrypto_ec_is_on_curve(CoreCrypto_ec_params x0,
+                               CoreCrypto_ec_point x1) {
+  return CoreCrypto_ec_is_on_curve_(&x0, &x1);
+}
+#endif
 
 FStar_Bytes_bytes
 CoreCrypto_aead_encrypt(CryptoTypes_aead_cipher x0,
@@ -520,12 +585,13 @@ CoreCrypto_aead_encrypt(CryptoTypes_aead_cipher x0,
   return ret;
 }
 
-FStar_Pervasives_Native_option__FStar_Bytes_bytes
-CoreCrypto_aead_decrypt(CryptoTypes_aead_cipher x0,
+
+void
+CoreCrypto_aead_decrypt_(CryptoTypes_aead_cipher x0,
                         FStar_Bytes_bytes x1,
                         FStar_Bytes_bytes x2,
                         FStar_Bytes_bytes x3,
-                        FStar_Bytes_bytes x4) {
+                        FStar_Bytes_bytes x4, FStar_Pervasives_Native_option__FStar_Bytes_bytes *ret) {
   // Hardcoded tag length, may need to be revised for other ciphers
   int olen, tlen = 16;
   EVP_CIPHER_CTX *ctx = NULL;
@@ -591,19 +657,32 @@ CoreCrypto_aead_decrypt(CryptoTypes_aead_cipher x0,
     FAIL_IF(true, "failed to set AEAD tag");
 
   if ((EVP_DecryptFinal_ex(ctx, output, &olen) != 1)) {
-    FStar_Pervasives_Native_option__FStar_Bytes_bytes ret = {
+    *ret = ((FStar_Pervasives_Native_option__FStar_Bytes_bytes){
       .tag = FStar_Pervasives_Native_None,
-      .v = {.length = 0, .data = 0}};
-    return ret;
+      .v = {.length = 0, .data = 0}});
+  } else {
+    EVP_CIPHER_CTX_free(ctx);
+    *ret = ((FStar_Pervasives_Native_option__FStar_Bytes_bytes){
+      .tag = FStar_Pervasives_Native_Some,
+      .v = {.length = x4.length - tlen, .data = (const char*)output}});
   }
+}
 
-  EVP_CIPHER_CTX_free(ctx);
-
-  FStar_Pervasives_Native_option__FStar_Bytes_bytes ret = {
-    .tag = FStar_Pervasives_Native_Some,
-    .v = {.length = x4.length - tlen, .data = (const char*)output}};
+#ifdef KRML_NOSTRUCT_PASSING
+#define CoreCrypto_aead_decrypt CoreCrypto_aead_decrypt_
+#else
+FStar_Pervasives_Native_option__FStar_Bytes_bytes
+CoreCrypto_aead_decrypt(CryptoTypes_aead_cipher x0,
+                        FStar_Bytes_bytes x1,
+                        FStar_Bytes_bytes x2,
+                        FStar_Bytes_bytes x3,
+                        FStar_Bytes_bytes x4) {
+  FStar_Pervasives_Native_option__FStar_Bytes_bytes ret;
+  CoreCrypto_aead_decrypt_(x0, x1, x2, x3, x4, &ret);
   return ret;
 }
+#endif
+
 
 #else // NO_OPENSSL
 

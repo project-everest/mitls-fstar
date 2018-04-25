@@ -37,7 +37,7 @@ endif
 ifneq (,$(KRML_NOUINT128))
 KOPTS+=-add-early-include '"FStar_UInt128.h"'
 KOPTS+=-fnouint128 -drop FStar.UInt128,FStar.Int.Cast.Full
-CFLAGS+=-DKRML_NOUINT128
+CFLAGS+=-DKRML_NOUINT128 # -DKRML_NOSTRUCT_PASSING
 export CFLAGS
 endif
 
@@ -64,7 +64,7 @@ KRML_COMMAND	= krml \
   -bundle 'LowParse.\*' \
   -bundle LowParseWrappers \
   -bundle 'Format.\*' \
-  -fnoanonymous-unions -warn-error -9-7-6 \
+  -fnoanonymous-unions -warn-error -9-7-6@4 \
   -fsopts --debug,yes -verbose \
   -ccopts -Wno-unused-function,-O0 \
   -ldopts -L,../pki,-lmipki \
@@ -78,7 +78,7 @@ endif
 # Sanity checks and shared directories definitions
 
 CURVE_DIR	= $(HACL_HOME)/code/curve25519/x25519-c
-SECURE_OUT	= $(HACL_HOME)/secure_api/out/vale_aes_abstract_id/crypto
+SECURE_OUT	= $(HACL_HOME)/secure_api/out/hacl_aes_abstract_id/crypto
 VALE_DIR	= $(HACL_HOME)/secure_api/vale/asm
 UINT128_DIR	= $(HACL_HOME)/secure_api/out/runtime_switch/uint128
 

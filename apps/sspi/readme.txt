@@ -32,10 +32,10 @@ directory named Detours, under the current directory.
 Installing
 ==========
 Copy the miTLS_SSP.dll to a directory on the machine which does not contain
-any spaces in the pathname.  Make sure libmitls.dll and its Cygwin and mingw32
-dependencies are on your PATH.
+any spaces in the pathname.  Make sure libmitls.dll, libmipki.dll, and their
+Cygwin and mingw32 dependencies are on your PATH.
 
-set PATH=c:\users\barrybo\everest\mitls-fstar\src\tls;C:\cygwin64\usr\x86_64-w64-mingw32\sys-root\mingw\bin;%PATH%
+set PATH=c:\users\barrybo\everest\mitls-fstar\src\windows\mitls;c:\users\barrybo\everest\mitls-fstar\src\pki;C:\cygwin64\usr\x86_64-w64-mingw32\sys-root\mingw\bin;%PATH%
 
 Then from an elevated command prompt, run:
   regsvr32 miTLS_SSP.dll
@@ -55,7 +55,7 @@ Using
 Make sure libmitls.dll and its Cygwin and mingw32 dependencies are on your 
 PATH.
 
-set PATH=c:\users\barrybo\everest\mitls-fstar\src\tls;C:\cygwin64\usr\x86_64-w64-mingw32\sys-root\mingw\bin;%PATH%
+set PATH=c:\users\barrybo\everest\mitls-fstar\src\windows\mitls;c:\users\barrybo\everest\mitls-fstar\src\pki;C:\cygwin64\usr\x86_64-w64-mingw32\sys-root\mingw\bin;%PATH%
 
 Once the registry key is present, Windows sspicli.dll, loaded into Windows
 applications, will enumerate the SecurityProviders key and load all of the

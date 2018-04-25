@@ -4,7 +4,7 @@ FLAVOR?=Model
 all: clean-depend ocaml-all kremlin-all
 
 clean-depend:
-	rm -f cache/OCaml/.depend cache/Kremlin.depend cache/Model/.depend
+	rm -f cache/OCaml/.depend cache/Kremlin/.depend cache/Model/.depend
 
 ocaml-%: clean-depend
 	$(MAKE) -f Makefile.OCaml $*
