@@ -1,6 +1,6 @@
 all: build
 
-build: build-internal-test build-library build-external-test
+build: build-internal-test # build-library build-external-test
 
 test: test-internal-test # test-library test-external-test
 
@@ -63,6 +63,7 @@ KRML_COMMAND	= $(KREMLIN_HOME)/krml \
   -bundle 'LowParse.\*' \
   -bundle LowParseWrappers \
   -bundle 'Format.\*' \
+  -bundle TLSConstants=TLSConstants,QD.TLS_protocolVersion \
   -fnoanonymous-unions -warn-error -9-7-6@4 \
   -fsopts --debug,yes -verbose \
   -ccopts -Wno-unused-function,-O0 \
@@ -144,7 +145,7 @@ ifdef VERBOSE
 endif
 	$(KRML_COMMAND) $^ -tmpdir $(INTERNAL_TEST_DIR) -no-prefix Test.Main \
 	  -skip-compilation -drop FFICallbacks \
-	  -bundle Test.Main=Test.*,AEAD_GCM,AEADOpenssl,AEADProvider,Alert,Connection,ConnInvariant,Content,DataStream,Encode,Epochs,FFI,HandshakeLog,HandshakeMessages,Hashing,Hashing.CRF,Hashing.OpenSSL,HKDF,HMAC,HMAC.UFCMA,IdNonce,KDF.Common,KDF.Salt.ODH,KeySchedule,LHAEPlain,MAC,MAC_SHA1,MAC_SHA256,MasterSecret,Negotiation,QUIC,Range,Record,Signature,StAE,Standalone,StatefulLHAE,StatefulPlain,StreamAE,StreamDeltas,StreamPlain,Ticket,TLS,TLSPRF,Transport,KDF,Extract1,Handshake.Secret,Old.Handshake,Old.HMAC.UFCMA,Old.HKDF,Old.KeySchedule
+	  -bundle Test.Main=Test.*,AEAD_GCM,AEADOpenssl,AEADProvider,Alert,Connection,ConnInvariant,Content,DataStream,Encode,Old.Epochs,FFI,HandshakeLog,HandshakeMessages,Hashing,Hashing.CRF,Hashing.OpenSSL,HMAC,IdNonce,KDF.Common,KDF.Salt.ODH,LHAEPlain,MAC,MAC_SHA1,MAC_SHA256,MasterSecret,Negotiation,QUIC,Range,Record,Signature,StAE,Standalone,StatefulLHAE,StatefulPlain,StreamAE,StreamDeltas,StreamPlain,Ticket,TLS,TLSPRF,Transport,KDF,Extract1,Old.Handshake,Old.HMAC.UFCMA,Old.HKDF,Old.KeySchedule
 
 internal-test-copy: $(addprefix $(INTERNAL_TEST_DIR)/,$(ALL_EXTERNAL_FILES)) $(INTERNAL_TEST_DIR)/stub/mipki_wrapper.c
 

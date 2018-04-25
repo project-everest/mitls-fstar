@@ -324,15 +324,15 @@ static mitls_version convert_pv(QD_TLS_protocolVersion_protocolVersion_ pv)
 {
   switch(pv.tag)
   {
-    case TLSConstants_SSL_3p0:
+    case QD_TLS_protocolVersion_SSL_3p0:
       return TLS_SSL3;
-    case TLSConstants_TLS_1p0:
+    case QD_TLS_protocolVersion_TLS_1p0:
       return TLS_1p0;
-    case TLSConstants_TLS_1p1:
+    case QD_TLS_protocolVersion_TLS_1p1:
       return TLS_1p1;
-    case TLSConstants_TLS_1p2:
+    case QD_TLS_protocolVersion_TLS_1p2:
       return TLS_1p2;
-    case TLSConstants_TLS_1p3:
+    case QD_TLS_protocolVersion_TLS_1p3:
       return TLS_1p3;
     default:
       return TLS_SSL3;

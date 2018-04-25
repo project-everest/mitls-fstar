@@ -303,6 +303,7 @@ let create d u i a =
 /// level of key derivation seems unavoidable: we need to idealize
 /// parents before childrens.)
 
+noextract
 let local_kdf_pkg (d:nat) (u:usage d) : local_pkg ii =
   (LocalPkg
     (secret d u)

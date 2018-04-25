@@ -13,13 +13,14 @@ open TLSConstants
 open Range
 open HandshakeMessages // for the message syntax
 open HandshakeLog // for Outgoing
-open Epochs
+open Old.Epochs
 
 module U32 = FStar.UInt32
 module MS = FStar.Monotonic.Seq
 module Nego = Negotiation
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
+module Epochs = Old.Epochs
 module KeySchedule = Old.KeySchedule
 module HMAC_UFCMA = Old.HMAC.UFCMA
 // For readabililty, we try to open/abbreviate fewer modules
@@ -218,8 +219,10 @@ val register: hs -> KeySchedule.recordInstance -> St unit
 let register hs keys =
     let ep = //? we don't have a full index yet for the epoch; reuse the one for keys??
       let h = Nego.Fresh ({ Nego.session_nego = None }) in
-      let KeySchedule.StAEInstance #id r w = keys in
-      Epochs.recordInstanceToEpoch #hs.region #(nonce hs) h (Handshake.Secret.StAEInstance #id r w) in // just coercion
+      Epochs.recordInstanceToEpoch #hs.region #(nonce hs) h keys in // just coercion
+      // New Handshake does
+      // let KeySchedule.StAEInstance #id r w = keys in
+      // Epochs.recordInstanceToEpoch #hs.region #(nonce hs) h (Handshake.Secret.StAEInstance #id r w) in
     Epochs.add_epoch hs.epochs ep // actually extending the epochs log
 
 val export: hs -> KeySchedule.exportKey -> St unit

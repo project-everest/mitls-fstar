@@ -51,15 +51,14 @@ INCLUDE_DIRS 	= secure kremlib include stub vale curve ffi uint128 .
 FILES 		= AEAD_GCM AEADProvider Alert BufferBytes Cert \
   C_Loops_Spec_Loops CommonDH Connection Content CoreCrypto \
   Crypto_Indexing Crypto_Symmetric_Bytes Crypto_Plain \
-  CryptoTypes curve/Curve25519 DataStream DHGroup ECGroup Epochs Extensions FFI \
-  FFICallbacks Flag Flags Format FStar HaclProvider Old.Handshake HandshakeLog \
-  HandshakeMessages Hashing Hashing_CRF Hashing_OpenSSL Hashing_Spec HKDF HMAC \
-  HMAC_UFCMA KeySchedule kremlib/kremdate kremlib/kremstr kremlinit LHAEPlain \
+  CryptoTypes curve/Curve25519 DataStream DHGroup ECGroup Old_Epochs Extensions FFI \
+  FFICallbacks Flags Format FStar HaclProvider Old_Handshake HandshakeLog \
+  HandshakeMessages Hashing Hashing_CRF Hashing_OpenSSL Hashing_Spec Old_HKDF HMAC \
+  Old_HMAC_UFCMA Old_KeySchedule kremlib/kremdate kremlib/kremstr kremlinit LHAEPlain \
   LowCProvider LowParse Negotiation Nonce Parse PMS Prims PSK QUIC Range Record RSAKey \
   secure/Crypto_HKDF_Crypto_HMAC \
   Specializations_Providers_AEAD StAE StatefulLHAE \
   StatefulPlain StreamAE StreamDeltas StreamPlain stub/core_crypto stub/hacl_aead \
-  QD_TLS_protocolVersion \
   stub/hacl_provider Ticket TLS TLSConstants TLS_Curve25519 TLSError TLSInfo \
   TLSInfoFlags TLSPRF Transport vale/sha256_main_i vale/vale_aes_glue \
   vale/Vale_Hash_SHA2_256 stub/mitlsffi stub/buffer_bytes uint128/uint128_wrapper \
@@ -73,7 +72,8 @@ CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror \
   -Wno-unused-variable -Wno-parentheses -Wno-unknown-warning-option \
   -Wno-unused-but-set-variable -Wno-infinite-recursion -g -fwrapv -fstack-check \
   -D_BSD_SOURCE -D_DEFAULT_SOURCE -D__USE_MINGW_ANSI_STDIO \
-  -Wno-missing-braces -Wno-error-tautological-compare -Wno-error-int-to-void-pointer-cast
+  -Wno-missing-braces -Wno-error-tautological-compare -Wno-error-int-to-void-pointer-cast \
+  -Wno-error-enum-conversion
 
 ifndef NO_OPENSSL
 CFLAGS += -I$(MLCRYPTO_HOME)/openssl/include

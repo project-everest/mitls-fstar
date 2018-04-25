@@ -331,7 +331,9 @@ val register: hs -> Secret.recordInstance -> St unit
 let register hs keys =
     let ep = //? we don't have a full index yet for the epoch; reuse the one for keys??
       let h = Nego.Fresh ({ Nego.session_nego = None }) in
-      Epochs.recordInstanceToEpoch #hs.region #(nonce hs) h keys in // just coercion
+      // Epochs.recordInstanceToEpoch #hs.region #(nonce hs) h keys in // just coercion
+      let KeySchedule.StAEInstance #id r w = keys in
+      Epochs.recordInstanceToEpoch #hs.region #(nonce hs) h (Handshake.Secret.StAEInstance #id r w) in // just coercion
     Epochs.add_epoch hs.epochs ep // actually extending the epochs log
 
 val export: hs -> Secret.exportKey -> St unit
