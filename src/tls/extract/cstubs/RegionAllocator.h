@@ -46,9 +46,7 @@ void HeapRegionFree(void* pv);
 // made outside of ENTER/LEAVE.  It will be freed when the region allocator
 // is cleaned up.
 #if IS_WINDOWS
-  #define FACILITY_EVEREST 255
-  #define CODE_OUT_OF_MEMORY 5
-  #define MITLS_OUT_OF_MEMORY_EXCEPTION MAKE_HRESULT(1,FACILITY_EVEREST,CODE_OUT_OF_MEMORY)
+  #define MITLS_OUT_OF_MEMORY_EXCEPTION 0x80ff0005
   
   #define ENTER_GLOBAL_HEAP_REGION() ENTER_HEAP_REGION(NULL)
 
