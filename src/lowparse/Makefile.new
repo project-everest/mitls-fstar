@@ -19,7 +19,7 @@ FSTAR_OPTIONS += --use_hints --use_two_phase_tc true # --use_extracted_interface
 
 MY_FSTAR=$(FSTAR_HOME)/bin/fstar.exe --cache_checked_modules --cache_dir $(FSTAR_OUT_DIR) --odir $(FSTAR_OUT_DIR) $(addprefix --include , $(INCLUDE_PATHS)) $(INCLUDE_KREMLIN)
 
-MY_KREMLIN=$(KREMLIN_HOME)/krml -bundle 'LowParse.\*' krembytes.c
+MY_KREMLIN=$(KREMLIN_HOME)/krml -bundle 'LowParse.\*' $(KREMLIN_HOME)/kremlib/kremstr.c -add-include '"kremstr.h"' -drop FStar.Bytes -add-include '"krembytes.h"'
 
 EXAMPLES=Example Example2
 ROOT_FILES=LowParse.SLow.fst $(addprefix LowParse, $(addsuffix .fst, $(EXAMPLES)))

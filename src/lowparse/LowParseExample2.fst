@@ -1,5 +1,6 @@
 module LowParseExample2
 
+open FStar.HyperStack.ST
 module B32 = FStar.Bytes
 module U32 = FStar.UInt32
 module LP = LowParse.SLow
@@ -167,4 +168,24 @@ let serialize_then_parse_t' x =
 let parse_then_serialize_t' x y consumed =
   LP.parser32_then_serializer32 _ parse_t'_impl serialize_t'_impl x
 
-let main () : Tot FStar.Int32.t = 0l
+#reset-options "--using_facts_from '* -LowParse'"
+
+// BUGBUG: HACK for Kremlin kremlib issue
+// Dummy function, to call some FStar.Bytes functions.  This
+// causes Kremlin to emit type declarations that are needed bytes
+// krembytes.h.
+let dummy (_:unit): Stack unit (fun _ -> true) (fun _ _ _ -> true) =
+  assume false;
+  push_frame();
+  let p = FStar.Bytes.twobytes (0uy, 1uy) in
+  let p = FStar.Bytes.split p 1ul in
+  let p = FStar.Bytes.iutf8_opt (FStar.Bytes.utf8_encode "Napoléon") in
+  pop_frame()
+
+val main: Int32.t -> FStar.Buffer.buffer (FStar.Buffer.buffer C.char) ->
+  Stack C.exit_code (fun _ -> true) (fun _ _ _ -> true)
+let main argc argv =
+  push_frame ();
+  dummy();
+  pop_frame ();
+  C.EXIT_SUCCESS
