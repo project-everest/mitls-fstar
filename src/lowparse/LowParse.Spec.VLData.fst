@@ -29,6 +29,8 @@ let decode_bounded_integer
 = E.lemma_be_to_n_is_bounded b;
   U32.uint_to_t (E.be_to_n b)
 
+
+#set-options "--z3rlimit 16"
 let decode_bounded_integer_injective'
   (i: integer_size)
   (b1: bytes { Seq.length b1 == i } )
@@ -44,6 +46,7 @@ let decode_bounded_integer_injective'
     assert (E.be_to_n b1 == E.be_to_n b2);
     E.be_to_n_inj b1 b2
   end else ()
+#reset-options
 
 let decode_bounded_integer_injective
   (i: integer_size)
