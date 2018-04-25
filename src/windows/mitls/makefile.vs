@@ -35,6 +35,7 @@ SOURCES = \
   FFICallbacks.c \
   Flag.c \
   Flags.c \
+  Format.c \
   FStar.c \
   HaclProvider.c \
   hacl_aead.c \
@@ -56,6 +57,8 @@ SOURCES = \
   kremstr.c \
   LHAEPlain.c \
   LowCProvider.c \
+  LowParse.c \
+  LowParseWrappers.c \
   mitlsffi.c \
   Negotiation.c \
   Nonce.c \

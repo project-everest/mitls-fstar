@@ -1,5 +1,5 @@
 module QUIC
- 
+
 /// QUIC-specific interface on top of our main TLS API
 /// * establishes session & exported keys: no application-data traffic!
 /// * simplified configuration, with reasonable defaults
@@ -23,6 +23,7 @@ open FFICallbacks
 
 open FStar.HyperStack.All
 module HS = FStar.HyperStack
+module FFI = FFI
 
 #set-options "--lax"
 
@@ -146,13 +147,13 @@ let quic_check config =
 /// [send] and [recv] are callbacks to operate on QUIC stream0 buffers
 /// [config] is a client configuration for QUIC (see above)
 /// [psks] is a list of proposed pre-shared-key identifiers and tickets
-let connect ctx send recv config psks: ML Connection.connection =
+let connect ctx send recv config : ML Connection.connection =
   // we assume the configuration specifies the target SNI;
   // otherwise we must check the authenticated certificate chain.
   let tcp = Transport.callbacks ctx send recv in
   let here = new_region HS.root in
   quic_check config;
-  TLS.resume here tcp config None psks
+  TLS.connect here tcp config
 
 /// [send] and [recv] are callbacks to operate on QUIC stream0 buffers
 /// [config] is a server configuration for QUIC (see above)
@@ -168,9 +169,8 @@ let accept ctx send recv config : ML Connection.connection =
 // (allowing resumption across miTLS client processes)
 val ffiConnect:
   Transport.pvoid -> Transport.pfn_send -> Transport.pfn_recv ->
-  config:config -> ticket: option (bytes * bytes) -> ML Connection.connection
-let ffiConnect ctx snd rcv config ticket =
-  connect ctx snd rcv config (FFI.install_ticket config ticket)
+  config:config -> ML Connection.connection
+let ffiConnect ctx snd rcv config = connect ctx snd rcv config
 
 val ffiAcceptConnected:
   Transport.pvoid -> Transport.pfn_send -> Transport.pfn_recv ->
@@ -185,3 +185,47 @@ let ffiConfig (host:bytes) =
     peer_name = h;
     non_blocking_read = true
   }
+
+private let rec join_alpn acc = function
+  | [] -> acc
+  | h::t -> join_alpn (if length acc = 0 then h else acc @| abyte 58z @| h) t
+
+type chSummary = {
+  ch_sni: bytes;
+  ch_alpn: bytes;
+  ch_extensions: bytes;
+  ch_cookie: option bytes;
+}
+
+let peekClientHello (ch:bytes) : ML (option chSummary) =
+  if length ch < 40 then (trace "peekClientHello: too short"; None) else
+  let hdr, ch = split ch 5ul in
+  match Record.parseHeader hdr with
+  | Error (_, msg) -> trace ("peekClientHello: bad record header"); None
+  | Correct(ct, pv, len) ->
+    if ct <> Content.Handshake || len <> length ch then
+      (trace "peekClientHello: bad CT or length"; None)
+    else
+      match HandshakeMessages.parseMessage ch with
+      | Error _
+      | Correct None -> trace ("peekClientHello: bad handshake header"); None
+      | Correct (Some (| _, hst, ch, _ |)) ->
+        if hst <> HandshakeMessages.HT_client_hello then
+          (trace "peekClientHello: not a client hello"; None)
+        else
+          match HandshakeMessages.parseClientHello ch with
+          | Error (_, msg) -> trace ("peekClientHello: bad client hello: "^msg); None
+          | Correct (ch, _) ->
+            let sni = Negotiation.get_sni ch in
+            let alpn = join_alpn empty_bytes (Negotiation.get_alpn ch) in
+            let cext = Extensions.app_ext_filter ch.HandshakeMessages.ch_extensions in
+            let ext = HandshakeMessages.optionExtensionsBytes cext in
+            let cookie =
+              match Negotiation.find_cookie ch with
+              | None -> None
+              | Some c ->
+                match Ticket.check_cookie c with
+                | None -> None
+                | Some (hrr, digest, extra) -> Some extra
+              in
+            Some ({ch_sni = sni; ch_alpn = alpn; ch_extensions = ext; ch_cookie = cookie; })

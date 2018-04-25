@@ -75,7 +75,7 @@ typedef mitls_nego_action (MITLS_CALLCONV *pfn_FFI_nego_cb)(void *cb_state, mitl
 #define MAX_SIGNATURE_LEN 8192
 // Select a certificate based on the given SNI and list of signatures.
 // Signature algorithms are represented as 16-bit integers using the TLS 1.3 RFC code points
-typedef void* (MITLS_CALLCONV *pfn_FFI_cert_select_cb)(void *cb_state, const unsigned char *sni, size_t sni_len, const mitls_signature_scheme *sigalgs, size_t sigalgs_len, mitls_signature_scheme *selected);
+typedef void* (MITLS_CALLCONV *pfn_FFI_cert_select_cb)(void *cb_state, mitls_version ver, const unsigned char *sni, size_t sni_len, const unsigned char *alpn, size_t alpn_len, const mitls_signature_scheme *sigalgs, size_t sigalgs_len, mitls_signature_scheme *selected);
 // Write the certificate chain to buffer, returning the number of written bytes.
 // The chain should be written by prefixing each certificate by its length encoded over 3 bytes
 typedef size_t (MITLS_CALLCONV *pfn_FFI_cert_format_cb)(void *cb_state, const void *cert_ptr, unsigned char buffer[MAX_CHAIN_LEN]);
@@ -111,6 +111,9 @@ extern void MITLS_CALLCONV FFI_mitls_cleanup(void);
 extern int MITLS_CALLCONV FFI_mitls_configure(/* out */ mitls_state **state, const char *tls_version, const char *host_name);
 extern int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *alg, const unsigned char *ticketkey, size_t klen);
 
+// Configure a ticket to resume (client only). Can be called more than once to offer multiple 1.3 PSK
+extern int MITLS_CALLCONV FFI_mitls_configure_ticket(mitls_state *state, const mitls_ticket *ticket);
+
 // Set configuration options ahead of connecting
 extern int MITLS_CALLCONV FFI_mitls_configure_cipher_suites(/* in */ mitls_state *state, const char *cs);
 extern int MITLS_CALLCONV FFI_mitls_configure_signature_algorithms(/* in */ mitls_state *state, const char *sa);
@@ -132,9 +135,6 @@ typedef int (MITLS_CALLCONV *pfn_FFI_recv)(void *ctx, unsigned char *buffer, siz
 // Connect to a TLS server
 extern int MITLS_CALLCONV FFI_mitls_connect(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state);
 
-// Resume a previously-established ticket
-extern int MITLS_CALLCONV FFI_mitls_resume(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state, /* in */ mitls_ticket *ticket);
-
 // Act as a TLS server to a client
 extern int MITLS_CALLCONV FFI_mitls_accept_connected(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state);
 
@@ -145,15 +145,15 @@ extern int MITLS_CALLCONV FFI_mitls_get_exporter(/* in */ mitls_state *state, in
 extern void *MITLS_CALLCONV FFI_mitls_get_cert(/* in */ mitls_state *state, /* out */ size_t *cert_size);
 
 // Send a message
-// Returns -1 for failure, or a TCP packet to be sent then freed with FFI_mitls_free_packet()
+// Returns -1 for failure, or a TCP packet to be sent then freed with FFI_mitls_free()
 extern int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const unsigned char *buffer, size_t buffer_size);
 
 // Receive a message
 // Returns NULL for failure, a plaintext packet to be freed with FFI_mitls_free_packet()
 extern unsigned char *MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_size);
 
-// Free a packet returned FFI_mitls_receive();
-extern void MITLS_CALLCONV FFI_mitls_free_packet(/* in */ mitls_state *state, unsigned char *packet);
+// Free a packet returned FFI_mitls_*() family of APIs
+extern void MITLS_CALLCONV FFI_mitls_free(/* in */ mitls_state *state, void* pv);
 
 /*************************************************************************
 * QUIC FFI
@@ -211,12 +211,28 @@ typedef struct {
 extern int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_config *cfg);
 extern quic_result MITLS_CALLCONV FFI_mitls_quic_process(quic_state *state, const unsigned char* inBuf, /*inout*/ size_t *pInBufLen, /*out*/ unsigned char *outBuf, /*inout*/ size_t *pOutBufLen);
 extern int MITLS_CALLCONV FFI_mitls_quic_get_exporter(quic_state *state, int early, /* out */ quic_secret *secret);
-extern void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state);
+extern void MITLS_CALLCONV FFI_mitls_quic_close(quic_state *state);
 
-extern int MITLS_CALLCONV FFI_mitls_find_custom_extension(int is_server, const unsigned char *exts, size_t exts_len, uint16_t ext_type, /*out*/ unsigned char **ext_data, /*out*/ size_t *ext_data_len);
+extern int MITLS_CALLCONV FFI_mitls_find_custom_extension(mitls_state *state, int is_server, const unsigned char *exts, size_t exts_len, uint16_t ext_type, unsigned char **ext_data, size_t *ext_data_len);
+extern int MITLS_CALLCONV FFI_mitls_quic_find_custom_extension(quic_state *state, const unsigned char *exts, size_t exts_len, uint16_t ext_type, unsigned char **ext_data, size_t *ext_data_len);
+
+typedef struct {
+  const unsigned char *sni;
+  size_t sni_len;
+  const unsigned char *alpn;
+  size_t alpn_len;
+  const unsigned char *extensions;
+  size_t extensions_len;
+  const unsigned char *hrr_cookie;
+  size_t hrr_cookie_len;
+} mitls_hello_summary;
 
 // The functions below should only be used on client extensions
-extern int MITLS_CALLCONV FFI_mitls_find_server_name(const unsigned char *exts, size_t exts_len, unsigned char **sni, size_t *sni_len);
-extern int MITLS_CALLCONV FFI_mitls_find_alpn(const unsigned char *exts, size_t exts_len, unsigned char **alpn, size_t *alpn_len);
+extern int MITLS_CALLCONV FFI_mitls_get_hello_summary(const unsigned char *buffer, size_t buffer_len, mitls_hello_summary *summary);
+extern int MITLS_CALLCONV FFI_mitls_find_server_name(mitls_state *state, const unsigned char *exts, size_t exts_len, unsigned char **sni, size_t *sni_len);
+extern int MITLS_CALLCONV FFI_mitls_quic_find_server_name(quic_state *state, const unsigned char *exts, size_t exts_len, unsigned char **sni, size_t *sni_len);
+
+// Free 'out' variables returned by the FFI_mitls_quic*() family of functions.
+extern void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state, void* pv);
 
 #endif // HEADER_MITLS_FFI_H

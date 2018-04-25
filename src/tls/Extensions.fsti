@@ -34,7 +34,7 @@ open TLSConstants
 
 (* PRE-SHARED KEYS AND KEY EXCHANGES *)
 
-type pskIdentity = PSK.psk_identifier * PSK.obfuscated_ticket_age
+type pskIdentity = psk_identifier * PSK.obfuscated_ticket_age
 
 // used in a refinement below
 val pskiListBytes: list pskIdentity -> bytes
@@ -83,7 +83,7 @@ val alpnBytes : alpn -> b:bytes{length b < 65536}
 // The length exactly reflects the RFC format constraint <2..254>
 type protocol_versions =
   | ServerPV of protocolVersion
-  | ClientPV of l:list protocolVersion {0 < List.Tot.length l /\ List.Tot.length l < 128}
+  | ClientPV of l:list protocolVersion' {0 < List.Tot.length l /\ List.Tot.length l < 128}
 
 (*
 // we used to support renegotiation_info

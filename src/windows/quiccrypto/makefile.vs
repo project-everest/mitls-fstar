@@ -1,6 +1,6 @@
 CCOPTS = /nologo /O2 /Gy /GF /Gw /GA /MD /Zi -I. -I.. -FI.\CommonInclude.h /DNO_OPENSSL
 
-all: libquiccrypto.dll
+all: libquiccrypto.dll test
 
 # 'dir /b *.c' then replace "^(.*)" by "  \1 \\"
 SOURCES = \
@@ -31,6 +31,12 @@ libquiccrypto_code.lib: $(SOURCES:.c=.obj) $(PLATFORM_OBJS)
   
 libquiccrypto.dll: libquiccrypto_code.lib libquiccrypto.def dllmain.obj
   link /nologo /dll /debug:full /out:libquiccrypto.dll libquiccrypto_code.lib dllmain.obj /def:libquiccrypto.def /OPT:ICF /OPT:REF ntdll.lib
+
+test.exe: test.obj libquiccrypto.dll
+  link /nologo /ltcg /debug:full /out:test.exe test.obj libquiccrypto.lib
+
+test: test.exe libquiccrypto.dll
+  test.exe
   
 .c.obj::
     cl $(CCOPTS) -c $<

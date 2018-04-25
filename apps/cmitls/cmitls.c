@@ -191,10 +191,12 @@ mitls_nego_action nego_callback(void *cb_state, mitls_version ver,
   printf(" @@@@ Nego callback for %s @@@@\n", pvname(ver));
   printf("Offered extensions:\n");
   dump(cexts, cexts_len);
+  
+  quic_state *state = *(quic_state**)cb_state;
 
   unsigned char *qtp = NULL;
   size_t qtp_len;
-  if(FFI_mitls_find_custom_extension(option_isserver, cexts, cexts_len, (uint16_t)0x1A, &qtp, &qtp_len))
+  if(FFI_mitls_quic_find_custom_extension(state, cexts, cexts_len, (uint16_t)0x1A, &qtp, &qtp_len))
   {
     printf("Transport parameters:\n");
     dump(qtp, qtp_len);
@@ -232,7 +234,7 @@ mitls_nego_action nego_callback(void *cb_state, mitls_version ver,
   return TLS_nego_accept;
 }
 
-void* certificate_select(void *cbs, const unsigned char *sni, size_t sni_len, const mitls_signature_scheme *sigalgs, size_t sigalgs_len, mitls_signature_scheme *selected)
+void* certificate_select(void *cbs, mitls_version ver, const unsigned char *sni, size_t sni_len, const unsigned char *alpn, size_t alpn_len, const mitls_signature_scheme *sigalgs, size_t sigalgs_len, mitls_signature_scheme *selected)
 {
   mipki_state *st = (mipki_state*)cbs;
   mipki_chain r = mipki_select_certificate(st, (char*)sni, sni_len, sigalgs, sigalgs_len, selected);
@@ -336,6 +338,7 @@ int ConfigureQuic(quic_state **pstate)
     };
 
     memset(&quic_cfg, 0, sizeof(quic_cfg));
+    quic_cfg.callback_state = pstate;
     quic_cfg.is_server = (option_isserver) ? 1 : 0;
     quic_cfg.cipher_suites = option_ciphers;
     quic_cfg.cert_callbacks = &cert_callbacks;
@@ -536,7 +539,7 @@ int SingleServer(mitls_state *state, SOCKET clientfd)
     strcat(payload, ctext);
     strncat(payload, (const char*)db, db_length);
 
-    FFI_mitls_free_packet(state, db);
+    FFI_mitls_free(state, db);
     r = FFI_mitls_send(state, (unsigned char*)payload, strlen(payload));
     if (r == 0) {
         printf("FFI_mitls_send() failed\n");
@@ -775,7 +778,7 @@ int SingleQuicServer(quic_state *state, SOCKET clientfd)
     quic_recv_until(state, clientfd, check_true);
     quic_dump(state);
 
-    FFI_mitls_quic_free(state);
+    FFI_mitls_quic_close(state);
     return 0;
 }
 
@@ -919,7 +922,7 @@ int TestClient(void)
       // otherwise, don't.
       if (!*option_file)
         puts((const char *)response);
-      FFI_mitls_free_packet(state, response);
+      FFI_mitls_free(state, response);
       // JP: TODO: how to determine when we have nothing left to read?
       if (response_length < 16384)
         break;

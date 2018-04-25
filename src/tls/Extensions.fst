@@ -35,7 +35,7 @@ private type canFail (a:Type) =
 
 (* PRE-SHARED KEYS AND KEY EXCHANGES *)
 
-val pskiBytes: PSK.psk_identifier * PSK.obfuscated_ticket_age -> bytes
+val pskiBytes: psk_identifier * PSK.obfuscated_ticket_age -> bytes
 
 let pskiBytes (i,ot) =
   lemma_repr_bytes_values (UInt32.v ot);
@@ -306,14 +306,14 @@ let protocol_versions_bytes = function
 //REMARK: This is not tail recursive, contrary to most of our parsing functions
 val parseVersions:
   b:bytes ->
-  Tot (result (l:list TLSConstants.protocolVersion {FStar.Mul.( length b == 2 * List.Tot.length l)})) (decreases (length b))
+  Tot (result (l:list TLSConstants.protocolVersion' {FStar.Mul.( length b == 2 * List.Tot.length l)})) (decreases (length b))
 let rec parseVersions b =
   match length b with
   | 0 -> let r = [] in assert_norm (List.Tot.length r == 0); Correct r
   | 1 -> Error (AD_decode_error, "malformed version list")
   | _ ->
     let b2, b' = split b 2ul in
-    match TLSConstants.parseVersion_draft b2 with
+    match TLSConstants.parseVersion_drafts b2 with
     | Error z -> Error z
     | Correct v ->
       match parseVersions b' with
