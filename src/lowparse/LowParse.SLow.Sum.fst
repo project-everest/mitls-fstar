@@ -366,6 +366,7 @@ let enum_head_key
 = match e with ((k, _) :: _) -> k
 
 inline_for_extraction
+unfold
 let sum_tail_type
   (t: sum)
 : Tot Type0
@@ -377,7 +378,8 @@ let sum_tail_tag_of_data
 : Ghost (enum_key (enum_tail' (sum_enum t)))
   (requires (Cons? (sum_enum t)))
   (ensures (fun _ -> True))
-= sum_tag_of_data t x
+= let y : sum_key_type t = sum_tag_of_data t x in
+  y
 
 inline_for_extraction
 let sum_tail
@@ -390,7 +392,7 @@ let sum_tail
     sum_repr_type t' == sum_repr_type t /\
     (sum_enum t' <: enum (sum_key_type t) (sum_repr_type t)) == enum_tail' (sum_enum t) /\
     sum_type t' == sum_tail_type t /\
-    (forall (x : sum_tail_type t) . (sum_tag_of_data t' x <: sum_key_type t) == (sum_tag_of_data t (x <: sum_type t) <: sum_key_type t))
+    (forall (x : sum_tail_type t) . (sum_tag_of_data t' (coerce (sum_type t') x) <: sum_key_type t) == (sum_tag_of_data t (x <: sum_type t) <: sum_key_type t))
   )))
 = Sum
     (sum_key_type t)
