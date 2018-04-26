@@ -245,14 +245,12 @@ int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *alg, const unsigned char
 int MITLS_CALLCONV FFI_mitls_configure_ticket(mitls_state *state, const mitls_ticket *ticket)
 {
     int b = 0;
-    LOCK_MUTEX(&lock);
-    ENTER_GLOBAL_HEAP_REGION();
+    ENTER_HEAP_REGION(state->rgn);
     FStar_Bytes_bytes tid, si;
     MakeFStar_Bytes_bytes(&tid, ticket->ticket, ticket->ticket_len);
     MakeFStar_Bytes_bytes(&si, ticket->session, ticket->session_len);
     state->cfg = FFI_ffiSetTicket(state->cfg, tid, si);
-    LEAVE_GLOBAL_HEAP_REGION();
-    UNLOCK_MUTEX(&lock);
+    LEAVE_HEAP_REGION();
     if (HAD_OUT_OF_MEMORY) {
         return 0;
     }
@@ -1130,101 +1128,99 @@ void MITLS_CALLCONV FFI_mitls_quic_close(quic_state *state)
     DESTROY_HEAP_REGION(rgn);
 }
 
-int MITLS_CALLCONV FFI_mitls_get_hello_summary(const unsigned char *buffer, size_t buffer_len, mitls_hello_summary *summary)
+static const unsigned char *FFI_mitls_memmem(
+  const unsigned char *b, size_t blen,
+  const unsigned char *search, size_t slen)
 {
+  const unsigned char *cur;
+  if (blen < slen) return NULL;
+  if (!slen) return b;
+
+	for (cur = b; cur <= b + blen - slen; cur++)
+		if (cur[0] == search[0] && !memcmp(cur+1, search+1, slen-1))
+			return cur;
+
+	return NULL;
+}
+
+int MITLS_CALLCONV FFI_mitls_get_hello_summary(const unsigned char *buffer, size_t buffer_len,
+  mitls_hello_summary *summary, unsigned char **cookie, size_t *cookie_len)
+{
+  HEAP_REGION rgn;
+  int ret = 0;
+
+  CREATE_HEAP_REGION(&rgn);
+  if (!VALID_HEAP_REGION(rgn)) {
+    return 0;
+  }
+
+  ENTER_HEAP_REGION(rgn);
   FStar_Bytes_bytes b = {.data = (const char*)buffer, .length = buffer_len};
   FStar_Pervasives_Native_option__QUIC_chSummary ch = QUIC_peekClientHello(b);
 
+  memset(summary, 0, sizeof(mitls_hello_summary));
+  *cookie = NULL; *cookie_len = 0;
   if(ch.tag == FStar_Pervasives_Native_Some)
   {
     QUIC_chSummary s = ch.v;
-    summary->sni = (const unsigned char*)s.ch_sni.data;
+    summary->sni = FFI_mitls_memmem(buffer, buffer_len,
+      (const unsigned char*)s.ch_sni.data, s.ch_sni.length);
     summary->sni_len = s.ch_sni.length;
 
-    summary->alpn = (const unsigned char*)s.ch_alpn.data;
+    summary->alpn = FFI_mitls_memmem(buffer, buffer_len,
+      (const unsigned char*)s.ch_alpn.data, s.ch_alpn.length);
     summary->alpn_len = s.ch_alpn.length;
 
-    summary->extensions = (const unsigned char*)s.ch_extensions.data;
+    summary->extensions = FFI_mitls_memmem(buffer, buffer_len,
+      (const unsigned char*)s.ch_extensions.data, s.ch_extensions.length);
     summary->extensions_len = s.ch_extensions.length;
+    ret = 1;
+  }
+  LEAVE_HEAP_REGION();
 
-    if(s.ch_cookie.tag == FStar_Pervasives_Native_Some) {
-      summary->hrr_cookie = (const unsigned char*)s.ch_cookie.v.data;
-      summary->hrr_cookie_len = s.ch_cookie.v.length;
-    } else {
-      summary->hrr_cookie = NULL;
-      summary->hrr_cookie_len = 0;
-    }
-
-    return 1;
+  if(ret && ch.v.ch_cookie.tag == FStar_Pervasives_Native_Some)
+  {
+    ENTER_GLOBAL_HEAP_REGION();
+    *cookie_len = ch.v.ch_cookie.v.length;
+    *cookie = KRML_HOST_MALLOC(*cookie_len);
+    memcpy(*cookie, ch.v.ch_cookie.v.data, *cookie_len);
+    LEAVE_GLOBAL_HEAP_REGION();
   }
 
-  return 0;
+  DESTROY_HEAP_REGION(rgn);
+  return ret;
 }
 
-int FFI_mitls_find_custom_extension_common(HEAP_REGION rgn, int is_server, const unsigned char *exts, size_t exts_len, uint16_t ext_type, unsigned char **ext_data, size_t *ext_data_len)
+int MITLS_CALLCONV FFI_mitls_find_custom_extension(int is_server, const unsigned char *exts, size_t exts_len, uint16_t ext_type, unsigned char **ext_data, size_t *ext_data_len)
 {
+  HEAP_REGION rgn;
   int ret = 0;
+
+  CREATE_HEAP_REGION(&rgn);
+  if (!VALID_HEAP_REGION(rgn)) {
+    return 0;
+  }
+
   ENTER_HEAP_REGION(rgn);
   FStar_Bytes_bytes b = {.data = (const char*)exts, .length = exts_len};
   FStar_Pervasives_Native_option__FStar_Bytes_bytes ob;
   ob = FFI_ffiFindCustomExtension((bool)is_server, b, ext_type);
-  *ext_data = NULL; *ext_data_len = 0;
 
+  *ext_data = NULL; *ext_data_len = 0;
   if(ob.tag == FStar_Pervasives_Native_Some)
   {
     *ext_data_len = ob.v.length;
-    *ext_data = KRML_HOST_MALLOC(*ext_data_len);
-    memcpy(*ext_data, ob.v.data, *ext_data_len);
+    *ext_data = (unsigned char*)FFI_mitls_memmem(exts, exts_len, (const unsigned char*)ob.v.data, *ext_data_len);
     ret = 1;
   }
+
   LEAVE_HEAP_REGION();
   if (HAD_OUT_OF_MEMORY) {
     ret = 0;
   }
+
+  DESTROY_HEAP_REGION(rgn);
   return ret;
-}
-
-int MITLS_CALLCONV FFI_mitls_find_custom_extension(mitls_state *state, int is_server, const unsigned char *exts, size_t exts_len, uint16_t ext_type, unsigned char **ext_data, size_t *ext_data_len)
-{
-    return FFI_mitls_find_custom_extension_common(state->rgn, is_server, exts, exts_len, ext_type, ext_data, ext_data_len);
-}
-
-int MITLS_CALLCONV FFI_mitls_quic_find_custom_extension(quic_state *state, const unsigned char *exts, size_t exts_len, uint16_t ext_type, unsigned char **ext_data, size_t *ext_data_len)
-{
-    return FFI_mitls_find_custom_extension_common(state->rgn, state->is_server, exts, exts_len, ext_type, ext_data, ext_data_len);
-}
-
-
-int FFI_mitls_find_server_name_common(HEAP_REGION rgn, const unsigned char *exts, size_t exts_len, unsigned char **sni, size_t *sni_len)
-{
-  int ret = 0;
-  ENTER_HEAP_REGION(rgn);
-  FStar_Bytes_bytes b = {.data = (const char*)exts, .length = exts_len};
-  FStar_Pervasives_Native_option__FStar_Bytes_bytes ob = FFI_ffiFindSNI(b);
-  *sni = NULL; *sni_len = 0;
-
-  if(ob.tag == FStar_Pervasives_Native_Some)
-  {
-    *sni_len = ob.v.length;
-    *sni = KRML_HOST_MALLOC(*sni_len);
-    memcpy(*sni, ob.v.data, *sni_len);
-    ret = 1;
-  }
-  LEAVE_HEAP_REGION();
-  if (HAD_OUT_OF_MEMORY) {
-    ret = 0;
-  }
-  return ret;
-}
-
-int MITLS_CALLCONV FFI_mitls_find_server_name(mitls_state *state, const unsigned char *exts, size_t exts_len, unsigned char **sni, size_t *sni_len)
-{
-    return FFI_mitls_find_server_name_common(state->rgn, exts, exts_len, sni, sni_len);
-}
-
-int MITLS_CALLCONV FFI_mitls_quic_find_server_name(quic_state *state, const unsigned char *exts, size_t exts_len, unsigned char **sni, size_t *sni_len)
-{
-    return FFI_mitls_find_server_name_common(state->rgn, exts, exts_len, sni, sni_len);
 }
 
 void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state, void* pv)
@@ -1232,4 +1228,11 @@ void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state, void* pv)
     ENTER_HEAP_REGION(state->rgn);
     KRML_HOST_FREE(pv);
     LEAVE_HEAP_REGION();
+}
+
+extern void MITLS_CALLCONV FFI_mitls_global_free(void* pv)
+{
+  ENTER_GLOBAL_HEAP_REGION();
+  KRML_HOST_FREE(pv);
+  LEAVE_GLOBAL_HEAP_REGION();
 }

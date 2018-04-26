@@ -186,10 +186,6 @@ let ffiConfig (host:bytes) =
     non_blocking_read = true
   }
 
-private let rec join_alpn acc = function
-  | [] -> acc
-  | h::t -> join_alpn (if length acc = 0 then h else acc @| abyte 58z @| h) t
-
 type chSummary = {
   ch_sni: bytes;
   ch_alpn: bytes;
@@ -217,9 +213,8 @@ let peekClientHello (ch:bytes) : ML (option chSummary) =
           | Error (_, msg) -> trace ("peekClientHello: bad client hello: "^msg); None
           | Correct (ch, _) ->
             let sni = Negotiation.get_sni ch in
-            let alpn = join_alpn empty_bytes (Negotiation.get_alpn ch) in
-            let cext = Extensions.app_ext_filter ch.HandshakeMessages.ch_extensions in
-            let ext = HandshakeMessages.optionExtensionsBytes cext in
+            let alpn = Extensions.alpnBytes (Negotiation.get_alpn ch) in
+            let ext = HandshakeMessages.optionExtensionsBytes ch.HandshakeMessages.ch_extensions in
             let cookie =
               match Negotiation.find_cookie ch with
               | None -> None

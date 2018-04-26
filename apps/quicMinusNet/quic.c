@@ -52,16 +52,19 @@ const char* pvname(mitls_version pv)
   return "(unknown)";
 }
 
-void print_hello_summary(mitls_hello_summary *ch)
+void print_hello_summary(mitls_hello_summary *ch, unsigned char *cookie, size_t cookie_len)
 {
   printf("~~~~~~~~~ Client Hello Summary ~~~~~~~~~~~\n");
-  printf("~ SNI = %s\n", ch->sni);
-  printf("~ ALPN = %s\n", ch->alpn);
-  printf("~ Cookie = ");
-  if(ch->hrr_cookie) dump(ch->hrr_cookie, ch->hrr_cookie_len);
+  printf("~ SNI = %s\n", ch->sni ? ch->sni : (const unsigned char*)"NULL");
+  printf("~ ALPN = ");
+  if(ch->alpn) dump(ch->alpn, ch->alpn_len);
   else printf("NULL\n");
-  printf("~ Extensions:\n");
-  dump(ch->extensions, ch->extensions_len);
+  printf("~ Cookie = ");
+  if(cookie) dump(cookie, cookie_len);
+  else printf("NULL\n");
+  printf("~ Extensions = ");
+  if(ch->extensions) dump(ch->extensions, ch->extensions_len);
+  else printf("NULL\n");
   printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
 }
 
@@ -78,7 +81,7 @@ mitls_nego_action nego_cb(void *cb_state, mitls_version ver,
   connection_state *state = (connection_state*)cb_state;
   unsigned char *qtp = NULL;
   size_t qtp_len;
-  int r = FFI_mitls_quic_find_custom_extension(state->quic_state, cexts, cexts_len, (uint16_t)0x1A, &qtp, &qtp_len);
+  int r = FFI_mitls_find_custom_extension(1, cexts, cexts_len, (uint16_t)0x1A, &qtp, &qtp_len);
   assert(r && qtp != NULL && qtp_len > 0);
   printf("Transport parameters offered:\n");
   dump(qtp, qtp_len);
@@ -585,8 +588,10 @@ int main(int argc, char **argv)
     printf("client returns %s clen=%zd slen=%zd\n", quic_result_string(rc), clen, slen);
     printf("ClientHello[%4zd] ---->\n\n",clen);
 
-    assert(FFI_mitls_get_hello_summary(c_buffer, clen, &ch) == 1);
-    print_hello_summary(&ch);
+    unsigned char *cookie; size_t cookie_len;
+    assert(FFI_mitls_get_hello_summary(c_buffer, clen, &ch, &cookie, &cookie_len) == 1);
+    print_hello_summary(&ch, cookie, cookie_len);
+    FFI_mitls_global_free(cookie);
 
     def_action = TLS_nego_retry; // Force server to ask for retry
     s_buffer += slen; smax -= slen; slen = smax;
@@ -613,8 +618,9 @@ int main(int argc, char **argv)
     printf("client returns %s clen=%zd slen=%zd\n", quic_result_string(rc), clen, slen);
     printf("ClientHello2[%4zd] ---->\n\n",clen);
 
-    assert(FFI_mitls_get_hello_summary(c_buffer, clen, &ch) == 1);
-    print_hello_summary(&ch);
+    assert(FFI_mitls_get_hello_summary(c_buffer, clen, &ch, &cookie, &cookie_len) == 1);
+    print_hello_summary(&ch, cookie, cookie_len);
+    FFI_mitls_global_free(cookie);
 
     s_buffer += slen; smax -= slen; slen = smax;
     rs = FFI_mitls_quic_process(server.quic_state, c_buffer, &clen, s_buffer, &slen);

@@ -213,9 +213,6 @@ extern quic_result MITLS_CALLCONV FFI_mitls_quic_process(quic_state *state, cons
 extern int MITLS_CALLCONV FFI_mitls_quic_get_exporter(quic_state *state, int early, /* out */ quic_secret *secret);
 extern void MITLS_CALLCONV FFI_mitls_quic_close(quic_state *state);
 
-extern int MITLS_CALLCONV FFI_mitls_find_custom_extension(mitls_state *state, int is_server, const unsigned char *exts, size_t exts_len, uint16_t ext_type, unsigned char **ext_data, size_t *ext_data_len);
-extern int MITLS_CALLCONV FFI_mitls_quic_find_custom_extension(quic_state *state, const unsigned char *exts, size_t exts_len, uint16_t ext_type, unsigned char **ext_data, size_t *ext_data_len);
-
 typedef struct {
   const unsigned char *sni;
   size_t sni_len;
@@ -223,16 +220,18 @@ typedef struct {
   size_t alpn_len;
   const unsigned char *extensions;
   size_t extensions_len;
-  const unsigned char *hrr_cookie;
-  size_t hrr_cookie_len;
 } mitls_hello_summary;
 
-// The functions below should only be used on client extensions
-extern int MITLS_CALLCONV FFI_mitls_get_hello_summary(const unsigned char *buffer, size_t buffer_len, mitls_hello_summary *summary);
-extern int MITLS_CALLCONV FFI_mitls_find_server_name(mitls_state *state, const unsigned char *exts, size_t exts_len, unsigned char **sni, size_t *sni_len);
-extern int MITLS_CALLCONV FFI_mitls_quic_find_server_name(quic_state *state, const unsigned char *exts, size_t exts_len, unsigned char **sni, size_t *sni_len);
+// N.B. *cookie must be freed with FFI_mitls_global_free as it is allocated in the global region
+extern int MITLS_CALLCONV FFI_mitls_get_hello_summary(const unsigned char *buffer, size_t buffer_len, mitls_hello_summary *summary, unsigned char **cookie, size_t *cookie_len);
+
+// *ext_data points to a location in exts - no freeing required
+extern int MITLS_CALLCONV FFI_mitls_find_custom_extension(int is_server, const unsigned char *exts, size_t exts_len, uint16_t ext_type, unsigned char **ext_data, size_t *ext_data_len);
 
 // Free 'out' variables returned by the FFI_mitls_quic*() family of functions.
 extern void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state, void* pv);
+
+// Free 'out' variables returned by functions that do not have a state as input
+extern void MITLS_CALLCONV FFI_mitls_global_free(void* pv);
 
 #endif // HEADER_MITLS_FFI_H
