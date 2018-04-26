@@ -192,11 +192,9 @@ mitls_nego_action nego_callback(void *cb_state, mitls_version ver,
   printf("Offered extensions:\n");
   dump(cexts, cexts_len);
   
-  quic_state *state = *(quic_state**)cb_state;
-
   unsigned char *qtp = NULL;
   size_t qtp_len;
-  if(FFI_mitls_quic_find_custom_extension(state, cexts, cexts_len, (uint16_t)0x1A, &qtp, &qtp_len))
+  if(FFI_mitls_find_custom_extension(1, cexts, cexts_len, (uint16_t)0x1A, &qtp, &qtp_len))
   {
     printf("Transport parameters:\n");
     dump(qtp, qtp_len);
