@@ -91,12 +91,13 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
         /\ witnessed (at_least n ent log)
 	      /\ sel h1 log == snoc ilog ent))))
 
+#set-options "--admit_smt_queries true"
 let encrypt #i e ad r p =
   let seqn = HST.op_Bang (ctr e.counter) in
   lemma_repr_bytes_values seqn;
   let ad' = LHAEPlain.makeAD i seqn ad in
   AEAD_GCM.encrypt #i e ad' r p
-
+#set-options "--admit_smt_queries false"
 
 (*------------------------------------------------------------------*)
 val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
