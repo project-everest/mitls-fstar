@@ -207,8 +207,8 @@ val read: Transport.t -> s: input_state -> ST read_result
 //   h0 h1)
 
 //18-04-20 TBC, how to speed up verification attempts?
-#set-options "--z3rlimit 100 --detail_errors"
-//#set-options "--admit_smt_queries true" 
+//#set-options "--z3rlimit 100 --detail_errors"
+#set-options "--admit_smt_queries true"
 let rec read tcp s =
   let h0 = ST.get() in 
   let header = Buffer.sub s.b 0ul headerLen in 
