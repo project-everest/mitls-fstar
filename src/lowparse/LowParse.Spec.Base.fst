@@ -461,13 +461,17 @@ let is_weaker_than
   (k1.parser_kind_metadata.parser_kind_metadata_total == true ==> k2.parser_kind_metadata.parser_kind_metadata_total == true) /\
   (Some? k1.parser_kind_subkind ==> k1.parser_kind_subkind == k2.parser_kind_subkind)
 
+(* AR: see bug#1349 *)
+unfold let coerce_to_bare_parser (t:Type0) (k2:parser_kind) (p:parser k2 t)
+  :Tot (bare_parser t) = p
+
 unfold
 let weaken (k1: parser_kind) (#k2: parser_kind) (#t: Type0) (p2: parser k2 t) : Pure (parser k1 t)
   (requires (k1 `is_weaker_than` k2))
   (ensures (fun _ -> True))
-= let p2b = p2 <: bare_parser t in
-  let p1 = p2b <: parser k1 t in
-  p1
+= (coerce_to_bare_parser t k2 p2) <: (parser k1 t)
+
+#reset-options
 
 // inline_for_extraction
 unfold
@@ -550,6 +554,15 @@ let glb_list
 
 unfold
 let coerce
+  (t2: Type)
+  (#t1: Type)
+  (x: t1)
+: Pure t2
+  (requires (t1 == t2))
+  (ensures (fun _ -> True))
+= (x <: t2)
+
+let coerce'
   (t2: Type)
   (#t1: Type)
   (x: t1)

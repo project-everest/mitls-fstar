@@ -392,7 +392,7 @@ let sum_tail
     sum_repr_type t' == sum_repr_type t /\
     (sum_enum t' <: enum (sum_key_type t) (sum_repr_type t)) == enum_tail' (sum_enum t) /\
     sum_type t' == sum_tail_type t /\
-    (forall (x : sum_tail_type t) . (sum_tag_of_data t' (coerce (sum_type t') x) <: sum_key_type t) == (sum_tag_of_data t (x <: sum_type t) <: sum_key_type t))
+    (forall (x : sum_tail_type t) . (sum_tag_of_data t' (coerce' (sum_type t') x) <: sum_key_type t) == (sum_tag_of_data t (x <: sum_type t) <: sum_key_type t))
   )))
 = Sum
     (sum_key_type t)
