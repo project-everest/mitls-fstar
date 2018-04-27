@@ -1,1 +1,114 @@
-[ "åü=\u001a½\u0011L.$agR>\u0006à", [] ]
+[
+  "åü=\u001a½\u0011L.$agR>\u0006à",
+  [
+    [
+      "StAE.is_stlhae",
+      1,
+      0,
+      1,
+      [
+        "@query", "disc_equation_TLSInfo.ID12",
+        "disc_equation_TLSInfo.PlaintextID",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "fc9f001526e82f4c4ffc6c89d6e4c702"
+    ],
+    [
+      "StAE.is_stlhae",
+      2,
+      0,
+      1,
+      [ "@query", "assumption_CryptoTypes.aead_cipher__uu___haseq" ],
+      0,
+      "04d0be6ac6e88d85ca891521f04df563"
+    ],
+    [
+      "StAE.is_stlhae",
+      3,
+      0,
+      1,
+      [ "@query", "assumption_CryptoTypes.aead_cipher__uu___haseq" ],
+      0,
+      "3363d7cfe27be0df552d4d7b48257460"
+    ],
+    [
+      "StAE.frag_plain_len",
+      1,
+      0,
+      1,
+      [ "@query" ],
+      0,
+      "a8c71c2454e0c30584ac30e77cd9dcd4"
+    ],
+    [
+      "StAE.frag_cipher_len",
+      1,
+      0,
+      1,
+      [ "@query", "equation_StAE.is_stream" ],
+      0,
+      "848336d51431e25c0dc40a031fb0e04f"
+    ],
+    [
+      "StAE.aeKeySize",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "constructor_distinct_TLSConstants.AEAD",
+        "disc_equation_TLSConstants.AEAD", "disc_equation_TLSInfo.ID12",
+        "disc_equation_TLSInfo.ID13", "disc_equation_TLSInfo.PlaintextID",
+        "equation_StAE.is_stlhae", "equation_StAE.is_stream",
+        "equation_StAE.stae_id", "equation_TLSInfo.aeAlg_of_id",
+        "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_TLSConstants.AEAD__0",
+        "projection_inverse_TLSConstants.AEAD__1",
+        "refinement_interpretation_StAE_Tm_refine_7f2a2c302ee268d1f2067f3ad49e35d9"
+      ],
+      0,
+      "5f288abe218bcbb6dc18cd96e0f332b7"
+    ],
+    [
+      "StAE.keyBytes",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "constructor_distinct_CryptoTypes.AES_128_GCM",
+        "constructor_distinct_CryptoTypes.AES_256_GCM",
+        "constructor_distinct_Tm_unit", "data_elim_TLSInfo.ID12",
+        "disc_equation_TLSConstants.AEAD", "disc_equation_TLSInfo.ID12",
+        "disc_equation_TLSInfo.ID13",
+        "equality_tok_CryptoTypes.AES_128_GCM@tok",
+        "equality_tok_CryptoTypes.AES_256_GCM@tok",
+        "equality_tok_QD.TLS_protocolVersion.TLS_1p3@tok",
+        "equation_AEADProvider.alg", "equation_AEADProvider.iv_length",
+        "equation_AEADProvider.salt_length",
+        "equation_CryptoTypes.aeadKeySize",
+        "equation_CryptoTypes.aeadRealIVSize",
+        "equation_QD.TLS_protocolVersion.protocolVersion",
+        "equation_StAE.aeKeySize", "equation_StAE.is_stlhae",
+        "equation_StAE.is_stream", "equation_StAE.stae_id",
+        "equation_StreamAE.id", "equation_StreamPlain.id",
+        "equation_TLSConstants.aeadAlg", "equation_TLSInfo.aeAlg_of_id",
+        "equation_TLSInfo.pv_of_id", "int_inversion",
+        "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
+        "proj_equation_TLSConstants.AEAD__0",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_StAE_Tm_refine_7f2a2c302ee268d1f2067f3ad49e35d9",
+        "refinement_interpretation_StreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88",
+        "refinement_interpretation_TLSInfo_Tm_refine_771d00c42e1fa557a792d8f0bf7b724d",
+        "refinement_interpretation_TLSInfo_Tm_refine_b371b18aea91964c12c83acc49841360",
+        "typing_CryptoTypes.aeadKeySize", "typing_StAE.is_stream",
+        "typing_StreamAE.alg"
+      ],
+      0,
+      "759c76e40145b12ab69d5820e5a3d063"
+    ]
+  ]
+]
