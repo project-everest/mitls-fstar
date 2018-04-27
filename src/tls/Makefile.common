@@ -64,7 +64,7 @@ endif
 			$(addprefix --include , $(INCLUDE_PATHS)) \
 			$(ROOTS) > $(DEP_FILE) \
 	)
-	sed -i.opt "s/cmx/cmo/g" $(DEP_FILE)
+	sed -i.opt -e "s/cmx/cmo/g" -e "s/source/old/g" $(DEP_FILE)
 
 $(DEP_FILE).dot:
 ifdef VERBOSE
