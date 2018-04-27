@@ -78,7 +78,7 @@ MITLS_BYTE_INPUTS=\
     $(KREMLIN_HOME)/_build/kremlib/C.cmo \
     $(MLCRYPTO_HOME)/CoreCrypto.cma \
     $(LOWC_HOME)/LowC.cma \
-    $(FFI_HOME)/FFICallbacks.cma \
+    $(FFI_HOME)/FFICallbacks.a \
     $(subst .ml,.cmo,$(subst TLSConstants.ml,TLSConstants.ml extract/OCaml/PKI.ml,$(ALL_ML_FILES))) \
     $(EXTRACT_DIR)/FFIRegister.cmo \
     extract/copied/kremstr.o
@@ -86,8 +86,8 @@ MITLS_BYTE_INPUTS=\
 mitls.exe: $(MITLS_INPUTS) test/mitls.cmx
 	$(OCAMLOPT) -cclib -L../pki -cclib -lmipki -linkall -linkpkg -g $^ -o $@ -thread
 
-mitls.byte: $(MITLS_BYTE_INPUTS) test/mitls.cmo
-	$(OCAMLC) -w -31 -cclib -L../pki -cclib -lmipki -linkall -linkpkg -g $^ -o mitls.exe -thread
+mitls.byte: $(MITLS_BYTE_INPUTS) test/mitls.cmo ../pki/libmipki.so
+	$(OCAMLC)   -cclib -L../pki -cclib -lmipki -linkall -linkpkg -g $^ -o mitls.exe -thread -w -31
 
 # FFI support - calling from C into miTLS. TODO: remove duplication somehow
 ifeq ($(OS),Windows_NT)
