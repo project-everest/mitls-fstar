@@ -31,6 +31,7 @@ OCAMLOPTS	=-package fstarlib,zarith,ctypes,ctypes.foreign -g \
 		  -I extract/mlstubs \
 		  -I .
 
+OCAMLC		= OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind c   $(OCAMLOPTS)
 OCAMLOPT	= OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind opt $(OCAMLOPTS)
 OCAMLMKLIB	= OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind mklib $(OCAMLOPTS)
 IMPL_CHOICE 	?= runtime_switch
@@ -59,7 +60,6 @@ endif
 
 %.o: %.c
 	$(CC) -I $(KREMLIN_HOME)/kremlib $^ -o $@ -c
-
 # We must insert PKI.cmx at the right spot in the list of inputs
 MITLS_INPUTS=\
     $(EXTRACT_DIR)/BufferBytes.cmx \
@@ -72,8 +72,22 @@ MITLS_INPUTS=\
     $(EXTRACT_DIR)/FFIRegister.cmx \
     extract/copied/kremstr.o
 
+MITLS_BYTE_INPUTS=\
+    $(EXTRACT_DIR)/BufferBytes.cmo \
+    $(EXTRACT_DIR)/Crypto_AEAD_Main.cmo \
+    $(KREMLIN_HOME)/_build/kremlib/C.cmo \
+    $(MLCRYPTO_HOME)/CoreCrypto.cma \
+    $(LOWC_HOME)/LowC.cma \
+    $(FFI_HOME)/FFICallbacks.cma \
+    $(subst .ml,.cmo,$(subst TLSConstants.ml,TLSConstants.ml extract/OCaml/PKI.ml,$(ALL_ML_FILES))) \
+    $(EXTRACT_DIR)/FFIRegister.cmo \
+    extract/copied/kremstr.o
+
 mitls.exe: $(MITLS_INPUTS) test/mitls.cmx
 	$(OCAMLOPT) -cclib -L../pki -cclib -lmipki -linkall -linkpkg -g $^ -o $@ -thread
+
+mitls.byte: $(MITLS_BYTE_INPUTS) test/mitls.cmo
+	$(OCAMLC) -w -31 -cclib -L../pki -cclib -lmipki -linkall -linkpkg -g $^ -o mitls.exe -thread
 
 # FFI support - calling from C into miTLS. TODO: remove duplication somehow
 ifeq ($(OS),Windows_NT)
@@ -128,22 +142,29 @@ cmitls.o: cmitls.c $(FFI_HOME)/mitlsffi.h
 cmitls.exe: cmitls.o $(LIBMITLS)
 	$(NATIVE_C_COMPILER) -g -o cmitls.exe cmitls.o $(LIBMITLS) ../pki/libmipki.dll $(NATIVE_C_LIBRARIES)
 
+test/mitls.cmo: test/mitls.ml $(subst .ml,.cmo,$(ALL_ML_FILES))
 test/mitls.cmx: test/mitls.ml $(subst .ml,.cmx,$(ALL_ML_FILES))
 
-extract/OCaml/Crypto_AEAD_Main.cmx: extract/mlstubs/Crypto_AEAD_Main.ml
+extract/OCaml/Crypto_AEAD_Main.cmo extract/OCaml/Crypto_AEAD_Main.cmx: \
+  extract/mlstubs/Crypto_AEAD_Main.ml
 
+extract/OCaml/FFIRegister.cmo: extract/mlstubs/FFIRegister.ml extract/OCaml/FFI.cmo extract/OCaml/QUIC.cmo
 extract/OCaml/FFIRegister.cmx: extract/mlstubs/FFIRegister.ml extract/OCaml/FFI.cmx extract/OCaml/QUIC.cmx
 
+extract/OCaml/AEADProvider.cmo: extract/OCaml/Crypto_AEAD_Main.cmo
 extract/OCaml/AEADProvider.cmx: extract/OCaml/Crypto_AEAD_Main.cmx
 
 # Because PKI is hand-written and is not part of the dependency graph (it's just
 # an fsti, so not extracted), we must insert it in the right spot *and* make it
 # take the proper dependencies.
+extract/OCaml/Test_Handshake.cmo: extract/OCaml/PKI.cmo
 extract/OCaml/Test_Handshake.cmx: extract/OCaml/PKI.cmx
 
-extract/OCaml/PKI.cmx: extract/mlstubs/PKI.ml extract/OCaml/TLSConstants.cmx
+extract/OCaml/PKI.cmo extract/OCaml/PKI.cmx: \
+  extract/mlstubs/PKI.ml extract/OCaml/TLSConstants.cmo
 
-extract/OCaml/BufferBytes.cmx: extract/mlstubs/BufferBytes.ml
+extract/OCaml/BufferBytes.cmo extract/OCaml/BufferBytes.cmx: \
+  extract/mlstubs/BufferBytes.ml
 
 %.cmx:
 ifdef VERBOSE
@@ -151,6 +172,14 @@ ifdef VERBOSE
 endif
 	$(subst \\,, \
 		$(OCAMLOPT) -w -8-11-26-20 -c $< -o $@ \
+	)
+
+%.cmo:
+ifdef VERBOSE
+	@echo -e "\033[0;32m=== Compiling $@ ...\033[;37m"
+endif
+	$(subst \\,, \
+		$(OCAMLC) -w -8-11-26-20 -c $< -o $@ \
 	)
 
 CERT_FILES=CAFile.pem server-ecdsa.crt server-ecdsa.key
@@ -172,6 +201,9 @@ else ifeq ($(UNAME),Linux)
 endif
 
 test: mitls.exe $(CERT_FILES)
+	$(PREFIX) ./mitls.exe
+
+test.byte: mitls.byte $(CERT_FILES)
 	$(PREFIX) ./mitls.exe
 
 clean:

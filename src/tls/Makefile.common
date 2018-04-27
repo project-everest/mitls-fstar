@@ -64,6 +64,7 @@ endif
 			$(addprefix --include , $(INCLUDE_PATHS)) \
 			$(ROOTS) > $(DEP_FILE) \
 	)
+	sed -i.opt "s/cmx/cmo/g" $(DEP_FILE)
 
 $(DEP_FILE).dot:
 ifdef VERBOSE
@@ -83,6 +84,7 @@ $(DEP_FILE).pdf: $(DEP_FILE).dot
 
 depend: $(DEP_FILE)
 
+-include $(DEP_FILE).opt
 -include $(DEP_FILE)
 
 # REMARK:
