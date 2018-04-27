@@ -1,16 +1,12 @@
 module Old.Handshake
 
-// provisional
-
-open FStar.HyperStack
-open FStar.HyperStack.ST
-
 open Mem
 open TLSConstants
 
 module HS = FStar.HyperStack 
-
+module Range = Range
 module Epochs = Old.Epochs
+module KeySchedule = Old.KeySchedule
 
 #set-options "--admit_smt_queries true"
 
@@ -191,7 +187,6 @@ let recv_ensures (s:hs) (h0:HS.mem) (result:incoming) (h1:HS.mem) =
     r1 == (if in_next_keys result then r0 + 1 else r0) /\
     (b2t (in_complete result) ==> r1 >= 0 /\ r1 = w1 /\ iT s Reader h1 >= 0 (*/\ completed (eT s Reader h1)*) )
 
-module Range = Range
 val recv_fragment: s:hs -> #i:TLSInfo.id -> rg:Range.frange i -> f:Range.rbytes rg -> ST incoming (* incoming transitions for our state machine *)
   (requires (hs_inv s))
   (ensures (recv_ensures s))
