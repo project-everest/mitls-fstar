@@ -6,10 +6,11 @@ all: FFICallbacks.cma FFICallbacks.cmxa
 clean:
 	rm -rf dllFFICallbacks.dll FFICallbacks.a FFICallbacks.cmi FFICallbacks.cmx FFICallbacks.cmxa FFICallbacks.o libFFICallbacks.a FFIRegister.cmi FFIRegister.cmx FFIRegister.o *~
 
-FFICallbacks.cmo FFICallbacks.cmi: FFICallbacks.mli
-	$(OCAMLC) -package batteries,zarith -c FFICallbacks.ml FFICallbacks.mli
+FFICallbacks.cmi: FFICallbacks.mli
+	$(OCAMLC) -package batteries,zarith -c FFICallbacks.mli
 
-ffi.o FFICallbacks.cmx: FFICallbacks.ml ffi.c FFICallbacks.cmi ffi.c mitlsffi.h
+ffi.o FFICallbacks.cmo FFICallbacks.cmx: FFICallbacks.ml ffi.c FFICallbacks.cmi ffi.c mitlsffi.h
+	$(OCAMLC) -package batteries,zarith -c FFICallbacks.ml -ccopt -Wall -ccopt -fPIC ffi.c
 	$(OCAMLOPT) -package batteries,zarith -c FFICallbacks.ml -ccopt -Wall -ccopt -fPIC ffi.c
 
 FFICallbacks.cmxa: FFICallbacks.cmx ffi.o
