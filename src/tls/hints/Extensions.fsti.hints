@@ -1,1 +1,95 @@
-[ "9ÉéÏ]•&r\u0018Â´ ÅB¹™", [] ]
+[
+  "9ÉéÏ]•&r\u0018Â´ ÅB¹™",
+  [
+    [
+      "Extensions.__proj__ClientPSK__item__identities",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Extensions.ClientPSK",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Extensions_Tm_refine_cab4c514d894d44191c3b7b5218d7d8f"
+      ],
+      0,
+      "7d347adcda22515d78cc412c38c295f5"
+    ],
+    [
+      "Extensions.__proj__ClientPSK__item__binders_len",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Extensions.ClientPSK",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Extensions_Tm_refine_cab4c514d894d44191c3b7b5218d7d8f"
+      ],
+      0,
+      "9e6e0e2fc4073c3ff2c8ea67c5fddde7"
+    ],
+    [
+      "Extensions.__proj__ServerPSK__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Extensions.ServerPSK",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Extensions_Tm_refine_80c71bcae317d0bd7f6fdc245fb17d57"
+      ],
+      0,
+      "63dde88164b49e832c4d430a39ae93be"
+    ],
+    [
+      "Extensions.client_psk_kexes",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_Extensions.psk_kex__uu___haseq",
+        "assumption_Prims.list__uu___haseq", "kinding_Extensions.psk_kex@tok"
+      ],
+      0,
+      "1fee01616e8efd25931027a2f60311d9"
+    ],
+    [
+      "Extensions.client_psk_kexes",
+      2,
+      2,
+      1,
+      [
+        "@query", "assumption_Extensions.psk_kex__uu___haseq",
+        "assumption_Prims.list__uu___haseq", "kinding_Extensions.psk_kex@tok"
+      ],
+      0,
+      "ace5ba8d3818ec2ae64e5074a885de87"
+    ],
+    [
+      "Extensions.client_psk_kexes",
+      3,
+      2,
+      1,
+      [
+        "@query", "assumption_Extensions.psk_kex__uu___haseq",
+        "assumption_Prims.list__uu___haseq", "kinding_Extensions.psk_kex@tok"
+      ],
+      0,
+      "2b2991d09f46db1f0e7c3f16c7ec2218"
+    ],
+    [
+      "Extensions.client_psk_kexes",
+      4,
+      2,
+      1,
+      [
+        "@query", "assumption_Extensions.psk_kex__uu___haseq",
+        "assumption_Prims.list__uu___haseq", "kinding_Extensions.psk_kex@tok"
+      ],
+      0,
+      "fa5e2721d59f1b8a4bad4c3599647f72"
+    ]
+  ]
+]
