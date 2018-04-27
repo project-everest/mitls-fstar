@@ -987,7 +987,7 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
     }
 
     if (cfg->enable_0rtt) {
-       st->cfg = FFI_ffiSetEarlyData(st->cfg, 0x7ffffffe);
+       st->cfg = FFI_ffiSetEarlyData(st->cfg, 0xffffffff);
     }
 
     if (cfg->ticket_callback) {

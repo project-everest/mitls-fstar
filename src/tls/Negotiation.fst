@@ -1214,12 +1214,12 @@ let rec filter_psk (l:list Extensions.pskIdentity)
   match l with
   | [] -> []
   | (id, _) :: t ->
-    match Ticket.check_ticket13 id with
+    (match Ticket.check_ticket13 id with
     | Some info -> (id, info) :: (filter_psk t)
     | None ->
       (match PSK.psk_lookup id with
       | Some info -> trace ("Loaded PSK from ticket <"^print_bytes id^">"); (id, info) :: (filter_psk t)
-      | None -> trace ("WARNING: the PSK <"^print_bytes id^"> has been filtered"); filter_psk t)
+      | None -> trace ("WARNING: the PSK <"^print_bytes id^"> has been filtered"); filter_psk t))
 
 // Registration of DH shares
 let rec register_shares (l:list pre_share)
@@ -1422,12 +1422,6 @@ let aux_extension_ok (o1, hrr) (e:Extensions.extension) =
             true) // FIXME
             //(extensionBytes e) = (extensionBytes e'))
 
-let rec forall_aux (#a:Type) (#b:Type) (env:b) (f: b -> a -> Tot bool) (l:list a)
-  : Tot bool
-  = match l with
-    | [] -> true
-    | hd::tl -> if f env hd then forall_aux env f tl else false
-
 val server_ClientHello: #region:rgn -> t region Server ->
   HandshakeMessages.ch -> log:HandshakeLog.t ->
   St (result serverMode)
@@ -1449,7 +1443,7 @@ let server_ClientHello #region ns offer log =
       List.Tot.mem hrr.hrr_cipher_suite o2.ch_cipher_suites &&
       o1.ch_compressions = o2.ch_compressions &&
       Some? o2.ch_extensions && Some? o1.ch_extensions &&
-      forall_aux (o1, hrr) aux_extension_ok (Some?.v o2.ch_extensions)
+      List.Helpers.forall_aux (o1, hrr) aux_extension_ok (Some?.v o2.ch_extensions)
     then
       let sm = computeServerMode ns.cfg offer ns.nonce in
       match sm with
