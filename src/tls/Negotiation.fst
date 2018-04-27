@@ -1207,11 +1207,6 @@ let compute_cs13 cfg o psks shares server_cert =
   let psk_kex = find_psk_key_exchange_modes o in
   Correct (compute_cs13_aux 0 o psks g_gx ncs psk_kex server_cert, g_hrr)
 
-let rec iutf8 (m:bytes) : St (s:string{String.length s < pow2 30 /\ utf8_encode s = m}) =
-    match iutf8_opt m with
-    | None -> trace ("Not a utf8 encoding of a string"); iutf8 m
-    | Some s -> s
-
 // Registration and filtering of PSK identities
 let rec filter_psk (l:list Extensions.pskIdentity)
   : St (list (PSK.pskid * PSK.pskInfo))
@@ -1219,9 +1214,6 @@ let rec filter_psk (l:list Extensions.pskIdentity)
   match l with
   | [] -> []
   | (id, _) :: t ->
-    //18-02-26 ?? review
-    let id8 = iutf8 id in
-    let id = utf8_encode id8 in // FIXME FStar.Bytes
     match Ticket.check_ticket13 id with
     | Some info -> (id, info) :: (filter_psk t)
     | None ->

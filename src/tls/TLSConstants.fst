@@ -1374,10 +1374,8 @@ let rec parseDistinguishedNameList data res =
       | Error z -> Error z
       | Correct (nameBytes,data) ->
         begin
-          match iutf8_opt nameBytes with
-          | None -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-          | Some name ->
-            if length (utf8_encode name) < 256 then
+            if length nameBytes < 256 then
+              let Some name = iutf8_opt nameBytes in
               let res = name :: res in
               parseDistinguishedNameList data res
             else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
