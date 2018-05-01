@@ -23,9 +23,6 @@ val config_of: hs -> ST config
 val version_of: hs -> ST TLSConstants.protocolVersion
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> h0 == h1)
-val resumeInfo_of: s:hs -> ST (TLSInfo.resumeInfo (role_of s))
-  (requires fun h0 -> True)
-  (ensures fun h0 _ h1 -> h0 == h1)
 val get_mode: hs -> ST Negotiation.mode
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> h0 == h1)
@@ -104,14 +101,13 @@ let in_complete (r:incoming)  = InAck? r && InAck?.complete r
 (* ----------------------- Control Interface -------------------------*)
 
 // Create instance for a fresh connection, with optional resumption for clients
-val create: r0:rid -> cfg:config -> r:role -> resume:TLSInfo.resumeInfo r -> ST hs
+val create: r0:rid -> cfg:config -> r:role -> ST hs
   (requires (fun h -> True))
   (ensures (fun h0 s h1 ->
     modifies Set.empty h0 h1 /\
     //fresh_subregion r0 (HS?.region s) h0 h1 /\
     // hs_inv s h1 /\
     // HS?.r s = r /\
-    // HS?.resume s = resume /\
     // HS?.cfg s = cfg /\
     logT s h1 == Seq.createEmpty ))
 

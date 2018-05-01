@@ -18,7 +18,7 @@
         "refinement_interpretation_StreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88"
       ],
       0,
-      "06ae34cf7cf0beb87a611136cf4a8590"
+      "9323d736e5f5be3a4fc817e9a102390f"
     ],
     [
       "StreamAE.ltag",
@@ -199,14 +199,14 @@
         "equation_FStar.Preorder.preorder_rel", "equation_FStar.UInt.fits",
         "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
         "equation_FStar.UInt32.n", "equation_StreamAE.counter",
-        "equation_TLSConstants.kdf_label",
+        "equation_TLSConstants.extract_label",
         "function_token_typing_FStar.UInt32.n", "primitive_Prims.op_AmpAmp",
         "primitive_Prims.op_LessThanOrEqual",
         "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
         "token_correspondence_FStar.Monotonic.Seq.increases",
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v",
-        "typing_TLSConstants.kdf_label"
+        "typing_TLSConstants.extract_label"
       ],
       0,
       "6ff87c4000ab664fcd0fb0d793d3749e"
@@ -584,7 +584,8 @@
         "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
         "equation_FStar.UInt32.n", "equation_Prims.nat",
         "equation_StreamAE.counter", "equation_StreamAE.id",
-        "equation_StreamPlain.id", "equation_TLSConstants.extract_label",
+        "equation_StreamPlain.id",
+        "equation_TLSConstants.extended_extract_label",
         "equation_TLSInfo.authId", "function_token_typing_FStar.UInt32.n",
         "function_token_typing_StreamAE.max_ctr",
         "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
@@ -596,7 +597,7 @@
         "refinement_interpretation_StreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88",
         "token_correspondence_FStar.Monotonic.Seq.increases",
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v",
-        "typing_TLSConstants.extract_label"
+        "typing_TLSConstants.extended_extract_label"
       ],
       0,
       "0f84444870a9022d02dba66f87949c0e"
@@ -809,7 +810,7 @@
         "projection_inverse_TLSConstants.AEAD__1"
       ],
       0,
-      "bc0c162af61ed56f0981cfa83be7af9e"
+      "6ce161c0657e3699a3ce382a6bec3d04"
     ],
     [
       "StreamAE.genReader",
@@ -856,7 +857,7 @@
         "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
         "equation_FStar.UInt32.n", "equation_Prims.nat",
         "equation_StreamAE.counter", "equation_StreamAE.reader",
-        "equation_TLSConstants.extract_label", "equation_TLSInfo.authId",
+        "equation_TLSConstants.kdf_label", "equation_TLSInfo.authId",
         "fuel_guarded_inversion_StreamAE.state",
         "function_token_typing_FStar.UInt32.n",
         "function_token_typing_StreamAE.max_ctr",
@@ -868,7 +869,7 @@
         "refinement_interpretation_StreamAE_Tm_refine_09ca3975302a8dca67cedeefb22ab80c",
         "token_correspondence_FStar.Monotonic.Seq.increases",
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v",
-        "typing_TLSConstants.extract_label"
+        "typing_TLSConstants.kdf_label"
       ],
       0,
       "cfab8c1ca1a0f0111f5a34444edca044"
@@ -1196,14 +1197,14 @@
         "equation_FStar.Preorder.preorder_rel", "equation_FStar.UInt.fits",
         "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
         "equation_FStar.UInt32.n", "equation_StreamAE.counter",
-        "equation_TLSConstants.extract_label",
+        "equation_TLSConstants.extended_extract_label",
         "function_token_typing_FStar.UInt32.n", "primitive_Prims.op_AmpAmp",
         "primitive_Prims.op_LessThanOrEqual",
         "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
         "token_correspondence_FStar.Monotonic.Seq.increases",
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v",
-        "typing_TLSConstants.extract_label"
+        "typing_TLSConstants.extended_extract_label"
       ],
       0,
       "5e3eae1f72ea3b7ef658dc87df5259fe"
