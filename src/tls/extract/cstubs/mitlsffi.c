@@ -1148,6 +1148,10 @@ int MITLS_CALLCONV FFI_mitls_get_hello_summary(const unsigned char *buffer, size
 {
   HEAP_REGION rgn;
   int ret = 0;
+  FStar_Pervasives_Native_option__QUIC_chSummary ch;
+
+  *cookie = NULL; *cookie_len = 0;
+  memset(&ch, 0, sizeof(ch));
 
   CREATE_HEAP_REGION(&rgn);
   if (!VALID_HEAP_REGION(rgn)) {
@@ -1156,10 +1160,9 @@ int MITLS_CALLCONV FFI_mitls_get_hello_summary(const unsigned char *buffer, size
 
   ENTER_HEAP_REGION(rgn);
   FStar_Bytes_bytes b = {.data = (const char*)buffer, .length = buffer_len};
-  FStar_Pervasives_Native_option__QUIC_chSummary ch = QUIC_peekClientHello(b);
+  ch = QUIC_peekClientHello(b);
 
   memset(summary, 0, sizeof(mitls_hello_summary));
-  *cookie = NULL; *cookie_len = 0;
   if(ch.tag == FStar_Pervasives_Native_Some)
   {
     QUIC_chSummary s = ch.v;
