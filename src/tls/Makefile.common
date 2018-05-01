@@ -43,7 +43,7 @@ endif
 # Project Files
 
 # Add more roots here!
-ROOTS ?= TLS.fst QUIC.fst Test.Main.fst 
+ROOTS ?= QUIC.fst Test.Main.fst 
 
 EVERYTHING=$(wildcard *.fst *.fsti Make* $(MITLS_HOME)/src/pki/* $(MITLS_HOME)/libs/ffi/* ideal-flags/* concrete-flags/* concrete-flags/$(FLAVOR)/*)
 
