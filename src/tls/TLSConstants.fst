@@ -1542,6 +1542,8 @@ type serverName =
 type alpn_entry = b:bytes{0 < length b /\ length b < 256}
 type alpn = l:list alpn_entry{List.Tot.length l < 256}
 
+type psk_identifier = identifier:bytes{length identifier < 65536}
+
 type pskInfo = {
   ticket_nonce: option bytes;
   time_created: UInt32.t;
@@ -1557,6 +1559,8 @@ type pskInfo = {
 type ticketInfo =
   | TicketInfo_12 of protocolVersion * cipherSuite * ems:bool
   | TicketInfo_13 of pskInfo
+
+type ticket_seal = b:bytes{length b < 65536}
 
 // 2018.03.10 SZ: Allow it to modify [psk_region]?
 // Missing refinements on arguments from types in PSK
@@ -1669,6 +1673,7 @@ noeq type config : Type0 = {
     offer_shares: CommonDH.supportedNamedGroups;
     //18-02-20 should it be a subset of named_groups?
     custom_extensions: custom_extensions;
+    use_tickets: list (psk_identifier * ticket_seal);
 
     (* Server side *)
     check_client_version_in_pms_for_old_tls: bool;

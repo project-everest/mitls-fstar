@@ -170,6 +170,9 @@ void* HeapRegionMalloc(size_t cb)
     }
     void *pv = HeapAlloc(heap->heap, 0, cb);
     UpdateStatisticsAfterMalloc(&heap->stats, pv, cb);
+    if (pv == NULL) {
+        RaiseException(MITLS_OUT_OF_MEMORY_EXCEPTION, EXCEPTION_NONCONTINUABLE, 0, NULL);
+    }
     
     return pv;
 }
@@ -182,9 +185,8 @@ void* HeapRegionCalloc(size_t num, size_t size)
         return NULL; // Integer overflow
     }
     void *pv = HeapRegionMalloc(cb);
-    if (pv) {
-        memset(pv, 0, cb);
-    }
+    memset(pv, 0, cb);
+
     return pv;
 }
 
@@ -222,6 +224,7 @@ typedef struct region_allocation {
 
 typedef struct region {
     LIST_HEAD(region_allocation_list, region_allocation) entries;
+    jmp_buf *penv;
 #if REGION_STATISTICS
     region_statistics stats;
 #endif    
@@ -248,7 +251,7 @@ int HeapRegionInitialize()
 // Global termination
 void HeapRegionCleanup(void)
 {
-    PrintRegionStatistics(NULL, &g_global_region.stats);
+    HeapRegionDestroy(g_global_region);
     pthread_key_delete(g_region_heap_slot);
     pthread_mutex_destroy(&g_global_region_lock);
 }
@@ -293,9 +296,14 @@ void PrintHeapRegionStatistics(HEAP_REGION rgn)
     PrintRegionStatistics(heap, &heap->stats);
 }
 
-void HeapRegionEnter(HEAP_REGION rgn)
+void HeapRegionEnter(HEAP_REGION rgn, jmp_buf *penv)
 {
     pthread_setspecific(g_region_heap_slot, rgn);
+    if (rgn == NULL) {
+        g_global_region.penv = penv;
+    } else {
+        rgn->penv = penv;
+    }
 }
 
 void HeapRegionLeave(void)
@@ -329,6 +337,8 @@ void* HeapRegionMalloc(size_t cb)
         return (void*)(e + 1); // Return the address of the byte following the LIST_ENTRY
     }
     else {
+        UpdateStatisticsAfterMalloc(&heap->stats, pv, cb);
+        longjmp(*heap->penv, 1);
         return NULL;
     }
 }
@@ -513,6 +523,7 @@ void* HeapRegionMalloc(size_t cb)
         return (void*)(e + 1); // Return the address of the byte following the LIST_ENTRY
     }
     else {
+        RtlRaiseStatus(MITLS_OUT_OF_MEMORY_EXCEPTION);
         return NULL;
     }
 }

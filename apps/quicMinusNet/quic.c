@@ -25,6 +25,11 @@ typedef enum {
   handshake_stateless_retry
 } hs_type;
 
+typedef struct {
+    quic_state *quic_state;
+    mipki_state *pki;
+} connection_state;
+
 void dump(const char *buffer, size_t len)
 {
   int i;
@@ -47,16 +52,19 @@ const char* pvname(mitls_version pv)
   return "(unknown)";
 }
 
-void print_hello_summary(mitls_hello_summary *ch)
+void print_hello_summary(mitls_hello_summary *ch, unsigned char *cookie, size_t cookie_len)
 {
   printf("~~~~~~~~~ Client Hello Summary ~~~~~~~~~~~\n");
-  printf("~ SNI = %s\n", ch->sni);
-  printf("~ ALPN = %s\n", ch->alpn);
-  printf("~ Cookie = ");
-  if(ch->hrr_cookie) dump(ch->hrr_cookie, ch->hrr_cookie_len);
+  printf("~ SNI = %s\n", ch->sni ? ch->sni : (const unsigned char*)"NULL");
+  printf("~ ALPN = ");
+  if(ch->alpn) dump(ch->alpn, ch->alpn_len);
   else printf("NULL\n");
-  printf("~ Extensions:\n");
-  dump(ch->extensions, ch->extensions_len);
+  printf("~ Cookie = ");
+  if(cookie) dump(cookie, cookie_len);
+  else printf("NULL\n");
+  printf("~ Extensions = ");
+  if(ch->extensions) dump(ch->extensions, ch->extensions_len);
+  else printf("NULL\n");
   printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
 }
 
@@ -70,6 +78,7 @@ mitls_nego_action nego_cb(void *cb_state, mitls_version ver,
   printf("Offered extensions:\n");
   dump(cexts, cexts_len);
 
+  connection_state *state = (connection_state*)cb_state;
   unsigned char *qtp = NULL;
   size_t qtp_len;
   int r = FFI_mitls_find_custom_extension(1, cexts, cexts_len, (uint16_t)0x1A, &qtp, &qtp_len);
@@ -119,28 +128,28 @@ void ticket_cb(void *st, const char *sni, const mitls_ticket *ticket)
 
 void* certificate_select(void *cbs, mitls_version ver, const unsigned char *sni, size_t sni_len, const unsigned char *alpn, size_t alpn_len, const mitls_signature_scheme *sigalgs, size_t sigalgs_len, mitls_signature_scheme *selected)
 {
-  mipki_state *st = (mipki_state*)cbs;
-  mipki_chain r = mipki_select_certificate(st, sni, sni_len, sigalgs, sigalgs_len, selected);
+  connection_state *state = (connection_state*)cbs;
+  mipki_chain r = mipki_select_certificate(state->pki, sni, sni_len, sigalgs, sigalgs_len, selected);
   return (void*)r;
 }
 
 size_t certificate_format(void *cbs, const void *cert_ptr, unsigned char *buffer)
 {
-  mipki_state *st = (mipki_state*)cbs;
+  connection_state *state = (connection_state*)cbs;
   mipki_chain chain = (mipki_chain)cert_ptr;
-  return mipki_format_chain(st, cert_ptr, buffer, MAX_CHAIN_LEN);
+  return mipki_format_chain(state->pki, cert_ptr, buffer, MAX_CHAIN_LEN);
 }
 
 size_t certificate_sign(void *cbs, const void *cert_ptr, const mitls_signature_scheme sigalg, const unsigned char *tbs, size_t tbs_len, unsigned char *sig)
 {
-  mipki_state *st = (mipki_state*)cbs;
+  connection_state *state = (connection_state*)cbs;
   size_t ret = MAX_SIGNATURE_LEN;
 
   printf("======== TO BE SIGNED <%04x>: (%zd octets) ========\n", sigalg, tbs_len);
   dump(tbs, tbs_len);
   printf("===================================================\n");
 
-  if(mipki_sign_verify(st, cert_ptr, sigalg, tbs, tbs_len, sig, &ret, MIPKI_SIGN))
+  if(mipki_sign_verify(state->pki, cert_ptr, sigalg, tbs, tbs_len, sig, &ret, MIPKI_SIGN))
     return ret;
 
   return 0;
@@ -148,8 +157,8 @@ size_t certificate_sign(void *cbs, const void *cert_ptr, const mitls_signature_s
 
 int certificate_verify(void *cbs, const unsigned char* chain_bytes, size_t chain_len, const mitls_signature_scheme sigalg, const unsigned char *tbs, size_t tbs_len, const unsigned char *sig, size_t sig_len)
 {
-  mipki_state *st = (mipki_state*)cbs;
-  mipki_chain chain = mipki_parse_chain(st, chain_bytes, chain_len);
+  connection_state *state = (connection_state*)cbs;
+  mipki_chain chain = mipki_parse_chain(state->pki, chain_bytes, chain_len);
 
   if(chain == NULL)
   {
@@ -158,20 +167,20 @@ int certificate_verify(void *cbs, const unsigned char* chain_bytes, size_t chain
   }
 
   // We don't validate hostname, but could with the callback state
-  if(!mipki_validate_chain(st, chain, ""))
+  if(!mipki_validate_chain(state->pki, chain, ""))
   {
     printf("WARNING: chain validation failed, ignoring.\n");
     // return 0;
   }
 
   size_t slen = sig_len;
-  if(!mipki_sign_verify(st, chain, sigalg, tbs, tbs_len, (char*)sig, &slen, MIPKI_VERIFY))
+  if(!mipki_sign_verify(state->pki, chain, sigalg, tbs, tbs_len, (char*)sig, &slen, MIPKI_VERIFY))
   {
     printf("ERROR: invalid signature.\n");
     return 0;
   }
 
-  mipki_free_chain(st, chain);
+  mipki_free_chain(state->pki, chain);
   return 1;
 }
 
@@ -205,7 +214,7 @@ int main(int argc, char **argv)
     }
   };
 
-  char *errmsg;
+  char *errmsg = NULL;
   int erridx;
 
   mipki_state *pki = mipki_init(pki_config, 1, NULL, &erridx);
@@ -245,7 +254,7 @@ int main(int argc, char **argv)
     .server_ticket = NULL,
     .exts = client_qtp,
     .exts_count = 1,
-    .callback_state = (void*)pki,
+    .callback_state = NULL,
     .ticket_callback = ticket_cb,
     .nego_callback = nego_cb,
     .cert_callbacks = &cert_callbacks,
@@ -259,7 +268,8 @@ int main(int argc, char **argv)
   };
 
   quic_result rc, rs;
-  quic_state *server = NULL, *client = NULL;
+  connection_state server = {.quic_state=NULL, pki=pki };
+  connection_state client = {.quic_state=NULL, pki=pki };
   quic_secret qs = {0}, qs_early = {0};
 
   FFI_mitls_init();
@@ -282,7 +292,8 @@ int main(int argc, char **argv)
       int server_complete = 0;
 
       printf("server create\n");
-      if(!FFI_mitls_quic_create(&server, &config))
+      config.callback_state = &server;
+      if(!FFI_mitls_quic_create(&server.quic_state, &config))
         {
           printf("quic_create server failed: %s\n", errmsg);
           return -1;
@@ -291,7 +302,8 @@ int main(int argc, char **argv)
       config.host_name = "localhost";
 
       printf("client create\n");
-      if(!FFI_mitls_quic_create(&client, &config))
+      config.callback_state = &client;
+      if(!FFI_mitls_quic_create(&client.quic_state, &config))
         {
           printf("quic_create client failed: %s\n", errmsg);
           return -1;
@@ -303,7 +315,7 @@ int main(int argc, char **argv)
         clen = cmax;
 
         printf("client call clen=%4zd slen=%4zd\n", clen, slen);
-        rc = FFI_mitls_quic_process(client, s_buffer, &slen, c_buffer, &clen);
+        rc = FFI_mitls_quic_process(client.quic_state, s_buffer, &slen, c_buffer, &clen);
         printf("client done clen=%4zd slen=%4zd status=%s\n", clen, slen, quic_result_string(rc));
         dump(c_buffer, clen);
 
@@ -319,12 +331,12 @@ int main(int argc, char **argv)
 
     /* clen -= 12; // simulating fragmentation */
     /* printf("server call clen=%4zd slen=%4zd\n", clen, slen); */
-    /* rs = FFI_mitls_quic_process(server, c_buffer, &clen, s_buffer, &slen); */
+    /* rs = FFI_mitls_quic_process(server.quic_state, c_buffer, &clen, s_buffer, &slen); */
     /* printf("server done clen=%4zd slen=%4zd rc=%d\n", clen, slen, rc); */
     /* clen += 12; */
 
         printf("server call clen=%4zd slen=%4zd\n", clen, slen);
-        rs = FFI_mitls_quic_process(server, c_buffer, &clen, s_buffer, &slen);
+        rs = FFI_mitls_quic_process(server.quic_state, c_buffer, &clen, s_buffer, &slen);
         printf("sender done clen=%4zd slen=%4zd status=%s\n", clen, slen, quic_result_string(rs));
         dump(s_buffer, slen);
 
@@ -338,7 +350,7 @@ int main(int argc, char **argv)
       while(!client_complete || !server_complete);
 
 /*
-      if (FFI_mitls_quic_get_peer_parameters(server, &ver, peer))
+      if (FFI_mitls_quic_get_peer_parameters(server.quic_state, &ver, peer))
         {
           printf("   === server received client parameters === \n");
           printf(" Client initial version: %x\n", ver);
@@ -347,7 +359,7 @@ int main(int argc, char **argv)
       else printf("Failed to get peer parameter: %s\n", errmsg);
 
       peer->tp_len = 256;
-      if (FFI_mitls_quic_get_peer_parameters(client, &ver, peer))
+      if (FFI_mitls_quic_get_peer_parameters(client.quic_state, &ver, peer))
         {
           printf("   === client received server parameters === \n");
           printf(" Server negotiated version: %x\n", ver);
@@ -356,8 +368,8 @@ int main(int argc, char **argv)
       else printf("Failed to get peer parameter: %s\n", errmsg);
 */
 
-      FFI_mitls_quic_get_exporter(client, 0, &qs);
-      FFI_mitls_quic_get_exporter(server, 0, &qs_early);
+      FFI_mitls_quic_get_exporter(client.quic_state, 0, &qs);
+      FFI_mitls_quic_get_exporter(server.quic_state, 0, &qs_early);
       if(memcmp(qs_early.secret, qs.secret, 64))
         {
           printf("  *** ERROR: exporter secrets do not match! ***\n");
@@ -410,7 +422,8 @@ int main(int argc, char **argv)
     printf("\n     INITIAL ECDHE HANDSHAKE (NO EARLY SECRET)\n\n");
 
     printf("server create\n");
-    if(!FFI_mitls_quic_create(&server, &config))
+    config.callback_state = &server;
+    if(!FFI_mitls_quic_create(&server.quic_state, &config))
       {
         printf("quic_create server failed: %s\n", errmsg);
         return -1;
@@ -419,49 +432,50 @@ int main(int argc, char **argv)
     config.host_name = "localhost";
 
     printf("client create\n");
-    if(!FFI_mitls_quic_create(&client, &config))
+    config.callback_state = &client;
+    if(!FFI_mitls_quic_create(&client.quic_state, &config))
       {
         printf("quic_create client failed: %s\n", errmsg);
         return -1;
       }
 
     c_buffer += clen; cmax -= clen; clen = cmax;
-    rc = FFI_mitls_quic_process(client, s_buffer, &slen, c_buffer, &clen);
+    rc = FFI_mitls_quic_process(client.quic_state, s_buffer, &slen, c_buffer, &clen);
     assert(rc == TLS_would_block);
     printf("client returns %s clen=%zd slen=%zd\n", quic_result_string(rc), clen, slen);
     printf("ClientHello[%4zd] ---->\n\n",clen);
 
     s_buffer += slen; smax -= slen; slen = smax;
-    rs = FFI_mitls_quic_process(server, c_buffer, &clen, s_buffer, &slen);
+    rs = FFI_mitls_quic_process(server.quic_state, c_buffer, &clen, s_buffer, &slen);
     assert(rs == TLS_server_accept);
-    FFI_mitls_quic_get_exporter(server, 0, &qs);
+    FFI_mitls_quic_get_exporter(server.quic_state, 0, &qs);
     printf("                        server returns %s clen=%zd slen=%zd\n", quic_result_string(rs), clen, slen);
     printf("                        secret="); dump(qs.secret, 32);
     printf("                  <---- ServerHello;(EncryptedExtensions; Certificate; CertVerify; Finished)[%4zd]\n\n",slen);
 
     c_buffer += clen; cmax -= clen; clen = cmax;
-    rc = FFI_mitls_quic_process(client, s_buffer, &slen, c_buffer, &clen);
+    rc = FFI_mitls_quic_process(client.quic_state, s_buffer, &slen, c_buffer, &clen);
     assert(rc == TLS_client_complete);
-    FFI_mitls_quic_get_exporter(client, 0, &qs);
+    FFI_mitls_quic_get_exporter(client.quic_state, 0, &qs);
     printf("client returns %s clen=%zd slen=%zd\n", quic_result_string(rc), clen, slen);
     printf("secret="); dump(qs.secret, 32);
     printf("(Finished) [%4zd] ---->\n\n",clen);
 
     s_buffer += slen; smax -= slen; slen = smax;
-    rs = FFI_mitls_quic_process(server, c_buffer, &clen, s_buffer, &slen);
+    rs = FFI_mitls_quic_process(server.quic_state, c_buffer, &clen, s_buffer, &slen);
     assert(rs == TLS_server_complete);
     printf("                        server returns %s clen=%zd slen=%zd\n", quic_result_string(rs), clen, slen);
 
     // NB we must call the server again to get a ticket
     c_buffer += clen; cmax -= clen; clen = 0;
     s_buffer += slen; smax -= slen; slen = smax;
-    rs = FFI_mitls_quic_process(server, c_buffer, &clen, s_buffer, &slen);
+    rs = FFI_mitls_quic_process(server.quic_state, c_buffer, &clen, s_buffer, &slen);
     assert(rs == TLS_would_block);
     printf("                        server returns %s clen=%zd slen=%zd\n", quic_result_string(rs), clen, slen);
     printf("                  <---- {Ticket}[%4zd]\n", slen);
 
     clen = cmax;
-    rc = FFI_mitls_quic_process(client, s_buffer, &slen, c_buffer, &clen);
+    rc = FFI_mitls_quic_process(client.quic_state, s_buffer, &slen, c_buffer, &clen);
     assert(rc == TLS_would_block);
     printf("client returns clen=%zd slen=%zd status=%s\n", clen, slen, quic_result_string(rc));
 
@@ -473,14 +487,15 @@ int main(int argc, char **argv)
       return -1;
     }
 
-    FFI_mitls_quic_free(server);
-    FFI_mitls_quic_free(client);
+    FFI_mitls_quic_close(server.quic_state);
+    FFI_mitls_quic_close(client.quic_state);
 
     config.is_server = 1;
     config.host_name = "";
 
     printf("server create\n");
-    if(!FFI_mitls_quic_create(&server, &config))
+    config.callback_state = &server;
+    if(!FFI_mitls_quic_create(&server.quic_state, &config))
       {
         printf("quic_create server failed: %s\n", errmsg);
         return -1;
@@ -490,7 +505,8 @@ int main(int argc, char **argv)
     config.server_ticket = qt;
 
     printf("client create\n");
-    if(!FFI_mitls_quic_create(&client, &config))
+    config.callback_state = &client;
+    if(!FFI_mitls_quic_create(&client.quic_state, &config))
       {
         printf("quic_create client failed: %s\n", errmsg);
         return -1;
@@ -498,46 +514,46 @@ int main(int argc, char **argv)
 
     s_buffer += slen; smax -= slen; slen = 0;
     c_buffer += clen; cmax -= clen; clen = cmax;
-    rc = FFI_mitls_quic_process(client, s_buffer, &slen, c_buffer, &clen);
+    rc = FFI_mitls_quic_process(client.quic_state, s_buffer, &slen, c_buffer, &clen);
     printf("client returns %s clen=%zd slen=%zd\n", quic_result_string(rc), clen, slen);
     assert(rc == TLS_client_early);
-    FFI_mitls_quic_get_exporter(client, 1, &qs_early);
+    FFI_mitls_quic_get_exporter(client.quic_state, 1, &qs_early);
     printf("early secret="); dump(qs_early.secret, 32);
     printf("ClientHello[%4zd] ---->\n\n",clen);
 
     s_buffer += slen; smax -= slen; slen = smax;
-    rs = FFI_mitls_quic_process(server, c_buffer, &clen, s_buffer, &slen);
+    rs = FFI_mitls_quic_process(server.quic_state, c_buffer, &clen, s_buffer, &slen);
     assert(rs == TLS_server_accept_with_early_data);
     printf("                        server returns %s clen=%zd slen=%zd\n", quic_result_string(rs), clen, slen);
-    FFI_mitls_quic_get_exporter(server, 1, &qs_early);
+    FFI_mitls_quic_get_exporter(server.quic_state, 1, &qs_early);
     printf("                        early secret="); dump(qs_early.secret, 32);
-    FFI_mitls_quic_get_exporter(server, 0, &qs);
+    FFI_mitls_quic_get_exporter(server.quic_state, 0, &qs);
     printf("                        secret="); dump(qs.secret, 32);
     printf("                  <---- ServerHello;(EncryptedExtensions; Certificate; CertVerify; Finished)[%4zd]\n\n",slen);
 
     c_buffer += clen; cmax -= clen; clen = cmax;
-    rc = FFI_mitls_quic_process(client, s_buffer, &slen, c_buffer, &clen);
+    rc = FFI_mitls_quic_process(client.quic_state, s_buffer, &slen, c_buffer, &clen);
     assert(rc == TLS_client_complete_with_early_data);
-    FFI_mitls_quic_get_exporter(client, 0, &qs);
+    FFI_mitls_quic_get_exporter(client.quic_state, 0, &qs);
     printf("client returns %s clen=%zd slen=%zd\n", quic_result_string(rc), clen, slen);
     printf("secret="); dump(qs.secret, 32);
     printf("(Finished) [%4zd] ---->\n\n",clen);
 
     s_buffer += slen; smax -= slen; slen = smax;
-    rs = FFI_mitls_quic_process(server, c_buffer, &clen, s_buffer, &slen);
+    rs = FFI_mitls_quic_process(server.quic_state, c_buffer, &clen, s_buffer, &slen);
     assert(rs == TLS_server_complete);
     printf("                        server returns clen=%zd slen=%zd status=%s\n", clen, slen, quic_result_string(rs));
 
     // NB we must call the server again to get a ticket
     c_buffer += clen; cmax -= clen; clen = 0;
     s_buffer += slen; smax -= slen; slen = smax;
-    rs = FFI_mitls_quic_process(server, c_buffer, &clen, s_buffer, &slen);
+    rs = FFI_mitls_quic_process(server.quic_state, c_buffer, &clen, s_buffer, &slen);
     assert(rs == TLS_would_block);
     printf("                        server returns %s clen=%zd slen=%zd\n", quic_result_string(rs), clen, slen);
     printf("                  <---- {Ticket}[%4zd]\n", slen);
 
     clen = cmax;
-    rc = FFI_mitls_quic_process(client, s_buffer, &slen, c_buffer, &clen);
+    rc = FFI_mitls_quic_process(client.quic_state, s_buffer, &slen, c_buffer, &clen);
     assert(rc == TLS_would_block);
     printf("client returns clen=%zd slen=%zd status=%s\n", clen, slen, quic_result_string(rc));
   }
@@ -548,7 +564,8 @@ int main(int argc, char **argv)
     printf("\n     STATELESS RETRY TEST\n\n");
 
     printf("server create\n");
-    if(!FFI_mitls_quic_create(&server, &config))
+    config.callback_state = &server;
+    if(!FFI_mitls_quic_create(&server.quic_state, &config))
       {
         printf("quic_create server failed: %s\n", errmsg);
         return -1;
@@ -558,85 +575,90 @@ int main(int argc, char **argv)
     config.host_name = "localhost";
 
     printf("client create\n");
-    if(!FFI_mitls_quic_create(&client, &config))
+    config.callback_state = &client;
+    if(!FFI_mitls_quic_create(&client.quic_state, &config))
       {
         printf("quic_create client failed: %s\n", errmsg);
         return -1;
       }
 
     c_buffer += clen; cmax -= clen; clen = cmax;
-    rc = FFI_mitls_quic_process(client, s_buffer, &slen, c_buffer, &clen);
+    rc = FFI_mitls_quic_process(client.quic_state, s_buffer, &slen, c_buffer, &clen);
     assert(rc == TLS_would_block);
     printf("client returns %s clen=%zd slen=%zd\n", quic_result_string(rc), clen, slen);
     printf("ClientHello[%4zd] ---->\n\n",clen);
 
-    assert(FFI_mitls_get_hello_summary(c_buffer, clen, &ch) == 1);
-    print_hello_summary(&ch);
+    unsigned char *cookie; size_t cookie_len;
+    assert(FFI_mitls_get_hello_summary(c_buffer, clen, &ch, &cookie, &cookie_len) == 1);
+    print_hello_summary(&ch, cookie, cookie_len);
+    FFI_mitls_global_free(cookie);
 
     def_action = TLS_nego_retry; // Force server to ask for retry
     s_buffer += slen; smax -= slen; slen = smax;
-    rs = FFI_mitls_quic_process(server, c_buffer, &clen, s_buffer, &slen);
+    rs = FFI_mitls_quic_process(server.quic_state, c_buffer, &clen, s_buffer, &slen);
     printf("                        server returns %s clen=%zd slen=%zd\n", quic_result_string(rs), clen, slen);
     printf("                  <---- HRR[%4zd]\n\n",slen);
     assert(rs == TLS_server_stateless_retry);
     def_action = TLS_nego_accept;
 
     // Kill the server (otherwise it defaults to stateful HRR)
-    FFI_mitls_quic_free(server);
+    FFI_mitls_quic_close(server.quic_state);
     config.is_server = 1;
+    config.callback_state = &server;
     printf("server re-create\n");
-    if(!FFI_mitls_quic_create(&server, &config))
+    if(!FFI_mitls_quic_create(&server.quic_state, &config))
       {
         printf("quic_create server failed: %s\n", errmsg);
         return -1;
       }
 
     c_buffer += clen; cmax -= clen; clen = cmax;
-    rc = FFI_mitls_quic_process(client, s_buffer, &slen, c_buffer, &clen);
+    rc = FFI_mitls_quic_process(client.quic_state, s_buffer, &slen, c_buffer, &clen);
     assert(rc == TLS_would_block);
     printf("client returns %s clen=%zd slen=%zd\n", quic_result_string(rc), clen, slen);
     printf("ClientHello2[%4zd] ---->\n\n",clen);
 
-    assert(FFI_mitls_get_hello_summary(c_buffer, clen, &ch) == 1);
-    print_hello_summary(&ch);
+    assert(FFI_mitls_get_hello_summary(c_buffer, clen, &ch, &cookie, &cookie_len) == 1);
+    print_hello_summary(&ch, cookie, cookie_len);
+    FFI_mitls_global_free(cookie);
 
     s_buffer += slen; smax -= slen; slen = smax;
-    rs = FFI_mitls_quic_process(server, c_buffer, &clen, s_buffer, &slen);
-    FFI_mitls_quic_get_exporter(server, 0, &qs);
+    rs = FFI_mitls_quic_process(server.quic_state, c_buffer, &clen, s_buffer, &slen);
+    FFI_mitls_quic_get_exporter(server.quic_state, 0, &qs);
     printf("                        server returns %s clen=%zd slen=%zd\n", quic_result_string(rs), clen, slen);
     printf("                        secret="); dump(qs.secret, 32);
     printf("                  <---- ServerHello;(EncryptedExtensions; Certificate; CertVerify; Finished)[%4zd]\n\n",slen);
     assert(rs == TLS_server_accept);
 
     c_buffer += clen; cmax -= clen; clen = cmax;
-    rc = FFI_mitls_quic_process(client, s_buffer, &slen, c_buffer, &clen);
+    rc = FFI_mitls_quic_process(client.quic_state, s_buffer, &slen, c_buffer, &clen);
     assert(rc == TLS_client_complete);
-    FFI_mitls_quic_get_exporter(client, 0, &qs);
+    FFI_mitls_quic_get_exporter(client.quic_state, 0, &qs);
     printf("client returns %s clen=%zd slen=%zd\n", quic_result_string(rc), clen, slen);
     printf("secret="); dump(qs.secret, 32);
     printf("(Finished) [%4zd] ---->\n\n",clen);
 
     s_buffer += slen; smax -= slen; slen = smax;
-    rs = FFI_mitls_quic_process(server, c_buffer, &clen, s_buffer, &slen);
+    rs = FFI_mitls_quic_process(server.quic_state, c_buffer, &clen, s_buffer, &slen);
     assert(rs == TLS_server_complete);
     printf("                        server returns %s clen=%zd slen=%zd\n", quic_result_string(rs), clen, slen);
 
     // NB we must call the server again to get a ticket
     c_buffer += clen; cmax -= clen; clen = 0;
     s_buffer += slen; smax -= slen; slen = smax;
-    rs = FFI_mitls_quic_process(server, c_buffer, &clen, s_buffer, &slen);
+    rs = FFI_mitls_quic_process(server.quic_state, c_buffer, &clen, s_buffer, &slen);
     assert(rs == TLS_would_block);
     printf("                        server returns %s clen=%zd slen=%zd\n", quic_result_string(rs), clen, slen);
     printf("                  <---- {Ticket}[%4zd]\n", slen);
 
     clen = cmax;
-    rc = FFI_mitls_quic_process(client, s_buffer, &slen, c_buffer, &clen);
+    rc = FFI_mitls_quic_process(client.quic_state, s_buffer, &slen, c_buffer, &clen);
     assert(rc == TLS_would_block);
     printf("client returns clen=%zd slen=%zd status=%s\n", clen, slen, quic_result_string(rc));
   }
 
-  FFI_mitls_quic_free(server);
-  FFI_mitls_quic_free(client);
+  FFI_mitls_quic_close(server.quic_state);
+  FFI_mitls_quic_close(client.quic_state);
   mipki_free(pki);
 
   printf("Ok\n");

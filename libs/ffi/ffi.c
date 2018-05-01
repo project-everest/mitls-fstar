@@ -446,15 +446,10 @@ void MITLS_CALLCONV FFI_mitls_close(mitls_state *state)
     }
 }
 
-void MITLS_CALLCONV FFI_mitls_free_msg(char *msg)
-{
-    free(msg);
-}
-
-void MITLS_CALLCONV FFI_mitls_free_packet(mitls_state *state, unsigned char *packet)
+void MITLS_CALLCONV FFI_mitls_free(mitls_state *state, void* pv)
 {
     // state is ignored in the OCaml build
-    free(packet);
+    free(pv);
 }
 
 void * copypacket(value packet, /* out */ size_t *packet_size)
@@ -1032,7 +1027,7 @@ int MITLS_CALLCONV FFI_mitls_quic_get_exporter(
     return ret;
 }
 
-void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state)
+void MITLS_CALLCONV FFI_mitls_quic_close(quic_state *state)
 {
     if (state != NULL) {
         caml_c_thread_register();

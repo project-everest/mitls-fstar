@@ -91,6 +91,7 @@ type ticket =
     li: logInfo ->
     rmsId: pre_rmsId li ->
     rms: bytes ->
+    nonce: bytes ->
     ticket_created: UInt32.t ->
     ticket_age_add: UInt32.t ->
     custom: bytes ->
@@ -118,7 +119,7 @@ let dummy_msId pv cs ems =
   StandardMS PMS.DummyPMS (Bytes.create 64ul 0z) (kefAlg pv cs ems)
 
 // not pure because of trace, but should be
-let parse (b:bytes) : St (option ticket) =
+let parse (b:bytes) (nonce:bytes) : St (option ticket) =
   trace ("Parsing ticket "^(hex_of_bytes b));
   if length b < 8 then None
   else
@@ -144,7 +145,7 @@ let parse (b:bytes) : St (option ticket) =
               let (| li, rmsId |) = dummy_rmsid ae h in
               let age_add = uint32_of_bytes age_add in
               let created = uint32_of_bytes created in
-              Some (Ticket13 cs li rmsId rms created age_add custom)
+              Some (Ticket13 cs li rmsId rms nonce created age_add custom)
          end
         | _ , CipherSuite _ _ _ ->
          begin
@@ -174,13 +175,15 @@ let check_ticket (b:bytes{length b <= 65551}) : St (option ticket) =
   else
     match ticket_decrypt b with
     | None -> trace ("Ticket decryption failed."); None
-    | Some plain -> parse plain
+    | Some plain ->
+      let nonce, _ = split b 12ul in
+      parse plain nonce
 
 let serialize = function
   | Ticket12 pv cs ems _ ms ->
     (versionBytes pv) @| (cipherSuiteBytes cs)
     @| abyte (if ems then 1z else 0z) @| (vlbytes 2 ms)
-  | Ticket13 cs _ _ rms created age custom ->
+  | Ticket13 cs _ _ rms _ created age custom ->
     (versionBytes TLS_1p3) @| (cipherSuiteBytes cs)
     @| (bytes_of_int32 created) @| (bytes_of_int32 age)
     @| (vlbytes 2 custom) @| (vlbytes 2 rms)
@@ -229,11 +232,10 @@ let check_cookie b =
           | Correct extra ->
             Some (hrr, digest, extra)
 
-let check_ticket13 b =
-  match check_ticket b with
-  | Some (Ticket13 cs li _ _ created age_add custom) ->
+let ticket_pskinfo (t:ticket) =
+  match t with
+  | Ticket13 cs li _ _ nonce created age_add custom ->
     let CipherSuite13 ae h = cs in
-    let nonce, _ = split b 12ul in
     Some ({
       ticket_nonce = Some nonce;
       time_created = created;
@@ -245,6 +247,11 @@ let check_ticket13 b =
       early_hash = h;
       identities = (empty_bytes, empty_bytes);
     })
+  | _ -> None
+
+let check_ticket13 b =
+  match check_ticket b with
+  | Some t -> ticket_pskinfo t
   | _ -> None
 
 let check_ticket12 b =
