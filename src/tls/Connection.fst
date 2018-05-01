@@ -5,6 +5,7 @@ module Connection
 open FStar.Heap
 open FStar.HyperStack
 // JP: please stop using opening so much stuff in scope srsly
+open FStar.Seq
 open FStar.Bytes
 open FStar.Error
 
@@ -12,7 +13,6 @@ open Mem
 open TLSError
 open TLSConstants
 open TLSInfo
-open Old.Epochs
 
 module Range = Range
 open Range
@@ -84,7 +84,7 @@ let c_log c = Handshake.epochs_of c.hs
 type st_inv c h = Handshake.hs_inv (C?.hs c) h
 
 //TODO: we will get the property that at most the current epochs' logs are extended, by making them monotonic in HS
-val epochs : c:connection -> h:HS.mem -> GTot (es:seq (epoch (Handshake.region_of c.hs) (Handshake.random_of c.hs)){
+val epochs : c:connection -> h:HS.mem -> GTot (es:seq (Epochs.epoch (Handshake.region_of c.hs) (Handshake.random_of c.hs)){
   Epochs.epochs_inv es /\ es == Handshake.logT c.hs h
 })
 let epochs c h = Handshake.logT c.hs h

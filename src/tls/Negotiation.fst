@@ -427,7 +427,7 @@ private let rec ticket13_pskinfo acc = function
   | [] -> List.Tot.rev acc
   | (tid, t) :: r -> ticket13_pskinfo ((tid, Some?.v (Ticket.ticket_pskinfo t))::acc) r
 
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 val computeOffer: r:role -> cfg:config -> nonce:TLSInfo.random
   -> ks:option CommonDH.keyShare -> resumeInfo -> now:UInt32.t
   -> Tot offer

@@ -135,7 +135,6 @@ let role_of       (s:hs) = s.r
 let random_of     (s:hs) = nonce s
 let config_of     (s:hs) = Nego.local_config s.nego
 let version_of    (s:hs) = Nego.version s.nego
-
 let get_mode (s:hs) = Nego.getMode s.nego
 let is_server_hrr (s:hs) = Nego.is_server_hrr s.nego
 let is_0rtt_offered (s:hs) =
@@ -609,22 +608,21 @@ let client_ServerHello (s:hs) ks (sh:sh) (* digest:Hashing.anyTag *): St incomin
         trace ("Offered SID="^(print_bytes mode.Nego.n_offer.ch_sessionID)^" Server SID="^(print_bytes mode.Nego.n_sessionID));
         if Nego.resume_12 mode then
          begin // 1.2 resumption
-         trace "Server accepted our 1.2 ticket.";
-         // Match cannot fail if resume_12 is true
-         let Some (tid, Ticket.Ticket12 pv cs ems msId ms) = fst (Nego.resume s.nego) in
-         let pv' = mode.Nego.n_protocol_version in
-         let cs' = mode.Nego.n_cipher_suite in
-         let sr = mode.Nego.n_server_random in
-         if pv = pv' && cs = cs' then // TODO check full session
+          trace "Server accepted our 1.2 ticket.";
+          let Some (tid, Ticket.Ticket12 pv cs ems msId ms) = fst (Nego.resume s.nego) in
+          let pv' = mode.Nego.n_protocol_version in
+          let cs' = mode.Nego.n_cipher_suite in
+          let sr = mode.Nego.n_server_random in
+          if pv = pv' && cs = cs' then // TODO check full session
            begin
-           let adk = KeySchedule.ks_client_12_resume s.ks sr pv cs ems msId ms in
-           let digestSH = HandshakeLog.hash_tag #ha s.log in
-           register s adk;
-           s.state := C_Wait_CCS1 digestSH;
-           InAck false false
+            let adk = KeySchedule.ks_client_12_resume s.ks sr pv cs ems msId ms in
+            let digestSH = HandshakeLog.hash_tag #ha s.log in
+            register s adk;
+            s.state := C_Wait_CCS1 digestSH;
+            InAck false false
            end
-         else
-           InError (AD_handshake_failure, "inconsitent protocol version or ciphersuite during resumption")
+          else
+            InError (AD_handshake_failure, "inconsitent protocol version or ciphersuite during resumption")
          end
         else
          begin // 1.2 full handshake
