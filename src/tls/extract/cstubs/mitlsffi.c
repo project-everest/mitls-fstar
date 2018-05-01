@@ -1154,7 +1154,6 @@ int MITLS_CALLCONV FFI_mitls_get_hello_summary(const unsigned char *buffer, size
     return 0;
   }
 
-  ENTER_HEAP_REGION(rgn);
   FStar_Bytes_bytes b = {.data = (const char*)buffer, .length = buffer_len};
   FStar_Pervasives_Native_option__QUIC_chSummary ch = QUIC_peekClientHello(b);
 
@@ -1201,7 +1200,6 @@ int MITLS_CALLCONV FFI_mitls_find_custom_extension(int is_server, const unsigned
     return 0;
   }
 
-  ENTER_HEAP_REGION(rgn);
   FStar_Bytes_bytes b = {.data = (const char*)exts, .length = exts_len};
   FStar_Pervasives_Native_option__FStar_Bytes_bytes ob;
   ob = FFI_ffiFindCustomExtension((bool)is_server, b, ext_type);
