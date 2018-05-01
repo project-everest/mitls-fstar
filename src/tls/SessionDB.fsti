@@ -5,7 +5,7 @@
 module SessionDB
 
 open TLSInfo
-open Platform.Date
+open FStar.Date
 
 //CF type SessionIndex = sessionID * role * Cert.hint
 //CF flattened for simpler refinements 

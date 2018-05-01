@@ -1,7 +1,8 @@
 ﻿(** hash algorithms and providers *)
 module Hashing.Spec
 
-open Platform.Bytes
+open FStar.UInt32
+open FStar.Bytes
 
 type alg = // CoreCrypto.hash_alg
   | MD5
@@ -14,27 +15,42 @@ type alg = // CoreCrypto.hash_alg
 //  | SHAKE256 of (n:nat{n >= 16})
 // see e.g. https://en.wikipedia.org/wiki/SHA-1 for a global comparison and lengths
 
+type alg13  = a:alg {a=SHA256 \/ a=SHA384 \/ a=SHA512}
+
+let string_of_alg = function
+  | MD5    -> "MD5"
+  | SHA1   -> "SHA1"
+  | SHA224 -> "SHA224"
+  | SHA256 -> "SHA256"
+  | SHA384 -> "SHA384"
+  | SHA512 -> "SHA512"
+
 // length of the input blocks, in bytes (used for specifying the outer hash loop)
 let blockLen = function
-  | MD5 | SHA1 | SHA224 | SHA256 -> 64
-  | SHA384 | SHA512 -> 128
-//  | SHAKE128 _ -> 168 | SHAKE256 _ -> 136
+  | MD5 | SHA1 | SHA224 | SHA256 ->  64ul
+  | SHA384 | SHA512              -> 128ul
+//| SHAKE128 _ -> 168 | SHAKE256 _ -> 136
+let blockLength a = v (blockLen a)
 
-// length of the resulting tag, in bytes (replicating CoreCrypto.hashSize)
-let tagLen (a:alg) : Tot (n:nat{n <= 64}) =
+// length of the resulting tag, in bytes
+let maxTagLen = 64ul
+let tagLen (a:alg) : Tot (n:UInt32.t {n <=^ maxTagLen}) =
   match a with
-  | MD5    -> 16
-  | SHA1   -> 20
-  | SHA224 -> 28 // truncated SHA256
-  | SHA256 -> 32
-  | SHA384 -> 48 // truncated SHA512
-  | SHA512 -> 64
+  | MD5    -> 16ul
+  | SHA1   -> 20ul
+  | SHA224 -> 28ul // truncated SHA256
+  | SHA256 -> 32ul
+  | SHA384 -> 48ul // truncated SHA512
+  | SHA512 -> 64ul
+let tagLength a = v (tagLen a)
 //  | SHAKE128 d -> d
 //  | SHAKE256 d -> d
-type tag (a:alg) = lbytes (tagLen a)
+type tag (a:alg) = lbytes32 (tagLen a)
+type anyTag = lbytes32 maxTagLen
+let lemma_maxLen (a:alg): Lemma (tagLen a <=^ maxTagLen) = ()
 
 // The hash of the empty string, used in KS
-#set-options "--lax" //17-05-08 TODO size of bytes constants.
+#set-options "--admit_smt_queries true" //17-05-08 TODO size of bytes constants.
 let emptyHash : a:alg -> Tot (tag a) =
   function
   | MD5 -> bytes_of_hex "d41d8cd98f00b204e9800998ecf8427e"
@@ -45,21 +61,44 @@ let emptyHash : a:alg -> Tot (tag a) =
   | SHA512 -> bytes_of_hex "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"
 #reset-options
 
-// A "placeholder" hash whose bytes are all 0 (used in KS)
-let zeroHash (a:alg) : Tot (tag a) =
-  createBytes (tagLen a) (FStar.Char.char_of_int 0)
+// A "placeholder" hash whose bytes are all 0, used for key-derivation in Handshake.Secret
+let zeroHash (a:alg): Tot (tag a) = Bytes.create (tagLen a) 0uy
 
-let maxTagLen = 64
-type anyTag = lbytes maxTagLen
-let lemma_maxLen (a:alg): Lemma (tagLen a <= maxTagLen) = ()
 
 // internal hash state for incremental computation
 // with initial value and core algorithm, accumulating an extra block into the current state
 
-assume type acc (a:alg)
-assume val acc0: a:alg -> Tot (acc a)
-assume val compress: #a:alg -> acc a -> lbytes (blockLen a) -> Tot (acc a)
-assume val truncate: #a:alg -> acc a -> Tot (tag a) // just keeping the first tagLen bytes
+// cwinter: keeping implementation so as not to break extraction.
+// assume type acc (a:alg)
+// assume val acc0: a:alg -> Tot (acc a)
+// assume val compress: #a:alg -> acc a -> lbytes32 (blockLen a) -> Tot (acc a)
+// assume val truncate: #a:alg -> acc a -> Tot (tag a) // just keeping the first tagLen bytes
+
+//18-02-26 TODO reconcile with fake abstract implementation in quic2c, which was:
+
+//NS, JR: A very dubious change here, replacing an assumed type and functions on it
+//        Otherwise, this doesn't compile at all
+
+abstract
+let acc (a:alg) = bytes
+
+abstract
+let acc0 (a:alg) : acc a = empty_bytes
+
+abstract
+let compress (#a:alg) (_:acc a) (l:lbytes32 (blockLen a)) = l <: acc a //??
+
+module U32 = FStar.UInt32 
+
+abstract
+let truncate (#a:alg) (ac:acc a): Tot (lbytes32 (tagLen a)) =
+  let l = tagLen a in
+  assume (U32.(Bytes.len ac <=^ tagLen a));
+  assume (U32.(l <=^ Bytes.len ac));
+  let r = Bytes.slice ac 0ul l in
+  assume (U32.(len r =^ l));
+  r //?? just keeping the first tagLen bytes
+
 (*
 let acc0 = function
   | MD5 ->  [0x67452301; 0xefcdab89; 0x98badcfe; 0x10325476] // A, B, C, D
@@ -70,47 +109,62 @@ let acc0 = function
   | SHA512 -> [0x6a09e667f3bcc908; 0xbb67ae8584caa73b; 0x3c6ef372fe94f82b; 0xa54ff53a5f1d36f1; 0x510e527fade682d1; 0x9b05688c2b3e6c1f; 0x1f83d9abfb41bd6b; 0x5be0cd19137e2179]
 *)
 
-val hash2: #a:alg -> acc a -> b:bytes { length b % blockLen a = 0 } -> Tot (acc a) (decreases (length b))
+val hash2: #a:alg -> acc a -> b:bytes {length b % blockLength a = 0} -> Tot (acc a) (decreases (length b))
 let rec hash2 #a v b =
-  if length b = 0 then v
+  if len b = 0ul then v
   else
-    let c,b = split b (blockLen a) in
+    let bl = blockLen a in
+    assume (U32.(0ul <=^ bl && bl <^ len b));
+    let c,b = split b bl in
     hash2 (compress v c) b
+
+(** maximal input lengths for hashing and hmac, overly limited by our UInt32 of bytes lengths *)
+let maxLength a: nat = pow2 32 - blockLength a - 9
+let hashable a = b: bytes {length b <= maxLength a}
+let macable a = b: bytes {length b + blockLength a <= maxLength a}
 
 // for convenience, we treat inputs as sequences of bytes, not bits.
 // but note what's encoded in the suffix is the length in bits.
-
-let suffixLen (a:alg) (len:nat) : n:nat {(n + len) % blockLen a = 0} =
+private 
+let suffixLength (a:alg) (len:UInt32.t {v len <= maxLength a}): n:nat {(n + v len) % blockLength a = 0 /\ n <= blockLength a + 9} =
+  let blocklen = v (blockLen a) in 
   let lenlen = match a with | SHA384 | SHA512 -> 8 | _ -> 4 in
-  let required = len + 1 + lenlen in // minimal length after padding and encoding the length
+  let required = v len + 1 + lenlen in // minimal length after padding and encoding the length
   let zeros = // minimal extra padding for block alignment
-    if required % blockLen a = 0 then 0 else blockLen a - (required % blockLen a) in
+    if required % blocklen = 0 
+    then 0
+    else blocklen - (required % blocklen) in
     //was, harder to prove: required + blockLen a - ((required - 1) % blockLen a + 1) in
   1 + zeros + lenlen
 
 // injective encoding for variable-length inputs
 // we add either 8 or 16 bytes of length and 1+ bytes of padding
-assume val suffix: a:alg -> len:nat -> Tot (c:lbytes (suffixLen a len))
+private 
+val suffix: a:alg -> len:UInt32.t {v len <= maxLength a} -> Tot (lbytes (suffixLength a len))
+// 2018.04.23 SZ: TODO: this is a placeholder, define properly
+let suffix a len =
+ Bytes.create (FStar.UInt32.uint_to_t (suffixLength a len)) 0uy
 
 // computed in one step (specification)
-val hash: a:alg -> bytes -> Tot (lbytes (tagLen a))
+val hash: a:alg -> b:hashable a -> Tot (lbytes32 (tagLen a))
 let hash a b =
-  let padded = b @| suffix a (length b) in
+  let q = suffix a (len b) in
+  assume (FStar.UInt.fits (length b + length q) 32);
+  let padded = b @| q in
   let v = hash2 (acc0 a) padded in
-  truncate v
-
+  let r = truncate v in
+  assert (U32.(len r <=^ tagLen a));
+  r
 
 // HMAC specification
 // in contrast with RFC 2104 (which take any key length),
 // in TLS, the HMAC key has the same length as the hash [TLS1.3, 4.4.3]
 type hkey (a:alg) = tag a
 
-val hmac: a:alg -> k:hkey a -> message:bytes -> Tot (tag a)
-
-private let xor #l a b = xor l a b
-
+val hmac: a:alg -> k:hkey a -> text:macable a -> Tot (tag a)
 let hmac a key message =
-  let xkey = key @| createBytes (blockLen a - tagLen a) 0x0z  in
-  let outer_key_pad = xor xkey (createBytes (blockLen a) 0x5cz) in
-  let inner_key_pad = xor xkey (createBytes (blockLen a) 0x36z) in
+  let xkey = key @| create U32.(blockLen a -^ tagLen a) 0x0z  in
+  let outer_key_pad = xor (blockLen a) xkey (create (blockLen a) 0x5cz) in
+  let inner_key_pad = xor (blockLen a) xkey (create (blockLen a) 0x36z) in
+  assume (FStar.UInt.fits (length inner_key_pad + length message) 32);
   hash a (outer_key_pad @| hash a (inner_key_pad @| message))

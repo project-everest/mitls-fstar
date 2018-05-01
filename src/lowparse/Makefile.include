@@ -1,0 +1,52 @@
+# This file can be used elsewhere (e.g. in the miTLS makefile)
+
+LOWPARSE_SPEC_FILES= \
+        LowParse.Math.fst \
+	LowParse.Bytes.fst \
+        LowParse.BigEndian.fst \
+	LowParse.Spec.Base.fst \
+	LowParse.Spec.Combinators.fst \
+        LowParse.Spec.Int.fsti \
+        LowParse.Spec.Int.Aux.fst \
+	LowParse.Spec.Int.fst \
+        LowParse.Spec.Int.Unique.fst \
+	LowParse.Spec.FLData.fst \
+	LowParse.Spec.VLData.fst \
+	LowParse.Spec.Bytes.fst \
+	LowParse.Spec.Enum.fst \
+	LowParse.Spec.Sum.fst \
+	LowParse.Spec.List.fst \
+	LowParse.Spec.Seq.fst \
+	LowParse.Spec.Array.fst \
+	LowParse.Spec.fst \
+
+
+LOWPARSE_SLOW_FILES= \
+	LowParse.SLow.Base.fst \
+	LowParse.SLow.Combinators.fst \
+	LowParse.SLow.List.fst \
+	LowParse.SLow.FLData.fst \
+        LowParse.Bytes32.fst \
+        LowParse.BigEndianImpl.fst \
+        LowParse.SLow.Int.fsti \
+        LowParse.SLow.Int.Aux.fst \
+        LowParse.SLow.Int.fst \
+	LowParse.SLow.VLData.fst \
+        LowParse.SLow.Array.fst \
+        LowParse.SLow.Bytes.fst \
+	LowParse.SLow.Enum.fst \
+	LowParse.SLow.Tac.Enum.fst \
+        LowParse.SLow.Sum.fst \
+        LowParse.SLow.Tac.Sum.fst \
+        LowParse.SLow.fst \
+        LowParseExample.Aux.fst \
+        LowParseExample.fst \
+        LowParseExample2.fsti \
+        LowParseExample2.fst \
+
+
+LOWPARSE_FILES= \
+	$(LOWPARSE_SPEC_FILES) \
+	$(LOWPARSE_SLOW_FILES) \
+
+

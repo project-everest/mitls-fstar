@@ -1,0 +1,34 @@
+LIBRARY libmitls
+
+; See mitlsffi.h
+EXPORTS
+    FFI_mitls_accept_connected
+    FFI_mitls_cleanup
+    FFI_mitls_close
+    FFI_mitls_configure
+    FFI_mitls_configure_alpn
+    FFI_mitls_configure_cert_callbacks
+    FFI_mitls_configure_cipher_suites
+    FFI_mitls_configure_early_data
+    FFI_mitls_configure_named_groups
+    FFI_mitls_configure_signature_algorithms
+    FFI_mitls_configure_nego_callback
+    FFI_mitls_configure_ticket_callback
+    FFI_mitls_connect
+    FFI_mitls_free_packet
+    FFI_mitls_get_cert
+    FFI_mitls_get_exporter
+    FFI_mitls_init
+    FFI_mitls_quic_create
+    FFI_mitls_quic_free
+    FFI_mitls_quic_get_exporter
+    FFI_mitls_quic_process
+    FFI_mitls_receive
+    FFI_mitls_resume
+    FFI_mitls_send
+    FFI_mitls_set_ticket_key
+    FFI_mitls_set_trace_callback
+    FFI_mitls_find_custom_extension
+    FFI_mitls_find_server_name
+    ;in mitlsffi.h but not implemented:  FFI_mitls_find_alpn
+    

@@ -84,7 +84,7 @@ let dump c =
 
 let ticketed c =
   match (Connection.c_cfg c).peer_name with
-  | Some n -> Some? (Ticket.lookup n)
+  | Some n -> Some? (PSK.lookup n)
   | None -> false
 
 let client config host port offerpsk =

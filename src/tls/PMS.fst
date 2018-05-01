@@ -2,9 +2,7 @@
 
 (* Split from KEF *)
 
-open FStar.HyperStack.All
-
-open Platform.Bytes
+open FStar.Bytes
 open TLSConstants
 open CoreCrypto
 
@@ -43,7 +41,7 @@ let coerceRSA (pk:RSAKey.pk) (cv:protocolVersion) b = ConcreteRSAPMS(b)
 let leakRSA (pk:RSAKey.pk) (cv:protocolVersion) pms =
   match pms with
 //  #if ideal
-  | IdealRSAPMS(_) -> Platform.Error.unexpected "pms is dishonest" //MK changed to unexpected from unreachable
+  | IdealRSAPMS(_) -> FStar.Error.unexpected "pms is dishonest" //MK changed to unexpected from unreachable
 //  #endif
   | ConcreteRSAPMS(b) -> b
 
@@ -63,18 +61,18 @@ type dhpms =
   | ConcreteDHPMS of dhrepr
 
 //#if ideal
-let honestDHPMS (g:CommonDH.group) (gx:CommonDH.share g) (gy:CommonDH.share g) pms =
+let honestDHPMS (g:CommonDH.group) (gx:CommonDH.ishare g) (gy:CommonDH.rshare g gx) pms =
   match pms with
   | IdealDHPMS(s)    -> true
   | ConcreteDHPMS(s) -> false
 //#endif
 
-let coerceDH (g:CommonDH.group) (gx:CommonDH.share g) (gy:CommonDH.share g) b =
+let coerceDH (g:CommonDH.group) (gx:CommonDH.ishare g) (gy:CommonDH.rshare g gx) b =
   ConcreteDHPMS(b)
 
 type pms =
   | RSAPMS of RSAKey.pk * protocolVersion * rsapms
-  | DHPMS: g:CommonDH.group -> CommonDH.share g -> CommonDH.share g -> dhpms -> pms
+  | DHPMS: g:CommonDH.group -> gx:CommonDH.ishare g -> CommonDH.rshare g gx -> dhpms -> pms
   | DummyPMS
 
 let honestPMS = function

@@ -16,11 +16,11 @@
 #include "mitls.h"
 extern "C" {
 #include "..\..\libs\ffi\mitlsffi.h"
+#include "..\..\src\pki\mipki.h"
 }
 
-void MITLS_ProcessMessages(char *outmsg, char *errmsg);
-int MITLS_CALLCONV MITLS_send_callback(struct _FFI_mitls_callbacks *callbacks, const void *buffer, size_t buffer_size);
-int MITLS_CALLCONV MITLS_recv_callback(struct _FFI_mitls_callbacks *callbacks, void *buffer, size_t buffer_size);
+int MITLS_CALLCONV MITLS_send_callback(void *ctx, const unsigned char *buffer, size_t buffer_size);
+int MITLS_CALLCONV MITLS_recv_callback(void *ctx, unsigned char *buffer, size_t buffer_size);
 
 typedef enum _TLS_WORK_ITEM_TYPE {
     TLS_CONNECT,
@@ -45,7 +45,7 @@ typedef struct _ConnectionState {
 
     TLS_WORK_ITEM *item; // ptr to work item while InitializeSecurityContext is running, NULL afterwards.
     mitls_state *state;
-    struct _FFI_mitls_callbacks callbacks;
+    mipki_state *pki;
 
     HANDLE hOutputIsReady;
     HANDLE hNextCallReady;
@@ -58,6 +58,7 @@ typedef struct _ConnectionState {
     bool OutputBufferBusy;
     unsigned long fContextReq;
     SECURITY_STATUS status;
+    const char *HostName;
 
     // The pInput buffer to actually read from.  This is initially a copy of the
     // caller's SECBUFFER_TOKEN SecBuffer, but as it is incrementally read from,
@@ -73,7 +74,6 @@ typedef struct _ConnectionState {
 } ConnectionState;
 
 typedef struct _TLS_CONNECT_WORK_ITEM {
-    const char *HostName;
     ConnectionState *state;     // bugbug: this can be leaked in some codepaths.
 } TLS_CONNECT_WORK_ITEM;
 
@@ -143,15 +143,66 @@ SEC_APPLICATION_PROTOCOL_LIST *GetNextList(SEC_APPLICATION_PROTOCOL_LIST *pList)
     return pNext;
 }
 
+void* MITLS_certificate_select(void *cbs, mitls_version ver,
+    const unsigned char *sni, size_t sni_len,
+    const unsigned char *alpn, size_t alpn_len,
+    const mitls_signature_scheme *sigalgs, size_t sigalgs_len,
+    mitls_signature_scheme *selected)
+{
+    ConnectionState *state = (ConnectionState*)cbs;
+    mipki_chain r = mipki_select_certificate(state->pki, (char*)sni, sni_len, sigalgs, sigalgs_len, selected);
+    return (void*)r;
+}
+
+size_t MITLS_certificate_format(void *cbs, const void *cert_ptr, unsigned char *buffer)
+{
+    ConnectionState *state = (ConnectionState*)cbs;
+    mipki_chain chain = (mipki_chain)cert_ptr;
+    return mipki_format_chain(state->pki, chain, (char*)buffer, MAX_CHAIN_LEN);
+}
+
+size_t MITLS_certificate_sign(void *cbs, const void *cert_ptr, const mitls_signature_scheme sigalg, const unsigned char *tbs, size_t tbs_len, unsigned char *sig)
+{
+    ConnectionState *state = (ConnectionState*)cbs;
+    size_t ret = MAX_SIGNATURE_LEN;
+
+    if (mipki_sign_verify(state->pki, cert_ptr, sigalg, (char*)tbs, tbs_len, (char*)sig, &ret, MIPKI_SIGN))
+        return ret;
+
+    return 0;
+}
+
+int MITLS_certificate_verify(void *cbs, const unsigned char* chain_bytes, size_t chain_len, const mitls_signature_scheme sigalg, const unsigned char *tbs, size_t tbs_len, const unsigned char *sig, size_t sig_len)
+{
+    ConnectionState *state = (ConnectionState*)cbs;
+    mipki_chain chain = mipki_parse_chain(state->pki, (char*)chain_bytes, chain_len);
+
+    if (chain == NULL)
+    {
+        _Print("ERROR: failed to parse certificate chain");
+        return 0;
+    }
+
+    // We don't validate hostname, but could with the callback state
+    if (!mipki_validate_chain(state->pki, chain, state->HostName))
+    {
+        _Print("WARNING: chain validation failed, ignoring.");
+        // return 0;
+    }
+
+    size_t slen = sig_len;
+    int r = mipki_sign_verify(state->pki, chain, sigalg, (char*)tbs, tbs_len, (char*)sig, &slen, MIPKI_VERIFY);
+    mipki_free_chain(state->pki, chain);
+    return r;
+}
+
+
 void ProcessConnect(TLS_CONNECT_WORK_ITEM* item)
 {
     ConnectionState *state = item->state;
 
-    char *outmsg;
-    char *errmsg;
-    _Print("FFI_mitls_configure - TlsVersion=%s hostname=%s", state->cred->TlsVersion, item->HostName);
-    int ret = FFI_mitls_configure(&state->state, state->cred->TlsVersion, item->HostName, &outmsg, &errmsg);
-    MITLS_ProcessMessages(outmsg, errmsg);
+    _Print("FFI_mitls_configure - TlsVersion=%s hostname=%s", state->cred->TlsVersion, state->HostName);
+    int ret = FFI_mitls_configure(&state->state, state->cred->TlsVersion, state->HostName);
     if (ret == 0) {
         // Failed
         _Print("MITLS Configure failed");
@@ -171,6 +222,22 @@ void ProcessConnect(TLS_CONNECT_WORK_ITEM* item)
             return;
         }
     }
+
+    int erridx;
+    state->pki = mipki_init(NULL, 0, NULL, &erridx);
+    if (!state->pki) {
+        _Print("mipki_init failed");
+        state->status = SEC_E_INTERNAL_ERROR;
+        return;
+    }
+
+    mitls_cert_cb cert_callbacks = {
+        MITLS_certificate_select,
+        MITLS_certificate_format,
+        MITLS_certificate_sign,
+        MITLS_certificate_verify
+    };
+    ret = FFI_mitls_configure_cert_callbacks(state->state, state, &cert_callbacks);
 
     if (state->pApplicationProtocols) {
         SEC_APPLICATION_PROTOCOLS  *pProtocols = (SEC_APPLICATION_PROTOCOLS *)state->pApplicationProtocols->pvBuffer;
@@ -201,10 +268,10 @@ void ProcessConnect(TLS_CONNECT_WORK_ITEM* item)
         }
     }
 
-    state->callbacks.send = MITLS_send_callback;
-    state->callbacks.recv = MITLS_recv_callback;
-    ret = FFI_mitls_connect(&state->callbacks, state->state, &outmsg, &errmsg);
-    MITLS_ProcessMessages(outmsg, errmsg);
+    ret = FFI_mitls_connect(state,
+                            MITLS_send_callback,
+                            MITLS_recv_callback,
+                            state->state);
     if (ret == 0) {
         // Failed
         _Print("MITLS Connect failed");
@@ -213,8 +280,7 @@ void ProcessConnect(TLS_CONNECT_WORK_ITEM* item)
     }
     _Print("FFI_mitls_get_cert");
     size_t cb;
-    void *pb = FFI_mitls_get_cert(state->state, &cb, &outmsg, &errmsg);
-    MITLS_ProcessMessages(outmsg, errmsg);
+    void *pb = FFI_mitls_get_cert(state->state, &cb);
     if (pb == NULL) {
         _Print("Failed to get the peer certificate");
         state->status = SEC_E_INTERNAL_ERROR;
@@ -242,13 +308,10 @@ void ProcessSend(TLS_SEND_WORK_ITEM* item)
     // Reality is far different.  WinInet passes just 3:  TOKEN/DATA/TOKEN
 
     // Send the application data, the plaintext, to miTLS
-    PVOID pvBuffer = state->ActualInputToken.pvBuffer;
+    const unsigned char *pvBuffer = (const unsigned char *)state->ActualInputToken.pvBuffer;
     DWORD cbBuffer = state->ActualInputToken.cbBuffer;
 
-    char *outmsg;
-    char *errmsg;
-    int ret = FFI_mitls_send(state->state, pvBuffer, cbBuffer, &outmsg, &errmsg);
-    MITLS_ProcessMessages(outmsg, errmsg);
+    int ret = FFI_mitls_send(state->state, pvBuffer, cbBuffer);
     if (ret == 0) {
         // Failed
         _Print("MITLS Send failed");
@@ -262,13 +325,10 @@ void ProcessRecv(TLS_RECV_WORK_ITEM* item)
 {
     ConnectionState *state = item->state;
 
-    char *outmsg;
-    char *errmsg;
     size_t cbReceived;
 
-    VOID *pvReceived = FFI_mitls_receive(state->state, &cbReceived, &outmsg, &errmsg);
-    MITLS_ProcessMessages(outmsg, errmsg);
-    if (pvReceived == NULL) {
+    unsigned char *pReceived = FFI_mitls_receive(state->state, &cbReceived);
+    if (pReceived == NULL) {
         // Failed
         _Print("MITLS Reecive failed");
         state->status = SEC_E_INTERNAL_ERROR;
@@ -286,7 +346,7 @@ void ProcessRecv(TLS_RECV_WORK_ITEM* item)
     }
     if (!OutputBuffer) {
         _Print("Couldn't find a SECBUFFER_DATA to write into!");
-        FFI_mitls_free_packet(pvReceived);
+        FFI_mitls_free_packet(state->state, pReceived);
         state->status = SEC_E_INTERNAL_ERROR;
         return;
     } else if (cbOutputBuffer < cbReceived) {
@@ -303,7 +363,7 @@ void ProcessRecv(TLS_RECV_WORK_ITEM* item)
             state->pOutput->pBuffers[1].BufferType = SECBUFFER_DATA;
             state->pOutput->pBuffers[1].cbBuffer = (ULONG)cbReceived;
             state->pOutput->pBuffers[1].pvBuffer = OutputBuffer;
-            memcpy(OutputBuffer, pvReceived, cbReceived);
+            memcpy(OutputBuffer, pReceived, cbReceived);
             if (state->pOutput->cBuffers > 2) {
                 state->pOutput->pBuffers[2].BufferType = SECBUFFER_STREAM_TRAILER;
                 state->pOutput->pBuffers[2].cbBuffer = 0;
@@ -317,7 +377,7 @@ void ProcessRecv(TLS_RECV_WORK_ITEM* item)
         }
     }
 
-    FFI_mitls_free_packet(pvReceived);
+    FFI_mitls_free_packet(state->state, pReceived);
     state->status = SEC_E_OK;
 }
 
@@ -330,6 +390,8 @@ void ProcessDisconnect(TLS_DISCONNECT_WORK_ITEM* item)
     state->item = NULL;
     state->state = NULL;
     state->status = SEC_E_OK;
+    free((void*)state->HostName);
+    free(state);
 }
 
 DWORD WINAPI MITLS_Threadproc(
@@ -337,8 +399,6 @@ DWORD WINAPI MITLS_Threadproc(
 )
 {
     ConnectionState *state = (ConnectionState*)lpThreadParameter;
-
-    FFI_mitls_thread_register();
 
     for (;;) {
         WaitForSingleObject(state->hqueueReady, INFINITE);
@@ -370,7 +430,6 @@ DWORD WINAPI MITLS_Threadproc(
                 SetEvent(item->hWorkItemCompleted);
                 break;
             case TLS_EXIT_THREAD:
-                FFI_mitls_thread_unregister();
                 delete item;
                 state->item = NULL;
                 return 0;
@@ -384,8 +443,14 @@ DWORD WINAPI MITLS_Threadproc(
     }
 }
 
+void MITLS_CALLCONV TraceCallback(const char *msg)
+{
+    _Print("%s", msg);
+}
+
 BOOL MITLS_Initialize(void)
 {
+    FFI_mitls_set_trace_callback(TraceCallback);
     int ret = FFI_mitls_init();
     if (ret == 0) {
         _Print("mitls_init failed.  Unable to continue");
@@ -393,18 +458,6 @@ BOOL MITLS_Initialize(void)
     }
 
     return TRUE;
-}
-
-void MITLS_ProcessMessages(char *outmsg, char *errmsg)
-{
-    if (outmsg) {
-        _Print("mitls: %s", outmsg);
-        FFI_mitls_free_msg(outmsg);
-    }
-    if (errmsg) {
-        _Print("mitls: ERROR %s", errmsg);
-        FFI_mitls_free_msg(errmsg);
-    }
 }
 
 void _PrintPSecBuffer(PSecBuffer b , bool fDump)
@@ -502,9 +555,9 @@ ParseOutputBufferDesc(
 
 
 
-int MITLS_CALLCONV MITLS_send_callback(struct _FFI_mitls_callbacks *callbacks, const void *buffer, size_t buffer_size)
+int MITLS_CALLCONV MITLS_send_callback(void *ctx, const unsigned char *buffer, size_t buffer_size)
 {
-    ConnectionState *state = CONTAINING_RECORD(callbacks, ConnectionState, callbacks);
+    ConnectionState *state = (ConnectionState*)ctx;
 
     _Print("MITLS wants to send %p %d", buffer, (int)buffer_size);
     _PrintBuffer(buffer, (int)buffer_size);
@@ -515,7 +568,7 @@ int MITLS_CALLCONV MITLS_send_callback(struct _FFI_mitls_callbacks *callbacks, c
     }
 
     if (state->item->Type == TLS_SEND) {
-        const char *pb = (const char*)buffer;
+        const unsigned char *pb = buffer;
         size_t cb = buffer_size;
         for (ULONG i = 0; cb && i < state->pOutput->cBuffers; ++i) {
             size_t cbcopy = min(cb, state->pOutput->pBuffers[i].cbBuffer);
@@ -585,9 +638,9 @@ int MITLS_CALLCONV MITLS_send_callback(struct _FFI_mitls_callbacks *callbacks, c
     return (int)buffer_size;
 }
 
-int MITLS_CALLCONV MITLS_recv_callback(struct _FFI_mitls_callbacks *callbacks, void *buffer, size_t buffer_size)
+int MITLS_CALLCONV MITLS_recv_callback(void *ctx, unsigned char *buffer, size_t buffer_size)
 {
-    ConnectionState *state = CONTAINING_RECORD(callbacks, ConnectionState, callbacks);
+    ConnectionState *state = (ConnectionState*)ctx;
 
     _Print("MITLS wants to recv %p %d", buffer, (int)buffer_size);
 
@@ -768,6 +821,7 @@ SEC_ENTRY MITLS_InitializeSecurityContextA(
         state->ActualInputToken.cbBuffer = 0;
         state->fDeleteOnComplete = false;
         state->pApplicationProtocols = pApplicationProtocols;
+        state->HostName = _strdup(pszTargetName);
 
         // The documentation indicates that the input buffers must be NULL on first call.  However,
         // Wininet passes a list, which may be empty, or contain SECBUFFER_TOKEN_BINDING and/or
@@ -778,7 +832,6 @@ SEC_ENTRY MITLS_InitializeSecurityContextA(
         item->Type = TLS_CONNECT;
         item->ThreadId = GetCurrentThreadId();
         item->hWorkItemCompleted = CreateEventW(NULL, FALSE, FALSE, NULL);
-        item->Connect.HostName = pszTargetName;
         item->Connect.state = state;
         EnterCriticalSection(&state->queueLock);
         state->mitlsQueue.push(item);

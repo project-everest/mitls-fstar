@@ -4,23 +4,25 @@ multiplexing StatefulLHAE and StreamAE with (some) length hiding
 (for now, under-specifying ciphertexts lengths and values)
 *)
 module StAE
+module HST = FStar.HyperStack.ST //Added automatically
 
-open FStar.HyperHeap
+
 open FStar.HyperStack
-open Platform.Bytes
+open FStar.Bytes
 
+open Mem
 open TLSConstants
 open TLSInfo
 
-module HH   = FStar.HyperHeap
+
 module HS   = FStar.HyperStack
-module MR   = FStar.Monotonic.RRef
+
 module MS   = FStar.Monotonic.Seq
 module C    = Content
 
 module Stream = StreamAE
 module StLHAE = StatefulLHAE
-
+module Range = Range
 #set-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -44,7 +46,12 @@ type stae_id = i:id {is_stream i \/ is_stlhae i}
 ////////////////////////////////////////////////////////////////////////////////
 
 let frag_plain_len (#i:id{is_stream i}) (f:C.fragment i): StreamPlain.plainLen =
-  snd (C.rg i f) + 1
+  let r = snd (C.rg i f) + 1 in
+  assume (StreamPlain.plainLength r);
+  r
+
+let frag_cipher_len (#i:id{is_stream i}) (f:C.fragment i) =
+  frag_plain_len f + Stream.ltag i
 
 // CONCRETE KEY MATERIALS, for leaking & coercing.
 // (each implementation splits it into encryption keys, IVs, MAC keys, etc)
@@ -64,6 +71,7 @@ type keyBytes (i:stae_id) = lbytes (aeKeySize i)
 ////////////////////////////////////////////////////////////////////////////////
 //`state i rw`, a sum to cover StreamAE (1.3) and StatefulLHAE (1.2)
 ////////////////////////////////////////////////////////////////////////////////
+#set-options "--admit_smt_queries true"
 noeq type state (i:id) (rw:rw) =
   | Stream: u:unit{is_stream i} -> Stream.state i rw -> state i rw
   | StLHAE: u:unit{is_stlhae i} -> StLHAE.state i rw -> state i rw
@@ -101,9 +109,22 @@ let tolerate_decrypt_failure (#i:id) (r:reader i)
   match r with
   | StLHAE _ _ -> false
   | Stream _ st ->
-    let ctr = MR.m_read (StreamAE.ctr st.StreamAE.counter) in
+    let ctr = HST.op_Bang (StreamAE.ctr st.StreamAE.counter) in
     let ID13 (KeyID #li (ExpandedSecret _ t _)) = i in
     0 = ctr && ClientHandshakeTrafficSecret? t
+
+let tolerate_ccs (#i:id) (r:reader i)
+  : ST bool
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 -> modifies_none h0 h1)
+  =
+  match r with
+  | StLHAE _ _ -> false
+  | Stream _ st ->
+    let ctr = ! (StreamAE.ctr st.StreamAE.counter) in
+    let ID13 (KeyID #li (ExpandedSecret _ t _)) = i in
+    0 = ctr && (ServerHandshakeTrafficSecret? t ||
+      ClientHandshakeTrafficSecret? t || ClientEarlyTrafficSecret? t)
 
 // our view to AE's ideal log (when idealized, ignoring ciphers) and counter
 // TODO: write down their joint monotonic specification: both are monotonic,
@@ -134,6 +155,7 @@ let entry (i:id) =
      AEAD_GCM.entry i
    else False
 
+private
 let ptext (#i:id) (ent:entry i): Tot (C.fragment i) =
   if is_stream i then
     Stream.Entry?.p #i ent
@@ -142,18 +164,18 @@ let ptext (#i:id) (ent:entry i): Tot (C.fragment i) =
 
 //A projection of fragments from Stream.entries
 let fragments (#i:id) (#rw:rw) (s:state i rw{authId i}) (h:mem): GTot (frags i) =
-  let entries = MR.m_sel #(log_region s) #_ #MS.grows h (ilog s) in
+  let entries = HS.sel #_ #MS.grows h (ilog s) in
   MS.map ptext entries
 
 val lemma_fragments_snoc_commutes: #i:id -> w:writer i{authId i}
   -> h0:mem -> h1:mem -> e:entry i
   -> Lemma (let log = ilog w in
-           MR.m_sel #(log_region w) #_ #MS.grows h1 log ==
-	   Seq.snoc (MR.m_sel #(log_region w) #_ #MS.grows h0 log) e ==>
+           HS.sel #_ #MS.grows h1 log ==
+	   Seq.snoc (HS.sel #_ #MS.grows h0 log) e ==>
 	   fragments w h1 == Seq.snoc (fragments w h0) (ptext e))
 let lemma_fragments_snoc_commutes #i w h0 h1 e =
   let log = ilog w in
-  MS.map_snoc ptext (MR.m_sel #(log_region w) #_ #MS.grows h0 log) e
+  MS.map_snoc ptext (HS.sel #_ #MS.grows h0 log) e
 
 //A predicate stating that the fragments have fs as a prefix
 let fragments_prefix (#i:id) (#rw:rw) (w:state i rw{authId i}) (fs:frags i) (h:mem) : GTot Type0 =
@@ -164,12 +186,12 @@ val fragments_prefix_stable: #i:id -> #rw:rw
   -> w:state i rw{authId i} -> h:mem
   -> Lemma (let fs = fragments w h in
 	   MS.grows fs fs
-	   /\ MR.stable_on_t #(log_region w) #_ #(MS.grows #(entry i)) (ilog w)
+	   /\ HST.stable_on_t #(log_region w) #_ #(MS.grows #(entry i)) (ilog w)
 	     (fragments_prefix w fs))
 let fragments_prefix_stable #i #rw w h =
   let fs = fragments w h in
   let log = ilog w in
-  MS.seq_extension_reflexive fs;
+  // MS.seq_extension_reflexive fs; //NS: seems no longer necessary
   MS.map_prefix_stable #_ #_ #(log_region w) log ptext fs
 
 
@@ -179,8 +201,8 @@ let fragments_prefix_stable #i #rw w h =
 
 let seqnT (#i:id) (#rw:rw) (s:state i rw) h : GTot nat =
   match s with
-  | Stream _ s -> MR.m_sel h (Stream.ctr (Stream.State?.counter s))
-  | StLHAE _ s -> MR.m_sel h (AEAD_GCM.ctr (StLHAE.counter s))
+  | Stream _ s -> HS.sel h (Stream.ctr (Stream.State?.counter s))
+  | StLHAE _ s -> HS.sel h (AEAD_GCM.ctr (StLHAE.counter s))
 
 //it's incrementable if it doesn't overflow
 let incrementable (#i:id) (#rw:rw) (s:state i rw) (h:mem) =
@@ -219,10 +241,10 @@ let trigger_frame (h:mem) = True
 let frame_f (#a:Type) (f:mem -> GTot a) (h0:mem) (s:Set.set rid) =
   forall h1.{:pattern trigger_frame h1}
         trigger_frame h1
-        /\ (HH.equal_on s h0.h h1.h ==> f h0 == f h1)
+        /\ (HS.equal_on s h0.h h1.h ==> f h0 == f h1)
 
 val frame_seqT_auto: i:id -> rw:rw -> s:state i rw -> h0:mem -> h1:mem ->
-  Lemma (requires   HH.equal_on (Set.singleton (region s)) h0.h h1.h
+  Lemma (requires   HS.equal_on (Set.singleton (region s)) h0.h h1.h
 		  /\ Map.contains h0.h (region s))
         (ensures seqnT s h0 = seqnT s h1)
 	[SMTPat (seqnT s h0);
@@ -231,7 +253,7 @@ val frame_seqT_auto: i:id -> rw:rw -> s:state i rw -> h0:mem -> h1:mem ->
 let frame_seqT_auto i rw s h0 h1 = ()
 
 val frame_fragments_auto: i:id{authId i} -> rw:rw -> s:state i rw -> h0:mem -> h1:mem ->
-  Lemma (requires    HH.equal_on (Set.singleton (log_region s)) h0.h h1.h
+  Lemma (requires    HS.equal_on (Set.singleton (log_region s)) h0.h h1.h
 		  /\ Map.contains h0.h (log_region s))
         (ensures fragments s h0 == fragments s h1)
 	[SMTPat (fragments s h0);
@@ -244,7 +266,7 @@ let frame_fragments_auto i rw s h0 h1 = ()
 //Experimenting with reads clauses: probably unnecessary
 ////////////////////////////////////////////////////////////////////////////////
 let reads (s:Set.set rid) (a:Type) =
-    f: (h:mem -> GTot a){forall h1 h2. (HH.equal_on s h1.h h2.h /\ Set.subset s (Map.domain h1.h))
+    f: (h:mem -> GTot a){forall h1 h2. (HS.equal_on s h1.h h2.h /\ Set.subset s (Map.domain h1.h))
 				  ==> f h1 == f h2}
 
 (*
@@ -255,9 +277,9 @@ let fragments' #i #rw s = fun h -> fragments #i #rw s h
 (*------------------------------------------------------------------*)
 let genPost (#i:id) parent h0 (w:writer i) h1 =
   let r = region #i #Writer w in
-  HH.modifies Set.empty h0.h h1.h /\
-  HH.extends r parent /\
-  stronger_fresh_region r h0 h1 /\
+  HS.modifies_transitively Set.empty h0 h1 /\
+  HS.extends r parent /\
+  HS.fresh_region r h0 h1 /\
   color r = color parent /\
   seqnT #i #Writer w h1 = 0 /\
   (authId i ==> fragments #i #Writer w h1 == Seq.createEmpty) // we need to re-apply #i knowning authId
@@ -275,13 +297,13 @@ let gen parent i =
 
 #set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
-  (requires (fun h0 -> HyperHeap.disjoint parent (region #i #Writer w))) //16-04-25  we may need w.region's parent instead
+  (requires (fun h0 -> HS.disjoint parent (region #i #Writer w))) //16-04-25  we may need w.region's parent instead
   (ensures  (fun h0 (r:reader i) h1 ->
                modifies Set.empty h0 h1 /\
                log_region r = region #i #Writer w /\
                extends (region r) parent /\
 	       color (region r) = color parent /\
-               stronger_fresh_region (region r) h0 h1 /\
+               HS.fresh_region (region r) h0 h1 /\
                //op_Equality #(log_ref w.region i) w.log r.log /\
                seqnT r h1 = 0))
 // encryption, recorded in the log; safe instances are idealized
@@ -289,11 +311,11 @@ let genReader parent #i w =
   match w with
   | Stream _ w ->
     lemma_ID13 i;
-    assume(StreamAE.(HyperHeap.disjoint parent (AEADProvider.region #i w.aead)));
+    assume(StreamAE.(HS.disjoint parent (AEADProvider.region #i w.aead)));
     Stream () (Stream.genReader parent #i w)
   | StLHAE _ w ->
     lemma_ID12 i;
-    assume(AEAD_GCM.(HyperHeap.disjoint parent (AEADProvider.region #i w.aead)));
+    assume(AEAD_GCM.(HS.disjoint parent (AEADProvider.region #i w.aead)));
     StLHAE () (StLHAE.genReader parent #i w)
 
 
@@ -309,13 +331,13 @@ val coerce: parent:rgn -> i:stae_id{~(authId i)} -> keyBytes i -> ST (writer i)
 #set-options "--z3rlimit 100"
 let coerce parent i kiv =
   if is_stream i then
-    let kv,iv = Platform.Bytes.split kiv (CoreCrypto.aeadKeySize (Stream.alg i)) in
+    let kv,iv = FStar.Bytes.split_ kiv (CoreCrypto.aeadKeySize (Stream.alg i)) in
     Stream () (Stream.coerce parent i kv iv)
   else
-    let kv,iv = Platform.Bytes.split kiv (CoreCrypto.aeadKeySize (StLHAE.alg i)) in
+    let kv,iv = FStar.Bytes.split_ kiv (CoreCrypto.aeadKeySize (StLHAE.alg i)) in
     StLHAE () (StLHAE.coerce parent i kv iv)
 
-#reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 2 --max_ifuel 2"
+#reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 2 --max_ifuel 2 --admit_smt_queries true"
 val leak: #i:id{~(authId i)} -> #role:rw -> s:state i role -> ST (keyBytes i) //with 2 units of i_fuel, we can invert s and prove that i must be an stae_id
   (requires (fun h0 -> True))
   (ensures  (fun h0 r h1 -> modifies Set.empty h0 h1 ))
@@ -326,7 +348,7 @@ let leak #i #role s =
 
 
 // ADL Jan 19. Made some progress on encrypt but need to merge lowlevel now
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 
 ////////////////////////////////////////////////////////////////////////////////
 //Encryption
@@ -341,7 +363,7 @@ val encrypt: #i:id -> e:writer i -> f:C.fragment i -> ST (C.encrypted f)
 	       /\ (authId i ==>
 		  fragments e h1 == Seq.snoc (fragments e h0) f
 		  /\ frame_f (fragments e) h1 (Set.singleton (log_region e))
-		  /\ MR.witnessed (fragments_prefix e (fragments e h1)))))
+		  /\ HST.witnessed (fragments_prefix e (fragments e h1)))))
 let encrypt #i e f =
   match e with
   | StLHAE u s ->
@@ -349,7 +371,7 @@ let encrypt #i e f =
     let h0 = get() in
     let ct,rg = C.ct_rg i f in
     let ad = StatefulPlain.makeAD i ct in
-    let seqn = MR.m_read (AEAD_GCM.ctr (StLHAE.counter s)) in
+    let seqn = HST.op_Bang (AEAD_GCM.ctr (StLHAE.counter s)) in
     let c = StLHAE.encrypt s ad rg f in
     let h1 = get() in
     if authId i then
@@ -359,7 +381,7 @@ let encrypt #i e f =
       let ent = AEAD_GCM.Entry c ad' f in
       lemma_fragments_snoc_commutes e h0 h1 ent;
       fragments_prefix_stable e h1;
-      MR.witness #(log_region e) (AEAD_GCM.ilog (AEAD_GCM.State?.log s))
+      HST.mr_witness #(log_region e) (AEAD_GCM.ilog (AEAD_GCM.State?.log s))
 		 (fragments_prefix e (fragments e h1))
       end;
     c
@@ -368,13 +390,15 @@ let encrypt #i e f =
     begin
     let h0 = get() in
     let l = frag_plain_len f in
-    let c = Stream.encrypt s l f in
+    let cl = frag_cipher_len f in
+    let ad = C.ctBytes C.Application_data @| versionBytes TLS_1p2 @| bytes_of_int 2 cl in
+    let c = Stream.encrypt s ad l f in
     let h1 = get() in
     if authId i then
       begin
       lemma_fragments_snoc_commutes e h0 h1 (Stream.Entry l c f);
       fragments_prefix_stable e h1;
-      MR.witness #(log_region e) (Stream.ilog (Stream.State?.log s))
+      HST.mr_witness #(log_region e) (Stream.ilog (Stream.State?.log s))
 		 (fragments_prefix e (fragments e h1))
       end;
     c
@@ -389,7 +413,7 @@ let fragment_at_j (#i:id) (#rw:rw) (s:state i rw{authId i}) (n:nat) (f:C.fragmen
   MS.map_has_at_index #_ #_ #(log_region s) (ilog s) ptext n f h
 
 let fragment_at_j_stable (#i:id) (#rw:rw) (s:state i rw{authId i}) (n:nat) (f:C.fragment i)
-  : Lemma (MR.stable_on_t #(log_region s) #_ #(MS.grows #(entry i)) (ilog s) (fragment_at_j s n f))
+  : Lemma (HST.stable_on_t #(log_region s) #_ #(MS.grows #(entry i)) (ilog s) (fragment_at_j s n f))
   = MS.map_has_at_index_stable #_ #_ #(log_region s) (ilog s) ptext n f
 
 
@@ -414,7 +438,7 @@ val decrypt: #i:id -> d:reader i -> c:C.decrypted i
    	             j < Seq.length written /\
   	             f = Seq.index written j /\
   	             frame_f (fragments d) h1 (Set.singleton (log_region d)) /\
-  	             MR.witnessed (fragment_at_j d j f)))))
+  	             HST.witnessed (fragment_at_j d j f)))))
 
 #set-options "--z3rlimit 100"
 
@@ -424,13 +448,14 @@ let decrypt #i d (ct,c) =
   match d with
   | Stream _ s ->
     begin
-    match Stream.decrypt s (Stream.lenCipher i c) c with
+    let ad = C.ctBytes ct @| versionBytes TLS_1p2 @| bytes_of_int 2 (length c) in
+    match Stream.decrypt s ad (Stream.lenCipher i c) c with
     | None -> None
     | Some f ->
       if authId i then
         begin
         fragment_at_j_stable d (seqnT d h0) f;
-        MR.witness #(log_region d) #_ #(MS.grows #(entry i))
+        HST.mr_witness #(log_region d) #_ #(MS.grows #(entry i))
           (ilog d) (fragment_at_j d (seqnT d h0) f)
         end;
       Some f
@@ -443,7 +468,7 @@ let decrypt #i d (ct,c) =
       if authId i then
         begin
         fragment_at_j_stable d (seqnT d h0) f;
-        MR.witness #(log_region d) #_ #(MS.grows #(entry i))
+        HST.mr_witness #(log_region d) #_ #(MS.grows #(entry i))
           (ilog d) (fragment_at_j d (seqnT d h0) f)
         end;
       Some f

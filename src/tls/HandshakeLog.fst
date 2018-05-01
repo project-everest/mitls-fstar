@@ -1,20 +1,20 @@
 module HandshakeLog
 
-open FStar.Heap
-open FStar.HyperHeap
-open FStar.HyperStack
+(* see als comments in Handshake.fsti *) 
+
 open FStar.Seq
- // for e.g. found
-open FStar.Set
-open Platform.Error
-open Platform.Bytes
+open FStar.Error
+open FStar.Bytes
+
+open Mem 
 open TLSError
 open TLSConstants
 open TLSInfo
 open HandshakeMessages
 open Hashing
 open Hashing.CRF // now using incremental, collision-resistant, agile Hashing.
-module HH = FStar.HyperHeap
+open Range  // cwinter: the extracted OCaml file contains a reference to this, which is not reflected in the .depend file?
+
 module HS = FStar.HyperStack
 
 
@@ -29,19 +29,20 @@ let print s = discard (IO.debug_print_string ("HSL| "^s^"\n"))
 unfold val trace: s:string -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
-unfold let trace = if Flags.debug_HSL then print else (fun _ -> ())
+unfold let trace = if DebugFlags.debug_HSL then print else (fun _ -> ())
 
+// FIXME(ADL): the ghost transcript is buggy in the Kremlin-extracted version
 
 let erased_transcript : Type0 =
-    if Flags.debug_HSL then hs_transcript
+    if false then hs_transcript
     else FStar.Ghost.erased hs_transcript
 
 let reveal_log (l:erased_transcript) : GTot (hs_transcript) =
-    if Flags.debug_HSL then l
+    if false then l
     else FStar.Ghost.reveal l
 
 let hide_log (l:hs_transcript) : Tot erased_transcript =
-    if Flags.debug_HSL then l
+    if false then l
     else FStar.Ghost.hide l
 
 (** TODO: move to FStar.Ghost (breach of abstraction)  *)
@@ -59,6 +60,7 @@ let ghost_bind
 : Tot (y: erased b { y == f (FStar.Ghost.reveal x) } )
 = f (FStar.Ghost.reveal x)
 
+inline_for_extraction
 let bind_log
   (l: erased_transcript)
   (f: (
@@ -68,19 +70,22 @@ let bind_log
     (ensures (fun _ -> True))
   ))
 : Tot (y: erased_transcript { y == f (reveal_log l) } )
-= if Flags.debug_HSL then f l
+= if false then f l
   else ghost_bind #hs_transcript #hs_transcript l f
 
 let empty_hs_transcript : erased_transcript = hide_log []
 
-let append_hs_transcript (l:erased_transcript) (ml:list msg { valid_transcript (reveal_log l @ ml) } ) : Tot erased_transcript =
-    bind_log l (fun l' -> hide_log (append_transcript l' ml))
+let append_hs_transcript
+    (l:erased_transcript)
+    (ml:list msg { valid_transcript (reveal_log l @ ml) } )
+    : Tot erased_transcript =
+      bind_log l (fun l' -> hide_log (append_transcript l' ml))
 
 let extend_hs_transcript (l:erased_transcript) (m:msg { valid_transcript (reveal_log l @ [m]) } ) : Tot erased_transcript =
     append_hs_transcript l [m]
 
 let print_hsl (hsl:erased_transcript) : Tot bool =
-    if Flags.debug_HSL then
+    if false then
     let sl = List.Tot.map HandshakeMessages.string_of_handshakeMessage hsl in
     let s = List.Tot.fold_left (fun x y -> x^", "^y) "" sl in
     IO.debug_print_string ("Current log: " ^ s)
@@ -123,12 +128,12 @@ let transcript_bytes l =
   let v = transcript_version l in
   handshakeMessagesBytes v (valid_transcript_to_list_valid_hs_msg_aux v l)
 
-#set-options "--z3rlimit 64"
+#set-options "--z3rlimit 64 --admit_smt_queries true"
 
 let transcript_format_injective ms0 ms1 =
   let f ()
   : Lemma
-    (requires (Seq.equal (transcript_bytes ms0) (transcript_bytes ms1)))
+    (requires (FStar.Bytes.equal (transcript_bytes ms0) (transcript_bytes ms1)))
     (ensures (ms0 == ms1))
   = match ms0 with
     | [] -> ()
@@ -154,6 +159,8 @@ let transcript_format_injective ms0 ms1 =
 //Note that a lot of this information is available in the log itself.
 //In particular: pv+kex+hash_alg can be read from CH/SH, dh_group can be read from SKE
 //TODO: decide whether to keep these parameters explicit or compute them from the log
+
+#reset-options "--admit_smt_queries true"
 
 private
 let rec tags_append_aux
@@ -245,6 +252,7 @@ let hashAlg h st =
 let transcript h t =
     reveal_log ((HS.sel h t).transcript)
 
+#set-options "--admit_smt_queries true" 
 let create reg pv =
     let l = State empty_hs_transcript empty_bytes None false
               empty_bytes [] (OpenHash empty_bytes)
@@ -259,7 +267,7 @@ let setParams l pv ha kexo dho =
       let acc = Hashing.start ha in
       let acc = Hashing.extend #ha acc msgs in
       let _ : squash (Hashing.content acc == msgs) =
-        append_empty_bytes_l msgs
+        admit () (* append_empty_bytes_l msgs //TODO bytes JR 09/27 *)
       in
       assume (tags ha (reveal_log st.transcript) st.parsed []); // TODO: FIXME: should this be part of OpenHash?
       let hs = FixedHash ha acc [] in
@@ -268,7 +276,7 @@ let setParams l pv ha kexo dho =
               st.incoming st.parsed hs (Some pv) kexo dho
 
 // TR: verifies up to this point
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 
 (*
 val getHash: #ha:hash_alg -> t:log -> ST (tag ha)
@@ -277,11 +285,25 @@ val getHash: #ha:hash_alg -> t:log -> ST (tag ha)
 let getHash #ha (LOG #reg st) =
     let cst = !st in
     let b =
-        if Flags.debug_HSL then
+        if false then
             print_hsl cst.transcript
         else false in
     Hashing.finalize #ha cst.hash
 *)
+
+// Must be called after receiving a CH in the Init state of nego, indicating
+// that the retry is stateless.
+let load_stateless_cookie l hrr digest =
+  let st = !l in
+  // The cookie is loaded after CH2 is written to the hash buffer
+  let OpenHash ch2b = st.hashes in
+  let fake_ch = (bytes_of_hex "fe0000") @| (Parse.vlbytes 1 digest) in
+  trace ("Installing prefix to transcript: "^(hex_of_bytes fake_ch));
+  let hrb = handshakeMessageBytes None (HelloRetryRequest hrr) in
+  trace ("HRR bytes: "^(hex_of_bytes hrb));
+  let h = OpenHash (fake_ch @| hrb @| ch2b) in
+  l := State st.transcript st.outgoing st.outgoing_next_keys st.outgoing_complete
+             st.incoming st.parsed h st.pv st.kex st.dh_group
 
 (* SEND *)
 let send l m =
@@ -294,7 +316,13 @@ let send l m =
       let acc = Hashing.extend #a acc mb in
       FixedHash a acc hl
     | OpenHash p ->
-      OpenHash (p @| mb)
+      (match m with
+      | HelloRetryRequest hrr ->
+        let ha = verifyDataHashAlg_of_ciphersuite hrr.hrr_cipher_suite in
+        let hmsg = Hashing.compute ha p in
+        let hht = (bytes_of_hex "fe0000") @| (bytes_of_int 1 (length hmsg)) @| hmsg in
+        OpenHash (hht @| mb)
+      | _ -> OpenHash (p @| mb))
     in
   let o = st.outgoing @| mb in
   let t = extend_hs_transcript st.transcript m in
@@ -313,7 +341,7 @@ let hash_tag_truncated #a l len =
   let st = !l in
   match st.hashes with
   | FixedHash a' acc hl -> trace "BAD HASH (statically excluded)"; admit()
-  | OpenHash b -> Hashing.compute a (fst (split b (length b - len)))
+  | OpenHash b -> Hashing.compute a (fst (split_ b (length b - len)))
 
 // maybe just compose the two functions above?
 let send_tag #a l m =
@@ -356,6 +384,7 @@ let send_CCS_tag #a l m cf =
   l := State t st.outgoing nk cf st.incoming st.parsed h st.pv st.kex st.dh_group;
   tg
 
+#set-options "--admit_smt_queries true" 
 // TODO require or check that both flags are clear before the call
 let send_signals l next_keys1 complete1 =
   let State transcript outgoing outgoing_next_keys0 outgoing_complete0 incoming parsed hashes pv kex dh_group = !l in
@@ -380,7 +409,7 @@ let next_fragment l (i:id) =
       let rg = (lo, lo) in
       (Some (| rg, o |), empty_bytes)
     else // at least two fragments
-      let (x,y) = split o max_TLSPlaintext_fragment_length in
+      let (x,y) = split_ o max_TLSPlaintext_fragment_length in
       let lx = length x in
       let rg = (lx, lx) in
       (Some (| rg, x |), y) in
@@ -410,7 +439,7 @@ let next_fragment l (i:id) =
               st.transcript outgoing' st.outgoing_next_keys st.outgoing_complete
               st.incoming st.parsed st.hashes st.pv st.kex st.dh_group;
       Outgoing fragment None false )
-
+#reset-options 
 (* RECEIVE *)
 
 //17-04-24 avoid parsing loop? may be simpler at the level of receive.
@@ -425,6 +454,7 @@ val parseMessages:
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> modifies_none h0 h1))
 
+#reset-options "--admit_smt_queries true"
 let rec parseMessages pvo kexo buf =
   match HandshakeMessages.parseMessage buf with
   | Error z -> Error z
@@ -432,7 +462,7 @@ let rec parseMessages pvo kexo buf =
   | Correct (Some (| rem, hstype, pl, to_log |)) ->
     ( // trace ("parsing " ^
       //   (if pvo = Some TLS_1p3 then "(1.3) " else if pvo = Some TLS_1p2 then  "(1.2) " else "(?) ") ^
-      //   Platform.Bytes.print_bytes pl);
+      //   FStar.Bytes.print_bytes pl);
       if hstype = HT_client_hello
       then (
         match parseClientHello pl with // ad hoc case: we parse into one or two messages
@@ -442,7 +472,7 @@ let rec parseMessages pvo kexo buf =
           Correct(true, rem, [ClientHello ch], [to_log]))
         | Correct (ch, Some binders) -> (
           trace ("parsed [ClientHello; Binders] -- end of flight "^(if length rem > 0 then " (bytes waiting)" else ""));
-          let chBytes, bindersBytes = split to_log (length to_log - HandshakeMessages.bindersLen_of_ch ch) in
+          let chBytes, bindersBytes = split_ to_log (length to_log - HandshakeMessages.bindersLen_of_ch ch) in
           Correct(true, rem, [ClientHello ch; Binders binders], [chBytes; bindersBytes])))
       else (
         match parseHandshakeMessage pvo kexo hstype pl with
@@ -470,19 +500,28 @@ val hashHandshakeMessages : t: erased_transcript ->
 let rec hashHandshakeMessages t p hs n nb =
     match n,nb with
     | [],[] -> hs
-    | m::mrest,mb::brest ->
-         (match hs with
-    | OpenHash b ->
-      let hs = OpenHash (b @| mb) in
-      hashHandshakeMessages t (p @ [m]) hs mrest brest
-    | FixedHash a acc tl ->
-      let acc = Hashing.extend #a acc mb in
-      let tl = if tagged m then
-             let t = Hashing.finalize #a acc in
-         tl @ [t]
-         else tl in
-      let hs = FixedHash a acc tl in
-      hashHandshakeMessages t (p @ [m]) hs mrest brest)
+    | m::mrest, mb::brest ->
+      (match hs with
+      | OpenHash b ->
+        let hs = match m with
+          | HelloRetryRequest hrr ->
+            let ha = verifyDataHashAlg_of_ciphersuite hrr.hrr_cipher_suite in
+            let hmsg = Hashing.compute ha b in
+            let hht = (bytes_of_hex "fe0000") @| (Parse.vlbytes 1 hmsg) in
+            trace ("Replacing CH1 in transcript with "^(hex_of_bytes hht));
+            trace ("HRR bytes: "^(hex_of_bytes mb));
+            OpenHash (hht @| mb)
+          | _ -> OpenHash (b @| mb)
+        in
+        hashHandshakeMessages t (p @ [m]) hs mrest brest
+      | FixedHash a acc tl ->
+        let acc = Hashing.extend #a acc mb in
+        let tl = if tagged m then
+               let t = Hashing.finalize #a acc in
+           tl @ [t]
+           else tl in
+        let hs = FixedHash a acc tl in
+        hashHandshakeMessages t (p @ [m]) hs mrest brest)
 
 let receive l mb =
   let st = !l in
@@ -513,7 +552,6 @@ let receive l mb =
           r ml hs st.pv st.kex st.dh_group;
         Correct None )
 
-
 // We receive CCS as external end-of-flight signals;
 // we return the messages processed so far, and their final tag;
 // we still can't write.
@@ -537,3 +575,4 @@ let receive_CCS #a l =
           st.incoming [] hs' st.pv st.kex st.dh_group;
       Correct (st.parsed, tl, h)
     end
+#reset-options

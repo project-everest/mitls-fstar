@@ -1,0 +1,164 @@
+HACL_HOME       ?= ../../../hacl-star
+FSTAR_HOME      ?= ../../../FStar
+MITLS_HOME      ?= ../..
+KREMLIN_HOME    ?= ../../../kremlin
+MLCRYPTO_HOME   ?= ../../../MLCrypto
+FLAVOR          ?= Model
+
+SHELL=/bin/bash
+
+
+# Paths and Commands
+
+INCLUDE_PATHS = \
+	$(FSTAR_HOME)/contrib/CoreCrypto/fst/ \
+	$(HACL_HOME)/secure_api \
+	$(HACL_HOME)/secure_api/utils \
+	$(HACL_HOME)/secure_api/concrete_specializations \
+	$(HACL_HOME)/secure_api/LowCProvider/fst \
+	$(HACL_HOME)/code/curve25519/api \
+	$(HACL_HOME)/code/lib \
+	$(KREMLIN_HOME)/kremlib \
+	$(MITLS_HOME)/libs/ffi \
+	$(MITLS_HOME)/src/lowparse \
+	$(SPECINC)
+
+ifeq (,$(MITLS_NODEBUG))
+  INCLUDE_PATHS += ./concrete-flags/Debug
+else
+  INCLUDE_PATHS += ./concrete-flags/NoDebug
+endif
+
+HINTS_DIR  ?= hints
+CACHE_DIR   = cache/$(FLAVOR)
+EXTRACT_DIR = extract/$(FLAVOR)
+DEP_FILE    = $(CACHE_DIR)/.depend
+FSTAR       = $(FSTAR_HOME)/bin/fstar.exe --cache_dir $(CACHE_DIR) --cache_checked_modules $(OTHERFLAGS)
+VFLAGS     ?= --use_hints --use_hint_hashes --record_hints --warn_error -272-241
+
+ifneq (,$(HINTS_DIR))
+	HINTS_OPTS=--hint_file $(HINTS_DIR)/$(notdir $(subst .checked,,$<)).hints
+endif
+
+# Project Files
+
+# Add more roots here!
+ROOTS ?= TLS.fst QUIC.fst Test.Main.fst 
+
+EVERYTHING=$(wildcard *.fst *.fsti Make* $(MITLS_HOME)/src/pki/* $(MITLS_HOME)/libs/ffi/* ideal-flags/* concrete-flags/* concrete-flags/$(FLAVOR)/*)
+
+# Production Rules
+
+$(DEP_FILE): # $(EVERYTHING) 
+ifdef VERBOSE
+	@echo -e "\033[1;33m=== Computing $(FLAVOR) dependencies ...\033[;37m"
+endif
+	@mkdir -p $(EXTRACT_DIR)
+	@mkdir -p $(CACHE_DIR)
+ifneq (,$(HINTS_DIR))
+	@mkdir -p $(HINTS_DIR)
+endif
+	$(subst \\,, \
+		$(FSTAR) --cache_dir $(CACHE_DIR) --odir $(EXTRACT_DIR) --extract $(EXTRACT) \
+			--dep full \
+			$(addprefix --include , $(INCLUDE_PATHS)) \
+			$(ROOTS) > $(DEP_FILE) \
+	)
+	sed -i.opt -e "s/cmx/cmo/g" -e "s/source/old/g" $(DEP_FILE)
+
+$(DEP_FILE).dot:
+ifdef VERBOSE
+	@echo -e "\033[1;33m=== Computing $@ ...\033[;37m"
+endif
+	$(subst \\,, \
+		$(FSTAR) --extract $(EXTRACT) \
+			--dep graph \
+			$(addprefix --include , $(INCLUDE_PATHS)) \
+			$(ROOTS) > /dev/null \
+	)
+	mv dep.graph $@
+
+$(DEP_FILE).pdf: $(DEP_FILE).dot
+	fdp -Tpdf $< -o$@
+
+
+depend: $(DEP_FILE)
+
+-include $(DEP_FILE).opt
+-include $(DEP_FILE)
+
+# REMARK:
+# $(subst ...) turns command strings into single-line strings, so they are
+# easier to read/follow.
+
+# REMARK:
+# These rules have an implicit prerequisite, coming from $(DEP_FILE),
+# on the source fst/fsti file
+
+# REMARK
+# "@touch $@" is needed because make may decide to invoke fstar on this
+# target because the timestamp on, say, the .fst file changed, and
+# then fstar may detect that there was no change in content and not
+# re-emit the .fst.checked file. Adding the touch ensures that the
+# timestamp on the .checked file is updated to avoid make running this
+# rule again.
+# If F* doesn't write a .checked file because it hasn't verified a
+# dependency, then an empty (invalid) file will be created.
+
+# REMARK
+# cwinter: The order-only dependency makes sure that F* will not run until 
+# $(DEP_FILE) is regenerated. Otherwise it can happen that this rule is 
+# executed in parallel with the $(DEP_FILE) rule, where this rule uses an 
+# outdated $(DEP_FILE) on the disc. Alternatively, secondary expansion could
+# solve this problem too. If there is an up to date $(DEP_FILE), or none at 
+# all, then the dependency can be ignored. 
+
+$(CACHE_DIR)/FStar.%.checked: | $(DEP_FILE)
+ifdef VERBOSE
+	@echo -e "\033[1;35m=== Producing $@ ...\033[;37m"
+endif
+	$(subst \\,, \
+		$(FSTAR) --admit_smt_queries true \
+		$(addprefix --include , $(INCLUDE_PATHS)) $< \
+		)
+	@touch $@
+
+%.checked: | $(DEP_FILE)
+ifdef VERBOSE
+	@echo -e "\033[1;35m=== Producing $@ ...\033[;37m"
+endif
+	$(subst \\,, \
+		$(FSTAR) $(VFLAGS) \
+		$(HINTS_OPTS) \
+		$(addprefix --include , $(INCLUDE_PATHS)) $< \
+		)
+	@touch $@
+
+$(EXTRACT_DIR)/%.$(EXTENSION):
+ifdef VERBOSE
+	@echo -e "\033[1;32m=== Extracting $@ ...\033[;37m"
+endif
+	$(subst \\,, \
+		$(FSTAR) $(VFLAGS) \
+			--codegen $(firstword $(subst -, ,$(FLAVOR))) \
+			--cache_dir $(CACHE_DIR) \
+			$(HINTS_OPTS) \
+			--odir $(EXTRACT_DIR) \
+			$(addprefix --include , $(INCLUDE_PATHS)) \
+			--extract_module $(basename $(notdir $(subst .checked,,$<))) \
+			$(subst $(CACHE_DIR)/,,$(subst .checked,,$<)) \
+	)
+
+# Avoids polluting the KreMLin source tree with a random .o file
+extract/copied/%.c: $(KREMLIN_HOME)/kremlib/%.c
+	mkdir -p $(dir $@)
+	cp $< $@
+
+# Don't delete these files otherwise one can't run Makefile.OCaml and
+# Makefile.Kremlin in parallel
+.PRECIOUS: extract/copied/%.c
+
+
+# Rules for Interactive Mode
+%.fst-in %.fsti-in: 
+	@echo $(addprefix --include , $(INCLUDE_PATHS)) --cache_dir $(CACHE_DIR) --cache_checked_modules $(OTHERFLAGS) --hint_file $(HINTS_DIR)/$(notdir $(subst -in,,$@)).hints $(VFLAGS)

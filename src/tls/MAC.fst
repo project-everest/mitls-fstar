@@ -4,18 +4,20 @@
     TODO: review indexing *) 
 
 open FStar.Heap
-open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.Seq
- // for e.g. found
+// for e.g. found
 
-open Platform.Bytes
-open Platform.Error
+open FStar.Bytes
+open FStar.Error
 //open CoreCrypto 
 
+open Mem
 open TLSConstants
 open TLSInfo
 open TLSError
+
+module HS = FStar.HyperStack
 
 // idealizing HMAC
 // for concreteness; the rest of the module is parametric in a:alg
@@ -25,11 +27,11 @@ type id = i:id { ID12? i /\ (let ae = aeAlg_of_id i in MACOnly? ae \/ MtE? ae) }
 let alg (i:id) = macAlg_of_id i
 
 type text = bytes
-type tag (i:id) = lbytes (macSize (alg i))
-type keyrepr (i:id) = lbytes (macSize (alg i))
+type tag (i:id) = Bytes.lbytes32 (macSize (alg i))
+type keyrepr (i:id) = Bytes.lbytes32 (macSize (alg i))
 
 
-type fresh_subregion rg parent h0 h1 = stronger_fresh_region rg h0 h1 /\ extends rg parent
+type fresh_subregion rg parent h0 h1 = HS.fresh_region rg h0 h1 /\ extends rg parent
 
 // We keep the tag in case we later want to enforce tag authentication
 abstract type entry (i:id) (good: bytes -> Type) = 
@@ -45,7 +47,7 @@ noeq type key (i:id) (good: bytes -> Type) =
   | Key: 
     #region: rgn -> // intuitively, the writer's region
     kv: keyrepr i ->
-    log: ref (seq (entry i good)){log.id = region} -> key i good
+    log: ref (seq (entry i good)){(HS.frameOf log) = region} -> key i good
 
 val region: #i:id -> #good:(bytes -> Type) -> k:key i good -> GTot rid
 val keyval: #i:id -> #good:(bytes -> Type) -> k:key i good -> GTot (keyrepr i)
@@ -63,14 +65,15 @@ val gen: i:id -> good: (bytes -> Type) -> parent: rgn -> ST(key i good)
   (requires (fun _ -> True))
   (ensures (fun h0 k h1 ->  
     modifies Set.empty h0 h1 /\
-    fresh_subregion (region #i #good k) parent h0 h1 )) 
-let gen    i good parent    = gen0 i good parent (CoreCrypto.random (macKeySize (alg i)))
+    Mem.fresh_subregion (region #i #good k) parent h0 h1 )) 
+let gen i good parent = 
+  gen0 i good parent (CoreCrypto.random32 (macKeySize (alg i)))
 
 val coerce: i:id -> good: (bytes -> Type) -> parent: rgn -> kv:keyrepr i -> ST(key i good)
   (requires (fun _ -> ~(authId i)))
   (ensures (fun h0 k h1 ->  
     modifies Set.empty h0 h1 /\
-    fresh_subregion (region #i #good k) parent h0 h1 )) 
+    Mem.fresh_subregion (region #i #good k) parent h0 h1 )) 
 let coerce i good parent kv = gen0 i good parent kv
 
 val leak: #i:id -> #good: (bytes -> Type) -> k:key i good {~(authId i)} -> Tot (kv:keyrepr i { kv = keyval k })

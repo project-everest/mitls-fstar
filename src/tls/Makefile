@@ -1,209 +1,30 @@
-MITLS_HOME ?= ../..
-FSTAR_HOME ?= ../../../FStar
-KREMLIN_HOME ?= ../../../kremlin
-HACL_HOME ?= ../../../hacl-star
-FFI_HOME ?= $(MITLS_HOME)/libs/ffi
-MARCH ?= x86_64
-ODIR ?= output
+EXTRACT='Nothing'
+FLAVOR?=Model
 
-FSTARFLAGS = --fstar_home $(FSTAR_HOME) $(OTHERFLAGS)
-FSTAR = $(FSTAR_HOME)/bin/fstar.exe $(FSTARFLAGS)
+all: clean-depend model-all ocaml-all kremlin-all
 
-HINTS_ENABLED ?= --use_hints
-VERFLAGS = --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection $(HINTS_ENABLED)
+clean-depend:
+	rm -f cache/OCaml/.depend cache/Kremlin/.depend cache/Model/.depend
 
-# These are all the known working targets in this file,
-# Check for regressions & comment about them!
+ocaml-%: clean-depend
+	$(MAKE) -f Makefile.OCaml $*
 
-# NOTE: the sequence of subtargets in all, build and verify
-# must be processed sequentially,
-# but each subtarget alone can be built with parallelism enabled.
-all:
-	$(MAKE) build
-	$(MAKE) verify
+kremlin-%: clean-depend
+	$(MAKE) -f Makefile.Kremlin $*
 
-build:
-	$(MAKE) mitls.exe
-	$(MAKE) tls-ffi
-	$(MAKE) cmitls.exe 
+model-% verify-%: clean-depend
+	$(MAKE) -f Makefile.Model $*
 
-verify:
-	$(MAKE) all-ver
-	$(MAKE) tls-sanity
-	$(MAKE) tls-lax
+quic-%: clean-depend
+	$(MAKE) -C ../../apps/quicMinusNet $* -k
 
-clean:
-	-rm -rf .depend* *.ml *.cm* *.o *.a *.exe *.lib *~ *.out $(ODIR) .fstarlib
+test: clean-depend model-test kremlin-test ocaml-test quic-test
 
-.PHONY: all build verify init depend clean test
+clean: ocaml-clean kremlin-clean quic-clean model-clean
+	rm -rf $(EXTRACT_DIR)/Kremlin $(EXTRACT_DIR)/OCaml $(EXTRACT_DIR)/copied
 
-STDLIB_REALIZED=Pervasives Pervasives.Native Mul Float Char UInt Int8 UInt8 Int16 UInt16 Int32 UInt32 Int64 UInt64 UInt128 Int.Cast Int.Cast.Full BaseTypes IO Heap List.Tot.Base List Option String Set Buffer CommonST TSet Map HyperHeap HyperStack HyperStack.ST HyperStack.All ST All Monotonic.RRef Monotonic.Seq Monotonic.HyperHeap Monotonic.HyperStack Seq.Base Seq.Properties BitVector Math.Lib
-CODEGEN_LIBS=Platform
-# CoreCrypto LowCProvider Platform Classical Seq HyperHeap HyperStack FFICallbacks
-PLATFORM_REALIZED=$(addprefix Platform.,Bytes Date Error Tcp)
-PDIR=$(FSTAR_HOME)/ucontrib/Platform/fst/
-CDIR=$(FSTAR_HOME)/ucontrib/CoreCrypto/fst/
-LLDIR=$(HACL_HOME)/secure_api
-LCDIR=$(LLDIR)/LowCProvider
+%.fst-in %.fsti-in:
+	$(MAKE) -f Makefile.$(FLAVOR) $@
 
-# Modules that are implemented in ML or C
-NOEXTRACT=$(addprefix --no_extract ,Prims $(addprefix FStar., $(STDLIB_REALIZED)) $(PLATFORM_REALIZED) CoreCrypto DHDB LowCProvider FFICallbacks)
-
-HACL_INCLUDES=$(addprefix --include ,$(KREMLIN_HOME)/kremlib $(HACL_HOME)/specs $(HACL_HOME)/code/lib/kremlin $(HACL_HOME)/code/bignum $(HACL_HOME)/code/experimental/aesgcm $(HACL_HOME)/code/poly1305 $(HACL_HOME)/code/salsa-family $(LLDIR)/test $(LLDIR)/utils $(LLDIR)/vale $(LLDIR)/uf1cma $(LLDIR)/prf $(LLDIR)/aead)
-FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(LCDIR)/fst $(HACL_INCLUDES) --include $(FFI_HOME)
-
-OCAMLPKG=-package batteries,stdint,fileutils,zarith,fstarlib
-OCAMLPATH=$(FSTAR_HOME)/bin
-OCAMLOPTS=$(OCAMLPKG) -thread -w -a
-OCAML_PATHS=test $(ODIR) $(FSTAR_HOME)/ucontrib/Platform/ml $(FSTAR_HOME)/ucontrib/CoreCrypto/ml $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/db $(LCDIR) $(FFI_HOME)
-OCAML_INCLUDE_PATHS=$(addprefix -I ,$(OCAML_PATHS))
-
-# Since quite a few people forget to set that in their path... eventually,
-# everyone should have it in their ~/.bashrc
-ifeq ($(OS),Windows_NT)
-  EXTRA_PATH = PATH="/usr/$(MARCH)-w64-mingw32/sys-root/mingw/bin/:$(PATH)"
-endif
-
-# --------------------------------------------------------------------
-# Modules verified in tls-ver -- any time one more file verifies, it
-# should be added here.
-
-VERIFY= \
-Flags \
-MonotoneMap \
-TLSError \
-TLSConstants \
-Transport \
-Nonce \
-RSAKey \
-DHGroup \
-ECGroup \
-CommonDH \
-PMS \
-Hashing.Spec \
-Hashing.OpenSSL \
-Hashing \
-Hashing.CRF \
-HMAC \
-Cert \
-Signature \
-TLSInfo \
-IdNonce \
-Extensions \
-Range \
-DataStream \
-Alert \
-Content \
-StreamPlain \
-StreamAE \
-MasterSecret \
-StatefulPlain \
-LHAEPlain \
-AEAD_GCM \
-MAC \
-StatefulLHAE \
-Record \
-StAE \
-KeySchedule \
-HandshakeLog \
-Handshake \
-StreamDeltas \
-HKDF \
-Epochs \
-Connection \
-ConnInvariant \
-TLS \
-FFI \
-QUIC
-
-# Lax-checking one file at a time
-%.fst-lax:
-	$(FSTAR) $(VERFLAGS) --lax \
-	$(FSTAR_INCLUDE_PATHS) \
-	--include $(MITLS_HOME)/src/tls/concrete-flags \
-	$(basename $@).fst
-
-# Verifying one file at a time
-# @echo -e  "\e[1;34m"Verifying $(basename $(notdir $@)) "\e[0m"; 
-%.fst-ver:
-	$(FSTAR) $(VERFLAGS) \
-	$(FSTAR_INCLUDE_PATHS) \
-	--include $(MITLS_HOME)/src/tls/ideal-flags \
-	--verify_module $(basename $(notdir $@)) \
-	$(basename $@).fst
-
-%.fsti-ver:
-	$(FSTAR) $(VERFLAGS) \
-	$(FSTAR_INCLUDE_PATHS) \
-	--include $(MITLS_HOME)/src/tls/ideal-flags \
-	--verify_module $(basename $(notdir $@)) \
-	$(basename $@).fsti
-
-# Targets to get F* arguments in interactive mode
-%.fst-in: 
-	@echo $(OPTIONS) $(VERFLAGS) \
-	$(FSTAR_INCLUDE_PATHS) \
-	--include $(MITLS_HOME)/src/tls/ideal-flags \
-	--verify_module $(basename $(notdir $@))
-
-%.fsti-in: 
-	@echo $(OPTIONS) $(VERFLAGS) \
-	$(FSTAR_INCLUDE_PATHS) \
-	--include $(MITLS_HOME)/src/tls/ideal-flags \
-	--verify_module $(basename $(notdir $@))
-
-# These rules are silent to avoid disturbing .fst-in etc
-.depend-TLS: # $(wildcard *.fst *.fsti)
-	@-$(FSTAR) $(FSTAR_INCLUDE_PATHS) --dep make FFI.fst QUIC.fst > .depend-TLS
-.depend-HS: # $(wildcard *.fst *.fsti)
-	@-$(FSTAR) $(FSTAR_INCLUDE_PATHS) --dep make Handshake.fst > .depend-HS
-.depend-AEAD: # $(wildcard $(HACL_HOME)/secure_api/*/*.fst)
-	@-$(FSTAR) $(FSTAR_INCLUDE_PATHS) --dep make $(LLDIR)/aead/Crypto.AEAD.Main.fst > .depend-AEAD
-.depend-CDH:
-	@-$(FSTAR) $(FSTAR_INCLUDE_PATHS) --dep make CommonDH.fst > .depend-CDH
-
--include .depend-CDH
--include .depend-AEAD
--include .depend-HS
--include .depend-TLS
-
-all-ver: $(addsuffix .fst-ver, $(VERIFY))
-
-# Sanity check
-tls-sanity:
-	$(FSTAR) $(VERFLAGS) \
-	$(FSTAR_INCLUDE_PATHS) \
-	--include $(MITLS_HOME)/src/tls/ideal-flags \
-        --verify_module False \
-	$(FSTS) test/False.fst 2>&1 | tail -n 1 | grep -c '1 error was reported (see above)'
-
-tls-lax:
-	$(FSTAR) $(FSTAR_INCLUDE_PATHS) --lax \
-	--include $(MITLS_HOME)/src/tls/concrete-flags \
-	TLS.fst
-
-wc:
-	wc -l *.fst *.fsti
-
-.fstarlib: $(FSTAR_HOME)/ulib/*.fst $(FSTAR_HOME)/ulib/ml/*.ml $(wildcard $(FSTAR_HOME)/ulib/ml/extracted/*.ml)
-	touch .fstarlib
-	$(MAKE) -C $(FSTAR_HOME)/ulib/ml
-
-mitls.cmxa: .fstarlib *.fst $(wildcard output/*.ml) $(wildcard output/*.cmx)
-	$(MAKE) -f Extracted.mk mitls.cmxa
-
-mitls.exe: mitls.cmxa
-	$(MAKE) -f Extracted.mk mitls.exe
-
-cmitls.o: cmitls.c
-	$(MAKE) -f Extracted.mk cmitls.o
-cmitls.exe: cmitls.o
-	echo $(MAKECMDGOALS)
-	$(MAKE) -f Extracted.mk $(MAKECMDGOALS)
-
-test:
-	$(MAKE) -f Extracted.mk test
-
-# Some rules are only defined after extraction, and passed to the post-extraction Makefile (with ocamldep)
-.DEFAULT:
-	$(MAKE) -f Extracted.mk $(MAKECMDGOALS)
+todo:
+	grep -nH -i -e admit -e assume -e '--lax' -e todo -e magic Make* `find . -regex '.*.fst[i]*\|./Make.*'` | grep -v 'assume val'

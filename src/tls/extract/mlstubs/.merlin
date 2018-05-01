@@ -1,0 +1,10 @@
+PKG zarith
+PKG ctypes
+PKG ctypes-foreign
+
+S ../../../../../FStar/ulib/ml/
+S ../../../../../FStar/ulib/ml/extracted
+
+B ../OCaml
+B ../../../../../FStar/ulib/ml/_build/ulib/ml
+B ../../../../../FStar/ulib/ml/_build/ulib/ml/extracted

@@ -3,27 +3,27 @@ module Connection
 // Connections are top-level instances of TLS clients and servers
 
 open FStar.Heap
-open FStar.HyperHeap
 open FStar.HyperStack
 // JP: please stop using opening so much stuff in scope srsly
 open FStar.Seq
- // for e.g. found
-//open FStar.Set
- 
-open Platform.Bytes
-open Platform.Error
+open FStar.Bytes
+open FStar.Error
 
+open Mem
 open TLSError
 open TLSConstants
 open TLSInfo
-  
+open Old.Epochs
+
+module Range = Range
 open Range
 
-open Epochs
-open Handshake
+module HS = FStar.HyperStack
 
-module MR = FStar.Monotonic.RRef
-module HH = FStar.HyperHeap
+module Epochs = Old.Epochs
+module Handshake = Old.Handshake
+
+#set-options "--admit_smt_queries true"
 
 // using also Range, DataStream, TLSFragment, Record
 
@@ -57,18 +57,17 @@ let string_of_halfState = function
 let string_of_state (r,w) =
   string_of_halfState r^"/"^string_of_halfState w
 
-type c_rgn = r:TLSConstants.rgn { HH.disjoint r TLSConstants.tls_region } 
+type c_rgn = r:rgn { HS.disjoint r tls_region } 
 
 (*
  * AR: changing the type of state from rref to ref, with region captured in the refinement.
  *)
 noeq type connection = | C:
   #region: c_rgn ->
-  hs:      hs {extends (region_of hs) region /\ is_hs_rgn (region_of hs)} (* providing role, config, and uid *) ->
-  tcp:     Transport.t ->
-  recv: ref Record.input_state{recv.id = region} -> // added for buffering non-blocking reads
-  state:   ref tlsState {state.id = region} -> 
-  connection
+  hs     : Handshake.hs {extends (Handshake.region_of hs) region /\ is_hs_rgn (Handshake.region_of hs)} (* providing role, config, and uid *) ->
+  tcp    : Transport.t ->
+  recv   : Record.input_state -> //TODO {HS.frameOf recv = region} -> // added for buffering non-blocking reads
+  state  : ref tlsState {HS.frameOf state = region} -> connection
 
 // 17-04-08 helpful or not? 
 let c_role c = Handshake.role_of c.hs
@@ -84,22 +83,23 @@ let c_log c = Handshake.epochs_of c.hs
 (* let writer_epoch #region #peer e = Handshake.writer_epoch e *)
 
 #set-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0"
-type st_inv c h = hs_inv (C?.hs c) h
+type st_inv c h = Handshake.hs_inv (C?.hs c) h
 
 //TODO: we will get the property that at most the current epochs' logs are extended, by making them monotonic in HS
-val epochs : c:connection -> h:HyperStack.mem -> GTot (es:seq (epoch (region_of c.hs) (random_of c.hs)){
-  Epochs.epochs_inv es /\ es == logT c.hs h
+val epochs : c:connection -> h:HS.mem -> GTot (es:seq (epoch (Handshake.region_of c.hs) (Handshake.random_of c.hs)){
+  Epochs.epochs_inv es /\ es == Handshake.logT c.hs h
 })
-let epochs c h = logT c.hs h
+let epochs c h = Handshake.logT c.hs h
 
 
-//16-05-30 unused?
-val frame_epochs: c:connection -> h0:HyperStack.mem -> h1:HyperStack.mem -> Lemma
-  (requires (
-    Map.contains (HyperStack.HS?.h h0) (region_of c.hs) /\ 
-    equal_on (Set.singleton (region_of c.hs)) (HyperStack.HS?.h h0) (HyperStack.HS?.h h1)))
-  (ensures (epochs c h0 == epochs c h1))
-let frame_epochs c h0 h1 = ()
+// //16-05-30 unused?
+// //NS: 18-01-30: commenting out
+// val frame_epochs: c:connection -> h0:HS.mem -> h1:HS.mem -> Lemma
+//   (requires (
+//     HS.live_region h0 (region_of c.hs) /\ 
+//     equal_on (Set.singleton (region_of c.hs)) ( h0) ( h1)))
+//   (ensures (epochs c h0 == epochs c h1))
+// let frame_epochs c h0 h1 = ()
 
 let epoch_i c h i = Seq.index (epochs c h) i
 
@@ -133,6 +133,6 @@ val equal_on_disjoint:
   s1:Set.set rid -> 
   s2:Set.set rid{disjoint_regions s1 s2} -> 
   r:rid{Set.mem r s1} -> 
-  h0:HyperStack.mem -> h1:HyperStack.mem{modifies (Set.singleton r) h0 h1} -> Lemma (equal_on s2 (HyperStack.HS?.h h0) (HyperStack.HS?.h h1))
+  h0:HS.mem -> h1:HS.mem{modifies (Set.singleton r) h0 h1} -> Lemma (HS.(equal_on s2 h0.h h1.h))
 let equal_on_disjoint s1 s2 r h0 h1 = ()
 

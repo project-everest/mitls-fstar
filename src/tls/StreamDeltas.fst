@@ -1,15 +1,15 @@
 module StreamDeltas
-open Platform.Bytes
-open Platform.Error
 
-open FStar.HyperHeap
+open FStar.Bytes
+open FStar.Error
+
+open Mem
 open FStar.HyperStack
 open TLSConstants
 open TLSInfo
 
-module HH   = FStar.HyperHeap
 module HS   = FStar.HyperStack
-module MR   = FStar.Monotonic.RRef
+module HST = FStar.HyperStack.ST //Added automatically; avoid.
 module MS   = FStar.Monotonic.Seq
 module S    = StAE
 module C    = Content
@@ -31,7 +31,7 @@ let project_one_frag #i = function
     | C.CT_Alert _ ad -> singleton (DataStream.Alert ad)
     | _ -> Seq.createEmpty                 // other fragments are internal to TLS
 
-val project_deltas: #i:id -> fs:S.frags i -> Tot (deltas i)
+val project_deltas: #i:id -> fs:S.frags i -> GTot (deltas i)
 let project_deltas #i fs = MS.collect project_one_frag fs
 
 val stream_deltas: #i:id -> #rw:rw -> s:StAE.state i rw{authId i} -> mem -> GTot (deltas i)
@@ -47,8 +47,8 @@ let deltas_prefix (#i:id) (#rw:rw) (s:S.state i rw{authId i}) (ds:deltas i) (h:m
   = MS.grows ds (project_deltas (S.fragments s h))
 
 val project_fragment_deltas: #i:id -> #rw:rw -> s:S.state i rw -> fs:S.frags i
-		  -> Lemma (authId i /\ MR.witnessed (S.fragments_prefix s fs)
-			   ==> MR.witnessed (deltas_prefix s (project_deltas fs)))
+		  -> Lemma (authId i /\ HST.witnessed (S.fragments_prefix s fs)
+			   ==> HST.witnessed (deltas_prefix s (project_deltas fs)))
 let project_fragment_deltas #i #rw s fs =
   if authId i 
   then let j : i:id{authId i} = i in //re-label for better implicit arg inference below
@@ -58,7 +58,7 @@ let project_fragment_deltas #i #rw s fs =
 			    ==> deltas_prefix s (project_deltas fs) h) =
 	  fun h -> MS.collect_grows project_one_frag fs (S.fragments s h) in
        let _ = FStar.Classical.forall_intro aux in
-       MR.weaken_witness (S.fragments_prefix s fs) (deltas_prefix s (project_deltas fs))
+       weaken_witness (S.fragments_prefix s fs) (deltas_prefix s (project_deltas fs))
   else ()
 
 let stream_deltas_snoc2 (#i:id) (#rw:rw) (s:StAE.state i rw) (h0:mem) (h1:mem) (f:Content.fragment i)
@@ -76,9 +76,9 @@ val encrypt: #i:id -> wr:StAE.writer i -> f:Content.fragment i -> ST (Content.en
 	      /\ StAE.seqnT wr h1 = StAE.seqnT wr h0 + 1
 	      /\ (authId i ==>
 	 	  StAE.fragments wr h1 == Seq.snoc (StAE.fragments wr h0) f
-		  /\ MR.witnessed (StAE.fragments_prefix wr (StAE.fragments wr h1))
+		  /\ HST.witnessed (StAE.fragments_prefix wr (StAE.fragments wr h1))
 		  /\ stream_deltas wr h1 == Seq.append (stream_deltas wr h0) (project_one_frag f)
- 		  /\ MR.witnessed (deltas_prefix wr (stream_deltas wr h1)))))
+ 		  /\ HST.witnessed (deltas_prefix wr (stream_deltas wr h1)))))
 let encrypt #i wr f = 
   let h0 = get () in
   let res = StAE.encrypt wr f in 

@@ -1,0 +1,210 @@
+all: mitls.exe
+
+FSTAR_HOME	?= ../../../FStar
+
+include $(FSTAR_HOME)/ulib/ml/Makefile.include
+
+#To include Makefile.common, you need to specify
+#the following five variables
+FLAVOR=OCaml
+EXTENSION=ml
+#Don't extract modules from fstarlib (NOEXTRACT_MODULES)
+#And also some specific ones from mitls that are implemented in C
+EXTRACT='* -Prims -FStar +FStar.Test +FStar.Kremlin.Endianness -CoreCrypto -CryptoTypes -DHDB -LowCProvider -HaclProvider -FFICallbacks -Crypto.AEAD -Crypto.Symmetric -Crypto.Plain -Spec.Loops -Buffer.Utils -C +C.Loops -LowParse.SLow.Tac -BufferBytes'
+SPECINC=$(MITLS_HOME)/src/tls/concrete-flags  $(MITLS_HOME)/src/tls/concrete-flags/OCaml
+include Makefile.common
+VFLAGS+=--admit_smt_queries true
+################################################################################
+
+FFI_HOME	= $(MITLS_HOME)/libs/ffi
+LOWC_HOME	= $(HACL_HOME)/secure_api/out/$(IMPL_CHOICE)
+
+OCAMLOPTS	=-package fstarlib,zarith,ctypes,ctypes.foreign -g \
+		  -I $(FSTAR_HOME)/ulib/ml \
+		  -I $(EXTRACT_DIR) \
+		  -I $(MLCRYPTO_HOME) \
+		  -I $(FFI_HOME) \
+		  -I $(HACL_HOME)/secure_api/LowCProvider \
+		  -I $(HACL_HOME)/secure_api/out/runtime_switch/ \
+		  -I $(KREMLIN_HOME)/_build/kremlib \
+		  -I test \
+		  -I extract/mlstubs \
+		  -I .
+
+OCAMLC		= OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind c   $(OCAMLOPTS)
+OCAMLOPT	= OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind opt $(OCAMLOPTS)
+OCAMLMKLIB	= OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind mklib $(OCAMLOPTS)
+IMPL_CHOICE 	?= runtime_switch
+
+# Sanity checks
+
+ifeq (,$(wildcard $(LOWC_HOME)/LowC.cmxa))
+  $(error LOWC_HOME is $(LOWC_HOME) and I cannot find $(LOWC_HOME)/LowC.cmxa -- please run make in secure_api!)
+endif
+
+ifeq (,$(wildcard $(KREMLIN_HOME)/_build/kremlib/C.cmx))
+  $(error KREMLIN_HOME is $(KREMLIN_HOME) and I cannot find $(KREMLIN_HOME)/_build/kremlib/C.cmx -- please run make in kremlin!)
+endif
+
+ifeq (,$(wildcard $(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa))
+  $(error FSTAR_HOME is $(FSTAR_HOME) and I cannot find $(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa -- please run make in $(FSTAR_HOME)/ulib/ml)
+endif
+
+ifeq (,$(wildcard $(MLCRYPTO_HOME)/CoreCrypto.cmxa))
+  $(error I cannot find $(MLCRYPTO_HOME)/CoreCrypto.cmxa -- please run make in $(MLCRYPTO_HOME))
+endif
+
+ifeq (,$(wildcard $(FFI_HOME)/FFICallbacks.cmxa)) 
+  $(error I cannot find $(FFI_HOME)/FFICallbacks.cmxa -- please run make in $(FFI_HOME))
+endif 
+
+%.o: %.c
+	$(CC) -I $(KREMLIN_HOME)/kremlib $^ -o $@ -c
+# We must insert PKI.cmx at the right spot in the list of inputs
+MITLS_INPUTS=\
+    $(EXTRACT_DIR)/BufferBytes.cmx \
+    $(EXTRACT_DIR)/Crypto_AEAD_Main.cmx \
+    $(KREMLIN_HOME)/_build/kremlib/C.cmx \
+    $(MLCRYPTO_HOME)/CoreCrypto.cmxa \
+    $(LOWC_HOME)/LowC.cmxa \
+    $(FFI_HOME)/FFICallbacks.cmxa \
+    $(subst .ml,.cmx,$(subst TLSConstants.ml,TLSConstants.ml extract/OCaml/PKI.ml,$(ALL_ML_FILES))) \
+    $(EXTRACT_DIR)/FFIRegister.cmx \
+    extract/copied/kremstr.o
+
+MITLS_BYTE_INPUTS=\
+    $(EXTRACT_DIR)/BufferBytes.cmo \
+    $(EXTRACT_DIR)/Crypto_AEAD_Main.cmo \
+    $(KREMLIN_HOME)/_build/kremlib/C.cmo \
+    $(MLCRYPTO_HOME)/CoreCrypto.cma \
+    $(LOWC_HOME)/LowC.cma \
+    $(FFI_HOME)/FFICallbacks.a \
+    $(subst .ml,.cmo,$(subst TLSConstants.ml,TLSConstants.ml extract/OCaml/PKI.ml,$(ALL_ML_FILES))) \
+    $(EXTRACT_DIR)/FFIRegister.cmo \
+    extract/copied/kremstr.o
+
+mitls.exe: $(MITLS_INPUTS) test/mitls.cmx
+	$(OCAMLOPT) -cclib -L../pki -cclib -lmipki -linkall -linkpkg -g $^ -o $@ -thread
+
+mitls.byte: $(MITLS_BYTE_INPUTS) test/mitls.cmo ../pki/libmipki.so
+	$(OCAMLC)   -cclib -L../pki -cclib -lmipki -linkall -linkpkg -g $^ -o mitls.exe -thread -w -31
+
+# FFI support - calling from C into miTLS. TODO: remove duplication somehow
+ifeq ($(OS),Windows_NT)
+LIBMITLS=libmitls.dll
+$(LIBMITLS): $(MITLS_INPUTS)
+	$(OCAMLOPT) $^ -thread -linkall -linkpkg -output-obj -g -o $(LIBMITLS)
+
+VS_BIN = $(shell ../../scripts/vsbin.sh)
+
+ifeq ($(PROCESSOR_ARCHITECTURE),AMD64)
+LIB_MACHINE=x64
+else
+LIB_MACHINE=x86
+endif
+
+ifeq ($(VS_BIN),)
+LIBMITLS_LIB=
+else
+LIBMITLS_LIB=libmitls.lib
+$(LIBMITLS_LIB): $(LIBMITLS)
+	"$(VS_BIN)/dumpbin.exe" /nologo /exports $(LIBMITLS) |  awk -F " " 'BEGIN {print "LIBRARY libmitls"; print "EXPORTS";} $$4 ~/FFI_mitls/{print $$4}' > libmitls.def
+	"$(VS_BIN)/lib.exe" /nologo /def:libmitls.def /out:$(LIBMITLS_LIB) /machine:$(LIB_MACHINE)
+endif
+
+else
+UNAME_S = $(shell uname -s)
+LIBMITLS=libmitls.so
+LIBMITLS_LIB=
+ifeq ($(UNAME_S),Darwin)
+$(LIBMITLS): $(MITLS_INPUTS)
+	$(OCAMLOPT) $^ -thread -linkall -linkpkg -runtime-variant _pic -ccopt -dynamiclib -ccopt -lasmrun -g -o libmitls.dylib
+	$(OCAMLOPT) $^ -thread -linkall -linkpkg -runtime-variant _pic -ccopt -dynamiclib -g -o $(LIBMITLS)
+else
+$(LIBMITLS): $(MITLS_INPUTS)
+    # pass "-z noexecstack" to better support Bash on Windows
+    # Use a version script to ensure that CoreCrypto calls to OpenSSL crypto are resolved by 
+    #   libcrypt.a at link time, not against libcrypto*.so at run-time, as version mismatches
+    #   can result in heap corruptions and crashes.
+	$(OCAMLOPT) $^ \
+	-thread -linkall -linkpkg -runtime-variant _pic -output-obj -g -o $(LIBMITLS) \
+	-ccopt "-Xlinker -z -Xlinker noexecstack -Xlinker --version-script -Xlinker libmitls_version_script"
+endif
+endif
+
+# ask OCaml about the name of the native C compiler.  This will be mingw on Windows.
+NATIVE_C_COMPILER=$(shell ocamlfind opt -config | grep native_c_compiler | sed -e "s/native_c_compiler: //")
+NATIVE_C_LIBRARIES=$(shell ocamlfind opt -config | grep native_c_libraries | sed -e "s/native_c_libraries: //")
+
+# C test of the FFI
+cmitls.o: cmitls.c $(FFI_HOME)/mitlsffi.h
+	$(NATIVE_C_COMPILER) -g -c -I$(FFI_HOME) -I../pki/ -g -Wall -O0 cmitls.c
+cmitls.exe: cmitls.o $(LIBMITLS)
+	$(NATIVE_C_COMPILER) -g -o cmitls.exe cmitls.o $(LIBMITLS) ../pki/libmipki.dll $(NATIVE_C_LIBRARIES)
+
+test/mitls.cmo: test/mitls.ml $(subst .ml,.cmo,$(ALL_ML_FILES))
+test/mitls.cmx: test/mitls.ml $(subst .ml,.cmx,$(ALL_ML_FILES))
+
+extract/OCaml/Crypto_AEAD_Main.cmo extract/OCaml/Crypto_AEAD_Main.cmx: \
+  extract/mlstubs/Crypto_AEAD_Main.ml
+
+extract/OCaml/FFIRegister.cmo: extract/mlstubs/FFIRegister.ml extract/OCaml/FFI.cmo extract/OCaml/QUIC.cmo
+extract/OCaml/FFIRegister.cmx: extract/mlstubs/FFIRegister.ml extract/OCaml/FFI.cmx extract/OCaml/QUIC.cmx
+
+extract/OCaml/AEADProvider.cmo: extract/OCaml/Crypto_AEAD_Main.cmo
+extract/OCaml/AEADProvider.cmx: extract/OCaml/Crypto_AEAD_Main.cmx
+
+# Because PKI is hand-written and is not part of the dependency graph (it's just
+# an fsti, so not extracted), we must insert it in the right spot *and* make it
+# take the proper dependencies.
+extract/OCaml/Test_Handshake.cmo: extract/OCaml/PKI.cmo
+extract/OCaml/Test_Handshake.cmx: extract/OCaml/PKI.cmx
+
+extract/OCaml/PKI.cmo extract/OCaml/PKI.cmx: \
+  extract/mlstubs/PKI.ml extract/OCaml/TLSConstants.cmo
+
+extract/OCaml/BufferBytes.cmo extract/OCaml/BufferBytes.cmx: \
+  extract/mlstubs/BufferBytes.ml
+
+%.cmx:
+ifdef VERBOSE
+	@echo -e "\033[0;32m=== Compiling $@ ...\033[;37m"
+endif
+	$(subst \\,, \
+		$(OCAMLOPT) -w -8-11-26-20 -c $< -o $@ \
+	)
+
+%.cmo:
+ifdef VERBOSE
+	@echo -e "\033[0;32m=== Compiling $@ ...\033[;37m"
+endif
+	$(subst \\,, \
+		$(OCAMLC) -w -8-11-26-20 -c $< -o $@ \
+	)
+
+CERT_FILES=CAFile.pem server-ecdsa.crt server-ecdsa.key
+
+$(CERT_FILES):
+	cp $(MITLS_HOME)/data/$@ .
+
+UNAME = $(shell uname)
+
+ifeq ($(OS),Windows_NT)
+  ifeq ($(shell uname -o),Cygwin)
+    MITLS_HOME_RUN := $(shell cygpath -u ${MITLS_HOME})
+  endif
+  export PATH := $(MITLS_HOME_RUN)/src/pki:$(PATH)
+else ifeq ($(UNAME),Darwin)
+  PREFIX = DYLD_LIBRARY_PATH=$(MITLS_HOME)/src/pki:$(DYLD_LIBRARY_PATH)
+else ifeq ($(UNAME),Linux)
+  export LD_LIBRARY_PATH := $(MITLS_HOME)/src/pki:$(LD_LIBRARY_PATH)
+endif
+
+test: mitls.exe $(CERT_FILES)
+	$(PREFIX) ./mitls.exe
+
+test.byte: mitls.byte $(CERT_FILES)
+	$(PREFIX) ./mitls.exe
+
+clean:
+	rm -rf $(CERT_FILES) mitls.exe test/mitls.cm? test/mitls.o $(DEP_FILE) extract/OCaml

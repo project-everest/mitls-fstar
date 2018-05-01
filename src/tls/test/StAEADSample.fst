@@ -20,7 +20,6 @@ open TLSInfo
 open StatefulPlain
 open AEAD_GCM
 open StatefulLHAE
-open Range
 open FStar.Heap
 open FStar.HyperHeap
 
@@ -36,7 +35,7 @@ assume val ad: adata i
 
 assume val clen: n:nat { valid_clen i n  }
 
-assume val rg: rg:range { rg = Range.cipherRangeClass i clen }
+assume val rg: rg:Range.range { rg = Range.cipherRangeClass i clen }
 
 assume val p: plain i ad rg
 
