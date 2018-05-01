@@ -1148,17 +1148,21 @@ int MITLS_CALLCONV FFI_mitls_get_hello_summary(const unsigned char *buffer, size
 {
   HEAP_REGION rgn;
   int ret = 0;
+  FStar_Pervasives_Native_option__QUIC_chSummary ch;
+
+  *cookie = NULL; *cookie_len = 0;
+  memset(&ch, 0, sizeof(ch));
 
   CREATE_HEAP_REGION(&rgn);
   if (!VALID_HEAP_REGION(rgn)) {
     return 0;
   }
 
+  ENTER_HEAP_REGION(rgn);
   FStar_Bytes_bytes b = {.data = (const char*)buffer, .length = buffer_len};
-  FStar_Pervasives_Native_option__QUIC_chSummary ch = QUIC_peekClientHello(b);
+  ch = QUIC_peekClientHello(b);
 
   memset(summary, 0, sizeof(mitls_hello_summary));
-  *cookie = NULL; *cookie_len = 0;
   if(ch.tag == FStar_Pervasives_Native_Some)
   {
     QUIC_chSummary s = ch.v;
@@ -1200,6 +1204,7 @@ int MITLS_CALLCONV FFI_mitls_find_custom_extension(int is_server, const unsigned
     return 0;
   }
 
+  ENTER_HEAP_REGION(rgn);
   FStar_Bytes_bytes b = {.data = (const char*)exts, .length = exts_len};
   FStar_Pervasives_Native_option__FStar_Bytes_bytes ob;
   ob = FFI_ffiFindCustomExtension((bool)is_server, b, ext_type);

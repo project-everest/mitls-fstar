@@ -1252,7 +1252,7 @@ let create (parent:rid) cfg role =
   let r = new_region parent in
   let log = HandshakeLog.create r None (* cfg.max_version (Nego.hashAlg nego) *) in
   //let nonce = Nonce.mkHelloRandom r r0 in //NS: should this really be Client?
-  let ks, nonce = KeySchedule.create #r role in
+  let ks, nonce = Secret.create #r role in
   let nego = Nego.create r role cfg nonce in
   let epochs = Epochs.create r nonce in
   let state = ralloc r (if role = Client then C_Idle else S_Idle) in

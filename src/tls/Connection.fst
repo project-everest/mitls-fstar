@@ -56,7 +56,7 @@ let string_of_halfState = function
 let string_of_state (r,w) =
   string_of_halfState r^"/"^string_of_halfState w
 
-type c_rgn = r:Mem.rgn { HS.disjoint r Mem.tls_region }
+type c_rgn = r:rgn { HS.disjoint r tls_region }
 
 (*
  * AR: changing the type of state from rref to ref, with region captured in the refinement.

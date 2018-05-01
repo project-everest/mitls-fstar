@@ -169,12 +169,15 @@ let ticket_decrypt cipher : St (option bytes) =
 
 let check_ticket (b:bytes{length b <= 65551}) : St (option ticket) =
   trace ("Decrypting ticket "^(hex_of_bytes b));
-  if length b < 32 then None else
-  match ticket_decrypt b with
-  | None -> trace ("Ticket decryption failed."); None
-  | Some plain ->
-    let nonce, _ = split b 12ul in
-    parse plain nonce
+  let Key tid _ rd = get_ticket_key () in
+  if length b < AE.iv_length tid + AE.taglen tid + 8 (*was: 32*) 
+  then None 
+  else
+    match ticket_decrypt b with
+    | None -> trace ("Ticket decryption failed."); None
+    | Some plain ->
+      let nonce, _ = split b 12ul in
+      parse plain nonce
 
 let serialize = function
   | Ticket12 pv cs ems _ ms ->

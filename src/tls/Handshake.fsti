@@ -102,16 +102,19 @@ type incoming =
 let in_next_keys (r:incoming) = InAck? r && InAck?.next_keys r
 let in_complete (r:incoming)  = InAck? r && InAck?.complete r
 
+(*! Control Interface *)
 
-// Create instance for a fresh connection, with optional resumption for clients
-val create: r0:rid -> cfg:config -> r:role -> ST hs
+// Create handshake instance for a fresh connection, 
+// with optional resumption for clients
+val create: 
+  r0:rid -> cfg:config -> r:role -> ST hs
   (requires (fun h -> True))
   (ensures (fun h0 s h1 ->
     modifies Set.empty h0 h1 /\
-    //fresh_subregion r0 (HS?.region s) h0 h1 /\
-    // hs_inv s h1 /\
-    // HS?.r s = r /\
-    // HS?.cfg s = cfg /\
+    fresh_subregion r0 (region_of s) h0 h1 /\
+    hs_inv s h1 /\
+    role_of s = r /\
+//  config_of s = cfg /\ // TODO: needs fixing
     logT s h1 == Seq.createEmpty ))
 
 let mods s h0 h1 = HS.modifies_one (region_of s) h0 h1

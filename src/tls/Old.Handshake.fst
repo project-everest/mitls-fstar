@@ -108,7 +108,7 @@ let version_of (s:hs) = Nego.version s.nego
 let get_mode (s:hs) = Nego.getMode s.nego
 let is_server_hrr (s:hs) = Nego.is_server_hrr s.nego
 let is_0rtt_offered (s:hs) =
-  let mode = get_mode s in Nego.zeroRTToffer mode.Nego.n_offer
+let mode = get_mode s in Nego.zeroRTToffer mode.Nego.n_offer
 let epochs_of (s:hs) = s.epochs
 
 (* WIP on the handshake invariant
@@ -220,6 +220,9 @@ let register hs keys =
     let ep = //? we don't have a full index yet for the epoch; reuse the one for keys??
       let h = Nego.Fresh ({ Nego.session_nego = None }) in
       Epochs.recordInstanceToEpoch #hs.region #(nonce hs) h keys in // just coercion
+      // New Handshake does
+      // let KeySchedule.StAEInstance #id r w = keys in
+      // Epochs.recordInstanceToEpoch #hs.region #(nonce hs) h (Handshake.Secret.StAEInstance #id r w) in
     Epochs.add_epoch hs.epochs ep // actually extending the epochs log
 
 val export: hs -> KeySchedule.exportKey -> St unit
@@ -290,8 +293,8 @@ let verify_binder hs (bkey:(i:binderId & bk:KeySchedule.binderKey i)) (tag:btag 
 // may be called both by client_ClientHello and client_HelloRetryRequest
 let client_Binders hs offer =
   match Nego.resume hs.nego with
-  | (_, []) -> () // No PSK, no binders
-  | (_, pskl) ->
+  | _, [] -> () // No PSK, no binders
+  | _, pskl -> // Nego may filter the PSKs
     let binderKeys = KeySchedule.ks_client_13_get_binder_keys hs.ks pskl in
     let binders = map_ST2 hs compute_binder binderKeys in
     HandshakeLog.send hs.log (Binders binders);
