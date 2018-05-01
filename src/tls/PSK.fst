@@ -71,21 +71,13 @@ let s12_extend (tid:bytes) (s:session12 tid) = MDM.extend sessions12 tid s
 let pskInfo_hash pi = pi.early_hash
 let pskInfo_ae pi = pi.early_ae
 
-type psk_identifier = identifier:bytes{length identifier < 65536}
+// We rule out all PSK that do not have at least one non-null byte
+// thus avoiding possible confusion with non-PSK for all possible hash algs
+type app_psk (i:psk_identifier) =
+  b:bytes{exists i.{:pattern b.[i]} b.[i] <> 0z}
 
-/// Real key materials for application PSKs.
-///
-/// Since the first extraction takes "PSK or 0" as key materials, and
-/// to avoid confusion for all possible HKDF hash algs, we require
-/// that any PSK have at least one non-null byte.
-/// 
-type app_psk (i:psk_identifier) = b:bytes{exists i.{:pattern b.[i]} b.[i] <> 0z}
-type app_psk_entry (i:psk_identifier) = 
-  | Entry: 
-       keybytes: app_psk i -> 
-       info: pskInfo -> 
-       honest: bool ->  (* only for the global table! *)
-       app_psk_entry i
+type app_psk_entry (i:psk_identifier) =
+  (app_psk i) * pskInfo * bool
 
 // Global invariant on the PSK idealization table
 // No longer necessary now that FStar.Monotonic.DependentMap uses eqtype

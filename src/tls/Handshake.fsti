@@ -25,9 +25,6 @@ val config_of: hs -> ST config
 val version_of: hs -> ST TLSConstants.protocolVersion
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> h0 == h1)
-val resumeInfo_of: s:hs -> ST (TLSInfo.resumeInfo (role_of s))
-  (requires fun h0 -> True)
-  (ensures fun h0 _ h1 -> h0 == h1)
 val get_mode: hs -> ST Negotiation.mode
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> h0 == h1)
@@ -106,21 +103,15 @@ let in_next_keys (r:incoming) = InAck? r && InAck?.next_keys r
 let in_complete (r:incoming)  = InAck? r && InAck?.complete r
 
 
-(*! Control Interface *)
-
-// Create handshake instance for a fresh connection, 
-// with optional resumption for clients
-val create: 
-  r0:rid -> cfg:config -> r:role -> resume:TLSInfo.resumeInfo r -> ST hs
+// Create instance for a fresh connection, with optional resumption for clients
+val create: r0:rid -> cfg:config -> r:role -> ST hs
   (requires (fun h -> True))
   (ensures (fun h0 s h1 ->
     modifies Set.empty h0 h1 /\
-    fresh_subregion r0 (region_of s) h0 h1 /\
-    hs_inv s h1 /\
-    role_of s = r /\
-// cwinter: this needs fixing.
-//    resumeInfo_of s = resume /\
-//    config_of s = cfg /\
+    //fresh_subregion r0 (HS?.region s) h0 h1 /\
+    // hs_inv s h1 /\
+    // HS?.r s = r /\
+    // HS?.cfg s = cfg /\
     logT s h1 == Seq.createEmpty ))
 
 let mods s h0 h1 = HS.modifies_one (region_of s) h0 h1
