@@ -52,6 +52,9 @@ unfold let trace = if DebugFlags.debug_HS then print else (fun _ -> ())
 // some states keep digests (irrespective of their hash algorithm)
 type digest = l:bytes{length l <= 32}
 
+private
+let finishedId = HMAC_UFCMA.finishedId
+
 #set-options "--admit_smt_queries true"
 type machineState =
   | C_Idle
@@ -256,6 +259,8 @@ let clientHello offer = // pure; shared by Client and Server
 *)
 
 (* -------------------- Handshake Client ------------------------ *)
+
+type binderId = HMAC_UFCMA.binderId
 
 type btag (binderKey:(i:binderId & bk:KeySchedule.binderKey i)) =
   HMAC_UFCMA.tag (HMAC_UFCMA.HMAC_Binder (let (|i,_|) = binderKey in i))
@@ -996,7 +1001,7 @@ let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinishe
            let cfg = Nego.local_config hs.nego in
            let cs = mode.Nego.n_cipher_suite in
            let age_add = CoreCrypto.random 4 in
-           let age_add = uint32_of_bytes age_add in
+           let age_add = Parse.uint32_of_bytes age_add in
            let now = CoreCrypto.now () in
            let ticket = Ticket.Ticket13 cs li rmsid rms empty_bytes now age_add empty_bytes in
            let tb = Ticket.create_ticket ticket in
@@ -1085,7 +1090,7 @@ let rec recv_fragment (hs:hs) #i rg f =
       | InAck false false -> recv_fragment hs #i (0,0) empty_bytes // only case where the next incoming flight may already have been buffered.
       | r -> r  in
     trace "recv_fragment";
-    let h0 = get() in
+    let h0 = HST.get() in
     let flight = HandshakeLog.receive hs.log f in
     match flight with
     | Error z -> InError z

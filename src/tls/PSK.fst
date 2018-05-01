@@ -11,23 +11,6 @@ module DM = FStar.DependentMap
 module MDM = FStar.Monotonic.DependentMap
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
-  
-/// Pre-shared key materials for TLS 1.3 handshake  
-///
-/// The constraints for PSK indexes are:
-///  - must be public (as psk index appears in hsId, msId and derived keys)
-///  - must support application-provided PSK as well as RMS-based PSK
-///  - must support dynamic compromise; we want to prove KI of 1RT keys in PSK_DHE
-///    even for leaked PSK (but not PSK-based auth obivously)
-/// 
-///    17-09-20 we can dynamically compromise the Binder key but not the PSK itself.
-///
-///    17-09-20 we support resumption only by coercing across indexes. TODO
-///   
-/// Implementation style:
-///  - pskid is the TLS PSK identifier, an internal index to the PSK table
-///  - for tickets, the encrypted serialized state is the PSK identifier
-///  - we store in the table the PSK context and compromise status
 
 // Has been moved to TLSConstants as it appears in config for ticket callbacks
 type pskInfo = TLSConstants.pskInfo
@@ -100,28 +83,28 @@ type registered_psk (i:psk_identifier) =
 
 let valid_app_psk (ctx:pskInfo) (i:psk_identifier) (h:mem) =
   match MDM.sel (HS.sel h app_psk_table) i with
-  | Some (Entry _ c _) -> b2t (c = ctx)
+  | Some (_, c, _) -> b2t (c = ctx)
   | _ -> False
 
-type pskid = i:psk_identifier{registered_psk i} 
+type pskid = i:psk_identifier{registered_psk i}
 
 let psk_value (i:pskid) : ST (app_psk i)
-  (requires (fun h0 -> True))
-  (ensures  (fun h0 _ h1 -> modifies_none h0 h1))
-  =
-  recall app_psk_table;
-  testify (MDM.defined app_psk_table i);
-  match MDM.lookup app_psk_table i with
-  | Some e -> e.keybytes
-
-let psk_info (i:pskid) : ST pskInfo
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
   recall app_psk_table;
   testify (MDM.defined app_psk_table i);
   match MDM.lookup app_psk_table i with
-  | Some e -> e.info
+  | Some (psk, _, _) -> psk
+
+let psk_info (i:pskid) : ST (pskInfo)
+  (requires (fun h0 -> True))
+  (ensures (fun h0 _ h1 -> modifies_none h0 h1))
+  =
+  recall app_psk_table;
+  testify (MDM.defined app_psk_table i);
+  match MDM.lookup app_psk_table i with
+  | Some (_, ctx, _) -> ctx
 
 let psk_lookup (i:psk_identifier) : ST (option pskInfo)
   (requires (fun h0 -> True))
@@ -131,7 +114,7 @@ let psk_lookup (i:psk_identifier) : ST (option pskInfo)
   =
   recall app_psk_table;
   match MDM.lookup app_psk_table i with
-  | Some (Entry _ ctx _) ->
+  | Some (_, ctx, _) ->
     assume(stable_on_t app_psk_table (MDM.defined app_psk_table i));
     mr_witness app_psk_table (MDM.defined app_psk_table i);
     Some ctx
@@ -139,12 +122,11 @@ let psk_lookup (i:psk_identifier) : ST (option pskInfo)
 
 type honest_st (i:pskid) (h:mem) =
   (MDM.defined app_psk_table i h /\
-  (let (Entry _ _ b) = MDM.value_of app_psk_table i h in b = true))
+  (let (_,_,b) = MDM.value_of app_psk_table i h in b = true))
 
 type honest_psk (i:pskid) = witnessed (honest_st i)
 
-/// Generates a fresh PSK identifier
-/// TODO: does this require idealization?
+// Generates a fresh PSK identity
 val fresh_psk_id: unit -> ST psk_identifier
   (requires (fun h -> True))
   (ensures (fun h0 i h1 ->
@@ -156,8 +138,8 @@ let rec fresh_psk_id () =
   | None -> id
   | Some _ -> fresh_psk_id ()
 
-/// "Application PSK" generator (enforces empty session context)
-/// TODO: usual caveat of random producing pairwise distinct keys
+// "Application PSK" generator (enforces empty session context)
+// Usual caveat of random producing pairwise distinct keys (TODO)
 let gen_psk (i:psk_identifier) (ctx:pskInfo)
   : ST unit
   (requires (fun h -> MDM.fresh app_psk_table i h))
@@ -170,7 +152,7 @@ let gen_psk (i:psk_identifier) (ctx:pskInfo)
   let rand = CoreCrypto.random 32 in
   let psk = (abyte 1z) @| rand in
   assume(psk.[0ul] = 1z);
-  let add : app_psk_entry i = Entry psk ctx true in
+  let add : app_psk_entry i = (psk, ctx, true) in
   MDM.extend app_psk_table i add;
   MDM.contains_stable app_psk_table i add;
   let h = get () in
@@ -189,16 +171,16 @@ let coerce_psk (i:psk_identifier) (ctx:pskInfo) (k:app_psk i)
     ~(honest_psk i)))
   =
   recall app_psk_table;
-  let add : app_psk_entry i = Entry k ctx false in
+  let add : app_psk_entry i = (k, ctx, false) in
   MDM.extend app_psk_table i add;
   MDM.contains_stable app_psk_table i add;
   let h = get () in
   cut(MDM.sel (HS.sel h app_psk_table) i == Some add);
   admit()
 
-abstract let compatible_hash_ae_st (i:pskid) (ha:hash_alg) (ae:aeadAlg) (h:mem) =
+let compatible_hash_ae_st (i:pskid) (ha:hash_alg) (ae:aeadAlg) (h:mem) =
   (MDM.defined app_psk_table i h /\
-  (let (Entry _ ctx _) = MDM.value_of app_psk_table i h in
+  (let (_,ctx,_) = MDM.value_of app_psk_table i h in
   ha = pskInfo_hash ctx /\ ae = pskInfo_ae ctx))
 
 let compatible_hash_ae (i:pskid) (h:hash_alg) (a:aeadAlg) =
@@ -206,7 +188,7 @@ let compatible_hash_ae (i:pskid) (h:hash_alg) (a:aeadAlg) =
 
 let compatible_info_st (i:pskid) (c:pskInfo) (h:mem) =
   (MDM.defined app_psk_table i h /\
-  (let (Entry _ ctx _) = MDM.value_of app_psk_table i h in c = ctx))
+  (let (_,ctx,_) = MDM.value_of app_psk_table i h in c = ctx))
 
 let compatible_info (i:pskid) (c:pskInfo) =
   witnessed (compatible_info_st i c)
@@ -223,7 +205,7 @@ let verify_hash_ae (i:pskid) (ha:hash_alg) (ae:aeadAlg) : ST bool
     let h = get() in
     cut(MDM.contains app_psk_table i x h);
     cut(MDM.value_of app_psk_table i h = x);
-    let (Entry _ ctx _) = x in
+    let (_, ctx, _) = x in
     if pskInfo_hash ctx = ha && pskInfo_ae ctx = ae then
      begin
       cut(compatible_hash_ae_st i ha ae h);
