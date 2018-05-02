@@ -19,7 +19,7 @@ VFLAGS+=--admit_smt_queries true
 FFI_HOME	= $(MITLS_HOME)/libs/ffi
 LOWC_HOME	= $(HACL_HOME)/secure_api/out/$(IMPL_CHOICE)
 
-OCAMLOPTS	=-package fstarlib,zarith,ctypes,ctypes.foreign -g \
+OCAMLOPTS0	= -g \
 		  -I $(FSTAR_HOME)/ulib/ml \
 		  -I $(EXTRACT_DIR) \
 		  -I $(MLCRYPTO_HOME) \
@@ -31,9 +31,10 @@ OCAMLOPTS	=-package fstarlib,zarith,ctypes,ctypes.foreign -g \
 		  -I extract/mlstubs \
 		  -I .
 
+OCAMLOPTS	= $(OCAMLOPTS0) -package fstarlib,zarith,ctypes,ctypes.foreign
 OCAMLC		= OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind c   $(OCAMLOPTS)
 OCAMLOPT	= OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind opt $(OCAMLOPTS)
-OCAMLMKLIB	= OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind mklib $(OCAMLOPTS)
+OCAMLMKLIB	= OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind mklib $(OCAMLOPTS0)
 IMPL_CHOICE 	?= runtime_switch
 
 # Sanity checks

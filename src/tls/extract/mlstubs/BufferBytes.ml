@@ -1,6 +1,6 @@
 open Prims
 
-type 'Al lbuffer = FStar_UInt8.t FStar_Buffer.buffer[@@deriving show]
+type 'Al lbuffer = FStar_UInt8.t FStar_Buffer.buffer
 
 let to_bytes : Prims.nat -> Prims.unit lbuffer -> FStar_Bytes.bytes =
   fun len -> fun buf ->

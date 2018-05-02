@@ -66,7 +66,8 @@ noeq type connection = | C:
   hs     : Handshake.hs {extends (Handshake.region_of hs) region /\ is_hs_rgn (Handshake.region_of hs)} (* providing role, config, and uid *) ->
   tcp    : Transport.t ->
   recv   : Record.input_state -> //TODO {HS.frameOf recv = region} -> // added for buffering non-blocking reads
-  state  : ref tlsState {HS.frameOf state = region} -> connection
+  state  : ref tlsState {HS.frameOf state = region} -> 
+  connection
 
 // 17-04-08 helpful or not?
 let c_role c = Handshake.role_of c.hs

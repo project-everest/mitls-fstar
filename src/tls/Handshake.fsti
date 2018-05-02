@@ -106,8 +106,7 @@ let in_complete (r:incoming)  = InAck? r && InAck?.complete r
 
 // Create handshake instance for a fresh connection, 
 // with optional resumption for clients
-val create: 
-  r0:rid -> cfg:config -> r:role -> ST hs
+val create: r0:rid -> cfg:config -> r:role -> ST hs
   (requires (fun h -> True))
   (ensures (fun h0 s h1 ->
     modifies Set.empty h0 h1 /\
