@@ -429,7 +429,9 @@ let sum_destr_cons
       if (k <: sum_key_type t) = (k' <: sum_key_type t)
       then (f k x' <: v)
       else
-        (destr (fun k x -> f (k <: sum_key_type t) (x <: sum_type t)) (k' <: sum_key_type t) (x' <: sum_tail_type t) <: v)
+        [@inline_let]
+        let x_ : sum_type t = x' in
+        (destr (fun k x -> f (k <: sum_key_type t) (x <: sum_type t)) (k' <: sum_key_type t) x_ <: v)
     ) <: (y: v {y == f k' x' } ))
 
 inline_for_extraction

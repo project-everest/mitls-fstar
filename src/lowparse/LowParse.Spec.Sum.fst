@@ -141,11 +141,6 @@ let sum_key (t: sum) : Tot Type0 =
   enum_key (sum_enum t)
 
 inline_for_extraction
-let sum_cases (t: sum) : Tot ((x: sum_key t) -> Tot Type0) =
-  let (Sum _ _ _ _ tag_of_data) = t in
-  (fun x -> refine_with_tag tag_of_data x)
-
-inline_for_extraction
 let sum_type (t: sum) : Tot Type0 =
   let (Sum _ _ _ data _) = t in
   data
@@ -154,6 +149,10 @@ inline_for_extraction
 let sum_tag_of_data (t: sum) : Tot ((x: sum_type t) -> GTot (sum_key t)) =
   let (Sum _ _ _ _ tag_of_data) = t in
   tag_of_data
+
+inline_for_extraction
+let sum_cases (t: sum) (x: sum_key t) : Type0 =
+  refine_with_tag #(sum_key t) #(sum_type t) (sum_tag_of_data t) x
 
 let weaken_parse_cases_kind
   (s: sum)
