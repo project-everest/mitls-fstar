@@ -27,6 +27,10 @@ else ifeq ($(UNAME),Linux)
   export LD_LIBRARY_PATH
 endif
 
+ifneq (,$(EVEREST_WINDOWS))
+CFLAGS+=-DKRML_NOUINT128 # -DKRML_NOSTRUCT_PASSING
+endif
+
 ifndef NO_OPENSSL
 ifeq ($(OS),Windows_NT)
   PATH := $(MLCRYPTO_HOME)/openssl:$(PATH)
