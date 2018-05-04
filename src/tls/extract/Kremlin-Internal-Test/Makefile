@@ -43,7 +43,7 @@ else
 endif
 endif
 
-INCLUDE_DIRS 	= secure kremlib include stub vale curve pki ffi uint128 .
+INCLUDE_DIRS 	= secure kreminc include stub vale curve pki ffi uint128 .
 
 # Note: see comment in Makefile.Kremlin to see why we're re-extracting
 # Crypto.Symmetric.Bytes rather than using the one from secure/
