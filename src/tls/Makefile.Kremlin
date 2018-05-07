@@ -82,8 +82,8 @@ SECURE_OUT	= $(HACL_HOME)/secure_api/out/hacl_aes_abstract_id/crypto
 VALE_DIR	= $(HACL_HOME)/secure_api/vale/asm
 UINT128_DIR	= $(HACL_HOME)/secure_api/out/runtime_switch/uint128
 
-ifeq (,$(wildcard $(CURVE_DIR)/Curve25519.h))
-  $(error HACL_HOME is $(HACL_HOME) and I cannot find $(CURVE_DIR)/Curve25519.h -- please run make extract-c -C $(CURVE_DIR)/.. -- thanks)
+ifeq (,$(wildcard $(CURVE_DIR)/Hacl_Curve25519.h))
+  $(error HACL_HOME is $(HACL_HOME) and I cannot find $(CURVE_DIR)/Hacl_Curve25519.h -- please run make extract-c -C $(CURVE_DIR)/.. -- thanks)
 endif
 
 ifeq (,$(wildcard $(SECURE_OUT)/Crypto_AEAD_Main.h))
@@ -100,7 +100,7 @@ endef
 ALL_EXTERNAL_FILES	= \
   $(addprefix secure/,Crypto_AEAD_Main.c Crypto_AEAD_Main.h \
     Crypto_HKDF_Crypto_HMAC.c Crypto_HKDF_Crypto_HMAC.h) \
-  $(addprefix curve/,Curve25519.c Curve25519.h) \
+  $(addprefix curve/,Hacl_Curve25519.c Hacl_Curve25519.h) \
   $(addprefix kremlib/,kremstr.c kremstr.h kremdate.c krembytes.h kremlib.h \
     gcc_compat.h testlib.h) \
   $(addprefix stub/,hacl_aead.c hacl_provider.c core_crypto.c log_to_choice.h \
