@@ -24,7 +24,7 @@ SOURCES = \
   Crypto_HKDF_Crypto_HMAC.c \
   Crypto_Indexing.c \
   Crypto_Symmetric_Bytes.c \
-  Curve25519.c \
+  Hacl_Curve25519.c \
   C_Loops_Spec_Loops.c \
   DataStream.c \
   DHGroup.c \
