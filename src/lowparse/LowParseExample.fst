@@ -1,7 +1,19 @@
 module LowParseExample
 
-let f (input: FStar.Bytes.bytes) : Tot (option (LowParseExample.Aux.t * FStar.UInt32.t)) =
-  LowParseExample.Aux.parse32_t input
+#reset-options "--using_facts_from '* -LowParse +LowParse.Spec.Base +LowParse.SLow.Base'"
+
+let f (input: FStar.Bytes.bytes) : Pure (option (LowParseExample.Aux.t * FStar.UInt32.t))
+  (requires True)
+  (ensures (fun res ->
+    match res with
+    | None -> True
+    | Some (_, consumed) -> FStar.UInt32.v consumed <= FStar.Bytes.length input
+  ))
+= [@inline_let]
+  let res = LowParseExample.Aux.parse32_t input in
+  [@inline_let]
+  let _ = LowParse.SLow.Base.parser32_consumes LowParseExample.Aux.parse32_t input in
+  res
 
 let g (input: FStar.Bytes.bytes) : Tot (option (LowParse.SLow.array LowParseExample.Aux.t 18 * FStar.UInt32.t)) =
   LowParseExample.Aux.parse32_t_array input
