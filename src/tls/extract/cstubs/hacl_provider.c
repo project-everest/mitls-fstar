@@ -1,6 +1,7 @@
 #include "kremlib.h"
 #include "Crypto_HKDF_Crypto_HMAC.h"
 #include "Hacl_Curve25519.h"
+#include "HaclProvider.h"
 
 // FIXME KRML_HOST_CALLOC() == NULL
 
