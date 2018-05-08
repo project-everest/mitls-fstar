@@ -12,7 +12,7 @@ endif
 
 INCLUDE_KREMLIN=--include $(KREMLIN_HOME)/kremlib
 
-FSTAR_OPTIONS += --use_hints --use_two_phase_tc true # --use_extracted_interfaces
+FSTAR_OPTIONS += --use_hints --use_two_phase_tc true --include . # --use_extracted_interfaces
 
 # NOTE: the cache dir and out dir for F* MUST be the same, because the
 # .krml files should be generated only once.
@@ -22,7 +22,7 @@ MY_FSTAR=$(FSTAR_HOME)/bin/fstar.exe --cache_checked_modules --cache_dir $(FSTAR
 MY_KREMLIN=$(KREMLIN_HOME)/krml -bundle 'LowParse.\*' $(KREMLIN_HOME)/kremlib/kremstr.c -add-include '"kremstr.h"' -drop FStar.Bytes -add-include '"krembytes.h"'
 
 EXAMPLES=Example Example2
-ROOT_FILES=LowParse.SLow.fst $(addprefix LowParse, $(addsuffix .fst, $(EXAMPLES)))
+ROOT_FILES=LowParse.SLow.fst $(addprefix LowParse, $(addsuffix .fst, $(EXAMPLES))) LowParseTestlib.fst
 
 EXCLUDE_KRML_FILES=$(FSTAR_OUT_DIR)/prims.krml
 
@@ -58,8 +58,11 @@ $(FSTAR_OUT_DIR)/%.krml:
 
 $(EXAMPLES): %: %/a.out
 
-%/a.out:
-	$(MY_KREMLIN) -tmpdir $(EXAMPLE) -bundle LowParse$(EXAMPLE)'.Aux' -no-prefix LowParse$(EXAMPLE) $(EXAMPLE_KRML_FILES) -o $@
+%/a.out: LowParseTestlib_c.o
+	$(MY_KREMLIN) -tmpdir $(EXAMPLE) -bundle LowParse$(EXAMPLE)'.Aux' -no-prefix LowParse$(EXAMPLE) $(EXAMPLE_KRML_FILES) LowParseTestlib_c.o -o $@
+    
+LowParseTestlib_c.o: LowParseTestlib_c.c
+	$(CC) -c -I$(KREMLIN_HOME)/kremlib -I$(EXAMPLE) LowParseTestlib_c.c
 
 extract-all: $(EXAMPLES)
 
