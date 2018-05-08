@@ -149,10 +149,10 @@ internal-test-copy: $(addprefix $(INTERNAL_TEST_DIR)/,$(ALL_EXTERNAL_FILES)) $(I
 output-internal-test: internal-test-copy $(INTERNAL_TEST_DIR)/Test_Main.c
 
 build-internal-test: output-internal-test
-	$(MAKE) -C $(INTERNAL_TEST_DIR)
+	EVEREST_WINDOWS=$(EVEREST_WINDOWS) $(MAKE) -C $(INTERNAL_TEST_DIR)
 
 test-internal-test: output-internal-test
-	$(MAKE) -C $(INTERNAL_TEST_DIR) test
+	EVEREST_WINDOWS=$(EVEREST_WINDOWS) $(MAKE) -C $(INTERNAL_TEST_DIR) test
 
 clean-internal-test:
 	-@find $(INTERNAL_TEST_DIR) -type f -and -not -name Makefile -and -not -name .gitignore \
@@ -183,10 +183,10 @@ library-copy: $(addprefix $(LIBRARY_DIR)/, $(filter-out pki/mipki.h, $(ALL_EXTER
 output-library: library-copy $(LIBRARY_DIR)/TLS.c
 
 build-library: output-library
-	$(MAKE) -C $(LIBRARY_DIR)
+	EVEREST_WINDOWS=$(EVEREST_WINDOWS) $(MAKE) -C $(LIBRARY_DIR)
 
 test-library: output-library
-	$(MAKE) -C $(LIBRARY_DIR) test
+	EVEREST_WINDOWS=$(EVEREST_WINDOWS) $(MAKE) -C $(LIBRARY_DIR) test
 
 clean-library:
 	-@find $(LIBRARY_DIR) -type f -and -not -name Makefile -and -not -name .gitignore \
