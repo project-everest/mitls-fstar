@@ -28,7 +28,7 @@ FStar_Bytes_bytes LowParseTestlib_load_file(Prims_string x0)
         KRML_HOST_EPRINTF("Failed to seek to start of file '%s'.  errno=%d\n", x0, errno);
         KRML_HOST_EXIT(1);
     }
-    char *buffer = (char*)malloc(filesize);
+    char *buffer = (char*)KRML_HOST_MALLOC(filesize);
     if (!buffer) {
         KRML_HOST_EPRINTF("Out of memory reading file '%s'.  errno=%d\n", x0, errno);
         KRML_HOST_EXIT(1);
