@@ -28,6 +28,10 @@ else ifeq ($(UNAME),Linux)
   export LD_LIBRARY_PATH
 endif
 
+ifneq (,$(EVEREST_WINDOWS))
+CFLAGS+=-DKRML_NOUINT128 # -DKRML_NOSTRUCT_PASSING
+endif
+
 ifndef NO_OPENSSL
 ifeq ($(OS),Windows_NT)
   PATH := $(MLCRYPTO_HOME)/openssl:$(PATH)
@@ -38,7 +42,7 @@ else
 endif
 endif
 
-INCLUDE_DIRS 	= secure kremlib include stub vale curve ffi uint128 .
+INCLUDE_DIRS 	= secure kreminc include stub vale curve ffi uint128 .
 
 # Note: see comment in Makefile.Kremlin to see why we're re-extracting
 # Crypto.Symmetric.Bytes rather than using the one from secure/
@@ -52,7 +56,7 @@ INCLUDE_DIRS 	= secure kremlib include stub vale curve ffi uint128 .
 FILES 		= AEAD_GCM AEADProvider Alert BufferBytes Cert \
   C_Loops_Spec_Loops CommonDH Connection Content CoreCrypto \
   Crypto_Indexing Crypto_Symmetric_Bytes Crypto_Plain \
-  CryptoTypes curve/Curve25519 DataStream DHGroup ECGroup Epochs Extensions FFI \
+  CryptoTypes curve/Hacl_Curve25519 DataStream DHGroup ECGroup Epochs Extensions FFI \
   FFICallbacks Flag Flags FStar HaclProvider Handshake HandshakeLog \
   HandshakeMessages Hashing Hashing_CRF Hashing_OpenSSL Hashing_Spec HKDF HMAC \
   HMAC_UFCMA KeySchedule kremlib/kremdate kremlib/kremstr kremlinit LHAEPlain \
@@ -100,6 +104,6 @@ libmitls.$(SO): $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/a
 clean:
 	rm -fr $(addsuffix .o,$(FILES)) $(addsuffix .c,$(FILES)) libmitls.$(SO)
 	rm -fr vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
-	rm -fr *.a *.h *~
+	rm -fr *.a *.h *.d *~
 
 test:

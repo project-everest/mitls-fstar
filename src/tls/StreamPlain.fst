@@ -25,9 +25,7 @@ type id = i:id { ID13? i }
 // similarly, the length accounts for the TLS-specific CT byte.
 // internally, we know len > 0
 
-//ADL is this correct? Why not l <= max_TLSPlaintext_fragment_length ??
-let plainLength (l:int) = 1 <= l /\ l <= max_TLSCiphertext_fragment_length_13
-
+let plainLength (l:int) = 1 <= l /\ l <= max_TLSPlaintext_fragment_length
 type plainLen = l:int { plainLength l }
 type plainRepr = b:bytes { plainLength (length b) }
 

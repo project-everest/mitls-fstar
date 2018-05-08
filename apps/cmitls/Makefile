@@ -44,6 +44,11 @@ all: cmitls.exe
 clean:
 	rm -rf *.o *.exe *.dll *~
 
+copy: $(MITLS_HOME)/src/pki/$(LIBPKI) $(MITLS_HOME)/src/tls/extract/Kremlin-Library/$(LIBMITLS)
+	cp $(MITLS_HOME)/src/pki/$(LIBPKI) .
+	cp $(MLCRYPTO_HOME)/openssl/$(OPENSSL) .
+	cp $(MITLS_HOME)/src/tls/extract/Kremlin-Library/$(LIBMITLS) .
+
 $(MITLS_HOME)/src/pki/$(LIBPKI):
 	$(MAKE) -C ../../src/pki
 

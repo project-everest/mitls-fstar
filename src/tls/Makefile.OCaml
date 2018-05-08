@@ -19,7 +19,7 @@ include Makefile.common
 FFI_HOME	= $(MITLS_HOME)/libs/ffi
 LOWC_HOME	= $(HACL_HOME)/secure_api/out/$(IMPL_CHOICE)
 
-OCAMLOPTS	=-package fstarlib,zarith,ctypes,ctypes.foreign -g \
+OCAMLOPTS0	= -g \
 		  -I $(FSTAR_HOME)/ulib/ml \
 		  -I $(EXTRACT_DIR) \
 		  -I $(MLCRYPTO_HOME) \
@@ -32,8 +32,10 @@ OCAMLOPTS	=-package fstarlib,zarith,ctypes,ctypes.foreign -g \
 		  -I $(EVERCRYPT_HOME)/multiplexer/ml \
 		  -I .
 
+OCAMLOPTS	= $(OCAMLOPTS0) -package fstarlib,zarith,ctypes,ctypes.foreign
+
 OCAMLOPT	= OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind opt $(OCAMLOPTS)
-OCAMLMKLIB	= OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind mklib $(OCAMLOPTS)
+OCAMLMKLIB	= OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind mklib $(OCAMLOPTS0)
 IMPL_CHOICE 	?= runtime_switch
 
 # Sanity checks
@@ -59,7 +61,7 @@ ifeq (,$(wildcard $(FFI_HOME)/FFICallbacks.cmxa))
 endif
 
 %.o: %.c
-	$(CC) -I $(KREMLIN_HOME)/kremlib $^ -o $@ -c
+	$(CC) -I $(KREMLIN_HOME)/include $^ -o $@ -c
 
 # We must insert PKI.cmx at the right spot in the list of inputs
 MITLS_INPUTS=\

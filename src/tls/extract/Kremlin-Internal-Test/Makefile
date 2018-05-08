@@ -34,6 +34,10 @@ ifeq (,$(wildcard $(MITLS_HOME)/src/pki/libmipki.$(SO)))
   $(error MITLS_HOME is $(MITLS_HOME) and I cannot find $(MITLS_HOME)/src/pki/libmipki.$(SO) -- please run make in $(MITLS_HOME)/src/pki)
 endif
 
+ifneq (,$(EVEREST_WINDOWS))
+CFLAGS+=-DKRML_NOUINT128 # -DKRML_NOSTRUCT_PASSING
+endif
+
 ifndef NO_OPENSSL
 ifeq ($(OS),Windows_NT)
   PATH := $(MLCRYPTO_HOME)/openssl:$(PATH)
@@ -44,7 +48,7 @@ else
 endif
 endif
 
-INCLUDE_DIRS 	= secure kremlib include stub vale curve pki ffi uint128 .
+INCLUDE_DIRS 	= secure kreminc include stub vale curve pki ffi uint128 .
 
 # Note: see comment in Makefile.Kremlin to see why we're re-extracting
 # Crypto.Symmetric.Bytes rather than using the one from secure/
@@ -53,7 +57,7 @@ INCLUDE_DIRS 	= secure kremlib include stub vale curve pki ffi uint128 .
 # then: remove Crypto_AEAD_Main because of the hacl_provider hack
 FILES 		= Cert C_Loops_Spec_Loops CommonDH CoreCrypto \
   Crypto_Indexing Crypto_Symmetric_Bytes Crypto_Plain \
-  CryptoTypes curve/Curve25519 DHGroup ECGroup Extensions Flag Flags FStar \
+  CryptoTypes curve/Hacl_Curve25519 DHGroup ECGroup Extensions Flag Flags FStar \
   HaclProvider Hashing_Spec kremlib/kremdate kremlib/kremstr kremlinit \
   LowCProvider Nonce Parse PMS Prims PSK RSAKey \
   secure/Crypto_HKDF_Crypto_HMAC \

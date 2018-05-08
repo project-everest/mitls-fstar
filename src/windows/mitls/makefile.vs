@@ -1,4 +1,4 @@
-CCOPTS = /nologo /O2 /Gy /GF /Gw /GA /MD /Zi -I. -I.. -FI..\CommonInclude.h /DNO_OPENSSL
+CCOPTS = /nologo /O2 /Gy /GF /Gw /GA /MD /Zi -I. -I.. -Iinclude -FI..\CommonInclude.h /DNO_OPENSSL
 
 all: libmitls.dll
 
@@ -24,7 +24,7 @@ SOURCES = \
   Crypto_HKDF_Crypto_HMAC.c \
   Crypto_Indexing.c \
   Crypto_Symmetric_Bytes.c \
-  Curve25519.c \
+  Hacl_Curve25519.c \
   C_Loops_Spec_Loops.c \
   DataStream.c \
   DHGroup.c \

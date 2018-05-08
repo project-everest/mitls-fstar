@@ -68,21 +68,15 @@ static Prims_string CopyPrimsString(const char *src)
 {
     size_t len = strlen(src)+1;
     Prims_string dst = KRML_HOST_MALLOC(len);
-    if (dst) {
-        memcpy((char*)dst, src, len);
-    }
+    memcpy((char*)dst, src, len);
     return dst;
 }
 
-static bool MakeFStar_Bytes_bytes(FStar_Bytes_bytes *b, const unsigned char *data, uint32_t length)
+static void MakeFStar_Bytes_bytes(FStar_Bytes_bytes *b, const unsigned char *data, uint32_t length)
 {
     b->data = KRML_HOST_MALLOC(length);
-    if (!b->data) {
-        return false;
-    }
     memcpy((char*)b->data, data, length);
     b->length = length;
-    return true;
 }
 
 void NoPrintf(const char *fmt, ...)
@@ -176,7 +170,13 @@ int MITLS_CALLCONV FFI_mitls_init(void)
   #endif
 #endif
 
+  ENTER_GLOBAL_HEAP_REGION();
   kremlinit_globals();
+  LEAVE_GLOBAL_HEAP_REGION();
+  if (HAD_OUT_OF_MEMORY) {
+      HeapRegionCleanup();
+      return 0;
+  }
   return 1; // success
 }
 
@@ -196,14 +196,14 @@ void MITLS_CALLCONV FFI_mitls_cleanup(void)
 // Called by the host app to configure miTLS ahead of creating a connection
 int MITLS_CALLCONV FFI_mitls_configure(mitls_state **state, const char *tls_version, const char *host_name)
 {
-    int ret;
+    int ret = 0;
 
     *state = NULL;
 
     HEAP_REGION rgn;
     CREATE_HEAP_REGION(&rgn);
     if (!VALID_HEAP_REGION(rgn)) {
-        return 0;
+        return 0; // out of memory
     }
 
     Prims_string host = CopyPrimsString(host_name);
@@ -213,28 +213,47 @@ int MITLS_CALLCONV FFI_mitls_configure(mitls_state **state, const char *tls_vers
 
     // Allocate space on the heap, to store an OCaml value
     mitls_state *s = (mitls_state*)KRML_HOST_MALLOC(sizeof(mitls_state));
-    if (s) {
-        s->cfg = config;
-        s->rgn = rgn;
-        *state = s;
-        ret = 1;
-    } else {
+    s->cfg = config;
+    s->rgn = rgn;
+    *state = s;
+    ret = 1;
+
+    LEAVE_HEAP_REGION();
+    if (HAD_OUT_OF_MEMORY) {
         DESTROY_HEAP_REGION(rgn);
         ret = 0;
     }
-
-    LEAVE_HEAP_REGION();
     return ret;
 }
 
 int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *alg, const unsigned char *tk, size_t klen)
 {
-    // bugbug: this uses the global region for heap allocations
+    int b = 0;
     LOCK_MUTEX(&lock);
+    ENTER_GLOBAL_HEAP_REGION();
     FStar_Bytes_bytes key;
-    bool b = MakeFStar_Bytes_bytes(&key, tk, klen);
-    if(b) b = FFI_ffiSetTicketKey(alg, key);
+    MakeFStar_Bytes_bytes(&key, tk, klen);
+    b = FFI_ffiSetTicketKey(alg, key);
+    LEAVE_GLOBAL_HEAP_REGION();
     UNLOCK_MUTEX(&lock);
+    if (HAD_OUT_OF_MEMORY) {
+        return 0;
+    }
+    return (b) ? 1 : 0;
+}
+
+int MITLS_CALLCONV FFI_mitls_configure_ticket(mitls_state *state, const mitls_ticket *ticket)
+{
+    int b = 0;
+    ENTER_HEAP_REGION(state->rgn);
+    FStar_Bytes_bytes tid, si;
+    MakeFStar_Bytes_bytes(&tid, ticket->ticket, ticket->ticket_len);
+    MakeFStar_Bytes_bytes(&si, ticket->session, ticket->session_len);
+    state->cfg = FFI_ffiSetTicket(state->cfg, tid, si);
+    LEAVE_HEAP_REGION();
+    if (HAD_OUT_OF_MEMORY) {
+        return 0;
+    }
     return (b) ? 1 : 0;
 }
 
@@ -243,6 +262,9 @@ int MITLS_CALLCONV FFI_mitls_configure_cipher_suites(/* in */ mitls_state *state
     ENTER_HEAP_REGION(state->rgn);
     state->cfg = FFI_ffiSetCipherSuites(state->cfg, cs);
     LEAVE_HEAP_REGION();
+    if (HAD_OUT_OF_MEMORY) {
+        return 0;
+    }
     return 1;
 }
 
@@ -251,6 +273,9 @@ int MITLS_CALLCONV FFI_mitls_configure_signature_algorithms(/* in */ mitls_state
     ENTER_HEAP_REGION(state->rgn);
     state->cfg = FFI_ffiSetSignatureAlgorithms(state->cfg, sa);
     LEAVE_HEAP_REGION();
+    if (HAD_OUT_OF_MEMORY) {
+        return 0;
+    }
     return 1;
 }
 
@@ -259,6 +284,9 @@ int MITLS_CALLCONV FFI_mitls_configure_named_groups(/* in */ mitls_state *state,
     ENTER_HEAP_REGION(state->rgn);
     state->cfg = FFI_ffiSetNamedGroups(state->cfg, ng);
     LEAVE_HEAP_REGION();
+    if (HAD_OUT_OF_MEMORY) {
+        return 0;
+    }
     return 1;
 }
 
@@ -267,6 +295,9 @@ int MITLS_CALLCONV FFI_mitls_configure_alpn(/* in */ mitls_state *state, const c
     ENTER_HEAP_REGION(state->rgn);
     state->cfg = FFI_ffiSetALPN(state->cfg, apl);
     LEAVE_HEAP_REGION();
+    if (HAD_OUT_OF_MEMORY) {
+        return 0;
+    }
     return 1;
 }
 
@@ -281,6 +312,9 @@ int MITLS_CALLCONV FFI_mitls_configure_custom_extensions(/* in */ mitls_state *s
     exts++;
   }
   LEAVE_HEAP_REGION();
+  if (HAD_OUT_OF_MEMORY) {
+    return 0;
+  }
   return 1;
 }
 
@@ -312,6 +346,9 @@ int MITLS_CALLCONV FFI_mitls_configure_ticket_callback(/* in */ mitls_state *sta
     cbs->cb = ticket_cb;
     state->cfg = FFI_ffiSetTicketCallback(state->cfg, (void*)cbs, ticket_cb_proxy);
     LEAVE_HEAP_REGION();
+    if (HAD_OUT_OF_MEMORY) {
+        return 0;
+    }
     return 1;
 }
 
@@ -401,6 +438,9 @@ int MITLS_CALLCONV FFI_mitls_configure_nego_callback(mitls_state *state, void *c
   cbs->cb = nego_cb;
   state->cfg = FFI_ffiSetNegoCallback(state->cfg, (void*)cbs, nego_cb_proxy);
   LEAVE_HEAP_REGION();
+  if (HAD_OUT_OF_MEMORY) {
+    return 0;
+  }
   return 1;
 }
 
@@ -596,6 +636,9 @@ int MITLS_CALLCONV FFI_mitls_configure_cert_callbacks(/* in */ mitls_state *stat
 
   state->cfg = FFI_ffiSetCertCallbacks(state->cfg, cb);
   LEAVE_HEAP_REGION();
+  if (HAD_OUT_OF_MEMORY) {
+    return 0;
+  }
   return 1;
 }
 
@@ -604,6 +647,9 @@ int MITLS_CALLCONV FFI_mitls_configure_early_data(/* in */ mitls_state *state, u
     ENTER_HEAP_REGION(state->rgn);
     state->cfg = FFI_ffiSetEarlyData(state->cfg, max_early_data);
     LEAVE_HEAP_REGION();
+    if (HAD_OUT_OF_MEMORY) {
+        return 0;
+    }
     return 1;
 }
 
@@ -617,10 +663,10 @@ void MITLS_CALLCONV FFI_mitls_close(mitls_state *state)
     }
 }
 
-void MITLS_CALLCONV FFI_mitls_free_packet(/* in */ mitls_state *state, unsigned char *packet)
+void MITLS_CALLCONV FFI_mitls_free(/* in */ mitls_state *state, void* pv)
 {
     ENTER_HEAP_REGION(state->rgn);
-    KRML_HOST_FREE(packet);
+    KRML_HOST_FREE(pv);
     LEAVE_HEAP_REGION();
 }
 
@@ -645,104 +691,49 @@ static int32_t wrapped_recv(void* ctx, uint8_t* buffer, uint32_t len)
 // Called by the host app to create a TLS connection.
 int MITLS_CALLCONV FFI_mitls_connect(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state)
 {
-   ENTER_HEAP_REGION(state->rgn);
-   LOCK_MUTEX(&lock);
-
-   wrapped_transport_cb* tcb = KRML_HOST_MALLOC(sizeof(wrapped_transport_cb));
-   Prims_list__FStar_Bytes_bytes *psks = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
-
-   tcb->send_recv_ctx = send_recv_ctx;
-   tcb->send = psend;
-   tcb->recv = precv;
-   psks->tag = Prims_Nil;
-
-    // No psks this FFI_connect() call
-    K___Connection_connection_Prims_int result = FFI_connect((FStar_Dyn_dyn)tcb, wrapped_send, wrapped_recv, state->cfg, psks);
-    state->cxn = result.fst;
-
-    UNLOCK_MUTEX(&lock);
-    LEAVE_HEAP_REGION();
-    return (result.snd == 0);
-}
-
-int MITLS_CALLCONV FFI_mitls_resume(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state, /* in */ mitls_ticket *ticket)
-{
-    ENTER_HEAP_REGION(state->rgn);
+    int ret = 0;
     LOCK_MUTEX(&lock);
+    ENTER_HEAP_REGION(state->rgn);
+
     wrapped_transport_cb* tcb = KRML_HOST_MALLOC(sizeof(wrapped_transport_cb));
     tcb->send_recv_ctx = send_recv_ctx;
     tcb->send = psend;
     tcb->recv = precv;
 
-    Prims_list__FStar_Bytes_bytes *head;
-    head = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
-    if (!head) {
-        UNLOCK_MUTEX(&lock);
-        return 1;
-    }
-
-    if (ticket->ticket_len) {
-
-        Prims_list__FStar_Bytes_bytes *tail = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
-        Prims_list__FStar_Bytes_bytes *nil = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
-        if (!tail || !nil) {
-            UNLOCK_MUTEX(&lock);
-            KRML_HOST_FREE(head);
-            KRML_HOST_FREE(tail);
-            LEAVE_HEAP_REGION();
-            return 1;
-        }
-
-        if (!MakeFStar_Bytes_bytes(&head->hd, ticket->ticket, ticket->ticket_len)) {
-            UNLOCK_MUTEX(&lock);
-            KRML_HOST_FREE(head);
-            KRML_HOST_FREE(tail);
-            LEAVE_HEAP_REGION();
-            return 1;
-        }
-        if (!MakeFStar_Bytes_bytes(&tail->hd, ticket->session, ticket->session_len)) {
-            UNLOCK_MUTEX(&lock);
-            KRML_HOST_FREE((char*)head->hd.data);
-            KRML_HOST_FREE(tail);
-            KRML_HOST_FREE(head);
-            LEAVE_HEAP_REGION();
-            return 1;
-        }
-
-        head->tag = Prims_Cons;
-        head->tl = tail;
-        tail->tag = Prims_Cons;
-        tail->tl = nil;
-        nil->tag = Prims_Nil;
-    } else {
-        head->tag = Prims_Nil;
-    }
-
-    K___Connection_connection_Prims_int result = FFI_connect((FStar_Dyn_dyn)tcb, wrapped_send, wrapped_recv, state->cfg, head);
+    K___Connection_connection_Prims_int result = FFI_connect((FStar_Dyn_dyn)tcb, wrapped_send, wrapped_recv, state->cfg);
     state->cxn = result.fst;
-    UNLOCK_MUTEX(&lock);
-    LEAVE_HEAP_REGION();
+    ret = (result.snd == 0);
 
-    return (result.snd == 0);
+    LEAVE_HEAP_REGION();
+    UNLOCK_MUTEX(&lock);
+    if (HAD_OUT_OF_MEMORY) {
+        return 0;
+    }
+    return ret;
 }
 
 // Called by the host server app, after a client has connected to a socket and the calling server has accepted the TCP connection.
 int MITLS_CALLCONV FFI_mitls_accept_connected(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state)
 {
-    ENTER_HEAP_REGION(state->rgn);
+    int ret = 0;
     LOCK_MUTEX(&lock);
+    ENTER_HEAP_REGION(state->rgn);
 
     wrapped_transport_cb* tcb = KRML_HOST_MALLOC(sizeof(wrapped_transport_cb));
     tcb->send_recv_ctx = send_recv_ctx;
     tcb->send = psend;
     tcb->recv = precv;
 
-    K___Connection_connection_Prims_int ret = FFI_ffiAcceptConnected((FStar_Dyn_dyn)tcb, wrapped_send, wrapped_recv, state->cfg);
-    state->cxn = ret.fst;
+    K___Connection_connection_Prims_int result = FFI_ffiAcceptConnected((FStar_Dyn_dyn)tcb, wrapped_send, wrapped_recv, state->cfg);
+    state->cxn = result.fst;
+    ret = (result.snd == 0) ? 1 : 0; // return success (1) if result.snd is 0.
 
-    UNLOCK_MUTEX(&lock);
     LEAVE_HEAP_REGION();
-    return (ret.snd == 0) ? 1 : 0; // return success (1) if ret.snd is 0.
+    UNLOCK_MUTEX(&lock);
+    if (HAD_OUT_OF_MEMORY) {
+        return 0;
+    }
+    return ret;
 }
 
 // Called by the host app transmit a packet
@@ -755,6 +746,9 @@ int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const unsigned ch
     ret = FFI_ffiSend(state->cxn, (FStar_Bytes_bytes){.data = (const char*)buffer, .length = buffer_size});
     UNLOCK_MUTEX(&lock);
     LEAVE_HEAP_REGION();
+    if (HAD_OUT_OF_MEMORY) {
+        return 0;
+    }
 
     return 1;
 }
@@ -762,23 +756,23 @@ int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const unsigned ch
 // Called by the host app to receive a packet
 unsigned char *MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_size)
 {
-    unsigned char *p;
+    unsigned char *p = NULL;
+    FStar_Bytes_bytes ret = {.data=NULL,.length=0};
     *packet_size = 0;
 
-    ENTER_HEAP_REGION(state->rgn);
     LOCK_MUTEX(&lock);
-    FStar_Bytes_bytes ret = FFI_ffiRecv(state->cxn);
-    UNLOCK_MUTEX(&lock);
+    ENTER_HEAP_REGION(state->rgn);
 
-    if(!ret.length) {
-        LEAVE_HEAP_REGION();
-        return NULL;
-    }
-    p = KRML_HOST_MALLOC(ret.length);
-    if(p != NULL) {
-        memcpy((char*)p, ret.data, ret.length);
+    ret = FFI_ffiRecv(state->cxn);
+    if (ret.length) {
+      p = KRML_HOST_MALLOC(ret.length);
+      memcpy((char*)p, ret.data, ret.length);
     }
     LEAVE_HEAP_REGION();
+    UNLOCK_MUTEX(&lock);
+    if (HAD_OUT_OF_MEMORY) {
+        return NULL;
+    }
     *packet_size = ret.length;
     return p;
 }
@@ -806,18 +800,26 @@ static int get_exporter(Connection_connection cxn, int early, /* out */ mitls_se
 
 int MITLS_CALLCONV FFI_mitls_get_exporter(/* in */ mitls_state *state, int early, /* out */ mitls_secret *secret)
 {
+  int ret=0;
   ENTER_HEAP_REGION(state->rgn);
-  int ret = get_exporter(state->cxn, early, secret);
+  ret = get_exporter(state->cxn, early, secret);
   LEAVE_HEAP_REGION();
+  if (HAD_OUT_OF_MEMORY) {
+    return 0;
+  }
   return ret;
 }
 
 void *MITLS_CALLCONV FFI_mitls_get_cert(/* in */ mitls_state *state, /* out */ size_t *cert_size)
 {
+    FStar_Bytes_bytes ret = {.length = 0, .data = NULL};
     ENTER_HEAP_REGION(state->rgn);
-    FStar_Bytes_bytes ret = FFI_getCert(state->cxn);
+    ret = FFI_getCert(state->cxn);
     *cert_size = ret.length;
     LEAVE_HEAP_REGION();
+    if (HAD_OUT_OF_MEMORY) {
+      return NULL;
+    }
     return (void*)ret.data; // bugbug: casting away const
 }
 
@@ -889,22 +891,9 @@ void quic_create_callout(PVOID Parameter)
     if(s->cfg->is_server) {
       s->st->cxn = QUIC_ffiAcceptConnected(s->st, quic_send, quic_recv, s->st->cfg);
     } else {
-      FStar_Pervasives_Native_option__K___FStar_Bytes_bytes_FStar_Bytes_bytes ticket;
-
-      if(s->cfg->server_ticket && s->cfg->server_ticket->ticket_len > 0) {
-          ticket.tag = FStar_Pervasives_Native_Some;
-
-          // BUGBUG: Handle OOM
-          MakeFStar_Bytes_bytes(&ticket.v.fst, s->cfg->server_ticket->ticket, s->cfg->server_ticket->ticket_len);
-          MakeFStar_Bytes_bytes(&ticket.v.snd, s->cfg->server_ticket->session, s->cfg->server_ticket->session_len);
-      }
-      else {
-          ticket.tag = FStar_Pervasives_Native_None;
-      }
-
       // Protect the write to the PSK table (WIP)
       LOCK_MUTEX(&lock);
-      s->st->cxn = QUIC_ffiConnect((FStar_Dyn_dyn)s->st, quic_send, quic_recv, s->st->cfg, ticket);
+      s->st->cxn = QUIC_ffiConnect((FStar_Dyn_dyn)s->st, quic_send, quic_recv, s->st->cfg);
       UNLOCK_MUTEX(&lock);
     }
 }
@@ -912,52 +901,40 @@ void quic_create_callout(PVOID Parameter)
 
 int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_config *cfg)
 {
+    quic_state* st = NULL;
     *state = NULL;
     HEAP_REGION rgn;
+
     CREATE_HEAP_REGION(&rgn);
     if (!VALID_HEAP_REGION(rgn)) {
         return 0; // out of memory
     }
-    quic_state* st = KRML_HOST_MALLOC(sizeof(quic_state));
-
-    if (!st) {
-      DESTROY_HEAP_REGION(rgn);
-      return 0;
-    }
+    st = KRML_HOST_MALLOC(sizeof(quic_state));
 
     memset(st, 0, sizeof(*st));
     st->is_server = cfg->is_server;
 
     Prims_string host_name = CopyPrimsString(cfg->host_name != NULL ? cfg->host_name : "");
-    if (host_name == NULL) {
-        KRML_HOST_FREE(st);
-        DESTROY_HEAP_REGION(rgn);
-        return 0; // failure
-    }
 
     st->cfg = QUIC_ffiConfig((FStar_Bytes_bytes){.data=host_name,.length=strlen(host_name)});
 
     if (cfg->cipher_suites) {
        Prims_string str = CopyPrimsString(cfg->cipher_suites);
-       // BUGBUG: Handle OOM
        st->cfg = FFI_ffiSetCipherSuites(st->cfg, str);
     }
 
     if (cfg->named_groups) {
        Prims_string str = CopyPrimsString(cfg->named_groups);
-       // BUGBUG: Handle OOM
        st->cfg = FFI_ffiSetNamedGroups(st->cfg, str);
     }
 
     if (cfg->signature_algorithms) {
        Prims_string str = CopyPrimsString(cfg->signature_algorithms);
-       // BUGBUG: Handle OOM
        st->cfg = FFI_ffiSetSignatureAlgorithms(st->cfg, str);
     }
 
     if (cfg->alpn) {
        Prims_string str = CopyPrimsString(cfg->alpn);
-       // BUGBUG: Handle OOM
        st->cfg = FFI_ffiSetALPN(st->cfg, str);
     }
 
@@ -975,9 +952,10 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
 
     if(cfg->ticket_enc_alg && cfg->ticket_key) {
         FStar_Bytes_bytes key;
-        bool b = MakeFStar_Bytes_bytes(&key, cfg->ticket_key, cfg->ticket_key_len);
+        bool b;
+        MakeFStar_Bytes_bytes(&key, cfg->ticket_key, cfg->ticket_key_len);
         LOCK_MUTEX(&lock);
-        if(b) b = FFI_ffiSetTicketKey(cfg->ticket_enc_alg, key);
+        b = FFI_ffiSetTicketKey(cfg->ticket_enc_alg, key);
         UNLOCK_MUTEX(&lock);
         if (!b) {
             KRML_HOST_FREE(st);
@@ -988,6 +966,13 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
 
     if (cfg->enable_0rtt) {
        st->cfg = FFI_ffiSetEarlyData(st->cfg, 0xffffffff);
+    }
+
+    if(cfg->server_ticket && cfg->server_ticket->ticket_len > 0) {
+      FStar_Bytes_bytes tid, si;
+      MakeFStar_Bytes_bytes(&tid, cfg->server_ticket->ticket, cfg->server_ticket->ticket_len);
+      MakeFStar_Bytes_bytes(&si, cfg->server_ticket->session, cfg->server_ticket->session_len);
+      st->cfg = FFI_ffiSetTicket(st->cfg, tid, si);
     }
 
     if (cfg->ticket_callback) {
@@ -1034,34 +1019,24 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
     NTSTATUS status = KeExpandKernelStackAndCallout(quic_create_callout, &s, MAXIMUM_EXPANSION_SIZE);
     if (!NT_SUCCESS(status)) {
         KRML_HOST_PRINTF("KeExpandKernelCallstackAndCallout for quic_create_callout failed st=%x", status);
-        LEAVE_HEAP_REGION();
-        return 0;
+        st = NULL;
     }
 #else
     if(cfg->is_server) {
       st->cxn = QUIC_ffiAcceptConnected(st, quic_send, quic_recv, st->cfg);
     } else {
-      FStar_Pervasives_Native_option__K___FStar_Bytes_bytes_FStar_Bytes_bytes ticket;
-
-      if(cfg->server_ticket && cfg->server_ticket->ticket_len > 0) {
-          ticket.tag = FStar_Pervasives_Native_Some;
-
-          // BUGBUG: Handle OOM
-          MakeFStar_Bytes_bytes(&ticket.v.fst, cfg->server_ticket->ticket, cfg->server_ticket->ticket_len);
-          MakeFStar_Bytes_bytes(&ticket.v.snd, cfg->server_ticket->session, cfg->server_ticket->session_len);
-      }
-      else {
-          ticket.tag = FStar_Pervasives_Native_None;
-      }
-
       // Protect the write to the PSK table (WIP)
       LOCK_MUTEX(&lock);
-      st->cxn = QUIC_ffiConnect((FStar_Dyn_dyn)st, quic_send, quic_recv, st->cfg, ticket);
+      st->cxn = QUIC_ffiConnect((FStar_Dyn_dyn)st, quic_send, quic_recv, st->cfg);
       UNLOCK_MUTEX(&lock);
     }
 #endif
 
     LEAVE_HEAP_REGION();
+    if (HAD_OUT_OF_MEMORY || st == NULL) {
+      DESTROY_HEAP_REGION(rgn);
+      return 0;
+    }
     st->rgn = rgn;
     *state = st;
     return 1;
@@ -1089,8 +1064,8 @@ quic_result MITLS_CALLCONV FFI_mitls_quic_process(
   /*inout*/ size_t *pOutBufLen)
 {
     quic_result ret = TLS_error_other;
-    ENTER_HEAP_REGION(state->rgn);
     LOCK_MUTEX(&lock);
+    ENTER_HEAP_REGION(state->rgn);
 
     // Update the buffers for the QUIC_* callbacks
     state->in_buffer = (const char*)inBuf;
@@ -1121,8 +1096,11 @@ quic_result MITLS_CALLCONV FFI_mitls_quic_process(
     *pInBufLen = state->in_buffer_used;
     *pOutBufLen = state->out_buffer_used;
 
-    UNLOCK_MUTEX(&lock);
     LEAVE_HEAP_REGION();
+    UNLOCK_MUTEX(&lock);
+    if (HAD_OUT_OF_MEMORY) {
+      return TLS_error_other;
+    }
     return ret;
 }
 
@@ -1131,13 +1109,17 @@ int MITLS_CALLCONV FFI_mitls_quic_get_exporter(
   int early,
   quic_secret *secret)
 {
+  int ret = 0;
   ENTER_HEAP_REGION(state->rgn);
-  int ret = get_exporter(state->cxn, early, secret);
+  ret = get_exporter(state->cxn, early, secret);
   LEAVE_HEAP_REGION();
+  if (HAD_OUT_OF_MEMORY) {
+    return 0;
+  }
   return ret;
 }
 
-void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state)
+void MITLS_CALLCONV FFI_mitls_quic_close(quic_state *state)
 {
     HEAP_REGION rgn = state->rgn;
     ENTER_HEAP_REGION(state->rgn);
@@ -1146,37 +1128,112 @@ void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state)
     DESTROY_HEAP_REGION(rgn);
 }
 
+static const unsigned char *FFI_mitls_memmem(
+  const unsigned char *b, size_t blen,
+  const unsigned char *search, size_t slen)
+{
+  const unsigned char *cur;
+  if (blen < slen) return NULL;
+  if (!slen) return b;
+
+	for (cur = b; cur <= b + blen - slen; cur++)
+		if (cur[0] == search[0] && !memcmp(cur+1, search+1, slen-1))
+			return cur;
+
+	return NULL;
+}
+
+int MITLS_CALLCONV FFI_mitls_get_hello_summary(const unsigned char *buffer, size_t buffer_len,
+  mitls_hello_summary *summary, unsigned char **cookie, size_t *cookie_len)
+{
+  HEAP_REGION rgn;
+  int ret = 0;
+  FStar_Pervasives_Native_option__QUIC_chSummary ch;
+
+  *cookie = NULL; *cookie_len = 0;
+  memset(&ch, 0, sizeof(ch));
+
+  CREATE_HEAP_REGION(&rgn);
+  if (!VALID_HEAP_REGION(rgn)) {
+    return 0;
+  }
+
+  FStar_Bytes_bytes b = {.data = (const char*)buffer, .length = buffer_len};
+  ch = QUIC_peekClientHello(b);
+
+  memset(summary, 0, sizeof(mitls_hello_summary));
+  if(ch.tag == FStar_Pervasives_Native_Some)
+  {
+    QUIC_chSummary s = ch.v;
+    summary->sni = FFI_mitls_memmem(buffer, buffer_len,
+      (const unsigned char*)s.ch_sni.data, s.ch_sni.length);
+    summary->sni_len = s.ch_sni.length;
+
+    summary->alpn = FFI_mitls_memmem(buffer, buffer_len,
+      (const unsigned char*)s.ch_alpn.data, s.ch_alpn.length);
+    summary->alpn_len = s.ch_alpn.length;
+
+    summary->extensions = FFI_mitls_memmem(buffer, buffer_len,
+      (const unsigned char*)s.ch_extensions.data, s.ch_extensions.length);
+    summary->extensions_len = s.ch_extensions.length;
+    ret = 1;
+  }
+  LEAVE_HEAP_REGION();
+
+  if(ret && ch.v.ch_cookie.tag == FStar_Pervasives_Native_Some)
+  {
+    ENTER_GLOBAL_HEAP_REGION();
+    *cookie_len = ch.v.ch_cookie.v.length;
+    *cookie = KRML_HOST_MALLOC(*cookie_len);
+    memcpy(*cookie, ch.v.ch_cookie.v.data, *cookie_len);
+    LEAVE_GLOBAL_HEAP_REGION();
+  }
+
+  DESTROY_HEAP_REGION(rgn);
+  return ret;
+}
+
 int MITLS_CALLCONV FFI_mitls_find_custom_extension(int is_server, const unsigned char *exts, size_t exts_len, uint16_t ext_type, unsigned char **ext_data, size_t *ext_data_len)
 {
+  HEAP_REGION rgn;
+  int ret = 0;
+
+  CREATE_HEAP_REGION(&rgn);
+  if (!VALID_HEAP_REGION(rgn)) {
+    return 0;
+  }
+
   FStar_Bytes_bytes b = {.data = (const char*)exts, .length = exts_len};
   FStar_Pervasives_Native_option__FStar_Bytes_bytes ob;
   ob = FFI_ffiFindCustomExtension((bool)is_server, b, ext_type);
-  *ext_data = NULL; *ext_data_len = 0;
 
+  *ext_data = NULL; *ext_data_len = 0;
   if(ob.tag == FStar_Pervasives_Native_Some)
   {
     *ext_data_len = ob.v.length;
-    *ext_data = KRML_HOST_MALLOC(*ext_data_len);
-    memcpy(*ext_data, ob.v.data, *ext_data_len);
-    return 1;
+    *ext_data = (unsigned char*)FFI_mitls_memmem(exts, exts_len, (const unsigned char*)ob.v.data, *ext_data_len);
+    ret = 1;
   }
 
-  return 0;
+  LEAVE_HEAP_REGION();
+  if (HAD_OUT_OF_MEMORY) {
+    ret = 0;
+  }
+
+  DESTROY_HEAP_REGION(rgn);
+  return ret;
 }
 
-int MITLS_CALLCONV FFI_mitls_find_server_name(const unsigned char *exts, size_t exts_len, unsigned char **sni, size_t *sni_len)
+void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state, void* pv)
 {
-  FStar_Bytes_bytes b = {.data = (const char*)exts, .length = exts_len};
-  FStar_Pervasives_Native_option__FStar_Bytes_bytes ob = FFI_ffiFindSNI(b);
-  *sni = NULL; *sni_len = 0;
+    ENTER_HEAP_REGION(state->rgn);
+    KRML_HOST_FREE(pv);
+    LEAVE_HEAP_REGION();
+}
 
-  if(ob.tag == FStar_Pervasives_Native_Some)
-  {
-    *sni_len = ob.v.length;
-    *sni = KRML_HOST_MALLOC(*sni_len);
-    memcpy(*sni, ob.v.data, *sni_len);
-    return 1;
-  }
-
-  return 0;
+extern void MITLS_CALLCONV FFI_mitls_global_free(void* pv)
+{
+  ENTER_GLOBAL_HEAP_REGION();
+  KRML_HOST_FREE(pv);
+  LEAVE_GLOBAL_HEAP_REGION();
 }
