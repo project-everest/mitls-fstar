@@ -64,7 +64,7 @@ FILES 		= Cert C_Loops_Spec_Loops CommonDH CoreCrypto \
   Specializations_Providers_AEAD stub/mipki_wrapper stub/core_crypto stub/hacl_aead \
   stub/hacl_provider stub/buffer_bytes Test_Main TLSConstants TLS_Curve25519 TLSError TLSInfo \
   TLSInfoFlags vale/sha256_main_i vale/vale_aes_glue vale/Vale_Hash_SHA2_256 \
-  uint128/uint128_wrapper stub/RegionAllocator
+  stub/RegionAllocator
 
 CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror \
   -Wno-unused-variable -Wno-parentheses -Wno-unknown-warning-option \
@@ -73,6 +73,10 @@ CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror \
   -Wno-missing-braces
 
 LDOPTS += -L$(EVERCRYPT_HOME)/out -levercrypt
+
+ifneq (,$(EVEREST_WINDOWS))
+FILES+=uint128/FStar_UInt128
+endif
 
 ifndef NO_OPENSSL
 CFLAGS += -I$(MLCRYPTO_HOME)/openssl/include

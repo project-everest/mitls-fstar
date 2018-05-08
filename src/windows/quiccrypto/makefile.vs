@@ -10,13 +10,12 @@ SOURCES = \
   Hacl_Curve25519.c \
   C_Loops_Spec_Loops.c \
   FStar.c \
-# FStar_UInt128.c \
+  FStar_UInt128.c \
 # Hacl_Test_X25519.c \
   kremstr.c \
   quic_provider.c \
   sha256_main_i.c \
 # test.c \
-  uint128_wrapper.c \
   vale_aes_glue.c \
   Vale_Hash_SHA2_256.c
 
