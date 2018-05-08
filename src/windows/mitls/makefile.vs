@@ -37,6 +37,7 @@ SOURCES = \
   Flags.c \
   Format.c \
   FStar.c \
+  FStar_UInt128.c \
   HaclProvider.c \
   hacl_aead.c \
   hacl_provider.c \
@@ -88,7 +89,6 @@ SOURCES = \
   TLSPRF.c \
   TLS_Curve25519.c \
   Transport.c \
-  uint128_wrapper.c \
   vale_aes_glue.c \
   Vale_Hash_SHA2_256.c
   

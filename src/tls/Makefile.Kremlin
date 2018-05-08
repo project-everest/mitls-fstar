@@ -112,13 +112,11 @@ ALL_EXTERNAL_FILES	= \
   $(addprefix vale/,sha256_main_i.c sha256_main_i.h sha256-$(MARCH)$(VARIANT).S \
     Vale_Hash_SHA2_256.c vale_aes_glue.c aes-$(MARCH)$(VARIANT).S DafnyLib.h) \
   $(addprefix pki/,mipki.h) \
-  $(addprefix ffi/,mitlsffi.h) \
-  $(addprefix uint128/,uint128_wrapper.c)
+  $(addprefix ffi/,mitlsffi.h)
 
 ifneq (,$(EVEREST_WINDOWS))
   ALL_EXTERNAL_FILES += \
-    $(addprefix uint128/,kremlib0.h FStar_UInt128.h \
-      FStar_UInt128.c)
+    $(addprefix uint128/,FStar_UInt128.h FStar_UInt128.c)
 endif
 
 ################################################################################
