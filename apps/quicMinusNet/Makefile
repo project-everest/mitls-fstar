@@ -2,7 +2,7 @@ MITLS_HOME ?= ../..
 FSTAR_HOME ?= ../../../FStar
 HACL_HOME ?= ../../../hacl-star
 MLCRYPTO_HOME ?= ../../../MLCrypto
-EVERCRYPT_HOME ?= ../../../evercrypt
+EVERCRYPT_HOME ?= $(HACL_HOME)/providers
 
 include $(FSTAR_HOME)/ulib/ml/Makefile.include
 

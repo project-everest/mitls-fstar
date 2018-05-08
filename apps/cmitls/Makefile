@@ -1,7 +1,7 @@
 MITLS_HOME ?= ../..
 FSTAR_HOME ?= ../../../FStar
 MLCRYPTO_HOME ?= ../../../MLCrypto
-EVERCRYPT_HOME ?= ../../../evercrypt
+EVERCRYPT_HOME ?= ../../../hacl-star/providers
 
 UNAME=$(shell uname)
 MARCH?=x86_64

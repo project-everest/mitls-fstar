@@ -5,7 +5,7 @@ MARCH		?= x86_64
 
 MITLS_HOME 	= ../../../..
 MLCRYPTO_HOME	?= ../../../../../MLCrypto
-EVERCRYPT_HOME	?= ../../../../../evercrypt
+EVERCRYPT_HOME	?= ../../../../../hacl-star/providers
 
 ifeq ($(OS),Windows_NT)
   PATH := $(MITLS_HOME)/src/pki:$(PATH)
