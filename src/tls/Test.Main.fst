@@ -44,6 +44,7 @@ let main (): St C.exit_code =
       "AEAD", AEAD.main;
       "StAE", StAE.main;
       "CommonDH", CommonDH.main;
+      // 2018.04.25: Enable once the regression is fixed
       "Handshake", handshake;
       (* ADD NEW TESTS HERE *)
     ];

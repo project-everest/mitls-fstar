@@ -39,7 +39,7 @@ private type canFail (a:Type) =
 
 (* PRE-SHARED KEYS AND KEY EXCHANGES *)
 
-val pskiBytes: PSK.psk_identifier * PSK.obfuscated_ticket_age -> bytes
+val pskiBytes: psk_identifier * PSK.obfuscated_ticket_age -> bytes
 
 let pskiBytes (i,ot) =
   lemma_repr_bytes_values (UInt32.v ot);

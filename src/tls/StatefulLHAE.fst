@@ -97,7 +97,6 @@ let encrypt #i e ad r p =
   let ad' = LHAEPlain.makeAD i seqn ad in
   AEAD_GCM.encrypt #i e ad' r p
 
-
 (*------------------------------------------------------------------*)
 val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
   -> ST (option (dplain i ad c))

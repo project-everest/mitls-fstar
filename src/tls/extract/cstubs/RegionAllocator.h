@@ -17,6 +17,11 @@ This file has multiple compilation options:
 
 ******/
 
+#if defined(_MSC_VER) || defined(__MINGW32__)
+#define IS_WINDOWS 1
+#else
+#define IS_WINDOWS 0
+#endif
 
 typedef void *HEAP_REGION;
 
@@ -41,50 +46,108 @@ void HeapRegionFree(void* pv);
 // made outside of ENTER/LEAVE.  It will be freed when the region allocator
 // is cleaned up.
 #if IS_WINDOWS
-  #define ENTER_HEAP_REGION(rgn) HeapRegionEnter(rgn)
-  #define LEAVE_HEAP_REGION()    HeapRegionLeave()
-  #define CREATE_HEAP_REGION(prgn)   HeapRegionCreateAndRegister(prgn)
+  #define FACILITY_EVEREST 255
+  #define CODE_OUT_OF_MEMORY 5
+  #define MITLS_OUT_OF_MEMORY_EXCEPTION MAKE_HRESULT(1,FACILITY_EVEREST,CODE_OUT_OF_MEMORY)
+  
+  #define ENTER_GLOBAL_HEAP_REGION() ENTER_HEAP_REGION(NULL)
+
+  #define LEAVE_GLOBAL_HEAP_REGION() \
+    } __except (GetExceptionCode() == MITLS_OUT_OF_MEMORY_EXCEPTION) { \
+        HadHeapException = 1; \
+    }
+
+  #define ENTER_HEAP_REGION(rgn) \
+    HeapRegionEnter(rgn); \
+    char HadHeapException = 0; \
+    __try {
+
+  #define LEAVE_HEAP_REGION() \
+    } __except (GetExceptionCode() == MITLS_OUT_OF_MEMORY_EXCEPTION) { \
+        HadHeapException = 1; \
+    } \
+    HeapRegionLeave();
+
+  #define CREATE_HEAP_REGION(prgn) \
+    HeapRegionCreateAndRegister(prgn); \
+    char HadHeapException = 0; \
+    __try {
+
   #define VALID_HEAP_REGION(rgn)    ((rgn) != NULL)
   #define DESTROY_HEAP_REGION(rgn) HeapRegionDestroy(rgn)
+  #define HAD_OUT_OF_MEMORY         (HadHeapException != 0)
+  void HeapRegionEnter(HEAP_REGION rgn);
 #else
-  #define ENTER_HEAP_REGION(rgn) HeapRegionEnter(rgn)
-  #define LEAVE_HEAP_REGION()    HeapRegionLeave()
-  #define CREATE_HEAP_REGION(prgn)   HeapRegionCreateAndRegister(prgn)
+  #include <setjmp.h>
+
+  #define ENTER_GLOBAL_HEAP_REGION() ENTER_HEAP_REGION(NULL)
+  #define LEAVE_GLOBAL_HEAP_REGION() }
+
+  #define ENTER_HEAP_REGION(rgn) \
+    jmp_buf jmp_buf_out_of_memory; \
+    char HadHeapException = 0; \
+    HeapRegionEnter(rgn, &jmp_buf_out_of_memory); \
+    if (setjmp(jmp_buf_out_of_memory)) { \
+      HadHeapException = 1; \
+    } else {
+  #define LEAVE_HEAP_REGION()    } HeapRegionLeave()
+  #define CREATE_HEAP_REGION(prgn)   HeapRegionCreateAndRegister(prgn); {
   #define VALID_HEAP_REGION(rgn)    ((rgn) != NULL)
   #define DESTROY_HEAP_REGION(rgn) HeapRegionDestroy(rgn)
+  #define HAD_OUT_OF_MEMORY         (HadHeapException != 0)
+  void HeapRegionEnter(HEAP_REGION rgn, jmp_buf* penv);
 #endif
-void HeapRegionEnter(HEAP_REGION rgn);
 void HeapRegionLeave(void);
 void HeapRegionCreateAndRegister(HEAP_REGION *prgn);
 void HeapRegionDestroy(HEAP_REGION rgn);
 
 #elif USE_KERNEL_REGIONS
 // Use regions managed within the kernel pool.  All unfreed allocations within
-// the region will be freed when the region is destroyed.  A deafult region
+// the region will be freed when the region is destroyed.  A default region
 // holds allocations made outside of ENTER/LEAVE.  It will be freed when
 // the region allocator is cleaned up.
 #if IS_WINDOWS
+  #define MITLS_OUT_OF_MEMORY_EXCEPTION 0x80ff0005
+  
   typedef struct {
     LIST_ENTRY entry; // dlist of region_entry
     PETHREAD id;
     void *region;     // ptr to dlist of actual pool allocations
   } region_entry;
 
+  #define ENTER_GLOBAL_HEAP_REGION() \
+    char HadHeapException = 0; \
+    __try {
+
+  #define LEAVE_GLOBAL_HEAP_REGION() \
+    } __except (GetExceptionCode() == MITLS_OUT_OF_MEMORY_EXCEPTION) { \
+        HadHeapException = 1; \
+    }
+
   #define ENTER_HEAP_REGION(rgn) \
     region_entry e; \
-    HeapRegionRegister(&e, (rgn));
-    
+    HeapRegionRegister(&e, (rgn)); \
+    char HadHeapException = 0; \
+    __try {
+
   #define LEAVE_HEAP_REGION() \
+    } __except (GetExceptionCode() == MITLS_OUT_OF_MEMORY_EXCEPTION) { \
+        HadHeapException = 1; \
+    } \
     HeapRegionUnregister(&e);
-    
+
   #define CREATE_HEAP_REGION(prgn) \
     region_entry e; \
-    HeapRegionCreateAndRegister(&e, (prgn));
+    HeapRegionCreateAndRegister(&e, (prgn)); \
+    char HadHeapException = 0; \
+    __try {
 
   #define VALID_HEAP_REGION(rgn)    ((rgn) != NULL)
-    
+
   #define DESTROY_HEAP_REGION(rgn) HeapRegionDestroy(rgn)
-  
+
+  #define HAD_OUT_OF_MEMORY         (HadHeapException != 0)
+
   void HeapRegionCreateAndRegister(region_entry* pe, HEAP_REGION *prgn);
   void HeapRegionRegister(region_entry* pe, HEAP_REGION rgn);
   void HeapRegionUnregister(region_entry* pe);
@@ -101,11 +164,14 @@ void HeapRegionDestroy(HEAP_REGION rgn);
 #define TRUE true
 #endif
 
+#define ENTER_GLOBAL_HEAP_REGION()
+#define LEAVE_GLOBAL_HEAP_REGION()
 #define ENTER_HEAP_REGION(rgn)
 #define LEAVE_HEAP_REGION()
 #define CREATE_HEAP_REGION(prgn) *(prgn)=NULL
 #define VALID_HEAP_REGION(rgn) TRUE
 #define DESTROY_HEAP_REGION(rgn)
+#define HAD_OUT_OF_MEMORY 0
 
 #endif
 

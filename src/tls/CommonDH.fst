@@ -657,7 +657,7 @@ let keyShareEntryBytes (k:keyShareEntry): bytes =
     let nng = Some?.v (namedGroup_of_group g) in
     let kex = (match s with 
                | S_FF g x -> x 
-               | S_EC g x -> ECGroup.serialize x) in
+               | S_EC g x -> ECGroup.serialize_point x) in
     let kse = { group=nng; key_exchange=kex; } in
     keyShareEntry_serializer32 kse)
   | UnknownShare ng b ->

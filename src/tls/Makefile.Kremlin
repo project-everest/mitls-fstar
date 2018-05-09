@@ -1,8 +1,8 @@
 all: build
 
-build: build-internal-test # build-library build-external-test
+build: build-internal-test build-library build-external-test
 
-test: test-internal-test # test-library test-external-test
+test: test-internal-test test-library test-external-test
 
 ifneq (,$(MITLS_USE_OPENSSL))
 CONCRETE_FLAVOR = -OpenSSL

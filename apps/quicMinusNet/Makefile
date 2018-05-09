@@ -26,14 +26,14 @@ else ifeq ($(UNAME),Darwin)
   LIBMITLS=libmitls.so
   LIBQC=libquicprovider.so
   LIBPKI=libmipki.so
-  LIBPATHS=$(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/extract/Kremlin-Library:$(HACL_HOME)/secure_api/out/runtime_switch
+  LIBPATHS=$(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/extract/Kremlin-Library:$(HACL_HOME)/secure_api/out/runtime_switch:$(MLCRYPTO_HOME)/openssl
   DYLD_LIBRARY_PATH := $(LIBPATHS):$(DYLD_LIBRARY_PATH)
   export DYLD_LIBRARY_PATH
 else ifeq ($(UNAME),Linux)
   LIBMITLS=libmitls.so
   LIBQC=libquicprovider.so
   LIBPKI=libmipki.so
-  CFLAGS+=-lpthread
+  CFLAGS+=-lpthread -pthread
   LIBPATHS=$(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/extract/Kremlin-Library:$(HACL_HOME)/secure_api/out/runtime_switch:$(MLCRYPTO_HOME)/openssl
   LD_LIBRARY_PATH := $(LIBPATHS):$(LD_LIBRARY_PATH)
   export LD_LIBRARY_PATH

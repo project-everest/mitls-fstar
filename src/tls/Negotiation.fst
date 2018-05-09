@@ -328,60 +328,60 @@ let is_cacheable12 m =
 
 type certNego = option (cert_type * signatureScheme)
 
-noeq type negotiationState (r:role) (cfg:config) (resume:resumeInfo r) : Type0 =
+noeq type negotiationState (r:role) (cfg:config) : Type0 =
   // Have C_Offer_13 and C_Offer? Shares aren't available in C_Offer yet
   | C_Init:     n_client_random: TLSInfo.random ->
-                negotiationState r cfg resume
+                negotiationState r cfg
 
   | C_Offer:    n_offer: offer ->
-                negotiationState r cfg resume
+                negotiationState r cfg
 
   | C_HRR:      n_offer: offer ->
                 n_hrr: retryInfo n_offer ->
-                negotiationState r cfg resume
+                negotiationState r cfg
 
   | C_WaitFinished1:
                 n_partialmode: mode ->
-                negotiationState r cfg resume
+                negotiationState r cfg
 
   | C_Mode:     n_mode: mode -> // In 1.2, used for resumption and full handshakes
-                negotiationState r cfg resume
+                negotiationState r cfg
 
   | C_WaitFinished2: // Only 1.2
                 n_mode: mode ->
                 n_client_certificate: option Cert.chain13 ->
-                negotiationState r cfg resume
+                negotiationState r cfg
 
   | C_Complete: n_mode: mode ->
                 n_client_certificate: option Cert.chain13 ->
-                negotiationState r cfg resume
+                negotiationState r cfg
 
   | S_Init:     n_server_random: TLSInfo.random ->
-                negotiationState r cfg resume
+                negotiationState r cfg
 
   // Waiting for ClientHello2
   | S_HRR:      n_offer: offer ->
                 n_hrr: hrr ->
-                negotiationState r cfg resume
+                negotiationState r cfg
 
   | S_ClientHello: // Transitional state to allow Handshake to call KS and generate a share
                 n_mode: mode -> // n_server_share and n_server_extensions are None
                 // We ask for a certificate from the PKI library - this is just a handle
                 // If a certificate is actually used, it appears in network format in mode.n_server_cert
                 n_selected_cert: certNego ->
-                negotiationState r cfg resume
+                negotiationState r cfg
 
   // This state is used to wait for both Finished1 and Finished2
   | S_Mode:     n_mode: mode -> // If 1.2, then client_share is None
                 n_selected_cert: certNego ->
-                negotiationState r cfg resume
+                negotiationState r cfg
 
   | S_Complete: n_mode: mode ->
                 n_client_certificate: option Cert.chain13 ->
-                negotiationState r cfg resume
+                negotiationState r cfg
 
-let ns_step (#r:role) (#cfg:config) (#resume:resumeInfo r)
-  (ns:negotiationState r cfg resume) (ns':negotiationState r cfg resume) =
+let ns_step (#r:role) (#cfg:config)
+  (ns:negotiationState r cfg) (ns':negotiationState r cfg) =
   match ns, ns' with
   | C_Init nonce, C_Offer offer -> nonce == offer.ch_client_random
   | C_Offer offer, C_Mode mode -> mode.n_offer == offer
@@ -392,39 +392,59 @@ let ns_step (#r:role) (#cfg:config) (#resume:resumeInfo r)
   | S_ClientHello _ _, S_Mode _ _ -> True
   | _, _ -> ns == ns'
 
-let ns_rel (#r:role) (#cfg:config) (#resume:resumeInfo r)
-  (ns:negotiationState r cfg resume) (ns':negotiationState r cfg resume) =
+let ns_rel (#r:role) (#cfg:config)
+  (ns:negotiationState r cfg) (ns':negotiationState r cfg) =
   ns_step ns ns' \/
   (exists ns0. ns_step ns ns0 /\ ns_step ns0 ns')
 
-assume val ns_rel_monotonic: #r:role -> #cfg:config -> #resume:resumeInfo r ->
-  Lemma (Preorder.preorder_rel (* (negotiationState r cfg resume) *) (ns_rel #r #cfg #resume))
+assume val ns_rel_monotonic: #r:role -> #cfg:config ->
+  Lemma (Preorder.preorder_rel (ns_rel #r #cfg))
+
+type resumeInfo =
+  option (psk_identifier * t:Ticket.ticket{Ticket.Ticket12? t}) *
+  list (psk_identifier * t:Ticket.ticket{Ticket.Ticket13? t})
 
 #reset-options "--admit_smt_queries true"
 noeq type t (region:rgn) (role:TLSConstants.role) : Type0 =
   | NS:
     cfg: config -> // local configuration
-    resume: TLSInfo.resumeInfo role ->
+    resume: resumeInfo ->
     nonce: TLSInfo.random ->
-    state: HST.m_rref region (negotiationState role cfg resume) ns_rel ->
+    state: HST.m_rref region (negotiationState role cfg) ns_rel ->
     t region role
 
-val computeOffer: r:role -> cfg:config -> resume:TLSInfo.resumeInfo r -> nonce:TLSInfo.random
-  -> ks:option CommonDH.keyShare -> list (PSK.pskid * PSK.pskInfo) -> UInt32.t
+private let rec find_ticket12 acc = function
+  | [] -> acc
+  | (tid, t) :: r ->
+    find_ticket12 (if Ticket.Ticket12? t then Some (tid, t) else acc) r
+
+private let rec filter_ticket13 acc = function
+  | [] -> List.Tot.rev acc
+  | (tid, t) :: r ->
+    filter_ticket13 (if Ticket.Ticket13? t then (tid, t)::acc else acc) r
+
+private let rec ticket13_pskinfo acc = function
+  | [] -> List.Tot.rev acc
+  | (tid, t) :: r -> ticket13_pskinfo ((tid, Some?.v (Ticket.ticket_pskinfo t))::acc) r
+
+#set-options "--admit_smt_queries true"
+val computeOffer: r:role -> cfg:config -> nonce:TLSInfo.random
+  -> ks:option CommonDH.keyShare -> resumeInfo -> now:UInt32.t
   -> Tot offer
-let computeOffer r cfg resume nonce ks pskinfo now =
+let computeOffer r cfg nonce ks resume now =
   let ticket12, sid =
-    match resume, cfg.enable_tickets, cfg.min_version with
+    match fst resume, cfg.enable_tickets, cfg.min_version with
     | _, _, TLS_1p3 -> None, empty_bytes // Don't bother sending session_ticket
     // Similar to what OpenSSL does, when we offer a 1.2 ticket
     // we send the hash of the ticket as SID to disambiguate the state machine
-    | (Some t, _), true, _ ->
+    | Some (tid, _), true, _ ->
       // FIXME Cannot compute hash in Tot
       //let sid = Hashing.compute Hashing.Spec.SHA256 t
-      let sid = if length t <= 32 then t else fst (split t 32ul) in
-      Some t, sid
-    | (None, _), true, _ -> Some (empty_bytes), empty_bytes
+      let sid = if length tid <= 32 then tid else fst (split tid 32ul) in
+      Some tid, sid
+    | None, true, _ -> Some (empty_bytes), empty_bytes
     | _ -> None, empty_bytes in
+  let pskinfo = ticket13_pskinfo [] (snd resume) in
   // Don't offer EDI if there is no PSK or first PSK doesn't have ED enabled
   let compatible_psk =
     match pskinfo with
@@ -460,10 +480,22 @@ let computeOffer r cfg resume nonce ks pskinfo now =
     ch_extensions = Some extensions
   }
 
+let rec unseal_tickets acc l : St (list (psk_identifier * Ticket.ticket))
+  = match l with
+  | [] -> List.Tot.rev acc
+  | (tid, seal) :: r ->
+    let acc =
+      match Ticket.check_ticket seal with
+      | Some t -> (tid, t) :: acc
+      | None -> acc in
+    unseal_tickets acc r
+
 val create:
-  region:rgn -> r:role -> cfg:config -> resume:TLSInfo.resumeInfo r -> TLSInfo.random ->
+  region:rgn -> r:role -> cfg:config -> TLSInfo.random ->
   St (t region r)
-let create region r cfg resume nonce =
+let create region r cfg nonce =
+  let resume = unseal_tickets [] cfg.use_tickets in
+  let resume = (find_ticket12 None resume, filter_ticket13 [] resume) in
   match r with
   | Client ->
     let state = Mem.ralloc region (C_Init nonce) in
@@ -548,16 +580,13 @@ let resume_12 mode =
   mode.n_sessionID = mode.n_offer.ch_sessionID
 
 val local_config: #region:rgn -> #role:TLSConstants.role -> t region role -> config
-let local_config #region #role ns =
-  ns.cfg
+let local_config #region #role ns = ns.cfg
 
 val nonce: #region:rgn -> #role:TLSConstants.role -> t region role -> Tot TLSInfo.random
-let nonce #region #role ns =
-  ns.nonce
+let nonce #region #role ns = ns.nonce
 
-val resume: #region:rgn -> #role:TLSConstants.role -> t region role -> TLSInfo.resumeInfo role
-let resume #region #role ns =
-  ns.resume
+val resume: #region:rgn -> #role:TLSConstants.role -> t region role -> resumeInfo
+let resume #region #role ns = ns.resume
 
 val getMode: #region:rgn -> #role:TLSConstants.role -> t region role ->
   ST mode
@@ -645,17 +674,16 @@ let client_ClientHello #region ns oks =
     match oks with
     | Some ks -> Some (CommonDH.ClientKeyShare ks)
     | None -> None in
-  let _, pskid = ns.resume in
-  let pskinfo = map_ST i_psk_info pskid in
   match HST.op_Bang ns.state with
   | C_Init _ ->
-      trace(if
-        (match pskinfo with
+      trace(
+        if (match ticket13_pskinfo [] (snd ns.resume) with
         | (_, i) :: _ -> i.allow_early_data && Some? ns.cfg.max_early_data // Must be the first PSK
         | _ -> false)
-      then "Offering a PSK compatible with 0-RTT" else "No PSK or 0-RTT disabled");
+        then "Offering a PSK compatible with 0-RTT"
+        else "No PSK or 0-RTT disabled");
       let now = CoreCrypto.now () in
-      let offer = computeOffer Client ns.cfg ns.resume ns.nonce oks' pskinfo now in
+      let offer = computeOffer Client ns.cfg ns.nonce oks' ns.resume now in
       trace ("offering client extensions "^string_of_option_extensions offer.ch_extensions);
       trace ("offering cipher suites "^string_of_ciphersuites offer.ch_cipher_suites);
       HST.op_Colon_Equals ns.state (C_Offer offer);
@@ -1207,11 +1235,6 @@ let compute_cs13 cfg o psks shares server_cert =
   let psk_kex = find_psk_key_exchange_modes o in
   Correct (compute_cs13_aux 0 o psks g_gx ncs psk_kex server_cert, g_hrr)
 
-let rec iutf8 (m:bytes) : St (s:string{String.length s < pow2 30 /\ utf8_encode s = m}) =
-    match iutf8_opt m with
-    | None -> trace ("Not a utf8 encoding of a string"); iutf8 m
-    | Some s -> s
-
 // Registration and filtering of PSK identities
 let rec filter_psk (l:list Extensions.pskIdentity)
   : St (list (PSK.pskid * PSK.pskInfo))
@@ -1219,15 +1242,12 @@ let rec filter_psk (l:list Extensions.pskIdentity)
   match l with
   | [] -> []
   | (id, _) :: t ->
-    //18-02-26 ?? review
-    let id8 = iutf8 id in
-    let id = utf8_encode id8 in // FIXME FStar.Bytes
-    match Ticket.check_ticket13 id with
+    (match Ticket.check_ticket13 id with
     | Some info -> (id, info) :: (filter_psk t)
     | None ->
       (match PSK.psk_lookup id with
       | Some info -> trace ("Loaded PSK from ticket <"^print_bytes id^">"); (id, info) :: (filter_psk t)
-      | None -> trace ("WARNING: the PSK <"^print_bytes id^"> has been filtered"); filter_psk t)
+      | None -> trace ("WARNING: the PSK <"^print_bytes id^"> has been filtered"); filter_psk t))
 
 // Registration of DH shares
 let rec register_shares (l:list pre_share)
@@ -1430,12 +1450,6 @@ let aux_extension_ok (o1, hrr) (e:Extensions.extension) =
             true) // FIXME
             //(extensionBytes e) = (extensionBytes e'))
 
-let rec forall_aux (#a:Type) (#b:Type) (env:b) (f: b -> a -> Tot bool) (l:list a)
-  : Tot bool
-  = match l with
-    | [] -> true
-    | hd::tl -> if f env hd then forall_aux env f tl else false
-
 val server_ClientHello: #region:rgn -> t region Server ->
   HandshakeMessages.ch -> log:HandshakeLog.t ->
   St (result serverMode)
@@ -1457,7 +1471,7 @@ let server_ClientHello #region ns offer log =
       List.Tot.mem hrr.hrr_cipher_suite o2.ch_cipher_suites &&
       o1.ch_compressions = o2.ch_compressions &&
       Some? o2.ch_extensions && Some? o1.ch_extensions &&
-      forall_aux (o1, hrr) aux_extension_ok (Some?.v o2.ch_extensions)
+      List.Helpers.forall_aux (o1, hrr) aux_extension_ok (Some?.v o2.ch_extensions)
     then
       let sm = computeServerMode ns.cfg offer ns.nonce in
       match sm with

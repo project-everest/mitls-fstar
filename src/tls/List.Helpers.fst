@@ -41,3 +41,9 @@ let exists_b_aux (#a:Type) (#b:Type) (env:b) (f:b -> a -> Tot bool) (l:list a) =
   Some? (find_aux env f l)
 
 let mem_rev (#a:eqtype) (l:list a) (x:a) = List.Tot.mem x l
+
+let rec forall_aux (#a:Type) (#b:Type) (env:b) (f: b -> a -> Tot bool) (l:list a)
+  : Tot bool
+  = match l with
+    | [] -> true
+    | hd::tl -> if f env hd then forall_aux env f tl else false

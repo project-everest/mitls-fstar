@@ -31,6 +31,28 @@ let parser32
 : Tot Type0
 = (input: bytes32) -> Tot (res: option (t * U32.t) { parser32_correct p input res } )
 
+let parser32_consumes
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (p32: parser32 p)
+  (input: bytes32)
+: Lemma
+  (Some? (p32 input) ==> (let (Some (_, consumed)) = p32 input in U32.v consumed <= B32.length input))
+= ()
+
+let parser32_consumes'
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (p32: parser32 p)
+  (input: bytes32)
+: Lemma
+  (match p32 input with
+  | Some (_, consumed) -> U32.v consumed <= B32.length input
+  | _ -> True)
+= ()
+
 inline_for_extraction
 let make_parser32
   (#k: parser_kind)

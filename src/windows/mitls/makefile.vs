@@ -29,7 +29,7 @@ SOURCES = \
   DataStream.c \
   DHGroup.c \
   ECGroup.c \
-  Epochs.c \
+  Old_Epochs.c \
   Extensions.c \
   FFI.c \
   FFICallbacks.c \
@@ -40,18 +40,17 @@ SOURCES = \
   HaclProvider.c \
   hacl_aead.c \
   hacl_provider.c \
-  Handshake.c \
+  Old_Handshake.c \
   HandshakeLog.c \
   HandshakeMessages.c \
   Hashing.c \
   Hashing_CRF.c \
-  Hashing_Flags.c \
   Hashing_OpenSSL.c \
   Hashing_Spec.c \
-  HKDF.c \
+  Old_HKDF.c \
   HMAC.c \
-  HMAC_UFCMA.c \
-  KeySchedule.c \
+  Old_HMAC_UFCMA.c \
+  Old_KeySchedule.c \
   kremdate.c \
   kremlinit.c \
   kremstr.c \

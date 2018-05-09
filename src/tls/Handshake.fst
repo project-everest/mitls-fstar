@@ -135,7 +135,6 @@ let role_of       (s:hs) = s.r
 let random_of     (s:hs) = nonce s
 let config_of     (s:hs) = Nego.local_config s.nego
 let version_of    (s:hs) = Nego.version s.nego
-let resumeInfo_of (s:hs) = Nego.resume s.nego
 let get_mode (s:hs) = Nego.getMode s.nego
 let is_server_hrr (s:hs) = Nego.is_server_hrr s.nego
 let is_0rtt_offered (s:hs) =
@@ -451,10 +450,9 @@ val client_Binders: s:hs -> offer -> ST client_binders_state
     else (exists (b:Extensions.binders). tr1 = tr0 @ [Binders b])
     )
 let client_Binders hs offer =
-  match Nego.find_clientPske offer with
-  | None -> () // No PSK, no binders
-  | Some (pskl, tlen) -> // Nego may filter the PSKs
-    let pskl = List.Tot.map fst pskl in
+  match Nego.resume hs.nego with
+  | (_, []) -> () // No PSK, no binders
+  | (_, pskl) ->
     let binderKeys = KeySchedule.ks_client_13_get_binder_keys hs.ks pskl in
     let binders = map_ST2 hs compute_binder binderKeys in
     HandshakeLog.send hs.log (Binders binders);
@@ -610,27 +608,21 @@ let client_ServerHello (s:hs) ks (sh:sh) (* digest:Hashing.anyTag *): St incomin
         trace ("Offered SID="^(print_bytes mode.Nego.n_offer.ch_sessionID)^" Server SID="^(print_bytes mode.Nego.n_sessionID));
         if Nego.resume_12 mode then
          begin // 1.2 resumption
-          // Cannot fail if resume_12 is true
-          let Some tid = Nego.find_sessionTicket mode.Nego.n_offer in
-          match PSK.s12_lookup tid with
-          | Some (pv, cs, ems, ms) ->
-            trace "Server accepted our 1.2 ticket.";
-            let msId = Ticket.dummy_msId pv cs ems in
-            let pv' = mode.Nego.n_protocol_version in
-            let sr = mode.Nego.n_server_random in
-            let cs' = mode.Nego.n_cipher_suite in
-            if pv = pv' && cs = cs' then // TODO check full session
-             begin
-              let adk = Secret.client12_resume s.ks sr pv cs ems msId ms in
-              let digestSH = HandshakeLog.hash_tag #ha s.log in
-              register s adk;
-              s.state := C12_wait_CCS1 digestSH;
-              InAck false false
-             end
-            else
-              InError (AD_handshake_failure, "inconsitent protocol version or ciphersuite for resumption")
-          | None ->
-            InError (AD_internal_error, "the offered ticket was not in the session database")
+          trace "Server accepted our 1.2 ticket.";
+          let Some (tid, Ticket.Ticket12 pv cs ems msId ms) = fst (Nego.resume s.nego) in
+          let pv' = mode.Nego.n_protocol_version in
+          let cs' = mode.Nego.n_cipher_suite in
+          let sr = mode.Nego.n_server_random in
+          if pv = pv' && cs = cs' then // TODO check full session
+           begin
+            let adk = KeySchedule.ks_client_12_resume s.ks sr pv cs ems msId ms in
+            let digestSH = HandshakeLog.hash_tag #ha s.log in
+            register s adk;
+            s.state := C_Wait_CCS1 digestSH;
+            InAck false false
+           end
+          else
+            InError (AD_handshake_failure, "inconsitent protocol version or ciphersuite during resumption")
          end
         else
          begin // 1.2 full handshake
@@ -1216,7 +1208,7 @@ let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinishe
            let age_add = CoreCrypto.random 4 in
            let age_add = uint32_of_bytes age_add in
            let now = CoreCrypto.now () in
-           let ticket = Ticket.Ticket13 cs li rmsid rms now age_add empty_bytes in
+           let ticket = Ticket.Ticket13 cs li rmsid rms empty_bytes now age_add empty_bytes in
            let tb = Ticket.create_ticket ticket in
 
            trace ("Sending ticket: "^(print_bytes tb));
@@ -1256,12 +1248,12 @@ val version: s:hs -> Tot protocolVersion
 
 (* ----------------------- Control Interface -------------------------*)
 
-let create (parent:rid) cfg role resume =
+let create (parent:rid) cfg role =
   let r = new_region parent in
   let log = HandshakeLog.create r None (* cfg.max_version (Nego.hashAlg nego) *) in
   //let nonce = Nonce.mkHelloRandom r r0 in //NS: should this really be Client?
   let ks, nonce = Secret.create #r role in
-  let nego = Nego.create r role cfg resume nonce in
+  let nego = Nego.create r role cfg nonce in
   let epochs = Epochs.create r nonce in
   let state = ralloc r (if role = Client then C_Idle else S_Idle) in
   let x: hs = HS role nego log ks epochs state in //17-04-17 why needed?

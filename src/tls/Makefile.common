@@ -43,7 +43,7 @@ endif
 # Project Files
 
 # Add more roots here!
-ROOTS ?= TLS.fst QUIC.fst Test.Main.fst 
+ROOTS ?= QUIC.fst Test.Main.fst 
 
 EVERYTHING=$(wildcard *.fst *.fsti Make* $(MITLS_HOME)/src/pki/* $(MITLS_HOME)/libs/ffi/* ideal-flags/* concrete-flags/* concrete-flags/$(FLAVOR)/*)
 
@@ -64,6 +64,7 @@ endif
 			$(addprefix --include , $(INCLUDE_PATHS)) \
 			$(ROOTS) > $(DEP_FILE) \
 	)
+	sed -i.opt -e "s/cmx/cmo/g" -e "s/source/old/g" $(DEP_FILE)
 
 $(DEP_FILE).dot:
 ifdef VERBOSE
@@ -83,6 +84,7 @@ $(DEP_FILE).pdf: $(DEP_FILE).dot
 
 depend: $(DEP_FILE)
 
+-include $(DEP_FILE).opt
 -include $(DEP_FILE)
 
 # REMARK:

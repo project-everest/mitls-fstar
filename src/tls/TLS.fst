@@ -66,7 +66,7 @@ let outerPV (c:connection) : ST protocolVersion
 (** control API ***)
 
 // subsumes connect, resume, accept_connected, ...
-val create: r0:c_rgn -> tcp:Transport.t -> r:role -> cfg:config -> resume: resumeInfo r -> ST connection
+val create: r0:c_rgn -> tcp:Transport.t -> r:role -> cfg:config -> ST connection
   (requires (fun h -> True))
   (ensures (fun h0 c h1 ->
     modifies Set.empty h0 h1 /\
@@ -85,9 +85,9 @@ val create: r0:c_rgn -> tcp:Transport.t -> r:role -> cfg:config -> resume: resum
     HS.sel h1 c.state = (Ctrl,Ctrl) ))
 
 #set-options "--z3rlimit 50"
-let create parent tcp role cfg resume =
+let create parent tcp role cfg =
     let m = new_region parent in
-    let hs = Handshake.create m cfg role resume in
+    let hs = Handshake.create m cfg role in
     let recv = Record.alloc_input_state m in
     let state = ralloc m (Ctrl,Ctrl) in
     assume (is_hs_rgn m);
@@ -114,8 +114,10 @@ let create parent tcp role cfg resume =
 //    initial Client ns c resume cn h1
 //    //TODO: even if the server declines, we authenticate the client's intent to resume from this sid.
 //  ))
-let connect m0 tcp cfg         = create m0 tcp Client cfg (None, [])
-let resume  m0 tcp cfg tid psk = create m0 tcp Client cfg (tid, psk)
+let connect m0 tcp cfg         = create m0 tcp Client cfg
+let resume  m0 tcp cfg tid psk =
+  let cfg = {cfg with use_tickets=(tid,psk)::cfg.use_tickets} in
+  create m0 tcp Client cfg
 
 //val accept_connected: ns:Transport.t -> c:config -> ST connection
 //  (requires (fun h0 -> True))
@@ -123,7 +125,7 @@ let resume  m0 tcp cfg tid psk = create m0 tcp Client cfg (tid, psk)
 //    modifies Set.empty h0 h1 /\
 //    initial Server ns c None cn h1
 //  ))
-let accept_connected m0 tcp cfg = create m0 tcp Server cfg (None, [])
+let accept_connected m0 tcp cfg = create m0 tcp Server cfg
 
 //* do we need accept and accept_connected?
 //val accept: Tcp.tcpListener -> c:config -> ST connection

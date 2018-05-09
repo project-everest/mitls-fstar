@@ -53,14 +53,13 @@ let first_bytes b =
 let test config: St unit =
   let rid = new_region root in
   let i = Test.StAE.id12 in
-  let resume = None, [] in
-  let client = Handshake.create rid config Client resume in
+  let client = Handshake.create rid config Client in
   let out0 = Handshake.next_fragment client i in
   match out0 with
   | Correct(HandshakeLog.Outgoing (Some f) _ _) ->
     let (|rg, ch|) = f in
     nprint ("----client-hello---> "^first_bytes ch);
-    let server = Handshake.create rid config Server resume in
+    let server = Handshake.create rid config Server in
     let _ = Handshake.recv_fragment server rg ch in
     let out1 = Handshake.next_fragment server i in
     (match out1 with
