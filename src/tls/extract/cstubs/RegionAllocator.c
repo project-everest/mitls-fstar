@@ -173,7 +173,7 @@ void* HeapRegionMalloc(size_t cb)
     void *pv = HeapAlloc(heap->heap, 0, cb);
     UpdateStatisticsAfterMalloc(&heap->stats, pv, cb);
     if (pv == NULL) {
-        RaiseException(MITLS_OUT_OF_MEMORY_EXCEPTION, EXCEPTION_NONCONTINUABLE, 0, NULL);
+        RaiseException((DWORD)MITLS_OUT_OF_MEMORY_EXCEPTION, EXCEPTION_NONCONTINUABLE, 0, NULL);
     }
     
     return pv;
