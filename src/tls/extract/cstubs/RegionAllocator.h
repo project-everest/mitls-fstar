@@ -52,13 +52,10 @@ void HeapRegionFree(void* pv);
   
   #define ENTER_GLOBAL_HEAP_REGION() ENTER_HEAP_REGION(NULL)
 
-  #define LEAVE_GLOBAL_HEAP_REGION() \
-    } __except (GetExceptionCode() == MITLS_OUT_OF_MEMORY_EXCEPTION) { \
-        HadHeapException = 1; \
-    }
+  #define LEAVE_GLOBAL_HEAP_REGION() LEAVE_HEAP_REGION()
 
   #define ENTER_HEAP_REGION(rgn) \
-    HeapRegionEnter(rgn); \
+    HEAP_REGION OldRegion = HeapRegionEnter(rgn); \
     char HadHeapException = 0; \
     __try {
 
@@ -66,39 +63,39 @@ void HeapRegionFree(void* pv);
     } __except (GetExceptionCode() == MITLS_OUT_OF_MEMORY_EXCEPTION) { \
         HadHeapException = 1; \
     } \
-    HeapRegionLeave();
+    HeapRegionLeave(OldRegion);
 
   #define CREATE_HEAP_REGION(prgn) \
-    HeapRegionCreateAndRegister(prgn); \
+    HEAP_REGION OldRegion = HeapRegionCreateAndRegister(prgn); \
     char HadHeapException = 0; \
     __try {
 
   #define VALID_HEAP_REGION(rgn)    ((rgn) != NULL)
   #define DESTROY_HEAP_REGION(rgn) HeapRegionDestroy(rgn)
   #define HAD_OUT_OF_MEMORY         (HadHeapException != 0)
-  void HeapRegionEnter(HEAP_REGION rgn);
+  HEAP_REGION HeapRegionEnter(HEAP_REGION rgn);
 #else
   #include <setjmp.h>
 
   #define ENTER_GLOBAL_HEAP_REGION() ENTER_HEAP_REGION(NULL)
-  #define LEAVE_GLOBAL_HEAP_REGION() }
+  #define LEAVE_GLOBAL_HEAP_REGION() LEAVE_HEAP_REGION()
 
   #define ENTER_HEAP_REGION(rgn) \
     jmp_buf jmp_buf_out_of_memory; \
     char HadHeapException = 0; \
-    HeapRegionEnter(rgn, &jmp_buf_out_of_memory); \
+    HEAP_REGION OldRegion = HeapRegionEnter(rgn, &jmp_buf_out_of_memory); \
     if (setjmp(jmp_buf_out_of_memory)) { \
       HadHeapException = 1; \
     } else {
-  #define LEAVE_HEAP_REGION()    } HeapRegionLeave()
+  #define LEAVE_HEAP_REGION()    } HeapRegionLeave(OldRegion)
   #define CREATE_HEAP_REGION(prgn)   HeapRegionCreateAndRegister(prgn); {
   #define VALID_HEAP_REGION(rgn)    ((rgn) != NULL)
   #define DESTROY_HEAP_REGION(rgn) HeapRegionDestroy(rgn)
   #define HAD_OUT_OF_MEMORY         (HadHeapException != 0)
-  void HeapRegionEnter(HEAP_REGION rgn, jmp_buf* penv);
+  HEAP_REGION HeapRegionEnter(HEAP_REGION rgn, jmp_buf* penv);
 #endif
-void HeapRegionLeave(void);
-void HeapRegionCreateAndRegister(HEAP_REGION *prgn);
+void HeapRegionLeave(HEAP_REGION oldrgn);
+HEAP_REGION HeapRegionCreateAndRegister(HEAP_REGION *prgn);
 void HeapRegionDestroy(HEAP_REGION rgn);
 
 #elif USE_KERNEL_REGIONS
