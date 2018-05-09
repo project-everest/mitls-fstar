@@ -1,7 +1,13 @@
 EXTRACT='Nothing'
 FLAVOR?=Model
 
-all: clean-depend model-all ocaml-all kremlin-all
+# NOTE: the `lowparse` target is independent of the rest of miTLS, it
+# is there only for CI
+
+all: clean-depend model-all ocaml-all kremlin-all lowparse
+
+lowparse:
+	+$(MAKE) -C ../lowparse
 
 clean-depend:
 	rm -f cache/OCaml/.depend cache/Kremlin/.depend cache/Model/.depend
