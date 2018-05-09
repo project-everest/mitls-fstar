@@ -283,13 +283,13 @@ int HeapRegionInitialize()
 // Global termination
 void HeapRegionCleanup(void)
 {
-    HeapRegionDestroy(g_global_region);
+    HeapRegionDestroy((HEAP_REGION)&g_global_region);
     pthread_key_delete(g_region_heap_slot);
     pthread_mutex_destroy(&g_global_region_lock);
 }
 
 // Create a new region and make it this thread's default
-void HeapRegionCreateAndRegister(HEAP_REGION *prgn, jmp_buf *penv)
+HEAP_REGION HeapRegionCreateAndRegister(HEAP_REGION *prgn, jmp_buf *penv)
 {
     HEAP_REGION oldrgn = (HEAP_REGION)pthread_getspecific(g_region_heap_slot);
     region *p = malloc(sizeof(region));
@@ -335,10 +335,11 @@ HEAP_REGION HeapRegionEnter(HEAP_REGION rgn, jmp_buf *penv)
 {
     HEAP_REGION oldrgn = (HEAP_REGION)pthread_getspecific(g_region_heap_slot);
     pthread_setspecific(g_region_heap_slot, rgn);
-    if (rgn == NULL) {
+    region *heap = (region*)rgn;
+    if (heap == NULL) {
         g_global_region.penv = penv;
     } else {
-        rgn->penv = penv;
+        heap->penv = penv;
     }
     return oldrgn;
 }
