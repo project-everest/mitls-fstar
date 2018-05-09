@@ -7,6 +7,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <errno.h>
 
 FStar_Bytes_bytes LowParseTestlib_load_file(Prims_string x0)
 {
