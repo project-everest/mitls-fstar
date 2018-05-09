@@ -8,8 +8,6 @@ SOURCES = \
   Crypto_HKDF_Crypto_HMAC.c \
   Crypto_Symmetric_Bytes.c \
   Hacl_Curve25519.c \
-  C_Loops_Spec_Loops.c \
-  FStar.c \
   FStar_UInt128.c \
 # Hacl_Test_X25519.c \
   kremstr.c \
