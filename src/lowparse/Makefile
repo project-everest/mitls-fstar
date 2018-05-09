@@ -60,6 +60,7 @@ $(EXAMPLES): %: %/a.out
 
 %/a.out:
 	$(MY_KREMLIN) -tmpdir $(EXAMPLE) -bundle LowParse$(EXAMPLE)'.Aux' -no-prefix LowParse$(EXAMPLE) $(EXAMPLE_KRML_FILES) LowParseTestlib_c.c -o $@
+	$@
 
 extract-all: $(EXAMPLES)
 
