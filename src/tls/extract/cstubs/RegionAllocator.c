@@ -513,6 +513,7 @@ LIST_ENTRY *HeapRegionFind(void)
             ExReleaseFastMutex(&g_mapping_lock);
             return r->region;
         }
+        p = p->Flink;
     }
     ExReleaseFastMutex(&g_mapping_lock);    
     return NULL;
