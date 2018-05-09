@@ -58,11 +58,8 @@ $(FSTAR_OUT_DIR)/%.krml:
 
 $(EXAMPLES): %: %/a.out
 
-%/a.out: LowParseTestlib_c.o
-	$(MY_KREMLIN) -tmpdir $(EXAMPLE) -bundle LowParse$(EXAMPLE)'.Aux' -no-prefix LowParse$(EXAMPLE) $(EXAMPLE_KRML_FILES) LowParseTestlib_c.o -o $@
-    
-LowParseTestlib_c.o: LowParseTestlib_c.c
-	$(CC) -c -I$(KREMLIN_HOME)/kremlib -I$(EXAMPLE) LowParseTestlib_c.c
+%/a.out:
+	$(MY_KREMLIN) -tmpdir $(EXAMPLE) -bundle LowParse$(EXAMPLE)'.Aux' -no-prefix LowParse$(EXAMPLE) $(EXAMPLE_KRML_FILES) LowParseTestlib_c.c -o $@
 
 extract-all: $(EXAMPLES)
 
