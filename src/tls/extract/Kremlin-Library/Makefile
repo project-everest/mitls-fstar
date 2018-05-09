@@ -27,6 +27,9 @@ else ifeq ($(UNAME),Linux)
   export LD_LIBRARY_PATH
 endif
 
+# Force-include RegionAllocator.h and enable heap regions in all builds
+CFLAGS := $(CFLAGS) -include RegionAllocator.h -DUSE_HEAP_REGIONS
+
 ifneq (,$(EVEREST_WINDOWS))
 CFLAGS+=-DKRML_NOUINT128 -DKRML_SEPARATE_UINT128 # -DKRML_NOSTRUCT_PASSING
 endif
