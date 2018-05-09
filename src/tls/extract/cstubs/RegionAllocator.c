@@ -680,5 +680,4 @@ void HeapRegionFree(void* pv)
 {
     free(pv);
 }
-
 #endif
