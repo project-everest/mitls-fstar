@@ -244,11 +244,13 @@ let parse_sum_with_nondep_aux_correct
         begin match parse (pc tg) input2 with
         | Some (d, consumed_d) ->
           // FIXME: implicit arguments are not inferred because (synth_tagged_union_data ...) is Tot instead of GTot
-          let (tg' : sum_key (make_sum_with_nondep nondep_t t)) = (tg <: sum_key_type (make_sum_with_nondep nondep_t t)) in
+          let (tg' : sum_key_type (make_sum_with_nondep nondep_t t)) = tg in
+          let (tg' : enum_key (sum_enum (make_sum_with_nondep nondep_t t))) = make_enum_key (sum_enum (make_sum_with_nondep nondep_t t)) tg' in
+          let (tg' : sum_key (make_sum_with_nondep nondep_t t)) = coerce' (sum_key (make_sum_with_nondep nondep_t t)) tg' in
           let (ndd_ : (nondep_t * sum_type t)) = (nd, (d <: sum_type t)) in
           let (ndd_ : sum_type (make_sum_with_nondep nondep_t t)) = ndd_ in
-          let u' : sum_key_type (make_sum_with_nondep nondep_t t) = sum_tag_of_data (make_sum_with_nondep nondep_t t) ndd_ in
-          let u : sum_key_type (make_sum_with_nondep nondep_t t) = sum_tag_of_data t (d <: sum_type t) in
+          let u' : sum_key_type (make_sum_with_nondep nondep_t t) = sum_key_type_of_sum_key (make_sum_with_nondep nondep_t t) (sum_tag_of_data (make_sum_with_nondep nondep_t t) ndd_) in
+          let u : sum_key_type (make_sum_with_nondep nondep_t t) = coerce' (sum_key_type (make_sum_with_nondep nondep_t t)) (sum_key_type_of_sum_key t (sum_tag_of_data t (d <: sum_type t))) in
           assert_norm (u' == u);
           assert (sum_tag_of_data (make_sum_with_nondep nondep_t t) ndd_ == tg');
           let (ndd : sum_cases (make_sum_with_nondep nondep_t t) tg') = ndd_ in

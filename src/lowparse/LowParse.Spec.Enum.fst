@@ -46,6 +46,12 @@ inline_for_extraction
 let enum_key (#key #repr: eqtype) (e: enum key repr) : Tot eqtype = (s: key { list_mem s (list_map fst e) } )
 
 inline_for_extraction
+let make_enum_key (#key #repr: eqtype) (e: enum key repr) (k: key) : Pure (enum_key e)
+  (requires (list_mem k (list_map fst e)))
+  (ensures (fun k' -> k == (k' <: key)))
+= k
+
+inline_for_extraction
 let enum_repr (#key #repr: eqtype) (e: enum key repr) : Tot eqtype = (r: repr { list_mem r (list_map snd e) } )
 
 let flip (#a #b: Type) (c: (a * b)) : Tot (b * a) = let (ca, cb) = c in (cb, ca)
