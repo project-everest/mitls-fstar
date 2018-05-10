@@ -5,6 +5,8 @@ module B32 = FStar.Bytes
 module Seq = FStar.Seq
 module U32 = FStar.UInt32
 
+#set-options "--use_two_phase_tc true"
+
 #set-options "--z3rlimit 128 --max_fuel 64 --max_ifuel 64"
 
 let lt_pow2_32
@@ -13,7 +15,7 @@ let lt_pow2_32
   (x < 4294967296 <==> x < pow2 32)
 = ()
 
-#reset-options
+#reset-options "--use_two_phase_tc true"
 
 let parse_flbytes_gen
   (sz: nat { sz < 4294967296 } )
@@ -103,7 +105,7 @@ let parse_all_bytes_injective () : Lemma
   in
   Classical.forall_intro_2 (fun x -> Classical.move_requires (prf x))
 
-#reset-options
+#reset-options "--use_two_phase_tc true"
 
 let parse_all_bytes_correct () : Lemma
   (parser_kind_prop parse_all_bytes_kind parse_all_bytes')
@@ -136,7 +138,7 @@ let serialize_all_bytes_correct () : Lemma (serializer_correct parse_all_bytes s
   in
   Classical.forall_intro prf
 
-#reset-options
+#reset-options "--use_two_phase_tc true"
 
 let serialize_all_bytes : serializer parse_all_bytes =
   serialize_all_bytes_correct ();
