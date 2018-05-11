@@ -171,7 +171,7 @@ uint32_t size_of_curve(CoreCrypto_ec_curve x) {
   case CoreCrypto_ECC_X448:
     return 56;
   }
-  exit(255);
+  KRML_HOST_EXIT(255);
 }
 
 FStar_Bytes_bytes CoreCrypto_ecdh_agreement_(CoreCrypto_ec_key *x0,
@@ -861,7 +861,7 @@ FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
   int fd = open("/dev/urandom", O_RDONLY);
   if (fd == -1) {
     KRML_HOST_EPRINTF("Cannot open /dev/urandom\n");
-    exit(255);
+    KRML_HOST_EXIT(255);
   }
   uint64_t res = read(fd, data, x0);
   if (res != x0) {
@@ -869,7 +869,7 @@ FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
             "Error on reading, expected %" PRIi32 " bytes, got %" PRIu64
             " bytes\n",
             x0, res);
-    exit(255);
+    KRML_HOST_EXIT(255);
   }
   close(fd);
 
