@@ -29,7 +29,7 @@ let serialize32_sum_gen'
   (#sc: ((x: sum_key t) -> Tot (serializer (pc x))))
   (sc32: ((x: sum_key t) -> Tot (serializer32 (sc x))))
   (u: unit { serializer32_sum_gen_precond kt k } )
-  (tag_of_data: ((x: sum_type t) -> Tot (y: sum_key_type t { y == sum_tag_of_data t x} )))
+  (tag_of_data: ((x: sum_type t) -> Tot (y: sum_key_type t  { y == (sum_tag_of_data t x <: sum_key_type t)}  )))
 : Tot (serializer32 (serialize_sum t s sc))
 = fun (input: sum_type t) -> ((
     let tg = tag_of_data input in
@@ -221,7 +221,7 @@ let parse_sum_with_nondep_aux
     end
   | _ -> None
 
-#set-options "--z3rlimit 256 --max_fuel 32"
+#set-options "--z3rlimit 512 --max_fuel 32"
 
 let parse_sum_with_nondep_aux_correct
   (#kt: parser_kind)
@@ -256,7 +256,8 @@ let parse_sum_with_nondep_aux_correct
           let (ndd : sum_cases (make_sum_with_nondep nondep_t t) tg') = ndd_ in
           assert_norm (synth_sum_with_nondep_case nondep_t t tg (nd, d) == ndd);
           let p1 : option (sum_cases (make_sum_with_nondep nondep_t t) tg' * consumed_length input1) = parse (parse_sum_with_nondep_cases t pnd pc tg') input1 in
-          assert (p1 == Some (ndd, consumed_nd + consumed_d));
+          let consumed_nd_d : consumed_length input1 = consumed_nd + consumed_d in
+          assert (p1 == Some (ndd, consumed_nd_d));
 //          assert (parse (parse_sum_with_nondep t p pnd pc) input == Some (ndd_, consumed_tg + (consumed_nd + consumed_d)));
           assert (parse (parse_synth #_ #_ #(sum_type (make_sum_with_nondep nondep_t t)) (parse_sum_with_nondep_cases t pnd pc tg) (synth_tagged_union_data (sum_tag_of_data (make_sum_with_nondep nondep_t t)) tg)) (input1) == Some (ndd_, consumed_nd + consumed_d));
 //          admit
@@ -364,7 +365,7 @@ let enum_head_key
   (e: enum key repr)
 : Pure (enum_key e)
   (requires (Cons? e))
-  (ensures (fun y -> Cons? e /\ (let ((k, _) :: _) = e in y == k)))
+  (ensures (fun y -> Cons? e /\ (let ((k, _) :: _) = e in (y <: key) == k)))
 = match e with ((k, _) :: _) -> k
 
 inline_for_extraction
@@ -463,7 +464,7 @@ let serialize32_sum_gen
   (#sc: ((x: sum_key t) -> Tot (serializer (pc x))))
   (sc32: ((x: sum_key t) -> Tot (serializer32 (sc x))))
   (u: unit { serializer32_sum_gen_precond kt k } )
-  (tag_of_data: ((x: sum_type t) -> Tot (y: sum_key_type t { y == sum_tag_of_data t x} )))
+  (tag_of_data: ((x: sum_type t) -> Tot (y: sum_key_type t { y == (sum_tag_of_data t x <: sum_key_type t)} )))
   (#k' : parser_kind)
   (#t' : Type0)
   (#p' : parser k' t')
@@ -526,7 +527,7 @@ let size32_sum_gen'
   (#sc: ((x: sum_key t) -> Tot (serializer (pc x))))
   (sc32: ((x: sum_key t) -> Tot (size32 (sc x))))
   (u: unit { serializer32_sum_gen_precond kt k } )
-  (tag_of_data: ((x: sum_type t) -> Tot (y: sum_key_type t { y == sum_tag_of_data t x} )))
+  (tag_of_data: ((x: sum_type t) -> Tot (y: sum_key_type t { y == (sum_tag_of_data t x <: sum_key_type t) } )))
 : Tot (size32 (serialize_sum t s sc))
 = fun (input: sum_type t) -> ((
     let tg = tag_of_data input in
@@ -549,7 +550,7 @@ let size32_sum_gen
   (#sc: ((x: sum_key t) -> Tot (serializer (pc x))))
   (sc32: ((x: sum_key t) -> Tot (size32 (sc x))))
   (u: unit { serializer32_sum_gen_precond kt k } )
-  (tag_of_data: ((x: sum_type t) -> Tot (y: sum_key_type t { y == sum_tag_of_data t x} )))
+  (tag_of_data: ((x: sum_type t) -> Tot (y: sum_key_type t { y == (sum_tag_of_data t x <: sum_key_type t) } )))
   (#k' : parser_kind)
   (#t' : Type0)
   (#p' : parser k' t')
