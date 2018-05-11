@@ -159,9 +159,10 @@ let region (#i:id) (#rw:rw) (st:state i rw) =
   | OpenSSLProvider -> OAEAD.State?.region (as_openssl_state st)
   | _ -> tls_region // TODO
 
-let log_region (#i:id) (#rw:rw) (st:state i rw) =
+let log_region (#i:id) (#rw:rw) (st:state i rw) : rgn =
   match use_provider() with
-  | OpenSSLProvider -> OAEAD.State?.log_region (as_openssl_state st)
+  | OpenSSLProvider ->
+    OAEAD.State?.log_region (as_openssl_state st)
   | _ -> tls_region
 
 let st_inv (#i:id) (#rw:rw) (st:state i rw) h = True //TODO

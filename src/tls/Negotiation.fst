@@ -413,19 +413,28 @@ noeq type t (region:rgn) (role:TLSConstants.role) : Type0 =
     state: HST.m_rref region (negotiationState role cfg) ns_rel ->
     t region role
 
-private let rec find_ticket12 acc = function
-  | [] -> acc
-  | (tid, t) :: r ->
-    find_ticket12 (if Ticket.Ticket12? t then Some (tid, t) else acc) r
+private
+let rec find_ticket12 (#a:Type0) (acc:option (a * Ticket.ticket))
+    : list (a * Ticket.ticket) -> option (a * Ticket.ticket) =
+    function
+    | [] -> acc
+    | (tid, t) :: r ->
+      find_ticket12 (if Ticket.Ticket12? t then Some (tid, t) else acc) r
 
-private let rec filter_ticket13 acc = function
-  | [] -> List.Tot.rev acc
-  | (tid, t) :: r ->
-    filter_ticket13 (if Ticket.Ticket13? t then (tid, t)::acc else acc) r
+private
+let rec filter_ticket13 (#a:Type0) (acc:list (a * Ticket.ticket))
+    : list (a * Ticket.ticket) -> list (a * Ticket.ticket) =
+    function
+    | [] -> List.Tot.rev acc
+    | (tid, t) :: r ->
+      filter_ticket13 (if Ticket.Ticket13? t then (tid, t)::acc else acc) r
 
-private let rec ticket13_pskinfo acc = function
-  | [] -> List.Tot.rev acc
-  | (tid, t) :: r -> ticket13_pskinfo ((tid, Some?.v (Ticket.ticket_pskinfo t))::acc) r
+private
+let rec ticket13_pskinfo (#a:Type0) (acc:list (a * pskInfo))
+    : list (a * Ticket.ticket) -> list (a * pskInfo) =
+    function
+    | [] -> List.Tot.rev acc
+    | (tid, t) :: r -> ticket13_pskinfo ((tid, Some?.v (Ticket.ticket_pskinfo t))::acc) r
 
 #set-options "--admit_smt_queries true"
 val computeOffer: r:role -> cfg:config -> nonce:TLSInfo.random
@@ -480,7 +489,9 @@ let computeOffer r cfg nonce ks resume now =
     ch_extensions = Some extensions
   }
 
-let rec unseal_tickets acc l : St (list (psk_identifier * Ticket.ticket))
+let rec unseal_tickets (acc:list (psk_identifier * Ticket.ticket))
+                       (l:list (psk_identifier * b:bytes{length b <= 65551}))
+    : St (list (psk_identifier * Ticket.ticket))
   = match l with
   | [] -> List.Tot.rev acc
   | (tid, seal) :: r ->

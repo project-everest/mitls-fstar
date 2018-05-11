@@ -466,7 +466,7 @@ let ks_server_13_init ks cr cs pskid g_gx =
   let KS #region st = ks in
   let S (S_Init sr) = !st in
   let CipherSuite13 ae h = cs in
-  let esId, es, bk =
+  let (| esId, es, bk |) : (i:_ & _:es i & option (i:binderId & binderKey i)) =
     match pskid with
     | Some id ->
       dbg ("Using negotiated PSK identity: "^(print_bytes id));
@@ -494,12 +494,12 @@ let ks_server_13_init ks cr cs pskid g_gx =
       let bk = finished_13 h bk in
       dbg ("binder Finished key:             "^print_bytes bk);
       let bk : binderKey bId = HMAC_UFCMA.coerce (HMAC_UFCMA.HMAC_Binder bId) (fun _ -> True) region bk in
-      i, es, Some (| bId, bk |)
+      (| i, es, Some (| bId, bk |) |)
     | None ->
       dbg "No PSK selected.";
       let esId = NoPSK h in
       let es : es esId = HKDF.hkdf_extract h (H.zeroHash h) (H.zeroHash h) in
-      esId, es, None
+      (| esId, es, None |)
     in
   dbg ("Computed early secret:           "^print_bytes es);
   let saltId = Salt (EarlySecretID esId) in

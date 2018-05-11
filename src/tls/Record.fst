@@ -180,6 +180,7 @@ val alloc_input_state: r:_ -> ST input_state
 let alloc_input_state r = 
   let pos = ralloc r 0ul in 
   let b = Buffer.rcreate r 0uy maxlen in
+  assume (Buffer.disjoint_ref_1 b pos); //NS: 05/11 ... added this while upgrading F*
   InputState pos b
 
 type read_result =

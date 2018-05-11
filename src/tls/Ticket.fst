@@ -98,7 +98,7 @@ type ticket =
     ticket
 
 // Currently we use dummy indexes until we can serialize them properly
-let dummy_rmsid ae h =
+let dummy_rmsid (ae:aeadAlg) (h:hash_alg) : Tot (li:logInfo & rmsId li) =
   let li = {
     li_sh_cr = Bytes.create 32ul 0z;
     li_sh_sr = Bytes.create 32ul 0z;

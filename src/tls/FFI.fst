@@ -276,7 +276,7 @@ let rec findsetting f l =
   | [] -> None
   | (s, i)::tl -> if s = f then Some i else findsetting f tl
 
-let rec updatecfg cfg l : ML config =
+let rec updatecfg cfg (l:list string) : ML config =
   match l with
   | [] -> cfg
   | hd::t ->
