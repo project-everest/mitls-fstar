@@ -90,7 +90,33 @@ SOURCES = \
   TLS_Curve25519.c \
   Transport.c \
   vale_aes_glue.c \
-  Vale_Hash_SHA2_256.c
+  Vale_Hash_SHA2_256.c \
+# Taken from the list of HACL sources in hacl-star/providers/Makefiles
+  Hacl_Chacha20.c \
+  Hacl_Salsa20.c \
+  Hacl_SHA2_256.c \
+  Hacl_SHA2_384.c \
+  Hacl_SHA2_512.c \
+  Hacl_Curve25519.c \
+  Hacl_Ed25519.c \
+  Hacl_Poly1305_64.c \
+  Hacl_HMAC_SHA2_256.c \
+  AEAD_Poly1305_64.c \
+  Hacl_Chacha20_Vec128.c \
+# Taken from ls hacl-star/providers/multiplexer/c/*.c | xargs basename
+  evercrypt_bytes.c \
+  evercrypt_native.c \
+  evercrypt_openssl.c \
+  evercrypt_vale.c \
+# Taken from ls hacl-star/providers/generated/EverCrypt_*.c | xargs basename
+  EverCrypt_Bytes.c \
+  EverCrypt_Hacl.c \
+  EverCrypt_Helpers.c \
+  EverCrypt_Native.c \
+  EverCrypt_OpenSSL.c \
+  EverCrypt_Specs.c \
+  EverCrypt_Vale.c
+
   
 aes-x86_64.obj: amd64\aes-x86_64.asm
   ml64 /nologo /Zi /c amd64\aes-x86_64.asm
