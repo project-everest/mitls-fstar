@@ -6,22 +6,15 @@
       1,
       2,
       1,
-      [ "@query", "assumption_CryptoTypes.aead_cipher__uu___haseq" ],
-      0,
-      "232a858de901630aa4a4c64f412ec915"
-    ],
-    [
-      "LowCProvider.aead_create",
-      2,
-      2,
-      1,
       [
-        "@MaxIFuel_assumption", "@query", "equation_CryptoTypes.aeadKeySize",
+        "@MaxIFuel_assumption", "@query",
+        "assumption_CryptoTypes.aead_cipher__uu___haseq",
+        "equation_CryptoTypes.aeadKeySize",
         "fuel_guarded_inversion_CryptoTypes.aead_cipher",
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "c47b6932ccc030e5d96b6cd8090ee8e6"
+      "e3973be0c0021f3635cea1e893d14a6c"
     ],
     [
       "LowCProvider.aead_encrypt",

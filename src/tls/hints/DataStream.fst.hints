@@ -1,5 +1,5 @@
 [
-  "\u0007Õ°CUBNî\u000e¦ÄbW\u007f\u001bð",
+  "ž€¤\fìÎ½„Ü[àã{ù\u000eÊ",
   [
     [
       "DataStream.fragment",
@@ -12,7 +12,7 @@
         "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87"
       ],
       0,
-      "93cc85547f89f381ddb7e57e2300c41a"
+      "d6b729ddd2fd55757a908edbde3c50b1"
     ],
     [
       "DataStream.repr",
@@ -68,7 +68,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "848877e7eaf2566b180606527293934f"
+      "419e0bf048e007c954a1cfdf3a291b9b"
     ],
     [
       "DataStream.__proj__Data__item___0",
@@ -81,7 +81,7 @@
         "refinement_interpretation_DataStream_Tm_refine_0d466ae495b3961c5a09f777ca3640cd"
       ],
       0,
-      "28f086e55e792a8dd3d8ff4c46ba3ec3"
+      "08e8a491de07fc0b30c045e3e3537861"
     ],
     [
       "DataStream.__proj__Alert__item___0",
@@ -117,14 +117,14 @@
       [
         "@MaxIFuel_assumption", "@query",
         "TLSInfo_pretyping_0afe7076ab7c3944b08749f79d359184",
-        "binder_x_0afe7076ab7c3944b08749f79d359184_0",
-        "binder_x_8734431131df6dd46aa9962779a47103_1",
+        "binder_x_0afe7076ab7c3944b08749f79d359184_1",
+        "binder_x_376ce23dc1ce2af6764585e02e54ff87_2",
         "disc_equation_Prims.Cons", "disc_equation_Prims.Nil",
         "equality_tok_Prims.LexTop@tok", "fuel_guarded_inversion_Prims.list",
         "subterm_ordering_Prims.Cons"
       ],
       0,
-      "160b2ac88a73caa2d7f60ebf9b8d9c95"
+      "37753f6053e7cdaabd9d41b051c9b39f"
     ],
     [
       "DataStream.wellformed",
@@ -169,7 +169,7 @@
         "refinement_interpretation_DataStream_Tm_refine_b9e1232437f6bc2669aefd956955c539"
       ],
       0,
-      "b863d826a3b7dbb8716bf4bfac2e3fa5"
+      "91046310af9cae520c34918a23a615ca"
     ],
     [
       "DataStream.__proj__State__item__ctr",
@@ -181,7 +181,7 @@
         "projection_inverse_DataStream.State_region"
       ],
       0,
-      "fd0c1d49dc924302d9b2c2e302378fb5"
+      "87f8c1a6231464c89f97a9976badad69"
     ],
     [
       "DataStream.gen",
@@ -193,14 +193,17 @@
         "constructor_distinct_FStar.Pervasives.Native.None",
         "data_typing_intro_FStar.Pervasives.V@tok",
         "disc_equation_FStar.Pervasives.Native.Some",
+        "equation_DataStream.stream", "equation_FStar.Heap.trivial_preorder",
+        "equation_FStar.HyperStack.ST.mref", "equation_Prims.nat",
         "equation_TLSInfo.authId", "kinding_DataStream.state@tok",
         "kinding_FStar.Pervasives.Native.tuple2@tok",
         "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_DataStream_Tm_refine_161e04719814801d293219f408210f95",
-        "refinement_interpretation_DataStream_Tm_refine_d9e35989bf511ab9e96c77a6d6447b81"
+        "refinement_interpretation_DataStream_Tm_refine_d9e35989bf511ab9e96c77a6d6447b81",
+        "refinement_interpretation_FStar.HyperStack.ST_Tm_refine_1a1278f1aecd37594ba20d888b7fd230"
       ],
       0,
-      "d3be152c4c03289035ac8d774d762b2c"
+      "54875e1a4f372ecf9d1e0295644a450d"
     ]
   ]
 ]

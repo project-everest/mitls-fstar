@@ -8,7 +8,7 @@
       1,
       [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
       0,
-      "1de436c75926512897a265d056436580"
+      "bf2bba53955ac7f592c7323deba603ac"
     ],
     [
       "Format.Constants.constantByte_parser",
@@ -16,10 +16,8 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "equation_Format.Constants.constantByte_parser_kind_",
+        "@query", "equation_Format.Constants.constantByte_parser_kind_",
         "equation_Format.Constants.constantByte_parser_kind_metadata",
-        "equation_Format.Constants.is_constantByte",
         "equation_LowParse.Spec.Base.strong_parser_kind",
         "equation_LowParse.Spec.Combinators.parse_filter_kind",
         "equation_LowParse.Spec.Combinators.total_constant_size_parser_kind",
@@ -28,15 +26,13 @@
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
-        "projection_inverse_BoxBool_proj_0",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
-        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
-        "typing_Format.Constants.is_constantByte"
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "cf3b491e497d7669c786fbb42a31ef66"
+      "d3992d94695c5b2265e1524b864fe086"
     ],
     [
       "Format.Constants.constantByte_parser32",
@@ -44,8 +40,7 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "equation_Format.Constants.constantByte_parser",
+        "@query", "equation_Format.Constants.constantByte_parser",
         "equation_Format.Constants.constantByte_parser_kind_",
         "equation_Format.Constants.constantByte_parser_kind_metadata",
         "equation_LowParse.Spec.Base.strong_parser_kind",
@@ -56,15 +51,13 @@
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
-        "projection_inverse_BoxBool_proj_0",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
-        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
-        "typing_Format.Constants.is_constantByte"
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "30e9a0f2ed7a433e5212dd1f501c3d1c"
+      "6deb350f625b1a76080f37e9089a2172"
     ],
     [
       "Format.Constants.constantByte_serializer",
@@ -72,8 +65,7 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "equation_Format.Constants.constantByte_parser",
+        "@query", "equation_Format.Constants.constantByte_parser",
         "equation_Format.Constants.constantByte_parser_kind_",
         "equation_Format.Constants.constantByte_parser_kind_metadata",
         "equation_LowParse.Spec.Base.strong_parser_kind",
@@ -84,15 +76,13 @@
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
-        "projection_inverse_BoxBool_proj_0",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
-        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
-        "typing_Format.Constants.is_constantByte"
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "7c372aecaa8c4ed8a4d7601be5e6565d"
+      "35fa7d433af4935c972ee44382b6dffb"
     ],
     [
       "Format.Constants.constantByte_serializer32",
@@ -100,8 +90,7 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "equation_Format.Constants.constantByte_parser",
+        "@query", "equation_Format.Constants.constantByte_parser",
         "equation_Format.Constants.constantByte_parser_kind_",
         "equation_Format.Constants.constantByte_parser_kind_metadata",
         "equation_Format.Constants.constantByte_serializer",
@@ -113,15 +102,13 @@
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
-        "projection_inverse_BoxBool_proj_0",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
-        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
-        "typing_Format.Constants.is_constantByte"
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "3da76691a70f9ccb2d8d4f2eae39eeac"
+      "3e5fd984617c984f21a07bf4a97b5cc8"
     ]
   ]
 ]
