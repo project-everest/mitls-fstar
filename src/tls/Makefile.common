@@ -33,7 +33,7 @@ HINTS_DIR  ?= hints
 CACHE_DIR   = cache/$(FLAVOR)
 EXTRACT_DIR = extract/$(FLAVOR)
 DEP_FILE    = $(CACHE_DIR)/.depend
-FSTAR       = $(FSTAR_HOME)/bin/fstar.exe --cache_dir $(CACHE_DIR) --cache_checked_modules $(OTHERFLAGS)
+FSTAR       = $(FSTAR_HOME)/bin/fstar.exe --cache_dir $(CACHE_DIR) --cache_checked_modules --use_two_phase_tc true $(OTHERFLAGS)
 VFLAGS     ?= --use_hints --use_hint_hashes --record_hints --warn_error -272-241
 
 ifneq (,$(HINTS_DIR))
