@@ -115,7 +115,9 @@ SOURCES = \
   EverCrypt_Native.c \
   EverCrypt_OpenSSL.c \
   EverCrypt_Specs.c \
-  EverCrypt_Vale.c
+  EverCrypt_Vale.c \
+# Remember to add these
+  EverCrypt.c
 
   
 aes-x86_64.obj: amd64\aes-x86_64.asm
@@ -123,11 +125,18 @@ aes-x86_64.obj: amd64\aes-x86_64.asm
   
 aes-i686.obj: i386\aes-i686.asm
   ml /nologo /Zi /c i386\aes-i686.asm
+
+# JP: didn't manage to make a pattern rule work here
+sha256-x86_64.obj: amd64\sha256-x86_64.asm
+  ml64 /nologo /Zi /c amd64\sha256-x86_64.asm
+  
+sha256-i686.obj: i386\sha256-i686.asm
+  ml /nologo /Zi /c i386\sha256-i686.asm
   
 !if "$(PLATFORM)"=="x86"
-PLATFORM_OBJS = aes-i686.obj
+PLATFORM_OBJS = aes-i686.obj sha256-i686.obj
 !else
-PLATFORM_OBJS = aes-x86_64.obj
+PLATFORM_OBJS = aes-x86_64.obj sha256-x86_64.obj
 !endif
 
 libmitls_code.lib: $(SOURCES:.c=.obj) $(PLATFORM_OBJS)
