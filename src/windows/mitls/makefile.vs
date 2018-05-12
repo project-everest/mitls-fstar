@@ -117,7 +117,8 @@ SOURCES = \
   EverCrypt_Specs.c \
   EverCrypt_Vale.c \
 # Remember to add these
-  EverCrypt.c
+  EverCrypt.c \
+  C_Failure.c
 
   
 aes-x86_64.obj: amd64\aes-x86_64.asm
