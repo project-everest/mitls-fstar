@@ -32,7 +32,7 @@ endif
 CFLAGS := $(CFLAGS) -include RegionAllocator.h -DUSE_HEAP_REGIONS
 
 ifneq (,$(EVEREST_WINDOWS))
-CFLAGS+=-DKRML_NOUINT128 -DKRML_SEPARATE_UINT128 # -DKRML_NOSTRUCT_PASSING
+CFLAGS+= # -DKRML_NOSTRUCT_PASSING
 endif
 
 ifndef NO_OPENSSL
@@ -71,10 +71,6 @@ FILES 		= AEAD_GCM AEADProvider Alert BufferBytes Cert \
   TLSInfoFlags TLSPRF Transport vale/sha256_main_i vale/vale_aes_glue \
   vale/Vale_Hash_SHA2_256 stub/mitlsffi stub/buffer_bytes \
   stub/RegionAllocator
-
-ifneq (,$(EVEREST_WINDOWS))
-FILES+=uint128/FStar_UInt128
-endif
 
 ifdef MITLS_USE_OPENSSL
 FILES += AEADOpenssl

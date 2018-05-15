@@ -1,4 +1,4 @@
-CCOPTS = /nologo /O2 /Gy /GF /Gw /GA /MD /Zi -I. -I.. -Iinclude -FI.\CommonInclude.h /DNO_OPENSSL
+CCOPTS = /nologo /O2 /Gy /GF /Gw /GA /MD /Zi -I. -I.. -Iinclude -Ikremlin -FI.\CommonInclude.h /DNO_OPENSSL
 
 all: libquiccrypto.dll test
 
@@ -8,7 +8,7 @@ SOURCES = \
   Crypto_HKDF_Crypto_HMAC.c \
   Crypto_Symmetric_Bytes.c \
   Hacl_Curve25519.c \
-  FStar_UInt128.c \
+  FStar_UInt128_MSVC.c \
 # Hacl_Test_X25519.c \
   kremstr.c \
   quic_provider.c \

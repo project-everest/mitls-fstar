@@ -35,8 +35,7 @@ endif
 # Support for building without __int128
 
 ifneq (,$(EVEREST_WINDOWS))
-KOPTS+=-add-early-include '"FStar_UInt128.h"'
-KOPTS+=-falloca -ftail-calls -fnouint128 -drop FStar.UInt128
+KOPTS+=-falloca -ftail-calls
 endif
 
 ################################################################################
@@ -98,11 +97,11 @@ ALL_EXTERNAL_FILES	= \
   $(addprefix secure/,Crypto_AEAD_Main.c Crypto_AEAD_Main.h \
     Crypto_HKDF_Crypto_HMAC.c Crypto_HKDF_Crypto_HMAC.h) \
   $(addprefix curve/,Hacl_Curve25519.c Hacl_Curve25519.h) \
-  $(addprefix kremlib/,kremstr.c kremdate.c) \
+  $(addprefix kremlib/,kremstr.c kremdate.c FStar_UInt128_MSVC.c) \
   kreminc/kremlib.h \
   $(addprefix kreminc/kremlin/,c.h c_endianness.h c_string.h fstar_bytes.h \
     fstar_char.h fstar_dyn.h fstar_ints.h fstar_uint128.h prims_int.h prims_string.h \
-    testlib.h \
+    testlib.h fstar_uint128_builtin.h fstar_uint128_msvc.h \
     $(addprefix internal/,builtin.h callconv.h debug.h target.h)) \
   $(addprefix stub/,hacl_aead.c hacl_provider.c core_crypto.c log_to_choice.h \
     buffer_bytes.c RegionAllocator.c RegionAllocator.h) \
@@ -111,11 +110,6 @@ ALL_EXTERNAL_FILES	= \
     Vale_Hash_SHA2_256.c vale_aes_glue.c aes-$(MARCH)$(VARIANT).S DafnyLib.h) \
   $(addprefix pki/,mipki.h) \
   $(addprefix ffi/,mitlsffi.h)
-
-ifneq (,$(EVEREST_WINDOWS))
-  ALL_EXTERNAL_FILES += \
-    $(addprefix uint128/,FStar_UInt128.h FStar_UInt128.c)
-endif
 
 ################################################################################
 

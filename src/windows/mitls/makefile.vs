@@ -1,4 +1,4 @@
-CCOPTS = /nologo /O2 /Gy /GF /Gw /GA /MD /Zi -I. -I.. -Iinclude -FI..\CommonInclude.h /DNO_OPENSSL
+CCOPTS = /nologo /O2 /Gy /GF /Gw /GA /MD /Zi -I. -I.. -Ikremlin -Iinclude -FI..\CommonInclude.h /DNO_OPENSSL
 
 all: libmitls.dll
 
@@ -37,7 +37,7 @@ SOURCES = \
   Flags.c \
   Format.c \
   FStar.c \
-  FStar_UInt128.c \
+  FStar_UInt128_MSVC.c \
   HaclProvider.c \
   hacl_aead.c \
   hacl_provider.c \

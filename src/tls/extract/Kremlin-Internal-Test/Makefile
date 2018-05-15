@@ -35,7 +35,7 @@ ifeq (,$(wildcard $(MITLS_HOME)/src/pki/libmipki.$(SO)))
 endif
 
 ifneq (,$(EVEREST_WINDOWS))
-CFLAGS+=-DKRML_NOUINT128 -DKRML_SEPARATE_UINT128 # -DKRML_NOSTRUCT_PASSING
+CFLAGS+= # -DKRML_NOSTRUCT_PASSING
 endif
 
 ifndef NO_OPENSSL
@@ -73,10 +73,6 @@ CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror \
   -Wno-missing-braces
 
 LDOPTS += -L$(EVERCRYPT_HOME)/out -levercrypt
-
-ifneq (,$(EVEREST_WINDOWS))
-FILES+=uint128/FStar_UInt128
-endif
 
 ifndef NO_OPENSSL
 CFLAGS += -I$(MLCRYPTO_HOME)/openssl/include
