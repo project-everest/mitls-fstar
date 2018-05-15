@@ -162,7 +162,7 @@ let rec find_key r ks = match ks with
   | k::ks -> if pkey_repr k = r then Some k else find_key r ks
 
 
-logic type mon_pkey (xs:kset) (xs':kset) =
+type mon_pkey (xs:kset) (xs':kset) =
   forall x. List.Tot.memP x xs ==> List.Tot.memP x xs'
 
 val add_key: ks:kset

@@ -17,8 +17,10 @@ type pskInfo = TLSConstants.pskInfo
 
 // SESSION TICKET DATABASE (TLS 1.3)
 // Note that the associated PSK are stored in the PSK table defined below in this file
-type hostname = string
-type tlabel (h:hostname) = t:bytes
+let hostname : eqtype = string
+
+let tlabel (h:hostname) = bytes
+
 noextract
 private let tregion:rgn = new_region tls_tables_region
 private let tickets : MDM.t tregion hostname tlabel (fun _ -> True) =
