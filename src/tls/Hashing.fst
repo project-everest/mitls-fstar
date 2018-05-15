@@ -12,13 +12,15 @@ include Hashing.Spec
 //17-01-26 still requiring two-step abstraction for datatypes
 private type accv' (a:alg) =  | Inputs: b: hashable a -> accv' a
 abstract type accv (a:alg) = accv' a
-val content: #a:alg -> accv a -> Tot (hashable a)
+
+abstract val content: #a:alg -> accv a -> Tot (hashable a)
 let content #a v = 
   match v with Inputs b -> b
 
-val start: a:alg -> Tot (v:accv a {content v == empty_bytes})
-val extend: #a:alg -> v:accv a -> b:bytes -> Tot (v':accv a {length (content v) + length b = length (content v') /\  content v' == content v @| b})
-val finalize: #a:alg -> v:accv a -> ST (t:tag a {t == hash a (content v)})
+abstract val start: a:alg -> Tot (v:accv a {content v == empty_bytes})
+abstract val extend: #a:alg -> v:accv a -> b:bytes -> Tot (v':accv a {length (content v) + length b = length (content v') /\  content v' == content v @| b})
+
+abstract val finalize: #a:alg -> v:accv a -> ST (t:tag a {t == hash a (content v)})
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> modifies Set.empty h0 h1))
 
