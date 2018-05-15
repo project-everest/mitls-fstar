@@ -60,7 +60,8 @@ ifeq (,$(wildcard $(FFI_HOME)/FFICallbacks.cmxa))
 endif 
 
 %.o: %.c
-	$(CC) -I $(KREMLIN_HOME)/kremlib $^ -o $@ -c
+	$(CC) -I $(KREMLIN_HOME)/include $^ -o $@ -c
+
 # We must insert PKI.cmx at the right spot in the list of inputs
 MITLS_INPUTS=\
     $(EXTRACT_DIR)/BufferBytes.cmx \

@@ -18,7 +18,7 @@ INCLUDE_PATHS = \
 	$(HACL_HOME)/secure_api/LowCProvider/fst \
 	$(HACL_HOME)/code/curve25519/api \
 	$(HACL_HOME)/code/lib \
-	$(KREMLIN_HOME)/kremlib \
+	$(KREMLIN_HOME)/include \
 	$(MITLS_HOME)/libs/ffi \
 	$(MITLS_HOME)/src/lowparse \
 	$(SPECINC)
