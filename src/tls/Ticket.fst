@@ -98,18 +98,19 @@ type ticket =
     ticket
 
 // Currently we use dummy indexes until we can serialize them properly
-let dummy_rmsid (ae:aeadAlg) (h:hash_alg) : Tot (li:logInfo & rmsId li) =
-  let li = {
+let dummy_rmsid (ae: aeadAlg) (h: hash_alg): (li: logInfo & rmsId li) =
+  let li: logInfo_SH = {
     li_sh_cr = Bytes.create 32ul 0z;
     li_sh_sr = Bytes.create 32ul 0z;
     li_sh_ae = ae;
     li_sh_hash = h;
     li_sh_psk = None;
   } in
-  let li = LogInfo_CF ({
+  let li_cf: logInfo_CF = {
     li_cf_sf = ({ li_sf_sh = li; li_sf_certificate = None; });
     li_cf_certificate = None;
-  }) in
+  } in
+  let li: logInfo = LogInfo_CF li_cf in
   let log : hashed_log li = empty_bytes in
   let i : rmsId li = RMSID (ASID (Salt (EarlySecretID (NoPSK h)))) log in
   (| li, i |)

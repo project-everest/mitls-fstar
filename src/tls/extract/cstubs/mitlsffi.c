@@ -959,8 +959,8 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
         UNLOCK_MUTEX(&lock);
         if (!b) {
             KRML_HOST_FREE(st);
-            DESTROY_HEAP_REGION(rgn);
-            return 0; // failure
+            st = NULL;
+            goto Exit;
         }
     }
 
@@ -1032,6 +1032,7 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
     }
 #endif
 
+Exit:;
     LEAVE_HEAP_REGION();
     if (HAD_OUT_OF_MEMORY || st == NULL) {
       DESTROY_HEAP_REGION(rgn);

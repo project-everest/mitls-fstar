@@ -12,6 +12,7 @@
 #pragma warning(disable:4554) // '>>': check operator precedence for possible error; use parentheses to clarify precedence
 
 #define KRML_NOUINT128
+#define KRML_SEPARATE_UINT128
 
 #ifdef _KERNEL_MODE
 #include <ntverp.h>

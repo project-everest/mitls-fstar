@@ -466,7 +466,7 @@ let ks_server_13_init ks cr cs pskid g_gx =
   let KS #region st = ks in
   let S (S_Init sr) = !st in
   let CipherSuite13 ae h = cs in
-  let (| esId, es, bk |) : (i:_ & _:es i & option (i:binderId & binderKey i)) =
+  let (esId: esId), (es: Hashing.Spec.tag h), (bk: option (bId: pre_binderId & binderKey bId)) =
     match pskid with
     | Some id ->
       dbg ("Using negotiated PSK identity: "^(print_bytes id));
@@ -484,11 +484,11 @@ let ks_server_13_init ks cr cs pskid g_gx =
           (i, psk, pski.early_hash)
         in
       dbg ("Pre-shared key: "^(print_bytes psk));
-      let es = HKDF.hkdf_extract h (H.zeroHash h) psk in
+      let es: Hashing.Spec.tag h = HKDF.hkdf_extract h (H.zeroHash h) psk in
       let ll, lb =
         if ApplicationPSK? i then ExtBinder, "ext binder"
         else ResBinder, "res binder" in
-      let bId = Binder i ll in
+      let bId: pre_binderId = Binder i ll in
       let bk = HKDF.derive_secret h es lb (H.emptyHash h) in
       dbg ("binder key:                      "^print_bytes bk);
       let bk = finished_13 h bk in
@@ -505,7 +505,7 @@ let ks_server_13_init ks cr cs pskid g_gx =
   let saltId = Salt (EarlySecretID esId) in
   let salt = HKDF.derive_secret h es "derived" (H.emptyHash h) in
   dbg ("Handshake salt:                  "^print_bytes salt);
-  let gy, hsId, hs =
+  let (gy: option CommonDH.keyShareEntry), (hsId: pre_hsId), (hs: Hashing.Spec.tag h) =
     match g_gx with
     | Some (| g, gx |) ->
       let gy, gxy = CommonDH.dh_responder g gx in
@@ -837,23 +837,23 @@ let ks_client_13_sh ks sr cs log gy accept_psk =
   let CipherSuite13 ae h = cs in
 
   // Early secret: must derive zero here as hash is not known before
-  let esId, es =
+  let (| esId, es |): (i: esId & es i) =
     match esl, accept_psk with
     | l, Some n ->
       let Some (| i, es |) : option (i:esId & es i) = List.Tot.nth l n in
       dbg ("recallPSK early secret:          "^print_bytes es);
-      i, es
+      (| i, es |)
     | _, None ->
       let es = HKDF.hkdf_extract h (H.zeroHash h) (H.zeroHash h) in
       dbg ("no PSK negotiated. Early secret: "^print_bytes es);
-      NoPSK h, es
+      (| NoPSK h, es |)
   in
 
   let saltId = Salt (EarlySecretID esId) in
   let salt = HKDF.derive_secret h es "derived" (H.emptyHash h) in
   dbg ("handshake salt:                  "^print_bytes salt);
 
-  let hsId, hs =
+  let (| hsId, hs |): (hsId: pre_hsId & hs: hs hsId) =
     match gy with
     | Some (| g, gy |) -> (* (PSK-)DHE *)
       let Some (| _, gx |) = List.Helpers.find_aux g group_matches gc in
@@ -861,11 +861,11 @@ let ks_client_13_sh ks sr cs log gy accept_psk =
       dbg ("DH shared secret: "^(print_bytes gxy));
       let hsId = HSID_DHE saltId g (CommonDH.ipubshare gx) gy in
       let hs : hs hsId = HKDF.hkdf_extract h salt gxy in
-      hsId, hs
+      (| hsId, hs |)
     | None -> (* Pure PSK *)
       let hsId = HSID_PSK saltId in
       let hs : hs hsId = HKDF.hkdf_extract h salt (H.zeroHash h) in
-      hsId, hs
+      (| hsId, hs |)
     in
   dbg ("handshake secret:                "^print_bytes hs);
 

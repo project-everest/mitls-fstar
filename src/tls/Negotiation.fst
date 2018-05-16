@@ -1047,9 +1047,9 @@ private let matches_sigHashAlg_of_signatureScheme sa alg =
       sa' = sa
 
 // Used for clients to verify the server's signature scheme
-let supported_signatureSchemes_12 mode =
+let supported_signatureSchemes_12 mode: Dv (list signatureScheme) =
   let ha0 = sessionHashAlg mode.n_protocol_version mode.n_cipher_suite in
-  let sa = sigAlg_of_ciphersuite mode.n_cipher_suite in
+  let sa: sigAlg = sigAlg_of_ciphersuite mode.n_cipher_suite in
   match mode.n_protocol_version with
   | TLS_1p0 | TLS_1p1 | SSL_3p0 -> [signatureScheme_of_sigHashAlg sa ha0]
   | TLS_1p2 ->
@@ -1238,9 +1238,9 @@ let compute_cs13 cfg o psks shares server_cert =
       match List.Helpers.filter_aux cfg is_in_cfg_named_groups gs with
       | [] -> None, None // No common group, only PSK
       | gl ->
-        let csg = match ncs with | [] -> None | cs :: _ -> Some (List.Tot.hd gl, cs) in
+        let csg: option (namedGroup * cipherSuite) = match ncs with | [] -> None | cs :: _ -> Some (List.Tot.hd gl, cs) in
         let gl' = List.Tot.map group_of_named_group gl in
-        let s = List.Helpers.find_aux gl' share_in_named_group shares in
+        let s: option share = List.Helpers.find_aux gl' share_in_named_group shares in
         s, (if server_cert then csg else None) // Can't do HRR without a certificate
     in
   let psk_kex = find_psk_key_exchange_modes o in

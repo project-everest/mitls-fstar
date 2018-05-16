@@ -14,7 +14,8 @@ FLAVOR		= Kremlin$(CONCRETE_FLAVOR)
 EXTENSION	= krml
 # Don't extract modules from mitls that are implemented in C
 EXTRACT		= '* -DHDB -LowCProvider -FFICallbacks -BufferBytes'
-SPECINC     = $(MITLS_HOME)/src/tls/concrete-flags $(MITLS_HOME)/src/tls/concrete-flags/$(FLAVOR)
+SPECINC     	= $(MITLS_HOME)/src/tls/concrete-flags $(MITLS_HOME)/src/tls/concrete-flags/$(FLAVOR)
+
 include Makefile.common
 VFLAGS     += --admit_smt_queries true
 
@@ -33,11 +34,9 @@ endif
 ################################################################################
 # Support for building without __int128
 
-ifneq (,$(KRML_NOUINT128))
+ifneq (,$(EVEREST_WINDOWS))
 KOPTS+=-add-early-include '"FStar_UInt128.h"'
-KOPTS+=-fnouint128 -drop FStar.UInt128,FStar.Int.Cast.Full
-CFLAGS+=-DKRML_NOUINT128 # -DKRML_NOSTRUCT_PASSING
-export CFLAGS
+KOPTS+=-falloca -ftail-calls -fnouint128 -drop FStar.UInt128
 endif
 
 ################################################################################
@@ -49,8 +48,9 @@ DROP_MODULES 	= $(addprefix -drop , FStar.Bytes MonotoneMap MonotoneMapNonDep \
   'Crypto.AEAD.\*' Crypto.HKDF Crypto.HMAC)
 
 # But we ask for their headers to be in scope.
-HEADERS 	= $(addprefix -add-include ,'"hacks.h"' '"krembytes.h"' \
-  '"kremstr.h"' '"hacl_glue.h"' '"Crypto_HKDF_Crypto_HMAC.h"')
+HEADERS 	= $(addprefix -add-include ,'"hacks.h"' '"kremlin/fstar_bytes.h"' \
+  '"kremlin/prims_string.h"' '"kremlin/prims_int.h"' '"kremlin/c_string.h"' '"hacl_glue.h"' \
+  '"Crypto_HKDF_Crypto_HMAC.h"')
 
 # Note: we could do the same with Crypto_Symmetric_Bytes, but it defines (hidden
 # behind the .h) the enum type for Option, which once again causes name clashes.
@@ -66,8 +66,6 @@ KRML_COMMAND	= $(KREMLIN_HOME)/krml \
   -bundle TLSConstants=TLSConstants,QD.TLS_protocolVersion \
   -fnoanonymous-unions -warn-error -9-7-6@4 \
   -fsopts --debug,yes -verbose \
-  -ccopts -Wno-unused-function,-O0 \
-  -ldopts -L,../pki,-lmipki \
   $(DROP_MODULES) $(HEADERS) $(KOPTS)
 
 ifndef NO_OPENSSL
@@ -101,22 +99,23 @@ ALL_EXTERNAL_FILES	= \
   $(addprefix secure/,Crypto_AEAD_Main.c Crypto_AEAD_Main.h \
     Crypto_HKDF_Crypto_HMAC.c Crypto_HKDF_Crypto_HMAC.h) \
   $(addprefix curve/,Hacl_Curve25519.c Hacl_Curve25519.h) \
-  include/kremlib.h \
-  $(addprefix include/kremlin/,c_string.h fstar_bytes.h testlib.h) \
-  $(addprefix kremlib/,kremstr.c kremdate.c gcc_compat.h ) \
+  $(addprefix kremlib/,kremstr.c kremdate.c) \
+  kreminc/kremlib.h \
+  $(addprefix kreminc/kremlin/,c.h c_endianness.h c_string.h fstar_bytes.h \
+    fstar_char.h fstar_dyn.h fstar_ints.h fstar_uint128.h prims_int.h prims_string.h \
+    testlib.h \
+    $(addprefix internal/,builtin.h callconv.h debug.h target.h)) \
   $(addprefix stub/,hacl_aead.c hacl_provider.c core_crypto.c log_to_choice.h \
     buffer_bytes.c RegionAllocator.c RegionAllocator.h) \
   $(addprefix include/,hacl_glue.h hacks.h regions.h) \
   $(addprefix vale/,sha256_main_i.c sha256_main_i.h sha256-$(MARCH)$(VARIANT).S \
     Vale_Hash_SHA2_256.c vale_aes_glue.c aes-$(MARCH)$(VARIANT).S DafnyLib.h) \
   $(addprefix pki/,mipki.h) \
-  $(addprefix ffi/,mitlsffi.h) \
-  $(addprefix uint128/,uint128_wrapper.c)
+  $(addprefix ffi/,mitlsffi.h)
 
-ifneq (,$(KRML_NOUINT128))
+ifneq (,$(EVEREST_WINDOWS))
   ALL_EXTERNAL_FILES += \
-    $(addprefix uint128/,kremlib0.h FStar_UInt128.h \
-      FStar_UInt128.c)
+    $(addprefix uint128/,FStar_UInt128.h FStar_UInt128.c)
 endif
 
 ################################################################################
@@ -131,6 +130,7 @@ INTERNAL_TEST_DIR=extract/Kremlin-Internal-Test
 $(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/secure,$(SECURE_OUT)))
 $(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/curve,$(CURVE_DIR)))
 $(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/kremlib,$(KREMLIN_HOME)/kremlib))
+$(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/kreminc,$(KREMLIN_HOME)/include))
 $(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/include,extract/include))
 $(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/stub,extract/cstubs))
 $(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/vale,$(VALE_DIR)))
@@ -153,10 +153,10 @@ internal-test-copy: $(addprefix $(INTERNAL_TEST_DIR)/,$(ALL_EXTERNAL_FILES)) $(I
 output-internal-test: internal-test-copy $(INTERNAL_TEST_DIR)/Test_Main.c
 
 build-internal-test: output-internal-test
-	$(MAKE) -C $(INTERNAL_TEST_DIR)
+	EVEREST_WINDOWS=$(EVEREST_WINDOWS) $(MAKE) -C $(INTERNAL_TEST_DIR)
 
 test-internal-test: output-internal-test
-	$(MAKE) -C $(INTERNAL_TEST_DIR) test
+	EVEREST_WINDOWS=$(EVEREST_WINDOWS) $(MAKE) -C $(INTERNAL_TEST_DIR) test
 
 clean-internal-test:
 	-@find $(INTERNAL_TEST_DIR) -type f -and -not -name Makefile -and -not -name .gitignore \
@@ -170,6 +170,7 @@ LIBRARY_DIR=extract/Kremlin-Library
 $(eval $(call COPY_template,$(LIBRARY_DIR)/secure,$(SECURE_OUT)))
 $(eval $(call COPY_template,$(LIBRARY_DIR)/curve,$(CURVE_DIR)))
 $(eval $(call COPY_template,$(LIBRARY_DIR)/kremlib,$(KREMLIN_HOME)/kremlib))
+$(eval $(call COPY_template,$(LIBRARY_DIR)/kreminc,$(KREMLIN_HOME)/include))
 $(eval $(call COPY_template,$(LIBRARY_DIR)/include,extract/include))
 $(eval $(call COPY_template,$(LIBRARY_DIR)/stub,extract/cstubs))
 $(eval $(call COPY_template,$(LIBRARY_DIR)/vale,$(VALE_DIR)))
@@ -189,10 +190,10 @@ library-copy: $(addprefix $(LIBRARY_DIR)/, $(filter-out pki/mipki.h, $(ALL_EXTER
 output-library: library-copy $(LIBRARY_DIR)/TLS.c
 
 build-library: output-library
-	$(MAKE) -C $(LIBRARY_DIR)
+	EVEREST_WINDOWS=$(EVEREST_WINDOWS) $(MAKE) -C $(LIBRARY_DIR)
 
 test-library: output-library
-	$(MAKE) -C $(LIBRARY_DIR) test
+	EVEREST_WINDOWS=$(EVEREST_WINDOWS) $(MAKE) -C $(LIBRARY_DIR) test
 
 clean-library:
 	-@find $(LIBRARY_DIR) -type f -and -not -name Makefile -and -not -name .gitignore \
