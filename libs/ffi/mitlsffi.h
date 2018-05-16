@@ -34,6 +34,11 @@ typedef struct {
   size_t ext_data_len;
 } mitls_extension;
 
+typedef struct {
+  const unsigned char *alpn;
+  size_t alpn_len;
+} mitls_alpn;
+
 typedef enum {
   TLS_hash_MD5 = 0,
   TLS_hash_SHA1 = 1,
@@ -104,12 +109,18 @@ extern void MITLS_CALLCONV FFI_mitls_set_trace_callback(pfn_mitls_trace_callback
 // Perform one-time initialization
 extern int MITLS_CALLCONV FFI_mitls_init(void);
 
+// Set the global ticket encryption key (used on the server side for tickets and cookies)
+// and sealing key (used on the client side to seal session information for resumption)
+// alg is one of "AES128-GCM", "AES256-GCM", "CHACHA20-POLY1305", klen must account for
+// the key and IV (e.g. 32 + 12). If these keys are not set, fresh random keys will be used.
+extern int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *alg, const unsigned char *ticketkey, size_t klen);
+extern int MITLS_CALLCONV FFI_mitls_set_sealing_key(const char *alg, const unsigned char *sealingkey, size_t klen);
+
 // Perform one-time termination
 extern void MITLS_CALLCONV FFI_mitls_cleanup(void);
 
 // Configure miTLS ahead of connecting
 extern int MITLS_CALLCONV FFI_mitls_configure(/* out */ mitls_state **state, const char *tls_version, const char *host_name);
-extern int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *alg, const unsigned char *ticketkey, size_t klen);
 
 // Configure a ticket to resume (client only). Can be called more than once to offer multiple 1.3 PSK
 extern int MITLS_CALLCONV FFI_mitls_configure_ticket(mitls_state *state, const mitls_ticket *ticket);
@@ -118,7 +129,7 @@ extern int MITLS_CALLCONV FFI_mitls_configure_ticket(mitls_state *state, const m
 extern int MITLS_CALLCONV FFI_mitls_configure_cipher_suites(/* in */ mitls_state *state, const char *cs);
 extern int MITLS_CALLCONV FFI_mitls_configure_signature_algorithms(/* in */ mitls_state *state, const char *sa);
 extern int MITLS_CALLCONV FFI_mitls_configure_named_groups(/* in */ mitls_state *state, const char *ng);
-extern int MITLS_CALLCONV FFI_mitls_configure_alpn(/* in */ mitls_state *state, const char *apl);
+extern int MITLS_CALLCONV FFI_mitls_configure_alpn(/* in */ mitls_state *state, const mitls_alpn *alpn, size_t alpn_count);
 extern int MITLS_CALLCONV FFI_mitls_configure_early_data(/* in */ mitls_state *state, uint32_t max_early_data);
 extern int MITLS_CALLCONV FFI_mitls_configure_custom_extensions(/* in */ mitls_state *state, const mitls_extension *exts, size_t exts_count);
 extern int MITLS_CALLCONV FFI_mitls_configure_ticket_callback(mitls_state *state, void *cb_state, pfn_FFI_ticket_cb ticket_cb);

@@ -20,6 +20,7 @@
 #define MITLS_FFI_LIST \
   MITLS_FFI_ENTRY(Config) \
   MITLS_FFI_ENTRY(SetTicketKey) \
+  MITLS_FFI_ENTRY(SetSealingKey) \
   MITLS_FFI_ENTRY(SetCipherSuites) \
   MITLS_FFI_ENTRY(SetSignatureAlgorithms) \
   MITLS_FFI_ENTRY(SetNamedGroups) \
@@ -223,16 +224,17 @@ static int configure_common_caml(/* in */ mitls_state *state, const char * str, 
 }
 
 // The OCaml runtime system must be acquired before calling this
-static int ocaml_set_ticket_key(const char *alg, const unsigned char *ticketkey, size_t klen)
+static int ocaml_set_global_key(int sealing, const char *alg, const unsigned char *ticketkey, size_t klen)
 {
     int ret;
+    value *setter = sealing ? g_mitls_FFI_ffiSetSealingKey : g_mitls_FFI_SetTicketKey;
     CAMLparam0();
     CAMLlocal3(r, a, tkey);
     tkey = caml_alloc_string(klen);
     memcpy(String_val(tkey), ticketkey, klen);
 
     a = caml_copy_string(alg);
-    r = caml_callback2_exn(*g_mitls_FFI_SetTicketKey, a, tkey);
+    r = caml_callback2_exn(*setter, a, tkey);
 
     if (Is_exception_result(r)) {
       report_caml_exception(r);
@@ -248,7 +250,18 @@ int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *alg, const unsigned char
     int ret;
     caml_c_thread_register();
     caml_acquire_runtime_system();
-    ret = ocaml_set_ticket_key(alg, tk, klen);
+    ret = ocaml_set_global_key(0, alg, tk, klen);
+    caml_release_runtime_system();
+    caml_c_thread_unregister();
+    return ret;
+}
+
+int MITLS_CALLCONV FFI_mitls_set_sealing_key(const char *alg, const unsigned char *tk, size_t klen)
+{
+    int ret;
+    caml_c_thread_register();
+    caml_acquire_runtime_system();
+    ret = ocaml_set_global_key(1, alg, tk, klen);
     caml_release_runtime_system();
     caml_c_thread_unregister();
     return ret;
@@ -861,7 +874,7 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg)
     }
 
     if(cfg->ticket_enc_alg && cfg->ticket_key) {
-       if(!ocaml_set_ticket_key(cfg->ticket_enc_alg, cfg->ticket_key, cfg->ticket_key_len))
+       if(!ocaml_set_global_key(0, cfg->ticket_enc_alg, cfg->ticket_key, cfg->ticket_key_len))
        {
          report_error("FFI_mitls_quic_create_caml: set ticket key");
          CAMLreturnT(int, 0);

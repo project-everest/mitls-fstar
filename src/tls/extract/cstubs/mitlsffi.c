@@ -242,6 +242,22 @@ int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *alg, const unsigned char
     return (b) ? 1 : 0;
 }
 
+int MITLS_CALLCONV FFI_mitls_set_sealing_key(const char *alg, const unsigned char *tk, size_t klen)
+{
+    int b = 0;
+    LOCK_MUTEX(&lock);
+    ENTER_GLOBAL_HEAP_REGION();
+    FStar_Bytes_bytes key;
+    MakeFStar_Bytes_bytes(&key, tk, klen);
+    b = FFI_ffiSetSealingKey(alg, key);
+    LEAVE_GLOBAL_HEAP_REGION();
+    UNLOCK_MUTEX(&lock);
+    if (HAD_OUT_OF_MEMORY) {
+        return 0;
+    }
+    return (b) ? 1 : 0;
+}
+
 int MITLS_CALLCONV FFI_mitls_configure_ticket(mitls_state *state, const mitls_ticket *ticket)
 {
     int b = 0;
@@ -290,9 +306,19 @@ int MITLS_CALLCONV FFI_mitls_configure_named_groups(/* in */ mitls_state *state,
     return 1;
 }
 
-int MITLS_CALLCONV FFI_mitls_configure_alpn(/* in */ mitls_state *state, const char *apl)
+int MITLS_CALLCONV FFI_mitls_configure_alpn(/* in */ mitls_state *state, const mitls_alpn *alpn, size_t alpn_count)
 {
     ENTER_HEAP_REGION(state->rgn);
+
+    for(size_t i = 0; i < alpn_count; i++)
+    {
+      FStar_Bytes_bytes *cur = KRML_HOST_MALLOC(sizeof(FStar_Bytes_bytes));
+      cur->length = alpn->alpn_len & 255;
+      cur->data = KRML_HOST_MALLOC(cur->length);
+      memcpy(cur->data, alpn->alpn, cur->length);
+      alpn++;
+    }
+
     state->cfg = FFI_ffiSetALPN(state->cfg, apl);
     LEAVE_HEAP_REGION();
     if (HAD_OUT_OF_MEMORY) {

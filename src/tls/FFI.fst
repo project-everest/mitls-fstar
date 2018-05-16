@@ -344,17 +344,22 @@ let ffiSetNamedGroups cfg x =
     offer_shares = ogl;
   }
 
+(*
 private
 let encodeALPN x =
     if String.length x < 256 then utf8_encode x
     else failwith ("ffiSetALPN: protocol <"^x^"> is too long")
+*)
 
-val ffiSetALPN: cfg:config -> x:string -> ML config
+val ffiSetALPN: config -> alpn -> ML config
 let ffiSetALPN cfg x =
+  { cfg with alpn = x }
+(*
   let apl = if x = "" then [] else split_string ':' x in
   if List.Tot.length apl > 255 then failwith "ffiSetALPN: too many entries";
   let apl = map encodeALPN apl in
   { cfg with alpn = if apl=[] then None else Some apl }
+*)
 
 val ffiSetEarlyData: cfg:config -> x:UInt32.t -> ML config
 let ffiSetEarlyData cfg x =
@@ -376,6 +381,12 @@ let ffiSetTicketKey a k =
   (match findsetting a aeads with
   | None -> false
   | Some a -> TLS.set_ticket_key a k)
+
+val ffiSetSealingKey: a:string -> k:bytes -> ML bool
+let ffiSetSealingKey a k =
+  (match findsetting a aeads with
+  | None -> false
+  | Some a -> TLS.set_sealing_key a k)
 
 let ffiSetTicket (cfg:config) (tid:bytes) (si:bytes) : ML config =
   {cfg with use_tickets = (tid,si) :: cfg.use_tickets}
@@ -420,28 +431,6 @@ let ffiSetCertCallbacks (cfg:config) (cb:cert_cb) =
   trace "Setting up certificate callbacks.";
   {cfg with cert_callbacks = cb}
 
-// ADL july 24: now returns both the ticket and the
-// entry in the PSK database to allow inter-process ticket reuse
-// Beware! this exports crypto materials!
-(*
-let ffiGetTicket c: ML (option (ticket:bytes * rms:bytes)) =
-  match (Connection.c_cfg c).peer_name with
-  | Some n ->
-    (match Ticket.lookup n with
-    | Some (t, true) ->
-      (match PSK.psk_lookup t with
-      | None -> None
-      | Some ctx ->
-        let ae = ctx.PSK.early_ae in
-        let h = ctx.PSK.early_hash in
-        let pskb = PSK.psk_value t in
-        let (| li, rmsid |) = Ticket.dummy_rmsid ae h in
-        let si = Ticket.serialize (Ticket.Ticket13 (CipherSuite13 ae h) li rmsid psk) in
-        Some (t, si))
-    | _ -> None)
-  | None -> None
-*)
-
 val ffiGetCert: Connection.connection -> ML cbytes
 let ffiGetCert c =
   let cert = getCert c in
@@ -473,7 +462,7 @@ let ffiTicketInfoBytes (info:ticketInfo) (key:bytes) =
     | TicketInfo_12 (pv, cs, ems) ->
       Ticket.Ticket12 pv cs ems (Ticket.dummy_msId pv cs ems) key
     in
-  Ticket.ticket_encrypt (Ticket.serialize si)
+  Ticket.create_ticket true si
 
 let ffiSplitChain (chain:bytes) : ML (list cert_repr) =
   match Cert.parseCertificateList chain with

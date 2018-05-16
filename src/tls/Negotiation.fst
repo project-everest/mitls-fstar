@@ -501,9 +501,9 @@ let rec unseal_tickets acc l : St (list (psk_identifier * Ticket.ticket))
   | [] -> List.Tot.rev acc
   | (tid, seal) :: r ->
     let acc =
-      match Ticket.check_ticket seal with
+      match Ticket.check_ticket true seal with
       | Some t -> (tid, t) :: acc
-      | None -> acc in
+      | None -> trace ("WARNING: failed to unseal the session data for ticket "^(print_bytes tid)^" (check sealing key)"); acc in
     unseal_tickets acc r
 
 val create:

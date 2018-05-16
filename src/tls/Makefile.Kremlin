@@ -99,7 +99,7 @@ ALL_EXTERNAL_FILES	= \
     Crypto_HKDF_Crypto_HMAC.c Crypto_HKDF_Crypto_HMAC.h) \
   $(addprefix curve/,Hacl_Curve25519.c Hacl_Curve25519.h) \
   $(addprefix kremlib/,kremstr.c kremdate.c) \
-  kreminc/kremlib.h \
+  $(addprefix kreminc/,kremlib.h) \
   $(addprefix kreminc/kremlin/,c.h c_endianness.h c_string.h fstar_bytes.h \
     fstar_char.h fstar_dyn.h fstar_ints.h fstar_uint128.h prims_int.h prims_string.h \
     testlib.h \
