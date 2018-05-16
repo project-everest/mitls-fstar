@@ -459,14 +459,14 @@ val ks_server_13_init:
     modifies (Set.singleton rid) h0 h1
     /\ (Some? bk <==> Some? pskid)
     /\ (Some? gy \/ Some? bk)
-    /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
+    /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) h0 h1)
 
 let ks_server_13_init ks cr cs pskid g_gx =
   dbg ("ks_server_init");
   let KS #region st = ks in
   let S (S_Init sr) = !st in
   let CipherSuite13 ae h = cs in
-  let (esId: esId), (es: Hashing.Spec.tag h), (bk: option (bId: pre_binderId & binderKey bId)) =
+  let esId, es, bk =
     match pskid with
     | Some id ->
       dbg ("Using negotiated PSK identity: "^(print_bytes id));
@@ -494,12 +494,12 @@ let ks_server_13_init ks cr cs pskid g_gx =
       let bk = finished_13 h bk in
       dbg ("binder Finished key:             "^print_bytes bk);
       let bk : binderKey bId = HMAC_UFCMA.coerce (HMAC_UFCMA.HMAC_Binder bId) (fun _ -> True) region bk in
-      (| i, es, Some (| bId, bk |) |)
+      i, es, Some (| bId, bk |)
     | None ->
       dbg "No PSK selected.";
       let esId = NoPSK h in
       let es : es esId = HKDF.hkdf_extract h (H.zeroHash h) (H.zeroHash h) in
-      (| esId, es, None |)
+      esId, es, None
     in
   dbg ("Computed early secret:           "^print_bytes es);
   let saltId = Salt (EarlySecretID esId) in
