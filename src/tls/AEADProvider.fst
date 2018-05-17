@@ -247,7 +247,8 @@ let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
     in
   dbg ((prov())^": COERCE(K="^(hex_of_bytes k)^")");
   w
-#reset-options
+
+//#reset-options
 
 type plainlen = n:nat{n <= max_TLSPlaintext_fragment_length}
 (* irreducible *)
