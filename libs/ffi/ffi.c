@@ -227,7 +227,7 @@ static int configure_common_caml(/* in */ mitls_state *state, const char * str, 
 static int ocaml_set_global_key(int sealing, const char *alg, const unsigned char *ticketkey, size_t klen)
 {
     int ret;
-    value *setter = sealing ? g_mitls_FFI_ffiSetSealingKey : g_mitls_FFI_SetTicketKey;
+    value *setter = sealing ? g_mitls_FFI_SetSealingKey : g_mitls_FFI_SetTicketKey;
     CAMLparam0();
     CAMLlocal3(r, a, tkey);
     tkey = caml_alloc_string(klen);
@@ -300,12 +300,49 @@ int MITLS_CALLCONV FFI_mitls_configure_named_groups(/* in */ mitls_state *state,
     return ret;
 }
 
-int MITLS_CALLCONV FFI_mitls_configure_alpn(/* in */ mitls_state *state, const char *apl)
+static value alpn_list_of_array(const mitls_alpn *alpn, size_t alpn_count)
+{
+  CAMLparam0();
+  CAMLlocal3(apl, cur, str);
+  apl = Val_int(0);
+
+  for(int i = (alpn_count & 255) - 1; i >= 0; i--)
+  {
+    cur = caml_alloc(2, 0);
+    str = caml_alloc_string(alpn[i].alpn_len);
+    memcpy(String_val(str), alpn[i].alpn, alpn[i].alpn_len);
+    Field(cur, 0) = str;
+    Field(cur, 1) = apl;
+    apl = cur;
+  }
+
+  CAMLreturn(apl);
+}
+
+static int ocaml_set_alpn(/* in */ mitls_state *state, const mitls_alpn *alpn, size_t alpn_count)
+{
+    CAMLparam0();
+    CAMLlocal2(config, camlvalue);
+    int ret = 0;
+
+    camlvalue = alpn_list_of_array(alpn, alpn_count);
+    config = caml_callback2_exn(*g_mitls_FFI_SetALPN, state->fstar_state, camlvalue);
+    if (Is_exception_result(config)) {
+        report_caml_exception(config);
+    } else {
+        state->fstar_state = config;
+        ret = 1;
+    }
+
+    CAMLreturnT(int,ret);
+}
+
+int MITLS_CALLCONV FFI_mitls_configure_alpn(/* in */ mitls_state *state, const mitls_alpn *alpn, size_t alpn_count)
 {
     int ret;
     caml_c_thread_register();
     caml_acquire_runtime_system();
-    ret = configure_common_caml(state, apl, g_mitls_FFI_SetALPN);
+    ret = ocaml_set_alpn(state, alpn, alpn_count);
     caml_release_runtime_system();
     caml_c_thread_unregister();
     return ret;
@@ -865,8 +902,8 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg)
        }
     }
 
-    if(cfg->alpn) {
-      if(!configure_common_caml(&ms, cfg->alpn, g_mitls_FFI_SetALPN))
+    if(cfg->alpn && cfg->alpn_count) {
+      if(!ocaml_set_alpn(&ms, cfg->alpn, cfg->alpn_count))
       {
         report_error("FFI_mitls_quic_create_caml: failed to set application-level protocols");
         CAMLreturnT(int, 0);
@@ -994,7 +1031,8 @@ static quic_result FFI_mitls_quic_process_caml(
         report_caml_exception(result);
     } else {
         int rc = Int_val(Field(result, 0));
-        int errorcode = Int_val(Field(result, 1));
+//        int errorcode = Int_val(Field(result, 1));
+//        FIXME: interpret error code
         if (rc <= TLS_server_complete) {
             ret = (quic_result) rc;
         }

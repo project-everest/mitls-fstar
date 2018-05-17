@@ -168,14 +168,14 @@ UNAME = $(shell uname)
 
 ifeq ($(OS),Windows_NT)
   ifeq ($(shell uname -o),Cygwin)
-    MITLS_HOME_RUN := $(shell cygpath -u ${MITLS_HOME})
-    EVERCRYPT_HOME_RUN := $(shell cygpath -u ${EVERCRYPT_HOME})
+    MITLS_HOME_RUN := $(shell cygpath -au ${MITLS_HOME})
+    EVERCRYPT_HOME_RUN := $(shell cygpath -au ${EVERCRYPT_HOME})
   endif
-  export PATH := $(EVERCRYPT_HOME_RUN)/out:$(MITLS_HOME_RUN)/src/pki:$(PATH)
+  export PATH := $(MLCRYPTO_HOME)/openssl:$(EVERCRYPT_HOME_RUN)/out:$(MITLS_HOME_RUN)/src/pki:$(PATH)
 else ifeq ($(UNAME),Darwin)
-  PREFIX = DYLD_LIBRARY_PATH=$(EVERCRYPT_HOME)/out:$(MITLS_HOME)/src/pki:$(DYLD_LIBRARY_PATH)
+  PREFIX = DYLD_LIBRARY_PATH=$(MLCRYPTO_HOME)/openssl:$(EVERCRYPT_HOME)/out:$(MITLS_HOME)/src/pki:$(DYLD_LIBRARY_PATH)
 else ifeq ($(UNAME),Linux)
-  export LD_LIBRARY_PATH := $(EVERCRYPT_HOME)/out:$(MITLS_HOME)/src/pki:$(LD_LIBRARY_PATH)
+  export LD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(EVERCRYPT_HOME)/out:$(MITLS_HOME)/src/pki:$(LD_LIBRARY_PATH)
 endif
 
 test: mitls.exe $(CERT_FILES)
