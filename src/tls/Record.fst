@@ -168,7 +168,6 @@ let waiting_len s =
     let Correct (_,_,length) = parseHeaderBuffer (Buffer.sub s.b 0ul headerLen) in
     headerLen +^ uint_to_t length -^ !s.pos
 
-
 // TODO later, use a length-field accessor instead of a header parser
 
 val alloc_input_state: r:_ -> ST input_state 
@@ -178,9 +177,8 @@ val alloc_input_state: r:_ -> ST input_state
     Mem.frameOf s.pos = r /\ 
     input_inv h1 s))
 let alloc_input_state r = 
-  let pos = ralloc r 0ul in 
+  let pos = ralloc r 0ul in
   let b = Buffer.rcreate r 0uy maxlen in
-  assume (Buffer.disjoint_ref_1 b pos); //NS: 05/11 ... added this while upgrading F*
   InputState pos b
 
 type read_result =
@@ -195,7 +193,7 @@ type read_result =
 // I had to modify the post-condition to say `input_inv` is preserved only if
 // the result is not a ReadError.
 // We return a ReadError when the header is invalid, but we still advance s.pos.
-// We could preserver the invariant unconditionally if we advanced it only when
+// We could preserve the invariant unconditionally if we advanced it only when
 // the header is valid.
 val read: Transport.t -> s: input_state -> ST read_result
   (requires fun h0 -> input_inv h0 s)
