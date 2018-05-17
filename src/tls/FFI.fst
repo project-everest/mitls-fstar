@@ -344,22 +344,19 @@ let ffiSetNamedGroups cfg x =
     offer_shares = ogl;
   }
 
-(*
-private
-let encodeALPN x =
-    if String.length x < 256 then utf8_encode x
-    else failwith ("ffiSetALPN: protocol <"^x^"> is too long")
-*)
+private let encodeALPN x =
+  if String.length x < 256 then utf8_encode x
+  else failwith ("ffiSetALPN: protocol <"^x^"> is too long")
+
+val ffiSplitALPN: config -> string -> ML alpn
+let ffiSplitALPN cfg x =
+  let apl = if x = "" then [] else split_string ':' x in
+  if List.Tot.length apl > 255 then failwith "ffiSetALPN: too many entries";
+  map encodeALPN apl
 
 val ffiSetALPN: config -> alpn -> ML config
 let ffiSetALPN cfg x =
-  { cfg with alpn = x }
-(*
-  let apl = if x = "" then [] else split_string ':' x in
-  if List.Tot.length apl > 255 then failwith "ffiSetALPN: too many entries";
-  let apl = map encodeALPN apl in
-  { cfg with alpn = if apl=[] then None else Some apl }
-*)
+  { cfg with alpn = if x = [] then None else Some x }
 
 val ffiSetEarlyData: cfg:config -> x:UInt32.t -> ML config
 let ffiSetEarlyData cfg x =

@@ -156,6 +156,7 @@ let request c ops     = Handshake.request     (C?.hs c) ops
 
 let get_mode c = (Handshake.get_mode (C?.hs c))
 let set_ticket_key (a:aeadAlg) (kv:bytes) = Ticket.set_ticket_key a kv
+let set_sealing_key (a:aeadAlg) (kv:bytes) = Ticket.set_sealing_key a kv
 
 (** current epochs ***)
 

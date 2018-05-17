@@ -271,7 +271,7 @@ let check_ticket13 b =
   | Some t -> ticket_pskinfo t
   | _ -> None
 
-let check_ticket12 false b =
-  match check_ticket b with
+let check_ticket12 b =
+  match check_ticket false b with
   | Some (Ticket12 pv cs ems msId ms) -> Some (pv, cs, ems, msId, ms)
   | _ -> None

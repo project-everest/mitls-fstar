@@ -194,7 +194,6 @@ typedef mitls_ticket quic_ticket;
 typedef struct {
   int is_server;
 
-  const char *alpn; // Colon separated list of application-level protocols, or NULL
   const char *cipher_suites; // Colon separated list of ciphersuite or NULL
   const char *signature_algorithms; // Colon separated list of signature schemes or NULL
   const char *named_groups; // Colon separated list of Diffie-Hellman groups or NULL
@@ -202,6 +201,8 @@ typedef struct {
 
   // only used by the client
   const char *host_name; // Client only, sent in SNI. Can pass NULL for server
+  const mitls_alpn *alpn; // Array of ALPN protocols to offer
+  size_t alpn_count; // Size of above array
   const quic_ticket *server_ticket; // May be NULL
   const mitls_extension *exts; // Array of custom extensions to offer, may be NULL
   size_t exts_count;           // Size of custom extensions array

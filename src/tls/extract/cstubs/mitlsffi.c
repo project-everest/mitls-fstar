@@ -306,19 +306,38 @@ int MITLS_CALLCONV FFI_mitls_configure_named_groups(/* in */ mitls_state *state,
     return 1;
 }
 
+void dump(const char *buffer, size_t len)
+{
+  int i;
+  for(i=0; i<len; i++) {
+    printf("%02x", buffer[i] & 0xFF);
+    if (i % 32 == 31 || i == len-1) printf("\n");
+  }
+}
+
+static TLSConstants_alpn alpn_list_of_array(const mitls_alpn *alpn, size_t alpn_count)
+{
+  TLSConstants_alpn apl = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
+  apl->tag = Prims_Nil;
+
+  for(int i = (alpn_count & 255) - 1; i >= 0; i--)
+  {
+    TLSConstants_alpn new = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
+    new->tag = Prims_Cons;
+    new->hd.length = alpn[i].alpn_len & 255;
+    new->hd.data = KRML_HOST_MALLOC(new->hd.length);
+    memcpy((unsigned char*)new->hd.data, alpn[i].alpn, new->hd.length);
+    new->tl = apl;
+    apl = new;
+  }
+
+  return apl;
+}
+
 int MITLS_CALLCONV FFI_mitls_configure_alpn(/* in */ mitls_state *state, const mitls_alpn *alpn, size_t alpn_count)
 {
     ENTER_HEAP_REGION(state->rgn);
-
-    for(size_t i = 0; i < alpn_count; i++)
-    {
-      FStar_Bytes_bytes *cur = KRML_HOST_MALLOC(sizeof(FStar_Bytes_bytes));
-      cur->length = alpn->alpn_len & 255;
-      cur->data = KRML_HOST_MALLOC(cur->length);
-      memcpy(cur->data, alpn->alpn, cur->length);
-      alpn++;
-    }
-
+    TLSConstants_alpn apl = alpn_list_of_array(alpn, alpn_count);
     state->cfg = FFI_ffiSetALPN(state->cfg, apl);
     LEAVE_HEAP_REGION();
     if (HAD_OUT_OF_MEMORY) {
@@ -960,8 +979,8 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
     }
 
     if (cfg->alpn) {
-       Prims_string str = CopyPrimsString(cfg->alpn);
-       st->cfg = FFI_ffiSetALPN(st->cfg, str);
+       TLSConstants_alpn apl = alpn_list_of_array(cfg->alpn, cfg->alpn_count);
+       st->cfg = FFI_ffiSetALPN(st->cfg, apl);
     }
 
     if(cfg->exts != NULL && cfg->exts_count > 0)

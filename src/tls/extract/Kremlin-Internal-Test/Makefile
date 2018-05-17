@@ -93,7 +93,7 @@ endif
 
 -include $(addsuffix .d,$(FILES))
 
-test.exe: $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
+test.exe: $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aesgcm-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
 	$(CC) $^ -o $@ -lmipki $(LDOPTS) -L$(MITLS_HOME)/src/pki
 
 CERT_FILES=CAFile.pem server-ecdsa.crt server-ecdsa.key
@@ -103,7 +103,7 @@ $(CERT_FILES):
 
 clean:
 	rm -fr $(addsuffix .o,$(FILES)) $(addsuffix .c,$(FILES)) test.exe
-	rm -fr vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
+	rm -fr vale/sha256-$(MARCH)$(VARIANT).o vale/aesgcm-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
 
 test: test.exe $(CERT_FILES)
 	./$<
