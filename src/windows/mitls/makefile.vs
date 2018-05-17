@@ -1,4 +1,4 @@
-CCOPTS = /nologo /O2 /Gy /GF /Gw /GA /MD /Zi -I. -I.. -FI..\CommonInclude.h /DNO_OPENSSL
+CCOPTS = /nologo /O2 /Gy /GF /Gw /GA /MD /Zi -I. -I.. -Iinclude -FI..\CommonInclude.h /DNO_OPENSSL
 
 all: libmitls.dll
 
@@ -24,7 +24,7 @@ SOURCES = \
   Crypto_HKDF_Crypto_HMAC.c \
   Crypto_Indexing.c \
   Crypto_Symmetric_Bytes.c \
-  Curve25519.c \
+  Hacl_Curve25519.c \
   C_Loops_Spec_Loops.c \
   DataStream.c \
   DHGroup.c \
@@ -37,6 +37,7 @@ SOURCES = \
   Flags.c \
   Format.c \
   FStar.c \
+  FStar_UInt128.c \
   HaclProvider.c \
   hacl_aead.c \
   hacl_provider.c \
@@ -87,20 +88,55 @@ SOURCES = \
   TLSPRF.c \
   TLS_Curve25519.c \
   Transport.c \
-  uint128_wrapper.c \
   vale_aes_glue.c \
-  Vale_Hash_SHA2_256.c
+  Vale_Hash_SHA2_256.c \
+# Taken from the list of HACL sources in hacl-star/providers/Makefiles
+  Hacl_Chacha20.c \
+  Hacl_Salsa20.c \
+  Hacl_SHA2_256.c \
+  Hacl_SHA2_384.c \
+  Hacl_SHA2_512.c \
+  Hacl_Curve25519.c \
+  Hacl_Ed25519.c \
+  Hacl_Poly1305_64.c \
+  Hacl_HMAC_SHA2_256.c \
+  AEAD_Poly1305_64.c \
+  Hacl_Chacha20_Vec128.c \
+# Taken from ls hacl-star/providers/multiplexer/c/*.c | xargs basename
+  evercrypt_bytes.c \
+  evercrypt_native.c \
+  evercrypt_openssl.c \
+  evercrypt_vale.c \
+# Taken from ls hacl-star/providers/generated/EverCrypt_*.c | xargs basename
+  EverCrypt_Bytes.c \
+  EverCrypt_Hacl.c \
+  EverCrypt_Helpers.c \
+  EverCrypt_Native.c \
+  EverCrypt_OpenSSL.c \
+  EverCrypt_Specs.c \
+  EverCrypt_Vale.c \
+# Remember to add these
+  EverCrypt.c \
+  C_Failure.c
+
   
 aes-x86_64.obj: amd64\aes-x86_64.asm
   ml64 /nologo /Zi /c amd64\aes-x86_64.asm
   
 aes-i686.obj: i386\aes-i686.asm
   ml /nologo /Zi /c i386\aes-i686.asm
+
+# JP: didn't manage to make a pattern rule work here
+sha256-x86_64.obj: amd64\sha256-x86_64.asm
+  ml64 /nologo /Zi /c amd64\sha256-x86_64.asm
+  
+sha256-i686.obj: i386\sha256-i686.asm
+  ml /nologo /Zi /c i386\sha256-i686.asm
   
 !if "$(PLATFORM)"=="x86"
-PLATFORM_OBJS = aes-i686.obj
+PLATFORM_OBJS = aes-i686.obj sha256-i686.obj
 !else
-PLATFORM_OBJS = aes-x86_64.obj
+PLATFORM_OBJS = aes-x86_64.obj sha256-x86_64.obj
 !endif
 
 libmitls_code.lib: $(SOURCES:.c=.obj) $(PLATFORM_OBJS)

@@ -12,6 +12,7 @@
 #pragma warning(disable:4554) // '>>': check operator precedence for possible error; use parentheses to clarify precedence
 
 #define KRML_NOUINT128
+#define KRML_SEPARATE_UINT128
 
 #ifdef _KERNEL_MODE
 #include <ntverp.h>
@@ -24,9 +25,6 @@ __declspec(noreturn) extern void KremlExit(int n);
 
 #define USE_HEAP_REGIONS 1
 #include "RegionAllocator.h"
-#define KRML_HOST_MALLOC HeapRegionMalloc
-#define KRML_HOST_CALLOC HeapRegionCalloc
-#define KRML_HOST_FREE   HeapRegionFree
 
 #define KRML_HOST_PRINTF DbgPrint
 #define KRML_HOST_EPRINTF DbgPrint

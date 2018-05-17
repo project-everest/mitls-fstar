@@ -7,18 +7,21 @@
 #include <malloc.h>
 #include <errno.h> // MinGW only provides include/errno.h
 #endif
-#if defined(_MSC_VER) || defined(__MINGW32__)
-#define IS_WINDOWS 1
+#if defined(_MSC_VER)
+  #define IS_WINDOWS 1
   #ifdef _KERNEL_MODE
     #include <nt.h>
     #include <ntrtl.h>
   #else
     #include <windows.h>
   #endif
-#else
-#define IS_WINDOWS 0
-#include <pthread.h>
-#include <sys/queue.h>
+#elif defined(__MINGW32__)
+  #define IS_WINDOWS 1
+  #include <windows.h>
+#else // Linux or gcc/cygwin
+  #define IS_WINDOWS 0
+  #include <pthread.h>
+  #include <sys/queue.h>
 #endif
 
 #include "RegionAllocator.h"
@@ -80,6 +83,9 @@ void UpdateStatisticsAfterFree(region_statistics *stats, size_t cb)
 #if IS_WINDOWS
 typedef struct _region {
     HANDLE heap;
+#if !defined(_MSC_VER)
+    jmp_buf *penv;
+#endif
 #if REGION_STATISTICS
     region_statistics stats;
 #endif
@@ -116,7 +122,11 @@ void HeapRegionCleanup(void)
 }
 
 // Create a new heap region
-void HeapRegionCreateAndRegister(HEAP_REGION *prgn)
+HEAP_REGION HeapRegionCreateAndRegister(HEAP_REGION *prgn
+#if !defined(_MSC_VER)
+  , jmp_buf *penv
+#endif
+)
 {
     // Allocate a heap with:
     // - no internal locking
@@ -127,15 +137,19 @@ void HeapRegionCreateAndRegister(HEAP_REGION *prgn)
     memset(heap, 0, sizeof(*heap));
     heap->heap = h;
     // Make it the heap for this callgraph
-    TlsSetValue(g_region_heap_slot, heap);
+    HEAP_REGION oldrgn = HeapRegionEnter(heap
+#if !defined(_MSC_VER)
+        ,penv
+#endif
+    );
     
     *prgn = heap;
+    return oldrgn;
 }
 
 // Destroy a heap region, freeing all of its allocations
 void HeapRegionDestroy(HEAP_REGION rgn)
 {
-    TlsSetValue(g_region_heap_slot, NULL);
     region *heap = (region*)rgn;
     HANDLE h = heap->heap;
     PrintRegionStatistics(heap, &heap->stats);
@@ -151,14 +165,28 @@ void PrintHeapRegionStatistics(HEAP_REGION rgn)
     PrintRegionStatistics(heap, &heap->stats);
 }
 
-void HeapRegionEnter(HEAP_REGION rgn)
+HEAP_REGION HeapRegionEnter(HEAP_REGION rgn
+#if !defined(_MSC_VER)
+  , jmp_buf *penv
+#endif
+)
 {
+    HEAP_REGION oldrgn = TlsGetValue(g_region_heap_slot);
     TlsSetValue(g_region_heap_slot, rgn);
+#if !defined(_MSC_VER)
+    region *heap = (region*)rgn;
+    if (heap == NULL) {
+        g_global_region.penv = penv;
+    } else {
+        heap->penv = penv;
+    }
+#endif
+    return oldrgn;
 }
 
-void HeapRegionLeave(void)
+void HeapRegionLeave(HEAP_REGION oldrgn)
 {
-    TlsSetValue(g_region_heap_slot, NULL);
+    TlsSetValue(g_region_heap_slot, oldrgn);
 }
 
 // KRML_HOST_MALLOC
@@ -171,7 +199,11 @@ void* HeapRegionMalloc(size_t cb)
     void *pv = HeapAlloc(heap->heap, 0, cb);
     UpdateStatisticsAfterMalloc(&heap->stats, pv, cb);
     if (pv == NULL) {
-        RaiseException(MITLS_OUT_OF_MEMORY_EXCEPTION, EXCEPTION_NONCONTINUABLE, 0, NULL);
+#if defined(_MSC_VER)
+        RaiseException((DWORD)MITLS_OUT_OF_MEMORY_EXCEPTION, EXCEPTION_NONCONTINUABLE, 0, NULL);
+#else
+        longjmp(*heap->penv, 1);
+#endif
     }
     
     return pv;
@@ -251,21 +283,24 @@ int HeapRegionInitialize()
 // Global termination
 void HeapRegionCleanup(void)
 {
-    HeapRegionDestroy(g_global_region);
+    HeapRegionDestroy((HEAP_REGION)&g_global_region);
     pthread_key_delete(g_region_heap_slot);
     pthread_mutex_destroy(&g_global_region_lock);
 }
 
 // Create a new region and make it this thread's default
-void HeapRegionCreateAndRegister(HEAP_REGION *prgn)
+HEAP_REGION HeapRegionCreateAndRegister(HEAP_REGION *prgn, jmp_buf *penv)
 {
+    HEAP_REGION oldrgn = (HEAP_REGION)pthread_getspecific(g_region_heap_slot);
     region *p = malloc(sizeof(region));
     if (p) {
         memset(p, 0, sizeof(region));
         LIST_INIT(&p->entries);
+        p->penv = penv;
         pthread_setspecific(g_region_heap_slot, p);
     }
     *prgn = (HEAP_REGION)p;
+    return oldrgn;
 }
 
 // Destroy a region and free all of its memory
@@ -296,19 +331,22 @@ void PrintHeapRegionStatistics(HEAP_REGION rgn)
     PrintRegionStatistics(heap, &heap->stats);
 }
 
-void HeapRegionEnter(HEAP_REGION rgn, jmp_buf *penv)
+HEAP_REGION HeapRegionEnter(HEAP_REGION rgn, jmp_buf *penv)
 {
+    HEAP_REGION oldrgn = (HEAP_REGION)pthread_getspecific(g_region_heap_slot);
     pthread_setspecific(g_region_heap_slot, rgn);
-    if (rgn == NULL) {
+    region *heap = (region*)rgn;
+    if (heap == NULL) {
         g_global_region.penv = penv;
     } else {
-        rgn->penv = penv;
+        heap->penv = penv;
     }
+    return oldrgn;
 }
 
-void HeapRegionLeave(void)
+void HeapRegionLeave(HEAP_REGION oldrgn)
 {
-    pthread_setspecific(g_region_heap_slot, NULL);
+    pthread_setspecific(g_region_heap_slot, oldrgn);
 }
 
 // KRML_HOST_MALLOC
@@ -377,7 +415,7 @@ void HeapRegionFree(void* pv)
     free(e);
 }
 
-#endif // !IS_WINDOWS
+#endif // !defined(_MSC_VER)
     
 
 // End of USE_PROCESS_HEAP
@@ -475,6 +513,7 @@ LIST_ENTRY *HeapRegionFind(void)
             ExReleaseFastMutex(&g_mapping_lock);
             return r->region;
         }
+        p = p->Flink;
     }
     ExReleaseFastMutex(&g_mapping_lock);    
     return NULL;
@@ -642,5 +681,4 @@ void HeapRegionFree(void* pv)
 {
     free(pv);
 }
-
 #endif

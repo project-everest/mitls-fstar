@@ -78,7 +78,7 @@ let final i d =
   | Close   -> true
   | Alert a -> isFatal a
 
-let rec finalized i s =
+let rec finalized (i: id) (s: list (delta i)): Tot bool =
   match s with 
   | [] -> false
   | hd::tl -> final i hd || finalized i tl

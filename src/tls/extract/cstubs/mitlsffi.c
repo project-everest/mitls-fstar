@@ -242,6 +242,22 @@ int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *alg, const unsigned char
     return (b) ? 1 : 0;
 }
 
+int MITLS_CALLCONV FFI_mitls_set_sealing_key(const char *alg, const unsigned char *tk, size_t klen)
+{
+    int b = 0;
+    LOCK_MUTEX(&lock);
+    ENTER_GLOBAL_HEAP_REGION();
+    FStar_Bytes_bytes key;
+    MakeFStar_Bytes_bytes(&key, tk, klen);
+    b = FFI_ffiSetSealingKey(alg, key);
+    LEAVE_GLOBAL_HEAP_REGION();
+    UNLOCK_MUTEX(&lock);
+    if (HAD_OUT_OF_MEMORY) {
+        return 0;
+    }
+    return (b) ? 1 : 0;
+}
+
 int MITLS_CALLCONV FFI_mitls_configure_ticket(mitls_state *state, const mitls_ticket *ticket)
 {
     int b = 0;
@@ -290,9 +306,38 @@ int MITLS_CALLCONV FFI_mitls_configure_named_groups(/* in */ mitls_state *state,
     return 1;
 }
 
-int MITLS_CALLCONV FFI_mitls_configure_alpn(/* in */ mitls_state *state, const char *apl)
+void dump(const char *buffer, size_t len)
+{
+  int i;
+  for(i=0; i<len; i++) {
+    printf("%02x", buffer[i] & 0xFF);
+    if (i % 32 == 31 || i == len-1) printf("\n");
+  }
+}
+
+static TLSConstants_alpn alpn_list_of_array(const mitls_alpn *alpn, size_t alpn_count)
+{
+  TLSConstants_alpn apl = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
+  apl->tag = Prims_Nil;
+
+  for(int i = (alpn_count & 255) - 1; i >= 0; i--)
+  {
+    TLSConstants_alpn new = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
+    new->tag = Prims_Cons;
+    new->hd.length = alpn[i].alpn_len & 255;
+    new->hd.data = KRML_HOST_MALLOC(new->hd.length);
+    memcpy((unsigned char*)new->hd.data, alpn[i].alpn, new->hd.length);
+    new->tl = apl;
+    apl = new;
+  }
+
+  return apl;
+}
+
+int MITLS_CALLCONV FFI_mitls_configure_alpn(/* in */ mitls_state *state, const mitls_alpn *alpn, size_t alpn_count)
 {
     ENTER_HEAP_REGION(state->rgn);
+    TLSConstants_alpn apl = alpn_list_of_array(alpn, alpn_count);
     state->cfg = FFI_ffiSetALPN(state->cfg, apl);
     LEAVE_HEAP_REGION();
     if (HAD_OUT_OF_MEMORY) {
@@ -934,8 +979,8 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
     }
 
     if (cfg->alpn) {
-       Prims_string str = CopyPrimsString(cfg->alpn);
-       st->cfg = FFI_ffiSetALPN(st->cfg, str);
+       TLSConstants_alpn apl = alpn_list_of_array(cfg->alpn, cfg->alpn_count);
+       st->cfg = FFI_ffiSetALPN(st->cfg, apl);
     }
 
     if(cfg->exts != NULL && cfg->exts_count > 0)
@@ -959,8 +1004,8 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
         UNLOCK_MUTEX(&lock);
         if (!b) {
             KRML_HOST_FREE(st);
-            DESTROY_HEAP_REGION(rgn);
-            return 0; // failure
+            st = NULL;
+            goto Exit;
         }
     }
 
@@ -1032,6 +1077,7 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
     }
 #endif
 
+Exit:;
     LEAVE_HEAP_REGION();
     if (HAD_OUT_OF_MEMORY || st == NULL) {
       DESTROY_HEAP_REGION(rgn);
