@@ -21,7 +21,7 @@ quic-%: clean-depend
 test: clean-depend kremlin-test ocaml-test quic-test
 
 clean: ocaml-clean kremlin-clean quic-clean model-clean
-	rm -rf $(EXTRACT_DIR)/Kremlin $(EXTRACT_DIR)/OCaml $(EXTRACT_DIR)/copied
+	rm -rf extract/Kremlin extract/OCaml extract/copied
 
 %.fst-in %.fsti-in:
 	$(MAKE) -f Makefile.$(FLAVOR) $@

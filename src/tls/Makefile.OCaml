@@ -10,7 +10,7 @@ FLAVOR=OCaml
 EXTENSION=ml
 #Don't extract modules from fstarlib (NOEXTRACT_MODULES)
 #And also some specific ones from mitls that are implemented in C
-EXTRACT='* -Prims -FStar +FStar.Test +FStar.Kremlin.Endianness -CoreCrypto -CryptoTypes -DHDB -LowCProvider -HaclProvider -FFICallbacks -Crypto.AEAD -Crypto.Symmetric -Crypto.Plain -Spec.Loops -Buffer.Utils -C +C.Loops -LowParse.SLow.Tac -BufferBytes'
+EXTRACT='* -Prims -FStar +FStar.Test +FStar.Kremlin.Endianness -CoreCrypto -CryptoTypes -EverCrypt.Bytes -EverCrypt -DHDB -LowCProvider -HaclProvider -FFICallbacks -Crypto.AEAD -Crypto.Symmetric -Crypto.Plain -Spec.Loops -Buffer.Utils -C +C.Loops -LowParse.SLow.Tac -BufferBytes'
 SPECINC=$(MITLS_HOME)/src/tls/concrete-flags  $(MITLS_HOME)/src/tls/concrete-flags/OCaml
 VFLAGS?=--admit_smt_queries true
 include Makefile.common
@@ -168,10 +168,15 @@ UNAME = $(shell uname)
 
 ifeq ($(OS),Windows_NT)
   ifeq ($(shell uname -o),Cygwin)
-    MITLS_HOME_RUN := $(shell cygpath -au ${MITLS_HOME})
-    EVERCRYPT_HOME_RUN := $(shell cygpath -au ${EVERCRYPT_HOME})
+    MITLS_HOME_RUN := $(shell cygpath -a -u ${MITLS_HOME})
+    EVERCRYPT_HOME_RUN := $(shell cygpath -a -u ${EVERCRYPT_HOME})
+    MLCRYPTO_HOME_RUN := $(shell cygpath -a -u ${MLCRYPTO_HOME})
+  else
+    MITLS_HOME_RUN := $(MITLS_HOME)
+    EVERCRYPT_HOME_RUN := $(EVERCRYPT_HOME)
+    MLCRYPTO_HOME_RUN := $(MLCRYPTO_HOME)
   endif
-  export PATH := $(MLCRYPTO_HOME)/openssl:$(EVERCRYPT_HOME_RUN)/out:$(MITLS_HOME_RUN)/src/pki:$(PATH)
+  export PATH := $(MLCRYPTO_HOME_RUN)/openssl:$(EVERCRYPT_HOME_RUN)/out:$(MITLS_HOME_RUN)/src/pki:$(PATH)
 else ifeq ($(UNAME),Darwin)
   PREFIX = DYLD_LIBRARY_PATH=$(MLCRYPTO_HOME)/openssl:$(EVERCRYPT_HOME)/out:$(MITLS_HOME)/src/pki:$(DYLD_LIBRARY_PATH)
 else ifeq ($(UNAME),Linux)
