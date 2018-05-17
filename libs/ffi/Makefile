@@ -1,7 +1,7 @@
 FSTAR_HOME ?= ../../../FStar
 include $(FSTAR_HOME)/ulib/ml/Makefile.include
 
-all: FFICallbacks.cma # FFICallbacks.cmxa
+all: FFICallbacks.cmxa # FFICallbacks.cma
 
 clean:
 	rm -rf dllFFICallbacks.dll FFICallbacks.a FFICallbacks.cmi FFICallbacks.cmx FFICallbacks.cmxa FFICallbacks.o libFFICallbacks.a FFIRegister.cmi FFIRegister.cmx FFIRegister.o *~
