@@ -106,12 +106,12 @@ all: libmitls.$(SO)
 
 -include $(addsuffix .d,$(FILES))
 
-libmitls.$(SO): $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
+libmitls.$(SO): $(addsuffix .o,$(FILES)) vale/aesgcm-$(MARCH)$(VARIANT).o vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
 	$(CC) $^ -shared -o $@ $(LDOPTS)
 
 clean:
 	rm -fr $(addsuffix .o,$(FILES)) $(addsuffix .c,$(FILES)) libmitls.$(SO)
-	rm -fr vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
+	rm -fr vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
 	rm -fr *.a *.h *.d *~
 
 test:

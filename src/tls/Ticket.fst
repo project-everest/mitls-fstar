@@ -50,6 +50,9 @@ private let dummy_id (a:aeadAlg) : St AE.id =
 // because the RNG may not yet be seeded when kremlinit_globals is called
 private let ticket_enc : reference (option ticket_key) = ralloc region None
 
+// Sealing key (for client-side sealing, e.g. of session local state)
+private let sealing_enc : reference (option ticket_key) = ralloc region None
+
 private let keygen () : St ticket_key =
   let id0 = dummy_id CC.CHACHA20_POLY1305 in
   let salt : AE.salt id0 = CC.random (AE.iv_length id0) in
@@ -65,14 +68,33 @@ let get_ticket_key () : St ticket_key =
     let k = keygen () in
     ticket_enc := Some k; k
 
-let set_ticket_key (a:aeadAlg) (kv:bytes) : St bool =
+let get_sealing_key () : St ticket_key =
+  match !sealing_enc with
+  | Some k -> k
+  | None ->
+    let k = keygen () in
+    sealing_enc := Some k; k
+
+private let set_internal_key (sealing:bool) (a:aeadAlg) (kv:bytes) : St bool =
   let tid = dummy_id a in
   if length kv = AE.key_length tid + AE.iv_length tid then
     let k, s = split_ kv (AE.key_length tid) in
     let wr = AE.coerce tid region k s in
     let rd = AE.genReader region wr in
-    ticket_enc := Some (Key tid wr rd); true
+    let _ =
+      if sealing then
+        sealing_enc := Some (Key tid wr rd)
+      else
+        ticket_enc := Some (Key tid wr rd)
+      in
+    true
   else false
+
+let set_ticket_key (a:aeadAlg) (kv:bytes) : St bool =
+  set_internal_key false a kv
+
+let set_sealing_key (a:aeadAlg) (kv:bytes) : St bool =
+  set_internal_key true a kv
 
 // TODO absolute bare bone for functionality
 // We should expand with certificates, mode, etc
@@ -160,21 +182,20 @@ let parse (b:bytes) (nonce:bytes) : St (option ticket) =
          end
         | _ -> None
 
-let ticket_decrypt cipher : St (option bytes) =
-  let Key tid _ rd = get_ticket_key () in
+let ticket_decrypt (seal:bool) cipher : St (option bytes) =
+  let Key tid _ rd = if seal then get_sealing_key () else get_ticket_key () in
   let salt = AE.salt_of_state rd in
   let (nb, b) = split_ cipher (AE.iv_length tid) in
   let plain_len = length b - AE.taglen tid in
   let iv = AE.coerce_iv tid (xor_ #(AE.iv_length tid) nb salt) in
   AE.decrypt #tid #plain_len rd iv empty_bytes b
 
-let check_ticket (b:bytes{length b <= 65551}) : St (option ticket) =
+let check_ticket (seal:bool) (b:bytes{length b <= 65551}) : St (option ticket) =
   trace ("Decrypting ticket "^(hex_of_bytes b));
   let Key tid _ rd = get_ticket_key () in
   if length b < AE.iv_length tid + AE.taglen tid + 8 (*was: 32*) 
   then None 
-  else
-    match ticket_decrypt b with
+  else match ticket_decrypt seal b with
     | None -> trace ("Ticket decryption failed."); None
     | Some plain ->
       let nonce, _ = split b 12ul in
@@ -189,23 +210,23 @@ let serialize = function
     @| (bytes_of_int32 created) @| (bytes_of_int32 age)
     @| (vlbytes 2 custom) @| (vlbytes 2 rms)
 
-let ticket_encrypt plain : St bytes =
-  let Key tid wr _ = get_ticket_key () in
+let ticket_encrypt (seal:bool) plain : St bytes =
+  let Key tid wr _ = if seal then get_sealing_key () else get_ticket_key () in
   let nb = CC.random (AE.iv_length tid) in
   let salt = AE.salt_of_state wr in
   let iv = AE.coerce_iv tid (xor 12ul nb salt) in
   let ae = AE.encrypt #tid #(length plain) wr iv empty_bytes plain in
   nb @| ae
 
-let create_ticket t =
+let create_ticket (seal:bool) t =
   let plain = serialize t in
-  ticket_encrypt plain
+  ticket_encrypt seal plain
 
 let create_cookie (hrr:HandshakeMessages.hrr) (digest:bytes) (extra:bytes) =
   let hrm = HandshakeMessages.HelloRetryRequest hrr in
   let hrb = vlbytes 3 (HandshakeMessages.handshakeMessageBytes None hrm) in
   let plain = hrb @| (vlbytes 1 digest) @| (vlbytes 2 extra) in
-  let cipher = ticket_encrypt plain in
+  let cipher = ticket_encrypt false plain in
   trace ("Encrypting cookie: "^(hex_of_bytes plain));
   trace ("Encrypted cookie:  "^(hex_of_bytes cipher));
   cipher
@@ -214,7 +235,7 @@ val check_cookie: b:bytes -> St (option (HandshakeMessages.hrr * bytes * bytes))
 let check_cookie b =
   trace ("Decrypting cookie "^(hex_of_bytes b));
   if length b < 32 then None else
-  match ticket_decrypt b with
+  match ticket_decrypt false b with
   | None -> trace ("Cookie decryption failed."); None
   | Some plain ->
     trace ("Plain cookie: "^(hex_of_bytes plain));
@@ -251,11 +272,11 @@ let ticket_pskinfo (t:ticket) =
   | _ -> None
 
 let check_ticket13 b =
-  match check_ticket b with
+  match check_ticket false b with
   | Some t -> ticket_pskinfo t
   | _ -> None
 
 let check_ticket12 b =
-  match check_ticket b with
+  match check_ticket false b with
   | Some (Ticket12 pv cs ems msId ms) -> Some (pv, cs, ems, msId, ms)
   | _ -> None

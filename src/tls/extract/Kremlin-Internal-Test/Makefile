@@ -57,7 +57,7 @@ INCLUDE_DIRS 	= secure kreminc include stub vale curve pki ffi uint128 .
 # then: remove Crypto_AEAD_Main because of the hacl_provider hack
 FILES 		= Cert C_Loops_Spec_Loops CommonDH CoreCrypto \
   Crypto_Indexing Crypto_Symmetric_Bytes Crypto_Plain \
-  CryptoTypes curve/Hacl_Curve25519 DHGroup ECGroup Extensions Flags Format FStar \
+  CryptoTypes curve/Hacl_Curve25519 DHGroup ECGroup Extensions Flag Flags Format FStar \
   HaclProvider Hashing_Spec kremlib/kremdate kremlib/kremstr kremlinit \
   LowCProvider LowParse Nonce Parse PMS Prims PSK RSAKey \
   secure/Crypto_HKDF_Crypto_HMAC \
@@ -93,7 +93,7 @@ endif
 
 -include $(addsuffix .d,$(FILES))
 
-test.exe: $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
+test.exe: $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aesgcm-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
 	$(CC) $^ -o $@ -lmipki $(LDOPTS) -L$(MITLS_HOME)/src/pki
 
 CERT_FILES=CAFile.pem server-ecdsa.crt server-ecdsa.key
@@ -103,7 +103,7 @@ $(CERT_FILES):
 
 clean:
 	rm -fr $(addsuffix .o,$(FILES)) $(addsuffix .c,$(FILES)) test.exe
-	rm -fr vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
+	rm -fr vale/sha256-$(MARCH)$(VARIANT).o vale/aesgcm-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
 
 test: test.exe $(CERT_FILES)
 	./$<

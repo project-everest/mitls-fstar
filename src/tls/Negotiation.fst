@@ -496,9 +496,9 @@ let rec unseal_tickets (acc:list (psk_identifier * Ticket.ticket))
   | [] -> List.Tot.rev acc
   | (tid, seal) :: r ->
     let acc =
-      match Ticket.check_ticket seal with
+      match Ticket.check_ticket true seal with
       | Some t -> (tid, t) :: acc
-      | None -> acc in
+      | None -> trace ("WARNING: failed to unseal the session data for ticket "^(print_bytes tid)^" (check sealing key)"); acc in
     unseal_tickets acc r
 
 val create:
@@ -1238,7 +1238,7 @@ let compute_cs13 cfg o psks shares server_cert =
       match List.Helpers.filter_aux cfg is_in_cfg_named_groups gs with
       | [] -> None, None // No common group, only PSK
       | gl ->
-        let csg: option (CommonDH.namedGroup * cipherSuite) = match ncs with | [] -> None | cs :: _ -> Some (List.Tot.hd gl, cs) in
+        let csg = match ncs with | [] -> None | cs :: _ -> Some (List.Tot.hd gl, cs) in
         let gl' = List.Tot.map group_of_named_group gl in
         let s: option share = List.Helpers.find_aux gl' share_in_named_group shares in
         s, (if server_cert then csg else None) // Can't do HRR without a certificate

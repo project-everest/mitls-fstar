@@ -451,7 +451,11 @@ int Configure(mitls_state **pstate)
     }
 
     if (option_alpn) {
-        r = FFI_mitls_configure_alpn(state, option_alpn);
+	mitls_alpn alpn = {
+          .alpn = (unsigned char*)option_alpn,
+	  .alpn_len = strlen(option_alpn)
+	};
+        r = FFI_mitls_configure_alpn(state, &alpn, 1);
         if (r == 0) {
             printf("FFI_mitls_configure_alpn(%s) failed.\n", option_alpn);
             return 2;
