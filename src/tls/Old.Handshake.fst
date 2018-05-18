@@ -909,7 +909,7 @@ let server_ClientFinished hs cvd digestCCS digestClientFinished =
           let ticket = Ticket.Ticket12 pv cs (Nego.emsFlag mode) msId ms in
           let ticket = {
             sticket_lifetime = FStar.UInt32.(uint_to_t 3600);
-            sticket_ticket = Ticket.create_ticket ticket;
+            sticket_ticket = Ticket.create_ticket false ticket;
           } in
           HandshakeLog.send_tag #ha hs.log (NewSessionTicket ticket)
         else digestClientFinished in
@@ -1007,7 +1007,7 @@ let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinishe
            let age_add = Parse.uint32_of_bytes age_add in
            let now = CoreCrypto.now () in
            let ticket = Ticket.Ticket13 cs li rmsid rms empty_bytes now age_add empty_bytes in
-           let tb = Ticket.create_ticket ticket in
+           let tb = Ticket.create_ticket false ticket in
 
            trace ("Sending ticket: "^(print_bytes tb));
            let ticket_ext =
