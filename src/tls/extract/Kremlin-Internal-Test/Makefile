@@ -57,7 +57,7 @@ INCLUDE_DIRS 	= secure kreminc include stub vale curve pki ffi uint128 .
 # then: remove Crypto_AEAD_Main because of the hacl_provider hack
 FILES 		= Cert C_Loops_Spec_Loops CommonDH CoreCrypto \
   Crypto_Indexing Crypto_Symmetric_Bytes Crypto_Plain \
-  CryptoTypes curve/Hacl_Curve25519 DHGroup ECGroup Extensions Flag Flags Format FStar \
+  CryptoTypes curve/Hacl_Curve25519 DHGroup ECGroup Extensions Flags Format FStar \
   HaclProvider Hashing_Spec kremlib/kremdate kremlib/kremstr kremlinit \
   LowCProvider LowParse Nonce Parse PMS Prims PSK RSAKey \
   secure/Crypto_HKDF_Crypto_HMAC \
