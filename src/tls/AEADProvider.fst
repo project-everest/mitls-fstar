@@ -147,7 +147,7 @@ let lemma_nonce_iv (#i:id) (#rw:rw) (st:state i rw) (n1:nonce i) (n2:nonce i)
   | _ ->
     if (salt @| n1) = (salt @| n2) then
       () //lemma_append_inj salt n1 salt n2 //TODO bytes NS 09/27
-#reset-options
+//#reset-options
 
 let empty_log (#i:id) (#rw:rw) (st:state i rw) h =
   match use_provider() with
