@@ -131,9 +131,13 @@ val validate_nochk_truncate32
     U32.v (B.get h' sz 0) == consumed /\
     B.get h' input 0 == B.sub (B.get h input 0) 0ul (U32.uint_to_t consumed) /\ (
     let sq' = B.as_seq h' (B.get h' input 0) in
-    sq' == Seq.slice sq 0 consumed /\
-    parse p sq' == Some (res, (consumed <: nat))
-  ))))
+    sq' == Seq.slice sq 0 consumed /\ (
+    let psq' = parse p sq' in
+    Some? psq' /\ (
+    let (Some (res', consumed')) = psq' in
+    res == res' /\
+    (consumed' <: nat) == (consumed <: nat)
+  ))))))
 
 let validate_nochk_truncate32 #k #t p v input sz =
   let h = HST.get () in
