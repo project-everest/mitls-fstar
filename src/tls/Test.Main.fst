@@ -20,7 +20,7 @@ let check s (f: unit -> St C.exit_code): St unit =
       print_string "\n";
       C.exit 255l
 
-let rec iter xs: St unit =
+let rec iter (xs:list (string * (unit -> St C.exit_code))) : St unit =
   match xs with
   | [] -> ()
   | (s,f) :: xs -> check s f; iter xs

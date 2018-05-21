@@ -5,6 +5,7 @@ MARCH		?= x86_64
 
 MITLS_HOME 	= ../../../..
 MLCRYPTO_HOME	?= ../../../../../MLCrypto
+EVERCRYPT_HOME	?= ../../../../../hacl-star/providers
 
 ifeq ($(OS),Windows_NT)
   PATH := $(MITLS_HOME)/src/pki:$(PATH)
@@ -27,6 +28,13 @@ else ifeq ($(UNAME),Linux)
   export LD_LIBRARY_PATH
 endif
 
+# Force-include RegionAllocator.h and enable heap regions in all builds
+CFLAGS := $(CFLAGS) -include RegionAllocator.h -DUSE_HEAP_REGIONS
+
+ifneq (,$(EVEREST_WINDOWS))
+CFLAGS+=-DKRML_NOUINT128 -DKRML_SEPARATE_UINT128 # -DKRML_NOSTRUCT_PASSING
+endif
+
 ifndef NO_OPENSSL
 ifeq ($(OS),Windows_NT)
   PATH := $(MLCRYPTO_HOME)/openssl:$(PATH)
@@ -37,7 +45,7 @@ else
 endif
 endif
 
-INCLUDE_DIRS 	= secure kremlib include stub vale curve ffi uint128 .
+INCLUDE_DIRS 	= secure kreminc include stub vale curve ffi uint128 .
 
 # Note: see comment in Makefile.Kremlin to see why we're re-extracting
 # Crypto.Symmetric.Bytes rather than using the one from secure/
@@ -51,7 +59,7 @@ INCLUDE_DIRS 	= secure kremlib include stub vale curve ffi uint128 .
 FILES 		= AEAD_GCM AEADProvider Alert BufferBytes Cert \
   C_Loops_Spec_Loops CommonDH Connection Content CoreCrypto \
   Crypto_Indexing Crypto_Symmetric_Bytes Crypto_Plain \
-  CryptoTypes curve/Curve25519 DataStream DHGroup ECGroup Old_Epochs Extensions FFI \
+  CryptoTypes curve/Hacl_Curve25519 DataStream DHGroup ECGroup Old_Epochs Extensions FFI \
   FFICallbacks Flags Format FStar HaclProvider Old_Handshake HandshakeLog \
   HandshakeMessages Hashing Hashing_CRF Hashing_OpenSSL Hashing_Spec Old_HKDF HMAC \
   Old_HMAC_UFCMA Old_KeySchedule kremlib/kremdate kremlib/kremstr kremlinit LHAEPlain \
@@ -61,8 +69,12 @@ FILES 		= AEAD_GCM AEADProvider Alert BufferBytes Cert \
   StatefulPlain StreamAE StreamDeltas StreamPlain stub/core_crypto stub/hacl_aead \
   stub/hacl_provider Ticket TLS TLSConstants TLS_Curve25519 TLSError TLSInfo \
   TLSInfoFlags TLSPRF Transport vale/sha256_main_i vale/vale_aes_glue \
-  vale/Vale_Hash_SHA2_256 stub/mitlsffi stub/buffer_bytes uint128/uint128_wrapper \
+  vale/Vale_Hash_SHA2_256 stub/mitlsffi stub/buffer_bytes \
   stub/RegionAllocator
+
+ifneq (,$(EVEREST_WINDOWS))
+FILES+=uint128/FStar_UInt128
+endif
 
 ifdef MITLS_USE_OPENSSL
 FILES += AEADOpenssl
@@ -74,6 +86,8 @@ CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror \
   -D_BSD_SOURCE -D_DEFAULT_SOURCE -D__USE_MINGW_ANSI_STDIO \
   -Wno-missing-braces -Wno-error-tautological-compare -Wno-error-int-to-void-pointer-cast \
   -Wno-error-enum-conversion
+
+LDOPTS += -L$(EVERCRYPT_HOME)/out -levercrypt
 
 ifndef NO_OPENSSL
 CFLAGS += -I$(MLCRYPTO_HOME)/openssl/include
@@ -92,12 +106,12 @@ all: libmitls.$(SO)
 
 -include $(addsuffix .d,$(FILES))
 
-libmitls.$(SO): $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
+libmitls.$(SO): $(addsuffix .o,$(FILES)) vale/aesgcm-$(MARCH)$(VARIANT).o vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
 	$(CC) $^ -shared -o $@ $(LDOPTS)
 
 clean:
 	rm -fr $(addsuffix .o,$(FILES)) $(addsuffix .c,$(FILES)) libmitls.$(SO)
-	rm -fr vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
+	rm -fr vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
 	rm -fr *.a *.h *.d *~
 
 test:

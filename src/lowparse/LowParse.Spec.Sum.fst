@@ -141,6 +141,12 @@ let sum_key (t: sum) : Tot Type0 =
   enum_key (sum_enum t)
 
 inline_for_extraction
+let sum_key_type_of_sum_key (t: sum) (k: sum_key t) : Pure (sum_key_type t)
+  (requires True)
+  (ensures (fun k' -> k' == (k <: sum_key_type t)))
+= k
+
+inline_for_extraction
 let sum_type (t: sum) : Tot Type0 =
   let (Sum _ _ _ data _) = t in
   data

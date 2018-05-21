@@ -10,7 +10,7 @@ FLAVOR=OCaml
 EXTENSION=ml
 #Don't extract modules from fstarlib (NOEXTRACT_MODULES)
 #And also some specific ones from mitls that are implemented in C
-EXTRACT='* -Prims -FStar +FStar.Test +FStar.Kremlin.Endianness -CoreCrypto -CryptoTypes -DHDB -LowCProvider -HaclProvider -FFICallbacks -Crypto.AEAD -Crypto.Symmetric -Crypto.Plain -Spec.Loops -Buffer.Utils -C +C.Loops -LowParse.SLow.Tac -BufferBytes'
+EXTRACT='* -Prims -FStar +FStar.Test +FStar.Kremlin.Endianness -CoreCrypto -CryptoTypes -EverCrypt.Bytes -EverCrypt -DHDB -LowCProvider -HaclProvider -FFICallbacks -Crypto.AEAD -Crypto.Symmetric -Crypto.Plain -Spec.Loops -Buffer.Utils -C +C.Loops -LowParse.SLow.Tac -BufferBytes'
 SPECINC=$(MITLS_HOME)/src/tls/concrete-flags  $(MITLS_HOME)/src/tls/concrete-flags/OCaml
 include Makefile.common
 VFLAGS+=--admit_smt_queries true
@@ -29,6 +29,7 @@ OCAMLOPTS0	= -g \
 		  -I $(KREMLIN_HOME)/_build/kremlib \
 		  -I test \
 		  -I extract/mlstubs \
+		  -I $(EVERCRYPT_HOME)/multiplexer/ml \
 		  -I .
 
 OCAMLOPTS	= $(OCAMLOPTS0) -package fstarlib,zarith,ctypes,ctypes.foreign
@@ -55,12 +56,13 @@ ifeq (,$(wildcard $(MLCRYPTO_HOME)/CoreCrypto.cmxa))
   $(error I cannot find $(MLCRYPTO_HOME)/CoreCrypto.cmxa -- please run make in $(MLCRYPTO_HOME))
 endif
 
-ifeq (,$(wildcard $(FFI_HOME)/FFICallbacks.cmxa)) 
+ifeq (,$(wildcard $(FFI_HOME)/FFICallbacks.cmxa))
   $(error I cannot find $(FFI_HOME)/FFICallbacks.cmxa -- please run make in $(FFI_HOME))
-endif 
+endif
 
 %.o: %.c
-	$(CC) -I $(KREMLIN_HOME)/kremlib $^ -o $@ -c
+	$(CC) -I $(KREMLIN_HOME)/include $^ -o $@ -c
+
 # We must insert PKI.cmx at the right spot in the list of inputs
 MITLS_INPUTS=\
     $(EXTRACT_DIR)/BufferBytes.cmx \
@@ -69,6 +71,7 @@ MITLS_INPUTS=\
     $(MLCRYPTO_HOME)/CoreCrypto.cmxa \
     $(LOWC_HOME)/LowC.cmxa \
     $(FFI_HOME)/FFICallbacks.cmxa \
+    $(EVERCRYPT_HOME)/out/evercrypt.cmxa \
     $(subst .ml,.cmx,$(subst TLSConstants.ml,TLSConstants.ml extract/OCaml/PKI.ml,$(ALL_ML_FILES))) \
     $(EXTRACT_DIR)/FFIRegister.cmx \
     extract/copied/kremstr.o
@@ -85,7 +88,9 @@ MITLS_BYTE_INPUTS=\
     extract/copied/kremstr.o
 
 mitls.exe: $(MITLS_INPUTS) test/mitls.cmx
-	$(OCAMLOPT) -cclib -L../pki -cclib -lmipki -linkall -linkpkg -g $^ -o $@ -thread
+	$(OCAMLOPT) -cclib -L../pki -cclib -lmipki \
+	  -cclib -L$(EVERCRYPT_HOME)/out -cclib -levercrypt -linkall \
+	  -linkpkg -g $^ -o $@ -thread
 
 mitls.byte: $(MITLS_BYTE_INPUTS) test/mitls.cmo ../pki/libmipki.so
 	$(OCAMLC)   -cclib -L../pki -cclib -lmipki -linkall -linkpkg -g $^ -o mitls.exe -thread -w -31
@@ -192,13 +197,19 @@ UNAME = $(shell uname)
 
 ifeq ($(OS),Windows_NT)
   ifeq ($(shell uname -o),Cygwin)
-    MITLS_HOME_RUN := $(shell cygpath -u ${MITLS_HOME})
+    MITLS_HOME_RUN := $(shell cygpath -a -u ${MITLS_HOME})
+    EVERCRYPT_HOME_RUN := $(shell cygpath -a -u ${EVERCRYPT_HOME})
+    MLCRYPTO_HOME_RUN := $(shell cygpath -a -u ${MLCRYPTO_HOME})
+  else
+    MITLS_HOME_RUN := $(MITLS_HOME)
+    EVERCRYPT_HOME_RUN := $(EVERCRYPT_HOME)
+    MLCRYPTO_HOME_RUN := $(MLCRYPTO_HOME)
   endif
-  export PATH := $(MITLS_HOME_RUN)/src/pki:$(PATH)
+  export PATH := $(MLCRYPTO_HOME_RUN)/openssl:$(EVERCRYPT_HOME_RUN)/out:$(MITLS_HOME_RUN)/src/pki:$(PATH)
 else ifeq ($(UNAME),Darwin)
-  PREFIX = DYLD_LIBRARY_PATH=$(MITLS_HOME)/src/pki:$(DYLD_LIBRARY_PATH)
+  PREFIX = DYLD_LIBRARY_PATH=$(MLCRYPTO_HOME)/openssl:$(EVERCRYPT_HOME)/out:$(MITLS_HOME)/src/pki:$(DYLD_LIBRARY_PATH)
 else ifeq ($(UNAME),Linux)
-  export LD_LIBRARY_PATH := $(MITLS_HOME)/src/pki:$(LD_LIBRARY_PATH)
+  export LD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(EVERCRYPT_HOME)/out:$(MITLS_HOME)/src/pki:$(LD_LIBRARY_PATH)
 endif
 
 test: mitls.exe $(CERT_FILES)

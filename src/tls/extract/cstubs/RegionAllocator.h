@@ -17,11 +17,7 @@ This file has multiple compilation options:
 
 ******/
 
-#if defined(_MSC_VER) || defined(__MINGW32__)
-#define IS_WINDOWS 1
-#else
-#define IS_WINDOWS 0
-#endif
+#include <stdlib.h> // for size_t
 
 typedef void *HEAP_REGION;
 
@@ -45,20 +41,17 @@ void HeapRegionFree(void* pv);
 // be freed when the region is destroyed.  A default region holds allocations
 // made outside of ENTER/LEAVE.  It will be freed when the region allocator
 // is cleaned up.
-#if IS_WINDOWS
+#if defined(_MSC_VER)
   #define FACILITY_EVEREST 255
   #define CODE_OUT_OF_MEMORY 5
   #define MITLS_OUT_OF_MEMORY_EXCEPTION MAKE_HRESULT(1,FACILITY_EVEREST,CODE_OUT_OF_MEMORY)
   
   #define ENTER_GLOBAL_HEAP_REGION() ENTER_HEAP_REGION(NULL)
 
-  #define LEAVE_GLOBAL_HEAP_REGION() \
-    } __except (GetExceptionCode() == MITLS_OUT_OF_MEMORY_EXCEPTION) { \
-        HadHeapException = 1; \
-    }
+  #define LEAVE_GLOBAL_HEAP_REGION() LEAVE_HEAP_REGION()
 
   #define ENTER_HEAP_REGION(rgn) \
-    HeapRegionEnter(rgn); \
+    HEAP_REGION OldRegion = HeapRegionEnter(rgn); \
     char HadHeapException = 0; \
     __try {
 
@@ -66,39 +59,52 @@ void HeapRegionFree(void* pv);
     } __except (GetExceptionCode() == MITLS_OUT_OF_MEMORY_EXCEPTION) { \
         HadHeapException = 1; \
     } \
-    HeapRegionLeave();
+    HeapRegionLeave(OldRegion);
 
   #define CREATE_HEAP_REGION(prgn) \
-    HeapRegionCreateAndRegister(prgn); \
+    HEAP_REGION OldRegion = HeapRegionCreateAndRegister(prgn); \
     char HadHeapException = 0; \
     __try {
 
   #define VALID_HEAP_REGION(rgn)    ((rgn) != NULL)
   #define DESTROY_HEAP_REGION(rgn) HeapRegionDestroy(rgn)
   #define HAD_OUT_OF_MEMORY         (HadHeapException != 0)
-  void HeapRegionEnter(HEAP_REGION rgn);
-#else
+  HEAP_REGION HeapRegionEnter(HEAP_REGION rgn);
+  HEAP_REGION HeapRegionCreateAndRegister(HEAP_REGION *prgn);
+#else // !defined(_MSC_VER), so mingw, gcc, etc.
   #include <setjmp.h>
 
   #define ENTER_GLOBAL_HEAP_REGION() ENTER_HEAP_REGION(NULL)
-  #define LEAVE_GLOBAL_HEAP_REGION() }
+  #define LEAVE_GLOBAL_HEAP_REGION() LEAVE_HEAP_REGION()
 
   #define ENTER_HEAP_REGION(rgn) \
     jmp_buf jmp_buf_out_of_memory; \
     char HadHeapException = 0; \
-    HeapRegionEnter(rgn, &jmp_buf_out_of_memory); \
+    HEAP_REGION OldRegion = HeapRegionEnter(rgn, &jmp_buf_out_of_memory); \
     if (setjmp(jmp_buf_out_of_memory)) { \
       HadHeapException = 1; \
     } else {
-  #define LEAVE_HEAP_REGION()    } HeapRegionLeave()
-  #define CREATE_HEAP_REGION(prgn)   HeapRegionCreateAndRegister(prgn); {
+
+  #define LEAVE_HEAP_REGION() \
+    } \
+    HeapRegionLeave(OldRegion)
+
+  #define CREATE_HEAP_REGION(prgn) \
+    jmp_buf jmp_buf_out_of_memory; \
+    char HadHeapException = 0; \
+    HEAP_REGION OldRegion = HeapRegionCreateAndRegister(prgn, &jmp_buf_out_of_memory); \
+    if (setjmp(jmp_buf_out_of_memory)) { \
+      HadHeapException = 1; \
+    } else {
+
   #define VALID_HEAP_REGION(rgn)    ((rgn) != NULL)
   #define DESTROY_HEAP_REGION(rgn) HeapRegionDestroy(rgn)
   #define HAD_OUT_OF_MEMORY         (HadHeapException != 0)
-  void HeapRegionEnter(HEAP_REGION rgn, jmp_buf* penv);
-#endif
-void HeapRegionLeave(void);
-void HeapRegionCreateAndRegister(HEAP_REGION *prgn);
+  HEAP_REGION HeapRegionEnter(HEAP_REGION rgn, jmp_buf* penv);
+  HEAP_REGION HeapRegionCreateAndRegister(HEAP_REGION *prgn, jmp_buf* penv);
+#endif // !defined(_MSC_VER), so mingw, gcc, etc.
+
+void HeapRegionLeave(HEAP_REGION oldrgn);
 void HeapRegionDestroy(HEAP_REGION rgn);
 
 #elif USE_KERNEL_REGIONS
@@ -106,7 +112,7 @@ void HeapRegionDestroy(HEAP_REGION rgn);
 // the region will be freed when the region is destroyed.  A default region
 // holds allocations made outside of ENTER/LEAVE.  It will be freed when
 // the region allocator is cleaned up.
-#if IS_WINDOWS
+#if defined(_MSC_VER)
   #define MITLS_OUT_OF_MEMORY_EXCEPTION 0x80ff0005
   
   typedef struct {
@@ -152,11 +158,15 @@ void HeapRegionDestroy(HEAP_REGION rgn);
   void HeapRegionRegister(region_entry* pe, HEAP_REGION rgn);
   void HeapRegionUnregister(region_entry* pe);
   void HeapRegionDestroy(HEAP_REGION rgn);
-#else
-  #error Non-Windows support is NYY
-#endif
+#else // !defined(_MSC_VER)
+  #error Non-Windows support is NYI
+#endif //!defined(_MSC_VER)
 
-#else
+#define KRML_HOST_MALLOC HeapRegionMalloc
+#define KRML_HOST_CALLOC HeapRegionCalloc
+#define KRML_HOST_FREE   HeapRegionFree
+
+#else // !USE_HEAP_REGIONS && !USE_KERNEL_REGIONS
 // Use the single process-wide heap.  All unfreed allocations will be leaked.
 
 #ifndef TRUE
@@ -173,6 +183,6 @@ void HeapRegionDestroy(HEAP_REGION rgn);
 #define DESTROY_HEAP_REGION(rgn)
 #define HAD_OUT_OF_MEMORY 0
 
-#endif
+#endif // !USE_HEAP_REGIONS && !USE_KERNEL_REGIONS
 
 #endif // HEADER_REGIONALLOCATOR_H

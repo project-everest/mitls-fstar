@@ -30,7 +30,7 @@ module Range = Range
 ////////////////////////////////////////////////////////////////////////////////
 let is_stream i = ID13? i
 
-let is_stlhae i = ID12? i && AEAD? (aeAlg_of_id i) &&
+let is_stlhae (i:id) = ID12? i && AEAD? (aeAlg_of_id i) &&
   (AEAD?._0 (aeAlg_of_id i) = CoreCrypto.AES_128_GCM ||
    AEAD?._0 (aeAlg_of_id i) = CoreCrypto.AES_256_GCM)
 

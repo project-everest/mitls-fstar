@@ -1,6 +1,7 @@
 MITLS_HOME ?= ../..
 FSTAR_HOME ?= ../../../FStar
 MLCRYPTO_HOME ?= ../../../MLCrypto
+EVERCRYPT_HOME ?= ../../../hacl-star/providers
 
 UNAME=$(shell uname)
 MARCH?=x86_64
@@ -15,8 +16,9 @@ ifeq ($(OS),Windows_NT)
 	ifeq ($(shell uname -o),Cygwin)
 	  MITLS_HOME := $(shell cygpath -u ${MITLS_HOME})
 	  MLCRYPTO_HOME := $(shell cygpath -u ${MLCRYPTO_HOME})
+	  EVERCRYPT_HOME := $(shell cygpath -u ${EVERCRYPT_HOME})
 	endif
-  LIBPATHS=$(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/extract/Kremlin-Library:$(MLCRYPTO_HOME)/openssl
+  LIBPATHS=$(EVERCRYPT_HOME)/out:$(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/extract/Kremlin-Library:$(MLCRYPTO_HOME)/openssl
   PATH := $(LIBPATHS):$(PATH)
   export PATH
 else ifeq ($(UNAME),Darwin)
@@ -24,7 +26,7 @@ else ifeq ($(UNAME),Darwin)
   LIBPKI=libmipki.so
   PIC=-fPIC
   WINSOCK=
-  LIBPATHS=$(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/extract/Kremlin-Library
+  LIBPATHS=$(EVERCRYPT_HOME)/out:$(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/extract/Kremlin-Library
   DYLD_LIBRARY_PATH := $(LIBPATHS):$(DYLD_LIBRARY_PATH)
   export DYLD_LIBRARY_PATH
 else ifeq ($(UNAME),Linux)
@@ -32,7 +34,7 @@ else ifeq ($(UNAME),Linux)
   LIBPKI=libmipki.so
   PIC=-fPIC -lpthread
   WINSOCK=
-  LIBPATHS=$(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/extract/Kremlin-Library:$(MLCRYPTO_HOME)/openssl
+  LIBPATHS=$(EVERCRYPT_HOME)/out:$(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/extract/Kremlin-Library:$(MLCRYPTO_HOME)/openssl
   LD_LIBRARY_PATH := $(LIBPATHS):$(LD_LIBRARY_PATH)
   export LD_LIBRARY_PATH
 endif

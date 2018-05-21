@@ -247,10 +247,16 @@ int main(int argc, char **argv)
     }
   };
 
+  mitls_alpn alpn = {
+    .alpn = "hq-10",
+    .alpn_len = 5
+  };
+
   quic_config config = {
     .is_server = 1,
     .host_name = "",
-    .alpn = "hq-08",
+    .alpn = &alpn,
+    .alpn_count = 1,
     .server_ticket = NULL,
     .exts = client_qtp,
     .exts_count = 1,

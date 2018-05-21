@@ -147,7 +147,7 @@ let lemma_nonce_iv (#i:id) (#rw:rw) (st:state i rw) (n1:nonce i) (n2:nonce i)
   | _ ->
     if (salt @| n1) = (salt @| n2) then
       () //lemma_append_inj salt n1 salt n2 //TODO bytes NS 09/27
-#reset-options
+//#reset-options
 
 let empty_log (#i:id) (#rw:rw) (st:state i rw) h =
   match use_provider() with
@@ -159,9 +159,10 @@ let region (#i:id) (#rw:rw) (st:state i rw) =
   | OpenSSLProvider -> OAEAD.State?.region (as_openssl_state st)
   | _ -> tls_region // TODO
 
-let log_region (#i:id) (#rw:rw) (st:state i rw) =
+let log_region (#i:id) (#rw:rw) (st:state i rw) : rgn =
   match use_provider() with
-  | OpenSSLProvider -> OAEAD.State?.log_region (as_openssl_state st)
+  | OpenSSLProvider ->
+    OAEAD.State?.log_region (as_openssl_state st)
   | _ -> tls_region
 
 let st_inv (#i:id) (#rw:rw) (st:state i rw) h = True //TODO
@@ -247,7 +248,8 @@ let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
     in
   dbg ((prov())^": COERCE(K="^(hex_of_bytes k)^")");
   w
-#reset-options
+
+//#reset-options
 
 type plainlen = n:nat{n <= max_TLSPlaintext_fragment_length}
 (* irreducible *)

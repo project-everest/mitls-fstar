@@ -231,19 +231,19 @@ let is_honest_dhi i =
 
 let ipubshare #g gx = pre_pubshare gx
 
-type registered_dhr_st (#i:dhi) (log:i_ilog) (j:pre_dhr i) (h:mem) =
+let registered_dhr_st (#i:dhi) (log:i_ilog) (j:pre_dhr i) (h:mem) =
   corrupt_dhi_st log i h \/
   (honest_dhi_st log i h /\
     (let Some (Honest log') = MDM.sel (sel h log) i in
       Some? (MDM.sel (sel h log') j)))
 
-type registered_dhr #i j =
+let registered_dhr #i j =
   (if Flags.model then
     let log: i_ilog = ilog in
     witnessed (registered_dhr_st log j)
   else True)
 
-type fresh_dhr #i j h =
+let fresh_dhr #i j h =
   (if Flags.model then
     let log: i_ilog = ilog in
     honest_dhi_st log i h
@@ -251,26 +251,26 @@ type fresh_dhr #i j h =
         None? (MDM.sel (sel h log') j))
   else False)
 
-type honest_dhr_st (#i:dhi) (log:i_ilog) (j:pre_dhr i) (h:mem) =
+let honest_dhr_st (#i:dhi) (log:i_ilog) (j:pre_dhr i) (h:mem) =
   honest_dhi_st log i h
   /\ (let Some (Honest log') = MDM.sel (sel h log) i in
       Some? (MDM.sel (sel h log') j)
       /\ Some?.v (MDM.sel (sel h log') j) = true)
 
-type honest_dhr #i j =
+let honest_dhr #i j =
   (if Flags.model then
     let log: i_ilog = ilog in
     witnessed (honest_dhr_st log j)
   else False)
 
-type corrupt_dhr_st (#i:dhi) (log:i_ilog) (j:pre_dhr i) (h:mem) =
+let corrupt_dhr_st (#i:dhi) (log:i_ilog) (j:pre_dhr i) (h:mem) =
   corrupt_dhi_st log i h \/
   (honest_dhi_st log i h /\
     (let Some (Honest log') = MDM.sel (sel h log) i in
       Some? (MDM.sel (sel h log') j)
       /\ Some?.v (MDM.sel (sel h log') j) = false))
 
-type corrupt_dhr #i j =
+let corrupt_dhr #i j =
   (if Flags.model then
     let log: i_ilog = ilog in
     witnessed (corrupt_dhr_st log j)

@@ -77,12 +77,12 @@ let ghost_repr #i #ad #rg pf =
 val repr: i:id{ ~(safeId i)} -> ad:adata i -> rg:range -> p:plain i ad rg -> Tot (b:rbytes rg {b = ghost_repr #i #ad #rg p})
 let repr i ad rg f = Content.repr i f
 
-logic type wf_ad_rg i ad rg =
+type wf_ad_rg i ad rg =
   wider Range.fragment_range rg
   /\ (parseAD i ad = Change_cipher_spec ==> wider rg (point 1))
   /\ (parseAD i ad = Alert ==> wider rg (point 2))
 
-logic type wf_payload_ad_rg i ad rg (b:rbytes rg) =
+type wf_payload_ad_rg i ad rg (b:rbytes rg) =
   (parseAD i ad = Change_cipher_spec ==> b = ccsBytes)
   /\ (parseAD i ad = Alert ==> length b = 2 /\ Correct? (Alert.parse b))
 

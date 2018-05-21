@@ -3,6 +3,7 @@ FSTAR_HOME      ?= ../../../FStar
 MITLS_HOME      ?= ../..
 KREMLIN_HOME    ?= ../../../kremlin
 MLCRYPTO_HOME   ?= ../../../MLCrypto
+EVERCRYPT_HOME	?= $(HACL_HOME)/providers
 FLAVOR          ?= Model
 
 SHELL=/bin/bash
@@ -18,9 +19,11 @@ INCLUDE_PATHS = \
 	$(HACL_HOME)/secure_api/LowCProvider/fst \
 	$(HACL_HOME)/code/curve25519/api \
 	$(HACL_HOME)/code/lib \
-	$(KREMLIN_HOME)/kremlib \
+	$(KREMLIN_HOME)/include \
+        $(KREMLIN_HOME)/kremlib \
 	$(MITLS_HOME)/libs/ffi \
 	$(MITLS_HOME)/src/lowparse \
+	$(EVERCRYPT_HOME)/multiplexer \
 	$(SPECINC)
 
 ifeq (,$(MITLS_NODEBUG))
@@ -43,13 +46,13 @@ endif
 # Project Files
 
 # Add more roots here!
-ROOTS ?= QUIC.fst Test.Main.fst 
+ROOTS ?= QUIC.fst Test.Main.fst
 
 EVERYTHING=$(wildcard *.fst *.fsti Make* $(MITLS_HOME)/src/pki/* $(MITLS_HOME)/libs/ffi/* ideal-flags/* concrete-flags/* concrete-flags/$(FLAVOR)/*)
 
 # Production Rules
 
-$(DEP_FILE): # $(EVERYTHING) 
+$(DEP_FILE): # $(EVERYTHING)
 ifdef VERBOSE
 	@echo -e "\033[1;33m=== Computing $(FLAVOR) dependencies ...\033[;37m"
 endif

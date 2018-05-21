@@ -17,8 +17,7 @@
         "equation_LowParse.Bytes.byte",
         "equation_LowParse.Spec.Bytes.serialize_all_bytes_",
         "equation_Mem.is_tls_rgn", "equation_Mem.rgn",
-        "equation_Mem.tls_region", "equation_Mem.tls_rgn",
-        "equation_Prims.nat", "equation_Prims.pos",
+        "equation_Mem.tls_rgn", "equation_Prims.nat", "equation_Prims.pos",
         "equation_with_fuel_Prims.pow2.fuel_instrumented",
         "function_token_typing_FStar.UInt32.n",
         "function_token_typing_Mem.tls_region", "int_typing",
@@ -45,7 +44,7 @@
         "typing_FStar.UInt8.uint_to_t", "typing_Mem.is_tls_rgn"
       ],
       0,
-      "58a11ab0c218e91d91c4fe09ce0a24df"
+      "4b1d01b7eedf7f08eeba352bde5b1977"
     ],
     [
       "DHGroup.group",
@@ -58,7 +57,7 @@
         "haseqDHGroup_Tm_refine_1e091eae2473b30eeefd9c4f8eac7426"
       ],
       0,
-      "69a04c2f3d9217c42fdad421f7d49747"
+      "a717f20fd7e1e9b321cd6a4b4723e1c2"
     ],
     [
       "DHGroup.__proj__Named__item___0",
@@ -71,7 +70,7 @@
         "refinement_interpretation_DHGroup_Tm_refine_1f67f6deaf7b51138cd35ad2f4568e94"
       ],
       0,
-      "cc9a923c19109c68393ac0b91dc17743"
+      "1010002efac98cb2d575013164515962"
     ],
     [
       "DHGroup.__proj__Explicit__item___0",
@@ -104,7 +103,7 @@
         "typing_DHGroup.__proj__Named__item___0"
       ],
       0,
-      "8e89bed814f60baee321049c67ac8652"
+      "d38633c8c1a35697a5e83ed16567b79a"
     ],
     [
       "DHGroup.keyshare",
@@ -113,7 +112,7 @@
       1,
       [ "@query", "assumption_CoreCrypto.dh_params__uu___haseq" ],
       0,
-      "3a58df38b5cee64a74df107b91661eea"
+      "d94a0994a0de31d853982f6802731611"
     ],
     [
       "DHGroup.pubshare",
@@ -126,7 +125,7 @@
         "refinement_interpretation_DHGroup_Tm_refine_19d1311d89c80108e6969c71ab06f0fa"
       ],
       0,
-      "21c8d57eaa0b98dd1d0d176c8f95c498"
+      "a7fe5d83cf589dff93aae0a45d272e7d"
     ],
     [
       "DHGroup.keygen",
@@ -168,7 +167,7 @@
         "typing_FStar.Set.complement", "typing_FStar.Set.empty"
       ],
       0,
-      "a2c670bb1cf421ad38ba42fb39c72b01"
+      "3a068ef57a7bc15419ed3f75cc6afd27"
     ],
     [
       "DHGroup.dh_initiator",
@@ -224,7 +223,7 @@
         "refinement_interpretation_LowParse.Spec.Bytes_Tm_refine_6ef601d9ddff0bec6e0cf75a07296cc4"
       ],
       0,
-      "2f2d07ed8877533f7943bd0e0f3696d1"
+      "e3bd473aeb358c1de474214cfaea8772"
     ],
     [
       "DHGroup.unsynth_vlb16",
@@ -260,7 +259,7 @@
         "token_correspondence_DHGroup.synth_vlb16"
       ],
       0,
-      "b62d5886a2733ba118bb2311720bcf54"
+      "7a846232c658f3ac0cf4d3850ba84307"
     ],
     [
       "DHGroup.vlb16_parser32",
@@ -275,7 +274,7 @@
         "token_correspondence_DHGroup.synth_vlb16"
       ],
       0,
-      "13c537d2d1de756ac4130d65164fb75e"
+      "f8351f7c36b00e64451a5bd7d6ae6925"
     ],
     [
       "DHGroup.vlb16_serializer",
@@ -293,7 +292,7 @@
         "token_correspondence_DHGroup.unsynth_vlb16"
       ],
       0,
-      "0176ec101f464a84ec78d4198e7e47b4"
+      "aab2cb30122c53c8801558925d27ca24"
     ],
     [
       "DHGroup.vlb16_serializer32",
@@ -311,7 +310,7 @@
         "token_correspondence_DHGroup.unsynth_vlb16"
       ],
       0,
-      "63901bd4e1244f15b650c413cc7cde10"
+      "8c2130041c1d3fa56d97d0b82fb66802"
     ],
     [
       "DHGroup.dhparam_parser",
@@ -332,7 +331,7 @@
         "token_correspondence_DHGroup.synth_dhparams"
       ],
       0,
-      "f4f586f83563a64db2f336ea55d193fe"
+      "f34c2a33c2a07ecf8a2b3229f9142fa9"
     ],
     [
       "DHGroup.dhparam_parser32",
@@ -353,7 +352,7 @@
         "token_correspondence_DHGroup.synth_dhparams"
       ],
       0,
-      "d512ec3db2074811720be76f1682220f"
+      "5a8541c9067f93aba114ad5884e4cee5"
     ],
     [
       "DHGroup.dhparam_serializer",
@@ -369,9 +368,7 @@
         "equation_LowParse.Spec.Base.serializer",
         "equation_LowParse.Spec.Base.serializer_correct",
         "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_LowParse.Spec.Combinators.and_then_kind",
         "equation_LowParse.Spec.Combinators.bare_serialize_nondep_then",
-        "equation_LowParse.Spec.Combinators.nondep_then",
         "equation_LowParse.Spec.Combinators.serialize_nondep_then",
         "equation_LowParse.Spec.Combinators.synth_injective",
         "equation_LowParse.Spec.Combinators.synth_inverse",
@@ -393,66 +390,17 @@
         "token_correspondence_DHGroup.unsynth_dhparams"
       ],
       0,
-      "a4f8d0080d3bcf8a87bb5288298a00ee"
+      "7f0af37e86e787c6b97f7f499012579b"
     ],
     [
       "DHGroup.dhparam_serializer32",
       1,
-      2,
-      1,
-      [
-        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_LowParse.Spec.VLData.parse_bounded_vldata_kind",
-        "primitive_Prims.op_Addition",
-        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
-        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
-      ],
-      0,
-      "ba5e5d3c6ee2f57b13b8aba364af66ae"
-    ],
-    [
-      "DHGroup.dhparam_serializer32",
-      2,
-      2,
-      1,
-      [
-        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_LowParse.Spec.VLData.parse_bounded_vldata_kind",
-        "primitive_Prims.op_Addition",
-        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
-        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
-      ],
-      0,
-      "2f6cab846b9034b8b615e80a09a8e084"
-    ],
-    [
-      "DHGroup.dhparam_serializer32",
-      3,
-      2,
-      1,
-      [
-        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_LowParse.Spec.VLData.parse_bounded_vldata_kind",
-        "primitive_Prims.op_Addition",
-        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
-        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
-      ],
-      0,
-      "899b2c34f9efac4c0ac2cb525a915a70"
-    ],
-    [
-      "DHGroup.dhparam_serializer32",
-      4,
       2,
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "DHGroup_interpretation_Tm_arrow_3456f803e8c22dde4c58f07f8b81bfdd",
-        "DHGroup_interpretation_Tm_arrow_96a0a1f5f1f4818612bad0f9e7913196",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "Prims_pretyping_f8666440faa91836cc5a13998af863fc", "bool_inversion",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565", "bool_inversion",
         "constructor_distinct_FStar.Pervasives.Native.Some",
-        "data_elim_FStar.Pervasives.Native.Mktuple2",
         "disc_equation_FStar.Pervasives.Native.Some",
         "equation_DHGroup.dhparam_parser",
         "equation_DHGroup.dhparam_serializer", "equation_DHGroup.dhparams",
@@ -460,19 +408,13 @@
         "equation_DHGroup.unsynth_dhparams", "equation_DHGroup.vlb16",
         "equation_DHGroup.vlb16_parser", "equation_DHGroup.vlb16_serializer",
         "equation_FStar.UInt32.n", "equation_LowParse.Bytes.byte",
-        "equation_LowParse.Bytes.bytes",
         "equation_LowParse.SLow.Combinators.serialize32_kind_precond",
-        "equation_LowParse.Spec.Base.parser_kind",
         "equation_LowParse.Spec.Base.serializer",
         "equation_LowParse.Spec.Base.serializer_correct",
         "equation_LowParse.Spec.Base.strong_parser_kind",
         "equation_LowParse.Spec.Combinators.and_then_kind",
         "equation_LowParse.Spec.Combinators.bare_serialize_nondep_then",
-        "equation_LowParse.Spec.Combinators.bare_serialize_synth",
-        "equation_LowParse.Spec.Combinators.nondep_then",
-        "equation_LowParse.Spec.Combinators.parse_ret_kind",
         "equation_LowParse.Spec.Combinators.serialize_nondep_then",
-        "equation_LowParse.Spec.Combinators.serialize_synth",
         "equation_LowParse.Spec.Combinators.synth_injective",
         "equation_LowParse.Spec.Combinators.synth_inverse",
         "equation_LowParse.Spec.Combinators.total_constant_size_parser_kind",
@@ -481,19 +423,9 @@
         "equation_LowParse.Spec.VLData.parse_bounded_integer_kind",
         "equation_LowParse.Spec.VLData.parse_bounded_vldata_kind",
         "equation_Prims.nat",
-        "fuel_guarded_inversion_FStar.Pervasives.Native.tuple2",
         "fuel_guarded_inversion_FStar.Pervasives.Native.tuple4",
-        "function_token_typing_DHGroup.synth_dhparams",
-        "function_token_typing_DHGroup.unsynth_dhparams",
-        "function_token_typing_DHGroup.vlb16",
-        "function_token_typing_DHGroup.vlb16_parser",
-        "function_token_typing_DHGroup.vlb16_serializer",
-        "function_token_typing_FStar.UInt32.n",
-        "function_token_typing_LowParse.Spec.Combinators.parse_ret_kind",
-        "int_typing",
-        "interpretation_LowParse.Spec.Combinators_Tm_abs_184d58045c61a7af9dd5a0b80a0cf6cf",
+        "function_token_typing_FStar.UInt32.n", "int_typing",
         "interpretation_LowParse.Spec.Combinators_Tm_abs_321df4f7be61a805091a5d49d91d80b6",
-        "kinding_FStar.Pervasives.Native.tuple2@tok",
         "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
         "primitive_Prims.op_LessThan",
         "proj_equation_FStar.Pervasives.Native.Some_v",
@@ -514,25 +446,16 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
         "refinement_interpretation_LowParse.Spec.Base_Tm_refine_40a24c6c363915cd0813473da688de21",
-        "refinement_interpretation_LowParse.Spec.Base_Tm_refine_9fc4b705eaf2fe68d9cc8785e7df72bf",
-        "refinement_interpretation_LowParse.Spec.Combinators_Tm_refine_30ed63538295cfbee9638b7c92f49ab3",
         "refinement_interpretation_LowParse.Spec.VLData_Tm_refine_1232d7c31404e3dd30cc0f0b94c039e1",
         "refinement_interpretation_LowParse.Spec.VLData_Tm_refine_546bd17e6f1845f0224f72eac33516bd",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "refinement_interpretation_Prims_Tm_refine_c16bc1b61f58b349bf6fc1c94dcaf83b",
         "token_correspondence_DHGroup.synth_dhparams",
         "token_correspondence_DHGroup.unsynth_dhparams",
         "typing_LowParse.SLow.Combinators.serialize32_kind_precond",
-        "typing_LowParse.Spec.Base.__proj__Mkparser_kind___item__parser_kind_low",
-        "typing_LowParse.Spec.Combinators.and_then_kind",
-        "typing_LowParse.Spec.Combinators.nondep_then",
-        "typing_LowParse.Spec.Combinators.serialize_nondep_then",
-        "typing_LowParse.Spec.VLData.log256_",
-        "typing_LowParse.Spec.VLData.parse_bounded_vldata_kind",
-        "unit_typing"
+        "typing_LowParse.Spec.VLData.log256_"
       ],
       0,
-      "3036c3e29e3f61e7f6e10d5a800307e3"
+      "5bdad2dca507090d577b3ce320e76b2a"
     ],
     [
       "DHGroup.serialize",
@@ -550,7 +473,7 @@
         "typing_DHGroup.params_of_group"
       ],
       0,
-      "f327fd7da79d5fa79dabdab3a97e2552"
+      "b51d7ba8e633ceb104d8bdfecf3c0e44"
     ],
     [
       "DHGroup.serialize_public",
@@ -601,7 +524,7 @@
         "typing_Mem.disjoint", "typing_Mem.tls_define_region"
       ],
       0,
-      "db09aae579acc5ac609e4299fb304580"
+      "342dc1370589af11a712631856343df6"
     ],
     [
       "DHGroup.lemma_dh_param_len_bound",
@@ -613,7 +536,7 @@
         "refinement_interpretation_DHGroup_Tm_refine_31e1e9e28de29ed74e8782cc7196c42f"
       ],
       0,
-      "ea94485fae1aeda486d6a926127e94fa"
+      "ca216bd3be57f1ed157266eecb51dd3f"
     ],
     [
       "DHGroup.parse_partial",
@@ -640,7 +563,7 @@
         "refinement_interpretation_Mem_Tm_refine_f70be9b0cc50942af80d22e44fc9b9c4"
       ],
       0,
-      "8ec3196f51271a812773ce8ffd09e579"
+      "ca41b168ef54401e6fa2adf137093130"
     ]
   ]
 ]

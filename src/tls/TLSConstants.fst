@@ -543,6 +543,8 @@ let isOnlyMACCipherSuite cs =
   | _ -> false
 
 (** Determine the signature algorithm associated to a ciphersuite *)
+// 2018.05.14 SZ: TODO: turn this into a total function
+val sigAlg_of_ciphersuite (cs:cipherSuite) : Dv sigAlg
 let sigAlg_of_ciphersuite cs =
   let open CoreCrypto in
   match cs with
@@ -1639,6 +1641,7 @@ type cert_cb = {
     (ensures fun h0 _ h1 -> modifies_none h0 h1));
 }
 
+abstract
 let mk_cert_cb
     app_ctx
     cert_select_ptr

@@ -413,19 +413,28 @@ noeq type t (region:rgn) (role:TLSConstants.role) : Type0 =
     state: HST.m_rref region (negotiationState role cfg) ns_rel ->
     t region role
 
-private let rec find_ticket12 acc = function
-  | [] -> acc
-  | (tid, t) :: r ->
-    find_ticket12 (if Ticket.Ticket12? t then Some (tid, t) else acc) r
+private
+let rec find_ticket12 (#a:Type0) (acc:option (a * Ticket.ticket))
+    : list (a * Ticket.ticket) -> option (a * Ticket.ticket) =
+    function
+    | [] -> acc
+    | (tid, t) :: r ->
+      find_ticket12 (if Ticket.Ticket12? t then Some (tid, t) else acc) r
 
-private let rec filter_ticket13 acc = function
-  | [] -> List.Tot.rev acc
-  | (tid, t) :: r ->
-    filter_ticket13 (if Ticket.Ticket13? t then (tid, t)::acc else acc) r
+private
+let rec filter_ticket13 (#a:Type0) (acc:list (a * Ticket.ticket))
+    : list (a * Ticket.ticket) -> list (a * Ticket.ticket) =
+    function
+    | [] -> List.Tot.rev acc
+    | (tid, t) :: r ->
+      filter_ticket13 (if Ticket.Ticket13? t then (tid, t)::acc else acc) r
 
-private let rec ticket13_pskinfo acc = function
-  | [] -> List.Tot.rev acc
-  | (tid, t) :: r -> ticket13_pskinfo ((tid, Some?.v (Ticket.ticket_pskinfo t))::acc) r
+private
+let rec ticket13_pskinfo (#a:Type0) (acc:list (a * pskInfo))
+    : list (a * Ticket.ticket) -> list (a * pskInfo) =
+    function
+    | [] -> List.Tot.rev acc
+    | (tid, t) :: r -> ticket13_pskinfo ((tid, Some?.v (Ticket.ticket_pskinfo t))::acc) r
 
 #set-options "--admit_smt_queries true"
 val computeOffer: r:role -> cfg:config -> nonce:TLSInfo.random
@@ -480,14 +489,16 @@ let computeOffer r cfg nonce ks resume now =
     ch_extensions = Some extensions
   }
 
-let rec unseal_tickets acc l : St (list (psk_identifier * Ticket.ticket))
+let rec unseal_tickets (acc:list (psk_identifier * Ticket.ticket))
+                       (l:list (psk_identifier * b:bytes{length b <= 65551}))
+    : St (list (psk_identifier * Ticket.ticket))
   = match l with
   | [] -> List.Tot.rev acc
   | (tid, seal) :: r ->
     let acc =
-      match Ticket.check_ticket seal with
+      match Ticket.check_ticket true seal with
       | Some t -> (tid, t) :: acc
-      | None -> acc in
+      | None -> trace ("WARNING: failed to unseal the session data for ticket "^(print_bytes tid)^" (check sealing key)"); acc in
     unseal_tickets acc r
 
 val create:
@@ -1036,9 +1047,9 @@ private let matches_sigHashAlg_of_signatureScheme sa alg =
       sa' = sa
 
 // Used for clients to verify the server's signature scheme
-let supported_signatureSchemes_12 mode =
+let supported_signatureSchemes_12 mode: Dv (list signatureScheme) =
   let ha0 = sessionHashAlg mode.n_protocol_version mode.n_cipher_suite in
-  let sa = sigAlg_of_ciphersuite mode.n_cipher_suite in
+  let sa: sigAlg = sigAlg_of_ciphersuite mode.n_cipher_suite in
   match mode.n_protocol_version with
   | TLS_1p0 | TLS_1p1 | SSL_3p0 -> [signatureScheme_of_sigHashAlg sa ha0]
   | TLS_1p2 ->
@@ -1229,7 +1240,7 @@ let compute_cs13 cfg o psks shares server_cert =
       | gl ->
         let csg = match ncs with | [] -> None | cs :: _ -> Some (List.Tot.hd gl, cs) in
         let gl' = List.Tot.map group_of_named_group gl in
-        let s = List.Helpers.find_aux gl' share_in_named_group shares in
+        let s: option share = List.Helpers.find_aux gl' share_in_named_group shares in
         s, (if server_cert then csg else None) // Can't do HRR without a certificate
     in
   let psk_kex = find_psk_key_exchange_modes o in

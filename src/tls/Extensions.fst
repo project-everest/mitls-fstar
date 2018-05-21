@@ -1318,7 +1318,7 @@ let serverToNegotiatedExtension cfg cExtL cs ri resuming res sExt =
       Error(AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ ("unhandled server extension: "^(string_of_extension e)))
 
 private
-let rec serverToNegotiatedExtensions_aux cfg cExtL cs ri resuming rpv sExtL =
+let rec serverToNegotiatedExtensions_aux cfg cExtL cs ri resuming rpv (sExtL:list extension) =
   match sExtL with
   | [] -> rpv
   | hd::tl ->
@@ -1396,7 +1396,7 @@ let clientToServerExtension pv cfg cs ri pski ks resuming cext =
   | _ -> None
 
 (* SI: API. Called by Handshake. *)
-let rec choose_clientToServerExtension pv cfg cs ri pski ks resuming cExtL =
+let rec choose_clientToServerExtension pv cfg cs ri pski ks resuming (cExtL:list extension) =
   match cExtL with
   | [] -> []
   | hd::cExtL ->
