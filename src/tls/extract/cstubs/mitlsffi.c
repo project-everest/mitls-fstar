@@ -306,15 +306,6 @@ int MITLS_CALLCONV FFI_mitls_configure_named_groups(/* in */ mitls_state *state,
     return 1;
 }
 
-void dump(const char *buffer, size_t len)
-{
-  int i;
-  for(i=0; i<len; i++) {
-    printf("%02x", buffer[i] & 0xFF);
-    if (i % 32 == 31 || i == len-1) printf("\n");
-  }
-}
-
 static TLSConstants_alpn alpn_list_of_array(const mitls_alpn *alpn, size_t alpn_count)
 {
   TLSConstants_alpn apl = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
