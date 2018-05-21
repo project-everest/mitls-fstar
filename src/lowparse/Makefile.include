@@ -4,6 +4,7 @@ LOWPARSE_SPEC_FILES= \
         LowParse.Math.fst \
 	LowParse.Bytes.fst \
         LowParse.BigEndian.fst \
+        LowParse.BigEndianImpl.Base.fst \
 	LowParse.Spec.Base.fst \
 	LowParse.Spec.Combinators.fst \
         LowParse.Spec.Int.fsti \
@@ -27,7 +28,7 @@ LOWPARSE_SLOW_FILES= \
 	LowParse.SLow.List.fst \
 	LowParse.SLow.FLData.fst \
         LowParse.Bytes32.fst \
-        LowParse.BigEndianImpl.fst \
+        LowParse.BigEndianImpl.SLow.fst \
         LowParse.SLow.Int.fsti \
         LowParse.SLow.Int.Aux.fst \
         LowParse.SLow.Int.fst \
@@ -45,8 +46,20 @@ LOWPARSE_SLOW_FILES= \
         LowParseExample2.fst \
 
 
+LOWPARSE_LOW_FILES= \
+        LowParse.BigEndianImpl.Low.fst \
+        LowParse.Slice.fst \
+        LowParse.Low.Base.fst \
+        LowParse.Low.Combinators.fst \
+        LowParse.Low.Int.Aux.fst \
+        LowParse.Low.Int.fsti \
+        LowParse.Low.Int.fst \
+        LowParse.Low.List.fst \
+
+
 LOWPARSE_FILES= \
 	$(LOWPARSE_SPEC_FILES) \
 	$(LOWPARSE_SLOW_FILES) \
+        $(LOWPARSE_LOW_FILES) \
 
 
