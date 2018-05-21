@@ -100,7 +100,6 @@ SOURCES = \
   Hacl_Curve25519.c \
   Hacl_Ed25519.c \
   Hacl_Poly1305_64.c \
-  Hacl_HMAC_SHA2_256.c \
   AEAD_Poly1305_64.c \
   Hacl_Chacha20_Vec128.c \
 # Taken from ls hacl-star/providers/multiplexer/c/*.c | xargs basename
