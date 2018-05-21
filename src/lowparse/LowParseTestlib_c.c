@@ -2,8 +2,6 @@
 
 #include "Prims.h"
 #include "FStar.h"
-#include "kremstr.h"
-#include "krembytes.h"
 
 #include <stdlib.h>
 #include <stdio.h>
