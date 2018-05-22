@@ -10,6 +10,8 @@ module HST = FStar.HyperStack.ST
 module HS = FStar.HyperStack
 module B = FStar.Buffer
 
+#set-options "--z3rlimit 16"
+
 let parse32_u8 =
   (fun (input: pointer buffer8) (len: pointer U32.t) ->
     let h = HST.get () in
