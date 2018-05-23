@@ -49,9 +49,9 @@ let validate32_synth
   (#k: parser_kind)
   (#t1: Type0)
   (#t2: Type0)
-  (p1: parser k t1)
-  (f2: t1 -> GTot t2)
+  (#p1: parser k t1)
   (p1' : validator32 p1)
+  (f2: t1 -> GTot t2)
   (u: unit {
     synth_injective f2
   })
@@ -64,9 +64,9 @@ let validate_nochk32_synth
   (#k: parser_kind)
   (#t1: Type0)
   (#t2: Type0)
-  (p1: parser k t1)
-  (f2: t1 -> GTot t2)
+  (#p1: parser k t1)
   (p1' : validator_nochk32 p1)
+  (f2: t1 -> GTot t2)
   (u: unit {
     synth_injective f2
   })
@@ -109,7 +109,55 @@ let validate_nochk32_constant_size
 = fun (input: pointer buffer8) (len: pointer U32.t) ->
   advance_slice_ptr input len sz
 
-module M = FStar.Modifies
+inline_for_extraction
+let accessor_weaken
+  (#k1: parser_kind)
+  (#t1: Type)
+  (#p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (#p2: parser k2 t2)
+  (#rel: (t1 -> t2 -> GTot Type0))
+  (a: accessor p1 p2 rel)
+  (rel': (t1 -> t2 -> GTot Type0))
+  (u: unit { forall x1 x2 . rel x1 x2 ==> rel' x1 x2 } )
+: Tot (accessor p1 p2 rel')
+= fun input res -> a input res
+
+let rel_compose (#t1 #t2 #t3: Type) (r12: t1 -> t2 -> GTot Type0) (r23: t2 -> t3 -> GTot Type0) (x1: t1) (x3: t3) : GTot Type0 =
+  exists x2 . r12 x1 x2 /\ r23 x2 x3
+
+inline_for_extraction
+let accessor_compose
+  (#k1: parser_kind)
+  (#t1: Type)
+  (#p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (#p2: parser k2 t2)
+  (#k3: parser_kind)
+  (#t3: Type)
+  (#p3: parser k3 t3)
+  (#rel12: (t1 -> t2 -> GTot Type0))
+  (#rel23: (t2 -> t3 -> GTot Type0))
+  (a12: accessor p1 p2 rel12)
+  (a23: accessor p2 p3 rel23)
+: Tot (accessor p1 p3 (rel12 `rel_compose` rel23))
+= fun input res ->
+    a12 input res;
+    a23 input res
+
+inline_for_extraction
+let accessor_synth
+  (#k: parser_kind)
+  (#t1: Type)
+  (#t2: Type)
+  (#p1: parser k t1)
+  (v1: validator_nochk32 p1)
+  (f: t1 -> GTot t2)
+  (u: unit {  synth_injective f } )
+: Tot (accessor (parse_synth p1 f) p1 (fun x y -> f y == x))
+= fun input res -> truncate32 v1 input res
 
 inline_for_extraction
 val nondep_then_fst
@@ -120,19 +168,7 @@ val nondep_then_fst
   (#k2: parser_kind)
   (#t2: Type0)
   (p2: parser k2 t2)
-  (input: pointer buffer8)
-  (sz: pointer U32.t)
-: HST.Stack unit
-  (requires (fun h ->
-    is_slice_ptr h input sz /\
-    Some? (parse_from_slice_ptr (nondep_then p1 p2) h input sz)
-  ))
-  (ensures (fun h _ h' ->
-    M.modifies (loc_slice input sz) h h' /\
-    includes_slice_ptr h h' input sz /\ (
-    let (Some ((x, _), _)) = parse_from_slice_ptr (nondep_then p1 p2) h input sz in
-    exactly_parse_from_slice_ptr p1 h' input sz == Some x
-  )))
+: Tot (accessor (p1 `nondep_then` p2) p1 (fun x y -> y == fst x))
 
 let nondep_then_fst #k1 #t1 #p1 p1' #k2 #t2 p2 input sz =
   truncate32 p1' input sz
@@ -147,19 +183,7 @@ val nondep_then_snd
   (#t2: Type0)
   (#p2: parser k2 t2)
   (p2' : validator_nochk32 p2)
-  (input: pointer buffer8)
-  (sz: pointer U32.t)
-: HST.Stack unit
-  (requires (fun h ->
-    is_slice_ptr h input sz /\
-    Some? (parse_from_slice_ptr (nondep_then p1 p2) h input sz)
-  ))
-  (ensures (fun h _ h' ->
-    M.modifies (loc_slice input sz) h h' /\
-    includes_slice_ptr h h' input sz /\ (
-    let (Some ((_, x), _)) = parse_from_slice_ptr (nondep_then p1 p2) h input sz in
-    exactly_parse_from_slice_ptr p2 h' input sz == Some x
-  )))
+: Tot (accessor (p1 `nondep_then` p2) p2 (fun x y -> y == snd x))
 
 let nondep_then_snd #k1 #t1 #p1 p1' #k2 #t2 #p2 p2' input sz =
   p1' input sz;

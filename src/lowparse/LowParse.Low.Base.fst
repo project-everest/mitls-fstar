@@ -176,6 +176,25 @@ let exactly_parse_from_slice_ptr
   (ensures (fun _ -> True))
 = exactly_parse_from_slice p h (B.get h b 0) (B.get h sz 0)
 
+let exactly_parse_from_slice_ptr_intro
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (h: HS.mem)
+  (b: pointer buffer8)
+  (sz: pointer U32.t)
+: Lemma
+  (requires (
+    is_slice_ptr h b sz /\
+    Some? (parse_from_slice_ptr p h b sz)
+  ))
+  (ensures (
+    let (Some (x, consumed)) = parse_from_slice_ptr p h b sz in
+    consumed <= U32.v (B.get h sz 0) /\
+    exactly_parse_from_slice p h (gsub (B.get h b 0) 0ul (U32.uint_to_t consumed)) (U32.uint_to_t consumed) == Some x
+  ))
+= exactly_parse_from_slice_intro p h (B.get h b 0) (B.get h sz 0)
+
 (* A validator, if succeeds, returns true and leaves the tail slice; otherwise returns false. *)
 
 let loc_slice (b: pointer buffer8) (sz: pointer U32.t) : GTot M.loc =
@@ -546,3 +565,32 @@ let rec is_buffer_concat_disjoint
       q
       l1
       l2
+
+
+
+inline_for_extraction
+let accessor
+  (#k1: parser_kind)
+  (#t1: Type)
+  (p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (p2: parser k2 t2)
+  (rel: (t1 -> t2 -> GTot Type0))
+: Tot Type
+= (input: pointer buffer8) ->
+  (len: pointer U32.t) ->
+  HST.Stack unit
+  (requires (fun h ->
+    is_slice_ptr h input len /\
+    Some? (parse_from_slice_ptr p1 h input len)
+  ))
+  (ensures (fun h _ h' ->
+    M.modifies (loc_slice input len) h h' /\
+    includes_slice_ptr h h' input len /\ (
+    let Some (x1, _) = parse_from_slice_ptr p1 h input len in
+    let ps2 = exactly_parse_from_slice_ptr p2 h' input len in
+    Some? ps2 /\ (
+    let Some x2 = ps2 in
+    rel x1 x2
+  ))))
