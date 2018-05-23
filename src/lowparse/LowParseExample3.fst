@@ -7,7 +7,7 @@ module U32 = FStar.UInt32
 module U16 = FStar.UInt16
 module Cast = FStar.Int.Cast
 
-#reset-options "--z3rlimit 16"
+#reset-options "--z3rlimit 32"
 
 let dummy
   (input: buffer8)
