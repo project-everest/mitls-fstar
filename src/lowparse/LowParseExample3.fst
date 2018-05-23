@@ -12,7 +12,8 @@ module Cast = FStar.Int.Cast
 let dummy
   (input: buffer8)
   (len: U32.t)
-: HST.Stack bool
+  (which: U32.t)
+: HST.Stack U32.t
   (requires (fun h -> is_slice h input len))
   (ensures (fun _ _ _ -> True))
 = HST.push_frame ();
@@ -21,11 +22,17 @@ let dummy
   let res =
     if validate32_t input' len'
     then
-      let x1 : U16.t = read_from_slice access_a parse32_u16 input len in
-      let x2 : U32.t = read_from_slice access_b parse32_u32 input len in
-      let x3 : U16.t = read_from_slice access_c parse32_u16 input len in
-      (Cast.uint16_to_uint32 x1) `U32.lt` x2 && x2 `U32.lt` (Cast.uint16_to_uint32 x3)
-    else false
+      if which = 42ul
+      then
+        let x : U16.t = read_from_slice access_a parse32_u16 input len in
+        Cast.uint16_to_uint32 x
+      else if which = 1729ul
+      then
+        read_from_slice access_b parse32_u32 input len
+      else
+        let x : U16.t = read_from_slice access_c parse32_u16 input len in
+        Cast.uint16_to_uint32 x
+    else 0ul
   in
   HST.pop_frame ();
   res
