@@ -19,9 +19,13 @@ FSTAR_OPTIONS += --use_hints --use_two_phase_tc true --include . # --use_extract
 
 MY_FSTAR=$(FSTAR_HOME)/bin/fstar.exe --cache_checked_modules --cache_dir $(FSTAR_OUT_DIR) --odir $(FSTAR_OUT_DIR) $(addprefix --include , $(INCLUDE_PATHS)) $(INCLUDE_KREMLIN)
 
-MY_KREMLIN=$(KREMLIN_HOME)/krml -bundle 'LowParse.\*'  -add-include '"kremlin/fstar_bytes.h"' -add-include '"kremlin/prims_string.h"' $(KREMLIN_HOME)/kremlib/kremstr.c -drop FStar.Bytes
+INTERMEDIATE_LEVEL= -add-include '"kremlin/fstar_bytes.h"' -add-include '"kremlin/prims_string.h"' $(KREMLIN_HOME)/kremlib/kremstr.c -drop FStar.Bytes LowParseTestlib_c.c
 
-EXAMPLES=Example Example2
+LOW_LEVEL=
+
+MY_KREMLIN=$(KREMLIN_HOME)/krml -bundle 'LowParse.\*'
+
+EXAMPLES=Example Example2 Example3
 ROOT_FILES=LowParse.SLow.fst LowParse.Low.fst $(addprefix LowParse, $(addsuffix .fst, $(EXAMPLES))) LowParseTestlib.fst
 
 EXCLUDE_KRML_FILES=$(FSTAR_OUT_DIR)/prims.krml
@@ -59,9 +63,13 @@ $(FSTAR_OUT_DIR)/%.krml:
 $(EXAMPLES): %: %/a.out
 
 %/a.out:
-	$(MY_KREMLIN) -tmpdir $(EXAMPLE) -bundle LowParse$(EXAMPLE)'.Aux' -no-prefix LowParse$(EXAMPLE) $(EXAMPLE_KRML_FILES) LowParseTestlib_c.c -o $@
+	$(MY_KREMLIN) $(KREMLIN_ARGS) -tmpdir $(EXAMPLE) -bundle LowParse$(EXAMPLE)'.Aux' -no-prefix LowParse$(EXAMPLE) $(EXAMPLE_KRML_FILES) -o $@
 	$@
 
 extract-all: $(EXAMPLES)
+
+Example: KREMLIN_ARGS=$(INTERMEDIATE_LEVEL)
+Example2: KREMLIN_ARGS=$(INTERMEDIATE_LEVEL)
+Example3: KREMLIN_ARGS=$(LOW_LEVEL)
 
 .PHONY: all verify-all clean extract-all $(EXAMPLES)
