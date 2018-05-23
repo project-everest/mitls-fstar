@@ -15,24 +15,24 @@ module B = FStar.Buffer
 
 inline_for_extraction
 let parse32_u8 =
-  (fun (input: pointer buffer8) (len: pointer U32.t) ->
+  (fun input ->
     let h = HST.get () in
-    let _ = Unique.parse_u8_unique (B.as_seq h (B.get h input 0)) in
-    Aux.parse32_u8 input len
+    let _ = Unique.parse_u8_unique (B.as_seq h input) in
+    Aux.parse32_u8 input
   )
 
 inline_for_extraction
 let parse32_u16 =
-  (fun (input: pointer buffer8) (len: pointer U32.t) ->
+  (fun input ->
     let h = HST.get () in
-    let _ = Unique.parse_u16_unique (B.as_seq h (B.get h input 0)) in
-    Aux.parse32_u16 input len
+    let _ = Unique.parse_u16_unique (B.as_seq h input) in
+    Aux.parse32_u16 input
   )
 
 inline_for_extraction
 let parse32_u32 =
-  (fun (input: pointer buffer8) (len: pointer U32.t) ->
+  (fun input ->
     let h = HST.get () in
-    let _ = Unique.parse_u32_unique (B.as_seq h (B.get h input 0)) in
-    Aux.parse32_u32 input len
+    let _ = Unique.parse_u32_unique (B.as_seq h input) in
+    Aux.parse32_u32 input
   )

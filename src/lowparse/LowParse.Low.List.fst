@@ -138,54 +138,56 @@ val list_is_nil
 let list_is_nil #k #t p input len =
   B.index len 0ul = 0ul
 
+/// TODO: generalize accessors with conditions
+
 inline_for_extraction
-val list_head
+let list_head
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (input: buffer8)
+: HST.Stack buffer8
+  (requires (fun h ->
+    B.live h input /\ (
+    let ps = parse (parse_list p) (B.as_seq h input) in
+    Some? ps /\ (
+    let Some (v, _) = ps in
+    Cons? v
+  ))))
+  (ensures (fun h res h' ->
+    M.modifies (M.loc_none) h h' /\
+    B.live h' input /\
+    B.includes input res /\ (
+    let Some ((v::_), _) = parse (parse_list p) (B.as_seq h input) in
+    let ps = parse p (B.as_seq h res) in
+    Some? ps /\ (
+    let (Some (v', _)) = ps in
+    v' == v
+  ))))
+= input
+
+inline_for_extraction
+let list_tail
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
   (v: validator_nochk32 p)
-  (input: pointer buffer8)
-  (len: pointer U32.t)
-: HST.Stack unit
+  (input: buffer8)
+: HST.Stack buffer8
   (requires (fun h ->
-    is_slice_ptr h input len /\ (
-    let ps = parse_from_slice_ptr (parse_list p) h input len in
+    B.live h input /\ (
+    let ps = parse (parse_list p) (B.as_seq h input) in
     Some? ps /\ (
     let Some (v, _) = ps in
     Cons? v
   ))))
-  (ensures (fun h _ h' ->
-    M.modifies (loc_slice input len) h h' /\
-    includes_slice_ptr h h' input len /\ (
-    let Some ((v::_), _) = parse_from_slice_ptr (parse_list p) h input len in
-    exactly_parse_from_slice_ptr p h' input len == Some v
-  )))
-
-let list_head #k #t #p v input len =
-  truncate32 v input len
-
-inline_for_extraction
-val list_tail
-  (#k: parser_kind)
-  (#t: Type0)
-  (p: parser k t)
-  (v: validator_nochk32 p)
-  (input: pointer buffer8)
-  (len: pointer U32.t)
-: HST.Stack unit
-  (requires (fun h ->
-    is_slice_ptr h input len /\ (
-    let ps = parse_from_slice_ptr (parse_list p) h input len in
+  (ensures (fun h res h' ->
+    M.modifies (M.loc_none) h h' /\
+    B.live h' input /\ (
+    let Some ((_::v), _) = parse (parse_list p) (B.as_seq h input) in
+    let ps = parse (parse_list p) (B.as_seq h res) in
     Some? ps /\ (
-    let Some (v, _) = ps in
-    Cons? v
+    let (Some (v', _)) = ps in
+    v == v'
   ))))
-  (ensures (fun h _ h' ->
-    M.modifies (loc_slice input len) h h' /\
-    includes_slice_ptr h h' input len /\ (
-    let Some ((_::v), _) = parse_from_slice_ptr (parse_list p) h input len in
-    exactly_parse_from_slice_ptr (parse_list p) h' input len == Some v
-  )))
-
-let list_tail #k #t p v input len =
-  v input len
+= B.offset input (v input)

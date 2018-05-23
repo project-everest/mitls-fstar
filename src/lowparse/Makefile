@@ -25,7 +25,7 @@ LOW_LEVEL=
 
 MY_KREMLIN=$(KREMLIN_HOME)/krml -bundle 'LowParse.\*'
 
-EXAMPLES=Example Example2 Example3 Example4
+EXAMPLES=Example Example2 Example3
 ROOT_FILES=LowParse.SLow.fst LowParse.Low.fst $(addprefix LowParse, $(addsuffix .fst, $(EXAMPLES))) LowParseTestlib.fst
 
 EXCLUDE_KRML_FILES=$(FSTAR_OUT_DIR)/prims.krml
@@ -71,6 +71,5 @@ extract-all: $(EXAMPLES)
 Example: KREMLIN_ARGS=$(INTERMEDIATE_LEVEL)
 Example2: KREMLIN_ARGS=$(INTERMEDIATE_LEVEL)
 Example3: KREMLIN_ARGS=$(LOW_LEVEL)
-Example4: KREMLIN_ARGS=$(LOW_LEVEL)
 
 .PHONY: all verify-all clean extract-all $(EXAMPLES)

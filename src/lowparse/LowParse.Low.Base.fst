@@ -303,19 +303,19 @@ let parser32
   (#t: Type0)
   (p: parser k t)
 : Tot Type0
-= (input: pointer buffer8) ->
-  (sz: pointer U32.t) ->
+= (input: buffer8) ->
   HST.Stack t
   (requires (fun h ->
-    is_slice_ptr h input sz /\
-    Some? (parse_from_slice_ptr p h input sz)
+    B.live h input /\
+    Some? (parse p (B.as_seq h input))
   ))
   (ensures (fun h res h' ->
-    let ps = parse_from_slice_ptr p h input sz in
+    M.modifies M.loc_none h h' /\
+    B.live h' input /\ (
+    let ps = parse p (B.as_seq h input) in
     let (Some (res', _)) = ps in
-    res == res' /\
-    validator32_postcond p input sz h true h'
-  ))
+    res == res'
+  )))
 
 inline_for_extraction
 let validator_nochk32
@@ -323,16 +323,19 @@ let validator_nochk32
   (#t: Type0)
   (p: parser k t)
 : Tot Type0
-= (input: pointer buffer8) ->
-  (sz: pointer U32.t) ->
-  HST.Stack unit
+= (input: buffer8) ->
+  HST.Stack U32.t
   (requires (fun h ->
-    is_slice_ptr h input sz /\
-    Some? (parse_from_slice_ptr p h input sz)
+    B.live h input /\
+    Some? (parse p (B.as_seq h input))
   ))
   (ensures (fun h res h' ->
-    validator32_postcond p input sz h true h'
-  ))
+    M.modifies M.loc_none h h' /\
+    B.live h' input /\
+    U32.v res <= B.length input /\ (
+    let (Some (x, res')) = parse p (B.as_seq h input) in
+    U32.v res == res'
+  )))
 
 inline_for_extraction
 val truncate32
@@ -362,9 +365,7 @@ let truncate32 #k #t #p v input sz =
   let h = HST.get () in
   let b0 = B.index input 0ul in
   let sz0 = B.index sz 0ul in
-  v input sz;
-  let tail_sz = B.index sz 0ul in
-  let sz' = U32.sub sz0 tail_sz in
+  let sz' = v b0 in
   let b' = B.sub b0 0ul sz' in
   B.upd input 0ul b' ;
   B.upd sz 0ul sz' ;
@@ -566,8 +567,6 @@ let rec is_buffer_concat_disjoint
       l1
       l2
 
-
-
 inline_for_extraction
 let accessor
   (#k1: parser_kind)
@@ -578,25 +577,25 @@ let accessor
   (p2: parser k2 t2)
   (rel: (t1 -> t2 -> GTot Type0))
 : Tot Type
-= (input: pointer buffer8) ->
-  (len: pointer U32.t) ->
-  HST.Stack unit
+= (input: buffer8) ->
+  HST.Stack buffer8
   (requires (fun h ->
-    is_slice_ptr h input len /\
-    Some? (parse_from_slice_ptr p1 h input len)
+    B.live h input /\
+    Some? (parse p1 (B.as_seq h input))
   ))
-  (ensures (fun h _ h' ->
-    M.modifies (loc_slice input len) h h' /\
-    includes_slice_ptr h h' input len /\ (
-    let Some (x1, _) = parse_from_slice_ptr p1 h input len in
-    let ps2 = exactly_parse_from_slice_ptr p2 h' input len in
+  (ensures (fun h res h' ->
+    M.modifies (M.loc_none) h h' /\
+    B.live h' input /\
+    B.includes input res /\ (
+    let Some (x1, _) = parse p1 (B.as_seq h input) in
+    let ps2 = parse p2 (B.as_seq h res) in
     Some? ps2 /\ (
-    let Some x2 = ps2 in
+    let Some (x2, _) = ps2 in
     rel x1 x2
   ))))
 
 inline_for_extraction
-let read_from_slice
+let read_from_buffer
   (#k1: parser_kind)
   (#t1: Type)
   (#p1: parser k1 t1)
@@ -607,48 +606,14 @@ let read_from_slice
   (a12: accessor p1 p2 rel)
   (p2' : parser32 p2)
   (input: buffer8)
-  (len: U32.t)
 : HST.Stack t2
   (requires (fun h ->
-    is_slice h input len /\
-    Some? (parse_from_slice p1 h input len)
+    B.live h input /\
+    Some? (parse p1 (B.as_seq h input))
   ))
   (ensures (fun h y h' ->
     M.modifies M.loc_none h h' /\ (
-    let (Some (x, _)) = parse_from_slice p1 h input len in
+    let (Some (x, _)) = parse p1 (B.as_seq h input) in
     rel x y
   )))
-= HST.push_frame () ;
-  let input' = B.create input 1ul in
-  let len' = B.create len 1ul in
-  a12 input' len' ;
-  let res = p2' input' len' in
-  HST.pop_frame ();
-  res
-
-inline_for_extraction
-let read_from_slice_ptr
-  (#k1: parser_kind)
-  (#t1: Type)
-  (#p1: parser k1 t1)
-  (#k2: parser_kind)
-  (#t2: Type)
-  (#p2: parser k2 t2)
-  (#rel: (t1 -> t2 -> GTot Type0))
-  (a12: accessor p1 p2 rel)
-  (p2' : parser32 p2)
-  (input: pointer buffer8)
-  (len: pointer U32.t)
-: HST.Stack t2
-  (requires (fun h ->
-    is_slice_ptr h input len /\
-    Some? (parse_from_slice_ptr p1 h input len)
-  ))
-  (ensures (fun h y h' ->
-    M.modifies M.loc_none h h' /\ (
-    let (Some (x, _)) = parse_from_slice_ptr p1 h input len in
-    rel x y
-  )))
-= let input0 = B.index input 0ul in
-  let len0 = B.index len 0ul in
-  read_from_slice a12 p2' input0 len0
+= p2' (a12 input)
