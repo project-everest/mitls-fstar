@@ -594,3 +594,61 @@ let accessor
     let Some x2 = ps2 in
     rel x1 x2
   ))))
+
+inline_for_extraction
+let read_from_slice
+  (#k1: parser_kind)
+  (#t1: Type)
+  (#p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (#p2: parser k2 t2)
+  (#rel: (t1 -> t2 -> GTot Type0))
+  (a12: accessor p1 p2 rel)
+  (p2' : parser32 p2)
+  (input: buffer8)
+  (len: U32.t)
+: HST.Stack t2
+  (requires (fun h ->
+    is_slice h input len /\
+    Some? (parse_from_slice p1 h input len)
+  ))
+  (ensures (fun h y h' ->
+    M.modifies M.loc_none h h' /\ (
+    let (Some (x, _)) = parse_from_slice p1 h input len in
+    rel x y
+  )))
+= HST.push_frame () ;
+  let input' = B.create input 1ul in
+  let len' = B.create len 1ul in
+  a12 input' len' ;
+  let res = p2' input' len' in
+  HST.pop_frame ();
+  res
+
+inline_for_extraction
+let read_from_slice_ptr
+  (#k1: parser_kind)
+  (#t1: Type)
+  (#p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (#p2: parser k2 t2)
+  (#rel: (t1 -> t2 -> GTot Type0))
+  (a12: accessor p1 p2 rel)
+  (p2' : parser32 p2)
+  (input: pointer buffer8)
+  (len: pointer U32.t)
+: HST.Stack t2
+  (requires (fun h ->
+    is_slice_ptr h input len /\
+    Some? (parse_from_slice_ptr p1 h input len)
+  ))
+  (ensures (fun h y h' ->
+    M.modifies M.loc_none h h' /\ (
+    let (Some (x, _)) = parse_from_slice_ptr p1 h input len in
+    rel x y
+  )))
+= let input0 = B.index input 0ul in
+  let len0 = B.index len 0ul in
+  read_from_slice a12 p2' input0 len0
