@@ -2,7 +2,7 @@ module Format.UncompressedPointRepresentation
 
 module B = FStar.Bytes
 module U32 = FStar.UInt32
-module LP = LowParse.SLow
+module LP = LowParse.SLow.Base
 
 (* Types *)
 
