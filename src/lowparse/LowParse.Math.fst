@@ -29,3 +29,9 @@ let lt_mul_add_reg_r
   (requires (x * s < y * s + s))
   (ensures (x <= y))
 = distributivity_add_left x (y + 1) s
+
+let mult_decomp
+  (i: pos) (j: nat)
+: Lemma
+  (i * j == j + (i - 1) * j)
+= ()
