@@ -13,32 +13,11 @@ type buffer8 = B.buffer FStar.UInt8.t
 inline_for_extraction
 type pointer (t: Type) = (b: Buffer.buffer t { B.length b == 1 } )
 
-let is_slice (h: HS.mem) (#t: Type) (b: Buffer.buffer t) (len: U32.t) : GTot Type0 =
+module I32 = FStar.Int32
+
+let is_slice (h: HS.mem) (#t: Type) (b: Buffer.buffer t) (len: I32.t) : GTot Type0 =
   B.live h b /\
-  B.length b == U32.v len
-
-let is_slice_ptr (h: HS.mem) (#t: Type) (b: pointer (B.buffer t)) (len: pointer U32.t) : GTot Type0 =
-  B.live h b /\
-  B.live h len /\
-  B.disjoint b len /\ (
-    let b' = B.get h b 0 in
-    let len' = B.get h len 0 in
-    B.disjoint b' b /\
-    B.disjoint b' len /\
-    is_slice h b' len'
-  )
-
-let includes_slice_ptr (h h' : HS.mem) (#t: Type) (b: pointer (B.buffer t)) (len: pointer U32.t) : GTot Type0 =
-  is_slice_ptr h b len /\
-  is_slice_ptr h' b len /\
-  B.get h b 0 `B.includes` B.get h' b 0
-
-let slice_ptr_as_seq 
-  (h: HS.mem) (#t: Type) (b: pointer (B.buffer t)) (len: pointer U32.t) : Ghost (Seq.seq t)
-  (requires (is_slice_ptr h b len))
-  (ensures (fun _ -> True))
-= let b' = B.get h b 0 in
-  B.as_seq h b'
+  B.length b == I32.v len
 
 let is_tail_of (#t: Type) (b' b : B.buffer t) : GTot Type0 =
   B.length b' <= B.length b /\
@@ -60,7 +39,7 @@ let parse_from_slice
   (p: parser k t)
   (h: HS.mem)
   (b: buffer8)
-  (sz: U32.t)
+  (sz: I32.t)
 : Ghost (option (t * nat))
   (requires (is_slice h b sz))
   (ensures (fun y ->
@@ -78,7 +57,7 @@ let exactly_parse_from_slice
   (p: parser k t)
   (h: HS.mem)
   (b: buffer8)
-  (sz: U32.t)
+  (sz: I32.t)
 : Ghost (option t)
   (requires (is_slice h b sz))
   (ensures (fun y ->
@@ -92,7 +71,7 @@ let exactly_parse_from_slice
   ))
 = match parse p (B.as_seq h b) with
   | Some (x, len) ->
-    if len = U32.v sz
+    if len = I32.v sz
     then Some x
     else None
   | _ -> None
@@ -114,7 +93,7 @@ let exactly_parse_from_slice_intro'
   (p: parser k t)
   (h: HS.mem)
   (b: buffer8)
-  (sz: U32.t)
+  (sz: I32.t)
   (x: t)
   (consumed: nat)
   (u: unit {
@@ -124,8 +103,8 @@ let exactly_parse_from_slice_intro'
 : Lemma
   (ensures (
     is_slice h b sz /\
-    consumed <= U32.v sz /\
-    exactly_parse_from_slice p h (gsub b 0ul (U32.uint_to_t consumed)) (U32.uint_to_t consumed) == Some x
+    consumed <= I32.v sz /\
+    exactly_parse_from_slice p h (gsub b 0ul (U32.uint_to_t consumed)) (I32.int_to_t consumed) == Some x
   ))
 = assert (no_lookahead_weak_on p (B.as_seq h b) (B.as_seq h (gsub b 0ul (U32.uint_to_t consumed))))
 
@@ -135,7 +114,7 @@ let exactly_parse_from_slice_intro
   (p: parser k t)
   (h: HS.mem)
   (b: buffer8)
-  (sz: U32.t)
+  (sz: I32.t)
 : Lemma
   (requires (
     is_slice h b sz /\
@@ -143,88 +122,35 @@ let exactly_parse_from_slice_intro
   ))
   (ensures (
     let (Some (x, consumed)) = parse_from_slice p h b sz in
-    consumed <= U32.v sz /\
-    exactly_parse_from_slice p h (gsub b 0ul (U32.uint_to_t consumed)) (U32.uint_to_t consumed) == Some x
+    consumed <= I32.v sz /\
+    exactly_parse_from_slice p h (gsub b 0ul (U32.uint_to_t consumed)) (I32.int_to_t consumed) == Some x
   ))
 //  [SMTPat (parse_from_slice p h b sz)]
 = let (Some (x, consumed)) = parse_from_slice p h b sz in
   exactly_parse_from_slice_intro' p h b sz x consumed ()
 
-unfold
-let parse_from_slice_ptr
-  (#k: parser_kind)
-  (#t: Type0)
-  (p: parser k t)
-  (h: HS.mem)
-  (b: pointer buffer8)
-  (sz: pointer U32.t)
-: Ghost (option (t * nat))
-  (requires (is_slice_ptr h b sz))
-  (ensures (fun _ -> True))
-= parse_from_slice p h (B.get h b 0) (B.get h sz 0)
-
-unfold
-let exactly_parse_from_slice_ptr
-  (#k: parser_kind)
-  (#t: Type0)
-  (p: parser k t)
-  (h: HS.mem)
-  (b: pointer buffer8)
-  (sz: pointer U32.t)
-: Ghost (option t)
-  (requires (is_slice_ptr h b sz))
-  (ensures (fun _ -> True))
-= exactly_parse_from_slice p h (B.get h b 0) (B.get h sz 0)
-
-let exactly_parse_from_slice_ptr_intro
-  (#k: parser_kind)
-  (#t: Type0)
-  (p: parser k t)
-  (h: HS.mem)
-  (b: pointer buffer8)
-  (sz: pointer U32.t)
-: Lemma
-  (requires (
-    is_slice_ptr h b sz /\
-    Some? (parse_from_slice_ptr p h b sz)
-  ))
-  (ensures (
-    let (Some (x, consumed)) = parse_from_slice_ptr p h b sz in
-    consumed <= U32.v (B.get h sz 0) /\
-    exactly_parse_from_slice p h (gsub (B.get h b 0) 0ul (U32.uint_to_t consumed)) (U32.uint_to_t consumed) == Some x
-  ))
-= exactly_parse_from_slice_intro p h (B.get h b 0) (B.get h sz 0)
-
-(* A validator, if succeeds, returns true and leaves the tail slice; otherwise returns false. *)
-
-let loc_slice (b: pointer buffer8) (sz: pointer U32.t) : GTot M.loc =
-  M.loc_union (M.loc_buffer b) (M.loc_buffer sz)
+(* A validator, if succeeds, returns the remaining length; otherwise returns a negative number. *)
 
 let validator32_postcond
   (#k: parser_kind)
   (#t: Type0)
   (p: parser k t)
-  (input: pointer buffer8)
-  (sz: pointer U32.t)
+  (input: buffer8)
+  (sz: I32.t)
   (h: HS.mem)
-  (res: bool)
+  (res: Int32.t)
   (h' : HS.mem)
 : GTot Type0
-= is_slice_ptr h input sz /\
-  M.modifies (loc_slice input sz) h h' /\ (
-    let pv = parse_from_slice_ptr p h input sz in
-    if res
+= is_slice h input sz /\
+  M.modifies M.loc_none h h' /\ (
+    let pv = parse_from_slice p h input sz in
+    if I32.v res >= 0
     then
-      is_slice_ptr h' input sz /\
       Some? pv /\ (
         let Some (_, consumed) = pv in
-        let len' = U32.uint_to_t (U32.v (B.get h sz 0) - consumed) in
-        B.get h' input 0 == B.sub (B.get h input 0) (U32.uint_to_t consumed) len' /\
-        B.get h' sz 0 == len'
+        I32.v res == I32.v sz - consumed
       )
     else
-      B.live h' input /\
-      B.live h' sz /\
       None? pv
   )
 
@@ -234,68 +160,15 @@ let validator32
   (#t: Type0)
   (p: parser k t)
 : Tot Type0
-= (input: pointer buffer8) ->
-  (sz: pointer U32.t) ->
-  HST.Stack bool
+= (input: buffer8) ->
+  (sz: I32.t) ->
+  HST.Stack I32.t
   (requires (fun h ->
-    is_slice_ptr h input sz
+    is_slice h input sz
   ))
   (ensures (fun h res h' ->
     validator32_postcond p input sz h res h'
   ))
-
-(* Derivative: if vp is a validator, then validate_and_truncate vp returns true iff input is valid, and if so, truncates to the parsing slice. *)
-
-inline_for_extraction
-val validate32_and_truncate32
-  (#k: parser_kind)
-  (#t: Type0)
-  (#p: parser k t)
-  (vp: validator32 p)
-  (b: pointer buffer8)
-  (sz: pointer U32.t)
-: HST.Stack bool
-  (requires (fun h ->
-    is_slice_ptr h b sz
-  ))
-  (ensures (fun h res h' ->
-    M.modifies (loc_slice b sz) h h' /\
-    is_slice_ptr h b sz /\ (
-    let pb = parse_from_slice_ptr p h b sz in
-    if res
-    then
-      Some? pb /\ (
-        let (Some (v, consumed)) = pb in
-        is_slice_ptr h' b sz /\
-        consumed <= B.length (B.get h b 0) /\
-        B.get h' b 0 == gsub (B.get h b 0) 0ul (U32.uint_to_t consumed) /\
-        exactly_parse_from_slice_ptr p h' b sz == Some v
-      )
-    else
-      B.live h' b /\
-      B.live h' sz /\
-      None? pb
-  )))
-
-#set-options "--z3rlimit 16"
-
-let validate32_and_truncate32 #k #t #p vp b sz =
-  let h = HST.get () in
-  let b0 = B.index b 0ul in
-  let sz0 = B.index sz 0ul in
-  if vp b sz
-  then begin
-    let tail_sz = B.index sz 0ul in
-    let sz' = U32.sub sz0 tail_sz in
-    let b' = B.sub b0 0ul sz' in
-    B.upd b 0ul b' ;
-    B.upd sz 0ul sz' ;
-    exactly_parse_from_slice_intro p h b0 sz0 ;
-    true
-  end
-  else false
-
-#reset-options
 
 inline_for_extraction
 let parser32
@@ -336,81 +209,6 @@ let validator_nochk32
     let (Some (x, res')) = parse p (B.as_seq h input) in
     U32.v res == res'
   )))
-
-inline_for_extraction
-val truncate32
-  (#k: parser_kind)
-  (#t: Type0)
-  (#p: parser k t)
-  (v: validator_nochk32 p)
-  (input: pointer buffer8)
-  (sz: pointer U32.t)
-: HST.Stack unit
-  (requires (fun h ->
-    is_slice_ptr h input sz /\
-    Some? (parse_from_slice_ptr p h input sz)
-  ))
-  (ensures (fun h _ h' ->
-    M.modifies (loc_slice input sz) h h' /\
-    is_slice_ptr h' input sz /\ (
-    let (Some (v, consumed)) = parse_from_slice_ptr p h input sz in
-    consumed <= B.length (B.get h input 0) /\
-    B.get h' input 0 == gsub (B.get h input 0) 0ul (U32.uint_to_t consumed) /\
-    exactly_parse_from_slice_ptr p h' input sz == Some v
-  )))
-
-#set-options "--z3rlimit 16"
-
-let truncate32 #k #t #p v input sz =
-  let h = HST.get () in
-  let b0 = B.index input 0ul in
-  let sz0 = B.index sz 0ul in
-  let sz' = v b0 in
-  let b' = B.sub b0 0ul sz' in
-  B.upd input 0ul b' ;
-  B.upd sz 0ul sz' ;
-  exactly_parse_from_slice_intro p h b0 sz0
-
-#reset-options
-
-inline_for_extraction
-let truncate_slice_ptr
-  (b: pointer buffer8)
-  (len: pointer U32.t)
-  (len' : U32.t)
-: HST.Stack unit
-  (requires (fun h -> is_slice_ptr h b len /\ U32.v len' <= U32.v (B.get h len 0)))
-  (ensures (fun h _ h' ->
-    M.modifies (loc_slice b len) h h' /\
-    is_slice_ptr h' b len /\
-    B.get h' len 0 == len' /\
-    B.get h' b 0 == B.sub (B.get h b 0) 0ul len'
-  ))
-= let b0 = B.index b 0ul in
-  let b' = B.sub b0 0ul len' in
-  B.upd b 0ul b';
-  B.upd len 0ul len'
-
-inline_for_extraction
-let advance_slice_ptr
-  (b: pointer buffer8)
-  (len: pointer U32.t)
-  (ofs: U32.t)
-: HST.Stack unit
-  (requires (fun h -> is_slice_ptr h b len /\ U32.v ofs <= U32.v (B.get h len 0)))
-  (ensures (fun h _ h' ->
-    M.modifies (loc_slice b len) h h' /\
-    is_slice_ptr h' b len /\ (
-    let len' = U32.sub (B.get h len 0) ofs in
-    B.get h' len 0 == len' /\
-    B.get h' b 0 == B.sub (B.get h b 0) ofs len'
-  )))
-= let b0 = B.index b 0ul in
-  let len0 = B.index len 0ul in
-  let len' = U32.sub len0 ofs in
-  let b' = B.sub b0 ofs len' in
-  B.upd b 0ul b' ;
-  B.upd len 0ul len'
 
 abstract
 let rec is_buffer_concat

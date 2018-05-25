@@ -10,6 +10,7 @@ module HST = FStar.HyperStack.ST
 module G = FStar.Ghost
 module M = FStar.Modifies
 
+(*
 let validate32_list_inv
   (#k: parser_kind)
   (#t: Type0)
@@ -116,27 +117,30 @@ let validate32_list
     then false
     else validate32_list' p v input len
   else false
+*)
+
+module I32 = FStar.Int32
 
 inline_for_extraction
 val list_is_nil
   (#k: parser_kind)
   (#t: Type0)
   (p: parser k t)
-  (input: pointer buffer8)
-  (len: pointer U32.t)
+  (input: buffer8)
+  (len: I32.t)
 : HST.Stack bool
   (requires (fun h ->
-    is_slice_ptr h input len /\
-    Some? (parse (parse_list p) (B.as_seq h (B.get h input 0)))
+    is_slice h input len /\
+    Some? (parse (parse_list p) (B.as_seq h input))
   ))
   (ensures (fun h res h' ->
     h == h' /\ (
-    let Some (v, _) = parse (parse_list p) (B.as_seq h (B.get h input 0)) in
+    let Some (v, _) = parse (parse_list p) (B.as_seq h input) in
     res == true <==> v == []
   )))
 
 let list_is_nil #k #t p input len =
-  B.index len 0ul = 0ul
+  len = 0l
 
 /// TODO: generalize accessors with conditions
 

@@ -6,6 +6,17 @@ module B = FStar.Buffer
 module U32 = FStar.UInt32
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
+module I32 = FStar.Int32
+module Cast = FStar.Int.Cast
+module M = LowParse.Math
+
+let int32_to_uint32_pos
+  (x: I32.t)
+: Lemma
+  (requires (I32.v x >= 0))
+  (ensures (U32.v (Cast.int32_to_uint32 x) == I32.v x))
+  [SMTPat (U32.v (Cast.int32_to_uint32 x))]
+= M.modulo_lemma (I32.v x) (pow2 32)
 
 #reset-options "--z3rlimit 256 --max_fuel 32 --max_ifuel 32 --z3cliopt smt.arith.nl=false"
 
@@ -20,12 +31,13 @@ let validate32_nondep_then
   (#p2: parser k2 t2)
   (p2' : validator32 p2)
 : Tot (validator32 (nondep_then p1 p2))
-= fun (input: pointer buffer8) (len: pointer U32.t) ->
-  if p1' input len
-  then begin
-    let res = p2' input len in
-    res
-  end else false
+= fun (input: buffer8) (len: I32.t) ->
+  let h = HST.get () in
+  let x1 = p1' input len in
+  if x1 `I32.lt` 0l
+  then x1 // TODO: more coding on error
+  else
+    p2' (B.offset input (Cast.int32_to_uint32 (len `I32.sub` x1))) x1
 
 #reset-options "--z3rlimit 128 --max_fuel 32 --max_ifuel 32 --z3cliopt smt.arith.nl=false"
 
@@ -57,7 +69,7 @@ let validate32_synth
     synth_injective f2
   })
 : Tot (validator32 (parse_synth p1 f2))
-= fun (input: pointer buffer8) (len: pointer U32.t) ->
+= fun (input: buffer8) (len: I32.t) ->
   p1' input len
 
 inline_for_extraction
@@ -80,21 +92,19 @@ let validate32_total_constant_size
   (#k: parser_kind)
   (#t: Type0)
   (p: parser k t)
-  (sz: U32.t)
+  (sz: I32.t)
   (u: unit {
     k.parser_kind_high == Some k.parser_kind_low /\
-    k.parser_kind_low == U32.v sz /\
+    k.parser_kind_low == I32.v sz /\
     k.parser_kind_metadata.parser_kind_metadata_total = true
   })
 : Tot (validator32 p)
-= fun (input: pointer buffer8) (len: pointer U32.t) ->
-  let len0 = B.index len 0ul in
-  if U32.lt len0 sz
-  then false
-  else begin
-    advance_slice_ptr input len sz;
-    true
-  end
+= fun (input: buffer8) (len: I32.t) ->
+  if I32.lt len sz
+  then -1l
+  else
+    let h = HST.get () in // TODO: WHY WHY WHY?
+    len `I32.sub` sz
 
 inline_for_extraction
 let validate_nochk32_constant_size
@@ -108,9 +118,7 @@ let validate_nochk32_constant_size
   })
 : Tot (validator_nochk32 p)
 = fun (input: buffer8) ->
-  let h = HST.get () in
-  [@inline_let]
-  let _ = assert (Some? (parse p (B.as_seq h input))) in
+  let h = HST.get () in // TODO: WHY WHY WHY?
   sz
 
 inline_for_extraction
