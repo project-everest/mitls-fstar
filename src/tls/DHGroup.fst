@@ -62,7 +62,7 @@ let params_of_group = function
 
 let pubshare #g k = 
   let r = k.dh_public in
-  assume(1 <= B.length r);
+  assume (length r > 0);
   r
 
 #reset-options "--z3rlimit 20"
@@ -183,38 +183,21 @@ let serialize #g dh_Y =
   assert (length x.dh_p < 65536);
   assert (length x.dh_g < 65536);
   let r = dhparam_serializer32 (x.dh_p, x.dh_g, dh_Y, Bytes.empty_bytes) in
-  assume (length r < 196612);
   r
 
-#reset-options "--using_facts_from '* -LowParse'"
 let serialize_public #g s l =
   lemma_repr_bytes_values l;
   let pad_len = l - length s in
   let (pad:lbytes pad_len) = Bytes.create_ pad_len 0z in
-  let (r:lbytes l) = Bytes.append pad s in
-  r
-#reset-options
+  Bytes.append pad s
 
-private 
-let lemma_dh_param_len_bound (bs:vlb16)
-  : Lemma 
-    (requires True)
-    (ensures (length bs < 65536))
-  = () // cwinter: this should come for free, no?
-
-#reset-options "--using_facts_from '* -LowParse'"
 let parse_partial (bs:bytes) =
   match dhparam_parser32 bs with 
   | Some ((p, g, gy, rem), _) -> 
-      // cwinter: I have no idea why these lemmas are needed, this should really be automatic.
-      lemma_dh_param_len_bound p;
-      lemma_dh_param_len_bound g;
-      if length gy <= length p then (
+      if 0 < length gy && length gy <= length p then (
         let dhp = { dh_p = p; dh_g = g; dh_q = None; safe_prime = false } in
-        assume (length gy > 0);
         Correct ((| Explicit dhp, gy |), rem)
       ) 
       else
         Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
   | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-#reset-options

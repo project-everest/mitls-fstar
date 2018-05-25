@@ -659,12 +659,10 @@ let keyShareEntryBytes (k:keyShareEntry): bytes =
     let r = keyShareEntry_serializer32 kse in
     r)
   | UnknownShare ng b ->
-    assume (length b > 0);
     let kse = { group=ng; key_exchange=b; } in
     let r = keyShareEntry_serializer32 kse in
     r
  
-(** Parsing function for a KeyShareEntry *)
 let parseKeyShareEntry b =
   // cwinter: this was marked as TODO?
   // assume false; // TODO registration
@@ -677,10 +675,13 @@ let parseKeyShareEntry b =
       | Some og -> 
         if is_ffdhe x.group then
           let FFDH dhg = og in
-          assume (let dhp = DHGroup.params_of_group dhg in length x.key_exchange <= length dhp.dh_p);
-          let (q:DHGroup.share dhg) = x.key_exchange in 
-          let (ps:pre_share og) = S_FF dhg q in
-          Correct (Share og ps)
+          let dhp = DHGroup.params_of_group dhg in
+          if length x.key_exchange <> length dhp.dh_p then
+            Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Invalid key share entry")
+          else
+            let (q:DHGroup.share dhg) = x.key_exchange in
+            let (ps:pre_share og) = S_FF dhg q in
+            Correct (Share og ps)
         else if is_ecdhe x.group then
           let ECDH ecg = og in
           (match ECGroup.parse_point ecg x.key_exchange with
@@ -696,19 +697,21 @@ let parseKeyShareEntry b =
 
 // Choice: truncate when maximum length is exceeded
 (** Serializing function for a list of KeyShareEntry *)
-private let rec keyShareEntriesBytes_aux (b:bytes{length b < 65536}) (kes:list keyShareEntry): Tot (b:bytes{length b < 65536}) (decreases kes) =
+private let rec keyShareEntriesBytes_aux (b:bytes{length b < 65536}) (kes:list keyShareEntry): Tot (r:bytes{length r < 65536}) (decreases kes) =
   match kes with
   | [] -> b
   | ke::kes ->
     let kseb = keyShareEntryBytes ke in
-    assume (UInt.fits (length b + length kseb) 32);
-    let b' = b @| kseb in
-    if length b' < 65536 then
-      keyShareEntriesBytes_aux b' kes
-    else b
+    if (not (UInt.fits (length b + length kseb) 32)) then
+      b
+    else
+      let b' = b @| kseb in
+      if length b' < 65536 then
+        keyShareEntriesBytes_aux b' kes
+      else b
 
-let keyShareEntriesBytes kes =
-  let b = keyShareEntriesBytes_aux empty_bytes kes in
+let keyShareEntriesBytes es =
+  let b = keyShareEntriesBytes_aux empty_bytes es in
   lemma_repr_bytes_values (length b);
   vlbytes 2 b
 
@@ -730,11 +733,14 @@ private let rec parseKeyShareEntries_aux (b:bytes) (entries:list keyShareEntry)
  	    | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry")
      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse key share entries")
    else Correct entries
-  
+
 let parseKeyShareEntries b =
-  match vlparse 2 b with
-  | Correct b -> parseKeyShareEntries_aux b []
-  | Error z   -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entries")
+  if 2 <= length b then
+    match vlparse 2 b with
+    | Correct b -> parseKeyShareEntries_aux b []
+    | Error z   -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entries")
+  else
+    Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entries")
 
 (** Serializing function for a ClientKeyShare *)
 let clientKeyShareBytes cks = keyShareEntriesBytes cks
@@ -761,7 +767,7 @@ let helloRetryKeyShareBytes (k:keyShare): Tot (b:bytes) =
   match k with 
   | HRRKeyShare ng -> namedGroup_serializer32 ng
   | _ -> Bytes.empty_bytes 
-  
+
 let parseHelloRetryKeyShare (bs:bytes): Tot (result keyShare) =
   match namedGroup_parser32 bs with 
   | Some (ng, _) -> Correct (HRRKeyShare ng)

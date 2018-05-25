@@ -42,7 +42,7 @@ val dh_initiator: #g:group -> keyshare g -> share g -> HST.ST (secret g)
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> HST.modifies_none h0 h1))
 
-val serialize: #g:group -> share g -> Tot (b:B.bytes{B.length b < 196612})
+val serialize: #g:group -> share g -> Tot B.bytes
 
 val serialize_public: #g:group -> s:share g -> l:nat{l < 65536 /\ B.length s <= l} -> Tot (B.lbytes l)
 

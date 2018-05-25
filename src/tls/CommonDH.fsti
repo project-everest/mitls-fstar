@@ -143,8 +143,8 @@ val serialize_raw: #g:group -> pre_share g -> Tot bytes // used for printing
 type keyShareEntry =
   | Share: g:group{Some? (namedGroup_of_group g)} -> pre_share g -> keyShareEntry
   | UnknownShare:
-    ng:namedGroup { None? (group_of_namedGroup ng)} ->
-    b:bytes{repr_bytes (length b) <= 2} -> keyShareEntry
+    ng:namedGroup{None? (group_of_namedGroup ng)} ->
+    b:bytes{repr_bytes (length b) <= 2 /\ length b > 0} -> keyShareEntry
 
 (** ClientKeyShare definition *)
 type clientKeyShare = l:list keyShareEntry{List.Tot.length l < 65536/4}
@@ -164,13 +164,13 @@ noeq type keyShare =
 (** Serializing function for a KeyShareEntry *)
 val keyShareEntryBytes: keyShareEntry -> Tot bytes
 val parseKeyShareEntry: pinverse_t keyShareEntryBytes
-val keyShareEntriesBytes: list keyShareEntry -> Tot (b:bytes{2 <= length b /\ length b < 65538})
+val keyShareEntriesBytes: list keyShareEntry -> Tot bytes
 val parseKeyShareEntries: pinverse_t keyShareEntriesBytes
-val clientKeyShareBytes: clientKeyShare -> Tot (b:bytes{2 <= length b /\ length b < 65538})
-val parseClientKeyShare: b:bytes{2 <= length b /\ length b < 65538} -> Tot (result keyShare)
+val clientKeyShareBytes: clientKeyShare -> Tot bytes
+val parseClientKeyShare: bytes -> Tot (result keyShare)
 val serverKeyShareBytes: serverKeyShare -> Tot bytes
 val parseServerKeyShare: bytes -> Tot (result keyShare)
-val helloRetryKeyShareBytes: keyShare -> Tot (b:bytes)
+val helloRetryKeyShareBytes: keyShare -> Tot bytes
 val parseHelloRetryKeyShare: bytes -> Tot (result keyShare)
 
 val keyShareBytes: ks:keyShare -> Tot (b:bytes{

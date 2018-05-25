@@ -53,6 +53,6 @@ val parse_point: g:group -> B.bytes -> Tot (option (share g))
 
 val parse_partial: B.bytes -> Tot (TLSError.result ((g:group & share g) * B.bytes))
 
-val serialize_point: #g:group -> e:share g -> Tot (b:B.bytes{1 <= B.length b /\ B.length b <= 255})
+val serialize_point: #g:group -> e:share g -> Tot (r:B.bytes{1 <= B.length r /\ B.length r <= 255})
 
-val serialize: #g:group -> e:share g -> Tot (b:B.bytes{B.length b <= 259})
+val serialize: #g:group -> e:share g -> Tot B.bytes
