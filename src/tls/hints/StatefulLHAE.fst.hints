@@ -8,7 +8,7 @@
       1,
       [ "@query" ],
       0,
-      "7397af48d0bcca8235da2748955310a8"
+      "c15bfc24ea349bd60a4311850f99b2a6"
     ],
     [
       "StatefulLHAE.dplain",
@@ -27,7 +27,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "203af14372b3372aeee320d3813d72cc"
+      "d1f3d8d1289d896e8b70c66b0c8a1349"
     ],
     [
       "StatefulLHAE.genReader",
@@ -45,7 +45,7 @@
         "refinement_interpretation_AEAD_GCM_Tm_refine_ab0552b9eec8ea05f2f4ffdc90946ac6"
       ],
       0,
-      "4ee9152ee726bb8e0e7876a3038b01c2"
+      "25e59811ccf60d786ba0c21fe0437cb3"
     ],
     [
       "StatefulLHAE.genReader",
@@ -54,7 +54,7 @@
       1,
       [ "@query" ],
       0,
-      "53436b83362e35b42af049a44bb5e192"
+      "1b4fcb0b983dbc2d155ca23d06e79098"
     ],
     [
       "StatefulLHAE.leak",
@@ -63,7 +63,7 @@
       1,
       [ "@query" ],
       0,
-      "b3abd6a189577f9d10abb5870f144640"
+      "8eee1a54c1ed33f9b7e303ffe21c8738"
     ],
     [
       "StatefulLHAE.encrypt",
@@ -100,7 +100,7 @@
         "typing_FStar.Pervasives.Native.snd"
       ],
       0,
-      "5f57c4593013e3d5eb9276c4fa912eea"
+      "cc6e3af5e4a7222187502f2f2e8dc62a"
     ],
     [
       "StatefulLHAE.encrypt",
@@ -167,7 +167,7 @@
         "typing_tok_TLSConstants.Writer@tok"
       ],
       0,
-      "21785c3ddd9ab2f277e342c4d755c44c"
+      "47ad795ed879d0a63f63ae5181740199"
     ],
     [
       "StatefulLHAE.decrypt",
@@ -220,7 +220,7 @@
         "typing_tok_TLSConstants.Reader@tok"
       ],
       0,
-      "6fee887f13d21cf63dccfc8661d5b4fa"
+      "90b519b24a15847cb335542287381fa7"
     ],
     [
       "StatefulLHAE.decrypt",
@@ -300,7 +300,7 @@
         "typing_StatefulLHAE.alg", "typing_tok_TLSConstants.Reader@tok"
       ],
       0,
-      "9804a7d33c79227c0387f1180bb2139d"
+      "5299e83814b13c8277b1c3e1ff84ac70"
     ]
   ]
 ]
