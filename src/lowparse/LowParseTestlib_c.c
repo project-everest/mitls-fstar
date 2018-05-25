@@ -6,8 +6,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
+#include "LowParseTestlib.h"
 
-FStar_Bytes_bytes LowParseTestlib_load_file(Prims_string x0)
+K___uint8_t__uint32_t LowParseTestlib_load_file_buffer(Prims_string x0)
 {
     FILE *fp = fopen(x0, "rb");
     if (!fp) {
@@ -37,6 +38,15 @@ FStar_Bytes_bytes LowParseTestlib_load_file(Prims_string x0)
         KRML_HOST_EXIT(1);
     }
     fclose(fp);
-    FStar_Bytes_bytes ret = {.length = filesize, buffer = buffer};
+
+    K___uint8_t__uint32_t ret = {.fst = (uint8_t*)buffer, .snd = (uint32_t)filesize };
+    return ret;
+}
+
+FStar_Bytes_bytes LowParseTestlib_load_file(Prims_string x0)
+{
+    K___uint8_t__uint32_t f = LowParseTestlib_load_file_buffer(x0);
+
+    FStar_Bytes_bytes ret = {.length = f.snd, .data = (char*)f.fst};
     return ret;
 }
