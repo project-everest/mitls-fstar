@@ -9,7 +9,6 @@ is for syntactically valid shares (used in parsing modules) while
 share is for registered shares (for which is_honest is defined).
 *)
 
-open FStar.HyperStack
 open FStar.Bytes
 open FStar.Error
 
@@ -22,8 +21,6 @@ module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 module MDM = FStar.Monotonic.DependentMap
 module DM = FStar.DependentMap
-
-#set-options "--admit_smt_queries true"
 
 (* A flag for runtime debugging of cDH data.
    The F* normalizer will erase debug prints at extraction
@@ -82,7 +79,6 @@ let pre_share (g:group) =
   s:pre_share'{(match g with
   | FFDH dhg -> S_FF? s /\ S_FF?.g s = dhg
   | ECDH ecg -> S_EC? s /\ S_EC?.g s = ecg)}
-
 
 let pre_pubshare #g ks =
   match g with
@@ -566,14 +562,15 @@ let register #g gx =
 *)
 
 let parse g x =
-  match g with
-  | ECDH g ->
-    (match ECGroup.parse_point g x with
-    | None -> None | Some gx -> Some (S_EC g gx))
-  | FFDH g ->
-    let dhp = DHGroup.params_of_group g in
-    if length x = length dhp.dh_p then Some (S_FF g x)
-    else None
+  if len x = 0ul then None 
+  else match g with
+       | ECDH g ->
+         (match ECGroup.parse_point g x with
+         | None -> None | Some gx -> Some (S_EC g gx))
+       | FFDH g ->
+         let dhp = DHGroup.params_of_group g in
+         if length x = length dhp.dh_p then Some (S_FF g x)
+         else None
 
 let parse_partial ec p =
   if ec then
@@ -659,12 +656,14 @@ let keyShareEntryBytes (k:keyShareEntry): bytes =
                | S_FF g x -> x 
                | S_EC g x -> ECGroup.serialize_point x) in
     let kse = { group=nng; key_exchange=kex; } in
-    keyShareEntry_serializer32 kse)
+    let r = keyShareEntry_serializer32 kse in
+    r)
   | UnknownShare ng b ->
+    assume (length b > 0);
     let kse = { group=ng; key_exchange=b; } in
-    keyShareEntry_serializer32 kse
+    let r = keyShareEntry_serializer32 kse in
+    r
  
-
 (** Parsing function for a KeyShareEntry *)
 let parseKeyShareEntry b =
   // cwinter: this was marked as TODO?
@@ -672,23 +671,27 @@ let parseKeyShareEntry b =
   let open Format.KeyShareEntry in
   let open Format.NamedGroup in
   let prsr = keyShareEntry_parser32 in
-  match prsr b with
-  | Some (x, _) ->
-    assert (Some? (group_of_namedGroup x.group));
-    let Some og = group_of_namedGroup x.group in
-    if is_ffdhe x.group then
-      let FFDH dhg = og in
-      let (q:DHGroup.share dhg) = x.key_exchange in 
-      let (ps:pre_share og) = S_FF dhg q in
-      Correct (Share og ps)
-    else if is_ecdhe x.group then
-      let ECDH ecg = og in
-      let Some (q:ECGroup.share ecg) = (ECGroup.parse_point ecg x.key_exchange) in
-      let (ps:pre_share og) = S_EC ecg q in
-      Correct (Share og ps)
-    else
-      Correct (UnknownShare x.group x.key_exchange)
-  | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry")
+  (match prsr b with
+   | Some (x, _) ->
+     (match group_of_namedGroup x.group with
+      | Some og -> 
+        if is_ffdhe x.group then
+          let FFDH dhg = og in
+          assume (let dhp = DHGroup.params_of_group dhg in length x.key_exchange <= length dhp.dh_p);
+          let (q:DHGroup.share dhg) = x.key_exchange in 
+          let (ps:pre_share og) = S_FF dhg q in
+          Correct (Share og ps)
+        else if is_ecdhe x.group then
+          let ECDH ecg = og in
+          (match ECGroup.parse_point ecg x.key_exchange with
+           | Some (q:ECGroup.share ecg) ->
+             let (ps:pre_share og) = S_EC ecg q in
+             Correct (Share og ps)
+           | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry"))
+        else
+          Correct (UnknownShare x.group x.key_exchange)
+      | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry"))
+  | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry"))
   
 
 // Choice: truncate when maximum length is exceeded
@@ -697,7 +700,9 @@ private let rec keyShareEntriesBytes_aux (b:bytes{length b < 65536}) (kes:list k
   match kes with
   | [] -> b
   | ke::kes ->
-    let b' = b @| keyShareEntryBytes ke in
+    let kseb = keyShareEntryBytes ke in
+    assume (UInt.fits (length b + length kseb) 32);
+    let b' = b @| kseb in
     if length b' < 65536 then
       keyShareEntriesBytes_aux b' kes
     else b
@@ -712,19 +717,19 @@ private let rec parseKeyShareEntries_aux (b:bytes) (entries:list keyShareEntry)
    : Tot (result (list keyShareEntry)) 
          (decreases (length b))
    = if length b > 0 then
-      if length b >= 4 then
-	let ng, data = split b 2ul in
-	match vlsplit 2 data with
-	| Correct(x) ->
-      let kex, bytes = x in
-	  begin
-	  match parseKeyShareEntry (ng @| vlbytes 2 kex) with
-	  | Correct entry -> parseKeyShareEntries_aux bytes (entries @ [entry])
-	  | Error z -> Error z
-	  end
-	| Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry")
-      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse key share entries")
-    else Correct entries
+       if length b >= 4 then
+	     let ng, data = split b 2ul in
+	     match vlsplit 2 data with
+	     | Correct(x) ->
+           let kex, bytes = x in
+	       begin
+	         match parseKeyShareEntry (ng @| vlbytes 2 kex) with
+	         | Correct entry -> parseKeyShareEntries_aux bytes (entries @ [entry])
+	         | Error z -> Error z
+	       end
+ 	    | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry")
+     else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse key share entries")
+   else Correct entries
   
 let parseKeyShareEntries b =
   match vlparse 2 b with
@@ -753,14 +758,14 @@ let parseServerKeyShare b =
   | Error z -> Error z
 
 let helloRetryKeyShareBytes (k:keyShare): Tot (b:bytes) = 
-  let HRRKeyShare ng = k in
-  namedGroup_serializer32 ng
+  match k with 
+  | HRRKeyShare ng -> namedGroup_serializer32 ng
+  | _ -> Bytes.empty_bytes 
   
 let parseHelloRetryKeyShare (bs:bytes): Tot (result keyShare) =
   match namedGroup_parser32 bs with 
   | Some (ng, _) -> Correct (HRRKeyShare ng)
   | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse hello retry group")
-
 
 (** Serializing function for a KeyShare *)
 let keyShareBytes = function

@@ -162,13 +162,13 @@ noeq type keyShare =
 
 // the parsing/formatting moves to the private part of Extensions
 (** Serializing function for a KeyShareEntry *)
-val keyShareEntryBytes: keyShareEntry -> Tot (b:bytes{4 <= length b})
+val keyShareEntryBytes: keyShareEntry -> Tot bytes
 val parseKeyShareEntry: pinverse_t keyShareEntryBytes
 val keyShareEntriesBytes: list keyShareEntry -> Tot (b:bytes{2 <= length b /\ length b < 65538})
 val parseKeyShareEntries: pinverse_t keyShareEntriesBytes
 val clientKeyShareBytes: clientKeyShare -> Tot (b:bytes{2 <= length b /\ length b < 65538})
 val parseClientKeyShare: b:bytes{2 <= length b /\ length b < 65538} -> Tot (result keyShare)
-val serverKeyShareBytes: serverKeyShare -> Tot (b:bytes{4 <= length b})
+val serverKeyShareBytes: serverKeyShare -> Tot bytes
 val parseServerKeyShare: bytes -> Tot (result keyShare)
 val helloRetryKeyShareBytes: keyShare -> Tot (b:bytes)
 val parseHelloRetryKeyShare: bytes -> Tot (result keyShare)
