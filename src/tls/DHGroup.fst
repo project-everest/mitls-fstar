@@ -81,11 +81,13 @@ let dhparam_parser_kind = let vlpk = LP.parse_bounded_vldata_kind 0 65535 in
 private type vlb16 = b:bytes{length b < 65536}
 private type dhparams = vlb16 * vlb16 * vlb16 * vlb16
 
+
 private 
 inline_for_extraction
 let synth_vlb16 (x:LP.parse_bounded_vlbytes_t 0 65535)
   : Tot vlb16
-  = assert (length x < 65536); let y:vlb16 = x in y
+  = assert (length x < 65536); 
+    x
 
 private 
 inline_for_extraction
@@ -185,6 +187,7 @@ let serialize #g dh_Y =
   let r = dhparam_serializer32 (x.dh_p, x.dh_g, dh_Y, Bytes.empty_bytes) in
   r
 
+#reset-options "--using_facts_from '* -LowParse'"
 let serialize_public #g s l =
   lemma_repr_bytes_values l;
   let pad_len = l - length s in
