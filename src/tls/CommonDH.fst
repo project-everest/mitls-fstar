@@ -702,13 +702,10 @@ private let rec keyShareEntriesBytes_aux (b:bytes{length b < 65536}) (kes:list k
   | [] -> b
   | ke::kes ->
     let kseb = keyShareEntryBytes ke in
-    if (not (UInt.fits (length b + length kseb) 32)) then
-      b
-    else
+    if length b + length kseb < 65536 then
       let b' = b @| kseb in
-      if length b' < 65536 then
-        keyShareEntriesBytes_aux b' kes
-      else b
+      keyShareEntriesBytes_aux b' kes
+    else b
 
 let keyShareEntriesBytes es =
   let b = keyShareEntriesBytes_aux empty_bytes es in
