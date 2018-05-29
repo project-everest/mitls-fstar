@@ -33,8 +33,6 @@ and children' = list (label * tree')
 
 let max x y = if x <= y then y else x
 
-#reset-options "--admit_smt_queries true"
-
 // induction on n-ary trees requires explicit termination
 let rec depth (x:tree') : nat =
   match x with
