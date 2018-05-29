@@ -2,7 +2,7 @@ module LowParse.Low.Combinators
 include LowParse.Low.Base
 include LowParse.Spec.Combinators
 
-module B = FStar.Buffer
+module B = LowStar.Buffer
 module U32 = FStar.UInt32
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
@@ -18,7 +18,7 @@ let int32_to_uint32_pos
   [SMTPat (U32.v (Cast.int32_to_uint32 x))]
 = M.modulo_lemma (I32.v x) (pow2 32)
 
-#reset-options "--z3rlimit 256 --max_fuel 32 --max_ifuel 32 --z3cliopt smt.arith.nl=false"
+#reset-options "--z3rlimit 32 --z3cliopt smt.arith.nl=false"
 
 inline_for_extraction
 let validate32_nondep_then
@@ -39,7 +39,7 @@ let validate32_nondep_then
   else
     p2' (B.offset input (Cast.int32_to_uint32 (len `I32.sub` x1))) x1
 
-#reset-options "--z3rlimit 128 --max_fuel 32 --max_ifuel 32 --z3cliopt smt.arith.nl=false"
+#reset-options
 
 inline_for_extraction
 let validate_nochk32_nondep_then
@@ -168,9 +168,7 @@ let accessor_synth
   (u: unit {  synth_injective f } )
 : Tot (accessor (parse_synth p1 f) p1 (fun x y -> f y == x))
 = fun input ->
-  let h = HST.get () in
-  [@inline_let]
-  let _ = assert (Some? (parse p1 (B.as_seq h input))) in
+  let h = HST.get () in // FIXME: WHY WHY WHY?
   input
 
 inline_for_extraction
@@ -184,9 +182,7 @@ val nondep_then_fst
 : Tot (accessor (p1 `nondep_then` p2) p1 (fun x y -> y == fst x))
 
 let nondep_then_fst #k1 #t1 p1 #k2 #t2 p2 input =
-  let h = HST.get () in
-  [@inline_let]
-  let _ = assert (Some? (parse p1 (B.as_seq h input))) in
+  let h = HST.get () in // FIXME: WHY WHY WHY?
   input
 
 inline_for_extraction

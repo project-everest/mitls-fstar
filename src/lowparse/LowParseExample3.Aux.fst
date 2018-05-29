@@ -21,7 +21,7 @@ let parse_t : parser _ t =
 
 inline_for_extraction
 let validate32_t : validator32 parse_t =
-  validate32_total_constant_size parse_t 8ul ()
+  validate32_total_constant_size parse_t 8l ()
 (*
   validate32_synth
   (validate32_u16 `validate32_nondep_then` validate32_u32 `validate32_nondep_then` validate32_u16)

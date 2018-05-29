@@ -9,7 +9,7 @@ module U16 = FStar.UInt16
 module U32 = FStar.UInt32
 module HST = FStar.HyperStack.ST
 module HS = FStar.HyperStack
-module B = FStar.Buffer
+module B = LowStar.Buffer
 
 #set-options "--z3rlimit 16"
 

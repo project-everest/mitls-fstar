@@ -2,124 +2,138 @@ module LowParse.Low.List
 include LowParse.Spec.List
 include LowParse.Low.Combinators
 
-module B = FStar.Buffer
+module B = LowStar.Buffer
 module U32 = FStar.UInt32
 module CL = C.Loops
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 module G = FStar.Ghost
-module M = FStar.Modifies
+module M = LowStar.Modifies
+module I32 = FStar.Int32
+module Cast = FStar.Int.Cast
 
-(*
-let validate32_list_inv
+let validate32_list_inv'
   (#k: parser_kind)
   (#t: Type0)
   (p: parser k t)
-  (input: pointer buffer8)
-  (len: pointer U32.t)
+  (input: buffer8)
+  (len: I32.t)
+  (read_so_far: pointer I32.t)
   (h0: G.erased HS.mem)
   (h: HS.mem)
   (stop: bool)
 : GTot Type0
-= is_slice_ptr (G.reveal h0) input len /\
-  M.modifies (loc_slice input len) (G.reveal h0) h /\
-  B.live h input /\
-  B.live h len /\ (
-    let len' = B.get h len 0 in
-    let ps0 = parse (parse_list p) (B.as_seq (G.reveal h0) (B.get (G.reveal h0) input 0)) in
+= is_slice (G.reveal h0) input len /\
+  B.disjoint input read_so_far /\
+  M.modifies (M.loc_buffer read_so_far) (G.reveal h0) h /\
+  is_slice h input len /\
+  B.live h read_so_far /\
+  (
+    let v_read_so_far = B.get h read_so_far 0 in
+    let ps0 = parse (parse_list p) (B.as_seq (G.reveal h0) input) in
     if stop
     then
-      if U32.v len' = 4294967295
-      then None? ps0
-      else validator32_postcond (parse_list p) input len (G.reveal h0) true h
+      validator32_postcond (parse_list p) input len (G.reveal h0) v_read_so_far (G.reveal h0)
     else
-      U32.v len' <> 4294967295 /\
-      is_slice_ptr h input len /\
-      tail_ptr (G.reveal h0) h input /\
-      Some? ps0 == Some? (parse (parse_list p) (B.as_seq h (B.get h input 0)))
-  )
+      I32.v v_read_so_far >= 0 /\
+      I32.v v_read_so_far <= I32.v len /\ (
+      let ps1 = parse (parse_list p) (B.as_seq (G.reveal h0) (gsub input (Cast.int32_to_uint32 v_read_so_far) (U32.uint_to_t (I32.v len - I32.v v_read_so_far)))) in
+      Some? ps0 == Some? ps1 /\
+      True
+        ))
 
-#reset-options "--z3rlimit 64"
+let validate32_list_inv
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (input: buffer8)
+  (len: I32.t)
+  (read_so_far: pointer I32.t)
+  (h0: G.erased HS.mem)
+  (h: HS.mem)
+  (stop: bool)
+: GTot Type0
+= validate32_list_inv' p input len read_so_far h0 h stop
+
+#reset-options "--z3rlimit 64 --z3cliopt smt.arith.nl=false"
 
 inline_for_extraction
 let validate32_list_body
   (#k: parser_kind)
   (#t: Type0)
-  (p: parser k t)
+  (#p: parser k t)
   (v: validator32 p)
-  (input: pointer buffer8)
-  (len: pointer U32.t)
+  (input: buffer8)
+  (len: I32.t)
+  (read_so_far: pointer I32.t)
   (h0: G.erased HS.mem)
-  ()
+  (u: unit)
 : HST.Stack bool
-  (requires (fun h -> validate32_list_inv p input len h0 h false))
-  (ensures (fun _ stop h' -> validate32_list_inv p input len h0 h' stop))
-= let len' = B.index len 0ul in
-  if len' = 0ul
-  then true
-  else if v input len
-  then
-    if B.index len 0ul = len'
-    then begin
-      B.upd len 0ul 4294967295ul;
-      true
-    end
-    else false
-  else begin
-    B.upd len 0ul 4294967295ul;
-    true
-  end
-
-inline_for_extraction
-let validate32_list'
-  (#k: parser_kind)
-  (#t: Type0)
-  (p: parser k t)
-  (v: validator32 p)
-  (input: pointer buffer8)
-  (len: pointer U32.t)
-: HST.Stack bool
-  (requires (fun h -> is_slice_ptr h input len /\ U32.v (B.get h len 0) <> 4294967295))
-  (ensures (fun h res h' ->
-    validator32_postcond (parse_list p) input len h res h'
+  (requires (fun h -> validate32_list_inv p input len read_so_far h0 h false))
+  (ensures (fun h stop h' ->
+    validate32_list_inv p input len read_so_far h0 h false /\
+    validate32_list_inv p input len read_so_far h0 h' stop
   ))
 = let h = HST.get () in
-  let h0 = G.hide h in
-  let len0 = B.index len 0ul in
-  let input0 = B.index input 0ul in
-  C.Loops.do_while
-    (validate32_list_inv p input len h0)
-    (fun () -> validate32_list_body p v input len h0 ())
-  ;
-  let len2 = B.index len 0ul in
-  len2 <> 4294967295ul
+  let f () : Lemma (validate32_list_inv p input len read_so_far h0 h false) = () in
+  let v_read_so_far = B.index read_so_far 0ul in
+  if v_read_so_far = len
+  then begin
+    B.upd read_so_far 0ul 0l;
+    f ();
+    true
+  end
+  else begin
+    let res = v (B.offset input (Cast.int32_to_uint32 v_read_so_far)) (len `I32.sub` v_read_so_far) in
+    if res `I32.lt` 0l || res = len `I32.sub` v_read_so_far
+    then begin
+      B.upd read_so_far 0ul (-1l);
+      f ();
+      true
+    end else begin
+      let read_so_far' = len `I32.sub` res in
+      B.upd read_so_far 0ul read_so_far';
+      assert (
+        let b0 = gsub input (Cast.int32_to_uint32 v_read_so_far) (U32.uint_to_t (I32.v len - I32.v v_read_so_far)) in
+        let b1 = gsub input (Cast.int32_to_uint32 read_so_far') (U32.uint_to_t (I32.v len - I32.v read_so_far')) in
+        let b1' = gsub b0 (U32.uint_to_t (I32.v read_so_far' - I32.v v_read_so_far)) (Cast.int32_to_uint32 res) in
+        b1 == b1' /\
+        Some? (parse (parse_list p) (B.as_seq (G.reveal h0) input)) == Some? (parse (parse_list p) (B.as_seq (G.reveal h0) b0)) /\
+        Some? (parse (parse_list p) (B.as_seq (G.reveal h0) b0)) ==
+          Some? (parse (parse_list p) (B.as_seq (G.reveal h0) b1)) /\
+        True
+      );
+      let h' = HST.get () in
+      assert (Some? (parse (parse_list p) (B.as_seq (G.reveal h0) input)) == Some? (parse (parse_list p) (B.as_seq (G.reveal h0) (gsub input (Cast.int32_to_uint32 read_so_far') (U32.uint_to_t (I32.v len - I32.v read_so_far'))))));
+      assert (validate32_list_inv p input len read_so_far h0 h' false);
+      f ();
+      false
+    end
+  end
 
-#reset-options "--z3rlimit 128 --max_fuel 16 --max_ifuel 16 --z3cliopt smt.arith.nl=false"
+#reset-options "--z3rlimit 32"
 
 inline_for_extraction
 let validate32_list
   (#k: parser_kind)
   (#t: Type0)
-  (p: parser k t)
+  (#p: parser k t)
   (v: validator32 p)
 : Tot (validator32 (parse_list p))
-= fun
-  (input: pointer buffer8)
-  (len: pointer U32.t)
-  ->
-  let len0 = B.index len 0ul in
-  if len0 = 0ul
-  then true
-  else if v input len
-  then
-    let len1 = B.index len 0ul in
-    if len0 = len1
-    then false
-    else validate32_list' p v input len
-  else false
-*)
+= fun input len ->
+  HST.push_frame ();  
+  let read_so_far = B.alloca 0l 1ul in
+  let h = HST.get () in
+  let h0 = G.hide h in
+  C.Loops.do_while
+    (validate32_list_inv p input len read_so_far h0)
+    (validate32_list_body v input len read_so_far h0)
+  ;
+  let res = B.index read_so_far 0ul in
+  HST.pop_frame ();
+  res
 
-module I32 = FStar.Int32
+#reset-options "--z3rlimit 128 --max_fuel 16 --max_ifuel 16 --z3cliopt smt.arith.nl=false"
 
 inline_for_extraction
 val list_is_nil

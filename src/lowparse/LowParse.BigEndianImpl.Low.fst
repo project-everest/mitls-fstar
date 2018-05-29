@@ -9,7 +9,8 @@ module U32 = FStar.UInt32
 module M = LowParse.Math
 module G = FStar.Ghost
 
-module B = FStar.Buffer
+module B = LowStar.Buffer
+module MO = LowStar.Modifies
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 
@@ -192,7 +193,7 @@ val n_to_be_body'
     n_to_be len (u.v x0) == Seq.append (n_to_be i (u.v x)) (accu)
   )))
   (ensures (fun h _ h' ->
-    B.modifies_1 b h h' /\
+    MO.modifies (MO.loc_buffer b) h h' /\
     B.live h' b /\ (
     let accu = Seq.slice (B.as_seq h b) (U32.v i) (U32.v len) in
     let x' = u.div256 x in
@@ -234,7 +235,7 @@ let n_to_be_1
     u.v x0 < pow2 (8 `Prims.op_Multiply` 1)
   ))
   (ensures (fun h _ h' ->
-    B.modifies_1 b h h' /\
+    MO.modifies (MO.loc_buffer b) h h' /\
     B.live h' b /\ (
     let accu' = B.as_seq h' b in
     n_to_be 1ul (u.v x0) == accu'
@@ -259,7 +260,7 @@ let n_to_be_2
     u.v x0 < pow2 (8 `Prims.op_Multiply` 2)
   ))
   (ensures (fun h _ h' ->
-    B.modifies_1 b h h' /\
+    MO.modifies (MO.loc_buffer b) h h' /\
     B.live h' b /\ (
     let accu' = B.as_seq h' b in
     n_to_be 2ul (u.v x0) == accu'
@@ -288,7 +289,7 @@ let n_to_be_3
     u.v x0 < pow2 (8 `Prims.op_Multiply` 3)
   ))
   (ensures (fun h _ h' ->
-    B.modifies_1 b h h' /\
+    MO.modifies (MO.loc_buffer b) h h' /\
     B.live h' b /\ (
     let accu' = B.as_seq h' b in
     n_to_be 3ul (u.v x0) == accu'
@@ -319,7 +320,7 @@ let n_to_be_4
     u.v x0 < pow2 (8 `Prims.op_Multiply` 4)
   ))
   (ensures (fun h _ h' ->
-    B.modifies_1 b h h' /\
+    MO.modifies (MO.loc_buffer b) h h' /\
     B.live h' b /\ (
     let accu' = B.as_seq h' b in
     n_to_be 4ul (u.v x0) == accu'

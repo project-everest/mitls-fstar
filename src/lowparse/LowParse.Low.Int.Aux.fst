@@ -7,7 +7,7 @@ module E = LowParse.BigEndianImpl.Low
 module U8  = FStar.UInt8
 module U16 = FStar.UInt16
 module U32 = FStar.UInt32
-module B = FStar.Buffer
+module B = LowStar.Buffer
 
 inline_for_extraction
 let parse32_u16 : parser32 parse_u16 =

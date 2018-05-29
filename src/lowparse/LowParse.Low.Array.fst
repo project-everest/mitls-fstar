@@ -61,7 +61,7 @@ val array_nth
   })
 : Tot (accessor (parse_array s array_byte_size elem_count) p (fun x y -> y == L.index x (U32.v i)))
 
-module B = FStar.Buffer
+module B = LowStar.Buffer
 
 #set-options "--z3rlimit 16"
 

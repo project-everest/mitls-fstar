@@ -2,11 +2,13 @@ module LowParse.Low.FLData
 include LowParse.Low.Combinators
 include LowParse.Spec.FLData
 
-module B = FStar.Buffer
+module B = LowStar.Buffer
 module U32 = FStar.UInt32
 module HST = FStar.HyperStack.ST
+module I32 = FStar.Int32
+module Cast = FStar.Int.Cast
 
-#set-options "--z3rlimit 32"
+#reset-options "--z3rlimit 32 --z3cliopt smt.arith.nl=false"
 
 inline_for_extraction
 let validate32_fldata
@@ -15,28 +17,15 @@ let validate32_fldata
   (#p: parser k t)
   (v: validator32 p)
   (sz: nat)
-  (sz32: U32.t { U32.v sz32 == sz /\ sz > 0 } ) // TODO: solve the sz = 0 case with liveness preservation
+  (sz32: I32.t { I32.v sz32 == sz } )
 : Tot (validator32 (parse_fldata p sz))
 = fun input len ->
-  let len0 = B.index len 0ul in
-  if len0 `U32.lt` sz32
-  then false
-  else begin
-    let input0 = B.index input 0ul in
-    B.upd input 0ul (B.sub input0 0ul sz32) ;
-    B.upd len 0ul sz32;
-    if v input len
-    then
-      let len1 = B.index len 0ul in
-      if len1 = 0ul
-      then begin
-        B.upd input 0ul (B.offset input0 sz32);
-        B.upd len 0ul (len0 `U32.sub` sz32);
-        true
-      end else
-        false
-    else false
-  end
+  if len `I32.lt` sz32
+  then -1l
+  else
+    if v (B.sub input 0ul (Cast.int32_to_uint32 sz32)) sz32 <> 0l
+    then -2l
+    else len `I32.sub` sz32
 
 #reset-options
 
@@ -48,7 +37,7 @@ let validate32_fldata_strong
   (s: serializer p)
   (v: validator32 p)
   (sz: nat)
-  (sz32: U32.t { U32.v sz32 == sz /\ sz > 0 } ) // TODO: solve the sz = 0 case with liveness preservation
+  (sz32: I32.t { I32.v sz32 == sz } )
 : Tot (validator32 (parse_fldata_strong s sz))
 = fun input len -> validate32_fldata v sz sz32 input len
 
