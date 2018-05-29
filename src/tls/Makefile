@@ -26,5 +26,8 @@ clean: ocaml-clean kremlin-clean quic-clean model-clean
 %.fst-in %.fsti-in:
 	$(MAKE) -f Makefile.$(FLAVOR) $@
 
+%.fst-ver %.fsti-ver:
+	$(MAKE) -f Makefile.Model cache/Model/$(notdir $(subst -ver,,$@)).checked
+
 todo:
 	grep -nH -i -e admit -e assume -e '--lax' -e todo -e magic Make* `find . -regex '.*.fst[i]*'` | grep -v 'assume val'
