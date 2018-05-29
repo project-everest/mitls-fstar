@@ -196,7 +196,8 @@ let serialize_public #g s l =
 
 let parse_partial (bs:bytes) =
   match dhparam_parser32 bs with 
-  | Some ((p, g, gy, rem), _) -> 
+  | Some ((p, g, gy, rem), _) ->
+      // REMARK: In TLS 1.3 we MUST have length gy = length p
       if 0 < length gy && length gy <= length p then (
         let dhp = { dh_p = p; dh_g = g; dh_q = None; safe_prime = false } in
         Correct ((| Explicit dhp, gy |), rem)
