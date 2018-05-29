@@ -1,5 +1,5 @@
 [
-  "\u000f\u0010\fí˛y¡9Çï\u007f\u007fóÌ-Õ",
+  "÷@Å\u001f/“Îªæ»Eã§r¡ ",
   [
     [
       "DHGroup.group",
@@ -12,7 +12,7 @@
         "haseqDHGroup_Tm_refine_1e091eae2473b30eeefd9c4f8eac7426"
       ],
       0,
-      "63a17eaadc53fbed04d462e2cf394242"
+      "39098f51fc67de3da11b1b6690c36e3a"
     ],
     [
       "DHGroup.__proj__Named__item___0",
@@ -25,7 +25,7 @@
         "refinement_interpretation_DHGroup_Tm_refine_1f67f6deaf7b51138cd35ad2f4568e94"
       ],
       0,
-      "97c61844c81bfa1cd7f0c28be1894066"
+      "f44187ebf1c9ae96cc5c2207b5c781bf"
     ],
     [
       "DHGroup.__proj__Explicit__item___0",
@@ -38,7 +38,7 @@
         "refinement_interpretation_DHGroup_Tm_refine_dc91833cf9fb025d258378587c7faffb"
       ],
       0,
-      "905b8e88cd2c0ddbe249550e3123a91f"
+      "270d9b766981232556a6409c68290c91"
     ],
     [
       "DHGroup.make_ffdhe",
@@ -83,7 +83,7 @@
         "typing_FStar.UInt8.uint_to_t", "typing_Mem.is_tls_rgn"
       ],
       0,
-      "4755320b5c41f7baf5375eade387987c"
+      "6eccc05bd534131bbf2e75a42eceaf00"
     ],
     [
       "DHGroup.params_of_group",
@@ -103,7 +103,7 @@
         "typing_DHGroup.__proj__Named__item___0"
       ],
       0,
-      "c6870e2abde2e1eed97e03049bf382ee"
+      "565e96e0bafe884cc981e88251a63e67"
     ],
     [
       "DHGroup.keyshare",
@@ -112,7 +112,7 @@
       1,
       [ "@query", "assumption_CoreCrypto.dh_params__uu___haseq" ],
       0,
-      "1eb5a3c1416cbc6d7d1cddea55a80eaa"
+      "0084b515c43665c8de924adf50165492"
     ],
     [
       "DHGroup.pubshare",
@@ -126,7 +126,7 @@
         "refinement_interpretation_DHGroup_Tm_refine_19d1311d89c80108e6969c71ab06f0fa"
       ],
       0,
-      "d3c1e4e0feae3050a75816518d858148"
+      "cf6dde728c77f4b03497a6628d65d062"
     ],
     [
       "DHGroup.keygen",
@@ -168,7 +168,7 @@
         "typing_FStar.Set.complement", "typing_FStar.Set.empty"
       ],
       0,
-      "c19a5a90700132c4fea238e4ca4a5820"
+      "257d5f534ac17b71c55ade17f5646682"
     ],
     [
       "DHGroup.dh_initiator",
@@ -207,7 +207,7 @@
         "typing_FStar.Set.complement", "typing_FStar.Set.empty"
       ],
       0,
-      "88fc9446dbaba77a52e658ee2501bae8"
+      "abf21521804d42a8c6e973b952b1d724"
     ],
     [
       "DHGroup.synth_vlb16",
@@ -224,7 +224,7 @@
         "refinement_interpretation_LowParse.Spec.Bytes_Tm_refine_6ef601d9ddff0bec6e0cf75a07296cc4"
       ],
       0,
-      "6409acb0e03878a8c6de0b699237041d"
+      "320b07ad40ab9012eabafb0b6d53817e"
     ],
     [
       "DHGroup.unsynth_vlb16",
@@ -247,7 +247,7 @@
         "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length"
       ],
       0,
-      "3eb3fa68d562de48c0f379581029c073"
+      "d72b30a02a9f254c5bf72aaa08265ba6"
     ],
     [
       "DHGroup.vlb16_parser",
@@ -260,7 +260,7 @@
         "token_correspondence_DHGroup.synth_vlb16"
       ],
       0,
-      "1062eaa64314b302ed9b77c422555e0b"
+      "c8287d132e278b1988675afa2cfc3d61"
     ],
     [
       "DHGroup.vlb16_parser32",
@@ -275,7 +275,7 @@
         "token_correspondence_DHGroup.synth_vlb16"
       ],
       0,
-      "51817c1693ed3b7cd6275cdb0c79e8c3"
+      "2c791dc52e745f85fae04fcda3d5efe3"
     ],
     [
       "DHGroup.vlb16_serializer",
@@ -293,7 +293,7 @@
         "token_correspondence_DHGroup.unsynth_vlb16"
       ],
       0,
-      "a705d24308e94b7cb1fc5d5eb1641822"
+      "88e878e94a1a8438e8931d038f7a5dde"
     ],
     [
       "DHGroup.vlb16_serializer32",
@@ -311,7 +311,7 @@
         "token_correspondence_DHGroup.unsynth_vlb16"
       ],
       0,
-      "f9a93ebf275c15195bea3ad27d3c2247"
+      "a70a9e2d3ca1d56b42619de28a320af0"
     ],
     [
       "DHGroup.dhparam_parser",
@@ -332,7 +332,7 @@
         "token_correspondence_DHGroup.synth_dhparams"
       ],
       0,
-      "6e2e4f48a429e5789dbeb1ad9ef6900f"
+      "e335eb476d37e7456d586155a2deefdb"
     ],
     [
       "DHGroup.dhparam_parser32",
@@ -353,7 +353,7 @@
         "token_correspondence_DHGroup.synth_dhparams"
       ],
       0,
-      "10f2f33f39a96aa613d405330dca1eeb"
+      "b10121393f7222ca10507d745790d91c"
     ],
     [
       "DHGroup.dhparam_serializer",
@@ -391,7 +391,7 @@
         "token_correspondence_DHGroup.unsynth_dhparams"
       ],
       0,
-      "a503ba7836e49d15497944db4d629d66"
+      "22006a30d83f868f03e951803468c996"
     ],
     [
       "DHGroup.dhparam_serializer32",
@@ -456,7 +456,7 @@
         "typing_LowParse.Spec.VLData.log256_"
       ],
       0,
-      "d4eb3325a07a1d78edc71030f014908a"
+      "883357d4264a8c25d5ea51938c433e03"
     ],
     [
       "DHGroup.serialize",
@@ -474,7 +474,7 @@
         "typing_DHGroup.params_of_group"
       ],
       0,
-      "38ae84a1a7a7632faa1d9b706f9d0ef1"
+      "a95fa843b4d8c5bec1d5c4b2caa97719"
     ],
     [
       "DHGroup.serialize_public",
@@ -487,7 +487,8 @@
         "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
         "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
         "bool_inversion", "bool_typing", "equation_DHGroup.make_ffdhe",
-        "equation_DHGroup.share", "equation_FStar.Bytes.lbytes",
+        "equation_DHGroup.share", "equation_FStar.Bytes.fits_in_k_bytes",
+        "equation_FStar.Bytes.lbytes",
         "equation_FStar.Monotonic.HyperHeap.disjoint",
         "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
         "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
@@ -495,7 +496,8 @@
         "equation_FStar.UInt8.n", "equation_Mem.disjoint",
         "equation_Mem.rgn", "equation_Mem.tls_define_region",
         "equation_Mem.tls_rgn", "equation_Mem.tls_tables_region",
-        "equation_Prims.nat", "function_token_typing_FStar.UInt32.n",
+        "equation_Prims.nat", "equation_Prims.pos",
+        "function_token_typing_FStar.UInt32.n",
         "function_token_typing_FStar.UInt8.n",
         "function_token_typing_FStar.UInt8.t",
         "function_token_typing_Mem.tls_define_region",
@@ -504,7 +506,8 @@
         "lemma_FStar.Seq.Base.lemma_len_append",
         "lemma_FStar.UInt.pow2_values", "lemma_FStar.UInt32.vu_inv",
         "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
-        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Negation",
+        "primitive_Prims.op_LessThan", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Multiply", "primitive_Prims.op_Negation",
         "primitive_Prims.op_Subtraction",
         "proj_equation_CoreCrypto.Mkdh_params_dh_g",
         "projection_inverse_BoxBool_proj_0",
@@ -514,18 +517,19 @@
         "refinement_interpretation_DHGroup_Tm_refine_48f03d387eb91acdf7bed79a69ac42d3",
         "refinement_interpretation_DHGroup_Tm_refine_8027a4a39160bb300d827980a2c091c3",
         "refinement_interpretation_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
+        "refinement_interpretation_FStar.Bytes_Tm_refine_b93721cf09417fced4c7248c31f5aefc",
         "refinement_interpretation_FStar.UInt8_Tm_refine_22871ed0ff70fd094ad3e8d742624d47",
         "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
         "refinement_interpretation_Mem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
         "refinement_interpretation_Mem_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
         "refinement_interpretation_Mem_Tm_refine_f70be9b0cc50942af80d22e44fc9b9c4",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "typing_FStar.Bytes.abyte", "typing_FStar.Bytes.reveal",
-        "typing_FStar.UInt8.uint_to_t", "typing_Mem.disjoint",
-        "typing_Mem.tls_define_region"
+        "typing_FStar.Bytes.abyte", "typing_FStar.Bytes.repr_bytes",
+        "typing_FStar.Bytes.reveal", "typing_FStar.UInt8.uint_to_t",
+        "typing_Mem.disjoint", "typing_Mem.tls_define_region"
       ],
       0,
-      "465abc40a84f86a95b9187e3c138fe3d"
+      "c3371535b5674c0974377fcd2f969fd5"
     ],
     [
       "DHGroup.parse_partial",
@@ -553,7 +557,7 @@
         "refinement_interpretation_Mem_Tm_refine_f70be9b0cc50942af80d22e44fc9b9c4"
       ],
       0,
-      "6546c417874baaca7f5f564c9fae068d"
+      "4273fbb9a1553e17d600db5ec1d7f6c9"
     ]
   ]
 ]
