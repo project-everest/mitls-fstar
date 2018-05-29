@@ -27,4 +27,4 @@ clean: ocaml-clean kremlin-clean quic-clean model-clean
 	$(MAKE) -f Makefile.$(FLAVOR) $@
 
 todo:
-	grep -nH -i -e admit -e assume -e '--lax' -e todo -e magic Make* `find . -regex '.*.fst[i]*\|./Make.*'` | grep -v 'assume val'
+	grep -nH -i -e admit -e assume -e '--lax' -e todo -e magic Make* `find . -regex '.*.fst[i]*'` | grep -v 'assume val'
