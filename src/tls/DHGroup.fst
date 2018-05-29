@@ -2,20 +2,14 @@
 
 open FStar.Bytes
 open FStar.Error
-
 open CoreCrypto
+
 open TLSError
 open Mem
 open Parse
 
-type ffdhe =
-  | FFDHE2048
-  | FFDHE3072
-  | FFDHE4096
-  | FFDHE6144
-  | FFDHE8192
-  
-type params = dhp:CoreCrypto.dh_params{length dhp.dh_p < 65536 && length dhp.dh_g < 65536}
+module CC = CoreCrypto
+module LP = LowParse.SLow
 
 val make_ffdhe: (p:string{length (bytes_of_hex p) < 65536}) -> string -> Tot params
 let make_ffdhe p q =
@@ -56,12 +50,7 @@ abstract let ffdhe8192 =
   assume (length (bytes_of_hex p) < 65536);
   make_ffdhe p q
 
-type group =
-  | Named    of ffdhe
-  | Explicit of params
-
 #reset-options "--z3rlimit 20"
-val params_of_group: group -> Tot params
 let params_of_group = function
   | Named FFDHE2048 -> ffdhe2048
   | Named FFDHE3072 -> ffdhe3072
@@ -71,37 +60,17 @@ let params_of_group = function
   | Explicit ps     -> ps
 #reset-options
 
-type share (g:group) = b:bytes{
-  length b < 65536 /\
-  (let dhp = params_of_group g in length b <= length dhp.dh_p)}
-
-type keyshare (g:group) = k:CoreCrypto.dh_key{
-  let dhp = k.dh_params in
-  params_of_group g = dhp /\ Some? k.dh_private /\
-  length dhp.dh_p < 65536 && length dhp.dh_g < 65536 /\
-  length k.dh_public <= length dhp.dh_p}
-
-type secret (g:group) = bytes
-
-val pubshare: #g:group -> keyshare g -> Tot (share g)
-let pubshare #g k = k.dh_public
+let pubshare #g k = 
+  let r = k.dh_public in
+  assume (length r > 0);
+  r
 
 #reset-options "--z3rlimit 20"
-val keygen: g:group -> ST (keyshare g)
-  (requires (fun h0 -> True))
-  (ensures (fun h0 _ h1 -> modifies_none h0 h1))
-let keygen g =
-  dh_gen_key (params_of_group g)
+let keygen g = dh_gen_key (params_of_group g)
 
-val dh_initiator: #g:group -> keyshare g -> share g -> ST (secret g)
-  (requires (fun h0 -> True))
-  (ensures (fun h0 _ h1 -> modifies_none h0 h1))
-let dh_initiator #g x gy =
-  dh_agreement x gy
+let dh_initiator #g x gy = dh_agreement x gy
 #reset-options
 
-
-module LP = LowParse.SLow
 
 private
 let dhparam_parser_kind = let vlpk = LP.parse_bounded_vldata_kind 0 65535 in
@@ -112,11 +81,13 @@ let dhparam_parser_kind = let vlpk = LP.parse_bounded_vldata_kind 0 65535 in
 private type vlb16 = b:bytes{length b < 65536}
 private type dhparams = vlb16 * vlb16 * vlb16 * vlb16
 
+
 private 
 inline_for_extraction
 let synth_vlb16 (x:LP.parse_bounded_vlbytes_t 0 65535)
   : Tot vlb16
-  = assert (length x < 65536); let y:vlb16 = x in y
+  = assert (length x < 65536); 
+    x
 
 private 
 inline_for_extraction
@@ -208,47 +179,28 @@ let dhparam_serializer32: LP.serializer32 dhparam_serializer =
     (fun x -> unsynth_dhparams x)
     ()
   
-val serialize: #g:group -> share g -> Tot (b:bytes{length b < 196612})
 let serialize #g dh_Y =
   let dhp:params = params_of_group g in
-  let (x:CoreCrypto.dh_params{length x.dh_p < 65536 && length x.dh_g < 65536}) = dhp in
+  let (x:dh_params{length x.dh_p < 65536 && length x.dh_g < 65536}) = dhp in
   assert (length x.dh_p < 65536);
   assert (length x.dh_g < 65536);
   let r = dhparam_serializer32 (x.dh_p, x.dh_g, dh_Y, Bytes.empty_bytes) in
-  assume (length r < 196612);
   r
 
 #reset-options "--using_facts_from '* -LowParse'"
-val serialize_public: #g:group -> s:share g -> l:nat{l < 65536 /\ length s <= l}
-  -> Tot (lbytes l)
 let serialize_public #g s l =
   lemma_repr_bytes_values l;
   let pad_len = l - length s in
   let (pad:lbytes pad_len) = Bytes.create_ pad_len 0z in
-  let (r:lbytes l) = Bytes.append pad s in
-  r
-#reset-options
+  Bytes.append pad s
 
-private 
-let lemma_dh_param_len_bound (bs:vlb16)
-  : Lemma 
-    (requires True)
-    (ensures (length bs < 65536))
-  = () // cwinter: this should come for free, no?
-
-#reset-options "--using_facts_from '* -LowParse'"
-val parse_partial: FStar.Bytes.bytes -> Tot (result ((g:group & share g) * bytes))
-let parse_partial bs =
+let parse_partial (bs:bytes) =
   match dhparam_parser32 bs with 
   | Some ((p, g, gy, rem), _) -> 
-      // cwinter: I have no idea why these lemmas are needed, this should really be automatic.
-      lemma_dh_param_len_bound p;
-      lemma_dh_param_len_bound g;
-      if length gy <= length p then (
+      if 0 < length gy && length gy <= length p then (
         let dhp = { dh_p = p; dh_g = g; dh_q = None; safe_prime = false } in
         Correct ((| Explicit dhp, gy |), rem)
       ) 
       else
         Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
   | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-#reset-options
