@@ -217,3 +217,80 @@ let make_total_constant_size_parser32
 : Tot (parser32 (make_total_constant_size_parser sz t f))
 = fun (input: buffer8) ->
   f' (B.sub input 0ul sz')
+
+inline_for_extraction
+let validate32_filter
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (v32: validator32 p)
+  (p32: parser32 p)
+  (f: (t -> GTot bool))
+  (f' : ((x: t) -> Tot (y: bool { y == f x } )))
+: Tot (validator32 (parse_filter p f))
+= fun input len ->
+  let res = v32 input len in
+  if res `I32.lt` 0l
+  then res
+  else
+    let va = p32 input in
+    if f' va
+    then res
+    else -1l
+
+module MO = LowStar.Modifies
+
+inline_for_extraction
+let parse32_filter'
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (p32: parser32 p)
+  (f: (t -> GTot bool))
+  (input: buffer8)
+: HST.Stack (x: t { f x == true } )
+  (requires (fun h -> B.live h input /\ Some? (parse (parse_filter p f) (B.as_seq h input))))
+  (ensures (fun h res h' ->
+    MO.modifies MO.loc_none h h' /\
+    B.live h' input /\ (
+    let z = parse p (B.as_seq h input) in
+    Some? z /\ (
+    let (Some (v, _)) = z in
+    f res == true /\
+    v == res
+  ))))
+= p32 input
+
+inline_for_extraction
+let parse32_filter
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (p32: parser32 p)
+  (f: (t -> GTot bool))
+: Tot (parser32 (parse_filter p f))
+= fun input ->
+  parse32_filter' p32 f input
+
+inline_for_extraction
+let validate32_and_then
+  (#k1: parser_kind)
+  (#t1: Type0)
+  (#p1: parser k1 t1)
+  (v1: validator32 p1)
+  (p1': parser32 p1)
+  (#k2: parser_kind)
+  (#t2: Type0)
+  (#p2: (t1 -> parser k2 t2))
+  (v2: ((x1: t1) -> validator32 (p2 x1)))
+  (u: unit {
+    and_then_cases_injective p2
+  })
+: Tot (validator32 (p1 `and_then` p2))
+= fun input len ->
+  let res = v1 input len in
+  if res `I32.lt` 0l
+  then res
+  else
+    let va = p1' input in
+    v2 va (B.offset input (Cast.int32_to_uint32 (len `I32.sub` res))) res
