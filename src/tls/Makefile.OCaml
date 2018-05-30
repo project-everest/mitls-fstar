@@ -166,8 +166,9 @@ extract/OCaml/AEADProvider.cmx: extract/OCaml/Crypto_AEAD_Main.cmx
 extract/OCaml/Test_Handshake.cmo: extract/OCaml/PKI.cmo
 extract/OCaml/Test_Handshake.cmx: extract/OCaml/PKI.cmx
 
-extract/OCaml/PKI.cmo extract/OCaml/PKI.cmx: \
-  extract/mlstubs/PKI.ml extract/OCaml/TLSConstants.cmo
+extract/OCaml/PKI.cmo: extract/mlstubs/PKI.ml extract/OCaml/TLSConstants.cmo
+
+extract/OCaml/PKI.cmx: extract/mlstubs/PKI.ml extract/OCaml/TLSConstants.cmx
 
 extract/OCaml/BufferBytes.cmo extract/OCaml/BufferBytes.cmx: \
   extract/mlstubs/BufferBytes.ml

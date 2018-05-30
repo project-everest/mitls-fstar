@@ -37,7 +37,7 @@ CACHE_DIR   = cache/$(FLAVOR)
 EXTRACT_DIR = extract/$(FLAVOR)
 DEP_FILE    = $(CACHE_DIR)/.depend
 FSTAR       = $(FSTAR_HOME)/bin/fstar.exe --cache_dir $(CACHE_DIR) --cache_checked_modules $(OTHERFLAGS)
-VFLAGS     ?= --use_hints --use_hint_hashes --record_hints --warn_error -272-241
+VFLAGS     ?= --warn_error -272-241
 
 ifneq (,$(HINTS_DIR))
 	HINTS_OPTS=--hint_file $(HINTS_DIR)/$(notdir $(subst .checked,,$<)).hints
