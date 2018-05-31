@@ -1,4 +1,6 @@
 module AEAD0
+module HS = FStar.HyperStack //Added automatically
+module HST = FStar.HyperStack.ST //Added automatically
 
 // With arbitrary nonces (as long as they are not repeated)
 // multiplexing over the constructions of CoreCrypto.aead_cipher
@@ -8,13 +10,13 @@ module AEAD0
 //16-09-10 consider sharing some AEAD?.Common.fst
 
 open FStar.Heap
-open FStar.HyperHeap
+
 open FStar.Seq
-open FStar.Monotonic.RRef
+
 open FStar.Monotonic.Seq
 
-open Platform.Error
-open Platform.Bytes
+open Fstar.Error
+open FStar.Bytes
 
 open TLSError
 open TLSConstants
@@ -177,7 +179,7 @@ let mref_seqn (#l:rid) (#r:rid) (#i:id) (#k:key i) (#siv:staticIV i) (#log:maybe
 // kept concrete for log and counter, but the key and iv should be private.
 noeq type state (i:id) (rw:rw) =
   | State: #region: rgn
-         -> #log_region: rgn{if rw = Writer then region = log_region else HyperHeap.disjoint region log_region}
+         -> #log_region: rgn{if rw = Writer then region = log_region else HS.disjoint region log_region}
          -> key: key i
          -> siv: staticIV i
          -> log: maybe_log log_region i key siv // kept only when idealizing
@@ -195,9 +197,9 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
   color w.region = color parent /\
   (ideal ==> 
     (m_contains (ilog w.log) h1 /\ 
-     m_sel h1 (ilog w.log) == createEmpty)) /\
+     sel h1 (ilog w.log) == createEmpty)) /\
   m_contains (mref_seqn w.seqn) h1 /\
-  m_sel h1 (mref_seqn w.seqn) === 0
+  sel h1 (mref_seqn w.seqn) === 0
 
 // Generate a fresh instance with index i in a fresh sub-region of r0
 // (we can drop this spec, since F* will infer something at least as precise,
@@ -207,7 +209,7 @@ val gen: parent:rid -> i:id -> ST (writer i)
   (ensures  (genPost parent))
 
 val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
-  (requires (fun h0 -> HyperHeap.disjoint parent w.region)) //16-04-25  we may need w.region's parent instead
+  (requires (fun h0 -> HS.disjoint parent w.region)) //16-04-25  we may need w.region's parent instead
   (ensures  (fun h0 (r:reader i) h1 ->
                modifies Set.empty h0 h1 /\
                r.log_region = w.region /\
@@ -218,7 +220,7 @@ val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
                w.siv = r.siv /\
                eq2 #(maybe_log w.region i w.key w.siv) w.log r.log /\
                m_contains (mref_seqn r.seqn) h1 /\
-               m_sel h1 (mref_seqn r.seqn) === 0 ))
+               sel h1 (mref_seqn r.seqn) === 0 ))
 
 
 // Coerce an instance with index i in a fresh sub-region of parent
@@ -240,21 +242,21 @@ val leak: #i:id{~(authId i)} -> #role:rw -> state i role -> ST (key i * iv i)
 // safeId i is fixed to false and after removal of the cryptographic ghost log,
 // i.e. all idealization is turned off
 val encrypt: #i:id -> e:writer i -> ad:adata i -> l:plainLen -> p:plain i l -> ST (cipher i l)
-  (requires (fun h0 -> m_sel h0 (mref_seqn e.seqn) < max_seqn i))
+  (requires (fun h0 -> sel h0 (mref_seqn e.seqn) < max_seqn i))
   (ensures  (fun h0 c h1 ->
            let ms = mref_seqn e.seqn in 
            modifies_one e.region h0 h1
 	 /\ m_contains ms h1
-	 /\ m_sel h1 ms === m_sel h0 ms + 1
+	 /\ sel h1 ms === sel h0 ms + 1
       	 /\ (ideal && authId i ==>
 	     (let log = ilog e.log in
-	      let n   = Seq.length (m_sel h0 log) in
+	      let n   = Seq.length (sel h0 log) in
               let nonce = ivT i e.siv n in 
               c = CoreCrypto.aead_encryptT (alg i) e.key nonce ad (repr p) /\ (
 	      let ent = Entry nonce ad l p c in
 	      m_contains log h1 /\
               witnessed (i_at_least n ent log) /\
-	      m_sel h1 log == snoc (m_sel h0 log) ent)
+	      sel h1 log == snoc (sel h0 log) ent)
 	   )
   )))
 
@@ -269,34 +271,34 @@ let matches #i c ad (Entry c' ad' _) = c = c' && ad = ad'
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
 val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
   -> ST (option (dplain i ad c))
-  (requires (fun h0 -> m_sel h0 (ctr d.counter) + 1 <= max_ctr (alg i)))
+  (requires (fun h0 -> sel h0 (ctr d.counter) + 1 <= max_ctr (alg i)))
   (ensures  (fun h0 res h1 ->
-     let j = m_sel h0 (ctr d.counter) in
+     let j = sel h0 (ctr d.counter) in
      (authId i ==>
-       (let log = m_sel h0 (ilog d.log) in
+       (let log = sel h0 (ilog d.log) in
        if j < Seq.length log && matches c ad (Seq.index log j)
        then res = Some (Entry?.p (Seq.index log j))
        else res = None))
     /\ (match res with
        | None -> modifies Set.empty h0 h1
        | _    -> modifies_one d.region h0 h1
-                /\ modifies_rref d.region (Set.singleton (Heap.addr_of (as_ref (as_rref (ctr d.counter))))) h0 h1
-	        /\ m_sel h1 (ctr d.counter) === j + 1)))
+                /\ HS.modifies_ref d.region (Set.singleton (Heap.addr_of (as_ref (as_rref (ctr d.counter))))) h0 h1
+	        /\ sel h1 (ctr d.counter) === j + 1)))
 
 (*
 let decrypt #i d ad c =
   let ctr = ctr d.counter in
-  m_recall ctr;
-  let j = m_read ctr in
+  HST.recall ctr;
+  let j = HST.op_Bang ctr in
   if authId i then
     let ilog = ilog d.log in
-    let log = m_read ilog in
+    let log = HST.op_Bang ilog in
     let ictr: ideal_ctr d.region i ilog = d.counter in
     let _ = testify_counter ictr in // now we know j <= Seq.length log
     if j < Seq.length log && matches c ad (Seq.index log j) then
       begin
       increment_counter ictr;
-      m_recall ctr;
+      HST.recall ctr;
       Some (Entry?.p (Seq.index log j))
       end
     else None
@@ -319,11 +321,11 @@ let decrypt #i d ad c =
       // TODO: This should be done by StatefulPlain.mk_plain
       if StatefulPlain.parseAD i (LHAEPlain.parseAD ad) = Content.Change_cipher_spec && text <> Content.ccsBytes then
         None
-      else if StatefulPlain.parseAD i (LHAEPlain.parseAD ad) = Content.Alert && (length text <> 2 || Platform.Error.Error? (Alert.parse text)) then
+      else if StatefulPlain.parseAD i (LHAEPlain.parseAD ad) = Content.Alert && (length text <> 2 || FStar.Error.Error? (Alert.parse text)) then
         None
       else
 	begin
-	m_write ctr (j + 1);
+	HST.op_Colon_Equals ctr (j + 1);
         let plain = mk_plain i ad r text in
         Some plain
 	end
@@ -350,7 +352,7 @@ let gen parent i =
     let ectr: ideal_ctr writer_r i log = new_seqn writer_r 0 log in
     State #i #Writer #writer_r #writer_r kv iv log ectr
   else 
-    let ectr: concrete_ctr writer_r i = m_alloc writer_r 0 in
+    let ectr: concrete_ctr writer_r i = HST.ralloc writer_r 0 in
     State #i #Writer #writer_r #writer_r kv iv () ectr 
 
 
@@ -361,13 +363,13 @@ let genReader parent #i w =
     let log : ideal_log w.region i = w.log in
     let dctr: ideal_ctr reader_r i log = new_seqn reader_r 0 log in
     State #i #Reader #reader_r #(w.region) w.key w.iv w.log dctr
-  else let dctr : concrete_ctr reader_r i = m_alloc reader_r 0 in
+  else let dctr : concrete_ctr reader_r i = HST.ralloc reader_r 0 in
     State #i #Reader #reader_r #(w.region) w.key w.iv () dctr
 
 
 let coerce parent i kv iv =
   let writer_r = new_region parent in
-  let ectr: concrete_ctr writer_r i = m_alloc writer_r 0 in
+  let ectr: concrete_ctr writer_r i = HST.ralloc writer_r 0 in
   State #i #Writer #writer_r #writer_r kv iv () ectr 
 
 let leak #i #role s = State?.key s, State?.iv s
@@ -398,7 +400,7 @@ let genReader parent #i w =
     let dctr: ideal_ctr reader_r i log = new_seqn reader_r 0 log in
     State #i #Reader #reader_r #w.region w.key w.log dctr
   else
-    let dctr: concrete_ctr reader_r i = m_alloc reader_r 0 in
+    let dctr: concrete_ctr reader_r i = HST.ralloc reader_r 0 in
     State #i #Reader #reader_r #w.region w.key () dctr
 
 
@@ -408,41 +410,41 @@ let genReader parent #i w =
    i.e. all idealization is turned off *)
 let encrypt #i e l p =
   let ctr = ctr e.seqn in 
-  m_recall ctr;
+  HST.recall ctr;
   let text = if safeId i then createBytes l 0z else repr i l p in
-  let n = m_read ctr in
+  let n = HST.op_Bang ctr in
   let iv = aeIV i n e.iv in
   let c = CoreCrypto.aead_encrypt (alg i) e.key iv noAD text in
   if authId i then
     begin
     let ilog = ilog e.log in
-    m_recall ilog;
+    HST.recall ilog;
     let ictr: ideal_ctr e.region i ilog = e.seqn in
     testify_seqn ictr;
     write_at_end ilog (Entry l c p); //need to extend the log first, before incrementing the seqn for monotonicity; do this only if ideal
-    m_recall ictr;
+    HST.recall ictr;
     increment_seqn ictr;
-    m_recall ictr
+    HST.recall ictr
     end
   else
-    m_write ctr (n + 1);
+    HST.op_Colon_Equals ctr (n + 1);
   c
 
 // decryption, idealized as a lookup at index d.seq# in the log for safe instances
 let decrypt #i d l c =
   let ctr = ctr d.seqn in 
-  m_recall ctr;
-  let j = m_read ctr in
+  HST.recall ctr;
+  let j = HST.op_Bang ctr in
   if authId i 
   then 
     let ilog = ilog d.log in
-    let log  = m_read ilog in
+    let log  = HST.op_Bang ilog in
     let ictr: ideal_ctr d.region i ilog = d.seqn in
     let _ = testify_seqn ictr in //now we know that j <= Seq.length log
     if j < Seq.length log && matches l c (Seq.index log j) then
       begin
       increment_seqn ictr;
-      m_recall ctr;
+      HST.recall ctr;
       Some (Entry?.p (Seq.index log j))
       end
     else None
@@ -453,7 +455,7 @@ let decrypt #i d l c =
      | Some pr ->
        begin
        match mk_plain i l pr with
-       | Some p -> (m_write ctr (j + 1); Some p)
+       | Some p -> (HST.op_Colon_Equals ctr (j + 1); Some p)
        | None   -> None
        end
 *)

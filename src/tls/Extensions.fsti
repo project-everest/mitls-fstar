@@ -39,6 +39,7 @@ type pskIdentity = psk_identifier * PSK.obfuscated_ticket_age
 // used in a refinement below
 val pskiListBytes: list pskIdentity -> bytes
 
+// how to build this type without overflows?? 
 noeq type psk =
   | ClientPSK:
     // truncated PSK extension, without the list of binder tags.
@@ -49,6 +50,9 @@ noeq type psk =
 
 // PSK binders, actually the truncated suffix of TLS 1.3 ClientHello
 // We statically enforce length requirements to ensure that formatting is total.
+
+//18-02-20 This should be defined in Hashing 
+//18-02-20 We'll need a lemma on HMAC tag lengths. 
 type binder = b:bytes {32 <= length b /\ length b <= 255}
 
 (** REMARK: this is more restrictive than in the RFC, which allows up to 2047 binders *)
@@ -68,10 +72,14 @@ type psk_kex =
 type client_psk_kexes = l:list psk_kex
   { l = [PSK_KE] \/ l = [PSK_DHE_KE] \/ l = [PSK_KE; PSK_DHE_KE] \/ l = [PSK_DHE_KE; PSK_KE] }
 
+#set-options "--admit_smt_queries true"
 let client_psk_kexes_length (l:client_psk_kexes): Lemma (List.Tot.length l < 3) = ()
 
+(* EARLY DATA INDICATION *)
 
-type earlyDataIndication = option UInt32.t // Some  max_early_data_size, only in  NewSessionTicket
+type earlyDataIndication = option UInt32.t // Some max_early_data_size, only in NewSessionTicket
+
+(* EC POINT FORMATS *)
 
 type point_format =
   | ECP_UNCOMPRESSED
@@ -85,14 +93,6 @@ type protocol_versions =
   | ServerPV of protocolVersion
   | ClientPV of l:list protocolVersion' {0 < List.Tot.length l /\ List.Tot.length l < 128}
 
-(*
-// we used to support renegotiation_info
-type ri_status =
-| RI_Unsupported
-| RI_Valid
-| RI_Invalid
-*)
-
 // We constrain unknown extensions to have headers different from
 // known extensions; we rely on parametricity to avoid recursion
 // between the datatype and its formatting property.
@@ -102,7 +102,7 @@ type unknownTag = lbytes 2 -> Type0
 // M=Mandatory, AF=mandatory for Application Features in https://tlswg.github.io/tls13-spec/#rfc.section.8.2.
 noeq type extension' (p: unknownTag) =
   | E_server_name of list serverName (* M, AF *) (* RFC 6066 *)
-  | E_supported_groups of list namedGroup (* M, AF *) (* RFC 7919 *)
+  | E_supported_groups of list CommonDH.namedGroup (* M, AF *) (* RFC 7919 *)
   | E_signature_algorithms of signatureSchemeList (* M, AF *) (* RFC 5246 *)
   | E_signature_algorithms_cert of signatureSchemeList (* TLS 1.3#23 addition; TLS 1.2 should also support it *)
   | E_key_share of CommonDH.keyShare (* M, AF *)
@@ -165,10 +165,11 @@ let encryptedExtension (ext: extension) : bool =
 (** Serializes an extension *)
 val extensionBytes: ext:extension -> b:bytes { 2 <= length b /\ length b < 65536 }
 val extensionBytes_is_injective:
-  ext1: extension -> s1: bytes ->
-  ext2: extension -> s2: bytes -> Lemma
-  (requires (Bytes.equal (extensionBytes ext1 @| s1) (extensionBytes ext2 @| s2)))
-  (ensures (ext1 == ext2 /\ s1 == s2))
+  ext1: extension -> s1: bytes{ UInt.size (length (extensionBytes ext1) + length s1) UInt32.n } ->
+  ext2: extension -> s2: bytes{ UInt.size (length (extensionBytes ext2) + length s2) UInt32.n } -> 
+  Lemma
+  (requires (extensionBytes ext1 @| s1 = extensionBytes ext2 @| s2))
+  (ensures  (ext1 == ext2 /\ s1 == s2))
 
 // we'll need to reveal more to build extensions...
 val extensionListBytes: exts: list extension -> bytes
@@ -186,9 +187,9 @@ val extensionsBytes:
   exts:valid_extensions -> b:bytes {2 <= length b /\ length b < 2 + 65536}
 
 val extensionsBytes_is_injective_strong:
-  exts1:valid_extensions -> s1: bytes ->
-  exts2:valid_extensions -> s2: bytes -> Lemma
-  (requires Bytes.equal (extensionsBytes exts1 @| s1) (extensionsBytes exts2 @| s2))
+  exts1:valid_extensions -> s1: bytes{ UInt.size (length (extensionsBytes exts1) + length s1) UInt32.n } ->
+  exts2:valid_extensions -> s2: bytes{ UInt.size (length (extensionsBytes exts2) + length s2) UInt32.n } -> Lemma
+  (requires extensionsBytes exts1 @| s1 = extensionsBytes exts2 @| s2)
   (ensures exts1 == exts2 /\ s1 == s2)
 
 val extensionsBytes_is_injective:
@@ -203,6 +204,8 @@ val extensionsBytes_is_injective:
 
 val parseExtension:     ext_msg -> bytes -> result (extension * option binders)
 val parseExtensions:    ext_msg -> bytes -> result (extensions * option binders)
+
+(** Called by HandshakeMessages; returns either Some,Some or None; why not using extensions here too? *)
 val parseOptExtensions: ext_msg -> bytes -> result (option (list extension) * option binders)
 
 (*************************************************
@@ -224,7 +227,9 @@ val prepareExtensions:
   bool -> // EDI (Nego checks that PSK is compatible)
   option bytes -> // session_ticket
   signatureSchemeList ->
-  list valid_namedGroup ->
+  //18-02-26 
+  // list CommonDH.namedGroup -> // FIXME: was: list valid_namedGroup, but the latter type disappeared
+  list CommonDH.supportedNamedGroup ->
   option (cVerifyData * sVerifyData) ->
   option CommonDH.keyShare ->
   list (PSK.pskid * pskInfo) ->
@@ -254,4 +259,4 @@ val negotiateServerExtensions:
   result (option (list extension))
 
 val default_signatureScheme:
-  protocolVersion -> cipherSuite -> ML signatureSchemeList
+  protocolVersion -> cipherSuite -> HyperStack.All.ML signatureSchemeList

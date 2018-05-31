@@ -4,24 +4,22 @@ Implemented by appending a fragment sequence number to the additional data of
 the underlying LHAE scheme
 *)
 module StatefulLHAE
+
 module HS = FStar.HyperStack //Added automatically
 module HST = FStar.HyperStack.ST //Added automatically
 
-open FStar.Heap
-
-open FStar.HyperStack
 open FStar.Seq
-
 open FStar.Monotonic.Seq
-
 open FStar.Bytes
 
+open Mem
 open TLSConstants
 open TLSInfo
-open Range
 open AEAD_GCM
 open StatefulPlain
+
 module Range = Range
+
 #set-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 
 // TODO: TEMPORARY, until we add back LHAE
@@ -33,7 +31,7 @@ type cipher (i:id) = StatefulPlain.cipher i
 
 (* decrypted plaintexts, within a range computed from the cipher length *)
 type dplain (i:id) (ad:adata i) (c:cipher i) =
-  StatefulPlain.plain i ad (cipherRangeClass i (length c))
+  StatefulPlain.plain i ad (Range.cipherRangeClass i (length c))
 
 type state (i:id) (rw:rw) =
   AEAD_GCM.state i rw
@@ -70,7 +68,7 @@ let leak (#i:id{~(authId i)}) (#role:rw) state = AEAD_GCM.leak #i #role state
 (*------------------------------------------------------------------*)
 #set-options "--z3rlimit 100 --max_ifuel 1 --initial_ifuel 0 --max_fuel 1 --initial_fuel 0"
 val encrypt: #i:id -> e:writer i -> ad:adata i
-  -> r:range{fst r = snd r /\ snd r <= max_TLSPlaintext_fragment_length}
+  -> r:Range.range{fst r = snd r /\ snd r <= max_TLSPlaintext_fragment_length}
   -> p:plain i ad r
   -> ST (cipher i)
      (requires (fun h0 ->
@@ -98,7 +96,6 @@ let encrypt #i e ad r p =
   lemma_repr_bytes_values seqn;
   let ad' = LHAEPlain.makeAD i seqn ad in
   AEAD_GCM.encrypt #i e ad' r p
-
 
 (*------------------------------------------------------------------*)
 val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i

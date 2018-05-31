@@ -4,16 +4,14 @@ module HS = FStar.HyperStack //Added automatically
 // adding an indirection to TCP for applications that prefer to take control of their IOs.
 
 open FStar.HyperStack.All
-
 open FStar.Bytes
 open FStar.Error
 open TLSError
-
+open Mem
 
 /// 18-01-23 We now have function pointers matching the types used in
 /// mitls.h. After hoisting for Kremlin extraction, we treat the
 /// explicit context as a dyn to avoid climbing in universes.
-
 type pvoid = FStar.Dyn.dyn
 type size_t = UInt32.t 
 type pfn_send = 
@@ -28,8 +26,7 @@ type pfn_send =
     modifies_none h0 h1 /\
     (v = -1 \/ (0 <= v /\ v <= UInt32.v max_len)))
 
-type pfn_recv = 
-  pvoid -> 
+unfold type recv_t = 
   input_buffer: FStar.Buffer.buffer UInt8.t -> 
   max_len: size_t -> ST Int32.t
   (requires fun h0 ->
@@ -39,9 +36,11 @@ type pfn_recv =
     let v = Int32.v r in 
     Buffer.modifies_1 input_buffer h0 h1 /\ 
     (v = -1 \/ (0 <= v /\ v <= UInt32.v max_len)))
+
+type pfn_recv = pvoid -> recv_t
     
 noeq type t = {
-  ptr : pvoid;
+  ptr: pvoid;
   snd: pfn_send;
   rcv: pfn_recv }
 
@@ -49,6 +48,22 @@ let callbacks v send recv: t = { ptr = v; snd = send; rcv = recv }
 
 // following the indirection
 let send t buffer len = t.snd t.ptr buffer len 
+
+//18-04-21 apparently requiring an explicit declaration
+//val recv: t -> recv_t
+
+val recv:
+  t ->
+  input_buffer: FStar.Buffer.buffer UInt8.t -> 
+  max_len: size_t -> ST Int32.t
+  (requires fun h0 ->
+    Buffer.live h0 input_buffer /\
+    UInt32.v max_len = Buffer.length input_buffer)
+  (ensures fun h0 r h1 -> 
+    let v = Int32.v r in 
+    Buffer.modifies_1 input_buffer h0 h1 /\ 
+    (v = -1 \/ (0 <= v /\ v <= UInt32.v max_len)))
+
 let recv t buffer len = t.rcv t.ptr buffer len 
 
 // val test: t -> b: Buffer.buffer UInt8.t {Buffer.length b = 5} -> ST unit

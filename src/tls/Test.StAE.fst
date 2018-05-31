@@ -15,22 +15,6 @@ module DH = CommonDH
 
 open FStar.HyperStack
 open FStar.HyperStack.ST
-(*
-open FStar.Heap
-open FStar.HyperHeap
-open FStar.IO
-
-open Platform.Bytes
-
-open TLSError
-open TLSInfo
-open TLSConstants
-open Range
-open StatefulPlain
-open AEAD_GCM
-open StatefulLHAE
-open StAE
-*)
 
 let prefix = "Test.StAE"
 let ok: ref bool = ralloc root true
@@ -46,6 +30,8 @@ let print s = discard (IO.debug_print_string (prefix^": "^s^".\n"))
 let eprint s : St unit = ok := false; print ("ERROR: "^s)
 let nprint s : St unit = print s
 
+#set-options "--admit_smt_queries true"
+
 // used in other tests too
 private let pre_id (role:role) =
   let cr  = Bytes.create 32ul 0z in
@@ -55,8 +41,6 @@ private let pre_id (role:role) =
   ID12 TLS_1p2 msid kdf (AEAD CoreCrypto.AES_256_GCM Hashing.Spec.SHA256) cr sr role
 
 let id12 = pre_id Client
-
-#set-options "--lax"
 
 let id13 =
   let cr  = Bytes.create 32ul 0z in

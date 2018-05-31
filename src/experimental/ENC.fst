@@ -1,4 +1,6 @@
-﻿module ENC
+﻿
+module ENC
+module HS = FStar.HyperStack //Added automatically
 
 (* Bulk encryption for TLS record's "MAC-encode-then encrypt", agile,
    possibly with internal state, and assumed conditionally CPA with
@@ -9,18 +11,18 @@
 (* Instead, we could write a well-typed ideal functionality and reduce
    it to its non-agile underlying algorithms, e.g. AES-CBC *)
 
-open FStar.Heap
-open FStar.HyperHeap
-open FStar.HyperStack
 open FStar.Seq
 
-open Platform.Bytes
-open Platform.Error
+open FStar.Bytes
+open FStar.Error
 
+open Mem
 open TLSError
 open TLSConstants
 open TLSInfo
 open LHAEPlain
+
+module Range = Range
 open Range
 
 (* Also using Encode; we do not open it so that we can syntactically
@@ -87,7 +89,7 @@ noeq type entry (i:id) = | Entry:
 // private
 noeq type state (i:id) (rw:rw) = | StateB:
   #region: rid ->
-  #peer_region: rid { HyperHeap.disjoint region peer_region } -> 
+  #peer_region: rid { HS.disjoint region peer_region } -> 
   k: key i -> // only ghost for stream ciphers
   s: ref (localState region i){s.id = region} -> 
   log: ref (seq (entry i)){log.id = (if rw = Reader then peer_region else region)} -> 
@@ -129,13 +131,13 @@ val gen:
   reader_parent:rid -> 
   writer_parent:rid -> 
   i:id -> ST (encryptor i * decryptor i) 
-  (requires (fun h0 -> HyperHeap.disjoint reader_parent writer_parent))
+  (requires (fun h0 -> HS.disjoint reader_parent writer_parent))
   (ensures (fun h0 (rw: encryptor i * decryptor i) h1 -> True))
                        
 let gen reader_parent writer_parent i =
   let reader_r = new_region reader_parent in
   let writer_r = new_region writer_parent in
-  assert(HyperHeap.disjoint reader_r writer_r);
+  assert(HS.disjoint reader_r writer_r);
   let log = ralloc writer_r Seq.createEmpty in 
   let alg = encAlg_of_id i in
   let kv, wstate, rstate = 

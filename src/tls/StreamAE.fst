@@ -5,24 +5,19 @@ concretely, we use AES_GCM but any other AEAD algorithm would do.
 module StreamAE
 module HST = FStar.HyperStack.ST //Added automatically
 
-open FStar.Heap
-
 open FStar.HyperStack
 open FStar.Seq
- // for e.g. found
-
 open FStar.Monotonic.Seq
-
 open FStar.Error
 open FStar.Bytes
 
+open Mem
 open TLSError
 open TLSConstants
 open TLSInfo
 open StreamPlain
 
 module AEAD = AEADProvider
-
 module HS = FStar.HyperStack
 
 type rid = HST.erid
@@ -45,13 +40,13 @@ type entry (i:id) =
 // key materials (from the AEAD provider)
 type key (i:id) = AEAD.key i
 type iv  (i:id) = AEAD.salt i
+ 
+let ideal_log (r:erid) (i:id) = log_t r (entry i)
 
-let ideal_log (r:rid) (i:id) = log_t r (entry i)
-
-let log_ref (r:rid) (i:id) : Tot Type0 =
+let log_ref (r:erid) (i:id) : Tot Type0 =
   if authId i then ideal_log r i else unit
 
-let ilog (#r:rid) (#i:id) (l:log_ref r i{authId i}) : Tot (ideal_log r i) =
+let ilog (#r:erid) (#i:id) (l:log_ref r i{authId i}) : Tot (ideal_log r i) =
   l
 
 irreducible let max_ctr: n:nat{n = 18446744073709551615} =
@@ -60,19 +55,19 @@ irreducible let max_ctr: n:nat{n = 18446744073709551615} =
 
 type counter = c:nat{c <= max_ctr}
 
-let ideal_ctr (#l:rid) (r:rid) (i:id) (log:ideal_log l i) : Tot Type0 =
+let ideal_ctr (#l:erid) (r: erid) (i:id) (log:ideal_log l i) : Tot Type0 =
   FStar.Monotonic.Seq.seqn r log max_ctr
   // An increasing counter, at most min(length log, 2^64-1)
 
-let concrete_ctr (r:rid) (i:id) : Tot Type0 =
+let concrete_ctr (r:erid) (i:id) : Tot Type0 =
   m_rref r counter increases
 
-let ctr_ref (#l:rid) (r:rid) (i:id) (log:log_ref l i) : Tot Type0 =
+let ctr_ref (#l:erid) (r:erid) (i:id) (log:log_ref l i) : Tot Type0 =
   if authId i
   then ideal_ctr r i (log <: ideal_log l i)
   else m_rref r counter increases
 
-let ctr (#l:rid) (#r:rid) (#i:id) (#log:log_ref l i) (c:ctr_ref r i log)
+let ctr (#l:erid) (#r:erid) (#i:id) (#log:log_ref l i) (c:ctr_ref r i log)
   : Tot (m_rref r (if authId i
 		   then seqn_val #l #(entry i) r log max_ctr
 		   else counter)
@@ -117,7 +112,7 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
 // (we might drop this spec, since F* will infer something at least as precise,
 // but we keep it for documentation)
 val gen: parent:rgn -> i:id -> ST (writer i)
-  (requires (fun h0 -> True))
+  (requires (fun h0 -> witnessed (region_contains_pred parent))) 
   (ensures (genPost parent))
 
 #set-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
@@ -136,8 +131,10 @@ let gen parent i =
 
 #reset-options
 val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
-  (requires (fun h0 -> HS.disjoint parent w.region /\
-  HS.disjoint parent (AEAD.region w.aead))) //16-04-25  we may need w.region's parent instead
+  (requires (fun h0 -> 
+    witnessed (region_contains_pred parent) /\ 
+    disjoint parent w.region /\
+    disjoint parent (AEAD.region w.aead))) //16-04-25  we may need w.region's parent instead
   (ensures  (fun h0 (r:reader i) h1 ->
          modifies Set.empty h0 h1 /\
          r.log_region = w.region /\
@@ -209,7 +206,7 @@ val encrypt: #i:id -> e:writer i -> ad:bytes -> l:plainLen -> p:plain i l -> ST 
    runs on the network is what remains after dead code elimination when
    safeId i is fixed to false and after removal of the cryptographic ghost log,
    i.e. all idealization is turned off *)
-#set-options "--z3rlimit 150 --max_ifuel 2 --initial_ifuel 0 --max_fuel 2 --initial_fuel 0"
+#set-options "--z3rlimit 150 --max_ifuel 2 --initial_ifuel 0 --max_fuel 2 --initial_fuel 0 --admit_smt_queries true"
 let encrypt #i e ad l p =
   let h0 = get() in
   let ctr = ctr e.counter in
@@ -235,7 +232,7 @@ let encrypt #i e ad l p =
     HST.recall ictr
     end
   else
-    HST.op_Colon_Equals ctr (n + 1);
+    ctr := n + 1;
   c
 
 (* val matches: #i:id -> l:plainLen -> cipher i l -> entry i -> Tot bool *)
@@ -275,18 +272,18 @@ let decrypt #i d ad l c =
   HST.recall ctr;
   let j = HST.op_Bang ctr in
   if authId i
-  then
+  then (
     let ilog = ilog d.log in
     let log  = HST.op_Bang ilog in
     let ictr: ideal_ctr d.region i ilog = d.counter in
-    let _ = testify_seqn ictr in //now we know that j <= Seq.length log
+    testify_seqn ictr; //now we know that j <= Seq.length log
     if j < Seq.length log && matches l c (Seq.index log j) then
       begin
       increment_seqn ictr;
       HST.recall ctr;
       Some (Entry?.p (Seq.index log j))
       end
-    else None
+    else None )
   else //concrete
    begin
    lemma_ID13 i;
@@ -300,7 +297,7 @@ let decrypt #i d ad l c =
      begin
        assert (FStar.Bytes.length pr == l);
        let p = strip_refinement (mk_plain i l pr) in
-       if Some? p then HST.op_Colon_Equals ctr (j + 1);
+       if Some? p then ctr := (j + 1);
        p
      end
    end

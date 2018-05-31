@@ -11,21 +11,21 @@ module QUIC
 ///
 /// Relying on FFI for accessing configs, callbacks, etc.
 /// Testing both in OCaml (TCP-based, TestQUIC ~ TestFFI) and in C.
-open FStar.String
+
 open FStar.Bytes
 open FStar.Error
+open FStar.HyperStack.All
+
 open TLSConstants
 open TLSInfo
-open Range
 open DataStream
 open TLS
 open FFICallbacks
 
-open FStar.HyperStack.All
 module HS = FStar.HyperStack
 module FFI = FFI
 
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 
 (* A flag for runtime debugging of ffi data.
    The F* normalizer will erase debug prints at extraction
@@ -104,6 +104,8 @@ type result = {
   code: resultcode;
   error: error; // we could keep more details
 }
+
+module Handshake = Old.Handshake
 
 val recv: Connection.connection -> St result
 let rec recv c =

@@ -1,16 +1,14 @@
 ﻿module MAC_SHA256
 
-open FStar.Heap
-
-open FStar.HyperStack
 open FStar.Seq
- // for e.g. found
+open FStar.Error
 
-open FStar.Bytes
+open Mem
 open TLSConstants
 open TLSInfo
-open FStar.Error
 open TLSError
+
+module B = FStar.Bytes
 
 // idealizing HMAC
 // for concreteness; the rest of the module is parametric in a
@@ -21,17 +19,17 @@ type id = i:id { ID12? i /\ ~(AEAD? (aeAlg_of_id i)) }
 
 let alg (i:id) = macAlg_of_id i
 
-type text = bytes
-type tag (i:id) = lbytes (macSize (alg i))
-type keyrepr (i:id) = lbytes (macSize (alg i))
+type text = B.bytes
+type tag (i:id) = B.lbytes32 (macSize (alg i))
+type keyrepr (i:id) = B.lbytes32 (macSize (alg i))
 type key (i:id) = keyrepr i
 
 // TBD in Encode?
-type good (i:id) (b:bytes) = True
+type good (i:id) (b:B.bytes) = True
 
 
 // we keep the tag in case we want to enforce tag authentication
-type entry (i:id) = | Entry: t:tag i -> p:bytes { good i p } -> entry i
+type entry (i:id) = | Entry: t:tag i -> p:B.bytes { good i p } -> entry i
 
 // readers and writers share the same state: a log of MACed messages
 (*
@@ -40,7 +38,7 @@ type entry (i:id) = | Entry: t:tag i -> p:bytes { good i p } -> entry i
 noeq type state (i:id) (rw:rw) = | State:
   #region:rgn -> // the region of the *writer*
   key: key i ->
-  log: ref (seq (entry i)){log.id = region} ->
+  log: ref (seq (entry i)){(HyperStack.frameOf log) = region} ->
   state i rw
 
 private type writer i = s:state i Writer
@@ -50,13 +48,13 @@ val gen: w:rid{is_eternal_region w}
     -> i:id
     -> St (reader i * writer i) //TODO: a more complete spec here
 let gen writer_parent i =
-  let kv = CoreCrypto.random (macKeySize a) in
+  let kv = CoreCrypto.random32 (macKeySize a) in
   let writer_r = new_region writer_parent in
   let log = ralloc writer_r Seq.createEmpty in
   State #i #Reader #writer_r kv log,
   State #i #Writer #writer_r kv log
 
-val mac: i:id -> wr:writer i -> p:bytes { good i p } -> ST (tag i)
+val mac: i:id -> wr:writer i -> p:B.bytes { good i p } -> ST (tag i)
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 ->
     modifies (Set.singleton wr.region) h0 h1 /\ // skipping modifies rref, as the region contains only one ref
@@ -74,7 +72,7 @@ let mac i wr p =
 val matches: i:id -> p:text -> entry i -> Tot bool
 let matches i p (Entry _ p') = p = p'
 
-val verify: i:id -> rd:reader i -> p:bytes -> t:tag i -> ST bool
+val verify: i:id -> rd:reader i -> p:B.bytes -> t:tag i -> ST bool
   (requires (fun h0 -> True))
   (ensures (fun h0 b h1 -> modifies Set.empty h0 h1 /\ (b ==> good i p)))
 

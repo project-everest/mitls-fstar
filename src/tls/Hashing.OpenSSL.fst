@@ -5,20 +5,16 @@ module HS = FStar.HyperStack //Added automatically
 // for now we only support OpenSSL, so we skip multiplexing, Hashing.OpenSSL,  and fstis
 // (TODO: separate interface and implementation; disentangle from CoreCrypto)
 
-open FStar.Heap
-
-open FStar.HyperStack
-open FStar.HyperStack.ST
-
+open Mem
 open FStar.Bytes
 open Hashing.Spec
 
 
 (* shared, stateful interface, still quite high level *)
 
-val compute: a:alg -> b:bytes -> ST (t:tag a {t == hash a b})
+val compute: a:alg -> b:bytes {length b <= maxLength a} -> ST (t:tag a {t == hash a b})
   (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> modifies Set.empty h0 h1))
+  (ensures (fun h0 t h1 -> modifies_none h0 h1))
 
 assume type hash_ctx (a:alg) (r:rid): Type0 // externally-allocated
 
@@ -52,7 +48,7 @@ val finalize: #a:alg -> #r:rgn -> v:hash_ctx a r -> ST (tag a)
     t = hash a (accT v h0))) // not specifying the post accT makes v non-reusable
 *)
 
-val hmac: a:alg -> k:hkey a -> m:bytes -> ST (t:tag a {t == Hashing.Spec.hmac a k m})
+val hmac: a:alg -> k:hkey a -> m:bytes {length m + blockLength a <= maxLength a } -> ST (t:tag a {t == Hashing.Spec.hmac a k m})
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> modifies Set.empty h0 h1))
 
@@ -73,7 +69,7 @@ let toHacl = function
   | _ -> None
 
 // *** by using this file, we assume CoreCrypto is functionally correct and safe ***
-#reset-options "--lax"
+#reset-options "--admit_smt_queries true"
 let compute a m =
   match toHacl a with
   | Some h -> HaclProvider.crypto_hash h m
@@ -85,13 +81,13 @@ let hmac a k m =
   | _ -> CoreCrypto.hmac (toCC a) k m
 
 (*
-let alloc a parent = CoreCrypto.digest_create (toCC a)
+let alloc a parent = CoreCrypto.digest_create (toCC a) 
 let update #a #r v b = CoreCrypto.digest_update v  b
-let finalize #a #r v b = CoreCrypto.digest_final v
+let finalize #a #r v b = CoreCrypto.digest_final v 
 *)
 
 
-(* WAS, for a long while:
+(* WAS, for a long while: 
 
 (* Parametric hash algorithm (implements interface) *)
 val hash': hashAlg -> bytes -> Tot bytes
@@ -109,6 +105,7 @@ let hash alg data: bytes =
 (*
   let exp = hashSize alg in
   if l = exp then h
-  else FStar.Error.unexpected "CoreCrypto.Hash returned a hash of an unexpected size"
+  else unexpected "CoreCrypto.Hash returned a hash of an unexpected size"
 *)
 *)
+

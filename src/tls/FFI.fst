@@ -1,6 +1,6 @@
 module FFI
-module HS = FStar.HyperStack //Added automatically
-module HST = FStar.HyperStack.ST
+
+
 // A thin layer on top of TLS, adapting a bit our main API:
 // - for TCP send & receive, we use callbacks provided by the application
 // - for output traffic, we send fragment and send the whole message at once
@@ -14,16 +14,22 @@ module HST = FStar.HyperStack.ST
 open FStar.Bytes
 open FStar.Error
 
+module HS = FStar.HyperStack
+module HST = FStar.HyperStack.ST
+
 open TLSConstants
 open TLSInfo
+module Range = Range
 open Range
+
+open Mem
 open DataStream
 open TLS
 //open FFICallbacks
 
 open FStar.HyperStack.All
 type cbytes = string
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 
 (* A flag for runtime debugging of ffi data.
    The F* normalizer will erase debug prints at extraction
@@ -240,14 +246,14 @@ let sas = [
 ]
 
 let ngs = [
-  ("P-521", Parse.SEC CoreCrypto.ECC_P521);
-  ("P-384", Parse.SEC CoreCrypto.ECC_P384);
-  ("P-256", Parse.SEC CoreCrypto.ECC_P256);
-  ("X25519", Parse.SEC CoreCrypto.ECC_X25519);
-  ("X448",  Parse.SEC CoreCrypto.ECC_X448);
-  ("FFDHE4096", Parse.FFDHE Parse.FFDHE4096);
-  ("FFDHE3072", Parse.FFDHE Parse.FFDHE3072);
-  ("FFDHE2048", Parse.FFDHE Parse.FFDHE2048);
+  ("P-521",     CommonDH.SECP521R1);
+  ("P-384",     CommonDH.SECP384R1);
+  ("P-256",     CommonDH.SECP256R1);
+  ("X25519",    CommonDH.X25519);
+  ("X448",      CommonDH.X448);
+  ("FFDHE4096", CommonDH.FFDHE4096);
+  ("FFDHE3072", CommonDH.FFDHE3072);
+  ("FFDHE2048", CommonDH.FFDHE2048);
 ]
 
 let aeads = [
@@ -270,7 +276,7 @@ let rec findsetting f l =
   | [] -> None
   | (s, i)::tl -> if s = f then Some i else findsetting f tl
 
-let rec updatecfg cfg l : ML config =
+let rec updatecfg cfg (l:list string) : ML config =
   match l with
   | [] -> cfg
   | hd::t ->
@@ -344,28 +350,30 @@ let ffiSetNamedGroups cfg x =
     offer_shares = ogl;
   }
 
-private
-let encodeALPN x =
-    if String.length x < 256 then utf8_encode x
-    else failwith ("ffiSetALPN: protocol <"^x^"> is too long")
+private let encodeALPN x =
+  if String.length x < 256 then utf8_encode x
+  else failwith ("ffiSetALPN: protocol <"^x^"> is too long")
 
-val ffiSetALPN: cfg:config -> x:string -> ML config
-let ffiSetALPN cfg x =
+val ffiSplitALPN: config -> string -> ML alpn
+let ffiSplitALPN cfg x =
   let apl = if x = "" then [] else split_string ':' x in
   if List.Tot.length apl > 255 then failwith "ffiSetALPN: too many entries";
-  let apl = map encodeALPN apl in
-  { cfg with alpn = if apl=[] then None else Some apl }
+  map encodeALPN apl
+
+val ffiSetALPN: config -> alpn -> ML config
+let ffiSetALPN cfg x =
+  { cfg with alpn = if x = [] then None else Some x }
 
 val ffiSetEarlyData: cfg:config -> x:UInt32.t -> ML config
 let ffiSetEarlyData cfg x =
-  trace ("setting early data limit to "^(hex_of_bytes (bytes_of_int32 x)));
+  trace ("setting early data limit to "^(hex_of_bytes (Parse.bytes_of_uint32 x)));
   { cfg with
   max_early_data = if x = 0ul then None else Some x;
   }
 
 val ffiAddCustomExtension: cfg:config -> UInt16.t -> bytes -> ML config
 let ffiAddCustomExtension cfg h b =
-  trace ("offering custom extension "^(hex_of_bytes (bytes_of_uint16 h)));
+  trace ("offering custom extension "^(hex_of_bytes (Parse.bytes_of_uint16 h)));
   trace ("extension contents: "^(hex_of_bytes b));
   { cfg with
   custom_extensions = (h, b) :: cfg.custom_extensions
@@ -376,6 +384,12 @@ let ffiSetTicketKey a k =
   (match findsetting a aeads with
   | None -> false
   | Some a -> TLS.set_ticket_key a k)
+
+val ffiSetSealingKey: a:string -> k:bytes -> ML bool
+let ffiSetSealingKey a k =
+  (match findsetting a aeads with
+  | None -> false
+  | Some a -> TLS.set_sealing_key a k)
 
 let ffiSetTicket (cfg:config) (tid:bytes) (si:bytes) : ML config =
   {cfg with use_tickets = (tid,si) :: cfg.use_tickets}
@@ -420,28 +434,6 @@ let ffiSetCertCallbacks (cfg:config) (cb:cert_cb) =
   trace "Setting up certificate callbacks.";
   {cfg with cert_callbacks = cb}
 
-// ADL july 24: now returns both the ticket and the
-// entry in the PSK database to allow inter-process ticket reuse
-// Beware! this exports crypto materials!
-(*
-let ffiGetTicket c: ML (option (ticket:bytes * rms:bytes)) =
-  match (Connection.c_cfg c).peer_name with
-  | Some n ->
-    (match Ticket.lookup n with
-    | Some (t, true) ->
-      (match PSK.psk_lookup t with
-      | None -> None
-      | Some ctx ->
-        let ae = ctx.PSK.early_ae in
-        let h = ctx.PSK.early_hash in
-        let pskb = PSK.psk_value t in
-        let (| li, rmsid |) = Ticket.dummy_rmsid ae h in
-        let si = Ticket.serialize (Ticket.Ticket13 (CipherSuite13 ae h) li rmsid psk) in
-        Some (t, si))
-    | _ -> None)
-  | None -> None
-*)
-
 val ffiGetCert: Connection.connection -> ML cbytes
 let ffiGetCert c =
   let cert = getCert c in
@@ -451,7 +443,7 @@ let ffiGetCert c =
 let ffiGetExporter (c:Connection.connection) (early:bool)
   : ML (option (Hashing.Spec.alg * aeadAlg * bytes))
   =
-  let keys = Handshake.xkeys_of c.Connection.hs in
+  let keys = Old.Handshake.xkeys_of c.Connection.hs in
   if Seq.length keys = 0 then None
   else
     let i = if Seq.length keys = 2 && not early then 1 else 0 in
@@ -473,7 +465,7 @@ let ffiTicketInfoBytes (info:ticketInfo) (key:bytes) =
     | TicketInfo_12 (pv, cs, ems) ->
       Ticket.Ticket12 pv cs ems (Ticket.dummy_msId pv cs ems) key
     in
-  Ticket.ticket_encrypt (Ticket.serialize si)
+  Ticket.create_ticket true si
 
 let ffiSplitChain (chain:bytes) : ML (list cert_repr) =
   match Cert.parseCertificateList chain with
@@ -484,7 +476,7 @@ private let rec ext_filter (ext_type:UInt16.t) (e:list Extensions.extension) : o
   match e with
   | [] -> None
   | Extensions.E_unknown_extension hd b :: t ->
-    if uint16_of_bytes hd = ext_type then Some b else ext_filter ext_type t
+    if Parse.uint16_of_bytes hd = ext_type then Some b else ext_filter ext_type t
   | _ :: t -> ext_filter ext_type t
 
 let ffiFindCustomExtension (server:bool) (exts:bytes) (ext_type:UInt16.t) : ML (option bytes) =

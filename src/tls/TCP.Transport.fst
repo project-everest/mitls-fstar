@@ -28,7 +28,7 @@ let recv_tcp : pfn_recv = fun ptr buffer len ->
     BufferBytes.store_bytes (length b) target 0 b;
     Int.Cast.uint32_to_int32 (Bytes.len b)
 
-let wrap (ns:FStar.Tcp.networkStream) : Dv t = callbacks (FStar.Dyn.mkdyn tcp) send_tcp recv_tcp
+let wrap (ns:FStar.Tcp.networkStream) : Dv t = callbacks (FStar.Dyn.mkdyn ns) send_tcp recv_tcp
 
 let listen domain port : ML FStar.Tcp.tcpListener = FStar.Tcp.listen domain port
 

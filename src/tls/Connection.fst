@@ -3,28 +3,26 @@ module Connection
 // Connections are top-level instances of TLS clients and servers
 
 open FStar.Heap
-
 open FStar.HyperStack
 // JP: please stop using opening so much stuff in scope srsly
 open FStar.Seq
- // for e.g. found
-//open FStar.Set
-
 open FStar.Bytes
 open FStar.Error
 
+open Mem
 open TLSError
 open TLSConstants
 open TLSInfo
 
+module Range = Range
 open Range
 
-open Epochs
-open Handshake
-
-
-
 module HS = FStar.HyperStack
+
+module Epochs = Old.Epochs
+module Handshake = Old.Handshake
+
+#set-options "--admit_smt_queries true"
 
 // using also Range, DataStream, TLSFragment, Record
 
@@ -58,17 +56,17 @@ let string_of_halfState = function
 let string_of_state (r,w) =
   string_of_halfState r^"/"^string_of_halfState w
 
-type c_rgn = r:TLSConstants.rgn { HS.disjoint r TLSConstants.tls_region }
+type c_rgn = r:rgn { HS.disjoint r tls_region }
 
 (*
  * AR: changing the type of state from rref to ref, with region captured in the refinement.
  *)
 noeq type connection = | C:
   #region: c_rgn ->
-  hs:      hs {extends (region_of hs) region /\ is_hs_rgn (region_of hs)} (* providing role, config, and uid *) ->
-  tcp:     Transport.t ->
-  recv: Record.input_state -> //TODO {HS.frameOf recv = region} -> // added for buffering non-blocking reads
-  state:   ref tlsState {HS.frameOf state = region} ->
+  hs     : Handshake.hs {extends (Handshake.region_of hs) region /\ is_hs_rgn (Handshake.region_of hs)} (* providing role, config, and uid *) ->
+  tcp    : Transport.t ->
+  recv   : Record.input_state -> //TODO {HS.frameOf recv = region} -> // added for buffering non-blocking reads
+  state  : ref tlsState {HS.frameOf state = region} -> 
   connection
 
 // 17-04-08 helpful or not?
@@ -84,13 +82,13 @@ let c_log c = Handshake.epochs_of c.hs
 (* let writer_epoch #region #peer e = Handshake.writer_epoch e *)
 
 #set-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0"
-type st_inv c h = hs_inv (C?.hs c) h
+type st_inv c h = Handshake.hs_inv (C?.hs c) h
 
 //TODO: we will get the property that at most the current epochs' logs are extended, by making them monotonic in HS
-val epochs : c:connection -> h:HS.mem -> GTot (es:seq (epoch (region_of c.hs) (random_of c.hs)){
-  Epochs.epochs_inv es /\ es == logT c.hs h
+val epochs : c:connection -> h:HS.mem -> GTot (es:seq (Epochs.epoch (Handshake.region_of c.hs) (Handshake.random_of c.hs)){
+  Epochs.epochs_inv es /\ es == Handshake.logT c.hs h
 })
-let epochs c h = logT c.hs h
+let epochs c h = Handshake.logT c.hs h
 
 
 // //16-05-30 unused?

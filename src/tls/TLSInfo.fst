@@ -1,6 +1,4 @@
 module TLSInfo
-module HS = FStar.HyperStack //Added automatically
-module HST = FStar.HyperStack.ST //Added automatically
 
 #set-options "--max_fuel 3 --initial_fuel 3 --max_ifuel 1 --initial_ifuel 1"
 
@@ -12,16 +10,13 @@ module HST = FStar.HyperStack.ST //Added automatically
 *)
 
 open FStar.Bytes
-open FStar.Date
+open Mem
 open TLSConstants
-//open PMS
-//open Cert
 
 module CC = CoreCrypto
 module DM = FStar.DependentMap
-module MM = FStar.Monotonic.DependentMap
-
-
+module MDM = FStar.Monotonic.DependentMap
+module HST = FStar.HyperStack.ST
 
 let default_cipherSuites = [
   TLS_AES_128_GCM_SHA256;
@@ -52,28 +47,44 @@ let default_signature_schemes = [
   RSA_PKCS1_SHA1
   ]
 
-let default_groups : list valid_namedGroup = [
-  // SEC CC.ECC_X448
-  SEC CC.ECC_P521;
-  SEC CC.ECC_P384;
-  SEC CC.ECC_X25519;
-  SEC CC.ECC_P256;
-  FFDHE FFDHE4096;
-  FFDHE FFDHE3072;
-  FFDHE FFDHE2048;
-  ]
+let default_groups : CommonDH.supportedNamedGroups =
+  let open CommonDH in
+  let groups = [
+    // X448
+    SECP521R1;
+    SECP384R1;
+    X25519;
+    SECP256R1;
+    FFDHE4096;
+    FFDHE3072;
+    FFDHE2048;
+  ] in
+  assert_norm (List.Tot.length groups <= Format.NamedGroupList.maxCount);
+  assert_norm (List.Tot.for_all is_supported_group groups);
+  groups
 
 // By default we use an in-memory ticket table
 // and the in-memory internal PSK database
 val defaultTicketCBFun: ticket_cb_fun
 let defaultTicketCBFun _ sni ticket info psk =
-  assume false; // FIXME(adl) have to assume modifies_none...
+  let h0 = get() in
+  begin
   match info with
   | TicketInfo_12 (pv, cs, ems) ->
-    PSK.s12_extend ticket (pv, cs, ems, psk)
+    // 2018.03.10 SZ: The ticket must be fresh
+    assume False;
+    PSK.s12_extend ticket (pv, cs, ems, psk) // modifies PSK.tregion
   | TicketInfo_13 pskInfo ->
-    PSK.coerce_psk ticket pskInfo psk;
-    PSK.extend sni ticket
+    // 2018.03.10 SZ: Missing refinement in ticket_cb_fun
+    assume (exists i.{:pattern index psk i} index psk i <> 0z);
+    // 2018.03.10 SZ: The ticket must be fresh
+    assume False;
+    PSK.coerce_psk ticket pskInfo psk;      // modifies psk_region
+    PSK.extend sni ticket                   // modifies PSK.tregion
+  end;
+  let h1 = HST.get() in
+  // 2018.03.10 SZ: [ticket_cb_fun] ensures [modifies_none]
+  assume (modifies_none h0 h1)
 
 val defaultTicketCB: ticket_cb
 let defaultTicketCB = {
@@ -120,7 +131,7 @@ let defaultConfig =
 
   // Client
   hello_retry = true;
-  offer_shares = [SEC CC.ECC_X25519];
+  offer_shares = [Format.NamedGroup.X25519];
   custom_extensions = [];
   use_tickets = [];
 
@@ -148,7 +159,7 @@ let defaultConfig =
 
 // their first 4 bytes give the local time,
 // so that they are locally pairwise-distinct
-type random = lbytes 32
+type random = Nonce.random
 type crand = random
 type srand = random
 type csRands = lbytes 64
@@ -288,7 +299,7 @@ let safeVD si = honestMS (msid si) && strongVD(vdAlg si)
 assume val int_cma: macAlg -> Tot bool
 let strongAuthSI si = true //TODO: fix
 
-assume val strongAESI: sessionInfo -> Tot bool
+// assume val strongAESI: sessionInfo -> Tot bool
 
 // -------------------------------------------------------------------
 // Indexing instances of derived keys for AE etc.
@@ -324,15 +335,15 @@ type logInfo_CH = {
 
 type logInfo_CH0 = {
   li_ch0_cr: crand;
-  li_ch0_ed_psk: PSK.pskid;        // 0-RT PSK
-  li_ch0_ed_ae: a:aeadAlg;  // 0-RT AEAD alg
-  li_ch0_ed_hash: h:hash_alg;      // 0-RT hash
+  li_ch0_ed_psk: PSK.pskid;   // 0-RT PSK
+  li_ch0_ed_ae: a:aeadAlg;    // 0-RT AEAD alg
+  li_ch0_ed_hash: h:hash_alg; // 0-RT hash
 }
 
 type logInfo_SH = {
   li_sh_cr: crand;
   li_sh_sr: srand;
-  li_sh_ae: a:aeadAlg; // AEAD alg selected by the server
+  li_sh_ae: a:aeadAlg;        // AEAD alg selected by the server
   li_sh_hash: h:hash_alg;     // Handshake hash selected by the server
   li_sh_psk: option PSK.pskid;// PSK selected by the server
 }
@@ -408,37 +419,38 @@ type binderLabel =
   | ExtBinder
   | ResBinder
 
-[@ Gc ]
+/// we define indexes in 3 stages:
+/// 1. functionality specific datatypes, documenting key provenance
+/// 2. unified pre-index, as domain of the global honesty table
+/// 3. its valid refinement, ensuring registration and its consistency (parents are also registered and at least as honest)
+
+/// early secrets (range of 1st extraction)
+[@ Gc ] // cwinter: quic2c
 type pre_esId : Type0 =
   | ApplicationPSK: #ha:hash_alg -> #ae:aeadAlg -> i:PSK.pskid{PSK.compatible_hash_ae i ha ae} -> pre_esId
   | ResumptionPSK: #li:logInfo{~(LogInfo_CH? li)} -> i:pre_rmsId li -> pre_esId
   | NoPSK: ha:hash_alg -> pre_esId
-
 and pre_binderId =
   | Binder: pre_esId -> binderLabel -> pre_binderId
-
+/// handshake secrets (2nd extraction)
 and pre_hsId =
   | HSID_PSK: pre_saltId -> pre_hsId // KEF_PRF idealized
-  | HSID_DHE: pre_saltId -> g:CommonDH.group -> si:CommonDH.share g -> sr:CommonDH.share g -> pre_hsId // KEF_PRF_ODH idealized
-
+  | HSID_DHE: pre_saltId -> g:CommonDH.group -> si:CommonDH.ishare g -> sr:CommonDH.rshare g si -> pre_hsId // KEF_PRF_ODH idealized
+/// useless, 3rd extraction
 and pre_asId =
   | ASID: pre_saltId -> pre_asId
-
+and pre_saltId =
+  | Salt: pre_secretId -> pre_saltId
+/// bundling all extracts together (not used?)
 and pre_secretId =
   | EarlySecretID: pre_esId -> pre_secretId
   | HandshakeSecretID: pre_hsId -> pre_secretId
   | ApplicationSecretID: pre_asId -> pre_secretId
-
-and pre_saltId =
-  | Salt: pre_secretId -> pre_saltId
-
 and pre_rmsId (li:logInfo) =
   | RMSID: pre_asId -> hashed_log li -> pre_rmsId li
-
 and pre_exportId (li:logInfo) =
   | EarlyExportID: pre_esId -> hashed_log li -> pre_exportId li
   | ExportID: pre_asId -> hashed_log li -> pre_exportId li
-
 and expandTag =
   | ClientEarlyTrafficSecret
   | ClientHandshakeTrafficSecret
@@ -446,16 +458,15 @@ and expandTag =
   | ClientApplicationTrafficSecret
   | ServerApplicationTrafficSecret
   | ApplicationTrafficSecret // Re-keying
-
 and pre_expandId (li:logInfo) =
   | ExpandedSecret: pre_secretId -> expandTag -> hashed_log li -> pre_expandId li
-
 and pre_keyId =
   | KeyID: #li:logInfo{~(LogInfo_CH? li)} -> i:pre_expandId li -> pre_keyId
-
 and pre_finishedId =
   | FinishedID: #li:logInfo -> pre_expandId li -> pre_finishedId
+// 18-02-23 will all be replaced by auxiliary functions and refinements in ID. 
 
+// 18-02-23 will all be subsumed by *ghost* ha_of_id 
 val esId_hash: i:pre_esId -> Tot hash_alg (decreases i)
 val binderId_hash: i:pre_binderId -> Tot hash_alg (decreases i)
 val hsId_hash: i:pre_hsId -> Tot hash_alg (decreases i)
@@ -514,7 +525,7 @@ let esId_ae (i:pre_esId{ApplicationPSK? i \/ ResumptionPSK? i}) =
   | ResumptionPSK #li _ -> logInfo_ae li
 
 type valid_hlen (b:bytes) (h:hash_alg) =
-  length b = Hashing.Spec.tagLen h
+  len b = Hashing.Spec.tagLen h
 
 type pre_index =
 | I_ES of pre_esId
@@ -531,19 +542,22 @@ type pre_index =
 
 type honest_index (i:pre_index) = bool
 
+noextract
 let safe_region:rgn = new_region tls_tables_region
-private type i_safety_log = MM.t safe_region pre_index honest_index (fun _ -> True)
-private type s_table = (if Flags.ideal_KEF then i_safety_log else unit)
 
-let safety_table : s_table =
+private type i_safety_log = MDM.t safe_region pre_index honest_index (fun _ -> True)
+private let s_table =
+  if Flags.ideal_KEF then i_safety_log else unit
+
+let safety_table: s_table =
   (if Flags.ideal_KEF then
-    MM.alloc () <: i_safety_log
+      MDM.alloc () <: i_safety_log
   else ())
-
+      
 type registered (i:pre_index) =
   (if Flags.ideal_KEF then
-    let log : i_safety_log = safety_table in
-    HST.witnessed (MM.defined log i)
+    let log: i_safety_log = safety_table in
+    witnessed (MDM.defined log i)
   else True)
 
 type valid (i:pre_index) =
@@ -557,7 +571,10 @@ type valid (i:pre_index) =
   | I_HS i ->
     (match i with
     | HSID_PSK i -> registered (I_SALT i)
-    | HSID_DHE i g si sr -> registered (I_SALT i) /\ CommonDH.registered (|g,si|) /\ CommonDH.registered (|g,sr|))
+    | HSID_DHE i g si sr ->
+      let gx : CommonDH.dhi = (| g, si |) in
+      let gy : CommonDH.dhr gx = sr in
+      registered (I_SALT i) /\ CommonDH.registered_dhi gx /\ CommonDH.registered_dhr gy)
   | I_AS i ->
     (match i with
     | ASID i -> registered (I_SALT i))
@@ -591,40 +608,56 @@ type index = i:pre_index{valid i}
 type honest (i:index) =
   (if Flags.ideal_KEF then
     let log : i_safety_log = safety_table in
-    HST.witnessed (MM.contains log i true)
+    HST.witnessed (MDM.contains log i true)
   else False)
 
 type dishonest (i:index) =
   (if Flags.ideal_KEF then
     let log : i_safety_log = safety_table in
-    HST.witnessed (MM.contains log i false)
+    HST.witnessed (MDM.contains log i false)
   else True)
 
 type esId = i:pre_esId{valid (I_ES i)}
-type binderId = i:pre_binderId{valid (I_BINDER i)}
-type hsId = i:pre_hsId{valid (I_HS i)}
-type asId = i:pre_asId{valid (I_AS i)}
+// type binderId = i:pre_binderId{valid (I_BINDER i)}
+// type hsId = i:pre_hsId{valid (I_HS i)}
+// type asId = i:pre_asId{valid (I_AS i)}
 type saltId = i:pre_saltId{valid (I_SALT i)}
 type secretId = i:pre_secretId{valid (I_SECRET i)}
 type rmsId (li:logInfo) = i:pre_rmsId li{valid (I_RMS i)}
 type exportId (li:logInfo) = i:pre_exportId li{valid (I_EXPORT i)}
 type expandId (li:logInfo) = i:pre_expandId li{valid (I_EXPAND i)}
 type keyId = i:pre_keyId{valid (I_KEY i)}
-type finishedId = i:pre_finishedId{valid (I_FINISHED i)}
+// type finishedId = i:pre_finishedId{valid (I_FINISHED i)}
 
 // Top-level index type for version-agile record keys
 type id =
 | PlaintextID: our_rand:random -> id // For IdNonce
-| ID13: keyId:keyId -> id
-| ID12: pv:protocolVersion{pv <> TLS_1p3} -> msId:msId -> kdfAlg:kdfAlg_t -> aeAlg: aeAlg -> cr:crand -> sr:srand -> writer:role -> id
+| ID13: 
+    keyId:keyId -> id
+    // these extra fields carry runtime info
+    // (determined by the ghost keyId index) 
+    // local: random -> 
+    // kdfAlg:kdfAlg_t ->
+    // aeAlg: aeAlg -> id
+| ID12:
+    pv:protocolVersion{pv <> TLS_1p3} ->
+    msId:msId ->
+    kdfAlg:kdfAlg_t ->
+    aeAlg: aeAlg ->
+    cr:crand ->
+    sr:srand ->
+    writer:role -> id
 
+// 17-11-14 switch to concrete strings? 
 let peerLabel = function
+  // these two are the same at both ends
   | ClientEarlyTrafficSecret -> ClientEarlyTrafficSecret
+  | ApplicationTrafficSecret -> ApplicationTrafficSecret
+
   | ClientHandshakeTrafficSecret -> ServerHandshakeTrafficSecret
   | ServerHandshakeTrafficSecret -> ClientHandshakeTrafficSecret
   | ClientApplicationTrafficSecret -> ServerApplicationTrafficSecret
   | ServerApplicationTrafficSecret -> ClientApplicationTrafficSecret
-  | ApplicationTrafficSecret -> ApplicationTrafficSecret
 
 let peerId = function
   | PlaintextID r -> PlaintextID r
@@ -643,12 +676,13 @@ let siId si r =
   let cr, sr = split (csrands si) 32ul in
   ID12 si.protocol_version (msid si) (kdfAlg si.protocol_version si.cipher_suite) (siAuthEncAlg si) cr sr r
 
+// required e.g. to compute the actual algorithm to use 
 let pv_of_id (i:id{~(PlaintextID? i)}) = match i with
   | ID13 _ -> TLS_1p3
   | ID12 pv _ _ _ _ _ _ -> pv
 
-// Returns the local nonce
-let nonce_of_id (i : id) : random =
+// Returns the local nonce (used for accessing connection state)
+let nonce_of_id (i: id): random =
   match i with
   | PlaintextID r -> r
   | ID13 (KeyID #li _) -> logInfo_nonce li
@@ -693,22 +727,22 @@ let sinfo_to_string (si:sessionInfo) = "TODO"
 
 (* ADL commenting until 1.2 stateful idealization is restored
 
-assume logic type keyCommit   : csRands -> protocolVersion -> aeAlg -> negotiatedExtensions -> Type
-assume logic type keyGenClient: csRands -> protocolVersion -> aeAlg -> negotiatedExtensions -> Type
-assume logic type sentCCS     : role -> sessionInfo -> Type
-assume logic type sentCCSAbbr : role -> abbrInfo -> Type
+// assume logic type keyCommit   : csRands -> protocolVersion -> aeAlg -> negotiatedExtensions -> Type
+// assume logic type keyGenClient: csRands -> protocolVersion -> aeAlg -> negotiatedExtensions -> Type
+// assume logic type sentCCS     : role -> sessionInfo -> Type
+// assume logic type sentCCSAbbr : role -> abbrInfo -> Type
 
-// ``the honest participants of handshake with this csr use matching aeAlgs''
-type matches_id (i:id) =
-    keyCommit i.csrConn i.pv i.aeAlg i.ext
-    /\ keyGenClient i.csrConn i.pv i.aeAlg i.ext
+// // ``the honest participants of handshake with this csr use matching aeAlgs''
+// type matches_id (i:id) =
+//     keyCommit i.csrConn i.pv i.aeAlg i.ext
+//     /\ keyGenClient i.csrConn i.pv i.aeAlg i.ext
 
-// This index is safe for MS-based key derivation
-val safeKDF: i:id -> Tot (b:bool { b=true <==> ((honestMS i.msId && strongKDF i.kdfAlg) /\ matches_id i) })
-//defining this as true makes the context inconsitent!
-let safeKDF _ = unsafe_coerce false //TODO: THIS IS A PLACEHOLDER
+// // This index is safe for MS-based key derivation
+// val safeKDF: i:id -> Tot (b:bool { b=true <==> ((honestMS i.msId && strongKDF i.kdfAlg) /\ matches_id i) })
+// //defining this as true makes the context inconsitent!
+// let safeKDF _ = unsafe_coerce false //TODO: THIS IS A PLACEHOLDER
 
-*)
+// *)
 
 // -----------------------------------------------------------------------
 // The two main safety properties for the record layer
@@ -717,25 +751,36 @@ let safeKDF _ = unsafe_coerce false //TODO: THIS IS A PLACEHOLDER
 //let strongAEId i   = strongAEAlg   i.pv i.aeAlg
 
 // ``We are idealizing integrity/confidentiality for this id''
-// abstract let authId = function
-//   | PlaintextID _ -> false
-//   | ID13 ki -> false // TODO
-//   | ID12 pv msid kdf ae cr sr rw -> false // TODO
-
-// abstract let safeId = function
-//   | PlaintextID _ -> false
-//   | ID13 ki -> false // TODO
-//   | ID12 pv msid kdf ae cr sr rw -> false // TODO
-inline_for_extraction
-let authId _ = false
+//
+// these functions are still used to control idealization in somes
+// files, so for now we keep them as `bool`
 
 inline_for_extraction
-let safeId _ = false
+let safeId (i:id) = false
+
+(* 2018.04.23 SZ: This can't be a match or abstract to fully normalize during extraction *)
+(*
+abstract let safeId: id -> bool = function
+  | PlaintextID _ -> false
+  | ID13 ki -> false // TODO
+  | ID12 pv msid kdf ae cr sr rw -> false //TODO 1.2
+*)
+
+inline_for_extraction
+let authId (i:id) = false
+
+(* 2018.04.23 SZ: This can't be a match or abstract to fully normalize during extraction *)
+(*
+abstract let authId: id -> bool = function
+  | PlaintextID _ -> false 
+  | ID13 ki -> false // TODO
+  | ID12 pv msid kdf ae cr sr rw -> false //TODO 1.2
+*)
 
 let plainText_is_not_auth (i:id)
   : Lemma (requires (PlaintextID? i))
-          (ensures (not (authId i)))
-          [SMTPat (PlaintextID? i)]
+          (ensures (~(authId i)))
+	  [SMTPat (PlaintextID? i)]
   = ()
 
 let safe_implies_auth (i:id)

@@ -41,7 +41,9 @@ let main () =
     rsa_prv_exp = Some (Bytes.bytes_of_hex "0a033748626487695f5f30bc38b98b44c2cd2dff434098cd20d8a138d090bf64797c3fa7a2cdcb3cd1e0bdba2654b4f9df8e8ae59d733d9f33b301624afd1d51")
   } in
   let pk2 = rsa_gen_key 1024 in
-  if test pk1 && test pk2 then C.EXIT_SUCCESS else C.EXIT_FAILURE
+  let tpk1 = test pk1  in
+  let tpk2 = test pk2  in
+  if tpk1 && tpk2 then C.EXIT_SUCCESS else C.EXIT_FAILURE
   
   
 

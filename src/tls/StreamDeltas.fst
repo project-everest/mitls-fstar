@@ -1,16 +1,15 @@
 module StreamDeltas
-module HST = FStar.HyperStack.ST //Added automatically
+
 open FStar.Bytes
 open FStar.Error
 
-
+open Mem
 open FStar.HyperStack
 open TLSConstants
 open TLSInfo
 
-
 module HS   = FStar.HyperStack
-
+module HST = FStar.HyperStack.ST //Added automatically; avoid.
 module MS   = FStar.Monotonic.Seq
 module S    = StAE
 module C    = Content

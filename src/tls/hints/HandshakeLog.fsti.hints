@@ -1,0 +1,52 @@
+[
+  "# ¾\u001ebs?\u0018\u0005²¯JË\u0016€?",
+  [
+    [
+      "HandshakeLog.gforall",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "binder_x_0a56e3de562c08d8ab59f4ac6f626a98_3",
+        "disc_equation_Prims.Cons", "disc_equation_Prims.Nil",
+        "fuel_guarded_inversion_Prims.list", "subterm_ordering_Prims.Cons"
+      ],
+      0,
+      "6e05ed7b0c8f5ae834b3a07de893e14f"
+    ],
+    [
+      "HandshakeLog.append_transcript",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_HandshakeLog.msg",
+        "refinement_interpretation_HandshakeLog_Tm_refine_fb118621c0b0f2173d7d8e9b92378a43"
+      ],
+      0,
+      "14dd7a4b33e7468ad8c4b25f78c593be"
+    ],
+    [
+      "HandshakeLog.narrowTag",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt32.t__uu___haseq" ],
+      0,
+      "e941312565540200b7c3679bb341f028"
+    ],
+    [
+      "HandshakeLog.modifies_one",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_Prims.HasEq_int", "equation_Prims.nat",
+        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
+      ],
+      0,
+      "7f945e79770cbde309234411dc5e4c17"
+    ]
+  ]
+]

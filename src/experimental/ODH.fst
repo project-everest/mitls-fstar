@@ -1,13 +1,11 @@
-<<<<<<< d38102c3e059e797e260cd04fe0a0081d9764e5b
-////////////////////////////////////////////////////////////////////////////////
-
 module KEF
+module HS = FStar.HyperStack //Added automatically
+module HST = FStar.HyperStack.ST //Added automatically
 
 type kefalg
 val keflen: a:kefalg -> Tot nat
 
 type kef_type =
-  // PSK extraction, zero salt
   | PSK: pski:PSK.pskid -> ikm
   // DH extraction, constant salt
   | DH: g:DH.group -> ishare:DH.share g -> ikm
@@ -30,14 +28,14 @@ let safety_table =
 
 type registered (i:id) =
   (if Flags.ideal_kef then
-    MR.witnessed (MM.defined safety_table i)
+    HST.witnessed (MM.defined safety_table i)
   else True)
 
 type id = i:pre_id{registered i}
 
 type safeId (i:id) =
   (if Flags.ideal_kef then
-    MR.witnessed (MM.contains KEF.safe_table i true)
+    HST.witnessed (MM.contains KEF.safe_table i true)
   else False)
 
 let is_safe (i:id) : ST bool
@@ -92,6 +90,8 @@ type extractor_instance (i:id) =
 
 // Middle extraction modeled as a PRF keyed by the extraction salt
 module KEF_PRF
+module HS = FStar.HyperStack //Added automatically
+module HST = FStar.HyperStack.ST //Added automatically
 open KEF
 
 type id = i:id{PSK? i.kef_type \/ DH_PSK? i.kef_type}
@@ -124,7 +124,7 @@ let create (i:id) (parent:rgn) (key:prf_key i) : ST (state i)
   (ensures (fun h0 st h1 ->
     modifies_none h0 h1 /\
     extends st.r parent /\
-    stronger_fresh_region st.r h0 h1 /\
+    HS.fresh_region st.r h0 h1 /\
     if safeId i then
       h1 `contains` st.log /\
       MM.m_sel h1 st.log == MM.empty_map
@@ -145,10 +145,10 @@ let extract (i:id) (st:state i) (v:prf_domain i) : ST (prf_range i v)
   (requires (fun h0 -> True))
   (ensures (fun h0 r h1 ->
     if safeId i then
-      (match MM.sel (MR.m_sel h0 st.log) v with
+      (match MM.sel (HS.sel h0 st.log) v with
       | None ->
         modifies_one st.r h0 h1 /\
-        MR.m_sel h1 st.log == MM.upd (MR.m_sel h0 st.log) v r) /\
+        HS.sel h1 st.log == MM.upd (HS.sel h0 st.log) v r) /\
         witnessed (MM.contains st.log v r)
       | Some r' ->
         modifies_none h0 h1 /\
@@ -172,6 +172,8 @@ let extract (i:id) (st:state i) (v:prf_domain i) : ST (prf_range i v)
     Hacl.KEF.extract (i.alg) concrete_v st.key // st.key is the salt
 
 module KEF_PRF_ODH
+module HS = FStar.HyperStack //Added automatically
+module HST = FStar.HyperStack.ST //Added automatically
 
 type id = i:KEF.id{DH? i.kef_type \/ DH_PSK? i.kef_type}
 
@@ -199,7 +201,7 @@ type state (i:id) (ir:dhrole) =
     key: ikm i ir -> // initiator keyshare or responder salt
     log: odh_log i r -> // Map of responder share and salt to extracted secrets
     // The responder share used by the initiator.
-    initiator_responder: rref r (o:option (odh_index i){is_Some o ==> MR.witnessed (MM.defined log (Some.v o))}) ->
+    initiator_responder: rref r (o:option (odh_index i){is_Some o ==> HST.witnessed (MM.defined log (Some.v o))}) ->
     state i
 
 type odh_initiator (i:id) = state i Initiator
@@ -209,7 +211,7 @@ let create (i:id) (ir:role i) (parent:rgn) (ikm:ikm i ir) : ST (state i ir)
   (requires (fun h0 -> True))
   (ensures (fun h0 st h1 ->
     modifies_none h0 h1 /\
-    stronger_fresh_region r parent /\
+    HS.fresh_region r parent /\
     empty_log (MM.sel h1 st.log) /\
     is_None (sel h1 st.initiator_responder)))
   =
@@ -262,7 +264,7 @@ let prf (i:id) (gxy:extracted_secret i) (n:salt i) =
       | Some st -> st
       | None ->
         let st = KEF_PRF.create i n in
-        MR.m_recall kef_prf_instances;
+        HST.recall kef_prf_instances;
         MM.extend kef_prf_instances i st; st
       in
     KEF_PRF.extract i st gxy
@@ -279,9 +281,9 @@ let extract_responder (i:id) (st:odh_responder i) : ST (rshare i * extracted_sec
     let n:salt i = st.key in
     (if safeId i then
       modifies_one st.r h0 h1 /\
-      MR.m_sel h1 st.log == MM.upd (MR.m_sel h0 st.log) (sr, n) r /\
-      MR.witnessed (MM.defined st.log (sr, n)) /\
-      MR.witnessed (MM.contains st.log (sr, n) r)
+      HS.sel h1 st.log == MM.upd (HS.sel h0 st.log) (sr, n) r /\
+      HST.witnessed (MM.defined st.log (sr, n)) /\
+      HST.witnessed (MM.contains st.log (sr, n) r)
     else h0 = h1)))
   =
   let (| g, si |) = ishare_of_id i in
@@ -299,11 +301,11 @@ let extract_responder (i:id) (st:odh_responder i) : ST (rshare i * extracted_sec
 let extract_initiator (i:id) (st:odh_initiator i) (sr:rshare i) (n:salt i)
   : ST (extracted_secret i)
   (requires (fun h0 ->
-    is_None (MR.m_sel st.initiator_responder h0)))
+    is_None (HS.sel st.initiator_responder h0)))
   (ensures (fun h0 r h1 ->
     let g, si = ishare_of_id i in
     modifies_one st.r h0 h1 /\
-    safeId i /\ MR.witnessed (MM.contains st.log (sr,n)) ==>
+    safeId i /\ HST.witnessed (MM.contains st.log (sr,n)) ==>
       (MM.defined st.log (sr,n) r h1 /\
       HH.sel h1 st.initiator_responder == Some (sr,n))
   ))

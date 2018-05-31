@@ -7,16 +7,18 @@ module DataStream
 //* now generalized to include signals; rename to Stream?
 
 open FStar.Heap
-
 open FStar.HyperStack
 open FStar.Seq
 open FStar.Bytes
 open FStar.Error
 
+open Mem
 open TLSError
 open TLSConstants
 open TLSInfo
+module Range = Range
 open Range
+
 module HS = FStar.HyperStack
 
 //--------- application data fragments ------------------------------
@@ -76,7 +78,7 @@ let final i d =
   | Close   -> true
   | Alert a -> isFatal a
 
-let rec finalized (i: id) (s: list (delta i)): Tot bool =
+let rec finalized (i:id) (s:list (delta i)): bool =
   match s with 
   | [] -> false
   | hd::tl -> final i hd || finalized i tl
@@ -105,25 +107,25 @@ type stream (i:id) = s: list (delta i) { wellformed i s }
 //* not much point sharing the two? is it re-implementing AppData?
 //* maybe the state is just an rref?
 
-// noeq type state (i:id) =
-//   | State: #region:rid ->
-//            log: option (rref region (stream i)) { Some? log <==> authId i } ->
-//            ctr: rref region nat ->
-//            state i
+noeq type state (i:id) =
+  | State: #region:rid ->
+           log: option (r: ref (stream i) {frameOf r = region}) { Some? log <==> authId i } ->
+           ctr: ref nat {frameOf ctr = region} ->
+           state i
 
-// (*
-//  * AR: adding the is_eternal_region refinement to satify the precondition of new_region.
-//  *)
-// val gen: r0:rid{is_eternal_region r0} -> i:id -> ML (state i * state i)
-// let gen r0 (i:id) =
-//   let r = new_region r0 in
-//   empty_is_well_formed i;
-//   let t = ralloc r [] in
-//   let log = if authId i then Some (HS.mrref_of t) else None in
-//   let ctr = ralloc r 0 in
-//   let enc = State #i #r log (HS.mrref_of ctr) in
-//   let dec = State #i #r log (HS.mrref_of ctr) in
-//   enc, dec
+(*
+ * AR: adding the is_eternal_region refinement to satify the precondition of new_region.
+ *)
+val gen: r0:rid{is_eternal_region r0 /\ witnessed(region_contains_pred r0)} -> i:id -> HyperStack.All.ML (state i * state i)
+let gen r0 (i:id) =
+  let r = new_region r0 in
+  empty_is_well_formed i;
+  let t = ralloc r [] in
+  let log = if authId i then Some t else None in
+  let ctr = ralloc r 0 in
+  let enc = State #i #r log ( ctr) in
+  let dec = State #i #r log ( ctr) in
+  enc, dec
 
 // -------------------------------------------------------------
 

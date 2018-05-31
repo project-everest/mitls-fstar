@@ -1,0 +1,31 @@
+[
+  "¶8\rÂbõ\u0016\t,ðlðï®\u000bÒ",
+  [
+    [
+      "Old.KeySchedule.discard",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "equation_FStar.Monotonic.Heap.equal_dom",
+        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
+        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
+      ],
+      0,
+      "aeabc39b3e2b978949f08bed3b1d0d24"
+    ],
+    [
+      "Old.KeySchedule.dbg",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_DebugFlags.debug", "equation_DebugFlags.debug_KS"
+      ],
+      0,
+      "3447a8c9f14c54f5986e22f4da84fce3"
+    ]
+  ]
+]

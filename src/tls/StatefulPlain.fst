@@ -7,8 +7,10 @@ open FStar.Error
 open TLSError
 open TLSConstants
 open TLSInfo
-open Range
 open Content
+
+module Range = Range
+open Range
 
 // Defines additional data and an abstract "plain i ad rg" plaintext
 // typed interface from the more concrete & TLS-specific type
@@ -31,6 +33,7 @@ type adata (i:id) = b:bytes { exists ct. b == makeAD i ct }
 
 let lemma_12 (i:id) : Lemma (~(PlaintextID? i)) = ()
 
+#set-options "--admit_smt_queries true"
 val parseAD: i:id -> ad:adata i -> Tot contentType
 let parseAD i ad =
   lemma_12 i;
@@ -40,17 +43,19 @@ let parseAD i ad =
   | Correct ct, Correct ver ->
     assert (ver = pv);
     ct
+#reset-options
 
-#set-options "--z3rlimit 10 --initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0"
+#set-options "--z3rlimit 10 --initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0 --admit_smt_queries true"
 val lemma_makeAD_parseAD: i:id -> ct:contentType -> Lemma
   (requires (True))
   (ensures (parseAD i (makeAD i ct) = ct))
   [SMTPat (makeAD i ct)]
 let lemma_makeAD_parseAD i ct = ()
+#reset-options
 
 (*** plaintext fragments ***)
 
-type is_plain (i: id) (ad: adata i) (rg: range) (f: fragment i) =
+type is_plain (i: id) (ad: adata i) (rg:range) (f: fragment i) =
   fst (ct_rg i f) = parseAD i ad /\ wider rg (snd (ct_rg i f))
 
 // naming: we switch from fragment to plain as we are no longer TLS-specific
@@ -72,16 +77,16 @@ let ghost_repr #i #ad #rg pf =
 val repr: i:id{ ~(safeId i)} -> ad:adata i -> rg:range -> p:plain i ad rg -> Tot (b:rbytes rg {b = ghost_repr #i #ad #rg p})
 let repr i ad rg f = Content.repr i f
 
-logic type wf_ad_rg i ad rg =
-  wider fragment_range rg
+type wf_ad_rg i ad rg =
+  wider Range.fragment_range rg
   /\ (parseAD i ad = Change_cipher_spec ==> wider rg (point 1))
   /\ (parseAD i ad = Alert ==> wider rg (point 2))
 
-logic type wf_payload_ad_rg i ad rg (b:rbytes rg) =
+type wf_payload_ad_rg i ad rg (b:rbytes rg) =
   (parseAD i ad = Change_cipher_spec ==> b = ccsBytes)
   /\ (parseAD i ad = Alert ==> length b = 2 /\ Correct? (Alert.parse b))
 
-val mk_plain: i:id{ ~(authId i)} -> ad:adata i -> rg:frange i { wf_ad_rg i ad rg } ->
+val mk_plain: i:id{ ~(authId i)} -> ad:adata i -> rg:Range.frange i { wf_ad_rg i ad rg } ->
     b:rbytes rg { wf_payload_ad_rg i ad rg b } ->
   Tot (p:plain i ad rg {b = ghost_repr #i #ad #rg p})
 
@@ -89,4 +94,4 @@ let mk_plain i ad rg b = Content.mk_fragment i (parseAD i ad) rg b
 
 // should go to StatefulLHAE
 
-type cipher (i:id) = b:bytes {valid_clen i (length b)}
+type cipher (i:id) = b:bytes {Range.valid_clen i (length b)}

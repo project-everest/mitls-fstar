@@ -3,7 +3,8 @@ open Platform.Bytes
 
 open TLSConstants
 open TLSInfo
-open Range
+module Range = Range
+let range = Range.range
 
 (* This interface hides TLS-specific details of the record layer; 
    it does *not* includes the corresponding function *)

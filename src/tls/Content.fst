@@ -6,7 +6,6 @@ module Content // was TLSFragment
 
 open FStar
 open FStar.Seq
-
 open FStar.Bytes
 open FStar.Error
 
@@ -15,6 +14,7 @@ open TLSConstants
 open TLSInfo
 open Range
 open DataStream
+open Parse
 module Range = Range
 
 // this description is detailed enough to compute the size of the plaintext and ciphertext
@@ -89,6 +89,7 @@ let parseCT b =
   | 23z -> Correct Application_data
   | _	-> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
+#set-options "--admit_smt_queries true"
 val inverse_ct: x:_ -> Lemma
   (requires True)
   (ensures lemma_inverse_g_f ctBytes parseCT x)
@@ -100,6 +101,7 @@ val pinverse_ct: x:_ -> Lemma
   (ensures (lemma_pinverse_f_g Bytes.equal ctBytes parseCT x))
   [SMTPat (ctBytes (Correct?._0 (parseCT x)))]
 let pinverse_ct x = ()
+#reset-options
 
 let ctToString = function
   | Change_cipher_spec -> "CCS"

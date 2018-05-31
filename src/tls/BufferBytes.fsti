@@ -15,7 +15,7 @@ type lbuffer (l:nat) = b:Buffer.buffer UInt8.t {Buffer.length b == l}
 
 val to_bytes: l:nat -> buf:lbuffer l -> Stack (b:bytes{length b = l})
   (requires (fun h0 -> Buffer.live h0 buf))
-  (ensures  (fun h0 s h1 -> h0 == h1 ))
+  (ensures  (fun h0 b h1 -> h0 == h1 /\ b = Bytes.hide (Buffer.as_seq h0 buf)))
 (* let rec to_bytes l buf = *)
 (*   if l = 0 then empty_bytes *)
 (*   else *)
@@ -37,7 +37,10 @@ val store_bytes: len:nat -> buf:lbuffer len -> i:nat{i <= len} -> b:bytes{length
 
 val from_bytes: b:bytes{UInt.fits (length b) 32} -> Stack (lbuffer (length b))
   (requires (fun h0 -> True))
-  (ensures  (fun h0 r h1 -> Buffer.modifies_0 h0 h1 /\ Buffer.live h1 r ))
+  (ensures  (fun h0 buf h1 -> 
+    Buffer.modifies_0 h0 h1 /\ 
+    Buffer.live h1 buf /\
+    b = Bytes.hide (Buffer.as_seq h0 buf)))
 (* let from_bytes b = *)
 (*   let buf = Buffer.rcreate root 0uy (U32.uint_to_t (length b)) in *)
 (*   store_bytes (length b) buf 0 b; *)

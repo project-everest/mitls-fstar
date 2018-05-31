@@ -29,7 +29,7 @@ SOURCES = \
   DataStream.c \
   DHGroup.c \
   ECGroup.c \
-  Epochs.c \
+  Old_Epochs.c \
   Extensions.c \
   FFI.c \
   FFICallbacks.c \
@@ -41,18 +41,17 @@ SOURCES = \
   HaclProvider.c \
   hacl_aead.c \
   hacl_provider.c \
-  Handshake.c \
+  Old_Handshake.c \
   HandshakeLog.c \
   HandshakeMessages.c \
   Hashing.c \
   Hashing_CRF.c \
-  Hashing_Flags.c \
   Hashing_OpenSSL.c \
   Hashing_Spec.c \
-  HKDF.c \
+  Old_HKDF.c \
   HMAC.c \
-  HMAC_UFCMA.c \
-  KeySchedule.c \
+  Old_HMAC_UFCMA.c \
+  Old_KeySchedule.c \
   kremdate.c \
   kremlinit.c \
   kremstr.c \
@@ -92,16 +91,17 @@ SOURCES = \
   vale_aes_glue.c \
   Vale_Hash_SHA2_256.c \
 # Taken from the list of HACL sources in hacl-star/providers/Makefiles
+  Hacl_Policies.c \
   Hacl_Chacha20.c \
   Hacl_Salsa20.c \
   Hacl_SHA2_256.c \
   Hacl_SHA2_384.c \
   Hacl_SHA2_512.c \
-  Hacl_Curve25519.c \
+# Hacl_Curve25519.c \
   Hacl_Ed25519.c \
   Hacl_Poly1305_64.c \
-  Hacl_HMAC_SHA2_256.c \
   AEAD_Poly1305_64.c \
+  Hacl_Chacha20Poly1305.c \
   Hacl_Chacha20_Vec128.c \
 # Taken from ls hacl-star/providers/multiplexer/c/*.c | xargs basename
   evercrypt_bytes.c \

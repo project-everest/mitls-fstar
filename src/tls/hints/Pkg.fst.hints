@@ -1,0 +1,797 @@
+[
+  "\u00041Ê,ü?€(!ƒ¸Ûo~só",
+  [
+    [
+      "Pkg.lbytes32",
+      1,
+      2,
+      1,
+      [
+        "@query", "b2t_def", "equation_FStar.UInt.fits",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "a06fab191bdb2ddbbf8db72ac16ec540"
+    ],
+    [
+      "Pkg.__proj__Idx__item__registered",
+      1,
+      2,
+      1,
+      [ "@query", "proj_equation_Pkg.Idx_t", "projection_inverse_Pkg.Idx_t" ],
+      0,
+      "e0aaa27b3b35c826d6708a9768723d6f"
+    ],
+    [
+      "Pkg.__proj__Idx__item__honest",
+      1,
+      2,
+      1,
+      [ "@query", "proj_equation_Pkg.Idx_t", "projection_inverse_Pkg.Idx_t" ],
+      0,
+      "70916b354949b84d3267aa888b4f972d"
+    ],
+    [
+      "Pkg.__proj__Idx__item__get_honesty",
+      1,
+      2,
+      1,
+      [
+        "@query", "proj_equation_Pkg.Idx_honest",
+        "proj_equation_Pkg.Idx_registered", "proj_equation_Pkg.Idx_t",
+        "projection_inverse_Pkg.Idx_honest",
+        "projection_inverse_Pkg.Idx_registered",
+        "projection_inverse_Pkg.Idx_t",
+        "token_correspondence_Pkg.__proj__Idx__item__honest",
+        "token_correspondence_Pkg.__proj__Idx__item__registered"
+      ],
+      0,
+      "a917a9f74caa9339618bd1b3ae9d359d"
+    ],
+    [
+      "Pkg.__proj__Pinv_region__item__r",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_Pkg.Pinv_region",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Pkg_Tm_refine_fa69a6835849eb789fda80fb5d58d49d"
+      ],
+      0,
+      "af10a42610fb3f0ca353c8bc137bd192"
+    ],
+    [
+      "Pkg.__proj__Pinv_define__item__it",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_Pkg.Pinv_define",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Pkg_Tm_refine_f5f232e1a365d739444cb5bbb0bbb87a"
+      ],
+      0,
+      "89acae82c7c370949c6ae2d9c27a3212"
+    ],
+    [
+      "Pkg.__proj__Pinv_define__item__vt",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_Pkg.Pinv_define",
+        "proj_equation_Pkg.Pinv_define_it",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Pkg.Pinv_define_it",
+        "refinement_interpretation_Pkg_Tm_refine_f5f232e1a365d739444cb5bbb0bbb87a"
+      ],
+      0,
+      "a768be062812b72f8cc6a32ff1b454c4"
+    ],
+    [
+      "Pkg.__proj__Pinv_define__item__t",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_Pkg.Pinv_define",
+        "proj_equation_Pkg.Pinv_define_it",
+        "proj_equation_Pkg.Pinv_define_vt",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Pkg.Pinv_define_it",
+        "projection_inverse_Pkg.Pinv_define_vt",
+        "refinement_interpretation_Pkg_Tm_refine_f5f232e1a365d739444cb5bbb0bbb87a"
+      ],
+      0,
+      "3372099d66cb5c8b5482d5eea752d16b"
+    ],
+    [
+      "Pkg.pkg",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "data_elim_Pkg.Idx",
+        "disc_equation_Pkg.Pinv_define", "disc_equation_Pkg.Pinv_region",
+        "equation_Prims.eqtype", "fuel_guarded_inversion_Pkg.ipkg",
+        "fuel_guarded_inversion_Pkg.pkg_inv_r",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "a69cc5cd2b536bd6dcbbd259bf7953ee"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__key",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "data_elim_Pkg.Idx",
+        "disc_equation_Pkg.Pinv_define", "disc_equation_Pkg.Pinv_region",
+        "equation_Prims.eqtype", "fuel_guarded_inversion_Pkg.ipkg",
+        "fuel_guarded_inversion_Pkg.pkg_inv_r",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "cecc434b3846673e52b4d5e93d3b7814"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__info",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "data_elim_Pkg.Idx",
+        "disc_equation_Pkg.Pinv_define", "disc_equation_Pkg.Pinv_region",
+        "equation_Prims.eqtype", "fuel_guarded_inversion_Pkg.ipkg",
+        "fuel_guarded_inversion_Pkg.pkg_inv_r",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "439c765dd86d7396d27409768fa9b116"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__len",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "data_elim_Pkg.Idx",
+        "disc_equation_Pkg.Pinv_define", "disc_equation_Pkg.Pinv_region",
+        "equation_Prims.eqtype", "fuel_guarded_inversion_Pkg.ipkg",
+        "fuel_guarded_inversion_Pkg.pkg_inv_r",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t", "proj_equation_Pkg.Pkg_info",
+        "projection_inverse_Pkg.Pkg_info",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "token_correspondence_Pkg.__proj__Pkg__item__info"
+      ],
+      0,
+      "8c88ea498c3d470f454f555cdb3a53a3"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__ideal",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "data_elim_Pkg.Idx",
+        "disc_equation_Pkg.Pinv_define", "disc_equation_Pkg.Pinv_region",
+        "equation_Prims.eqtype", "fuel_guarded_inversion_Pkg.ipkg",
+        "fuel_guarded_inversion_Pkg.pkg_inv_r",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "53687ed8c4550993b949f8ced9c09e6e"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__define_table",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_Pkg.__proj__Idx__item__t"
+      ],
+      0,
+      "f869f46d9f527d48fee12f1212fb00db"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__define_table",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "data_elim_Pkg.Idx",
+        "disc_equation_Pkg.Pinv_define", "disc_equation_Pkg.Pinv_region",
+        "equation_Prims.eqtype", "fuel_guarded_inversion_Pkg.ipkg",
+        "fuel_guarded_inversion_Pkg.pkg",
+        "fuel_guarded_inversion_Pkg.pkg_inv_r",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t", "proj_equation_Pkg.Pkg_key",
+        "projection_inverse_Pkg.Pkg_key",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "f4ef1a8c99d6d48041bd84f3e189afe3"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__footprint",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "data_elim_Pkg.Idx",
+        "disc_equation_Pkg.Pinv_define", "disc_equation_Pkg.Pinv_region",
+        "equation_Prims.eqtype", "fuel_guarded_inversion_Pkg.ipkg",
+        "fuel_guarded_inversion_Pkg.pkg_inv_r",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "82c7cea9c468aca6bd62ded7582e4831"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__footprint_framing",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "data_elim_Pkg.Idx",
+        "equation_Prims.eqtype", "fuel_guarded_inversion_Pkg.ipkg",
+        "fuel_guarded_inversion_Pkg.pkg",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "cc0a8d76b486fa2c2c0d1cda60fde663"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__footprint_framing",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "data_elim_Pkg.Idx",
+        "disc_equation_Pkg.Pinv_define", "disc_equation_Pkg.Pinv_region",
+        "equation_Prims.eqtype", "fuel_guarded_inversion_Pkg.ipkg",
+        "fuel_guarded_inversion_Pkg.pkg",
+        "fuel_guarded_inversion_Pkg.pkg_inv_r",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t", "proj_equation_Pkg.Pkg_define_table",
+        "proj_equation_Pkg.Pkg_footprint", "proj_equation_Pkg.Pkg_key",
+        "projection_inverse_Pkg.Pkg_define_table",
+        "projection_inverse_Pkg.Pkg_footprint",
+        "projection_inverse_Pkg.Pkg_key",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "token_correspondence_Pkg.__proj__Pkg__item__footprint"
+      ],
+      0,
+      "fe2c3cb39cfd719213918cd824960d66"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__package_invariant",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "data_elim_Pkg.Idx",
+        "disc_equation_Pkg.Pinv_define", "disc_equation_Pkg.Pinv_region",
+        "equation_Prims.eqtype", "fuel_guarded_inversion_Pkg.ipkg",
+        "fuel_guarded_inversion_Pkg.pkg_inv_r",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "9cf087dee5857a650ec94a53ec901aee"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__package_invariant_framing",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "data_elim_Pkg.Idx",
+        "disc_equation_Pkg.Pinv_define", "disc_equation_Pkg.Pinv_region",
+        "equation_Prims.eqtype", "fuel_guarded_inversion_Pkg.ipkg",
+        "fuel_guarded_inversion_Pkg.pkg",
+        "fuel_guarded_inversion_Pkg.pkg_inv_r",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "88a7d190b301158c826e2086327427bb"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__package_invariant_framing",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "data_elim_Pkg.Idx",
+        "disc_equation_Pkg.Pinv_define", "disc_equation_Pkg.Pinv_region",
+        "equation_Prims.eqtype", "fuel_guarded_inversion_Pkg.ipkg",
+        "fuel_guarded_inversion_Pkg.pkg",
+        "fuel_guarded_inversion_Pkg.pkg_inv_r",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t", "proj_equation_Pkg.Pkg_define_table",
+        "proj_equation_Pkg.Pkg_footprint", "proj_equation_Pkg.Pkg_key",
+        "proj_equation_Pkg.Pkg_package_invariant",
+        "projection_inverse_Pkg.Pkg_define_table",
+        "projection_inverse_Pkg.Pkg_footprint",
+        "projection_inverse_Pkg.Pkg_key",
+        "projection_inverse_Pkg.Pkg_package_invariant",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "token_correspondence_Pkg.__proj__Pkg__item__footprint",
+        "token_correspondence_Pkg.__proj__Pkg__item__package_invariant"
+      ],
+      0,
+      "2185149da5385d80693df5dc4c324110"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__post",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "data_elim_Pkg.Idx",
+        "disc_equation_Pkg.Pinv_define", "disc_equation_Pkg.Pinv_region",
+        "equation_Prims.eqtype", "fuel_guarded_inversion_Pkg.ipkg",
+        "fuel_guarded_inversion_Pkg.pkg_inv_r",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t", "proj_equation_Pkg.Pkg_info",
+        "proj_equation_Pkg.Pkg_key", "projection_inverse_Pkg.Pkg_info",
+        "projection_inverse_Pkg.Pkg_key",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "token_correspondence_Pkg.__proj__Pkg__item__info",
+        "token_correspondence_Pkg.__proj__Pkg__item__key"
+      ],
+      0,
+      "c7ebe4a9b964343b9988ae7c02143387"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__post_framing",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "data_elim_Pkg.Idx",
+        "disc_equation_Pkg.Pinv_define", "disc_equation_Pkg.Pinv_region",
+        "equation_Prims.eqtype", "fuel_guarded_inversion_Pkg.ipkg",
+        "fuel_guarded_inversion_Pkg.pkg_inv_r",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t", "proj_equation_Pkg.Pkg_footprint",
+        "proj_equation_Pkg.Pkg_info", "proj_equation_Pkg.Pkg_key",
+        "proj_equation_Pkg.Pkg_post", "projection_inverse_Pkg.Pkg_footprint",
+        "projection_inverse_Pkg.Pkg_info", "projection_inverse_Pkg.Pkg_key",
+        "projection_inverse_Pkg.Pkg_post",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "token_correspondence_Pkg.__proj__Pkg__item__footprint",
+        "token_correspondence_Pkg.__proj__Pkg__item__info",
+        "token_correspondence_Pkg.__proj__Pkg__item__key",
+        "token_correspondence_Pkg.__proj__Pkg__item__post"
+      ],
+      0,
+      "27226e5db80dab5ffa9e8e8fea5c75ba"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__create",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
+        "fuel_guarded_inversion_Pkg.pkg",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_Pkg.__proj__Idx__item__t"
+      ],
+      0,
+      "0a76723b4922af96b9ab8242cab08ff0"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__create",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "data_elim_Pkg.Idx", "disc_equation_Pkg.Pinv_define",
+        "disc_equation_Pkg.Pinv_region", "equation_Mem.is_tls_rgn",
+        "equation_Mem.rgn", "equation_Mem.tls_rgn", "equation_Pkg.model",
+        "equation_Prims.eqtype",
+        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
+        "fuel_guarded_inversion_Pkg.ipkg", "fuel_guarded_inversion_Pkg.pkg",
+        "fuel_guarded_inversion_Pkg.pkg_inv_r",
+        "function_token_typing_Flags.model",
+        "function_token_typing_Mem.tls_region",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t", "proj_equation_Pkg.Pkg_define_table",
+        "proj_equation_Pkg.Pkg_footprint", "proj_equation_Pkg.Pkg_info",
+        "proj_equation_Pkg.Pkg_key",
+        "proj_equation_Pkg.Pkg_package_invariant",
+        "proj_equation_Pkg.Pkg_post",
+        "projection_inverse_Pkg.Pkg_define_table",
+        "projection_inverse_Pkg.Pkg_footprint",
+        "projection_inverse_Pkg.Pkg_info", "projection_inverse_Pkg.Pkg_key",
+        "projection_inverse_Pkg.Pkg_package_invariant",
+        "projection_inverse_Pkg.Pkg_post",
+        "refinement_interpretation_Mem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
+        "refinement_interpretation_Mem_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
+        "refinement_interpretation_Pkg_Tm_refine_2777959a7e96b6b406961ca910813be6",
+        "refinement_interpretation_Pkg_Tm_refine_39c167c57bd82e65242f3f56914954d2",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "token_correspondence_Pkg.__proj__Pkg__item__info",
+        "token_correspondence_Pkg.__proj__Pkg__item__key",
+        "token_correspondence_Pkg.__proj__Pkg__item__package_invariant",
+        "token_correspondence_Pkg.__proj__Pkg__item__post",
+        "typing_Mem.is_tls_rgn"
+      ],
+      0,
+      "8259701786fc65f78ef980dd71b14f52"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__coerceT",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "f1932a67a64c29942108841adc4db242"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__coerceT",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "data_elim_Pkg.Idx",
+        "disc_equation_Pkg.Pinv_define", "disc_equation_Pkg.Pinv_region",
+        "equation_Prims.eqtype", "fuel_guarded_inversion_Pkg.ipkg",
+        "fuel_guarded_inversion_Pkg.pkg_inv_r",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t", "proj_equation_Pkg.Pkg_ideal",
+        "proj_equation_Pkg.Pkg_info", "proj_equation_Pkg.Pkg_key",
+        "proj_equation_Pkg.Pkg_len", "projection_inverse_Pkg.Pkg_ideal",
+        "projection_inverse_Pkg.Pkg_info", "projection_inverse_Pkg.Pkg_key",
+        "projection_inverse_Pkg.Pkg_len",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "token_correspondence_Pkg.__proj__Pkg__item__info",
+        "token_correspondence_Pkg.__proj__Pkg__item__key",
+        "token_correspondence_Pkg.__proj__Pkg__item__len"
+      ],
+      0,
+      "2b3b84f0894a33212f9eb0e3b448da7b"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__coerce",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
+        "fuel_guarded_inversion_Pkg.pkg",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_Pkg.__proj__Idx__item__t"
+      ],
+      0,
+      "761d5781127aaa2110fd4b8931017a2d"
+    ],
+    [
+      "Pkg.__proj__Pkg__item__coerce",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Pkg_interpretation_Tm_arrow_cab770f07458d1ad4764ebfc07a190db",
+        "data_elim_Pkg.Idx", "data_elim_Pkg.Pkg",
+        "disc_equation_Pkg.Pinv_define", "disc_equation_Pkg.Pinv_region",
+        "equation_Prims.eqtype",
+        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
+        "fuel_guarded_inversion_Pkg.ipkg", "fuel_guarded_inversion_Pkg.pkg",
+        "fuel_guarded_inversion_Pkg.pkg_inv_r",
+        "haseqPkg_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "proj_equation_Pkg.Idx_t", "proj_equation_Pkg.Pkg_coerceT",
+        "proj_equation_Pkg.Pkg_define_table",
+        "proj_equation_Pkg.Pkg_footprint", "proj_equation_Pkg.Pkg_ideal",
+        "proj_equation_Pkg.Pkg_info", "proj_equation_Pkg.Pkg_key",
+        "proj_equation_Pkg.Pkg_len",
+        "proj_equation_Pkg.Pkg_package_invariant",
+        "proj_equation_Pkg.Pkg_post", "projection_inverse_Pkg.Pkg_coerceT",
+        "projection_inverse_Pkg.Pkg_define_table",
+        "projection_inverse_Pkg.Pkg_footprint",
+        "projection_inverse_Pkg.Pkg_ideal",
+        "projection_inverse_Pkg.Pkg_info", "projection_inverse_Pkg.Pkg_key",
+        "projection_inverse_Pkg.Pkg_len",
+        "projection_inverse_Pkg.Pkg_package_invariant",
+        "projection_inverse_Pkg.Pkg_post",
+        "refinement_interpretation_Pkg_Tm_refine_7d93f9e4ed73ce68c639a89d48c50efd",
+        "refinement_interpretation_Pkg_Tm_refine_94b2291dae068e159b252f3c9388ae60",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "token_correspondence_Pkg.__proj__Pkg__item__coerceT",
+        "token_correspondence_Pkg.__proj__Pkg__item__info",
+        "token_correspondence_Pkg.__proj__Pkg__item__key",
+        "token_correspondence_Pkg.__proj__Pkg__item__len",
+        "token_correspondence_Pkg.__proj__Pkg__item__package_invariant",
+        "token_correspondence_Pkg.__proj__Pkg__item__post"
+      ],
+      0,
+      "d4d4745e5099c037c4c2578a02983a44"
+    ],
+    [
+      "Pkg.local_pkg",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "0e986ca3e074a333eb98b2dca80321c8"
+    ],
+    [
+      "Pkg.__proj__LocalPkg__item__key",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "1a451493865b00f27395ed43d8280d47"
+    ],
+    [
+      "Pkg.__proj__LocalPkg__item__info",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "557ddc1155b676bfd7545fd9f2c9611f"
+    ],
+    [
+      "Pkg.__proj__LocalPkg__item__len",
+      1,
+      2,
+      1,
+      [
+        "@query", "proj_equation_Pkg.LocalPkg_info",
+        "projection_inverse_Pkg.LocalPkg_info",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__info"
+      ],
+      0,
+      "060d698f0560898ba5df247699b73554"
+    ],
+    [
+      "Pkg.__proj__LocalPkg__item__ideal",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "2d61602582f8a0d4fd61e8efb98fa0d2"
+    ],
+    [
+      "Pkg.__proj__LocalPkg__item__shared_footprint",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "693d5b031896c495bc108d065585fb63"
+    ],
+    [
+      "Pkg.__proj__LocalPkg__item__local_footprint",
+      1,
+      2,
+      1,
+      [
+        "@query", "proj_equation_Pkg.LocalPkg_key",
+        "proj_equation_Pkg.LocalPkg_shared_footprint",
+        "projection_inverse_Pkg.LocalPkg_key",
+        "projection_inverse_Pkg.LocalPkg_shared_footprint",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__key"
+      ],
+      0,
+      "5e82dc76c7d91eb47bed9ca0c7aa99c1"
+    ],
+    [
+      "Pkg.__proj__LocalPkg__item__local_invariant",
+      1,
+      2,
+      1,
+      [
+        "@query", "proj_equation_Pkg.LocalPkg_key",
+        "projection_inverse_Pkg.LocalPkg_key",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__key"
+      ],
+      0,
+      "1e668ea1d7cb452fe51c136eb5406784"
+    ],
+    [
+      "Pkg.__proj__LocalPkg__item__local_invariant_framing",
+      1,
+      2,
+      1,
+      [
+        "@query", "proj_equation_Pkg.LocalPkg_key",
+        "proj_equation_Pkg.LocalPkg_local_footprint",
+        "proj_equation_Pkg.LocalPkg_local_invariant",
+        "proj_equation_Pkg.LocalPkg_shared_footprint",
+        "projection_inverse_Pkg.LocalPkg_key",
+        "projection_inverse_Pkg.LocalPkg_local_footprint",
+        "projection_inverse_Pkg.LocalPkg_local_invariant",
+        "projection_inverse_Pkg.LocalPkg_shared_footprint",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__key",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__local_footprint",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__local_invariant"
+      ],
+      0,
+      "cf35d1b41ab7a83a292745b97144f0af"
+    ],
+    [
+      "Pkg.__proj__LocalPkg__item__post",
+      1,
+      2,
+      1,
+      [
+        "@query", "proj_equation_Pkg.LocalPkg_info",
+        "proj_equation_Pkg.LocalPkg_key",
+        "projection_inverse_Pkg.LocalPkg_info",
+        "projection_inverse_Pkg.LocalPkg_key",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__info",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__key"
+      ],
+      0,
+      "326fea0fc9063fe6d3a5810599ed7fa3"
+    ],
+    [
+      "Pkg.__proj__LocalPkg__item__post_framing",
+      1,
+      2,
+      1,
+      [
+        "@query", "proj_equation_Pkg.LocalPkg_info",
+        "proj_equation_Pkg.LocalPkg_key",
+        "proj_equation_Pkg.LocalPkg_local_footprint",
+        "proj_equation_Pkg.LocalPkg_post",
+        "projection_inverse_Pkg.LocalPkg_info",
+        "projection_inverse_Pkg.LocalPkg_key",
+        "projection_inverse_Pkg.LocalPkg_local_footprint",
+        "projection_inverse_Pkg.LocalPkg_post",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__info",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__key",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__local_footprint",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__post"
+      ],
+      0,
+      "9f835a55019ff1b3e34b67573f85820b"
+    ],
+    [
+      "Pkg.__proj__LocalPkg__item__create",
+      1,
+      2,
+      1,
+      [
+        "@query", "proj_equation_Pkg.LocalPkg_info",
+        "proj_equation_Pkg.LocalPkg_key",
+        "proj_equation_Pkg.LocalPkg_local_footprint",
+        "proj_equation_Pkg.LocalPkg_local_invariant",
+        "proj_equation_Pkg.LocalPkg_post",
+        "projection_inverse_Pkg.LocalPkg_info",
+        "projection_inverse_Pkg.LocalPkg_key",
+        "projection_inverse_Pkg.LocalPkg_local_footprint",
+        "projection_inverse_Pkg.LocalPkg_local_invariant",
+        "projection_inverse_Pkg.LocalPkg_post",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__info",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__key",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__local_footprint",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__local_invariant",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__post"
+      ],
+      0,
+      "4b5be3b6b673fcb720a57cdedac9fae3"
+    ],
+    [
+      "Pkg.__proj__LocalPkg__item__coerceT",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "7e217f042acf52a2dcb5e54b04392210"
+    ],
+    [
+      "Pkg.__proj__LocalPkg__item__coerceT",
+      2,
+      2,
+      1,
+      [
+        "@query", "proj_equation_Pkg.LocalPkg_ideal",
+        "proj_equation_Pkg.LocalPkg_info", "proj_equation_Pkg.LocalPkg_key",
+        "proj_equation_Pkg.LocalPkg_len",
+        "projection_inverse_Pkg.LocalPkg_ideal",
+        "projection_inverse_Pkg.LocalPkg_info",
+        "projection_inverse_Pkg.LocalPkg_key",
+        "projection_inverse_Pkg.LocalPkg_len",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__info",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__key",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__len"
+      ],
+      0,
+      "cf4799b54951fdeb6773f2636b194a2d"
+    ],
+    [
+      "Pkg.__proj__LocalPkg__item__coerce",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "6e3d932c15abf3f90b1d5e30d826902f"
+    ],
+    [
+      "Pkg.__proj__LocalPkg__item__coerce",
+      2,
+      2,
+      1,
+      [
+        "@query", "proj_equation_Pkg.LocalPkg_coerceT",
+        "proj_equation_Pkg.LocalPkg_ideal",
+        "proj_equation_Pkg.LocalPkg_info", "proj_equation_Pkg.LocalPkg_key",
+        "proj_equation_Pkg.LocalPkg_len",
+        "proj_equation_Pkg.LocalPkg_local_footprint",
+        "proj_equation_Pkg.LocalPkg_local_invariant",
+        "proj_equation_Pkg.LocalPkg_post",
+        "projection_inverse_Pkg.LocalPkg_coerceT",
+        "projection_inverse_Pkg.LocalPkg_ideal",
+        "projection_inverse_Pkg.LocalPkg_info",
+        "projection_inverse_Pkg.LocalPkg_key",
+        "projection_inverse_Pkg.LocalPkg_len",
+        "projection_inverse_Pkg.LocalPkg_local_footprint",
+        "projection_inverse_Pkg.LocalPkg_local_invariant",
+        "projection_inverse_Pkg.LocalPkg_post",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__coerceT",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__info",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__key",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__len",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__local_footprint",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__local_invariant",
+        "token_correspondence_Pkg.__proj__LocalPkg__item__post"
+      ],
+      0,
+      "065f8d66d14ade482ea579cce86eb1aa"
+    ],
+    [
+      "Pkg.lemma_mm_forall_frame",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_Prims.eqtype",
+        "function_token_typing_FStar.Monotonic.HyperHeap.rid",
+        "lemma_FStar.Set.mem_empty"
+      ],
+      0,
+      "da9383274a8543a7b926c1357fa6af20"
+    ]
+  ]
+]

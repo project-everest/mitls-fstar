@@ -7,16 +7,20 @@ module LHAE
    used by StatefulLHAE, parameterized by LHAEPlain. *)
 
 open FStar.Heap
-open FStar.HyperHeap
+
 open FStar.Seq
 
-open Platform.Bytes
-open Platform.Error
+open FStar.Bytes
+open FStar.Error
 
 open TLSError
 open TLSConstants
 open TLSInfo
-open Range
+
+module Range = Range
+let range = Range.range
+let frange = Range.frange
+let cipherRangeClass = Range.cipherRangeClass
 
 type cipher = b:bytes { length b <= max_TLSCiphertext_fragment_length }
 

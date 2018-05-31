@@ -1,15 +1,17 @@
 module Alert
 
 open FStar.Heap
-
 open FStar.Seq
-
 open FStar.Error
 open FStar.Bytes
 
 open TLSError
 open TLSConstants
 open TLSInfo
+open Parse
+open Mem
+
+module Range = Range
 open Range
 
 //16-05-29 not much protocol left; consider merging with TLSError
@@ -54,7 +56,7 @@ let alertBytes ad =
     | AD_unsupported_extension ->              twobytes (2z, 110z)
     | AD_no_application_protocol ->            twobytes (2z, 120z)
 
-#set-options "--z3rlimit 64"
+#set-options "--z3rlimit 64 --admit_smt_queries true"
 
 val parse: b:lbytes 2 -> Tot
   (r: result alertDescription { forall ad. (r = Correct ad ==> b == alertBytes ad) })

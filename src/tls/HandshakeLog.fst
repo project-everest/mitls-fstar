@@ -1,19 +1,19 @@
 module HandshakeLog
 
-open FStar.Heap
+(* see als comments in Handshake.fsti *) 
 
-open FStar.HyperStack
 open FStar.Seq
- // for e.g. found
-open FStar.Set
 open FStar.Error
 open FStar.Bytes
+
+open Mem 
 open TLSError
 open TLSConstants
 open TLSInfo
 open HandshakeMessages
 open Hashing
 open Hashing.CRF // now using incremental, collision-resistant, agile Hashing.
+open Range  // cwinter: the extracted OCaml file contains a reference to this, which is not reflected in the .depend file?
 
 module HS = FStar.HyperStack
 
@@ -128,7 +128,7 @@ let transcript_bytes l =
   let v = transcript_version l in
   handshakeMessagesBytes v (valid_transcript_to_list_valid_hs_msg_aux v l)
 
-#set-options "--z3rlimit 64"
+#set-options "--z3rlimit 64 --admit_smt_queries true"
 
 let transcript_format_injective ms0 ms1 =
   let f ()
@@ -159,6 +159,8 @@ let transcript_format_injective ms0 ms1 =
 //Note that a lot of this information is available in the log itself.
 //In particular: pv+kex+hash_alg can be read from CH/SH, dh_group can be read from SKE
 //TODO: decide whether to keep these parameters explicit or compute them from the log
+
+#reset-options "--admit_smt_queries true"
 
 private
 let rec tags_append_aux
@@ -250,6 +252,7 @@ let hashAlg h st =
 let transcript h t =
     reveal_log ((HS.sel h t).transcript)
 
+#set-options "--admit_smt_queries true" 
 let create reg pv =
     let l = State empty_hs_transcript empty_bytes None false
               empty_bytes [] (OpenHash empty_bytes)
@@ -273,7 +276,7 @@ let setParams l pv ha kexo dho =
               st.incoming st.parsed hs (Some pv) kexo dho
 
 // TR: verifies up to this point
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 
 (*
 val getHash: #ha:hash_alg -> t:log -> ST (tag ha)
@@ -294,7 +297,7 @@ let load_stateless_cookie l hrr digest =
   let st = !l in
   // The cookie is loaded after CH2 is written to the hash buffer
   let OpenHash ch2b = st.hashes in
-  let fake_ch = (bytes_of_hex "fe0000") @| (vlbytes 1 digest) in
+  let fake_ch = (bytes_of_hex "fe0000") @| (Parse.vlbytes 1 digest) in
   trace ("Installing prefix to transcript: "^(hex_of_bytes fake_ch));
   let hrb = handshakeMessageBytes None (HelloRetryRequest hrr) in
   trace ("HRR bytes: "^(hex_of_bytes hrb));
@@ -381,6 +384,7 @@ let send_CCS_tag #a l m cf =
   l := State t st.outgoing nk cf st.incoming st.parsed h st.pv st.kex st.dh_group;
   tg
 
+#set-options "--admit_smt_queries true" 
 // TODO require or check that both flags are clear before the call
 let send_signals l next_keys1 complete1 =
   let State transcript outgoing outgoing_next_keys0 outgoing_complete0 incoming parsed hashes pv kex dh_group = !l in
@@ -435,7 +439,7 @@ let next_fragment l (i:id) =
               st.transcript outgoing' st.outgoing_next_keys st.outgoing_complete
               st.incoming st.parsed st.hashes st.pv st.kex st.dh_group;
       Outgoing fragment None false )
-
+#reset-options 
 (* RECEIVE *)
 
 //17-04-24 avoid parsing loop? may be simpler at the level of receive.
@@ -450,6 +454,7 @@ val parseMessages:
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> modifies_none h0 h1))
 
+#reset-options "--admit_smt_queries true"
 let rec parseMessages pvo kexo buf =
   match HandshakeMessages.parseMessage buf with
   | Error z -> Error z
@@ -502,7 +507,7 @@ let rec hashHandshakeMessages t p hs n nb =
           | HelloRetryRequest hrr ->
             let ha = verifyDataHashAlg_of_ciphersuite hrr.hrr_cipher_suite in
             let hmsg = Hashing.compute ha b in
-            let hht = (bytes_of_hex "fe0000") @| (vlbytes 1 hmsg) in
+            let hht = (bytes_of_hex "fe0000") @| (Parse.vlbytes 1 hmsg) in
             trace ("Replacing CH1 in transcript with "^(hex_of_bytes hht));
             trace ("HRR bytes: "^(hex_of_bytes mb));
             OpenHash (hht @| mb)
@@ -547,7 +552,6 @@ let receive l mb =
           r ml hs st.pv st.kex st.dh_group;
         Correct None )
 
-
 // We receive CCS as external end-of-flight signals;
 // we return the messages processed so far, and their final tag;
 // we still can't write.
@@ -571,3 +575,4 @@ let receive_CCS #a l =
           st.incoming [] hs' st.pv st.kex st.dh_group;
       Correct (st.parsed, tl, h)
     end
+#reset-options

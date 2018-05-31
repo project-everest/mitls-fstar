@@ -3,7 +3,7 @@
 (* 16-05-17 removed precompilation flags, commenting out ideal code still to be upgraded to F* *)
 
 open FStar.Seq
-open Platform.Bytes
+open FStar.Bytes
 open TLSConstants
 open TLSInfo
 open CoreCrypto
@@ -139,7 +139,7 @@ let keyCommit (csr:csRands) (pv:protocolVersion) (a:aeAlg) (* (ext:negotiatedExt
       let state = commit csr pv a ext in
       kdlog := update csr state !kdlog
   | _    -> 
-      Platform.Error.unexpected "prevented by freshness of the server random"
+      FStar.Error.unexpected "prevented by freshness of the server random"
 *)
   ()
 
@@ -190,7 +190,7 @@ let keyGenClient (rdId:id) (wrId:id) ms =
         // we logically deduce not Auth for both indexes 
         deriveKeys rdId wrId ms Client
     | Derived(_,_,_) ->
-        Platform.Error.unexpected "Excluded by usage restriction (affinity)"
+        FStar.Error.unexpected "Excluded by usage restriction (affinity)"
 *)
     deriveKeys rdId wrId ms Client
 
@@ -199,7 +199,7 @@ let keyGenServer (rdId:id) (wrId:id) ms =
     let csr = rdId.csrConn in
     match read csr !kdlog with  
     | Init -> 
-        Platform.Error.unexpected "Excluded by usage restriction (affinity)"
+        FStar.Error.unexpected "Excluded by usage restriction (affinity)"
     | Committed(pv',aeAlg',ext') -> 
         // when SafeKDF, the client keyGens only on fresh Ids,
         // hence we will never have AuthId(rdId) for this csr.
@@ -300,6 +300,6 @@ let ssl_certificate_verify (si:sessionInfo) ms (algs:sigAlg) log =
   match algs with
   | CoreCrypto.RSASIG -> TLSPRF.ssl_verifyCertificate MD5 s log @| TLSPRF.ssl_verifyCertificate SHA1 s log 
   | CoreCrypto.DSA    -> TLSPRF.ssl_verifyCertificate SHA1 s log 
-  | _                 -> Platform.Error.unexpected "[ssl_certificate_verify] invoked on a wrong signature algorithm"
+  | _                 -> FStar.Error.unexpected "[ssl_certificate_verify] invoked on a wrong signature algorithm"
 
 *)

@@ -6,12 +6,14 @@ open FStar.Printf
 open FStar.HyperStack
 open FStar.HyperStack.ST
 
-
-open Parse
 open TLSError
 open TLSConstants
+open Format.NamedGroup
+open Format.NamedGroupList
 
 module DH = CommonDH
+
+#set-options "--admit_smt_queries true"
 
 let prefix = "Test.CommonDH"
 
@@ -26,9 +28,9 @@ let print s = discard (IO.debug_print_string (prefix^": "^s^".\n"))
 val test: DH.group -> St bool
 let test group =
   let initiator_key_and_share = DH.keygen group in
-  let gx = DH.pubshare initiator_key_and_share in
-  let gy, gxy = DH.dh_responder gx in
-  let gxy' = DH.dh_initiator initiator_key_and_share gy in
+  let gx = DH.ipubshare initiator_key_and_share in
+  let gy, gxy = DH.dh_responder group gx in
+  let gxy' = DH.dh_initiator group initiator_key_and_share gy in
   let gxy  = hex_of_bytes gxy in
   let gxy' = hex_of_bytes gxy' in
   if gxy = gxy' then true
@@ -37,24 +39,22 @@ let test group =
       print ("Unexpected output: output = " ^ gxy' ^ "\nexpected = " ^ gxy);
       false
     end
-
-let groups : list Parse.namedGroup =
-  let open CoreCrypto in
-  let open Parse in
+ 
+let groups : namedGroupList =
   [
-    FFDHE FFDHE2048;
-    FFDHE FFDHE3072;
-    FFDHE FFDHE4096;
-    FFDHE FFDHE6144;
-    FFDHE FFDHE8192;
-    SEC ECC_P256;
-    SEC ECC_P384;
-    SEC ECC_P521;
-    SEC ECC_X25519;
+    SECP256R1;
+    SECP384R1;
+    SECP521R1;
+    X25519;
+    FFDHE2048;
+    FFDHE3072;
+    FFDHE4096;
+    FFDHE6144;
+    FFDHE8192;
     // TODO: Not implemented; see ECGroup.fst
-    //SEC ECC_X448
+    //X448
   ]
-
+  
 let rec test_groups (groups:list namedGroup) : St bool =
   match groups with
   | g :: gs ->

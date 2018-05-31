@@ -1,0 +1,147 @@
+[
+  "≥Ëç\f•\u0018Ò∏º\u00154˛\u007fòyl",
+  [
+    [
+      "LowParse.SLow.Int.parse32_u8",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "LowParse.SLow.Base_interpretation_Tm_arrow_5c70a976cd24289e06fb8048f00682b5",
+        "b2t_def", "disc_equation_FStar.Pervasives.Native.Some",
+        "equation_LowParse.SLow.Base.bytes32",
+        "equation_LowParse.SLow.Base.parser32",
+        "equation_LowParse.SLow.Base.parser32_correct",
+        "equation_LowParse.SLow.Combinators.make_total_constant_size_parser32",
+        "equation_LowParse.SLow.Int.Aux.parse32_u8",
+        "equation_LowParse.Spec.Int.Aux.parse_u8",
+        "equation_LowParse.Spec.Int.Aux.parse_u8_kind",
+        "equation_LowParse.Spec.Int.parse_u8_kind",
+        "fuel_guarded_inversion_FStar.Pervasives.Native.option",
+        "function_token_typing_LowParse.SLow.Int.Aux.parse32_u8",
+        "interpretation_LowParse.SLow.Combinators_Tm_abs_bcee0fe2ce9b2726e0c4352830919132",
+        "l_and-interp", "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_LowParse.SLow.Base_Tm_refine_c28ed5a0c122862bed8762ed717dc39e"
+      ],
+      0,
+      "3fd3418e193eaf0b4552c34cdc3a7af1"
+    ],
+    [
+      "LowParse.SLow.Int.serialize32_u8",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "LowParse.SLow.Base_interpretation_Tm_arrow_1cb1e15a6b135a8ad66262acd77a1056",
+        "equation_LowParse.SLow.Base.bytes32",
+        "equation_LowParse.SLow.Base.serializer32_correct",
+        "equation_LowParse.SLow.Int.Aux.serialize32_u8",
+        "equation_LowParse.Spec.Base.serialize",
+        "equation_LowParse.Spec.Int.Aux.parse_u8",
+        "equation_LowParse.Spec.Int.Aux.parse_u8_kind",
+        "equation_LowParse.Spec.Int.Aux.serialize_u8",
+        "equation_LowParse.Spec.Int.parse_u8_kind",
+        "function_token_typing_LowParse.SLow.Int.Aux.serialize32_u8",
+        "refinement_interpretation_LowParse.SLow.Base_Tm_refine_e752124f651a437c8db65345677589fb"
+      ],
+      0,
+      "c4b3bf5112b814dee80d59274f83c4bc"
+    ],
+    [
+      "LowParse.SLow.Int.parse32_u16",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "LowParse.SLow.Base_interpretation_Tm_arrow_5c70a976cd24289e06fb8048f00682b5",
+        "b2t_def", "disc_equation_FStar.Pervasives.Native.Some",
+        "equation_LowParse.SLow.Base.bytes32",
+        "equation_LowParse.SLow.Base.parser32",
+        "equation_LowParse.SLow.Base.parser32_correct",
+        "equation_LowParse.SLow.Combinators.make_total_constant_size_parser32",
+        "equation_LowParse.SLow.Int.Aux.parse32_u16",
+        "equation_LowParse.Spec.Int.Aux.parse_u16",
+        "equation_LowParse.Spec.Int.Aux.parse_u16_kind",
+        "equation_LowParse.Spec.Int.parse_u16_kind",
+        "fuel_guarded_inversion_FStar.Pervasives.Native.option",
+        "function_token_typing_LowParse.SLow.Int.Aux.parse32_u16",
+        "interpretation_LowParse.SLow.Combinators_Tm_abs_bcee0fe2ce9b2726e0c4352830919132",
+        "l_and-interp", "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_LowParse.SLow.Base_Tm_refine_c28ed5a0c122862bed8762ed717dc39e"
+      ],
+      0,
+      "6c1319a77ef4054043e8b67de097121a"
+    ],
+    [
+      "LowParse.SLow.Int.serialize32_u16",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "LowParse.SLow.Base_interpretation_Tm_arrow_1cb1e15a6b135a8ad66262acd77a1056",
+        "equation_LowParse.SLow.Base.bytes32",
+        "equation_LowParse.SLow.Base.serializer32_correct",
+        "equation_LowParse.SLow.Int.Aux.serialize32_u16",
+        "equation_LowParse.Spec.Base.serialize",
+        "equation_LowParse.Spec.Int.Aux.parse_u16",
+        "equation_LowParse.Spec.Int.Aux.parse_u16_kind",
+        "equation_LowParse.Spec.Int.parse_u16_kind",
+        "function_token_typing_LowParse.SLow.Int.Aux.serialize32_u16",
+        "refinement_interpretation_LowParse.SLow.Base_Tm_refine_e752124f651a437c8db65345677589fb"
+      ],
+      0,
+      "ea382021dc785654f5a9c575d08550b8"
+    ],
+    [
+      "LowParse.SLow.Int.parse32_u32",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "LowParse.SLow.Base_interpretation_Tm_arrow_5c70a976cd24289e06fb8048f00682b5",
+        "b2t_def", "disc_equation_FStar.Pervasives.Native.Some",
+        "equation_LowParse.SLow.Base.bytes32",
+        "equation_LowParse.SLow.Base.parser32",
+        "equation_LowParse.SLow.Base.parser32_correct",
+        "equation_LowParse.SLow.Combinators.make_total_constant_size_parser32",
+        "equation_LowParse.SLow.Int.Aux.parse32_u32",
+        "equation_LowParse.Spec.Int.Aux.parse_u32",
+        "equation_LowParse.Spec.Int.Aux.parse_u32_kind",
+        "equation_LowParse.Spec.Int.parse_u32_kind",
+        "fuel_guarded_inversion_FStar.Pervasives.Native.option",
+        "function_token_typing_LowParse.SLow.Int.Aux.parse32_u32",
+        "interpretation_LowParse.SLow.Combinators_Tm_abs_bcee0fe2ce9b2726e0c4352830919132",
+        "l_and-interp", "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_LowParse.SLow.Base_Tm_refine_c28ed5a0c122862bed8762ed717dc39e"
+      ],
+      0,
+      "4cbc17b52df4e632bb43d443a13c7a62"
+    ],
+    [
+      "LowParse.SLow.Int.serialize32_u32",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "LowParse.SLow.Base_interpretation_Tm_arrow_1cb1e15a6b135a8ad66262acd77a1056",
+        "equation_LowParse.SLow.Base.bytes32",
+        "equation_LowParse.SLow.Base.serializer32_correct",
+        "equation_LowParse.SLow.Int.Aux.serialize32_u32",
+        "equation_LowParse.Spec.Base.serialize",
+        "equation_LowParse.Spec.Int.Aux.parse_u32",
+        "equation_LowParse.Spec.Int.Aux.parse_u32_kind",
+        "equation_LowParse.Spec.Int.parse_u32_kind",
+        "function_token_typing_LowParse.SLow.Int.Aux.serialize32_u32",
+        "refinement_interpretation_LowParse.SLow.Base_Tm_refine_e752124f651a437c8db65345677589fb"
+      ],
+      0,
+      "3bb699a96cc4394b1a2f8c67b51436af"
+    ]
+  ]
+]

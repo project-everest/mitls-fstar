@@ -11,13 +11,15 @@ module AppData
 //* incoming (rg,f), how to move the reader pos?
 //* postconditions show the transition, callers restore their invariant
 
-open Platform.Error
-open Platform.Bytes
+open FStar.Error
+open FStar.Bytes
 
 open TLSError
 open TLSInfo
+module Range = Range
 open Range
 open DataStream
+
 
 type output_buffer =
     | NoneOBuf of stream

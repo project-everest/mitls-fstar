@@ -3,14 +3,26 @@
 module TLSPRF
 module HS = FStar.HyperStack //Added automatically
 
-(* Low-level (bytes -> byte) PRF implementations for TLS *)
+(* Low-level (bytes -> byte) PRF implementations for TLS
+   used by Handshake, Handshake.Secret, KEF, and PRF.
+*)
 
 open FStar.Bytes
+open FStar.HyperStack.ST
+
+open Mem
 open Hashing.Spec
 open TLSConstants
 open TLSInfo
 //open CoreCrypto
 
+
+module U32 = FStar.UInt32
+
+type key = bytes //18-02-14 TODO length
+let coerce (k:bytes) : key = k
+
+// #set-options "--admit_smt_queries true"
 
 (* SSL3 *)
 (* 17-02-02 deprecated, and not quite typechecking...
@@ -67,38 +79,49 @@ let ssl_verifyCertificate hashAlg ms log  =
   hash hashAlg forStep2
 *)
 
-abstract type key = bytes
-let coerce (k:bytes) : key = k
+(* TLS 1.0--1.1 *) 
 
-val p_hash_int: a:macAlg -> k:lbytes (macKeySize a) -> bytes -> int -> int -> bytes -> bytes -> ST bytes
+#reset-options "--admit_smt_queries true"
+private val p_hash_int: 
+  a: macAlg -> 
+  secret: lbytes32 (macKeySize a) -> 
+  seed: bytes -> 
+  U32.t -> U32.t -> bytes -> bytes -> ST bytes
   (requires (fun _ -> True))
-  (ensures (fun h0 _ h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
+  (ensures (fun h0 _ h1 -> modifies Set.empty h0 h1))
 let rec p_hash_int alg secret seed len it aPrev acc =
   let aCur = HMAC.tls_mac alg secret aPrev in
   let pCur = HMAC.tls_mac alg secret (aCur @| seed) in
-  if it = 1 then
+  if it = 1ul then
     let hs = macSize alg in
-    let r = len % hs in
-    let (pCur,_) = split_ pCur r in
+    let r = U32.(len %^ hs) in
+    let (pCur,_) = split pCur r in
     acc @| pCur
   else
-    p_hash_int alg secret seed len (it-1) aCur (acc @| pCur)
+    p_hash_int alg secret seed len U32.(it -^ 1ul) aCur (acc @| pCur)
 
-val p_hash: macAlg -> bytes -> bytes -> int -> St bytes
+val p_hash: 
+  a: macAlg -> 
+  secret: lbytes32 (macKeySize a) -> 
+  seed: bytes -> len:U32.t -> St (lbytes32 len)
 let p_hash alg secret seed len =
   let hs = macSize alg in
-  let it = (len/hs)+1 in
-  p_hash_int alg secret seed len it seed empty_bytes
-
-val tls_prf: bytes -> bytes -> bytes -> int -> St bytes
+  let it = U32.((len /^ hs) +^ 1ul) in
+  let r = p_hash_int alg secret seed len it seed empty_bytes in
+  assume(Bytes.len r = len); //18-02-14 TODO
+  r
+  
+val tls_prf: lbytes32 (hashSize TLSConstants.MD5SHA1) -> bytes -> bytes -> len:U32.t -> St (lbytes32 len)
 let tls_prf secret label seed len =
+  //18-02-14 fixed broken implementation, but currently unused and untested. 
   let l_s = length secret in
   let l_s1 = (l_s+1)/2 in
   let secret1,secret2 = split_ secret l_s1 in
   let newseed = label @| seed in
   let hmd5  = p_hash (HMac MD5) secret1 newseed len in
   let hsha1 = p_hash (HMac SHA1) secret2 newseed len in
-  xor (UInt32.uint_to_t len) hmd5 hsha1
+  assume(Bytes.len hmd5 = len /\ Bytes.len hsha1 = len);
+  xor len hmd5 hsha1
 
 let tls_client_label = utf8_encode "client finished"
 let tls_server_label = utf8_encode "server finished"
@@ -109,17 +132,21 @@ let tls_finished_label =
   | Client -> tls_client_label
   | Server -> tls_server_label
 
-let verifyDataLen = 12
+let verifyDataLen = 12ul
 
-val tls_verifyData: bytes -> role -> bytes -> St (lbytes verifyDataLen)
+val tls_verifyData: lbytes32 (hashSize TLSConstants.MD5SHA1) -> role -> bytes -> St (lbytes32 verifyDataLen)
 let tls_verifyData ms role data =
   let md5hash  = Hashing.OpenSSL.compute MD5 data in
   let sha1hash = Hashing.OpenSSL.compute SHA1 data in
-  tls_prf ms (tls_finished_label role) (md5hash @| sha1hash) 12
+  tls_prf ms (tls_finished_label role) (md5hash @| sha1hash) verifyDataLen
+
 
 (* TLS 1.2 *)
 
-val tls12prf: cipherSuite -> bytes -> bytes -> bytes -> len:nat -> St (lbytes len)
+val tls12prf: 
+  cs: cipherSuite {Some? (prfMacAlg_of_ciphersuite_aux cs)} -> 
+  ms: lbytes32 (macKeySize (prfMacAlg_of_ciphersuite cs)) -> 
+  bytes -> bytes -> len:U32.t -> St (lbytes32 len)
 let tls12prf cs ms label data len =
   let prfMacAlg = prfMacAlg_of_ciphersuite cs in
   p_hash prfMacAlg ms (label @| data) len
@@ -127,7 +154,10 @@ let tls12prf cs ms label data len =
 let tls12prf' macAlg ms label data len =
   p_hash macAlg ms (label @| data) len
 
-val tls12VerifyData: cipherSuite -> bytes -> role -> bytes -> St (lbytes verifyDataLen)
+val tls12VerifyData: 
+  cs: cipherSuite {Some? (prfMacAlg_of_ciphersuite_aux cs)} -> 
+  ms: lbytes32 (macKeySize (prfMacAlg_of_ciphersuite cs)) -> 
+  role -> bytes -> St (lbytes32 verifyDataLen)
 let tls12VerifyData cs ms role data =
   let verifyDataHashAlg = verifyDataHashAlg_of_ciphersuite cs in
   let hashed = Hashing.OpenSSL.compute verifyDataHashAlg data in
@@ -136,7 +166,11 @@ let tls12VerifyData cs ms role data =
 let finished12 hAlg (ms:key) role log =
   p_hash (HMac hAlg) ms ((tls_finished_label role) @| log) verifyDataLen
 
+
 (* Internal agile implementation of PRF *)
+
+//18-02-14 TODO specify key lengths 
+#set-options "--admit_smt_queries true" 
 
 val verifyData: (protocolVersion * cipherSuite) -> key -> role -> bytes -> St bytes
 let verifyData (pv,cs) (secret:key) (role:role) (data:bytes) =
@@ -145,16 +179,16 @@ let verifyData (pv,cs) (secret:key) (role:role) (data:bytes) =
     | TLS_1p0 | TLS_1p1 -> tls_verifyData     secret role data
     | TLS_1p2           -> tls12VerifyData cs secret role data
 
-val prf: (protocolVersion * cipherSuite) -> bytes -> bytes -> bytes -> int -> St bytes
+val prf: (protocolVersion * cipherSuite) -> bytes -> bytes -> bytes -> U32.t -> St bytes
 let prf (pv,cs) secret (label:bytes) data len =
   match pv with
   //| SSL_3p0           -> ssl_prf     secret       data len
   | TLS_1p0 | TLS_1p1 -> tls_prf     secret label data len
   | TLS_1p2           -> tls12prf cs secret label data len
 
-// This is for Extended Master Secret
-// The data is hashed using the PV/CS-specific hash function
-val prf_hashed: (protocolVersion * cipherSuite) -> bytes -> bytes -> bytes -> int -> St bytes
+// Extended Master Secret
+// data is hashed using the PV/CS-specific hash function
+val prf_hashed: (protocolVersion * cipherSuite) -> bytes -> bytes -> bytes -> U32.t -> St bytes
 let prf_hashed (pv, cs) secret label data len =
   let data = match pv with
     | TLS_1p2 ->
@@ -163,11 +197,11 @@ let prf_hashed (pv, cs) secret label data len =
     | _ -> data in
   prf (pv, cs) secret label data len
 
-let prf' a secret data len =
+let prf' a (secret: bytes) data len =
     match a with
     | PRF_TLS_1p2 label macAlg -> tls12prf' macAlg secret label data len  // typically SHA256 but may depend on CS
-    | PRF_TLS_1p01 label         -> tls_prf          secret label data len  // MD5 xor SHA1
-    //| PRF_SSL3_nested           -> ssl_prf          secret       data len  // MD5(SHA1(...)) for extraction and keygen
+    | PRF_TLS_1p01 label       -> tls_prf          secret label data len  // MD5 xor SHA1
+  //| PRF_SSL3_nested         -> ssl_prf          secret       data len  // MD5(SHA1(...)) for extraction and keygen
     | _ -> FStar.Error.unexpected "[prf'] unreachable pattern match"
 
 //let extract a secret data len = prf a secret extract_label data len

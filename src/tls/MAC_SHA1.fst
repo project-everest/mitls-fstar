@@ -1,15 +1,13 @@
 ﻿module MAC_SHA1
 
-open FStar.Heap
 
-open FStar.HyperStack
 open FStar.Seq
- // for e.g. found
-
 open FStar.Bytes
+open FStar.Error
+
+open Mem
 open TLSConstants
 open TLSInfo
-open FStar.Error
 open TLSError
 
 // idealizing HMAC
@@ -23,8 +21,8 @@ type id = i:id { ID12? i /\ ~(AEAD? (aeAlg_of_id i)) }
 let alg (i:id) = macAlg_of_id i
 
 type text = bytes
-type tag (i:id) = lbytes (macSize (alg i))
-type keyrepr (i:id) = lbytes (macSize (alg i))
+type tag (i:id) = lbytes32 (macSize (alg i))
+type keyrepr (i:id) = lbytes32 (macSize (alg i))
 type key (i:id) = keyrepr i
 
 assume type good (i:id) (b:bytes) : Type0 // TBD in Encode?
@@ -40,7 +38,7 @@ type entry (i:id) = | Entry: t:tag i -> p:bytes { good i p } -> entry i
 noeq type state (i:id) (rw:rw) = | State:
   #region:rgn -> // the region of the *writer*
   key: key i ->
-  log: ref (seq (entry i)){log.id = region} ->
+  log: ref (seq (entry i)){(HyperStack.frameOf log) = region} ->
   state i rw
 
 private type writer i = s:state i Writer
@@ -50,7 +48,7 @@ val gen: w:rid{is_eternal_region w}
     -> i:id
     -> St (reader i * writer i) //TODO: a more complete spec here
 let gen writer_parent i =
-  let kv = CoreCrypto.random (macKeySize a) in
+  let kv = CoreCrypto.random32 (macKeySize a) in
   let writer_r = new_region writer_parent in
   let log = ralloc writer_r Seq.createEmpty in
   State #i #Reader #writer_r kv log,

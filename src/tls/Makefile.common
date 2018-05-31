@@ -19,8 +19,10 @@ INCLUDE_PATHS = \
 	$(HACL_HOME)/secure_api/LowCProvider/fst \
 	$(HACL_HOME)/code/curve25519/api \
 	$(HACL_HOME)/code/lib \
-	$(KREMLIN_HOME)/kremlib \
+	$(KREMLIN_HOME)/include \
+        $(KREMLIN_HOME)/kremlib \
 	$(MITLS_HOME)/libs/ffi \
+	$(MITLS_HOME)/src/lowparse \
 	$(EVERCRYPT_HOME)/multiplexer \
 	$(SPECINC)
 
@@ -35,10 +37,10 @@ CACHE_DIR   = cache/$(FLAVOR)
 EXTRACT_DIR = extract/$(FLAVOR)
 DEP_FILE    = $(CACHE_DIR)/.depend
 FSTAR       = $(FSTAR_HOME)/bin/fstar.exe --cache_dir $(CACHE_DIR) --cache_checked_modules $(OTHERFLAGS)
-VFLAGS     ?= --use_hints --use_hint_hashes --record_hints --warn_error -271
+VFLAGS     ?= --warn_error -272-241
 
 ifneq (,$(HINTS_DIR))
-	HINTS_OPTS=--hint_file $(HINTS_DIR)/$(notdir $(subst .lax,,$(subst .checked,,$<))).hints
+	HINTS_OPTS=--hint_file $(HINTS_DIR)/$(notdir $(subst .checked,,$<)).hints
 endif
 
 # Project Files
@@ -65,9 +67,27 @@ endif
 			$(addprefix --include , $(INCLUDE_PATHS)) \
 			$(ROOTS) > $(DEP_FILE) \
 	)
+	sed -i.opt -e "s/cmx/cmo/g" -e "s/source/old/g" $(DEP_FILE)
+
+$(DEP_FILE).dot:
+ifdef VERBOSE
+	@echo -e "\033[1;33m=== Computing $@ ...\033[;37m"
+endif
+	$(subst \\,, \
+		$(FSTAR) --extract $(EXTRACT) \
+			--dep graph \
+			$(addprefix --include , $(INCLUDE_PATHS)) \
+			$(ROOTS) > /dev/null \
+	)
+	mv dep.graph $@
+
+$(DEP_FILE).pdf: $(DEP_FILE).dot
+	fdp -Tpdf $< -o$@
+
 
 depend: $(DEP_FILE)
 
+-include $(DEP_FILE).opt
 -include $(DEP_FILE)
 
 # REMARK:
@@ -87,6 +107,14 @@ depend: $(DEP_FILE)
 # rule again.
 # If F* doesn't write a .checked file because it hasn't verified a
 # dependency, then an empty (invalid) file will be created.
+
+# REMARK
+# cwinter: The order-only dependency makes sure that F* will not run until 
+# $(DEP_FILE) is regenerated. Otherwise it can happen that this rule is 
+# executed in parallel with the $(DEP_FILE) rule, where this rule uses an 
+# outdated $(DEP_FILE) on the disc. Alternatively, secondary expansion could
+# solve this problem too. If there is an up to date $(DEP_FILE), or none at 
+# all, then the dependency can be ignored. 
 
 $(CACHE_DIR)/FStar.%.checked: | $(DEP_FILE)
 ifdef VERBOSE
@@ -120,8 +148,8 @@ endif
 			$(HINTS_OPTS) \
 			--odir $(EXTRACT_DIR) \
 			$(addprefix --include , $(INCLUDE_PATHS)) \
-			--extract_module $(basename $(notdir $(subst .lax,,$(subst .checked,,$<)))) \
-			$(subst $(CACHE_DIR)/,,$(subst .lax,,$(subst .checked,,$<))) \
+			--extract_module $(basename $(notdir $(subst .checked,,$<))) \
+			$(subst $(CACHE_DIR)/,,$(subst .checked,,$<)) \
 	)
 
 # Avoids polluting the KreMLin source tree with a random .o file
@@ -136,4 +164,4 @@ extract/copied/%.c: $(KREMLIN_HOME)/kremlib/%.c
 
 # Rules for Interactive Mode
 %.fst-in %.fsti-in: 
-	@echo $(addprefix --include , $(INCLUDE_PATHS)) --cache_dir $(CACHE_DIR) --cache_checked_modules $(OTHERFLAGS) --use_hints --use_hint_hashes --hint_file $(HINTS_DIR)/$(notdir $(subst -in,,$@)).hints
+	@echo $(addprefix --include , $(INCLUDE_PATHS)) --cache_dir $(CACHE_DIR) --cache_checked_modules $(OTHERFLAGS) --hint_file $(HINTS_DIR)/$(notdir $(subst -in,,$@)).hints $(VFLAGS)

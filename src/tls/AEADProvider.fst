@@ -1,20 +1,20 @@
 module AEADProvider
-module HS = FStar.HyperStack //Added automatically
 
 open FStar.Heap
-
 open FStar.HyperStack
+open FStar.HyperStack.ST
 open FStar.Seq
 open FStar.Bytes
 
+open Mem
 open TLSConstants
 open TLSInfo
 open FStar.UInt32
 
+module HS = FStar.HyperStack
 module CC = CoreCrypto
 module OAEAD = AEADOpenssl
 module CAEAD = LowCProvider
-
 module Plain = Crypto.Plain
 module AE = Crypto.AEAD.Main
 module CB = Crypto.Symmetric.Bytes
@@ -130,12 +130,10 @@ let create_nonce (#i:id) (#rw:rw) (st:state i rw) (n:nonce i)
   | (TLS_1p3, _) | (_, CC.CHACHA20_POLY1305) ->
     xor_ #(iv_length i) n salt
   | _ ->
-    let r = salt @| n in
-    //lemma_len_append salt n; //TODO bytes NS 09/27 seems unnecessary
-    r
+    salt @| n
 
 (* Necessary for injectivity of the nonce-to-IV construction in TLS 1.3 *)
-#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
+#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1 --admit_smt_queries true"
 let lemma_nonce_iv (#i:id) (#rw:rw) (st:state i rw) (n1:nonce i) (n2:nonce i)
   : Lemma (create_nonce st n1 = create_nonce st n2 ==> n1 = n2)
   =
@@ -147,6 +145,7 @@ let lemma_nonce_iv (#i:id) (#rw:rw) (st:state i rw) (n1:nonce i) (n2:nonce i)
   | _ ->
     if (salt @| n1) = (salt @| n2) then
       () //lemma_append_inj salt n1 salt n2 //TODO bytes NS 09/27
+#reset-options
 
 let empty_log (#i:id) (#rw:rw) (st:state i rw) h =
   match use_provider() with
@@ -158,9 +157,10 @@ let region (#i:id) (#rw:rw) (st:state i rw) =
   | OpenSSLProvider -> OAEAD.State?.region (as_openssl_state st)
   | _ -> tls_region // TODO
 
-let log_region (#i:id) (#rw:rw) (st:state i rw) =
+let log_region (#i:id) (#rw:rw) (st:state i rw) : rgn =
   match use_provider() with
-  | OpenSSLProvider -> OAEAD.State?.log_region (as_openssl_state st)
+  | OpenSSLProvider ->
+    OAEAD.State?.log_region (as_openssl_state st)
   | _ -> tls_region
 
 let st_inv (#i:id) (#rw:rw) (st:state i rw) h = True //TODO
@@ -177,20 +177,18 @@ let gen (i:id) (r:rgn) : ST (state i Writer)
   (requires (fun h -> True))
   (ensures (genPost r))
   =
+  let salt : salt i = CC.random (salt_length i) in
   match use_provider() with
   | OpenSSLProvider ->
-    let salt : salt i = CC.random (salt_length i) in
     let st : OAEAD.state i Writer = OAEAD.gen r i in
     st, salt
   | LowCProvider ->
     assume false; // TODO
     let kv: key i = CC.random (CC.aeadKeySize (alg i)) in
-    let salt: salt i = CC.random (salt_length i) in
     let st = CAEAD.aead_create (alg i) CAEAD.ValeAES kv in
     (st, kv), salt
   | LowProvider ->
     assume false; // TODO
-    let salt : salt i = CC.random (salt_length i) in
     let st = AE.gen i tls_region r in
     st, salt
 
@@ -213,6 +211,7 @@ let leak (#i:id) (#rw:rw) (st:state i rw)
 // to the low-level crypto which currently shares the region between
 // the reader and writer (this is not sound for some buffers in that
 // region, for instance, the writer may write the the reader's key buffer)
+#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1 --admit_smt_queries true"
 let genReader (parent:rgn) (#i:id) (st:writer i) : ST (reader i)
   (requires (fun h -> HS.disjoint parent (region st)))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
@@ -228,7 +227,9 @@ let genReader (parent:rgn) (#i:id) (st:writer i) : ST (reader i)
   | LowCProvider ->
     assume false;
     as_lowc_state st, salt_of_state st
+#reset-options
 
+#reset-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
   : ST (state i Writer)
   (requires (fun h -> ~(authId i)))
@@ -239,14 +240,21 @@ let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
     | OpenSSLProvider ->
       OAEAD.coerce r i k, s
     | LowCProvider ->
-      let st = CAEAD.aead_create (alg i) CAEAD.ValeAES k in
-      (st, k), s
+      let (st:CAEAD.aead_state) = CAEAD.aead_create (alg i) CAEAD.ValeAES k in
+      let (psi:pre_state i Writer) = (st, k) in
+        psi, s
     | LowProvider ->
-      let st = AE.coerce i r (BufferBytes.from_bytes k) in
+      assume (AE.keylen i = len k);
+      assume (~ (Flag.prf i));
+      assume(false);
+      let (bb:AE.lbuffer (length k)) = BufferBytes.from_bytes k in
+      let (bb:AE.lbuffer (v (AE.keylen i))) = bb in
+      let st = AE.coerce i r bb in
       st, s
     in
   dbg ((prov())^": COERCE(K="^(hex_of_bytes k)^")");
   w
+#reset-options
 
 type plainlen = n:nat{n <= max_TLSPlaintext_fragment_length}
 (* irreducible *)
@@ -273,7 +281,7 @@ let logged_iv (#i:id{authId i}) (#l:plainlen) (#rw:rw) (s:state i rw) (iv:iv i)
   | _ -> True
 
 // ADL Jan 3: PlanA changes TODO
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 
 let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:plain i l)
   : ST (cipher:cipher i l)
@@ -297,15 +305,17 @@ let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:pla
       let cipherlen = uint_to_t (cipherlen i l) in
       assume(AE.safelen i (v plainlen) = true); // TODO
       push_frame ();
-      let plain =
-        if not (Flag.safeId i) then
-          Plain.unsafe_hide_buffer i #l (BufferBytes.from_bytes plain)
-        else Plain.create i 0uy plainlen
-      in
       let cipher = Buffer.create 0uy cipherlen in
       assume(v cipherlen = v plainlen + 12);
       let tmp = BufferBytes.from_bytes iv in
-      AE.encrypt i st (Crypto.Symmetric.Bytes.load_uint128 12ul tmp) adlen ad plainlen plain cipher;
+      begin
+      if not (TLSInfo.safeId i) then
+        let plain = Plain.unsafe_hide_buffer i #l (BufferBytes.from_bytes plain) in
+        AE.encrypt i st (Crypto.Symmetric.Bytes.load_uint128 12ul tmp) adlen ad plainlen plain cipher
+      else
+        let plain = Plain.create i 0uy plainlen in
+        AE.encrypt i st (Crypto.Symmetric.Bytes.load_uint128 12ul tmp) adlen ad plainlen plain cipher
+      end;
       let ret = BufferBytes.to_bytes (FStar.UInt32.v cipherlen) cipher in
       pop_frame ();
       ret
@@ -367,3 +377,58 @@ let decrypt (#i:id) (#l:plainlen) (st:reader i) (iv:iv i) (ad:adata i) (cipher:c
     else false in
   if r then plain else plain
  *)
+
+
+(*
+/// Agility:
+/// - for AEAD, we need a pair of algorithms for the cipher and for UFCMA---use Crypto.Indexing.fsti;
+/// - for StreamAE, we additionallly need the PV (to control the length of the static IV).
+///
+/// We keep these parameters in AEADProvider and StreamAE instances, respectively.
+
+type aeadAlg // fixme.
+
+// TODO: add the two regions of AEAD.fsti, used only ideally (hence coerce is ~pure)
+type info (ip: ipkg) (aeadAlg_of_i: i:ip.IK.t -> aeadAlg) (i:ip.t) = a:aeadAlg {a = aeadAlg_of_i i}
+
+open IK
+unfold let localpkg
+  (ip: ipkg)
+  (aeadAlg_of_i: i:ip.IK.t -> aeadAlg)
+  :
+  p: IK.local_pkg ip {IK.LocalPkg?.info #ip p == info1 ip ha_of_i good_of_i}
+=
+    IK.LocalPkg
+      (fun (i:ip.IK.t {ip.IK.registered i}) -> writer ip i)
+      (info ip aeadAlg_of_i)
+      (fun #_ u -> aeadLen u)
+      Flags.ideal_aead
+      // local footprint
+      (fun #i (k:writer ip i) -> Set.empty (*17-11-24 regions for the PRF and the log *)  )
+      // local invariant
+      (fun #_ k h -> True)
+      (fun r i h0 k h1 -> ())
+      // create/coerce postcondition
+      (fun #i u k h1 -> k.u == u (*17-11-24  /\ fresh_subregion (region k) u.parent h0 h1 *) )
+      (fun #i u k h1 r h2 -> ())
+      (create ip aeadAlg_of_i)
+      (coerceT ip aeadAlg_of_i)
+      (coerce ip aeadAlg_of_i)
+
+let mk_pkg (ip:ipkg) (aeadAlg_of_i: ip.t -> aeadAlg): ST (pkg ip)
+  (requires fun h0 -> True)
+  (ensures fun h0 p h1 ->
+    //17-12-01 we also need freshness and emptyness of the new table + local packaging
+    modifies_mem_table p.define_table h0 h1 /\
+    p.package_invariant h1)
+=
+  memoization_ST #ip (localpkg ip aeadAlg_of_i)
+
+// we may want to provide TLS-specific encrypt, decrypt... partially applied e.g. [encrypt ii aeadAlg_of_i]
+
+
+unfold let localpkg_IV
+// TODO adapting local_raw_pkg
+
+// TODO ensure the flag is set only when multiplexing to the verified implementation
+*)

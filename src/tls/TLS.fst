@@ -1,33 +1,36 @@
 module TLS
 module HS = FStar.HyperStack //Added automatically
-open FStar.String
-open FStar.Heap
 
-open FStar.HyperStack
 open FStar.Seq
-open FStar.Set
-
 open FStar.Bytes
 open FStar.Error
 
+open Mem
 open TLSError
 open TLSConstants
 open TLSInfo
 
-open Range
+
 module Range = Range
+let range = Range.range
+let point = Range.point
+let frange = Range.frange
+let valid_clen = Range.valid_clen
+let fragment_range = Range.fragment_range
+
 //open Negotiation
-open Epochs
-//open Handshake
+open Old.Epochs
 open Connection
 
-
 module ST   = FStar.HyperStack.ST
+module HST  = FStar.HyperStack
 module MS   = FStar.Monotonic.Seq
 module DS   = DataStream
 module SD   = StreamDeltas
 module Conn = Connection
-module EP   = Epochs
+
+module Epochs    = Old.Epochs
+module Handshake = Old.Handshake
 
 (* A flag for runtime debugging of TLS data.
    The F* normalizer will erase debug prints at extraction
@@ -46,7 +49,7 @@ unfold let trace = if DebugFlags.debug_TLS then print else (fun _ -> ())
 unfold let op_Array_Access (#a:Type) (s:Seq.seq a) n = Seq.index s n // s.[n]
 
 // using also DataStream, Content, Record
-#set-options "--initial_ifuel 0 --max_ifuel 0 --initial_fuel 0 --max_fuel 0"
+#set-options "--initial_ifuel 0 --max_ifuel 0 --initial_fuel 0 --max_fuel 0 --admit_smt_queries true"
 
 
 (** misc ***)
@@ -156,6 +159,7 @@ let request c ops     = Handshake.request     (C?.hs c) ops
 
 let get_mode c = (Handshake.get_mode (C?.hs c))
 let set_ticket_key (a:aeadAlg) (kv:bytes) = Ticket.set_ticket_key a kv
+let set_sealing_key (a:aeadAlg) (kv:bytes) = Ticket.set_sealing_key a kv
 
 (** current epochs ***)
 
@@ -387,7 +391,7 @@ private let check_incrementable (#c:connection) (#i:id) (wopt:option (cwriter i 
 ////////////////////////////////////////////////////////////////////////////////
 // Sending fragments on a given writer (not necessarily the current one)
 ////////////////////////////////////////////////////////////////////////////////
-let opt_writer_regions (#i:id) (#c:connection) (wopt:option (cwriter i c)) : GTot (set HS.rid) =
+let opt_writer_regions (#i:id) (#c:connection) (wopt:option (cwriter i c)) : GTot (FStar.Set.set HS.rid) =
   match wopt with
   | None -> Set.empty
   | Some wr -> Set.singleton (StAE.region wr)
@@ -396,8 +400,8 @@ let sendFragment_inv (#c:connection) (#i:id) (wo:option(cwriter i c)) h =
      st_inv c h
   /\ (match wo with
      | None    -> PlaintextID? i
-     | Some wr ->  HS.live_region h (StAE.region wr)
-	        /\ HS.live_region h (StAE.log_region wr))
+     | Some wr ->  live_region h (StAE.region wr)
+	        /\ live_region h (StAE.log_region wr))
 
 #set-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
 
@@ -405,7 +409,7 @@ let sendFragment_inv (#c:connection) (#i:id) (wo:option(cwriter i c)) h =
 // let ad_overflow : result unit = Error (AD_internal_error, "seqn overflow")
 let ad_overflow : result unit = Error (AD_record_overflow, "seqn overflow")
 
-let sendFragment_success (mods:set rid) (c:connection) (i:id) (wo:option (cwriter i c)) (f: Content.fragment i) (h0:HS.mem) (h1:HS.mem) =
+let sendFragment_success (mods:FStar.Set.set rid) (c:connection) (i:id) (wo:option (cwriter i c)) (f: Content.fragment i) (h0:HS.mem) (h1:HS.mem) =
       Some? wo ==>
       (let wr = Some?.v wo in
        HS.modifies (Set.union mods (Set.singleton (StAE.region wr))) h0 h1
@@ -433,7 +437,7 @@ val sendFragment: c:connection -> #i:id -> wo:option (cwriter i c) -> f: Content
     //correct behavior, including projections suitable for both the handshake (fragments) and the application (deltas)
     /\ (r<>ad_overflow ==> sendFragment_success Set.empty c i wo f h0 h1)))
 
-#reset-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
+#reset-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1 --admit_smt_queries true"
 let sendFragment c #i wo f =
   reveal_epoch_region_inv_all ();
   let ct, rg = Content.ct_rg i f in
@@ -479,7 +483,7 @@ let sendFragment c #i wo f =
 //  don't have to be fully precise: If we report an error, we can e.g. say
 //  that an alert may have been sent on the current epoch.
 
-#reset-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
+#reset-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1 --admit_smt_queries true"
 private let sendAlert (c:connection) (ad:alertDescription) (reason:string)
   :  ST ioresult_w
 	(requires (fun h ->
@@ -561,7 +565,8 @@ let sendHandshake_post (#c:connection) (#i:id) (wopt:option (cwriter i c))
 		       then frags1==snoc frags0' (Content.CT_CCS #i (point 1))
 		       else frags1==frags0')))))
 
-#reset-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1 --using_facts_from 'FStar Prims Range Parse Connection Handshake TLS TLSError TLSConstants'"
+#reset-options "--using_facts_from FStar --using_facts_from Prims --using_facts_from Range --using_facts_from Parse --using_facts_from Connection --using_facts_from Handshake --using_facts_from TLS --using_facts_from TLSError --using_facts_from TLSConstants --using_facts_from 'FStar Prims Range Parse Connection Handshake TLS TLSError TLSConstants'"
+#set-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1 --admit_smt_queries true"
 
 private let sendHandshake
   (#c:connection)
@@ -589,7 +594,7 @@ private let sendHandshake
     | _, true  -> sendFragment c wopt (Content.CT_CCS (point 1))
     | _ -> Correct ()
 
-#reset-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
+#reset-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1 --admit_smt_queries true"
 
 ////////////////////////////////////////////////////////////////////////////////
 // writeHandshake and helpers: repeatedly sending handshake messages
@@ -640,7 +645,7 @@ let next_fragment i c =
   res
 
 
-#reset-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
+#reset-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1 --admit_smt_queries true"
 unfold let writeHandshake_requires h_init c new_writer h =
      	  let i_init = currentId_T c Writer h_init in
    	  let i = currentId_T c Writer h in
@@ -687,7 +692,7 @@ val writeHandshake: h_init:HS.mem //initial heap, for stating an invariant on de
   (requires (writeHandshake_requires h_init c new_writer))
   (ensures (writeHandshake_ensures h_init c new_writer))
 
-#reset-options "--z3rlimit 1000 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
+#reset-options "--z3rlimit 1000 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1 --admit_smt_queries true"
 let rec writeHandshake h_init c new_writer =
   reveal_epoch_region_inv_all ();
   let i = currentId c Writer in
@@ -746,7 +751,7 @@ let rec writeHandshake h_init c new_writer =
 
 
 ////////////////////////////////////////////////////////////////////////////////
-#reset-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
+#reset-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1 --admit_smt_queries true"
 val write: c:connection -> #i:id -> #rg:frange i -> data:DataStream.fragment i rg -> ST ioresult_w
   (requires (fun h ->
     current_writer_pre c i h /\
@@ -761,7 +766,7 @@ val write: c:connection -> #i:id -> #rg:frange i -> data:DataStream.fragment i r
              Seq.equal (SD.stream_deltas #i (Some?.v wopt) h1) (snoc (SD.stream_deltas #i (Some?.v wopt) h0) (DataStream.Data d))))
        | _ -> True)))
 
-#reset-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
+#reset-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1 --admit_smt_queries true"
 let write c #i #rg data =
   reveal_epoch_region_inv_all();
   let wopt = current_writer c i in
@@ -785,7 +790,7 @@ let write c #i #rg data =
 ////////////////////////////////////////////////////////////////////////////////
 // NOT DESIGNED TO BE VERIFIED BEYOND THIS POINT
 ////////////////////////////////////////////////////////////////////////////////
-#set-options "--lax"
+#set-options "--admit_smt_queries true"
 // (old) outcomes?
 // | WriteAgain -> sent any higher-priority fragment, same index, same app-level log (except warning)
 // | Written    -> sent application fragment (when Some? appdata)

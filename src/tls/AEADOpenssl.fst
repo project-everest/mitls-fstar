@@ -1,19 +1,18 @@
 module AEADOpenssl
-module HS = FStar.HyperStack //Added automatically
-module HST = FStar.HyperStack.ST //Added automatically
 
 open FStar.Heap
-
 open FStar.HyperStack
 open FStar.Seq
 open FStar.Bytes
 open CoreCrypto
 
+open Mem
 open TLSConstants
 open TLSInfo
 
-module MM = FStar.Monotonic.DependentMap
-
+module MDM = FStar.Monotonic.DependentMap
+module HS = FStar.HyperStack
+module HST = FStar.HyperStack.ST
 
 type id = i:id{~(PlaintextID? i) /\ AEAD? (aeAlg_of_id i)}
 let alg (i:id) = AEAD?._0 (aeAlg_of_id i)
@@ -51,7 +50,7 @@ type entry (#i:id) (iv:iv i) =
     entry iv
 
 type no_inv m = True
-let ideal_log (r:rgn) (i:id) = MM.t r (iv i) entry no_inv
+let ideal_log (r:rgn) (i:id) = MDM.t r (iv i) entry no_inv
 let log_ref (r:rgn) (i:id) : Tot Type0 =
   if authId i then ideal_log r i else unit
 
@@ -77,7 +76,7 @@ noeq type state (i:id) (rw:rw) =
 type empty_log (#i:id) (#rw:rw) (st:state i rw) h =
   authId i ==>
     (h `HS.contains` (ilog st.log) /\
-     HS.sel h (ilog st.log) == MM.empty)
+     HS.sel h (ilog st.log) == MDM.empty)
 
 type writer i = s:state i Writer
 type reader i = s:state i Reader
@@ -98,7 +97,7 @@ let gen parent i =
   let writer_r = new_region parent in
   cut (is_eternal_region writer_r);
   if authId i then
-    let log : ideal_log writer_r i = MM.alloc () in
+    let log : ideal_log writer_r i = MDM.alloc () in
     State writer_r kv (ilog_as_ref log)
   else
     State writer_r kv (unit_as_ref writer_r i)
@@ -139,13 +138,13 @@ val leak: #i:id -> #role:rw -> state i role -> ST (key i)
 let leak #i #role s = State?.key s
 
 type fresh_iv (#i:id{authId i}) (w:writer i) (iv:iv i) h =
-  MM.fresh (ilog w.log) iv h
+  MDM.fresh (ilog w.log) iv h
 
 type defined_iv (#i:id{authId i}) (#rw:rw) (s:state i rw) (iv:iv i) h =
-  MM.defined (ilog s.log) iv h
+  MDM.defined (ilog s.log) iv h
 
 let logged_iv (#i:id{authId i}) (#rw:rw) (s:state i rw) (iv:iv i) (e:entry #i iv) h =
-  MM.contains (ilog s.log) iv e h
+  MDM.contains (ilog s.log) iv e h
 
 val encrypt: #i:id -> #l:plainlen -> e:writer i ->
              iv:iv i -> ad:adata i -> p:plain i l -> ST (cipher i l)
@@ -161,7 +160,7 @@ let encrypt #i #l e iv ad p =
       let log = ilog e.log in
       HST.recall log;
       let c = CoreCrypto.random (cipherlen i l) in
-      MM.extend log iv (Entry ad p c);
+      MDM.extend log iv (Entry ad p c);
       c
     end
   else
@@ -171,7 +170,7 @@ type correct_decrypt (#i:id) (#l:plainlen) (r:reader i) (iv:iv i) (ad:adata i)
                      (c:cipher i l) (po:option (plain i l)) (h:HS.mem) =
   (authId i ==>
     (defined_iv #i r iv h ==>
-      (let Entry ad' p c' = MM.value_of (ilog r.log) iv h in
+      (let Entry ad' p c' = MDM.value_of (ilog r.log) iv h in
         ((ad'=ad /\ c'=c) ==> po = Some p)))) /\
   (~(authId i) ==>
     (forall (p:plain i l).{:pattern (aead_encryptT (alg i) (State?.key r) iv ad p)}
@@ -186,12 +185,13 @@ val decrypt: #i:id -> #l:plainlen -> d:reader i ->
      correct_decrypt d iv ad c res h1
   ))
 
+#set-options "--admit_smt_queries true" //18-02-18 
 let decrypt #i #l d iv ad c =
   if authId i then
    begin
     let log = ilog d.log in
     HST.recall log;
-    match MM.lookup log iv with
+    match MDM.lookup log iv with
     | None -> assume false; None
     | Some (Entry ad' p c') ->
       if ad' = ad && c' = c then

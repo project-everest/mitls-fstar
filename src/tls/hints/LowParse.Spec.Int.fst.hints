@@ -1,0 +1,137 @@
+[
+  "nj\r_\u0003j¢³–×¡èâÀK\u0003",
+  [
+    [
+      "LowParse.Spec.Int.parse_u8_spec",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
+        "bool_typing", "disc_equation_FStar.Pervasives.Native.Some",
+        "equation_Prims.squash", "function_token_typing_FStar.UInt8.t",
+        "kinding_FStar.Pervasives.Native.tuple2@tok",
+        "primitive_Prims.op_GreaterThanOrEqual",
+        "primitive_Prims.op_LessThanOrEqual",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "typing_FStar.Pervasives.Native.uu___is_Some",
+        "typing_LowParse.Spec.Base.consumed_length"
+      ],
+      0,
+      "1a51fa5c41109914e9c6d9e96db641b1"
+    ],
+    [
+      "LowParse.Spec.Int.parse_u8_spec",
+      2,
+      2,
+      1,
+      [ "@query", "equation_LowParse.Spec.Int.parse_u8" ],
+      0,
+      "40c777b347eac198875ecec7d980a2f9"
+    ],
+    [
+      "LowParse.Spec.Int.serialize_u8",
+      1,
+      2,
+      1,
+      [ "@query", "equation_LowParse.Spec.Int.parse_u8" ],
+      0,
+      "d32bb643704d862c359bb83a410611a6"
+    ],
+    [
+      "LowParse.Spec.Int.parse_u16_spec",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
+        "bool_typing", "disc_equation_FStar.Pervasives.Native.Some",
+        "equation_Prims.squash", "function_token_typing_FStar.UInt16.t",
+        "kinding_FStar.Pervasives.Native.tuple2@tok",
+        "primitive_Prims.op_GreaterThanOrEqual",
+        "primitive_Prims.op_LessThanOrEqual",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "typing_FStar.Pervasives.Native.uu___is_Some",
+        "typing_LowParse.Spec.Base.consumed_length"
+      ],
+      0,
+      "27c82784c3d9090ab64bf0ddad305f1f"
+    ],
+    [
+      "LowParse.Spec.Int.parse_u16_spec",
+      2,
+      2,
+      1,
+      [ "@query", "equation_LowParse.Spec.Int.parse_u16" ],
+      0,
+      "1dfec825c00edaf474e8b1cb0239afff"
+    ],
+    [
+      "LowParse.Spec.Int.serialize_u16",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_LowParse.Bytes.byte",
+        "equation_LowParse.Bytes.bytes",
+        "equation_LowParse.Spec.Int.Aux.parse_u16",
+        "equation_LowParse.Spec.Int.Aux.parse_u16_kind",
+        "equation_LowParse.Spec.Int.parse_u16",
+        "equation_LowParse.Spec.Int.parse_u16_kind",
+        "function_token_typing_LowParse.Spec.Int.Aux.serialize_u16",
+        "refinement_interpretation_LowParse.Spec.Combinators_Tm_refine_4dc535732f9ebcd2a18294ea7fcdb82f"
+      ],
+      0,
+      "75af6c510248678903e9d06af4a6a138"
+    ],
+    [
+      "LowParse.Spec.Int.parse_u32_spec",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
+        "bool_typing", "disc_equation_FStar.Pervasives.Native.Some",
+        "equation_Prims.squash", "function_token_typing_FStar.UInt32.t",
+        "kinding_FStar.Pervasives.Native.tuple2@tok",
+        "primitive_Prims.op_GreaterThanOrEqual",
+        "primitive_Prims.op_LessThanOrEqual",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "typing_FStar.Pervasives.Native.uu___is_Some",
+        "typing_LowParse.Spec.Base.consumed_length"
+      ],
+      0,
+      "c19642656f4628fb410713d4c90d3b06"
+    ],
+    [
+      "LowParse.Spec.Int.parse_u32_spec",
+      2,
+      2,
+      1,
+      [ "@query", "equation_LowParse.Spec.Int.parse_u32" ],
+      0,
+      "0f257ca96ce6bd8a1b7523a4218a6e5b"
+    ],
+    [
+      "LowParse.Spec.Int.serialize_u32",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_LowParse.Bytes.byte",
+        "equation_LowParse.Bytes.bytes",
+        "equation_LowParse.Spec.Int.Aux.parse_u32",
+        "equation_LowParse.Spec.Int.Aux.parse_u32_kind",
+        "equation_LowParse.Spec.Int.parse_u32",
+        "equation_LowParse.Spec.Int.parse_u32_kind",
+        "function_token_typing_LowParse.Spec.Int.Aux.serialize_u32",
+        "refinement_interpretation_LowParse.Spec.Combinators_Tm_refine_4dc535732f9ebcd2a18294ea7fcdb82f"
+      ],
+      0,
+      "74106a0f82464077846856708303b51e"
+    ]
+  ]
+]

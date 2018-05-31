@@ -242,6 +242,22 @@ int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *alg, const unsigned char
     return (b) ? 1 : 0;
 }
 
+int MITLS_CALLCONV FFI_mitls_set_sealing_key(const char *alg, const unsigned char *tk, size_t klen)
+{
+    int b = 0;
+    LOCK_MUTEX(&lock);
+    ENTER_GLOBAL_HEAP_REGION();
+    FStar_Bytes_bytes key;
+    MakeFStar_Bytes_bytes(&key, tk, klen);
+    b = FFI_ffiSetSealingKey(alg, key);
+    LEAVE_GLOBAL_HEAP_REGION();
+    UNLOCK_MUTEX(&lock);
+    if (HAD_OUT_OF_MEMORY) {
+        return 0;
+    }
+    return (b) ? 1 : 0;
+}
+
 int MITLS_CALLCONV FFI_mitls_configure_ticket(mitls_state *state, const mitls_ticket *ticket)
 {
     int b = 0;
@@ -290,9 +306,29 @@ int MITLS_CALLCONV FFI_mitls_configure_named_groups(/* in */ mitls_state *state,
     return 1;
 }
 
-int MITLS_CALLCONV FFI_mitls_configure_alpn(/* in */ mitls_state *state, const char *apl)
+static TLSConstants_alpn alpn_list_of_array(const mitls_alpn *alpn, size_t alpn_count)
+{
+  TLSConstants_alpn apl = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
+  apl->tag = Prims_Nil;
+
+  for(int i = (alpn_count & 255) - 1; i >= 0; i--)
+  {
+    TLSConstants_alpn new = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
+    new->tag = Prims_Cons;
+    new->hd.length = alpn[i].alpn_len & 255;
+    new->hd.data = KRML_HOST_MALLOC(new->hd.length);
+    memcpy((unsigned char*)new->hd.data, alpn[i].alpn, new->hd.length);
+    new->tl = apl;
+    apl = new;
+  }
+
+  return apl;
+}
+
+int MITLS_CALLCONV FFI_mitls_configure_alpn(/* in */ mitls_state *state, const mitls_alpn *alpn, size_t alpn_count)
 {
     ENTER_HEAP_REGION(state->rgn);
+    TLSConstants_alpn apl = alpn_list_of_array(alpn, alpn_count);
     state->cfg = FFI_ffiSetALPN(state->cfg, apl);
     LEAVE_HEAP_REGION();
     if (HAD_OUT_OF_MEMORY) {
@@ -357,19 +393,19 @@ typedef struct {
   pfn_FFI_nego_cb cb;
 } wrapped_nego_cb;
 
-static mitls_version convert_pv(TLSConstants_protocolVersion_ pv)
+static mitls_version convert_pv(QD_TLS_protocolVersion_protocolVersion_ pv)
 {
   switch(pv.tag)
   {
-    case TLSConstants_SSL_3p0:
+    case QD_TLS_protocolVersion_SSL_3p0:
       return TLS_SSL3;
-    case TLSConstants_TLS_1p0:
+    case QD_TLS_protocolVersion_TLS_1p0:
       return TLS_1p0;
-    case TLSConstants_TLS_1p1:
+    case QD_TLS_protocolVersion_TLS_1p1:
       return TLS_1p1;
-    case TLSConstants_TLS_1p2:
+    case QD_TLS_protocolVersion_TLS_1p2:
       return TLS_1p2;
-    case TLSConstants_TLS_1p3:
+    case QD_TLS_protocolVersion_TLS_1p3:
       return TLS_1p3;
     default:
       return TLS_SSL3;
@@ -377,7 +413,7 @@ static mitls_version convert_pv(TLSConstants_protocolVersion_ pv)
   return TLS_SSL3; // unreachable
 }
 
-static TLSConstants_nego_action nego_cb_proxy(FStar_Dyn_dyn cbs, TLSConstants_protocolVersion_ pv,
+static TLSConstants_nego_action nego_cb_proxy(FStar_Dyn_dyn cbs, QD_TLS_protocolVersion_protocolVersion_ pv,
   FStar_Bytes_bytes extb, FStar_Pervasives_Native_option__FStar_Bytes_bytes cookie)
 {
   wrapped_nego_cb *cb = (wrapped_nego_cb*)cbs;
@@ -529,7 +565,7 @@ static size_t list_sa_len(Prims_list__TLSConstants_signatureScheme *l)
 }
 
 static FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme
-  wrapped_select(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st, TLSConstants_protocolVersion_ pv,
+  wrapped_select(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st, QD_TLS_protocolVersion_protocolVersion_ pv,
     FStar_Bytes_bytes sni, FStar_Bytes_bytes alpn,
     Prims_list__TLSConstants_signatureScheme *sal)
 {
@@ -934,8 +970,8 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
     }
 
     if (cfg->alpn) {
-       Prims_string str = CopyPrimsString(cfg->alpn);
-       st->cfg = FFI_ffiSetALPN(st->cfg, str);
+       TLSConstants_alpn apl = alpn_list_of_array(cfg->alpn, cfg->alpn_count);
+       st->cfg = FFI_ffiSetALPN(st->cfg, apl);
     }
 
     if(cfg->exts != NULL && cfg->exts_count > 0)

@@ -1,25 +1,27 @@
 module AEAD_GCM
-module HST = FStar.HyperStack.ST //Added automatically
-module HS = FStar.HyperStack //Added automatically
 // AEAD-GCM mode for the TLS record layer, as specified in RFC 5288.
 // We support both AES_128_GCM and AES_256_GCM, differing only in their key sizes
 
 open FStar.Heap
-
 open FStar.HyperStack
 open FStar.Seq
 open FStar.Bytes
 open CoreCrypto
 
+open Mem
 open TLSConstants
 open TLSInfo
 open LHAEPlain
 
+module Range = Range
 open Range
+
 open FStar.Monotonic.Seq
 
 module Range = Range
 module AEAD = AEADProvider
+module HST = FStar.HyperStack.ST
+module HS = FStar.HyperStack
 
 type id = i:id{ ID12? i /\ AEAD? (aeAlg_of_id i) }
 let alg (i:id) = let AEAD ae _ = aeAlg_of_id i in ae
@@ -44,11 +46,10 @@ type entry (i:id) = // records that c is an encryption of p with ad
 
 let ideal_log (r:rgn) (i:id) = log_t r (entry i)
 
-let log_ref (r:rgn) (i:id) : Tot Type0 =
+let log_ref (r:rgn) (i:id): Tot Type0 =
   if authId i then ideal_log r i else unit
 
-let ilog (#r:rgn) (#i:id) (l:log_ref r i{authId i}) : Tot (ideal_log r i) =
-  l
+let ilog (#r:rgn) (#i:id) (l:log_ref r i{authId i}): ideal_log r i = l
 
 (** we have a counter, that's increasing, at most to the min(length log, 2^64-1) *)
 let ideal_ctr (#l:rgn) (r:rgn) (i:id) (log:ideal_log l i) : Tot Type0 =
@@ -63,6 +64,7 @@ let ctr_ref (#l:rgn) (r:rgn) (i:id) (log:log_ref l i) : Tot Type0 =
   else m_rref r (counter (alg i)) increases
 
 #set-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
+inline_for_extraction
 let ctr (#l:rgn) (#r:rgn) (#i:id) (#log:log_ref l i) (c:ctr_ref r i log)
   : Tot (m_rref r (if authId i
 		   then seqn_val #l #(entry i) r log (max_ctr (alg i))
@@ -178,6 +180,7 @@ let leak #i #role s =
 
 let lemma_12 (i:id) : Lemma (pv_of_id i <> TLS_1p3) = ()
 
+#set-options "--admit_smt_queries true"
 let concrete_encrypt (#i:id) (e:writer i)
   (n:nat{n <= max_ctr (alg i)}) (ad:adata i)
   (rg:range{fst rg = snd rg /\ snd rg <= max_TLSPlaintext_fragment_length})
@@ -186,7 +189,7 @@ let concrete_encrypt (#i:id) (e:writer i)
   (requires (fun h0 ->
     AEAD.st_inv e.aead h0))
   (ensures (fun h0 c h1 ->
-    length c = Range.targetLength i rg /\
+    length c = targetLength i rg /\
     modifies_one (AEAD.log_region e.aead) h0 h1))
   =
   let h = get() in
@@ -207,7 +210,10 @@ let concrete_encrypt (#i:id) (e:writer i)
   cut (within (length text) (cipherRangeClass i tlen));
   targetLength_at_most_max_TLSCiphertext_fragment_length i (cipherRangeClass i tlen);
   let enc = AEAD.encrypt #i #l e.aead iv ad' text in
+  assume (UInt.fits (length nonce_explicit + length enc) 32);
   nonce_explicit @| enc
+
+#reset-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 
 // Encryption of plaintexts; safe instances are idealized
 // Returns (nonce_explicit @| cipher @| tag)
@@ -246,8 +252,7 @@ let encrypt #i e ad rg p =
   let n = HST.op_Bang ctr in
   assume(AEAD.st_inv e.aead h0);
   let c = concrete_encrypt e n ad rg p in
-  if authId i then
-    begin
+  if authId i then (
     let log = ilog e.log in
     HST.recall log;
     let ictr: ideal_ctr e.region i log = e.counter in
@@ -255,12 +260,11 @@ let encrypt #i e ad rg p =
     write_at_end log (Entry c ad p);
     HST.recall ictr;
     increment_seqn ictr;
-    HST.recall ictr
-    end
+    HST.recall ictr)
   else
     begin
     HST.recall ctr;
-    HST.op_Colon_Equals ctr (n + 1)
+    ctr := n + 1
     end;
   c
 
@@ -339,8 +343,8 @@ let decrypt #i d ad c =
         None
       else
 	begin
-	HST.op_Colon_Equals ctr (j + 1);
-	assert (Range.within (FStar.Bytes.length text) r);
+	ctr := j + 1;
+	assert (FStar.Bytes.length text `within` r);
 	let plain = mk_plain i ad r text in
         Some plain
 	end

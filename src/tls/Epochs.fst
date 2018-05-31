@@ -1,5 +1,5 @@
 (**
-This modules implements the mutable state for the successive StAE epochs allocated by KeySchedule and used by TLS.
+This modules implements the mutable state for the successive StAE epochs which is used by TLS.
 Its separation from Handshake and coding is somewhat arbitrary.
 An elaboration would ensure that keys in old epochs are erased.
 (i.e. we only keep old epoch AE logs for specifying authentication)
@@ -8,10 +8,8 @@ module Epochs
 module HST = FStar.HyperStack.ST //Added automatically
 
 open FStar.Heap
-
 open FStar.Seq // DO NOT move further below, it would shadow `FStar.HyperStack.mem`
 open FStar.HyperStack
-
 open FStar.Monotonic.Seq
 open FStar.Error
 open FStar.Bytes
@@ -19,15 +17,19 @@ open FStar.Bytes
 open TLSError
 open TLSInfo
 open TLSConstants
+module Range = Range
 open Range
-//open HandshakeMessages
 open StAE
 //open Negotiation
+open Mem
 
-
+module ST = FStar.HyperStack.ST 
 module HS = FStar.HyperStack
-
 module MS = FStar.Monotonic.Seq
+module Secret = Handshake.Secret
+
+#set-options "--admit_smt_queries true"
+
 type random = TLSInfo.random
 
 (* debug printing *)
@@ -135,8 +137,36 @@ noeq type epochs (r:rgn) (n:random) = | MkEpochs:
   es: MS.i_seq r (epoch r n) (epochs_inv #r #n) ->
   read: epoch_ctr r es ->
   write: epoch_ctr r es ->
-  exporter: MS.i_seq r KeySchedule.exportKey (fun s -> Seq.length s <= 2)  ->
+  exporter: MS.i_seq r Secret.exportKey (fun s -> Seq.length s <= 2)  ->
   epochs r n
+
+/// Epochs stores all keys produced by the HS and used by TLS.
+/// These keys consist of 
+/// - the StAE reader or writer for 0RTT (client2server only)
+/// - the 0RTT exporter secret key 
+///
+/// - StAE 1RTT reader or writer for 1RTT (in both directions)
+/// - the 0RTT and 1RTT exporter keys.
+/// We also need to keep track of which key is in use, if any, in each direction.
+///
+/// Proposal:
+/// - have a single mutable state 
+/// - instead of "-1", we could have a special "NULL" value for StAE.
+/// - we need to think ahead for key erasure:
+///   * we have a "ghost" sequence of readers (or writers) for overall integrity.
+///   * we only keep concrete current keys + future keys
+///   * (for DTLS, we may need to keep a few keys for the record layer)
+///
+/// Questions:
+/// 
+/// - what to do with the epoch context? We need to bind the keys to
+///   the connection and to the handshake, in order to give
+///   precise TLS-level security guarantees.
+/// - how to guarantee synchronized configs between readers and writers?
+/// - how to control the usage of these keys? Some of them CANNOT be
+///   used for application data.
+/// - should epochs track connection closure? 
+
 
 let containsT (#r:rgn) (#n:random) (es:epochs r n) (h:mem) =
     MS.i_contains (MkEpochs?.es es) h
@@ -153,7 +183,7 @@ val alloc_log_and_ctrs: #a:Type0 -> #p:(seq a -> Type0) -> r:rgn ->
       h1 `contains` c2 /\
       i_sel h1 is == Seq.createEmpty)))
 
-#reset-options "--using_facts_from FStar --using_facts_from Prims --using_facts_from Epochs --using_facts_from Parse"
+#reset-options "--using_facts_from FStar --using_facts_from Prims --using_facts_from Epochs --using_facts_from Parse --admit_smt_queries true"
 
 let alloc_log_and_ctrs #a #p r =
   let init = Seq.createEmpty in
@@ -163,7 +193,7 @@ let alloc_log_and_ctrs #a #p r =
   let c2 : epoch_ctr #a #p r is = HST.ralloc r (-1) in
   (| is, c1, c2 |)
 
-#reset-options
+// #reset-options
 
 val incr_epoch_ctr :
   #a:Type0 ->
@@ -292,9 +322,9 @@ let get_current_epoch
 
 val recordInstanceToEpoch:
   #r:rgn -> #n:random -> hs:Negotiation.handshake ->
-  ks:KeySchedule.recordInstance -> Tot (epoch r n)
+  ks:Secret.recordInstance -> Tot (epoch r n)
 let recordInstanceToEpoch #hs_rgn #n hs ri =
-  let KeySchedule.StAEInstance #i rd wr = ri in
+  let Secret.StAEInstance #i rd wr = ri in
   assume(nonce_of_id i = n); // ADL: KS will need to provove this
   assume(epoch_region_inv' hs_rgn rd wr);
   Epoch #hs_rgn #n #i hs rd wr

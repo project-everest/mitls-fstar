@@ -7,7 +7,11 @@ open FStar.Error
 open TLSError
 open TLSConstants
 open TLSInfo
-open Range
+open Parse
+
+module Range = Range
+let range = Range.range
+let rbytes = Range.rbytes
 
 //--------------------------------------------------------------------
 // `Plain' interface towards LHAE
@@ -27,13 +31,16 @@ let parseAD b = snd(split b 8ul)
 type adata (i:id) = b:lbytes (ad_Length i)
   { exists (ad:StatefulPlain.adata i). ad == parseAD b}
 
+#set-options "--admit_smt_queries true"
 let makeAD i seqn (ad:StatefulPlain.adata i) : adata i =
   let b = bytes_of_seq seqn @| ad in
   cut(Bytes.equal ad (parseAD b));
   b
+#reset-options
 
 val seqN: i:id -> adata i -> Tot seqn
 let seqN i ad =
+//18-02-26 review?
 //    let snb,ad = FStar.Bytes.split_eq ad 8 in //TODO bytes NS 09/27
     let snb,ad = FStar.Bytes.split ad 8ul in    
     seq_of_bytes snb
@@ -48,11 +55,13 @@ let lemma_makeAD_seqN i n ad = admit()
     // cut (Seq.equal (fst (Seq.split_eq (bytes_of_seq n @| ad) 8)) (bytes_of_seq n));
     // int_of_bytes_of_int (Seq.length (bytes_of_seq n)) n
 
+#set-options "--admit_smt_queries true"
 val lemma_makeAD_parseAD: i:id -> n:seqn -> ad:StatefulPlain.adata i
           -> Lemma (requires (True))
                    (ensures (parseAD (makeAD i n ad) = ad))
                    [SMTPat (makeAD i n ad)]
 let lemma_makeAD_parseAD i n ad = cut (Bytes.equal ad (parseAD (makeAD i n ad)))
+#reset-options
 
 // let test i (n:seqn) (m:seqn{m<>n}) (ad:adata i) =
 //   assert (makeAD i n ad <> makeAD i m ad)
@@ -66,7 +75,7 @@ val repr: i:id{ ~(safeId i)} -> ad:adata i -> r:range -> p:plain i ad r -> Tot (
 let repr i ad rg p = StatefulPlain.repr i (parseAD ad) rg p
 
 val mk_plain: i:id{ ~(authId i)} -> ad:adata i -> 
-  rg:(frange i){ StatefulPlain.wf_ad_rg i (parseAD ad) rg } ->
+  rg:(Range.frange i){ StatefulPlain.wf_ad_rg i (parseAD ad) rg } ->
   b:rbytes rg { StatefulPlain.wf_payload_ad_rg i (parseAD ad) rg b } ->
     Tot (p:plain i ad rg {b = ghost_repr #i #ad #rg p})
 let mk_plain i ad rg b = StatefulPlain.mk_plain i (parseAD ad) rg b

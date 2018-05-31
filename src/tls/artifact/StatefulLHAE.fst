@@ -15,7 +15,8 @@ open Platform.Bytes
 
 open TLSError
 open TLSInfo
-open Range
+module Range = Range
+let range = Range.range
 open LHAEPlain
 open AEAD_GCM
 open StatefulPlain

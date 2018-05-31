@@ -7,7 +7,6 @@ open FStar.Error
 open TLSError
 open TLSConstants
 open TLSInfo
-open Range
 open Content
 
 // Defines an abstract "plain i len" plaintext interface from the more
@@ -18,6 +17,7 @@ open Content
 
 type id = i:id { ID13? i }
 
+#set-options "--use_two_phase_tc true"
 
 (*** plain := fragment | CT | 0*  ***)
 
@@ -69,6 +69,7 @@ unfold let min (a:nat) (b:nat): nat = if a < b then a else b
 // the padding and compute a value of type `plain` with a public range.
 // The representation of the result is the original
 // AE-decrypted plaintext truncated to max_TLSPlaintext_fragment_length + 1.
+#reset-options "--admit_smt_queries true"
 val scan: i:id { ~ (authId i) } -> bs:plainRepr ->
   j:nat { j < length bs
 	/\ (forall (k:nat {j < k /\ k < length bs}).{:pattern (FStar.Bytes.index bs k)} FStar.Bytes.index bs k = 0z) } ->

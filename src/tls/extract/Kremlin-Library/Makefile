@@ -59,11 +59,11 @@ INCLUDE_DIRS 	= secure kreminc include stub vale curve ffi uint128 .
 FILES 		= AEAD_GCM AEADProvider Alert BufferBytes Cert \
   C_Loops_Spec_Loops CommonDH Connection Content CoreCrypto \
   Crypto_Indexing Crypto_Symmetric_Bytes Crypto_Plain \
-  CryptoTypes curve/Hacl_Curve25519 DataStream DHGroup ECGroup Epochs Extensions FFI \
-  FFICallbacks Flag Flags FStar HaclProvider Handshake HandshakeLog \
-  HandshakeMessages Hashing Hashing_CRF Hashing_OpenSSL Hashing_Spec HKDF HMAC \
-  HMAC_UFCMA KeySchedule kremlib/kremdate kremlib/kremstr kremlinit LHAEPlain \
-  LowCProvider Negotiation Nonce Parse PMS Prims PSK QUIC Range Record RSAKey \
+  CryptoTypes curve/Hacl_Curve25519 DataStream DHGroup ECGroup Old_Epochs Extensions FFI \
+  FFICallbacks Flags Format FStar HaclProvider Old_Handshake HandshakeLog \
+  HandshakeMessages Hashing Hashing_CRF Hashing_OpenSSL Hashing_Spec Old_HKDF HMAC \
+  Old_HMAC_UFCMA Old_KeySchedule kremlib/kremdate kremlib/kremstr kremlinit LHAEPlain \
+  LowCProvider LowParse Negotiation Nonce Parse PMS Prims PSK QUIC Range Record RSAKey \
   secure/Crypto_HKDF_Crypto_HMAC \
   Specializations_Providers_AEAD StAE StatefulLHAE \
   StatefulPlain StreamAE StreamDeltas StreamPlain stub/core_crypto stub/hacl_aead \
@@ -76,11 +76,12 @@ ifdef MITLS_USE_OPENSSL
 FILES += AEADOpenssl
 endif
 
-CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall \
+CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror \
   -Wno-unused-variable -Wno-parentheses -Wno-unknown-warning-option \
   -Wno-unused-but-set-variable -Wno-infinite-recursion -g -fwrapv -fstack-check \
   -D_BSD_SOURCE -D_DEFAULT_SOURCE -D__USE_MINGW_ANSI_STDIO \
-  -Wno-missing-braces
+  -Wno-missing-braces -Wno-error-tautological-compare -Wno-error-int-to-void-pointer-cast \
+  -Wno-error-enum-conversion
 
 LDOPTS += -L$(EVERCRYPT_HOME)/out -levercrypt
 
@@ -101,12 +102,12 @@ all: libmitls.$(SO)
 
 -include $(addsuffix .d,$(FILES))
 
-libmitls.$(SO): $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
+libmitls.$(SO): $(addsuffix .o,$(FILES)) vale/aesgcm-$(MARCH)$(VARIANT).o vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
 	$(CC) $^ -shared -o $@ $(LDOPTS)
 
 clean:
 	rm -fr $(addsuffix .o,$(FILES)) $(addsuffix .c,$(FILES)) libmitls.$(SO)
-	rm -fr vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
+	rm -fr vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
 	rm -fr *.a *.h *.d *~
 
 test:

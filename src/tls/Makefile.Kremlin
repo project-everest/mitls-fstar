@@ -2,7 +2,7 @@ all: build
 
 build: build-internal-test build-library build-external-test
 
-test: test-internal-test # test-library test-external-test
+test: test-internal-test test-library test-external-test
 
 ifneq (,$(MITLS_USE_OPENSSL))
 CONCRETE_FLAVOR = -OpenSSL
@@ -15,9 +15,9 @@ EXTENSION	= krml
 # Don't extract modules from mitls that are implemented in C
 EXTRACT		= '* -DHDB -LowCProvider -FFICallbacks -BufferBytes'
 SPECINC     	= $(MITLS_HOME)/src/tls/concrete-flags $(MITLS_HOME)/src/tls/concrete-flags/$(FLAVOR)
-VFLAGS     	?= --admit_smt_queries true
 
 include Makefile.common
+VFLAGS     += --admit_smt_queries true
 
 clean: clean-internal-test clean-library clean-external-test
 	rm -f $(DEP_FILE)
@@ -58,10 +58,11 @@ HEADERS 	= $(addprefix -add-include ,'"hacks.h"' '"kremlin/fstar_bytes.h"' \
 #
 # Note: Crypto.Plain is not pre-extracted by secure_api.
 
-KRML_COMMAND	= krml \
+KRML_COMMAND	= $(KREMLIN_HOME)/krml \
   -bundle 'LowParse.\*' \
   -bundle LowParseWrappers \
   -bundle 'Format.\*' \
+  -bundle TLSConstants=TLSConstants,QD.TLS_protocolVersion \
   -fnoanonymous-unions -warn-error -9-7-6@4 \
   -fsopts --debug,yes -verbose \
   $(DROP_MODULES) $(HEADERS) $(KOPTS)
@@ -98,7 +99,7 @@ ALL_EXTERNAL_FILES	= \
     Crypto_HKDF_Crypto_HMAC.c Crypto_HKDF_Crypto_HMAC.h) \
   $(addprefix curve/,Hacl_Curve25519.c Hacl_Curve25519.h) \
   $(addprefix kremlib/,kremstr.c kremdate.c FStar_UInt128_MSVC.c) \
-  kreminc/kremlib.h \
+  $(addprefix kreminc/,kremlib.h) \
   $(addprefix kreminc/kremlin/,c.h c_endianness.h c_string.h fstar_bytes.h \
     fstar_char.h fstar_dyn.h fstar_ints.h fstar_uint128.h prims_int.h prims_string.h \
     testlib.h fstar_uint128_builtin.h fstar_uint128_msvc.h \
@@ -107,7 +108,7 @@ ALL_EXTERNAL_FILES	= \
     buffer_bytes.c RegionAllocator.c RegionAllocator.h) \
   $(addprefix include/,hacl_glue.h hacks.h regions.h) \
   $(addprefix vale/,sha256_main_i.c sha256_main_i.h sha256-$(MARCH)$(VARIANT).S \
-    Vale_Hash_SHA2_256.c vale_aes_glue.c aes-$(MARCH)$(VARIANT).S DafnyLib.h) \
+    Vale_Hash_SHA2_256.c vale_aes_glue.c aesgcm-$(MARCH)$(VARIANT).S aes-$(MARCH)$(VARIANT).S DafnyLib.h) \
   $(addprefix pki/,mipki.h) \
   $(addprefix ffi/,mitlsffi.h)
 
@@ -134,9 +135,12 @@ $(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/uint128,$(UINT128_DIR)))
 # Leave Crypto_Indexing (which Crypto_AEAD_Main wants) standalone, and its
 # dependencies too.
 $(INTERNAL_TEST_DIR)/Test_Main.c: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES))
+ifdef VERBOSE
+	@echo -e "\033[1;32m=== Extracting $@ ...\033[;37m"
+endif
 	$(KRML_COMMAND) $^ -tmpdir $(INTERNAL_TEST_DIR) -no-prefix Test.Main \
 	  -skip-compilation -drop FFICallbacks \
-	  -bundle Test.Main=Test.*,AEAD_GCM,AEADOpenssl,AEADProvider,Alert,Connection,ConnInvariant,Content,DataStream,Encode,Epochs,FFI,Handshake,HandshakeLog,HandshakeMessages,Hashing,Hashing.CRF,Hashing.OpenSSL,HKDF,HMAC,HMAC.UFCMA,IdNonce,KDF.Common,KDF.Salt.ODH,KeySchedule,LHAEPlain,MAC,MAC_SHA1,MAC_SHA256,MasterSecret,Negotiation,QUIC,Range,Record,Signature,StAE,Standalone,StatefulLHAE,StatefulPlain,StreamAE,StreamDeltas,StreamPlain,Ticket,TLS,TLSPRF,Transport
+	  -bundle Test.Main=Test.*,AEAD_GCM,AEADOpenssl,AEADProvider,Alert,Connection,ConnInvariant,Content,DataStream,Encode,Old.Epochs,FFI,HandshakeLog,HandshakeMessages,Hashing,Hashing.CRF,Hashing.OpenSSL,HMAC,IdNonce,KDF.Common,KDF.Salt.ODH,LHAEPlain,MAC,MAC_SHA1,MAC_SHA256,MasterSecret,Negotiation,QUIC,Range,Record,Signature,StAE,Standalone,StatefulLHAE,StatefulPlain,StreamAE,StreamDeltas,StreamPlain,Ticket,TLS,TLSPRF,Transport,KDF,Extract1,Old.Handshake,Old.HMAC.UFCMA,Old.HKDF,Old.KeySchedule
 
 internal-test-copy: $(addprefix $(INTERNAL_TEST_DIR)/,$(ALL_EXTERNAL_FILES)) $(INTERNAL_TEST_DIR)/stub/mipki_wrapper.c
 
@@ -168,6 +172,9 @@ $(eval $(call COPY_template,$(LIBRARY_DIR)/ffi,$(MITLS_HOME)/libs/ffi))
 $(eval $(call COPY_template,$(LIBRARY_DIR)/uint128,$(UINT128_DIR)))
 
 $(LIBRARY_DIR)/TLS.c: $(filter-out $(EXTRACT_DIR)/prims.krml $(EXTRACT_DIR)/PKI.krml $(EXTRACT_DIR)/Test_%.krml,$(ALL_KRML_FILES))
+ifdef VERBOSE
+	@echo -e "\033[1;32m=== Extracting $@ ...\033[;37m"
+endif
 	$(KRML_COMMAND) $^ -tmpdir $(LIBRARY_DIR) -skip-compilation
 
 library-copy: $(addprefix $(LIBRARY_DIR)/, $(filter-out pki/mipki.h, $(ALL_EXTERNAL_FILES))) \
