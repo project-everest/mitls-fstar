@@ -81,6 +81,7 @@ type key (ip:ipkg)
   else
     concrete_key)
 
+abstract
 val usage:
   #ip:ipkg ->
   #index_of_i:(ip.t -> I.id) ->
@@ -89,11 +90,13 @@ val usage:
   GTot info
 let usage #ip #index_of_i #i k =
   if model then
-    match k <: _key index_of_i i with
+    let k: _key index_of_i i = k in
+    match k with
     | Ideal ck _ -> ck.u
     | Real ck -> ck.u
   else k.u
 
+abstract
 val keyval:
   #ip:ipkg ->
   #index_of_i:(ip.t -> I.id) ->
@@ -102,7 +105,8 @@ val keyval:
   GTot (keyrepr (usage k))
 let keyval #ip #index_of_i #i k =
   if model then
-    match k <: _key index_of_i i with
+    let k: _key index_of_i i = k in
+    match k with
     | Ideal ck _ -> ck.k
     | Real ck -> ck.k
   else k.k
@@ -112,6 +116,7 @@ let shared_footprint =
   if model then AE.shared_footprint
   else Set.empty
 
+abstract
 val footprint:
   #ip:ipkg ->
   #index_of_i:(ip.t -> I.id) ->
@@ -121,12 +126,14 @@ val footprint:
 let footprint #ip #index_of_i #i k =
   Set.lemma_equal_intro (Set.empty `Set.intersect` shared_footprint) Set.empty;
   if model then
-    match k <: _key index_of_i i with
+    let k: _key index_of_i i = k in
+    match k with
     | Ideal _ st -> AE.footprint st
     | Real _ -> Set.empty
   else Set.empty
 
 (** The local AEAD invariant *)
+abstract
 val invariant:
   #ip:ipkg ->
   #index_of_i:(ip.t -> I.id) ->
@@ -136,11 +143,13 @@ val invariant:
   GTot Type0
 let invariant #ip #index_of_i #i k h =
   if model then
-    match k <: _key index_of_i i with
+    let k: _key index_of_i i = k in
+    match k with
     | Ideal _ st -> AE.invariant st h
     | Real _ -> True
   else True
 
+abstract
 val invariant_framing:
   #ip:ipkg ->
   #index_of_i:(ip.t -> I.id) ->
@@ -156,10 +165,12 @@ val invariant_framing:
         (ensures invariant k h1)
 let invariant_framing #ip #index_of_i i k h0 r h1 =
   if model then
-    match k <: _key index_of_i i with
+    let k: _key index_of_i i = k in
+    match k with
     | Ideal _ st -> AE.frame_invariant st h0 r h1
     | Real _ -> ()
 
+abstract
 val empty_log:
   #ip:ipkg ->
   #aeadAlg_of_i:(ip.t -> aeadAlg) ->
@@ -171,7 +182,8 @@ val empty_log:
   GTot Type0
 let empty_log #ip #aeadAlg_of_i #index_of_i #i a k h =
   if model then
-    match k <: _key index_of_i i with
+    let k: _key index_of_i i = k in
+    match k with
     | Ideal _ st ->
       if AE.safeMac (index_of_i i) then
         AE.log st h == Seq.createEmpty
@@ -179,6 +191,7 @@ let empty_log #ip #aeadAlg_of_i #index_of_i #i a k h =
     | Real _ -> True
   else True
 
+abstract
 val empty_log_framing:
   #ip:ipkg ->
   #aeadAlg_of_i:(ip.t -> aeadAlg) ->
@@ -196,13 +209,15 @@ val empty_log_framing:
     (ensures  (empty_log a k h1))
 let empty_log_framing #ip #aeadAlg_of_i #index_of_i #i a k h0 r h1 =
   if model then
-    match k <: _key index_of_i i with
+    let k: _key index_of_i i = k in
+    match k with
     | Ideal _ st ->
       if AE.safeMac (index_of_i i) then
         AE.frame_log st Seq.createEmpty h0 r h1
       else ()
     | Real _ -> ()
 
+abstract
 val create_key:
   ip:ipkg ->
   // 2018.03.22: To guarantee erasure of `aeadAlg_of_i`,
@@ -215,7 +230,7 @@ val create_key:
   i:ip.t{ip.registered i} ->
   a:info1 #ip aeadAlg_of_i i ->
   ST (key ip index_of_i i)
-     (requires fun h0 -> model /\ live_region h0 (AE.prf_region (index_of_i i)))
+     (requires fun h0 -> model) ///\ live_region h0 (AE.prf_region (index_of_i i)))
      (ensures  fun h0 k h1 ->
        modifies_none h0 h1 /\
        fresh_regions (footprint k) h0 h1 /\
