@@ -92,6 +92,7 @@ SOURCES = \
   vale_aes_glue.c \
   Vale_Hash_SHA2_256.c \
 # Taken from the list of HACL sources in hacl-star/providers/Makefiles
+  Hacl_Policies.c \
   Hacl_Chacha20.c \
   Hacl_Salsa20.c \
   Hacl_SHA2_256.c \
@@ -101,6 +102,7 @@ SOURCES = \
   Hacl_Ed25519.c \
   Hacl_Poly1305_64.c \
   AEAD_Poly1305_64.c \
+  Hacl_Chacha20Poly1305.c \
   Hacl_Chacha20_Vec128.c \
 # Taken from ls hacl-star/providers/multiplexer/c/*.c | xargs basename
   evercrypt_bytes.c \
