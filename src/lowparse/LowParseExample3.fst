@@ -8,7 +8,7 @@ module U16 = FStar.UInt16
 module Cast = FStar.Int.Cast
 module I32 = FStar.Int32
 
-#reset-options "--z3rlimit 32"
+#reset-options "--z3rlimit 64 --z3cliopt smt.arith.nl=false --using_facts_from '* -LowParse.Low.VLData'"
 
 let dummy
   (input: buffer8)
@@ -19,9 +19,8 @@ let dummy
   (ensures (fun _ _ _ -> True))
 = HST.push_frame ();
   let res =
-    if validate32_t input len `I32.lt` 0l
-    then 0ul
-    else
+    if validate32 validate32_t input len
+    then
       if which = 42ul
       then
         let x : U16.t = read_from_buffer access_a parse32_u16 input in
@@ -32,6 +31,7 @@ let dummy
       else
         let x : U16.t = read_from_buffer access_c parse32_u16 input in
         Cast.uint16_to_uint32 x
+    else 0ul
   in
   HST.pop_frame ();
   res

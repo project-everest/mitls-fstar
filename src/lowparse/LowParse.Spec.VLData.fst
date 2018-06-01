@@ -406,6 +406,35 @@ let parse_bounded_vldata_elim
   )))))
 = parse_bounded_vldata_elim' min max p xbytes x consumed
 
+let parse_bounded_vldata_elim_forall
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (xbytes: bytes)
+: Lemma
+  (requires (Some? (parse (parse_bounded_vldata min max p) xbytes)))
+  (ensures (
+    let (Some (x, consumed)) = parse (parse_bounded_vldata min max p) xbytes in
+    let sz : integer_size = log256' max in
+    let plen = parse (parse_bounded_integer sz) xbytes in
+    Some? plen /\ (
+    let (Some (len, consumed_len)) = plen in
+    (consumed_len <: nat) == (sz <: nat) /\
+    in_bounds min max len /\
+    U32.v len <= Seq.length xbytes - sz /\ (
+    let input' = Seq.slice xbytes (sz <: nat) (sz + U32.v len) in
+    let pp = parse p input' in
+    Some? pp /\ (
+    let (Some (x', consumed_p)) = pp in
+    x' == x /\
+    (consumed_p <: nat) == U32.v len /\
+    (consumed <: nat) == sz + U32.v len
+  )))))
+= let (Some (x, consumed)) = parse (parse_bounded_vldata min max p) xbytes in
+  parse_bounded_vldata_elim min max p xbytes x consumed
+
 (* Serialization *)
 
 let parse_bounded_vldata_strong_pred

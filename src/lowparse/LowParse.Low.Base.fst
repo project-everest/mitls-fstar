@@ -171,6 +171,27 @@ let validator32
   ))
 
 inline_for_extraction
+let validate32
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (v: validator32 p)
+  (input: buffer8)
+  (sz: I32.t)
+: HST.Stack bool
+  (requires (fun h ->
+    is_slice h input sz
+  ))
+  (ensures (fun h res h' ->
+    is_slice h input sz /\
+    M.modifies M.loc_none h h' /\ (
+    let pv = parse_from_slice p h input sz in
+    res == Some? pv
+ )))
+= let res = v input sz in
+  not (res `I32.lt` 0l)
+
+inline_for_extraction
 let parser32
   (#k: parser_kind)
   (#t: Type0)

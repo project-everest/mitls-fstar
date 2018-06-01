@@ -18,6 +18,14 @@ let int32_to_uint32_pos
   [SMTPat (U32.v (Cast.int32_to_uint32 x))]
 = M.modulo_lemma (I32.v x) (pow2 32)
 
+let uint32_to_int32_bounded
+  (x: U32.t)
+: Lemma
+  (requires (U32.v x < 2147483648))
+  (ensures (I32.v (Cast.uint32_to_int32 x) == U32.v x))
+  [SMTPat (I32.v (Cast.uint32_to_int32 x))]
+= M.modulo_lemma (U32.v x) (pow2 32)
+
 #reset-options "--z3rlimit 32 --z3cliopt smt.arith.nl=false"
 
 inline_for_extraction
@@ -39,8 +47,6 @@ let validate32_nondep_then
   else
     p2' (B.offset input (Cast.int32_to_uint32 (len `I32.sub` x1))) x1
 
-#reset-options
-
 inline_for_extraction
 let validate_nochk32_nondep_then
   (#k1: parser_kind)
@@ -56,6 +62,8 @@ let validate_nochk32_nondep_then
   let off1 = p1' input in
   let off2 = p2' (B.offset input off1) in
   U32.add off1 off2
+
+#reset-options
 
 inline_for_extraction
 let validate32_synth
@@ -294,3 +302,35 @@ let validate32_and_then
   else
     let va = p1' input in
     v2 va (B.offset input (Cast.int32_to_uint32 (len `I32.sub` res))) res
+
+#set-options "--z3rlimit 32"
+
+inline_for_extraction
+let validate32_filter_and_then
+  (#k1: parser_kind)
+  (#t1: Type0)
+  (#p1: parser k1 t1)
+  (v1: validator32 p1)
+  (p1': parser32 p1)
+  (f: (t1 -> GTot bool))
+  (f' : ((x: t1) -> Tot (y: bool { y == f x } )))
+  (#k2: parser_kind)
+  (#t2: Type0)
+  (#p2: ((x: t1 { f x == true} ) -> parser k2 t2))
+  (v2: ((x1: t1 { f x1 == true } ) -> validator32 (p2 x1)))
+  (u: unit {
+    and_then_cases_injective p2
+  })
+: Tot (validator32 (parse_filter p1 f `and_then` p2))
+= fun input len ->
+  let res = v1 input len in
+  if res `I32.lt` 0l
+  then res
+  else
+    let va = p1' input in
+    if f' va
+    then
+      v2 va (B.offset input (Cast.int32_to_uint32 (len `I32.sub` res))) res
+    else -1l
+
+#reset-options
