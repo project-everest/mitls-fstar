@@ -25,7 +25,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "a43c757e61ab92bdb030388ece67372a"
+      "3f69c8b5d483a466993c4e748ed48c74"
     ],
     [
       "Buffer.Utils.op_Less_Less_Less",
@@ -88,7 +88,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "91a5a645a89b02819032b0a8130def41"
+      "adba62128b984e5ee6949ef01bb519de"
     ],
     [
       "Buffer.Utils.lemma_euclidean_division",
@@ -123,7 +123,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "59ab5fe40ad6a3cf038152f8c68b457e"
+      "794e6864e6618f330e4e829f53a058e3"
     ],
     [
       "Buffer.Utils.uint32_of_bytes",
@@ -205,12 +205,12 @@
         "Prims_pretyping_ae567c2fb75be05905677af440075565",
         "Prims_pretyping_f537159ed795b314b4e58c260361ae86",
         "assumption_Prims.HasEq_int", "b2t_def", "bool_inversion",
-        "bool_typing", "data_elim_FStar.Buffer.MkBuffer",
-        "equation_Buffer.Utils.bytes", "equation_Buffer.Utils.u32",
-        "equation_Buffer.Utils.u8", "equation_Buffer.Utils.uint32s",
-        "equation_FStar.BitVector.bv_t", "equation_FStar.Buffer.buffer",
-        "equation_FStar.Buffer.length", "equation_FStar.Buffer.live",
-        "equation_FStar.Buffer.lseq", "equation_FStar.Heap.trivial_preorder",
+        "bool_typing", "equation_Buffer.Utils.bytes",
+        "equation_Buffer.Utils.u32", "equation_Buffer.Utils.u8",
+        "equation_Buffer.Utils.uint32s", "equation_FStar.BitVector.bv_t",
+        "equation_FStar.Buffer.buffer", "equation_FStar.Buffer.length",
+        "equation_FStar.Buffer.live", "equation_FStar.Buffer.lseq",
+        "equation_FStar.Heap.trivial_preorder",
         "equation_FStar.HyperStack.ST.equal_domains",
         "equation_FStar.HyperStack.ST.mreference",
         "equation_FStar.HyperStack.ST.reference",
@@ -264,7 +264,6 @@
         "refinement_interpretation_Buffer.Utils_Tm_refine_e7dd788c984157d4fd5d8eacd2366aae",
         "refinement_interpretation_FStar.BitVector_Tm_refine_a0cd7d06c5da6444b6b51b319febde8e",
         "refinement_interpretation_FStar.Buffer_Tm_refine_811063936efbc06568ec405d75452cb9",
-        "refinement_interpretation_FStar.Buffer_Tm_refine_ba56e54aa82f2631b0e7a66e112023c8",
         "refinement_interpretation_FStar.HyperStack.ST_Tm_refine_003cbb363565c5358e7ed8a8d7dba6d4",
         "refinement_interpretation_FStar.Seq.Base_Tm_refine_b913a3f691ca99086652e0a655e72f17",
         "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
@@ -284,7 +283,7 @@
         "typing_Prims.pow2", "unit_inversion", "unit_typing"
       ],
       0,
-      "3307ad7bfc93e387164bf829a41fb910"
+      "cdf55da0e54fecd62c1eb6e789e2d3ef"
     ],
     [
       "Buffer.Utils.bytes_of_uint32",
@@ -310,7 +309,7 @@
         "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87"
       ],
       0,
-      "5012dbf822a2d90ee2b43a3c206d2f8b"
+      "fa2994795c6d422a7b8ca830c3c8255d"
     ],
     [
       "Buffer.Utils.bytes_of_uint32",
@@ -383,7 +382,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "658701489b341f776e515dc0afa1c3cd"
+      "31e433ecdccc705c37d04825ddf23e41"
     ],
     [
       "Buffer.Utils.memset",
@@ -406,7 +405,7 @@
         "typing_FStar.Buffer.length"
       ],
       0,
-      "5c934dd6449523dace48aa138d8bd35c"
+      "f2747f9e4590a307e7a33e758e0ab04b"
     ],
     [
       "Buffer.Utils.memset",
@@ -454,7 +453,7 @@
         "typing_FStar.Seq.Base.create", "typing_FStar.UInt32.v"
       ],
       0,
-      "4c31bbd8a5e58223cffbf8f39592d6cf"
+      "5bce28af5250618387a571851fb8fa57"
     ]
   ]
 ]
