@@ -73,5 +73,3 @@ Example2: KREMLIN_ARGS=$(INTERMEDIATE_LEVEL)
 Example3: KREMLIN_ARGS=$(LOW_LEVEL)
 
 .PHONY: all verify-all clean extract-all $(EXAMPLES)
-
-$(FSTAR_OUT_DIR)/FStar.Math.Lemmas.fst.checked: FSTAR_OPTIONS += --z3rlimit_factor 4
