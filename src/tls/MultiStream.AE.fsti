@@ -2,12 +2,15 @@ module MultiStream.AE
 
 open Range // cwinter: module name clash with FStar.Range when referring to Range.*
 
+let ( ++ ) = Seq.snoc
+
 
 (*! refactoring Epochs, with a narrower, more abstract
     interface. WIP. *)
 
-// Consider switching to Low*? Intuitively is does not change much
-// crypto modelling, which will remain based on ghost/ideal bytes.
+// Consider switching to Low*? Intuitively it would not affect much
+// our crypto modelling, which will remain based on ghost/ideal bytes
+// contents.
 
 /// Multistreams provide authenticated encryption with rekeying.
 ///
@@ -18,11 +21,11 @@ open Range // cwinter: module name clash with FStar.Range when referring to Rang
 /// next key.
 /// 
 /// Each multistream instance is specified
-/// using two ghost monotonic views:
+/// using two ghost monotonic views
 ///
-/// * a sequence of authenticated ghost bytes sent/received, grouped
-///   by successive keys; no abstraction, no indexing, possibly no
-///   need for range.
+/// 1. A sequence of authenticated ghost bytes sent/received, grouped
+///    by successive keys; no abstraction, no indexing, possibly no
+///    need for range.
 ///
 ///   Logs grow either by appending an empty sequence (as we start
 ///   using the next key) or by appending a record in the last
@@ -32,23 +35,99 @@ open Range // cwinter: module name clash with FStar.Range when referring to Rang
 ///   that's a global choice.
 /// 
 ///   The TLS API will specify a projection of that log.
+// We still don't know what's most convenient for the receiver
+// application. Going ahead with ghost abstract logs at both ends.
+//
+// HOW TO SYNCHRONIZE INDEXES? 
 
-// Use lists instead of sequences?
+// We could abstractly require that the appended index be a stable
+// function of the current state. Assuming 0RTT-rejecting servers know
+// what index they are skipping.
+//
+// PARTIAL COMPROMISE? 
+//
+// Adaptive key-based model. Separate dynamic integrity from more
+// static confidentiality? Difficulty: the indexes may get out of
+// sync. Property: 1st successful decryption at a honest index
+// guarantees synchronization.
+//
+// HOW TO MODEL STREAM & SUB-STREAM TERMINATION?
+//
+// Each multistream is parametrized by an application-defined sender
+// update condition, both for appending to the current sub-stream and
+// for switching to the next empty stream. (The preorder will require
+// an explicit transitive closure.)
+//
+// At the receivers's, we can't locally enforce it as we decrypt: if
+// the sender is corrupt, the receiver's current sub-stream may extend
+// beyond terminators. In contrast, the receiver application enforces
+// that key switches happen only when the current substream is
+// terminated.
+//
+// Tricky cases: 
+//
+// * trial decryption, formally Ok as we decrypt only with the current
+// * key.
+//
+// * rejected 0RTT. The server never installs the 0RTT key, and
+//   instead immediately installs the next key. It will know that the
+//   client has stopped 0RTT once it decrypts the first HS message,
+//   but the gap between the two streams will persist.
+//
+// * out-of-order decryption for DTLS/QUIC. This will require a
+// * generalized receiver API, with explicit erasure of old keys.
+//
+// A sub-stream is complete (stable, terminated) once the sender
+// update condition disables any update.
+//
+// At the receiver, we give no such guarantee. 
+// Instead, the receiver may deduce it from the stream contents.
+// 
+// The receiver application decides when to switch keys.
+//
+//
+// Use lists instead of sequences? Note StreamAE uses FStar.Monotonic.Seq 
 // Revert them for syntactic convenience? 
+//
+//
+// How to prevent confusion between multiple instances? This will be
+// required internally to prove framing etc. This is index-based, e.g.
+// disjoint indexes between different connections, directions,
+// position in stream.
 
 type ghost_record = (rg:range & b:Bytes.bytes{Bytes.length b <= snd rg})
-type logs = Seq.seq (Seq.seq ghost_record) 
 
-let empty_logs xs = Seq.for_all (fun x -> x == []) xs 
-let rec extends_logs xs ys =
-  let open FStar.Seq in 
-  match length xs with 
-  | 0 -> empty_logs ys
-  | 1 -> head xs `prefix_of` head ys /\ empty_logs ys
-  | _ -> head xs = head ys /\ extends_logs (tail xs) (tail ys)
+open FStar.Seq 
+
+type log = seq ghost_record
+type logs = seq log
+
+// let empty_logs xs = Seq.for_all (fun x -> Seq.length x = 0 ) xs 
+
+// Several properties to consider
+// [Correctness]     Senders/receivers local updates are as specified in the pre/posts of encrypt, decrypt, switch,...
+// [Integrity]       If the sender is honest, her state evolves according to a (parametric) update preorder.
+// [Authenticity]    For each honest index, the sub-stream received is a prefix of the sub-stream sent. 
+// [Confidentiality] IND for sub-stream contents sent at honest indexes 
+
+
+let rec prefix (rs ws:log): Tot _ (decreases (length rs + length ws)) = 
+  length rs = 0 \/ 
+  (length ws > 0 /\ head rs == head ws /\ prefix (tail rs)(tail ws))
+
+let rec empty_tail (rs:logs): Tot _ (decreases (length rs)) = 
+  length rs = 0 \/ 
+  (head rs == createEmpty /\ empty_tail (tail rs))
+
+#set-options "--z3rlimit 100"
+let rec prefixes (rs ws:logs): Tot _ (decreases (length rs + length ws)) =
+  empty_tail rs \/ 
+  (length rs > 0 /\ length ws > 0 /\ prefix (head rs) (head ws) /\ prefixes (tail rs) (tail ws))
 
 // clarify ghost vs ideal for [logs]
 
+/// ... and
+/// 
 /// * a sequence of StAE indexes, controlling idealization and plaintext
 ///   abstraction; since keys are added before being used, [idxs] is
 ///   at least as long as [logs]. It grows by appending StAE keys in
@@ -57,18 +136,26 @@ let rec extends_logs xs ys =
 ///   TLS will maintain an invariant relating these indexes to the
 ///   connection, enabling reasoning about their conditional safety.
 
-type idxs = Seq.seq id 
+type id = TLSInfo.id // for now, compatible with StAE
+type rw = TLSConstants.rw 
 
+type idxs = seq id
 
-noeq type t (role:rw) (* stateful, monotonic, intuitively indexed by [idxs] *)
+type t (role:rw) (* stateful, monotonic, intuitively indexed by [idxs] *)
+
+let rec snoc2 (xs:logs{length xs > 0}) (r:ghost_record): Tot (xs':logs) (decreases (length xs)) =
+  if length xs = 1 then create #log 1 (head #log xs ++ r) else cons (head xs) (snoc2 (tail xs) r)
+  
 
 // footprint
-val region:   #role:rw -> x:t role -> rid 
-val sel_logs: #role:rw -> x:t role -> mem -> logs 
-val sel_idxs: #role:rw -> x:t role -> mem -> idxs
+val region:   #role:rw -> x:t role -> HyperStack.rid  
+val sel_logs: #role:rw -> x:t role -> HyperStack.mem -> logs 
+val sel_idxs: #role:rw -> x:t role -> HyperStack.mem -> idxs
 
 // TODO framing and monotonicity; clarify where AE states vs AE logs
 // are allocated.
+
+let empty_log: log = createEmpty 
 
 /// We use multiple regions:
 /// - one for local control (modified by installing or changing keys)
@@ -87,64 +174,68 @@ val sel_idxs: #role:rw -> x:t role -> mem -> idxs
 /// The whole memory shape is recorded as a strong invariant (see epochs)
 /// with a special case for remotely-allocated writers. 
 
-
+open FStar.HyperStack.All
 
 /// Internally, the state consists of
 /// - a list of (| i, StAE role i |)
-/// - a current integer index within the list (starting at -1)
+/// - a current integer index within the list (starting at -1, sadly)
 /// 
-/// The list *before* the current index is ghost.
+/// The list of StAE instances *before* the current index is ghost.
 // TODO extract [logs] and [idxs] from those.
 
 /// Concretely, we only keep one current key and a few future
 /// keys. This matters for forward secrecy.  We may statically bound
 /// the number of live keys (3 for TLS?) so that future keys can be
-/// stored in a small buffer.
+/// stored in a small buffer, or use the current Handshake state.
 
 /// registering a future key
-val extend: #role:rw -> x:t role -> i:id -> k:StAE.t role -> ST unit 
-  (requires fun h0 -> StAE.sel h0 k = [])
+val extend: #role:rw -> x:t role -> i:TLSInfo.id -> k:StAE.state i role -> ST unit 
+  (requires fun h0 -> 
+    // only on the sender side? 
+    TLSConstants.Writer? role /\ TLSInfo.authId i ==> 
+    length (StAE.fragments k h0) = 0)
   (ensures fun h0 _ h1 -> 
-    modifies_one h0 h1 (region x) /\
-    sel_idxs h1 x == sel_idxs h0 x ++ i /\ 
-    sel_logs h1 x == sel_logs h0 x)
+    HyperStack.modifies_one (region x) h0 h1 /\
+    sel_idxs x h1 == sel_idxs x h0 ++ i /\ 
+    sel_logs x h1 == sel_logs x h0)
 
 /// ensuring local forward secrecy
-val next: #role:rw -> x:t role -> i:id -> k:StAE.t role -> ST unit 
+val next: #role:rw -> x:t role -> i:id -> k:StAE.state i role -> ST unit 
   (requires fun h0 -> 
-    length (sel_logs h0 x) < length (sel_idxs h0 x))
+    length (sel_logs x h0) < length (sel_idxs x h0))
   (ensures fun h0 _ h1 -> 
-    modifies_one h0 h1 (region x) /\
-    sel_idxs h1 x == sel_idxs h0 /\ 
-    sel_logs h1 x == sel_logs h0 x ++ [])
+    HyperStack.modifies_one (region x) h0 h1 /\
+    sel_idxs x h1 == sel_idxs x h0 /\ 
+    sel_logs x h1 == sel_logs x h0 ++ empty_log)
 
-val read: x: t Reader -> i: id -> ST (result (rg:Range.range & Plain.t i rg))
+val read: x: t TLSConstants.Reader -> i: id -> ST (result (rg:Range.range & StreamPlain.plain i (admit())))
   (requires fun h0 -> 
-    live h0 x /\
-    sel_logs h0 x <> [] /\
-    i = index (sel_idxs h0 x) (length (sel_logs h0 x) - 1))
+    // live h0 x /\
+    length (sel_logs x h0) <> 0 /\
+    i = index (sel_idxs x h0) (length (sel_logs x h0) - 1))
   (ensures fun h0 r h1 -> 
-    live h1 x /\ 
-    modifies_one h0 h1 (region x) /\
-    sel_idxs h1 x == sel_idxs h0 x /\
-    (let l0 = sel_logs h0 x in 
-     let l1 = sel_logs h1 x in 
+    // live h1 x /\ 
+    HyperStack.modifies_one (region x) h0 h1 /\
+    sel_idxs x h1 == sel_idxs x h0 /\
+    (let l0 = sel_logs x h0 in 
+     let l1 = sel_logs x h1 in 
      match r with 
-     | Correct (| rg, p |) -> l1 == snoc2 l0 (Plain.v p)
-     | Error _             -> l1 == l0))
+     | Error.Correct (| rg, p |) -> l1 == snoc2 l0 (StreamPlain.goodrepr p)
+     | Error.Error _             -> l1 == l0
+     ))
 
-val write: x: t Writer -> i: id -> rg: Range.range -> plain:Plain.t i rg -> ST (result cipher)
+val write: x: t TLSConstants.Writer -> i: id -> rg: Range.range -> plain:StreamPlain.plain i (admit()) -> ST (result cipher)
   (requires fun h0 -> 
     live h0 x /\ 
-    sel_logs h0 x <> [] /\
-    i = index (sel_idxs h0 x) (length (sel_logs h0 x) - 1))
+    length (sel_logs x h0) > 0 /\
+    i = index (sel_idxs x h0) (length (sel_logs x h0) - 1))
   (ensures fun h0 r h1 -> 
-    live h1 x /\ // although write errors should be fatal
-    modifies_one h0 h1 (region x) /\
-    sel_idxs h1 x == sel_idxs h0 x /\
-    (let logs0 = sel_logs h0 x in 
-     let logs1 = sel_logs h1 x in 
-     let logs_correct = snoc2 (sel_logs h0 x) (Plain.v p) in 
+    // live h1 x /\ // although write errors should be fatal
+    HyperStack.modifies_one (region x) h0 h1 /\
+    sel_idxs x h1 == sel_idxs x h0 /\
+    (let logs0 = sel_logs x h0 in 
+     let logs1 = sel_logs x h1 in 
+     let logs_correct = snoc2 (sel_logs x h0) (StreamPlain.v p) in 
      match r with 
      | Correct cipher -> logs1 == logs_correct 
      | Error _    -> logs1 == logs_correct \/ logs1 == logs0))
@@ -155,17 +246,17 @@ val create: role: rw -> r:rid -> ST (t role)
     modifies_none h0 h1 /\ // to be adjusted
     live x /\ 
     fresh_subregion (region x) r /\ 
-    sel_idxs h1 x == [] /\
-    sel_logs h1 x == [])
+    length (sel_idxs x h1) = 0 /\
+    length (sel_logs x h1) = 0)
 
 /// scrubs and deallocates all concrete state
 /// (formally leaving ghost state unchanged)
 val free: #role: rw -> x:t role -> ST unit
   (requires fun h0 -> live h0 x)
   (ensures fun h0 r h1 -> 
-    modifies_one h0 h1 (region x) /\
-    sel_idxs h1 x == sel_idxs h0 x /\
-    sel_logs h1 x == sel_logs h0 x)
+    modifies_one (region x) h0 h1 /\
+    sel_idxs x h1 == sel_idxs x h0 /\
+    sel_logs x h1 == sel_logs x h0)
     
 // what about closure and forward-secrecy for the last key? 
 // we do not represent failure or termination (client-specific)

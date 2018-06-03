@@ -45,7 +45,9 @@ val pre_pubshare: #g:group -> pre_keyshare g -> pre_share g
 type secret (g:group) = bytes
 
 val namedGroup_of_group: g:group -> Tot (option namedGroup)
-val group_of_namedGroup: ng:namedGroup -> Tot (option group)
+val group_of_namedGroup: ng:namedGroup -> Tot (o: option group)
+val group_of_supportedNamedGroup: ng: supportedNamedGroup -> Lemma (Some? (group_of_namedGroup ng))
+
 val default_group: group
 
 /// We index ODH instances using public shares.  This enables us to

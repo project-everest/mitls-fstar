@@ -118,6 +118,22 @@ let group_of_namedGroup (ng:namedGroup): Tot (option group) =
   | FFDHE8192 -> Some (FFDH (DHGroup.Named DHGroup.FFDHE8192))
   | _         -> None
 
+let group_of_supportedNamedGroup ng = 
+  match ng with 
+  | SECP256R1
+  | SECP384R1
+  | SECP521R1
+  | X25519   
+  | X448     
+  | FFDHE2048
+  | FFDHE3072
+  | FFDHE4096
+  | FFDHE6144
+  | FFDHE8192 -> assert_norm (Some? (group_of_namedGroup ng))
+  | FFDHE_PRIVATE_USE _ 
+  | ECDHE_PRIVATE_USE _ 
+  | UNKNOWN _ -> assume(is_supported_group ng == false) // awkward with List.mem-based definition? 
+
 let is_ecdhe (ng:namedGroup): Tot bool = List.mem ng [ SECP256R1; SECP384R1; SECP521R1; X25519; X448 ]
 
 let is_ffdhe (ng:namedGroup): Tot bool = List.mem ng [ FFDHE2048; FFDHE3072; FFDHE4096; FFDHE6144; FFDHE8192 ]

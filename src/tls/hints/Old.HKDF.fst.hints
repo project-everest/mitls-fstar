@@ -1,1 +1,26 @@
-[ "ôﬂ\u0001)ﬁ±¿\b¡¡L\u0000¿mnë", [] ]
+[
+  "ôﬂ\u0001)ﬁ±¿\b¡¡L\u0000¿mnë",
+  [
+    [
+      "Old.HKDF.hkdf_extract",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Old.HKDF_Tm_refine_01ee375b43d95f601d1b2bb184dfa4f9"
+      ],
+      0,
+      "61df028b05b42b3b26bf2c754b7d84ba"
+    ],
+    [
+      "Old.HKDF.hkdf_expand_int",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_Prims.HasEq_int" ],
+      0,
+      "5212f13953b3b7a80f02c4dc7079d7d7"
+    ]
+  ]
+]

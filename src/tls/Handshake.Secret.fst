@@ -19,11 +19,15 @@ module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
 module H = Hashing.Spec
 
-#set-options "--admit_smt_queries true" 
 
 // cwinter: Epochs.fst still depends on these (previously in KeySchedule.fst)
 type exportKey = (li:logInfo & i:exportId li & H.tag (exportId_hash i))
-type recordInstance = | StAEInstance: #id:TLSInfo.id -> StAE.reader (TLSInfo.peerId id) -> StAE.writer id -> recordInstance  
+noeq type recordInstance = | StAEInstance: 
+  #id:TLSInfo.id -> 
+  StAE.reader (TLSInfo.peerId id) -> 
+  StAE.writer id -> 
+  recordInstance  
+//18-06-03 usability: omitting [noeq] should yield the precise error returned on simpler definitions.
 
 (* A flag for runtime debugging of computed keys.
    The F* normalizer will erase debug prints at extraction
@@ -33,18 +37,22 @@ let discard (b:bool): ST unit (requires (fun _ -> True))
 let print s = discard (IO.debug_print_string ("KS | "^s^"\n"))
 unfold let dbg : string -> ST unit (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1)) =
-  if DebugFlags.debug_KS then print else (fun _ -> ())
+  if DebugFlags.debug_KS then print else (fun _ -> ()) 
 
 
 // parsed handshake message transcript; essentially opaque/ghost to
-// the key-schedule: what we get out of HandshakeLog.
+// the key-schedule: what we get out of HandshakeLog. The refinement
+// on digest will follow from the wellformedness of derived indexes.
 
-type transcript = HandshakeLog.hs_transcript // ghost 
+type transcript = Idx.transcript // HandshakeLog.hs_transcript
 let digest (i:id) (t:transcript) = 
-  let ha = Idx.ha_of_id i in 
-  let v = HandshakeLog.transcript_bytes t in 
-  t: Hashing.Spec.anyTag {Hashing.CRF.hashed ha v /\ t = Hashing.hash ha v}
-
+  h: Hashing.anyTag {
+    let ha = Idx.ha_of_id i in 
+    let v = HandshakeLog.transcript_bytes t in 
+    length v <= Hashing.maxLength ha /\ // hashing precondition
+    Hashing.CRF.hashed ha v /\
+    h = Hashing.hash ha v} 
+//18-06-03 usability: omitting the length condition should yield a precise error
 
 /// THE LIVE OF KEY INDEXES. we use relative paths to index various
 /// secrets and keys as we progress in the schedule; we try to keep
@@ -86,7 +94,12 @@ let ets_of_ems i transcript: i:ts_id {sender_of_id i = Some Client} = Derive i "
 let cts_of_hms i transcript: i:ts_id {sender_of_id i = Some Client} = Derive i "c hs traffic" (ExpandLog transcript tmp)
 let sts_of_hms i transcript: i:ts_id {sender_of_id i = Some Server} = Derive i "s hs traffic" (ExpandLog transcript tmp)
 let cts_of_ams i transcript: i:ts_id {sender_of_id i = Some Client} = Derive i "c ap traffic" (ExpandLog transcript tmp)
-let sts_of_ams i transcript: i:ts_id {sender_of_id i = Some Server} = Derive i "s ap traffic" (ExpandLog transcript tmp)
+let sts_of_ams i transcript: i:ts_id {sender_of_id i = Some Server} = 
+  // Derive i "s ap traffic" (ExpandLog transcript tmp)
+  // 18-06-03 usability: slow to verify without assert_norm, why? 
+  let j = Derive i "s ap traffic" (ExpandLog transcript tmp) in 
+  assert_norm(sender_of_id j = Some Server); 
+  j
 
 //TODO define [aeadAlg_of_i] specifically on transport secrets. 
 //TODO make the most of welldefined_id
@@ -102,6 +115,7 @@ let cfk_of_hms i transcript = fnk_of_s (cts_of_hms i transcript)
 let sfk_of_hms i transcript = fnk_of_s (sts_of_hms i transcript)
 
 
+// move to CommonDH?
 let sprint_share (#g:CommonDH.group) (s:CommonDH.pre_share g): string
   =
   let kb = CommonDH.serialize_raw #g s in
@@ -200,7 +214,7 @@ let read_psk (pi:PSK.pskid): ST (i:id & u:PSK.pskInfo {ha_of_id i = u.early_hash
   (requires fun h -> True)
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
 =
-  magic()
+  admit()
   (*
   let c = PSK.psk_info pi in
   let i =
@@ -311,7 +325,7 @@ noeq type ks12_state =
     ms:ms -> ks12_state
 
 // state after sending ClientHello (for all protocol  versions)
-abstract type c13_wait_ServerHello 
+noeq type c13_wait_ServerHello 
   (psks  : list (i:id{~(no_psk i)})) 
   (groups: list CommonDH.group) = 
 | C13_wait_ServerHello:
@@ -328,13 +342,16 @@ abstract type c13_wait_ServerHello
 
 /// rekeying part of the final state, holding the *next* transport
 /// secret, separately for the client and the server.
-abstract type next_ts (i: ts_id) = secret (ts_of_ts i) 
+abstract type next_ts (i: ts_id {wellformed_id i}) = (
+  let j = ts_of_ts i in 
+  assert(wellformed_id j); 
+  secret (ts_of_ts i) )
 
 //18-01-07 TODO AEAD packaging
-assume val aeadAlg_of_i: id -> aeAlg //18-01-07  should match AEAD.Pkg.aeadAlg?
+assume val aeadAlg_of_i: id -> aeAlg //18-01-07 should match AEAD.Pkg.aeadAlg?
 
 // intermediate state waiting for the the ...ServerHello digest
-abstract type s13_wait_ServerHello (i0: id (*esId*)) (z:id_dhe) =
+noeq type s13_wait_ServerHello (i0: id (*esId*)) (z:id_dhe) =
 | S13_wait_SH: 
     ha: kdfa {ha = ha_of_id i0} -> 
     aea: option (a:aeAlg {a == aeadAlg_of_i i0}) -> // still undefined when there is no PSK
@@ -343,7 +360,7 @@ abstract type s13_wait_ServerHello (i0: id (*esId*)) (z:id_dhe) =
     ems i0 ->
     hms (hms_of_ems i0 z) -> s13_wait_ServerHello i0 z
 
-abstract type s13_wait_ServerFinished (i: id (*amsId*)) = secret i 
+type s13_wait_ServerFinished (i: id (*amsId*)) = secret i 
 
 
 // KeySchedule instances
@@ -418,14 +435,18 @@ let create #rid r =
   (KS #ks_region (ralloc ks_region istate)), nonce
 *)
 
-private let group_of_valid_namedGroup
+// move to CommonDH? 
+private let group_of_supportedNamedGroup
   (g:CommonDH.supportedNamedGroup)
   : CommonDH.group
-  = Some?.v (CommonDH.group_of_namedGroup g)
+  = 
+  CommonDH.group_of_supportedNamedGroup g; 
+  Some?.v (CommonDH.group_of_namedGroup g)
 
+// move to library? generalize?
 effect ST0 (a:Type) = ST a (fun _ -> True) (fun h0 _ h1 -> modifies_none h0 h1)
-
-val map_ST: ('a -> ST0 'b) -> list 'a -> ST0 (list 'b)
+effect STDH (a:Type) = ST a (fun _ -> True) (fun h0 _ h1 -> modifies_one CommonDH.dh_region h0 h1)
+val map_ST: ('a -> STDH 'b) -> list 'a -> STDH (list 'b)
 let rec map_ST f x = match x with
   | [] -> []
   | a::tl -> f a :: map_ST f tl
@@ -435,9 +456,17 @@ private let group_of_cks = function
   | CommonDH.UnknownShare g _ -> g
 
 // 17-12-02 should call IK.initI, at least for TLS 1.3
-private let keygen (g:CommonDH.group)
-  : St (g:CommonDH.group & CommonDH.pre_keyshare g)
-  = (| g, CommonDH.keygen g |)
+private let keygen (ng: CommonDH.supportedNamedGroup): 
+  ST (g:CommonDH.group & CommonDH.ikeyshare g)
+  (requires fun h0 -> True) 
+  (ensures fun h0 (|g,x|) h1 -> 
+    modifies_one CommonDH.dh_region h0 h1 /\ 
+    // TODO propagate conditional security from CommonDH.keygen
+    g == group_of_supportedNamedGroup ng )
+= 
+  let g = group_of_supportedNamedGroup ng in 
+  (| g, CommonDH.keygen g |)
+
 
 assume val ks_client_init: ogl: option (CommonDH.supportedNamedGroups)
   -> ST (option CommonDH.clientKeyShare)
@@ -445,65 +474,63 @@ assume val ks_client_init: ogl: option (CommonDH.supportedNamedGroups)
   (ensures fun h0 ogxl h1 ->
     (None? ogl ==> None? ogxl) /\
     (Some? ogl ==> (Some? ogxl /\ Some?.v ogl == List.Tot.map group_of_cks (Some?.v ogxl))) /\
-    modifies_none h0 h1)
-
-(* 17-12-02 FIXME
+    modifies_one CommonDH.dh_region h0 h1 )
+// 18-06-03 not the right signature
+(*
 let ks_client_init ogl =
-  dbg ("ks_client_init "^(if ogl=None then "1.2" else "1.3"));
+  dbg ("ks_client_init "^(if ogl = None then "1.2" else "1.3"));
   match ogl with
   | None -> None // TLS 1.2
   | Some gl ->   // TLS 1.3
-    let groups = List.Tot.map group_of_valid_namedGroup gl in
-    let gs = map_ST keygen groups in
+    let gs = map_ST keygen gl in
     let serialize_share (gx: CommonDH.dhi) =
       let (| g, gx |) = gx in
       match CommonDH.namedGroup_of_group g with
       | None -> None // Impossible
-      | Some ng -> Some (CommonDH.Share g (CommonDH.pubshare #g gx)) in
+      | Some ng -> Some (CommonDH.Share g gx) in
     let gxl = List.Tot.choose serialize_share gs in
     // st := C (C_13_wait_SH cr [] gs);
     Some gxl
 *)
-
-
-(* 17-11-25 functionally replacing the two functions below *)
 
 // the digest comes with its logical payload, ready to be MACed.
 // we will need a full spec of the early index. 
 // we can re-use this code at the server, except that we verify instead of MACing
 
 
+(*
 val client13_compute_es_and_bfk:
   #rid: rgn -> 
   (pskid:PSK.pskid * PSK.obfuscated_ticket_age) -> 
-  ST (i: id (*esId{~(dummy i)}*) & ems i * binderKey (bns_of_ems i) * Idx.info (*TBC*) )
+  ST (i: id {registered (bns_of_ems i)} 
+    (*esId{~(dummy i)}*) & ems i * binderKey (bns_of_ems i) * Idx.info (*TBC*) )
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
 
-// cwinter: broken, but unused?
-// let client13_compute_es_and_bfk truncatedHello #rid (pskid,_) =
-//   // 17-11-25 rediscuss this callback
-//   let i, pski, psk = read_psk pskid in
-//   let ha = pski.early_hash in
-//   dbg ("Loaded pre-shared key "^print_bytes pskid^": "^print_bytes psk);
+// cwinter: broken, but unused? 
+let client13_compute_es_and_bfk truncatedHello #rid (pskid,_) =
+  // 17-11-25 rediscuss this callback
+  let i, pski, psk = read_psk pskid in
+  let ha = pski.early_hash in
+  dbg ("Loaded pre-shared key "^print_bytes pskid^": "^print_bytes psk);
 
-//   let es: es i = magic() in // extract0 psk ha in
-//   dbg ("Early secret: "^print_bytes es);
+  let es: es i = magic() in // extract0 psk ha in
+  dbg ("Early secret: "^print_bytes es);
 
-//   // // strange twist on usage; does it help re: salt collisions?
-//   //
-//   // let binder_key = 
-//   //   if ApplicationPSK? i 
-//   //   then derive_secret "ext binder" es ha 
-//   //   else derive_secret "res binder" es ha
-//   let lb = 
-//     if ApplicationPSK? i //17-11-26 we need to know at run-time
-//     then "ext binder" 
-//     else "res binder" in
+  // // strange twist on usage; does it help re: salt collisions?
+  //
+  // let binder_key = 
+  //   if ApplicationPSK? i 
+  //   then derive_secret "ext binder" es ha 
+  //   else derive_secret "res binder" es ha
+  let lb = 
+    if ApplicationPSK? i //17-11-26 we need to know at run-time
+    then "ext binder" 
+    else "res binder" in
 
-//   let bk: binderKey (binder_of_esid_id i) = magic() in 
-//   let es_info = magic() in
-//   (*
+  let bk: binderKey (binder_of_esid_id i) = magic() in 
+  let es_info = magic() in
+  (*
 //   let bId = Binder i ll in
 //   let bk: secret bId = magic() in // KDF.derive_secret ha es lb (H.emptyHash ha) in
 //   dbg ("binder key["^lb^"]: "^print_bytes bk);
@@ -512,7 +539,8 @@ val client13_compute_es_and_bfk:
 //   let bfk: HMAC.UFCMA.key bkfId = KDF.derive bk ha "finished" in
 //   dbg ("binder Finished key: "^print_bytes bfk);
 //   *)
-//   (| i, (es, bk, es_info) |)
+  (| i, (es, bk, es_info) |)
+*)
 
 (* WAS:
 private let mk_binder (#rid) (pskid:PSK.pskid)
@@ -566,42 +594,44 @@ let ks_client_13_hello_retry ks (g:CommonDH.group)
 *)
 
 
-/// When 0-RTT is offered, derive the early data key and exporter
-/// secret from the early secret of the first offered PSK.
+/// When offering 0-RTT, the client derives the early data key and
+/// exporter secret from the early secret of the first offered PSK.
 
-// cwinter: broken, but unused?
-// let client13_0RTT 
-//   (i: emsi) 
-//   (es: secret i) //TODO does the secret embed its info? otherwise [ha,aea] required
-//   (truncated_ClientHello: transcript) // ghost
-//   (digest: Hashing.Spec.anyTag) // to be refined
-//   (writer_parent: rgn) 
-//   : ST (
-//     secret (x0s_of_ems i truncated_ClientHello) * 
-//     StreamAE.writer (ets_of_ems i truncated_ClientHello))
-//   (requires fun h0 -> True 
-//     // freshness of this transcript (from freshness of its nonce)
-//     )
-//   (ensures fun h0 r h1 ->
-//     modifies_none h0 h1 
-//     // except for the keys we derive
-//     )
-//   =
-//   dbg ("client13_0RTT log="^print_bytes digest);
-//   let ha = esId_hash i in
-//   let aea = esId_ae i in
-//   let info = (ha,aea) in
+assume val sprint_secret: i: id -> s:secret i -> string 
 
-//   let x0si = x0s_of_ems i transcript in 
-//   let x0s: secret x0si = derive es ha "e exp master" transcript digest info in
-//   dbg ("Early exporter master secret:    "^print_bytes (leak_secret x0s));
+// cwinter: broken, but unused? cf: this is WIP, called from Handshake.client_ClientHello  
+let client13_0RTT 
+  (i: id) 
+  (es: secret i) //TODO does the secret embed its info? otherwise [ha,aea] required
+  (truncated_ClientHello: transcript) // ghost
+  (digest: Hashing.Spec.anyTag) // to be refined
+  (writer_parent: rgn) 
+  : ST (
+    secret (x0s_of_ems i truncated_ClientHello) * 
+    StreamAE.writer (ets_of_ems i truncated_ClientHello))
+  (requires fun h0 -> True 
+    // freshness of this transcript (from freshness of its nonce)
+    )
+  (ensures fun h0 r h1 ->
+    modifies_none h0 h1 
+    // except for the keys we derive
+    )
+  =
+  dbg ("0RTT log digest: "^print_bytes digest);
+  let ha = esId_hash i in
+  let aea = esId_ae i in
+  let info = (ha,aea) in
 
-//   let etsi = ets_of_ems i transcript in
-//   let ets: secret etsi = derive es ha "c e traffic" transcript digest info in
-//   dbg ("Client early traffic secret:     "^print_bytes (leak_secret ets));
+  let x0si = x0s_of_ems i transcript in 
+  let x0s: secret x0si = admit() in // derive es ha "e exp master" transcript digest info in
+  dbg ("Early exporter master secret:    "^sprint_secret x0s);
 
-//   let key0 = derive_streamAE #etsi ets Writer writer_parent in 
-//   x0s, key0
+  let etsi = ets_of_ems i transcript in
+  let ets: secret etsi = admit() in // derive es ha "c e traffic" transcript digest info in
+  dbg ("Client early traffic secret:     "^sprint_secret ets);
+
+  let key0 = admit() in // derive_streamAE #etsi ets Writer writer_parent in 
+  x0s, key0
 
 (* WAS: 
 let ks_client_13_ch ks (log:bytes): ST (exportKey * recordInstance)

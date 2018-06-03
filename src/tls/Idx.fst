@@ -33,12 +33,15 @@ type kdfa = Hashing.Spec.alg
 ///
 /// HKDF defines an injective function from label * context to bytes, to be used as KDF indexes.
 ///
-type context =
+
+type transcript = HandshakeLog.hs_transcript 
+noeq type context =
   | Extract: context // TLS extractions have no label and no context; we may separate Extract0 and Extract2
   | ExtractDH: v:id_dhe -> context // This is Extract1 (the middle extraction)
   | Expand: context // TLS expansion with default hash value
   | ExpandLog: // TLS expansion using hash of the handshake log
-    info: TLSInfo.logInfo (* ghost, abstract summary of the transcript *) ->
+    (* ghost, abstract summary of the transcript; was TLSInfo.logInfo *)
+    info: transcript -> 
     hv: Hashing.Spec.anyTag (* requires stratification *) -> context
 
 /// Underneath, HKDF takes a "context" and a required length, with
@@ -50,7 +53,7 @@ type id_psk = nat // external application PSKs only; we may also set the usage's
 // The `[@ Gc]` attribute instructs Kremlin to translate the `pre_id` field as a pointer,
 // otherwise it would generate an invalid type definition.
 [@ Gc]
-type pre_id =
+noeq type pre_id =
   | Preshared:
       a: kdfa (* fixing the hash algorithm *) ->
       id_psk  ->
@@ -61,7 +64,7 @@ type pre_id =
       context (* dynamic part of the derivation label *) ->
       pre_id
 
-// always bound by the index (and also passed concretely at creation-time).
+// always bound by the ghost index (and also passed concretely at creation-time).
 val ha_of_id: i:pre_id -> kdfa
 let rec ha_of_id = function
   | Preshared a _ -> a
@@ -69,15 +72,17 @@ let rec ha_of_id = function
 
 // placeholders
 assume val idh_of_log: TLSInfo.logInfo -> id_dhe
-assume val summary: bytes -> TLSInfo.logInfo
+// assume val summary: bytes -> TLSInfo.logInfo
 
 // concrete transcript digest
-let digest_info (a:kdfa) (info:TLSInfo.logInfo) (hv: Hashing.Spec.anyTag) =
-  exists (transcript: Hashing.Spec.hashable a).
-    // Bytes.length hv = tagLen a /\
-    hv = Hashing.Spec.hash a transcript /\
-    Hashing.CRF.hashed a transcript /\
-    info = summary transcript
+let wellformed_digest (a:kdfa) (info:transcript) (tag: Hashing.Spec.anyTag) =
+    // hashing precondition
+    let v = HandshakeLog.transcript_bytes info in 
+    Bytes.length v <= Hashing.maxLength a /\ 
+    // hashing postcondition 
+    Bytes.length tag = Hashing.tagLength a /\     
+    Hashing.CRF.hashed a v /\ 
+    tag = Hashing.hash a v 
 
 /// stratified definition of id required.
 ///
@@ -90,7 +95,9 @@ let digest_info (a:kdfa) (info:TLSInfo.logInfo) (hv: Hashing.Spec.anyTag) =
 val wellformed_id: pre_id -> Type0
 let rec wellformed_id = function
   | Preshared a _ -> True
-  | Derive i l (ExpandLog info hv) -> wellformed_id i /\ digest_info (ha_of_id i) info hv
+  | Derive i l (ExpandLog info hv) -> 
+      wellformed_id i /\ 
+      wellformed_digest (ha_of_id i) info hv
   | Derive i lbl ctx ->
       //TODO "ctx either extends the parent's, or includes its idh" /\
       wellformed_id i

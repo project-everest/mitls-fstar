@@ -19,7 +19,7 @@ open TLSConstants
  *************************************************)
 
 // Extensions may (selectively) appear in the following messages
- type ext_msg =
+type ext_msg =
    | EM_ClientHello
    | EM_ServerHello
    | EM_EncryptedExtensions
