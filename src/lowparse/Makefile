@@ -50,6 +50,10 @@ $(FSTAR_OUT_DIR)/%.checked:
 	$(MY_FSTAR) $(FSTAR_OPTIONS) $(OTHERFLAGS) $<
 	touch $@
 
+ifdef ADMIT_LOWPARSE
+$(FSTAR_OUT_DIR)/LowParse.%.checked: FSTAR_OPTIONS += --admit_smt_queries true
+endif
+
 # No need to specify the path to the .fst file, since it will be
 # recovered by the --include path
 #
