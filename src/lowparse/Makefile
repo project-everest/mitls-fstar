@@ -19,14 +19,14 @@ FSTAR_OPTIONS += --use_hints --use_two_phase_tc true --include . # --use_extract
 
 MY_FSTAR=$(FSTAR_HOME)/bin/fstar.exe --cache_checked_modules --cache_dir $(FSTAR_OUT_DIR) --odir $(FSTAR_OUT_DIR) $(addprefix --include , $(INCLUDE_PATHS)) $(INCLUDE_KREMLIN)
 
-INTERMEDIATE_LEVEL= -add-include '"kremlin/fstar_bytes.h"' -add-include '"kremlin/prims_string.h"' $(KREMLIN_HOME)/kremlib/kremstr.c -drop FStar.Bytes LowParseTestlib_c.c
+INTERMEDIATE_LEVEL= -add-include '"kremlin/fstar_bytes.h"' -add-include '"kremlin/prims_string.h"' $(KREMLIN_HOME)/kremlib/kremstr.c -drop FStar.Bytes LowParse_TestLib_SLow_c.c
 
-LOW_LEVEL=
+LOW_LEVEL= -add-include '"kremlin/prims_string.h"' $(KREMLIN_HOME)/kremlib/kremstr.c LowParse_TestLib_Low_c.c
 
 MY_KREMLIN=$(KREMLIN_HOME)/krml -bundle 'LowParse.\*'
 
 EXAMPLES=Example Example2 Example3
-ROOT_FILES=LowParse.SLow.fst LowParse.Low.fst $(addprefix LowParse, $(addsuffix .fst, $(EXAMPLES))) LowParseTestlib.fst
+ROOT_FILES=LowParse.SLow.fst LowParse.Low.fst $(addprefix LowParse, $(addsuffix .fst, $(EXAMPLES))) LowParse.TestLib.SLow.fst LowParse.TestLib.Low.fst
 
 EXCLUDE_KRML_FILES=$(FSTAR_OUT_DIR)/prims.krml
 

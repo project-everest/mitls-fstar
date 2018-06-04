@@ -4,7 +4,7 @@ open FStar.HyperStack.ST
 open FStar.Bytes
 open FStar.HyperStack.IO
 open FStar.Printf
-open LowParseTestlib
+open LowParse.TestLib.SLow
 
 #reset-options "--using_facts_from '* -LowParse +LowParse.Spec.Base +LowParse.SLow.Base'"
 

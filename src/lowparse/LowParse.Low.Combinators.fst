@@ -8,25 +8,8 @@ module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 module I32 = FStar.Int32
 module Cast = FStar.Int.Cast
-module M = LowParse.Math
 
-let int32_to_uint32_pos
-  (x: I32.t)
-: Lemma
-  (requires (I32.v x >= 0))
-  (ensures (U32.v (Cast.int32_to_uint32 x) == I32.v x))
-  [SMTPat (U32.v (Cast.int32_to_uint32 x))]
-= M.modulo_lemma (I32.v x) (pow2 32)
-
-let uint32_to_int32_bounded
-  (x: U32.t)
-: Lemma
-  (requires (U32.v x < 2147483648))
-  (ensures (I32.v (Cast.uint32_to_int32 x) == U32.v x))
-  [SMTPat (I32.v (Cast.uint32_to_int32 x))]
-= M.modulo_lemma (U32.v x) (pow2 32)
-
-#reset-options "--z3rlimit 32 --z3cliopt smt.arith.nl=false"
+#reset-options "--z3rlimit 64 --z3cliopt smt.arith.nl=false"
 
 inline_for_extraction
 let validate32_nondep_then
@@ -46,6 +29,8 @@ let validate32_nondep_then
   then x1 // TODO: more coding on error
   else
     p2' (B.offset input (Cast.int32_to_uint32 (len `I32.sub` x1))) x1
+
+#reset-options "--z3rlimit 32 --z3cliopt smt.arith.nl=false"
 
 inline_for_extraction
 let validate_nochk32_nondep_then

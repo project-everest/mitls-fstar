@@ -1,3 +1,6 @@
+#ifndef __LOWPARSE_TESTLIB_AUX_H
+#define __LOWPARSE_TESTLIB_AUX_H
+
 #include "kremlib.h"
 
 #include "Prims.h"
@@ -6,9 +9,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
-#include "LowParseTestlib.h"
 
-K___uint8_t__uint32_t LowParseTestlib_load_file_buffer(Prims_string x0)
+void LowParse_TestLib_Aux_load_file(Prims_string x0, uint8_t** buf, int32_t * len)
 {
     FILE *fp = fopen(x0, "rb");
     if (!fp) {
@@ -38,15 +40,9 @@ K___uint8_t__uint32_t LowParseTestlib_load_file_buffer(Prims_string x0)
         KRML_HOST_EXIT(1);
     }
     fclose(fp);
-
-    K___uint8_t__uint32_t ret = {.fst = (uint8_t*)buffer, .snd = (uint32_t)filesize };
-    return ret;
+    *buf = (uint8_t*) buffer;
+    *len = (int32_t) filesize;
 }
 
-FStar_Bytes_bytes LowParseTestlib_load_file(Prims_string x0)
-{
-    K___uint8_t__uint32_t f = LowParseTestlib_load_file_buffer(x0);
 
-    FStar_Bytes_bytes ret = {.length = f.snd, .data = (char*)f.fst};
-    return ret;
-}
+#endif

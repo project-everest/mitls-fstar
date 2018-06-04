@@ -6,14 +6,31 @@ module M = LowStar.Modifies
 module U32 = FStar.UInt32
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
+module I32 = FStar.Int32
+module Cast = FStar.Int.Cast
+module MA = LowParse.Math
+
+let int32_to_uint32_pos
+  (x: I32.t)
+: Lemma
+  (requires (I32.v x >= 0))
+  (ensures (U32.v (Cast.int32_to_uint32 x) == I32.v x))
+  [SMTPat (U32.v (Cast.int32_to_uint32 x))]
+= MA.modulo_lemma (I32.v x) (pow2 32)
+
+let uint32_to_int32_bounded
+  (x: U32.t)
+: Lemma
+  (requires (U32.v x < 2147483648))
+  (ensures (I32.v (Cast.uint32_to_int32 x) == U32.v x))
+  [SMTPat (I32.v (Cast.uint32_to_int32 x))]
+= MA.modulo_lemma (U32.v x) (pow2 32)
 
 inline_for_extraction
 type buffer8 = B.buffer FStar.UInt8.t
 
 inline_for_extraction
 type pointer (t: Type) = (b: B.buffer t { B.length b == 1 } )
-
-module I32 = FStar.Int32
 
 let is_slice (h: HS.mem) (#t: Type) (b: B.buffer t) (len: I32.t) : GTot Type0 =
   B.live h b /\
