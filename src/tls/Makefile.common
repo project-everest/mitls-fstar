@@ -116,15 +116,7 @@ depend: $(DEP_FILE)
 # solve this problem too. If there is an up to date $(DEP_FILE), or none at 
 # all, then the dependency can be ignored. 
 
-$(CACHE_DIR)/FStar.%.checked: | $(DEP_FILE)
-ifdef VERBOSE
-	@echo -e "\033[1;35m=== Producing $@ ...\033[;37m"
-endif
-	$(subst \\,, \
-		$(FSTAR) --admit_smt_queries true \
-		$(addprefix --include , $(INCLUDE_PATHS)) $< \
-		)
-	@touch $@
+VFLAGS += $(HINTS_OPTS)
 
 %.checked: | $(DEP_FILE)
 ifdef VERBOSE
@@ -132,10 +124,15 @@ ifdef VERBOSE
 endif
 	$(subst \\,, \
 		$(FSTAR) $(VFLAGS) \
-		$(HINTS_OPTS) \
 		$(addprefix --include , $(INCLUDE_PATHS)) $< \
 		)
 	@touch $@
+
+$(CACHE_DIR)/FStar.%.checked \
+$(CACHE_DIR)/LowStar.%.checked \
+$(CACHE_DIR)/C.%.checked \
+$(CACHE_DIR)/LowParse.%.checked \
+: VFLAGS = --admit_smt_queries true
 
 $(EXTRACT_DIR)/%.$(EXTENSION):
 ifdef VERBOSE
