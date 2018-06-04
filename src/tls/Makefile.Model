@@ -6,10 +6,11 @@ EXTRACT   = Nothing
 SPECINC   = $(MITLS_HOME)/src/tls/ideal-flags $(MITLS_HOME)/src/tls/concrete-flags/generic
 
 include Makefile.common
+VFLAGS += --use_hints --use_hint_hashes --record_hints
 
 # Verification is performed in dependency order too. If we want to verify 
 # something that nothing depends on yet, we need to add it to ROOTS here.
-ROOTS    += 
+ROOTS    += IV.fst HMAC.UFCMA.fst Token.UF1CMA.fst Pkg.Tree.fst AEAD.Pkg.fst
 
 model verify: $(addprefix $(CACHE_DIR)/, $(addsuffix .checked, $(notdir $(ALL_FST_FILES))))
 

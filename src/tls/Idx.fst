@@ -255,9 +255,9 @@ let get_honesty (i:id {registered i}) : ST bool
          *     For the other direction, we need to do a recall on the witnessed predicate in honest i
          *     One way is to go through squash types, using a bind_squash_st axiom above
          *)
-        let aux (b:bool) :ST (squash (honest i ==> b2t b))
+        let aux (b:bool) : ST unit
                              (requires (fun h0     -> MDM.contains log i b h0))
-	    		     (ensures (fun h0 _ h1 -> h0 == h1))
+	    		     (ensures (fun h0 _ h1 -> h0 == h1 /\ (honest i ==> b)))
           = let f :(b:bool) -> (c_or (honest i) (~ (honest i)))
 	           -> ST (squash (honest i ==> b2t b))
 	                (requires (fun h0      -> MDM.contains log i b h0))
@@ -267,7 +267,6 @@ let get_honesty (i:id {registered i}) : ST bool
 	        | Left  h -> Squash.return_squash h; testify (MDM.contains log i true)
 	        | Right h -> Squash.return_squash h; assert (~ (honest i))
 	    in
-	    //y:l_or (honest i) (~ (honest i))
 	    let y = Squash.bind_squash (Squash.get_proof (l_or (honest i) (~ (honest i)))) (fun y -> y) in
 	    bind_squash_st y (f b)
         in

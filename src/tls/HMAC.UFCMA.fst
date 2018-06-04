@@ -69,14 +69,16 @@ type key (ip:ipkg) (i:ip.Pkg.t{ip.Pkg.registered i}) =
 // 18-02-25 we probably miss indexing by ha_of_i and good_of_i...
 let usage (#ip:ipkg) (#i:ip.Pkg.t{ip.Pkg.registered i}) (k:key ip i): GTot info =
   if model then
-    match k <: ir_key ip i with
+    let k: ir_key ip i = k in
+    match k with
     | IdealKey ck _ _ -> ck.u
     | RealKey ck      -> ck.u
   else k.u
 
 let keyval (#ip:ipkg) (#i:ip.Pkg.t{ip.Pkg.registered i}) (k:key ip i): GTot (keyrepr (usage k)) =
   if model then
-    match k <: ir_key ip i with
+    let k: ir_key ip i = k in
+    match k with
     | IdealKey ck _ _ -> ck.k
     | RealKey ck -> ck.k
   else k.k
@@ -94,8 +96,9 @@ let footprint (#ip:ipkg) (#i:ip.Pkg.t {ip.Pkg.registered i}) (k:key ip i):
   =
   assume false; //TODO downwards closed set
   if model then
-    match k <: ir_key ip i with
-    | IdealKey _ r _ -> Set.singleton r
+    let k: ir_key ip i = k in
+    match k with
+      | IdealKey _ r _ -> Set.singleton r
     | RealKey _ -> rset_empty ()
   else rset_empty ()
 
@@ -104,7 +107,8 @@ private let get_key (#ip:ipkg) (#i:ip.Pkg.t{ip.Pkg.registered i}) (k:key ip i)
   : concrete_key
   =
   if model then
-    match k <: ir_key ip i with
+    let k: ir_key ip i = k in
+    match k with
     | IdealKey rk _ _ -> rk
     | RealKey rk -> rk
   else k

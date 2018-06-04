@@ -198,7 +198,7 @@ noeq type local_pkg (ip: ipkg) =
 
 (* Iterators over Monotonic.Map, require a change of implementation *)
 (* cwinter: this is now a Monotonic.DependentMap *)
-
+(* 2018.05.26 SZ: I can't find anything like these in Monotonic.DependentMap; cwinter? *)
 let mm_fold (#a:eqtype) (#b:a -> Type) (t:MDM.map a b)
   (#rt:Type) (init:rt) (folder:(rt -> i:a -> b i -> GTot rt)) : GTot rt
   = admit()

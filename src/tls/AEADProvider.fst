@@ -130,9 +130,7 @@ let create_nonce (#i:id) (#rw:rw) (st:state i rw) (n:nonce i)
   | (TLS_1p3, _) | (_, CC.CHACHA20_POLY1305) ->
     xor_ #(iv_length i) n salt
   | _ ->
-    let r = salt @| n in
-    //lemma_len_append salt n; //TODO bytes NS 09/27 seems unnecessary
-    r
+    salt @| n
 
 (* Necessary for injectivity of the nonce-to-IV construction in TLS 1.3 *)
 #set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1 --admit_smt_queries true"
@@ -147,7 +145,7 @@ let lemma_nonce_iv (#i:id) (#rw:rw) (st:state i rw) (n1:nonce i) (n2:nonce i)
   | _ ->
     if (salt @| n1) = (salt @| n2) then
       () //lemma_append_inj salt n1 salt n2 //TODO bytes NS 09/27
-//#reset-options
+#reset-options
 
 let empty_log (#i:id) (#rw:rw) (st:state i rw) h =
   match use_provider() with
@@ -229,7 +227,9 @@ let genReader (parent:rgn) (#i:id) (st:writer i) : ST (reader i)
   | LowCProvider ->
     assume false;
     as_lowc_state st, salt_of_state st
+#reset-options
 
+#reset-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
   : ST (state i Writer)
   (requires (fun h -> ~(authId i)))
@@ -240,16 +240,21 @@ let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
     | OpenSSLProvider ->
       OAEAD.coerce r i k, s
     | LowCProvider ->
-      let st = CAEAD.aead_create (alg i) CAEAD.ValeAES k in
-      (st, k), s
+      let (st:CAEAD.aead_state) = CAEAD.aead_create (alg i) CAEAD.ValeAES k in
+      let (psi:pre_state i Writer) = (st, k) in
+        psi, s
     | LowProvider ->
-      let st = AE.coerce i r (BufferBytes.from_bytes k) in
+      assume (AE.keylen i = len k);
+      assume (~ (Flag.prf i));
+      assume(false);
+      let (bb:AE.lbuffer (length k)) = BufferBytes.from_bytes k in
+      let (bb:AE.lbuffer (v (AE.keylen i))) = bb in
+      let st = AE.coerce i r bb in
       st, s
     in
   dbg ((prov())^": COERCE(K="^(hex_of_bytes k)^")");
   w
-
-//#reset-options
+#reset-options
 
 type plainlen = n:nat{n <= max_TLSPlaintext_fragment_length}
 (* irreducible *)

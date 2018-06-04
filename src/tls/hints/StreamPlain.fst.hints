@@ -8,7 +8,7 @@
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "2b961dcdfdc330898c102cd0fa0477d4"
+      "ff3f688a108e795a07fd7bbdbb055628"
     ],
     [
       "StreamPlain.pad",
@@ -235,8 +235,9 @@
         "typing_Content.ghost_repr", "typing_Content.rg",
         "typing_FStar.Bytes.append", "typing_FStar.Bytes.create",
         "typing_FStar.Bytes.len", "typing_FStar.Bytes.reveal",
-        "typing_FStar.UInt32.uint_to_t", "typing_FStar.UInt8.uint_to_t",
-        "typing_Mem.disjoint", "typing_Mem.tls_define_region",
+        "typing_FStar.UInt32.uint_to_t", "typing_FStar.UInt32.v",
+        "typing_FStar.UInt8.uint_to_t", "typing_Mem.disjoint",
+        "typing_Mem.tls_define_region",
         "typing_tok_Content.Change_cipher_spec@tok"
       ],
       0,
