@@ -1,5 +1,5 @@
 [
-  "éNTçT\u0011  Ý¶\u0018kçt–'",
+  " y@™Âo‹Ã°”Š7\u0000õš@",
   [
     [
       "LowParse.Math.mul_reg_r",
@@ -12,7 +12,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "7987ae3468ab413d2a6534603066ea33"
+      "44398ad2ceae28ed1c3929ae311ee0e6"
     ],
     [
       "LowParse.Math.mul_reg_l",
@@ -25,7 +25,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "c8081cdc32623ec160427455596cc494"
+      "b981e4d6d5eacde0a167761fac85645c"
     ],
     [
       "LowParse.Math.lt_mul_add_reg_r",
@@ -42,6 +42,19 @@
       ],
       0,
       "ff229b95b70c2d3ae518a2478c8d39d7"
+    ],
+    [
+      "LowParse.Math.mult_decomp",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "int_inversion", "int_typing",
+        "primitive_Prims.op_Addition", "primitive_Prims.op_Multiply",
+        "primitive_Prims.op_Subtraction", "projection_inverse_BoxInt_proj_0"
+      ],
+      0,
+      "b1f8b4374d235dee64dc75da1c1a7f15"
     ]
   ]
 ]

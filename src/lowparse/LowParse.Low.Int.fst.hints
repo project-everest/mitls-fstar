@@ -1,5 +1,5 @@
 [
-  ";«Ù&\u0005MW´\u001cLÒPHñ…ž",
+  "e\u0004\u001c“SkÇ\u0017›†ãiæ=.‘",
   [
     [
       "LowParse.Low.Int.parse32_u8",
@@ -7,16 +7,12 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query",
-        "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_FStar.Buffer.buffer", "equation_LowParse.Bytes.byte",
+        "@MaxIFuel_assumption", "@query", "equation_LowParse.Bytes.byte",
         "equation_LowParse.Spec.Int.Aux.parse_u8",
-        "fuel_guarded_inversion_FStar.Buffer._buffer",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_LowParse.Low.Int_Tm_refine_1bc2072c4bd18afeeb71a262a074d41c"
+        "refinement_interpretation_LowParse.Low.Int_Tm_refine_9c8eb8af3c2311b6ccdfd1e74bae8d02"
       ],
       0,
-      "3a126825f741a8cfa5ae3aee01ab47f2"
+      "c85bb4d4d593c9fefc914a896a15ca71"
     ],
     [
       "LowParse.Low.Int.parse32_u16",
@@ -27,14 +23,13 @@
         "@MaxIFuel_assumption", "@query",
         "FStar.UInt16_pretyping_9807ddb0e569187e389675611f2acf1e",
         "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_FStar.Buffer.buffer", "equation_LowParse.Bytes.byte",
+        "equation_LowParse.Bytes.byte",
         "equation_LowParse.Spec.Int.Aux.parse_u16",
-        "fuel_guarded_inversion_FStar.Buffer._buffer",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_LowParse.Low.Int_Tm_refine_e0187058e132ab0dc3478209ec01e379"
+        "refinement_interpretation_LowParse.Low.Int_Tm_refine_2733b92f2e4817674c0183dfa609ef2b"
       ],
       0,
-      "3636ec89428b279f40ac50143d7eab47"
+      "bedc2701da03cb5160b3fd328d5d52d9"
     ],
     [
       "LowParse.Low.Int.parse32_u32",
@@ -45,14 +40,13 @@
         "@MaxIFuel_assumption", "@query",
         "FStar.UInt32_pretyping_041e3a67a2d2b51fd702f1f88cfc3b44",
         "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_FStar.Buffer.buffer", "equation_LowParse.Bytes.byte",
+        "equation_LowParse.Bytes.byte",
         "equation_LowParse.Spec.Int.Aux.parse_u32",
-        "fuel_guarded_inversion_FStar.Buffer._buffer",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_LowParse.Low.Int_Tm_refine_e0187058e132ab0dc3478209ec01e379"
+        "refinement_interpretation_LowParse.Low.Int_Tm_refine_2733b92f2e4817674c0183dfa609ef2b"
       ],
       0,
-      "76f5c8ae6deb435b74d8e738b9f4ae2f"
+      "5ce731e4ccb6a45e5cdc5588ccc40b16"
     ],
     [
       "LowParse.Low.Int.validate32_u8",
@@ -73,7 +67,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind_metadata_t_parser_kind_metadata_total"
       ],
       0,
-      "af3790caecb844dc5656d0978eeb3692"
+      "ca38e3f01941eaaa9df6dd4eec220d53"
     ],
     [
       "LowParse.Low.Int.validate32_u16",
@@ -94,7 +88,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind_metadata_t_parser_kind_metadata_total"
       ],
       0,
-      "92dc738d7356e744c1bb6eb8dbb5ffd5"
+      "729b9df932e0425fea070c93342f2e0a"
     ],
     [
       "LowParse.Low.Int.validate32_u32",
@@ -115,7 +109,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind_metadata_t_parser_kind_metadata_total"
       ],
       0,
-      "c30f9acb7a61b86d84b3f6668046d83c"
+      "8c63b523fee37855d9dd946f177589c6"
     ],
     [
       "LowParse.Low.Int.validate_nochk32_u8",
@@ -132,7 +126,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "92bc3208f5562c7570f5aaf3de47b90e"
+      "86a60ea11b1663f33a727ac010576b2a"
     ],
     [
       "LowParse.Low.Int.validate_nochk32_u16",
@@ -149,7 +143,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "e32d7be4bb927b9b75dce5141730219f"
+      "41a3b5257f5c458e79e2f275029fe447"
     ],
     [
       "LowParse.Low.Int.validate_nochk32_u32",
@@ -166,7 +160,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "cef8d0ef9d7dc44d61876cdbbf184026"
+      "43276569fdff3655404249205d4e9fa0"
     ]
   ]
 ]
