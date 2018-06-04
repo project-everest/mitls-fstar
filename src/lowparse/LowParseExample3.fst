@@ -1,6 +1,9 @@
 module LowParseExample3
 include LowParseExample3.Aux
 
+open FStar.HyperStack.ST
+open LowParseTestlib
+
 module B = FStar.Buffer
 module HST = FStar.HyperStack.ST
 module U32 = FStar.UInt32
@@ -10,6 +13,7 @@ module I32 = FStar.Int32
 
 #reset-options "--z3rlimit 64 --z3cliopt smt.arith.nl=false --using_facts_from '* -LowParse.Low.VLData'"
 
+(*
 let dummy
   (input: buffer8)
   (len: I32.t)
@@ -35,8 +39,49 @@ let dummy
   in
   HST.pop_frame ();
   res
+*)
+
+#reset-options "--using_facts_from '* -LowParse'"
+
+(** Test parser 'f' and formatter 'm' *)
+let test_f_m (input:buffer8) (inputlen:U32.t): Stack (option (buffer8 * FStar.UInt32.t)) 
+  (requires(fun h -> is_slice h input inputlen))
+  (ensures(fun h0 y h1 ->
+    match y with
+    | None -> true
+    | Some (r,o) -> is_slice h1 r o ))
+ =
+(* BUGBUG:  Complete this when low-level formatting is ready
+  let result = f input in
+  match result with
+  | Some (v, offset) -> (
+    let formattedresult = m v in
+    Some (formattedresult, offset)
+  )
+  | _ -> None
+*)
+  None
+
+#reset-options "--z3cliopt smt.arith.nl=false"
+
+(** Run all unit tests, by calling test_buffer and test_file_buffer
+    multiple times, with different parser+formatter pairs and 
+    input data *)
+let test (_:unit): Stack unit (fun _ -> true) (fun _ _ _ -> true) =
+  push_frame();
+
+  let testbuffer:buffer8 = B.createL [ 0x01uy; 0x02uy; 0x55uy; 0xaauy; 0x34uy; 0x45uy; 0xbauy; 0xabuy ] in
+  test_buffer test_f_m "Example3 expect fail" testbuffer 8ul;
+  
+  test_file_buffer test_f_m "Example3_pass.bin";
+  test_file_buffer test_f_m "Example3_fail.bin";
+  
+  pop_frame()
 
 val main: Int32.t -> FStar.Buffer.buffer (FStar.Buffer.buffer C.char) ->
   HST.Stack C.exit_code (fun _ -> true) (fun _ _ _ -> true)
 let main argc argv =
+  push_frame ();
+  test ();
+  pop_frame ();
   C.EXIT_SUCCESS
