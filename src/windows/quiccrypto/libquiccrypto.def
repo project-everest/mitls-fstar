@@ -8,6 +8,7 @@ EXPORTS
     quic_crypto_create
     quic_crypto_encrypt
     quic_crypto_decrypt
+    quic_crypto_packet_number_otp
     quic_crypto_free_key
     quic_crypto_hash
     quic_crypto_hmac
