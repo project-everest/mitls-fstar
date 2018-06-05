@@ -34,7 +34,7 @@ kremlin-%: clean-depend
 model-% verify-%: lowparse-% clean-depend
 	+$(MAKE) -f Makefile.Model $*
 
-quic-%: lowparse-% clean-depend
+quic-%: clean-depend
 	+$(MAKE) -C ../../apps/quicMinusNet $* -k
 
 test: clean-depend model-test kremlin-test ocaml-test quic-test
