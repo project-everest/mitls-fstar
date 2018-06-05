@@ -7,20 +7,18 @@ FLAVOR?=Model
 # variable. In that case, F* ulib and KreMLib MUST have been already
 # verified beforehand.
 
-all: clean-depend model-all ocaml-all kremlin-all lowparse-examples
+all: clean-depend model-all ocaml-all kremlin-all lowparse lowparse-examples
 
 lowparse:
 ifdef VERIFY_LOWPARSE
 	+$(MAKE) -C ../lowparse -f Makefile.LowParse
 endif
 
-lowparse-test lowparse-all: lowparse
-
 lowparse-clean:
 	+$(MAKE) -C ../lowparse clean
 	+$(MAKE) -C ../lowparse -f Makefile.LowParse clean
 
-lowparse-examples: lowparse
+lowparse-examples:
 	+$(MAKE) ADMIT_LOWPARSE=1 -C ../lowparse
 
 clean-depend:
@@ -32,7 +30,7 @@ ocaml-%: clean-depend
 kremlin-%: clean-depend
 	+$(MAKE) -f Makefile.Kremlin $*
 
-model-% verify-%: lowparse-% clean-depend
+model-% verify-%: clean-depend
 	+$(MAKE) -f Makefile.Model $*
 
 quic-%: clean-depend
