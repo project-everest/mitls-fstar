@@ -4,7 +4,7 @@ all: libquiccrypto.dll test
 
 # 'dir /b *.c' then replace "^(.*)" by "  \1 \\"
 SOURCES = \
-  Crypto_AEAD_Main_Crypto_Indexing.c \
+  Crypto_AEAD_Main_Crypto_Symmetric_Cipher_Crypto_Indexing.c \
   Crypto_HKDF_Crypto_HMAC.c \
   Crypto_Symmetric_Bytes.c \
   Hacl_Curve25519.c \
