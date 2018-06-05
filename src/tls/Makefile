@@ -21,7 +21,7 @@ lowparse-clean:
 	+$(MAKE) -C ../lowparse -f Makefile.LowParse clean
 
 lowparse-examples: lowparse
-	ADMIT_LOWPARSE=1 +$(MAKE) -C ../lowparse
+	+$(MAKE) ADMIT_LOWPARSE=1 -C ../lowparse
 
 clean-depend:
 	rm -f cache/OCaml/.depend cache/Kremlin/.depend cache/Model/.depend
