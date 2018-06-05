@@ -63,6 +63,8 @@ endif
 %.o: %.c
 	$(CC) -I $(KREMLIN_HOME)/include $^ -o $@ -c
 
+LIBKREMLIB = $(KREMLIN_HOME)/kremlib/out/libkremlib.a
+
 # We must insert PKI.cmx at the right spot in the list of inputs
 MITLS_INPUTS=\
     $(EXTRACT_DIR)/BufferBytes.cmx \
@@ -74,7 +76,7 @@ MITLS_INPUTS=\
     $(EVERCRYPT_HOME)/out/evercrypt.cmxa \
     $(subst .ml,.cmx,$(subst TLSConstants.ml,TLSConstants.ml extract/OCaml/PKI.ml,$(ALL_ML_FILES))) \
     $(EXTRACT_DIR)/FFIRegister.cmx \
-    extract/copied/kremstr.o
+    $(LIBKREMLIB)
 
 MITLS_BYTE_INPUTS=\
     $(EXTRACT_DIR)/BufferBytes.cmo \
@@ -87,7 +89,10 @@ MITLS_BYTE_INPUTS=\
     $(EXTRACT_DIR)/FFIRegister.cmo \
     extract/copied/kremstr.o
 
-mitls.exe: $(MITLS_INPUTS) test/mitls.cmx
+$(LIBKREMLIB):
+	$(error Please run make -C $(KREMLIN_HOME)/kremlib to generate libkremlib.a)
+
+mitls.exe: $(MITLS_INPUTS) $(LIBKREMLIB)
 	$(OCAMLOPT) -cclib -L../pki -cclib -lmipki \
 	  -cclib -L$(EVERCRYPT_HOME)/out -cclib -levercrypt -linkall \
 	  -linkpkg -g $^ -o $@ -thread

@@ -62,7 +62,7 @@ FILES 		= AEAD_GCM AEADProvider Alert BufferBytes Cert \
   CryptoTypes curve/Hacl_Curve25519 DataStream DHGroup ECGroup Old_Epochs Extensions FFI \
   FFICallbacks Flags Format FStar HaclProvider Old_Handshake HandshakeLog \
   HandshakeMessages Hashing Hashing_CRF Hashing_OpenSSL Hashing_Spec Old_HKDF HMAC \
-  Old_HMAC_UFCMA Old_KeySchedule kremlib/kremdate kremlib/kremstr kremlinit LHAEPlain \
+  Old_HMAC_UFCMA Old_KeySchedule kremlinit LHAEPlain \
   LowCProvider LowParse Negotiation Nonce Parse PMS Prims PSK QUIC Range Record RSAKey \
   secure/Crypto_HKDF_Crypto_HMAC \
   Specializations_Providers_AEAD StAE StatefulLHAE \
@@ -103,7 +103,7 @@ all: libmitls.$(SO)
 -include $(addsuffix .d,$(FILES))
 
 libmitls.$(SO): $(addsuffix .o,$(FILES)) vale/aesgcm-$(MARCH)$(VARIANT).o vale/sha256-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
-	$(CC) $^ -shared -o $@ $(LDOPTS)
+	$(CC) $^ -shared -o $@ $(LDOPTS) $(KREMLIN_HOME)/kremlib/out/libkremlib.a
 
 clean:
 	rm -fr $(addsuffix .o,$(FILES)) $(addsuffix .c,$(FILES)) libmitls.$(SO)

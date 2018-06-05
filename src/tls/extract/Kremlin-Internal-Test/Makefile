@@ -58,7 +58,7 @@ INCLUDE_DIRS 	= secure kreminc include stub vale curve pki ffi uint128 .
 FILES 		= Cert C_Loops_Spec_Loops CommonDH CoreCrypto \
   Crypto_Indexing Crypto_Symmetric_Bytes Crypto_Plain \
   CryptoTypes curve/Hacl_Curve25519 DHGroup ECGroup Extensions Flags Format FStar \
-  HaclProvider Hashing_Spec kremlib/kremdate kremlib/kremstr kremlinit \
+  HaclProvider Hashing_Spec kremlinit \
   LowCProvider LowParse Nonce Parse PMS Prims PSK RSAKey \
   secure/Crypto_HKDF_Crypto_HMAC \
   Specializations_Providers_AEAD stub/mipki_wrapper stub/core_crypto stub/hacl_aead \
@@ -90,7 +90,7 @@ endif
 -include $(addsuffix .d,$(FILES))
 
 test.exe: $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aesgcm-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
-	$(CC) $^ -o $@ -lmipki $(LDOPTS) -L$(MITLS_HOME)/src/pki
+	$(CC) $^ -o $@ -lmipki $(LDOPTS) -L$(MITLS_HOME)/src/pki $(KREMLIN_HOME)/kremlib/out/libkremlib.a
 
 CERT_FILES=CAFile.pem server-ecdsa.crt server-ecdsa.key
 
