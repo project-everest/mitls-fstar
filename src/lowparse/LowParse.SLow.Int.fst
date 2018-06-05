@@ -3,7 +3,6 @@ module LowParse.SLow.Int
 module Aux = LowParse.SLow.Int.Aux
 module Unique = LowParse.Spec.Int.Unique
 module Seq = FStar.Seq
-module E = LowParse.BigEndianImpl
 module U8  = FStar.UInt8
 module U16 = FStar.UInt16
 module U32 = FStar.UInt32

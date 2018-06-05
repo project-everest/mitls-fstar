@@ -4,7 +4,7 @@ include LowParse.SLow.FLData
 
 module Seq = FStar.Seq
 module U32 = FStar.UInt32
-module E = LowParse.BigEndianImpl
+module E = LowParse.BigEndianImpl.SLow
 module B32 = LowParse.Bytes32
 
 inline_for_extraction

@@ -1,5 +1,5 @@
 [
-  "éNTçT\u0011  Ý¶\u0018kçt–'",
+  " y@™Âo‹Ã°”Š7\u0000õš@",
   [
     [
       "LowParse.Math.mul_reg_r",
@@ -7,20 +7,12 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "int_inversion",
-        "primitive_Prims.op_Multiply", "projection_inverse_BoxInt_proj_0"
+        "@MaxIFuel_assumption", "@query", "assumption_Prims.HasEq_int",
+        "int_inversion", "primitive_Prims.op_Multiply",
+        "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "7b2ca0cd5bc8701d993ff3bd54681853"
-    ],
-    [
-      "LowParse.Math.mul_reg_r",
-      2,
-      2,
-      1,
-      [ "@query", "assumption_Prims.HasEq_int" ],
-      0,
-      "e29ea0a194b6f7da7ff4c28620fe0ec7"
+      "44398ad2ceae28ed1c3929ae311ee0e6"
     ],
     [
       "LowParse.Math.mul_reg_l",
@@ -28,20 +20,12 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "int_inversion",
-        "primitive_Prims.op_Multiply", "projection_inverse_BoxInt_proj_0"
+        "@MaxIFuel_assumption", "@query", "assumption_Prims.HasEq_int",
+        "int_inversion", "primitive_Prims.op_Multiply",
+        "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "64f10b245214a93530efc5a8ca5ae861"
-    ],
-    [
-      "LowParse.Math.mul_reg_l",
-      2,
-      2,
-      1,
-      [ "@query", "assumption_Prims.HasEq_int" ],
-      0,
-      "3f2cd4ddf4f42f414b87ec1c808c3d31"
+      "b981e4d6d5eacde0a167761fac85645c"
     ],
     [
       "LowParse.Math.lt_mul_add_reg_r",
@@ -57,7 +41,20 @@
         "refinement_interpretation_Prims_Tm_refine_f048236b5f8051f83b495ea5eaa6127b"
       ],
       0,
-      "aabfe4734904941c80844f0e7f90bf57"
+      "ff229b95b70c2d3ae518a2478c8d39d7"
+    ],
+    [
+      "LowParse.Math.mult_decomp",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "int_inversion", "int_typing",
+        "primitive_Prims.op_Addition", "primitive_Prims.op_Multiply",
+        "primitive_Prims.op_Subtraction", "projection_inverse_BoxInt_proj_0"
+      ],
+      0,
+      "b1f8b4374d235dee64dc75da1c1a7f15"
     ]
   ]
 ]
