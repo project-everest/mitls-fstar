@@ -1,15 +1,16 @@
 EXTRACT='Nothing'
 FLAVOR?=Model
 
-# NOTE: this file explicitly verifies LowParse separately before
-# verifying miTLS. Verifying LowParse separately assumes that F* ulib
-# and KreMLib are already verified.  If you want to disable this
-# behavior, you can set the ADMIT_LOWPARSE variable.
+# NOTE: by default, this file DOES NOT verify LowParse. It only
+# verifies and tests LowParse examples and unit tests. If you want to
+# verify LowParse, then you can explicit set the VERIFY_LOWPARSE
+# variable. In that case, F* ulib and KreMLib MUST have been already
+# verified beforehand.
 
 all: clean-depend model-all ocaml-all kremlin-all lowparse-examples
 
 lowparse:
-ifndef ADMIT_LOWPARSE
+ifdef VERIFY_LOWPARSE
 	+$(MAKE) -C ../lowparse -f Makefile.LowParse
 endif
 
@@ -20,7 +21,7 @@ lowparse-clean:
 	+$(MAKE) -C ../lowparse -f Makefile.LowParse clean
 
 lowparse-examples: lowparse
-	+$(MAKE) -C ../lowparse
+	ADMIT_LOWPARSE=1 +$(MAKE) -C ../lowparse
 
 clean-depend:
 	rm -f cache/OCaml/.depend cache/Kremlin/.depend cache/Model/.depend
