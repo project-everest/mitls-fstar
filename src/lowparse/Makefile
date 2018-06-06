@@ -19,7 +19,7 @@ FSTAR_OPTIONS += --use_hints --use_two_phase_tc true --include . # --use_extract
 
 MY_FSTAR=$(FSTAR_HOME)/bin/fstar.exe --cache_checked_modules --cache_dir $(FSTAR_OUT_DIR) --odir $(FSTAR_OUT_DIR) $(addprefix --include , $(INCLUDE_PATHS)) $(INCLUDE_KREMLIN)
 
-INTERMEDIATE_LEVEL= -add-include '"kremlin/fstar_bytes.h"' -add-include '"kremlin/prims_string.h"' $(KREMLIN_HOME)/kremlib/kremstr.c -drop FStar.Bytes LowParse_TestLib_SLow_c.c
+INTERMEDIATE_LEVEL= -add-include '"kremlin/fstar_bytes.h"' -add-include '"kremlin/prims_string.h"' $(KREMLIN_HOME)/kremlib/kremstr.c -drop FStar.Bytes LowParse_TestLib_SLow_c.c -ccopt -Wno-error-tautological-compare
 
 LOW_LEVEL= -add-include '"kremlin/prims_string.h"' $(KREMLIN_HOME)/kremlib/kremstr.c LowParse_TestLib_Low_c.c
 
