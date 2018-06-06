@@ -8,7 +8,7 @@
       1,
       [ "@query" ],
       0,
-      "6f26dc81f1340ff59843fc60f083d26b"
+      "0cb8cc74dc6213015ded233d1d853dc5"
     ],
     [
       "AEAD.Pkg.is_safe",
@@ -43,7 +43,7 @@
         "typing_FStar.Set.complement", "typing_FStar.Set.empty"
       ],
       0,
-      "c3ae18fe12be65c41f8656634d348719"
+      "7d55067bde9e30a455781a6acf7afb6a"
     ],
     [
       "AEAD.Pkg.info",
@@ -51,13 +51,15 @@
       2,
       1,
       [
-        "@query", "assumption_AEAD.Pkg.aeadAlg__uu___haseq",
-        "assumption_FStar.Monotonic.HyperHeap.HasEq_rid", "equation_Mem.rgn",
+        "@MaxIFuel_assumption", "@query",
+        "assumption_AEAD.Pkg.aeadAlg__uu___haseq", "equation_Mem.rgn",
+        "function_token_typing_FStar.Monotonic.HyperHeap.rid",
         "haseqAEAD.Pkg_Tm_refine_e435e80303d5e61fdd89d528aa58d952",
-        "haseqMem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e"
+        "haseqMem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "2f0ba2d5958ff12e343f9e885202a1a4"
+      "aee8744a0b902bf02d1926e814b0e4bc"
     ],
     [
       "AEAD.Pkg.keylen",
@@ -71,7 +73,7 @@
         "fuel_guarded_inversion_AEAD.Pkg.aeadAlg"
       ],
       0,
-      "4bd63eefd879444ff334e5cdc67a5c4d"
+      "1543d287a644c22e56d682c46e8d8b3b"
     ],
     [
       "AEAD.Pkg.__proj__AEAD__item__k",
@@ -83,7 +85,7 @@
         "projection_inverse_AEAD.Pkg.AEAD_u"
       ],
       0,
-      "b1730c763e11ed2338458e6ac03aecd5"
+      "c69a75c25292b70980b0c92b9ff382af"
     ],
     [
       "AEAD.Pkg.__proj__Ideal__item__ck",
@@ -96,7 +98,7 @@
         "refinement_interpretation_AEAD.Pkg_Tm_refine_2f47e4e77732b0c7320113be77bdc955"
       ],
       0,
-      "5d2b61a3a0f581b2c9c64901c3957057"
+      "4c0bd661b342d82a0d59ea23358e3cf6"
     ],
     [
       "AEAD.Pkg.__proj__Ideal__item__state",
@@ -109,7 +111,7 @@
         "refinement_interpretation_AEAD.Pkg_Tm_refine_2f47e4e77732b0c7320113be77bdc955"
       ],
       0,
-      "beba4cb5c86044e0cafd809257805f27"
+      "24ae6349d46355706e6e1f6e515be669"
     ],
     [
       "AEAD.Pkg.__proj__Real__item__ck",
@@ -122,7 +124,7 @@
         "refinement_interpretation_AEAD.Pkg_Tm_refine_f188697aeaf2d3748a8dd8ff5e07e864"
       ],
       0,
-      "722e238bc6e322f35e58196506f2029f"
+      "3ff68666502ab8fd085ec12f146d4836"
     ],
     [
       "AEAD.Pkg.usage",
@@ -137,7 +139,7 @@
         "refinement_interpretation_AEAD.Pkg_Tm_refine_ad51d55195e7f1f701ce50bc38680944"
       ],
       0,
-      "fe67b6152f0e384874dec8f80e26317d"
+      "ba2fc68841af68c4300125c381d82d58"
     ],
     [
       "AEAD.Pkg.keyval",
@@ -159,7 +161,7 @@
         "refinement_interpretation_AEAD.Pkg_Tm_refine_ad51d55195e7f1f701ce50bc38680944"
       ],
       0,
-      "de2899b95d33b668e32752e115bb29a6"
+      "f3cd2a7caae0744f56fb7b6cd6d142e3"
     ],
     [
       "AEAD.Pkg.shared_footprint",
@@ -172,7 +174,7 @@
         "lemma_FStar.Set.mem_empty"
       ],
       0,
-      "dbd766c4b24132324d8ead805f4260c9"
+      "e72ff281fc3987910a8276e5656c2aad"
     ],
     [
       "AEAD.Pkg.footprint",
@@ -197,7 +199,7 @@
         "typing_FStar.Set.mem"
       ],
       0,
-      "0fd65181ae1e23cf5a94bf312d09baae"
+      "cf9fc945af86f6a72b9e1f630c3461e8"
     ],
     [
       "AEAD.Pkg.invariant",
@@ -212,7 +214,7 @@
         "refinement_interpretation_AEAD.Pkg_Tm_refine_ad51d55195e7f1f701ce50bc38680944"
       ],
       0,
-      "638922649150ec352bf9db087f9664d2"
+      "9579cf55656c9409449be96c2d034395"
     ],
     [
       "AEAD.Pkg.invariant_framing",
@@ -249,7 +251,7 @@
         "unit_inversion", "unit_typing"
       ],
       0,
-      "eb520837dd21f872542bf346b1afa2c5"
+      "d6c7e27c4bc2258a6590d2a360f620ed"
     ],
     [
       "AEAD.Pkg.empty_log",
@@ -265,7 +267,7 @@
         "refinement_interpretation_AEAD.Pkg_Tm_refine_ad51d55195e7f1f701ce50bc38680944"
       ],
       0,
-      "e366d58df882808ce325a8de5a9cc1b6"
+      "27b21be1c87654b8a3e57e5df459dad3"
     ],
     [
       "AEAD.Pkg.empty_log_framing",
@@ -304,7 +306,7 @@
         "unit_inversion", "unit_typing"
       ],
       0,
-      "01f7d2cd4833c526e13ad1f29c480007"
+      "8e37edfded8871d7251f5fae245b3bb3"
     ],
     [
       "AEAD.Pkg.create_key",
@@ -320,7 +322,7 @@
         "typing_AEAD.Pkg.__proj__Mkinfo__item__parent"
       ],
       0,
-      "cf83d581fc2bf0cef479bf7eee5882af"
+      "ff707c3f3a6a6c04e8096a0c5f04df89"
     ],
     [
       "AEAD.Pkg.coerceT_key",
@@ -329,7 +331,7 @@
       1,
       [ "@query" ],
       0,
-      "eb7fe99c57e801432008848c6f5cee60"
+      "eb4d91eaf5702ba9633ba9bfe937719c"
     ],
     [
       "AEAD.Pkg.coerce_key",
@@ -338,7 +340,7 @@
       1,
       [ "@query" ],
       0,
-      "b35fbdba2db6d11a526d4dd3086a1f4f"
+      "3a087a220c4e313af0c3c7ff434f3c3d"
     ],
     [
       "AEAD.Pkg.local_ae_pkg",
@@ -350,7 +352,7 @@
         "fuel_guarded_inversion_Pkg.ipkg"
       ],
       0,
-      "45582fd9052af36eea3dfd1ac628fdf5"
+      "87003fa72fbdfaa4b3473331bee05375"
     ],
     [
       "AEAD.Pkg.mp",
@@ -365,7 +367,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "6189d9ca5a2e06dd5b532894f222bc97"
+      "45843b45d8e742b7fe881d5103e8d028"
     ],
     [
       "AEAD.Pkg.encrypt",
@@ -413,7 +415,7 @@
         "typing_FStar.Set.complement", "typing_FStar.Set.union"
       ],
       0,
-      "46358143c46101d6e3f2e759c06d291c"
+      "b9fa77815482dd63108a00816e945c71"
     ]
   ]
 ]
