@@ -31,6 +31,14 @@ let case_enum : LP.enum cases U8.t =
   in
   e
 
+module T = FStar.Tactics
+
+let x : LP.maybe_enum_key_of_repr'_t case_enum =
+  T.synth_by_tactic (fun () -> LP.maybe_enum_key_of_repr_tac_new case_enum)
+
+let x_old : LP.maybe_enum_key_of_repr'_t case_enum =
+  T.synth_by_tactic (fun () -> LP.maybe_enum_key_of_repr_tac case_enum ())
+
 inline_for_extraction
 let cases_of_t
   (x: t)

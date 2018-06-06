@@ -4,6 +4,36 @@ include LowParse.SLow.Enum
 module T = FStar.Tactics
 
 noextract
+let conclude ()
+: T.Tac unit
+= // T.norm [delta; iota];
+  T.trivial ()
+
+noextract
+let rec maybe_enum_key_of_repr_tac_new
+  (#key #repr: eqtype)
+  (e: list (key * repr))
+: T.Tac unit
+  (decreases e)
+= match e with
+  | [] -> T.fail "e must be cons"
+  | [_] ->
+    let fu = quote (maybe_enum_key_of_repr'_t_cons_nil' #key #repr) in
+    T.apply fu;
+    T.iseq [
+      (fun () -> T.exact_guard (quote ()); T.dump "maybe_enum_key_of_repr_tac_new left"; conclude ());
+    ];
+    T.dump "end left"
+  |  _ :: e_ ->
+    let fu = quote (maybe_enum_key_of_repr'_t_cons' #key #repr) in
+    T.apply fu;
+    T.iseq [
+      (fun () -> maybe_enum_key_of_repr_tac_new e_);
+      (fun () -> T.exact_guard (quote ()); T.dump "maybe_enum_key_of_repr_tac_new right"; conclude ());
+    ];
+    T.dump "end right"
+
+noextract
 let rec maybe_enum_key_of_repr_tac'
   (#key #repr: eqtype)
   (e: enum key repr)

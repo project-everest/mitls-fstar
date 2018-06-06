@@ -42,6 +42,14 @@ let maybe_enum_key_of_repr'_t_cons_nil
     e
 
 inline_for_extraction
+let maybe_enum_key_of_repr'_t_cons_nil'
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (u: unit { Cons? e /\ Nil? (enum_tail' e) } )
+: Tot (maybe_enum_key_of_repr'_t e)
+= maybe_enum_key_of_repr'_t_cons_nil e
+
+inline_for_extraction
 let maybe_enum_key_of_repr'_t_cons
   (#key #repr: eqtype)
   (e: enum key repr )
@@ -61,6 +69,15 @@ let maybe_enum_key_of_repr'_t_cons
         | Unknown x' -> Unknown x
       ) <: (k: maybe_enum_key e { k == maybe_enum_key_of_repr e x } ))))
       e
+
+inline_for_extraction
+let maybe_enum_key_of_repr'_t_cons'
+  (#key #repr: eqtype)
+  (e: enum key repr )
+  (g : maybe_enum_key_of_repr'_t (enum_tail' e))
+  (u: unit { Cons? e } )
+: Tot (maybe_enum_key_of_repr'_t e)
+= maybe_enum_key_of_repr'_t_cons e g
 
 #reset-options
 
