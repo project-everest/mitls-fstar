@@ -129,7 +129,7 @@ SOURCES = \
     ml /nologo /c $< /Fo$@
   
 !if "$(PLATFORM)"=="x86"
-PLATFORM_OBJS = aes-i686.obj sha256-i686.obj aesgcm-x86_64.obj
+PLATFORM_OBJS = aes-i686.obj
 !else
 PLATFORM_OBJS = aes-x86_64.obj sha256-x86_64.obj aesgcm-x86_64.obj
 !endif
