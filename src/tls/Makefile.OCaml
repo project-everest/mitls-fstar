@@ -29,7 +29,7 @@ OCAMLOPTS0	= -g \
 		  -I $(KREMLIN_HOME)/_build/kremlib \
 		  -I test \
 		  -I extract/mlstubs \
-		  -I $(EVERCRYPT_HOME)/multiplexer/ml \
+		  -I $(EVERCRYPT_HOME)/evercrypt/ml \
 		  -I .
 
 OCAMLOPTS	= $(OCAMLOPTS0) -package fstarlib,zarith,ctypes,ctypes.foreign

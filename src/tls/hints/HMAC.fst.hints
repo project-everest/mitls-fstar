@@ -16,7 +16,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "3c2643b45c0ecdb37220f41f102577f4"
+      "a36b2738bd0ee7243684fc97116a0ec1"
     ],
     [
       "HMAC.sslHashAlg",
@@ -91,10 +91,9 @@
         "equation_FStar.Monotonic.HyperStack.is_eternal_color",
         "equation_FStar.Monotonic.HyperStack.modifies",
         "equation_FStar.Set.eqtype", "equation_FStar.Set.subset",
-        "equation_FStar.UInt.fits", "equation_FStar.UInt.lte",
-        "equation_FStar.UInt.max_int", "equation_FStar.UInt.min_int",
-        "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
-        "equation_FStar.UInt16.n", "equation_FStar.UInt32.lte",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "equation_FStar.UInt.uint_t", "equation_FStar.UInt16.n",
         "equation_FStar.UInt32.n", "equation_FStar.UInt64.n",
         "equation_FStar.UInt8.n", "equation_HMAC.ssl_pad1_md5",
         "equation_HMAC.ssl_pad1_sha1", "equation_HMAC.ssl_pad2_md5",
@@ -151,7 +150,6 @@
         "refinement_interpretation_HMAC_Tm_refine_47d7fcff82540c448bcdd6936d31a17f",
         "refinement_interpretation_HMAC_Tm_refine_5848cd2d4b8f3092109fb78df61e11e1",
         "refinement_interpretation_Hashing.Spec_Tm_refine_c63e2e852fc8bac4fafda96d703d8ec5",
-        "refinement_interpretation_Hashing.Spec_Tm_refine_e295d1a089abf8fd7758b0cf33f12cde",
         "refinement_interpretation_Mem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
         "refinement_interpretation_Mem_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
         "refinement_interpretation_Mem_Tm_refine_f70be9b0cc50942af80d22e44fc9b9c4",
@@ -168,8 +166,7 @@
         "typing_FStar.UInt32.v", "typing_FStar.UInt8.uint_to_t",
         "typing_HMAC.ssl_pad1_md5", "typing_HMAC.ssl_pad1_sha1",
         "typing_HMAC.ssl_pad2_md5", "typing_HMAC.ssl_pad2_sha1",
-        "typing_Hashing.Spec.tagLen", "typing_Mem.disjoint",
-        "typing_Mem.tls_define_region"
+        "typing_Mem.disjoint", "typing_Mem.tls_define_region"
       ],
       0,
       "4db439cd1ba6ed956e2df6dee4b418b0"

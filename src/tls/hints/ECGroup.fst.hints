@@ -20,7 +20,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "c494cde1f75b81117d40aa7a59313485"
+      "8c8672c9d99665ea25b3a769548e5429"
     ],
     [
       "ECGroup.pre_keyshare",
@@ -36,7 +36,7 @@
         "haseqECGroup_Tm_refine_79d2cf0d6ed3db26581f07568712f445"
       ],
       0,
-      "b0b283f877f9094faeebfd7e7d5306ef"
+      "4db66e906f6ea28973f0b87bc6f27581"
     ],
     [
       "ECGroup.pre_keyshare",
@@ -99,7 +99,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "e7113d607029f70bf25bfcb8a19a3870"
+      "ce38c97518810a41b53acdad4642f4bf"
     ],
     [
       "ECGroup.__proj__KS_CC__item___0",
@@ -188,7 +188,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "f1ccc62cd8af9620d43688ed4e11e43e"
+      "ba9a7f25b713bdc52d3bd2dcc81d6f32"
     ],
     [
       "ECGroup.pre_share",
@@ -209,7 +209,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "4f9f05458a637180c3d899ac405c874b"
+      "1c4073af6d67544020f1f5e569a7d359"
     ],
     [
       "ECGroup.pre_share",
@@ -266,7 +266,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "26b8bcf005af1a5c44024c1b2597938e"
+      "59ec9e22e514fc0a7e020e0fe9157c54"
     ],
     [
       "ECGroup.__proj__S_CC__item___0",
@@ -355,7 +355,7 @@
         "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "98dce33f37c89211346cc296cd41caae"
+      "67b247a04a74d589682c143ac9b0c48d"
     ],
     [
       "ECGroup.__proj__EC_CORE__item___0",
@@ -368,7 +368,7 @@
         "refinement_interpretation_ECGroup_Tm_refine_88a982c45d92fce449f91a119832f38d"
       ],
       0,
-      "7b62378059b3bd6b2e2d862cb64028e0"
+      "b57c530165765c5c6811db08aef7343e"
     ],
     [
       "ECGroup.__proj__EC_UNKNOWN__item___0",
@@ -502,7 +502,7 @@
         "typing_Mem.is_tls_rgn", "typing_Mem.tls_define_region"
       ],
       0,
-      "a6a6fdebb8e89b69ec1b9b39e1a1d20b"
+      "fa402db3b78b8cae85235a1c71e34cef"
     ],
     [
       "ECGroup.dh_initiator",
@@ -587,7 +587,7 @@
         "primitive_Prims.op_LessThan"
       ],
       0,
-      "85a7d7e9b0c7b0725b2ba4fbaf65cb14"
+      "33d5881f31746c536d4c3621d072741c"
     ],
     [
       "ECGroup.parse_point",
@@ -614,10 +614,9 @@
         "equation_Mem.tls_rgn", "equation_Prims.nat",
         "function_token_typing_FStar.UInt32.n",
         "function_token_typing_FStar.UInt8.n",
-        "function_token_typing_Mem.tls_region", "int_inversion",
-        "int_typing", "lemma_FStar.Buffer.lemma_size",
-        "lemma_FStar.UInt.pow2_values", "primitive_Prims.op_AmpAmp",
-        "primitive_Prims.op_LessThanOrEqual",
+        "function_token_typing_Mem.tls_region",
+        "lemma_FStar.Buffer.lemma_size", "lemma_FStar.UInt.pow2_values",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
         "primitive_Prims.op_Subtraction",
         "proj_equation_CoreCrypto.Mkec_point_ecx",
         "proj_equation_CoreCrypto.Mkec_point_ecy",
@@ -640,7 +639,7 @@
         "typing_CoreCrypto.ec_bytelen", "typing_Mem.is_tls_rgn"
       ],
       0,
-      "4f8817c7528b257922b89a5ae60483bd"
+      "181fdca3c289aa02b63a59550627225c"
     ],
     [
       "ECGroup.parse_partial",
@@ -652,6 +651,7 @@
         "Prims_pretyping_ae567c2fb75be05905677af440075565",
         "assumption_Prims.HasEq_int", "b2t_def", "bool_inversion",
         "bool_typing", "constructor_distinct_FStar.Pervasives.Native.Some",
+        "disc_equation_FStar.Error.Correct",
         "disc_equation_FStar.Error.Error",
         "disc_equation_FStar.Pervasives.Native.None",
         "disc_equation_FStar.Pervasives.Native.Some",
@@ -667,16 +667,15 @@
         "equation_Mem.tls_define_region", "equation_Mem.tls_rgn",
         "equation_Mem.tls_tables_region", "equation_Prims.nat",
         "equation_TLSError.error", "equation_TLSError.result",
+        "fuel_guarded_inversion_FStar.Error.optResult",
         "function_token_typing_FStar.Bytes.empty_bytes",
         "function_token_typing_FStar.UInt32.n",
         "function_token_typing_FStar.UInt8.t",
         "function_token_typing_Mem.tls_define_region",
         "function_token_typing_Mem.tls_region",
-        "function_token_typing_Mem.tls_tables_region",
-        "function_token_typing_TLSError.error", "int_inversion",
+        "function_token_typing_Mem.tls_tables_region", "int_inversion",
         "int_typing", "kinding_CoreCrypto.ec_curve@tok",
         "lemma_FStar.Buffer.lemma_size", "lemma_FStar.Bytes.length_reveal",
-        "lemma_FStar.Error.invertOptResult",
         "lemma_FStar.Pervasives.invertOption",
         "lemma_FStar.Seq.Base.lemma_len_slice", "lemma_FStar.UInt32.vu_inv",
         "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
@@ -697,12 +696,9 @@
         "refinement_interpretation_Mem_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
         "refinement_interpretation_Mem_Tm_refine_f70be9b0cc50942af80d22e44fc9b9c4",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "refinement_kinding_ECGroup_Tm_refine_3722e98158ad45673a454180404265a9",
         "typing_ECGroup.parse_curve", "typing_ECGroup.parse_point",
         "typing_ECGroup.share", "typing_FStar.Bytes.len",
         "typing_FStar.Bytes.reveal", "typing_FStar.Bytes.split",
-        "typing_FStar.Error.uu___is_Correct",
-        "typing_FStar.Error.uu___is_Error",
         "typing_FStar.Pervasives.Native.uu___is_None",
         "typing_FStar.Pervasives.Native.uu___is_Some",
         "typing_FStar.Seq.Base.length", "typing_FStar.UInt.fits",
@@ -710,7 +706,7 @@
         "typing_Mem.is_tls_rgn", "typing_Mem.tls_define_region"
       ],
       0,
-      "06b6349a4e000881f0128e0a96332abe"
+      "c0bc26e7ea9752cfb82be969f701a2d9"
     ],
     [
       "ECGroup.serialize_point",
@@ -763,7 +759,7 @@
         "typing_tok_CoreCrypto.ECC_X25519@tok"
       ],
       0,
-      "714d4fd2179e841388b4460b64e49244"
+      "572d4ad69f1546a6e3cb436d8a59fe14"
     ],
     [
       "ECGroup.curve_id",
@@ -780,7 +776,7 @@
         "fuel_guarded_inversion_CoreCrypto.ec_curve"
       ],
       0,
-      "2c37f83b09057eedf87dd9675dbf8a04"
+      "88c6dd02ab7138f79cff41254acbccc8"
     ],
     [
       "ECGroup.serialize",
