@@ -1,1 +1,46 @@
-[ "OOFï\u001b;»¸\\4†ßÜ™Bo", [] ]
+[
+  "OOFï\u001b;»¸\\4†ßÜ™Bo",
+  [
+    [
+      "HandshakeMessages.string_of_handshakeMessage",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HandshakeMessages.Binders",
+        "disc_equation_HandshakeMessages.Certificate",
+        "disc_equation_HandshakeMessages.Certificate13",
+        "disc_equation_HandshakeMessages.CertificateRequest",
+        "disc_equation_HandshakeMessages.CertificateRequest13",
+        "disc_equation_HandshakeMessages.CertificateVerify",
+        "disc_equation_HandshakeMessages.ClientHello",
+        "disc_equation_HandshakeMessages.ClientKeyExchange",
+        "disc_equation_HandshakeMessages.EncryptedExtensions",
+        "disc_equation_HandshakeMessages.EndOfEarlyData",
+        "disc_equation_HandshakeMessages.Finished",
+        "disc_equation_HandshakeMessages.HelloRequest",
+        "disc_equation_HandshakeMessages.HelloRetryRequest",
+        "disc_equation_HandshakeMessages.KeyUpdate",
+        "disc_equation_HandshakeMessages.MessageHash",
+        "disc_equation_HandshakeMessages.NewSessionTicket",
+        "disc_equation_HandshakeMessages.NewSessionTicket13",
+        "disc_equation_HandshakeMessages.ServerHello",
+        "disc_equation_HandshakeMessages.ServerHelloDone",
+        "disc_equation_HandshakeMessages.ServerKeyExchange",
+        "fuel_guarded_inversion_HandshakeMessages.hs_msg"
+      ],
+      0,
+      "62672c9cd5c88af81c0f696e4e2b6b1d"
+    ],
+    [
+      "HandshakeMessages.parseEmptyMessage",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_Prims.HasEq_int" ],
+      0,
+      "8cb328bd290ce412e6f4076c2cae929e"
+    ]
+  ]
+]

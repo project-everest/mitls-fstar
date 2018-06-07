@@ -1,1 +1,209 @@
-[ "=>\b\u001f´xa$|›ºþÿ\f\u000fi", [] ]
+[
+  "=>\b\u001f´xa$|›ºþÿ\f\u000fi",
+  [
+    [
+      "DataStream.fragment",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_FStar.UInt.uint_t",
+        "lemma_FStar.Buffer.lemma_size",
+        "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87"
+      ],
+      0,
+      "1393993c0bfed45366298a6c777a91ce"
+    ],
+    [
+      "DataStream.repr",
+      1,
+      2,
+      1,
+      [ "@query", "equation_DataStream.ghost_repr" ],
+      0,
+      "f0bdacaab314d482f4c3fd09eb692d90"
+    ],
+    [
+      "DataStream.mk_fragment",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_DataStream.ghost_repr", "equation_Range.within",
+        "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "af6f0e3b8423b294a91e06f0bbd6bad4"
+    ],
+    [
+      "DataStream.appFragment",
+      1,
+      2,
+      1,
+      [ "@query", "equation_DataStream.ghost_repr" ],
+      0,
+      "c9b7c743df2a0b1cf5713a6ee7970a53"
+    ],
+    [
+      "DataStream.appBytes",
+      1,
+      2,
+      1,
+      [ "@query", "equation_DataStream.ghost_repr" ],
+      0,
+      "fea70b78d0594beb93fdb42057df045e"
+    ],
+    [
+      "DataStream.delta",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_TLSError.alertDescription__uu___haseq",
+        "equation_DataStream.fragment", "equation_DataStream.pre_fragment",
+        "equation_Range.fragment_range",
+        "function_token_typing_FStar.Bytes.bytes",
+        "haseqDataStream_Tm_refine_d8bdfb1b483f1471db6abe90c9377c69",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "4f3e8a5b19e819b04125a7c3c3e2de5d"
+    ],
+    [
+      "DataStream.__proj__Data__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_DataStream.Data",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_DataStream_Tm_refine_0d466ae495b3961c5a09f777ca3640cd"
+      ],
+      0,
+      "e413a86f6d5a7cf57ff6b0fa56f7b7dd"
+    ],
+    [
+      "DataStream.__proj__Alert__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_DataStream.Alert",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_DataStream_Tm_refine_36ed55116eca5cfa741045f75917d7b2"
+      ],
+      0,
+      "7bf5807bd4a5aedfaf3cc2eef700fd93"
+    ],
+    [
+      "DataStream.final",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_DataStream.Alert",
+        "disc_equation_DataStream.Close", "disc_equation_DataStream.Data",
+        "fuel_guarded_inversion_DataStream.delta"
+      ],
+      0,
+      "bbfe39b844e0da3ce00c2bc752805966"
+    ],
+    [
+      "DataStream.finalized",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "TLSInfo_pretyping_0afe7076ab7c3944b08749f79d359184",
+        "binder_x_0afe7076ab7c3944b08749f79d359184_0",
+        "binder_x_8734431131df6dd46aa9962779a47103_1",
+        "disc_equation_Prims.Cons", "disc_equation_Prims.Nil",
+        "equality_tok_Prims.LexTop@tok", "fuel_guarded_inversion_Prims.list",
+        "subterm_ordering_Prims.Cons"
+      ],
+      0,
+      "160b2ac88a73caa2d7f60ebf9b8d9c95"
+    ],
+    [
+      "DataStream.wellformed",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "binder_x_8734431131df6dd46aa9962779a47103_1",
+        "disc_equation_Prims.Cons", "disc_equation_Prims.Nil",
+        "fuel_guarded_inversion_Prims.list"
+      ],
+      0,
+      "01b0c61cb0bf6b6572d7a1d38682a321"
+    ],
+    [
+      "DataStream.empty_is_well_formed",
+      1,
+      2,
+      1,
+      [
+        "@MaxFuel_assumption",
+        "@fuel_correspondence_DataStream.wellformed.fuel_instrumented",
+        "@query", "constructor_distinct_Prims.Nil",
+        "equation_with_fuel_DataStream.wellformed.fuel_instrumented",
+        "projection_inverse_BoxBool_proj_0", "projection_inverse_Prims.Nil_a"
+      ],
+      0,
+      "daf3b4fdb0a93f9995ec5db588e1b616"
+    ],
+    [
+      "DataStream.__proj__State__item__log",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_FStar.Pervasives.Native.Some",
+        "equation_TLSInfo.authId", "proj_equation_DataStream.State_region",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_DataStream.State_region",
+        "refinement_interpretation_DataStream_Tm_refine_b9e1232437f6bc2669aefd956955c539"
+      ],
+      0,
+      "2af347db02a41f65d6b407de3c724573"
+    ],
+    [
+      "DataStream.__proj__State__item__ctr",
+      1,
+      2,
+      1,
+      [
+        "@query", "proj_equation_DataStream.State_region",
+        "projection_inverse_DataStream.State_region"
+      ],
+      0,
+      "87f8c1a6231464c89f97a9976badad69"
+    ],
+    [
+      "DataStream.gen",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_FStar.Pervasives.Native.None",
+        "data_typing_intro_FStar.Pervasives.V@tok",
+        "disc_equation_FStar.Pervasives.Native.Some",
+        "equation_DataStream.stream", "equation_FStar.Heap.trivial_preorder",
+        "equation_FStar.HyperStack.ST.mref", "equation_Prims.nat",
+        "equation_TLSInfo.authId", "kinding_DataStream.state@tok",
+        "kinding_FStar.Pervasives.Native.tuple2@tok",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_DataStream_Tm_refine_161e04719814801d293219f408210f95",
+        "refinement_interpretation_DataStream_Tm_refine_d9e35989bf511ab9e96c77a6d6447b81",
+        "refinement_interpretation_FStar.HyperStack.ST_Tm_refine_1a1278f1aecd37594ba20d888b7fd230"
+      ],
+      0,
+      "822720bbce396236fbfa60f53d664e03"
+    ]
+  ]
+]

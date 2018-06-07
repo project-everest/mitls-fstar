@@ -106,17 +106,17 @@ SOURCES = \
 # Taken from ls hacl-star/providers/multiplexer/c/*.c | xargs basename
   evercrypt_bytes.c \
   evercrypt_autoconfig.c \
-#  evercrypt_openssl.c \
-  evercrypt_vale_glue.c \
+#  evercrypt_openssl.c
+  evercrypt_vale_stubs.c \
 # Taken from ls hacl-star/providers/generated/EverCrypt_*.c | xargs basename
   EverCrypt_Bytes.c \
   EverCrypt_Hacl.c \
   EverCrypt_Helpers.c \
-#  EverCrypt_Native.c \
-#  EverCrypt_OpenSSL.c \
+#  EverCrypt_OpenSSL.c
   EverCrypt_Specs.c \
   EverCrypt_StaticConfig.c \
   EverCrypt_Vale.c \
+  evercrypt_ValeGlue.c \
 # Remember to add these
   EverCrypt.c \
   C_Failure.c
