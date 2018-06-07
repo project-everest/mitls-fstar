@@ -6,7 +6,7 @@ module L = FStar.List.Tot
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 3 --max_ifuel 3"
 
-type alertDescription =
+type alertDescription : eqtype u#0 =
   | Close_notify
   | Unexpected_message
   | Bad_record_mac
@@ -71,6 +71,8 @@ inline_for_extraction let alertDescription_enum : LP.enum alertDescription U8.t 
   in e
 
 module T = FStar.Tactics
+
+#set-options "--no_smt"
 
 let x : LP.maybe_enum_key_of_repr'_t alertDescription_enum =
   T.synth_by_tactic (fun () -> LP.maybe_enum_key_of_repr_tac_new alertDescription_enum)
