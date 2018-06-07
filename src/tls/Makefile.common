@@ -23,7 +23,7 @@ INCLUDE_PATHS = \
         $(KREMLIN_HOME)/kremlib \
 	$(MITLS_HOME)/libs/ffi \
 	$(MITLS_HOME)/src/lowparse \
-	$(EVERCRYPT_HOME)/multiplexer \
+	$(EVERCRYPT_HOME)/evercrypt \
 	$(SPECINC)
 
 ifeq (,$(MITLS_NODEBUG))
