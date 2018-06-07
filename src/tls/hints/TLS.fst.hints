@@ -1,1 +1,32 @@
-[ "¡Ê\u0005J‹{Xº¥‹^ÏT\u001a9\\", [] ]
+[
+  "¡Ê\u0005J‹{Xº¥‹^ÏT\u001a9\\",
+  [
+    [
+      "TLS.discard",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "equation_FStar.Monotonic.Heap.equal_dom",
+        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
+        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
+      ],
+      0,
+      "d9f0d2fcf79253914a87ba8c6ee20a58"
+    ],
+    [
+      "TLS.trace",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_DebugFlags.debug",
+        "equation_DebugFlags.debug_TLS"
+      ],
+      0,
+      "88a2aaf6dbc65c32029a0278a09c1083"
+    ]
+  ]
+]

@@ -1,1 +1,150 @@
-[ "óxá³\u001euhsýž\u007fù«ÚÞi", [] ]
+[
+  "óxá³\u001euhsýž\u007fù«ÚÞi",
+  [
+    [
+      "TLSError.string_of_ad",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_TLSError.AD_access_denied",
+        "disc_equation_TLSError.AD_bad_certificate_fatal",
+        "disc_equation_TLSError.AD_bad_certificate_warning",
+        "disc_equation_TLSError.AD_bad_record_mac",
+        "disc_equation_TLSError.AD_certificate_expired_fatal",
+        "disc_equation_TLSError.AD_certificate_expired_warning",
+        "disc_equation_TLSError.AD_certificate_revoked_fatal",
+        "disc_equation_TLSError.AD_certificate_revoked_warning",
+        "disc_equation_TLSError.AD_certificate_unknown_fatal",
+        "disc_equation_TLSError.AD_certificate_unknown_warning",
+        "disc_equation_TLSError.AD_close_notify",
+        "disc_equation_TLSError.AD_decode_error",
+        "disc_equation_TLSError.AD_decompression_failure",
+        "disc_equation_TLSError.AD_decrypt_error",
+        "disc_equation_TLSError.AD_decryption_failed",
+        "disc_equation_TLSError.AD_export_restriction",
+        "disc_equation_TLSError.AD_handshake_failure",
+        "disc_equation_TLSError.AD_illegal_parameter",
+        "disc_equation_TLSError.AD_insufficient_security",
+        "disc_equation_TLSError.AD_internal_error",
+        "disc_equation_TLSError.AD_missing_extension",
+        "disc_equation_TLSError.AD_no_application_protocol",
+        "disc_equation_TLSError.AD_no_certificate",
+        "disc_equation_TLSError.AD_no_renegotiation",
+        "disc_equation_TLSError.AD_protocol_version",
+        "disc_equation_TLSError.AD_record_overflow",
+        "disc_equation_TLSError.AD_unexpected_message",
+        "disc_equation_TLSError.AD_unknown_ca",
+        "disc_equation_TLSError.AD_unrecognized_name",
+        "disc_equation_TLSError.AD_unsupported_certificate_fatal",
+        "disc_equation_TLSError.AD_unsupported_certificate_warning",
+        "disc_equation_TLSError.AD_unsupported_extension",
+        "disc_equation_TLSError.AD_user_cancelled_fatal",
+        "disc_equation_TLSError.AD_user_cancelled_warning",
+        "fuel_guarded_inversion_TLSError.alertDescription"
+      ],
+      0,
+      "2cf984797a9faee9453e9a767e8cc17a"
+    ],
+    [
+      "TLSError.string_of_result",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_FStar.Error.Correct",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
+        "function_token_typing_TLSError.error",
+        "lemma_FStar.Error.invertOptResult",
+        "projection_inverse_BoxBool_proj_0",
+        "typing_FStar.Error.uu___is_Correct"
+      ],
+      0,
+      "a7043bd37b669e40bd3bfe77ce0dea31"
+    ],
+    [
+      "TLSError.resT",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_FStar.Error.Correct", "equation_TLSError.error",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_TLSError_Tm_refine_beedc2a801d7d2c429f84212cb5b7279"
+      ],
+      0,
+      "3194ff82b0da3eef06206bba53bd78ff"
+    ],
+    [
+      "TLSError.mapResult",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_FStar.Error.Correct",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
+        "equation_TLSError.result", "function_token_typing_TLSError.error",
+        "lemma_FStar.Error.invertOptResult",
+        "typing_FStar.Error.uu___is_Correct",
+        "typing_FStar.Error.uu___is_Error"
+      ],
+      0,
+      "856ebc8e7ffc91a5334f282283df6e69"
+    ],
+    [
+      "TLSError.bindResult",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_FStar.Error.Correct",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
+        "equation_TLSError.result", "function_token_typing_TLSError.error",
+        "lemma_FStar.Error.invertOptResult",
+        "typing_FStar.Error.uu___is_Correct",
+        "typing_FStar.Error.uu___is_Error"
+      ],
+      0,
+      "2c8d819332fa1c5dfb67c18ac04fa094"
+    ],
+    [
+      "TLSError.resultMap",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_FStar.Error.Correct",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
+        "equation_TLSError.result", "function_token_typing_TLSError.error",
+        "lemma_FStar.Error.invertOptResult",
+        "typing_FStar.Error.uu___is_Correct",
+        "typing_FStar.Error.uu___is_Error"
+      ],
+      0,
+      "680af35616e507cfcdc1cb5a9d65b2f3"
+    ],
+    [
+      "TLSError.resultBind",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_FStar.Error.Correct",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
+        "equation_TLSError.result", "function_token_typing_TLSError.error",
+        "lemma_FStar.Error.invertOptResult",
+        "typing_FStar.Error.uu___is_Correct",
+        "typing_FStar.Error.uu___is_Error"
+      ],
+      0,
+      "75b615b6f272038c397da2e47d560c49"
+    ]
+  ]
+]
