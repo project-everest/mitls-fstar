@@ -36,9 +36,32 @@ let rec enum_destr_tac'
       ]
     ) e
 
-(* Parser *)
+noextract
+let rec enum_destr_tac_new
+  (t: Type)
+  (eq: (t -> t -> GTot Type0))
+  (ifc: if_combinator t eq)
+  (u: unit { r_reflexive _ eq /\ r_transitive _ eq } )
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (eu: unit { Cons? e } )
+: T.Tac unit
+= match e with
+  | [_] ->
+    let fu = quote (enum_destr_cons_nil' #key #repr #t eq ()) in
+    T.apply fu;
+    T.iseq [
+      (fun () -> T.exact_guard (quote ()); conclude ());
+    ]
+  | _ :: e' ->
+    let fu = quote (enum_destr_cons' #key #repr #t eq ifc ()) in
+    T.apply fu;
+    T.iseq [
+      (fun () -> enum_destr_tac_new t eq ifc u e' ());
+      (fun () -> T.exact_guard (quote ()); conclude ());
+    ]
 
-#reset-options "--z3rlimit 128  --z3cliopt smt.arith.nl=false"
+(* Parser *)
 
 noextract
 let parse32_sum_tac_ar2
@@ -135,8 +158,6 @@ let parse32_sum_tac'
   in
   res
 
-#reset-options
-
 noextract
 let parse32_sum_tac
   (#kt: parser_kind)
@@ -160,6 +181,48 @@ let parse32_sum_tac
 = let f = parse32_sum_tac' t p32 pc32 p' u in
   T.print (T.term_to_string f);
   T.exact_guard f
+
+noextract
+let parse32_sum_tac_new
+  (#kt: parser_kind)
+  (t: sum)
+  (#p: parser kt (sum_repr_type t))
+  (p32: parser32 p)
+  (#k: parser_kind)
+  (#pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
+  (pc32: ((x: sum_key t) -> Tot (parser32 (pc x))))
+  (#k' : parser_kind)
+  (#t' : Type0)
+  (p' : parser k' t')
+  (u: unit {
+    Cons? (sum_enum t) /\
+    k' == and_then_kind (parse_filter_kind kt) k /\
+    t' == sum_type t /\
+    p' == parse_sum t p pc
+  })
+  ()
+: T.Tac unit
+= let fu : T.term = quote (
+    parse32_sum_gen
+      #kt
+      t
+      p
+      #k
+      #pc
+      pc32
+      #k'
+      #t'
+      p'
+      u
+  )
+  in
+  let eq = feq bytes32 (option (sum_type t * U32.t)) (eq2 #_) in
+  let (eq_refl : unit { r_reflexive _ eq /\ r_transitive _ eq } ) = () in   
+  T.apply fu;
+  T.iseq [
+    (fun () -> parse32_enum_key_tac_new p32 (sum_enum t) (parse_enum_key p (sum_enum t)) () ());
+    (fun () -> enum_destr_tac_new (bytes32 -> Tot (option (sum_type t * U32.t))) eq (fif _ _ (eq2 #_) (default_if _)) eq_refl (sum_enum t) ());
+  ]
 
 noextract
 let rec sum_destr_tac
@@ -187,9 +250,28 @@ let rec sum_destr_tac
       ar2, T.Q_Explicit;
     ]
 
-#set-options "--z3rlimit 32 "
-
-// assume val bidon_f (#t: Type) (x: t) : Tot unit
+noextract
+let rec sum_destr_tac_new
+  (v: Type)
+  (s: sum)
+  (su: unit { Cons? (sum_enum s) } )
+: T.Tac unit
+  (decreases (sum_enum s))
+= let open T in
+  match sum_enum s with
+  | [_] ->
+    let fu = quote (sum_destr_cons_nil' v) in
+    T.apply fu;
+    T.iseq [
+      (fun () -> T.exact (quote ()); conclude ());
+    ]
+  | _ ->
+    let fu = quote (sum_destr_cons' v) in
+    T.apply fu;
+    T.iseq [
+      (fun () -> sum_destr_tac_new v (sum_tail s) ());
+      (fun () -> T.exact_guard (quote ()); conclude ());
+    ]
 
 noextract
 let serialize32_sum_tac_ar1
@@ -235,8 +317,6 @@ let serialize32_sum_tac_ar1
     #(parse_enum_key p e)
     (serialize_enum_key p s e)
     ()
-
-#set-options "--z3rlimit 128"
 
 noextract
 let serialize32_sum_tac'
@@ -292,8 +372,6 @@ let serialize32_sum_tac'
   in
   res
 
-#set-options "--z3rlimit 32 "
-
 let serialize32_sum_tac_precond
   (#kt: parser_kind)
   (t: sum)
@@ -342,7 +420,52 @@ let serialize32_sum_tac
   T.print (T.term_to_string f);
   T.exact_guard f
 
-#set-options "--z3rlimit 64 "
+noextract
+let serialize32_sum_tac_new
+  (#kt: parser_kind)
+  (t: sum)
+  (#p: parser kt (sum_repr_type t))
+  (#s: serializer p )
+  (s32: serializer32 s)
+  (#k: parser_kind)
+  (#pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
+  (#sc: ((x: sum_key t) -> Tot (serializer (pc x))))
+  (sc32: ((x: sum_key t) -> Tot (serializer32 (sc x))))
+  (u: unit { serializer32_sum_gen_precond kt k } )
+  (tag_of_data: ((x: sum_type t) -> Tot (y: sum_key_type t { y == (sum_tag_of_data t x <: sum_key_type t)} )))
+  (#k' : parser_kind)
+  (#t' : Type0)
+  (#p' : parser k' t')
+  (s' : serializer p')
+  (u' : unit {
+    serialize32_sum_tac_precond t s32 sc32 u s'
+  })
+  ()
+: T.Tac unit
+= let fu = quote (
+    serialize32_sum_gen
+      #kt
+      t
+      #p
+      s
+      #k
+      #pc
+      #sc
+      sc32
+      u
+      tag_of_data
+      #k'
+      #t'
+      #p'
+      s'
+      u'
+  )
+  in
+  T.apply fu;
+  T.iseq [
+    (fun () -> serialize32_enum_key_gen_tac_new #kt #(sum_key_type t) #(sum_repr_type t) #p #s s32 (sum_enum t) #(parse_filter_kind kt) #(parse_enum_key p (sum_enum t)) (serialize_enum_key p s (sum_enum t)) () ());
+    (fun () -> sum_destr_tac_new bytes32 t ());
+  ]
 
 noextract
 let size32_sum_tac'

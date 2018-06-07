@@ -171,6 +171,15 @@ let enum_repr_of_key_cons
      e
 
 inline_for_extraction
+let enum_repr_of_key_cons'
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (f : enum_repr_of_key'_t (enum_tail' e))
+  (u: unit { Cons? e } )
+: Tot (enum_repr_of_key'_t e)
+= enum_repr_of_key_cons e f
+
+inline_for_extraction
 let enum_repr_of_key_cons_nil
   (#key #repr: eqtype)
   (e: enum key repr)
@@ -182,6 +191,14 @@ let enum_repr_of_key_cons_nil
      (fun (x: enum_key e) ->
       (r <: (r: enum_repr e { enum_repr_of_key e x == r } ))))
      e
+
+inline_for_extraction
+let enum_repr_of_key_cons_nil'
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (u: unit { Cons? e /\ Nil? (enum_tail' e) } )
+: Tot (enum_repr_of_key'_t e)
+= enum_repr_of_key_cons_nil e
 
 inline_for_extraction
 let serialize32_maybe_enum_key_gen'

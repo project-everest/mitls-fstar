@@ -147,6 +147,19 @@ let enum_destr_cons
   ) e
 
 inline_for_extraction
+let enum_destr_cons'
+  (#key #repr: eqtype)
+  (#t: Type)
+  (eq: (t -> t -> GTot Type0))
+  (ift: if_combinator t eq)
+  (u_refl_trans: unit { r_reflexive t eq /\ r_transitive t eq } )
+  (e: enum key repr)
+  (g: enum_destr_t t eq (enum_tail' e))
+  (u: unit { Cons? e } )
+: Tot (enum_destr_t t eq e)
+= enum_destr_cons eq ift e g
+
+inline_for_extraction
 let enum_destr_cons_nil
   (#key #repr: eqtype)
   (#t: Type)
@@ -161,6 +174,17 @@ let enum_destr_cons_nil
        f k
      ) <: (y: t { eq y (f x) } )))
   ) e
+
+inline_for_extraction
+let enum_destr_cons_nil'
+  (#key #repr: eqtype)
+  (#t: Type)
+  (eq: (t -> t -> GTot Type0))
+  (u_refl: unit { r_reflexive t eq } )
+  (e: enum key repr)
+  (u: unit { Cons? e /\ Nil? (enum_tail' e) } )
+: Tot (enum_destr_t t eq e)
+= enum_destr_cons_nil eq e
 
 #set-options "--z3rlimit 64"
 
@@ -438,6 +462,15 @@ let sum_destr_cons
     ) <: (y: v {y == f k' x' } ))
 
 inline_for_extraction
+let sum_destr_cons'
+  (v: Type)
+  (t: sum)
+  (destr: sum_destr v (sum_tail t))
+  (u: unit { Cons? (sum_enum t)} )
+: Tot (sum_destr v t)
+= sum_destr_cons v t destr
+
+inline_for_extraction
 let sum_destr_cons_nil
   (v: Type)
   (t: sum)
@@ -452,6 +485,14 @@ let sum_destr_cons_nil
       (x' : refine_with_tag (sum_tag_of_data t) k')
     ->
       (f k x' <: (y: v { y == f k' x' } ))
+
+inline_for_extraction
+let sum_destr_cons_nil'
+  (v: Type)
+  (t: sum)
+  (u: unit { Cons? (sum_enum t) /\ Nil? (enum_tail' (sum_enum t)) } )
+: Tot (sum_destr v t)
+= sum_destr_cons_nil v t
 
 inline_for_extraction
 let serialize32_sum_gen
