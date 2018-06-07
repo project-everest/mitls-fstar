@@ -134,6 +134,8 @@ function refresh_hints() {
     # Memorize that commit
     commit=$(git rev-parse HEAD)
 
+    CI_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
     # Drop any other files that were modified as part of the build (e.g.
     # parse.fsi)
     git reset --hard HEAD
