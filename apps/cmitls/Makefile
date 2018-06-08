@@ -12,7 +12,7 @@ ifeq ($(OS),Windows_NT)
   OPENSSL=libcrypto-*.dll
   CC?=$(MARCH)-w64-mingw32-gcc
   PIC=
-  WINSOCK=-lws2_32
+  WINSOCK=-lbcrypt -lws2_32
 	ifeq ($(shell uname -o),Cygwin)
 	  MITLS_HOME := $(shell cygpath -u ${MITLS_HOME})
 	  MLCRYPTO_HOME := $(shell cygpath -u ${MLCRYPTO_HOME})
