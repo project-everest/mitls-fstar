@@ -179,8 +179,8 @@ let enum_destr_cons'
   (u_refl: r_reflexive_t _ eq)
   (u_trans: r_transitive_t _ eq)
   (e: enum key repr)
-  (g: enum_destr_t t eq (enum_tail' e))
   (u: unit { Cons? e } )
+  (g: enum_destr_t t eq (enum_tail' e))
 : Tot (enum_destr_t t eq e)
 = [@inline_let]
   let _ = r_reflexive_t_elim _ _ u_refl in
@@ -211,7 +211,8 @@ let enum_destr_cons_nil'
   (eq: (t -> t -> GTot Type0))
   (u_refl: r_reflexive_t t eq )
   (e: enum key repr)
-  (u: unit { Cons? e /\ Nil? (enum_tail' e) } )
+  (u1: unit { Cons? e } )
+  (u2: unit { Nil? (enum_tail' e) } )
 : Tot (enum_destr_t t eq e)
 = [@inline_let]
   let _ = r_reflexive_t_elim _ _ u_refl in
@@ -404,11 +405,9 @@ let parse32_sum_gen
   (#k' : parser_kind)
   (#t' : Type0)
   (p' : parser k' t')
-  (u: unit {
-    k' == and_then_kind (parse_filter_kind kt) k /\
-    t' == sum_type t /\
-    p' == parse_sum t p pc
-  })
+  (u1: unit { k' == and_then_kind (parse_filter_kind kt) k })
+  (u2: unit { t' == sum_type t })
+  (u3: unit { p' == parse_sum t p pc })
   (p32: parser32 (parse_enum_key p (sum_enum t)))
   (destr: enum_destr_t (bytes32 -> Tot (option (sum_type t * U32.t))) (feq bytes32 _ (eq2 #(option (sum_type t * U32.t)))) (sum_enum t))
 : Tot (parser32 p')
@@ -496,8 +495,8 @@ inline_for_extraction
 let sum_destr_cons'
   (v: Type)
   (t: sum)
-  (destr: sum_destr v (sum_tail t))
   (u: unit { Cons? (sum_enum t)} )
+  (destr: sum_destr v (sum_tail t))
 : Tot (sum_destr v t)
 = sum_destr_cons v t destr
 
@@ -521,7 +520,8 @@ inline_for_extraction
 let sum_destr_cons_nil'
   (v: Type)
   (t: sum)
-  (u: unit { Cons? (sum_enum t) /\ Nil? (enum_tail' (sum_enum t)) } )
+  (u1: unit { Cons? (sum_enum t) } )
+  (u2: unit { Nil? (enum_tail' (sum_enum t)) } )
 : Tot (sum_destr v t)
 = sum_destr_cons_nil v t
 
@@ -540,11 +540,24 @@ let serialize32_sum_gen
   (#t' : Type0)
   (#p' : parser k' t')
   (s' : serializer p')
-  (u: unit {
-    serializer32_sum_gen_precond kt k /\
-    k' == and_then_kind (parse_filter_kind kt) k /\
-    t' == sum_type t /\
-    p' == parse_sum t p pc /\
+  (u1: unit {
+    kt.parser_kind_subkind == Some ParserStrong
+  })
+  (u2: unit {
+    match kt.parser_kind_high, k.parser_kind_high with
+    | Some vt, Some v -> vt + v < 4294967296
+    | _ -> False
+  })
+  (u3: unit {
+    k' == and_then_kind (parse_filter_kind kt) k
+  })
+  (u4: unit {
+    t' == sum_type t
+  })
+  (u5: unit {
+    p' == parse_sum t p pc
+  })
+  (u6: unit {
     s' == serialize_sum t s sc
   })
   (s32: serializer32 (serialize_enum_key _ s (sum_enum t)))

@@ -3,25 +3,22 @@ include LowParse.SLow.Enum
 
 module T = FStar.Tactics
 
-private val split_lem : (#a:Type) -> (#b:Type) ->
-                        squash a -> squash b -> Lemma (a /\ b)
-let split_lem #a #b sa sb = ()
-
-noextract
-let rec resplit () : T.Tac unit =
-  let g = T.cur_goal () in
-  match T.term_as_formula g with
-  | T.And _ _ -> T.apply_lemma (`split_lem); T.iseq [ resplit; resplit ]
-  | _ -> T.first [
-    (fun () -> T.trefl ());
-    (fun () -> T.trivial ());
-  ]
-
 noextract
 let conclude ()
 : T.Tac unit
-= T.norm [delta; iota; primops];
-  resplit ()
+= // T.dump "conclude before";
+  T.norm [delta; iota; primops];
+  T.first [
+    T.trefl;
+    T.trivial;
+  ];
+//  T.dump "conclude after";
+  ()
+
+noextract
+let solve_vc ()
+: T.Tac unit
+= T.exact_guard (quote ()); conclude ()
 
 noextract
 let rec maybe_enum_key_of_repr_tac
@@ -33,17 +30,18 @@ let rec maybe_enum_key_of_repr_tac
 = match e with
   | [] -> T.fail "e must be cons"
   | [_] ->
-    let fu = quote (maybe_enum_key_of_repr'_t_cons_nil' #key #repr) in
+    let fu = quote (maybe_enum_key_of_repr'_t_cons_nil') in
     T.apply fu;
     T.iseq [
-      (fun () -> T.exact_guard (quote ()); conclude ());
+      solve_vc;
+      solve_vc;
     ]
   |  _ :: e_ ->
-    let fu = quote (maybe_enum_key_of_repr'_t_cons' #key #repr) in
+    let fu = quote (maybe_enum_key_of_repr'_t_cons') in
     T.apply fu;
     T.iseq [
+      solve_vc;
       (fun () -> maybe_enum_key_of_repr_tac e_ ());
-      (fun () -> T.exact_guard (quote ()); conclude ());
     ]
 
 noextract
@@ -58,14 +56,15 @@ let rec enum_repr_of_key_tac
     let fu = quote (enum_repr_of_key_cons_nil' #key #repr) in
     T.apply fu;
     T.iseq [
-      (fun () -> T.exact_guard (quote ()); conclude ());
+      solve_vc;
+      solve_vc;
     ]
   | _ :: e' ->
     let fu = quote (enum_repr_of_key_cons' #key #repr) in
     T.apply fu;
     T.iseq [
+      solve_vc;
       (fun () -> enum_repr_of_key_tac e' () ());
-      (fun () -> T.exact_guard (quote ()); conclude ());
     ]
 
 noextract
@@ -83,10 +82,12 @@ let parse32_maybe_enum_key_tac
   })
   ()
 : T.Tac unit
-= let fu = quote (parse32_maybe_enum_key_gen #k #key #repr #p p32 e #k' p') in
+= let fu = quote (parse32_maybe_enum_key_gen #k #key #repr #p p32 e) in
   T.apply fu;
   T.iseq [
-    (fun () -> T.exact_guard (quote u); conclude ());
+    solve_vc;
+    solve_vc;
+    solve_vc;
     (fun () -> maybe_enum_key_of_repr_tac #key #repr e ());
   ]
 
@@ -108,7 +109,8 @@ let parse32_enum_key_tac
 = let fu = quote (parse32_enum_key_gen #k #key #repr p e #k' p') in
   T.apply fu;
   T.iseq [
-    (fun () -> T.exact_guard (quote u); conclude ());
+    solve_vc;
+    solve_vc;
     (fun () -> parse32_maybe_enum_key_tac p32 e (parse_maybe_enum_key p e) () ())
   ]
 
@@ -133,7 +135,9 @@ let serialize32_enum_key_gen_tac
 = let fu = quote (serialize32_enum_key_gen #k #key #repr #p #s s32 e #k' #p' s') in
   T.apply fu;
   T.iseq [
-    (fun () -> T.exact_guard (quote u); conclude ());
+    solve_vc;
+    solve_vc;
+    solve_vc;
     (fun () -> enum_repr_of_key_tac e () ());
   ]
 
@@ -158,6 +162,8 @@ let serialize32_maybe_enum_key_tac
 = let fu = quote (serialize32_maybe_enum_key_gen #k #key #repr #p #s s32 e #k' #p' s') in
   T.apply fu;
   T.iseq [
-    (fun () -> T.exact_guard (quote u); conclude ());
+    solve_vc;
+    solve_vc;
+    solve_vc;
     (fun () -> enum_repr_of_key_tac e () ());
   ]

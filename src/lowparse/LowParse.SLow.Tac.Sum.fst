@@ -23,14 +23,15 @@ let rec enum_destr_tac
     let fu = quote (enum_destr_cons_nil' #key #repr #t eq u_refl) in
     T.apply fu;
     T.iseq [
-      (fun () -> T.exact_guard (quote ()); conclude ());
+      solve_vc;
+      solve_vc;
     ]
   | _ :: e' ->
     let fu = quote (enum_destr_cons' #key #repr #t eq ifc u_refl u_trans) in
     T.apply fu;
     T.iseq [
+      solve_vc;
       (fun () -> enum_destr_tac t eq ifc u_refl u_trans e' ());
-      (fun () -> T.exact_guard (quote ()); conclude ());
     ]
 
 (* Parser *)
@@ -81,7 +82,9 @@ let parse32_sum_tac
   in
   T.apply fu;
   T.iseq [
-    (fun () -> T.exact_guard (quote u); conclude ());
+    solve_vc;
+    solve_vc;
+    solve_vc;
     (fun () -> parse32_enum_key_tac p32 (sum_enum t) (parse_enum_key p (sum_enum t)) () ());
     (fun () -> enum_destr_tac (bytes32 -> Tot (option (sum_type t * U32.t))) (parse32_sum_eq t) (fif _ _ (eq2 #_) (default_if _)) (parse32_sum_eq_refl t) (parse32_sum_eq_trans t) (sum_enum t) ());
   ];
@@ -100,14 +103,15 @@ let rec sum_destr_tac
     let fu = quote (sum_destr_cons_nil' v) in
     T.apply fu;
     T.iseq [
-      (fun () -> T.exact (quote ()); conclude ());
+      solve_vc;
+      solve_vc;
     ]
   | _ ->
     let fu = quote (sum_destr_cons' v) in
     T.apply fu;
     T.iseq [
+      solve_vc;
       (fun () -> sum_destr_tac v (sum_tail s) ());
-      (fun () -> T.exact_guard (quote ()); conclude ());
     ]
 
 let serialize32_sum_tac_precond
@@ -173,7 +177,12 @@ let serialize32_sum_tac
   in
   T.apply fu;
   T.iseq [
-    (fun () -> T.exact_guard (quote ()); conclude ());
+    solve_vc;
+    solve_vc;
+    solve_vc;
+    solve_vc;
+    solve_vc;
+    solve_vc;
     (fun () -> serialize32_enum_key_gen_tac #kt #(sum_key_type t) #(sum_repr_type t) #p #s s32 (sum_enum t) #(parse_filter_kind kt) #(parse_enum_key p (sum_enum t)) (serialize_enum_key p s (sum_enum t)) () ());
     (fun () -> sum_destr_tac bytes32 t ());
   ]
