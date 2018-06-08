@@ -31,6 +31,14 @@ let case_enum : LP.enum cases U8.t =
   in
   e
 
+module T = FStar.Tactics
+
+let x : LP.maybe_enum_key_of_repr'_t case_enum =
+  T.synth_by_tactic (fun () -> LP.maybe_enum_key_of_repr_tac_new case_enum)
+
+let x_old : LP.maybe_enum_key_of_repr'_t case_enum =
+  T.synth_by_tactic (fun () -> LP.maybe_enum_key_of_repr_tac case_enum ())
+
 inline_for_extraction
 let cases_of_t
   (x: t)
@@ -148,7 +156,7 @@ inline_for_extraction
 let parse32_t
 : LP.parser32 parse_t
 = FStar.Tactics.synth_by_tactic
-    (LP.parse32_sum_tac_new
+    (LP.parse32_sum_tac
       t_sum
       LP.parse32_u8
       parse32_cases
@@ -294,7 +302,7 @@ let serialize32_t : LP.serializer32 serialize_t =
       (LP.weaken_parse_cases_kind t_sum parse_cases')
   )
   in
-  FStar.Tactics.synth_by_tactic (LP.serialize32_sum_tac_new
+  FStar.Tactics.synth_by_tactic (LP.serialize32_sum_tac
     t_sum
     #_
     #LP.serialize_u8
