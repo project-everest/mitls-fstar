@@ -75,7 +75,4 @@ module T = FStar.Tactics
 #set-options "--no_smt"
 
 let x : LP.maybe_enum_key_of_repr'_t alertDescription_enum =
-  T.synth_by_tactic (fun () -> LP.maybe_enum_key_of_repr_tac_new alertDescription_enum)
-
-let x_old : LP.maybe_enum_key_of_repr'_t alertDescription_enum =
   T.synth_by_tactic (fun () -> LP.maybe_enum_key_of_repr_tac alertDescription_enum ())
