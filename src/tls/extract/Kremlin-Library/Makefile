@@ -94,6 +94,9 @@ CFLAGS += -I$(MLCRYPTO_HOME)/openssl/include
 LDOPTS += -L$(MLCRYPTO_HOME)/openssl -lcrypto
 else
 CFLAGS += -DNO_OPENSSL
+ifneq (,$(EVEREST_WINDOWS))
+LDOPTS += -lbcrypt
+endif
 endif
 
 all: libmitls.$(SO)
