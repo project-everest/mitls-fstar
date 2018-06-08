@@ -73,7 +73,7 @@ let parse32_sum_tac
   let (eq_refl : unit { r_reflexive _ eq /\ r_transitive _ eq } ) = () in   
   T.apply fu;
   T.iseq [
-    (fun () -> T.exact_guard (quote u); conclude ());
+    (fun () -> T.exact_guard (quote u); T.dump "parse32_sum_tac"; conclude ());
     (fun () -> parse32_enum_key_tac p32 (sum_enum t) (parse_enum_key p (sum_enum t)) () ());
     (fun () -> enum_destr_tac (bytes32 -> Tot (option (sum_type t * U32.t))) eq (fif _ _ (eq2 #_) (default_if _)) eq_refl (sum_enum t) ());
   ]

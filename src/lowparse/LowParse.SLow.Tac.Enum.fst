@@ -3,11 +3,27 @@ include LowParse.SLow.Enum
 
 module T = FStar.Tactics
 
+private val split_lem : (#a:Type) -> (#b:Type) ->
+                        squash a -> squash b -> Lemma (a /\ b)
+let split_lem #a #b sa sb = ()
+
+noextract
+let rec resplit () : T.Tac unit =
+  let g = T.cur_goal () in
+  match T.term_as_formula g with
+  | T.And _ _ -> T.apply_lemma (`split_lem); T.iseq [ resplit; resplit ]
+  | _ -> T.first [
+    (fun () -> T.trefl ());
+    (fun () -> T.trivial ());
+  ]
+
 noextract
 let conclude ()
 : T.Tac unit
-= // T.norm [delta; iota];
-  T.trivial ()
+= T.norm [delta; iota; primops];
+  T.dump "after norm";
+  resplit ();
+  T.dump "done?"
 
 noextract
 let rec maybe_enum_key_of_repr_tac
