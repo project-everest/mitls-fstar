@@ -504,13 +504,13 @@ let serialize32_sum_gen
   (#pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
   (#sc: ((x: sum_key t) -> Tot (serializer (pc x))))
   (sc32: ((x: sum_key t) -> Tot (serializer32 (sc x))))
-  (u: unit { serializer32_sum_gen_precond kt k } )
   (tag_of_data: ((x: sum_type t) -> Tot (y: sum_key_type t { y == (sum_tag_of_data t x <: sum_key_type t)} )))
   (#k' : parser_kind)
   (#t' : Type0)
   (#p' : parser k' t')
   (s' : serializer p')
   (u: unit {
+    serializer32_sum_gen_precond kt k /\
     k' == and_then_kind (parse_filter_kind kt) k /\
     t' == sum_type t /\
     p' == parse_sum t p pc /\
