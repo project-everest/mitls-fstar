@@ -75,9 +75,6 @@ let parse32_sum_tac
       #k
       #pc
       pc32
-      #k'
-      #t'
-      p'
   )
   in
   T.apply fu;

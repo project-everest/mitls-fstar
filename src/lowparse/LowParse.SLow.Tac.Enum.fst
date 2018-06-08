@@ -106,9 +106,10 @@ let parse32_enum_key_tac
   })
   ()
 : T.Tac unit
-= let fu = quote (parse32_enum_key_gen #k #key #repr p e #k' p') in
+= let fu = quote (parse32_enum_key_gen #k #key #repr p e) in
   T.apply fu;
   T.iseq [
+    solve_vc;
     solve_vc;
     solve_vc;
     (fun () -> parse32_maybe_enum_key_tac p32 e (parse_maybe_enum_key p e) () ())
@@ -132,9 +133,10 @@ let serialize32_enum_key_gen_tac
   })
   ()
 : T.Tac unit
-= let fu = quote (serialize32_enum_key_gen #k #key #repr #p #s s32 e #k' #p' s') in
+= let fu = quote (serialize32_enum_key_gen #k #key #repr #p #s s32 e) in
   T.apply fu;
   T.iseq [
+    solve_vc;
     solve_vc;
     solve_vc;
     solve_vc;
@@ -159,9 +161,10 @@ let serialize32_maybe_enum_key_tac
   })
   ()
 : T.Tac unit
-= let fu = quote (serialize32_maybe_enum_key_gen #k #key #repr #p #s s32 e #k' #p' s') in
+= let fu = quote (serialize32_maybe_enum_key_gen #k #key #repr #p #s s32 e) in
   T.apply fu;
   T.iseq [
+    solve_vc;
     solve_vc;
     solve_vc;
     solve_vc;
