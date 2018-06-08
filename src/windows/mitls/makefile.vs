@@ -106,17 +106,17 @@ SOURCES = \
 # Taken from ls hacl-star/providers/multiplexer/c/*.c | xargs basename
   evercrypt_bytes.c \
   evercrypt_autoconfig.c \
-#  evercrypt_openssl.c \
-  evercrypt_vale_glue.c \
+#  evercrypt_openssl.c
+  evercrypt_vale_stubs.c \
 # Taken from ls hacl-star/providers/generated/EverCrypt_*.c | xargs basename
   EverCrypt_Bytes.c \
   EverCrypt_Hacl.c \
   EverCrypt_Helpers.c \
-#  EverCrypt_Native.c \
-#  EverCrypt_OpenSSL.c \
+#  EverCrypt_OpenSSL.c
   EverCrypt_Specs.c \
   EverCrypt_StaticConfig.c \
   EverCrypt_Vale.c \
+  evercrypt_ValeGlue.c \
 # Remember to add these
   EverCrypt.c \
   C_Failure.c
@@ -129,9 +129,11 @@ SOURCES = \
     ml /nologo /c $< /Fo$@
   
 !if "$(PLATFORM)"=="x86"
-PLATFORM_OBJS = aes-i686.obj sha256-i686.obj aesgcm-x86_64.obj
-!else
+PLATFORM_OBJS = aes-i686.obj
+!else if "$(PLATFORM)"=="X64"
 PLATFORM_OBJS = aes-x86_64.obj sha256-x86_64.obj aesgcm-x86_64.obj
+!else
+PLATFORM_OBJS = 
 !endif
 
 libmitls_code.lib: $(SOURCES:.c=.obj) $(PLATFORM_OBJS)
