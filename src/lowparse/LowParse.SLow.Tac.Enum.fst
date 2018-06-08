@@ -21,9 +21,7 @@ noextract
 let conclude ()
 : T.Tac unit
 = T.norm [delta; iota; primops];
-  T.dump "after norm";
-  resplit ();
-  T.dump "done?"
+  resplit ()
 
 noextract
 let rec maybe_enum_key_of_repr_tac

@@ -12,29 +12,39 @@ let rec enum_destr_tac
   (t: Type)
   (eq: (t -> t -> GTot Type0))
   (ifc: if_combinator t eq)
-  (u: unit { r_reflexive _ eq /\ r_transitive _ eq } )
+  (u_refl: r_reflexive_t _ eq)
+  (u_trans: r_transitive_t _ eq)
   (#key #repr: eqtype)
   (e: enum key repr)
   (eu: unit { Cons? e } )
 : T.Tac unit
 = match e with
   | [_] ->
-    let fu = quote (enum_destr_cons_nil' #key #repr #t eq) in
+    let fu = quote (enum_destr_cons_nil' #key #repr #t eq u_refl) in
     T.apply fu;
     T.iseq [
-      (fun () -> T.exact_guard (quote u); conclude ());
       (fun () -> T.exact_guard (quote ()); conclude ());
     ]
   | _ :: e' ->
-    let fu = quote (enum_destr_cons' #key #repr #t eq ifc) in
+    let fu = quote (enum_destr_cons' #key #repr #t eq ifc u_refl u_trans) in
     T.apply fu;
     T.iseq [
-      (fun () -> T.exact_guard (quote u); conclude ());
-      (fun () -> enum_destr_tac t eq ifc u e' ());
+      (fun () -> enum_destr_tac t eq ifc u_refl u_trans e' ());
       (fun () -> T.exact_guard (quote ()); conclude ());
     ]
 
 (* Parser *)
+
+let parse32_sum_eq (t: sum) : Tot (_ -> _ -> GTot Type0) =
+  feq bytes32 (option (sum_type t * U32.t)) (eq2 #_)
+
+abstract
+let parse32_sum_eq_refl (t: sum) : Tot (r_reflexive_t _ (parse32_sum_eq t)) =
+  fun _ -> ()
+
+abstract
+let parse32_sum_eq_trans (t: sum) : Tot (r_transitive_t _ (parse32_sum_eq t)) =
+  fun _ _ _ -> ()
 
 noextract
 let parse32_sum_tac
@@ -69,14 +79,13 @@ let parse32_sum_tac
       p'
   )
   in
-  let eq = feq bytes32 (option (sum_type t * U32.t)) (eq2 #_) in
-  let (eq_refl : unit { r_reflexive _ eq /\ r_transitive _ eq } ) = () in   
   T.apply fu;
   T.iseq [
-    (fun () -> T.exact_guard (quote u); T.dump "parse32_sum_tac"; conclude ());
+    (fun () -> T.exact_guard (quote u); conclude ());
     (fun () -> parse32_enum_key_tac p32 (sum_enum t) (parse_enum_key p (sum_enum t)) () ());
-    (fun () -> enum_destr_tac (bytes32 -> Tot (option (sum_type t * U32.t))) eq (fif _ _ (eq2 #_) (default_if _)) eq_refl (sum_enum t) ());
-  ]
+    (fun () -> enum_destr_tac (bytes32 -> Tot (option (sum_type t * U32.t))) (parse32_sum_eq t) (fif _ _ (eq2 #_) (default_if _)) (parse32_sum_eq_refl t) (parse32_sum_eq_trans t) (sum_enum t) ());
+  ];
+  T.dump "parse32_sum_tac"
 
 noextract
 let rec sum_destr_tac

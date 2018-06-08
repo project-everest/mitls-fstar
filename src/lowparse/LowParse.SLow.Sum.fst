@@ -40,23 +40,47 @@ let serialize32_sum_gen'
 
 (* Universal destructor *)
 
-let r_reflexive
+let r_reflexive_prop
   (t: Type)
   (r: (t -> t -> GTot Type0))
 : GTot Type0
 = forall (x: t) . r x x
 
-let r_symmetric
+inline_for_extraction
+let r_reflexive_t
   (t: Type)
   (r: (t -> t -> GTot Type0))
-: GTot Type0
-= forall (x y: t) . r x y ==> r y x
+: Tot Type0
+= (x: t) -> Lemma (r x x)
 
-let r_transitive
+let r_reflexive_t_elim
+  (t: Type)
+  (r: (t -> t -> GTot Type0))
+  (phi: r_reflexive_t t r)
+: Lemma
+  (r_reflexive_prop t r)
+= Classical.forall_intro phi
+
+let r_transitive_prop
   (t: Type)
   (r: (t -> t -> GTot Type0))
 : GTot Type0
 = forall (x y z: t) . (r x y /\ r y z) ==> r x z
+
+inline_for_extraction
+let r_transitive_t
+  (t: Type)
+  (r: (t -> t -> GTot Type0))
+: Tot Type0
+= (x: t) -> (y: t) -> (z: t) -> Lemma ((r x y /\ r y z) ==> r x z)
+
+let r_transitive_t_elim
+  (t: Type)
+  (r: (t -> t -> GTot Type0))
+  (phi: r_transitive_t t r)
+: Lemma
+  (r_transitive_prop t r)
+= Classical.forall_intro_3 phi
 
 inline_for_extraction
 let if_combinator
@@ -119,7 +143,7 @@ let enum_destr_cons
   (e: enum key repr)
   (g: enum_destr_t t eq (enum_tail' e))
 : Pure (enum_destr_t t eq e)
-  (requires (Cons? e /\ r_reflexive t eq /\ r_transitive t eq))
+  (requires (Cons? e /\ r_reflexive_prop t eq /\ r_transitive_prop t eq))
   (ensures (fun _ -> True))
 = (fun (e' : list (key * repr) { e' == e } ) -> match e' with
      | (k, _) :: _ ->
@@ -152,12 +176,17 @@ let enum_destr_cons'
   (#t: Type)
   (eq: (t -> t -> GTot Type0))
   (ift: if_combinator t eq)
-  (u_refl_trans: unit { r_reflexive t eq /\ r_transitive t eq } )
+  (u_refl: r_reflexive_t _ eq)
+  (u_trans: r_transitive_t _ eq)
   (e: enum key repr)
   (g: enum_destr_t t eq (enum_tail' e))
   (u: unit { Cons? e } )
 : Tot (enum_destr_t t eq e)
-= enum_destr_cons eq ift e g
+= [@inline_let]
+  let _ = r_reflexive_t_elim _ _ u_refl in
+  [@inline_let]
+  let _ = r_transitive_t_elim _ _ u_trans in
+  enum_destr_cons eq ift e g
 
 inline_for_extraction
 let enum_destr_cons_nil
@@ -166,7 +195,7 @@ let enum_destr_cons_nil
   (eq: (t -> t -> GTot Type0))
   (e: enum key repr)
 : Pure (enum_destr_t t eq e)
-  (requires (Cons? e /\ Nil? (enum_tail' e) /\ r_reflexive t eq))
+  (requires (Cons? e /\ Nil? (enum_tail' e) /\ r_reflexive_prop t eq))
   (ensures (fun _ -> True))
 = (fun (e' : list (key * repr) { e' == e } ) -> match e' with
      | (k, _) :: _ ->
@@ -180,11 +209,13 @@ let enum_destr_cons_nil'
   (#key #repr: eqtype)
   (#t: Type)
   (eq: (t -> t -> GTot Type0))
-  (u_refl: unit { r_reflexive t eq } )
+  (u_refl: r_reflexive_t t eq )
   (e: enum key repr)
   (u: unit { Cons? e /\ Nil? (enum_tail' e) } )
 : Tot (enum_destr_t t eq e)
-= enum_destr_cons_nil eq e
+= [@inline_let]
+  let _ = r_reflexive_t_elim _ _ u_refl in
+  enum_destr_cons_nil eq e
 
 #set-options "--z3rlimit 64"
 
