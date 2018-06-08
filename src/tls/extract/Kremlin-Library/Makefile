@@ -7,12 +7,14 @@ MITLS_HOME 	= ../../../..
 MLCRYPTO_HOME	?= ../../../../../MLCrypto
 EVERCRYPT_HOME	?= ../../../../../hacl-star/providers
 
+LDOPTS += -L$(EVERCRYPT_HOME)/out -levercrypt
+
 ifeq ($(OS),Windows_NT)
   PATH := $(MITLS_HOME)/src/pki:$(PATH)
   SO = dll
   CC ?= x86_64-w64-mingw32-gcc
   CFLAGS := -pthread $(CFLAGS) -include log_to_choice.h
-  LDOPTS := -lntdll -lbcrypt $(LDOPTS)
+  LDOPTS += -lntdll -lbcrypt
   export PATH
 else ifeq ($(UNAME),Darwin)
   VARIANT = -Darwin
@@ -87,16 +89,11 @@ CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror \
   -Wno-missing-braces -Wno-error-tautological-compare -Wno-error-int-to-void-pointer-cast \
   -Wno-error-enum-conversion
 
-LDOPTS += -L$(EVERCRYPT_HOME)/out -levercrypt
-
 ifndef NO_OPENSSL
 CFLAGS += -I$(MLCRYPTO_HOME)/openssl/include
 LDOPTS += -L$(MLCRYPTO_HOME)/openssl -lcrypto
 else
 CFLAGS += -DNO_OPENSSL
-ifneq (,$(EVEREST_WINDOWS))
-LDOPTS += -lbcrypt
-endif
 endif
 
 all: libmitls.$(SO)
