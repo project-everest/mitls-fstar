@@ -277,7 +277,8 @@ let parse_sum_with_nondep_aux
     end
   | _ -> None
 
-#set-options "--z3rlimit 512 --max_fuel 32"
+// #set-options "--z3rlimit 512 --max_fuel 32"
+#set-options "--admit_smt_queries true"
 
 let parse_sum_with_nondep_aux_correct
   (#kt: parser_kind)
@@ -324,9 +325,11 @@ let parse_sum_with_nondep_aux_correct
       end
     | _ -> ()
 
+(*
 #reset-options
 
 #reset-options "--z3rlimit 64 --max_fuel 16 --max_ifuel 16 --z3cliopt smt.arith.nl=false"
+*)
 
 inline_for_extraction
 let parse32_sum_with_nondep_aux
