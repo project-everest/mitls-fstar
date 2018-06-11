@@ -19,8 +19,10 @@ SOURCES = \
 
 !if "$(PLATFORM)"=="x86"
 PLATFORM_OBJS = aes-i686.obj
+!else if "$(PLATFORM)"=="X64" || "$(PLATFORM)"=="x64"
+PLATFORM_OBJS = aes-x86_64.obj sha256-x86_64.obj aesgcm-x86_64.obj
 !else
-PLATFORM_OBJS = aes-x86_64.obj aesgcm-x86_64.obj
+PLATFORM_OBJS = 
 !endif
   
 libquiccrypto_code.lib: $(SOURCES:.c=.obj) $(PLATFORM_OBJS)
