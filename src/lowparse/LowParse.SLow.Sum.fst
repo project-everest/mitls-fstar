@@ -405,8 +405,8 @@ let parse32_sum_gen
   (#k: parser_kind)
   (#pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
   (pc32: ((x: sum_key t) -> Tot (parser32 (pc x))))
-  (#k' : parser_kind)
-  (#t' : Type0)
+  (k' : parser_kind)
+  (t' : Type0)
   (p' : parser k' t')
   (u1: unit { k' == and_then_kind (parse_filter_kind kt) k })
   (u2: unit { t' == sum_type t })
@@ -539,9 +539,9 @@ let serialize32_sum_gen
   (#sc: ((x: sum_key t) -> Tot (serializer (pc x))))
   (sc32: ((x: sum_key t) -> Tot (serializer32 (sc x))))
   (tag_of_data: ((x: sum_type t) -> Tot (y: sum_key_type t { y == (sum_tag_of_data t x <: sum_key_type t)} )))
-  (#k' : parser_kind)
-  (#t' : Type0)
-  (#p' : parser k' t')
+  (k' : parser_kind)
+  (t' : Type0)
+  (p' : parser k' t')
   (s' : serializer p')
   (u1: unit {
     kt.parser_kind_subkind == Some ParserStrong
@@ -639,9 +639,9 @@ let size32_sum_gen
   (sc32: ((x: sum_key t) -> Tot (size32 (sc x))))
   (u: unit { serializer32_sum_gen_precond kt k } )
   (tag_of_data: ((x: sum_type t) -> Tot (y: sum_key_type t { y == (sum_tag_of_data t x <: sum_key_type t) } )))
-  (#k' : parser_kind)
-  (#t' : Type0)
-  (#p' : parser k' t')
+  (k' : parser_kind)
+  (t' : Type0)
+  (p' : parser k' t')
   (s' : serializer p')
   (u: unit {
     k' == and_then_kind (parse_filter_kind kt) k /\
