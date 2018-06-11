@@ -73,6 +73,8 @@ KRML_COMMAND	= $(KREMLIN_HOME)/krml \
 
 ifndef NO_OPENSSL
   KRML_COMMAND += -ldopts -L,$(MLCRYPTO_HOME)/openssl,-lcrypto,-lssl
+else
+  KRML_COMMAND += -ldopts -lbcrypt
 endif
 
 ################################################################################

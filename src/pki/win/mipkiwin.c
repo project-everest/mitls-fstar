@@ -99,7 +99,7 @@ static const char *OIDFromTLS(mipki_signature alg)
     }
 }
 
-mipki_chain mipki_select_certificate(mipki_state *st, const char *sni, const mipki_signature *algs, size_t algs_len, mipki_signature *selected)
+mipki_chain mipki_select_certificate(mipki_state *st, const char *sni, size_t sni_len, const mipki_signature *algs, size_t algs_len, mipki_signature *selected)
 {
     *selected = (mipki_signature)~0u;
     

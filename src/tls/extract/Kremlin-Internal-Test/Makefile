@@ -8,11 +8,13 @@ MITLS_HOME 	= ../../../..
 MLCRYPTO_HOME	?= ../../../../../MLCrypto
 EVERCRYPT_HOME	?= ../../../../../hacl-star/providers
 
+LDOPTS += -L$(EVERCRYPT_HOME)/out -levercrypt
+
 ifeq ($(OS),Windows_NT)
   ifeq ($(shell uname -o),Cygwin)
     MLCRYPTO_HOME := $(shell cygpath -u ${MLCRYPTO_HOME})
   endif
-  LDOPTS := -lntdll -lbcrypt $(LDOPTS)
+  LDOPTS += -lntdll -lbcrypt
   PATH := $(EVERCRYPT_HOME)/out:$(MITLS_HOME)/src/pki:$(PATH)
   SO = dll
   CC ?= x86_64-w64-mingw32-gcc
@@ -25,7 +27,7 @@ else ifeq ($(UNAME),Darwin)
 else ifeq ($(UNAME),Linux)
   VARIANT = -Linux
   LD_LIBRARY_PATH := $(EVERCRYPT_HOME)/out:$(MITLS_HOME)/src/pki:$(LD_LIBRARY_PATH)
-  LDOPTS := -lpthread $(LDOPTS)
+  LDOPTS += -lpthread
   SO = so
   export LD_LIBRARY_PATH
 endif
@@ -72,18 +74,18 @@ CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror \
   -D_BSD_SOURCE -D_DEFAULT_SOURCE -D__USE_MINGW_ANSI_STDIO \
   -Wno-missing-braces -Wno-error-tautological-compare -Wno-error-int-to-void-pointer-cast
 
-LDOPTS += -L$(EVERCRYPT_HOME)/out -levercrypt
-
 ifneq (,$(EVEREST_WINDOWS))
 FILES+=uint128/FStar_UInt128
 endif
 
 ifndef NO_OPENSSL
 CFLAGS += -I$(MLCRYPTO_HOME)/openssl/include
-LDOPTS += -L$(MLCRYPTO_HOME)/openssl -lcrypto -lssl
+LDOPTS += -L$(MLCRYPTO_HOME)/openssl -lcrypto
 else
 CFLAGS += -DNO_OPENSSL
 endif
+
+LDOPTS += -L$(MITLS_HOME)/src/pki -lmipki
 
 %.d: %.c
 	@set -e; rm -f $@; \
@@ -94,7 +96,7 @@ endif
 -include $(addsuffix .d,$(FILES))
 
 test.exe: $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aesgcm-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
-	$(CC) $^ -o $@ -lmipki $(LDOPTS) -L$(MITLS_HOME)/src/pki
+	$(CC) $^ -o $@ $(LDOPTS)
 
 CERT_FILES=CAFile.pem server-ecdsa.crt server-ecdsa.key
 
