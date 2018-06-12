@@ -109,6 +109,7 @@ SOURCES = \
 #  evercrypt_openssl.c
   evercrypt_vale_stubs.c \
 # Taken from ls hacl-star/providers/generated/EverCrypt_*.c | xargs basename
+  EverCrypt_Bcrypt.c \
   EverCrypt_Bytes.c \
   EverCrypt_Hacl.c \
   EverCrypt_Helpers.c \
