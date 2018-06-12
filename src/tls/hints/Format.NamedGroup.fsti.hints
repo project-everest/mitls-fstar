@@ -1,1 +1,107 @@
-[ "\u0015pwùÇ‰§0ì\u0012V.Rêˆ§", [] ]
+[
+  "\u0015pwùÇ‰§0ì\u0012V.Rêˆ§",
+  [
+    [
+      "Format.NamedGroup.namedGroup",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
+      0,
+      "c2524af6bee5e6f79d7cd70600d01800"
+    ],
+    [
+      "Format.NamedGroup.namedGroup",
+      2,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
+      0,
+      "bfe2d1d00e69bad7f84be9ae7cdc2fdd"
+    ],
+    [
+      "Format.NamedGroup.namedGroup",
+      3,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
+      0,
+      "471d841263f477f7589fce5ff75fd36a"
+    ],
+    [
+      "Format.NamedGroup.namedGroup",
+      4,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "haseqFormat.NamedGroup_Tm_refine_309007fede2e6280af138bf4d7b7716c",
+        "haseqFormat.NamedGroup_Tm_refine_6c2e8ca2b11524e51167718c61d7ccfe",
+        "haseqFormat.NamedGroup_Tm_refine_9ae3c9ac57ad5e44cdb3bb7614447a7f"
+      ],
+      0,
+      "6fdfa7776cf600389fea9f041cf01634"
+    ],
+    [
+      "Format.NamedGroup.__proj__FFDHE_PRIVATE_USE__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Format.NamedGroup.FFDHE_PRIVATE_USE",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Format.NamedGroup_Tm_refine_d1f5a2381ef75c2a9f61e17bda93e690"
+      ],
+      0,
+      "dd956f6e508d4faae6d61563908fea68"
+    ],
+    [
+      "Format.NamedGroup.__proj__ECDHE_PRIVATE_USE__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Format.NamedGroup.ECDHE_PRIVATE_USE",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Format.NamedGroup_Tm_refine_db417a3ade6cf95714f1f1ef30b2b1ee"
+      ],
+      0,
+      "ab00948bff241329cb00376757200fd1"
+    ],
+    [
+      "Format.NamedGroup.uu___is_UNKNOWN",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
+      0,
+      "f102b0a732147d4e2c3c003460142142"
+    ],
+    [
+      "Format.NamedGroup.__proj__UNKNOWN__item___0",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
+      0,
+      "a626bcce409ef1525fd36d260d994fa5"
+    ],
+    [
+      "Format.NamedGroup.__proj__UNKNOWN__item___0",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_FStar.UInt16.t__uu___haseq",
+        "disc_equation_Format.NamedGroup.UNKNOWN",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Format.NamedGroup_Tm_refine_a54bdafe09cd84d95e70ab4c7b8306f3"
+      ],
+      0,
+      "cae1a4ccc11f0281745a0d95f8f36247"
+    ]
+  ]
+]
