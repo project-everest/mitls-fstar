@@ -125,11 +125,11 @@ let fif
 
 inline_for_extraction
 let enum_destr_t
-  (#key #repr: eqtype)
+  (t: Type)
+  (#key #repr: eqtype)  
   (e: enum key repr)
 : Tot Type
-= (t: Type) ->
-  (eq: (t -> t -> GTot Type0)) ->
+= (eq: (t -> t -> GTot Type0)) ->
   (ift: if_combinator t eq) ->
   (eq_refl: r_reflexive_t _ eq) ->
   (eq_trans: r_transitive_t _ eq) ->
@@ -139,13 +139,14 @@ let enum_destr_t
 
 inline_for_extraction
 let enum_destr_cons
+  (t: Type)
   (#key #repr: eqtype)
   (e: enum key repr)
-  (g: enum_destr_t (enum_tail' e))
-: Pure (enum_destr_t e)
+  (g: enum_destr_t t (enum_tail' e))
+: Pure (enum_destr_t t e)
   (requires (Cons? e))
   (ensures (fun _ -> True))
-= fun (t: Type) (eq: (t -> t -> GTot Type0)) (ift: if_combinator t eq) (eq_refl: r_reflexive_t _ eq) (eq_trans: r_transitive_t _ eq) ->
+= fun (eq: (t -> t -> GTot Type0)) (ift: if_combinator t eq) (eq_refl: r_reflexive_t _ eq) (eq_trans: r_transitive_t _ eq) ->
   [@inline_let]
   let _ = r_reflexive_t_elim _ _ eq_refl in
   [@inline_let]
@@ -169,7 +170,7 @@ let enum_destr_cons
          (fun h ->
            [@inline_let]
            let x' : enum_key (enum_tail' e) = (x <: key) in
-           (g t eq ift eq_refl eq_trans f' x' <: t))
+           (g eq ift eq_refl eq_trans f' x' <: t))
        in
        y
      ) <: (y: t { eq y (f x) } )))
@@ -177,21 +178,23 @@ let enum_destr_cons
 
 inline_for_extraction
 let enum_destr_cons'
+  (t: Type)
   (key repr: eqtype)
   (e: enum key repr)
   (u: unit { Cons? e } )
-  (g: enum_destr_t (enum_tail e))
-: Tot (enum_destr_t e)
-= enum_destr_cons e g
+  (g: enum_destr_t t (enum_tail e))
+: Tot (enum_destr_t t e)
+= enum_destr_cons t e g
 
 inline_for_extraction
 let enum_destr_cons_nil
+  (t: Type)
   (#key #repr: eqtype)
   (e: enum key repr)
-: Pure (enum_destr_t e)
+: Pure (enum_destr_t t e)
   (requires (Cons? e /\ Nil? (enum_tail' e)))
   (ensures (fun _ -> True))
-= fun (t: Type) (eq: (t -> t -> GTot Type0)) (ift: if_combinator t eq) (eq_refl: r_reflexive_t _ eq) (eq_trans: r_transitive_t _ eq) ->
+= fun (eq: (t -> t -> GTot Type0)) (ift: if_combinator t eq) (eq_refl: r_reflexive_t _ eq) (eq_trans: r_transitive_t _ eq) ->
   [@inline_let]
   let _ = r_reflexive_t_elim _ _ eq_refl in
   (fun (e' : list (key * repr) { e' == e } ) -> match e' with
@@ -203,12 +206,13 @@ let enum_destr_cons_nil
 
 inline_for_extraction
 let enum_destr_cons_nil'
+  (t: Type)
   (key repr: eqtype)
   (e: enum key repr)
   (u1: unit { Cons? e } )
   (u2: unit { Nil? (enum_tail e) } )
-: Tot (enum_destr_t e)
-= enum_destr_cons_nil e
+: Tot (enum_destr_t t e)
+= enum_destr_cons_nil t e
 
 inline_for_extraction
 let parse32_sum_t (t: sum) : Tot Type =
@@ -238,13 +242,13 @@ let parse32_sum_gen'
   (#pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
   (pc32: ((x: sum_key t) -> Tot (parser32 (pc x))))
   (p32: parser32 (parse_enum_key p (sum_enum t)))
-  (destr: enum_destr_t (sum_enum t))
+  (destr: enum_destr_t (parse32_sum_t t) (sum_enum t))
 : Tot (parser32 (parse_sum t p pc))
 = fun (input: bytes32) -> ((
     match p32 input with
     | Some (tg, consumed_tg) ->
       let input' = B32.b32slice input consumed_tg (B32.len input) in
-      begin match destr _ _ (parse32_sum_if t) (parse32_sum_eq_refl t) (parse32_sum_eq_trans t) (fun (x: sum_key t) (input: bytes32) -> match pc32 x input with | Some (d, consumed_d) -> Some ((d <: sum_type t), consumed_d) | _ -> None) tg input' with
+      begin match destr _ (parse32_sum_if t) (parse32_sum_eq_refl t) (parse32_sum_eq_trans t) (fun (x: sum_key t) (input: bytes32) -> match pc32 x input with | Some (d, consumed_d) -> Some ((d <: sum_type t), consumed_d) | _ -> None) tg input' with
       | Some (d, consumed_d) ->
         // FIXME: implicit arguments are not inferred because (synth_tagged_union_data ...) is Tot instead of GTot
         assert (parse (parse_synth #_ #_ #(sum_type t) (pc tg) (synth_tagged_union_data (sum_tag_of_data t) tg)) (B32.reveal input') == Some (d, U32.v consumed_d));
@@ -351,7 +355,7 @@ let parse32_sum_with_nondep_aux
   (#pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
   (pc32: ((x: sum_key t) -> Tot (parser32 (pc x))))
   (p32: parser32 (parse_enum_key p (sum_enum t)))
-  (destr: enum_destr_t (sum_enum t))
+  (destr: enum_destr_t (parse32_sum_t t) (sum_enum t))
   (input: bytes32)
 : Tot (option ((nondep_t * sum_type t) * U32.t))
 = match p32 input with
@@ -360,7 +364,7 @@ let parse32_sum_with_nondep_aux
     begin match pnd32 input1 with
     | Some (nd, consumed_nd) ->
       let input2 = B32.b32slice input1 consumed_nd (B32.len input1) in
-      begin match destr _ _ (parse32_sum_if t) (parse32_sum_eq_refl t) (parse32_sum_eq_trans t) (fun (x: sum_key t) (input: bytes32) -> match pc32 x input with | Some (d, consumed_d) -> Some ((d <: sum_type t), consumed_d) | _ -> None) tg input2
+      begin match destr _ (parse32_sum_if t) (parse32_sum_eq_refl t) (parse32_sum_eq_trans t) (fun (x: sum_key t) (input: bytes32) -> match pc32 x input with | Some (d, consumed_d) -> Some ((d <: sum_type t), consumed_d) | _ -> None) tg input2
       with
       | Some (d, consumed_d) ->
         [@inline_let]
@@ -385,7 +389,7 @@ let parse32_sum_with_nondep_aux_correct
   (#pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
   (pc32: ((x: sum_key t) -> Tot (parser32 (pc x))))
   (p32: parser32 (parse_enum_key p (sum_enum t)))
-  (destr: enum_destr_t (sum_enum t))
+  (destr: enum_destr_t (parse32_sum_t t) (sum_enum t))
   (input: bytes32)
 : Lemma
   (parser32_correct (parse_sum_with_nondep t p pnd pc) input (parse32_sum_with_nondep_aux t p pnd32 pc32 p32 destr input))
@@ -418,7 +422,7 @@ let parse32_sum_gen
   (u2: unit { t' == sum_type t })
   (u3: unit { p' == parse_sum t p pc })
   (p32: parser32 (parse_enum_key p (sum_enum t)))
-  (destr: enum_destr_t (sum_enum t))
+  (destr: enum_destr_t (parse32_sum_t t) (sum_enum t))
 : Tot (parser32 p')
 = parse32_sum_gen' t p pc32 p32 destr
 
