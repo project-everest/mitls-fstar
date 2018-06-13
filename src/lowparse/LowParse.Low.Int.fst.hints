@@ -7,12 +7,14 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "equation_LowParse.Bytes.byte",
+        "@MaxIFuel_assumption", "@query",
+        "equation_FStar.Monotonic.HyperStack.mem",
+        "equation_LowParse.Bytes.byte",
         "equation_LowParse.Spec.Int.Aux.parse_u8",
-        "refinement_interpretation_LowParse.Low.Int_Tm_refine_9c8eb8af3c2311b6ccdfd1e74bae8d02"
+        "refinement_interpretation_LowParse.Low.Int_Tm_refine_3a18552374530edebe8dd753ab66addd"
       ],
       0,
-      "71a0723232cfc04f0cf2b15c9f867aca"
+      "aade8c21c1fa9a618110179a59782e11"
     ],
     [
       "LowParse.Low.Int.parse32_u16",
@@ -23,13 +25,14 @@
         "@MaxIFuel_assumption", "@query",
         "FStar.UInt16_pretyping_9807ddb0e569187e389675611f2acf1e",
         "disc_equation_FStar.Pervasives.Native.Some",
+        "equation_FStar.Monotonic.HyperStack.mem",
         "equation_LowParse.Bytes.byte",
         "equation_LowParse.Spec.Int.Aux.parse_u16",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_LowParse.Low.Int_Tm_refine_2733b92f2e4817674c0183dfa609ef2b"
+        "refinement_interpretation_LowParse.Low.Int_Tm_refine_af5d2decb3d977b949da3f7b5bffd0e6"
       ],
       0,
-      "927dbf17c7d70f548aa40c33edb77491"
+      "47e265cfaa113495e478b6b1f3534ad7"
     ],
     [
       "LowParse.Low.Int.parse32_u32",
@@ -40,13 +43,14 @@
         "@MaxIFuel_assumption", "@query",
         "FStar.UInt32_pretyping_041e3a67a2d2b51fd702f1f88cfc3b44",
         "disc_equation_FStar.Pervasives.Native.Some",
+        "equation_FStar.Monotonic.HyperStack.mem",
         "equation_LowParse.Bytes.byte",
         "equation_LowParse.Spec.Int.Aux.parse_u32",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_LowParse.Low.Int_Tm_refine_2733b92f2e4817674c0183dfa609ef2b"
+        "refinement_interpretation_LowParse.Low.Int_Tm_refine_af5d2decb3d977b949da3f7b5bffd0e6"
       ],
       0,
-      "bcc8152ce37ae44d493ee537314c77ea"
+      "21d38f9113b1be59a2a30d7a99852b06"
     ],
     [
       "LowParse.Low.Int.validate32_u8",
@@ -67,7 +71,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind_metadata_t_parser_kind_metadata_total"
       ],
       0,
-      "801ba340b2dd6e0ca7c7e59bd17d2150"
+      "3dc72f9b113733db283289e6684adf08"
     ],
     [
       "LowParse.Low.Int.validate32_u16",
