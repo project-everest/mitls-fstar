@@ -3,10 +3,6 @@ include LowParse.Spec.Combinators
 
 module L = FStar.List.Tot
 
-inline_for_extraction
-let eqtype : Type u#1 = (t: Type0 { hasEq t } )
-// eqtype u#0 // does not extract to OCaml
-
 noeq
 type norm_t : Type0 = | Norm
 
