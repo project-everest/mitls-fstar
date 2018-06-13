@@ -109,6 +109,7 @@ SOURCES = \
 #  evercrypt_openssl.c
   evercrypt_vale_stubs.c \
 # Taken from ls hacl-star/providers/generated/EverCrypt_*.c | xargs basename
+  EverCrypt_Bcrypt.c \
   EverCrypt_Bytes.c \
   EverCrypt_Hacl.c \
   EverCrypt_Helpers.c \
@@ -130,7 +131,7 @@ SOURCES = \
   
 !if "$(PLATFORM)"=="x86"
 PLATFORM_OBJS = aes-i686.obj
-!else if "$(PLATFORM)"=="X64"
+!else if "$(PLATFORM)"=="X64" || "$(VSCMD_ARG_TGT_ARCH)"=="x64"
 PLATFORM_OBJS = aes-x86_64.obj sha256-x86_64.obj aesgcm-x86_64.obj
 !else
 PLATFORM_OBJS = 

@@ -9,17 +9,13 @@
       [
         "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
         "bool_typing", "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_Prims.squash", "function_token_typing_FStar.UInt8.t",
-        "kinding_FStar.Pervasives.Native.tuple2@tok",
-        "primitive_Prims.op_GreaterThanOrEqual",
+        "equation_Prims.squash", "primitive_Prims.op_GreaterThanOrEqual",
         "primitive_Prims.op_LessThanOrEqual",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
-        "typing_FStar.Pervasives.Native.uu___is_Some",
-        "typing_LowParse.Spec.Base.consumed_length"
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
       ],
       0,
-      "ec6e0381615da101098fd68678505639"
+      "a75bb9d02eac9c45918e748cb7e1f621"
     ],
     [
       "LowParse.Spec.Int.parse_u16_spec",

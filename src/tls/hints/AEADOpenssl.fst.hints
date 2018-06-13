@@ -11,7 +11,7 @@
         "refinement_interpretation_AEADOpenssl_Tm_refine_15bf079f4ce5823e739071012326443f"
       ],
       0,
-      "cc5a9859062ed2ba041c0647112e558a"
+      "1bbe968b508c6e0e07a35147af8e54c1"
     ],
     [
       "AEADOpenssl.key",
@@ -25,7 +25,7 @@
         "typing_AEADOpenssl.keylen"
       ],
       0,
-      "9e64244c20c81d35d09e44ca8f936662"
+      "b5ca856bf3f385e268462be739e5a4ba"
     ],
     [
       "AEADOpenssl.iv",
@@ -38,7 +38,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "98de8eb8d53d8df847bd7867a9630f24"
+      "f39c64e74086924a60c1d265ad0fce54"
     ],
     [
       "AEADOpenssl.adata",
@@ -50,7 +50,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "76da208d638466d69639c5f39aac3799"
+      "3008b3c5f783308b6e09e0d722dce2fd"
     ],
     [
       "AEADOpenssl.cipherlen",
@@ -71,7 +71,7 @@
         "typing_AEADOpenssl.taglen"
       ],
       0,
-      "27f39d89127215226d063d41b5317756"
+      "1a17f0581165d2a115e6b4e9b08435ff"
     ],
     [
       "AEADOpenssl.entry",
@@ -80,7 +80,7 @@
       1,
       [ "@query" ],
       0,
-      "f6a0bbdbfcacdae0000e3d98747fc65e"
+      "5a941a3f02332617d3e5faaba24fb9e0"
     ],
     [
       "AEADOpenssl.entry",
@@ -89,7 +89,7 @@
       1,
       [ "@query" ],
       0,
-      "1096d51c3f915cf8f7a1e53d7166d7ac"
+      "f8bbe3d1d6ee6f4d4cd46c9802e890cf"
     ],
     [
       "AEADOpenssl.entry",
@@ -113,7 +113,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "a52e9f4cb65ed09e5728fc9e4424f868"
+      "1923b10c8493a5ecf1ecfb325c678cee"
     ],
     [
       "AEADOpenssl.__proj__Entry__item__l",
@@ -122,7 +122,7 @@
       1,
       [ "@query" ],
       0,
-      "6d127f1bbe3a229d5c73f1bd34056b59"
+      "efd8c2756a1ba821acb1f4ae1b06f516"
     ],
     [
       "AEADOpenssl.__proj__Entry__item__ad",
@@ -131,7 +131,7 @@
       1,
       [ "@query" ],
       0,
-      "af032166d876eca3d93de2631b6ddf3d"
+      "626c2b4fba306e5c05192947aca25161"
     ],
     [
       "AEADOpenssl.__proj__Entry__item__ad",
@@ -140,7 +140,7 @@
       1,
       [ "@query" ],
       0,
-      "6be37832773750741b6a338db6042bcb"
+      "51c129cd6ab3cc262cd2696ccf301d0c"
     ],
     [
       "AEADOpenssl.__proj__Entry__item__p",
@@ -152,7 +152,7 @@
         "projection_inverse_AEADOpenssl.Entry_l"
       ],
       0,
-      "9fac6a690c58c715a74c7c0a33fc209d"
+      "413befe99d3d6e19eef644e6c35e1961"
     ],
     [
       "AEADOpenssl.__proj__Entry__item__c",
@@ -164,7 +164,7 @@
         "projection_inverse_AEADOpenssl.Entry_l"
       ],
       0,
-      "8982682071b65458cea579302d021ff3"
+      "c3ab354840188a39c43dd07c521e65fa"
     ],
     [
       "AEADOpenssl.ideal_log",
@@ -179,7 +179,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "48659359abb86ebc454a12ba1b6ba84d"
+      "bda2a37094c11e8bef30eed5e532ec55"
     ],
     [
       "AEADOpenssl.ilog",
@@ -192,7 +192,7 @@
         "refinement_interpretation_AEADOpenssl_Tm_refine_c33dac232e232f71a3f6666b479eed6e"
       ],
       0,
-      "8c2789a2a32951b6d4fe32137d6e2215"
+      "1cd71dd7bdca6ba022d573a5c49f09f0"
     ],
     [
       "AEADOpenssl.ilog_as_ref",
@@ -205,7 +205,7 @@
         "refinement_interpretation_AEADOpenssl_Tm_refine_b3db26da54a5d59ee0434197743bab26"
       ],
       0,
-      "15cb16031530477c896b082619f9dd53"
+      "058f7fca83516287ae10ab033523e47c"
     ],
     [
       "AEADOpenssl.state",
@@ -220,7 +220,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "9e324f6742fdffc1d70c47f9e8165ac1"
+      "955c30d9332e5ac272a09169e6bac777"
     ],
     [
       "AEADOpenssl.__proj__State__item__region",
@@ -235,7 +235,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "d843510a0dbf4a7b85f88999daa01353"
+      "8968962c177571aff4559f024e65ecc1"
     ],
     [
       "AEADOpenssl.__proj__State__item__log_region",
@@ -250,7 +250,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "44c4bb1b606babaffe1dfeb4dcdbdc39"
+      "df7f823360a2d694dc091722431d2bf6"
     ],
     [
       "AEADOpenssl.__proj__State__item__log_region",
@@ -268,7 +268,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "ca6d6bd788e9eb6cfc5f7c3eeb0a6f56"
+      "51d000336aa3bae0aaeb30278c7e533c"
     ],
     [
       "AEADOpenssl.__proj__State__item__key",
@@ -283,7 +283,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "8a97a4ae45224c4f3c2c3a8e714f3816"
+      "7d6babb84d1a47c7c964e890c2c427c3"
     ],
     [
       "AEADOpenssl.__proj__State__item__log",
@@ -300,7 +300,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "6161ab3f05d3fffcf7ec603fa73e406c"
+      "c39145f6c1c09a9bfcec3a8bd8565fe2"
     ],
     [
       "AEADOpenssl.empty_log",
@@ -312,7 +312,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "dcfba2ea67f4df1ddfcd20b3d3f2dc5b"
+      "d818869d2ef378801361d8df1c227a16"
     ],
     [
       "AEADOpenssl.genPost",
@@ -321,7 +321,7 @@
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "3601c47856a71d901e69872d22e22f93"
+      "41e07e26a3ea9eaf3d07a63cdfb6484a"
     ],
     [
       "AEADOpenssl.gen",
@@ -337,7 +337,6 @@
         "Prims_interpretation_Tm_arrow_9cb3c953faf527c316d427b2ce8bd81b",
         "Prims_pretyping_f537159ed795b314b4e58c260361ae86", "bool_inversion",
         "constructor_distinct_Prims.Cons", "constructor_distinct_Tm_unit",
-        "data_elim_FStar.Monotonic.HyperStack.HS",
         "equality_tok_Format.NamedGroup.SECP521R1@tok",
         "equality_tok_TLSConstants.TLS_AES_128_GCM_SHA256@tok",
         "equality_tok_TLSConstants.Writer@tok",
@@ -351,6 +350,7 @@
         "equation_FStar.Monotonic.HyperHeap.modifies_just",
         "equation_FStar.Monotonic.HyperStack.fresh_region",
         "equation_FStar.Monotonic.HyperStack.is_wf_with_ctr_and_tip",
+        "equation_FStar.Monotonic.HyperStack.mem",
         "equation_FStar.Monotonic.HyperStack.modifies",
         "equation_FStar.Set.eqtype",
         "equation_Format.NamedGroupList.maxCount",
@@ -359,7 +359,6 @@
         "equation_Prims.eqtype", "equation_TLSInfo.authId",
         "equation_TLSInfo.default_groups",
         "equation_with_fuel_FStar.List.Tot.Base.for_all.fuel_instrumented",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
         "function_token_typing_CommonDH.is_supported_group",
         "function_token_typing_FStar.Monotonic.Heap.emp",
         "function_token_typing_FStar.Monotonic.Heap.heap",
@@ -378,22 +377,22 @@
         "lemma_FStar.Map.lemma_UpdDomain",
         "lemma_FStar.Map.lemma_equal_intro",
         "lemma_FStar.Monotonic.HyperHeap.lemma_extends_only_parent",
-        "lemma_FStar.Set.lemma_equal_elim", "lemma_FStar.Set.mem_singleton",
-        "lemma_FStar.Set.mem_subset", "lemma_FStar.Set.mem_union",
-        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_BarBar",
-        "primitive_Prims.op_Equality",
+        "lemma_FStar.Set.lemma_equal_elim", "lemma_FStar.Set.mem_complement",
+        "lemma_FStar.Set.mem_empty", "lemma_FStar.Set.mem_subset",
+        "lemma_FStar.Set.mem_union", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
+        "primitive_Prims.op_Negation",
         "proj_equation_AEADOpenssl.State_region",
-        "proj_equation_FStar.Monotonic.HyperStack.HS_h",
         "projection_inverse_AEADOpenssl.State_region",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_Prims.Cons_a",
         "projection_inverse_Prims.Cons_hd",
         "projection_inverse_Prims.Cons_tl",
-        "refinement_interpretation_AEADOpenssl_Tm_refine_161e04719814801d293219f408210f95",
+        "refinement_interpretation_AEADOpenssl_Tm_refine_601254ebe274211073b2024a11d02039",
         "refinement_interpretation_CommonDH_Tm_refine_ad40453eba827f4a2613f33dd7da77ea",
         "refinement_interpretation_FStar.Monotonic.HyperHeap_Tm_refine_b4ddecfc36eb649aced773e3e29ae4e3",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_e4e6aa39833c3650925e47e88cf250f9",
+        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9a74d818566e70513bc032cc3b65a144",
         "refinement_interpretation_Format.NamedGroupList_Tm_refine_be73026b04c1694daf246c1dc10927a4",
         "refinement_interpretation_Mem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
         "token_correspondence_FStar.List.Tot.Base.for_all.fuel_instrumented",
@@ -401,11 +400,12 @@
         "typing_FStar.Map.contains", "typing_FStar.Map.domain",
         "typing_FStar.Map.restrict", "typing_FStar.Map.upd",
         "typing_FStar.Monotonic.HyperHeap.extends",
+        "typing_FStar.Monotonic.HyperStack.get_hmap",
         "typing_FStar.Set.complement", "typing_FStar.Set.empty",
         "typing_FStar.Set.singleton", "typing_FStar.Set.union"
       ],
       0,
-      "ff773e2c0d53b52433a3496a4706dd0e"
+      "1dd8d1f9ba03bad4e6fa1d7ee94a7be0"
     ],
     [
       "AEADOpenssl.peered",
@@ -433,7 +433,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "addb3f082759223a4b3262a4e28b0169"
+      "71b5663c3b986de9503dab95cec6fc50"
     ],
     [
       "AEADOpenssl.genReader",
@@ -442,7 +442,7 @@
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "f2c0a41b86abe89ce31e495fc9b7af28"
+      "1a3c924a19d2dab8d1922f9077aa38dd"
     ],
     [
       "AEADOpenssl.genReader",
@@ -453,7 +453,6 @@
         "@MaxIFuel_assumption", "@query",
         "TLSConstants_pretyping_6f101dcc3b0227ea7e555725221d173c",
         "bool_inversion", "bool_typing", "data_elim_AEADOpenssl.State",
-        "data_elim_FStar.Monotonic.HyperStack.HS",
         "data_typing_intro_TLSConstants.Writer@tok",
         "equality_tok_TLSConstants.Reader@tok",
         "equality_tok_TLSConstants.Writer@tok",
@@ -465,17 +464,16 @@
         "equation_FStar.Monotonic.HyperHeap.modifies_just",
         "equation_FStar.Monotonic.HyperStack.fresh_region",
         "equation_FStar.Monotonic.HyperStack.is_wf_with_ctr_and_tip",
+        "equation_FStar.Monotonic.HyperStack.mem",
         "equation_FStar.Monotonic.HyperStack.modifies",
-        "equation_FStar.Set.eqtype", "equation_FStar.Set.subset",
-        "equation_Mem.rgn", "equation_Prims.eqtype",
-        "equation_TLSInfo.authId",
+        "equation_FStar.Set.eqtype", "equation_Mem.rgn",
+        "equation_Prims.eqtype", "equation_TLSInfo.authId",
         "fuel_guarded_inversion_AEADOpenssl.state",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
         "function_token_typing_FStar.Monotonic.Heap.emp",
         "function_token_typing_FStar.Monotonic.Heap.heap",
         "function_token_typing_FStar.Monotonic.HyperHeap.rid",
         "function_token_typing_FStar.Monotonic.HyperHeap.root",
-        "int_inversion", "lemma_FStar.Map.lemma_ContainsDom",
+        "lemma_FStar.Map.lemma_ContainsDom",
         "lemma_FStar.Map.lemma_InDomConcat",
         "lemma_FStar.Map.lemma_InDomRestrict",
         "lemma_FStar.Map.lemma_InDomUpd1", "lemma_FStar.Map.lemma_InDomUpd2",
@@ -489,38 +487,36 @@
         "lemma_FStar.Monotonic.HyperHeap.lemma_extends_only_parent",
         "lemma_FStar.Monotonic.HyperHeap.lemma_includes_trans",
         "lemma_FStar.Set.lemma_equal_elim", "lemma_FStar.Set.mem_complement",
-        "lemma_FStar.Set.mem_empty", "lemma_FStar.Set.mem_union",
-        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_BarBar",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_Negation",
-        "proj_equation_AEADOpenssl.State_key",
+        "lemma_FStar.Set.mem_empty", "lemma_FStar.Set.mem_subset",
+        "lemma_FStar.Set.mem_union", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
+        "primitive_Prims.op_Negation", "proj_equation_AEADOpenssl.State_key",
         "proj_equation_AEADOpenssl.State_log",
         "proj_equation_AEADOpenssl.State_log_region",
         "proj_equation_AEADOpenssl.State_region",
-        "proj_equation_FStar.Monotonic.HyperStack.HS_h",
-        "proj_equation_FStar.Monotonic.HyperStack.HS_tip",
         "projection_inverse_AEADOpenssl.State_key",
         "projection_inverse_AEADOpenssl.State_log",
         "projection_inverse_AEADOpenssl.State_log_region",
         "projection_inverse_AEADOpenssl.State_region",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_AEADOpenssl_Tm_refine_161e04719814801d293219f408210f95",
+        "refinement_interpretation_AEADOpenssl_Tm_refine_601254ebe274211073b2024a11d02039",
         "refinement_interpretation_AEADOpenssl_Tm_refine_94c5b10e9459214333881c323a5c3428",
-        "refinement_interpretation_AEADOpenssl_Tm_refine_c60ae6edfe605d48168757241e223bd6",
+        "refinement_interpretation_AEADOpenssl_Tm_refine_c90194aa5bedffa06b4bb7c73bd3eca0",
         "refinement_interpretation_FStar.Monotonic.HyperHeap_Tm_refine_b4ddecfc36eb649aced773e3e29ae4e3",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_e4e6aa39833c3650925e47e88cf250f9",
+        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9a74d818566e70513bc032cc3b65a144",
         "refinement_interpretation_Mem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
         "typing_AEADOpenssl.__proj__State__item__region",
         "typing_FStar.Map.concat", "typing_FStar.Map.contains",
         "typing_FStar.Map.domain", "typing_FStar.Map.restrict",
         "typing_FStar.Map.upd", "typing_FStar.Monotonic.HyperHeap.extends",
         "typing_FStar.Monotonic.HyperHeap.includes",
-        "typing_FStar.Monotonic.HyperStack.__proj__HS__item__h",
+        "typing_FStar.Monotonic.HyperStack.get_hmap",
         "typing_FStar.Set.complement", "typing_FStar.Set.empty",
         "typing_FStar.Set.singleton", "typing_FStar.Set.union",
         "typing_tok_TLSConstants.Writer@tok", "unit_inversion"
       ],
       0,
-      "eed617f31de0208a90a277d0f233e5a0"
+      "a9d9e3416d2d2b7d5244b582ff9be378"
     ],
     [
       "AEADOpenssl.coerce",
@@ -529,7 +525,6 @@
       1,
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "data_elim_FStar.Monotonic.HyperStack.HS",
         "equality_tok_TLSConstants.Writer@tok",
         "equation_AEADOpenssl.empty_log", "equation_AEADOpenssl.genPost",
         "equation_AEADOpenssl.id", "equation_AEADOpenssl.writer",
@@ -538,16 +533,15 @@
         "equation_FStar.Monotonic.HyperHeap.modifies_just",
         "equation_FStar.Monotonic.HyperStack.fresh_region",
         "equation_FStar.Monotonic.HyperStack.is_wf_with_ctr_and_tip",
+        "equation_FStar.Monotonic.HyperStack.mem",
         "equation_FStar.Monotonic.HyperStack.modifies",
-        "equation_FStar.Set.eqtype", "equation_FStar.Set.subset",
-        "equation_Mem.rgn", "equation_Prims.eqtype",
-        "equation_TLSInfo.authId",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
+        "equation_FStar.Set.eqtype", "equation_Mem.rgn",
+        "equation_Prims.eqtype", "equation_TLSInfo.authId",
         "function_token_typing_FStar.Monotonic.Heap.emp",
         "function_token_typing_FStar.Monotonic.Heap.heap",
         "function_token_typing_FStar.Monotonic.HyperHeap.rid",
         "function_token_typing_FStar.Monotonic.HyperHeap.root",
-        "int_inversion", "lemma_FStar.Map.lemma_ContainsDom",
+        "lemma_FStar.Map.lemma_ContainsDom",
         "lemma_FStar.Map.lemma_InDomConcat",
         "lemma_FStar.Map.lemma_InDomRestrict",
         "lemma_FStar.Map.lemma_InDomUpd1", "lemma_FStar.Map.lemma_InDomUpd2",
@@ -557,27 +551,26 @@
         "lemma_FStar.Map.lemma_UpdDomain",
         "lemma_FStar.Map.lemma_equal_intro",
         "lemma_FStar.Set.lemma_equal_elim", "lemma_FStar.Set.mem_complement",
-        "lemma_FStar.Set.mem_empty", "lemma_FStar.Set.mem_union",
-        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_BarBar",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_Negation",
+        "lemma_FStar.Set.mem_empty", "lemma_FStar.Set.mem_subset",
+        "lemma_FStar.Set.mem_union", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
+        "primitive_Prims.op_Negation",
         "proj_equation_AEADOpenssl.State_region",
-        "proj_equation_FStar.Monotonic.HyperStack.HS_h",
-        "proj_equation_FStar.Monotonic.HyperStack.HS_tip",
         "projection_inverse_AEADOpenssl.State_region",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_AEADOpenssl_Tm_refine_161e04719814801d293219f408210f95",
         "refinement_interpretation_AEADOpenssl_Tm_refine_329f7cdd508b70bf332607897e0b8a7b",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_e4e6aa39833c3650925e47e88cf250f9",
+        "refinement_interpretation_AEADOpenssl_Tm_refine_601254ebe274211073b2024a11d02039",
+        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9a74d818566e70513bc032cc3b65a144",
         "refinement_interpretation_Mem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
         "typing_FStar.Map.concat", "typing_FStar.Map.contains",
         "typing_FStar.Map.domain", "typing_FStar.Map.restrict",
         "typing_FStar.Map.upd", "typing_FStar.Monotonic.HyperHeap.extends",
-        "typing_FStar.Monotonic.HyperStack.__proj__HS__item__h",
+        "typing_FStar.Monotonic.HyperStack.get_hmap",
         "typing_FStar.Set.complement", "typing_FStar.Set.empty",
         "typing_FStar.Set.singleton", "typing_FStar.Set.union"
       ],
       0,
-      "547fdbded9e3c8d7df9fcc6826595698"
+      "f12ec8908b2aa83560eeab8ae06b468c"
     ],
     [
       "AEADOpenssl.leak",
@@ -591,11 +584,11 @@
         "equation_FStar.Monotonic.Heap.equal_dom",
         "equation_FStar.Monotonic.HyperHeap.hmap",
         "equation_FStar.Monotonic.HyperHeap.modifies_just",
+        "equation_FStar.Monotonic.HyperStack.mem",
         "equation_FStar.Monotonic.HyperStack.modifies",
         "equation_FStar.Set.eqtype", "equation_FStar.Set.subset",
         "equation_Prims.eqtype", "equation_TLSInfo.authId",
         "fuel_guarded_inversion_AEADOpenssl.state",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
         "function_token_typing_FStar.Monotonic.Heap.heap",
         "function_token_typing_FStar.Monotonic.HyperHeap.rid",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro",
@@ -608,17 +601,16 @@
         "lemma_FStar.Map.lemma_equal_intro",
         "lemma_FStar.Set.mem_complement", "lemma_FStar.Set.mem_empty",
         "primitive_Prims.op_AmpAmp", "primitive_Prims.op_BarBar",
-        "primitive_Prims.op_Negation",
-        "proj_equation_FStar.Monotonic.HyperStack.HS_h",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_AEADOpenssl_Tm_refine_225b1bc96369ae55b6a7b2c982b0575f",
+        "primitive_Prims.op_Negation", "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_AEADOpenssl_Tm_refine_e5b9afdb29235ddc08f5fee0ffdacaea",
+        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9a74d818566e70513bc032cc3b65a144",
         "typing_FStar.Map.concat", "typing_FStar.Map.contains",
         "typing_FStar.Map.restrict",
-        "typing_FStar.Monotonic.HyperStack.__proj__HS__item__h",
+        "typing_FStar.Monotonic.HyperStack.get_hmap",
         "typing_FStar.Set.complement", "typing_FStar.Set.empty"
       ],
       0,
-      "886eb80ba56b4ab140009959c8577c4f"
+      "3b56881bcbdc93e40d1ecacdd315d838"
     ],
     [
       "AEADOpenssl.fresh_iv",
@@ -631,7 +623,7 @@
         "refinement_interpretation_AEADOpenssl_Tm_refine_49edabf22ed387b83e79e9af2d6a6391"
       ],
       0,
-      "5b23c71723ffab2e7ae0caf648d8f613"
+      "d28e0535ced255703fd34c25f9257feb"
     ],
     [
       "AEADOpenssl.defined_iv",
@@ -646,7 +638,7 @@
         "refinement_interpretation_AEADOpenssl_Tm_refine_49edabf22ed387b83e79e9af2d6a6391"
       ],
       0,
-      "4e1caee38004553006ebcff3a1aa493b"
+      "af02775c1dfc1f920dba9520ba366dc2"
     ],
     [
       "AEADOpenssl.logged_iv",
@@ -661,7 +653,7 @@
         "refinement_interpretation_AEADOpenssl_Tm_refine_49edabf22ed387b83e79e9af2d6a6391"
       ],
       0,
-      "0ea5f0591ce77f4c649bbe7632eeb475"
+      "ada7b4e9a8fa493922abb9f43daaa235"
     ],
     [
       "AEADOpenssl.encrypt",
@@ -688,7 +680,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "4a097682ba57bb7d8c297c688deb6704"
+      "e281210f0fd7fc11728efb0b48b1758e"
     ],
     [
       "AEADOpenssl.encrypt",
@@ -698,25 +690,24 @@
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion",
         "data_elim_AEADOpenssl.State",
-        "data_elim_FStar.Monotonic.HyperStack.HS",
         "equality_tok_TLSConstants.Writer@tok", "equation_AEADOpenssl.adata",
         "equation_AEADOpenssl.adlen", "equation_AEADOpenssl.alg",
         "equation_AEADOpenssl.cipher", "equation_AEADOpenssl.cipherlen",
         "equation_AEADOpenssl.iv", "equation_AEADOpenssl.ivlen",
-        "equation_AEADOpenssl.keylen", "equation_AEADOpenssl.plain",
-        "equation_AEADOpenssl.taglen", "equation_AEADOpenssl.writer",
-        "equation_FStar.Bytes.lbytes",
+        "equation_AEADOpenssl.key", "equation_AEADOpenssl.keylen",
+        "equation_AEADOpenssl.plain", "equation_AEADOpenssl.taglen",
+        "equation_AEADOpenssl.writer", "equation_FStar.Bytes.lbytes",
         "equation_FStar.HyperStack.ST.equal_stack_domains",
         "equation_FStar.Monotonic.Heap.equal_dom",
         "equation_FStar.Monotonic.HyperHeap.hmap",
         "equation_FStar.Monotonic.HyperHeap.modifies_just",
         "equation_FStar.Monotonic.HyperHeap.modifies_one",
+        "equation_FStar.Monotonic.HyperStack.mem",
         "equation_FStar.Monotonic.HyperStack.modifies_one",
         "equation_FStar.Set.eqtype", "equation_FStar.Set.subset",
         "equation_Mem.rgn", "equation_Prims.eqtype",
         "equation_TLSConstants.aeadAlg", "equation_TLSInfo.authId",
         "fuel_guarded_inversion_AEADOpenssl.state",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
         "function_token_typing_FStar.Monotonic.Heap.heap",
         "function_token_typing_FStar.Monotonic.HyperHeap.rid",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro",
@@ -729,20 +720,23 @@
         "lemma_FStar.Map.lemma_equal_intro", "primitive_Prims.op_AmpAmp",
         "primitive_Prims.op_BarBar",
         "proj_equation_AEADOpenssl.State_log_region",
-        "proj_equation_FStar.Monotonic.HyperStack.HS_h",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_AEADOpenssl_Tm_refine_07c79b08c225aa7fbef7fa6669d62743",
         "refinement_interpretation_AEADOpenssl_Tm_refine_605435faae4b4318ba15a56d36a2c9bd",
         "refinement_interpretation_AEADOpenssl_Tm_refine_94c5b10e9459214333881c323a5c3428",
+        "refinement_interpretation_AEADOpenssl_Tm_refine_b6624c033e8063bae4db9f0ac7c070c4",
         "refinement_interpretation_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
+        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9a74d818566e70513bc032cc3b65a144",
         "refinement_interpretation_Mem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
+        "typing_AEADOpenssl.__proj__State__item__key",
         "typing_AEADOpenssl.alg", "typing_CoreCrypto.aead_encryptT",
         "typing_FStar.Map.concat", "typing_FStar.Map.contains",
-        "typing_FStar.Map.restrict", "typing_FStar.Set.complement",
-        "typing_FStar.Set.singleton"
+        "typing_FStar.Map.restrict",
+        "typing_FStar.Monotonic.HyperStack.get_hmap",
+        "typing_FStar.Set.complement", "typing_FStar.Set.singleton",
+        "typing_tok_TLSConstants.Writer@tok"
       ],
       0,
-      "8719feafd7797ed601054d657ba46a42"
+      "7ab6920e68a85f5ec98579716e0266c7"
     ],
     [
       "AEADOpenssl.correct_decrypt",
@@ -778,7 +772,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "754d2ed701c5cf19039e5c1195e5cf6f"
+      "a8d6dc25155270a320749f5bb6ffcba7"
     ],
     [
       "AEADOpenssl.decrypt",
@@ -787,7 +781,7 @@
       1,
       [ "@query" ],
       0,
-      "595a899757cc603186585eb3e31f3973"
+      "73674206d54647e6b8e3e167121cef78"
     ]
   ]
 ]

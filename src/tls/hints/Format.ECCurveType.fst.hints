@@ -13,7 +13,7 @@
         "refinement_interpretation_Format.ECCurveType_Tm_refine_01a030ae38a402d3db21024ea97f8597"
       ],
       0,
-      "df87a82597e261a3953a93028eec5ff9"
+      "f80e1d0c82900ba0c2234ca225665642"
     ],
     [
       "Format.ECCurveType.__proj__UNKNOWN__item___0",
@@ -27,7 +27,7 @@
         "refinement_interpretation_Format.ECCurveType_Tm_refine_c50fc0e99edad44b43e6212ca848e6e0"
       ],
       0,
-      "76246b50524cef7f0e5596d47e91d548"
+      "1bbd8ef73b10f7738fee019fe8f9d67c"
     ],
     [
       "Format.ECCurveType.byte_of_ecCurveType",
@@ -44,7 +44,7 @@
         "fuel_guarded_inversion_Format.ECCurveType.ecCurveType"
       ],
       0,
-      "3fcd3f2b3cec947d287af2b78bdb3b65"
+      "e98719f1f00395d03b9c6856f49b0689"
     ],
     [
       "Format.ECCurveType.lemma_ecCurveType_of_byte_is_injective",
@@ -68,25 +68,16 @@
         "typing_Format.ECCurveType.ecCurveType_of_byte"
       ],
       0,
-      "828a8d070a2d204b610a43d3680f301c"
+      "d01f98155ae55e28edfd9c6e72bd1aac"
     ],
     [
       "Format.ECCurveType.ecCurveType_parser",
       1,
       2,
       1,
-      [
-        "@query", "equation_Format.ECCurveType.byte",
-        "equation_Format.ECCurveType.ecCurveType_parser_kind_",
-        "equation_Format.ECCurveType.ecCurveType_parser_kind_metadata",
-        "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_LowParse.Spec.Combinators.total_constant_size_parser_kind",
-        "equation_LowParse.Spec.Int.parse_u8_kind",
-        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
-        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
-      ],
+      [ "@query", "equation_Format.ECCurveType.byte" ],
       0,
-      "843ddfe3fff77d81aa15c31f2bfe6c5b"
+      "9fff79624154daef91e4006181026762"
     ],
     [
       "Format.ECCurveType.ecCurveType_parser32",
@@ -95,17 +86,10 @@
       1,
       [
         "@query", "equation_Format.ECCurveType.byte",
-        "equation_Format.ECCurveType.ecCurveType_parser",
-        "equation_Format.ECCurveType.ecCurveType_parser_kind_",
-        "equation_Format.ECCurveType.ecCurveType_parser_kind_metadata",
-        "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_LowParse.Spec.Combinators.total_constant_size_parser_kind",
-        "equation_LowParse.Spec.Int.parse_u8_kind",
-        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
-        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
+        "equation_Format.ECCurveType.ecCurveType_parser"
       ],
       0,
-      "382c8d3973350f678cac792d674030cd"
+      "cd3fe8a99c1f391487b3ab59043645ed"
     ],
     [
       "Format.ECCurveType.lemma_ecCurveType_of_byte_of_ecCurveType",
@@ -155,7 +139,7 @@
         "typing_Format.ECCurveType.ecCurveType_of_byte", "typing_Prims.pow2"
       ],
       0,
-      "6d995edd27479d04505ddb818135afaf"
+      "c5bd01c733fde17b69d80c95e1bb2a80"
     ],
     [
       "Format.ECCurveType.ecCurveType_serializer",
@@ -166,16 +150,13 @@
         "@query", "equation_Format.ECCurveType.byte",
         "equation_Format.ECCurveType.ecCurveType_parser",
         "equation_Format.ECCurveType.ecCurveType_parser_kind",
-        "equation_Format.ECCurveType.ecCurveType_parser_kind_",
-        "equation_Format.ECCurveType.ecCurveType_parser_kind_metadata",
-        "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_LowParse.Spec.Combinators.total_constant_size_parser_kind",
-        "equation_LowParse.Spec.Int.parse_u8_kind",
-        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
-        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
+        "equation_LowParse.Spec.Combinators.and_then",
+        "equation_LowParse.Spec.Combinators.parse_ret_kind",
+        "equation_LowParse.Spec.Combinators.parse_synth",
+        "equation_LowParse.Spec.Int.parse_u8_kind"
       ],
       0,
-      "c183001105f9921887b5dd51e22878dd"
+      "a70e7ae63eaf1360e0482a2c651aa76a"
     ],
     [
       "Format.ECCurveType.ecCurveType_serializer32",
@@ -186,17 +167,14 @@
         "@query", "equation_Format.ECCurveType.byte",
         "equation_Format.ECCurveType.ecCurveType_parser",
         "equation_Format.ECCurveType.ecCurveType_parser_kind",
-        "equation_Format.ECCurveType.ecCurveType_parser_kind_",
-        "equation_Format.ECCurveType.ecCurveType_parser_kind_metadata",
         "equation_Format.ECCurveType.ecCurveType_serializer",
-        "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_LowParse.Spec.Combinators.total_constant_size_parser_kind",
-        "equation_LowParse.Spec.Int.parse_u8_kind",
-        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
-        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
+        "equation_LowParse.Spec.Combinators.and_then",
+        "equation_LowParse.Spec.Combinators.parse_ret_kind",
+        "equation_LowParse.Spec.Combinators.parse_synth",
+        "equation_LowParse.Spec.Int.parse_u8_kind"
       ],
       0,
-      "2bc83a5e83ffdd2a6975056294389173"
+      "d15f062828d98f71153c5ad929b62dc1"
     ]
   ]
 ]

@@ -23,6 +23,7 @@ ifeq ($(OS),Windows_NT)
   endif
   LIBPATHS=$(EVERCRYPT_HOME)/out:$(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/extract/Kremlin-Library:$(HACL_HOME)/secure_api/out/runtime_switch:$(MLCRYPTO_HOME)/openssl
   PATH := $(LIBPATHS):$(PATH)
+  CFLAGS+=-lbcrypt
   export PATH
 else ifeq ($(UNAME),Darwin)
   LIBMITLS=libmitls.so

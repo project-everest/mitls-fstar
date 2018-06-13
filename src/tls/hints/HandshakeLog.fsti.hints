@@ -13,7 +13,7 @@
         "fuel_guarded_inversion_Prims.list", "subterm_ordering_Prims.Cons"
       ],
       0,
-      "6405f47dece5a2e6c0fda45e2e5c7785"
+      "3012f0285d7459bfad42c5a21ba1ca52"
     ],
     [
       "HandshakeLog.append_transcript",
@@ -25,16 +25,23 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_fb118621c0b0f2173d7d8e9b92378a43"
       ],
       0,
-      "579e19909049c41726c57ba659400c1d"
+      "bf91cb65baa65c3eaa097c1a7dd4daa7"
     ],
     [
       "HandshakeLog.narrowTag",
       1,
       2,
       1,
-      [ "@query", "assumption_FStar.UInt32.t__uu___haseq" ],
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_FStar.UInt32.t__uu___haseq",
+        "equation_FStar.Bytes.lbytes32", "equation_Hashing.Spec.anyTag",
+        "equation_Hashing.Spec.maxTagLen",
+        "refinement_interpretation_FStar.Bytes_Tm_refine_78e6c490611dc4c555ca11ffbdccfc9c",
+        "refinement_interpretation_HandshakeLog_Tm_refine_a969e8191f5bd9af155588608ec95487"
+      ],
       0,
-      "236af77fb4bd246e3573099038955560"
+      "f27b27e0ae145fa80cb113cda685a0cf"
     ],
     [
       "HandshakeLog.modifies_one",
@@ -46,7 +53,7 @@
         "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "8f28ac9bb2609253d6df56069405d6f6"
+      "cf339f61b9ecb75734f11f236202d34f"
     ]
   ]
 ]
