@@ -13,7 +13,7 @@ let conclude ()
     T.trivial;
   ];
 //  T.dump "conclude after";
-  ()
+  T.qed ()
 
 noextract
 let solve_vc ()
@@ -21,51 +21,42 @@ let solve_vc ()
 = T.exact_guard (quote ()); conclude ()
 
 noextract
-let rec maybe_enum_key_of_repr_tac
-  (#key #repr: eqtype)
+let rec enum_tac_gen
+  (t_cons_nil: T.term)
+  (t_cons: T.term)
+  (#key #repr: Type)
   (e: list (key * repr))
-  ()
 : T.Tac unit
-  (decreases e)
 = match e with
-  | [] -> T.fail "e must be cons"
+  | [] -> T.fail "enum_tac_gen: e must be cons"
   | [_] ->
-    let fu = quote (maybe_enum_key_of_repr'_t_cons_nil') in
-    T.apply fu;
+    T.apply t_cons_nil;
     T.iseq [
       solve_vc;
       solve_vc;
-    ]
-  |  _ :: e_ ->
-    let fu = quote (maybe_enum_key_of_repr'_t_cons') in
-    T.apply fu;
+    ];
+    T.qed ()
+  | _ :: e_ ->
+    T.apply t_cons;
     T.iseq [
       solve_vc;
-      (fun () -> maybe_enum_key_of_repr_tac e_ ());
-    ]
+      (fun () -> enum_tac_gen t_cons_nil t_cons e_);
+    ];
+    T.qed ()
 
 noextract
-let rec enum_repr_of_key_tac
-  (#key #repr: eqtype)
-  (e: enum key repr)
-  (u: unit  { Cons? e } )
-  ()
+let maybe_enum_key_of_repr_tac
+  (#key #repr: Type)
+  (e: list (key * repr))
 : T.Tac unit
-= match e with
-  | [_] ->
-    let fu = quote (enum_repr_of_key_cons_nil' #key #repr) in
-    T.apply fu;
-    T.iseq [
-      solve_vc;
-      solve_vc;
-    ]
-  | _ :: e' ->
-    let fu = quote (enum_repr_of_key_cons' #key #repr) in
-    T.apply fu;
-    T.iseq [
-      solve_vc;
-      (fun () -> enum_repr_of_key_tac e' () ());
-    ]
+= enum_tac_gen (quote maybe_enum_key_of_repr'_t_cons_nil') (quote maybe_enum_key_of_repr'_t_cons') e
+
+noextract
+let enum_repr_of_key_tac
+  (#key #repr: Type)
+  (e: list (key * repr))
+: T.Tac unit
+= enum_tac_gen (quote enum_repr_of_key_cons_nil') (quote enum_repr_of_key_cons') e
 
 noextract
 let parse32_maybe_enum_key_tac
@@ -88,7 +79,7 @@ let parse32_maybe_enum_key_tac
     solve_vc;
     solve_vc;
     solve_vc;
-    (fun () -> maybe_enum_key_of_repr_tac #key #repr e ());
+    (fun () -> maybe_enum_key_of_repr_tac #key #repr e);
   ]
 
 noextract
@@ -140,7 +131,7 @@ let serialize32_enum_key_gen_tac
     solve_vc;
     solve_vc;
     solve_vc;
-    (fun () -> enum_repr_of_key_tac e () ());
+    (fun () -> enum_repr_of_key_tac e);
   ]
 
 noextract
@@ -168,5 +159,5 @@ let serialize32_maybe_enum_key_tac
     solve_vc;
     solve_vc;
     solve_vc;
-    (fun () -> enum_repr_of_key_tac e () ());
+    (fun () -> enum_repr_of_key_tac e);
   ]

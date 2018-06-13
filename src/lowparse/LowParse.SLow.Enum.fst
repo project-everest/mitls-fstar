@@ -26,6 +26,13 @@ let enum_tail'
 = match e with _ :: y -> y | _ -> []
 
 inline_for_extraction
+let enum_tail
+  (#key #repr: eqtype)
+  (e: enum key repr)
+: Tot (enum key repr)
+= enum_tail' e
+
+inline_for_extraction
 let maybe_enum_key_of_repr'_t_cons_nil
   (#key #repr: eqtype)
   (e: enum key repr)
@@ -43,7 +50,7 @@ let maybe_enum_key_of_repr'_t_cons_nil
 
 inline_for_extraction
 let maybe_enum_key_of_repr'_t_cons_nil'
-  (#key #repr: eqtype)
+  (key repr: eqtype)
   (e: enum key repr)
   (u1: unit { Cons? e } )
   (u2: unit { Nil? (enum_tail' e) } )
@@ -73,7 +80,7 @@ let maybe_enum_key_of_repr'_t_cons
 
 inline_for_extraction
 let maybe_enum_key_of_repr'_t_cons'
-  (#key #repr: eqtype)
+  (key repr: eqtype)
   (e: enum key repr )
   (u: unit { Cons? e } )
   (g : maybe_enum_key_of_repr'_t (enum_tail' e))
@@ -99,7 +106,7 @@ let parse32_maybe_enum_key_gen
 : Tot (parser32 p')
 = parse32_synth p (maybe_enum_key_of_repr e) f p32 ()
 
-#set-options "--z3rlimit 32 --max_fuel 8 --max_ifuel 8"
+#set-options "--z3rlimit 64 --max_fuel 8 --max_ifuel 8"
 
 inline_for_extraction
 let parse32_enum_key_gen
@@ -173,7 +180,7 @@ let enum_repr_of_key_cons
 
 inline_for_extraction
 let enum_repr_of_key_cons'
-  (#key #repr: eqtype)
+  (key repr: eqtype)
   (e: enum key repr)
   (u: unit { Cons? e } )
   (f : enum_repr_of_key'_t (enum_tail' e))
@@ -195,7 +202,7 @@ let enum_repr_of_key_cons_nil
 
 inline_for_extraction
 let enum_repr_of_key_cons_nil'
-  (#key #repr: eqtype)
+  (key repr: eqtype)
   (e: enum key repr)
   (u1: unit { Cons? e } )
   (u2: unit { Nil? (enum_tail' e) } )

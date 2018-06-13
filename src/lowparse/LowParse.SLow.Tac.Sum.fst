@@ -8,44 +8,13 @@ module U32 = FStar.UInt32
 (* Universal destructor *)
 
 noextract
-let rec enum_destr_tac
-  (t: Type)
-  (eq: (t -> t -> GTot Type0))
-  (ifc: if_combinator t eq)
-  (u_refl: r_reflexive_t _ eq)
-  (u_trans: r_transitive_t _ eq)
-  (#key #repr: eqtype)
-  (e: enum key repr)
-  (eu: unit { Cons? e } )
+let enum_destr_tac
+  (#key #repr: Type)
+  (e: list (key * repr))
 : T.Tac unit
-= match e with
-  | [_] ->
-    let fu = quote (enum_destr_cons_nil' #key #repr #t eq u_refl) in
-    T.apply fu;
-    T.iseq [
-      solve_vc;
-      solve_vc;
-    ]
-  | _ :: e' ->
-    let fu = quote (enum_destr_cons' #key #repr #t eq ifc u_refl u_trans) in
-    T.apply fu;
-    T.iseq [
-      solve_vc;
-      (fun () -> enum_destr_tac t eq ifc u_refl u_trans e' ());
-    ]
+= enum_tac_gen (quote enum_destr_cons_nil') (quote enum_destr_cons') e
 
 (* Parser *)
-
-let parse32_sum_eq (t: sum) : Tot (_ -> _ -> GTot Type0) =
-  feq bytes32 (option (sum_type t * U32.t)) (eq2 #_)
-
-abstract
-let parse32_sum_eq_refl (t: sum) : Tot (r_reflexive_t _ (parse32_sum_eq t)) =
-  fun _ -> ()
-
-abstract
-let parse32_sum_eq_trans (t: sum) : Tot (r_transitive_t _ (parse32_sum_eq t)) =
-  fun _ _ _ -> ()
 
 noextract
 let parse32_sum_tac
@@ -77,19 +46,23 @@ let parse32_sum_tac
       pc32
   )
   in
-  T.apply fu;
-  T.iseq [
-    solve_vc;
-    solve_vc;
-    solve_vc;
-    (fun () -> parse32_enum_key_tac p32 (sum_enum t) (parse_enum_key p (sum_enum t)) () ());
-    (fun () -> enum_destr_tac (bytes32 -> Tot (option (sum_type t * U32.t))) (parse32_sum_eq t) (fif _ _ (eq2 #_) (default_if _)) (parse32_sum_eq_refl t) (parse32_sum_eq_trans t) (sum_enum t) ());
-  ];
-  T.dump "parse32_sum_tac"
+  T.dump "parse32_sum_tac before apply";
+  T.with_policy T.Goal (fun () ->
+    T.apply fu;
+    T.dump "parse32_sum_tac after apply";
+    T.iseq [
+      solve_vc;
+      solve_vc;
+      solve_vc;
+      (fun () -> parse32_enum_key_tac p32 (sum_enum t) (parse_enum_key p (sum_enum t)) () (); T.qed ());
+         (fun () -> enum_destr_tac (sum_enum t); T.qed ());
+    ];
+    T.dump "parse32_sum_tac after all subgoals"; 
+    T.qed ()
+  )
 
 noextract
 let rec sum_destr_tac
-  (v: Type)
   (s: sum)
   (su: unit { Cons? (sum_enum s) } )
 : T.Tac unit
@@ -97,18 +70,18 @@ let rec sum_destr_tac
 = let open T in
   match sum_enum s with
   | [_] ->
-    let fu = quote (sum_destr_cons_nil' v) in
+    let fu = quote (sum_destr_cons_nil') in
     T.apply fu;
     T.iseq [
       solve_vc;
       solve_vc;
     ]
   | _ ->
-    let fu = quote (sum_destr_cons' v) in
+    let fu = quote (sum_destr_cons') in
     T.apply fu;
     T.iseq [
       solve_vc;
-      (fun () -> sum_destr_tac v (sum_tail s) ());
+      (fun () -> sum_destr_tac (sum_tail s) ());
     ]
 
 let serialize32_sum_tac_precond
@@ -166,10 +139,6 @@ let serialize32_sum_tac
       #sc
       sc32
       tag_of_data
-      #k'
-      #t'
-      #p'
-      s'
   )
   in
   T.apply fu;
@@ -181,7 +150,7 @@ let serialize32_sum_tac
     solve_vc;
     solve_vc;
     (fun () -> serialize32_enum_key_gen_tac #kt #(sum_key_type t) #(sum_repr_type t) #p #s s32 (sum_enum t) #(parse_filter_kind kt) #(parse_enum_key p (sum_enum t)) (serialize_enum_key p s (sum_enum t)) () ());
-    (fun () -> sum_destr_tac bytes32 t ());
+    (fun () -> sum_destr_tac t ());
   ]
 
 (*
