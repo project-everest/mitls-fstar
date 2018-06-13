@@ -1,1 +1,59 @@
-[ "ló“C9:ŸXÉt=Š\u0016¦\u0013â", [] ]
+[
+  "ló“C9:ŸXÉt=Š\u0016¦\u0013â",
+  [
+    [
+      "Transport.pfn_send",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "assumption_Prims.HasEq_int", "equation_FStar.UInt32.n",
+        "function_token_typing_FStar.UInt32.n",
+        "haseqFStar.Bytes_Tm_refine_1ec852aff28ab568526a8c54c3e853ec"
+      ],
+      0,
+      "c3cd492d9c491869f942e5a563deba97"
+    ],
+    [
+      "Transport.recv_t",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "assumption_Prims.HasEq_int", "equation_FStar.UInt32.n",
+        "function_token_typing_FStar.UInt32.n",
+        "haseqFStar.Bytes_Tm_refine_1ec852aff28ab568526a8c54c3e853ec"
+      ],
+      0,
+      "09d6453eb5d0657f9ef85127e154c7b8"
+    ],
+    [
+      "Transport.recv",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "assumption_Prims.HasEq_int", "equation_FStar.UInt32.n",
+        "function_token_typing_FStar.UInt32.n",
+        "haseqFStar.Bytes_Tm_refine_1ec852aff28ab568526a8c54c3e853ec"
+      ],
+      0,
+      "516caa646376eb84852e5b95226dcb3d"
+    ],
+    [
+      "Transport.recv",
+      2,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "0aece931e64592c2596fafd9da394bb3"
+    ]
+  ]
+]

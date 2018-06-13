@@ -680,7 +680,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "aa0afa8facfd3e20925520e233f5246c"
+      "25f74ad4fbb2b3b0619e43e9f4f9f2a9"
     ],
     [
       "AEADOpenssl.encrypt",
@@ -694,9 +694,9 @@
         "equation_AEADOpenssl.adlen", "equation_AEADOpenssl.alg",
         "equation_AEADOpenssl.cipher", "equation_AEADOpenssl.cipherlen",
         "equation_AEADOpenssl.iv", "equation_AEADOpenssl.ivlen",
-        "equation_AEADOpenssl.keylen", "equation_AEADOpenssl.plain",
-        "equation_AEADOpenssl.taglen", "equation_AEADOpenssl.writer",
-        "equation_FStar.Bytes.lbytes",
+        "equation_AEADOpenssl.key", "equation_AEADOpenssl.keylen",
+        "equation_AEADOpenssl.plain", "equation_AEADOpenssl.taglen",
+        "equation_AEADOpenssl.writer", "equation_FStar.Bytes.lbytes",
         "equation_FStar.HyperStack.ST.equal_stack_domains",
         "equation_FStar.Monotonic.Heap.equal_dom",
         "equation_FStar.Monotonic.HyperHeap.hmap",
@@ -727,14 +727,16 @@
         "refinement_interpretation_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
         "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9a74d818566e70513bc032cc3b65a144",
         "refinement_interpretation_Mem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
+        "typing_AEADOpenssl.__proj__State__item__key",
         "typing_AEADOpenssl.alg", "typing_CoreCrypto.aead_encryptT",
         "typing_FStar.Map.concat", "typing_FStar.Map.contains",
         "typing_FStar.Map.restrict",
         "typing_FStar.Monotonic.HyperStack.get_hmap",
-        "typing_FStar.Set.complement", "typing_FStar.Set.singleton"
+        "typing_FStar.Set.complement", "typing_FStar.Set.singleton",
+        "typing_tok_TLSConstants.Writer@tok"
       ],
       0,
-      "26d197d9e66169fa3209972acb3b3355"
+      "745c9d564d05d7067f716134fce29b7f"
     ],
     [
       "AEADOpenssl.correct_decrypt",
@@ -770,7 +772,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "6c0d1b1ccbf0db8abaa439fc8b45b5cd"
+      "6f34d746e44c23e00f83d3dd7e6947da"
     ],
     [
       "AEADOpenssl.decrypt",
@@ -779,7 +781,7 @@
       1,
       [ "@query" ],
       0,
-      "7ac82f2e75e511864519148881e3e649"
+      "99929f12c7a96c3e4ecd358c81f13d30"
     ]
   ]
 ]

@@ -81,7 +81,7 @@ val log: #i:_ -> #rw:_ -> s:aead_state i rw{safeMac i} -> mem -> GTot (Seq.seq (
 let address = nat
 
 let addr_unused_in (rid:rid) (a:address) (m0:mem) =
-  Monotonic.Heap.addr_unused_in a (Map.sel m0.h rid)
+  Monotonic.Heap.addr_unused_in a (Map.sel (HS.get_hmap m0) rid)
 
 let contains_addr (rid:rid) (a:address) (m:mem) =
   ~(addr_unused_in rid a m)
