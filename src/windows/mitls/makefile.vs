@@ -105,39 +105,36 @@ SOURCES = \
   Hacl_Chacha20_Vec128.c \
 # Taken from ls hacl-star/providers/multiplexer/c/*.c | xargs basename
   evercrypt_bytes.c \
-  evercrypt_native.c \
-  evercrypt_openssl.c \
-  evercrypt_vale.c \
+  evercrypt_autoconfig.c \
+#  evercrypt_openssl.c
+  evercrypt_vale_stubs.c \
 # Taken from ls hacl-star/providers/generated/EverCrypt_*.c | xargs basename
+  EverCrypt_Bcrypt.c \
   EverCrypt_Bytes.c \
   EverCrypt_Hacl.c \
   EverCrypt_Helpers.c \
-  EverCrypt_Native.c \
-  EverCrypt_OpenSSL.c \
+#  EverCrypt_OpenSSL.c
   EverCrypt_Specs.c \
+  EverCrypt_StaticConfig.c \
   EverCrypt_Vale.c \
+  evercrypt_ValeGlue.c \
 # Remember to add these
   EverCrypt.c \
   C_Failure.c
 
   
-aes-x86_64.obj: amd64\aes-x86_64.asm
-  ml64 /nologo /Zi /c amd64\aes-x86_64.asm
-  
-aes-i686.obj: i386\aes-i686.asm
-  ml /nologo /Zi /c i386\aes-i686.asm
+{amd64\}.asm.obj:
+    ml64 /nologo /c $< /Fo$@
 
-# JP: didn't manage to make a pattern rule work here
-sha256-x86_64.obj: amd64\sha256-x86_64.asm
-  ml64 /nologo /Zi /c amd64\sha256-x86_64.asm
-  
-sha256-i686.obj: i386\sha256-i686.asm
-  ml /nologo /Zi /c i386\sha256-i686.asm
+{i386\}.asm.obj:
+    ml /nologo /c $< /Fo$@
   
 !if "$(PLATFORM)"=="x86"
-PLATFORM_OBJS = aes-i686.obj sha256-i686.obj
+PLATFORM_OBJS = aes-i686.obj
+!else if "$(PLATFORM)"=="X64" || "$(VSCMD_ARG_TGT_ARCH)"=="x64"
+PLATFORM_OBJS = aes-x86_64.obj sha256-x86_64.obj aesgcm-x86_64.obj
 !else
-PLATFORM_OBJS = aes-x86_64.obj sha256-x86_64.obj
+PLATFORM_OBJS = 
 !endif
 
 libmitls_code.lib: $(SOURCES:.c=.obj) $(PLATFORM_OBJS)

@@ -11,7 +11,7 @@
         "assumption_Prims.HasEq_string"
       ],
       0,
-      "334809fc0b1153ba6ef2c0cc91843036"
+      "45ceba1e828af515a3f80faa1de1fe15"
     ],
     [
       "Test.AEAD.test",
@@ -24,9 +24,8 @@
         "disc_equation_FStar.Pervasives.Native.Some",
         "equation_FStar.Bytes.lbytes",
         "equation_FStar.HyperStack.ST.equal_stack_domains",
-        "equation_FStar.Monotonic.Heap.equal_dom", "equation_Prims.nat",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
-        "fuel_guarded_inversion_Test.AEAD.vector",
+        "equation_FStar.Monotonic.Heap.equal_dom", "equation_Prims.eqtype",
+        "equation_Prims.nat", "fuel_guarded_inversion_Test.AEAD.vector",
         "function_token_typing_FStar.Bytes.bytes",
         "function_token_typing_FStar.UInt8.t",
         "haseqFStar.Bytes_Tm_refine_1ec852aff28ab568526a8c54c3e853ec",
@@ -52,7 +51,7 @@
         "typing_Test.AEAD.__proj__Mkvector__item__plaintext"
       ],
       0,
-      "251eadcf0975dc9693c7d78c51a663b9"
+      "487e9240e7f8c3410f4c34faa7097379"
     ],
     [
       "Test.AEAD.iter",
@@ -65,7 +64,6 @@
         "equality_tok_C.EXIT_SUCCESS@tok",
         "equation_FStar.HyperStack.ST.equal_stack_domains",
         "equation_FStar.Monotonic.Heap.equal_dom",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
         "fuel_guarded_inversion_Prims.list",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_elim",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro",
@@ -73,7 +71,7 @@
         "typing_tok_C.EXIT_FAILURE@tok", "typing_tok_C.EXIT_SUCCESS@tok"
       ],
       0,
-      "62cc0b058b9eb3574be4cf9a5839ca6b"
+      "94fd889610cf470c81a2ab81b616b9f7"
     ]
   ]
 ]

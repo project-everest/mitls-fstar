@@ -132,5 +132,6 @@ val equal_on_disjoint:
   s1:Set.set rid ->
   s2:Set.set rid{disjoint_regions s1 s2} ->
   r:rid{Set.mem r s1} ->
-  h0:HS.mem -> h1:HS.mem{modifies (Set.singleton r) h0 h1} -> Lemma (HS.(equal_on s2 h0.h h1.h))
+  h0:HS.mem -> h1:HS.mem{modifies (Set.singleton r) h0 h1} -> Lemma
+  (HS.(equal_on s2 (HS.get_hmap h0) (HS.get_hmap h1)))
 let equal_on_disjoint s1 s2 r h0 h1 = ()

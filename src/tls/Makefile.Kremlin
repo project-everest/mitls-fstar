@@ -16,6 +16,9 @@ EXTENSION	= krml
 EXTRACT		= '* -DHDB -LowCProvider -FFICallbacks -BufferBytes'
 SPECINC     	= $(MITLS_HOME)/src/tls/concrete-flags $(MITLS_HOME)/src/tls/concrete-flags/$(FLAVOR)
 
+# SMT verification is disabled, so do not record hints
+OTHERFLAGS := $(filter-out --record_hints,$(OTHERFLAGS))
+
 include Makefile.common
 VFLAGS     += --admit_smt_queries true
 
@@ -69,6 +72,8 @@ KRML_COMMAND	= $(KREMLIN_HOME)/krml \
 
 ifndef NO_OPENSSL
   KRML_COMMAND += -ldopts -L,$(MLCRYPTO_HOME)/openssl,-lcrypto,-lssl
+else
+  KRML_COMMAND += -ldopts -lbcrypt
 endif
 
 ################################################################################

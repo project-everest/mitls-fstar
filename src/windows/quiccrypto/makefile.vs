@@ -4,7 +4,7 @@ all: libquiccrypto.dll test
 
 # 'dir /b *.c' then replace "^(.*)" by "  \1 \\"
 SOURCES = \
-  Crypto_AEAD_Main_Crypto_Indexing.c \
+  Crypto_AEAD_Main_Crypto_Symmetric_Cipher_Crypto_Indexing.c \
   Crypto_HKDF_Crypto_HMAC.c \
   Crypto_Symmetric_Bytes.c \
   Hacl_Curve25519.c \
@@ -19,8 +19,10 @@ SOURCES = \
 
 !if "$(PLATFORM)"=="x86"
 PLATFORM_OBJS = aes-i686.obj
+!else if "$(PLATFORM)"=="X64" || "$(VSCMD_ARG_TGT_ARCH)"=="x64"
+PLATFORM_OBJS = aes-x86_64.obj sha256-x86_64.obj aesgcm-x86_64.obj
 !else
-PLATFORM_OBJS = aes-x86_64.obj aesgcm-x86_64.obj
+PLATFORM_OBJS = 
 !endif
   
 libquiccrypto_code.lib: $(SOURCES:.c=.obj) $(PLATFORM_OBJS)

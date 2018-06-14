@@ -222,7 +222,7 @@ let incrementable (#i:id) (#rw:rw) (s:state i rw) (h:mem) =
 val frame_fragments : #i:id -> #rw:rw -> st:state i rw -> h0:mem -> h1:mem -> s:Set.set rid
   -> Lemma
     (requires modifies s h0 h1
-	      /\ Map.contains h0.h (log_region st)
+	      /\ Map.contains (HS.get_hmap h0) (log_region st)
 	      /\ not (Set.mem (log_region st) s))
     (ensures authId i ==> fragments st h0 == fragments st h1)
 let frame_fragments #i #rw st h0 h1 s = ()
@@ -231,7 +231,7 @@ let frame_fragments #i #rw st h0 h1 s = ()
 val frame_seqnT : #i:id -> #rw:rw -> st:state i rw -> h0:mem -> h1:mem -> s:Set.set rid
 	       -> Lemma
     (requires modifies s h0 h1
-    	  /\ Map.contains h0.h (region st)
+    	  /\ Map.contains (HS.get_hmap h0) (region st)
 	      /\ not (Set.mem (region st) s))
     (ensures seqnT st h0 = seqnT st h1)
 let frame_seqnT #i #rw st h0 h1 s = ()
@@ -241,11 +241,12 @@ let trigger_frame (h:mem) = True
 let frame_f (#a:Type) (f:mem -> GTot a) (h0:mem) (s:Set.set rid) =
   forall h1.{:pattern trigger_frame h1}
         trigger_frame h1
-        /\ (HS.equal_on s h0.h h1.h ==> f h0 == f h1)
+        /\ (HS.equal_on s (HS.get_hmap h0) (HS.get_hmap h1) ==> f h0 == f h1)
 
 val frame_seqT_auto: i:id -> rw:rw -> s:state i rw -> h0:mem -> h1:mem ->
-  Lemma (requires   HS.equal_on (Set.singleton (region s)) h0.h h1.h
-		  /\ Map.contains h0.h (region s))
+  Lemma (requires   HS.equal_on (Set.singleton (region s)) (HS.get_hmap h0)
+  (HS.get_hmap h1)
+		  /\ Map.contains (HS.get_hmap h0) (region s))
         (ensures seqnT s h0 = seqnT s h1)
 	[SMTPat (seqnT s h0);
 	 SMTPat (seqnT s h1)]
@@ -253,8 +254,9 @@ val frame_seqT_auto: i:id -> rw:rw -> s:state i rw -> h0:mem -> h1:mem ->
 let frame_seqT_auto i rw s h0 h1 = ()
 
 val frame_fragments_auto: i:id{authId i} -> rw:rw -> s:state i rw -> h0:mem -> h1:mem ->
-  Lemma (requires    HS.equal_on (Set.singleton (log_region s)) h0.h h1.h
-		  /\ Map.contains h0.h (log_region s))
+  Lemma (requires    HS.equal_on (Set.singleton (log_region s)) (HS.get_hmap h0)
+  (HS.get_hmap h1)
+		  /\ Map.contains (HS.get_hmap h0) (log_region s))
         (ensures fragments s h0 == fragments s h1)
 	[SMTPat (fragments s h0);
 	 SMTPat (fragments s h1)]
@@ -266,7 +268,8 @@ let frame_fragments_auto i rw s h0 h1 = ()
 //Experimenting with reads clauses: probably unnecessary
 ////////////////////////////////////////////////////////////////////////////////
 let reads (s:Set.set rid) (a:Type) =
-    f: (h:mem -> GTot a){forall h1 h2. (HS.equal_on s h1.h h2.h /\ Set.subset s (Map.domain h1.h))
+    f: (h:mem -> GTot a){forall h1 h2. (HS.equal_on s (HS.get_hmap h1)
+    (HS.get_hmap h2) /\ Set.subset s (Map.domain (HS.get_hmap h1)))
 				  ==> f h1 == f h2}
 
 (*
