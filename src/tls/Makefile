@@ -24,6 +24,12 @@ lowparse-examples:
 clean-depend:
 	rm -f cache/OCaml/.depend cache/Kremlin/.depend cache/Model/.depend
 
+SHELL=/bin/bash
+
+.PHONY: clean-%
+clean-c:
+	rm -rf extract/Kremlin-{Library,Internal-Test}/{*.c,*/*.c}
+
 ocaml-%: clean-depend
 	+$(MAKE) -f Makefile.OCaml $*
 
