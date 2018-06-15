@@ -10,7 +10,7 @@ module M = LowParse.Math
 module G = FStar.Ghost
 
 module B = LowStar.Buffer
-module MO = LowStar.Modifies
+module MO = LowStar.ModifiesPat
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 
