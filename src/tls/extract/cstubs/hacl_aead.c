@@ -1,6 +1,0 @@
-#include "Crypto_AEAD_Main.h"
-
-#define FStar_Pervasives_Native_None __noconflict_FStar_Pervasives_Native_None
-#define FStar_Pervasives_Native_Some __noconflict_FStar_Pervasives_Native_Some
-
-#include "Crypto_AEAD_Main.c"

@@ -3,7 +3,6 @@ CCOPTS = /nologo /O2 /Gy /GF /Gw /GA /MD /Zi -I. -I.. -Ikremlin -Iinclude -FI..\
 all: libmitls.dll
 
 # 'dir /b *.c' then replace "^(.*)" by "  \1 \\"
-# then comment out Crypto_AEAD_Main.c
 SOURCES = \
   AEADOpenssl.c \
   AEADProvider.c \
@@ -19,7 +18,7 @@ SOURCES = \
   CoreCrypto.c \
   core_crypto.c \
   CryptoTypes.c \
-#  Crypto_AEAD_Main.c \
+  Crypto_AEAD_Main.c \
   Crypto_Plain.c \
   Crypto_HKDF_Crypto_HMAC.c \
   Crypto_Indexing.c \
@@ -39,7 +38,6 @@ SOURCES = \
   FStar.c \
   FStar_UInt128_MSVC.c \
   HaclProvider.c \
-  hacl_aead.c \
   hacl_provider.c \
   Old_Handshake.c \
   HandshakeLog.c \

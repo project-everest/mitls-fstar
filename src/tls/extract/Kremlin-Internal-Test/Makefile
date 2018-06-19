@@ -56,14 +56,14 @@ INCLUDE_DIRS 	= secure kreminc include stub vale curve pki ffi uint128 .
 # Crypto.Symmetric.Bytes rather than using the one from secure/
 
 # ls *.c */*.c | sed 's/\.c//g' >> Makefile
-# then: remove Crypto_AEAD_Main because of the hacl_provider hack
 FILES 		= Cert C_Loops_Spec_Loops CommonDH CoreCrypto \
+  secure/Crypto_AEAD_Main \
   Crypto_Indexing Crypto_Symmetric_Bytes Crypto_Plain \
   CryptoTypes curve/Hacl_Curve25519 DHGroup ECGroup Extensions Flags Format FStar \
   HaclProvider Hashing_Spec kremlinit \
   LowCProvider LowParse Nonce Parse PMS Prims PSK RSAKey \
   secure/Crypto_HKDF_Crypto_HMAC \
-  Specializations_Providers_AEAD stub/mipki_wrapper stub/core_crypto stub/hacl_aead \
+  Specializations_Providers_AEAD stub/mipki_wrapper stub/core_crypto \
   stub/hacl_provider stub/buffer_bytes Test_Main TLSConstants TLS_Curve25519 TLSError TLSInfo \
   TLSInfoFlags vale/sha256_main_i vale/vale_aes_glue vale/Vale_Hash_SHA2_256 \
   stub/RegionAllocator
