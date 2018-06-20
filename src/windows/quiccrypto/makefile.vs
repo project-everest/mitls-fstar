@@ -8,9 +8,7 @@ SOURCES = \
   Crypto_HKDF_Crypto_HMAC.c \
   Crypto_Symmetric_Bytes.c \
   Hacl_Curve25519.c \
-  FStar_UInt128_MSVC.c \
 # Hacl_Test_X25519.c \
-  kremstr.c \
   quic_provider.c \
   sha256_main_i.c \
 # test.c \
@@ -29,13 +27,13 @@ libquiccrypto_code.lib: $(SOURCES:.c=.obj) $(PLATFORM_OBJS)
   lib /nologo /out:libquiccrypto_code.lib $**
   
 libquiccrypto.dll: libquiccrypto_code.lib libquiccrypto.def dllmain.obj
-  link /nologo /dll /debug:full /out:libquiccrypto.dll libquiccrypto_code.lib dllmain.obj /def:libquiccrypto.def /OPT:ICF /OPT:REF ntdll.lib
+  link /nologo /dll /debug:full /out:libquiccrypto.dll libquiccrypto_code.lib dllmain.obj /def:libquiccrypto.def /OPT:ICF /OPT:REF ntdll.lib ../kremlib/libkremlib.lib
 
 test.exe: test.obj libquiccrypto.dll
-  link /nologo /ltcg /debug:full /out:test.exe test.obj libquiccrypto.lib
+  link /nologo /ltcg /debug:full /out:test.exe test.obj libquiccrypto.lib ../kremlib/libkremlib.lib
 
 test: test.exe libquiccrypto.dll
-  test.exe
+  PATH=%PATH%;../kremlib test.exe
   
 .c.obj::
     cl $(CCOPTS) -c $<

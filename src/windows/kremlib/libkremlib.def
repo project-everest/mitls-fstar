@@ -42,6 +42,7 @@ EXPORTS
     FStar_Bytes_bytes_of_string
     FStar_Bytes_copy
     FStar_Bytes_create
+    FStar_Bytes_empty_bytes
     FStar_Bytes_get
     FStar_Bytes_hex_of_bytes
     FStar_Bytes_init

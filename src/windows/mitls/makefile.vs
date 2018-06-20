@@ -36,7 +36,6 @@ SOURCES = \
   Flags.c \
   Format.c \
   FStar.c \
-  FStar_UInt128_MSVC.c \
   HaclProvider.c \
   hacl_provider.c \
   Old_Handshake.c \
@@ -50,9 +49,7 @@ SOURCES = \
   HMAC.c \
   Old_HMAC_UFCMA.c \
   Old_KeySchedule.c \
-  kremdate.c \
   kremlinit.c \
-  kremstr.c \
   LHAEPlain.c \
   LowCProvider.c \
   LowParse.c \
@@ -69,7 +66,6 @@ SOURCES = \
   Range.c \
   Record.c \
   RSAKey.c \
-  sha256_main_i.c \
   Specializations_Providers_AEAD.c \
   StAE.c \
   StatefulLHAE.c \
@@ -85,61 +81,13 @@ SOURCES = \
   TLSInfoFlags.c \
   TLSPRF.c \
   TLS_Curve25519.c \
-  Transport.c \
-  vale_aes_glue.c \
-  Vale_Hash_SHA2_256.c \
-# Taken from the list of HACL sources in hacl-star/providers/Makefiles
-  Hacl_Policies.c \
-  Hacl_Chacha20.c \
-  Hacl_Salsa20.c \
-  Hacl_SHA2_256.c \
-  Hacl_SHA2_384.c \
-  Hacl_SHA2_512.c \
-# Hacl_Curve25519.c \
-  Hacl_Ed25519.c \
-  Hacl_Poly1305_64.c \
-  AEAD_Poly1305_64.c \
-  Hacl_Chacha20Poly1305.c \
-  Hacl_Chacha20_Vec128.c \
-# Taken from ls hacl-star/providers/multiplexer/c/*.c | xargs basename
-  evercrypt_bytes.c \
-  evercrypt_autoconfig.c \
-#  evercrypt_openssl.c
-  evercrypt_vale_stubs.c \
-# Taken from ls hacl-star/providers/generated/EverCrypt_*.c | xargs basename
-  EverCrypt_Bcrypt.c \
-  EverCrypt_Bytes.c \
-  EverCrypt_Hacl.c \
-  EverCrypt_Helpers.c \
-#  EverCrypt_OpenSSL.c
-  EverCrypt_Specs.c \
-  EverCrypt_StaticConfig.c \
-  EverCrypt_Vale.c \
-  evercrypt_ValeGlue.c \
-# Remember to add these
-  EverCrypt.c \
-  C_Failure.c
-
-  
-{amd64\}.asm.obj:
-    ml64 /nologo /c $< /Fo$@
-
-{i386\}.asm.obj:
-    ml /nologo /c $< /Fo$@
-  
-!if "$(PLATFORM)"=="x86"
-PLATFORM_OBJS = aes-i686.obj
-!else if "$(PLATFORM)"=="X64" || "$(VSCMD_ARG_TGT_ARCH)"=="x64"
-PLATFORM_OBJS = aes-x86_64.obj sha256-x86_64.obj aesgcm-x86_64.obj
-!else
-PLATFORM_OBJS = 
-!endif
+  Transport.c
 
 libmitls_code.lib: $(SOURCES:.c=.obj) $(PLATFORM_OBJS)
   lib /nologo /out:libmitls_code.lib $**
   
 libmitls.dll: libmitls_code.lib libmitls.def dllmain.obj
-  link /nologo /dll /debug:full /out:libmitls.dll libmitls_code.lib dllmain.obj /def:libmitls.def ntdll.lib advapi32.lib bcrypt.lib /OPT:ICF /OPT:REF
+  link /nologo /dll /debug:full /out:libmitls.dll libmitls_code.lib dllmain.obj /def:libmitls.def ntdll.lib advapi32.lib bcrypt.lib ../kremlib/libkremlib.lib ../evercrypt/libevercrypt.lib /OPT:ICF /OPT:REF
 
 .c.obj::
     cl $(CCOPTS) -c $<
