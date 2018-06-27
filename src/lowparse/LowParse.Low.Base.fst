@@ -2,7 +2,7 @@ module LowParse.Low.Base
 include LowParse.Spec.Base
 
 module B = LowStar.Buffer
-module M = LowStar.Modifies
+module M = LowStar.ModifiesPat
 module U32 = FStar.UInt32
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST

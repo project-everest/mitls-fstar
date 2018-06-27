@@ -19,7 +19,7 @@
         "function_token_typing_LowStar.Modifies.loc_none",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_all_regions_intro",
         "lemma_FStar.Set.lemma_equal_refl",
-        "lemma_LowStar.Modifies.modifies_refl",
+        "lemma_LowStar.ModifiesPat.modifies_refl_",
         "projection_inverse_FStar.Pervasives.Native.None_a",
         "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9a74d818566e70513bc032cc3b65a144",
         "refinement_interpretation_LowParseExample3_Tm_refine_1cd5fe5b0c03d08288a57839f0783fcf",
@@ -27,7 +27,7 @@
         "typing_FStar.Monotonic.HyperStack.get_hmap"
       ],
       0,
-      "1a2035794c8d88837da07e4dc2e8dc30"
+      "a62fc55e909281f2c0627ada48560dcb"
     ],
     [
       "LowParseExample3.test_f_m",
@@ -41,7 +41,7 @@
         "fuel_guarded_inversion_FStar.Pervasives.Native.option"
       ],
       0,
-      "e2d6a9cf27201bb42753afce788baa10"
+      "0619e745df2aa33e2e8b7e40abdbfcef"
     ],
     [
       "LowParseExample3.test",
@@ -50,9 +50,7 @@
       1,
       [
         "@MaxFuel_assumption", "@MaxIFuel_assumption",
-        "@fuel_correspondence_FStar.List.Tot.Base.length.fuel_instrumented",
         "@fuel_correspondence_Prims.pow2.fuel_instrumented",
-        "@fuel_irrelevance_FStar.List.Tot.Base.length.fuel_instrumented",
         "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
         "FStar.Monotonic.HyperStack_pretyping_cd115f719b336f9a8366e4b68a41d001",
         "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
@@ -77,11 +75,8 @@
         "equation_FStar.UInt.uint_t", "equation_FStar.UInt32.n",
         "equation_FStar.UInt8.n", "equation_LowParse.Low.Base.buffer8",
         "equation_LowParse.Low.Base.is_slice",
-        "equation_LowStar.Buffer.alloc_post_common",
-        "equation_LowStar.Buffer.alloc_post_static",
         "equation_LowStar.Buffer.length", "equation_Prims.eqtype",
         "equation_Prims.nat", "equation_Prims.pos",
-        "equation_with_fuel_FStar.List.Tot.Base.length.fuel_instrumented",
         "function_token_typing_FStar.Bytes.empty_bytes",
         "function_token_typing_FStar.Int31.n",
         "function_token_typing_FStar.Monotonic.Heap.emp",
@@ -141,7 +136,7 @@
         "typing_LowStar.Buffer.g_is_null"
       ],
       0,
-      "b66003e43d0268468e5056196c397daf"
+      "21e63d232aaa04e87e63c34bf059161c"
     ],
     [
       "LowParseExample3.main",
@@ -177,7 +172,7 @@
         "typing_tok_C.EXIT_SUCCESS@tok"
       ],
       0,
-      "c9a9167afbfbeeecc52ed1d14b871459"
+      "eec1953e57d55ade29f21121a4474de9"
     ]
   ]
 ]
