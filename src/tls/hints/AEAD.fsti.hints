@@ -17,7 +17,7 @@
         "typing_AEAD.ivlen", "typing_FStar.UInt32.v"
       ],
       0,
-      "0dd063324c80b6f47b89d520df1bbf84"
+      "377d54b470de891c335abe6bcc36636a"
     ],
     [
       "AEAD.aadmax",
@@ -26,7 +26,7 @@
       1,
       [ "@query" ],
       0,
-      "383862747625065cf239836f59a184ce"
+      "6c7dd7d63e95e6026a6691c7b8a6066b"
     ],
     [
       "AEAD.cipher",
@@ -48,7 +48,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "ac9051daad32f869859dad693bb71589"
+      "daf8bab624045791dce258ef2c755420"
     ],
     [
       "AEAD.cipher32",
@@ -74,7 +74,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "8ff3dea349574d4826407673160771cd"
+      "744bb324b4046e3e10cff993eaa04fb7"
     ],
     [
       "AEAD.mk_entry",
@@ -93,7 +93,7 @@
         "typing_Crypto.Plain.as_bytes"
       ],
       0,
-      "68510a89d8e8175a072e5c75ac5b1776"
+      "c0f891787f3df9aceb8551f3b93e9f26"
     ],
     [
       "AEAD.entry_injective",
@@ -123,7 +123,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "01f652ffab18dd95299fdb73b4a19097"
+      "8d95a7616e6bf7e8d6cb08fc12a36118"
     ],
     [
       "AEAD.fresh_addresses",
@@ -139,7 +139,20 @@
         "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "bf65766a4139b8ffe869d194f6bb428e"
+      "573fbe187a08eea4b0f90dd67fd363c0"
+    ],
+    [
+      "AEAD.fresh_addresses",
+      2,
+      2,
+      1,
+      [
+        "@query", "assumption_Prims.HasEq_int", "equation_AEAD.address",
+        "equation_Prims.nat",
+        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
+      ],
+      0,
+      "96f4659399f8f95b3396f6c820c78cc4"
     ],
     [
       "AEAD.ok_plain_len_32",
@@ -156,7 +169,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "3130a6a0306075dfa3140898ebb8d7ed"
+      "3a25522110a15062f65e8e9a736f5cfc"
     ],
     [
       "AEAD.frame_log",
@@ -169,7 +182,7 @@
         "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
       ],
       0,
-      "027db00f0140a5df4a22631b1fca82e7"
+      "fe3dbe2f908effe67b8a21f1765d5201"
     ],
     [
       "AEAD.gen",
@@ -185,7 +198,7 @@
         "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "8382f0dbea846832a8fbc3d3fc81e6a0"
+      "47ed948d26cdab840dc2d137f0a7a3e7"
     ]
   ]
 ]

@@ -20,7 +20,7 @@
         "refinement_interpretation_Format.NamedGroupList_Tm_refine_be73026b04c1694daf246c1dc10927a4"
       ],
       0,
-      "12931b3816a7c4d0868fe3c8e115457a"
+      "74664454d71f51edbf1a09362c38e181"
     ],
     [
       "Format.NamedGroupList.nglist_serializer",
@@ -44,7 +44,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "907d3c69a97b31ac0fe7f2a57d8fd88a"
+      "1dba1a73ce6cf763194cc2f43ce8bec0"
     ],
     [
       "Format.NamedGroupList.synth_namedGroupList",
@@ -67,7 +67,24 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high"
       ],
       0,
-      "64406b685aed29c9a29bf1c4bd38490e"
+      "b63a05246b6f82432edd8b6a5944b297"
+    ],
+    [
+      "Format.NamedGroupList.synth_namedGroupList",
+      2,
+      2,
+      1,
+      [
+        "@MaxFuel_assumption",
+        "@fuel_correspondence_FStar.List.Tot.Base.length.fuel_instrumented",
+        "@fuel_irrelevance_FStar.List.Tot.Base.length.fuel_instrumented",
+        "@query", "equation_Format.NamedGroupList.maxCount",
+        "equation_Format.NamedGroupList.minCount",
+        "primitive_Prims.op_LessThanOrEqual",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "fbc4abedc1bf43d4672e31453d0e2333"
     ],
     [
       "Format.NamedGroupList.synth_namedGroupList_recip",
@@ -83,7 +100,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high"
       ],
       0,
-      "43c2851d74a0bde68a5ff4ce949a9b6d"
+      "e51e4bbc891b34b92acd7e66cd141ba1"
     ],
     [
       "Format.NamedGroupList.namedGroupList_parser_kind",
@@ -96,7 +113,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "3213a5c5909584f79c99f7cf45a9cf27"
+      "6c2666a12a37dbb968b1e6ca49a37ce7"
     ],
     [
       "Format.NamedGroupList.namedGroupList_parser",
@@ -116,7 +133,7 @@
         "token_correspondence_Format.NamedGroupList.synth_namedGroupList"
       ],
       0,
-      "b111b7e376eff0a035986542ea3ab8cb"
+      "e45888031aa0a2d5e68feb0925eb10cb"
     ],
     [
       "Format.NamedGroupList.namedGroupList_parser32",
@@ -140,7 +157,7 @@
         "token_correspondence_Format.NamedGroupList.synth_namedGroupList"
       ],
       0,
-      "d77bd6444f419efe217b58d005444a10"
+      "f7ca14690d3db6b5ae3460d98378cff0"
     ],
     [
       "Format.NamedGroupList.namedGroupList_serializer",
@@ -178,7 +195,7 @@
         "token_correspondence_Format.NamedGroupList.synth_namedGroupList_recip"
       ],
       0,
-      "f0286bef399435cf0dd32f1a979bea06"
+      "34ee660d486a1fafd7fadd2a281377e2"
     ],
     [
       "Format.NamedGroupList.namedGroupList_serializer32",
@@ -217,7 +234,7 @@
         "token_correspondence_Format.NamedGroupList.synth_namedGroupList_recip"
       ],
       0,
-      "0e17b217b6c8b317434b8ce889eeeeea"
+      "af292308733f390ab4ada56d94ceceb8"
     ]
   ]
 ]
