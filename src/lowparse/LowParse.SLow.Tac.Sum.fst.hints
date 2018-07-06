@@ -6,15 +6,9 @@
       1,
       2,
       1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "Prims_pretyping_f8666440faa91836cc5a13998af863fc",
-        "fuel_guarded_inversion_FStar.Tactics.Result.__result",
-        "refinement_interpretation_LowParse.SLow.Tac.Sum_Tm_refine_6186c9752ef9e7122052177ddf4a2b1c",
-        "unit_typing"
-      ],
+      [ "@query" ],
       0,
-      "9ea1c454b35300b657840ce3bc9ce4a8"
+      "9e4a443767c6d6d76586da119dd9f649"
     ],
     [
       "LowParse.SLow.Tac.Sum.parse32_sum_tac",
@@ -29,7 +23,7 @@
         "unit_typing"
       ],
       0,
-      "94d257345e85e7e07ddedb2e4c81c6f7"
+      "e75adaeb03e9deec6c39bfcc06cb0309"
     ],
     [
       "LowParse.SLow.Tac.Sum.sum_destr_tac",
@@ -52,7 +46,7 @@
         "typing_LowParse.Spec.Sum.sum_enum", "unit_typing"
       ],
       0,
-      "8acdce8c1b7815287a5ec8ca90d0647e"
+      "5da65917d9289f79050132902bd14196"
     ],
     [
       "LowParse.SLow.Tac.Sum.serialize32_sum_tac_precond",
@@ -65,7 +59,7 @@
         "refinement_interpretation_LowParse.SLow.Sum_Tm_refine_08e5096c4b30b9dc521746952e0b1312"
       ],
       0,
-      "26caf03310129b33441e155b667d498e"
+      "101ebf73ca2e531618f3428f6eb95d87"
     ],
     [
       "LowParse.SLow.Tac.Sum.serialize32_sum_tac",
@@ -74,21 +68,15 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "Prims_pretyping_f8666440faa91836cc5a13998af863fc",
-        "equation_LowParse.SLow.Tac.Sum.serialize32_sum_tac_precond",
         "equation_LowParse.Spec.Enum.enum_key",
         "equation_LowParse.Spec.Sum.sum_enum",
         "equation_LowParse.Spec.Sum.sum_key",
         "equation_LowParse.Spec.Sum.sum_key_type",
         "equation_LowParse.Spec.Sum.sum_repr_type",
-        "fuel_guarded_inversion_FStar.Tactics.Result.__result",
-        "fuel_guarded_inversion_LowParse.Spec.Sum.sum",
-        "refinement_interpretation_LowParse.SLow.Tac.Sum_Tm_refine_c80f416f4297bc60ec09c003dd3225fc",
-        "refinement_interpretation_LowParse.Spec.Enum_Tm_refine_f63a4a268f020733364bf5736477d275",
-        "unit_typing"
+        "refinement_interpretation_LowParse.Spec.Enum_Tm_refine_f63a4a268f020733364bf5736477d275"
       ],
       0,
-      "e9d4f3ae4880f22074d6932acd35d550"
+      "f44b6468c4d1793270b15a8204c8c57e"
     ],
     [
       "LowParse.SLow.Tac.Sum.serialize32_sum_tac",
@@ -105,7 +93,7 @@
         "unit_typing"
       ],
       0,
-      "df94199ccf99a9cc7a63b3a1d913cd10"
+      "d99b5e7e03f64d122dd5d53db101ace0"
     ]
   ]
 ]
