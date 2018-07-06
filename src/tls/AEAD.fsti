@@ -29,9 +29,18 @@ let aadmax =
 
 type aadlen_32 = l:U32.t {l <=^ aadmax}
 
-val keylen   : I.id -> U32.t
+type info' = {
+  alg: I.aeadAlg;
+  prf_rgn: subrgn tls_tables_region;
+  log_rgn: subrgn tls_tables_region;
+}
 
-val statelen : I.id -> U32.t
+type info (i:I.id) =
+  info:info'{I.aeadAlg_of_id i == info.alg}
+
+val keylen   : #i:I.id -> u:info i -> U32.t
+
+val statelen : #i:I.id -> u:info i -> U32.t
 
 type cipher (i:I.id) (l:nat{l + v taglen < pow2 32}) = lbytes (l + (UInt32.v taglen))
 
@@ -40,7 +49,7 @@ type cipher32 (i:I.id) (l:U32.t{UInt.size (v l + 16) 32}) = lbytes32 (l +^ tagle
 inline_for_extraction
 val entry : i:I.id -> Type0
 
-let nonce (i:I.id) = iv (I.cipherAlg_of_id i)
+type nonce (i:I.id) = iv (I.cipherAlg_of_id i)
 
 type adata = b:bytes{length b <= v aadmax}
 
@@ -66,15 +75,59 @@ val entry_injective (#i:I.id)
 
 val nonce_of_entry (#i:_) (e:entry i) : nonce i
 
+val ad_of_entry (#i:_) (e:entry i) : adata
+
+val plain_of_entry (#i:_) (e:entry i) : (l:plainLen & p:Plain.plain i l)
+
 let safeMac (i:I.id) = Flag.safeHS i && Flag.mac1 i
 
 let safeId  (i:I.id) = Flag.safeId i
 
 val aead_state: I.id -> I.rw -> Type0
 
+
+(** Draft of Stream interface & security spec
+val stream_state: I.id -> I.rw -> Type0
+
+val ctrT: #i:I.id -> #rw:_ -> wr:stream_state i rw -> mem -> GTot UInt32.t
+val log: #i:I.id -> #rw:_ -> wr:stream_state i rw -> mem -> GTot (Seq.seq (stream_entry i)
+
+val create: i:I.id -> u:info i -> rw:_
+  ST (stream_state i rw)
+  (requires fun h0 -> disjoint u.shared u.local)
+  (ensures fun h0 st h1 ->
+    I.safeId i ==>
+      (log st h1 == Seq.empty /\
+      ctrT st h1 == 0ul)
+    /\ invariant st h1
+  )
+
+val encrypt (#i:_) (w:stream_state i I.Writer) (ad:adata i) (#rg:Range.rg) (p:StreamPlain.plain l i) : ST (cipher i rg)
+  (requires fun h0 -> incrementable h0 /\ invariant h0)
+  (ensures fun h0 cipher h1 ->
+    ctrT w h1 == U32.(ctrT w h0 +^ 1ul) /\
+    invariant w h1 /\
+    I.safeId ==> (
+      (log w h1 == Seq.Cons (log w h0) (mk_entry ad p cipher))
+    /\ modifies (footprint w) h0 h1
+    ))
+
+
+val frame_invariant: #i:_ -> #rw:_ -> st:aead_state i rw -> h0:mem -> r:rid -> h1:mem ->
+    Lemma (requires (invariant st h0 /\
+           modifies_one r h0 h1 /\
+           ~(r `Set.mem` footprint st) /\
+           ~(r `Set.mem` shared_footprint)))
+          (ensures invariant st h1)
+
+val frame_log: #i:_ -> #rw:_ -> st:aead_state i rw -> l:Seq.seq (entry i) ->
+  h0:mem -> r:rid -> h1:mem ->
+
+**)
+
 val log_region: #i:_ -> #rw:_ -> aead_state i rw -> subrgn tls_tables_region
 
-val prf_region: i:I.id -> subrgn tls_tables_region
+val prf_region: #i:_ -> #rw:_ -> aead_state i rw -> subrgn tls_tables_region
 
 val log: #i:_ -> #rw:_ -> s:aead_state i rw{safeMac i} -> mem -> GTot (Seq.seq (entry i))
 
@@ -99,7 +152,7 @@ val footprint: #i:I.id -> #rw:_ -> aead_state i rw ->
   GTot (s:rset{s `Set.disjoint` shared_footprint})
 
 //Leaving this abstract for now; but it should imply Crypto.AEAD.Invariant.safelen i len (otp_offset i)
-val safelen: I.id -> nat -> bool
+val safelen: I.id -> nat -> GTot bool
 
 let ok_plain_len_32 (i:I.id) = l:U32.t{safelen i (v l)}
 
@@ -125,28 +178,30 @@ val frame_log: #i:_ -> #rw:_ -> st:aead_state i rw -> l:Seq.seq (entry i) ->
 
 (** Allocating a writer **)
 val gen (i:I.id)
-        (prf_rgn:subrgn tls_tables_region)
-        (log_rgn:subrgn tls_tables_region)
+        (u:info i)
   : ST (aead_state i I.Writer)
-    (requires (fun h -> prf_rgn `disjoint` log_rgn))
+    (requires (fun h -> u.prf_rgn `disjoint` u.log_rgn))
     (ensures  (fun h0 s h1 ->
-               log_region s == log_rgn /\
-               prf_region i == prf_rgn /\
+               log_region s == u.log_rgn /\
+               prf_region s == u.prf_rgn /\
                modifies_none h0 h1 /\ // allocates only
                (exists fresh.
-                  fresh_addresses prf_rgn fresh h0 h1 /\
-                  footprint s == Set.singleton log_rgn /\
-                  shared_footprint == Set.singleton prf_rgn) /\
-               (safeMac i ==> log s h1 == Seq.createEmpty) /\
+                  fresh_addresses u.prf_rgn fresh h0 h1 /\
+                  footprint s == Set.singleton u.log_rgn /\
+                  shared_footprint == Set.singleton u.prf_rgn) /\
+               (safeId i ==> log s h1 == Seq.empty) /\
                invariant s h1
               ))
 
-(*
 (** Building a reader from a writer **)
+
 (* A reader never writes to the log_region, but may write to the prf_region *)
-let read_footprint (#i:_) (wr:aead_state i I.Writer) : GTot fp =
-  FStar.TSet.filter (fun (rs:(HS.rid * refs_in_region)) -> fst rs == prf_region wr)
-                    (footprint wr)
+let reader_footprint (#i:_) (wr:aead_state i I.Writer) : GTot rset =
+  assume false;
+  Set.singleton (prf_region wr)
+  
+//  TSet.filter (fun (r:HS.rid) -> r == prf_region wr)
+//                    (footprint wr)
 
 val genReader
            (#i: I.id)
@@ -158,9 +213,9 @@ val genReader
                invariant rd h1 /\
                log_region rd == log_region wr /\
                prf_region rd == prf_region wr /\
-               footprint  rd == read_footprint wr))
+               footprint  rd == reader_footprint wr))
 
-
+(*
 (** [coerce]: Only needed for modeling the adversary *)
 val coerce
          (i: I.id)

@@ -39,18 +39,18 @@ val prf_cpa: bool
 
 // guarantees fresh record keys (to be defined by TLS Handshake)
 assume
-val safeHS: i:id -> Tot bool 
+val safeHS: i:id -> GTot bool 
 
 // controls PRF idealization of ciphers (move to PRF?)
-let prf (i: id): Tot bool = safeHS i && cipher_prf(cipherAlg_of_id i)
+let prf (i: id): GTot bool = safeHS i && cipher_prf(cipherAlg_of_id i)
 
 // controls INT1CMA idealization of MACs (move to MAC?)
-let mac1 i: Tot bool = mac_log && mac_int1cma (macAlg_of_id i)
+let mac1 i: GTot bool = mac_log && mac_int1cma (macAlg_of_id i)
 
 // controls abstraction of plaintexts
 // (kept abstract, but requires all the crypto steps above)
 assume
-val safeId: i:id -> Tot bool
+val safeId: i:id -> GTot bool
 
 
 (* IDEALIZATION DEPENDENCIES *) 
