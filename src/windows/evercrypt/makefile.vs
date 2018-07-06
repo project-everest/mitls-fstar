@@ -68,7 +68,7 @@ libevercrypt_code.lib: $(SOURCES:.c=.obj) $(PLATFORM_OBJS)
 
 # Note: libevercrypt.def generated via nm libevercrypt.a -g | grep ' T ' | awk '{ print $3; }'
 # Then: remove symbols that mention OpenSSL
-libevercrypt.dll: libevercrypt_code.lib libevercrypt.def dllmain.obj ../kremlin/libkremlib.lib
+libevercrypt.dll: libevercrypt_code.lib libevercrypt.def dllmain.obj ../kremlib/libkremlib.lib
   link /nologo /dll /debug:full /out:libevercrypt.dll ../kremlib/libkremlib.lib libevercrypt_code.lib dllmain.obj /def:libevercrypt.def /OPT:ICF /OPT:REF ntdll.lib bcrypt.lib
 
 .c.obj::
