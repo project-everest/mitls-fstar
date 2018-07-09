@@ -6,6 +6,15 @@
       1,
       2,
       1,
+      [ "@query" ],
+      0,
+      "57f37c40faa8037f0549efda165e88e8"
+    ],
+    [
+      "LowParse.Low.Bytes.validate32_flbytes",
+      2,
+      2,
+      1,
       [
         "@MaxFuel_assumption", "@MaxIFuel_assumption",
         "@fuel_correspondence_Prims.pow2.fuel_instrumented",
@@ -38,11 +47,20 @@
         "typing_FStar.Int32.v"
       ],
       0,
-      "a8c3536bfd1160811b6713ad1d20c860"
+      "746b1cdd53286f315f30a792bc6ea612"
     ],
     [
       "LowParse.Low.Bytes.validate_nochk32_flbytes",
       1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "c3bed9426631798b1e325f9c1ce88d42"
+    ],
+    [
+      "LowParse.Low.Bytes.validate_nochk32_flbytes",
+      2,
       2,
       1,
       [
@@ -71,7 +89,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "9b61aa186b2b379912f04079d3966a14"
+      "bbe9f770c26ae9aaf2bffb207396b056"
     ],
     [
       "LowParse.Low.Bytes.read_byte",
@@ -254,7 +272,7 @@
         "token_correspondence_LowParse.Spec.Bytes.parse_flbytes_gen",
         "token_correspondence_LowParse.Spec.Bytes.serialize_all_bytes_",
         "typing_FStar.Bytes.lbytes", "typing_FStar.Bytes.len",
-        "typing_FStar.Bytes.slice",
+        "typing_FStar.Bytes.reveal", "typing_FStar.Bytes.slice",
         "typing_FStar.Pervasives.Native.__proj__Some__item__v",
         "typing_FStar.Seq.Base.length", "typing_FStar.Seq.Base.slice",
         "typing_FStar.UInt32.add", "typing_FStar.UInt32.lte",
@@ -262,13 +280,14 @@
         "typing_LowParse.Spec.Base.__proj__Mkparser_kind___item__parser_kind_low",
         "typing_LowParse.Spec.Base.consumed_length",
         "typing_LowParse.Spec.Base.parse",
+        "typing_LowParse.Spec.Bytes.serialize_all_bytes_",
         "typing_LowParse.Spec.Combinators.make_constant_size_parser_aux",
         "typing_LowParse.Spec.Combinators_Tm_abs_18d69f26728d2f40351341008fd21e4e",
         "typing_LowParse.Spec.Combinators_Tm_abs_f1266442db0bf5057481226f43991c6d",
         "typing_LowStar.Buffer.as_seq", "unit_typing"
       ],
       0,
-      "38f1c5f42939e2f59378eff6c56e91d8"
+      "5b6bdebb9c75851a3ba90724887826ae"
     ]
   ]
 ]

@@ -156,6 +156,8 @@ let validate32_bounded_vldata_strong
 = fun input len ->
   validate32_bounded_vldata min min32 max max32 v sz32 () input len
 
+#set-options "--z3rlimit 64"
+
 let accessor_bounded_vldata_payload
   (min: nat)
   (max: nat)
