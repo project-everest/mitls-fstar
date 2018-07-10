@@ -43,6 +43,8 @@ SOURCES = \
   Hacl_SHA2_256.c \
   Hacl_SHA2_384.c \
   Hacl_SHA2_512.c \
+  Crypto_Symmetric_AES.c \
+  Crypto_Symmetric_AES128.c \
   LowStar.c \
   Prims.c \
   Vale_Hash_SHA2_256.c \
