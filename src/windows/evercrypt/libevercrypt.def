@@ -39,7 +39,6 @@ EXPORTS
     Hacl_Policies_declassify_u8
     Hacl_Chacha20Poly1305_aead_decrypt
     Hacl_Chacha20Poly1305_aead_encrypt
-    Hacl_Chacha20Poly1305_encode_length
     sha256_main_i_CopyUint32Array
     sha256_main_i_CopyUint64ToByteArray
     sha256_main_i_DafnyBzero
@@ -63,7 +62,6 @@ EXPORTS
     EverCrypt_aes256_gcm_decrypt
     EverCrypt_aes256_gcm_encrypt
     EverCrypt_chacha20_poly1305_decrypt
-    EverCrypt_chacha20_poly1305_encode_length
     EverCrypt_chacha20_poly1305_encrypt
     EverCrypt_sha256_finish
     EverCrypt_sha256_hash
