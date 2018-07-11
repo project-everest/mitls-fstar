@@ -26,7 +26,7 @@ typedef enum {
 } hs_type;
 
 typedef struct {
-    quic_state *quic_state;
+    quic12_state *quic_state;
     mipki_state *pki;
 } connection_state;
 
@@ -279,15 +279,10 @@ int main(int argc, char **argv)
 
   FFI_mitls_init();
 
-  // server writer buffer (cumulative)
-  size_t slen = 0;
-  size_t smax = 8*1024;
-  char _sbuf[smax], *s_buffer = _sbuf;
-
-  // client write buffer (cumulative)
-  size_t clen = 0;
-  size_t cmax = 8*1024;
-  char _cbuf[cmax], *c_buffer = _cbuf;
+  size_t slen = 0, clen = 0, smax = 8*1024, cmax = 8*1024;
+  unsigned char sbuf[smax], cbuf[cmax];
+  quic_process_ctx cctx, sctx;
+  int32_t cr = -1, cw = -1, sr = -1, sw = -1;
 
   if (mode == handshake_simple)
   {
@@ -298,7 +293,7 @@ int main(int argc, char **argv)
 
       printf("server create\n");
       config.callback_state = &server;
-      if(!FFI_mitls_quic_create(&server.quic_state, &config))
+      if(!FFI_mitls_quic12_create(&server.quic_state, &config))
         {
           printf("quic_create server failed: %s\n", errmsg);
           return -1;
@@ -308,71 +303,64 @@ int main(int argc, char **argv)
 
       printf("client create\n");
       config.callback_state = &client;
-      if(!FFI_mitls_quic_create(&client.quic_state, &config))
+      if(!FFI_mitls_quic12_create(&client.quic_state, &config))
         {
           printf("quic_create client failed: %s\n", errmsg);
           return -1;
         }
 
-      do {
-        c_buffer += clen; // assuming miTLS never returns a larger clen
-        cmax -= clen;
-        clen = cmax;
+      cctx.input = cbuf;
+      cctx.input_len = 0;
+      cctx.output = sbuf;
+      cctx.output_len = smax;
+      cctx.complete = 0;
 
-        printf("client call clen=%4zd slen=%4zd\n", clen, slen);
-        rc = FFI_mitls_quic_process(client.quic_state, s_buffer, &slen, c_buffer, &clen);
-        printf("client done clen=%4zd slen=%4zd status=%s\n", clen, slen, quic_result_string(rc));
-        dump(c_buffer, clen);
+      sctx.input = sbuf;
+      sctx.input_len = 0;
+      sctx.output = cbuf;
+      sctx.output_len = cmax;
+      sctx.complete = 0;
 
-        client_complete |= rc == TLS_client_complete || rc == TLS_client_complete_with_early_data;
-        if(rc == TLS_error_other || rc == TLS_error_local || rc == TLS_error_alert){
-          printf("Stopping due to error code. Msg: %s\n", errmsg);
-          break;
-        }
+      for(int i = 0; i<4; i++)
+      {
+	printf("\n == Round %d [CComplete=%d, SComplete=%d] ==\n\n", i, cctx.complete & 255, sctx.complete & 255);
+	/*** CLIENT ***/
+        printf("[C] out_len=%d, in<%d>=\n", cctx.output_len, cctx.input_len);
+	dump(cctx.input, cctx.input_len);
+	
+	FFI_mitls_quic12_process(client.quic_state, &cctx);
 
-        s_buffer += slen; // assuming miTLS never returns a larger clen
-        smax -= slen;
-        slen = smax;
+        printf("[C] Epochs: %d read, %d write\n", cctx.cur_reader_key, cctx.cur_writer_key);
+	printf("[C] Read %d, written %d, to_be_written %d\n",
+	       cctx.consumed_bytes, cctx.output_len, cctx.to_be_written);
 
-    /* clen -= 12; // simulating fragmentation */
-    /* printf("server call clen=%4zd slen=%4zd\n", clen, slen); */
-    /* rs = FFI_mitls_quic_process(server.quic_state, c_buffer, &clen, s_buffer, &slen); */
-    /* printf("server done clen=%4zd slen=%4zd rc=%d\n", clen, slen, rc); */
-    /* clen += 12; */
+	cctx.output += cctx.output_len;
+	cctx.input += cctx.consumed_bytes;
+	cctx.input_len -= cctx.consumed_bytes;
 
-        printf("server call clen=%4zd slen=%4zd\n", clen, slen);
-        rs = FFI_mitls_quic_process(server.quic_state, c_buffer, &clen, s_buffer, &slen);
-        printf("sender done clen=%4zd slen=%4zd status=%s\n", clen, slen, quic_result_string(rs));
-        dump(s_buffer, slen);
+	sctx.input_len += cctx.output_len;
+	sctx.output_len = cmax - (sctx.output - cbuf);
 
-        server_complete |= rs == TLS_server_complete;
-        if(rs == TLS_error_other || rs == TLS_error_local || rs == TLS_error_alert){
-          printf("Stopping due to error code. Msg: %s\n", errmsg);
-          break;
-        }
+        /*** SERVER ***/
+	printf("[S] out_len=%d, in<%d>=\n", sctx.output_len, sctx.input_len);
+	dump(sctx.input, sctx.input_len);
+	
+	FFI_mitls_quic12_process(server.quic_state, &sctx);
 
+        printf("[S] Epochs: %d read, %d write\n", sctx.cur_reader_key, sctx.cur_writer_key);
+	printf("[S] Read %d, written %d, to_be_written %d\n",
+	  sctx.consumed_bytes, sctx.output_len, sctx.to_be_written);
+
+	sctx.output += sctx.output_len;
+	sctx.input += sctx.consumed_bytes;
+	sctx.input_len -= sctx.consumed_bytes;
+      
+	cctx.input_len += sctx.output_len;
+	cctx.output_len = smax - (cctx.output - sbuf);
       }
-      while(!client_complete || !server_complete);
+      
 
-/*
-      if (FFI_mitls_quic_get_peer_parameters(server.quic_state, &ver, peer))
-        {
-          printf("   === server received client parameters === \n");
-          printf(" Client initial version: %x\n", ver);
-          dump_parameters(peer);
-        }
-      else printf("Failed to get peer parameter: %s\n", errmsg);
-
-      peer->tp_len = 256;
-      if (FFI_mitls_quic_get_peer_parameters(client.quic_state, &ver, peer))
-        {
-          printf("   === client received server parameters === \n");
-          printf(" Server negotiated version: %x\n", ver);
-          dump_parameters(peer);
-        }
-      else printf("Failed to get peer parameter: %s\n", errmsg);
-*/
-
+      /**
       FFI_mitls_quic_get_exporter(client.quic_state, 0, &qs);
       FFI_mitls_quic_get_exporter(server.quic_state, 0, &qs_early);
       if(memcmp(qs_early.secret, qs.secret, 64))
@@ -416,10 +404,12 @@ int main(int argc, char **argv)
         return 1;
       }
       printf("   === Decrypt successful ===\n");
-
+      
       quic_crypto_free_key(k_client);
       quic_crypto_free_key(k_server);
+      **/
   }
+  /****
   else if(mode == handshake_0rtt)
   {
     // HANDSHAKE WALKTHROUGH; 0RTT then 1RTT
@@ -661,9 +651,10 @@ int main(int argc, char **argv)
     assert(rc == TLS_would_block);
     printf("client returns clen=%zd slen=%zd status=%s\n", clen, slen, quic_result_string(rc));
   }
+  **/
 
-  FFI_mitls_quic_close(server.quic_state);
-  FFI_mitls_quic_close(client.quic_state);
+  FFI_mitls_quic12_close(server.quic_state);
+  FFI_mitls_quic12_close(client.quic_state);
   mipki_free(pki);
 
   printf("Ok\n");

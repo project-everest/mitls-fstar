@@ -312,7 +312,7 @@ let client_Binders hs offer =
       HandshakeLog.send_signals hs.log (Some (true, false)) false
      end
 
-val client_ClientHello: s:hs -> i:id -> ST (result (HandshakeLog.outgoing i))
+val client_ClientHello: s:hs -> i:id -> ST (result unit) // (result (HandshakeLog.outgoing i))
   (requires fun h0 ->
     let n = HS.sel h0 Nego.(s.nego.state) in
     let t = transcript h0 s.log in
@@ -368,7 +368,7 @@ let client_ClientHello hs i =
 
   // we may still need to keep parts of ch
   hs.state := C_Wait_ServerHello;
-  Correct(HandshakeLog.next_fragment hs.log i)
+  Correct ()
 
 let client_HelloRetryRequest (hs:hs) (hrr:hrr) : St incoming =
   trace "client_HelloRetryRequest";
@@ -921,7 +921,7 @@ let server_ClientFinished hs cvd digestCCS digestClientFinished =
       InError (AD_decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestClientFinished)
 
 (* send EncryptedExtensions; Certificate13; CertificateVerify; Finish (1.3) *)
-val server_ServerFinished_13: hs -> i:id -> ST (result (outgoing i))
+val server_ServerFinished_13: hs -> i:id -> ST (result unit) // (result (outgoing i))
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let server_ServerFinished_13 hs i =
@@ -967,7 +967,7 @@ let server_ServerFinished_13 hs i =
       hs.state :=
         (if Nego.zeroRTT mode then S_Wait_EOED
          else S_Wait_Finished2 digestServerFinished);
-      Correct(HandshakeLog.next_fragment hs.log i)
+      Correct()
     | Error z -> Error z
 
 let server_EOED hs (digestEOED: Hashing.anyTag)
@@ -1070,20 +1070,32 @@ let invalidateSession hs = ()
 
 (* ------------------ Outgoing -----------------------*)
 
-let next_fragment (hs:hs) i =
+let next_fragment_bounded (hs:hs) i (max:nat) =
     trace "next_fragment";
-    let outgoing = HandshakeLog.next_fragment hs.log i in
+    let outgoing = HandshakeLog.write_at_most hs.log i max in
     match outgoing, !hs.state with
     // when the output buffer is empty, we send extra messages in two cases
     // we prepare the initial ClientHello; or
     // after sending ServerHello in plaintext, we continue with encrypted traffic
     // otherwise, we just returns buffered messages and signals
-    | Outgoing None None false, C_Idle -> client_ClientHello hs i
-    | Outgoing None None false, S_Sent_ServerHello -> server_ServerFinished_13 hs i
-    | Outgoing None None false, C_Sent_EOED d ocr cfk -> client_ClientFinished_13 hs d ocr cfk; Correct(HandshakeLog.next_fragment hs.log i)
-
-    //| Outgoing msg  true _ _, _ -> (Epochs.incr_writer hs.epochs; Correct outgoing) // delayed
+    | Outgoing None None false, C_Idle ->
+      (match client_ClientHello hs i with
+      | Error z -> Error z
+      | Correct () -> Correct(HandshakeLog.write_at_most hs.log i max))
+    | Outgoing None None false, S_Sent_ServerHello ->
+      (match server_ServerFinished_13 hs i with
+      | Error z -> Error z
+      | Correct () -> Correct(HandshakeLog.write_at_most hs.log i max))
+    | Outgoing None None false, C_Sent_EOED d ocr cfk ->
+      client_ClientFinished_13 hs d ocr cfk;
+      Correct(HandshakeLog.write_at_most hs.log i max)
     | _ -> Correct outgoing // nothing to do
+
+let next_fragment (hs:hs) i =
+  next_fragment_bounded hs i max_TLSPlaintext_fragment_length
+
+let to_be_written (hs:hs) =
+  HandshakeLog.to_be_written hs.log
 
 (* ----------------------- Incoming ----------------------- *)
 

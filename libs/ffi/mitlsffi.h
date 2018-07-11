@@ -12,6 +12,7 @@
 
 typedef struct mitls_state mitls_state;
 typedef struct quic_state quic_state;
+typedef struct quic12_state quic12_state;
 
 typedef struct {
   size_t ticket_len;
@@ -197,7 +198,6 @@ typedef struct {
   const char *cipher_suites; // Colon separated list of ciphersuite or NULL
   const char *signature_algorithms; // Colon separated list of signature schemes or NULL
   const char *named_groups; // Colon separated list of Diffie-Hellman groups or NULL
-  int enable_0rtt; // Probably true for QUIC
 
   // only used by the client
   const char *host_name; // Client only, sent in SNI. Can pass NULL for server
@@ -235,7 +235,7 @@ typedef struct {
 } mitls_hello_summary;
 
 // N.B. *cookie must be freed with FFI_mitls_global_free as it is allocated in the global region
-extern int MITLS_CALLCONV FFI_mitls_get_hello_summary(const unsigned char *buffer, size_t buffer_len, mitls_hello_summary *summary, unsigned char **cookie, size_t *cookie_len);
+extern int MITLS_CALLCONV FFI_mitls_get_hello_summary(const unsigned char *buffer, size_t buffer_len, int has_record, mitls_hello_summary *summary, unsigned char **cookie, size_t *cookie_len);
 
 // *ext_data points to a location in exts - no freeing required
 extern int MITLS_CALLCONV FFI_mitls_find_custom_extension(int is_server, const unsigned char *exts, size_t exts_len, uint16_t ext_type, unsigned char **ext_data, size_t *ext_data_len);
@@ -245,5 +245,39 @@ extern void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state, void* pv);
 
 // Free 'out' variables returned by functions that do not have a state as input
 extern void MITLS_CALLCONV FFI_mitls_global_free(void* pv);
+
+/*************************************************************************
+* QUIC draft 12 API to the TLS handshake
+**************************************************************************/
+
+// Convert into a quic_key with quic_crypto_create
+typedef struct {
+  mitls_aead alg;
+  unsigned char *aead_key;
+  unsigned char *aead_iv;
+  unsigned char *pne_key;
+} quic12_key;
+
+typedef struct {
+  // == Set by QUIC ==
+  const unsigned char *input; // can be NULL, a TLS message fragment read by QUIC
+  size_t input_len; // Size of input buffer (can be 0)
+  unsigned char *output; // can be NULL, a buffer to store handshake data to send
+  size_t output_len; // Size of output buffer (can be 0)
+
+  // == Set by TLS ==
+  uint16_t tls_error; // alert code of a locally-generated TLS alert
+  size_t consumed_bytes; // how many bytes of the input have been processed - leftover bytes must be processed in the next call
+  size_t to_be_written; // how many bytes are left to write (after writing *output)
+  const char *tls_error_desc; // meaningful description of the local error
+  int32_t cur_reader_key; // current reader epoch, if incremented by TLS, QUIC must switch key BEFORE processing further packets.
+  int32_t cur_writer_key; // current writer epoch, if incremented by TLS, QUIC must switch key AFTER writing *output
+  uint8_t complete; // a flag to indicate handshake completion. Not very meaningful as post-handshake messages may still need processing
+} quic_process_ctx;
+
+extern int MITLS_CALLCONV FFI_mitls_quic12_create(quic12_state **state, const quic_config *cfg);
+extern int MITLS_CALLCONV FFI_mitls_quic12_process(quic12_state *state, quic_process_ctx *ctx);
+extern int MITLS_CALLCONV FFI_mitls_quic12_get_record_key(quic12_state *state, quic12_key *key, int32_t epoch, int rw);
+extern void MITLS_CALLCONV FFI_mitls_quic12_close(quic12_state *state);
 
 #endif // HEADER_MITLS_FFI_H

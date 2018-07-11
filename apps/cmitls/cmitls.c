@@ -343,7 +343,6 @@ int ConfigureQuic(quic_state **pstate)
     quic_cfg.nego_callback = &nego_callback;
     quic_cfg.signature_algorithms = option_sigalgs;
     quic_cfg.named_groups = option_groups;
-    quic_cfg.enable_0rtt = (option_0rtt) ? 1 : 0;
     quic_cfg.exts = client_qtp;
     quic_cfg.exts_count = 1;
 

@@ -56,21 +56,34 @@ $(MITLS_HOME)/src/tls/extract/Kremlin-Library/$(LIBMITLS):
 $(HACL_HOME)/secure_api/out/runtime_switch/$(LIBQC):
 	$(MAKE) -j8 -C $(HACL_HOME)/secure_api
 
-quic.exe: quic.c \
-	$(MITLS_HOME)/src/pki/mipki.h \
-	$(HACL_HOME)/secure_api/QuicProvider/quic_provider.h \
-	../../libs/ffi/mitlsffi.h \
-	$(MITLS_HOME)/src/pki/$(LIBPKI) \
-	$(HACL_HOME)/secure_api/out/runtime_switch/$(LIBQC) \
-	$(MITLS_HOME)/src/tls/extract/Kremlin-Library/$(LIBMITLS)
+EXTERNAL_HEADERS=\
+        $(MITLS_HOME)/src/pki/mipki.h \
+        $(HACL_HOME)/secure_api/QuicProvider/quic_provider.h \
+        ../../libs/ffi/mitlsffi.h
+
+EXTERNAL_LIBS =\
+        $(MITLS_HOME)/src/pki/$(LIBPKI) \
+        $(HACL_HOME)/secure_api/out/runtime_switch/$(LIBQC) \
+        $(MITLS_HOME)/src/tls/extract/Kremlin-Library/$(LIBMITLS)
+
+quic.exe: quic.c $(EXTERNAL_HEADERS) $(EXTERNAL_LIBS)
 	$(CC) -fPIC -I$(MITLS_HOME)/src/tls/extract/Kremlin-Library/include \
 	  -I$(MITLS_HOME)/src/tls/extract/Kremlin-Library/stub -I../../src/pki \
 	  -I../../libs/ffi -I$(HACL_HOME)/secure_api/QuicProvider \
-	  quic.c \
           -L$(subst :, -L,$(LIBPATHS)) \
-	  -lmitls -lquicprovider -lmipki $(CFLAGS) -o quic.exe
+	  $< -lmitls -lquicprovider -lmipki $(CFLAGS) -o $@
 
 test: quic.exe
 	./quic.exe
 	./quic.exe 0rtt
 	./quic.exe hrr
+
+quic12.exe: quic12.c $(EXTERNAL_HEADERS) $(EXTERNAL_LIBS)
+	$(CC) -fPIC -I$(MITLS_HOME)/src/tls/extract/Kremlin-Library/include \
+	  -I$(MITLS_HOME)/src/tls/extract/Kremlin-Library/stub -I../../src/pki \
+	  -I../../libs/ffi -I$(HACL_HOME)/secure_api/QuicProvider \
+	  -L$(subst :, -L,$(LIBPATHS)) \
+	  $< -lmitls -lquicprovider -lmipki $(CFLAGS) -o $@
+
+test12: quic12.exe
+	./quic12.exe

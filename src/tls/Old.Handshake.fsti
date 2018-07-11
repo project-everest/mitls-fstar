@@ -160,15 +160,24 @@ let next_fragment_ensures (#i:TLSInfo.id) (s:hs) h0 (result: result (HandshakeLo
           (b2t complete ==> r1 = w1 /\ Seq.indexable (logT s h1) w1 (*/\ completed (eT s Writer h1)*) )
       | _ -> True )
 
-val next_fragment: s:hs -> i:TLSInfo.id -> ST (result (HandshakeLog.outgoing i))
-  (requires (fun h0 ->
-    let es = logT s h0 in
-    let j = iT s Writer h0 in
-    j < Seq.length es /\ //17-04-08 added verification hint
-    hs_inv s h0 /\
-    (if j < 0 then TLSInfo.PlaintextID? i else let e = Seq.index es j in i = Epochs.epoch_id e)
-  ))
+let next_fragment_requires (#i:TLSInfo.id) (s:hs) h0 =
+  let es = logT s h0 in
+  let j = iT s Writer h0 in
+  j < Seq.length es /\ //17-04-08 added verification hint
+  hs_inv s h0 /\
+  (if j < 0 then TLSInfo.PlaintextID? i else let e = Seq.index es j in i = Epochs.epoch_id e)
+
+val next_fragment_bounded: s:hs -> i:TLSInfo.id -> nax:nat -> ST (result (HandshakeLog.outgoing i))
+  (requires (fun h0 -> next_fragment_requires #i s h0))
   (ensures (fun h0 r h1 -> next_fragment_ensures #i s h0 r h1))
+
+val next_fragment: s:hs -> i:TLSInfo.id -> ST (result (HandshakeLog.outgoing i))
+  (requires (fun h0 -> next_fragment_requires #i s h0))
+  (ensures (fun h0 r h1 -> next_fragment_ensures #i s h0 r h1))
+
+val to_be_written: s:hs -> ST nat
+  (requires (fun h0 -> True))
+  (ensures (fun h0 _ h1 -> modifies_none h0 h1))
 
 (* ----------------------- Incoming ----------------------- *)
 
