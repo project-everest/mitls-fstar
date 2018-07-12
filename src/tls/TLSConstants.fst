@@ -1744,3 +1744,5 @@ let cert_verify_cb (c:config) (cl:list cert_repr) (ss:signatureScheme) (tbs:byte
 
 type cVerifyData = b:bytes{length b <= 64} (* ClientFinished payload *)
 type sVerifyData = b:bytes{length b <= 64} (* ServerFinished payload *)
+
+let is_quic (c:config) = c.max_early_data = Some 0xfffffffful

@@ -253,9 +253,9 @@ extern void MITLS_CALLCONV FFI_mitls_global_free(void* pv);
 // Convert into a quic_key with quic_crypto_create
 typedef struct {
   mitls_aead alg;
-  unsigned char *aead_key;
-  unsigned char *aead_iv;
-  unsigned char *pne_key;
+  unsigned char aead_key[32];
+  unsigned char aead_iv[12];
+  unsigned char pne_key[32];
 } quic12_key;
 
 typedef struct {

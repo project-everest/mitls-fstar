@@ -1,3 +1,4 @@
+
 module Old.Handshake
 
 open FStar.String
@@ -416,7 +417,9 @@ let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming 
                  else "No 0RTT possible because of rejected PSK");
           // Skip the 0-RTT epoch on the reading side
           Epochs.incr_reader s.epochs
-         end;
+         end
+	else // No EOED to send in 0-RTT epoch
+	 Epochs.incr_writer s.epochs; // Next flight (CFin) will use HSK
         s.state := C_Wait_Finished1;
         Epochs.incr_reader s.epochs; // Client 1.3 HSK switch to handshake key for decrypting EE etc...
         InAck true false // Client 1.3 HSK
@@ -505,7 +508,6 @@ let client_ClientFinished_13 hs digestServerFinished ocr cfin_key =
     | None -> digestServerFinished in
   let (| finId, cfin_key |) = cfin_key in
   let cvd = HMAC_UFCMA.mac cfin_key digest in
-  if not (Nego.zeroRTT mode) then Epochs.incr_writer hs.epochs; // to HSK, 0-RTT case is treated in EOED logic
   let digest_CF = HandshakeLog.send_tag #ha hs.log (Finished ({fin_vd = cvd})) in
   KeySchedule.ks_client_13_cf hs.ks digest_CF; // For Post-HS
   Epochs.incr_reader hs.epochs; // to ATK
@@ -1050,7 +1052,7 @@ let create (parent:rid) cfg role =
   let r = new_region parent in
   let log = HandshakeLog.create r None (* cfg.max_version (Nego.hashAlg nego) *) in
   //let nonce = Nonce.mkHelloRandom r r0 in //NS: should this really be Client?
-  let ks, nonce = KeySchedule.create #r role in
+  let ks, nonce = KeySchedule.create #r role (is_quic cfg) in
   let nego = Nego.create r role cfg nonce in
   let epochs = Epochs.create r nonce in
   let state = ralloc r (if role = Client then C_Idle else S_Idle) in

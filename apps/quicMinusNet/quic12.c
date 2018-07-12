@@ -194,6 +194,69 @@ char *quic_result_string(quic_result r){
   return codes[10];
 }
 
+void half_round(quic12_state *my_state, quic_process_ctx *my_ctx, quic_process_ctx *peer_ctx, int *my_r, int *my_w, unsigned char *plain, unsigned char *cipher, size_t *plen, int is_server, int *my_ctr, int *peer_ctr)
+{
+  if(*my_r >= 0)
+  {
+    quic12_key k;
+    assert(FFI_mitls_quic12_get_record_key(my_state, &k, *my_r, 1));
+    printf("[%c] R_Key[%d] = ", is_server?'S':'C', *my_r);
+    dump(k.aead_key, k.alg ? 32 : 16);
+    printf("[%c] R_IV[%d] = ", is_server?'S':'C', *my_r);
+    dump(k.aead_iv, 12);
+    printf("[%c] R_PN Key[%d] = ", is_server?'S':'C', *my_r);
+    dump(k.pne_key, k.alg ? 32 : 16);
+    quic_key *key;
+    assert(quic_crypto_create(&key, k.alg, k.aead_key, k.aead_iv, k.pne_key));
+    unsigned char tmp[2048];
+    assert(quic_crypto_decrypt(key, tmp, *peer_ctr, tmp, 0, cipher, (*plen)+16));
+    assert(!memcmp(tmp, plain, *plen));
+    printf("[%c] Decrypt successful for PN=%d.\n", is_server?'S':'C', *peer_ctr);
+    (*peer_ctr)++;
+    quic_crypto_free_key(key);
+    }
+  
+  printf("[%c] out_len=%d, in<%d>=\n", is_server?'S':'C',
+    my_ctx->output_len, my_ctx->input_len);
+  dump(my_ctx->input, my_ctx->input_len);
+
+  size_t old_olen = my_ctx->output_len;
+  FFI_mitls_quic12_process(my_state, my_ctx);
+
+  printf("[%c] Epochs: %d read, %d write\n", is_server?'S':'C',
+    my_ctx->cur_reader_key, my_ctx->cur_writer_key);
+  printf("[%c] Read %d, written %d, to_be_written %d\n", is_server?'S':'C',
+    my_ctx->consumed_bytes, my_ctx->output_len, my_ctx->to_be_written);
+
+  if(*my_w >= 0)
+  {
+    quic12_key k;
+    assert(FFI_mitls_quic12_get_record_key(my_state, &k, *my_w, 0));
+    printf("[%c] W_Key[%d] = ", is_server?'S':'C', *my_w);
+    dump(k.aead_key, k.alg ? 32 : 16);
+    printf("[%c] W_IV[%d] = ", is_server?'S':'C', *my_w);
+    dump(k.aead_iv, 12);
+    printf("[%c] W_PN Key[%d] = ", is_server?'S':'C', *my_w);
+    dump(k.pne_key, k.alg ? 32 : 16);
+    quic_key *key;
+    assert(quic_crypto_create(&key, k.alg, k.aead_key, k.aead_iv, k.pne_key));
+    *plen = my_ctx->output_len;
+    memcpy(plain, my_ctx->output, *plen);
+    assert(quic_crypto_encrypt(key, cipher, *my_ctr, plain, 0, plain, *plen));
+    printf("[%c] Encrypt successful for PN=%d.\n", is_server?'S':'C', *my_ctr);
+    quic_crypto_free_key(key);
+  }
+
+  my_ctx->output += my_ctx->output_len;
+  my_ctx->input += my_ctx->consumed_bytes;
+  my_ctx->input_len -= my_ctx->consumed_bytes;
+  peer_ctx->input_len += my_ctx->output_len;
+  my_ctx->output_len = old_olen - my_ctx->output_len;
+  
+  if(my_ctx->cur_reader_key > *my_r) *my_r = my_ctx->cur_reader_key;
+  if(my_ctx->cur_writer_key > *my_w) *my_w = my_ctx->cur_writer_key;
+}
+
 int main(int argc, char **argv)
 {
   hs_type mode = handshake_simple;
@@ -279,86 +342,53 @@ int main(int argc, char **argv)
 
   FFI_mitls_init();
 
-  size_t slen = 0, clen = 0, smax = 8*1024, cmax = 8*1024;
-  unsigned char sbuf[smax], cbuf[cmax];
+  size_t slen = 0, clen = 0, smax = 8*1024, cmax = 8*1024, plen;
+  unsigned char sbuf[smax], cbuf[cmax], plain[2048], cipher[2048];
   quic_process_ctx cctx, sctx;
-  int32_t cr = -1, cw = -1, sr = -1, sw = -1;
+  int32_t cr = -1, cw = -1, sr = -1, sw = -1, cpn = 0, spn = 0;
 
+  // GENERIC HANDSHAKE TEST (NO 0RTT)
   if (mode == handshake_simple)
   {
-      // GENERIC HANDSHAKE TEST (NO 0RTT)
+    int client_complete = 0;
+    int server_complete = 0;
 
-      int client_complete = 0;
-      int server_complete = 0;
+    printf("[S] create\n");
+    config.callback_state = &server;
+    assert(FFI_mitls_quic12_create(&server.quic_state, &config));
 
-      printf("server create\n");
-      config.callback_state = &server;
-      if(!FFI_mitls_quic12_create(&server.quic_state, &config))
-        {
-          printf("quic_create server failed: %s\n", errmsg);
-          return -1;
-        }
-      config.is_server = 0;
-      config.host_name = "localhost";
+    config.is_server = 0;
+    config.host_name = "localhost";
+    printf("[C] create\n");
+    config.callback_state = &client;
+    assert(FFI_mitls_quic12_create(&client.quic_state, &config));
 
-      printf("client create\n");
-      config.callback_state = &client;
-      if(!FFI_mitls_quic12_create(&client.quic_state, &config))
-        {
-          printf("quic_create client failed: %s\n", errmsg);
-          return -1;
-        }
+    cctx.input = cbuf;
+    cctx.input_len = 0;
+    cctx.output = sbuf;
+    cctx.output_len = smax;
+    cctx.complete = 0;
 
-      cctx.input = cbuf;
-      cctx.input_len = 0;
-      cctx.output = sbuf;
-      cctx.output_len = smax;
-      cctx.complete = 0;
+    sctx.input = sbuf;
+    sctx.input_len = 0;
+    sctx.output = cbuf;
+    sctx.output_len = cmax;
+    sctx.complete = 0;
 
-      sctx.input = sbuf;
-      sctx.input_len = 0;
-      sctx.output = cbuf;
-      sctx.output_len = cmax;
-      sctx.complete = 0;
-
-      for(int i = 0; i<4; i++)
-      {
-	printf("\n == Round %d [CComplete=%d, SComplete=%d] ==\n\n", i, cctx.complete & 255, sctx.complete & 255);
-	/*** CLIENT ***/
-        printf("[C] out_len=%d, in<%d>=\n", cctx.output_len, cctx.input_len);
-	dump(cctx.input, cctx.input_len);
-	
-	FFI_mitls_quic12_process(client.quic_state, &cctx);
-
-        printf("[C] Epochs: %d read, %d write\n", cctx.cur_reader_key, cctx.cur_writer_key);
-	printf("[C] Read %d, written %d, to_be_written %d\n",
-	       cctx.consumed_bytes, cctx.output_len, cctx.to_be_written);
-
-	cctx.output += cctx.output_len;
-	cctx.input += cctx.consumed_bytes;
-	cctx.input_len -= cctx.consumed_bytes;
-
-	sctx.input_len += cctx.output_len;
-	sctx.output_len = cmax - (sctx.output - cbuf);
-
-        /*** SERVER ***/
-	printf("[S] out_len=%d, in<%d>=\n", sctx.output_len, sctx.input_len);
-	dump(sctx.input, sctx.input_len);
-	
-	FFI_mitls_quic12_process(server.quic_state, &sctx);
-
-        printf("[S] Epochs: %d read, %d write\n", sctx.cur_reader_key, sctx.cur_writer_key);
-	printf("[S] Read %d, written %d, to_be_written %d\n",
-	  sctx.consumed_bytes, sctx.output_len, sctx.to_be_written);
-
-	sctx.output += sctx.output_len;
-	sctx.input += sctx.consumed_bytes;
-	sctx.input_len -= sctx.consumed_bytes;
+    plen = 0;
+    memset(plain, 0, sizeof(plain));
+    memset(cipher, 0, sizeof(cipher));
       
-	cctx.input_len += sctx.output_len;
-	cctx.output_len = smax - (cctx.output - sbuf);
-      }
-      
+    for(int i = 0; i<4; i++)
+    {
+      printf("\n == Round %d [CComplete=%d, SComplete=%d] ==\n\n", i, cctx.complete & 255, sctx.complete & 255);
+
+      // Client half-round
+      half_round(client.quic_state, &cctx, &sctx, &cr, &cw, plain, cipher, &plen, 0, &cpn, &spn);
+
+      // Server half-round
+      half_round(server.quic_state, &sctx, &cctx, &sr, &sw, plain, cipher, &plen, 1, &spn, &cpn);
+    }      
 
       /**
       FFI_mitls_quic_get_exporter(client.quic_state, 0, &qs);

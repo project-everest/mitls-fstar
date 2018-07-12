@@ -276,9 +276,9 @@ private let handle_signals (hs:H.hs) (sig:option HSL.next_keys_use) : ML unit =
   match sig with
   | None -> ()
   | Some use ->
-    Old.Epochs.incr_writer (H.epochs_of hs);
-    if use.HSL.out_skip_0RTT then
-      Old.Epochs.incr_writer (H.epochs_of hs)
+    Old.Epochs.incr_writer (H.epochs_of hs)
+//    if use.HSL.out_skip_0RTT then
+//      Old.Epochs.incr_writer (H.epochs_of hs)
 
 let process_hs (hs:H.hs) (ctx:hs_in) : ML hs_result =
   let tbw = H.to_be_written hs in
@@ -337,22 +337,23 @@ let get_key (hs:Old.Handshake.hs) (ectr:nat) (rw:bool) : ML (option raw_key) =
   let epochs = Monotonic.Seq.i_read (Old.Epochs.get_epochs (Handshake.epochs_of hs)) in
   if Seq.length epochs <= ectr then None
   else
-    let AEAD alg _ = aeAlg_of_id (currentId hs Writer) in
+    let AEAD alg _ = aeAlg_of_id (currentId hs (if rw then Reader else Writer)) in
     let e = Seq.index epochs ectr in
-    let key, iv =
+    let (key, iv), pn =
+      let (rpn, wpn) = Old.Epochs.pn_epoch e in
       if rw then
         let StAE.Stream _ st = Old.Epochs.reader_epoch e in
         let st = StreamAE.State?.aead st in
-        AEADProvider.leak st
+        AEADProvider.leak st, Some?.v rpn
       else
         let StAE.Stream _ st = Old.Epochs.writer_epoch e in
         let st = StreamAE.State?.aead st in
-        AEADProvider.leak st
+        AEADProvider.leak st, Some?.v wpn
     in
     Some ({
       alg = alg;
       aead_key = key;
       aead_iv = iv;
-      pn_key = Bytes.create 32ul 0uy
+      pn_key = pn;
     })
     
