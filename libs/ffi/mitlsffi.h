@@ -272,6 +272,7 @@ typedef struct {
   const char *tls_error_desc; // meaningful description of the local error
   int32_t cur_reader_key; // current reader epoch, if incremented by TLS, QUIC must switch key BEFORE processing further packets.
   int32_t cur_writer_key; // current writer epoch, if incremented by TLS, QUIC must switch key AFTER writing *output
+  uint8_t can_write_data; // Set to 1 if the writer epoch has increased and the new key can be used to send data packets
   uint8_t complete; // a flag to indicate handshake completion. Not very meaningful as post-handshake messages may still need processing
 } quic_process_ctx;
 

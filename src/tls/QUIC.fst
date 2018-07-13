@@ -256,6 +256,7 @@ type hs_out = {
   output: bytes;
   to_be_written: UInt32.t;
   is_complete: bool;
+  is_writable: bool;
 }
 
 type hs_result =
@@ -272,13 +273,14 @@ private let currentId (hs:H.hs) (rw:rw) : St TLSInfo.id =
 let get_epochs (hs:H.hs) : ML (int * int) =
   H.i hs Reader, H.i hs Writer
 
-private let handle_signals (hs:H.hs) (sig:option HSL.next_keys_use) : ML unit =
+private let handle_signals (hs:H.hs) (sig:option HSL.next_keys_use) : ML bool =
   match sig with
-  | None -> ()
+  | None -> false
   | Some use ->
-    Old.Epochs.incr_writer (H.epochs_of hs)
-//    if use.HSL.out_skip_0RTT then
-//      Old.Epochs.incr_writer (H.epochs_of hs)
+    Old.Epochs.incr_writer (H.epochs_of hs);
+    if use.HSL.out_skip_0RTT then
+      Old.Epochs.incr_writer (H.epochs_of hs);
+    use.HSL.out_appdata
 
 let process_hs (hs:H.hs) (ctx:hs_in) : ML hs_result =
   let tbw = H.to_be_written hs in
@@ -288,20 +290,22 @@ let process_hs (hs:H.hs) (ctx:hs_in) : ML hs_result =
       HS_SUCCESS ({
         consumed = 0ul;
         output = empty_bytes;
-	to_be_written = UInt32.uint_to_t tbw;
-	is_complete = false;
+        to_be_written = UInt32.uint_to_t tbw;
+        is_complete = false;
+        is_writable = false;
       })
     else
       let i = currentId hs Writer in
       match H.next_fragment_bounded hs i (UInt32.v ctx.max_output) with
       | Error (z) -> HS_ERROR 1us
-      | Correct (HSL.Outgoing (Some frag) sig _) ->
-        handle_signals hs sig;
+      | Correct (HSL.Outgoing (Some frag) sig complete) ->
+        let is_writable = handle_signals hs sig in
         HS_SUCCESS ({
 	  consumed = 0ul;
 	  output = dsnd frag;
 	  to_be_written = UInt32.uint_to_t (H.to_be_written hs);
-	  is_complete = false;
+	  is_complete = complete;
+	  is_writable = is_writable;
 	})
    end
   else
@@ -311,19 +315,31 @@ let process_hs (hs:H.hs) (ctx:hs_in) : ML hs_result =
     let f : Range.rbytes rg = ctx.input in
     match H.recv_fragment hs rg f with
     | H.InQuery _ _ -> HS_ERROR 2us
-    | H.InError z -> HS_ERROR 3us
+    | H.InError (ad, err) ->
+      let ec = Parse.uint16_of_bytes (Alert.alertBytes ad) in
+      trace ("Returning HS error: "^err);
+      HS_ERROR ec
     | H.InAck nk complete ->
       let consumed = UInt32.uint_to_t len in
+      let j = H.i hs Writer in
+      let reject_0rtt = 
+        if H.role_of hs = Client && j = 0 then
+	  let mode = H.get_mode hs in
+	  Negotiation.zeroRTToffer mode.Negotiation.n_offer
+	    && not (Negotiation.zeroRTT mode)
+	else false in
       let i = currentId hs Writer in
-      match H.next_fragment_bounded hs i (UInt32.v ctx.max_output) with
+      let max_o = if reject_0rtt then 0 else UInt32.v ctx.max_output in
+      match H.next_fragment_bounded hs i max_o with
       | Error z -> HS_ERROR 4us
-      | Correct (HSL.Outgoing frag sig _ ) ->
-        handle_signals hs sig;
-	HS_SUCCESS ({
+      | Correct (HSL.Outgoing frag sig complete' ) ->
+        let is_writable = handle_signals hs sig in
+        HS_SUCCESS ({
           consumed = consumed;
           output = (match frag with Some f -> dsnd f | None -> empty_bytes);
           to_be_written = UInt32.uint_to_t (H.to_be_written hs);
-          is_complete = complete;
+          is_complete = complete || complete';
+	  is_writable = is_writable;
         })
 
 type raw_key = {

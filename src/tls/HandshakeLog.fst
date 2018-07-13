@@ -427,7 +427,7 @@ let write_at_most (l:log) (i:id) (max:nat)
       let lx = length x in
       let rg = (lx, lx) in
       (Some (| rg, x |), y) in
-    if length outgoing' = 0
+    if length outgoing' = 0 || max = 0
     then (
       // send signals only after flushing the output buffer
       let next_keys1, outgoing1 = match st.outgoing_next_keys with

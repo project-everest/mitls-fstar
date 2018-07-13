@@ -416,7 +416,9 @@ let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming 
           trace (if Some? mode.Nego.n_pski then "0RTT potentially accepted (wait for EE to confirm)"
                  else "No 0RTT possible because of rejected PSK");
           // Skip the 0-RTT epoch on the reading side
-          Epochs.incr_reader s.epochs
+          Epochs.incr_reader s.epochs;
+	  // Skip the 0-RTT epoch when rejected
+	  if None? mode.Nego.n_pski then Epochs.incr_writer s.epochs
          end
 	else // No EOED to send in 0-RTT epoch
 	 Epochs.incr_writer s.epochs; // Next flight (CFin) will use HSK
@@ -833,7 +835,8 @@ let server_ClientHello hs offer obinders =
             if zeroing  then (
               let early_exporter_secret, zero_keys = KeySchedule.ks_server_13_0rtt_key hs.ks digestClientHelloBinders in
               export hs early_exporter_secret;
-              register hs zero_keys
+              register hs zero_keys;
+	      Epochs.incr_reader hs.epochs // Be ready to read 0-RTT data
             );
             // TODO handle 0RTT accepted and 0RTT refused
             // - get 0RTT key from KS.
@@ -964,11 +967,14 @@ let server_ServerFinished_13 hs i =
       export hs exporter_master_secret;
       register hs app_keys;
       HandshakeLog.send_signals hs.log (Some (true,false)) false;
-      Epochs.incr_reader hs.epochs; // TODO when to increment the reader?
 
-      hs.state :=
-        (if Nego.zeroRTT mode then S_Wait_EOED
-         else S_Wait_Finished2 digestServerFinished);
+      hs.state := (
+        if Nego.zeroRTT mode then
+	  S_Wait_EOED // EOED sent with 0-RTT: dont increment reader
+        else
+	  (Epochs.incr_reader hs.epochs; // Turn on HS key
+	  S_Wait_Finished2 digestServerFinished)
+      );
       Correct()
     | Error z -> Error z
 
