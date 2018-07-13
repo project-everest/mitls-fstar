@@ -386,9 +386,9 @@ int main(int argc, char **argv)
 
     s_buffer += slen; smax -= slen; slen = smax;
     rs = FFI_mitls_quic_process(server.quic_state, c_buffer, &clen, s_buffer, &slen);
-//    assert(rs == TLS_server_complete);
+    assert(rs == TLS_server_complete);
     printf("                        server returns clen=%zd slen=%zd status=%s\n", clen, slen, quic_result_string(rs));
-assert(rs == TLS_server_complete);
+
     // NB we must call the server again to get a ticket
     c_buffer += clen; cmax -= clen; clen = 0;
     s_buffer += slen; smax -= slen; slen = smax;
