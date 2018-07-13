@@ -209,6 +209,52 @@ let validate32
   not (res `I32.lt` 0l)
 
 inline_for_extraction
+let ghost_parse_from_validator32
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (v: validator32 p)
+  (input: buffer8)
+  (sz: I32.t)
+: HST.Stack (option (Ghost.erased t))
+  (requires (fun h ->
+    is_slice h input sz
+  ))
+  (ensures (fun h res h' ->
+    is_slice h input sz /\
+    M.modifies M.loc_none h h'  /\
+    res == (match parse_from_slice p h input sz with
+    | Some (x, _) -> Some (Ghost.hide x)
+    | _ ->  None
+  )))
+= let h = HST.get () in
+  if validate32 v input sz
+  then begin
+    let f () : GTot t =
+      let (Some (x, _)) = parse_from_slice p h input sz in
+      x
+    in
+    Some (Ghost.elift1 f (Ghost.hide ()))
+  end
+  else None
+
+inline_for_extraction
+let ghost_parse32
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (input: buffer8)
+: HST.Stack (Ghost.erased t)
+  (requires (fun h -> B.live h input /\ Some? (parse p (B.as_seq h input))))
+  (ensures (fun h res h' -> h == h' /\ (let (Some (x, _)) = parse p (B.as_seq h input) in res == Ghost.hide x)))
+= let h = HST.get () in
+  let f () : GTot t =
+    let (Some (x, _)) = parse p (B.as_seq h input) in
+    x
+  in
+  Ghost.elift1 f (Ghost.hide ())
+
+inline_for_extraction
 let parser32
   (#k: parser_kind)
   (#t: Type0)
