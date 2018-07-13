@@ -298,3 +298,112 @@ let read_from_buffer
     rel x y
   )))
 = p2' (a12 input)
+
+let exactly_contains_valid_data
+  (#k: parser_kind)
+  (#t: Type)
+  (h: HS.mem)
+  (p: parser k t)
+  (b: buffer8)
+  (lo: U32.t)
+  (x: t)
+  (hi: U32.t)
+: GTot Type0
+= B.live h b /\
+  U32.v lo <= U32.v hi /\
+  U32.v hi <= B.length b /\
+  parse p (B.as_seq h (B.gsub b lo (U32.sub hi lo))) == Some (x, U32.v hi - U32.v lo)
+
+let exactly_contains_valid_data_injective
+  (#k: parser_kind)
+  (#t: Type)
+  (h: HS.mem)
+  (p: parser k t)
+  (b: buffer8)
+  (lo: U32.t)
+  (x1: t)
+  (hi: U32.t)
+  (x2: t)
+: Lemma
+  (requires (
+    exactly_contains_valid_data h p b lo x1 hi /\
+    exactly_contains_valid_data h p b lo x2 hi
+  ))
+  (ensures (
+    x1 == x2
+  ))
+  [SMTPat (exactly_contains_valid_data h p b lo x1 hi);
+   SMTPat (exactly_contains_valid_data h p b lo x2 hi);]
+= ()
+
+let exactly_contains_valid_data_injective_strong'
+  (#k: parser_kind)
+  (#t: Type)
+  (h: HS.mem)
+  (p: parser k t)
+  (b: buffer8)
+  (lo: U32.t)
+  (x1: t)
+  (hi1: U32.t)
+  (x2: t)
+  (hi2: U32.t)
+: Lemma
+  (requires (
+    exactly_contains_valid_data h p b lo x1 hi1 /\
+    exactly_contains_valid_data h p b lo x2 hi2 /\
+    k.parser_kind_subkind == Some ParserStrong /\
+    U32.v hi1 <= U32.v hi2
+  ))
+  (ensures (
+    x1 == x2 /\ hi1 == hi2
+  ))
+= assert (no_lookahead_on p (B.as_seq h (B.gsub b lo (U32.sub hi1 lo))) (B.as_seq h (B.gsub b lo (U32.sub hi2 lo))));
+  assert (injective_precond p (B.as_seq h (B.gsub b lo (U32.sub hi2 lo))) (B.as_seq h (B.gsub b lo (U32.sub hi1 lo)))) 
+
+let exactly_contains_valid_data_injective_strong
+  (#k: parser_kind)
+  (#t: Type)
+  (h: HS.mem)
+  (p: parser k t)
+  (b: buffer8)
+  (lo: U32.t)
+  (x1: t)
+  (hi1: U32.t)
+  (x2: t)
+  (hi2: U32.t)
+: Lemma
+  (requires (
+    exactly_contains_valid_data h p b lo x1 hi1 /\
+    exactly_contains_valid_data h p b lo x2 hi2 /\
+    k.parser_kind_subkind == Some ParserStrong
+  ))
+  (ensures (
+    x1 == x2 /\ hi1 == hi2
+  ))
+  [SMTPat (exactly_contains_valid_data h p b lo x1 hi1);
+   SMTPat (exactly_contains_valid_data h p b lo x2 hi2);]
+= if U32.v hi1 <= U32.v hi2
+  then exactly_contains_valid_data_injective_strong' h p b lo x1 hi1 x2 hi2
+  else exactly_contains_valid_data_injective_strong' h p b lo x2 hi2 x1 hi1
+
+let exactly_contains_valid_data_invariant
+  (#k: parser_kind)
+  (#t: Type)
+  (l: M.loc)
+  (h h' : HS.mem)
+  (p: parser k t)
+  (b: buffer8)
+  (lo: U32.t)
+  (x: t)
+  (hi: U32.t)
+: Lemma
+  (requires (
+    M.modifies l h h' /\
+    exactly_contains_valid_data h p b lo x hi /\
+    M.loc_disjoint l (M.loc_buffer (B.gsub b lo (U32.sub hi lo)))
+  ))
+  (ensures (
+    exactly_contains_valid_data h' p b lo x hi
+  ))
+  [SMTPat (M.modifies l h h'); SMTPat (exactly_contains_valid_data h p b lo x hi)]
+= ()
