@@ -318,4 +318,32 @@ let validate32_filter_and_then
       v2 va (B.offset input (Cast.int32_to_uint32 (len `I32.sub` res))) res
     else -1l
 
-#reset-options
+// #reset-options
+
+let exactly_contains_valid_data_nondep_then
+  (h: HS.mem)
+  (#k1: parser_kind)
+  (#t1: Type)
+  (p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (p2: parser k2 t2)
+  (b: buffer8)
+  (lo: U32.t)
+  (x1: t1)
+  (mi: U32.t)
+  (x2: t2)
+  (hi: U32.t)
+: Lemma
+  (requires (
+    k1.parser_kind_subkind == Some ParserStrong /\
+    exactly_contains_valid_data h p1 b lo x1 mi /\
+    exactly_contains_valid_data h p2 b mi x2 hi
+  ))
+  (ensures (
+    exactly_contains_valid_data h (p1 `nondep_then` p2) b lo (x1, x2) hi
+  ))
+  [SMTPat (exactly_contains_valid_data h p1 b lo x1 mi);
+   SMTPat (exactly_contains_valid_data h p2 b mi x2 hi);]
+= assert (no_lookahead_on p1 (B.as_seq h (B.gsub b lo (U32.sub mi lo))) (B.as_seq h (B.gsub b lo (U32.sub hi lo))));
+  assert (injective_precond p1 (B.as_seq h (B.gsub b lo (U32.sub mi lo))) (B.as_seq h (B.gsub b lo (U32.sub hi lo))))
