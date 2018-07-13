@@ -15,45 +15,71 @@ open Pkg
 
 type llbytes (lmax:nat) = b:bytes{length b <= lmax}
 
-val plain: i:I.id -> lmax:AEAD.plainLen -> Type0
+val plain: i:I.id -> lmax:AEAD.plainLen -> t:Type0{hasEq t}
 
-type cipher (i:I.id) (lmax:AEAD.plainLen) = llbytes lmax
+type cipher (i:I.id) (lmax:AEAD.plainLen) = lbytes (lmax + U32.v (AEAD.taglen) + 1)
 
 type safeid = i:I.id{Flag.safeId i}
 
-val stream_entry : i:I.id -> Type0
+let safeId (i:I.id) = AEAD.safeId i
 
-val mk_entry (#i:I.id) :
+let max_ctr = pow2 32 - 1
+
+//val stream_entry : i:I.id -> Type0
+type stream_entry (i:I.id) =
+  | Entry:
     ad:AEAD.adata ->
     #lmax:AEAD.plainLen ->
     p:plain i lmax ->
     c:cipher i lmax ->
     stream_entry i
 
+(*
+val mk_entry (#i:I.id) :
+    ad:AEAD.adata ->
+    #lmax:AEAD.plainLen ->
+    p:plain i lmax ->
+    c:cipher i lmax ->
+    stream_entry i
+*)
 
 //val stream_state: I.id -> I.rw -> Type0
 
 val stream_writer: I.id -> Type0
 val stream_reader: #i:I.id -> w:stream_writer i -> Type0
 
+val invariant: #i:I.id -> w:stream_writer i -> mem -> Type0
+val rinvariant: #i:I.id -> #w:stream_writer i -> r:stream_reader w -> h:mem -> Type0
+
 val wctrT: #i:I.id -> w:stream_writer i -> mem -> GTot nat
 val wctr: #i:I.id -> w:stream_writer i -> ST UInt32.t
   (requires fun h0 -> True)
   (ensures fun h0 c h1 -> h0 == h1 /\ UInt32.v c = wctrT w h1)
-  
-val rctrT: #i:I.id -> #w:stream_writer i -> stream_reader w -> h:mem ->
-  GTot (n:nat{n <= wctrT w h})
+
+val rctrT: #i:I.id -> #w:stream_writer i -> r:stream_reader w -> h:mem ->
+  GTot (n:nat{rinvariant r h ==> n <= wctrT w h})
 val rctr: #i:I.id -> #w:stream_writer i -> r:stream_reader w -> ST UInt32.t
   (requires fun h0 -> True)
   (ensures fun h0 c h1 -> h0 == h1 /\ UInt32.v c = rctrT r h1)
 
-val wlog: #i:safeid -> w:stream_writer i -> h:mem -> GTot (s:Seq.seq (stream_entry i){wctrT w h == Seq.length s})
+val wlog: #i:safeid -> w:stream_writer i -> h:mem{invariant w h} -> GTot (s:Seq.seq (stream_entry i)
+  {wctrT w h == Seq.length s})
 
-let prefix (#i:safeid) (w:stream_writer i) (h:mem) (k:nat{k <= wctrT w h}) =
+let prefix (#i:safeid) (w:stream_writer i) (h:mem{invariant w h}) (k:nat{k <= wctrT w h}) =
   Seq.Base.slice (wlog w h) 0 k
 
-val rlog: #i:safeid -> #w:stream_writer i -> r:stream_reader w -> h:mem ->
-  GTot (s:Seq.seq (stream_entry i){s == prefix w h (rctrT r h)})
+val rlog: #i:safeid -> #w:stream_writer i -> r:stream_reader w -> h:mem{invariant w h /\ rinvariant r h} ->
+  GTot (s:Seq.seq (stream_entry i)
+    {s == prefix w h (rctrT r h)})
+
+
+
+let incrementable (#i:I.id) (w:stream_writer i) (h:mem) =
+  wctrT w h <= max_ctr
+
+
+
+
 
 (*
 val ctrT: #i:I.id -> #rw:I.rw -> wr:stream_state i rw -> mem -> GTot UInt32.t
@@ -66,10 +92,6 @@ let log_inv (#i:I.id) (rw:stream_state i) (h:mem) =
 val invariant: #i:I.id -> #rw:I.rw -> stream_state i rw -> mem -> Type0
 *)
 
-val invariant: #i:I.id -> w:stream_writer i -> mem -> Type0
-
-let rinvariant (#i:I.id) (#w:stream_writer i) (r:stream_reader w) (h:mem) =
-  invariant w h
 
 type info' = {
   alg: I.aeadAlg;
@@ -80,14 +102,14 @@ type info' = {
 type info (i:I.id) =
   info:info'{I.aeadAlg_of_id i == info.alg}
 
-val shared_footprint: #i:I.id -> w:stream_writer i -> rset
+val shared_footprint: #i:I.id -> w:stream_writer i -> GTot rset
 
-val footprint: #i:I.id -> w:stream_writer i -> s:rset{Set.disjoint s (shared_footprint w)}
+val footprint: #i:I.id -> w:stream_writer i -> GTot (s:rset{Set.disjoint s (shared_footprint w)})
 
 let rshared_footprint (#i:I.id) (#w:stream_writer i) (r:stream_reader w): GTot rset =
   shared_footprint w
 
-val rfootprint: #i:I.id -> #w:stream_writer i -> r:stream_reader w -> s:rset{Set.disjoint s (rshared_footprint r)}
+val rfootprint: #i:I.id -> #w:stream_writer i -> r:stream_reader w -> GTot (s:rset{Set.disjoint s (rshared_footprint r)})
  
 
 val frame_invariant: #i:I.id -> w:stream_writer i -> h0:mem -> ri:rid -> h1:mem ->
@@ -107,16 +129,17 @@ val rframe_invariant: #i:I.id -> #w:stream_writer i -> r:stream_reader w -> h0:m
     ~(Set.mem ri (rfootprint r))))
   (ensures rinvariant r h1)
 
-val frame_log: #i:I.id -> w:stream_writer i -> l:Seq.seq (stream_entry i) ->
+(*val frame_log: #i:I.id -> w:stream_writer i -> l:Seq.seq (stream_entry i) ->
   h0:mem -> ri:rid -> h1:mem ->
   Lemma
   (requires
     Flag.safeId i /\
+    invariant w h0 ->
     wlog w h0 == l /\
     modifies_one ri h0 h1 /\
     ~(Set.mem ri (footprint w)))
   (ensures wlog w h1 == l)
-
+*)
 
 val create: parent:rgn -> i:I.id -> u:info i ->
   ST (stream_writer i)
@@ -147,6 +170,7 @@ val createReader: parent:rgn -> #i:I.id -> w:stream_writer i ->
   ST (stream_reader w)
   (requires fun h0 -> invariant w h0)
   (ensures fun h0 r h1 ->
+    invariant w h1 /\
     rinvariant r h1 /\
     modifies_none h0 h1 /\
     Flag.safeId i ==>
@@ -154,10 +178,6 @@ val createReader: parent:rgn -> #i:I.id -> w:stream_writer i ->
       rctrT r h1 == 0)
   )
 
-let max_ctr = pow2 32 - 1
-
-let incrementable (#i:I.id) (w:stream_writer i) (h:mem) =
-  wctrT w h <= max_ctr
 
 
 //val rincrementable: #i:I.id -> #w:stream_writer i -> r:stream_reader w -> h:mem -> Type0
@@ -172,19 +192,19 @@ val encrypt
   ST (cipher i lmax)
   (requires fun h0 -> incrementable w h0 /\ invariant w h0)
   (ensures fun h0 c h1 ->
+    invariant w h1 /\
     wctrT w h1 == wctrT w h0 + 1 /\ 
     (Flag.safeId i ==> (
-      wlog w h1 == Seq.snoc (wlog w h0) (mk_entry ad p c))) /\
-    invariant w h1 /\
+      wlog w h1 == Seq.snoc (wlog w h0) (Entry ad p c))) /\
     modifies (Set.union (footprint w) (shared_footprint w)) h0 h1)
 
-val adata_of_entry: #i:I.id -> stream_entry i -> GTot AEAD.adata
+//val adata_of_entry: #i:I.id -> stream_entry i -> GTot AEAD.adata
 
-val cipher_of_entry: #i:I.id -> stream_entry i -> GTot (lmax:AEAD.plainLen & c:cipher i lmax)
+//val cipher_of_entry: #i:I.id -> stream_entry i -> GTot //(lmax:AEAD.plainLen & c:cipher i lmax)
 
-let matches (#i:I.id) (e:stream_entry i) (ad:AEAD.adata) (lmax:AEAD.plainLen) (c:cipher i lmax) : GTot bool =
-  let (|lmax', c'|) = cipher_of_entry e in
-    adata_of_entry e = ad && lmax' = lmax && c' = c
+//let matches (#i:I.id) (e:stream_entry i) (ad:AEAD.adata) (lmax:AEAD.plainLen) (c:cipher i lmax) : GTot bool =
+//  let (|lmax', c'|) = cipher_of_entry e in
+ //   adata_of_entry e = ad && lmax' = lmax && c' = c
 
 
 val decrypt
@@ -195,19 +215,23 @@ val decrypt
   (lmax:AEAD.plainLen)
   (c:cipher i lmax):
   ST (option (plain i lmax))
-  (requires fun h0 -> rinvariant r h0)
+  (requires fun h0 -> rinvariant r h0 /\ invariant w h0)
   (ensures fun h0 res h1 ->
+    let j = rctrT r h0 in
+    invariant w h1 /\
     rinvariant r h1 /\
     modifies (Set.union (rfootprint r) (rshared_footprint r)) h0 h1 /\
+    (Some? res ==> rctrT r h1 == j + 1) /\
+    (None? res ==> rctrT r h1 == j) /\
     (Flag.safeId i ==> (
-      let j = rctrT r h0 in
       let lg = wlog w h0 in
-      if j < wctrT w h0 && matches (Seq.index lg j) ad lmax c then
-        (Some? res /\
-        Seq.index lg j == mk_entry ad (Some?.v res) c /\
-        rctrT r h1 == j + 1 /\
-        rlog r h1 == Seq.snoc (rlog r h0) (Seq.index lg j))
+      if j < wctrT w h0 then
+        (match (Seq.index lg j) with 
+          | Entry ad' #lmax' p' c' ->
+            if ad' = ad && lmax' = lmax && c' = c then
+              res = Some p' 
+            else
+              res = None)
       else
-        res == None)))
-        
-
+        res = None))
+  ) 
