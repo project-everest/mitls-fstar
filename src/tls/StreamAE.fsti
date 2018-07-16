@@ -62,8 +62,8 @@ val rctr: #i:I.id -> #w:stream_writer i -> r:stream_reader w -> ST UInt32.t
   (requires fun h0 -> True)
   (ensures fun h0 c h1 -> h0 == h1 /\ UInt32.v c = rctrT r h1)
 
-val wlog: #i:safeid -> w:stream_writer i -> h:mem{invariant w h} -> GTot (s:Seq.seq (stream_entry i)
-  {wctrT w h == Seq.length s})
+val wlog: #i:safeid -> w:stream_writer i -> h:mem -> GTot (s:Seq.seq (stream_entry i)
+  {invariant w h ==> wctrT w h == Seq.length s})
 
 let prefix (#i:safeid) (w:stream_writer i) (h:mem{invariant w h}) (k:nat{k <= wctrT w h}) =
   Seq.Base.slice (wlog w h) 0 k
@@ -129,17 +129,17 @@ val rframe_invariant: #i:I.id -> #w:stream_writer i -> r:stream_reader w -> h0:m
     ~(Set.mem ri (rfootprint r))))
   (ensures rinvariant r h1)
 
-(*val frame_log: #i:I.id -> w:stream_writer i -> l:Seq.seq (stream_entry i) ->
+val frame_log: #i:I.id -> w:stream_writer i -> l:Seq.seq (stream_entry i) ->
   h0:mem -> ri:rid -> h1:mem ->
   Lemma
   (requires
     Flag.safeId i /\
-    invariant w h0 ->
+//    invariant w h0 ->
     wlog w h0 == l /\
     modifies_one ri h0 h1 /\
     ~(Set.mem ri (footprint w)))
   (ensures wlog w h1 == l)
-*)
+
 
 val create: parent:rgn -> i:I.id -> u:info i ->
   ST (stream_writer i)
@@ -218,7 +218,7 @@ val decrypt
   (requires fun h0 -> rinvariant r h0 /\ invariant w h0)
   (ensures fun h0 res h1 ->
     let j = rctrT r h0 in
-    invariant w h1 /\
+//    invariant w h1 /\
     rinvariant r h1 /\
     modifies (Set.union (rfootprint r) (rshared_footprint r)) h0 h1 /\
     (Some? res ==> rctrT r h1 == j + 1) /\

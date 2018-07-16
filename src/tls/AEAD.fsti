@@ -40,11 +40,16 @@ type aadlen_32 = l:U32.t {l <=^ aadmax}
 
 type plainLen = l:nat{l + v taglen < pow2 32}
 
+type plainLenMin (lmin:plainLen) = l:plainLen{l >= lmin}
+
+
+
 noeq type plain_pkg =
   | PlainPkg:
-    plain: (i:I.id -> plainLen -> eqtype) ->
-    as_bytes: (i:I.id -> l:plainLen -> plain i l -> GTot (lbytes l)) ->
-    repr: (i:unsafeid -> l:plainLen -> p:plain i l -> Tot (b:lbytes l{b == as_bytes i l p})) ->
+    min_len: plainLen ->
+    plain: (i:I.id -> plainLenMin min_len -> eqtype) ->
+    as_bytes: (i:I.id -> l:plainLenMin min_len -> plain i l -> GTot (lbytes l)) ->
+    repr: (i:unsafeid -> l:plainLenMin min_len -> p:plain i l -> Tot (b:lbytes l{b == as_bytes i l p})) ->
     plain_pkg
 
 noeq type info' = {
@@ -57,20 +62,23 @@ noeq type info' = {
 type info (i:I.id) =
   info:info'{I.aeadAlg_of_id i == info.alg}
 
-let plain (#i:I.id) (u:info i) (l:plainLen) =
+let plainLenM (#i:I.id) (u:info i) = plainLenMin (PlainPkg?.min_len u.plain)
+
+let plain (#i:I.id) (u:info i) (l:plainLenM u) =
   (PlainPkg?.plain u.plain) i l
  
-let as_bytes (#i:I.id) (#u:info i) (#l:plainLen) (p:plain u l) : GTot (lbytes l) = 
+let as_bytes (#i:I.id) (#u:info i) (#l:plainLenM u) (p:plain u l) : GTot (lbytes l) = 
   (PlainPkg?.as_bytes u.plain) i l p
   
-let repr (#i:unsafeid) (#u:info i) (#l:plainLen) (p:plain u l) : Tot (r:lbytes l{r == as_bytes p}) =
+let repr (#i:unsafeid) (#u:info i) (#l:plainLenM u) (p:plain u l) : Tot (r:lbytes l{r == as_bytes p}) =
   (PlainPkg?.repr u.plain) i l p
 
 val keylen   : #i:I.id -> u:info i -> U32.t
 
 val statelen : #i:I.id -> u:info i -> U32.t
 
-type cipher (i:I.id) (l:plainLen) = lbytes (l + (UInt32.v taglen))
+type cipher (i:I.id) (u:info i) (l:plainLenM u) =
+  lbytes (l + (UInt32.v taglen))
 
 type cipher32 (i:I.id) (l:U32.t{UInt.size (v l + 16) 32}) = lbytes32 (l +^ taglen)
 
@@ -82,9 +90,9 @@ type entry (i:I.id) (u:info i) =
   | Entry:
     nonce: nonce i ->
     ad: adata ->
-    #l: plainLen ->
+    #l: plainLenM u ->
     p: plain u l ->
-    c: cipher i l ->
+    c: cipher i u l ->
     entry i u
 
 
@@ -272,9 +280,9 @@ val encrypt
   (w: aead_writer i)
   (n: iv (I.cipherAlg_of_id i))
   (aad: adata)
-  (l: plainLen)
+  (l: plainLenM (wgetinfo w))
   (p: plain (wgetinfo w) l)
-  : ST (cipher i l)
+  : ST (cipher i (wgetinfo w) l)
   (requires (fun h0 ->
     winvariant w h0 /\
     (safeId i ==> fresh_nonce n w h0)))
@@ -290,8 +298,8 @@ val decrypt
   (r: aead_reader w)
   (aad:adata)
   (n: iv (I.cipherAlg_of_id i))
-  (l:plainLen)
-  (c:cipher i l)
+  (l:plainLenM (wgetinfo w))
+  (c:cipher i (wgetinfo w) l)
   : ST (option (plain (rgetinfo r) l))
   (requires (fun h0 ->
     winvariant w h0))

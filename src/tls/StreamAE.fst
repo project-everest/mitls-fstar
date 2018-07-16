@@ -30,8 +30,14 @@ open TLSError
 open TLSConstants
 open TLSInfo
 
+type plainLenMin = AEAD.plainLenMin 1
+
 // plain i lmax: stream plaintext of length at most lmax
 let plain i lmax = llbytes lmax
+
+//aead_plain i l: aead plain of length exactly l
+type aead_plain (i:I.id) (l:plainLenMin) : t:Type0{hasEq t} = lbytes l
+
 
 type counter = c:UInt32.t{UInt32.v c <= max_ctr}
 
@@ -40,28 +46,11 @@ let increases_u32 (x:U32.t) (y:U32.t)  = b2t (x <=^ y)
 let ctr_ref (r:erid) (i:I.id) : Tot Type0 =
   m_rref r counter increases_u32
 
-//aead_plain i l: aead plain of length exactly l
-type aead_plain (i:I.id) (l:AEAD.plainLen) : t:Type0{hasEq t} = lbytes l
 
-assume val pad: lmax:AEAD.plainLen -> p:llbytes lmax -> lbytes (lmax+1)
-assume val unpad: #l:AEAD.plainLen{l>=1} -> p:lbytes l -> llbytes (l-1)
 
-let plain_of_aead_plain
-  (#i:I.id)
-  (#l:AEAD.plainLen {l>=1})
- // (#l:AEAD.plainLen{l <= lmax})
-  (p:aead_plain i l) : plain i (l-1) =
-  unpad p
+let as_bytes (i:I.id) (l:plainLenMin) (p:aead_plain i l) : GTot (lbytes l) = p
 
-let cipher_of_aead_cipher
-  (#i:I.id)
-  (#l:AEAD.plainLen{l>=1})
-  (c:AEAD.cipher i l) : cipher i (l-1) =
-  c
-
-let as_bytes (i:I.id) (l:AEAD.plainLen) (p:aead_plain i l) : GTot (lbytes l) = p
-
-let repr (i:AEAD.unsafeid) (l:AEAD.plainLen) (p:aead_plain i l) : Tot (b:lbytes l{b == as_bytes i l p}) =
+let repr (i:AEAD.unsafeid) (l:plainLenMin) (p:aead_plain i l) : Tot (b:lbytes l{b == as_bytes i l p}) =
   p
 
 //let f ($x: (I.id -> AEAD.plainLen -> t:Type0{hasEq t})) = True
@@ -70,12 +59,28 @@ let repr (i:AEAD.unsafeid) (l:AEAD.plainLen) (p:aead_plain i l) : Tot (b:lbytes 
 
 //let _ = f aead_plain
 
-let aead_plain_pkg = AEAD.PlainPkg aead_plain as_bytes repr
+let aead_plain_pkg = AEAD.PlainPkg 1 aead_plain as_bytes repr
 
 //let aead_plain_pkg = AEAD.PlainPkg (fun i l -> aead_plain i l) as_bytes repr
 
 type aead_info (i:I.id) = u:(AEAD.info i){u.AEAD.plain == aead_plain_pkg}
 
+
+assume val pad: lmax:AEAD.plainLen -> p:llbytes lmax -> lbytes (lmax+1)
+assume val unpad: #l:plainLenMin -> p:lbytes l -> llbytes (l-1)
+
+let plain_of_aead_plain
+  (#i:I.id)
+  (#l:plainLenMin)
+  (p:aead_plain i l) : plain i (l-1) =
+  unpad p
+
+let cipher_of_aead_cipher
+  (#i:I.id)
+  (#u:aead_info i)
+  (#l:plainLenMin)
+  (c:AEAD.cipher i u l) : cipher i (l-1) =
+  c
 
 
 noeq type stream_writer (i:I.id) =
@@ -83,7 +88,8 @@ noeq type stream_writer (i:I.id) =
     #region: rgn ->
     aead: AEAD.aead_writer i
       {(AEAD.wgetinfo aead).AEAD.plain == aead_plain_pkg /\
-        ~ (Set.mem region (Set.union (AEAD.wfootprint aead) (AEAD.shared_footprint)))} ->
+        Set.disjoint (Set.singleton region) (AEAD.wfootprint aead) /\
+        Set.disjoint (Set.singleton region) (AEAD.shared_footprint)} ->
     iv: AEAD.iv (I.cipherAlg_of_id i) ->
     ctr: ctr_ref region i ->
     stream_writer i
@@ -116,8 +122,6 @@ let create_nonce (#i:I.id) (iv: AEAD.iv (I.cipherAlg_of_id i)) (j:U32.t) : Tot (
   U128.(iv ^^ (uint32_to_uint128 j))
 
 
-// ?? agility: cases AES and ChaCha20 (see AEADProvider)
-
 let invariant (#i:I.id) (w:stream_writer i) (h:mem) =
   AEAD.winvariant (Stream_writer?.aead w) h /\
   (if safeId i then
@@ -125,7 +129,6 @@ let invariant (#i:I.id) (w:stream_writer i) (h:mem) =
     let wlg = AEAD.wlog (Stream_writer?.aead w) h in
     let iv = Stream_writer?.iv w in
     UInt32.v wc = Seq.length wlg /\
-    (forall e. Seq.mem e wlg ==> AEAD.Entry?.l e >= 1) /\
     (forall (j:U32.t). (v j < v wc) ==> AEAD.Entry?.nonce (Seq.index wlg (v j)) = create_nonce iv j)
   else
     True)
@@ -161,7 +164,7 @@ let rctr (#i:I.id) (#w:stream_writer i) (r:stream_reader w) =
   !(Stream_reader?.ctr r)
 
 
-let stream_entry_of_aead_entry (#i:I.id) (#u:aead_info i) (e:AEAD.entry i u {AEAD.Entry?.l e >= 1}) =
+let stream_entry_of_aead_entry (#i:I.id) (#u:aead_info i) (e:AEAD.entry i u) =
   match e with
     | AEAD.Entry nonce ad #l p c ->
       Entry ad (plain_of_aead_plain p) (cipher_of_aead_cipher c)
@@ -171,34 +174,90 @@ let seqmap (#t:Type) (#t':Type) (f:(t -> t')) (s:seq t) : (s':seq t'{Seq.length 
 
 let wlog (#i:safeid) (w:stream_writer i) (h:mem) =
   let wlg = AEAD.wlog (Stream_writer?.aead w) h in
-//  seqmap stream_entry_of_aead_entry wlg
-  magic()
-  
-let rlog (#i:safeid) (#w:stream_writer i) (r:stream_reader w) (h:mem) =
-  let wlg = AEAD.wlog (Stream_writer?.aead w) h in
-//  pref (seqmap stream_entry_of_aead_entry wlg) (rctrT r h)
-  assume False; magic()
+  seqmap stream_entry_of_aead_entry wlg
+
+
+let rlog (#i:safeid) (#w:stream_writer i) (r:stream_reader w) h =
+  pref (wlog w h) (rctrT r h)
 
 
 let shared_footprint #i w = AEAD.shared_footprint
 
+(*let testtest (#i:I.id) (w:stream_writer i) =
+  rset_union (AEAD.wfootprint (Stream_writer?.aead w)) (Set.singleton (Stream_writer?.region w))
+
+let test (#i:I.id) (w:stream_writer i) :
+  Lemma 
+  (requires True)
+  (ensures Set.disjoint (testtest w) (shared_footprint w)) =
+  ()
+
+*)
 let footprint #i w =
-  magic()
-//  Set.union (AEAD.wfootprint (Stream_writer?.aead w)) (Set.singleton (Stream_writer?.region w))
+  assume False;
+  Set.union (AEAD.wfootprint (Stream_writer?.aead w)) (Set.singleton (Stream_writer?.region w))
+ 
 
 let rfootprint #i #w r =
-  magic()//  Set.union (AEAD.rfootprint (Stream_reader?.aead r)) (Set.singleton (Stream_reader?.region r))
+  assume False;
+  Set.union (AEAD.rfootprint (Stream_reader?.aead r)) (Set.singleton (Stream_reader?.region r))
 
-let frame_invariant #i w h0 ri h1 = admit()
-let rframe_invariant #i #w r h0 ri h1 = admit()
+let frame_invariant #i w h0 ri h1 =
+  AEAD.wframe_invariant (Stream_writer?.aead w) h0 ri h1;
+  admit()
+
+//admit()
+let rframe_invariant #i #w r h0 ri h1 = 
+//  AEAD.wframe_invariant (Stream_writer?.aead w) h0 ri h1;
+  admit()
+  
+let frame_log #i w l h0 ri h1 = admit()
 
 let aead_info_of_info (#i:I.id) (u:info i) : AEAD.info i =
   {AEAD.alg= u.alg; AEAD.prf_rgn=u.shared; AEAD.log_rgn=u.local; AEAD.plain=aead_plain_pkg}
-  
+
+val lem_ivlen : alg:I.cipherAlg -> Lemma (requires True) (ensures (16ul -^ (AEAD.ivlen alg) = 4ul))
+let lem_ivlen alg = ()
+
+
+
 let create (parent:rgn) (i:I.id) (u:info i) =
   let w = AEAD.gen i (aead_info_of_info u) in
-  Stream_writer w
+  let rr = new_region parent in
+  let alg = I.cipherAlg_of_aeadAlg u.alg in
+  //let ivlen = AEAD.ivlen alg in
+  //let ivv = CoreCrypto.random32 ivlen in
+  //let ivv' = Bytes.append ivv
+  //let _ = (Bytes.create (16ul -^ ivlen)
+  //  (FStar.UInt8.uint_to_t 0)) in
+//  let iv = U128.uint_to_t (Bytes.int_of_bytes ivv') in
+  let iv = U128.uint_to_t 0 in
+  let ctr = ralloc #(U32.t) #increases_u32 rr 0ul in
+  admit();
+  Stream_writer #i #rr w iv ctr
   
+
+let coerce parent i u = admit()
+
+
+let createReader (parent:rgn) (#i:I.id) (w:stream_writer i) =
+  let aw = Stream_writer?.aead w in
+  let r = AEAD.genReader aw in
+  let rr = new_region parent in
+  let iv = U128.uint_to_t 0 in
+  let ctr = ralloc #(U32.t) #increases_u32 rr 0ul in
+  admit()//;
+//  Stream_reader #i #w #rr r iv ctr 
+
+
+let encrypt #i (w:stream_writer i) ad lmax (p:plain i lmax) =
+  let pp:aead_plain i (lmax+1) = pad lmax p in
+  let aw = Stream_writer?.aead w in
+  let n = create_nonce (Stream_writer?.iv w) !(Stream_writer?.ctr w) in
+  let cc:AEAD.cipher i (getinfo w) = AEAD.encrypt i aw n ad (lmax+1) pp in
+  let c = cipher_of_aead_cipher cc in
+  c
+
 
 
 (*type rid = HST.erid
