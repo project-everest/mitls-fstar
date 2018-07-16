@@ -36,3 +36,7 @@ let parse32_u32 =
     let _ = Unique.parse_u32_unique (B.as_seq h input) in
     Aux.parse32_u32 input
   )
+
+let serialize32_u16 = magic ()
+
+let serialize32_u32 = magic ()

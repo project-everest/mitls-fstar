@@ -26,7 +26,7 @@ LOW_LEVEL= -add-include '"kremlin/internal/compat.h"' LowParse_TestLib_Low_c.c
 MY_KREMLIN=$(KREMLIN_HOME)/krml -bundle 'LowParse.\*'
 
 EXAMPLES=Example Example2 Example3
-ROOT_FILES=LowParse.SLow.fst LowParse.Low.fst $(addprefix LowParse, $(addsuffix .fst, $(EXAMPLES))) LowParse.TestLib.SLow.fst LowParse.TestLib.Low.fst
+ROOT_FILES=LowParse.SLow.fst LowParse.Low.fst $(addprefix LowParse, $(addsuffix .fst, $(EXAMPLES))) LowParse.TestLib.SLow.fst LowParse.TestLib.Low.fst LowParseExample4.fsti
 
 EXCLUDE_KRML_FILES=$(FSTAR_OUT_DIR)/prims.krml
 
