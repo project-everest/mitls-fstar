@@ -257,6 +257,7 @@ type hs_out = {
   to_be_written: UInt32.t;
   is_complete: bool;
   is_writable: bool;
+  is_early_rejected: bool;
 }
 
 type hs_result =
@@ -293,6 +294,7 @@ let process_hs (hs:H.hs) (ctx:hs_in) : ML hs_result =
         to_be_written = UInt32.uint_to_t tbw;
         is_complete = false;
         is_writable = false;
+	is_early_rejected = false;
       })
     else
       let i = currentId hs Writer in
@@ -306,6 +308,7 @@ let process_hs (hs:H.hs) (ctx:hs_in) : ML hs_result =
 	  to_be_written = UInt32.uint_to_t (H.to_be_written hs);
 	  is_complete = complete;
 	  is_writable = is_writable;
+	  is_early_rejected = false;
 	})
    end
   else
@@ -340,6 +343,7 @@ let process_hs (hs:H.hs) (ctx:hs_in) : ML hs_result =
           to_be_written = UInt32.uint_to_t (H.to_be_written hs);
           is_complete = complete || complete';
 	  is_writable = is_writable;
+	  is_early_rejected = reject_0rtt;
         })
 
 type raw_key = {

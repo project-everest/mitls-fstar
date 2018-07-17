@@ -77,7 +77,8 @@ let parseVersion_draft v =
   | (127z, d) ->
     if d = draft
     then Correct TLS_1p3
-    else Error(AD_decode_error, "Refused to parse unknown draft "^print_bytes v^": expected TLS 1.3#"^UInt8.to_string draft)
+    else Correct (Unknown_protocolVersion (uint16_of_bytes v))
+//    else Error(AD_decode_error, "Refused to parse unknown draft "^print_bytes v^": expected TLS 1.3#"^UInt8.to_string draft)
   | (3z, 4z) -> Error(AD_decode_error, "Refused to parse TLS 1.3 final version: expected TLS 1.3#"^UInt8.to_string draft)
   | _ ->
     match parseVersion v with

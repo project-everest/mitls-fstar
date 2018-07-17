@@ -1342,6 +1342,7 @@ int MITLS_CALLCONV FFI_mitls_quic12_process(quic12_state *st, quic_process_ctx *
       memcpy(ctx->output, out.output.data, ctx->output_len);
     if(out.is_complete) st->is_complete = 1;
     ctx->can_write_data = !!out.is_writable;
+    ctx->rejected_0rtt = !!out.is_early_rejected;
     r = 1;
   }
   else
@@ -1351,6 +1352,7 @@ int MITLS_CALLCONV FFI_mitls_quic12_process(quic12_state *st, quic_process_ctx *
     ctx->consumed_bytes = 0;
     ctx->to_be_written = 0;
     ctx->can_write_data = 0;
+    ctx->rejected_0rtt = 0;
   }
 
   K___Prims_int_Prims_int epochs = QUIC_get_epochs(st->hs);
