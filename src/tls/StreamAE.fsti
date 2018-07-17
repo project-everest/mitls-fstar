@@ -13,11 +13,13 @@ open Mem
 open Pkg
 
 
+type plainLen = l:nat{l + v AEAD.taglen < pow2 32 - 1}
+
 type llbytes (lmax:nat) = b:bytes{length b <= lmax}
 
-val plain: i:I.id -> lmax:AEAD.plainLen -> t:Type0{hasEq t}
+val plain: i:I.id -> lmax:plainLen -> t:Type0{hasEq t}
 
-type cipher (i:I.id) (lmax:AEAD.plainLen) = lbytes (lmax + U32.v (AEAD.taglen) + 1)
+type cipher (i:I.id) (lmax:plainLen) = lbytes (lmax + U32.v (AEAD.taglen) + 1)
 
 type safeid = i:I.id{Flag.safeId i}
 
@@ -29,7 +31,7 @@ let max_ctr = pow2 32 - 1
 type stream_entry (i:I.id) =
   | Entry:
     ad:AEAD.adata ->
-    #lmax:AEAD.plainLen ->
+    #lmax:plainLen ->
     p:plain i lmax ->
     c:cipher i lmax ->
     stream_entry i
@@ -126,7 +128,8 @@ val rframe_invariant: #i:I.id -> #w:stream_writer i -> r:stream_reader w -> h0:m
   (requires
     (rinvariant r h0 /\
     modifies_one ri h0 h1 /\
-    ~(Set.mem ri (rfootprint r))))
+    ~(Set.mem ri (rfootprint r))) /\
+    ~(Set.mem ri (shared_footprint w)))
   (ensures rinvariant r h1)
 
 val frame_log: #i:I.id -> w:stream_writer i -> l:Seq.seq (stream_entry i) ->
@@ -187,7 +190,7 @@ val encrypt
   (#i:I.id)
   (w:stream_writer i)
   (ad:AEAD.adata)
-  (lmax:AEAD.plainLen)
+  (lmax:plainLen)
   (p:plain i lmax):
   ST (cipher i lmax)
   (requires fun h0 -> incrementable w h0 /\ invariant w h0)
@@ -212,7 +215,7 @@ val decrypt
   (#w:stream_writer i)
   (r:stream_reader w)
   (ad:AEAD.adata)
-  (lmax:AEAD.plainLen)
+  (lmax:plainLen)
   (c:cipher i lmax):
   ST (option (plain i lmax))
   (requires fun h0 -> rinvariant r h0 /\ invariant w h0)

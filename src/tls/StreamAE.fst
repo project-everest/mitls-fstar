@@ -66,7 +66,7 @@ let aead_plain_pkg = AEAD.PlainPkg 1 aead_plain as_bytes repr
 type aead_info (i:I.id) = u:(AEAD.info i){u.AEAD.plain == aead_plain_pkg}
 
 
-assume val pad: lmax:AEAD.plainLen -> p:llbytes lmax -> lbytes (lmax+1)
+assume val pad: lmax:plainLen -> p:llbytes lmax -> lbytes (lmax+1)
 assume val unpad: #l:plainLenMin -> p:lbytes l -> llbytes (l-1)
 
 let plain_of_aead_plain
@@ -75,11 +75,25 @@ let plain_of_aead_plain
   (p:aead_plain i l) : plain i (l-1) =
   unpad p
 
+let aead_plain_of_plain
+  (#i:I.id)
+  (#lmax:plainLen)
+  (p:plain i lmax) : aead_plain i (lmax+1) =
+  pad lmax p
+
+
 let cipher_of_aead_cipher
   (#i:I.id)
   (#u:aead_info i)
   (#l:plainLenMin)
   (c:AEAD.cipher i u l) : cipher i (l-1) =
+  c
+
+let aead_cipher_of_cipher
+  (#i:I.id)
+  (u:aead_info i)
+  (#lmax:plainLen)
+  (c:cipher i lmax) : AEAD.cipher i u (lmax+1) =
   c
 
 
@@ -100,7 +114,7 @@ noeq type stream_reader (#i:I.id) (w:stream_writer i) =
     aead: AEAD.aead_reader (Stream_writer?.aead w)
       {(AEAD.rgetinfo aead).AEAD.plain == aead_plain_pkg /\
       ~ (Set.mem region (Set.union (AEAD.rfootprint aead) (AEAD.shared_footprint)))} ->
-    iv: AEAD.iv (I.cipherAlg_of_id i) ->
+    iv: AEAD.iv (I.cipherAlg_of_id i){iv = w.iv} ->
     ctr: ctr_ref region i ->
     stream_reader w
 
@@ -140,19 +154,11 @@ let rinvariant (#i:I.id) (#w:stream_writer i) (r:stream_reader w) (h:mem) =
   let wc = sel h (Stream_writer?.ctr w) in
   let rc = sel h (Stream_reader?.ctr r) in
   AEAD.winvariant (Stream_writer?.aead w) h /\
-  rc <=^ wc /\
-  Stream_writer?.iv w = Stream_reader?.iv r (*/\
-  (if safeId i then
-    let wlg = AEAD.wlog (Stream_writer?.aead w) h in
-    let rlg = AEAD.rlog (Stream_reader?.aead r) h in
-    v wc == Seq.length wlg /\
-    v rc == Seq.length rlg /\
-    rlg == pref wlg (v rc)
-  else
-    True)*)
+  rc <=^ wc
 
 let wctrT (#i:I.id) (w:stream_writer i) (h:mem) =
   v (sel h (Stream_writer?.ctr w)) 
+
 
 let wctr (#i:I.id) (w:stream_writer i) =
   !(Stream_writer?.ctr w)
@@ -183,16 +189,6 @@ let rlog (#i:safeid) (#w:stream_writer i) (r:stream_reader w) h =
 
 let shared_footprint #i w = AEAD.shared_footprint
 
-(*let testtest (#i:I.id) (w:stream_writer i) =
-  rset_union (AEAD.wfootprint (Stream_writer?.aead w)) (Set.singleton (Stream_writer?.region w))
-
-let test (#i:I.id) (w:stream_writer i) :
-  Lemma 
-  (requires True)
-  (ensures Set.disjoint (testtest w) (shared_footprint w)) =
-  ()
-
-*)
 let footprint #i w =
   assume False;
   Set.union (AEAD.wfootprint (Stream_writer?.aead w)) (Set.singleton (Stream_writer?.region w))
@@ -200,18 +196,33 @@ let footprint #i w =
 
 let rfootprint #i #w r =
   assume False;
-  Set.union (AEAD.rfootprint (Stream_reader?.aead r)) (Set.singleton (Stream_reader?.region r))
+  Set.union (AEAD.rfootprint (Stream_reader?.aead r))
+    (Set.union (AEAD.wfootprint (Stream_writer?.aead w))
+      (Set.union (Set.singleton (Stream_reader?.region r))
+        (Set.singleton (Stream_writer?.region w))))
 
-let frame_invariant #i w h0 ri h1 =
-  AEAD.wframe_invariant (Stream_writer?.aead w) h0 ri h1;
-  admit()
+//#reset-options "--detail_errors"
 
-//admit()
+let frame_invariant (#i:I.id) (w:stream_writer i) (h0:mem) (ri:rid) (h1:mem) =
+  let aw = Stream_writer?.aead w in
+//  FStar.Set.mem_union ri (AEAD.wfootprint (Stream_writer?.aead w)) (Set.singleton (Stream_writer?.region w));
+  assume (ri <> (frameOf (Stream_writer?.ctr w)) ==> sel h0  (Stream_writer?.ctr w) = sel h1 (Stream_writer?.ctr w));
+  AEAD.wframe_invariant aw h0 ri h1;
+  if safeId i then (AEAD.frame_log aw (AEAD.wlog aw h0) h0 ri h1)
+
+
 let rframe_invariant #i #w r h0 ri h1 = 
-//  AEAD.wframe_invariant (Stream_writer?.aead w) h0 ri h1;
-  admit()
+  let aw = Stream_writer?.aead w in
+  assume (ri <> (frameOf (Stream_writer?.ctr w)) ==> sel h0  (Stream_writer?.ctr w) = sel h1 (Stream_writer?.ctr w));
+  assume (ri <> (frameOf (Stream_reader?.ctr r)) ==> sel h0  (Stream_reader?.ctr r) = sel h1 (Stream_reader?.ctr r));
+  AEAD.wframe_invariant aw h0 ri h1
+ 
+
+
+let frame_log #i w l h0 ri h1 =
+  let aw = Stream_writer?.aead w in
+  AEAD.frame_log aw (AEAD.wlog aw h0) h0 ri h1
   
-let frame_log #i w l h0 ri h1 = admit()
 
 let aead_info_of_info (#i:I.id) (u:info i) : AEAD.info i =
   {AEAD.alg= u.alg; AEAD.prf_rgn=u.shared; AEAD.log_rgn=u.local; AEAD.plain=aead_plain_pkg}
@@ -219,19 +230,83 @@ let aead_info_of_info (#i:I.id) (u:info i) : AEAD.info i =
 val lem_ivlen : alg:I.cipherAlg -> Lemma (requires True) (ensures (16ul -^ (AEAD.ivlen alg) = 4ul))
 let lem_ivlen alg = ()
 
+let rec little_endian (b:bytes) : Tot (n:nat) (decreases (length b)) =
+  if length b = 0 then 0
+  else
+    let b' = sub b 1ul (U32.uint_to_t ((length b) - 1)) in
+    let h = FStar.Bytes.get b 0ul in
+    (UInt8.v h) + pow2 8 * little_endian b'
+
+val lemma_euclidean_division: r:nat -> b:nat -> q:pos -> Lemma
+  (requires (r < q))
+  (ensures  (r + q * b < q * (b+1)))
+let lemma_euclidean_division r b q = ()
+
+val lemma_factorise: a:nat -> b:nat -> Lemma (a + a * b == a * (b + 1))
+let lemma_factorise a b = ()
+
+val lemma_little_endian_is_bounded: b:bytes -> Lemma
+  (requires True)
+  (ensures  (little_endian b < pow2 (8 * length b)))
+  (decreases (length b))
+let rec lemma_little_endian_is_bounded b =
+  if length b = 0 then ()
+  else
+    admit()
+
+(*
+    begin
+    let s = slice b 1ul (U32.uint_to_t (length b)) in
+    assert(length s = length b - 1);
+    lemma_little_endian_is_bounded s;
+    assert(UInt8.v (FStar.Bytes.get b 0ul) < pow2 8);
+    assert(little_endian s < pow2 (8 * length s));
+    assert(little_endian b < pow2 8 + pow2 8 * pow2 (8 * (length b - 1)));
+    lemma_euclidean_division (UInt8.v (FStar.Bytes.get b 0ul)) (little_endian s) (pow2 8);
+    assert(little_endian b <= pow2 8 * (little_endian s + 1));
+    assert(little_endian b <= pow2 8 * pow2 (8 * (length b - 1)));
+    Math.Lemmas.pow2_plus 8 (8 * (length b - 1));
+    lemma_factorise 8 (length b - 1)
+    end
+*)
+
+val uint8_to_uint128: a:UInt8.t -> Tot (b:UInt128.t{UInt128.v b == UInt8.v a})
+let uint8_to_uint128 a = U128.uint64_to_uint128 (FStar.Int.Cast.uint8_to_uint64 a)
 
 
+val load_uint128:
+  alg:I.cipherAlg ->
+  len:U32.t {len <=^ (AEAD.ivlen alg)} -> 
+  b:lbytes (v len) -> 
+  Tot (n:U128.t{U128.v n == little_endian b}) (decreases (v len))
+  
+let rec load_uint128 alg len b =
+  if len = 0ul then U128.uint64_to_uint128 0UL
+  else
+    let n' = load_uint128 alg (len -^ 1ul) (sub b 1ul (len -^ 1ul)) in
+    let h = FStar.Bytes.get b 0ul in
+    lemma_little_endian_is_bounded
+      (sub b 1ul (len -^ 1ul));
+     magic()
+(*    assert (UInt128.v n' <= pow2 (8 * v len - 8) - 1);
+   assert (256 * UInt128.v n' <= 256 * pow2 (8 * v len - 8) - 256);
+    assert_norm (256 * pow2 (8 * 16 - 8) - 256 <= pow2 128 - 256);
+    Math.Lemmas.pow2_le_compat (8 * 16 - 8) (8 * v len - 8);
+    assert (256 * pow2 (8 * v len - 8) - 256 <= pow2 128 - 256);
+    Math.Lemmas.modulo_lemma (256 * UInt128.v n') (pow2 128);
+    assert_norm (pow2 (UInt32.v 8ul) == 256);
+    assert (256 * UInt128.v n' == FStar.UInt128.(v (n' <<^ 8ul)));
+    FStar.UInt128.(uint8_to_uint128 h +^ (n' <<^ 8ul))
+*)
+
+//parent in the info ?
 let create (parent:rgn) (i:I.id) (u:info i) =
   let w = AEAD.gen i (aead_info_of_info u) in
   let rr = new_region parent in
   let alg = I.cipherAlg_of_aeadAlg u.alg in
-  //let ivlen = AEAD.ivlen alg in
-  //let ivv = CoreCrypto.random32 ivlen in
-  //let ivv' = Bytes.append ivv
-  //let _ = (Bytes.create (16ul -^ ivlen)
-  //  (FStar.UInt8.uint_to_t 0)) in
-//  let iv = U128.uint_to_t (Bytes.int_of_bytes ivv') in
-  let iv = U128.uint_to_t 0 in
+  let ivlen = AEAD.ivlen alg in
+  let b = CoreCrypto.random32 ivlen in
+  let iv = load_uint128 alg ivlen b in
   let ctr = ralloc #(U32.t) #increases_u32 rr 0ul in
   admit();
   Stream_writer #i #rr w iv ctr
@@ -253,297 +328,21 @@ let createReader (parent:rgn) (#i:I.id) (w:stream_writer i) =
 let encrypt #i (w:stream_writer i) ad lmax (p:plain i lmax) =
   let pp:aead_plain i (lmax+1) = pad lmax p in
   let aw = Stream_writer?.aead w in
-  let n = create_nonce (Stream_writer?.iv w) !(Stream_writer?.ctr w) in
-  let cc:AEAD.cipher i (getinfo w) = AEAD.encrypt i aw n ad (lmax+1) pp in
-  let c = cipher_of_aead_cipher cc in
-  c
+  let ctr = Stream_writer?.ctr w in
+  let n = create_nonce (Stream_writer?.iv w) !ctr in
+ // let cc:AEAD.cipher i (AEAD.wgetinfo aw) (lmax+1) = AEAD.encrypt i aw n ad (lmax+1) pp in
+//  let c = cipher_of_aead_cipher cc in
+  ctr := !ctr  + 1
+  admit() //c
 
 
-
-(*type rid = HST.erid
-
-type id = i:id { ID13? i } *)
-
-(*let alg (i:id) =
-  let AEAD ae _ = aeAlg_of_id i in ae
-
-let ltag i : nat = CoreCrypto.aeadTagSize (alg i)
-let cipherLen i (l:plainLen) : nat = l + ltag i
-type cipher i (l:plainLen) = lbytes (cipherLen i l)
-*)
-
-// will require proving before decryption
-(*let lenCipher i (c:bytes { ltag i <= length c }) : nat = length c - ltag i
-
-// key materials (from the AEAD provider)
-type key (i:id) = AEAD.key i
-type iv  (i:id) = AEAD.salt i
- 
-let ideal_log (r:erid) (i:id) = log_t r (entry i)
-
-let log_ref (r:erid) (i:id) : Tot Type0 =
-  if authId i then ideal_log r i else unit
-
-let ilog (#r:erid) (#i:id) (l:log_ref r i{authId i}) : Tot (ideal_log r i) =
-  l
-
-irreducible let max_ctr: n:nat{n = 18446744073709551615} =
-  assert_norm (pow2 64 - 1 = 18446744073709551615);
-  pow2 64 - 1
-
-type counter = c:nat{c <= max_ctr}
-
-let ideal_ctr (#l:erid) (r: erid) (i:id) (log:ideal_log l i) : Tot Type0 =
-  FStar.Monotonic.Seq.seqn r log max_ctr
-  // An increasing counter, at most min(length log, 2^64-1)
-
-let concrete_ctr (r:erid) (i:id) : Tot Type0 =
-  m_rref r counter increases
-
-let ctr_ref (#l:erid) (r:erid) (i:id) (log:log_ref l i) : Tot Type0 =
-  if authId i
-  then ideal_ctr r i (log <: ideal_log l i)
-  else m_rref r counter increases
-
-let ctr (#l:erid) (#r:erid) (#i:id) (#log:log_ref l i) (c:ctr_ref r i log)
-  : Tot (m_rref r (if authId i
-		   then seqn_val #l #(entry i) r log max_ctr
-		   else counter)
-		increases) =
-  c
-
-// kept concrete for log and counter, but the key and iv should be private.
-noeq type state (i:id) (rw:rw) =
-  | State: #region: rgn
-         -> #log_region: rgn{if rw = Writer then region = log_region else HS.disjoint region log_region}
-         -> aead: AEAD.state i rw
-         -> log: log_ref log_region i // ghost, subject to cryptographic assumption
-         -> counter: ctr_ref region i log // types are sufficient to anti-alias log and counter
-         -> state i rw
-
-// Some invariants:
-// - the writer counter is the length of the log; the reader counter is lower or equal
-// - gen is called at most once for each (i:id), generating distinct refs for each (i:id)
-// - the log is monotonic
-
-type writer i = s:state i Writer
-type reader i = s:state i Reader
-
-
-// We generate first the writer, then the reader (possibly several of them)
-let genPost (#i:id) parent h0 (w:writer i) h1 =
-  modifies Set.empty h0 h1 /\
-  HS.parent w.region = parent /\
-  HS.fresh_region w.region h0 h1 /\
-  color w.region = color parent /\
-  extends (AEAD.region w.aead) parent /\
-  HS.fresh_region (AEAD.region w.aead) h0 h1 /\
-  color (AEAD.region w.aead) = color parent /\
-  (authId i ==>
-      (h1 `HS.contains` (ilog w.log) /\
-       sel h1 (ilog w.log) == createEmpty)) /\
-  h1 `HS.contains` (ctr w.counter) /\
-  sel h1 (ctr w.counter) === 0
-//16-04-30 how to share the whole ST ... instead of genPost?
-
-// Generate a fresh instance with index i in a fresh sub-region of r0
-// (we might drop this spec, since F* will infer something at least as precise,
-// but we keep it for documentation)
-val gen: parent:rgn -> i:id -> ST (writer i)
-  (requires (fun h0 -> witnessed (region_contains_pred parent))) 
-  (ensures (genPost parent))
-
-#set-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
-let gen parent i =
-  let writer_r = new_region parent in
-  lemma_ID13 i;
-  let aead = AEAD.gen i parent in
-  let _ = cut (is_eternal_region writer_r) in
-  if authId i then
-    let log : ideal_log writer_r i = alloc_mref_seq writer_r Seq.createEmpty in
-    let ectr: ideal_ctr #writer_r writer_r i log = new_seqn #(entry i) #writer_r #max_ctr writer_r 0 log in
-    State #i #Writer #writer_r #writer_r aead log ectr
-  else
-    let ectr: concrete_ctr writer_r i = HST.ralloc writer_r 0 in
-    State #i #Writer #writer_r #writer_r aead () ectr
-
-#reset-options
-val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
-  (requires (fun h0 -> 
-    witnessed (region_contains_pred parent) /\ 
-    disjoint parent w.region /\
-    disjoint parent (AEAD.region w.aead))) //16-04-25  we may need w.region's parent instead
-  (ensures  (fun h0 (r:reader i) h1 ->
-         modifies Set.empty h0 h1 /\
-         r.log_region = w.region /\
-         HS.parent r.region = parent /\
-	       color r.region = color parent /\
-         HS.fresh_region r.region h0 h1 /\
-         w.log == r.log /\
-	 h1 `HS.contains` (ctr r.counter) /\
-	 sel h1 (ctr r.counter) === 0))
-// encryption (on concrete bytes), returns (cipher @| tag)
-// Keeps seqn and nonce implicit; requires the counter not to overflow
-// encryption of plaintexts; safe instances are idealized
-
-#set-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
-let genReader parent #i w =
-  let reader_r = new_region parent in
-  let writer_r : rgn = w.region in
-  assert(HS.disjoint writer_r reader_r);
-  lemma_ID13 i;
-  let raead = AEAD.genReader parent #i w.aead in
-  if authId i then
-    let log : ideal_log w.region i = w.log in
-    let dctr: ideal_ctr reader_r i log = new_seqn reader_r 0 log in
-    State #i #Reader #reader_r #writer_r raead w.log dctr
-  else let dctr : concrete_ctr reader_r i = HST.ralloc reader_r 0 in
-    State #i #Reader #reader_r #writer_r raead () dctr
-
-// Coerce a writer with index i in a fresh subregion of parent
-// (coerced readers can then be obtained by calling genReader)
-val coerce: parent:rgn -> i:id{~(authId i)} -> kv:key i -> iv:iv i -> ST (writer i)
-  (requires (fun h0 -> True))
-  (ensures  (genPost parent))
-
-let coerce parent i kv iv =
-  assume false; // coerce missing post-condition
-  let writer_r = new_region parent in
-  let ectr: concrete_ctr writer_r i = HST.ralloc writer_r 0 in
-  let aead = AEAD.coerce i parent kv iv in
-  State #i #Writer #writer_r #writer_r aead () ectr
-
-val leak: #i:id{~(authId i)} -> #role:rw -> state i role -> ST (key i * iv i)
-  (requires (fun h0 -> True))
-  (ensures  (fun h0 r h1 -> modifies Set.empty h0 h1 ))
-
-let leak #i #role s =
-  lemma_ID13 i;
-  AEAD.leak #i #role (State?.aead s)
-
-val encrypt: #i:id -> e:writer i -> ad:bytes -> l:plainLen -> p:plain i l -> ST (cipher i l)
-    (requires (fun h0 ->
-      lemma_ID13 i;
-      HS.disjoint e.region (AEAD.log_region #i e.aead) /\
-      l <= max_TLSPlaintext_fragment_length /\
-      sel h0 (ctr e.counter) < max_ctr))
-    (ensures  (fun h0 c h1 ->
-      lemma_ID13 i;
-      modifies (Set.as_set [e.log_region; AEAD.log_region #i e.aead]) h0 h1 /\
-      h1 `HS.contains` (ctr e.counter) /\
-      sel h1 (ctr e.counter) === sel h0 (ctr e.counter) + 1 /\
-	    (authId i ==>
-		    (let log = ilog e.log in
-		    let ent = Entry l c p in
-		    let n = Seq.length (sel h0 log) in
-		    h1 `HS.contains` log /\
-		    witnessed (at_least n ent log) /\
-		    sel h1 log == snoc (sel h0 log) ent))))
-
-(* we primarily model the ideal functionality, the concrete code that actually
-   runs on the network is what remains after dead code elimination when
-   safeId i is fixed to false and after removal of the cryptographic ghost log,
-   i.e. all idealization is turned off *)
-#set-options "--z3rlimit 150 --max_ifuel 2 --initial_ifuel 0 --max_fuel 2 --initial_fuel 0 --admit_smt_queries true"
-let encrypt #i e ad l p =
-  let h0 = get() in
-  let ctr = ctr e.counter in
-  HST.recall ctr;
-  let text = if safeId i then create_ l 0z else repr i l p in
-  let n = HST.op_Bang ctr in
-  lemma_repr_bytes_values n;
-  let nb = bytes_of_int (AEAD.noncelen i) n in
-  let iv = AEAD.create_nonce e.aead nb in
-  lemma_repr_bytes_values (length text);
-  assume(AEAD.st_inv e.aead h0); // TODO
-  assume(authId i ==> (Flag.prf i /\ AEAD.fresh_iv #i e.aead iv h0)); // TODO
-  let c = AEAD.encrypt #i #l e.aead iv ad text in
-  if authId i then
-    begin
-    let ilog = ilog e.log in
-    HST.recall ilog;
-    let ictr: ideal_ctr e.region i ilog = e.counter in
-    testify_seqn ictr;
-    write_at_end ilog (Entry l c p); //need to extend the log first, before incrementing the counter for monotonicity; do this only if ideal
-    HST.recall ictr;
-    increment_seqn ictr;
-    HST.recall ictr
-    end
-  else
-    ctr := n + 1;
-  c
-
-(* val matches: #i:id -> l:plainLen -> cipher i l -> entry i -> Tot bool *)
-let matches (#i:id) (l:plainLen) (c:cipher i l) (e:entry i) : Tot bool =
-  let Entry l' c' _ = e in
-  l = l' && c = c'
-
-// decryption, idealized as a lookup of (c,ad) in the log for safe instances
-val decrypt: #i:id -> d:reader i -> ad:bytes -> l:plainLen -> c:cipher i l
-  -> ST (option (plain i (min l (max_TLSPlaintext_fragment_length + 1))))
-  (requires (fun h0 ->
-     l <= max_TLSPlaintext_fragment_length /\ // FIXME ADL: why is plainLen <= max_TLSCiphertext_fragment_length_13 ?? Fix StreamPlain!
-     sel h0 (ctr d.counter) < max_ctr))
-  (ensures  (fun h0 res h1 ->
-      let j : nat = sel h0 (ctr d.counter) in
-      (authId i ==>
-    	(let log = sel h0 (ilog d.log) in
-    	 if j < Seq.length log && matches l c (Seq.index log j)
-    	 then res = Some (Entry?.p (Seq.index log j))
-    	 else res = None)) /\
-      (match res with
-       | None -> HS.modifies_transitively Set.empty h0 h1
-       | _ -> let ctr_counter_as_hsref = ctr d.counter in
-             HS.modifies_one d.region h0 h1 /\
-             HS.modifies_ref d.region (Set.singleton (Heap.addr_of (as_ref ctr_counter_as_hsref))) h0 h1 /\
-             sel h1 (ctr d.counter) === j + 1)))
-
-val strip_refinement: #a:Type -> #p:(a -> Type0) -> o:option (x:a{p x}) -> option a
-let strip_refinement #a #p = function
-  | None -> None
-  | Some x -> Some x
-
-#set-options "--z3rlimit 100 --initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
-// decryption, idealized as a lookup of (c,ad) in the log for safe instances
-let decrypt #i d ad l c =
-  let ctr = ctr d.counter in
-  HST.recall ctr;
-  let j = HST.op_Bang ctr in
-  if authId i
-  then (
-    let ilog = ilog d.log in
-    let log  = HST.op_Bang ilog in
-    let ictr: ideal_ctr d.region i ilog = d.counter in
-    testify_seqn ictr; //now we know that j <= Seq.length log
-    if j < Seq.length log && matches l c (Seq.index log j) then
-      begin
-      increment_seqn ictr;
-      HST.recall ctr;
-      Some (Entry?.p (Seq.index log j))
-      end
-    else None )
-  else //concrete
-   begin
-   lemma_ID13 i;
-   assert (AEAD.noncelen i = AEAD.iv_length i);
-   lemma_repr_bytes_values j;
-   let nb = bytes_of_int (AEAD.noncelen i) j in
-   let iv = AEAD.create_nonce d.aead nb in
-   match AEAD.decrypt #i #l d.aead iv ad c with
-   | None -> None
-   | Some pr ->
-     begin
-       assert (FStar.Bytes.length pr == l);
-       let p = strip_refinement (mk_plain i l pr) in
-       if Some? p then ctr := (j + 1);
-       p
-     end
-   end
-
-(* TODO
-
-- Check that decrypt indeed must use authId and not safeId (like in the F7 code)
-- Injective allocation table from i to refs
-
-*)
-*)
+let decrypt #i (#w:stream_writer i) (r:stream_reader w) ad lmax (c:cipher i lmax) =
+  let ar = Stream_reader?.aead r in
+  let cc:AEAD.cipher i (AEAD.rgetinfo ar) (lmax+1) = aead_cipher_of_cipher (AEAD.rgetinfo ar) c in
+  let ctr = (Stream_reader?.ctr r) in
+  let n = create_nonce (Stream_reader?.iv r) !ctr in
+  let op = AEAD.decrypt i ar ad n (lmax+1) cc in
+  admit();
+  match op with
+    | Some (pp:aead_plain i (lmax+1)) -> ctr := !ctr + 1; Some (unpad pp)
+    | None -> None
