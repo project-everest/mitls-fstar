@@ -453,3 +453,96 @@ let exactly_contains_valid_data_invariant
   ))
   [SMTPat (M.modifies l h h'); SMTPat (exactly_contains_valid_data h p b lo x hi)]
 = ()
+
+let contains_valid_serialized_data_or_fail
+  (#k: parser_kind)
+  (#t: Type)
+  (h: HS.mem)
+  (#p: parser k t)
+  (s: serializer p)
+  (b: buffer8)
+  (lo: I32.t)
+  (x: t)
+  (hi: I32.t)
+: GTot Type0
+= B.live h b /\
+  I32.v lo <= B.length b /\ (
+  if I32.v lo < 0
+  then I32.v hi < 0
+  else
+    let sd = serialize s x in
+    if I32.v lo + Seq.length sd > B.length b
+    then I32.v hi < 0
+    else
+      I32.v lo <= I32.v hi /\
+      I32.v hi <= B.length b /\
+      Seq.slice (B.as_seq h b) (I32.v lo) (I32.v hi) == sd
+  )
+
+let contains_valid_serialized_data_or_fail_exactly_contains_valid_data
+  (#k: parser_kind)
+  (#t: Type)
+  (h: HS.mem)
+  (#p: parser k t)
+  (s: serializer p)
+  (b: buffer8)
+  (lo: I32.t)
+  (x: t)
+  (hi: I32.t)
+: Lemma
+  (requires (
+    contains_valid_serialized_data_or_fail h s b lo x hi /\
+    I32.v lo >= 0 /\
+    I32.v hi >= 0
+  ))
+  (ensures (
+    exactly_contains_valid_data h p b (Cast.int32_to_uint32 lo) x (Cast.int32_to_uint32 hi)
+  ))
+= ()
+
+let exactly_contains_valid_data_contains_valid_serialized_data_or_fail
+  (#k: parser_kind)
+  (#t: Type)
+  (h: HS.mem)
+  (#p: parser k t)
+  (s: serializer p)
+  (b: buffer8)
+  (lo: U32.t)
+  (x: t)
+  (hi: U32.t)
+: Lemma
+  (requires (
+    exactly_contains_valid_data h p b lo x hi /\
+    U32.v hi <= 2147483647
+  ))
+  (ensures (
+    contains_valid_serialized_data_or_fail h s b (Cast.uint32_to_int32 lo) x (Cast.uint32_to_int32 hi)
+  ))
+= serializer_correct_implies_complete p s
+
+let contains_valid_serialized_data_or_fail_invariant
+  (#k: parser_kind)
+  (#t: Type)
+  (l: M.loc)
+  (h h' : HS.mem)
+  (#p: parser k t)
+  (s: serializer p)
+  (b: buffer8)
+  (lo: I32.t)
+  (x: t)
+  (hi: I32.t)
+: Lemma
+  (requires (
+    M.modifies l h h' /\
+    contains_valid_serialized_data_or_fail h s b lo x hi /\
+    B.live h' b /\
+    M.loc_disjoint l (
+      if I32.v hi < 0
+      then M.loc_none
+      else M.loc_buffer (B.gsub b (Cast.int32_to_uint32 lo) (Cast.int32_to_uint32 (I32.sub hi lo)))
+  )))
+  (ensures (
+    contains_valid_serialized_data_or_fail h' s b lo x hi
+  ))
+  [SMTPat (M.modifies l h h'); SMTPat (contains_valid_serialized_data_or_fail h s b lo x hi)]
+= ()

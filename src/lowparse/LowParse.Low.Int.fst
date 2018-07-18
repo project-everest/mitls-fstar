@@ -11,7 +11,7 @@ module HST = FStar.HyperStack.ST
 module HS = FStar.HyperStack
 module B = LowStar.Buffer
 
-#set-options "--z3rlimit 16"
+#set-options "--z3rlimit 32"
 
 inline_for_extraction
 let parse32_u8 =
@@ -40,3 +40,7 @@ let parse32_u32 =
 let serialize32_u16 = magic ()
 
 let serialize32_u32 = magic ()
+
+let serialize32_u16_fail = magic ()
+
+let serialize32_u32_fail = magic ()

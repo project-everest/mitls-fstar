@@ -347,3 +347,48 @@ let exactly_contains_valid_data_nondep_then
    SMTPat (exactly_contains_valid_data h p2 b mi x2 hi);]
 = assert (no_lookahead_on p1 (B.as_seq h (B.gsub b lo (U32.sub mi lo))) (B.as_seq h (B.gsub b lo (U32.sub hi lo))));
   assert (injective_precond p1 (B.as_seq h (B.gsub b lo (U32.sub mi lo))) (B.as_seq h (B.gsub b lo (U32.sub hi lo))))
+
+let seq_append_slice
+  (#t: Type)
+  (s: Seq.seq t)
+  (l1 l2 l3: nat)
+: Lemma
+  (requires (l1 <= l2 /\ l2 <= l3 /\ l3 <= Seq.length s))
+  (ensures (Seq.append (Seq.slice s l1 l2) (Seq.slice s l2 l3) == Seq.slice s l1 l3))
+= assert (Seq.append (Seq.slice s l1 l2) (Seq.slice s l2 l3) `Seq.equal` Seq.slice s l1 l3)
+
+let contains_valid_serialized_data_or_fail_nondep_then
+  (h: HS.mem)
+  (#k1: parser_kind)
+  (#t1: Type)
+  (#p1: parser k1 t1)
+  (s1: serializer p1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (#p2: parser k2 t2)
+  (s2: serializer p2)
+  (b: buffer8)
+  (lo: I32.t)
+  (x1: t1)
+  (mi: I32.t)
+  (x2: t2)
+  (hi: I32.t)
+: Lemma
+  (requires (
+    k1.parser_kind_subkind == Some ParserStrong /\
+    contains_valid_serialized_data_or_fail h s1 b lo x1 mi /\
+    contains_valid_serialized_data_or_fail h s2 b mi x2 hi
+  ))
+  (ensures (
+    contains_valid_serialized_data_or_fail h (serialize_nondep_then _ s1 () _ s2) b lo (x1, x2) hi
+  ))
+  [SMTPat (contains_valid_serialized_data_or_fail h s1 b lo x1 mi);
+   SMTPat (contains_valid_serialized_data_or_fail h s2 b mi x2 hi);]
+= if I32.v lo < 0
+  then ()
+  else if I32.v mi < 0
+  then ()
+  else if I32.v hi < 0
+  then ()
+  else
+    seq_append_slice (B.as_seq h b) (I32.v lo) (I32.v mi) (I32.v hi)

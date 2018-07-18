@@ -4,6 +4,7 @@ include LowParse.Low.Combinators
 
 module U16 = FStar.UInt16
 module U32 = FStar.UInt32
+module I32 = FStar.Int32
 module HST = FStar.HyperStack.ST
 module HS = FStar.HyperStack
 module B = LowStar.Buffer
@@ -64,4 +65,46 @@ val serialize32_u32
     M.modifies (M.loc_buffer (B.gsub b lo (4ul))) h h' /\
     B.live h' b /\
     exactly_contains_valid_data h' parse_u32 b lo v (U32.add lo 4ul)
+  ))
+
+module Cast = FStar.Int.Cast
+
+val serialize32_u16_fail
+  (b: buffer8)
+  (len: I32.t { I32.v len == B.length b } )
+  (lo: I32.t)
+  (v: U16.t)
+: HST.Stack I32.t
+  (requires (fun h -> B.live h b))
+  (ensures (fun h hi h' ->
+    B.live h' b /\
+    contains_valid_serialized_data_or_fail h' serialize_u16 b lo v hi /\
+    M.modifies (
+      if I32.v lo < 0
+      then M.loc_none
+      else if I32.v hi < 0
+      then M.loc_buffer (B.gsub b (Cast.int32_to_uint32 lo) (B.len b `U32.sub` Cast.int32_to_uint32 lo))
+      else M.loc_buffer (B.gsub b (Cast.int32_to_uint32 lo) (Cast.int32_to_uint32 (hi `I32.sub` lo)))
+    )
+    h h'
+  ))
+
+val serialize32_u32_fail
+  (b: buffer8)
+  (len: I32.t { I32.v len == B.length b } )
+  (lo: I32.t)
+  (v: U32.t)
+: HST.Stack I32.t
+  (requires (fun h -> B.live h b))
+  (ensures (fun h hi h' ->
+    B.live h' b /\
+    contains_valid_serialized_data_or_fail h' serialize_u32 b lo v hi /\
+    M.modifies (
+      if I32.v lo < 0
+      then M.loc_none
+      else if I32.v hi < 0
+      then M.loc_buffer (B.gsub b (Cast.int32_to_uint32 lo) (B.len b `U32.sub` Cast.int32_to_uint32 lo))
+      else M.loc_buffer (B.gsub b (Cast.int32_to_uint32 lo) (Cast.int32_to_uint32 (hi `I32.sub` lo)))
+    )
+    h h'
   ))
