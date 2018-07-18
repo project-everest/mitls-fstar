@@ -918,14 +918,6 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg)
        }
     }
 
-    if(cfg->enable_0rtt) {
-       if(!configure_common_bool_caml(&ms, Val_int(0xFFFFFFFF), g_mitls_FFI_SetEarlyData))
-       {
-         report_error("FFI_mitls_quic_create_caml: can't enable early_data");
-         CAMLreturnT(int, 0);
-       }
-    }
-
     if(cfg->ticket_callback) {
       if(!ocaml_set_ticket_callback(&ms, cfg->callback_state, cfg->ticket_callback))
       {
