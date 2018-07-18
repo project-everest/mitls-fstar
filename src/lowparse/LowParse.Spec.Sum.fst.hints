@@ -56,7 +56,7 @@
         "typing_LowParse.Spec.Sum.refine_with_tag"
       ],
       0,
-      "96f37ad41e367cfa09160c5b2077666a"
+      "fedcd2c3ed18eda1ded64c9a22593957"
     ],
     [
       "LowParse.Spec.Sum.bare_serialize_tagged_union_correct",
@@ -153,7 +153,7 @@
         "typing_LowParse.Spec.Sum_Tm_abs_92b67ada30c4afe8c900e6ad1e4dd1ca"
       ],
       0,
-      "ea5412f0602a1f0326e6c452cddf9db1"
+      "5140c9d8b08705edbf43df8978c2dc49"
     ],
     [
       "LowParse.Spec.Sum.serialize_tagged_union",
@@ -162,7 +162,7 @@
       1,
       [ "@query" ],
       0,
-      "a2ac179480f9d4f3d100223e5adf24a9"
+      "5bce7300f7c4336cb56ce292a2ee58fd"
     ],
     [
       "LowParse.Spec.Sum.__proj__Sum__item__e",
@@ -176,7 +176,7 @@
         "projection_inverse_LowParse.Spec.Sum.Sum_repr"
       ],
       0,
-      "f96c995b0a2ab23de95c88ffcabccf47"
+      "e5c7d67ef30798834f67aa8dce6a3324"
     ],
     [
       "LowParse.Spec.Sum.__proj__Sum__item__tag_of_data",
@@ -283,7 +283,7 @@
         "typing_LowParse.Spec.Sum.sum_repr_type"
       ],
       0,
-      "e8080d9d7691b0f87923ba143c91ea9f"
+      "a338a71dcb1e077c4b58d8d355856dc2"
     ],
     [
       "LowParse.Spec.Sum.parse_sum_cases",
@@ -336,7 +336,7 @@
         "typing_LowParse.Spec.Sum_Tm_abs_d7198639d2a55ed74bfa4ac2a2337e9c"
       ],
       0,
-      "e90bcf27c1b03cbc5b81ed43bf805425"
+      "1561c8931daec1ad83fb25a5431de38a"
     ],
     [
       "LowParse.Spec.Sum.serialize_sum_cases",
@@ -382,7 +382,7 @@
         "projection_inverse_LowParse.Spec.Sum.Sum_repr"
       ],
       0,
-      "055dcbfdf7e4e9d979a5c0d15208eda3"
+      "48f30dcddb0c46f8ce0bc97981e117b1"
     ],
     [
       "LowParse.Spec.Sum.synth_sum_with_nondep_case",
@@ -462,7 +462,7 @@
         "token_correspondence_LowParse.Spec.Sum.synth_sum_with_nondep_case"
       ],
       0,
-      "9bc4aaa87fbc9031fea225102cd48a7a"
+      "d9ef48681411d872111913ed713753c1"
     ],
     [
       "LowParse.Spec.Sum.maybe_data",
@@ -471,7 +471,7 @@
       1,
       [ "@query" ],
       0,
-      "8c7819ee3d0b4840586df50ea4fa384e"
+      "a48359589b9f6e10ca3399e60d66812d"
     ],
     [
       "LowParse.Spec.Sum.__proj__KnownData__item__d",
@@ -485,7 +485,7 @@
         "refinement_interpretation_LowParse.Spec.Sum_Tm_refine_5e307fbddfd8745937545ce5277eb01d"
       ],
       0,
-      "9aef3d2892e13195f35cc37f2d8130be"
+      "085998f03ff13c50aa6504217b7a7897"
     ],
     [
       "LowParse.Spec.Sum.__proj__UnknownData__item__r",
@@ -584,7 +584,7 @@
         "typing_LowParse.Spec.Sum.sum_repr_type"
       ],
       0,
-      "0b16beb3e7c7dba67b51b8c4f99fc87f"
+      "5624a6c715923a60ec3b2472ed608fec"
     ],
     [
       "LowParse.Spec.Sum.synth_dsum_unknown",
@@ -613,7 +613,7 @@
         "typing_LowParse.Spec.Sum.sum_repr_type"
       ],
       0,
-      "f5d87420809095ef474771783a9d44ad"
+      "230a69e43c3987d3c1320bc258027ae2"
     ],
     [
       "LowParse.Spec.Sum.parse_dsum_cases",
@@ -646,7 +646,7 @@
         "token_correspondence_LowParse.Spec.Sum.synth_dsum_unknown"
       ],
       0,
-      "1472b31e04b762050ee0e3123f38120d"
+      "da2f7a1b42cedf54f0dfb539c73136bc"
     ],
     [
       "LowParse.Spec.Sum.synth_dsum_known_recip",
@@ -681,7 +681,7 @@
         "token_correspondence_LowParse.Spec.Sum.dsum_tag_of_data"
       ],
       0,
-      "b1f230a32eb8a269a348c866b4f841e5"
+      "6a71f59ffd229adb49ca58ca4547bac2"
     ],
     [
       "LowParse.Spec.Sum.synth_dsum_unknown_recip",
@@ -703,7 +703,7 @@
         "token_correspondence_LowParse.Spec.Sum.dsum_tag_of_data"
       ],
       0,
-      "42e964c5022e167088d32b28e0738561"
+      "89c7a6b3275b488c03a4062e1afd94c7"
     ],
     [
       "LowParse.Spec.Sum.serialize_dsum_cases",
@@ -759,7 +759,7 @@
         "token_correspondence_LowParse.Spec.Sum.synth_dsum_unknown_recip"
       ],
       0,
-      "d7ca828f424547123007b129d55df6ee"
+      "9182a68204765cc57ea934b9f86eedb0"
     ],
     [
       "LowParse.Spec.Sum.serialize_dsum",
@@ -768,7 +768,7 @@
       1,
       [ "@query", "equation_LowParse.Spec.Sum.parse_dsum" ],
       0,
-      "d46e530888fb80f8bc23f0cae175c995"
+      "b8fb5449b7345b6143419a518bd0ab8c"
     ]
   ]
 ]
