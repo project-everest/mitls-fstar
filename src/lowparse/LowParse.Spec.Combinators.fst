@@ -510,6 +510,29 @@ let nondep_then
 : Tot (parser (and_then_kind k1 k2) (t1 * t2))
 = p1 `and_then` (fun v1 -> p2 `and_then` (fun v2 -> (parse_ret (v1, v2))))
 
+#set-options "--z3rlimit 16"
+
+let nondep_then_eq
+  (#k1: parser_kind)
+  (#t1: Type0)
+  (p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type0)
+  (p2: parser k2 t2)
+  (b: bytes)
+: Lemma
+  (parse (nondep_then p1 p2) b == (match parse p1 b with
+  | Some (x1, consumed1) ->
+    let b' = Seq.slice b consumed1 (Seq.length b) in
+    begin match parse p2 b' with
+    | Some (x2, consumed2) ->
+      Some ((x1, x2), consumed1 + consumed2)
+    | _ -> None
+    end
+  | _ -> None
+  ))
+= ()
+
 #set-options "--z3rlimit 32"
 
 let bare_serialize_nondep_then
@@ -758,6 +781,20 @@ let parse_synth
   ))
   (ensures (fun _ -> True))
 = coerce (parser k t2) (and_then p1 (fun v1 -> parse_fret f2 v1))
+
+let parse_synth_eq
+  (#k: parser_kind)
+  (#t1: Type0)
+  (#t2: Type0)
+  (p1: parser k t1)
+  (f2: t1 -> GTot t2)
+  (b: bytes)
+: Lemma
+  (requires (synth_injective f2))
+  (ensures (parse (parse_synth p1 f2) b == (match parse p1 b with
+  | None -> None
+  | Some (x1, consumed) -> Some (f2 x1, consumed))))
+= ()
 
 let compose (#t1 #t2 #t3: Type) (f1: t1 -> GTot t2) (f2: t2 -> GTot t3) (x: t1) : GTot t3 =
   let y1 = f1 x in

@@ -290,9 +290,6 @@ let parse_sum_with_nondep_aux
     end
   | _ -> None
 
-// #set-options "--z3rlimit 512 --max_fuel 32"
-#set-options "--admit_smt_queries true"
-
 let parse_sum_with_nondep_aux_correct
   (#kt: parser_kind)
   (t: sum)
@@ -305,40 +302,7 @@ let parse_sum_with_nondep_aux_correct
   (input: bytes)
 : Lemma
   (parse_sum_with_nondep_aux t p pnd pc input == parse (parse_sum_with_nondep t p pnd pc) input)
-=   match parse (parse_enum_key p (sum_enum t)) input with
-    | Some (tg, consumed_tg) ->
-      let input1 = Seq.slice input consumed_tg (Seq.length input) in
-      begin match parse pnd input1 with
-      | Some (nd, consumed_nd) ->
-        let input2 = Seq.slice input1 consumed_nd (Seq.length input1) in
-        begin match parse (pc tg) input2 with
-        | Some (d, consumed_d) ->
-          // FIXME: implicit arguments are not inferred because (synth_tagged_union_data ...) is Tot instead of GTot
-          let (tg' : sum_key_type (make_sum_with_nondep nondep_t t)) = tg in
-          let (tg' : enum_key (sum_enum (make_sum_with_nondep nondep_t t))) = make_enum_key (sum_enum (make_sum_with_nondep nondep_t t)) tg' in
-          let (tg' : sum_key (make_sum_with_nondep nondep_t t)) = coerce' (sum_key (make_sum_with_nondep nondep_t t)) tg' in
-          let (ndd_ : (nondep_t * sum_type t)) = (nd, (d <: sum_type t)) in
-          let (ndd_ : sum_type (make_sum_with_nondep nondep_t t)) = ndd_ in
-          let u' : sum_key_type (make_sum_with_nondep nondep_t t) = sum_key_type_of_sum_key (make_sum_with_nondep nondep_t t) (sum_tag_of_data (make_sum_with_nondep nondep_t t) ndd_) in
-          let u : sum_key_type (make_sum_with_nondep nondep_t t) = coerce' (sum_key_type (make_sum_with_nondep nondep_t t)) (sum_key_type_of_sum_key t (sum_tag_of_data t (d <: sum_type t))) in
-          assert_norm (u' == u);
-          assert (sum_tag_of_data (make_sum_with_nondep nondep_t t) ndd_ == tg');
-          let (ndd : sum_cases (make_sum_with_nondep nondep_t t) tg') = ndd_ in
-          assert_norm (synth_sum_with_nondep_case nondep_t t tg (nd, d) == ndd);
-          let p1 : option (sum_cases (make_sum_with_nondep nondep_t t) tg' * consumed_length input1) = parse (parse_sum_with_nondep_cases t pnd pc tg') input1 in
-          let consumed_nd_d : consumed_length input1 = consumed_nd + consumed_d in
-          assert (p1 == Some (ndd, consumed_nd_d));
-//          assert (parse (parse_sum_with_nondep t p pnd pc) input == Some (ndd_, consumed_tg + (consumed_nd + consumed_d)));
-          assert (parse (parse_synth #_ #_ #(sum_type (make_sum_with_nondep nondep_t t)) (parse_sum_with_nondep_cases t pnd pc tg) (synth_tagged_union_data (sum_tag_of_data (make_sum_with_nondep nondep_t t)) tg)) (input1) == Some (ndd_, consumed_nd + consumed_d));
-//          admit
-          ()
-        | _ -> ()
-      end
-      | _ -> ()
-      end
-    | _ -> ()
-
-#reset-options
+= parse_sum_with_nondep_eq t p pnd pc input
 
 #reset-options "--z3rlimit 64 --max_fuel 16 --max_ifuel 16 --z3cliopt smt.arith.nl=false"
 
