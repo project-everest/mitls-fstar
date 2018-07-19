@@ -878,6 +878,12 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg)
     caml_register_generational_global_root(&state->fstar_state);
     mitls_state ms = {.fstar_state = result};
 
+    if(!configure_common_bool_caml(&ms, Val_int(0xFFFFFFFF), g_mitls_FFI_SetEarlyData))
+    {
+      report_error("FFI_mitls_quic_create_caml: can't enable early_data");
+      CAMLreturnT(int, 0);
+    }
+
     if(cfg->cipher_suites) {
        if(!configure_common_caml(&ms, cfg->cipher_suites, g_mitls_FFI_SetCipherSuites))
        {
