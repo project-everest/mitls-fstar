@@ -17,13 +17,14 @@ SOURCES = \
   C_Endianness.c \
   C_Failure.c \
   C_Loops.c \
-  C_Nullity.c \
+#  C_Nullity.c \
   C_String.c \
   EverCrypt.c \
   EverCrypt_AutoConfig.c \
   EverCrypt_BCrypt.c \
   EverCrypt_Bytes.c \
   EverCrypt_Hacl.c \
+  EverCrypt_Hash.c \
   EverCrypt_Helpers.c \
 #  EverCrypt_OpenSSL.c \
   EverCrypt_Specs.c \
