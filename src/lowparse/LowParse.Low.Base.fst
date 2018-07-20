@@ -546,3 +546,91 @@ let contains_valid_serialized_data_or_fail_invariant
   ))
   [SMTPat (M.modifies l h h'); SMTPat (contains_valid_serialized_data_or_fail h s b lo x hi)]
 = ()
+
+inline_for_extraction
+let serializer32
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (s: serializer p)
+: Tot Type
+= (b: buffer8) ->
+  (lo: U32.t) ->
+  (v: t) ->
+  HST.Stack unit
+  (requires (fun h -> B.live h b /\ U32.v lo + Seq.length (serialize s v) <= B.length b))
+  (ensures (fun h _ h' ->
+    let len = U32.uint_to_t (Seq.length (serialize s v)) in
+    M.modifies (M.loc_buffer (B.gsub b lo len)) h h' /\
+    B.live h' b /\
+    exactly_contains_valid_data h' p b lo v (U32.add lo len)
+  ))
+
+inline_for_extraction
+let serializer32_fail
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (s: serializer p)
+: Tot Type
+= (b: buffer8) ->
+  (len: I32.t { I32.v len == B.length b } ) ->
+  (lo: I32.t) ->
+  (v: t) ->
+  HST.Stack I32.t
+  (requires (fun h -> B.live h b /\ I32.v lo <= I32.v len))
+  (ensures (fun h hi h' ->
+    B.live h' b /\
+    contains_valid_serialized_data_or_fail h' s b lo v hi /\ (
+    if I32.v lo < 0
+    then M.modifies M.loc_none h h'
+    else if I32.v hi < 0
+    then M.modifies (M.loc_buffer (B.gsub b (Cast.int32_to_uint32 lo) (B.len b `U32.sub` Cast.int32_to_uint32 lo))) h h'
+    else M.modifies (M.loc_buffer (B.gsub b (Cast.int32_to_uint32 lo) (Cast.int32_to_uint32 (hi `I32.sub` lo)))) h h'
+  )))
+
+(* Stateful serializers for constant-size parsers *)
+
+inline_for_extraction
+let serializer32_fail_of_serializer
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (#s: serializer p)
+  (s32: serializer32 s)
+  (psz: I32.t { k.parser_kind_high == Some k.parser_kind_low /\ k.parser_kind_low == I32.v psz } ) 
+: Tot (serializer32_fail s)
+= fun out (len: I32.t { I32.v len == B.length out } ) lo v ->
+  let h = HST.get () in
+  if lo `I32.lt` 0l
+  then begin
+    let res = lo in
+    let h' = HST.get () in
+    assert (contains_valid_serialized_data_or_fail h' s out lo v res);
+    res
+  end
+  else begin
+    assert (I32.v lo >= 0);
+    assert (I32.v len >= 0);
+    assert (I32.v lo <= I32.v len);
+    assert (Seq.length (serialize s v) == I32.v psz);
+    if (len `I32.sub` lo) `I32.lt` psz
+    then begin
+      let res = I32.int_to_t (-1) in
+      let h' = HST.get () in
+      assert (contains_valid_serialized_data_or_fail h' s out lo v res);
+      assert (B.modifies (B.loc_buffer (B.gsub out (Cast.int32_to_uint32 lo) (B.len out `U32.sub` Cast.int32_to_uint32 lo))) h h');
+      res
+    end else begin
+      assert (Seq.length (serialize s v) == I32.v psz);
+      assert (I32.v lo + Seq.length (serialize s v) <= I32.v len);
+      assert (U32.v (Cast.int32_to_uint32 lo) == I32.v lo);
+      assert (U32.v (Cast.int32_to_uint32 lo) + Seq.length (serialize s v) <= I32.v len);
+      assert (U32.v (Cast.int32_to_uint32 lo) + Seq.length (serialize s v) <= B.length out);
+      s32 out (Cast.int32_to_uint32 lo) v;
+      let h = HST.get () in
+      exactly_contains_valid_data_contains_valid_serialized_data_or_fail h s out (Cast.int32_to_uint32 lo) v (Cast.int32_to_uint32 (lo `I32.add` psz));
+      lo `I32.add` psz
+    end
+  end
+  
