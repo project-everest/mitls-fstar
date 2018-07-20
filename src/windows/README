@@ -1,0 +1,20 @@
+Some notes on how to properly generate the .def files.
+
+A quick-and-dirty way to generate them is via nm if you have a build on another
+OS (see comments in Makefiles). However, this doesn't seem to quite work out
+because i) different name mangling conventions on other OSes related to
+underscores (and not just the leading underscore on OSX) and also ii) this will
+list the symbols in a non-Windows build configuration which is not super
+accurate.
+
+Therefore, what I recommend is:
+
+(in a VS prompt)
+
+  dumpbin /symbols /out:exports libevercrypt_code.lib
+
+then:
+
+   grep External exports | cut -c 49- | egrep '^EverCrypt'
+
+A little hackish but works out fine.
