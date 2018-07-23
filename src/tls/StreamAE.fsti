@@ -47,7 +47,7 @@ val mk_entry (#i:I.id) :
 
 //val stream_state: I.id -> I.rw -> Type0
 
-val stream_writer: I.id -> Type0
+val stream_writer: (i:I.id) -> Type0
 val stream_reader: #i:I.id -> w:stream_writer i -> Type0
 
 val invariant: #i:I.id -> w:stream_writer i -> mem -> Type0
@@ -59,7 +59,7 @@ val wctr: #i:I.id -> w:stream_writer i -> ST UInt32.t
   (ensures fun h0 c h1 -> h0 == h1 /\ UInt32.v c = wctrT w h1)
 
 val rctrT: #i:I.id -> #w:stream_writer i -> r:stream_reader w -> h:mem ->
-  GTot (n:nat{rinvariant r h ==> n <= wctrT w h})
+  GTot (n:nat{(rinvariant r h /\ safeId i) ==> n <= wctrT w h})
 val rctr: #i:I.id -> #w:stream_writer i -> r:stream_reader w -> ST UInt32.t
   (requires fun h0 -> True)
   (ensures fun h0 c h1 -> h0 == h1 /\ UInt32.v c = rctrT r h1)
@@ -76,10 +76,12 @@ val rlog: #i:safeid -> #w:stream_writer i -> r:stream_reader w -> h:mem{invarian
 
 
 
-let incrementable (#i:I.id) (w:stream_writer i) (h:mem) =
-  wctrT w h <= max_ctr
+let wincrementable (#i:I.id) (w:stream_writer i) (h:mem) =
+  wctrT w h < max_ctr
 
 
+let rincrementable (#i:I.id) (#w:stream_writer i) (r:stream_reader w) (h:mem) =
+  rctrT r h < max_ctr
 
 
 
@@ -99,6 +101,7 @@ type info' = {
   alg: I.aeadAlg;
   shared: subrgn tls_tables_region;
   local: subrgn tls_tables_region;
+  parent: subrgn tls_tables_region;
 }
 
 type info (i:I.id) =
@@ -144,13 +147,13 @@ val frame_log: #i:I.id -> w:stream_writer i -> l:Seq.seq (stream_entry i) ->
   (ensures wlog w h1 == l)
 
 
-val create: parent:rgn -> i:I.id -> u:info i ->
+val create: i:I.id -> u:info i ->
   ST (stream_writer i)
   (requires fun h0 -> 
     disjoint u.shared u.local)
   (ensures fun h0 w h1 ->
     invariant w h1 /\
-    footprint w == Set.singleton u.local /\
+//    footprint w == Set.union (Set.singleton u.local) (Set.singleton u.parent) /\
     shared_footprint w == Set.singleton u.shared /\
     modifies_none h0 h1 /\
     Flag.safeId i ==>
@@ -158,7 +161,7 @@ val create: parent:rgn -> i:I.id -> u:info i ->
       wctrT w h1 == 0)
   )
 
-val coerce: parent:rgn -> i:I.id -> u:info i ->
+val coerce: i:I.id -> u:info i ->
   ST (stream_writer i)
   (requires fun h0 -> 
     ~ (Flag.safeId i) /\ disjoint u.shared u.local)
@@ -193,7 +196,7 @@ val encrypt
   (lmax:plainLen)
   (p:plain i lmax):
   ST (cipher i lmax)
-  (requires fun h0 -> incrementable w h0 /\ invariant w h0)
+  (requires fun h0 -> wincrementable w h0 /\ invariant w h0)
   (ensures fun h0 c h1 ->
     invariant w h1 /\
     wctrT w h1 == wctrT w h0 + 1 /\ 
@@ -218,7 +221,7 @@ val decrypt
   (lmax:plainLen)
   (c:cipher i lmax):
   ST (option (plain i lmax))
-  (requires fun h0 -> rinvariant r h0 /\ invariant w h0)
+  (requires fun h0 -> rinvariant r h0 /\ invariant w h0 /\ rincrementable r h0)
   (ensures fun h0 res h1 ->
     let j = rctrT r h0 in
 //    invariant w h1 /\

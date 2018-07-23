@@ -263,9 +263,12 @@ let entry_of
   mk_entry n aad p c
 *)
 
+let nonce_filter (#i:I.id) (#w:aead_writer i) (n:nonce i) (e:entry i (wgetinfo w)) : bool =
+  Entry?.nonce e = n
+
 let wentry_for_nonce (#i:I.id) (n:nonce i) (w:aead_writer i) (h:mem)
   : Ghost (option (entry i (wgetinfo w))) (requires safeId i) (ensures fun _ -> True) =
-  Seq.find_l (fun e -> Entry?.nonce e = n) (wlog w h)
+  Seq.find_l (nonce_filter #i #w n) (wlog w h)
 
 let fresh_nonce (#i:I.id) (n:nonce i) (s:aead_writer i) (h:mem)
   : Ghost bool (requires safeId i) (ensures fun _ -> True) =
