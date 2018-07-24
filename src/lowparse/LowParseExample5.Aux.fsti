@@ -1,4 +1,4 @@
-module LowParseExample5
+module LowParseExample5.Aux
 
 module LPC = LowParse.Spec.Combinators
 module LPI = LowParse.Low.Int
@@ -66,21 +66,3 @@ val serialize_t_intro
     LP.contains_valid_serialized_data_or_fail h serialize_t b lo ({ inner = l; last = r; }) hi
   ))
   [SMTPat (LP.contains_valid_serialized_data_or_fail h (LPC.serialize_nondep_then _ serialize_inner () _ LPI.serialize_u32) b lo x hi)]
-
-(*
-#set-options "--z3rlimit 32"
-
-let main: Int32.t -> FStar.Buffer.buffer (FStar.Buffer.buffer C.char) ->
-   HST.Stack C.exit_code (fun _ -> true) (fun _ _ _ -> true)
-=
-  fun _ _ ->
-  HST.push_frame ();
-  let b : LP.buffer8 = B.alloca 0uy 8ul in
-//  assert (B.len b == 8ul);
-  let j = LPI.serialize32_u16_fail b 8l 0l 18us in
-  let j = LPI.serialize32_u16_fail b 8l j 42us in
-  let j = LPI.serialize32_u32_fail b 8l j 1729ul in
-  let h = HST.get () in
-  assert (LP.contains_valid_serialized_data_or_fail h serialize_t b 0l ({ inner = ({ left = 18us; right = 42us; }); last = 1729ul;}) j);
-  HST.pop_frame ();
-  C.EXIT_SUCCESS

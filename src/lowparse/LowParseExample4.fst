@@ -1,6 +1,7 @@
 module LowParseExample4
+include LowParseExample4.Aux
 
-module LPC = LowParse.Low.Combinators
+module LPC = LowParse.Spec.Combinators
 module LPI = LowParse.Low.Int
 module LP = LowParse.Low.Base
 
@@ -10,35 +11,19 @@ module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 module B = LowStar.Buffer
 
-let parse_inner_raw =
-  LPI.parse_u16 `LPC.nondep_then` LPI.parse_u16
+#set-options "--z3rlimit 32"
 
-let synth_inner (x: (U16.t * U16.t)) : Tot inner =
-  let (left, right) = x in
-  {left = left; right = right;}
-
-let parse_inner' : LP.parser _ inner =
-  parse_inner_raw `LPC.parse_synth` synth_inner
-
-let parse_inner_kind = LP.get_parser_kind parse_inner'
-
-let parse_inner = parse_inner'
-
-let parse_inner_intro =
-  LPC.exactly_contains_valid_data_synth parse_inner_raw synth_inner
-
-let parse_t_raw =
-  parse_inner ` LPC.nondep_then` LPI.parse_u32
-
-let synth_t (x: (inner * U32.t)) : Tot t =
-  let (inner, last) = x in
-  {inner = inner; last = last;}
-
-let parse_t' = parse_t_raw `LPC.parse_synth` synth_t
-
-let parse_t_kind = LP.get_parser_kind parse_t'
-
-let parse_t = parse_t'
-
-let parse_t_intro =
-  LPC.exactly_contains_valid_data_synth parse_t_raw synth_t
+let main: Int32.t -> FStar.Buffer.buffer (FStar.Buffer.buffer C.char) ->
+   HST.Stack C.exit_code (fun _ -> true) (fun _ _ _ -> true)
+=
+  fun _ _ ->
+  HST.push_frame ();
+  let b : LP.buffer8 = B.alloca 0uy 8ul in
+//  assert (B.len b == 8ul);
+  LPI.serialize32_u16 b 0ul 18us;
+  LPI.serialize32_u16 b 2ul 42us;
+  LPI.serialize32_u32 b 4ul 1729ul;
+  let h = HST.get () in
+  assert (LP.exactly_contains_valid_data h parse_t b 0ul ({ inner = ({ left = 18us; right = 42us; }); last = 1729ul;}) 8ul);
+  HST.pop_frame ();
+  C.EXIT_SUCCESS
