@@ -19,14 +19,14 @@ FSTAR_OPTIONS += --use_hints --use_two_phase_tc true --include . # --use_extract
 
 MY_FSTAR=$(FSTAR_HOME)/bin/fstar.exe --cache_checked_modules --cache_dir $(FSTAR_OUT_DIR) --odir $(FSTAR_OUT_DIR) $(addprefix --include , $(INCLUDE_PATHS)) $(INCLUDE_KREMLIN)
 
-INTERMEDIATE_LEVEL= -add-include '"kremlin/internal/compat.h"' LowParse_TestLib_SLow_c.c -ccopt -Wno-error-tautological-compare
+INTERMEDIATE_LEVEL=LowParse_TestLib_SLow_c.c -ccopt -Wno-error-tautological-compare
 
-LOW_LEVEL= -add-include '"kremlin/internal/compat.h"' LowParse_TestLib_Low_c.c
+LOW_LEVEL=LowParse_TestLib_Low_c.c
 
-MY_KREMLIN=$(KREMLIN_HOME)/krml -bundle 'LowParse.\*'
+MY_KREMLIN=$(KREMLIN_HOME)/krml -bundle 'LowParse.\*'  -add-include '"kremlin/internal/compat.h"'
 
-EXAMPLES=Example Example2 Example3
-ROOT_FILES=LowParse.SLow.fst LowParse.Low.fst $(addprefix LowParse, $(addsuffix .fst, $(EXAMPLES))) LowParse.TestLib.SLow.fst LowParse.TestLib.Low.fst LowParseExample4.fst LowParseExample5.fst
+EXAMPLES=Example Example2 Example3 Example4 Example5
+ROOT_FILES=LowParse.SLow.fst LowParse.Low.fst $(addprefix LowParse, $(addsuffix .fst, $(EXAMPLES))) LowParse.TestLib.SLow.fst LowParse.TestLib.Low.fst
 
 EXCLUDE_KRML_FILES=$(FSTAR_OUT_DIR)/prims.krml
 
@@ -75,6 +75,8 @@ extract-all: $(EXAMPLES)
 Example: KREMLIN_ARGS=$(INTERMEDIATE_LEVEL)
 Example2: KREMLIN_ARGS=$(INTERMEDIATE_LEVEL)
 Example3: KREMLIN_ARGS=$(LOW_LEVEL)
+Example4: KREMLIN_ARGS=
+Example5: KREMLIN_ARGS=
 
 .PHONY: all verify-all clean extract-all $(EXAMPLES)
 
