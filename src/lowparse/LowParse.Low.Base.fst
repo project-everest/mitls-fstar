@@ -535,11 +535,10 @@ let contains_valid_serialized_data_or_fail_invariant
   (requires (
     M.modifies l h h' /\
     contains_valid_serialized_data_or_fail h s b lo x hi /\
-    B.live h' b /\
-    M.loc_disjoint l (
+    B.live h' b /\ (
       if I32.v hi < 0
-      then M.loc_none
-      else M.loc_buffer (B.gsub b (Cast.int32_to_uint32 lo) (Cast.int32_to_uint32 (I32.sub hi lo)))
+      then True
+      else M.loc_disjoint l (M.loc_buffer (B.gsub b (Cast.int32_to_uint32 lo) (Cast.int32_to_uint32 (I32.sub hi lo))))
   )))
   (ensures (
     contains_valid_serialized_data_or_fail h' s b lo x hi

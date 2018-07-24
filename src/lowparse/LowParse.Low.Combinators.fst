@@ -345,7 +345,8 @@ let exactly_contains_valid_data_nondep_then
   ))
   [SMTPat (exactly_contains_valid_data h p1 b lo x1 mi);
    SMTPat (exactly_contains_valid_data h p2 b mi x2 hi);]
-= assert (no_lookahead_on p1 (B.as_seq h (B.gsub b lo (U32.sub mi lo))) (B.as_seq h (B.gsub b lo (U32.sub hi lo))));
+= nondep_then_eq p1 p2 (B.as_seq h (B.gsub b lo (U32.sub hi lo)));
+  assert (no_lookahead_on p1 (B.as_seq h (B.gsub b lo (U32.sub mi lo))) (B.as_seq h (B.gsub b lo (U32.sub hi lo))));
   assert (injective_precond p1 (B.as_seq h (B.gsub b lo (U32.sub mi lo))) (B.as_seq h (B.gsub b lo (U32.sub hi lo))))
 
 let seq_append_slice
@@ -392,3 +393,39 @@ let contains_valid_serialized_data_or_fail_nondep_then
   then ()
   else
     seq_append_slice (B.as_seq h b) (I32.v lo) (I32.v mi) (I32.v hi)
+
+let exactly_contains_valid_data_synth
+  (#k: parser_kind)
+  (#t1 #t2: Type)
+  (p: parser k t1)
+  (f: t1 -> GTot t2 { synth_injective f } )
+  (h: HS.mem)
+  (b: buffer8)
+  (lo: U32.t)
+  (x: t1)
+  (hi: U32.t)
+: Lemma
+  (requires (
+    exactly_contains_valid_data h p b lo x hi
+  ))
+  (ensures (
+    exactly_contains_valid_data h (p `parse_synth` f) b lo (f x) hi
+  ))
+= ()
+
+let contains_valid_serialized_data_or_fail_synth
+  (#k: parser_kind)
+  (#t1 #t2: Type)
+  (#p: parser k t1)
+  (s: serializer p)
+  (f: t1 -> GTot t2 { synth_injective f } )
+  (g: t2 -> GTot t1 { synth_inverse f g } )
+  (h : HS.mem)
+  (b: buffer8)
+  (lo: I32.t)
+  (x: t1)
+  (hi: I32.t)
+: Lemma
+  (requires (contains_valid_serialized_data_or_fail h s b lo x hi))
+  (ensures (contains_valid_serialized_data_or_fail h (serialize_synth _ f s g ()) b lo (f x) hi))
+= ()

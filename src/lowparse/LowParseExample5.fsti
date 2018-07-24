@@ -67,6 +67,7 @@ val serialize_t_intro
   ))
   [SMTPat (LP.contains_valid_serialized_data_or_fail h (LPC.serialize_nondep_then _ serialize_inner () _ LPI.serialize_u32) b lo x hi)]
 
+(*
 #set-options "--z3rlimit 32"
 
 let main: Int32.t -> FStar.Buffer.buffer (FStar.Buffer.buffer C.char) ->

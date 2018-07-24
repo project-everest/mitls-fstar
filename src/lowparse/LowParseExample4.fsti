@@ -62,6 +62,7 @@ val parse_t_intro
   ))
   [SMTPat (LP.exactly_contains_valid_data h (parse_inner `LPC.nondep_then` LPI.parse_u32) b lo x hi)]
 
+(*
 #set-options "--z3rlimit 32"
 
 let main: Int32.t -> FStar.Buffer.buffer (FStar.Buffer.buffer C.char) ->
