@@ -209,6 +209,52 @@ let validate32
   not (res `I32.lt` 0l)
 
 inline_for_extraction
+let ghost_parse_from_validator32
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (v: validator32 p)
+  (input: buffer8)
+  (sz: I32.t)
+: HST.Stack (option (Ghost.erased t))
+  (requires (fun h ->
+    is_slice h input sz
+  ))
+  (ensures (fun h res h' ->
+    is_slice h input sz /\
+    M.modifies M.loc_none h h'  /\
+    res == (match parse_from_slice p h input sz with
+    | Some (x, _) -> Some (Ghost.hide x)
+    | _ ->  None
+  )))
+= let h = HST.get () in
+  if validate32 v input sz
+  then begin
+    let f () : GTot t =
+      let (Some (x, _)) = parse_from_slice p h input sz in
+      x
+    in
+    Some (Ghost.elift1 f (Ghost.hide ()))
+  end
+  else None
+
+inline_for_extraction
+let ghost_parse32
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (input: buffer8)
+: HST.Stack (Ghost.erased t)
+  (requires (fun h -> B.live h input /\ Some? (parse p (B.as_seq h input))))
+  (ensures (fun h res h' -> h == h' /\ (let (Some (x, _)) = parse p (B.as_seq h input) in res == Ghost.hide x)))
+= let h = HST.get () in
+  let f () : GTot t =
+    let (Some (x, _)) = parse p (B.as_seq h input) in
+    x
+  in
+  Ghost.elift1 f (Ghost.hide ())
+
+inline_for_extraction
 let parser32
   (#k: parser_kind)
   (#t: Type0)
@@ -298,3 +344,292 @@ let read_from_buffer
     rel x y
   )))
 = p2' (a12 input)
+
+let exactly_contains_valid_data
+  (#k: parser_kind)
+  (#t: Type)
+  (h: HS.mem)
+  (p: parser k t)
+  (b: buffer8)
+  (lo: U32.t)
+  (x: t)
+  (hi: U32.t)
+: GTot Type0
+= B.live h b /\
+  U32.v lo <= U32.v hi /\
+  U32.v hi <= B.length b /\
+  parse p (B.as_seq h (B.gsub b lo (U32.sub hi lo))) == Some (x, U32.v hi - U32.v lo)
+
+let exactly_contains_valid_data_injective
+  (#k: parser_kind)
+  (#t: Type)
+  (h: HS.mem)
+  (p: parser k t)
+  (b: buffer8)
+  (lo: U32.t)
+  (x1: t)
+  (hi: U32.t)
+  (x2: t)
+: Lemma
+  (requires (
+    exactly_contains_valid_data h p b lo x1 hi /\
+    exactly_contains_valid_data h p b lo x2 hi
+  ))
+  (ensures (
+    x1 == x2
+  ))
+  [SMTPat (exactly_contains_valid_data h p b lo x1 hi);
+   SMTPat (exactly_contains_valid_data h p b lo x2 hi);]
+= ()
+
+let exactly_contains_valid_data_injective_strong'
+  (#k: parser_kind)
+  (#t: Type)
+  (h: HS.mem)
+  (p: parser k t)
+  (b: buffer8)
+  (lo: U32.t)
+  (x1: t)
+  (hi1: U32.t)
+  (x2: t)
+  (hi2: U32.t)
+: Lemma
+  (requires (
+    exactly_contains_valid_data h p b lo x1 hi1 /\
+    exactly_contains_valid_data h p b lo x2 hi2 /\
+    k.parser_kind_subkind == Some ParserStrong /\
+    U32.v hi1 <= U32.v hi2
+  ))
+  (ensures (
+    x1 == x2 /\ hi1 == hi2
+  ))
+= assert (no_lookahead_on p (B.as_seq h (B.gsub b lo (U32.sub hi1 lo))) (B.as_seq h (B.gsub b lo (U32.sub hi2 lo))));
+  assert (injective_precond p (B.as_seq h (B.gsub b lo (U32.sub hi2 lo))) (B.as_seq h (B.gsub b lo (U32.sub hi1 lo)))) 
+
+let exactly_contains_valid_data_injective_strong
+  (#k: parser_kind)
+  (#t: Type)
+  (h: HS.mem)
+  (p: parser k t)
+  (b: buffer8)
+  (lo: U32.t)
+  (x1: t)
+  (hi1: U32.t)
+  (x2: t)
+  (hi2: U32.t)
+: Lemma
+  (requires (
+    exactly_contains_valid_data h p b lo x1 hi1 /\
+    exactly_contains_valid_data h p b lo x2 hi2 /\
+    k.parser_kind_subkind == Some ParserStrong
+  ))
+  (ensures (
+    x1 == x2 /\ hi1 == hi2
+  ))
+  [SMTPat (exactly_contains_valid_data h p b lo x1 hi1);
+   SMTPat (exactly_contains_valid_data h p b lo x2 hi2);]
+= if U32.v hi1 <= U32.v hi2
+  then exactly_contains_valid_data_injective_strong' h p b lo x1 hi1 x2 hi2
+  else exactly_contains_valid_data_injective_strong' h p b lo x2 hi2 x1 hi1
+
+let exactly_contains_valid_data_invariant
+  (#k: parser_kind)
+  (#t: Type)
+  (l: M.loc)
+  (h h' : HS.mem)
+  (p: parser k t)
+  (b: buffer8)
+  (lo: U32.t)
+  (x: t)
+  (hi: U32.t)
+: Lemma
+  (requires (
+    M.modifies l h h' /\
+    exactly_contains_valid_data h p b lo x hi /\
+    M.loc_disjoint l (M.loc_buffer (B.gsub b lo (U32.sub hi lo)))
+  ))
+  (ensures (
+    exactly_contains_valid_data h' p b lo x hi
+  ))
+  [SMTPat (M.modifies l h h'); SMTPat (exactly_contains_valid_data h p b lo x hi)]
+= ()
+
+let contains_valid_serialized_data_or_fail
+  (#k: parser_kind)
+  (#t: Type)
+  (h: HS.mem)
+  (#p: parser k t)
+  (s: serializer p)
+  (b: buffer8)
+  (lo: I32.t)
+  (x: t)
+  (hi: I32.t)
+: GTot Type0
+= B.live h b /\
+  I32.v lo <= B.length b /\ (
+  if I32.v lo < 0
+  then I32.v hi < 0
+  else
+    let sd = serialize s x in
+    if I32.v lo + Seq.length sd > B.length b
+    then I32.v hi < 0
+    else
+      I32.v lo <= I32.v hi /\
+      I32.v hi <= B.length b /\
+      Seq.slice (B.as_seq h b) (I32.v lo) (I32.v hi) == sd
+  )
+
+let contains_valid_serialized_data_or_fail_exactly_contains_valid_data
+  (#k: parser_kind)
+  (#t: Type)
+  (h: HS.mem)
+  (#p: parser k t)
+  (s: serializer p)
+  (b: buffer8)
+  (lo: I32.t)
+  (x: t)
+  (hi: I32.t)
+: Lemma
+  (requires (
+    contains_valid_serialized_data_or_fail h s b lo x hi /\
+    I32.v lo >= 0 /\
+    I32.v hi >= 0
+  ))
+  (ensures (
+    exactly_contains_valid_data h p b (Cast.int32_to_uint32 lo) x (Cast.int32_to_uint32 hi)
+  ))
+= ()
+
+let exactly_contains_valid_data_contains_valid_serialized_data_or_fail
+  (#k: parser_kind)
+  (#t: Type)
+  (h: HS.mem)
+  (#p: parser k t)
+  (s: serializer p)
+  (b: buffer8)
+  (lo: U32.t)
+  (x: t)
+  (hi: U32.t)
+: Lemma
+  (requires (
+    exactly_contains_valid_data h p b lo x hi /\
+    U32.v hi <= 2147483647
+  ))
+  (ensures (
+    contains_valid_serialized_data_or_fail h s b (Cast.uint32_to_int32 lo) x (Cast.uint32_to_int32 hi)
+  ))
+= serializer_correct_implies_complete p s
+
+let contains_valid_serialized_data_or_fail_invariant
+  (#k: parser_kind)
+  (#t: Type)
+  (l: M.loc)
+  (h h' : HS.mem)
+  (#p: parser k t)
+  (s: serializer p)
+  (b: buffer8)
+  (lo: I32.t)
+  (x: t)
+  (hi: I32.t)
+: Lemma
+  (requires (
+    M.modifies l h h' /\
+    contains_valid_serialized_data_or_fail h s b lo x hi /\
+    B.live h' b /\ (
+      if I32.v hi < 0
+      then True
+      else M.loc_disjoint l (M.loc_buffer (B.gsub b (Cast.int32_to_uint32 lo) (Cast.int32_to_uint32 (I32.sub hi lo))))
+  )))
+  (ensures (
+    contains_valid_serialized_data_or_fail h' s b lo x hi
+  ))
+  [SMTPat (M.modifies l h h'); SMTPat (contains_valid_serialized_data_or_fail h s b lo x hi)]
+= ()
+
+inline_for_extraction
+let serializer32
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (s: serializer p)
+: Tot Type
+= (b: buffer8) ->
+  (lo: U32.t) ->
+  (v: t) ->
+  HST.Stack unit
+  (requires (fun h -> B.live h b /\ U32.v lo + Seq.length (serialize s v) <= B.length b))
+  (ensures (fun h _ h' ->
+    let len = U32.uint_to_t (Seq.length (serialize s v)) in
+    M.modifies (M.loc_buffer (B.gsub b lo len)) h h' /\
+    B.live h' b /\
+    exactly_contains_valid_data h' p b lo v (U32.add lo len)
+  ))
+
+inline_for_extraction
+let serializer32_fail
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (s: serializer p)
+: Tot Type
+= (b: buffer8) ->
+  (len: I32.t { I32.v len == B.length b } ) ->
+  (lo: I32.t) ->
+  (v: t) ->
+  HST.Stack I32.t
+  (requires (fun h -> B.live h b /\ I32.v lo <= I32.v len))
+  (ensures (fun h hi h' ->
+    B.live h' b /\
+    contains_valid_serialized_data_or_fail h' s b lo v hi /\ (
+    if I32.v lo < 0
+    then M.modifies M.loc_none h h'
+    else if I32.v hi < 0
+    then M.modifies (M.loc_buffer (B.gsub b (Cast.int32_to_uint32 lo) (B.len b `U32.sub` Cast.int32_to_uint32 lo))) h h'
+    else M.modifies (M.loc_buffer (B.gsub b (Cast.int32_to_uint32 lo) (Cast.int32_to_uint32 (hi `I32.sub` lo)))) h h'
+  )))
+
+(* Stateful serializers for constant-size parsers *)
+
+inline_for_extraction
+let serializer32_fail_of_serializer
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (#s: serializer p)
+  (s32: serializer32 s)
+  (psz: I32.t { k.parser_kind_high == Some k.parser_kind_low /\ k.parser_kind_low == I32.v psz } ) 
+: Tot (serializer32_fail s)
+= fun out (len: I32.t { I32.v len == B.length out } ) lo v ->
+  let h = HST.get () in
+  if lo `I32.lt` 0l
+  then begin
+    let res = lo in
+    let h' = HST.get () in
+    assert (contains_valid_serialized_data_or_fail h' s out lo v res);
+    res
+  end
+  else begin
+    assert (I32.v lo >= 0);
+    assert (I32.v len >= 0);
+    assert (I32.v lo <= I32.v len);
+    assert (Seq.length (serialize s v) == I32.v psz);
+    if (len `I32.sub` lo) `I32.lt` psz
+    then begin
+      let res = I32.int_to_t (-1) in
+      let h' = HST.get () in
+      assert (contains_valid_serialized_data_or_fail h' s out lo v res);
+      assert (B.modifies (B.loc_buffer (B.gsub out (Cast.int32_to_uint32 lo) (B.len out `U32.sub` Cast.int32_to_uint32 lo))) h h');
+      res
+    end else begin
+      assert (Seq.length (serialize s v) == I32.v psz);
+      assert (I32.v lo + Seq.length (serialize s v) <= I32.v len);
+      assert (U32.v (Cast.int32_to_uint32 lo) == I32.v lo);
+      assert (U32.v (Cast.int32_to_uint32 lo) + Seq.length (serialize s v) <= I32.v len);
+      assert (U32.v (Cast.int32_to_uint32 lo) + Seq.length (serialize s v) <= B.length out);
+      s32 out (Cast.int32_to_uint32 lo) v;
+      let h = HST.get () in
+      exactly_contains_valid_data_contains_valid_serialized_data_or_fail h s out (Cast.int32_to_uint32 lo) v (Cast.int32_to_uint32 (lo `I32.add` psz));
+      lo `I32.add` psz
+    end
+  end
+  

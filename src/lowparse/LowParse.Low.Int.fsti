@@ -2,6 +2,14 @@ module LowParse.Low.Int
 include LowParse.Spec.Int
 include LowParse.Low.Combinators
 
+module U16 = FStar.UInt16
+module U32 = FStar.UInt32
+module I32 = FStar.Int32
+module HST = FStar.HyperStack.ST
+module HS = FStar.HyperStack
+module B = LowStar.Buffer
+module M = LowStar.Modifies
+
 inline_for_extraction
 val parse32_u8: parser32 parse_u8
 
@@ -34,3 +42,15 @@ let validate_nochk32_u16 : validator_nochk32 parse_u16 =
 inline_for_extraction
 let validate_nochk32_u32 : validator_nochk32 parse_u32 =
   validate_nochk32_constant_size parse_u32 4ul ()
+
+inline_for_extraction
+val serialize32_u16 : serializer32 serialize_u16
+
+inline_for_extraction
+val serialize32_u32 : serializer32 serialize_u32
+
+inline_for_extraction
+val serialize32_u16_fail : serializer32_fail serialize_u16
+
+inline_for_extraction
+val serialize32_u32_fail : serializer32_fail serialize_u32

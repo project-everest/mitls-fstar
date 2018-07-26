@@ -34,6 +34,27 @@ let parse_tagged_union #kt #tag_t pt #data_t tag_of_data #k p =
   )
 #reset-options
 
+let parse_tagged_union_eq
+  (#kt: parser_kind)
+  (#tag_t: Type0)
+  (pt: parser kt tag_t)
+  (#data_t: Type0)
+  (tag_of_data: (data_t -> GTot tag_t))
+  (#k: parser_kind)
+  (p: (t: tag_t) -> Tot (parser k (refine_with_tag tag_of_data t)))
+  (input: bytes)
+: Lemma
+  (parse (parse_tagged_union pt tag_of_data p) input == (match parse pt input with
+  | None -> None
+  | Some (tg, consumed_tg) ->
+    let input_tg = Seq.slice input consumed_tg (Seq.length input) in
+    begin match parse (p tg) input_tg with
+    | Some (x, consumed_x) -> Some ((x <: data_t), consumed_tg + consumed_x)
+    | None -> None
+    end
+  ))
+= ()
+
 let bare_serialize_tagged_union
   (#kt: parser_kind)
   (#tag_t: Type0)
@@ -195,6 +216,25 @@ let parse_sum
     #k
     pc
 
+let parse_sum_eq
+  (#kt: parser_kind)
+  (t: sum)
+  (p: parser kt (sum_repr_type t))
+  (#k: parser_kind)
+  (pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
+  (input: bytes)
+: Lemma
+  (parse (parse_sum t p pc) input == (match parse (parse_enum_key p (sum_enum t)) input with
+  | None -> None
+  | Some (k, consumed_k) ->
+    let input_k = Seq.slice input consumed_k (Seq.length input) in
+    begin match parse (pc k) input_k with
+    | None -> None
+    | Some (x, consumed_x) -> Some ((x <: sum_type t), consumed_k + consumed_x)
+    end
+  ))
+= parse_tagged_union_eq #(parse_filter_kind kt) #(sum_key t) (parse_enum_key p (sum_enum t)) #(sum_type t) (sum_tag_of_data t) #k pc input
+
 let serialize_sum_cases
   (s: sum)
   (f: (x: sum_key s) -> Tot (k: parser_kind & parser k (sum_cases s x)))
@@ -294,6 +334,41 @@ let parse_sum_with_nondep
   (pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
 : Tot (parser _ (sum_type (make_sum_with_nondep nondep_t t)))
 = parse_sum (make_sum_with_nondep nondep_t t) p (parse_sum_with_nondep_cases t pnd pc)
+
+let parse_sum_with_nondep_eq
+  (#kt: parser_kind)
+  (t: sum)
+  (p: parser kt (sum_repr_type t))
+  (#knd: parser_kind)
+  (#nondep_t: Type0)
+  (pnd: parser knd nondep_t)
+  (#k: parser_kind)
+  (pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
+  (input: bytes)
+: Lemma
+  (parse (parse_sum_with_nondep t p pnd pc) input == (match parse (parse_enum_key p (sum_enum t)) input with
+  | Some (tg, consumed_tg) ->
+    let input1 = Seq.slice input consumed_tg (Seq.length input) in
+    begin match parse pnd input1 with
+    | Some (nd, consumed_nd) ->
+      let input2 = Seq.slice input1 consumed_nd (Seq.length input1) in
+      begin match parse (pc tg) input2 with
+      | Some (d, consumed_d) ->
+        Some ((nd, d), consumed_tg + (consumed_nd + consumed_d))
+      | _ -> None
+    end
+    | _ -> None
+    end
+  | _ -> None
+  ))
+= parse_sum_eq (make_sum_with_nondep nondep_t t) p (parse_sum_with_nondep_cases t pnd pc) input;
+  match parse (parse_enum_key p (sum_enum t)) input with
+  | Some (tg, consumed_tg) ->
+    let input1 = Seq.slice input consumed_tg (Seq.length input) in
+    parse_synth_eq (nondep_then pnd (pc tg)) (synth_sum_with_nondep_case _ t tg) input1;
+    nondep_then_eq pnd (pc tg) input1
+  | _ -> ()
+
 
 (* Sum with default case *)
 
