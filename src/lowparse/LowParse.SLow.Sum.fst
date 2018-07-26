@@ -628,3 +628,124 @@ let size32_sum_gen
     (fun (x: refine_with_tag (sum_tag_of_data t) k) -> destr U32.t sc32 k x)
   in
   (size32_sum_gen' t s32 sc32' () tag_of_data <: size32 s')
+
+(* Sum with default case *)
+
+module L = FStar.List.Tot
+
+let maybe_enum_key_of_repr_not_in (#key #repr: eqtype) (e: enum key repr) (l: list (key * repr)) (x: repr) : GTot Type0 =
+  (~ (L.mem x (L.map snd l)))
+
+let list_append_rev_cons (#t: Type) (l1: list t) (x: t) (l2: list t) : Lemma
+  (L.append (L.rev l1) (x :: l2) == L.append (L.rev (x :: l1)) l2)
+= L.rev_rev' (x :: l1);
+  L.rev_rev' l1;
+  L.append_assoc (L.rev l1) [x] l2
+
+let rec assoc_append_flip_l_intro
+  (#key #repr: eqtype)
+  (l1 l2: list (key * repr))
+  (y: repr)
+  (x: key)
+: Lemma
+  (requires (L.noRepeats (L.map snd (L.append l1 l2)) /\ L.assoc y (L.map flip l2) == Some x))
+  (ensures (L.assoc y (L.map flip (l1 `L.append` l2)) == Some x))
+= match l1 with
+  | [] -> ()
+  | (_, r') :: q ->
+    L.assoc_mem y (L.map flip l2);
+    map_fst_flip l2;
+    L.map_append snd l1 l2;
+    L.noRepeats_append_elim (L.map snd l1) (L.map snd l2);
+    assoc_append_flip_l_intro q l2 y x
+
+inline_for_extraction
+let maybe_enum_destr_t'
+  (t: Type)
+  (#key #repr: eqtype)  
+  (e: enum key repr)
+  (l1 l2: list (key * repr))
+  (u1: squash (e == L.append (L.rev l1) l2))
+: Tot Type
+= (eq: (t -> t -> GTot Type0)) ->
+  (ift: if_combinator t eq) ->
+  (eq_refl: r_reflexive_t _ eq) ->
+  (eq_trans: r_transitive_t _ eq) ->
+  (f: ((x: maybe_enum_key e) -> Tot t)) ->
+  (x: repr { maybe_enum_key_of_repr_not_in e l1 x } ) ->
+  Tot (y: t { eq y (f (maybe_enum_key_of_repr e x)) } )
+
+inline_for_extraction
+let maybe_enum_destr_t
+  (t: Type)
+  (#key #repr: eqtype)  
+  (e: enum key repr)
+: Tot Type
+= (eq: (t -> t -> GTot Type0)) ->
+  (ift: if_combinator t eq) ->
+  (eq_refl: r_reflexive_t _ eq) ->
+  (eq_trans: r_transitive_t _ eq) ->
+  (f: ((x: maybe_enum_key e) -> Tot t)) ->
+  (x: repr) ->
+  Tot (y: t { eq y (f (maybe_enum_key_of_repr e x)) } )
+
+inline_for_extraction
+let maybe_enum_destr_t_intro
+  (t: Type)
+  (#key #repr: eqtype)  
+  (e: enum key repr)
+  (f: maybe_enum_destr_t' t e [] e ())
+: Tot (maybe_enum_destr_t t e)
+= f
+
+let maybe_enum_key_of_repr_not_in_cons
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (k: key)
+  (r: repr)
+  (l: list (key * repr))
+  (x: repr)
+: Lemma
+  (requires (maybe_enum_key_of_repr_not_in e l x /\ x <> r))
+  (ensures (maybe_enum_key_of_repr_not_in e ((k, r) :: l) x))
+= ()
+
+inline_for_extraction
+let maybe_enum_destr_cons
+  (t: Type)
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (l1 l2: list (key * repr))
+  (u1: squash (e == L.append (L.rev l1) l2))
+  (u3: squash (Cons? l2))
+  (g: (maybe_enum_destr_t' t e (L.hd l2 :: l1) (L.tl l2) (list_append_rev_cons l1 (L.hd l2) (L.tl l2))))
+: Tot (maybe_enum_destr_t' t e l1 l2 u1)
+= fun (eq: (t -> t -> GTot Type0)) (ift: if_combinator t eq) (eq_refl: r_reflexive_t _ eq) (eq_trans: r_transitive_t _ eq) (f: (maybe_enum_key e -> Tot t)) ->
+  [@inline_let]
+  let _ = r_reflexive_t_elim _ _ eq_refl in
+  [@inline_let]
+  let _ = r_transitive_t_elim _ _ eq_trans in
+  [@inline_let]
+  let kr :: q = l2 in
+  let (k, r) = kr in
+  [@inline_let]
+  let _ : squash (L.mem k (L.map fst e)) =
+    L.append_mem (L.map fst (L.rev l1)) (L.map fst l2) k;
+    L.map_append fst (L.rev l1) l2;
+    ()
+  in
+  fun (x: repr { maybe_enum_key_of_repr_not_in e l1 x } ) -> ((
+  if x = r
+  then begin
+    [@inline_let]
+    let (_ : squash (maybe_enum_key_of_repr e x == Known k)) =
+      L.append_mem (L.map snd (L.rev l1)) (L.map snd l2) r;
+      L.map_append snd (L.rev l1) l2;
+      assoc_append_flip_l_intro (L.rev l1) l2 r k;
+      ()
+    in
+    f (Known k)
+  end else begin
+    g eq ift eq_refl eq_trans f x
+  end
+  ) <: (y: t { eq y (f (maybe_enum_key_of_repr e x)) } ))
