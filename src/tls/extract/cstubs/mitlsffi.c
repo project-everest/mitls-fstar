@@ -1364,13 +1364,13 @@ int MITLS_CALLCONV FFI_mitls_quic12_process(quic12_state *st, quic_process_ctx *
   return r;
 }
 
-int MITLS_CALLCONV FFI_mitls_quic12_get_record_key(quic12_state *st, quic12_key *key, int32_t epoch, int rw)
+int MITLS_CALLCONV FFI_mitls_quic12_get_record_key(quic12_state *st, quic12_key *key, int32_t epoch, quic_direction rw)
 {
   int res = 0;
   FStar_Pervasives_Native_option__QUIC_raw_key r;
   
   ENTER_HEAP_REGION(st->rgn);
-  r = QUIC_get_key(st->hs, epoch, rw);
+  r = QUIC_get_key(st->hs, epoch, (int)rw);
   
   if(r.tag == FStar_Pervasives_Native_Some)
   {

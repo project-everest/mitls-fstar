@@ -277,9 +277,14 @@ typedef struct {
   uint8_t complete; // a flag to indicate handshake completion. Not very meaningful as post-handshake messages may still need processing
 } quic_process_ctx;
 
+typedef enum {
+  QUIC_Writer = 0,
+  QUIC_Reader = 1      
+} quic_direction;
+
 extern int MITLS_CALLCONV FFI_mitls_quic12_create(quic12_state **state, const quic_config *cfg);
 extern int MITLS_CALLCONV FFI_mitls_quic12_process(quic12_state *state, quic_process_ctx *ctx);
-extern int MITLS_CALLCONV FFI_mitls_quic12_get_record_key(quic12_state *state, quic12_key *key, int32_t epoch, int rw);
+extern int MITLS_CALLCONV FFI_mitls_quic12_get_record_key(quic12_state *state, quic12_key *key, int32_t epoch, quic_direction rw);
 extern void MITLS_CALLCONV FFI_mitls_quic12_close(quic12_state *state);
 
 #endif // HEADER_MITLS_FFI_H

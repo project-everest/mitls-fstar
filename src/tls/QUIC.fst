@@ -357,8 +357,8 @@ let get_key (hs:Old.Handshake.hs) (ectr:nat) (rw:bool) : ML (option raw_key) =
   let epochs = Monotonic.Seq.i_read (Old.Epochs.get_epochs (Handshake.epochs_of hs)) in
   if Seq.length epochs <= ectr then None
   else
-    let AEAD alg _ = aeAlg_of_id (currentId hs (if rw then Reader else Writer)) in
     let e = Seq.index epochs ectr in
+    let AEAD alg _ = aeAlg_of_id (Old.Epochs.epoch_id e) in
     let (key, iv), pn =
       let (rpn, wpn) = Old.Epochs.pn_epoch e in
       if rw then
