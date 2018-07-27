@@ -47,11 +47,16 @@ let prf (i: id): GTot bool = safeHS i && cipher_prf(cipherAlg_of_id i)
 // controls INT1CMA idealization of MACs (move to MAC?)
 let mac1 i: GTot bool = mac_log && mac_int1cma (macAlg_of_id i)
 
-// controls abstraction of plaintexts
-// (kept abstract, but requires all the crypto steps above)
-assume
-val safeId: i:id -> GTot bool
 
+
+let idealAEAD : bool = Flags.ideal_AEAD
+
+assume val safeId : (i:id) -> b:bool{b ==> idealAEAD}
+
+// pne abstraction
+assume val idealPNE : b:bool{b ==> idealAEAD}
+
+assume val safePNE : i:id -> b:bool{b ==> idealPNE}
 
 (* IDEALIZATION DEPENDENCIES *) 
 
@@ -82,3 +87,4 @@ val safeId_implies_cpa: i:id -> Lemma
 
 assume
 val aes_ct : bool
+
