@@ -249,6 +249,19 @@ let parse_maybe_enum_key
 : Tot (parser k (maybe_enum_key e))
 = p `parse_synth` (maybe_enum_key_of_repr e)
 
+let parse_maybe_enum_key_eq
+  (#k: parser_kind)
+  (#key #repr: eqtype)
+  (p: parser k repr)
+  (e: enum key repr)
+  (input: bytes)
+: Lemma
+  (parse (parse_maybe_enum_key p e) input == (match parse p input with
+  | Some (x, consumed) -> Some (maybe_enum_key_of_repr e x, consumed)
+  | _ -> None
+  ))
+= ()
+
 let repr_of_maybe_enum_key
   (#key #repr: eqtype)
   (e: enum key repr)
