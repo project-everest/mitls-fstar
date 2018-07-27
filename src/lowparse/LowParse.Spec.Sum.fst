@@ -372,155 +372,163 @@ let parse_sum_with_nondep_eq
 
 (* Sum with default case *)
 
-inline_for_extraction
-let dsum = (sum * Type0)
+noeq
+type dsum =
+| DSum:
+    (key: eqtype) ->
+    (repr: eqtype) ->
+    (e: enum key repr) ->
+    (data: Type0) ->
+    (tag_of_data: (data -> GTot (maybe_enum_key e))) ->
+    dsum
 
-type maybe_data (known_data: Type0) (unknown_repr: eqtype) (unknown_data: Type0) =
-  | KnownData : (d: known_data) -> maybe_data known_data unknown_repr unknown_data
-  | UnknownData : (r: unknown_repr) -> (d: unknown_data) -> maybe_data known_data unknown_repr unknown_data
+inline_for_extraction
+let dsum_key_type (t: dsum) : Tot eqtype =
+  match t with (DSum key _ _ _ _) -> key
 
 inline_for_extraction
-let sum_of_dsum
-  (d: dsum)
-: Tot sum
-= let (s, _) = d in s
+let dsum_repr_type (t: dsum) : Tot eqtype =
+  match t with (DSum _ repr _ _ _) -> repr
+
+inline_for_extraction
+let dsum_enum (t: dsum) : Tot (enum (dsum_key_type t) (dsum_repr_type t)) =
+  match t with (DSum _ _ e _ _) -> e
 
 inline_for_extraction
 let dsum_key (t: dsum) : Tot Type0 =
-  maybe_enum_key (sum_enum (sum_of_dsum t))
+  maybe_enum_key (dsum_enum t)
 
 inline_for_extraction
-let dsum_unknown_type
-  (t: dsum)
-: Tot Type0
-= let (_, ud) = t in
-  ud
+let dsum_known_key (t: dsum) : Tot Type0 =
+  enum_key (dsum_enum t)
 
 inline_for_extraction
-let dsum_type
-  (t: dsum)
-: Tot Type0
-= maybe_data
-    (sum_type (sum_of_dsum t)) 
-    (unknown_enum_repr (sum_enum (sum_of_dsum t)))
-    (dsum_unknown_type t)
+let dsum_unknown_key (t: dsum) : Tot Type0 =
+  unknown_enum_repr (dsum_enum t)
 
 inline_for_extraction
-let dsum_tag_of_data
-  (d: dsum)
-  (data: dsum_type d)
-: GTot (dsum_key d)
-= match data with
-  | KnownData kd -> Known (sum_tag_of_data (sum_of_dsum d) kd)
-  | UnknownData r _ -> Unknown r
+let dsum_type (t: dsum) : Tot Type0 =
+  let (DSum _ _ _ data _) = t in
+  data
 
 inline_for_extraction
-let synth_dsum_known
-  (d: dsum)
-  (kt: sum_key (sum_of_dsum d))
-  (d' : sum_cases (sum_of_dsum d) kt)
-: Tot (refine_with_tag (dsum_tag_of_data d) (Known kt))
-= (KnownData d' <: dsum_type d)
+let dsum_tag_of_data (t: dsum) : Tot ((x: dsum_type t) -> GTot (dsum_key t)) =
+  let (DSum _ _ _ _ tag_of_data) = t in
+  tag_of_data
 
 inline_for_extraction
-let synth_dsum_unknown
-  (d: dsum)
-  (r: unknown_enum_repr (sum_enum (sum_of_dsum d)))
-  (d' : dsum_unknown_type d)
-: Tot (refine_with_tag (dsum_tag_of_data d) (Unknown r))
-= (UnknownData r d' <: dsum_type d)
+let dsum_cases (t: dsum) (x: dsum_key t) : Type0 =
+  refine_with_tag #(dsum_key t) #(dsum_type t) (dsum_tag_of_data t) x
+
+let weaken_parse_dsum_cases_kind
+  (s: dsum)
+  (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_cases s (Known x))))
+  (k' : parser_kind)
+: Tot parser_kind
+= let keys : list (dsum_key_type s) = List.Tot.map fst (dsum_enum s) in
+  glb_list_of #(dsum_key_type s) (fun (x: dsum_key_type s) ->
+    if List.Tot.mem x keys
+    then let (| k, _ |) = f x in k
+    else k'
+  ) (List.Tot.map fst (dsum_enum s)) `glb` k'
 
 let parse_dsum_cases
-  (d: dsum)
-  (#k: parser_kind)
-  (pk: ((kt: sum_key (sum_of_dsum d)) -> Tot (parser k (sum_cases (sum_of_dsum d) kt))))
-  (pu: parser k (dsum_unknown_type d))
-  (t: dsum_key d)
-: Tot (parser k (refine_with_tag (dsum_tag_of_data d) t))
-= match t with
-  | Known kt ->
-    parse_synth (pk kt) (synth_dsum_known d kt)
-  | Unknown r ->
-    parse_synth pu (synth_dsum_unknown d r)
+  (s: dsum)
+  (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_cases s (Known x))))
+  (k: parser_kind)
+  (g: (x: dsum_unknown_key s) -> Tot (parser k (dsum_cases s (Unknown x))))
+  (x: dsum_key s)
+: Tot (parser (weaken_parse_dsum_cases_kind s f k) (dsum_cases s x))
+= match x with
+  | Known x ->  
+    let (| _, p |) = f x in
+    weaken (weaken_parse_dsum_cases_kind s f k) p
+  | Unknown x ->
+    weaken (weaken_parse_dsum_cases_kind s f k) (g x)
 
 let parse_dsum
-  (d: dsum)
-  (#tk: parser_kind)
-  (tp: parser tk (sum_repr_type (sum_of_dsum d)))
+  (#kt: parser_kind)
+  (t: dsum)
+  (p: parser kt (dsum_repr_type t))
   (#k: parser_kind)
-  (pk: ((kt: sum_key (sum_of_dsum d)) -> Tot (parser k (sum_cases (sum_of_dsum d) kt))))
-  (pu: parser k (dsum_unknown_type d))
-: Tot (parser (and_then_kind tk k) (dsum_type d))
+  (pc: ((x: dsum_key t) -> Tot (parser k (dsum_cases t x))))
+: Tot (parser (and_then_kind kt k) (dsum_type t))
 = parse_tagged_union
-    #tk
-    #(dsum_key d)
-    (parse_maybe_enum_key tp (sum_enum (sum_of_dsum d)))
-    #(dsum_type d)
-    (dsum_tag_of_data d)
+    #kt
+    #(dsum_key t)
+    (parse_maybe_enum_key p (dsum_enum t))
+    #(dsum_type t)
+    (dsum_tag_of_data t)
     #k
-    (parse_dsum_cases d pk pu)
+    pc
 
-inline_for_extraction
-let synth_dsum_known_recip
-  (d: dsum)
-  (kt: sum_key (sum_of_dsum d))
-  (d' : refine_with_tag (dsum_tag_of_data d) (Known kt))
-: Tot (sum_cases (sum_of_dsum d) kt)
-= let (KnownData d_) = (d' <: dsum_type d) in d_
-
-inline_for_extraction
-let synth_dsum_unknown_recip
-  (d: dsum)
-  (r: unknown_enum_repr (sum_enum (sum_of_dsum d)))
-  (d' : refine_with_tag (dsum_tag_of_data d) (Unknown r)) 
-: Tot (dsum_unknown_type d)
-= let (UnknownData r d_) = (d' <: dsum_type d) in d_
+let parse_dsum_eq
+  (#kt: parser_kind)
+  (t: dsum)
+  (p: parser kt (dsum_repr_type t))
+  (#k: parser_kind)
+  (pc: ((x: dsum_key t) -> Tot (parser k (dsum_cases t x))))
+  (input: bytes)
+: Lemma
+  (parse (parse_dsum t p pc) input == (match parse (parse_maybe_enum_key p (dsum_enum t)) input with
+  | None -> None
+  | Some (k, consumed_k) ->
+    let input_k = Seq.slice input consumed_k (Seq.length input) in
+    begin match parse (pc k) input_k with
+    | None -> None
+    | Some (x, consumed_x) -> Some ((x <: dsum_type t), consumed_k + consumed_x)
+    end
+  ))
+= parse_tagged_union_eq #(kt) #(dsum_key t) (parse_maybe_enum_key p (dsum_enum t)) #(dsum_type t) (dsum_tag_of_data t) #k pc input
 
 let serialize_dsum_cases
-  (d: dsum)
-  (#k: parser_kind)
-  (#pk: ((kt: sum_key (sum_of_dsum d)) -> Tot (parser k (sum_cases (sum_of_dsum d) kt))))
-  (sk: ((kt: sum_key (sum_of_dsum d)) -> Tot (serializer (pk kt))))
-  (#pu: parser k (dsum_unknown_type d))
-  (su: serializer pu)
-  (t: dsum_key d)
-: Tot (serializer (parse_dsum_cases d pk pu t))
-= match t with
-  | Known kt ->
-    serialize_synth
-      _
-      (synth_dsum_known d kt)
-      (sk kt)
-      (synth_dsum_known_recip d kt)
-      ()
-  | Unknown r ->
-    serialize_synth
-      _
-      (synth_dsum_unknown d r)
-      su
-      (synth_dsum_unknown_recip d r)
-      ()
+  (s: dsum)
+  (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_cases s (Known x))))
+  (sr: (x: dsum_known_key s) -> Tot (serializer (dsnd (f x))))  
+  (k: parser_kind)
+  (g: (x: dsum_unknown_key s) -> Tot (parser k (dsum_cases s (Unknown x))))
+  (sg: (x: dsum_unknown_key s) -> Tot (serializer (g x)))
+  (x: dsum_key s)
+: Tot (serializer (parse_dsum_cases s f k g x))
+= match x with
+  | Known x ->
+    serialize_ext
+      (dsnd (f x))
+      (sr x)
+      (parse_dsum_cases s f k g (Known x))
+  | Unknown x ->
+    serialize_ext
+      (g x)
+      (sg x)
+      (parse_dsum_cases s f k g (Unknown x))
 
 let serialize_dsum
-  (d: dsum)
-  (#tk: parser_kind)
-  (#tp: parser tk (sum_repr_type (sum_of_dsum d)))
-  (ts: serializer tp)
+  (#kt: parser_kind)
+  (t: dsum)
+  (#p: parser kt (dsum_repr_type t))
+  (s: serializer p)
   (#k: parser_kind)
-  (#pk: ((kt: sum_key (sum_of_dsum d)) -> Tot (parser k (sum_cases (sum_of_dsum d) kt))))
-  (sk: ((kt: sum_key (sum_of_dsum d)) -> Tot (serializer (pk kt))))
-  (#pu: parser k (dsum_unknown_type d))
-  (su: serializer pu)
-: Pure (serializer (parse_dsum d tp pk pu))
-  (requires (tk.parser_kind_subkind == Some ParserStrong))
+  (#pc: ((x: dsum_key t) -> Tot (parser k (dsum_cases t x))))
+  (sc: ((x: dsum_key t) -> Tot (serializer (pc x))))
+: Pure (serializer (parse_dsum t p pc))
+  (requires (kt.parser_kind_subkind == Some ParserStrong))
   (ensures (fun _ -> True))
 = serialize_tagged_union
-    #tk
-    #(dsum_key d)
-    #(parse_maybe_enum_key tp (sum_enum (sum_of_dsum d)))
-    (serialize_maybe_enum_key _ ts (sum_enum (sum_of_dsum d)))
-    #(dsum_type d)
-    (dsum_tag_of_data d)
+    #(kt)
+    #(dsum_key t)
+    #(parse_maybe_enum_key p (dsum_enum t))
+    (serialize_maybe_enum_key p s (dsum_enum t))
+    #(dsum_type t)
+    (dsum_tag_of_data t)
     #k
-    #(parse_dsum_cases d pk pu)
-    (serialize_dsum_cases d sk su)
+    #pc
+    sc
+
+inline_for_extraction
+let make_dsum
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (#data: Type0)
+  (tag_of_data: (data -> GTot (maybe_enum_key e)))
+: Tot dsum
+= DSum key repr e data tag_of_data
