@@ -790,3 +790,49 @@ let maybe_enum_destr_nil
     L.rev_mem (L.map snd l1) x;
     f (Unknown x)
   ) <: (y: t { eq y (f (maybe_enum_key_of_repr e x)) } ))
+
+inline_for_extraction
+let parse32_dsum_t (t: dsum) : Tot Type =
+  bytes32 -> Tot (option (dsum_type t * U32.t))
+
+let parse32_dsum_eq (t: dsum) : Tot (parse32_dsum_t t -> parse32_dsum_t t -> GTot Type0) =
+  feq _ _ (eq2 #_)
+
+inline_for_extraction
+let parse32_dsum_if (t: dsum) : Tot (if_combinator _ (parse32_dsum_eq t)) =
+  fif _ _ _ (default_if _)
+
+let parse32_dsum_eq_refl (t: dsum) : Tot (r_reflexive_t _ (parse32_dsum_eq t)) =
+  fun _ -> ()
+
+let parse32_dsum_eq_trans (t: dsum) : Tot (r_transitive_t _ (parse32_dsum_eq t)) =
+  fun _ _ _ -> ()
+
+#set-options "--z3rlimit 64"
+
+inline_for_extraction
+let parse32_dsum_gen
+  (#kt: parser_kind)
+  (t: dsum)
+  (#p: parser kt (dsum_repr_type t))
+  (p32: parser32 p)
+  (#k: parser_kind)
+  (pc: ((x: dsum_key t) -> Tot (parser k (dsum_cases t x))))
+  (pc32: ((x: dsum_key t) -> Tot (parser32 (pc x))))
+  (destr: maybe_enum_destr_t (B32.bytes -> Tot (option (dsum_type t * U32.t)) ) (dsum_enum t))
+: Tot (parser32 (parse_dsum t p pc))
+= fun input -> ((
+  parse_dsum_eq t p pc (B32.reveal input);
+  parse_maybe_enum_key_eq p (dsum_enum t) (B32.reveal input);
+  match p32 input with
+  | None -> None
+  | Some (r, consumed_k) ->
+    let input_k = B32.slice input consumed_k (B32.len input) in
+    begin match destr _ (parse32_dsum_if t) (parse32_dsum_eq_refl t) (parse32_dsum_eq_trans t) (fun (x: dsum_key t) (input: bytes32) -> match pc32 x input with | Some (d, consumed_d) -> Some ((d <: dsum_type t), consumed_d) | _ -> None) r input_k with
+    | Some (d, consumed_d) ->
+      Some (d, U32.add consumed_k consumed_d)
+    | _ -> None
+    end
+  ) <: (res: option (dsum_type t * U32.t) { parser32_correct (parse_dsum t p pc) input res }))
+
+#reset-options
