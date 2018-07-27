@@ -636,10 +636,18 @@ module L = FStar.List.Tot
 let maybe_enum_key_of_repr_not_in (#key #repr: eqtype) (e: enum key repr) (l: list (key * repr)) (x: repr) : GTot Type0 =
   (~ (L.mem x (L.map snd l)))
 
+let list_rev_cons
+  (#t: Type)
+  (a: t)
+  (q: list t)
+: Lemma
+  (L.rev (a :: q) == L.rev q `L.append` [a])
+= L.rev_rev' (a :: q);
+  L.rev_rev' q
+
 let list_append_rev_cons (#t: Type) (l1: list t) (x: t) (l2: list t) : Lemma
   (L.append (L.rev l1) (x :: l2) == L.append (L.rev (x :: l1)) l2)
-= L.rev_rev' (x :: l1);
-  L.rev_rev' l1;
+= list_rev_cons x l1;
   L.append_assoc (L.rev l1) [x] l2
 
 let rec assoc_append_flip_l_intro
@@ -734,18 +742,51 @@ let maybe_enum_destr_cons
     L.map_append fst (L.rev l1) l2;
     ()
   in
+  [@inline_let]
+  let (_ : squash (maybe_enum_key_of_repr e r == Known k)) =
+    L.append_mem (L.map snd (L.rev l1)) (L.map snd l2) r;
+    L.map_append snd (L.rev l1) l2;
+    assoc_append_flip_l_intro (L.rev l1) l2 r k;
+    ()
+  in
   fun (x: repr { maybe_enum_key_of_repr_not_in e l1 x } ) -> ((
-  if x = r
-  then begin
-    [@inline_let]
-    let (_ : squash (maybe_enum_key_of_repr e x == Known k)) =
-      L.append_mem (L.map snd (L.rev l1)) (L.map snd l2) r;
-      L.map_append snd (L.rev l1) l2;
-      assoc_append_flip_l_intro (L.rev l1) l2 r k;
-      ()
-    in
-    f (Known k)
-  end else begin
-    g eq ift eq_refl eq_trans f x
-  end
+    ift
+      (x = r)
+      (fun h -> f (Known k))
+      (fun h -> g eq ift eq_refl eq_trans f x)
+  ) <: (y: t { eq y (f (maybe_enum_key_of_repr e x)) } ))
+
+let rec list_rev_map
+  (#t1 #t2: Type)
+  (f: t1 -> Tot t2)
+  (l: list t1)
+: Lemma
+  (L.rev (L.map f l) == L.map f (L.rev l))
+= match l with
+  | [] -> ()
+  | a :: q ->
+    list_rev_cons a q;
+    list_rev_cons (f a) (L.map f q);
+    list_rev_map f q;
+    L.map_append f (L.rev q) [a]
+
+inline_for_extraction
+let maybe_enum_destr_nil
+  (t: Type)
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (l1 l2: list (key * repr))
+  (u1: squash (e == L.append (L.rev l1) l2))
+  (u3: squash (Nil? l2))
+: Tot (maybe_enum_destr_t' t e l1 l2 u1)
+= fun (eq: (t -> t -> GTot Type0)) (ift: if_combinator t eq) (eq_refl: r_reflexive_t _ eq) (eq_trans: r_transitive_t _ eq) (f: (maybe_enum_key e -> Tot t)) ->
+  [@inline_let]
+  let _ = r_reflexive_t_elim _ _ eq_refl in
+  [@inline_let]
+  let _ = r_transitive_t_elim _ _ eq_trans in
+  fun (x: repr { maybe_enum_key_of_repr_not_in e l1 x } ) -> ((
+    L.append_l_nil (L.rev l1);
+    list_rev_map snd l1;
+    L.rev_mem (L.map snd l1) x;
+    f (Unknown x)
   ) <: (y: t { eq y (f (maybe_enum_key_of_repr e x)) } ))
