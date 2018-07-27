@@ -15,15 +15,22 @@ open Pkg
 
 type plainLen = l:nat{l + v AEAD.taglen < pow2 32 - 1}
 
+type safeid = i:I.id{Flag.safeId i}
+
+let safeId (i:I.id) = AEAD.safeId i
+
 type llbytes (lmax:nat) = b:bytes{length b <= lmax}
 
 val plain: i:I.id -> lmax:plainLen -> t:Type0{hasEq t}
 
+val as_bytes : i:I.id -> lmax:plainLen -> p:plain i lmax -> GTot (llbytes lmax)
+
+val mk_plain: i:I.id -> lmax:plainLen -> b:llbytes lmax -> p:plain i lmax{~(AEAD.safeId i) ==> as_bytes i lmax p == b}
+
+val repr : i:I.id{~(AEAD.safeId i)} -> lmax:plainLen -> p:plain i lmax -> b:llbytes lmax{b == as_bytes i lmax p}
+
 type cipher (i:I.id) (lmax:plainLen) = lbytes (lmax + U32.v (AEAD.taglen) + 1)
 
-type safeid = i:I.id{Flag.safeId i}
-
-let safeId (i:I.id) = AEAD.safeId i
 
 let max_ctr = pow2 32 - 1
 

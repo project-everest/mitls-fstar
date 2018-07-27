@@ -39,6 +39,16 @@ type iplainLenMin = l:AEAD.plainLenMin 1{l + v AEAD.taglen < pow2 32 - 1}
 // plain i lmax: stream plaintext of length at most lmax
 let plain i lmax = llbytes lmax
 
+let as_bytes i lmax p = p
+
+let mk_plain i lmax b =
+  if AEAD.safeId i then
+    Bytes.create (U32.uint_to_t lmax) (U8.uint_to_t 0)
+  else
+    b
+
+let repr i lmax p = p
+
 //aead_plain i l: aead plain of length exactly l
 type aead_plain (i:I.id) (l:plainLenMin) : t:Type0{hasEq t} = lbytes l
 
