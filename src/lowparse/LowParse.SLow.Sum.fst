@@ -872,6 +872,27 @@ let parse32_dsum_cases
   | Known x -> (fun input -> pc32 x input)
   | Unknown x -> (fun input -> pd32 x input)
 
+(* FIXME: WHY WHY WHY do I need this CONTRIVED definition? *)
+
+inline_for_extraction
+let serialize32_dsum_cases_aux
+  (s: dsum)
+  (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_cases s (Known x))))
+  (sr: (x: dsum_known_key s) -> Tot (serializer (dsnd (f x))))
+  (sr32: (x: dsum_known_key s) -> Tot (serializer32 (sr x)))
+  (#k: parser_kind)
+  (g: (x: dsum_unknown_key s) -> Tot (parser k (dsum_cases s (Unknown x))))
+  (sg: (x: dsum_unknown_key s) -> Tot (serializer (g x)))
+  (sg32: (x: dsum_unknown_key s) -> Tot (serializer32 (sg x)))
+  (x: dsum_key s)
+: Tot ((input: dsum_cases s x) -> (y: bytes32 { serializer32_correct (serialize_dsum_cases s f sr g  sg x) input y } ))
+= fun (input: dsum_cases s x) ->
+  match x with
+  | Known x ->
+    sr32 x input
+  | Unknown x ->
+    sg32 x input
+
 inline_for_extraction
 let serialize32_dsum_cases
   (s: dsum)
@@ -884,12 +905,9 @@ let serialize32_dsum_cases
   (sg32: (x: dsum_unknown_key s) -> Tot (serializer32 (sg x)))
   (x: dsum_key s)
 : Tot (serializer32 (serialize_dsum_cases s f sr g sg x))
-= match x with
-  | Known x ->
-    (fun input -> sr32 x input)
-  | Unknown x ->
-    (fun input -> sg32 x input)
+= serialize32_dsum_cases_aux s f sr sr32 g sg sg32 x
 
+(* TODO: swap match and fun as above *)
 
 inline_for_extraction
 let size32_dsum_cases
