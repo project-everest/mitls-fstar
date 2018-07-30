@@ -858,3 +858,38 @@ let serialize32_dsum_gen
     let s = sc32 tg input in
     B32.b32append stg s
   ) <: (res: bytes32 { serializer32_correct (serialize_dsum t s sc) input res } ))
+
+inline_for_extraction
+let parse32_dsum_cases
+  (t: dsum)
+  (pc: ((x: dsum_known_key t) -> Tot (k: parser_kind & parser k (dsum_cases t (Known x)))))
+  (pc32: ((x: dsum_known_key t) -> Tot (parser32 (dsnd (pc x)))))
+  (#k: parser_kind)
+  (pd: ((x: dsum_unknown_key t) -> Tot (parser k (dsum_cases t (Unknown x)))))
+  (pd32: ((x: dsum_unknown_key t) -> Tot (parser32 (pd x))))
+  (x: dsum_key t)
+: Tot (parser32 (parse_dsum_cases t pc pd x))
+= match x with
+  | Known x -> (fun input -> pc32 x input)
+  | Unknown x -> (fun input -> pd32 x input)
+
+(*
+inline_for_extraction
+let serialize32_dsum_cases
+  (s: dsum)
+  (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (sum_cases s x)))
+  (sr: (x: sum_key s) -> Tot (serializer (dsnd (f x))))
+  (sr32: (x: sum_key s) -> Tot (serializer32 (sr x)))
+  (x: sum_key s)
+: Tot (serializer32 (serialize_sum_cases s f sr x))
+= (fun input -> sr32 x input)
+
+inline_for_extraction
+let size32_sum_cases
+  (s: sum)
+  (f: (x: sum_key s) -> Tot (k: parser_kind & parser k (sum_cases s x)))
+  (sr: (x: sum_key s) -> Tot (serializer (dsnd (f x))))
+  (sr32: (x: sum_key s) -> Tot (size32 (sr x)))
+  (x: sum_key s)
+: Tot (size32 (serialize_sum_cases s f sr x))
+= (fun input -> sr32 x input)

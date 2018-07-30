@@ -435,7 +435,7 @@ let weaken_parse_dsum_cases_kind
 let parse_dsum_cases
   (s: dsum)
   (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_cases s (Known x))))
-  (k: parser_kind)
+  (#k: parser_kind)
   (g: (x: dsum_unknown_key s) -> Tot (parser k (dsum_cases s (Unknown x))))
   (x: dsum_key s)
 : Tot (parser (weaken_parse_dsum_cases_kind s f k) (dsum_cases s x))
@@ -485,22 +485,22 @@ let serialize_dsum_cases
   (s: dsum)
   (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_cases s (Known x))))
   (sr: (x: dsum_known_key s) -> Tot (serializer (dsnd (f x))))  
-  (k: parser_kind)
+  (#k: parser_kind)
   (g: (x: dsum_unknown_key s) -> Tot (parser k (dsum_cases s (Unknown x))))
   (sg: (x: dsum_unknown_key s) -> Tot (serializer (g x)))
   (x: dsum_key s)
-: Tot (serializer (parse_dsum_cases s f k g x))
+: Tot (serializer (parse_dsum_cases s f g x))
 = match x with
   | Known x ->
     serialize_ext
       (dsnd (f x))
       (sr x)
-      (parse_dsum_cases s f k g (Known x))
+      (parse_dsum_cases s f g (Known x))
   | Unknown x ->
     serialize_ext
       (g x)
       (sg x)
-      (parse_dsum_cases s f k g (Unknown x))
+      (parse_dsum_cases s f g (Unknown x))
 
 let serialize_dsum
   (#kt: parser_kind)
