@@ -836,3 +836,25 @@ let parse32_dsum_gen
   ) <: (res: option (dsum_type t * U32.t) { parser32_correct (parse_dsum t p pc) input res }))
 
 #reset-options
+
+
+inline_for_extraction
+let serialize32_dsum_gen
+  (#kt: parser_kind)
+  (t: dsum)
+  (#p: parser kt (dsum_repr_type t))
+  (#s: serializer p)
+  (s32: serializer32 (serialize_maybe_enum_key _ s (dsum_enum t)))
+  (#k: parser_kind)
+  (#pc: ((x: dsum_key t) -> Tot (parser k (dsum_cases t x))))
+  (#sc: ((x: dsum_key t) -> Tot (serializer (pc x))))
+  (sc32: ((x: dsum_key t) -> Tot (serializer32 (sc x))))
+  (u: unit { serializer32_sum_gen_precond kt k } )
+  (tag_of_data: ((x: dsum_type t) -> Tot (y: dsum_key t  { y == (dsum_tag_of_data t x <: dsum_key t)}  )))
+: Tot (serializer32 (serialize_dsum t s sc))
+= fun (input: dsum_type t) -> ((
+    let tg = tag_of_data input in
+    let stg = s32 tg in
+    let s = sc32 tg input in
+    B32.b32append stg s
+  ) <: (res: bytes32 { serializer32_correct (serialize_dsum t s sc) input res } ))
