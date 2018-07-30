@@ -432,6 +432,14 @@ let weaken_parse_dsum_cases_kind
     else k'
   ) (List.Tot.map fst (dsum_enum s)) `glb` k'
 
+let weaken_parse_dsum_cases_kind'
+  (s: dsum)
+  (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_cases s (Known x))))
+  (#k' : parser_kind)
+  (p: (x: dsum_unknown_key s) -> Tot (parser k' (dsum_cases s (Unknown x))))
+: Tot parser_kind
+= weaken_parse_dsum_cases_kind s f k'
+
 let parse_dsum_cases
   (s: dsum)
   (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_cases s (Known x))))
