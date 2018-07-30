@@ -1,11 +1,12 @@
 # miTLS build container
 
-# Define here what FStar base container image mitls build should use.
+# Define on fstar-version.json what FStar base container image
+# mitls build should use.
 # By default it always look for the latest FStar container available
 # In case you would like to reference a specific commit,
 # replace latest with the commit id from github using 12 characters.
-# i.e.: FROM fstar:cbac9b43ab46
-FROM fstar:latest
+ARG COMMITID
+FROM fstar:${COMMITID}
 
 ARG BUILDLOGFILE
 ARG MAXTHREADS
