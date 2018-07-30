@@ -734,7 +734,8 @@ let maybe_enum_destr_cons
   let _ = r_reflexive_t_elim _ _ eq_refl in
   [@inline_let]
   let _ = r_transitive_t_elim _ _ eq_trans in
-  let (k, r) = x in
+  match x with
+  | (k, r) ->
   [@inline_let]
   let _ : squash (L.mem k (L.map fst e)) =
     L.append_mem (L.map fst (L.rev l1)) (L.map fst (x :: l2)) k;
