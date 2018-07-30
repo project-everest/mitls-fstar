@@ -199,13 +199,15 @@ FStar.Tactics.synth_by_tactic
       parse_t
       ()
     )
+*)
+
 
 let cases_of_t_A (x: t) : Lemma
-  (cases_of_t x == Case_A <==> A? x)
+  (cases_of_t x == LP.Known Case_A <==> A? x)
 = ()
 
 inline_for_extraction
-let synth_case_A_inv (z: LP.sum_cases t_sum Case_A) : Tot (z: (U8.t * U8.t)) =
+let synth_case_A_inv (z: LP.dsum_cases t_sum (LP.Known Case_A)) : Tot (z: (U8.t * U8.t)) =
   [@inline_let]
   let z' : t = z in
   let _ = cases_of_t_A z' in
@@ -217,11 +219,11 @@ let synth_case_A_inv_correct () : Lemma
 = ()
 
 let cases_of_t_B (x: t) : Lemma
-  (cases_of_t x == Case_B <==> B? x)
+  (cases_of_t x == LP.Known Case_B <==> B? x)
 = ()
 
 inline_for_extraction
-let synth_case_B_inv (z: LP.sum_cases t_sum Case_B) : Tot (z: U16.t { UInt16.v z > 0 } ) =
+let synth_case_B_inv (z: LP.dsum_cases t_sum (LP.Known Case_B)) : Tot (z: U16.t { UInt16.v z > 0 } ) =
   [@inline_let]
   let z' : t = z in
   let _ = cases_of_t_B z' in
@@ -231,6 +233,24 @@ let synth_case_B_inv (z: LP.sum_cases t_sum Case_B) : Tot (z: U16.t { UInt16.v z
 let synth_case_B_inv_correct () : Lemma
   (LP.synth_inverse synth_case_B synth_case_B_inv)
 = ()
+
+let cases_of_t_C (x: t) : Lemma
+  ((LP.Unknown? (cases_of_t x) <==> C? x) /\ (match cases_of_t x, x with
+    | LP.Unknown k1, C k2 _ -> k1 == k2
+    | _ -> True
+  ))
+= ()
+
+inline_for_extraction
+let synth_case_C_inv (x: LP.unknown_enum_repr case_enum) (y: LP.dsum_cases t_sum (LP.Unknown x)) : Tot U16.t =
+  [@inline_let]
+  let z : t = y in
+  let _ = cases_of_t_C z in
+  match z with
+  | C _ y -> y
+
+let synth_case_C_inv_correct (x: LP.unknown_enum_repr case_enum) : Lemma (LP.synth_inverse (synth_case_C x) (synth_case_C_inv x))
+= Classical.forall_intro cases_of_t_C
 
 let serialize_case_A
 : LP.serializer parse_case_A
@@ -258,20 +278,32 @@ let serialize_case_B
         ()
       )
 
+let serialize_case_C
+  (x: LP.unknown_enum_repr case_enum)
+: Tot (LP.serializer (parse_case_C x))
+= synth_case_C_inj x;
+  synth_case_C_inv_correct x;
+  LP.serialize_synth
+    LP.parse_u16
+    (synth_case_C x)
+    LP.serialize_u16
+    (synth_case_C_inv x)
+    ()
+
 let serialize_cases'
-  (x: LP.sum_key t_sum)
+  (x: LP.dsum_known_key t_sum)
 : Tot (LP.serializer (dsnd (parse_cases' x)))
 = match x with
   | Case_A -> serialize_case_A
   | Case_B -> serialize_case_B
 
 let serialize_cases
-: (x: LP.sum_key t_sum) ->
+: (x: LP.dsum_key t_sum) ->
   Tot (LP.serializer (parse_cases x))
-= LP.serialize_sum_cases t_sum parse_cases' serialize_cases'
+= LP.serialize_dsum_cases t_sum parse_cases' serialize_cases' parse_case_C serialize_case_C
 
 let serialize_t : LP.serializer parse_t =
-  LP.serialize_sum t_sum LP.serialize_u8 serialize_cases
+  LP.serialize_dsum t_sum LP.serialize_u8 serialize_cases
 
 inline_for_extraction
 let serialize32_case_A
@@ -308,8 +340,26 @@ let serialize32_case_B
         ()
 
 inline_for_extraction
+let serialize32_case_C
+  (x: LP.unknown_enum_repr case_enum)
+: Tot (LP.serializer32 (serialize_case_C x))
+=
+      [@inline_let]
+      let _ = synth_case_C_inj x in
+      [@inline_let]
+      let _ = synth_case_C_inv_correct x in
+      LP.serialize32_synth
+        LP.parse_u16
+        (synth_case_C x)
+        LP.serialize_u16
+        LP.serialize32_u16
+        (synth_case_C_inv x)
+        (fun y -> synth_case_C_inv x y)
+        ()
+
+inline_for_extraction
 let serialize32_cases'
-  (x: LP.sum_key t_sum)
+  (x: LP.dsum_known_key t_sum)
 : Tot (LP.serializer32 (serialize_cases' x))
 = match x with
   | Case_A -> serialize32_case_A
@@ -317,13 +367,20 @@ let serialize32_cases'
 
 inline_for_extraction
 let serialize32_cases
-: (x: LP.sum_key t_sum) ->
+: (x: LP.dsum_key t_sum) ->
   Tot (LP.serializer32 (serialize_cases x))
-= LP.serialize32_sum_cases
+= LP.serialize32_dsum_cases
     t_sum
     parse_cases'
     serialize_cases'
     serialize32_cases'
+    _
+    _
+    serialize32_case_C
+
+inline_for_extraction
+let serialize32_key : LP.serializer32 (LP.serialize_maybe_enum_key _ LP.serialize_u8 (LP.dsum_enum t_sum))
+= _ by (LP.serialize32_maybe_enum_key_tac LP.serialize32_u8 (LP.dsum_enum t_sum) LP.serialize_u8 () ())
 
 inline_for_extraction
 let serialize32_t : LP.serializer32 serialize_t =
@@ -331,13 +388,22 @@ let serialize32_t : LP.serializer32 serialize_t =
   let (u: unit {
     LP.serializer32_sum_gen_precond
       LP.parse_u8_kind
-      (LP.weaken_parse_cases_kind t_sum parse_cases')
+      (LP.weaken_parse_dsum_cases_kind' t_sum parse_cases' parse_case_C)
   }) = assert_norm (
     LP.serializer32_sum_gen_precond
       LP.parse_u8_kind
-      (LP.weaken_parse_cases_kind t_sum parse_cases')
+      (LP.weaken_parse_dsum_cases_kind' t_sum parse_cases' parse_case_C)
   )
   in
+  LP.serialize32_dsum_gen
+    t_sum
+    serialize32_key
+    serialize32_cases
+    ()
+    (fun x -> cases_of_t x)
+
+
+(*
   FStar.Tactics.synth_by_tactic (LP.serialize32_sum_tac
     t_sum
     #_
@@ -349,4 +415,3 @@ let serialize32_t : LP.serializer32 serialize_t =
     serialize_t
     ()
   )
-*)
