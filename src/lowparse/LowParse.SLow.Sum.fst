@@ -723,30 +723,29 @@ let maybe_enum_destr_cons
   (t: Type)
   (#key #repr: eqtype)
   (e: enum key repr)
-  (l1 l2: list (key * repr))
-  (u1: squash (e == L.append (L.rev l1) l2))
-  (u3: squash (Cons? l2))
-  (g: (maybe_enum_destr_t' t e (L.hd l2 :: l1) (L.tl l2) (list_append_rev_cons l1 (L.hd l2) (L.tl l2))))
-: Tot (maybe_enum_destr_t' t e l1 l2 u1)
+  (l1: list (key * repr))
+  (x: key * repr)
+  (l2: list (key * repr))
+  (u1: squash (e == L.append (L.rev l1) (x :: l2)))
+  (g: (maybe_enum_destr_t' t e (x :: l1) (l2) (list_append_rev_cons l1 (x) (l2))))
+: Tot (maybe_enum_destr_t' t e l1 (x :: l2) u1)
 = fun (eq: (t -> t -> GTot Type0)) (ift: if_combinator t eq) (eq_refl: r_reflexive_t _ eq) (eq_trans: r_transitive_t _ eq) (f: (maybe_enum_key e -> Tot t)) ->
   [@inline_let]
   let _ = r_reflexive_t_elim _ _ eq_refl in
   [@inline_let]
   let _ = r_transitive_t_elim _ _ eq_trans in
-  [@inline_let]
-  let kr :: q = l2 in
-  let (k, r) = kr in
+  let (k, r) = x in
   [@inline_let]
   let _ : squash (L.mem k (L.map fst e)) =
-    L.append_mem (L.map fst (L.rev l1)) (L.map fst l2) k;
-    L.map_append fst (L.rev l1) l2;
+    L.append_mem (L.map fst (L.rev l1)) (L.map fst (x :: l2)) k;
+    L.map_append fst (L.rev l1) (x :: l2);
     ()
   in
   [@inline_let]
   let (_ : squash (maybe_enum_key_of_repr e r == Known k)) =
-    L.append_mem (L.map snd (L.rev l1)) (L.map snd l2) r;
-    L.map_append snd (L.rev l1) l2;
-    assoc_append_flip_l_intro (L.rev l1) l2 r k;
+    L.append_mem (L.map snd (L.rev l1)) (L.map snd (x :: l2)) r;
+    L.map_append snd (L.rev l1) (x :: l2);
+    assoc_append_flip_l_intro (L.rev l1) (x :: l2) r k;
     ()
   in
   fun (x: repr { maybe_enum_key_of_repr_not_in e l1 x } ) -> ((
@@ -775,10 +774,9 @@ let maybe_enum_destr_nil
   (t: Type)
   (#key #repr: eqtype)
   (e: enum key repr)
-  (l1 l2: list (key * repr))
-  (u1: squash (e == L.append (L.rev l1) l2))
-  (u3: squash (Nil? l2))
-: Tot (maybe_enum_destr_t' t e l1 l2 u1)
+  (l1: list (key * repr))
+  (u1: squash (e == L.append (L.rev l1) []))
+: Tot (maybe_enum_destr_t' t e l1 [] u1)
 = fun (eq: (t -> t -> GTot Type0)) (ift: if_combinator t eq) (eq_refl: r_reflexive_t _ eq) (eq_trans: r_transitive_t _ eq) (f: (maybe_enum_key e -> Tot t)) ->
   [@inline_let]
   let _ = r_reflexive_t_elim _ _ eq_refl in
