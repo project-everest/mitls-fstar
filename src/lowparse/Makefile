@@ -82,3 +82,6 @@ Example6: KREMLIN_ARGS=
 .PHONY: all verify-all clean extract-all $(EXAMPLES)
 
 $(FSTAR_OUT_DIR)/FStar.Math.Lemmas.fst.checked: FSTAR_OPTIONS += --use_extracted_interfaces true
+
+%.fst-in:
+       @echo $(INCLUDE_KREMLIN)
