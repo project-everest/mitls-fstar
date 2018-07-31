@@ -159,6 +159,52 @@ let parse_vldata_gen
   `and_then`
   parse_vldata_payload sz f p
 
+let parse_vldata_gen_eq
+  (sz: integer_size)
+  (f: (bounded_integer sz -> GTot bool))
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (input: bytes)
+: Lemma
+  (parse (parse_vldata_gen sz f p) input == (match parse (parse_bounded_integer sz) input with
+  | None -> None
+  | Some (len, _) ->
+    if f len
+    then begin
+      if Seq.length input < sz + U32.v len
+      then None
+      else
+      let input' = Seq.slice input sz (sz + U32.v len) in
+      match parse p input' with
+      | Some (x, consumed_x) ->
+        if consumed_x = U32.v len
+        then Some (x, sz + U32.v len)
+        else None
+      | _ -> None
+    end
+    else None
+  ))
+= parse_filter_eq (parse_bounded_integer sz) f input;
+  match parse (parse_bounded_integer sz) input with
+  | None -> ()
+  | Some (len, consumed_len) ->
+    if f len
+    then
+      let input1 = Seq.slice input consumed_len (Seq.length input) in
+      if Seq.length input1 < U32.v len
+      then ()
+      else begin
+        let input' = Seq.slice input consumed_len (consumed_len + U32.v len) in
+        assert (input' == Seq.slice input1 0 (U32.v len));
+        assert (parse (parse_vldata_gen sz f p) input == (match parse_fldata' p (U32.v len) input1 with
+        | None -> None
+        | Some (x, consumed_x) -> Some (x, consumed_len + consumed_x)
+        ));
+        ()
+      end
+    else ()
+
 let unconstrained_bounded_integer
   (sz: integer_size)
   (i: bounded_integer sz)
@@ -173,6 +219,30 @@ let parse_vldata
 : Tot (parser _ t)
 = parse_vldata_gen sz (unconstrained_bounded_integer sz) p
 
+let parse_vldata_eq
+  (sz: integer_size)
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (input: bytes)
+: Lemma
+  (parse (parse_vldata sz p) input == (match parse (parse_bounded_integer sz) input with
+  | None -> None
+  | Some (len, _) ->
+    begin
+      if Seq.length input < sz + U32.v len
+      then None
+      else
+      let input' = Seq.slice input sz (sz + U32.v len) in
+      match parse p input' with
+      | Some (x, consumed_x) ->
+        if consumed_x = U32.v len
+        then Some (x, sz + U32.v len)
+        else None
+      | _ -> None
+    end
+  ))
+= parse_vldata_gen_eq sz (unconstrained_bounded_integer _) p input
 
 (** Explicit bounds on size *)
 
@@ -278,8 +348,6 @@ let parse_bounded_vldata_kind
     parser_kind_metadata_total = false;
   })
 
-#reset-options "--z3rlimit 128 --z3cliopt smt.arith.nl=false --z3refresh"
-
 let parse_bounded_vldata_elim'
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
@@ -307,37 +375,7 @@ let parse_bounded_vldata_elim'
     (consumed_p <: nat) == U32.v len /\
     (consumed <: nat) == sz + U32.v len
   )))))
-=   let sz : integer_size = log256' max in
-    let plen_ = parse (parse_filter (parse_bounded_integer sz) (in_bounds min max)) xbytes in
-    assert (Some? plen_);
-    let (Some (len_, consumed_len_)) = plen_ in
-    let plen = parse (parse_bounded_integer sz) xbytes in
-    assert (Some? plen);
-    let (Some (len, consumed_len)) = plen in
-    assert ((len <: U32.t) == (len_ <: U32.t));
-    assert (consumed_len_ == consumed_len);    
-    assert ((consumed_len <: nat) == (sz <: nat));
-    assert (in_bounds min max len);
-    let input1 = Seq.slice xbytes sz (Seq.length xbytes) in
-    let pp1 = parse (parse_vldata_payload sz (in_bounds min max) p len) input1 in
-    assert (Some? pp1);
-    let (Some (x1, consumed_p1)) = pp1 in
-    assert (x == x1);
-    let pp15 = parse (parse_fldata p (U32.v len)) input1 in
-    assert (Some? pp15);
-    let (Some (x15, consumed_p15)) = pp15 in
-    assert (x == x15);
-    assert (consumed_p1 == consumed_p15);
-    assert (U32.v len <= Seq.length xbytes - sz);
-    let input' = Seq.slice input1 0 (U32.v len) in
-    assert (input' == Seq.slice xbytes (sz <: nat) (sz + U32.v len));
-    let pp = parse p input' in
-    assert (Some? pp);
-    let (Some (x', consumed_p)) = pp in
-    assert (x == x');
-    assert ((consumed_p <: nat) == U32.v len);
-    assert ((consumed <: nat) == sz + consumed_p);
-    ()
+= parse_vldata_gen_eq (log256' max) (in_bounds min max) p xbytes
 
 let parse_bounded_vldata_correct
   (min: nat)
@@ -364,8 +402,6 @@ let parse_bounded_vldata_correct
     parse_bounded_vldata_elim' min max p input data consumed 
   in
   Classical.forall_intro (Classical.move_requires prf)
-
-#reset-options
 
 let parse_bounded_vldata
   (min: nat)
@@ -459,8 +495,6 @@ let parse_bounded_vldata_strong_t
 : Tot Type0
 = (x: t { parse_bounded_vldata_strong_pred min max s x } )
 
-#reset-options "--z3rlimit 64 --z3cliopt smt.arith.nl=false --z3refresh"
-
 let parse_bounded_vldata_strong_correct
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
@@ -488,8 +522,6 @@ let parse_bounded_vldata_strong_correct
   assert (s x == input');
   ()
 
-#reset-options
-
 let parse_bounded_vldata_strong
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
@@ -510,8 +542,6 @@ let serialize_bounded_integer'
     res
   )
 
-#set-options "--z3rlimit 64 --max_fuel 8 --max_ifuel 8"
-
 let serialize_bounded_integer_correct
   (sz: integer_size)
 : Lemma
@@ -528,15 +558,11 @@ let serialize_bounded_integer_correct
   in
   Classical.forall_intro prf
 
-#reset-options
-
 let serialize_bounded_integer
   (sz: integer_size)
 : Tot (serializer (parse_bounded_integer sz))
 = serialize_bounded_integer_correct sz;
   serialize_bounded_integer' sz
-
-#set-options "--z3rlimit 64"
 
 let serialize_bounded_vldata_strong'
   (min: nat)
@@ -593,32 +619,15 @@ val serialize_vldata_gen_correct_aux
     consumed' == Seq.length b
   ))))
 
-#reset-options "--z3rlimit 128 --z3cliopt smt.arith.nl=false --z3refresh"
-
 let serialize_vldata_gen_correct_aux sz f #k #t p b b1 b2 =
   let (Some (len, consumed1)) = parse (parse_bounded_integer sz) b1 in
   assert (consumed1 == sz);
   assert (no_lookahead_on (parse_bounded_integer sz) b1 b);
-  let v1' = parse (parse_bounded_integer sz) b in
-  assert (Some? v1');
-  let (Some (len', consumed1')) = v1' in
-  assert (consumed1' == sz);
   assert (injective_postcond (parse_bounded_integer sz) b1 b);
-  assert (len' == len);
-  let v1_ = parse (parse_filter (parse_bounded_integer sz) f) b in
-  assert (Some? v1_);
-  let (Some (len_, consumed1_)) = v1_ in
-  assert (consumed1_ == sz);
-  assert ((len_ <: bounded_integer sz) == len);
-  assert (Some? (parse p b2));
-  assert (b2 == Seq.slice b2 0 (U32.v len));
-  assert (Some? (parse (parse_fldata p (U32.v len)) b2));
-  assert (Some? (parse (parse_vldata_payload sz f p len) b2));
-  assert (Some? (parse (parse_vldata_gen sz f p) b));
-//  admit
-  ()
-
-#reset-options
+  assert (parse (parse_bounded_integer sz) b == Some (len, sz));
+  assert (sz + U32.v len == Seq.length b);
+  assert (b2 == Seq.slice b sz (sz + U32.v len));
+  parse_vldata_gen_eq sz f p b
 
 val serialize_vldata_gen_correct
   (sz: integer_size)
@@ -656,8 +665,6 @@ let serialize_vldata_gen_correct sz f #k #t p b1 b2 =
   seq_slice_append_l b1 b2;
   seq_slice_append_r b1 b2;
   serialize_vldata_gen_correct_aux sz f p (Seq.append b1 b2) b1 b2
-
-#reset-options "--z3rlimit 32 --z3cliopt smt.arith.nl=false --z3refresh"
 
 let serialize_bounded_vldata_strong_correct
   (min: nat)

@@ -950,6 +950,22 @@ let parse_filter
 : Tot (parser (parse_filter_kind k) (x: t { f x == true }))
 = p `and_then` (parse_filter_payload f)
 
+let parse_filter_eq
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (f: (t -> GTot bool))
+  (input: bytes)
+: Lemma
+  (parse (parse_filter p f) input == (match parse p input with
+  | None -> None
+  | Some (x, consumed) ->
+    if f x
+    then Some (x, consumed)
+    else None
+  ))
+= ()
+
 let serialize_filter'
   (#k: parser_kind)
   (#t: Type0)
