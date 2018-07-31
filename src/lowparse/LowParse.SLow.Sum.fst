@@ -872,41 +872,6 @@ let parse32_dsum_cases
   | Known x -> (fun input -> pc32 x input)
   | Unknown x -> (fun input -> pd32 x input)
 
-(* FIXME: WHY WHY WHY do I need this CONTRIVED definition? *)
-
-inline_for_extraction
-let serialize32_dsum_cases_aux
-  (s: dsum)
-  (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_cases s (Known x))))
-  (sr: (x: dsum_known_key s) -> Tot (serializer (dsnd (f x))))
-  (sr32: (x: dsum_known_key s) -> Tot (serializer32 (sr x)))
-  (#k: parser_kind)
-  (g: (x: dsum_unknown_key s) -> Tot (parser k (dsum_cases s (Unknown x))))
-  (sg: (x: dsum_unknown_key s) -> Tot (serializer (g x)))
-  (sg32: (x: dsum_unknown_key s) -> Tot (serializer32 (sg x)))
-  (x: dsum_key s)
-: Tot ((input: dsum_cases s x) -> (y: bytes32 { serializer32_correct (serialize_dsum_cases s f sr g  sg x) input y } ))
-= fun (input: dsum_cases s x) ->
-  match x with
-  | Known x ->
-    sr32 x input
-  | Unknown x ->
-    sg32 x input
-
-inline_for_extraction
-let serialize32_dsum_cases
-  (s: dsum)
-  (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_cases s (Known x))))
-  (sr: (x: dsum_known_key s) -> Tot (serializer (dsnd (f x))))
-  (sr32: (x: dsum_known_key s) -> Tot (serializer32 (sr x)))
-  (#k: parser_kind)
-  (g: (x: dsum_unknown_key s) -> Tot (parser k (dsum_cases s (Unknown x))))
-  (sg: (x: dsum_unknown_key s) -> Tot (serializer (g x)))
-  (sg32: (x: dsum_unknown_key s) -> Tot (serializer32 (sg x)))
-  (x: dsum_key s)
-: Tot (serializer32 (serialize_dsum_cases s f sr g sg x))
-= serialize32_dsum_cases_aux s f sr sr32 g sg sg32 x
-
 (* TODO: swap match and fun as above *)
 
 inline_for_extraction
@@ -926,3 +891,164 @@ let size32_dsum_cases
     (fun input -> sr32 x input)
   | Unknown x ->
     (fun input -> sg32 x input)
+
+inline_for_extraction
+let dep_enum_destr
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (v: (enum_key e -> Tot Type))
+: Tot Type
+= (v_eq: ((k: enum_key e) -> v k -> v k -> GTot Type0)) ->
+  (v_if: ((k: enum_key e) -> Tot (if_combinator (v k) (v_eq k)))) ->
+  (v_eq_refl: ((k: enum_key e) -> Tot (r_reflexive_t _ (v_eq k)))) ->
+  (v_eq_trans: ((k: enum_key e) -> Tot (r_transitive_t _ (v_eq k)))) ->
+  (f: ((k: enum_key e) -> Tot (v k))) ->
+  (k: enum_key e) ->
+  Tot (y: v k { v_eq k y (f k) } )
+
+inline_for_extraction
+let dep_enum_destr_cons
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (u: squash (Cons? e))
+  (v: (enum_key e -> Tot Type))
+  (destr: dep_enum_destr (enum_tail e) (fun (k' : enum_key (enum_tail e)) -> v (k' <: key)))
+: Tot (dep_enum_destr e v)
+= match e with
+  | ((k, _) :: _) ->
+    fun
+    (v_eq: ((k: enum_key e) -> v k -> v k -> GTot Type0))
+    (v_if: ((k: enum_key e) -> Tot (if_combinator (v k) (v_eq k))))
+    (v_eq_refl: ((k: enum_key e) -> Tot (r_reflexive_t _ (v_eq k))))
+    (v_eq_trans: ((k: enum_key e) -> Tot (r_transitive_t _ (v_eq k))))
+    (f: ((k: enum_key e) -> Tot (v k)))
+    (k' : enum_key e) ->
+    [@inline_let]
+    let _ = r_reflexive_t_elim (v k') (v_eq k') (v_eq_refl k') in
+    [@inline_let]
+    let _ = r_transitive_t_elim (v k') (v_eq k') (v_eq_trans k') in  
+    [@inline_let]
+    let y : v k' =
+      v_if k' (k = k') (fun _ ->
+        [@inline_let]
+        let y : v k' = f k in
+        y
+      ) (fun _ ->
+        [@inline_let]
+        let v' (k: enum_key (enum_tail e)) : Tot Type = v (k <: key) in
+        [@inline_let]
+        let v'_eq (k: enum_key (enum_tail e)) : Tot (v' k -> v' k -> GTot Type0) = v_eq (k <: key) in
+        [@inline_let]
+        let v'_if (k: enum_key (enum_tail e)) : Tot (if_combinator (v' k) (v'_eq k)) = v_if (k <: key) in
+        [@inline_let]
+        let v'_eq_refl (k: enum_key (enum_tail e)) : Tot (r_reflexive_t _ (v'_eq k)) = v_eq_refl (k <: key) in
+        [@inline_let]
+        let v'_eq_trans (k: enum_key (enum_tail e)) : Tot (r_transitive_t _ (v'_eq k)) = v_eq_trans (k <: key) in
+        [@inline_let]
+        let f' (k: enum_key (enum_tail e)) : Tot (v' k) = f (k <: key) in
+        [@inline_let]
+        let k' : key = k' in
+        assert (k' <> k);
+        assert (L.mem k' (L.map fst (enum_tail e)));
+        [@inline_let]
+        let (y: v' k') =
+          destr v'_eq v'_if v'_eq_refl v'_eq_trans f' k'
+        in
+        y
+      )
+    in
+    (y <: (y: v k' { v_eq k' y (f k') } ))
+
+inline_for_extraction
+let dep_enum_destr_cons_nil
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (u: squash (Cons? e /\ Nil? (enum_tail e)))
+  (v: (enum_key e -> Tot Type))
+: Tot (dep_enum_destr e v)
+= match e with
+  | ((k, _) :: _) ->
+    fun
+    (v_eq: ((k: enum_key e) -> v k -> v k -> GTot Type0))
+    (v_if: ((k: enum_key e) -> Tot (if_combinator (v k) (v_eq k))))
+    (v_eq_refl: ((k: enum_key e) -> Tot (r_reflexive_t _ (v_eq k))))
+    (v_eq_trans: ((k: enum_key e) -> Tot (r_transitive_t _ (v_eq k))))
+    (f: ((k: enum_key e) -> Tot (v k)))
+    (k' : enum_key e) ->
+    [@inline_let]
+    let _ = r_reflexive_t_elim (v k') (v_eq k') (v_eq_refl k') in
+    [@inline_let]
+    let _ = r_transitive_t_elim (v k') (v_eq k') (v_eq_trans k') in  
+    [@inline_let]
+    let y : v k' = f k in
+    (y <: (y: v k' { v_eq k' y (f k') } ))
+
+inline_for_extraction
+let serialize32_dsum_t
+  (s: dsum)
+  (x: enum_key (dsum_enum s))
+: Tot Type
+= dsum_cases s (Known x) -> Tot bytes32
+
+inline_for_extraction
+let serialize32_dsum_eq
+  (s: dsum)
+  (x: enum_key (dsum_enum s))
+: Tot (serialize32_dsum_t s x -> serialize32_dsum_t s x -> GTot Type0)
+= feq _ _ eq2
+
+let serialize32_dsum_eq_refl
+  (s: dsum)
+  (x: enum_key (dsum_enum s))
+: Tot (r_reflexive_t _ (serialize32_dsum_eq s x))
+= fun _ -> ()
+
+let serialize32_dsum_eq_trans
+  (s: dsum)
+  (x: enum_key (dsum_enum s))
+: Tot (r_transitive_t _ (serialize32_dsum_eq s x))
+= fun _ _ _ -> ()
+
+inline_for_extraction
+let serialize32_dsum_if
+  (s: dsum)
+  (x: enum_key (dsum_enum s))
+: Tot (if_combinator _ (serialize32_dsum_eq s x))
+= fif _ _ _ (default_if _)
+
+(* FIXME: WHY WHY WHY do I need this CONTRIVED aux definition? *)
+
+inline_for_extraction
+let serialize32_dsum_cases_aux
+  (s: dsum)
+  (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_cases s (Known x))))
+  (sr: (x: dsum_known_key s) -> Tot (serializer (dsnd (f x))))
+  (sr32: (x: dsum_known_key s) -> Tot (serializer32 (sr x)))
+  (#k: parser_kind)
+  (g: (x: dsum_unknown_key s) -> Tot (parser k (dsum_cases s (Unknown x))))
+  (sg: (x: dsum_unknown_key s) -> Tot (serializer (g x)))
+  (sg32: (x: dsum_unknown_key s) -> Tot (serializer32 (sg x)))
+  (destr: dep_enum_destr (dsum_enum s) (serialize32_dsum_t s))
+  (x: dsum_key s)
+: Tot ((input: dsum_cases s x) -> (y: bytes32 { serializer32_correct (serialize_dsum_cases s f sr g  sg x) input y } ))
+= fun (input: dsum_cases s x) ->
+  match x with
+  | Known x ->
+    destr _ (serialize32_dsum_if s) (serialize32_dsum_eq_refl s) (serialize32_dsum_eq_trans s) sr32 x input
+  | Unknown x ->
+    sg32 x input
+
+inline_for_extraction
+let serialize32_dsum_cases
+  (s: dsum)
+  (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_cases s (Known x))))
+  (sr: (x: dsum_known_key s) -> Tot (serializer (dsnd (f x))))
+  (sr32: (x: dsum_known_key s) -> Tot (serializer32 (sr x)))
+  (#k: parser_kind)
+  (g: (x: dsum_unknown_key s) -> Tot (parser k (dsum_cases s (Unknown x))))
+  (sg: (x: dsum_unknown_key s) -> Tot (serializer (g x)))
+  (sg32: (x: dsum_unknown_key s) -> Tot (serializer32 (sg x)))
+  (destr: dep_enum_destr (dsum_enum s) (serialize32_dsum_t s))
+  (x: dsum_key s)
+: Tot (serializer32 (serialize_dsum_cases s f sr g sg x))
+= serialize32_dsum_cases_aux s f sr sr32 g sg sg32 destr x

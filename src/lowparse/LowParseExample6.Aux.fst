@@ -366,6 +366,22 @@ let serialize32_cases'
   | Case_B -> serialize32_case_B
 
 inline_for_extraction
+let dep_destr
+  (t: (k: LP.enum_key case_enum) -> Tot Type)
+: Tot (LP.dep_enum_destr case_enum t)
+= _ by (
+    T.apply (`LP.dep_enum_destr_cons);
+    T.iseq [
+      T.trivial;
+      (fun () ->
+        T.apply (`LP.dep_enum_destr_cons_nil);
+        T.trivial ()
+      );
+    ];
+    T.qed ()
+  )
+
+inline_for_extraction
 let serialize32_cases
 : (x: LP.dsum_key t_sum) ->
   Tot (LP.serializer32 (serialize_cases x))
@@ -377,6 +393,7 @@ let serialize32_cases
     _
     _
     serialize32_case_C
+    (dep_destr _)
 
 inline_for_extraction
 let serialize32_key : LP.serializer32 (LP.serialize_maybe_enum_key _ LP.serialize_u8 (LP.dsum_enum t_sum))
