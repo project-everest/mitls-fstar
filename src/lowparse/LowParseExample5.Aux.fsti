@@ -23,7 +23,7 @@ type t = {
   last: U32.t;
 }
 
-val parse_inner_kind: (k: LP.parser_kind { k.LP.parser_kind_subkind == Some LP.ParserStrong})
+val parse_inner_kind: (k: LP.parser_kind { k.LP.parser_kind_subkind == Some LP.ParserStrong /\ k.LP.parser_kind_high == Some 4 })
 
 val parse_inner: LP.parser parse_inner_kind inner
 
@@ -45,7 +45,7 @@ val serialize_inner_intro
   ))
   [SMTPat (LP.contains_valid_serialized_data_or_fail h (LPC.serialize_nondep_then _ LPI.serialize_u16 () _ LPI.serialize_u16) b lo x hi)]
 
-val parse_t_kind : (k: LP.parser_kind { k.LP.parser_kind_subkind == Some LP.ParserStrong})
+val parse_t_kind : (k: LP.parser_kind { k.LP.parser_kind_subkind == Some LP.ParserStrong /\ k.LP.parser_kind_high == Some 8 })
 
 val parse_t : LP.parser parse_t_kind t
 
