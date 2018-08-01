@@ -158,6 +158,7 @@ let validate32_bounded_vldata_strong
 
 #set-options "--z3rlimit 64"
 
+inline_for_extraction
 let accessor_bounded_vldata_payload
   (min: nat)
   (max: nat)
@@ -178,6 +179,7 @@ let accessor_bounded_vldata_payload
   let len = parse32_bounded_integer sz input in
   B.sub (B.offset input sz32) 0ul len
 
+inline_for_extraction
 let accessor_bounded_vldata_strong_payload
   (min: nat)
   (max: nat)
@@ -192,3 +194,100 @@ let accessor_bounded_vldata_strong_payload
   })
 : Tot (accessor (parse_bounded_vldata_strong min max s) p (fun x y -> y == x))
 = fun input -> accessor_bounded_vldata_payload min max p sz32 () input
+
+#reset-options
+
+module HS = FStar.HyperStack
+
+assume
+val contains_valid_serialized_data_or_fail_serialize_bounded_vldata_strong_intro
+  (h: HS.mem)
+  (min: nat)
+  (max: nat)
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (b: buffer8)
+  (lo: I32.t)
+  (hi: I32.t)
+  (x: t)
+: Lemma
+  (requires (
+    min <= max /\ max > 0 /\ max < 4294967296 /\ (
+    let sz : integer_size = log256' max in
+    I32.v lo >= sz /\ I32.v lo <= I32.v hi /\ (
+      let hilo = I32.v hi - I32.v lo in
+      min <= hilo /\ hilo <= max /\
+      contains_valid_serialized_data_or_fail h s b lo x hi /\
+      contains_valid_serialized_data_or_fail h (serialize_bounded_integer sz) b (I32.sub lo (I32.int_to_t sz)) (U32.uint_to_t hilo) lo
+  ))))
+  (ensures (
+    let sz : integer_size = log256' max in
+    parse_bounded_vldata_strong_pred min max s x /\
+    contains_valid_serialized_data_or_fail h (serialize_bounded_vldata_strong min max s) b (I32.sub lo (I32.int_to_t sz)) x hi
+  ))
+
+assume
+val serialize32_bounded_integer
+  (min: nat)
+  (max: nat)
+  (u: unit {
+    min <= max /\ max > 0 /\ max < 4294967296
+  })
+: Tot (serializer32 (serialize_bounded_integer (log256' max)))
+
+#set-options "--z3rlimit 16"
+
+inline_for_extraction
+let serialize32_bounded_vldata_strong_size
+  (min: nat)
+  (max: nat)
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (b: buffer8)
+  (lo: I32.t)
+  (hi: I32.t)
+: HST.Stack bool
+  (requires (fun h ->
+    min <= max /\ max > 0 /\ max < 4294967296 /\ (
+    let sz : integer_size = log256' max in
+    B.live h b /\ I32.v lo <= B.length b
+  )))
+  (ensures (fun h res h' ->
+    let sz : integer_size = log256' max in
+    res == (I32.v lo >= sz && I32.v lo <= I32.v hi && (let hilo = I32.v hi - I32.v lo in min <= hilo && hilo <= max)) /\ (
+    if res
+    then (
+      B.modifies (B.loc_buffer (B.gsub b (Cast.int32_to_uint32 (I32.sub lo (I32.int_to_t sz))) (U32.uint_to_t sz))) h h' /\ (
+      forall (x: t) .
+        contains_valid_serialized_data_or_fail h s b lo x hi ==>
+        (parse_bounded_vldata_strong_pred min max s x /\
+          contains_valid_serialized_data_or_fail h' (serialize_bounded_vldata_strong min max s) b (I32.sub lo (I32.int_to_t sz)) x hi)
+    ))
+    else
+      B.modifies B.loc_none h h'
+  )))
+= [@inline_let]
+  let sz : integer_size = log256' max in
+  FStar.Int.pow2_values 31;
+  [@inline_let]
+  let sz32i = I32.int_to_t sz in
+  if lo `I32.gte` sz32i && lo `I32.lte` hi
+  then
+    let hilo = Cast.int32_to_uint32 (hi `I32.sub` lo) in
+    if U32.uint_to_t min `U32.lte` hilo && hilo `U32.lte` U32.uint_to_t max
+    then begin
+      serialize32_bounded_integer min max () b (Cast.int32_to_uint32 (lo `I32.sub` sz32i)) hilo;
+      let h = HST.get () in
+      exactly_contains_valid_data_contains_valid_serialized_data_or_fail h (serialize_bounded_integer sz) b (Cast.int32_to_uint32 (lo `I32.sub` sz32i)) hilo (Cast.int32_to_uint32 lo);
+      Classical.forall_intro (Classical.move_requires (contains_valid_serialized_data_or_fail_serialize_bounded_vldata_strong_intro h min max s b lo hi));
+      true
+    end
+    else false
+  else
+    false
+
+#reset-options
