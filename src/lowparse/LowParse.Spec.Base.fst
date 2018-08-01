@@ -777,3 +777,19 @@ let serializer_parser_unique
   else if Some? (p2 x)
   then serializer_parser_unique' p2 p1 s x
   else ()
+
+let serialize_length
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (x: t)
+: Lemma
+  (let x = Seq.length (serialize s x) in
+   k.parser_kind_low <= x /\ (
+   match k.parser_kind_high with
+   | None -> True
+   | Some y -> x <= y
+  ))
+  [SMTPat (Seq.length (serialize s x))]
+= ()

@@ -1,50 +1,9 @@
 module LowParse.Low.VLData
-include LowParse.Spec.VLData
+include LowParse.Low.VLData.Aux
 include LowParse.Low.FLData
 
 module B = LowStar.Buffer
-module E = LowParse.BigEndianImpl.Low
 module HST = FStar.HyperStack.ST
-
-inline_for_extraction
-let parse32_bounded_integer_1 : (parser32 (parse_bounded_integer 1)) =
-  decode_bounded_integer_injective 1;
-  make_total_constant_size_parser32 1 1ul #(bounded_integer 1) (decode_bounded_integer 1) () (fun input ->
-    let h = HST.get () in
-    let r = E.be_to_n_1 _ _ (E.u32 ()) input in
-    E.lemma_be_to_n_is_bounded (B.as_seq h input);
-    r
-  )
-
-inline_for_extraction
-let parse32_bounded_integer_2 : (parser32 (parse_bounded_integer 2)) =
-  decode_bounded_integer_injective 2;
-  make_total_constant_size_parser32 2 2ul #(bounded_integer 2) (decode_bounded_integer 2) () (fun input ->
-    let h = HST.get () in
-    let r = E.be_to_n_2 _ _ (E.u32 ()) input in
-    E.lemma_be_to_n_is_bounded (B.as_seq h input);
-    r
-  )
-
-inline_for_extraction
-let parse32_bounded_integer_3 : (parser32 (parse_bounded_integer 3)) =
-  decode_bounded_integer_injective 3;
-  make_total_constant_size_parser32 3 3ul #(bounded_integer 3) (decode_bounded_integer 3) () (fun input ->
-    let h = HST.get () in
-    let r = E.be_to_n_3 _ _ (E.u32 ()) input in
-    E.lemma_be_to_n_is_bounded (B.as_seq h input);
-    r
-  )
-
-inline_for_extraction
-let parse32_bounded_integer_4 : (parser32 (parse_bounded_integer 4)) =
-  decode_bounded_integer_injective 4;
-  make_total_constant_size_parser32 4 4ul #(bounded_integer 4) (decode_bounded_integer 4) () (fun input ->
-    let h = HST.get () in
-    let r = E.be_to_n_4 _ _ (E.u32 ()) input in
-    E.lemma_be_to_n_is_bounded (B.as_seq h input);
-    r
-  )
 
 inline_for_extraction
 let parse32_bounded_integer
@@ -53,10 +12,10 @@ let parse32_bounded_integer
 = [@inline_let]
   let _ = integer_size_values i in
   match i with
-  | 1 -> parse32_bounded_integer_1
-  | 2 -> parse32_bounded_integer_2
-  | 3 -> parse32_bounded_integer_3
-  | 4 -> parse32_bounded_integer_4
+  | 1 -> parse32_bounded_integer_1 ()
+  | 2 -> parse32_bounded_integer_2 ()
+  | 3 -> parse32_bounded_integer_3 ()
+  | 4 -> parse32_bounded_integer_4 ()
 
 module I32 = FStar.Int32
 
@@ -262,7 +221,7 @@ let serialize32_bounded_vldata_strong_size
     if res
     then (
       B.modifies (B.loc_buffer (B.gsub b (Cast.int32_to_uint32 (I32.sub lo (I32.int_to_t sz))) (U32.uint_to_t sz))) h h' /\ (
-      forall (x: t) .
+      forall (x: t) .  {:pattern (contains_valid_serialized_data_or_fail h s b lo x hi) }
         contains_valid_serialized_data_or_fail h s b lo x hi ==>
         (parse_bounded_vldata_strong_pred min max s x /\
           contains_valid_serialized_data_or_fail h' (serialize_bounded_vldata_strong min max s) b (I32.sub lo (I32.int_to_t sz)) x hi)
