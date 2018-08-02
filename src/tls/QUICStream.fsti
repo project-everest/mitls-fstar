@@ -38,23 +38,32 @@ let max_ctr = pow2 62 - 1
 
 let pnlen = n:nat{n=1 \/ n=2 \/ n=4}
 
-(*val npn: j:I.id -> l:pnlen -> t:Type0{hasEq t}
+val npn: j:I.id -> l:pnlen -> t:Type0{hasEq t}
 
 val npn_as_bytes : j:I.id -> l:pnlen -> n:npn j l -> GTot (lbytes l)
 
 val mk_npn: j:I.id -> l:pnlen -> b:lbytes l -> n:npn j l{~(PNE.safePNE j) ==> npn_as_bytes j l n == b}
 
 val npn_repr : j:I.id{~(PNE.safePNE j)} -> l:pnlen -> n:npn j l -> b:lbytes l{b == npn_as_bytes j l n}
-*)
+
 let epn = PNE.epn
 
 type rpn = n:U64.t{U64.v n <= max_ctr}
 
-let rpn_of_u32 (j:U32.t) : rpn =
+(*let rpn_of_u32 (j:U32.t) : rpn =
   let jj:nat = U32.v j in
   U64.uint_to_t jj
+*)
 
-//val npn_of_rpn : (j:I.id) -> (r:rpn) -> (l:pnlen) -> (n:npn j l)
+val npn_encode : (j:I.id) -> (r:rpn) -> (l:pnlen) -> (n:npn j l)
+
+val npn_decode : (#j:I.id) -> (#l:pnlen) -> (n:npn j l) -> (maxpn:rpn) -> rpn
+
+
+//val npn_inj
+//npn_decode
+
+
 
 type stream_entry (i:I.id) (j:I.id) =
   | Entry:
@@ -87,29 +96,26 @@ val wlog: #i:safeid -> #j:I.id -> w:stream_writer i j -> h:mem{invariant w h} ->
   {wctrT w h == Seq.length s})
 
 val highest_pnT: #i:I.id -> #j:I.id -> #w:stream_writer i j -> r:stream_reader w -> h:mem ->
-  Ghost (option nat)
+  Ghost (option rpn)
   (requires True)
   (ensures fun o ->  
     Some? o ==> 
-    (let n:nat = Some?.v o in
-      n<=max_ctr /\ 
+    (let n:rpn = Some?.v o in
       (rinvariant r h ==> 
-        (Seq.mem (U64.uint_to_t n) (pnlog r h) /\
-        (forall (k:rpn). Seq.mem k (pnlog r h) ==> U64.v k <= n)))))
+        (Seq.mem n (pnlog r h) /\
+        (forall (k:rpn). Seq.mem k (pnlog r h) ==> U64.v k <= U64.v n)))))
         
-let map_option (#t:Type) (#t':Type) (f:t -> t') (o:option t) :
-  Tot (o':option t') //{(None? o ==> None? o') /\ (Some? o ==> o' == Some (f (Some?.v o)))})
-=
-  match o with
-    | None -> None
-    | Some x -> Some (f x)
-    
 #reset-options "--z3rlimit 50"
 
 val highest_pn: #i:I.id -> #j:I.id -> #w:stream_writer i j -> r:stream_reader w -> ST (option rpn)
   (requires fun h0 -> True)
   (ensures fun h0 c h1 -> h0 == h1 /\
-    (highest_pnT #i #j #w r h0 = map_option #rpn #nat U64.v c))
+    (c == highest_pnT #i #j #w r h0))
+
+let highest_pn_or_zero (#i:I.id) (#j:I.id) (#w:stream_writer i j) (r:stream_reader w) (h:mem) : GTot rpn =
+  match highest_pnT r h with
+    | None -> U64.uint_to_t 0
+    | Some x -> x
 
 let pn_filter (i:I.id) (j:I.id) (ns:Seq.seq rpn) (e:stream_entry i j) : bool =
   let n = Entry?.pn e in
@@ -285,8 +291,19 @@ val decrypt
       let lg = wlog w h0 in
       match (Seq.find_l (epn_filter i j nl ne) lg) with
         | None -> res = None
-        | Some (Entry nl' pn ad' #l' p _ c') ->
-          if nl = nl' && ad' = ad && l' = l && c' = c then
-            (res = Some p /\ pnlog r h1 == Seq.snoc (pnlog r h0) pn)
+        | Some (Entry _ rpn ad' #l' p _ c') ->
+          if rpn = npn_decode (npn_encode j rpn nl) (highest_pn_or_zero r h0)
+            && ad' = ad && l' = l && c' = c then
+              (res = Some p /\ pnlog r h1 == Seq.snoc (pnlog r h0) rpn)
           else
             res = None)))
+
+
+(*      let npn = 'find nl ne in pnetable' in
+      let rpn = 'decode npn maxpn' in
+      match 'find rpn in enctable' with
+        ne' -> ne' =? ne
+
+      let rpn = 'find nl ne in enctable' in
+        rpn =? decode (encode rpn nl) maxpn
+*)
