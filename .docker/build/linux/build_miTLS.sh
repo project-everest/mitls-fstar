@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-#set -x 
+#set -x
 
 target=$1
 out_file=$2
@@ -168,13 +168,13 @@ function exec_build () {
     fi
 
     if [[ $target == "mitls_verify" ]]; then
-        echo target -> mitls_verify
+        echo "target -> mitls_verify"
         mitls_verify && echo -n true > $status_file;
     elif [[ $target == "mitls_verify_and_hints" ]]; then
-        echo target -> mitls_verify_and_hints
+        echo "target -> mitls_verify_and_hints"
         export OTHERFLAGS="--record_hints $OTHERFLAGS"
         mitls_verify_and_hints && echo -n true > $status_file;
-    else 
+    else
         echo "Invalid target"
         echo Failure > $result_file
         return

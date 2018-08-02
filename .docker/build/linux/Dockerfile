@@ -36,6 +36,14 @@ RUN mkdir ${MYHOME}/FStar/mitls-fstar
 COPY --chown=everest / ${MYHOME}/FStar/mitls-fstar/
 WORKDIR ${MYHOME}/FStar/mitls-fstar
 
+# ADD SSH KEY
+RUN mkdir -p ${MYHOME}/.ssh
+RUN chown everest ${MYHOME}/.ssh
+RUN chmod 700 ${MYHOME}/.ssh
+COPY --chown=everest id_rsa ${MYHOME}/.ssh/id_rsa
+RUN chmod 600 ${MYHOME}/.ssh/id_rsa
+RUN eval $(ssh-agent)
+
 COPY --chown=everest build_miTLS.sh ${MYHOME}/FStar/mitls-fstar/build_miTLS.sh
 RUN chmod +x build_miTLS.sh
 COPY --chown=everest build.sh ${MYHOME}/FStar/mitls-fstar/build.sh
@@ -52,3 +60,6 @@ RUN bash -c "../.scripts/query-stats.py -f ${BUILDLOGFILE} -F html -o log_no_rep
 # Worst offenders (longest times)
 RUN bash -c "../.scripts/query-stats.py -f ${BUILDLOGFILE} -F html -o log_worst.html -c -g -n 10"
 
+# Remove ssh identities.
+RUN rm ${MYHOME}/.ssh/id_rsa
+RUN eval $(ssh-agent) && ssh-add -D
