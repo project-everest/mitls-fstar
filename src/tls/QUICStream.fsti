@@ -68,11 +68,11 @@ val npn_decode : (#j:I.id) -> (#l:pnlen) -> (n:npn j l) -> (maxpn:rpn) -> rpn
 type stream_entry (i:I.id) (j:I.id) =
   | Entry:
     nl:pnlen ->
-    pn: rpn ->
+    pn:rpn ->
     ad:AEAD.adata ->
     #l:plainLen ->
     p:plain i l ->
-    ne: epn nl ->
+    ne:epn nl ->
     c:cipher i l ->
     stream_entry i j
 
@@ -292,12 +292,47 @@ val decrypt
       match (Seq.find_l (epn_filter i j nl ne) lg) with
         | None -> res = None
         | Some (Entry _ rpn ad' #l' p _ c') ->
-          if rpn = npn_decode (npn_encode j rpn nl) (highest_pn_or_zero r h0)
+	  let npn = npn_encode j rpn nl in
+          if (
             && ad' = ad && l' = l && c' = c then
               (res = Some p /\ pnlog r h1 == Seq.snoc (pnlog r h0) rpn)
           else
             res = None)))
 
+(*
+  (Flag.safePNE j ==>
+    match entry_for_ne r ne h0 with
+    | None -> None? res
+    | Some (Entry nl' rpn' ad' l' p' _ c') ->
+      if c' = c then
+        let npn = 
+      else None? res
+  | Entry:
+    nl:pnlen ->
+    pn:rpn ->
+    ad:AEAD.adata ->
+    #l:plainLen ->
+    p:plain i l ->
+    ne:epn nl ->
+    c:cipher i l ->
+    stream_entry i j
+*)
+
+    (Flag.safePNE j ==>
+      let s = PNE.sample_cipher c in
+      match PNE.entry_for_sample s (pne_state r) h0 with
+      | None -> None? res
+      | Some (Entry _ nl' ne' npn) ->
+        if nl = nl' && ne = ne' then
+	  let rpn = npn_decode #nl npn (highest_pn_or_zero r h0) in
+	  let n = encode_nonce rpn nl static_iv in
+	  match AEAD.entry_for_nonce (aead_state r) n h0 with
+	  | None -> None? res
+	  | Some (_, ad', l', p', c')  ->
+	    if ad' = empty_bytes && l' = l && c' = c then
+	      res = Some p'
+	    else None? res
+	else None? res
 
 (*      let npn = 'find nl ne in pnetable' in
       let rpn = 'decode npn maxpn' in
@@ -307,3 +342,12 @@ val decrypt
       let rpn = 'find nl ne in enctable' in
         rpn =? decode (encode rpn nl) maxpn
 *)
+
+(*
+N(nl, rpn) = encode(nl)<<62 + rpn
+
+N(nl1, rpn1) = N(nl2, rpn2) ==> nl1 = nl2 /\ rpn1 = rpn2
+
+decode(npn, nl, highest_pn) = (highest_pn & ~nl) | npn
+
+y-2^(8*len(x)-1) < decode x y < y + 2^(8*len(x)-1)
