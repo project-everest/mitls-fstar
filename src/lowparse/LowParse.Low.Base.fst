@@ -526,7 +526,9 @@ let contains_valid_serialized_data_or_fail_elim
     if I32.v lo < 0
     then I32.v hi < 0
     else if I32.v hi < 0
-    then True
+    then match k.parser_kind_high with
+      | None -> True
+      | Some sz' -> I32.v lo + sz' > B.length b
     else
       I32.v lo <= I32.v hi /\
       I32.v hi <= B.length b /\ (
