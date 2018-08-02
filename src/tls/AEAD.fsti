@@ -52,12 +52,23 @@ noeq type plain_pkg =
     repr: (i:unsafeid -> l:plainLenMin min_len -> p:plain i l -> Tot (b:lbytes l{b == as_bytes i l p})) ->
     plain_pkg
 
+noeq type nonce_pkg =
+  | NoncePkg:
+    tag: (t:Type0{hasEq t}) ->
+    nonce: (i:I.id -> tag -> t:Type0{hasEq t}) ->
+    as_bytes: (i:I.id -> t:tag -> nonce i t -> GTot (iv (I.cipherAlg_of_id i))) ->
+    repr: (i:I.id{~ (safeId i)} -> t:tag -> n:nonce i t -> Tot (r:iv (I.cipherAlg_of_id i){r == as_bytes i t n})) ->
+    nonce_pkg
+    
+    
 noeq type info' = {
   alg: I.aeadAlg;
   prf_rgn: subrgn tls_tables_region;
   log_rgn: subrgn tls_tables_region;
   plain: plain_pkg;
+  nonce:nonce_pkg;
 }
+
 
 type info (i:I.id) =
   info:info'{I.aeadAlg_of_id i == info.alg}
@@ -67,11 +78,15 @@ let plainLenM (#i:I.id) (u:info i) = plainLenMin (PlainPkg?.min_len u.plain)
 let plain (#i:I.id) (u:info i) (l:plainLenM u) =
   (PlainPkg?.plain u.plain) i l
  
-let as_bytes (#i:I.id) (#u:info i) (#l:plainLenM u) (p:plain u l) : GTot (lbytes l) = 
+let plain_as_bytes (#i:I.id) (#u:info i) (#l:plainLenM u) (p:plain u l) : GTot (lbytes l) = 
   (PlainPkg?.as_bytes u.plain) i l p
   
-let repr (#i:unsafeid) (#u:info i) (#l:plainLenM u) (p:plain u l) : Tot (r:lbytes l{r == as_bytes p}) =
+let plain_repr (#i:unsafeid) (#u:info i) (#l:plainLenM u) (p:plain u l) : Tot (r:lbytes l{r == plain_as_bytes p}) =
   (PlainPkg?.repr u.plain) i l p
+
+let nonce_tag (#i:I.id) (u:info i) : t:Type0{hasEq t} = NoncePkg?.tag u.nonce
+
+let nonce (#i:I.id) (u:info i) (tag:nonce_tag u) : t:Type0{hasEq t} = NoncePkg?.nonce u.nonce i tag
 
 val keylen   : #i:I.id -> u:info i -> U32.t
 
@@ -82,13 +97,14 @@ type cipher (i:I.id) (u:info i) (l:plainLenM u) =
 
 type cipher32 (i:I.id) (l:U32.t{UInt.size (v l + 16) 32}) = lbytes32 (l +^ taglen)
 
-type nonce (i:I.id) = iv (I.cipherAlg_of_id i)
+//type nonce (i:I.id) = iv (I.cipherAlg_of_id i)
 
 type adata = b:bytes{length b <= v aadmax}
 
 type entry (i:I.id) (u:info i) =
   | Entry:
-    nonce: nonce i ->
+    #tag:nonce_tag u ->
+    n: nonce u tag ->
     ad: adata ->
     #l: plainLenM u ->
     p: plain u l ->
@@ -263,16 +279,16 @@ let entry_of
   mk_entry n aad p c
 *)
 
-let nonce_filter (#i:I.id) (#w:aead_writer i) (n:nonce i) (e:entry i (wgetinfo w)) : bool =
-  Entry?.nonce e = n
+let nonce_filter (#i:I.id) (#w:aead_writer i) (#t:nonce_tag (wgetinfo w)) (n:nonce (wgetinfo w) t) (e:entry i (wgetinfo w)) : bool =
+  Entry?.tag e = t && Entry?.n e = n
 
-let wentry_for_nonce (#i:I.id) (n:nonce i) (w:aead_writer i) (h:mem)
+let wentry_for_nonce (#i:I.id) (w:aead_writer i) (#t:nonce_tag (wgetinfo w)) (n:nonce (wgetinfo w) t) (h:mem)
   : Ghost (option (entry i (wgetinfo w))) (requires safeId i) (ensures fun _ -> True) =
-  Seq.find_l (nonce_filter #i #w n) (wlog w h)
+  Seq.find_l (nonce_filter #i #w #t n) (wlog w h)
 
-let fresh_nonce (#i:I.id) (n:nonce i) (s:aead_writer i) (h:mem)
+let fresh_nonce (#i:I.id) (w:aead_writer i) (#t:nonce_tag (wgetinfo w)) (n:nonce (wgetinfo w) t) (h:mem)
   : Ghost bool (requires safeId i) (ensures fun _ -> True) =
-  None? (wentry_for_nonce n s h)
+  None? (wentry_for_nonce w n h)
 
 (*let just_one_buffer (#a:Type) (b:Buffer.buffer a) : GTot fp =
    as_set [(Buffer.frameOf b, SomeRefs (as_set [Buffer.as_addr b]))]
@@ -281,14 +297,15 @@ let fresh_nonce (#i:I.id) (n:nonce i) (s:aead_writer i) (h:mem)
 val encrypt
   (i: I.id)
   (w: aead_writer i)
-  (n: iv (I.cipherAlg_of_id i))
+  (#t:nonce_tag (wgetinfo w))
+  (n: nonce (wgetinfo w) t)
   (aad: adata)
   (l: plainLenM (wgetinfo w))
   (p: plain (wgetinfo w) l)
   : ST (cipher i (wgetinfo w) l)
   (requires (fun h0 ->
     winvariant w h0 /\
-    (safeId i ==> fresh_nonce n w h0)))
+    (safeId i ==> fresh_nonce w n h0)))
   (ensures (fun h0 c h1 ->
     modifies (Set.union (wfootprint w) shared_footprint) h0 h1 /\
     winvariant w h1 /\
@@ -300,7 +317,8 @@ val decrypt
   (#w: aead_writer i)
   (r: aead_reader w)
   (aad:adata)
-  (n: iv (I.cipherAlg_of_id i))
+  (#t:nonce_tag (rgetinfo r))
+  (n: nonce (rgetinfo r) t)
   (l:plainLenM (wgetinfo w))
   (c:cipher i (wgetinfo w) l)
   : ST (option (plain (rgetinfo r) l))
@@ -310,7 +328,7 @@ val decrypt
     winvariant w h1 /\
     modifies (Set.union (rfootprint r) shared_footprint) h0 h1 /\
     (safeId i ==>
-      (match wentry_for_nonce n w h0 with
+      (match wentry_for_nonce w n h0 with
       | None -> None? res
       | Some (Entry _ aad' #l' p' c') ->
         (if aad' = aad && c' = c && l = l' then res = Some p'

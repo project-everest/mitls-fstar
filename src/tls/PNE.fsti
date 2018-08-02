@@ -17,7 +17,7 @@ open Mem
 open Pkg
 
 
-let pnlen = 4
+//let pnlen = 4
 
 val table_region : rgn
 
@@ -27,30 +27,34 @@ type cipher = b:bytes{Bytes.length b >= 16}
 
 type ciphersample = lbytes 16
 
-type epn = lbytes pnlen
+type pnlen = n:nat{n<=16}
+
+type epn (l:pnlen) = lbytes l
+
 
 noeq type pn_pkg =
   | PNPkg:
-    pn: (i:I.id -> (t:Type0{hasEq t})) ->
-    as_bytes: (i:I.id -> pn i -> GTot (lbytes pnlen)) ->
-    repr: (i:I.id{~(safePNE i)} -> n:pn i -> Tot (b:lbytes pnlen{b == as_bytes i n})) ->
-    from_bytes: (i:I.id -> b:lbytes pnlen -> GTot (n:pn i{as_bytes i n == b})) ->
-    abs: (i:I.id{~(safePNE i)} -> b:lbytes pnlen -> Tot (n:pn i{n == from_bytes i b})) ->
+    pn: (i:I.id -> l:pnlen -> (t:Type0{hasEq t})) ->
+    as_bytes: (i:I.id -> l:pnlen -> pn i l -> GTot (lbytes l)) ->
+    repr: (i:I.id{~(safePNE i)} -> l:pnlen -> n:pn i l -> Tot (b:lbytes l{b == as_bytes i l n})) ->
+    from_bytes: (i:I.id -> l:pnlen -> b:lbytes l -> GTot (n:pn i l{as_bytes i l n == b})) ->
+    abs: (i:I.id{~(safePNE i)} -> l:pnlen -> b:lbytes l -> Tot (n:pn i l{n == from_bytes i l b})) ->
     pn_pkg
 
 let info = pn_pkg
 
-let pn (i:I.id) (u:info) = PNPkg?.pn u i
+let pn (i:I.id) (u:info) (l:pnlen) = PNPkg?.pn u i l
 
-let repr (i:I.id{~(safePNE i)}) (u:info) (n:pn i u) = PNPkg?.repr u i n
+let repr (i:I.id{~(safePNE i)}) (u:info) (l:pnlen) (n:pn i u l) = PNPkg?.repr u i l n
 
-let abs (i:I.id{~(safePNE i)}) (u:info) (b:lbytes pnlen) = PNPkg?.abs u i b
+let abs (i:I.id{~(safePNE i)}) (u:info) (l:pnlen) (b:lbytes l) = PNPkg?.abs u i l b
 
 type entry (i:I.id) (u:info) =
   | Entry :
     s:ciphersample ->
-    ne:epn ->
-    n:pn i u ->
+    #l:pnlen -> 
+    ne:epn l ->
+    n:pn i u l ->
     entry i u
 
 val pne_state : i:I.id -> u:info -> Type0
@@ -83,9 +87,10 @@ val encrypt :
   (#i:I.id) ->
   (#u:info) ->
   (st:pne_state i u) ->
-  (n:pn i u) ->
+  (#l:pnlen) ->
+  (n:pn i u l) ->
   (c:cipher) ->
-  ST epn
+  ST (epn l)
   (requires fun h0 ->
     fresh_sample (sample_cipher c) st h0)
   (ensures fun h0 ne h1 ->
@@ -97,9 +102,10 @@ val decrypt :
   (#i:I.id) ->
   (#u: info) ->
   (st:pne_state i u) ->
-  (ne:epn) ->
+  (#l:pnlen) ->
+  (ne:epn l) ->
   (c:cipher) ->
-  ST (option (pn i u))
+  ST (option (pn i u l))
   (requires fun h0 -> True)
   (ensures fun h0 on h1 ->
     modifies_none h0 h1 /\
