@@ -520,7 +520,22 @@ let contains_valid_serialized_data_or_fail_elim
   (hi: I32.t)
 : Lemma
   (requires (contains_valid_serialized_data_or_fail h s b lo x hi))
-  (ensures (contains_valid_serialized_data_or_fail' h s b lo x hi))
+  (ensures (
+    B.live h b /\
+    I32.v lo <= B.length b /\ (
+    if I32.v lo < 0
+    then I32.v hi < 0
+    else if I32.v hi < 0
+    then True
+    else
+      I32.v lo <= I32.v hi /\
+      I32.v hi <= B.length b /\ (
+      let sz = I32.v hi - I32.v lo in
+      k.parser_kind_low <= sz /\ (
+      match k.parser_kind_high with
+      | None -> True
+      | Some sz' -> sz <= sz'
+  )))))
   [SMTPat (contains_valid_serialized_data_or_fail h s b lo x hi)]
 = ()
 

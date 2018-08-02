@@ -13,7 +13,7 @@ module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 module B = LowStar.Buffer
 
-#reset-options "--z3rlimit 64" //  --z3cliopt smt.arith.nl=false"
+#reset-options "--z3rlimit 64  --z3cliopt smt.arith.nl=false --z3cliopt smt.case_split=3"
 // --using_facts_from '* -FStar.Kremlin.Endianness -LowParse.BigEndian -LowParse.BigEndianImpl.* -LowParse.Math -FStar.Math.*'"
 
 noextract
@@ -27,11 +27,11 @@ let vltest () : HST.Stack unit (fun _ -> True) (fun _ _ _ -> True) =
   let h = HST.get () in
   let k = LPV.serialize32_bounded_vldata_strong_size 8 8 serialize_t b 4l j in
   let h' = HST.get () in
-  assert (k == true);
   assert (
     let v = ({ inner = ({ left = 18us; right = 42us; }); last = 1729ul;}) in
     LP.contains_valid_serialized_data_or_fail h serialize_t b 4l v j
   );
+  assert (k == true);
   assert (
     let v = ({ inner = ({ left = 18us; right = 42us; }); last = 1729ul;}) in
     LPV.parse_bounded_vldata_strong_pred 8 8 serialize_t v /\
