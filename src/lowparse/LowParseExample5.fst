@@ -31,13 +31,16 @@ let vltest () : HST.Stack unit (fun _ -> True) (fun _ _ _ -> True) =
     let v = ({ inner = ({ left = 18us; right = 42us; }); last = 1729ul;}) in
     LP.contains_valid_serialized_data_or_fail h serialize_t b 4l v j
   );
-  assert (k == true);
+  begin if k
+  then
   assert (
     let v = ({ inner = ({ left = 18us; right = 42us; }); last = 1729ul;}) in
     LPV.parse_bounded_vldata_strong_pred 8 8 serialize_t v /\
     LP.contains_valid_serialized_data_or_fail h' (LPV.serialize_bounded_vldata_strong 8 8 serialize_t) b 3l v j /\
     True
-  );
+  )
+  else ()
+  end;
   HST.pop_frame ()
 
 let main: Int32.t -> FStar.Buffer.buffer (FStar.Buffer.buffer C.char) ->
