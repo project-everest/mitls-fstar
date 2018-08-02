@@ -385,7 +385,10 @@ let contains_valid_serialized_data_or_fail_nondep_then
   ))
   [SMTPat (contains_valid_serialized_data_or_fail h s1 b lo x1 mi);
    SMTPat (contains_valid_serialized_data_or_fail h s2 b mi x2 hi);]
-= if I32.v lo < 0
+= contains_valid_serialized_data_or_fail_equiv h s1 b lo x1 mi;
+  contains_valid_serialized_data_or_fail_equiv h s2 b mi x2 hi;
+  contains_valid_serialized_data_or_fail_equiv h (serialize_nondep_then _ s1 () _ s2) b lo (x1, x2) hi;
+  if I32.v lo < 0
   then ()
   else if I32.v mi < 0
   then ()
@@ -428,4 +431,5 @@ let contains_valid_serialized_data_or_fail_synth
 : Lemma
   (requires (contains_valid_serialized_data_or_fail h s b lo x hi))
   (ensures (contains_valid_serialized_data_or_fail h (serialize_synth _ f s g ()) b lo (f x) hi))
-= ()
+= contains_valid_serialized_data_or_fail_equiv h s b lo x hi;
+  contains_valid_serialized_data_or_fail_equiv h (serialize_synth _ f s g ()) b lo (f x) hi

@@ -454,7 +454,7 @@ let exactly_contains_valid_data_invariant
   [SMTPat (M.modifies l h h'); SMTPat (exactly_contains_valid_data h p b lo x hi)]
 = ()
 
-let contains_valid_serialized_data_or_fail
+let contains_valid_serialized_data_or_fail'
   (#k: parser_kind)
   (#t: Type)
   (h: HS.mem)
@@ -479,6 +479,52 @@ let contains_valid_serialized_data_or_fail
       Seq.slice (B.as_seq h b) (I32.v lo) (I32.v hi) == sd
   )
 
+abstract
+let contains_valid_serialized_data_or_fail
+  (#k: parser_kind)
+  (#t: Type)
+  (h: HS.mem)
+  (#p: parser k t)
+  (s: serializer p)
+  (b: buffer8)
+  (lo: I32.t)
+  (x: t)
+  (hi: I32.t)
+= contains_valid_serialized_data_or_fail' h s b lo x hi
+
+abstract
+let contains_valid_serialized_data_or_fail_equiv
+  (#k: parser_kind)
+  (#t: Type)
+  (h: HS.mem)
+  (#p: parser k t)
+  (s: serializer p)
+  (b: buffer8)
+  (lo: I32.t)
+  (x: t)
+  (hi: I32.t)
+: Lemma
+  (contains_valid_serialized_data_or_fail h s b lo x hi <==> contains_valid_serialized_data_or_fail' h s b lo x hi)
+= ()
+
+abstract
+let contains_valid_serialized_data_or_fail_elim
+  (#k: parser_kind)
+  (#t: Type)
+  (h: HS.mem)
+  (#p: parser k t)
+  (s: serializer p)
+  (b: buffer8)
+  (lo: I32.t)
+  (x: t)
+  (hi: I32.t)
+: Lemma
+  (requires (contains_valid_serialized_data_or_fail h s b lo x hi))
+  (ensures (contains_valid_serialized_data_or_fail' h s b lo x hi))
+  [SMTPat (contains_valid_serialized_data_or_fail h s b lo x hi)]
+= ()
+
+abstract
 let contains_valid_serialized_data_or_fail_exactly_contains_valid_data
   (#k: parser_kind)
   (#t: Type)
@@ -500,6 +546,7 @@ let contains_valid_serialized_data_or_fail_exactly_contains_valid_data
   ))
 = ()
 
+abstract
 let exactly_contains_valid_data_contains_valid_serialized_data_or_fail
   (#k: parser_kind)
   (#t: Type)
@@ -520,6 +567,7 @@ let exactly_contains_valid_data_contains_valid_serialized_data_or_fail
   ))
 = serializer_correct_implies_complete p s
 
+abstract
 let contains_valid_serialized_data_or_fail_invariant
   (#k: parser_kind)
   (#t: Type)
