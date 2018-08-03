@@ -21,9 +21,8 @@ EXPORTS
     FFI_mitls_get_exporter
     FFI_mitls_init
     FFI_mitls_quic_create
-    FFI_mitls_quic_close
     FFI_mitls_quic_free
-    FFI_mitls_quic_get_exporter
+    FFI_mitls_quic_get_record_key
     FFI_mitls_quic_process
     FFI_mitls_receive
     FFI_mitls_send
