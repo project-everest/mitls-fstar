@@ -6,6 +6,7 @@ MARCH		?= x86_64
 MITLS_HOME 	= ../../../..
 MLCRYPTO_HOME	?= ../../../../../MLCrypto
 EVERCRYPT_HOME	?= ../../../../../hacl-star/providers
+KREMLIN_HOME    ?= ../../../../../kremlin
 
 LDOPTS += -L$(EVERCRYPT_HOME)/out -levercrypt
 

@@ -103,6 +103,10 @@ let tls13_prefix : lbytes 6 =
   let s = bytes_of_string "tls13 " in
   assume(length s = 6); s
 
+let quic_prefix : lbytes 5 =
+  let s = bytes_of_string "quic " in
+  assume(length s = 5); s
+
 (*-------------------------------------------------------------------*)
 (*
 HKDF-Expand-Label(Secret, Label, Messages, Length) =
@@ -126,12 +130,14 @@ val hkdf_expand_label: ha: hash_alg
   -> label: string{length (bytes_of_string label) < 256 - 9}
   -> hv: bytes{length hv < 256}
   -> len: nat{len <= op_Multiply 255 (UInt32.v (tagLen ha))}
+  -> is_quic: bool
   -> ST (lbytes len)
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
 
-let hkdf_expand_label ha prk label hv len =
-  let label_bytes = tls13_prefix @| bytes_of_string label in
+let hkdf_expand_label ha prk label hv len is_quic =
+  let prefix = if is_quic then quic_prefix else tls13_prefix in
+  let label_bytes = prefix @| bytes_of_string label in
   lemma_repr_bytes_values len;
   lemma_repr_bytes_values (length label_bytes);
   lemma_repr_bytes_values (length hv);
@@ -139,7 +145,6 @@ let hkdf_expand_label ha prk label hv len =
 	     Parse.vlbytes 1 label_bytes @|
 	     Parse.vlbytes 1 hv in
   hkdf_expand ha prk info len
-
 
 
 (*-------------------------------------------------------------------*)
@@ -154,13 +159,16 @@ val derive_secret:
   secret: hkey ha ->
   label: string{length (bytes_of_string label) < 256-6} ->
   hs_hash: bytes{length hs_hash < 256} ->
+  is_quic: bool ->
   ST (lbytes (UInt32.v (Hashing.Spec.tagLen ha)))
   (requires fun h -> True)
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
 
-let derive_secret ha secret label hashed_log =
-  let lbl = tls13_prefix @| bytes_of_string label in
-  cut(length lbl < 256);
+let derive_secret ha secret label hashed_log is_quic =
+  let prefix = if is_quic then quic_prefix else tls13_prefix in
+  assert(length prefix <= 6);
+  let lbl = prefix @| bytes_of_string label in
+  assert(length lbl < 256);
   lemma_repr_bytes_values (UInt32.v (Hashing.Spec.tagLen ha));
   lemma_repr_bytes_values (length lbl);
   lemma_repr_bytes_values (length hashed_log);

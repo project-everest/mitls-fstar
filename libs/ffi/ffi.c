@@ -105,10 +105,11 @@ int MITLS_CALLCONV FFI_mitls_init(void)
         return 1;
     }
 
-    char *Argv[2];
+    char_os *Argv[2];
+    char_os empty[1] = {0};
 
     // Build a stub argv[] to satisfy caml_Startup()
-    Argv[0] = "";
+    Argv[0] = empty;
     Argv[1] = NULL;
 
     // Initialize the OCaml runtime
@@ -783,6 +784,8 @@ void *MITLS_CALLCONV FFI_mitls_get_cert(/* in */ mitls_state *state, /* out */ s
 * QUIC FFI
 **************************************************************************/
 
+#if 0 // FIXME: update to draft 13 API
+
 // ADL yikes!! can't we just expose the mitls_state to the callback??
 #define CONTAINING_RECORD(address, type, field) ((type *)((char*)(address) - (size_t)(&((type *)0)->field)))
 
@@ -878,6 +881,12 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg)
     caml_register_generational_global_root(&state->fstar_state);
     mitls_state ms = {.fstar_state = result};
 
+    if(!configure_common_bool_caml(&ms, Val_int(0xFFFFFFFF), g_mitls_FFI_SetEarlyData))
+    {
+      report_error("FFI_mitls_quic_create_caml: can't enable early_data");
+      CAMLreturnT(int, 0);
+    }
+
     if(cfg->cipher_suites) {
        if(!configure_common_caml(&ms, cfg->cipher_suites, g_mitls_FFI_SetCipherSuites))
        {
@@ -914,14 +923,6 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg)
        if(!ocaml_set_global_key(0, cfg->ticket_enc_alg, cfg->ticket_key, cfg->ticket_key_len))
        {
          report_error("FFI_mitls_quic_create_caml: set ticket key");
-         CAMLreturnT(int, 0);
-       }
-    }
-
-    if(cfg->enable_0rtt) {
-       if(!configure_common_bool_caml(&ms, Val_int(0xFFFFFFFF), g_mitls_FFI_SetEarlyData))
-       {
-         report_error("FFI_mitls_quic_create_caml: can't enable early_data");
          CAMLreturnT(int, 0);
        }
     }
@@ -1090,6 +1091,8 @@ void MITLS_CALLCONV FFI_mitls_quic_close(quic_state *state)
         free(state);
     }
 }
+
+#endif
 
 // Certificate selection callback
 CAMLprim value ocaml_cert_select_cb(value st, value fp, value pv, value sni_alpn, value sal)
