@@ -15,9 +15,11 @@ let _ = Callback.register "MITLS_FFI_Config" FFI.ffiConfig;
         Callback.register "MITLS_FFI_GetExporter" FFI.ffiGetExporter;
         Callback.register "MITLS_FFI_GetCert" FFI.ffiGetCert;
         Callback.register "MITLS_FFI_QuicConfig" QUIC.ffiConfig;
+        (* Deprecated QUIC API
         Callback.register "MITLS_FFI_QuicCreateClient" QUIC.ffiConnect;
         Callback.register "MITLS_FFI_QuicCreateServer" QUIC.ffiAcceptConnected;
         Callback.register "MITLS_FFI_QuicProcess" QUIC.recv;
+        *)
         (* Callback.register "MITLS_FFI_TicketCallback" FFI.ffiTicketCallback;
         Callback.register "MITLS_FFI_CertSelectCallback" FFI.ffiCertSelectCallback;
         Callback.register "MITLS_FFI_CertFormatCallback" FFI.ffiCertFormatCallback;
