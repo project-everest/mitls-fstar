@@ -105,8 +105,8 @@ int MITLS_CALLCONV FFI_mitls_init(void)
         return 1;
     }
 
-    char_os *Argv[2];
-    char_os empty[1] = {0};
+    char *Argv[2];
+    char empty[2] = {0, 0};
 
     // Build a stub argv[] to satisfy caml_Startup()
     Argv[0] = empty;
