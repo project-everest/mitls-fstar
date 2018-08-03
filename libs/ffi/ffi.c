@@ -12,6 +12,7 @@
 #include <caml/callback.h>
 #include <caml/alloc.h>
 #include <caml/memory.h>
+#include <caml/misc.h>
 #include <caml/threads.h>
 #include <caml/printexc.h>
 #include <caml/fail.h>
