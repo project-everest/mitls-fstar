@@ -12,7 +12,6 @@
 #include <caml/callback.h>
 #include <caml/alloc.h>
 #include <caml/memory.h>
-#include <caml/misc.h>
 #include <caml/threads.h>
 #include <caml/printexc.h>
 #include <caml/fail.h>
@@ -106,8 +105,8 @@ int MITLS_CALLCONV FFI_mitls_init(void)
         return 1;
     }
 
-    char_os *Argv[2];
-    char_os empty[1] = {0};
+    char *Argv[2];
+    char empty[2] = {0, 0};
 
     // Build a stub argv[] to satisfy caml_Startup()
     Argv[0] = empty;
