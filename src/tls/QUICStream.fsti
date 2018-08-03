@@ -14,9 +14,7 @@ open Mem
 open Pkg
 
 
-
-
-type plainLen = l:nat{l + v AEAD.taglen <= pow2 32 - 1}
+type plainLen = l:nat{l + v AEAD.taglen <= pow2 32 - 1 /\ l + v AEAD.taglen >= 16}
 
 type safeid = i:I.id{Flag.safeId i}
 
@@ -24,6 +22,7 @@ let safeId (i:I.id) = AEAD.safeId i
 
 let safePNE (j:I.id) = PNE.safePNE j
 
+(* plain pkg *)
 val plain: i:I.id -> l:plainLen -> t:Type0{hasEq t}
 
 val plain_as_bytes : i:I.id -> l:plainLen -> p:plain i l -> GTot (lbytes l)
@@ -32,12 +31,28 @@ val mk_plain: i:I.id -> l:plainLen -> b:lbytes l -> p:plain i l{~(AEAD.safeId i)
 
 val plain_repr : i:I.id{~(AEAD.safeId i)} -> l:plainLen -> p:plain i l -> b:lbytes l{b == plain_as_bytes i l p}
 
+let aead_plain_pkg = AEAD.PlainPkg 0 plain plain_as_bytes plain_repr
+
+(* nonce pkg *)
+let pnlen = n:nat{n=1 \/ n=2 \/ n=4}
+
+val nonce (i:I.id) (nl:pnlen) : (t:Type0{hasEq t}) //= AEAD.iv (I.cipherAlg_of_id i)
+
+val nonce_as_bytes (i:I.id) (nl:pnlen) (n:nonce i nl) : GTot (AEAD.iv (I.cipherAlg_of_id i)) //= n
+
+val nonce_repr (i:I.id{~(safeId i)}) (nl:pnlen) (n:nonce i nl) :
+  Tot (b:AEAD.iv (I.cipherAlg_of_id i){b == nonce_as_bytes i nl n}) //= n
+
+let aead_nonce_pkg =
+  AEAD.NoncePkg pnlen nonce nonce_as_bytes nonce_repr
+
+
 type cipher (i:I.id) (l:plainLen) = lbytes (l + v AEAD.taglen)
 
 let max_ctr = pow2 62 - 1
 
-let pnlen = n:nat{n=1 \/ n=2 \/ n=4}
 
+(* pn pkg *)
 val npn: j:I.id -> l:pnlen -> t:Type0{hasEq t}
 
 val npn_as_bytes : j:I.id -> l:pnlen -> n:npn j l -> GTot (lbytes l)
@@ -46,14 +61,22 @@ val mk_npn: j:I.id -> l:pnlen -> b:lbytes l -> n:npn j l{~(PNE.safePNE j) ==> np
 
 val npn_repr : j:I.id{~(PNE.safePNE j)} -> l:pnlen -> n:npn j l -> b:lbytes l{b == npn_as_bytes j l n}
 
+val npn_from_bytes : j:I.id -> l:pnlen -> b:lbytes l -> GTot (n:npn j l{npn_as_bytes j l n == b}) 
+
+val npn_abs : j:I.id{~(PNE.safePNE j)} -> l:pnlen -> b:lbytes l -> Tot (n:npn j l{n == npn_from_bytes j l b})
+  
+let npn_pkg = PNE.PNPkg npn npn_as_bytes npn_repr npn_from_bytes npn_abs
+
+
+
+
 let epn = PNE.epn
 
 type rpn = n:U64.t{U64.v n <= max_ctr}
 
-(*let rpn_of_u32 (j:U32.t) : rpn =
-  let jj:nat = U32.v j in
-  U64.uint_to_t jj
-*)
+let rpn_of_nat (j:nat{j<= max_ctr}) : rpn =
+  U64.uint_to_t j
+
 
 val npn_encode : (j:I.id) -> (r:rpn) -> (l:pnlen) -> (n:npn j l)
 
@@ -64,7 +87,7 @@ val npn_decode : (#j:I.id) -> (#l:pnlen) -> (n:npn j l) -> (maxpn:rpn) -> rpn
 //npn_decode
 
 
-
+(*
 type stream_entry (i:I.id) (j:I.id) =
   | Entry:
     nl:pnlen ->
@@ -75,13 +98,28 @@ type stream_entry (i:I.id) (j:I.id) =
     ne:epn nl ->
     c:cipher i l ->
     stream_entry i j
-
+*)
 
 val stream_writer: (i:I.id) -> (j:I.id) -> Type0
 val stream_reader: #i:I.id -> #j:I.id -> w:stream_writer i j -> Type0
 
-val invariant: #i:I.id -> #j:I.id -> w:stream_writer i j -> mem -> Type0
-val rinvariant: #i:I.id -> #j:I.id -> #w:stream_writer i j -> r:stream_reader w -> h:mem -> Type0
+val writer_aead_state : #i:I.id -> #j:I.id -> w:stream_writer i j ->
+  aw:AEAD.aead_writer i
+  {(AEAD.wgetinfo aw).AEAD.plain == aead_plain_pkg /\
+  (AEAD.wgetinfo aw).AEAD.nonce == aead_nonce_pkg} 
+val reader_aead_state : #i:I.id -> #j:I.id -> #w:stream_writer i j -> r:stream_reader w ->
+  ar:AEAD.aead_reader (writer_aead_state w)
+  {(AEAD.rgetinfo ar).AEAD.plain == aead_plain_pkg /\
+  (AEAD.rgetinfo ar).AEAD.nonce == aead_nonce_pkg} 
+
+val writer_pne_state : #i:I.id -> #j:I.id -> w:stream_writer i j -> PNE.pne_state j npn_pkg
+
+val reader_pne_state : #i:I.id -> #j:I.id -> #w:stream_writer i j -> r:stream_reader w -> PNE.pne_state j npn_pkg
+
+val invariant: #i:I.id -> #j:I.id -> w:stream_writer i j -> h:mem ->
+  t:Type0{t ==> AEAD.winvariant (writer_aead_state w) h} 
+val rinvariant: #i:I.id -> #j:I.id -> #w:stream_writer i j -> r:stream_reader w -> h:mem ->
+  t:Type0{t ==> AEAD.winvariant (writer_aead_state w) h} 
 
 val wctrT: #i:I.id -> #j:I.id -> w:stream_writer i j -> mem -> GTot (n:nat{n<=max_ctr})
 val wctr: #i:I.id -> #j:I.id -> w:stream_writer i j -> ST rpn
@@ -89,23 +127,27 @@ val wctr: #i:I.id -> #j:I.id -> w:stream_writer i j -> ST rpn
   (ensures fun h0 c h1 -> h0 == h1 /\ UInt64.v c = wctrT w h1)
 
 
-val pnlog: #i:I.id -> #j:I.id -> #w: stream_writer i j -> r:stream_reader w -> h:mem ->
+(*val pnlog: #i:I.id -> #j:I.id -> #w: stream_writer i j -> r:stream_reader w -> h:mem ->
   GTot (s:Seq.seq rpn{rinvariant r h /\ safeId i ==> (forall (k:rpn). Seq.mem k s ==> U64.v k <= wctrT w h)})
   
 val wlog: #i:safeid -> #j:I.id -> w:stream_writer i j -> h:mem{invariant w h} -> GTot (s:Seq.seq (stream_entry i j)
   {wctrT w h == Seq.length s})
+*)
+
+val writer_iv: #i:I.id -> #j:I.id -> w:stream_writer i j -> AEAD.iv (I.cipherAlg_of_id i)
+val reader_iv: #i:I.id -> #j:I.id -> #w:stream_writer i j -> r:stream_reader w ->
+  iv:AEAD.iv (I.cipherAlg_of_id i){iv = writer_iv w}
 
 val highest_pnT: #i:I.id -> #j:I.id -> #w:stream_writer i j -> r:stream_reader w -> h:mem ->
-  Ghost (option rpn)
-  (requires True)
+  GTot (option rpn)
+(*  (requires True)
   (ensures fun o ->  
     Some? o ==> 
     (let n:rpn = Some?.v o in
       (rinvariant r h ==> 
         (Seq.mem n (pnlog r h) /\
-        (forall (k:rpn). Seq.mem k (pnlog r h) ==> U64.v k <= U64.v n)))))
+        (forall (k:rpn). Seq.mem k (pnlog r h) ==> U64.v k <= U64.v n)))))*)
         
-#reset-options "--z3rlimit 50"
 
 val highest_pn: #i:I.id -> #j:I.id -> #w:stream_writer i j -> r:stream_reader w -> ST (option rpn)
   (requires fun h0 -> True)
@@ -117,7 +159,7 @@ let highest_pn_or_zero (#i:I.id) (#j:I.id) (#w:stream_writer i j) (r:stream_read
     | None -> U64.uint_to_t 0
     | Some x -> x
 
-let pn_filter (i:I.id) (j:I.id) (ns:Seq.seq rpn) (e:stream_entry i j) : bool =
+(*let pn_filter (i:I.id) (j:I.id) (ns:Seq.seq rpn) (e:stream_entry i j) : bool =
   let n = Entry?.pn e in
   Seq.mem n ns
 
@@ -133,6 +175,7 @@ let log_filter (#i:safeid) (#j:I.id) (w:stream_writer i j) (h:mem{invariant w h}
 val rlog: #i:safeid -> #j:I.id -> #w:stream_writer i j -> r:stream_reader w -> h:mem{invariant w h /\ rinvariant r h} ->
   GTot (s:Seq.seq (stream_entry i j)
     {s == log_filter w h (pnlog r h)})
+*)
 
 let wincrementable (#i:I.id) (#j:I.id) (w:stream_writer i j) (h:mem) =
   wctrT w h < max_ctr
@@ -178,28 +221,53 @@ val rframe_invariant: #i:I.id -> #j:I.id -> #w:stream_writer i j -> r:stream_rea
   (ensures rinvariant r h1)
 
 
-val frame_log: #i:safeid -> #j:I.id -> w:stream_writer i j -> l:Seq.seq (stream_entry i j) ->
+val wframe_log: #i:safeid -> #j:I.id -> w:stream_writer i j -> l:Seq.seq (AEAD.entry i (AEAD.wgetinfo (writer_aead_state w))) ->
   h0:mem -> ri:rid -> h1:mem ->
   Lemma
   (requires
     Flag.safeId i /\
     invariant w h0 /\
-    wlog w h0 == l /\
+    AEAD.wlog (writer_aead_state w) h0 == l /\
     modifies_one ri h0 h1 /\
     ~(Set.mem ri (footprint w)) /\
     ~(Set.mem ri (shared_footprint w)))
-  (ensures invariant w h1 ==> wlog w h1 == l)
+  (ensures invariant w h1 ==> AEAD.wlog (writer_aead_state w) h1 == l)
 
-val frame_pnlog: #i:safeid -> #j:I.id -> #w:stream_writer i j -> r:stream_reader w -> l:Seq.seq rpn ->
+val rframe_log: #i:safeid -> #j:I.id -> #w:stream_writer i j -> r:stream_reader w -> l:Seq.seq (AEAD.entry i (AEAD.rgetinfo (reader_aead_state r))) ->
   h0:mem -> ri:rid -> h1:mem ->
   Lemma
   (requires
     Flag.safeId i /\
-    pnlog r h0 == l /\
+    invariant w h0 /\
+    AEAD.rlog (reader_aead_state r) h0 == l /\
+    modifies_one ri h0 h1 /\
+    ~(Set.mem ri (footprint w)) /\
+    ~(Set.mem ri (shared_footprint w)))
+  (ensures invariant w h1 ==> AEAD.rlog (reader_aead_state r) h1 == l)
+
+
+val wframe_pnlog: #i:safeid -> #j:I.id -> w:stream_writer i j -> l:Seq.seq (PNE.entry j npn_pkg) ->
+  h0:mem -> ri:rid -> h1:mem ->
+  Lemma
+  (requires
+    Flag.safeId i /\
+    PNE.table (writer_pne_state w) h0 == l /\
+    modifies_one ri h0 h1 /\
+    ~(Set.mem ri (footprint w)) /\
+    ~(Set.mem ri (shared_footprint w)))
+  (ensures PNE.table (writer_pne_state w) h1 == l)
+
+val rframe_pnlog: #i:safeid -> #j:I.id -> #w:stream_writer i j -> r:stream_reader w -> l:Seq.seq (PNE.entry j npn_pkg) ->
+  h0:mem -> ri:rid -> h1:mem ->
+  Lemma
+  (requires
+    Flag.safeId i /\
+    PNE.table (reader_pne_state r) h0 == l /\
     modifies_one ri h0 h1 /\
     ~(Set.mem ri (rfootprint r)) /\
     ~(Set.mem ri (shared_footprint w)))
-  (ensures pnlog r h1 == l)
+  (ensures PNE.table (reader_pne_state r) h1 == l)
+
 
 val create: i:I.id -> j:I.id -> u:info i j ->
   ST (stream_writer i j)
@@ -211,8 +279,9 @@ val create: i:I.id -> j:I.id -> u:info i j ->
     shared_footprint w == Set.singleton u.shared /\
     modifies_none h0 h1 /\
     Flag.safeId i ==>
-      (wlog w h1 == Seq.empty /\
-      wctrT w h1 == 0)
+    (AEAD.wlog (writer_aead_state w) h1 == Seq.empty /\
+    PNE.table (writer_pne_state w) h1 == Seq.empty /\
+    wctrT w h1 == 0)
   )
 
 (*val coerce: i:I.id -> u:info i ->
@@ -234,8 +303,8 @@ val createReader: parent:rgn -> #i:I.id -> #j:I.id -> w:stream_writer i j ->
     rinvariant r h1 /\
     modifies_none h0 h1 /\
     Flag.safeId i ==>
-      (rlog r h1 == Seq.empty /\
-      pnlog r h1 == Seq.empty /\
+      (AEAD.rlog (reader_aead_state r) h1 == Seq.empty /\
+      PNE.table (reader_pne_state r) h1 == Seq.empty /\
       highest_pnT r h1 == None)
   )
 
@@ -243,23 +312,33 @@ val createReader: parent:rgn -> #i:I.id -> #j:I.id -> w:stream_writer i j ->
 
 //val rincrementable: #i:I.id -> #w:stream_writer i -> r:stream_reader w -> h:mem -> Type0
 
+//todo create nonce
+
+val create_nonce : #i:I.id -> iv: AEAD.iv (I.cipherAlg_of_id i) -> nl:pnlen -> r:rpn -> Tot (nonce i nl)
 
 val encrypt
   (#i:I.id)
   (#j:I.id)
   (w:stream_writer i j)
-  (ad:AEAD.adata)
+//  (ad:AEAD.adata)
   (nl:pnlen)
   (l:plainLen)
   (p:plain i l):
   ST ((epn nl) * (cipher i l))
   (requires fun h0 -> wincrementable w h0 /\ invariant w h0)
   (ensures fun h0 (ne,c) h1 ->
+    let aw = writer_aead_state w in
+    let ps = writer_pne_state w in
     invariant w h1 /\
     wctrT w h1 == wctrT w h0 + 1 /\ 
-    (Flag.safeId i ==> (
-      let n = U64.uint_to_t (wctrT w h0) in
-      wlog w h1 == Seq.snoc (wlog w h0) (Entry nl n ad p ne c))) /\
+    ((Flag.safePNE j /\ Flag.safeId i) ==> (
+      let rpn = rpn_of_nat (wctrT w h0) in
+      let npn = npn_encode j rpn nl in
+      let s = PNE.sample_cipher c in
+      let n = create_nonce #i (writer_iv w) nl rpn in
+      let ad = Bytes.empty_bytes in
+      AEAD.wlog aw h1 == Seq.snoc (AEAD.wlog aw h0) (AEAD.Entry #i #(AEAD.wgetinfo aw) #nl n ad p c) /\
+      PNE.table ps h1 == Seq.snoc (PNE.table ps h0) (PNE.Entry #j #npn_pkg s #nl ne npn))) /\
     modifies (Set.union (footprint w) (shared_footprint w)) h0 h1)
 
 //val adata_of_entry: #i:I.id -> stream_entry i -> GTot AEAD.adata
@@ -271,12 +350,13 @@ val encrypt
  //   adata_of_entry e = ad && lmax' = lmax && c' = c
 
 
+
 val decrypt
   (#i:I.id)
   (#j:I.id)
   (#w:stream_writer i j)
   (r:stream_reader w)
-  (ad:AEAD.adata)
+//  (ad:AEAD.adata)
   (#nl:pnlen)
   (ne:epn nl)
   (l:plainLen)
@@ -284,21 +364,50 @@ val decrypt
   ST (option (plain i l))
   (requires fun h0 -> rinvariant r h0 /\ invariant w h0)
   (ensures fun h0 res h1 ->
+    let ar = reader_aead_state r in
+    let aw = writer_aead_state w in
+    let ps = reader_pne_state r in
     rinvariant r h1 /\
     modifies (Set.union (rfootprint r) (rshared_footprint r)) h0 h1 /\
-    (None? res ==> pnlog r h1 == pnlog r h0) /\
+    (None? res ==> highest_pnT r h1 == highest_pnT r h0) /\    
+    ((Flag.safePNE j /\ Flag.safeId i) ==> 
+      (let s = PNE.sample_cipher c in
+      match PNE.entry_for_sample s ps h0 with
+        | None -> None? res
+        | Some (PNE.Entry _ #nl' ne' npn) ->
+          if nl = nl' && ne = ne' then
+	    let rpn = npn_decode #j #nl npn (highest_pn_or_zero r h0) in
+            let n = create_nonce #i (reader_iv r) nl rpn in
+            match AEAD.wentry_for_nonce aw #nl n h0 with
+	      | None -> None? res
+	      | Some (AEAD.Entry _  ad' #l' p' c')  -> 
+	        if ad' = Bytes.empty_bytes && l' = l && c' = c then 
+	          (res = Some p' /\
+                  (if U64.v rpn > U64.v (highest_pn_or_zero r h0) then
+                    highest_pnT r h1 = Some rpn
+                  else
+                    highest_pnT r h1 = highest_pnT r h0))                  
+	        else None? res
+	  else None? res
+      )
+    )
+  )
+
+(*)
+
+
+ (*   (None? res ==> pnlog r h1 == pnlog r h0) /\    
     (Flag.safeId i ==> (
       let lg = wlog w h0 in
       match (Seq.find_l (epn_filter i j nl ne) lg) with
         | None -> res = None
         | Some (Entry _ rpn ad' #l' p _ c') ->
 	  let npn = npn_encode j rpn nl in
-          if (
-            && ad' = ad && l' = l && c' = c then
+          if (ad' = ad && l' = l && c' = c then
               (res = Some p /\ pnlog r h1 == Seq.snoc (pnlog r h0) rpn)
           else
             res = None)))
-
+*)
 (*
   (Flag.safePNE j ==>
     match entry_for_ne r ne h0 with
@@ -317,7 +426,7 @@ val decrypt
     c:cipher i l ->
     stream_entry i j
 *)
-
+(*)
     (Flag.safePNE j ==>
       let s = PNE.sample_cipher c in
       match PNE.entry_for_sample s (pne_state r) h0 with

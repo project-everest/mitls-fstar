@@ -27,7 +27,8 @@ type cipher = b:bytes{Bytes.length b >= 16}
 
 type ciphersample = lbytes 16
 
-type pnlen = n:nat{n<=16}
+//type pnlen = n:nat{n<=16}
+let pnlen = n:nat{n=1 \/ n=2 \/ n=4}
 
 type epn (l:pnlen) = lbytes l
 
