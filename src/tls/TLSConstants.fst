@@ -1670,6 +1670,8 @@ noeq type config : Type0 = {
     (* Supported versions, ciphersuites, groups, signature algorithms *)
     min_version: protocolVersion;
     max_version: protocolVersion;
+    is_quic: bool; // Use QUIC labels for key derivations
+    
     cipher_suites: x:valid_cipher_suites{List.Tot.length x < 256};
     named_groups: CommonDH.supportedNamedGroups;
     signature_algorithms: signatureSchemeList;
@@ -1747,5 +1749,3 @@ let cert_verify_cb (c:config) (cl:list cert_repr) (ss:signatureScheme) (tbs:byte
 
 type cVerifyData = b:bytes{length b <= 64} (* ClientFinished payload *)
 type sVerifyData = b:bytes{length b <= 64} (* ServerFinished payload *)
-
-let is_quic (c:config) = c.max_early_data = Some 0xfffffffful

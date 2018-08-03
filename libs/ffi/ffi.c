@@ -105,10 +105,11 @@ int MITLS_CALLCONV FFI_mitls_init(void)
         return 1;
     }
 
-    char *Argv[2];
+    char_os *Argv[2];
+    char_os empty[1] = {0};
 
     // Build a stub argv[] to satisfy caml_Startup()
-    Argv[0] = "";
+    Argv[0] = empty;
     Argv[1] = NULL;
 
     // Initialize the OCaml runtime
@@ -783,6 +784,8 @@ void *MITLS_CALLCONV FFI_mitls_get_cert(/* in */ mitls_state *state, /* out */ s
 * QUIC FFI
 **************************************************************************/
 
+#if 0 // FIXME: update to draft 13 API
+
 // ADL yikes!! can't we just expose the mitls_state to the callback??
 #define CONTAINING_RECORD(address, type, field) ((type *)((char*)(address) - (size_t)(&((type *)0)->field)))
 
@@ -1088,6 +1091,8 @@ void MITLS_CALLCONV FFI_mitls_quic_close(quic_state *state)
         free(state);
     }
 }
+
+#endif
 
 // Certificate selection callback
 CAMLprim value ocaml_cert_select_cb(value st, value fp, value pv, value sni_alpn, value sal)

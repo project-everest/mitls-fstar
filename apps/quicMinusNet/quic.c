@@ -19,18 +19,18 @@
 // PKI library
 #include "mipki.h"
 
-#define STATE_TYPE quic12_state
+#define COMPLETE(ctx) (0 != ctx.flags & QFLAG_COMPLETE)
 
 // Definitions shared between old and new API
 // e.g. callbacks, printers, etc.
 #include "quic_common.c"
 
-void half_round(quic12_state *my_state, quic_process_ctx *my_ctx, quic_process_ctx *peer_ctx, int *my_r, int *my_w, unsigned char *plain, unsigned char *cipher, size_t *plen, int is_server, int *my_ctr, int *peer_ctr)
+void half_round(quic_state *my_state, quic_process_ctx *my_ctx, quic_process_ctx *peer_ctx, int *my_r, int *my_w, unsigned char *plain, unsigned char *cipher, size_t *plen, int is_server, int *my_ctr, int *peer_ctr)
 {
   if(*plen && *my_r >= 0)
   {
-    quic12_key k;
-    assert(FFI_mitls_quic12_get_record_key(my_state, &k, *my_r, 1));
+    quic_raw_key k;
+    assert(FFI_mitls_quic_get_record_key(my_state, &k, *my_r, QUIC_Reader));
     printf("[%c] R_Key[%d] = ", is_server?'S':'C', *my_r);
     dump(k.aead_key, k.alg ? 32 : 16);
     printf("[%c] R_IV[%d] = ", is_server?'S':'C', *my_r);
@@ -52,7 +52,7 @@ void half_round(quic12_state *my_state, quic_process_ctx *my_ctx, quic_process_c
   dump(my_ctx->input, my_ctx->input_len);
 
   size_t old_olen = my_ctx->output_len;
-  if(!FFI_mitls_quic12_process(my_state, my_ctx))
+  if(!FFI_mitls_quic_process(my_state, my_ctx))
   {
     printf("[%c] Error %d returned.\n", is_server?'S':'C', my_ctx->tls_error);
     exit(my_ctx->tls_error & 255);
@@ -67,8 +67,8 @@ void half_round(quic12_state *my_state, quic_process_ctx *my_ctx, quic_process_c
   memcpy(plain, my_ctx->output, *plen);
   if(*plen && *my_w >= 0)
   {
-    quic12_key k;
-    assert(FFI_mitls_quic12_get_record_key(my_state, &k, *my_w, 0));
+    quic_raw_key k;
+    assert(FFI_mitls_quic_get_record_key(my_state, &k, *my_w, QUIC_Writer));
     printf("[%c] W_Key[%d] = ", is_server?'S':'C', *my_w);
     dump(k.aead_key, k.alg ? 32 : 16);
     printf("[%c] W_IV[%d] = ", is_server?'S':'C', *my_w);
@@ -90,7 +90,7 @@ void half_round(quic12_state *my_state, quic_process_ctx *my_ctx, quic_process_c
   
   if(my_ctx->cur_reader_key > *my_r) *my_r = my_ctx->cur_reader_key;
   if(my_ctx->cur_writer_key > *my_w) *my_w = my_ctx->cur_writer_key;
-  if(my_ctx->can_write_data)
+  if(my_ctx->flags & QFLAG_APPLICATION_KEY)
     printf("[%c] Application data can now be sent (%s)\n",
            is_server?'S':'C', *my_w == 0 ? "0-RTT" : "1-RTT");
 }
@@ -101,20 +101,19 @@ void reset_ctx(quic_process_ctx *cctx, quic_process_ctx *sctx, unsigned char *cb
   cctx->input_len = 0;
   cctx->output = sbuf;
   cctx->output_len = smax;
-  cctx->complete = 0;
-  cctx->can_write_data = 0;
+  cctx->flags = 0;
 
   sctx->input = sbuf;
   sctx->input_len = 0;
   sctx->output = cbuf;
   sctx->output_len = cmax;
-  sctx->complete = 0;
-  sctx->can_write_data = 0;
+  sctx->flags = 0;
 }
 
 int main(int argc, char **argv)
 {
   hs_type mode = handshake_simple;
+  
   if(argc > 1)
   {
     if(!strcasecmp(argv[1], "0rtt"))
@@ -174,6 +173,7 @@ int main(int argc, char **argv)
 
   quic_config config = {
     .is_server = 1,
+    .enable_0rtt = 1,
     .host_name = "localhost",
     .alpn = &alpn,
     .alpn_count = 1,
@@ -192,10 +192,8 @@ int main(int argc, char **argv)
     .ticket_key_len = 0
   };
 
-  quic_result rc, rs;
   connection_state server = {.quic_state=NULL, pki=pki };
   connection_state client = {.quic_state=NULL, pki=pki };
-  quic_secret qs = {0}, qs_early = {0};
 
   FFI_mitls_init();
 
@@ -216,19 +214,19 @@ int main(int argc, char **argv)
 
     printf("[S] create\n");
     config.callback_state = &server;
-    assert(FFI_mitls_quic12_create(&server.quic_state, &config));
+    assert(FFI_mitls_quic_create(&server.quic_state, &config));
 
     config.is_server = 0;
     printf("[C] create\n");
     config.callback_state = &client;
-    assert(FFI_mitls_quic12_create(&client.quic_state, &config));
+    assert(FFI_mitls_quic_create(&client.quic_state, &config));
       
-    for(int i = 0, post_hs = 0; !(cctx.complete && sctx.complete && post_hs) ; i++)
+    for(int i = 0, post_hs = 0; !post_hs ; i++)
     {
       // We need one extra round of post-handshake for NST
-      if(cctx.complete && sctx.complete) post_hs = 1;
+      if(COMPLETE(cctx) && COMPLETE(sctx)) post_hs = 1;
       
-      printf("\n == Round %d [CComplete=%d, SComplete=%d] ==\n\n", i, cctx.complete & 255, sctx.complete & 255);
+      printf("\n == Round %d ==\n\n", i);
 
       // Client half-round
       half_round(client.quic_state, &cctx, &sctx, &cr, &cw, plain, cipher, &plen, 0, &cpn, &spn);
@@ -236,7 +234,7 @@ int main(int argc, char **argv)
       // Server half-round
       half_round(server.quic_state, &sctx, &cctx, &sr, &sw, plain, cipher, &plen, 1, &spn, &cpn);
 
-      printf("\n == End round %d [CComplete=%d, SComplete=%d] ==\n\n", i, cctx.complete & 255, sctx.complete & 255);
+      printf("\n == End round %d [CComplete=%d, SComplete=%d] ==\n\n", i, COMPLETE(cctx), COMPLETE(sctx));
     }
   }
   else if(mode == handshake_0rtt || mode == handshake_0rtt_reject)
@@ -245,19 +243,19 @@ int main(int argc, char **argv)
 
     printf("[S] create\n");
     config.callback_state = &server;
-    assert(FFI_mitls_quic12_create(&server.quic_state, &config));
+    assert(FFI_mitls_quic_create(&server.quic_state, &config));
 
     config.is_server = 0;
     printf("[C] create\n");
     config.callback_state = &client;
-    assert(FFI_mitls_quic12_create(&client.quic_state, &config));
+    assert(FFI_mitls_quic_create(&client.quic_state, &config));
       
-    for(int i = 0, post_hs = 0; !(cctx.complete && sctx.complete && post_hs) ; i++)
+    for(int i = 0, post_hs = 0; !post_hs; i++)
     {
       // We need one extra round of post-handshake for NST
-      if(cctx.complete && sctx.complete) post_hs = 1;
+      if(COMPLETE(cctx) && COMPLETE(sctx)) post_hs = 1;
       
-      printf("\n == Round %d [CComplete=%d, SComplete=%d] ==\n\n", i, cctx.complete & 255, sctx.complete & 255);
+      printf("\n == Round %d ==\n\n", i);
 
       // Client half-round
       half_round(client.quic_state, &cctx, &sctx, &cr, &cw, plain, cipher, &plen, 0, &cpn, &spn);
@@ -265,7 +263,7 @@ int main(int argc, char **argv)
       // Server half-round
       half_round(server.quic_state, &sctx, &cctx, &sr, &sw, plain, cipher, &plen, 1, &spn, &cpn);
 
-      printf("\n == End round %d [CComplete=%d, SComplete=%d] ==\n\n", i, cctx.complete & 255, sctx.complete & 255);
+      printf("\n == End round %d [CComplete=%d, SComplete=%d] ==\n\n", i, COMPLETE(cctx), COMPLETE(sctx));
     }
     
     printf("\n     TICKET-BASED RESUMPTION\n\n");
@@ -280,29 +278,29 @@ int main(int argc, char **argv)
     if(mode == handshake_0rtt_reject)
       memset((char*)qt->ticket, 0, 8);
 
-    FFI_mitls_quic12_close(server.quic_state);
-    FFI_mitls_quic12_close(client.quic_state);
+    FFI_mitls_quic_free(server.quic_state);
+    FFI_mitls_quic_free(client.quic_state);
     reset_ctx(&cctx, &sctx, cbuf, sbuf, cmax, smax);
     cr = -1; sr = -1; cw = -1; sw = -1;
 
     printf("[S] create\n");
     config.is_server = 1;
     config.callback_state = &server;
-    assert(FFI_mitls_quic12_create(&server.quic_state, &config));
+    assert(FFI_mitls_quic_create(&server.quic_state, &config));
 
     config.is_server = 0;
     printf("[C] create with ticket<%d> = ", qt->ticket_len);
     dump(qt->ticket, qt->ticket_len);
     config.callback_state = &client;
     config.server_ticket = qt;
-    assert(FFI_mitls_quic12_create(&client.quic_state, &config));
+    assert(FFI_mitls_quic_create(&client.quic_state, &config));
       
-    for(int i = 0, post_hs = 0; !(cctx.complete && sctx.complete && post_hs); i++)
+    for(int i = 0, post_hs = 0; !post_hs; i++)
     {
       // We need one extra round of post-handshake for NST
-      if(cctx.complete && sctx.complete) post_hs = 1;
+      if(COMPLETE(cctx) && COMPLETE(sctx)) post_hs = 1;
       
-      printf("\n == Round %d [CComplete=%d, SComplete=%d] ==\n\n", i, cctx.complete & 255, sctx.complete & 255);
+      printf("\n == Round %d ==\n\n", i);
 
       // Client half-round
       half_round(client.quic_state, &cctx, &sctx, &cr, &cw, plain, cipher, &plen, 0, &cpn, &spn);
@@ -310,12 +308,12 @@ int main(int argc, char **argv)
       // Server half-round
       half_round(server.quic_state, &sctx, &cctx, &sr, &sw, plain, cipher, &plen, 1, &spn, &cpn);
 
-      printf("\n == End round %d [CComplete=%d, SComplete=%d] ==\n\n", i, cctx.complete & 255, sctx.complete & 255);
+      printf("\n == End round %d [CComplete=%d, SComplete=%d] ==\n\n", i, COMPLETE(cctx), COMPLETE(sctx));
     }
   }
 
-  FFI_mitls_quic12_close(server.quic_state);
-  FFI_mitls_quic12_close(client.quic_state);
+  FFI_mitls_quic_free(server.quic_state);
+  FFI_mitls_quic_free(client.quic_state);
   mipki_free(pki);
 
   printf("Ok\n");

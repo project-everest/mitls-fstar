@@ -7,8 +7,8 @@ typedef enum {
 } hs_type;
 
 typedef struct {
-    STATE_TYPE *quic_state;
-    mipki_state *pki;
+  quic_state *quic_state;
+  mipki_state *pki;
 } connection_state;
 
 void dump(const char *buffer, size_t len)
@@ -163,14 +163,4 @@ int certificate_verify(void *cbs, const unsigned char* chain_bytes, size_t chain
 
   mipki_free_chain(state->pki, chain);
   return 1;
-}
-
-char *quic_result_string(quic_result r){
-  static char *codes[11] = {
-    "would_block", "error_local", "error_alert", "client_early_data",
-    "client_complete", "client_complete_early_data", "server_accept",
-    "server_accept_early_data", "server_complete", "server_stateless_retry",
-    "other_error" };
-  if(r < 10) return codes[r];
-  return codes[10];
 }

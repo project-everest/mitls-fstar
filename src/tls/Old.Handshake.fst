@@ -612,7 +612,7 @@ let client_NewSessionTicket_13 (hs:hs) (st13:sticket13)
   let sni = iutf8 (Nego.get_sni mode.Nego.n_offer) in
   let cfg = Nego.local_config hs.nego in
   let valid_ed =
-    if cfg.max_early_data = Some 0xfffffffful then
+    if cfg.is_quic then
       (match ed with
       | None -> true
       | Some (Extensions.E_early_data (Some x)) -> x = 0xfffffffful
@@ -1058,7 +1058,7 @@ let create (parent:rid) cfg role =
   let r = new_region parent in
   let log = HandshakeLog.create r None (* cfg.max_version (Nego.hashAlg nego) *) in
   //let nonce = Nonce.mkHelloRandom r r0 in //NS: should this really be Client?
-  let ks, nonce = KeySchedule.create #r role (is_quic cfg) in
+  let ks, nonce = KeySchedule.create #r role cfg.is_quic in
   let nego = Nego.create r role cfg nonce in
   let epochs = Epochs.create r nonce in
   let state = ralloc r (if role = Client then C_Idle else S_Idle) in

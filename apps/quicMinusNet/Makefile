@@ -77,20 +77,8 @@ test: quic.exe
 	./quic.exe
 	./quic.exe 0rtt
 	./quic.exe 0rtt-reject
-	./quic.exe hrr
+#	./quic.exe hrr
 
-quic12.exe: quic12.c $(EXTERNAL_HEADERS) $(EXTERNAL_LIBS)
-	$(CC) -fPIC -I$(MITLS_HOME)/src/tls/extract/Kremlin-Library/include \
-	  -I$(MITLS_HOME)/src/tls/extract/Kremlin-Library/stub -I../../src/pki \
-	  -I../../libs/ffi -I$(HACL_HOME)/providers/quic_provider \
-	  -L$(subst :, -L,$(LIBPATHS)) \
-	  $< -lmitls -lquiccrypto -lmipki $(CFLAGS) -o $@
-
-test12: quic12.exe
-	./quic12.exe
-	./quic12.exe 0rtt
-	./quic12.exe 0rtt-reject
-
-debug12: quic12.exe
-	gdb ./quic12.exe
+debug: quic.exe
+	gdb ./quic.exe
 

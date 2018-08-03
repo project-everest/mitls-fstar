@@ -860,85 +860,23 @@ void *MITLS_CALLCONV FFI_mitls_get_cert(/* in */ mitls_state *state, /* out */ s
 }
 
 /*************************************************************************
-* QUIC FFI
+* QUIC API
 **************************************************************************/
 
 typedef struct quic_state {
    HEAP_REGION rgn;
-   int is_server;
-   const char* in_buffer;
-   uint32_t in_buffer_size;
-   uint32_t in_buffer_used;
-   char* out_buffer;
-   uint32_t out_buffer_size;
-   uint32_t out_buffer_used;
-   TLSConstants_config cfg;
-   Connection_connection cxn;
+   uint8_t is_server;
+   uint8_t is_complete;
+   Old_Handshake_hs hs;
 } quic_state;
-
-int32_t quic_send(void* ctx, uint8_t* buffer, uint32_t buffer_size)
-{
-  quic_state* s = (quic_state*)ctx;
-
-  if(!s->out_buffer) {
-    KRML_HOST_PRINTF("QUIC_send(): out_buffer is NULL");
-    return -1;
-  }
-
-  // ADL FIXME better error management
-  if(buffer_size <= s->out_buffer_size - s->out_buffer_used) {
-    memcpy(s->out_buffer + s->out_buffer_used, buffer, buffer_size);
-    s->out_buffer_used += buffer_size;
-    return buffer_size;
-  }
-
-  KRML_HOST_PRINTF("QUIC_send():  Insufficient space in out_buffer");
-  return -1;
-}
-
-int32_t quic_recv(void* ctx, uint8_t* buffer, uint32_t len)
-{
-  quic_state* s = (quic_state*)ctx;
-
-  if(!s->in_buffer || buffer == NULL) {
-    KRML_HOST_PRINTF("QUIC_recv():  in_buffer or buffer is NULL");
-    return -1;
-  }
-
-  if(len > s->in_buffer_size - s->in_buffer_used)
-    len = s->in_buffer_size - s->in_buffer_used; // may be 0
-
-  memcpy(buffer, s->in_buffer + s->in_buffer_used, len);
-
-  s->in_buffer_used += len;
-  return len;
-}
-
-#ifdef _KERNEL_MODE
-typedef struct {
-    quic_config *cfg;
-    quic_state* st;
-} quic_create_state;
-
-void quic_create_callout(PVOID Parameter)
-{
-    quic_create_state *s = (quic_create_state*)Parameter;
-
-    if(s->cfg->is_server) {
-      s->st->cxn = QUIC_ffiAcceptConnected(s->st, quic_send, quic_recv, s->st->cfg);
-    } else {
-      // Protect the write to the PSK table (WIP)
-      LOCK_MUTEX(&lock);
-      s->st->cxn = QUIC_ffiConnect((FStar_Dyn_dyn)s->st, quic_send, quic_recv, s->st->cfg);
-      UNLOCK_MUTEX(&lock);
-    }
-}
-#endif
 
 static TLSConstants_config quic_set_config(TLSConstants_config c0, const quic_config *cfg)
 {
     TLSConstants_config c = c0;
-    c = FFI_ffiSetEarlyData(c, 0xffffffff);
+
+    if(cfg->enable_0rtt) {
+      c = FFI_ffiSetEarlyData(c, 0xffffffff);
+    }
  
     if (cfg->cipher_suites) {
        Prims_string str = CopyPrimsString(cfg->cipher_suites);
@@ -1029,7 +967,7 @@ static TLSConstants_config quic_set_config(TLSConstants_config c0, const quic_co
     return c;
 }
 
-int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_config *cfg)
+int MITLS_CALLCONV FFI_mitls_quic_create(quic_state **state, const quic_config *cfg)
 {
     quic_state* st = NULL;
     *state = NULL;
@@ -1039,41 +977,23 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
     if (!VALID_HEAP_REGION(rgn)) {
         return 0; // out of memory
     }
+    
     st = KRML_HOST_MALLOC(sizeof(quic_state));
-
     memset(st, 0, sizeof(*st));
     st->is_server = cfg->is_server;
 
     Prims_string host_name = CopyPrimsString(cfg->host_name != NULL ? cfg->host_name : "");
     TLSConstants_config config = QUIC_ffiConfig((FStar_Bytes_bytes){.data=host_name,.length=strlen(host_name)});
-    config = quic_set_config(config, cfg);
-    st->cfg = config;
     
-#ifdef _KERNEL_MODE
-    // A call to QUIC_ffiConnect() may consume 0x2400 bytes.
-    quic_create_state s = {.cfg = cfg, .st = st };
-    NTSTATUS status = KeExpandKernelStackAndCallout(quic_create_callout, &s, MAXIMUM_EXPANSION_SIZE);
-    if (!NT_SUCCESS(status)) {
-        KRML_HOST_PRINTF("KeExpandKernelCallstackAndCallout for quic_create_callout failed st=%x", status);
-        st = NULL;
-    }
-#else
-    if(cfg->is_server) {
-      st->cxn = QUIC_ffiAcceptConnected(st, quic_send, quic_recv, st->cfg);
-    } else {
-      // Protect the write to the PSK table (WIP)
-      LOCK_MUTEX(&lock);
-      st->cxn = QUIC_ffiConnect((FStar_Dyn_dyn)st, quic_send, quic_recv, st->cfg);
-      UNLOCK_MUTEX(&lock);
-    }
-#endif
+    config = quic_set_config(config, cfg);
+    st->hs = QUIC_create_hs(st->is_server, config);
 
-    //Exit:;
     LEAVE_HEAP_REGION();
     if (HAD_OUT_OF_MEMORY || st == NULL) {
       DESTROY_HEAP_REGION(rgn);
       return 0;
     }
+    
     st->rgn = rgn;
     *state = st;
     return 1;
@@ -1082,81 +1002,101 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
 #ifdef _KERNEL_MODE
 typedef struct {
     quic_state *state;
-    QUIC_result r;
+    QUIC_hs_in *in;
+    QUIC_hs_result *r;
 } quic_process_state;
 
-VOID quic_process_callout(PVOID Parameter)
+static VOID quic_process_callout(PVOID Parameter)
 {
     quic_process_state *s = (quic_process_state*)Parameter;
-
-    s->r = QUIC_recv(s->state->cxn);
+    *s->r = QUIC_recv(s->state->hs, *s->in);
 }
 #endif
 
-quic_result MITLS_CALLCONV FFI_mitls_quic_process(
-  /* in */ quic_state *state,
-  /*in*/ const unsigned char* inBuf,
-  /*inout*/ size_t *pInBufLen,
-  /*out*/ unsigned char *outBuf,
-  /*inout*/ size_t *pOutBufLen)
+int MITLS_CALLCONV FFI_mitls_quic_process(quic_state *st, quic_process_ctx *ctx)
 {
-    quic_result ret = TLS_error_other;
-    LOCK_MUTEX(&lock);
-    ENTER_HEAP_REGION(state->rgn);
-
-    // Update the buffers for the QUIC_* callbacks
-    state->in_buffer = (const char*)inBuf;
-    state->in_buffer_used = 0;
-    state->in_buffer_size = *pInBufLen;
-    state->out_buffer = (char*)outBuf;
-    state->out_buffer_used = 0;
-    state->out_buffer_size = *pOutBufLen;
+  int r = 0;
+  ENTER_HEAP_REGION(st->rgn);
+  unsigned char z = 0;
+  
+  QUIC_hs_in in;
+  in.input = (FStar_Bytes_bytes){
+    .data = (char*)(ctx->input == NULL ? &z : ctx->input),
+    .length = ctx->input_len
+  };
+  in.max_output = ctx->output_len;  
 
 #ifdef _KERNEL_MODE
-    // A call to QUIC_recv() may consume 0x4b00 bytes.
-    quic_process_state s = {.state = state, .r = TLS_error_other };
-    NTSTATUS status = KeExpandKernelStackAndCallout(quic_process_callout, &s, MAXIMUM_EXPANSION_SIZE);
-    QUIC_result r = s.r;
-    if (!NT_SUCCESS(status)) {
-        KRML_HOST_PRINTF("KeExpandKernelCallstackAndCallout for quic_process_callout failed st=%x", status);
-        r.code = TLS_error_other;
-    }
-#else
-    QUIC_result r = QUIC_recv(state->cxn);
-#endif
-
-    if ((int)r.code <= (int)TLS_server_stateless_retry) {
-        ret = (quic_result) r.code;
-    }
-    // BUGBUG: the r.error value is currently discarded.
-
-    *pInBufLen = state->in_buffer_used;
-    *pOutBufLen = state->out_buffer_used;
-
-    LEAVE_HEAP_REGION();
-    UNLOCK_MUTEX(&lock);
-    if (HAD_OUT_OF_MEMORY) {
-      return TLS_error_other;
-    }
-    return ret;
-}
-
-int MITLS_CALLCONV FFI_mitls_quic_get_exporter(
-  /* in */ quic_state *state,
-  int early,
-  quic_secret *secret)
-{
-  int ret = 0;
-  ENTER_HEAP_REGION(state->rgn);
-  ret = get_exporter(state->cxn, early, secret);
-  LEAVE_HEAP_REGION();
-  if (HAD_OUT_OF_MEMORY) {
+  QUIC_hs_result res;
+  quic_process_state s = {.state = st, .in = &in, .r = &res };
+  NTSTATUS status = KeExpandKernelStackAndCallout(quic_process_callout, &s, MAXIMUM_EXPANSION_SIZE);
+  
+  if (!NT_SUCCESS(status)) {
+    KRML_HOST_PRINTF("KeExpandKernelCallstackAndCallout for quic_process_callout failed st=%x", status);
+    ctx->tls_error = 0x0350; // Internal error
     return 0;
   }
-  return ret;
+#else
+  QUIC_hs_result res = QUIC_process_hs(st->hs, in);
+#endif
+
+  ctx->flags = 0;
+  if(res.tag == QUIC_HS_SUCCESS)
+  {
+    QUIC_hs_out out = res.val.case_HS_SUCCESS;
+    ctx->consumed_bytes = out.consumed;
+    ctx->to_be_written = out.to_be_written;
+    ctx->output_len = out.output.length;
+    if(ctx->output != NULL && ctx->output_len)
+      memcpy(ctx->output, out.output.data, ctx->output_len);
+    
+    if(out.is_complete) st->is_complete = 1;
+    if(out.is_writable) ctx->flags |= QFLAG_APPLICATION_KEY;
+    if(out.is_early_rejected) ctx->flags |= QFLAG_REJECTED_0RTT;
+    r = 1;
+  }
+  else
+  {
+    ctx->tls_error = res.val.case_HS_ERROR;
+    ctx->output_len = 0;
+    ctx->consumed_bytes = 0;
+  }
+
+  K___Prims_int_Prims_int epochs = QUIC_get_epochs(st->hs);
+  ctx->cur_reader_key = epochs.fst;
+  ctx->cur_writer_key = epochs.snd;
+  if(st->is_complete) ctx->flags |= QFLAG_COMPLETE;
+  
+  LEAVE_HEAP_REGION();
+  return r;
 }
 
-void MITLS_CALLCONV FFI_mitls_quic_close(quic_state *state)
+int MITLS_CALLCONV FFI_mitls_quic_get_record_key(quic_state *st, quic_raw_key *key, int32_t epoch, quic_direction rw)
+{
+  int res = 0;
+  FStar_Pervasives_Native_option__QUIC_raw_key r;
+  
+  ENTER_HEAP_REGION(st->rgn);
+  r = QUIC_get_key(st->hs, epoch, (int)rw);
+  
+  if(r.tag == FStar_Pervasives_Native_Some)
+  {
+    QUIC_raw_key k = r.v;
+    key->alg =
+      k.alg == CryptoTypes_AES_128_GCM ? TLS_aead_AES_128_GCM :
+      (k.alg == CryptoTypes_AES_256_GCM ? TLS_aead_AES_256_GCM :
+       TLS_aead_CHACHA20_POLY1305);
+    memcpy(key->aead_key, k.aead_key.data, k.aead_key.length);
+    memcpy(key->aead_iv, k.aead_iv.data, k.aead_iv.length);
+    memcpy(key->pne_key, k.pn_key.data, k.pn_key.length);
+    res = 1;
+  }
+  
+  LEAVE_HEAP_REGION();
+  return res;
+}
+
+void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state)
 {
     HEAP_REGION rgn = state->rgn;
     ENTER_HEAP_REGION(state->rgn);
@@ -1164,6 +1104,7 @@ void MITLS_CALLCONV FFI_mitls_quic_close(quic_state *state)
     LEAVE_HEAP_REGION();
     DESTROY_HEAP_REGION(rgn);
 }
+
 
 static const unsigned char *FFI_mitls_memmem(
   const unsigned char *b, size_t blen,
@@ -1261,140 +1202,9 @@ int MITLS_CALLCONV FFI_mitls_find_custom_extension(int is_server, const unsigned
   return ret;
 }
 
-void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state, void* pv)
-{
-    ENTER_HEAP_REGION(state->rgn);
-    KRML_HOST_FREE(pv);
-    LEAVE_HEAP_REGION();
-}
-
 extern void MITLS_CALLCONV FFI_mitls_global_free(void* pv)
 {
   ENTER_GLOBAL_HEAP_REGION();
   KRML_HOST_FREE(pv);
   LEAVE_GLOBAL_HEAP_REGION();
 }
-
-/*************************************************************************
-* QUIC draft 12 API to the TLS handshake
-**************************************************************************/
-
-typedef struct quic12_state {
-   HEAP_REGION rgn;
-   uint8_t is_server;
-   uint8_t is_complete;
-   Old_Handshake_hs hs;
-} quic12_state;
-
-int MITLS_CALLCONV FFI_mitls_quic12_create(quic12_state **state, const quic_config *cfg)
-{
-    quic12_state* st = NULL;
-    *state = NULL;
-    HEAP_REGION rgn;
-
-    CREATE_HEAP_REGION(&rgn);
-    if (!VALID_HEAP_REGION(rgn)) {
-        return 0; // out of memory
-    }
-    
-    st = KRML_HOST_MALLOC(sizeof(quic12_state));
-    memset(st, 0, sizeof(*st));
-    st->is_server = cfg->is_server;
-
-    Prims_string host_name = CopyPrimsString(cfg->host_name != NULL ? cfg->host_name : "");
-    TLSConstants_config config = QUIC_ffiConfig((FStar_Bytes_bytes){.data=host_name,.length=strlen(host_name)});
-    
-    config = quic_set_config(config, cfg);
-    st->hs = QUIC_create_hs(st->is_server, config);
-
-    LEAVE_HEAP_REGION();
-    if (HAD_OUT_OF_MEMORY || st == NULL) {
-      DESTROY_HEAP_REGION(rgn);
-      return 0;
-    }
-    
-    st->rgn = rgn;
-    *state = st;
-    return 1;
-}
-
-int MITLS_CALLCONV FFI_mitls_quic12_process(quic12_state *st, quic_process_ctx *ctx)
-{
-  int r = 0;
-  ENTER_HEAP_REGION(st->rgn);
-  unsigned char z = 0;
-  
-  QUIC_hs_in in;
-  in.input = (FStar_Bytes_bytes){
-    .data = (char*)(ctx->input == NULL ? &z : ctx->input),
-    .length = ctx->input_len
-  };
-  in.max_output = ctx->output_len;  
-
-  QUIC_hs_result res = QUIC_process_hs(st->hs, in);
-  if(res.tag == QUIC_HS_SUCCESS)
-  {
-    QUIC_hs_out out = res.val.case_HS_SUCCESS;
-    ctx->consumed_bytes = out.consumed;
-    ctx->to_be_written = out.to_be_written;
-    ctx->output_len = out.output.length;
-    if(ctx->output != NULL && ctx->output_len)
-      memcpy(ctx->output, out.output.data, ctx->output_len);
-    if(out.is_complete) st->is_complete = 1;
-    ctx->can_write_data = !!out.is_writable;
-    ctx->rejected_0rtt = !!out.is_early_rejected;
-    r = 1;
-  }
-  else
-  {
-    ctx->tls_error = res.val.case_HS_ERROR;
-    ctx->output_len = 0;
-    ctx->consumed_bytes = 0;
-    ctx->to_be_written = 0;
-    ctx->can_write_data = 0;
-    ctx->rejected_0rtt = 0;
-  }
-
-  K___Prims_int_Prims_int epochs = QUIC_get_epochs(st->hs);
-  ctx->cur_reader_key = epochs.fst;
-  ctx->cur_writer_key = epochs.snd;
-  ctx->complete = st->is_complete;
-  
-  LEAVE_HEAP_REGION();
-  return r;
-}
-
-int MITLS_CALLCONV FFI_mitls_quic12_get_record_key(quic12_state *st, quic12_key *key, int32_t epoch, quic_direction rw)
-{
-  int res = 0;
-  FStar_Pervasives_Native_option__QUIC_raw_key r;
-  
-  ENTER_HEAP_REGION(st->rgn);
-  r = QUIC_get_key(st->hs, epoch, (int)rw);
-  
-  if(r.tag == FStar_Pervasives_Native_Some)
-  {
-    QUIC_raw_key k = r.v;
-    key->alg =
-      k.alg == CryptoTypes_AES_128_GCM ? TLS_aead_AES_128_GCM :
-      (k.alg == CryptoTypes_AES_256_GCM ? TLS_aead_AES_256_GCM :
-       TLS_aead_CHACHA20_POLY1305);
-    memcpy(key->aead_key, k.aead_key.data, k.aead_key.length);
-    memcpy(key->aead_iv, k.aead_iv.data, k.aead_iv.length);
-    memcpy(key->pne_key, k.pn_key.data, k.pn_key.length);
-    res = 1;
-  }
-  
-  LEAVE_HEAP_REGION();
-  return res;
-}
-
-void MITLS_CALLCONV FFI_mitls_quic12_close(quic12_state *state)
-{
-    HEAP_REGION rgn = state->rgn;
-    ENTER_HEAP_REGION(state->rgn);
-    KRML_HOST_FREE(state);
-    LEAVE_HEAP_REGION();
-    DESTROY_HEAP_REGION(rgn);
-}
-
