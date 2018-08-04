@@ -77,6 +77,7 @@ function fetch_mlcrypto() {
     git submodule update
     cd ..
     export_home MLCRYPTO "$(pwd)/mlcrypto"
+    export_home OPENSSL "$(pwd)/mlcrypto/openssl"
 }
 
 function fetch_and_make_mlcrypto() {
