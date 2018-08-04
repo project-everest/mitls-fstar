@@ -51,6 +51,7 @@ COPY --chown=everest build.sh ${MYHOME}/FStar/mitls-fstar/build.sh
 RUN chmod +x build.sh
 
 RUN echo $(date -u '+%Y-%m-%d %H:%M:%S') >> ${BUILDLOGFILE}
+RUN echo "FStar version => ${COMMITID}" >> ${BUILDLOGFILE}
 RUN ./build.sh ${TARGET} ${BUILDLOGFILE} ${MAXTHREADS} ${BRANCHNAME} || true
 RUN echo $(date -u '+%Y-%m-%d %H:%M:%S') >> ${BUILDLOGFILE}
 
