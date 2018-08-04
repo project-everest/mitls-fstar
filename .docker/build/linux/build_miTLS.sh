@@ -22,9 +22,10 @@ function fetch_hacl() {
 
     cd hacl-star
     git fetch origin
-    local ref=$( if [ -f ../.hacl_version ]; then cat ../.hacl_version | tr -d '\r\n'; else echo origin/master; fi )
+    local ref=$(if [ -f ../.hacl_version ]; then cat ../.hacl_version | tr -d '\r\n'; else echo origin/master; fi)
     echo Switching to HACL $ref
     git reset --hard $ref
+    git clean -fdx
     cd ..
     export_home HACL "$(pwd)/hacl-star"
     export_home EVERCRYPT "$(pwd)/hacl-star/providers"
@@ -38,7 +39,7 @@ function fetch_kremlin() {
 
     cd kremlin
     git fetch origin
-    local ref=$( if [ -f ../.kremlin_version ]; then cat ../.kremlin_version | tr -d '\r\n'; else echo origin/master; fi )
+    local ref=$(if [ -f ../.kremlin_version ]; then cat ../.kremlin_version | tr -d '\r\n'; else echo origin/master; fi)
     echo Switching to KreMLin $ref
     git reset --hard $ref
     cd ..
@@ -56,19 +57,20 @@ function fetch_and_make_kremlin() {
         target="$1"
     fi
 
-    make -C kremlin -j $threads $target || \
-    (cd kremlin && git clean -fdx && make -j $threads $target)
+    make -C kremlin -j $threads $target ||
+        (cd kremlin && git clean -fdx && make -j $threads $target)
+    OTHERFLAGS='--admit_smt_queries true' make -C kremlin/kremlib -j $threads
     export PATH="$(pwd)/kremlin:$PATH"
 }
 
 function fetch_mlcrypto() {
-    if [ ! -d mlcrypto  ]; then
+    if [ ! -d mlcrypto ]; then
         git clone https://github.com/project-everest/MLCrypto mlcrypto
     fi
 
     cd mlcrypto
     git fetch origin
-    local ref=$( if [ -f ../.mlcrypto_version ]; then cat ../.mlcrypto_version | tr -d '\r\n'; else echo origin/master; fi )
+    local ref=$(if [ -f ../.mlcrypto_version ]; then cat ../.mlcrypto_version | tr -d '\r\n'; else echo origin/master; fi)
     echo Switching to MLCrypto $ref
     git reset --hard $ref
     git submodule update
@@ -91,15 +93,15 @@ function mitls_verify() {
     export_home MITLS "$(pwd)"
 
     # Only building a subset of HACL* for now
-    fetch_and_make_kremlin all && fetch_hacl && \
-    fetch_and_make_mlcrypto && \
-    make -C hacl-star/code extract-c -j $threads && \
-    OTHERFLAGS="--admit_smt_queries true $OTHERFLAGS" make -C hacl-star/providers -j $threads && \
-    make -C hacl-star/secure_api -j $threads && \
-    make -C libs/ffi -j $threads && \
-    build_pki_if && \
-    VERIFY_LOWPARSE=1 make -C src/tls -j $threads all -k && \
-    make -C src/tls -j $threads test -k
+    fetch_and_make_kremlin all && fetch_hacl &&
+        fetch_and_make_mlcrypto &&
+        make -C hacl-star/code extract-c -j $threads &&
+        OTHERFLAGS="--admit_smt_queries true $OTHERFLAGS" make -C hacl-star/providers -j $threads &&
+        make -C hacl-star/secure_api -j $threads &&
+        make -C libs/ffi -j $threads &&
+        build_pki_if &&
+        VERIFY_LOWPARSE=1 make -C src/tls -j $threads all -k &&
+        make -C src/tls -j $threads test -k
 }
 
 function mitls_verify_and_hints() {
@@ -154,38 +156,38 @@ function refresh_hints() {
     git push $remote $CI_BRANCH
 }
 
-function exec_build () {
+function exec_build() {
 
     export_home FSTAR "$(pwd)/../"
     result_file=result.txt
     local status_file="status.txt"
-    echo -n false > $status_file
+    echo -n false >$status_file
 
     if [ ! -f miTLS_icla.txt ]; then
         echo "I don't seem to be in the right directory, bailing"
-        echo Failure > $result_file
+        echo Failure >$result_file
         return
     fi
 
     if [[ $target == "mitls_verify" ]]; then
         echo "target -> mitls_verify"
-        mitls_verify && echo -n true > $status_file;
+        mitls_verify && echo -n true >$status_file
     elif [[ $target == "mitls_verify_and_hints" ]]; then
         echo "target -> mitls_verify_and_hints"
         export OTHERFLAGS="--record_hints $OTHERFLAGS"
-        mitls_verify_and_hints && echo -n true > $status_file;
+        mitls_verify_and_hints && echo -n true >$status_file
     else
         echo "Invalid target"
-        echo Failure > $result_file
+        echo Failure >$result_file
         return
     fi
 
     if [[ $(cat $status_file) != "true" ]]; then
         echo "Build failed"
-        echo Failure > $result_file
+        echo Failure >$result_file
     else
         echo "Build succeeded"
-        echo Success > $result_file
+        echo Success >$result_file
     fi
 }
 
