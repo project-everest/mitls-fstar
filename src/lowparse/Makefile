@@ -2,13 +2,16 @@ all: verify-all extract-all
 
 FSTAR_OUT_DIR?=.fstar-out
 
-ifndef FSTAR_HOME
- $(error FSTAR_HOME must be defined.)
-endif
+FSTAR_HOME ?= ../../../FStar
+KREMLIN_HOME ?= ../../../kremlin
 
-ifndef KREMLIN_HOME
- $(error KREMLIN_HOME must be defined.)
-endif
+#ifndef FSTAR_HOME
+# $(error FSTAR_HOME must be defined.)
+#endif
+#
+#ifndef KREMLIN_HOME
+## $(error KREMLIN_HOME must be defined.)
+#endif
 
 INCLUDE_KREMLIN=--include $(KREMLIN_HOME)/kremlib
 

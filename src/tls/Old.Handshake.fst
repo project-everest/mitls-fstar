@@ -1,3 +1,4 @@
+
 module Old.Handshake
 
 open FStar.String
@@ -312,7 +313,7 @@ let client_Binders hs offer =
       HandshakeLog.send_signals hs.log (Some (true, false)) false
      end
 
-val client_ClientHello: s:hs -> i:id -> ST (result (HandshakeLog.outgoing i))
+val client_ClientHello: s:hs -> i:id -> ST (result unit) // (result (HandshakeLog.outgoing i))
   (requires fun h0 ->
     let n = HS.sel h0 Nego.(s.nego.state) in
     let t = transcript h0 s.log in
@@ -368,7 +369,7 @@ let client_ClientHello hs i =
 
   // we may still need to keep parts of ch
   hs.state := C_Wait_ServerHello;
-  Correct(HandshakeLog.next_fragment hs.log i)
+  Correct ()
 
 let client_HelloRetryRequest (hs:hs) (hrr:hrr) : St incoming =
   trace "client_HelloRetryRequest";
@@ -415,8 +416,12 @@ let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming 
           trace (if Some? mode.Nego.n_pski then "0RTT potentially accepted (wait for EE to confirm)"
                  else "No 0RTT possible because of rejected PSK");
           // Skip the 0-RTT epoch on the reading side
-          Epochs.incr_reader s.epochs
-         end;
+          Epochs.incr_reader s.epochs;
+	  // Skip the 0-RTT epoch when rejected
+	  if None? mode.Nego.n_pski then Epochs.incr_writer s.epochs
+         end
+	else // No EOED to send in 0-RTT epoch
+	 Epochs.incr_writer s.epochs; // Next flight (CFin) will use HSK
         s.state := C_Wait_Finished1;
         Epochs.incr_reader s.epochs; // Client 1.3 HSK switch to handshake key for decrypting EE etc...
         InAck true false // Client 1.3 HSK
@@ -505,7 +510,6 @@ let client_ClientFinished_13 hs digestServerFinished ocr cfin_key =
     | None -> digestServerFinished in
   let (| finId, cfin_key |) = cfin_key in
   let cvd = HMAC_UFCMA.mac cfin_key digest in
-  if not (Nego.zeroRTT mode) then Epochs.incr_writer hs.epochs; // to HSK, 0-RTT case is treated in EOED logic
   let digest_CF = HandshakeLog.send_tag #ha hs.log (Finished ({fin_vd = cvd})) in
   KeySchedule.ks_client_13_cf hs.ks digest_CF; // For Post-HS
   Epochs.incr_reader hs.epochs; // to ATK
@@ -608,7 +612,7 @@ let client_NewSessionTicket_13 (hs:hs) (st13:sticket13)
   let sni = iutf8 (Nego.get_sni mode.Nego.n_offer) in
   let cfg = Nego.local_config hs.nego in
   let valid_ed =
-    if cfg.max_early_data = Some 0xfffffffful then
+    if cfg.is_quic then
       (match ed with
       | None -> true
       | Some (Extensions.E_early_data (Some x)) -> x = 0xfffffffful
@@ -831,7 +835,8 @@ let server_ClientHello hs offer obinders =
             if zeroing  then (
               let early_exporter_secret, zero_keys = KeySchedule.ks_server_13_0rtt_key hs.ks digestClientHelloBinders in
               export hs early_exporter_secret;
-              register hs zero_keys
+              register hs zero_keys;
+	      Epochs.incr_reader hs.epochs // Be ready to read 0-RTT data
             );
             // TODO handle 0RTT accepted and 0RTT refused
             // - get 0RTT key from KS.
@@ -921,7 +926,7 @@ let server_ClientFinished hs cvd digestCCS digestClientFinished =
       InError (AD_decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestClientFinished)
 
 (* send EncryptedExtensions; Certificate13; CertificateVerify; Finish (1.3) *)
-val server_ServerFinished_13: hs -> i:id -> ST (result (outgoing i))
+val server_ServerFinished_13: hs -> i:id -> ST (result unit) // (result (outgoing i))
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let server_ServerFinished_13 hs i =
@@ -962,12 +967,15 @@ let server_ServerFinished_13 hs i =
       export hs exporter_master_secret;
       register hs app_keys;
       HandshakeLog.send_signals hs.log (Some (true,false)) false;
-      Epochs.incr_reader hs.epochs; // TODO when to increment the reader?
 
-      hs.state :=
-        (if Nego.zeroRTT mode then S_Wait_EOED
-         else S_Wait_Finished2 digestServerFinished);
-      Correct(HandshakeLog.next_fragment hs.log i)
+      hs.state := (
+        if Nego.zeroRTT mode then
+	  S_Wait_EOED // EOED sent with 0-RTT: dont increment reader
+        else
+	  (Epochs.incr_reader hs.epochs; // Turn on HS key
+	  S_Wait_Finished2 digestServerFinished)
+      );
+      Correct()
     | Error z -> Error z
 
 let server_EOED hs (digestEOED: Hashing.anyTag)
@@ -1050,7 +1058,7 @@ let create (parent:rid) cfg role =
   let r = new_region parent in
   let log = HandshakeLog.create r None (* cfg.max_version (Nego.hashAlg nego) *) in
   //let nonce = Nonce.mkHelloRandom r r0 in //NS: should this really be Client?
-  let ks, nonce = KeySchedule.create #r role in
+  let ks, nonce = KeySchedule.create #r role cfg.is_quic in
   let nego = Nego.create r role cfg nonce in
   let epochs = Epochs.create r nonce in
   let state = ralloc r (if role = Client then C_Idle else S_Idle) in
@@ -1070,20 +1078,32 @@ let invalidateSession hs = ()
 
 (* ------------------ Outgoing -----------------------*)
 
-let next_fragment (hs:hs) i =
+let next_fragment_bounded (hs:hs) i (max:nat) =
     trace "next_fragment";
-    let outgoing = HandshakeLog.next_fragment hs.log i in
+    let outgoing = HandshakeLog.write_at_most hs.log i max in
     match outgoing, !hs.state with
     // when the output buffer is empty, we send extra messages in two cases
     // we prepare the initial ClientHello; or
     // after sending ServerHello in plaintext, we continue with encrypted traffic
     // otherwise, we just returns buffered messages and signals
-    | Outgoing None None false, C_Idle -> client_ClientHello hs i
-    | Outgoing None None false, S_Sent_ServerHello -> server_ServerFinished_13 hs i
-    | Outgoing None None false, C_Sent_EOED d ocr cfk -> client_ClientFinished_13 hs d ocr cfk; Correct(HandshakeLog.next_fragment hs.log i)
-
-    //| Outgoing msg  true _ _, _ -> (Epochs.incr_writer hs.epochs; Correct outgoing) // delayed
+    | Outgoing None None false, C_Idle ->
+      (match client_ClientHello hs i with
+      | Error z -> Error z
+      | Correct () -> Correct(HandshakeLog.write_at_most hs.log i max))
+    | Outgoing None None false, S_Sent_ServerHello ->
+      (match server_ServerFinished_13 hs i with
+      | Error z -> Error z
+      | Correct () -> Correct(HandshakeLog.write_at_most hs.log i max))
+    | Outgoing None None false, C_Sent_EOED d ocr cfk ->
+      client_ClientFinished_13 hs d ocr cfk;
+      Correct(HandshakeLog.write_at_most hs.log i max)
     | _ -> Correct outgoing // nothing to do
+
+let next_fragment (hs:hs) i =
+  next_fragment_bounded hs i max_TLSPlaintext_fragment_length
+
+let to_be_written (hs:hs) =
+  HandshakeLog.to_be_written hs.log
 
 (* ----------------------- Incoming ----------------------- *)
 

@@ -81,7 +81,7 @@ val create: r0:c_rgn -> tcp:Transport.t -> r:role -> cfg:config -> ST connection
     c.tcp == tcp  /\
     //17-04-07 went back to static refinements on resumeInfo r
     //(r = Server ==> resume = None) /\ //16-05-28 style: replacing a refinement under the option
-    epochs c h1 == Seq.createEmpty /\ // we probably don't care---but we should say nothing written yet
+    epochs c h1 == Seq.empty /\ // we probably don't care---but we should say nothing written yet
     HS.sel h1 c.state = (Ctrl,Ctrl) ))
 
 #set-options "--z3rlimit 50"
@@ -1069,7 +1069,7 @@ let rec readFragment c i =
     else
       // payload decryption
       let e = Seq.index es j in
-      let Epoch hs rd wr = e in
+      let Epoch hs rd wr _ = e in
       let tccs = StAE.tolerate_ccs #i rd in
       if payload = abyte 1z && tccs then
        begin

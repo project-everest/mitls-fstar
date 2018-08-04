@@ -77,14 +77,17 @@ let parseVersion_draft v =
   | (127z, d) ->
     if d = draft
     then Correct TLS_1p3
-    else Error(AD_decode_error, "Refused to parse unknown draft "^print_bytes v^": expected TLS 1.3#"^UInt8.to_string draft)
+    else
+      let x = uint16_of_bytes v in // TODO: x >= 0x7f00us ==> etc
+      Correct (assume false; Unknown_protocolVersion x <: protocolVersion)
+//    else Error(AD_decode_error, "Refused to parse unknown draft "^print_bytes v^": expected TLS 1.3#"^UInt8.to_string draft)
   | (3z, 4z) -> Error(AD_decode_error, "Refused to parse TLS 1.3 final version: expected TLS 1.3#"^UInt8.to_string draft)
   | _ ->
     match parseVersion v with
     | Correct (Unknown_protocolVersion _) -> Error(AD_decode_error, "Parsed unknown version ")
     | Correct pv -> Correct pv
     | Error z -> Error z
-                                              
+
 (** Determine the oldest protocol versions for TLS *)
 let minPV (a:protocolVersion) (b:protocolVersion) =
   match a,b with
@@ -1667,6 +1670,8 @@ noeq type config : Type0 = {
     (* Supported versions, ciphersuites, groups, signature algorithms *)
     min_version: protocolVersion;
     max_version: protocolVersion;
+    is_quic: bool; // Use QUIC labels for key derivations
+    
     cipher_suites: x:valid_cipher_suites{List.Tot.length x < 256};
     named_groups: CommonDH.supportedNamedGroups;
     signature_algorithms: signatureSchemeList;

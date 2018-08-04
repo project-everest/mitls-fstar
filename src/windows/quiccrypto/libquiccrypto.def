@@ -2,7 +2,7 @@ LIBRARY libquiccrypto
 
 ; See quic_provider.h
 EXPORTS
-    quic_derive_handshake_secrets
+    quic_derive_initial_secrets
     quic_crypto_tls_derive_secret
     quic_crypto_derive_key
     quic_crypto_create
@@ -14,5 +14,4 @@ EXPORTS
     quic_crypto_hmac
     quic_crypto_hkdf_extract
     quic_crypto_hkdf_expand
-    quic_crypto_hkdf_quic_label
-    quic_crypto_hkdf_tls_label
+    quic_crypto_hkdf_label

@@ -396,7 +396,21 @@ let send_signals l next_keys1 complete1 =
     | None -> None in
   l := State transcript outgoing outgoing_next_keys1 complete1  incoming parsed hashes pv kex dh_group
 
-let next_fragment l (i:id) =
+let to_be_written (l:log) =
+  let st = !l in
+  length st.outgoing
+
+// For QUIC handshake interface
+// do not do TLS fragmentation, support
+// max output buffer size
+let write_at_most (l:log) (i:id) (max:nat)
+  : ST (outgoing i)
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 ->
+    modifies_one l h0 h1 /\
+    hashAlg h0 l == hashAlg h1 l /\
+    transcript h0 l == transcript h1 l)
+  =
   let st = !l in
   // do we have a fragment to send?
   let fragment, outgoing' =
@@ -405,15 +419,15 @@ let next_fragment l (i:id) =
     if lo = 0 then // nothing to send
        (None, empty_bytes)
     else // at most one fragment
-    if (lo <= max_TLSPlaintext_fragment_length) then
+    if (lo <= max) then
       let rg = (lo, lo) in
       (Some (| rg, o |), empty_bytes)
     else // at least two fragments
-      let (x,y) = split_ o max_TLSPlaintext_fragment_length in
+      let (x,y) = split_ o max in
       let lx = length x in
       let rg = (lx, lx) in
       (Some (| rg, x |), y) in
-    if length outgoing' = 0
+    if length outgoing' = 0 || max = 0
     then (
       // send signals only after flushing the output buffer
       let next_keys1, outgoing1 = match st.outgoing_next_keys with
@@ -439,6 +453,10 @@ let next_fragment l (i:id) =
               st.transcript outgoing' st.outgoing_next_keys st.outgoing_complete
               st.incoming st.parsed st.hashes st.pv st.kex st.dh_group;
       Outgoing fragment None false )
+
+let next_fragment l (i:id) =
+  write_at_most l i max_TLSPlaintext_fragment_length
+      
 #reset-options 
 (* RECEIVE *)
 

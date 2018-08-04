@@ -125,6 +125,8 @@ let defaultConfig =
   {
   min_version = TLS_1p2;
   max_version = TLS_1p3;
+  is_quic = false;
+  
   cipher_suites = cipherSuites_of_nameList default_cipherSuites;
   named_groups = default_groups;
   signature_algorithms = default_signature_schemes;

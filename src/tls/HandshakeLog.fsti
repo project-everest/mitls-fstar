@@ -312,6 +312,17 @@ type outgoing (i:id) (* initial index *) =
 // provides outputs to the record layer, one fragment at a time
 // never fails, in contrast with Handshake.next_fragment
 
+val to_be_written: s:log -> ST nat
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 -> modifies_none h0 h1)
+
+val write_at_most: s:log -> i:id -> max:nat -> ST (outgoing i)
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 ->
+    modifies_one s h0 h1 /\
+    hashAlg h0 s == hashAlg h1 s /\
+    transcript h0 s == transcript h1 s)
+
 val next_fragment: s:log -> i:id -> ST (outgoing i)
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 ->

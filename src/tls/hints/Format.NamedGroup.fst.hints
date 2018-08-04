@@ -8,7 +8,7 @@
       1,
       [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
       0,
-      "dfac67c6b273142de9b8c972185c39f5"
+      "dd923dd2fb5dfa5b04804ecaddf7fc4f"
     ],
     [
       "Format.NamedGroup.namedGroup",
@@ -17,7 +17,7 @@
       1,
       [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
       0,
-      "9dfea0283bef92534f050e1c9a51f70c"
+      "18650a71a0dfc055523ac7cdee1487ef"
     ],
     [
       "Format.NamedGroup.namedGroup",
@@ -26,7 +26,7 @@
       1,
       [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
       0,
-      "7326259e53becb63378eef6d1b4fa147"
+      "0937f4eb231a29acaf40fd9f7bb16473"
     ],
     [
       "Format.NamedGroup.namedGroup",
@@ -40,7 +40,7 @@
         "haseqFormat.NamedGroup_Tm_refine_9ae3c9ac57ad5e44cdb3bb7614447a7f"
       ],
       0,
-      "e8af7c5634b125fc63ebec69cfba56fd"
+      "f6bbdf73a610e43b50fdce5b67e97b7a"
     ],
     [
       "Format.NamedGroup.__proj__FFDHE_PRIVATE_USE__item___0",
@@ -54,7 +54,7 @@
         "refinement_interpretation_Format.NamedGroup_Tm_refine_d1f5a2381ef75c2a9f61e17bda93e690"
       ],
       0,
-      "96b80cc33e6e644def40f4f07fdd4b08"
+      "c45002714b4bb32f3e7639c207119f3e"
     ],
     [
       "Format.NamedGroup.__proj__ECDHE_PRIVATE_USE__item___0",
@@ -68,16 +68,7 @@
         "refinement_interpretation_Format.NamedGroup_Tm_refine_db417a3ade6cf95714f1f1ef30b2b1ee"
       ],
       0,
-      "31eea8618159b7be89696bf6c7df167c"
-    ],
-    [
-      "Format.NamedGroup.uu___is_UNKNOWN",
-      1,
-      2,
-      1,
-      [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
-      0,
-      "3c6292b99b3909afbd95ba15cd3fb374"
+      "41a98e8c8585e40ef5271efbf9658ecc"
     ],
     [
       "Format.NamedGroup.__proj__UNKNOWN__item___0",
@@ -86,7 +77,7 @@
       1,
       [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
       0,
-      "f16dd3ca49dfff9e759c64624f4b9e4f"
+      "0221a750936975057ad46f32050c9620"
     ],
     [
       "Format.NamedGroup.__proj__UNKNOWN__item___0",
@@ -101,7 +92,7 @@
         "refinement_interpretation_Format.NamedGroup_Tm_refine_a54bdafe09cd84d95e70ab4c7b8306f3"
       ],
       0,
-      "18442b475c19a7a0a36d3067f4c219c1"
+      "b8d97baf3f43c350ab05ce4f80dab687"
     ],
     [
       "Format.NamedGroup.u16_of_namedGroup",
@@ -127,7 +118,7 @@
         "fuel_guarded_inversion_Format.NamedGroup.namedGroup"
       ],
       0,
-      "44f8fe8bdc007f4c2581f86c247856ab"
+      "81a80e7b60b52996da2b516bee0a094b"
     ],
     [
       "Format.NamedGroup.lemma_namedGroup_of_u16_is_injective",
@@ -167,7 +158,7 @@
         "typing_Format.NamedGroup.namedGroup_of_u16"
       ],
       0,
-      "8585bd52c27781c8f89e126a522364d0"
+      "570758163adb17580d583438f885f4ab"
     ],
     [
       "Format.NamedGroup.lemma_namedGroup_of_u16_is_injective_2",
@@ -207,7 +198,7 @@
         "typing_Format.NamedGroup.namedGroup_of_u16"
       ],
       0,
-      "fe57db30c875573caf69b4bef5d5972f"
+      "4c3711e5c8f9f4dad76270f10cc0ddbb"
     ],
     [
       "Format.NamedGroup.namedGroup_parser",
@@ -220,7 +211,7 @@
         "token_correspondence_Format.NamedGroup.namedGroup_of_u16"
       ],
       0,
-      "f4f8a5a1a3955bc04bf514a0167f200b"
+      "44f6c7b5ab58cfaf06e14bb8db74e0ed"
     ],
     [
       "Format.NamedGroup.namedGroup_parser32",
@@ -234,7 +225,7 @@
         "token_correspondence_Format.NamedGroup.namedGroup_of_u16"
       ],
       0,
-      "f07b35705676c84c5b3ac4b2ca3dd51d"
+      "7fa92258e6d24b0178ed4d47e8ddb6db"
     ],
     [
       "Format.NamedGroup.lemma_namedGroup_of_u16_of_namedGroup",
@@ -300,7 +291,7 @@
         "typing_Format.NamedGroup.u16_of_namedGroup"
       ],
       0,
-      "b31b05cfec519b43e7ad17dc908c2108"
+      "3121f4b4356b537442ebd6e6c6dc2f3c"
     ],
     [
       "Format.NamedGroup.namedGroup_serializer",
@@ -326,7 +317,7 @@
         "token_correspondence_Format.NamedGroup.u16_of_namedGroup"
       ],
       0,
-      "033166c600a1b0e4f133a2cbe7b50d4f"
+      "f28b38c166260a51acffe84bcd127db5"
     ],
     [
       "Format.NamedGroup.namedGroup_serializer32",
@@ -353,7 +344,7 @@
         "token_correspondence_Format.NamedGroup.u16_of_namedGroup"
       ],
       0,
-      "2b1689c8abae18d73bdc11b9739d166f"
+      "881fc9dbb65a1d59681ed902dbdb24f8"
     ]
   ]
 ]

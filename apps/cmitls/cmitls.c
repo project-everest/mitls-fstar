@@ -39,7 +39,6 @@ const char *option_file;
     STRING_OPTION("-ciphers", ciphers, "colon-separated list of cipher suites; see above for valid values") \
     STRING_OPTION("-sigalgs", sigalgs, "colon-separated list of signature algorithms; see above for valid values") \
     STRING_OPTION("-alpn", alpn, "colon-separated list of application-level protocols") \
-    BOOL_OPTION("-quic", quic, "test QUIC API, using the QuicTransportParameters extension") \
     BOOL_OPTION("-reconnect", reconnect, "reconnect at the end of the session, using received ticket (client only)") \
     STRING_OPTION("-groups", groups, "colon-separated list of named groups; see above for valid values") \
     STRING_OPTION("-cert", cert, "PEM file containing certificate chain to send") \
@@ -200,20 +199,8 @@ mitls_nego_action nego_callback(void *cb_state, mitls_version ver,
     dump(qtp, qtp_len);
   }
 
-  if(option_quic && option_isserver)
-  {
-    *custom_exts = malloc(sizeof(mitls_extension));
-    *custom_exts_len = 1;
-    custom_exts[0]->ext_type = (uint16_t)0x1a;
-    custom_exts[0]->ext_data = (const unsigned char*)"\x00\x01\x02";
-    custom_exts[0]->ext_data_len = 3;
-    printf("Adding server transport parameters:\n");
-    dump(custom_exts[0]->ext_data, custom_exts[0]->ext_data_len);
-  }
-  else {
-    *custom_exts_len = 0;
-    *custom_exts = NULL;
-  }
+  *custom_exts_len = 0;
+  *custom_exts = NULL;
 
   if(*cookie != NULL) {
     if(*cookie_len) {
@@ -285,85 +272,6 @@ int certificate_verify(void *cbs, const unsigned char* chain_bytes, size_t chain
   return r;
 }
 
-int ConfigureQuic(quic_state **pstate)
-{
-    int erridx, r;
-    quic_state *state;
-    quic_config quic_cfg;
-
-    // Server PKI configuration: one ECDSA certificate
-    mipki_config_entry pki_config[1] = {
-      {
-        .cert_file = option_cert ? option_cert : "../../data/server-ecdsa.crt",
-        .key_file = option_key ? option_key : "../../data/server-ecdsa.key",
-        .is_universal = 1 // ignore SNI
-      }
-    };
-
-    mipki_state *pki = mipki_init(pki_config, 1, NULL, &erridx);
-    mitls_cert_cb cert_callbacks =
-      {
-        .select = certificate_select,
-        .format = certificate_format,
-        .sign = certificate_sign,
-        .verify = certificate_verify
-      };
-
-    if(!pki)
-    {
-      printf("Failed to initialize PKI library: errid=%d\n", erridx);
-      return 1;
-    }
-
-    if(!mipki_add_root_file_or_path(pki, option_cafile ? option_cafile : "../../data/CAFile.pem"))
-    {
-      printf("Failed to add CAFile\n");
-      return 1;
-    }
-
-    *pstate = NULL;
-    if (!option_quic) {
-        printf("Call Configure() instead of ConfigureQuic(), for TLS connections.\n");
-        return 4;
-    }
-
-    mitls_extension client_qtp[1] = {
-      { // QUIC transport parameters (client)
-        .ext_type = (uint16_t)0x1A,
-        .ext_data = (const unsigned char*)"\xff\xff\x00\x05\x0a\x0b\x0c\x0d\x0e\x00",
-        .ext_data_len = 9
-      }
-    };
-
-    memset(&quic_cfg, 0, sizeof(quic_cfg));
-    quic_cfg.callback_state = pstate;
-    quic_cfg.is_server = (option_isserver) ? 1 : 0;
-    quic_cfg.cipher_suites = option_ciphers;
-    quic_cfg.cert_callbacks = &cert_callbacks;
-    quic_cfg.nego_callback = &nego_callback;
-    quic_cfg.signature_algorithms = option_sigalgs;
-    quic_cfg.named_groups = option_groups;
-    quic_cfg.enable_0rtt = (option_0rtt) ? 1 : 0;
-    quic_cfg.exts = client_qtp;
-    quic_cfg.exts_count = 1;
-
-    if (option_isserver) {
-        quic_cfg.ticket_enc_alg = NULL;
-        quic_cfg.ticket_key = NULL;
-        quic_cfg.ticket_key_len = 0;
-    } else { // client
-        quic_cfg.host_name = option_hostname;
-    }
-
-    r = FFI_mitls_quic_create(&state, &quic_cfg);
-    if (r == 0) {
-        printf("FFI_mitls_quic_create() failed.\n");
-        return 2;
-    }
-    *pstate = state;
-    return 0;
-}
-
 int Configure(mitls_state **pstate)
 {
     mitls_state *state = NULL;
@@ -390,11 +298,6 @@ int Configure(mitls_state **pstate)
     if(!mipki_add_root_file_or_path(pki, option_cafile ? option_cafile : "../../data/CAFile.pem")) {
       printf("Failed to set CAFile\n");
       return 1;
-    }
-
-    if (option_quic) {
-        printf("Call ConfigureQuic() instead of Configure(), for QUIC connections.\n");
-        return 4;
     }
 
     r = FFI_mitls_configure(&state, option_version, option_hostname);
@@ -606,51 +509,6 @@ int TestServer()
     return 0;
 }
 
-typedef int (*quic_result_check)(quic_result r);
-
-// auxiliary reading loop (brittle when using TCP)
-void quic_recv_until(quic_state *state, SOCKET fd, quic_result_check check)
-{
-    quic_result r;
-    unsigned char inbuf[8192];
-    size_t inbufsize;
-    unsigned char outbuf[8192];
-    size_t outbufsize;
-    int sockresult;
-
-    inbufsize = 0;
-    do {
-        r = FFI_mitls_quic_process(state, inbuf, &inbufsize, outbuf, &outbufsize);
-        switch (r) {
-        case TLS_would_block: printf("would block\n"); break;
-        case TLS_error_local: printf("fatal error\n"); break;
-        case TLS_error_alert: printf("received fatal alert\n"); break;
-        case TLS_client_early: printf("client offers early data\n"); break;
-        case TLS_client_complete: printf("client completes {secret1}; the server is ignoring early data\n"); break;
-        case TLS_client_complete_with_early_data: printf("client offers early data {secret0}"); break;
-        case TLS_server_accept: printf("server accepts X early data\n"); break;
-        case TLS_server_accept_with_early_data: printf("server accepts with early data {secret0; secret1}\n"); break;
-        case TLS_server_complete: printf("server completes\n"); break;
-        case TLS_error_other: printf("other miTLS error\n"); break;
-        default: printf("Unknown return %d from FFI_mitls_quic_process\n", r); return;
-        }
-        if (outbufsize) {
-            sockresult = send(fd, (char*)outbuf, (int)outbufsize, 0);
-            if (sockresult != outbufsize) {
-                printf("Socket send failed\n");
-                return;
-            }
-        }
-        if (inbufsize) {
-            sockresult = recv(fd, (char*)inbuf, inbufsize, 0);
-            if (sockresult != inbufsize) {
-                printf("Socket recv failed\n");
-                return;
-            }
-        }
-    } while ((*check)(r));
-}
-
 void print_bytes(const void *buf, size_t len)
 {
     const unsigned char *b = (const unsigned char*)buf;
@@ -672,172 +530,7 @@ const char *aead_names[] =
     "AES_128_GCM", "AES_256_GCM", "CHACHA20_POLY1305"
 };
 
-void print_secret(quic_secret *s)
-{
-    printf("{%s %s ", hash_names[s->hash], aead_names[s->ae]);
-    print_bytes(s->secret, sizeof(s->secret));
-    printf("}");
-}
-
-void quic_dump(quic_state *state)
-{
-    printf("OK\n");
-    quic_secret secret0;
-    quic_secret secret1;
-    int ret0;
-    int ret1;
-
-    ret0 = FFI_mitls_quic_get_exporter(state, 0, &secret0);
-    ret1 = FFI_mitls_quic_get_exporter(state, 1, &secret1);
-
-    if (ret0) {
-        printf("early secret: ");
-        print_secret(&secret0);
-        printf("\n");
-    }
-    if (ret1) {
-        printf("main secret: ");
-        print_secret(&secret1);
-        printf("\n");
-    }
-    // bugbug: dump get_parameters of state for Client and Server  via FFI_mitls_quic_get_parameters()
-}
-
-int check_client_complete(quic_result r)
-{
-    if (r == TLS_client_complete || r == TLS_client_complete_with_early_data) {
-        return 1;
-    }
-    return 0;
-}
-
-int check_is_ticketed(quic_result r)
-{
-    // bugbug: implement
-    return 1;
-}
-
-int check_server_complete(quic_result r)
-{
-    if (r == TLS_server_complete) {
-        return 1;
-    }
-    return 0;
-}
-
-int check_true(quic_result r)
-{
-    return 1;
-}
-
-int TestQuicClient(void)
-{
-    quic_state *state;
-    SOCKET sockfd;
-    struct hostent *peer;
-    struct sockaddr_in addr;
-    int r;
-
-    printf("CLIENT\n");
-
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0) {
-        printf("Failed socket open: %s\n", strerror(errno));
-        return 1;
-    }
-    peer = gethostbyname(option_hostname);
-    if (peer == NULL) {
-        printf("Failed gethostbyname %s\n", strerror(errno));
-        return 1;
-    }
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    memcpy(&addr.sin_addr.s_addr, peer->h_addr, peer->h_length);
-    addr.sin_port = htons(option_port);
-
-    if (connect(sockfd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        printf("Failed connect %s\n", strerror(errno));
-        return 1;
-    }
-
-    r = ConfigureQuic(&state);
-    if (r != 0) {
-        return 1;
-    }
-
-    quic_recv_until(state, sockfd, check_client_complete);
-    quic_recv_until(state, sockfd, check_is_ticketed);
-    quic_dump(state);
-
-    return 0;
-}
-
 #define MAX_RECEIVED_REQUEST_LENGTH  (65536) // 64kb
-int SingleQuicServer(quic_state *state, SOCKET clientfd)
-{
-    // brittle, as we need to write the ticket without blocking on TCP read.
-    quic_recv_until(state, clientfd, check_server_complete);
-    quic_recv_until(state, clientfd, check_true);
-    quic_dump(state);
-
-    FFI_mitls_quic_close(state);
-    return 0;
-}
-
-int TestQuicServer(void)
-{
-    SOCKET sockfd;
-    struct hostent *host;
-    struct sockaddr_in addr;
-    quic_state *state;
-
-    printf("SERVER\n");
-
-    host = gethostbyname(option_hostname);
-    if (host == NULL) {
-        printf("Failed gethostbyname(%s) %d\n", option_hostname, WSAGetLastError());
-        return 1;
-    }
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    memcpy(&addr.sin_addr.s_addr, host->h_addr, host->h_length);
-    addr.sin_port = htons(option_port);
-
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0) {
-        printf("Failed socket open: %d\n", WSAGetLastError());
-        return 1;
-    }
-    if (bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        printf("Failed bind() %d\n", WSAGetLastError());
-        closesocket(sockfd);
-        return 1;
-    }
-    if (listen(sockfd, 128) < 0) {
-        printf("Failed listen() %d\n", WSAGetLastError());
-        closesocket(sockfd);
-        return 1;
-    }
-    while (1) {
-        SOCKET clientsockfd;
-        socklen_t len = sizeof(addr);
-
-        clientsockfd = accept(sockfd, (struct sockaddr*)&addr, &len);
-        if (clientsockfd == SOCKET_ERROR) {
-            printf("Failed accept() %d\n", WSAGetLastError());
-            closesocket(sockfd);
-            return 1;
-        }
-        if (ConfigureQuic(&state) != 0) {
-            return 1;
-        }
-        if (SingleQuicServer(state, clientsockfd)) {
-            return 1;
-        }
-        closesocket(clientsockfd);
-    }
-    return 0;
-}
 
 int TestClient(void)
 {
@@ -975,17 +668,9 @@ int main(int argc, char **argv)
 
     printf("cmitls.exe about to act as client or server\n");
     if (option_isserver) {
-        if (option_quic) {
-            r = TestQuicServer();
-        } else {
-            r = TestServer();
-        }
+        r = TestServer();
     } else {
-        if (option_quic) {
-            r = TestQuicClient();
-        } else {
-            r = TestClient();
-        }
+        r = TestClient();
     }
     FFI_mitls_cleanup();
 
