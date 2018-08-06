@@ -16,6 +16,8 @@ ARG COMMITID
 
 RUN export FSTAR_HOME=${MYHOME}/FStar
 
+WORKDIR ${MYHOME}/FStar
+
 # Do some cleanup
 RUN rm -rf hacl-star
 RUN rm -rf hacl-star-old
@@ -43,8 +45,6 @@ RUN rm ${MYHOME}/FStar/mitls-fstar/build_miTLS.sh
 RUN rm ${MYHOME}/FStar/mitls-fstar/build.sh
 RUN rm ${MYHOME}/FStar/mitls-fstar/id_rsa
 RUN rm ${MYHOME}/FStar/mitls-fstar/commitinfofilename.json
-
-WORKDIR ${MYHOME}/FStar/mitls-fstar
 
 # ADD SSH KEY
 RUN mkdir -p ${MYHOME}/.ssh
