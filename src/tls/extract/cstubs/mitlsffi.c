@@ -1009,7 +1009,7 @@ typedef struct {
 static VOID quic_process_callout(PVOID Parameter)
 {
     quic_process_state *s = (quic_process_state*)Parameter;
-    *s->r = QUIC_recv(s->state->hs, *s->in);
+    *s->r = QUIC_process_hs(s->state->hs, *s->in);
 }
 #endif
 

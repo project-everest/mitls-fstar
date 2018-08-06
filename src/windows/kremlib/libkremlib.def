@@ -125,3 +125,10 @@ EXPORTS
     FStar_UInt16_to_string
     FStar_UInt16_uint_to_t
     FStar_UInt16_v
+    HeapRegionInitialize
+    HeapRegionCleanup
+    HeapRegionEnter
+    HeapRegionCreateAndRegister
+    HeapRegionLeave
+    HeapRegionDestroy
+

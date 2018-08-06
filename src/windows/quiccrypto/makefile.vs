@@ -1,4 +1,4 @@
-CCOPTS = /nologo /O2 /Gy /GF /Gw /GA /MD /Zi -I. -I../evercrypt -I.. -Iinclude -Ikremlin -FI.\CommonInclude.h /DNO_OPENSSL
+CCOPTS = /nologo /O2 /Gy /GF /Gw /GA /MD /Zi -I. -I../include -FICommonInclude.h /DNO_OPENSSL
 
 all: libquiccrypto.dll test
 
@@ -6,7 +6,6 @@ all: libquiccrypto.dll test
 SOURCES = \
   Crypto_HKDF_Crypto_HMAC.c \
   quic_provider.c
-# test.c \
 
 PLATFORM_OBJS = 
   
@@ -24,12 +23,6 @@ test: test.exe libquiccrypto.dll
   
 .c.obj::
     cl $(CCOPTS) -c $<
-
-{amd64\}.asm.obj:
-    ml64 /nologo /c $< /Fo$@
-
-{i386\}.asm.obj:
-    ml /nologo /c $< /Fo$@
 
 clean:
     -del *.lib
