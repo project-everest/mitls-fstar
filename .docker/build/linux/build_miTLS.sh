@@ -165,8 +165,8 @@ function refresh_hints() {
 function exec_build() {
 
     export_home FSTAR "$(pwd)/../"
-    result_file=result.txt
-    local status_file="status.txt"
+    result_file="../result.txt"
+    local status_file="../status.txt"
     echo -n false >$status_file
 
     if [ ! -f miTLS_icla.txt ]; then
@@ -202,4 +202,6 @@ export OCAMLRUNPARAM=b
 export OTHERFLAGS="--print_z3_statistics --use_hints --query_stats"
 export MAKEFLAGS="$MAKEFLAGS -Otarget"
 
+cd mitls-fstar
 exec_build
+cd ..
