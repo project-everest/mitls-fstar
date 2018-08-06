@@ -1,12 +1,11 @@
-CCOPTS = /nologo /O2 /Gy /GF /Gw /GA /MD /Zi -I. -I../evercrypt -I.. -Iinclude -Ikremlin -FI.\CommonInclude.h /DNO_OPENSSL
+CCOPTS = /nologo /O2 /Gy /GF /Gw /GA /MD /Zi -I. -I../evercrypt -I../include -FI.\CommonInclude.h /DNO_OPENSSL
 
-all: libquiccrypto.dll test
+all: libquiccrypto.dll # test
 
 # 'dir /b *.c' then replace "^(.*)" by "  \1 \\"
 SOURCES = \
   Crypto_HKDF_Crypto_HMAC.c \
   quic_provider.c
-# test.c \
 
 PLATFORM_OBJS = 
   

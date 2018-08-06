@@ -1,10 +1,11 @@
-CCOPTS = /nologo /O2 /Gy /GF /Gw /GA /MD /Zi -I. -I.. -I../mitls /FI..\CommonInclude.h
+CCOPTS = /nologo /O2 /Gy /GF /Gw /GA /MD /Zi -I. -I../include /FI..\CommonInclude.h
 
 all: libkremlib.dll libkremlib.lib
 
 # ls kremlin/kremlib/*.c | xargs basename -a
 # remove fstar_uint128.c
 SOURCES = \
+  RegionAllocator.c \
   c.c \
   c_string.c \
   fstar_bytes.c \
