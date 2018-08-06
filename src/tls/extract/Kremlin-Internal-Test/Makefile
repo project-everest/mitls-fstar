@@ -5,6 +5,7 @@ UNAME		= $(shell uname)
 MARCH		?= x86_64
 
 MITLS_HOME 	= ../../../..
+KREMLIN_HOME    ?= ../../../../../kremlin
 MLCRYPTO_HOME	?= ../../../../../MLCrypto
 EVERCRYPT_HOME	?= ../../../../../hacl-star/providers
 
@@ -50,7 +51,7 @@ else
 endif
 endif
 
-INCLUDE_DIRS 	= secure kreminc include stub vale curve pki ffi uint128 .
+INCLUDE_DIRS 	= secure kreminc include stub pki ffi uint128 .
 
 # Note: see comment in Makefile.Kremlin to see why we're re-extracting
 # Crypto.Symmetric.Bytes rather than using the one from secure/
@@ -59,13 +60,13 @@ INCLUDE_DIRS 	= secure kreminc include stub vale curve pki ffi uint128 .
 FILES 		= Cert C_Loops_Spec_Loops CommonDH CoreCrypto \
   secure/Crypto_AEAD_Main \
   Crypto_Indexing Crypto_Symmetric_Bytes Crypto_Plain \
-  CryptoTypes curve/Hacl_Curve25519 DHGroup ECGroup Extensions Flags Format FStar \
+  CryptoTypes DHGroup ECGroup Extensions Flags Format FStar \
   HaclProvider Hashing_Spec kremlinit \
   LowCProvider LowParse Nonce Parse PMS Prims PSK RSAKey \
   secure/Crypto_HKDF_Crypto_HMAC \
   Specializations_Providers_AEAD stub/mipki_wrapper stub/core_crypto \
-  stub/hacl_provider stub/buffer_bytes Test_Main TLSConstants TLS_Curve25519 TLSError TLSInfo \
-  TLSInfoFlags vale/sha256_main_i vale/vale_aes_glue vale/Vale_Hash_SHA2_256 \
+  stub/hacl_provider stub/buffer_bytes Test_Main TLSConstants \
+  TLS_Curve25519 TLSError TLSInfo TLSInfoFlags \
   stub/RegionAllocator
 
 CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror \
@@ -93,7 +94,7 @@ LDOPTS += -L$(MITLS_HOME)/src/pki -lmipki $(KREMLIN_HOME)/kremlib/out/libkremlib
 
 -include $(addsuffix .d,$(FILES))
 
-test.exe: $(addsuffix .o,$(FILES)) vale/sha256-$(MARCH)$(VARIANT).o vale/aesgcm-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
+test.exe: $(addsuffix .o,$(FILES))
 	$(CC) $^ -o $@ $(LDOPTS)
 
 CERT_FILES=CAFile.pem server-ecdsa.crt server-ecdsa.key
@@ -103,7 +104,6 @@ $(CERT_FILES):
 
 clean:
 	rm -fr $(addsuffix .o,$(FILES)) $(addsuffix .c,$(FILES)) test.exe
-	rm -fr vale/sha256-$(MARCH)$(VARIANT).o vale/aesgcm-$(MARCH)$(VARIANT).o vale/aes-$(MARCH)$(VARIANT).o
 
 test: test.exe $(CERT_FILES)
 	./$<

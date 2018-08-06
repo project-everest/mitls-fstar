@@ -1,18 +1,8 @@
 #include "kremlinit.h"
 #include "Crypto_HKDF_Crypto_HMAC.h"
-#include "Hacl_Curve25519.h"
 #include "HaclProvider.h"
 
 // FIXME KRML_HOST_CALLOC() == NULL
-
-FStar_Bytes_bytes HaclProvider_crypto_scalarmult(FStar_Bytes_bytes secret, FStar_Bytes_bytes base) {
-  FStar_Bytes_bytes out = {
-    .length = 32,
-    .data = KRML_HOST_CALLOC(32, 1)
-  };
-  Hacl_Curve25519_crypto_scalarmult((uint8_t *) out.data, (uint8_t *) secret.data,  (uint8_t *) base.data);
-  return out;
-}
 
 static inline Crypto_HMAC_alg hash_alg(HaclProvider_hash_alg i) {
   switch (i) {
