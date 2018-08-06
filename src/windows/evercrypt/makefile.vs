@@ -1,4 +1,4 @@
-CCOPTS = /nologo /O2 /Gy /GF /Gw /GA /MD /Zi -I. -I../include -I../mitls /FI..\CommonInclude.h
+CCOPTS = /nologo /O2 /Gy /GF /Gw /GA /MD /Zi -I. -I../include /FICommonInclude.h
 
 all: libevercrypt.dll libevercrypt.lib
 

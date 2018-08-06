@@ -1,6 +1,6 @@
-CCOPTS = /nologo /O2 /Gy /GF /Gw /GA /MD /Zi -I. -I../evercrypt -I../include -FI.\CommonInclude.h /DNO_OPENSSL
+CCOPTS = /nologo /O2 /Gy /GF /Gw /GA /MD /Zi -I. -I../include -FICommonInclude.h /DNO_OPENSSL
 
-all: libquiccrypto.dll # test
+all: libquiccrypto.dll test
 
 # 'dir /b *.c' then replace "^(.*)" by "  \1 \\"
 SOURCES = \
@@ -23,12 +23,6 @@ test: test.exe libquiccrypto.dll
   
 .c.obj::
     cl $(CCOPTS) -c $<
-
-{amd64\}.asm.obj:
-    ml64 /nologo /c $< /Fo$@
-
-{i386\}.asm.obj:
-    ml /nologo /c $< /Fo$@
 
 clean:
     -del *.lib

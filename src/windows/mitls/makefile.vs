@@ -1,4 +1,4 @@
-CCOPTS = /nologo /O2 /Gy /GF /Gw /GA /MD /Zi -I. -I../include -Iinclude -FI..\CommonInclude.h /DNO_OPENSSL
+CCOPTS = /nologo /O2 /Gy /GF /Gw /GA /MD /Zi -I. -I../include -Iinclude -FICommonInclude.h /DNO_OPENSSL
 
 all: libmitls.dll
 
