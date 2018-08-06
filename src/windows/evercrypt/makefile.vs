@@ -13,7 +13,6 @@ SOURCES = \
   C_Endianness.c \
   C_Failure.c \
   C_Loops.c \
-#  C_Nullity.c \
   C_String.c \
   EverCrypt.c \
   EverCrypt_AutoConfig.c \
@@ -28,7 +27,6 @@ SOURCES = \
   EverCrypt_ValeGlue.c \
   FStar.c \
   Hacl_Chacha20.c \
-#  Hacl_Chacha20_Vec128.c \ # vec128.h not compatible with MSVC
   Hacl_Chacha20Poly1305.c \
   Hacl_Curve25519.c \
   Hacl_Ed25519.c \
