@@ -159,7 +159,12 @@ type ems #li (i:exportId li) = H.tag (exportId_hash i)
 // but I'm waiting for it to be tested to switch over
 // TODO use the newer index types
 type recordInstance =
-  | StAEInstance: #id:TLSInfo.id -> StAE.reader (peerId id) -> StAE.writer id -> recordInstance
+  | StAEInstance: 
+    #id:TLSInfo.id ->
+    r: StAE.reader (peerId id) ->
+    w: StAE.writer id ->
+    pn: option bytes * option bytes ->
+    recordInstance
 
 (* 2 choices - I prefer the second:
      (1) replace recordInstance in this module with Epochs.epoch, but that requires dependence on more than just $id
@@ -231,41 +236,50 @@ type ks_state =
  * AR: changing state from rref to ref, with region captured in the refinement.
  *)
 type ks =
-| KS: #region:rid -> state:(ref ks_state){HS.frameOf state = region} -> ks
+| KS:
+  #region:rid ->
+  state:(ref ks_state){HS.frameOf state = region} ->
+  is_quic: bool ->
+  ks
+
 //17-04-17 CF: expose it as a concrete ref?
 //17-04-17 CF: no need to keep the region, already in the ref.
 
 // Extract keys and IVs from a derived 1.3 secret
-private let keygen_13 h secret ae : St (bytes * bytes) =
+private let keygen_13 h secret ae is_quic : St (bytes * bytes * option bytes) =
   let kS = CoreCrypto.aeadKeySize ae in
   let iS = CoreCrypto.aeadRealIVSize ae in
-  let kb = HKDF.hkdf_expand_label h secret "key" empty_bytes kS in
-  let ib = HKDF.hkdf_expand_label h secret "iv" empty_bytes iS in
-  (kb, ib)
+  let kb = HKDF.hkdf_expand_label h secret "key" empty_bytes kS is_quic in
+  let ib = HKDF.hkdf_expand_label h secret "iv" empty_bytes iS is_quic in
+  let pn = if is_quic then
+      Some (HKDF.hkdf_expand_label h secret "pn" empty_bytes kS is_quic)
+    else None in
+  (kb, ib, pn)
 
 // Extract finished keys
-private let finished_13 h secret : St (bytes) =
-  HKDF.hkdf_expand_label h secret "finished" empty_bytes (UInt32.v (H.tagLen h))
+private let finished_13 h secret is_quic : St (bytes) =
+  HKDF.hkdf_expand_label h secret "finished" empty_bytes (UInt32.v (H.tagLen h)) is_quic
 
 // Create a fresh key schedule instance
 // We expect this to be called when the Handshake instance is created
-val create: #rid:rid -> role -> ST (ks * random)
+val create: #rid:rid -> role -> is_quic:bool -> ST (ks * random)
   (requires fun h -> rid<>root)
   (ensures fun h0 (r,_) h1 ->
-    let KS #ks_region state = r in
+    let KS #ks_region state iq = r in
     HS.fresh_region ks_region h0 h1
     /\ extends ks_region rid
+    /\ iq = is_quic
     /\ modifies (Set.singleton rid) h0 h1
     /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref state))) ( h0) ( h1))
 
-let create #rid r =
+let create #rid r is_quic =
   ST.recall_region rid;
   let ks_region = new_region rid in
   let nonce = Nonce.mkHelloRandom r ks_region in
   let istate = match r with
     | Client -> C (C_Init nonce)
     | Server -> S (S_Init nonce) in
-  (KS #ks_region (ralloc ks_region istate)), nonce
+  (KS #ks_region (ralloc ks_region istate) is_quic), nonce
 
 private let group_of_valid_namedGroup
   (g:CommonDH.supportedNamedGroup)
@@ -293,12 +307,11 @@ val ks_client_init: ks:ks -> ogl: option CommonDH.supportedNamedGroups
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_Init? (C?.s kss))
   (ensures fun h0 ogxl h1 ->
-    let KS #rid st = ks in
+    let KS #rid st _ = ks in
     (None? ogl ==> None? ogxl) /\
     (Some? ogl ==> (Some? ogxl /\ Some?.v ogl == List.Tot.map group_of_cks (Some?.v ogxl))) /\
     modifies (Set.singleton rid) h0 h1 /\
     HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
-
 
 private
 let serialize_share (gx:(g:CommonDH.group & CommonDH.ikeyshare g)) =
@@ -315,7 +328,7 @@ private let rec map_ST_keygen l =
 
 let ks_client_init ks ogl =
   dbg ("ks_client_init "^(if ogl=None then "1.2" else "1.3"));
-  let KS #rid st = ks in
+  let KS #rid st _ = ks in
   let C (C_Init cr) = !st in
   match ogl with
   | None -> // TLS 1.2
@@ -330,7 +343,7 @@ let ks_client_init ks ogl =
 
 type ticket13 = t:Ticket.ticket{Ticket.Ticket13? t}
 
-private let mk_binder (#rid) (pskid:psk_identifier) (t:ticket13)
+private let mk_binder (#rid) (pskid:psk_identifier) (t:ticket13) (is_quic:bool)
   : ST ((i:binderId & bk:binderKey i) * (i:esId{~(NoPSK? i)} & es i))
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
@@ -346,29 +359,29 @@ private let mk_binder (#rid) (pskid:psk_identifier) (t:ticket13)
     if ApplicationPSK? i then ExtBinder, "ext binder"
     else ResBinder, "res binder" in
   let bId = Binder i ll in
-  let bk = HKDF.derive_secret h es lb (H.emptyHash h) in
+  let bk = HKDF.derive_secret h es lb (H.emptyHash h) is_quic in
   dbg ("Binder key["^lb^"]: "^(print_bytes bk));
-  let bk = finished_13 h bk in
+  let bk = finished_13 h bk is_quic in
   dbg ("Binder Finished key: "^(print_bytes bk));
   let bk : binderKey bId = HMAC_UFCMA.coerce (HMAC_UFCMA.HMAC_Binder bId) trivial rid bk in
   (| bId, bk|), (| i, es |)
 
-private let rec tickets13 #rid acc (l:list (psk_identifier * Ticket.ticket))
+private let rec tickets13 #rid acc (l:list (psk_identifier * Ticket.ticket)) (is_quic:bool)
   : ST0 (list ((i:binderId & bk:binderKey i) * (i:esId{~(NoPSK? i)} & es i)))
   = match l with
   | [] -> List.Tot.rev acc
-  | (pskid, t) :: r -> tickets13 #rid (if Ticket.Ticket13? t then (mk_binder #rid pskid t)::acc else acc) r
+  | (pskid, t) :: r -> tickets13 #rid (if Ticket.Ticket13? t then (mk_binder #rid pskid t is_quic)::acc else acc) r is_quic
 
 let ks_client_13_get_binder_keys ks l =
-  let KS #rid st = ks in
+  let KS #rid st is_quic = ks in
   let C (C_13_wait_SH cr [] gs) = !st in
-  let (bkl, esl) = List.Tot.split (tickets13 #rid [] l) in
+  let (bkl, esl) = List.Tot.split (tickets13 #rid [] l is_quic) in
   st := C (C_13_wait_SH cr esl gs);
   bkl
 
 let ks_client_13_hello_retry ks (g:CommonDH.group)
   : ST0 (CommonDH.share g) =
-  let KS #rid st = ks in
+  let KS #rid st _ = ks in
   let C (C_13_wait_SH cr esl gs) = !st in
   let s : CommonDH.ikeyshare g = CommonDH.keygen g in
   st := C (C_13_wait_SH cr esl [(| g, s |)]);
@@ -381,11 +394,11 @@ let ks_client_13_ch ks (log:bytes): ST (exportKey * recordInstance)
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_13_wait_SH? (C?.s kss))
   (ensures fun h0 r h1 ->
-    let KS #rid st = ks in
+    let KS #rid st _ = ks in
     modifies_none h0 h1)
   =
   dbg ("ks_client_13_ch log="^(print_bytes log));
-  let KS #rid st = ks in
+  let KS #rid st is_quic = ks in
   let C (C_13_wait_SH cr ((| i, es |) :: _) gs) = !st in
 
   let h = esId_hash i in
@@ -399,15 +412,15 @@ let ks_client_13_ch ks (log:bytes): ST (exportKey * recordInstance)
 
   let log : hashed_log li = log in
   let expandId : expandId li = ExpandedSecret (EarlySecretID i) ClientEarlyTrafficSecret log in
-  let ets = HKDF.derive_secret h es "c e traffic" log in
+  let ets = HKDF.derive_secret h es "c e traffic" log is_quic in
   dbg ("Client early traffic secret:     "^print_bytes ets);
   let expId : exportId li = EarlyExportID i log in
-  let early_export : ems expId = HKDF.derive_secret h es "e exp master" log in
+  let early_export : ems expId = HKDF.derive_secret h es "e exp master" log is_quic in
   dbg ("Early exporter master secret:    "^print_bytes early_export);
   let exporter0 = (| li, expId, early_export |) in
 
   // Expand all keys from the derived early secret
-  let (ck, civ) = keygen_13 h ets ae in
+  let (ck, civ, pn) = keygen_13 h ets ae is_quic in
   dbg ("Client 0-RTT key:                "^print_bytes ck^", IV="^print_bytes civ);
 
   let id = ID13 (KeyID expandId) in
@@ -415,7 +428,7 @@ let ks_client_13_ch ks (log:bytes): ST (exportKey * recordInstance)
   let civ: StreamAE.iv id  = civ in
   let rw = StAE.coerce HS.root id (ckv @| civ) in
   let r = StAE.genReader HS.root rw in
-  let early_d = StAEInstance r rw in
+  let early_d = StAEInstance r rw (pn, pn) in
   exporter0, early_d
 
 val ks_server_12_init_dh: ks:ks -> cr:random -> pv:protocolVersion -> cs:cipherSuite -> ems:bool -> g:CommonDH.group -> ST (CommonDH.share g)
@@ -426,13 +439,13 @@ val ks_server_12_init_dh: ks:ks -> cr:random -> pv:protocolVersion -> cs:cipherS
     /\ (let CipherSuite kex _ _ = cs in
          (kex = Kex_DHE \/ kex = Kex_ECDHE)))
   (ensures fun h0 r h1 ->
-    let KS #rid st = ks in
+    let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
     /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
 
 let ks_server_12_init_dh ks cr pv cs ems g =
   dbg "ks_server_12_init_dh";
-  let KS #region st = ks in
+  let KS #region st _ = ks in
   let S (S_Init sr) = !st in
   let CipherSuite kex sa ae = cs in
   let our_share = CommonDH.keygen g in
@@ -455,7 +468,7 @@ val ks_server_13_init:
     /\ (Some? g_gx ==> Some? (CommonDH.namedGroup_of_group (dfst (Some?.v g_gx))))
     /\ CipherSuite13? cs)
   (ensures fun h0 (gy, bk) h1 ->
-    let KS #rid st = ks in
+    let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
     /\ (Some? bk <==> Some? pskid)
     /\ (Some? gy \/ Some? bk)
@@ -463,7 +476,7 @@ val ks_server_13_init:
 
 let ks_server_13_init ks cr cs pskid g_gx =
   dbg ("ks_server_init");
-  let KS #region st = ks in
+  let KS #region st is_quic = ks in
   let S (S_Init sr) = !st in
   let CipherSuite13 ae h = cs in
   let esId, es, bk =
@@ -477,7 +490,7 @@ let ks_server_13_init ks cr cs pskid g_gx =
           let i = ResumptionPSK #li rmsId in
           let CipherSuite13 _ h = cs in
           let nonce, _ = split id 12ul in
-          let psk = HKDF.derive_secret h rms "resumption" nonce in
+          let psk = HKDF.derive_secret h rms "resumption" nonce is_quic in
           (i, psk, h)
         | None ->
           let i, pski, psk = read_psk id in
@@ -489,9 +502,9 @@ let ks_server_13_init ks cr cs pskid g_gx =
         if ApplicationPSK? i then ExtBinder, "ext binder"
         else ResBinder, "res binder" in
       let bId: pre_binderId = Binder i ll in
-      let bk = HKDF.derive_secret h es lb (H.emptyHash h) in
+      let bk = HKDF.derive_secret h es lb (H.emptyHash h) is_quic in
       dbg ("binder key:                      "^print_bytes bk);
-      let bk = finished_13 h bk in
+      let bk = finished_13 h bk is_quic in
       dbg ("binder Finished key:             "^print_bytes bk);
       let bk : binderKey bId = HMAC_UFCMA.coerce (HMAC_UFCMA.HMAC_Binder bId) (fun _ -> True) region bk in
       i, es, Some (| bId, bk |)
@@ -503,7 +516,7 @@ let ks_server_13_init ks cr cs pskid g_gx =
     in
   dbg ("Computed early secret:           "^print_bytes es);
   let saltId = Salt (EarlySecretID esId) in
-  let salt = HKDF.derive_secret h es "derived" (H.emptyHash h) in
+  let salt = HKDF.derive_secret h es "derived" (H.emptyHash h) is_quic in
   dbg ("Handshake salt:                  "^print_bytes salt);
   let (gy: option CommonDH.keyShareEntry), (hsId: pre_hsId), (hs: Hashing.Spec.tag h) =
     match g_gx with
@@ -530,7 +543,7 @@ let ks_server_13_0rtt_key ks (log:bytes)
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
   =
   dbg "ks_server_13_0rtt_key";
-  let KS #region st = ks in
+  let KS #region st is_quic = ks in
   let S (S_13_wait_SH (ae, h) cr sr (| esId, es |) _) = !st in
 
   let li = LogInfo_CH0 ({
@@ -541,14 +554,14 @@ let ks_server_13_0rtt_key ks (log:bytes)
   }) in
   let log : hashed_log li = log in
   let expandId : expandId li = ExpandedSecret (EarlySecretID esId) ClientEarlyTrafficSecret log in
-  let ets = HKDF.derive_secret h es "c e traffic" log in
+  let ets = HKDF.derive_secret h es "c e traffic" log is_quic in
   dbg ("Client early traffic secret:     "^print_bytes ets);
   let expId : exportId li = EarlyExportID esId log in
-  let early_export : ems expId = HKDF.derive_secret h es "e exp master" log in
+  let early_export : ems expId = HKDF.derive_secret h es "e exp master" log is_quic in
   dbg ("Early exporter master secret:    "^print_bytes early_export);
 
   // Expand all keys from the derived early secret
-  let (ck,civ) = keygen_13 h ets ae in
+  let (ck, civ, pn) = keygen_13 h ets ae is_quic in
   dbg ("Client 0-RTT key:                "^print_bytes ck^", IV="^print_bytes civ);
 
   let id = ID13 (KeyID expandId) in
@@ -556,7 +569,7 @@ let ks_server_13_0rtt_key ks (log:bytes)
   let civ: StreamAE.iv id  = civ in
   let rw = StAE.coerce HS.root id (ckv @| civ) in
   let r = StAE.genReader HS.root rw in
-  let early_d = StAEInstance r rw in
+  let early_d = StAEInstance r rw (pn, pn) in
   (| li, expId, early_export |), early_d
 
 val ks_server_13_sh: ks:ks -> log:bytes -> ST (recordInstance)
@@ -564,13 +577,13 @@ val ks_server_13_sh: ks:ks -> log:bytes -> ST (recordInstance)
     let kss = sel h0 (KS?.state ks) in
     S? kss /\ S_13_wait_SH? (S?.s kss))
   (ensures fun h0 r h1 ->
-    let KS #rid st = ks in
+    let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
     /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
 
 let ks_server_13_sh ks log =
   dbg ("ks_server_13_sh, hashed log = "^print_bytes log);
-  let KS #region st = ks in
+  let KS #region st is_quic = ks in
   let S (S_13_wait_SH (ae, h) cr sr _ (| hsId, hs |)) = !st in
   let secretId = HandshakeSecretID hsId in
   let li = LogInfo_SH ({
@@ -586,13 +599,13 @@ let ks_server_13_sh ks log =
   let s_expandId = ExpandedSecret secretId ServerHandshakeTrafficSecret log in
 
   // Derived handshake secret
-  let cts = HKDF.derive_secret h hs "c hs traffic" log in
+  let cts = HKDF.derive_secret h hs "c hs traffic" log is_quic in
   dbg ("handshake traffic secret[C]:     "^print_bytes cts);
-  let sts = HKDF.derive_secret h hs "s hs traffic" log in
+  let sts = HKDF.derive_secret h hs "s hs traffic" log is_quic in
   dbg ("handshake traffic secret[S]:     "^print_bytes sts);
-  let (ck,civ) = keygen_13 h cts ae in
+  let (ck, civ, cpn) = keygen_13 h cts ae is_quic in
   dbg ("handshake key[C]:                "^print_bytes ck^", IV="^print_bytes civ);
-  let (sk,siv) = keygen_13 h sts ae in
+  let (sk, siv, spn) = keygen_13 h sts ae is_quic in
   dbg ("handshake key[S]: "^print_bytes sk^", IV="^print_bytes siv);
 
   // Handshake traffic keys
@@ -608,16 +621,16 @@ let ks_server_13_sh ks log =
   // Finished keys
   let cfkId = FinishedID c_expandId in
   let sfkId = FinishedID s_expandId in
-  let cfk1 = finished_13 h cts in
+  let cfk1 = finished_13 h cts is_quic in
   dbg ("finished key[C]:                 "^print_bytes cfk1);
-  let sfk1 = finished_13 h sts in
+  let sfk1 = finished_13 h sts is_quic in
   dbg ("finished key[S]:                 "^print_bytes sfk1);
 
   let cfk1 : fink cfkId = HMAC_UFCMA.coerce (HMAC_UFCMA.HMAC_Finished cfkId) (fun _ -> True) region cfk1 in
   let sfk1 : fink sfkId = HMAC_UFCMA.coerce (HMAC_UFCMA.HMAC_Finished sfkId) (fun _ -> True) region sfk1 in
 
   let saltId = Salt (HandshakeSecretID hsId) in
-  let salt = HKDF.derive_secret h hs "derived" (H.emptyHash h) in
+  let salt = HKDF.derive_secret h hs "derived" (H.emptyHash h) is_quic in
   dbg ("Application salt:                "^print_bytes salt);
 
   // Replace handshake secret with application master secret
@@ -626,14 +639,14 @@ let ks_server_13_sh ks log =
   dbg ("Application secret:              "^print_bytes ams);
 
   st := S (S_13_wait_SF (ae, h) (| cfkId, cfk1 |) (| sfkId, sfk1 |) (| amsId, ams |));
-  StAEInstance r w
+  StAEInstance r w (cpn, spn)
 
 let ks_server_13_server_finished ks
   : ST (i:finishedId & fink i)
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
   =
-  let KS #region st = ks in
+  let KS #region st _ = ks in
   let S (S_13_wait_SF _ _ sfk _) = !st in
   sfk
 
@@ -642,7 +655,7 @@ let ks_server_13_client_finished ks
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
   =
-  let KS #region st = ks in
+  let KS #region st _ = ks in
   let S (S_13_wait_CF _ cfk _ _) = !st in
   cfk
 
@@ -659,14 +672,14 @@ val ks_12_finished_key: ks:ks -> ST (key:TLSPRF.key)
     modifies Set.empty h0 h1)
 
 let ks_12_finished_key ks =
- let KS #region st = ks in
+ let KS #region st _ = ks in
  let ms = match !st with
  | C (C_12_has_MS _ _ _ ms) -> ms
  | S (S_12_has_MS _ _ _ ms) -> ms in
  TLSPRF.coerce ms
 
 let ks_12_ms ks =
-  let KS #region st = ks in
+  let KS #region st _ = ks in
   match !st with
   | C (C_12_has_MS _ _ msId ms) -> (msId, ms)
   | S (S_12_has_MS _ _ msId ms) -> (msId, ms)
@@ -674,7 +687,7 @@ let ks_12_ms ks =
 private val ks_12_record_key: ks:ks -> St recordInstance
 let ks_12_record_key ks =
   dbg "ks_12_record_key";
-  let KS #region st = ks in
+  let KS #region st _ = ks in
   let role, csr, alpha, msId, ms =
     match !st with
     | C (C_12_has_MS csr alpha msId ms) -> Client, csr, alpha, msId, ms
@@ -699,7 +712,7 @@ let ks_12_record_key ks =
   let w = StAE.coerce HS.root id (wk @| wiv) in
   let rw = StAE.coerce HS.root id (rk @| riv) in
   let r = StAE.genReader HS.root rw in
-  StAEInstance r w
+  StAEInstance r w (None, None)
 
 (* 1.2 resumption *)
 
@@ -710,12 +723,12 @@ let ks_client_12_resume (ks:ks) (sr:random) (pv:protocolVersion) (cs:cipherSuite
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ (C_12_Full_CH? (C?.s kss) \/ C_13_wait_SH? (C?.s kss)))
   (ensures fun h0 r h1 ->
-    let KS #rid st = ks in
+    let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
     /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
   =
   dbg "ks_client_12_resume";
-  let KS #rid st = ks in
+  let KS #rid st _ = ks in
   let cr = match !st with
     | C (C_12_Full_CH cr) -> cr
     | C (C_13_wait_SH cr _ _) -> cr in
@@ -726,7 +739,7 @@ let ks_client_12_resume (ks:ks) (sr:random) (pv:protocolVersion) (cs:cipherSuite
 let ks_server_12_resume (ks:ks) (cr:random) (pv:protocolVersion) (cs:cipherSuite)
   (ems:bool) (msId:msId) (ms:bytes) =
   dbg ("ks_server_12_resume");
-  let KS #region st = ks in
+  let KS #region st _ = ks in
   let S (S_Init sr) = !st in
   dbg ("Recall MS: "^(print_bytes ms));
   st := S (S_12_has_MS (cr @| sr) (pv, cs, ems) msId ms);
@@ -743,12 +756,12 @@ val ks_server_12_cke_dh: ks:ks -> gy:(g:CommonDH.group & CommonDH.share g) ->
     (let S (S_12_wait_CKE_DH _ _ (| g', _ |)) = kss in
     g' = dfst gy)) // Responder share must be over the same group as initiator's
   (ensures fun h0 r h1 ->
-    let KS #rid st = ks in
+    let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
     /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
 let ks_server_12_cke_dh ks gy hashed_log =
   dbg "ks_server_12_cke_dh";
-  let KS #region st = ks in
+  let KS #region st _ = ks in
   let S (S_12_wait_CKE_DH csr alpha (| g, gx |)) = !st in
   let (pv, cs, ems) = alpha in
   let (| _, gy |) = gy in
@@ -819,7 +832,7 @@ val ks_client_13_sh: ks:ks -> sr:random -> cs:cipherSuite -> h:bytes ->
       | _::_ , Some n -> n < List.Tot.length ei
       | _ -> False)))
   (ensures fun h0 r h1 ->
-    let KS #rid st = ks in
+    let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
     /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
 
@@ -832,7 +845,7 @@ private let group_matches
 // ServerHello log breakpoint (client)
 let ks_client_13_sh ks sr cs log gy accept_psk =
   dbg ("ks_client_13_sh hashed_log = "^(print_bytes log));
-  let KS #region st = ks in
+  let KS #region st is_quic = ks in
   let C (C_13_wait_SH cr esl gc) = !st in
   let CipherSuite13 ae h = cs in
 
@@ -850,7 +863,7 @@ let ks_client_13_sh ks sr cs log gy accept_psk =
   in
 
   let saltId = Salt (EarlySecretID esId) in
-  let salt = HKDF.derive_secret h es "derived" (H.emptyHash h) in
+  let salt = HKDF.derive_secret h es "derived" (H.emptyHash h) is_quic in
   dbg ("handshake salt:                  "^print_bytes salt);
 
   let (| hsId, hs |): (hsId: pre_hsId & hs: hs hsId) =
@@ -881,28 +894,28 @@ let ks_client_13_sh ks sr cs log gy accept_psk =
   let c_expandId = ExpandedSecret secretId ClientHandshakeTrafficSecret log in
   let s_expandId = ExpandedSecret secretId ServerHandshakeTrafficSecret log in
 
-  let cts = HKDF.derive_secret h hs "c hs traffic" log in
+  let cts = HKDF.derive_secret h hs "c hs traffic" log is_quic in
   dbg ("handshake traffic secret[C]:     "^print_bytes cts);
-  let sts = HKDF.derive_secret h hs "s hs traffic" log in
+  let sts = HKDF.derive_secret h hs "s hs traffic" log is_quic in
   dbg ("handshake traffic secret[S]:     "^print_bytes sts);
-  let (ck,civ) = keygen_13 h cts ae in
+  let (ck, civ, cpn) = keygen_13 h cts ae is_quic in
   dbg ("handshake key[C]:                "^print_bytes ck^", IV="^print_bytes civ);
-  let (sk,siv) = keygen_13 h sts ae in
+  let (sk, siv, spn) = keygen_13 h sts ae is_quic in
   dbg ("handshake key[S]:                "^print_bytes sk^", IV="^print_bytes siv);
 
   // Finished keys
   let cfkId = FinishedID c_expandId in
   let sfkId = FinishedID s_expandId in
-  let cfk1 = finished_13 h cts in
+  let cfk1 = finished_13 h cts is_quic in
   dbg ("finished key[C]: "^(print_bytes cfk1));
-  let sfk1 = finished_13 h sts in
+  let sfk1 = finished_13 h sts is_quic in
   dbg ("finished key[S]: "^(print_bytes sfk1));
 
   let cfk1 : fink cfkId = HMAC_UFCMA.coerce (HMAC_UFCMA.HMAC_Finished cfkId) (fun _ -> True) region cfk1 in
   let sfk1 : fink sfkId = HMAC_UFCMA.coerce (HMAC_UFCMA.HMAC_Finished sfkId) (fun _ -> True) region sfk1 in
 
   let saltId = Salt (HandshakeSecretID hsId) in
-  let salt = HKDF.derive_secret h hs "derived" (H.emptyHash h) in
+  let salt = HKDF.derive_secret h hs "derived" (H.emptyHash h) is_quic in
   dbg ("application salt:                "^print_bytes salt);
 
   let asId = ASID saltId in
@@ -919,7 +932,7 @@ let ks_client_13_sh ks sr cs log gy accept_psk =
   let rw = StAE.coerce HS.root id (skv @| siv) in
   let r = StAE.genReader HS.root rw in
   st := C (C_13_wait_SF (ae, h) (| cfkId, cfk1 |) (| sfkId, sfk1 |) (| asId, ams |));
-  StAEInstance r w
+  StAEInstance r w (spn, cpn)
 
 (******************************************************************)
 
@@ -929,12 +942,12 @@ let ks_client_13_sf ks (log:bytes)
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_13_wait_SF? (C?.s kss))
   (ensures fun h0 r h1 ->
-    let KS #rid st = ks in
+    let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
     /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
   =
   dbg ("ks_client_13_sf hashed_log = "^(print_bytes log));
-  let KS #region st = ks in
+  let KS #region st is_quic = ks in
   let C (C_13_wait_SF alpha cfk sfk (| asId, ams |)) = !st in
   let (ae, h) = alpha in
 
@@ -944,18 +957,18 @@ let ks_client_13_sf ks (log:bytes)
   let c_expandId = ExpandedSecret secretId ClientApplicationTrafficSecret log in
   let s_expandId = ExpandedSecret secretId ClientApplicationTrafficSecret log in
 
-  let cts = HKDF.derive_secret h ams "c ap traffic" log in
+  let cts = HKDF.derive_secret h ams "c ap traffic" log is_quic in
   dbg ("application traffic secret[C]:   "^print_bytes cts);
-  let sts = HKDF.derive_secret h ams "s ap traffic" log in
+  let sts = HKDF.derive_secret h ams "s ap traffic" log is_quic in
   dbg ("application traffic secret[S]:   "^print_bytes sts);
   let emsId : exportId li = ExportID asId log in
-  let ems = HKDF.derive_secret h ams "exp master" log in
+  let ems = HKDF.derive_secret h ams "exp master" log is_quic in
   dbg ("exporter master secret:          "^print_bytes ems);
   let exporter1 = (| li, emsId, ems |) in
 
-  let (ck,civ) = keygen_13 h cts ae in
+  let (ck,civ,cpn) = keygen_13 h cts ae is_quic in
   dbg ("application key[C]:              "^print_bytes ck^", IV="^print_bytes civ);
-  let (sk,siv) = keygen_13 h sts ae in
+  let (sk,siv,spn) = keygen_13 h sts ae is_quic in
   dbg ("application key[S]:              "^print_bytes sk^", IV="^print_bytes siv);
 
   let id = ID13 (KeyID c_expandId) in
@@ -969,7 +982,7 @@ let ks_client_13_sf ks (log:bytes)
   let r = StAE.genReader HS.root rw in
 
   st := C (C_13_wait_CF alpha cfk (| asId, ams |) (| li, c_expandId, (cts,sts)|));
-  (sfk, cfk, StAEInstance r w, exporter1)
+  (sfk, cfk, StAEInstance r w (spn, cpn), exporter1)
 
 let ks_server_13_sf ks (log:bytes)
   : ST (recordInstance * (li:logInfo & i:exportId li & ems i))
@@ -977,12 +990,12 @@ let ks_server_13_sf ks (log:bytes)
     let kss = sel h0 (KS?.state ks) in
     S? kss /\ C_13_wait_SF? (C?.s kss))
   (ensures fun h0 r h1 ->
-    let KS #rid st = ks in
+    let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
     /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
   =
   dbg ("ks_server_13_sf hashed_log = "^print_bytes log);
-  let KS #region st = ks in
+  let KS #region st is_quic = ks in
   let S (S_13_wait_SF alpha cfk _ (| asId, ams |)) = !st in
   let FinishedID #li _ = dfst cfk in // TODO loginfo
   let (ae, h) = alpha in
@@ -992,18 +1005,18 @@ let ks_server_13_sf ks (log:bytes)
   let c_expandId = ExpandedSecret secretId ClientApplicationTrafficSecret log in
   let s_expandId = ExpandedSecret secretId ClientApplicationTrafficSecret log in
 
-  let cts = HKDF.derive_secret h ams "c ap traffic" log in
+  let cts = HKDF.derive_secret h ams "c ap traffic" log is_quic in
   dbg ("application traffic secret[C]:   "^print_bytes cts);
-  let sts = HKDF.derive_secret h ams "s ap traffic" log in
+  let sts = HKDF.derive_secret h ams "s ap traffic" log is_quic in
   dbg ("application traffic secret[S]:   "^print_bytes sts);
   let emsId : exportId li = ExportID asId log in
-  let ems = HKDF.derive_secret h ams "exp master" log in
+  let ems = HKDF.derive_secret h ams "exp master" log is_quic in
   dbg ("exporter master secret:          "^print_bytes ems);
   let exporter1 = (| li, emsId, ems |) in
 
-  let (ck,civ) = keygen_13 h cts ae in
+  let (ck,civ,cpn) = keygen_13 h cts ae is_quic in
   dbg ("application key[C]:              "^print_bytes ck^", IV="^print_bytes civ);
-  let (sk,siv) = keygen_13 h sts ae in
+  let (sk,siv,spn) = keygen_13 h sts ae is_quic in
   dbg ("application key[S]:              "^print_bytes sk^", IV="^print_bytes siv);
 
   let id = ID13 (KeyID c_expandId) in
@@ -1017,19 +1030,19 @@ let ks_server_13_sf ks (log:bytes)
   let r = StAE.genReader HS.root rw in
 
   st := S (S_13_wait_CF alpha cfk (| asId, ams |) (| li, c_expandId, (cts,sts) |));
-  StAEInstance r w, exporter1
+  StAEInstance r w (cpn, spn), exporter1
 
 let ks_server_13_cf ks (log:bytes) : ST (li:logInfo & i:rmsId li & rms i)
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     S? kss /\ S_13_wait_CF? (S?.s kss))
   (ensures fun h0 r h1 ->
-    let KS #rid st = ks in
+    let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
     /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
   =
   dbg ("ks_server_13_cf hashed_log = "^(print_bytes log));
-  let KS #region st = ks in
+  let KS #region st is_quic = ks in
   let S (S_13_wait_CF alpha cfk (| asId, ams |) rekey_info) = !st in
   let (ae, h) = alpha in
 
@@ -1038,7 +1051,7 @@ let ks_server_13_cf ks (log:bytes) : ST (li:logInfo & i:rmsId li & rms i)
   let log : hashed_log li = log in
   let rmsId : rmsId li = RMSID asId log in
 
-  let rms : rms rmsId = HKDF.derive_secret h ams "res master" log in
+  let rms : rms rmsId = HKDF.derive_secret h ams "res master" log is_quic in
   dbg ("resumption master secret:        "^print_bytes rms);
   st := S (S_13_postHS alpha rekey_info);
   (| li, rmsId, rms |)
@@ -1049,12 +1062,12 @@ let ks_client_13_cf ks (log:bytes) : ST unit
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_13_wait_CF? (C?.s kss))
   (ensures fun h0 r h1 ->
-    let KS #rid st = ks in
+    let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
     /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
   =
   dbg ("ks_client_13_cf hashed_log = "^(print_bytes log));
-  let KS #region st = ks in
+  let KS #region st is_quic = ks in
   let C (C_13_wait_CF alpha cfk (| asId, ams |) rekey_info) = !st in
   let (ae, h) = alpha in
 
@@ -1063,7 +1076,7 @@ let ks_client_13_cf ks (log:bytes) : ST unit
   let log : hashed_log li = log in
   let rmsId : rmsId li = RMSID asId log in
 
-  let rms : rms rmsId = HKDF.derive_secret h ams "res master" log in
+  let rms : rms rmsId = HKDF.derive_secret h ams "res master" log is_quic in
   dbg ("resumption master secret:        "^print_bytes rms);
   st := C (C_13_postHS alpha rekey_info (| li, rmsId, rms |))
 
@@ -1074,15 +1087,15 @@ let ks_client_13_rms_psk ks (nonce:bytes) : ST (bytes)
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_13_postHS? (C?.s kss))
   (ensures fun h0 r h1 ->
-    let KS #rid st = ks in
+    let KS #rid st _ = ks in
     modifies_none h0 h1)
   =
   dbg "ks_client_13_rms";
-  let KS #region st = ks in
+  let KS #region st is_quic = ks in
   let C (C_13_postHS _ _ rmsi) = !st in
   let (| li, rmsId, rms |) = rmsi in
   dbg ("Recall RMS: "^(hex_of_bytes rms));
-  HKDF.derive_secret (rmsId_hash rmsId) rms "resumption" nonce
+  HKDF.derive_secret (rmsId_hash rmsId) rms "resumption" nonce is_quic
 
 (******************************************************************)
 
@@ -1095,12 +1108,12 @@ val ks_client_12_full_dh: ks:ks -> sr:random -> pv:protocolVersion ->
     C? st /\
     (C_12_Full_CH? (C?.s st) \/ C_12_Resume_CH? (C?.s st) \/ C_13_wait_SH? (C?.s st)))
   (ensures fun h0 r h1 ->
-    let KS #rid st = ks in
+    let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
     /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
 
 let ks_client_12_full_dh ks sr pv cs ems (|g,gx|) =
-  let KS #region st = ks in
+  let KS #region st _ = ks in
   let cr = match !st with
     | C (C_12_Full_CH cr) -> cr
     | C (C_12_Resume_CH cr _ _ _) -> cr
@@ -1130,12 +1143,12 @@ val ks_client_12_full_rsa: ks:ks -> sr:random -> pv:protocolVersion -> cs:cipher
     C? st /\
     (C_12_Full_CH? (C?.s st) \/ C_12_Resume_CH? (C?.s st)))
   (ensures fun h0 r h1 ->
-    let KS #rid st = ks in
+    let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
     /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
 
 let ks_client_12_full_rsa ks sr pv cs ems pk =
-  let KS #region st = ks in
+  let KS #region st _ = ks in
   let alpha = (pv, cs, ems) in
   let cr = match !st with
     | C (C_12_Full_CH cr) -> cr
@@ -1167,7 +1180,7 @@ val ks_client_12_set_session_hash: ks:ks -> h:bytes -> ST (TLSPRF.key * recordIn
 
 let ks_client_12_set_session_hash ks log =
   dbg ("ks_client_12_set_session_hash hashed_log = "^(print_bytes log));
-  let KS #region st = ks in
+  let KS #region st _ = ks in
   let ms =
     match !st with
     | C (C_12_has_MS csr alpha msId ms) ->
@@ -1275,4 +1288,4 @@ let ks_client_12_server_finished ks
 *)
 
 val getId: recordInstance -> GTot id
-let getId (StAEInstance #i rd wr) = i
+let getId (StAEInstance #i _ _ _) = i

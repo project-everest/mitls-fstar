@@ -68,9 +68,12 @@ abstract type epoch_region_inv'
 
 noeq type epoch (hs_rgn:rgn) (n:random) =
   | Epoch: #i:id{nonce_of_id i = n} ->
-      h:Negotiation.handshake ->
+      h :Negotiation.handshake ->
       r: reader (peerId i) ->
-      w: writer i {epoch_region_inv' hs_rgn r w} -> epoch hs_rgn n
+      w: writer i {epoch_region_inv' hs_rgn r w} ->
+      pn: option bytes * option bytes ->
+      epoch hs_rgn n
+
 // we would extend/adapt it for TLS 1.3,
 // e.g. to notify 0RTT/forwad-privacy transitions
 // for now epoch completion is a total function on handshake --- should be stateful
@@ -100,6 +103,9 @@ let reader_epoch (#hs_rgn:rgn) (#n:random) (e:epoch hs_rgn n)
   : Tot (r:reader (peerId e.i) {epoch_region_inv hs_rgn r (Epoch?.w e)})
 =
   Epoch?.r e
+
+let pn_epoch (#hs_rgn:rgn) (#n:random) (e:epoch hs_rgn n) =
+  let Epoch _ _ _ pn = e in pn
 
 (* The footprint just includes the writer regions *)
 let epochs_inv (#r:rgn) (#n:random) (es: seq (epoch r n)) =
@@ -324,7 +330,7 @@ val recordInstanceToEpoch:
   #r:rgn -> #n:random -> hs:Negotiation.handshake ->
   ks:Secret.recordInstance -> Tot (epoch r n)
 let recordInstanceToEpoch #hs_rgn #n hs ri =
-  let Secret.StAEInstance #i rd wr = ri in
+  let Secret.StAEInstance #i rd wr pn = ri in
   assume(nonce_of_id i = n); // ADL: KS will need to provove this
   assume(epoch_region_inv' hs_rgn rd wr);
-  Epoch #hs_rgn #n #i hs rd wr
+  Epoch #hs_rgn #n #i hs rd wr pn

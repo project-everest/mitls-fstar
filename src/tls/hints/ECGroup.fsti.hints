@@ -20,7 +20,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "721263a36b947dc45b9f32114f0907d8"
+      "27260b90a31cb44e95a73477d97b812a"
     ],
     [
       "ECGroup.pre_keyshare",
@@ -36,7 +36,7 @@
         "haseqECGroup_Tm_refine_79d2cf0d6ed3db26581f07568712f445"
       ],
       0,
-      "145baae98c1493d5810d5b91d19aa905"
+      "43aca0c22e7ad987bd86ead78a3ec895"
     ],
     [
       "ECGroup.pre_keyshare",
@@ -57,7 +57,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "b1638e750d442c89e5390f403d1f90f9"
+      "d5ff11a4481b3bf774ffd0693cf6d1bc"
     ],
     [
       "ECGroup.pre_keyshare",
@@ -78,28 +78,7 @@
         "refinement_kinding_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4"
       ],
       0,
-      "472de3619166f7e774b3c7817475fb4b"
-    ],
-    [
-      "ECGroup.uu___is_KS_CC",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "assumption_CoreCrypto.ec_curve__uu___haseq",
-        "assumption_Prims.HasEq_int", "equation_FStar.UInt.uint_t",
-        "equation_FStar.UInt32.n", "function_token_typing_FStar.UInt32.n",
-        "haseqECGroup_Tm_refine_79d2cf0d6ed3db26581f07568712f445",
-        "refinement_interpretation_ECGroup_Tm_refine_d0adf5cb83d53524e17ded8186a8afd9",
-        "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
-        "typing_CoreCrypto.__proj__Mkec_key__item__ec_point",
-        "typing_CoreCrypto.__proj__Mkec_point__item__ecy",
-        "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
-      ],
-      0,
-      "51a54219c06a3e9cbcc75340821d0737"
+      "2a8ec885148ab8a8596d3706209bfb09"
     ],
     [
       "ECGroup.__proj__KS_CC__item___0",
@@ -115,7 +94,7 @@
         "haseqECGroup_Tm_refine_79d2cf0d6ed3db26581f07568712f445"
       ],
       0,
-      "4528d8547ac549f93f0ed52f8baacdf2"
+      "c46a19ee42a4d28837d8c152ca92e8d2"
     ],
     [
       "ECGroup.__proj__KS_CC__item___0",
@@ -142,7 +121,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "2e1a1fe4508be73fa99ec173cc4c1efe"
+      "1d6bfe7bd71a08608c1c98e06b2b4fe1"
     ],
     [
       "ECGroup.__proj__KS_X25519__item___0",
@@ -155,7 +134,7 @@
         "refinement_interpretation_ECGroup_Tm_refine_81c6f60dc95eec95122f242ef166cd95"
       ],
       0,
-      "b604e619034cb9b47e554ee4739626b8"
+      "47373e6d7baf2f2282e1de909e776bb1"
     ],
     [
       "ECGroup.__proj__KS_X448__item___0",
@@ -168,7 +147,7 @@
         "refinement_interpretation_ECGroup_Tm_refine_c9a2fe89d4710b6fd3ffa98ede9374a0"
       ],
       0,
-      "16a06e412fff9eed85e118a819dd8211"
+      "cfcff608334fdeb53367bdf8af37e640"
     ],
     [
       "ECGroup.pre_share",
@@ -188,7 +167,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "0e9e0ca0fda3bdbe8fd39525e8cf2389"
+      "751a0bd840c7900d44f0cf06902bd82d"
     ],
     [
       "ECGroup.pre_share",
@@ -209,7 +188,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "8bb18518725fd7edd7553a905cb8c6fa"
+      "408eeb47cd40874352542df1d28691e1"
     ],
     [
       "ECGroup.pre_share",
@@ -229,7 +208,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "78599c62a7387eb09d9d350fca98c8c2"
+      "27fd5b8f22b09c28cb0fe3b3d54d56d6"
     ],
     [
       "ECGroup.pre_share",
@@ -246,27 +225,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "6202256ce07d922cff26b8609ed886e3"
-    ],
-    [
-      "ECGroup.uu___is_S_CC",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "assumption_Prims.HasEq_int", "equation_FStar.UInt.uint_t",
-        "equation_FStar.UInt32.n", "function_token_typing_FStar.UInt32.n",
-        "haseqECGroup_Tm_refine_79d2cf0d6ed3db26581f07568712f445",
-        "haseqECGroup_Tm_refine_a8698f94727f8312ae07c7e01fdaff78",
-        "refinement_interpretation_ECGroup_Tm_refine_6ef310c066e847a1aecbd2e883cd341c",
-        "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
-        "typing_CoreCrypto.__proj__Mkec_point__item__ecy",
-        "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
-      ],
-      0,
-      "42c9f891eacff139c3d731b9c162b25f"
+      "105a240fc6d8cc172fa5ed06cce8417b"
     ],
     [
       "ECGroup.__proj__S_CC__item___0",
@@ -291,7 +250,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "64f3b8374b86f6f7a30ca96d054db393"
+      "b90a89c8bca4a4e5fd1efd3969b3272e"
     ],
     [
       "ECGroup.__proj__S_CC__item___0",
@@ -315,7 +274,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "16398f6bbfbbe4c1eb2c0b224ad74595"
+      "9c1c872533cb6027f53579d45823934e"
     ],
     [
       "ECGroup.__proj__S_X25519__item___0",
@@ -328,7 +287,7 @@
         "refinement_interpretation_ECGroup_Tm_refine_3fe025d9655cfc205e806357ac63a5cb"
       ],
       0,
-      "276b20040f231eaeb42d7244270f940c"
+      "3e734db32ee7609698604521b79bec0b"
     ],
     [
       "ECGroup.__proj__S_X448__item___0",
@@ -341,7 +300,7 @@
         "refinement_interpretation_ECGroup_Tm_refine_699fa5fe2bf10284a105031d3185a838"
       ],
       0,
-      "deef5a21cf9982f3ddd600ab6a414a78"
+      "1f0a96fc69faef1d9e3c05d3d184380a"
     ]
   ]
 ]

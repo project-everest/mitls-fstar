@@ -7,17 +7,12 @@ all: libevercrypt.dll libevercrypt.lib
 #  add a couple missing ones... looks like make-source-drop is more
 #  authoritative
 SOURCES = \
-  evercrypt_autoconfig.c \
-  evercrypt_bcrypt.c \
-  evercrypt_bytes.c \
-#  evercrypt_openssl.c \
   evercrypt_vale_stubs.c \
   AEAD_Poly1305_64.c \
   C.c \
   C_Endianness.c \
   C_Failure.c \
   C_Loops.c \
-#  C_Nullity.c \
   C_String.c \
   EverCrypt.c \
   EverCrypt_AutoConfig.c \
@@ -26,14 +21,12 @@ SOURCES = \
   EverCrypt_Hacl.c \
   EverCrypt_Hash.c \
   EverCrypt_Helpers.c \
-#  EverCrypt_OpenSSL.c \
   EverCrypt_Specs.c \
   EverCrypt_StaticConfig.c \
   EverCrypt_Vale.c \
   EverCrypt_ValeGlue.c \
   FStar.c \
   Hacl_Chacha20.c \
-#  Hacl_Chacha20_Vec128.c \ # vec128.h not compatible with MSVC
   Hacl_Chacha20Poly1305.c \
   Hacl_Curve25519.c \
   Hacl_Ed25519.c \

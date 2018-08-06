@@ -51,6 +51,8 @@ let rec get_info (i0: id): info =
   | Derive i l (ExpandLog log hv) -> Info (ha_of_id i) (Some (Log log hv))
   | Derive i _ _                  -> get_info i
 
+type info0 (i:id) = u:info{get_info i == u}
+
 assume val hkdf_derive_label_spec:
   ha: Hashing.Spec.alg -> k: Hashing.Spec.tag ha -> lbl: label -> ctx:context -> GTot (Hashing.Spec.tag ha)
 
@@ -307,7 +309,7 @@ noextract
 let local_kdf_pkg (d:nat) (u:usage d) : local_pkg ii =
   (LocalPkg
     (secret d u)
-    (fun i -> a:info{a == get_info i})
+    info0 //(fun i -> a:info{a == get_info i})
     (fun #_ a -> secret_len a)
     (idealKDF d)
     (kdf_shared_footprint u)
