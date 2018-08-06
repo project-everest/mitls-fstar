@@ -1,24 +1,7 @@
 module LowParse.SLow.Tac.Enum
 include LowParse.SLow.Enum
 
-module T = FStar.Tactics
-
-noextract
-let conclude ()
-: T.Tac unit
-= // T.dump "conclude before";
-  T.norm [delta; iota; primops];
-  T.first [
-    T.trefl;
-    T.trivial;
-  ];
-//  T.dump "conclude after";
-  T.qed ()
-
-noextract
-let solve_vc ()
-: T.Tac unit
-= T.exact_guard (quote ()); conclude ()
+module T = LowParse.TacLib
 
 noextract
 let rec enum_tac_gen
@@ -32,14 +15,14 @@ let rec enum_tac_gen
   | [_] ->
     T.apply t_cons_nil;
     T.iseq [
-      solve_vc;
-      solve_vc;
+      T.solve_vc;
+      T.solve_vc;
     ];
     T.qed ()
   | _ :: e_ ->
     T.apply t_cons;
     T.iseq [
-      solve_vc;
+      T.solve_vc;
       (fun () -> enum_tac_gen t_cons_nil t_cons e_);
     ];
     T.qed ()
@@ -76,9 +59,9 @@ let parse32_maybe_enum_key_tac
 = let fu = quote (parse32_maybe_enum_key_gen #k #key #repr #p p32 e) in
   T.apply fu;
   T.iseq [
-    solve_vc;
-    solve_vc;
-    solve_vc;
+    T.solve_vc;
+    T.solve_vc;
+    T.solve_vc;
     (fun () -> maybe_enum_key_of_repr_tac #key #repr e);
   ]
 
@@ -100,9 +83,9 @@ let parse32_enum_key_tac
 = let fu = quote (parse32_enum_key_gen #k #key #repr p e) in
   T.apply fu;
   T.iseq [
-    solve_vc;
-    solve_vc;
-    solve_vc;
+    T.solve_vc;
+    T.solve_vc;
+    T.solve_vc;
     (fun () -> parse32_maybe_enum_key_tac p32 e (parse_maybe_enum_key p e) () ())
   ]
 
@@ -127,10 +110,10 @@ let serialize32_enum_key_gen_tac
 = let fu = quote (serialize32_enum_key_gen #k #key #repr #p #s s32 e) in
   T.apply fu;
   T.iseq [
-    solve_vc;
-    solve_vc;
-    solve_vc;
-    solve_vc;
+    T.solve_vc;
+    T.solve_vc;
+    T.solve_vc;
+    T.solve_vc;
     (fun () -> enum_repr_of_key_tac e);
   ]
 
@@ -155,9 +138,9 @@ let serialize32_maybe_enum_key_tac
 = let fu = quote (serialize32_maybe_enum_key_gen #k #key #repr #p #s s32 e) in
   T.apply fu;
   T.iseq [
-    solve_vc;
-    solve_vc;
-    solve_vc;
-    solve_vc;
+    T.solve_vc;
+    T.solve_vc;
+    T.solve_vc;
+    T.solve_vc;
     (fun () -> enum_repr_of_key_tac e);
   ]

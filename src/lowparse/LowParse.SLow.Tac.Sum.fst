@@ -2,7 +2,7 @@ module LowParse.SLow.Tac.Sum
 include LowParse.SLow.Tac.Enum
 include LowParse.SLow.Sum
 
-module T = FStar.Tactics
+module T = LowParse.TacLib
 module U32 = FStar.UInt32
 
 (* Universal destructor *)
@@ -51,9 +51,9 @@ let parse32_sum_tac
     T.apply fu;
     T.dump "parse32_sum_tac after apply";
     T.iseq [
-      solve_vc;
-      solve_vc;
-      solve_vc;
+      T.solve_vc;
+      T.solve_vc;
+      T.solve_vc;
       (fun () -> parse32_enum_key_tac p32 (sum_enum t) (parse_enum_key p (sum_enum t)) () (); T.qed ());
          (fun () -> enum_destr_tac (sum_enum t); T.qed ());
     ];
@@ -73,14 +73,14 @@ let rec sum_destr_tac
     let fu = quote (sum_destr_cons_nil') in
     T.apply fu;
     T.iseq [
-      solve_vc;
-      solve_vc;
+      T.solve_vc;
+      T.solve_vc;
     ]
   | _ ->
     let fu = quote (sum_destr_cons') in
     T.apply fu;
     T.iseq [
-      solve_vc;
+      T.solve_vc;
       (fun () -> sum_destr_tac (sum_tail s) ());
     ]
 
@@ -143,15 +143,73 @@ let serialize32_sum_tac
   in
   T.apply fu;
   T.iseq [
-    solve_vc;
-    solve_vc;
-    solve_vc;
-    solve_vc;
-    solve_vc;
-    solve_vc;
+    T.solve_vc;
+    T.solve_vc;
+    T.solve_vc;
+    T.solve_vc;
+    T.solve_vc;
+    T.solve_vc;
     (fun () -> serialize32_enum_key_gen_tac #kt #(sum_key_type t) #(sum_repr_type t) #p #s s32 (sum_enum t) #(parse_filter_kind kt) #(parse_enum_key p (sum_enum t)) (serialize_enum_key p s (sum_enum t)) () ());
     (fun () -> sum_destr_tac t ());
   ]
+
+noextract
+let rec dep_enum_destr_tac () : T.Tac unit =
+  let (goal_fun, goal_arg) = T.app_head_tail (T.cur_goal ()) in
+  let _ = T.tassert (goal_fun `T.term_eq` (`dep_enum_destr)) in
+  match goal_arg with
+  | [_; _; (te, _); _] ->
+    let (te_fun, te_arg) = T.app_head_tail (T.norm_term [delta; iota; zeta] te) in
+    let _ = T.tassert (te_fun `T.term_eq` (`Cons)) in
+    begin match te_arg with
+    | [_; _; (tl, _)] ->
+      let (tl_fun, _) = T.app_head_tail tl in
+      if tl_fun `T.term_eq` (`Cons)
+      then begin
+        T.apply (`dep_enum_destr_cons);
+        T.iseq [
+          (fun () -> T.trivial (); T.qed ());
+          dep_enum_destr_tac
+        ];
+        T.qed ()
+      end
+      else if tl_fun `T.term_eq` (`Nil)
+      then begin
+        T.apply (`dep_enum_destr_cons_nil);
+        T.trivial ();
+        T.qed ()
+      end
+      else T.fail "Unknown enum shape: not a cons/nil"
+    | _ -> T.fail "Not the right arguments to cons"
+    end
+  | _ -> T.fail ("Not the right argument to dep_enum_destr")
+
+noextract
+let rec maybe_enum_destr_t'_tac () : T.Tac unit =
+  let (goal_fun, goal_arg) = T.app_head_tail (T.cur_goal ()) in
+  let _ = T.tassert (goal_fun `T.term_eq` (`maybe_enum_destr_t')) in
+  match goal_arg with
+  | [_; _; _; _; (tl1, _); (tl2, _); _] ->
+    let (tl2_fun, _) = T.app_head_tail (T.norm_term [delta; iota; zeta] tl2) in
+    if tl2_fun `T.term_eq` (`Cons)
+    then begin
+      T.apply (`maybe_enum_destr_cons);
+      maybe_enum_destr_t'_tac ()
+    end else
+    if tl2_fun `T.term_eq` (`Nil)
+    then begin
+      T.apply (`maybe_enum_destr_nil);
+      T.qed ()
+    end
+    else T.fail "Unknown shape for l2"
+  | _ -> T.fail "Not the rigt arguments to maybe_enum_destr_t'"
+
+noextract
+let maybe_enum_destr_t_tac () : T.Tac unit =
+  let (goal_fun, _) = T.app_head_tail (T.cur_goal ()) in
+  let _ = T.tassert (goal_fun `T.term_eq` (`maybe_enum_destr_t)) in
+  T.apply (`maybe_enum_destr_t_intro);
+  maybe_enum_destr_t'_tac ()
 
 (*
 noextract

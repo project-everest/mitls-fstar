@@ -172,13 +172,7 @@ inline_for_extraction
 let destr_case_enum
   (t: Type)
 : Tot (LP.maybe_enum_destr_t t case_enum)
-= _ by (
-    T.apply (`LP.maybe_enum_destr_t_intro);
-    T.apply (`LP.maybe_enum_destr_cons);
-    T.apply (`LP.maybe_enum_destr_cons);
-    T.apply (`LP.maybe_enum_destr_nil);
-    T.qed ()
-  )
+= _ by (LP.maybe_enum_destr_t_tac ())
 
 inline_for_extraction
 let parse32_t
@@ -369,17 +363,7 @@ inline_for_extraction
 let dep_destr
   (t: (k: LP.enum_key case_enum) -> Tot Type)
 : Tot (LP.dep_enum_destr case_enum t)
-= _ by (
-    T.apply (`LP.dep_enum_destr_cons);
-    T.iseq [
-      T.trivial;
-      (fun () ->
-        T.apply (`LP.dep_enum_destr_cons_nil);
-        T.trivial ()
-      );
-    ];
-    T.qed ()
-  )
+= _ by (LP.dep_enum_destr_tac ())
 
 inline_for_extraction
 let serialize32_cases
