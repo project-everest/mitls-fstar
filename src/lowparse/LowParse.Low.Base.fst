@@ -584,6 +584,96 @@ let exactly_contains_valid_data_contains_valid_serialized_data_or_fail
   ))
 = serializer_correct_implies_complete p s
 
+
+abstract
+let loc_ibuffer
+  (b: buffer8)
+  (i: I32.t)
+  (j: I32.t)
+: GTot B.loc
+= if I32.v i < 0 || I32.v i > B.length b || (I32.v j >= 0 && I32.v j < I32.v i)
+  then M.loc_none
+  else if I32.v j < 0 || I32.v j > B.length b
+  then M.loc_buffer (B.gsub b (Cast.int32_to_uint32 i) (B.len b ` U32.sub` Cast.int32_to_uint32 i))
+  else M.loc_buffer (B.gsub b (Cast.int32_to_uint32 i) (Cast.int32_to_uint32 (j `I32.sub` i)))
+
+abstract
+let loc_ibuffer_eq
+  (b: buffer8)
+  (i: I32.t)
+  (j: I32.t)
+: Lemma
+  (requires (
+    I32.v i <= B.length b /\ (
+    if I32.v i < 0
+    then I32.v j < 0
+    else if I32.v j < 0
+    then True
+    else I32.v i <= I32.v j /\ I32.v j <= B.length b
+  )))
+  (ensures (
+    loc_ibuffer b i j == (
+      if I32.v i < 0
+      then M.loc_none
+      else if I32.v j < 0
+      then M.loc_buffer (B.gsub b (Cast.int32_to_uint32 i) (B.len b ` U32.sub` Cast.int32_to_uint32 i))
+      else M.loc_buffer (B.gsub b (Cast.int32_to_uint32 i) (Cast.int32_to_uint32 (j `I32.sub` i)))
+  )))
+= ()
+
+abstract
+let contains_valid_serialized_data_or_fail_loc_ibuffer_eq
+  (#k: parser_kind)
+  (#t: Type)
+  (h : HS.mem)
+  (#p: parser k t)
+  (s: serializer p)
+  (b: buffer8)
+  (i: I32.t)
+  (x: t)
+  (j: I32.t)
+: Lemma
+  (requires (contains_valid_serialized_data_or_fail h s b i x j))
+  (ensures (contains_valid_serialized_data_or_fail' h s b i x j /\
+    loc_ibuffer b i j == (
+      if I32.v i < 0
+      then M.loc_none
+      else if I32.v j < 0
+      then M.loc_buffer (B.gsub b (Cast.int32_to_uint32 i) (B.len b ` U32.sub` Cast.int32_to_uint32 i))
+      else M.loc_buffer (B.gsub b (Cast.int32_to_uint32 i) (Cast.int32_to_uint32 (j `I32.sub` i)))
+  )))
+= ()
+
+abstract
+let loc_buffer_includes_ibuffer
+  (b: buffer8)
+  (i: I32.t)
+  (j: I32.t)
+: Lemma
+  (B.loc_buffer b `B.loc_includes` loc_ibuffer b i j)
+  [SMTPat (loc_ibuffer b i j)]
+= ()
+
+abstract
+let loc_includes_union_r_ibuffer
+  (l1 l2: M.loc)
+  (b: buffer8)
+  (i j: I32.t)
+: Lemma
+  (requires (M.loc_includes l1 (loc_ibuffer b i j) \/ M.loc_includes l2 (loc_ibuffer b i j)))
+  (ensures (M.loc_includes (l1 `M.loc_union` l2) (loc_ibuffer b i j)))
+  [SMTPat (M.loc_includes (l1 `M.loc_union` l2) (loc_ibuffer b i j))]
+= ()
+
+abstract
+let loc_disjoint_ibuffer
+  (b: buffer8)
+  (i j k: I32.t)
+: Lemma
+  (M.loc_disjoint (loc_ibuffer b i j) (loc_ibuffer b j k))
+  [SMTPat (loc_ibuffer b i j); SMTPat (loc_ibuffer b j k)]
+= ()
+
 abstract
 let contains_valid_serialized_data_or_fail_invariant
   (#k: parser_kind)
@@ -600,15 +690,37 @@ let contains_valid_serialized_data_or_fail_invariant
   (requires (
     M.modifies l h h' /\
     contains_valid_serialized_data_or_fail h s b lo x hi /\
-    B.live h' b /\ (
-      if I32.v hi < 0
-      then True
-      else M.loc_disjoint l (M.loc_buffer (B.gsub b (Cast.int32_to_uint32 lo) (Cast.int32_to_uint32 (I32.sub hi lo))))
-  )))
+    B.live h' b /\
+    M.loc_disjoint l (loc_ibuffer b lo hi)
+  ))
   (ensures (
     contains_valid_serialized_data_or_fail h' s b lo x hi
   ))
   [SMTPat (M.modifies l h h'); SMTPat (contains_valid_serialized_data_or_fail h s b lo x hi)]
+= ()
+
+abstract
+let contains_valid_serialized_data_or_fail_loc_includes_loc_ibuffer
+  (#k1: parser_kind)
+  (#t1: Type)
+  (h1 : HS.mem)
+  (#p1: parser k1 t1)
+  (s1: serializer p1)
+  (b: buffer8)
+  (i0: I32.t)
+  (x1: t1)
+  (i1: I32.t)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (h2: HS.mem)
+  (#p2: parser k2 t2)
+  (s2: serializer p2)
+  (x2: t2)
+  (i2: I32.t)
+: Lemma
+  (requires (contains_valid_serialized_data_or_fail h1 s1 b i0 x1 i1 /\ contains_valid_serialized_data_or_fail h2 s2 b i1 x2 i2))
+  (ensures (M.loc_includes (loc_ibuffer b i0 i2) (loc_ibuffer b i0 i1) /\ M.loc_includes (loc_ibuffer b i0 i2) (loc_ibuffer b i1 i2)))
+  [SMTPat (contains_valid_serialized_data_or_fail h1 s1 b i0 x1 i1); SMTPat (contains_valid_serialized_data_or_fail h2 s2 b i1 x2 i2)]
 = ()
 
 inline_for_extraction
@@ -645,13 +757,10 @@ let serializer32_fail
   (requires (fun h -> B.live h b /\ I32.v lo <= I32.v len))
   (ensures (fun h hi h' ->
     B.live h' b /\
-    contains_valid_serialized_data_or_fail h' s b lo v hi /\ (
-    if I32.v lo < 0
-    then M.modifies M.loc_none h h'
-    else if I32.v hi < 0
-    then M.modifies (M.loc_buffer (B.gsub b (Cast.int32_to_uint32 lo) (B.len b `U32.sub` Cast.int32_to_uint32 lo))) h h'
-    else M.modifies (M.loc_buffer (B.gsub b (Cast.int32_to_uint32 lo) (Cast.int32_to_uint32 (hi `I32.sub` lo)))) h h'
-  )))
+    contains_valid_serialized_data_or_fail h' s b lo v hi /\
+    M.modifies (loc_ibuffer b lo hi) h h'
+  ))
+
 
 (* Stateful serializers for constant-size parsers *)
 

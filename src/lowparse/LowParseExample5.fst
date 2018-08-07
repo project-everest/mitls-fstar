@@ -13,7 +13,7 @@ module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 module B = LowStar.Buffer
 
-#reset-options "--z3rlimit 64  --z3cliopt smt.arith.nl=false --z3cliopt smt.case_split=3"
+#set-options "--z3rlimit 16" //  --z3cliopt smt.arith.nl=false --z3cliopt smt.case_split=3"
 // --using_facts_from '* -FStar.Kremlin.Endianness -LowParse.BigEndian -LowParse.BigEndianImpl.* -LowParse.Math -FStar.Math.*'"
 
 noextract

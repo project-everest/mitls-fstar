@@ -220,16 +220,17 @@ let serialize32_bounded_vldata_strong_size
     res == (I32.v lo >= sz && I32.v lo <= I32.v hi && (let hilo = I32.v hi - I32.v lo in min <= hilo && hilo <= max)) /\ (
     if res
     then (
-      B.modifies (B.loc_buffer (B.gsub b (Cast.int32_to_uint32 (I32.sub lo (I32.int_to_t sz))) (U32.uint_to_t sz))) h h' /\ (
       forall (x: t) .  {:pattern (contains_valid_serialized_data_or_fail h s b lo x hi) }
-        contains_valid_serialized_data_or_fail h s b lo x hi ==>
+        contains_valid_serialized_data_or_fail h s b lo x hi ==> (
+        B.modifies (loc_ibuffer b (I32.sub lo (I32.int_to_t sz)) hi) h h' /\
         (parse_bounded_vldata_strong_pred min max s x /\
           contains_valid_serialized_data_or_fail h' (serialize_bounded_vldata_strong min max s) b (I32.sub lo (I32.int_to_t sz)) x hi)
     ))
     else
       B.modifies B.loc_none h h'
   )))
-= [@inline_let]
+= let h0 = HST.get () in
+  [@inline_let]
   let sz : integer_size = log256' max in
   FStar.Int.pow2_values 31;
   [@inline_let]
@@ -241,8 +242,22 @@ let serialize32_bounded_vldata_strong_size
     then begin
       serialize32_bounded_integer min max () b (Cast.int32_to_uint32 (lo `I32.sub` sz32i)) hilo;
       let h = HST.get () in
-      exactly_contains_valid_data_contains_valid_serialized_data_or_fail h (serialize_bounded_integer sz) b (Cast.int32_to_uint32 (lo `I32.sub` sz32i)) hilo (Cast.int32_to_uint32 lo);
-      Classical.forall_intro (Classical.move_requires (contains_valid_serialized_data_or_fail_serialize_bounded_vldata_strong_intro h min max s b lo hi));
+      let f
+        (x: t)
+      : Lemma
+        (requires (contains_valid_serialized_data_or_fail h0 s b lo x hi))
+        (ensures (
+          B.modifies (loc_ibuffer b (I32.sub lo (I32.int_to_t sz)) hi) h0 h /\
+          parse_bounded_vldata_strong_pred min max s x /\
+          contains_valid_serialized_data_or_fail h (serialize_bounded_vldata_strong min max s) b (I32.sub lo (I32.int_to_t sz)) x hi
+        ))
+      = contains_valid_serialized_data_or_fail_elim h0 s b lo x hi;
+        exactly_contains_valid_data_contains_valid_serialized_data_or_fail h (serialize_bounded_integer sz) b (Cast.int32_to_uint32 (I32.sub lo (I32.int_to_t sz))) hilo (Cast.int32_to_uint32 lo);
+        loc_ibuffer_eq b (I32.sub lo (I32.int_to_t sz)) lo;
+        contains_valid_serialized_data_or_fail_serialize_bounded_vldata_strong_intro h min max s b lo hi x;
+        ()
+      in
+      Classical.forall_intro (Classical.move_requires f);
       true
     end
     else false
