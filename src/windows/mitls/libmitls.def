@@ -27,6 +27,7 @@ EXPORTS
     FFI_mitls_receive
     FFI_mitls_send
     FFI_mitls_set_ticket_key
+    FFI_mitls_set_sealing_key
     FFI_mitls_set_trace_callback
     FFI_mitls_find_custom_extension
     FFI_mitls_get_hello_summary
