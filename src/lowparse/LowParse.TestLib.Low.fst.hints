@@ -18,7 +18,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "6e9b92fe089a8a2a41e794ca211c52d9"
+      "f8c3089249f203bc6540fd23d5cc6dd5"
     ],
     [
       "LowParse.TestLib.Low.beqb",
@@ -36,7 +36,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "6bed4d8933f8330bd9aa433e93f46cd2"
+      "56f48ef4f32a9bdb891a53b2031c3d05"
     ],
     [
       "LowParse.TestLib.Low.test_buffer",
@@ -49,7 +49,6 @@
         "FStar.Monotonic.HyperStack_pretyping_cd115f719b336f9a8366e4b68a41d001",
         "Prims_pretyping_ae567c2fb75be05905677af440075565", "bool_inversion",
         "constructor_distinct_FStar.Integers.Signed",
-        "constructor_distinct_FStar.Integers.Unsigned",
         "constructor_distinct_FStar.Integers.W16",
         "constructor_distinct_FStar.Integers.W31",
         "constructor_distinct_FStar.Integers.W32",
@@ -62,7 +61,7 @@
         "equality_tok_FStar.Integers.Winfinite@tok",
         "equation_FStar.HyperStack.ST.equal_domains",
         "equation_FStar.Int.lte", "equation_FStar.Int32.lte",
-        "equation_FStar.Integers.int_t", "equation_FStar.Integers.uint_8",
+        "equation_FStar.Integers.int_t",
         "equation_FStar.Monotonic.HyperHeap.hmap",
         "equation_FStar.Monotonic.HyperStack.fresh_frame",
         "equation_FStar.Monotonic.HyperStack.is_wf_with_ctr_and_tip",
@@ -74,20 +73,20 @@
         "equation_FStar.Set.eqtype", "equation_FStar.UInt32.n",
         "equation_LowParse.Low.Base.buffer8",
         "equation_LowParse.Low.Base.is_slice", "equation_Prims.eqtype",
-        "equation_Prims.nat", "function_token_typing_FStar.Integers.uint_8",
+        "equation_Prims.nat",
         "function_token_typing_FStar.Monotonic.Heap.emp",
         "function_token_typing_FStar.Monotonic.Heap.heap",
         "function_token_typing_FStar.Monotonic.HyperHeap.rid",
         "function_token_typing_FStar.Monotonic.HyperHeap.root",
         "function_token_typing_FStar.UInt32.n",
         "function_token_typing_FStar.UInt8.t",
-        "function_token_typing_LowStar.Modifies.address_liveness_insensitive_locs",
-        "function_token_typing_LowStar.Modifies.loc_none", "int_inversion",
+        "function_token_typing_LowStar.Buffer.address_liveness_insensitive_locs",
+        "function_token_typing_LowStar.Buffer.loc_none", "int_inversion",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_all_regions_elim",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_all_regions_intro",
         "lemma_FStar.Map.lemma_ContainsDom",
         "lemma_FStar.Map.lemma_InDomRestrict",
-        "lemma_FStar.Map.lemma_InDomUpd1", "lemma_FStar.Map.lemma_InDomUpd2",
+        "lemma_FStar.Map.lemma_InDomUpd2",
         "lemma_FStar.Map.lemma_SelRestrict", "lemma_FStar.Map.lemma_SelUpd1",
         "lemma_FStar.Map.lemma_SelUpd2", "lemma_FStar.Map.lemma_UpdDomain",
         "lemma_FStar.Monotonic.HyperStack.lemma_mk_mem__projectors",
@@ -96,13 +95,13 @@
         "lemma_FStar.Set.mem_complement", "lemma_FStar.Set.mem_intersect",
         "lemma_FStar.Set.mem_singleton", "lemma_FStar.Set.mem_union",
         "lemma_LowParse.Low.Base.int32_to_uint32_pos",
-        "lemma_LowStar.Modifies.loc_includes_none",
-        "lemma_LowStar.ModifiesPat.fresh_frame_modifies_inert",
-        "lemma_LowStar.ModifiesPat.modifies_inert_intro",
-        "lemma_LowStar.ModifiesPat.modifies_inert_liveness_insensitive_buffer_weak",
-        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_BarBar",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "primitive_Prims.op_Negation", "primitive_Prims.op_disEquality",
+        "lemma_LowStar.Buffer.fresh_frame_modifies_inert",
+        "lemma_LowStar.Buffer.loc_includes_none",
+        "lemma_LowStar.Buffer.modifies_inert_intro",
+        "lemma_LowStar.Buffer.modifies_inert_liveness_insensitive_buffer_weak",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_Equality",
+        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Negation",
+        "primitive_Prims.op_disEquality",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_FStar.Integers.Signed__0",
         "projection_inverse_FStar.Integers.Unsigned__0",
@@ -132,7 +131,7 @@
         "typing_LowStar.Buffer.length", "unit_inversion"
       ],
       0,
-      "7f22cfc2a3af07eae77d7bddea33378a"
+      "c8b72425575f23b0b39f81ed5eff6c73"
     ],
     [
       "LowParse.TestLib.Low.test_file_buffer",
@@ -192,7 +191,7 @@
         "typing_FStar.Set.singleton"
       ],
       0,
-      "4dd72322645412e28086dadd738ec388"
+      "e1efd0681b745e2f18b86e4225c149fe"
     ]
   ]
 ]

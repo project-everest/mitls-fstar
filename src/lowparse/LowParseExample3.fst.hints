@@ -16,10 +16,10 @@
         "equation_FStar.Set.eqtype", "equation_Prims.eqtype",
         "function_token_typing_FStar.Monotonic.Heap.heap",
         "function_token_typing_FStar.Monotonic.HyperHeap.rid",
-        "function_token_typing_LowStar.Modifies.loc_none",
+        "function_token_typing_LowStar.Buffer.loc_none",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_all_regions_intro",
         "lemma_FStar.Set.lemma_equal_refl",
-        "lemma_LowStar.ModifiesPat.modifies_refl_",
+        "lemma_LowStar.Buffer.modifies_refl",
         "projection_inverse_FStar.Pervasives.Native.None_a",
         "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9a74d818566e70513bc032cc3b65a144",
         "refinement_interpretation_LowParseExample3_Tm_refine_1cd5fe5b0c03d08288a57839f0783fcf",
@@ -27,7 +27,7 @@
         "typing_FStar.Monotonic.HyperStack.get_hmap"
       ],
       0,
-      "24c09e3312cec62330d15e72dd4112cd"
+      "c2bd9c41da4d8c8a8e2323323cc1989f"
     ],
     [
       "LowParseExample3.test_f_m",
@@ -41,7 +41,7 @@
         "fuel_guarded_inversion_FStar.Pervasives.Native.option"
       ],
       0,
-      "00c72155ec867c33c5471838231aad50"
+      "4c1f5363c314d7eedd81dc55d0c24832"
     ],
     [
       "LowParseExample3.test",
@@ -136,7 +136,7 @@
         "typing_LowStar.Buffer.g_is_null"
       ],
       0,
-      "e26244660b5745dac3d6d750c04ed2e1"
+      "a209944f43be3e374a0c60a9a498eaab"
     ],
     [
       "LowParseExample3.main",
@@ -172,7 +172,7 @@
         "typing_tok_C.EXIT_SUCCESS@tok"
       ],
       0,
-      "008e7cd727300a5b1657b95fd1c9a554"
+      "f309b1a36cf4412a006622936d58eefc"
     ]
   ]
 ]

@@ -32,7 +32,6 @@ let parse_tagged_union #kt #tag_t pt #data_t tag_of_data #k p =
   pt `and_then` (fun (tg: tag_t) ->
     parse_synth #k #(refine_with_tag tag_of_data tg) (p tg) (synth_tagged_union_data tag_of_data tg)
   )
-#reset-options
 
 let parse_tagged_union_eq
   (#kt: parser_kind)
@@ -54,6 +53,7 @@ let parse_tagged_union_eq
     end
   ))
 = ()
+#reset-options
 
 let bare_serialize_tagged_union
   (#kt: parser_kind)
