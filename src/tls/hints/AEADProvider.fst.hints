@@ -433,6 +433,7 @@
         "equality_tok_QD.TLS_protocolVersion.TLS_1p3@tok",
         "equality_tok_TLSConstants.Writer@tok",
         "equation_AEADOpenssl.genPost", "equation_AEADOpenssl.id",
+        "equation_AEADOpenssl.writer",
         "equation_AEADProvider.as_openssl_state",
         "equation_AEADProvider.empty_log", "equation_AEADProvider.genPost",
         "equation_AEADProvider.id", "equation_AEADProvider.iv_length",
@@ -441,24 +442,23 @@
         "equation_AEADProvider.st_inv", "equation_AEADProvider.state",
         "equation_CryptoTypes.aeadRealIVSize",
         "equation_FStar.HyperStack.ST.modifies_none",
+        "equation_FStar.Monotonic.HyperStack.mem",
         "equation_FStar.Pervasives.Native.fst", "equation_Mem.rgn",
-        "equation_Prims.l_True", "equation_Prims.logical",
         "equation_QD.TLS_protocolVersion.protocolVersion",
         "equation_TLSInfo.pv_of_id",
         "fuel_guarded_inversion_AEADOpenssl.state",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
         "fuel_guarded_inversion_Specializations.Providers.AEAD.provider",
         "fuel_guarded_inversion_TLSInfo.id", "int_inversion",
-        "interpretation_AEADProvider_Tm_abs_217e89816ba74c14df3b1eb8e55b1bdc",
+        "lemma_FStar.Monotonic.HyperHeap.lemma_extends_only_parent",
         "proj_equation_AEADOpenssl.State_region",
         "proj_equation_FStar.Pervasives.Native.Mktuple2__1",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
         "refinement_interpretation_Crypto.Indexing_Tm_refine_15bf079f4ce5823e739071012326443f",
+        "refinement_interpretation_FStar.Monotonic.HyperHeap_Tm_refine_b4ddecfc36eb649aced773e3e29ae4e3",
         "refinement_interpretation_Mem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
         "refinement_interpretation_TLSInfo_Tm_refine_b371b18aea91964c12c83acc49841360",
-        "token_correspondence_AEADProvider.st_inv", "true_interp",
         "typing_AEADOpenssl.__proj__State__item__region",
         "typing_AEADProvider.salt_length",
         "typing_FStar.Monotonic.HyperHeap.extends",
@@ -466,7 +466,7 @@
         "typing_tok_TLSConstants.Writer@tok", "unit_typing"
       ],
       0,
-      "d6741fe558f98c98bffeb6977c16874a"
+      "046f0de2f674ed68d6e49f5a9a259f3b"
     ],
     [
       "AEADProvider.leak",
@@ -526,7 +526,7 @@
         "typing_Specializations.Providers.AEAD.use_provider", "unit_typing"
       ],
       0,
-      "ec5e997d5384bc2ee7e0ae22c7e1bf7c"
+      "3a30c3299b634adb021ebcb426efe1cf"
     ],
     [
       "AEADProvider.coerce",
@@ -583,7 +583,7 @@
         "typing_Specializations.Providers.AEAD.use_provider", "unit_typing"
       ],
       0,
-      "8ec72be07c85a95e139d03d4b2d3791d"
+      "8b4d2e61adc6af2c0a80dee4ed35a5d8"
     ],
     [
       "AEADProvider.adata",
