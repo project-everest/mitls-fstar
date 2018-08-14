@@ -1,0 +1,5 @@
+PREFIX=Format.AutoGen_
+QD_HOME?=../../../quackyducky
+
+$(PREFIX)%.fst: %.rfc
+	$(QD_HOME)/qd -prefix $(PREFIX) $^
