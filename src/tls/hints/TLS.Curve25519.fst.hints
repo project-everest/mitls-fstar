@@ -95,7 +95,16 @@
         "typing_FStar.UInt8.uint_to_t", "typing_Prims.pow2"
       ],
       0,
-      "914df82f44f198f900cb7d483e834d09"
+      "631b87ba2d14710780f9bc5173fcf5cf"
+    ],
+    [
+      "TLS.Curve25519.mul",
+      1,
+      2,
+      1,
+      [ "@query", "equation_TLS.Curve25519.point" ],
+      0,
+      "a469f2f62cef75bb8d356b612c44c9c7"
     ]
   ]
 ]

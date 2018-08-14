@@ -49,6 +49,19 @@
       "f3e7ef8219625d3316c7afc8664bfda1"
     ],
     [
+      "StatefulLHAE.gen",
+      1,
+      0,
+      1,
+      [
+        "@query", "equality_tok_TLSConstants.Writer@tok",
+        "equation_AEAD_GCM.writer", "equation_StatefulLHAE.state",
+        "equation_StatefulLHAE.writer"
+      ],
+      0,
+      "73fe96fae781c3aafc8d660cdb8f3a86"
+    ],
+    [
       "StatefulLHAE.genReader",
       1,
       0,
@@ -64,16 +77,20 @@
         "refinement_interpretation_AEAD_GCM_Tm_refine_ab0552b9eec8ea05f2f4ffdc90946ac6"
       ],
       0,
-      "42d27dac89e223f649f7bab178dde925"
+      "a3e5fb3b7f322338a06e41be1f8aa922"
     ],
     [
       "StatefulLHAE.genReader",
       2,
       0,
       1,
-      [ "@query" ],
+      [
+        "@query", "equality_tok_TLSConstants.Reader@tok",
+        "equation_AEAD_GCM.reader", "equation_StatefulLHAE.reader",
+        "equation_StatefulLHAE.state"
+      ],
       0,
-      "6a82e57d41cdac12e7e3c84a995a1db1"
+      "1e360e059bb6e456098eaf1d59206b8a"
     ],
     [
       "StatefulLHAE.encrypt",
@@ -129,7 +146,7 @@
         "typing_tok_TLSConstants.Writer@tok"
       ],
       0,
-      "ec32b557afe45b187555cc739578b6b7"
+      "7370aa12e45f1461d0451c54ee7f034e"
     ],
     [
       "StatefulLHAE.encrypt",
@@ -196,7 +213,7 @@
         "typing_tok_TLSConstants.Writer@tok"
       ],
       0,
-      "0700171f2c01135c2118b9d1accd785a"
+      "3c93126e0a0f10865c834273b2c52273"
     ],
     [
       "StatefulLHAE.encrypt",
@@ -263,7 +280,7 @@
         "typing_tok_TLSConstants.Writer@tok"
       ],
       0,
-      "b99badb44591076ca5353fcd1a2879a5"
+      "39584cfc8fcbfd5660af8f27a9fe3ec0"
     ],
     [
       "StatefulLHAE.decrypt",
@@ -316,7 +333,7 @@
         "typing_tok_TLSConstants.Reader@tok"
       ],
       0,
-      "c702e7e6decf77253e87242ca0898527"
+      "2974737a429e10999534dfd0cf171ef9"
     ],
     [
       "StatefulLHAE.decrypt",
@@ -397,7 +414,7 @@
         "typing_StatefulLHAE.alg", "typing_tok_TLSConstants.Reader@tok"
       ],
       0,
-      "70bc83e2a22859f1cd99dd6d97c31b58"
+      "bf0fb946c7a8b7cbbb0bf068399cb04f"
     ],
     [
       "StatefulLHAE.decrypt",
@@ -478,7 +495,7 @@
         "typing_StatefulLHAE.alg", "typing_tok_TLSConstants.Reader@tok"
       ],
       0,
-      "97efe9836838e515f38873adae004696"
+      "39f1900cb9869cfebd7e22c1f482f8e9"
     ]
   ]
 ]

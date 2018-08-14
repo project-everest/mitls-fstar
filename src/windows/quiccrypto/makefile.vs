@@ -19,7 +19,7 @@ test.exe: test.obj libquiccrypto.dll
   link /nologo /ltcg /debug:full /out:test.exe test.obj libquiccrypto.lib ../kremlib/libkremlib.lib
 
 test: test.exe libquiccrypto.dll
-  set PATH=..\kremlib;%PATH% ; .\test.exe
+  set PATH=..\kremlib;..\evercrypt;%PATH% & .\test.exe
   
 .c.obj::
     cl $(CCOPTS) -c $<
