@@ -1,6 +1,6 @@
 module Format.NamedGroupList
-include Format.AutoGen_namedGroupList
-(*
+module NGL = Format.AutoGen_namedGroupList
+
 
 open Format.NamedGroup
 

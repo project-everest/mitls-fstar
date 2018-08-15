@@ -1,8 +1,7 @@
 PREFIX=Format.AutoGen_
 QD_HOME?=../../../quackyducky
 
-SOURCES=$(wildcard *.rfc)
-TARGETS=$(addsuffix .fst,$(addprefix $(PREFIX),$(SOURCES:%.rfc=%)))
+SOURCES=mitls_data_formats.rfc
 
 all:
 	$(QD_HOME)/qd -prefix $(PREFIX) $(SOURCES)
