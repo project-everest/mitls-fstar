@@ -4,9 +4,10 @@ QD_HOME?=../../../quackyducky
 SOURCES=$(wildcard *.rfc)
 TARGETS=$(addsuffix .fst,$(addprefix $(PREFIX),$(SOURCES:%.rfc=%)))
 
-all: $(TARGETS)
+all:
+	$(QD_HOME)/qd -prefix $(PREFIX) $(SOURCES)
 
-$(PREFIX)%.fst: %.rfc
-	$(QD_HOME)/qd -prefix $(PREFIX) $^
+clean:
+	rm -rf $(PREFIX)*.fst*
 
-.PHONY: all
+.PHONY: all clean
