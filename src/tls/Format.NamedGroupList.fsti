@@ -1,4 +1,6 @@
 module Format.NamedGroupList
+include Format.AutoGen_namedGroupList
+(*
 
 open Format.NamedGroup
 
@@ -10,9 +12,6 @@ module L = FStar.List.Tot
 
 (* https://tlswg.github.io/tls13-spec/draft-ietf-tls-tls13.html#rfc.section.4.2.7
 
-    struct {
-        NamedGroup namedGroup_list<2..2^16-1>;
-    } NamedGroupList;
            
 *)
 
