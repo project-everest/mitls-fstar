@@ -1,0 +1,34 @@
+[
+  ":K†î\u001c'DñÅ©&Ÿ1so\u0004",
+  [
+    [
+      "LowParseExample5.Aux.serialize_inner_intro",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_LowParse.Spec.Combinators.total_constant_size_parser_kind",
+        "equation_LowParse.Spec.Int.parse_u16_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
+      ],
+      0,
+      "35ffaed5185feffa113e1b9c0d00151a"
+    ],
+    [
+      "LowParseExample5.Aux.serialize_t_intro",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "equation_LowParse.Spec.Base.parser_kind", "equation_Prims.nat",
+        "function_token_typing_LowParseExample5.Aux.parse_inner_kind",
+        "refinement_interpretation_LowParseExample5.Aux_Tm_refine_f8632554367f02d7aa2ab024b23736aa"
+      ],
+      0,
+      "ac4f037d4dcd351f174473a51c8d1e2b"
+    ]
+  ]
+]

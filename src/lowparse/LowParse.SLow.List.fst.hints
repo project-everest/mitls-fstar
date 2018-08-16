@@ -78,7 +78,7 @@
         "typing_LowParse.Spec.Base.parse", "well-founded-ordering-on-nat"
       ],
       0,
-      "0aadb86f04d414e072425f48b138b156"
+      "bebb0907da47f510a8ba352fc417c37e"
     ],
     [
       "LowParse.SLow.List.list_append_rev_cons",
@@ -323,7 +323,7 @@
         "unit_typing"
       ],
       0,
-      "9cfdd4dde3812b451fa031c2ea3f93cb"
+      "af7d2753c1192ae47649c6f6090a4879"
     ],
     [
       "LowParse.SLow.List.parse_list_tailrec_inv",
@@ -341,7 +341,7 @@
         "typing_FStar.Pervasives.Native.uu___is_Some"
       ],
       0,
-      "1ae59cd3b1a85dbc69a240479ed1674c"
+      "7531f42beada52c2cecedf34149869e3"
     ],
     [
       "LowParse.SLow.List.parse_list_tailrec_measure",
@@ -543,7 +543,7 @@
         "typing_LowParse.SLow.List.parse_list_tailrec_", "unit_typing"
       ],
       0,
-      "4d67f8c42512bad452b359a91400df9e"
+      "c37deab8da74e0c21068e5baff8cf220"
     ],
     [
       "LowParse.SLow.List.parse32_list",
@@ -596,7 +596,7 @@
         "typing_LowParse.Spec.List.parse_list_bare"
       ],
       0,
-      "9ad4c63cc2e7f8edc0fa0355f0b5d74d"
+      "d3628327732b92307b70ee73a7d2d35e"
     ],
     [
       "LowParse.SLow.List.partial_serialize32_list'",
@@ -711,6 +711,7 @@
         "@fuel_irrelevance_LowParse.SLow.List.partial_serialize32_list_.fuel_instrumented",
         "@fuel_irrelevance_LowParse.Spec.List.bare_serialize_list.fuel_instrumented",
         "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
+        "LowParse.Spec.List_interpretation_Tm_arrow_74bf8d1379ad489e99f6865b00f588e3",
         "Prims_interpretation_Tm_arrow_9cb3c953faf527c316d427b2ce8bd81b",
         "Prims_pretyping_ae567c2fb75be05905677af440075565",
         "Prims_pretyping_f8666440faa91836cc5a13998af863fc", "b2t_def",
@@ -753,6 +754,7 @@
         "function_token_typing_FStar.UInt32.n",
         "function_token_typing_FStar.UInt8.t",
         "function_token_typing_LowParse.Spec.Combinators.serialize_empty",
+        "function_token_typing_LowParse.Spec.List.bare_serialize_list",
         "function_token_typing_LowParse.Spec.List.parse_list_kind",
         "interpretation_LowParse.Spec.Combinators_Tm_abs_cfa6e3bc6cbeac4e6a4001e0d947b1a2",
         "kinding_Prims.list@tok", "lemma_FStar.Bytes.length_reveal",
@@ -772,6 +774,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "projection_inverse_Prims.Cons_hd",
         "projection_inverse_Prims.Cons_tl", "projection_inverse_Prims.Nil_a",
+        "refinement_interpretation_FStar.Bytes_Tm_refine_46395463de5f67e9ea553633efae8203",
         "refinement_interpretation_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
         "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
         "refinement_interpretation_LowParse.SLow.List_Tm_refine_ae7db6467533a2c911be63c8b8a4e55d",
@@ -783,9 +786,11 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "subterm_ordering_Prims.Cons",
+        "token_correspondence_LowParse.SLow.List.partial_serialize32_list_.fuel_instrumented",
         "token_correspondence_LowParse.Spec.List.bare_serialize_list",
-        "typing_FStar.Bytes.len", "typing_FStar.Bytes.reveal",
-        "typing_FStar.Seq.Base.length", "typing_FStar.UInt32.v",
+        "typing_FStar.Bytes.append", "typing_FStar.Bytes.len",
+        "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length",
+        "typing_FStar.UInt32.v",
         "typing_LowParse.SLow.List.partial_serialize32_list_",
         "typing_LowParse.Spec.Base.__proj__Mkparser_kind___item__parser_kind_low",
         "typing_LowParse.Spec.Base.serialize",
@@ -1013,7 +1018,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "09942e8dafc7e530a793ff10ffa0d139"
+      "7c383b7a48a7d167170d1db7d3284aa5"
     ],
     [
       "LowParse.SLow.List.size32_list_inv",
@@ -1031,7 +1036,7 @@
         "refinement_interpretation_LowParse.SLow.List_Tm_refine_bdca4fc410f8869663f1d5c98e261255"
       ],
       0,
-      "9d8918d56c82e285a777c26fafc3cbe8"
+      "e6cd9b93ac6042c3a1af3a2dee547ec8"
     ],
     [
       "LowParse.SLow.List.size32_list_body",
@@ -1188,7 +1193,7 @@
         "unit_inversion"
       ],
       0,
-      "64747550defb135a50399d3dcc03bfff"
+      "29efedca4f6911ca947590edeb1785a3"
     ]
   ]
 ]
