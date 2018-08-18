@@ -12,7 +12,7 @@ type t =
   | A of (U8.t * U8.t)
   | B of (x: U16.t { U16.v x > 0 } )
 
-type cases : eqtype u#0 =
+type cases : eqtype =
   | Case_A
   | Case_B
 

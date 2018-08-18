@@ -6,7 +6,7 @@ module L = FStar.List.Tot
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 3 --max_ifuel 3"
 
-type alertDescription : eqtype u#0 =
+type alertDescription : eqtype =
   | Close_notify
   | Unexpected_message
   | Bad_record_mac

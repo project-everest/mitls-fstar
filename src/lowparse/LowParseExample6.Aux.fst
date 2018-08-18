@@ -7,7 +7,7 @@ module U8 = FStar.UInt8
 module U16 = FStar.UInt16
 module L = FStar.List.Tot
 
-type cases : eqtype u#0 =
+type cases : eqtype =
   | Case_A
   | Case_B
 
