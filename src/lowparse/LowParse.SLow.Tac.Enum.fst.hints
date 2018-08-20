@@ -1,5 +1,5 @@
 [
-  "\n©B±è’7˜c¿Í¶\u0002RQ·",
+  "‡Ù<Da\"9ô8…Ýè\u001d‹Ì,",
   [
     [
       "LowParse.SLow.Tac.Enum.enum_tac_gen",
@@ -11,43 +11,27 @@
         "disc_equation_Prims.Nil", "fuel_guarded_inversion_Prims.list"
       ],
       0,
-      "f0e098fb0b0d0ed145ff8360e47816ab"
-    ],
-    [
-      "LowParse.SLow.Tac.Enum.parse32_maybe_enum_key_tac",
-      1,
-      2,
-      1,
-      [ "@query" ],
-      0,
-      "6ad3ebaaf7db0346af3f342ed19eef93"
+      "0d5a75d1fe9794c6be398d9874e37613"
     ],
     [
       "LowParse.SLow.Tac.Enum.parse32_enum_key_tac",
       1,
       2,
       1,
-      [ "@query" ],
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_f8666440faa91836cc5a13998af863fc", "b2t_def",
+        "constructor_distinct_FStar.Tactics.Result.Success",
+        "equation_Prims.squash",
+        "fuel_guarded_inversion_FStar.Tactics.Result.__result",
+        "projection_inverse_FStar.Tactics.Result.Success_a",
+        "projection_inverse_FStar.Tactics.Result.Success_ps",
+        "projection_inverse_FStar.Tactics.Result.Success_v",
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "unit_typing"
+      ],
       0,
-      "88b53d8ff4ce39fceb9c1dfdc972e23e"
-    ],
-    [
-      "LowParse.SLow.Tac.Enum.serialize32_enum_key_gen_tac",
-      1,
-      2,
-      1,
-      [ "@query" ],
-      0,
-      "55d8568273520714cc377d65a87964ab"
-    ],
-    [
-      "LowParse.SLow.Tac.Enum.serialize32_maybe_enum_key_tac",
-      1,
-      2,
-      1,
-      [ "@query" ],
-      0,
-      "2de166d10a4def4e6f84f95dc5603152"
+      "32ce073f057203915b1c2a11d9f57a04"
     ]
   ]
 ]
