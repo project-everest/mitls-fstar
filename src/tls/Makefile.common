@@ -134,6 +134,12 @@ $(CACHE_DIR)/C.%.checked \
 $(CACHE_DIR)/LowParse.%.checked \
 : VFLAGS = --admit_smt_queries true
 
+$(CACHE_DIR)/FStar.%.checked \
+$(CACHE_DIR)/LowStar.%.checked \
+$(CACHE_DIR)/C.%.checked \
+$(CACHE_DIR)/LowParse.%.checked \
+: OTHERFLAGS := $(filter-out --record_hints,$(OTHERFLAGS))
+
 $(EXTRACT_DIR)/%.$(EXTENSION):
 ifdef VERBOSE
 	@echo -e "\033[1;32m=== Extracting $@ ...\033[;37m"
