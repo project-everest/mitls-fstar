@@ -152,8 +152,6 @@ let parse32_t
       t_sum
       LP.parse32_u8
       parse32_cases
-      parse_t
-      ()
     )
 
 let cases_of_t_A (x: t) : Lemma

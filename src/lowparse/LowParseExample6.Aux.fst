@@ -381,7 +381,7 @@ let serialize32_cases
 
 inline_for_extraction
 let serialize32_key : LP.serializer32 (LP.serialize_maybe_enum_key _ LP.serialize_u8 (LP.dsum_enum t_sum))
-= _ by (LP.serialize32_maybe_enum_key_tac LP.serialize32_u8 (LP.dsum_enum t_sum) LP.serialize_u8 () ())
+= _ by (LP.serialize32_maybe_enum_key_tac LP.serialize32_u8 (LP.dsum_enum t_sum) ())
 
 inline_for_extraction
 let serialize32_t : LP.serializer32 serialize_t =

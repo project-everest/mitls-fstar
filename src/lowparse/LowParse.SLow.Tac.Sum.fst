@@ -25,15 +25,6 @@ let parse32_sum_tac
   (#k: parser_kind)
   (#pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
   (pc32: ((x: sum_key t) -> Tot (parser32 (pc x))))
-  (#k' : parser_kind)
-  (#t' : Type0)
-  (p' : parser k' t')
-  (u: unit {
-    Cons? (sum_enum t) /\
-    k' == and_then_kind (parse_filter_kind kt) k /\
-    t' == sum_type t /\
-    p' == parse_sum t p pc
-  })
   ()
 : T.Tac unit
 = let fu : T.term = quote (
@@ -54,7 +45,7 @@ let parse32_sum_tac
       T.solve_vc;
       T.solve_vc;
       T.solve_vc;
-      (fun () -> parse32_enum_key_tac p32 (sum_enum t) (parse_enum_key p (sum_enum t)) () (); T.qed ());
+      (fun () -> parse32_enum_key_tac p32 (sum_enum t) (); T.qed ());
          (fun () -> enum_destr_tac (sum_enum t); T.qed ());
     ];
     T.dump "parse32_sum_tac after all subgoals"; 
@@ -149,7 +140,7 @@ let serialize32_sum_tac
     T.solve_vc;
     T.solve_vc;
     T.solve_vc;
-    (fun () -> serialize32_enum_key_gen_tac #kt #(sum_key_type t) #(sum_repr_type t) #p #s s32 (sum_enum t) #(parse_filter_kind kt) #(parse_enum_key p (sum_enum t)) (serialize_enum_key p s (sum_enum t)) () ());
+    (fun () -> serialize32_enum_key_gen_tac #kt #(sum_key_type t) #(sum_repr_type t) #p #s s32 (sum_enum t) ());
     (fun () -> sum_destr_tac t ());
   ]
 

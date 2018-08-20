@@ -71,16 +71,11 @@ let parse32_enum_key_tac
   (#key #repr: eqtype)
   (#p: parser k repr)
   (p32: parser32 p)
-  (e: enum key repr { Cons? e } )
-  (#k' : parser_kind)
-  (p' : parser k' (enum_key e))
-  (u: unit {
-    k' == parse_filter_kind k /\
-    p' == parse_enum_key p e
-  })
+  (e: enum key repr)
   ()
 : T.Tac unit
-= let fu = quote (parse32_enum_key_gen #k #key #repr p e) in
+= T.tassert (Cons? e);
+  let fu = quote (parse32_enum_key_gen #k #key #repr p e) in
   T.apply fu;
   T.iseq [
     T.solve_vc;
@@ -97,14 +92,6 @@ let serialize32_enum_key_gen_tac
   (#s: serializer p)
   (s32: serializer32 s)
   (e: enum key repr { Cons? e } )
-  (#k' : parser_kind)
-  (#p' : parser k' (enum_key e))
-  (s' : serializer p')
-  (u: unit {
-    k' == parse_filter_kind k /\
-    p' == parse_enum_key p e /\
-    s' == serialize_enum_key p s e
-  })
   ()
 : T.Tac unit
 = let fu = quote (serialize32_enum_key_gen #k #key #repr #p #s s32 e) in
@@ -125,14 +112,6 @@ let serialize32_maybe_enum_key_tac
   (#s: serializer p)
   (s32: serializer32 s)
   (e: enum key repr { Cons? e } )
-  (#k' : parser_kind)
-  (#p' : parser k' (maybe_enum_key e))
-  (s' : serializer p')
-  (u: unit {
-    k == k' /\
-    p' == parse_maybe_enum_key p e /\
-    s' == serialize_maybe_enum_key p s e
-  })
   ()
 : T.Tac unit
 = let fu = quote (serialize32_maybe_enum_key_gen #k #key #repr #p #s s32 e) in
