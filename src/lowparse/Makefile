@@ -55,6 +55,7 @@ $(FSTAR_OUT_DIR)/%.checked:
 
 ifdef ADMIT_LOWPARSE
 $(FSTAR_OUT_DIR)/LowParse.%.checked: FSTAR_OPTIONS += --admit_smt_queries true
+$(FSTAR_OUT_DIR)/LowParse.%.checked: OTHERFLAGS := $(filter-out --record_hints,$(OTHERFLAGS))
 endif
 
 # No need to specify the path to the .fst file, since it will be
