@@ -39,6 +39,12 @@ let table (#i:I.id) (#u:info) (st:pne_state i u) (h:mem) : GTot (Seq.seq (entry 
 let footprint (#i:I.id) (#u:info) (st:pne_state i u) =
   PNE_state?.region st
  
+let frame_table #i #u st l h0 s h1 =
+  assume (
+    (modifies s h0 h1 /\ ~ (Set.mem (frameOf (PNE_state?.tbl st)) s)) ==>
+    sel h0 (PNE_state?.tbl st) == sel h1 (PNE_state?.tbl st));
+()
+  
 
 let create (i:I.id) (u:info) =
   let rg = new_region table_region in
@@ -74,11 +80,20 @@ let decrypt #i #u st #l ne c =
   let l' = U32.uint_to_t l in
   if safePNE i then
     (match Seq.find_l (sample_filter i u s) !t with
-          | None -> None
-          | Some (Entry _ ne' n) -> 
-            if ne = ne' then Some n
-            else None)
+          | Some (Entry _ #l'' ne' n) -> 
+            if ne'=ne then n
+            else
+            (let mask = Bytes.slice (aes k s) 0ul l' in
+            let n = Bytes.xor l' ne mask in
+            abs i u l n)
+              
+          | None -> 
+            (let mask = Bytes.slice (aes k s) 0ul l' in
+            let n = Bytes.xor l' ne mask in
+            abs i u l n)
+    )
   else
     (let mask = Bytes.slice (aes k s) 0ul l' in
     let n = Bytes.xor l' ne mask in
-    Some (abs i u l n))
+    abs i u l n)
+
