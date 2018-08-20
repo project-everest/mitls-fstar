@@ -60,7 +60,7 @@ let serialize_protocolVersion' : LP.serializer spec_parse_protocolVersion' =
   LP.serialize_synth _ synth_protocolVersion' serialize_maybe_protocolVersion_key synth_protocolVersion'_inv ()
 
 inline_for_extraction let parse32_maybe_protocolVersion_key : LP.parser32 parse_maybe_protocolVersion_key =
-  FStar.Tactics.synth_by_tactic (LP.parse32_maybe_enum_key_tac LP.parse32_u16 protocolVersion_enum parse_maybe_protocolVersion_key ())
+  FStar.Tactics.synth_by_tactic (LP.parse32_maybe_enum_key_tac LP.parse32_u16 protocolVersion_enum)
 
 inline_for_extraction let parse32_protocolVersion' : LP.parser32 spec_parse_protocolVersion' =
   lemma_synth_protocolVersion'_inj ();
