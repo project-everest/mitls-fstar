@@ -48,12 +48,6 @@ let parse32_maybe_enum_key_tac
   (#p: parser k repr)
   (p32: parser32 p)
   (e: enum key repr { Cons? e } )
-  (#k' : parser_kind)
-  (p' : parser k' (maybe_enum_key e))
-  (u: unit {
-    k' == k /\
-    p' == parse_maybe_enum_key p e
-  })
   ()
 : T.Tac unit
 = let fu = quote (parse32_maybe_enum_key_gen #k #key #repr #p p32 e) in
@@ -81,7 +75,7 @@ let parse32_enum_key_tac
     T.solve_vc;
     T.solve_vc;
     T.solve_vc;
-    (fun () -> parse32_maybe_enum_key_tac p32 e (parse_maybe_enum_key p e) () ())
+    (fun () -> parse32_maybe_enum_key_tac p32 e ())
   ]
 
 noextract
