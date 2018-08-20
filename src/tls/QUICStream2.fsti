@@ -49,6 +49,8 @@ let aead_nonce_pkg =
 
 type cipher (i:I.id) (l:plainLen) = lbytes (l + v AEAD.taglen)
 
+type ciphersample = lbytes 16
+
 let max_ctr = pow2 62 - 1
 
 
@@ -100,6 +102,20 @@ val reader_aead_state : #i:I.id -> #j:I.id -> #w:stream_writer i j -> r:stream_r
 val writer_pne_state : #i:I.id -> #j:I.id -> w:stream_writer i j -> PNE2.pne_state j
 
 val reader_pne_state : #i:I.id -> #j:I.id -> #w:stream_writer i j -> r:stream_reader w -> PNE2.pne_state j
+
+type pne_entry (j:I.id) =
+  | Entry :
+    s:ciphersample ->
+    #nl:pnlen -> 
+    ne:epn nl ->
+    n:npn j nl ->
+    pne_entry j
+
+val writer_pne_table: #i:I.id -> #j:I.id -> w:stream_writer i j -> h:mem ->
+  GTot (Seq.seq (pne_entry j))
+
+val reader_pne_table: #i:I.id -> #j:I.id -> #w:stream_writer i j ->
+  r:stream_reader w -> h:mem -> GTot (s:(Seq.seq (pne_entry j)){s == writer_pne_table w h})
 
 val invariant: #i:I.id -> #j:I.id -> w:stream_writer i j -> h:mem ->
   t:Type0{t ==> AEAD.winvariant (writer_aead_state w) h} 
@@ -281,20 +297,68 @@ val createReader: parent:rgn -> #i:I.id -> #j:I.id -> w:stream_writer i j ->
 //val rincrementable: #i:I.id -> #w:stream_writer i -> r:stream_reader w -> h:mem -> Type0
 
 
+let sample_filter (j:I.id) (s:ciphersample) (e:pne_entry j) : bool =
+  Entry?.s e = s
 
-val encrypt_pn
-  (#i:I.id)
-  (#j:I.id)
-  (w:stream_writer i j)
-  (#l:plainLen)
-  (c:cipher i l)
-  (nl:pnlen)
+let entry_for_sample (#i:I.id) (#j:I.id) (s:ciphersample) (w:stream_writer i j) (h:mem) :
+  GTot (option (pne_entry j)) =
+  Seq.find_l (sample_filter j s) (writer_pne_table w h)
+  
+let fresh_sample (#i:I.id) (#j:I.id) (s:ciphersample) (w:stream_writer i j) (h:mem) :
+  GTot bool =
+  None? (entry_for_sample s w h)
+
+let find_sample (#i:I.id) (#j:I.id) (s:ciphersample) (w:stream_writer i j) (h:mem) :
+  GTot bool =
+  Some? (entry_for_sample s w h)
+
+
+val encrypt_pn:
+  (#i:I.id) ->
+  (#j:I.id) ->
+  (w:stream_writer i j) ->
+  (#l:plainLen) ->
+  (c:cipher i l) ->
+  (nl:pnlen) ->
+  (n:npn j nl) ->
   ST (epn nl)
-  (requires fun h0 -> wincrementable w h0 /\ invariant w h0)
+  (requires fun h0 -> wincrementable w h0 /\ invariant w h0 /\ fresh_sample (PNE2.sample_cipher c) w h0)
   (ensures fun h0 ne h1 ->
+    modifies (shared_footprint w) h0 h1 /\
+    (safePNE j ==> writer_pne_table w h1 == Seq.snoc (writer_pne_table w h0) (Entry (PNE2.sample_cipher c) ne n)))
+
+let sample_epn_filter (j:I.id) (s:ciphersample) (#nl:pnlen) (ne:epn nl) (e:pne_entry j) : bool =
+  Entry?.s e = s && Entry?.nl e = nl && Entry?.ne e = ne
+
+let entry_for_sample_epn (#i:I.id) (#j:I.id) (s:ciphersample) (#nl:pnlen) (ne:epn nl) (w:stream_writer i j) (h:mem) :
+  GTot (option (pne_entry j)) =
+  Seq.find_l (sample_epn_filter j s #nl ne) (writer_pne_table w h)
   
-  
-    
+let find_sample_epn (#i:I.id) (#j:I.id) (s:ciphersample) (#nl:pnlen) (ne:epn nl) (w:stream_writer i j) (h:mem) :
+  GTot bool =
+  Some? (entry_for_sample_epn s ne w h)
+
+
+val decrypt_pn :
+  (#i:I.id) ->
+  (#j:I.id) ->
+  (#w:stream_writer i j) ->
+  (r:stream_reader w) ->
+  (#l:plainLen) ->
+  (c:cipher i l) ->
+  (nl:pnlen) ->
+  (ne:epn nl) ->
+  ST (npn j nl)
+  (requires fun h0 -> True)
+  (ensures fun h0 n h1 ->
+    let s = PNE2.sample_cipher c in
+    modifies_none h0 h1 /\
+    ((safePNE j /\ find_sample_epn s ne w h0) ==> 
+     (match entry_for_sample_epn s ne w h0 with
+       | Some (Entry _ #nl' _ n') -> n = n')))
+
+//        | Some (Entry _ #nl' ne' n') -> (nl = nl' /\ n = n') <==> (nl = nl' /\ ne = ne'))
+
 
 
 val encrypt
