@@ -35,7 +35,7 @@
         "typing_FStar.UInt32.v", "typing_LowStar.Buffer.len"
       ],
       0,
-      "9082df42d9a00f0f192281f1c9bb36d8"
+      "3e616e5ec728f7ce77f88668900141ea"
     ],
     [
       "LowParse.Low.List.validate32_list_body",
@@ -216,7 +216,7 @@
         "typing_LowStar.Buffer.loc_union", "unit_typing"
       ],
       0,
-      "ddc41d6a6441f19d7344640dff353a10"
+      "614c40b7f0c776190dac0c92498a2072"
     ],
     [
       "LowParse.Low.List.validate32_list",
@@ -294,6 +294,7 @@
         "lemma_FStar.Map.lemma_InDomRestrict",
         "lemma_FStar.Map.lemma_InDomUpd2",
         "lemma_FStar.Map.lemma_SelRestrict", "lemma_FStar.Map.lemma_SelUpd2",
+        "lemma_FStar.Map.lemma_UpdDomain",
         "lemma_FStar.Monotonic.HyperHeap.lemma_extends_includes",
         "lemma_FStar.Monotonic.HyperHeap.lemma_extends_parent",
         "lemma_FStar.Monotonic.HyperHeap.lemma_includes_refl",
@@ -304,7 +305,8 @@
         "lemma_FStar.Set.lemma_equal_elim",
         "lemma_FStar.Set.lemma_equal_intro",
         "lemma_FStar.Set.mem_complement", "lemma_FStar.Set.mem_intersect",
-        "lemma_FStar.Set.mem_singleton", "lemma_FStar.UInt32.vu_inv",
+        "lemma_FStar.Set.mem_singleton", "lemma_FStar.Set.mem_union",
+        "lemma_FStar.UInt32.vu_inv",
         "lemma_LowParse.Low.Base.int32_to_uint32_pos",
         "lemma_LowStar.Buffer.as_seq_gsub",
         "lemma_LowStar.Buffer.fresh_frame_modifies_inert",
@@ -376,8 +378,8 @@
         "typing_FStar.Monotonic.HyperStack.live_region",
         "typing_FStar.Monotonic.HyperStack.remove_elt",
         "typing_FStar.Set.complement", "typing_FStar.Set.mem",
-        "typing_FStar.Set.singleton", "typing_FStar.UInt32.uint_to_t",
-        "typing_FStar.UInt32.v",
+        "typing_FStar.Set.singleton", "typing_FStar.Set.union",
+        "typing_FStar.UInt32.uint_to_t", "typing_FStar.UInt32.v",
         "typing_LowParse.Spec.Base.__proj__Mkparser_kind___item__parser_kind_low",
         "typing_LowParse.Spec.Base.parse",
         "typing_LowParse.Spec.List.parse_list_bare",
@@ -390,7 +392,7 @@
         "typing_LowStar.Buffer.loc_union"
       ],
       0,
-      "fd0f2f5506dce7d3bcbe56c46c0a549d"
+      "3ed969511970dd2caa118c512218da1a"
     ],
     [
       "LowParse.Low.List.list_is_nil",
@@ -405,7 +407,7 @@
         "refinement_interpretation_LowParse.Low.List_Tm_refine_0e8bfd531eefffa210b78767d8489659"
       ],
       0,
-      "05b514330f1e3d781a59122ce99541d3"
+      "a53d58b93662bb292b86beb5bb31246d"
     ],
     [
       "LowParse.Low.List.list_is_nil",
@@ -482,7 +484,7 @@
         "typing_LowStar.Buffer.length", "unit_typing"
       ],
       0,
-      "45bb4ae789739c6ed8aec4a9f77f8534"
+      "0a3ebf8e0b81d1bee3fb1559399d60de"
     ],
     [
       "LowParse.Low.List.list_head",
@@ -568,7 +570,7 @@
         "unit_typing"
       ],
       0,
-      "0422c2c27b9d0a734274e3cd6fc4335c"
+      "8a6a0e6d6b6da603b1fd017bf4203569"
     ],
     [
       "LowParse.Low.List.list_tail",
@@ -692,7 +694,7 @@
         "typing_LowStar.Buffer.loc_buffer", "unit_typing"
       ],
       0,
-      "f6554a85b0e854d2864b259a7e302ef0"
+      "ed183aacd79af6485c13837f44c38211"
     ]
   ]
 ]

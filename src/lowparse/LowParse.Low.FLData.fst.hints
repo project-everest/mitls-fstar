@@ -8,7 +8,7 @@
       1,
       [ "@query" ],
       0,
-      "6ca8ca7d1c7f5157080a91fe45758f73"
+      "ac02d9c1ae5749c8bc92fcb91d4c7fba"
     ],
     [
       "LowParse.Low.FLData.validate32_fldata",
@@ -28,7 +28,6 @@
         "bool_typing", "constructor_distinct_FStar.Pervasives.Native.None",
         "constructor_distinct_FStar.Pervasives.Native.Some",
         "data_elim_FStar.Pervasives.Native.Mktuple2",
-        "data_elim_FStar.Pervasives.Native.Some",
         "disc_equation_FStar.Pervasives.Native.None",
         "disc_equation_FStar.Pervasives.Native.Some",
         "equation_FStar.HyperStack.ST.equal_domains",
@@ -65,7 +64,6 @@
         "equation_Prims.nat", "equation_Prims.pos",
         "equation_with_fuel_Prims.pow2.fuel_instrumented",
         "fuel_guarded_inversion_FStar.Pervasives.Native.option",
-        "fuel_guarded_inversion_FStar.Pervasives.Native.tuple2",
         "fuel_guarded_inversion_LowParse.Spec.Base.parser_kind_",
         "function_token_typing_FStar.Monotonic.Heap.heap",
         "function_token_typing_FStar.Monotonic.HyperHeap.rid",
@@ -86,6 +84,9 @@
         "lemma_LowStar.Buffer.length_as_seq",
         "lemma_LowStar.Buffer.live_gsub",
         "lemma_LowStar.Buffer.live_region_frameOf",
+        "lemma_LowStar.Buffer.loc_disjoint_none_r",
+        "lemma_LowStar.Buffer.modifies_inert_buffer_elim",
+        "lemma_LowStar.Buffer.modifies_inert_intro",
         "lemma_LowStar.Buffer.modifies_refl", "primitive_Prims.op_Addition",
         "primitive_Prims.op_AmpAmp", "primitive_Prims.op_Equality",
         "primitive_Prims.op_GreaterThanOrEqual",
@@ -136,11 +137,11 @@
         "typing_LowParse.Spec.FLData.parse_fldata",
         "typing_LowParse.Spec.FLData.parse_fldata_kind",
         "typing_LowStar.Buffer.as_seq", "typing_LowStar.Buffer.frameOf",
-        "typing_LowStar.Buffer.len", "typing_LowStar.Buffer.length",
+        "typing_LowStar.Buffer.len", "typing_LowStar.Buffer.loc_buffer",
         "unit_typing"
       ],
       0,
-      "1188543d4537aa56f9cbd1b09889798d"
+      "89c6f282ca35d62a8896e7c42a0e1952"
     ],
     [
       "LowParse.Low.FLData.validate32_fldata_strong",
@@ -149,7 +150,7 @@
       1,
       [ "@query" ],
       0,
-      "29e589e92f50e944c0e3d79c6e534344"
+      "222da5ffb1104229435e6458ef82b0c9"
     ],
     [
       "LowParse.Low.FLData.validate32_fldata_strong",
@@ -201,7 +202,7 @@
         "typing_LowStar.Buffer.as_seq"
       ],
       0,
-      "c1733b68cbd0537ba43d23e92aa8d6c4"
+      "7b6f0762c7544fa1005fcd6ea46db20e"
     ],
     [
       "LowParse.Low.FLData.validate_nochk32_fldata",
@@ -210,7 +211,7 @@
       1,
       [ "@query" ],
       0,
-      "5791d99bba011923d4b446ac0a92d016"
+      "f02d784aa08ea8f9a95870c00431407e"
     ],
     [
       "LowParse.Low.FLData.validate_nochk32_fldata",
@@ -228,7 +229,7 @@
         "refinement_interpretation_FStar.UInt32_Tm_refine_6c25b42778726de94cd4dac42edb4860"
       ],
       0,
-      "197700359bd40ad0e5b47372e0293659"
+      "e6845244fc4647298053ee03057a7675"
     ],
     [
       "LowParse.Low.FLData.validate_nochk32_fldata_strong",
@@ -237,7 +238,7 @@
       1,
       [ "@query" ],
       0,
-      "f80ee3aea621de4e33f5fe4b5d8109e0"
+      "c965629cf34c3c25aca755839baf2845"
     ],
     [
       "LowParse.Low.FLData.validate_nochk32_fldata_strong",
@@ -255,7 +256,7 @@
         "refinement_interpretation_FStar.UInt32_Tm_refine_6c25b42778726de94cd4dac42edb4860"
       ],
       0,
-      "b1ced0ebdd09ccf3aeb983456eb27752"
+      "5c14e4ba2a47e7e161c66c8c4537b261"
     ],
     [
       "LowParse.Low.FLData.accessor_fldata",
@@ -264,7 +265,7 @@
       1,
       [ "@query" ],
       0,
-      "0815d522ef8f26ed94f4075de9b4c392"
+      "31617ba46bcc12e2c3e5d059176a5142"
     ],
     [
       "LowParse.Low.FLData.accessor_fldata",
@@ -329,7 +330,7 @@
         "typing_LowStar.Buffer.as_seq", "typing_LowStar.Buffer.len"
       ],
       0,
-      "27b3b60fb11978b2af94187bd9611c1a"
+      "954398df04ca39eaa034b523353a5831"
     ],
     [
       "LowParse.Low.FLData.accessor_fldata_strong",
@@ -338,7 +339,7 @@
       1,
       [ "@query" ],
       0,
-      "5ccf979ce9d0758ae56447468586f9d0"
+      "49333489e8c89e1b90ad2fbf7c927a02"
     ],
     [
       "LowParse.Low.FLData.accessor_fldata_strong",
@@ -387,7 +388,7 @@
         "typing_LowStar.Buffer.as_seq"
       ],
       0,
-      "dc89df09389d395f7c486a3827fd591e"
+      "91bb23c7c3f94e0e076d2353754eb6e5"
     ]
   ]
 ]
