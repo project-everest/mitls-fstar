@@ -23,7 +23,9 @@
 
 #include "InteropTester.h"
 #include "Tester.h"
-#include "mitlsffi.h"
+
+#include "mitlsffi.h" // this is the real interface!
+#include "mipki.h"    // interface for the certificate handling
 
 //**********************************************************************************************************************************
 
@@ -79,7 +81,68 @@ TLSTESTER::TLSTESTER (  FILE *DebugFile,
                                                                      TestResultsFile,
                                                                      RecordedMeasurementsFile )
 {
-    Component = new COMPONENT ( DebugFile );
+    // set the default values here in case they are not over-ridden by command line arguments
+
+    strcpy ( HostFileName, "\0" );
+
+    strcpy ( TLSVersion, "1.3" );
+
+    strcpy ( HostName, "google.com" );
+
+    PortNumber = 443;
+
+    strcpy ( ClientCertificateFilename,    "server-ecdsa.crt" );
+    strcpy ( ClientCertificateKeyFilename, "server-ecdsa.key" );
+    strcpy ( ServerCertificateFilename,    "server-ecdsa.crt" );
+    strcpy ( ServerCertificateKeyFilename, "server-ecdsa.key" );
+
+    strcpy ( CertificateAuthorityChainFilename, "CAFile.pem" );
+
+    // command line over-ride flags
+
+    VerboseConsoleOutput = FALSE;
+
+    ConsoleDebugging = FALSE;
+
+    UseHostList = FALSE;
+
+    UseHostName = FALSE;
+
+    UsePortNumber = FALSE;
+
+    DoTLSTests    = FALSE;
+    DoQUICTests   = FALSE;
+    DoClientTests = FALSE;
+    DoServerTests = FALSE;
+
+    DoClientInteroperabilityTests = FALSE;
+    DoServerInteroperabilityTests = FALSE;
+}
+
+//**********************************************************************************************************************************
+
+void TLSTESTER::Configure ( void )
+{
+    Component = new COMPONENT ( this, DebugFile );
+
+    // configure the component attributes using the command line arguments if any given
+
+    if ( Component != NULL )
+    {
+        Component->SetVersion  ( TLSVersion );
+
+        Component->SetHostName ( HostName );
+
+        Component->SetPortNumber ( PortNumber );
+
+        Component->SetClientCertificateFilename ( ClientCertificateFilename );
+
+        Component->SetClientCertificateKeyFilename ( ClientCertificateKeyFilename );
+
+        Component->SetServerCertificateFilename ( ServerCertificateFilename );
+
+        Component->SetServerCertificateKeyFilename ( ServerCertificateKeyFilename );
+    }
 }
 
 //**********************************************************************************************************************************
@@ -101,7 +164,7 @@ void TLSTESTER::RunClientTLSTests ( char *DateAndTimeString )
     int  Result                   = 0;
     int  ErrorIndex               = 0;
 
-    RecordTestRunStartTime ();
+    RecordTestRunStartTime ( TLS_CLIENT_MEASUREMENTS );
 
     Component->SetTestRunNumber ( TLS_CLIENT_MEASUREMENTS );
 
@@ -157,7 +220,7 @@ void TLSTESTER::RunClientTLSTests ( char *DateAndTimeString )
 
     Component->Cleanup ();
 
-    RecordTestRunEndTime ();
+    RecordTestRunEndTime ( TLS_CLIENT_MEASUREMENTS );
 }
 
 //**********************************************************************************************************************************
@@ -178,7 +241,7 @@ void TLSTESTER::RunClientQUICTests ( char * DateAndTimeString )
     int  Result                   = 0;
     int  ErrorIndex               = 0;
 
-    RecordTestRunStartTime ();
+    RecordTestRunStartTime ( QUIC_CLIENT_MEASUREMENTS );
 
     Result = Component->InitialiseTLS ();
 
@@ -251,7 +314,7 @@ void TLSTESTER::RunClientQUICTests ( char * DateAndTimeString )
         printf ( "Component->InitialiseTLS() call failed!\n" );
     }
 
-    RecordTestRunEndTime ();
+    RecordTestRunEndTime ( QUIC_CLIENT_MEASUREMENTS );
 }
 
 //**********************************************************************************************************************************
@@ -435,11 +498,14 @@ void TLSTESTER::RunSingleClientTLSTest ( int         MeasurementNumber,
               SignatureAlgorithm,
               NamedGroup );
 
-    printf ( "Running single client TLS test %d on Cipher Suite %s, Signature Algorithm %s and Named group %s\n",
-             MeasurementNumber,
-             CipherSuite,
-             SignatureAlgorithm,
-             NamedGroup );
+    if ( VerboseConsoleOutput )
+    {
+        printf ( "Running single client TLS test %d on Cipher Suite %s, Signature Algorithm %s and Named group %s\n",
+                 MeasurementNumber,
+                 CipherSuite,
+                 SignatureAlgorithm,
+                 NamedGroup );
+    }
 
     // open socket to communicate with peer (server)
 
@@ -467,7 +533,7 @@ void TLSTESTER::RunSingleClientTLSTest ( int         MeasurementNumber,
 
             Component->SetSocket ( PeerSocket ); // use the peer for now but switch to the server thread ASAP
 
-            Result = Component->AddRootFileOrPath ( "CAFile.pem" ); // must be done before the configure
+            Result = Component->AddRootFileOrPath ( CertificateAuthorityChainFilename ); // must be done before the configure
 
             if ( Result )
             {
@@ -504,7 +570,7 @@ void TLSTESTER::RunSingleClientTLSTest ( int         MeasurementNumber,
 
                                         if ( Result )
                                         {
-                                            printf ( "Component->Connect() was successful!\n" );
+                                            if ( VerboseConsoleOutput ) printf ( "Component->Connect() was successful!\n" );
 
                                             Component->CloseConnection ();
                                         }
@@ -550,7 +616,7 @@ void TLSTESTER::RunSingleClientTLSTest ( int         MeasurementNumber,
 
             Component->RecordEndTime ();
 
-            printf ( "Last Error Code = %d\n", GetLastError () );
+            if ( VerboseConsoleOutput ) printf ( "Last Error Code = %d\n", GetLastError () );
         }
         else
         {
@@ -639,11 +705,14 @@ void TLSTESTER::RunSingleClientQUICTest ( int         MeasurementNumber,
               SignatureAlgorithm,
               NamedGroup );
 
-    printf ( "Running single client QUIC test %d on Cipher Suite %s, Signature Algorithm %s and Named group %s\n",
-             MeasurementNumber,
-             CipherSuite,
-             SignatureAlgorithm,
-             NamedGroup );
+    if ( VerboseConsoleOutput )
+    {
+        printf ( "Running single client QUIC test %d on Cipher Suite %s, Signature Algorithm %s and Named group %s\n",
+                 MeasurementNumber,
+                 CipherSuite,
+                 SignatureAlgorithm,
+                 NamedGroup );
+    }
 
     // open socket to communicate with peer (server)
 
@@ -795,7 +864,7 @@ void TLSTESTER::RunSingleClientQUICTest ( int         MeasurementNumber,
 
             Component->RecordEndTime ();
 
-            printf ( "Return Code = %d\n", GetLastError () );
+            if ( VerboseConsoleOutput ) printf ( "Return Code = %d\n", GetLastError () );
         }
         else
         {
@@ -837,7 +906,7 @@ void TLSTESTER::RunSingleServerQUICTest ( int         MeasurementNumber,
 
 //**********************************************************************************************************************************
 
-bool TLSTESTER::PrintQuicResult ( quic_result QuicResult )
+bool TLSTESTER::PrintQuicResult ( quic_result QuicResult ) // old knowledge now hidden!
 {
     bool Result = TRUE;
 
@@ -857,7 +926,7 @@ bool TLSTESTER::PrintQuicResult ( quic_result QuicResult )
         case TLS_server_stateless_retry :          fprintf ( DebugFile, "Server Stateless Retry\n"          ); break;
         case TLS_error_other :                     fprintf ( DebugFile, "Error Other\n"                     ); break;
 
-        default:  fprintf ( DebugFile, "Unknown Quic Result\n" ); Result = FALSE; break;
+        default: fprintf ( DebugFile, "Unknown Quic Result\n" ); Result = FALSE; break;
     }
 
     return (  Result );

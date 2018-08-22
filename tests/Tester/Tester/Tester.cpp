@@ -20,6 +20,7 @@
 //**********************************************************************************************************************************
 
 #include "stdafx.h"
+#include "time.h"
 #include "winsock2.h" // for WSAStartup and WSACleanup
 #include "windows.h" // for sleep
 
@@ -55,10 +56,12 @@ FILE *TESTER::GetDebugFile ( void )
 
 //**********************************************************************************************************************************
 
-bool TESTER::Setup ( void )
+bool TESTER::Setup ( char *DateAndTimeString )
 {
-    int     ResultCode = 0;
-    WSADATA WindowsSocketsData;
+    int        ResultCode = 0;
+    WSADATA    WindowsSocketsData;
+    time_t     CurrentTime;
+    struct tm *LocalTime;
 
     ResultCode = WSAStartup ( MAKEWORD ( 2, 2 ), &WindowsSocketsData );
 
@@ -74,7 +77,36 @@ bool TESTER::Setup ( void )
         fprintf ( DebugFile, "    System Status: %s\n",     WindowsSocketsData.szSystemStatus );
         fprintf ( DebugFile, "\n" );
 
-        printf ( "Runnning!\n" );
+        if ( VerboseConsoleOutput )
+        {
+            printf ( "Runnning!\n" );
+        }
+        else
+        {
+            if ( ! ConsoleDebugging ) // if console debugging is enabled then we do want the output on the console!
+            {
+                // get the current date and time
+
+                time ( &CurrentTime );
+
+                LocalTime = localtime ( &CurrentTime );
+
+                // and create a filename based on that for the redirected standard output
+
+                sprintf ( RedirectedStandardOutputFilename,
+                          "RedirectedStandardOutput_%02d_%02d_%2d_at_%02d_%02d_%02d.txt",
+                          LocalTime->tm_wday,
+                          LocalTime->tm_mday,
+                          LocalTime->tm_year,
+                          LocalTime->tm_hour,
+                          LocalTime->tm_min,
+                          LocalTime->tm_sec );
+
+                 // now redirect the standard output stream into the capture file to hide the debug output from the dlls
+
+                 RedirectedStandardOutputFile = freopen ( RedirectedStandardOutputFilename, "a", stdout );
+            }
+        }
 
         // you only need to get this once as it will not change for a given machine and os
 
@@ -86,7 +118,7 @@ bool TESTER::Setup ( void )
     }
     else
     {
-        fprintf ( DebugFile, "Could not initialise Windows Sockets! (ResultCode=%d)\n", ResultCode );
+        fprintf ( DebugFile, "Could not initialise Windows Sockets! ( ResultCode = %d )\n", ResultCode );
 
         PrintSocketError ();
 

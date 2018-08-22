@@ -753,13 +753,25 @@ class TESTER
 
     public:
 
+        // console output over-ride flags
+
+        bool ConsoleDebugging;     // if TRUE, produce console debug output (in addition to component's logging)
+
+        bool VerboseConsoleOutput; // if TRUE, print out all information messages on the console, errors are always output
+
+        FILE *RedirectedStandardOutputFile; // contains the output from the dll and any other stdout
+
+        char RedirectedStandardOutputFilename [ MAX_PATH ]; // the filename of the redirected output file
+
+    public:
+
         TESTER ( FILE *NewDebugFile, FILE * NewComponentStatisticsFile, FILE *NewRecordedMeasurementsFile );
 
         ~TESTER ( void );
 
         FILE *GetDebugFile ( void );
 
-        bool Setup ( void );
+        bool Setup ( char *DateAndTimeString );
 
         bool TearDown ( void );
 
@@ -775,21 +787,59 @@ class TLSTESTER : public TESTER
 {
     protected:
 
-       LARGE_INTEGER TestStartTime;
-       LARGE_INTEGER TestEndTime;
+        LARGE_INTEGER TestStartTime;
+        LARGE_INTEGER TestEndTime;
 
-       SOCKET PeerSocket;
-       SOCKET ComponentSocket;
+        SOCKET PeerSocket;
+        SOCKET ComponentSocket;
 
     public:
 
-     class COMPONENT *Component; // callback functions need access to this to do measurements
+        class COMPONENT *Component; // callback functions need access to this to do measurements
+
+        char HostFileName [ MAX_PATH ]; // the name of the file containing the list of hosts, if any
+
+        char TLSVersion [ 4 ];
+
+        char HostName [ MAX_PATH ]; // the default hostname
+
+        int PortNumber; // the default port number
+
+        char ClientCertificateFilename    [ MAX_PATH ];
+        char ClientCertificateKeyFilename [ MAX_PATH ];
+
+        char ServerCertificateFilename    [ MAX_PATH ];
+        char ServerCertificateKeyFilename [ MAX_PATH ];
+
+        char CertificateAuthorityChainFilename [ MAX_PATH ];
+
+        // command line over-ride flags
+
+        bool UseHostList;                   // if TRUE, user has specified a list of hostnames in a file
+
+        bool UseHostName;                   // if TRUE, then the host name is specified on the command line
+
+        bool UsePortNumber;                 // if TRUE, then the port n umber is specified on the command line
+
+        bool DoTLSTests;                    // if TRUE, do the TLS tests part of a measurement or test run
+
+        bool DoQUICTests;                   // if TRUE, do the QUIC tests part of a measurement or test run
+
+        bool DoClientTests;                 // if TRUE, do the client only TLS and DTLS tests
+
+        bool DoServerTests;                 // if TRUE, do the client/server TLS and DTLS tests
+
+        bool DoClientInteroperabilityTests; // if TRUE, do the client mode interoperability TLS and DTLS tests
+
+        bool DoServerInteroperabilityTests; // if TRUE, do the server mode interoperability TLS and DTLS tests
 
     public:
 
         TLSTESTER ( FILE *DebugFile, FILE *TestResultsFile, FILE *RecordedMeasurementsFile );
 
         ~TLSTESTER ( void );
+
+        void Configure ( void ); // configure the component settings from the tester settings
 
         void RunClientTLSTests ( char *DateAndTimeString ); // mitls running in TLS client mode
 
@@ -880,13 +930,15 @@ class COMPONENT
 {
     protected:
 
+        TLSTESTER *Tester = NULL;
+
         mitls_state *TLSState = NULL; // should be set by the first mitls_init function to the internal state address
 
         quic_state  *QUICState = NULL; // should be set by the quic_create function to the internal state address
 
         mipki_state *PKIState = NULL; // should be set by the mipki_init function to the internal state address
 
-       quic_config Configuration =
+        quic_config Configuration =
         {
             Configuration.is_server = 0, // should be boolean FALSE but defined as an int
 
@@ -913,27 +965,27 @@ class COMPONENT
             Configuration.ticket_key_len = 0,
         };
 
-        char ClientCertificateFilename    [ MAX_PATH ] = { "server-ecdsa.crt" };
-        char ClientCertificateKeyFilename [ MAX_PATH ] = { "server-ecdsa.key" };
+        char ClientCertificateFilename    [ MAX_PATH ];
+        char ClientCertificateKeyFilename [ MAX_PATH ];
 
-        char ServerCertificateFilename    [ MAX_PATH ] = { "server-ecdsa.crt" };
-        char ServerCertificateKeyFilename [ MAX_PATH ] = { "server-ecdsa.key" };
+        char ServerCertificateFilename    [ MAX_PATH ];
+        char ServerCertificateKeyFilename [ MAX_PATH ];
 
         // kremlin generated code will abort if this is set to > "1.3". If set to "1.3" then the hello messages use "1.2" and use
         // the extensions to specify the right version. If set to "1.2" then the hello messages use "1.2". If set to "1.1" then the
         // hello messages use "1.1".
 
-        const char *TLSVersion = "1.3";
+        char TLSVersion [ 4 ]; // "1.X" plus termiating zero
 
-        const char HostName [ MAX_PATH ] = { "google.com" };
+        char HostName [ MAX_PATH ];
 
-        int PortNumber = 443;
+        int PortNumber;
 
-        int TestRunNumber = 0;
+        int TestRunNumber;
 
-        int MeasurementNumber = 0;
+        int MeasurementNumber;
 
-        int NumberOfMeasurementsMade = 0;
+        int NumberOfMeasurementsMade;
 
     public: // so callbacks can access them quickly
 
@@ -949,7 +1001,7 @@ class COMPONENT
 
     public:
 
-        COMPONENT ( FILE *TestResultsFile );
+        COMPONENT ( TLSTESTER *Parent,  FILE *NewDebugFile );
 
         ~COMPONENT ( void );
 
@@ -967,11 +1019,11 @@ class COMPONENT
 
         void SetServerCertificateKeyFilename ( char *NewServerCertificateKeyFilename );
 
-        void SetVersion  ( char *Version );
+        void SetVersion  ( char *NewVersion );
 
-        void SetHostName ( char *HostName );
+        void SetHostName ( char *NewHostName );
 
-        void SetPortNumber ( int PortNumber );
+        void SetPortNumber ( int NewPortNumber );
 
         void SetTestRunNumber ( int NewTestRunNumber );
 
@@ -1120,13 +1172,22 @@ class COMPONENT
     private:
 };
 
-bool InitialiseMeasurementResults ( void );
+void InitialiseMeasurementResults ( void );
 
-bool PrintMeasurementResults ( FILE * MeasurementsResultFile );
+void AllocateMeasurementResult ( int TestRunNumber );
 
-void RecordTestRunStartTime ( void );
+void FreeMeasurementResults ( void );
 
-void RecordTestRunEndTime ( void );
+void InitialiseMeasurementResult ( MEASUREMENTRESULTS *MeasurementResult );
+
+void PrintMeasurementResults ( FILE *MeasurementsResultFile );
+
+void PrintMeasurementResult ( FILE               *MeasurementsResultFile,
+                              MEASUREMENTRESULTS *MeasurementResult );
+
+void RecordTestRunStartTime ( int TestRunNumber );
+
+void RecordTestRunEndTime ( int TestRunNumber );
 
 //**********************************************************************************************************************************
 

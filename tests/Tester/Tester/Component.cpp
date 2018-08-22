@@ -54,7 +54,7 @@ static unsigned int CurrentTestRunNumber = 0; // for use in mipki callbacks whic
 
 static unsigned int CurrentMeasurementNumber = 0; // for use in mipki callbacks which don't have the context
 
-MEASUREMENTRESULTS *MeasurementResultsArray; // actually indexed by TestRunNumber
+MEASUREMENTRESULTS *MeasurementResultsArray [ MAX_MEASUREMENT_TYPES ]; // actually indexed by TestRunNumber
 
 //**********************************************************************************************************************************
 
@@ -159,199 +159,284 @@ const char *PKICallbackMeasurementEntryNames [ MAX_PKI_CALLBACK_FUNCTIONS ] = //
 //
 //**********************************************************************************************************************************
 
-bool InitialiseMeasurementResults ( void )
+void InitialiseMeasurementResults ( void )
 {
-    COMPONENTMEASUREMENTENTRY *ComponentMeasurementEntry   = NULL;
-    CALLBACKMEASUREMENTENTRY  *CallbackMeasurementEntry    = NULL;
-    COMPONENTMEASUREMENT      *ComponentMeasurement        = NULL;
-    size_t                     MeasurementResultsArraySize = sizeof ( MEASUREMENTRESULTS ) * MAX_MEASUREMENT_TYPES;
+    int                 TestRunNumber     = 0;
+    MEASUREMENTRESULTS *MeasurementResult = NULL;
 
-    MeasurementResultsArray = ( MEASUREMENTRESULTS * ) malloc ( MeasurementResultsArraySize );
+    // initialise all array entries to unallocated
 
-    if ( MeasurementResultsArray != NULL )
+    for ( TestRunNumber = 0; TestRunNumber < MAX_MEASUREMENT_TYPES; TestRunNumber++ )
     {
-        memset ( MeasurementResultsArray, 0, MeasurementResultsArraySize );
+        MeasurementResultsArray [ TestRunNumber ] = NULL;
+    }
 
-        // Initialise the measurement results array
+    // Then allocate the measurement results arrays for the selected measurements
 
-        for ( int TestRunNumber = 0; TestRunNumber < MAX_MEASUREMENT_TYPES; TestRunNumber++ )
+    if ( Tester->DoClientTests )
+    {
+        if ( Tester->DoTLSTests  ) AllocateMeasurementResult ( TLS_CLIENT_MEASUREMENTS  );
+        if ( Tester->DoQUICTests ) AllocateMeasurementResult ( QUIC_CLIENT_MEASUREMENTS );
+    }
+
+    if ( Tester->DoServerTests )
+    {
+        if ( Tester->DoTLSTests  ) AllocateMeasurementResult ( TLS_SERVER_MEASUREMENTS  );
+        if ( Tester->DoQUICTests ) AllocateMeasurementResult ( QUIC_SERVER_MEASUREMENTS );
+    }
+
+    if ( Tester->DoServerInteroperabilityTests )
+    {
+        AllocateMeasurementResult ( OPENSSL_SERVER_MEASUREMENTS   );
+        AllocateMeasurementResult ( BORINGSSL_SERVER_MEASUREMENTS );
+        AllocateMeasurementResult ( MBEDTLS_SERVER_MEASUREMENTS   );
+        AllocateMeasurementResult ( WOLFSSL_SERVER_MEASUREMENTS   );
+        AllocateMeasurementResult ( FIZZ_SERVER_MEASUREMENTS      );
+    }
+
+    if ( Tester->DoClientInteroperabilityTests )
+    {
+        AllocateMeasurementResult ( OPENSSL_CLIENT_MEASUREMENTS   );
+        AllocateMeasurementResult ( BORINGSSL_CLIENT_MEASUREMENTS );
+        AllocateMeasurementResult ( MBEDTLS_CLIENT_MEASUREMENTS   );
+        AllocateMeasurementResult ( WOLFSSL_CLIENT_MEASUREMENTS   );
+        AllocateMeasurementResult ( FIZZ_CLIENT_MEASUREMENTS      );
+    }
+
+    // finally, initialise the allocated measurement results arrays
+
+    for ( TestRunNumber = 0; TestRunNumber < MAX_MEASUREMENT_TYPES; TestRunNumber++ )
+    {
+        if ( MeasurementResultsArray [ TestRunNumber ] != NULL ) // was memory allocated for this measurement?
         {
-            MeasurementResultsArray [ TestRunNumber ].MeasurementTypeName = MeasurementTypeNames [ TestRunNumber ];
+            MeasurementResult = MeasurementResultsArray [ TestRunNumber ];
 
-            MeasurementResultsArray [ TestRunNumber ].StartTime.QuadPart = 0;
-            MeasurementResultsArray [ TestRunNumber ].EndTime.QuadPart   = 0;
+            MeasurementResult->MeasurementTypeName = MeasurementTypeNames [ TestRunNumber ];
 
-            for ( int MeasurementNumber = 0; MeasurementNumber < MAX_MEASUREMENTS; MeasurementNumber++ )
-            {
-                ComponentMeasurement = &MeasurementResultsArray [ TestRunNumber ].Measurements [ MeasurementNumber ];
-
-                ComponentMeasurement->StartTime.QuadPart = 0;
-                ComponentMeasurement->EndTime.QuadPart   = 0;
-
-                for ( int FunctionIndex = 0; FunctionIndex < MAX_FFI_FUNCTIONS; FunctionIndex++ )
-                {
-                    ComponentMeasurementEntry = &ComponentMeasurement->FFIMeasurements [ FunctionIndex ];
-
-                    ComponentMeasurementEntry->EntryName = FFIMeasurementEntryNames [ FunctionIndex ];
-
-                    ComponentMeasurementEntry->StartTime.QuadPart = 0;
-                    ComponentMeasurementEntry->EndTime.QuadPart   = 0;
-                }
-
-                for ( int FunctionIndex = 0; FunctionIndex < MAX_PKI_FUNCTIONS; FunctionIndex++ )
-                {
-                    ComponentMeasurementEntry = &ComponentMeasurement->PKIMeasurements [ FunctionIndex ];
-
-                    ComponentMeasurementEntry->EntryName = PKIMeasurementEntryNames [ FunctionIndex ];
-
-                    ComponentMeasurementEntry->StartTime.QuadPart = 0;
-                    ComponentMeasurementEntry->EndTime.QuadPart   = 0;
-                }
-
-                for ( int FunctionIndex = 0; FunctionIndex < MAX_FFI_CALLBACK_FUNCTIONS; FunctionIndex++ )
-                {
-                    CallbackMeasurementEntry = &ComponentMeasurement->FFICallbackMeasurements [ FunctionIndex ];
-
-                    CallbackMeasurementEntry->EntryName = FFICallbackMeasurementEntryNames [ FunctionIndex ];
-
-                    CallbackMeasurementEntry->NumberOfCalls = 0;
-
-                    for ( int CallIndex = 0; CallIndex < MAX_CALLS_PER_MEASUREMENT; CallIndex++ )
-                    {
-                        CallbackMeasurementEntry->StartTimes [ CallIndex ].QuadPart = 0;
-                        CallbackMeasurementEntry->EndTimes   [ CallIndex ].QuadPart = 0;
-                    }
-                }
-
-                for ( int FunctionIndex = 0; FunctionIndex < MAX_PKI_CALLBACK_FUNCTIONS; FunctionIndex++ )
-                {
-                    CallbackMeasurementEntry = &ComponentMeasurement->PKICallbackMeasurements [ FunctionIndex ];
-
-                    CallbackMeasurementEntry->EntryName = PKICallbackMeasurementEntryNames [ FunctionIndex ];
-
-                    CallbackMeasurementEntry->NumberOfCalls = 0;
-
-                    for ( int CallIndex = 0; CallIndex < MAX_CALLS_PER_MEASUREMENT; CallIndex++ )
-                    {
-                        CallbackMeasurementEntry->StartTimes [ CallIndex ].QuadPart = 0;
-                        CallbackMeasurementEntry->EndTimes   [ CallIndex ].QuadPart = 0;
-                    }
-                }
-            }
+            InitialiseMeasurementResult ( MeasurementResult );
         }
-
-        return ( TRUE );
     }
-    else
-    {
-        printf ( "Cannot allocate memory for measurements array!\n" );
-    }
-
-    return ( FALSE );
 }
 
 //**********************************************************************************************************************************
 
-bool PrintMeasurementResults ( FILE * MeasurementsResultFile )
+void AllocateMeasurementResult ( int TestRunNumber )
 {
-    COMPONENTMEASUREMENTENTRY *MeasurementEntry          = NULL;
+    MeasurementResultsArray [ TestRunNumber ] = ( MEASUREMENTRESULTS * ) malloc ( sizeof ( MEASUREMENTRESULTS ) );
+
+    if ( MeasurementResultsArray [ TestRunNumber ] == NULL )
+    {
+        printf ( "Could not allocate memory for measurement type %d. This is a FATAL error!\n", TestRunNumber );
+
+        exit ( EXIT_FAILURE );
+    }
+}
+
+//**********************************************************************************************************************************
+
+void FreeMeasurementResults ( void )
+{
+    int TestRunNumber = 0;
+
+    for ( TestRunNumber = 0; TestRunNumber < MAX_MEASUREMENT_TYPES; TestRunNumber++ )
+    {
+        if ( MeasurementResultsArray [ TestRunNumber ] != NULL ) // was memory allocated for this measurement?
+        {
+            // if so then free it
+
+            free ( MeasurementResultsArray [ TestRunNumber ] );
+
+            MeasurementResultsArray [ TestRunNumber ] = NULL;
+        }
+    }
+}
+
+//**********************************************************************************************************************************
+
+void InitialiseMeasurementResult ( MEASUREMENTRESULTS *MeasurementResult )
+{
+    COMPONENTMEASUREMENTENTRY *ComponentMeasurementEntry = NULL;
     CALLBACKMEASUREMENTENTRY  *CallbackMeasurementEntry  = NULL;
     COMPONENTMEASUREMENT      *ComponentMeasurement      = NULL;
+
+    MeasurementResult->StartTime.QuadPart = 0;
+    MeasurementResult->EndTime.QuadPart   = 0;
+
+    for ( int MeasurementNumber = 0; MeasurementNumber < MAX_MEASUREMENTS; MeasurementNumber++ )
+    {
+        ComponentMeasurement = &MeasurementResult->Measurements [ MeasurementNumber ];
+
+        ComponentMeasurement->StartTime.QuadPart = 0;
+        ComponentMeasurement->EndTime.QuadPart   = 0;
+
+        for ( int FunctionIndex = 0; FunctionIndex < MAX_FFI_FUNCTIONS; FunctionIndex++ )
+        {
+            ComponentMeasurementEntry = &ComponentMeasurement->FFIMeasurements [ FunctionIndex ];
+
+            ComponentMeasurementEntry->EntryName = FFIMeasurementEntryNames [ FunctionIndex ];
+
+            ComponentMeasurementEntry->StartTime.QuadPart = 0;
+            ComponentMeasurementEntry->EndTime.QuadPart   = 0;
+        }
+
+        for ( int FunctionIndex = 0; FunctionIndex < MAX_PKI_FUNCTIONS; FunctionIndex++ )
+        {
+            ComponentMeasurementEntry = &ComponentMeasurement->PKIMeasurements [ FunctionIndex ];
+
+            ComponentMeasurementEntry->EntryName = PKIMeasurementEntryNames [ FunctionIndex ];
+
+            ComponentMeasurementEntry->StartTime.QuadPart = 0;
+            ComponentMeasurementEntry->EndTime.QuadPart   = 0;
+        }
+
+        for ( int FunctionIndex = 0; FunctionIndex < MAX_FFI_CALLBACK_FUNCTIONS; FunctionIndex++ )
+        {
+            CallbackMeasurementEntry = &ComponentMeasurement->FFICallbackMeasurements [ FunctionIndex ];
+
+            CallbackMeasurementEntry->EntryName = FFICallbackMeasurementEntryNames [ FunctionIndex ];
+
+            CallbackMeasurementEntry->NumberOfCalls = 0;
+
+            for ( int CallIndex = 0; CallIndex < MAX_CALLS_PER_MEASUREMENT; CallIndex++ )
+            {
+                CallbackMeasurementEntry->StartTimes [ CallIndex ].QuadPart = 0;
+                CallbackMeasurementEntry->EndTimes   [ CallIndex ].QuadPart = 0;
+            }
+        }
+
+        for ( int FunctionIndex = 0; FunctionIndex < MAX_PKI_CALLBACK_FUNCTIONS; FunctionIndex++ )
+        {
+            CallbackMeasurementEntry = &ComponentMeasurement->PKICallbackMeasurements [ FunctionIndex ];
+
+            CallbackMeasurementEntry->EntryName = PKICallbackMeasurementEntryNames [ FunctionIndex ];
+
+            CallbackMeasurementEntry->NumberOfCalls = 0;
+
+            for ( int CallIndex = 0; CallIndex < MAX_CALLS_PER_MEASUREMENT; CallIndex++ )
+            {
+                CallbackMeasurementEntry->StartTimes [ CallIndex ].QuadPart = 0;
+                CallbackMeasurementEntry->EndTimes   [ CallIndex ].QuadPart = 0;
+            }
+        }
+    }
+}
+
+//**********************************************************************************************************************************
+
+void PrintMeasurementResults ( FILE *MeasurementsResultFile )
+{
+    MEASUREMENTRESULTS *MeasurementResult = NULL;
 
     // write the measurements to the recorded measurements file
 
     for ( int TestRunNumber = 0; TestRunNumber < MAX_MEASUREMENT_TYPES; TestRunNumber++ )
     {
+        MeasurementResult = MeasurementResultsArray [ TestRunNumber ];
+
         // only print out the test runs which were actually recorded
 
-        if ( MeasurementResultsArray [ TestRunNumber ].StartTime.QuadPart == 0 ) break;
-
-        fprintf ( MeasurementsResultFile, "Measurement Type = %s\n", MeasurementResultsArray [ TestRunNumber ].MeasurementTypeName );
-
-        fprintf ( MeasurementsResultFile, "Measurement StartTime = %I64u\n", MeasurementResultsArray [ TestRunNumber ].StartTime.QuadPart );
-
-        fprintf ( MeasurementsResultFile, "Measurement EndTime = %I64u\n", MeasurementResultsArray [ TestRunNumber ].EndTime.QuadPart );
-
-        for ( int MeasurementNumber = 0; MeasurementNumber < MAX_MEASUREMENTS; MeasurementNumber++ )
+        if ( MeasurementResult != NULL ) // was memory allocated?
         {
-            ComponentMeasurement = &MeasurementResultsArray [ TestRunNumber ].Measurements [ MeasurementNumber ];
-
-            // only print out the measurements which were actually recorded
-
-            if ( ComponentMeasurement->StartTime.QuadPart == 0 ) break;
-
-            fprintf ( MeasurementsResultFile, "\nMeasurement Results Entry [ %d ]\n\n", MeasurementNumber );
-
-            fprintf ( MeasurementsResultFile, "Component Test Start Time = %I64u\n", ComponentMeasurement->StartTime.QuadPart );
-            fprintf ( MeasurementsResultFile, "Component Test End Time   = %I64u\n", ComponentMeasurement->EndTime.QuadPart   );
-
-            for ( int FunctionIndex = 0; FunctionIndex < MAX_FFI_FUNCTIONS; FunctionIndex++ )
+            if ( MeasurementResult->StartTime.QuadPart != 0 ) // did the measurement take place?
             {
-                MeasurementEntry = &ComponentMeasurement->FFIMeasurements [ FunctionIndex ];
-
-                fprintf ( MeasurementsResultFile, " FFI Function Name = %s\n", MeasurementEntry->EntryName );
-
-                fprintf ( MeasurementsResultFile, " Measurement Start Time = %I64u\n", MeasurementEntry->StartTime.QuadPart );
-                fprintf ( MeasurementsResultFile, " Measurement End Time   = %I64u\n", MeasurementEntry->EndTime.QuadPart   );
-            }
-
-            for ( int FunctionIndex = 0; FunctionIndex < MAX_FFI_CALLBACK_FUNCTIONS; FunctionIndex++ )
-            {
-                CallbackMeasurementEntry = &ComponentMeasurement->FFICallbackMeasurements [ FunctionIndex ];
-
-                fprintf ( MeasurementsResultFile, " FFI Callback Name = %s\n", CallbackMeasurementEntry->EntryName );
-
-                fprintf ( MeasurementsResultFile, "   Number Of Calls = %u\n", CallbackMeasurementEntry->NumberOfCalls );
-
-                for ( int CallIndex = 0; CallIndex < CallbackMeasurementEntry->NumberOfCalls; CallIndex++ )
-                {
-                    fprintf ( MeasurementsResultFile, " Measurement Start Time [%03d] = %I64u\n", CallIndex, CallbackMeasurementEntry->StartTimes [ CallIndex ].QuadPart );
-                    fprintf ( MeasurementsResultFile, " Measurement End Time   [%03d] = %I64u\n", CallIndex, CallbackMeasurementEntry->EndTimes   [ CallIndex ].QuadPart );
-                }
-            }
-
-            for ( int FunctionIndex = 0; FunctionIndex < MAX_PKI_FUNCTIONS; FunctionIndex++ )
-            {
-                MeasurementEntry = &ComponentMeasurement->PKIMeasurements [ FunctionIndex ];
-
-                fprintf ( MeasurementsResultFile, " PKI Function Name = %s\n", MeasurementEntry->EntryName );
-
-                fprintf ( MeasurementsResultFile, " Measurement Start Time = %I64u\n", MeasurementEntry->StartTime.QuadPart );
-                fprintf ( MeasurementsResultFile, " Measurement End Time   = %I64u\n", MeasurementEntry->EndTime.QuadPart   );
-            }
-
-            for ( int FunctionIndex = 0; FunctionIndex < MAX_PKI_CALLBACK_FUNCTIONS; FunctionIndex++ )
-            {
-                CallbackMeasurementEntry = &ComponentMeasurement->PKICallbackMeasurements [ FunctionIndex ];
-
-                fprintf ( MeasurementsResultFile, " PKI Callback Name = %s\n", CallbackMeasurementEntry->EntryName );
-
-                fprintf ( MeasurementsResultFile, "   Number Of Calls = %u\n", CallbackMeasurementEntry->NumberOfCalls );
-
-                for ( int CallIndex = 0; CallIndex < CallbackMeasurementEntry->NumberOfCalls; CallIndex++ )
-                {
-                    fprintf ( MeasurementsResultFile, " Measurement Start Time [%03d] = %I64u\n", CallIndex, CallbackMeasurementEntry->StartTimes [ CallIndex ].QuadPart );
-                    fprintf ( MeasurementsResultFile, " Measurement End Time   [%03d] = %I64u\n", CallIndex, CallbackMeasurementEntry->EndTimes   [ CallIndex ].QuadPart );
-                }
+                PrintMeasurementResult ( MeasurementsResultFile, MeasurementResult );
             }
         }
     }
-
-    return ( TRUE );
 }
 
 //**********************************************************************************************************************************
 
-void RecordTestRunStartTime ( void )
+void PrintMeasurementResult ( FILE               *MeasurementsResultFile,
+                              MEASUREMENTRESULTS *MeasurementResult )
 {
-     QueryPerformanceCounter ( &MeasurementResultsArray [ CurrentTestRunNumber ].StartTime );
+    COMPONENTMEASUREMENTENTRY *MeasurementEntry         = NULL;
+    CALLBACKMEASUREMENTENTRY  *CallbackMeasurementEntry = NULL;
+    COMPONENTMEASUREMENT      *ComponentMeasurement     = NULL;
+
+    fprintf ( MeasurementsResultFile, "Measurement Type = %s\n", MeasurementResult->MeasurementTypeName );
+
+    fprintf ( MeasurementsResultFile, "Measurement StartTime = %I64u\n", MeasurementResult->StartTime.QuadPart );
+
+    fprintf ( MeasurementsResultFile, "Measurement EndTime = %I64u\n", MeasurementResult->EndTime.QuadPart );
+
+    for ( int MeasurementNumber = 0; MeasurementNumber < MAX_MEASUREMENTS; MeasurementNumber++ )
+    {
+        ComponentMeasurement = &MeasurementResult->Measurements [ MeasurementNumber ];
+
+        // only print out the measurements which were actually recorded
+
+        if ( ComponentMeasurement->StartTime.QuadPart == 0 ) break;
+
+        fprintf ( MeasurementsResultFile, "\nMeasurement Results Entry [ %d ]\n\n", MeasurementNumber );
+
+        fprintf ( MeasurementsResultFile, "Component Test Start Time = %I64u\n", ComponentMeasurement->StartTime.QuadPart );
+        fprintf ( MeasurementsResultFile, "Component Test End Time   = %I64u\n", ComponentMeasurement->EndTime.QuadPart   );
+
+        for ( int FunctionIndex = 0; FunctionIndex < MAX_FFI_FUNCTIONS; FunctionIndex++ )
+        {
+            MeasurementEntry = &ComponentMeasurement->FFIMeasurements [ FunctionIndex ];
+
+            fprintf ( MeasurementsResultFile, " FFI Function Name = %s\n", MeasurementEntry->EntryName );
+
+            fprintf ( MeasurementsResultFile, " Measurement Start Time = %I64u\n", MeasurementEntry->StartTime.QuadPart );
+            fprintf ( MeasurementsResultFile, " Measurement End Time   = %I64u\n", MeasurementEntry->EndTime.QuadPart   );
+        }
+
+        for ( int FunctionIndex = 0; FunctionIndex < MAX_FFI_CALLBACK_FUNCTIONS; FunctionIndex++ )
+        {
+            CallbackMeasurementEntry = &ComponentMeasurement->FFICallbackMeasurements [ FunctionIndex ];
+
+            fprintf ( MeasurementsResultFile, " FFI Callback Name = %s\n", CallbackMeasurementEntry->EntryName );
+
+            fprintf ( MeasurementsResultFile, "   Number Of Calls = %u\n", CallbackMeasurementEntry->NumberOfCalls );
+
+            for ( int CallIndex = 0; CallIndex < CallbackMeasurementEntry->NumberOfCalls; CallIndex++ )
+            {
+                fprintf ( MeasurementsResultFile, " Measurement Start Time [%03d] = %I64u\n", CallIndex, CallbackMeasurementEntry->StartTimes [ CallIndex ].QuadPart );
+                fprintf ( MeasurementsResultFile, " Measurement End Time   [%03d] = %I64u\n", CallIndex, CallbackMeasurementEntry->EndTimes   [ CallIndex ].QuadPart );
+            }
+        }
+
+        for ( int FunctionIndex = 0; FunctionIndex < MAX_PKI_FUNCTIONS; FunctionIndex++ )
+        {
+            MeasurementEntry = &ComponentMeasurement->PKIMeasurements [ FunctionIndex ];
+
+            fprintf ( MeasurementsResultFile, " PKI Function Name = %s\n", MeasurementEntry->EntryName );
+
+            fprintf ( MeasurementsResultFile, " Measurement Start Time = %I64u\n", MeasurementEntry->StartTime.QuadPart );
+            fprintf ( MeasurementsResultFile, " Measurement End Time   = %I64u\n", MeasurementEntry->EndTime.QuadPart   );
+        }
+
+        for ( int FunctionIndex = 0; FunctionIndex < MAX_PKI_CALLBACK_FUNCTIONS; FunctionIndex++ )
+        {
+            CallbackMeasurementEntry = &ComponentMeasurement->PKICallbackMeasurements [ FunctionIndex ];
+
+            fprintf ( MeasurementsResultFile, " PKI Callback Name = %s\n", CallbackMeasurementEntry->EntryName );
+
+            fprintf ( MeasurementsResultFile, "   Number Of Calls = %u\n", CallbackMeasurementEntry->NumberOfCalls );
+
+            for ( int CallIndex = 0; CallIndex < CallbackMeasurementEntry->NumberOfCalls; CallIndex++ )
+            {
+                fprintf ( MeasurementsResultFile, " Measurement Start Time [%03d] = %I64u\n", CallIndex, CallbackMeasurementEntry->StartTimes [ CallIndex ].QuadPart );
+                fprintf ( MeasurementsResultFile, " Measurement End Time   [%03d] = %I64u\n", CallIndex, CallbackMeasurementEntry->EndTimes   [ CallIndex ].QuadPart );
+            }
+        }
+    }
 }
 
 //**********************************************************************************************************************************
 
-void RecordTestRunEndTime ( void )
+void RecordTestRunStartTime ( int TestRunNumber )
 {
-     QueryPerformanceCounter ( &MeasurementResultsArray [ CurrentTestRunNumber ].EndTime );
+     QueryPerformanceCounter ( &MeasurementResultsArray [ TestRunNumber ]->StartTime );
+}
+
+//**********************************************************************************************************************************
+
+void RecordTestRunEndTime ( int TestRunNumber )
+{
+     QueryPerformanceCounter ( &MeasurementResultsArray [ TestRunNumber ]->EndTime );
 }
 
 //**********************************************************************************************************************************
@@ -367,7 +452,7 @@ void MITLS_CALLCONV TicketCallback ( void               *cb_state,
     CALLBACKMEASUREMENTENTRY *FFICallbackMeasurement = NULL;
     unsigned int              CallCount              = 0;
 
-    FFICallbackMeasurement = &MeasurementResultsArray [ CurrentTestRunNumber ].Measurements [ CurrentMeasurementNumber ].FFICallbackMeasurements [ FFI_MITLS_TICKET_CALLBACK ];
+    FFICallbackMeasurement = &MeasurementResultsArray [ CurrentTestRunNumber ]->Measurements [ CurrentMeasurementNumber ].FFICallbackMeasurements [ FFI_MITLS_TICKET_CALLBACK ];
 
     CallCount = FFICallbackMeasurement->NumberOfCalls++;
 
@@ -398,7 +483,7 @@ mitls_nego_action MITLS_CALLCONV NegotiationCallback ( void                 *cb_
     CALLBACKMEASUREMENTENTRY *FFICallbackMeasurement = NULL;
     unsigned int              CallCount              = 0;
 
-    FFICallbackMeasurement = &MeasurementResultsArray [ CurrentTestRunNumber ].Measurements [ CurrentMeasurementNumber ].FFICallbackMeasurements [ FFI_MITLS_NEGOTIATION_CALLBACK ];
+    FFICallbackMeasurement = &MeasurementResultsArray [ CurrentTestRunNumber ]->Measurements [ CurrentMeasurementNumber ].FFICallbackMeasurements [ FFI_MITLS_NEGOTIATION_CALLBACK ];
 
     CallCount = FFICallbackMeasurement->NumberOfCalls++;
 
@@ -430,7 +515,7 @@ void MITLS_CALLCONV TraceCallback ( const char *msg )
 
 //**********************************************************************************************************************************
 
-static unsigned char LargeTransmitBuffer [ 65536 ]; // almost the maximum packet the network will return in one go
+static unsigned char LargeTransmitBuffer [ 65536 ]; // almost the maximum packet the network will process in one go
 
 static unsigned int LargeTransmitBufferReadIndex = 0;
 
@@ -449,7 +534,7 @@ int MITLS_CALLCONV SendCallback ( void                *Context,
     CALLBACKMEASUREMENTENTRY *FFICallbackMeasurement = NULL;
     unsigned int              CallCount              = 0;
 
-    FFICallbackMeasurement = &MeasurementResultsArray [ CurrentTestRunNumber ].Measurements [ CurrentMeasurementNumber ].FFICallbackMeasurements [ FFI_MITLS_SEND_CALLBACK ];
+    FFICallbackMeasurement = &MeasurementResultsArray [ CurrentTestRunNumber ]->Measurements [ CurrentMeasurementNumber ].FFICallbackMeasurements [ FFI_MITLS_SEND_CALLBACK ];
 
     CallCount = FFICallbackMeasurement->NumberOfCalls++;
 
@@ -458,76 +543,81 @@ int MITLS_CALLCONV SendCallback ( void                *Context,
         QueryPerformanceCounter ( &FFICallbackMeasurement->StartTimes [ CallCount ] );
     }
 
-    printf ( "Send callback function invoked for %d octets!\n", BufferSize );
+    if ( Tester->ConsoleDebugging ) printf ( "Send callback function invoked for %zd octets!\n", BufferSize );
 
-    // The component sends the records in sections now (Aug 2018) so we have to send this right away, but keep a copy so that when
-    // we have the full record we can decode it.
+    // The component sends the records in sections now (Aug 2018) so we have to send this right away
 
     AmountSent = send ( Component->Socket, (char * ) Buffer, (int) BufferSize, 0 );
 
-    if ( AmountSent == 0 )
+    // if console debugging is enabled then accumulate the network packets and then decode them
+
+    if ( Tester->ConsoleDebugging )
     {
-        printf ( "Socket Closed!\n" );
-    }
-    else
-    {
-        // append to temporary decoder buffer
-
-        memcpy ( (void *) &LargeTransmitBuffer [ LargeTransmitBufferReadIndex ], (const void *) Buffer, BufferSize );
-
-        LargeTransmitBufferReadIndex += BufferSize;
-
-        AmountTransmitted += BufferSize;
-
-        if ( IncompleteTransmission == FALSE )
+        if ( AmountSent == 0 )
         {
-            if ( AmountSent == 5 ) // just the header was sent first (API change August 2018)
-            {
-                // peek into message to get record length if its a TLS handshake record
-
-                TLS_RECORD *TLSRecord = (TLS_RECORD *) Buffer;
-
-                if ( TLSRecord->RecordHeader.ContentType == TLS_CT_HANDSHAKE )
-                {
-                    ExpectedRecordLength = ( TLSRecord->RecordHeader.ContentLengthHigh * 256 ) + TLSRecord->RecordHeader.ContentLengthLow;
-
-                    IncompleteTransmission = TRUE; // we will need to get the rest before decoding
-                }
-                else
-                {
-                    if ( TLSRecord->RecordHeader.ContentType == TLS_CT_ALERT )
-                    {
-                        DecodePacket ( (void *) LargeTransmitBuffer, BufferSize, "Packet sent to server" );
-
-                        // reset decoder buffer as we know what this is
-
-                        LargeTransmitBufferReadIndex = 0;
-
-                        AmountTransmitted = 0;
-                    }
-                }
-            }
+            printf ( "Socket Closed!\n" );
         }
         else
         {
-            // do we have enough to decode it yet?
+            // append to temporary decoder buffer
 
-            if ( AmountTransmitted >= ExpectedRecordLength )
+            memcpy ( (void *) &LargeTransmitBuffer [ LargeTransmitBufferReadIndex ], (const void *) Buffer, BufferSize );
+
+            LargeTransmitBufferReadIndex += BufferSize;
+
+            AmountTransmitted += BufferSize;
+
+            if ( IncompleteTransmission == FALSE )
             {
-                DecodePacket ( (void *) LargeTransmitBuffer, BufferSize, "Packet sent to server" );
+                if ( AmountSent == 5 ) // just the header was sent first (API change August 2018)
+                {
+                    // peek into message to get record length if its a TLS handshake record
 
-                // reset decoder buffer
+                    TLS_RECORD *TLSRecord = (TLS_RECORD *) Buffer;
 
-                LargeTransmitBufferReadIndex = 0;
+                    if ( TLSRecord->RecordHeader.ContentType == TLS_CT_HANDSHAKE )
+                    {
+                        ExpectedRecordLength = ( TLSRecord->RecordHeader.ContentLengthHigh * 256 ) + TLSRecord->RecordHeader.ContentLengthLow;
 
-                AmountTransmitted = 0;
+                        IncompleteTransmission = TRUE; // we will need to get the rest before decoding
+                    }
+                    else
+                    {
+                        if ( TLSRecord->RecordHeader.ContentType == TLS_CT_ALERT )
+                        {
+                            DecodePacket ( (void *) LargeTransmitBuffer, BufferSize, "Packet sent to server" );
 
-                ExpectedRecordLength = 0;
+                            // reset decoder buffer as we know what this is
 
-                IncompleteTransmission = FALSE;
+                            LargeTransmitBufferReadIndex = 0;
+
+                            AmountTransmitted = 0;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // do we have enough to decode it yet?
+
+                if ( AmountTransmitted >= ExpectedRecordLength )
+                {
+                    DecodePacket ( (void *) LargeTransmitBuffer, BufferSize, "Packet sent to server" );
+
+                    // reset decoder buffer
+
+                    LargeTransmitBufferReadIndex = 0;
+
+                    AmountTransmitted = 0;
+
+                    ExpectedRecordLength = 0;
+
+                    IncompleteTransmission = FALSE;
+                }
             }
         }
-    }
+
+    } // if ConsoleDebugging
 
     if ( CallCount < MAX_CALLS_PER_MEASUREMENT )
     {
@@ -563,76 +653,87 @@ int MITLS_CALLCONV ReceiveCallback ( void          *Context,
     CALLBACKMEASUREMENTENTRY *FFICallbackMeasurement = NULL;
     unsigned int              CallCount              = 0;
 
-    FFICallbackMeasurement = &MeasurementResultsArray [ CurrentTestRunNumber ].Measurements [ CurrentMeasurementNumber ].FFICallbackMeasurements [ FFI_MITLS_RECEIVE_CALLBACK ];
+    FFICallbackMeasurement = &MeasurementResultsArray [ CurrentTestRunNumber ]->Measurements [ CurrentMeasurementNumber ].FFICallbackMeasurements [ FFI_MITLS_RECEIVE_CALLBACK ];
 
     CallCount = FFICallbackMeasurement->NumberOfCalls++;
-
-    printf ( "Receive callback function invoked (with room for %zu octets)!\n", BufferSize );
 
     if ( CallCount < MAX_CALLS_PER_MEASUREMENT )
     {
         QueryPerformanceCounter ( &FFICallbackMeasurement->StartTimes [ CallCount ] );
     }
 
-    // did the previous call result in an incomplete transfer?
+    // if console debugging is enabled then we need to buffer the network packet to decode it and return only the requested amount.
 
-    if ( IncompleteTransfer == FALSE )
+    if ( Tester->ConsoleDebugging )
     {
-        // No, so get as much as the network will provide
+        printf ( "Receive callback function invoked (with room for %zu octets)!\n", BufferSize );
 
-        LargeBufferReadIndex = 0;
+        // yes, so did the previous call result in an incomplete transfer?
 
-        AmountReceived = recv ( Component->Socket, (char * ) LargeReceiveBuffer, sizeof ( LargeReceiveBuffer ), 0 );
-
-        if ( AmountReceived > 0 )
+        if ( IncompleteTransfer == FALSE )
         {
-            IncompleteTransfer = TRUE;
+            // No, so get as much as the network will provide
 
-            // we only decode the packet the first time round!
+            LargeBufferReadIndex = 0;
 
-            DecodePacket ( (void *) LargeReceiveBuffer, AmountReceived, "Packet received from server" );
+            AmountReceived = recv ( Component->Socket, (char * ) LargeReceiveBuffer, sizeof ( LargeReceiveBuffer ), 0 );
+
+            if ( AmountReceived > 0 )
+            {
+                IncompleteTransfer = TRUE;
+
+                // we only decode the packet the first time round and if console debuggin is enabled!
+
+                DecodePacket ( (void *) LargeReceiveBuffer, AmountReceived, "Packet received from server" );
+            }
         }
-    }
 
-    // webservers such as bing.com will go mute when you specify a valid but old cipher suite in the clienthello which means that
-    // the call to recv() will timeout and an error returned such as "connection reset by peer". So we have to test for this but we
-    // also need to indicate back to the component that it has happened, so that it finishes the ffi_mitls_connect() call.
+        // webservers such as bing.com will go mute when you specify a valid but old cipher suite in the clienthello which means that
+        // the call to recv() will timeout and an error returned such as "connection reset by peer". So we have to test for this but we
+        // also need to indicate back to the component that it has happened, so that it finishes the ffi_mitls_connect() call.
 
-    if ( AmountReceived == -1 )
-    {
-        PrintSocketError ();
-
-        return ( AmountReceived ); // let libmitls.dll know what has happened
-    }
-
-    if ( AmountReceived == 0 )
-    {
-        printf ( "Socket Closed!\n" );
-
-        IncompleteTransfer = FALSE;
-    }
-    else
-    {
-        AmountRemaining = AmountReceived - LargeBufferReadIndex;
-
-        if ( AmountRemaining > BufferSize )
+        if ( AmountReceived == -1 )
         {
-            memcpy ( Buffer, &LargeReceiveBuffer [ LargeBufferReadIndex ], BufferSize );
+            PrintSocketError ();
 
-            AmountTransferred = BufferSize;
+            return ( AmountReceived ); // let libmitls.dll know what has happened
+        }
 
-            IncompleteTransfer = TRUE; // still more left so still incomplete
+        if ( AmountReceived == 0 )
+        {
+            printf ( "Socket Closed!\n" );
+
+            IncompleteTransfer = FALSE;
         }
         else
         {
-            memcpy ( Buffer, &LargeReceiveBuffer [ LargeBufferReadIndex ], AmountRemaining );
+            AmountRemaining = AmountReceived - LargeBufferReadIndex;
 
-            AmountTransferred = AmountRemaining;
+            if ( AmountRemaining > BufferSize )
+            {
+                memcpy ( Buffer, &LargeReceiveBuffer [ LargeBufferReadIndex ], BufferSize );
 
-            IncompleteTransfer = FALSE; // no more left now so transfer complete
+                AmountTransferred = BufferSize;
+
+                IncompleteTransfer = TRUE; // still more left so still incomplete
+            }
+            else
+            {
+                memcpy ( Buffer, &LargeReceiveBuffer [ LargeBufferReadIndex ], AmountRemaining );
+
+                AmountTransferred = AmountRemaining;
+
+                IncompleteTransfer = FALSE; // no more left now so transfer complete
+            }
+
+            LargeBufferReadIndex += AmountTransferred;
         }
+    }
+    else
+    {
+        // no, so just return the amount requested from the network
 
-        LargeBufferReadIndex += AmountTransferred;
+        AmountTransferred = recv ( Component->Socket, (char * ) Buffer, BufferSize, 0 );
     }
 
     if ( CallCount < MAX_CALLS_PER_MEASUREMENT )
@@ -658,7 +759,7 @@ void *MITLS_CALLCONV CertificateSelectCallback ( void                         *c
     CALLBACKMEASUREMENTENTRY *FFICallbackMeasurement = NULL;
     unsigned int              CallCount              = 0;
 
-    FFICallbackMeasurement = &MeasurementResultsArray [ CurrentTestRunNumber ].Measurements [ CurrentMeasurementNumber ].FFICallbackMeasurements [ FFI_MITLS_CERTIFICATE_SELECT_CALLBACK ];
+    FFICallbackMeasurement = &MeasurementResultsArray [ CurrentTestRunNumber ]->Measurements [ CurrentMeasurementNumber ].FFICallbackMeasurements [ FFI_MITLS_CERTIFICATE_SELECT_CALLBACK ];
 
     CallCount = FFICallbackMeasurement->NumberOfCalls++;
 
@@ -686,7 +787,7 @@ size_t MITLS_CALLCONV CertificateFormatCallback ( void          *cb_state,
     CALLBACKMEASUREMENTENTRY *FFICallbackMeasurement = NULL;
     unsigned int              CallCount              = 0;
 
-    FFICallbackMeasurement = &MeasurementResultsArray [ CurrentTestRunNumber ].Measurements [ CurrentMeasurementNumber ].FFICallbackMeasurements [ FFI_MITLS_CERTIFICATE_FORMAT_CALLBACK ];
+    FFICallbackMeasurement = &MeasurementResultsArray [ CurrentTestRunNumber ]->Measurements [ CurrentMeasurementNumber ].FFICallbackMeasurements [ FFI_MITLS_CERTIFICATE_FORMAT_CALLBACK ];
 
     CallCount = FFICallbackMeasurement->NumberOfCalls++;
 
@@ -717,7 +818,7 @@ size_t MITLS_CALLCONV CertificateSignCallback ( void                         *cb
     CALLBACKMEASUREMENTENTRY *FFICallbackMeasurement = NULL;
     unsigned int              CallCount              = 0;
 
-    FFICallbackMeasurement = &MeasurementResultsArray [ CurrentTestRunNumber ].Measurements [ CurrentMeasurementNumber ].FFICallbackMeasurements [ FFI_MITLS_CERTIFICATE_SIGN_CALLBACK ];
+    FFICallbackMeasurement = &MeasurementResultsArray [ CurrentTestRunNumber ]->Measurements [ CurrentMeasurementNumber ].FFICallbackMeasurements [ FFI_MITLS_CERTIFICATE_SIGN_CALLBACK ];
 
     CallCount = FFICallbackMeasurement->NumberOfCalls++;
 
@@ -738,15 +839,6 @@ size_t MITLS_CALLCONV CertificateSignCallback ( void                         *cb
 
 //**********************************************************************************************************************************
 
-// typedef int (MITLS_CALLCONV *pfn_FFI_cert_verify_cb)(void *cb_state,
-//const unsigned char* chain,
-//size_t chain_len,
-//const mitls_signature_scheme sigalg,
-//const unsigned char *tbs,
-//size_t tbs_len,
-//const unsigned char *sig,
-//size_t sig_len);
-
 int MITLS_CALLCONV CertificateVerifyCallback ( void                         *State,
                                                const unsigned char          *ChainOfTrust,       // the certificate chain of trust
                                                size_t                        ChainLength,        // how many entries are in the chain
@@ -761,7 +853,7 @@ int MITLS_CALLCONV CertificateVerifyCallback ( void                         *Sta
     int                       Result                  = 0;
     size_t                    VerifiedSignatureLength = SignatureLength;
 
-    FFICallbackMeasurement = &MeasurementResultsArray [ CurrentTestRunNumber ].Measurements [ CurrentMeasurementNumber ].FFICallbackMeasurements [ FFI_MITLS_CERTIFICATE_VERIFY_CALLBACK ];
+    FFICallbackMeasurement = &MeasurementResultsArray [ CurrentTestRunNumber ]->Measurements [ CurrentMeasurementNumber ].FFICallbackMeasurements [ FFI_MITLS_CERTIFICATE_VERIFY_CALLBACK ];
 
     CallCount = FFICallbackMeasurement->NumberOfCalls++;
 
@@ -770,22 +862,22 @@ int MITLS_CALLCONV CertificateVerifyCallback ( void                         *Sta
         QueryPerformanceCounter ( &FFICallbackMeasurement->StartTimes [ CallCount ] );
     }
 
-    printf ( "Certificate Verify Callback function invoked!\n" );
+    if ( Tester->ConsoleDebugging ) printf ( "Certificate Verify Callback function invoked!\n" );
 
-    bool Supported = FALSE;
-
-    const char *SignatureAlgorithmName = LookupSignatureAlgorithm ( SignatureAlgorithm, &Supported );
-
-    printf ( "             State = 0x%08X\n",     State             );
-    printf ( "      ChainOfTrust = 0x%08X\n",     ChainOfTrust      );
-    printf ( "       ChainLength = %zd octets\n", ChainLength       );
-
-    printf ( "SignatureAlgorithm = 0x%04X (%s), Supported = %d\n", SignatureAlgorithm, SignatureAlgorithmName, Supported );
-
-    printf ( "       Certificate = 0x%08X\n",     Certificate       );
-    printf ( " CertificateLength = %zd octets\n", CertificateLength );
-    printf ( "         Signature = 0x%08X\n",     Signature         );
-    printf ( "   SignatureLength = %zd octets\n", SignatureLength   );
+    //bool Supported = FALSE;
+    //
+    //const char *SignatureAlgorithmName = LookupSignatureAlgorithm ( SignatureAlgorithm, &Supported );
+    //
+    //printf ( "             State = 0x%08X\n",     State             );
+    //printf ( "      ChainOfTrust = 0x%08X\n",     ChainOfTrust      );
+    //printf ( "       ChainLength = %zd octets\n", ChainLength       );
+    //
+    //printf ( "SignatureAlgorithm = 0x%04X (%s), Supported = %d\n", SignatureAlgorithm, SignatureAlgorithmName, Supported );
+    //
+    //printf ( "       Certificate = 0x%08X\n",     Certificate       );
+    //printf ( " CertificateLength = %zd octets\n", CertificateLength );
+    //printf ( "         Signature = 0x%08X\n",     Signature         );
+    //printf ( "   SignatureLength = %zd octets\n", SignatureLength   );
 
     // verification requires us to first parse the chain of trust. If all is well, then we use the library to verify the certificate
     // which is why there are so many parameters to this callback
@@ -798,7 +890,10 @@ int MITLS_CALLCONV CertificateVerifyCallback ( void                         *Sta
 
         if ( ! Result )
         {
-            printf ( "Chain Validation failed!\n" ); // comment on result but otherwise ignore it
+            if ( Tester->ConsoleDebugging )
+            {
+                if ( Tester->ConsoleDebugging ) printf ( "Chain Validation failed!\n" ); // comment on result but otherwise ignore it
+            }
         }
 
          Result = Tester->Component->VerifyCertificate ( (mipki_state *) State,
@@ -811,7 +906,7 @@ int MITLS_CALLCONV CertificateVerifyCallback ( void                         *Sta
 
         if ( ! Result )
         {
-            printf ( "Certificate Verification failed!\n" );
+            if ( Tester->ConsoleDebugging ) printf ( "Certificate Verification failed!\n" );
         }
 
         // free the chain as we no longer need it
@@ -822,7 +917,7 @@ int MITLS_CALLCONV CertificateVerifyCallback ( void                         *Sta
     }
     else
     {
-        printf ( "Certificate Chain Parsing failed!\n" );
+        if ( Tester->ConsoleDebugging ) printf ( "Certificate Chain Parsing failed!\n" );
     }
 
     if ( CallCount < MAX_CALLS_PER_MEASUREMENT )
@@ -846,7 +941,7 @@ int MITLS_CALLCONV CertificatePasswordCallback ( char       *password,
     CALLBACKMEASUREMENTENTRY *PKICallbackMeasurement = NULL;
     unsigned int              CallCount              = 0;
 
-    PKICallbackMeasurement = &MeasurementResultsArray [ CurrentTestRunNumber ].Measurements [ CurrentMeasurementNumber ].PKICallbackMeasurements [ MIPKI_PASSWORD_CALLBACK ];
+    PKICallbackMeasurement = &MeasurementResultsArray [ CurrentTestRunNumber ]->Measurements [ CurrentMeasurementNumber ].PKICallbackMeasurements [ MIPKI_PASSWORD_CALLBACK ];
 
     CallCount = PKICallbackMeasurement->NumberOfCalls++;
 
@@ -874,7 +969,7 @@ void *MITLS_CALLCONV CertificateAllocationCallback ( void    *cur,
     CALLBACKMEASUREMENTENTRY *PKICallbackMeasurement = NULL;
     unsigned int              CallCount              = 0;
 
-    PKICallbackMeasurement = &MeasurementResultsArray [ CurrentTestRunNumber ].Measurements [ CurrentMeasurementNumber ].PKICallbackMeasurements [ MIPKI_ALLOC_CALLBACK ];
+    PKICallbackMeasurement = &MeasurementResultsArray [ CurrentTestRunNumber ]->Measurements [ CurrentMeasurementNumber ].PKICallbackMeasurements [ MIPKI_ALLOC_CALLBACK ];
 
     CallCount = PKICallbackMeasurement->NumberOfCalls++;
 
@@ -899,32 +994,113 @@ void *MITLS_CALLCONV CertificateAllocationCallback ( void    *cur,
 //
 //**********************************************************************************************************************************
 
-COMPONENT::COMPONENT ( FILE *TestResultsFile )
+COMPONENT::COMPONENT ( TLSTESTER *Parent,  FILE *NewDebugFile )
 {
-    DebugFile = TestResultsFile;
+    Tester = Parent;
+
+    DebugFile = NewDebugFile;
+
+    Socket = INVALID_SOCKET;
+
+    // initialise component and library internal state variable addresses
+
+    TLSState  = NULL;
+    QUICState = NULL;
+    PKIState  = NULL;
+
+    // set the default values here in case they are not over-ridden by command line arguments
+
+    strcpy ( TLSVersion, "1.3" );
+
+    strcpy ( HostName, "google.com" );
+
+    PortNumber = 443;
+
+    strcpy ( ClientCertificateFilename,    "server-ecdsa.crt" );
+    strcpy ( ClientCertificateKeyFilename, "server-ecdsa.key" );
+    strcpy ( ServerCertificateFilename,    "server-ecdsa.crt" );
+    strcpy ( ServerCertificateKeyFilename, "server-ecdsa.key" );
 
     TestRunNumber = 0;
 
     MeasurementNumber = 0;
 
+    NumberOfMeasurementsMade = 0;
+
+    // initialise certificate chain variables
+
+    NumberOfChainsAllocated = 0; // index into CertificateChains
+
+    for ( int ChainNumber = 0; ChainNumber < MAX_CERTIFICATE_CHAINS; ChainNumber++ )
+    {
+        CertificateChains [ ChainNumber ] = NULL;
+    }
+
+    // initialise measurement results global variables
+
     CurrentTestRunNumber = 0;
 
     CurrentMeasurementNumber = 0;
 
-    CurrentComponentMeasurement = &MeasurementResultsArray [ 0 ].Measurements [ 0 ];
+    CurrentComponentMeasurement = &MeasurementResultsArray [ 0 ]->Measurements [ 0 ]; // set to the first test and measurement
 
-    if ( ! InitialiseMeasurementResults () )
-    {
-        printf ( "No measurements can be made, this is fatal!\n" );
-
-        exit ( EXIT_FAILURE ); // this is fatal so exit
-    }
+    InitialiseMeasurementResults ();
 }
 
 //**********************************************************************************************************************************
 
 COMPONENT::~COMPONENT ( void )
 {
+    FreeMeasurementResults ();
+}
+
+//**********************************************************************************************************************************
+
+void COMPONENT::SetClientCertificateFilename ( char *NewClientCertificateFilename )
+{
+    strcpy ( ClientCertificateFilename, NewClientCertificateFilename );
+}
+
+//**********************************************************************************************************************************
+
+void COMPONENT::SetClientCertificateKeyFilename ( char *NewClientCertificateKeyFilename )
+{
+    strcpy ( ClientCertificateKeyFilename, NewClientCertificateKeyFilename );
+}
+
+//**********************************************************************************************************************************
+
+void COMPONENT::SetServerCertificateFilename ( char *NewServerCertificateFilename )
+{
+    strcpy ( ServerCertificateFilename, NewServerCertificateFilename );
+}
+
+//**********************************************************************************************************************************
+
+void COMPONENT::SetServerCertificateKeyFilename ( char *NewServerCertificateKeyFilename )
+{
+    strcpy ( ServerCertificateKeyFilename, NewServerCertificateKeyFilename );
+}
+
+//**********************************************************************************************************************************
+
+void COMPONENT::SetVersion ( char *NewVersion )
+{
+    strcpy ( TLSVersion, NewVersion );
+}
+
+//**********************************************************************************************************************************
+
+void COMPONENT::SetHostName ( char *NewHostName )
+{
+    strcpy ( HostName, NewHostName );
+}
+
+//**********************************************************************************************************************************
+
+void COMPONENT::SetPortNumber ( int NewPortNumber )
+{
+    PortNumber = NewPortNumber;
 }
 
 //**********************************************************************************************************************************
@@ -948,7 +1124,7 @@ void COMPONENT::SetMeasurementNumber ( int NewMeasurementNumber )
 
     CurrentMeasurementNumber = MeasurementNumber;
 
-    CurrentComponentMeasurement = &MeasurementResultsArray [ TestRunNumber ].Measurements [ MeasurementNumber ];
+    CurrentComponentMeasurement = &MeasurementResultsArray [ TestRunNumber ]->Measurements [ MeasurementNumber ];
 }
 
 //**********************************************************************************************************************************
@@ -969,14 +1145,14 @@ void COMPONENT::SetNumberOfMeasurementsMade ( int FinalNumberOfMeasurementsMade 
 
 void COMPONENT::RecordStartTime ( void )
 {
-    QueryPerformanceCounter ( &MeasurementResultsArray [ TestRunNumber ].Measurements [ MeasurementNumber ].StartTime );
+    QueryPerformanceCounter ( &MeasurementResultsArray [ TestRunNumber ]->Measurements [ MeasurementNumber ].StartTime );
 }
 
 //**********************************************************************************************************************************
 
 void COMPONENT::RecordEndTime ( void )
 {
-    QueryPerformanceCounter ( &MeasurementResultsArray [ TestRunNumber ].Measurements [ MeasurementNumber ].EndTime );
+    QueryPerformanceCounter ( &MeasurementResultsArray [ TestRunNumber ]->Measurements [ MeasurementNumber ].EndTime );
 }
 
 //**********************************************************************************************************************************
@@ -1037,7 +1213,7 @@ int COMPONENT::SetTicketKey ( const char          *Algorithm,
 
     QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_SET_TICKET_KEY ].StartTime );
 
-    int Result = FFI_mitls_set_ticket_key ( Algorithm, TicketKey, TicketKeyLength ); // const char *alg, const unsigned char *ticketkey, size_t klen)
+    int Result = FFI_mitls_set_ticket_key ( Algorithm, TicketKey, TicketKeyLength );
 
     QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_SET_TICKET_KEY ].EndTime );
 
