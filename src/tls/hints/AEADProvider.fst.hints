@@ -22,11 +22,12 @@
       2,
       1,
       [
-        "@query", "equation_DebugFlags.debug",
-        "equation_DebugFlags.debug_AEP"
+        "@query", "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "equation_FStar.Monotonic.Heap.equal_dom",
+        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "aa16157c6c5d52cd0a09025ff3f96e1e"
+      "fe945fed7520bb18180c8b21c3da950d"
     ],
     [
       "AEADProvider.prov",

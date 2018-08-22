@@ -22,11 +22,12 @@
       2,
       1,
       [
-        "@query", "equation_DebugFlags.debug",
-        "equation_DebugFlags.debug_NGO"
+        "@query", "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "equation_FStar.Monotonic.Heap.equal_dom",
+        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "533a2ccd956c1cb48a55456ec785d1b1"
+      "a3b2e1a58b5971ad0b67b8a2f43723b7"
     ],
     [
       "Negotiation.string_of_option_extensions",
@@ -244,7 +245,7 @@
         "typing_Negotiation.find_client_extension"
       ],
       0,
-      "a0f86924a640f930237084d2060776df"
+      "f2dc7b01a5544dbab4c376b8c0db6e22"
     ],
     [
       "Negotiation.find_signature_algorithms",
@@ -270,7 +271,7 @@
         "typing_Negotiation.find_client_extension"
       ],
       0,
-      "d9d9f922cbdabf8b89e0bb55b576d403"
+      "3b3ab9439e38098ee36c93d55b7ee69a"
     ],
     [
       "Negotiation.find_signature_algorithms_cert",
@@ -296,7 +297,7 @@
         "typing_Negotiation.find_client_extension"
       ],
       0,
-      "11650171bdb898f20dad7ab5777812ed"
+      "f047b0b0a27fd1e4919b2b82fbe40318"
     ],
     [
       "Negotiation.find_cookie",
@@ -322,7 +323,7 @@
         "typing_Negotiation.find_client_extension"
       ],
       0,
-      "77c94813dfcb26ed402ba85e79ed7357"
+      "56cd2238708c639c78951b44236446bc"
     ],
     [
       "Negotiation.find_sessionTicket",
@@ -348,7 +349,7 @@
         "typing_Negotiation.find_client_extension"
       ],
       0,
-      "c12fa412c9160562304d7eb84a8ced9a"
+      "0e01f383d09b0079c4ffc53ec7cafd5c"
     ],
     [
       "Negotiation.find_clientPske",
@@ -377,7 +378,7 @@
         "typing_Negotiation.find_client_extension"
       ],
       0,
-      "c03a0c8ee8203713267bae5ca2d9a519"
+      "d508064107ce15ff9dc14ceecad6686f"
     ],
     [
       "Negotiation.find_serverPske",
@@ -455,7 +456,7 @@
         "typing_Negotiation.find_client_extension"
       ],
       0,
-      "c72716f79f1d02f4ab550f3eeeea1f18"
+      "589312850958fb83c35697181366fe8b"
     ],
     [
       "Negotiation.list_of_ClientKeyShare",
@@ -519,7 +520,7 @@
         "typing_Negotiation.find_client_extension"
       ],
       0,
-      "a02232d9a6fe3797940aa69a9cdf55b5"
+      "00cfaf0f4449fc1587e8ba26a8f990dd"
     ],
     [
       "Negotiation.__proj__Mode__item__n_hrr",
