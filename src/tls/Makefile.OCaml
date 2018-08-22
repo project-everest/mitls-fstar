@@ -42,28 +42,6 @@ OCAMLOPT	= OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind opt $(OCAMLOPTS)
 OCAMLMKLIB	= OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind mklib $(OCAMLOPTS0)
 IMPL_CHOICE 	?= runtime_switch
 
-# Sanity checks
-
-ifeq (,$(wildcard $(LOWC_HOME)/LowC.cmxa))
-  $(error LOWC_HOME is $(LOWC_HOME) and I cannot find $(LOWC_HOME)/LowC.cmxa -- please run make in secure_api!)
-endif
-
-ifeq (,$(wildcard $(KREMLIN_HOME)/_build/kremlib/C.cmx))
-  $(error KREMLIN_HOME is $(KREMLIN_HOME) and I cannot find $(KREMLIN_HOME)/_build/kremlib/C.cmx -- please run make in kremlin!)
-endif
-
-ifeq (,$(wildcard $(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa))
-  $(error FSTAR_HOME is $(FSTAR_HOME) and I cannot find $(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa -- please run make in $(FSTAR_HOME)/ulib/ml)
-endif
-
-ifeq (,$(wildcard $(MLCRYPTO_HOME)/CoreCrypto.cmxa))
-  $(error I cannot find $(MLCRYPTO_HOME)/CoreCrypto.cmxa -- please run make in $(MLCRYPTO_HOME))
-endif
-
-ifeq (,$(wildcard $(FFI_HOME)/FFICallbacks.cmxa))
-  $(error I cannot find $(FFI_HOME)/FFICallbacks.cmxa -- please run make in $(FFI_HOME))
-endif
-
 %.o: %.c
 	$(CC) -I $(KREMLIN_HOME)/include $^ -o $@ -c
 
@@ -100,6 +78,27 @@ mitls.exe: $(MITLS_INPUTS) $(LIBKREMLIB)
 	$(OCAMLOPT) -cclib -L../pki -cclib -lmipki \
 	  -cclib -L$(EVERCRYPT_HOME)/out -cclib -levercrypt -linkall \
 	  -linkpkg -g $^ -o $@ -thread
+
+# Sanity checks, replaced with dependencies on mitls.exe
+
+$(LOWC_HOME)/LowC.cmxa:
+	$(error LOWC_HOME is $(LOWC_HOME) and I cannot find $(LOWC_HOME)/LowC.cmxa -- please run make in secure_api!)
+
+# fstarlib.cmxa MUST NOT be a direct dependency of mitls.exe (if it
+# is, then it will appear several times at linking.) So we make it an
+# indirect dependency, say via kremlib.
+
+$(KREMLIN_HOME)/_build/kremlib/C.cmx: $(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa
+	$(error KREMLIN_HOME is $(KREMLIN_HOME) and I cannot find $(KREMLIN_HOME)/_build/kremlib/C.cmx -- please run make in kremlin!)
+
+$(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa:
+	$(error FSTAR_HOME is $(FSTAR_HOME) and I cannot find $(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa -- please run make in $(FSTAR_HOME)/ulib/ml)
+
+$(MLCRYPTO_HOME)/CoreCrypto.cmxa:
+	$(error I cannot find $(MLCRYPTO_HOME)/CoreCrypto.cmxa -- please run make in $(MLCRYPTO_HOME))
+
+$(FFI_HOME)/FFICallbacks.cmxa:
+	$(error I cannot find $(FFI_HOME)/FFICallbacks.cmxa -- please run make in $(FFI_HOME))
 
 mitls.byte: $(MITLS_BYTE_INPUTS) test/mitls.cmo ../pki/libmipki.so
 	$(OCAMLC)   -cclib -L../pki -cclib -lmipki -linkall -linkpkg -g $^ -o mitls.exe -thread -w -31
