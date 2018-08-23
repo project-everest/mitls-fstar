@@ -15,30 +15,46 @@
 //  -----------
 //
 //! \file Tester.cpp
-//! \brief Contains the complete implementation of the TESTER Object.
+//! \brief Contains the complete implementation of the TESTER Object. This covers generic tester attributes and functions.
 //!
 //**********************************************************************************************************************************
 
 #include "stdafx.h"
-#include "time.h"
+#include "time.h"     // for time and local_time
 #include "winsock2.h" // for WSAStartup and WSACleanup
-#include "windows.h" // for sleep
+#include "windows.h"  // for sleep
 
 #include "InteropTester.h"
 #include "Tester.h"
 
 //**********************************************************************************************************************************
 
-extern int PrintSocketError ( void );
+extern int PrintSocketError ( void ); // in simpleserver.cpp
 
 //**********************************************************************************************************************************
 
 TESTER::TESTER ( FILE *NewDebugFile, FILE * NewComponentStatisticsFile, FILE *NewRecordedMeasurementsFile )
 {
-   DebugFile                = NewDebugFile;
-   ComponentStatisticsFile  = NewComponentStatisticsFile;
-   RecordedMeasurementsFile = NewRecordedMeasurementsFile;
-}
+    DebugFile                = NewDebugFile;
+    ComponentStatisticsFile  = NewComponentStatisticsFile;
+    RecordedMeasurementsFile = NewRecordedMeasurementsFile;
+
+    // initialise basic measurement variables
+
+    memset ( &StartTime, 0, sizeof ( StartTime ) );
+    memset ( &EndTime,   0, sizeof ( EndTime   ) );
+    memset ( &Frequency, 0, sizeof ( Frequency ) );
+
+    // initialise debug and console flags
+
+    VerboseConsoleOutput = FALSE;
+
+    ConsoleDebugging = FALSE;
+
+    RedirectedStandardOutputFile = NULL;
+
+    RedirectedStandardOutputFilename [ 0 ] = '\0';
+ }
 
 //**********************************************************************************************************************************
 
@@ -83,7 +99,7 @@ bool TESTER::Setup ( char *DateAndTimeString )
         }
         else
         {
-            if ( ! ConsoleDebugging ) // if console debugging is enabled then we do want the output on the console!
+            if ( ! ConsoleDebugging ) // if console debugging is enabled then we "DO" want the output on the console!
             {
                 // get the current date and time
 
@@ -112,7 +128,7 @@ bool TESTER::Setup ( char *DateAndTimeString )
 
         QueryPerformanceFrequency ( &Frequency ); // clock ticks per second
 
-        QueryPerformanceCounter ( &StartTime );  // in clock ticks
+        QueryPerformanceCounter ( &StartTime );   // in clock ticks
 
         return ( TRUE );
     }
@@ -142,7 +158,7 @@ bool TESTER::TearDown ( void )
 
     WSACleanup ();
 
-    return ( FALSE );
+    return ( TRUE );
 }
 
 //**********************************************************************************************************************************
@@ -153,9 +169,9 @@ long TESTER::CalculateExecutionTime ( LARGE_INTEGER StartingTime, LARGE_INTEGER 
     __int64       ScaledTime;
     double        ElapsedTime;
 
-    ElapsedMicroseconds.QuadPart = EndingTime.QuadPart - StartingTime.QuadPart;
-    ElapsedMicroseconds.QuadPart *= 1000000;
-    ElapsedMicroseconds.QuadPart /= Frequency.QuadPart;
+    ElapsedMicroseconds.QuadPart = EndingTime.QuadPart - StartingTime.QuadPart; // calculate delta time
+    ElapsedMicroseconds.QuadPart *= 1000000;                                    // convert it to clock ticks
+    ElapsedMicroseconds.QuadPart /= Frequency.QuadPart;                         // convert to microseconds
 
     ScaledTime = ( (EndingTime.QuadPart) - (StartingTime.QuadPart) ) * 1000000;
 

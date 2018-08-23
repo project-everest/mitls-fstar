@@ -15,7 +15,7 @@
 //  -----------
 //
 //! \file TLSTester.cpp
-//! \brief Contains the complete implementation of the TESTER Object.
+//! \brief Contains the complete implementation of the TLSTESTER Object. This covers TLS tester attributes and functions.
 //!
 //**********************************************************************************************************************************
 
@@ -100,10 +100,6 @@ TLSTESTER::TLSTESTER (  FILE *DebugFile,
 
     // command line over-ride flags
 
-    VerboseConsoleOutput = FALSE;
-
-    ConsoleDebugging = FALSE;
-
     UseHostList = FALSE;
 
     UseHostName = FALSE;
@@ -181,25 +177,48 @@ void TLSTESTER::RunClientTLSTests ( char *DateAndTimeString )
     if ( ErrorIndex != 0 ) { printf ( "Failed to Initialise PKI!\n" ); return; }
 
     //
-    // run a measurement for each combination of cipher suite, algorithm and named group
+    // Run a measurement for just the default cipher suite, signature algorithm and named group
     //
 
-    for ( CipherSuiteNumber = 0; CipherSuiteNumber < 1 /* NumberOfCipherSuites */; CipherSuiteNumber++ )
+    QueryPerformanceCounter ( &MeasurementStartTime ); // just for this measurement to give a quick result below
+
+    Success = RunSingleClientDefaultsTLSTest ( MeasurementNumber );
+
+    QueryPerformanceCounter ( &MeasurementEndTime );
+
+    if ( Success )
     {
-        for ( SignatureAlgorithmNumber = 0; SignatureAlgorithmNumber < 1 /* NumberOfSignatureAlgorithms */; SignatureAlgorithmNumber++ )
+        ExecutionTime = CalculateExecutionTime ( MeasurementStartTime, MeasurementEndTime );
+
+        fprintf ( ComponentStatisticsFile,
+                  "%s, %d, Default, Default, Default, PASS, %u\n",
+                  DateAndTimeString,
+                  MeasurementNumber,
+                  ExecutionTime );
+    }
+
+    MeasurementNumber++;
+
+    //
+    // Then run a measurement for each combination of supported cipher suite, signature algorithm and named group
+    //
+
+    for ( CipherSuiteNumber = 0; CipherSuiteNumber < NumberOfCipherSuites; CipherSuiteNumber++ )
+    {
+        for ( SignatureAlgorithmNumber = 0; SignatureAlgorithmNumber < NumberOfSignatureAlgorithms; SignatureAlgorithmNumber++ )
         {
-            for ( NamedGroupNumber = 0; NamedGroupNumber < 1 /* NumberOfNamedGroups */; NamedGroupNumber++ )
+            for ( NamedGroupNumber = 0; NamedGroupNumber < NumberOfNamedGroups; NamedGroupNumber++ )
             {
-                QueryPerformanceCounter ( &TestStartTime );
+                QueryPerformanceCounter ( &MeasurementStartTime ); // just for this measurement to give a quick result below
 
                 Success = RunSingleClientTLSTest ( MeasurementNumber,
                                                    SupportedCipherSuites        [ CipherSuiteNumber        ],
                                                    SupportedSignatureAlgorithms [ SignatureAlgorithmNumber ],
                                                    SupportedNamedGroups         [ NamedGroupNumber         ] );
 
-                QueryPerformanceCounter ( &TestEndTime );
+                QueryPerformanceCounter ( &MeasurementEndTime );
 
-                ExecutionTime = CalculateExecutionTime ( TestStartTime, TestEndTime );
+                ExecutionTime = CalculateExecutionTime ( MeasurementStartTime, MeasurementEndTime );
 
                 if ( Success ) TestResult = "PASS";
 
@@ -546,15 +565,15 @@ bool TLSTESTER::RunSingleClientTLSTest ( int         MeasurementNumber,
 
                 if ( Result )
                 {
-                    //Result = Component->ConfigureCipherSuites ( CipherSuite );
+                    Result = Component->ConfigureCipherSuites ( CipherSuite );
 
                     if ( Result )
                     {
-                        //Result = Component->ConfigureSignatureAlgorithms ( SignatureAlgorithm );
+                        Result = Component->ConfigureSignatureAlgorithms ( SignatureAlgorithm );
 
                         if ( Result )
                         {
-                            //Result = Component->ConfigureNamedGroups ( NamedGroup );
+                            Result = Component->ConfigureNamedGroups ( NamedGroup );
 
                             if ( Result )
                             {
@@ -639,6 +658,149 @@ bool TLSTESTER::RunSingleClientTLSTest ( int         MeasurementNumber,
         fprintf ( DebugFile, "Cannot open TCP socket for peer!\n" );
 
         PrintSocketError ();
+    }
+
+    return ( Success );
+}
+
+//**********************************************************************************************************************************
+
+SOCKET TLSTESTER::OpenPeerSocket ( void )
+{
+    struct sockaddr_in   PeerAddress;
+    struct hostent      *Peer        = NULL;
+    int                  Response    = 0;
+    SOCKET               PeerSocket  = INVALID_SOCKET;
+
+    // open socket to communicate with peer
+
+    PeerSocket = socket ( AF_INET, SOCK_STREAM, 0 ); // we need a TCP socket as this is TLS!
+
+    if ( PeerSocket != INVALID_SOCKET )
+    {
+        Peer = gethostbyname ( Component->GetHostName () );
+
+        memset ( &PeerAddress, 0, sizeof ( PeerAddress ) );
+
+        PeerAddress.sin_family = AF_INET;
+
+        memcpy ( &PeerAddress.sin_addr.s_addr, Peer->h_addr, Peer->h_length );
+
+        PeerAddress.sin_port = htons ( Component->GetPortNumber () );
+
+        Response = connect ( PeerSocket, ( struct sockaddr* ) &PeerAddress, sizeof ( PeerAddress ) );
+
+        if ( Response != 0 )
+        {
+            fprintf ( DebugFile, "Cannot connect to peer \"%s\" for test!\n", Component->GetHostName () );
+
+            PrintSocketError ();
+
+            closesocket ( PeerSocket ); // we can't use this socket so just close it
+
+            PeerSocket = INVALID_SOCKET;
+        }
+    }
+    else
+    {
+        fprintf ( DebugFile, "Cannot open TCP socket for peer!\n" );
+
+        PrintSocketError ();
+    }
+
+    return ( PeerSocket );
+}
+
+//**********************************************************************************************************************************
+//
+// This test uses just the default configuration for the cipher suites, signature algorithms and named groups.
+//
+
+bool TLSTESTER::RunSingleClientDefaultsTLSTest ( int MeasurementNumber )
+{
+    int    Response;
+    int    Result;
+    bool   Success    = FALSE;
+    SOCKET PeerSocket = INVALID_SOCKET;
+
+    fprintf ( DebugFile, "Running single client defaults TLS test %d\n", MeasurementNumber );
+
+    if ( VerboseConsoleOutput )
+    {
+        printf ( "Running single client defaults TLS test %d\n", MeasurementNumber );
+    }
+
+    // open socket to communicate with peer (server)
+
+    PeerSocket = OpenPeerSocket ();
+
+    if ( PeerSocket != INVALID_SOCKET )
+    {
+        Component->RecordStartTime (); // start time for this measurement
+
+        Component->SetMeasurementNumber ( MeasurementNumber );
+
+        Component->SetSocket ( PeerSocket );
+
+        Result = Component->AddRootFileOrPath ( CertificateAuthorityChainFilename ); // must be done before the configure
+
+        if ( Result )
+        {
+            Result = Component->Configure (); // set default TLS version
+
+            if ( Result )
+            {
+                Result = Component->ConfigureCertificateCallbacks ();
+
+                if ( Result )
+                {
+                    Result = Component->ConfigureNegotiationCallback ();
+
+                    if ( Result )
+                    {
+                        Result = Component->Connect ();
+
+                        //
+                        // The component will call the send() and receive() callback functions to perform the handshake and the
+                        // Connect () function call returns only when the handshake is complete.
+                        //
+
+                        if ( Result )
+                        {
+                            if ( VerboseConsoleOutput ) printf ( "Component->Connect() was successful!\n" );
+
+                            Component->CloseConnection ();
+
+                            Success = TRUE;
+                        }
+                        else
+                        {
+                            printf ( "Component->Connect() failed!\n" );
+                        }
+                    }
+                    else
+                    {
+                        printf ( "Component->ConfigureNegotiationCallback () failed!\n" );
+                    }
+                }
+                else
+                {
+                    printf ( "Component->ConfigureCertificateCallbacks () failed!\n" );
+                }
+            }
+            else
+            {
+                printf ( "Component->Configure() failed!\n" );
+            }
+        }
+        else
+        {
+            printf ( "Component->AddRootFileOrPath () failed!\n" );
+        }
+
+        Component->RecordEndTime ();
+
+        if ( VerboseConsoleOutput ) printf ( "Last Error Code = %d\n", GetLastError () );
     }
 
     return ( Success );

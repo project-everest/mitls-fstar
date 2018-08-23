@@ -787,8 +787,11 @@ class TLSTESTER : public TESTER
 {
     protected:
 
-        LARGE_INTEGER TestStartTime;
-        LARGE_INTEGER TestEndTime;
+        LARGE_INTEGER TestStartTime; // start time for a measurement
+        LARGE_INTEGER TestEndTime;   // end time for a measurement
+
+        LARGE_INTEGER MeasurementStartTime; // start time for a client TLS measurement
+        LARGE_INTEGER MeasurementEndTime;   // end time for a client TLS measurement
 
         SOCKET PeerSocket;
         SOCKET ComponentSocket;
@@ -898,6 +901,10 @@ class TLSTESTER : public TESTER
         void RunFizzServerQUICTests ( char *DateAndTimeString );    // mitls as QUIC server with Fizz Client
 
 private:
+
+        SOCKET OpenPeerSocket ( void );
+
+        bool RunSingleClientDefaultsTLSTest ( int MeasurementNumber );
 
         bool RunSingleClientTLSTest ( int         MeasurementNumber,
                                       const char *CipherSuite,
