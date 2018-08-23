@@ -18,6 +18,7 @@ Then type tester.exe to run the tester.
 
 When running Tester.exe with no arguments will generate the help text:-
 
+<code><pre>
            TLS/DTLS Tester
             Version 0.0.2
 (c) Microsoft Research 21st August 2018
@@ -39,7 +40,9 @@ Usage: Tester.exe [Arguments...]
   -r:certfilename Use specified Server Certificate filename (default is built in)
   -k:keyfilename  Use specified Server certificate key filename (default is built in)
   -a:authfilename Use specified Certificate Authority Chain filename (default is built in)
-  
+
+</pre></code>
+
 All the options except for "-f:filename", "-s", "i", "-x" are currently supported. The Component DLL currently produces copius amounts of debug output, but this is gathered into a file. If you want to see this output then choose the "-v" flag which makes the tester more verbose.
 
 If no other arguments are given, the tester does not perform any tests. You have to enable the tests you want to run by using the "-c" and "-t" flags. There are no server or interoperability tests as yet so the "-s", "i", "-x" flags have no effect.
