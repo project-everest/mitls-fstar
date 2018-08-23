@@ -262,6 +262,24 @@ let parse_maybe_enum_key_eq
   ))
 = ()
 
+let parse_enum_key_eq
+  (#k: parser_kind)
+  (#key #repr: eqtype)
+  (p: parser k repr)
+  (e: enum key repr)
+  (input: bytes)
+: Lemma
+  (parse (parse_enum_key p e) input == (match parse p input with
+  | Some (x, consumed) ->
+    begin match maybe_enum_key_of_repr e x with
+    | Known k -> Some (k, consumed)
+    | _ -> None
+    end
+  | _ -> None
+  ))
+= parse_filter_eq p (fun (r: repr) -> list_mem r (list_map snd e)) input;
+  parse_synth_eq (p `parse_filter` (fun (r: repr) -> list_mem r (list_map snd e))) (fun (x: repr { list_mem x (list_map snd e) == true } ) -> enum_key_of_repr e x) input
+
 let repr_of_maybe_enum_key
   (#key #repr: eqtype)
   (e: enum key repr)
