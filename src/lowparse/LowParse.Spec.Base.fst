@@ -421,6 +421,7 @@ let parser_kind_prop_ext
   no_lookahead_weak_ext f1 f2;
   injective_ext f1 f2
 
+[@unifier_hint_injective]
 inline_for_extraction
 let parser
   (k: parser_kind)
