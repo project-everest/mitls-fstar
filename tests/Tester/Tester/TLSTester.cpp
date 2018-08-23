@@ -156,13 +156,15 @@ TLSTESTER::~TLSTESTER ( void )
 
 void TLSTESTER::RunClientTLSTests ( char *DateAndTimeString )
 {
-    int  CipherSuiteNumber        = 0;
-    int  SignatureAlgorithmNumber = 0;
-    int  NamedGroupNumber         = 0;
-    int  MeasurementNumber        = 0;
-    long ExecutionTime            = 0;
-    int  Result                   = 0;
-    int  ErrorIndex               = 0;
+    int   CipherSuiteNumber        = 0;
+    int   SignatureAlgorithmNumber = 0;
+    int   NamedGroupNumber         = 0;
+    int   MeasurementNumber        = 0;
+    long  ExecutionTime            = 0;
+    int   Result                   = 0;
+    int   ErrorIndex               = 0;
+    bool  Success                  = FALSE;
+    char *TestResult               = "FAIL"; // or "PASS"
 
     RecordTestRunStartTime ( TLS_CLIENT_MEASUREMENTS );
 
@@ -190,14 +192,16 @@ void TLSTESTER::RunClientTLSTests ( char *DateAndTimeString )
             {
                 QueryPerformanceCounter ( &TestStartTime );
 
-                RunSingleClientTLSTest ( MeasurementNumber,
-                                         SupportedCipherSuites        [ CipherSuiteNumber        ],
-                                         SupportedSignatureAlgorithms [ SignatureAlgorithmNumber ],
-                                         SupportedNamedGroups         [ NamedGroupNumber         ] );
+                Success = RunSingleClientTLSTest ( MeasurementNumber,
+                                                   SupportedCipherSuites        [ CipherSuiteNumber        ],
+                                                   SupportedSignatureAlgorithms [ SignatureAlgorithmNumber ],
+                                                   SupportedNamedGroups         [ NamedGroupNumber         ] );
 
                 QueryPerformanceCounter ( &TestEndTime );
 
                 ExecutionTime = CalculateExecutionTime ( TestStartTime, TestEndTime );
+
+                if ( Success ) TestResult = "PASS";
 
                 fprintf ( ComponentStatisticsFile,
                           "%s, %d, %s, %s, %s, %s, %u\n",
@@ -206,7 +210,7 @@ void TLSTESTER::RunClientTLSTests ( char *DateAndTimeString )
                           SupportedCipherSuites        [ CipherSuiteNumber        ],
                           SupportedSignatureAlgorithms [ SignatureAlgorithmNumber ],
                           SupportedNamedGroups         [ NamedGroupNumber         ],
-                          "FAIL",
+                          TestResult,
                           ExecutionTime );
 
                 OperatorConfidence ();
@@ -481,7 +485,7 @@ void TLSTESTER::RunFizzServerQUICTests ( char *DateAndTimeString )
 //
 // </code></pre>
 //
-void TLSTESTER::RunSingleClientTLSTest ( int         MeasurementNumber,
+bool TLSTESTER::RunSingleClientTLSTest ( int         MeasurementNumber,
                                          const char *CipherSuite,
                                          const char *SignatureAlgorithm,
                                          const char *NamedGroup )
@@ -490,6 +494,7 @@ void TLSTESTER::RunSingleClientTLSTest ( int         MeasurementNumber,
     struct sockaddr_in  PeerAddress;
     int                 Response;
     int                 Result;
+    bool                Success = FALSE;
 
     fprintf ( DebugFile,
               "Running single client TLS test %d on Cipher Suite %s, Signature Algorithm %s and Named group %s\n",
@@ -573,6 +578,8 @@ void TLSTESTER::RunSingleClientTLSTest ( int         MeasurementNumber,
                                             if ( VerboseConsoleOutput ) printf ( "Component->Connect() was successful!\n" );
 
                                             Component->CloseConnection ();
+
+                                            Success = TRUE;
                                         }
                                         else
                                         {
@@ -633,6 +640,8 @@ void TLSTESTER::RunSingleClientTLSTest ( int         MeasurementNumber,
 
         PrintSocketError ();
     }
+
+    return ( Success );
 }
 
 //**********************************************************************************************************************************

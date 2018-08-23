@@ -899,7 +899,7 @@ class TLSTESTER : public TESTER
 
 private:
 
-        void RunSingleClientTLSTest ( int         MeasurementNumber,
+        bool RunSingleClientTLSTest ( int         MeasurementNumber,
                                       const char *CipherSuite,
                                       const char *SignatureAlgorithm,
                                       const char *NamedGroup );
