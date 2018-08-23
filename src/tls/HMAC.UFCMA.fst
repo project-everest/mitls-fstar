@@ -44,6 +44,7 @@ type keyrepr (u:info) = Hashing.hkey u.alg
 let goodish (#ip:ipkg) (i:ip.Pkg.t) (u:info) (msg:text u) =
   _: unit{~(safe i) \/ u.good msg}
 
+[@unifier_hint_injective]
 private type log_t (#ip:ipkg) (i:ip.Pkg.t) (u:info) (r:rgn) =
   MDM.t r (tag u * text u) (fun (t,v) -> goodish i u v) (fun _ -> True) // could constrain size
 
