@@ -16,7 +16,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "de24082749d318c3e7435922880c1cbc"
+      "a2c44af8fd0072e58dec111f0abf4cb7"
     ],
     [
       "Format.UncompressedPointRepresentation.lbytes_pair_parser_kind",
@@ -32,7 +32,7 @@
         "refinement_interpretation_Format.UncompressedPointRepresentation_Tm_refine_2dcde2c233833ec0b2801e96897e362a"
       ],
       0,
-      "96810742a06f93b34d0743de549616d2"
+      "613bb1cd0f2a0a7338b5d009298555fb"
     ],
     [
       "Format.UncompressedPointRepresentation.lbytes_pair_parser",
@@ -61,7 +61,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "ff6a93d80204466914ac26009496c007"
+      "1272278b33b2c7fd3aa25991104fb5ee"
     ],
     [
       "Format.UncompressedPointRepresentation.lbytes_pair_parser32",
@@ -91,7 +91,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "b34a2b550aae14a800b0a6e178998480"
+      "2d8604408deb0f2097703862c7a3f57c"
     ],
     [
       "Format.UncompressedPointRepresentation.lemma_ucp_of_uv_is_injective",
@@ -110,7 +110,7 @@
         "projection_inverse_Format.UncompressedPointRepresentation.MkuncompressedPointRepresentation_y"
       ],
       0,
-      "c66c4590ce349636a2cab37129a4d870"
+      "8ccb2c93dcfad98f6cf92e513094a26e"
     ],
     [
       "Format.UncompressedPointRepresentation.lemma_ucp_of_uv_of_ucp",
@@ -135,7 +135,7 @@
         "refinement_interpretation_Format.UncompressedPointRepresentation_Tm_refine_5abcae620b915f89552905becc875ea5"
       ],
       0,
-      "cf699d8b30167bb7e62f4675cd584b3d"
+      "89de56c19716e3f08291908d98c79c87"
     ],
     [
       "Format.UncompressedPointRepresentation.cuv_of_ucp",
@@ -147,7 +147,7 @@
         "primitive_Prims.op_Equality", "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "60ce17b73fd334dfeea17d46c09061c3"
+      "f1ca6486c54df4020d523b404a5c53fb"
     ],
     [
       "Format.UncompressedPointRepresentation.lemma_ucp_of_cuv_is_injective",
@@ -174,7 +174,7 @@
         "refinement_interpretation_Format.Constants_Tm_refine_797ad669d4f1ee4d5aab91d7b78dc71d"
       ],
       0,
-      "afadd4976d6cb4f1c08bac2a970eafdc"
+      "f3f6fbd71c699bb85fcf07a30df1c45a"
     ],
     [
       "Format.UncompressedPointRepresentation.lemma_ucp_of_cuv_of_ucp",
@@ -200,7 +200,7 @@
         "refinement_interpretation_Format.UncompressedPointRepresentation_Tm_refine_5abcae620b915f89552905becc875ea5"
       ],
       0,
-      "a849924428c2a4bd51d518bf50a7d611"
+      "5b69d3ee76740a359bcd5045cb5f5f39"
     ],
     [
       "Format.UncompressedPointRepresentation.uncompressedPointRepresentation_parser",
@@ -229,7 +229,7 @@
         "token_correspondence_Format.UncompressedPointRepresentation.ucp_of_cuv"
       ],
       0,
-      "f4a970098f6b9a200790916ad6e73822"
+      "95216ab5516987d1f58dd1c023d8c7b0"
     ],
     [
       "Format.UncompressedPointRepresentation.uncompressedPointRepresentation_parser32",
@@ -259,7 +259,7 @@
         "token_correspondence_Format.UncompressedPointRepresentation.ucp_of_cuv"
       ],
       0,
-      "a586085abd35b777bf39990f4026cb12"
+      "7a81d1be587dfc39394321ed273752ee"
     ],
     [
       "Format.UncompressedPointRepresentation.lbytes_pair_serializer",
@@ -268,33 +268,91 @@
       16,
       [
         "@MaxIFuel_assumption", "@query",
+        "FStar.Pervasives.Native_pretyping_b53dbd183c526bc5d0f20d7b966ae125",
+        "LowParse.Spec.Base_interpretation_Tm_arrow_8f715f5f264ee069249ef205f97117af",
+        "Prims_interpretation_Tm_arrow_9cb3c953faf527c316d427b2ce8bd81b",
         "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
-        "bool_inversion", "bool_typing", "equation_FStar.UInt.fits",
-        "equation_FStar.UInt.max_int", "equation_FStar.UInt.min_int",
-        "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
-        "equation_FStar.UInt32.n",
+        "bool_inversion", "bool_typing",
+        "constructor_distinct_FStar.Pervasives.Native.Some",
+        "data_elim_FStar.Pervasives.Native.Mktuple2",
+        "data_elim_FStar.Pervasives.Native.Some",
+        "disc_equation_FStar.Pervasives.Native.None",
+        "disc_equation_FStar.Pervasives.Native.Some",
+        "equation_FStar.Bytes.lbytes", "equation_FStar.Bytes.lbytes32",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "equation_FStar.UInt.uint_t", "equation_FStar.UInt32.n",
         "equation_Format.UncompressedPointRepresentation.coordinate_length_type",
         "equation_Format.UncompressedPointRepresentation.lbytes_pair_parser",
+        "equation_Format.UncompressedPointRepresentation.lbytes_pair_parser_kind",
+        "equation_LowParse.Bytes.byte", "equation_LowParse.Bytes.bytes",
         "equation_LowParse.SLow.Base.u32_max",
+        "equation_LowParse.Spec.Base.bare_parser",
+        "equation_LowParse.Spec.Base.bare_serializer",
+        "equation_LowParse.Spec.Base.consumed_length",
+        "equation_LowParse.Spec.Base.is_total_constant_size_parser",
+        "equation_LowParse.Spec.Base.parse",
+        "equation_LowParse.Spec.Base.parser",
+        "equation_LowParse.Spec.Base.parser_kind_prop",
+        "equation_LowParse.Spec.Base.serializer",
+        "equation_LowParse.Spec.Base.serializer_correct",
         "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_LowParse.Spec.Bytes.serialize_flbytes",
+        "equation_LowParse.Spec.Bytes.serialize_flbytes_",
+        "equation_LowParse.Spec.Combinators.and_then_kind",
+        "equation_LowParse.Spec.Combinators.and_then_metadata",
+        "equation_LowParse.Spec.Combinators.bare_serialize_nondep_then",
+        "equation_LowParse.Spec.Combinators.nondep_then",
+        "equation_LowParse.Spec.Combinators.serialize_nondep_then",
         "equation_LowParse.Spec.Combinators.total_constant_size_parser_kind",
+        "equation_Prims.eqtype", "equation_Prims.nat",
+        "fuel_guarded_inversion_FStar.Pervasives.Native.tuple2",
         "function_token_typing_FStar.UInt32.n",
+        "function_token_typing_FStar.UInt8.t",
         "function_token_typing_LowParse.SLow.Base.u32_max", "int_inversion",
-        "int_typing", "lemma_FStar.Buffer.lemma_size",
-        "lemma_FStar.UInt32.uv_inv", "lemma_FStar.UInt32.vu_inv",
-        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_Equality",
+        "int_typing",
+        "interpretation_LowParse.Spec.Combinators_Tm_abs_321df4f7be61a805091a5d49d91d80b6",
+        "kinding_FStar.Pervasives.Native.tuple2@tok",
+        "lemma_FStar.Bytes.length_reveal",
+        "lemma_FStar.Pervasives.invertOption",
+        "lemma_FStar.Seq.Base.lemma_len_append", "lemma_FStar.UInt32.uv_inv",
+        "lemma_FStar.UInt32.vu_inv", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThan",
         "primitive_Prims.op_LessThanOrEqual",
+        "proj_equation_FStar.Pervasives.Native.Some_v",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind_metadata_t_parser_kind_metadata_total",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_FStar.Pervasives.Native.Some_a",
+        "projection_inverse_FStar.Pervasives.Native.Some_v",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind_metadata_t_parser_kind_metadata_total",
+        "refinement_interpretation_FStar.Bytes_Tm_refine_78e6c490611dc4c555ca11ffbdccfc9c",
+        "refinement_interpretation_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
         "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
         "refinement_interpretation_Format.UncompressedPointRepresentation_Tm_refine_2dcde2c233833ec0b2801e96897e362a",
         "refinement_interpretation_LowParse.SLow.Base_Tm_refine_37aada3d4a501a6616c90a97d93560d2",
-        "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
+        "refinement_interpretation_LowParse.Spec.Base_Tm_refine_40a24c6c363915cd0813473da688de21",
+        "refinement_interpretation_LowParse.Spec.Base_Tm_refine_956bc881132332bd221131ea988e10db",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "refinement_kinding_FStar.Seq.Base_Tm_refine_cd046bc4a887ee7e1b05946e0bf5772b",
+        "token_correspondence_FStar.Bytes.reveal",
+        "typing_FStar.Bytes.lbytes32", "typing_FStar.Bytes.len",
+        "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.append",
+        "typing_FStar.UInt32.v",
+        "typing_Format.UncompressedPointRepresentation.lbytes_pair_parser",
+        "typing_LowParse.Spec.Base.parse",
+        "typing_LowParse.Spec.Combinators.nondep_then"
       ],
       0,
-      "29dd50a1560ae32a6823907b9d1689e2"
+      "fad8223193a16fb9d6e49ef797e942d2"
     ],
     [
       "Format.UncompressedPointRepresentation.lbytes_pair_serializer32",
@@ -315,15 +373,17 @@
         "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
         "equation_FStar.UInt32.n", "equation_FStar.UInt8.n",
         "equation_Format.UncompressedPointRepresentation.coordinate_length_type",
-        "equation_Format.UncompressedPointRepresentation.lbytes_pair_parser",
         "equation_Format.UncompressedPointRepresentation.lbytes_pair_serializer",
         "equation_LowParse.Bytes.byte", "equation_LowParse.Bytes.bytes",
+        "equation_LowParse.SLow.Base.serializer32_correct",
         "equation_LowParse.SLow.Base.u32_max",
         "equation_LowParse.SLow.Combinators.serialize32_kind_precond",
         "equation_LowParse.Spec.Base.parse",
         "equation_LowParse.Spec.Base.serializer_correct",
         "equation_LowParse.Spec.Base.strong_parser_kind",
         "equation_LowParse.Spec.Bytes.serialize_all_bytes_",
+        "equation_LowParse.Spec.Combinators.and_then_kind",
+        "equation_LowParse.Spec.Combinators.nondep_then",
         "equation_LowParse.Spec.Combinators.parse_empty",
         "equation_LowParse.Spec.Combinators.parse_ret_kind",
         "equation_LowParse.Spec.Combinators.total_constant_size_parser_kind",
@@ -333,12 +393,12 @@
         "function_token_typing_FStar.UInt8.n",
         "function_token_typing_LowParse.SLow.Base.u32_max",
         "function_token_typing_LowParse.Spec.Combinators.serialize_empty",
-        "int_typing",
+        "int_inversion", "int_typing",
         "interpretation_LowParse.Spec.Combinators_Tm_abs_cfa6e3bc6cbeac4e6a4001e0d947b1a2",
-        "lemma_FStar.Buffer.lemma_size", "lemma_FStar.Bytes.length_reveal",
-        "lemma_FStar.UInt.pow2_values", "lemma_FStar.UInt32.uv_inv",
-        "lemma_FStar.UInt32.vu_inv", "primitive_Prims.op_Addition",
-        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_Equality",
+        "lemma_FStar.Bytes.length_reveal", "lemma_FStar.UInt.pow2_values",
+        "lemma_FStar.UInt32.uv_inv", "lemma_FStar.UInt32.vu_inv",
+        "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_Equality",
         "primitive_Prims.op_GreaterThanOrEqual",
         "primitive_Prims.op_LessThan", "primitive_Prims.op_LessThanOrEqual",
         "primitive_Prims.op_Subtraction",
@@ -364,7 +424,7 @@
         "unit_typing"
       ],
       0,
-      "940a5d23969d97912303587b4c2170a1"
+      "93c9e9aa21225563886e5574f0846e99"
     ],
     [
       "Format.UncompressedPointRepresentation.uncompressedPointRepresentation_serializer",
@@ -374,6 +434,7 @@
       [
         "@query", "equation_Format.Constants.constantByte_parser_kind",
         "equation_Format.UncompressedPointRepresentation.uncompressedPointRepresentation_parser",
+        "equation_Format.UncompressedPointRepresentation.uncompressedPointRepresentation_parser_kind",
         "equation_LowParse.Spec.Base.strong_parser_kind",
         "equation_LowParse.Spec.Combinators.synth_injective",
         "equation_LowParse.Spec.Combinators.synth_inverse",
@@ -383,7 +444,7 @@
         "token_correspondence_Format.UncompressedPointRepresentation.ucp_of_cuv"
       ],
       0,
-      "0ccd42a34d20bbff5c27c3338e903f90"
+      "cf8e0f1670abfba831672ea8ab345c75"
     ],
     [
       "Format.UncompressedPointRepresentation.uncompressedPointRepresentation_serializer32",
@@ -404,6 +465,7 @@
         "equation_Format.UncompressedPointRepresentation.coordinate_length_type",
         "equation_Format.UncompressedPointRepresentation.lbytes_pair_parser_kind",
         "equation_Format.UncompressedPointRepresentation.uncompressedPointRepresentation_parser",
+        "equation_Format.UncompressedPointRepresentation.uncompressedPointRepresentation_parser_kind",
         "equation_Format.UncompressedPointRepresentation.uncompressedPointRepresentation_serializer",
         "equation_LowParse.SLow.Combinators.serialize32_kind_precond",
         "equation_LowParse.Spec.Base.strong_parser_kind",
@@ -436,7 +498,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "565b7ed2c15b281bd5b685d1e73acc97"
+      "c697247d2e0657078306dbc73d067354"
     ]
   ]
 ]

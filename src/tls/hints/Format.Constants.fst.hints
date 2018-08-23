@@ -8,28 +8,7 @@
       1,
       [ "@query", "equation_Format.Constants.constantByte_parser" ],
       0,
-      "2c93cadfa46ca30785ca8978a8ecc772"
-    ],
-    [
-      "Format.Constants.constantByte_serializer",
-      1,
-      2,
-      1,
-      [ "@query", "equation_Format.Constants.constantByte_parser" ],
-      0,
-      "91498f86bc753dbc86399110d2737234"
-    ],
-    [
-      "Format.Constants.constantByte_serializer32",
-      1,
-      2,
-      1,
-      [
-        "@query", "equation_Format.Constants.constantByte_parser",
-        "equation_Format.Constants.constantByte_serializer"
-      ],
-      0,
-      "203cacf15ee6fb6aec075be0b90f3dfe"
+      "a2e50c48262bfca773bde161a4fa8de0"
     ]
   ]
 ]
