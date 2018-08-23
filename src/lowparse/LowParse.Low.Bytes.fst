@@ -1,6 +1,7 @@
 module LowParse.Low.Bytes
 include LowParse.Spec.Bytes
 include LowParse.Low.Combinators
+include LowParse.Low.VLData
 
 module I32 = FStar.Int32
 
@@ -52,5 +53,40 @@ let slice_bytes
 = fun input ->
   B.sub input i sz'
 
-#reset-options
+inline_for_extraction
+let validate32_all_bytes
+: validator32 (parse_all_bytes)
+= fun input len ->
+    let h = HST.get () in
+    0l
 
+inline_for_extraction
+let validate32_bounded_vlbytes'
+  (min: nat)
+  (min32: U32.t)
+  (max: nat { min <= max /\ max > 0 /\ max < 2147483648 })
+  (max32: U32.t)
+  (sz32: I32.t)
+  (u: squash (
+    U32.v min32 == min /\ U32.v max32 == max /\
+    I32.v sz32 == log256' max
+  ))
+: Tot (validator32 (parse_bounded_vlbytes' min max))
+= validate32_bounded_vldata_strong min min32 max max32 (serialize_all_bytes) validate32_all_bytes sz32 ()
+
+inline_for_extraction
+let validate32_bounded_vlbytes
+  (min: nat)
+  (min32: U32.t)
+  (max: nat { min <= max /\ max > 0 /\ max < 2147483648 } )
+  (max32: U32.t)
+  (sz32: I32.t)
+  (u: squash (
+    U32.v min32 == min /\ U32.v max32 == max /\
+    I32.v sz32 == log256' max
+  ))
+: Tot (validator32 (parse_bounded_vlbytes min max))
+= validate32_synth
+    (validate32_bounded_vlbytes' min min32 max max32 sz32 ())
+    (synth_bounded_vlbytes min max)
+    ()
