@@ -225,7 +225,7 @@ let rec partial_serialize32_list'
 = match input with
   | [] ->
     let res = B32.empty_bytes in
-    assert (Seq.equal (B32.reveal res) (Seq.createEmpty));
+    assert (Seq.equal (B32.reveal res) (Seq.empty));
     res
   | a :: q ->
     serialize_list_cons p s a q;
@@ -330,7 +330,7 @@ let partial_serialize32_list'_init
   (ensures (
     partial_serialize32_list'_inv p s s32 input true (B32.empty_bytes, input)
   ))
-= assert (Seq.equal (B32.reveal B32.empty_bytes) Seq.createEmpty);
+= assert (Seq.equal (B32.reveal B32.empty_bytes) Seq.empty);
   Seq.append_empty_l (B32.reveal (partial_serialize32_list' p s s32 input));
   assert (B32.reveal (partial_serialize32_list' p s s32 input) == B32.reveal (partial_serialize32_list_tailrec' p s s32 B32.empty_bytes input));
   assert (serializer32_correct (serialize_list p s) input (partial_serialize32_list_tailrec' p s s32 B32.empty_bytes input))

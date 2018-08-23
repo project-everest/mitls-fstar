@@ -179,7 +179,7 @@ let containsT (#r:rgn) (#n:random) (es:epochs r n) (h:mem) =
 
 val alloc_log_and_ctrs: #a:Type0 -> #p:(seq a -> Type0) -> r:rgn ->
   ST (is:MS.i_seq r a p & c1:epoch_ctr r is & c2:epoch_ctr r is)
-    (requires (fun h -> p Seq.createEmpty))
+    (requires (fun h -> p Seq.empty))
     (ensures (fun h0 x h1 ->
       modifies_one r h0 h1 /\
       HS.modifies_ref r Set.empty ( h0) ( h1) /\
@@ -187,12 +187,12 @@ val alloc_log_and_ctrs: #a:Type0 -> #p:(seq a -> Type0) -> r:rgn ->
       i_contains is h1 /\
       h1 `contains` c1 /\
       h1 `contains` c2 /\
-      i_sel h1 is == Seq.createEmpty)))
+      i_sel h1 is == Seq.empty)))
 
 #reset-options "--using_facts_from FStar --using_facts_from Prims --using_facts_from Epochs --using_facts_from Parse --admit_smt_queries true"
 
 let alloc_log_and_ctrs #a #p r =
-  let init = Seq.createEmpty in
+  let init = Seq.empty in
   let is = alloc_mref_iseq p r init in
   HST.mr_witness is (int_at_most (-1) is);
   let c1 : epoch_ctr #a #p r is = HST.ralloc r (-1) in
@@ -226,7 +226,7 @@ val create: r:rgn -> n:random -> ST (epochs r n)
     (ensures (fun h0 x h1 -> modifies_one r h0 h1 /\ HS.modifies_ref r Set.empty ( h0) ( h1)))
 let create (r:rgn) (n:random) =
   let (| esref, c1, c2 |) = alloc_log_and_ctrs #(epoch r n) #(epochs_inv #r #n) r in
-  let xkr = alloc_mref_iseq (fun s -> Seq.length s <= 2) r Seq.createEmpty in
+  let xkr = alloc_mref_iseq (fun s -> Seq.length s <= 2) r Seq.empty in
   assume False; //17-06-30 TODO restore framing with extra field
   MkEpochs esref c1 c2 xkr
 

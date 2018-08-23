@@ -140,7 +140,7 @@ let ms_conn_inv (ms:ms_t)
         //technical: for framing; need to know that when idealized, the log also exists
         (authId i ==> HMS.contains h log_as_hsref) /\
         //main application invariant:
-        (HS.sel h (StreamAE.ilog (StreamAE.State?.log w)) == Seq.createEmpty  \/   //the writer is either still unused; or
+        (HS.sel h (StreamAE.ilog (StreamAE.State?.log w)) == Seq.empty  \/   //the writer is either still unused; or
                      (let copt = MDM.sel conn (nonce_of_id i) in
                       Some? copt /\ registered i w (Some?.v copt) h)))            //it's been registered with the connection associated with its nonce
 
@@ -201,7 +201,7 @@ val ms_derive_is_ok: h0:HS.mem -> h1:HS.mem -> i:AE.id -> w:MS.writer i
                      (TLSInfo.authId i ==>  //and if we're idealizing i
                          (let log_as_hsref =  (StreamAE.ilog (StreamAE.State?.log w)) in
                           HS.contains h1 log_as_hsref /\  //the log exists in h1
-                          HS.sel h1 (AE.ilog (StreamAE.State?.log w)) == Seq.createEmpty))))))       //and w is as yet unused
+                          HS.sel h1 (AE.ilog (StreamAE.State?.log w)) == Seq.empty))))))       //and w is as yet unused
          (ensures (mc_inv h1))
 val invertOption : a:Type -> Lemma
   (requires True)
@@ -334,7 +334,7 @@ let register_writer_in_epoch_ok h0 h1 i c e =
              let log0 = HS.sel h0 log_ref in
              let log1 = HS.sel h1 log_ref in
              assert (log0 == log1); //the properties in the three asserts above are needed to show that j's log didn't change just by registering i
-             assert (~(log0 == Seq.createEmpty //if the log remains empty, it's easy
+             assert (~(log0 == Seq.empty //if the log remains empty, it's easy
                        \/ wj==wi) //if j is in fact the same as i, then i gets registered at the end, so that's easy too
                      ==> (let nonce_j = nonce_of_id j in
                           if nonce_j = nonce

@@ -84,7 +84,7 @@ let derive (r:rgn) (i:AE.id)
                old_ms == new_ms //either ms_tab didn't change at all
                \/ (MDM.sel old_ms i == None
                   /\ new_ms == MDM.upd old_ms i w //or we just added w to it
-                  /\ (TLSInfo.authId i ==> HS.sel h1 (AE.ilog w.log) == Seq.createEmpty))))) //and it is a fresh log
+                  /\ (TLSInfo.authId i ==> HS.sel h1 (AE.ilog w.log) == Seq.empty))))) //and it is a fresh log
   = HST.recall ms_tab;
     match MDM.lookup ms_tab i with
     | None ->

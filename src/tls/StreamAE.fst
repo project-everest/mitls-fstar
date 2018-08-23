@@ -103,7 +103,7 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
   color (AEAD.region w.aead) = color parent /\
   (authId i ==>
       (h1 `HS.contains` (ilog w.log) /\
-       sel h1 (ilog w.log) == createEmpty)) /\
+       sel h1 (ilog w.log) == Seq.empty)) /\
   h1 `HS.contains` (ctr w.counter) /\
   sel h1 (ctr w.counter) === 0
 //16-04-30 how to share the whole ST ... instead of genPost?
@@ -122,7 +122,7 @@ let gen parent i =
   let aead = AEAD.gen i parent in
   let _ = cut (is_eternal_region writer_r) in
   if authId i then
-    let log : ideal_log writer_r i = alloc_mref_seq writer_r Seq.createEmpty in
+    let log : ideal_log writer_r i = alloc_mref_seq writer_r Seq.empty in
     let ectr: ideal_ctr #writer_r writer_r i log = new_seqn #(entry i) #writer_r #max_ctr writer_r 0 log in
     State #i #Writer #writer_r #writer_r aead log ectr
   else

@@ -58,7 +58,7 @@ let keyval #i #good (k:key i good) = k.kv
 // todo: mark it as private
 private let gen0 i good parent kv = 
   let region = new_region parent in 
-  let log = ralloc region Seq.createEmpty in 
+  let log = ralloc region Seq.empty in 
   Key #i #good #region kv log
 
 val gen: i:id -> good: (bytes -> Type) -> parent: rgn -> ST(key i good)

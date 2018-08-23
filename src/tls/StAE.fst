@@ -285,7 +285,7 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
   HS.fresh_region r h0 h1 /\
   color r = color parent /\
   seqnT #i #Writer w h1 = 0 /\
-  (authId i ==> fragments #i #Writer w h1 == Seq.createEmpty) // we need to re-apply #i knowning authId
+  (authId i ==> fragments #i #Writer w h1 == Seq.empty) // we need to re-apply #i knowning authId
 
 // Generate a fresh instance with index i in a fresh sub-region
 val gen: parent:rgn -> i:stae_id -> ST (writer i)

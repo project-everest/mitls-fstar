@@ -293,7 +293,7 @@ let rec gen a =
   match find_key pkr keys with
   | Some _ -> gen a // retry until distinct. SZ: why not just throw an exception?
   | None ->
-    let p = alloc_pubkey (Signed Seq.createEmpty) pkr in
+    let p = alloc_pubkey (Signed Seq.empty) pkr in
     let k = (| a, p |) in
     let keys' = add_key keys k in
     HST.op_Colon_Equals rkeys keys';
@@ -414,7 +414,7 @@ let lookup_key #a keyfile =
         None
     | None ->
       begin
-      let p = alloc_pubkey (Signed Seq.createEmpty) pkr in
+      let p = alloc_pubkey (Signed Seq.empty) pkr in
       let k = (| a, p |) in
       let keys' = add_key keys k in
       HST.recall rkeys;

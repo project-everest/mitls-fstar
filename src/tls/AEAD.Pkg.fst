@@ -186,7 +186,7 @@ let empty_log #ip #aeadAlg_of_i #index_of_i #i a k h =
     match k with
     | Ideal _ st ->
       if AE.safeMac (index_of_i i) then
-        AE.log st h == Seq.createEmpty
+        AE.log st h == Seq.empty
       else True
     | Real _ -> True
   else True
@@ -213,7 +213,7 @@ let empty_log_framing #ip #aeadAlg_of_i #index_of_i #i a k h0 r h1 =
     match k with
     | Ideal _ st ->
       if AE.safeMac (index_of_i i) then
-        AE.frame_log st Seq.createEmpty h0 r h1
+        AE.frame_log st Seq.empty h0 r h1
       else ()
     | Real _ -> ()
 

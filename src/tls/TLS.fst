@@ -659,7 +659,7 @@ unfold let writeHandshake_requires h_init c new_writer h =
 		 ==> (if None? new_writer
 		      then Some? wopt ==> SD.stream_deltas #i (Some?.v wopt) h == SD.stream_deltas #i (Some?.v wopt) h_init
 		      else True)))
-            (* (Some? wopt ==> SD.stream_deltas #i (Some?.v wopt) h == Seq.createEmpty) *) // haven't sent any application data yet on the new write
+            (* (Some? wopt ==> SD.stream_deltas #i (Some?.v wopt) h == Seq.empty) *) // haven't sent any application data yet on the new write
 		        (* /\ (Some? wopt_init ==> SD.stream_deltas #i_init (Some?.v wopt_init) h_init == SD.stream_deltas #i_init (Some?.v wopt_init) h)))))) *) //and the old writer's app data hasn't changed
 
 unfold let writeHandshake_ensures h_init c new_writer h0 r h1 =
