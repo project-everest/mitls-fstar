@@ -57,6 +57,7 @@ let serialize32_u16 : serializer32 #_ #_ #parse_u16 serialize_u16 =
 inline_for_extraction
 let serialize32_u16_fail = serializer32_fail_of_serializer #_ #_ #parse_u16 #serialize_u16 serialize32_u16 2l
 
+#push-options "--z3rlimit 20"
 inline_for_extraction
 let serialize32_u32 : serializer32 #_ #_ #parse_u32 serialize_u32 =
   fun out lo v ->
@@ -72,6 +73,7 @@ let serialize32_u32 : serializer32 #_ #_ #parse_u32 serialize_u32 =
   E.n_to_be_4 U32.t 32 (E.u32 ()) v out';
   let h' = HST.get () in
   assert (exactly_contains_valid_data h' parse_u32 out lo v (U32.add lo 4ul))
+#pop-options
 
 inline_for_extraction
 let serialize32_u32_fail = serializer32_fail_of_serializer #_ #_ #parse_u32 #serialize_u32 serialize32_u32 4l
