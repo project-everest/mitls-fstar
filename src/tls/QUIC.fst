@@ -210,7 +210,7 @@ let process_hs (hs:H.hs) (ctx:hs_in) : ML hs_result =
       let consumed = UInt32.uint_to_t len in
       let j = H.i hs Writer in
       let reject_0rtt = 
-        if H.role_of hs = Client && j = 0 then
+        if H.role_of hs = Client && j = 1 then
 	  let mode = H.get_mode hs in
 	  Negotiation.zeroRTToffer mode.Negotiation.n_offer
 	    && not (Negotiation.zeroRTT mode)

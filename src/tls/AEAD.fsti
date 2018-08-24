@@ -137,7 +137,7 @@ val gen (i:I.id)
                   fresh_addresses prf_rgn fresh h0 h1 /\
                   footprint s == Set.singleton log_rgn /\
                   shared_footprint == Set.singleton prf_rgn) /\
-               (safeMac i ==> log s h1 == Seq.createEmpty) /\
+               (safeMac i ==> log s h1 == Seq.empty) /\
                invariant s h1
               ))
 

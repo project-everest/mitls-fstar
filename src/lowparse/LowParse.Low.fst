@@ -7,3 +7,4 @@ include LowParse.Low.FLData
 include LowParse.Low.Array
 include LowParse.Low.Bytes
 include LowParse.Low.VLData
+include LowParse.Low.Enum

@@ -149,7 +149,7 @@ let rec bare_serialize_list
   (x: list t)
 : GTot bytes
 = match x with
-  | [] -> Seq.createEmpty
+  | [] -> Seq.empty
   | a :: q -> Seq.append (s a) (bare_serialize_list p s q)
 
 unfold
@@ -215,7 +215,7 @@ let serialize_list_nil
   (requires (
     serialize_list_precond k
   ))
-  (ensures (serialize (serialize_list p s) [] == Seq.createEmpty))
+  (ensures (serialize (serialize_list p s) [] == Seq.empty))
 = ()
 
 let serialize_list_cons

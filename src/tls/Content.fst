@@ -44,7 +44,7 @@ val project: i:id -> fs:seq (fragment i) -> Tot (seq (DataStream.delta i))
   (decreases %[Seq.length fs]) // not-quite-stuctural termination
 #reset-options
 let rec project i fs =
-  if Seq.length fs = 0 then Seq.createEmpty
+  if Seq.length fs = 0 then Seq.empty
   else
     let fs, f = split #(fragment i) fs in
     let ds = project i fs in

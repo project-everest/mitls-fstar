@@ -114,7 +114,7 @@ val create: r0:rid -> cfg:config -> r:role -> ST hs
     hs_inv s h1 /\
     role_of s = r /\
 //  config_of s = cfg /\ // TODO: needs fixing
-    logT s h1 == Seq.createEmpty ))
+    logT s h1 == Seq.empty ))
 
 let mods s h0 h1 = HS.modifies_one (region_of s) h0 h1
 

@@ -78,7 +78,7 @@ private let gen0 i good (parent:rgn) kv : ST (key i good)
     modifies Set.empty h0 h1
   )) =
   let region = new_region parent in
-  let log = ralloc region Seq.createEmpty in
+  let log = ralloc region Seq.empty in
   Key #i #good #region kv log
 
 val gen: i:id -> good: (bytes -> Type) -> parent: rgn -> ST(key i good)

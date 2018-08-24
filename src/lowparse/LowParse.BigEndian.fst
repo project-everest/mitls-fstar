@@ -59,7 +59,7 @@ let rec n_to_be'
   (decreases len)
 = if len = 0
   then
-    Seq.createEmpty
+    Seq.empty
   else begin
     let b' = n_to_be' (len - 1) (n / 256) in
     let b'' = Seq.create 1 (n % 256) in

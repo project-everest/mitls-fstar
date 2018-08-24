@@ -19,7 +19,7 @@ val parse_seq_aux
 let rec parse_seq_aux #t p b =
   if Seq.length b = 0
   then 
-    Some (Seq.createEmpty, (0 <: consumed_length b))
+    Some (Seq.empty, (0 <: consumed_length b))
   else
     match p b with
     | None -> None
