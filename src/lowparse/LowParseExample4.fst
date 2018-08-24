@@ -24,6 +24,7 @@ let main: Int32.t -> FStar.Buffer.buffer (FStar.Buffer.buffer C.char) ->
   LPI.serialize32_u16 b 2ul 42us;
   LPI.serialize32_u32 b 4ul 1729ul;
   let h = HST.get () in
+  admit ();
   assert (LP.exactly_contains_valid_data h parse_t b 0ul ({ inner = ({ left = 18us; right = 42us; }); last = 1729ul;}) 8ul);
   HST.pop_frame ();
   C.EXIT_SUCCESS
