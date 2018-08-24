@@ -38,7 +38,7 @@ let validate32_flat_maybe_enum_key
   (p32: parser32 p)
   (e: enum key repr)
   (f: (maybe_enum_key e -> GTot t))
-  (unknown: (t -> GTot bool))
+  (filter_spec: (t -> GTot bool))
   (destr: T.maybe_enum_destr_t bool e)
   (u: squash (
     synth_injective f
@@ -46,13 +46,13 @@ let validate32_flat_maybe_enum_key
   (lemma: (
     (k: maybe_enum_key e) -> 
     Lemma
-    (Unknown? k <==> unknown (f k))
+    (Unknown? k <==> not (filter_spec (f k)))
   ))
-: Tot (validator32 ((parse_maybe_enum_key p e `parse_synth` f) `parse_filter` (fun x -> not (unknown x))))
+: Tot (validator32 ((parse_maybe_enum_key p e `parse_synth` f) `parse_filter` filter_spec))
 = fun input sz ->
   let h = HST.get () in
   parse_synth_eq (parse_maybe_enum_key p e) f (B.as_seq h input);
-  parse_filter_eq (parse_maybe_enum_key p e `parse_synth` f) (fun x -> not (unknown x)) (B.as_seq h input);
+  parse_filter_eq (parse_maybe_enum_key p e `parse_synth` f) filter_spec (B.as_seq h input);
   let consumed = v input sz in
   if consumed `I32.lt` 0l
   then consumed
