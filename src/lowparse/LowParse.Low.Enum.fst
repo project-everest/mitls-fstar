@@ -29,6 +29,16 @@ let validate32_enum_key (#key #repr: eqtype) (#k: parser_kind) (#p: parser k rep
 (* QuackyDucky-specific: "flat" enums with baked-in Unknown case *)
 
 inline_for_extraction
+let is_known
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (k: maybe_enum_key e)
+: Tot (b: bool { b == Known? k } )
+= match k with
+  | Known _ -> true
+  | _ -> false
+
+inline_for_extraction
 let validate32_flat_maybe_enum_key
   (#key #repr: eqtype)
   (#t: Type)
@@ -59,7 +69,7 @@ let validate32_flat_maybe_enum_key
   else begin
     Classical.forall_intro lemma;
     let r = p32 input in
-    if destr eq2 (T.default_if bool) (fun _ -> ()) (fun _ _ _ -> ()) (Known?) r
+    if destr eq2 (T.default_if bool) (fun _ -> ()) (fun _ _ _ -> ()) (is_known e) r
     then consumed
     else (-1l)
   end
