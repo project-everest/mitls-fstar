@@ -241,6 +241,7 @@ let serialize32_bounded_vldata_strong_size
     if U32.uint_to_t min `U32.lte` hilo && hilo `U32.lte` U32.uint_to_t max
     then begin
       serialize32_bounded_integer min max () b (Cast.int32_to_uint32 (lo `I32.sub` sz32i)) hilo;
+      loc_jbuffer_eq b (Cast.int32_to_uint32 (lo `I32.sub` sz32i)) (Cast.int32_to_uint32 lo);
       let h = HST.get () in
       let f
         (x: t)

@@ -52,7 +52,8 @@ let serialize32_u16 : serializer32 #_ #_ #parse_u16 serialize_u16 =
   assert (U16.v v < pow2 (8 `Prims.op_Multiply` 2));
   E.n_to_be_2 U16.t 16 (E.u16 ()) v out';
   let h' = HST.get () in
-  assert (exactly_contains_valid_data h' parse_u16 out lo v (U32.add lo 2ul))
+  loc_jbuffer_eq out lo (U32.add lo 2ul);
+  exactly_contains_valid_data_equiv h' parse_u16 out lo v (U32.add lo 2ul)
 
 inline_for_extraction
 let serialize32_u16_fail = serializer32_fail_of_serializer #_ #_ #parse_u16 #serialize_u16 serialize32_u16 2l
@@ -72,7 +73,8 @@ let serialize32_u32 : serializer32 #_ #_ #parse_u32 serialize_u32 =
   assert (U32.v v < pow2 (8 `Prims.op_Multiply` 4));
   E.n_to_be_4 U32.t 32 (E.u32 ()) v out';
   let h' = HST.get () in
-  assert (exactly_contains_valid_data h' parse_u32 out lo v (U32.add lo 4ul))
+  loc_jbuffer_eq out lo (U32.add lo 4ul);
+  exactly_contains_valid_data_equiv h' parse_u32 out lo v (U32.add lo 4ul)
 #pop-options
 
 inline_for_extraction

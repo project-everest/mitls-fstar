@@ -345,7 +345,10 @@ let exactly_contains_valid_data_nondep_then
   ))
   [SMTPat (exactly_contains_valid_data h p1 b lo x1 mi);
    SMTPat (exactly_contains_valid_data h p2 b mi x2 hi);]
-= nondep_then_eq p1 p2 (B.as_seq h (B.gsub b lo (U32.sub hi lo)));
+= exactly_contains_valid_data_equiv h p1 b lo x1 mi;
+  exactly_contains_valid_data_equiv h p2 b mi x2 hi;
+  exactly_contains_valid_data_equiv h (p1 `nondep_then` p2) b lo (x1, x2) hi;
+  nondep_then_eq p1 p2 (B.as_seq h (B.gsub b lo (U32.sub hi lo)));
   assert (no_lookahead_on p1 (B.as_seq h (B.gsub b lo (U32.sub mi lo))) (B.as_seq h (B.gsub b lo (U32.sub hi lo))));
   assert (injective_precond p1 (B.as_seq h (B.gsub b lo (U32.sub mi lo))) (B.as_seq h (B.gsub b lo (U32.sub hi lo))))
 
@@ -414,7 +417,8 @@ let exactly_contains_valid_data_synth
   (ensures (
     exactly_contains_valid_data h (p `parse_synth` f) b lo (f x) hi
   ))
-= ()
+= exactly_contains_valid_data_equiv h p b lo x hi;
+  exactly_contains_valid_data_equiv h (p `parse_synth` f) b lo (f x) hi
 
 let contains_valid_serialized_data_or_fail_synth
   (#k: parser_kind)
