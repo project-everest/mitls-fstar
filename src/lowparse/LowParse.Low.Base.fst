@@ -345,7 +345,7 @@ let read_from_buffer
   )))
 = p2' (a12 input)
 
-let exactly_contains_valid_data
+let exactly_contains_valid_data'
   (#k: parser_kind)
   (#t: Type)
   (h: HS.mem)
@@ -360,6 +360,59 @@ let exactly_contains_valid_data
   U32.v hi <= B.length b /\
   parse p (B.as_seq h (B.gsub b lo (U32.sub hi lo))) == Some (x, U32.v hi - U32.v lo)
 
+abstract
+let exactly_contains_valid_data
+  (#k: parser_kind)
+  (#t: Type)
+  (h: HS.mem)
+  (p: parser k t)
+  (b: buffer8)
+  (lo: U32.t)
+  (x: t)
+  (hi: U32.t)
+: GTot Type0
+= exactly_contains_valid_data' h p b lo x hi
+
+abstract
+let exactly_contains_valid_data_equiv
+  (#k: parser_kind)
+  (#t: Type)
+  (h: HS.mem)
+  (p: parser k t)
+  (b: buffer8)
+  (lo: U32.t)
+  (x: t)
+  (hi: U32.t)
+: Lemma
+  (exactly_contains_valid_data h p b lo x hi <==> exactly_contains_valid_data' h p b lo x hi)
+= ()
+
+abstract
+let exactly_contains_valid_data_elim
+  (#k: parser_kind)
+  (#t: Type)
+  (h: HS.mem)
+  (p: parser k t)
+  (b: buffer8)
+  (lo: U32.t)
+  (x: t)
+  (hi: U32.t)
+: Lemma
+  (requires (exactly_contains_valid_data h p b lo x hi))
+  (ensures (
+    B.live h b /\
+    U32.v lo <= U32.v hi /\
+    U32.v hi <= B.length b /\ (
+    let hilo = U32.v hi - U32.v lo in
+    k.parser_kind_low <= hilo /\ (
+    match k.parser_kind_high with
+    | Some l -> hilo <= l
+    | _ -> True
+  ))))
+  [SMTPat (exactly_contains_valid_data h p b lo x hi)]
+= ()
+
+abstract
 let exactly_contains_valid_data_injective
   (#k: parser_kind)
   (#t: Type)
@@ -382,6 +435,7 @@ let exactly_contains_valid_data_injective
    SMTPat (exactly_contains_valid_data h p b lo x2 hi);]
 = ()
 
+abstract
 let exactly_contains_valid_data_injective_strong'
   (#k: parser_kind)
   (#t: Type)
@@ -406,6 +460,7 @@ let exactly_contains_valid_data_injective_strong'
 = assert (no_lookahead_on p (B.as_seq h (B.gsub b lo (U32.sub hi1 lo))) (B.as_seq h (B.gsub b lo (U32.sub hi2 lo))));
   assert (injective_precond p (B.as_seq h (B.gsub b lo (U32.sub hi2 lo))) (B.as_seq h (B.gsub b lo (U32.sub hi1 lo)))) 
 
+abstract
 let exactly_contains_valid_data_injective_strong
   (#k: parser_kind)
   (#t: Type)
@@ -432,6 +487,57 @@ let exactly_contains_valid_data_injective_strong
   then exactly_contains_valid_data_injective_strong' h p b lo x1 hi1 x2 hi2
   else exactly_contains_valid_data_injective_strong' h p b lo x2 hi2 x1 hi1
 
+abstract
+let loc_jbuffer
+  (b: buffer8)
+  (lo: U32.t)
+  (hi: U32.t)
+: GTot M.loc
+= if U32.v lo <= U32.v hi && U32.v hi <= B.length b
+  then M.loc_buffer (B.gsub b lo (U32.sub hi lo))
+  else M.loc_none
+
+abstract
+let loc_jbuffer_eq
+  (b: buffer8)
+  (i j: U32.t)
+: Lemma
+  (requires (U32.v i <= U32.v j /\ U32.v j <= B.length b))
+  (ensures (loc_jbuffer b i j == M.loc_buffer (B.gsub b i (U32.sub j i))))
+//  [SMTPat (loc_jbuffer b i j)] // test by uncommenting this and commenting the following 3 lemmas
+= ()
+
+abstract
+let loc_jbuffer_includes_r
+  (b: buffer8)
+  (lo hi: U32.t)
+: Lemma
+  (M.loc_buffer b `M.loc_includes` loc_jbuffer b lo hi)
+  [SMTPat (loc_jbuffer b lo hi)]
+= ()
+
+abstract
+let loc_includes_union_l_jbuffer
+  (l1 l2: M.loc)
+  (b: buffer8)
+  (i j: U32.t)
+: Lemma
+  (requires (M.loc_includes l1 (loc_jbuffer b i j) \/ M.loc_includes l2 (loc_jbuffer b i j)))
+  (ensures (M.loc_includes (l1 `M.loc_union` l2) (loc_jbuffer b i j)))
+  [SMTPat (M.loc_includes (l1 `M.loc_union` l2) (loc_jbuffer b i j))]
+= ()
+
+abstract
+let loc_disjoint_jbuffer
+  (b: buffer8)
+  (i j k: U32.t)
+: Lemma
+  (requires (U32.v i <= U32.v j /\ U32.v j <= U32.v k))
+  (ensures (M.loc_disjoint (loc_jbuffer b i j) (loc_jbuffer b j k)))
+  [SMTPat (loc_jbuffer b i j); SMTPat (loc_jbuffer b j k)]
+= ()
+
+abstract
 let exactly_contains_valid_data_invariant
   (#k: parser_kind)
   (#t: Type)
@@ -446,7 +552,7 @@ let exactly_contains_valid_data_invariant
   (requires (
     M.modifies l h h' /\
     exactly_contains_valid_data h p b lo x hi /\
-    M.loc_disjoint l (M.loc_buffer (B.gsub b lo (U32.sub hi lo)))
+    M.loc_disjoint l (loc_jbuffer b lo hi)
   ))
   (ensures (
     exactly_contains_valid_data h' p b lo x hi
@@ -737,7 +843,7 @@ let serializer32
   (requires (fun h -> B.live h b /\ U32.v lo + Seq.length (serialize s v) <= B.length b))
   (ensures (fun h _ h' ->
     let len = U32.uint_to_t (Seq.length (serialize s v)) in
-    M.modifies (M.loc_buffer (B.gsub b lo len)) h h' /\
+    M.modifies (loc_jbuffer b lo (U32.add lo len)) h h' /\
     B.live h' b /\
     exactly_contains_valid_data h' p b lo v (U32.add lo len)
   ))
