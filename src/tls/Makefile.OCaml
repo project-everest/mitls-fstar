@@ -88,7 +88,7 @@ $(LOWC_HOME)/LowC.cmxa:
 # is, then it will appear several times at linking.) So we make it an
 # indirect dependency, say via kremlib.
 
-$(KREMLIN_HOME)/_build/kremlib/C.cmx: $(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa
+$(KREMLIN_HOME)/_build/kremlib/C.cmx:
 	$(error KREMLIN_HOME is $(KREMLIN_HOME) and I cannot find $(KREMLIN_HOME)/_build/kremlib/C.cmx -- please run make in kremlin!)
 
 $(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa:
