@@ -39,6 +39,8 @@ let parse32_u8 : parser32 parse_u8 =
 
 module HST = FStar.HyperStack.ST
 
+#push-options "--z3rlimit 32"
+
 inline_for_extraction
 let serialize32_u16 : serializer32 #_ #_ #parse_u16 serialize_u16 =
   fun out lo v ->
@@ -54,6 +56,8 @@ let serialize32_u16 : serializer32 #_ #_ #parse_u16 serialize_u16 =
   let h' = HST.get () in
   loc_jbuffer_eq out lo (U32.add lo 2ul);
   exactly_contains_valid_data_equiv h' parse_u16 out lo v (U32.add lo 2ul)
+
+#pop-options
 
 inline_for_extraction
 let serialize32_u16_fail = serializer32_fail_of_serializer #_ #_ #parse_u16 #serialize_u16 serialize32_u16 2l
