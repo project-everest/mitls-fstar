@@ -221,10 +221,10 @@ int main(int argc, char **argv)
     config.callback_state = &client;
     assert(FFI_mitls_quic_create(&client.quic_state, &config));
       
-    for(int i = 0, post_hs = 0; post_hs < 2 ; i++)
+    for(int i = 0, post_hs = 0; !post_hs ; i++)
     {
       // We need one extra round of post-handshake for NST
-      if(COMPLETE(cctx) && COMPLETE(sctx)) post_hs++;
+      if(COMPLETE(cctx) && COMPLETE(sctx)) post_hs = 1;
       
       printf("\n == Round %d ==\n\n", i);
 
@@ -250,10 +250,10 @@ int main(int argc, char **argv)
     config.callback_state = &client;
     assert(FFI_mitls_quic_create(&client.quic_state, &config));
       
-    for(int i = 0, post_hs = 0; post_hs < 2; i++)
+    for(int i = 0, post_hs = 0; !post_hs; i++)
     {
       // We need one extra round of post-handshake for NST
-      if(COMPLETE(cctx) && COMPLETE(sctx)) post_hs++;
+      if(COMPLETE(cctx) && COMPLETE(sctx)) post_hs = 1;
       
       printf("\n == Round %d ==\n\n", i);
 
@@ -295,10 +295,10 @@ int main(int argc, char **argv)
     config.server_ticket = qt;
     assert(FFI_mitls_quic_create(&client.quic_state, &config));
       
-    for(int i = 0, post_hs = 0; post_hs < 2; i++)
+    for(int i = 0, post_hs = 0; !post_hs; i++)
     {
       // We need one extra round of post-handshake for NST
-      if(COMPLETE(cctx) && COMPLETE(sctx)) post_hs++;
+      if(COMPLETE(cctx) && COMPLETE(sctx)) post_hs = 1;
       
       printf("\n == Round %d ==\n\n", i);
 
