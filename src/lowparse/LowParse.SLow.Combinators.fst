@@ -15,6 +15,21 @@ let parse32_ret
 = (fun input -> ((Some (x, 0ul)) <: (res: option (t * U32.t) { parser32_correct (parse_ret x) input res } )))
 
 inline_for_extraction
+let parse32_empty : parser32 parse_empty = parse32_ret ()
+
+inline_for_extraction
+let serialize32_empty : serializer32 #_ #_ #parse_empty serialize_empty
+= fun input ->
+  [@inline_let]
+  let b = B32.empty_bytes in
+  assert (B32.reveal b `Seq.equal` Seq.empty);
+  (b <: (b: bytes32 { serializer32_correct #_ #_ #parse_empty serialize_empty input b } ))
+
+inline_for_extraction
+let size32_empty : size32 #_ #_ #parse_empty serialize_empty
+= size32_constant #_ #_ #parse_empty serialize_empty 0ul ()
+
+inline_for_extraction
 let parse32_and_then
   (#k: parser_kind)
   (#t:Type)

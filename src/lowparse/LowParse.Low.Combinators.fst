@@ -100,6 +100,17 @@ let validate32_total_constant_size
     len `I32.sub` sz
 
 inline_for_extraction
+let validate32_ret
+  (#t: Type)
+  (v: t)
+: Tot (validator32 (parse_ret v))
+= validate32_total_constant_size (parse_ret v) 0l ()
+
+inline_for_extraction
+let validate32_empty : validator32 parse_empty
+= validate32_ret ()
+
+inline_for_extraction
 let validate_nochk32_constant_size
   (#k: parser_kind)
   (#t: Type0)
