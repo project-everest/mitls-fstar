@@ -101,7 +101,11 @@ val split_epncipher
   (nl:pnlen)
   (nec:epncipher{length nec >= nl + v AEAD.taglen /\ length nec - nl <= pow2 32 - 1})
   : epn nl * cipher i (length nec - nl - v AEAD.taglen)
-  
+
+(*
+val lemma_split_concat (c:ciphil i l) (ne:epn nl) : Lemma
+  (split_epncipher i nl (concat_epn_cipher ne c) = (ne,c))
+*)
 
 val npn_encode : (k:I.id) -> (r:rpn) -> (l:pnlen) -> (n:npn k l)
 
@@ -366,7 +370,6 @@ val rframe_pnetable: #i:I.id -> #j:I.id -> #k:I.id -> #w:stream_writer i j k -> 
     Set.disjoint s (shared_footprint w))
   (ensures invariant w h1 ==> reader_pne_table r h1 == l)
 
-
 val create: i:I.id -> j:I.id -> k:I.id -> u:info i j k ->
   ST (stream_writer i j k)
   (requires fun h0 -> 
@@ -412,6 +415,17 @@ val createReader: parent:rgn -> #i:I.id -> #j:I.id -> #k:I.id -> w:stream_writer
 
 //val rincrementable: #i:I.id -> #w:stream_writer i -> r:stream_reader w -> h:mem -> Type0
 
+(*
+pne_table_invariant: all (ne || c) are unique
+the invariant is broken when encrypting a new PN which creates a collision
+we have to assume this doesn't happen
+
+In implementation:
+  if safeQUIC k then
+    let ne = random () in
+    match find_encipher (concat ne c) with
+    | Some _ -> unique_pne_encrypt p h rn ... (*implies pne_table_invariant h1*)
+    | None -> (ne, c) (* ne||c is fresh *)
 
 val encrypt_pn:
   (#i:I.id) ->
@@ -453,7 +467,7 @@ val decrypt_pn :
          nl'=nl /\ n = n' /\
          l = length nec - nl - v AEAD.taglen /\ c' = c)))
 
-
+*)
 
 
 val encrypt
@@ -461,14 +475,12 @@ val encrypt
   (#j:I.id)
   (#k:I.id)
   (w:stream_writer i j k)
-//  (ad:AEAD.adata)
   (nl:pnlen)
   (l:plainLen)
   (p:plain i l):
-  ST ((epn nl) * (cipher i l))
+  ST ((epn j nl) * (cipher i l))
   (requires fun h0 -> wincrementable w h0 /\ invariant w h0)
-  (ensures fun h0 res h1 ->
-    let ((ne:epn nl),(c:cipher i l)) = res in
+  (ensures fun h0 (ne, c) h1 ->
     let aw = writer_aead_state w in
     invariant w h1 /\
     wctrT w h1 == wctrT w h0 + 1 /\ 
@@ -482,6 +494,31 @@ val encrypt
       AEAD.wlog aw h1 == Seq.snoc (AEAD.wlog aw h0) (AEAD.Entry #i #(AEAD.wgetinfo aw) #nl n ad p c) /\
       writer_pne_table w h1 == Seq.snoc (writer_pne_table w h0) (Entry c ne npn'))) /\
     modifies (Set.union (footprint w) (shared_footprint w)) h0 h1)
+
+(*
+Does not work
+leak (#nl) (i:I.id) (j:I.id) (e:epn j nl) (c:cipher i) : ST (npn j nl)
+  (requires fun h0 -> safeQUIC (i,j) ==> None? (find_pnetable e c))
+  =
+  if safeQUIC (i,j) then
+    let npn = sample () in
+    extend npn_table (c, e, npn); npn
+  else
+    real_decrypt e c
+*)
+
+(*
+
+let rec unique_pne_encrypt nl p h rn : ST (epn nl * cipher k l)
+  (ensures fun h0 c h1 -> pne_table_invariant h1)
+  =
+  let c = AEAD.encrypt ... in
+
+
+let encrypt =
+
+  if idealQUIC then
+  let c = ,,,
 
 
 //val adata_of_entry: #i:I.id -> stream_entry i -> GTot AEAD.adata
