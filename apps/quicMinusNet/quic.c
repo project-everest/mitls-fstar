@@ -90,6 +90,8 @@ void half_round(quic_state *my_state, quic_process_ctx *my_ctx, quic_process_ctx
   
   if(my_ctx->cur_reader_key > *my_r) *my_r = my_ctx->cur_reader_key;
   if(my_ctx->cur_writer_key > *my_w) *my_w = my_ctx->cur_writer_key;
+  if(my_ctx->flags & QFLAG_REJECTED_0RTT)
+    printf("[%c] Server rejected our 0-RTT data!\n", is_server?'S':'C');
   if(my_ctx->flags & QFLAG_APPLICATION_KEY)
     printf("[%c] Application data can now be sent (%s)\n",
            is_server?'S':'C', *my_w == 0 ? "0-RTT" : "1-RTT");

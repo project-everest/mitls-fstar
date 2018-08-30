@@ -167,6 +167,10 @@ private let handle_signals (hs:H.hs) (sig:option HSL.next_keys_use) : ML bool =
       Old.Epochs.incr_writer (H.epochs_of hs);
     use.HSL.out_appdata
 
+private inline_for_extraction let api_error (ad, err) =
+  trace ("Returning HS error: "^err);
+  HS_ERROR (Parse.uint16_of_bytes (Alert.alertBytes ad))
+
 let process_hs (hs:H.hs) (ctx:hs_in) : ML hs_result =
   let tbw = H.to_be_written hs in
   if tbw > 0 then
@@ -183,7 +187,7 @@ let process_hs (hs:H.hs) (ctx:hs_in) : ML hs_result =
     else
       let i = currentId hs Writer in
       match H.next_fragment_bounded hs i (UInt32.v ctx.max_output) with
-      | Error (z) -> HS_ERROR 1us
+      | Error z -> api_error z
       | Correct (HSL.Outgoing (Some frag) sig complete) ->
         let is_writable = handle_signals hs sig in
         HS_SUCCESS ({
@@ -201,11 +205,8 @@ let process_hs (hs:H.hs) (ctx:hs_in) : ML hs_result =
     let rg : Range.frange i = (len, len) in
     let f : Range.rbytes rg = ctx.input in
     match H.recv_fragment hs rg f with
-    | H.InQuery _ _ -> HS_ERROR 2us
-    | H.InError (ad, err) ->
-      let ec = Parse.uint16_of_bytes (Alert.alertBytes ad) in
-      trace ("Returning HS error: "^err);
-      HS_ERROR ec
+    | H.InQuery _ _ -> trace "Unexpected handshake query"; HS_ERROR 252us
+    | H.InError z -> api_error z
     | H.InAck nk complete ->
       let consumed = UInt32.uint_to_t len in
       let j = H.i hs Writer in
@@ -216,9 +217,9 @@ let process_hs (hs:H.hs) (ctx:hs_in) : ML hs_result =
 	    && not (Negotiation.zeroRTT mode)
 	else false in
       let i = currentId hs Writer in
-      let max_o = if reject_0rtt then 0 else UInt32.v ctx.max_output in
+      let max_o = UInt32.v ctx.max_output in
       match H.next_fragment_bounded hs i max_o with
-      | Error z -> HS_ERROR 4us
+      | Error z -> api_error z
       | Correct (HSL.Outgoing frag sig complete' ) ->
         let is_writable = handle_signals hs sig in
         HS_SUCCESS ({
