@@ -20,11 +20,10 @@
 //**********************************************************************************************************************************
 
 #include "stdafx.h"
-#include "windows.h" // for LARGE_INTEGER
+#include "windows.h" // for LARGE_INTEGER as used by QueryPerformanceCounter ()
 
 #include "mitlsffi.h" // for mitls_state etc
 #include "mipki.h"    // for mipki_state etc
-//#include "quic_provider.h"
 
 //**********************************************************************************************************************************
 
@@ -216,23 +215,26 @@ typedef enum pkicallbackfunctions
 
 //**********************************************************************************************************************************
 
+#define MAX_COMPONENT_CALLS_PER_MEASUREMENT (5)
+#define MAX_CALLBACK_CALLS_PER_MEASUREMENT  (200)
+#define MAX_MEASUREMENTS                    (2000)
+
 typedef struct componentmeasuremententry
 {
     const char    *EntryName;
-    LARGE_INTEGER  StartTime; // when the function was called
-    LARGE_INTEGER  EndTime;   // when the function returned
+    unsigned int   NumberOfCalls;
+    LARGE_INTEGER  StartTimes [ MAX_COMPONENT_CALLS_PER_MEASUREMENT ]; // when the function was called
+    LARGE_INTEGER  EndTimes   [ MAX_COMPONENT_CALLS_PER_MEASUREMENT ]; // when the function returned
 
 } COMPONENTMEASUREMENTENTRY;
-
-#define MAX_CALLS_PER_MEASUREMENT (1000)
 
 typedef struct callbackmeasuremententry
 {
     const char   *EntryName;
     unsigned int  NumberOfCalls;
 
-    LARGE_INTEGER StartTimes [ MAX_CALLS_PER_MEASUREMENT ]; // when the function was called
-    LARGE_INTEGER EndTimes   [ MAX_CALLS_PER_MEASUREMENT ]; // when the function returned
+    LARGE_INTEGER StartTimes [ MAX_CALLBACK_CALLS_PER_MEASUREMENT ]; // when the function was called
+    LARGE_INTEGER EndTimes   [ MAX_CALLBACK_CALLS_PER_MEASUREMENT ]; // when the function returned
 
 } CALLBACKMEASUREMENTENTRY;
 
@@ -243,7 +245,7 @@ typedef struct componentmeasurement
 
     COMPONENTMEASUREMENTENTRY FFIMeasurements [ MAX_FFI_FUNCTIONS ]; // one for each FFI function
 
-    COMPONENTMEASUREMENTENTRY PKIMeasurements [ MAX_PKI_FUNCTIONS ];       // one for each PKI function
+    COMPONENTMEASUREMENTENTRY PKIMeasurements [ MAX_PKI_FUNCTIONS ]; // one for each PKI function
 
     CALLBACKMEASUREMENTENTRY FFICallbackMeasurements [ MAX_FFI_CALLBACK_FUNCTIONS ]; // one for each call back function
 
@@ -251,14 +253,12 @@ typedef struct componentmeasurement
 
 } COMPONENTMEASUREMENT;
 
-#define MAX_MEASUREMENTS (1000)
-
 typedef struct measurementresults
 {
     const char *MeasurementTypeName;
 
-    LARGE_INTEGER StartTime; // when the testing run actually started
-    LARGE_INTEGER EndTime;   // when the testing run actually finished
+    LARGE_INTEGER StartTime; // when the test run started
+    LARGE_INTEGER EndTime;   // when the test run finished
 
     COMPONENTMEASUREMENT Measurements [ MAX_MEASUREMENTS ]; // individual component measurements
 
@@ -783,6 +783,8 @@ class TESTER
 
 //**********************************************************************************************************************************
 
+#define MAX_HOST_NAMES (1000)
+
 class TLSTESTER : public TESTER
 {
     protected:
@@ -796,11 +798,27 @@ class TLSTESTER : public TESTER
         SOCKET PeerSocket;
         SOCKET ComponentSocket;
 
+        DWORD PipeThreadIdentifier;
+        DWORD ClientThreadIdentifier;
+        DWORD ServerThreadIdentifier;
+
+        HANDLE PipeThreadHandle;
+        HANDLE ClientThreadHandle;
+        HANDLE ServerThreadHandle;
+
     public:
+
+        bool TerminatePipeThread;   // if TRUE, then the pipe thread will close itself
+        bool TerminateClientThread; // if TRUE, then the client thread will close itself
+        bool TerminateServerThread; // if TRUE, then the server thread will close itself
 
         class COMPONENT *Component; // callback functions need access to this to do measurements
 
         char HostFileName [ MAX_PATH ]; // the name of the file containing the list of hosts, if any
+
+        int NumberOfHostsRead;
+
+        char HostNames [ MAX_HOST_NAMES ] [ 100 ];
 
         char TLSVersion [ 4 ];
 
@@ -831,6 +849,10 @@ class TLSTESTER : public TESTER
         bool DoClientTests;                 // if TRUE, do the client only TLS and DTLS tests
 
         bool DoServerTests;                 // if TRUE, do the client/server TLS and DTLS tests
+
+        bool DoDefaultTests;                // if TRUE, do default TLS Parameters part of tests (no config)
+
+        bool DoCombinationTests;            // if TRUE, do parameter combinations tests (all configurable TLS Parameters)
 
         bool DoClientInteroperabilityTests; // if TRUE, do the client mode interoperability TLS and DTLS tests
 
@@ -903,6 +925,10 @@ class TLSTESTER : public TESTER
 private:
 
         SOCKET OpenPeerSocket ( void );
+
+        int RunCombinationTest ( int   MeasurementNumber,
+                                 char *DateAndTimeString,
+                                 char *HostName );
 
         bool RunSingleClientDefaultsTLSTest ( int MeasurementNumber );
 
@@ -980,9 +1006,9 @@ class COMPONENT
 
         // kremlin generated code will abort if this is set to > "1.3". If set to "1.3" then the hello messages use "1.2" and use
         // the extensions to specify the right version. If set to "1.2" then the hello messages use "1.2". If set to "1.1" then the
-        // hello messages use "1.1".
+        // hello messages use "1.1". Earlier version are not supported. It is not possible to specify the TLS draft number.
 
-        char TLSVersion [ 4 ]; // "1.X" plus termiating zero
+        char TLSVersion [ 4 ]; // "1.X" plus terminating zero
 
         char HostName [ MAX_PATH ];
 
@@ -991,8 +1017,6 @@ class COMPONENT
         int TestRunNumber;
 
         int MeasurementNumber;
-
-        int NumberOfMeasurementsMade;
 
     public: // so callbacks can access them quickly
 
@@ -1005,6 +1029,8 @@ class COMPONENT
         int NumberOfChainsAllocated = 0; // index into CertificateChains
 
         mipki_chain CertificateChains [ MAX_CERTIFICATE_CHAINS ];
+
+        int NumberOfMeasurementsMade; // the total number for all tests
 
     public:
 
@@ -1073,6 +1099,8 @@ class COMPONENT
         void Cleanup ( void );
 
         int Configure ( void );
+
+        int Configure ( char *UseThisHostName ); // configure using the specified host name
 
         int SetTicketKey ( const char          *Algorithm,
                            const unsigned char *TicketKey,

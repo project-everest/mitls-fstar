@@ -20,6 +20,7 @@
 //**********************************************************************************************************************************
 
 #include "stdafx.h"
+#include "process.h"
 
 #include "InteropTester.h"
 #include "Tester.h"
@@ -41,36 +42,107 @@ extern void DumpPacket ( void         *Packet,         // the packet to be hex d
 
 //**********************************************************************************************************************************
 
-static const int NumberOfCipherSuites = 3;
+// see https://github.com/project-everest/mitls-fstar/blob/e2490b839c46beac96c0900beee4d19111355b21/src/tls/FFI.fst#L244
+
+static const int NumberOfCipherSuites = 14;
 
 static const char *SupportedCipherSuites [ NumberOfCipherSuites ] =
 {
+    // these are the cipher suites offered by default in the ClientHello
+
     "TLS_AES_128_GCM_SHA256",
     "TLS_AES_256_GCM_SHA384",
     "TLS_CHACHA20_POLY1305_SHA256",
+    "TLS_AES_128_CCM_SHA256",
+    "TLS_AES_128_CCM_8_SHA256",
+    "ECDHE-RSA-AES256-GCM-SHA384",
+    "ECDHE-RSA-AES128-GCM-SHA256",
+    "ECDHE-RSA-CHACHA20-POLY1305-SHA256",
+    "ECDHE-ECDSA-AES256-GCM-SHA384",
+    "ECDHE-ECDSA-AES128-GCM-SHA256",
+    "ECDHE-ECDSA-CHACHA20-POLY1305-SHA256",
+    "DHE-RSA-AES256-GCM-SHA384",
+    "DHE-RSA-AES128-GCM-SHA256",
+    "DHE-RSA-CHACHA20-POLY1305-SHA256",
 };
 
 //**********************************************************************************************************************************
 
-static const int NumberOfSignatureAlgorithms = 3;
+// See https://github.com/project-everest/mitls-fstar/blob/master/src/tls/TLSConstants.fst and
+// https://github.com/project-everest/mitls-fstar/blob/e2490b839c46beac96c0900beee4d19111355b21/src/tls/FFI.fst#L244
+
+static const int NumberOfSignatureAlgorithms = 11;
 
 static const char *SupportedSignatureAlgorithms [ NumberOfSignatureAlgorithms ] =
 {
-   "ECDSA+SHA256",
-   "ECDSA+SHA384",
-   "ECDSA+SHA512",
+    "RSAPSS+SHA512",
+    "RSAPSS+SHA384",
+    "RSAPSS+SHA256",
+    "RSA+SHA512",
+    "RSA+SHA384",
+    "RSA+SHA256",
+    "RSA+SHA1",
+    "ECDSA+SHA512",
+    "ECDSA+SHA384",
+    "ECDSA+SHA256",
+    "ECDSA+SHA1",
+
+    // these are the signature algorithms offered by default in the ClientHello Signature Algorithms Extension
+
+    // legacy algorithms
+//  "RSA_PKCS1_SHA1",    // no longer supported in kremlin code
+//  "RSA_PKCS1_MD5SHA1", // only used internally for now
+//  "ECDSA_SHA1",        // no longer supported in kremlin code
+
+    // Not sure what these are (nothing in header file
+//  "RSA_PKCS1_SHA256",
+//  "RSA_PKCS1_SHA384",
+//  "RSA_PKCS1_SHA512",
+
+    // RSASSA-PSS Algorithms
+//  "RSA_PSS_SHA256",
+//  "RSA_PSS_SHA384",
+//  "RSA_PSS_SHA512",
+
+    // ECDSA Algorithms
+//  "ECDSA_SECP256R1_SHA256:",
+//  "ECDSA_SECP384R1_SHA384",
+//  "ECDSA_SECP521R1_SHA512",
+
+    // EDDSA Algorithms
+//  "ED25519_SHA512",
+//  "ED448_SHAKE256",
+
+    // Reserved code points
+//  "DSA_SHA1",
+//  "DSA_SHA256",
+//  "DSA_SHA384",
+//  "DSA_SHA512",
+
+    // old list
+//  "ECDSA+SHA256",
+//  "ECDSA+SHA384",
+//  "ECDSA+SHA512",
+
 };
 
 //**********************************************************************************************************************************
 
-static const int NumberOfNamedGroups = 4;
+// see https://github.com/project-everest/mitls-fstar/blob/master/src/tls/CommonDH.fst and
+// https://github.com/project-everest/mitls-fstar/blob/e2490b839c46beac96c0900beee4d19111355b21/src/tls/FFI.fst#L244
+
+static const int NumberOfNamedGroups = 8;
 
 static const char *SupportedNamedGroups [ NumberOfNamedGroups ] =
 {
-    "X25519",
     "P-521",
     "P-384",
     "P-256",
+    "X25519",
+    "X448",
+    "FFDHE4096",
+    "FFDHE3072",
+    "FFDHE2048",
 };
 
 //**********************************************************************************************************************************
@@ -84,6 +156,10 @@ TLSTESTER::TLSTESTER (  FILE *DebugFile,
     // set the default values here in case they are not over-ridden by command line arguments
 
     strcpy ( HostFileName, "\0" );
+
+    NumberOfHostsRead = 0;
+
+    memset ( HostNames, 0, sizeof ( HostNames ) );
 
     strcpy ( TLSVersion, "1.3" );
 
@@ -111,6 +187,9 @@ TLSTESTER::TLSTESTER (  FILE *DebugFile,
     DoClientTests = FALSE;
     DoServerTests = FALSE;
 
+    DoDefaultTests     = FALSE;
+    DoCombinationTests = FALSE;
+
     DoClientInteroperabilityTests = FALSE;
     DoServerInteroperabilityTests = FALSE;
 }
@@ -121,7 +200,7 @@ void TLSTESTER::Configure ( void )
 {
     Component = new COMPONENT ( this, DebugFile );
 
-    // configure the component attributes using the command line arguments if any given
+    // configure the component attributes using the command line arguments if any given or the defaults otherwise
 
     if ( Component != NULL )
     {
@@ -138,7 +217,36 @@ void TLSTESTER::Configure ( void )
         Component->SetServerCertificateFilename ( ServerCertificateFilename );
 
         Component->SetServerCertificateKeyFilename ( ServerCertificateKeyFilename );
+
+        // create the threads for the stdout redirection, client and server
+
+        TerminatePipeThread   = FALSE;
+        TerminateClientThread = FALSE;
+        TerminateServerThread = FALSE;
+
+        PipeThreadHandle = CreateThread ( NULL,                    // default security attributes
+                                          0,                       // use default stack size
+                                          PipeThread,              // thread function name
+                                          this,                    // argument to thread function is class instance
+                                          0,                       // use default creation flags
+                                          &PipeThreadIdentifier ); // returns the thread identifier
+
+        ClientThreadHandle = CreateThread ( NULL,                      // default security attributes
+                                            0,                         // use default stack size
+                                            PipeThread,                // thread function name
+                                            this,                      // argument to thread function is class instance
+                                            0,                         // use default creation flags
+                                            &ClientThreadIdentifier ); // returns the thread identifier
+
+        ServerThreadHandle = CreateThread ( NULL,                      // default security attributes
+                                            0,                         // use default stack size
+                                            PipeThread,                // thread function name
+                                            this,                      // argument to thread function is class instance
+                                            0,                         // use default creation flags
+                                            &ServerThreadIdentifier ); // returns the thread identifier
     }
+
+    _beginthread (   );
 }
 
 //**********************************************************************************************************************************
@@ -152,15 +260,11 @@ TLSTESTER::~TLSTESTER ( void )
 
 void TLSTESTER::RunClientTLSTests ( char *DateAndTimeString )
 {
-    int   CipherSuiteNumber        = 0;
-    int   SignatureAlgorithmNumber = 0;
-    int   NamedGroupNumber         = 0;
     int   MeasurementNumber        = 0;
     long  ExecutionTime            = 0;
     int   Result                   = 0;
     int   ErrorIndex               = 0;
     bool  Success                  = FALSE;
-    char *TestResult               = "FAIL"; // or "PASS"
 
     RecordTestRunStartTime ( TLS_CLIENT_MEASUREMENTS );
 
@@ -176,38 +280,83 @@ void TLSTESTER::RunClientTLSTests ( char *DateAndTimeString )
 
     if ( ErrorIndex != 0 ) { printf ( "Failed to Initialise PKI!\n" ); return; }
 
-    //
-    // Run a measurement for just the default cipher suite, signature algorithm and named group
-    //
-
-    QueryPerformanceCounter ( &MeasurementStartTime ); // just for this measurement to give a quick result below
-
-    Success = RunSingleClientDefaultsTLSTest ( MeasurementNumber );
-
-    QueryPerformanceCounter ( &MeasurementEndTime );
-
-    if ( Success )
+    if ( DoDefaultTests )
     {
-        ExecutionTime = CalculateExecutionTime ( MeasurementStartTime, MeasurementEndTime );
+        //
+        // Run a measurement for just the default, cipher suite, signature algorithm and named group
+        //
 
-        fprintf ( ComponentStatisticsFile,
-                  "%s, %d, Default, Default, Default, PASS, %u\n",
-                  DateAndTimeString,
-                  MeasurementNumber,
-                  ExecutionTime );
+        QueryPerformanceCounter ( &MeasurementStartTime ); // just for this measurement to give a quick result below
+
+        Success = RunSingleClientDefaultsTLSTest ( MeasurementNumber );
+
+        QueryPerformanceCounter ( &MeasurementEndTime );
+
+        if ( Success )
+        {
+            ExecutionTime = CalculateExecutionTime ( MeasurementStartTime, MeasurementEndTime );
+
+            fprintf ( ComponentStatisticsFile,
+                      "%s, %d, %s, Default, Default, Default, PASS, %u\n",
+                      DateAndTimeString,
+                      MeasurementNumber,
+                      HostName,
+                      ExecutionTime );
+        }
+
+        MeasurementNumber++;
     }
 
-    MeasurementNumber++;
-
-    //
-    // Then run a measurement for each combination of supported cipher suite, signature algorithm and named group
-    //
-
-    for ( CipherSuiteNumber = 0; CipherSuiteNumber < NumberOfCipherSuites; CipherSuiteNumber++ )
+    if ( DoCombinationTests )
     {
-        for ( SignatureAlgorithmNumber = 0; SignatureAlgorithmNumber < NumberOfSignatureAlgorithms; SignatureAlgorithmNumber++ )
+        //
+        // Then run a measurement for each combination of supported cipher suite, signature algorithm and named groups
+        // for all specified hosts.
+        //
+        if ( UseHostList )
         {
-            for ( NamedGroupNumber = 0; NamedGroupNumber < NumberOfNamedGroups; NamedGroupNumber++ )
+            for ( int HostNumber = 0; HostNumber < NumberOfHostsRead; HostNumber++ )
+            {
+                Component->SetHostName ( HostNames [ HostNumber ] );
+
+                MeasurementNumber = RunCombinationTest ( MeasurementNumber, DateAndTimeString, HostNames [ HostNumber ] );
+            }
+        }
+        else
+        {
+            MeasurementNumber = RunCombinationTest ( MeasurementNumber, DateAndTimeString, HostName );
+        }
+    }
+
+    Component->TerminatePKI ();
+
+    Component->Cleanup ();
+
+    RecordTestRunEndTime ( TLS_CLIENT_MEASUREMENTS );
+
+    // add this set of tests to the total run
+
+    Component->NumberOfMeasurementsMade += MeasurementNumber;
+}
+
+//**********************************************************************************************************************************
+
+int TLSTESTER::RunCombinationTest ( int   MeasurementNumber,
+                                    char *DateAndTimeString,
+                                    char *HostName )
+{
+    int  CipherSuiteNumber        = 0;
+    int  SignatureAlgorithmNumber = 0;
+    int  NamedGroupNumber         = 0;
+    int  Success                  = 0;
+    long ExecutionTime            = 0;
+    char *TestResult              = "FAIL"; // or "PASS"
+
+    for ( CipherSuiteNumber = 0; CipherSuiteNumber < 1 /*NumberOfCipherSuites*/; CipherSuiteNumber++ )
+    {
+        for ( SignatureAlgorithmNumber = 0; SignatureAlgorithmNumber < 1 /*NumberOfSignatureAlgorithms*/; SignatureAlgorithmNumber++ )
+        {
+            for ( NamedGroupNumber = 0; NamedGroupNumber < 1 /*NumberOfNamedGroups*/; NamedGroupNumber++ )
             {
                 QueryPerformanceCounter ( &MeasurementStartTime ); // just for this measurement to give a quick result below
 
@@ -223,9 +372,10 @@ void TLSTESTER::RunClientTLSTests ( char *DateAndTimeString )
                 if ( Success ) TestResult = "PASS";
 
                 fprintf ( ComponentStatisticsFile,
-                          "%s, %d, %s, %s, %s, %s, %u\n",
+                          "%s, %d, %s, %s, %s, %s, %s, %u\n",
                           DateAndTimeString,
                           MeasurementNumber,
+                          HostName,
                           SupportedCipherSuites        [ CipherSuiteNumber        ],
                           SupportedSignatureAlgorithms [ SignatureAlgorithmNumber ],
                           SupportedNamedGroups         [ NamedGroupNumber         ],
@@ -239,11 +389,7 @@ void TLSTESTER::RunClientTLSTests ( char *DateAndTimeString )
         }
     }
 
-    Component->TerminatePKI ();
-
-    Component->Cleanup ();
-
-    RecordTestRunEndTime ( TLS_CLIENT_MEASUREMENTS );
+    return ( MeasurementNumber );
 }
 
 //**********************************************************************************************************************************
@@ -338,6 +484,10 @@ void TLSTESTER::RunClientQUICTests ( char * DateAndTimeString )
     }
 
     RecordTestRunEndTime ( QUIC_CLIENT_MEASUREMENTS );
+
+    // add this set of tests to the total run
+
+    Component->NumberOfMeasurementsMade += MeasurementNumber;
 }
 
 //**********************************************************************************************************************************
@@ -484,23 +634,19 @@ void TLSTESTER::RunFizzServerQUICTests ( char *DateAndTimeString )
 
 //**********************************************************************************************************************************
 //
-// In a client test, two sockets are required. The first one is for the connection to the real peer (server) and the second one is
-// for the tester to provide to the component.
-//
-// A thread then copies bidirectionaly any data that would normally sent to and from the component to the real peer. This is the
-// only way to intercept the tls/quic handshake and then the secured data. The secured data is not decrypted.
+// In a client test, only one socket is required, a socket for the connection to the peer (server) as the componenet uses send and
+// receive callbacks to communicate with the environment. This makes the componenet platform and transport agnostic.
 //
 // <pre><code>
-//
-//                 ..                     ..
-//    --------    .  .     ----------    .  .    -------------
+//                 ..
+//    --------    .  .     ----------  Receive() -------------
 //    |      |------------>|        |----------->|           |
-//    | Peer |    .  .     | Tester |    .  .    | Component |
+//    | Peer |    .  .     | Tester |            | Component |
 //    |      |<------------|        |<-----------|           |
-//    --------    .  .     ----------    .  .    -------------
-//                 ..                     ..
-//                Peer                Component
-//               Socket                 Socket
+//    --------    .  .     ----------   Send()   -------------
+//                 ..
+//                Peer
+//               Socket
 //
 // </code></pre>
 //
@@ -533,131 +679,104 @@ bool TLSTESTER::RunSingleClientTLSTest ( int         MeasurementNumber,
 
     // open socket to communicate with peer (server)
 
-    PeerSocket = socket ( AF_INET, SOCK_STREAM, 0 ); // we need a TCP socket as this is TLS!
+    PeerSocket = OpenPeerSocket ();
 
-    if ( PeerSocket != 0 )
+    if ( PeerSocket != INVALID_SOCKET )
     {
-        Peer = gethostbyname ( Component->GetHostName () );
+        Component->RecordStartTime (); // start time for this measurement
 
-        memset ( &PeerAddress, 0, sizeof ( PeerAddress ) );
+        Component->SetMeasurementNumber ( MeasurementNumber );
 
-        PeerAddress.sin_family = AF_INET;
+        Component->SetSocket ( PeerSocket ); // use the peer for now but switch to the server thread ASAP
 
-        memcpy ( &PeerAddress.sin_addr.s_addr, Peer->h_addr, Peer->h_length );
+        Result = Component->AddRootFileOrPath ( CertificateAuthorityChainFilename ); // must be done before the configure
 
-        PeerAddress.sin_port = htons ( Component->GetPortNumber () );
-
-        Response = connect ( PeerSocket, ( struct sockaddr* ) &PeerAddress, sizeof ( PeerAddress ) );
-
-        if ( Response == 0 )
+        if ( Result )
         {
-            Component->RecordStartTime (); // start time for this measurement
-
-            Component->SetMeasurementNumber ( MeasurementNumber );
-
-            Component->SetSocket ( PeerSocket ); // use the peer for now but switch to the server thread ASAP
-
-            Result = Component->AddRootFileOrPath ( CertificateAuthorityChainFilename ); // must be done before the configure
+            Result = Component->Configure ();
 
             if ( Result )
             {
-                Result = Component->Configure (); // set default TLS version
+                Result = Component->ConfigureCipherSuites ( CipherSuite );
 
                 if ( Result )
                 {
-                    Result = Component->ConfigureCipherSuites ( CipherSuite );
+                    Result = Component->ConfigureSignatureAlgorithms ( SignatureAlgorithm );
 
                     if ( Result )
                     {
-                        Result = Component->ConfigureSignatureAlgorithms ( SignatureAlgorithm );
+                        Result = Component->ConfigureNamedGroups ( NamedGroup );
 
                         if ( Result )
                         {
-                            Result = Component->ConfigureNamedGroups ( NamedGroup );
+                            Result = Component->ConfigureCertificateCallbacks ();
 
                             if ( Result )
                             {
-                                Result = Component->ConfigureCertificateCallbacks ();
+                                Result = Component->ConfigureNegotiationCallback ();
 
                                 if ( Result )
                                 {
-                                    Result = Component->ConfigureNegotiationCallback ();
+                                    Result = Component->Connect ();
+
+                                    //
+                                    // The component will call the send() and receive() callback functions to perform the handshake and the
+                                    // Connect () function call returns only when the handshake is complete.
+                                    //
 
                                     if ( Result )
                                     {
-                                        Result = Component->Connect ();
+                                        if ( VerboseConsoleOutput ) printf ( "Component->Connect() was successful!\n" );
 
-                                        //
-                                        // The component will call the send() and receive() callback functions to perform the handshake and the
-                                        // Connect () function call returns only when the handshake is complete.
-                                        //
+                                        Component->CloseConnection ();
 
-                                        if ( Result )
-                                        {
-                                            if ( VerboseConsoleOutput ) printf ( "Component->Connect() was successful!\n" );
-
-                                            Component->CloseConnection ();
-
-                                            Success = TRUE;
-                                        }
-                                        else
-                                        {
-                                            printf ( "Component->Connect() failed!\n" );
-                                        }
+                                        Success = TRUE;
                                     }
                                     else
                                     {
-                                        printf ( "Component->ConfigureNegotiationCallback () failed!\n" );
+                                        printf ( "Component->Connect() failed!\n" );
                                     }
                                 }
                                 else
                                 {
-                                    printf ( "Component->ConfigureCertificateCallbacks() failed!\n" );
+                                    printf ( "Component->ConfigureNegotiationCallback () failed!\n" );
                                 }
                             }
                             else
                             {
-                                printf ( "Component->ConfigureNamedGroups ( %s ) failed!\n", NamedGroup );
+                                printf ( "Component->ConfigureCertificateCallbacks() failed!\n" );
                             }
                         }
                         else
                         {
-                            printf ( "Component->ConfigureSignatureAlgorithms ( %s ) failed!\n", SignatureAlgorithm );
+                            printf ( "Component->ConfigureNamedGroups ( %s ) failed!\n", NamedGroup );
                         }
                     }
                     else
                     {
-                        printf ( "Component->ConfigureCipherSuites ( %s ) failed!\n", CipherSuite );
+                        printf ( "Component->ConfigureSignatureAlgorithms ( %s ) failed!\n", SignatureAlgorithm );
                     }
                 }
                 else
                 {
-                    printf ( "Component->Configure() failed!\n" );
+                    printf ( "Component->ConfigureCipherSuites ( %s ) failed!\n", CipherSuite );
                 }
             }
             else
             {
-                printf ( "Component->AddRootFileOrPath () failed!\n" );
+                printf ( "Component->Configure() failed!\n" );
             }
-
-            Component->RecordEndTime ();
-
-            if ( VerboseConsoleOutput ) printf ( "Last Error Code = %d\n", GetLastError () );
         }
         else
         {
-            fprintf ( DebugFile, "Cannot connect to peer \"%s\" for test!\n", Component->GetHostName () );
-
-            PrintSocketError ();
+            printf ( "Component->AddRootFileOrPath () failed!\n" );
         }
 
-        closesocket ( PeerSocket );
-    }
-    else
-    {
-        fprintf ( DebugFile, "Cannot open TCP socket for peer!\n" );
+        Component->RecordEndTime ();
 
-        PrintSocketError ();
+        if ( VerboseConsoleOutput ) printf ( "Last Error Code = %d\n", GetLastError () );
+
+        closesocket ( PeerSocket );
     }
 
     return ( Success );
@@ -672,7 +791,7 @@ SOCKET TLSTESTER::OpenPeerSocket ( void )
     int                  Response    = 0;
     SOCKET               PeerSocket  = INVALID_SOCKET;
 
-    // open socket to communicate with peer
+    // open socket to communicate with peer (server)
 
     PeerSocket = socket ( AF_INET, SOCK_STREAM, 0 ); // we need a TCP socket as this is TLS!
 
@@ -713,7 +832,8 @@ SOCKET TLSTESTER::OpenPeerSocket ( void )
 
 //**********************************************************************************************************************************
 //
-// This test uses just the default configuration for the cipher suites, signature algorithms and named groups.
+// This test uses just the default configuration for the cipher suites, signature algorithms and named groups. The actual defaults
+// could change from implementation to implementation as work progresses, so don't actually list them here.
 //
 
 bool TLSTESTER::RunSingleClientDefaultsTLSTest ( int MeasurementNumber )
@@ -768,6 +888,8 @@ bool TLSTESTER::RunSingleClientDefaultsTLSTest ( int MeasurementNumber )
                         if ( Result )
                         {
                             if ( VerboseConsoleOutput ) printf ( "Component->Connect() was successful!\n" );
+
+                            // don't do any data transfer in this particular test
 
                             Component->CloseConnection ();
 
@@ -1101,6 +1223,48 @@ bool TLSTESTER::PrintQuicResult ( quic_result QuicResult ) // old knowledge now 
     }
 
     return (  Result );
+}
+
+//**********************************************************************************************************************************
+
+DWORD WINAPI ClientThread ( LPVOID lpParam )
+{
+    TLSTESTER *Tester = ( TLSTESTER * ) lpParam;
+
+    while ( Tester->TerminateClientThread == FALSE )
+    {
+
+    }
+
+    return ( 0 );
+}
+
+//**********************************************************************************************************************************
+
+DWORD WINAPI ServerThread ( LPVOID lpParam )
+{
+    TLSTESTER *Tester = ( TLSTESTER * ) lpParam;
+
+    while ( Tester->TerminateServerThread == FALSE )
+    {
+
+    }
+
+    return ( 0 );
+}
+
+//**********************************************************************************************************************************
+
+DWORD WINAPI PipeThread ( LPVOID lpParam )
+{
+    TLSTESTER *Tester = ( TLSTESTER * ) lpParam;
+
+    while ( Tester->TerminatePipeThread == FALSE )
+    {
+
+    }
+
+    return ( 0 );
 }
 
 //**********************************************************************************************************************************

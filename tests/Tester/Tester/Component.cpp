@@ -27,6 +27,7 @@
 
 #include "stdafx.h"
 #include "time.h"
+#include "windows.h"
 
 #include "Tester.h"
 
@@ -269,14 +270,23 @@ void InitialiseMeasurementResult ( MEASUREMENTRESULTS *MeasurementResult )
         ComponentMeasurement->StartTime.QuadPart = 0;
         ComponentMeasurement->EndTime.QuadPart   = 0;
 
+        //***********************
+        // Component measurements
+        //***********************
+
         for ( int FunctionIndex = 0; FunctionIndex < MAX_FFI_FUNCTIONS; FunctionIndex++ )
         {
             ComponentMeasurementEntry = &ComponentMeasurement->FFIMeasurements [ FunctionIndex ];
 
             ComponentMeasurementEntry->EntryName = FFIMeasurementEntryNames [ FunctionIndex ];
 
-            ComponentMeasurementEntry->StartTime.QuadPart = 0;
-            ComponentMeasurementEntry->EndTime.QuadPart   = 0;
+            ComponentMeasurementEntry->NumberOfCalls = 0;
+
+            for ( int CallIndex = 0; CallIndex < MAX_COMPONENT_CALLS_PER_MEASUREMENT; CallIndex++ )
+            {
+                ComponentMeasurementEntry->StartTimes [ CallIndex ].QuadPart = 0;
+                ComponentMeasurementEntry->EndTimes   [ CallIndex ].QuadPart = 0;
+            }
         }
 
         for ( int FunctionIndex = 0; FunctionIndex < MAX_PKI_FUNCTIONS; FunctionIndex++ )
@@ -285,9 +295,18 @@ void InitialiseMeasurementResult ( MEASUREMENTRESULTS *MeasurementResult )
 
             ComponentMeasurementEntry->EntryName = PKIMeasurementEntryNames [ FunctionIndex ];
 
-            ComponentMeasurementEntry->StartTime.QuadPart = 0;
-            ComponentMeasurementEntry->EndTime.QuadPart   = 0;
+            ComponentMeasurementEntry->NumberOfCalls = 0;
+
+            for ( int CallIndex = 0; CallIndex < MAX_COMPONENT_CALLS_PER_MEASUREMENT; CallIndex++ )
+            {
+                ComponentMeasurementEntry->StartTimes [ CallIndex ].QuadPart = 0;
+                ComponentMeasurementEntry->EndTimes   [ CallIndex ].QuadPart = 0;
+            }
         }
+
+        //*********************
+        // Library measurements
+        //*********************
 
         for ( int FunctionIndex = 0; FunctionIndex < MAX_FFI_CALLBACK_FUNCTIONS; FunctionIndex++ )
         {
@@ -297,7 +316,7 @@ void InitialiseMeasurementResult ( MEASUREMENTRESULTS *MeasurementResult )
 
             CallbackMeasurementEntry->NumberOfCalls = 0;
 
-            for ( int CallIndex = 0; CallIndex < MAX_CALLS_PER_MEASUREMENT; CallIndex++ )
+            for ( int CallIndex = 0; CallIndex < MAX_CALLBACK_CALLS_PER_MEASUREMENT; CallIndex++ )
             {
                 CallbackMeasurementEntry->StartTimes [ CallIndex ].QuadPart = 0;
                 CallbackMeasurementEntry->EndTimes   [ CallIndex ].QuadPart = 0;
@@ -312,7 +331,7 @@ void InitialiseMeasurementResult ( MEASUREMENTRESULTS *MeasurementResult )
 
             CallbackMeasurementEntry->NumberOfCalls = 0;
 
-            for ( int CallIndex = 0; CallIndex < MAX_CALLS_PER_MEASUREMENT; CallIndex++ )
+            for ( int CallIndex = 0; CallIndex < MAX_CALLBACK_CALLS_PER_MEASUREMENT; CallIndex++ )
             {
                 CallbackMeasurementEntry->StartTimes [ CallIndex ].QuadPart = 0;
                 CallbackMeasurementEntry->EndTimes   [ CallIndex ].QuadPart = 0;
@@ -350,9 +369,9 @@ void PrintMeasurementResults ( FILE *MeasurementsResultFile )
 void PrintMeasurementResult ( FILE               *MeasurementsResultFile,
                               MEASUREMENTRESULTS *MeasurementResult )
 {
-    COMPONENTMEASUREMENTENTRY *MeasurementEntry         = NULL;
-    CALLBACKMEASUREMENTENTRY  *CallbackMeasurementEntry = NULL;
-    COMPONENTMEASUREMENT      *ComponentMeasurement     = NULL;
+    COMPONENTMEASUREMENTENTRY *ComponentMeasurementEntry = NULL;
+    CALLBACKMEASUREMENTENTRY  *CallbackMeasurementEntry  = NULL;
+    COMPONENTMEASUREMENT      *ComponentMeasurement      = NULL;
 
     fprintf ( MeasurementsResultFile, "Measurement Type = %s\n", MeasurementResult->MeasurementTypeName );
 
@@ -373,53 +392,91 @@ void PrintMeasurementResult ( FILE               *MeasurementsResultFile,
         fprintf ( MeasurementsResultFile, "Component Test Start Time = %I64u\n", ComponentMeasurement->StartTime.QuadPart );
         fprintf ( MeasurementsResultFile, "Component Test End Time   = %I64u\n", ComponentMeasurement->EndTime.QuadPart   );
 
+        //***********************
+        // Component measurements
+        //***********************
+
         for ( int FunctionIndex = 0; FunctionIndex < MAX_FFI_FUNCTIONS; FunctionIndex++ )
         {
-            MeasurementEntry = &ComponentMeasurement->FFIMeasurements [ FunctionIndex ];
+            ComponentMeasurementEntry = &ComponentMeasurement->FFIMeasurements [ FunctionIndex ];
 
-            fprintf ( MeasurementsResultFile, " FFI Function Name = %s\n", MeasurementEntry->EntryName );
+            // only print out the component measurements recorded
 
-            fprintf ( MeasurementsResultFile, " Measurement Start Time = %I64u\n", MeasurementEntry->StartTime.QuadPart );
-            fprintf ( MeasurementsResultFile, " Measurement End Time   = %I64u\n", MeasurementEntry->EndTime.QuadPart   );
+            if ( ComponentMeasurementEntry->NumberOfCalls > 0 )
+            {
+                fprintf ( MeasurementsResultFile, " FFI Function Name = %s\n", ComponentMeasurementEntry->EntryName );
+
+                fprintf ( MeasurementsResultFile, "   Number Of Calls = %u\n", ComponentMeasurementEntry->NumberOfCalls );
+
+                for ( int CallIndex = 0; CallIndex < ComponentMeasurementEntry->NumberOfCalls; CallIndex++ )
+                {
+                    fprintf ( MeasurementsResultFile, " Measurement Start Time [%03d] = %I64u\n", CallIndex, ComponentMeasurementEntry->StartTimes [ CallIndex ].QuadPart );
+                    fprintf ( MeasurementsResultFile, " Measurement End Time   [%03d] = %I64u\n", CallIndex, ComponentMeasurementEntry->EndTimes   [ CallIndex ].QuadPart );
+                }
+            }
         }
 
         for ( int FunctionIndex = 0; FunctionIndex < MAX_FFI_CALLBACK_FUNCTIONS; FunctionIndex++ )
         {
             CallbackMeasurementEntry = &ComponentMeasurement->FFICallbackMeasurements [ FunctionIndex ];
 
-            fprintf ( MeasurementsResultFile, " FFI Callback Name = %s\n", CallbackMeasurementEntry->EntryName );
+            // only print out the component callback measurements recorded
 
-            fprintf ( MeasurementsResultFile, "   Number Of Calls = %u\n", CallbackMeasurementEntry->NumberOfCalls );
-
-            for ( int CallIndex = 0; CallIndex < CallbackMeasurementEntry->NumberOfCalls; CallIndex++ )
+            if ( CallbackMeasurementEntry->NumberOfCalls > 0 )
             {
-                fprintf ( MeasurementsResultFile, " Measurement Start Time [%03d] = %I64u\n", CallIndex, CallbackMeasurementEntry->StartTimes [ CallIndex ].QuadPart );
-                fprintf ( MeasurementsResultFile, " Measurement End Time   [%03d] = %I64u\n", CallIndex, CallbackMeasurementEntry->EndTimes   [ CallIndex ].QuadPart );
-            }
+                fprintf ( MeasurementsResultFile, " FFI Callback Name = %s\n", CallbackMeasurementEntry->EntryName );
+
+                fprintf ( MeasurementsResultFile, "   Number Of Calls = %u\n", CallbackMeasurementEntry->NumberOfCalls );
+
+                for ( int CallIndex = 0; CallIndex < CallbackMeasurementEntry->NumberOfCalls; CallIndex++ )
+                {
+                    fprintf ( MeasurementsResultFile, " Measurement Start Time [%03d] = %I64u\n", CallIndex, CallbackMeasurementEntry->StartTimes [ CallIndex ].QuadPart );
+                    fprintf ( MeasurementsResultFile, " Measurement End Time   [%03d] = %I64u\n", CallIndex, CallbackMeasurementEntry->EndTimes   [ CallIndex ].QuadPart );
+                }
+                }
         }
+
+        //*********************
+        // Library measurements
+        //*********************
 
         for ( int FunctionIndex = 0; FunctionIndex < MAX_PKI_FUNCTIONS; FunctionIndex++ )
         {
-            MeasurementEntry = &ComponentMeasurement->PKIMeasurements [ FunctionIndex ];
+            ComponentMeasurementEntry = &ComponentMeasurement->PKIMeasurements [ FunctionIndex ];
 
-            fprintf ( MeasurementsResultFile, " PKI Function Name = %s\n", MeasurementEntry->EntryName );
+            // only print the library measurements recorded
 
-            fprintf ( MeasurementsResultFile, " Measurement Start Time = %I64u\n", MeasurementEntry->StartTime.QuadPart );
-            fprintf ( MeasurementsResultFile, " Measurement End Time   = %I64u\n", MeasurementEntry->EndTime.QuadPart   );
+            if ( ComponentMeasurementEntry->NumberOfCalls > 0 )
+            {
+                fprintf ( MeasurementsResultFile, " PKI Function Name = %s\n", ComponentMeasurementEntry->EntryName );
+
+                fprintf ( MeasurementsResultFile, "   Number Of Calls = %u\n", ComponentMeasurementEntry->NumberOfCalls );
+
+                for ( int CallIndex = 0; CallIndex < ComponentMeasurementEntry->NumberOfCalls; CallIndex++ )
+                {
+                    fprintf ( MeasurementsResultFile, " Measurement Start Time [%03d] = %I64u\n", CallIndex, ComponentMeasurementEntry->StartTimes [ CallIndex ].QuadPart );
+                    fprintf ( MeasurementsResultFile, " Measurement End Time   [%03d] = %I64u\n", CallIndex, ComponentMeasurementEntry->EndTimes   [ CallIndex ].QuadPart );
+                }
+            }
         }
 
         for ( int FunctionIndex = 0; FunctionIndex < MAX_PKI_CALLBACK_FUNCTIONS; FunctionIndex++ )
         {
             CallbackMeasurementEntry = &ComponentMeasurement->PKICallbackMeasurements [ FunctionIndex ];
 
-            fprintf ( MeasurementsResultFile, " PKI Callback Name = %s\n", CallbackMeasurementEntry->EntryName );
+            // only print the library callback measurements recorded
 
-            fprintf ( MeasurementsResultFile, "   Number Of Calls = %u\n", CallbackMeasurementEntry->NumberOfCalls );
-
-            for ( int CallIndex = 0; CallIndex < CallbackMeasurementEntry->NumberOfCalls; CallIndex++ )
+            if ( CallbackMeasurementEntry->NumberOfCalls > 0 )
             {
-                fprintf ( MeasurementsResultFile, " Measurement Start Time [%03d] = %I64u\n", CallIndex, CallbackMeasurementEntry->StartTimes [ CallIndex ].QuadPart );
-                fprintf ( MeasurementsResultFile, " Measurement End Time   [%03d] = %I64u\n", CallIndex, CallbackMeasurementEntry->EndTimes   [ CallIndex ].QuadPart );
+                fprintf ( MeasurementsResultFile, " PKI Callback Name = %s\n", CallbackMeasurementEntry->EntryName );
+
+                fprintf ( MeasurementsResultFile, "   Number Of Calls = %u\n", CallbackMeasurementEntry->NumberOfCalls );
+
+                for ( int CallIndex = 0; CallIndex < CallbackMeasurementEntry->NumberOfCalls; CallIndex++ )
+                {
+                    fprintf ( MeasurementsResultFile, " Measurement Start Time [%03d] = %I64u\n", CallIndex, CallbackMeasurementEntry->StartTimes [ CallIndex ].QuadPart );
+                    fprintf ( MeasurementsResultFile, " Measurement End Time   [%03d] = %I64u\n", CallIndex, CallbackMeasurementEntry->EndTimes   [ CallIndex ].QuadPart );
+                }
             }
         }
     }
@@ -441,6 +498,13 @@ void RecordTestRunEndTime ( int TestRunNumber )
 
 //**********************************************************************************************************************************
 //
+// Threads
+//
+//**********************************************************************************************************************************
+
+
+//**********************************************************************************************************************************
+//
 // FFI Callback Function wrappers
 //
 //**********************************************************************************************************************************
@@ -456,14 +520,14 @@ void MITLS_CALLCONV TicketCallback ( void               *cb_state,
 
     CallCount = FFICallbackMeasurement->NumberOfCalls++;
 
-    if ( CallCount < MAX_CALLS_PER_MEASUREMENT )
+    if ( CallCount < MAX_CALLBACK_CALLS_PER_MEASUREMENT )
     {
         QueryPerformanceCounter ( &FFICallbackMeasurement->StartTimes [ CallCount ] );
     }
 
     printf ( "Ticket callback function invoked!\n" );
 
-    if ( CallCount < MAX_CALLS_PER_MEASUREMENT )
+    if ( CallCount < MAX_CALLBACK_CALLS_PER_MEASUREMENT )
     {
         QueryPerformanceCounter ( &FFICallbackMeasurement->EndTimes [ CallCount ] );
     }
@@ -487,14 +551,14 @@ mitls_nego_action MITLS_CALLCONV NegotiationCallback ( void                 *cb_
 
     CallCount = FFICallbackMeasurement->NumberOfCalls++;
 
-    if ( CallCount < MAX_CALLS_PER_MEASUREMENT )
+    if ( CallCount < MAX_CALLBACK_CALLS_PER_MEASUREMENT )
     {
         QueryPerformanceCounter ( &FFICallbackMeasurement->StartTimes [ CallCount ] );
     }
 
     printf ( "Negotiation callback function invoked!\n" );
 
-    if ( CallCount < MAX_CALLS_PER_MEASUREMENT )
+    if ( CallCount < MAX_CALLBACK_CALLS_PER_MEASUREMENT )
     {
         QueryPerformanceCounter ( &FFICallbackMeasurement->EndTimes [ CallCount ] );
     }
@@ -538,7 +602,7 @@ int MITLS_CALLCONV SendCallback ( void                *Context,
 
     CallCount = FFICallbackMeasurement->NumberOfCalls++;
 
-    if ( CallCount < MAX_CALLS_PER_MEASUREMENT )
+    if ( CallCount < MAX_CALLBACK_CALLS_PER_MEASUREMENT )
     {
         QueryPerformanceCounter ( &FFICallbackMeasurement->StartTimes [ CallCount ] );
     }
@@ -619,7 +683,7 @@ int MITLS_CALLCONV SendCallback ( void                *Context,
 
     } // if ConsoleDebugging
 
-    if ( CallCount < MAX_CALLS_PER_MEASUREMENT )
+    if ( CallCount < MAX_CALLBACK_CALLS_PER_MEASUREMENT )
     {
         QueryPerformanceCounter ( &FFICallbackMeasurement->EndTimes [ CallCount ] );
     }
@@ -657,7 +721,7 @@ int MITLS_CALLCONV ReceiveCallback ( void          *Context,
 
     CallCount = FFICallbackMeasurement->NumberOfCalls++;
 
-    if ( CallCount < MAX_CALLS_PER_MEASUREMENT )
+    if ( CallCount < MAX_CALLBACK_CALLS_PER_MEASUREMENT )
     {
         QueryPerformanceCounter ( &FFICallbackMeasurement->StartTimes [ CallCount ] );
     }
@@ -736,7 +800,7 @@ int MITLS_CALLCONV ReceiveCallback ( void          *Context,
         AmountTransferred = recv ( Component->Socket, (char * ) Buffer, BufferSize, 0 );
     }
 
-    if ( CallCount < MAX_CALLS_PER_MEASUREMENT )
+    if ( CallCount < MAX_CALLBACK_CALLS_PER_MEASUREMENT )
     {
         QueryPerformanceCounter ( &FFICallbackMeasurement->EndTimes [ CallCount ] );
     }
@@ -763,14 +827,14 @@ void *MITLS_CALLCONV CertificateSelectCallback ( void                         *c
 
     CallCount = FFICallbackMeasurement->NumberOfCalls++;
 
-    if ( CallCount < MAX_CALLS_PER_MEASUREMENT )
+    if ( CallCount < MAX_CALLBACK_CALLS_PER_MEASUREMENT )
     {
         QueryPerformanceCounter ( &FFICallbackMeasurement->StartTimes [ CallCount ] );
     }
 
     printf ( "Certificate Select Callback function invoked!\n" );
 
-    if ( CallCount < MAX_CALLS_PER_MEASUREMENT )
+    if ( CallCount < MAX_CALLBACK_CALLS_PER_MEASUREMENT )
     {
         QueryPerformanceCounter ( &FFICallbackMeasurement->EndTimes [ CallCount ] );
     }
@@ -791,14 +855,14 @@ size_t MITLS_CALLCONV CertificateFormatCallback ( void          *cb_state,
 
     CallCount = FFICallbackMeasurement->NumberOfCalls++;
 
-    if ( CallCount < MAX_CALLS_PER_MEASUREMENT )
+    if ( CallCount < MAX_CALLBACK_CALLS_PER_MEASUREMENT )
     {
         QueryPerformanceCounter ( &FFICallbackMeasurement->StartTimes [ CallCount ] );
     }
 
     printf ( "Certificate Format Callback function invoked!\n" );
 
-    if ( CallCount < MAX_CALLS_PER_MEASUREMENT )
+    if ( CallCount < MAX_CALLBACK_CALLS_PER_MEASUREMENT )
     {
         QueryPerformanceCounter ( &FFICallbackMeasurement->EndTimes [ CallCount ] );
     }
@@ -822,14 +886,14 @@ size_t MITLS_CALLCONV CertificateSignCallback ( void                         *cb
 
     CallCount = FFICallbackMeasurement->NumberOfCalls++;
 
-    if ( CallCount < MAX_CALLS_PER_MEASUREMENT )
+    if ( CallCount < MAX_CALLBACK_CALLS_PER_MEASUREMENT )
     {
         QueryPerformanceCounter ( &FFICallbackMeasurement->StartTimes [ CallCount ] );
     }
 
     printf ( "Certificate Sign Callback function invoked!\n" );
 
-    if ( CallCount < MAX_CALLS_PER_MEASUREMENT )
+    if ( CallCount < MAX_CALLBACK_CALLS_PER_MEASUREMENT )
     {
         QueryPerformanceCounter ( &FFICallbackMeasurement->EndTimes [ CallCount ] );
     }
@@ -857,7 +921,7 @@ int MITLS_CALLCONV CertificateVerifyCallback ( void                         *Sta
 
     CallCount = FFICallbackMeasurement->NumberOfCalls++;
 
-    if ( CallCount < MAX_CALLS_PER_MEASUREMENT )
+    if ( CallCount < MAX_CALLBACK_CALLS_PER_MEASUREMENT )
     {
         QueryPerformanceCounter ( &FFICallbackMeasurement->StartTimes [ CallCount ] );
     }
@@ -920,7 +984,7 @@ int MITLS_CALLCONV CertificateVerifyCallback ( void                         *Sta
         if ( Tester->ConsoleDebugging ) printf ( "Certificate Chain Parsing failed!\n" );
     }
 
-    if ( CallCount < MAX_CALLS_PER_MEASUREMENT )
+    if ( CallCount < MAX_CALLBACK_CALLS_PER_MEASUREMENT )
     {
         QueryPerformanceCounter ( &FFICallbackMeasurement->EndTimes [ CallCount ] );
     }
@@ -945,14 +1009,14 @@ int MITLS_CALLCONV CertificatePasswordCallback ( char       *password,
 
     CallCount = PKICallbackMeasurement->NumberOfCalls++;
 
-    if ( CallCount < MAX_CALLS_PER_MEASUREMENT )
+    if ( CallCount < MAX_CALLBACK_CALLS_PER_MEASUREMENT )
     {
         QueryPerformanceCounter ( &PKICallbackMeasurement->StartTimes [ CallCount ] );
     }
 
     printf ( "Certificate Password Callback function invoked!\n" );
 
-    if ( CallCount < MAX_CALLS_PER_MEASUREMENT )
+    if ( CallCount < MAX_CALLBACK_CALLS_PER_MEASUREMENT )
     {
         QueryPerformanceCounter ( &PKICallbackMeasurement->EndTimes [ CallCount ] );
     }
@@ -973,14 +1037,14 @@ void *MITLS_CALLCONV CertificateAllocationCallback ( void    *cur,
 
     CallCount = PKICallbackMeasurement->NumberOfCalls++;
 
-    if ( CallCount < MAX_CALLS_PER_MEASUREMENT )
+    if ( CallCount < MAX_CALLBACK_CALLS_PER_MEASUREMENT )
     {
         QueryPerformanceCounter ( &PKICallbackMeasurement->StartTimes [ CallCount ] );
     }
 
     printf ( "Certificate Allocation Callback function invoked!\n" );
 
-    if ( CallCount < MAX_CALLS_PER_MEASUREMENT )
+    if ( CallCount < MAX_CALLBACK_CALLS_PER_MEASUREMENT )
     {
         QueryPerformanceCounter ( &PKICallbackMeasurement->EndTimes [ CallCount ] );
     }
@@ -1177,13 +1241,17 @@ int COMPONENT::GetPortNumber ( void )
 
 int COMPONENT::InitialiseTLS ( void )
 {
+    COMPONENTMEASUREMENTENTRY *FFIComponentMeasurement = &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_INIT ];
+
+    int CallCount = FFIComponentMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "FFI_mitls_init () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_INIT ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->StartTimes [ CallCount ] );
 
     int Result = FFI_mitls_init ();
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_INIT ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->EndTimes [ CallCount ] );
 
     return ( Result );
 }
@@ -1192,13 +1260,36 @@ int COMPONENT::InitialiseTLS ( void )
 
 int COMPONENT::Configure ( void )
 {
+    COMPONENTMEASUREMENTENTRY *FFIComponentMeasurement = &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONFIGURE ];
+
+    int CallCount = FFIComponentMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "FFI_mitls_configure () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONFIGURE ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->StartTimes [ CallCount ] );
 
     int Result = FFI_mitls_configure ( &TLSState, TLSVersion, HostName ); // note that this one requires a state double pointer!
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONFIGURE ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->EndTimes [ CallCount ] );
+
+    return ( Result );
+}
+
+//**********************************************************************************************************************************
+
+int COMPONENT::Configure ( char *UseThisHostName ) // configure using the specified host name
+{
+    COMPONENTMEASUREMENTENTRY *FFIComponentMeasurement = &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONFIGURE ];
+
+    int CallCount = FFIComponentMeasurement->NumberOfCalls++;
+
+    fprintf ( DebugFile, "FFI_mitls_configure () called\n" );
+
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->StartTimes [ CallCount ] );
+
+    int Result = FFI_mitls_configure ( &TLSState, TLSVersion, UseThisHostName ); // note that this one requires a state double pointer!
+
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->EndTimes [ CallCount ] );
 
     return ( Result );
 }
@@ -1209,13 +1300,17 @@ int COMPONENT::SetTicketKey ( const char          *Algorithm,
                               const unsigned char *TicketKey,
                               size_t               TicketKeyLength )
 {
+    COMPONENTMEASUREMENTENTRY *FFIComponentMeasurement = &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_SET_TICKET_KEY ];
+
+    int CallCount = FFIComponentMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "FFI_mitls_set_ticket_key () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_SET_TICKET_KEY ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->StartTimes [ CallCount ] );
 
     int Result = FFI_mitls_set_ticket_key ( Algorithm, TicketKey, TicketKeyLength );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_SET_TICKET_KEY ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->EndTimes [ CallCount ] );
 
     return ( Result );
 }
@@ -1224,13 +1319,17 @@ int COMPONENT::SetTicketKey ( const char          *Algorithm,
 
 int COMPONENT::ConfigureCipherSuites ( const char *CipherSuites )
 {
+    COMPONENTMEASUREMENTENTRY *FFIComponentMeasurement = &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONFIGURE_CIPHER_SUITES ];
+
+    int CallCount = FFIComponentMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "FFI_mitls_configure_cipher_suites () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONFIGURE_CIPHER_SUITES ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->StartTimes [ CallCount ] );
 
     int Result = FFI_mitls_configure_cipher_suites ( TLSState, CipherSuites );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONFIGURE_CIPHER_SUITES ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->EndTimes [ CallCount ] );
 
     return ( Result );
 }
@@ -1239,13 +1338,17 @@ int COMPONENT::ConfigureCipherSuites ( const char *CipherSuites )
 
 int COMPONENT::ConfigureSignatureAlgorithms ( const char *SignatureAlgorithms )
 {
+    COMPONENTMEASUREMENTENTRY *FFIComponentMeasurement = &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONFIGURE_SIGNATURE_ALGORITHMS ];
+
+    int CallCount = FFIComponentMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "FFI_mitls_configure_signature_algorithms () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONFIGURE_SIGNATURE_ALGORITHMS ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->StartTimes [ CallCount ] );
 
     int Result = FFI_mitls_configure_signature_algorithms ( TLSState, SignatureAlgorithms );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONFIGURE_SIGNATURE_ALGORITHMS ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->EndTimes [ CallCount ] );
 
     return ( Result );
 }
@@ -1254,13 +1357,17 @@ int COMPONENT::ConfigureSignatureAlgorithms ( const char *SignatureAlgorithms )
 
 int COMPONENT::ConfigureNamedGroups ( const char *NamedGroups )
 {
+    COMPONENTMEASUREMENTENTRY *FFIComponentMeasurement = &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONFIGURE_NAMED_GROUPS ];
+
+    int CallCount = FFIComponentMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "FFI_mitls_configure_named_groups () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONFIGURE_NAMED_GROUPS ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->StartTimes [ CallCount ] );
 
     int Result = FFI_mitls_configure_named_groups ( TLSState, NamedGroups );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONFIGURE_NAMED_GROUPS ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->EndTimes [ CallCount ] );
 
     return ( Result );
 }
@@ -1269,13 +1376,17 @@ int COMPONENT::ConfigureNamedGroups ( const char *NamedGroups )
 
 int COMPONENT::ConfigureApplicationLayerProtocolNegotiation ( const char *ApplicationLayerProtocolNegotiation )
 {
+    COMPONENTMEASUREMENTENTRY *FFIComponentMeasurement = &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONFIGURE_ALPN ];
+
+    int CallCount = FFIComponentMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "FFI_mitls_configure_alpn () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONFIGURE_ALPN ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->StartTimes [ CallCount ] );
 
     int Result = FFI_mitls_configure_alpn ( TLSState, ApplicationLayerProtocolNegotiation );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONFIGURE_ALPN ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->EndTimes [ CallCount ] );
 
     return ( Result );
 }
@@ -1284,13 +1395,17 @@ int COMPONENT::ConfigureApplicationLayerProtocolNegotiation ( const char *Applic
 
 int COMPONENT::ConfigureEarlyData ( uint32_t MaximumEarlyData )
 {
+    COMPONENTMEASUREMENTENTRY *FFIComponentMeasurement = &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONFIGURE_EARLY_DATA ];
+
+    int CallCount = FFIComponentMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "FFI_mitls_configure_early_data () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONFIGURE_EARLY_DATA ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->StartTimes [ CallCount ] );
 
     int Result = FFI_mitls_configure_early_data ( TLSState, MaximumEarlyData );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONFIGURE_EARLY_DATA ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->EndTimes [ CallCount ] );
 
     return ( Result );
 }
@@ -1299,26 +1414,34 @@ int COMPONENT::ConfigureEarlyData ( uint32_t MaximumEarlyData )
 
 void COMPONENT::ConfigureTraceCallback ( void )
 {
+    COMPONENTMEASUREMENTENTRY *FFIComponentMeasurement = &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_SET_TRACE_CALLBACK ];
+
+    int CallCount = FFIComponentMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "FFI_mitls_set_trace_callback () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_SET_TRACE_CALLBACK ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->StartTimes [ CallCount ] );
 
     FFI_mitls_set_trace_callback ( TraceCallback );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_SET_TRACE_CALLBACK ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->EndTimes [ CallCount ] );
 }
 //**********************************************************************************************************************************
 
 int COMPONENT::ConfigureTicketCallback ( void              *CallbackState,
                                          pfn_FFI_ticket_cb  TicketCallback )
 {
+    COMPONENTMEASUREMENTENTRY *FFIComponentMeasurement = &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONFIGURE_TICKET_CALLBACK ];
+
+    int CallCount = FFIComponentMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "FFI_mitls_configure_ticket_callback () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONFIGURE_TICKET_CALLBACK ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->StartTimes [ CallCount ] );
 
     int Result = FFI_mitls_configure_ticket_callback ( TLSState, CallbackState, TicketCallback );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONFIGURE_TICKET_CALLBACK ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->EndTimes [ CallCount ] );
 
     return ( Result );
 }
@@ -1327,13 +1450,17 @@ int COMPONENT::ConfigureTicketCallback ( void              *CallbackState,
 
 int COMPONENT::ConfigureNegotiationCallback ( void )
 {
+    COMPONENTMEASUREMENTENTRY *FFIComponentMeasurement = &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONFIGURE_NEGO_CALLBACK ];
+
+    int CallCount = FFIComponentMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "FFI_mitls_configure_nego_callback () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONFIGURE_NEGO_CALLBACK ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->StartTimes [ CallCount ] );
 
     int Result = FFI_mitls_configure_nego_callback ( TLSState, NULL, NegotiationCallback );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONFIGURE_NEGO_CALLBACK ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->EndTimes [ CallCount ] );
 
     return ( Result );
 }
@@ -1342,6 +1469,10 @@ int COMPONENT::ConfigureNegotiationCallback ( void )
 
 int COMPONENT::ConfigureCertificateCallbacks ( void )
 {
+    COMPONENTMEASUREMENTENTRY *FFIComponentMeasurement = &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONFIGURE_CERT_CALLBACKS ];
+
+    int CallCount = FFIComponentMeasurement->NumberOfCalls++;
+
     mitls_cert_cb CertificateCallbacks;
 
     // setup the callback functions structure with the wrapper functions (so we can do measurements)
@@ -1353,11 +1484,11 @@ int COMPONENT::ConfigureCertificateCallbacks ( void )
 
     fprintf ( DebugFile, "FFI_mitls_configure_cert_callbacks () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONFIGURE_CERT_CALLBACKS ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->StartTimes [ CallCount ] );
 
     int Result = FFI_mitls_configure_cert_callbacks ( TLSState, PKIState, &CertificateCallbacks );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONFIGURE_CERT_CALLBACKS ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->EndTimes [ CallCount ] );
 
     return ( Result );
 }
@@ -1366,28 +1497,36 @@ int COMPONENT::ConfigureCertificateCallbacks ( void )
 
 void COMPONENT::CloseConnection ( void )
 {
+    COMPONENTMEASUREMENTENTRY *FFIComponentMeasurement = &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CLOSE ];
+
+    int CallCount = FFIComponentMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "FFI_mitls_close () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CLOSE ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->StartTimes [ CallCount ] );
 
     FFI_mitls_close ( TLSState );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CLOSE ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->EndTimes [ CallCount ] );
 }
 
 //**********************************************************************************************************************************
 
 int COMPONENT::Connect ( void )
 {
+    COMPONENTMEASUREMENTENTRY *FFIComponentMeasurement = &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONNECT ];
+
+    int CallCount = FFIComponentMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "FFI_mitls_connect () called\n" );
 
     CurrentMeasurementNumber = MeasurementNumber; // record the measurement number used for the connect call for use in callbacks
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONNECT ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->StartTimes [ CallCount ] );
 
     int Result = FFI_mitls_connect ( ( void * ) this, SendCallback, ReceiveCallback, TLSState );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CONNECT ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->EndTimes [ CallCount ] );
 
     return ( Result );
 }
@@ -1396,13 +1535,17 @@ int COMPONENT::Connect ( void )
 
 int COMPONENT::AcceptConnected ( void  )
 {
+    COMPONENTMEASUREMENTENTRY *FFIComponentMeasurement = &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_ACCEPT_CONNECTED ];
+
+    int CallCount = FFIComponentMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "FFI_mitls_accept_connected () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_ACCEPT_CONNECTED ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->StartTimes [ CallCount ] );
 
     int Result = FFI_mitls_accept_connected ( ( void * ) this, SendCallback, ReceiveCallback, TLSState  );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_ACCEPT_CONNECTED ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->EndTimes [ CallCount ] );
 
     return ( Result );
 }
@@ -1412,13 +1555,17 @@ int COMPONENT::AcceptConnected ( void  )
 int COMPONENT::GetExporter ( int           early,
                              mitls_secret *secret )
 {
+    COMPONENTMEASUREMENTENTRY *FFIComponentMeasurement = &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_GET_EXPORTER ];
+
+    int CallCount = FFIComponentMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "FFI_mitls_get_exporter () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_GET_EXPORTER ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->StartTimes [ CallCount ] );
 
     int Result = FFI_mitls_get_exporter ( TLSState, early, secret );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_GET_EXPORTER ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->EndTimes [ CallCount ] );
 
     return ( Result );
 }
@@ -1427,13 +1574,17 @@ int COMPONENT::GetExporter ( int           early,
 
 void *COMPONENT::GetCertificate ( size_t *cert_size )
 {
+    COMPONENTMEASUREMENTENTRY *FFIComponentMeasurement = &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_GET_CERT ];
+
+    int CallCount = FFIComponentMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "FFI_mitls_get_cert () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_GET_CERT ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->StartTimes [ CallCount ] );
 
     void *Certificate = FFI_mitls_get_cert ( TLSState, cert_size );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_GET_CERT ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->EndTimes [ CallCount ] );
 
     return ( Certificate );
 }
@@ -1443,13 +1594,17 @@ void *COMPONENT::GetCertificate ( size_t *cert_size )
 int COMPONENT::Send ( const unsigned char *buffer,
                       size_t               buffer_size )
 {
+    COMPONENTMEASUREMENTENTRY *FFIComponentMeasurement = &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_SEND ];
+
+    int CallCount = FFIComponentMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "FFI_mitls_send () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_SEND ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->StartTimes [ CallCount ] );
 
     int Result = FFI_mitls_send ( TLSState, buffer, buffer_size );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_SEND ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->EndTimes [ CallCount ] );
 
     return ( Result );
 }
@@ -1458,13 +1613,17 @@ int COMPONENT::Send ( const unsigned char *buffer,
 
 void *COMPONENT::Receive ( size_t *packet_size )
 {
+    COMPONENTMEASUREMENTENTRY *FFIComponentMeasurement = &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_RECEIVE ];
+
+    int CallCount = FFIComponentMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "FFI_mitls_receive () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_RECEIVE ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->StartTimes [ CallCount ] );
 
     void *Packet = FFI_mitls_receive ( TLSState, packet_size );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_RECEIVE ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->EndTimes [ CallCount ] );
 
     return ( Packet );
 }
@@ -1473,13 +1632,17 @@ void *COMPONENT::Receive ( size_t *packet_size )
 
 void COMPONENT::Cleanup ( void )
 {
+    COMPONENTMEASUREMENTENTRY *FFIComponentMeasurement = &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CLEANUP ];
+
+    int CallCount = FFIComponentMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "FFI_mitls_cleanup () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CLEANUP ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->StartTimes [ CallCount ] );
 
     FFI_mitls_cleanup ();
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_CLEANUP ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->EndTimes [ CallCount ] );
 }
 
 //**********************************************************************************************************************************
@@ -1505,6 +1668,10 @@ mitls_extension QuicClientTransportParameters =
 
 int COMPONENT::QuicCreate ( void )
 {
+    COMPONENTMEASUREMENTENTRY *FFIComponentMeasurement = &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_QUIC_CREATE ];
+
+    int CallCount = FFIComponentMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "FFI_mitls_quic_create () called\n" );
 
     // set the right configuration for this test
@@ -1518,11 +1685,11 @@ int COMPONENT::QuicCreate ( void )
 
     // and call the API with this config
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_QUIC_CREATE ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->StartTimes [ CallCount ] );
 
     int Result = FFI_mitls_quic_create ( &QUICState, &Configuration );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_QUIC_CREATE ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->EndTimes [ CallCount ] );
 
     return ( Result );
 }
@@ -1534,13 +1701,17 @@ quic_result COMPONENT::QuicProcess ( const unsigned char *inBuf,
                                      unsigned char       *outBuf,
                                      size_t              *pOutBufLen )
 {
+    COMPONENTMEASUREMENTENTRY *FFIComponentMeasurement = &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_QUIC_PROCESS ];
+
+    int CallCount = FFIComponentMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "FFI_mitls_quic_process () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_QUIC_PROCESS ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->StartTimes [ CallCount ] );
 
     quic_result Result = FFI_mitls_quic_process ( QUICState, inBuf, pInBufLen, outBuf, pOutBufLen );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_QUIC_PROCESS ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->EndTimes [ CallCount ] );
 
     return ( Result );
 }
@@ -1550,13 +1721,17 @@ quic_result COMPONENT::QuicProcess ( const unsigned char *inBuf,
 int COMPONENT::QuicGetExporter ( int          early,
                                  quic_secret *secret )
 {
+    COMPONENTMEASUREMENTENTRY *FFIComponentMeasurement = &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_QUIC_GET_EXPORTER ];
+
+    int CallCount = FFIComponentMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "FFI_mitls_quic_get_exporter () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_QUIC_GET_EXPORTER ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->StartTimes [ CallCount ] );
 
     //int Result = FFI_mitls_quic_get_exporter ( QUICState, early, secret );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_QUIC_GET_EXPORTER ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->EndTimes [ CallCount ] );
 
     return ( 0 /*Result*/ );
 }
@@ -1565,13 +1740,17 @@ int COMPONENT::QuicGetExporter ( int          early,
 
 void COMPONENT::QuicClose ( void )
 {
+    COMPONENTMEASUREMENTENTRY *FFIComponentMeasurement = &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_QUIC_CLOSE ];
+
+    int CallCount = FFIComponentMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "FFI_mitls_quic_close () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_QUIC_CLOSE ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->StartTimes [ CallCount ] );
 
     //FFI_mitls_quic_close ( QUICState );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_QUIC_CLOSE ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->EndTimes [ CallCount ] );
 }
 
 //**********************************************************************************************************************************
@@ -1582,13 +1761,17 @@ int COMPONENT::GetHelloSummary ( const unsigned char  *buffer,
                                  unsigned char       **cookie,
                                  size_t               *cookie_len )
 {
+    COMPONENTMEASUREMENTENTRY *FFIComponentMeasurement = &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_GET_HELLO_SUMMARY ];
+
+    int CallCount = FFIComponentMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "FFI_mitls_quic_get_hello_summary () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_GET_HELLO_SUMMARY ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->StartTimes [ CallCount ] );
 
     int Result = FFI_mitls_get_hello_summary ( buffer, buffer_len, summary, cookie, cookie_len );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_GET_HELLO_SUMMARY ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->EndTimes [ CallCount ] );
 
     return ( Result );
 }
@@ -1602,13 +1785,17 @@ int COMPONENT::FindCustomExtension ( int                   is_server,
                                      unsigned char       **ext_data,
                                      size_t               *ext_data_len )
 {
+    COMPONENTMEASUREMENTENTRY *FFIComponentMeasurement = &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_FIND_CUSTOM_EXTENSION ];
+
+    int CallCount = FFIComponentMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "FFI_mitls_find_custom_extension () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_FIND_CUSTOM_EXTENSION ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->StartTimes [ CallCount ] );
 
     int Result = FFI_mitls_find_custom_extension ( is_server, exts, exts_len, ext_type, ext_data, ext_data_len );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_FIND_CUSTOM_EXTENSION ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->EndTimes [ CallCount ] );
 
     return ( Result );
 }
@@ -1617,13 +1804,17 @@ int COMPONENT::FindCustomExtension ( int                   is_server,
 
 void COMPONENT::GlobalFree ( void *pv )
 {
+    COMPONENTMEASUREMENTENTRY *FFIComponentMeasurement = &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_GLOBAL_FREE ];
+
+    int CallCount = FFIComponentMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "FFI_mitls_global_free () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_GLOBAL_FREE ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->StartTimes [ CallCount ] );
 
     FFI_mitls_global_free ( pv );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->FFIMeasurements [ FFI_MITLS_GLOBAL_FREE ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &FFIComponentMeasurement->EndTimes [ CallCount ] );
 }
 
 //**********************************************************************************************************************************
@@ -1637,17 +1828,21 @@ int COMPONENT::InitialisePKI ( void )
     signed int         ErrorIndex;
     mipki_config_entry Configuration [ 1 ];
 
+    COMPONENTMEASUREMENTENTRY *PKILibraryMeasurement = &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_INIT ];
+
+    int CallCount = PKILibraryMeasurement->NumberOfCalls++;
+
     Configuration [ 0 ].cert_file    = ServerCertificateFilename; // only 1 certificate and key
     Configuration [ 0 ].key_file     = ServerCertificateKeyFilename;
     Configuration [ 0 ].is_universal = TRUE;
 
     fprintf ( DebugFile, "mipki_init () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_INIT ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &PKILibraryMeasurement->StartTimes [ CallCount ] );
 
     PKIState = mipki_init ( Configuration, 1, NULL, &ErrorIndex );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_INIT ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &PKILibraryMeasurement->EndTimes [ CallCount ] );
 
     return ( ErrorIndex );
 }
@@ -1656,26 +1851,34 @@ int COMPONENT::InitialisePKI ( void )
 
 void COMPONENT::TerminatePKI ( void )
 {
+    COMPONENTMEASUREMENTENTRY *PKILibraryMeasurement = &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_FREE ];
+
+    int CallCount = PKILibraryMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "mipki_free () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_FREE ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &PKILibraryMeasurement->StartTimes [ CallCount ] );
 
     mipki_free ( PKIState );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_FREE ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &PKILibraryMeasurement->EndTimes [ CallCount ] );
 }
 
 //**********************************************************************************************************************************
 
 int COMPONENT::AddRootFileOrPath ( const char *CertificateAuthorityFile )
 {
+    COMPONENTMEASUREMENTENTRY *PKILibraryMeasurement = &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_ADD_ROOT_FILE_OR_PATH ];
+
+    int CallCount = PKILibraryMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "mipki_add_root_file_or_path () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_ADD_ROOT_FILE_OR_PATH ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &PKILibraryMeasurement->StartTimes [ CallCount ] );
 
     int Result = mipki_add_root_file_or_path ( PKIState, CertificateAuthorityFile );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_ADD_ROOT_FILE_OR_PATH ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &PKILibraryMeasurement->EndTimes [ CallCount ] );
 
     return ( Result );
 }
@@ -1684,13 +1887,17 @@ int COMPONENT::AddRootFileOrPath ( const char *CertificateAuthorityFile )
 
 mipki_chain COMPONENT::SelectCertificate ( void )
 {
+    COMPONENTMEASUREMENTENTRY *PKILibraryMeasurement = &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_SELECT_CERTIFICATE ];
+
+    int CallCount = PKILibraryMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "mipki_select_certificate () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_SELECT_CERTIFICATE ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &PKILibraryMeasurement->StartTimes [ CallCount ] );
 
     // mipki_chain Chain = mipki_select_certificate ( PKIState, const char *sni, size_t sni_len, const mipki_signature *algs, size_t algs_len, mipki_signature *selected );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_SELECT_CERTIFICATE ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &PKILibraryMeasurement->EndTimes [ CallCount ] );
 
     return ( NULL );
 }
@@ -1699,27 +1906,22 @@ mipki_chain COMPONENT::SelectCertificate ( void )
 
 int COMPONENT::SignCertificate ( mipki_chain CertificatePointer )
 {
+    COMPONENTMEASUREMENTENTRY *PKILibraryMeasurement = &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_SIGN_VERFIY ];
+
+    int CallCount = PKILibraryMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "mipki_sign_verify () called in Sign Mode\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_SIGN_VERFIY ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &PKILibraryMeasurement->StartTimes [ CallCount ] );
 
     // int Result = mipki_sign_verify ( PKIState, CertificatePointer, const mipki_signature sigalg, const char *tbs, size_t tbs_len, char *sig, size_t *sig_len, MIPKI_SIGN );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_SIGN_VERFIY ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &PKILibraryMeasurement->EndTimes [ CallCount ] );
 
     return ( 0 );
 }
 
 //**********************************************************************************************************************************
-
-// extern "C" int MITLS_CALLCONV mipki_sign_verify(mipki_state *st,
-// mipki_chain cert_ptr,
-// const mipki_signature sigalg,
-// const char *tbs,
-// size_t tbs_len,
-// char *sig,
-// size_t *sig_len,
-// mipki_mode m);
 
 int COMPONENT::VerifyCertificate ( mipki_state           *State,               // use the state provided by the callback!
                                    mipki_chain            CertificatePointer,
@@ -1729,9 +1931,13 @@ int COMPONENT::VerifyCertificate ( mipki_state           *State,               /
                                    char                  *Signature,
                                    size_t                *SignatureLength )
 {
+    COMPONENTMEASUREMENTENTRY *PKILibraryMeasurement = &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_SIGN_VERFIY ];
+
+    int CallCount = PKILibraryMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "mipki_sign_verify () called in Verify Mode\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_SIGN_VERFIY ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &PKILibraryMeasurement->StartTimes [ CallCount ] );
 
     int Result = mipki_sign_verify ( State,
                                      CertificatePointer,
@@ -1742,7 +1948,7 @@ int COMPONENT::VerifyCertificate ( mipki_state           *State,               /
                                      SignatureLength,
                                      MIPKI_VERIFY );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_SIGN_VERFIY ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &PKILibraryMeasurement->EndTimes [ CallCount ] );
 
     return ( Result );
 }
@@ -1753,9 +1959,13 @@ int COMPONENT::ParseChain ( mipki_state *State,        // use the state provided
                             const char  *ChainOfTrust, // the certificate chain of trust in TLS network format
                             size_t       ChainLength ) // returns index into CertificateChains []
 {
+    COMPONENTMEASUREMENTENTRY *PKILibraryMeasurement = &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_PARSE_CHAIN ];
+
+    int CallCount = PKILibraryMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "mipki_parse_chain () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_PARSE_CHAIN ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &PKILibraryMeasurement->StartTimes [ CallCount ] );
 
     if ( NumberOfChainsAllocated < MAX_CERTIFICATE_CHAINS )
     {
@@ -1768,7 +1978,7 @@ int COMPONENT::ParseChain ( mipki_state *State,        // use the state provided
         printf ( "Number of certificate chains in component exceeded!\n" );
     }
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_PARSE_CHAIN ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &PKILibraryMeasurement->EndTimes [ CallCount ] );
 
     return ( NumberOfChainsAllocated++ );
 }
@@ -1777,13 +1987,17 @@ int COMPONENT::ParseChain ( mipki_state *State,        // use the state provided
 
 mipki_chain COMPONENT::ParseList ( void )
 {
+    COMPONENTMEASUREMENTENTRY *PKILibraryMeasurement = &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_PARSE_LIST ];
+
+    int CallCount = PKILibraryMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "mipki_parse_list () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_PARSE_LIST ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &PKILibraryMeasurement->StartTimes [ CallCount ] );
 
     // mipki_chain Chain = mipki_parse_list ( PKIState, const char **certs, const size_t* certs_len, size_t chain_len );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_PARSE_LIST ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &PKILibraryMeasurement->EndTimes [ CallCount ] );
 
     return ( NULL );
 }
@@ -1792,13 +2006,17 @@ mipki_chain COMPONENT::ParseList ( void )
 
 int COMPONENT::FormatChain ( mipki_chain Chain )
 {
+    COMPONENTMEASUREMENTENTRY *PKILibraryMeasurement = &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_FORMAT_CHAIN ];
+
+    int CallCount = PKILibraryMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "mipki_format_chain () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_FORMAT_CHAIN ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &PKILibraryMeasurement->StartTimes [ CallCount ] );
 
     // size_t Result = mipki_format_chain ( PKIState, Chain, char *buffer, size_t buffer_len );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_FORMAT_CHAIN ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &PKILibraryMeasurement->EndTimes [ CallCount ] );
 
     return ( 0 );
 }
@@ -1807,26 +2025,34 @@ int COMPONENT::FormatChain ( mipki_chain Chain )
 
 void COMPONENT::FormatAllocation ( mipki_chain Chain )
 {
+    COMPONENTMEASUREMENTENTRY *PKILibraryMeasurement = &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_FORMAT_ALLOC ];
+
+    int CallCount = PKILibraryMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "mipki_format_alloc () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_FORMAT_ALLOC ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &PKILibraryMeasurement->StartTimes [ CallCount ] );
 
     // mipki_format_alloc ( PKIState, Chain, void* init, alloc_callback cb );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_FORMAT_ALLOC ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &PKILibraryMeasurement->EndTimes [ CallCount ] );
 }
 
 //**********************************************************************************************************************************
 
 int COMPONENT::ValidateChain ( mipki_chain Chain )
 {
+    COMPONENTMEASUREMENTENTRY *PKILibraryMeasurement = &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_VALIDATE_CHAIN ];
+
+    int CallCount = PKILibraryMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "mipki_validate_chain () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_VALIDATE_CHAIN ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &PKILibraryMeasurement->StartTimes [ CallCount ] );
 
     int Result = mipki_validate_chain ( PKIState, Chain, "" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_VALIDATE_CHAIN ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &PKILibraryMeasurement->EndTimes [ CallCount ] );
 
     return ( Result );
 }
@@ -1835,13 +2061,17 @@ int COMPONENT::ValidateChain ( mipki_chain Chain )
 
 void COMPONENT::FreeChain ( mipki_chain Chain )
 {
+    COMPONENTMEASUREMENTENTRY *PKILibraryMeasurement = &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_FREE_CHAIN ];
+
+    int CallCount = PKILibraryMeasurement->NumberOfCalls++;
+
     fprintf ( DebugFile, "mipki_free_chain () called\n" );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_FREE_CHAIN ].StartTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &PKILibraryMeasurement->StartTimes [ CallCount ] );
 
     mipki_free_chain ( PKIState, Chain );
 
-    QueryPerformanceCounter ( &CurrentComponentMeasurement->PKIMeasurements [ MIPKI_FREE_CHAIN ].EndTime );
+    if ( CallCount < MAX_COMPONENT_CALLS_PER_MEASUREMENT ) QueryPerformanceCounter ( &PKILibraryMeasurement->EndTimes [ CallCount ] );
 }
 
 //**********************************************************************************************************************************

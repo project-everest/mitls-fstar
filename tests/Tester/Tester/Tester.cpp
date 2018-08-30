@@ -101,6 +101,7 @@ bool TESTER::Setup ( char *DateAndTimeString )
         {
             if ( ! ConsoleDebugging ) // if console debugging is enabled then we "DO" want the output on the console!
             {
+
                 // get the current date and time
 
                 time ( &CurrentTime );
@@ -110,10 +111,10 @@ bool TESTER::Setup ( char *DateAndTimeString )
                 // and create a filename based on that for the redirected standard output
 
                 sprintf ( RedirectedStandardOutputFilename,
-                          "RedirectedStandardOutput_%02d_%02d_%2d_at_%02d_%02d_%02d.txt",
+                          "RedirectedStandardOutput_%02d_%02d_%d_at_%02d_%02d_%02d.txt",
                           LocalTime->tm_wday,
                           LocalTime->tm_mday,
-                          LocalTime->tm_year,
+                          LocalTime->tm_year + 1900,
                           LocalTime->tm_hour,
                           LocalTime->tm_min,
                           LocalTime->tm_sec );
