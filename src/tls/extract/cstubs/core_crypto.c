@@ -32,13 +32,6 @@
     return _x;                                                                 \
   }
 
-// For ticket age, currently using C runtime <time.h> with second resolution
-// FIXME(adl) switch to milisecond timers, after we check the Windows options
-uint32_t CoreCrypto_now()
-{
-  return (uint32_t)KRML_HOST_TIME();
-}
-
 #ifndef NO_OPENSSL
 
 #include <openssl/bn.h>
@@ -880,14 +873,6 @@ FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
   return ret;
 }
 #endif
-
-FStar_Bytes_bytes CoreCrypto_zero(Prims_nat x0)
-{
-  char *data = KRML_HOST_MALLOC(x0);
-  memset(data, 0, x0);
-  FStar_Bytes_bytes ret = {.length = x0, .data = data};
-  return ret;
-}
 
 // We need this to expose CoreCrypto_Initialize from F* where
 // identifiers must start with lowercase
