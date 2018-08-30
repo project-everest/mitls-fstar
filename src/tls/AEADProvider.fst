@@ -19,6 +19,7 @@ module Plain = Crypto.Plain
 module AE = Crypto.AEAD.Main
 module CB = Crypto.Symmetric.Bytes
 module U8 = FStar.UInt8
+module E = EverCrypt
 
 (* Forcing a dependency so that when building with the OpenSSL provider the
  * Crypto_Indexing module is in scope at this stage, henceby allowing us to
@@ -44,7 +45,16 @@ type u32 = FStar.UInt32.t
 (***********************************************************************)
 
 type id = i:id{~(PlaintextID? i) /\ AEAD? (aeAlg_of_id i)}
-let alg (i:id) = let AEAD aead _ = aeAlg_of_id i in aead
+let alg (i:id) :aeadAlg = let AEAD aead _ = aeAlg_of_id i in aead
+let evercrypt_aeadAlg_option_of_aead_cipher : aeadAlg -> option EverCrypt.aead_alg =
+  function
+  | CoreCrypto.AES_128_GCM -> Some EverCrypt.AES128_GCM
+  | CoreCrypto.AES_256_GCM -> Some EverCrypt.AES256_GCM
+  | CoreCrypto.CHACHA20_POLY1305 -> Some EverCrypt.CHACHA20_POLY1305
+  | _ -> None
+let aeadAlg_for_evercrypt (a:aeadAlg{Some? (evercrypt_aeadAlg_option_of_aead_cipher a)})
+  : EverCrypt.aead_alg
+  = Some?.v (evercrypt_aeadAlg_option_of_aead_cipher a)
 
 // Real IVs must be created with the internal
 // salting function below.
@@ -87,7 +97,7 @@ let pre_state (i:id) (r:rw) =
   match use_provider() with
   | OpenSSLProvider -> OAEAD.state i r
   | LowCProvider -> (CAEAD.aead_state * key i)
-  | LowProvider -> AE.aead_state i (Crypto.Indexing.rw2rw r)
+  | LowProvider -> EverCrypt.aead_state //NS: Used to be AE.aead_state i (Crypto.Indexing.rw2rw r)
 
 
 let state (i:id) (r:rw) =
@@ -105,7 +115,7 @@ let as_lowc_state #i #r (s:state i r{use_provider()=LowCProvider})
 
 noextract inline_for_extraction
 let as_low_state #i #r (s:state i r{use_provider()=LowProvider})
-  : AE.aead_state i (Crypto.Indexing.rw2rw r)
+  : EverCrypt.aead_state
   = fst s
 
 let salt_of_state #i #r (s:state i r) : salt i = snd s
@@ -173,6 +183,9 @@ let genPost (#i:id) (parent:rgn) h0 (w:writer i) h1 =
   empty_log w h1 /\
   st_inv w h1
 
+module LB = LowStar.Buffer
+
+#set-options "--max_fuel 0 --max_ifuel 1"
 let gen (i:id) (r:rgn) : ST (state i Writer)
   (requires (fun h -> True))
   (ensures (genPost r))
@@ -188,9 +201,22 @@ let gen (i:id) (r:rgn) : ST (state i Writer)
     let st = CAEAD.aead_create (alg i) CAEAD.ValeAES kv in
     (st, kv), salt
   | LowProvider ->
-    assume false; // TODO
-    let st = AE.gen i tls_region r in
-    st, salt
+    let len = CC.aeadKeySize (alg i) in
+    let kv: key i = CC.random len in
+    assume (FStar.UInt.size len 32);
+    let len32 = UInt32.uint_to_t len in
+    assume (len > 0);
+    assume (is_eternal_region r);
+    let kvb = LB.malloc r 0uy len32 in
+    FStar.Bytes.store_bytes len32 kvb len32 kv;
+    let h = get () in
+    assume (Some? (evercrypt_aeadAlg_option_of_aead_cipher (alg i)));
+    assume (EverCrypt.Specs.aead_create_pre h); //effectively False
+    let st = EverCrypt.aead_create (aeadAlg_for_evercrypt (alg i)) kvb in
+    let res : state i Writer = st, salt in
+    let h1 = get () in
+    assume (genPost r h res h1);
+    res
 
 let leak (#i:id) (#rw:rw) (st:state i rw)
   : ST (key i * salt i)
@@ -203,8 +229,7 @@ let leak (#i:id) (#rw:rw) (st:state i rw)
   | LowProvider ->
     assume (false);
     assume(~(Flag.prf i));
-    let k = AE.leak #i (as_low_state st) in
-    (BufferBytes.to_bytes (key_length i) k, salt_of_state st)
+    magic() //We do not have a leak yet in EverCrypt
 
 // ADL TODO
 // There is an issue connecting the stateful encryption in miTLS
@@ -220,13 +245,10 @@ let genReader (parent:rgn) (#i:id) (st:writer i) : ST (reader i)
   | OpenSSLProvider ->
     // CoreCrypto state is in an external region
     OAEAD.genReader parent (as_openssl_state st), salt_of_state st
-  | LowProvider -> // st salt ->
-    assume false;
-    let st' : AE.aead_state i Crypto.Indexing.Reader = AE.genReader (as_low_state st) in
-    st', salt_of_state st
   | LowCProvider ->
     assume false;
     as_lowc_state st, salt_of_state st
+  | LowProvider -> st //EverCrypt.fsti does not provide a genReader
 #reset-options
 
 #reset-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
@@ -247,11 +269,14 @@ let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
       assume (AE.keylen i = len k);
       assume (~ (Flag.prf i));
       assume(false);
-      let (bb:AE.lbuffer (length k)) = BufferBytes.from_bytes k in
-      let (bb:AE.lbuffer (v (AE.keylen i))) = bb in
-      let st = AE.coerce i r bb in
-      st, s
-    in
+      let len = length k in
+      let len32 = FStar.UInt32.uint_to_t len in
+      assume (is_eternal_region r);
+      let kvb = LB.malloc r 0uy len32 in
+      FStar.Bytes.store_bytes len32 kvb len32 k;
+      let st = EverCrypt.aead_create (aeadAlg_for_evercrypt (alg i)) kvb in
+      let res : state i Writer = st, s in
+      res in
   dbg ((prov())^": COERCE(K="^(hex_of_bytes k)^")");
   w
 #reset-options
@@ -281,8 +306,22 @@ let logged_iv (#i:id{authId i}) (#l:plainlen) (#rw:rw) (s:state i rw) (iv:iv i)
   | _ -> True
 
 // ADL Jan 3: PlanA changes TODO
-#set-options "--admit_smt_queries true"
+open EverCrypt.Helpers
+module LM = LowStar.Modifies
+let from_bytes (b:bytes{UInt.fits (length b) 32}) : StackInline uint8_p
+  (requires (fun h0 -> True))
+  (ensures  (fun h0 buf h1 ->
+    LM.(modifies loc_none h0 h1) /\
+    LB.live h1 buf /\
+    b = Bytes.hide (LB.as_seq h0 buf)))
+  =
+  let len = FStar.UInt32.uint_to_t (length b) in
+  let lb = LB.alloca 0uy len in
+  FStar.Bytes.store_bytes len lb len b;
+  lb
 
+#set-options "--admit_smt_queries true"
+//let from_bytes (b:
 let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:plain i l)
   : ST (cipher:cipher i l)
   (requires (fun h ->
@@ -300,25 +339,27 @@ let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:pla
     | LowProvider ->
       let st = as_low_state w in
       let adlen = uint_to_t (length ad) in
-      let ad = BufferBytes.from_bytes ad in
       let plainlen = uint_to_t l in
       let cipherlen = uint_to_t (cipherlen i l) in
       assume(AE.safelen i (v plainlen) = true); // TODO
       push_frame ();
-      let cipher = Buffer.create 0uy cipherlen in
-      assume(v cipherlen = v plainlen + 12);
-      let tmp = BufferBytes.from_bytes iv in
+      let ad = from_bytes ad in
+      let cipher = LB.alloca 0uy plainlen in
+      let tag = LB.alloca 0uy 12ul in
+      let iv = from_bytes iv in
       begin
       if not (TLSInfo.safeId i) then
-        let plain = Plain.unsafe_hide_buffer i #l (BufferBytes.from_bytes plain) in
-        AE.encrypt i st (Crypto.Symmetric.Bytes.load_uint128 12ul tmp) adlen ad plainlen plain cipher
+        let plain = from_bytes plain in
+        EverCrypt.aead_encrypt st iv ad adlen plain plainlen cipher tag
       else
-        let plain = Plain.create i 0uy plainlen in
-        AE.encrypt i st (Crypto.Symmetric.Bytes.load_uint128 12ul tmp) adlen ad plainlen plain cipher
+        admit()
+        // let plain = Plain.create i 0uy plainlen in
+        // AE.encrypt i st (Crypto.Symmetric.Bytes.load_uint128 12ul tmp) adlen ad plainlen plain cipher
       end;
-      let ret = BufferBytes.to_bytes (FStar.UInt32.v cipherlen) cipher in
-      pop_frame ();
-      ret
+      admit()
+      // let ret = BufferBytes.to_bytes (FStar.UInt32.v cipherlen) cipher in
+      // pop_frame ();
+      // ret
 
   (*
   let r =
