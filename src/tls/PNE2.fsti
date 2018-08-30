@@ -54,7 +54,7 @@ let abs (i:I.id{~(safePNE i)}) (u:info) (l:pnlen) (b:lbytes l) = PNPkg?.abs u i 
 *)
 type entry (i:I.id) =
   | Entry :
-    s:ciphersample ->
+    c:cipher ->
     m:mask ->
     entry i
 
@@ -74,16 +74,16 @@ val frame_table: #i:I.id -> st:pne_state i -> l:Seq.seq (entry i) ->
       Set.disjoint s (Set.singleton (footprint st)))
     (ensures table st h1 == l)
 
-let sample_filter (i:I.id) (s:ciphersample) (e:entry i) : bool =
-  Entry?.s e = s
+let cipher_filter (i:I.id) (c:cipher) (e:entry i) : bool =
+  Entry?.c e = c
 
-let entry_for_sample (#i:I.id) (s:ciphersample) (st:pne_state i) (h:mem) :
+let entry_for_cipher (#i:I.id) (c:cipher) (st:pne_state i) (h:mem) :
   GTot (option (entry i)) =
-  Seq.find_l (sample_filter i s) (table st h)
+  Seq.find_l (cipher_filter i c) (table st h)
   
-let fresh_sample (#i:I.id) (s:ciphersample) (st:pne_state i) (h:mem) :
+let fresh_cipher (#i:I.id) (c:cipher) (st:pne_state i) (h:mem) :
   GTot bool =
-  None? (entry_for_sample s st h)
+  None? (entry_for_cipher c st h)
 
 let sample_cipher (c:cipher) : s:ciphersample =
   Bytes.slice c 0ul 16ul
@@ -102,9 +102,9 @@ val compute :
   (requires fun h0 -> True)
 //    fresh_sample (sample_cipher c) st h0)
   (ensures fun h0 m h1 ->
-    let s = sample_cipher c in
+   // let s = sample_cipher c in
     modifies_one (footprint st) h0 h1 /\
     (safePNE i ==>
-      (match (entry_for_sample s st h0) with
-        | None -> table st h1 == Seq.snoc (table st h0) (Entry s m)
+      (match (entry_for_cipher c st h0) with
+        | None -> table st h1 == Seq.snoc (table st h0) (Entry c m)
         | Some (Entry _ m') -> m = m')))

@@ -58,6 +58,12 @@ assume val idealPNE : b:bool{b ==> idealAEAD}
 
 assume val safePNE : i:id -> b:bool{b ==> idealPNE}
 
+// quic abstraction
+assume val idealQUIC : b:bool{b ==> idealPNE}
+
+assume val safeQUIC : (i:id) -> b:bool{b ==> idealQUIC}
+
+
 (* IDEALIZATION DEPENDENCIES *) 
 
 // review usage of these lemmas
