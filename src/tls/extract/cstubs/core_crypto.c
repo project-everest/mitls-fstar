@@ -284,9 +284,8 @@ static inline const EVP_MD *get_md(CoreCrypto_hash_alg h){
     return EVP_sha384();
   case CoreCrypto_SHA512:
     return EVP_sha512();
-  default:
-    return EVP_md_null();
   }
+  KRML_HOST_EXIT(255);
 }
 
 FStar_Bytes_bytes CoreCrypto_hash(CoreCrypto_hash_alg x0, FStar_Bytes_bytes x1) {
@@ -524,9 +523,11 @@ CoreCrypto_aead_encrypt(CryptoTypes_aead_cipher x0,
   case CryptoTypes_AES_256_GCM:
     cipher = EVP_aes_256_gcm();
     break;
+#ifndef OPENSSL_IS_BORINGSSL
   case CryptoTypes_CHACHA20_POLY1305:
     cipher = EVP_chacha20_poly1305();
     break;
+#endif
   default:
     FAIL_IF(true, "Unsupported AEAD cipher");
   }
@@ -604,9 +605,11 @@ CoreCrypto_aead_decrypt_(CryptoTypes_aead_cipher x0,
   case CryptoTypes_AES_256_GCM:
     cipher = EVP_aes_256_gcm();
     break;
+#ifndef OPENSSL_IS_BORINGSSL
   case CryptoTypes_CHACHA20_POLY1305:
     cipher = EVP_chacha20_poly1305();
     break;
+#endif
   default:
     FAIL_IF(true, "Unsupported AEAD cipher");
   }
