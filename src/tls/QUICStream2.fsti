@@ -507,20 +507,6 @@ leak (#nl) (i:I.id) (j:I.id) (e:epn j nl) (c:cipher i) : ST (npn j nl)
     real_decrypt e c
 *)
 
-(*
-
-let rec unique_pne_encrypt nl p h rn : ST (epn nl * cipher k l)
-  (ensures fun h0 c h1 -> pne_table_invariant h1)
-  =
-  let c = AEAD.encrypt ... in
-
-
-let encrypt =
-
-  if idealQUIC then
-  let c = ,,,
-
-
 //val adata_of_entry: #i:I.id -> stream_entry i -> GTot AEAD.adata
 
 //val cipher_of_entry: #i:I.id -> stream_entry i -> GTot //(lmax:AEAD.plainLen & c:cipher i lmax)
