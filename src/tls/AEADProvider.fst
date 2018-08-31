@@ -208,7 +208,7 @@ let gen (i:id) (r:rgn) : ST (state i Writer)
     assume (len > 0);
     assume (is_eternal_region r);
     let kvb = LB.malloc r 0uy len32 in
-    FStar.Bytes.store_bytes len32 kvb len32 kv;
+    FStar.Bytes.store_bytes kv kvb;
     let h = get () in
     assume (Some? (evercrypt_aeadAlg_option_of_aead_cipher (alg i)));
     assume (EverCrypt.Specs.aead_create_pre h); //effectively False
@@ -266,7 +266,7 @@ let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
       let len32 = FStar.UInt32.uint_to_t len in
       assume (is_eternal_region r);
       let kvb = LB.malloc r 0uy len32 in
-      FStar.Bytes.store_bytes len32 kvb len32 k;
+      FStar.Bytes.store_bytes k kvb;
       let st = EverCrypt.aead_create (aeadAlg_for_evercrypt (alg i)) kvb in
       let res : pre_state i Writer = st in
       res
@@ -304,7 +304,7 @@ open EverCrypt.Helpers
 module LM = LowStar.Modifies
 
 #set-options "--max_fuel 0 --max_ifuel 0"
-let from_bytes (b:bytes{UInt.fits (length b) 32 /\ length b <> 0}) : StackInline uint8_p
+let from_bytes (b:bytes{length b <> 0}) : StackInline uint8_p
   (requires (fun h0 -> True))
   (ensures  (fun h0 buf h1 ->
     LB.(modifies loc_none h0 h1) /\
@@ -316,7 +316,7 @@ let from_bytes (b:bytes{UInt.fits (length b) 32 /\ length b <> 0}) : StackInline
   let h0 = get () in
   let len = FStar.UInt32.uint_to_t (length b) in
   let lb = LB.alloca 0uy len in
-  FStar.Bytes.store_bytes len lb len b;
+  FStar.Bytes.store_bytes b lb;
   let h1 = get () in
   LB.(modifies_only_not_unused_in loc_none h0 h1);
   lb
