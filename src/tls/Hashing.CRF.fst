@@ -1,9 +1,9 @@
 ﻿(** computational assumption: collision resistance *)
 module Hashing.CRF
 
-open FStar.Bytes
 open Mem
 include Hashing
+open FStar.Bytes
 
 //2018.04.24 SZ: to be moved elsewhere, set to false for real extraction
 inline_for_extraction
@@ -22,7 +22,7 @@ module MDM = FStar.Monotonic.DependentMap
 // the precise types guarantee that the table stays empty when crf _ = false
 private type range = | Computed: a: alg {crf a} -> t: tag a -> range
 private type domain (r:range) =
-  b:bytes {let Computed a t = r in length b <= maxLength a /\ hash a b = t}
+  b:bytes {let Computed a t = r in length b <= maxLength a /\ h a b = t}
 
 private let inv (f:MDM.partial_dependent_map range domain) = True // a bit overkill?
 private let table : MDM.t tls_tables_region range domain inv = MDM.alloc()
@@ -34,21 +34,19 @@ private let table : MDM.t tls_tables_region range domain inv = MDM.alloc()
 //val hashed: a:alg -> b:bytes -> Type
 abstract type hashed (a:alg) (b:hashable a) =
   crf a ==> (
-    let h = hash a b in
-    let b: domain (Computed a h) = b in
-    witnessed (MDM.contains table (Computed a h) b))
+    let t = h a b in
+    let b: domain (Computed a t) = b in
+    witnessed (MDM.contains table (Computed a t) b))
 
 val crf_injective (a:alg) (b0 b1:hashable a): ST unit  // should be STTot
   (requires fun h0 -> hashed a b0 /\ hashed a b1)
-  (ensures fun h0 _ h1 -> h0 == h1 /\ (crf a /\ hash a b0 =  hash a b1 ==> b0 = b1))
+  (ensures fun t0 _ t1 -> t0 == t1 /\ (crf a /\ h a b0 =  h a b1 ==> b0 = b1))
 let crf_injective a b0 b1 =
   if crf a then (
     recall table;
     let f = !table in
-    let h0 = hash a b0 in
-    let h1 = hash a b1 in
-    testify(MDM.contains table (Computed a h0) b0);
-    testify(MDM.contains table (Computed a h1) b1)
+    testify(MDM.contains table (Computed a (h a b0)) b0);
+    testify(MDM.contains table (Computed a (h a b1)) b1)
   )
 
 /// We use [stop] to model the exclusion of "bad" events, in this case
@@ -66,19 +64,19 @@ val finalize: #a:alg -> v:accv a -> ST (tag a)
   (ensures (fun h0 t h1 ->
     let b = content v in
     //18-01-03 TODO modifies (Set.as_set [TLSConstants.tls_tables_region]) h0 h1 /\
-    t = hash a b /\ hashed a b
+    t = h a b /\ hashed a b
   ))
 
 #set-options "--admit_smt_queries true" //18-02-26 was verified with MonotonicMap
 let finalize #a v =
-  let h = Hashing.finalize v in
+  let t = Hashing.finalize v in
   if crf a then (
-    let x = Computed a h in
+    let x = Computed a t in
     let b = Hashing.content v in
     match MDM.lookup table x with
       | None -> MDM.extend table x b
       | Some b' -> if b <> b' then stop "hash collision detected");
-  h
+  t
 #reset-options 
 
 #set-options "--z3rlimit 100"

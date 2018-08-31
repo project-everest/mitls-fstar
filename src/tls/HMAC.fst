@@ -1,13 +1,12 @@
 ﻿module HMAC
 
-open FStar.Bytes
-open FStar.HyperStack.ST
-
-open Mem
-open TLSConstants
 open Hashing.Spec // for the algorithm names, instead of CoreCrypt
+open Mem
 
-#reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0"
+open FStar.HyperStack.ST
+open FStar.Bytes
+
+open TLSConstants
 
 type key = bytes
 type mac (a:macAlg) = lbytes32 (macSize a)
@@ -17,12 +16,44 @@ type text (a:alg) = macable a
 
 (* Parametric keyed HMAC; could be coded up from two HASH calls. *)
 
-val hmac: a:alg -> k:hkey a -> m: macable a -> 
-  ST (t:tag a {t == Hashing.Spec.hmac a k m})
+val hmac: a:EverCrypt.HMAC.ha -> k:hkey a -> m: macable a -> 
+  Stack (t:tag a {t == Hashing.Spec.hmac a k m})
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
+  // TODO add functional spec to crypto proof 
 
-let hmac a k m = Hashing.OpenSSL.hmac a k m
+let hmac a k m = 
+  let h00 = HyperStack.ST.get() in 
+  push_frame(); 
+  let lt = EverCrypt.Hash.tagLen a in
+  let bk = LowStar.Buffer.alloca 0uy lt in 
+  store_bytes k bk;
+  assert_norm(EverCrypt.HMAC.keysized a (tagLength a));
+
+  let bt = LowStar.Buffer.alloca 0uy lt in
+  let lm = Bytes.len m in 
+
+  if lm = 0ul then (
+    let bm = LowStar.Buffer.null in 
+    EverCrypt.HMAC.compute a bt bk lt bm lm
+  )
+  else (
+    push_frame();
+    let bm = LowStar.Buffer.alloca 0uy lm in 
+    store_bytes m bm;
+    EverCrypt.HMAC.compute a bt bk lt bm lm;
+    pop_frame()
+    );
+  assume False;//18-09-01 not sure what's broken
+    
+  let t = of_buffer lt bt in
+  pop_frame();
+  let h11 = HyperStack.ST.get() in 
+  //18-09-01 todo, as in Hashing.compute
+  assume(HyperStack.modifies Set.empty h00 h11);
+  t
+
+//#reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0"
 
 // consider providing it only in UFCMA
 val hmacVerify: a:alg -> k:hkey a -> m:macable a -> t: tag a -> ST (b:bool {b <==> (t == Hashing.Spec.hmac a k m)})
@@ -60,6 +91,9 @@ let sslKeyedHash a k p =
       match a with 
       | MD5 -> ssl_pad1_md5, ssl_pad2_md5
       | SHA1 -> ssl_pad1_sha1, ssl_pad2_sha1 in
+
+    //18-08-31 TODO 4x hashable bounds
+    assume(False);
     let h = Hashing.compute a (k @| inner @| p) in
     Hashing.compute a (k @| outer @| h)
 

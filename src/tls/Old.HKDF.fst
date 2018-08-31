@@ -1,10 +1,10 @@
 module Old.HKDF
 
-open FStar.Bytes
 open FStar.HyperStack.ST
 
 open TLSConstants
 open Hashing.Spec
+open FStar.Bytes
 
 private let max (a:int) (b:int) = if a < b then b else a
 
@@ -26,13 +26,15 @@ HKDF-Extract(salt, IKM) -> PRK
    PRK = HMAC-Hash(salt, IKM)
 *)
 
-val hkdf_extract: ha:hash_alg -> salt:hkey ha -> ikm:bytes -> ST (tag ha)
+val hkdf_extract: 
+  ha:EverCrypt.HMAC.ha -> 
+  salt:hkey ha -> 
+  ikm:macable ha -> 
+  ST (tag ha)
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
 
-let hkdf_extract ha salt ikm = 
-  assume (length ikm + blockLength ha <= maxLength ha);
-  HMAC.hmac ha salt ikm
+let hkdf_extract ha salt ikm = HMAC.hmac ha salt ikm
 
 private val hkdf_expand_int: ha:hash_alg
   -> prk: hkey ha //was: bytes{tagLen ha <= length prk}

@@ -551,7 +551,7 @@ val cipherSuiteBytesOpt: cipherSuite -> Tot (option (lbytes 2))
 let cipherSuiteBytesOpt cs =
   let open CoreCrypto in
   let open Hashing.Spec in
-  let twobytes b: option (lbytes 2) = Some (twobytes b) in
+  let twobytes b: option (FStar.Bytes.lbytes 2) = Some (FStar.Bytes.twobytes b) in
     match cs with
     | UnknownCipherSuite b1 b2 -> twobytes (b1,b2)
     | NullCipherSuite                                              -> twobytes ( 0x00z, 0x00z )

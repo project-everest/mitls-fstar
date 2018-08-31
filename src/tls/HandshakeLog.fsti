@@ -25,7 +25,6 @@ module HandshakeLog
 - support abstract plaintexts and multiple epochs
 *)
 
-open FStar.Bytes
 open FStar.Ghost 
 
 open Mem
@@ -37,7 +36,10 @@ open FStar.Error
 open TLSError
 open Hashing
 open Hashing.CRF
+open FStar.Bytes
 
+let hash = Hashing.h //18-08-31 
+  
 type msg = HandshakeMessages.hs_msg
 
 /// Specifies which messages indicate the end of incoming flights and
@@ -124,7 +126,7 @@ let rec tags (a:alg) (prior: list msg) (ms: list msg) (hs:list anyTag) : Tot Typ
           let t = transcript_bytes prior in
           (  tagLength h = tagLen a /\
              (  let h = narrowTag a h in
-                hashed a t /\ h == hash a t /\
+                hashed a t /\ h == Hashing.h a t /\
                 tags a prior ms hs ))
           )
       | false, hs -> tags a prior ms hs
@@ -227,7 +229,7 @@ val hash_tag: #a:alg -> s:log -> ST (tag a)
   (ensures fun h0 h h1 ->
     let bs = transcript_bytes (transcript h1 s)  in
     h0 == h1 /\
-    hashed a bs /\ h == hash a bs )
+    hashed a bs /\ h == Hashing.h a bs )
 
 val hash_tag_truncated: #a:alg -> s:log -> suffix_len:nat -> ST (tag a)
   (requires fun h0 ->
@@ -238,7 +240,7 @@ val hash_tag_truncated: #a:alg -> s:log -> suffix_len:nat -> ST (tag a)
     let bs = transcript_bytes (transcript h1 s)  in
     h0 == h1 /\ suffix_len <= length bs /\ (
     let prefix, _ = split_ bs (length bs - suffix_len)  in
-    hashed a prefix /\ h == hash a prefix))
+    hashed a prefix /\ h == Hashing.h a prefix))
 
 val send_tag: #a:alg -> s:log -> m:msg -> ST (tag a)
   (requires fun h0 ->
@@ -247,7 +249,7 @@ val send_tag: #a:alg -> s:log -> m:msg -> ST (tag a)
   (ensures fun h0 h h1 ->
     let bs = transcript_bytes (transcript h1 s)  in
     write_transcript h0 h1 s m /\
-    hashed a bs /\ h == hash a bs )
+    hashed a bs /\ h == Hashing.h a bs )
 
 // An ad hoc variant for caching a message to be sent immediately after the CCS
 // We always increment the writer, sometimes report handshake completion.
@@ -260,7 +262,7 @@ val send_CCS_tag: #a:alg -> s:log -> m:msg -> complete:bool -> ST (tag a)
   (ensures (fun h0 h h1 ->
     let bs = transcript_bytes (transcript h1 s)  in
     write_transcript h0 h1 s m /\
-    hashed a bs /\ h == hash a bs ))
+    hashed a bs /\ h == Hashing.h a bs ))
 
 // Setting signals 'drops' the writing state, to prevent further writings until the signals have been transmitted
 val send_signals: s:log -> next_keys:option (bool * bool) -> complete:bool -> ST unit

@@ -3,13 +3,74 @@ module Hashing
 
 open Mem
 
-open FStar.Bytes
 include Hashing.Spec
+
+open FStar.HyperStack.ST 
+open FStar.Bytes
+open FStar.Integers
+
+module ST = FStar.HyperStack.ST
+
+// defining those on FStar.Bytes, not on EverCrypt's seq Uin8.t
+type hashable (a:alg) = b:bytes {length b <= maxLength a}
+type tag (a:alg) = lbytes32 (tagLen a)
+
+// 18-08-31 pure hash specification; 
+// renamed from [hash] already included from EverCrypt.Hash
+let h (a:alg) (b:hashable a): GTot (tag a) = 
+  let v = spec a (Bytes.reveal b) in
+  Bytes.hide v
+
+/// bytes wrapper for [EverCrypt.Hash.hash]
+val compute: a:alg -> text:hashable a -> Stack (tag a)
+  (requires fun h0 -> True)
+  (ensures fun h0 t h1 -> 
+    let v = reveal text in 
+    modifies Set.empty h0 h1 /\
+    Seq.length v <= maxLength a /\
+    t = h a text)
+
+let compute a text = 
+  let h00 = ST.get() in 
+  push_frame(); 
+  let tlen = EverCrypt.Hash.tagLen a in
+  let output = LowStar.Buffer.alloca 0uy tlen in
+  let len = Bytes.len text in 
+  if len = 0ul then (
+    let input = LowStar.Buffer.null in 
+    //18-09-01 this could follow from LowStar.Buffer or Bytes properties
+    let h0 = ST.get() in 
+    Seq.lemma_eq_intro (reveal text) (LowStar.Buffer.as_seq h0 input);
+    EverCrypt.Hash.hash a output input len 
+    )
+  else (
+    let h0 = ST.get() in
+    push_frame();
+    let input = LowStar.Buffer.alloca 0uy len in 
+    store_bytes text input;
+    EverCrypt.Hash.hash a output input len;
+    pop_frame();
+    let h1 = ST.get() in
+    assert(LowStar.Modifies.(modifies (loc_buffer output) h0 h1))
+    );
+  let t = Bytes.of_buffer tlen output in
+  pop_frame();
+  //18-09-01 missing an inverse of modifies_none_modifies?
+  let h11 = ST.get() in 
+  assert(LowStar.Modifies.(modifies loc_none h00 h11));
+  assume(modifies Set.empty h00 h11);
+  t
+
+
 
 (* IMPLEMENTATION PLACEHOLDER, 
     simply buffering the bytes underneath *)
 
-//17-01-26 still requiring two-step abstraction for datatypes
+// 18-08-29 TODO actually use EverCrypt's incremental API, but this
+// requires (1) any-length incremental, and (2) switching all these
+// functions from pure to modifiying an abstract footprint...
+
+//17-01-26 two steps required for abstraction for datatypes
 private type accv' (a:alg) =  | Inputs: b: hashable a -> accv' a
 abstract type accv (a:alg) = accv' a
 
@@ -20,7 +81,7 @@ let content #a v =
 abstract val start: a:alg -> Tot (v:accv a {content v == empty_bytes})
 abstract val extend: #a:alg -> v:accv a -> b:bytes -> Tot (v':accv a {length (content v) + length b = length (content v') /\  content v' == content v @| b})
 
-abstract val finalize: #a:alg -> v:accv a -> ST (t:tag a {t == hash a (content v)})
+abstract val finalize: #a:alg -> v:accv a -> ST (t:tag a {t == h a (content v)})
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> modifies Set.empty h0 h1))
 
@@ -29,13 +90,21 @@ let extend #a (Inputs b0) b1 =
   assume (FStar.UInt.fits (length b0 + length b1) 32); 
   assume (length b0 + length b1 < Hashing.Spec.maxLength a); 
   Inputs (b0 @| b1)
-let finalize #a (Inputs b) = Hashing.OpenSSL.compute a b
-
-let compute =  Hashing.OpenSSL.compute 
+let finalize #a (Inputs b) = compute a b
 
 (* older construction, still used in sig *)
 let compute_MD5SHA1 data = compute MD5 data @| compute SHA1 data 
 
+(*
+// 18-08-29 was in Hashing.OpenSSL
+val hmac: 
+  a:alg -> 
+  k:tag a -> 
+  m:bytes {length m + blockLength a <= maxLength a } -> 
+  Stack (t:tag a {reveal t == EverCrypt.HMAC.hmac a (reveal k) (reveal m)})
+  (requires fun h0 -> True)
+  (ensures fun h0 t h1 -> modifies Set.empty h0 h1)
+*)
 
 (* another PURE, VERIFIED, INCREMENTAL IMPLEMENTATION 
     not usable yet, as we don't have a full F* specification 

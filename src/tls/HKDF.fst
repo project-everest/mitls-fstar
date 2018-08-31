@@ -3,12 +3,13 @@ TLS 1.3 HKDF extract and expand constructions, parametrized by their hash algori
 *)
 module HKDF
 
-open FStar.UInt32
-open FStar.Bytes
-
+open Mem
+open FStar.Integers
 open Hashing.Spec
 open TLSConstants
-open Parse
+open FStar.Bytes
+
+//open Parse
 
 private let max (a:int) (b:int) = if a < b then b else a
 
@@ -31,7 +32,8 @@ HKDF-Extract(salt, IKM) -> PRK
 *)
 
 val extract: 
-  #ha: Hashing.alg -> salt: hkey ha -> 
+  #ha: EverCrypt.HMAC.ha -> 
+  salt: hkey ha -> 
   ikm: macable ha -> 
   ST (hkey ha)
   (requires (fun h0 -> True))
@@ -93,11 +95,11 @@ private val expand_int:
 
 #set-options "--z3rlimit 10 --admit_smt_queries true"
 let rec expand_int #ha prk info len count curr previous =
-  if curr <^ len && FStar.UInt8.(count <^ 255uy) then (
+  if curr < len && FStar.UInt8.(count <^ 255uy) then (
     assert(FStar.UInt8.(count <^ 255uy));
     assert(UInt8.v count < 255);
     let count = FStar.UInt8.(count +^ 1uy) in
-    let curr = curr +^ tagLen ha in
+    let curr = curr + tagLen ha in
     lemma_repr_bytes_values (UInt8.v count);
     assume (UInt.fits (length previous + length info + 1) 32);
     let block = HMAC.hmac ha prk (previous @| info @| bytes_of_int8 count) in
@@ -162,8 +164,8 @@ let format ha label hv len =
   lemma_repr_bytes_values (length label_bytes);
   lemma_repr_bytes_values (length hv);
   bytes_of_int 2 (v len) @|
-  vlbytes 1 label_bytes @|
-  vlbytes 1 hv 
+  Parse.vlbytes 1 label_bytes @|
+  Parse.vlbytes 1 hv 
 
 /// since derivations depend on the concrete info,
 /// we will need to prove format injective. 
@@ -190,7 +192,7 @@ let expand_label #ha prk label hv len =
 /// renamed to expand_secret for uniformity
 
 val expand_secret:
-  #ha:Hashing.alg ->
+  #ha: EverCrypt.HMAC.ha ->
   secret: hkey ha ->
   label: string{length (bytes_of_string label) < 256-6} ->
   hs_hash: bytes{length hs_hash < 256} ->
@@ -209,7 +211,7 @@ let expand_secret #ha prk label hv =
              *)
 
 val derive_secret:
-  ha:hash_alg ->
+  ha: EverCrypt.HMAC.ha ->
   secret: hkey ha ->
   label: string{length (bytes_of_string label) < 256-6} ->
   hs_hash: bytes{length hs_hash < 256} ->
@@ -217,14 +219,16 @@ val derive_secret:
   (requires fun h -> True)
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
 
+#set-options "--z3rlimit 200"
 let derive_secret ha secret label hashed_log =
   let lbl = tls13_prefix @| bytes_of_string label in
-  cut(length lbl < 256);
-  lemma_repr_bytes_values (Hashing.Spec.tagLength ha);
+  assert(length lbl < 256);
+  let tlen = Hashing.Spec.tagLen ha in
+  lemma_repr_bytes_values (v tlen);
   lemma_repr_bytes_values (length lbl);
   lemma_repr_bytes_values (length hashed_log);
   let info =
-  bytes_of_int 2 (Hashing.Spec.tagLength ha) @|
-  vlbytes 1 lbl @|
-  vlbytes 1 hashed_log in
-  expand #ha secret info (Hashing.Spec.tagLen ha)
+  bytes_of_int 2 (v tlen) @|
+  Parse.vlbytes 1 lbl @|
+  Parse.vlbytes 1 hashed_log in
+  expand #ha secret info tlen

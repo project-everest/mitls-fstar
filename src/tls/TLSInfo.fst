@@ -13,7 +13,6 @@ open FStar.Bytes
 open Mem
 open TLSConstants
 
-module CC = CoreCrypto
 module DM = FStar.DependentMap
 module MDM = FStar.Monotonic.DependentMap
 module HST = FStar.HyperStack.ST

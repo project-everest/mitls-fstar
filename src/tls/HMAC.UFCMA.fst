@@ -282,7 +282,9 @@ unfold let localpkg
 noextract 
 let string_of_key (#ip:ipkg) (#i:ip.Pkg.t{ip.Pkg.registered i}) (k:key ip i): string = 
   let MAC u kv = get_key k in
-  "HMAC-"^Hashing.Spec.string_of_alg u.alg^" key="^print_bytes kv
+//18-08-31 TODO string vs string
+//"HMAC-"^Hashing.Spec.string_of_alg u.alg^" key="^print_bytes kv
+"HMAC key="^print_bytes kv
 
 
 (**! Unit test for the packaging of UFCMA *)
@@ -367,6 +369,7 @@ let unit_test(): St bool =
   let here = new_colored_region root hs_color in
   let b0 = 
     let a = Hashing.SHA1 in 
+    assert_norm(Hashing.Spec.blockLength a <= Hashing.Spec.maxLength a);
     test a here empty_bytes (Bytes.create (Hashing.tagLen a) 42z) in
   let b1 = 
     let a = Hashing.SHA1 in 
