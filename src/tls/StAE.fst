@@ -314,11 +314,11 @@ let genReader parent #i w =
   match w with
   | Stream _ w ->
     lemma_ID13 i;
-    assume(StreamAE.(HS.disjoint parent (AEADProvider.region #i w.aead)));
+//    assume(StreamAE.(HS.disjoint parent (AEADProvider.region #i w.aead)));
     Stream () (Stream.genReader parent #i w)
   | StLHAE _ w ->
     lemma_ID12 i;
-    assume(AEAD_GCM.(HS.disjoint parent (AEADProvider.region #i w.aead)));
+//    assume(AEAD_GCM.(HS.disjoint parent (AEADProvider.region #i w.aead)));
     StLHAE () (StLHAE.genReader parent #i w)
 
 

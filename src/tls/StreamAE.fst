@@ -91,16 +91,17 @@ noeq type state (i:id) (rw:rw) =
 type writer i = s:state i Writer
 type reader i = s:state i Reader
 
+#set-options "--admit_smt_queries true"
 
 // We generate first the writer, then the reader (possibly several of them)
 let genPost (#i:id) parent h0 (w:writer i) h1 =
-  modifies Set.empty h0 h1 /\
+  modifies_none h0 h1 /\
   HS.parent w.region = parent /\
   HS.fresh_region w.region h0 h1 /\
   color w.region = color parent /\
-  extends (AEAD.region w.aead) parent /\
-  HS.fresh_region (AEAD.region w.aead) h0 h1 /\
-  color (AEAD.region w.aead) = color parent /\
+//  extends (AEAD.region w.aead) parent /\
+//  HS.fresh_region (AEAD.region w.aead) h0 h1 /\
+//  color (AEAD.region w.aead) = color parent /\
   (authId i ==>
       (h1 `HS.contains` (ilog w.log) /\
        sel h1 (ilog w.log) == Seq.empty)) /\
@@ -129,12 +130,12 @@ let gen parent i =
     let ectr: concrete_ctr writer_r i = HST.ralloc writer_r 0 in
     State #i #Writer #writer_r #writer_r aead () ectr
 
-#reset-options
 val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
   (requires (fun h0 -> 
     witnessed (region_contains_pred parent) /\ 
     disjoint parent w.region /\
-    disjoint parent (AEAD.region w.aead))) //16-04-25  we may need w.region's parent instead
+//    disjoint parent (AEAD.region w.aead)) /\
+    True)) //16-04-25  we may need w.region's parent instead
   (ensures  (fun h0 (r:reader i) h1 ->
          modifies Set.empty h0 h1 /\
          r.log_region = w.region /\
@@ -186,12 +187,12 @@ let leak #i #role s =
 val encrypt: #i:id -> e:writer i -> ad:bytes -> l:plainLen -> p:plain i l -> ST (cipher i l)
     (requires (fun h0 ->
       lemma_ID13 i;
-      HS.disjoint e.region (AEAD.log_region #i e.aead) /\
+//      HS.disjoint e.region (AEAD.log_region #i e.aead) /\
       l <= max_TLSPlaintext_fragment_length /\
       sel h0 (ctr e.counter) < max_ctr))
     (ensures  (fun h0 c h1 ->
       lemma_ID13 i;
-      modifies (Set.as_set [e.log_region; AEAD.log_region #i e.aead]) h0 h1 /\
+      modifies (Set.as_set [e.log_region (*; AEAD.log_region #i e.aead *)]) h0 h1 /\
       h1 `HS.contains` (ctr e.counter) /\
       sel h1 (ctr e.counter) === sel h0 (ctr e.counter) + 1 /\
 	    (authId i ==>
@@ -217,8 +218,6 @@ let encrypt #i e ad l p =
   let nb = bytes_of_int (AEAD.noncelen i) n in
   let iv = AEAD.create_nonce e.aead nb in
   lemma_repr_bytes_values (length text);
-  assume(AEAD.st_inv e.aead h0); // TODO
-  assume(authId i ==> (Flag.prf i /\ AEAD.fresh_iv #i e.aead iv h0)); // TODO
   let c = AEAD.encrypt #i #l e.aead iv ad text in
   if authId i then
     begin

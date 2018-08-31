@@ -100,12 +100,12 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
   modifies Set.empty h0 h1 /\
   extends w.region parent /\
   HS.fresh_region w.region h0 h1 /\
-  disjoint w.region (AEAD.log_region w.aead) /\
+//  disjoint w.region (AEAD.log_region w.aead) /\
   color w.region = color parent /\
-  extends (AEAD.region w.aead) parent /\
-  HS.fresh_region (AEAD.region w.aead) h0 h1 /\
-  color (AEAD.region w.aead) = color parent /\
-  AEAD.empty_log w.aead h1 /\
+//  extends (AEAD.region w.aead) parent /\
+//  HS.fresh_region (AEAD.region w.aead) h0 h1 /\
+//  color (AEAD.region w.aead) = color parent /\
+//  AEAD.empty_log w.aead h1 /\
   (authId i ==> (h1 `HS.contains` (ilog w.log) /\ sel h1 (ilog w.log) == Seq.empty)) /\
   h1 `HS.contains` (ctr w.counter) /\
   sel h1 (ctr w.counter) === 0
@@ -187,7 +187,9 @@ let concrete_encrypt (#i:id) (e:writer i)
   (p:plain i ad rg)
   : ST (cipher i)
   (requires (fun h0 ->
-    AEAD.st_inv e.aead h0))
+//    AEAD.st_inv e.aead h0 /\
+  True
+  ))
   (ensures (fun h0 c h1 ->
     length c = targetLength i rg /\
     modifies_one (AEAD.log_region e.aead) h0 h1))
@@ -199,7 +201,7 @@ let concrete_encrypt (#i:id) (e:writer i)
   let nb = bytes_of_int (AEAD.noncelen i) n in
   let nonce_explicit, _ = split_ nb (AEAD.explicit_iv_length i) in
   let iv = AEAD.create_nonce e.aead nb in
-  assume(authId i ==> (Flag.prf i /\ AEAD.fresh_iv #i e.aead iv h)); // TODO
+//  assume(authId i ==> (Flag.prf i /\ AEAD.fresh_iv #i e.aead iv h)); // TODO
   lemma_repr_bytes_values (length text);
   lemma_12 i;
   assert_norm(length ad = 11);
@@ -250,7 +252,7 @@ let encrypt #i e ad rg p =
   let ctr = ctr e.counter in
   HST.recall ctr;
   let n = HST.op_Bang ctr in
-  assume(AEAD.st_inv e.aead h0);
+//  assume(AEAD.st_inv e.aead h0);
   let c = concrete_encrypt e n ad rg p in
   if authId i then (
     let log = ilog e.log in
