@@ -36,8 +36,8 @@ let keygen g =
   match g with
   | ECC_X25519 -> KS_X25519 (TLS.Curve25519.keygen ())
   | ECC_X448 ->
-    let s = CoreCrypto.random 56 in
-    let p = CoreCrypto.random 56 in
+    let s = Random.sample32 56ul in
+    let p = Random.sample32 56ul in
     KS_X448 (p, s)
   | _ ->
     let params = params_of_group g false in

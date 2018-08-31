@@ -113,7 +113,7 @@ val create:
     Pkg.fresh_regions (footprint k) h0 h1)
 
 let create ip _ _ i u =
-  let kv: keyrepr u = CoreCrypto.random32 (Hashing.tagLen u.alg) in
+  let kv: keyrepr u = Random.sample32 (Hashing.tagLen u.alg) in
   let ck = MAC u kv in
   let k : ir_key ip i =
     if is_safe i then

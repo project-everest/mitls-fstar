@@ -55,8 +55,8 @@ private let sealing_enc : reference (option ticket_key) = ralloc region None
 
 private let keygen () : St ticket_key =
   let id0 = dummy_id CC.CHACHA20_POLY1305 in
-  let salt : AE.salt id0 = CC.random (AE.iv_length id0) in
-  let key : AE.key id0 = CC.random (AE.key_length id0) in
+  let salt : AE.salt id0 = Random.sample (AE.iv_length id0) in
+  let key : AE.key id0 = Random.sample (AE.key_length id0) in
   let wr = AE.coerce id0 region key salt in
   let rd = AE.genReader region #id0 wr in
   Key id0 wr rd
@@ -212,7 +212,7 @@ let serialize = function
 
 let ticket_encrypt (seal:bool) plain : St bytes =
   let Key tid wr _ = if seal then get_sealing_key () else get_ticket_key () in
-  let nb = CC.random (AE.iv_length tid) in
+  let nb = Random.sample (AE.iv_length tid) in
   let salt = AE.salt_of_state wr in
   let iv = AE.coerce_iv tid (xor 12ul nb salt) in
   let ae = AE.encrypt #tid #(length plain) wr iv empty_bytes plain in

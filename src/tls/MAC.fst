@@ -67,7 +67,7 @@ val gen: i:id -> good: (bytes -> Type) -> parent: rgn -> ST(key i good)
     modifies Set.empty h0 h1 /\
     Mem.fresh_subregion (region #i #good k) parent h0 h1 )) 
 let gen i good parent = 
-  gen0 i good parent (CoreCrypto.random32 (macKeySize (alg i)))
+  gen0 i good parent (Random.sample32 (macKeySize (alg i)))
 
 val coerce: i:id -> good: (bytes -> Type) -> parent: rgn -> kv:keyrepr i -> ST(key i good)
   (requires (fun _ -> ~(authId i)))

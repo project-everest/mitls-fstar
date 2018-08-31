@@ -176,8 +176,8 @@ let gen (i:id) (r:rgn) : ST (state i Writer)
   (requires (fun h -> True))
   (ensures (genPost r))
   =
-  let salt : salt i = CC.random (salt_length i) in
-  let kv: key i = CC.random (CC.aeadKeySize (alg i)) in
+  let salt : salt i = Random.sample (salt_length i) in
+  let kv: key i = Random.sample (CC.aeadKeySize (alg i)) in
   match use_provider() with
   | OpenSSLProvider ->
     let st : OAEAD.state i Writer = OAEAD.gen r i in

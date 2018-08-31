@@ -20,8 +20,9 @@
 #include <pthread.h>
 #endif
 
-#include "FFI.h"    // Kremlin-extracted file
-#include "QUIC.h"   // Kremlin-extracted file
+#include "EverCrypt.h"
+#include "FFI.h"
+#include "QUIC.h"
 #include "mitlsffi.h"
 #include "RegionAllocator.h"
 
@@ -30,9 +31,6 @@
 //
 // So it uses KRML_HOST_MALLOC and KRML_HOST_FREE in order to
 // support the same pluggable heap manager as the rest of miTLS.
-
-extern int CoreCrypto_Initialize(void);
-extern void CoreCrypto_Terminate(void);
 
 #if LOG_TO_CHOICE
 typedef void (*p_log)(const char *fmt, ...);
@@ -128,32 +126,33 @@ int MITLS_CALLCONV FFI_mitls_init(void)
   if (HeapRegionInitialize() == 0) {
       return 0;
   }
-  if (CoreCrypto_Initialize() == 0) {
+
+  if (Random_init() != 1) {
       HeapRegionCleanup();
       return 0;
   }
 
   #if IS_WINDOWS
-  #ifdef _KERNEL_MODE
+    #ifdef _KERNEL_MODE
     ExInitializeFastMutex(&lock);
-    #if LOG_TO_CHOICE
-    if (!g_LogPrint) {
-        g_LogPrint = (p_log)DbgPrint;
-    }
-    #endif
-  #else
+      #if LOG_TO_CHOICE
+      if (!g_LogPrint) {
+          g_LogPrint = (p_log)DbgPrint;
+      }
+      #endif
+    #else /* _KERNEL_MODE */
     InitializeCriticalSection(&lock);
-    #if LOG_TO_CHOICE
-    if (!g_LogPrint) {
+      #if LOG_TO_CHOICE
+      if (!g_LogPrint) {
         if (GetEnvironmentVariableA("MITLS_LOG", NULL, 0) == 0) {
             g_LogPrint = (p_log)DbgPrint; // if not set, log to the debugger by default
         } else {
             g_LogPrint = (p_log)printf;
         }
-    }
-    #endif
-  #endif
-#else
+      }
+      #endif
+    #endif /* _KERNEL_MODE */
+  #else /* IS_WINDOWS */
   if (pthread_mutex_init(&lock, NULL) != 0) {
     CoreCrypto_Terminate();
     HeapRegionCleanup();
@@ -173,24 +172,28 @@ int MITLS_CALLCONV FFI_mitls_init(void)
   ENTER_GLOBAL_HEAP_REGION();
   kremlinit_globals();
   LEAVE_GLOBAL_HEAP_REGION();
+  
   if (HAD_OUT_OF_MEMORY) {
       HeapRegionCleanup();
       return 0;
   }
+  
   return 1; // success
 }
 
 void MITLS_CALLCONV FFI_mitls_cleanup(void)
 {
-    CoreCrypto_Terminate();
+  Random_cleanup();
+    
 #if IS_WINDOWS
-    #ifndef _KERNEL_MODE
-    DeleteCriticalSection(&lock);
-    #endif
+  #ifndef _KERNEL_MODE
+  DeleteCriticalSection(&lock);
+  #endif
 #else
-    pthread_mutex_destroy(&lock);
+  pthread_mutex_destroy(&lock);
 #endif
-    HeapRegionCleanup();
+
+  HeapRegionCleanup();
 }
 
 // Called by the host app to configure miTLS ahead of creating a connection

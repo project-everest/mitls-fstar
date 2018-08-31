@@ -2,6 +2,7 @@
 
 (* Split from KEF *)
 
+open Mem
 open FStar.Bytes
 open TLSConstants
 open CoreCrypto
@@ -28,14 +29,14 @@ let honestRSAPMS (pk:RSAKey.pk) (cv:TLSConstants.protocolVersion) pms =
   | ConcreteRSAPMS(s) -> false
 //#endif
 
-let genRSA (pk:RSAKey.pk) (vc:protocolVersion): EXT rsapms =
-    let verBytes = versionBytes vc in
-    let rnd = CoreCrypto.random 46 in
-    let pms = verBytes @| rnd in
-    if ideal && RSAKey.honest pk && RSAKey.strong vc then
-        IdealRSAPMS({seed=pms})
-    else
-        ConcreteRSAPMS(pms)
+let genRSA (pk:RSAKey.pk) (vc:protocolVersion): St rsapms =
+  let verBytes = versionBytes vc in
+  let rnd = Random.sample32 46ul in
+  let pms = verBytes @| rnd in
+  if ideal && RSAKey.honest pk && RSAKey.strong vc then
+     IdealRSAPMS({seed=pms})
+  else
+    ConcreteRSAPMS(pms)
 
 let coerceRSA (pk:RSAKey.pk) (cv:protocolVersion) b = ConcreteRSAPMS(b)
 let leakRSA (pk:RSAKey.pk) (cv:protocolVersion) pms =

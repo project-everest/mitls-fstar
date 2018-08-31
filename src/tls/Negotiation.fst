@@ -1422,7 +1422,7 @@ let computeServerMode cfg co serverRandom =
                 None // no HRR before TLS 1.3
                 pv
                 serverRandom
-                (CoreCrypto.random 32)
+                (Random.sample32 32ul)
                 cs
                 None
                 None // Extensions will be filled later

@@ -95,7 +95,7 @@ val mkHelloRandom: cs:role -> r:ex_rid -> ST random
       role_nonce cs n r))) //and the triple are associated as well, for ever more
 let rec mkHelloRandom cs r =
   HST.recall nonce_rid_table;
-  let rand = CoreCrypto.random 28 in
+  let rand = Random.sample32 28ul in
   let ts = timestamp() in
   let n : random = ts @| rand in
   if ideal then

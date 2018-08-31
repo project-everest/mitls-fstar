@@ -1011,7 +1011,7 @@ let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinishe
            let (| li, rmsid, rms |) = KeySchedule.ks_server_13_cf hs.ks digestClientFinished in
            let cfg = Nego.local_config hs.nego in
            let cs = mode.Nego.n_cipher_suite in
-           let age_add = CoreCrypto.random 4 in
+           let age_add = Random.sample32 4ul in
            let age_add = Parse.uint32_of_bytes age_add in
            let now = UInt32.uint_to_t (FStar.Date.secondsFromDawn()) in
            let ticket = Ticket.Ticket13 cs li rmsid rms empty_bytes now age_add empty_bytes in
