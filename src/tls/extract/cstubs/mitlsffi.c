@@ -154,7 +154,6 @@ int MITLS_CALLCONV FFI_mitls_init(void)
     #endif /* _KERNEL_MODE */
   #else /* IS_WINDOWS */
   if (pthread_mutex_init(&lock, NULL) != 0) {
-    CoreCrypto_Terminate();
     HeapRegionCleanup();
     return 0;
   }

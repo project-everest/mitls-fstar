@@ -22,18 +22,27 @@ This is done by FF_mitls_init and automatically in Evercrypt
 when possible
 *)
 
-let init () : St UInt32.t =
+let init () : ST UInt32.t
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 -> modifies_none h0 h1)
+  =
 //  let h0 = get() in
 //  assume(EverCrypt.Specs.random_init_pre h0);
   assume false;
   EverCrypt.AutoConfig.(init Default);
   EverCrypt.random_init ()
 
-let cleanup () : St unit =
+let cleanup () : ST unit
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 -> modifies_none h0 h1)
+  =
   assume false; // Precondition of random_cleanup in EverCrypt
   EverCrypt.random_cleanup ()
 
-let sample32 (len:UInt32.t) : St (lbytes (UInt32.v len)) =
+let sample32 (len:UInt32.t) : ST (lbytes (UInt32.v len))
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 -> modifies_none h0 h1)
+  =
   assume false; // Precondition of random_sample in EverCrypt
   push_frame ();
   let b = LowStar.Buffer.alloca 0uy len in
@@ -43,5 +52,8 @@ let sample32 (len:UInt32.t) : St (lbytes (UInt32.v len)) =
   pop_frame ();
   r
 
-let sample (len:nat{len < pow2 32}) : St (lbytes len) =
+let sample (len:nat{len < pow2 32}) : ST (lbytes len)
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 -> modifies_none h0 h1)
+  =
   sample32 (UInt32.uint_to_t len)
