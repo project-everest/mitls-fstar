@@ -1033,20 +1033,25 @@ let serialize_synth_upd_chain
     synth_inverse f2 g1 /\
     synth_injective f2
   })
-  (x: t2)
-  (y: t2)
+  (x1: t1)
+  (x2: t2)
+  (y1: t1)
+  (y2: t2)
   (i': nat)
   (s' : bytes)
 : Lemma
   (requires (
-    let s = serialize s1 (g1 x) in
+    let s = serialize s1 x1 in
     i' + Seq.length s' <= Seq.length s /\
-    serialize s1 (g1 y) == seq_upd_seq s i' s'
+    serialize s1 y1 == seq_upd_seq s i' s' /\
+    x2 == f2 x1 /\
+    y2 == f2 y1
   ))
   (ensures (
-    let s = serialize (serialize_synth p1 f2 s1 g1 u) x in
+    let s = serialize (serialize_synth p1 f2 s1 g1 u) x2 in
     i' + Seq.length s' <= Seq.length s /\
-    serialize (serialize_synth p1 f2 s1 g1 u) y == seq_upd_seq s i' s'
+    Seq.length s == Seq.length (serialize s1 x1) /\
+    serialize (serialize_synth p1 f2 s1 g1 u) y2 == seq_upd_seq s i' s'
   ))
 = ()
 
