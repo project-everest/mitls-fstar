@@ -229,7 +229,9 @@ let leak (#i:id) (#rw:rw) (st:state i rw)
   | LowProvider ->
     assume (false);
     assume(~(Flag.prf i));
-    magic() //We do not have a leak yet in EverCrypt
+    let len = CC.aeadKeySize (alg i) in
+    let kv: key i = CC.random len in
+    kv, snd st //TODO: FIXME! We do not have a leak yet in EverCrypt
 
 // ADL TODO
 // There is an issue connecting the stateful encryption in miTLS
@@ -248,7 +250,7 @@ let genReader (parent:rgn) (#i:id) (st:writer i) : ST (reader i)
   | LowCProvider ->
     assume false;
     as_lowc_state st, salt_of_state st
-  | LowProvider -> st //EverCrypt.fsti does not provide a genReader
+  | LowProvider -> st //TODO: EverCrypt.fsti does not provide a genReader
 #reset-options
 
 #reset-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
@@ -308,27 +310,34 @@ let logged_iv (#i:id{authId i}) (#l:plainlen) (#rw:rw) (s:state i rw) (iv:iv i)
 // ADL Jan 3: PlanA changes TODO
 open EverCrypt.Helpers
 module LM = LowStar.Modifies
-let from_bytes (b:bytes{UInt.fits (length b) 32}) : StackInline uint8_p
+
+#set-options "--max_fuel 0 --max_ifuel 0"
+let from_bytes (b:bytes{UInt.fits (length b) 32 /\ length b <> 0}) : StackInline uint8_p
   (requires (fun h0 -> True))
   (ensures  (fun h0 buf h1 ->
-    LM.(modifies loc_none h0 h1) /\
+    LB.(modifies loc_none h0 h1) /\
     LB.live h1 buf /\
-    b = Bytes.hide (LB.as_seq h0 buf)))
+    LB.unused_in buf h0 /\
+    LB.length buf = length b /\
+    Bytes.reveal b `Seq.equal` LB.as_seq h1 buf))
   =
+  let h0 = get () in
   let len = FStar.UInt32.uint_to_t (length b) in
   let lb = LB.alloca 0uy len in
   FStar.Bytes.store_bytes len lb len b;
+  let h1 = get () in
+  LB.(modifies_only_not_unused_in loc_none h0 h1);
   lb
 
 #set-options "--admit_smt_queries true"
-//let from_bytes (b:
 let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:plain i l)
   : ST (cipher:cipher i l)
-  (requires (fun h ->
-    st_inv w h /\
-    (authId i ==> (Flag.prf i /\ fresh_iv #i w iv h)) /\
-    FStar.UInt.size (length ad) 32 /\ FStar.UInt.size l 32))
-  (ensures (fun h0 cipher h1 -> modifies_one (log_region w) h0 h1))
+       (requires (fun h ->
+                    st_inv w h /\
+                    (authId i ==> (Flag.prf i /\ fresh_iv #i w iv h)) /\
+                    FStar.UInt.size (length ad) 32 /\
+                    FStar.UInt.size l 32))
+       (ensures (fun h0 cipher h1 -> modifies_one (log_region w) h0 h1))
   =
     match use_provider() with
     | OpenSSLProvider -> OAEAD.encrypt (as_openssl_state w) iv ad plain
@@ -340,26 +349,24 @@ let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:pla
       let st = as_low_state w in
       let adlen = uint_to_t (length ad) in
       let plainlen = uint_to_t l in
-      let cipherlen = uint_to_t (cipherlen i l) in
+      let taglen = uint_to_t (taglen i) in
+      let cipherlen = plainlen +^ taglen in
       assume(AE.safelen i (v plainlen) = true); // TODO
       push_frame ();
       let ad = from_bytes ad in
-      let cipher = LB.alloca 0uy plainlen in
-      let tag = LB.alloca 0uy 12ul in
+      let cipher_tag = LB.alloca 0uy cipherlen in
+      let cipher = LB.sub cipher_tag 0ul plainlen in
+      let tag = LB.sub cipher_tag plainlen taglen in
       let iv = from_bytes iv in
-      begin
-      if not (TLSInfo.safeId i) then
-        let plain = from_bytes plain in
-        EverCrypt.aead_encrypt st iv ad adlen plain plainlen cipher tag
-      else
-        admit()
-        // let plain = Plain.create i 0uy plainlen in
-        // AE.encrypt i st (Crypto.Symmetric.Bytes.load_uint128 12ul tmp) adlen ad plainlen plain cipher
-      end;
-      admit()
-      // let ret = BufferBytes.to_bytes (FStar.UInt32.v cipherlen) cipher in
-      // pop_frame ();
-      // ret
+      let plain =
+        if not (TLSInfo.safeId i)
+        then from_bytes plain
+        else LB.alloca 0uy plainlen
+      in
+      EverCrypt.aead_encrypt st iv ad adlen plain plainlen cipher tag;
+      let cipher_tag_res = FStar.Bytes.of_buffer cipherlen cipher in
+      pop_frame();
+      cipher_tag_res
 
   (*
   let r =
@@ -375,33 +382,37 @@ let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:pla
 
 let decrypt (#i:id) (#l:plainlen) (st:reader i) (iv:iv i) (ad:adata i) (cipher:cipher i l)
   : ST (co:option (plain i l))
-  (requires (fun _ -> True))
+       (requires (fun _ -> True))
 //  (requires (fun _ ->
 //    FStar.UInt.size (length ad) 32
 //    /\ FStar.UInt.size (length cipher) 32
 //    /\ length cipher >= CC.aeadTagSize (alg i))
-  (ensures (fun h0 plain h1 ->
-    modifies_none h0 h1
-  ))
+       (ensures (fun h0 plain h1 ->
+                   modifies_none h0 h1))
   =
-  let plain =
     match use_provider() with
     | OpenSSLProvider -> OAEAD.decrypt (as_openssl_state st) iv ad cipher
     | LowCProvider -> CAEAD.aead_decrypt (fst (as_lowc_state st)) iv ad cipher
     | LowProvider ->
+      push_frame();
       let st = as_low_state st in
-      let ivlen = uint_to_t (iv_length i) in
-      let iv = CB.load_uint128 ivlen (BufferBytes.from_bytes iv) in
+      let iv = from_bytes iv in
       let adlen = uint_to_t (length ad) in
-      let ad = BufferBytes.from_bytes ad in
+      let ad = from_bytes ad in
       let plainlen = uint_to_t l in
-      let cbuf = BufferBytes.from_bytes cipher in
-      let plain = Plain.create i 0uy plainlen in
-      if AE.decrypt i st iv adlen ad plainlen plain cbuf then
-        Some (BufferBytes.to_bytes l (Plain.bufferRepr #i plain))
-      else None
-    in
-  plain
+      let taglen = uint_to_t (taglen i) in
+      let cipher_tag_buf = from_bytes cipher in
+      let cipher = LB.sub cipher_tag_buf 0ul plainlen in
+      let tag = LB.sub cipher_tag_buf plainlen taglen in
+      let plain = LB.alloca 0uy plainlen in
+      let ok = EverCrypt.aead_decrypt st iv ad adlen plain plainlen cipher tag in
+      let ret =
+        if ok = 0ul
+        then Some (FStar.Bytes.of_buffer plainlen plain)
+        else None
+      in
+      pop_frame();
+      ret
 
   (*
   let r =
