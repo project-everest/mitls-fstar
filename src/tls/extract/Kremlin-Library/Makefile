@@ -66,10 +66,10 @@ FILES = AEAD_GCM AEADProvider Alert BufferBytes Cert \
   FFICallbacks Flags Format FStar HaclProvider Old_Handshake HandshakeLog \
   HandshakeMessages Hashing Hashing_CRF Hashing_OpenSSL Hashing_Spec Old_HKDF HMAC \
   Old_HMAC_UFCMA Old_KeySchedule kremlinit LHAEPlain \
-  LowCProvider LowParse Negotiation Nonce Parse PMS Prims \
+  LowParse Negotiation Nonce Parse PMS Prims \
   PSK QUIC Random Range Record RSAKey \
   secure/Crypto_HKDF_Crypto_HMAC \
-  Specializations_Providers_AEAD StAE StatefulLHAE \
+  StAE StatefulLHAE \
   StatefulPlain StreamAE StreamDeltas StreamPlain stub/core_crypto \
   stub/hacl_provider Ticket TLS TLSConstants TLS_Curve25519 TLSError TLSInfo \
   TLSInfoFlags TLSPRF Transport stub/mitlsffi stub/buffer_bytes \
