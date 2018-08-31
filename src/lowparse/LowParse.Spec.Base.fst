@@ -794,3 +794,214 @@ let serialize_length
   ))
   [SMTPat (Seq.length (serialize s x))]
 = ()
+
+let seq_upd_seq
+  (#t: Type)
+  (s: Seq.seq t)
+  (i: nat)
+  (s' : Seq.seq t)
+: Pure (s_ : Seq.seq t { Seq.length s_ == Seq.length s } )
+  (requires (i + Seq.length s' <= Seq.length s))
+  (ensures (fun _ -> True))
+= Seq.append
+    (Seq.slice s 0 i)
+    (Seq.append s' (Seq.slice s (i + Seq.length s') (Seq.length s)))
+
+let index_seq_upd_seq
+  (#t: Type)
+  (s: Seq.seq t)
+  (i: nat)
+  (s' : Seq.seq t)
+  (j: nat)
+: Lemma
+  (requires (i + Seq.length s' <= Seq.length s /\ j < Seq.length s))
+  (ensures (
+    Seq.index (seq_upd_seq s i s') j == (if i <= j && j < i + Seq.length s' then Seq.index s' (j - i) else Seq.index s j)))
+= ()
+
+let seq_upd_seq_slice
+  (#t: Type)
+  (s: Seq.seq t)
+  (i: nat)
+  (s' : Seq.seq t)
+: Lemma
+  (requires (i + Seq.length s' <= Seq.length s))
+  (ensures (Seq.slice (seq_upd_seq s i s') i (i + Seq.length s') == s'))
+= assert (Seq.slice (seq_upd_seq s i s') i (i + Seq.length s') `Seq.equal` s')
+
+let seq_upd_seq_slice'
+  (#t: Type)
+  (s: Seq.seq t)
+  (i: nat)
+  (s' : Seq.seq t)
+  (j1 j2: nat)
+: Lemma
+  (requires (i + Seq.length s' <= Seq.length s /\ i <= j1 /\ j1 <= j2 /\ j2 <= i + Seq.length s'))
+  (ensures (Seq.slice (seq_upd_seq s i s') j1 j2 == Seq.slice s' (j1 - i) (j2 - i)))
+= seq_upd_seq_slice s i s';
+  Seq.slice_slice (seq_upd_seq s i s') i (i + Seq.length s') (j1 - i) (j2 - i)
+
+let seq_upd_seq_slice_left
+  (#t: Type)
+  (s: Seq.seq t)
+  (i: nat)
+  (s' : Seq.seq t)
+: Lemma
+  (requires (i + Seq.length s' <= Seq.length s))
+  (ensures (Seq.slice (seq_upd_seq s i s') 0 i == Seq.slice s 0 i))
+= assert (Seq.slice (seq_upd_seq s i s') 0 i `Seq.equal` Seq.slice s 0 i)
+
+let seq_upd_seq_slice_left'
+  (#t: Type)
+  (s: Seq.seq t)
+  (i: nat)
+  (s' : Seq.seq t)
+  (j1 j2: nat)
+: Lemma
+  (requires (i + Seq.length s' <= Seq.length s /\ j1 <= j2 /\ j2 <= i))
+  (ensures (Seq.slice (seq_upd_seq s i s') j1 j2 == Seq.slice s j1 j2))
+= seq_upd_seq_slice_left s i s';
+  Seq.slice_slice (seq_upd_seq s i s') 0 i j1 j2
+
+let seq_upd_seq_slice_right
+  (#t: Type)
+  (s: Seq.seq t)
+  (i: nat)
+  (s' : Seq.seq t)
+: Lemma
+  (requires (i + Seq.length s' <= Seq.length s))
+  (ensures (Seq.slice (seq_upd_seq s i s') (i + Seq.length s') (Seq.length s) == Seq.slice s (i + Seq.length s') (Seq.length s)))
+= assert (Seq.slice (seq_upd_seq s i s') (i + Seq.length s') (Seq.length s) `Seq.equal` Seq.slice s (i + Seq.length s') (Seq.length s))
+
+let seq_upd_seq_slice_right'
+  (#t: Type)
+  (s: Seq.seq t)
+  (i: nat)
+  (s' : Seq.seq t)
+  (j1 j2: nat)
+: Lemma
+  (requires (i + Seq.length s' <= j1 /\ j1 <= j2 /\ j2 <= Seq.length s))
+  (ensures (Seq.slice (seq_upd_seq s i s') j1 j2 == Seq.slice s j1 j2))
+= seq_upd_seq_slice_right s i s';
+  Seq.slice_slice (seq_upd_seq s i s') (i + Seq.length s') (Seq.length s) (j1 - (i + Seq.length s')) (j2 - (i + Seq.length s'))
+
+let seq_upd_seq_empty
+  (#t: Type)
+  (s: Seq.seq t)
+  (i: nat)
+  (s' : Seq.seq t)
+: Lemma
+  (requires (i <= Seq.length s /\ Seq.length s' == 0))
+  (ensures (seq_upd_seq s i s' == s))
+= assert (seq_upd_seq s i s' `Seq.equal` s)
+
+let seq_upd_seq_slice_idem
+  (#t: Type)
+  (s: Seq.seq t)
+  (lo hi: nat)
+: Lemma
+  (requires (lo <= hi /\ hi <= Seq.length s))
+  (ensures (seq_upd_seq s lo (Seq.slice s lo hi) == s))
+= assert (seq_upd_seq s lo (Seq.slice s lo hi) `Seq.equal` s)
+  
+let seq_upd_seq_left
+  (#t: Type)
+  (s: Seq.seq t)
+  (s' : Seq.seq t)
+: Lemma
+  (requires (Seq.length s' <= Seq.length s))
+  (ensures (seq_upd_seq s 0 s' == Seq.append s' (Seq.slice s (Seq.length s') (Seq.length s))))
+= assert (seq_upd_seq s 0 s' `Seq.equal` Seq.append s' (Seq.slice s (Seq.length s') (Seq.length s)))
+
+let seq_upd_seq_right
+  (#t: Type)
+  (s: Seq.seq t)
+  (s' : Seq.seq t)
+: Lemma
+  (requires (Seq.length s' <= Seq.length s))
+  (ensures (seq_upd_seq s (Seq.length s - Seq.length s') s' == Seq.append (Seq.slice s 0 (Seq.length s - Seq.length s')) s'))
+= assert (seq_upd_seq s (Seq.length s - Seq.length s') s' `Seq.equal` Seq.append (Seq.slice s 0 (Seq.length s - Seq.length s')) s')
+
+let seq_upd_seq_right_to_left
+  (#t: Type)
+  (s1: Seq.seq t)
+  (i1: nat)
+  (s2: Seq.seq t)
+  (i2: nat)
+  (s3: Seq.seq t)
+: Lemma
+  (requires (i1 + Seq.length s2 <= Seq.length s1 /\ i2 + Seq.length s3 <= Seq.length s2))
+  (ensures (
+    seq_upd_seq s1 i1 (seq_upd_seq s2 i2 s3) == seq_upd_seq (seq_upd_seq s1 i1 s2) (i1 + i2) s3
+  ))
+= assert (seq_upd_seq s1 i1 (seq_upd_seq s2 i2 s3) `Seq.equal` seq_upd_seq (seq_upd_seq s1 i1 s2) (i1 + i2) s3)
+
+let seq_upd_seq_seq_upd_seq_slice
+  (#t: Type)
+  (s1: Seq.seq t)
+  (i1: nat)
+  (hi: nat)
+  (i2: nat)
+  (s3: Seq.seq t)
+: Lemma
+  (requires (i1 <= hi /\ hi <= Seq.length s1 /\ i1 + i2 + Seq.length s3 <= hi))
+  (ensures (
+    seq_upd_seq s1 i1 (seq_upd_seq (Seq.slice s1 i1 hi) i2 s3) == seq_upd_seq s1 (i1 + i2) s3
+  ))
+= assert (seq_upd_seq s1 i1 (seq_upd_seq (Seq.slice s1 i1 hi) i2 s3) `Seq.equal` seq_upd_seq s1 (i1 + i2) s3)
+
+let seq_upd_seq_disj_comm
+  (#t: Type)
+  (s: Seq.seq t)
+  (i1: nat)
+  (s1: Seq.seq t)
+  (i2: nat)
+  (s2: Seq.seq t)
+: Lemma
+  (requires (
+    i1 + Seq.length s1 <= Seq.length s /\
+    i2 + Seq.length s2 <= Seq.length s /\
+    (i1 + Seq.length s1 <= i2 \/ i2 + Seq.length s2 <= i1)
+  ))
+  (ensures (
+    seq_upd_seq (seq_upd_seq s i1 s1) i2 s2 == seq_upd_seq (seq_upd_seq s i2 s2) i1 s1
+  ))
+= assert (seq_upd_seq (seq_upd_seq s i1 s1) i2 s2 `Seq.equal` seq_upd_seq (seq_upd_seq s i2 s2) i1 s1)
+
+let seq_upd_seq_seq_upd
+  (#t: Type)
+  (s: Seq.seq t)
+  (i: nat)
+  (x: t)
+: Lemma
+  (requires (i < Seq.length s))
+  (ensures (Seq.upd s i x == seq_upd_seq s i (Seq.create 1 x)))
+= assert (Seq.upd s i x `Seq.equal` seq_upd_seq s i (Seq.create 1 x))
+
+let seq_append_seq_upd_seq_l
+  (#t: Type)
+  (s: Seq.seq t)
+  (i': nat)
+  (s' : Seq.seq t)
+  (sl : Seq.seq t)
+: Lemma
+  (requires (i' + Seq.length s' <= Seq.length s))
+  (ensures (
+    Seq.length sl + i' <= Seq.length (sl `Seq.append` s) /\
+    sl `Seq.append` seq_upd_seq s i' s' == seq_upd_seq (sl `Seq.append` s) (Seq.length sl + i') s'
+  ))
+= assert (sl `Seq.append` seq_upd_seq s i' s' `Seq.equal` seq_upd_seq (sl `Seq.append` s) (Seq.length sl + i') s')
+
+let seq_append_seq_upd_seq_r
+  (#t: Type)
+  (s: Seq.seq t)
+  (i': nat)
+  (s' : Seq.seq t)
+  (sr : Seq.seq t)
+: Lemma
+  (requires (i' + Seq.length s' <= Seq.length s))
+  (ensures (
+    i' <= Seq.length (s `Seq.append` sr) /\
+    seq_upd_seq s i' s' `Seq.append` sr == seq_upd_seq (s `Seq.append` sr) i' s'
+  ))
+= assert ((seq_upd_seq s i' s' `Seq.append` sr) `Seq.equal` seq_upd_seq (s `Seq.append` sr) i' s')

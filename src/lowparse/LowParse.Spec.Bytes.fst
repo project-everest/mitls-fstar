@@ -195,3 +195,12 @@ let serialize_bounded_vlbytes
       (x <: parse_bounded_vldata_strong_t min max #_ #_ #parse_all_bytes serialize_all_bytes)
     )
     ()
+
+let length_serialize_bounded_vlbytes
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (x: parse_bounded_vlbytes_t min max)
+: Lemma
+  (Seq.length (serialize (serialize_bounded_vlbytes min max) x) == log256' max + B32.length x)
+  [SMTPat (Seq.length (serialize (serialize_bounded_vlbytes min max) x))]
+= ()

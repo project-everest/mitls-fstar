@@ -712,3 +712,16 @@ let serialize_bounded_vldata_strong
 : Tot (serializer (parse_bounded_vldata_strong min max s))
 = Classical.forall_intro (serialize_bounded_vldata_strong_correct min max s);
   serialize_bounded_vldata_strong' min max s
+
+let length_serialize_bounded_vldata_strong
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (x: parse_bounded_vldata_strong_t min max s)
+: Lemma
+  (Seq.length (serialize (serialize_bounded_vldata_strong min max s) x) == log256' max + Seq.length (serialize s x))
+  [SMTPat (Seq.length (serialize (serialize_bounded_vldata_strong min max s) x))]
+= ()

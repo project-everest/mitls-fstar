@@ -540,3 +540,24 @@ let make_dsum
   (tag_of_data: (data -> GTot (maybe_enum_key e)))
 : Tot dsum
 = DSum key repr e data tag_of_data
+
+let serialize_dsum_eq
+  (#kt: parser_kind)
+  (t: dsum)
+  (#p: parser kt (dsum_repr_type t))
+  (s: serializer p)
+  (#k: parser_kind)
+  (#pc: ((x: dsum_key t) -> Tot (parser k (dsum_cases t x))))
+  (sc: ((x: dsum_key t) -> Tot (serializer (pc x))))
+  (x: dsum_type t)
+: Lemma
+  (requires (kt.parser_kind_subkind == Some ParserStrong))
+  (ensures (
+    let tg = dsum_tag_of_data t x in
+    let x' : dsum_cases t tg = x in
+    let s1 = serialize (serialize_dsum t s sc) x in
+    let s2 = serialize (serialize_maybe_enum_key _ s (dsum_enum t)) tg in
+    let s3 = serialize (sc tg) x' in
+    s1 == s2 `Seq.append` s3
+  ))
+= ()
