@@ -32,13 +32,6 @@
     return _x;                                                                 \
   }
 
-// For ticket age, currently using C runtime <time.h> with second resolution
-// FIXME(adl) switch to milisecond timers, after we check the Windows options
-uint32_t CoreCrypto_now()
-{
-  return (uint32_t)KRML_HOST_TIME();
-}
-
 #ifndef NO_OPENSSL
 
 #include <openssl/bn.h>
@@ -284,9 +277,8 @@ static inline const EVP_MD *get_md(CoreCrypto_hash_alg h){
     return EVP_sha384();
   case CoreCrypto_SHA512:
     return EVP_sha512();
-  default:
-    return EVP_md_null();
   }
+  KRML_HOST_EXIT(255);
 }
 
 FStar_Bytes_bytes CoreCrypto_hash(CoreCrypto_hash_alg x0, FStar_Bytes_bytes x1) {
@@ -524,9 +516,11 @@ CoreCrypto_aead_encrypt(CryptoTypes_aead_cipher x0,
   case CryptoTypes_AES_256_GCM:
     cipher = EVP_aes_256_gcm();
     break;
+#ifndef OPENSSL_IS_BORINGSSL
   case CryptoTypes_CHACHA20_POLY1305:
     cipher = EVP_chacha20_poly1305();
     break;
+#endif
   default:
     FAIL_IF(true, "Unsupported AEAD cipher");
   }
@@ -604,9 +598,11 @@ CoreCrypto_aead_decrypt_(CryptoTypes_aead_cipher x0,
   case CryptoTypes_AES_256_GCM:
     cipher = EVP_aes_256_gcm();
     break;
+#ifndef OPENSSL_IS_BORINGSSL
   case CryptoTypes_CHACHA20_POLY1305:
     cipher = EVP_chacha20_poly1305();
     break;
+#endif
   default:
     FAIL_IF(true, "Unsupported AEAD cipher");
   }
@@ -795,100 +791,3 @@ CoreCrypto_aead_decrypt(CryptoTypes_aead_cipher x0,
   return ret;
 }
 #endif // NO_OPENSSL
-
-#if IS_WINDOWS
-
-#ifndef _KERNEL_MODE
-#define NT_SUCCESS(Status)          (((NTSTATUS)(Status)) >= 0)
-#endif
-
-static BCRYPT_ALG_HANDLE g_hAlgRandom;
-
-// Perform per-process initialization, called from FFI_mitls_init.  Return 0 for failure.
-int CoreCrypto_Initialize(void)
-{
-
-  NTSTATUS st = BCryptOpenAlgorithmProvider(&g_hAlgRandom, BCRYPT_RNG_ALGORITHM, NULL,
-#ifdef _KERNEL_MODE
-                    BCRYPT_PROV_DISPATCH
-#else
-                    0
-#endif
-                    );
-  if (!NT_SUCCESS(st)) {
-    KRML_HOST_EPRINTF("BCryptOpenAlgorithmProvider failed: 0x%x\n", (unsigned int)st);
-    return 0;
-  }
-  return 1;
-}
-
-// Perform per-process termination, called from FFI_mitls_cleanup.
-void CoreCrypto_Terminate(void)
-{
-    BCryptCloseAlgorithmProvider(g_hAlgRandom, 0);
-}
-
-FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
-  NTSTATUS st;
-
-  PUCHAR data = KRML_HOST_MALLOC(x0);
-
-  st = BCryptGenRandom(g_hAlgRandom, data, x0, 0);
-  if (!NT_SUCCESS(st)) {
-    KRML_HOST_EPRINTF("Cannot read random bytes: 0x%x\n", (unsigned int)st);
-    KRML_HOST_EXIT(255);
-  }
-
-  FStar_Bytes_bytes ret = {.length = x0, .data = (char *)data};
-  return ret;
-}
-#else
-
-// Perform per-process initialization, called from FFI_mitls_init.  Return 0 for failure.
-int CoreCrypto_Initialize(void)
-{
-    return 1;
-}
-
-// Perform per-process termination, called from FFI_mitls_cleanup.
-void CoreCrypto_Terminate(void)
-{
-}
-
-FStar_Bytes_bytes CoreCrypto_random(Prims_nat x0) {
-  char *data = KRML_HOST_MALLOC(x0);
-
-  int fd = open("/dev/urandom", O_RDONLY);
-  if (fd == -1) {
-    KRML_HOST_EPRINTF("Cannot open /dev/urandom\n");
-    KRML_HOST_EXIT(255);
-  }
-  uint64_t res = read(fd, data, x0);
-  if (res != x0) {
-    KRML_HOST_EPRINTF(
-            "Error on reading, expected %" PRIi32 " bytes, got %" PRIu64
-            " bytes\n",
-            x0, res);
-    KRML_HOST_EXIT(255);
-  }
-  close(fd);
-
-  FStar_Bytes_bytes ret = {.length = x0, .data = data};
-  return ret;
-}
-#endif
-
-FStar_Bytes_bytes CoreCrypto_zero(Prims_nat x0)
-{
-  char *data = KRML_HOST_MALLOC(x0);
-  memset(data, 0, x0);
-  FStar_Bytes_bytes ret = {.length = x0, .data = data};
-  return ret;
-}
-
-// We need this to expose CoreCrypto_Initialize from F* where
-// identifiers must start with lowercase
-int CoreCrypto_init(void)
-{
-  return CoreCrypto_Initialize();
-}

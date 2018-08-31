@@ -129,7 +129,7 @@ val create:
 
 noextract
 let create ip _ _ i u =
-  let kv: keyrepr u = CoreCrypto.random32 (Hashing.tagLen u.alg) in
+  let kv: keyrepr u = Random.sample32 (Hashing.tagLen u.alg) in
   let ck = MAC u kv in
   let k : ir_key ip i =
     if is_safe i then
@@ -426,7 +426,7 @@ val gen: i:id -> good: (bytes -> Type) -> parent: rgn -> ST(key i good)
     modifies Set.empty h0 h1 /\
     fresh_subregion (region #i #good k) parent h0 h1 ))
 let gen i good parent =
-  gen0 i good parent (CoreCrypto.random (keysize i))
+  gen0 i good parent (Random.sample (keysize i))
 
 val coerce: i:id -> good: (bytes -> Type) -> parent: rgn -> kv:keyrepr i -> ST(key i good)
   (requires (fun _ -> ~(authId i)))

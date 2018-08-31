@@ -48,7 +48,7 @@ val gen: w:rid{is_eternal_region w}
     -> i:id
     -> St (reader i * writer i) //TODO: a more complete spec here
 let gen writer_parent i =
-  let kv = CoreCrypto.random32 (macKeySize a) in
+  let kv = Random.sample32 (macKeySize a) in
   let writer_r = new_region writer_parent in
   let log = ralloc writer_r Seq.empty in
   State #i #Reader #writer_r kv log,

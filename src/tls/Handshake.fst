@@ -794,9 +794,10 @@ let client13_NewSessionTicket (hs:hs) (st13:sticket13)
   let CipherSuite13 ae h = mode.Nego.n_cipher_suite in
   let t_ext = st13.ticket13_extensions in
   let ed = List.Tot.find Extensions.E_early_data? t_ext in
+  let now = UInt32.uint_to_t (FStar.Date.secondsFromDawn()) in
   let pskInfo = PSK.({
     ticket_nonce = Some st13.ticket13_nonce;
-    time_created = CoreCrypto.now (); // TODO
+    time_created = now;
     ticket_age_add = st13.ticket13_age_add;
     allow_early_data = Some? ed;
     allow_dhe_resumption = true;
@@ -1205,9 +1206,9 @@ let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinishe
            let (| li, rmsid, rms |) = KeySchedule.ks_server_13_cf hs.ks digestClientFinished in
            let cfg = Nego.local_config hs.nego in
            let cs = mode.Nego.n_cipher_suite in
-           let age_add = CoreCrypto.random 4 in
+           let age_add = Random.sample32 4ul in
            let age_add = uint32_of_bytes age_add in
-           let now = CoreCrypto.now () in
+           let now = UInt32.uint_to_t (FStar.Date.secondsFromDawn()) in
            let ticket = Ticket.Ticket13 cs li rmsid rms empty_bytes now age_add empty_bytes in
            let tb = Ticket.create_ticket false ticket in
 

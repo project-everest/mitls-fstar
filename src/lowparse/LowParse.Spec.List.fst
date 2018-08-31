@@ -261,6 +261,169 @@ let rec serialize_list_append
   | [] ->
     Seq.append_empty_l (serialize (serialize_list p s) l2)
 
+let serialize_list_cons_upd
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (x: t)
+  (l2: list t)
+  (y: t)
+: Lemma
+  (requires (
+    serialize_list_precond k /\
+    Seq.length (serialize s y) == Seq.length (serialize s x)
+  ))
+  (ensures (
+    let ln2 = Seq.length (serialize (serialize_list _ s) l2) in
+    let sx = serialize s x in
+    let sl = serialize (serialize_list _ s) (x :: l2) in
+    Seq.length sl == Seq.length sx + ln2 /\
+    serialize (serialize_list _ s) (y :: l2) == seq_upd_seq sl 0 (serialize s y)
+  ))
+= serialize_list_cons _ s x l2;
+  serialize_list_cons _ s y l2;
+  let sl = serialize (serialize_list _ s) (x :: l2) in
+  seq_upd_seq_left sl (serialize s y);
+  let ln = Seq.length (serialize s x) in
+  Seq.lemma_split sl ln;
+  Seq.lemma_append_inj (Seq.slice sl 0 ln) (Seq.slice sl ln (Seq.length sl)) (serialize s x) (serialize (serialize_list _ s) l2)
+
+#set-options "--z3rlimit 32"
+
+let serialize_list_upd
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (l1: list t)
+  (x: t)
+  (l2: list t)
+  (y: t)
+: Lemma
+  (requires (
+    serialize_list_precond k /\
+    Seq.length (serialize s y) == Seq.length (serialize s x)
+  ))
+  (ensures (
+    let ln1 = Seq.length (serialize (serialize_list _ s) l1) in
+    let ln2 = Seq.length (serialize (serialize_list _ s) l2) in
+    let sx = serialize s x in
+    let sl = serialize (serialize_list _ s) (l1 `L.append` (x :: l2)) in
+    Seq.length sl == ln1 + Seq.length sx + ln2 /\
+    serialize (serialize_list _ s) (l1 `L.append` (y :: l2)) == seq_upd_seq sl ln1 (serialize s y)
+  ))
+  (decreases (L.length l1))
+= serialize_list_append _ s l1 (y :: l2);
+  assert (serialize (serialize_list _ s) (l1 `L.append` (y :: l2)) == serialize (serialize_list _ s) l1 `Seq.append` serialize (serialize_list _ s) (y :: l2));
+  serialize_list_cons_upd s x l2 y;
+  assert (serialize (serialize_list _ s) (l1 `L.append` (y :: l2)) == serialize (serialize_list _ s) l1 `Seq.append` seq_upd_seq (serialize (serialize_list _ s) (x :: l2)) 0 (serialize s y));
+  seq_append_seq_upd_seq_l (serialize (serialize_list _ s) (x :: l2)) 0 (serialize s y) (serialize (serialize_list _ s) l1);
+  assert (serialize (serialize_list _ s) (l1 `L.append` (y :: l2)) == seq_upd_seq (serialize (serialize_list _ s) l1 `Seq.append` serialize (serialize_list _ s) (x :: l2)) (Seq.length (serialize (serialize_list _ s) l1) + 0) (serialize s y));
+  serialize_list_append _ s l1 (x :: l2)
+
+let serialize_list_upd_chain
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (l1: list t)
+  (x: t)
+  (l2: list t)
+  (y: t)
+  (i' : nat)
+  (s' : bytes)
+: Lemma
+  (requires (
+    let sx = serialize s x in
+    serialize_list_precond k /\
+    i' + Seq.length s' <= Seq.length sx /\
+    serialize s y == seq_upd_seq sx i' s'
+  ))
+  (ensures (
+    let ln1 = Seq.length (serialize (serialize_list _ s) l1) in
+    let ln2 = Seq.length (serialize (serialize_list _ s) l2) in
+    let sx = serialize s x in
+    let sl = serialize (serialize_list _ s) (l1 `L.append` (x :: l2)) in
+    Seq.length sl == ln1 + Seq.length sx + ln2 /\
+    ln1 + i' + Seq.length s' <= Seq.length sl /\
+    serialize (serialize_list _ s) (l1 `L.append` (y :: l2)) == seq_upd_seq sl (ln1 + i') s'
+  ))
+= serialize_list_upd s l1 x l2 y;
+  serialize_list_append _ s l1 (x :: l2);
+  let sl1 = serialize (serialize_list _ s) l1 in
+  let ln1 = Seq.length sl1 in
+  let sxl2 = serialize (serialize_list _ s) (x :: l2) in
+  let sl = serialize (serialize_list _ s) (l1 `L.append` (x :: l2)) in
+  Seq.lemma_split sl ln1;
+  Seq.lemma_append_inj (Seq.slice sl 0 ln1) (Seq.slice sl ln1 (Seq.length sl)) sl1 sxl2;
+  let sx = serialize s x in
+  let sl2 = serialize (serialize_list _ s) l2 in
+  let lx = Seq.length sx in
+  serialize_list_cons _ s x l2;
+  Seq.lemma_split sxl2 lx;
+  Seq.lemma_append_inj (Seq.slice sxl2 0 lx) (Seq.slice sxl2 lx (Seq.length sxl2)) sx sl2;
+  Seq.slice_slice sl ln1 (Seq.length sl) 0 lx;
+  assert (sx == Seq.slice sl ln1 (ln1 + lx));
+  seq_upd_seq_seq_upd_seq_slice sl ln1 (ln1 + lx) i' s';
+  ()
+
+let serialize_list_cons_upd_chain
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (x: t)
+  (l2: list t)
+  (y: t)
+  (i' : nat)
+  (s' : bytes)
+: Lemma
+  (requires (
+    let sx = serialize s x in
+    serialize_list_precond k /\
+    i' + Seq.length s' <= Seq.length sx /\
+    serialize s y == seq_upd_seq sx i' s'
+  ))
+  (ensures (
+    let ln2 = Seq.length (serialize (serialize_list _ s) l2) in
+    let sx = serialize s x in
+    let sl = serialize (serialize_list _ s) (x :: l2) in
+    Seq.length sl == Seq.length sx + ln2 /\
+    i' + Seq.length s' <= Seq.length sl /\
+    serialize (serialize_list _ s) (y :: l2) == seq_upd_seq sl i' s'
+  ))
+= serialize_list_upd_chain s [] x l2 y i' s'
+
+let serialize_list_snoc_upd_chain
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (l1: list t)
+  (x: t)
+  (y: t)
+  (i' : nat)
+  (s' : bytes)
+: Lemma
+  (requires (
+    let sx = serialize s x in
+    serialize_list_precond k /\
+    i' + Seq.length s' <= Seq.length sx /\
+    serialize s y == seq_upd_seq sx i' s'
+  ))
+  (ensures (
+    let ln1 = Seq.length (serialize (serialize_list _ s) l1) in
+    let sx = serialize s x in
+    let sl = serialize (serialize_list _ s) (l1 `L.append` [x]) in
+    Seq.length sl == ln1 + Seq.length sx /\
+    ln1 + i' + Seq.length s' <= Seq.length sl /\
+    serialize (serialize_list _ s) (l1 `L.append` [y]) == seq_upd_seq sl (ln1 + i') s'
+  ))
+= serialize_list_upd_chain s l1 x [] y i' s'
+
+#reset-options
+
 val list_length_constant_size_parser_correct
   (#k: parser_kind)
   (#t: Type0)

@@ -619,6 +619,127 @@ let serialize_nondep_then
 = bare_serialize_nondep_then_correct p1 s1 p2 s2;
   bare_serialize_nondep_then p1 s1 p2 s2
 
+let serialize_nondep_then_upd_left
+  (#k1: parser_kind)
+  (#t1: Type0)
+  (p1: parser k1 t1)
+  (s1: serializer p1)
+  (u: unit { k1.parser_kind_subkind == Some ParserStrong } )
+  (#k2: parser_kind)
+  (#t2: Type0)
+  (p2: parser k2 t2)
+  (s2: serializer p2)
+  (x: t1 * t2)
+  (y: t1)
+: Lemma
+  (requires (Seq.length (serialize s1 y) == Seq.length (serialize s1 (fst x))))
+  (ensures (
+    let s = serialize (serialize_nondep_then p1 s1 u p2 s2) x in
+    Seq.length (serialize s1 y) <= Seq.length s /\
+    serialize (serialize_nondep_then p1 s1 u p2 s2) (y, snd x) == seq_upd_seq s 0 (serialize s1 y)
+  ))
+= let s = serialize (serialize_nondep_then p1 s1 u p2 s2) x in
+  seq_upd_seq_left s (serialize s1 y);
+  let l1 = Seq.length (serialize s1 (fst x)) in
+  Seq.lemma_split s l1;
+  Seq.lemma_append_inj (Seq.slice s 0 l1) (Seq.slice s l1 (Seq.length s)) (serialize s1 (fst x)) (serialize s2 (snd x))
+
+let serialize_nondep_then_upd_left_chain
+  (#k1: parser_kind)
+  (#t1: Type0)
+  (p1: parser k1 t1)
+  (s1: serializer p1)
+  (u: unit { k1.parser_kind_subkind == Some ParserStrong } )
+  (#k2: parser_kind)
+  (#t2: Type0)
+  (p2: parser k2 t2)
+  (s2: serializer p2)
+  (x: t1 * t2)
+  (y: t1)
+  (i' : nat)
+  (s' : bytes)
+: Lemma
+  (requires (
+    let s1' = serialize s1 (fst x) in
+    i' + Seq.length s' <= Seq.length s1' /\
+    serialize s1 y == seq_upd_seq s1' i' s'
+  ))
+  (ensures (
+    let s = serialize (serialize_nondep_then p1 s1 u p2 s2) x in
+    i' + Seq.length s' <= Seq.length s /\
+    serialize (serialize_nondep_then p1 s1 u p2 s2) (y, snd x) == seq_upd_seq s i' s'
+  ))
+= serialize_nondep_then_upd_left p1 s1 u p2 s2 x y;
+  let s = serialize (serialize_nondep_then p1 s1 u p2 s2) x in
+  let s1' = serialize s1 (fst x) in
+  let l1 = Seq.length s1' in
+  Seq.lemma_split s l1;
+  Seq.lemma_append_inj (Seq.slice s 0 l1) (Seq.slice s l1 (Seq.length s)) s1' (serialize s2 (snd x));
+  seq_upd_seq_right_to_left s 0 s1' i' s';
+  seq_upd_seq_slice_idem s 0 (Seq.length s1')
+
+
+let serialize_nondep_then_upd_right
+  (#k1: parser_kind)
+  (#t1: Type0)
+  (p1: parser k1 t1)
+  (s1: serializer p1)
+  (u: unit { k1.parser_kind_subkind == Some ParserStrong } )
+  (#k2: parser_kind)
+  (#t2: Type0)
+  (p2: parser k2 t2)
+  (s2: serializer p2)
+  (x: t1 * t2)
+  (y: t2)
+: Lemma
+  (requires (Seq.length (serialize s2 y) == Seq.length (serialize s2 (snd x))))
+  (ensures (
+    let s = serialize (serialize_nondep_then p1 s1 u p2 s2) x in
+    Seq.length (serialize s2 y) <= Seq.length s /\
+    serialize (serialize_nondep_then p1 s1 u p2 s2) (fst x, y) == seq_upd_seq s (Seq.length s - Seq.length (serialize s2 y)) (serialize s2 y)
+  ))
+= let s = serialize (serialize_nondep_then p1 s1 u p2 s2) x in
+  seq_upd_seq_right s (serialize s2 y);
+  let l2 = Seq.length s - Seq.length (serialize s2 (snd x)) in
+  Seq.lemma_split s l2;
+  Seq.lemma_append_inj (Seq.slice s 0 l2) (Seq.slice s l2 (Seq.length s)) (serialize s1 (fst x)) (serialize s2 (snd x))
+
+let serialize_nondep_then_upd_right_chain
+  (#k1: parser_kind)
+  (#t1: Type0)
+  (p1: parser k1 t1)
+  (s1: serializer p1)
+  (u: unit { k1.parser_kind_subkind == Some ParserStrong } )
+  (#k2: parser_kind)
+  (#t2: Type0)
+  (p2: parser k2 t2)
+  (s2: serializer p2)
+  (x: t1 * t2)
+  (y: t2)
+  (i' : nat)
+  (s' : bytes)
+: Lemma
+  (requires (
+    let s2' = serialize s2 (snd x) in
+    i' + Seq.length s' <= Seq.length s2' /\
+    serialize s2 y == seq_upd_seq s2' i' s'
+  ))
+  (ensures (
+    let s = serialize (serialize_nondep_then p1 s1 u p2 s2) x in
+    let l1 = Seq.length (serialize s1 (fst x)) in
+    Seq.length s == l1 + Seq.length (serialize s2 (snd x)) /\
+    l1 + i' + Seq.length s' <= Seq.length s /\
+    serialize (serialize_nondep_then p1 s1 u p2 s2) (fst x, y) == seq_upd_seq s (l1 + i') s'
+  ))
+= serialize_nondep_then_upd_right p1 s1 u p2 s2 x y;
+  let s = serialize (serialize_nondep_then p1 s1 u p2 s2) x in
+  let s2' = serialize s2 (snd x) in
+  let l2 = Seq.length s - Seq.length s2' in
+  Seq.lemma_split s l2;
+  Seq.lemma_append_inj (Seq.slice s 0 l2) (Seq.slice s l2 (Seq.length s)) (serialize s1 (fst x)) s2';
+  seq_upd_seq_right_to_left s l2 s2' i' s';
+  seq_upd_seq_slice_idem s l2 (Seq.length s)
+
 
 (** Apply a total transformation on parsed data *)
 
@@ -883,6 +1004,56 @@ let serialize_synth
 = bare_serialize_synth_correct p1 f2 s1 g1;
   bare_serialize_synth p1 f2 s1 g1
 
+let serialize_synth_eq
+  (#k: parser_kind)
+  (#t1: Type0)
+  (#t2: Type0)
+  (p1: parser k t1)
+  (f2: t1 -> GTot t2)
+  (s1: serializer p1)
+  (g1: t2 -> GTot t1)
+  (u: unit {
+    synth_inverse f2 g1 /\
+    synth_injective f2
+  })
+  (x: t2)
+: Lemma
+  (serialize (serialize_synth p1 f2 s1 g1 u) x == serialize s1 (g1 x))
+= ()
+
+let serialize_synth_upd_chain
+  (#k: parser_kind)
+  (#t1: Type0)
+  (#t2: Type0)
+  (p1: parser k t1)
+  (f2: t1 -> GTot t2)
+  (s1: serializer p1)
+  (g1: t2 -> GTot t1)
+  (u: unit {
+    synth_inverse f2 g1 /\
+    synth_injective f2
+  })
+  (x1: t1)
+  (x2: t2)
+  (y1: t1)
+  (y2: t2)
+  (i': nat)
+  (s' : bytes)
+: Lemma
+  (requires (
+    let s = serialize s1 x1 in
+    i' + Seq.length s' <= Seq.length s /\
+    serialize s1 y1 == seq_upd_seq s i' s' /\
+    x2 == f2 x1 /\
+    y2 == f2 y1
+  ))
+  (ensures (
+    let s = serialize (serialize_synth p1 f2 s1 g1 u) x2 in
+    i' + Seq.length s' <= Seq.length s /\
+    Seq.length s == Seq.length (serialize s1 x1) /\
+    serialize (serialize_synth p1 f2 s1 g1 u) y2 == seq_upd_seq s i' s'
+  ))
+= ()
 
 (** Tot vs. Ghost *)
 

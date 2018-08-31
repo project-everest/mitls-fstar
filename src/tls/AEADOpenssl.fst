@@ -93,7 +93,7 @@ val gen: parent:rgn -> i:id -> ST (writer i)
   (requires (fun h0 -> True))
   (ensures  (genPost parent))
 let gen parent i =
-  let kv : key i = CoreCrypto.random (keylen i) in
+  let kv : key i = Random.sample (keylen i) in
   let writer_r = new_region parent in
   cut (is_eternal_region writer_r);
   if authId i then
@@ -159,7 +159,7 @@ let encrypt #i #l e iv ad p =
     begin
       let log = ilog e.log in
       HST.recall log;
-      let c = CoreCrypto.random (cipherlen i l) in
+      let c = Random.sample (cipherlen i l) in
       MDM.extend log iv (Entry ad p c);
       c
     end
@@ -216,7 +216,7 @@ let test_correctness (i:id{pv_of_id i = TLS_1p3}) : St unit =
   let l : plainlen = 0 in
   let ad : adata i = empty_bytes in
   let plain : plain i l = empty_bytes in
-  let iv : iv i = CoreCrypto.random (ivlen i) in
+  let iv : iv i = Random.sample (ivlen i) in
   let cipher : cipher i l = encrypt w iv ad plain in
   let r = genReader rr w in
   let p' = decrypt r iv ad cipher in

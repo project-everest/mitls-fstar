@@ -7,7 +7,8 @@ FLAVOR?=Model
 # variable. In that case, F* ulib and KreMLib MUST have been already
 # verified beforehand.
 
-all: clean-depend model-all ocaml-all kremlin-all lowparse lowparse-examples
+# ADL (31 Aug. 2018) Disabling ocaml-all during transition to EverCrypt
+all: clean-depend model-all kremlin-all lowparse lowparse-examples #ocaml-all
 
 lowparse:
 ifdef VERIFY_LOWPARSE
@@ -42,7 +43,8 @@ model-% verify-%: clean-depend
 quic-%: clean-depend
 	+$(MAKE) -C ../../apps/quicMinusNet $* -k
 
-test: clean-depend model-test kremlin-test ocaml-test quic-test
+#ADL (31 Aug. 2018) Disabling ocaml-test during transition to EverCrypt
+test: clean-depend model-test kremlin-test quic-test #ocaml-test
 
 clean: ocaml-clean kremlin-clean quic-clean model-clean lowparse-clean
 	rm -rf extract/Kremlin extract/OCaml extract/copied

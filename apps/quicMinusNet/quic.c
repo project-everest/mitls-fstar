@@ -90,6 +90,8 @@ void half_round(quic_state *my_state, quic_process_ctx *my_ctx, quic_process_ctx
   
   if(my_ctx->cur_reader_key > *my_r) *my_r = my_ctx->cur_reader_key;
   if(my_ctx->cur_writer_key > *my_w) *my_w = my_ctx->cur_writer_key;
+  if(my_ctx->flags & QFLAG_REJECTED_0RTT)
+    printf("[%c] Server rejected our 0-RTT data!\n", is_server?'S':'C');
   if(my_ctx->flags & QFLAG_APPLICATION_KEY)
     printf("[%c] Application data can now be sent (%s)\n",
            is_server?'S':'C', *my_w == 0 ? "0-RTT" : "1-RTT");
@@ -221,10 +223,10 @@ int main(int argc, char **argv)
     config.callback_state = &client;
     assert(FFI_mitls_quic_create(&client.quic_state, &config));
       
-    for(int i = 0, post_hs = 0; !post_hs ; i++)
+    for(int i = 0, post_hs = 0; post_hs < 2 ; i++)
     {
       // We need one extra round of post-handshake for NST
-      if(COMPLETE(cctx) && COMPLETE(sctx)) post_hs = 1;
+      if(COMPLETE(cctx) && COMPLETE(sctx)) post_hs++;
       
       printf("\n == Round %d ==\n\n", i);
 
@@ -250,10 +252,10 @@ int main(int argc, char **argv)
     config.callback_state = &client;
     assert(FFI_mitls_quic_create(&client.quic_state, &config));
       
-    for(int i = 0, post_hs = 0; !post_hs; i++)
+    for(int i = 0, post_hs = 0; post_hs < 2; i++)
     {
       // We need one extra round of post-handshake for NST
-      if(COMPLETE(cctx) && COMPLETE(sctx)) post_hs = 1;
+      if(COMPLETE(cctx) && COMPLETE(sctx)) post_hs++;
       
       printf("\n == Round %d ==\n\n", i);
 
@@ -295,10 +297,10 @@ int main(int argc, char **argv)
     config.server_ticket = qt;
     assert(FFI_mitls_quic_create(&client.quic_state, &config));
       
-    for(int i = 0, post_hs = 0; !post_hs; i++)
+    for(int i = 0, post_hs = 0; post_hs < 2; i++)
     {
       // We need one extra round of post-handshake for NST
-      if(COMPLETE(cctx) && COMPLETE(sctx)) post_hs = 1;
+      if(COMPLETE(cctx) && COMPLETE(sctx)) post_hs++;
       
       printf("\n == Round %d ==\n\n", i);
 

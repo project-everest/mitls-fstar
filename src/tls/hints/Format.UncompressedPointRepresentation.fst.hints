@@ -16,60 +16,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "983b7e355c98ae972406a229058b4255"
-    ],
-    [
-      "Format.UncompressedPointRepresentation.uncompressedPointRepresentation",
-      2,
-      2,
-      1,
-      [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
-      0,
-      "6e5f369f678870266091e143f283fef2"
-    ],
-    [
-      "Format.UncompressedPointRepresentation.uncompressedPointRepresentation",
-      3,
-      2,
-      1,
-      [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
-      0,
-      "44fd7b4ec72de6da040dcf80c4ae116b"
-    ],
-    [
-      "Format.UncompressedPointRepresentation.uncompressedPointRepresentation",
-      4,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "assumption_FStar.UInt8.t__uu___haseq",
-        "equation_FStar.Bytes.lbytes32",
-        "function_token_typing_FStar.Bytes.bytes",
-        "haseqFStar.Bytes_Tm_refine_78e6c490611dc4c555ca11ffbdccfc9c",
-        "haseqFormat.UncompressedPointRepresentation_Tm_refine_5abcae620b915f89552905becc875ea5",
-        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
-      ],
-      0,
-      "78d4318a7f6f94469131ab8c2f65f09e"
-    ],
-    [
-      "Format.UncompressedPointRepresentation.__proj__MkuncompressedPointRepresentation__item__legacy_form",
-      1,
-      2,
-      1,
-      [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
-      0,
-      "ca9e8d77544d5753af6ed82662b7bd83"
-    ],
-    [
-      "Format.UncompressedPointRepresentation.__proj__MkuncompressedPointRepresentation__item__legacy_form",
-      2,
-      2,
-      1,
-      [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
-      0,
-      "5dd52ed078bfc9b05e8434202ab0e017"
+      "c5492f46b45896c93c93e84ade85237a"
     ],
     [
       "Format.UncompressedPointRepresentation.lbytes_pair_parser_kind",
@@ -85,7 +32,7 @@
         "refinement_interpretation_Format.UncompressedPointRepresentation_Tm_refine_2dcde2c233833ec0b2801e96897e362a"
       ],
       0,
-      "4723698ea9e3097ce93d0fcb942ae262"
+      "01607095f1e646ea2aa2e9ff766ee506"
     ],
     [
       "Format.UncompressedPointRepresentation.lbytes_pair_parser",
@@ -114,7 +61,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "44b907b5c4fde629165fe0807379a142"
+      "155c26c21ccd8b15125744b14d699f4f"
     ],
     [
       "Format.UncompressedPointRepresentation.lbytes_pair_parser32",
@@ -144,7 +91,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "b1220616498cb118c7af0bc48e24b4e0"
+      "0753108bf6f1e55444c4df429c0a8cd4"
     ],
     [
       "Format.UncompressedPointRepresentation.lemma_ucp_of_uv_is_injective",
@@ -163,7 +110,7 @@
         "projection_inverse_Format.UncompressedPointRepresentation.MkuncompressedPointRepresentation_y"
       ],
       0,
-      "3e990c6b81ad7e751ba20aaf6382573f"
+      "3c1e300cca5486ad73c7c8334891129d"
     ],
     [
       "Format.UncompressedPointRepresentation.lemma_ucp_of_uv_of_ucp",
@@ -188,7 +135,7 @@
         "refinement_interpretation_Format.UncompressedPointRepresentation_Tm_refine_5abcae620b915f89552905becc875ea5"
       ],
       0,
-      "1b69ff1e39fb30e70a33f3c436a2eed5"
+      "32a7149419dea3d6624573f1b9650e45"
     ],
     [
       "Format.UncompressedPointRepresentation.cuv_of_ucp",
@@ -200,7 +147,7 @@
         "primitive_Prims.op_Equality", "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "e34c2bfda0c2a510095e6f4c91e6836d"
+      "e07c08ea7597ca7c02ef1d98efba0771"
     ],
     [
       "Format.UncompressedPointRepresentation.lemma_ucp_of_cuv_is_injective",
@@ -227,7 +174,7 @@
         "refinement_interpretation_Format.Constants_Tm_refine_797ad669d4f1ee4d5aab91d7b78dc71d"
       ],
       0,
-      "245c85b17efb659f959befefe7023a05"
+      "32cd0676eadde5ce3b50f5a1a28f7d71"
     ],
     [
       "Format.UncompressedPointRepresentation.lemma_ucp_of_cuv_of_ucp",
@@ -253,7 +200,7 @@
         "refinement_interpretation_Format.UncompressedPointRepresentation_Tm_refine_5abcae620b915f89552905becc875ea5"
       ],
       0,
-      "74a95ccff1d0b8cc376a232d743bf73f"
+      "74d072192abfa38b2496ff0c547abc6d"
     ],
     [
       "Format.UncompressedPointRepresentation.uncompressedPointRepresentation_parser",
@@ -282,7 +229,7 @@
         "token_correspondence_Format.UncompressedPointRepresentation.ucp_of_cuv"
       ],
       0,
-      "2578c652cbd8d7690f19486cf079e88b"
+      "7289d42a27f11c9b68d3c533307d051d"
     ],
     [
       "Format.UncompressedPointRepresentation.uncompressedPointRepresentation_parser32",
@@ -312,7 +259,7 @@
         "token_correspondence_Format.UncompressedPointRepresentation.ucp_of_cuv"
       ],
       0,
-      "1cb5a7afb3b551ee0b0a355efc635ae5"
+      "29f8fe4058f42527efd81981514a3f0f"
     ],
     [
       "Format.UncompressedPointRepresentation.lbytes_pair_serializer",
@@ -405,7 +352,7 @@
         "typing_LowParse.Spec.Combinators.nondep_then"
       ],
       0,
-      "40a41de9b031ff806ee2ccbc59880771"
+      "96f3219664b9e14e82024718bd6db508"
     ],
     [
       "Format.UncompressedPointRepresentation.lbytes_pair_serializer32",
@@ -477,7 +424,7 @@
         "unit_typing"
       ],
       0,
-      "fe4d114f7bcab2bada2e90d56457a414"
+      "aea23278c825b718da33b18bfc07d7e8"
     ],
     [
       "Format.UncompressedPointRepresentation.uncompressedPointRepresentation_serializer",
@@ -497,7 +444,7 @@
         "token_correspondence_Format.UncompressedPointRepresentation.ucp_of_cuv"
       ],
       0,
-      "05b2acdcaa2ba37ae9657df72e8a3958"
+      "c76a364fdf7dd05b0f004100111e0313"
     ],
     [
       "Format.UncompressedPointRepresentation.uncompressedPointRepresentation_serializer32",
@@ -551,7 +498,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "fe6b4c608c29ecec2118974af9e785d7"
+      "0919fcd4cf98f890985f70c03a78720f"
     ]
   ]
 ]

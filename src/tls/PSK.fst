@@ -135,7 +135,7 @@ val fresh_psk_id: unit -> ST psk_identifier
     modifies_none h0 h1 /\
     MDM.fresh app_psk_table i h1))
 let rec fresh_psk_id () =
-  let id = CoreCrypto.random 8 in
+  let id = Random.sample32 8ul in
   match MDM.lookup app_psk_table id with
   | None -> id
   | Some _ -> fresh_psk_id ()
@@ -151,7 +151,7 @@ let gen_psk (i:psk_identifier) (ctx:pskInfo)
     honest_psk i))
   =
   recall app_psk_table;
-  let rand = CoreCrypto.random 32 in
+  let rand = Random.sample32 32ul in
   let psk = (abyte 1z) @| rand in
   assume(psk.[0ul] = 1z);
   let add : app_psk_entry i = (psk, ctx, true) in

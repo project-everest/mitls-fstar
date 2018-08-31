@@ -712,3 +712,73 @@ let serialize_bounded_vldata_strong
 : Tot (serializer (parse_bounded_vldata_strong min max s))
 = Classical.forall_intro (serialize_bounded_vldata_strong_correct min max s);
   serialize_bounded_vldata_strong' min max s
+
+let serialize_bounded_vldata_strong_upd
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (x: parse_bounded_vldata_strong_t min max s)
+  (y: t)
+: Lemma
+  (requires (Seq.length (serialize s y) == Seq.length (serialize s x)))
+  (ensures (
+    let sy = serialize s y in
+    let y : parse_bounded_vldata_strong_t min max s = y in
+    let sx = serialize (serialize_bounded_vldata_strong min max s) x in
+    let lm = log256' max in
+    lm + Seq.length sy == Seq.length sx /\
+    serialize (serialize_bounded_vldata_strong min max s) y == seq_upd_seq sx lm sy
+  ))
+=   let y : parse_bounded_vldata_strong_t min max s = y in
+    let sx = serialize s x in
+    let sx' = serialize (serialize_bounded_vldata_strong min max s) x in
+    let sy = serialize s y in
+    let sy' = serialize (serialize_bounded_vldata_strong min max s) y in
+    let lm = log256' max in
+    let sz = serialize (serialize_bounded_integer lm) (U32.uint_to_t (Seq.length sx)) in
+    assert (lm + Seq.length sy == Seq.length sx');
+    seq_upd_seq_right sx' sy;
+    Seq.lemma_split sx' lm;
+    Seq.lemma_split sy' lm;
+    Seq.lemma_append_inj (Seq.slice sx' 0 lm) (Seq.slice sx' lm (Seq.length sx')) sz sx;
+    Seq.lemma_append_inj (Seq.slice sy' 0 lm) (Seq.slice sy' lm (Seq.length sy')) sz sy;
+    assert (sy' `Seq.equal` seq_upd_seq sx' lm sy)
+
+let serialize_bounded_vldata_strong_upd_chain
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (x: parse_bounded_vldata_strong_t min max s)
+  (y: t)
+  (i' : nat)
+  (s' : bytes)
+: Lemma
+  (requires (
+    let sx = serialize s x in
+    i' + Seq.length s' <= Seq.length sx /\
+    serialize s y == seq_upd_seq sx i' s'
+  ))
+  (ensures (
+    parse_bounded_vldata_strong_pred min max s y /\ (
+    let y : parse_bounded_vldata_strong_t min max s = y in
+    let sx' = serialize (serialize_bounded_vldata_strong min max s) x in
+    let lm = log256' max in
+    lm + Seq.length (serialize s x) == Seq.length sx' /\
+    lm + i' + Seq.length s' <= Seq.length sx' /\
+    serialize (serialize_bounded_vldata_strong min max s) y == seq_upd_seq sx' (lm + i') s'
+  )))
+= serialize_bounded_vldata_strong_upd min max s x y;
+  let sx = serialize s x in
+  let sx' = serialize (serialize_bounded_vldata_strong min max s) x in
+  let lm = log256' max in
+  let sz = serialize (serialize_bounded_integer lm) (U32.uint_to_t (Seq.length sx)) in
+  seq_upd_seq_right_to_left sx' lm sx i' s';
+  Seq.lemma_split sx' lm;
+  Seq.lemma_append_inj (Seq.slice sx' 0 lm) (Seq.slice sx' lm (Seq.length sx')) sz sx;
+  seq_upd_seq_seq_upd_seq_slice sx' lm (Seq.length sx') i' s'

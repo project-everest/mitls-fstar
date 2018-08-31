@@ -96,12 +96,11 @@ type salt (i:id) = lbytes (salt_length i)
 let pre_state (i:id) (r:rw) =
   match use_provider() with
   | OpenSSLProvider -> OAEAD.state i r
-  | LowCProvider -> (CAEAD.aead_state * key i)
+  | LowCProvider -> CAEAD.aead_state
   | LowProvider -> EverCrypt.aead_state //NS: Used to be AE.aead_state i (Crypto.Indexing.rw2rw r)
 
-
 let state (i:id) (r:rw) =
-    pre_state i r * salt i
+    pre_state i r * (key i * salt i)
 
 noextract inline_for_extraction
 let as_openssl_state #i #r (s:state i r{use_provider()=OpenSSLProvider})
@@ -110,7 +109,7 @@ let as_openssl_state #i #r (s:state i r{use_provider()=OpenSSLProvider})
 
 noextract inline_for_extraction
 let as_lowc_state #i #r (s:state i r{use_provider()=LowCProvider})
-  : CAEAD.aead_state * key i
+  : CAEAD.aead_state
   = fst s
 
 noextract inline_for_extraction
@@ -118,7 +117,7 @@ let as_low_state #i #r (s:state i r{use_provider()=LowProvider})
   : EverCrypt.aead_state
   = fst s
 
-let salt_of_state #i #r (s:state i r) : salt i = snd s
+let salt_of_state #i #r (s:state i r) : salt i = snd (snd s)
 
 type writer i = s:state i Writer
 type reader i = s:state i Reader
@@ -190,16 +189,17 @@ let gen (i:id) (r:rgn) : ST (state i Writer)
   (requires (fun h -> True))
   (ensures (genPost r))
   =
-  let salt : salt i = CC.random (salt_length i) in
+  let salt : salt i = Random.sample (salt_length i) in
+  let kv: key i = Random.sample (CC.aeadKeySize (alg i)) in
   match use_provider() with
   | OpenSSLProvider ->
+    assume false; // TODO
     let st : OAEAD.state i Writer = OAEAD.gen r i in
-    st, salt
+    st, (kv, salt)
   | LowCProvider ->
     assume false; // TODO
-    let kv: key i = CC.random (CC.aeadKeySize (alg i)) in
     let st = CAEAD.aead_create (alg i) CAEAD.ValeAES kv in
-    (st, kv), salt
+    st, (kv, salt)
   | LowProvider ->
     let len = CC.aeadKeySize (alg i) in
     let kv: key i = CC.random len in
@@ -223,15 +223,7 @@ let leak (#i:id) (#rw:rw) (st:state i rw)
   (requires (fun h0 -> ~(authId i)))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
-  match use_provider() with
-  | OpenSSLProvider -> (OAEAD.leak (as_openssl_state st), salt_of_state st)
-  | LowCProvider -> (snd (as_lowc_state st), salt_of_state st)
-  | LowProvider ->
-    assume (false);
-    assume(~(Flag.prf i));
-    let len = CC.aeadKeySize (alg i) in
-    let kv: key i = CC.random len in
-    kv, snd st //TODO: FIXME! We do not have a leak yet in EverCrypt
+  snd st
 
 // ADL TODO
 // There is an issue connecting the stateful encryption in miTLS
@@ -246,11 +238,14 @@ let genReader (parent:rgn) (#i:id) (st:writer i) : ST (reader i)
   match use_provider() with
   | OpenSSLProvider ->
     // CoreCrypto state is in an external region
-    OAEAD.genReader parent (as_openssl_state st), salt_of_state st
+    OAEAD.genReader parent (as_openssl_state st), snd st
+  | LowProvider -> // st salt ->
+    assume false;
+    let st' : AE.aead_state i Crypto.Indexing.Reader = AE.genReader (as_low_state st) in
+    st', snd st
   | LowCProvider ->
     assume false;
-    as_lowc_state st, salt_of_state st
-  | LowProvider -> st //TODO: EverCrypt.fsti does not provide a genReader
+    as_lowc_state st, snd st
 #reset-options
 
 #reset-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
@@ -261,12 +256,9 @@ let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
   =
   let w =
     match use_provider() with
-    | OpenSSLProvider ->
-      OAEAD.coerce r i k, s
+    | OpenSSLProvider -> OAEAD.coerce r i k
     | LowCProvider ->
-      let (st:CAEAD.aead_state) = CAEAD.aead_create (alg i) CAEAD.ValeAES k in
-      let (psi:pre_state i Writer) = (st, k) in
-        psi, s
+      let (st:CAEAD.aead_state) = CAEAD.aead_create (alg i) CAEAD.ValeAES k in st
     | LowProvider ->
       assume (AE.keylen i = len k);
       assume (~ (Flag.prf i));
@@ -278,9 +270,10 @@ let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
       FStar.Bytes.store_bytes len32 kvb len32 k;
       let st = EverCrypt.aead_create (aeadAlg_for_evercrypt (alg i)) kvb in
       let res : state i Writer = st, s in
-      res in
+      res
+   in
   dbg ((prov())^": COERCE(K="^(hex_of_bytes k)^")");
-  w
+  w, (k,s)
 #reset-options
 
 type plainlen = n:nat{n <= max_TLSPlaintext_fragment_length}
@@ -342,7 +335,7 @@ let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:pla
     match use_provider() with
     | OpenSSLProvider -> OAEAD.encrypt (as_openssl_state w) iv ad plain
     | LowCProvider ->
-      let st, _ = as_lowc_state w in
+      let st = as_lowc_state w in
       assume(CAEAD.alg st = alg i); // assume val in the .fst
       CAEAD.aead_encrypt st iv ad plain
     | LowProvider ->
@@ -392,7 +385,7 @@ let decrypt (#i:id) (#l:plainlen) (st:reader i) (iv:iv i) (ad:adata i) (cipher:c
   =
     match use_provider() with
     | OpenSSLProvider -> OAEAD.decrypt (as_openssl_state st) iv ad cipher
-    | LowCProvider -> CAEAD.aead_decrypt (fst (as_lowc_state st)) iv ad cipher
+    | LowCProvider -> CAEAD.aead_decrypt (as_lowc_state st) iv ad cipher
     | LowProvider ->
       push_frame();
       let st = as_low_state st in

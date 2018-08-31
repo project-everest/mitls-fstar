@@ -693,7 +693,7 @@ let client_ClientHello #region ns oks =
         | _ -> false)
         then "Offering a PSK compatible with 0-RTT"
         else "No PSK or 0-RTT disabled");
-      let now = CoreCrypto.now () in
+      let now = UInt32.uint_to_t (FStar.Date.secondsFromDawn()) in
       let offer = computeOffer Client ns.cfg ns.nonce oks' ns.resume now in
       trace ("offering client extensions "^string_of_option_extensions offer.ch_extensions);
       trace ("offering cipher suites "^string_of_ciphersuites offer.ch_cipher_suites);
@@ -1422,7 +1422,7 @@ let computeServerMode cfg co serverRandom =
                 None // no HRR before TLS 1.3
                 pv
                 serverRandom
-                (CoreCrypto.random 32)
+                (Random.sample32 32ul)
                 cs
                 None
                 None // Extensions will be filled later

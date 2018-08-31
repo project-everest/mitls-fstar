@@ -62,7 +62,7 @@ FILES 		= Cert C_Loops_Spec_Loops CommonDH CoreCrypto \
   Crypto_Indexing Crypto_Symmetric_Bytes Crypto_Plain \
   CryptoTypes DHGroup ECGroup Extensions Flags Format FStar \
   HaclProvider Hashing_Spec kremlinit \
-  LowCProvider LowParse Nonce Parse PMS Prims PSK RSAKey \
+  LowCProvider LowParse Nonce Parse PMS Prims PSK Random RSAKey \
   secure/Crypto_HKDF_Crypto_HMAC \
   Specializations_Providers_AEAD stub/mipki_wrapper stub/core_crypto \
   stub/hacl_provider stub/buffer_bytes Test_Main TLSConstants \
