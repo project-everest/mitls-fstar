@@ -355,6 +355,8 @@ let parseSupportedVersions b =
   if length b = 2 then
     (match parseVersion b with
     | Error z -> Error z
+    | Correct (Unknown_protocolVersion _) ->
+      Error (AD_illegal_parameter, "server selected a version we don't support")
     | Correct pv -> Correct (ServerPV pv))
   else
     (match vlparse 1 b with

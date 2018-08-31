@@ -180,6 +180,7 @@ let gen (i:id) (r:rgn) : ST (state i Writer)
   let kv: key i = Random.sample (CC.aeadKeySize (alg i)) in
   match use_provider() with
   | OpenSSLProvider ->
+    assume false; // TODO
     let st : OAEAD.state i Writer = OAEAD.gen r i in
     st, (kv, salt)
   | LowCProvider ->
