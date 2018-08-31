@@ -6,7 +6,7 @@
 # In case you would like to reference a specific commit,
 # replace latest with the commit id from github using 12 characters.
 ARG COMMITID
-FROM fstar:${COMMITID}
+FROM fstar-linux:${COMMITID}
 
 ARG BUILDLOGFILE
 ARG MAXTHREADS
