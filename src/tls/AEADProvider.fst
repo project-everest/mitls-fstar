@@ -213,7 +213,7 @@ let gen (i:id) (r:rgn) : ST (state i Writer)
     assume (Some? (evercrypt_aeadAlg_option_of_aead_cipher (alg i)));
     assume (EverCrypt.Specs.aead_create_pre h); //effectively False
     let st = EverCrypt.aead_create (aeadAlg_for_evercrypt (alg i)) kvb in
-    let res : state i Writer = st, salt in
+    let res : state i Writer = st, (kv, salt) in
     let h1 = get () in
     assume (genPost r h res h1);
     res
@@ -239,11 +239,10 @@ let genReader (parent:rgn) (#i:id) (st:writer i) : ST (reader i)
   | OpenSSLProvider ->
     // CoreCrypto state is in an external region
     OAEAD.genReader parent (as_openssl_state st), snd st
-  | LowProvider -> // st salt ->
-    assume false;
-    let st' : AE.aead_state i Crypto.Indexing.Reader = AE.genReader (as_low_state st) in
-    st', snd st
   | LowCProvider ->
+    assume false;
+    as_lowc_state st, snd st
+  | LowProvider -> // st salt ->
     assume false;
     as_lowc_state st, snd st
 #reset-options
@@ -269,7 +268,7 @@ let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
       let kvb = LB.malloc r 0uy len32 in
       FStar.Bytes.store_bytes len32 kvb len32 k;
       let st = EverCrypt.aead_create (aeadAlg_for_evercrypt (alg i)) kvb in
-      let res : state i Writer = st, s in
+      let res : pre_state i Writer = st in
       res
    in
   dbg ((prov())^": COERCE(K="^(hex_of_bytes k)^")");
