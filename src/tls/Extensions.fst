@@ -319,11 +319,11 @@ let parse_uint32 (b:bytes) : result UInt32.t =
 (* PROTOCOL VERSIONS *)
 
 #set-options "--admit_smt_queries true"
-private let protocol_versions_bytes_aux acc v = acc @| TLSConstants.versionBytes_draft v
+private let protocol_versions_bytes_aux acc v = acc @| TLSConstants.versionBytes v
 
 val protocol_versions_bytes: protocol_versions -> b:bytes {length b <= 255}
 let protocol_versions_bytes = function
-  | ServerPV pv -> versionBytes_draft pv
+  | ServerPV pv -> versionBytes pv
   | ClientPV vs ->  vlbytes 1 (List.Tot.fold_left protocol_versions_bytes_aux empty_bytes vs)
   // todo length bound; do we need an ad hoc variant of fold?
 #reset-options
@@ -340,7 +340,7 @@ let rec parseVersions b =
   | 1 -> Error (AD_decode_error, "malformed version list")
   | _ ->
     let b2, b' = split b 2ul in
-    match TLSConstants.parseVersion_draft b2 with
+    match TLSConstants.parseVersion b2 with
     | Error z -> Error z
     | Correct v ->
       match parseVersions b' with
@@ -353,7 +353,7 @@ let rec parseVersions b =
 val parseSupportedVersions: b:bytes{2 <= length b /\ length b < 256} -> result protocol_versions
 let parseSupportedVersions b =
   if length b = 2 then
-    (match parseVersion_draft b with
+    (match parseVersion b with
     | Error z -> Error z
     | Correct pv -> Correct (ServerPV pv))
   else
@@ -603,7 +603,7 @@ let sameExt_equal_extensionHeaderBytes
 // Missing refinements in `extension` type constructors to be able to prove the length bound
 #set-options "--admit_smt_queries true"
 (** Serializes an extension payload *)
-private let extensionPayloadBytes_aux acc v = acc @| versionBytes_draft v
+private let extensionPayloadBytes_aux acc v = acc @| versionBytes v
 val extensionPayloadBytes: extension -> b:bytes { length b < 65536 - 4 }
 let rec extensionPayloadBytes = function
   | E_server_name []                -> vlbytes 2 empty_bytes // ServerHello, EncryptedExtensions

@@ -497,7 +497,7 @@ let parseClientHello data =
 let serverHelloBytes sh =
   // signalling the current draft version
   let pv = match sh.sh_protocol_version with | TLS_1p3 -> TLS_1p2 | v -> v in
-  let verB = versionBytes_draft pv in
+  let verB = versionBytes pv in
   lemma_repr_bytes_values (length sh.sh_sessionID);
   let sidB = vlbytes 1 sh.sh_sessionID in
   let csB = cipherSuiteBytes sh.sh_cipher_suite in
@@ -516,7 +516,7 @@ let serverHelloBytes sh =
 let serverHelloBytes_is_injective msg1 msg2 =
   if serverHelloBytes msg1 = serverHelloBytes msg2 then
   begin
-    let verB1 = versionBytes_draft msg1.sh_protocol_version in
+    let verB1 = versionBytes msg1.sh_protocol_version in
     lemma_repr_bytes_values (length msg1.sh_sessionID);
     let sidB1 = vlbytes 1 msg1.sh_sessionID in
       let csB1 = cipherSuiteBytes msg1.sh_cipher_suite in
@@ -528,7 +528,7 @@ let serverHelloBytes_is_injective msg1 msg2 =
       | TLS_1p3 -> verB1 @| (msg1.sh_server_random @| (csB1 @| extB1))
       | _       -> verB1 @| (msg1.sh_server_random @| (sidB1 @| (csB1 @| (cmB1 @| extB1)))) in
       lemma_repr_bytes_values (length data1);
-      let verB2 = versionBytes_draft msg2.sh_protocol_version in
+      let verB2 = versionBytes msg2.sh_protocol_version in
       lemma_repr_bytes_values (length msg2.sh_sessionID);
       let sidB2 = vlbytes 1 msg2.sh_sessionID in
       let csB2 = cipherSuiteBytes msg2.sh_cipher_suite in
@@ -623,7 +623,7 @@ let parseServerHello data =
     Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
   else
     let (serverVerBytes, serverRandomBytes, data) = split2 data 2 32 in
-    match parseVersion_draft serverVerBytes with
+    match parseVersion serverVerBytes with
     | Error z -> Error z
     | Correct serverVer ->
      if length data >= 1 then

@@ -30,7 +30,7 @@ let handshake () =
 
 let main (): St C.exit_code =
   ignore (FStar.Test.dummy ());
-  if CoreCrypto.init () = 0 then
+  if Random.init () = 0ul then
     begin
     print_string "✘ RNG initialization\n";
     C.EXIT_FAILURE
