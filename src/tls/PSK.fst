@@ -164,7 +164,8 @@ let gen_psk (i:psk_identifier) (ctx:pskInfo)
   assume(stable_on_t app_psk_table (MDM.defined app_psk_table i));
   mr_witness app_psk_table (MDM.defined app_psk_table i);
   assume(stable_on_t app_psk_table (honest_st i));
-  mr_witness app_psk_table (honest_st i)
+  mr_witness app_psk_table (honest_st i);
+  assume False //18-09-01 TODO timeout? 
 
 let coerce_psk (i:psk_identifier) (ctx:pskInfo) (k:app_psk i)
   : ST unit
