@@ -1,5 +1,5 @@
 [
-  "–¼:\u000f_¦F¶RÜ2\u00152ÝèŽ",
+  "VÐ>Â¦°Ï_Šƒ‘H¡­\u000eÛ",
   [
     [
       "AEADProvider.discard",
@@ -52,7 +52,7 @@
         "refinement_interpretation_AEADProvider_Tm_refine_b549bf3deb28db882d1c0fc679cf41b7"
       ],
       0,
-      "80f9842a118a65d2bb93e4c44cd4678e"
+      "abef5f9b949aeeccb701983bc684b740"
     ],
     [
       "AEADProvider.iv",
@@ -250,6 +250,7 @@
         "@MaxFuel_assumption", "@MaxIFuel_assumption",
         "@fuel_correspondence_Prims.pow2.fuel_instrumented", "@query",
         "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
+        "bool_inversion",
         "constructor_distinct_QD.TLS_protocolVersion.TLS_1p3",
         "constructor_distinct_Tm_unit", "data_elim_TLSInfo.ID12",
         "disc_equation_TLSInfo.PlaintextID",
@@ -262,27 +263,36 @@
         "equation_CryptoTypes.aeadRealIVSize",
         "equation_EverCrypt.Specs.aead_create_pre",
         "equation_FStar.Bytes.lbytes",
+        "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "equation_FStar.Monotonic.HyperStack.fresh_frame",
+        "equation_FStar.Monotonic.HyperStack.is_stack_region",
+        "equation_FStar.Monotonic.HyperStack.is_tip",
+        "equation_FStar.Monotonic.HyperStack.is_wf_with_ctr_and_tip",
         "equation_FStar.Monotonic.HyperStack.mem",
+        "equation_FStar.Monotonic.HyperStack.poppable",
         "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
         "equation_FStar.UInt.size", "equation_FStar.UInt32.n",
-        "equation_Mem.rgn", "equation_Prims.nat",
+        "equation_Prims.nat",
         "equation_QD.TLS_protocolVersion.protocolVersion",
         "equation_TLSInfo.pv_of_id", "fuel_guarded_inversion_TLSInfo.id",
         "function_token_typing_FStar.UInt32.n", "int_inversion",
+        "lemma_FStar.Buffer.lemma_fresh_poppable",
         "lemma_FStar.Buffer.lemma_size", "lemma_FStar.UInt.pow2_values",
         "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
-        "primitive_Prims.op_Subtraction",
+        "primitive_Prims.op_Subtraction", "primitive_Prims.op_disEquality",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_Crypto.Indexing_Tm_refine_15bf079f4ce5823e739071012326443f",
         "refinement_interpretation_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
-        "refinement_interpretation_Mem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
+        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9a74d818566e70513bc032cc3b65a144",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "refinement_interpretation_TLSInfo_Tm_refine_b371b18aea91964c12c83acc49841360",
-        "typing_AEADProvider.key_length", "typing_AEADProvider.salt_length"
+        "typing_AEADProvider.key_length", "typing_AEADProvider.salt_length",
+        "typing_FStar.Monotonic.HyperStack.get_tip",
+        "typing_FStar.Monotonic.HyperStack.is_stack_region"
       ],
       0,
-      "69ee80c0e0a59387e040b4ab8602c9d7"
+      "5bac4f66983817682c9f8e253eff83df"
     ],
     [
       "AEADProvider.leak",
@@ -342,7 +352,7 @@
         "typing_Specializations.Providers.AEAD.use_provider", "unit_typing"
       ],
       0,
-      "3167e3e6f84b034620fe97de2d50c0fa"
+      "32c7c108dd0853d196feb5f33d6b5fca"
     ],
     [
       "AEADProvider.adata",
@@ -354,7 +364,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "80c5e129d657b87cb1c46b68c238b282"
+      "c7f13da24da0df9050e7ba860e2798df"
     ],
     [
       "AEADProvider.cipherlen",
@@ -375,7 +385,7 @@
         "typing_AEADProvider.taglen"
       ],
       0,
-      "2e511533ad1cee96970c4a99853e51c2"
+      "951cbeb150b6ad4dd4f89aab2ea38914"
     ],
     [
       "AEADProvider.from_bytes",
@@ -384,7 +394,7 @@
       0,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "5d88dc378df1c367ee62b3e9dfddc597"
+      "1c9ce8395341759fd158784252b9df59"
     ],
     [
       "AEADProvider.from_bytes",
@@ -458,7 +468,7 @@
         "typing_LowStar.ToFStarBuffer.union_loc_to_new"
       ],
       0,
-      "a726e3ceea9e5b30992608af87e206a5"
+      "2b3c89540c22f5c87654479e2b15fe71"
     ]
   ]
 ]
