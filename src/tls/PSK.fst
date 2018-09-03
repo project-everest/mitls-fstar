@@ -150,8 +150,10 @@ let gen_psk (i:psk_identifier) (ctx:pskInfo)
     registered_psk i /\
     honest_psk i))
   =
-  recall app_psk_table;
   let rand = Random.sample32 32ul in
+  let h = get () in
+  assume(MDM.fresh app_psk_table i h); // Frame new stateful RNG call
+  recall app_psk_table;
   let psk = (abyte 1z) @| rand in
   assume(psk.[0ul] = 1z);
   let add : app_psk_entry i = (psk, ctx, true) in

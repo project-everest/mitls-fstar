@@ -132,12 +132,13 @@ let gen (i:id) (r:rgn) : ST (state i Writer)
   (requires (fun h -> True))
   (ensures (genPost r))
   =
+  push_frame ();
   let salt : salt i = Random.sample (salt_length i) in
   let klen = CC.aeadKeySize (alg i) in
   assume (FStar.UInt.size klen 32);
   let kv: key i = Random.sample klen in
   let len32 = UInt32.uint_to_t klen in
-  let kvb = LB.malloc r 0uy len32 in
+  let kvb = LB.alloca 0uy len32 in
   FStar.Bytes.store_bytes kv kvb;
   let h = get () in
   assume (Some? (evercrypt_aeadAlg_option_of_aead_cipher (alg i)));
@@ -145,6 +146,7 @@ let gen (i:id) (r:rgn) : ST (state i Writer)
   let st = EverCrypt.aead_create (aeadAlg_for_evercrypt (alg i)) kvb in
   let res : state i Writer = st, (kv, salt) in
   let h1 = get () in
+  pop_frame ();
   res
 
 let leak (#i:id) (#rw:rw) (st:state i rw)
@@ -174,15 +176,16 @@ let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
   (requires (fun h -> ~(authId i)))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
+  push_frame ();
   dbg ("COERCE(K="^(hex_of_bytes k)^", SIV="^(hex_of_bytes s)^")");
   assume (~ (Flag.prf i));
   assume(false);
   let len = length k in
   let len32 = FStar.UInt32.uint_to_t len in
-  assume (is_eternal_region r);
-  let kvb = LB.malloc r 0uy len32 in
+  let kvb = LB.alloca 0uy len32 in
   FStar.Bytes.store_bytes k kvb;
   let st = EverCrypt.aead_create (aeadAlg_for_evercrypt (alg i)) kvb in
+  pop_frame ();
   st, (k,s)
 #reset-options
 
@@ -267,7 +270,7 @@ let decrypt (#i:id) (#l:plainlen) (st:reader i) (iv:iv i) (ad:adata i) (cipher:c
   let plain = LB.alloca 0uy plainlen in
   let ok = EverCrypt.aead_decrypt (fst st) iv ad adlen plain plainlen cipher tag in
   let ret =
-    if ok = 0ul
+    if ok = 1ul
     then Some (FStar.Bytes.of_buffer plainlen plain)
     else None
   in

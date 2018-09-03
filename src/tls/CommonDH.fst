@@ -714,22 +714,20 @@ let keyShareEntriesBytes es =
 
 (** Parsing function for a list KeyShareEntry *)
 private let rec parseKeyShareEntries_aux (b:bytes) (entries:list keyShareEntry)
-   : Tot (result (list keyShareEntry)) 
-         (decreases (length b))
-   = if length b > 0 then
-       if length b >= 4 then
-	     let ng, data = split b 2ul in
-	     match vlsplit 2 data with
-	     | Correct(x) ->
-           let kex, bytes = x in
-	       begin
-	         match parseKeyShareEntry (ng @| vlbytes 2 kex) with
-	         | Correct entry -> parseKeyShareEntries_aux bytes (entries @ [entry])
-	         | Error z -> Error z
-	       end
- 	    | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry")
-     else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse key share entries")
-   else Correct entries
+ : Tot (result (list keyShareEntry)) 
+       (decreases (length b))
+ =
+ if length b > 0 then
+   if length b >= 4 then
+     let ng, data = split b 2ul in
+     match vlsplit 2 data with
+     | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry")
+     | Correct(kex, bytes) ->
+       match parseKeyShareEntry (ng @| vlbytes 2 kex) with
+       | Error z -> Error z
+       | Correct entry -> parseKeyShareEntries_aux bytes (entries @ [entry])
+   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse key share entries")
+ else Correct entries
 
 let parseKeyShareEntries b =
   if 2 <= length b then

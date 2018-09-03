@@ -90,6 +90,7 @@ val mk_plain: i:id{ ~(authId i)} -> ad:adata i -> rg:Range.frange i { wf_ad_rg i
     b:rbytes rg { wf_payload_ad_rg i ad rg b } ->
   Tot (p:plain i ad rg {b = ghost_repr #i #ad #rg p})
 
+#set-options "--z3rlimit 20"
 let mk_plain i ad rg b = Content.mk_fragment i (parseAD i ad) rg b
 
 // should go to StatefulLHAE
