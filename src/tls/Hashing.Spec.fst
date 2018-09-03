@@ -1,8 +1,14 @@
-﻿(** hash algorithms and providers *)
+﻿(** hash algorithms and providers
+
+ * provides bytes-friendly API before idealization
+ * no dependency on TLS: could go to EverCrypt or SecureAPI.
+
+*)
 module Hashing.Spec
 
 include EverCrypt.Hash 
 
+open FStar.Integers
 open FStar.Bytes 
 type tag (a:alg) = Bytes.lbytes32 (tagLen a)
 type anyTag = lbytes (Integers.v maxTagLen)
@@ -49,13 +55,20 @@ let emptyHash : a:alg -> Tot (tag a) =
 let zeroHash (a:alg): Tot (tag a) = Bytes.create (tagLen a) 0uy
 
 
+// TLS-specific hash and MAC algorithms (review) 
+type tls_alg = 
+  | NULL
+  | MD5SHA1
+  | Hash of alg
 
+val tls_tagLen: h:tls_alg{h<>NULL} -> Tot UInt32.t
+let tls_tagLen = function
+  | Hash a  -> tagLen a
+  | MD5SHA1 -> tagLen MD5 + tagLen SHA1
 
-// open FStar.Bytes // used concretely --- as opposed to specs using seq uint8s
+type tls_macAlg = EverCrypt.HMAC.ha
 
-(* for reference:
-
-
+(* for reference, a bytes spec of HMAC:
 let hmac a key message = EverCrypt.Hash. 
   let xkey = key @| create U32.(blockLen a -^ tagLen a) 0x0z  in
   let outer_key_pad = xor (blockLen a) xkey (create (blockLen a) 0x5cz) in

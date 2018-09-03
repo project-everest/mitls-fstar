@@ -111,20 +111,15 @@ type encAlg =
   | Block of blockCipher
   | Stream of streamCipher
 
+(** TLS-specific hash and MAC algorithms *)
+
 type hash_alg = Hashing.Spec.alg
+type hashAlg = Hashing.Spec.tls_alg
+type macAlg = Hashing.Spec.alg
 
-(** TLS-specific hash algorithms *)
-type hashAlg =
-  | NULL
-  | MD5SHA1
-  | Hash of hash_alg
-
-type hash_alg_classic = a:hash_alg {Hashing.Spec.(a = MD5 \/ a = SHA1)}
-
-(** TLS-specific MAC algorithms *)
-type macAlg =
-  | HMac     of hash_alg
-  | SSLKHash of hash_alg_classic
+let hashSize = Hashing.Spec.tls_tagLen
+let macKeySize = Hashing.Spec.tagLen
+let macSize = Hashing.Spec.tagLen
 
 (** Authenticated Encryption modes *)
 type aeAlg =
@@ -192,22 +187,6 @@ let aeadRecordIVSize =
   | AES_256_GCM       -> 8
   | CHACHA20_POLY1305 -> 0
   | _                 -> 8 //recheck
-
-(** Hash sizes *)
-val hashSize: h:hashAlg{h<>NULL} -> Tot UInt32.t
-let hashSize = function
-  | Hash a  -> Hashing.Spec.tagLen a
-  | MD5SHA1 -> 16ul +^ 20ul
-
-(** MAC key sizes *)
-let macKeySize = function
-  | HMac alg
-  | SSLKHash alg -> hashSize (Hash alg)
-
-(** MAC sizes *)
-let macSize = function
-  | HMac alg
-  | SSLKHash alg -> hashSize (Hash alg)
 
 
 // -----------------------------------------------------------------------
@@ -1198,6 +1177,7 @@ let verifyDataHashAlg_of_ciphersuite : require_some verifyDataHashAlg_of_ciphers
 (** Determine which session hash algorithm is to be used with the protocol version and ciphersuite *)
 val sessionHashAlg: pv:protocolVersion -> cs:cipherSuite{pvcs pv cs} -> Tot hashAlg
 let sessionHashAlg pv cs =
+  let open Hashing.Spec in
   match pv with
   | TLS_1p3 -> let CipherSuite13 _ h = cs in Hash h
   | SSL_3p0 | TLS_1p0 | TLS_1p1 -> MD5SHA1 // FIXME: DSA uses only SHA1
@@ -1234,7 +1214,7 @@ let macAlg_of_aeAlg pv ae =
   //  | SSL_3p0,MtE _ alg   -> SSLKHash alg
   //  | _      ,MACOnly alg -> SSLKHash alg
   | _      ,MACOnly alg
-  | _      ,MtE _ alg   -> HMac alg
+  | _      ,MtE _ alg   -> Hashing.Spec.HMac alg
 
 
 
