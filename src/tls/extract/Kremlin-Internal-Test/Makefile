@@ -61,11 +61,11 @@ FILES 		= Cert C_Loops_Spec_Loops CommonDH CoreCrypto \
   secure/Crypto_AEAD_Main \
   Crypto_Indexing Crypto_Symmetric_Bytes Crypto_Plain \
   CryptoTypes DHGroup ECGroup Extensions Flags Format FStar \
-  HaclProvider Hashing_Spec kremlinit \
+  Hashing_Spec Hashing HMAC HKDF kremlinit \
   LowParse Nonce Parse PMS Prims PSK Random RSAKey \
   secure/Crypto_HKDF_Crypto_HMAC \
   stub/mipki_wrapper stub/core_crypto \
-  stub/hacl_provider stub/buffer_bytes Test_Main TLSConstants \
+  stub/buffer_bytes Test_Main TLSConstants \
   TLS_Curve25519 TLSError TLSInfo TLSInfoFlags \
   stub/RegionAllocator
 

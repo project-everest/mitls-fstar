@@ -257,9 +257,9 @@ let ngs = [
 ]
 
 let aeads = [
-  ("AES128-GCM", CoreCrypto.AES_128_GCM);
-  ("AES256-GCM", CoreCrypto.AES_256_GCM);
-  ("CHACHA20-POLY1305", CoreCrypto.CHACHA20_POLY1305);
+  ("AES128-GCM", EverCrypt.AES128_GCM);
+  ("AES256-GCM", EverCrypt.AES256_GCM);
+  ("CHACHA20-POLY1305", EverCrypt.CHACHA20_POLY1305);
 ]
 
 let ffiConfig version host =

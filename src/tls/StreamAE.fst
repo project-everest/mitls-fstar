@@ -27,7 +27,7 @@ type id = i:id { ID13? i }
 let alg (i:id) =
   let AEAD ae _ = aeAlg_of_id i in ae
 
-let ltag i : nat = CoreCrypto.aeadTagSize (alg i)
+let ltag i : nat = UInt32.v (EverCrypt.aead_tagLen (alg i))
 let cipherLen i (l:plainLen) : nat = l + ltag i
 type cipher i (l:plainLen) = lbytes (cipherLen i l)
 

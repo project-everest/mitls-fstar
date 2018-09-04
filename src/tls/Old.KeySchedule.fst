@@ -6,6 +6,7 @@ open FStar.HyperStack.ST
 open FStar.Seq
 open FStar.Bytes
 open FStar.Error
+//open FStar.Integers 
 
 open TLSError
 open TLSConstants
@@ -13,16 +14,16 @@ open Extensions
 open TLSInfo
 open Range
 open StatefulLHAE
-open Old.HKDF
+open HKDF
 open PSK
 
+module HKDF = HKDF
 module MDM = FStar.Monotonic.DependentMap
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
 module H = Hashing.Spec
 
 module HMAC_UFCMA = Old.HMAC.UFCMA
-module HKDF = Old.HKDF
 
 type finishedId = HMAC_UFCMA.finishedId
 
@@ -247,18 +248,18 @@ type ks =
 
 // Extract keys and IVs from a derived 1.3 secret
 private let keygen_13 h secret ae is_quic : St (bytes * bytes * option bytes) =
-  let kS = CoreCrypto.aeadKeySize ae in
-  let iS = CoreCrypto.aeadRealIVSize ae in
-  let kb = HKDF.hkdf_expand_label h secret "key" empty_bytes kS is_quic in
-  let ib = HKDF.hkdf_expand_label h secret "iv" empty_bytes iS is_quic in
+  let kS = EverCrypt.aead_keyLen ae in
+  let iS = 12ul in // IV length 
+  let kb = HKDF.expand_label #h secret "key" empty_bytes kS is_quic in
+  let ib = HKDF.expand_label #h secret "iv" empty_bytes iS is_quic in
   let pn = if is_quic then
-      Some (HKDF.hkdf_expand_label h secret "pn" empty_bytes kS is_quic)
+      Some (HKDF.expand_label #h secret "pn" empty_bytes kS is_quic)
     else None in
   (kb, ib, pn)
 
 // Extract finished keys
 private let finished_13 h secret is_quic : St (bytes) =
-  HKDF.hkdf_expand_label h secret "finished" empty_bytes (UInt32.v (H.tagLen h)) is_quic
+  HKDF.expand_label #h secret "finished" empty_bytes (H.tagLen h) is_quic
 
 // Create a fresh key schedule instance
 // We expect this to be called when the Handshake instance is created
@@ -353,7 +354,7 @@ private let mk_binder (#rid) (pskid:psk_identifier) (t:ticket13) (is_quic:bool)
   let psk = Ticket.Ticket13?.rms t in
   let h = pski.early_hash in
   dbg ("Loaded pre-shared key "^(print_bytes pskid)^": "^(print_bytes psk));
-  let es : es i = HKDF.hkdf_extract h (H.zeroHash h) psk in
+  let es : es i = HKDF.extract #h (H.zeroHash h) psk in
   dbg ("Early secret: "^(print_bytes es));
   let ll, lb =
     if ApplicationPSK? i then ExtBinder, "ext binder"
@@ -497,7 +498,7 @@ let ks_server_13_init ks cr cs pskid g_gx =
           (i, psk, pski.early_hash)
         in
       dbg ("Pre-shared key: "^(print_bytes psk));
-      let es: Hashing.Spec.tag h = HKDF.hkdf_extract h (H.zeroHash h) psk in
+      let es: Hashing.Spec.tag h = HKDF.extract #h (H.zeroHash h) psk in
       let ll, lb =
         if ApplicationPSK? i then ExtBinder, "ext binder"
         else ResBinder, "res binder" in
@@ -511,7 +512,7 @@ let ks_server_13_init ks cr cs pskid g_gx =
     | None ->
       dbg "No PSK selected.";
       let esId = NoPSK h in
-      let es : es esId = HKDF.hkdf_extract h (H.zeroHash h) (H.zeroHash h) in
+      let es : es esId = HKDF.extract #h (H.zeroHash h) (H.zeroHash h) in
       esId, es, None
     in
   dbg ("Computed early secret:           "^print_bytes es);
@@ -524,11 +525,11 @@ let ks_server_13_init ks cr cs pskid g_gx =
       let gy, gxy = CommonDH.dh_responder g gx in
       dbg ("DH shared secret: "^(print_bytes gxy));
       let hsId = HSID_DHE saltId g gx gy in
-      let hs : hs hsId = HKDF.hkdf_extract h salt gxy in
+      let hs : hs hsId = HKDF.extract #h salt gxy in
       Some (CommonDH.Share g gy), hsId, hs
     | None ->
       let hsId = HSID_PSK saltId in
-      let hs : hs hsId = HKDF.hkdf_extract h salt (H.zeroHash h) in
+      let hs : hs hsId = HKDF.extract #h salt (H.zeroHash h) in
       None, hsId, hs
     in
   dbg ("Handshake secret:                "^print_bytes hs);
@@ -635,7 +636,7 @@ let ks_server_13_sh ks log =
 
   // Replace handshake secret with application master secret
   let amsId = ASID saltId in
-  let ams : ams amsId = HKDF.hkdf_extract h salt (H.zeroHash h) in
+  let ams : ams amsId = HKDF.extract #h salt (H.zeroHash h) in
   dbg ("Application secret:              "^print_bytes ams);
 
   st := S (S_13_wait_SF (ae, h) (| cfkId, cfk1 |) (| sfkId, sfk1 |) (| amsId, ams |));
@@ -698,13 +699,13 @@ let ks_12_record_key ks =
   let ae = get_aeAlg cs in
   let id = ID12 pv msId kdf ae cr sr role in
   let AEAD alg _ = ae in (* 16-10-18 FIXME! only correct for AEAD *)
-  let klen = CoreCrypto.aeadKeySize alg in
-  let slen = AEADProvider.salt_length id in
-  let expand = TLSPRF.kdf kdf ms (sr @| cr) (UInt32.uint_to_t (klen + klen + slen + slen)) in
+  let klen = EverCrypt.aead_keyLen alg in
+  let slen = UInt32.uint_to_t (AEADProvider.salt_length id) in
+  let expand = TLSPRF.kdf kdf ms (sr @| cr) FStar.Integers.(klen + klen + slen + slen) in
   dbg ("keystring (CK, CIV, SK, SIV) = "^(print_bytes expand));
-  let k1, expand = split_ expand klen in
-  let k2, expand = split_ expand klen in
-  let iv1, iv2 = split_ expand slen in
+  let k1, expand = split expand klen in
+  let k2, expand = split expand klen in
+  let iv1, iv2 = split expand slen in
   let wk, wiv, rk, riv =
     match role with
     | Client -> k1, iv1, k2, iv2
@@ -857,7 +858,7 @@ let ks_client_13_sh ks sr cs log gy accept_psk =
       dbg ("recallPSK early secret:          "^print_bytes es);
       (| i, es |)
     | _, None ->
-      let es = HKDF.hkdf_extract h (H.zeroHash h) (H.zeroHash h) in
+      let es = HKDF.extract #h (H.zeroHash h) (H.zeroHash h) in
       dbg ("no PSK negotiated. Early secret: "^print_bytes es);
       (| NoPSK h, es |)
   in
@@ -873,11 +874,11 @@ let ks_client_13_sh ks sr cs log gy accept_psk =
       let gxy = CommonDH.dh_initiator g gx gy in
       dbg ("DH shared secret: "^(print_bytes gxy));
       let hsId = HSID_DHE saltId g (CommonDH.ipubshare gx) gy in
-      let hs : hs hsId = HKDF.hkdf_extract h salt gxy in
+      let hs : hs hsId = HKDF.extract #h salt gxy in
       (| hsId, hs |)
     | None -> (* Pure PSK *)
       let hsId = HSID_PSK saltId in
-      let hs : hs hsId = HKDF.hkdf_extract h salt (H.zeroHash h) in
+      let hs : hs hsId = HKDF.extract #h salt (H.zeroHash h) in
       (| hsId, hs |)
     in
   dbg ("handshake secret:                "^print_bytes hs);
@@ -919,7 +920,7 @@ let ks_client_13_sh ks sr cs log gy accept_psk =
   dbg ("application salt:                "^print_bytes salt);
 
   let asId = ASID saltId in
-  let ams : ams asId = HKDF.hkdf_extract h salt (H.zeroHash h) in
+  let ams : ams asId = HKDF.extract #h salt (H.zeroHash h) in
   dbg ("application secret:              "^print_bytes ams);
 
   let id = ID13 (KeyID c_expandId) in

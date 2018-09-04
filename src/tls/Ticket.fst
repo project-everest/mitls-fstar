@@ -9,7 +9,6 @@ open TLSError
 open TLSConstants
 open TLSInfo
 
-module CC = CoreCrypto
 module AE = AEADProvider
 
 #set-options "--admit_smt_queries true"
@@ -54,7 +53,7 @@ private let ticket_enc : reference (option ticket_key) = ralloc region None
 private let sealing_enc : reference (option ticket_key) = ralloc region None
 
 private let keygen () : St ticket_key =
-  let id0 = dummy_id CC.CHACHA20_POLY1305 in
+  let id0 = dummy_id EverCrypt.CHACHA20_POLY1305 in
   let salt : AE.salt id0 = Random.sample (AE.iv_length id0) in
   let key : AE.key id0 = Random.sample (AE.key_length id0) in
   let wr = AE.coerce id0 region key salt in

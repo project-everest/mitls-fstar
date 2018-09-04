@@ -140,7 +140,7 @@ let cipherLen i f =
   else if is_stream i then
     // sufficient to ensure the cipher can be processed without length errors
     let alg  = AEAD?._0 (aeAlg_of_id i) in
-    let ltag = CoreCrypto.aeadTagSize alg in
+    let ltag = UInt32.v (EverCrypt.aead_tagLen alg) in
     snd r + 1 + ltag
   else if is_stlhae i then
     Range.targetLength i r

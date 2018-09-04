@@ -42,7 +42,6 @@ SOURCES = \
   HandshakeMessages.c \
   Hashing.c \
   Hashing_CRF.c \
-  Hashing_OpenSSL.c \
   Hashing_Spec.c \
   Old_HKDF.c \
   HMAC.c \

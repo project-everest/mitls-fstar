@@ -428,9 +428,9 @@ type binderLabel =
 /// early secrets (range of 1st extraction)
 [@ Gc ] // cwinter: quic2c
 type pre_esId : Type0 =
-  | ApplicationPSK: #ha:hash_alg -> #ae:aeadAlg -> i:PSK.pskid{PSK.compatible_hash_ae i ha ae} -> pre_esId
+  | ApplicationPSK: #ha:HMAC.ha -> #ae:aeadAlg -> i:PSK.pskid{PSK.compatible_hash_ae i ha ae} -> pre_esId
   | ResumptionPSK: #li:logInfo{~(LogInfo_CH? li)} -> i:pre_rmsId li -> pre_esId
-  | NoPSK: ha:hash_alg -> pre_esId
+  | NoPSK: HMAC.ha -> pre_esId
 and pre_binderId =
   | Binder: pre_esId -> binderLabel -> pre_binderId
 /// handshake secrets (2nd extraction)
@@ -468,17 +468,17 @@ and pre_finishedId =
 // 18-02-23 will all be replaced by auxiliary functions and refinements in ID. 
 
 // 18-02-23 will all be subsumed by *ghost* ha_of_id 
-val esId_hash: i:pre_esId -> Tot hash_alg (decreases i)
-val binderId_hash: i:pre_binderId -> Tot hash_alg (decreases i)
-val hsId_hash: i:pre_hsId -> Tot hash_alg (decreases i)
-val asId_hash: i:pre_asId -> Tot hash_alg (decreases i)
-val saltId_hash: i:pre_saltId -> Tot hash_alg (decreases i)
-val secretId_hash: i:pre_secretId -> Tot hash_alg (decreases i)
-val rmsId_hash: #li:logInfo -> i:pre_rmsId li -> Tot hash_alg (decreases i)
-val exportId_hash: #li:logInfo -> i:pre_exportId li -> Tot hash_alg (decreases i)
-val expandId_hash: #li:logInfo -> i:pre_expandId li -> Tot hash_alg (decreases i)
-val keyId_hash: i:pre_keyId -> Tot hash_alg (decreases i)
-val finishedId_hash: i:pre_finishedId -> Tot hash_alg (decreases i)
+val esId_hash: i:pre_esId -> Tot HMAC.ha (decreases i)
+val binderId_hash: i:pre_binderId -> Tot HMAC.ha (decreases i)
+val hsId_hash: i:pre_hsId -> Tot HMAC.ha (decreases i)
+val asId_hash: i:pre_asId -> Tot HMAC.ha (decreases i)
+val saltId_hash: i:pre_saltId -> Tot HMAC.ha (decreases i)
+val secretId_hash: i:pre_secretId -> Tot HMAC.ha (decreases i)
+val rmsId_hash: #li:logInfo -> i:pre_rmsId li -> Tot HMAC.ha (decreases i)
+val exportId_hash: #li:logInfo -> i:pre_exportId li -> Tot HMAC.ha (decreases i)
+val expandId_hash: #li:logInfo -> i:pre_expandId li -> Tot HMAC.ha (decreases i)
+val keyId_hash: i:pre_keyId -> Tot HMAC.ha (decreases i)
+val finishedId_hash: i:pre_finishedId -> Tot HMAC.ha (decreases i)
 
 let rec esId_hash = function
   | ApplicationPSK #h #ae pskid -> h
