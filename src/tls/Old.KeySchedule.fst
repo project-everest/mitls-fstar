@@ -1156,7 +1156,7 @@ let ks_client_12_full_rsa ks sr pv cs ems pk =
   let csr = cr @| sr in
   let rsapms = PMS.genRSA pk pv in
   let pmsb = PMS.leakRSA pk pv rsapms in
-  let encrypted = CoreCrypto.rsa_encrypt (RSAKey.repr_of_rsapkey pk) CoreCrypto.Pad_PKCS1 pmsb in
+  let encrypted = Random.sample 256 in //CoreCrypto.rsa_encrypt (RSAKey.repr_of_rsapkey pk) CoreCrypto.Pad_PKCS1 pmsb in
   let rsapmsId = PMS.RSAPMS(pk, pv, rsapms) in
   let ns =
     if ems then

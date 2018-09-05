@@ -269,12 +269,14 @@ val genrepr: a:alg
    	    sigAlg_of_public_repr pk == sigAlg_of_secret_repr sk
 	  /\ sigAlg_of_public_repr pk == a.core))))
 
-let genrepr a =
+let genrepr a = admit()
+(* Removed as CoreCrypto is deprecated.
   match a.core with
   | RSAPSS -> let k = rsa_gen_key 2048 in (PK_RSA k true, SK_RSA k true)
   | RSASIG -> let k = rsa_gen_key 2048 in (PK_RSA k false, SK_RSA k false)
   | DSA    -> let k = dsa_gen_key 1024 in (PK_DSA k, SK_DSA k)
   | ECDSA  -> let k = ec_gen_key ({curve = ECC_P256; point_compression = false}) in (PK_ECDSA k, SK_ECDSA k)
+*)
 
 val gen: a:alg -> All (skey a)
   (requires (fun h -> h `contains` rkeys))

@@ -12,7 +12,6 @@ share is for registered shares (for which is_honest is defined).
 open FStar.Bytes
 open FStar.Error
 
-open CoreCrypto
 open Parse
 open TLSError
 open Mem 
@@ -21,6 +20,7 @@ module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 module MDM = FStar.Monotonic.DependentMap
 module DM = FStar.DependentMap
+module EC = EverCrypt
 
 (* A flag for runtime debugging of cDH data.
    The F* normalizer will erase debug prints at extraction
@@ -53,13 +53,12 @@ let string_of_group = function
     end
   | ECDH g ->
     begin
-    let open CoreCrypto in
     match g with
-    | ECC_P256    -> "P256"
-    | ECC_P384    -> "P384"
-    | ECC_P521    -> "P521"
-    | ECC_X25519  -> "X255519"
-    | ECC_X448    -> "X448"
+    | EC.ECC_P256    -> "P256"
+    | EC.ECC_P384    -> "P384"
+    | EC.ECC_P521    -> "P521"
+    | EC.ECC_X25519  -> "X255519"
+    | EC.ECC_X448    -> "X448"
     end
 
 private type pre_keyshare' =
@@ -87,11 +86,11 @@ let pre_pubshare #g ks =
 
 let namedGroup_of_group (g:group): Tot (option namedGroup) =
   match g with
-  | ECDH CoreCrypto.ECC_P256 -> Some SECP256R1
-  | ECDH CoreCrypto.ECC_P384 -> Some SECP384R1
-  | ECDH CoreCrypto.ECC_P521 -> Some SECP521R1
-  | ECDH CoreCrypto.ECC_X25519 -> Some X25519
-  | ECDH CoreCrypto.ECC_X448 -> Some X448
+  | ECDH EC.ECC_P256 -> Some SECP256R1
+  | ECDH EC.ECC_P384 -> Some SECP384R1
+  | ECDH EC.ECC_P521 -> Some SECP521R1
+  | ECDH EC.ECC_X25519 -> Some X25519
+  | ECDH EC.ECC_X448 -> Some X448
   | FFDH (DHGroup.Named DHGroup.FFDHE2048) -> Some FFDHE2048
   | FFDH (DHGroup.Named DHGroup.FFDHE3072) -> Some FFDHE3072
   | FFDH (DHGroup.Named DHGroup.FFDHE4096) -> Some FFDHE4096
@@ -106,11 +105,11 @@ let lemma_namedGroup_of_group (g:group)
 
 let group_of_namedGroup (ng:namedGroup): Tot (option group) =
   match ng with
-  | SECP256R1 -> Some (ECDH CoreCrypto.ECC_P256)
-  | SECP384R1 -> Some (ECDH CoreCrypto.ECC_P384)
-  | SECP521R1 -> Some (ECDH CoreCrypto.ECC_P521)
-  | X25519    -> Some (ECDH CoreCrypto.ECC_X25519)
-  | X448      -> Some (ECDH CoreCrypto.ECC_X448)
+  | SECP256R1 -> Some (ECDH EC.ECC_P256)
+  | SECP384R1 -> Some (ECDH EC.ECC_P384)
+  | SECP521R1 -> Some (ECDH EC.ECC_P521)
+  | X25519    -> Some (ECDH EC.ECC_X25519)
+  | X448      -> Some (ECDH EC.ECC_X448)
   | FFDHE2048 -> Some (FFDH (DHGroup.Named DHGroup.FFDHE2048))
   | FFDHE3072 -> Some (FFDH (DHGroup.Named DHGroup.FFDHE3072))
   | FFDHE4096 -> Some (FFDH (DHGroup.Named DHGroup.FFDHE4096))
@@ -127,7 +126,7 @@ let is_ffdhe (ng:namedGroup): Tot bool = List.mem ng [ FFDHE2048; FFDHE3072; FFD
 //   [SMTPat (group_of_namedGroup ng)]
 //   = ()
 
-let default_group = ECDH (CoreCrypto.ECC_P256)
+let default_group = ECDH (EC.ECC_X25519)
 
 noextract
 let dh_region = new_region tls_tables_region
@@ -569,7 +568,7 @@ let parse g x =
          | None -> None | Some gx -> Some (S_EC g gx))
        | FFDH g ->
          let dhp = DHGroup.params_of_group g in
-         if length x = length dhp.dh_p then Some (S_FF g x)
+         if length x = length dhp.DHGroup.dh_p then Some (S_FF g x)
          else None
 
 let parse_partial ec p =
@@ -600,7 +599,7 @@ let serialize_raw #g s =
   | FFDH g ->
     let S_FF _ s = s in
     let dhp = DHGroup.params_of_group g in
-    DHGroup.serialize_public #g s (length dhp.dh_p)
+    DHGroup.serialize_public #g s (length dhp.DHGroup.dh_p)
   | ECDH g ->
     let S_EC _ s = s in
     ECGroup.serialize_point #g s
@@ -676,7 +675,7 @@ let parseKeyShareEntry b =
         if is_ffdhe x.group then
           let FFDH dhg = og in
           let dhp = DHGroup.params_of_group dhg in
-          if length x.key_exchange <> length dhp.dh_p then
+          if length x.key_exchange <> length dhp.DHGroup.dh_p then
             Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Invalid key share entry")
           else
             let (q:DHGroup.share dhg) = x.key_exchange in

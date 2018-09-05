@@ -1,7 +1,5 @@
 module DHGroup
 
-open CoreCrypto
-
 module B = FStar.Bytes
 module HST = FStar.HyperStack.ST
 
@@ -11,8 +9,13 @@ type ffdhe =
   | FFDHE4096
   | FFDHE6144
   | FFDHE8192
-  
-type params = dhp:dh_params{B.length dhp.dh_p < 65536 && B.length dhp.dh_g < 65536}
+
+type params = {
+  dh_p : b:B.bytes{B.length b < 65536};
+  dh_g : b:B.bytes{B.length b < 65536};
+  dh_q : option (b:B.bytes{B.length b < 65536});
+  safe_prime : bool;
+}
 
 type group =
   | Named    of ffdhe
@@ -24,11 +27,7 @@ type share (g:group) = b:B.bytes{
   1 <= B.length b /\ B.length b < 65536 /\
   (let dhp = params_of_group g in B.length b <= B.length dhp.dh_p)}
 
-type keyshare (g:group) = k:dh_key{
-  let dhp = k.dh_params in
-  params_of_group g = dhp /\ Some? k.dh_private /\
-  B.length dhp.dh_p < 65536 && B.length dhp.dh_g < 65536 /\
-  B.length k.dh_public <= B.length dhp.dh_p}
+val keyshare: group -> eqtype
 
 type secret (g:group) = B.bytes
 

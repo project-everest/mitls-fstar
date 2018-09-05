@@ -1,43 +1,49 @@
 module ECGroup
 
-open CoreCrypto
-
 module B = FStar.Bytes
 module HST = FStar.HyperStack.ST
 
-type group = ec_curve
+type group = EverCrypt.ec_curve
+
+let bytelen (g:group) : n:nat{n <= 127} =
+  match g with
+  | EverCrypt.ECC_P256 -> 32
+  | EverCrypt.ECC_P384 -> 48
+  | EverCrypt.ECC_P521 -> 66
+  | EverCrypt.ECC_X25519 -> 32
+  | EverCrypt.ECC_X448 -> 56
+
+type point (g:group) = {
+  ecx : B.lbytes (bytelen g);
+  ecy : B.lbytes (bytelen g);
+}
+
+private val _key: group -> eqtype
 
 private type pre_keyshare g =
-  | KS_CC of k:ec_key {
-    Some? k.ec_priv /\ k.ec_params.curve = g /\
-    B.length k.ec_point.ecx = ec_bytelen g /\
-    B.length k.ec_point.ecy = ec_bytelen g }
+  | KS_CC: point g -> _key g -> pre_keyshare g
   | KS_X25519 of TLS.Curve25519.keyshare
-  | KS_X448 of (pub:B.lbytes 56 * priv:B.lbytes 56)
+  | KS_X448: pub:B.lbytes 56 -> priv:B.lbytes 56 -> pre_keyshare g
 
-// ADL do not use untagged union here!
-// The ML Obj.t type is not compatible with CC extracted as --codegen-lib
 type keyshare (g:group) =
   s:pre_keyshare g{(
     match g with
-    | ECC_X25519 -> KS_X25519? s
-    | ECC_X448   -> KS_X448? s
-    | _             -> KS_CC? s)}
+    | EverCrypt.ECC_X25519 -> KS_X25519? s
+    | EverCrypt.ECC_X448   -> KS_X448? s
+    | _ -> KS_CC? s)}
 
 private type pre_share g =
-  | S_CC of p:ec_point{
-     B.length p.ecx = ec_bytelen g /\
-     B.length p.ecy = ec_bytelen g}
+  | S_CC of point g
   | S_X25519 of TLS.Curve25519.point
   | S_X448 of B.lbytes 56
 
 type share (g:group) =
   s:pre_share g{(match g with
-    | ECC_X25519 -> S_X25519? s
-    | ECC_X448 -> S_X448? s
+    | EverCrypt.ECC_X25519 -> S_X25519? s
+    | EverCrypt.ECC_X448 -> S_X448? s
     | _ -> S_CC? s)}
 
-type secret (g:group) = B.bytes
+type secret (g:group) = B.lbytes (bytelen g)
 
 val pubshare: #g:group -> keyshare g -> Tot (share g)
 
