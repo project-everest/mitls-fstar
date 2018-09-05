@@ -13,7 +13,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "b510e6445fbe7c140ef74dd39866a4b6"
+      "9cf941fcab74c1b1d94d11cefd34ffbd"
     ],
     [
       "HMAC.UFCMA.is_safe",
@@ -56,7 +56,7 @@
         "typing_FStar.Set.complement", "typing_FStar.Set.empty"
       ],
       0,
-      "f0b1991a8521307a6300dd2ba8ce5fbb"
+      "073ca7f36798912c0176734ca25595f3"
     ],
     [
       "HMAC.UFCMA.__proj__Info__item__good",
@@ -68,7 +68,7 @@
         "projection_inverse_HMAC.UFCMA.Info_alg"
       ],
       0,
-      "390bb99bfc67d45d310c5879a2df7065"
+      "408f058948777b08d3e626d845c8b7d3"
     ],
     [
       "HMAC.UFCMA.keylen",
@@ -105,7 +105,7 @@
         "typing_Mem.tls_define_region"
       ],
       0,
-      "ae2a8f46e7e90c7623c689abf04828f7"
+      "6a66ef12d9531fcc27b1b28229e8ae1d"
     ],
     [
       "HMAC.UFCMA.log_t",
@@ -127,7 +127,7 @@
         "typing_HMAC.UFCMA.tag", "typing_HMAC.UFCMA.text"
       ],
       0,
-      "efcf6567981faac584125514cbe4907d"
+      "de00253219247a85ff1a193c00a49298"
     ],
     [
       "HMAC.UFCMA.__proj__MAC__item__k",
@@ -139,7 +139,7 @@
         "projection_inverse_HMAC.UFCMA.MAC_u"
       ],
       0,
-      "cc7c29437c0c555e456efcd4be47b2a9"
+      "06dc785c0fcc33f601771fcd7f1b0dcd"
     ],
     [
       "HMAC.UFCMA.__proj__IdealKey__item__ck",
@@ -158,7 +158,7 @@
         "refinement_interpretation_Mem_Tm_refine_b9611c68854b3e8b5fcc372285b2bc8d"
       ],
       0,
-      "c1c89b56369ad1516c9c0730b165a17f"
+      "f1e199748994d8ded8912951926c90cf"
     ],
     [
       "HMAC.UFCMA.__proj__IdealKey__item__region",
@@ -181,7 +181,7 @@
         "refinement_interpretation_Mem_Tm_refine_b9611c68854b3e8b5fcc372285b2bc8d"
       ],
       0,
-      "460bf0b02d33731ac1c8a842eba5c9bb"
+      "c5eb13995b88d6d1f207fcf24aaf76f0"
     ],
     [
       "HMAC.UFCMA.__proj__IdealKey__item__log",
@@ -200,7 +200,7 @@
         "refinement_interpretation_HMAC.UFCMA_Tm_refine_31ede321500877740c94dff74bb67a52"
       ],
       0,
-      "76f4ca424ba9d97861091453cc422d44"
+      "319999276f95fbd042c428831776eb6d"
     ],
     [
       "HMAC.UFCMA.__proj__RealKey__item__ck",
@@ -213,7 +213,7 @@
         "refinement_interpretation_HMAC.UFCMA_Tm_refine_dcd7312b46a0f1d2cbfdd86314d8dac0"
       ],
       0,
-      "e69279e066116e57d4ed3367d0e572c5"
+      "c2055b94a6f14b2bdd82735b7aff0fa3"
     ],
     [
       "HMAC.UFCMA.usage",
@@ -233,7 +233,7 @@
         "refinement_interpretation_Mem_Tm_refine_b9611c68854b3e8b5fcc372285b2bc8d"
       ],
       0,
-      "8c747c1a8ab3718377a592135ffae16a"
+      "74c9d3671a153d8604aa640be4cb3f53"
     ],
     [
       "HMAC.UFCMA.keyval",
@@ -271,7 +271,7 @@
         "typing_FStar.Monotonic.HyperStack.is_eternal_color"
       ],
       0,
-      "026d1c3488f802523f1dc1bbc7e08728"
+      "8395c1460db2b5d9036858fcf888791f"
     ],
     [
       "HMAC.UFCMA.region",
@@ -299,7 +299,7 @@
         "refinement_interpretation_Mem_Tm_refine_b9611c68854b3e8b5fcc372285b2bc8d"
       ],
       0,
-      "6ec72c68838e80dd302738bb71691904"
+      "02c3f706b0c0cf796d71a3592bec9bc7"
     ],
     [
       "HMAC.UFCMA.get_key",
@@ -319,7 +319,7 @@
         "refinement_interpretation_Mem_Tm_refine_b9611c68854b3e8b5fcc372285b2bc8d"
       ],
       0,
-      "863f5fe1087093e227a9aa47f68bbf7d"
+      "bb3c99a546659334f93738673c74c9db"
     ],
     [
       "HMAC.UFCMA.create",
@@ -328,7 +328,7 @@
       1,
       [ "@query", "assumption_Hashing.Spec.alg__uu___haseq" ],
       0,
-      "e35316746a724ab70317c15f9546611d"
+      "8d27d77e37a55b862fc9b43b3dd787e7"
     ],
     [
       "HMAC.UFCMA.create",
@@ -471,7 +471,7 @@
         "typing_Mem.tls_define_region"
       ],
       0,
-      "a3c0e154e78fd3b67f54ddf51f9a5f3d"
+      "e406fdd86f8b80c3e16031828877a920"
     ],
     [
       "HMAC.UFCMA.create",
@@ -624,7 +624,7 @@
         "typing_Mem.is_tls_rgn", "typing_Mem.tls_define_region"
       ],
       0,
-      "3c667750f20a263d996c9cf4bc95db8f"
+      "8f95c871cf44a10dd80e9580d3b08701"
     ],
     [
       "HMAC.UFCMA.coerceT",
@@ -649,7 +649,7 @@
         "typing_FStar.Bytes.len", "typing_HMAC.UFCMA.keylen"
       ],
       0,
-      "16c942f8a1c0db63adcbdeaacbca0df1"
+      "3d62feee7b7191346dd96ba07ec70974"
     ],
     [
       "HMAC.UFCMA.coerceT",
@@ -673,7 +673,7 @@
         "typing_FStar.Bytes.len", "typing_HMAC.UFCMA.keylen"
       ],
       0,
-      "d5911df00d1b8a240d052055c0bf1323"
+      "936bc956bb52d338b72986f13cedc172"
     ],
     [
       "HMAC.UFCMA.coerce",
@@ -682,7 +682,7 @@
       0,
       [ "@query", "assumption_Hashing.Spec.alg__uu___haseq" ],
       0,
-      "98276d634447a901727604c2edb0ba1f"
+      "23b41e2b873376c11d6e887d57f62473"
     ],
     [
       "HMAC.UFCMA.coerce",
@@ -749,7 +749,7 @@
         "typing_HMAC.UFCMA.keylen"
       ],
       0,
-      "3dd760a11cc7f159c7fc5145fd7c9577"
+      "f502722861b8d338d254c75b35d3b09a"
     ],
     [
       "HMAC.UFCMA.coerce",
@@ -815,7 +815,7 @@
         "typing_HMAC.UFCMA.keylen"
       ],
       0,
-      "f089a5245665fe9575898b577777d80a"
+      "77c79f16e171e9f9a34773877b9c2c99"
     ],
     [
       "HMAC.UFCMA.mac",
@@ -824,7 +824,7 @@
       0,
       [ "@query", "assumption_Hashing.Spec.alg__uu___haseq" ],
       0,
-      "6dc003c31c15e5b8559add02df3674c3"
+      "9417c886770ef1c2667397b42fdd9eb1"
     ],
     [
       "HMAC.UFCMA.mac",
@@ -833,7 +833,7 @@
       0,
       [ "@query", "assumption_Hashing.Spec.alg__uu___haseq" ],
       0,
-      "193b82339bcdeaa03b86353a5d58f844"
+      "30160e74ff6a65fd0b93deafc03a408c"
     ],
     [
       "HMAC.UFCMA.verify",
@@ -847,7 +847,7 @@
         "refinement_interpretation_HMAC.UFCMA_Tm_refine_3e8fd52eec97f60ccab1c84fb559a7bc"
       ],
       0,
-      "8ca4eab94dfc907a2fb68561a2e6cfed"
+      "61535b88bdbfd7c41bfac7768a5a73da"
     ],
     [
       "HMAC.UFCMA.verify",
@@ -945,7 +945,7 @@
         "typing_Mem.disjoint", "typing_Mem.tls_define_region", "unit_typing"
       ],
       0,
-      "c9ea68fe46fbf9eedd47364d3cd96801"
+      "89b44b3571db30c29080e54b4fa538d5"
     ],
     [
       "HMAC.UFCMA.info1",
@@ -954,7 +954,7 @@
       0,
       [ "@query", "assumption_Hashing.Spec.alg__uu___haseq" ],
       0,
-      "ee92b5823ad4174e24b5d65b838665d2"
+      "6639efa46598fd3899aa64f815c3b239"
     ],
     [
       "HMAC.UFCMA.localpkg",
@@ -973,7 +973,7 @@
         "refinement_interpretation_Flags_Tm_refine_8e34da49ca786e8cddfceaa89a6f83cc"
       ],
       0,
-      "ca248b24b435a9313683a6ba10f10584"
+      "b753a71b7f3357f853e18100932d34c7"
     ],
     [
       "HMAC.UFCMA.coerce_eq2",
@@ -982,7 +982,7 @@
       0,
       [ "@query" ],
       0,
-      "1e88045e1aa655c8f2912a88ebcd8370"
+      "c70f3598de8ccd545058bbc23052bd5f"
     ],
     [
       "HMAC.UFCMA.ip",
@@ -1009,7 +1009,7 @@
         "typing_FStar.Monotonic.HyperStack.is_eternal_color"
       ],
       0,
-      "a2043aef1b6b9eafc88df0c9cfa7ff0a"
+      "a06b22783491762205b082422221f9cd"
     ],
     [
       "HMAC.UFCMA.test",
@@ -1147,7 +1147,7 @@
         "typing_HMAC.UFCMA.footprint", "typing_Mem.tls_define_region"
       ],
       0,
-      "cd0927c8aa18c8b4ab4c7925677c44cf"
+      "31384d7b51f560a2e590201162a48256"
     ],
     [
       "HMAC.UFCMA.unit_test",
@@ -1238,7 +1238,7 @@
         "typing_tok_Hashing.Spec.SHA1@tok"
       ],
       0,
-      "a36ffd0dac3541a916dba8f2c990b468"
+      "1d01b64cdd6608579702490a0634cd0b"
     ]
   ]
 ]

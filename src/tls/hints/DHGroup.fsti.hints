@@ -1,18 +1,34 @@
 [
-  "€AБќ“\u0006vтDl\u0001Ц\u0017–X/",
+  "ҐУ€<ї.\u0010бМ«€Ґ\u000eЛЦШ",
   [
+    [
+      "DHGroup.params",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_FStar.Pervasives.Native.option__uu___haseq",
+        "assumption_Prims.HasEq_bool",
+        "function_token_typing_FStar.Bytes.bytes",
+        "haseqDHGroup_Tm_refine_31e1e9e28de29ed74e8782cc7196c42f",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "refinement_kinding_DHGroup_Tm_refine_31e1e9e28de29ed74e8782cc7196c42f"
+      ],
+      0,
+      "20301d8982ce1040bf4a761d486d2ae3"
+    ],
     [
       "DHGroup.group",
       1,
       2,
       1,
       [
-        "@query", "assumption_CoreCrypto.dh_params__uu___haseq",
-        "assumption_DHGroup.ffdhe__uu___haseq", "equation_DHGroup.params",
-        "haseqDHGroup_Tm_refine_1e091eae2473b30eeefd9c4f8eac7426"
+        "@query", "assumption_DHGroup.ffdhe__uu___haseq",
+        "assumption_DHGroup.params__uu___haseq"
       ],
       0,
-      "747520e3339880174d3bed626acece71"
+      "2a818a1a1c23f1b161ef6ff88350255c"
     ],
     [
       "DHGroup.__proj__Named__item___0",
@@ -25,7 +41,7 @@
         "refinement_interpretation_DHGroup_Tm_refine_1f67f6deaf7b51138cd35ad2f4568e94"
       ],
       0,
-      "8b182228c14aefcf54eeba86d8a54f8f"
+      "eafd0b5c45635967b8107e045755c338"
     ],
     [
       "DHGroup.__proj__Explicit__item___0",
@@ -38,16 +54,7 @@
         "refinement_interpretation_DHGroup_Tm_refine_dc91833cf9fb025d258378587c7faffb"
       ],
       0,
-      "9adcbad2dcb5d2faaa1f61d18cf76ac2"
-    ],
-    [
-      "DHGroup.keyshare",
-      1,
-      2,
-      1,
-      [ "@query", "assumption_CoreCrypto.dh_params__uu___haseq" ],
-      0,
-      "46151d87037b5a46a136b8f60c6f8c0b"
+      "6a2bd27d7f52a53be6d84b2bcbeae7fd"
     ]
   ]
 ]
