@@ -4,7 +4,6 @@ module HandshakeLog
 
 open FStar.Seq
 open FStar.Error
-open FStar.Bytes
 
 open Mem 
 open TLSError
@@ -13,10 +12,10 @@ open TLSInfo
 open HandshakeMessages
 open Hashing
 open Hashing.CRF // now using incremental, collision-resistant, agile Hashing.
+open FStar.Bytes //18-08-31 reordered 
 open Range  // cwinter: the extracted OCaml file contains a reference to this, which is not reflected in the .depend file?
 
 module HS = FStar.HyperStack
-
 
 (* A flag for runtime debugging of handshakelog data.
    The F* normalizer will erase debug prints at extraction

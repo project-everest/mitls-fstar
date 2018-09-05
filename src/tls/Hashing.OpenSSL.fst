@@ -1,6 +1,8 @@
 module Hashing.OpenSSL
-module HS = FStar.HyperStack //Added automatically
 
+//18-08-31 empty, to be deleted.
+
+(*
 // unverified, external implementation of our core hash algorithms
 // for now we only support OpenSSL, so we skip multiplexing, Hashing.OpenSSL,  and fstis
 // (TODO: separate interface and implementation; disentangle from CoreCrypto)
@@ -109,3 +111,6 @@ let hash alg data: bytes =
 *)
 *)
 
+
+
+*)

@@ -2,8 +2,6 @@ module Crypto.Indexing
 
 open TLSInfo
 
-module CC = CoreCrypto
-
 type rw =
   | Reader
   | Writer
@@ -21,6 +19,7 @@ type cipherAlg =
   | AES256
   | CHACHA20
 
+// 18-09-04 TODO get rid of this indirection
 type aeadAlg =
   | AES_128_GCM
   | AES_256_GCM
@@ -43,9 +42,9 @@ type id =
 let aeadAlg_of_id (i:id) =
   let TLSConstants.AEAD a _ = aeAlg_of_id i in
   match a with
-  | CC.AES_128_GCM -> AES_128_GCM
-  | CC.AES_256_GCM -> AES_256_GCM
-  | CC.CHACHA20_POLY1305 -> CHACHA20_POLY1305
+  | EverCrypt.AES128_GCM        -> AES_128_GCM
+  | EverCrypt.AES256_GCM        -> AES_256_GCM
+  | EverCrypt.CHACHA20_POLY1305 -> CHACHA20_POLY1305
   | _ -> admit()
 
 let macAlg_of_id (i:id) =

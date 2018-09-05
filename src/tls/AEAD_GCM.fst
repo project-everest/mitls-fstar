@@ -6,7 +6,6 @@ open FStar.Heap
 open FStar.HyperStack
 open FStar.Seq
 open FStar.Bytes
-open CoreCrypto
 
 open Mem
 open TLSConstants
@@ -317,13 +316,13 @@ let decrypt #i d ad c =
     lemma_repr_bytes_values j;
     let iv =
       match AEAD.alg i with
-      | CHACHA20_POLY1305 ->
+      | EverCrypt.CHACHA20_POLY1305 ->
         let nonce = bytes_of_int (AEAD.noncelen i) j in
         AEAD.create_nonce d.aead nonce
       | _ ->
         assume(AEAD.noncelen i = AEAD.explicit_iv_length i); // Should be proved, both = 8
         AEAD.create_nonce d.aead nb in
-    let len = length c' - aeadTagSize (alg i) in
+    let len = length c' - UInt32.v (EverCrypt.aead_tagLen (alg i)) in
     lemma_repr_bytes_values len;
     let ad' = ad @| bytes_of_int 2 len in
     assert(length ad' = 13);

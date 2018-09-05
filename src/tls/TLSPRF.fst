@@ -7,11 +7,11 @@ module HS = FStar.HyperStack //Added automatically
    used by Handshake, Handshake.Secret, KEF, and PRF.
 *)
 
-open FStar.Bytes
 open FStar.HyperStack.ST
 
 open Mem
 open Hashing.Spec
+open FStar.Bytes
 open TLSConstants
 open TLSInfo
 //open CoreCrypto
@@ -111,15 +111,15 @@ let p_hash alg secret seed len =
   assume(Bytes.len r = len); //18-02-14 TODO
   r
   
-val tls_prf: lbytes32 (hashSize TLSConstants.MD5SHA1) -> bytes -> bytes -> len:U32.t -> St (lbytes32 len)
+val tls_prf: lbytes32 (hashSize Hashing.MD5SHA1) -> bytes -> bytes -> len:U32.t -> St (lbytes32 len)
 let tls_prf secret label seed len =
   //18-02-14 fixed broken implementation, but currently unused and untested. 
   let l_s = length secret in
   let l_s1 = (l_s+1)/2 in
   let secret1,secret2 = split_ secret l_s1 in
   let newseed = label @| seed in
-  let hmd5  = p_hash (HMac MD5) secret1 newseed len in
-  let hsha1 = p_hash (HMac SHA1) secret2 newseed len in
+  let hmd5  = p_hash MD5 secret1 newseed len in
+  let hsha1 = p_hash SHA1 secret2 newseed len in
   assume(Bytes.len hmd5 = len /\ Bytes.len hsha1 = len);
   xor len hmd5 hsha1
 
@@ -134,10 +134,10 @@ let tls_finished_label =
 
 let verifyDataLen = 12ul
 
-val tls_verifyData: lbytes32 (hashSize TLSConstants.MD5SHA1) -> role -> bytes -> St (lbytes32 verifyDataLen)
+val tls_verifyData: lbytes32 (hashSize Hashing.MD5SHA1) -> role -> bytes -> St (lbytes32 verifyDataLen)
 let tls_verifyData ms role data =
-  let md5hash  = Hashing.OpenSSL.compute MD5 data in
-  let sha1hash = Hashing.OpenSSL.compute SHA1 data in
+  let md5hash  = Hashing.compute MD5 data in
+  let sha1hash = Hashing.compute SHA1 data in
   tls_prf ms (tls_finished_label role) (md5hash @| sha1hash) verifyDataLen
 
 
@@ -160,11 +160,11 @@ val tls12VerifyData:
   role -> bytes -> St (lbytes32 verifyDataLen)
 let tls12VerifyData cs ms role data =
   let verifyDataHashAlg = verifyDataHashAlg_of_ciphersuite cs in
-  let hashed = Hashing.OpenSSL.compute verifyDataHashAlg data in
+  let hashed = Hashing.compute verifyDataHashAlg data in
   tls12prf cs ms (tls_finished_label role) hashed verifyDataLen
 
 let finished12 hAlg (ms:key) role log =
-  p_hash (HMac hAlg) ms ((tls_finished_label role) @| log) verifyDataLen
+  p_hash hAlg ms ((tls_finished_label role) @| log) verifyDataLen
 
 
 (* Internal agile implementation of PRF *)
@@ -193,7 +193,7 @@ let prf_hashed (pv, cs) secret label data len =
   let data = match pv with
     | TLS_1p2 ->
       let sessionHashAlg = verifyDataHashAlg_of_ciphersuite cs in
-      Hashing.OpenSSL.compute sessionHashAlg data
+      Hashing.compute sessionHashAlg data
     | _ -> data in
   prf (pv, cs) secret label data len
 

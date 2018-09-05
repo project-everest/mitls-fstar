@@ -30,7 +30,7 @@ type ha = Hashing.alg
 // initial parameters
 noeq type info = | Info: 
   parent: rgn {~ (is_tls_rgn parent)} -> 
-  alg: Hashing.alg -> //too loose? Pkg.kdfa;
+  alg: HMAC.ha -> 
   good: (Hashing.macable alg -> bool) ->  //TODO: should be Type0 instead of bool, and erased, but hard to propagate
   info
 
@@ -282,7 +282,9 @@ unfold let localpkg
 noextract 
 let string_of_key (#ip:ipkg) (#i:ip.Pkg.t{ip.Pkg.registered i}) (k:key ip i): string = 
   let MAC u kv = get_key k in
-  "HMAC-"^Hashing.Spec.string_of_alg u.alg^" key="^print_bytes kv
+//18-08-31 TODO string vs string
+//"HMAC-"^Hashing.Spec.string_of_alg u.alg^" key="^print_bytes kv
+"HMAC key="^print_bytes kv
 
 
 (**! Unit test for the packaging of UFCMA *)
@@ -297,7 +299,7 @@ private let ip : ipkg = Pkg.Idx id (fun _ -> True) (fun _ -> True) (fun _ -> tru
 #set-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1 --z3rlimit 10"
 
 noextract
-private let test (a: ha) (r: rgn{~(is_tls_rgn r)}) (v': Hashing.macable a) (t': Hashing.Spec.tag a)
+private let test (a: HMAC.ha) (r: rgn{~(is_tls_rgn r)}) (v': Hashing.macable a) (t': Hashing.Spec.tag a)
   : ST bool
   (requires fun h0 -> model)
   (ensures fun h0 _ h1 -> True)
@@ -367,6 +369,7 @@ let unit_test(): St bool =
   let here = new_colored_region root hs_color in
   let b0 = 
     let a = Hashing.SHA1 in 
+    assert_norm(Hashing.Spec.blockLength a <= Hashing.Spec.maxLength a);
     test a here empty_bytes (Bytes.create (Hashing.tagLen a) 42z) in
   let b1 = 
     let a = Hashing.SHA1 in 

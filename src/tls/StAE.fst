@@ -31,8 +31,8 @@ module Range = Range
 let is_stream i = ID13? i
 
 let is_stlhae (i:id) = ID12? i && AEAD? (aeAlg_of_id i) &&
-  (AEAD?._0 (aeAlg_of_id i) = CoreCrypto.AES_128_GCM ||
-   AEAD?._0 (aeAlg_of_id i) = CoreCrypto.AES_256_GCM)
+  (AEAD?._0 (aeAlg_of_id i) = EverCrypt.AES128_GCM ||
+   AEAD?._0 (aeAlg_of_id i) = EverCrypt.AES256_GCM)
 
 // type id = i:id {is_stream i \/ is_stlhae i}
 
@@ -59,10 +59,10 @@ let frag_cipher_len (#i:id{is_stream i}) (f:C.fragment i) =
 let aeKeySize (i:stae_id) =
   if is_stream i
   then
-    CoreCrypto.aeadKeySize (Stream.alg i) +
+    UInt32.v (EverCrypt.aead_keyLen (Stream.alg i)) +
     AEADProvider.iv_length i
   else
-    CoreCrypto.aeadKeySize (AEAD?._0 (aeAlg_of_id i)) +
+    UInt32.v (EverCrypt.aead_keyLen (AEAD?._0 (aeAlg_of_id i))) +
     AEADProvider.salt_length i
 
 type keyBytes (i:stae_id) = lbytes (aeKeySize i)
@@ -334,10 +334,10 @@ val coerce: parent:rgn -> i:stae_id{~(authId i)} -> keyBytes i -> ST (writer i)
 #set-options "--z3rlimit 100"
 let coerce parent i kiv =
   if is_stream i then
-    let kv,iv = FStar.Bytes.split_ kiv (CoreCrypto.aeadKeySize (Stream.alg i)) in
+    let kv,iv = FStar.Bytes.split_ kiv (UInt32.v (EverCrypt.aead_keyLen (Stream.alg i))) in
     Stream () (Stream.coerce parent i kv iv)
   else
-    let kv,iv = FStar.Bytes.split_ kiv (CoreCrypto.aeadKeySize (StLHAE.alg i)) in
+    let kv,iv = FStar.Bytes.split_ kiv (UInt32.v (EverCrypt.aead_keyLen (StLHAE.alg i))) in
     StLHAE () (StLHAE.coerce parent i kv iv)
 
 #reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 2 --max_ifuel 2 --admit_smt_queries true"

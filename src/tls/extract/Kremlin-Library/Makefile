@@ -63,15 +63,15 @@ FILES = AEAD_GCM AEADProvider Alert BufferBytes Cert \
   secure/Crypto_AEAD_Main \
   Crypto_Indexing Crypto_Symmetric_Bytes Crypto_Plain \
   CryptoTypes DataStream DHGroup ECGroup Old_Epochs Extensions FFI \
-  FFICallbacks Flags Format FStar HaclProvider Old_Handshake HandshakeLog \
-  HandshakeMessages Hashing Hashing_CRF Hashing_OpenSSL Hashing_Spec Old_HKDF HMAC \
+  FFICallbacks Flags Format FStar Old_Handshake HandshakeLog \
+  HandshakeMessages Hashing Hashing_CRF Hashing_Spec HKDF HMAC \
   Old_HMAC_UFCMA Old_KeySchedule kremlinit LHAEPlain \
   LowParse Negotiation Nonce Parse PMS Prims \
   PSK QUIC Random Range Record RSAKey \
   secure/Crypto_HKDF_Crypto_HMAC \
   StAE StatefulLHAE \
   StatefulPlain StreamAE StreamDeltas StreamPlain stub/core_crypto \
-  stub/hacl_provider Ticket TLS TLSConstants TLS_Curve25519 TLSError TLSInfo \
+  Ticket TLS TLSConstants TLS_Curve25519 TLSError TLSInfo \
   TLSInfoFlags TLSPRF Transport stub/mitlsffi stub/buffer_bytes \
   stub/RegionAllocator
 

@@ -30,7 +30,7 @@ type id =
 | HMAC_Finished of finishedId
 | HMAC_Binder of binderId
 
-let alg (i:id) = match i with
+let alg (i:id) : HMAC.ha = match i with
 | HMAC_Finished i -> TLSInfo.finishedId_hash i
 | HMAC_Binder i -> TLSInfo.binderId_hash i
 
@@ -109,7 +109,7 @@ val mac: #i:id -> #good:(bytes -> Type) -> k:key i good -> p:bytes { authId i ==
 
 // We log every authenticated texts, with their index and resulting tag
 let mac #i #good k p =
-  assume (length p + Hashing.Spec.blockLength (alg i) <= Hashing.Spec.maxLength (alg i)) ;
+  assume (length p + Hashing.Spec.blockLength (alg i) < pow2 32);
   let p : p:bytes { authId i ==> good p } = p in
   let t = HMAC.hmac (alg i) k.kv p in
   let e : entry i good = Entry t p in
