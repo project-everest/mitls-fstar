@@ -29,7 +29,7 @@ ssh-add -D
 
 # Generate query-stats.
 # List the hints that fail to replay.
-FStar/.scripts/query-stats.py -f $out_file -F html -o log_no_replay.html -n all '--filter=fstar_usedhints=+' '--filter=fstar_tag=-' -g
+.scripts/query-stats.py -f $out_file -F html -o log_no_replay.html -n all '--filter=fstar_usedhints=+' '--filter=fstar_tag=-' -g
 
 # Worst offenders (longest times)
-FStar/.scripts/query-stats.py -f $out_file -F html -o log_worst.html -c -g -n 10
+.scripts/query-stats.py -f $out_file -F html -o log_worst.html -c -g -n 10
