@@ -6,7 +6,7 @@ threads=$3
 branchname=$4
 fstarVersion=$5
 
-export FSTAR_HOME=${MYHOME}/FStar
+export FSTAR_HOME=$(pwd)/FStar
 
 # Add ssh identity
 eval $(ssh-agent)
