@@ -55,7 +55,7 @@ WORKDIR ".."
 COPY build.sh build.sh
 COPY build_helper.sh build_helper.sh
 
-RUN ./build_helper.sh ${TARGET} ${BUILDLOGFILE} ${MAXTHREADS} ${BRANCHNAME} ${FSTARSOURCEVERSION} || true
+RUN Invoke-BashCmd ./build_helper.sh $Env:TARGET $Env:BUILDLOGFILE $Env:MAXTHREADS $Env:BRANCHNAME $Env:FSTARSOURCEVERSION '||' true
 
 # Remove ssh key.
 RUN Invoke-BashCmd rm .ssh/id_rsa
