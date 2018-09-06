@@ -200,8 +200,10 @@ val nondep_then_snd
   (p2: parser k2 t2)
 : Tot (accessor (p1 `nondep_then` p2) p2 (fun x y -> y == snd x))
 
+#push-options "--z3rlimit 50"
 let nondep_then_snd #k1 #t1 #p1 p1' #k2 #t2 p2 input =
   B.offset input (p1' input)
+#pop-options
 
 inline_for_extraction
 let make_total_constant_size_parser32
