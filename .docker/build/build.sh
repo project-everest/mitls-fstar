@@ -162,7 +162,6 @@ function refresh_hints() {
 
 function exec_build() {
 
-    export_home FSTAR "$(pwd)/../"
     result_file="../result.txt"
     local status_file="../status.txt"
     echo -n false >$status_file
@@ -200,6 +199,7 @@ export OCAMLRUNPARAM=b
 export OTHERFLAGS="--print_z3_statistics --use_hints --query_stats"
 export MAKEFLAGS="$MAKEFLAGS -Otarget"
 
+export_home FSTAR "$(pwd)/FStar"
 cd mitls-fstar
 exec_build
 cd ..

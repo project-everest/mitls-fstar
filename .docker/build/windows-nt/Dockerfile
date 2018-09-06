@@ -23,34 +23,27 @@ WORKDIR ".."
 # Now, using bash we copy the file, set the correct security and remove the previous folder
 RUN Invoke-BashCmd '"cd .ssh && cp ../everestsshkey/id_rsa . && chmod 600 id_rsa && rm -rf ../everestsshkey"'
 
-# Do some cleanup
-RUN Invoke-BashCmd rm -rf FStar/hacl-star
-RUN Invoke-BashCmd rm -rf FStar/hacl-star-old
-RUN Invoke-BashCmd rm -rf FStar/kremlin
-RUN Invoke-BashCmd rm -rf FStar/hacl-star
-RUN Invoke-BashCmd rm -rf FStar/mitls-fstar
-RUN Invoke-BashCmd rm -rf FStar/vale
-
-RUN Invoke-BashCmd rm -f FStar/build.sh
-RUN Invoke-BashCmd rm -f FStar/build_helper.sh
-RUN Invoke-BashCmd rm -f FStar/buildlogfile.txt
-RUN Invoke-BashCmd rm -f FStar/log_no_replay.html
-RUN Invoke-BashCmd rm -f FStar/log_worst.html
-RUN Invoke-BashCmd rm -f FStar/orange_status.txt
-RUN Invoke-BashCmd rm -f FStar/result.txt
-RUN Invoke-BashCmd rm -f FStar/status.txt
-RUN Invoke-BashCmd rm -f FStar/commitinfofilename.json
-
-WORKDIR "FStar/mitls-fstar"
+# Copy source files
+WORKDIR "mitls-fstar"
 COPY / .
-
-# Do another cleanup
-RUN Invoke-BashCmd rm Dockerfile
-RUN Invoke-BashCmd rm build.sh
-RUN Invoke-BashCmd rm build_helper.sh
-RUN Invoke-BashCmd rm id_rsa
-RUN Invoke-BashCmd rm commitinfofilename.json
 WORKDIR ".."
+
+# Do some cleanup
+RUN Invoke-BashCmd rm -f build.sh
+RUN Invoke-BashCmd rm -f build_helper.sh
+RUN Invoke-BashCmd rm -f buildlogfile.txt
+RUN Invoke-BashCmd rm -f log_no_replay.html
+RUN Invoke-BashCmd rm -f log_worst.html
+RUN Invoke-BashCmd rm -f orange_status.txt
+RUN Invoke-BashCmd rm -f result.txt
+RUN Invoke-BashCmd rm -f status.txt
+RUN Invoke-BashCmd rm -f commitinfofilename.json
+
+RUN Invoke-BashCmd rm mitls-fstar/Dockerfile
+RUN Invoke-BashCmd rm mitls-fstar/build.sh
+RUN Invoke-BashCmd rm mitls-fstar/build_helper.sh
+RUN Invoke-BashCmd rm mitls-fstar/id_rsa
+RUN Invoke-BashCmd rm mitls-fstar/commitinfofilename.json
 
 COPY build.sh build.sh
 COPY build_helper.sh build_helper.sh
