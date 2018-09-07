@@ -230,23 +230,20 @@ let set_binders
     get_psk_id ch' == get_psk_id ch /\
     get_binders ch' == b' /\
     B32.length b' <= Seq.length s /\
-    LP.serialize serialize_client_hello ch' == LP.seq_upd_seq s (Seq.length s - B32.length b') (B32.reveal b')
+    LP.serialize serialize_client_hello ch' == LP.seq_upd_bw_seq s 0 (B32.reveal b')
   ))
 = let (cs, exts) = ch in
   let last : extension = L.last exts in
   let last : LP.dsum_cases extension_sum (LP.Known PreSharedKeyExtension_t) = last in
   let (PreSharedKeyExtension ps) = last in
   let (i, b) = ps in
-  LP.serialize_bounded_vlbytes_upd 0 65535 b b';
+  LP.serialize_bounded_vlbytes_upd_bw 0 65535 b b';
   let rb' = B32.reveal b' in
   let b' : binders = b' in
-  let j = LP.log256' 65535 in
-  LP.serialize_nondep_then_upd_right_chain _ LP.serialize_u32 () _ serialize_binders ps b' j rb';
-  let j = Seq.length (LP.serialize LP.serialize_u32 i) + j in
+  LP.serialize_nondep_then_upd_bw_right_chain _ LP.serialize_u32 () _ serialize_binders ps b' 0 rb';
   let ps' : pre_shared_key_extension = (i, b') in
-  LP.serialize_bounded_vldata_strong_upd_chain 2 65535 serialize_pre_shared_key_extension ps ps' j rb';
+  LP.serialize_bounded_vldata_strong_upd_bw_chain 2 65535 serialize_pre_shared_key_extension ps ps' 0 rb';
   let ps' : LP.parse_bounded_vldata_strong_t 2 65535 serialize_pre_shared_key_extension = ps' in
-  let j = LP.log256' 65535 + j in
   let last' : extension = PreSharedKeyExtension ps' in
   assert_norm (LP.dsum_tag_of_data extension_sum last' == LP.Known PreSharedKeyExtension_t);
   let last' : LP.dsum_cases extension_sum (LP.Known PreSharedKeyExtension_t) = last' in
@@ -254,25 +251,20 @@ let set_binders
   synth_pre_shared_extension_inv ();
   assert_norm (synth_pre_shared_extension ps == last);
   assert_norm (synth_pre_shared_extension ps' == last');
-  LP.serialize_synth_upd_chain _ synth_pre_shared_extension (LP.serialize_bounded_vldata_strong 2 65535 serialize_pre_shared_key_extension) synth_pre_shared_extension_recip () ps  last ps' last' j rb';
+  LP.serialize_synth_upd_bw_chain _ synth_pre_shared_extension (LP.serialize_bounded_vldata_strong 2 65535 serialize_pre_shared_key_extension) synth_pre_shared_extension_recip () ps  last ps' last' 0 rb';
   assert_norm (LP.serialize (serialize_extension_cases (LP.Known PreSharedKeyExtension_t)) last == LP.serialize (LP.serialize_synth _ synth_pre_shared_extension (LP.serialize_bounded_vldata_strong 2 65535 serialize_pre_shared_key_extension) synth_pre_shared_extension_recip ()) last);
   assert_norm (LP.serialize (serialize_extension_cases (LP.Known PreSharedKeyExtension_t)) last' == LP.serialize (LP.serialize_synth _ synth_pre_shared_extension (LP.serialize_bounded_vldata_strong 2 65535 serialize_pre_shared_key_extension) synth_pre_shared_extension_recip ()) last');
-  LP.serialize_dsum_upd_chain extension_sum LP.serialize_u32 serialize_extension_cases last last' j rb';
-  let j = Seq.length (LP.serialize (LP.serialize_maybe_enum_key _ LP.serialize_u32 (LP.dsum_enum extension_sum)) (LP.Known PreSharedKeyExtension_t)) + j in
+  LP.serialize_dsum_upd_bw_chain extension_sum LP.serialize_u32 serialize_extension_cases last last' 0 rb';
   let init = L.init exts in
   assert_norm (LP.serialize_list_precond (LP.get_parser_kind parse_extension));
-  LP.serialize_list_snoc_upd_chain serialize_extension init last last' j rb';
-  let j = Seq.length (LP.serialize (LP.serialize_list _ serialize_extension) init) + j in
+  LP.serialize_list_snoc_upd_bw_chain serialize_extension init last last' 0 rb';
   list_init_last exts;
   let exts' = L.append init [last'] in
-  LP.serialize_bounded_vldata_strong_upd_chain 0 65535 (LP.serialize_list _ serialize_extension) exts exts' j rb';
+  LP.serialize_bounded_vldata_strong_upd_bw_chain 0 65535 (LP.serialize_list _ serialize_extension) exts exts' 0 rb';
   let exts' : extensions = exts' in
-  let j = LP.log256' 65535 + j in
-  LP.serialize_nondep_then_upd_right_chain _ serialize_cipher_suites () _ serialize_extensions ch exts' j rb';
+  LP.serialize_nondep_then_upd_bw_right_chain _ serialize_cipher_suites () _ serialize_extensions ch exts' 0 rb';
   let ch' : client_hello = (cs, exts') in
-  let j = Seq.length (LP.serialize serialize_cipher_suites cs) + j in
-  assert (LP.serialize serialize_client_hello ch' == LP.seq_upd_seq (LP.serialize serialize_client_hello ch) j (B32.reveal b'));
-  assume (j == Seq.length (LP.serialize serialize_client_hello ch) - B32.length b');
+  assert (LP.serialize serialize_client_hello ch' == LP.seq_upd_bw_seq (LP.serialize serialize_client_hello ch) 0 (B32.reveal b'));
   list_init_last_recip init last';
   assert (
     with_psk ch' /\
