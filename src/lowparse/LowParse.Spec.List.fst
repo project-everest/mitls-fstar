@@ -322,6 +322,8 @@ let serialize_list_upd
   assert (serialize (serialize_list _ s) (l1 `L.append` (y :: l2)) == seq_upd_seq (serialize (serialize_list _ s) l1 `Seq.append` serialize (serialize_list _ s) (x :: l2)) (Seq.length (serialize (serialize_list _ s) l1) + 0) (serialize s y));
   serialize_list_append _ s l1 (x :: l2)
 
+#set-options "--z3rlimit 64"
+
 let serialize_list_upd_chain
   (#k: parser_kind)
   (#t: Type0)
