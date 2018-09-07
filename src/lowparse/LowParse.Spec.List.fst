@@ -322,6 +322,31 @@ let serialize_list_upd
   assert (serialize (serialize_list _ s) (l1 `L.append` (y :: l2)) == seq_upd_seq (serialize (serialize_list _ s) l1 `Seq.append` serialize (serialize_list _ s) (x :: l2)) (Seq.length (serialize (serialize_list _ s) l1) + 0) (serialize s y));
   serialize_list_append _ s l1 (x :: l2)
 
+let serialize_list_upd_bw
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (l1: list t)
+  (x: t)
+  (l2: list t)
+  (y: t)
+: Lemma
+  (requires (
+    serialize_list_precond k /\
+    Seq.length (serialize s y) == Seq.length (serialize s x)
+  ))
+  (ensures (
+    let ln1 = Seq.length (serialize (serialize_list _ s) l1) in
+    let ln2 = Seq.length (serialize (serialize_list _ s) l2) in
+    let sx = serialize s x in
+    let sl = serialize (serialize_list _ s) (l1 `L.append` (x :: l2)) in
+    Seq.length sl == ln1 + Seq.length sx + ln2 /\
+    serialize (serialize_list _ s) (l1 `L.append` (y :: l2)) == seq_upd_bw_seq sl ln2 (serialize s y)
+  ))
+  (decreases (L.length l1))
+= serialize_list_upd s l1 x l2 y
+
 #set-options "--z3rlimit 64"
 
 let serialize_list_upd_chain
@@ -370,6 +395,37 @@ let serialize_list_upd_chain
   seq_upd_seq_seq_upd_seq_slice sl ln1 (ln1 + lx) i' s';
   ()
 
+let serialize_list_upd_bw_chain
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (l1: list t)
+  (x: t)
+  (l2: list t)
+  (y: t)
+  (i' : nat)
+  (s' : bytes)
+: Lemma
+  (requires (
+    let sx = serialize s x in
+    serialize_list_precond k /\
+    i' + Seq.length s' <= Seq.length sx /\
+    serialize s y == seq_upd_bw_seq sx i' s'
+  ))
+  (ensures (
+    let ln1 = Seq.length (serialize (serialize_list _ s) l1) in
+    let ln2 = Seq.length (serialize (serialize_list _ s) l2) in
+    let sx = serialize s x in
+    let sl = serialize (serialize_list _ s) (l1 `L.append` (x :: l2)) in
+    Seq.length sl == ln1 + Seq.length sx + ln2 /\
+    ln2 + i' + Seq.length s' <= Seq.length sl /\
+    serialize (serialize_list _ s) (l1 `L.append` (y :: l2)) == seq_upd_bw_seq sl (ln2 + i') s'
+  ))
+= let sx = serialize s x in
+  let j' = Seq.length sx - i' - Seq.length s' in
+  serialize_list_upd_chain s l1 x l2 y j' s'
+
 let serialize_list_cons_upd_chain
   (#k: parser_kind)
   (#t: Type0)
@@ -397,6 +453,34 @@ let serialize_list_cons_upd_chain
   ))
 = serialize_list_upd_chain s [] x l2 y i' s'
 
+let serialize_list_cons_upd_bw_chain
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (x: t)
+  (l2: list t)
+  (y: t)
+  (i' : nat)
+  (s' : bytes)
+: Lemma
+  (requires (
+    let sx = serialize s x in
+    serialize_list_precond k /\
+    i' + Seq.length s' <= Seq.length sx /\
+    serialize s y == seq_upd_bw_seq sx i' s'
+  ))
+  (ensures (
+    let ln2 = Seq.length (serialize (serialize_list _ s) l2) in
+    let sx = serialize s x in
+    let sl = serialize (serialize_list _ s) (x :: l2) in
+    Seq.length sl == Seq.length sx + ln2 /\
+    ln2 + i' + Seq.length s' <= Seq.length sl /\
+    serialize (serialize_list _ s) (y :: l2) == seq_upd_bw_seq sl (ln2 + i') s'
+  ))
+= let j' = Seq.length (serialize s x) - i' - Seq.length s' in
+  serialize_list_cons_upd_chain s x l2 y j' s'
+
 let serialize_list_snoc_upd_chain
   (#k: parser_kind)
   (#t: Type0)
@@ -423,6 +507,34 @@ let serialize_list_snoc_upd_chain
     serialize (serialize_list _ s) (l1 `L.append` [y]) == seq_upd_seq sl (ln1 + i') s'
   ))
 = serialize_list_upd_chain s l1 x [] y i' s'
+
+let serialize_list_snoc_upd_bw_chain
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (l1: list t)
+  (x: t)
+  (y: t)
+  (i' : nat)
+  (s' : bytes)
+: Lemma
+  (requires (
+    let sx = serialize s x in
+    serialize_list_precond k /\
+    i' + Seq.length s' <= Seq.length sx /\
+    serialize s y == seq_upd_bw_seq sx i' s'
+  ))
+  (ensures (
+    let ln1 = Seq.length (serialize (serialize_list _ s) l1) in
+    let sx = serialize s x in
+    let sl = serialize (serialize_list _ s) (l1 `L.append` [x]) in
+    Seq.length sl == ln1 + Seq.length sx /\
+    i' + Seq.length s' <= Seq.length sl /\
+    serialize (serialize_list _ s) (l1 `L.append` [y]) == seq_upd_bw_seq sl i' s'
+  ))
+= let j' = Seq.length (serialize s x) - i' - Seq.length s' in
+  serialize_list_snoc_upd_chain s l1 x y j' s'
 
 #reset-options
 

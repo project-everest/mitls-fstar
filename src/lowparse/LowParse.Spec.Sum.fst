@@ -584,6 +584,43 @@ let serialize_dsum_upd
     Seq.lemma_append_inj (Seq.slice sy' 0 tlen) (Seq.slice sy' tlen (Seq.length sy')) st sy;
     assert (sy' `Seq.equal` seq_upd_seq sx' tlen sy)
 
+#reset-options "--z3refresh --z3rlimit 32 --z3cliopt smt.arith.nl=false"
+
+let serialize_dsum_upd_bw
+  (#kt: parser_kind)
+  (t: dsum)
+  (#p: parser kt (dsum_repr_type t))
+  (s: serializer p)
+  (#k: parser_kind)
+  (#pc: ((x: dsum_key t) -> Tot (parser k (dsum_cases t x))))
+  (sc: ((x: dsum_key t) -> Tot (serializer (pc x))))
+  (x: dsum_type t)
+  (y: dsum_type t)
+: Lemma
+  (requires (
+    let tx = dsum_tag_of_data t x in
+    let ty = dsum_tag_of_data t y in
+    kt.parser_kind_subkind == Some ParserStrong /\
+    ty == tx /\
+    Seq.length (serialize (sc ty) y) == Seq.length (serialize (sc tx) x)
+  ))
+  (ensures (
+    let tx = dsum_tag_of_data t x in
+    let ty = dsum_tag_of_data t y in
+    let tlen = Seq.length (serialize (serialize_maybe_enum_key _ s (dsum_enum t)) tx) in
+    let sx' = serialize (serialize_dsum t s sc) x in
+    let sy = serialize (sc ty) y in
+    tlen + Seq.length sy == Seq.length sx' /\
+    serialize (serialize_dsum t s sc) y == seq_upd_bw_seq sx' 0 sy
+  ))
+= serialize_dsum_upd t s sc x y;
+  let tx = dsum_tag_of_data t x in
+  let ty = dsum_tag_of_data t y in
+  let tlen = Seq.length (serialize (serialize_maybe_enum_key _ s (dsum_enum t)) tx) in
+  let sx' = serialize (serialize_dsum t s sc) x in
+  let sy = serialize (sc ty) y in
+  assert (Seq.length sx' - Seq.length sy == tlen)
+
 let serialize_dsum_upd_chain
   (#kt: parser_kind)
   (t: dsum)
@@ -624,3 +661,42 @@ let serialize_dsum_upd_chain
   Seq.lemma_split sx' tlen;
   Seq.lemma_append_inj (Seq.slice sx' 0 tlen) (Seq.slice sx' tlen (Seq.length sx')) st sx;
   seq_upd_seq_seq_upd_seq_slice sx' tlen (Seq.length sx') i' s'
+
+let serialize_dsum_upd_bw_chain
+  (#kt: parser_kind)
+  (t: dsum)
+  (#p: parser kt (dsum_repr_type t))
+  (s: serializer p)
+  (#k: parser_kind)
+  (#pc: ((x: dsum_key t) -> Tot (parser k (dsum_cases t x))))
+  (sc: ((x: dsum_key t) -> Tot (serializer (pc x))))
+  (x: dsum_type t)
+  (y: dsum_type t)
+  (i' : nat)
+  (s' : bytes)
+: Lemma
+  (requires (
+    let tx = dsum_tag_of_data t x in
+    let ty = dsum_tag_of_data t y in
+    let sx = serialize (sc tx) x in
+    kt.parser_kind_subkind == Some ParserStrong /\
+    ty == tx /\
+    i' + Seq.length s' <= Seq.length sx /\
+    serialize (sc ty) y == seq_upd_bw_seq sx i' s'
+  ))
+  (ensures (
+    let tx = dsum_tag_of_data t x in
+    let tlen = Seq.length (serialize (serialize_maybe_enum_key _ s (dsum_enum t)) tx) in
+    let sx' = serialize (serialize_dsum t s sc) x in
+    tlen + Seq.length (serialize (sc tx) x) == Seq.length sx' /\
+    i' + Seq.length s' <= Seq.length sx' /\
+    serialize (serialize_dsum t s sc) y == seq_upd_bw_seq sx' (i') s'
+  ))
+= let tx = dsum_tag_of_data t x in
+  let j' = Seq.length (serialize (sc tx) x) - i' - Seq.length s' in
+  serialize_dsum_upd_chain t s sc x y j' s';
+  let sx' = serialize (serialize_dsum t s sc) x in
+  let tlen = Seq.length (serialize (serialize_maybe_enum_key _ s (dsum_enum t)) tx) in
+  assert (tlen + j' == Seq.length sx' - i' - Seq.length s');
+  assert (seq_upd_bw_seq sx' i' s' == seq_upd_seq sx' (tlen + j') s');
+  ()

@@ -678,6 +678,55 @@ let serialize_nondep_then_upd_left_chain
   seq_upd_seq_right_to_left s 0 s1' i' s';
   seq_upd_seq_slice_idem s 0 (Seq.length s1')
 
+let serialize_nondep_then_upd_bw_left
+  (#k1: parser_kind)
+  (#t1: Type0)
+  (p1: parser k1 t1)
+  (s1: serializer p1)
+  (u: unit { k1.parser_kind_subkind == Some ParserStrong } )
+  (#k2: parser_kind)
+  (#t2: Type0)
+  (p2: parser k2 t2)
+  (s2: serializer p2)
+  (x: t1 * t2)
+  (y: t1)
+: Lemma
+  (requires (Seq.length (serialize s1 y) == Seq.length (serialize s1 (fst x))))
+  (ensures (
+    let s = serialize (serialize_nondep_then p1 s1 u p2 s2) x in
+    let len2 = Seq.length (serialize s2 (snd x)) in
+    len2 + Seq.length (serialize s1 y) <= Seq.length s /\
+    serialize (serialize_nondep_then p1 s1 u p2 s2) (y, snd x) == seq_upd_bw_seq s len2 (serialize s1 y)
+  ))
+= serialize_nondep_then_upd_left p1 s1 u p2 s2 x y
+
+let serialize_nondep_then_upd_bw_left_chain
+  (#k1: parser_kind)
+  (#t1: Type0)
+  (p1: parser k1 t1)
+  (s1: serializer p1)
+  (u: unit { k1.parser_kind_subkind == Some ParserStrong } )
+  (#k2: parser_kind)
+  (#t2: Type0)
+  (p2: parser k2 t2)
+  (s2: serializer p2)
+  (x: t1 * t2)
+  (y: t1)
+  (i' : nat)
+  (s' : bytes)
+: Lemma
+  (requires (
+    let s1' = serialize s1 (fst x) in
+    i' + Seq.length s' <= Seq.length s1' /\
+    serialize s1 y == seq_upd_bw_seq s1' i' s'
+  ))
+  (ensures (
+    let s = serialize (serialize_nondep_then p1 s1 u p2 s2) x in
+    let len2 = Seq.length (serialize s2 (snd x)) in
+    len2 + i' + Seq.length s' <= Seq.length s /\
+    serialize (serialize_nondep_then p1 s1 u p2 s2) (y, snd x) == seq_upd_bw_seq s (len2 + i') s'
+  ))
+= serialize_nondep_then_upd_left_chain p1 s1 u p2 s2 x y (Seq.length (serialize s1 (fst x)) - i' - Seq.length s') s'
 
 let serialize_nondep_then_upd_right
   (#k1: parser_kind)
@@ -740,6 +789,65 @@ let serialize_nondep_then_upd_right_chain
   seq_upd_seq_right_to_left s l2 s2' i' s';
   seq_upd_seq_slice_idem s l2 (Seq.length s)
 
+let serialize_nondep_then_upd_bw_right
+  (#k1: parser_kind)
+  (#t1: Type0)
+  (p1: parser k1 t1)
+  (s1: serializer p1)
+  (u: unit { k1.parser_kind_subkind == Some ParserStrong } )
+  (#k2: parser_kind)
+  (#t2: Type0)
+  (p2: parser k2 t2)
+  (s2: serializer p2)
+  (x: t1 * t2)
+  (y: t2)
+: Lemma
+  (requires (Seq.length (serialize s2 y) == Seq.length (serialize s2 (snd x))))
+  (ensures (
+    let s = serialize (serialize_nondep_then p1 s1 u p2 s2) x in
+    Seq.length (serialize s2 y) <= Seq.length s /\
+    serialize (serialize_nondep_then p1 s1 u p2 s2) (fst x, y) == seq_upd_bw_seq s 0 (serialize s2 y)
+  ))
+= serialize_nondep_then_upd_right p1 s1 u p2 s2 x y
+
+#reset-options "--z3refresh --z3rlimit 64 --z3cliopt smt.arith.nl=false"
+
+let serialize_nondep_then_upd_bw_right_chain
+  (#k1: parser_kind)
+  (#t1: Type0)
+  (p1: parser k1 t1)
+  (s1: serializer p1)
+  (u: unit { k1.parser_kind_subkind == Some ParserStrong } )
+  (#k2: parser_kind)
+  (#t2: Type0)
+  (p2: parser k2 t2)
+  (s2: serializer p2)
+  (x: t1 * t2)
+  (y: t2)
+  (i' : nat)
+  (s' : bytes)
+: Lemma
+  (requires (
+    let s2' = serialize s2 (snd x) in
+    i' + Seq.length s' <= Seq.length s2' /\
+    serialize s2 y == seq_upd_bw_seq s2' i' s'
+  ))
+  (ensures (
+    let s = serialize (serialize_nondep_then p1 s1 u p2 s2) x in
+    let l1 = Seq.length (serialize s1 (fst x)) in
+    Seq.length s == l1 + Seq.length (serialize s2 (snd x)) /\
+    i' + Seq.length s' <= Seq.length s /\
+    serialize (serialize_nondep_then p1 s1 u p2 s2) (fst x, y) == seq_upd_bw_seq s i' s'
+  ))
+= let s2' = serialize s2 (snd x) in
+  let j' = Seq.length s2' - i' - Seq.length s' in
+  assert (j' + Seq.length s' <= Seq.length s2');
+  assert (serialize s2 y == seq_upd_seq s2' j' s');
+  let s = serialize (serialize_nondep_then p1 s1 u p2 s2) x in
+  serialize_nondep_then_upd_right_chain p1 s1 u p2 s2 x y j' s';
+  ()
+
+#reset-options "--z3rlimit 32"
 
 (** Apply a total transformation on parsed data *)
 
@@ -1052,6 +1160,40 @@ let serialize_synth_upd_chain
     i' + Seq.length s' <= Seq.length s /\
     Seq.length s == Seq.length (serialize s1 x1) /\
     serialize (serialize_synth p1 f2 s1 g1 u) y2 == seq_upd_seq s i' s'
+  ))
+= ()
+
+let serialize_synth_upd_bw_chain
+  (#k: parser_kind)
+  (#t1: Type0)
+  (#t2: Type0)
+  (p1: parser k t1)
+  (f2: t1 -> GTot t2)
+  (s1: serializer p1)
+  (g1: t2 -> GTot t1)
+  (u: unit {
+    synth_inverse f2 g1 /\
+    synth_injective f2
+  })
+  (x1: t1)
+  (x2: t2)
+  (y1: t1)
+  (y2: t2)
+  (i': nat)
+  (s' : bytes)
+: Lemma
+  (requires (
+    let s = serialize s1 x1 in
+    i' + Seq.length s' <= Seq.length s /\
+    serialize s1 y1 == seq_upd_bw_seq s i' s' /\
+    x2 == f2 x1 /\
+    y2 == f2 y1
+  ))
+  (ensures (
+    let s = serialize (serialize_synth p1 f2 s1 g1 u) x2 in
+    i' + Seq.length s' <= Seq.length s /\
+    Seq.length s == Seq.length (serialize s1 x1) /\
+    serialize (serialize_synth p1 f2 s1 g1 u) y2 == seq_upd_bw_seq s i' s'
   ))
 = ()
 

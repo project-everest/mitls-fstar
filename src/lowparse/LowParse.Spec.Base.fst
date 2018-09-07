@@ -1005,3 +1005,22 @@ let seq_append_seq_upd_seq_r
     seq_upd_seq s i' s' `Seq.append` sr == seq_upd_seq (s `Seq.append` sr) i' s'
   ))
 = assert ((seq_upd_seq s i' s' `Seq.append` sr) `Seq.equal` seq_upd_seq (s `Seq.append` sr) i' s')
+
+let seq_upd_bw_seq
+  (#t: Type)
+  (s: Seq.seq t)
+  (i: nat)
+  (s' : Seq.seq t)
+: Pure (s_ : Seq.seq t { Seq.length s_ == Seq.length s } )
+  (requires (i + Seq.length s' <= Seq.length s))
+  (ensures (fun _ -> True))
+= seq_upd_seq s (Seq.length s - i - Seq.length s') s'
+
+let seq_upd_bw_seq_right
+  (#t: Type)
+  (s: Seq.seq t)
+  (s' : Seq.seq t)
+: Lemma
+  (requires (Seq.length s' <= Seq.length s))
+  (ensures (seq_upd_bw_seq s 0 s' == Seq.append (Seq.slice s 0 (Seq.length s - Seq.length s')) s'))
+= seq_upd_seq_right s s'

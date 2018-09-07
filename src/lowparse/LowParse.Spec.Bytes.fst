@@ -212,3 +212,20 @@ let serialize_bounded_vlbytes_upd
     serialize (serialize_bounded_vlbytes min max) y == seq_upd_seq sx lm sy
   ))
 = serialize_bounded_vldata_strong_upd min max serialize_all_bytes x y
+
+let serialize_bounded_vlbytes_upd_bw
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (x: parse_bounded_vlbytes_t min max)
+  (y: B32.bytes)
+: Lemma
+  (requires (B32.length y == B32.length x))
+  (ensures (
+    let sy = B32.reveal y in
+    let y : parse_bounded_vlbytes_t min max = y in
+    let sx = serialize (serialize_bounded_vlbytes min max) x in
+    let lm = log256' max in
+    lm + B32.length y == Seq.length sx /\
+    serialize (serialize_bounded_vlbytes min max) y == seq_upd_bw_seq sx 0 sy
+  ))
+= serialize_bounded_vldata_strong_upd_bw min max serialize_all_bytes x y

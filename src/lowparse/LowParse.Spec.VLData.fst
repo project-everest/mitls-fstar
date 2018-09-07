@@ -747,6 +747,27 @@ let serialize_bounded_vldata_strong_upd
     Seq.lemma_append_inj (Seq.slice sy' 0 lm) (Seq.slice sy' lm (Seq.length sy')) sz sy;
     assert (sy' `Seq.equal` seq_upd_seq sx' lm sy)
 
+let serialize_bounded_vldata_strong_upd_bw
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (x: parse_bounded_vldata_strong_t min max s)
+  (y: t)
+: Lemma
+  (requires (Seq.length (serialize s y) == Seq.length (serialize s x)))
+  (ensures (
+    let sy = serialize s y in
+    let y : parse_bounded_vldata_strong_t min max s = y in
+    let sx = serialize (serialize_bounded_vldata_strong min max s) x in
+    let lm = log256' max in
+    lm + Seq.length sy == Seq.length sx /\
+    serialize (serialize_bounded_vldata_strong min max s) y == seq_upd_bw_seq sx 0 sy
+  ))
+= serialize_bounded_vldata_strong_upd min max s x y
+
 let serialize_bounded_vldata_strong_upd_chain
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
@@ -782,3 +803,33 @@ let serialize_bounded_vldata_strong_upd_chain
   Seq.lemma_split sx' lm;
   Seq.lemma_append_inj (Seq.slice sx' 0 lm) (Seq.slice sx' lm (Seq.length sx')) sz sx;
   seq_upd_seq_seq_upd_seq_slice sx' lm (Seq.length sx') i' s'
+
+#reset-options "--z3refresh --z3rlimit 32 --z3cliopt smt.arith.nl=false"
+
+let serialize_bounded_vldata_strong_upd_bw_chain
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (x: parse_bounded_vldata_strong_t min max s)
+  (y: t)
+  (i' : nat)
+  (s' : bytes)
+: Lemma
+  (requires (
+    let sx = serialize s x in
+    i' + Seq.length s' <= Seq.length sx /\
+    serialize s y == seq_upd_bw_seq sx i' s'
+  ))
+  (ensures (
+    parse_bounded_vldata_strong_pred min max s y /\ (
+    let y : parse_bounded_vldata_strong_t min max s = y in
+    let sx' = serialize (serialize_bounded_vldata_strong min max s) x in
+    let lm = log256' max in
+    lm + Seq.length (serialize s x) == Seq.length sx' /\
+    i' + Seq.length s' <= Seq.length sx' /\
+    serialize (serialize_bounded_vldata_strong min max s) y == seq_upd_bw_seq sx' i' s'
+  )))
+= serialize_bounded_vldata_strong_upd_chain min max s x y (Seq.length (serialize s x) - i' - Seq.length s') s'
