@@ -21,11 +21,13 @@ open Pkg
 
 val table_region : rgn
 
-let safePNE (i:I.id) = Flag.safePNE i
+type prfid = Flag.prfid
+
+let safePNE (j:prfid) = Flag.safePNE j
 
 type cipher = b:bytes{Bytes.length b >= 16}
 
-type mask = lbytes 16
+type mask = lbytes 16 
 
 type ciphersample = lbytes 16
 
@@ -52,59 +54,60 @@ let repr (i:I.id{~(safePNE i)}) (u:info) (l:pnlen) (n:pn i u l) = PNPkg?.repr u 
 
 let abs (i:I.id{~(safePNE i)}) (u:info) (l:pnlen) (b:lbytes l) = PNPkg?.abs u i l b
 *)
-type entry (i:I.id) =
+type entry (j:prfid) =
   | Entry :
     c:cipher ->
     m:mask ->
-    entry i
+    entry j
 
-val pne_state : i:I.id -> Type0
+val pne_state : (j:prfid) -> Type0
 
-val table : (#i:I.id) -> (st:pne_state i) -> (h:mem) -> GTot (Seq.seq (entry i))
+val table : (#j:prfid) -> (st:pne_state j) -> (h:mem) -> GTot (Seq.seq (entry j))
 
-val footprint : #i:I.id -> st:pne_state i -> GTot (subrgn table_region)
+val footprint : #j:prfid -> st:pne_state j -> GTot (subrgn table_region)
 
-val frame_table: #i:I.id -> st:pne_state i -> l:Seq.seq (entry i) ->
+val frame_table: #j:prfid -> st:pne_state j -> l:Seq.seq (entry j) ->
   h0:mem -> s:Set.set rid -> h1:mem ->
   Lemma
     (requires
-      safePNE i /\
+      safePNE j /\
       table st h0 == l /\
       modifies s h0 h1 /\
       Set.disjoint s (Set.singleton (footprint st)))
     (ensures table st h1 == l)
 
-let cipher_filter (i:I.id) (c:cipher) (e:entry i) : bool =
+let cipher_filter (j:prfid) (c:cipher) (e:entry j) : bool =
   Entry?.c e = c
 
-let entry_for_cipher (#i:I.id) (c:cipher) (st:pne_state i) (h:mem) :
-  GTot (option (entry i)) =
-  Seq.find_l (cipher_filter i c) (table st h)
+let entry_for_cipher (#j:prfid) (c:cipher) (st:pne_state j) (h:mem) :
+  GTot (option (entry j)) =
+  Seq.find_l (cipher_filter j c) (table st h)
   
-let fresh_cipher (#i:I.id) (c:cipher) (st:pne_state i) (h:mem) :
+let fresh_cipher (#j:prfid) (c:cipher) (st:pne_state j) (h:mem) :
   GTot bool =
   None? (entry_for_cipher c st h)
 
 let sample_cipher (c:cipher) : s:ciphersample =
   Bytes.slice c 0ul 16ul
 
-val create (i:I.id) : ST (pne_state i)
+val create (j:prfid) : ST (pne_state j)
   (requires fun _ -> True)
   (ensures fun h0 st h1 ->
     modifies_none h0 h1 /\
     table st h1 == Seq.empty)
 
 val compute :
-  (#i:I.id) ->
-  (st:pne_state i) ->
+  (#j:prfid) ->
+  (st:pne_state j) ->
   (c:cipher) ->
   ST (mask)
   (requires fun h0 -> True)
-//    fresh_sample (sample_cipher c) st h0)
   (ensures fun h0 m h1 ->
-   // let s = sample_cipher c in
     modifies_one (footprint st) h0 h1 /\
-    (safePNE i ==>
+    (safePNE j ==>
       (match (entry_for_cipher c st h0) with
         | None -> table st h1 == Seq.snoc (table st h0) (Entry c m)
         | Some (Entry _ m') -> m = m')))
+
+
+

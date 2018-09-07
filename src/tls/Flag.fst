@@ -54,14 +54,20 @@ let idealAEAD : bool = Flags.ideal_AEAD
 assume val safeId : (i:id) -> b:bool{b ==> idealAEAD}
 
 // pne abstraction
+assume type prfid
+
 assume val idealPNE : b:bool{b ==> idealAEAD}
 
-assume val safePNE : i:id -> b:bool{b ==> idealPNE}
+assume val safePNE : i:prfid -> b:bool{b ==> idealPNE}
 
 // quic abstraction
+
+type quicid = id*prfid
+
 assume val idealQUIC : b:bool{b ==> idealPNE}
 
-assume val safeQUIC : (i:id) -> b:bool{b ==> idealQUIC}
+assume val safeQUIC : k:quicid -> b:bool
+  {b ==> idealQUIC /\ (let (i,j) = k in safeId i /\ safePNE j)}
 
 
 (* IDEALIZATION DEPENDENCIES *) 
