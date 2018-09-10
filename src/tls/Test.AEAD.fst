@@ -2,15 +2,17 @@ module Test.AEAD
 
 open FStar.HyperStack.ST
 open FStar.HyperStack.IO
+module HS = FStar.HyperStack
 
+open TLSConstants
+open TLSInfo
 open FStar.Bytes
-open CoreCrypto
 
 let prefix = "Test.AEAD"
 let print_string s = print_string (prefix ^ ": " ^ s ^ ".\n")
 
 type vector = {
-  cipher:    aead_cipher;
+  cipher:    aeadAlg;
   key:       string;
   iv:        string;
   aad:       string;
@@ -19,16 +21,38 @@ type vector = {
   ciphertext:string;
 }
 
+module AEAD = AEADProvider
+
+let id13 alg =
+  assume false;
+  let cr  = Bytes.create 32ul 0z in
+  let ch0 = {
+    li_ch0_cr = cr;
+    li_ch0_ed_psk = Bytes.utf8_encode "whatever";
+    li_ch0_ed_ae = alg;
+    li_ch0_ed_hash = Hashing.Spec.SHA256; } in
+  let li = LogInfo_CH0 ch0 in
+  let i = ExpandedSecret
+      (EarlySecretID (NoPSK Hashing.Spec.SHA256))
+      ClientEarlyTrafficSecret
+      (Bytes.utf8_encode "whatever") in
+  let kid: keyId = KeyID #li i in
+  ID13 kid
+
 val test: vector -> St bool
 let test v =
+  assume false;
   let key = Bytes.bytes_of_hex v.key in
   let iv  = Bytes.bytes_of_hex v.iv in
   let aad = Bytes.bytes_of_hex v.aad in
   let plaintext = Bytes.bytes_of_hex v.plaintext in
   let ciphertext = Bytes.bytes_of_hex (v.ciphertext ^ v.tag) in
-  assume (length key = aeadKeySize v.cipher);
-  assume (length iv = aeadRealIVSize v.cipher);
-  let encrypted = aead_encrypt v.cipher key iv aad plaintext in
+  let i = id13 v.cipher in
+  assume (length key = AEAD.key_length i);
+  assume (length iv = AEAD.salt_length i);
+  let enc = AEAD.coerce i HS.root key (Bytes.create 12ul 0z) in
+  let iv = AEAD.create_nonce enc iv in
+  let encrypted = AEAD.encrypt #i #(length plaintext) enc iv aad plaintext in
   if encrypted <> ciphertext then
     begin
     print_string ("ERROR: encryption result doesn't match");
@@ -37,7 +61,7 @@ let test v =
     false
     end
   else
-  match aead_decrypt v.cipher key iv aad ciphertext with
+  match AEAD.decrypt #i #(length plaintext) (AEAD.genReader HS.root enc) iv aad ciphertext with
   | None ->
     begin
     print_string ("ERROR: decryption failed without producing a plaintext");
@@ -60,7 +84,7 @@ let test v =
 
 let test_vectors = [
   { (* rfc7539#page-22 *)
-    cipher = CHACHA20_POLY1305;
+    cipher = EverCrypt.CHACHA20_POLY1305;
     key = "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f";
     iv  = "070000004041424344454647";
     aad = "50515253c0c1c2c3c4c5c6c7";
@@ -69,7 +93,7 @@ let test_vectors = [
     ciphertext = "d31a8d34648e60db7b86afbc53ef7ec2a4aded51296e08fea9e2b5a736ee62d63dbea45e8ca9671282fafb69da92728b1a71de0a9e060b2905d6a5b67ecd3b3692ddbd7f2d778b8c9803aee328091b58fab324e4fad675945585808b4831d7bc3ff4def08e4b7a9de576d26586cec64b6116";
   };
   {
-    cipher = CHACHA20_POLY1305;
+    cipher = EverCrypt.CHACHA20_POLY1305;
     key = "1c9240a5eb55d38af333888604f6b5f0473917c1402b80099dca5cbc207075c0";
     iv  = "000000000102030405060708";
     aad = "f33388860000000000004e91";
@@ -78,7 +102,7 @@ let test_vectors = [
     ciphertext = "64a0861575861af460f062c79be643bd5e805cfd345cf389f108670ac76c8cb24c6cfc18755d43eea09ee94e382d26b0bdb7b73c321b0100d4f03b7f355894cf332f830e710b97ce98c8a84abd0b948114ad176e008d33bd60f982b1ff37c8559797a06ef4f0ef61c186324e2b3506383606907b6a7c02b0f9f6157b53c867e4b9166c767b804d46a59b5216cde7a4e99040c5a40433225ee282a1b0a06c523eaf4534d7f83fa1155b0047718cbc546a0d072b04b3564eea1b422273f548271a0bb2316053fa76991955ebd63159434ecebb4e466dae5a1073a6727627097a1049e617d91d361094fa68f0ff77987130305beaba2eda04df997b714d6c6f2c29a6ad5cb4022b02709b";
   };
   {
-    cipher = AES_128_GCM;
+    cipher = EverCrypt.AES128_GCM;
     key = "00000000000000000000000000000000";
     iv  = "000000000000000000000000";
     aad = "";
@@ -87,7 +111,7 @@ let test_vectors = [
     ciphertext = "";
   };
   {
-    cipher = AES_128_GCM;
+    cipher = EverCrypt.AES128_GCM;
     key = "00000000000000000000000000000000";
     iv  = "000000000000000000000000";
     aad = "";
@@ -96,7 +120,7 @@ let test_vectors = [
     ciphertext = "0388dace60b6a392f328c2b971b2fe78";
   };
   {
-    cipher = AES_128_GCM;
+    cipher = EverCrypt.AES128_GCM;
     key = "feffe9928665731c6d6a8f9467308308";
     iv  = "cafebabefacedbaddecaf888";
     aad = "";
@@ -105,7 +129,7 @@ let test_vectors = [
     ciphertext = "42831ec2217774244b7221b784d0d49ce3aa212f2c02a4e035c17e2329aca12e21d514b25466931c7d8f6a5aac84aa051ba30b396a0aac973d58e091473f5985";
   };
   {
-    cipher = AES_128_GCM;
+    cipher = EverCrypt.AES128_GCM;
     key = "feffe9928665731c6d6a8f9467308308";
     iv  = "cafebabefacedbaddecaf888";
     aad = "feedfacedeadbeeffeedfacedeadbeefabaddad2";
@@ -114,7 +138,7 @@ let test_vectors = [
     ciphertext = "42831ec2217774244b7221b784d0d49ce3aa212f2c02a4e035c17e2329aca12e21d514b25466931c7d8f6a5aac84aa051ba30b396a0aac973d58e091";
   };
   {
-    cipher = AES_256_GCM;
+    cipher = EverCrypt.AES256_GCM;
     key = "0000000000000000000000000000000000000000000000000000000000000000";
     iv  = "000000000000000000000000";
     aad = "";
@@ -123,7 +147,7 @@ let test_vectors = [
     ciphertext = "";
   };
   {
-    cipher = AES_256_GCM;
+    cipher = EverCrypt.AES256_GCM;
     key = "feffe9928665731c6d6a8f9467308308feffe9928665731c6d6a8f9467308308";
     iv  = "cafebabefacedbaddecaf888";
     aad = "";
@@ -132,7 +156,7 @@ let test_vectors = [
     ciphertext = "522dc1f099567d07f47f37a32a84427d643a8cdcbfe5c0c97598a2bd2555d1aa8cb08e48590dbb3da7b08b1056828838c5f61e6393ba7a0abcc9f662898015ad";
   };
   {
-    cipher = AES_256_GCM;
+    cipher = EverCrypt.AES256_GCM;
     key = "feffe9928665731c6d6a8f9467308308feffe9928665731c6d6a8f9467308308";
     iv  = "cafebabefacedbaddecaf888";
     aad = "";
@@ -141,7 +165,7 @@ let test_vectors = [
     ciphertext = "522dc1f099567d07f47f37a32a84427d643a8cdcbfe5c0c97598a2bd2555d1aa8cb08e48590dbb3da7b08b1056828838c5f61e6393ba7a0abcc9f662898015ad";
   };
   {
-    cipher = AES_256_GCM;
+    cipher = EverCrypt.AES256_GCM;
     key = "feffe9928665731c6d6a8f9467308308feffe9928665731c6d6a8f9467308308";
     iv  = "cafebabefacedbaddecaf888";
     aad = "feedfacedeadbeeffeedfacedeadbeefabaddad2";
@@ -150,7 +174,7 @@ let test_vectors = [
     ciphertext = "522dc1f099567d07f47f37a32a84427d643a8cdcbfe5c0c97598a2bd2555d1aa8cb08e48590dbb3da7b08b1056828838c5f61e6393ba7a0abcc9f662";
   };
   {
-    cipher = AES_128_GCM;
+    cipher = EverCrypt.AES128_GCM;
     key = "00000000000000000000000000000000";
     iv  = "000000000000000000000000";
     aad = "d9313225f88406e5a55909c5aff5269a86a7a9531534f7da2e4c303d8a318a721c3c0c95956809532fcf0e2449a6b525b16aedf5aa0de657ba637b391aafd255522dc1f099567d07f47f37a32a84427d643a8cdcbfe5c0c97598a2bd2555d1aa8cb08e48590dbb3da7b08b1056828838c5f61e6393ba7a0abcc9f662898015ad";
@@ -159,7 +183,7 @@ let test_vectors = [
     ciphertext = "";
   };
   {
-    cipher = AES_128_GCM;
+    cipher = EverCrypt.AES128_GCM;
     key = "00000000000000000000000000000000";
     iv  = "000000000000000000000000";
     aad = "";
@@ -168,7 +192,7 @@ let test_vectors = [
     ciphertext = "0388dace60b6a392f328c2b971b2fe78f795aaab494b5923f7fd89ff948bc1e0200211214e7394da2089b6acd093abe0";
   };
   {
-    cipher = AES_128_GCM;
+    cipher = EverCrypt.AES128_GCM;
     key = "00000000000000000000000000000000";
     iv  = "000000000000000000000000";
     aad = "";
@@ -177,7 +201,7 @@ let test_vectors = [
     ciphertext = "0388dace60b6a392f328c2b971b2fe78f795aaab494b5923f7fd89ff948bc1e0200211214e7394da2089b6acd093abe0c94da219118e297d7b7ebcbcc9c388f28ade7d85a8ee35616f7124a9d5270291";
   };
   {
-    cipher = AES_128_GCM;
+    cipher = EverCrypt.AES128_GCM;
     key = "00000000000000000000000000000000";
     iv  = "000000000000000000000000";
     aad = "";
@@ -186,7 +210,7 @@ let test_vectors = [
     ciphertext = "0388dace60b6a392f328c2b971b2fe78f795aaab494b5923f7fd89ff948bc1e0200211214e7394da2089b6acd093abe0c94da219118e297d7b7ebcbcc9c388f28ade7d85a8ee35616f7124a9d527029195b84d1b96c690ff2f2de30bf2ec89e00253786e126504f0dab90c48a30321de3345e6b0461e7c9e6c6b7afedde83f40";
   };
   {
-    cipher = AES_128_GCM;
+    cipher = EverCrypt.AES128_GCM;
     key = "843ffcf5d2b72694d19ed01d01249412";
     iv  = "dbcca32ebf9b804617c3aa9e";
     aad = "00000000000000000000000000000000101112131415161718191a1b1c1d1e1f";
