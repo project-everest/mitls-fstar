@@ -158,7 +158,8 @@ let valid_offer ch =
 // There is a pure function computing a ClientHello from an offer (minus the PSK binders)
 type offer = ch:HandshakeMessages.ch { valid_offer ch }
 
-let find_client_extension filter o =
+let find_client_extension (filter:Extensions.extension -> bool) o
+  : option (e:Extensions.extension{filter e}) =
   match o.ch_extensions with
   | None -> None
   | Some es -> List.Tot.find filter es
@@ -204,13 +205,14 @@ let find_sessionTicket o =
   | None -> None
   | Some (Extensions.E_session_ticket b) -> Some b
 
+// FIXME regression without the default case
 let find_clientPske o =
   match find_client_extension Extensions.E_pre_shared_key? o with
-  | None -> None
   | Some (Extensions.E_pre_shared_key psk) ->
-    match psk with
+    (match psk with
     | ServerPSK _ -> None
-    | ClientPSK ids tlen -> Some (ids,tlen)
+    | ClientPSK ids tlen -> Some (ids,tlen))
+  | _ -> None
 
 let find_serverPske sh =
   match sh.sh_extensions with
@@ -250,13 +252,12 @@ let find_key_shares (o:offer)
   | Some (Extensions.E_key_share (CommonDH.ClientKeyShare ks)) -> Some ks
   | _ -> None
 
-private let rec list_of_ClientKeyShare (ks:CommonDH.clientKeyShare)
-  : Tot (list pre_share)
-  =
+private let rec list_of_ClientKeyShare (ks:list CommonDH.keyShareEntry)
+  : Tot (list pre_share) =
   match ks with
   | [] -> []
-  | CommonDH.Share g s :: tl -> (|g, s|) :: list_of_ClientKeyShare tl
-  | CommonDH.UnknownShare _ _  :: tl -> list_of_ClientKeyShare tl
+  | (CommonDH.UnknownShare _ _) :: tl -> list_of_ClientKeyShare tl
+  | (CommonDH.Share g s) :: tl -> (|g, s|) :: list_of_ClientKeyShare tl
 
 let gs_of (o:offer) : Tot (list pre_share) =
   match find_key_shares o with
