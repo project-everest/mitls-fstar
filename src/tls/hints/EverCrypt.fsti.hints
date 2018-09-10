@@ -1,1 +1,73 @@
-[ "ŒCwOÐ©S-41\u000f²\u001c}\n~", [] ]
+[
+  "ö°#ƒ€\u0001«-˜Ÿ\b³dv'…",
+  [
+    [
+      "EverCrypt.block_cipher_keyLen",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_EverCrypt.AES128_CBC",
+        "disc_equation_EverCrypt.AES256_CBC",
+        "disc_equation_EverCrypt.TDES_EDE_CBC",
+        "fuel_guarded_inversion_EverCrypt.block_cipher_alg"
+      ],
+      0,
+      "b15e247ec381d713ba9a487ee5842b7e"
+    ],
+    [
+      "EverCrypt.block_cipher_blockLen",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_EverCrypt.AES128_CBC",
+        "disc_equation_EverCrypt.AES256_CBC",
+        "disc_equation_EverCrypt.TDES_EDE_CBC",
+        "fuel_guarded_inversion_EverCrypt.block_cipher_alg"
+      ],
+      0,
+      "ce24ed58c18781af9979a9ae177a8fd0"
+    ],
+    [
+      "EverCrypt.aead_keyLen",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_EverCrypt.AES128_CCM",
+        "disc_equation_EverCrypt.AES128_CCM8",
+        "disc_equation_EverCrypt.AES128_GCM",
+        "disc_equation_EverCrypt.AES256_CCM",
+        "disc_equation_EverCrypt.AES256_CCM8",
+        "disc_equation_EverCrypt.AES256_GCM",
+        "disc_equation_EverCrypt.CHACHA20_POLY1305",
+        "fuel_guarded_inversion_EverCrypt.aead_alg"
+      ],
+      0,
+      "323424ac4a4a0f5b3e74fecd93111a6d"
+    ],
+    [
+      "EverCrypt.aead_tagLen",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_EverCrypt.AES128_CCM",
+        "disc_equation_EverCrypt.AES128_CCM8",
+        "disc_equation_EverCrypt.AES128_GCM",
+        "disc_equation_EverCrypt.AES256_CCM",
+        "disc_equation_EverCrypt.AES256_CCM8",
+        "disc_equation_EverCrypt.AES256_GCM",
+        "disc_equation_EverCrypt.CHACHA20_POLY1305",
+        "fuel_guarded_inversion_EverCrypt.aead_alg"
+      ],
+      0,
+      "15e0bb8032832ab02be3f1f1da59ee81"
+    ]
+  ]
+]

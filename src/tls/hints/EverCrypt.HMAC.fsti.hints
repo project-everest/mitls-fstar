@@ -1,0 +1,57 @@
+[
+  "\u0006çª\u001bªiêò7ÿˆËÁ|¶•",
+  [
+    [
+      "EverCrypt.HMAC.ha",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_EverCrypt.Hash.alg__uu___haseq" ],
+      0,
+      "c96bb071e7ae295ea41fd46c025d6c94"
+    ],
+    [
+      "EverCrypt.HMAC.lbseq",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_Prims.HasEq_int", "equation_Prims.nat",
+        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
+      ],
+      0,
+      "9ff461bebebaab9011f566e02ef87963"
+    ],
+    [
+      "EverCrypt.HMAC.hmac",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "6c5f7284e1c5f5316be0cc7e2adbf86c"
+    ],
+    [
+      "EverCrypt.HMAC.compute",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "assumption_Prims.HasEq_int", "equation_EverCrypt.Helpers.uint8_p",
+        "equation_EverCrypt.Helpers.uint8_t", "equation_FStar.UInt32.n",
+        "equation_LowStar.Buffer.buffer",
+        "function_token_typing_FStar.UInt32.n",
+        "function_token_typing_FStar.UInt8.t",
+        "haseqLowStar.Buffer_Tm_refine_1ec852aff28ab568526a8c54c3e853ec",
+        "lemma_LowStar.Monotonic.Buffer.length_as_seq",
+        "refinement_interpretation_EverCrypt.HMAC_Tm_refine_77db98c400459b9499873ee145a28134",
+        "refinement_interpretation_EverCrypt.HMAC_Tm_refine_bd8e34d3b91921b2fb6a6503e772851a",
+        "typing_LowStar.Buffer.trivial_preorder"
+      ],
+      0,
+      "a7dbb51be990a17f8acbb815571ac615"
+    ]
+  ]
+]

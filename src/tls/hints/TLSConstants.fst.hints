@@ -1,5 +1,5 @@
 [
-  "P±\u0012ÁR\u0017¥œØ÷ÁìÇü÷\u001b",
+  "íl—|&•9__Å¿Ž?øŒX",
   [
     [
       "TLSConstants.fold_string",
@@ -14,7 +14,7 @@
         "subterm_ordering_Prims.Cons"
       ],
       0,
-      "9f6165f056e5ad8014f7422927965deb"
+      "e5c58a00ef480b443723564fedbe78e1"
     ],
     [
       "TLSConstants.dualRole",
@@ -28,7 +28,7 @@
         "fuel_guarded_inversion_TLSConstants.role"
       ],
       0,
-      "3b61111a43def53239dc39da52cdcee6"
+      "94f04a3a728fa5c9f0bf97da014cae3a"
     ],
     [
       "TLSConstants.minPV",
@@ -51,7 +51,7 @@
         "refinement_interpretation_QD.TLS_protocolVersion_Tm_refine_e48704b6086454f6959d561c0b2bcd8b"
       ],
       0,
-      "258ed6129f34c88849e32a907a6d0a30"
+      "c894d6cea7a26cb4591ed3a99f126db7"
     ],
     [
       "TLSConstants.geqPV",
@@ -63,7 +63,7 @@
         "assumption_QD.TLS_protocolVersion.protocolVersion___uu___haseq"
       ],
       0,
-      "84ef46c96c24dfdd6e72f20ec9de9633"
+      "55a08847acba680575bdbe29e175734f"
     ],
     [
       "TLSConstants.string_of_pv",
@@ -82,7 +82,7 @@
         "fuel_guarded_inversion_QD.TLS_protocolVersion.protocolVersion_"
       ],
       0,
-      "e081282a2098e244accdde547c43cc23"
+      "604c6ddec7a54928f41813df7be6eb29"
     ],
     [
       "TLSConstants.encAlg",
@@ -90,13 +90,13 @@
       2,
       1,
       [
-        "@query", "assumption_CoreCrypto.block_cipher__uu___haseq",
-        "assumption_CoreCrypto.stream_cipher__uu___haseq",
+        "@query", "assumption_EverCrypt.block_cipher_alg__uu___haseq",
+        "assumption_EverCrypt.stream_cipher_alg__uu___haseq",
         "equation_TLSConstants.blockCipher",
         "equation_TLSConstants.streamCipher"
       ],
       0,
-      "8f2a222713aa00bbec97a862e1e0dce0"
+      "f0463ec84a14c7ce73d577fe31cb4aaa"
     ],
     [
       "TLSConstants.__proj__Block__item___0",
@@ -109,7 +109,7 @@
         "refinement_interpretation_TLSConstants_Tm_refine_209400c4a3294a183c1b4dc20a047b7b"
       ],
       0,
-      "ea35d549d6a743d9273fa4c9b477d710"
+      "ac901423511d43d4ccb62a88f80951ff"
     ],
     [
       "TLSConstants.__proj__Stream__item___0",
@@ -123,82 +123,7 @@
         "refinement_interpretation_TLSConstants_Tm_refine_3c0bd2a96dfbbccf15e0b981898f469e"
       ],
       0,
-      "14a20e372ea8cb12345e5762a9866850"
-    ],
-    [
-      "TLSConstants.hashAlg",
-      1,
-      2,
-      1,
-      [
-        "@query", "assumption_Hashing.Spec.alg__uu___haseq",
-        "equation_TLSConstants.hash_alg"
-      ],
-      0,
-      "887c0a520bc1b2455e47b79d6c38b095"
-    ],
-    [
-      "TLSConstants.__proj__Hash__item___0",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query", "disc_equation_TLSConstants.Hash",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_TLSConstants_Tm_refine_7bcb4926572bd703fda582cbda1f5d74"
-      ],
-      0,
-      "4e40f884bbe62be0c432e78f939932b8"
-    ],
-    [
-      "TLSConstants.hash_alg_classic",
-      1,
-      2,
-      1,
-      [ "@query", "assumption_Hashing.Spec.alg__uu___haseq" ],
-      0,
-      "16f365fca0a94787c98b1b1bf2382dcf"
-    ],
-    [
-      "TLSConstants.macAlg",
-      1,
-      2,
-      1,
-      [
-        "@query", "assumption_Hashing.Spec.alg__uu___haseq",
-        "equation_TLSConstants.hash_alg",
-        "equation_TLSConstants.hash_alg_classic",
-        "haseqTLSConstants_Tm_refine_7779d0afc8f31db2f4cf37d6463dc39a"
-      ],
-      0,
-      "dd0a2286765bc738cf891f8918ff2417"
-    ],
-    [
-      "TLSConstants.__proj__HMac__item___0",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query", "disc_equation_TLSConstants.HMac",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_TLSConstants_Tm_refine_3aa330a900af0ebd197609911aa52516"
-      ],
-      0,
-      "dbfff83a8071a8671ff19ab28d324137"
-    ],
-    [
-      "TLSConstants.__proj__SSLKHash__item___0",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "disc_equation_TLSConstants.SSLKHash",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_TLSConstants_Tm_refine_587a99d4c37a097a26052d3d1dbfd6c9"
-      ],
-      0,
-      "ac419dad226f7db62aedf462e369a60b"
+      "3c69d8ff9ea5241ea8e5d3b286934d6f"
     ],
     [
       "TLSConstants.aeAlg",
@@ -206,13 +131,13 @@
       2,
       1,
       [
-        "@query", "assumption_CryptoTypes.aead_cipher__uu___haseq",
-        "assumption_Hashing.Spec.alg__uu___haseq",
+        "@query", "assumption_EverCrypt.Hash.alg__uu___haseq",
+        "assumption_EverCrypt.aead_alg__uu___haseq",
         "assumption_TLSConstants.encAlg__uu___haseq",
         "equation_TLSConstants.aeadAlg", "equation_TLSConstants.hash_alg"
       ],
       0,
-      "75b029ce0c5012b703a4dfe27920f969"
+      "f13dd854e8dd42b3c0c9567e04c5384b"
     ],
     [
       "TLSConstants.__proj__MACOnly__item___0",
@@ -226,7 +151,7 @@
         "refinement_interpretation_TLSConstants_Tm_refine_09cbbac811ab0bda510200f12686d94f"
       ],
       0,
-      "262c3694aeb68742bf89612c5056745c"
+      "63426c09ef9ac75f0ccf8f1d771cee39"
     ],
     [
       "TLSConstants.__proj__MtE__item___0",
@@ -239,7 +164,7 @@
         "refinement_interpretation_TLSConstants_Tm_refine_df8498700e74aaddc4e3a9deaf78052e"
       ],
       0,
-      "eb0ead9e5ebf11f4b95c9215121af7b3"
+      "693e698cd44a9527542b3bcb88082c7a"
     ],
     [
       "TLSConstants.__proj__MtE__item___1",
@@ -252,7 +177,7 @@
         "refinement_interpretation_TLSConstants_Tm_refine_df8498700e74aaddc4e3a9deaf78052e"
       ],
       0,
-      "d5744f0eb01b371276712c05d6b72f4c"
+      "673af9c1241761c31037ac8c937364cc"
     ],
     [
       "TLSConstants.__proj__AEAD__item___0",
@@ -265,7 +190,7 @@
         "refinement_interpretation_TLSConstants_Tm_refine_f0bffa42328d7c5602e43036b75f4e6e"
       ],
       0,
-      "c685fce0da9d8103f91f2103a263f683"
+      "7cee5b9f3fb67dd3849b55e3a028fdcf"
     ],
     [
       "TLSConstants.__proj__AEAD__item___1",
@@ -278,7 +203,7 @@
         "refinement_interpretation_TLSConstants_Tm_refine_f0bffa42328d7c5602e43036b75f4e6e"
       ],
       0,
-      "8747016897bc6346f55bac58f5510a1a"
+      "53db5fdd33c5c4522714049a1ba0a73f"
     ],
     [
       "TLSConstants.aeAlg_hash",
@@ -292,7 +217,7 @@
         "fuel_guarded_inversion_TLSConstants.aeAlg"
       ],
       0,
-      "3c15ec88eb3c5442d17eddbdc2de09c1"
+      "47847b429eae110dadb0207d73dd26a6"
     ],
     [
       "TLSConstants.lhae",
@@ -313,7 +238,7 @@
         "typing_TLSConstants.__proj__MtE__item___0"
       ],
       0,
-      "05056cd5a178b14271951ee711368e52"
+      "143c0c453b420987de1fceb6fdb2bdd3"
     ],
     [
       "TLSConstants.encKeySize",
@@ -336,137 +261,7 @@
         "typing_TLSConstants.__proj__Block__item___0"
       ],
       0,
-      "774750fe0e1df29b4f40720c766bd922"
-    ],
-    [
-      "TLSConstants.hashSize",
-      1,
-      2,
-      1,
-      [ "@query", "assumption_TLSConstants.hashAlg__uu___haseq" ],
-      0,
-      "aec4b852316093c200ee160399e419d9"
-    ],
-    [
-      "TLSConstants.hashSize",
-      2,
-      2,
-      1,
-      [
-        "@MaxFuel_assumption", "@MaxIFuel_assumption",
-        "@fuel_correspondence_Prims.pow2.fuel_instrumented",
-        "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "assumption_TLSConstants.hashAlg__uu___haseq", "b2t_def",
-        "bool_inversion", "bool_typing", "disc_equation_TLSConstants.Hash",
-        "disc_equation_TLSConstants.MD5SHA1",
-        "equality_tok_TLSConstants.NULL@tok",
-        "equation_FStar.HyperStack.ST.is_eternal_region",
-        "equation_FStar.Monotonic.HyperHeap.disjoint",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
-        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
-        "equation_FStar.UInt32.n", "equation_Mem.disjoint",
-        "equation_Mem.rgn", "equation_Mem.tls_define_region",
-        "equation_Mem.tls_rgn", "equation_Mem.tls_tables_region",
-        "equation_Prims.nat", "fuel_guarded_inversion_TLSConstants.hashAlg",
-        "function_token_typing_CommonDH.dh_region",
-        "function_token_typing_FStar.UInt32.n",
-        "function_token_typing_Mem.tls_define_region",
-        "function_token_typing_Mem.tls_tables_region",
-        "lemma_FStar.UInt.pow2_values", "primitive_Prims.op_AmpAmp",
-        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Negation",
-        "primitive_Prims.op_Subtraction",
-        "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_Mem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
-        "refinement_interpretation_Mem_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
-        "refinement_interpretation_Mem_Tm_refine_f70be9b0cc50942af80d22e44fc9b9c4",
-        "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "refinement_interpretation_TLSConstants_Tm_refine_dacd82a376cac25c6cac9dcfdba63afe",
-        "typing_FStar.Monotonic.HyperHeap.color",
-        "typing_FStar.Monotonic.HyperStack.is_eternal_color",
-        "typing_Mem.disjoint", "typing_Mem.tls_define_region"
-      ],
-      0,
-      "980bc2d440f58086c0bdd04a48a88e2b"
-    ],
-    [
-      "TLSConstants.hashSize",
-      3,
-      2,
-      1,
-      [
-        "@MaxFuel_assumption", "@MaxIFuel_assumption",
-        "@fuel_correspondence_Prims.pow2.fuel_instrumented",
-        "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
-        "bool_inversion", "bool_typing", "disc_equation_TLSConstants.Hash",
-        "disc_equation_TLSConstants.MD5SHA1",
-        "equality_tok_TLSConstants.NULL@tok",
-        "equation_FStar.HyperStack.ST.is_eternal_region",
-        "equation_FStar.Monotonic.HyperHeap.disjoint",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
-        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
-        "equation_FStar.UInt32.n", "equation_Mem.disjoint",
-        "equation_Mem.rgn", "equation_Mem.tls_define_region",
-        "equation_Mem.tls_rgn", "equation_Mem.tls_tables_region",
-        "equation_Prims.nat", "fuel_guarded_inversion_TLSConstants.hashAlg",
-        "function_token_typing_CommonDH.dh_region",
-        "function_token_typing_FStar.UInt32.n",
-        "function_token_typing_Mem.tls_define_region",
-        "function_token_typing_Mem.tls_tables_region",
-        "lemma_FStar.UInt.pow2_values", "primitive_Prims.op_AmpAmp",
-        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Negation",
-        "primitive_Prims.op_Subtraction",
-        "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_Mem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
-        "refinement_interpretation_Mem_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
-        "refinement_interpretation_Mem_Tm_refine_f70be9b0cc50942af80d22e44fc9b9c4",
-        "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "refinement_interpretation_TLSConstants_Tm_refine_dacd82a376cac25c6cac9dcfdba63afe",
-        "typing_FStar.Monotonic.HyperHeap.color",
-        "typing_FStar.Monotonic.HyperStack.is_eternal_color",
-        "typing_Mem.disjoint", "typing_Mem.tls_define_region"
-      ],
-      0,
-      "2f73c7477040e467019e70fcbd346c08"
-    ],
-    [
-      "TLSConstants.macKeySize",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "constructor_distinct_TLSConstants.Hash",
-        "constructor_distinct_TLSConstants.NULL",
-        "disc_equation_TLSConstants.HMac",
-        "disc_equation_TLSConstants.SSLKHash",
-        "equality_tok_TLSConstants.NULL@tok",
-        "fuel_guarded_inversion_TLSConstants.macAlg"
-      ],
-      0,
-      "d3bce313fbff36835c19c2e3ff2b7898"
-    ],
-    [
-      "TLSConstants.macSize",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "constructor_distinct_TLSConstants.Hash",
-        "constructor_distinct_TLSConstants.NULL",
-        "disc_equation_TLSConstants.HMac",
-        "disc_equation_TLSConstants.SSLKHash",
-        "equality_tok_TLSConstants.NULL@tok",
-        "fuel_guarded_inversion_TLSConstants.macAlg"
-      ],
-      0,
-      "0feac4ec430b6f3e90cf7252393a0bf0"
+      "5e68e41c02f9029061a97703a7a10255"
     ],
     [
       "TLSConstants.signatureScheme",
@@ -479,7 +274,7 @@
         "refinement_interpretation_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4"
       ],
       0,
-      "c38a501b27a7c21ffb947d1d657754f9"
+      "1a682357720c4a2c11886602e08c57c2"
     ],
     [
       "TLSConstants.signatureScheme",
@@ -488,7 +283,7 @@
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "b40b881192240b199edf717ab8a21f2a"
+      "3677623afc2bc232a9fa0d8a4cc9bfd4"
     ],
     [
       "TLSConstants.signatureScheme",
@@ -501,7 +296,7 @@
         "refinement_interpretation_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4"
       ],
       0,
-      "3a2c2f2b6a7dda89a6fb63cedd3f5937"
+      "00f7a9a1b835df2b46dc19ce733ab35d"
     ],
     [
       "TLSConstants.signatureScheme",
@@ -516,7 +311,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "e0bebe884b7527f2ac8113b1a42cee8d"
+      "4b73ffe47777d5d8f5a3ea9847c52c69"
     ],
     [
       "TLSConstants.__proj__SIG_UNKNOWN__item___0",
@@ -529,7 +324,7 @@
         "refinement_interpretation_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4"
       ],
       0,
-      "d9aa1749292785c04ce931c052f469c1"
+      "ef2c2a256a830ae275c2e55db809b532"
     ],
     [
       "TLSConstants.__proj__SIG_UNKNOWN__item___0",
@@ -545,7 +340,7 @@
         "refinement_interpretation_TLSConstants_Tm_refine_8b9127255c4d5e0ddaca9e28eedd33c1"
       ],
       0,
-      "9f5e083686aba01252426f735e21b81b"
+      "0c133dfd6176412d0e8d6444b2656ef8"
     ],
     [
       "TLSConstants.signatureSchemeBytes",
@@ -574,7 +369,7 @@
         "fuel_guarded_inversion_TLSConstants.signatureScheme"
       ],
       0,
-      "e90a97e5c2a1b20c12f65169a4e8ba79"
+      "c250d0bfd15f8dc080ac382f74076f73"
     ],
     [
       "TLSConstants.parseSignatureScheme",
@@ -587,7 +382,7 @@
         "refinement_interpretation_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4"
       ],
       0,
-      "7ba47802fa07030ee5a6dbea2cce0889"
+      "bb9be1fec86594b0af56725f4eb1e759"
     ],
     [
       "TLSConstants.sigHashAlg_of_signatureScheme",
@@ -618,7 +413,7 @@
         "refinement_interpretation_TLSConstants_Tm_refine_9cc573b7b338ce607fb7d696da8ae673"
       ],
       0,
-      "fa85bf2881370dca5ad0e36daf13acbd"
+      "ac84bc9b25ba0a6f200c390221745f8d"
     ],
     [
       "TLSConstants.signatureScheme_of_sigHashAlg",
@@ -653,7 +448,7 @@
         "typing_Prims.pow2"
       ],
       0,
-      "37056397a7f545c426704a3a118894ec"
+      "b36acf7fac4b0f534483030ed966e01c"
     ],
     [
       "TLSConstants.compression",
@@ -665,7 +460,7 @@
         "haseqTLSConstants_Tm_refine_f0fa186507923a15625fef76fc364280"
       ],
       0,
-      "408d80d693c798d0e0d914509c9f8081"
+      "b9008a462d7add8a81338664591f4c99"
     ],
     [
       "TLSConstants.compression",
@@ -674,7 +469,7 @@
       1,
       [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
       0,
-      "cf3b5f473481fd2c68d2b0714253cccc"
+      "ad05c6df55076bb0b9c64feb027f2d46"
     ],
     [
       "TLSConstants.compression",
@@ -683,7 +478,7 @@
       1,
       [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
       0,
-      "4c8f72766ca4d18514b6bbfd3e4005c7"
+      "147e3e47ae76ce553b1077b7c3072a55"
     ],
     [
       "TLSConstants.compression",
@@ -695,7 +490,7 @@
         "haseqTLSConstants_Tm_refine_f0fa186507923a15625fef76fc364280"
       ],
       0,
-      "0661d114091f67cc2f5acd90cc9b7418"
+      "d251f5e8db30a96e51ddb616649b9bf8"
     ],
     [
       "TLSConstants.__proj__UnknownCompression__item___0",
@@ -704,7 +499,7 @@
       1,
       [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
       0,
-      "c48c868a60f7ff2f5f0022dbf367a27a"
+      "8c14a1f6f5a773df585e23c825ebc129"
     ],
     [
       "TLSConstants.__proj__UnknownCompression__item___0",
@@ -719,7 +514,7 @@
         "refinement_interpretation_TLSConstants_Tm_refine_506fca9c9209de4d10d4087339cac41d"
       ],
       0,
-      "f1c8e4cdf53e21e1520ab35dc344bb38"
+      "fbca1bc75e5f9a4b00b66f0a2d974950"
     ],
     [
       "TLSConstants.compressionBytes",
@@ -733,7 +528,7 @@
         "fuel_guarded_inversion_TLSConstants.compression"
       ],
       0,
-      "11dccc3eb3378e85c03938050d9798c4"
+      "6a50f1829503ad1a4656ac0bc6c93194"
     ],
     [
       "TLSConstants.parseCompressions",
@@ -745,7 +540,7 @@
         "haseqFStar.Bytes_Tm_refine_7f014d1f670e5d2ecdc0d7946b4a693d"
       ],
       0,
-      "7e00957b331bbdecb3605d5bbbc99325"
+      "f1b3a8fa3e0364f2dfe248f60b91525b"
     ],
     [
       "TLSConstants.parseCompressions",
@@ -796,7 +591,7 @@
         "well-founded-ordering-on-nat"
       ],
       0,
-      "3a2c655da36dd0cf232e71c1c97b83ce"
+      "c53e1113364963751d2b40b7b5be7203"
     ],
     [
       "TLSConstants.compressionMethodsBytes",
@@ -861,7 +656,7 @@
         "typing_tok_TLSConstants.NullCompression@tok"
       ],
       0,
-      "3c4291a334e5c49528a6fb20518419d2"
+      "1b65378e43f832545c04f0b33c689250"
     ],
     [
       "TLSConstants.cipherSuite",
@@ -870,17 +665,17 @@
       1,
       [
         "@query", "assumption_CoreCrypto.sig_alg__uu___haseq",
-        "assumption_CryptoTypes.aead_cipher__uu___haseq",
+        "assumption_EverCrypt.Hash.alg__uu___haseq",
+        "assumption_EverCrypt.aead_alg__uu___haseq",
         "assumption_FStar.Pervasives.Native.option__uu___haseq",
         "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Hashing.Spec.alg__uu___haseq",
         "assumption_TLSConstants.aeAlg__uu___haseq",
         "assumption_TLSConstants.kexAlg__uu___haseq",
         "equation_TLSConstants.aeadAlg", "equation_TLSConstants.hash_alg",
         "equation_TLSConstants.sigAlg", "kinding_CoreCrypto.sig_alg@tok"
       ],
       0,
-      "5cba0781e39b30a0ff059617d3b60fd6"
+      "dcb83647363727a26188fae955259fff"
     ],
     [
       "TLSConstants.__proj__CipherSuite__item___0",
@@ -894,7 +689,7 @@
         "refinement_interpretation_TLSConstants_Tm_refine_4a6f609b0093b5943538dfa956f2f64a"
       ],
       0,
-      "df0081890627e51b18fe65b88a500048"
+      "670a13ca7b1b90d21b5ce004f7374de8"
     ],
     [
       "TLSConstants.__proj__CipherSuite__item___1",
@@ -908,7 +703,7 @@
         "refinement_interpretation_TLSConstants_Tm_refine_4a6f609b0093b5943538dfa956f2f64a"
       ],
       0,
-      "21e22cc15bfffa2a72a17ba72dd5062f"
+      "8c7a01f2c5ba518745334c166da3ebb6"
     ],
     [
       "TLSConstants.__proj__CipherSuite__item___2",
@@ -922,7 +717,7 @@
         "refinement_interpretation_TLSConstants_Tm_refine_4a6f609b0093b5943538dfa956f2f64a"
       ],
       0,
-      "1efcaa387d577a182b47c6742cfe5044"
+      "9c02d2bc2f3a22395e8bb8c060c83a1a"
     ],
     [
       "TLSConstants.__proj__CipherSuite13__item___0",
@@ -936,7 +731,7 @@
         "refinement_interpretation_TLSConstants_Tm_refine_3266f0b805c4a5922b667090b6e2e596"
       ],
       0,
-      "c321321e261e4d5e4a3370d2b75fbd82"
+      "1dc61aaaedfba15b6f05e9eacb33f841"
     ],
     [
       "TLSConstants.__proj__CipherSuite13__item___1",
@@ -950,7 +745,7 @@
         "refinement_interpretation_TLSConstants_Tm_refine_3266f0b805c4a5922b667090b6e2e596"
       ],
       0,
-      "11bc0b5bcfc0b54a0546e4f924cfb1e4"
+      "50f5d135bdf5083eb2972d229ea92dbb"
     ],
     [
       "TLSConstants.__proj__UnknownCipherSuite__item__a",
@@ -964,7 +759,7 @@
         "refinement_interpretation_TLSConstants_Tm_refine_aafd5edaf7f77b3c053d188b7a41ac33"
       ],
       0,
-      "24a3df87705452909e9cf6302c21272f"
+      "021b2c48bc4939702e0d1df192bcdce0"
     ],
     [
       "TLSConstants.__proj__UnknownCipherSuite__item__b",
@@ -978,7 +773,7 @@
         "refinement_interpretation_TLSConstants_Tm_refine_aafd5edaf7f77b3c053d188b7a41ac33"
       ],
       0,
-      "9fa1cff8393bca13425940bf9f8ad4b4"
+      "833b289a4b85a2d5bdc0b3bc66c7d875"
     ],
     [
       "TLSConstants.contains_SCSV",
@@ -987,7 +782,7 @@
       1,
       [ "@query", "assumption_TLSConstants.cipherSuite__uu___haseq" ],
       0,
-      "1311b38a23692e246583d1bcd6a5c240"
+      "027790ea0711a8f48975b4e9e46356c9"
     ],
     [
       "TLSConstants.cipherSuiteBytes",
@@ -1002,7 +797,7 @@
         "refinement_interpretation_TLSConstants_Tm_refine_2097a9d5d828b5c2ca189bbd6ef8723a"
       ],
       0,
-      "04bd3be90f128d7af5cd9631e1e54269"
+      "87ad596cd92b3de6d12e534c2980d1fb"
     ],
     [
       "TLSConstants.parseCipherSuiteAux",
@@ -1032,7 +827,7 @@
         "typing_tok_TLSConstants.NullCipherSuite@tok"
       ],
       0,
-      "751eecb94854afe1f9a956739b5e17f5"
+      "cb457443d37a229b07abe370789973dd"
     ],
     [
       "TLSConstants.parseCipherSuite",
@@ -1051,7 +846,7 @@
         "typing_TLSConstants.parseCipherSuiteAux"
       ],
       0,
-      "c355b5f0092369f47d4711aea0f05b66"
+      "7454e402619b61bbf2a7b9c7935a90e1"
     ],
     [
       "TLSConstants.inverse_cipherSuite",
@@ -1075,7 +870,7 @@
         "refinement_kinding_TLSConstants_Tm_refine_2097a9d5d828b5c2ca189bbd6ef8723a"
       ],
       0,
-      "7caa9d3ec17be673e81f0b075cc5235c"
+      "299569c6b24eda87f1e35fa1374957b5"
     ],
     [
       "TLSConstants.pinverse_cipherSuite",
@@ -1084,7 +879,7 @@
       6,
       [ "@query" ],
       0,
-      "6aa42ad81637afa36891238bb0b47a92"
+      "976ee94ab275dfbf66dc6570c8f67f9b"
     ],
     [
       "TLSConstants.cipherSuitesBytes",
@@ -1105,7 +900,7 @@
         "typing_FStar.List.Tot.Base.length"
       ],
       0,
-      "9b3a1c07268aab798cb31a61560ec280"
+      "d7130feb38fd55182c00bc0b6971a9fa"
     ],
     [
       "TLSConstants.cipherSuitesBytes",
@@ -1173,7 +968,7 @@
         "typing_TLSConstants.cipherSuiteBytesOpt"
       ],
       0,
-      "1f858f09cabed55274829d5f081bc2d1"
+      "4d74467ec4fbacecdb52bbfc93467f51"
     ],
     [
       "TLSConstants.parseCipherSuites",
@@ -1194,7 +989,6 @@
         "equation_FStar.Seq.Properties.split", "equation_FStar.UInt.uint_t",
         "equation_FStar.UInt32.n",
         "equation_Format.NamedGroup.namedGroup_parser_kind",
-        "equation_LowParse.Bytes.byte",
         "equation_LowParse.Spec.Base.parser_kind",
         "equation_LowParse.Spec.Base.strong_parser_kind", "equation_Mem.rgn",
         "equation_Prims.nat", "equation_TLSConstants.cipherSuites",
@@ -1237,7 +1031,7 @@
         "well-founded-ordering-on-nat"
       ],
       0,
-      "2e6e1f83aa782fd39711bd2c7ae962ad"
+      "334cf62ba2225c7d411807905e39a6d7"
     ],
     [
       "TLSConstants.cipherSuite_of_name",
@@ -1246,23 +1040,28 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "constructor_distinct_CoreCrypto.AES_128_CBC",
-        "constructor_distinct_CoreCrypto.AES_256_CBC",
+        "FStar.Integers_pretyping_6ad08c58c10cb742e34ff2d7d8900d61",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
         "constructor_distinct_CoreCrypto.DSA",
         "constructor_distinct_CoreCrypto.ECDSA",
         "constructor_distinct_CoreCrypto.RSASIG",
-        "constructor_distinct_CoreCrypto.TDES_EDE_CBC",
-        "constructor_distinct_CryptoTypes.AES_128_CCM",
-        "constructor_distinct_CryptoTypes.AES_128_CCM_8",
-        "constructor_distinct_CryptoTypes.AES_128_GCM",
-        "constructor_distinct_CryptoTypes.AES_256_GCM",
-        "constructor_distinct_CryptoTypes.CHACHA20_POLY1305",
+        "constructor_distinct_EverCrypt.AES128_CBC",
+        "constructor_distinct_EverCrypt.AES128_CCM",
+        "constructor_distinct_EverCrypt.AES128_CCM8",
+        "constructor_distinct_EverCrypt.AES128_GCM",
+        "constructor_distinct_EverCrypt.AES256_CBC",
+        "constructor_distinct_EverCrypt.AES256_GCM",
+        "constructor_distinct_EverCrypt.CHACHA20_POLY1305",
+        "constructor_distinct_EverCrypt.Hash.MD5",
+        "constructor_distinct_EverCrypt.Hash.SHA1",
+        "constructor_distinct_EverCrypt.Hash.SHA256",
+        "constructor_distinct_EverCrypt.Hash.SHA384",
+        "constructor_distinct_EverCrypt.TDES_EDE_CBC",
+        "constructor_distinct_FStar.Integers.Unsigned",
+        "constructor_distinct_FStar.Integers.W32",
+        "constructor_distinct_FStar.Integers.Winfinite",
         "constructor_distinct_FStar.Pervasives.Native.None",
         "constructor_distinct_FStar.Pervasives.Native.Some",
-        "constructor_distinct_Hashing.Spec.MD5",
-        "constructor_distinct_Hashing.Spec.SHA1",
-        "constructor_distinct_Hashing.Spec.SHA256",
-        "constructor_distinct_Hashing.Spec.SHA384",
         "constructor_distinct_TLSConstants.AEAD",
         "constructor_distinct_TLSConstants.Block",
         "constructor_distinct_TLSConstants.CipherSuite",
@@ -1278,6 +1077,7 @@
         "constructor_distinct_TLSConstants.MtE",
         "constructor_distinct_TLSConstants.NullCipherSuite",
         "constructor_distinct_TLSConstants.Stream",
+        "data_typing_intro_FStar.Integers.Unsigned@tok",
         "disc_equation_FStar.Pervasives.Native.Some",
         "disc_equation_TLSConstants.TLS_AES_128_CCM_8_SHA256",
         "disc_equation_TLSConstants.TLS_AES_128_CCM_SHA256",
@@ -1339,22 +1139,24 @@
         "disc_equation_TLSConstants.TLS_RSA_WITH_NULL_SHA256",
         "disc_equation_TLSConstants.TLS_RSA_WITH_RC4_128_MD5",
         "disc_equation_TLSConstants.TLS_RSA_WITH_RC4_128_SHA",
-        "equality_tok_CoreCrypto.AES_128_CBC@tok",
-        "equality_tok_CoreCrypto.AES_256_CBC@tok",
         "equality_tok_CoreCrypto.DSA@tok",
         "equality_tok_CoreCrypto.ECDSA@tok",
-        "equality_tok_CoreCrypto.RC4_128@tok",
         "equality_tok_CoreCrypto.RSASIG@tok",
-        "equality_tok_CoreCrypto.TDES_EDE_CBC@tok",
-        "equality_tok_CryptoTypes.AES_128_CCM@tok",
-        "equality_tok_CryptoTypes.AES_128_CCM_8@tok",
-        "equality_tok_CryptoTypes.AES_128_GCM@tok",
-        "equality_tok_CryptoTypes.AES_256_GCM@tok",
-        "equality_tok_CryptoTypes.CHACHA20_POLY1305@tok",
-        "equality_tok_Hashing.Spec.MD5@tok",
-        "equality_tok_Hashing.Spec.SHA1@tok",
-        "equality_tok_Hashing.Spec.SHA256@tok",
-        "equality_tok_Hashing.Spec.SHA384@tok",
+        "equality_tok_EverCrypt.AES128_CBC@tok",
+        "equality_tok_EverCrypt.AES128_CCM8@tok",
+        "equality_tok_EverCrypt.AES128_CCM@tok",
+        "equality_tok_EverCrypt.AES128_GCM@tok",
+        "equality_tok_EverCrypt.AES256_CBC@tok",
+        "equality_tok_EverCrypt.AES256_GCM@tok",
+        "equality_tok_EverCrypt.CHACHA20_POLY1305@tok",
+        "equality_tok_EverCrypt.Hash.MD5@tok",
+        "equality_tok_EverCrypt.Hash.SHA1@tok",
+        "equality_tok_EverCrypt.Hash.SHA256@tok",
+        "equality_tok_EverCrypt.Hash.SHA384@tok",
+        "equality_tok_EverCrypt.RC4_128@tok",
+        "equality_tok_EverCrypt.TDES_EDE_CBC@tok",
+        "equality_tok_FStar.Integers.W32@tok",
+        "equality_tok_FStar.Integers.Winfinite@tok",
         "equality_tok_TLSConstants.Kex_DH@tok",
         "equality_tok_TLSConstants.Kex_DHE@tok",
         "equality_tok_TLSConstants.Kex_ECDHE@tok",
@@ -1363,13 +1165,20 @@
         "equality_tok_TLSConstants.Kex_PSK_ECDHE@tok",
         "equality_tok_TLSConstants.Kex_RSA@tok",
         "equality_tok_TLSConstants.NullCipherSuite@tok",
-        "equation_FStar.Bytes.lbytes",
+        "equation_EverCrypt.Hash.maxTagLen", "equation_FStar.Bytes.lbytes",
+        "equation_FStar.Integers.fixed_width",
+        "equation_FStar.Integers.int_t", "equation_FStar.Integers.v",
+        "equation_FStar.UInt32.n",
         "equation_TLSConstants.cipherSuiteBytesOpt",
         "equation_TLSConstants.sigAlg",
         "equation_TLSConstants.validCipherSuite",
         "fuel_guarded_inversion_TLSConstants.cipherSuiteName",
+        "function_token_typing_EverCrypt.Hash.maxTagLen",
+        "function_token_typing_FStar.UInt32.n",
         "interpretation_TLSConstants_Tm_abs_a4eb3faebcf22dc9e72ed4e5f4b466c1",
         "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_FStar.Integers.Unsigned__0",
+        "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
         "projection_inverse_FStar.Pervasives.Native.None_a",
         "projection_inverse_FStar.Pervasives.Native.Some_a",
         "projection_inverse_FStar.Pervasives.Native.Some_v",
@@ -1384,10 +1193,13 @@
         "projection_inverse_TLSConstants.MACOnly__0",
         "projection_inverse_TLSConstants.MtE__0",
         "projection_inverse_TLSConstants.MtE__1",
-        "projection_inverse_TLSConstants.Stream__0"
+        "projection_inverse_TLSConstants.Stream__0",
+        "refinement_interpretation_FStar.Integers_Tm_refine_41ae00a3e556b48ef5ab6c6b5dd15278",
+        "refinement_interpretation_FStar.Integers_Tm_refine_d12d61266a2f2128b6a00b00566f8446",
+        "typing_FStar.Integers.v", "typing_tok_FStar.Integers.W32@tok"
       ],
       0,
-      "e1824dcfe2011222740c00d26d6aa496"
+      "1138cfc7c43b552bde1502b3620b2340"
     ],
     [
       "TLSConstants.cipherSuites_of_nameList",
@@ -1399,7 +1211,7 @@
         "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "5a1f20b1f922507f15e32f6634cc3280"
+      "fafdad0fc7f6942408a152eba2d40f2c"
     ],
     [
       "TLSConstants.names_of_cipherSuites",
@@ -1430,7 +1242,7 @@
         "typing_TLSConstants.name_of_cipherSuite"
       ],
       0,
-      "290f36e7253fb962ffb4f85a2b611579"
+      "80d9fcaa843a87f077d33e4acb2cdd66"
     ]
   ]
 ]
