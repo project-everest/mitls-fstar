@@ -17,7 +17,6 @@ open StatefulLHAE
 open HKDF
 open PSK
 
-module HKDF = HKDF
 module MDM = FStar.Monotonic.DependentMap
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST

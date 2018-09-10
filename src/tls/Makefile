@@ -30,6 +30,7 @@ SHELL=/bin/bash
 .PHONY: clean-%
 clean-c:
 	rm -rf extract/Kremlin-{Library,Internal-Test}/{*.c,*/*.c}
+	rm include/EverCrypt.h
 
 ocaml-%: clean-depend
 	+$(MAKE) -f Makefile.OCaml $*
