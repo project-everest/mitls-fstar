@@ -726,7 +726,9 @@ let serialize_nondep_then_upd_bw_left_chain
     len2 + i' + Seq.length s' <= Seq.length s /\
     serialize (serialize_nondep_then p1 s1 u p2 s2) (y, snd x) == seq_upd_bw_seq s (len2 + i') s'
   ))
-= serialize_nondep_then_upd_left_chain p1 s1 u p2 s2 x y (Seq.length (serialize s1 (fst x)) - i' - Seq.length s') s'
+= let j' = Seq.length (serialize s1 (fst x)) - i' - Seq.length s' in
+  serialize_nondep_then_upd_left_chain p1 s1 u p2 s2 x y j' s';
+  assert (j' == Seq.length (serialize (serialize_nondep_then p1 s1 u p2 s2) x) - (Seq.length (serialize s2 (snd x)) + i') - Seq.length s')
 
 let serialize_nondep_then_upd_right
   (#k1: parser_kind)
@@ -845,6 +847,7 @@ let serialize_nondep_then_upd_bw_right_chain
   assert (serialize s2 y == seq_upd_seq s2' j' s');
   let s = serialize (serialize_nondep_then p1 s1 u p2 s2) x in
   serialize_nondep_then_upd_right_chain p1 s1 u p2 s2 x y j' s';
+  assert (Seq.length (serialize s1 (fst x)) + j' == Seq.length s - i' - Seq.length s');
   ()
 
 #reset-options "--z3rlimit 32"
