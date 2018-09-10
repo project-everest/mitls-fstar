@@ -88,24 +88,25 @@ let expand #ha prk info len =
   store_bytes prk prk_p;
   assert_norm(EverCrypt.HMAC.keysized ha (EverCrypt.Hash.tagLength ha));
 
-  let tag_p = LowStar.Buffer.alloca 0uy tlen in
-
+  let tag_p = LowStar.Buffer.alloca 0uy len in
   let infolen = Bytes.len info in 
 
   if infolen = 0ul then (
     let info_p = LowStar.Buffer.null in 
-    EverCrypt.HKDF.hkdf_expand ha tag_p prk_p tlen info_p infolen tlen
+    EverCrypt.HKDF.hkdf_expand ha tag_p prk_p tlen info_p infolen len
   )
   else (
-    push_frame();
+    push_frame ();
     let info_p = LowStar.Buffer.alloca 0uy infolen in 
     store_bytes info info_p;
-    EverCrypt.HKDF.hkdf_expand ha tag_p prk_p tlen info_p infolen tlen;
-    pop_frame()
-    );
+    EverCrypt.HKDF.hkdf_expand ha tag_p prk_p tlen info_p infolen len;
+    pop_frame ()
+  );
+
+  // FIXME(adl) a functional spec would have helped here
   assume False;//18-09-01 not sure what's broken
     
-  let tag = of_buffer tlen prk_p in
+  let tag = of_buffer len tag_p in
   pop_frame();
   let h11 = HyperStack.ST.get() in 
   //18-09-01 todo, as in Hashing.compute
