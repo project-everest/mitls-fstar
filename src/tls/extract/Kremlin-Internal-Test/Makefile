@@ -107,3 +107,5 @@ clean:
 
 test: test.exe $(CERT_FILES)
 	./$<
+
+.PHONY: test
