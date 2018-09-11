@@ -18,7 +18,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "288cdf0563246e9e398f1030be3471d5"
+      "124040971f076822db0b9128fd19a964"
     ],
     [
       "LowParse.TestLib.Low.beqb",
@@ -28,15 +28,24 @@
       [
         "@MaxIFuel_assumption", "@query",
         "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "equation_FStar.UInt.uint_t", "equation_FStar.UInt32.n",
-        "function_token_typing_FStar.UInt32.n", "int_inversion",
+        "constructor_distinct_FStar.Integers.Unsigned",
+        "constructor_distinct_FStar.Integers.W8",
+        "equality_tok_FStar.Integers.W8@tok",
+        "equation_FStar.Integers.int_t", "equation_FStar.UInt.uint_t",
+        "equation_FStar.UInt32.n",
+        "equation_LowStar.Buffer.trivial_preorder", "equation_Prims.l_True",
+        "equation_Prims.logical", "function_token_typing_FStar.UInt32.n",
+        "function_token_typing_LowStar.Buffer.trivial_preorder",
+        "int_inversion",
+        "interpretation_LowStar.Buffer_Tm_abs_d359dc64ac5a79b32b9828a25bf0bd72",
         "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_FStar.Integers.Unsigned__0",
         "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
         "refinement_interpretation_LowParse.TestLib.Low_Tm_refine_74c22ee1132f6f6ff3ee75cd01d455af",
-        "typing_FStar.UInt32.v"
+        "true_interp", "typing_FStar.UInt32.v"
       ],
       0,
-      "754183d24d7fb49de2703bd029974ea2"
+      "41bf5a8eb59640dca94e72277aff2e78"
     ],
     [
       "LowParse.TestLib.Low.test_buffer",
@@ -135,7 +144,7 @@
         "typing_LowStar.Monotonic.Buffer.length", "unit_inversion"
       ],
       0,
-      "0f403821f47ca53f84e531f8298f14ff"
+      "792684d4b5855ba04b6c0f25307eb589"
     ],
     [
       "LowParse.TestLib.Low.test_file_buffer",
@@ -195,7 +204,7 @@
         "typing_FStar.Set.singleton"
       ],
       0,
-      "c24040f86b798c7429909a2234d3fe21"
+      "bbed3a0b85bebc1bbd88969202a8a691"
     ]
   ]
 ]
