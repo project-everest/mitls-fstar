@@ -30,9 +30,13 @@ module Range = Range
 ////////////////////////////////////////////////////////////////////////////////
 let is_stream i = ID13? i
 
-let is_stlhae (i:id) = ID12? i && AEAD? (aeAlg_of_id i) &&
-  (AEAD?._0 (aeAlg_of_id i) = EverCrypt.AES128_GCM ||
-   AEAD?._0 (aeAlg_of_id i) = EverCrypt.AES256_GCM)
+let is_stlhae (i:id) =
+  if ID12? i && AEAD? (aeAlg_of_id i) then
+    let is_aes128 = AEAD?._0 (aeAlg_of_id i) = EverCrypt.AES128_GCM in
+    let is_aes256 = AEAD?._0 (aeAlg_of_id i) = EverCrypt.AES256_GCM in
+    is_aes128 || is_aes256
+  else
+    false
 
 // type id = i:id {is_stream i \/ is_stlhae i}
 

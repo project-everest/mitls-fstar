@@ -1475,6 +1475,12 @@ let server_ClientHello #region ns offer log =
   | S_HRR o1 hrr ->
     trace ("Processing second offer based on existing HRR state (staeful HRR).");
     let o2 = offer in
+    let extension_ok =
+      if Some? o2.ch_extensions && Some? o1.ch_extensions then
+        List.Helpers.forall_aux (o1, hrr) aux_extension_ok (Some?.v o2.ch_extensions)
+      else
+        false
+    in
     if
       o1.ch_protocol_version = o2.ch_protocol_version &&
       o1.ch_client_random = o2.ch_client_random &&
@@ -1482,8 +1488,7 @@ let server_ClientHello #region ns offer log =
       o1.ch_sessionID = hrr.hrr_sessionID &&
       List.Tot.mem hrr.hrr_cipher_suite o2.ch_cipher_suites &&
       o1.ch_compressions = o2.ch_compressions &&
-      Some? o2.ch_extensions && Some? o1.ch_extensions &&
-      List.Helpers.forall_aux (o1, hrr) aux_extension_ok (Some?.v o2.ch_extensions)
+      extension_ok
     then
       let sm = computeServerMode ns.cfg offer ns.nonce in
       match sm with
