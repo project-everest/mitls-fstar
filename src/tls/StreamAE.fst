@@ -106,7 +106,7 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
       (h1 `HS.contains` (ilog w.log) /\
        sel h1 (ilog w.log) == Seq.empty)) /\
   h1 `HS.contains` (ctr w.counter) /\
-  sel h1 (ctr w.counter) === 0
+  sel h1 (ctr w.counter) == 0
 //16-04-30 how to share the whole ST ... instead of genPost?
 
 // Generate a fresh instance with index i in a fresh sub-region of r0
@@ -144,7 +144,7 @@ val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
          HS.fresh_region r.region h0 h1 /\
          w.log == r.log /\
 	 h1 `HS.contains` (ctr r.counter) /\
-	 sel h1 (ctr r.counter) === 0))
+	 sel h1 (ctr r.counter) == 0))
 // encryption (on concrete bytes), returns (cipher @| tag)
 // Keeps seqn and nonce implicit; requires the counter not to overflow
 // encryption of plaintexts; safe instances are idealized
@@ -194,7 +194,7 @@ val encrypt: #i:id -> e:writer i -> ad:bytes -> l:plainLen -> p:plain i l -> ST 
       lemma_ID13 i;
       modifies (Set.as_set [e.log_region (*; AEAD.log_region #i e.aead *)]) h0 h1 /\
       h1 `HS.contains` (ctr e.counter) /\
-      sel h1 (ctr e.counter) === sel h0 (ctr e.counter) + 1 /\
+      sel h1 (ctr e.counter) == sel h0 (ctr e.counter) + 1 /\
 	    (authId i ==>
 		    (let log = ilog e.log in
 		    let ent = Entry l c p in
@@ -257,7 +257,7 @@ val decrypt: #i:id -> d:reader i -> ad:bytes -> l:plainLen -> c:cipher i l
        | _ -> let ctr_counter_as_hsref = ctr d.counter in
              HS.modifies_one d.region h0 h1 /\
              HS.modifies_ref d.region (Set.singleton (Heap.addr_of (as_ref ctr_counter_as_hsref))) h0 h1 /\
-             sel h1 (ctr d.counter) === j + 1)))
+             sel h1 (ctr d.counter) == j + 1)))
 
 val strip_refinement: #a:Type -> #p:(a -> Type0) -> o:option (x:a{p x}) -> option a
 let strip_refinement #a #p = function

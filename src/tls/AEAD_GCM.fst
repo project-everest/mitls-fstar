@@ -107,7 +107,7 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
 //  AEAD.empty_log w.aead h1 /\
   (authId i ==> (h1 `HS.contains` (ilog w.log) /\ sel h1 (ilog w.log) == Seq.empty)) /\
   h1 `HS.contains` (ctr w.counter) /\
-  sel h1 (ctr w.counter) === 0
+  sel h1 (ctr w.counter) == 0
 
 // Generate a fresh instance with index i in a fresh sub-region of r0
 // (we can drop this spec, since F* will infer something at least as precise,
@@ -142,7 +142,7 @@ val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
     HS.fresh_region r.region h0 h1 /\
     eq2 #(log_ref w.log_region i) w.log r.log /\
     h1 `HS.contains` (ctr r.counter) /\
-    sel h1 (ctr r.counter) === 0))
+    sel h1 (ctr r.counter) == 0))
 let genReader parent #i w =
   let reader_r = new_region parent in
   let wr : rgn = w.region in
@@ -233,7 +233,7 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
        (ensures  (fun h0 c h1 ->
         modifies (Set.as_set [e.log_region; AEAD.log_region e.aead]) h0 h1
   	 /\ h1 `HS.contains` (ctr e.counter)
-  	 /\ sel h1 (ctr e.counter) === sel h0 (ctr e.counter) + 1
+  	 /\ sel h1 (ctr e.counter) == sel h0 (ctr e.counter) + 1
   	 /\ length c = Range.targetLength i r
       	 /\ (authId i ==>
   	     (let log = ilog e.log in
@@ -288,7 +288,7 @@ val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
        | None -> modifies Set.empty h0 h1
        | _    -> modifies_one d.region h0 h1
                 /\ HS.modifies_ref d.region (Set.singleton (HS.as_addr (ctr d.counter))) h0 h1
-	        /\ sel h1 (ctr d.counter) === j + 1)))
+	        /\ sel h1 (ctr d.counter) == j + 1)))
 
 #set-options "--z3rlimit 100 --max_fuel 0 --initial_fuel 1 --initial_ifuel 0 --max_ifuel 1"
 let decrypt #i d ad c =
