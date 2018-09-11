@@ -77,7 +77,7 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
      (ensures  (fun h0 c h1 ->
        modifies (Set.as_set [e.log_region; AEADProvider.log_region e.aead]) h0 h1
        /\ h1 `HS.contains` (ctr e.counter)
-       /\ sel h1 (ctr e.counter) === sel h0 (ctr e.counter) + 1
+       /\ sel h1 (ctr e.counter) == sel h0 (ctr e.counter) + 1
        /\ length c = Range.targetLength i r
        /\ (authId i ==>
 	     (let log = ilog e.log in
@@ -116,7 +116,7 @@ val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
        | None -> modifies Set.empty h0 h1
        | _    -> modifies_one d.region h0 h1
                 /\ HS.modifies_ref d.region (Set.singleton (HS.as_addr (ctr d.counter))) h0 h1
-	        /\ sel h1 (ctr d.counter) === j + 1)))
+	        /\ sel h1 (ctr d.counter) == j + 1)))
 let decrypt #i d ad c =
   let seqn = HST.op_Bang (ctr d.counter) in
   lemma_repr_bytes_values seqn;
