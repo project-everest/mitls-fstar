@@ -801,7 +801,11 @@ let negotiate_version cfg offer =
   one and is a valid ciphersuite, or [None]
 *)
 private
-let is_cs_in_l (l1, sa) s = CipherSuite? s && List.Tot.mem s l1 && CipherSuite?._1 s = Some sa
+let is_cs_in_l (l1, sa) s =
+  if CipherSuite? s then
+    List.Tot.mem s l1 && CipherSuite?._1 s = Some sa
+  else false
+
 val negotiate: l1:list valid_cipher_suite -> list valid_cipher_suite -> sigAlg
  -> Tot (option (c:valid_cipher_suite{CipherSuite? c && List.Tot.mem c l1}))
 let negotiate l1 l2 sa =
