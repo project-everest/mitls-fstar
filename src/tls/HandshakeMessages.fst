@@ -978,8 +978,6 @@ let parseCertificateRequest13 (body:bytes): result cr13 = error "Certificate req
 
 (** A.4.3 Client Authentication and Key Exchange Messages *)
 
-open CoreCrypto
-
 let kex_c_of_dh_key #g kex =
   if CommonDH.is_ec g then
     KEX_C_ECDHE (CommonDH.serialize_raw #g kex)
@@ -1118,8 +1116,6 @@ let parseSignature pv data =
 
 
 (* ServerKeyExchange *)
-
-open CoreCrypto
 
 let kex_s_to_bytes kex =
   admit(); // JK: TODO

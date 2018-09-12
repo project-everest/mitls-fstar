@@ -48,36 +48,23 @@ else
 endif
 endif
 
-INCLUDE_DIRS 	= secure kreminc include stub ffi uint128 .
+INCLUDE_DIRS 	= kreminc include stub ffi .
 
 # Note: see comment in Makefile.Kremlin to see why we're re-extracting
 # Crypto.Symmetric.Bytes rather than using the one from secure/
 
-# ls *.c */*.c | sed 's/\.c//g' >> Makefile
-# then: remove AEADOpenssl because no other modules refer to it
-# thanks to inlining and partial evaluation.
-# (except AEADProvider, which refers to AEADOpenssl_state in AEADOpenssl.h)
-# ADL: Do not include Test_* modules in this library please
-FILES = AEAD_GCM AEADProvider Alert BufferBytes Cert \
-  C_Loops_Spec_Loops CommonDH Connection Content CoreCrypto \
-  secure/Crypto_AEAD_Main \
-  Crypto_Indexing Crypto_Symmetric_Bytes Crypto_Plain \
-  CryptoTypes DataStream DHGroup ECGroup Old_Epochs Extensions FFI \
-  FFICallbacks Flags Format FStar Old_Handshake HandshakeLog \
-  HandshakeMessages Hashing Hashing_CRF Hashing_Spec HKDF HMAC \
-  Old_HMAC_UFCMA Old_KeySchedule kremlinit LHAEPlain \
-  LowParse Negotiation Nonce Parse PMS Prims \
-  PSK QUIC Random Range Record RSAKey \
-  secure/Crypto_HKDF_Crypto_HMAC \
-  StAE StatefulLHAE \
-  StatefulPlain StreamAE StreamDeltas StreamPlain stub/core_crypto \
-  Ticket TLS TLSConstants TLS_Curve25519 TLSError TLSInfo \
-  TLSInfoFlags TLSPRF Transport stub/mitlsffi stub/buffer_bytes \
-  stub/RegionAllocator
-
-ifdef MITLS_USE_OPENSSL
-FILES += AEADOpenssl
-endif
+# we are now packaging most miTLS modules into meaningful C compilation units
+# See src/tls/Makefile.Kremlin for the list of bundles that are used
+FILES = AEADProvider Alert BufferBytes Cert \
+  C CommonDH Connection Content Crypto_Plain \
+  Extensions FFI FFICallbacks Flags Format FStar \
+  HandshakeLog HandshakeMessages Hashing \
+  kremlinit LowParse LowParseWrappers LowStar \
+  Mem Negotiation Nonce Old_Handshake Parse \
+  PMS Prims PSK QUIC Random Range Record \
+  Spec_Loops StatefulLHAE StreamAE Ticket \
+  TLS TLSConstants TLSError TLSInfo \
+  stub/mitlsffi stub/buffer_bytes stub/RegionAllocator
 
 CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror \
   -Wno-unused-variable -Wno-parentheses -Wno-unknown-warning-option \

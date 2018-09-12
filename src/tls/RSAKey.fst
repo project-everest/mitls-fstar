@@ -1,15 +1,15 @@
 ﻿(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 module RSAKey
+
 module HS = FStar.HyperStack //Added automatically
 
-open CoreCrypto
 open FStar.Bytes
 open FStar.HyperStack.All
 
 module TC = TLSConstants
 
-type pk = (k:CoreCrypto.rsa_key{None? k.rsa_prv_exp})
-type sk = CoreCrypto.rsa_key
+type pk = bytes
+type sk = bytes
 
 type pred = | SK_PK of sk * pk
 
@@ -33,10 +33,11 @@ let gen () : ML (pk * sk) = admit()
     pk, sk
 *)
 
-let coerce (k:pk) (s:CoreCrypto.rsa_key) =
-    s
+let coerce (k:pk) (s:bytes) = s
 
 let repr_of_rsapkey (p) = p
 let repr_of_rsaskey (s) = s
 
-let create_rsapkey ((m, e) : modulus * exponent) = {rsa_mod = m; rsa_pub_exp = e; rsa_prv_exp = None}
+let create_rsapkey ((m, e) : modulus * exponent) =
+  empty_bytes, empty_bytes
+  //{rsa_mod = m; rsa_pub_exp = e; rsa_prv_exp = None}

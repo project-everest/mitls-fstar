@@ -13,7 +13,7 @@ endif
 FLAVOR		= Kremlin$(CONCRETE_FLAVOR)
 EXTENSION	= krml
 # Don't extract modules from mitls that are implemented in C
-EXTRACT		= '* -DHDB -LowCProvider -FFICallbacks -BufferBytes'
+EXTRACT		= '* -DHDB -FFICallbacks -BufferBytes'
 SPECINC     	= $(MITLS_HOME)/src/tls/concrete-flags $(MITLS_HOME)/src/tls/concrete-flags/$(FLAVOR)
 
 # SMT verification is disabled, so do not record hints
@@ -51,8 +51,7 @@ DROP_MODULES 	= $(addprefix -drop , MonotoneMap MonotoneMapNonDep \
 
 # But we ask for their headers to be in scope.
 HEADERS 	= $(addprefix -add-include ,'"hacks.h"' \
-  '"kremlin/internal/compat.h"' '"hacl_glue.h"' \
-  '"Crypto_HKDF_Crypto_HMAC.h"')
+  '"kremlin/internal/compat.h"')
 
 # Note: we could do the same with Crypto_Symmetric_Bytes, but it defines (hidden
 # behind the .h) the enum type for Option, which once again causes name clashes.
@@ -61,11 +60,26 @@ HEADERS 	= $(addprefix -add-include ,'"hacks.h"' \
 #
 # Note: Crypto.Plain is not pre-extracted by secure_api.
 
-KRML_COMMAND	= $(KREMLIN_HOME)/krml \
+KRML_COMMAND	= $(KREMLIN_HOME)/krml -minimal \
+  -add-include '"kremlib.h"' \
   -bundle 'LowParse.\*' \
   -bundle LowParseWrappers \
   -bundle 'Format.\*' \
-  -bundle TLSConstants=TLSConstants,QD.TLS_protocolVersion \
+  -bundle 'EverCrypt=EverCrypt,EverCrypt.\*' \
+  -bundle 'FStar.\*' \
+  -bundle 'LowStar.\*' \
+  -bundle 'C=C,C.\*' \
+  -bundle TLSConstants=TLSConstants,QD.TLS_protocolVersion,List.Helpers \
+  -bundle Hashing=Hashing.Spec,Hashing,Hashing.CRF,HMAC,HKDF,HMAC.UFCMA \
+  -bundle Old.Handshake=Old.HMAC.UFCMA,Old.Epochs,Old.KeySchedule,Old.Handshake \
+  -bundle StatefulLHAE=AEAD_GCM,LHAEPlain,StatefulPlain,StatefulLHAE \
+  -bundle StreamAE=StreamPlain,StreamAE \
+  -bundle CommonDH=TLS.Curve25519,DHGroup,ECGroup,CommonDH \
+  -bundle Content=Content,DataStream \
+  -bundle Record=Record,StAE,Transport,StreamDeltas \
+  -bundle PMS=PMS,RSAKey,TLSPRF \
+  -bundle Crypto.Plain=Buffer.Utils,Crypto.Indexing,Crypto.Plain,Crypto.Symmetric.Bytes \
+  -bundle Flags=DebugFlags,Flags,Flag,TLSInfoFlags \
   -fnoanonymous-unions -warn-error -9-7-6@4 \
   -fsopts --debug,yes -verbose \
   -library EverCrypt,EverCrypt.* \
@@ -91,14 +105,11 @@ endef
 
 # All the files that we bring from external projects
 ALL_EXTERNAL_FILES	= \
-  $(addprefix secure/,Crypto_AEAD_Main.c Crypto_AEAD_Main.h \
-    Crypto_HKDF_Crypto_HMAC.c Crypto_HKDF_Crypto_HMAC.h) \
   $(addprefix kreminc/,kremlib.h) \
   $(addprefix kreminc/kremlin/,c_endianness.h \
     $(addprefix internal/,builtin.h callconv.h debug.h target.h types.h compat.h)) \
-  $(addprefix stub/,core_crypto.c log_to_choice.h \
-    buffer_bytes.c RegionAllocator.c RegionAllocator.h) \
-  $(addprefix include/,hacl_glue.h hacks.h regions.h) \
+  $(addprefix stub/,log_to_choice.h buffer_bytes.c RegionAllocator.c RegionAllocator.h) \
+  $(addprefix include/,hacks.h regions.h) \
   $(addprefix pki/,mipki.h) \
   $(addprefix ffi/,mitlsffi.h)
 
@@ -127,7 +138,7 @@ ifdef VERBOSE
 endif
 	$(KRML_COMMAND) $^ -tmpdir $(INTERNAL_TEST_DIR) -no-prefix Test.Main \
 	  -skip-compilation -drop FFICallbacks \
-	  -bundle Test.Main=Test.*,AEAD_GCM,AEADOpenssl,AEADProvider,Alert,Connection,ConnInvariant,Content,DataStream,Encode,Old.Epochs,FFI,HandshakeLog,HandshakeMessages,Hashing.CRF,IdNonce,KDF.Common,KDF.Salt.ODH,LHAEPlain,MAC,MAC_SHA1,MAC_SHA256,MasterSecret,Negotiation,QUIC,Range,Record,Signature,StAE,Standalone,StatefulLHAE,StatefulPlain,StreamAE,StreamDeltas,StreamPlain,Ticket,TLS,TLSPRF,Transport,KDF,Extract1,Old.Handshake,Old.HMAC.UFCMA,Old.KeySchedule
+	  -bundle Test.Main=Test.*,AEAD_GCM,AEADProvider,Alert,Connection,ConnInvariant,Content,DataStream,Encode,Old.Epochs,FFI,HandshakeLog,HandshakeMessages,Hashing.CRF,IdNonce,KDF.Common,KDF.Salt.ODH,LHAEPlain,MAC,MAC_SHA1,MAC_SHA256,MasterSecret,Negotiation,QUIC,Range,Record,Signature,StAE,Standalone,StatefulLHAE,StatefulPlain,StreamAE,StreamDeltas,StreamPlain,Ticket,TLS,TLSPRF,Transport,KDF,Extract1,Old.Handshake,Old.HMAC.UFCMA,Old.KeySchedule
 
 internal-test-copy: $(addprefix $(INTERNAL_TEST_DIR)/,$(ALL_EXTERNAL_FILES)) $(INTERNAL_TEST_DIR)/stub/mipki_wrapper.c
 

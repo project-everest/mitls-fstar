@@ -98,10 +98,10 @@ noeq type hrr = {
 // TLS 1.2 KeyExchange
 noeq type kex_s =
 | KEX_S_DHE of (g:CommonDH.group & CommonDH.pre_share g)
-| KEX_S_RSA of (pk:CoreCrypto.rsa_key{False}) // Unimplemented
+| KEX_S_RSA of bytes // Unimplemented
 noeq type kex_s_priv =
 | KEX_S_PRIV_DHE of (g:CommonDH.group & CommonDH.ikeyshare g)
-| KEX_S_PRIV_RSA of CoreCrypto.rsa_key
+| KEX_S_PRIV_RSA of bytes // Unimplemented
 type kex_c =
 | KEX_C_DHE of b:bytes{length b < 65536}
 | KEX_C_ECDHE of b:bytes{length b < 256}

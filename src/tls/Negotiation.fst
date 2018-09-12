@@ -14,7 +14,6 @@ module HST = FStar.HyperStack.ST
 
 //16-05-31 these opens are implementation-only; overall we should open less
 open Extensions
-open CoreCrypto
 
 (**
   Debugging flag.
@@ -953,7 +952,6 @@ let client_ServerHello #region ns sh =
     let sext = sh.sh_extensions in
     let ssid = sh.sh_sessionID in
     let cext = offer.ch_extensions in
-    let sig  = CoreCrypto.RSASIG in
     let resume = ssid = offer.ch_sessionID && length offer.ch_sessionID > 0 in
     trace ("processing server extensions "^string_of_option_extensions sext);
     (match Extensions.negotiateClientExtensions spv ns.cfg cext sext cs None resume with

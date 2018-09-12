@@ -22,8 +22,7 @@ module HS = FStar.HyperStack
 let sample (len:UInt32.t): ST (lbytes32 len)
     (requires fun h0 -> True)
     (ensures fun h0 r h1 -> h0 == h1)
-  = CoreCrypto.random (UInt32.v len)
-
+  = assume false; Random.sample len
 
 type idealKDF d = b2t (Flags.flag_KDF d)
 assume val lemma_KDF_depth: d:nat{d>0} -> Lemma (idealKDF d ==> idealKDF (d-1))

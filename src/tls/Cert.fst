@@ -1,4 +1,4 @@
-﻿(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
+﻿(* Copyright (C) 2012--2018 Microsoft Research and INRIA *)
 module Cert
 
 open FStar.Bytes
@@ -6,7 +6,6 @@ open FStar.Error
 
 open TLSError
 open TLSConstants
-open CoreCrypto
 open Extensions // defining cert, cert13, chain
 open Parse
  

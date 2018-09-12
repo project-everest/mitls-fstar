@@ -14,8 +14,6 @@ open Hashing.Spec
 open FStar.Bytes
 open TLSConstants
 open TLSInfo
-//open CoreCrypto
-
 
 module U32 = FStar.UInt32
 

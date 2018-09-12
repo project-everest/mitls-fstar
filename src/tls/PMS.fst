@@ -5,10 +5,8 @@
 open Mem
 open FStar.Bytes
 open TLSConstants
-open CoreCrypto
 
 let ideal = Flags.ideal_PMS // controls idealization of PMS.
-
 
 type rsarepr = bytes
 (*private*)

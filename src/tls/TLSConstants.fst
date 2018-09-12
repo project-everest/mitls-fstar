@@ -86,7 +86,7 @@ let string_of_pv = function
 
 /// Various elements used in ciphersuites
 
-(* Key exchange algorithms *)
+(** Key exchange algorithms **)
 type kexAlg =
   | Kex_RSA
   | Kex_DH
@@ -96,7 +96,7 @@ type kexAlg =
   | Kex_DHE
   | Kex_ECDHE
 
-(** Aliasing of cryptographic types from the CoreCrypto library *)
+(** Crypto algorithm names are defined in EverCrypt **)
 type blockCipher = EverCrypt.block_cipher_alg
 type streamCipher = EverCrypt.stream_cipher_alg
 type aeadAlg = EverCrypt.aead_alg
@@ -197,10 +197,14 @@ let max_TLSCiphertext_fragment_length_13 = max_TLSPlaintext_fragment_length + 25
 
 /// SIGNATURE ALGORITHMS
 /// 18-02-22 QD fodder
-///
-(** Signature algorithms *)
-type sigAlg = CoreCrypto.sig_alg
 
+(** Signature algorithms *)
+type sigAlg =
+ | RSASIG
+ | DSA
+ | ECDSA
+ | RSAPSS
+ 
 (* This is the old version of the inverse predicate. According to CF,
    verification was harder with this style, so we moved to the new style with
    pinverse_t + lemmas. The type abbrevations lemma_inverse_* minimize the
@@ -322,7 +326,6 @@ let parseSignatureScheme b =
 val sigHashAlg_of_signatureScheme:
   scheme:signatureScheme{~(SIG_UNKNOWN? scheme)} -> sigAlg * hashAlg
 let sigHashAlg_of_signatureScheme =
-  let open CoreCrypto in
   let open Hashing.Spec in
   function
   | RSA_PKCS1_SHA256       -> (RSASIG, Hash SHA256)
@@ -346,7 +349,6 @@ let sigHashAlg_of_signatureScheme =
 
 val signatureScheme_of_sigHashAlg: sigAlg -> hashAlg -> signatureScheme
 let signatureScheme_of_sigHashAlg sa ha =
-  let open CoreCrypto in
   let open Hashing.Spec in
   match sa, ha with
   | (RSASIG, Hash SHA256) -> RSA_PKCS1_SHA256
@@ -458,7 +460,6 @@ let isAnonCipherSuite cs =
 
 (** Determine if a ciphersuite implies using (EC)Diffie-Hellman KEX *)
 let isDHECipherSuite cs =
-  let open CoreCrypto in
   match cs with
   | CipherSuite Kex_DHE (Some DSA) _      -> true
   | CipherSuite Kex_DHE (Some RSASIG) _   -> true
@@ -468,7 +469,6 @@ let isDHECipherSuite cs =
 
 (** Determine if a ciphersuite implies using Elliptic Curves Diffie-Hellman KEX *)
 let isECDHECipherSuite cs =
-  let open CoreCrypto in
   match cs with
   | CipherSuite Kex_ECDHE (Some ECDSA) _  -> true
   | CipherSuite Kex_ECDHE (Some RSASIG) _ -> true
@@ -476,7 +476,6 @@ let isECDHECipherSuite cs =
 
 (** Determine if a ciphersuite implies using plain Diffie-Hellman KEX *)
 let isDHCipherSuite cs =
-  let open CoreCrypto in
   match cs with
   | CipherSuite Kex_DH (Some DSA) _    -> true
   | CipherSuite Kex_DH (Some RSASIG) _ -> true
@@ -498,7 +497,6 @@ let isOnlyMACCipherSuite cs =
 // 2018.05.14 SZ: TODO: turn this into a total function
 val sigAlg_of_ciphersuite (cs:cipherSuite) : Dv sigAlg
 let sigAlg_of_ciphersuite cs =
-  let open CoreCrypto in
   match cs with
   | CipherSuite Kex_RSA None _
   | CipherSuite Kex_ECDHE (Some RSASIG) _
@@ -522,7 +520,6 @@ let contains_SCSV (css: list cipherSuite) = List.Tot.mem SCSV css
 
 val cipherSuiteBytesOpt: cipherSuite -> Tot (option (lbytes 2))
 let cipherSuiteBytesOpt cs =
-  let open CoreCrypto in // still required for signatures 
   let open EverCrypt in
   let open Hashing.Spec in
   let twobytes b: option (FStar.Bytes.lbytes 2) = Some (FStar.Bytes.twobytes b) in
@@ -650,7 +647,6 @@ let cipherSuiteBytes c = Some?.v (cipherSuiteBytesOpt c)
 private
 val parseCipherSuiteAux : lbytes 2 -> Tot (result (c:cipherSuite{validCipherSuite c}))
 let parseCipherSuiteAux b =
-  let open CoreCrypto in
   let open EverCrypt in 
   let open Hashing.Spec in
   match b.[0ul], b.[1ul] with
@@ -924,7 +920,6 @@ type cipherSuiteNames = list cipherSuiteName
 (** Determine the validity of a ciphersuite based on it's name *)
 val cipherSuite_of_name: cipherSuiteName -> Tot valid_cipher_suite
 let cipherSuite_of_name =
-  let open CoreCrypto in
   let open EverCrypt in 
   let open Hashing.Spec in function
   | TLS_NULL_WITH_NULL_NULL                -> NullCipherSuite
@@ -1005,7 +1000,6 @@ let cipherSuites_of_nameList nameList =
 
 (** Determine the name of a ciphersuite based on its construction *)
 let name_of_cipherSuite =
-  let open CoreCrypto in
   let open EverCrypt in 
   let open Hashing.Spec in function
   | NullCipherSuite                                                      -> Correct TLS_NULL_WITH_NULL_NULL
@@ -1288,7 +1282,6 @@ val defaultCertTypes: bool -> cipherSuite -> HyperStack.All.ML (l:list certType{
 
 //17-12-26 TODO: get rid of this single use of ML
 let defaultCertTypes sign cs =
-  let open CoreCrypto in
   let alg = sigAlg_of_ciphersuite cs in
     if sign then
       match alg with

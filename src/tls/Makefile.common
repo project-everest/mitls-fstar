@@ -12,12 +12,9 @@ SHELL=/bin/bash
 # Paths and Commands
 
 INCLUDE_PATHS = \
-	$(FSTAR_HOME)/contrib/CoreCrypto/fst/ \
 	$(HACL_HOME)/secure_api \
 	$(HACL_HOME)/secure_api/utils \
 	$(HACL_HOME)/secure_api/concrete_specializations \
-	$(HACL_HOME)/secure_api/LowCProvider/fst \
-	$(HACL_HOME)/code/curve25519/api \
 	$(HACL_HOME)/code/lib \
 	$(KREMLIN_HOME)/include \
         $(KREMLIN_HOME)/kremlib \

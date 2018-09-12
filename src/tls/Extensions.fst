@@ -1430,7 +1430,6 @@ let negotiateServerExtensions pv cExtL csl cfg cs ri pski ks resuming =
 private val default_signatureScheme_fromSig: protocolVersion -> sigAlg ->
   HyperStack.All.ML (l:list signatureScheme{List.Tot.length l == 1})
 let default_signatureScheme_fromSig pv sigAlg =
-  let open CoreCrypto in
   let open Hashing.Spec in
   match sigAlg with
   | RSASIG ->

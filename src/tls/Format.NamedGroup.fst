@@ -4,7 +4,6 @@ module U16 = FStar.UInt16
 module U32 = FStar.UInt32
 module L = FStar.List.Tot
 module LP = LowParse.SLow
-module CC = CoreCrypto
 module B32 = FStar.Bytes
 
 unfold type is_injective (#a:Type) (#b:Type) (f:a -> b) 

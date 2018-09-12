@@ -1085,8 +1085,8 @@ int MITLS_CALLCONV FFI_mitls_quic_get_record_key(quic_state *st, quic_raw_key *k
   {
     QUIC_raw_key k = r.v;
     key->alg =
-      k.alg == CryptoTypes_AES_128_GCM ? TLS_aead_AES_128_GCM :
-      (k.alg == CryptoTypes_AES_256_GCM ? TLS_aead_AES_256_GCM :
+      k.alg == EverCrypt_AES128_GCM ? TLS_aead_AES_128_GCM :
+      (k.alg == EverCrypt_AES256_GCM ? TLS_aead_AES_256_GCM :
        TLS_aead_CHACHA20_POLY1305);
     memcpy(key->aead_key, k.aead_key.data, k.aead_key.length);
     memcpy(key->aead_iv, k.aead_iv.data, k.aead_iv.length);
