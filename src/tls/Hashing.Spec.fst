@@ -20,7 +20,9 @@ let macable a = b:bytes {length b + blockLength a < pow2 32}
 // in contrast with RFC 2104 (which take any key length),
 // in TLS, the HMAC key has the same length as the hash [TLS1.3, 4.4.3]
 
-type hkey (a:alg) = tag a
+type hkey (a:alg) = b:bytes{
+  length b > 0 /\ // FIXME(adl) this should be in keysized
+  EverCrypt.HMAC.keysized a (length b)}
 
 val hmac: 
   a:alg -> 

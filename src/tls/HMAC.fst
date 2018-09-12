@@ -4,128 +4,54 @@ open Hashing.Spec // for the algorithm names, instead of CoreCrypt
 open Mem
 
 open FStar.HyperStack.ST
-open FStar.Bytes
+module B = FStar.Bytes
+module LB = LowStar.Buffer
 
 let ha = EverCrypt.HMAC.ha 
 
-type key = bytes
-// type mac (a:macAlg) = lbytes32 (macSize a)
-//18-02-25 should instead be derived from Hashing
-
-type text (a:alg) = macable a
-
 (* Parametric keyed HMAC; could be coded up from two HASH calls. *)
-
-(*
-// bytes input but uses a buffer for the resulting tag
-private val hmac0:
-  a:ha -> 
-  k:hkey a -> 
-  m: macable a -> 
-  bt: LowStar.Buffer.buffer UInt8.t {LowStar.Buffer.length bt = tagLength a} -> 
-  Stack unit
-  (requires fun h0 -> LowStar.Buffer.live h0 bt)
-  (ensures fun h0 () h1 -> 
-    LowStar.Buffer.as_seq h1 bt == Bytes.reveal (Hashing.Spec.hmac a k m) /\
-    LowStar.Modifies.(modifies (loc_buffer bt) h0 h1))
-
-let hmac0 a k m bt = 
-  let h00 = HyperStack.ST.get() in 
-  push_frame(); 
-  let h0 =  HyperStack.ST.get() in 
-  let lt = EverCrypt.Hash.tagLen a in
-  let bk = LowStar.Buffer.alloca 0uy lt in 
-  store_bytes k bk;
-  assert_norm(EverCrypt.HMAC.keysized a (tagLength a));
-
-  let lm = Bytes.len m in 
-  if lm = 0ul then (
-    let bm = LowStar.Buffer.null in 
-    EverCrypt.HMAC.compute a bt bk lt bm lm
-  )
-  else (
-    push_frame();
-    let bm = LowStar.Buffer.alloca 0uy lm in 
-    store_bytes m bm;
-    EverCrypt.HMAC.compute a bt bk lt bm lm;
-    pop_frame()
-    );
-  pop_frame();
-  assume False
-
-val hmac: 
-  a:ha -> 
-  k:hkey a -> 
-  m: macable a -> 
-  Stack (t:tag a {t == Hashing.Spec.hmac a k m})
-  (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
-  // TODO add functional spec to crypto proof 
-  
-let hmac a k m = 
-  let h00 = HyperStack.ST.get() in 
-  push_frame(); 
-  let lt = EverCrypt.Hash.tagLen a in
-  let bt = LowStar.Buffer.alloca 0uy lt in
-  hmac0 a k m bt; 
-  let t = of_buffer lt bt in
-  pop_frame();
-  let h11 = HyperStack.ST.get() in 
-  assume(HyperStack.modifies Set.empty h00 h11);
-  // assume(t = Hashing.Spec.hmac a k m);
-  t
-
-val hmac_verify: 
-  a:ha -> 
-  k:hkey a -> 
-  m: macable a -> 
-  t:tag a -> 
-  Stack (b:bool {b = (t = Hashing.Spec.hmac a k m)})
-  (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
-*)
 
 val hmac:
   a:ha -> 
   k:hkey a -> 
   m: macable a -> 
-  Stack (tag a)
+  ST (tag a)
   (requires fun h0 -> True)
   (ensures fun h0 t h1 -> 
-    modifies Set.empty h0 h1 /\
+    modifies_none h0 h1 /\ // FIXME this is now wrong
     t = Hashing.Spec.hmac a k m)
 
+#set-options "--z3rlimit 20"
 let hmac a k m = 
-  let h00 = HyperStack.ST.get() in 
+  let h00 = get() in 
   push_frame(); 
   let lt = EverCrypt.Hash.tagLen a in
-  let bk = LowStar.Buffer.alloca 0uy lt in 
-  store_bytes k bk;
-  assert_norm(EverCrypt.HMAC.keysized a (tagLength a));
-
-  let bt = LowStar.Buffer.alloca 0uy lt in
-  let lm = Bytes.len m in 
+  let lk = B.len k in
+  let bk = LB.alloca 0uy lk in 
+  B.store_bytes k bk;
+  let bt = LB.alloca 0uy lt in
+  let lm = B.len m in 
 
   if lm = 0ul then (
-    let bm = LowStar.Buffer.null in 
-    EverCrypt.HMAC.compute a bt bk lt bm lm
-  )
-  else (
+    B.empty_unique m;
+    EverCrypt.HMAC.compute a bt bk lk LB.null lm;
+    let h1 = get() in
+    assume(LB.as_seq h1 bt == B.reveal (Hashing.Spec.hmac a k m))
+  ) else (
     push_frame();
-    let bm = LowStar.Buffer.alloca 0uy lm in 
-    store_bytes m bm;
-    EverCrypt.HMAC.compute a bt bk lt bm lm;
+    let bm = LB.alloca 0uy lm in 
+    B.store_bytes m bm;
+    EverCrypt.HMAC.compute a bt bk lk bm lm;
     pop_frame()
-    );
-  assume False;//18-09-01 not sure what's broken
-    
-  let t = of_buffer lt bt in
-  pop_frame();
-  let h11 = HyperStack.ST.get() in 
-  //18-09-01 todo, as in Hashing.compute
-  //assume(HyperStack.modifies Set.empty h00 h11);
-  t
+  );
 
+  let h2 = get() in
+  assert(LB.as_seq h2 bt == B.reveal (Hashing.Spec.hmac a k m));
+  let t = B.of_buffer lt bt in
+  pop_frame();
+  let h11 = get() in
+  assume(modifies_none h00 h11); // FIXME
+  t
 
 //18-09-02 TODO lower code to avoid bytes-allocating the tag. 
 
@@ -136,7 +62,6 @@ val hmacVerify: a:ha -> k:hkey a -> m:macable a -> t: tag a -> ST (b:bool {b <==
 let hmacVerify a k p t =
   let result = hmac a k p in
   result = t
-
 
 /// Historical constructions from SSL, still used in TLS 1.0, actually
 /// just HMAC. Disable in this version of the code.
@@ -181,14 +106,15 @@ let sslKeyedHashVerify a k p t =
     res=t
 *)
 
+(*** Old TLS 1.2 HMAC ***)
 
 /// Agile bytes-friendly MAC function
 
-type macable = b:bytes {length b + 128 < pow2 32} // [==> pre of hmac for all algorithms]
+type macable = b:B.bytes {B.length b + 128 < pow2 32} // [==> pre of hmac for all algorithms]
 
 val tls_mac: a: 
   tls_macAlg -> 
-  k: tag a  -> 
+  k: hkey a  -> 
   msg:macable -> 
   ST (tag a)
   (requires fun h0 -> True)
@@ -197,7 +123,7 @@ let tls_mac a k msg  = hmac a k msg
 
 val tls_macVerify: 
   a:tls_macAlg -> 
-  k: tag a  -> 
+  k: hkey a  -> 
   msg:macable -> 
   tag a -> 
   ST bool
