@@ -109,9 +109,11 @@ val mac: #i:id -> #good:(bytes -> Type) -> k:key i good -> p:bytes { authId i ==
 
 // We log every authenticated texts, with their index and resulting tag
 let mac #i #good k p =
-  assume (length p + Hashing.Spec.blockLength (alg i) < pow2 32);
+  let a = alg i in 
+  assume (length p + Hashing.Spec.blockLength a < pow2 32);
+  assert_norm(EverCrypt.HMAC.keysized a (EverCrypt.Hash.tagLength a));
   let p : p:bytes { authId i ==> good p } = p in
-  let t = HMAC.hmac (alg i) k.kv p in
+  let t = HMAC.hmac a k.kv p in
   let e : entry i good = Entry t p in
   recall k.log;
   k.log := snoc !k.log e;

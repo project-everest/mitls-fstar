@@ -129,6 +129,7 @@ val create:
 
 noextract
 let create ip _ _ i u =
+  assert_norm(EverCrypt.HMAC.keysized u.alg (EverCrypt.Hash.tagLength u.alg));
   let kv: keyrepr u = Random.sample32 (Hashing.tagLen u.alg) in
   let ck = MAC u kv in
   let k : ir_key ip i =
@@ -147,6 +148,7 @@ let coerceT (ip: ipkg) (ha_of_i: ip.Pkg.t -> ha) (good_of_i: (i:ip.Pkg.t -> Hash
   (u: info {u.alg = ha_of_i i /\ u.good == good_of_i i})
   (kv: lbytes32 (keylen u)) : GTot (key ip i)
   =
+  assert_norm(EverCrypt.HMAC.keysized u.alg (EverCrypt.Hash.tagLength u.alg));
   let ck = MAC u kv in
   if model then
     let k: ir_key ip i = RealKey ck in k
@@ -177,6 +179,7 @@ val coerce:
     usage k == u /\
     Pkg.fresh_regions (footprint k) h0 h1)
 let coerce ip _ _ i u kv =
+  assert_norm(EverCrypt.HMAC.keysized u.alg (EverCrypt.Hash.tagLength u.alg));
   let ck = MAC u kv in
   if model then
     let k: ir_key ip i = RealKey ck in k

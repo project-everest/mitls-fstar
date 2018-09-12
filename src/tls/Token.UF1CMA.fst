@@ -1,4 +1,4 @@
-(* Idealizing derived authentication tokens; independent of TLS, used for TLS 1.2 Finished message payloads. *) 
+(* Idealizing derived authentication tokens; independent of TLS, used for TLS 1.2 Finished message payloads. *)
 module Token.UF1CMA
 
 //TODO use this file instead of TLSPRF
@@ -13,13 +13,13 @@ open Mem
 
 let ipkg = Pkg.ipkg
 let model = Flags.model
-let ideal = Flags.ideal_HMAC 
+let ideal = Flags.ideal_HMAC
 // secret idealization flag for the UF1CMA assumption
-//TODO use a separate flag 
+//TODO use a separate flag
 
 type safe (#ip:ipkg) (i:ip.Pkg.t) = b2t ideal /\ ip.Pkg.honest i
 
-private let is_safe (#ip:ipkg) (i:ip.Pkg.t{ip.Pkg.registered i}): ST bool 
+private let is_safe (#ip:ipkg) (i:ip.Pkg.t{ip.Pkg.registered i}): ST bool
   (requires fun h0 -> True)
   (ensures fun h0 b h1 -> modifies_none h0 h1 /\ (b <==> safe i))
   =
@@ -28,7 +28,7 @@ private let is_safe (#ip:ipkg) (i:ip.Pkg.t{ip.Pkg.registered i}): ST bool
 
 #set-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 
-// formally agile in the KDF algorithm, which controls the token length. 
+// formally agile in the KDF algorithm, which controls the token length.
 type ha = Hashing.Spec.alg
 
 // initial parameters
@@ -41,11 +41,11 @@ noeq type info = {
 type tag (u:info) = lbytes32 (Hashing.tagLen u.alg)
 
 let keylen (u:info): Pkg.keylen = Hashing.Spec.tagLen u.alg
-type keyrepr (u:info) = Hashing.Spec.hkey u.alg
+type keyrepr (u:info) = lbytes (Hashing.Spec.tagLength u.alg)
 
 let goodish (#ip:ipkg) (i:ip.Pkg.t) (u:info) = _: unit{~(safe i) \/ u.good}
 
-private type log_t (#ip:ipkg) (i:ip.Pkg.t) (u:info) (r:rgn) = 
+private type log_t (#ip:ipkg) (i:ip.Pkg.t) (u:info) (r:rgn) =
   m_rref r (option (goodish #ip i u)) ssa
 
 // runtime (concrete) type of MAC instances
@@ -63,7 +63,7 @@ noeq (* abstract *) type ir_key (ip:ipkg) (i:ip.Pkg.t) =
   | RealKey: ck:concrete_key -> ir_key ip i
 
 type key (ip:ipkg) (i:ip.Pkg.t{ip.Pkg.registered i}) =
-  (if model 
+  (if model
   then k:ir_key ip i{IdealKey? k <==> safe i}
   else concrete_key)
 
@@ -83,15 +83,15 @@ let keyval (#ip:ipkg) (#i:ip.Pkg.t{ip.Pkg.registered i}) (k:key ip i): GTot (key
     | RealKey ck -> ck.k
   else k.k
 
-let region (#ip:ipkg) (#i:ip.Pkg.t{ip.Pkg.registered i}) (k:key ip i): 
+let region (#ip:ipkg) (#i:ip.Pkg.t{ip.Pkg.registered i}) (k:key ip i):
   Ghost (subrgn (usage k).parent)
-  (requires safe i) 
+  (requires safe i)
   (ensures fun _ -> True)
   = let IdealKey _ r _ = k <: ir_key ip i in r
 
 let shared_footprint: rset = Set.empty
 
-let footprint (#ip:ipkg) (#i:ip.Pkg.t {ip.Pkg.registered i}) (k:key ip i): 
+let footprint (#ip:ipkg) (#i:ip.Pkg.t {ip.Pkg.registered i}) (k:key ip i):
   s:rset{s `Set.disjoint` shared_footprint}
   =
   assume false; //TODO downwards closed set
@@ -113,6 +113,7 @@ val create:
     Pkg.fresh_regions (footprint k) h0 h1)
 
 let create ip _ _ i u =
+  assert_norm(EverCrypt.HMAC.keysized u.alg (EverCrypt.Hash.tagLength u.alg));
   let kv: keyrepr u = Random.sample32 (Hashing.tagLen u.alg) in
   let ck = MAC u kv in
   let k : ir_key ip i =
@@ -130,6 +131,7 @@ let coerceT (ip: ipkg) (ha_of_i: ip.Pkg.t -> ha) (good_of_i: ip.Pkg.t -> bool)
   (u: info {u.alg = ha_of_i i /\ u.good == good_of_i i})
   (kv: lbytes32 (keylen u)) : GTot (key ip i)
   =
+  assert_norm(EverCrypt.HMAC.keysized u.alg (EverCrypt.Hash.tagLength u.alg));
   let ck = MAC u kv in
   if model then
     let k : ir_key ip i = RealKey ck in k
@@ -148,6 +150,7 @@ val coerce:
     Pkg.fresh_regions (footprint k) h0 h1)
 
 let coerce ip _ _ i u kv =
+  assert_norm(EverCrypt.HMAC.keysized u.alg (EverCrypt.Hash.tagLength u.alg));
   let ck = MAC u kv in
   if model then
     let k : ir_key ip i = RealKey ck in k
@@ -183,18 +186,18 @@ val verify:
   #ip:ipkg -> #i:ip.Pkg.t {ip.Pkg.registered i} -> k:key ip i ->
   t: tag (usage k) -> ST bool
   (requires fun _ -> True)
-  (ensures fun h0 b h1 -> 
+  (ensures fun h0 b h1 ->
     modifies_none h0 h1 /\
     (b /\ safe i ==> (usage k).good))
 let verify #ip #i k t =
-  let MAC _ t' = get_key k in 
+  let MAC _ t' = get_key k in
   let verified = (t = t') in
   if is_safe i then
     // We use the log to correct any verification errors
     let IdealKey _ _ log = k <: ir_key ip i in
-    match !log with 
+    match !log with
     | Some () -> verified
-    | None    -> 
+    | None    ->
       assume false; //18-01-04 TODO how can this fail otherwise?
       false
   else

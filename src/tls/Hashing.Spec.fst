@@ -6,36 +6,38 @@
 *)
 module Hashing.Spec
 
-include EverCrypt.Hash 
+include EverCrypt.Hash
 
 open FStar.Integers
-open FStar.Bytes 
+open FStar.Bytes
 type tag (a:alg) = Bytes.lbytes32 (tagLen a)
 type anyTag = lbytes (Integers.v maxTagLen)
 
 let macable a = b:bytes {length b + blockLength a < pow2 32}
-// 32-bit implementation restriction 
+// 32-bit implementation restriction
 
-// HMAC specification
-// in contrast with RFC 2104 (which take any key length),
-// in TLS, the HMAC key has the same length as the hash [TLS1.3, 4.4.3]
+// Adapting EverCrypt's HMAC specification to TLS. In contrast with
+// RFC 2104 (which take any key length), in TLS, the HMAC key has the
+// same length as the hash [TLS1.3, 4.4.3]
 
 type hkey (a:alg) = b:bytes{
-  length b > 0 /\ // FIXME(adl) this should be in keysized
+  // 18-09-12 this usage restriction is dubious, but always met in
+  // miTLS; it avoids a null-pointer case in the wrapper below.
+  length b > 0 /\
   EverCrypt.HMAC.keysized a (length b)}
 
-val hmac: 
-  a:alg -> 
-  k:hkey a -> 
-  text:macable a -> 
+val hmac:
+  a:alg ->
+  k:hkey a ->
+  text:macable a ->
   GTot (t:tag a{
-    let text = Bytes.reveal text in 
+    let text = Bytes.reveal text in
     Seq.length text + blockLength a <= maxLength a /\
     Bytes.reveal t = EverCrypt.HMAC.hmac a (Bytes.reveal k) text})
 
-let hmac a k text = 
-  let k = Bytes.reveal k in 
-  let text = Bytes.reveal text in 
+let hmac a k text =
+  let k = Bytes.reveal k in
+  let text = Bytes.reveal text in
   assert_norm (Seq.length text + blockLength a <= maxLength a);
   let t: EverCrypt.Hash.tag a = EverCrypt.HMAC.hmac a k text in
   Bytes.hide t
@@ -57,8 +59,8 @@ let emptyHash : a:alg -> Tot (tag a) =
 let zeroHash (a:alg): Tot (tag a) = Bytes.create (tagLen a) 0uy
 
 
-// TLS-specific hash and MAC algorithms (review) 
-type tls_alg = 
+// TLS-specific hash and MAC algorithms (review)
+type tls_alg =
   | NULL
   | MD5SHA1
   | Hash of alg
@@ -71,7 +73,7 @@ let tls_tagLen = function
 type tls_macAlg = EverCrypt.HMAC.ha
 
 (* for reference, a bytes spec of HMAC:
-let hmac a key message = EverCrypt.Hash. 
+let hmac a key message = EverCrypt.Hash.
   let xkey = key @| create U32.(blockLen a -^ tagLen a) 0x0z  in
   let outer_key_pad = xor (blockLen a) xkey (create (blockLen a) 0x5cz) in
   let inner_key_pad = xor (blockLen a) xkey (create (blockLen a) 0x36z) in

@@ -31,6 +31,7 @@ unfold let trace = if DebugFlags.debug_NGO then print else (fun _ -> ())
 
 
 //17-05-01 relocate these printing functions?!
+//18-09-09
 let string_of_option_extensions (o: option extensions) = match o with
   | None -> "None"
   | Some es -> "[ "^Extensions.string_of_extensions es^"]"
@@ -157,6 +158,10 @@ let valid_offer ch =
 // There is a pure function computing a ClientHello from an offer (minus the PSK binders)
 type offer = ch:HandshakeMessages.ch { valid_offer ch }
 
+
+// boilerplate code for accessing individual extensions
+// 18-09-09 TODO use lowparse readers (simpler datatypes)
+
 let find_client_extension (filter:Extensions.extension -> bool) o
   : option (e:Extensions.extension{filter e}) =
   match o.ch_extensions with
@@ -204,14 +209,13 @@ let find_sessionTicket o =
   | None -> None
   | Some (Extensions.E_session_ticket b) -> Some b
 
-// FIXME regression without the default case
 let find_clientPske o =
   match find_client_extension Extensions.E_pre_shared_key? o with
+  | None -> None
   | Some (Extensions.E_pre_shared_key psk) ->
-    (match psk with
+    match psk with
     | ServerPSK _ -> None
-    | ClientPSK ids tlen -> Some (ids,tlen))
-  | _ -> None
+    | ClientPSK ids tlen -> Some (ids,tlen)
 
 let find_serverPske sh =
   match sh.sh_extensions with
@@ -296,7 +300,8 @@ noeq type mode =
     // redundant with the server extension response?
     n_pski: option (pski n_offer) -> // only for TLS 1.3, result of a tricky stateful computation
 
-    // concatenating SH and EE extensions for 1.3, in wire order.
+    // concatenating SH and EE extensions for 1.3, in wire order
+    // 18-09-09 recheck we exclude ambiguity
     n_server_extensions: option (se:list extension{List.Tot.length se < 256}) ->
 
     // more from SKE in ...ServerHelloDone (1.2) or SH (1.3)

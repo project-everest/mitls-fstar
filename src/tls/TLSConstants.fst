@@ -8,7 +8,18 @@ hash algorithm etc.
 *)
 module TLSConstants
 
-//18-02-27 not a reasonable default? 
+/// 18-09-08 contents & triage (beware of scopes)
+/// - crypto ==> EverCrypt
+/// - datatypes ==> QD
+///    7% for signatures
+///   53% for ciphersuites!
+///   10% for certificates
+/// - prf details ==> KeySchedule
+/// - parsed extension contents ==> Extensions
+/// - split Config (defaults are defined much later); align to EverCrypt
+/// - callbacks + ad hoc string conversions ==> FFI ?
+
+//18-02-27 not a reasonable default?
 //#set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1"
 
 open FStar.Seq
@@ -18,7 +29,7 @@ open FStar.Error
 open TLSError
 
 open Mem
-open Parse 
+open Parse
 //include Parse
 
 (* Relocate? *)
@@ -112,6 +123,8 @@ type encAlg =
   | Stream of streamCipher
 
 (** TLS-specific hash and MAC algorithms *)
+
+//18-09-08 eliminate once EverCrypt/Hashing are stable.
 
 type hash_alg = Hashing.Spec.alg
 type hashAlg = Hashing.Spec.tls_alg
@@ -286,7 +299,7 @@ let signatureSchemeBytes = function
   | SIG_UNKNOWN codepoint  -> codepoint
 
 assume val signatureSchemeBytes_is_injective:
-  s1: signatureScheme -> s2: signatureScheme -> 
+  s1: signatureScheme -> s2: signatureScheme ->
   Lemma
   (requires signatureSchemeBytes s1 == signatureSchemeBytes s2)
   (ensures s1 == s2)
@@ -410,12 +423,12 @@ let parseCompression b =
 type compressions = cms: list compression {List.length cms <= 254}
 
 (** Parsing function for compression algorithm lists *)
-val parseCompressions: 
-  b:bytes {length b <= 254} -> 
+val parseCompressions:
+  b:bytes {length b <= 254} ->
   Tot (cms: compressions {List.length cms = length b}) (decreases (length b))
 let rec parseCompressions b =
   if length b = 0
-  then 
+  then
     let cms: list compression = [] in
     assert_norm (List.length cms = 0); //libraries?
     cms
@@ -423,14 +436,14 @@ let rec parseCompressions b =
     let cmB,b' = split b 1ul in
     let cm = parseCompression cmB in
     let cms' = parseCompressions b' in
-    let cms = cm :: cms' in 
+    let cms = cm :: cms' in
     assert_norm(List.length cms = 1 + List.length cms'); //library?
     cms )
 
 //#set-options "--max_fuel 1 --initial_fuel 1 --max_ifuel 1 --initial_ifuel 1"
 
 (** Serializing function for lists of compression algorithms *)
-val compressionMethodsBytes: 
+val compressionMethodsBytes:
   cms: compressions -> Tot (lbytes (List.Tot.length cms))
 let rec compressionMethodsBytes cms =
   match cms with
@@ -634,7 +647,7 @@ type cipherSuites = cs: list valid_cipher_suite
   { let l = List.length cs in 0 <= l /\ l <= (65536/2 - 2)}
 
 (** List of valid ciphersuite (redundant) *)
-let valid_cipher_suites = cipherSuites 
+let valid_cipher_suites = cipherSuites
 
 (** Serializing function for a valid ciphersuite *)
 val cipherSuiteBytes: valid_cipher_suite -> Tot (lbytes 2)
@@ -790,7 +803,7 @@ let pinverse_cipherSuite x = admit()
 #set-options "--max_ifuel 1 --initial_ifuel 1 --max_fuel 1 --initial_fuel 1"
 
 (** Serializing function for a list of ciphersuite *)
-val cipherSuitesBytes: 
+val cipherSuitesBytes:
   cs: list valid_cipher_suite {List.length cs <= 65536} -> Tot (lbytes (op_Multiply 2 (List.length cs))) (decreases cs)
 let rec cipherSuitesBytes cs =
   match cs with
@@ -810,9 +823,9 @@ let rec parseCipherSuites b =
     let (b0, b1) = split b 2ul in
     let rest = parseCipherSuites b1 in
     match parseCipherSuite b0 with
-    | Correct cs -> 
-      if List.length rest < 65536/2 - 3 
-      then cs :: rest 
+    | Correct cs ->
+      if List.length rest < 65536/2 - 3
+      then cs :: rest
       else rest
     | _ -> rest
   else
@@ -1303,7 +1316,7 @@ type dn = s:string{
   length(utf8_encode s) < 256}
 
 (** Serializing function for a list of Distinguished Names of certificates *)
-val distinguishedNameListBytes: 
+val distinguishedNameListBytes:
   names: list dn {List.length names <= 1024} -> // arbitrary bound
   b:bytes{length b <= op_Multiply 258 (List.Tot.length names)}
 let rec distinguishedNameListBytes names =
@@ -1618,7 +1631,7 @@ noeq type config : Type0 = {
     min_version: protocolVersion;
     max_version: protocolVersion;
     is_quic: bool; // Use QUIC labels for key derivations
-    
+
     cipher_suites: x:valid_cipher_suites{List.Tot.length x < 256};
     named_groups: CommonDH.supportedNamedGroups;
     signature_algorithms: signatureSchemeList;
