@@ -238,6 +238,7 @@ let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:pla
        (ensures (fun h0 cipher h1 -> modifies_none h0 h1))
   =
   push_frame ();
+  dbg ("ENCRYPT[N="^(hex_of_bytes iv)^",AD="^(hex_of_bytes ad)^"]");
   let adlen = uint_to_t (length ad) in
   let plainlen = uint_to_t l in
   let taglen = uint_to_t (taglen i) in
@@ -267,6 +268,7 @@ let decrypt (#i:id) (#l:plainlen) (st:reader i) (iv:iv i) (ad:adata i) (cipher:c
        (ensures (fun h0 plain h1 -> modifies_none h0 h1))
   =
   push_frame();
+  dbg ("DECRYPT[N="^(hex_of_bytes iv)^",AD="^(hex_of_bytes ad)^"]");
   let iv = from_bytes iv in
   let adlen = uint_to_t (length ad) in
   let ad = from_bytes ad in
@@ -284,23 +286,6 @@ let decrypt (#i:id) (#l:plainlen) (st:reader i) (iv:iv i) (ad:adata i) (cipher:c
   in
   pop_frame();
   ret
-
-  (*
-  let r =
-    if debug then
-      let ivh = hex_of_bytes iv in
-      let adh = hex_of_bytes ad in
-      let ch = hex_of_bytes cipher in
-      let ph =
-        match plain with
-        | None -> "FAIL"
-        | Some p -> hex_of_bytes p
-        in
-      IO.debug_print_string ((prov())^": DECRYPT[IV="^ivh^",AD="^adh^",C="^ch^"] = "^ph^"\n")
-    else false in
-  if r then plain else plain
- *)
-
 
 (*
 /// Agility:
