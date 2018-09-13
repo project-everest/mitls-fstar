@@ -1,33 +1,10 @@
 LIBRARY libevercrypt
 
 EXPORTS
-    EverCrypt_ValeGlue_sha256_size_state
-    EverCrypt_ValeGlue_sha256_counter
-    EverCrypt_ValeGlue_sha256_init
-    EverCrypt_ValeGlue_sha256_update
-    EverCrypt_ValeGlue_sha256_update_multi
-    EverCrypt_ValeGlue_sha256_update_last
-    EverCrypt_ValeGlue_sha256_finish
-    EverCrypt_ValeGlue_sha256_hash
     EverCrypt_StaticConfig_hacl
     EverCrypt_StaticConfig_vale
     EverCrypt_StaticConfig_openssl
     EverCrypt_StaticConfig_bcrypt
-    EverCrypt_AutoConfig_sha256_impl
-    EverCrypt_ValeGlue_sha256_init
-    EverCrypt_ValeGlue_sha256_update
-    EverCrypt_ValeGlue_sha256_update_multi
-    EverCrypt_ValeGlue_sha256_update_last
-    EverCrypt_ValeGlue_sha256_finish
-    EverCrypt_ValeGlue_sha256_hash
-    EverCrypt_Hash_uu___is_SHA256
-    EverCrypt_Hash_uu___is_SHA384
-    EverCrypt_Hash_uu___is_SHA256_Hacl
-    EverCrypt_Hash___proj__SHA256_Hacl__item__p
-    EverCrypt_Hash_uu___is_SHA256_Vale
-    EverCrypt_Hash___proj__SHA256_Vale__item__p
-    EverCrypt_Hash_uu___is_SHA384_Hacl
-    EverCrypt_Hash___proj__SHA384_Hacl__item__p
     EverCrypt_Hash_create
     EverCrypt_Hash_init
     EverCrypt_Hash_update
@@ -36,39 +13,24 @@ EXPORTS
     EverCrypt_Hash_finish
     EverCrypt_Hash_free
     EverCrypt_Hash_hash
-    EverCrypt_ValeGlue_sha256_size_state
-    EverCrypt_Hacl_x25519
-    EverCrypt_Hacl_aes128_keyExpansion
-    EverCrypt_Hacl_aes128_cipher
-    EverCrypt_Hacl_aes256_keyExpansion
-    EverCrypt_Hacl_aes256_cipher
-    EverCrypt_Hacl_chacha20
-    EverCrypt_Hacl_chacha20_poly1305_encrypt
-    EverCrypt_Hacl_chacha20_poly1305_decrypt
-    EverCrypt_Hacl_x25519
-    EverCrypt_Hacl_aes128_keyExpansion
-    EverCrypt_Hacl_aes128_cipher
-    EverCrypt_Hacl_aes256_keyExpansion
-    EverCrypt_Hacl_aes256_cipher
-    EverCrypt_Hacl_chacha20
-    EverCrypt_Hacl_chacha20_poly1305_encrypt
-    EverCrypt_Hacl_chacha20_poly1305_decrypt
-    EverCrypt_BCrypt_aes128_gcm_encrypt
-    EverCrypt_BCrypt_aes128_gcm_decrypt
-    EverCrypt_BCrypt_aes256_gcm_encrypt
-    EverCrypt_BCrypt_aes256_gcm_decrypt
-    EverCrypt_BCrypt_aead_create
-    EverCrypt_BCrypt_aead_encrypt
-    EverCrypt_BCrypt_aead_decrypt
-    EverCrypt_BCrypt_aead_free
-    EverCrypt_AutoConfig_x25519_impl
-    EverCrypt_AutoConfig_aes128_impl
-    EverCrypt_AutoConfig_aes256_impl
-    EverCrypt_AutoConfig_chacha20_impl
-    EverCrypt_AutoConfig_aes128_gcm_impl
-    EverCrypt_AutoConfig_aes256_gcm_impl
-    EverCrypt_AutoConfig_chacha20_poly1305_impl
+    EverCrypt_Hash_tagLen
+    EverCrypt_HMAC_compute
+    EverCrypt_HKDF_hkdf_expand
+    EverCrypt_HKDF_hkdf_extract
+    EverCrypt_random_init
+    EverCrypt_random_sample
+    EverCrypt_random_cleanup
     EverCrypt_x25519
+    EverCrypt_ecdh_load_curve
+    EverCrypt_ecdh_free_curve
+    EverCrypt_ecdh_keygen
+    EverCrypt_ecdh_compute
+    EverCrypt_dh_load_group
+    EverCrypt_dh_free_group
+    EverCrypt_dh_keygen
+    EverCrypt_dh_compute
+    EverCrypt_block_cipher_keyLen
+    EverCrypt_block_cipher_blockLen
     EverCrypt_aes128_create
     EverCrypt_aes128_compute
     EverCrypt_aes128_free
@@ -82,9 +44,8 @@ EXPORTS
     EverCrypt_aes256_gcm_decrypt
     EverCrypt_chacha20_poly1305_encrypt
     EverCrypt_chacha20_poly1305_decrypt
-    EverCrypt_uu___is_AES128_GCM
-    EverCrypt_uu___is_AES256_GCM
-    EverCrypt_uu___is_CHACHA20_POLY1305
+    EverCrypt_aead_tagLen
+    EverCrypt_aead_keyLen
     EverCrypt_aead_create
     EverCrypt_aead_encrypt
     EverCrypt_aead_decrypt
@@ -92,28 +53,6 @@ EXPORTS
     EverCrypt_Bytes_x25519
     EverCrypt_Bytes_chacha20_poly1305_encrypt
     EverCrypt_Bytes_chacha20_poly1305_decrypt
-    EverCrypt_x25519
     EverCrypt_chacha20_poly1305_encrypt
     EverCrypt_chacha20_poly1305_decrypt
-    EverCrypt_BCrypt_aes128_gcm_encrypt
-    EverCrypt_BCrypt_aes128_gcm_decrypt
-    EverCrypt_BCrypt_aes256_gcm_encrypt
-    EverCrypt_BCrypt_aes256_gcm_decrypt
-    EverCrypt_BCrypt_aead_create
-    EverCrypt_BCrypt_aead_encrypt
-    EverCrypt_BCrypt_aead_decrypt
-    EverCrypt_BCrypt_aead_free
-    EverCrypt_AutoConfig_sha256_impl
-    EverCrypt_AutoConfig_sha384_impl
-    EverCrypt_AutoConfig_sha512_impl
-    EverCrypt_AutoConfig_x25519_impl
-    EverCrypt_AutoConfig_aes128_impl
-    EverCrypt_AutoConfig_aes256_impl
-    EverCrypt_AutoConfig_chacha20_impl
-    EverCrypt_AutoConfig_aes128_gcm_impl
-    EverCrypt_AutoConfig_aes256_gcm_impl
-    EverCrypt_AutoConfig_chacha20_poly1305_impl
     EverCrypt_AutoConfig_init
-    EverCrypt_StaticConfig_vale
-    EverCrypt_StaticConfig_openssl
-    EverCrypt_StaticConfig_bcrypt

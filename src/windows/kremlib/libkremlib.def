@@ -51,12 +51,14 @@ EXPORTS
     FStar_Bytes_iutf8_opt_
     FStar_Bytes_len
     FStar_Bytes_length
+    FStar_Bytes_of_buffer
     FStar_Bytes_print_bytes
     FStar_Bytes_repr_bytes
     FStar_Bytes_set_byte
     FStar_Bytes_slice
     FStar_Bytes_split
     FStar_Bytes_split__
+    FStar_Bytes_store_bytes
     FStar_Bytes_sub
     FStar_Bytes_twobytes
     FStar_Bytes_twobytes_

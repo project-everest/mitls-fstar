@@ -4,7 +4,6 @@ all: libquiccrypto.dll test
 
 # 'dir /b *.c' then replace "^(.*)" by "  \1 \\"
 SOURCES = \
-  Crypto_HKDF_Crypto_HMAC.c \
   quic_provider.c
 
 PLATFORM_OBJS = 

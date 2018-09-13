@@ -7,27 +7,27 @@ all: libevercrypt.dll libevercrypt.lib
 #  add a couple missing ones... looks like make-source-drop is more
 #  authoritative
 SOURCES = \
-  evercrypt_vale_stubs.c \
   AEAD_Poly1305_64.c \
-  C.c \
-  C_Endianness.c \
-  C_Failure.c \
-  C_Loops.c \
-  C_String.c \
+  C_C.c \
+  Crypto_Symmetric_AES.c \
+  Crypto_Symmetric_AES128.c \
   EverCrypt.c \
   EverCrypt_AutoConfig.c \
   EverCrypt_BCrypt.c \
   EverCrypt_Bytes.c \
   EverCrypt_Hacl.c \
   EverCrypt_Hash.c \
-  EverCrypt_HMAC.c \
-  EverCrypt_HKDF.c \
   EverCrypt_Helpers.c \
+  EverCrypt_HKDF.c \
+  EverCrypt_HMAC.c \
   EverCrypt_Specs.c \
   EverCrypt_StaticConfig.c \
   EverCrypt_Vale.c \
+  evercrypt_vale_stubs.c \
   EverCrypt_ValeGlue.c \
+  Flag.c \
   FStar.c \
+  Hacl.c \
   Hacl_Chacha20.c \
   Hacl_Chacha20Poly1305.c \
   Hacl_Curve25519.c \
@@ -39,12 +39,10 @@ SOURCES = \
   Hacl_SHA2_256.c \
   Hacl_SHA2_384.c \
   Hacl_SHA2_512.c \
-  Crypto_Symmetric_AES.c \
-  Crypto_Symmetric_AES128.c \
   LowStar.c \
   Prims.c \
-  Vale_Hash_SHA2_256.c \
   vale_aes_glue.c \
+  Vale_Hash_SHA2_256.c \
   sha256_main_i.c
 
 {amd64\}.asm.obj:

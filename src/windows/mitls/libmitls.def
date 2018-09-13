@@ -16,9 +16,12 @@ EXPORTS
     FFI_mitls_configure_ticket
     FFI_mitls_configure_ticket_callback
     FFI_mitls_connect
+    FFI_mitls_find_custom_extension
     FFI_mitls_free
     FFI_mitls_get_cert
     FFI_mitls_get_exporter
+    FFI_mitls_get_hello_summary
+    FFI_mitls_global_free
     FFI_mitls_init
     FFI_mitls_quic_create
     FFI_mitls_quic_free
@@ -29,7 +32,4 @@ EXPORTS
     FFI_mitls_set_ticket_key
     FFI_mitls_set_sealing_key
     FFI_mitls_set_trace_callback
-    FFI_mitls_find_custom_extension
-    FFI_mitls_get_hello_summary
-    FFI_mitls_global_free
     
