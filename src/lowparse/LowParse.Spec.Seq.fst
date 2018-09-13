@@ -79,7 +79,6 @@ let parse_seq
   (p: parser k t)
 : Tot (parser PL.parse_list_kind (Seq.seq t))
 = Classical.forall_intro (parse_seq_aux_correct p);
-//  no_lookahead_weak_ext (parse_seq' p) (parse_seq_aux p);
   injective_ext (parse_seq' p) (parse_seq_aux p);
   no_lookahead_ext (parse_seq' p) (parse_seq_aux p);
   parse_seq_aux p

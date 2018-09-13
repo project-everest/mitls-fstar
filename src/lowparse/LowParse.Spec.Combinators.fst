@@ -201,82 +201,6 @@ let and_then_bare #t #t' p p' =
       end
     | None -> None
 
-(*
-val and_then_no_lookahead_weak_on
-    (#t:Type)
-    (#t':Type)
-    (p: bare_parser t)
-    (p': (t -> Tot (bare_parser t')))
-    (x: bytes) 
-    (x' : bytes)
-  : Lemma
-    (requires (
-      no_lookahead_weak p /\
-      (forall (x: t) . no_lookahead_weak (p' x))
-    ))
-    (ensures (no_lookahead_weak_on (and_then_bare p p') x x'))
-
-let and_then_no_lookahead_weak_on #t #t' p p' x x' =
-    let f = and_then_bare p p' in
-    match f x with
-    | Some v -> 
-      let (y, off) = v in
-      let off : nat = off in
-      let (off_x : consumed_length x ) = off in
-      if off <= Seq.length x'
-      then
-	let (off_x' : consumed_length x') = off in
-	let g () : Lemma
-	  (requires (Seq.length x' <= Seq.length x /\ Seq.slice x' 0 off_x' == Seq.slice x 0 off_x))
-	  (ensures (
-	    Some? (parse f x') /\ (
-	    let (Some v') = parse f x' in
-	    let (y', off') = v' in
-	    y == y' /\ (off <: nat) == (off' <: nat)
-	  )))
-	= assert (Some? (parse p x));
-	  let (Some (y1, off1)) = parse p x in
-	  assert (off1 <= off);
-	  assert (off1 <= Seq.length x');
-	  assert (Seq.slice x' 0 off1 == Seq.slice (Seq.slice x' 0 off_x') 0 off1);
-	  assert (Seq.slice x' 0 off1 == Seq.slice x 0 off1);
-	  assert (no_lookahead_weak_on p x x');
-	  assert (Some? (parse p x'));
-	  let (Some v1') = parse p x' in
-	  let (y1', off1') = v1' in
-	  assert (y1 == y1' /\ (off1 <: nat) == (off1' <: nat));
-	  let x2 : bytes = Seq.slice x off1 (Seq.length x) in
-	  let x2' : bytes = Seq.slice x' off1 (Seq.length x') in
-	  let p2 = p' y1 in
-	  assert (Some? (parse p2 x2));
-	  let (Some (y', off2)) = parse p2 x2 in
-	  assert (off == off1 + off2);
-	  assert (off2 <= Seq.length x2);
-	  assert (off2 <= Seq.length x2');
-	  assert (Seq.length x2' <= Seq.length x2);
-	  assert (Seq.slice x2' 0 off2 == Seq.slice (Seq.slice x' 0 off_x') off1 (off1 + off2));
-	  assert (Seq.slice x2' 0 off2 == Seq.slice x2 0 off2);
-	  assert (no_lookahead_weak_on p2 x2 x2');
-	  ()
-	in
-	Classical.move_requires g ()
-      else ()
-    | _ -> ()
-
-let and_then_no_lookahead_weak
-  (#t:Type)
-  (#t':Type)
-  (p: bare_parser t)
-  (p': (t -> Tot (bare_parser t')))
-: Lemma
-  (requires (
-    no_lookahead_weak p /\
-    (forall (x: t) . no_lookahead_weak (p' x))
-  ))
-  (ensures (no_lookahead_weak (and_then_bare p p')))
-= Classical.forall_intro_2 (fun x -> Classical.move_requires (and_then_no_lookahead_weak_on p p' x))
-*)
-
 let and_then_cases_injective_precond
   (#t:Type)
   (#t':Type)
@@ -472,12 +396,10 @@ let and_then_correct
     and_then_cases_injective p'
   ))
   (ensures (
-//    no_lookahead_weak (and_then_bare p p') /\
     injective (and_then_bare p p') /\
     parser_kind_prop (and_then_kind k k') (and_then_bare p p')
   ))
-= // and_then_no_lookahead_weak p p';
-  and_then_injective p p';
+= and_then_injective p p';
   and_then_no_lookahead p p'
 
 #reset-options
@@ -884,19 +806,6 @@ let bare_parse_strengthen
     Some (x', consumed)
   | _ -> None
 
-(*
-let bare_parse_strengthen_no_lookahead_weak
-  (#k: parser_kind)
-  (#t1: Type0)
-  (p1: parser k t1)
-  (p2: t1 -> GTot Type0)
-  (prf: parse_strengthen_prf p1 p2)
-: Lemma
-  (no_lookahead_weak (bare_parse_strengthen p1 p2 prf))
-= let p' : bare_parser (x: t1 { p2 x } ) = bare_parse_strengthen p1 p2 prf in
-  assert (forall b1 b2 . no_lookahead_weak_on p1 b1 b2 ==> no_lookahead_weak_on p' b1 b2)
-*)
-
 let bare_parse_strengthen_no_lookahead
   (#k: parser_kind)
   (#t1: Type0)
@@ -927,11 +836,9 @@ let bare_parse_strengthen_correct
   (p2: t1 -> GTot Type0)
   (prf: parse_strengthen_prf p1 p2)
 : Lemma
-  ( // no_lookahead_weak (bare_parse_strengthen p1 p2 prf) /\
-  injective (bare_parse_strengthen p1 p2 prf) /\
+  (injective (bare_parse_strengthen p1 p2 prf) /\
   parser_kind_prop k (bare_parse_strengthen p1 p2 prf))
-= // bare_parse_strengthen_no_lookahead_weak p1 p2 prf;
-  bare_parse_strengthen_no_lookahead p1 p2 prf;
+= bare_parse_strengthen_no_lookahead p1 p2 prf;
   bare_parse_strengthen_injective p1 p2 prf;
   ()
 

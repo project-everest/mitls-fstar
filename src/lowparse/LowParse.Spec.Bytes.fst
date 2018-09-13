@@ -109,8 +109,7 @@ let parse_all_bytes_injective () : Lemma
 
 let parse_all_bytes_correct () : Lemma
   (parser_kind_prop parse_all_bytes_kind parse_all_bytes')
-= parse_all_bytes_injective ();
-  () //  injective_consumes_all_no_lookahead_weak parse_all_bytes'
+= parse_all_bytes_injective ()
 
 let parse_all_bytes : parser parse_all_bytes_kind B32.bytes =
   parse_all_bytes_correct ();

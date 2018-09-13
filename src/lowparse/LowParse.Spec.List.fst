@@ -65,18 +65,6 @@ let parse_list_bare_consumes_all
   (consumes_all (parse_list_bare p))
 = Classical.forall_intro (Classical.move_requires (parse_list_bare_consumed p))
 
-(*
-let no_lookahead_weak_on_parse_list_bare
-  (#t: Type0)
-  (p: bare_parser t)
-  (x x' : bytes)
-: Lemma
-  (no_lookahead_weak_on (parse_list_bare p) x x')
-= match parse_list_bare p x with
-  | Some _ -> parse_list_bare_consumed p x
-  | _ -> ()
-*)
-
 #set-options "--z3rlimit 16"
 
 let parse_list_bare_injective
@@ -138,7 +126,6 @@ val parse_list
 : Tot (parser parse_list_kind (list t))
 
 let parse_list #k #t p =
-//  Classical.forall_intro_2 (no_lookahead_weak_on_parse_list_bare p);
   parse_list_bare_injective p;
   parse_list_bare_consumes_all p;
   parse_list_bare p
