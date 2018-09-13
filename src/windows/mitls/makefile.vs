@@ -40,7 +40,6 @@ SOURCES = \
   Random.c \
   Range.c \
   Record.c \
-  Spec_Loops.c \
   StatefulLHAE.c \
   StreamAE.c \
   Ticket.c \

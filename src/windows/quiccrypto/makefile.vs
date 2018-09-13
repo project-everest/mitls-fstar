@@ -15,7 +15,7 @@ libquiccrypto.dll: libquiccrypto_code.lib libquiccrypto.def dllmain.obj ../kreml
   link /nologo /dll /debug:full /out:libquiccrypto.dll libquiccrypto_code.lib dllmain.obj /def:libquiccrypto.def /OPT:ICF /OPT:REF ntdll.lib ../kremlib/libkremlib.lib ../evercrypt/libevercrypt.lib
 
 test.exe: test.obj libquiccrypto.dll
-  link /nologo /ltcg /debug:full /out:test.exe test.obj libquiccrypto.lib ../kremlib/libkremlib.lib
+  link /nologo /debug:full /out:test.exe test.obj libquiccrypto.lib ../kremlib/libkremlib.lib
 
 test: test.exe libquiccrypto.dll
   set PATH=..\kremlib;..\evercrypt;%PATH% & .\test.exe
