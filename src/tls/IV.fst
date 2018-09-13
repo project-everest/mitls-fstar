@@ -6,7 +6,7 @@ open Pkg
 let sample (len:UInt32.t): ST (Bytes.lbytes32 len)
     (requires fun h0 -> True)
     (ensures fun h0 r h1 -> h0 == h1)
-  = CoreCrypto.random (UInt32.v len)
+  = assume false; Random.sample32 len
 
 
 /// A sample functionality for fresh, public initialization vectors,

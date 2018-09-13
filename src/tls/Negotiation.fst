@@ -211,11 +211,11 @@ let find_sessionTicket o =
 
 let find_clientPske o =
   match find_client_extension Extensions.E_pre_shared_key? o with
-  | None -> None
   | Some (Extensions.E_pre_shared_key psk) ->
-    match psk with
+    (match psk with
     | ServerPSK _ -> None
-    | ClientPSK ids tlen -> Some (ids,tlen)
+    | ClientPSK ids tlen -> Some (ids,tlen))
+  | _ -> None
 
 let find_serverPske sh =
   match sh.sh_extensions with

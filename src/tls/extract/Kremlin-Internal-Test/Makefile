@@ -51,23 +51,13 @@ else
 endif
 endif
 
-INCLUDE_DIRS 	= secure kreminc include stub pki ffi uint128 .
+INCLUDE_DIRS 	= kreminc include stub pki ffi .
 
 # Note: see comment in Makefile.Kremlin to see why we're re-extracting
 # Crypto.Symmetric.Bytes rather than using the one from secure/
 
-# ls *.c */*.c | sed 's/\.c//g' >> Makefile
-FILES 		= Cert C_Loops_Spec_Loops CommonDH CoreCrypto \
-  secure/Crypto_AEAD_Main \
-  Crypto_Indexing Crypto_Symmetric_Bytes Crypto_Plain \
-  CryptoTypes DHGroup ECGroup Extensions Flags Format FStar \
-  Hashing_Spec Hashing HMAC HKDF kremlinit \
-  LowParse Nonce Parse PMS Prims PSK Random RSAKey \
-  secure/Crypto_HKDF_Crypto_HMAC \
-  stub/mipki_wrapper stub/core_crypto \
-  stub/buffer_bytes Test_Main TLSConstants \
-  TLS_Curve25519 TLSError TLSInfo TLSInfoFlags \
-  stub/RegionAllocator
+FILES = $(patsubst %.c,%,$(wildcard *.c)) \
+  stub/mipki_wrapper stub/buffer_bytes stub/RegionAllocator
 
 CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror \
   -Wno-unused-variable -Wno-parentheses -Wno-unknown-warning-option \

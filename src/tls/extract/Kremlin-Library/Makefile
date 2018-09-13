@@ -50,20 +50,10 @@ endif
 
 INCLUDE_DIRS 	= kreminc include stub ffi .
 
-# Note: see comment in Makefile.Kremlin to see why we're re-extracting
-# Crypto.Symmetric.Bytes rather than using the one from secure/
-
 # we are now packaging most miTLS modules into meaningful C compilation units
 # See src/tls/Makefile.Kremlin for the list of bundles that are used
-FILES = AEADProvider Alert BufferBytes Cert \
-  C CommonDH Connection Content Crypto_Plain \
-  Extensions FFI FFICallbacks Flags Format FStar \
-  HandshakeLog HandshakeMessages Hashing \
-  kremlinit LowParse LowParseWrappers LowStar \
-  Mem Negotiation Nonce Old_Handshake Parse \
-  PMS Prims PSK QUIC Random Range Record \
-  Spec_Loops StatefulLHAE StreamAE Ticket \
-  TLS TLSConstants TLSError TLSInfo \
+# All extracted C files should be part of the DLL
+FILES = $(patsubst %.c,%,$(wildcard *.c)) \
   stub/mitlsffi stub/buffer_bytes stub/RegionAllocator
 
 CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror \

@@ -8,6 +8,27 @@ ifneq (,$(MITLS_USE_OPENSSL))
 CONCRETE_FLAVOR = -OpenSSL
 endif
 
+# Target C compilation units for miTLS sources. Requires -minimal
+MITLS_BUNDLES = -drop Spec.Loops \
+  -bundle 'LowParse.\*' \
+  -bundle LowParseWrappers \
+  -bundle 'Format.\*' \
+  -bundle 'EverCrypt=EverCrypt,EverCrypt.\*' \
+  -bundle 'FStar.\*' \
+  -bundle 'LowStar.\*' \
+  -bundle 'C=C,C.\*' \
+  -bundle TLSConstants=TLSConstants,QD.TLS_protocolVersion,List.Helpers \
+  -bundle Hashing=Hashing.Spec,Hashing,Hashing.CRF,HMAC,HKDF,HMAC.UFCMA \
+  -bundle Old.Handshake=Old.HMAC.UFCMA,Old.Epochs,Old.KeySchedule,Old.Handshake \
+  -bundle StatefulLHAE=AEAD_GCM,LHAEPlain,StatefulPlain,StatefulLHAE \
+  -bundle StreamAE=StreamPlain,StreamAE \
+  -bundle CommonDH=TLS.Curve25519,DHGroup,ECGroup,CommonDH \
+  -bundle Content=Content,DataStream \
+  -bundle Record=Record,StAE,Transport,StreamDeltas \
+  -bundle PMS=PMS,RSAKey,TLSPRF \
+  -bundle Crypto.Plain=Buffer.Utils,Crypto.Indexing,Crypto.Plain,Crypto.Symmetric.Bytes \
+  -bundle Flags=DebugFlags,Flags,Flag,TLSInfoFlags
+
 # To include Makefile.common, you need to specify
 # the following five variables
 FLAVOR		= Kremlin$(CONCRETE_FLAVOR)
@@ -62,28 +83,11 @@ HEADERS 	= $(addprefix -add-include ,'"hacks.h"' \
 
 KRML_COMMAND	= $(KREMLIN_HOME)/krml -minimal \
   -add-include '"kremlib.h"' \
-  -bundle 'LowParse.\*' \
-  -bundle LowParseWrappers \
-  -bundle 'Format.\*' \
-  -bundle 'EverCrypt=EverCrypt,EverCrypt.\*' \
-  -bundle 'FStar.\*' \
-  -bundle 'LowStar.\*' \
-  -bundle 'C=C,C.\*' \
-  -bundle TLSConstants=TLSConstants,QD.TLS_protocolVersion,List.Helpers \
-  -bundle Hashing=Hashing.Spec,Hashing,Hashing.CRF,HMAC,HKDF,HMAC.UFCMA \
-  -bundle Old.Handshake=Old.HMAC.UFCMA,Old.Epochs,Old.KeySchedule,Old.Handshake \
-  -bundle StatefulLHAE=AEAD_GCM,LHAEPlain,StatefulPlain,StatefulLHAE \
-  -bundle StreamAE=StreamPlain,StreamAE \
-  -bundle CommonDH=TLS.Curve25519,DHGroup,ECGroup,CommonDH \
-  -bundle Content=Content,DataStream \
-  -bundle Record=Record,StAE,Transport,StreamDeltas \
-  -bundle PMS=PMS,RSAKey,TLSPRF \
-  -bundle Crypto.Plain=Buffer.Utils,Crypto.Indexing,Crypto.Plain,Crypto.Symmetric.Bytes \
-  -bundle Flags=DebugFlags,Flags,Flag,TLSInfoFlags \
-  -fnoanonymous-unions -warn-error -9-7-6@4 \
+  -fnoanonymous-unions -warn-error -9-7-6@4-14-15 \
   -fsopts --debug,yes -verbose \
   -library EverCrypt,EverCrypt.* \
-  $(DROP_MODULES) $(HEADERS) $(KOPTS)
+  $(DROP_MODULES) $(HEADERS) \
+  $(MITLS_BUNDLES) $(KOPTS)
 
 ifndef NO_OPENSSL
   KRML_COMMAND += -ldopts -L,$(MLCRYPTO_HOME)/openssl,-lcrypto,-lssl
@@ -130,15 +134,12 @@ $(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/ffi,$(MITLS_HOME)/libs/ffi))
 $(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/pki,$(MITLS_HOME)/src/pki))
 $(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/uint128,$(UINT128_DIR)))
 
-# Leave Crypto_Indexing (which Crypto_AEAD_Main wants) standalone, and its
-# dependencies too.
 $(INTERNAL_TEST_DIR)/Test_Main.c: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES))
 ifdef VERBOSE
 	@echo -e "\033[1;32m=== Extracting $@ ...\033[;37m"
 endif
 	$(KRML_COMMAND) $^ -tmpdir $(INTERNAL_TEST_DIR) -no-prefix Test.Main \
-	  -skip-compilation -drop FFICallbacks \
-	  -bundle Test.Main=Test.*,AEAD_GCM,AEADProvider,Alert,Connection,ConnInvariant,Content,DataStream,Encode,Old.Epochs,FFI,HandshakeLog,HandshakeMessages,Hashing.CRF,IdNonce,KDF.Common,KDF.Salt.ODH,LHAEPlain,MAC,MAC_SHA1,MAC_SHA256,MasterSecret,Negotiation,QUIC,Range,Record,Signature,StAE,Standalone,StatefulLHAE,StatefulPlain,StreamAE,StreamDeltas,StreamPlain,Ticket,TLS,TLSPRF,Transport,KDF,Extract1,Old.Handshake,Old.HMAC.UFCMA,Old.KeySchedule
+	  -skip-compilation -bundle 'Test.Main=Test.\*'
 
 internal-test-copy: $(addprefix $(INTERNAL_TEST_DIR)/,$(ALL_EXTERNAL_FILES)) $(INTERNAL_TEST_DIR)/stub/mipki_wrapper.c
 
