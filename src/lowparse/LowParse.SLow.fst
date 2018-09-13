@@ -11,3 +11,4 @@ include LowParse.SLow.Enum
 include LowParse.SLow.Tac.Enum
 include LowParse.SLow.Sum
 include LowParse.SLow.Tac.Sum
+include LowParse.SLow.Option
