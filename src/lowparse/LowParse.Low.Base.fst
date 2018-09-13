@@ -79,6 +79,7 @@ let parse_from_slice
   | Some (x, len) -> Some (x, len)
   | _ -> None
 
+(*
 let exactly_parse_from_slice
   (#k: parser_kind)
   (#t: Type0)
@@ -145,6 +146,7 @@ let exactly_parse_from_slice_intro
 //  [SMTPat (parse_from_slice p h b sz)]
 = let (Some (x, consumed)) = parse_from_slice p h b sz in
   exactly_parse_from_slice_intro' p h b sz x consumed ()
+*)
 
 (* A validator, if succeeds, returns the remaining length; otherwise returns a negative number. *)
 

@@ -31,6 +31,7 @@ let parse
 : GTot (option (t * consumed_length input))
 = p input
 
+(*
 let no_lookahead_weak_on
   (#t: Type0)
   (f: bare_parser t)
@@ -45,6 +46,30 @@ let no_lookahead_weak_on
   let (y', off') = v' in
   y == y' /\ (off <: nat) == (off' <: nat)
   )))
+
+let no_lookahead_weak_on_precond
+  (#t: Type0)
+  (f: bare_parser t)
+  (x x' : bytes)
+: GTot Type0
+= Some? (parse f x) /\ (
+  let (Some v) = parse f x in
+  let (y, off) = v in
+  (off <= Seq.length x' /\ Seq.length x' <= Seq.length x /\ Seq.slice x' 0 off == Seq.slice x 0 off))
+
+let no_lookahead_weak_on_postcond
+  (#t: Type0)
+  (f: bare_parser t)
+  (x x' : bytes)
+: GTot Type0
+= Some? (parse f x) /\
+  Some? (parse f x') /\ (
+  let (Some v) = parse f x in
+  let (y, off) = v in
+  let (Some v') = parse f x' in
+  let (y', off') = v' in
+  y == y' /\ (off <: nat) == (off' <: nat)
+  )
 
 let no_lookahead_weak_on_ext
   (#t: Type0)
@@ -66,6 +91,21 @@ let no_lookahead_weak
 : GTot Type0
 = forall (x x' : bytes) . no_lookahead_weak_on f x x'
 
+let no_lookahead_weak_on_intro
+  (#t: Type0)
+  (f: bare_parser t)
+  (prf: (
+    (x : bytes) ->
+    (x' : bytes) ->
+    Lemma
+    (requires (no_lookahead_weak_on_precond f x x'))
+    (ensures (no_lookahead_weak_on_postcond f x x'))
+  ))
+: Lemma
+  (no_lookahead_weak f)
+= assert (forall x x' . (no_lookahead_weak_on_precond f x x' ==> no_lookahead_weak_on_postcond f x x') ==> no_lookahead_weak_on f x x');
+  Classical.forall_intro_2 (fun x -> Classical.move_requires (prf x))
+
 let no_lookahead_weak_ext
   (#t: Type0)
   (f1 f2: bare_parser t)
@@ -77,6 +117,7 @@ let no_lookahead_weak_ext
     no_lookahead_weak f2 <==> no_lookahead_weak f1
   ))
 = Classical.forall_intro_2 (fun b1 -> Classical.move_requires (no_lookahead_weak_on_ext f1 f2 b1))
+*)
 
 (** Injectivity of parsing *)
 
@@ -228,6 +269,7 @@ let consumes_all
     Seq.length b == len
   )
 
+(*
 let injective_consumes_all_no_lookahead_weak
   (#t: Type0)
   (p: bare_parser t)
@@ -240,6 +282,7 @@ let injective_consumes_all_no_lookahead_weak
     no_lookahead_weak p
   ))
 = ()
+*)
 
 (** Parsing data of bounded size *)
 
@@ -285,6 +328,7 @@ for empty data.
 
 *)
 
+(*
 let nonempty_strong_parser_consumes_at_least_one_byte
   (#t: Type0)
   (p: bare_parser t)
@@ -325,7 +369,7 @@ let nonempty_strong_parser_consumes_at_least_one_byte
     end
   in
   Classical.forall_intro (Classical.move_requires prf)
-
+*)
 
 let parses_at_most
   (sz: nat)
@@ -403,7 +447,7 @@ let strong_parser_kind (lo hi: nat) (md: parser_kind_metadata_t) : Pure parser_k
   }
 
 let parser_kind_prop (#t: Type0) (k: parser_kind) (f: bare_parser t) : GTot Type0 =
-  no_lookahead_weak f /\
+//  no_lookahead_weak f /\
   injective f /\
   parses_at_least k.parser_kind_low f /\
   (Some? k.parser_kind_high ==> (parses_at_most (Some?.v k.parser_kind_high) f)) /\
@@ -418,7 +462,7 @@ let parser_kind_prop_ext
   (requires (forall (input: bytes) . parse f1 input == parse f2 input))
   (ensures (parser_kind_prop k f1 <==> parser_kind_prop k f2))
 = no_lookahead_ext f1 f2;
-  no_lookahead_weak_ext f1 f2;
+//  no_lookahead_weak_ext f1 f2;
   injective_ext f1 f2
 
 [@unifier_hint_injective]
@@ -507,7 +551,7 @@ let glb
 
 let default_parser_kind : (x: parser_kind {
   forall (t: Type0) (p: bare_parser t) .
-  (no_lookahead_weak p /\ injective p) ==> parser_kind_prop x p
+  ( (* no_lookahead_weak p /\ *) injective p) ==> parser_kind_prop x p
 })
 = {
     parser_kind_low = 0;
@@ -642,7 +686,7 @@ let serializer_correct_implies_complete
       f x == Seq.slice s 0 len
     )))
   = let (Some (x, len)) = parse p s in
-    assert (no_lookahead_weak_on p (f x) s);
+//    assert (no_lookahead_weak_on p (f x) s);
     assert (injective_precond p (f x) s);
     assert (injective_postcond p (f x) s)
   in

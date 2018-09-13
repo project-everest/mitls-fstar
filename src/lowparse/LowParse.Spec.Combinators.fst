@@ -201,6 +201,7 @@ let and_then_bare #t #t' p p' =
       end
     | None -> None
 
+(*
 val and_then_no_lookahead_weak_on
     (#t:Type)
     (#t':Type)
@@ -274,6 +275,7 @@ let and_then_no_lookahead_weak
   ))
   (ensures (no_lookahead_weak (and_then_bare p p')))
 = Classical.forall_intro_2 (fun x -> Classical.move_requires (and_then_no_lookahead_weak_on p p' x))
+*)
 
 let and_then_cases_injective_precond
   (#t:Type)
@@ -470,11 +472,11 @@ let and_then_correct
     and_then_cases_injective p'
   ))
   (ensures (
-    no_lookahead_weak (and_then_bare p p') /\
+//    no_lookahead_weak (and_then_bare p p') /\
     injective (and_then_bare p p') /\
     parser_kind_prop (and_then_kind k k') (and_then_bare p p')
   ))
-= and_then_no_lookahead_weak p p';
+= // and_then_no_lookahead_weak p p';
   and_then_injective p p';
   and_then_no_lookahead p p'
 
@@ -700,6 +702,8 @@ let serialize_nondep_then_upd_bw_left
   ))
 = serialize_nondep_then_upd_left p1 s1 u p2 s2 x y
 
+#reset-options "--z3refresh --z3rlimit 64 --z3cliopt smt.arith.nl=false"
+
 let serialize_nondep_then_upd_bw_left_chain
   (#k1: parser_kind)
   (#t1: Type0)
@@ -812,8 +816,6 @@ let serialize_nondep_then_upd_bw_right
   ))
 = serialize_nondep_then_upd_right p1 s1 u p2 s2 x y
 
-#reset-options "--z3refresh --z3rlimit 64 --z3cliopt smt.arith.nl=false"
-
 let serialize_nondep_then_upd_bw_right_chain
   (#k1: parser_kind)
   (#t1: Type0)
@@ -882,6 +884,7 @@ let bare_parse_strengthen
     Some (x', consumed)
   | _ -> None
 
+(*
 let bare_parse_strengthen_no_lookahead_weak
   (#k: parser_kind)
   (#t1: Type0)
@@ -892,6 +895,7 @@ let bare_parse_strengthen_no_lookahead_weak
   (no_lookahead_weak (bare_parse_strengthen p1 p2 prf))
 = let p' : bare_parser (x: t1 { p2 x } ) = bare_parse_strengthen p1 p2 prf in
   assert (forall b1 b2 . no_lookahead_weak_on p1 b1 b2 ==> no_lookahead_weak_on p' b1 b2)
+*)
 
 let bare_parse_strengthen_no_lookahead
   (#k: parser_kind)
@@ -923,10 +927,10 @@ let bare_parse_strengthen_correct
   (p2: t1 -> GTot Type0)
   (prf: parse_strengthen_prf p1 p2)
 : Lemma
-  (no_lookahead_weak (bare_parse_strengthen p1 p2 prf) /\
+  ( // no_lookahead_weak (bare_parse_strengthen p1 p2 prf) /\
   injective (bare_parse_strengthen p1 p2 prf) /\
   parser_kind_prop k (bare_parse_strengthen p1 p2 prf))
-= bare_parse_strengthen_no_lookahead_weak p1 p2 prf;
+= // bare_parse_strengthen_no_lookahead_weak p1 p2 prf;
   bare_parse_strengthen_no_lookahead p1 p2 prf;
   bare_parse_strengthen_injective p1 p2 prf;
   ()
