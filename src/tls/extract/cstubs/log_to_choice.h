@@ -8,3 +8,4 @@ extern p_log g_LogPrint;
 
 #define KRML_HOST_PRINTF (*g_LogPrint)
 #define KRML_HOST_EPRINTF (*g_LogPrint)
+

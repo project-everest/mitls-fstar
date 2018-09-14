@@ -137,7 +137,7 @@ int MITLS_CALLCONV FFI_mitls_init(void)
     ExInitializeFastMutex(&lock);
       #if LOG_TO_CHOICE
       if (!g_LogPrint) {
-          g_LogPrint = (p_log)DbgPrint;
+        g_LogPrint = (p_log)DbgPrint;
       }
       #endif
     #else /* _KERNEL_MODE */
@@ -145,9 +145,9 @@ int MITLS_CALLCONV FFI_mitls_init(void)
       #if LOG_TO_CHOICE
       if (!g_LogPrint) {
         if (GetEnvironmentVariableA("MITLS_LOG", NULL, 0) == 0) {
-            g_LogPrint = (p_log)DbgPrint; // if not set, log to the debugger by default
+          g_LogPrint = (p_log)NoPrintf; // no logging
         } else {
-            g_LogPrint = (p_log)printf;
+          g_LogPrint = (p_log)printf;
         }
       }
       #endif
