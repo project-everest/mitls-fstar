@@ -58,7 +58,7 @@ $(HACL_HOME)/providers/quic_provider/$(LIBQC):
 
 EXTERNAL_HEADERS=\
         $(MITLS_HOME)/src/pki/mipki.h \
-        $(HACL_HOME)/secure_api/QuicProvider/quic_provider.h \
+        $(HACL_HOME)/providers/quic_provider/quic_provider.h \
         ../../libs/ffi/mitlsffi.h
 
 EXTERNAL_LIBS =\
