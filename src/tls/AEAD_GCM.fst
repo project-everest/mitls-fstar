@@ -1,4 +1,4 @@
-module AEAD_GCM
+ module AEAD_GCM
 // AEAD-GCM mode for the TLS record layer, as specified in RFC 5288.
 // We support both AES_128_GCM and AES_256_GCM, differing only in their key sizes
 
@@ -95,8 +95,10 @@ type matching (#i:id) (r:reader i) (w:writer i) =
   /\ disjoint (parent r.region) (parent w.region)
 *)
 
+module Mod = LowStar.Modifies
+
 let genPost (#i:id) parent h0 (w:writer i) h1 =
-  modifies Set.empty h0 h1 /\
+  Mod.modifies Mod.loc_none h0 h1 /\
   extends w.region parent /\
   HS.fresh_region w.region h0 h1 /\
 //  disjoint w.region (AEAD.log_region w.aead) /\
@@ -135,7 +137,7 @@ val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
     HS.disjoint parent w.region /\
     HS.disjoint parent (AEAD.region w.aead)))
   (ensures  (fun h0 (r:reader i) h1 ->
-    modifies Set.empty h0 h1 /\
+    Mod.modifies Mod.loc_none h0 h1 /\
     r.log_region = w.region /\
     extends r.region parent /\
     color r.region = color parent /\
@@ -164,22 +166,26 @@ val coerce: parent:rgn -> i:id{~(authId i)} -> kv:key i -> iv:iv i -> ST (writer
   (requires (fun h0 -> True))
   (ensures  (genPost parent))
 let coerce parent i kv iv =
-  assume false; // coerce missing post-condition
+// assume false; // coerce missing post-condition
+  let h0 = HST.get () in
   let writer_r = new_region parent in
   let ectr: concrete_ctr writer_r i = HST.ralloc writer_r 0 in
   let aead = AEAD.coerce i parent kv iv in
+  let h1 = HST.get () in
+  assert (Mod.modifies Mod.loc_none h0 h1); // this is not necessary but just checking that we have it
   State #i #Writer #writer_r #writer_r aead () ectr
 
 
 val leak: #i:id{~(authId i)} -> #role:rw -> state i role -> ST (key i * iv i)
   (requires (fun h0 -> True))
-  (ensures  (fun h0 r h1 -> modifies Set.empty h0 h1))
+  (ensures  (fun h0 r h1 -> Mod.modifies Mod.loc_none h0 h1))
 let leak #i #role s =
   AEAD.leak (State?.aead s)
 
 let lemma_12 (i:id) : Lemma (pv_of_id i <> TLS_1p3) = ()
 
-#set-options "--admit_smt_queries true"
+
+// #set-options "--admit_smt_queries true
 let concrete_encrypt (#i:id) (e:writer i)
   (n:nat{n <= max_ctr (alg i)}) (ad:adata i)
   (rg:range{fst rg = snd rg /\ snd rg <= max_TLSPlaintext_fragment_length})
@@ -191,14 +197,16 @@ let concrete_encrypt (#i:id) (e:writer i)
   ))
   (ensures (fun h0 c h1 ->
     length c = targetLength i rg /\
-    modifies_one (AEAD.log_region e.aead) h0 h1))
+    Mod.modifies (Mod.loc_region_only true (AEAD.log_region e.aead)) h0 h1))
   =
   let h = get() in
   let l = fst rg in
   let text = if safeId i then create_ l 0z else repr i ad rg p in
   lemma_repr_bytes_values n;
   let nb = bytes_of_int (AEAD.noncelen i) n in
-  let nonce_explicit, _ = split_ nb (AEAD.explicit_iv_length i) in
+  let nonce_explicit_split_len = AEAD.explicit_iv_length i in
+  assume (let k = nonce_explicit_split_len in FStar.UInt.size k FStar.UInt32.n /\ k < FStar.Bytes.length nb);
+  let nonce_explicit, _ = split_ nb nonce_explicit_split_len in
   let iv = AEAD.create_nonce e.aead nb in
 //  assume(authId i ==> (Flag.prf i /\ AEAD.fresh_iv #i e.aead iv h)); // TODO
   lemma_repr_bytes_values (length text);
@@ -211,7 +219,9 @@ let concrete_encrypt (#i:id) (e:writer i)
   cut (within (length text) (cipherRangeClass i tlen));
   targetLength_at_most_max_TLSCiphertext_fragment_length i (cipherRangeClass i tlen);
   let enc = AEAD.encrypt #i #l e.aead iv ad' text in
-  assume (UInt.fits (length nonce_explicit + length enc) 32);
+//  assume (UInt.fits (length nonce_explicit + length enc) 32);
+  let h1 = get () in
+  assert (Mod.modifies (Mod.loc_region_only true (AEAD.log_region e.aead)) h h1);
   nonce_explicit @| enc
 
 #reset-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
@@ -231,7 +241,7 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
          HS.disjoint e.region (AEAD.log_region e.aead) /\
          sel h0 (ctr e.counter) < max_ctr (alg i)))
        (ensures  (fun h0 c h1 ->
-        modifies (Set.as_set [e.log_region; AEAD.log_region e.aead]) h0 h1
+        Mod.modifies (Mod.loc_regions true (Set.as_set [e.log_region; AEAD.log_region e.aead])) h0 h1
   	 /\ h1 `HS.contains` (ctr e.counter)
   	 /\ sel h1 (ctr e.counter) == sel h0 (ctr e.counter) + 1
   	 /\ length c = Range.targetLength i r
@@ -285,9 +295,8 @@ val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
        then res = Some (Entry?.p (Seq.index log j))
        else res = None))
     /\ (match res with
-       | None -> modifies Set.empty h0 h1
-       | _    -> modifies_one d.region h0 h1
-                /\ HS.modifies_ref d.region (Set.singleton (HS.as_addr (ctr d.counter))) h0 h1
+       | None -> Mod.modifies Mod.loc_none h0 h1
+       | _    -> Mod.modifies (Mod.loc_mreference d.counter) h0 h1
 	        /\ sel h1 (ctr d.counter) == j + 1)))
 
 #set-options "--z3rlimit 100 --max_fuel 0 --initial_fuel 1 --initial_ifuel 0 --max_ifuel 1"
