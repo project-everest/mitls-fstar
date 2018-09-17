@@ -546,8 +546,6 @@ let parse_bounded_vldata_strong_kind
     parser_kind_metadata_total = false;
   })
 
-#reset-options "--z3cliopt smt.arith.nl=false --using_facts_from '*  -FStar.UInt8 -FStar.UInt16' --z3rlimit 32"
-
 let parse_bounded_vldata_strong'
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
@@ -563,6 +561,42 @@ let parse_bounded_vldata_strong'
   (parse_strengthen (parse_bounded_vldata min max p) (parse_bounded_vldata_strong_pred min max s) (parse_bounded_vldata_strong_correct min max s))
   )
 
+#reset-options "--z3cliopt smt.arith.nl=false --using_facts_from '*  -FStar.UInt8 -FStar.UInt16' --z3rlimit 32"
+
+let parse_bounded_vldata_strong'_consumed
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (input: bytes)
+: Lemma
+  (requires (Some? (parse (parse_bounded_vldata_strong' min max s) input)))
+  (ensures (
+    let pp = parse (parse_bounded_vldata_strong' min max s) input in
+    Some? pp /\ (
+    let Some (data, consumed) = pp in
+    let max' = (parse_bounded_vldata_strong_kind min max k).parser_kind_high in
+      (parse_bounded_vldata_strong_kind min max k).parser_kind_low <= consumed /\
+      Some? max' /\
+      consumed <= Some?.v max'
+  )))
+= ()
+
+let parse_bounded_vldata_strong'_parser_kind_prop
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+: Lemma
+  (parser_kind_prop (parse_bounded_vldata_strong_kind min max k) (parse_bounded_vldata_strong' min max s))
+= Classical.forall_intro (Classical.move_requires (parse_bounded_vldata_strong'_consumed min max s))
+
+#reset-options
+
 let parse_bounded_vldata_strong
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
@@ -573,7 +607,7 @@ let parse_bounded_vldata_strong
 : Tot (parser (parse_bounded_vldata_strong_kind min max k) (parse_bounded_vldata_strong_t min max s))
 = let p' = parse_bounded_vldata_strong' min max s in
   let k' = parse_bounded_vldata_strong_kind min max k in
-  assume (parser_kind_prop k' p');
+  parse_bounded_vldata_strong'_parser_kind_prop min max s;
   strengthen k' p'
 
 let serialize_bounded_integer'
