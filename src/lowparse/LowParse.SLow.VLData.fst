@@ -238,7 +238,7 @@ let parse32_bounded_vldata_strong
   (#p: parser k t)
   (s: serializer p)
   (p32: parser32 p)
-: Tot (parser32 #(parse_bounded_vldata_kind min max) #(parse_bounded_vldata_strong_t min max s) (parse_bounded_vldata_strong min max s))
+: Tot (parser32 #_ #(parse_bounded_vldata_strong_t min max s) (parse_bounded_vldata_strong min max s))
 = make_parser32
     (parse_bounded_vldata_strong min max s)
     (fun input ->

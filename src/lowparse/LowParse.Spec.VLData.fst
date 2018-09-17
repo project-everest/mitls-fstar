@@ -522,7 +522,33 @@ let parse_bounded_vldata_strong_correct
   assert (s x == input');
   ()
 
-let parse_bounded_vldata_strong
+inline_for_extraction
+let parse_bounded_vldata_strong_kind
+  (min: nat)
+  (max: nat)
+  (k: parser_kind)
+: Pure parser_kind
+  (requires (min <= max /\ max > 0 /\ max < 4294967296 ))
+  (ensures (fun _ -> True))
+= [@inline_let]
+  let kmin = k.parser_kind_low in
+  [@inline_let]
+  let min' = if kmin > min then kmin else min in
+  [@inline_let]
+  let max' = match k.parser_kind_high with
+  | None -> max
+  | Some kmax -> if kmax < max then kmax else max
+  in
+  [@inline_let]
+  let max' = if max' < min' then min' else max' in
+  (* the size of the length prefix must conform to the max bound given by the user, not on the metadata *)
+  strong_parser_kind (log256' max + min') (log256' max + max') ({
+    parser_kind_metadata_total = false;
+  })
+
+#reset-options "--z3cliopt smt.arith.nl=false --using_facts_from '*  -FStar.UInt8 -FStar.UInt16' --z3rlimit 32"
+
+let parse_bounded_vldata_strong'
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
   (#k: parser_kind)
@@ -530,9 +556,25 @@ let parse_bounded_vldata_strong
   (#p: parser k t)
   (s: serializer p)
 : Tot (parser (parse_bounded_vldata_kind min max) (parse_bounded_vldata_strong_t min max s)) 
-= coerce_parser
+= // strengthen (parse_bounded_vldata_strong_kind min max k)
+  (
+  coerce_parser
   (parse_bounded_vldata_strong_t min max s)
   (parse_strengthen (parse_bounded_vldata min max p) (parse_bounded_vldata_strong_pred min max s) (parse_bounded_vldata_strong_correct min max s))
+  )
+
+let parse_bounded_vldata_strong
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+: Tot (parser (parse_bounded_vldata_strong_kind min max k) (parse_bounded_vldata_strong_t min max s))
+= let p' = parse_bounded_vldata_strong' min max s in
+  let k' = parse_bounded_vldata_strong_kind min max k in
+  assume (parser_kind_prop k' p');
+  strengthen k' p'
 
 let serialize_bounded_integer'
   (sz: integer_size)
