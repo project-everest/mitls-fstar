@@ -148,7 +148,6 @@ let parse_ret_kind : parser_kind =
     parser_kind_metadata_total = true;
   })
 
-unfold
 let parse_ret (#t:Type) (v:t) : Tot (parser parse_ret_kind t) =
   parse_ret' v
 

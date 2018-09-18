@@ -66,6 +66,20 @@ let serialize32_array
     ()
 
 inline_for_extraction
+let size32_array
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (array_byte_size: nat)
+  (array_byte_size32: U32.t { U32.v array_byte_size32 == array_byte_size } )
+  (elem_count: nat)
+  (u : unit { fldata_array_precond p array_byte_size elem_count == true } )
+: Tot (size32 (serialize_array s array_byte_size elem_count u))
+= size32_constant (serialize_array s array_byte_size elem_count u) array_byte_size32 ()
+
+
+inline_for_extraction
 let parse32_vlarray
   (array_byte_size_min: nat)
   (array_byte_size_min32: U32.t { U32.v array_byte_size_min32 == array_byte_size_min } )

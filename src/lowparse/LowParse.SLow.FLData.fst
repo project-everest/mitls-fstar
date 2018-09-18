@@ -60,3 +60,14 @@ let serialize32_fldata_strong
   (sz: nat { sz < 4294967296 } )
 : Tot (serializer32 (serialize_fldata_strong s sz))
 = (fun (input: parse_fldata_strong_t s sz) -> s32 input)
+
+inline_for_extraction
+let size32_fldata_strong
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (sz: nat)
+  (sz32: U32.t { U32.v sz32 == sz } )
+: Tot (size32 (serialize_fldata_strong s sz))
+= size32_constant (serialize_fldata_strong s sz) sz32 ()
