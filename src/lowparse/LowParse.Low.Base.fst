@@ -104,6 +104,7 @@ let validator32_postcond
       None? pv
   )
 
+[@unifier_hint_injective]
 inline_for_extraction
 let validator32
   (#k: parser_kind)
