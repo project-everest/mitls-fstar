@@ -847,3 +847,5 @@ let serializer32_fail_of_serializer
     end
   end
   
+inline_for_extraction
+let error_code = (x: I32.t { I32.v x < 0 } )

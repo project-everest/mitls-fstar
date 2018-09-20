@@ -23,7 +23,8 @@ let validate32_list_inv'
   (h: HS.mem)
   (stop: bool)
 : GTot Type0
-= is_slice (G.reveal h0) input len /\
+= k.parser_kind_low > 0 /\
+  is_slice (G.reveal h0) input len /\
   B.disjoint input read_so_far /\
   M.modifies (M.loc_buffer read_so_far) (G.reveal h0) h /\
   is_slice h input len /\
@@ -85,9 +86,11 @@ let validate32_list_body
   end
   else begin
     let res = v (B.offset input (Cast.int32_to_uint32 v_read_so_far)) (len `I32.sub` v_read_so_far) in
-    if res `I32.lt` 0l || res = len `I32.sub` v_read_so_far
+ (* now we require that the element parser consumes at least one byte *)
+//    assume (res <> len `I32.sub` v_read_so_far);
+    if res `I32.lt` 0l // || res = len `I32.sub` v_read_so_far
     then begin
-      B.upd read_so_far 0ul (-1l);
+      B.upd read_so_far 0ul res; // (-1l);
       f ();
       true
     end else begin
@@ -118,7 +121,7 @@ let validate32_list
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
-  (v: validator32 p)
+  (v: validator32 p { k.parser_kind_low > 0 } )
 : Tot (validator32 (parse_list p))
 = fun input len ->
   HST.push_frame ();  

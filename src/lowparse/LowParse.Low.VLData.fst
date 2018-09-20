@@ -5,6 +5,13 @@ include LowParse.Low.FLData
 module B = LowStar.Buffer
 module HST = FStar.HyperStack.ST
 
+class error_vldata_cls = {
+  error_vldata_not_enough_size_input: error_code;
+  error_vldata_size_out_of_bounds: error_code;
+  error_vldata_not_enough_payload_input: error_code;
+  error_vldata_not_enough_consumed_payload_input: error_code;
+}
+
 inline_for_extraction
 let parse32_bounded_integer
   (i: integer_size)
@@ -21,10 +28,13 @@ module I32 = FStar.Int32
 
 inline_for_extraction
 let validate32_bounded_integer
+  [| error_vldata_cls |]
   (i: integer_size)
   (i32: I32.t { I32.v i32 == i } )
 : Tot (validator32 (parse_bounded_integer i))
-= validate32_total_constant_size (parse_bounded_integer i) i32 ()
+= [@inline_let]
+  let _ = { error_total_constant_size_not_enough_input = error_vldata_not_enough_size_input } in
+  validate32_total_constant_size (parse_bounded_integer i) i32 ()
 
 module U32 = FStar.UInt32
 module Cast = FStar.Int.Cast
@@ -37,11 +47,18 @@ let validate32_vldata_payload
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
+  [| error_vldata_cls |]
   (v: validator32 p)
   (i: bounded_integer sz { f i == true } )
 : Tot (validator32 (parse_vldata_payload sz f p i))
 = (* eta expansion needed because of `weaken` *)
   fun input len ->
+    [@inline_let]
+    let _ = {
+      error_fldata_not_enough_input = error_vldata_not_enough_payload_input;
+      error_fldata_not_enough_consumed_input = error_vldata_not_enough_consumed_payload_input;
+    }
+    in
     Classical.forall_intro f_lemma;
     validate32_fldata v (U32.v i) (Cast.uint32_to_int32 i) input len
 
@@ -55,6 +72,8 @@ let validate32_vldata_gen
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
+  [| error_vldata_cls |]
+  [| error_filter_cls |]
   (v32: validator32 p)
 : Tot (validator32 (parse_vldata_gen sz f p))
 = parse_fldata_and_then_cases_injective sz f p;
@@ -79,6 +98,7 @@ let validate32_bounded_vldata
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
+  [| error_vldata_cls |]
   (v: validator32 p)
   (sz32: I32.t)
   (u: unit {
@@ -90,6 +110,11 @@ let validate32_bounded_vldata
 : Tot (validator32 (parse_bounded_vldata min max p))
 = [@inline_let]
   let sz : integer_size = log256' max in
+  [@inline_let]
+  let _ = {
+    error_filter_assertion_failed = error_vldata_size_out_of_bounds;
+  }
+  in
   fun input len ->
     validate32_vldata_gen sz sz32 (in_bounds min max) (fun _ -> ()) (fun i -> not (U32.lt i min32 || U32.lt max32 i)) v input len
 
@@ -102,6 +127,7 @@ let validate32_bounded_vldata_strong
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
+  [| error_vldata_cls |]
   (s: serializer p)
   (v: validator32 p)
   (sz32: I32.t)

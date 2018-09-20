@@ -26,7 +26,7 @@ let validate32_nondep_then
   let h = HST.get () in
   let x1 = p1' input len in
   if x1 `I32.lt` 0l
-  then x1 // TODO: more coding on error
+  then x1 // propagate error
   else
     p2' (B.offset input (Cast.int32_to_uint32 (len `I32.sub` x1))) x1
 
@@ -80,12 +80,17 @@ let validate_nochk32_synth
 = fun (input: buffer8) ->
   p1' input
 
+class error_total_constant_size_cls = {
+  error_total_constant_size_not_enough_input: error_code;
+}
+
 inline_for_extraction
 let validate32_total_constant_size
   (#k: parser_kind)
   (#t: Type0)
   (p: parser k t)
   (sz: I32.t)
+  [| error_total_constant_size_cls |]
   (u: unit {
     k.parser_kind_high == Some k.parser_kind_low /\
     k.parser_kind_low == I32.v sz /\
@@ -94,7 +99,7 @@ let validate32_total_constant_size
 : Tot (validator32 p)
 = fun (input: buffer8) (len: I32.t) ->
   if I32.lt len sz
-  then -1l
+  then error_total_constant_size_not_enough_input
   else
     let h = HST.get () in // TODO: WHY WHY WHY?
     len `I32.sub` sz
@@ -102,12 +107,14 @@ let validate32_total_constant_size
 inline_for_extraction
 let validate32_ret
   (#t: Type)
+  [| error_total_constant_size_cls |]
   (v: t)
 : Tot (validator32 (parse_ret v))
 = validate32_total_constant_size (parse_ret v) 0l ()
 
 inline_for_extraction
-let validate32_empty : validator32 parse_empty
+let validate32_empty   [| error_total_constant_size_cls |]
+ : Tot (validator32 parse_empty)
 = validate32_ret ()
 
 inline_for_extraction
@@ -224,11 +231,16 @@ let make_total_constant_size_parser32
 = fun (input: buffer8) ->
   f' (B.sub input 0ul sz')
 
+class error_filter_cls = {
+  error_filter_assertion_failed: error_code;
+}
+
 inline_for_extraction
 let validate32_filter
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
+  [| error_filter_cls |]
   (v32: validator32 p)
   (p32: parser32 p)
   (f: (t -> GTot bool))
@@ -242,7 +254,7 @@ let validate32_filter
     let va = p32 input in
     if f' va
     then res
-    else -1l
+    else error_filter_assertion_failed
 
 module MO = LowStar.Modifies
 
@@ -316,6 +328,7 @@ let validate32_filter_and_then
   (#t2: Type0)
   (#p2: ((x: t1 { f x == true} ) -> parser k2 t2))
   (v2: ((x1: t1 { f x1 == true } ) -> validator32 (p2 x1)))
+  [| error_filter_cls |]
   (u: unit {
     and_then_cases_injective p2
   })
@@ -329,7 +342,7 @@ let validate32_filter_and_then
     if f' va
     then
       v2 va (B.offset input (Cast.int32_to_uint32 (len `I32.sub` res))) res
-    else -1l
+    else error_filter_assertion_failed
 
 // #reset-options
 

@@ -80,6 +80,7 @@ let validate32_array
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
+  [| error_fldata_cls |]
   (s: serializer p)
   (v: validator32 p)
   (array_byte_size: nat)
@@ -120,6 +121,7 @@ let validate32_vlarray
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
+  [| error_vldata_cls |]
   (s: serializer p)
   (v: validator32 p)
   (elem_count_min: nat)
