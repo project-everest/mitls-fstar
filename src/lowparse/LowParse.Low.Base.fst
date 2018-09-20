@@ -81,9 +81,14 @@ let parse_from_slice
 
 (* A validator, if succeeds, returns the remaining length; otherwise returns a negative number. *)
 
+class validator32_cls = {
+  validator32_error_loc: B.loc;
+}
+
 let validator32_postcond
   (#k: parser_kind)
   (#t: Type0)
+  [| validator32_cls |]
   (p: parser k t)
   (input: buffer8)
   (sz: I32.t)
@@ -92,7 +97,7 @@ let validator32_postcond
   (h' : HS.mem)
 : GTot Type0
 = is_slice h input sz /\
-  M.modifies M.loc_none h h' /\ (
+  M.modifies validator32_error_loc h h' /\ (
     let pv = parse_from_slice p h input sz in
     if I32.v res >= 0
     then
@@ -109,13 +114,15 @@ inline_for_extraction
 let validator32
   (#k: parser_kind)
   (#t: Type0)
+  [| validator32_cls |]
   (p: parser k t)
 : Tot Type0
 = (input: buffer8) ->
   (sz: I32.t) ->
   HST.Stack I32.t
   (requires (fun h ->
-    is_slice h input sz
+    is_slice h input sz /\
+    M.loc_disjoint (B.loc_buffer input) validator32_error_loc
   ))
   (ensures (fun h res h' ->
     validator32_postcond p input sz h res h'
@@ -123,6 +130,7 @@ let validator32
 
 inline_for_extraction
 let validate32
+  [| validator32_cls |]
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
@@ -131,11 +139,12 @@ let validate32
   (sz: I32.t)
 : HST.Stack bool
   (requires (fun h ->
-    is_slice h input sz
+    is_slice h input sz /\
+    M.loc_disjoint (B.loc_buffer input) validator32_error_loc
   ))
   (ensures (fun h res h' ->
     is_slice h input sz /\
-    M.modifies M.loc_none h h' /\ (
+    M.modifies validator32_error_loc h h' /\ (
     let pv = parse_from_slice p h input sz in
     res == Some? pv
  )))
@@ -144,6 +153,7 @@ let validate32
 
 inline_for_extraction
 let ghost_parse_from_validator32
+  [| cls: validator32_cls |]
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
@@ -152,17 +162,19 @@ let ghost_parse_from_validator32
   (sz: I32.t)
 : HST.Stack (option (Ghost.erased t))
   (requires (fun h ->
-    is_slice h input sz
+    is_slice h input sz /\
+    M.loc_disjoint (B.loc_buffer input) validator32_error_loc
   ))
   (ensures (fun h res h' ->
     is_slice h input sz /\
-    M.modifies M.loc_none h h'  /\
+    M.modifies validator32_error_loc h h'  /\
     res == (match parse_from_slice p h input sz with
     | Some (x, _) -> Some (Ghost.hide x)
     | _ ->  None
   )))
 = let h = HST.get () in
-  if validate32 v input sz
+  // FIXME: WHY WHY WHY does tc instantiation fail here?
+  if validate32 #cls v input sz
   then begin
     let f () : GTot t =
       let (Some (x, _)) = parse_from_slice p h input sz in
