@@ -162,19 +162,23 @@ let validate32_list
   (v: validator32 #cls p { k.parser_kind_low > 0 } )
 : Tot (validator32 (parse_list p))
 = fun input len ->
+  let h_0 = HST.get () in
   HST.push_frame ();
   let h_ = HST.get () in
-  assert (validator32_error_inv h_);
+  M.not_live_region_loc_not_unused_in_disjoint h_0 (HS.get_tip h_);
+  validator32_error_inv_frame' h_0 h_ M.loc_none;
   let read_so_far = B.alloca 0l 1ul in
   let h = HST.get () in
-  assert (validator32_error_inv h);
   let h0 = G.hide h in
   C.Loops.do_while
     (validate32_list_inv p input len read_so_far h0)
     (validate32_list_body v input len read_so_far h0)
   ;
   let res = B.index read_so_far 0ul in
+  let h'1 = HST.get () in
   HST.pop_frame ();
+  let h'  = HST.get () in
+  validator32_error_inv_frame' h'1 h' (M.loc_region_only false (HS.get_tip h'1));
   res
 
 #reset-options "--z3rlimit 128 --max_fuel 16 --max_ifuel 16 --z3cliopt smt.arith.nl=false"

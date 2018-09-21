@@ -107,13 +107,19 @@ let validator32_error_inv_frame'
   (h' : HS.mem)
   (l: M.loc)
 : Lemma
-  (requires (M.modifies l h h' /\ M.loc_disjoint validator32_error_loc l /\ validator32_error_inv h))
+  (requires (M.modifies_inert l h h' /\ M.loc_disjoint validator32_error_loc l /\ validator32_error_inv h))
   (ensures (validator32_error_inv h'))
   [SMTPatOr [
     [SMTPat (M.modifies l h h'); SMTPat (validator32_error_inv h)];
     [SMTPat (M.modifies l h h'); SMTPat (validator32_error_inv h')];
   ]]
 = validator32_error_inv_frame h h' l
+
+let loc_includes_union_l_validator32_error_loc [| validator32_cls |] (l1 l2: M.loc)  : Lemma
+  (requires (M.loc_includes l1 validator32_error_loc \/ M.loc_includes l2 validator32_error_loc))
+  (ensures (M.loc_includes (M.loc_union l1 l2) validator32_error_loc))
+  [SMTPat (M.loc_includes (M.loc_union l1 l2) validator32_error_loc)]
+= M.loc_includes_union_l l1 l2 validator32_error_loc
 
 unfold
 let validator32_postcond' 
