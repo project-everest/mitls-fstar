@@ -13,6 +13,7 @@ module Cast = FStar.Int.Cast
 
 inline_for_extraction
 let validate32_nondep_then
+  [| validator32_cls |]
   (#k1: parser_kind)
   (#t1: Type0)
   (#p1: parser k1 t1)
@@ -52,6 +53,7 @@ let validate_nochk32_nondep_then
 
 inline_for_extraction
 let validate32_synth
+  [| validator32_cls |]
   (#k: parser_kind)
   (#t1: Type0)
   (#t2: Type0)
@@ -67,6 +69,7 @@ let validate32_synth
 
 inline_for_extraction
 let validate_nochk32_synth
+  [| validator32_cls |]
   (#k: parser_kind)
   (#t1: Type0)
   (#t2: Type0)
@@ -86,6 +89,7 @@ class error_total_constant_size_cls = {
 
 inline_for_extraction
 let validate32_total_constant_size
+  [| validator32_cls |]
   (#k: parser_kind)
   (#t: Type0)
   (p: parser k t)
@@ -106,15 +110,18 @@ let validate32_total_constant_size
 
 inline_for_extraction
 let validate32_ret
+  [| cls: validator32_cls |] // FIXME: WHY WHY WHY does tc inference not work?
   (#t: Type)
   [| error_total_constant_size_cls |]
   (v: t)
-: Tot (validator32 (parse_ret v))
+: Tot (validator32 #cls (parse_ret v))
 = validate32_total_constant_size (parse_ret v) 0l ()
 
 inline_for_extraction
-let validate32_empty   [| error_total_constant_size_cls |]
- : Tot (validator32 parse_empty)
+let validate32_empty
+   [| cls: validator32_cls |] // FIXME: WHY WHY WHY does tc inference not work?
+   [| error_total_constant_size_cls |]
+ : Tot (validator32 #cls parse_empty)
 = validate32_ret ()
 
 inline_for_extraction
@@ -237,6 +244,7 @@ class error_filter_cls = {
 
 inline_for_extraction
 let validate32_filter
+  [| validator32_cls |]
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
@@ -292,6 +300,7 @@ let parse32_filter
 
 inline_for_extraction
 let validate32_and_then
+  [| validator32_cls |]
   (#k1: parser_kind)
   (#t1: Type0)
   (#p1: parser k1 t1)
@@ -317,6 +326,7 @@ let validate32_and_then
 
 inline_for_extraction
 let validate32_filter_and_then
+  [| validator32_cls |]
   (#k1: parser_kind)
   (#t1: Type0)
   (#p1: parser k1 t1)
