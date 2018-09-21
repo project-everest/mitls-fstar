@@ -37,3 +37,19 @@ instance _ = {
 instance _ = {
   error_total_constant_size_not_enough_input = (-10l);
 }
+
+module M = LowStar.Buffer
+
+let default_validator32_cls : validator32_cls = {
+  validator32_error_loc = M.loc_none;
+  validator32_error_inv = (fun _ -> True);
+  validator32_error_inv_loc_not_unused_in = (fun _ -> ());
+  validator32_error_inv_frame = (fun _ _ _ -> ());
+}
+
+let buffer_validator32_cls (#t: Type) (b: M.buffer t) : GTot validator32_cls = {
+  validator32_error_loc = M.loc_buffer b;
+  validator32_error_inv = (fun h -> M.live h b);
+  validator32_error_inv_loc_not_unused_in = (fun _ -> ());
+  validator32_error_inv_frame = (fun _ _ _ -> ());
+}
