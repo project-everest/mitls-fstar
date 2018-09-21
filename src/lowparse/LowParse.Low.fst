@@ -33,3 +33,7 @@ instance _ = {
 instance _ = {
   error_int_not_enough_input = (-9l);
 }
+
+instance _ = {
+  error_total_constant_size_not_enough_input = (-10l);
+}
