@@ -4,8 +4,10 @@ include LowParse.Low.Combinators
 
 module T = LowParse.SLow.Tac.Sum
 
+// FIXME: WHY WHY WHY does tc inference not work here?
+
 inline_for_extraction
-let validate32_maybe_enum_key (#key #repr: eqtype) (#k: parser_kind) (#p: parser k repr) (v: validator32 p) (e: enum key repr) : Tot (validator32 (parse_maybe_enum_key p e)) =
+let validate32_maybe_enum_key [| cls: validator32_cls |] (#key #repr: eqtype) (#k: parser_kind) (#p: parser k repr) (v: validator32 #cls p) (e: enum key repr) : Tot (validator32 (parse_maybe_enum_key p e)) =
   validate32_synth v (maybe_enum_key_of_repr e) ()
 
 module I32 = FStar.Int32
@@ -17,7 +19,7 @@ class error_enum_cls = {
 }
 
 inline_for_extraction
-let validate32_enum_key (#key #repr: eqtype) (#k: parser_kind) (#p: parser k repr) [| error_enum_cls |] (v: validator32 p) (p32: parser32 p) (e: enum key repr) (destr: T.maybe_enum_destr_t bool e) : Tot (validator32 (parse_enum_key p e)) =
+let validate32_enum_key [| validator32_cls |] (#key #repr: eqtype) (#k: parser_kind) (#p: parser k repr) [| error_enum_cls |] (v: validator32 p) (p32: parser32 p) (e: enum key repr) (destr: T.maybe_enum_destr_t bool e) : Tot (validator32 (parse_enum_key p e)) =
   fun input sz ->
     let h = HST.get () in
     parse_enum_key_eq p e (B.as_seq h input);
@@ -44,6 +46,7 @@ let is_known
 
 inline_for_extraction
 let validate32_flat_maybe_enum_key
+  [| validator32_cls |]
   (#key #repr: eqtype)
   (#t: Type)
   (#k: parser_kind)

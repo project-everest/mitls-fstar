@@ -17,6 +17,7 @@ class error_fldata_cls = {
 
 inline_for_extraction
 let validate32_fldata
+  [| validator32_cls |]
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
@@ -40,12 +41,13 @@ let validate32_fldata
 
 inline_for_extraction
 let validate32_fldata_strong
+  [| cls: validator32_cls |] // FIXME: WHY WHY WHY does tc inference not work here?
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
   [| error_fldata_cls |]
   (s: serializer p)
-  (v: validator32 p)
+  (v: validator32 #cls p)
   (sz: nat)
   (sz32: I32.t { I32.v sz32 == sz } )
 : Tot (validator32 (parse_fldata_strong s sz))

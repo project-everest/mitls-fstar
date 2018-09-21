@@ -23,8 +23,10 @@ val parse32_u16: parser32 parse_u16
 inline_for_extraction
 val parse32_u32: parser32 parse_u32
 
+// FIXME: WHY WHY WHY does typeclass inference not work here?
+
 inline_for_extraction
-let validate32_u8 [| error_int_cls |] : validator32 parse_u8 =
+let validate32_u8 [| cls: validator32_cls |] [| error_int_cls |] : validator32 #cls parse_u8 =
   [@inline_let]
   let _ = {
     error_total_constant_size_not_enough_input = error_int_not_enough_input;
@@ -33,7 +35,7 @@ let validate32_u8 [| error_int_cls |] : validator32 parse_u8 =
   validate32_total_constant_size parse_u8 1l ()
 
 inline_for_extraction
-let validate32_u16 [| error_int_cls |] : validator32 parse_u16 =
+let validate32_u16 [| cls: validator32_cls |] [| error_int_cls |] : validator32 #cls parse_u16 =
   [@inline_let]
   let _ = {
     error_total_constant_size_not_enough_input = error_int_not_enough_input;
@@ -42,7 +44,7 @@ let validate32_u16 [| error_int_cls |] : validator32 parse_u16 =
   validate32_total_constant_size parse_u16 2l ()
 
 inline_for_extraction
-let validate32_u32 [| error_int_cls |] : validator32 parse_u32 =
+let validate32_u32 [| cls: validator32_cls |] [| error_int_cls |] : validator32 #cls parse_u32 =
   [@inline_let]
   let _ = {
     error_total_constant_size_not_enough_input = error_int_not_enough_input;

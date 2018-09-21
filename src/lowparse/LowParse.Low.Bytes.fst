@@ -9,12 +9,15 @@ class error_flbytes_cls = {
   error_flbytes_not_enough_input: error_code;
 }
 
+// TODO: WHY WHY WHY does tc inference not typecheck here?
+
 inline_for_extraction
 let validate32_flbytes
+  [| cls: validator32_cls |]
   [| error_flbytes_cls |]
   (sz: nat)
   (sz32: I32.t { I32.v sz32 == sz } )
-: Tot (validator32 (parse_flbytes sz))
+: Tot (validator32 #cls (parse_flbytes sz))
 = [@inline_let]
   let _ = { error_total_constant_size_not_enough_input = error_flbytes_not_enough_input } in
   validate32_total_constant_size (parse_flbytes sz) sz32 ()
@@ -62,6 +65,7 @@ let slice_bytes
 
 inline_for_extraction
 let validate32_all_bytes
+  [| validator32_cls |]
 : validator32 (parse_all_bytes)
 = fun input len ->
     let h = HST.get () in
@@ -69,6 +73,7 @@ let validate32_all_bytes
 
 inline_for_extraction
 let validate32_bounded_vlbytes'
+  [| cls: validator32_cls |]
   [| error_vldata_cls |]
   (min: nat)
   (min32: U32.t)
@@ -79,11 +84,12 @@ let validate32_bounded_vlbytes'
     U32.v min32 == min /\ U32.v max32 == max /\
     I32.v sz32 == log256' max
   ))
-: Tot (validator32 (parse_bounded_vlbytes' min max))
+: Tot (validator32 #cls (parse_bounded_vlbytes' min max))
 = validate32_bounded_vldata_strong min min32 max max32 (serialize_all_bytes) validate32_all_bytes sz32 ()
 
 inline_for_extraction
 let validate32_bounded_vlbytes
+  [| cls: validator32_cls |]
   [| error_vldata_cls |]
   (min: nat)
   (min32: U32.t)
@@ -94,7 +100,7 @@ let validate32_bounded_vlbytes
     U32.v min32 == min /\ U32.v max32 == max /\
     I32.v sz32 == log256' max
   ))
-: Tot (validator32 (parse_bounded_vlbytes min max))
+: Tot (validator32 #cls (parse_bounded_vlbytes min max))
 = validate32_synth
     (validate32_bounded_vlbytes' min min32 max max32 sz32 ())
     (synth_bounded_vlbytes min max)

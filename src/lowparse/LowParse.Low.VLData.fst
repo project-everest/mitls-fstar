@@ -26,12 +26,15 @@ let parse32_bounded_integer
 
 module I32 = FStar.Int32
 
+// FIXME: WHY WHY WHY does tc inference not work here?
+
 inline_for_extraction
 let validate32_bounded_integer
+  [| cls: validator32_cls |]
   [| error_vldata_cls |]
   (i: integer_size)
   (i32: I32.t { I32.v i32 == i } )
-: Tot (validator32 (parse_bounded_integer i))
+: Tot (validator32 #cls (parse_bounded_integer i))
 = [@inline_let]
   let _ = { error_total_constant_size_not_enough_input = error_vldata_not_enough_size_input } in
   validate32_total_constant_size (parse_bounded_integer i) i32 ()
@@ -41,6 +44,7 @@ module Cast = FStar.Int.Cast
 
 inline_for_extraction
 let validate32_vldata_payload
+  [| cls: validator32_cls |]
   (sz: integer_size)
   (f: ((x: bounded_integer sz) -> GTot bool))
   (f_lemma: ((x: bounded_integer sz) -> Lemma (f x == true ==> U32.v x < 2147483648)))
@@ -48,7 +52,7 @@ let validate32_vldata_payload
   (#t: Type0)
   (#p: parser k t)
   [| error_vldata_cls |]
-  (v: validator32 p)
+  (v: validator32 #cls p)
   (i: bounded_integer sz { f i == true } )
 : Tot (validator32 (parse_vldata_payload sz f p i))
 = (* eta expansion needed because of `weaken` *)
@@ -64,6 +68,7 @@ let validate32_vldata_payload
 
 inline_for_extraction
 let validate32_vldata_gen
+  [| cls: validator32_cls |]
   (sz: integer_size)
   (sz32: I32.t { I32.v sz32 == sz } )
   (f: ((x: bounded_integer sz) -> GTot bool))
@@ -74,7 +79,7 @@ let validate32_vldata_gen
   (#p: parser k t)
   [| error_vldata_cls |]
   [| error_filter_cls |]
-  (v32: validator32 p)
+  (v32: validator32 #cls p)
 : Tot (validator32 (parse_vldata_gen sz f p))
 = parse_fldata_and_then_cases_injective sz f p;
   parse_vldata_gen_kind_correct sz;
@@ -91,6 +96,7 @@ let validate32_vldata_gen
 
 inline_for_extraction
 let validate32_bounded_vldata
+  [| cls: validator32_cls |]
   (min: nat)
   (min32: U32.t)
   (max: nat)
@@ -99,7 +105,7 @@ let validate32_bounded_vldata
   (#t: Type0)
   (#p: parser k t)
   [| error_vldata_cls |]
-  (v: validator32 p)
+  (v: validator32 #cls p)
   (sz32: I32.t)
   (u: unit {
     U32.v min32 == min /\
@@ -120,6 +126,7 @@ let validate32_bounded_vldata
 
 inline_for_extraction
 let validate32_bounded_vldata_strong
+  [| cls: validator32_cls |]
   (min: nat)
   (min32: U32.t)
   (max: nat)
@@ -129,7 +136,7 @@ let validate32_bounded_vldata_strong
   (#p: parser k t)
   [| error_vldata_cls |]
   (s: serializer p)
-  (v: validator32 p)
+  (v: validator32 #cls p)
   (sz32: I32.t)
   (u: unit {
     U32.v min32 == min /\
