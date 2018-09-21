@@ -19,6 +19,8 @@ let parse_t : parser _ t =
   (parse_u16 `nondep_then` parse_u32 `nondep_then` parse_u16)
   `parse_synth` synth_t
 
+(* local *) instance _ : validator32_cls = default_validator32_cls
+
 inline_for_extraction
 let validate32_t : validator32 parse_t =
   validate32_total_constant_size parse_t 8l ()
