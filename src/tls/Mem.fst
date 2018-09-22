@@ -1,26 +1,80 @@
 module Mem
 
-/// Setting a uniform HyperStack-based memory model, and gathering
-/// abbreviations and top-level regions. Note this module already
-/// depends on Flags (as we do not wish to extract the global TLS
-/// region and its contents).
+/// * Sets a uniform Low* HyperStack-based memory model, gathering
+///   abbreviations and top-level regions.
+///
+/// * Depends on Flags, as we do not to extract the global TLS region
+///   and its contents (only ideal stuff).
+/// 
+/// Coding guidelines (aligned to EverCrypt)
+/// - avoid eternal refs and buffer (fstar may deprecate them in lowstar)
+/// - use LowStar.buffer and LowStar.modifies
+/// - use monotonic buffers
+/// 
+/// - migrate from Bytes --> Spec-level sequences or Buffer [will take a while] 
+/// - enable divergence checking (try it out on a Everest feature branch?)
+/// - use abbreviations wisely, e.g. only those to be defined in this file (no clear consensus yet)
+/// - use FStar.Integers (but avoid opening it because of v n etc... IntegersOps?)
+/// 
+/// - [create parent_region ...] may allocate a private sub-region,
+///   unless its state is e.g. just a single transparent reference;
+///   the caller usually tracks it using locations rather than
+///   regions.
 
-open FStar.HyperStack.All
+// TODO FStar.IntegerOps
 
-open FStar.Seq
-open FStar.Bytes
+// TODO LowStar.Lib variants of the stateful FStar.Lib we use,
+// e.g. [FStar.DependentMap] and [FStar.Monotonic.DependentMap]
+
+
+// open FStar.HyperStack.All // no need for Ocaml exceptions!
+// open FStar.Seq
+// open FStar.Bytes
 open FStar.Error
 open TLSError
 
 include FStar.HyperStack
 include FStar.HyperStack.ST
 
+/// Low* buffers (new)
+
+open LowStar.BufferOps 
+// enabling the concrete syntax below. We don't open [LowStar.Buffer] to avoid shadowing
+// [b.(i) <- v; b.(i)]
+// [b *= v; !*b] when i = 0 for even nicer C syntax
+
+module B = LowStar.Buffer // rather than bytes
+
+(* trying out  syntax 
+open FStar.Integers 
+
+// ? 
+// inline_for_extraction
+// let op_String_Access = Seq.index 
+
+let f (b: B.buffer UInt8.t {B.length b = 1}): 
+  ST unit
+  (requires fun h0 -> B.live h0 b /\ Seq.head (B.as_seq h0 b) < 10uy  )
+  (ensures fun h0 _ h1 -> B.modifies (B.loc_buffer b) h0 h1  /\ B.live h1 b) = 
+  b *= (3uy + (!*b))
+// two details: 
+// *= should have lower precedence, so that we can avoid parentheses
+// Integers type inference fails when swapping the arguments 
+*) 
+
 module HS = FStar.HyperStack
+
+// 18-09-22 Avoid those, too specific?
 module DM = FStar.DependentMap
 module MDM = FStar.Monotonic.DependentMap
 
+
+
+/// Global, ideal memory
+
 let model = Flags.model 
 
+// disjointness of regions; otherwise use LowStar.Buffer.loc_disjoint 
 let disjoint = HS.disjoint
 
 /// 18-01-04 We need to explicitly choose between using colors and
@@ -48,6 +102,7 @@ let is_hs_rgn r    = HS.color r = hs_color
  *            Also see HyperStack.lemma_downward_closed that provides this from the memory model
  *)
 let rgn = r:HS.rid{r =!= HS.root /\ is_eternal_region r /\ witnessed (region_contains_pred r)}
+// TODO aseem: pls use library abbreviations
 
 // 18-01-04 we would prefer [is_live_region] to [region_contains_pred].
 
