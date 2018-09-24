@@ -9,6 +9,7 @@ module HST = FStar.HyperStack.ST
 module I32 = FStar.Int32
 module Cast = FStar.Int.Cast
 module MA = LowParse.Math
+module G = FStar.Ghost
 
 let int32_to_uint32_pos
   (x: I32.t)
@@ -82,22 +83,24 @@ let parse_from_slice
 (* A validator, if succeeds, returns the remaining length; otherwise returns a negative number. *)
 
 class validator32_cls = {
-  validator32_error_loc: B.loc;
+  validator32_error_gloc: G.erased B.loc;
   validator32_error_inv: HS.mem -> GTot Type0;
   validator32_error_inv_loc_not_unused_in: (h: HS.mem) -> Lemma
     (requires (validator32_error_inv h))
-    (ensures (M.loc_not_unused_in h `M.loc_includes` validator32_error_loc));
+    (ensures (M.loc_not_unused_in h `M.loc_includes` (G.reveal validator32_error_gloc)));
   validator32_error_inv_frame: (h: HS.mem) -> (h' : HS.mem) -> (l: M.loc) -> Lemma
-    (requires (M.modifies_inert l h h' /\ M.loc_disjoint validator32_error_loc l /\ validator32_error_inv h))
+    (requires (M.modifies_inert l h h' /\ M.loc_disjoint (G.reveal validator32_error_gloc) l /\ validator32_error_inv h))
     (ensures (validator32_error_inv h'))
 }
+
+let validator32_error_loc [| validator32_cls |] () : GTot B.loc = G.reveal validator32_error_gloc
 
 let validator32_error_inv_loc_not_unused_in'
   [| validator32_cls |]
   (h: HS.mem)
 : Lemma
   (requires (validator32_error_inv h))
-  (ensures (M.loc_not_unused_in h `M.loc_includes` validator32_error_loc))
+  (ensures (M.loc_not_unused_in h `M.loc_includes` (validator32_error_loc ())))
   [SMTPat (validator32_error_inv h)]
 = validator32_error_inv_loc_not_unused_in h
 
@@ -107,7 +110,7 @@ let validator32_error_inv_frame'
   (h' : HS.mem)
   (l: M.loc)
 : Lemma
-  (requires (M.modifies_inert l h h' /\ M.loc_disjoint validator32_error_loc l /\ validator32_error_inv h))
+  (requires (M.modifies_inert l h h' /\ M.loc_disjoint (validator32_error_loc ()) l /\ validator32_error_inv h))
   (ensures (validator32_error_inv h'))
   [SMTPatOr [
     [SMTPat (M.modifies l h h'); SMTPat (validator32_error_inv h)];
@@ -116,10 +119,10 @@ let validator32_error_inv_frame'
 = validator32_error_inv_frame h h' l
 
 let loc_includes_union_l_validator32_error_loc [| validator32_cls |] (l1 l2: M.loc)  : Lemma
-  (requires (M.loc_includes l1 validator32_error_loc \/ M.loc_includes l2 validator32_error_loc))
-  (ensures (M.loc_includes (M.loc_union l1 l2) validator32_error_loc))
-  [SMTPat (M.loc_includes (M.loc_union l1 l2) validator32_error_loc)]
-= M.loc_includes_union_l l1 l2 validator32_error_loc
+  (requires (M.loc_includes l1 (validator32_error_loc ()) \/ M.loc_includes l2 (validator32_error_loc ())))
+  (ensures (M.loc_includes (M.loc_union l1 l2) (validator32_error_loc ())))
+  [SMTPat (M.loc_includes (M.loc_union l1 l2) (validator32_error_loc()))]
+= M.loc_includes_union_l l1 l2 (validator32_error_loc ())
 
 unfold
 let validator32_postcond' 
@@ -134,7 +137,7 @@ let validator32_postcond'
   (h' : HS.mem)
 : GTot Type0
 = is_slice h input sz /\
-  M.modifies validator32_error_loc h h' /\
+  M.modifies (validator32_error_loc ()) h h' /\
   validator32_error_inv h' /\ (
     let pv = parse_from_slice p h input sz in
     if I32.v res >= 0
@@ -173,7 +176,7 @@ let validator32
   HST.Stack I32.t
   (requires (fun h ->
     is_slice h input sz /\
-    M.loc_disjoint (B.loc_buffer input) validator32_error_loc /\
+    M.loc_disjoint (B.loc_buffer input) (validator32_error_loc ()) /\
     validator32_error_inv h
   ))
   (ensures (fun h res h' ->
@@ -192,12 +195,12 @@ let validate32
 : HST.Stack bool
   (requires (fun h ->
     is_slice h input sz /\
-    M.loc_disjoint (B.loc_buffer input) validator32_error_loc /\
+    M.loc_disjoint (B.loc_buffer input) (validator32_error_loc ()) /\
     validator32_error_inv h
   ))
   (ensures (fun h res h' ->
     is_slice h input sz /\
-    M.modifies validator32_error_loc h h' /\
+    M.modifies (validator32_error_loc ()) h h' /\
     validator32_error_inv h' /\ (
     let pv = parse_from_slice p h input sz in
     res == Some? pv
@@ -217,12 +220,12 @@ let ghost_parse_from_validator32
 : HST.Stack (option (Ghost.erased t))
   (requires (fun h ->
     is_slice h input sz /\
-    M.loc_disjoint (B.loc_buffer input) validator32_error_loc /\
+    M.loc_disjoint (B.loc_buffer input) (validator32_error_loc ()) /\
     validator32_error_inv h
   ))
   (ensures (fun h res h' ->
     is_slice h input sz /\
-    M.modifies validator32_error_loc h h' /\
+    M.modifies (validator32_error_loc ()) h h' /\
     validator32_error_inv h' /\
     res == (match parse_from_slice p h input sz with
     | Some (x, _) -> Some (Ghost.hide x)

@@ -28,10 +28,10 @@ let validate32_list_inv'
 = k.parser_kind_low > 0 /\
   is_slice (G.reveal h0) input len /\
   B.disjoint input read_so_far /\
-  M.loc_disjoint (M.loc_buffer read_so_far) validator32_error_loc /\
-  M.loc_disjoint (M.loc_buffer input) validator32_error_loc /\
-//  M.loc_disjoint (M.loc_union (M.loc_buffer read_so_far) (M.loc_buffer input)) validator32_error_loc /\
-  M.modifies (M.loc_union validator32_error_loc (M.loc_buffer read_so_far)) (G.reveal h0) h /\
+  M.loc_disjoint (M.loc_buffer read_so_far) (validator32_error_loc ()) /\
+  M.loc_disjoint (M.loc_buffer input) (validator32_error_loc ()) /\
+//  M.loc_disjoint (M.loc_union (M.loc_buffer read_so_far) (M.loc_buffer input)) (validator32_error_loc ()) /\
+  M.modifies (M.loc_union (validator32_error_loc ()) (M.loc_buffer read_so_far)) (G.reveal h0) h /\
   validator32_error_inv (Ghost.reveal h0) /\
   validator32_error_inv h /\
   is_slice h input len /\

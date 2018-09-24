@@ -39,16 +39,19 @@ instance _ = {
 }
 
 module M = LowStar.Buffer
+module G = FStar.Ghost
 
+inline_for_extraction
 let default_validator32_cls : validator32_cls = {
-  validator32_error_loc = M.loc_none;
+  validator32_error_gloc = G.hide M.loc_none;
   validator32_error_inv = (fun _ -> True);
   validator32_error_inv_loc_not_unused_in = (fun _ -> ());
   validator32_error_inv_frame = (fun _ _ _ -> ());
 }
 
-let buffer_validator32_cls (#t: Type) (b: M.buffer t) : GTot validator32_cls = {
-  validator32_error_loc = M.loc_buffer b;
+inline_for_extraction
+let buffer_validator32_cls (#t: Type) (b: M.buffer t) : Tot validator32_cls = {
+  validator32_error_gloc = G.hide (M.loc_buffer b);
   validator32_error_inv = (fun h -> M.live h b);
   validator32_error_inv_loc_not_unused_in = (fun _ -> ());
   validator32_error_inv_frame = (fun _ _ _ -> ());
