@@ -348,6 +348,28 @@ let serialize_sum
 = // FIXME: WHY WHY WHY is implicit argument inference failing here? (i.e. introducing an eta-expansion)
   serialize_sum' t s #_ #(parse_sum_cases t pc) (serialize_sum_cases t pc sc)
 
+#set-options "--z3rlimit 32"
+
+let serialize_sum_eq
+  (#kt: parser_kind)
+  (t: sum)
+  (#p: parser kt (sum_repr_type t))
+  (s: serializer p)
+  (#pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (sc: ((x: sum_key t) -> Tot (serializer (dsnd (pc x)))))
+  (x: sum_type t)
+: Lemma
+  (requires (kt.parser_kind_subkind == Some ParserStrong))
+  (ensures (
+    serialize (serialize_sum t s sc) x == (
+    let tg = sum_tag_of_data t x in
+    serialize (serialize_enum_key _ s (sum_enum t)) tg `Seq.append`
+    serialize (sc tg) (synth_sum_case_recip t tg x)
+  )))
+= ()
+
+#reset-options
+
 inline_for_extraction
 let make_sum
   (#key #repr: eqtype)
@@ -799,6 +821,33 @@ let make_dsum
     dsum
   )
 = DSum key repr e data tag_of_data
+
+#set-options "--z3rlimit 16"
+
+let serialize_dsum_eq
+  (#kt: parser_kind)  
+  (s: dsum)
+  (#pt: parser kt (dsum_repr_type s))
+  (st: serializer pt)
+  (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag s x)))
+  (sr: (x: dsum_known_key s) -> Tot (serializer (dsnd (f x))))
+  (#k: parser_kind)
+  (g: parser k (dsum_type_of_unknown_tag s))
+  (sg: serializer g)
+  (x: dsum_type s)
+: Lemma
+  (requires (kt.parser_kind_subkind == Some ParserStrong))
+  (ensures (
+    serialize (serialize_dsum s st f sr g sg) x == (
+    let tg = dsum_tag_of_data s x in
+    serialize (serialize_maybe_enum_key _ st (dsum_enum s)) tg `Seq.append` (
+    match tg with
+    | Known k -> serialize (sr k) (synth_dsum_known_case_recip s k x)
+    | Unknown k -> serialize sg (synth_dsum_unknown_case_recip s k x)
+  ))))
+= ()
+
+#reset-options
 
 (*
 let serialize_dsum_upd
