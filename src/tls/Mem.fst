@@ -58,8 +58,8 @@ let f (b: B.buffer UInt8.t {B.length b = 1}):
   (ensures fun h0 _ h1 -> B.modifies (B.loc_buffer b) h0 h1  /\ B.live h1 b) = 
   b *= (3uy + (!*b))
 // two details: 
-// *= should have lower precedence, so that we can avoid parentheses
-// Integers type inference fails when swapping the arguments 
+// * fix precedences to avoid parentheses?
+// * integers type inference fails when swapping the arguments 
 *) 
 
 module HS = FStar.HyperStack

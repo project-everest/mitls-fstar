@@ -543,6 +543,7 @@ let serializer_correct_implies_complete
   in
   Classical.forall_intro (Classical.move_requires prf)
 
+[@unifier_hint_injective]
 inline_for_extraction
 let serializer
   (#k: parser_kind)
