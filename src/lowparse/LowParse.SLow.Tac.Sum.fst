@@ -14,6 +14,36 @@ let enum_destr_tac
 : T.Tac unit
 = enum_tac_gen (quote enum_destr_cons_nil') (quote enum_destr_cons') e
 
+noextract
+let synth_case_recip_synth_case_tac
+  (t: T.term)
+: T.Tac unit
+=   let _ = T.destruct t in
+    let x = T.intro () in
+    let y = T.intro () in
+    let kreq = T.intro () in
+    T.rewrite kreq;
+    T.destruct (T.binder_to_term x);
+    T.iseq [
+      (fun () ->
+        let z = T.intro () in
+        let xeq = T.intro () in
+        T.rewrite xeq;
+        T.destruct (T.binder_to_term z);
+        T.iterAll (fun () ->
+          let ueq = T.intro () in
+          T.rewrite ueq;
+          T.trefl ()
+      ));
+      (fun () ->
+        let x = T.intro () in
+        let xeq = T.intro () in
+        T.rewrite xeq;
+        T.trefl ()
+      );
+    ]
+
+
 (*
 (* Parser *)
 

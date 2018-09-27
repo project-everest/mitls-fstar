@@ -723,6 +723,7 @@ let maybe_enum_destr_nil
   ) <: (y: t { eq y (f (maybe_enum_key_of_repr e x)) } ))
 
 
+(*
 #set-options "--z3rlimit 32"
 
 let parse32_dsum_aux
@@ -857,6 +858,8 @@ let parse32_dsum
 : Tot (parser32 (parse_dsum t p f g))
 = fun input ->
   (parse32_dsum' t p32 f f32 g32 destr input <: (res: option (dsum_type t * U32.t) { parser32_correct (parse_dsum t p f g) input res } ))
+*)
+
 
 
 (*

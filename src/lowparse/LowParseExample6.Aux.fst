@@ -12,7 +12,7 @@ type cases : eqtype =
   | Case_B
 
 inline_for_extraction
-let case_enum : LP.enum cases U8.t =
+let case_enum : LP.total_enum cases U8.t =
   [@inline_let]
   let e : list (cases * U8.t) = [
     Case_A, 18uy;
@@ -26,90 +26,85 @@ let case_enum : LP.enum cases U8.t =
   in
   e
 
+inline_for_extraction
+let case_B = (x: U16.t { U16.v x > 0 } )
+
 noeq
 type t =
   | A of (U8.t * U8.t)
-  | B of (x: U16.t { U16.v x > 0 } )
+  | B of case_B
   | C : LP.unknown_enum_repr case_enum -> U16.t -> t
 
 inline_for_extraction
 let cases_of_t
   (x: t)
-: Tot (LP.maybe_enum_key case_enum)
+: Tot (LP.maybe_total_enum_key case_enum)
 = match x with
-  | A _ -> LP.Known Case_A
-  | B _ -> LP.Known Case_B
-  | C x _ -> LP.Unknown x
+  | A _ -> LP.TotalKnown Case_A
+  | B _ -> LP.TotalKnown Case_B
+  | C x _ -> LP.TotalUnknown x
 
 inline_for_extraction
-let t_sum
-= LP.make_dsum case_enum cases_of_t
+let type_of_known_case
+  (x: LP.enum_key case_enum)
+: Tot Type0
+= match x with
+  | Case_A -> U8.t * U8.t
+  | Case_B -> case_B
 
 inline_for_extraction
-let synth_case_A (z: (U8.t * U8.t)) : Tot (LP.dsum_cases t_sum (LP.Known Case_A)) =
-  [@inline_let]
-  let res : t = A z in
-  [@inline_let]
-  let _ : squash (LP.dsum_tag_of_data t_sum res == LP.Known Case_A) =
-    assert_norm (LP.dsum_tag_of_data t_sum res == LP.Known Case_A)
-  in
-  res
-
-let synth_case_A_inj () : Lemma
-  (LP.synth_injective synth_case_A)
-= ()
+let synth_known_case
+  (x: LP.enum_key case_enum)
+  (y: type_of_known_case x)
+: Tot (LP.refine_with_tag cases_of_t (LP.TotalKnown x))
+= match x with
+  | Case_A -> (A y <: t)
+  | Case_B -> (B y <: t)
 
 inline_for_extraction
-let synth_case_B (z: (U16.t) { U16.v z > 0 } ) : Tot (LP.dsum_cases t_sum (LP.Known Case_B)) =
-  [@inline_let]
-  let res : t = B z in
-  [@inline_let]
-  let _ : squash (LP.dsum_tag_of_data t_sum res == LP.Known Case_B) =
-    assert_norm (LP.dsum_tag_of_data t_sum res == LP.Known Case_B)
-  in
-  res
+let synth_unknown_case
+  (x: LP.unknown_enum_repr case_enum)
+  (y: U16.t)
+: Tot (LP.refine_with_tag cases_of_t (LP.TotalUnknown x))
+= C x y
 
-let synth_case_B_inj () : Lemma
-  (LP.synth_injective synth_case_B)
-= ()
+inline_for_extraction
+let synth_case_recip
+  (x: t)
+: Tot (LP.dsum_type_of_tag case_enum type_of_known_case U16.t (cases_of_t x))
+= match x with
+  | A y -> (y <: LP.dsum_type_of_tag case_enum type_of_known_case U16.t (cases_of_t x))
+  | B y -> (y <: LP.dsum_type_of_tag case_enum type_of_known_case U16.t (cases_of_t x))
+  | C _ y ->  (y <: LP.dsum_type_of_tag case_enum type_of_known_case U16.t (cases_of_t x))
+
+let synth_case_recip_synth_case (xy: (x: LP.maybe_total_enum_key case_enum & LP.dsum_type_of_tag case_enum type_of_known_case U16.t x)) : Tot (squash (LP.synth_dsum_case_recip' case_enum cases_of_t type_of_known_case U16.t synth_case_recip (LP.synth_dsum_case' case_enum cases_of_t type_of_known_case U16.t synth_known_case synth_unknown_case xy) == xy))
+= _ by (LP.synth_case_recip_synth_case_tac (quote xy))
+
+inline_for_extraction
+let t_sum : LP.dsum
+= LP.make_dsum case_enum cases_of_t type_of_known_case U16.t synth_known_case synth_unknown_case synth_case_recip
+    synth_case_recip_synth_case
+    (fun x -> ())
 
 let parse_case_B_filter
   (x: U16.t)
 : GTot bool
 = U16.v x > 0
 
-inline_for_extraction
-let synth_case_C (x: LP.unknown_enum_repr case_enum) (y: U16.t) : Tot (LP.dsum_cases t_sum (LP.Unknown x)) =
-  C x y
+let parse_case_B : LP.parser _ case_B =
+  LP.parse_filter LP.parse_u16 parse_case_B_filter
 
-let synth_case_C_inj (x: LP.unknown_enum_repr case_enum) : Lemma
-  (LP.synth_injective (synth_case_C x))
-= ()
-
-let parse_case_A : LP.parser _ (LP.dsum_cases t_sum (LP.Known Case_A)) =
-    synth_case_A_inj ();
-    LP.parse_synth (LP.parse_u8 `LP.nondep_then` LP.parse_u8) synth_case_A
-
-let parse_case_B : LP.parser _ (LP.dsum_cases t_sum (LP.Known Case_B)) =
-    synth_case_B_inj ();
-    LP.parse_synth (LP.parse_filter LP.parse_u16 parse_case_B_filter) synth_case_B
-
-let parse_case_C (x: LP.unknown_enum_repr case_enum) : Tot (LP.parser _ (LP.dsum_cases t_sum (LP.Unknown x))) =
-  synth_case_C_inj x;
-  LP.parse_synth LP.parse_u16 (synth_case_C x)
-
-let parse_cases'
+let parse_known_cases
   (x: LP.dsum_known_key t_sum)
-: Tot (k: LP.parser_kind & LP.parser k  (LP.dsum_cases t_sum (LP.Known x)))
+: Tot (k: LP.parser_kind & LP.parser k (type_of_known_case x))
 = match x with
-  | Case_A -> (| _, parse_case_A |)
+  | Case_A -> (| _, LP.parse_u8 `LP.nondep_then` LP.parse_u8 |)
   | Case_B -> (| _, parse_case_B |)
 
-let parse_cases :
-  (x: LP.dsum_key t_sum) ->
-  Tot (LP.parser _ (LP.dsum_cases t_sum x))
-= LP.parse_dsum_cases t_sum parse_cases' parse_case_C
+let parse_t : LP.parser _ t =
+  LP.parse_dsum t_sum LP.parse_u8 parse_known_cases LP.parse_u16
 
+(*
 inline_for_extraction
 let parse32_cases_A
 : (LP.parser32 parse_case_A)
@@ -162,9 +157,6 @@ let parse32_cases
 : (x: LP.dsum_key t_sum) ->
   Tot (LP.parser32 (parse_cases x))
 = LP.parse32_dsum_cases t_sum parse_cases' parse32_cases' parse_case_C parse32_cases_C
-
-let parse_t : LP.parser _ t =
-  LP.parse_dsum t_sum LP.parse_u8 parse_cases
 
 module T = FStar.Tactics
 

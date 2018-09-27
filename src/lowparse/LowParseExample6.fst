@@ -9,6 +9,7 @@ module AUX = LowParseExample6.Aux
 
 #reset-options "--using_facts_from '* -LowParse +LowParse.Spec.Base +LowParse.SLow.Base'"
 
+(*
 let f (input: FStar.Bytes.bytes) : Pure (option (AUX.t * FStar.UInt32.t))
   (requires True)
   (ensures (fun res ->
@@ -24,6 +25,7 @@ let f (input: FStar.Bytes.bytes) : Pure (option (AUX.t * FStar.UInt32.t))
 
 let m (x: AUX.t) : Tot FStar.Bytes.bytes =
   AUX.serialize32_t x
+*)
 
 val main: Int32.t -> FStar.Buffer.buffer (FStar.Buffer.buffer C.char) ->
   Stack C.exit_code (fun _ -> true) (fun _ _ _ -> true)
