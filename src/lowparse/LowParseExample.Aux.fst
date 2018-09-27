@@ -100,6 +100,19 @@ let parse32_cases
 let parse_t : LP.parser _ t =
   LP.parse_sum t_sum LP.parse_u8 parse_cases
 
+inline_for_extraction
+let parse32_case_destr
+: (LP.enum_destr_t (option (t * FStar.UInt32.t)) case_enum)
+= _ by (LP.enum_destr_tac case_enum)
+
+let parse32_case_enum
+: LP.parser32 (LP.parse_enum_key LP.parse_u8 case_enum)
+= _ by (LP.parse32_enum_key_tac LP.parse32_u8 case_enum ())
+
+let parse32_t
+: LP.parser32 parse_t
+= LP.parse32_sum t_sum _ parse32_case_enum _ parse32_cases parse32_case_destr
+
 (*
 inline_for_extraction
 let parse32_t

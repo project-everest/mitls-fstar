@@ -188,8 +188,8 @@ let sum_type (t: sum) : Tot Type0 =
 
 inline_for_extraction
 let sum_tag_of_data (t: sum) : Tot ((x: sum_type t) -> Tot (sum_key t)) =
-  let (Sum _ _ _ _ tag_of_data _ _ _ _ _) = t in
-  tag_of_data
+  match t with
+  | Sum _ _ _ _ tag_of_data _ _ _ _ _ -> tag_of_data
 
 inline_for_extraction
 let sum_cases (t: sum) (x: sum_key t) : Type0 =
@@ -213,8 +213,8 @@ let weaken_parse_cases_kind
 
 inline_for_extraction
 let synth_sum_case (s: sum) : (k: sum_key s) -> (x: sum_type_of_tag s k) -> Tot (sum_cases s k) =
-  let (Sum _ _ _ _ _ _ synth_case _ _ _) = s in
-  synth_case
+  match s with
+  | Sum _ _ _ _ _ _ synth_case _ _ _ -> synth_case
 
 let synth_sum_case_injective (s: sum) (k: sum_key s) : Lemma
   (synth_injective (synth_sum_case s k))
@@ -310,7 +310,7 @@ let parse_sum_eq
 
 inline_for_extraction
 let synth_sum_case_recip (s: sum) (k: sum_key s) (x: sum_cases s k) : Tot (sum_type_of_tag s k) =
-  let (Sum _ _ _ _ _ _ _ synth_case_recip _ _) = s in
+  match s with (Sum _ _ _ _ _ _ _ synth_case_recip _ _) ->
   synth_case_recip x
 
 let synth_sum_case_inverse (s: sum) (k: sum_key s) : Lemma

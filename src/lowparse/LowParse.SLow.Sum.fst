@@ -276,6 +276,7 @@ let parse32_sum'
           ()
           input_k
       in
+      [@inline_let]
       let f_prop
         (k: sum_key t)
       : Lemma
@@ -291,8 +292,10 @@ let parse32_sum'
       in
       [@inline_let]
       let j : option (sum_type t * U32.t) = destr (eq2 #(option (sum_type t * U32.t))) (default_if _) (fun _ -> ()) (fun _ _ _ -> ()) (fun k -> f k) k in
-      assert (j == f k);
-      f_prop k;
+      [@inline_let]
+      let _ : squash (j == f k) = assert (j == f k) in
+      [@inline_let]
+      let _ = f_prop k in
       begin match j with
       | None -> None
       | Some (x, consumed_x) ->
@@ -317,225 +320,6 @@ let parse32_sum
   (parse32_sum' t p p32 pc pc32 destr input <: (res: option (sum_type t * U32.t) { parser32_correct (parse_sum t p pc) input res } ))
 
 (*
-
-inline_for_extraction
-let parse32_sum
-  (#kt: parser_kind)
-  (t: sum)
-  (p: parser kt (sum_repr_type t))
-  (p32: parser32 (parse_enum_key p (sum_enum t)))
-  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
-  (pc32: ((x: sum_key t) -> Tot (parser32 (dsnd (pc x)))))
-  (destr: enum_destr_t (option (sum_type t * U32.t)) (sum_enum t))
-: Tot (parser32 (parse_sum t p pc))
-= fun input ->
-  parse_sum_eq' t p pc (B32.reveal input);
-  [@inline_let]
-  let res : option (sum_type t * U32.t) =
-    match p32 input with
-    | None -> None
-    | Some (k, consumed_k) ->
-      let input_k = B32.b32slice input consumed_k (B32.len input) in
-      synth_sum_case_injective t k;
-      [@inline_let]
-      let f'
-        (k: sum_key t)
-        (u: squash (synth_injective (synth_sum_case t k)))
-      : Tot (parser32 (parse_synth (dsnd (pc k)) (synth_sum_case t k)))
-      = synth_sum_case_injective t k;
-        parse32_synth'
-          (dsnd (pc k))
-          (synth_sum_case t k)
-          (pc32 k)
-          ()
-      in
-      [@inline_let]
-      let f
-        (k: sum_key t)
-      : Tot (res: option (sum_type t * U32.t) {
-          True
-//          synth_injective (synth_sum_case t k) /\
-//          parser32_correct (parse_synth (dsnd (pc k)) (synth_sum_case t k)) input_k res
-        })
-      = synth_sum_case_injective t k;
-        f' k () input_k
-      in
-//      synth_sum_case_injective t k;
-//      assert (parser32_correct (parse_synth (dsnd (pc k)) (synth_sum_case t k)) input_k (f k));
-      [@inline_let]
-      let j : option (sum_type t * U32.t) = destr (eq2 #(option (sum_type t * U32.t))) (default_if _) (fun _ -> ()) (fun _ _ _ -> ()) (fun k -> f k) k in
-//      assert (j == f k);
-      synth_sum_case_injective t k;
-      assume (parser32_correct (parse_synth (dsnd (pc k)) (synth_sum_case t k)) input_k j);
-      begin match j with
-      | None -> None
-      | Some (x, consumed_x) ->
-        assert (parse (parse_synth (dsnd (pc k)) (synth_sum_case t k)) (B32.reveal input_k) == Some (x, U32.v consumed_x));
-        Some (x, consumed_k `U32.add` consumed_x)
-      end
-  in
-  (res <: (res: option (sum_type t * U32.t) { parser32_correct (parse_sum t p pc) input res } ))
-
-(*
-#set-options "--z3rlimit 64"
-
-inline_for_extraction
-let parse32_sum_gen'
-  (#kt: parser_kind)
-  (t: sum)
-  (p: parser kt (sum_repr_type t))
-  (#k: parser_kind)
-  (#pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
-  (pc32: ((x: sum_key t) -> Tot (parser32 (pc x))))
-  (p32: parser32 (parse_enum_key p (sum_enum t)))
-  (destr: enum_destr_t (parse32_sum_t t) (sum_enum t))
-: Tot (parser32 (parse_sum t p pc))
-= fun (input: bytes32) -> ((
-    match p32 input with
-    | Some (tg, consumed_tg) ->
-      let input' = B32.b32slice input consumed_tg (B32.len input) in
-      begin match destr _ (parse32_sum_if t) (parse32_sum_eq_refl t) (parse32_sum_eq_trans t) (fun (x: sum_key t) (input: bytes32) -> match pc32 x input with | Some (d, consumed_d) -> Some ((d <: sum_type t), consumed_d) | _ -> None) tg input' with
-      | Some (d, consumed_d) ->
-        // FIXME: implicit arguments are not inferred because (synth_tagged_union_data ...) is Tot instead of GTot
-        assert (parse (parse_synth #_ #_ #(sum_type t) (pc tg) (synth_tagged_union_data (sum_tag_of_data t) tg)) (B32.reveal input') == Some (d, U32.v consumed_d));
-        Some (d, U32.add consumed_tg consumed_d)
-      | _ -> None
-      end
-    | _ -> None
-  )
-  <: (res: option (sum_type t * U32.t) { parser32_correct (parse_sum t p pc) input res } )
-  )
-
-#reset-options
-
-module Seq = FStar.Seq
-
-let parse_sum_with_nondep_aux
-  (#kt: parser_kind)
-  (t: sum)
-  (p: parser kt (sum_repr_type t))
-  (#knd: parser_kind)
-  (#nondep_t: Type0)
-  (pnd: parser knd nondep_t)
-  (#k: parser_kind)
-  (pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
-  (input: bytes)
-: GTot (option ((nondep_t * sum_type t) * consumed_length input))
-= match parse (parse_enum_key p (sum_enum t)) input with
-  | Some (tg, consumed_tg) ->
-    let input1 = Seq.slice input consumed_tg (Seq.length input) in
-    begin match parse pnd input1 with
-    | Some (nd, consumed_nd) ->
-      let input2 = Seq.slice input1 consumed_nd (Seq.length input1) in
-      begin match parse (pc tg) input2 with
-      | Some (d, consumed_d) ->
-        Some ((nd, d), consumed_tg + (consumed_nd + consumed_d))
-      | _ -> None
-    end
-    | _ -> None
-    end
-  | _ -> None
-
-let parse_sum_with_nondep_aux_correct
-  (#kt: parser_kind)
-  (t: sum)
-  (p: parser kt (sum_repr_type t))
-  (#knd: parser_kind)
-  (#nondep_t: Type0)
-  (pnd: parser knd nondep_t)
-  (#k: parser_kind)
-  (pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
-  (input: bytes)
-: Lemma
-  (parse_sum_with_nondep_aux t p pnd pc input == parse (parse_sum_with_nondep t p pnd pc) input)
-= parse_sum_with_nondep_eq t p pnd pc input
-
-#reset-options "--z3rlimit 64 --max_fuel 16 --max_ifuel 16 --z3cliopt smt.arith.nl=false"
-
-inline_for_extraction
-let parse32_sum_with_nondep_aux
-  (#kt: parser_kind)
-  (t: sum)
-  (p: parser kt (sum_repr_type t))
-  (#knd: parser_kind)
-  (#nondep_t: Type0)
-  (#pnd: parser knd nondep_t)
-  (pnd32: parser32 pnd)
-  (#k: parser_kind)
-  (#pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
-  (pc32: ((x: sum_key t) -> Tot (parser32 (pc x))))
-  (p32: parser32 (parse_enum_key p (sum_enum t)))
-  (destr: enum_destr_t (parse32_sum_t t) (sum_enum t))
-  (input: bytes32)
-: Tot (option ((nondep_t * sum_type t) * U32.t))
-= match p32 input with
-  | Some (tg, consumed_tg) ->
-    let input1 = B32.b32slice input consumed_tg (B32.len input) in
-    begin match pnd32 input1 with
-    | Some (nd, consumed_nd) ->
-      let input2 = B32.b32slice input1 consumed_nd (B32.len input1) in
-      begin match destr _ (parse32_sum_if t) (parse32_sum_eq_refl t) (parse32_sum_eq_trans t) (fun (x: sum_key t) (input: bytes32) -> match pc32 x input with | Some (d, consumed_d) -> Some ((d <: sum_type t), consumed_d) | _ -> None) tg input2
-      with
-      | Some (d, consumed_d) ->
-        [@inline_let]
-        let _ = assert (U32.v consumed_tg + (U32.v consumed_nd + U32.v consumed_d) < 4294967296) in
-        Some ((nd, d), U32.add consumed_tg (U32.add consumed_nd consumed_d))
-      | _ -> None
-    end
-    | _ -> None
-    end
-  | _ -> None
-
-inline_for_extraction
-let parse32_sum_with_nondep_aux_correct
-  (#kt: parser_kind)
-  (t: sum)
-  (p: parser kt (sum_repr_type t))
-  (#knd: parser_kind)
-  (#nondep_t: Type0)
-  (#pnd: parser knd nondep_t)
-  (pnd32: parser32 pnd)
-  (#k: parser_kind)
-  (#pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
-  (pc32: ((x: sum_key t) -> Tot (parser32 (pc x))))
-  (p32: parser32 (parse_enum_key p (sum_enum t)))
-  (destr: enum_destr_t (parse32_sum_t t) (sum_enum t))
-  (input: bytes32)
-: Lemma
-  (parser32_correct (parse_sum_with_nondep t p pnd pc) input (parse32_sum_with_nondep_aux t p pnd32 pc32 p32 destr input))
-= let res = parse32_sum_with_nondep_aux t p pnd32 pc32 p32 destr input in
-  let gp = parse_sum_with_nondep_aux t p pnd pc (B32.reveal input) in
-  assert (match res with
-  | None -> gp == None
-  | Some (hres, consumed) ->
-    Some? gp /\ (
-    let (Some (hres', consumed')) = gp in
-    hres == hres' /\
-    U32.v consumed == (consumed' <: nat)
-  ));
-  parse_sum_with_nondep_aux_correct t p pnd pc (B32.reveal input)
-
-#reset-options
-
-inline_for_extraction
-let parse32_sum_gen
-  (#kt: parser_kind)
-  (t: sum)
-  (p: parser kt (sum_repr_type t))
-  (#k: parser_kind)
-  (#pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
-  (pc32: ((x: sum_key t) -> Tot (parser32 (pc x))))
-  (k' : parser_kind)
-  (t' : Type0)
-  (p' : parser k' t')
-  (u1: unit { k' == and_then_kind (parse_filter_kind kt) k })
-  (u2: unit { t' == sum_type t })
-  (u3: unit { p' == parse_sum t p pc })
-  (p32: parser32 (parse_enum_key p (sum_enum t)))
-  (destr: enum_destr_t (parse32_sum_t t) (sum_enum t))
-: Tot (parser32 p')
-= parse32_sum_gen' t p pc32 p32 destr
-
 inline_for_extraction
 let enum_head_key
   (#key #repr: eqtype)
@@ -776,6 +560,7 @@ let size32_sum_gen
   (size32_sum_gen' t s32 sc32' () tag_of_data <: size32 s')
 
 (* Sum with default case *)
+*)
 
 module L = FStar.List.Tot
 
@@ -936,6 +721,7 @@ let maybe_enum_destr_nil
     f (Unknown x)
   ) <: (y: t { eq y (f (maybe_enum_key_of_repr e x)) } ))
 
+(*
 inline_for_extraction
 let parse32_dsum_t (t: dsum) : Tot Type =
   bytes32 -> Tot (option (dsum_type t * U32.t))

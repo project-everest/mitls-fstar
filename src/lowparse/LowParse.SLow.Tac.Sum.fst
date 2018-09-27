@@ -14,6 +14,7 @@ let enum_destr_tac
 : T.Tac unit
 = enum_tac_gen (quote enum_destr_cons_nil') (quote enum_destr_cons') e
 
+(*
 (* Parser *)
 
 noextract
@@ -174,6 +175,7 @@ let rec dep_enum_destr_tac () : T.Tac unit =
     | _ -> T.fail "Not the right arguments to cons"
     end
   | _ -> T.fail ("Not the right argument to dep_enum_destr")
+*)
 
 noextract
 let rec maybe_enum_destr_t'_tac () : T.Tac unit =
