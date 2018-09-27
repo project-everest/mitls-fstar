@@ -261,6 +261,29 @@ let parse_sum
 : Tot (parser (parse_sum_kind kt t pc) (sum_type t))
 = parse_sum' t p (parse_sum_cases t pc)
 
+#set-options "--z3rlimit 16"
+
+let parse_sum_eq'
+  (#kt: parser_kind)
+  (t: sum)
+  (p: parser kt (sum_repr_type t))
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (input: bytes)
+: Lemma
+  (parse (parse_sum t p pc) input == (match parse (parse_enum_key p (sum_enum t)) input with
+  | None -> None
+  | Some (k, consumed_k) ->
+    let input_k = Seq.slice input consumed_k (Seq.length input) in
+    synth_sum_case_injective t k;
+    begin match parse (parse_synth (dsnd (pc k)) (synth_sum_case t k)) input_k with
+    | None -> None
+    | Some (x, consumed_x) -> Some ((x <: sum_type t), consumed_k + consumed_x)
+    end
+  ))
+= parse_tagged_union_eq #(parse_filter_kind kt) #(sum_key t) (parse_enum_key p (sum_enum t)) #(sum_type t) (sum_tag_of_data t) (parse_sum_cases t pc) input
+
+#reset-options
+
 let parse_sum_eq
   (#kt: parser_kind)
   (t: sum)

@@ -149,6 +149,20 @@ let parse32_synth
    ) <: (res: option (t2 * U32.t) { parser32_correct (parse_synth p1 f2) input res } ))
 
 inline_for_extraction
+let parse32_synth'
+  (#k: parser_kind)
+  (#t1: Type0)
+  (#t2: Type0)
+  (p1: parser k t1)
+  (f2: t1 -> Tot t2)
+  (p1' : parser32 p1)
+  (u: unit {
+    synth_injective f2
+  })
+: Tot (parser32 (parse_synth p1 f2))
+= parse32_synth p1 f2 (fun x -> f2 x) p1' u
+
+inline_for_extraction
 let serialize32_synth
   (#k: parser_kind)
   (#t1: Type0)
