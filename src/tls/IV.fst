@@ -54,7 +54,8 @@ let coerce_raw (ip: ipkg) (len_of_i: ip.t -> keylen)
   (ensures fun h0 k h1 -> k == coerceT_raw ip len_of_i i len r /\ modifies_none h0 h1)
   = r
 
-inline_for_extraction
+//inline_for_extraction
+unfold
 let local_raw_pkg (ip:ipkg) (len_of_i:ip.t -> keylen) : local_pkg ip =
   LocalPkg
     (raw ip len_of_i)
@@ -70,16 +71,24 @@ let local_raw_pkg (ip:ipkg) (len_of_i:ip.t -> keylen) : local_pkg ip =
     (create_raw ip len_of_i)
     (coerceT_raw ip len_of_i)
     (coerce_raw ip len_of_i)
+ 
+inline_for_extraction let iv_coerce (#ip:ipkg) (p:local_pkg ip) =
+  LocalPkg?.coerce p
 
-inline_for_extraction
+noextract
 let rp (ip:ipkg) (len_of_i:ip.t -> keylen): ST (pkg ip)
   (requires fun h0 -> True)
   (ensures fun h0 p h1 -> modifies_one tls_define_region h0 h1 /\ p.package_invariant h1)
   =
   memoization_ST (local_raw_pkg ip len_of_i)
 
-(*
 // does this extract? 18-09-24 no
+
+val discard: bool -> ST unit
+  (requires (fun _ -> True))  (ensures (fun h0 _ h1 -> h0 == h1))
+let discard _ = ()
+let print s : ST unit (requires fun h0 -> True) (ensures fun h0 _ h1 -> h0 == h1)
+  = discard (IO.debug_print_string ("NGO| "^s^"\n"))
 
 let test() : ST unit 
   (requires fun h0 -> True)
@@ -87,11 +96,13 @@ let test() : ST unit
   = 
   let id = n:nat {n < 256} in 
   let ip : ipkg = Pkg.Idx id (fun _ -> True) (fun _ -> True) (fun _ -> true) in
-  let len_of_i (i:id): keylen = Integers.u i in 
+  let len_of_i (i:id): keylen = UInt32.uint_to_t i in 
   let p = local_raw_pkg ip len_of_i in 
   // let table = mem_alloc (key ip) in 
   // let q = Pkg.memoization p table in 
-  assume False; 
-  let v0 = p.coerce 12 in  
+  assume (model == false);
+  let kl : keylen = 12ul in
+  let k = Bytes.create 12ul 0uy in
+  let v0 = p.coerce 12 kl k in 
+  print (Bytes.hex_of_bytes v0);
   ()
-*)  

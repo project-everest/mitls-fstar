@@ -417,6 +417,7 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
     p.post post_framing
     create p.coerceT coerce)
 
+noextract
 let memoization_ST (#ip:ipkg) (p:local_pkg ip)
   : ST (pkg ip)
   (requires fun h0 -> True)
