@@ -77,13 +77,10 @@ let synth_case_recip
   | B y -> (y <: LP.dsum_type_of_tag case_enum type_of_known_case U16.t (cases_of_t x))
   | C _ y ->  (y <: LP.dsum_type_of_tag case_enum type_of_known_case U16.t (cases_of_t x))
 
-let synth_case_recip_synth_case (xy: (x: LP.maybe_total_enum_key case_enum & LP.dsum_type_of_tag case_enum type_of_known_case U16.t x)) : Tot (squash (LP.synth_dsum_case_recip' case_enum cases_of_t type_of_known_case U16.t synth_case_recip (LP.synth_dsum_case' case_enum cases_of_t type_of_known_case U16.t synth_known_case synth_unknown_case xy) == xy))
-= _ by (LP.synth_case_recip_synth_case_tac (quote xy))
-
 inline_for_extraction
 let t_sum : LP.dsum
 = LP.make_dsum case_enum cases_of_t type_of_known_case U16.t synth_known_case synth_unknown_case synth_case_recip
-    synth_case_recip_synth_case
+    (_ by (LP.synth_case_recip_synth_case_tac ()))
     (fun x -> ())
 
 let parse_case_B_filter

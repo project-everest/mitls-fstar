@@ -477,15 +477,15 @@ type dsum =
     (synth_case_recip: ((x: data) -> Tot (dsum_type_of_tag e type_of_known_tag type_of_unknown_tag (tag_of_data x)))) ->
     (synth_case_recip_synth_case: (
       (xy: (x: maybe_total_enum_key e & dsum_type_of_tag e type_of_known_tag type_of_unknown_tag x)) ->
-      Lemma
+      Tot (squash
       (synth_dsum_case_recip' e tag_of_data type_of_known_tag type_of_unknown_tag synth_case_recip
-        (synth_dsum_case' e tag_of_data type_of_known_tag type_of_unknown_tag synth_known_case synth_unknown_case xy) == xy)
+        (synth_dsum_case' e tag_of_data type_of_known_tag type_of_unknown_tag synth_known_case synth_unknown_case xy) == xy))
     )) ->
     (synth_case_synth_case_recip: (
       (x: data) ->
-      Lemma
+      Tot (squash
       (synth_dsum_case' e tag_of_data type_of_known_tag type_of_unknown_tag synth_known_case synth_unknown_case
-        (synth_dsum_case_recip' e tag_of_data type_of_known_tag type_of_unknown_tag synth_case_recip x) == x)
+        (synth_dsum_case_recip' e tag_of_data type_of_known_tag type_of_unknown_tag synth_case_recip x) == x))
     )) ->
     dsum
 
@@ -876,15 +876,15 @@ let make_dsum
     (synth_case_recip: ((x: data) -> Tot (dsum_type_of_tag e type_of_known_tag type_of_unknown_tag (tag_of_data x)))) ->
     (synth_case_recip_synth_case: (
       (xy: (x: maybe_total_enum_key e & dsum_type_of_tag e type_of_known_tag type_of_unknown_tag x)) ->
-      Lemma
+      Tot (squash
       (synth_dsum_case_recip' e tag_of_data type_of_known_tag type_of_unknown_tag synth_case_recip
-        (synth_dsum_case' e tag_of_data type_of_known_tag type_of_unknown_tag synth_known_case synth_unknown_case xy) == xy)
+        (synth_dsum_case' e tag_of_data type_of_known_tag type_of_unknown_tag synth_known_case synth_unknown_case xy) == xy))
     )) ->
     (synth_case_synth_case_recip: (
       (x: data) ->
-      Lemma
+      Tot (squash
       (synth_dsum_case' e tag_of_data type_of_known_tag type_of_unknown_tag synth_known_case synth_unknown_case
-        (synth_dsum_case_recip' e tag_of_data type_of_known_tag type_of_unknown_tag synth_case_recip x) == x)
+        (synth_dsum_case_recip' e tag_of_data type_of_known_tag type_of_unknown_tag synth_case_recip x) == x))
     )) ->
     dsum
   )

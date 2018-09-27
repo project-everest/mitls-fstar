@@ -16,9 +16,10 @@ let enum_destr_tac
 
 noextract
 let synth_case_recip_synth_case_tac
-  (t: T.term)
+  ()
 : T.Tac unit
-=   let _ = T.destruct t in
+= let t = T.binder_to_term (T.intro ()) in
+    let _ = T.destruct t in
     let x = T.intro () in
     let y = T.intro () in
     let kreq = T.intro () in
