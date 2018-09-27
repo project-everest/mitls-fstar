@@ -43,14 +43,15 @@ let sample32 (len:UInt32.t) : ST (lbytes (UInt32.v len))
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
   =
-  assume false; // Precondition of random_sample in EverCrypt
+  if len = 0ul then Bytes.empty_bytes else (
   push_frame ();
   let b = LowStar.Buffer.alloca 0uy len in
+  assume false; // Precondition of random_sample in EverCrypt
   EverCrypt.random_sample len b;
-  let r = BufferBytes.to_bytes (UInt32.v len) (LowStar.ToFStarBuffer.new_to_old_st b) in
+  let r = Bytes.of_buffer len b in
   trace ("Sampled: "^(hex_of_bytes r));
   pop_frame ();
-  r
+  r)
 
 let sample (len:nat{len < pow2 32}) : ST (lbytes len)
   (requires fun h0 -> True)

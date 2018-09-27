@@ -1,7 +1,7 @@
 module Idx
 
 open Mem
-open Pkg
+//open Pkg
 
 module DM = FStar.DependentMap
 module MDM = FStar.Monotonic.DependentMap
@@ -33,13 +33,15 @@ type kdfa = Hashing.Spec.alg
 ///
 /// HKDF defines an injective function from label * context to bytes, to be used as KDF indexes.
 ///
-type context =
+noeq type context =
   | Extract: context // TLS extractions have no label and no context; we may separate Extract0 and Extract2
   | ExtractDH: v:id_dhe -> context // This is Extract1 (the middle extraction)
   | Expand: context // TLS expansion with default hash value
   | ExpandLog: // TLS expansion using hash of the handshake log
-    info: TLSInfo.logInfo (* ghost, abstract summary of the transcript *) ->
+    info: HandshakeLog.hs_transcript (* ghost, abstract summary of the transcript *) ->
     hv: Hashing.Spec.anyTag (* requires stratification *) -> context
+// 18-09-25 should info be HandshakeLog.transcript? 
+
 
 /// Underneath, HKDF takes a "context" and a required length, with
 /// disjoint internal encodings of the context:
@@ -50,7 +52,7 @@ type id_psk = nat // external application PSKs only; we may also set the usage's
 // The `[@ Gc]` attribute instructs Kremlin to translate the `pre_id` field as a pointer,
 // otherwise it would generate an invalid type definition.
 [@ Gc]
-type pre_id =
+noeq type pre_id =
   | Preshared:
       a: kdfa (* fixing the hash algorithm *) ->
       id_psk  ->
@@ -101,8 +103,8 @@ type honest_idh (c:context) =
   ExtractDH? c /\ IDH? (ExtractDH?.v c) /\
   (let ExtractDH (IDH gX gY) = c in CommonDH.honest_dhr gY)
 
-/// We use a global honesty table for all indexes Inside ipkg, we
-/// assume all index types are defined in the table below We assume
+/// We use a global honesty table for all indexes. Inside ipkg, we
+/// assume all index types are defined in the table below. We assume
 /// write access to this table is public, but the following global
 /// invariant must be enforced: if i is corrupt then all indexes
 /// derived from i are also corrupt

@@ -4,13 +4,13 @@ TLS 1.3 HKDF extract and expand constructions, parametrized by their hash algori
 module HKDF
 
 open Mem
+
 open FStar.UInt32
+// open FStar.Integers
+// 18-09-24 still triggering extraction error
+
 open Hashing.Spec
 open FStar.Bytes
-
-//open Parse
-
-private let max (a:int) (b:int) = if a < b then b else a
 
 (*-------------------------------------------------------------------*)
 (*
@@ -69,17 +69,16 @@ HKDF-Expand(PRK, info, L) -> OKM
    ...
 *)
 
-
 val expand:
   #ha:Hashing.alg ->
-  prk: hkey ha ->
-  info: bytes ->
-  len: UInt32.t {v len <= op_Multiply 255 (tagLength ha)} ->
-  Stack (lbytes32 len)
+  prk: lbytes (EverCrypt.Hash.tagLength ha) ->
+  info: bytes {Bytes.length info < 1024 (* somewhat arbitrary *) } ->
+  len: UInt32.t {0 < v len /\ v len <= op_Multiply 255 (tagLength ha)} ->
+  ST (lbytes32 len)
   (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> modifies Set.empty h0 h1))
+  (ensures (fun h0 t h1 -> modifies_none h0 h1))
 
-#reset-options "--admit_smt_queries true"
+#set-options "--z3rlimit 100" 
 let expand #ha prk info len =
   let h00 = HyperStack.ST.get() in
   push_frame();
@@ -99,20 +98,19 @@ let expand #ha prk info len =
     push_frame();
     let info_p = LowStar.Buffer.alloca 0uy infolen in
     store_bytes info info_p;
+    assert(tagLength ha + v infolen + 1 + blockLength ha < pow2 32);
     EverCrypt.HKDF.hkdf_expand ha tag_p prk_p tlen info_p infolen len;
     pop_frame ()
   );
-
   // FIXME(adl) a functional spec would have helped here
-  assume False;//18-09-01 not sure what's broken
 
   let tag = of_buffer len tag_p in
   pop_frame();
   let h11 = HyperStack.ST.get() in
-  //18-09-01 todo, as in Hashing.compute
-  //assume(HyperStack.modifies Set.empty h00 h11);
+  //18-09-01 todo, as in Hashing.compute; similarly missing Stack vs ST. 
+  assume(modifies_none h00 h11);
   tag
-
+#reset-options ""
 
 (* earlier, bytes-level implementation:
 
@@ -204,42 +202,53 @@ let quic_prefix : lbytes 5 =
   let s = bytes_of_string "quic " in
   assume(length s = 5); s
 
-inline_for_extraction
+inline_for_extraction private 
 val format:
   ha: Hashing.alg ->
   label: string{length (bytes_of_string label) < 256 - 6} ->
-  hv: bytes{length hv < 256} ->
+  digest: bytes{length digest < 256} ->
   len: UInt32.t {v len <= op_Multiply 255 (tagLength ha)} ->
   is_quic: bool ->
   Tot bytes
 
-inline_for_extraction
-let format ha label hv len is_quic =
+/// since derivations depend on the concrete info, we will need to
+/// prove format injective on (at least) label digest is_quic.
+
+// RFC-like grammar: 
+// struct {
+//   uint16 len; 
+//   opaque label<0..255>;
+//   opaque digest<0..255>;
+// } Info;
+
+
+inline_for_extraction private 
+let format ha label digest len is_quic =
   let prefix = if is_quic then quic_prefix else tls13_prefix in
   let label_bytes = prefix @| bytes_of_string label in
   lemma_repr_bytes_values (v len);
   lemma_repr_bytes_values (length label_bytes);
-  lemma_repr_bytes_values (length hv);
+  lemma_repr_bytes_values (length digest);
   bytes_of_int 2 (v len) @|
   Parse.vlbytes 1 label_bytes @|
-  Parse.vlbytes 1 hv
+  Parse.vlbytes 1 digest
 
-/// since derivations depend on the concrete info,
-/// we will need to prove format injective.
+/// used for computing all derived keys; 
 
 val expand_label:
   #ha: HMAC.ha ->
-  prk: hkey ha ->
+  secret: lbytes (EverCrypt.Hash.tagLength ha) ->
   label: string{length (bytes_of_string label) < 256 - 6} -> // -9?
   hv: bytes{length hv < 256} ->
-  len: UInt32.t {v len <= op_Multiply 255 (tagLength ha)} ->
+  len: UInt32.t {0 < v len /\ v len <= op_Multiply 255 (tagLength ha)} ->
   is_quic: bool ->
   ST (lbytes32 len)
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> modifies_none h0 h1))
 
-let expand_label #ha prk label hv len is_quic =
-  expand prk (format ha label hv len is_quic) len
+let expand_label #ha secret label digest len is_quic =
+  let info = format ha label digest len is_quic in 
+  expand #ha secret info len
 
 (*-------------------------------------------------------------------*)
 (*
@@ -247,7 +256,26 @@ let expand_label #ha prk label hv len is_quic =
     HKDF-Expand-Label(Secret, Label,
        Transcript-Hash(Messages), Hash.length)
 *)
+
+/// used in both hanshakes for deriving intermediate HKDF keys.
+
+val derive_secret:
+  ha: EverCrypt.HMAC.ha ->
+  secret: lbytes (EverCrypt.Hash.tagLength ha) ->
+  label: string{length (bytes_of_string label) < 256-6} ->
+  digest: bytes{length digest < 256} ->
+  is_quic: bool ->
+  ST (lbytes32 (Hashing.Spec.tagLen ha))
+  (requires fun h -> True)
+  (ensures fun h0 _ h1 -> modifies_none h0 h1)
+
+let derive_secret ha secret label digest is_quic =
+  let len = Hashing.Spec.tagLen ha in
+  expand_label secret label digest len is_quic
+
+(*
 /// renamed to expand_secret for uniformity
+/// not used anymore? 
 
 val expand_secret:
   #ha: EverCrypt.HMAC.ha ->
@@ -260,36 +288,5 @@ val expand_secret:
 
 let expand_secret #ha prk label hv =
   expand_label prk label hv (Hashing.Spec.tagLen ha) false
+*)
 
-(*-------------------------------------------------------------------*)
-(*
-  Derive-Secret(Secret, Label, Messages) =
-      HKDF-Expand-Label(Secret, Label,
-             Transcript-Hash(Messages), Hash.length)
-             *)
-
-val derive_secret:
-  ha: EverCrypt.HMAC.ha ->
-  secret: hkey ha ->
-  label: string{length (bytes_of_string label) < 256-6} ->
-  hs_hash: bytes{length hs_hash < 256} ->
-  is_quic: bool ->
-  ST (lbytes32 (Hashing.Spec.tagLen ha))
-  (requires fun h -> True)
-  (ensures fun h0 _ h1 -> modifies_none h0 h1)
-
-#set-options "--z3rlimit 200"
-let derive_secret ha secret label hashed_log is_quic =
-  let prefix = if is_quic then quic_prefix else tls13_prefix in
-  assert(length prefix <= 6);
-  let lbl = prefix @| bytes_of_string label in
-  assert(length lbl < 256);
-  let tlen = Hashing.Spec.tagLen ha in
-  lemma_repr_bytes_values (v tlen);
-  lemma_repr_bytes_values (length lbl);
-  lemma_repr_bytes_values (length hashed_log);
-  let info =
-    bytes_of_int 2 (v tlen) @|
-    Parse.vlbytes 1 lbl @|
-    Parse.vlbytes 1 hashed_log in
-  expand #ha secret info tlen
