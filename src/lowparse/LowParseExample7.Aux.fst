@@ -8,6 +8,7 @@ module U32 = FStar.UInt32
 
 module L = FStar.List.Tot
 
+(*
 let rec list_init_last (#t: Type) (l: list t) : Lemma
   (requires (Cons? l))
   (ensures (l == L.append (L.init l) [L.last l]))
