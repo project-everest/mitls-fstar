@@ -7,10 +7,18 @@ module U8 = FStar.UInt8
 module U16 = FStar.UInt16
 module L = FStar.List.Tot
 
+let parse_case_B_filter
+  (x: U16.t)
+: GTot bool
+= U16.v x > 0
+
+inline_for_extraction
+let case_B = (x: U16.t { parse_case_B_filter x } )
+
 noeq
 type t =
   | A of (U8.t * U8.t)
-  | B of (x: U16.t { U16.v x > 0 } )
+  | B of case_B
 
 type cases : eqtype =
   | Case_A
@@ -40,110 +48,59 @@ let cases_of_t
   | B _ -> Case_B
 
 inline_for_extraction
-let t_sum
-= LP.make_sum case_enum cases_of_t
-
-inline_for_extraction
-let synth_case_A (z: (U8.t * U8.t)) : Tot (LP.sum_cases t_sum Case_A) =
-  [@inline_let]
-  let res : t = A z in
-  [@inline_let]
-  let _ : squash (LP.sum_tag_of_data t_sum res == Case_A) =
-    assert_norm (LP.sum_tag_of_data t_sum res == Case_A)
-  in
-  res
-
-let synth_case_A_inj () : Lemma
-  (LP.synth_injective synth_case_A)
-= ()
-
-inline_for_extraction
-let synth_case_B (z: (U16.t) { U16.v z > 0 } ) : Tot (LP.sum_cases t_sum Case_B) =
-  [@inline_let]
-  let res : t = B z in
-  [@inline_let]
-  let _ : squash (LP.sum_tag_of_data t_sum res == Case_B) =
-    assert_norm (LP.sum_tag_of_data t_sum res == Case_B)
-  in
-  res
-
-let synth_case_B_inj () : Lemma
-  (LP.synth_injective synth_case_B)
-= ()
-
-let parse_case_B_filter
-  (x: U16.t)
-: GTot bool
-= U16.v x > 0
-
-let parse_case_A : LP.parser _ (LP.sum_cases t_sum Case_A) =
-    synth_case_A_inj ();
-    LP.parse_synth (LP.parse_u8 `LP.nondep_then` LP.parse_u8) synth_case_A
-
-let parse_case_B : LP.parser _ (LP.sum_cases t_sum Case_B) =
-    synth_case_B_inj ();
-    LP.parse_synth (LP.parse_filter LP.parse_u16 parse_case_B_filter) synth_case_B
-
-let parse_cases'
-  (x: LP.sum_key t_sum)
-: Tot (k: LP.parser_kind & LP.parser k  (LP.sum_cases t_sum x))
+let type_of_case
+  (x: cases)
+: Tot Type0
 = match x with
-  | Case_A -> (| _, parse_case_A |)
+  | Case_A -> U8.t * U8.t
+  | Case_B -> case_B
+
+inline_for_extraction
+let synth_case
+  (x: cases)
+  (y: type_of_case x)
+: Tot (LP.refine_with_tag cases_of_t x)
+= match x with
+  | Case_A -> A y
+  | Case_B -> B y
+
+inline_for_extraction
+let synth_case_recip
+  (x: t)
+: Tot (type_of_case (cases_of_t x))
+= match x with
+  | A y -> (y <: type_of_case (cases_of_t x))
+  | B y -> (y <: type_of_case (cases_of_t x))
+
+inline_for_extraction
+let t_sum : LP.sum
+= LP.make_sum case_enum cases_of_t type_of_case synth_case synth_case_recip (fun x y -> ()) (fun x -> ())
+
+let parse_case_B : LP.parser _ case_B =
+  LP.parse_filter LP.parse_u16 parse_case_B_filter
+
+let parse_cases
+  (x: LP.sum_key t_sum)
+: Tot (k: LP.parser_kind & LP.parser k (type_of_case x))
+= match x with
+  | Case_A -> (| _, LP.parse_u8 `LP.nondep_then` LP.parse_u8 |)
   | Case_B -> (| _, parse_case_B |)
 
-let parse_cases :
-  (x: LP.sum_key t_sum) ->
-  Tot (LP.parser _ (LP.sum_cases t_sum x))
-= LP.parse_sum_cases t_sum parse_cases'
-
-inline_for_extraction
-let parse32_cases_A
-: (LP.parser32 parse_case_A)
-=
-    [@inline_let]
-    let _ = synth_case_A_inj () in
-    LP.parse32_synth
-      _
-      synth_case_A
-      (fun x -> synth_case_A x)
-      (LP.parse32_nondep_then LP.parse32_u8 LP.parse32_u8)
-      ()
-
-inline_for_extraction
-let parse32_cases_B
-: (LP.parser32 parse_case_B)
-=
-    [@inline_let]
-    let _ = synth_case_B_inj () in
-    LP.parse32_synth
-      _
-      synth_case_B
-      (fun (x: U16.t { parse_case_B_filter x == true } ) -> synth_case_B x)
-      (LP.parse32_filter LP.parse32_u16 parse_case_B_filter (fun x -> U16.gt x 0us))
-      ()
-
-inline_for_extraction
-let parse32_cases'
-  (x: LP.sum_key t_sum)
-: Tot (LP.parser32 (dsnd (parse_cases' x)))
-= match x with
-  | Case_A -> parse32_cases_A
-  | Case_B -> parse32_cases_B
+let parse32_case_B : LP.parser32 parse_case_B =
+  LP.parse32_filter LP.parse32_u16 parse_case_B_filter (fun x -> U16.gt x 0us)
 
 inline_for_extraction
 let parse32_cases
-: (x: LP.sum_key t_sum) ->
-  Tot (LP.parser32 (parse_cases x))
-= LP.parse32_sum_cases t_sum parse_cases' parse32_cases'
+  (x: LP.sum_key t_sum)
+: Tot (LP.parser32 (dsnd (parse_cases x)))
+= match x with
+  | Case_A -> (LP.parse32_nondep_then LP.parse32_u8 LP.parse32_u8 <: LP.parser32 (dsnd (parse_cases x)))
+  | Case_B -> (parse32_case_B <: LP.parser32 (dsnd (parse_cases x)))
 
-let parse_t_kind : LP.parser_kind =
-  LP.and_then_kind
-    (LP.parse_filter_kind LP.parse_u8_kind)
-    (LP.weaken_parse_cases_kind t_sum parse_cases')
-
-let parse_t : LP.parser parse_t_kind t =
+let parse_t : LP.parser _ t =
   LP.parse_sum t_sum LP.parse_u8 parse_cases
 
+(*
 inline_for_extraction
 let parse32_t
 : LP.parser32 parse_t
