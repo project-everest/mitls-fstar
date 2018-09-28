@@ -21,7 +21,6 @@ let f (input: FStar.Bytes.bytes) : Pure (option (LowParseExample.Aux.t * FStar.U
   let _ = LowParse.SLow.Base.parser32_consumes LowParseExample.Aux.parse32_t input in
   res
 
-(*
 let g (input: FStar.Bytes.bytes) : Tot (option (LowParse.SLow.array LowParseExample.Aux.t 18 * FStar.UInt32.t)) =
   LowParseExample.Aux.parse32_t_array input
 
@@ -33,11 +32,9 @@ let m (x: LowParseExample.Aux.t) : Tot FStar.Bytes.bytes =
 
 let s (x: LowParse.SLow.array LowParseExample.Aux.t 18) : Tot FStar.Bytes.bytes =
   LowParseExample.Aux.serialize32_t_array x
-*)
 
 #reset-options "--using_facts_from '* -LowParse'"
 
-(*
 (** Test parser 'f' and formatter 'm' *)
 let test_f_m (input:FStar.Bytes.bytes): Stack (option (FStar.Bytes.bytes * FStar.UInt32.t)) (fun _ -> true) (fun _ _ _ -> true) =
   let result = f input in
@@ -47,7 +44,6 @@ let test_f_m (input:FStar.Bytes.bytes): Stack (option (FStar.Bytes.bytes * FStar
     Some (formattedresult, offset)
   )
   | _ -> None
-*)
 
 (** Run all unit tests, by calling test_bytes and test_file 
     multiple times, with different parser+formatter pairs and 
@@ -55,7 +51,6 @@ let test_f_m (input:FStar.Bytes.bytes): Stack (option (FStar.Bytes.bytes * FStar
 let test (_:unit): Stack unit (fun _ -> true) (fun _ _ _ -> true) =
   push_frame();
 
-(*
   let test1 = "11010299" in
   let testbytes = bytes_of_hex test1 in
   test_bytes test_f_m "test_expect_fail" testbytes;
@@ -64,7 +59,6 @@ let test (_:unit): Stack unit (fun _ -> true) (fun _ _ _ -> true) =
   
   test_file test_f_m "test_f_m_pass.bin";
   test_file test_f_m "test_f_m_fail.bin";
-*)
 
   pop_frame()
 

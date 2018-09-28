@@ -320,180 +320,175 @@ let parse32_sum
   (parse32_sum' t p p32 pc pc32 destr input <: (res: option (sum_type t * U32.t) { parser32_correct (parse_sum t p pc) input res } ))
 
 
-(*
-inline_for_extraction
-let enum_head_key
-  (#key #repr: eqtype)
-  (e: enum key repr)
-: Pure (enum_key e)
-  (requires (Cons? e))
-  (ensures (fun y -> Cons? e /\ (let ((k, _) :: _) = e in (y <: key) == k)))
-= match e with ((k, _) :: _) -> k
-
-inline_for_extraction
-unfold
-let sum_tail_type
-  (t: sum)
-: Tot Type0
-= (x: sum_type t { Cons? (sum_enum t) /\ sum_tag_of_data t x <> enum_head_key (sum_enum t) } )
-
-let sum_tail_tag_of_data
-  (t: sum)
-  (x: sum_tail_type t)
-: Ghost (enum_key (enum_tail' (sum_enum t)))
-  (requires (Cons? (sum_enum t)))
-  (ensures (fun _ -> True))
-= let y : sum_key_type t = sum_tag_of_data t x in
-  y
-
-inline_for_extraction
-let sum_tail
-  (t: sum)
-: Pure sum
-  (requires True)
-  (ensures (fun t' ->
-    Cons? (sum_enum t) ==> (
-    sum_key_type t' == sum_key_type t /\
-    sum_repr_type t' == sum_repr_type t /\
-    (sum_enum t' <: enum (sum_key_type t) (sum_repr_type t)) == enum_tail' (sum_enum t) /\
-    sum_type t' == sum_tail_type t /\
-    (forall (x : sum_tail_type t) . (sum_tag_of_data t' (coerce' (sum_type t') x) <: sum_key_type t) == (sum_tag_of_data t (x <: sum_type t) <: sum_key_type t))
-  )))
-= Sum
-    (sum_key_type t)
-    (sum_repr_type t)
-    (enum_tail' (sum_enum t))
-    (sum_tail_type t)
-    (sum_tail_tag_of_data t)
-
-inline_for_extraction
-let sum_destr
-  (t: sum)
-: Tot Type
-= (v: Type) ->
-  (f: ((k: sum_key t) -> (x: refine_with_tag (sum_tag_of_data t) k) -> Tot v)) ->
-  (k: sum_key t) ->
-  (x: refine_with_tag (sum_tag_of_data t) k) ->
-  Tot (y: v { y == f k x } )
-
-inline_for_extraction
-let sum_destr_cons
-  (t: sum)
-  (destr: sum_destr (sum_tail t))
-: Pure (sum_destr t)
-  (requires (Cons? (sum_enum t)))
-  (ensures (fun _ -> True))
-= fun v ->
-  match sum_enum t with
-  | ((k, _) :: _) ->
-    fun 
-      (f: ((k: sum_key t) -> (x: refine_with_tag (sum_tag_of_data t) k) -> Tot v))
-      (k' : sum_key t)
-      (x' : refine_with_tag (sum_tag_of_data t) k')
-    -> ((
-      if (k <: sum_key_type t) = (k' <: sum_key_type t)
-      then (f k x' <: v)
-      else
-        [@inline_let]
-        let x_ : sum_type t = x' in
-        (destr _ (fun k x -> f (k <: sum_key_type t) (x <: sum_type t)) (k' <: sum_key_type t) x_ <: v)
-    ) <: (y: v {y == f k' x' } ))
-
-inline_for_extraction
-let sum_destr_cons'
-  (t: sum)
-  (u: unit { Cons? (sum_enum t)} )
-  (destr: sum_destr (sum_tail t))
-: Tot (sum_destr t)
-= sum_destr_cons t destr
-
-inline_for_extraction
-let sum_destr_cons_nil
-  (t: sum)
-: Pure (sum_destr t)
-  (requires (Cons? (sum_enum t) /\ Nil? (enum_tail' (sum_enum t))))
-  (ensures (fun _ -> True))
-= fun v ->
-  match sum_enum t with
-  | ((k, _) :: _) ->
-    fun 
-      (f: ((k: sum_key t) -> (x: refine_with_tag (sum_tag_of_data t) k) -> Tot v))
-      (k' : sum_key t)
-      (x' : refine_with_tag (sum_tag_of_data t) k')
-    ->
-      (f k x' <: (y: v { y == f k' x' } ))
-
-inline_for_extraction
-let sum_destr_cons_nil'
-  (t: sum)
-  (u1: unit { Cons? (sum_enum t) } )
-  (u2: unit { Nil? (enum_tail' (sum_enum t)) } )
-: Tot (sum_destr t)
-= sum_destr_cons_nil t
-
-inline_for_extraction
-let serialize32_sum_gen
+let serialize32_sum_aux
   (#kt: parser_kind)
   (t: sum)
   (#p: parser kt (sum_repr_type t))
   (s: serializer p)
-  (#k: parser_kind)
-  (#pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
-  (#sc: ((x: sum_key t) -> Tot (serializer (pc x))))
-  (sc32: ((x: sum_key t) -> Tot (serializer32 (sc x))))
-  (tag_of_data: ((x: sum_type t) -> Tot (y: sum_key_type t { y == (sum_tag_of_data t x <: sum_key_type t)} )))
-  (k' : parser_kind)
-  (t' : Type0)
-  (p' : parser k' t')
-  (s' : serializer p')
-  (u1: unit {
-    kt.parser_kind_subkind == Some ParserStrong
-  })
-  (u2: unit {
-    match kt.parser_kind_high, k.parser_kind_high with
-    | Some vt, Some v -> vt + v < 4294967296
-    | _ -> False
-  })
-  (u3: unit {
-    k' == and_then_kind (parse_filter_kind kt) k
-  })
-  (u4: unit {
-    t' == sum_type t
-  })
-  (u5: unit {
-    p' == parse_sum t p pc
-  })
-  (u6: unit {
-    s' == serialize_sum t s sc
-  })
   (s32: serializer32 (serialize_enum_key _ s (sum_enum t)))
-  (destr: sum_destr t)
-: Tot (serializer32 s')
-= [@inline_let]
-  let sc32' (k: sum_key t) : Tot (serializer32 (sc k)) =
-    (fun (x: refine_with_tag (sum_tag_of_data t) k) -> destr bytes32 sc32 k x)
-  in
-  (serialize32_sum_gen' t s32 sc32' () tag_of_data <: serializer32 s')
+  (#pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (sc: ((x: sum_key t) -> Tot (serializer (dsnd (pc x)))))
+  (sc32: ((x: sum_key t) -> Tot (serializer32 (sc x))))
+  (u: squash (serializer32_sum_gen_precond kt (weaken_parse_cases_kind t pc)))
+: GTot (serializer32 (serialize_sum t s sc))
+= fun x ->
+  serialize_sum_eq t s sc x;
+  let tg = sum_tag_of_data t x in
+  let s1 = s32 tg in
+  let s2 = sc32 tg (synth_sum_case_recip t tg x) in
+  let res = s1 `B32.b32append` s2 in
+  (res <: (res: B32.bytes { serializer32_correct (serialize_sum t s sc) x res } ))
 
 inline_for_extraction
-let parse32_sum_cases
+let dep_enum_destr
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (v: (enum_key e -> Tot Type))
+: Tot Type
+= (v_eq: ((k: enum_key e) -> v k -> v k -> GTot Type0)) ->
+  (v_if: ((k: enum_key e) -> Tot (if_combinator (v k) (v_eq k)))) ->
+  (v_eq_refl: ((k: enum_key e) -> Tot (r_reflexive_t _ (v_eq k)))) ->
+  (v_eq_trans: ((k: enum_key e) -> Tot (r_transitive_t _ (v_eq k)))) ->
+  (f: ((k: enum_key e) -> Tot (v k))) ->
+  (k: enum_key e) ->
+  Tot (y: v k { v_eq k y (f k) } )
+
+module L = FStar.List.Tot
+
+inline_for_extraction
+let dep_enum_destr_cons
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (u: squash (Cons? e))
+  (v: (enum_key e -> Tot Type))
+  (destr: dep_enum_destr (enum_tail e) (fun (k' : enum_key (enum_tail e)) -> v (k' <: key)))
+: Tot (dep_enum_destr e v)
+= match e with
+  | ((k, _) :: _) ->
+    fun
+    (v_eq: ((k: enum_key e) -> v k -> v k -> GTot Type0))
+    (v_if: ((k: enum_key e) -> Tot (if_combinator (v k) (v_eq k))))
+    (v_eq_refl: ((k: enum_key e) -> Tot (r_reflexive_t _ (v_eq k))))
+    (v_eq_trans: ((k: enum_key e) -> Tot (r_transitive_t _ (v_eq k))))
+    (f: ((k: enum_key e) -> Tot (v k)))
+    (k' : enum_key e) ->
+    [@inline_let]
+    let _ = r_reflexive_t_elim (v k') (v_eq k') (v_eq_refl k') in
+    [@inline_let]
+    let _ = r_transitive_t_elim (v k') (v_eq k') (v_eq_trans k') in  
+    [@inline_let]
+    let y : v k' =
+      v_if k' (k = k') (fun _ ->
+        [@inline_let]
+        let y : v k' = f k in
+        y
+      ) (fun _ ->
+        [@inline_let]
+        let v' (k: enum_key (enum_tail e)) : Tot Type = v (k <: key) in
+        [@inline_let]
+        let v'_eq (k: enum_key (enum_tail e)) : Tot (v' k -> v' k -> GTot Type0) = v_eq (k <: key) in
+        [@inline_let]
+        let v'_if (k: enum_key (enum_tail e)) : Tot (if_combinator (v' k) (v'_eq k)) = v_if (k <: key) in
+        [@inline_let]
+        let v'_eq_refl (k: enum_key (enum_tail e)) : Tot (r_reflexive_t _ (v'_eq k)) = v_eq_refl (k <: key) in
+        [@inline_let]
+        let v'_eq_trans (k: enum_key (enum_tail e)) : Tot (r_transitive_t _ (v'_eq k)) = v_eq_trans (k <: key) in
+        [@inline_let]
+        let f' (k: enum_key (enum_tail e)) : Tot (v' k) = f (k <: key) in
+        [@inline_let]
+        let k' : key = k' in
+        assert (k' <> k);
+        assert (L.mem k' (L.map fst (enum_tail e)));
+        [@inline_let]
+        let (y: v' k') =
+          destr v'_eq v'_if v'_eq_refl v'_eq_trans f' k'
+        in
+        y
+      )
+    in
+    (y <: (y: v k' { v_eq k' y (f k') } ))
+
+inline_for_extraction
+let dep_enum_destr_cons_nil
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (u: squash (Cons? e /\ Nil? (enum_tail e)))
+  (v: (enum_key e -> Tot Type))
+: Tot (dep_enum_destr e v)
+= match e with
+  | ((k, _) :: _) ->
+    fun
+    (v_eq: ((k: enum_key e) -> v k -> v k -> GTot Type0))
+    (v_if: ((k: enum_key e) -> Tot (if_combinator (v k) (v_eq k))))
+    (v_eq_refl: ((k: enum_key e) -> Tot (r_reflexive_t _ (v_eq k))))
+    (v_eq_trans: ((k: enum_key e) -> Tot (r_transitive_t _ (v_eq k))))
+    (f: ((k: enum_key e) -> Tot (v k)))
+    (k' : enum_key e) ->
+    [@inline_let]
+    let _ = r_reflexive_t_elim (v k') (v_eq k') (v_eq_refl k') in
+    [@inline_let]
+    let _ = r_transitive_t_elim (v k') (v_eq k') (v_eq_trans k') in  
+    [@inline_let]
+    let y : v k' = f k in
+    (y <: (y: v k' { v_eq k' y (f k') } ))
+
+inline_for_extraction
+let serialize32_sum_destr_codom
   (t: sum)
-  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_cases t x))))
-  (pc32: ((x: sum_key t) -> Tot (parser32 (dsnd (pc x)))))
-  (x: sum_key t)
-: Tot (parser32 (parse_sum_cases t pc x))
-= (fun input -> pc32 x input)
+  (k: sum_key t)
+: Tot Type
+= refine_with_tag (sum_tag_of_data t) k -> Tot B32.bytes
+
+module T = FStar.Tactics
+
+let serialize32_sum_destr_eq
+  (t: sum)
+  (k: sum_key t)
+: Tot (serialize32_sum_destr_codom t k -> serialize32_sum_destr_codom t k -> GTot Type0)
+= _ by (T.apply (`feq); T.apply (`eq2))
 
 inline_for_extraction
-let serialize32_sum_cases
-  (s: sum)
-  (f: (x: sum_key s) -> Tot (k: parser_kind & parser k (sum_cases s x)))
-  (sr: (x: sum_key s) -> Tot (serializer (dsnd (f x))))
-  (sr32: (x: sum_key s) -> Tot (serializer32 (sr x)))
-  (x: sum_key s)
-: Tot (serializer32 (serialize_sum_cases s f sr x))
-= (fun input -> sr32 x input)
+let serialize32_sum_destr_if
+  (t: sum)
+  (k: sum_key t)
+: Tot (if_combinator _ (serialize32_sum_destr_eq t k))
+= // _ by (T.apply (`fif); T.fail "abc")
+  fif _ _ _ (default_if _) 
 
+#set-options "--z3rlimit 16"
+
+inline_for_extraction
+let serialize32_sum
+  (#kt: parser_kind)
+  (t: sum)
+  (#p: parser kt (sum_repr_type t))
+  (s: serializer p)
+  (s32: serializer32 (serialize_enum_key _ s (sum_enum t)))
+  (#pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (sc: ((x: sum_key t) -> Tot (serializer (dsnd (pc x)))))
+  (sc32: ((x: sum_key t) -> Tot (serializer32 (sc x))))
+  (destr: dep_enum_destr (sum_enum t) (serialize32_sum_destr_codom t))
+  (u: squash (serializer32_sum_gen_precond kt (weaken_parse_cases_kind t pc)))
+: Tot (serializer32 (serialize_sum t s sc))
+= fun x ->
+  serialize_sum_eq t s sc x;
+  let tg = sum_tag_of_data t x in
+  let s1 = s32 tg in
+  let s2 = destr
+    (serialize32_sum_destr_eq t)
+    (serialize32_sum_destr_if t)
+    (fun _ _ -> ())
+    (fun _ _ _ _ -> ())
+    (fun tg x -> sc32 tg (synth_sum_case_recip t tg x))
+    tg
+    x
+  in
+  let res = s1 `B32.b32append` s2 in
+  (res <: (res: B32.bytes { serializer32_correct (serialize_sum t s sc) x res } ))
+
+#reset-options
+
+(*
 inline_for_extraction
 let size32_sum_cases
   (s: sum)
@@ -562,8 +557,6 @@ let size32_sum_gen
 
 (* Sum with default case *)
 *)
-
-module L = FStar.List.Tot
 
 let maybe_enum_key_of_repr_not_in (#key #repr: eqtype) (e: enum key repr) (l: list (key * repr)) (x: repr) : GTot Type0 =
   (~ (L.mem x (L.map snd l)))
@@ -990,97 +983,6 @@ let size32_dsum_cases
     (fun input -> sr32 x input)
   | Unknown x ->
     (fun input -> sg32 x input)
-
-inline_for_extraction
-let dep_enum_destr
-  (#key #repr: eqtype)
-  (e: enum key repr)
-  (v: (enum_key e -> Tot Type))
-: Tot Type
-= (v_eq: ((k: enum_key e) -> v k -> v k -> GTot Type0)) ->
-  (v_if: ((k: enum_key e) -> Tot (if_combinator (v k) (v_eq k)))) ->
-  (v_eq_refl: ((k: enum_key e) -> Tot (r_reflexive_t _ (v_eq k)))) ->
-  (v_eq_trans: ((k: enum_key e) -> Tot (r_transitive_t _ (v_eq k)))) ->
-  (f: ((k: enum_key e) -> Tot (v k))) ->
-  (k: enum_key e) ->
-  Tot (y: v k { v_eq k y (f k) } )
-
-inline_for_extraction
-let dep_enum_destr_cons
-  (#key #repr: eqtype)
-  (e: enum key repr)
-  (u: squash (Cons? e))
-  (v: (enum_key e -> Tot Type))
-  (destr: dep_enum_destr (enum_tail e) (fun (k' : enum_key (enum_tail e)) -> v (k' <: key)))
-: Tot (dep_enum_destr e v)
-= match e with
-  | ((k, _) :: _) ->
-    fun
-    (v_eq: ((k: enum_key e) -> v k -> v k -> GTot Type0))
-    (v_if: ((k: enum_key e) -> Tot (if_combinator (v k) (v_eq k))))
-    (v_eq_refl: ((k: enum_key e) -> Tot (r_reflexive_t _ (v_eq k))))
-    (v_eq_trans: ((k: enum_key e) -> Tot (r_transitive_t _ (v_eq k))))
-    (f: ((k: enum_key e) -> Tot (v k)))
-    (k' : enum_key e) ->
-    [@inline_let]
-    let _ = r_reflexive_t_elim (v k') (v_eq k') (v_eq_refl k') in
-    [@inline_let]
-    let _ = r_transitive_t_elim (v k') (v_eq k') (v_eq_trans k') in  
-    [@inline_let]
-    let y : v k' =
-      v_if k' (k = k') (fun _ ->
-        [@inline_let]
-        let y : v k' = f k in
-        y
-      ) (fun _ ->
-        [@inline_let]
-        let v' (k: enum_key (enum_tail e)) : Tot Type = v (k <: key) in
-        [@inline_let]
-        let v'_eq (k: enum_key (enum_tail e)) : Tot (v' k -> v' k -> GTot Type0) = v_eq (k <: key) in
-        [@inline_let]
-        let v'_if (k: enum_key (enum_tail e)) : Tot (if_combinator (v' k) (v'_eq k)) = v_if (k <: key) in
-        [@inline_let]
-        let v'_eq_refl (k: enum_key (enum_tail e)) : Tot (r_reflexive_t _ (v'_eq k)) = v_eq_refl (k <: key) in
-        [@inline_let]
-        let v'_eq_trans (k: enum_key (enum_tail e)) : Tot (r_transitive_t _ (v'_eq k)) = v_eq_trans (k <: key) in
-        [@inline_let]
-        let f' (k: enum_key (enum_tail e)) : Tot (v' k) = f (k <: key) in
-        [@inline_let]
-        let k' : key = k' in
-        assert (k' <> k);
-        assert (L.mem k' (L.map fst (enum_tail e)));
-        [@inline_let]
-        let (y: v' k') =
-          destr v'_eq v'_if v'_eq_refl v'_eq_trans f' k'
-        in
-        y
-      )
-    in
-    (y <: (y: v k' { v_eq k' y (f k') } ))
-
-inline_for_extraction
-let dep_enum_destr_cons_nil
-  (#key #repr: eqtype)
-  (e: enum key repr)
-  (u: squash (Cons? e /\ Nil? (enum_tail e)))
-  (v: (enum_key e -> Tot Type))
-: Tot (dep_enum_destr e v)
-= match e with
-  | ((k, _) :: _) ->
-    fun
-    (v_eq: ((k: enum_key e) -> v k -> v k -> GTot Type0))
-    (v_if: ((k: enum_key e) -> Tot (if_combinator (v k) (v_eq k))))
-    (v_eq_refl: ((k: enum_key e) -> Tot (r_reflexive_t _ (v_eq k))))
-    (v_eq_trans: ((k: enum_key e) -> Tot (r_transitive_t _ (v_eq k))))
-    (f: ((k: enum_key e) -> Tot (v k)))
-    (k' : enum_key e) ->
-    [@inline_let]
-    let _ = r_reflexive_t_elim (v k') (v_eq k') (v_eq_refl k') in
-    [@inline_let]
-    let _ = r_transitive_t_elim (v k') (v_eq k') (v_eq_trans k') in  
-    [@inline_let]
-    let y : v k' = f k in
-    (y <: (y: v k' { v_eq k' y (f k') } ))
 
 inline_for_extraction
 let serialize32_dsum_t

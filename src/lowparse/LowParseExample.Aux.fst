@@ -113,166 +113,45 @@ let parse32_t
 : LP.parser32 parse_t
 = LP.parse32_sum t_sum _ parse32_case_enum _ parse32_cases parse32_case_destr
 
-(*
-inline_for_extraction
-let parse32_t
-: LP.parser32 parse_t
-= FStar.Tactics.synth_by_tactic
-    (LP.parse32_sum_tac
-      t_sum
-      LP.parse32_u8
-      parse32_cases
-    )
-
-let cases_of_t_A (x: t) : Lemma
-  (cases_of_t x == Case_A <==> A? x)
-= ()
+let serialize_case_B : LP.serializer parse_case_B =
+  LP.serialize_filter LP.serialize_u16 parse_case_B_filter
 
 inline_for_extraction
-let synth_case_A_inv (z: LP.sum_cases t_sum Case_A) : Tot (z: (U8.t * U8.t)) =
-  [@inline_let]
-  let z' : t = z in
-  let _ = cases_of_t_A z' in
-  match z' with
-  | A res -> res
-
-let synth_case_A_inv_correct () : Lemma
-  (LP.synth_inverse synth_case_A synth_case_A_inv)
-= ()
-
-let cases_of_t_B (x: t) : Lemma
-  (cases_of_t x == Case_B <==> B? x)
-= ()
-
-inline_for_extraction
-let synth_case_B_inv (z: LP.sum_cases t_sum Case_B) : Tot (z: U16.t { UInt16.v z > 0 } ) =
-  [@inline_let]
-  let z' : t = z in
-  let _ = cases_of_t_B z' in
-  match z' with
-  | B res -> res
-
-let synth_case_B_inv_correct () : Lemma
-  (LP.synth_inverse synth_case_B synth_case_B_inv)
-= ()
-
-let serialize_case_A
-: LP.serializer parse_case_A
-= 
-    synth_case_A_inj ();
-    synth_case_A_inv_correct ();
-      (LP.serialize_synth
-        (LP.nondep_then LP.parse_u8 LP.parse_u8)
-        synth_case_A
-        (LP.serialize_nondep_then LP.parse_u8 LP.serialize_u8 () LP.parse_u8 LP.serialize_u8)
-        synth_case_A_inv
-        ()
-      )
-
-let serialize_case_B
-: LP.serializer parse_case_B
-= 
-    synth_case_B_inj ();
-    synth_case_B_inv_correct ();
-      (LP.serialize_synth
-        (LP.parse_filter LP.parse_u16 parse_case_B_filter)
-        synth_case_B
-        (LP.serialize_filter #_ #_ #LP.parse_u16 LP.serialize_u16 parse_case_B_filter)
-        synth_case_B_inv
-        ()
-      )
-
-let serialize_cases'
-  (x: LP.sum_key t_sum)
-: Tot (LP.serializer (dsnd (parse_cases' x)))
-= match x with
-  | Case_A -> serialize_case_A
-  | Case_B -> serialize_case_B
+let serialize32_case_B: LP.serializer32 serialize_case_B =
+  LP.serialize32_filter LP.serialize32_u16 parse_case_B_filter
 
 let serialize_cases
-: (x: LP.sum_key t_sum) ->
-  Tot (LP.serializer (parse_cases x))
-= LP.serialize_sum_cases t_sum parse_cases' serialize_cases'
+  (x: LP.sum_key t_sum)
+: Tot (LP.serializer (dsnd (parse_cases x)))
+= match x with
+  | Case_A -> (LP.serialize_nondep_then _ LP.serialize_u8 () _ LP.serialize_u8 <: LP.serializer (dsnd (parse_cases x)))
+  | Case_B -> (serialize_case_B <: LP.serializer (dsnd (parse_cases x)))
+
+inline_for_extraction
+let serialize32_cases
+  (x: LP.sum_key t_sum)
+: Tot (LP.serializer32 (serialize_cases x))
+= match x with
+  | Case_A -> (LP.serialize32_nondep_then LP.serialize32_u8 () LP.serialize32_u8 () <: LP.serializer32 (serialize_cases x))
+  | Case_B -> (serialize32_case_B <: LP.serializer32 (serialize_cases x))
 
 let serialize_t : LP.serializer parse_t =
   LP.serialize_sum t_sum LP.serialize_u8 serialize_cases
 
 inline_for_extraction
-let serialize32_case_A
-: LP.serializer32 (serialize_case_A)
-= 
-      [@inline_let]
-      let _ = synth_case_A_inj () in
-      [@inline_let]
-      let _ = synth_case_A_inv_correct () in
-      LP.serialize32_synth
-        _
-        synth_case_A
-        _
-        (LP.serialize32_nondep_then #_ #_ #LP.parse_u8 #LP.serialize_u8 LP.serialize32_u8 () #_ #_ #LP.parse_u8 #LP.serialize_u8 LP.serialize32_u8 ())
-        synth_case_A_inv
-        (fun x -> synth_case_A_inv x)
-        ()
+let serialize32_key : LP.serializer32 (LP.serialize_enum_key _ LP.serialize_u8 case_enum) =
+  _ by (LP.serialize32_enum_key_gen_tac LP.serialize32_u8 case_enum ())
 
-inline_for_extraction
-let serialize32_case_B
-: LP.serializer32 (serialize_case_B)
-=
-      [@inline_let]
-      let _ = synth_case_B_inj () in
-      [@inline_let]
-      let _ = synth_case_B_inv_correct () in
-      LP.serialize32_synth
-        (LP.parse_filter LP.parse_u16 parse_case_B_filter)
-        synth_case_B
-        (LP.serialize_filter LP.serialize_u16 parse_case_B_filter)
-        (LP.serialize32_filter LP.serialize32_u16 parse_case_B_filter)
-        synth_case_B_inv
-        (fun x -> synth_case_B_inv x)
-        ()
-
-inline_for_extraction
-let serialize32_cases'
-  (x: LP.sum_key t_sum)
-: Tot (LP.serializer32 (serialize_cases' x))
-= match x with
-  | Case_A -> serialize32_case_A
-  | Case_B -> serialize32_case_B
-
-inline_for_extraction
-let serialize32_cases
-: (x: LP.sum_key t_sum) ->
-  Tot (LP.serializer32 (serialize_cases x))
-= LP.serialize32_sum_cases
-    t_sum
-    parse_cases'
-    serialize_cases'
-    serialize32_cases'
-
-inline_for_extraction
 let serialize32_t : LP.serializer32 serialize_t =
-  [@inline_let]
-  let (u: unit {
-    LP.serializer32_sum_gen_precond
-      LP.parse_u8_kind
-      (LP.weaken_parse_cases_kind t_sum parse_cases')
-  }) = assert_norm (
-    LP.serializer32_sum_gen_precond
-      LP.parse_u8_kind
-      (LP.weaken_parse_cases_kind t_sum parse_cases')
-  )
-  in
-  FStar.Tactics.synth_by_tactic (LP.serialize32_sum_tac
+  assert_norm (LP.serializer32_sum_gen_precond (LP.get_parser_kind LP.parse_u8) (LP.weaken_parse_cases_kind t_sum parse_cases));
+  LP.serialize32_sum
     t_sum
-    #_
-    #LP.serialize_u8
-    LP.serialize32_u8
+    _
+    serialize32_key
+    _
     serialize32_cases
-    u
-    (fun x -> cases_of_t x)
-    serialize_t
+    (_ by (LP.dep_enum_destr_tac ()))
     ()
-  )
 
 let parse_t_array_precond () : Lemma
   (LP.fldata_array_precond
