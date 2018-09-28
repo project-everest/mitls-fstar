@@ -114,13 +114,9 @@ let parse32_known_cases
   | Case_A -> LP.parse32_u8 `LP.parse32_nondep_then` LP.parse32_u8
   | Case_B -> parse32_cases_B
 
-inline_for_extraction
-let destr_parse32 : LP.maybe_enum_destr_t (option (t * FStar.UInt32.t)) case_enum =
-  _ by (LP.maybe_enum_destr_t_tac ())
-
 let parse32_t
 : LP.parser32 parse_t
-= LP.parse32_dsum t_sum LP.parse32_u8 parse_known_cases parse32_known_cases LP.parse32_u16 destr_parse32
+= LP.parse32_dsum t_sum LP.parse32_u8 parse_known_cases parse32_known_cases LP.parse32_u16 (_ by (LP.maybe_enum_destr_t_tac ()))
 
 (*
 inline_for_extraction
