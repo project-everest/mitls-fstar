@@ -101,6 +101,27 @@ let parse_known_cases
 let parse_t : LP.parser _ t =
   LP.parse_dsum t_sum LP.parse_u8 parse_known_cases LP.parse_u16
 
+inline_for_extraction
+let parse32_cases_B
+: (LP.parser32 parse_case_B)
+= LP.parse32_filter LP.parse32_u16 parse_case_B_filter (fun x -> U16.gt x 0us)
+
+inline_for_extraction
+let parse32_known_cases
+  (x: LP.dsum_known_key t_sum)
+: Tot (LP.parser32 (dsnd (parse_known_cases x)))
+= match x with
+  | Case_A -> LP.parse32_u8 `LP.parse32_nondep_then` LP.parse32_u8
+  | Case_B -> parse32_cases_B
+
+inline_for_extraction
+let destr_parse32 : LP.maybe_enum_destr_t (option (t * FStar.UInt32.t)) case_enum =
+  _ by (LP.maybe_enum_destr_t_tac ())
+
+let parse32_t
+: LP.parser32 parse_t
+= LP.parse32_dsum t_sum LP.parse32_u8 parse_known_cases parse32_known_cases LP.parse32_u16 destr_parse32
+
 (*
 inline_for_extraction
 let parse32_cases_A

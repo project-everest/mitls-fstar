@@ -383,7 +383,8 @@ let serialize_maybe_total_enum_key
 : Tot (serializer (parse_maybe_total_enum_key p e))
 = serialize_synth p (maybe_total_enum_key_of_repr e) s (repr_of_maybe_total_enum_key e) ()
 
-let weaken_maybe_enum_key
+inline_for_extraction
+let maybe_enum_key_of_total
   (#key #repr: eqtype)
   (e: total_enum key repr)
   (k: maybe_total_enum_key e)
@@ -391,3 +392,33 @@ let weaken_maybe_enum_key
 = match k with
   | TotalKnown ek -> Known (ek <: key)
   | TotalUnknown r -> Unknown r
+
+inline_for_extraction
+let total_of_maybe_enum_key
+  (#key #repr: eqtype)
+  (e: total_enum key repr)
+  (k: maybe_enum_key e)
+: Tot (maybe_total_enum_key e)
+= match k with
+  | Known ek -> TotalKnown (ek <: key)
+  | Unknown r -> TotalUnknown r
+
+let maybe_total_enum_key_of_repr_eq
+  (#key #repr: eqtype)
+  (e: total_enum key repr)
+  (r: repr)
+: Lemma
+  (maybe_total_enum_key_of_repr e r == total_of_maybe_enum_key e (maybe_enum_key_of_repr e r))
+= ()
+
+let parse_maybe_total_enum_key_eq
+  (#k: parser_kind)
+  (#key #repr: eqtype)
+  (p: parser k repr)
+  (e: total_enum key repr)
+  (input: bytes)
+: Lemma
+  (parse (parse_maybe_total_enum_key p e) input == (parse (parse_maybe_enum_key p e `parse_synth` total_of_maybe_enum_key e) input))
+= parse_synth_eq p (maybe_total_enum_key_of_repr e) input;
+  parse_synth_eq (parse_maybe_enum_key p e) (total_of_maybe_enum_key e) input;
+  parse_synth_eq p (maybe_enum_key_of_repr e) input

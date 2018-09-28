@@ -665,7 +665,6 @@ let parse_dsum
 : Tot (parser (parse_dsum_kind kt t f k) (dsum_type t))
 = parse_dsum' t p (parse_dsum_cases t f g)
 
-(*
 #set-options "--z3rlimit 16"
 
 let parse_dsum_eq'
@@ -680,16 +679,16 @@ let parse_dsum_eq'
   (parse (parse_dsum t p f g) input == (match parse p input with
   | None -> None
   | Some (k', consumed_k) ->
-    let k = maybe_enum_key_of_repr (dsum_enum t) k' in
+    let k = maybe_total_enum_key_of_repr (dsum_enum t) k' in
     let input_k = Seq.slice input consumed_k (Seq.length input) in
     begin match k with
-    | Known k ->
+    | TotalKnown k ->
       synth_dsum_known_case_injective t k;
       begin match parse (dsnd (f k) `parse_synth` synth_dsum_known_case t k) input_k with
       | None -> None
       | Some (x, consumed_x) -> Some ((x <: dsum_type t), consumed_k + consumed_x)
       end
-    | Unknown k ->
+    | TotalUnknown k ->
       synth_dsum_unknown_case_injective t k;
       begin match parse (g `parse_synth` synth_dsum_unknown_case t k) input_k with
       | None -> None
@@ -697,8 +696,8 @@ let parse_dsum_eq'
       end
     end
   ))
-= parse_tagged_union_eq #(kt) #(dsum_key t) (parse_maybe_enum_key p (dsum_enum t)) #(dsum_type t) (dsum_tag_of_data t) (parse_dsum_cases t f g) input;
-  parse_synth_eq p (maybe_enum_key_of_repr (dsum_enum t)) input
+= parse_tagged_union_eq #(kt) #(dsum_key t) (parse_maybe_total_enum_key p (dsum_enum t)) #(dsum_type t) (dsum_tag_of_data t) (parse_dsum_cases t f g) input;
+  parse_synth_eq p (maybe_total_enum_key_of_repr (dsum_enum t)) input
 
 let parse_dsum_eq
   (#kt: parser_kind)
@@ -709,40 +708,39 @@ let parse_dsum_eq
   (g: parser k' (dsum_type_of_unknown_tag t))
   (input: bytes)
 : Lemma
-  (parse (parse_dsum t p f g) input == (match parse (parse_maybe_enum_key p (dsum_enum t)) input with
+  (parse (parse_dsum t p f g) input == (match parse (parse_maybe_total_enum_key p (dsum_enum t)) input with
   | None -> None
   | Some (k, consumed_k) ->
     let input_k = Seq.slice input consumed_k (Seq.length input) in
     begin match k with
-    | Known k ->
+    | TotalKnown k ->
       begin match parse (dsnd (f k)) input_k with
       | None -> None
       | Some (x, consumed_x) -> Some ((synth_dsum_known_case t k x <: dsum_type t), consumed_k + consumed_x)
       end
-    | Unknown k ->
+    | TotalUnknown k ->
       begin match parse g input_k with
       | None -> None
       | Some (x, consumed_x) -> Some ((synth_dsum_unknown_case t k x <: dsum_type t), consumed_k + consumed_x)
       end
     end
   ))
-= parse_tagged_union_eq #(kt) #(dsum_key t) (parse_maybe_enum_key p (dsum_enum t)) #(dsum_type t) (dsum_tag_of_data t) (parse_dsum_cases t f g) input;
-  let j = parse (parse_maybe_enum_key p (dsum_enum t)) input in
+= parse_tagged_union_eq #(kt) #(dsum_key t) (parse_maybe_total_enum_key p (dsum_enum t)) #(dsum_type t) (dsum_tag_of_data t) (parse_dsum_cases t f g) input;
+  let j = parse (parse_maybe_total_enum_key p (dsum_enum t)) input in
   match j with
   | None -> ()
   | Some (k, consumed_k) ->
     let input_k = Seq.slice input consumed_k (Seq.length input) in
     begin match k with
-    | Known k ->
+    | TotalKnown k ->
       synth_dsum_known_case_injective t k;
       parse_synth_eq (weaken (weaken_parse_dsum_cases_kind t f k') (dsnd (f k))) (synth_dsum_known_case t k) input_k
-    | Unknown k ->
+    | TotalUnknown k ->
       synth_dsum_unknown_case_injective t k;
       parse_synth_eq (weaken (weaken_parse_dsum_cases_kind t f k') g) (synth_dsum_unknown_case t k) input_k
     end
 
 #reset-options
-*)
 
 inline_for_extraction
 let synth_dsum_known_case_recip
@@ -890,7 +888,6 @@ let make_dsum
   )
 = DSum key repr e data tag_of_data
 
-(*
 #set-options "--z3rlimit 16"
 
 let serialize_dsum_eq
@@ -909,15 +906,14 @@ let serialize_dsum_eq
   (ensures (
     serialize (serialize_dsum s st f sr g sg) x == (
     let tg = dsum_tag_of_data s x in
-    serialize (serialize_maybe_enum_key _ st (dsum_enum s)) tg `Seq.append` (
+    serialize (serialize_maybe_total_enum_key _ st (dsum_enum s)) tg `Seq.append` (
     match tg with
-    | Known k -> serialize (sr k) (synth_dsum_known_case_recip s k x)
-    | Unknown k -> serialize sg (synth_dsum_unknown_case_recip s k x)
+    | TotalKnown k -> serialize (sr k) (synth_dsum_known_case_recip s k x)
+    | TotalUnknown k -> serialize sg (synth_dsum_unknown_case_recip s k x)
   ))))
 = ()
 
 #reset-options
-*)
 
 (*
 let serialize_dsum_upd
