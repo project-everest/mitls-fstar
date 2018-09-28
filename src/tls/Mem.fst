@@ -72,6 +72,7 @@ module MDM = FStar.Monotonic.DependentMap
 
 /// Global, ideal memory
 
+inline_for_extraction 
 let model = Flags.model 
 
 // disjointness of regions; otherwise use LowStar.Buffer.loc_disjoint 

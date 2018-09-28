@@ -33,14 +33,14 @@ type kdfa = Hashing.Spec.alg
 ///
 /// HKDF defines an injective function from label * context to bytes, to be used as KDF indexes.
 ///
-noeq type context =
+type context =
   | Extract: context // TLS extractions have no label and no context; we may separate Extract0 and Extract2
   | ExtractDH: v:id_dhe -> context // This is Extract1 (the middle extraction)
   | Expand: context // TLS expansion with default hash value
   | ExpandLog: // TLS expansion using hash of the handshake log
-    info: HandshakeLog.hs_transcript (* ghost, abstract summary of the transcript *) ->
+    info: TLSInfo.logInfo (* ghost, abstract summary of the transcript *) ->
     hv: Hashing.Spec.anyTag (* requires stratification *) -> context
-// 18-09-25 should info be HandshakeLog.transcript? 
+// 18-09-25 should info be HandshakeLog.hs_transcript? 
 
 
 /// Underneath, HKDF takes a "context" and a required length, with
@@ -52,7 +52,7 @@ type id_psk = nat // external application PSKs only; we may also set the usage's
 // The `[@ Gc]` attribute instructs Kremlin to translate the `pre_id` field as a pointer,
 // otherwise it would generate an invalid type definition.
 [@ Gc]
-noeq type pre_id =
+type pre_id =
   | Preshared:
       a: kdfa (* fixing the hash algorithm *) ->
       id_psk  ->
@@ -71,7 +71,7 @@ let rec ha_of_id = function
 
 // placeholders
 assume val idh_of_log: TLSInfo.logInfo -> id_dhe
-assume val summary: bytes -> TLSInfo.logInfo
+assume val summary: Bytes.bytes -> TLSInfo.logInfo
 
 // concrete transcript digest
 let digest_info (a:kdfa) (info:TLSInfo.logInfo) (hv: Hashing.Spec.anyTag) =
@@ -155,6 +155,7 @@ assume val bind_squash_st:
   $f:(a -> ST (squash b) (requires (fun h0 -> pre h0)) (ensures (fun h0 _ h1 -> h0 == h1))) ->
   ST (squash b) (requires (fun h0 -> pre h0)) (ensures (fun h0 _ h1 -> h0 == h1))
 
+#set-options "--z3rlimit 100"
 inline_for_extraction
 private let lemma_honest_or_corrupt (i:regid)
   :ST unit (requires (fun _ -> True)) (ensures (fun h0 _ h1 -> h0 == h1 /\ (honest i \/ corrupt i)))
@@ -216,6 +217,7 @@ let lemma_honest_corrupt (i:regid)
   : Lemma (honest i <==> ~(corrupt i)) =
   admit()
 
+#set-options "--z3rlimit 100" 
 inline_for_extraction
 let lemma_corrupt_invariant (i:regid) (lbl:label)
   (ctx:context {wellformed_id (Derive i lbl ctx) /\ registered (Derive i lbl ctx)})
@@ -323,5 +325,5 @@ let register_derive (i:id{registered i}) (l:label) (c:context{wellformed_id (Der
 // sharing.
 
 noextract
-let ii: ipkg = // (#info:Type0) (get_info: id -> info) =
-  Idx id registered honest get_honesty
+let ii: Pkg.ipkg = // (#info:Type0) (get_info: id -> info) =
+  Pkg.Idx id registered honest get_honesty
