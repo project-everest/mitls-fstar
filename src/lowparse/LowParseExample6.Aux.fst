@@ -71,11 +71,11 @@ let synth_unknown_case
 inline_for_extraction
 let synth_case_recip
   (x: t)
-: Tot (LP.dsum_type_of_tag case_enum type_of_known_case U16.t (cases_of_t x))
+: Tot (LP.dsum_type_of_tag' case_enum type_of_known_case U16.t (cases_of_t x))
 = match x with
-  | A y -> (y <: LP.dsum_type_of_tag case_enum type_of_known_case U16.t (cases_of_t x))
-  | B y -> (y <: LP.dsum_type_of_tag case_enum type_of_known_case U16.t (cases_of_t x))
-  | C _ y ->  (y <: LP.dsum_type_of_tag case_enum type_of_known_case U16.t (cases_of_t x))
+  | A y -> (y <: LP.dsum_type_of_tag' case_enum type_of_known_case U16.t (cases_of_t x))
+  | B y -> (y <: LP.dsum_type_of_tag' case_enum type_of_known_case U16.t (cases_of_t x))
+  | C _ y ->  (y <: LP.dsum_type_of_tag' case_enum type_of_known_case U16.t (cases_of_t x))
 
 inline_for_extraction
 let t_sum : LP.dsum
