@@ -66,11 +66,12 @@ let synth_case
 
 inline_for_extraction
 let synth_case_recip
-  (x: t)
-: Tot (type_of_case (cases_of_t x))
-= match x with
-  | A y -> (y <: type_of_case (cases_of_t x))
-  | B y -> (y <: type_of_case (cases_of_t x))
+  (k: cases)
+  (x: LP.refine_with_tag cases_of_t k)
+: Tot (type_of_case k)
+= match k with
+  | Case_A -> (match x with A y -> (y <: type_of_case k))
+  | Case_B -> (match x with B y -> (y <: type_of_case k))
 
 inline_for_extraction
 let t_sum : LP.sum

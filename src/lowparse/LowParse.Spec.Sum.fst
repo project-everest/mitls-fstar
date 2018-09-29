@@ -135,6 +135,19 @@ let serialize_tagged_union
 = bare_serialize_tagged_union_correct st tag_of_data s;
   bare_serialize_tagged_union st tag_of_data s
 
+
+let synth_case_recip'
+    (#key: eqtype)
+    (#repr: eqtype)
+    (e: enum key repr)
+    (#data: Type0)
+    (tag_of_data: (data -> Tot (enum_key e)))
+    (type_of_tag: (enum_key e -> Tot Type0))
+    (synth_case_recip: ((k: enum_key e) -> (x: refine_with_tag tag_of_data k) -> Tot (type_of_tag k)))
+    (x: data)
+: GTot (type_of_tag (tag_of_data x))
+= synth_case_recip (tag_of_data x) x
+
 noeq
 type sum =
 | Sum:
@@ -145,17 +158,17 @@ type sum =
     (tag_of_data: (data -> Tot (enum_key e))) ->
     (type_of_tag: (enum_key e -> Tot Type0)) ->
     (synth_case: ((x: enum_key e) -> (y: type_of_tag x) -> Tot (refine_with_tag tag_of_data x))) ->
-    (synth_case_recip: ((x: data) -> Tot (type_of_tag (tag_of_data x)))) ->
+    (synth_case_recip: ((k: enum_key e) -> (x: refine_with_tag tag_of_data k) -> Tot (type_of_tag k))) ->
     (synth_case_recip_synth_case: (
       (x: enum_key e) ->
       (y: type_of_tag x) ->
       Lemma
-      (synth_case_recip (synth_case x y) == y)
+      (synth_case_recip' e tag_of_data type_of_tag synth_case_recip (synth_case x y) == y)
     )) ->
     (synth_case_synth_case_recip: (
       (x: data) ->
       Lemma
-      (synth_case (tag_of_data x) (synth_case_recip x) == x)
+      (synth_case (tag_of_data x) (synth_case_recip' e tag_of_data type_of_tag synth_case_recip x) == x)
     )) ->
     sum
 
@@ -311,7 +324,7 @@ let parse_sum_eq
 inline_for_extraction
 let synth_sum_case_recip (s: sum) (k: sum_key s) (x: sum_cases s k) : Tot (sum_type_of_tag s k) =
   match s with (Sum _ _ _ _ _ _ _ synth_case_recip _ _) ->
-  synth_case_recip x
+  synth_case_recip k x
 
 let synth_sum_case_inverse (s: sum) (k: sum_key s) : Lemma
   (synth_inverse (synth_sum_case s k) (synth_sum_case_recip s k))
@@ -402,17 +415,17 @@ let make_sum
 : Tot (
     (type_of_tag: (enum_key e -> Tot Type0)) ->
     (synth_case: ((x: enum_key e) -> (y: type_of_tag x) -> Tot (refine_with_tag tag_of_data x))) ->
-    (synth_case_recip: ((x: data) -> Tot (type_of_tag (tag_of_data x)))) ->
+    (synth_case_recip: ((k: enum_key e) -> (x: refine_with_tag tag_of_data k) -> Tot (type_of_tag k))) ->
     (synth_case_recip_synth_case: (
       (x: enum_key e) ->
       (y: type_of_tag x) ->
       Lemma
-      (synth_case_recip (synth_case x y) == y)
+      (synth_case_recip' e tag_of_data type_of_tag synth_case_recip (synth_case x y) == y)
     )) ->
     (synth_case_synth_case_recip: (
       (x: data) ->
       Lemma
-      (synth_case (tag_of_data x) (synth_case_recip x) == x)
+      (synth_case (tag_of_data x) (synth_case_recip' e tag_of_data type_of_tag synth_case_recip x) == x)
     )) ->
   Tot sum)
 = Sum key repr e data tag_of_data
