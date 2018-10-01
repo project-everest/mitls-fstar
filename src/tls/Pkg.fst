@@ -267,6 +267,7 @@ unfold type mem_package (#ip:ipkg) (p:local_pkg ip) =
 
 #set-options "--z3rlimit 100 --admit_smt_queries true"
 //unfold
+inline_for_extraction
 noextract
 let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
   let footprint_extend (s:rset) (i:ip.t{ip.registered i}) (k:p.key i) =
@@ -414,6 +415,8 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
     p.post post_framing
     create p.coerceT coerce)
 
+inline_for_extraction
+noextract 
 let memoization_ST (#ip:ipkg) (p:local_pkg ip)
   : ST (pkg ip)
   (requires fun h0 -> True)
@@ -427,6 +430,7 @@ let memoization_ST (#ip:ipkg) (p:local_pkg ip)
   let h0 = get() in
   let mtable: mem_table p.key = mem_alloc #(i:ip.t{ip.registered i}) p.key in
   let h1 = get() in
+  [@inline_let]
   let q = memoization #ip p mtable in
   //assert(q == memoization #ip p mtable); // fails when unfolding memoization AR: 12/05: this is no longer needed per the new inlining behavior
   // assert_norm(q == memoization #ip p mtable);// also fails, with squashing error
