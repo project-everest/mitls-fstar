@@ -12,7 +12,7 @@ type cases : eqtype =
   | Case_B
 
 inline_for_extraction
-let case_enum : LP.total_enum cases U8.t =
+let case_enum : LP.enum cases U8.t =
   [@inline_let]
   let e : list (cases * U8.t) = [
     Case_A, 18uy;
@@ -38,11 +38,11 @@ type t =
 inline_for_extraction
 let cases_of_t
   (x: t)
-: Tot (LP.maybe_total_enum_key case_enum)
+: Tot (LP.maybe_enum_key case_enum)
 = match x with
-  | A _ -> LP.TotalKnown Case_A
-  | B _ -> LP.TotalKnown Case_B
-  | C x _ -> LP.TotalUnknown x
+  | A _ -> LP.Known Case_A
+  | B _ -> LP.Known Case_B
+  | C x _ -> LP.Unknown x
 
 inline_for_extraction
 let type_of_known_case
@@ -54,24 +54,24 @@ let type_of_known_case
 
 inline_for_extraction
 let synth_case
-  (x: LP.maybe_total_enum_key case_enum)
+  (x: LP.maybe_enum_key case_enum)
   (y: LP.dsum_type_of_tag' case_enum type_of_known_case U16.t x)
 : Tot (LP.refine_with_tag cases_of_t x)
 = match x with
-  | LP.TotalKnown Case_A -> (A y <: t)
-  | LP.TotalKnown Case_B -> (B y <: t)
-  | LP.TotalUnknown x -> (C x y <: t)
+  | LP.Known Case_A -> (A y <: t)
+  | LP.Known Case_B -> (B y <: t)
+  | LP.Unknown x -> (C x y <: t)
 
 inline_for_extraction
 let synth_case_recip
-  (k: LP.maybe_total_enum_key case_enum)
+  (k: LP.maybe_enum_key case_enum)
   (x: LP.refine_with_tag cases_of_t k)
 : Tot (LP.dsum_type_of_tag' case_enum type_of_known_case U16.t k)
 = match k with
-  | LP.TotalKnown Case_A ->
+  | LP.Known Case_A ->
     (match x with A y -> (y <: LP.dsum_type_of_tag' case_enum type_of_known_case U16.t k))
-  | LP.TotalKnown Case_B -> (match x with B y -> (y <: LP.dsum_type_of_tag' case_enum type_of_known_case U16.t k))
-  | LP.TotalUnknown _ -> (match x with C _ y ->  (y <: LP.dsum_type_of_tag' case_enum type_of_known_case U16.t k))
+  | LP.Known Case_B -> (match x with B y -> (y <: LP.dsum_type_of_tag' case_enum type_of_known_case U16.t k))
+  | LP.Unknown _ -> (match x with C _ y ->  (y <: LP.dsum_type_of_tag' case_enum type_of_known_case U16.t k))
 
 inline_for_extraction
 let t_sum : LP.dsum
