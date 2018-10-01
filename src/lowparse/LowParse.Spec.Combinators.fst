@@ -1009,6 +1009,16 @@ let synth_inverse_intro
   (ensures (synth_inverse f2 g1))
 = ()
 
+let synth_inverse_synth_injective
+  (#t1: Type0)
+  (#t2: Type0)
+  (f: (t1 -> GTot t2))
+  (g: (t2 -> GTot t1))
+: Lemma
+  (requires (synth_inverse g f))
+  (ensures (synth_injective f))
+= ()
+
 let serialize_synth
   (#k: parser_kind)
   (#t1: Type0)

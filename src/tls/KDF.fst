@@ -22,7 +22,7 @@ module HS = FStar.HyperStack
 let sample (len:UInt32.t): ST (lbytes32 len)
     (requires fun h0 -> True)
     (ensures fun h0 r h1 -> h0 == h1)
-  = assume false; Random.sample len
+  = assume false; Random.sample32 len
 
 type idealKDF d = b2t (Flags.flag_KDF d)
 assume val lemma_KDF_depth: d:nat{d>0} -> Lemma (idealKDF d ==> idealKDF (d-1))
@@ -232,12 +232,14 @@ val coerce:
     /\ fresh_regions (kdf_footprint k) h0 h1
     /\ kdf_post a k h1 /\ local_kdf_invariant k h1)
 
+#reset-options "--z3rlimit 100" 
 let coerce d u i a repr =
   let k = corrupt_secret #d #u #i repr in
   let h1 = get() in
   // WIP stronger packaging
   (if model then assume(local_kdf_invariant k h1));
   k
+
 
 /// NS:
 /// MDM.alloc is a stateful function with all implicit arguments
@@ -304,6 +306,8 @@ let create d u i a =
 /// level of key derivation seems unavoidable: we need to idealize
 /// parents before childrens.)
 
+
+#reset-options "--admit_smt_queries true"
 noextract
 let local_kdf_pkg (d:nat) (u:usage d) : local_pkg ii =
   (LocalPkg
@@ -320,6 +324,7 @@ let local_kdf_pkg (d:nat) (u:usage d) : local_pkg ii =
     (create d u)
     (coerceT d u)
     (coerce d u))
+#reset-options ""
 
 let pp (d:nat) (u:usage d) : ST (pkg ii)
   (requires fun h0 -> True)
@@ -453,6 +458,11 @@ type kdf_subtree (d:nat) = t:tree (idealKDF d){
   p == memoization (local_kdf_pkg d u) p.define_table)}
 
 let u_of_t (#d:nat) (t:kdf_subtree d) : usage d = Node?.children t
+
+
+#reset-options "--admit_smt_queries true" //18-09-24  to get going in other files
+
+
 let kdf_dt (#d:nat) (t:kdf_subtree d) : mem_table (secret d (u_of_t t)) = Pkg?.define_table (Node?.node t)
 
 /// The well-formedness condition on the derived label (opaque from
@@ -525,7 +535,8 @@ let derive #d #t #i k a lbl ctx a' =
    end
   else
    begin
-    let raw = HKDF.expand #(a.ha) (secret_corrupt k) (FStar.Bytes.bytes_of_string lbl) (Pkg?.len pkg a') in
+    let dlen = Pkg?.len pkg #id a' in 
+    let raw = HKDF.expand #(a.ha) (secret_corrupt k) (FStar.Bytes.bytes_of_string lbl) dlen in
     let h2 = get() in
     assume(modifies_none h1 h2); // FIXME HKDF framing
     assume(tree_invariant t h2);

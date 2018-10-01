@@ -338,19 +338,22 @@
         "constructor_distinct_FStar.Pervasives.Native.None",
         "disc_equation_FStar.Pervasives.Native.Some",
         "equation_FStar.UInt32.n",
-        "equation_LowParse.Spec.Base.serializer_correct",
         "equation_LowParse.Spec.SeqBytes.parse_bounded_seq_vlbytes_",
         "equation_LowParse.Spec.SeqBytes.parse_seq_all_bytes_kind",
         "equation_Prims.nat", "function_token_typing_FStar.UInt32.n",
-        "int_inversion",
+        "int_inversion", "primitive_Prims.op_GreaterThan",
+        "primitive_Prims.op_LessThan",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_FStar.Pervasives.Native.None_a",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "refinement_interpretation_LowParse.Spec.VLData_Tm_refine_aaff7da132eaf31ae1230c17792231e2",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "87fde3ba13fcf8c50d589fa2729a3c13"
+      "173e62c7faace77ed44d10cbe56dda4a"
     ],
     [
       "LowParse.Spec.SeqBytes.serialize_bounded_seq_vlbytes",
@@ -366,6 +369,7 @@
         "equation_LowParse.Bytes.bytes",
         "equation_LowParse.Spec.Combinators.synth_injective",
         "equation_LowParse.Spec.Combinators.synth_inverse",
+        "equation_LowParse.Spec.SeqBytes.parse_bounded_seq_vlbytes",
         "equation_LowParse.Spec.SeqBytes.parse_bounded_seq_vlbytes_pred",
         "equation_LowParse.Spec.SeqBytes.parse_seq_all_bytes",
         "equation_LowParse.Spec.SeqBytes.parse_seq_all_bytes_kind",
@@ -385,7 +389,7 @@
         "token_correspondence_LowParse.Spec.SeqBytes.synth_bounded_seq_vlbytes"
       ],
       0,
-      "543b04b3d1b49321cdf49381e72159c1"
+      "4773f3ab37783102be5600573d892ebd"
     ],
     [
       "LowParse.Spec.SeqBytes.serialize_bounded_seq_vlbytes_upd",
@@ -432,7 +436,7 @@
         "unit_typing"
       ],
       0,
-      "412c8b223805574373c3e014af538ea4"
+      "050a4fba6a2cec11b05910ebb23ec2ab"
     ],
     [
       "LowParse.Spec.SeqBytes.serialize_bounded_seq_vlbytes_upd_bw",
@@ -483,7 +487,7 @@
         "unit_typing"
       ],
       0,
-      "9fe1d2a4aa4ab14c42fda6942f063bc4"
+      "e0d2a0421b8718f3113de8cd211cd260"
     ]
   ]
 ]
