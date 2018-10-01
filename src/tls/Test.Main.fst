@@ -28,11 +28,9 @@ let rec iter (xs:list (string * (unit -> St C.exit_code))) : St unit =
 let handshake () =
   Test.Handshake.main "CAFile.pem" "server-ecdsa.crt" "server-ecdsa.key" ()
 
-(*
 let iv () = 
   IV.test(); 
   C.EXIT_SUCCESS
-*)
 
 let main (): St C.exit_code =
   ignore (FStar.Test.dummy ());
