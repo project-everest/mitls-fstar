@@ -50,6 +50,7 @@ let main (): St C.exit_code =
       "CommonDH", CommonDH.main;
       // 2018.04.25: Enable once the regression is fixed
       "Handshake", handshake;
+      "IV", iv;
       (* ADD NEW TESTS HERE *)
     ];
     C.EXIT_SUCCESS

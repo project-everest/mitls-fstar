@@ -46,6 +46,7 @@ let coerceT_raw (ip:ipkg) (len_of_i:ip.t -> keylen)
   (len:keylen{len == len_of_i i}) (r: Bytes.lbytes32 len):
   GTot (raw ip len_of_i i) = r
 
+inline_for_extraction
 let coerce_raw (ip: ipkg) (len_of_i: ip.t -> keylen)
   (i: ip.t {ip.registered i /\ (idealRaw ==> ~(ip.honest i))})
   (len:keylen {len == len_of_i i}) (r: Bytes.lbytes32 len):
@@ -54,6 +55,7 @@ let coerce_raw (ip: ipkg) (len_of_i: ip.t -> keylen)
   (ensures fun h0 k h1 -> k == coerceT_raw ip len_of_i i len r /\ modifies_none h0 h1)
   = r
 
+noextract 
 //inline_for_extraction
 unfold
 let local_raw_pkg (ip:ipkg) (len_of_i:ip.t -> keylen) : local_pkg ip =
@@ -88,21 +90,34 @@ val discard: bool -> ST unit
   (requires (fun _ -> True))  (ensures (fun h0 _ h1 -> h0 == h1))
 let discard _ = ()
 let print s : ST unit (requires fun h0 -> True) (ensures fun h0 _ h1 -> h0 == h1)
-  = discard (IO.debug_print_string ("NGO| "^s^"\n"))
+  = discard (IO.debug_print_string ("IV | "^s^"\n"))
+
+private type id = n:nat {n < 256} 
+
+inline_for_extraction
+noextract 
+private let ip : ipkg = Pkg.Idx id (fun _ -> True) (fun _ -> True) (fun _ -> true)
+
+private let len_of_i (i:id): keylen = UInt32.uint_to_t i 
 
 let test() : ST unit 
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> True)
   = 
-  let id = n:nat {n < 256} in 
-  let ip : ipkg = Pkg.Idx id (fun _ -> True) (fun _ -> True) (fun _ -> true) in
-  let len_of_i (i:id): keylen = UInt32.uint_to_t i in 
-  let p = local_raw_pkg ip len_of_i in 
-  // let table = mem_alloc (key ip) in 
-  // let q = Pkg.memoization p table in 
   assume (model == false);
   let kl : keylen = 12ul in
   let k = Bytes.create 12ul 0uy in
-  let v0 = p.coerce 12 kl k in 
+  print (Bytes.hex_of_bytes k);
+
+  [@inline_let]
+  let p = local_raw_pkg ip len_of_i in 
+//let coerce = iv_coerce p in  
+//let v0 = p.coerce 12 kl k in 
+  let v0 = coerce_raw ip len_of_i 12 kl k in 
   print (Bytes.hex_of_bytes v0);
+
+  let table = mem_alloc (fun n -> Bytes.lbytes n) in 
+  let q = Pkg.memoization p table in
+//let v1 = Pkg.Pkg?.coerce q 12 kl k in 
+//print (Bytes.hex_of_bytes v0);
   ()

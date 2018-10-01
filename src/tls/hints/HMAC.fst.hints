@@ -14,7 +14,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "101b6efd54e08563ba50d853d127270a"
+      "a6fb9f6351f10eb088d83c58ed0d56a7"
     ],
     [
       "HMAC.hmac",
@@ -69,13 +69,14 @@
         "equation_FStar.Monotonic.HyperStack.poppable",
         "equation_FStar.Monotonic.HyperStack.popped",
         "equation_FStar.Monotonic.HyperStack.remove_elt",
-        "equation_FStar.UInt.fits", "equation_FStar.UInt.lte",
-        "equation_FStar.UInt.max_int", "equation_FStar.UInt.min_int",
-        "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
-        "equation_FStar.UInt32.lte", "equation_FStar.UInt32.n",
-        "equation_FStar.UInt64.n", "equation_HMAC.ha",
-        "equation_Hashing.Spec.hkey", "equation_Hashing.Spec.hmac",
-        "equation_Hashing.Spec.macable",
+        "equation_FStar.Set.eqtype", "equation_FStar.UInt.fits",
+        "equation_FStar.UInt.lte", "equation_FStar.UInt.max_int",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "equation_FStar.UInt.uint_t", "equation_FStar.UInt32.lte",
+        "equation_FStar.UInt32.n", "equation_FStar.UInt64.n",
+        "equation_HMAC.ha", "equation_Hashing.Spec.hkey",
+        "equation_Hashing.Spec.hmac", "equation_Hashing.Spec.macable",
+        "equation_LowStar.Buffer.buffer", "equation_LowStar.Buffer.null",
         "equation_LowStar.Monotonic.Buffer.disjoint",
         "equation_Mem.disjoint", "equation_Mem.is_tls_rgn",
         "equation_Mem.rgn", "equation_Mem.tls_define_region",
@@ -122,7 +123,6 @@
         "lemma_LowStar.Monotonic.Buffer.address_liveness_insensitive_buffer",
         "lemma_LowStar.Monotonic.Buffer.fresh_frame_loc_not_unused_in_disjoint",
         "lemma_LowStar.Monotonic.Buffer.fresh_frame_modifies_inert",
-        "lemma_LowStar.Monotonic.Buffer.lemma_live_equal_mem_domains",
         "lemma_LowStar.Monotonic.Buffer.length_as_seq",
         "lemma_LowStar.Monotonic.Buffer.length_null_2",
         "lemma_LowStar.Monotonic.Buffer.live_is_null",
@@ -136,8 +136,7 @@
         "lemma_LowStar.Monotonic.Buffer.loc_includes_none",
         "lemma_LowStar.Monotonic.Buffer.loc_includes_refl",
         "lemma_LowStar.Monotonic.Buffer.loc_includes_region_buffer",
-        "lemma_LowStar.Monotonic.Buffer.loc_includes_region_buffer_",
-        "lemma_LowStar.Monotonic.Buffer.loc_includes_region_region_",
+        "lemma_LowStar.Monotonic.Buffer.loc_includes_trans_backwards",
         "lemma_LowStar.Monotonic.Buffer.loc_includes_union_l_buffer",
         "lemma_LowStar.Monotonic.Buffer.loc_includes_union_r_",
         "lemma_LowStar.Monotonic.Buffer.loc_union_comm",
@@ -152,9 +151,10 @@
         "lemma_LowStar.Monotonic.Buffer.popped_modifies_inert",
         "lemma_LowStar.Monotonic.Buffer.unused_in_loc_unused_in",
         "lemma_LowStar.Monotonic.Buffer.unused_in_not_unused_in_disjoint_2",
-        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_Equality",
-        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Negation",
-        "primitive_Prims.op_Subtraction", "primitive_Prims.op_disEquality",
+        "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Negation", "primitive_Prims.op_Subtraction",
+        "primitive_Prims.op_disEquality",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_FStar.Integers.Unsigned__0",
@@ -172,15 +172,13 @@
         "refinement_interpretation_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
         "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9a74d818566e70513bc032cc3b65a144",
         "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
-        "refinement_interpretation_HMAC_Tm_refine_22d5e66a974d1c591df3825e9fef9c27",
         "refinement_interpretation_HMAC_Tm_refine_2892ae5811c75237263be9b0f7d3603b",
-        "refinement_interpretation_HMAC_Tm_refine_5bd3f31978c499028678161b3cbcd432",
         "refinement_interpretation_HMAC_Tm_refine_61746cd1f90db9be9d7c85b5911fa047",
+        "refinement_interpretation_HMAC_Tm_refine_902161f08b702744dd90615e080a4a0f",
         "refinement_interpretation_HMAC_Tm_refine_9711c74a9d5bd5eeaa94f25804c7c0b2",
         "refinement_interpretation_HMAC_Tm_refine_9e5c7dbf3b04f464443f7795127d1b06",
         "refinement_interpretation_HMAC_Tm_refine_de7c4a3e670e1a6684895f11c386ccbd",
         "refinement_interpretation_HMAC_Tm_refine_e6e3f7c1f800390e5f198e21f3a0bf39",
-        "refinement_interpretation_HMAC_Tm_refine_f4a09ff245555a22e4d0b0a4566314a8",
         "refinement_interpretation_Hashing.Spec_Tm_refine_2276d26cf5dc48520445dd678b6f28f5",
         "refinement_interpretation_Hashing.Spec_Tm_refine_980a48dd0b8513313f1c89eab2a9fd26",
         "refinement_interpretation_Hashing.Spec_Tm_refine_b423b492fefd293195282a67631fd97a",
@@ -203,6 +201,7 @@
         "typing_FStar.Seq.Base.length", "typing_FStar.Set.complement",
         "typing_FStar.Set.empty", "typing_FStar.Set.singleton",
         "typing_FStar.UInt.fits", "typing_FStar.UInt32.v",
+        "typing_LowStar.Buffer.null",
         "typing_LowStar.Buffer.trivial_preorder",
         "typing_LowStar.Monotonic.Buffer.as_addr",
         "typing_LowStar.Monotonic.Buffer.as_seq",
@@ -216,7 +215,7 @@
         "typing_Mem.is_tls_rgn", "typing_Mem.tls_define_region"
       ],
       0,
-      "334663e0846d94c4687c0008d74985d5"
+      "6747d6c5288bca4a472bb44126a60578"
     ],
     [
       "HMAC.hmacVerify",
@@ -233,7 +232,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "d99c3a5af2b5b28a7578e14652bf2bd5"
+      "46e2be9baa43235aa97ef436f8b316d1"
     ],
     [
       "HMAC.tls_mac",
@@ -301,7 +300,7 @@
         "typing_Mem.tls_define_region"
       ],
       0,
-      "7473fb54f90e7cadbebb7bc5135e799d"
+      "2aea4d0b4769a8792f587d52606f0654"
     ],
     [
       "HMAC.tls_macVerify",
@@ -370,7 +369,7 @@
         "typing_Mem.tls_define_region"
       ],
       0,
-      "c3f337de514e650e0d42e8ca1854dd4c"
+      "64044d036197cdbf7e4b14cbb3eb61a8"
     ]
   ]
 ]
