@@ -766,15 +766,15 @@ let parse32_dsum_aux
     | Some (k', consumed_k) ->
       let k = maybe_total_enum_key_of_repr (dsum_enum t) k' in
       let input_k = B32.b32slice input consumed_k (B32.len input) in
+      synth_dsum_case_injective t k;
       begin match k with
-      | TotalKnown k ->
-        synth_dsum_known_case_injective t k;
+      | TotalKnown k_ ->
         begin
           match
             parse32_synth'
-              (dsnd (f k))
-              (synth_dsum_known_case t k)
-              (f32 k)
+              (dsnd (f k_))
+              (synth_dsum_case t k)
+              (f32 k_)
               ()
               input_k
           with
@@ -783,13 +783,13 @@ let parse32_dsum_aux
             assert (U32.v consumed_k + U32.v consumed_x <= B32.length input);
             Some ((x <: dsum_type t), consumed_k `U32.add` consumed_x)
         end
-      | TotalUnknown k ->
-        synth_dsum_unknown_case_injective t k;
+      | TotalUnknown k_ ->
+        synth_dsum_case_injective t k;
         begin
           match
             parse32_synth'
               g
-              (synth_dsum_unknown_case t k)
+              (synth_dsum_case t k)
               g32
               ()
               input_k
@@ -827,15 +827,16 @@ let parse32_dsum'
     let input_k = B32.b32slice input consumed_k (B32.len input) in
     [@inline_let]
     let f (k: maybe_total_enum_key (dsum_enum t)) : Tot (option (dsum_type t * U32.t)) =
+      [@inline_let]
+      let _ = synth_dsum_case_injective t k in
       begin match k with
-      | TotalKnown k ->
-        synth_dsum_known_case_injective t k;
+      | TotalKnown k_ ->
         begin
           match
             parse32_synth'
-              (dsnd (f k))
-              (synth_dsum_known_case t k)
-              (f32 k)
+              (dsnd (f k_))
+              (synth_dsum_case t k)
+              (f32 k_)
               ()
               input_k
           with
@@ -844,13 +845,12 @@ let parse32_dsum'
             assert (U32.v consumed_k + U32.v consumed_x <= B32.length input);
             Some ((x <: dsum_type t), consumed_k `U32.add` consumed_x)
         end
-      | TotalUnknown k ->
-        synth_dsum_unknown_case_injective t k;
+      | TotalUnknown k_ ->
         begin
           match
             parse32_synth'
               g
-              (synth_dsum_unknown_case t k)
+              (synth_dsum_case t k)
               g32
               ()
               input_k

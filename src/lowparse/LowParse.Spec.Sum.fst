@@ -486,34 +486,34 @@ type dsum =
     (tag_of_data: (data -> Tot (maybe_total_enum_key e))) ->
     (type_of_known_tag: (key -> Tot Type0)) ->
     (type_of_unknown_tag: Type0) ->
-    (synth_known_case: ((x: key) -> (y: type_of_known_tag x) -> Tot (refine_with_tag tag_of_data (TotalKnown x)))) ->
-    (synth_unknown_case: ((x: unknown_enum_repr e) -> type_of_unknown_tag -> Tot (refine_with_tag tag_of_data (TotalUnknown x)))) ->
+    (synth_case: ((x: maybe_total_enum_key e) -> (y: dsum_type_of_tag' e type_of_known_tag type_of_unknown_tag x) -> Tot (refine_with_tag tag_of_data x))) ->
     (synth_case_recip: ((k: maybe_total_enum_key e) -> (refine_with_tag tag_of_data k) -> Tot (dsum_type_of_tag' e type_of_known_tag type_of_unknown_tag k))) ->
     (synth_case_recip_synth_case: (
-      (xy: (x: maybe_total_enum_key e & dsum_type_of_tag' e type_of_known_tag type_of_unknown_tag x)) ->
+      (x: maybe_total_enum_key e) ->
+      (y: dsum_type_of_tag' e type_of_known_tag type_of_unknown_tag x) ->
       Tot (squash
-      (synth_dsum_case_recip' e tag_of_data type_of_known_tag type_of_unknown_tag synth_case_recip
-        (synth_dsum_case' e tag_of_data type_of_known_tag type_of_unknown_tag synth_known_case synth_unknown_case xy) == xy))
+        (synth_case_recip x (synth_case x y) == y)
+      )
     )) ->
     (synth_case_synth_case_recip: (
       (x: data) ->
       Tot (squash
-      (synth_dsum_case' e tag_of_data type_of_known_tag type_of_unknown_tag synth_known_case synth_unknown_case
-        (synth_dsum_case_recip' e tag_of_data type_of_known_tag type_of_unknown_tag synth_case_recip x) == x))
+        (synth_case (tag_of_data x) (synth_case_recip (tag_of_data x) x) == x)
+      )
     )) ->
     dsum
 
 inline_for_extraction
 let dsum_key_type (t: dsum) : Tot eqtype =
-  match t with (DSum key _ _ _ _ _ _ _ _ _ _ _) -> key
+  match t with (DSum key _ _ _ _ _ _ _ _ _ _) -> key
 
 inline_for_extraction
 let dsum_repr_type (t: dsum) : Tot eqtype =
-  match t with (DSum _ repr _ _ _ _ _ _ _ _ _ _) -> repr
+  match t with (DSum _ repr _ _ _ _ _ _ _ _ _) -> repr
 
 inline_for_extraction
 let dsum_enum (t: dsum) : Tot (total_enum (dsum_key_type t) (dsum_repr_type t)) =
-  match t with (DSum _ _ e _ _ _ _ _ _ _ _ _) -> e
+  match t with (DSum _ _ e _ _ _ _ _ _ _ _) -> e
 
 inline_for_extraction
 let dsum_key (t: dsum) : Tot Type0 =
@@ -529,12 +529,12 @@ let dsum_unknown_key (t: dsum) : Tot Type0 =
 
 inline_for_extraction
 let dsum_type (t: dsum) : Tot Type0 =
-  let (DSum _ _ _ data _ _ _ _ _ _ _ _) = t in
+  let (DSum _ _ _ data _ _ _ _ _ _ _) = t in
   data
 
 inline_for_extraction
 let dsum_tag_of_data (t: dsum) : Tot ((x: dsum_type t) -> Tot (dsum_key t)) =
-  match t with (DSum _ _ _ _ tag_of_data _ _ _ _ _ _ _) -> tag_of_data
+  match t with (DSum _ _ _ _ tag_of_data _ _ _ _ _ _) -> tag_of_data
 
 inline_for_extraction
 let dsum_cases (t: dsum) (x: dsum_key t) : Type0 =
@@ -542,13 +542,17 @@ let dsum_cases (t: dsum) (x: dsum_key t) : Type0 =
 
 inline_for_extraction
 let dsum_type_of_known_tag (t: dsum) : Tot ((k: dsum_known_key t) -> Tot Type0) =
-  let (DSum _ _ _ _ _ type_of_known_tag _ _ _ _ _ _) = t in
+  match t with (DSum _ _ _ _ _ type_of_known_tag _ _ _ _ _) ->
   type_of_known_tag
 
 inline_for_extraction
 let dsum_type_of_unknown_tag (t: dsum) : Tot Type0 =
-  let (DSum _ _ _ _ _ _ type_of_unknown_tag _ _ _ _ _) = t in
+  match t with (DSum _ _ _ _ _ _ type_of_unknown_tag _ _ _ _) ->
   type_of_unknown_tag
+
+inline_for_extraction
+let dsum_type_of_tag (t: dsum) =
+  dsum_type_of_tag' (dsum_enum t) (dsum_type_of_known_tag t) (dsum_type_of_unknown_tag t)
 
 let weaken_parse_dsum_cases_kind
   (s: dsum)
@@ -570,6 +574,49 @@ let weaken_parse_dsum_cases_kind'
 : Tot parser_kind
 = weaken_parse_dsum_cases_kind s f k'
 
+inline_for_extraction
+let synth_dsum_case
+  (s: dsum)
+: Tot ((x: dsum_key s) -> dsum_type_of_tag s x -> Tot (refine_with_tag (dsum_tag_of_data s) x))
+= match s with DSum _ _ _ _ _ _ _ synth_case _ _ _ -> synth_case
+
+inline_for_extraction
+let synth_dsum_case_recip
+  (s: dsum)
+: Tot ((x: dsum_key s) -> refine_with_tag (dsum_tag_of_data s) x -> Tot (dsum_type_of_tag s x))
+= match s with DSum _ _ _ _ _ _ _ _ synth_case_recip _ _ -> synth_case_recip
+
+let synth_dsum_case_injective
+  (s: dsum)
+  (x: dsum_key s)
+: Lemma
+  (synth_injective (synth_dsum_case s x))
+= let f
+    (y1: dsum_type_of_tag s x)
+    (y2: dsum_type_of_tag s x)
+  : Lemma
+    (requires (synth_dsum_case s x y1 == synth_dsum_case s x y2))
+    (ensures (y1 == y2))
+  = let k1 : squash (synth_dsum_case_recip s x (synth_dsum_case s x y1) == y1) =
+      DSum?.synth_case_recip_synth_case s x y1
+    in
+    let k2 : squash (synth_dsum_case_recip s x (synth_dsum_case s x y2) == y2) =
+      DSum?.synth_case_recip_synth_case s x y2
+    in
+    // FIXME: WHY WHY WHY is this assert necessary?
+    assert (synth_dsum_case_recip s x (synth_dsum_case s x y2) == y2);
+    ()
+  in
+  let g
+    (y1: dsum_type_of_tag s x)
+    (y2: dsum_type_of_tag s x)
+  : Lemma
+    (synth_dsum_case s x y1 == synth_dsum_case s x y2 ==> y1 == y2)
+  = Classical.move_requires (f y1) y2
+  in
+  Classical.forall_intro_2 g
+
+(*
 inline_for_extraction
 let synth_dsum_known_case
   (s: dsum)
@@ -627,6 +674,18 @@ let synth_dsum_unknown_case_injective
   = Classical.move_requires (f y1) y2
   in
   Classical.forall_intro_2 g
+*)
+
+let parse_dsum_type_of_tag
+  (s: dsum)
+  (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag s x)))
+  (#k: parser_kind)
+  (g: parser k (dsum_type_of_unknown_tag s))
+  (x: dsum_key s)
+: Tot (parser (weaken_parse_dsum_cases_kind s f k) (dsum_type_of_tag s x))
+= match x with
+    | TotalKnown x' -> weaken (weaken_parse_dsum_cases_kind s f k) (dsnd (f x')) <: parser (weaken_parse_dsum_cases_kind s f k) (dsum_type_of_tag s x)
+    | TotalUnknown x' -> weaken (weaken_parse_dsum_cases_kind s f k) g <: parser (weaken_parse_dsum_cases_kind s f k) (dsum_type_of_tag s x)
 
 let parse_dsum_cases
   (s: dsum)
@@ -635,14 +694,8 @@ let parse_dsum_cases
   (g: parser k (dsum_type_of_unknown_tag s))
   (x: dsum_key s)
 : Tot (parser (weaken_parse_dsum_cases_kind s f k) (dsum_cases s x))
-= match x with
-  | TotalKnown x ->  
-    let (| _, p |) = f x in
-    synth_dsum_known_case_injective s x;
-    weaken (weaken_parse_dsum_cases_kind s f k) p `parse_synth` synth_dsum_known_case s x
-  | TotalUnknown x ->
-    synth_dsum_unknown_case_injective s x;
-    weaken (weaken_parse_dsum_cases_kind s f k) g `parse_synth` synth_dsum_unknown_case s x
+= synth_dsum_case_injective s x;
+  parse_dsum_type_of_tag s f g x `parse_synth` synth_dsum_case s x
 
 let parse_dsum'
   (#kt: parser_kind)
@@ -695,16 +748,15 @@ let parse_dsum_eq'
   | Some (k', consumed_k) ->
     let k = maybe_total_enum_key_of_repr (dsum_enum t) k' in
     let input_k = Seq.slice input consumed_k (Seq.length input) in
+    synth_dsum_case_injective t k;
     begin match k with
-    | TotalKnown k ->
-      synth_dsum_known_case_injective t k;
-      begin match parse (dsnd (f k) `parse_synth` synth_dsum_known_case t k) input_k with
+    | TotalKnown k' ->
+      begin match parse (dsnd (f k') `parse_synth` synth_dsum_case t k) input_k with
       | None -> None
       | Some (x, consumed_x) -> Some ((x <: dsum_type t), consumed_k + consumed_x)
       end
-    | TotalUnknown k ->
-      synth_dsum_unknown_case_injective t k;
-      begin match parse (g `parse_synth` synth_dsum_unknown_case t k) input_k with
+    | TotalUnknown k' ->
+      begin match parse (g `parse_synth` synth_dsum_case t k) input_k with
       | None -> None
       | Some (x, consumed_x) -> Some ((x <: dsum_type t), consumed_k + consumed_x)
       end
@@ -727,15 +779,15 @@ let parse_dsum_eq
   | Some (k, consumed_k) ->
     let input_k = Seq.slice input consumed_k (Seq.length input) in
     begin match k with
-    | TotalKnown k ->
-      begin match parse (dsnd (f k)) input_k with
+    | TotalKnown k' ->
+      begin match parse (dsnd (f k')) input_k with
       | None -> None
-      | Some (x, consumed_x) -> Some ((synth_dsum_known_case t k x <: dsum_type t), consumed_k + consumed_x)
+      | Some (x, consumed_x) -> Some ((synth_dsum_case t k x <: dsum_type t), consumed_k + consumed_x)
       end
-    | TotalUnknown k ->
+    | TotalUnknown k' ->
       begin match parse g input_k with
       | None -> None
-      | Some (x, consumed_x) -> Some ((synth_dsum_unknown_case t k x <: dsum_type t), consumed_k + consumed_x)
+      | Some (x, consumed_x) -> Some ((synth_dsum_case t k x <: dsum_type t), consumed_k + consumed_x)
       end
     end
   ))
@@ -745,24 +797,30 @@ let parse_dsum_eq
   | None -> ()
   | Some (k, consumed_k) ->
     let input_k = Seq.slice input consumed_k (Seq.length input) in
+    synth_dsum_case_injective t k;
     begin match k with
-    | TotalKnown k ->
-      synth_dsum_known_case_injective t k;
-      parse_synth_eq (weaken (weaken_parse_dsum_cases_kind t f k') (dsnd (f k))) (synth_dsum_known_case t k) input_k
-    | TotalUnknown k ->
-      synth_dsum_unknown_case_injective t k;
-      parse_synth_eq (weaken (weaken_parse_dsum_cases_kind t f k') g) (synth_dsum_unknown_case t k) input_k
+    | TotalKnown k_ ->
+      parse_synth_eq (weaken (weaken_parse_dsum_cases_kind t f k') (dsnd (f k_))) (synth_dsum_case t k) input_k
+    | TotalUnknown k_ ->
+      parse_synth_eq (weaken (weaken_parse_dsum_cases_kind t f k') g) (synth_dsum_case t k) input_k
     end
 
 #reset-options
 
-inline_for_extraction
-let dsum_type_of_tag
-  (t: dsum)
-  (k: dsum_key t)
-: Tot Type0
-= dsum_type_of_tag' (dsum_enum t) (dsum_type_of_known_tag t) (dsum_type_of_unknown_tag t) k
+let synth_dsum_case_inverse
+  (s: dsum)
+  (x: dsum_key s)
+: Lemma
+  (synth_inverse (synth_dsum_case s x) (synth_dsum_case_recip s x))
+= let f
+    (y: refine_with_tag (dsum_tag_of_data s) (x))
+  : Lemma
+    (synth_dsum_case s x (synth_dsum_case_recip s x y) == y)
+  = DSum?.synth_case_synth_case_recip s y
+  in
+  Classical.forall_intro f
 
+(*
 inline_for_extraction
 let synth_dsum_known_case_recip
   (t: dsum)
@@ -806,6 +864,22 @@ let synth_dsum_unknown_case_inverse
   = DSum?.synth_case_synth_case_recip s y
   in
   Classical.forall_intro f
+*)
+
+let serialize_dsum_type_of_tag
+  (s: dsum)
+  (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag s x)))
+  (sr: (x: dsum_known_key s) -> Tot (serializer (dsnd (f x))))
+  (#k: parser_kind)
+  (g: parser k (dsum_type_of_unknown_tag s))
+  (sg: serializer g)
+  (x: dsum_key s)
+: Tot (serializer (parse_dsum_type_of_tag s f g x))
+= match x with
+  | TotalKnown x' ->
+    serialize_ext (dsnd (f x')) (sr x') (parse_dsum_type_of_tag s f g x)
+  | TotalUnknown x' ->
+    serialize_ext g sg (parse_dsum_type_of_tag s f g x)
 
 let serialize_dsum_cases
   (s: dsum)
@@ -816,33 +890,14 @@ let serialize_dsum_cases
   (sg: serializer g)
   (x: dsum_key s)
 : Tot (serializer (parse_dsum_cases s f g x))
-= match x with
-  | TotalKnown x ->
-    synth_dsum_known_case_injective s x;
-    synth_dsum_known_case_inverse s x;
-    serialize_ext
-      (dsnd (f x) `parse_synth` synth_dsum_known_case s x)
-      (serialize_synth
-        _
-        (synth_dsum_known_case s x)
-        (sr x)
-        (synth_dsum_known_case_recip s x)
-        ()
-      )
-      (parse_dsum_cases s f g (TotalKnown x))
-  | TotalUnknown x ->
-    synth_dsum_unknown_case_injective s x;
-    synth_dsum_unknown_case_inverse s x;
-    serialize_ext
-      (g `parse_synth` synth_dsum_unknown_case s x)
-      (serialize_synth
-        _
-        (synth_dsum_unknown_case s x)
-        sg
-        (synth_dsum_unknown_case_recip s x)
-        ()
-      )
-      (parse_dsum_cases s f g (TotalUnknown x))
+= synth_dsum_case_injective s x;
+  synth_dsum_case_inverse s x;
+  serialize_synth
+    _
+    (synth_dsum_case s x)
+    (serialize_dsum_type_of_tag s f sr g sg x)
+    (synth_dsum_case_recip s x)
+    ()
 
 let serialize_dsum'
   (#kt: parser_kind)
@@ -890,20 +945,20 @@ let make_dsum
 : Tot (
     (type_of_known_tag: (key -> Tot Type0)) ->
     (type_of_unknown_tag: Type0) ->
-    (synth_known_case: ((x: key) -> (y: type_of_known_tag x) -> Tot (refine_with_tag tag_of_data (TotalKnown x)))) ->
-    (synth_unknown_case: ((x: unknown_enum_repr e) -> type_of_unknown_tag -> Tot (refine_with_tag tag_of_data (TotalUnknown x)))) ->
+    (synth_case: ((x: maybe_total_enum_key e) -> (y: dsum_type_of_tag' e type_of_known_tag type_of_unknown_tag x) -> Tot (refine_with_tag tag_of_data x))) ->
     (synth_case_recip: ((k: maybe_total_enum_key e) -> (refine_with_tag tag_of_data k) -> Tot (dsum_type_of_tag' e type_of_known_tag type_of_unknown_tag k))) ->
     (synth_case_recip_synth_case: (
-      (xy: (x: maybe_total_enum_key e & dsum_type_of_tag' e type_of_known_tag type_of_unknown_tag x)) ->
+      (x: maybe_total_enum_key e) ->
+      (y: dsum_type_of_tag' e type_of_known_tag type_of_unknown_tag x) ->
       Tot (squash
-      (synth_dsum_case_recip' e tag_of_data type_of_known_tag type_of_unknown_tag synth_case_recip
-        (synth_dsum_case' e tag_of_data type_of_known_tag type_of_unknown_tag synth_known_case synth_unknown_case xy) == xy))
+        (synth_case_recip x (synth_case x y) == y)
+      )
     )) ->
     (synth_case_synth_case_recip: (
       (x: data) ->
       Tot (squash
-      (synth_dsum_case' e tag_of_data type_of_known_tag type_of_unknown_tag synth_known_case synth_unknown_case
-        (synth_dsum_case_recip' e tag_of_data type_of_known_tag type_of_unknown_tag synth_case_recip x) == x))
+        (synth_case (tag_of_data x) (synth_case_recip (tag_of_data x) x) == x)
+      )
     )) ->
     dsum
   )
@@ -929,8 +984,8 @@ let serialize_dsum_eq
     let tg = dsum_tag_of_data s x in
     serialize (serialize_maybe_total_enum_key _ st (dsum_enum s)) tg `Seq.append` (
     match tg with
-    | TotalKnown k -> serialize (sr k) (synth_dsum_known_case_recip s k x)
-    | TotalUnknown k -> serialize sg (synth_dsum_unknown_case_recip s k x)
+    | TotalKnown k -> serialize (sr k) (synth_dsum_case_recip s tg x)
+    | TotalUnknown k -> serialize sg (synth_dsum_case_recip s tg x)
   ))))
 = ()
 
