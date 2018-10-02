@@ -488,75 +488,74 @@ let serialize32_sum
 
 #reset-options
 
-(*
 inline_for_extraction
-let size32_sum_cases
-  (s: sum)
-  (f: (x: sum_key s) -> Tot (k: parser_kind & parser k (sum_cases s x)))
-  (sr: (x: sum_key s) -> Tot (serializer (dsnd (f x))))
-  (sr32: (x: sum_key s) -> Tot (size32 (sr x)))
-  (x: sum_key s)
-: Tot (size32 (serialize_sum_cases s f sr x))
-= (fun input -> sr32 x input)
+let size32_sum_destr_codom
+  (t: sum)
+  (k: sum_key t)
+: Tot Type
+= refine_with_tag (sum_tag_of_data t) k -> Tot U32.t
+
+let size32_sum_destr_eq
+  (t: sum)
+  (k: sum_key t)
+: Tot (size32_sum_destr_codom t k -> size32_sum_destr_codom t k -> GTot Type0)
+= _ by (T.apply (`feq); T.apply (`eq2))
+
+inline_for_extraction
+let size32_sum_destr_if
+  (t: sum)
+  (k: sum_key t)
+: Tot (if_combinator _ (size32_sum_destr_eq t k))
+= // _ by (T.apply (`fif); T.fail "abc")
+  fif _ _ _ (default_if _) 
+
+let size32_sum_gen_precond
+  (kt: parser_kind)
+  (k: parser_kind)
+: GTot Type0
+= kt.parser_kind_subkind == Some ParserStrong /\
+  Some? kt.parser_kind_high /\
+  Some? k.parser_kind_high /\ (
+  let (Some vt) = kt.parser_kind_high in
+  let (Some v) = k.parser_kind_high in
+  vt + v < 4294967295
+  )
 
 #set-options "--z3rlimit 16"
 
 inline_for_extraction
-let size32_sum_gen'
+let size32_sum
   (#kt: parser_kind)
   (t: sum)
   (#p: parser kt (sum_repr_type t))
-  (#s: serializer p)
+  (s: serializer p)
   (s32: size32 (serialize_enum_key _ s (sum_enum t)))
-  (#k: parser_kind)
-  (#pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
-  (#sc: ((x: sum_key t) -> Tot (serializer (pc x))))
+  (#pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (sc: ((x: sum_key t) -> Tot (serializer (dsnd (pc x)))))
   (sc32: ((x: sum_key t) -> Tot (size32 (sc x))))
-  (u: unit { serializer32_sum_gen_precond kt k } )
-  (tag_of_data: ((x: sum_type t) -> Tot (y: sum_key_type t { y == (sum_tag_of_data t x <: sum_key_type t) } )))
+  (destr: dep_enum_destr (sum_enum t) (size32_sum_destr_codom t))
+  (u: squash (size32_sum_gen_precond kt (weaken_parse_cases_kind t pc)))
 : Tot (size32 (serialize_sum t s sc))
-= fun (input: sum_type t) -> ((
-    let tg = tag_of_data input in
-    let stg = s32 tg in
-    let s = sc32 tg input in
-    U32.add stg s
-  ) <: (res: U32.t { size32_postcond (serialize_sum t s sc) input res } ))
+= fun x ->
+  serialize_sum_eq t s sc x;
+  let tg = sum_tag_of_data t x in
+  let s1 = s32 tg in
+  let s2 = destr
+    (size32_sum_destr_eq t)
+    (size32_sum_destr_if t)
+    (fun _ _ -> ())
+    (fun _ _ _ _ -> ())
+    (fun tg x -> sc32 tg (synth_sum_case_recip t tg x))
+    tg
+    x
+  in
+  assert_norm (U32.v u32_max == 4294967295);
+  let res = s1 `U32.add` s2 in
+  (res <: (res: U32.t { size32_postcond (serialize_sum t s sc) x res } ))
 
 #reset-options
 
-inline_for_extraction
-let size32_sum_gen
-  (#kt: parser_kind)
-  (t: sum)
-  (#p: parser kt (sum_repr_type t))
-  (#s: serializer p)
-  (s32: size32 (serialize_enum_key _ s (sum_enum t)))
-  (#k: parser_kind)
-  (#pc: ((x: sum_key t) -> Tot (parser k (sum_cases t x))))
-  (#sc: ((x: sum_key t) -> Tot (serializer (pc x))))
-  (sc32: ((x: sum_key t) -> Tot (size32 (sc x))))
-  (u0: unit { serializer32_sum_gen_precond kt k } )
-  (tag_of_data: ((x: sum_type t) -> Tot (y: sum_key_type t { y == (sum_tag_of_data t x <: sum_key_type t) } )))
-  (k' : parser_kind)
-  (t' : Type0)
-  (p' : parser k' t')
-  (s' : serializer p')
-  (u1: unit {
-    k' == and_then_kind (parse_filter_kind kt) k /\
-    t' == sum_type t /\
-    p' == parse_sum t p pc /\
-    s' == serialize_sum t s sc
-  })
-  (destr: sum_destr t)
-: Tot (size32 s')
-= [@inline_let]
-  let sc32' (k: sum_key t) : Tot (size32 (sc k)) =
-    (fun (x: refine_with_tag (sum_tag_of_data t) k) -> destr U32.t sc32 k x)
-  in
-  (size32_sum_gen' t s32 sc32' () tag_of_data <: size32 s')
-
 (* Sum with default case *)
-*)
 
 let maybe_enum_key_of_repr_not_in (#key #repr: eqtype) (e: enum key repr) (l: list (key * repr)) (x: repr) : GTot Type0 =
   (~ (L.mem x (L.map snd l)))

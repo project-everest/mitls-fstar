@@ -154,6 +154,34 @@ let serialize32_t : LP.serializer32 serialize_t =
     (_ by (LP.dep_enum_destr_tac ()))
     ()
 
+inline_for_extraction
+let size32_key : LP.size32 (LP.serialize_enum_key _ LP.serialize_u8 case_enum) =
+  _ by (LP.size32_enum_key_gen_tac LP.size32_u8 case_enum ())
+
+inline_for_extraction
+let size32_case_B: LP.size32 serialize_case_B =
+  LP.size32_filter LP.size32_u16 parse_case_B_filter
+
+inline_for_extraction
+let size32_cases
+  (x: LP.sum_key t_sum)
+: Tot (LP.size32 (serialize_cases x))
+= match x with
+  | Case_A -> (LP.size32_nondep_then LP.size32_u8 () LP.size32_u8 <: LP.size32 (serialize_cases x))
+  | Case_B -> (size32_case_B <: LP.size32 (serialize_cases x))
+
+let size32_t : LP.size32 serialize_t =
+  assert_norm (LP.size32_sum_gen_precond (LP.get_parser_kind LP.parse_u8) (LP.weaken_parse_cases_kind t_sum parse_cases));
+  LP.size32_sum
+    t_sum
+    _
+    size32_key
+    _
+    size32_cases
+    (_ by (LP.dep_enum_destr_tac ()))
+    ()
+
+
 let parse_t_array_precond () : Lemma
   (LP.fldata_array_precond
       parse_t

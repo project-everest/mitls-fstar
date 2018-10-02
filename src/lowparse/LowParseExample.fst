@@ -30,6 +30,9 @@ let j (input: FStar.Bytes.bytes) : Tot (option (LowParse.SLow.vlarray LowParseEx
 let m (x: LowParseExample.Aux.t) : Tot FStar.Bytes.bytes =
   LowParseExample.Aux.serialize32_t x
 
+let msz ( x: LowParseExample.Aux.t) : Tot FStar.UInt32.t =
+  LowParseExample.Aux.size32_t x
+
 let s (x: LowParse.SLow.array LowParseExample.Aux.t 18) : Tot FStar.Bytes.bytes =
   LowParseExample.Aux.serialize32_t_array x
 

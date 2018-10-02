@@ -253,7 +253,7 @@ let parse32_total
   ))
 = ()
   
-
+inline_for_extraction
 let u32_max : (y: U32.t { forall (x: U32.t) . U32.v x <= U32.v y } ) =
   4294967295ul
 

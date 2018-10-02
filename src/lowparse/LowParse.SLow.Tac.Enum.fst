@@ -117,3 +117,43 @@ let serialize32_maybe_enum_key_tac
     T.solve_vc;
     (fun () -> enum_repr_of_key_tac e);
   ]
+
+noextract
+let size32_enum_key_gen_tac
+  (#k: parser_kind)
+  (#key #repr: eqtype)
+  (#p: parser k repr)
+  (#s: serializer p)
+  (s32: size32 s)
+  (e: enum key repr { Cons? e } )
+  ()
+: T.Tac unit
+= let fu = quote (size32_enum_key_gen #k #key #repr #p #s s32 e) in
+  T.apply fu;
+  T.iseq [
+    T.solve_vc;
+    T.solve_vc;
+    T.solve_vc;
+    T.solve_vc;
+    (fun () -> enum_repr_of_key_tac e);
+  ]
+
+noextract
+let size32_maybe_enum_key_tac
+  (#k: parser_kind)
+  (#key #repr: eqtype)
+  (#p: parser k repr)
+  (#s: serializer p)
+  (s32: size32 s)
+  (e: enum key repr { Cons? e } )
+  ()
+: T.Tac unit
+= let fu = quote (size32_maybe_enum_key_gen #k #key #repr #p #s s32 e) in
+  T.apply fu;
+  T.iseq [
+    T.solve_vc;
+    T.solve_vc;
+    T.solve_vc;
+    T.solve_vc;
+    (fun () -> enum_repr_of_key_tac e);
+  ]
