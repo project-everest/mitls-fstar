@@ -25,7 +25,7 @@
         "refinement_interpretation_LowParse.SLow.Base_Tm_refine_c28ed5a0c122862bed8762ed717dc39e"
       ],
       0,
-      "3fa74df580b928d4fbe916c6f0b461fd"
+      "e3f560456f0766a91b89c6259f74ed7d"
     ],
     [
       "LowParse.SLow.Int.serialize32_u8",
@@ -47,7 +47,7 @@
         "refinement_interpretation_LowParse.SLow.Base_Tm_refine_e752124f651a437c8db65345677589fb"
       ],
       0,
-      "8bb290189fec3af2bfad14123352039f"
+      "2c2e33ea28f0a9acac202abe8555dbb2"
     ],
     [
       "LowParse.SLow.Int.parse32_u16",
@@ -73,7 +73,7 @@
         "refinement_interpretation_LowParse.SLow.Base_Tm_refine_c28ed5a0c122862bed8762ed717dc39e"
       ],
       0,
-      "97cb8c98a4617ca9b54b013a0bd37016"
+      "f0ebe0852badca9fc3a60edd8b3c041c"
     ],
     [
       "LowParse.SLow.Int.serialize32_u16",
@@ -94,7 +94,7 @@
         "refinement_interpretation_LowParse.SLow.Base_Tm_refine_e752124f651a437c8db65345677589fb"
       ],
       0,
-      "6a09b53129d40fa52206204fec7f6fec"
+      "c7249908209a8874b14579d9eb0cc205"
     ],
     [
       "LowParse.SLow.Int.parse32_u32",
@@ -120,7 +120,7 @@
         "refinement_interpretation_LowParse.SLow.Base_Tm_refine_c28ed5a0c122862bed8762ed717dc39e"
       ],
       0,
-      "47d2848161025889ad9a5477956e65a9"
+      "42aaf530d62b507bb69d32f9461dd728"
     ],
     [
       "LowParse.SLow.Int.serialize32_u32",
@@ -141,7 +141,34 @@
         "refinement_interpretation_LowParse.SLow.Base_Tm_refine_e752124f651a437c8db65345677589fb"
       ],
       0,
-      "380f6189535a9356f048fe6579545d7c"
+      "4608b1e80b35623c40279e2630eecf35"
+    ],
+    [
+      "LowParse.SLow.Int.size32_u8",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "4075db9ef06af73ae8e450a6105e5bfb"
+    ],
+    [
+      "LowParse.SLow.Int.size32_u16",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "45491c1f354077b8feb330c54d188897"
+    ],
+    [
+      "LowParse.SLow.Int.size32_u32",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "8bf2a60781bcdac3731799a4b70fd523"
     ]
   ]
 ]
