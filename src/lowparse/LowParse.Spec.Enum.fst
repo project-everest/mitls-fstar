@@ -901,3 +901,120 @@ let maybe_enum_destr_nil
     L.rev_mem (L.map snd l1) x;
     f (Unknown x)
   ) <: (y: t { eq y (f (maybe_enum_key_of_repr e x)) } ))
+
+(* dependent representation-based destructor *)
+
+inline_for_extraction
+let dep_maybe_enum_destr_t
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (v: (maybe_enum_key e -> Tot Type))
+: Tot Type
+= (v_eq: ((k: maybe_enum_key e) -> v k -> v k -> GTot Type0)) ->
+  (v_if: ((k: maybe_enum_key e) -> Tot (if_combinator (v k) (v_eq k)))) ->
+  (v_eq_refl: ((k: maybe_enum_key e) -> Tot (r_reflexive_t _ (v_eq k)))) ->
+  (v_eq_trans: ((k: maybe_enum_key e) -> Tot (r_transitive_t _ (v_eq k)))) ->
+  (f: ((k: maybe_enum_key e) -> Tot (v k))) ->
+  (r: repr) ->
+  Tot (y: v (maybe_enum_key_of_repr e r) { v_eq (maybe_enum_key_of_repr e r) y (f (maybe_enum_key_of_repr e r)) } )
+
+inline_for_extraction
+let dep_maybe_enum_destr_t'
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (v: (maybe_enum_key e -> Tot Type))
+  (l1 l2: list (key * repr))
+  (u1: squash (e == L.append (L.rev l1) l2))
+: Tot Type
+= (v_eq: ((k: maybe_enum_key e) -> v k -> v k -> GTot Type0)) ->
+  (v_if: ((k: maybe_enum_key e) -> Tot (if_combinator (v k) (v_eq k)))) ->
+  (v_eq_refl: ((k: maybe_enum_key e) -> Tot (r_reflexive_t _ (v_eq k)))) ->
+  (v_eq_trans: ((k: maybe_enum_key e) -> Tot (r_transitive_t _ (v_eq k)))) ->
+  (f: ((k: maybe_enum_key e) -> Tot (v k))) ->
+  (r: repr { maybe_enum_key_of_repr_not_in e l1 r } ) ->
+  Tot (y: v (maybe_enum_key_of_repr e r) { v_eq (maybe_enum_key_of_repr e r) y (f (maybe_enum_key_of_repr e r)) } )
+
+inline_for_extraction
+let dep_maybe_enum_destr_t_intro
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (v: (maybe_enum_key e -> Tot Type))
+  (d: dep_maybe_enum_destr_t' e v [] e ())
+: Tot (dep_maybe_enum_destr_t e v)
+= d
+
+inline_for_extraction
+let dep_maybe_enum_destr_cons
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (v: (maybe_enum_key e -> Tot Type))
+  (l1: list (key * repr))
+  (l2: list (key * repr))
+  (u1: squash (Cons? l2 /\ e == L.append (L.rev l1) l2))
+  (g: (dep_maybe_enum_destr_t' e v (list_hd l2 :: l1) (list_tl l2) (list_append_rev_cons l1 (list_hd l2) (list_tl l2))))
+: Tot (dep_maybe_enum_destr_t' e v l1 l2 u1)
+= fun
+  (v_eq: ((k: maybe_enum_key e) -> v k -> v k -> GTot Type0))
+  (v_if: ((k: maybe_enum_key e) -> Tot (if_combinator (v k) (v_eq k))))
+  (v_eq_refl: ((k: maybe_enum_key e) -> Tot (r_reflexive_t _ (v_eq k))))
+  (v_eq_trans: ((k: maybe_enum_key e) -> Tot (r_transitive_t _ (v_eq k))))
+  (f: ((k: maybe_enum_key e) -> Tot (v k)))
+  ->
+  match list_hd l2 with
+  | (k, r) ->
+  [@inline_let]
+  let _ : squash (L.mem k (L.map fst e)) =
+    L.append_mem (L.map fst (L.rev l1)) (L.map fst l2) k;
+    L.map_append fst (L.rev l1) (l2);
+    ()
+  in
+  [@inline_let]
+  let (_ : squash (maybe_enum_key_of_repr e r == Known k)) =
+    L.append_mem (L.map snd (L.rev l1)) (L.map snd (l2)) r;
+    L.map_append snd (L.rev l1) (l2);
+    assoc_append_flip_l_intro (L.rev l1) (l2) r k;
+    ()
+  in
+  fun (x: repr { maybe_enum_key_of_repr_not_in e l1 x } ) ->
+    let y : v (maybe_enum_key_of_repr e x) =
+      v_if
+        (maybe_enum_key_of_repr e x) // TODO: Since we cannot make this argument ghost, we need to make the user aware of the fact that this argument must not be extracted.
+        (x = r)
+        (fun h -> f (Known k))
+        (fun h ->
+          g v_eq v_if v_eq_refl v_eq_trans f x)
+    in
+    [@inline_let]
+    let _ : squash (v_eq (maybe_enum_key_of_repr e x) y (f (maybe_enum_key_of_repr e x))) =
+      if x = r
+      then ()
+      else v_eq_trans (maybe_enum_key_of_repr e x) y (g v_eq v_if v_eq_refl v_eq_trans f x) (f (maybe_enum_key_of_repr e x))
+    in
+    (y <: (y: v (maybe_enum_key_of_repr e x) { v_eq (maybe_enum_key_of_repr e x) y (f (maybe_enum_key_of_repr e x)) } ))
+
+inline_for_extraction
+let dep_maybe_enum_destr_nil
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (v: (maybe_enum_key e -> Tot Type))
+  (l1: list (key * repr))
+  (l2: list (key * repr))
+  (u1: squash (Nil? l2 /\ e == L.append (L.rev l1) []))
+: Tot (dep_maybe_enum_destr_t' e v l1 l2 u1)
+= fun
+  (v_eq: ((k: maybe_enum_key e) -> v k -> v k -> GTot Type0))
+  (v_if: ((k: maybe_enum_key e) -> Tot (if_combinator (v k) (v_eq k))))
+  (v_eq_refl: ((k: maybe_enum_key e) -> Tot (r_reflexive_t _ (v_eq k))))
+  (v_eq_trans: ((k: maybe_enum_key e) -> Tot (r_transitive_t _ (v_eq k))))
+  (f: ((k: maybe_enum_key e) -> Tot (v k)))
+  (x: repr { maybe_enum_key_of_repr_not_in e l1 x } )
+  -> ((
+    L.append_l_nil (L.rev l1);
+    list_rev_map snd l1;
+    L.rev_mem (L.map snd l1) x;
+    assert (Unknown x == maybe_enum_key_of_repr e x);
+    let y : v (maybe_enum_key_of_repr e x) = f (Unknown x) in
+    [@inline_let]
+    let _ = v_eq_refl (maybe_enum_key_of_repr e x) (f (maybe_enum_key_of_repr e x)) in
+    y
+  ) <: (y: v (maybe_enum_key_of_repr e x) { v_eq (maybe_enum_key_of_repr e x) y (f (maybe_enum_key_of_repr e x)) } ))
