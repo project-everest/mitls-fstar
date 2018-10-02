@@ -17,22 +17,6 @@ let maybe_enum_key_of_repr'_t
 #set-options "--z3rlimit 32"
 
 inline_for_extraction
-let enum_tail'
-  (#key #repr: eqtype)
-  (e: enum key repr)
-: Pure (enum key repr)
-  (requires True)
-  (ensures (fun y -> Cons? e ==> (let (_ :: y') = e in y == y')))
-= match e with _ :: y -> y | _ -> []
-
-inline_for_extraction
-let enum_tail
-  (#key #repr: eqtype)
-  (e: enum key repr)
-: Tot (enum key repr)
-= enum_tail' e
-
-inline_for_extraction
 let maybe_enum_key_of_repr'_t_cons_nil
   (#key #repr: eqtype)
   (e: enum key repr)

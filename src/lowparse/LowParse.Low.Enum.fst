@@ -2,8 +2,6 @@ module LowParse.Low.Enum
 include LowParse.Spec.Enum
 include LowParse.Low.Combinators
 
-module T = LowParse.SLow.Tac.Sum
-
 inline_for_extraction
 let validate32_maybe_enum_key (#key #repr: eqtype) (#k: parser_kind) (#p: parser k repr) (v: validator32 p) (e: enum key repr) : Tot (validator32 (parse_maybe_enum_key p e)) =
   validate32_synth v (maybe_enum_key_of_repr e) ()
@@ -13,7 +11,7 @@ module HST = FStar.HyperStack.ST
 module B = LowStar.Buffer
 
 inline_for_extraction
-let validate32_enum_key (#key #repr: eqtype) (#k: parser_kind) (#p: parser k repr) (v: validator32 p) (p32: parser32 p) (e: enum key repr) (destr: T.maybe_enum_destr_t bool e) : Tot (validator32 (parse_enum_key p e)) =
+let validate32_enum_key (#key #repr: eqtype) (#k: parser_kind) (#p: parser k repr) (v: validator32 p) (p32: parser32 p) (e: enum key repr) (destr: maybe_enum_destr_t bool e) : Tot (validator32 (parse_enum_key p e)) =
   fun input sz ->
     let h = HST.get () in
     parse_enum_key_eq p e (B.as_seq h input);
@@ -22,7 +20,7 @@ let validate32_enum_key (#key #repr: eqtype) (#k: parser_kind) (#p: parser k rep
     then consumed
     else
       let r = p32 input in
-      if destr eq2 (T.default_if bool) (fun _ -> ()) (fun _ _ _ -> ()) (Known?) r
+      if destr eq2 (default_if bool) (fun _ -> ()) (fun _ _ _ -> ()) (Known?) r
       then consumed
       else (-1l)
 
@@ -38,6 +36,8 @@ let is_known
   | Known _ -> true
   | _ -> false
 
+#set-options "--z3rlimit 16"
+
 inline_for_extraction
 let validate32_flat_maybe_enum_key
   (#key #repr: eqtype)
@@ -49,7 +49,7 @@ let validate32_flat_maybe_enum_key
   (e: enum key repr)
   (f: (maybe_enum_key e -> GTot t))
   (filter_spec: (t -> GTot bool))
-  (destr: T.maybe_enum_destr_t bool e)
+  (destr: maybe_enum_destr_t bool e)
   (u: squash (
     synth_injective f
   ))
@@ -69,7 +69,7 @@ let validate32_flat_maybe_enum_key
   else begin
     Classical.forall_intro lemma;
     let r = p32 input in
-    if destr eq2 (T.default_if bool) (fun _ -> ()) (fun _ _ _ -> ()) (is_known e) r
+    if destr eq2 (default_if bool) (fun _ -> ()) (fun _ _ _ -> ()) (is_known e) r
     then consumed
     else (-1l)
   end
