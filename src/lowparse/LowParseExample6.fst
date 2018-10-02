@@ -25,6 +25,9 @@ let f (input: FStar.Bytes.bytes) : Pure (option (AUX.t * FStar.UInt32.t))
 let m (x: AUX.t) : Tot FStar.Bytes.bytes =
   AUX.serialize32_t x
 
+let msz ( x: AUX.t) : Tot FStar.UInt32.t =
+  AUX.size32_t x
+
 val main: Int32.t -> FStar.Buffer.buffer (FStar.Buffer.buffer C.char) ->
   Stack C.exit_code (fun _ -> true) (fun _ _ _ -> true)
 let main argc argv =

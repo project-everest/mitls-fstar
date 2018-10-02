@@ -149,6 +149,27 @@ let serialize32_t
 = assert_norm (LP.serializer32_sum_gen_precond (LP.get_parser_kind LP.parse_u8) (LP.weaken_parse_dsum_cases_kind t_sum parse_known_cases (LP.get_parser_kind LP.parse_u16)));
   LP.serialize32_dsum t_sum _ serialize32_key _ _ serialize32_known_cases LP.serialize32_u16 (_ by (LP.dep_enum_destr_tac ())) ()
 
+inline_for_extraction
+let size32_case_B: LP.size32 serialize_case_B =
+  LP.size32_filter LP.size32_u16 parse_case_B_filter
+
+inline_for_extraction
+let size32_known_cases
+  (x: LP.dsum_known_key t_sum)
+: Tot (LP.size32 (serialize_known_cases x))
+= match x with
+  | Case_A -> LP.size32_nondep_then LP.size32_u8 () LP.size32_u8
+  | Case_B -> size32_case_B
+
+inline_for_extraction
+let size32_key : LP.size32 (LP.serialize_maybe_enum_key _ LP.serialize_u8 case_enum) =
+  _ by (LP.size32_maybe_enum_key_tac LP.size32_u8 case_enum ())
+
+let size32_t
+: LP.size32 serialize_t
+= assert_norm (LP.size32_sum_gen_precond (LP.get_parser_kind LP.parse_u8) (LP.weaken_parse_dsum_cases_kind t_sum parse_known_cases (LP.get_parser_kind LP.parse_u16)));
+  LP.size32_dsum t_sum _ size32_key _ _ size32_known_cases LP.size32_u16 (_ by (LP.dep_enum_destr_tac ())) ()
+
 (*
 inline_for_extraction
 let parse32_cases_A

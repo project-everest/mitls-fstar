@@ -326,3 +326,20 @@ let size32_synth
     let x = g1' input in
     let y = s1' x in
     (y <: (res: U32.t { size32_postcond (serialize_synth p1 f2 s1 g1 u) input res } ))
+
+inline_for_extraction
+let size32_synth'
+  (#k: parser_kind)
+  (#t1: Type0)
+  (#t2: Type0)
+  (p1: parser k t1)
+  (f2: t1 -> GTot t2)
+  (s1: serializer p1)
+  (s1' : size32 s1)
+  (g1: t2 -> Tot t1)
+  (u: unit {
+    synth_inverse f2 g1 /\
+    synth_injective f2
+  })
+: Tot (size32 (serialize_synth p1 f2 s1 g1 u))
+= size32_synth p1 f2 s1 s1' g1 (fun x -> g1 x) u

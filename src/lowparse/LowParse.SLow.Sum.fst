@@ -966,194 +966,90 @@ let serialize32_dsum
 
 #reset-options
 
-
-(*
-  (x: dsum_type t)
-: Tot (res: B32.bytes { res == serialize32_dsum_aux t s s32 f sf sf32 sg32 u x } )
-=
-let tg = dsum_tag_of_data t x in
-  let s1 = s32 tg in
-  let s2 =
-    match tg with
-    | Known tg' ->  s_tg tg' x
-    | Unknown _ -> sg32 (synth_dsum_case_recip t tg x)
-  in
-  assert (B32.length s1 + B32.length s2 < 4294967296);
-  let res = s1 `B32.b32append` s2 in
-  assert (res == serialize32_dsum_aux t s s32 f sf sf32 sg32 u x);
-  (res <: (res: B32.bytes { res == serialize32_dsum_aux t s s32 f sf sf32 sg32 u x } ))
-
-
-
-(*
 inline_for_extraction
-let parse32_dsum_t (t: dsum) : Tot Type =
-  bytes32 -> Tot (option (dsum_type t * U32.t))
-
-let parse32_dsum_eq (t: dsum) : Tot (parse32_dsum_t t -> parse32_dsum_t t -> GTot Type0) =
-  feq _ _ (eq2 #_)
-
-inline_for_extraction
-let parse32_dsum_if (t: dsum) : Tot (if_combinator _ (parse32_dsum_eq t)) =
-  fif _ _ _ (default_if _)
-
-let parse32_dsum_eq_refl (t: dsum) : Tot (r_reflexive_t _ (parse32_dsum_eq t)) =
-  fun _ -> ()
-
-let parse32_dsum_eq_trans (t: dsum) : Tot (r_transitive_t _ (parse32_dsum_eq t)) =
-  fun _ _ _ -> ()
-
-#set-options "--z3rlimit 64"
-
-inline_for_extraction
-let parse32_dsum_gen
-  (#kt: parser_kind)
+let size32_dsum_type_of_tag
   (t: dsum)
-  (#p: parser kt (dsum_repr_type t))
-  (p32: parser32 p)
-  (#k: parser_kind)
-  (pc: ((x: dsum_key t) -> Tot (parser k (dsum_cases t x))))
-  (pc32: ((x: dsum_key t) -> Tot (parser32 (pc x))))
-  (destr: maybe_enum_destr_t (B32.bytes -> Tot (option (dsum_type t * U32.t)) ) (dsum_enum t))
-: Tot (parser32 (parse_dsum t p pc))
-= fun input -> ((
-  parse_dsum_eq t p pc (B32.reveal input);
-  parse_maybe_enum_key_eq p (dsum_enum t) (B32.reveal input);
-  match p32 input with
-  | None -> None
-  | Some (r, consumed_k) ->
-    let input_k = B32.slice input consumed_k (B32.len input) in
-    begin match destr _ (parse32_dsum_if t) (parse32_dsum_eq_refl t) (parse32_dsum_eq_trans t) (fun (x: dsum_key t) (input: bytes32) -> match pc32 x input with | Some (d, consumed_d) -> Some ((d <: dsum_type t), consumed_d) | _ -> None) r input_k with
-    | Some (d, consumed_d) ->
-      Some (d, U32.add consumed_k consumed_d)
-    | _ -> None
-    end
-  ) <: (res: option (dsum_type t * U32.t) { parser32_correct (parse_dsum t p pc) input res }))
-
-#reset-options
-
-
-inline_for_extraction
-let serialize32_dsum_gen
-  (#kt: parser_kind)
-  (t: dsum)
-  (#p: parser kt (dsum_repr_type t))
-  (#s: serializer p)
-  (s32: serializer32 (serialize_maybe_enum_key _ s (dsum_enum t)))
-  (#k: parser_kind)
-  (#pc: ((x: dsum_key t) -> Tot (parser k (dsum_cases t x))))
-  (#sc: ((x: dsum_key t) -> Tot (serializer (pc x))))
-  (sc32: ((x: dsum_key t) -> Tot (serializer32 (sc x))))
-  (u: unit { serializer32_sum_gen_precond kt k } )
-  (tag_of_data: ((x: dsum_type t) -> Tot (y: dsum_key t  { y == (dsum_tag_of_data t x <: dsum_key t)}  )))
-: Tot (serializer32 (serialize_dsum t s sc))
-= fun (input: dsum_type t) -> ((
-    let tg = tag_of_data input in
-    let stg = s32 tg in
-    let s = sc32 tg input in
-    B32.b32append stg s
-  ) <: (res: bytes32 { serializer32_correct (serialize_dsum t s sc) input res } ))
-
-inline_for_extraction
-let parse32_dsum_cases
-  (t: dsum)
-  (pc: ((x: dsum_known_key t) -> Tot (k: parser_kind & parser k (dsum_cases t (Known x)))))
-  (pc32: ((x: dsum_known_key t) -> Tot (parser32 (dsnd (pc x)))))
-  (#k: parser_kind)
-  (pd: ((x: dsum_unknown_key t) -> Tot (parser k (dsum_cases t (Unknown x)))))
-  (pd32: ((x: dsum_unknown_key t) -> Tot (parser32 (pd x))))
-  (x: dsum_key t)
-: Tot (parser32 (parse_dsum_cases t pc pd x))
-= match x with
-  | Known x -> (fun input -> pc32 x input)
-  | Unknown x -> (fun input -> pd32 x input)
-
-(* TODO: swap match and fun as above *)
+  (f: (x: dsum_known_key t) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag t x)))
+  (sf: (x: dsum_known_key t) -> Tot (serializer (dsnd (f x))))
+  (sf32: (x: dsum_known_key t) -> Tot (size32 (sf x)))
+  (#k': parser_kind)
+  (#g: parser k' (dsum_type_of_unknown_tag t))
+  (#sg: serializer g)
+  (sg32: size32 sg)
+  (tg: dsum_key t)
+: Tot (size32 (serialize_dsum_type_of_tag t f sf g sg tg))
+= match tg with
+  | Known x' -> size32_ext (dsnd (f x')) (sf x') (sf32 x') (parse_dsum_type_of_tag t f g tg) ()
+  | Unknown x' -> size32_ext g sg sg32 (parse_dsum_type_of_tag t f g tg) ()
 
 inline_for_extraction
 let size32_dsum_cases
-  (s: dsum)
-  (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_cases s (Known x))))
-  (sr: (x: dsum_known_key s) -> Tot (serializer (dsnd (f x))))
-  (sr32: (x: dsum_known_key s) -> Tot (size32 (sr x)))
-  (#k: parser_kind)
-  (g: (x: dsum_unknown_key s) -> Tot (parser k (dsum_cases s (Unknown x))))
-  (sg: (x: dsum_unknown_key s) -> Tot (serializer (g x)))
-  (sg32: (x: dsum_unknown_key s) -> Tot (size32 (sg x)))
-  (x: dsum_key s)
-: Tot (size32 (serialize_dsum_cases s f sr g sg x))
-= match x with
-  | Known x ->
-    (fun input -> sr32 x input)
-  | Unknown x ->
-    (fun input -> sg32 x input)
+  (t: dsum)
+  (f: (x: dsum_known_key t) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag t x)))
+  (sf: (x: dsum_known_key t) -> Tot (serializer (dsnd (f x))))
+  (sf32: (x: dsum_known_key t) -> Tot (size32 (sf x)))
+  (#k': parser_kind)
+  (#g: parser k' (dsum_type_of_unknown_tag t))
+  (#sg: serializer g)
+  (sg32: size32 sg)
+  (tg: dsum_key t)
+: Tot (size32 (serialize_dsum_cases t f sf g sg tg))
+= synth_dsum_case_injective t tg;
+  synth_dsum_case_inverse t tg;
+  size32_synth' _ (synth_dsum_case t tg) _ (size32_dsum_type_of_tag t f sf sf32 sg32 tg) (synth_dsum_case_recip t tg) ()
 
 inline_for_extraction
-let serialize32_dsum_t
-  (s: dsum)
-  (x: enum_key (dsum_enum s))
+let size32_dsum_known_destr_codom
+  (t: dsum)
+  (k: dsum_known_key t)
 : Tot Type
-= dsum_cases s (Known x) -> Tot bytes32
+= refine_with_tag (dsum_tag_of_data t) (Known k) -> Tot U32.t
+
+let size32_dsum_known_destr_eq
+  (t: dsum)
+  (k: dsum_known_key t)
+: Tot (size32_dsum_known_destr_codom t k -> size32_dsum_known_destr_codom t k -> GTot Type0)
+= _ by (T.apply (`feq); T.apply (`eq2))
 
 inline_for_extraction
-let serialize32_dsum_eq
-  (s: dsum)
-  (x: enum_key (dsum_enum s))
-: Tot (serialize32_dsum_t s x -> serialize32_dsum_t s x -> GTot Type0)
-= feq _ _ eq2
-
-let serialize32_dsum_eq_refl
-  (s: dsum)
-  (x: enum_key (dsum_enum s))
-: Tot (r_reflexive_t _ (serialize32_dsum_eq s x))
-= fun _ -> ()
-
-let serialize32_dsum_eq_trans
-  (s: dsum)
-  (x: enum_key (dsum_enum s))
-: Tot (r_transitive_t _ (serialize32_dsum_eq s x))
-= fun _ _ _ -> ()
-
-inline_for_extraction
-let serialize32_dsum_if
-  (s: dsum)
-  (x: enum_key (dsum_enum s))
-: Tot (if_combinator _ (serialize32_dsum_eq s x))
+let size32_dsum_known_destr_if
+  (t: dsum)
+  (k: dsum_known_key t)
+: Tot (if_combinator _ (size32_dsum_known_destr_eq t k))
 = fif _ _ _ (default_if _)
 
-(* FIXME: WHY WHY WHY do I need this CONTRIVED aux definition? *)
+#set-options "--z3rlimit 32"
 
 inline_for_extraction
-let serialize32_dsum_cases_aux
-  (s: dsum)
-  (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_cases s (Known x))))
-  (sr: (x: dsum_known_key s) -> Tot (serializer (dsnd (f x))))
-  (sr32: (x: dsum_known_key s) -> Tot (serializer32 (sr x)))
-  (#k: parser_kind)
-  (g: (x: dsum_unknown_key s) -> Tot (parser k (dsum_cases s (Unknown x))))
-  (sg: (x: dsum_unknown_key s) -> Tot (serializer (g x)))
-  (sg32: (x: dsum_unknown_key s) -> Tot (serializer32 (sg x)))
-  (destr: dep_enum_destr (dsum_enum s) (serialize32_dsum_t s))
-  (x: dsum_key s)
-: Tot ((input: dsum_cases s x) -> (y: bytes32 { serializer32_correct (serialize_dsum_cases s f sr g  sg x) input y } ))
-= fun (input: dsum_cases s x) ->
-  match x with
-  | Known x ->
-    destr _ (serialize32_dsum_if s) (serialize32_dsum_eq_refl s) (serialize32_dsum_eq_trans s) sr32 x input
-  | Unknown x ->
-    sg32 x input
+let size32_dsum
+  (#kt: parser_kind)
+  (t: dsum)
+  (#p: parser kt (dsum_repr_type t))
+  (s: serializer p)
+  (s32: size32 (serialize_maybe_enum_key _ s (dsum_enum t)))
+  (f: (x: dsum_known_key t) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag t x)))
+  (sf: (x: dsum_known_key t) -> Tot (serializer (dsnd (f x))))
+  (sf32: (x: dsum_known_key t) -> Tot (size32 (sf x)))
+  (#k': parser_kind)
+  (#g: parser k' (dsum_type_of_unknown_tag t))
+  (#sg: serializer g)
+  (sg32: size32 sg)
+  (destr: dep_enum_destr (dsum_enum t) (size32_dsum_known_destr_codom t))
+  (u: squash (size32_sum_gen_precond kt (weaken_parse_dsum_cases_kind t f k')))
+: Tot (size32 (serialize_dsum t s f sf g sg))
+= fun x ->
+  serialize_dsum_eq' t s f sf g sg x;
+  let tg = dsum_tag_of_data t x in
+  let s1 = s32 tg in
+  let s2 = match tg with
+    | Known tg' -> destr (size32_dsum_known_destr_eq t) (size32_dsum_known_destr_if t) (fun _ _ -> ()) (fun _ _ _ _ -> ()) (fun tg_ -> size32_dsum_cases t f sf sf32 sg32 (Known tg_)) tg' x
+    | Unknown tg' -> size32_dsum_cases t f sf sf32 sg32 (Unknown tg') x
+  in
+  assert_norm (U32.v u32_max == 4294967295);
+  assert (s2 == (size32_dsum_cases t f sf sf32 sg32 tg x));
+  assert (U32.v s1 + U32.v s2 < 4294967295);
+  let res = s1 `U32.add` s2 in
+  assert (size32_postcond (serialize_dsum t s f sf g sg) x res);
+  (res <: (res: U32.t { size32_postcond (serialize_dsum t s f sf g sg) x res } ))
 
-inline_for_extraction
-let serialize32_dsum_cases
-  (s: dsum)
-  (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_cases s (Known x))))
-  (sr: (x: dsum_known_key s) -> Tot (serializer (dsnd (f x))))
-  (sr32: (x: dsum_known_key s) -> Tot (serializer32 (sr x)))
-  (#k: parser_kind)
-  (g: (x: dsum_unknown_key s) -> Tot (parser k (dsum_cases s (Unknown x))))
-  (sg: (x: dsum_unknown_key s) -> Tot (serializer (g x)))
-  (sg32: (x: dsum_unknown_key s) -> Tot (serializer32 (sg x)))
-  (destr: dep_enum_destr (dsum_enum s) (serialize32_dsum_t s))
-  (x: dsum_key s)
-: Tot (serializer32 (serialize_dsum_cases s f sr g sg x))
-= serialize32_dsum_cases_aux s f sr sr32 g sg sg32 destr x
+#reset-options

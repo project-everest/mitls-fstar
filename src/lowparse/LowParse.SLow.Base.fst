@@ -333,3 +333,17 @@ let size32_constant
   [@inline_let]
   let (z: U32.t { size32_postcond s x z } ) = len32 in
   z
+
+inline_for_extraction
+let size32_ext
+  (#k1: parser_kind)
+  (#t1: Type0)
+  (p1: parser k1 t1)
+  (s1: serializer p1)
+  (s1': size32 s1)
+  (#k2: parser_kind)
+  (#t2: Type0)
+  (p2: parser k2 t2)
+  (u: squash (t1 == t2 /\ (forall (input: bytes) . parse p1 input == parse p2 input)))
+: Tot (size32 (serialize_ext p1 s1 p2))
+= fun input -> s1' input
