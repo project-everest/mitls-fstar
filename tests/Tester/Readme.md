@@ -40,9 +40,9 @@ Usage: Tester.exe [Arguments...]
   -k:keyfilename  Use specified Server certificate key filename (default is 'server-ecdsa.key')
   -a:authfilename Use specified Certificate Authority Chain filename (default is 'CAFile.pem')
 </pre></code>
-All the options except for "-f:filename", "-s", "i", "-x" are currently supported. The Component DLL currently produces copious amounts of debug output, but this is gathered into a file. If you want to see this output then choose the "-v" flag which makes the tester more verbose.
+All the options except for "i", "-x" are currently supported. The Component DLL currently produces copious amounts of debug output, but this is gathered into a file. If you want to see this output then choose the "-v" flag which makes the tester more verbose.
 
-If no other arguments are given, the tester does not perform any tests. You have to enable the tests you want to run by using the "-c" and "-t" flags. There are no server or interoperability tests as yet so the "-s", "i", "-x" flags have no effect.
+If no other arguments are given, the tester does not perform any tests. You have to enable the tests you want to run by using the "-c", "-s" and "-t" flags. There are no interoperability tests as yet, so the "i" and "-x" flags have no effect.
 
 The tester has a built in TLS Decoder which can be enabled with the "-d" flag. The QUIC tests do not currently run correcly.
 
