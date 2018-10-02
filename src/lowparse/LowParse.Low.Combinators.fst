@@ -244,6 +244,16 @@ let validate32_filter
     then res
     else -1l
 
+inline_for_extraction
+let validate_nochk32_filter
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (v32: validator_nochk32 p)
+  (f: (t -> GTot bool))
+: Tot (validator_nochk32 (parse_filter p f))
+= fun input -> v32 input
+
 module MO = LowStar.Modifies
 
 inline_for_extraction
@@ -277,6 +287,37 @@ let parse32_filter
 : Tot (parser32 (parse_filter p f))
 = fun input ->
   parse32_filter' p32 f input
+
+inline_for_extraction
+let parse32_synth
+  (#k: parser_kind)
+  (#t1: Type0)
+  (#t2: Type0)
+  (p1: parser k t1)
+  (f2: t1 -> GTot t2)
+  (f2': (x: t1) -> Tot (y: t2 { y == f2 x } )) 
+  (p1' : parser32 p1)
+  (u: unit {
+    synth_injective f2
+  })
+: Tot (parser32 (parse_synth p1 f2))
+= fun input ->
+  let res = p1' input in
+  f2' res <: t2
+
+inline_for_extraction
+let parse32_synth'
+  (#k: parser_kind)
+  (#t1: Type0)
+  (#t2: Type0)
+  (p1: parser k t1)
+  (f2: t1 -> Tot t2)
+  (p1' : parser32 p1)
+  (u: unit {
+    synth_injective f2
+  })
+: Tot (parser32 (parse_synth p1 f2))
+= parse32_synth p1 f2 (fun x -> f2 x) p1' u
 
 inline_for_extraction
 let validate32_and_then

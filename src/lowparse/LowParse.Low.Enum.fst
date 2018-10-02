@@ -73,3 +73,19 @@ let validate32_flat_maybe_enum_key
     then consumed
     else (-1l)
   end
+
+#reset-options
+
+inline_for_extraction
+let validate_nochk32_maybe_enum_key (#key #repr: eqtype) (#k: parser_kind) (#p: parser k repr) (v: validator_nochk32 p) (e: enum key repr) : Tot (validator_nochk32 (parse_maybe_enum_key p e)) =
+  validate_nochk32_synth v (maybe_enum_key_of_repr e) ()
+
+inline_for_extraction
+let validate_nochk32_enum_key
+  (#key #repr: eqtype)
+  (#k: parser_kind)
+  (#p: parser k repr)
+  (v: validator_nochk32 p)
+  (e: enum key repr)
+: Tot (validator_nochk32 (parse_enum_key p e))
+= validate_nochk32_filter v (fun r -> list_mem r (list_map snd e))
