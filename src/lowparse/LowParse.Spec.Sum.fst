@@ -858,7 +858,26 @@ let make_dsum
   )
 = DSum key repr e data tag_of_data
 
-#set-options "--z3rlimit 16"
+let serialize_dsum_eq'
+  (#kt: parser_kind)  
+  (s: dsum)
+  (#pt: parser kt (dsum_repr_type s))
+  (st: serializer pt)
+  (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag s x)))
+  (sr: (x: dsum_known_key s) -> Tot (serializer (dsnd (f x))))
+  (#k: parser_kind)
+  (g: parser k (dsum_type_of_unknown_tag s))
+  (sg: serializer g)
+  (x: dsum_type s)
+: Lemma
+  (requires (kt.parser_kind_subkind == Some ParserStrong))
+  (ensures (
+    serialize (serialize_dsum s st f sr g sg) x == (
+    let tg = dsum_tag_of_data s x in
+    serialize (serialize_maybe_enum_key _ st (dsum_enum s)) tg `Seq.append`
+    serialize (serialize_dsum_cases s f sr g sg tg) x
+  )))
+= ()
 
 let serialize_dsum_eq
   (#kt: parser_kind)  
@@ -881,9 +900,7 @@ let serialize_dsum_eq
     | Known k -> serialize (sr k) (synth_dsum_case_recip s tg x)
     | Unknown k -> serialize sg (synth_dsum_case_recip s tg x)
   ))))
-= ()
-
-#reset-options
+= serialize_dsum_eq' s st f sr g sg x
 
 (*
 let serialize_dsum_upd

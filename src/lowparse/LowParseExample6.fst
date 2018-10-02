@@ -22,10 +22,8 @@ let f (input: FStar.Bytes.bytes) : Pure (option (AUX.t * FStar.UInt32.t))
   let _ = LowParse.SLow.Base.parser32_consumes AUX.parse32_t input in
   res
 
-(*
 let m (x: AUX.t) : Tot FStar.Bytes.bytes =
   AUX.serialize32_t x
-*)
 
 val main: Int32.t -> FStar.Buffer.buffer (FStar.Buffer.buffer C.char) ->
   Stack C.exit_code (fun _ -> true) (fun _ _ _ -> true)

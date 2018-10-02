@@ -183,6 +183,22 @@ let serialize32_synth
     (s1' x <: (res: bytes32 { serializer32_correct (serialize_synth p1 f2 s1 g1 u) input res } ))
 
 inline_for_extraction
+let serialize32_synth'
+  (#k: parser_kind)
+  (#t1: Type0)
+  (#t2: Type0)
+  (p1: parser k t1)
+  (f2: t1 -> GTot t2)
+  (s1: serializer p1)
+  (s1' : serializer32 s1)
+  (g1: t2 -> Tot t1)
+  (u: unit {
+    synth_inverse f2 g1 /\
+    synth_injective f2
+  })
+= serialize32_synth p1 f2 s1 s1' g1 (fun x -> g1 x) u
+
+inline_for_extraction
 let parse32_filter
   (#k: parser_kind)
   (#t: Type0)

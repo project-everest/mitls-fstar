@@ -118,6 +118,20 @@ let serializer32
 = (input: t) -> Tot (res: bytes32 { serializer32_correct s input res } )
 
 inline_for_extraction
+let serialize32_ext
+  (#k1: parser_kind)
+  (#t1: Type0)
+  (p1: parser k1 t1)
+  (s1: serializer p1)
+  (s1': serializer32 s1)
+  (#k2: parser_kind)
+  (#t2: Type0)
+  (p2: parser k2 t2)
+  (u: squash (t1 == t2 /\ (forall (input: bytes) . parse p1 input == parse p2 input)))
+: Tot (serializer32 (serialize_ext p1 s1 p2))
+= fun input -> s1' input
+
+inline_for_extraction
 let partial_serializer32
   (#k: parser_kind)
   (#t: Type0)

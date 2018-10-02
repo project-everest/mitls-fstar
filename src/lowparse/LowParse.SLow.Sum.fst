@@ -879,14 +879,9 @@ let parse32_dsum
 = fun input ->
   (parse32_dsum' t p32 f f32 g32 destr input <: (res: option (dsum_type t * U32.t) { parser32_correct (parse_dsum t p f g) input res } ))
 
-#set-options "--z3rlimit 32"
-
-let serialize32_dsum_aux
-  (#kt: parser_kind)
+inline_for_extraction
+let serialize32_dsum_type_of_tag
   (t: dsum)
-  (#p: parser kt (dsum_repr_type t))
-  (s: serializer p)
-  (s32: serializer32 (serialize_maybe_enum_key _ s (dsum_enum t)))
   (f: (x: dsum_known_key t) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag t x)))
   (sf: (x: dsum_known_key t) -> Tot (serializer (dsnd (f x))))
   (sf32: (x: dsum_known_key t) -> Tot (serializer32 (sf x)))
@@ -894,22 +889,27 @@ let serialize32_dsum_aux
   (#g: parser k' (dsum_type_of_unknown_tag t))
   (#sg: serializer g)
   (sg32: serializer32 sg)
-  (u: squash (serializer32_sum_gen_precond kt (weaken_parse_dsum_cases_kind t f k')))
-: GTot (serializer32 (serialize_dsum t s f sf g sg))
-= fun x ->
-  serialize_dsum_eq t s f sf g sg x;
-  let tg = dsum_tag_of_data t x in
-  let s1 = s32 tg in
-  let s2 =
-    match tg with
-    | Known tg' -> sf32 tg' (synth_dsum_case_recip t tg x)
-    | Unknown _ -> sg32 (synth_dsum_case_recip t tg x)
-  in
-  assert (B32.length s1 + B32.length s2 < 4294967296);
-  let res = s1 `B32.b32append` s2 in
-  assert (serializer32_correct (serialize_dsum t s f sf g sg) x res);
-  (res <: (res: B32.bytes { serializer32_correct (serialize_dsum t s f sf g sg) x res } ))
+  (tg: dsum_key t)
+: Tot (serializer32 (serialize_dsum_type_of_tag t f sf g sg tg))
+= match tg with
+  | Known x' -> serialize32_ext (dsnd (f x')) (sf x') (sf32 x') (parse_dsum_type_of_tag t f g tg) ()
+  | Unknown x' -> serialize32_ext g sg sg32 (parse_dsum_type_of_tag t f g tg) ()
 
+inline_for_extraction
+let serialize32_dsum_cases
+  (t: dsum)
+  (f: (x: dsum_known_key t) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag t x)))
+  (sf: (x: dsum_known_key t) -> Tot (serializer (dsnd (f x))))
+  (sf32: (x: dsum_known_key t) -> Tot (serializer32 (sf x)))
+  (#k': parser_kind)
+  (#g: parser k' (dsum_type_of_unknown_tag t))
+  (#sg: serializer g)
+  (sg32: serializer32 sg)
+  (tg: dsum_key t)
+: Tot (serializer32 (serialize_dsum_cases t f sf g sg tg))
+= synth_dsum_case_injective t tg;
+  synth_dsum_case_inverse t tg;
+  serialize32_synth' _ (synth_dsum_case t tg) _ (serialize32_dsum_type_of_tag t f sf sf32 sg32 tg) (synth_dsum_case_recip t tg) ()
 
 inline_for_extraction
 let serialize32_dsum_known_destr_codom
@@ -931,10 +931,10 @@ let serialize32_dsum_known_destr_if
 : Tot (if_combinator _ (serialize32_dsum_known_destr_eq t k))
 = fif _ _ _ (default_if _)
 
-#set-options "--z3rlimit 64"
+#set-options "--z3rlimit 32"
 
 inline_for_extraction
-let serialize32_dsum'
+let serialize32_dsum
   (#kt: parser_kind)
   (t: dsum)
   (#p: parser kt (dsum_repr_type t))
@@ -949,17 +949,33 @@ let serialize32_dsum'
   (sg32: serializer32 sg)
   (destr: dep_enum_destr (dsum_enum t) (serialize32_dsum_known_destr_codom t))
   (u: squash (serializer32_sum_gen_precond kt (weaken_parse_dsum_cases_kind t f k')))
+: Tot (serializer32 (serialize_dsum t s f sf g sg))
+= fun x ->
+  serialize_dsum_eq' t s f sf g sg x;
+  let tg = dsum_tag_of_data t x in
+  let s1 = s32 tg in
+  let s2 = match tg with
+    | Known tg' -> destr (serialize32_dsum_known_destr_eq t) (serialize32_dsum_known_destr_if t) (fun _ _ -> ()) (fun _ _ _ _ -> ()) (fun tg_ -> serialize32_dsum_cases t f sf sf32 sg32 (Known tg_)) tg' x
+    | Unknown tg' -> serialize32_dsum_cases t f sf sf32 sg32 (Unknown tg') x
+  in
+  assert (s2 == (serialize32_dsum_cases t f sf sf32 sg32 tg x));
+  assert (B32.length s1 + B32.length s2 < 4294967296);
+  let res = s1 `B32.b32append` s2 in
+  assert (serializer32_correct (serialize_dsum t s f sf g sg) x res);
+  (res <: (res: B32.bytes { serializer32_correct (serialize_dsum t s f sf g sg) x res } ))
+
+#reset-options
+
+
+(*
   (x: dsum_type t)
 : Tot (res: B32.bytes { res == serialize32_dsum_aux t s s32 f sf sf32 sg32 u x } )
-= [@inline_let]
-  let s_tg (tg': dsum_known_key t) (x': refine_with_tag (dsum_tag_of_data t) (Known tg')) : Tot B32.bytes =
-    sf32 tg' (synth_dsum_case_recip t (Known tg') x')
-  in
-  let tg = dsum_tag_of_data t x in
+=
+let tg = dsum_tag_of_data t x in
   let s1 = s32 tg in
   let s2 =
     match tg with
-    | Known tg' -> destr (serialize32_dsum_known_destr_eq t) (serialize32_dsum_known_destr_if t) (fun _ _ -> ()) (fun _ _ _ _ -> ()) s_tg tg' x
+    | Known tg' ->  s_tg tg' x
     | Unknown _ -> sg32 (synth_dsum_case_recip t tg x)
   in
   assert (B32.length s1 + B32.length s2 < 4294967296);
