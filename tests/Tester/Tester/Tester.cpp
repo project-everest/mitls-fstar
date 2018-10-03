@@ -19,25 +19,19 @@
 //!
 //**********************************************************************************************************************************
 
-#include "stdafx.h"
-#include "time.h"     // for time and local_time
-#include "winsock2.h" // for WSAStartup and WSACleanup
-#include "windows.h"  // for sleep
-
-#include "InteropTester.h"
-#include "Tester.h"
+#include "Tester.h" // pulls in everything else
 
 //**********************************************************************************************************************************
 
-extern int PrintSocketError ( void ); // in simpleserver.cpp
-
-//**********************************************************************************************************************************
-
-TESTER::TESTER ( FILE *NewDebugFile, FILE * NewComponentStatisticsFile, FILE *NewRecordedMeasurementsFile )
+TESTER::TESTER ( FILE *NewDebugFile,
+                 FILE *NewComponentStatisticsFile,
+                 FILE *NewRecordedClientMeasurementsFile,
+                 FILE *NewRecordedServerMeasurementsFile ) // maybe NULL
 {
-    DebugFile                = NewDebugFile;
-    ComponentStatisticsFile  = NewComponentStatisticsFile;
-    RecordedMeasurementsFile = NewRecordedMeasurementsFile;
+/* protected */
+
+    DebugFile               = NewDebugFile;
+    ComponentStatisticsFile = NewComponentStatisticsFile;
 
     // initialise basic measurement variables
 
@@ -45,22 +39,26 @@ TESTER::TESTER ( FILE *NewDebugFile, FILE * NewComponentStatisticsFile, FILE *Ne
     memset ( &EndTime,   0, sizeof ( EndTime   ) );
     memset ( &Frequency, 0, sizeof ( Frequency ) );
 
-    // initialise debug and console flags
+/* public */
 
-    VerboseConsoleOutput = FALSE;
+    RecordedClientMeasurementsFile = NewRecordedClientMeasurementsFile;
+    RecordedServerMeasurementsFile = NewRecordedServerMeasurementsFile;
+
+    // initialise debug and console flags
 
     ConsoleDebugging = FALSE;
 
+    VerboseConsoleOutput = FALSE;
+
     RedirectedStandardOutputFile = NULL;
 
-    RedirectedStandardOutputFilename [ 0 ] = '\0';
+    memset ( &RedirectedStandardOutputFilename, 0, sizeof ( RedirectedStandardOutputFilename ) );
  }
 
 //**********************************************************************************************************************************
 
 TESTER::~TESTER ( void )
 {
-    // nothing to do yet!
 }
 
 //**********************************************************************************************************************************
@@ -101,7 +99,6 @@ bool TESTER::Setup ( char *DateAndTimeString )
         {
             if ( ! ConsoleDebugging ) // if console debugging is enabled then we "DO" want the output on the console!
             {
-
                 // get the current date and time
 
                 time ( &CurrentTime );
@@ -153,7 +150,8 @@ bool TESTER::TearDown ( void )
 
     fprintf ( DebugFile, "Total Run Time was: %u microseconds\n", CalculateExecutionTime ( StartTime, EndTime ) );
 
-    PrintMeasurementResults ( RecordedMeasurementsFile );
+    //if ( ClientComponent != NULL ) ClientComponent->PrintMeasurementResults ( RecordedClientMeasurementsFile );
+    //if ( ServerComponent != NULL ) ServerComponent->PrintMeasurementResults ( RecordedServerMeasurementsFile );
 
     fprintf ( DebugFile, "Closing Windows Sockets!\n" );
 

@@ -5,7 +5,7 @@
 //
 //   Project: Everest
 //
-//  Filename: InteropTester.h
+//  Filename: Tester.h
 //
 //   Authors: Caroline.M.Mathieson (CMM)
 //
@@ -14,16 +14,36 @@
 //  Description
 //  -----------
 //
-//! \file InteropTester.h
+//! \file Tester.h
 //! \brief Contains the complete definition  of the TESTER Object.
 //!
 //**********************************************************************************************************************************
 
 #include "stdafx.h"
-#include "windows.h" // for LARGE_INTEGER as used by QueryPerformanceCounter ()
+#include "process.h"
+#include "string.h"
+#include "stdlib.h"
+#include "io.h"
+#include "fcntl.h"    // for _open_osfhandle() etc
+#include "time.h"     // for time and local_time
+#include "winsock2.h" // for WSAStartup and WSACleanup
+#include "windows.h"  // for LARGE_INTEGER as used by QueryPerformanceCounter (), sleep ()
 
 #include "mitlsffi.h" // for mitls_state etc
 #include "mipki.h"    // for mipki_state etc
+
+#include "pngwriter.h"
+
+//**********************************************************************************************************************************
+
+typedef struct optionstableentry
+{
+    const char *Name;
+    const char *Meaning;
+
+    void ( OptionHandlerFunction ) ( const char *Argument ); // function to call to parse argument
+
+} OPTIONS_TABLE_ENTRY;
 
 //**********************************************************************************************************************************
 
@@ -240,8 +260,8 @@ typedef struct callbackmeasuremententry
 
 typedef struct componentmeasurement
 {
-    LARGE_INTEGER StartTime; // when the measurement started
-    LARGE_INTEGER EndTime;   // when the measurement finished
+    LARGE_INTEGER MeasurementStartTime; // when the measurement started
+    LARGE_INTEGER MeasurementEndTime;   // when the measurement finished
 
     COMPONENTMEASUREMENTENTRY FFIMeasurements [ MAX_FFI_FUNCTIONS ]; // one for each FFI function
 
@@ -257,12 +277,28 @@ typedef struct measurementresults
 {
     const char *MeasurementTypeName;
 
-    LARGE_INTEGER StartTime; // when the test run started
-    LARGE_INTEGER EndTime;   // when the test run finished
+    LARGE_INTEGER TestRunStartTime; // when the test run started
+    LARGE_INTEGER TestRunEndTime;   // when the test run finished
 
     COMPONENTMEASUREMENT Measurements [ MAX_MEASUREMENTS ]; // individual component measurements
 
 } MEASUREMENTRESULTS;
+
+typedef struct measurementsummaryentry
+{
+    bool IsCallback;
+    bool IsServer;
+
+    const char *FunctionName;
+
+    unsigned int TestRunNumber;
+    unsigned int MeasurementNumber;
+    unsigned int CallNumber;
+
+    unsigned long StartTime;
+    unsigned long Duration;
+
+} MEASUREMENT_SUMMARY_ENTRY;
 
 //**********************************************************************************************************************************
 
@@ -736,6 +772,34 @@ typedef struct asnentry
 #define MAX_ASN_ENTRIES (100000)
 
 //**********************************************************************************************************************************
+//
+// This structure implements a very simplist buffering system. There is a simple linear array of unsigned bytes which are written
+// into and read from. The bufer is not circular, so if it becomes full then there is a problem with the reading side. Reads and
+// writes are performedd using pointers and when the pointers become the same then both are reset to zero since this indicates that
+// everything written was read. A record is kept of the total amount of bytes ever written into and read from the buffer.
+//
+
+#define TRANSFER_BUFFER_SIZE ( 1000000 ) // 1MB should be more than enough if the pointers are reset often
+
+typedef struct buffer
+{
+#ifdef WIN32
+    CRITICAL_SECTION CriticalSection;
+#endif
+    unsigned char Buffer [ TRANSFER_BUFFER_SIZE ];
+
+    unsigned char *ReadPointer  = Buffer;
+    unsigned char *WritePointer = Buffer;
+
+    unsigned int ReadIndex  = 0;
+    unsigned int WriteIndex = 0;
+
+    unsigned long int TotalAmountWritten = 0;
+    unsigned long int TotalAmountRead    = 0;
+
+} TRANSFER_BUFFER;
+
+//**********************************************************************************************************************************
 
 class TESTER
 {
@@ -743,7 +807,6 @@ class TESTER
 
         FILE *DebugFile;
         FILE *ComponentStatisticsFile;
-        FILE *RecordedMeasurementsFile;
 
         // measurement variables
 
@@ -752,6 +815,9 @@ class TESTER
         LARGE_INTEGER Frequency;
 
     public:
+
+        FILE *RecordedClientMeasurementsFile;
+        FILE *RecordedServerMeasurementsFile;
 
         // console output over-ride flags
 
@@ -765,7 +831,10 @@ class TESTER
 
     public:
 
-        TESTER ( FILE *NewDebugFile, FILE * NewComponentStatisticsFile, FILE *NewRecordedMeasurementsFile );
+        TESTER ( FILE *NewDebugFile,
+                 FILE *NewComponentStatisticsFile,
+                 FILE *NewRecordedClientMeasurementsFile,
+                 FILE *NewRecordedServerMeasurementsFile );
 
         ~TESTER ( void );
 
@@ -796,23 +865,13 @@ class TLSTESTER : public TESTER
         LARGE_INTEGER MeasurementEndTime;   // end time for a client TLS measurement
 
         SOCKET PeerSocket;
-        SOCKET ComponentSocket;
-
-        DWORD PipeThreadIdentifier;
-        DWORD ClientThreadIdentifier;
-        DWORD ServerThreadIdentifier;
-
-        HANDLE PipeThreadHandle;
-        HANDLE ClientThreadHandle;
-        HANDLE ServerThreadHandle;
 
     public:
 
-        bool TerminatePipeThread;   // if TRUE, then the pipe thread will close itself
-        bool TerminateClientThread; // if TRUE, then the client thread will close itself
-        bool TerminateServerThread; // if TRUE, then the server thread will close itself
+        class COMPONENT *ClientComponent; // callback functions need access to this to do measurements
+        class COMPONENT *ServerComponent;
 
-        class COMPONENT *Component; // callback functions need access to this to do measurements
+        char *DateAndTimeString; // the date and time of the test
 
         char HostFileName [ MAX_PATH ]; // the name of the file containing the list of hosts, if any
 
@@ -826,6 +885,8 @@ class TLSTESTER : public TESTER
 
         int PortNumber; // the default port number
 
+        // certificate attributes
+
         char ClientCertificateFilename    [ MAX_PATH ];
         char ClientCertificateKeyFilename [ MAX_PATH ];
 
@@ -835,6 +896,8 @@ class TLSTESTER : public TESTER
         char CertificateAuthorityChainFilename [ MAX_PATH ];
 
         // command line over-ride flags
+
+        bool GenerateImageFiles;            // if TRUE, generate a gantt chart style image for each component measurement
 
         bool UseHostList;                   // if TRUE, user has specified a list of hostnames in a file
 
@@ -858,21 +921,41 @@ class TLSTESTER : public TESTER
 
         bool DoServerInteroperabilityTests; // if TRUE, do the server mode interoperability TLS and DTLS tests
 
+        // thread attributes
+
+        HANDLE AppStandardOutput;
+
+        DWORD ClientTLSTestsThreadIdentifier;
+        DWORD ServerTLSTestsThreadIdentifier;
+
+        HANDLE ClientTLSTestsThreadHandle;
+        HANDLE ServerTLSTestsThreadHandle;
+
+        bool ClientTestsFinished; // if TRUE, the client test thread has run and completed
+        bool ServerTestsFinished; // if TRUE, the server test thread has run and completed
+
     public:
 
-        TLSTESTER ( FILE *DebugFile, FILE *TestResultsFile, FILE *RecordedMeasurementsFile );
+        TLSTESTER (  FILE *NewDebugFile,
+                     FILE *NewComponentStatisticsFile,
+                     FILE *NewRecordedClientMeasurementsFile,
+                     FILE *NewRecordedServerMeasurementsFile );
 
         ~TLSTESTER ( void );
 
-        void Configure ( void ); // configure the component settings from the tester settings
+        void ConfigureClient ( void ); // configure the client component settings from the tester settings
 
-        void RunClientTLSTests ( char *DateAndTimeString ); // mitls running in TLS client mode
+        void ConfigureServer ( void ); // configure the server component settings from the tester settings
 
-        void RunServerTLSTests ( char *DateAndTimeString ); // mitls running in TLS server mode
+        // basic TLS and QUIC client and server tests
 
-        void RunClientQUICTests ( char *DateAndTimeString ); // mitls running in QUIC client mode
+        void RunClientTLSTests ( char *TestDateAndTimeString ); // mitls running in TLS client mode only
 
-        void RunServerQUICTests ( char *DateAndTimeString ); // mitls running in QUIC server mode
+        void RunServerTLSTests ( char *TestDateAndTimeString ); // mitls running in TLS client and server mode
+
+        void RunClientQUICTests ( char *DateAndTimeString ); // mitls running in QUIC client mode only
+
+        void RunServerQUICTests ( char *DateAndTimeString ); // mitls running in QUIC client and server mode
 
         // client interoperability TLS tests
 
@@ -922,22 +1005,31 @@ class TLSTESTER : public TESTER
 
         void RunFizzServerQUICTests ( char *DateAndTimeString );    // mitls as QUIC server with Fizz Client
 
-private:
+    public: // equivalent of above methods but accessable from threads
+
+        void ClientTLSTests ( void );
+
+        void ClientServerTLSTests ( void );
+
+        void ServerTLSTests ( void );
+
+    private:
 
         SOCKET OpenPeerSocket ( void );
 
         int RunCombinationTest ( int   MeasurementNumber,
-                                 char *DateAndTimeString,
                                  char *HostName );
 
         bool RunSingleClientDefaultsTLSTest ( int MeasurementNumber );
+
+        bool RunSingleServerDefaultsTLSTest ( int MeasurementNumber );
 
         bool RunSingleClientTLSTest ( int         MeasurementNumber,
                                       const char *CipherSuite,
                                       const char *SignatureAlgorithm,
                                       const char *NamedGroup );
 
-        void RunSingleServerTLSTest ( int         MeasurementNumber,
+        bool RunSingleServerTLSTest ( int         MeasurementNumber,
                                       const char *CipherSuite,
                                       const char *SignatureAlgorithm,
                                       const char *NamedGroup );
@@ -951,6 +1043,11 @@ private:
                                        const char *CipherSuite,
                                        const char *SignatureAlgorithm,
                                        const char *NamedGroup );
+
+        bool SingleClientTLSTest ( int         MeasurementNumber,
+                                   const char *CipherSuite,
+                                   const char *SignatureAlgorithm,
+                                   const char *NamedGroup );
 
         bool PrintQuicResult ( quic_result QuicResult );
 };
@@ -973,7 +1070,7 @@ class COMPONENT
 
         quic_config Configuration =
         {
-            Configuration.is_server = 0, // should be boolean FALSE but defined as an int
+            Configuration.is_server = IsServer, // should be boolean but defined as an int
 
             Configuration.alpn                 = NULL,
             Configuration.cipher_suites        = NULL,
@@ -1004,7 +1101,7 @@ class COMPONENT
         char ServerCertificateFilename    [ MAX_PATH ];
         char ServerCertificateKeyFilename [ MAX_PATH ];
 
-        // kremlin generated code will abort if this is set to > "1.3". If set to "1.3" then the hello messages use "1.2" and use
+        // kremlin generated code will abort if this is set to > "1.3". If set to "1.3" then the hello messages use "1.2" and uses
         // the extensions to specify the right version. If set to "1.2" then the hello messages use "1.2". If set to "1.1" then the
         // hello messages use "1.1". Earlier version are not supported. It is not possible to specify the TLS draft number.
 
@@ -1014,33 +1111,76 @@ class COMPONENT
 
         int PortNumber;
 
-        int TestRunNumber;
+   public: // so callbacks can access them quickly
 
-        int MeasurementNumber;
-
-    public: // so callbacks can access them quickly
+        bool IsServer = FALSE;
 
         SOCKET Socket = 0;
 
         FILE *DebugFile = NULL;
 
-        COMPONENTMEASUREMENT *CurrentComponentMeasurement = NULL; // for test run number and measurement number
-
         int NumberOfChainsAllocated = 0; // index into CertificateChains
 
         mipki_chain CertificateChains [ MAX_CERTIFICATE_CHAINS ];
 
+        int TestRunNumber;
+
+        int MeasurementNumber;
+
         int NumberOfMeasurementsMade; // the total number for all tests
+
+        COMPONENTMEASUREMENT *CurrentComponentMeasurement = NULL; // for test run number and measurement number
+
+        MEASUREMENTRESULTS *MeasurementResultsArray [ MAX_MEASUREMENT_TYPES ]; // actually indexed by TestRunNumber
 
     public:
 
-        COMPONENT ( TLSTESTER *Parent,  FILE *NewDebugFile );
+        COMPONENT ( TLSTESTER *Parent,  FILE *NewDebugFile, bool IsServer );
 
         ~COMPONENT ( void );
 
-        void RecordStartTime ( void );
+        // measurements
 
-        void RecordEndTime ( void );
+        void InitialiseMeasurementResults ( void );
+
+        void AllocateMeasurementResult ( int TestRunNumber );
+
+        void FreeMeasurementResults ( void );
+
+        void InitialiseMeasurementResult ( MEASUREMENTRESULTS *MeasurementResult );
+
+        void PrintMeasurementResults ( FILE *MeasurementsResultFile );
+
+        void PrintMeasurementResult ( FILE               *MeasurementsResultFile,
+                                      MEASUREMENTRESULTS *MeasurementResult );
+
+        void PrintMeasurementSummary ( bool IsServer );
+
+        void AddMeasurementSummaryEntry ( FILE                      *MeasurementSummaryFile,
+                                          MEASUREMENTRESULTS        *MeasurementResult,
+                                          COMPONENTMEASUREMENT      *ComponentMeasurement,
+                                          COMPONENTMEASUREMENTENTRY *ComponentMeasurementEntry,
+                                          int                        TestRunNumber,
+                                          int                        MeasurementNumber,
+                                          int                        FunctionIndex,
+                                          int                        CallIndex );
+
+        void AddMeasurementSummaryEntry ( FILE                     *MeasurementSummaryFile,
+                                          COMPONENTMEASUREMENT     *ComponentMeasurement,
+                                          CALLBACKMEASUREMENTENTRY *CallbackMeasurementEntry,
+                                          int                       TestRunNumber,
+                                          int                       MeasurementNumber,
+                                          int                       CallIndex );
+
+        void CreateMeasurementSummaryImage (  int TestRunNumber, int MeasurementNMumber );
+
+        void RecordTestRunStartTime ( void );
+
+        void RecordTestRunEndTime ( void );
+
+        void RecordMeasurementStartTime ( void );
+
+        void RecordMeasurementEndTime ( void );
 
         // setters
 
@@ -1125,7 +1265,7 @@ class COMPONENT
 
         int ConfigureCertificateCallbacks ( void ); // uses the callback functions in component.cpp
 
-        void CloseConnection ( void );
+        void Close ( void );
 
         int Connect ( void ); // client side
 
@@ -1178,11 +1318,22 @@ class COMPONENT
 
         int AddRootFileOrPath ( const char *CertificateAuthorityFile );
 
-        mipki_chain SelectCertificate ( void );
+        mipki_chain SelectCertificate ( mipki_state                  *State,
+                                        const unsigned char          *ServerNameIndicator,
+                                        size_t                        ServerNameIndicatorLength,
+                                        const mitls_signature_scheme *SignatureAlgorithms,
+                                        size_t                        SignatureAlgorithmsLength,
+                                        mitls_signature_scheme       *SelectedSignature );
 
-        int SignCertificate ( mipki_chain CertificatePointer );
+        int SignCertificate ( mipki_state           *State,
+                              mipki_chain            CertificatePointer,
+                              const mipki_signature  SignatureAlgorithm,
+                              const char            *Certificate,
+                              size_t                 CertificateLength,
+                              char                  *Signature,
+                              size_t                *SignatureLength );
 
-        int VerifyCertificate ( mipki_state           *State,               // use the state provided by the callback!
+        int VerifyCertificate ( mipki_state           *State,
                                 mipki_chain            CertificatePointer,
                                 const mipki_signature  SignatureAlgorithm,
                                 const char            *Certificate,
@@ -1190,13 +1341,16 @@ class COMPONENT
                                 char                  *Signature,
                                 size_t                *SignatureLength );
 
-        int ParseChain ( mipki_state *State,         // use the state provided by the callback!
+        int ParseChain ( mipki_state *State,
                          const char  *ChainOfTrust,
                          size_t       ChainLength ); // returns index into CertificateChains []
 
         mipki_chain ParseList ( void );
 
-        int FormatChain ( mipki_chain Chain );
+        size_t FormatChain ( mipki_state   *State,
+                             mipki_chain    ChainOfTrust,
+                             unsigned char *ChainBuffer,
+                             size_t         ChainBufferLength );
 
         void FormatAllocation ( mipki_chain Chain );
 
@@ -1207,22 +1361,108 @@ class COMPONENT
     private:
 };
 
-void InitialiseMeasurementResults ( void );
+//**********************************************************************************************************************************
 
-void AllocateMeasurementResult ( int TestRunNumber );
+// in InteropTester.cpp
 
-void FreeMeasurementResults ( void );
+FILE *OpenRecordedMeasurementsFile ( char *RecordedMeasurementsFileName ); // there is more than one
 
-void InitialiseMeasurementResult ( MEASUREMENTRESULTS *MeasurementResult );
+FILE *OpenStatisticsFile ( void );
 
-void PrintMeasurementResults ( FILE *MeasurementsResultFile );
+FILE *OpenDebugFile ( void );
 
-void PrintMeasurementResult ( FILE               *MeasurementsResultFile,
-                              MEASUREMENTRESULTS *MeasurementResult );
+void OperatorConfidence ( void );
 
-void RecordTestRunStartTime ( int TestRunNumber );
+void ProcessCommandLine ( int   ArgumentCount,
+                          char *ArgumentList         [],
+                          char *EnvironmentVariables [],
+                          bool  Silent );
 
-void RecordTestRunEndTime ( int TestRunNumber );
+void GetTestParameters ( int   ArgumentCount,
+                         char *ArgumentList         [],
+                         char *EnvironmentVariables [],
+                         bool  Silent );
+
+void TestImageCreation ( void );
+
+int main ( int   ArgumentCount,
+           char *ArgumentList         [],
+           char *EnvironmentVariables [] );
+
+//**********************************************************************************************************************************
+
+// in component.cpp
+
+void BufferInitialise ( TRANSFER_BUFFER *TransferBuffer );
+
+unsigned long BufferWrite ( TRANSFER_BUFFER *TransferBuffer, unsigned char *Buffer, unsigned long BufferSize );
+
+unsigned long BufferRead ( TRANSFER_BUFFER *TransferBuffer, unsigned char *Buffer, unsigned long BufferSize );
+
+void BufferReset ( TRANSFER_BUFFER *TransferBuffer );
+
+CALLBACKMEASUREMENTENTRY *GetFFICallbackMeasurement ( unsigned int   CallBackNumber,
+                                                      COMPONENT    **Component );
+
+CALLBACKMEASUREMENTENTRY *GetPKICallbackMeasurement ( unsigned int   CallBackNumber,
+                                                      COMPONENT    **Component );
+
+int MeasurementSummaryCompare ( const void *arg1, const void *arg2 );
+
+//**********************************************************************************************************************************
+
+// in simpleserver.cpp
+
+void OpenConsoleCopyFile ( void );
+
+void CloseConsoleCopyFile ( void );
+
+void DumpPacket ( void         *Packet,         // the packet to be hex dumped
+                  unsigned int  PacketLength,   // the length of the packet in octets
+                  unsigned int  HighlightStart, // the first octet of special interest
+                  unsigned int  HighlightEnd,   // the last octet of special interest (0 = none)
+                  const char   *Title );        // the purpose of the packet (if known)
+
+unsigned long DecodePacket ( void *Packet, size_t PacketLength, const char *Title );
+
+unsigned long DecodeRecord ( void *Record ); // the length is inside the record
+
+unsigned long DecodeHandshakeRecord ( void *HandshakeRecord ); // the length is inside the message
+
+void DecodeClientHello ( TLS_MESSAGE_HEADER *TLSMessage );
+
+void DecodeExtension ( unsigned int   ExtensionType,   // the type of the extension (enumerated)
+                       unsigned int   ExtensionLength, // the length of the extension in octets
+                       unsigned int   ExtensionsIndex, // octet index into the extensions field
+                       unsigned char *MessagePointer,  // points at the beginning of the message
+                       unsigned int   MessageIndex );  // index into the message for the extension
+
+unsigned char *DecodeASN ( unsigned char *ASNMessage,
+                           unsigned long  MessageLength );
+
+const char *GetVersionString ( unsigned char MajorVersion,
+                               unsigned char MinorVersion );
+
+int PrintSocketError ( void );
+
+const char *LookupCipherSuite ( int   CipherSuite,
+                                bool *Supported );
+
+const char *LookupSignatureAlgorithm ( int   SignatureAlgorithm,
+                                       bool *Supported );
+
+const char *LookupNamedGroup ( int   NamedGroup,
+                               bool *Supported );
+
+//**********************************************************************************************************************************
+
+// threads for tests
+
+DWORD WINAPI ClientTLSTestsThread ( LPVOID lpParam );
+
+DWORD WINAPI ClientServerTLSTestsThread ( LPVOID lpParam );
+
+DWORD WINAPI ServerTLSTestsThread ( LPVOID lpParam );
 
 //**********************************************************************************************************************************
 
