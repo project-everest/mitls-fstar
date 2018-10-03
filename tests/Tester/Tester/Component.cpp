@@ -714,18 +714,18 @@ void MITLS_CALLCONV TraceCallback ( const char *msg )
 {
     DWORD CurrentThreadId = GetCurrentThreadId (); // which thread is running?
 
-    printf ( ASES_SET_FOREGROUND_YELLOW );
+    //printf ( ASES_SET_FOREGROUND_YELLOW );
 
     if ( CurrentThreadId == Tester->ClientTLSTestsThreadIdentifier )
     {
-        printf ( "Client Traced: %s", msg );
+        printf (  ASES_SET_FOREGROUND_YELLOW "Client Traced: %s" ASES_SET_FOREGROUND_BLACK, msg );
     }
     else
     {
-        printf ( "Server Traced: %s", msg );
+        printf (  ASES_SET_FOREGROUND_YELLOW "Server Traced: %s" ASES_SET_FOREGROUND_BLACK, msg );
     }
 
-    printf ( ASES_SET_FOREGROUND_BLACK );
+    //printf ( ASES_SET_FOREGROUND_BLACK );
 }
 
 //**********************************************************************************************************************************
