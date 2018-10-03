@@ -714,8 +714,6 @@ void MITLS_CALLCONV TraceCallback ( const char *msg )
 {
     DWORD CurrentThreadId = GetCurrentThreadId (); // which thread is running?
 
-    //printf ( ASES_SET_FOREGROUND_YELLOW );
-
     if ( CurrentThreadId == Tester->ClientTLSTestsThreadIdentifier )
     {
         printf (  ASES_SET_FOREGROUND_YELLOW "Client Traced: %s" ASES_SET_FOREGROUND_BLACK, msg );
@@ -724,8 +722,6 @@ void MITLS_CALLCONV TraceCallback ( const char *msg )
     {
         printf (  ASES_SET_FOREGROUND_YELLOW "Server Traced: %s" ASES_SET_FOREGROUND_BLACK, msg );
     }
-
-    //printf ( ASES_SET_FOREGROUND_BLACK );
 }
 
 //**********************************************************************************************************************************
@@ -1217,6 +1213,8 @@ void COMPONENT::PrintMeasurementResult ( FILE               *MeasurementsResultF
     COMPONENTMEASUREMENTENTRY *ComponentMeasurementEntry = NULL;
     CALLBACKMEASUREMENTENTRY  *CallbackMeasurementEntry  = NULL;
     COMPONENTMEASUREMENT      *ComponentMeasurement      = NULL;
+
+    fprintf ( MeasurementsResultFile, "\n" );
 
     fprintf ( MeasurementsResultFile, "Test Run Type Type = %s\n", MeasurementResult->MeasurementTypeName );
 
@@ -1710,7 +1708,14 @@ void COMPONENT::CreateMeasurementSummaryImage ( int TestRunNumber,
 
     char *FontPath = "C:\\Program Files (x86)\\Graphviz2.38\\share\\fonts\\FreeSans.ttf";
 
-    sprintf ( TestImageFilename, "MeasurementSummaryImage_Run%d_Measurement%d.png", TestRunNumber, MeasurementNMumber );
+    if ( IsServer )
+    {
+        sprintf ( TestImageFilename, "ServerMeasurementSummaryImage_Run%d_Measurement%d.png", TestRunNumber, MeasurementNMumber );
+    }
+    else
+    {
+        sprintf ( TestImageFilename, "ClientMeasurementSummaryImage_Run%d_Measurement%d.png", TestRunNumber, MeasurementNMumber );
+    }
 
     pngwriter TestImage ( ImageWidth, ImageHeight, 65535, TestImageFilename ); // a white image
 

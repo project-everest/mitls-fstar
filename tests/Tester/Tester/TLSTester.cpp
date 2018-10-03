@@ -341,7 +341,7 @@ DWORD WINAPI ClientServerTLSTestsThread ( LPVOID lpParam )
 {
     TLSTESTER *Tester = (TLSTESTER *) lpParam;
 
-    Tester->ClientTLSTests ();
+    Tester->ClientServerTLSTests ();
 
     Tester->ClientTestsFinished = TRUE;
 
@@ -402,18 +402,20 @@ void TLSTESTER::ClientTLSTests ( void )
         if ( Success )
         {
             fprintf ( ComponentStatisticsFile,
-                      "%s, %d, %s, Default, Default, Default, PASS, %u\n",
+                      "%s, %d, %d, %s, Default, Default, Default, PASS, %u\n",
                       DateAndTimeString,
-                      /*ClientComponent->NumberOfMeasurementsMade +*/ MeasurementNumber,
+                      ClientComponent->TestRunNumber,
+                      MeasurementNumber,
                       ClientComponent->GetHostName (),
                       ExecutionTime );
         }
         else
         {
             fprintf ( ComponentStatisticsFile,
-                      "%s, %d, %s, Default, Default, Default, FAIL, %u\n",
+                      "%s, %d, %d, %s, Default, Default, Default, FAIL, %u\n",
                       DateAndTimeString,
-                      /*ClientComponent->NumberOfMeasurementsMade +*/ MeasurementNumber,
+                      ClientComponent->TestRunNumber,
+                      MeasurementNumber,
                       ClientComponent->GetHostName (),
                       ExecutionTime );
         }
@@ -547,7 +549,7 @@ void TLSTESTER::ServerTLSTests ( void )
 
     ConfigureServer (); // create and initialise a component for server dll access
 
-    //ServerComponent->SetTestRunNumber ( TLS_SERVER_MEASUREMENTS );
+    ServerComponent->SetTestRunNumber ( TLS_SERVER_MEASUREMENTS );
 
     //ServerComponent->RecordTestRunStartTime ();
 
