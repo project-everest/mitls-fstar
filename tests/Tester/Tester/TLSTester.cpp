@@ -328,7 +328,7 @@ DWORD WINAPI ClientTLSTestsThread ( LPVOID lpParam )
 {
     TLSTESTER *Tester = (TLSTESTER *) lpParam;
 
-    Tester->ClientTLSTests ( TLS_CLIENT_MEASUREMENTS );
+    Tester->ClientTLSTests ();
 
     Tester->ClientTestsFinished = TRUE;
 
@@ -341,7 +341,7 @@ DWORD WINAPI ClientServerTLSTestsThread ( LPVOID lpParam )
 {
     TLSTESTER *Tester = (TLSTESTER *) lpParam;
 
-    Tester->ClientTLSTests ( TLS_SERVER_MEASUREMENTS );
+    Tester->ClientTLSTests ();
 
     Tester->ClientTestsFinished = TRUE;
 
