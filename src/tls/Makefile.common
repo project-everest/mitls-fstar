@@ -17,6 +17,7 @@ INCLUDE_PATHS = \
 	$(HACL_HOME)/secure_api/concrete_specializations \
 	$(HACL_HOME)/code/lib \
 	$(KREMLIN_HOME)/include \
+        $(KREMLIN_HOME)/kremlib/compat \
         $(KREMLIN_HOME)/kremlib \
 	$(MITLS_HOME)/libs/ffi \
 	$(MITLS_HOME)/src/lowparse \
