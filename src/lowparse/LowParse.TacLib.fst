@@ -46,3 +46,20 @@ let tassert (b: bool) : Tac (squash b) =
   else
     let s = term_to_string (quote b) in
     fail ("Tactic assertion failed: " ^ s)
+
+noextract
+let rec to_all_goals (t: (unit -> Tac unit)) : Tac unit =
+  if ngoals () = 0
+  then ()
+  else
+    let _ = divide 1 t (fun () -> to_all_goals t) in ()
+
+noextract
+let rec intros_until_squash
+  ()
+: Tac binder
+= let i = intro () in
+  let (tm, _) = app_head_tail (cur_goal ()) in
+  if tm `term_eq` (`squash)
+  then i
+  else intros_until_squash ()

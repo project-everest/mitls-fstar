@@ -44,6 +44,22 @@ let synth_case_recip_synth_case_tac
       );
     ]
 
+noextract
+let synth_case_recip_pre_tac
+  ()
+: T.Tac unit
+= let x = T.intro () in
+  T.destruct (T.binder_to_term x);
+  T.to_all_goals (fun () ->
+    let re = T.intros_until_squash () in
+    T.rewrite re;
+    T.norm [delta; iota];
+    let im = T.implies_intro () in
+    T.rewrite im;
+    T.trefl ()
+  )
+
+
 
 (*
 (* Parser *)

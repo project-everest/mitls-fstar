@@ -297,6 +297,31 @@ let parse_sum_eq'
 
 #reset-options
 
+let parse_sum_eq''
+  (#kt: parser_kind)
+  (t: sum)
+  (p: parser kt (sum_repr_type t))
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (input: bytes)
+: Lemma
+  (parse (parse_sum t p pc) input == (match parse p input with
+  | None -> None
+  | Some (k', consumed_k) ->
+    let input_k = Seq.slice input consumed_k (Seq.length input) in
+    let k = maybe_enum_key_of_repr (sum_enum t) k' in
+    begin match k with
+    | Known k ->
+      synth_sum_case_injective t k;
+      begin match parse (parse_synth (dsnd (pc k)) (synth_sum_case t k)) input_k with
+      | None -> None
+      | Some (x, consumed_x) -> Some ((x <: sum_type t), consumed_k + consumed_x)
+      end
+    | _ -> None
+    end
+  ))
+= parse_sum_eq' t p pc input;
+  parse_enum_key_eq p (sum_enum t) input
+
 let parse_sum_eq
   (#kt: parser_kind)
   (t: sum)
