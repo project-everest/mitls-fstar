@@ -22,9 +22,9 @@ type t =
   | V2 of U16.t
   | V3 of U16.t
   | V4 of  U16.t
+(*
   | V5 of U16.t
   | V6 of U16.t
-(*
   | V7 of U16.t
   | V8 of U16.t
   | V9 of U16.t
@@ -36,9 +36,9 @@ type cases : eqtype =
   | Case_V2
   | Case_V3
   | Case_V4
+(*  
   | Case_V5
   | Case_V6
-(*  
   | Case_V7
   | Case_V8
   | Case_V9
@@ -56,9 +56,9 @@ let case_enum : LP.enum cases u8 =
     Case_V2, 71uy;
     Case_V3, 72uy;
     Case_V4, 73uy;
+(*    
     Case_V5, 74uy;
     Case_V6, 75uy;
-(*    
     Case_V7, 76uy;
     Case_V8, 77uy;
     Case_V9, 78uy;
@@ -97,9 +97,9 @@ let cases_of_t
   | V2 _ -> case_as_case_enum Case_V2
   | V3 _ -> case_as_case_enum Case_V3
   | V4 _ -> case_as_case_enum Case_V4
+(*
   | V5 _ -> case_as_case_enum Case_V5
   | V6 _ -> case_as_case_enum Case_V6
-(*
   | V7 _ -> case_as_case_enum Case_V7
   | V8 _ -> case_as_case_enum Case_V8
   | V9 _ -> case_as_case_enum Case_V9
@@ -115,9 +115,9 @@ let type_of_case
   | Case_V2 -> U16.t
   | Case_V3 -> U16.t
   | Case_V4 -> U16.t
+(*  
   | Case_V5 -> U16.t
   | Case_V6 -> U16.t
-(*  
   | Case_V7 -> U16.t
   | Case_V8 -> U16.t
   | Case_V9 -> U16.t
@@ -160,9 +160,9 @@ let synth_case
   | Case_V2 -> to_refine_with_tag x (V2 (to_type_of_case Case_V2 y))
   | Case_V3 -> to_refine_with_tag x (V3 (to_type_of_case Case_V3 y))
   | Case_V4 -> to_refine_with_tag x (V4 (to_type_of_case Case_V4 y))
+(*  
   | Case_V5 -> to_refine_with_tag x (V5 (to_type_of_case Case_V5 y))
   | Case_V6 -> to_refine_with_tag x (V6 (to_type_of_case Case_V6 y))
-(*  
   | Case_V7 -> to_refine_with_tag x (V7 (to_type_of_case Case_V7 y))
   | Case_V8 -> to_refine_with_tag x (V8 (to_type_of_case Case_V8 y))
   | Case_V9 -> to_refine_with_tag x (V9 (to_type_of_case Case_V9 y))
@@ -191,9 +191,9 @@ let synth_case_recip_pre
   | Case_V2 -> (V2? x)
   | Case_V3 -> (V3? x)
   | Case_V4 -> (V4? x)
+(*  
   | Case_V5 -> (V5? x)
   | Case_V6 -> (V6? x)
-(*  
   | Case_V7 -> (V7? x)
   | Case_V8 -> (V8? x)
   | Case_V9 -> (V9? x)
@@ -229,9 +229,9 @@ let synth_case_recip
   | Case_V2 -> [@inline_let] let _ = synth_case_recip_pre_intro Case_V2 x in (match x with V2 y -> (from_type_of_case Case_V2 y))
   | Case_V3 -> [@inline_let] let _ = synth_case_recip_pre_intro Case_V3 x in (match x with V3 y -> (from_type_of_case Case_V3 y))
   | Case_V4 -> [@inline_let] let _ = synth_case_recip_pre_intro Case_V4 x in (match x with V4 y -> (from_type_of_case Case_V4 y))
+(*  
   | Case_V5 -> [@inline_let] let _ = synth_case_recip_pre_intro Case_V5 x in (match x with V5 y -> (from_type_of_case Case_V5 y))
   | Case_V6 -> [@inline_let] let _ = synth_case_recip_pre_intro Case_V6 x in (match x with V6 y -> (from_type_of_case Case_V6 y))
-(*  
   | Case_V7 -> [@inline_let] let _ = synth_case_recip_pre_intro Case_V7 x in (match x with V7 y -> (from_type_of_case Case_V7 y))
   | Case_V8 -> [@inline_let] let _ = synth_case_recip_pre_intro Case_V8 x in (match x with V8 y -> (from_type_of_case Case_V8 y))
   | Case_V9 -> [@inline_let] let _ = synth_case_recip_pre_intro Case_V9 x in (match x with V9 y -> (from_type_of_case Case_V9 y))
