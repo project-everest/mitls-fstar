@@ -25,7 +25,7 @@
         "refinement_interpretation_LowParse.SLow.Base_Tm_refine_c28ed5a0c122862bed8762ed717dc39e"
       ],
       0,
-      "3fa74df580b928d4fbe916c6f0b461fd"
+      "fcfad72782f1c90e95336a1beb1862cb"
     ],
     [
       "LowParse.SLow.Int.serialize32_u8",
@@ -47,7 +47,7 @@
         "refinement_interpretation_LowParse.SLow.Base_Tm_refine_e752124f651a437c8db65345677589fb"
       ],
       0,
-      "8bb290189fec3af2bfad14123352039f"
+      "d26188c17a95e811dbf8f59a7903c7c4"
     ],
     [
       "LowParse.SLow.Int.parse32_u16",
@@ -73,7 +73,7 @@
         "refinement_interpretation_LowParse.SLow.Base_Tm_refine_c28ed5a0c122862bed8762ed717dc39e"
       ],
       0,
-      "97cb8c98a4617ca9b54b013a0bd37016"
+      "694a2524a195147909cbecbd42b6c62f"
     ],
     [
       "LowParse.SLow.Int.serialize32_u16",
@@ -94,7 +94,7 @@
         "refinement_interpretation_LowParse.SLow.Base_Tm_refine_e752124f651a437c8db65345677589fb"
       ],
       0,
-      "6a09b53129d40fa52206204fec7f6fec"
+      "1d03259e1f53cc0bc7eebadae9225a01"
     ],
     [
       "LowParse.SLow.Int.parse32_u32",
@@ -120,7 +120,7 @@
         "refinement_interpretation_LowParse.SLow.Base_Tm_refine_c28ed5a0c122862bed8762ed717dc39e"
       ],
       0,
-      "47d2848161025889ad9a5477956e65a9"
+      "18647fb271a05ce9af0ddae2adc938c3"
     ],
     [
       "LowParse.SLow.Int.serialize32_u32",
@@ -141,7 +141,34 @@
         "refinement_interpretation_LowParse.SLow.Base_Tm_refine_e752124f651a437c8db65345677589fb"
       ],
       0,
-      "380f6189535a9356f048fe6579545d7c"
+      "6267fe0364d66b21d83c698e43e54550"
+    ],
+    [
+      "LowParse.SLow.Int.size32_u8",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "c2e4eeff7f3558bd91e735eb0f2eb045"
+    ],
+    [
+      "LowParse.SLow.Int.size32_u16",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "e809624438e72c88610b1102c708cdc1"
+    ],
+    [
+      "LowParse.SLow.Int.size32_u32",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "3499d7114eb113a01b9de6606d33d303"
     ]
   ]
 ]
