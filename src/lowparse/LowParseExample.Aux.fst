@@ -330,6 +330,25 @@ let serialize32_t : LP.serializer32 serialize_t =
     serialize32_destr
     ()
 
+module LL = LowParse.Low
+
+let validate32_case_B
+: LL.validator32 parse_case_B
+= LL.validate32_filter LL.validate32_u16 LL.parse32_u16 parse_case_B_filter (fun x -> x `U16.gt` 0us)
+
+inline_for_extraction
+let validate32_cases 
+  (x: LP.enum_key case_enum)
+: Tot (LL.validator32 (dsnd (parse_cases x)))
+= match x with
+  | Case_B -> validate32_case_B
+  | Case_A -> LL.validate32_u8 `LL.validate32_nondep_then` LL.validate32_u8
+  | _ -> LL.validate32_u16
+
+let validate32_t
+: LL.validator32 parse_t
+= LL.validate32_sum t_sum LL.validate32_u8 LL.parse32_u8 _ validate32_cases (_ by (LP.dep_maybe_enum_destr_t_tac ()))
+
 (*
 // inline_for_extraction
 let size32_key : LP.size32 (LP.serialize_enum_key _ LP.serialize_u8 case_enum) =

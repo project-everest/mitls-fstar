@@ -9,3 +9,4 @@ include LowParse.Low.Bytes
 include LowParse.Low.VLData
 include LowParse.Low.Enum
 include LowParse.Low.Option
+include LowParse.Low.Sum

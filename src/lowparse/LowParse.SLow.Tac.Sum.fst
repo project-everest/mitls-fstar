@@ -251,6 +251,33 @@ let maybe_enum_destr_t_tac () : T.Tac unit =
   T.apply (`maybe_enum_destr_t_intro);
   maybe_enum_destr_t'_tac ()
 
+noextract
+let rec dep_maybe_enum_destr_t'_tac () : T.Tac unit =
+  let (goal_fun, goal_arg) = T.app_head_tail (T.cur_goal ()) in
+  let _ = T.tassert (goal_fun `T.term_eq` (`dep_maybe_enum_destr_t')) in
+  match goal_arg with
+  | [_; _; _; _; (tl1, _); (tl2, _); _] ->
+    let (tl2_fun, _) = T.app_head_tail (T.norm_term [delta; iota; zeta] tl2) in
+    if tl2_fun `T.term_eq` (`Cons)
+    then begin
+      T.apply (`dep_maybe_enum_destr_cons);
+      dep_maybe_enum_destr_t'_tac ()
+    end else
+    if tl2_fun `T.term_eq` (`Nil)
+    then begin
+      T.apply (`dep_maybe_enum_destr_nil);
+      T.qed ()
+    end
+    else T.fail "Unknown shape for l2"
+  | _ -> T.fail "Not the rigt arguments to maybe_enum_destr_t'"
+
+noextract
+let dep_maybe_enum_destr_t_tac () : T.Tac unit =
+  let (goal_fun, _) = T.app_head_tail (T.cur_goal ()) in
+  let _ = T.tassert (goal_fun `T.term_eq` (`dep_maybe_enum_destr_t)) in
+  T.apply (`dep_maybe_enum_destr_t_intro);
+  dep_maybe_enum_destr_t'_tac ()
+
 (*
 noextract
 let size32_sum_tac'
