@@ -1,6 +1,6 @@
 CCOPTS = /nologo /O2 /Gy /GF /Gw /GA /MD /Zi -I. -I../include /FICommonInclude.h
 
-all: libkremlib.dll libkremlib.lib
+all: libkremlib.lib
 
 # ls kremlin/kremlib/*.c | xargs basename -a
 # remove fstar_uint128.c
@@ -33,13 +33,8 @@ SOURCES = \
   testlib.c
 
 
-libkremlib_code.lib: $(SOURCES:.c=.obj)
-  lib /nologo /out:libkremlib_code.lib $**
-
-# Note: libkremlib.def generated via nm libkremlib.a -g | grep ' T ' | awk '{ print $3; }'
-# Then: remove FStar_UInt128_mul + TestLib_cpucycles*
-libkremlib.dll: libkremlib_code.lib libkremlib.def dllmain.obj
-  link /nologo /dll /debug:full /out:libkremlib.dll libkremlib_code.lib dllmain.obj /def:libkremlib.def /OPT:ICF /OPT:REF ntdll.lib
+libkremlib.lib: $(SOURCES:.c=.obj)
+  lib /nologo /out:libkremlib.lib $**
 
 .c.obj::
     cl $(CCOPTS) -c $<
