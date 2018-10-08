@@ -71,7 +71,8 @@ let validate32_sum_aux
 : Tot (validator32 (parse_sum t p pc))
 = fun input len ->
   let h = HST.get () in
-  parse_sum_eq'' t p pc (B.as_seq h input);
+  [@inline_let]
+  let _ = parse_sum_eq'' t p pc (B.as_seq h input) in
   let len_after_tag = v input len in
   if len_after_tag `I32.lt` 0l
   then len_after_tag
@@ -80,8 +81,10 @@ let validate32_sum_aux
     let k' = p32 input in
     let off = Cast.int32_to_uint32 (len `I32.sub` len_after_tag) in
     let input_k = B.offset input off in
-    assert (U32.v off == I32.v len - I32.v len_after_tag);
-    assert (parse p (B.as_seq h input) == Some (k', U32.v off));
+    [@inline_let]
+    let _ = assert (U32.v off == I32.v len - I32.v len_after_tag) in
+    [@inline_let]
+    let _ = assert (parse p (B.as_seq h input) == Some (k', U32.v off)) in
     v_payload k' input_k len_after_tag
   end
 
@@ -97,7 +100,8 @@ let validate32_sum_aux_payload'
 = fun input_k len_after_tag ->
     match k with
     | Known k ->
-      synth_sum_case_injective t k;
+      [@inline_let]
+      let _ = synth_sum_case_injective t k in
       validate32_synth (pc32 k) (synth_sum_case t k) () input_k len_after_tag
     | _ -> (-1l)
 
