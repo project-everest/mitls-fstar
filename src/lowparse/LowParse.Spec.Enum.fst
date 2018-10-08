@@ -678,8 +678,10 @@ let dep_enum_destr_cons
         let f' (k: enum_key (enum_tail e)) : Tot (v' k) = f (k <: key) in
         [@inline_let]
         let k' : key = k' in
-        assert (k' <> k);
-        assert (L.mem k' (L.map fst (enum_tail e)));
+        [@inline_let]
+        let _ = assert (k' <> k) in
+        [@inline_let]
+        let _ = assert (L.mem k' (L.map fst (enum_tail e))) in
         [@inline_let]
         let (y: v' k') =
           destr v'_eq v'_if v'_eq_refl v'_eq_trans f' k'
@@ -829,6 +831,7 @@ let list_tl
   (l: list t { Cons? l } )
 = match l with
   | _ :: q -> q
+
 
 inline_for_extraction
 let maybe_enum_destr_cons

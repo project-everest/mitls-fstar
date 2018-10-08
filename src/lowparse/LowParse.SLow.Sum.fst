@@ -202,7 +202,8 @@ let serialize32_sum
   (u: squash (serializer32_sum_gen_precond kt (weaken_parse_cases_kind t pc)))
 : Tot (serializer32 (serialize_sum t s sc))
 = fun x ->
-  serialize_sum_eq t s sc x;
+  [@inline_let]
+  let _ = serialize_sum_eq t s sc x in
   let tg = sum_tag_of_data t x in
   let s1 = s32 tg in
   let s2 = destr

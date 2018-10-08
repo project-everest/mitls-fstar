@@ -22,13 +22,19 @@ type t =
   | V2 of U16.t
   | V3 of U16.t
   | V4 of  U16.t
-(*
   | V5 of U16.t
   | V6 of U16.t
   | V7 of U16.t
   | V8 of U16.t
   | V9 of U16.t
-*)
+  | W2 of U16.t
+  | W3 of U16.t
+  | W4 of  U16.t
+  | W5 of U16.t
+  | W6 of U16.t
+  | W7 of U16.t
+  | W8 of U16.t
+  | W9 of U16.t
 
 type cases : eqtype =
   | Case_A
@@ -36,13 +42,19 @@ type cases : eqtype =
   | Case_V2
   | Case_V3
   | Case_V4
-(*  
   | Case_V5
   | Case_V6
   | Case_V7
   | Case_V8
   | Case_V9
-*)
+  | Case_W2
+  | Case_W3
+  | Case_W4
+  | Case_W5
+  | Case_W6
+  | Case_W7
+  | Case_W8
+  | Case_W9
 
 inline_for_extraction
 let u8 : eqtype = U8.t
@@ -56,13 +68,19 @@ let case_enum : LP.enum cases u8 =
     Case_V2, 71uy;
     Case_V3, 72uy;
     Case_V4, 73uy;
-(*    
     Case_V5, 74uy;
     Case_V6, 75uy;
     Case_V7, 76uy;
     Case_V8, 77uy;
     Case_V9, 78uy;
-*)    
+    Case_W2, 81uy;
+    Case_W3, 82uy;
+    Case_W4, 83uy;
+    Case_W5, 84uy;
+    Case_W6, 85uy;
+    Case_W7, 86uy;
+    Case_W8, 87uy;
+    Case_W9, 88uy;
   ]
   in
   [@inline_let]
@@ -97,13 +115,19 @@ let cases_of_t
   | V2 _ -> case_as_case_enum Case_V2
   | V3 _ -> case_as_case_enum Case_V3
   | V4 _ -> case_as_case_enum Case_V4
-(*
   | V5 _ -> case_as_case_enum Case_V5
   | V6 _ -> case_as_case_enum Case_V6
   | V7 _ -> case_as_case_enum Case_V7
   | V8 _ -> case_as_case_enum Case_V8
   | V9 _ -> case_as_case_enum Case_V9
-*)
+  | W2 _ -> case_as_case_enum Case_W2
+  | W3 _ -> case_as_case_enum Case_W3
+  | W4 _ -> case_as_case_enum Case_W4
+  | W5 _ -> case_as_case_enum Case_W5
+  | W6 _ -> case_as_case_enum Case_W6
+  | W7 _ -> case_as_case_enum Case_W7
+  | W8 _ -> case_as_case_enum Case_W8
+  | W9 _ -> case_as_case_enum Case_W9
 
 inline_for_extraction
 let type_of_case
@@ -115,13 +139,19 @@ let type_of_case
   | Case_V2 -> U16.t
   | Case_V3 -> U16.t
   | Case_V4 -> U16.t
-(*  
   | Case_V5 -> U16.t
   | Case_V6 -> U16.t
   | Case_V7 -> U16.t
   | Case_V8 -> U16.t
   | Case_V9 -> U16.t
-*)
+  | Case_W2 -> U16.t
+  | Case_W3 -> U16.t
+  | Case_W4 -> U16.t
+  | Case_W5 -> U16.t
+  | Case_W6 -> U16.t
+  | Case_W7 -> U16.t
+  | Case_W8 -> U16.t
+  | Case_W9 -> U16.t
 
 // BEGIN typechecking performance improvements thanks to normalization and tactics
 
@@ -160,13 +190,20 @@ let synth_case
   | Case_V2 -> to_refine_with_tag x (V2 (to_type_of_case Case_V2 y))
   | Case_V3 -> to_refine_with_tag x (V3 (to_type_of_case Case_V3 y))
   | Case_V4 -> to_refine_with_tag x (V4 (to_type_of_case Case_V4 y))
-(*  
   | Case_V5 -> to_refine_with_tag x (V5 (to_type_of_case Case_V5 y))
   | Case_V6 -> to_refine_with_tag x (V6 (to_type_of_case Case_V6 y))
   | Case_V7 -> to_refine_with_tag x (V7 (to_type_of_case Case_V7 y))
   | Case_V8 -> to_refine_with_tag x (V8 (to_type_of_case Case_V8 y))
   | Case_V9 -> to_refine_with_tag x (V9 (to_type_of_case Case_V9 y))
-*)
+  | Case_W2 -> to_refine_with_tag x (W2 (to_type_of_case Case_W2 y))
+  | Case_W3 -> to_refine_with_tag x (W3 (to_type_of_case Case_W3 y))
+  | Case_W4 -> to_refine_with_tag x (W4 (to_type_of_case Case_W4 y))
+  | Case_W5 -> to_refine_with_tag x (W5 (to_type_of_case Case_W5 y))
+  | Case_W6 -> to_refine_with_tag x (W6 (to_type_of_case Case_W6 y))
+  | Case_W7 -> to_refine_with_tag x (W7 (to_type_of_case Case_W7 y))
+  | Case_W8 -> to_refine_with_tag x (W8 (to_type_of_case Case_W8 y))
+  | Case_W9 -> to_refine_with_tag x (W9 (to_type_of_case Case_W9 y))
+
 
 unfold
 inline_for_extraction
@@ -191,13 +228,19 @@ let synth_case_recip_pre
   | Case_V2 -> (V2? x)
   | Case_V3 -> (V3? x)
   | Case_V4 -> (V4? x)
-(*  
   | Case_V5 -> (V5? x)
   | Case_V6 -> (V6? x)
   | Case_V7 -> (V7? x)
   | Case_V8 -> (V8? x)
   | Case_V9 -> (V9? x)
-*)
+  | Case_W2 -> (W2? x)
+  | Case_W3 -> (W3? x)
+  | Case_W4 -> (W4? x)
+  | Case_W5 -> (W5? x)
+  | Case_W6 -> (W6? x)
+  | Case_W7 -> (W7? x)
+  | Case_W8 -> (W8? x)
+  | Case_W9 -> (W9? x)
 
 module T = LowParse.TacLib
 
@@ -229,13 +272,20 @@ let synth_case_recip
   | Case_V2 -> [@inline_let] let _ = synth_case_recip_pre_intro Case_V2 x in (match x with V2 y -> (from_type_of_case Case_V2 y))
   | Case_V3 -> [@inline_let] let _ = synth_case_recip_pre_intro Case_V3 x in (match x with V3 y -> (from_type_of_case Case_V3 y))
   | Case_V4 -> [@inline_let] let _ = synth_case_recip_pre_intro Case_V4 x in (match x with V4 y -> (from_type_of_case Case_V4 y))
-(*  
   | Case_V5 -> [@inline_let] let _ = synth_case_recip_pre_intro Case_V5 x in (match x with V5 y -> (from_type_of_case Case_V5 y))
   | Case_V6 -> [@inline_let] let _ = synth_case_recip_pre_intro Case_V6 x in (match x with V6 y -> (from_type_of_case Case_V6 y))
   | Case_V7 -> [@inline_let] let _ = synth_case_recip_pre_intro Case_V7 x in (match x with V7 y -> (from_type_of_case Case_V7 y))
   | Case_V8 -> [@inline_let] let _ = synth_case_recip_pre_intro Case_V8 x in (match x with V8 y -> (from_type_of_case Case_V8 y))
   | Case_V9 -> [@inline_let] let _ = synth_case_recip_pre_intro Case_V9 x in (match x with V9 y -> (from_type_of_case Case_V9 y))
-*)
+  | Case_W2 -> [@inline_let] let _ = synth_case_recip_pre_intro Case_W2 x in (match x with W2 y -> (from_type_of_case Case_W2 y))
+  | Case_W3 -> [@inline_let] let _ = synth_case_recip_pre_intro Case_W3 x in (match x with W3 y -> (from_type_of_case Case_W3 y))
+  | Case_W4 -> [@inline_let] let _ = synth_case_recip_pre_intro Case_W4 x in (match x with W4 y -> (from_type_of_case Case_W4 y))
+  | Case_W5 -> [@inline_let] let _ = synth_case_recip_pre_intro Case_W5 x in (match x with W5 y -> (from_type_of_case Case_W5 y))
+  | Case_W6 -> [@inline_let] let _ = synth_case_recip_pre_intro Case_W6 x in (match x with W6 y -> (from_type_of_case Case_W6 y))
+  | Case_W7 -> [@inline_let] let _ = synth_case_recip_pre_intro Case_W7 x in (match x with W7 y -> (from_type_of_case Case_W7 y))
+  | Case_W8 -> [@inline_let] let _ = synth_case_recip_pre_intro Case_W8 x in (match x with W8 y -> (from_type_of_case Case_W8 y))
+  | Case_W9 -> [@inline_let] let _ = synth_case_recip_pre_intro Case_W9 x in (match x with W9 y -> (from_type_of_case Case_W9 y))
+
 
 // END typechecking performance improvements
 
@@ -320,7 +370,8 @@ let serialize32_destr : LP.dep_enum_destr case_enum (LP.serialize32_sum_destr_co
   (_ by (LP.dep_enum_destr_tac ()))
 
 let serialize32_t : LP.serializer32 serialize_t =
-  assert_norm (LP.serializer32_sum_gen_precond (LP.get_parser_kind LP.parse_u8) (LP.weaken_parse_cases_kind t_sum parse_cases));
+  [@inline_let]
+  let _ =  assert_norm (LP.serializer32_sum_gen_precond (LP.get_parser_kind LP.parse_u8) (LP.weaken_parse_cases_kind t_sum parse_cases)) in
   LP.serialize32_sum
     t_sum
     _
@@ -438,3 +489,4 @@ let serialize32_t_vlarray : LP.serializer32 serialize_t_vlarray =
   [@inline_let]
   let _ = parse_t_vlarray_precond () in
   LP.serialize32_vlarray 13 22 #_ #_ #parse_t #serialize_t serialize32_t 5 7 ()
+*)
