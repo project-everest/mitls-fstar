@@ -455,6 +455,47 @@ let make_sum
   Tot sum)
 = Sum key repr e data tag_of_data
 
+let synth_case_recip_synth_case_post
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (#data: Type0)
+  (tag_of_data: (data -> Tot (enum_key e)))
+  (type_of_tag: (enum_key e -> Tot Type0))
+  (synth_case: ((x: enum_key e) -> (y: type_of_tag x) -> Tot (refine_with_tag tag_of_data x)))
+  (synth_case_recip: ((k: enum_key e) -> (x: refine_with_tag tag_of_data k) -> Tot (type_of_tag k)))
+  (x: key)
+: GTot Type0
+= 
+  list_mem x (list_map fst e) ==> (
+    forall (y: type_of_tag x) .
+    synth_case_recip' e tag_of_data type_of_tag synth_case_recip (synth_case x y) == y
+  )
+
+inline_for_extraction
+let make_sum'
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (#data: Type0)
+  (tag_of_data: (data -> Tot (enum_key e)))
+  (type_of_tag: (enum_key e -> Tot Type0))
+  (synth_case: ((x: enum_key e) -> (y: type_of_tag x) -> Tot (refine_with_tag tag_of_data x)))
+  (synth_case_recip: ((k: enum_key e) -> (x: refine_with_tag tag_of_data k) -> Tot (type_of_tag k)))
+  (synth_case_recip_synth_case: (
+    (x: key) ->
+    Tot (squash (synth_case_recip_synth_case_post e tag_of_data type_of_tag synth_case synth_case_recip x))
+  ))
+: Tot (
+    (synth_case_synth_case_recip: (
+      (x: data) ->
+      Lemma
+      (synth_case (tag_of_data x) (synth_case_recip' e tag_of_data type_of_tag synth_case_recip x) == x)
+    )) ->
+  Tot sum)
+= make_sum e tag_of_data type_of_tag synth_case synth_case_recip (fun x y ->
+  let sq : squash (synth_case_recip_synth_case_post e tag_of_data type_of_tag synth_case synth_case_recip x) =
+  synth_case_recip_synth_case x in
+  assert (synth_case_recip'  e tag_of_data type_of_tag synth_case_recip (synth_case x y) == y))
+
 (* Sum with default case *)
 
 inline_for_extraction

@@ -111,7 +111,10 @@ function mitls_verify_and_hints() {
 }
 
 function refresh_mitls_hints() {
-    refresh_hints "git@github.com:mitls/mitls-fstar.git" "true" "regenerate hints" "src"
+    # We should not generate hints when building on Windows
+    if [[ "$OS" != "Windows_NT" ]]; then
+        refresh_hints "git@github.com:mitls/mitls-fstar.git" "true" "regenerate hints" "src"
+    fi
 }
 
 # Note: this performs an _approximate_ refresh of the hints, in the sense that

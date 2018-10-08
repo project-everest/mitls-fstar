@@ -15,34 +15,20 @@ let enum_destr_tac
 = enum_tac_gen (quote enum_destr_cons_nil') (quote enum_destr_cons') e
 
 noextract
-let synth_case_recip_synth_case_tac
+let make_sum_synth_case_recip_synth_case_tac
   ()
 : T.Tac unit
-= let t = T.binder_to_term (T.intro ()) in
-    let _ = T.destruct t in
-    let x = T.intro () in
-    let y = T.intro () in
-    let kreq = T.intro () in
-    T.rewrite kreq;
-    T.destruct (T.binder_to_term x);
-    T.iseq [
-      (fun () ->
-        let z = T.intro () in
-        let xeq = T.intro () in
-        T.rewrite xeq;
-        T.destruct (T.binder_to_term z);
-        T.iterAll (fun () ->
-          let ueq = T.intro () in
-          T.rewrite ueq;
-          T.trefl ()
-      ));
-      (fun () ->
-        let x = T.intro () in
-        let xeq = T.intro () in
-        T.rewrite xeq;
-        T.trefl ()
-      );
-    ]
+= 
+    let x = T.binder_to_term (T.intro ()) in
+    T.destruct x;
+    T.to_all_goals (fun () ->
+      let xeq = T.intros_until_squash () in
+      T.norm [delta; iota; zeta; primops];
+      T.rewrite xeq;
+      T.norm [delta; iota; zeta; primops];
+      T.trivial ()
+    )
+
 
 noextract
 let synth_case_recip_pre_tac
