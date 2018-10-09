@@ -28,6 +28,12 @@ let m (x: AUX.t) : Tot FStar.Bytes.bytes =
 let msz ( x: AUX.t) : Tot FStar.UInt32.t =
   AUX.size32_t x
 
+// For now, extract the validator for compilation purposes only
+let v (x: LowStar.Buffer.buffer FStar.UInt8.t) (len: FStar.Int32.t) : FStar.HyperStack.ST.Stack FStar.Int32.t
+  (requires (fun _ -> False))
+  (ensures (fun _ _ _ -> True))
+= AUX.validate32_t x len
+
 val main: Int32.t -> FStar.Buffer.buffer (FStar.Buffer.buffer C.char) ->
   Stack C.exit_code (fun _ -> true) (fun _ _ _ -> true)
 let main argc argv =

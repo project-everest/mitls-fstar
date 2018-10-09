@@ -740,6 +740,28 @@ let parse_dsum
 
 #set-options "--z3rlimit 32"
 
+let parse_dsum_eq''
+  (#kt: parser_kind)
+  (t: dsum)
+  (p: parser kt (dsum_repr_type t))
+  (f: (x: dsum_known_key t) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag t x)))
+  (#k': parser_kind)
+  (g: parser k' (dsum_type_of_unknown_tag t))
+  (input: bytes)
+: Lemma
+  (parse (parse_dsum t p f g) input == (match parse p input with
+  | None -> None
+  | Some (k', consumed_k) ->
+    let k = maybe_enum_key_of_repr (dsum_enum t) k' in
+    let input_k = Seq.slice input consumed_k (Seq.length input) in
+    begin match parse (parse_dsum_cases t f g k) input_k with
+    | None -> None
+    | Some (x, consumed_x) -> Some ((x <: dsum_type t), consumed_k + consumed_x)
+    end
+  ))
+= parse_tagged_union_eq #(kt) #(dsum_key t) (parse_maybe_enum_key p (dsum_enum t)) #(dsum_type t) (dsum_tag_of_data t) (parse_dsum_cases t f g) input;
+  parse_synth_eq p (maybe_enum_key_of_repr (dsum_enum t)) input
+
 let parse_dsum_eq'
   (#kt: parser_kind)
   (t: dsum)

@@ -450,6 +450,7 @@ let glb_list
 (* Coercions *)
 
 unfold
+inline_for_extraction
 let coerce
   (t2: Type)
   (#t1: Type)

@@ -298,6 +298,7 @@ let size32_postcond
   then y == u32_max
   else U32.v y == sz
 
+[@unifier_hint_injective]
 inline_for_extraction
 let size32
   (#k: parser_kind)
