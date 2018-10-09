@@ -44,6 +44,12 @@ let make_dsum_synth_case_recip_synth_case_unknown_tac
   T.trivial ()
 
 noextract
+let synth_case_synth_case_recip_tac
+  ()
+: T.Tac unit
+= make_sum_synth_case_recip_synth_case_tac ()
+
+noextract
 let synth_case_recip_pre_tac
   ()
 : T.Tac unit

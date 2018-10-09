@@ -293,7 +293,7 @@ inline_for_extraction
 let t_sum : LP.sum
 = LP.make_sum' case_enum cases_of_t type_of_case synth_case synth_case_recip
     (_ by (LP.make_sum_synth_case_recip_synth_case_tac ()))
-    (fun x -> ())
+    (_ by (LP.synth_case_synth_case_recip_tac ()))
 
 let parse_case_B : LP.parser _ case_B =
   LP.parse_filter LP.parse_u16 parse_case_B_filter

@@ -484,17 +484,17 @@ let make_sum'
     (x: key) ->
     Tot (squash (synth_case_recip_synth_case_post e tag_of_data type_of_tag synth_case synth_case_recip x))
   ))
-: Tot (
-    (synth_case_synth_case_recip: (
+  (synth_case_synth_case_recip: (
       (x: data) ->
-      Lemma
-      (synth_case (tag_of_data x) (synth_case_recip' e tag_of_data type_of_tag synth_case_recip x) == x)
-    )) ->
-  Tot sum)
+      Tot (squash
+      (synth_case (tag_of_data x) (synth_case_recip' e tag_of_data type_of_tag synth_case_recip x) == x))
+  ))
+: Tot sum
 = make_sum e tag_of_data type_of_tag synth_case synth_case_recip (fun x y ->
   let sq : squash (synth_case_recip_synth_case_post e tag_of_data type_of_tag synth_case synth_case_recip x) =
   synth_case_recip_synth_case x in
   assert (synth_case_recip'  e tag_of_data type_of_tag synth_case_recip (synth_case x y) == y))
+  (fun x -> let _ = synth_case_synth_case_recip x in assert (synth_case (tag_of_data x) (synth_case_recip' e tag_of_data type_of_tag synth_case_recip x) == x))
 
 (* Sum with default case *)
 

@@ -264,7 +264,7 @@ let t_sum : LP.dsum
 = LP.make_dsum' case_enum cases_of_t type_of_known_case U16.t synth_case synth_case_recip
     (_ by (LP.make_dsum_synth_case_recip_synth_case_known_tac ()))
     (_ by (LP.make_dsum_synth_case_recip_synth_case_unknown_tac ()))
-    (fun x -> ())
+    (_ by (LP.synth_case_synth_case_recip_tac ()))
 
 let parse_case_B_filter
   (x: U16.t)
