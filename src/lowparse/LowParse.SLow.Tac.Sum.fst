@@ -29,6 +29,19 @@ let make_sum_synth_case_recip_synth_case_tac
       T.trivial ()
     )
 
+noextract
+let make_dsum_synth_case_recip_synth_case_known_tac
+  ()
+: T.Tac unit
+= make_sum_synth_case_recip_synth_case_tac ()
+
+noextract
+let make_dsum_synth_case_recip_synth_case_unknown_tac
+  ()
+: T.Tac unit
+= let x = T.binder_to_term (T.intro ()) in
+  T.norm [delta; iota; zeta; primops];
+  T.trivial ()
 
 noextract
 let synth_case_recip_pre_tac

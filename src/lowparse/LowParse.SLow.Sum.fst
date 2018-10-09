@@ -386,7 +386,8 @@ let parse32_dsum'
           with
           | None -> None
           | Some (x, consumed_x) ->
-            assert (U32.v consumed_k + U32.v consumed_x <= B32.length input);
+            [@inline_let]
+            let _ = assert (U32.v consumed_k + U32.v consumed_x <= B32.length input) in
             Some ((x <: dsum_type t), consumed_k `U32.add` consumed_x)
         end
       | Unknown k_ ->
@@ -401,7 +402,8 @@ let parse32_dsum'
           with
           | None -> None
           | Some (x, consumed_x) ->
-            assert (U32.v consumed_k + U32.v consumed_x <= B32.length input);
+            [@inline_let]
+            let _ = assert (U32.v consumed_k + U32.v consumed_x <= B32.length input) in
             Some ((x <: dsum_type t), consumed_k `U32.add` consumed_x)
         end
       end
@@ -452,8 +454,10 @@ let serialize32_dsum_cases
   (sg32: serializer32 sg)
   (tg: dsum_key t)
 : Tot (serializer32 (serialize_dsum_cases t f sf g sg tg))
-= synth_dsum_case_injective t tg;
-  synth_dsum_case_inverse t tg;
+= [@inline_let]
+  let _ = synth_dsum_case_injective t tg in
+  [@inline_let]
+  let _ = synth_dsum_case_inverse t tg in
   serialize32_synth' _ (synth_dsum_case t tg) _ (serialize32_dsum_type_of_tag t f sf sf32 sg32 tg) (synth_dsum_case_recip t tg) ()
 
 inline_for_extraction
@@ -496,17 +500,21 @@ let serialize32_dsum
   (u: squash (serializer32_sum_gen_precond kt (weaken_parse_dsum_cases_kind t f k')))
 : Tot (serializer32 (serialize_dsum t s f sf g sg))
 = fun x ->
-  serialize_dsum_eq' t s f sf g sg x;
+  [@inline_let]
+  let _ = serialize_dsum_eq' t s f sf g sg x in
   let tg = dsum_tag_of_data t x in
   let s1 = s32 tg in
   let s2 = match tg with
     | Known tg' -> destr (serialize32_dsum_known_destr_eq t) (serialize32_dsum_known_destr_if t) (fun _ _ -> ()) (fun _ _ _ _ -> ()) (fun tg_ -> serialize32_dsum_cases t f sf sf32 sg32 (Known tg_)) tg' x
     | Unknown tg' -> serialize32_dsum_cases t f sf sf32 sg32 (Unknown tg') x
   in
-  assert (s2 == (serialize32_dsum_cases t f sf sf32 sg32 tg x));
-  assert (B32.length s1 + B32.length s2 < 4294967296);
+  [@inline_let]
+  let _ = assert (s2 == (serialize32_dsum_cases t f sf sf32 sg32 tg x)) in
+  [@inline_let]
+  let _ = assert (B32.length s1 + B32.length s2 < 4294967296) in
   let res = s1 `B32.b32append` s2 in
-  assert (serializer32_correct (serialize_dsum t s f sf g sg) x res);
+  [@inline_let]
+  let _ = assert (serializer32_correct (serialize_dsum t s f sf g sg) x res) in
   (res <: (res: B32.bytes { serializer32_correct (serialize_dsum t s f sf g sg) x res } ))
 
 #reset-options
@@ -539,8 +547,10 @@ let size32_dsum_cases
   (sg32: size32 sg)
   (tg: dsum_key t)
 : Tot (size32 (serialize_dsum_cases t f sf g sg tg))
-= synth_dsum_case_injective t tg;
-  synth_dsum_case_inverse t tg;
+= [@inline_let]
+  let _ = synth_dsum_case_injective t tg in
+  [@inline_let]
+  let _ = synth_dsum_case_inverse t tg in
   size32_synth' _ (synth_dsum_case t tg) _ (size32_dsum_type_of_tag t f sf sf32 sg32 tg) (synth_dsum_case_recip t tg) ()
 
 inline_for_extraction
@@ -583,18 +593,23 @@ let size32_dsum
   (u: squash (size32_sum_gen_precond kt (weaken_parse_dsum_cases_kind t f k')))
 : Tot (size32 (serialize_dsum t s f sf g sg))
 = fun x ->
-  serialize_dsum_eq' t s f sf g sg x;
+  [@inline_let]
+  let _ = serialize_dsum_eq' t s f sf g sg x in
   let tg = dsum_tag_of_data t x in
   let s1 = s32 tg in
   let s2 = match tg with
     | Known tg' -> destr (size32_dsum_known_destr_eq t) (size32_dsum_known_destr_if t) (fun _ _ -> ()) (fun _ _ _ _ -> ()) (fun tg_ -> size32_dsum_cases t f sf sf32 sg32 (Known tg_)) tg' x
     | Unknown tg' -> size32_dsum_cases t f sf sf32 sg32 (Unknown tg') x
   in
-  assert_norm (U32.v u32_max == 4294967295);
-  assert (s2 == (size32_dsum_cases t f sf sf32 sg32 tg x));
-  assert (U32.v s1 + U32.v s2 < 4294967295);
+  [@inline_let]
+  let _ = assert_norm (U32.v u32_max == 4294967295) in
+  [@inline_let]
+  let _ = assert (s2 == (size32_dsum_cases t f sf sf32 sg32 tg x)) in
+  [@inline_let]
+  let _ = assert (U32.v s1 + U32.v s2 < 4294967295) in
   let res = s1 `U32.add` s2 in
-  assert (size32_postcond (serialize_dsum t s f sf g sg) x res);
+  [@inline_let]
+  let _ = assert (size32_postcond (serialize_dsum t s f sf g sg) x res) in
   (res <: (res: U32.t { size32_postcond (serialize_dsum t s f sf g sg) x res } ))
 
 #reset-options

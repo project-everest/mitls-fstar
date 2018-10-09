@@ -896,6 +896,40 @@ let serialize_dsum
   (ensures (fun _ -> True))
 = serialize_dsum' s st #_ #(parse_dsum_cases s f g) (serialize_dsum_cases s f sr g sg)
 
+let synth_dsum_case_recip_synth_case_known_post
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (#data: Type0)
+  (tag_of_data: (data -> Tot (maybe_enum_key e)))
+  (type_of_known_tag: (enum_key e -> Tot Type0))
+  (type_of_unknown_tag: Type0)
+  (synth_case: ((x: maybe_enum_key e) -> (y: dsum_type_of_tag' e type_of_known_tag type_of_unknown_tag x) -> Tot (refine_with_tag tag_of_data x)))
+  (synth_case_recip: ((k: maybe_enum_key e) -> (refine_with_tag tag_of_data k) -> Tot (dsum_type_of_tag' e type_of_known_tag type_of_unknown_tag k)))
+  (x: key)
+: GTot Type0
+= 
+  list_mem x (list_map fst e) ==> (
+    forall (y: type_of_known_tag x) .
+    synth_case_recip (Known x) (synth_case (Known x) y) == y
+  )
+
+let synth_dsum_case_recip_synth_case_unknown_post
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (#data: Type0)
+  (tag_of_data: (data -> Tot (maybe_enum_key e)))
+  (type_of_known_tag: (enum_key e -> Tot Type0))
+  (type_of_unknown_tag: Type0)
+  (synth_case: ((x: maybe_enum_key e) -> (y: dsum_type_of_tag' e type_of_known_tag type_of_unknown_tag x) -> Tot (refine_with_tag tag_of_data x)))
+  (synth_case_recip: ((k: maybe_enum_key e) -> (refine_with_tag tag_of_data k) -> Tot (dsum_type_of_tag' e type_of_known_tag type_of_unknown_tag k)))
+  (x: repr)
+: GTot Type0
+= 
+  list_mem x (list_map snd e) == false ==> (
+    forall (y: type_of_unknown_tag) .
+    synth_case_recip (Unknown x) (synth_case (Unknown x) y) == y
+  )
+
 inline_for_extraction
 let make_dsum
   (#key #repr: eqtype)
@@ -923,6 +957,42 @@ let make_dsum
     dsum
   )
 = DSum key repr e data tag_of_data
+
+inline_for_extraction
+let make_dsum'
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (#data: Type0)
+  (tag_of_data: (data -> Tot (maybe_enum_key e)))
+  (type_of_known_tag: (enum_key e -> Tot Type0))
+  (type_of_unknown_tag: Type0)
+  (synth_case: ((x: maybe_enum_key e) -> (y: dsum_type_of_tag' e type_of_known_tag type_of_unknown_tag x) -> Tot (refine_with_tag tag_of_data x)))
+  (synth_case_recip: ((k: maybe_enum_key e) -> (refine_with_tag tag_of_data k) -> Tot (dsum_type_of_tag' e type_of_known_tag type_of_unknown_tag k)))
+  (synth_case_recip_synth_case_known: (
+    (x: key) ->
+    Tot (squash (synth_dsum_case_recip_synth_case_known_post e tag_of_data type_of_known_tag type_of_unknown_tag synth_case synth_case_recip x))
+  ))
+  (synth_case_recip_synth_case_unknown: (
+    (x: repr) ->
+    Tot (squash (synth_dsum_case_recip_synth_case_unknown_post e tag_of_data type_of_known_tag type_of_unknown_tag synth_case synth_case_recip x))
+  ))
+: Tot (
+    (synth_case_synth_case_recip: (
+      (x: data) ->
+      Tot (squash
+        (synth_case (tag_of_data x) (synth_case_recip (tag_of_data x) x) == x)
+      )
+    )) ->
+    dsum
+  )
+= make_dsum e tag_of_data type_of_known_tag type_of_unknown_tag synth_case synth_case_recip
+    (fun x y ->
+      match x with
+      | Known x' ->
+        synth_case_recip_synth_case_known x'
+      | Unknown x' ->
+        synth_case_recip_synth_case_unknown x'
+    )
 
 let serialize_dsum_eq'
   (#kt: parser_kind)  
