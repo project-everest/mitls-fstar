@@ -35,6 +35,7 @@ type lbytes32 n = FStar.Bytes.lbytes (UInt32.v n)
 /// intent (and is considered public) and "safe", which controls
 /// fine-grained idealization: roughly safe i = Flags.ideal /\ honest i
 
+inline_for_extraction
 noeq type ipkg = | Idx:
   t: eqtype  (* abstract type for indexes *) ->
   // three abstract predicates implemented as witnesses, and a stateful reader.
@@ -92,6 +93,7 @@ type modifies_footprint (fp:mem->GTot rset) h0 h1 =
   forall (r:rid). (Set.mem r (fp h0) /\ ~(Set.mem r (fp h1))) ==> fresh_region r h0 h1  
   //AR: 12/05: Could use the pattern {:pattern (Set.mem r (fp h0)); (Set.mem r (fp h1))}
 
+inline_for_extraction
 noeq type pkg (ip: ipkg) = | Pkg:
   key: (i:ip.t {ip.registered i} -> Type0)  (* indexed state of the functionality *) ->
   $info: (ip.t -> Type0)                    (* creation-time arguments, typically refined using i:ip.t *) ->
@@ -161,6 +163,7 @@ type fresh_regions (s:rset) (h0:mem) (h1:mem) =
 /// packages of instances with local private state, before ensuring
 /// their unique definition at every index and the disjointness of
 /// their footprints.
+inline_for_extraction
 noeq type local_pkg (ip: ipkg) =
 | LocalPkg:
   $key: (i:ip.t{ip.registered i} -> Type0) ->
@@ -341,6 +344,7 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
         lemma_mm_forall_frame map p.local_invariant ls_footprint ls_footprint_frame tls_define_region h0 h1;
         lemma_mem_disjoint_stable t mtable h0 h1)
     else () in
+  [@inline_let]
   let create (i:ip.t{ip.registered i}) (a:p.info i) : ST (p.key i)
     (requires fun h0 -> model /\ package_invariant h0 /\ mem_fresh mtable i h0)
     (ensures fun h0 k h1 -> modifies_mem_table mtable h0 h1
@@ -364,6 +368,7 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
     assume(HS.modifies_ref tls_define_region (Set.singleton (mem_addr (itable mtable))) h0 h2); // How to prove?
     footprint_grow h0 i k h2;
     k in
+  [@inline_let]
   let coerce (i:ip.t{ip.registered i /\ (p.ideal ==> ~(ip.honest i))}) (a:p.info i) (k0:lbytes32 (p.len a))
     : ST (p.key i)
     (requires fun h0 -> package_invariant h0 /\ mem_fresh mtable i h0)
