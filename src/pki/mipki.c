@@ -254,7 +254,7 @@ mipki_chain MITLS_CALLCONV mipki_select_certificate(mipki_state *st, const char 
       OPENSSL_free(peername);
       #endif
 
-      int curve, kt = EVP_PKEY_base_id(cfg->key);
+      int curve, kt = EVP_PKEY_type(EVP_PKEY_id(cfg->key));
       *selected = 0;
 
       #if DEBUG
@@ -457,6 +457,11 @@ int MITLS_CALLCONV mipki_sign_verify(mipki_state *st, const mipki_chain cert_ptr
     {
       if(EVP_PKEY_CTX_set_rsa_padding(key_ctx, RSA_PKCS1_PSS_PADDING) != 1)
         return 0;
+
+      // BoringSSL does not define this, but -1 also forces a sale of the digest length
+      #ifndef RSA_PSS_SALTLEN_DIGEST
+        #define RSA_PSS_SALTLEN_DIGEST -1
+      #endif
       if(EVP_PKEY_CTX_set_rsa_pss_saltlen(key_ctx, RSA_PSS_SALTLEN_DIGEST) != 1)
         return 0;
     }
@@ -627,7 +632,7 @@ size_t MITLS_CALLCONV mipki_format_chain(mipki_state *st, const mipki_chain chai
   config_entry *cfg = (config_entry*)chain;
   char *cur = buffer;
   char *end = buffer + buffer_len;
-  sk_X509_unshift(cfg->intermediates, cfg->endpoint);
+  sk_X509_insert(cfg->intermediates, cfg->endpoint, 0);
 
   #if DEBUG
     printf("Formatting the selected certificate chain.\n");
