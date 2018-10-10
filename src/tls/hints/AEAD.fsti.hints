@@ -17,7 +17,7 @@
         "typing_AEAD.ivlen", "typing_FStar.UInt32.v"
       ],
       0,
-      "70051cc5b4f0570ffd8787af5ba3c85d"
+      "5f2153d022bc7f603aeecf27c5eab41e"
     ],
     [
       "AEAD.aadmax",
@@ -26,7 +26,7 @@
       1,
       [ "@query" ],
       0,
-      "2429d239871737bd1187a8662fa0437c"
+      "8676b3060ab915c6ab806a412482b384"
     ],
     [
       "AEAD.cipher",
@@ -48,7 +48,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "1ae45c3716977824575c838aa916b640"
+      "72a78ad7aa0974cd9168c7de1deb0f45"
     ],
     [
       "AEAD.cipher32",
@@ -74,7 +74,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "590ca71c1afcd752fbd8c6f90643891d"
+      "e393fc7eec39a7901c8c52448a095863"
     ],
     [
       "AEAD.mk_entry",
@@ -93,7 +93,7 @@
         "typing_Crypto.Plain.as_bytes"
       ],
       0,
-      "b70e78b7ee0771425241de10d800eb75"
+      "09861974cc614c6dccd5231ba117547b"
     ],
     [
       "AEAD.entry_injective",
@@ -123,7 +123,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "d0c9ce25d994600ab56a29f0965c28a5"
+      "420360aa395c7a81b34a2d9fa9c98b92"
     ],
     [
       "AEAD.fresh_addresses",
@@ -131,15 +131,14 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "assumption_Prims.HasEq_int", "equation_AEAD.address",
-        "equation_FStar.UInt32.n", "equation_Prims.nat",
-        "function_token_typing_FStar.UInt32.n",
-        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
+        "@MaxIFuel_assumption", "@query", "equation_AEAD.address",
+        "equation_Prims.eqtype", "equation_Prims.nat",
+        "function_token_typing_Prims.int",
+        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "0b7d1ae61ac5bb7a088a18607e42c272"
+      "16ac4d6a8ceb90944423378caf736834"
     ],
     [
       "AEAD.fresh_addresses",
@@ -147,12 +146,14 @@
       2,
       1,
       [
-        "@query", "assumption_Prims.HasEq_int", "equation_AEAD.address",
-        "equation_Prims.nat",
-        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
+        "@MaxIFuel_assumption", "@query", "equation_AEAD.address",
+        "equation_Prims.eqtype", "equation_Prims.nat",
+        "function_token_typing_Prims.int",
+        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "012978059b1a8f115d9a208ac214c1a9"
+      "8e9d18aa9d376122ef7585ca782b3e64"
     ],
     [
       "AEAD.ok_plain_len_32",
@@ -169,7 +170,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "a5de90fdd6823d38ced56cc9ca33cc5b"
+      "858e93e63d8a2a73585dd930366df327"
     ],
     [
       "AEAD.frame_log",
@@ -182,7 +183,7 @@
         "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
       ],
       0,
-      "96d049299cc2c520fd6489f7d0b5e959"
+      "b13e93320fb4181a7fb71860a05598c7"
     ],
     [
       "AEAD.gen",
@@ -192,13 +193,15 @@
       [
         "@MaxIFuel_assumption", "@query",
         "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "assumption_Prims.HasEq_int", "equation_AEAD.address",
-        "equation_FStar.UInt32.n", "equation_Prims.nat",
+        "equation_AEAD.address", "equation_FStar.UInt32.n",
+        "equation_Prims.eqtype", "equation_Prims.nat",
         "function_token_typing_FStar.UInt32.n",
-        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
+        "function_token_typing_Prims.int",
+        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "e0c620b293d42ffcdffa68cdabbf16e8"
+      "4605aabb721403701fe7fa533044e151"
     ]
   ]
 ]

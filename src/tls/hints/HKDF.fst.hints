@@ -83,7 +83,7 @@
         "typing_Mem.tls_define_region"
       ],
       0,
-      "a574553f7d63fdee0b70c1c0807b4e87"
+      "1b11dab3997a3a9c20aa9d0797b87203"
     ],
     [
       "HKDF.expand",
@@ -92,7 +92,7 @@
       1,
       [ "@query" ],
       0,
-      "f16042bfdfbd2a5ee3027225fea04988"
+      "81d49914ad5d6dd3da75ff89d2c43133"
     ],
     [
       "HKDF.expand",
@@ -101,7 +101,7 @@
       1,
       [ "@query" ],
       0,
-      "211168efcd8e5ba7474ff1a8f643c929"
+      "be6c95c821d113274e6bd8edaa319d2a"
     ],
     [
       "HKDF.expand",
@@ -113,8 +113,7 @@
         "@fuel_correspondence_Prims.pow2.fuel_instrumented",
         "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
         "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "assumption_FStar.UInt32.t__uu___haseq",
-        "assumption_Prims.HasEq_int", "b2t_def", "bool_inversion",
+        "assumption_FStar.UInt32.t__uu___haseq", "b2t_def", "bool_inversion",
         "bool_typing", "constructor_distinct_EverCrypt.Hash.MD5",
         "constructor_distinct_FStar.Integers.Unsigned",
         "constructor_distinct_FStar.Integers.W32",
@@ -173,7 +172,7 @@
         "function_token_typing_Mem.tls_define_region",
         "function_token_typing_Mem.tls_region",
         "function_token_typing_Mem.tls_tables_region",
-        "function_token_typing_Prims.nat",
+        "function_token_typing_Prims.int", "function_token_typing_Prims.nat",
         "haseqFStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
         "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "int_inversion", "lemma_FStar.Bytes.empty_unique",
@@ -276,7 +275,7 @@
         "typing_Mem.is_tls_rgn", "typing_Mem.tls_define_region"
       ],
       0,
-      "549b2936720c99511a081db7dc339020"
+      "3a1d0701339a3341734d3b4866dc98df"
     ],
     [
       "HKDF.tls13_prefix",
@@ -285,7 +284,7 @@
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "5de886c6e3d19e87b3ae89fad125e9cd"
+      "37caec1fb866da134eebd1d49b8e1c21"
     ],
     [
       "HKDF.quic_prefix",
@@ -294,7 +293,7 @@
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "052e0b4abf2dece1d904e9317043bbee"
+      "c317d0d4282df5484179baccee6f4a54"
     ],
     [
       "HKDF.format",
@@ -362,7 +361,7 @@
         "typing_Mem.is_tls_rgn", "typing_Mem.tls_define_region"
       ],
       0,
-      "d7c8e783b8a00423f50d34586cf46215"
+      "cd7c8eb3379d62b2f97b1d20cce01b09"
     ],
     [
       "HKDF.expand_label",
@@ -371,7 +370,7 @@
       1,
       [ "@query" ],
       0,
-      "39528762ed4879f81b35a74d8f65f60b"
+      "a0e1e869b5398784464ce9243f809577"
     ],
     [
       "HKDF.expand_label",
@@ -380,7 +379,7 @@
       1,
       [ "@query" ],
       0,
-      "a5b5f606f92c580d4075fb92bf5431b6"
+      "9c1b3e64337425ee1ae1f4512796eb25"
     ],
     [
       "HKDF.expand_label",
@@ -453,7 +452,7 @@
         "typing_Mem.tls_define_region", "typing_Parse.vlbytes"
       ],
       0,
-      "67f64f30b04b2e01b8387558b0900159"
+      "1278c532b018ed137c4718b2982dd30c"
     ],
     [
       "HKDF.derive_secret",
@@ -462,7 +461,7 @@
       1,
       [ "@query" ],
       0,
-      "734d8e86c139731eb83ded9c13513e41"
+      "a13d809b0e018ec139c7905c65b842f7"
     ],
     [
       "HKDF.derive_secret",
@@ -471,7 +470,7 @@
       1,
       [ "@query" ],
       0,
-      "d31cf3ba7307f15b0da15ab11ba7dd4f"
+      "13be84e74e2d95e70fb6a492d5d5fc1e"
     ],
     [
       "HKDF.derive_secret",
@@ -535,7 +534,7 @@
         "typing_Mem.tls_define_region"
       ],
       0,
-      "a12969417f3794f0bc6fe1c301ef4264"
+      "b3f819207a640bdd993157482d358df6"
     ]
   ]
 ]
