@@ -434,7 +434,7 @@ int MITLS_CALLCONV mipki_sign_verify(mipki_state *st, const mipki_chain cert_ptr
   DIGEST md = NULL;
   EVP_MD_CTX *md_ctx = EVP_MD_CTX_new();
 
-  int kt = EVP_PKEY_base_id(cfg->key);
+  int kt = EVP_PKEY_type(EVP_PKEY_id(cfg->key));
   if(!set_digest(sigalg, &md)) return 0;
 
   #if DEBUG
@@ -679,7 +679,7 @@ void MITLS_CALLCONV mipki_format_alloc(mipki_state *st, mipki_chain chain, void*
 {
   assert(st != NULL);
   config_entry *cfg = (config_entry*)chain;
-  sk_X509_unshift(cfg->intermediates, cfg->endpoint);
+  sk_X509_insert(cfg->intermediates, cfg->endpoint, 0);
   void* list = init;
 
   #if DEBUG
