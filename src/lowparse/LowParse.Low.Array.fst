@@ -75,13 +75,17 @@ let array_nth #k #t #p s array_byte_size elem_count array_byte_size32 elem_byte_
 
 #reset-options
 
+// FIXME: WHY WHY WHY does tc inference not work here?
+
 inline_for_extraction
 let validate32_array
+  [| cls: validator32_cls |]
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
+  [| error_fldata_cls |]
   (s: serializer p)
-  (v: validator32 p)
+  (v: validator32 #cls p)
   (array_byte_size: nat)
   (array_byte_size32: I32.t)
   (elem_count: nat)
@@ -113,6 +117,7 @@ let validate_nochk32_array
 
 inline_for_extraction
 let validate32_vlarray
+  [| cls: validator32_cls |]
   (array_byte_size_min: nat)
   (array_byte_size_min32: U32.t { U32.v array_byte_size_min32 = array_byte_size_min } )
   (array_byte_size_max: nat)
@@ -120,8 +125,9 @@ let validate32_vlarray
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
+  [| error_vldata_cls |]
   (s: serializer p)
-  (v: validator32 p)
+  (v: validator32 #cls p)
   (elem_count_min: nat)
   (elem_count_max: nat)
   (u: unit {

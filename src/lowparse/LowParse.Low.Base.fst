@@ -9,6 +9,7 @@ module HST = FStar.HyperStack.ST
 module I32 = FStar.Int32
 module Cast = FStar.Int.Cast
 module MA = LowParse.Math
+module G = FStar.Ghost
 
 let int32_to_uint32_pos
   (x: I32.t)
@@ -81,7 +82,51 @@ let parse_from_slice
 
 (* A validator, if succeeds, returns the remaining length; otherwise returns a negative number. *)
 
-let validator32_postcond
+class validator32_cls = {
+  validator32_error_gloc: G.erased B.loc;
+  validator32_error_inv: HS.mem -> GTot Type0;
+  validator32_error_inv_loc_not_unused_in: (h: HS.mem) -> Lemma
+    (requires (validator32_error_inv h))
+    (ensures (M.loc_not_unused_in h `M.loc_includes` (G.reveal validator32_error_gloc)));
+  validator32_error_inv_frame: (h: HS.mem) -> (h' : HS.mem) -> (l: M.loc) -> Lemma
+    (requires (M.modifies_inert l h h' /\ M.loc_disjoint (G.reveal validator32_error_gloc) l /\ validator32_error_inv h))
+    (ensures (validator32_error_inv h'))
+}
+
+let validator32_error_loc [| validator32_cls |] () : GTot B.loc = G.reveal validator32_error_gloc
+
+let validator32_error_inv_loc_not_unused_in'
+  [| validator32_cls |]
+  (h: HS.mem)
+: Lemma
+  (requires (validator32_error_inv h))
+  (ensures (M.loc_not_unused_in h `M.loc_includes` (validator32_error_loc ())))
+  [SMTPat (validator32_error_inv h)]
+= validator32_error_inv_loc_not_unused_in h
+
+let validator32_error_inv_frame'
+  [| validator32_cls |]
+  (h: HS.mem)
+  (h' : HS.mem)
+  (l: M.loc)
+: Lemma
+  (requires (M.modifies_inert l h h' /\ M.loc_disjoint (validator32_error_loc ()) l /\ validator32_error_inv h))
+  (ensures (validator32_error_inv h'))
+  [SMTPatOr [
+    [SMTPat (M.modifies l h h'); SMTPat (validator32_error_inv h)];
+    [SMTPat (M.modifies l h h'); SMTPat (validator32_error_inv h')];
+  ]]
+= validator32_error_inv_frame h h' l
+
+let loc_includes_union_l_validator32_error_loc [| validator32_cls |] (l1 l2: M.loc)  : Lemma
+  (requires (M.loc_includes l1 (validator32_error_loc ()) \/ M.loc_includes l2 (validator32_error_loc ())))
+  (ensures (M.loc_includes (M.loc_union l1 l2) (validator32_error_loc ())))
+  [SMTPat (M.loc_includes (M.loc_union l1 l2) (validator32_error_loc()))]
+= M.loc_includes_union_l l1 l2 (validator32_error_loc ())
+
+unfold
+let validator32_postcond' 
+  [| validator32_cls |]
   (#k: parser_kind)
   (#t: Type0)
   (p: parser k t)
@@ -92,7 +137,8 @@ let validator32_postcond
   (h' : HS.mem)
 : GTot Type0
 = is_slice h input sz /\
-  M.modifies M.loc_none h h' /\ (
+  M.modifies (validator32_error_loc ()) h h' /\
+  validator32_error_inv h' /\ (
     let pv = parse_from_slice p h input sz in
     if I32.v res >= 0
     then
@@ -104,9 +150,23 @@ let validator32_postcond
       None? pv
   )
 
+let validator32_postcond
+  [| validator32_cls |]
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (input: buffer8)
+  (sz: I32.t)
+  (h: HS.mem)
+  (res: Int32.t)
+  (h' : HS.mem)
+: GTot Type0
+= validator32_postcond'  p input sz h res h' 
+
 [@unifier_hint_injective]
 inline_for_extraction
 let validator32
+  [| validator32_cls |]
   (#k: parser_kind)
   (#t: Type0)
   (p: parser k t)
@@ -115,7 +175,9 @@ let validator32
   (sz: I32.t) ->
   HST.Stack I32.t
   (requires (fun h ->
-    is_slice h input sz
+    is_slice h input sz /\
+    M.loc_disjoint (B.loc_buffer input) (validator32_error_loc ()) /\
+    validator32_error_inv h
   ))
   (ensures (fun h res h' ->
     validator32_postcond p input sz h res h'
@@ -123,6 +185,7 @@ let validator32
 
 inline_for_extraction
 let validate32
+  [| validator32_cls |]
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
@@ -131,11 +194,14 @@ let validate32
   (sz: I32.t)
 : HST.Stack bool
   (requires (fun h ->
-    is_slice h input sz
+    is_slice h input sz /\
+    M.loc_disjoint (B.loc_buffer input) (validator32_error_loc ()) /\
+    validator32_error_inv h
   ))
   (ensures (fun h res h' ->
     is_slice h input sz /\
-    M.modifies M.loc_none h h' /\ (
+    M.modifies (validator32_error_loc ()) h h' /\
+    validator32_error_inv h' /\ (
     let pv = parse_from_slice p h input sz in
     res == Some? pv
  )))
@@ -144,6 +210,7 @@ let validate32
 
 inline_for_extraction
 let ghost_parse_from_validator32
+  [| cls: validator32_cls |]
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
@@ -152,17 +219,21 @@ let ghost_parse_from_validator32
   (sz: I32.t)
 : HST.Stack (option (Ghost.erased t))
   (requires (fun h ->
-    is_slice h input sz
+    is_slice h input sz /\
+    M.loc_disjoint (B.loc_buffer input) (validator32_error_loc ()) /\
+    validator32_error_inv h
   ))
   (ensures (fun h res h' ->
     is_slice h input sz /\
-    M.modifies M.loc_none h h'  /\
+    M.modifies (validator32_error_loc ()) h h' /\
+    validator32_error_inv h' /\
     res == (match parse_from_slice p h input sz with
     | Some (x, _) -> Some (Ghost.hide x)
     | _ ->  None
   )))
 = let h = HST.get () in
-  if validate32 v input sz
+  // FIXME: WHY WHY WHY does tc instantiation fail here?
+  if validate32 #cls v input sz
   then begin
     let f () : GTot t =
       let (Some (x, _)) = parse_from_slice p h input sz in
@@ -847,3 +918,5 @@ let serializer32_fail_of_serializer
     end
   end
   
+inline_for_extraction
+let error_code = (x: I32.t { I32.v x < 0 } )

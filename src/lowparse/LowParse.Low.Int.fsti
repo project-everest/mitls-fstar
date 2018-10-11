@@ -10,6 +10,10 @@ module HS = FStar.HyperStack
 module B = LowStar.Buffer
 module M = LowStar.Modifies
 
+class error_int_cls = {
+  error_int_not_enough_input : error_code
+}
+
 inline_for_extraction
 val parse32_u8: parser32 parse_u8
 
@@ -19,16 +23,33 @@ val parse32_u16: parser32 parse_u16
 inline_for_extraction
 val parse32_u32: parser32 parse_u32
 
+// FIXME: WHY WHY WHY does typeclass inference not work here?
+
 inline_for_extraction
-let validate32_u8 : validator32 parse_u8 =
+let validate32_u8 [| cls: validator32_cls |] [| error_int_cls |] : validator32 #cls parse_u8 =
+  [@inline_let]
+  let _ = {
+    error_total_constant_size_not_enough_input = error_int_not_enough_input;
+  }
+  in
   validate32_total_constant_size parse_u8 1l ()
 
 inline_for_extraction
-let validate32_u16 : validator32 parse_u16 =
+let validate32_u16 [| cls: validator32_cls |] [| error_int_cls |] : validator32 #cls parse_u16 =
+  [@inline_let]
+  let _ = {
+    error_total_constant_size_not_enough_input = error_int_not_enough_input;
+  }
+  in
   validate32_total_constant_size parse_u16 2l ()
 
 inline_for_extraction
-let validate32_u32 : validator32 parse_u32 =
+let validate32_u32 [| cls: validator32_cls |] [| error_int_cls |] : validator32 #cls parse_u32 =
+  [@inline_let]
+  let _ = {
+    error_total_constant_size_not_enough_input = error_int_not_enough_input;
+  }
+  in
   validate32_total_constant_size parse_u32 4l ()
 
 inline_for_extraction

@@ -20,6 +20,13 @@ let parse_t : parser _ t =
   `parse_synth` synth_t
 
 inline_for_extraction
+(* local *) instance val_cls : validator32_cls = default_validator32_cls
+
+// FIXME: WHY WHY WHY does inference fail?
+inline_for_extraction
+let validator32 #k #t = validator32 #val_cls #k #t
+
+inline_for_extraction
 let validate32_t : validator32 parse_t =
   validate32_total_constant_size parse_t 8l ()
 (*
