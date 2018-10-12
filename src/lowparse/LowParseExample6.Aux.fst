@@ -341,7 +341,7 @@ let serialize32_t
 let size32_case_B: LP.size32 serialize_case_B =
   LP.size32_filter LP.size32_u16 parse_case_B_filter
 
-#push-options "--z3rlimit 20"
+#push-options "--z3rlimit 32"
 
 inline_for_extraction
 let size32_known_cases
@@ -366,22 +366,38 @@ let size32_t
 
 module LL = LowParse.Low
 
-let validate32_case_B : LL.validator32 parse_case_B =
+inline_for_extraction
+instance vc : LL.validator32_cls = LL.default_validator32_cls
+
+// FIXME: WHY WHY WHY does inference fail?
+inline_for_extraction
+let validator32 #k #t = LL.validator32 #vc #k #t
+
+inline_for_extraction
+instance fc = {
+  LL.error_filter_assertion_failed = (-11l);
+}
+
+let validate32_case_B : validator32 parse_case_B =
   LL.validate32_filter LL.validate32_u16 LL.parse32_u16 parse_case_B_filter (fun x -> x `U16.gt` 0us)
+
+#push-options "--z3rlimit 32"
 
 inline_for_extraction
 let validate32_known_cases
   (x: LP.dsum_known_key t_sum)
-: Tot (LL.validator32 (dsnd (parse_known_cases x)))
+: Tot (validator32 (dsnd (parse_known_cases x)))
 = match x with
   | Case_A ->
-    LL.coerce (LL.validator32 (dsnd (parse_known_cases x))) (LL.validate32_nondep_then LL.validate32_u8 LL.validate32_u8)
+    (LL.validate32_u8 `LL.validate32_nondep_then` LL.validate32_u8)
   | Case_B ->
-    LL.coerce (LL.validator32 (dsnd (parse_known_cases x))) validate32_case_B
+    validate32_case_B
   | _ ->
-    LL.coerce (LL.validator32 (dsnd (parse_known_cases x))) LL.validate32_u16
+    LL.validate32_u16
 
-let validate32_t : LL.validator32 parse_t =
+#pop-options
+
+let validate32_t : validator32 parse_t =
   LL.validate32_dsum
     t_sum
     LL.validate32_u8

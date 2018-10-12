@@ -69,7 +69,6 @@ let validate32_synth
 
 inline_for_extraction
 let validate_nochk32_synth
-  [| validator32_cls |]
   (#k: parser_kind)
   (#t1: Type0)
   (#t2: Type0)

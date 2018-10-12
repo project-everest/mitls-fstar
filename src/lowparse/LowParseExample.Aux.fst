@@ -385,21 +385,37 @@ let serialize32_t : LP.serializer32 serialize_t =
 
 module LL = LowParse.Low
 
+inline_for_extraction
+instance vc : LL.validator32_cls = LL.default_validator32_cls
+
+// FIXME: WHY WHY WHY does inference fail?
+inline_for_extraction
+let validator32 #k #t = LL.validator32 #vc #k #t
+
+inline_for_extraction
+instance fc = {
+  LL.error_filter_assertion_failed = (-11l);
+}
+
 let validate32_case_B
-: LL.validator32 parse_case_B
+: validator32 parse_case_B
 = LL.validate32_filter LL.validate32_u16 LL.parse32_u16 parse_case_B_filter (fun x -> x `U16.gt` 0us)
+
+#push-options "--z3rlimit 32"
 
 inline_for_extraction
 let validate32_cases 
   (x: LP.enum_key case_enum)
-: Tot (LL.validator32 (dsnd (parse_cases x)))
+: Tot (validator32 (dsnd (parse_cases x)))
 = match x with
   | Case_B -> validate32_case_B
   | Case_A -> LL.validate32_u8 `LL.validate32_nondep_then` LL.validate32_u8
   | _ -> LL.validate32_u16
 
+#pop-options
+
 let validate32_t
-: LL.validator32 parse_t
+: validator32 parse_t
 = LL.validate32_sum t_sum LL.validate32_u8 LL.parse32_u8 _ validate32_cases (_ by (LP.dep_maybe_enum_destr_t_tac ()))
 
 (*

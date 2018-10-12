@@ -7,9 +7,31 @@ module HST = FStar.HyperStack.ST
 module B = LowStar.Buffer
 module I32 = FStar.Int32
 module Cast = FStar.Int.Cast
+module HS = FStar.HyperStack
+
+let validate32_sum_aux_payload_postcond
+  [| validator32_cls |]
+  (t: sum)
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (k: maybe_enum_key (sum_enum t))
+  (input: B.buffer byte)
+  (len: I32.t)
+  (h: HS.mem)
+  (res: I32.t)
+  (h' : HS.mem)
+: GTot Type0
+= B.modifies (validator32_error_loc ()) h h' /\
+  validator32_error_inv h' /\ (
+    match k with
+    | Unknown _ -> I32.v res < 0
+    | Known k' ->
+      synth_injective (synth_sum_case t k') /\
+      validator32_postcond (dsnd (pc k') `parse_synth` (synth_sum_case t k')) input len h res h'
+  )
 
 inline_for_extraction
 let validate32_sum_aux_payload_t
+  [| validator32_cls |]
   (t: sum)
   (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
   (k: maybe_enum_key (sum_enum t))
@@ -17,31 +39,34 @@ let validate32_sum_aux_payload_t
 = (input: B.buffer byte) ->
   (len: I32.t) ->
   HST.Stack I32.t
-  (requires (fun h -> is_slice h input len))
+  (requires (fun h ->
+    is_slice h input len /\
+    B.loc_disjoint (B.loc_buffer input) (validator32_error_loc ()) /\
+    validator32_error_inv h
+  ))
   (ensures (fun h res h' ->
-    B.modifies B.loc_none h h' /\ (
-    match k with
-    | Unknown _ -> I32.v res < 0
-    | Known k' ->
-      validator32_postcond (dsnd (pc k')) input len h res h'
-  )))
+    validate32_sum_aux_payload_postcond t pc k input len h res h'
+  ))
 
+// FIXME: WHY WHY WHY does tc inference NOT work here?
 let validate32_sum_aux_payload_eq
+  [| cls: validator32_cls |]
   (t: sum)
   (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
   (k: maybe_enum_key (sum_enum t))
-: Tot (validate32_sum_aux_payload_t t pc k -> validate32_sum_aux_payload_t t pc k -> GTot Type0)
+: Tot (validate32_sum_aux_payload_t #cls t pc k -> validate32_sum_aux_payload_t #cls t pc k -> GTot Type0)
 = fun _ _ -> True
 
 inline_for_extraction
 let validate32_sum_aux_payload_if'
+  [| cls: validator32_cls |]
   (t: sum)
   (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
   (k: maybe_enum_key (sum_enum t))
   (cond: bool)
-  (ift: ((cond_true cond) -> Tot (validate32_sum_aux_payload_t t pc k)))
-  (iff: ((cond_false cond) -> Tot (validate32_sum_aux_payload_t t pc k)))
-: Tot (validate32_sum_aux_payload_t t pc k)
+  (ift: ((cond_true cond) -> Tot (validate32_sum_aux_payload_t #cls t pc k)))
+  (iff: ((cond_false cond) -> Tot (validate32_sum_aux_payload_t #cls t pc k)))
+: Tot (validate32_sum_aux_payload_t #cls t pc k)
 = fun input len ->
   if cond
   then begin
@@ -51,16 +76,18 @@ let validate32_sum_aux_payload_if'
 
 inline_for_extraction
 let validate32_sum_aux_payload_if
+  [| cls: validator32_cls |]
   (t: sum)
   (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
   (k: maybe_enum_key (sum_enum t))
-: Tot (if_combinator _ (validate32_sum_aux_payload_eq t pc k))
+: Tot (if_combinator _ (validate32_sum_aux_payload_eq #cls t pc k))
 = validate32_sum_aux_payload_if' t pc k
 
-#reset-options "--z3rlimit 128 --z3cliopt smt.arith.nl=false --query_stats --initial_ifuel 1 --max_ifuel 1 --smtencoding.elim_box true --smtencoding.l_arith_repr native --z3refresh"
+#reset-options "--z3rlimit 128 --z3cliopt smt.arith.nl=false --query_stats --initial_ifuel 1 --max_ifuel 1 --initial_fuel 2 --max_fuel 2 --smtencoding.elim_box true --smtencoding.l_arith_repr native --z3refresh"
 
 inline_for_extraction
 let validate32_sum_aux
+  [| validator32_cls |]
   (t: sum)
   (#kt: parser_kind)
   (#p: parser kt (sum_repr_type t))
@@ -91,45 +118,58 @@ let validate32_sum_aux
 #reset-options
 
 inline_for_extraction
-let validate32_sum_aux_payload'
+let validate32_sum_aux_payload_known
+  [| cls: validator32_cls |]
   (t: sum)
   (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
-  (pc32: ((x: sum_key t) -> Tot (validator32 (dsnd (pc x)))))
+  (pc32: ((x: sum_key t) -> Tot (validator32 #cls (dsnd (pc x)))))
+  (k: enum_key (sum_enum t))
+: Tot (validate32_sum_aux_payload_t #cls t pc (Known k))
+= fun input_k len_after_tag ->
+    validate32_synth (pc32 k) (synth_sum_case t k) (synth_sum_case_injective t k) input_k len_after_tag
+
+inline_for_extraction
+let validate32_sum_aux_payload'
+  [| cls: validator32_cls |]
+  (t: sum)
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (pc32: ((x: sum_key t) -> Tot (validator32 #cls (dsnd (pc x)))))
   (k: maybe_enum_key (sum_enum t))
-: Tot (validate32_sum_aux_payload_t t pc k)
+: Tot (validate32_sum_aux_payload_t #cls t pc k)
 = fun input_k len_after_tag ->
     match k with
-    | Known k ->
-      [@inline_let]
-      let _ = synth_sum_case_injective t k in
-      validate32_synth (pc32 k) (synth_sum_case t k) () input_k len_after_tag
-    | _ -> (-1l)
+    | Known k -> validate32_sum_aux_payload_known t pc pc32 k input_k len_after_tag
+    | _ ->
+      (-1l)
 
 inline_for_extraction
 let validate32_sum_aux_payload
+  [| cls: validator32_cls |]
   (t: sum)
   (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
-  (pc32: ((x: sum_key t) -> Tot (validator32 (dsnd (pc x)))))
-  (destr: dep_maybe_enum_destr_t (sum_enum t) (validate32_sum_aux_payload_t t pc))
+  (pc32: ((x: sum_key t) -> Tot (validator32 #cls (dsnd (pc x)))))
+  (destr: dep_maybe_enum_destr_t (sum_enum t) (validate32_sum_aux_payload_t #cls t pc))
   (k: sum_repr_type t)
-: Tot (validate32_sum_aux_payload_t t pc (maybe_enum_key_of_repr (sum_enum t) k))
+: Tot (validate32_sum_aux_payload_t #cls t pc (maybe_enum_key_of_repr (sum_enum t) k))
 = destr (validate32_sum_aux_payload_eq t pc) (validate32_sum_aux_payload_if t pc) (fun _ _ -> ()) (fun _ _ _ _ -> ()) (validate32_sum_aux_payload' t pc pc32) k
 
 inline_for_extraction
 let validate32_sum
+  [| cls: validator32_cls |]
   (t: sum)
   (#kt: parser_kind)
   (#p: parser kt (sum_repr_type t))
-  (v: validator32 p)
+  (v: validator32 #cls p)
   (p32: parser32 p)
   (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
-  (pc32: ((x: sum_key t) -> Tot (validator32 (dsnd (pc x)))))
-  (destr: dep_maybe_enum_destr_t (sum_enum t) (validate32_sum_aux_payload_t t pc))
-: Tot (validator32 (parse_sum t p pc))
+  (pc32: ((x: sum_key t) -> Tot (validator32 #cls (dsnd (pc x)))))
+  (destr: dep_maybe_enum_destr_t (sum_enum t) (validate32_sum_aux_payload_t #cls t pc))
+: Tot (validator32 #cls (parse_sum t p pc))
 = validate32_sum_aux t v p32 pc (validate32_sum_aux_payload t pc pc32 destr)
 
 inline_for_extraction
 let validate32_dsum_type_of_tag
+  [| validator32_cls |]
   (s: dsum)
   (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag s x)))
   (vf: (x: dsum_known_key s) -> Tot (validator32 (dsnd (f x))))
@@ -144,6 +184,7 @@ let validate32_dsum_type_of_tag
 
 inline_for_extraction
 let validate32_dsum_cases_t
+  [| validator32_cls |]
   (s: dsum)
   (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag s x)))
   (#k: parser_kind)
@@ -154,19 +195,21 @@ let validate32_dsum_cases_t
 
 inline_for_extraction
 let validate32_dsum_cases
+  [| cls: validator32_cls |]
   (s: dsum)
   (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag s x)))
-  (vf: (x: dsum_known_key s) -> Tot (validator32 (dsnd (f x))))
+  (vf: (x: dsum_known_key s) -> Tot (validator32 #cls (dsnd (f x))))
   (#k: parser_kind)
   (g: parser k (dsum_type_of_unknown_tag s))
   (vg: validator32 g)
   (x: dsum_key s)
-: Tot (validate32_dsum_cases_t s f g x)
+: Tot (validate32_dsum_cases_t #cls s f g x)
 = [@inline_let]
   let _ = synth_dsum_case_injective s x in
   validate32_synth (validate32_dsum_type_of_tag s f vf g vg x) (synth_dsum_case s x) ()
 
 let validate32_dsum_cases_eq
+  [| validator32_cls |]
   (s: dsum)
   (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag s x)))
   (#k: parser_kind)
@@ -178,14 +221,15 @@ let validate32_dsum_cases_eq
 
 inline_for_extraction
 let validate32_dsum_cases_if'
+  [| cls: validator32_cls |]
   (s: dsum)
   (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag s x)))
   (#k: parser_kind)
   (g: parser k (dsum_type_of_unknown_tag s))
   (x: dsum_key s)
   (cond: bool)
-  (ift: (cond_true cond -> Tot (validate32_dsum_cases_t s f g x)))
-  (iff: (cond_false cond -> Tot (validate32_dsum_cases_t s f g x)))
+  (ift: (cond_true cond -> Tot (validate32_dsum_cases_t #cls s f g x)))
+  (iff: (cond_false cond -> Tot (validate32_dsum_cases_t #cls s f g x)))
 : Tot (validate32_dsum_cases_t s f g x)
 = fun input len ->
   if cond
@@ -194,25 +238,27 @@ let validate32_dsum_cases_if'
 
 inline_for_extraction
 let validate32_dsum_cases_if
+  [| cls: validator32_cls |]
   (s: dsum)
   (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag s x)))
   (#k: parser_kind)
   (g: parser k (dsum_type_of_unknown_tag s))
   (x: dsum_key s)
-: Tot (if_combinator _ (validate32_dsum_cases_eq s f g x))
+: Tot (if_combinator _ (validate32_dsum_cases_eq #cls s f g x))
 = validate32_dsum_cases_if' s f g x
 
-#reset-options "--z3rlimit 32 --z3cliopt smt.arith.nl=false --query_stats --initial_ifuel 1 --max_ifuel 1 --smtencoding.elim_box true --smtencoding.l_arith_repr native --z3refresh"
+#reset-options "--z3rlimit 64 --z3cliopt smt.arith.nl=false --query_stats --initial_ifuel 1 --max_ifuel 1 --smtencoding.elim_box true --smtencoding.l_arith_repr native --z3refresh"
 
 inline_for_extraction
 let validate32_dsum
+  [| cls: validator32_cls |]
   (#kt: parser_kind)
   (t: dsum)
   (#p: parser kt (dsum_repr_type t))
-  (v: validator32 p)
+  (v: validator32 #cls p)
   (p32: parser32 p)
   (f: (x: dsum_known_key t) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag t x)))
-  (f32: (x: dsum_known_key t) -> Tot (validator32 (dsnd (f x))))
+  (f32: (x: dsum_known_key t) -> Tot (validator32 #cls (dsnd (f x))))
   (#k': parser_kind)
   (#g: parser k' (dsum_type_of_unknown_tag t))
   (g32: validator32 g)
