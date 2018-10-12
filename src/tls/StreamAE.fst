@@ -46,6 +46,7 @@ let ideal_log (r:erid) (i:id) = log_t r (entry i)
 let log_ref (r:erid) (i:id) : Tot Type0 =
   if authId i then ideal_log r i else unit
 
+noextract
 let ilog (#r:erid) (#i:id) (l:log_ref r i{authId i}) : Tot (ideal_log r i) =
   l
 

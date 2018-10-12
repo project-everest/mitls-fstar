@@ -8,7 +8,7 @@
       1,
       [ "@query", "assumption_EverCrypt.Hash.alg__uu___haseq" ],
       0,
-      "995549cdbefdae9197148ffc13823d7e"
+      "48658416c261eb57e63c59fe9dd300cd"
     ],
     [
       "EverCrypt.HMAC.lbseq",
@@ -16,11 +16,13 @@
       2,
       1,
       [
-        "@query", "assumption_Prims.HasEq_int", "equation_Prims.nat",
-        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
+        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
+        "equation_Prims.nat", "function_token_typing_Prims.int",
+        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "abe2232cd0904ee5e4a0bdd6288d5825"
+      "16dedf89c3e0c9dd3eb4491e01ecde0f"
     ],
     [
       "EverCrypt.HMAC.hmac",
@@ -29,7 +31,7 @@
       1,
       [ "@query" ],
       0,
-      "cfa37f17b35cc3bc1f3f6c5b2977583e"
+      "bbc3d183ec1661e2c99c0563350363c3"
     ],
     [
       "EverCrypt.HMAC.compute",
@@ -51,7 +53,7 @@
         "typing_LowStar.Buffer.trivial_preorder"
       ],
       0,
-      "4fb4a514f26e6e9aea4acc23294ec7d5"
+      "d7165239d4fcbe3223481973aa0ffd15"
     ]
   ]
 ]

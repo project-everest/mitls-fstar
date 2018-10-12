@@ -237,7 +237,7 @@ type i_mem_table (#it:eqtype) (vt:it -> Type) =
 type mem_table (#it:eqtype) (vt:it -> Type) =
   (if model then i_mem_table vt else unit)
 
-noextract
+noextract inline_for_extraction
 let itable (#it:eqtype) (#vt:it -> Type) (t:mem_table vt)
   : Pure (i_mem_table vt) (requires model) (ensures fun _ -> True) = t
 
