@@ -205,7 +205,42 @@
         "subterm_ordering_Prims.Cons"
       ],
       0,
-      "eaff98b32e4da39c1d9d1e8c14729afe"
+      "99dffca34d8f5866cdd7aec6dcf1ad00"
+    ],
+    [
+      "HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux_inj",
+      2,
+      2,
+      1,
+      [
+        "@MaxFuel_assumption", "@MaxIFuel_assumption",
+        "@fuel_correspondence_HandshakeLog.gforall.fuel_instrumented",
+        "@fuel_correspondence_HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux.fuel_instrumented",
+        "@fuel_irrelevance_HandshakeLog.gforall.fuel_instrumented",
+        "@fuel_irrelevance_HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux.fuel_instrumented",
+        "@query", "binder_x_00307fb773434c329a2c095a1079a695_1",
+        "binder_x_00307fb773434c329a2c095a1079a695_2",
+        "constructor_distinct_Prims.Cons", "constructor_distinct_Prims.Nil",
+        "disc_equation_Prims.Cons",
+        "equality_tok_TLSConstants.TLS_AES_128_GCM_SHA256@tok",
+        "equation_HandshakeLog.msg",
+        "equation_QD.TLS_protocolVersion.protocolVersion",
+        "equation_with_fuel_HandshakeLog.gforall.fuel_instrumented",
+        "equation_with_fuel_HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux.fuel_instrumented",
+        "fuel_guarded_inversion_Prims.list", "primitive_Prims.op_AmpAmp",
+        "proj_equation_FStar.Pervasives.Native.Mktuple2__1",
+        "proj_equation_FStar.Pervasives.Native.Mktuple2__2",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
+        "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
+        "projection_inverse_Prims.Cons_a",
+        "projection_inverse_Prims.Cons_hd",
+        "projection_inverse_Prims.Cons_tl",
+        "refinement_interpretation_HandshakeLog_Tm_refine_422458d7c599567ec8c612cf0b1dfa4a",
+        "subterm_ordering_Prims.Cons"
+      ],
+      0,
+      "af631848d6ce1f69f4fdd0ebb36d08a3"
     ],
     [
       "HandshakeLog.transcript_bytes",
@@ -220,7 +255,7 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_7913c46ed823df5e60659625cd966658"
       ],
       0,
-      "091bc415e8d090b2e2bd2daf47f8300a"
+      "0cf82ae68f19346c0d4e573043cb6b13"
     ]
   ]
 ]

@@ -415,48 +415,27 @@
       2,
       1,
       [
-        "@MaxFuel_assumption", "@MaxIFuel_assumption",
+        "@MaxIFuel_assumption",
         "@fuel_correspondence_FStar.Kremlin.Endianness.n_to_be.fuel_instrumented",
-        "@fuel_correspondence_LowParse.BigEndian.n_to_be_.fuel_instrumented",
-        "@fuel_correspondence_Prims.pow2.fuel_instrumented",
-        "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "assumption_Prims.HasEq_int", "b2t_def",
-        "binder_x_3cfe4f5782784c1de200aa5f421ffb64_0",
-        "binder_x_744f7e711d047f16c658854969137bff_2",
-        "binder_x_de40dbddfcf2e4085906b81eda37f6be_1",
-        "equality_tok_Prims.LexTop@tok",
-        "equation_FStar.Kremlin.Endianness.bytes",
-        "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
-        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
-        "equation_FStar.UInt.uint_t", "equation_FStar.UInt32.n",
-        "equation_FStar.UInt8.n", "equation_Prims.nat",
-        "function_token_typing_FStar.UInt32.n",
-        "function_token_typing_FStar.UInt8.n",
-        "function_token_typing_FStar.UInt8.t", "int_inversion", "int_typing",
-        "lemma_FStar.Seq.Base.lemma_len_slice",
-        "lemma_FStar.UInt.pow2_values", "primitive_Prims.op_Addition",
-        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_Division",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "primitive_Prims.op_Multiply", "primitive_Prims.op_Subtraction",
-        "projection_inverse_BoxBool_proj_0",
+        "@query", "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "b2t_def", "equation_FStar.Kremlin.Endianness.bytes",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.min_int",
+        "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
+        "equation_FStar.UInt32.n", "equation_Prims.nat",
+        "function_token_typing_FStar.UInt32.n", "int_inversion",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Multiply", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_FStar.BitVector_Tm_refine_a0cd7d06c5da6444b6b51b319febde8e",
         "refinement_interpretation_FStar.Kremlin.Endianness_Tm_refine_12b5b1a5c1daffe21a10c15e7bc1721a",
         "refinement_interpretation_FStar.Kremlin.Endianness_Tm_refine_1e62df159c33fd3091667f8254d1ab80",
-        "refinement_interpretation_FStar.Seq.Base_Tm_refine_aebc5aa9049e78f605051015a3436e68",
         "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
-        "refinement_interpretation_LowParse.BigEndian_Tm_refine_5862849ddb90d9ff6930189cd6a3b0e1",
-        "refinement_interpretation_LowParse.BigEndian_Tm_refine_6463f1a0bec6f9515908fe26dfeee420",
-        "refinement_interpretation_LowParse.BigEndian_Tm_refine_ac30c0395f959a2e18a95d81e13b973a",
-        "refinement_interpretation_LowParse.BigEndian_Tm_refine_dc268166b5a370edc7647513d22adde2",
+        "refinement_interpretation_LowParse.BigEndian_Tm_refine_734a1d0f810efd228d75b5689ddeb995",
+        "refinement_interpretation_LowParse.BigEndian_Tm_refine_ba20691c598b7aba0d11d91ead0d6da1",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "typing_FStar.Kremlin.Endianness.n_to_be",
-        "typing_FStar.Seq.Base.length", "typing_FStar.UInt32.v",
-        "typing_LowParse.BigEndian.n_to_be_", "well-founded-ordering-on-nat"
+        "typing_FStar.Kremlin.Endianness.n_to_be", "typing_FStar.UInt32.v"
       ],
       0,
-      "902433bcc48e9853eb7ba7e5284c841d"
+      "2542a7b42c38e2ab1f92be1bdd742e6f"
     ],
     [
       "LowParse.BigEndian.index_n_to_be",
@@ -503,7 +482,7 @@
         "typing_LowParse.BigEndian.n_to_be_", "well-founded-ordering-on-nat"
       ],
       0,
-      "e5ae24c5560d0f0ecdc5bb7534cc73a0"
+      "bc753bdeba837418bf3b204594e8620c"
     ],
     [
       "LowParse.BigEndian.div_256",
@@ -522,7 +501,7 @@
         "well-founded-ordering-on-nat"
       ],
       0,
-      "bbb1092bba80d3525049f81afd308b13"
+      "f8aee4b821d30bdd81d9620f6a24a4ab"
     ],
     [
       "LowParse.BigEndian.index_n_to_be'",
@@ -530,37 +509,51 @@
       2,
       1,
       [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.nat",
+        "primitive_Prims.op_Subtraction", "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_FStar.Seq.Properties_Tm_refine_a0cd7d06c5da6444b6b51b319febde8e",
+        "refinement_interpretation_LowParse.BigEndian_Tm_refine_11555900f97890e627a1d5e09024642c",
+        "typing_LowParse.BigEndian.n_to_be_"
+      ],
+      0,
+      "e523b7c9666323262d1f98b5cbac4b66"
+    ],
+    [
+      "LowParse.BigEndian.index_n_to_be'",
+      2,
+      2,
+      1,
+      [
         "@MaxFuel_assumption", "@MaxIFuel_assumption",
         "@fuel_correspondence_LowParse.BigEndian.div_256.fuel_instrumented",
         "@fuel_correspondence_LowParse.BigEndian.n_to_be_.fuel_instrumented",
         "@fuel_irrelevance_LowParse.BigEndian.div_256.fuel_instrumented",
-        "@fuel_irrelevance_LowParse.BigEndian.n_to_be_.fuel_instrumented",
         "@query", "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "assumption_Prims.HasEq_int",
         "binder_x_e05f9d204e8cf9d1ba926e9170e301fb_2",
         "binder_x_e22ba7a032a73f6d0678d3d186686631_0",
         "binder_x_e22ba7a032a73f6d0678d3d186686631_1",
         "equality_tok_Prims.LexTop@tok", "equation_FStar.UInt32.n",
         "equation_Prims.nat",
         "equation_with_fuel_LowParse.BigEndian.div_256.fuel_instrumented",
-        "equation_with_fuel_LowParse.BigEndian.n_to_be_.fuel_instrumented",
         "function_token_typing_FStar.UInt32.n",
         "function_token_typing_Prims.nat", "int_inversion", "int_typing",
-        "lemma_FStar.Seq.Base.lemma_index_app1",
-        "primitive_Prims.op_Division", "primitive_Prims.op_Equality",
-        "primitive_Prims.op_LessThanOrEqual",
+        "lemma_FStar.Seq.Base.lemma_index_slice",
+        "lemma_FStar.Seq.Base.lemma_len_slice",
+        "primitive_Prims.op_Addition", "primitive_Prims.op_Division",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
         "primitive_Prims.op_Subtraction",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_FStar.Seq.Base_Tm_refine_36f208f2b1019ab7b5d9be73f4c89349",
+        "refinement_interpretation_FStar.Seq.Base_Tm_refine_3321cbe2f573e3c988fd0895bf1f0cf9",
+        "refinement_interpretation_FStar.Seq.Base_Tm_refine_559c261b1c3777929ea329abfe70ab33",
+        "refinement_interpretation_FStar.Seq.Base_Tm_refine_aebc5aa9049e78f605051015a3436e68",
         "refinement_interpretation_FStar.Seq.Properties_Tm_refine_a0cd7d06c5da6444b6b51b319febde8e",
         "refinement_interpretation_LowParse.BigEndian_Tm_refine_4f64b15013ba8d3a0dda29cfc7bb279a",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "typing_FStar.Seq.Base.create", "typing_FStar.Seq.Base.index",
         "typing_LowParse.BigEndian.n_to_be_", "well-founded-ordering-on-nat"
       ],
       0,
-      "eb1cd300c818704580ad42ef2dcd7af8"
+      "e32100bd3d41d053f636e4f6da8ff979"
     ],
     [
       "LowParse.BigEndian.lemma_u8_eq_intro",
@@ -582,7 +575,7 @@
         "unit_typing"
       ],
       0,
-      "c1396a7782e1bf29da3ee52ed6fbfcd3"
+      "f1d6cb89242aaa65bf810af76afca881"
     ],
     [
       "LowParse.BigEndian.lemma_u8_eq_intro",
@@ -599,7 +592,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "cc0cdb55fc5a0c5e2e270b4aa12cd220"
+      "aa294bb95c013cdd4efff07be37ac058"
     ],
     [
       "LowParse.BigEndian.be_to_n_inj",
@@ -658,7 +651,7 @@
         "typing_FStar.UInt8.v", "well-founded-ordering-on-nat"
       ],
       0,
-      "fee2186182ab0b0c3ac242216ccde948"
+      "10edefbb4447b181639247c13a7f4297"
     ]
   ]
 ]

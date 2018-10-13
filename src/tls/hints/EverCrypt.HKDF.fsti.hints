@@ -13,7 +13,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "2c68bf9f4a1cea306b675d25034ca99f"
+      "489f7ea8a193def66d101c812f84438d"
     ],
     [
       "EverCrypt.HKDF.expand0",
@@ -102,7 +102,35 @@
         "well-founded-ordering-on-nat"
       ],
       0,
-      "e75b2088f6dda8db5b841fca87fc3459"
+      "38ca247662ca2a74d363a7a219a4f9c7"
+    ],
+    [
+      "EverCrypt.HKDF.expand0",
+      3,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
+        "equation_Prims.nat", "function_token_typing_Prims.int",
+        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "39d3cc3bd8205ffa0cbb170e9fd8cd62"
+    ],
+    [
+      "EverCrypt.HKDF.expand0",
+      4,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
+        "equation_Prims.nat", "function_token_typing_Prims.int",
+        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "ee7529911945d3c90d1d9e8b231011c7"
     ],
     [
       "EverCrypt.HKDF.expand",
@@ -114,7 +142,7 @@
         "refinement_interpretation_EverCrypt.HKDF_Tm_refine_490d0b34e45834a179ccd500411a2a67"
       ],
       0,
-      "ca73892b866476d5c41c63be23bc984b"
+      "7dd9d25d04628b0b8aab42eb900763f3"
     ],
     [
       "EverCrypt.HKDF.hkdf_extract",
@@ -134,7 +162,7 @@
         "typing_LowStar.Buffer.trivial_preorder"
       ],
       0,
-      "4d80dcba46ce024c3aaced78f1d5f5f2"
+      "6af294823e4fea271d20c2e571314a6b"
     ],
     [
       "EverCrypt.HKDF.hkdf_expand",
@@ -182,7 +210,7 @@
         "typing_LowStar.Buffer.trivial_preorder"
       ],
       0,
-      "8ab937ca81cb180a4e9e093808ef86ab"
+      "4f8c301c64ff6d20b96fa8d50145d7bc"
     ]
   ]
 ]
