@@ -75,7 +75,7 @@ function fetch_qd() {
     echo Switching to QuackyDucky $ref
     git reset --hard $ref
     cd ..
-    export_home QD "$(pwd)/kremlin"
+    export_home QD "$(pwd)/qd"
 }
 
 function fetch_and_make_qd() {
