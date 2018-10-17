@@ -164,7 +164,10 @@ private let handle_signals (hs:H.hs) (sig:option HSL.next_keys_use) : ML bool =
   | Some use ->
     Old.Epochs.incr_writer (H.epochs_of hs);
     if use.HSL.out_skip_0RTT then
-      Old.Epochs.incr_writer (H.epochs_of hs);
+     begin
+      trace "Skip 0-RTT (incr writer)";
+      Old.Epochs.incr_writer (H.epochs_of hs)
+     end;
     use.HSL.out_appdata
 
 private inline_for_extraction let api_error (ad, err) =
@@ -211,7 +214,7 @@ let process_hs (hs:H.hs) (ctx:hs_in) : ML hs_result =
       let consumed = UInt32.uint_to_t len in
       let j = H.i hs Writer in
       let reject_0rtt = 
-        if H.role_of hs = Client && j = 1 then
+        if H.role_of hs = Client && j = 2 then // FIXME: early reject vs. late reject
 	  let mode = H.get_mode hs in
 	  Negotiation.zeroRTToffer mode.Negotiation.n_offer
 	    && not (Negotiation.zeroRTT mode)

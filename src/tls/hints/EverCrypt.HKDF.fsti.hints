@@ -7,11 +7,13 @@
       2,
       1,
       [
-        "@query", "assumption_Prims.HasEq_int", "equation_Prims.nat",
-        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
+        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
+        "equation_Prims.nat", "function_token_typing_Prims.int",
+        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "8373109d7b57852976e947741039bb5c"
+      "07dd2dbfc429aad57eb7b98dd3cbf730"
     ],
     [
       "EverCrypt.HKDF.expand0",
@@ -100,7 +102,35 @@
         "well-founded-ordering-on-nat"
       ],
       0,
-      "9b606d5da98c03b319f0fae706b759c4"
+      "dc3b721067c13cc98375b4f0c5b9d7a0"
+    ],
+    [
+      "EverCrypt.HKDF.expand0",
+      3,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
+        "equation_Prims.nat", "function_token_typing_Prims.int",
+        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "17f7cbba0719e70bc7de511cb61869c9"
+    ],
+    [
+      "EverCrypt.HKDF.expand0",
+      4,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
+        "equation_Prims.nat", "function_token_typing_Prims.int",
+        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "e0ab9fec4970c467e7cdacd146dad165"
     ],
     [
       "EverCrypt.HKDF.expand",
@@ -112,7 +142,7 @@
         "refinement_interpretation_EverCrypt.HKDF_Tm_refine_490d0b34e45834a179ccd500411a2a67"
       ],
       0,
-      "3757c57dce6d31b75eea292b99a4cb57"
+      "1018a2e2ed268db00c08aaba9eb09628"
     ],
     [
       "EverCrypt.HKDF.hkdf_extract",
@@ -132,7 +162,7 @@
         "typing_LowStar.Buffer.trivial_preorder"
       ],
       0,
-      "b674c6f77c30f6c643e476d979e676b2"
+      "2c99ff184de4895f4b04f5d32094e0e4"
     ],
     [
       "EverCrypt.HKDF.hkdf_expand",
@@ -180,7 +210,7 @@
         "typing_LowStar.Buffer.trivial_preorder"
       ],
       0,
-      "d8c029fc2225577ca2d201624db9f2e8"
+      "aa13501d6ce2205a9d333f9e0b39864d"
     ]
   ]
 ]

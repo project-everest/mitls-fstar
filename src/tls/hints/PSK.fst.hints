@@ -2,15 +2,6 @@
   "ë7Ì-37¢0^§>Bt‡Â‘",
   [
     [
-      "PSK.hostname",
-      1,
-      2,
-      1,
-      [ "@query", "assumption_Prims.HasEq_string" ],
-      0,
-      "aef8e6315d4ecd7701c701291f2e69b7"
-    ],
-    [
       "PSK.tregion",
       1,
       2,
@@ -41,7 +32,7 @@
         "typing_FStar.Monotonic.HyperStack.is_eternal_color"
       ],
       0,
-      "9974ee1b7b81cbdb466c104c92a3932f"
+      "426f9d58eca9f34f9b4f11164955e421"
     ],
     [
       "PSK.tickets",
@@ -53,7 +44,7 @@
         "refinement_interpretation_Mem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e"
       ],
       0,
-      "64c8523fdaf48c359c665412ec8a7c07"
+      "f102dc9c6d3a72b7bd433002dd4922de"
     ],
     [
       "PSK.sessions12",
@@ -65,7 +56,7 @@
         "refinement_interpretation_Mem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e"
       ],
       0,
-      "f73def0535f3f86390aa90aee67385b6"
+      "6871d30d1b0e30fbf854af8abc7ec68d"
     ],
     [
       "PSK.app_psk",
@@ -74,7 +65,7 @@
       1,
       [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
       0,
-      "a2af897bdefb8f507907e2cda11ed70e"
+      "0be8ce89bed7b67b16e6f89d6d1fd9fb"
     ],
     [
       "PSK.psk_table_invariant",
@@ -89,7 +80,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "202e8360bd146b06c7efb793ce41091d"
+      "cd21b08b7b572bfa8ba606ffe5bc9881"
     ],
     [
       "PSK.psk_region",
@@ -122,7 +113,7 @@
         "typing_FStar.Monotonic.HyperStack.is_eternal_color"
       ],
       0,
-      "4b58b559fcbc8de43179fcc6004c57ba"
+      "8a6978e28b486031b63de00280226fb6"
     ],
     [
       "PSK.app_psk_table",
@@ -140,7 +131,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "73cbc5cd47aa0565aec49e68f9563d02"
+      "c24095281a93574d924ca868e8627f80"
     ],
     [
       "PSK.registered_psk",
@@ -155,7 +146,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "f6a67a339e9a33043bf49af42f2b060e"
+      "c75db0342bc353daa7f82bd65d647cd9"
     ],
     [
       "PSK.valid_app_psk",
@@ -171,7 +162,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "7942558723421162f8f825dcfdaa06d5"
+      "d5dd55f995f83d4747d15b27ef20af56"
     ],
     [
       "PSK.psk_value",
@@ -219,7 +210,7 @@
         "typing_FStar.Set.complement", "typing_FStar.Set.empty"
       ],
       0,
-      "252c35e4a06bc2a93cc03fe464aa9474"
+      "628c1ac2f67196723e2537e1c3cb130b"
     ],
     [
       "PSK.psk_info",
@@ -267,7 +258,7 @@
         "typing_FStar.Set.complement", "typing_FStar.Set.empty"
       ],
       0,
-      "ceabf20fb816df5be802e79c29b0a097"
+      "2c95a6b89daea436b628f4368501b670"
     ],
     [
       "PSK.psk_lookup",
@@ -339,7 +330,7 @@
         "typing_TLSConstants.extract_label"
       ],
       0,
-      "c9db12e0369ce2a4976ec6993fbe4ae6"
+      "76b2a00c6bfb8765f625afb549df795c"
     ],
     [
       "PSK.honest_st",
@@ -354,7 +345,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "41dfc3283f8b463725a7cbc1107816a0"
+      "91a102e2504193a8e575bd011542a6bb"
     ],
     [
       "PSK.fresh_psk_id",
@@ -369,7 +360,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "f16b651a53501b56ccf4f6854f59a651"
+      "9a47d4ee40684792bc0026e13c09e3bb"
     ],
     [
       "PSK.fresh_psk_id",
@@ -446,7 +437,7 @@
         "typing_Mem.tls_define_region"
       ],
       0,
-      "cfd7a2b67abbb717a00cebbc7a6c14b8"
+      "2fee4c727e085f295542d91d91287ee4"
     ],
     [
       "PSK.gen_psk",
@@ -604,7 +595,7 @@
         "typing_Mem.disjoint", "typing_Mem.tls_define_region"
       ],
       0,
-      "4f1b58da3c2329af449d25c2ad8ff7b9"
+      "de457ec3b6cc2271434274ebea85d76c"
     ],
     [
       "PSK.coerce_psk",
@@ -654,7 +645,7 @@
         "typing_FStar.Monotonic.HyperStack.sel", "typing_PSK.app_psk"
       ],
       0,
-      "ff891c19b992079bac34fb7005562fdb"
+      "d2a0f6d8d9fcf69e2e12bb0b04a63526"
     ],
     [
       "PSK.compatible_hash_ae_st",
@@ -672,7 +663,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "c3530cde4732da812c5cfca29c2d6f1d"
+      "51075213474f6a47a42504db5b3c6832"
     ],
     [
       "PSK.compatible_info_st",
@@ -688,7 +679,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "6eaedc99a675ed8fd5a5566c5e26464a"
+      "841c8a541a37e5bdeb5e2646657888e4"
     ],
     [
       "PSK.verify_hash_ae",
@@ -702,7 +693,6 @@
         "assumption_EverCrypt.Hash.alg__uu___haseq",
         "assumption_EverCrypt.aead_alg__uu___haseq",
         "assumption_FStar.Pervasives.Native.tuple3__uu___haseq",
-        "assumption_Prims.HasEq_bool",
         "assumption_TLSConstants.pskInfo__uu___haseq", "b2t_def",
         "bool_typing", "data_elim_FStar.Pervasives.Native.Some",
         "disc_equation_FStar.Pervasives.Native.Some",
@@ -720,8 +710,8 @@
         "equation_PSK.compatible_hash_ae_st", "equation_PSK.pskInfo",
         "equation_PSK.pskInfo_ae", "equation_PSK.pskInfo_hash",
         "equation_PSK.pskid", "equation_PSK.registered_psk",
-        "equation_TLSConstants.aeadAlg",
-        "equation_TLSConstants.extended_extract_label",
+        "equation_Prims.eqtype", "equation_TLSConstants.aeadAlg",
+        "equation_TLSConstants.extract_label",
         "equation_TLSConstants.hash_alg",
         "equation_TLSConstants.psk_identifier",
         "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mreference_",
@@ -748,10 +738,10 @@
         "refinement_interpretation_PSK_Tm_refine_226068e5c1abf4f9a2b470864e2fe4be",
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v",
-        "typing_PSK.app_psk", "typing_TLSConstants.extended_extract_label"
+        "typing_PSK.app_psk", "typing_TLSConstants.extract_label"
       ],
       0,
-      "5bc5738ecbe5e7f10c9f6621b05cf4c2"
+      "40922acdb5fc1c7ce1e7e8777725f472"
     ],
     [
       "PSK.inverse_mask",
@@ -807,7 +797,7 @@
         "typing_PSK.encode_age"
       ],
       0,
-      "0da92db597c8cff2b2a7f23c0c8c9826"
+      "db057cd40f27f7d2ff28e60badbaeb03"
     ]
   ]
 ]

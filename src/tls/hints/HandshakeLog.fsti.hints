@@ -13,7 +13,7 @@
         "fuel_guarded_inversion_Prims.list", "subterm_ordering_Prims.Cons"
       ],
       0,
-      "3486ac9d0818d2d3bbafd0e911850312"
+      "2e2fb7b8855456fd1376ebc72ec1fe77"
     ],
     [
       "HandshakeLog.append_transcript",
@@ -25,7 +25,7 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_fb118621c0b0f2173d7d8e9b92378a43"
       ],
       0,
-      "f0f254c75a9d7a6a18059745aa6b61e1"
+      "14e2b26b886f4c3bd5879ca3af9c8e85"
     ],
     [
       "HandshakeLog.narrowTag",
@@ -41,7 +41,7 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_a969e8191f5bd9af155588608ec95487"
       ],
       0,
-      "f5c35e36673fee4b13b0c09e644bd20f"
+      "132c80d22fec75dcee003b361e54ddc8"
     ],
     [
       "HandshakeLog.narrowTag",
@@ -55,7 +55,7 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_a969e8191f5bd9af155588608ec95487"
       ],
       0,
-      "d3e3097eaeb8fe7b1884edfa20971bfb"
+      "beacf9e5d08ad5e965afe17637101a5d"
     ],
     [
       "HandshakeLog.modifies_one",
@@ -63,11 +63,16 @@
       2,
       1,
       [
-        "@query", "assumption_Prims.HasEq_int", "equation_Prims.nat",
-        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "equation_FStar.UInt32.n", "equation_Prims.eqtype",
+        "equation_Prims.nat", "function_token_typing_FStar.UInt32.n",
+        "function_token_typing_Prims.int",
+        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "2942313569d1cc4ce138381d5c58bd8b"
+      "ccaf515b89c51c8597e457ca28d4e9e4"
     ]
   ]
 ]
