@@ -215,6 +215,19 @@ val plain_coerce: i:eid -> l:plen ->
   (requires fun h0 -> UInt32.v l <= LB.length v /\ (~(b2t F.ideal_AEAD) \/ Idx.corrupt (G.reveal i)))
   (ensures fun h0 p h1 -> plain_pred p h1)
 
+// Discussion: safety
+// ------------------
+// In previous versions we used to separate
+// safeId i and authId i. Since the new version
+// of this interface is based on AEAD, it is very
+// difficult to separate the two, unless we expose
+// the deep internals of the AEAD security proof.
+// Even then, we currently require an indeal PRF
+// before idealizing the MAC, as we are keying the
+// UFCMA game with the first block of the PRF.
+// In the AEAD setting, safeId guarantees both
+// confidentiality and integrity of plaintexts.
+
 (**
 Main AEAD safety predicate
 **)
@@ -224,6 +237,21 @@ val is_safeId: i:Idx.id -> ST.ST bool
   (ensures fun h0 b h1 ->
     M.modifies M.loc_none h0 h1 /\
     (b ==> safeId i))
+
+// Discussion: epoch log
+// ----------------------
+// The stateful epoch_log function is somewhat cumbersome
+// An alternaive approach that we consider is to
+// pre-compute the expected index sequence from the
+// authenticated mode. There are technical problems
+// with this method - for instance, the fact that the
+// computed indexes would not yet be registered.
+// It may be possible to use provide security for the
+// top-level interface against a weaker attacker model
+// and offer a coarse-grained notion of honesty - for 
+// instance, connection-level honnesty (possibly, up to
+// a compromise point if we want to capture forward
+// secrecy).
 
 (**
 The epoch log of a connection is simply a sequence
@@ -235,6 +263,50 @@ of indexes (under-specified).
 //  L.map (fun (| i, _ |) -> i) (writer_log s h)
 val epoch_log: #r:HS.rid -> s:tls_state r -> h:HS.mem ->
   GTot (S.seq Idx.id)
+
+
+// Discussion: Writer log
+// ----------------------
+// There are many ways to specify stream security.
+// In previous attempts, we have tried to write
+// duplex stream models, but this does not work
+// well with 0-RTT and one-sided re-keying. Instead,
+// in the spirit of the MultiStrea.AE.fsti draft,
+// and in contrast to the current design of Epoch.fst, 
+// we use a ghost log of byte sequences to specify
+// the writer log, and a counter value to specify
+// the position of the reader in the writer log.
+//
+// In order to model the fact that some keys can
+// be installed before they are activated, the
+// sequence of epochs is separated from the sequence
+// of fragments. Note that the fragments are no longer
+// indexed (in contrast to previous attempts). It used
+// to be the case because the ghost logged values were
+// at the same type as the concrete arguments of read
+// and write. In the buffer world, we need secure/abstract
+// indexed buffers in the read/write interface, but their
+// value can be specified in terms of seq U8.t.
+//
+// An interesting problem for the top-level API is how
+// much to reveal to the application about the internal
+// handshake epoch, and the associated internal fragments.
+// Since we are not currently trying to prove any 
+// confidentiality or integrity of handshake message fragments,
+// I am tempted to completely hide the handshake epoch to the
+// application. However, Cedric points out that we can no longer
+// prove the integrity of remote errors during the handshake -
+// a property that is very marginally useful for typical apps.
+//
+// Currently, writer_log remains a function of the connection.
+// I experimented with a style where the writer_log is an
+// under-specified function of any index. However, this
+// made it very difficult for applications to prove that
+// operations on a connection do not affect the writer_log of
+// indexes outside the epoch_log of the connection. Proving this
+// requires detailed knowledge of the global stateful invariant,
+// and the style does not tolerate multiple corrupt connections
+// that end up using the same index.
 
 (**
 Tries to find a connection that contains a writer
@@ -296,10 +368,6 @@ val lemma_frame_writer_log: #r:HS.rid -> s:tls_state r ->
   (ensures writer_log s h0 == writer_log s h1 /\
     epoch_log s h0 == epoch_log s h1)
 
-//type not_plaintext (#r:HS.rid) (s:tls_state r) (h:HS.mem) =
-//  L.length (writer_log s h) > 0
-// type not_plaintext
-
 (**
 Returns the index of the key for the
 other direction of communication
@@ -334,6 +402,11 @@ let currentId (#r:HS.rid) (s:tls_state r) (h:HS.mem)
   let j = S.length (writer_log s h) - 1 in
   S.index (epoch_log s h) j
 
+// N.B. requires F.model because of peerId.
+// If the "if model" is moved to the index type,
+// it may be possible to specify this function for
+// any index (see wiki notes)
+
 (**
 The ideal state of a reader is the position
 of the last received message in the writer log
@@ -355,22 +428,24 @@ val reader_counter: #r:HS.rid -> s:tls_state r -> i:Idx.id -> h:HS.mem -> Ghost 
         (dsnd (Some?.v opeer)) (peerId i) h)))
 *)
 
-(**
-A witness of the authentication of earlyInfo,
-and it's stateful accessor.
-**)
-val early_auth: #r:HS.rid -> s:tls_state r -> t:Type0
-val get_early_auth: #r:HS.rid -> s:tls_state r -> ST.St (b:bool{b ==> early_auth s})
+// Discussion: authentication
+// --------------------------
+// For the application, the main outcome of handshake
+// completion is (conditional) mode authentication.
+// For Low* reasons (and also, for callback reasons
+// related to certificates) the concrete mode is
+// a noeq type -- however, there exists a pure specification
+// of it that defines mode equality.
+//
+// We need separate variants of authentication for the finished
+// (mode authentication) and binders (offer authentication),
+// which is why the types are duplicated.
 
-(**
-A witness of the authentication of conInfo
-**)
-val auth: #r:HS.rid -> s:tls_state r -> t:Type0
-val get_auth: #r:HS.rid -> s:tls_state r -> ST.St (b:bool{b ==> auth s})
-
-(** Value spec of early connection info / mode **)
+(** Value spec of offer / mode **)
 val earlyInfoT: eqtype
 val conInfoT: eqtype
+// include QD.Parse_clientHello
+// include Negotiation.Spec
 
 (** Low-level type of connection info, defined in API **)
 val earlyInfo: Type0
@@ -379,15 +454,27 @@ val conInfo: Type0
 val conInfo_repr: conInfo -> GTot conInfoT
 // include TLSInfo
 
+(**
+Witness of the negotiation state defining
+offer and mode - required for accessing
+get_info and get_early_info
+**)
+val early_complete: #r:HS.rid -> s:tls_state r -> t:Type0
+val complete: #r:HS.rid -> s:tls_state r -> t:Type0
+
 val get_early_info: #r:HS.rid -> s:tls_state r ->
-  Ghost earlyInfoT (requires early_auth s) (ensures fun _ -> True)
+  Ghost earlyInfoT (requires early_complete s) (ensures fun _ -> True)
 
 val get_info: #r:HS.rid -> s:tls_state r ->
-  Ghost conInfoT (requires auth s) (ensures fun _ -> True)
+  Ghost conInfoT (requires complete s) (ensures fun _ -> True)
+
+// Safety predicate for negotiation security
+val safeEarlyMode: earlyInfoT -> Type0
+val safeMode: conInfoT -> Type0
 
 val tls_get_early_info: #r:HS.rid -> s:tls_state r ->
   ST.ST earlyInfo
-  (requires fun h0 -> early_auth s /\ tls_invariant s h0)
+  (requires fun h0 -> early_complete s /\ tls_invariant s h0)
   (ensures fun h0 si h1 ->
     M.modifies M.loc_none h0 h1 /\
     earlyInfo_repr si == get_early_info s /\
@@ -395,11 +482,19 @@ val tls_get_early_info: #r:HS.rid -> s:tls_state r ->
 
 val tls_get_info: #r:HS.rid -> s:tls_state r ->
   ST.ST conInfo
-  (requires fun h0 -> auth s /\ tls_invariant s h0)
+  (requires fun h0 -> complete s /\ tls_invariant s h0)
   (ensures fun h0 si h1 ->
     M.modifies M.loc_none h0 h1 /\
     conInfo_repr si == get_info s /\
     tls_invariant s h1)
+
+val is_safeMode: #r:HS.rid -> s:tls_state r -> ST.ST bool
+  (requires fun h0 -> complete s)
+  (ensures fun h0 b h1 -> h0 == h1 /\ (b ==> safeMode (get_info s)))
+val is_safeEarlyMode: #r:HS.rid -> s:tls_state r -> ST.ST bool
+  (requires fun h0 -> early_complete s)
+  (ensures fun h0 b h1 -> h0 == h1 /\ (b ==> safeEarlyMode (get_early_info s)))
+
 
 (**
 Ghost access to the peer connection object requires:
@@ -409,10 +504,13 @@ Ghost access to the peer connection object requires:
 val get_peer: #r:HS.rid -> s:tls_state r -> h:HS.mem ->
   Ghost (r':HS.rid & tls_state r')
   (requires tls_global_invariant h /\
-    (early_auth s \/ auth s))
+    ((early_complete s /\ safeEarlyMode (get_early_info s))
+     \/ (complete s /\ safeMode (get_info s))))
   (ensures fun (| _, s' |) ->
-    (early_auth s ==> (early_auth s' /\ get_early_info s' = get_early_info s)) /\
-    (auth s ==> (auth s' /\ get_info s' = get_info s)))
+    (early_complete s ==> 
+      (early_complete s' /\ get_early_info s' = get_early_info s)) /\
+    (complete s ==>
+      (complete s' /\ get_info s' = get_info s)))
 
 (**
 Initialization of the library.
@@ -514,9 +612,12 @@ val tls_do_handshake: #r:HS.rid -> p:tls_state r ->
       (F.model /\ role == Client ==>
         writer_log p h1 == S.empty)
     | HS_Blocked -> stm' == stm
-    | HS_Complete -> auth p /\
+    | HS_Complete -> complete p /\
       not_plaintext p h1 /\
       stm' == HandshakeComplete /\
+      (safeMode (get_info p) ==>
+        (let (| _, p'|) = get_peer p h1 in
+	get_info p' = get_info p)) /\
       (F.model ==>
         (let i = currentId p h1 in
 	epoch_log p h1 == S.snoc (epoch_log p h0) i /\
@@ -532,8 +633,11 @@ val tls_do_handshake: #r:HS.rid -> p:tls_state r ->
 	  reader_counter p (peerId i) h1 == 0)) /\
         (match role with
         | Client -> stm' == InHandshakeWritable
-        | Server -> early_auth p /\
-	  stm' == InHandshakeReadable))
+        | Server -> early_complete p /\
+	  stm' == InHandshakeReadable /\
+	  (safeEarlyMode (get_early_info p) ==>
+	    (let (| _, p' |) = get_peer p h1 in
+	    get_early_info p' = get_early_info p))))
     | HS_LocalError
     | HS_RemoteError -> stm' == InError
   ))
@@ -544,6 +648,11 @@ noeq type tls_iresult =
   | R_Fragment: i:eid -> l:plen -> plain i l -> tls_iresult
   | R_KeyUpdate: bool -> tls_iresult
   | R_Closed
+// | R_CantRead // Alternatively, dynamically fail if not readable
+
+type authCon (#r:HS.rid) (p:tls_state r) =
+  (early_complete p /\ safeEarlyMode (get_early_info p))
+  \/ (complete p /\ safeMode (get_info p))
 
 val tls_read: #r:HS.rid -> p:tls_state r ->
   input:uint8_p -> in_len:uint32_p ->
@@ -556,13 +665,15 @@ val tls_read: #r:HS.rid -> p:tls_state r ->
     LB.live h0 in_len /\ LB.live h0 out_len /\
     UInt32.v (LB.get h0 in_len 0) <= LB.length input /\
     UInt32.v (LB.get h0 out_len 0) <= LB.length output /\
+    // Or, allow function call but return R_CantRead
+    // auth p \/ early_auth p is required to ensure that
+    // there exists a unique peer writer
     (match tls_get_stm p h0 with
-    | InHandshakeReadable -> early_auth p
+    | InHandshakeReadable -> early_complete p
     | HandshakeComplete
-    | LocalClosed -> auth p
+    | LocalClosed -> complete p
     | _ -> False))
   (ensures fun h0 r h1 ->
-    let (| r', p' |) = get_peer p h0 in
     let s = tls_deref p h1 in
     let l = [ M.loc_buffer in_len;
       M.loc_buffer output; M.loc_buffer out_len;
@@ -603,18 +714,25 @@ val tls_read: #r:HS.rid -> p:tls_state r ->
       | R_KeyUpdate b ->
         epoch_log p h0 == S.snoc (epoch_log p h1) i' /\
         ri' == 0 /\
-	safeId i ==> ri == S.length (writer_epoch_log p' i h0) /\
+	((safeId i /\ authCon p) ==>
+	  (let (| r', p' |) = get_peer p h0 in
+            ri == S.length (writer_epoch_log p' i h0))) /\
 	(b /\ safeId i' ==>
 	  (writer_log p h1 == S.snoc (writer_log p h0) S.empty))
       | R_Fragment ei l f ->
         G.reveal ei == i /\
-        safeId i ==>
+        ((safeId i /\ authCon p) ==>
           (let fb = ghost_repr f in
+	  let (| r', p' |) = get_peer p h1 in
+	  // Alternatively, this could be folded into the
+	  // definition of reader_counter
           ri < S.length (writer_epoch_log p' i h1) /\
           i' == i /\ ri' == ri + 1 /\
-          S.index (writer_epoch_log p' i h1) ri == fb)
+          S.index (writer_epoch_log p' i h1) ri == fb))
       | R_Closed ->
-	S.length (writer_epoch_log p' i h0) == ri
+        (safeId i /\ authCon p) ==>
+	  (let (| _, p' |) = get_peer p h1 in
+	  S.length (writer_epoch_log p' i h0) == ri)
       | _ -> True))
   ))
 
@@ -622,6 +740,7 @@ type tls_oresult =
   | W_Error
   | W_Blocked
   | W_Success
+// | W_CantWrite // Alternatively, dynamically fail if con not writable
 
 #set-options "--z3rlimit 20"
 val tls_write: #r:HS.rid -> p:tls_state r ->
@@ -700,6 +819,7 @@ val tls_close: #r:HS.rid -> p:tls_state r ->
     tls_invariant p h0 /\ not_plaintext p h0 /\
     LB.live h0 output /\ LB.live h0 out_len /\
     UInt32.v (LB.get h0 out_len 0) <= LB.length output /\
+    // Alternatively, allow the call but return W_CantWrite
     (match tls_get_stm p h0 with
     | InHandshakeWritable | HandshakeComplete
     | RemoteClosed -> True | _ -> False))
@@ -726,7 +846,7 @@ val tls_close: #r:HS.rid -> p:tls_state r ->
       | HandshakeComplete -> 
         stm' == LocalClosed // Sent close_notify
       | RemoteClosed ->
-        stm' == FullClosed)
+        stm' == FullClosed) // Both close_notify have been exchanged
   ))
 
 (***** Test application *****)
