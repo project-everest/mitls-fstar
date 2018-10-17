@@ -21,6 +21,7 @@ INCLUDE_PATHS = \
         $(KREMLIN_HOME)/kremlib \
 	$(MITLS_HOME)/libs/ffi \
 	$(MITLS_HOME)/src/lowparse \
+        $(MITLS_HOME)/src/parsers/generated \
 	$(EVERCRYPT_HOME)/evercrypt \
 	$(SPECINC)
 

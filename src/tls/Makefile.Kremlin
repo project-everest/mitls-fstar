@@ -16,6 +16,7 @@ MITLS_BUNDLES = -drop Spec.Loops \
   -bundle 'EverCrypt=EverCrypt,EverCrypt.\*' \
   -bundle 'FStar.\*' \
   -bundle 'LowStar.\*' \
+  -bundle 'Parsers.\*' \
   -bundle 'C=C,C.\*' \
   -bundle TLSConstants=TLSConstants,QD.TLS_protocolVersion,List.Helpers \
   -bundle Hashing=Hashing.Spec,Hashing,Hashing.CRF,HMAC,HKDF,HMAC.UFCMA \
