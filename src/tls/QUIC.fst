@@ -164,7 +164,10 @@ private let handle_signals (hs:H.hs) (sig:option HSL.next_keys_use) : ML bool =
   | Some use ->
     Old.Epochs.incr_writer (H.epochs_of hs);
     if use.HSL.out_skip_0RTT then
-      Old.Epochs.incr_writer (H.epochs_of hs);
+     begin
+      trace "Skip 0-RTT (incr writer)";
+      Old.Epochs.incr_writer (H.epochs_of hs)
+     end;
     use.HSL.out_appdata
 
 private inline_for_extraction let api_error (ad, err) =

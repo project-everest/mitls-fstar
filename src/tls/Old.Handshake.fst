@@ -395,6 +395,7 @@ let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming 
   | Error z -> InError z
   | Correct mode ->
     let pv = mode.Nego.n_protocol_version in
+    let cfg = Nego.local_config s.nego in
     let ha = Nego.hashAlg mode in
     let ka = Nego.kexAlg mode in
     HandshakeLog.setParams s.log pv ha (Some ka) None (*?*);
@@ -412,15 +413,19 @@ let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming 
         register s hs_keys; // register new epoch
         if Nego.zeroRTToffer mode.Nego.n_offer then
          begin
-          trace (if Some? mode.Nego.n_pski then "0RTT potentially accepted (wait for EE to confirm)"
-                 else "No 0RTT possible because of rejected PSK");
           // Skip the 0-RTT epoch on the reading side
           Epochs.incr_reader s.epochs;
-	  // Skip the 0-RTT epoch when rejected
-	  if None? mode.Nego.n_pski then Epochs.incr_writer s.epochs
+	  match mode.Nego.n_pski with
+	  | None ->
+	    trace "0-RTT rejected early (no PSK was selected)";
+	    Epochs.incr_writer s.epochs
+	  | Some _ ->
+            trace "0RTT potentially accepted (wait for EE to confirm)";
+	    // No EOED in QUIC, so we immediately enable HSK
+	    if cfg.is_quic then Epochs.incr_writer s.epochs
          end
 	else // No EOED to send in 0-RTT epoch
-	 Epochs.incr_writer s.epochs; // Next flight (CFin) will use HSK
+	  Epochs.incr_writer s.epochs; // Next flight (CFin) will use HSK
         s.state := C_Wait_Finished1;
         Epochs.incr_reader s.epochs; // Client 1.3 HSK switch to handshake key for decrypting EE etc...
         InAck true false // Client 1.3 HSK
@@ -529,6 +534,7 @@ val client_ServerFinished_13:
   St incoming
 let client_ServerFinished_13 hs ee ocr oc ocv (svd:bytes) digestCert digestCertVerify digestServerFinished =
     let oc = match oc with | None -> None | Some c -> Some c.crt_chain13 in
+    let cfg = Nego.local_config hs.nego in
     match Nego.clientComplete_13 hs.nego ee ocr oc ocv digestCert with
     | Error z -> InError z
     | Correct mode ->
@@ -538,21 +544,29 @@ let client_ServerFinished_13 hs ee ocr oc ocv (svd:bytes) digestCert digestCertV
         let (| finId, sfin_key |) = sfin_key in
         if not (HMAC_UFCMA.verify sfin_key digestCertVerify svd)
         then InError (AD_decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestCertVerify )
-        else (
+        else
+	 begin
           export hs exporter_master_secret;
           register hs app_keys; // ATKs are ready to use in both directions
-          if Nego.zeroRTT mode then (
+
+          // EOED emitting (not used for QUIC)
+          if Nego.zeroRTT mode && not cfg.is_quic then
+	   begin
             trace "Early data accepted; emitting EOED.";
             let ha = Nego.hashAlg mode in
             let digestEOED = HandshakeLog.send_tag #ha hs.log EndOfEarlyData in
             HandshakeLog.send_signals hs.log (Some (false, false)) false;
             hs.state := C_Sent_EOED digestEOED ocr cfin_key;
-            InAck false false )
-          else (
-            trace "Early data rejected";
+            InAck false false
+	   end
+          else
+	   begin
+            (if Nego.zeroRTT mode then trace "Early data accepted (QUIC, no EOED)."
+	    else trace "Early data rejected");
             client_ClientFinished_13 hs digestServerFinished ocr cfin_key;
             InAck true false // Client 1.3 ATK; next the client will read again to send Finished, writer++, and the Complete signal
-          )) // moving to C_Complete
+           end
+	 end // moving to C_Complete
 
 let rec iutf8 (m:bytes) : St (s:string{String.length s < pow2 30 /\ utf8_encode s = m}) =
     match iutf8_opt m with
@@ -934,6 +948,7 @@ let server_ServerFinished_13 hs i =
     // most of this should go to Nego
     trace "prepare Server Finished";
     let mode = Nego.getMode hs.nego in
+    let cfg = Nego.local_config hs.nego in
     let kex = Nego.kexAlg mode in
     let pv = mode.Nego.n_protocol_version in
     let cs = mode.Nego.n_cipher_suite in
@@ -969,7 +984,7 @@ let server_ServerFinished_13 hs i =
       HandshakeLog.send_signals hs.log (Some (true,false)) false;
 
       hs.state := (
-        if Nego.zeroRTT mode then
+        if Nego.zeroRTT mode && not cfg.is_quic then
 	  S_Wait_EOED // EOED sent with 0-RTT: dont increment reader
         else
 	  (Epochs.incr_reader hs.epochs; // Turn on HS key
