@@ -209,7 +209,7 @@ val format:
   digest: bytes{length digest < 256} ->
   len: UInt32.t {v len <= op_Multiply 255 (tagLength ha)} ->
   is_quic: bool ->
-  Tot bytes
+  Tot (b: bytes {length b < 1024})
 
 /// since derivations depend on the concrete info, we will need to
 /// prove format injective on (at least) label digest is_quic.
@@ -226,12 +226,12 @@ inline_for_extraction private
 let format ha label digest len is_quic =
   let prefix = if is_quic then quic_prefix else tls13_prefix in
   let label_bytes = prefix @| bytes_of_string label in
-  lemma_repr_bytes_values (v len);
-  lemma_repr_bytes_values (length label_bytes);
-  lemma_repr_bytes_values (length digest);
-  bytes_of_int 2 (v len) @|
-  Parse.vlbytes 1 label_bytes @|
-  Parse.vlbytes 1 digest
+  assume (7 <= length label_bytes);
+  Parsers.HKDF.Parse_hkdfLabel.(hkdfLabel_serializer32 ({
+    length  = (FStar.Int.Cast.uint32_to_uint16 len);
+    label   = label_bytes;
+    context = digest;
+  }))
 
 /// used for computing all derived keys; 
 
