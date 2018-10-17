@@ -64,6 +64,35 @@ function fetch_and_make_kremlin() {
     export PATH="$(pwd)/kremlin:$PATH"
 }
 
+function fetch_qd() {
+    if [ ! -d qd ]; then
+        git clone https://github.com/project-everest/quackyducky qd
+    fi
+
+    cd qd
+    git fetch origin
+    local ref=$(if [ -f ../.qd_version ]; then cat ../.qd_version | tr -d '\r\n'; else echo origin/adl_dev; fi)
+    echo Switching to QuackyDucky $ref
+    git reset --hard $ref
+    cd ..
+    export_home QD "$(pwd)/kremlin"
+}
+
+function fetch_and_make_qd() {
+    fetch_qd
+
+    # Default build target is quackyducky, unless specified otherwise
+    local target
+    if [[ $1 == "" ]]; then
+        target="quackyducky"
+    else
+        target="$1"
+    fi
+
+    make -C qd -j $threads $target ||
+        (cd qd && git clean -fdx && make -j $threads $target)
+}
+
 function fetch_mlcrypto() {
     if [ ! -d mlcrypto ]; then
         git clone https://github.com/project-everest/MLCrypto mlcrypto
@@ -96,6 +125,7 @@ function mitls_verify() {
 
     # Only building a subset of HACL* for now
     fetch_and_make_kremlin all && fetch_hacl &&
+    fetch_and_make_qd &&
         fetch_and_make_mlcrypto &&
         make -C hacl-star/code extract-c -j $threads &&
         OTHERFLAGS="--admit_smt_queries true $OTHERFLAGS" make -C hacl-star/providers -j $threads &&
