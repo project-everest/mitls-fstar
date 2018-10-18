@@ -639,7 +639,7 @@ let parseServerHello data =
                | Correct cs ->
                  let cm = parseCompression cmBytes in
                  (match cm with
-                   | UnknownCompression _ ->
+                   | Unknown_compressionMethod _ ->
                      Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "server selected a compression mode")
                    | NullCompression ->
                      let em = // FIXME what can we do about this horrible, atrocious hack?

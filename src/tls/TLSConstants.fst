@@ -401,31 +401,26 @@ let signatureScheme_of_sigHashAlg sa ha =
 
 
 /// COMPRESSION (LARGELY DEPRECATED IN TLS 1.3)
-/// QD fodder
-///
+
 (** Compression definition *)
-type compression =
-  | NullCompression
-  | UnknownCompression of (b:byte{b <> 0z})
+
+include Parsers.Parse_compressionMethod // for NullCompression
+
+inline_for_extraction
+type compression = compressionMethod
 
 (** Serializing function for compression algorithms *)
 val compressionBytes: compression -> Tot (lbytes 1)
-let compressionBytes comp =
-  match comp with
-  | NullCompression      -> abyte 0z
-  | UnknownCompression b -> abyte b
+let compressionBytes =
+  LowParseWrappers.wrap_serializer32_constant_length compressionMethod_serializer32 1 ()
 
-// Not pinverse_t compressionBytes, because it never fails
+// Not pinverse_t compressionBytes, because it never fails.
 
 (** Parsing function for compression algorithm *)
 val parseCompression: b:lbytes 1
   -> Tot (cm:compression{compressionBytes cm == b})
-let parseCompression b =
-  assume false; //18-02-23 to get the refinement above with FStar.Bytes
-  match b.[0ul] with
-  | 0z -> Seq.lemma_eq_intro (Bytes.reveal (abyte 0z)) (Bytes.reveal b);
-         NullCompression
-  | b  -> UnknownCompression b
+let parseCompression =
+  LowParseWrappers.wrap_parser32_total_constant_length compressionMethod_serializer32 compressionMethod_parser32 1 ()
 
 // We ignore compression methods we don't understand. This is a departure
 // from usual parsing, where we fail on unknown values, but that's how TLS

@@ -1151,7 +1151,7 @@ enum /*@open*/ {
 
 opaque SessionID<0..32>;
 
-enum /*@open*/ { null(0), (255) } CompressionMethod;
+enum /*@open*/ { nullCompression(0), (255) } CompressionMethod;
 
 /** Shared Handshake Message Types **/
 

@@ -67,6 +67,35 @@ let bytes_equal_intro
   (ensures (equal b1 b2))
 = ()
 
+let wrap_parser32_total_constant_length_precond
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (p32: parser32 p)
+  (len: nat)
+: GTot Type0
+= k.parser_kind_high == Some k.parser_kind_low /\
+  k.parser_kind_low == len /\
+  k.parser_kind_metadata.parser_kind_metadata_total == true
+
+inline_for_extraction
+let wrap_parser32_total_constant_length
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (#s: serializer p)
+  (s32: serializer32 s)
+  (p32: parser32 p)
+  (len: nat)
+  (u: unit { wrap_parser32_total_constant_length_precond p32 len } )
+  (x: lbytes len)
+: Tot (y: t { s32 y == x } )
+= match p32 x with
+  | Some (y, consumed) ->
+    [@inline_let]
+    let _ = parser32_then_serializer32' p32 s32 x y consumed in
+    y
+
 let lemma_pinverse_serializer32_parser32_constant_length
   (#k: parser_kind)
   (#t: Type0)
