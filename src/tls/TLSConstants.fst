@@ -61,7 +61,13 @@ type rw =
 /// 18-02-22 QD fodder?
 ///
 (** Protocol version negotiated values *)
-include QD.TLS_protocolVersion
+
+include Parsers.Parse_protocolVersion // for TLS_1p3, etc.
+
+inline_for_extraction
+type protocolVersion' = Parsers.Parse_protocolVersion.protocolVersion
+inline_for_extraction
+type protocolVersion = (p: protocolVersion' { not (Unknown_protocolVersion? p) } )
 
 // aka TLS_1p3
 let is_pv_13 = function
@@ -70,10 +76,15 @@ let is_pv_13 = function
 
 (** Serializing function for the protocol version *)
 let versionBytes : protocolVersion' -> Tot (lbytes 2) =
-  protocolVersion_bytes
+  LowParseWrappers.wrap_serializer32_constant_length protocolVersion_serializer32 2 ()
+
+inline_for_extraction
+let parse_protocolVersion_error_msg : string =
+  FStar.Error.perror __SOURCE_FILE__ __LINE__ ""
 
 val parseVersion: pinverse_t versionBytes
-let parseVersion = parse_protocolVersion'
+let parseVersion x =
+  LowParseWrappers.wrap_parser32_constant_length protocolVersion_serializer32 2 () protocolVersion_parser32 parse_protocolVersion_error_msg x
 
 (** Determine the oldest protocol versions for TLS *)
 let minPV (a:protocolVersion) (b:protocolVersion) =
