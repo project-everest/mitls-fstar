@@ -202,7 +202,7 @@ let validate32_dsum_cases_if
 : Tot (if_combinator _ (validate32_dsum_cases_eq s f g x))
 = validate32_dsum_cases_if' s f g x
 
-#reset-options "--z3rlimit 32 --z3cliopt smt.arith.nl=false --query_stats --initial_ifuel 1 --max_ifuel 1 --smtencoding.elim_box true --smtencoding.l_arith_repr native --z3refresh"
+#reset-options "--z3rlimit 64 --z3cliopt smt.arith.nl=false --query_stats --initial_ifuel 1 --max_ifuel 1 --smtencoding.elim_box true --smtencoding.l_arith_repr native --z3refresh"
 
 inline_for_extraction
 let validate32_dsum
