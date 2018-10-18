@@ -428,6 +428,8 @@ let parseCompression =
 
 type compressions = cms: list compression {List.length cms <= 254}
 
+#reset-options "--using_facts_from '* -LowParse.Spec.Base'"
+
 (** Parsing function for compression algorithm lists *)
 val parseCompressions:
   b:bytes {length b <= 254} ->
@@ -456,6 +458,7 @@ let rec compressionMethodsBytes cms =
   | c::cs -> compressionBytes c @| compressionMethodsBytes cs
   | []   -> empty_bytes
 
+#reset-options
 
 
 /// CIPHERSUITES, with new structure for TLS 1.3
