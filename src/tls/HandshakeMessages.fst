@@ -1134,13 +1134,15 @@ assume val kex_s_to_bytes_is_injective: k1:kex_s -> k2:kex_s ->
   Lemma (requires True)
   (ensures (Bytes.equal (kex_s_to_bytes k1) (kex_s_to_bytes k2) ==> k1 == k2))
 
+#reset-options "--admit_smt_queries true"
+
 val serverKeyExchangeBytes: ske -> Tot (b:bytes{hs_msg_bytes HT_server_key_exchange b})
 let serverKeyExchangeBytes ske =
   let kexB = kex_s_to_bytes ske.ske_kex_s in
   let sigB = signatureBytes ske.ske_signed_params in
   let payload = kexB @| sigB in
   lemma_repr_bytes_values (length payload);
-  messageBytes HT_server_key_exchange payload
+  (messageBytes HT_server_key_exchange payload <: bytes)
 
 (* JK: TODO, currently not injective and missing an extra argument compared to the
    parsing function: the kex algorithm *)

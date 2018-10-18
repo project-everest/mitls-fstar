@@ -827,6 +827,8 @@ let rec cipherSuitesBytes cs =
 // type cipherSuites = cs: list valid_cipher_suite
 //   { let l = List.length cs in 1 <= l /\ l <= (65536/2 - 2)}
 
+#reset-options "--max_ifuel 2 --initial_ifuel 2 --max_fuel 2 --initial_fuel 2 --z3cliopt smt.arith.nl=false --z3rlimit 16 --using_facts_from '* -LowParse.Spec.Base'"
+
 (** Parsing function for a list of ciphersuites *)
 val parseCipherSuites: b:bytes -> Tot cipherSuites (decreases (length b))
 let rec parseCipherSuites b =

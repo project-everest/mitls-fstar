@@ -12,7 +12,9 @@ module AE = AEADProvider
 
 let hashLen = Hashing.tagLen
 
-#reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 2"
+#reset-options "--using_facts_from '* -LowParse.Spec.Base'"
+
+#set-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 2"
 
 type id2 = i:id { ID12? i } // gradually adding TLS 1.3...
 

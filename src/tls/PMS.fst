@@ -6,6 +6,8 @@ open Mem
 open FStar.Bytes
 open TLSConstants
 
+#reset-options "--using_facts_from '* -LowParse.Spec.Base'"
+
 let ideal = Flags.ideal_PMS // controls idealization of PMS.
 
 type rsarepr = bytes

@@ -105,6 +105,8 @@ let noncelen (i:id) =
 type nonce i = lbytes (noncelen i)
 
 let coerce_iv (i:id) (b:lbytes (iv_length i)) : Tot (iv i) = b
+
+#reset-options "--using_facts_from '* -LowParse.Spec.Base'"
  
 let create_nonce (#i:id) (#rw:rw) (st:state i rw) (n:nonce i): Tot (i:iv i) =
   let salt = salt_of_state st in

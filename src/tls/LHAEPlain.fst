@@ -38,6 +38,8 @@ let makeAD i seqn (ad:StatefulPlain.adata i) : adata i =
   b
 #reset-options
 
+#reset-options "--using_facts_from '* -LowParse.Spec.Base'"
+
 val seqN: i:id -> adata i -> Tot seqn
 let seqN i ad =
 //18-02-26 review?

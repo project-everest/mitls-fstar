@@ -1,5 +1,7 @@
 module TLSInfo
 
+#reset-options "--using_facts_from '* -LowParse.Spec.Base'"
+
 #set-options "--max_fuel 3 --initial_fuel 3 --max_ifuel 1 --initial_ifuel 1"
 
 (* This module gathers the definitions of

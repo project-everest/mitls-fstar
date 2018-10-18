@@ -22,6 +22,8 @@ module AEAD = AEADProvider
 module HST = FStar.HyperStack.ST
 module HS = FStar.HyperStack
 
+#reset-options "--using_facts_from '* -LowParse.Spec.Base'"
+
 type id = i:id{ ID12? i /\ AEAD? (aeAlg_of_id i) }
 let alg (i:id) = let AEAD ae _ = aeAlg_of_id i in ae
 
@@ -214,7 +216,8 @@ let concrete_encrypt (#i:id) (e:writer i)
   assume (UInt.fits (length nonce_explicit + length enc) 32);
   nonce_explicit @| enc
 
-#reset-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
+#reset-options "--using_facts_from '* -LowParse.Spec.Base'"
+#set-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 
 // Encryption of plaintexts; safe instances are idealized
 // Returns (nonce_explicit @| cipher @| tag)

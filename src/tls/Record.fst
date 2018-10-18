@@ -50,6 +50,8 @@ private let headerLen = 5ul
 private (* noextract *) let headerLength = v headerLen 
 private type header = b:lbytes headerLength // for all TLS versions
 
+#reset-options "--using_facts_from '* -LowParse.Spec.Base'"
+
 private let fake = ctBytes Application_data @| versionBytes TLS_1p2
 
 // this is the outer packet; to comply with legacy version signalling,

@@ -331,6 +331,9 @@ let protocol_versions_bytes = function
 //17-05-01 added a refinement to control the list length; this function verifies.
 //17-05-01 should we use generic code to parse such bounded lists?
 //REMARK: This is not tail recursive, contrary to most of our parsing functions
+
+#reset-options "--using_facts_from '* -LowParse.Spec.Base'"
+
 val parseVersions:
   b:bytes ->
   Tot (result (l:list TLSConstants.protocolVersion' {FStar.Mul.( length b == 2 * List.Tot.length l)})) (decreases (length b))
@@ -1339,6 +1342,8 @@ let negotiateClientExtensions pv cfg cExtL sExtL cs ri resuming =
     serverToNegotiatedExtensions_aux cfg cExtL cs ri resuming (correct pv) sExtL
 
 #reset-options
+
+#reset-options "--using_facts_from '* -LowParse.Spec.Base'"
 
 private val clientToServerExtension: protocolVersion
   -> config
