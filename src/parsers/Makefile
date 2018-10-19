@@ -1,4 +1,4 @@
-QD_HOME ?= ../../quackyducky
+QD_HOME ?= ../../../quackyducky
 
 all: gen
 
