@@ -33,6 +33,7 @@ SOURCES = \
   Nonce.c \
   Old_Handshake.c \
   Parse.c \
+  Parsers.c \
   PMS.c \
   Prims.c \
   PSK.c \
