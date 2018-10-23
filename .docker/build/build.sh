@@ -71,7 +71,7 @@ function fetch_qd() {
 
     cd qd
     git fetch origin
-    local ref=$(if [ -f ../.qd_version ]; then cat ../.qd_version | tr -d '\r\n'; else echo origin/taramana_lowparse_qd_integrate; fi)
+    local ref=$(if [ -f ../.qd_version ]; then cat ../.qd_version | tr -d '\r\n'; else echo origin/master; fi)
     echo Switching to QuackyDucky $ref
     git reset --hard $ref
     cd ..
