@@ -395,19 +395,19 @@ typedef struct {
   pfn_FFI_nego_cb cb;
 } wrapped_nego_cb;
 
-static mitls_version convert_pv(Parsers_Parse_protocolVersion_protocolVersion pv)
+static mitls_version convert_pv(Parsers_ProtocolVersion_protocolVersion pv)
 {
   switch(pv.tag)
   {
-    case Parsers_Parse_protocolVersion_SSL_3p0:
+    case Parsers_ProtocolVersion_SSL_3p0:
       return TLS_SSL3;
-    case Parsers_Parse_protocolVersion_TLS_1p0:
+    case Parsers_ProtocolVersion_TLS_1p0:
       return TLS_1p0;
-    case Parsers_Parse_protocolVersion_TLS_1p1:
+    case Parsers_ProtocolVersion_TLS_1p1:
       return TLS_1p1;
-    case Parsers_Parse_protocolVersion_TLS_1p2:
+    case Parsers_ProtocolVersion_TLS_1p2:
       return TLS_1p2;
-    case Parsers_Parse_protocolVersion_TLS_1p3:
+    case Parsers_ProtocolVersion_TLS_1p3:
       return TLS_1p3;
     default:
       return TLS_SSL3;
@@ -415,7 +415,7 @@ static mitls_version convert_pv(Parsers_Parse_protocolVersion_protocolVersion pv
   return TLS_SSL3; // unreachable
 }
 
-static TLSConstants_nego_action nego_cb_proxy(FStar_Dyn_dyn cbs, Parsers_Parse_protocolVersion_protocolVersion pv,
+static TLSConstants_nego_action nego_cb_proxy(FStar_Dyn_dyn cbs, Parsers_ProtocolVersion_protocolVersion pv,
   FStar_Bytes_bytes extb, FStar_Pervasives_Native_option__FStar_Bytes_bytes cookie)
 {
   wrapped_nego_cb *cb = (wrapped_nego_cb*)cbs;
@@ -567,7 +567,7 @@ static size_t list_sa_len(Prims_list__TLSConstants_signatureScheme *l)
 }
 
 static FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme
-  wrapped_select(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st, Parsers_Parse_protocolVersion_protocolVersion pv,
+  wrapped_select(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st, Parsers_ProtocolVersion_protocolVersion pv,
     FStar_Bytes_bytes sni, FStar_Bytes_bytes alpn,
     Prims_list__TLSConstants_signatureScheme *sal)
 {

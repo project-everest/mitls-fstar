@@ -9,7 +9,7 @@ gen: $(addsuffix .gen,$(wildcard *.rfc))
 	# issue of capitalization of module names in QuackyDucky is
 	# solved
 	mkdir -p generated
-	$(QD_HOME)/qd -prefix $(basename $<).Parse_ -odir generated $<
+	$(QD_HOME)/qd -prefix $(basename $<). -odir generated $<
 	touch $@
 
 clean:

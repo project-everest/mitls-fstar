@@ -62,10 +62,10 @@ type rw =
 ///
 (** Protocol version negotiated values *)
 
-include Parsers.Parse_protocolVersion // for TLS_1p3, etc.
+include Parsers.ProtocolVersion // for TLS_1p3, etc.
 
 inline_for_extraction
-type protocolVersion' = Parsers.Parse_protocolVersion.protocolVersion
+type protocolVersion' = Parsers.ProtocolVersion.protocolVersion
 inline_for_extraction
 type protocolVersion = (p: protocolVersion' { not (Unknown_protocolVersion? p) } )
 
@@ -404,7 +404,7 @@ let signatureScheme_of_sigHashAlg sa ha =
 
 (** Compression definition *)
 
-include Parsers.Parse_compressionMethod // for NullCompression
+include Parsers.CompressionMethod // for NullCompression
 
 inline_for_extraction
 type compression = compressionMethod

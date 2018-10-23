@@ -227,7 +227,7 @@ let format ha label digest len is_quic =
   let prefix = if is_quic then quic_prefix else tls13_prefix in
   let label_bytes = prefix @| bytes_of_string label in
   assume (7 <= length label_bytes);
-  Parsers.HKDF.Parse_hkdfLabel.(hkdfLabel_serializer32 ({
+  Parsers.HKDF.HkdfLabel.(hkdfLabel_serializer32 ({
     length  = (FStar.Int.Cast.uint32_to_uint16 len);
     label   = label_bytes;
     context = digest;
