@@ -1021,3 +1021,62 @@ let dep_maybe_enum_destr_nil
     let _ = v_eq_refl (maybe_enum_key_of_repr e x) (f (maybe_enum_key_of_repr e x)) in
     y
   ) <: (y: v (maybe_enum_key_of_repr e x) { v_eq (maybe_enum_key_of_repr e x) y (f (maybe_enum_key_of_repr e x)) } ))
+
+(* Eliminators and destructors for verification purposes *)
+
+let rec list_forallp (#t: Type) (p: t -> GTot Type0) (l: list t) : GTot Type0 =
+  match l with
+  | [] -> True
+  | a :: q -> p a /\ list_forallp p q
+
+let rec list_forallp_mem (#t: eqtype) (p: t -> GTot Type0) (l: list t) : Lemma
+  (list_forallp p l <==> (forall x . L.mem x l ==> p x))
+= match l with
+  | [] -> ()
+  | _ :: q -> list_forallp_mem p q
+
+inline_for_extraction
+let destruct_maybe_enum_key
+  (#key #value: eqtype)
+  (e: enum key value)
+  (f: maybe_enum_key e -> Tot Type)
+  (f_known: (
+    (x: key) ->
+    (u: squash (list_mem x (list_map fst e))) ->
+    Tot (f (Known x))
+  ))
+  (f_unknown: (
+    (x: value) ->
+    (u: squash (list_mem x (list_map snd e) == false)) ->
+    Tot (f (Unknown x))
+  ))
+  (x: maybe_enum_key e)
+: Tot (f x)
+= match x with
+  | Known x' -> f_known x' ()
+  | Unknown x' -> f_unknown x' ()
+
+let forall_maybe_enum_key
+  (#key #value: eqtype)
+  (e: enum key value)
+  (f: maybe_enum_key e -> Tot Type0)
+  (f_known: squash (list_forallp (fun (x: key) -> list_mem x (list_map fst e) /\ f (Known x)) (list_map fst e)))
+  (f_unknown: (
+    (x: value) ->
+    Tot (squash (list_mem x (list_map snd e) == false ==> f (Unknown x)))
+  ))
+: Tot (squash (forall (x: maybe_enum_key e) . f x))
+= let g
+    (x: maybe_enum_key e)
+  : Lemma
+    (f x)
+  = let u : squash (f x) =
+      destruct_maybe_enum_key
+        e
+        (fun y -> squash (f y))
+        (fun x' u -> list_forallp_mem (fun (x: key) -> list_mem x (list_map fst e) /\ f (Known x)) (list_map fst e))
+        (fun x' u -> f_unknown x') x
+    in
+    assert (f x)
+  in
+  Classical.forall_intro g

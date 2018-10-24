@@ -157,3 +157,31 @@ let size32_maybe_enum_key_tac
     T.solve_vc;
     (fun () -> enum_repr_of_key_tac e);
   ]
+
+noextract
+let synth_maybe_enum_key_inv_unknown_tac (#key: Type) (x: key) : T.Tac unit =
+  let open T in
+    destruct (quote x);
+    to_all_goals (fun () ->
+      let breq = intros_until_squash () in
+      rewrite breq;
+      norm [delta; iota; zeta; primops];
+      trivial ();
+      qed ()
+    );
+    qed ()
+
+noextract
+let forall_maybe_enum_key_known_tac () : T.Tac unit =
+      let open T in
+      norm [delta; iota; zeta; primops];
+      trivial ();
+      qed ()
+
+noextract
+let forall_maybe_enum_key_unknown_tac () : T.Tac unit =
+      let open T in
+      let x = intro () in
+      norm [delta; iota; zeta; primops];
+      trivial ();
+      qed ()

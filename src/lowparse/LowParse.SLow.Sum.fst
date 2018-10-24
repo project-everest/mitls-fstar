@@ -186,7 +186,7 @@ let serialize32_sum_destr_if
 = // _ by (T.apply (`fif); T.fail "abc")
   fif _ _ _ (default_if _) 
 
-#set-options "--z3rlimit 16"
+#set-options "--z3rlimit 32"
 
 inline_for_extraction
 let serialize32_sum
