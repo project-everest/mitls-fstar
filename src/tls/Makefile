@@ -56,7 +56,7 @@ clean: ocaml-clean kremlin-clean quic-clean model-clean lowparse-clean
 %.fst-in %.fsti-in:
 	+$(MAKE) -f Makefile.$(FLAVOR) $@
 
-%.fst-ver %.fsti-ver:
+%.fst-ver %.fsti-ver: refresh-depend
 	rm -f cache/Model/$(notdir $(subst -ver,,$@)).checked
 	+$(MAKE) -f Makefile.Model cache/Model/$(notdir $(subst -ver,,$@)).checked
 
