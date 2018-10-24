@@ -1,0 +1,40 @@
+[
+  "0\u000eÍ­\tÈi\u00193vkø†½7e",
+  [
+    [
+      "Parsers.ProtocolVersion.protocolVersion_repr_eq",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "equation_Parsers.ProtocolVersion.protocolVersion_repr"
+      ],
+      0,
+      "5dab4f9f13a74936276fd365018787b6"
+    ],
+    [
+      "Parsers.ProtocolVersion.protocolVersion",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
+      0,
+      "c3be96923b4525fe799534a15079654e"
+    ],
+    [
+      "Parsers.ProtocolVersion.__proj__Unknown_protocolVersion__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.ProtocolVersion.Unknown_protocolVersion",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Parsers.ProtocolVersion_Tm_refine_de0484a62d509e9de813bfe30726d436"
+      ],
+      0,
+      "4027dabf2f38c3c218d9c652036018e7"
+    ]
+  ]
+]

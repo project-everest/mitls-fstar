@@ -1,5 +1,5 @@
 [
-  "ˆoËOáM\u000eZÌç)†\u001dyÅ£",
+  "d¿A#%7‘Û­\u0000FÈ–Šõ«",
   [
     [
       "PMS.rsaseed",
@@ -12,7 +12,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "b6e79b4c23a50fd4db3a009c1e314116"
+      "75ff1c40d192ca5da14f862542500497"
     ],
     [
       "PMS.rsapms",
@@ -26,7 +26,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "7b0b8576f3a03fc8979645a797c58c70"
+      "a6a56ad8e9a2debb44a4ce4e460246bc"
     ],
     [
       "PMS.__proj__IdealRSAPMS__item___0",
@@ -39,7 +39,7 @@
         "refinement_interpretation_PMS_Tm_refine_4b165c74d9a659bf95c22cc5c0cddc2f"
       ],
       0,
-      "b14158470957ce1eca0fd8a90a336b95"
+      "3ba5e0fdcd43d6128b99977958858076"
     ],
     [
       "PMS.__proj__ConcreteRSAPMS__item___0",
@@ -52,7 +52,7 @@
         "refinement_interpretation_PMS_Tm_refine_21658e76784ec5e41f1ede63fdf3a3b0"
       ],
       0,
-      "30f55d7f9d66d1394208980959e49093"
+      "daecd7efb450caffb1b506a8c9aaefa9"
     ],
     [
       "PMS.honestRSAPMS",
@@ -64,7 +64,7 @@
         "disc_equation_PMS.IdealRSAPMS", "fuel_guarded_inversion_PMS.rsapms"
       ],
       0,
-      "2b03f08d054b233bf2c17b51e41ead68"
+      "0c47b81c9e2d5b8391c5dcf9e14efe32"
     ],
     [
       "PMS.genRSA",
@@ -76,26 +76,37 @@
         "@fuel_correspondence_Prims.pow2.fuel_instrumented",
         "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
         "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
-        "equation_FStar.Bytes.lbytes", "equation_FStar.UInt.fits",
-        "equation_FStar.UInt.max_int", "equation_FStar.UInt.min_int",
-        "equation_FStar.UInt.size", "equation_FStar.UInt32.n",
-        "equation_Prims.nat",
-        "equation_QD.TLS_protocolVersion.protocolVersion",
+        "bool_inversion", "bool_typing", "equation_FStar.Bytes.lbytes",
+        "equation_FStar.Monotonic.HyperHeap.disjoint",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "equation_FStar.UInt32.n", "equation_Mem.disjoint",
+        "equation_Mem.rgn", "equation_Mem.tls_define_region",
+        "equation_Mem.tls_rgn", "equation_Mem.tls_tables_region",
+        "equation_Parsers.ProtocolVersion.protocolVersion_parser_kind",
+        "equation_Prims.nat", "equation_RSAKey.strong",
+        "equation_TLSConstants.protocolVersion",
+        "equation_TLSConstants.protocolVersion_",
         "equation_TLSConstants.versionBytes",
-        "equation_with_fuel_Prims.pow2.fuel_instrumented",
-        "function_token_typing_FStar.UInt32.n", "int_typing",
+        "function_token_typing_FStar.UInt32.n",
+        "function_token_typing_Mem.tls_define_region",
+        "function_token_typing_Mem.tls_tables_region", "int_typing",
         "lemma_FStar.UInt.pow2_values", "primitive_Prims.op_Addition",
         "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
-        "primitive_Prims.op_Multiply", "primitive_Prims.op_Subtraction",
+        "primitive_Prims.op_Negation", "primitive_Prims.op_Subtraction",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
+        "refinement_interpretation_Mem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
+        "refinement_interpretation_Mem_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
+        "refinement_interpretation_Mem_Tm_refine_f70be9b0cc50942af80d22e44fc9b9c4",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "refinement_interpretation_QD.TLS_protocolVersion_Tm_refine_e48704b6086454f6959d561c0b2bcd8b",
-        "typing_TLSConstants.versionBytes"
+        "refinement_interpretation_TLSConstants_Tm_refine_0285de1debfea92a55eb096492ec8fa9",
+        "typing_FStar.UInt.fits", "typing_Mem.disjoint",
+        "typing_Mem.tls_define_region", "typing_TLSConstants.versionBytes"
       ],
       0,
-      "d0ed551cec6cbf60d999e352b3ad8ae9"
+      "1bc525d16c39bf6a03b838e3cf396dbf"
     ],
     [
       "PMS.dhseed",
@@ -108,7 +119,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "ba2f6e80e20de90fa294be825c9bfb8e"
+      "3d2404cd8fcd34e40f86bebfdeb66142"
     ],
     [
       "PMS.dhpms",
@@ -122,7 +133,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "df02263f360e27ddd4594c9b2cfde1dd"
+      "5479b395cf39f1d2fdc6289fdf928b9b"
     ],
     [
       "PMS.__proj__IdealDHPMS__item___0",
@@ -135,7 +146,7 @@
         "refinement_interpretation_PMS_Tm_refine_68f56426ab673280a097f887a8d712db"
       ],
       0,
-      "c8a1f13e94103a3f8c66ed52f964ff0c"
+      "cdb77402fd39d771224e24cff5865db1"
     ],
     [
       "PMS.__proj__ConcreteDHPMS__item___0",
@@ -148,7 +159,7 @@
         "refinement_interpretation_PMS_Tm_refine_5e03437877d8157a7d93f8b434a81ef3"
       ],
       0,
-      "2a3f322aee865cda682b4891e8d9c03a"
+      "7f496df06c6e53646dcbb0da2b39d4ec"
     ],
     [
       "PMS.honestDHPMS",
@@ -160,7 +171,7 @@
         "disc_equation_PMS.IdealDHPMS", "fuel_guarded_inversion_PMS.dhpms"
       ],
       0,
-      "115fba883477ee6732b6d69d04a434b3"
+      "695da9b8680f443f984c51e51863cea8"
     ],
     [
       "PMS.pms",
@@ -169,29 +180,28 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "assumption_CoreCrypto.rsa_key__uu___haseq",
         "assumption_FStar.Pervasives.Native.tuple3__uu___haseq",
         "assumption_PMS.dhpms__uu___haseq",
         "assumption_PMS.rsapms__uu___haseq",
-        "assumption_QD.TLS_protocolVersion.protocolVersion___uu___haseq",
+        "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq",
         "equation_CommonDH.dhr", "equation_CommonDH.ishare",
         "equation_CommonDH.pre_dhr", "equation_CommonDH.rshare",
-        "equation_FStar.Pervasives.dfst",
-        "equation_QD.TLS_protocolVersion.protocolVersion",
-        "equation_RSAKey.pk", "function_token_typing_CommonDH.group",
-        "function_token_typing_RSAKey.pk",
+        "equation_FStar.Pervasives.dfst", "equation_RSAKey.pk",
+        "equation_TLSConstants.protocolVersion",
+        "equation_TLSConstants.protocolVersion_",
+        "function_token_typing_CommonDH.group",
+        "function_token_typing_FStar.Bytes.bytes",
+        "function_token_typing_TLSConstants.protocolVersion",
         "haseqCommonDH_Tm_refine_0449a919f2686f2dad948d88586b56ce",
         "haseqCommonDH_Tm_refine_59e636272f909930c53ccc0e9facf997",
-        "haseqQD.TLS_protocolVersion_Tm_refine_e48704b6086454f6959d561c0b2bcd8b",
-        "haseqRSAKey_Tm_refine_a9bfc0fafe17f7581769be852314b8fc",
+        "haseqTLSConstants_Tm_refine_0285de1debfea92a55eb096492ec8fa9",
         "kinding_PMS.rsapms@tok", "proj_equation_Prims.Mkdtuple2__1",
         "projection_inverse_Prims.Mkdtuple2__1",
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
-        "refinement_kinding_QD.TLS_protocolVersion_Tm_refine_e48704b6086454f6959d561c0b2bcd8b",
-        "typing_CommonDH.pre_share"
+        "typing_CommonDH.pre_share", "typing_FStar.Bytes.bytes"
       ],
       0,
-      "cee1248d87341ff0c16a6327ee8ae15d"
+      "d5d0eb2d87757ef240aac5d3012e61d2"
     ],
     [
       "PMS.__proj__RSAPMS__item___0",
@@ -204,7 +214,7 @@
         "refinement_interpretation_PMS_Tm_refine_ef6fa93ce9da0bc0ec2e9c9a50e6dd43"
       ],
       0,
-      "20f765f9d11e8629a265021e5eff81e2"
+      "b75603eb5e125c6360c22250a844d214"
     ],
     [
       "PMS.__proj__DHPMS__item__g",
@@ -217,7 +227,7 @@
         "refinement_interpretation_PMS_Tm_refine_a82900f6c5ee138b7d328b3c3765a0f8"
       ],
       0,
-      "30e7a7d79ab2576df090ca6ce331aa24"
+      "1da4fc429734bce8e2f113867ab24a18"
     ],
     [
       "PMS.__proj__DHPMS__item__gx",
@@ -231,7 +241,7 @@
         "refinement_interpretation_PMS_Tm_refine_a82900f6c5ee138b7d328b3c3765a0f8"
       ],
       0,
-      "5e5642f2fb338231a5c6b34f89226b03"
+      "9992d1bb13cd3855faf1209ba0cb4055"
     ],
     [
       "PMS.__proj__DHPMS__item___2",
@@ -246,7 +256,7 @@
         "refinement_interpretation_PMS_Tm_refine_a82900f6c5ee138b7d328b3c3765a0f8"
       ],
       0,
-      "4de7dac8dc33e4bce77409daef40209f"
+      "576ff14ef250f7a91c62314e592df437"
     ],
     [
       "PMS.__proj__DHPMS__item___3",
@@ -259,7 +269,7 @@
         "refinement_interpretation_PMS_Tm_refine_a82900f6c5ee138b7d328b3c3765a0f8"
       ],
       0,
-      "bf2d60e6d0de62985328304849e1b19b"
+      "8ee8c41b340ab9a2fc2b5be0bb770fb0"
     ],
     [
       "PMS.honestPMS",
@@ -272,7 +282,7 @@
         "fuel_guarded_inversion_PMS.pms"
       ],
       0,
-      "6d1cfa7d0dab39d55e2a64970dbc7c42"
+      "72d83cc448961924d283b816e4663bea"
     ]
   ]
 ]

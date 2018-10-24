@@ -1,6 +1,41 @@
 [
-  "Å\u0011S…Y\f\u0000ç@®:““‘è!",
+  "zñ\u0011QÆO¸tîê\u001fÍ†Â^k",
   [
+    [
+      "HandshakeMessages.valid_hs_msg_prop",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "data_elim_TLSConstants.Mkconfig",
+        "equality_tok_Parsers.ProtocolVersion.TLS_1p2@tok",
+        "equality_tok_Parsers.ProtocolVersion.TLS_1p3@tok",
+        "equation_Extensions.extension", "equation_FStar.UInt32.n",
+        "equation_HandshakeMessages.ee", "equation_Prims.nat",
+        "equation_TLSConstants.protocolVersion",
+        "equation_TLSConstants.protocolVersion_",
+        "equation_TLSInfo.defaultConfig", "equation_TLSInfo.default_groups",
+        "equation_TLSInfo.default_signature_schemes",
+        "function_token_typing_Extensions.unknown",
+        "function_token_typing_FStar.UInt32.n",
+        "function_token_typing_FStar.UInt8.t",
+        "function_token_typing_TLSInfo.defaultConfig",
+        "lemma_FStar.Bytes.lemma_repr_bytes_values",
+        "lemma_FStar.Bytes.length_reveal", "primitive_Prims.op_Addition",
+        "primitive_Prims.op_LessThan", "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_HandshakeMessages_Tm_refine_9969c026b30621b0b8bd12581e9ddba5",
+        "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_TLSConstants_Tm_refine_0285de1debfea92a55eb096492ec8fa9",
+        "refinement_interpretation_TLSConstants_Tm_refine_8145eef20c7ea5402420fa6e103bff3f",
+        "typing_Extensions.bindersLen",
+        "typing_Extensions.extensionListBytes", "typing_FStar.Bytes.reveal",
+        "typing_FStar.Seq.Base.length"
+      ],
+      0,
+      "83f3f2c280b57a98e9b3f6ba54af5ba6"
+    ],
     [
       "HandshakeMessages.string_of_handshakeMessage",
       1,
@@ -31,7 +66,7 @@
         "fuel_guarded_inversion_HandshakeMessages.hs_msg"
       ],
       0,
-      "087c07255ab40d677e6d95e77314d897"
+      "0e0db52afdb0b96374e95005a34da866"
     ]
   ]
 ]
