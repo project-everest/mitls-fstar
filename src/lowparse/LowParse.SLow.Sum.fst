@@ -34,6 +34,8 @@ let parse32_sum_eq_refl (t: sum) : Tot (r_reflexive_t _ (parse32_sum_eq t)) =
 let parse32_sum_eq_trans (t: sum) : Tot (r_transitive_t _ (parse32_sum_eq t)) =
   fun _ _ _ -> ()
 
+#set-options "--z3rlimit 32"
+
 let parse32_sum_aux
   (#kt: parser_kind)
   (t: sum)
@@ -65,8 +67,6 @@ let parse32_sum_aux
       end
   in
   (res <: (res: option (sum_type t * U32.t) { parser32_correct (parse_sum t p pc) input res } ))
-
-#set-options "--z3rlimit 32"
 
 inline_for_extraction
 let parse32_sum'
@@ -347,8 +347,6 @@ let parse32_dsum_aux
   in
   (res <: (res: option (dsum_type t * U32.t) { parser32_correct (parse_dsum t p f g) input res } ))
 
-#reset-options
-
 inline_for_extraction
 let parse32_dsum'
   (#kt: parser_kind)
@@ -409,6 +407,8 @@ let parse32_dsum'
       end
     in
     destr (eq2 #_) (default_if _) (fun _ -> ()) (fun _ _ _ -> ()) f k'
+
+#reset-options
 
 inline_for_extraction
 let parse32_dsum

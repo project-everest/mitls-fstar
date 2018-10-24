@@ -179,6 +179,13 @@ let fail_parser
 = let p = fail_parser' t in
   strengthen k p
 
+inline_for_extraction
+let parse_false_kind = strong_parser_kind 0 0 ({ parser_kind_metadata_total = false })
+
+let parse_false : parser parse_false_kind False = fail_parser _ _
+
+let serialize_false : serializer parse_false = fun input -> false_elim (FStar.Squash.return_squash input)
+
 /// monadic bind for the parser monad
 
 val and_then_bare : #t:Type -> #t':Type ->
