@@ -1,5 +1,5 @@
 [
-  "ˇù5\u001a;Â\u000b:3v:\u0007M\by\u001a",
+  "\u0007◊w∂…ø êJ¨wOñÍ™U",
   [
     [
       "Parsers.CompressionMethod.compressionMethod_repr_eq",
@@ -11,7 +11,7 @@
         "equation_Parsers.CompressionMethod.compressionMethod_repr"
       ],
       0,
-      "6ffd4d0f731d74bb8eb80306944f0f04"
+      "3c130f4000b7cc79a3134f56873a3826"
     ],
     [
       "Parsers.CompressionMethod.compressionMethod",
@@ -20,7 +20,7 @@
       1,
       [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
       0,
-      "47d70a57cb69453fdb43e676a6e8ced5"
+      "1ef00996ee1b38b71006c6489ee4ad5f"
     ],
     [
       "Parsers.CompressionMethod.__proj__Unknown_compressionMethod__item___0",
@@ -34,7 +34,7 @@
         "refinement_interpretation_Parsers.CompressionMethod_Tm_refine_024d66cc355bb4f5c02304d3ef6c059f"
       ],
       0,
-      "51ec4b582d80921d9a06754c7aecac96"
+      "959bc960b150715b271ec5a02c6dcffe"
     ],
     [
       "Parsers.CompressionMethod.compressionMethod_enum",
@@ -52,49 +52,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "842e9267679aafbeb7cc2a3e2c90e415"
-    ],
-    [
-      "Parsers.CompressionMethod.compressionMethod_repr_size32",
-      1,
-      2,
-      1,
-      [
-        "@MaxFuel_assumption", "@MaxIFuel_assumption",
-        "@fuel_correspondence_Prims.pow2.fuel_instrumented",
-        "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
-        "data_elim_LowParse.Spec.Base.Mkparser_kind_",
-        "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
-        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
-        "equation_FStar.UInt.uint_t", "equation_FStar.UInt32.n",
-        "equation_LowParse.SLow.Base.size32_constant_precond",
-        "equation_LowParse.Spec.Base.parser_kind",
-        "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_LowParse.Spec.Combinators.total_constant_size_parser_kind",
-        "equation_LowParse.Spec.Int.parse_u8_kind",
-        "equation_Parsers.CompressionMethod.compressionMethod_parser_kind",
-        "equation_Prims.nat", "equation_Prims.pos",
-        "equation_with_fuel_Prims.pow2.fuel_instrumented",
-        "function_token_typing_FStar.UInt32.n",
-        "function_token_typing_Parsers.CompressionMethod.compressionMethod_parser_kind",
-        "int_typing", "lemma_FStar.UInt32.vu_inv",
-        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
-        "primitive_Prims.op_Multiply", "primitive_Prims.op_Subtraction",
-        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
-        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
-        "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0",
-        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
-        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
-        "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
-        "refinement_interpretation_LowParse.Spec.Base_Tm_refine_9fc4b705eaf2fe68d9cc8785e7df72bf",
-        "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "refinement_interpretation_Prims_Tm_refine_f048236b5f8051f83b495ea5eaa6127b",
-        "token_correspondence_Prims.pow2.fuel_instrumented"
-      ],
-      0,
-      "d68e5735c8ded19fcd37eb57ee87f14d"
+      "a426da3718e267aa97007b167a888cb0"
     ],
     [
       "Parsers.CompressionMethod.synth_compressionMethod",
@@ -108,7 +66,7 @@
         "haseqParsers.CompressionMethod_Tm_refine_e75d90b4028446014e22af4f38094d80"
       ],
       0,
-      "844920ad24daf6f04ccfb6a3118796e5"
+      "0cf2d25805c7fdd17964e80b8e71520b"
     ],
     [
       "Parsers.CompressionMethod.synth_compressionMethod",
@@ -162,7 +120,51 @@
         "typing_LowParse.Spec.Enum.list_map"
       ],
       0,
-      "6eee0bc3024c61ff50456838fe7c13fd"
+      "9946941b34b29ead29faf2d77b930e7e"
+    ],
+    [
+      "Parsers.CompressionMethod.synth_compressionMethod_inv",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_f537159ed795b314b4e58c260361ae86",
+        "Prims_pretyping_f8666440faa91836cc5a13998af863fc",
+        "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "b2t_def", "bool_inversion", "bool_typing",
+        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Prims.l_imp", "equation_Prims.squash", "l_imp-interp",
+        "primitive_Prims.op_Negation", "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Parsers.CompressionMethod_Tm_refine_6c62fe0923ba96eeef1e7e6fcb82ed91",
+        "refinement_interpretation_Parsers.CompressionMethod_Tm_refine_8f298af8c6d13fcf45122e9d42fdb6a4",
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "typing_Parsers.CompressionMethod.uu___is_Unknown_compressionMethod",
+        "unit_typing"
+      ],
+      0,
+      "40cf94ba9b197ceee255237ecedfa9d9"
+    ],
+    [
+      "Parsers.CompressionMethod.lemma_synth_compressionMethod_inv'",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "equation_LowParse.Spec.Combinators.synth_inverse",
+        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Prims.l_Forall", "equation_Prims.squash",
+        "l_quant_interp__16758",
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod",
+        "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod_inv"
+      ],
+      0,
+      "9958441b4059b10c886840a80f3031f6"
     ],
     [
       "Parsers.CompressionMethod.lemma_synth_compressionMethod_inj",
@@ -190,60 +192,37 @@
         "typing_Parsers.CompressionMethod.synth_compressionMethod"
       ],
       0,
-      "cf7955e56b9de8f0105e3652723c59ce"
-    ],
-    [
-      "Parsers.CompressionMethod.synth_compressionMethod_inv",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
-        "bool_inversion",
-        "disc_equation_Parsers.CompressionMethod.Unknown_compressionMethod",
-        "equality_tok_Parsers.CompressionMethod.NullCompression@tok",
-        "equation_Parsers.CompressionMethod.compressionMethod_",
-        "equation_Parsers.CompressionMethod.compressionMethod_repr",
-        "equation_Parsers.CompressionMethod.compressionMethod_repr_eq",
-        "equation_Parsers.CompressionMethod.known_compressionMethod_repr",
-        "fuel_guarded_inversion_Parsers.CompressionMethod.compressionMethod",
-        "haseqParsers.CompressionMethod_Tm_refine_e75d90b4028446014e22af4f38094d80",
-        "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
-        "primitive_Prims.op_Negation", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Parsers.CompressionMethod_Tm_refine_6c62fe0923ba96eeef1e7e6fcb82ed91",
-        "typing_Parsers.CompressionMethod.uu___is_Unknown_compressionMethod"
-      ],
-      0,
-      "70478a4d05e90e988edfde0830d78a0c"
+      "5fb217d8717df064c6012c6949ab8e31"
     ],
     [
       "Parsers.CompressionMethod.lemma_synth_compressionMethod_inv",
       1,
-      2,
-      1,
+      0,
+      0,
       [
         "@MaxIFuel_assumption", "@query",
         "assumption_FStar.UInt8.t__uu___haseq",
         "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
-        "constructor_distinct_Parsers.CompressionMethod.Unknown_compressionMethod",
-        "data_elim_LowParse.Spec.Enum.Known",
-        "disc_equation_Parsers.CompressionMethod.Unknown_compressionMethod",
-        "equation_LowParse.Spec.Enum.enum_key",
-        "equation_Parsers.CompressionMethod.compressionMethod_",
+        "constructor_distinct_LowParse.Spec.Enum.Known",
+        "constructor_distinct_LowParse.Spec.Enum.Unknown",
+        "equation_LowParse.Spec.Combinators.synth_inverse",
         "equation_Parsers.CompressionMethod.compressionMethod_enum",
         "equation_Parsers.CompressionMethod.synth_compressionMethod",
         "equation_Parsers.CompressionMethod.synth_compressionMethod_inv",
-        "fuel_guarded_inversion_LowParse.Spec.Enum.maybe_enum_key",
-        "haseqParsers.CompressionMethod_Tm_refine_e75d90b4028446014e22af4f38094d80",
-        "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_Parsers.CompressionMethod.Unknown_compressionMethod__0",
-        "refinement_interpretation_LowParse.Spec.Enum_Tm_refine_f63a4a268f020733364bf5736477d275",
-        "refinement_interpretation_Parsers.CompressionMethod_Tm_refine_e75d90b4028446014e22af4f38094d80"
+        "fuel_guarded_inversion_Parsers.CompressionMethod.compressionMethod",
+        "inversion-interp", "projection_inverse_LowParse.Spec.Enum.Known__0",
+        "projection_inverse_LowParse.Spec.Enum.Known_e",
+        "projection_inverse_LowParse.Spec.Enum.Known_key",
+        "projection_inverse_LowParse.Spec.Enum.Known_repr",
+        "projection_inverse_LowParse.Spec.Enum.Unknown__0",
+        "projection_inverse_LowParse.Spec.Enum.Unknown_e",
+        "projection_inverse_LowParse.Spec.Enum.Unknown_key",
+        "projection_inverse_LowParse.Spec.Enum.Unknown_repr",
+        "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod",
+        "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod_inv"
       ],
       0,
-      "ccedc75c74fca04c49d90b5148deee24"
+      "edb714d9ba143feb7d16e7c43ea44142"
     ],
     [
       "Parsers.CompressionMethod.parse_maybe_compressionMethod_key",
@@ -257,7 +236,7 @@
         "haseqParsers.CompressionMethod_Tm_refine_e75d90b4028446014e22af4f38094d80"
       ],
       0,
-      "ac06c78787cb07fde782f774e948b894"
+      "57b10a551a1636174dec77387db41ad3"
     ],
     [
       "Parsers.CompressionMethod.serialize_maybe_compressionMethod_key",
@@ -272,7 +251,7 @@
         "haseqParsers.CompressionMethod_Tm_refine_e75d90b4028446014e22af4f38094d80"
       ],
       0,
-      "378dc512beed5cc78e89b66d6c2b8835"
+      "0302805a0551d3cc712c9e987e9d3f2c"
     ],
     [
       "Parsers.CompressionMethod.compressionMethod_parser",
@@ -288,7 +267,7 @@
         "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod"
       ],
       0,
-      "561485808cc3b1d371cdcd4f5dc65074"
+      "567a0073a3d38c6bb633edbe2bf1f7ea"
     ],
     [
       "Parsers.CompressionMethod.compressionMethod_serializer",
@@ -331,7 +310,7 @@
         "typing_tok_Parsers.CompressionMethod.NullCompression@tok"
       ],
       0,
-      "8eeba250a5fbc55e12e0e1820c5b6910"
+      "86bc1216ec18f3b0981fd1cb4bedd167"
     ],
     [
       "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
@@ -351,7 +330,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "79f83a90393a8b21b0c5a45c47e4fe79"
+      "6ff6739f34e20d4bc91c7b0a9a32f05a"
     ],
     [
       "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
@@ -371,7 +350,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "9f806951fb7bf7e299e1dac0c8414cfa"
+      "586882ef0ea50d811a0bc06a4f1b0ed6"
     ],
     [
       "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
@@ -385,7 +364,7 @@
         "haseqParsers.CompressionMethod_Tm_refine_e75d90b4028446014e22af4f38094d80"
       ],
       0,
-      "cd7d1fce636f0b80fd39da5fd04129ab"
+      "2bcabccd5ad536a1b7152889d1c96cc2"
     ],
     [
       "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
@@ -399,7 +378,7 @@
         "haseqParsers.CompressionMethod_Tm_refine_e75d90b4028446014e22af4f38094d80"
       ],
       0,
-      "e99bac882fbe60a62da387ebe85639da"
+      "befb92118851e7e8c6949f71c18b35d6"
     ],
     [
       "Parsers.CompressionMethod.compressionMethod_parser32",
@@ -416,7 +395,7 @@
         "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod"
       ],
       0,
-      "732cdf9ab667f6f434104fd8cc94ace5"
+      "d3dcbe56b1f646a7b6da4b1b8032f6d4"
     ],
     [
       "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
@@ -436,7 +415,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "06570f86d10069095d23707939a6a77f"
+      "5497f341546b47db1a92f8b556e112bb"
     ],
     [
       "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
@@ -456,7 +435,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "302dd2304fc248aba1ef696e5a4dcf1c"
+      "817a659ae12f0af66e396a7ddd92436f"
     ],
     [
       "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
@@ -470,7 +449,7 @@
         "haseqParsers.CompressionMethod_Tm_refine_e75d90b4028446014e22af4f38094d80"
       ],
       0,
-      "d43abe37c0a123a064f1f92c7c35339e"
+      "0c89163a03e0920be15d8ae5f783d4cf"
     ],
     [
       "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
@@ -484,7 +463,7 @@
         "haseqParsers.CompressionMethod_Tm_refine_e75d90b4028446014e22af4f38094d80"
       ],
       0,
-      "4ab9b5815c98e042784da48d14ec556f"
+      "466b8458cef9c04914638df6f296fe44"
     ],
     [
       "Parsers.CompressionMethod.compressionMethod_serializer32",
@@ -529,7 +508,7 @@
         "typing_tok_Parsers.CompressionMethod.NullCompression@tok"
       ],
       0,
-      "178b210ffc4d410b904788c5be38a1b0"
+      "cd1dcc827cad36f430a19d96ee57e429"
     ],
     [
       "Parsers.CompressionMethod.compressionMethod_size32",
@@ -538,7 +517,7 @@
       1,
       [ "@query" ],
       0,
-      "477b3c5e622b6f2ef8db71f5695c8cd5"
+      "91d1a690e025af95e627282a6ea12f4d"
     ]
   ]
 ]
