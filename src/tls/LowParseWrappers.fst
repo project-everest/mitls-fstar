@@ -2,7 +2,7 @@ module LowParseWrappers
 include TLSError // for AD_decode_error
 include FStar.Error // for Correct, Error
 include Parse // for pinverse, lemma_(p?)inverse_*, etc.
-open LowParse.SLow
+open LowParse.SLow.Base
 include FStar.Bytes // for bytes, lbytes, length, equal
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection' --z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 2 --max_ifuel 2"
