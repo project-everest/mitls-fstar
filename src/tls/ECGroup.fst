@@ -81,10 +81,10 @@ let dh_initiator #g gx gy =
 val parse_curve: B.bytes -> Tot (option group)
 let parse_curve b =
   if (B.length b < 1) then None else (
-    let open Format.ECCurveType in  
+    let open Parsers.ECCurveType.EcCurveType in  
     let open Format.NamedGroup in
     match ecCurveType_parser32 b with // <- parse_curve == ecCurveType_parser and-then named_group_parser
-    | Some (Format.ECCurveType.NAMED_CURVE, _) -> 
+    | Some (Parsers.ECCurveType.EcCurveType.NAMED_CURVE, _) -> 
       let ty, id = B.split b 1ul in
       (match namedGroup_parser32 id with
        | Some (SECP256R1, _) -> Some EC.ECC_P256
