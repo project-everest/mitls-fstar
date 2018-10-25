@@ -68,7 +68,7 @@ noeq type ch = {
   ch_protocol_version: protocolVersion; // max supported version up to TLS_1p2 (TLS 1.3 uses the supported_versions extension)
   ch_client_random: TLSInfo.random;
   ch_sessionID: sessionID;
-  ch_cipher_suites: k:valid_cipher_suites{List.Tot.length k < 256};
+  ch_cipher_suites: k: list cipherSuiteName{List.Tot.length k < 256};
   ch_compressions: cl:list compression{List.Tot.length cl > 0 /\ List.Tot.length cl < 256};
   ch_extensions: option (ce:list extension{List.Tot.length ce < 256});
 }
@@ -84,7 +84,7 @@ noeq type sh = {
   sh_protocol_version: protocolVersion;
   sh_server_random: TLSInfo.random;
   sh_sessionID: sessionID; // omitted in TLS 1.3
-  sh_cipher_suite: valid_cipher_suite;
+  sh_cipher_suite: cipherSuiteName;
   sh_compression: compression; // omitted in TLS 1.3
   sh_extensions: option (se:list extension{List.Tot.length se < 256});
 }

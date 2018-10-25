@@ -274,7 +274,6 @@ let setParams l pv ha kexo dho =
       l := State st.transcript st.outgoing st.outgoing_next_keys st.outgoing_complete
               st.incoming st.parsed hs (Some pv) kexo dho
 
-// TR: verifies up to this point
 #set-options "--admit_smt_queries true"
 
 (*

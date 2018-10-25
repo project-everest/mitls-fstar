@@ -713,7 +713,7 @@ let serverHello (m:Nego.mode) =
     sh_protocol_version = pv;
     sh_server_random = m.n_server_random;
     sh_sessionID = m.n_sessionID;
-    sh_cipher_suite = m.n_cipher_suite;
+    sh_cipher_suite = name_of_cipherSuite m.n_cipher_suite;
     sh_compression = NullCompression;
     sh_extensions =
       match pv, m.n_server_extensions with
