@@ -12,6 +12,7 @@ unfold type is_injective (#a:Type) (#b:Type) (f:a -> b)
 unfold type is_injective_2 (#a:Type) (#b:Type) (f:a -> b) (x:a) (y:a)
   = f x == f y ==> x == y
 
+#reset-options "--using_facts_from '* -LowParse -FStar.Reflection -FStar.Tactics' --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16"
 private
 inline_for_extraction
 let namedGroup_of_u16 (x:U16.t): Tot namedGroup =
@@ -48,7 +49,6 @@ let u16_of_namedGroup (ng:namedGroup): Tot U16.t =
   | ECDHE_PRIVATE_USE u -> u
   | UNKNOWN u           -> u
 
-#reset-options "--using_facts_from '* -LowParse -FStar.Reflection -FStar.Tactics' --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16"
 let lemma_namedGroup_of_u16_is_injective () 
   : Lemma (is_injective namedGroup_of_u16) 
   = ()
