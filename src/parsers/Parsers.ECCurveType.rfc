@@ -1,0 +1,9 @@
+enum /*@open*/ {
+  EXPLICIT_PRIME(0x01),
+  EXPLICIT_CHAR2(0x02),
+  NAMED_CURVE(0x03),
+/*
+  RESERVED(248..255),
+*/
+  (0xFF)
+} ecCurveType;
