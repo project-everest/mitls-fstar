@@ -213,7 +213,7 @@ type ioresult_w =
     // public results returned by TLS.send
     | Written             // the application data was written; the connection remains writable
     | WriteClose          // a final closeNotify was written; the connection is either closed or read-only
-    | WriteError: o:option alertDescription -> txt: string -> ioresult_w
+    | WriteError: o:option alert -> txt: string -> ioresult_w
                           // The connection is gone, possibly after sending a fata alert
 //  | WritePartial of unsent_data // worth restoring?
 
@@ -407,7 +407,7 @@ let sendFragment_inv (#c:connection) (#i:id) (wo:option(cwriter i c)) h =
 
 //16-05-29 note that AD_record_overflow os for oversized incoming records, not seqn overflows! See slack.
 // let ad_overflow : result unit = Error (AD_internal_error, "seqn overflow")
-let ad_overflow : result unit = Error (AD_record_overflow, "seqn overflow")
+let ad_overflow : result unit = fatal Record_overflow "seqn overflow"
 
 let sendFragment_success (mods:FStar.Set.set rid) (c:connection) (i:id) (wo:option (cwriter i c)) (f: Content.fragment i) (h0:HS.mem) (h1:HS.mem) =
       Some? wo ==>
@@ -469,7 +469,7 @@ let sendFragment c #i wo f =
        trace ("Sending fragment of length " ^ string_of_int (length payload));
        let r = Record.sendPacket c.tcp ct (PlaintextID? i) pv payload in
        match r with
-       | Error(x)  -> Error(AD_internal_error,x)
+       | Error x   -> fatal Internal_error x
        | Correct _ -> Correct()
   end
 
@@ -483,8 +483,10 @@ let sendFragment c #i wo f =
 //  don't have to be fully precise: If we report an error, we can e.g. say
 //  that an alert may have been sent on the current epoch.
 
+
+// 18-10-30 we could statically enforce what alerts are sendable: no warnings etc
 #reset-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1 --admit_smt_queries true"
-private let sendAlert (c:connection) (ad:alertDescription) (reason:string)
+private let sendAlert (c:connection) (ad:alert) (reason:string)
   :  ST ioresult_w
 	(requires (fun h ->
 	  let i = currentId_T c Writer h in
@@ -520,7 +522,7 @@ private let sendAlert (c:connection) (ad:alertDescription) (reason:string)
     match res with
     | Error xy -> unrecoverable c (snd xy) // or reason?
     | Correct _   ->
-        if ad = AD_close_notify then
+        if ad.description = Close_notify then
           begin // graceful closure
             c.state := (fst st, Closed);
             WriteClose
@@ -879,7 +881,7 @@ let write_ensures (c:connection) (i:id) (appdata: option (rg:frange i & DataStre
 
 let writeCloseNotify c =
   trace "writeCloseNotify";
-  sendAlert c AD_close_notify "full shutdown"
+  sendAlert c ({level=Warning; description=Close_notify}) "full shutdown"
 
 // We notify and don't wait for confirmation.
 // Less reliable. Makes the connection unwritable.
@@ -887,7 +889,7 @@ let writeCloseNotify c =
 //      or some unrecoverable error (in which case we don't know)
 
 let writeClose c =
-  let r = sendAlert c AD_close_notify "half shutdown" in
+  let r = sendAlert c ({level=Warning; description=Close_notify}) "half shutdown" in
   c.state := (Closed, Closed);
   r
 
@@ -930,7 +932,7 @@ type ioresult_i (i:id) =
         // only after normal closure (a = AD_close_notify)
         // We have not sent anything notable (no AD, no alerts).
 
-    | ReadError: o:option alertDescription -> txt:string -> ioresult_i i
+    | ReadError: o:option alert -> txt:string -> ioresult_i i
         // We encountered an error while reading, so the connection dies.
         // we return the fatal alert we may have sent, if any,
         // or None in case of an internal error.
@@ -976,7 +978,7 @@ let string_of_ioresult_i (#i:id) = function
   | ReadWouldBlock -> "ReadWouldBlock"
   | Read (DataStream.Data d) -> "Read "^string_of_int (length (DataStream.appBytes #i #Range.fragment_range d)) ^ " bytes of data"
   | Read DataStream.Close -> "Read Close"
-  | Read (DataStream.Alert a) -> "Read Alert "^string_of_ad a
+  | Read (DataStream.Alert a) -> "Read Alert "^string_of_alert a
   | ReadError (Some o) txt -> "ReadError "^string_of_error(o,txt)
   | ReadError None txt -> "ReadError "^txt
   | CertQuery _ _ -> "CertQuery"
@@ -1012,8 +1014,9 @@ type delta h c =
 
 // frequent error handler; note that i is the (unused) reader index
 //val alertFlush: TODO: WE REALLY NEED A VAL!
-let alertFlush c ri (ad:alertDescription { isFatal ad }) (reason:string) =
-  let written = sendAlert c ad reason in
+// 18-10-30 called on close_notify warning, right?
+let alertFlush c ri (a:alert {a.level=Fatal}) (reason:string) =
+  let written = sendAlert c a reason in
   let r : ioresult_i ri =
     match written with
     | WriteClose      -> Read DataStream.Close // do we need this case?
@@ -1053,6 +1056,8 @@ val readFragment: c:connection -> i:id -> ST (result (option (Content.fragment i
             f == Seq.index frs n)
   ))))))
 
+// 18-10-30 removd two decryption_failed; recheck
+
 let rec readFragment c i =
   assume false; // 16-05-19 can't prove POST.
   match Record.read c.tcp c.recv with
@@ -1081,7 +1086,7 @@ let rec readFragment c i =
        begin
         // we might make an effort to parse plaintext alerts
         trace ("bad payload: "^print_bytes payload);
-        Error(AD_decryption_failed, "Invalid ciphertext length")
+        fatal Illegal_parameter "Invalid ciphertext length"
        end
       else
       match StAE.decrypt (reader_epoch e) (ct,payload) with
@@ -1095,7 +1100,7 @@ let rec readFragment c i =
           readFragment c i
          end
         else
-          Error(AD_decryption_failed, "Decryption failure")
+          fatal Bad_record_mac "Decryption failure"
       | Some f ->
         trace "StAE decrypt correct.";
         Correct (Some f)
@@ -1110,8 +1115,8 @@ let readOne c i =
   assume false; //16-05-19
   match readFragment c i with
   | Error (x, y) ->
-    (match x with
-     | AD_internal_error ->
+    (match x.description with //18-10-30 TODO we should check the alert level!
+     | Internal_error ->
        if y = "TCP close" then  // If TCP died, no point trying to send an alert
          (disconnect c;
           ReadError None "TCP close")
@@ -1122,8 +1127,8 @@ let readOne c i =
     match f with
     | Content.CT_Alert rg ad ->
       begin
-        trace ("read Alert fragment "^TLSError.string_of_ad ad);
-        if ad = AD_close_notify then
+        trace ("read Alert fragment "^TLSError.string_of_alert ad);
+        if ad.description = Close_notify then
           if Closed? (snd !c.state)
           then ( // received a notify response; cleanly close the connection.
             c.state := (Closed, Closed);
@@ -1131,9 +1136,9 @@ let readOne c i =
             Read (DataStream.Close (* was: Alert ad *)))
           else ( // received first notification; immediately enqueue notify response [RFC 7.2.1]
             c.state := (Closed, snd !c.state);
-            alertFlush c i AD_close_notify "notify response")  // NB we could ignore write errors here.
+            alertFlush c i ({level=Warning; description=Close_notify}) "notify response")  // NB we could ignore write errors here.
         else (
-          if isFatal ad then disconnect c;
+          if ad.level = Fatal then disconnect c;
           Read (DataStream.Alert ad))
           // else we carry on; the user will know what to do
       end

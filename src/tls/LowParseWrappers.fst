@@ -58,7 +58,7 @@ let wrap_parser32_constant_length
 = fun (x: lbytes len) ->
   match p32 x with
   | Some (y, _) -> Correct y
-  | _ -> Error (AD_decode_error, msg)
+  | _ -> fatal Decode_error msg
 
 let bytes_equal_intro
   (b1 b2: bytes)
@@ -141,7 +141,7 @@ let wrap_parser32
 : Tot (result t)
 = match p32 x with
   | Some (y, _) -> Correct y
-  | _ -> Error (AD_decode_error, msg)
+  | _ -> fatal Decode_error msg
 
 inline_for_extraction
 let wrap_serializer32
