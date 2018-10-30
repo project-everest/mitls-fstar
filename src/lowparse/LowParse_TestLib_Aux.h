@@ -1,10 +1,10 @@
 #ifndef __LOWPARSE_TESTLIB_AUX_H
 #define __LOWPARSE_TESTLIB_AUX_H
 
-#include "kremlib.h"
+#include <kremlib.h>
+#include <kremlin/internal/compat.h>
 
-#include "Prims.h"
-#include "FStar.h"
+#include "LowParse.h"
 
 #include <stdlib.h>
 #include <stdio.h>
