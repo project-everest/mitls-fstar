@@ -83,11 +83,11 @@ let rec scan i bs j =
   match FStar.Bytes.index bs j with
   | 0z ->
     if j > 0 then scan i bs (j - 1)
-    else Error (AD_decode_error, "No ContentType byte")
+    else fatal Decode_error "No ContentType byte"
   | 20z ->
     begin
     match j with
-    | 0 -> Error (AD_decode_error, "Empty ChangeCipherSpec fragment")
+    | 0 -> fatal Decode_error "Empty ChangeCipherSpec fragment"
     | 1 ->
       let payload, _ = split_ bs j in
       let rg = (1, len - 1) in
@@ -98,14 +98,14 @@ let rec scan i bs j =
         Correct f
 	end
       else
-	Error (AD_decode_error, "Malformed ChangeCipherSpec fragment")
-    | _ -> Error (AD_decode_error, "Malformed ChangeCipherSpec fragment")
+	fatal Decode_error "Malformed ChangeCipherSpec fragment"
+    | _ -> fatal Decode_error "Malformed ChangeCipherSpec fragment"
     end
   | 21z ->
     begin
     match j with
-    | 0 -> Error (AD_decode_error, "Empty Alert fragment")
-    | 1 -> Error (AD_decode_error, "Fragmented Alert")
+    | 0 -> fatal Decode_error "Empty Alert fragment"
+    | 1 -> fatal Decode_error "Fragmented Alert"
     | 2 ->
       let payload, _ = split_ bs j in
       let rg = (2, len - 1) in
@@ -117,13 +117,13 @@ let rec scan i bs j =
         Correct f
       | Error e -> Error e
       end
-    | _ -> Error (AD_decode_error, "Malformed Alert fragment")
+    | _ -> fatal Decode_error "Malformed Alert fragment"
     end
   | 22z ->
-    if j = 0 then Error (AD_decode_error, "Empty Handshake fragment")
+    if j = 0 then fatal Decode_error "Empty Handshake fragment"
     else
       if j > max_TLSPlaintext_fragment_length then
-	Error (AD_record_overflow, "TLSPlaintext fragment exceeds maximum length")
+	fatal Record_overflow "TLSPlaintext fragment exceeds maximum length"
       else
 	let payload, _ = split_ bs j in
 	let rg = (1, len - 1) in
@@ -132,7 +132,7 @@ let rec scan i bs j =
         Correct f
   | 23z ->
     if j > max_TLSPlaintext_fragment_length then
-      Error (AD_record_overflow, "TLSPlaintext fragment exceeds maximum length")
+      fatal Record_overflow "TLSPlaintext fragment exceeds maximum length"
     else
       let payload, _ = split_ bs j in
       let rg = (0, len - 1) in
@@ -140,7 +140,7 @@ let rec scan i bs j =
       let f = CT_Data rg d in
       assume (Bytes.equal bs' (pad payload Application_data len));
       Correct f
-  | _   -> Error (AD_decode_error, "Unknown ContentType")
+  | _   -> fatal Decode_error "Unknown ContentType"
 
 val scan_pad_correct: i:id {~ (authId i)} -> payload:bytes -> ct:contentType
   -> len:plainLen { length payload < len /\ length payload <= max_TLSPlaintext_fragment_length }
