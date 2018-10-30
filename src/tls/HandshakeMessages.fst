@@ -1298,7 +1298,7 @@ let helloRetryRequestBytes hrr =
     sh_protocol_version = TLS_1p2;
     sh_server_random = bytes_of_hex "cf21ad74e59a6111be1d8c021e65b891c2a211167abb8c5e079e09e2c8a8339c";
     sh_sessionID = hrr.hrr_sessionID;
-    sh_cipher_suite = name_of_cipherSuite hrr.hrr_cipher_suite;
+    sh_cipher_suite = hrr.hrr_cipher_suite;
     sh_compression = NullCompression;
     sh_extensions = Some hrr.hrr_extensions
   })
@@ -1670,26 +1670,22 @@ let parseBoolean (body: bytes): result bool =
 
 #reset-options "--admit_smt_queries true"
 
-let helloRetryRequest_of_serverHello (sh: sh) : Tot (result (option hrr)) =
+let helloRetryRequest_of_serverHello (sh: sh) : Tot (option hrr) =
   if sh.sh_server_random = bytes_of_hex "cf21ad74e59a6111be1d8c021e65b891c2a211167abb8c5e079e09e2c8a8339c"
-  then match cipherSuite_of_name sh.sh_cipher_suite with
-    | Some cs ->
-      Correct (Some ({
+  then (Some ({
         hrr_sessionID = sh.sh_sessionID;
-        hrr_cipher_suite = cs;
+        hrr_cipher_suite = sh.sh_cipher_suite;
         hrr_extensions = Some?.v (sh.sh_extensions)
       }))
-    | _ -> error "not a proper HRR (invalid cipher suite)"
-  else Correct None
+  else None
 
 // Special case for ticket internal encoding
 let parseHelloRetryRequest b =
   match parseServerHello b with
   | Correct sh ->
     begin match helloRetryRequest_of_serverHello sh with
-    | Error z -> Error z
-    | Correct None -> error "not a proper HRR (magic nonce does not match)"
-    | Correct (Some hr) -> Correct hr
+    | None -> error "not a proper HRR (magic nonce does not match)"
+    | (Some hr) -> Correct hr
     end
   | Error z -> Error z
 
@@ -1704,9 +1700,8 @@ let parseHandshakeMessage pv kex hstype body =
       (match parseServerHello body with
       | Correct sh ->
         begin match helloRetryRequest_of_serverHello sh with
-        | Error z -> Error z
-        | Correct (Some hr) -> Correct (HelloRetryRequest hr)
-        | Correct None -> Correct (ServerHello sh)
+        | (Some hr) -> Correct (HelloRetryRequest hr)
+        | None -> Correct (ServerHello sh)
         end
       | err -> error "failed to parse ServerHello/HRR")
     | HT_session_ticket, Some TLS_1p3,_ -> mapResult NewSessionTicket13 (parseSessionTicket13 body)

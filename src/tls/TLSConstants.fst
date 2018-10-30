@@ -538,6 +538,7 @@ inline_for_extraction
 type cipherSuiteName = Parsers.CipherSuite.cipherSuite
 
 (** Determine the validity of a ciphersuite based on it's name *)
+inline_for_extraction
 val cipherSuite'_of_name: cipherSuiteName -> Tot (option cipherSuite')
 let cipherSuite'_of_name =
   let open EverCrypt in 
@@ -613,6 +614,7 @@ let cipherSuite'_of_name =
   | _ -> None
 
 (** Determine the name of a ciphersuite based on its construction *)
+inline_for_extraction
 let name_of_cipherSuite' =
   let open EverCrypt in 
   let open Hashing.Spec in function
@@ -689,6 +691,7 @@ let name_of_cipherSuite' =
 
 let name_of_cipherSuite_of_name_post (n: Parsers.CipherSuite.cipherSuite) : GTot Type0 = match cipherSuite'_of_name n with Some c -> name_of_cipherSuite' c == Correct n | _ -> True
 
+(* TODO: hide behind an interface *)
 let name_of_cipherSuite_of_name : (n: Parsers.CipherSuite.cipherSuite) -> Tot (squash (name_of_cipherSuite_of_name_post n)) =
    _ by (
      let open FStar.Tactics in
@@ -734,12 +737,12 @@ let name_of_cipherSuite_of_name' (n: cipherSuiteName) (c: cipherSuite') : Lemma
 val cipherSuite_of_name: cipherSuiteName -> Tot (option cipherSuite)
 let cipherSuite_of_name c =
   match cipherSuite'_of_name c with
-  | Some v -> name_of_cipherSuite_of_name' c v; Some v
+  | Some v -> [@inline_let] let _ = name_of_cipherSuite_of_name' c v in Some v
   | None -> None
 
 val name_of_cipherSuite: cipherSuite -> Tot cipherSuiteName
 let name_of_cipherSuite c =
-  cipherSuite_of_name_of_cipherSuite c;
+  [@inline_let] let _ = cipherSuite_of_name_of_cipherSuite c in
   match name_of_cipherSuite' c with
   | Correct n -> n
 

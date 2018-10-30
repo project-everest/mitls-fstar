@@ -220,7 +220,10 @@ val load_stateless_cookie: s:log -> h:hrr -> digest:bytes -> ST unit
 val send: s:log -> m:msg -> ST unit
   (requires (fun h0 ->
     writing h0 s /\
-    valid_transcript (transcript h0 s @ [m])))
+    valid_transcript (transcript h0 s @ [m]) /\
+    (match m with
+    | HelloRetryRequest hrr -> Some? (TLSConstants.cipherSuite_of_name hrr.hrr_cipher_suite)
+    | _ -> True)))
   (ensures (fun h0 _ h1 -> write_transcript h0 h1 s m))
 
 #set-options "--admit_smt_queries true"

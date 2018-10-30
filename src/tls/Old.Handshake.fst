@@ -755,7 +755,7 @@ let server_ClientHello hs offer obinders =
     // the HRR group
     match Nego.server_ClientHello hs.nego offer hs.log with
     | Error z -> InError z
-    | Correct (Nego.ServerHelloRetryRequest hrr) ->
+    | Correct (Nego.ServerHelloRetryRequest hrr _) ->
       HandshakeLog.send hs.log (HelloRetryRequest hrr);
       // Note: no handshake state machine transition
       InAck false false

@@ -1310,7 +1310,9 @@ type extra_ext = // list (e:Extensions.extension{E_unknown_extension? e})
 
 //17-03-30 still missing a few for servers.
 type serverMode =
-  | ServerHelloRetryRequest: hrr -> serverMode
+  | ServerHelloRetryRequest: hrr:hrr ->
+    cs:cipherSuite{name_of_cipherSuite cs = hrr.hrr_cipher_suite} ->
+    serverMode
   | ServerMode: mode -> certNego -> extra_ext -> serverMode
 
 let get_sni (o:offer) : bytes =
@@ -1366,12 +1368,12 @@ let computeServerMode cfg co serverRandom =
     | Correct ([], Some (ng, cs)) ->
       let hrr = {
         hrr_sessionID = co.ch_sessionID;
-        hrr_cipher_suite = cs;
+        hrr_cipher_suite = name_of_cipherSuite cs;
         hrr_extensions = [
           Extensions.E_supported_versions (Extensions.ServerPV TLS_1p3);
           Extensions.E_key_share (CommonDH.HRRKeyShare ng);
         ]; } in
-      Correct(ServerHelloRetryRequest hrr)
+      Correct(ServerHelloRetryRequest hrr cs)
     | Correct ((PSK_EDH j ogx cs)::_, _) ->
       (trace "Negotiated PSK_EDH key exchange";
       Correct (ServerMode (Mode
@@ -1521,7 +1523,7 @@ let server_ClientHello #region ns offer log =
       o1.ch_client_random = o2.ch_client_random &&
       o1.ch_sessionID = o2.ch_sessionID &&
       o1.ch_sessionID = hrr.hrr_sessionID &&
-      List.Tot.mem (name_of_cipherSuite hrr.hrr_cipher_suite) o2.ch_cipher_suites &&
+      List.Tot.mem hrr.hrr_cipher_suite o2.ch_cipher_suites &&
       o1.ch_compressions = o2.ch_compressions &&
       extension_ok
     then
@@ -1530,7 +1532,7 @@ let server_ClientHello #region ns offer log =
       | Error z ->
         trace ("negotiation failed: "^string_of_error z);
         Error z
-      | Correct (ServerHelloRetryRequest hrr) ->
+      | Correct (ServerHelloRetryRequest hrr _) ->
         Error(AD_illegal_parameter, "client sent the same hello in response to hello retry")
       | Correct (ServerMode m cert _) ->
         trace ("negotiated after HRR "^string_of_pv m.n_protocol_version^" "^string_of_ciphersuite m.n_cipher_suite);
@@ -1569,11 +1571,11 @@ let server_ClientHello #region ns offer log =
     | Error z ->
       trace ("negotiation failed: "^string_of_error z);
       Error z
-    | Correct (ServerHelloRetryRequest hrr) ->
+    | Correct (ServerHelloRetryRequest hrr cs) ->
       // Internal HRR caused by group negotiation
       // We do not invoke the server nego callback in this case
       // record the initial offer and return the HRR to HS
-      let ha = verifyDataHashAlg_of_ciphersuite hrr.hrr_cipher_suite in
+      let ha = verifyDataHashAlg_of_ciphersuite cs in
       let digest = HandshakeLog.hash_tag #ha log in
       let cookie = Ticket.create_cookie hrr digest empty_bytes in
       let hrr = { hrr with hrr_extensions =
@@ -1593,17 +1595,17 @@ let server_ClientHello #region ns offer log =
       | Nego_retry cextra ->
         let hrr = ({
           hrr_sessionID = offer.ch_sessionID;
-          hrr_cipher_suite = m.n_cipher_suite;
+          hrr_cipher_suite = name_of_cipherSuite m.n_cipher_suite;
           hrr_extensions = [
             Extensions.E_supported_versions (Extensions.ServerPV TLS_1p3);
           ]}) in
-        let ha = verifyDataHashAlg_of_ciphersuite hrr.hrr_cipher_suite in
+        let ha = verifyDataHashAlg_of_ciphersuite m.n_cipher_suite in
         let digest = HandshakeLog.hash_tag #ha log in
         let cookie = Ticket.create_cookie hrr digest cextra in
         let hrr = { hrr with hrr_extensions =
           (Extensions.E_cookie cookie) :: hrr.hrr_extensions; } in
         ns.state := (S_HRR offer hrr);
-        Correct (ServerHelloRetryRequest hrr)
+        Correct (ServerHelloRetryRequest hrr m.n_cipher_suite)
       | Nego_accept sexts ->
         trace ("negotiated "^string_of_pv m.n_protocol_version^" "^string_of_ciphersuite m.n_cipher_suite);
         ns.state := S_ClientHello m cert;

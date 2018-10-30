@@ -91,7 +91,7 @@ noeq type sh = {
 // Hello retry request
 noeq type hrr = {
   hrr_sessionID: sessionID;
-  hrr_cipher_suite: valid_cipher_suite;
+  hrr_cipher_suite: cipherSuiteName;
   hrr_extensions: he:list extension{List.Tot.length he < 256};
 }
 
