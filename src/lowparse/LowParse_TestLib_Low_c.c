@@ -2,6 +2,13 @@
 
 #include "LowParse_TestLib_Aux.h"
 
+typedef struct K___uint8_t__int32_t_s
+{
+  uint8_t *fst;
+  int32_t snd;
+}
+K___uint8_t__int32_t;
+
 K___uint8_t__int32_t LowParse_TestLib_Low_load_file_buffer(Prims_string x0)
 {
     K___uint8_t__int32_t ret;
