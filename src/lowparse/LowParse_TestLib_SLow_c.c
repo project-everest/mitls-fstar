@@ -1,12 +1,6 @@
 #include "kremlib.h"
 
-#include "Prims.h"
-#include "FStar.h"
-
-#include <stdlib.h>
-#include <stdio.h>
-#include <errno.h>
-#include "LowParse.h"
+#include <kremlin/internal/compat.h>
 #include "LowParse_TestLib_Aux.h"
 
 FStar_Bytes_bytes LowParse_TestLib_SLow_load_file(Prims_string x0)

@@ -1,5 +1,5 @@
 [
-  "=>\b\u001f´xa$|›ºþÿ\f\u000fi",
+  "Š\u001dßôéÄ#\u0019¸sòúa)\n\u001a",
   [
     [
       "DataStream.fragment",
@@ -12,7 +12,7 @@
         "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87"
       ],
       0,
-      "b360cf513b976d05be0e25b11106412f"
+      "74ae77661dc6785431982706c29556c4"
     ],
     [
       "DataStream.repr",
@@ -21,7 +21,7 @@
       1,
       [ "@query", "equation_DataStream.ghost_repr" ],
       0,
-      "6d55273e7155e444e1d6bd74debb6fe3"
+      "3a8c80112f950713bfa95ee409d4714d"
     ],
     [
       "DataStream.mk_fragment",
@@ -33,7 +33,7 @@
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "4e70fdf6a08662bbdc39a252a66f9f3c"
+      "d88e90b716fae9d5e45d9272a3707138"
     ],
     [
       "DataStream.appFragment",
@@ -42,7 +42,7 @@
       1,
       [ "@query", "equation_DataStream.ghost_repr" ],
       0,
-      "ea6c9352c87e368efe06c440eae3dac5"
+      "efae352f4f04d75174620642ebc467e4"
     ],
     [
       "DataStream.appBytes",
@@ -51,7 +51,7 @@
       1,
       [ "@query", "equation_DataStream.ghost_repr" ],
       0,
-      "6f818c1d173f5714ef034e908c9b3235"
+      "8fefeb061caf5ac95de61389821e3b02"
     ],
     [
       "DataStream.delta",
@@ -60,7 +60,7 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "assumption_TLSError.alertDescription__uu___haseq",
+        "assumption_Parsers.Alert.alert__uu___haseq",
         "equation_DataStream.fragment", "equation_DataStream.pre_fragment",
         "equation_Range.fragment_range",
         "function_token_typing_FStar.Bytes.bytes",
@@ -68,7 +68,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "43541050ed318a9fcb59e5d4d05639ba"
+      "b895eb87515ec0c6b3738246fb0baee7"
     ],
     [
       "DataStream.__proj__Data__item___0",
@@ -81,7 +81,7 @@
         "refinement_interpretation_DataStream_Tm_refine_0d466ae495b3961c5a09f777ca3640cd"
       ],
       0,
-      "59f363f9f0eff77416ec9c788903d940"
+      "c98598411d87fec72cf7bf59f31a239e"
     ],
     [
       "DataStream.__proj__Alert__item___0",
@@ -94,7 +94,7 @@
         "refinement_interpretation_DataStream_Tm_refine_36ed55116eca5cfa741045f75917d7b2"
       ],
       0,
-      "da235b762310c729ae7b39436a97eebe"
+      "48c19f655f1a939635e85ca8148f09df"
     ],
     [
       "DataStream.final",
@@ -102,12 +102,14 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "disc_equation_DataStream.Alert",
-        "disc_equation_DataStream.Close", "disc_equation_DataStream.Data",
+        "@MaxIFuel_assumption", "@query",
+        "assumption_Parsers.AlertLevel.alertLevel__uu___haseq",
+        "disc_equation_DataStream.Alert", "disc_equation_DataStream.Close",
+        "disc_equation_DataStream.Data",
         "fuel_guarded_inversion_DataStream.delta"
       ],
       0,
-      "f59a87c81cda818619d5e7112f45aa82"
+      "c12285c2aa83c57440930c7ba7a190bd"
     ],
     [
       "DataStream.finalized",
@@ -124,7 +126,7 @@
         "subterm_ordering_Prims.Cons"
       ],
       0,
-      "3e95c5b32ae412b47abe3ed03833b5b4"
+      "30835323a6e493c721bd50f960cdc6f2"
     ],
     [
       "DataStream.wellformed",
@@ -138,7 +140,7 @@
         "fuel_guarded_inversion_Prims.list"
       ],
       0,
-      "9be878c3915faa07ea255d4f35b0c18d"
+      "5bb910ef173e2397c3f22ffa0fd4e336"
     ],
     [
       "DataStream.empty_is_well_formed",
@@ -153,7 +155,7 @@
         "projection_inverse_BoxBool_proj_0", "projection_inverse_Prims.Nil_a"
       ],
       0,
-      "9aeff3f80c2fa728b603a61737cb963b"
+      "411b52584aebd7b1edabfea518dfe9ec"
     ],
     [
       "DataStream.__proj__State__item__log",
@@ -169,7 +171,7 @@
         "refinement_interpretation_DataStream_Tm_refine_b9e1232437f6bc2669aefd956955c539"
       ],
       0,
-      "a1e7a83b057041663e68c90880950ab2"
+      "7e1da72d632ce6c454cea509418e5e7e"
     ],
     [
       "DataStream.__proj__State__item__ctr",
@@ -181,7 +183,7 @@
         "projection_inverse_DataStream.State_region"
       ],
       0,
-      "ed162d4d454fc3e0094fdee41c5e301d"
+      "b2976df7e4a73a7424830aab30bc5269"
     ],
     [
       "DataStream.gen",
@@ -202,7 +204,7 @@
         "refinement_interpretation_DataStream_Tm_refine_d9e35989bf511ab9e96c77a6d6447b81"
       ],
       0,
-      "e65be7c75ca7f3c2ccffad1795454300"
+      "80c82005d6d3bbde644fdb572856ad01"
     ]
   ]
 ]

@@ -20,7 +20,6 @@ SOURCES = \
   EverCrypt_Helpers.c \
   EverCrypt_HKDF.c \
   EverCrypt_HMAC.c \
-  EverCrypt_Specs.c \
   EverCrypt_StaticConfig.c \
   EverCrypt_Vale.c \
   evercrypt_vale_stubs.c \

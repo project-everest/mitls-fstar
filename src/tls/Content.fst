@@ -62,6 +62,7 @@ let rec project i fs =
 val project_ignores_Handshake: i:id -> s:seq (fragment i) {Seq.length s > 0 /\ CT_Handshake? (Seq.index s (Seq.length s - 1))} ->
   Lemma(project i s == project i (Seq.slice s 0 (Seq.length s - 1)))
 let project_ignores_Handshake i s = ()
+#reset-options
 
 
 // --------------- parsing and formatting content types ---------------------
@@ -135,6 +136,8 @@ let is_stream i = ID13? i
 let is_stlhae i = ID12? i && AEAD? (aeAlg_of_id i)
 
 val cipherLen: i:id -> fragment i -> Tot (l:nat{Range.valid_clen i l})
+
+#set-options "--z3rlimit 100"
 let cipherLen i f =
   let r = rg i f in
   if PlaintextID? i then
