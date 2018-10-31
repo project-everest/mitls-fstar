@@ -9,7 +9,7 @@ module U32 = FStar.UInt32
 module HST = FStar.HyperStack.ST
 module I32 = FStar.Int32
 
-#reset-options "--z3cliopt smt.arith.nl=false"
+#reset-options "--z3cliopt smt.arith.nl=false --z3rlimit 16"
 
 val list_nth_constant_size_parser_correct
   (#k: parser_kind)
@@ -34,7 +34,7 @@ val list_nth_constant_size_parser_correct
     let (Some (x, _)) = parse p b' in
     x == L.index l i
   ))))
-  (decreases (Seq.length b))
+  (decreases i)
 
 let rec list_nth_constant_size_parser_correct #k #t p b i =
   if i = 0

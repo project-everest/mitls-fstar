@@ -230,7 +230,7 @@ let serializer32_injective
 : Lemma
   (requires (s32 input1 == s32 input2))
   (ensures (input1 == input2))
-= ()
+= assert (parse p (serialize s input1) == parse p (serialize s input2))
 
 let parse32_size
   (#k: parser_kind)

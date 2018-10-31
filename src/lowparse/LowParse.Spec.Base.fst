@@ -608,7 +608,10 @@ let serializer_unique
   (x: t)
 : Lemma
   (s1 x == s2 x)
-= serializer_correct_implies_complete p s2
+= (* need these because of patterns *)
+  let _ = parse p (s1 x) in
+  let _ = parse p (s2 x) in
+  serializer_correct_implies_complete p s2
 
 let serializer_injective
   (#k: parser_kind)
@@ -619,7 +622,8 @@ let serializer_injective
 : Lemma
   (requires (s x1 == s x2))
   (ensures (x1 == x2))
-= ()
+= (* patterns, again *)
+  assert (parse p (s x1) == parse p (s x2))
 
 let serializer_parser_unique'
   (#k1: parser_kind)
@@ -635,19 +639,19 @@ let serializer_parser_unique'
     is_strong p2 /\
     serializer_correct p1 s /\
     serializer_correct p2 s /\
-    Some? (p1 x)
+    Some? (parse p1 x)
   ))
   (ensures (
-    p1 x == p2 x
+    parse p1 x == parse p2 x
   ))
 = serializer_correct_implies_complete p1 s;
-  let (Some (y, len)) = p1 x in
+  let (Some (y, len)) = parse p1 x in
   let x' = Seq.slice x 0 len in
   assert (s y == x');
   let len' = Seq.length x' in
   assert (len == len');
-  assert (p1 x' == Some (y, len'));
-  assert (p2 x' == Some (y, len'));
+  assert (parse p1 x' == Some (y, len'));
+  assert (parse p2 x' == Some (y, len'));
   assert (no_lookahead_on p2 x' x);
   assert (no_lookahead_on_postcond p2 x' x);
   assert (injective_postcond p2 x' x)
@@ -690,7 +694,7 @@ let serialize_length
    | Some y -> x <= y
   ))
   [SMTPat (Seq.length (serialize s x))]
-= ()
+= assert (Some? (parse p (serialize s x)))
 
 let seq_upd_seq
   (#t: Type)

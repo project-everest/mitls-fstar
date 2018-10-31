@@ -622,8 +622,12 @@ let exactly_contains_valid_data_contains_valid_serialized_data_or_fail
   (ensures (
     contains_valid_serialized_data_or_fail h s b (Cast.uint32_to_int32 lo) x (Cast.uint32_to_int32 hi)
   ))
-= serializer_correct_implies_complete p s
-
+= 
+  let sd = serialize s x in
+  serializer_correct_implies_complete p s;
+  assert (parse p sd == Some (x, Seq.length sd));
+  assert (injective_precond p sd (B.as_seq h (B.gsub b lo (U32.sub hi lo))));
+  assert (injective_postcond p sd (B.as_seq h (B.gsub b lo (U32.sub hi lo))))
 
 abstract
 let loc_ibuffer

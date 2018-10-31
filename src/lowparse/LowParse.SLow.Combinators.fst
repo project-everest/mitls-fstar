@@ -114,6 +114,10 @@ let serialize32_nondep_then
   | (fs, sn) ->
     let output1 = s1' fs in
     let output2 = s2' sn in
+    [@inline_let]
+    let _ = assert (B32.length output1 == Seq.length (serialize s1 fs)) in
+    [@inline_let]
+    let _ = assert (B32.length output2 == Seq.length (serialize s2 sn)) in
   ((B32.append output1 output2) <:
     (res: bytes32 { serializer32_correct (serialize_nondep_then p1 s1 u p2 s2) input res } ))
 
