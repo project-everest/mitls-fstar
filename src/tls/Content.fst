@@ -185,13 +185,6 @@ let fragmentRepr (#i:id) (ct:contentType) (rg:frange i) (b:rbytes rg) =
 val mk_fragment: i:id{ ~(authId i) } -> ct:contentType -> rg:frange i -> b:rbytes rg { fragmentRepr ct rg b } ->
   Tot (p:fragment i {b = ghost_repr p})
 
-(* TODO: This will be fixed in Alert *)
-let parse_then_alertBytes (x:lbytes 2) :
-  Lemma (
-    match Alert.parse x with
-    | Correct a -> Alert.alertBytes a == x
-    | _ -> True) = admit()
-
   // LowParseWrappers.lemma_pinverse_serializer32_parser32_constant_length alert_serializer32 2 () alert_parser32 "" x
 
 let mk_fragment i ct rg b =
@@ -202,7 +195,7 @@ let mk_fragment i ct rg b =
   | Alert              ->
     let Correct a = Alert.parse b in
     let p = CT_Alert rg a in
-    parse_then_alertBytes b;
+    Alert.parse_then_alertBytes b;
     p
 
 val mk_ct_rg: i:id{ ~(authId i) } -> ct:contentType -> rg:frange i -> b:rbytes rg { fragmentRepr ct rg b } ->
