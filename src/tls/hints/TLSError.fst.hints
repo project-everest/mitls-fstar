@@ -1,6 +1,52 @@
 [
-  "«p.¤}+\"Qp\u0004@Lí‘ý\u0017",
+  "óxá³\u001euhsýž\u007fù«ÚÞi",
   [
+    [
+      "TLSError.string_of_ad",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_TLSError.AD_access_denied",
+        "disc_equation_TLSError.AD_bad_certificate_fatal",
+        "disc_equation_TLSError.AD_bad_certificate_warning",
+        "disc_equation_TLSError.AD_bad_record_mac",
+        "disc_equation_TLSError.AD_certificate_expired_fatal",
+        "disc_equation_TLSError.AD_certificate_expired_warning",
+        "disc_equation_TLSError.AD_certificate_revoked_fatal",
+        "disc_equation_TLSError.AD_certificate_revoked_warning",
+        "disc_equation_TLSError.AD_certificate_unknown_fatal",
+        "disc_equation_TLSError.AD_certificate_unknown_warning",
+        "disc_equation_TLSError.AD_close_notify",
+        "disc_equation_TLSError.AD_decode_error",
+        "disc_equation_TLSError.AD_decompression_failure",
+        "disc_equation_TLSError.AD_decrypt_error",
+        "disc_equation_TLSError.AD_decryption_failed",
+        "disc_equation_TLSError.AD_export_restriction",
+        "disc_equation_TLSError.AD_handshake_failure",
+        "disc_equation_TLSError.AD_illegal_parameter",
+        "disc_equation_TLSError.AD_insufficient_security",
+        "disc_equation_TLSError.AD_internal_error",
+        "disc_equation_TLSError.AD_missing_extension",
+        "disc_equation_TLSError.AD_no_application_protocol",
+        "disc_equation_TLSError.AD_no_certificate",
+        "disc_equation_TLSError.AD_no_renegotiation",
+        "disc_equation_TLSError.AD_protocol_version",
+        "disc_equation_TLSError.AD_record_overflow",
+        "disc_equation_TLSError.AD_unexpected_message",
+        "disc_equation_TLSError.AD_unknown_ca",
+        "disc_equation_TLSError.AD_unrecognized_name",
+        "disc_equation_TLSError.AD_unsupported_certificate_fatal",
+        "disc_equation_TLSError.AD_unsupported_certificate_warning",
+        "disc_equation_TLSError.AD_unsupported_extension",
+        "disc_equation_TLSError.AD_user_cancelled_fatal",
+        "disc_equation_TLSError.AD_user_cancelled_warning",
+        "fuel_guarded_inversion_TLSError.alertDescription"
+      ],
+      0,
+      "fa440f9670f6d50b8cb8e25a20da6e2e"
+    ],
     [
       "TLSError.string_of_result",
       1,
@@ -16,7 +62,7 @@
         "typing_FStar.Error.uu___is_Correct"
       ],
       0,
-      "c9d643a173c793780f956e8ccf0afd99"
+      "172d663fbca55c8faf00d4659ec0e59d"
     ],
     [
       "TLSError.resT",
@@ -30,7 +76,7 @@
         "refinement_interpretation_TLSError_Tm_refine_beedc2a801d7d2c429f84212cb5b7279"
       ],
       0,
-      "3bda44a8d24b21de83c06f127837903b"
+      "b9bba80ec4addfe0464b70d17f3b6a2a"
     ],
     [
       "TLSError.mapResult",
@@ -47,7 +93,7 @@
         "typing_FStar.Error.uu___is_Error"
       ],
       0,
-      "d373d1fa2c5a2e68a8ea29b6b44ee0a1"
+      "afd870f3b4a728144af15758cb3ce8bd"
     ],
     [
       "TLSError.bindResult",
@@ -64,7 +110,7 @@
         "typing_FStar.Error.uu___is_Error"
       ],
       0,
-      "d745c53d1cb8409aec56dcfa9a80e895"
+      "77d782d56309897e4af912511a974810"
     ],
     [
       "TLSError.resultMap",
@@ -81,7 +127,7 @@
         "typing_FStar.Error.uu___is_Error"
       ],
       0,
-      "287b25debcba3f01745c9c5f8761e97a"
+      "784d8f2b8b3b1a3f25555d04a1441ef8"
     ],
     [
       "TLSError.resultBind",
@@ -98,7 +144,7 @@
         "typing_FStar.Error.uu___is_Error"
       ],
       0,
-      "3ee51bad174ce53a7e2cdb83c76e4050"
+      "c1c727d9b81687c81328eba03ee32a61"
     ]
   ]
 ]
