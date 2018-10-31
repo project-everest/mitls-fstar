@@ -53,6 +53,7 @@ clean: ocaml-clean kremlin-clean quic-clean model-clean lowparse-clean
 	rm -rf extract/Kremlin extract/OCaml extract/copied
 	+$(MAKE) -C ../parsers clean
 
+VFLAGS=
 %.fst-in %.fsti-in:
 	+$(MAKE) -f Makefile.$(FLAVOR) $@
 

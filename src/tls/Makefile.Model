@@ -6,7 +6,8 @@ EXTRACT   = Nothing
 SPECINC   = $(MITLS_HOME)/src/tls/ideal-flags $(MITLS_HOME)/src/tls/concrete-flags/generic
 
 include Makefile.common
-VFLAGS += --use_hints --use_hint_hashes --record_hints
+HINTS_ENABLED ?= --use_hints --use_hint_hashes --record_hints
+VFLAGS += $(HINTS_ENABLED)
 
 # Verification is performed in dependency order too. If we want to verify 
 # something that nothing depends on yet, we need to add it to ROOTS here.

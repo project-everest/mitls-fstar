@@ -176,7 +176,7 @@ let consumes_all
   (#t: Type0)
   (p: bare_parser t)
 : GTot Type0
-= forall (b: bytes) . Some? (parse p b) ==> (
+= forall (b: bytes) . {:pattern (parse p b)} Some? (parse p b) ==> (
     let (Some (_, len)) = parse p b in
     Seq.length b == len
   )
@@ -188,7 +188,7 @@ let parses_at_least
   (#t: Type0)
   (f: bare_parser t)
 : GTot Type0
-= forall (s: bytes) .
+= forall (s: bytes) . {:pattern (parse f s)}
   Some? (parse f s) ==> (
     let (_, consumed) = Some?.v (parse f s) in
     sz <= (consumed <: nat)
@@ -230,7 +230,7 @@ let parses_at_most
   (#t: Type0)
   (f: bare_parser t)
 : GTot Type0
-= forall (s: bytes) .
+= forall (s: bytes) . {:pattern (parse f s)}
   Some? (parse f s) ==> (
     let (_, consumed) = Some?.v (parse f s) in
     sz >= (consumed <: nat)
@@ -241,7 +241,7 @@ let is_constant_size_parser
   (#t: Type0)
   (f: bare_parser t)
 : GTot Type0
-= forall (s: bytes) .
+= forall (s: bytes) . {:pattern (parse f s)}
   Some? (parse f s) ==> (
     let (_, consumed) = Some?.v (parse f s) in
     sz == (consumed <: nat)
@@ -494,7 +494,7 @@ let serializer_correct
   (p: parser k t)
   (f: bare_serializer t)
 : GTot Type0
-= forall (x: t) . parse p (f x) == Some (x, Seq.length (f x))
+= forall (x: t) .{:pattern (parse p (f x))} parse p (f x) == Some (x, Seq.length (f x))
 
 let serializer_correct_ext
   (#k1: parser_kind)
@@ -515,7 +515,7 @@ let serializer_complete
   (p: parser k t)
   (f: bare_serializer t)
 : GTot Type0
-= forall (s: bytes) .
+= forall (s: bytes) . {:pattern (parse p s)}
   Some? (parse p s) ==> (
     let (Some (x, len)) = parse p s in
     f x == Seq.slice s 0 len
