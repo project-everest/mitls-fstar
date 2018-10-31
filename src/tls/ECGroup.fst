@@ -126,16 +126,17 @@ let parse_partial payload =
     if B.length payload >= 7 then
       let (curve, point) = B.split payload 3ul in
       match parse_curve curve with
-      | None -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Unsupported curve")
+      
+      | None -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "Unsupported curve")
       | Some(ecp) ->
         match vlsplit 1 point with
         | Error(z) -> Error(z)
         | Correct(x) ->
            let rawpoint, rem = x in
            match parse_point ecp rawpoint with
-           | None -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ("Invalid EC point received:"^(FStar.Bytes.print_bytes rawpoint)))
+           | None -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ ("Invalid EC point received:"^(FStar.Bytes.print_bytes rawpoint)))
            | Some p -> Correct ((| ecp, p |),rem)
-    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+    else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")
 
 open FStar.Mul
 
