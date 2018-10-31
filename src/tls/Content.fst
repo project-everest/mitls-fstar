@@ -34,14 +34,13 @@ let split #a s =
   Seq.slice s 0 last, Seq.index s last
 
 // Alert fragmentation is forbidden in TLS 1.3; as a slight deviation
-// from the standard, we also forbid it in earlier version. 
+// from the standard, we also forbid it in earlier version.
 // Anyway, this is internal to the Alert protocol.
 
 // Ghost projection from low-level multiplexed fragments to application-level deltas
-// Some fragments won't parse; they are ignored in the projection. 
+// Some fragments won't parse; they are ignored in the projection.
 // We may prove that they are never written on authentic streams.
 
-#set-options "--z3rlimit 300"
 val project: i:id -> fs:seq (fragment i) -> Tot (seq (DataStream.delta i))
   (decreases %[Seq.length fs]) // not-quite-stuctural termination
 let rec project i fs =
@@ -54,7 +53,8 @@ let rec project i fs =
       let d:pre_fragment i = d in //A widening coercion as a proof hint, unpacking (d:fragment i (frange i)) to a pre_fragment i
       snoc ds (DataStream.Data d)   //so that it can be repackaged as a fragment i fragment_range
     | CT_Alert rg ad -> snoc ds (DataStream.Alert ad)
-    | _ -> ds	 // other fragments are internal to TLS
+    | _ -> ds     // other fragments are internal to TLS
+
 
 // try out a few lemmas
 // we may also need a projection that takes a low-level pos and yields a high-level pos
@@ -62,7 +62,6 @@ let rec project i fs =
 val project_ignores_Handshake: i:id -> s:seq (fragment i) {Seq.length s > 0 /\ CT_Handshake? (Seq.index s (Seq.length s - 1))} ->
   Lemma(project i s == project i (Seq.slice s 0 (Seq.length s - 1)))
 let project_ignores_Handshake i s = ()
-#reset-options
 
 
 // --------------- parsing and formatting content types ---------------------
@@ -78,8 +77,8 @@ type contentType13 = ct: contentType { ct <> Change_cipher_spec }
 val ctBytes: contentType -> Tot (lbytes 1)
 let ctBytes = function
   | Change_cipher_spec -> abyte 20z
-  | Alert	       -> abyte 21z
-  | Handshake	       -> abyte 22z
+  | Alert              -> abyte 21z
+  | Handshake          -> abyte 22z
   | Application_data   -> abyte 23z
 
 val parseCT: pinverse_t ctBytes
@@ -89,7 +88,7 @@ let parseCT b =
   | 21z -> Correct Alert
   | 22z -> Correct Handshake
   | 23z -> Correct Application_data
-  
+
   | _	-> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")
 
 #set-options "--admit_smt_queries true"
@@ -108,8 +107,8 @@ let pinverse_ct x = ()
 
 let ctToString = function
   | Change_cipher_spec -> "CCS"
-  | Alert	       -> "Alert"
-  | Handshake	       -> "Handshake"
+  | Alert              -> "Alert"
+  | Handshake          -> "Handshake"
   | Application_data   -> "Data"
 
 
@@ -173,27 +172,37 @@ let repr i = function
 
 // "plain interface" for conditional security (TODO restore details)
 
-let fragmentRepr (#i:id) (ct:contentType) (rg:frange i) (b:rbytes rg) = 
-  match ct with 
+let fragmentRepr (#i:id) (ct:contentType) (rg:frange i) (b:rbytes rg) =
+  match ct with
   | Change_cipher_spec -> wider rg (point 1) /\ b = ccsBytes
   | Alert              -> wider rg (point 2) /\ length b = 2 /\ Correct? (Alert.parse b)
   | _                  -> True
 
-#set-options "--z3rlimit 300" 
+// #set-options "--z3rlimit 300"
 val mk_fragment: i:id{ ~(authId i) } -> ct:contentType -> rg:frange i -> b:rbytes rg { fragmentRepr ct rg b } ->
   Tot (p:fragment i {b = ghost_repr p})
+
+(* TODO: This will be fixed in Alert *)
+let parse_then_alertBytes (x:lbytes 2) :
+  Lemma (
+    match Alert.parse x with
+    | Correct a -> Alert.alertBytes a == x
+    | _ -> True) = admit()
+
+  // LowParseWrappers.lemma_pinverse_serializer32_parser32_constant_length alert_serializer32 2 () alert_parser32 "" x
+
 let mk_fragment i ct rg b =
   match ct with
   | Application_data   -> CT_Data      rg (DataStream.mk_fragment #i rg b)
   | Handshake          -> CT_Handshake rg b
   | Change_cipher_spec -> CT_CCS       rg
-  | Alert              -> 
-    let Correct a = Alert.parse b in 
+  | Alert              ->
+    let Correct a = Alert.parse b in
     let p = CT_Alert rg a in
-    assume(b = ghost_repr p); // 18-10-30 fixme
-    p 
+    parse_then_alertBytes b;
+    p
 
 val mk_ct_rg: i:id{ ~(authId i) } -> ct:contentType -> rg:frange i -> b:rbytes rg { fragmentRepr ct rg b } ->
   Lemma (requires True) (ensures (ct,rg) = ct_rg i (mk_fragment i ct rg b))
-	[SMTPat (ct_rg i (mk_fragment i ct rg b))]
+        [SMTPat (ct_rg i (mk_fragment i ct rg b))]
 let mk_ct_rg i ct rg b = ()
