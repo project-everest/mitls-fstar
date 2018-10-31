@@ -117,6 +117,25 @@ let serializer32
 : Tot Type0
 = (input: t) -> Tot (res: bytes32 { serializer32_correct s input res } )
 
+let serializer32_correct_length
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (input: t)
+  (res: bytes32)
+: Lemma
+  (requires (serializer32_correct s input res))
+  (ensures (
+    let len = FStar.Bytes.length res in
+    k.parser_kind_low <= len /\ (
+    match k.parser_kind_high with
+    | Some max -> len <= max
+    | _ -> True
+  )))
+  [SMTPat (serializer32_correct s input res); SMTPat (FStar.Bytes.length res)]
+= serialize_length s input
+
 inline_for_extraction
 let serialize32_ext
   (#k1: parser_kind)
