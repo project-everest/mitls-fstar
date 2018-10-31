@@ -123,17 +123,44 @@ function build_pki_if() {
 function mitls_verify() {
     export_home MITLS "$(pwd)"
 
-    # Only building a subset of HACL* for now
-    fetch_and_make_kremlin all && fetch_hacl &&
+    # Figure out the branch
+    CI_BRANCH=${branchname##refs/heads/}
+    echo "Current branch_name=$CI_BRANCH"
+
+    fetch_and_make_kremlin all &&
     fetch_and_make_qd &&
-        fetch_and_make_mlcrypto &&
-        make -C hacl-star/code extract-c -j $threads &&
-        OTHERFLAGS="--admit_smt_queries true $OTHERFLAGS" make -C hacl-star/providers -j $threads &&
-        make -C hacl-star/secure_api -j $threads &&
-        make -C libs/ffi -j $threads &&
-        build_pki_if &&
-        VERIFY_LOWPARSE=1 make -C src/tls -j $threads all -k &&
-        make -C src/tls -j $threads test -k
+    # Build LowParse first, it is a dependency of miTLS anyway
+    make -C src/lowparse -f Makefile.LowParse -j $threads -k &&
+    { echo false > lowparse_examples_success ; } &&
+    { echo false > mitls_success ; } && {
+        # Perform LowParse CI and miTLS CI in parallel
+        {
+            # Test LowParse examples
+            make -C src/lowparse -f Makefile.LowParseExamples -j $threads -k &&
+            { echo true > lowparse_examples_success ; }
+        } &
+        {
+            if echo "$CI_BRANCH" | grep '^taramana_lowparse_ci_' ; then
+                echo This is a LowParse CI-only branch. No miTLS CI here.
+            else
+                # miTLS CI proper starts here
+                fetch_hacl &&
+                    fetch_and_make_mlcrypto &&
+                    # Only building a subset of HACL* for now
+                    make -C hacl-star/code extract-c -j $threads &&
+                    OTHERFLAGS="--admit_smt_queries true $OTHERFLAGS" make -C hacl-star/providers -j $threads &&
+                    make -C hacl-star/secure_api -j $threads &&
+                    make -C libs/ffi -j $threads &&
+                    build_pki_if &&
+                    make -C src/tls -j $threads all -k &&
+                    make -C src/tls -j $threads test -k
+            fi &&
+            { echo true > mitls_success ; }
+        } &
+        wait
+    } &&
+    $(cat lowparse_examples_success) &&
+    $(cat mitls_success)
 }
 
 function mitls_verify_and_hints() {

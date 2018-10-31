@@ -141,7 +141,7 @@ let vlsplit lSize vlb =
     //assert(vl @| b0 = vlbytes lSize b0);
     //assert(vlb = vl @| b0 @| b1);
     Correct(b0,b1)
-  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+  else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")
 
 val vlparse: 
   lSize: nat {lSize <= 3} -> 
@@ -152,7 +152,7 @@ let vlparse lSize vlb =
   let vl,b = split_ vlb lSize in
   if int_of_bytes vl = length b
   then Correct b
-  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+  else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")
 
 val vlparse_vlbytes: 
   lSize:nat{lSize <= 3} -> 

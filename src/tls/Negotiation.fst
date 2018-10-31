@@ -664,9 +664,10 @@ let const_true _ = true
 
 let sign #region #role ns tbs =
   // TODO(adl) make the pattern below a static pre-condition
+  // 18-10-29 review usage of Bad_certificate to report signing error
   let S_Mode mode (Some (cert, sa)) = HST.op_Bang ns.state in
   match cert_sign_cb ns.cfg cert sa tbs with
-  | None -> Error (AD_no_certificate, perror __SOURCE_FILE__ __LINE__ "Failed to sign with selected certificate.")
+  | None -> fatal Bad_certificate (perror __SOURCE_FILE__ __LINE__ "Failed to sign with selected certificate.")
   | Some sigv ->
     let alg = if mode.n_protocol_version `geqPV` TLS_1p2 then Some sa else None in
     Correct ({sig_algorithm = alg; sig_signature = sigv})
@@ -745,11 +746,11 @@ let client_HelloRetryRequest #region (ns:t region Client) hrr (s:option share) =
       | None -> ext', true in
 
     if sid <> offer.ch_sessionID then
-      Error(AD_illegal_parameter, "mismatched session ID in HelloRetryRequest")
+      fatal Illegal_parameter "mismatched session ID in HelloRetryRequest"
     // 2018.03.08 SZ: TODO We must Update PSK extension if present
     // See https://tools.ietf.org/html/draft-ietf-tls-tls13-26#section-4.1.2
     else if None? (group_of_hrr hrr) && no_cookie then
-      Error(AD_illegal_parameter, "received a HRR that would yield the same ClientHello")
+      fatal Illegal_parameter "received a HRR that would yield the same ClientHello"
     else
      begin
       let offer' = {offer with ch_extensions = Some ext'} in
@@ -771,7 +772,7 @@ let offered_versions min_pv (o: offer): result (l: list protocolVersion {l <> []
   match find_supported_versions o with
   | Some (ServerPV _)
   | Some (Extensions.ClientPV []) ->
-    Error(AD_protocol_version, "protocol version negotiation: empty proposal")
+    fatal Protocol_version "protocol version negotiation: empty proposal"
   | Some (ClientPV vs) -> Correct (List.Tot.filter not_unknown_version vs) // might check no proposal is below min_pv
   | None -> // use legacy offer
       match o.ch_protocol_version, min_pv with
@@ -781,7 +782,7 @@ let offered_versions min_pv (o: offer): result (l: list protocolVersion {l <> []
       | TLS_1p2, TLS_1p0 -> Correct [TLS_1p2; TLS_1p1; TLS_1p0]
       | TLS_1p2, TLS_1p1 -> Correct [TLS_1p2; TLS_1p1]
       | TLS_1p2, TLS_1p2 -> Correct [TLS_1p2]
-      | _, _ -> Error(AD_protocol_version, "protocol version negotation: bad legacy proposal")
+      | _, _ -> fatal Protocol_version "protocol version negotation: bad legacy proposal"
 
 let is_client13 (o:offer) =
   match offered_versions TLS_1p3 o with
@@ -797,7 +798,7 @@ let negotiate_version cfg offer =
   | Correct vs ->
     match List.Helpers.find_aux cfg version_within vs with
     | Some v -> Correct v
-    | None -> Error(AD_protocol_version, "protocol version negotiation: mismatch")
+    | None -> fatal Protocol_version "protocol version negotiation: mismatch"
 
 (**
   For use in negotiating the ciphersuite, takes two lists and
@@ -824,7 +825,7 @@ val negotiateCipherSuite: cfg:config -> pv:protocolVersion -> ccs:valid_cipher_s
 let negotiateCipherSuite cfg pv ccs sa =
   match negotiate ccs cfg.cipher_suites sa with
   | Some(CipherSuite kex sa ae) -> Correct(kex,sa,ae,CipherSuite kex sa ae)
-  | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Cipher suite negotiation failed")
+  | None -> fatal Internal_error (perror __SOURCE_FILE__ __LINE__ "Cipher suite negotiation failed")
 
 (*
 val negotiateGroupKeyShare13
@@ -963,9 +964,9 @@ let client_ServerHello #region ns sh =
     | Error z -> Error z
     | Correct spv ->
       if not (acceptableVersion ns.cfg spv sr) then
-        Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation")
+        fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation")
       else if not (acceptableCipherSuite ns.cfg spv cs) then
-        Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
+        fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
       else (
         trace ("negotiated "^string_of_pv spv^" "^string_of_ciphersuite cs);
         match cs with
@@ -977,9 +978,9 @@ let client_ServerHello #region ns sh =
               if idx < List.Tot.length ids then
                 Correct (Some idx) // REMARK: we can't check yet consistency with early_data in EE
               else
-                Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "PSK out of bounds")
+                fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "PSK out of bounds")
             | None, Some _ ->
-              Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "PSK not offered")
+              fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "PSK not offered")
             | _, _ -> Correct None
           in
           match pski with
@@ -1012,7 +1013,7 @@ let client_ServerHello #region ns sh =
               HST.op_Colon_Equals ns.state (C_Mode mode);
               Correct mode
             | _ ->
-              Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Impossible: TLS 1.3 PSK")
+              fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "Impossible: TLS 1.3 PSK")
             end
           end
         | CipherSuite kex sa ae ->
@@ -1032,7 +1033,7 @@ let client_ServerHello #region ns sh =
           in
           HST.op_Colon_Equals ns.state (C_Mode mode);
           Correct mode
-        | _ -> Error (AD_decode_error, "ServerHello ciphersuite is not a real ciphersuite")))
+        | _ -> fatal Decode_error "ServerHello ciphersuite is not a real ciphersuite"))
 
 (* ---------------- signature stuff, to be removed from Handshake -------------------- *)
 
@@ -1074,8 +1075,7 @@ val client_ServerKeyExchange: #region:rgn -> t region Client ->
 let client_ServerKeyExchange #region ns crt ske ocr =
   let mode = getMode ns in
   match ske.ske_kex_s with
-  | KEX_S_RSA _ ->
-    Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Illegal message")
+  | KEX_S_RSA _ -> fatal Handshake_failure (perror __SOURCE_FILE__ __LINE__ "Illegal message")
   | KEX_S_DHE gy ->
     let ske_tbs = kex_s_to_bytes ske.ske_kex_s in
     let salgs = supported_signatureSchemes_12 mode in
@@ -1085,14 +1085,14 @@ let client_ServerKeyExchange #region ns crt ske ocr =
       | Some sa' -> List.Helpers.filter_aux sa' op_Equality salgs in
     match salgs with
     | [] ->
-      Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Signature algorithm negotiation failed")
+      fatal Handshake_failure (perror __SOURCE_FILE__ __LINE__ "Signature algorithm negotiation failed")
     | sa::_ ->
       let csr = ns.nonce @| mode.n_server_random in
       let tbs = to_be_signed mode.n_protocol_version Server (Some csr) ske_tbs in
       let valid = cert_verify_cb ns.cfg crt.crt_chain sa tbs ske.ske_signed_params.sig_signature in
       trace ("ServerKeyExchange signature: " ^ (if valid then "Valid" else "Invalid"));
       if not valid then
-        Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Failed to check SKE signature")
+        fatal Handshake_failure (perror __SOURCE_FILE__ __LINE__ "Failed to check SKE signature")
       else
         let Mode offer hrr pv sr sid cs pski sext _ _ _ gx = mode in
         let scert = Some (Cert.chain_up crt.crt_chain, sa) in
@@ -1125,8 +1125,8 @@ let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify d
     let exts_bytes = HandshakeMessages.optionExtensionsBytes exts in
     trace ("Negotiation callback to process application extensions.");
     match nego_cb.negotiate nego_cb.nego_context mode.n_protocol_version exts_bytes None with
-    | Nego_abort -> Error(AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "application requested to abort the handshake")
-    | Nego_retry _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "client application requested a server retry")
+    | Nego_abort -> fatal Handshake_failure (perror __SOURCE_FILE__ __LINE__ "application requested to abort the handshake")
+    | Nego_retry _ -> fatal Internal_error (perror __SOURCE_FILE__ __LINE__ "client application requested a server retry")
     | Nego_accept _ ->
       let validSig, schain =
         match kexAlg mode, optServerCert, optCertVerify, digest with
@@ -1163,7 +1163,7 @@ let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify d
         HST.op_Colon_Equals ns.state (C_Complete mode ccert);
         Correct mode
       else
-        Error(AD_bad_certificate_fatal, "Failed to validate signature or certificate")
+        fatal Bad_certificate "Failed to validate signature or certificate"
 
 (* SERVER *)
 
@@ -1334,7 +1334,7 @@ let computeServerMode cfg co serverRandom =
       in
     match compute_cs13 cfg co pske shares (Some? scert) with
     | Error z -> Error z
-    | Correct ([], None) -> Error(AD_handshake_failure, "ciphersuite negotiation failed")
+    | Correct ([], None) -> fatal Handshake_failure "ciphersuite negotiation failed"
     | Correct ([], Some (ng, cs)) ->
       let hrr = {
         hrr_sessionID = co.ch_sessionID;
@@ -1364,7 +1364,7 @@ let computeServerMode cfg co serverRandom =
       (trace "Negotiated Pure EDH key exchange";
       let Some (cert, sa) = scert in
       let schain = cert_format_cb cfg cert in
-      trace ("Negotiated " ^ (string_of_signatureScheme sa));
+      trace ("Negotiated " ^ string_of_signatureScheme sa);
       Correct
         (ServerMode
           (Mode
@@ -1409,14 +1409,16 @@ let computeServerMode cfg co serverRandom =
     | _ ->
       // Make sure NullCompression is offered
       if not (List.Tot.mem NullCompression co.ch_compressions)
-      then Error(AD_illegal_parameter, "Compression is deprecated") else
+      then fatal Illegal_parameter "Compression is deprecated" else
       let salgs =
         match find_signature_algorithms co with
         | None -> [SIG_UNKNOWN (twobytes (0xFFz, 0xFFz)); ECDSA_SHA1]
         | Some sigalgs -> List.Helpers.filter_aux cfg.signature_algorithms List.Helpers.mem_rev sigalgs
         in
       match cert_select_cb cfg pv (get_sni co) (nego_alpn co cfg) salgs with
-      | None -> Error(AD_no_certificate, perror __SOURCE_FILE__ __LINE__ "No compatible certificate can be selected")
+      | None -> 
+        //18-10-29 review Certificate_unknown; was No_certificate
+        fatal Certificate_unknown (perror __SOURCE_FILE__ __LINE__ "No compatible certificate can be selected")
       | Some (cert, sa) ->
         let schain = cert_format_cb cfg cert in
         let sig, _ = sigHashAlg_of_signatureScheme sa in
@@ -1503,7 +1505,7 @@ let server_ClientHello #region ns offer log =
         trace ("negotiation failed: "^string_of_error z);
         Error z
       | Correct (ServerHelloRetryRequest hrr) ->
-        Error(AD_illegal_parameter, "client sent the same hello in response to hello retry")
+        fatal Illegal_parameter "client sent the same hello in response to hello retry"
       | Correct (ServerMode m cert _) ->
         trace ("negotiated after HRR "^string_of_pv m.n_protocol_version^" "^string_of_ciphersuite m.n_cipher_suite);
         let nego_cb = ns.cfg.nego_callback in
@@ -1517,9 +1519,9 @@ let server_ClientHello #region ns offer log =
           Correct (ServerMode m cert el)
         | _ ->
           trace ("Application requested to abort the handshake after internal HRR.");
-          Error (AD_handshake_failure, "application aborted the handshake by callback")
+          fatal Handshake_failure "application aborted the handshake by callback"
     else
-      Error(AD_illegal_parameter, "Inconsistant parameters between first and second client hello")
+      fatal Illegal_parameter "Inconsistant parameters between first and second client hello"
   | S_Init _ ->
     let sm = computeServerMode ns.cfg offer ns.nonce in
     let previous_cookie = // for stateless HRR
@@ -1561,7 +1563,7 @@ let server_ClientHello #region ns offer log =
       match nego_cb.negotiate nego_cb.nego_context m.n_protocol_version exts_bytes previous_cookie with
       | Nego_abort ->
         trace ("Application requested to abort the handshake.");
-        Error (AD_handshake_failure, "application aborted the handshake by callback")
+        fatal Handshake_failure "application aborted the handshake by callback"
       | Nego_retry cextra ->
         let hrr = ({
           hrr_sessionID = offer.ch_sessionID;
