@@ -38,7 +38,6 @@ SOURCES = \
   Hacl_SHA2_256.c \
   Hacl_SHA2_384.c \
   Hacl_SHA2_512.c \
-  LowStar.c \
   Prims.c \
   vale_aes_glue.c \
   Vale_Hash_SHA2_256.c \

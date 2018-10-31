@@ -25,7 +25,6 @@ SOURCES = \
   Hashing.c \
   kremlinit.c \
   LowParse.c \
-  LowParseWrappers.c \
   LowStar.c \
   Mem.c \
   mitlsffi.c \
