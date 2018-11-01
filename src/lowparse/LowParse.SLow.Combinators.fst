@@ -32,11 +32,11 @@ let size32_empty : size32 #_ #_ #parse_empty serialize_empty
 inline_for_extraction
 let parse32_false : parser32 parse_false = fun _ -> None
 
-noextract // to make compilation of extracted C code fail if this serializer ever appears
-let serialize32_false : serializer32 #_ #_ #parse_false serialize_false = fun input -> false_elim (FStar.Squash.return_squash input)
+inline_for_extraction
+let serialize32_false : serializer32 #_ #_ #parse_false serialize_false = fun input -> B32.empty_bytes
 
-noextract // to make compilation of extracted C code fail if this serializer ever appears
-let size32_false : size32 #_ #_ #parse_false serialize_false = fun input -> false_elim (FStar.Squash.return_squash input)
+inline_for_extraction
+let size32_false : size32 #_ #_ #parse_false serialize_false = fun input -> 0ul
 
 inline_for_extraction
 let parse32_and_then

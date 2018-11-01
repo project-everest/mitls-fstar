@@ -18,8 +18,6 @@ this can happen for one of the following reasons:
     (e.g. capturing more precise dependency, such as extension body)
 */
 
-struct {} Empty;
-
 /**
 Protocol version
 The RFC defines this as
@@ -1373,12 +1371,12 @@ enum {
   ticket12, ticket13, (255)
 } TicketVersion;
 
-enum { false, true, (255)} bool;
+enum { b_false, b_true, (255)} boolean;
 
 struct {
   ProtocolVersion pv;
   CipherSuite cs;
-  bool ems;
+  boolean ems;
   opaque master_secret[48];
 } TicketContents12;
 
