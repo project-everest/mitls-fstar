@@ -1,5 +1,5 @@
 [
-  "\u0011áYD√\u0013Á0lb— Wc±Õ",
+  "ØDÌà+\u000fç4∏–\u0011‰p…˜Õ",
   [
     [
       "LowParse.SLow.Base.parser32_correct",
@@ -20,7 +20,7 @@
         "typing_LowParse.Spec.Base.consumed_length"
       ],
       0,
-      "ee4e8313c70b462750d6158991ec822d"
+      "c46b5166651f8ee4678bb483dc3a995d"
     ],
     [
       "LowParse.SLow.Base.parser32_consumes",
@@ -60,7 +60,7 @@
         "typing_LowParse.Spec.Base.parse"
       ],
       0,
-      "f4d9f53dc9b6b80f6bf33246f5d20890"
+      "a68d55ab42ab799afb37f43d8b2aa93b"
     ],
     [
       "LowParse.SLow.Base.parser32_consumes'",
@@ -105,7 +105,7 @@
         "typing_LowParse.Spec.Base.parse"
       ],
       0,
-      "ca81f34d389a6485d1aeb39f70de895d"
+      "4a22b155b42a62a3d816e2105104c669"
     ],
     [
       "LowParse.SLow.Base.make_parser32",
@@ -114,7 +114,7 @@
       1,
       [ "@query" ],
       0,
-      "a915d699d834393d9086016b4425e247"
+      "5653e52773071146f744791a63f2805d"
     ],
     [
       "LowParse.SLow.Base.coerce_parser32",
@@ -126,7 +126,7 @@
         "refinement_interpretation_LowParse.Spec.Base_Tm_refine_8002c79ae42ff92c4edc4d769192262d"
       ],
       0,
-      "1fd668eabcec98d5709ab4fc6842fcf4"
+      "aec53173dbea1a471eefde425341fdc4"
     ],
     [
       "LowParse.SLow.Base.validator_correct",
@@ -147,7 +147,22 @@
         "typing_LowParse.Spec.Base.consumed_length"
       ],
       0,
-      "17178c2bea33ecac620b6d7b57b0417c"
+      "1d06b87d72b95a0a388cdd40c7598388"
+    ],
+    [
+      "LowParse.SLow.Base.serializer32_correct_length",
+      1,
+      2,
+      1,
+      [
+        "@query", "eq2-interp", "equation_LowParse.Bytes.byte",
+        "equation_LowParse.SLow.Base.bytes32",
+        "equation_LowParse.SLow.Base.serializer32_correct",
+        "equation_LowParse.Spec.Base.serialize",
+        "lemma_FStar.Bytes.length_reveal"
+      ],
+      0,
+      "516e0c2c60d0af619d960564afd6fe2e"
     ],
     [
       "LowParse.SLow.Base.serialize32_ext",
@@ -156,7 +171,7 @@
       1,
       [ "@query" ],
       0,
-      "89595b4d243b60e5a708e99a99978f4a"
+      "7c7f0adb5e850a0ccc4821ed40257736"
     ],
     [
       "LowParse.SLow.Base.serialize32_ext",
@@ -176,7 +191,7 @@
         "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
       ],
       0,
-      "7e0408838e764d7c055ec63588facf11"
+      "69c8461174e99732e75a57ed19f7bca3"
     ],
     [
       "LowParse.SLow.Base.serializer32_then_parser32",
@@ -225,7 +240,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "9163ec4dc49d8ffd535636b10d59aac6"
+      "355dda0f1a3183d33462fdf8f4f2f8df"
     ],
     [
       "LowParse.SLow.Base.parser32_then_serializer32",
@@ -288,7 +303,7 @@
         "typing_LowParse.Spec.Base.parse", "unit_typing"
       ],
       0,
-      "c254a7bcd657c51cc59d62cdb238180e"
+      "f86b753251af9af2b238a45e4400bfa4"
     ],
     [
       "LowParse.SLow.Base.parser32_then_serializer32'",
@@ -364,7 +379,7 @@
         "typing_LowParse.Spec.Base.parse"
       ],
       0,
-      "8f0b8c39b46ee9ebddb8b2e938d1d5de"
+      "0df50eeafb5c44f4d0bdc714e597f5a1"
     ],
     [
       "LowParse.SLow.Base.parser32_injective",
@@ -425,7 +440,7 @@
         "typing_LowParse.Spec.Base.parse"
       ],
       0,
-      "bfb7e963dc8c8ab7dd25bc86b7461208"
+      "c3c112a58cf8b6601aa2aea874ac6183"
     ],
     [
       "LowParse.SLow.Base.serializer32_injective",
@@ -439,7 +454,9 @@
         "equation_LowParse.SLow.Base.bytes32",
         "equation_LowParse.SLow.Base.serializer32",
         "equation_LowParse.SLow.Base.serializer32_correct",
+        "equation_LowParse.Spec.Base.consumed_length",
         "equation_LowParse.Spec.Base.parser_kind",
+        "equation_LowParse.Spec.Base.serialize",
         "equation_LowParse.Spec.Base.serializer",
         "equation_LowParse.Spec.Base.serializer_correct",
         "equation_Prims.nat",
@@ -451,7 +468,7 @@
         "refinement_interpretation_LowParse.Spec.Base_Tm_refine_9fc4b705eaf2fe68d9cc8785e7df72bf"
       ],
       0,
-      "ddbabf217520d38fc6e5861007a532a7"
+      "783170f78eaff5fc0b19e279cc86a83d"
     ],
     [
       "LowParse.SLow.Base.parse32_size",
@@ -485,7 +502,7 @@
         "typing_FStar.Bytes.reveal"
       ],
       0,
-      "2c10799a5a378be8c920fcd55d4a9c65"
+      "3601a9d27d6acf2dcb04d0e28c2dfa7d"
     ],
     [
       "LowParse.SLow.Base.parse32_total",
@@ -519,7 +536,7 @@
         "typing_FStar.Bytes.reveal"
       ],
       0,
-      "8c0a5b430da7a652dbc8f79bb794113c"
+      "2272761fc171d954611a414cff533fe2"
     ],
     [
       "LowParse.SLow.Base.u32_max",
@@ -545,7 +562,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "58c8d135761799cd9305c679fd147fd9"
+      "a39480eb24d2c3d67f5cd9c57baff2e8"
     ],
     [
       "LowParse.SLow.Base.add_overflow",
@@ -573,7 +590,7 @@
         "typing_FStar.UInt32.v", "typing_LowParse.SLow.Base.u32_max"
       ],
       0,
-      "847e8e0a06af41f2336e638a0712ef77"
+      "3f0670b4f1f6bdb22321cd622104746d"
     ],
     [
       "LowParse.SLow.Base.size32_postcond",
@@ -582,7 +599,7 @@
       1,
       [ "@query" ],
       0,
-      "f3a3df2f35ac7d5443aa37bf0c07c843"
+      "957a092ffbaae1c7b78e3e98c9a3aea9"
     ],
     [
       "LowParse.SLow.Base.size32_constant_precond",
@@ -591,7 +608,7 @@
       1,
       [ "@query" ],
       0,
-      "735665493e130531b87120767393cddb"
+      "209b13d0b6db165924efdf7ab8e03349"
     ],
     [
       "LowParse.SLow.Base.size32_constant",
@@ -641,7 +658,7 @@
         "typing_LowParse.Spec.Base.serialize"
       ],
       0,
-      "463355baee27cf34282275c0228e0362"
+      "ee2d06e845e90f45ac9e941599f2a452"
     ],
     [
       "LowParse.SLow.Base.size32_ext",
@@ -650,7 +667,7 @@
       1,
       [ "@query" ],
       0,
-      "c46db07a4717d33b3d1d5105c0229451"
+      "606586320e17a12b2e49e6543e226457"
     ],
     [
       "LowParse.SLow.Base.size32_ext",
@@ -671,7 +688,7 @@
         "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
       ],
       0,
-      "96abe1f154f6cc4ca7faf4233aaeffe2"
+      "8f86242c089330e271bcfddd367ed4d1"
     ]
   ]
 ]

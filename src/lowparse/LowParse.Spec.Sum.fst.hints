@@ -33,6 +33,7 @@
         "equation_LowParse.Spec.Sum.refine_with_tag",
         "equation_LowParse.Spec.Sum.synth_tagged_union_data",
         "equation_Prims.nat",
+        "fuel_guarded_inversion_FStar.Pervasives.Native.option",
         "fuel_guarded_inversion_FStar.Pervasives.Native.tuple2",
         "fuel_guarded_inversion_LowParse.Spec.Base.parser_kind_",
         "interpretation_LowParse.Spec.Combinators_Tm_abs_4e8e6588059dcad2a8065b9aa7d0c70d",
@@ -56,7 +57,7 @@
         "typing_LowParse.Spec.Sum.refine_with_tag"
       ],
       0,
-      "c668bb02246f2357d90d3f85862d7432"
+      "89a173e14a44acdb075909a84fd2baca"
     ],
     [
       "LowParse.Spec.Sum.parse_tagged_union_eq",
@@ -138,7 +139,7 @@
         "typing_LowParse.Spec.Sum_Tm_abs_92b67ada30c4afe8c900e6ad1e4dd1ca"
       ],
       0,
-      "98670afadd272d375ed6c95bb8702054"
+      "4302d0dda95a629fd974625405314770"
     ],
     [
       "LowParse.Spec.Sum.bare_serialize_tagged_union_correct",
@@ -235,7 +236,7 @@
         "unit_typing"
       ],
       0,
-      "fd8e6c77776b0f447706553bccc2704c"
+      "40e17853592259f8ecee86fe3d8da304"
     ],
     [
       "LowParse.Spec.Sum.serialize_tagged_union",
@@ -809,7 +810,7 @@
         "typing_Prims.__proj__Mkdtuple2__item___1", "unit_typing"
       ],
       0,
-      "f3708e6917a5559f5e42fe6a9e134cd8"
+      "a1f1979f4e3e76019c0dd55b5c7c88f0"
     ],
     [
       "LowParse.Spec.Sum.parse_sum_eq''",
@@ -897,7 +898,7 @@
         "typing_Prims.__proj__Mkdtuple2__item___1", "unit_typing"
       ],
       0,
-      "0a510bde8990e7823625b0d43687a637"
+      "ec95dee0135595a013f1ad8f9902f5cb"
     ],
     [
       "LowParse.Spec.Sum.parse_sum_eq",
@@ -1012,7 +1013,7 @@
         "typing_Prims.__proj__Mkdtuple2__item___1", "unit_typing"
       ],
       0,
-      "cc282582b1ea6f14859e731e10c27770"
+      "52b26afb7e07c70a175c084e2465b70c"
     ],
     [
       "LowParse.Spec.Sum.synth_sum_case_recip",
@@ -1786,7 +1787,7 @@
         "unit_typing"
       ],
       0,
-      "69da84ec584a022b0a521f7faa2c7a65"
+      "6aab2796017889ed4fb840f993f7b04b"
     ],
     [
       "LowParse.Spec.Sum.parse_dsum_eq'",
@@ -1933,7 +1934,7 @@
         "typing_LowParse.Spec.Sum.dsum_type", "unit_typing"
       ],
       0,
-      "b91300156635faed84f7a8c968796f90"
+      "052babbe59e58fc3e31b4336a67045f7"
     ],
     [
       "LowParse.Spec.Sum.parse_dsum_eq",
@@ -2094,7 +2095,7 @@
         "unit_inversion", "unit_typing"
       ],
       0,
-      "de106e569d3e5beb49678d5e5b1f0ba7"
+      "59697860bc41cb070aca7ee82293ea06"
     ],
     [
       "LowParse.Spec.Sum.synth_dsum_case_inverse",
