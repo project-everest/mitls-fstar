@@ -1,0 +1,5 @@
+PREFIX="TLS.HSL."
+QD_HOME?=../../../../../quackyducky
+
+$(PREFIX)Msg.fst: HSLMsg.rfc
+	$(QD_HOME)/qd -prefix $(PREFIX) $^

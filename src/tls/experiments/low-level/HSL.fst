@@ -15,8 +15,8 @@ module B = LowStar.Buffer
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
 
-module M = HSLMsg
-module LP = LowParse.Low
+module M = TLS.HSL.Msg
+module LP = LowParse.Low.Base
 
 type loc = LowStar.Modifies.loc
 type buffer8 = B.buffer uint8
@@ -34,103 +34,85 @@ type buffer8 = B.buffer uint8
  * We also keep msgs: list of all subsequences in the buffer that are serializations of valid msgs
  *                    in each subsequence, we also keep a ghost repr of its parsing
  *)
+abstract noeq
+type message (len:uint32)= {
+  from:(x:uint32{x <= len});
+  to: (x:uint32{from <= x /\ x <= len});
+  msg: M.msg
+}
 abstract noeq type hsl_state =
   | Mk_state: len:uint32 ->
               buf:buffer8{B.len buf == len} ->
               p0:reference uint32 ->
               p1:reference uint32 ->
-              msgs:reference (list (uint32 & G.erased M.msg)) ->
+              msgs:reference (G.erased (list (message len))) -> //can we have an erased_reference?
               hsl_state
 
 (* abstract getters *)
-abstract let hsl_get_len (st:hsl_state) :uint32 = st.len
-abstract let hsl_get_buf (st:hsl_state) :buffer8 = st.buf
-abstract let hsl_get_p0 (st:hsl_state) :reference uint32 = st.p0
-abstract let hsl_get_p1 (st:hsl_state) :reference uint32 = st.p1
+abstract 
+let hsl_get_len (st:hsl_state) 
+  : GTot uint32 
+  = st.len
 
-private abstract let hsl_get_msgs (st:hsl_state) :reference (list (uint_32 & G.erased M.msg)) = st.msgs
+abstract 
+let hsl_get_buf (st:hsl_state) 
+  : GTot (b:buffer8{B.len b == hsl_get_len st})
+  = st.buf
 
-[@"opaque_to_smt"]
-unfold private let liveness_and_disjointness_inv (st:hsl_state) (h:HS.mem) =
-  let len, buf, p0, p1, msgs = hsl_get_len st, hsl_get_buf st, hsl_get_p0 st, hsl_get_p1 st, hsl_get_msgs st in
-
-  B.(loc_pairwise_disjoint [
-       loc_mreference p0;
-       loc_mreference p1;
-       loc_buffer buf;
-       loc_mreference msgs;
-     ])  //disjointness
+abstract 
+let hsl_get_p1 (st:hsl_state) (h:HS.mem) 
+  : GTot uint32
+  = HS.sel h st.p1
   
-  /\
+abstract 
+let hsl_get_msgs (st:hsl_state) (h:HS.mem)
+  : GTot (list (message (hsl_get_len st))) 
+  = G.reveal (HS.sel h st.msgs)
 
-  B.live h buf /\ h `HS.contains` p0 /\ h `HS.contains` p1 /\ h `HS.contains` msgs  //liveness
+let liveness (st:hsl_state) (h:HS.mem) =
+  B.live h (hsl_get_buf st)
 
-[@"opaque_to_smt"]
-unfold private let p0_p1_inv (st:hsl_state) (h:HS.mem) =
-  let len, p0, p1 = hsl_get_len st, hsl_get_p0 st, hsl_get_p1 st in
+abstract
+let msgs_inv (st:hsl_state) (h:HS.mem) =
+  let msgs = hsl_get_msgs st h in
+  let p0 = HS.sel h st.p0 in
+  let p1 = hsl_get_p1 st h in
+  p0 <= p1 /\
+  p1 <= st.len /\
+  (forall (m:message st.len). {:pattern List.Tot.memP m msgs}
+        List.Tot.memP m msgs ==>
+        m.to <= p0  /\
+        (let delta = m.to - m.from in
+         let sub = B.gsub st.buf m.from delta in
+         match LP.parse M.msg_parser (B.as_seq h sub) with
+         | None -> False
+         | Some (msg, consumed) ->
+           msg == m.msg /\
+           consumed == v delta (* unsure about the latter part *)
+         ))
 
-  HS.sel h p1 <= len /\  //p1 is leq len
-  HS.sel h p0 <= HS.sel h p1  //p0 is leq p1
+abstract
+let st_inv (st:hsl_state) (h:HS.mem) =
+  (* Disjointness *)
+  B.(loc_pairwise_disjoint [
+       loc_mreference st.p0;
+       loc_mreference st.p1;
+       loc_buffer st.buf;
+       loc_mreference st.msgs;
+     ]) /\
+  (* Liveness *)
+  B.live h st.buf /\
+  h `HS.contains` st.p0 /\
+  h `HS.contains` st.p1 /\
+  h `HS.contains` st.msgs /\
+  (* Main stateful invariant *)
+  msgs_inv st h
 
-//#set-options "--max_fuel 0 --max_ifuel 1 --initial_ifuel 1 --log_queries"
-[@"opaque_to_smt"]
-unfold private let msgs_inv (st:hsl_state) (h:HS.mem{liveness_and_disjointness_inv st h /\ p0_p1_inv st h}) =
-  let len, buf, p0_ref, msgs_ref = hsl_get_len st, hsl_get_buf st, hsl_get_p0 st, hsl_get_msgs st in
-  let p0, msgs = HS.sel h p0_ref, HS.sel h msgs_ref in
-  (forall m. List.Tot.memP m msgs ==>
-        (let x, repr = m in
-	 UInt32.v x <= B.length buf - 8 /\
-         (let _ = B.gsub buf x 8ul in 
-	  True)))
-
-	 // let parse = LP.parse_from_slice M.msg_parser h (B.gsub buf x 8l) 8l in
-	 // True))
-
-
-
-// (*
-//  * An invariant on the sequence content between p0 and p1 in the buffer, that it doesn't contains 0ul
-//  *
-//  *)
-// [@"opaque_to_smt"]
-// unfold private let null_terminator_invariant_helper
-//   (buf:Buffer.buffer uint_32) (p0:uint_32) (p1:uint_32{p1 <= Buffer.len buf /\ p0 <= p1}) (h:mem)
-//   = let subseq_size = p1 - p0 in
-//     let subseq = Buffer.as_seq h (Buffer.gsub buf p0 subseq_size) in
-//     forall (i:nat). // {:pattern (Seq.index subseq i)} //NS: no pattern here; fixme; this one fails
-//       i < v subseq_size ==> Seq.index subseq i =!= 0ul
-// //Also tried to write the quantifier in terms of indexing directly on buf, rather than on the subbuf
-// //no luck with that either
-
-// (* Lifted to hsl_state *)
-// [@"opaque_to_smt"]
-// unfold private let null_terminator_invariant (st:hsl_state) (h:mem{liveness_and_disjointness st h})
-//   = let buf, p0, p1 = hsl_get_buf st, sel h (hsl_get_p0 st), sel h (hsl_get_p1 st) in
-//     null_terminator_invariant_helper buf p0 p1 h
-
-// (*
-//  * An invariant on the list that all subsequences are 0ul free //NS: Can the null_terminator_invariant be phrased as just an instance of this?
-//  *)
-// [@"opaque_to_smt"]
-// unfold private let msgs_list_invariant_helper
-//   (buf:Buffer.buffer uint_32) (l:list (uint_32 & uint_32)) (p0:uint_32{p0 <= Buffer.len buf}) (h:mem)
-//   = forall ij. //{:pattern (List.Tot.mem ij l)} //NS: fixme; tried this pattern and also separately quantifying i,j; neither worked
-//           let i, j = ij in
-//           List.Tot.mem ij l ==>  //if (i, j) is in the list
-//           (i < j /\
-//            j < p0 /\  //then both lie before p0
-//            null_terminator_invariant_helper buf i j h)
-
-// (* Lifted to hsl_state *)
-// [@"opaque_to_smt"]
-// unfold private let msgs_list_invariant (st:hsl_state) (h:mem{liveness_and_disjointness st h})
-//   = let buf, p0, msgs = hsl_get_buf st, sel h (hsl_get_p0 st), sel h (hsl_get_msgs st) in
-//     msgs_list_invariant_helper buf msgs p0 h
-
-// (* Combine the predicates above *)
-// [@"opaque_to_smt"]
-// unfold private let hsl_invariant_predicate (st:hsl_state) (h:mem)
-//   = liveness_and_disjointness st h /\ null_terminator_invariant st h /\ msgs_list_invariant st h
+(* Questions:
+      Is the HSL state recycled? i.e., what happens when the buffer is filled?
+      Is it worth keeping HSL state after a flight has been parsed?
+      How much can we do with monotonicity, e.g., the msgs reference would be convenient to model monotonically
+*)
 
 // (* Finally, the abstract invariant and its elimination *)
 // abstract let hsl_invariant (st:hsl_state) (h:mem) = hsl_invariant_predicate st h
