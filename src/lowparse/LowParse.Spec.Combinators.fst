@@ -154,8 +154,10 @@ let parse_ret (#t:Type) (v:t) : Tot (parser parse_ret_kind t) =
 let parse_empty : parser parse_ret_kind unit =
   parse_ret ()
 
-let serialize_empty : serializer parse_empty =
-  fun _ -> Seq.empty
+let serialize_empty' : serializer parse_empty =
+  fun (x:unit) -> Seq.empty
+
+let serialize_empty : serializer parse_empty = serialize_empty'
 
 #set-options "--z3rlimit 16"
 
