@@ -139,6 +139,7 @@ inline_for_extraction
 type cipherSuiteName = Parsers.CipherSuite.cipherSuite
 
 (** Determine the validity of a ciphersuite based on it's name *)
+inline_for_extraction
 let cipherSuite'_of_name : cipherSuiteName -> Tot (option cipherSuite')  =
   let open EverCrypt in 
   let open Hashing.Spec in function
@@ -213,6 +214,7 @@ let cipherSuite'_of_name : cipherSuiteName -> Tot (option cipherSuite')  =
   | _ -> None
 
 (** Determine the name of a ciphersuite based on its construction *)
+inline_for_extraction
 let name_of_cipherSuite' =
   let open EverCrypt in 
   let open Hashing.Spec in function
@@ -313,13 +315,15 @@ let name_of_cipherSuite_of_name' (n: cipherSuiteName) (c: cipherSuite') : Lemma
   assert (name_of_cipherSuite_of_name_post n);
   ()
 
+inline_for_extraction
 let cipherSuite_of_name (c: cipherSuiteName) : Tot (option cipherSuite) =
   match cipherSuite'_of_name c with
-  | Some v -> name_of_cipherSuite_of_name' c v; Some v
+  | Some v -> [@inline_let] let _ = name_of_cipherSuite_of_name' c v in Some v
   | None -> None
 
+inline_for_extraction
 let name_of_cipherSuite (c: cipherSuite) : Tot cipherSuiteName =
-  cipherSuite_of_name_of_cipherSuite c;
+  [@inline_let] let _ = cipherSuite_of_name_of_cipherSuite c in
   match name_of_cipherSuite' c with
   | Correct n -> n
 
