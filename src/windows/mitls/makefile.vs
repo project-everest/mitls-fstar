@@ -10,6 +10,7 @@ SOURCES = \
   BufferBytes.c \
   C.c \
   Cert.c \
+  CipherSuite.c \
   CommonDH.c \
   Connection.c \
   Content.c \
@@ -25,7 +26,6 @@ SOURCES = \
   Hashing.c \
   kremlinit.c \
   LowParse.c \
-  LowParseWrappers.c \
   LowStar.c \
   Mem.c \
   mitlsffi.c \

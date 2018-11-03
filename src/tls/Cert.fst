@@ -105,9 +105,10 @@ let rec certificateListBytes13_is_injective c1 c2 =
 abstract val parseCertificateList: b:bytes -> Tot (result chain) (decreases (length b))
 let rec parseCertificateList b =
   if length b = 0 then Correct [] else
-  if length b < 3 then Error(AD_bad_certificate_fatal, "not enough bytes (certificate length)") else
+  
+  if length b < 3 then fatal Bad_certificate "not enough bytes (certificate length)" else
   match vlsplit 3 b with
-  | Error _ -> Error(AD_bad_certificate_fatal, "not enough bytes (certificate)")
+  | Error _ -> fatal Bad_certificate "not enough bytes (certificate)"
   | Correct (x) -> (
     let c, r = x in
     match parseCertificateList r with
@@ -118,14 +119,14 @@ let rec parseCertificateList b =
 abstract val parseCertificateList13: b:bytes -> Tot (result chain13) (decreases (length b))
 let rec parseCertificateList13 b =
   if length b = 0 then Correct [] else
-  if length b < 3 then Error(AD_bad_certificate_fatal, "not enough bytes (certificate length)") else
+  if length b < 3 then fatal Bad_certificate "not enough bytes (certificate length)" else
   match vlsplit 3 b with
-  | Error _ -> Error(AD_bad_certificate_fatal, "not enough bytes (certificate)")
+  | Error _ -> fatal Bad_certificate "not enough bytes (certificate)"
   | Correct (x) -> (
     let c, r = x in 
-    if length r < 2 then Error(AD_bad_certificate_fatal, "not enough bytes (extension length") else
+    if length r < 2 then fatal Bad_certificate "not enough bytes (extension length" else
     match vlsplit 2 r with
-    | Error _ -> Error(AD_bad_certificate_fatal, "not enough bytes (extension list)")
+    | Error _ -> fatal Bad_certificate "not enough bytes (extension list)"
     | Correct (x) -> (
       let e, r = x in
       match parseExtensions EM_Certificate (vlbytes 2 e) with
@@ -140,9 +141,9 @@ let rec parseCertificateList13 b =
             lemma_repr_bytes_values (length (extensionListBytes exts));
             Correct ((c,exts) :: x)
           end
-          else Error(AD_bad_certificate_fatal, "unexpected extension") )))
+          else fatal Bad_certificate "unexpected extension" )))
 
-#set-options "--max_ifuel 4"
+#set-options "--z3rlimit 100 --max_ifuel 4"
 
 val lemma_parseCertificateList_length: b:bytes ->
   Lemma (ensures (match parseCertificateList b with

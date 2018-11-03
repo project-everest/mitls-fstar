@@ -273,9 +273,11 @@ unfold type mem_package (#ip:ipkg) (p:local_pkg ip) =
 inline_for_extraction
 noextract
 let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
+  [@inline_let]
   let footprint_extend (s:rset) (i:ip.t{ip.registered i}) (k:p.key i) =
     rset_union s (p.local_footprint k)
     in
+  [@inline_let]
   let footprint (h:mem): GTot rset =
     let instances_footprint =
       if model then
@@ -284,6 +286,7 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
       else Set.empty in
     rset_union p.shared_footprint instances_footprint
     in
+  [@inline_let]
   let footprint_grow (h0:mem) (i:ip.t{ip.registered i}) (k:p.key i) (h1:mem) : Lemma
     (requires (mem_update mtable i k h0 h1 /\ fresh_regions (p.local_footprint k) h0 h1))
     (ensures (modifies_footprint footprint h0 h1))
@@ -303,19 +306,23 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
      end
     else ()
     in
+  [@inline_let]
   let footprint_framing (h0:mem) (h1:mem) : Lemma
     (requires mem_stable mtable h0 h1)
     (ensures footprint h0 == footprint h1)
     = ()
   in
+  [@inline_let]
   let package_invariant h =
     (model ==>
       (let log : i_mem_table p.key = itable mtable in
       mm_forall (HS.sel h log) p.local_invariant h))
     in
+  [@inline_let]
   let ls_footprint (#i:ip.t{ip.registered i}) (k:p.key i) =
     rset_union (p.local_footprint k) p.shared_footprint
     in
+  [@inline_let]
   let ls_footprint_frame (i:ip.t{ip.registered i}) (k:p.key i) (h0:mem) (r:rid) (h1:mem)
     : Lemma (requires p.local_invariant k h0 /\ modifies_one r h0 h1
                       /\ ~(r `Set.mem` ls_footprint k))
@@ -324,6 +331,7 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
     assert(~(r `Set.mem` ls_footprint k) <==> ~(r `Set.mem` p.local_footprint k) /\ ~(r `Set.mem` p.shared_footprint));
     p.local_invariant_framing i k h0 r h1
     in
+  [@inline_let]
   let package_invariant_framing (h0:mem) (r:pkg_inv_r) (h1:mem) : Lemma
     (requires package_invariant h0 /\ mem_contains mtable h0 /\
       (match r with
@@ -397,6 +405,7 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($mtable: mem_table p.key): pkg ip =
       k
     ) else p.coerce i a k0
     in
+  [@inline_let]
   let post_framing (#i:ip.t{ip.registered i}) (a:p.info i) (k:p.key i)
     (h0:mem) (r:rid) (h1:mem) : Lemma
     (requires p.post a k h0 /\ modifies_one r h0 h1 /\ ~(Set.mem r (footprint h0)))

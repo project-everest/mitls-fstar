@@ -8,18 +8,19 @@ module Classical = FStar.Classical
 
 inline_for_extraction
 val parse_fldata'
+  (#k: parser_kind)
   (#t: Type0)
-  (p: bare_parser t)
+  (p: parser k t)
   (sz: nat)
 : Tot (bare_parser t)
 
-let parse_fldata' #t p sz =
+let parse_fldata' #k #t p sz =
   let () = () in // Necessary to pass arity checking
   fun (s: bytes) ->
   if Seq.length s < sz
   then None
   else
-    match p (Seq.slice s 0 sz) with
+    match parse p (Seq.slice s 0 sz) with
     | Some (v, consumed) ->
       if (consumed <: nat) = (sz <: nat)
       then Some (v, (sz <: consumed_length s))
@@ -63,20 +64,21 @@ let parse_fldata #b #t p sz =
   parse_fldata' p sz  
 
 val parse_fldata_consumes_all
+  (#k: parser_kind)
   (#t: Type0)
-  (p: bare_parser t)
+  (p: parser k t)
   (sz: nat)
 : Pure (bare_parser t)
   (requires (consumes_all p))
   (ensures (fun _ -> True))
 
-let parse_fldata_consumes_all #t p sz =
+let parse_fldata_consumes_all #k #t p sz =
   let () = () in // Necessary to pass arity checking
   fun (s: bytes) ->
   if Seq.length s < sz
   then None
   else
-    match p (Seq.slice s 0 sz) with
+    match parse p (Seq.slice s 0 sz) with
     | Some (v, _) ->
       Some (v, (sz <: consumed_length s))
     | _ -> None

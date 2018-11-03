@@ -110,9 +110,9 @@ let test() : ST unit
   let v0 = LocalPkg?.coerce p 12 kl k in
   print (Bytes.hex_of_bytes v0);
 
-  (*let table = mem_alloc (fun n -> Bytes.lbytes n) in
+  let table = mem_alloc (fun n -> Bytes.lbytes n) in
   [@inline_let]
   let q = Pkg.memoization p table in
-  let v1 = Pkg.Pkg?.coerce q 12 kl k in
-  print (Bytes.hex_of_bytes v1);*)
+  let v1 = Pkg?.coerce q 12 kl k in
+  print (Bytes.hex_of_bytes v1);
   ()
