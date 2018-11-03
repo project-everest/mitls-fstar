@@ -10,13 +10,17 @@
    
 *)
 
-module Parsers.Misc
+module Parsers.Misc2
 
-module M2 = Parsers.Misc2
+module B = FStar.Bytes
+module L = FStar.List.Tot
+module LP = LowParse.SLow
+module PCS = Parsers.CipherSuite
 
-friend Parsers.Misc2
-friend LowParse.SLow
+inline_for_extraction
+val cipherSuitesVLBytes
+  (l: list PCS.cipherSuite { L.length l < 256 } )
+: Tot (b: B.bytes { B.length b <= 65536 } )
 
-let cipherSuitesVLBytes = M2.cipherSuitesVLBytes
-
-let parseVLCipherSuites = M2.parseVLCipherSuites
+inline_for_extraction
+val parseVLCipherSuites (b: B.bytes) : Tot (option ((l: list PCS.cipherSuite { 1 <= L.length l /\ L.length l <= 255 } ) * B.bytes))
