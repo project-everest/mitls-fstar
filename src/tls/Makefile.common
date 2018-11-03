@@ -139,6 +139,9 @@ $(CACHE_DIR)/C.%.checked \
 $(CACHE_DIR)/LowParse.%.checked \
 : OTHERFLAGS := $(filter-out --record_hints,$(OTHERFLAGS))
 
+$(CACHE_DIR)/Parsers.%.checked \
+: OTHERFLAGS += --cmi
+
 $(EXTRACT_DIR)/%.$(EXTENSION):
 ifdef VERBOSE
 	@echo -e "\033[1;32m=== Extracting $@ ...\033[;37m"
