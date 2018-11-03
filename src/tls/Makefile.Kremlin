@@ -135,6 +135,11 @@ $(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/ffi,$(MITLS_HOME)/libs/ffi))
 $(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/pki,$(MITLS_HOME)/src/pki))
 $(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/uint128,$(UINT128_DIR)))
 
+$(EXTRACT_DIR)/LowParse_%.krml \
+$(EXTRACT_DIR)/Parsers_%.krml \
+$(EXTRACT_DIR)/Format_%.krml \
+: VFLAGS += --cmi
+
 $(INTERNAL_TEST_DIR)/Test_Main.c: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES))
 ifdef VERBOSE
 	@echo -e "\033[1;32m=== Extracting $@ ...\033[;37m"
