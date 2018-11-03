@@ -11,6 +11,8 @@ module HST = FStar.HyperStack.ST
 module HS = FStar.HyperStack
 module B = LowStar.Buffer
 
+friend LowParse.Spec.Int
+
 #set-options "--z3rlimit 32"
 
 inline_for_extraction
