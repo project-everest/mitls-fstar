@@ -62,7 +62,7 @@ ifneq (,$(HINTS_DIR))
 endif
 	$(subst \\,, \
 		$(FSTAR) --cache_dir $(CACHE_DIR) --odir $(EXTRACT_DIR) --extract $(EXTRACT) \
-			--dep full \
+			--cmi --dep full \
 			$(addprefix --include , $(INCLUDE_PATHS)) \
 			$(ROOTS) > $(DEP_FILE) \
 	)
