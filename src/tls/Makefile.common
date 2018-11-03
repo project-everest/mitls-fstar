@@ -130,6 +130,7 @@ endif
 $(CACHE_DIR)/FStar.%.checked \
 $(CACHE_DIR)/LowStar.%.checked \
 $(CACHE_DIR)/C.%.checked \
+$(CACHE_DIR)/LowParse.%.checked \
 : VFLAGS = --admit_smt_queries true
 
 $(CACHE_DIR)/FStar.%.checked \
@@ -137,13 +138,6 @@ $(CACHE_DIR)/LowStar.%.checked \
 $(CACHE_DIR)/C.%.checked \
 $(CACHE_DIR)/LowParse.%.checked \
 : OTHERFLAGS := $(filter-out --record_hints,$(OTHERFLAGS))
-
-$(CACHE_DIR)/LowParse.%.checked \
-: VFLAGS = --admit_smt_queries true --cmi
-
-$(CACHE_DIR)/Parsers.%.checked \
-$(CACHE_DIR)/Format.%.checked \
-: VFLAGS += --cmi
 
 $(EXTRACT_DIR)/%.$(EXTENSION):
 ifdef VERBOSE
