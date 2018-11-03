@@ -1,6 +1,8 @@
 module LowParse.Low.VLData.Aux
 open LowParse.Low.Combinators
 
+friend LowParse.Spec.VLData.Header
+
 module B = LowStar.Buffer
 module E = LowParse.BigEndianImpl.Low
 module HST = FStar.HyperStack.ST

@@ -1,70 +1,10 @@
 module LowParse.Spec.VLData
 include LowParse.Spec.FLData
+include LowParse.Spec.VLData.Header
 
 module Seq = FStar.Seq
 module U32 = FStar.UInt32
-module E = LowParse.BigEndian
 module M = LowParse.Math
-
-let integer_size : Type0 = (sz: nat { 1 <= sz /\ sz <= 4 } )
-
-#reset-options "--z3cliopt smt.arith.nl=false --using_facts_from '*  -FStar.UInt8 -FStar.UInt16' --z3rlimit 32"
-
-let integer_size_values (i: integer_size) : Lemma
-  (i == 1 \/ i == 2 \/ i == 3 \/ i == 4)
-= ()
-
-#reset-options
-
-inline_for_extraction
-let bounded_integer
-  (i: integer_size)
-: Tot Type0
-= (u: U32.t { U32.v u < pow2 (FStar.Mul.op_Star 8 i) } )
-
-let decode_bounded_integer
-  (i: integer_size)
-  (b: bytes { Seq.length b == i } )
-: GTot (bounded_integer i)
-= E.lemma_be_to_n_is_bounded b;
-  U32.uint_to_t (E.be_to_n b)
-
-
-#set-options "--z3rlimit 16"
-let decode_bounded_integer_injective'
-  (i: integer_size)
-  (b1: bytes { Seq.length b1 == i } )
-  (b2: bytes { Seq.length b2 == i } )
-: Lemma
-  (decode_bounded_integer i b1 == decode_bounded_integer i b2 ==> Seq.equal b1 b2)
-= if decode_bounded_integer i b1 = decode_bounded_integer i b2
-  then begin
-    E.lemma_be_to_n_is_bounded b1;
-    E.lemma_be_to_n_is_bounded b2;
-    assert (U32.v (U32.uint_to_t (E.be_to_n b1)) == E.be_to_n b1);
-    assert (U32.v (U32.uint_to_t (E.be_to_n b2)) == E.be_to_n b2);
-    assert (E.be_to_n b1 == E.be_to_n b2);
-    E.be_to_n_inj b1 b2
-  end else ()
-#reset-options
-
-let decode_bounded_integer_injective
-  (i: integer_size)
-: Lemma
-  (make_total_constant_size_parser_precond i (bounded_integer i) (decode_bounded_integer i))
-= Classical.forall_intro_2 (decode_bounded_integer_injective' i)
-
-// unfold
-let parse_bounded_integer_kind
-  (i: integer_size)
-: Tot parser_kind
-= total_constant_size_parser_kind i
-
-let parse_bounded_integer
-  (i: integer_size)
-: Tot (parser (parse_bounded_integer_kind i) (bounded_integer i))
-= decode_bounded_integer_injective i;
-  make_total_constant_size_parser i (bounded_integer i) (decode_bounded_integer i)
 
 #reset-options "--z3rlimit 64 --max_fuel 64 --max_ifuel 64 --z3refresh --z3cliopt smt.arith.nl=false"
 
@@ -609,36 +549,6 @@ let parse_bounded_vldata_strong
   let k' = parse_bounded_vldata_strong_kind min max k in
   parse_bounded_vldata_strong'_parser_kind_prop min max s;
   strengthen k' p'
-
-let serialize_bounded_integer'
-  (sz: integer_size)
-: Tot (bare_serializer (bounded_integer sz))
-= (fun (x: bounded_integer sz) ->
-    let res = E.n_to_be (U32.uint_to_t sz) (U32.v x) in
-    res
-  )
-
-let serialize_bounded_integer_correct
-  (sz: integer_size)
-: Lemma
-  (serializer_correct (parse_bounded_integer sz) (serialize_bounded_integer' sz))
-= let prf
-    (x: bounded_integer sz)
-  : Lemma
-    (
-      let res = serialize_bounded_integer' sz x in
-      Seq.length res == (sz <: nat) /\
-      parse (parse_bounded_integer sz) res == Some (x, (sz <: nat))
-    )
-  = ()
-  in
-  Classical.forall_intro prf
-
-let serialize_bounded_integer
-  (sz: integer_size)
-: Tot (serializer (parse_bounded_integer sz))
-= serialize_bounded_integer_correct sz;
-  serialize_bounded_integer' sz
 
 let serialize_bounded_vldata_strong'
   (min: nat)
