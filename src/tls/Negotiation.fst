@@ -973,7 +973,7 @@ let client_ServerHello #region ns sh =
          | Correct spv -> Correct (cs, spv)
          end
        | None -> 
-         Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Server cipherSuite")
+         fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "Server cipherSuite")
      in
     match nego with
     | Error z -> Error z
