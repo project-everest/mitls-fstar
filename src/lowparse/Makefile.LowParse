@@ -23,7 +23,7 @@ else
 endif
 INCLUDE_KREMLIN=--include $(KREMLIB)
 
-FSTAR_OPTIONS += --use_hints --use_two_phase_tc true # --use_extracted_interfaces
+FSTAR_OPTIONS += --use_hints --use_two_phase_tc true --cmi # --use_extracted_interfaces
 
 MY_FSTAR=$(FSTAR_EXE) --cache_checked_modules $(addprefix --include , $(INCLUDE_PATHS)) $(INCLUDE_KREMLIN)
 

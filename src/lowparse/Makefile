@@ -15,7 +15,7 @@ KREMLIN_HOME ?= ../../../kremlin
 
 INCLUDE_KREMLIN=--include $(KREMLIN_HOME)/kremlib
 
-FSTAR_OPTIONS += --use_hints --use_two_phase_tc true --include . # --use_extracted_interfaces
+FSTAR_OPTIONS += --use_hints --use_two_phase_tc true --include . --cmi # --use_extracted_interfaces
 
 # NOTE: the cache dir and out dir for F* MUST be the same, because the
 # .krml files should be generated only once.

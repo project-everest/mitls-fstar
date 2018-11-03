@@ -6,15 +6,19 @@ module Seq = FStar.Seq
 module U32 = FStar.UInt32
 module B32 = LowParse.Bytes32
 
+inline_for_extraction
 val serialize32_bounded_integer_1
 : (serializer32 (serialize_bounded_integer 1))
 
+inline_for_extraction
 val serialize32_bounded_integer_2
 : (serializer32 (serialize_bounded_integer 2))
 
+inline_for_extraction
 val serialize32_bounded_integer_3
 : (serializer32 (serialize_bounded_integer 3))
 
+inline_for_extraction
 val serialize32_bounded_integer_4
 : (serializer32 (serialize_bounded_integer 4))
 
@@ -28,18 +32,22 @@ let serialize32_bounded_integer
   | 3 -> serialize32_bounded_integer_3
   | 4 -> serialize32_bounded_integer_4
 
+inline_for_extraction
 val decode32_bounded_integer_1
   (b: B32.lbytes 1)
 : Tot (y: bounded_integer 1 { y == decode_bounded_integer 1 (B32.reveal b) } )
 
+inline_for_extraction
 val decode32_bounded_integer_2
   (b: B32.lbytes 2)
 : Tot (y: bounded_integer 2 { y == decode_bounded_integer 2 (B32.reveal b) } )
 
+inline_for_extraction
 val decode32_bounded_integer_3
   (b: B32.lbytes 3)
 : Tot (y: bounded_integer 3 { y == decode_bounded_integer 3 (B32.reveal b) } )
 
+inline_for_extraction
 val decode32_bounded_integer_4
   (b: B32.lbytes 4)
 : Tot (y: bounded_integer 4 { y == decode_bounded_integer 4 (B32.reveal b) } )
