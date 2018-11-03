@@ -9,18 +9,19 @@ module Classical = FStar.Classical
 (* Parse a list, until there is nothing left to read. This parser will mostly fail EXCEPT if the whole size is known and the slice has been suitably truncated beforehand, or if the elements of the list all have a known constant size. *)
 
 val parse_list_aux
+  (#k: parser_kind)
   (#t: Type0)
-  (p: bare_parser t)
+  (p: parser k t)
   (b: bytes)
 : GTot (option (list t * (consumed_length b)))
   (decreases (Seq.length b))
 
-let rec parse_list_aux #t p b =
+let rec parse_list_aux #k #t p b =
   if Seq.length b = 0
   then 
     Some ([], (0 <: consumed_length b))
   else
-    match p b with
+    match parse p b with
     | None -> None
     | Some (v, n) ->
       if n = 0
@@ -31,15 +32,17 @@ let rec parse_list_aux #t p b =
 	| _ -> None
 
 val parse_list_bare
+  (#k: parser_kind)
   (#t: Type0)
-  (p: bare_parser t)
+  (p: parser k t)
 : Tot (bare_parser (list t))
 
-let parse_list_bare #t p = (fun b -> parse_list_aux #t p b) <: bare_parser (list t)
+let parse_list_bare #k #t p = (fun b -> parse_list_aux #k #t p b) <: bare_parser (list t)
 
 let rec parse_list_bare_consumed
+  (#k: parser_kind)
   (#t: Type0)
-  (p: bare_parser t)
+  (p: parser k t)
   (b: bytes)
 : Lemma
   (requires (Some? (parse_list_bare p b)))

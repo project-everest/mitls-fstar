@@ -577,10 +577,10 @@ let receive_CCS #a l =
   if length st.incoming > 0
   then (
     trace ("too many bytes: "^print_bytes st.incoming);
-    Error (AD_unexpected_message, "unexpected fragment after CCS"))
+    fatal Unexpected_message "unexpected fragment after CCS")
   else
   match st.hashes with
-  | OpenHash b -> Error (AD_internal_error, "the hash is open")
+  | OpenHash b -> fatal Internal_error "the hash is open"
   | FixedHash a acc tl ->
     begin
       let nt = append_hs_transcript st.transcript st.parsed in

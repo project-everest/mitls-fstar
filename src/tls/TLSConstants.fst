@@ -156,6 +156,7 @@ let aeAlg_hash = function
   | MtE _ ha -> ha
   | AEAD _ ha -> ha
 
+#set-options "--z3rlimit 100"
 (** Determine if this algorithm provide padding support with TLS 1.2 *)
 let lhae = function
   | MtE (Block _) _                         -> true
@@ -345,7 +346,7 @@ let parseSignatureScheme b =
     then
       Correct (SIG_UNKNOWN b)
     else // Unreachable
-      Error(AD_decode_error, "Parsed invalid SignatureScheme " ^ print_bytes b)
+      fatal Decode_error ("Parsed invalid SignatureScheme " ^ print_bytes b)
 
 val sigHashAlg_of_signatureScheme:
   scheme:signatureScheme{~(SIG_UNKNOWN? scheme)} -> sigAlg * hashAlg
@@ -685,7 +686,7 @@ let name_of_cipherSuite' =
   | CipherSuite Kex_PSK_ECDHE None (AEAD CHACHA20_POLY1305 SHA256)       -> Correct TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256
   | CipherSuite Kex_PSK_DHE None (AEAD CHACHA20_POLY1305 SHA256)         -> Correct TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256
 
-  | _ -> Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Invoked on a unknown ciphersuite")
+  | _ -> fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "Invoked on a unknown ciphersuite")
 
 let name_of_cipherSuite_of_name_post (n: Parsers.CipherSuite.cipherSuite) : GTot Type0 = match cipherSuite'_of_name n with Some c -> name_of_cipherSuite' c == Correct n | _ -> True
 
@@ -935,7 +936,7 @@ let parseCertType b =
   | 2z -> Correct DSA_sign
   | 3z -> Correct RSA_fixed_dh
   | 4z -> Correct DSA_fixed_dh
-  | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+  | _ -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")
 
 (** Lemmas associated to serializing/parsing of certificate types *)
 val inverse_certType: x:_ -> Lemma
@@ -1019,19 +1020,19 @@ let rec parseDistinguishedNameList data res =
     Correct res
   else
     if length data < 2 then
-      Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+      fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")
     else
       match vlsplit 2 data with
       | Error z -> Error z
       | Correct (nameBytes,data) ->
         begin
           match iutf8_opt nameBytes with
-          | None -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+          | None -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")
           | Some name ->
             if length (utf8_encode name) < 256 then
               let res = name :: res in
               parseDistinguishedNameList data res
-            else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+            else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")
         end
 
 // TODO: move all the definitions below to a separate file / figure out whether
@@ -1122,7 +1123,7 @@ let rec parseSignatureSchemeList_aux: b:bytes -> algs:list signatureScheme -> b'
       match parseSignatureScheme alg with
       | Correct sha -> parseSignatureSchemeList_aux b (sha::algs) bytes
       | Error z     -> Error z
-      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse sig hash algs")
+      else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse sig hash algs")
     else Correct algs
 
 let parseSignatureSchemeList b =
@@ -1133,7 +1134,7 @@ let parseSignatureSchemeList b =
     | Correct l -> Correct l
     | Error z -> Error z
     end
-  | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse sig hash algs")
+  | Error z -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "Failed to parse sig hash algs")
 
 
 

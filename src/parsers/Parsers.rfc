@@ -18,8 +18,6 @@ this can happen for one of the following reasons:
     (e.g. capturing more precise dependency, such as extension body)
 */
 
-struct {} Empty;
-
 /**
 Protocol version
 The RFC defines this as
@@ -1233,20 +1231,18 @@ struct {
 } KeyUpdate;
 
 enum {
-  hello_request_RESERVED(0),
+  hello_request(0),
   client_hello(1),
   server_hello(2),
-  hello_verify_request_RESERVED(3),
   new_session_ticket(4),
   end_of_early_data(5),
-  hello_retry_request_RESERVED(6),
   encrypted_extensions(8),
   certificate(11),
-  server_key_exchange_RESERVED(12),
+  server_key_exchange(12),
   certificate_request(13),
-  server_hello_done_RESERVED(14),
+  server_hello_done(14),
   certificate_verify(15),
-  client_key_exchange_RESERVED(16),
+  client_key_exchange(16),
   finished(20),
   key_update(24),
   message_hash(254),
@@ -1377,12 +1373,12 @@ enum {
   ticket12, ticket13, (255)
 } TicketVersion;
 
-enum { false, true, (255)} bool;
+enum { b_false, b_true, (255)} boolean;
 
 struct {
   ProtocolVersion pv;
   CipherSuite cs;
-  bool ems;
+  boolean ems;
   opaque master_secret[48];
 } TicketContents12;
 

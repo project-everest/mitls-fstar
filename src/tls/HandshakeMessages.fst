@@ -84,7 +84,7 @@ let parseHt b =
   | 24z -> Correct HT_key_update
   | 254z -> Correct HT_message_hash
   //| 67z -> Correct HT_next_protocol
-  | _   -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+  | _   -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")
 
 //#reset-options "--z3rlimit 600 --initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0"
 let inverse_ht x = admit ()
@@ -96,7 +96,7 @@ let ch_is_resumption {ch_sessionID = sid} = length sid > 0
 
 /// Post-Handshake Messages
 
-let error s = Error(AD_decode_error, "Handshake parser: "^s)
+let error s = fatal Decode_error ("Handshake parser: "^s)
 
 
 /// Handshake message format
@@ -412,7 +412,7 @@ let parseClientHello data =
           let compExts =
             if length data < 1 || List.Tot.length clientCipherSuites >= 256 then error "ciphersuites length"
             else (match vlsplit 1 data with
-            | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse compression bytes")
+            | Error z -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "Failed to parse compression bytes")
             | Correct (x) ->
               let cmBytes, extensions = x in
               let cm = parseCompressions cmBytes in
@@ -567,7 +567,7 @@ let serverHelloBytes_is_injective_strong msg1 s1 msg2 s2 =
 #reset-options "--admit_smt_queries true"
 let parseServerHello data =
   if length data < 34 then
-    Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+    fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")
   else
     let (serverVerBytes, serverRandomBytes, data) = split2 data 2 32 in
     match parseVersion serverVerBytes with
@@ -585,7 +585,7 @@ let parseServerHello data =
                  let cm = parseCompression cmBytes in
                  (match cm with
                    | Unknown_compressionMethod _ ->
-                     Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "server selected a compression mode")
+                     fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "server selected a compression mode")
                    | NullCompression ->
                      let em = // FIXME what can we do about this horrible, atrocious hack?
                        if bytes_of_hex "cf21ad74e59a6111be1d8c021e65b891c2a211167abb8c5e079e09e2c8a8339c" = serverRandomBytes
@@ -606,10 +606,10 @@ let parseServerHello data =
                              sh_cipher_suite = cs;
                              sh_compression = NullCompression;
                              sh_extensions = exts})
-                         else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))))
-           else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-         else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+                         else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ ""))))
+           else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")
+         else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")
+     else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")
 
 let helloRequestBytes =
   lemma_repr_bytes_values 0;
@@ -700,10 +700,10 @@ val parseCertificate: data:bytes{repr_bytes (length data) <= 3} -> Tot (result v
 let parseCertificate data =
   if length data < 3 then error "not enough certificate-list length bytes" else
   match vlparse 3 data with
-  | Error (x,y) -> Error(AD_bad_certificate_fatal, y)
+  | Error (x,y) -> fatal Bad_certificate y
   | Correct certList -> (
     match Cert.parseCertificateList certList with
-    | Error (x,y) -> Error(AD_bad_certificate_fatal, y)
+    | Error (x,y) -> fatal Bad_certificate y
     | Correct l ->
       if length certList >= 16777212 then error "certificate list is too large" else
       ( Cert.lemma_parseCertificateList_length certList;
@@ -716,7 +716,7 @@ let parseCertificate13 data =
   if not (hdr = abyte 0z) then error "non-empty context" else
   if length data < 3 then error "not enough bytes (certificate list length)" else (
   match vlparse 3 data with
-  | Error (x,y) -> Error(AD_bad_certificate_fatal, y)
+  | Error (x,y) -> fatal Bad_certificate y
   | Correct certList -> (
     match Cert.parseCertificateList13 certList with
     | Error z -> Error z
@@ -894,7 +894,7 @@ let parseCertificateRequest pv data =
                          cr_sig_algorithms = Some sigAlgs;
                          cr_certificate_authorities = distNamesList})
                     end
-                else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Certificate Request message is too short")
+                else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "Certificate Request message is too short")
               end
             end
           | _ -> // TLS_1p0, TLS_1p1
@@ -906,9 +906,9 @@ let parseCertificateRequest pv data =
                 cr_sig_algorithms = None;
                 cr_certificate_authorities = distNamesList})
           end // match pv
-        else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Certificate Request message is too short")
-      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "empty certificate_types in Certificate Request")
-  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Certificate Request message is too short")
+        else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "Certificate Request message is too short")
+      else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "empty certificate_types in Certificate Request")
+  else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "Certificate Request message is too short")
 
 let mk_certificateRequestBytes sign cs version =
   certificateRequestBytes (
@@ -972,31 +972,31 @@ let parseClientKeyExchange kex data =
   | Kex_DH ->
       if length data = 0
       then Correct({cke_kex_c = KEX_C_DH})
-      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+      else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")
   | Kex_DHE ->
       if length data >= 2
       then (match vlparse 2 data with
            | Error(z) -> Error(z)
            | Correct(y) -> (lemma_repr_bytes_values (length y); Correct({cke_kex_c = KEX_C_DHE y})))
-      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+      else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")
   | Kex_ECDHE ->
       if length data >= 1
       then (match vlparse 1 data with
            | Error(z) -> Error(z)
            | Correct(y) -> (lemma_repr_bytes_values (length y); Correct({cke_kex_c = KEX_C_ECDHE y})))
-      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+      else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")
 //  | SSL_3p0,Kex_RSA ->
 //      if length data < 4096 then
 //         (lemma_repr_bytes_values (length data); Correct({cke_kex_c = KEX_C_RSA data}))
-//      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+//      else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")
   | Kex_RSA  ->
         if length data >= 2 then
             match vlparse 2 data with
             | Correct (encPMS) ->
         if length encPMS < 4096 then (lemma_repr_bytes_values (length encPMS); correct({cke_kex_c = KEX_C_RSA encPMS}))
-        else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+        else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")
             | Error(z) -> Error(z)
-        else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+        else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")
 
 (* Signature *)
 
@@ -1045,10 +1045,10 @@ let parseSignature pv data =
           lemma_repr_bytes_values (length sigv);
           Correct ({sig_algorithm = Some sigalg; sig_signature = sigv})
         | _ ->
-          Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Signature: incorrect signature length")
+          fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "Signature: incorrect signature length")
         end
-      | Error _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Signature: invalid signature scheme")
-    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Signature: message too short")
+      | Error _ -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "Signature: invalid signature scheme")
+    else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "Signature: message too short")
   else
     if length data >= 2 then
       match vlparse 2 data with
@@ -1056,8 +1056,8 @@ let parseSignature pv data =
         lemma_repr_bytes_values (length sigv);
         Correct ({sig_algorithm = None; sig_signature = sigv})
       | _ ->
-        Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Signature: incorrect signature length")
-    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Signature: message too short")
+        fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "Signature: incorrect signature length")
+    else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "Signature: message too short")
 
 
 (* ServerKeyExchange *)
@@ -1135,7 +1135,7 @@ let parseServerKeyExchange pv kex payload =
       end
     | Error z -> Error z
     end
-  | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "ServerKeyExchange: Unexpected Key Exchange")
+  | _ -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "ServerKeyExchange: Unexpected Key Exchange")
 
 
 (* Certificate Verify *)
@@ -1230,7 +1230,7 @@ val parseSessionTicket: b:bytes{repr_bytes(length b) <= 3} ->
   result (s:sticket {Bytes.equal (sessionTicketBytes s) (messageBytes HT_session_ticket b)})
 let parseSessionTicket b =
   if length b < 6 then
-    Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket: too short")
+    fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "NewSessionTicket: too short")
   else
     begin
     let lifetimeB, ticketB = split b 4ul in
@@ -1241,14 +1241,14 @@ let parseSessionTicket b =
     | Correct ticket ->
       Correct ({ sticket_lifetime = lifetime; sticket_ticket = ticket })
     | Error _ ->
-      Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket: incorrect length")
+      fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "NewSessionTicket: incorrect length")
     end
 
 val parseSessionTicket13: b:bytes{repr_bytes(length b) <= 3} ->
   result (s:sticket13 {Bytes.equal (sessionTicketBytes13 s) (messageBytes HT_session_ticket b)})
 let parseSessionTicket13 b =
   if length b < 12 then
-    Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: too short")
+    fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: too short")
   else
     begin
     let lifetimeB, rest = split b 4ul in
@@ -1260,7 +1260,7 @@ let parseSessionTicket13 b =
     lemma_repr_bytes_values age;
     let age = UInt32.uint_to_t age in
     match vlsplit 1 rest with
-    | Error _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: invalid nonce (check draft version 21 or greater)")
+    | Error _ -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: invalid nonce (check draft version 21 or greater)")
     | Correct(x) ->
       let nonce, rest = x in
       begin
@@ -1272,7 +1272,7 @@ let parseSessionTicket13 b =
           | Correct (x) ->
             let exts, eof = x in
             if length eof > 0 then
-              Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: dangling bytes")
+              fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: dangling bytes")
             else
               begin
               match parseExtensions EM_NewSessionTicket (vlbytes 2 exts) with
@@ -1282,11 +1282,11 @@ let parseSessionTicket13 b =
                            ticket13_nonce = nonce;
                            ticket13_ticket = ticket;
                            ticket13_extensions = exts})
-              | Error _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: invalid extensions")
+              | Error _ -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: invalid extensions")
               end
-          | Error _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: incorrect length")
+          | Error _ -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: incorrect length")
           end
-        | Error _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: incorrect length")
+        | Error _ -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: incorrect length")
         end
       end
 

@@ -1,0 +1,40 @@
+[
+  "îÒÙ„-¨Ä™—e¡WŒ‚úæ",
+  [
+    [
+      "Parsers.ECCurveType.EcCurveType.ecCurveType_repr_eq",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "equation_Parsers.ECCurveType.EcCurveType.ecCurveType_repr"
+      ],
+      0,
+      "742b72b75e47c3521b06508cc1a4a9db"
+    ],
+    [
+      "Parsers.ECCurveType.EcCurveType.ecCurveType",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
+      0,
+      "04d3642e86ee2c04d631b110e53d407e"
+    ],
+    [
+      "Parsers.ECCurveType.EcCurveType.__proj__Unknown_ecCurveType__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.ECCurveType.EcCurveType.Unknown_ecCurveType",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Parsers.ECCurveType.EcCurveType_Tm_refine_5c3734000392ee8460683125cd88121b"
+      ],
+      0,
+      "ffacd9b5408fde62195451e02b9f7e24"
+    ]
+  ]
+]
