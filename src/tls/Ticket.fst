@@ -150,9 +150,10 @@ let parse (b:bytes) (nonce:bytes) : St (option ticket) =
     | Error _ -> None
     | Correct pv ->
       let (csb, r) = split r 2ul in
-      match parseCipherSuite csb with
-      | Error _ -> None
-      | Correct cs ->
+      let csn = parseCipherSuiteName csb in
+      match cipherSuite_of_name csn with // FIXME: move to check_ticket. Needs to be disentangled with dummy_rmsid, dummy_msId
+      | None -> None
+      | Some cs ->
         match pv, cs with
         | TLS_1p3, CipherSuite13 ae h ->
          begin
@@ -202,10 +203,10 @@ let check_ticket (seal:bool) (b:bytes{length b <= 65551}) : St (option ticket) =
 
 let serialize = function
   | Ticket12 pv cs ems _ ms ->
-    (versionBytes pv) @| (cipherSuiteBytes cs)
+    (versionBytes pv) @| (cipherSuiteNameBytes (name_of_cipherSuite cs))
     @| abyte (if ems then 1z else 0z) @| (vlbytes 2 ms)
   | Ticket13 cs _ _ rms _ created age custom ->
-    (versionBytes TLS_1p3) @| (cipherSuiteBytes cs)
+    (versionBytes TLS_1p3) @| (cipherSuiteNameBytes (name_of_cipherSuite cs))
     @| (bytes_of_int32 created) @| (bytes_of_int32 age)
     @| (vlbytes 2 custom) @| (vlbytes 2 rms)
 

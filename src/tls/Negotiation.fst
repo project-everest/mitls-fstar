@@ -36,80 +36,79 @@ let string_of_option_extensions (o: option extensions) = match o with
   | None -> "None"
   | Some es -> "[ "^Extensions.string_of_extensions es^"]"
 
-#reset-options "--admit_smt_queries true"
-let string_of_ciphersuite (cs:cipherSuite) =
-  match name_of_cipherSuite cs with
-  | Correct TLS_NULL_WITH_NULL_NULL -> "TLS_NULL_WITH_NULL_NULL"
+#reset-options "--admit_smt_queries true" // TODO: complete the pattern below
+let string_of_ciphersuitename (csn:cipherSuiteName) = match csn with
+  | TLS_NULL_WITH_NULL_NULL -> "TLS_NULL_WITH_NULL_NULL"
 
-  | Correct TLS_AES_128_GCM_SHA256 -> "TLS_AES_128_GCM_SHA256"
-  | Correct TLS_AES_256_GCM_SHA384 -> "TLS_AES_256_GCM_SHA384"
-  | Correct TLS_CHACHA20_POLY1305_SHA256 -> "TLS_CHACHA20_POLY1305_SHA256"
-  | Correct TLS_AES_128_CCM_SHA256 -> "TLS_AES_128_CCM_SHA256"
-  | Correct TLS_AES_128_CCM_8_SHA256 -> "TLS_AES_128_CCM_8_SHA256"
+  | TLS_AES_128_GCM_SHA256 -> "TLS_AES_128_GCM_SHA256"
+  | TLS_AES_256_GCM_SHA384 -> "TLS_AES_256_GCM_SHA384"
+  | TLS_CHACHA20_POLY1305_SHA256 -> "TLS_CHACHA20_POLY1305_SHA256"
+  | TLS_AES_128_CCM_SHA256 -> "TLS_AES_128_CCM_SHA256"
+  | TLS_AES_128_CCM_8_SHA256 -> "TLS_AES_128_CCM_8_SHA256"
 
-  | Correct TLS_RSA_WITH_NULL_MD5 -> "TLS_RSA_WITH_NULL_MD5"
-  | Correct TLS_RSA_WITH_NULL_SHA -> "TLS_RSA_WITH_NULL_SHA"
-  | Correct TLS_RSA_WITH_NULL_SHA256 -> "TLS_RSA_WITH_NULL_SHA256"
-  | Correct TLS_RSA_WITH_RC4_128_MD5 -> "TLS_RSA_WITH_RC4_128_MD5"
-  | Correct TLS_RSA_WITH_RC4_128_SHA -> "TLS_RSA_WITH_RC4_128_SHA"
-  | Correct TLS_RSA_WITH_3DES_EDE_CBC_SHA -> "TLS_RSA_WITH_3DES_EDE_CBC_SHA"
-  | Correct TLS_RSA_WITH_AES_128_CBC_SHA -> "TLS_RSA_WITH_AES_128_CBC_SHA"
-  | Correct TLS_RSA_WITH_AES_256_CBC_SHA -> "TLS_RSA_WITH_AES_256_CBC_SHA"
-  | Correct TLS_RSA_WITH_AES_128_CBC_SHA256 -> "TLS_RSA_WITH_AES_128_CBC_SHA256"
-  | Correct TLS_RSA_WITH_AES_256_CBC_SHA256 -> "TLS_RSA_WITH_AES_256_CBC_SHA256"
+  | TLS_RSA_WITH_NULL_MD5 -> "TLS_RSA_WITH_NULL_MD5"
+  | TLS_RSA_WITH_NULL_SHA -> "TLS_RSA_WITH_NULL_SHA"
+  | TLS_RSA_WITH_NULL_SHA256 -> "TLS_RSA_WITH_NULL_SHA256"
+  | TLS_RSA_WITH_RC4_128_MD5 -> "TLS_RSA_WITH_RC4_128_MD5"
+  | TLS_RSA_WITH_RC4_128_SHA -> "TLS_RSA_WITH_RC4_128_SHA"
+  | TLS_RSA_WITH_3DES_EDE_CBC_SHA -> "TLS_RSA_WITH_3DES_EDE_CBC_SHA"
+  | TLS_RSA_WITH_AES_128_CBC_SHA -> "TLS_RSA_WITH_AES_128_CBC_SHA"
+  | TLS_RSA_WITH_AES_256_CBC_SHA -> "TLS_RSA_WITH_AES_256_CBC_SHA"
+  | TLS_RSA_WITH_AES_128_CBC_SHA256 -> "TLS_RSA_WITH_AES_128_CBC_SHA256"
+  | TLS_RSA_WITH_AES_256_CBC_SHA256 -> "TLS_RSA_WITH_AES_256_CBC_SHA256"
 
-  | Correct TLS_DHE_DSS_WITH_3DES_EDE_CBC_SHA -> "TLS_DHE_DSS_WITH_3DES_EDE_CBC_SHA"
-  | Correct TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA -> "TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA"
-  | Correct TLS_DHE_DSS_WITH_AES_128_CBC_SHA -> "TLS_DHE_DSS_WITH_AES_128_CBC_SHA"
-  | Correct TLS_DHE_RSA_WITH_AES_128_CBC_SHA -> "TLS_DHE_RSA_WITH_AES_128_CBC_SHA"
-  | Correct TLS_DHE_DSS_WITH_AES_256_CBC_SHA -> "TLS_DHE_DSS_WITH_AES_256_CBC_SHA"
-  | Correct TLS_DHE_RSA_WITH_AES_256_CBC_SHA -> "TLS_DHE_RSA_WITH_AES_256_CBC_SHA"
-  | Correct TLS_DHE_DSS_WITH_AES_128_CBC_SHA256 -> "TLS_DHE_DSS_WITH_AES_128_CBC_SHA256"
-  | Correct TLS_DHE_RSA_WITH_AES_128_CBC_SHA256 -> "TLS_DHE_RSA_WITH_AES_128_CBC_SHA256"
-  | Correct TLS_DHE_DSS_WITH_AES_256_CBC_SHA256 -> "TLS_DHE_DSS_WITH_AES_256_CBC_SHA256"
-  | Correct TLS_DHE_RSA_WITH_AES_256_CBC_SHA256 -> "TLS_DHE_RSA_WITH_AES_256_CBC_SHA256"
+  | TLS_DHE_DSS_WITH_3DES_EDE_CBC_SHA -> "TLS_DHE_DSS_WITH_3DES_EDE_CBC_SHA"
+  | TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA -> "TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA"
+  | TLS_DHE_DSS_WITH_AES_128_CBC_SHA -> "TLS_DHE_DSS_WITH_AES_128_CBC_SHA"
+  | TLS_DHE_RSA_WITH_AES_128_CBC_SHA -> "TLS_DHE_RSA_WITH_AES_128_CBC_SHA"
+  | TLS_DHE_DSS_WITH_AES_256_CBC_SHA -> "TLS_DHE_DSS_WITH_AES_256_CBC_SHA"
+  | TLS_DHE_RSA_WITH_AES_256_CBC_SHA -> "TLS_DHE_RSA_WITH_AES_256_CBC_SHA"
+  | TLS_DHE_DSS_WITH_AES_128_CBC_SHA256 -> "TLS_DHE_DSS_WITH_AES_128_CBC_SHA256"
+  | TLS_DHE_RSA_WITH_AES_128_CBC_SHA256 -> "TLS_DHE_RSA_WITH_AES_128_CBC_SHA256"
+  | TLS_DHE_DSS_WITH_AES_256_CBC_SHA256 -> "TLS_DHE_DSS_WITH_AES_256_CBC_SHA256"
+  | TLS_DHE_RSA_WITH_AES_256_CBC_SHA256 -> "TLS_DHE_RSA_WITH_AES_256_CBC_SHA256"
 
-  | Correct TLS_ECDHE_RSA_WITH_RC4_128_SHA -> "TLS_ECDHE_RSA_WITH_RC4_128_SHA"
-  | Correct TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA -> "TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA"
-  | Correct TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA -> "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA"
-  | Correct TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256 -> "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256"
-  | Correct TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA -> "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA"
-  | Correct TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384 -> "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384"
+  | TLS_ECDHE_RSA_WITH_RC4_128_SHA -> "TLS_ECDHE_RSA_WITH_RC4_128_SHA"
+  | TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA -> "TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA"
+  | TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA -> "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA"
+  | TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256 -> "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256"
+  | TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA -> "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA"
+  | TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384 -> "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384"
 
-  | Correct TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 -> "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"
-  | Correct TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 -> "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
-  | Correct TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 -> "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"
-  | Correct TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 -> "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+  | TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 -> "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"
+  | TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 -> "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+  | TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 -> "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"
+  | TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 -> "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
 
-  | Correct TLS_DH_anon_WITH_RC4_128_MD5 -> "TLS_DH_anon_WITH_RC4_128_MD5"
-  | Correct TLS_DH_anon_WITH_3DES_EDE_CBC_SHA -> "TLS_DH_anon_WITH_3DES_EDE_CBC_SHA"
-  | Correct TLS_DH_anon_WITH_AES_128_CBC_SHA -> "TLS_DH_anon_WITH_AES_128_CBC_SHA"
-  | Correct TLS_DH_anon_WITH_AES_256_CBC_SHA -> "TLS_DH_anon_WITH_AES_256_CBC_SHA"
-  | Correct TLS_DH_anon_WITH_AES_128_CBC_SHA256 -> "TLS_DH_anon_WITH_AES_128_CBC_SHA256"
-  | Correct TLS_DH_anon_WITH_AES_256_CBC_SHA256 -> "TLS_DH_anon_WITH_AES_256_CBC_SHA256"
+  | TLS_DH_anon_WITH_RC4_128_MD5 -> "TLS_DH_anon_WITH_RC4_128_MD5"
+  | TLS_DH_anon_WITH_3DES_EDE_CBC_SHA -> "TLS_DH_anon_WITH_3DES_EDE_CBC_SHA"
+  | TLS_DH_anon_WITH_AES_128_CBC_SHA -> "TLS_DH_anon_WITH_AES_128_CBC_SHA"
+  | TLS_DH_anon_WITH_AES_256_CBC_SHA -> "TLS_DH_anon_WITH_AES_256_CBC_SHA"
+  | TLS_DH_anon_WITH_AES_128_CBC_SHA256 -> "TLS_DH_anon_WITH_AES_128_CBC_SHA256"
+  | TLS_DH_anon_WITH_AES_256_CBC_SHA256 -> "TLS_DH_anon_WITH_AES_256_CBC_SHA256"
 
-  | Correct TLS_RSA_WITH_AES_128_GCM_SHA256 -> "TLS_RSA_WITH_AES_128_GCM_SHA256"
-  | Correct TLS_RSA_WITH_AES_256_GCM_SHA384 -> "TLS_RSA_WITH_AES_256_GCM_SHA384"
-  | Correct TLS_DHE_RSA_WITH_AES_128_GCM_SHA256 -> "TLS_DHE_RSA_WITH_AES_128_GCM_SHA256"
-  | Correct TLS_DHE_RSA_WITH_AES_256_GCM_SHA384 -> "TLS_DHE_RSA_WITH_AES_256_GCM_SHA384"
-  | Correct TLS_DH_RSA_WITH_AES_128_GCM_SHA256 -> "TLS_DH_RSA_WITH_AES_128_GCM_SHA256"
-  | Correct TLS_DH_RSA_WITH_AES_256_GCM_SHA384 -> "TLS_DH_RSA_WITH_AES_256_GCM_SHA384"
-  | Correct TLS_DHE_DSS_WITH_AES_128_GCM_SHA256 -> "TLS_DHE_DSS_WITH_AES_128_GCM_SHA256"
-  | Correct TLS_DHE_DSS_WITH_AES_256_GCM_SHA384 -> "TLS_DHE_DSS_WITH_AES_256_GCM_SHA384"
-  | Correct TLS_DH_DSS_WITH_AES_128_GCM_SHA256 -> "TLS_DH_DSS_WITH_AES_128_GCM_SHA256"
-  | Correct TLS_DH_DSS_WITH_AES_256_GCM_SHA384 -> "TLS_DH_DSS_WITH_AES_256_GCM_SHA384"
-  | Correct TLS_DH_anon_WITH_AES_128_GCM_SHA256 -> "TLS_DH_anon_WITH_AES_128_GCM_SHA256"
-  | Correct TLS_DH_anon_WITH_AES_256_GCM_SHA384 -> "TLS_DH_anon_WITH_AES_256_GCM_SHA384"
+  | TLS_RSA_WITH_AES_128_GCM_SHA256 -> "TLS_RSA_WITH_AES_128_GCM_SHA256"
+  | TLS_RSA_WITH_AES_256_GCM_SHA384 -> "TLS_RSA_WITH_AES_256_GCM_SHA384"
+  | TLS_DHE_RSA_WITH_AES_128_GCM_SHA256 -> "TLS_DHE_RSA_WITH_AES_128_GCM_SHA256"
+  | TLS_DHE_RSA_WITH_AES_256_GCM_SHA384 -> "TLS_DHE_RSA_WITH_AES_256_GCM_SHA384"
+  | TLS_DH_RSA_WITH_AES_128_GCM_SHA256 -> "TLS_DH_RSA_WITH_AES_128_GCM_SHA256"
+  | TLS_DH_RSA_WITH_AES_256_GCM_SHA384 -> "TLS_DH_RSA_WITH_AES_256_GCM_SHA384"
+  | TLS_DHE_DSS_WITH_AES_128_GCM_SHA256 -> "TLS_DHE_DSS_WITH_AES_128_GCM_SHA256"
+  | TLS_DHE_DSS_WITH_AES_256_GCM_SHA384 -> "TLS_DHE_DSS_WITH_AES_256_GCM_SHA384"
+  | TLS_DH_DSS_WITH_AES_128_GCM_SHA256 -> "TLS_DH_DSS_WITH_AES_128_GCM_SHA256"
+  | TLS_DH_DSS_WITH_AES_256_GCM_SHA384 -> "TLS_DH_DSS_WITH_AES_256_GCM_SHA384"
+  | TLS_DH_anon_WITH_AES_128_GCM_SHA256 -> "TLS_DH_anon_WITH_AES_128_GCM_SHA256"
+  | TLS_DH_anon_WITH_AES_256_GCM_SHA384 -> "TLS_DH_anon_WITH_AES_256_GCM_SHA384"
 
-  | Correct TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
-  | Correct TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256"
-  | Correct TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
-  | Correct TLS_PSK_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_PSK_WITH_CHACHA20_POLY1305_SHA256"
-  | Correct TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256"
-  | Correct TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256"
-
-  | Error z -> "Unknown ciphersuite"
+  | TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
+  | TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256"
+  | TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
+  | TLS_PSK_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_PSK_WITH_CHACHA20_POLY1305_SHA256"
+  | TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256"
+  | TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256"
 #reset-options
+
+let string_of_ciphersuite (cs:cipherSuite) = string_of_ciphersuitename (name_of_cipherSuite cs)
 
 let string_of_signatureScheme = function
   | RSA_PKCS1_SHA256       -> "RSA_PKCS1_SHA256"
@@ -143,6 +142,12 @@ let accum_string_of_ciphersuite s cs =
     s ^ "; " ^ string_of_ciphersuite cs
 let string_of_ciphersuites csl =
   List.Tot.fold_left accum_string_of_ciphersuite "" csl
+
+private
+let accum_string_of_ciphersuitename s cs =
+    s ^ "; " ^ string_of_ciphersuitename cs
+let string_of_ciphersuitenames csl =
+  List.Tot.fold_left accum_string_of_ciphersuitename "" csl
 
 (* Negotiation: HELLO sub-module *)
 type ri = cVerifyData * sVerifyData
@@ -488,7 +493,7 @@ let computeOffer r cfg nonce ks resume now =
     ch_protocol_version = minPV TLS_1p2 cfg.max_version; // legacy for 1.3
     ch_client_random = nonce;
     ch_sessionID = sid;
-    ch_cipher_suites = cfg.cipher_suites;
+    ch_cipher_suites = nameList_of_cipherSuites cfg.cipher_suites;
     // This file is reconstructed from ch_cipher_suites in HandshakeMessages.clientHelloBytes;
     ch_compressions = [NullCompression];
     ch_extensions = Some extensions
@@ -702,7 +707,7 @@ let client_ClientHello #region ns oks =
       let now = UInt32.uint_to_t (FStar.Date.secondsFromDawn()) in
       let offer = computeOffer Client ns.cfg ns.nonce oks' ns.resume now in
       trace ("offering client extensions "^string_of_option_extensions offer.ch_extensions);
-      trace ("offering cipher suites "^string_of_ciphersuites offer.ch_cipher_suites);
+      trace ("offering cipher suites "^string_of_ciphersuitenames offer.ch_cipher_suites);
       HST.op_Colon_Equals ns.state (C_Offer offer);
       offer
 
@@ -808,11 +813,11 @@ let negotiate_version cfg offer =
 private
 let is_cs_in_l (l1, sa) s =
   if CipherSuite? s then
-    List.Tot.mem s l1 && CipherSuite?._1 s = Some sa
+    List.Tot.mem (name_of_cipherSuite s) l1 && CipherSuite?._1 s = Some sa
   else false
 
-val negotiate: l1:list valid_cipher_suite -> list valid_cipher_suite -> sigAlg
- -> Tot (option (c:valid_cipher_suite{CipherSuite? c && List.Tot.mem c l1}))
+val negotiate: l1:list cipherSuiteName -> list valid_cipher_suite -> sigAlg
+ -> Tot (option (c:valid_cipher_suite{CipherSuite? c && List.Tot.mem (name_of_cipherSuite c) l1}))
 let negotiate l1 l2 sa =
   List.Helpers.find_aux (l1, sa) is_cs_in_l l2
 
@@ -821,7 +826,7 @@ let negotiate l1 l2 sa =
   ciphersuite with associated kex, sig and ae algorithms,
   and throws an error if No ciphersuites were supported in both lists
 *)
-val negotiateCipherSuite: cfg:config -> pv:protocolVersion -> ccs:valid_cipher_suites -> sa:sigAlg -> Tot (result (TLSConstants.kexAlg * option TLSConstants.sigAlg * TLSConstants.aeAlg * valid_cipher_suite))
+val negotiateCipherSuite: cfg:config -> pv:protocolVersion -> ccs: list cipherSuiteName -> sa:sigAlg -> Tot (result (TLSConstants.kexAlg * option TLSConstants.sigAlg * TLSConstants.aeAlg * valid_cipher_suite))
 let negotiateCipherSuite cfg pv ccs sa =
   match negotiate ccs cfg.cipher_suites sa with
   | Some(CipherSuite kex sa ae) -> Correct(kex,sa,ae,CipherSuite kex sa ae)
@@ -954,15 +959,25 @@ let client_ServerHello #region ns sh =
   | C_Offer offer ->
     let spv  = sh.sh_protocol_version in
     let sr   = sh.sh_server_random in
-    let cs   = sh.sh_cipher_suite in
+    let csn   = sh.sh_cipher_suite in
     let sext = sh.sh_extensions in
     let ssid = sh.sh_sessionID in
     let cext = offer.ch_extensions in
     let resume = ssid = offer.ch_sessionID && length offer.ch_sessionID > 0 in
     trace ("processing server extensions "^string_of_option_extensions sext);
-    (match Extensions.negotiateClientExtensions spv ns.cfg cext sext cs None resume with
+    (let nego =
+       match cipherSuite_of_name csn with
+       | Some cs -> 
+         begin match Extensions.negotiateClientExtensions spv ns.cfg cext sext cs None resume with
+         | Error z -> Error z
+         | Correct spv -> Correct (cs, spv)
+         end
+       | None -> 
+         fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "Server cipherSuite")
+     in
+    match nego with
     | Error z -> Error z
-    | Correct spv ->
+    | Correct (cs, spv) ->
       if not (acceptableVersion ns.cfg spv sr) then
         fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation")
       else if not (acceptableCipherSuite ns.cfg spv cs) then
@@ -1222,6 +1237,19 @@ let share_in_named_group gl (x :share) =
     let (| g, _ |) = x in
     List.Tot.mem g gl
 
+let rec filter_cipherSuites13_aux (cfg: config) (l: list cipherSuiteName) (accu: list cipherSuite) : Tot (list cipherSuite) (decreases l) =
+  match l with
+  | [] -> List.Tot.rev accu
+  | csn :: q ->
+    let accu' = match cipherSuite_of_name csn with
+    | None -> accu
+    | Some cs -> if is_cs13_in_cfg cfg cs then cs :: accu else accu
+    in
+    filter_cipherSuites13_aux cfg q accu'
+
+let filter_cipherSuites13 (cfg: config) (l: list cipherSuiteName) : Tot (list cipherSuite) =
+  filter_cipherSuites13_aux cfg l []
+
 // returns a list of negotiable "core modes" for TLS 1.3
 // and an optional group and ciphersuite suitable for HRR
 // the key exchange can be derived from cs13
@@ -1235,7 +1263,7 @@ val compute_cs13:
   result (list (cs13 o) * option (CommonDH.namedGroup * cs:cipherSuite))
 let compute_cs13 cfg o psks shares server_cert =
   // pick acceptable record ciphersuites
-  let ncs =  List.Helpers.filter_aux cfg is_cs13_in_cfg o.ch_cipher_suites in
+  let ncs = filter_cipherSuites13 cfg o.ch_cipher_suites in
   // pick the (potential) group to use for DHE/ECDHE
   // also remember if there is a supported group with no share provided
   // in case we want to to a HRR
@@ -1282,7 +1310,9 @@ type extra_ext = // list (e:Extensions.extension{E_unknown_extension? e})
 
 //17-03-30 still missing a few for servers.
 type serverMode =
-  | ServerHelloRetryRequest: hrr -> serverMode
+  | ServerHelloRetryRequest: hrr:hrr ->
+    cs:cipherSuite{name_of_cipherSuite cs = hrr.hrr_cipher_suite} ->
+    serverMode
   | ServerMode: mode -> certNego -> extra_ext -> serverMode
 
 let get_sni (o:offer) : bytes =
@@ -1338,12 +1368,12 @@ let computeServerMode cfg co serverRandom =
     | Correct ([], Some (ng, cs)) ->
       let hrr = {
         hrr_sessionID = co.ch_sessionID;
-        hrr_cipher_suite = cs;
+        hrr_cipher_suite = name_of_cipherSuite cs;
         hrr_extensions = [
           Extensions.E_supported_versions (Extensions.ServerPV TLS_1p3);
           Extensions.E_key_share (CommonDH.HRRKeyShare ng);
         ]; } in
-      Correct(ServerHelloRetryRequest hrr)
+      Correct(ServerHelloRetryRequest hrr cs)
     | Correct ((PSK_EDH j ogx cs)::_, _) ->
       (trace "Negotiated PSK_EDH key exchange";
       Correct (ServerMode (Mode
@@ -1476,7 +1506,7 @@ val server_ClientHello: #region:rgn -> t region Server ->
   St (result serverMode)
 let server_ClientHello #region ns offer log =
   trace ("offered client extensions "^string_of_option_extensions offer.ch_extensions);
-  trace ("offered cipher suites "^(string_of_ciphersuites offer.ch_cipher_suites));
+  trace ("offered cipher suites "^(string_of_ciphersuitenames offer.ch_cipher_suites));
   trace (match (offered_versions TLS_1p0 offer) with
         | Error z -> "Error: "^string_of_error z
         | Correct v -> List.Tot.fold_left accum_string_of_pv "offered versions" v);
@@ -1504,7 +1534,7 @@ let server_ClientHello #region ns offer log =
       | Error z ->
         trace ("negotiation failed: "^string_of_error z);
         Error z
-      | Correct (ServerHelloRetryRequest hrr) ->
+      | Correct (ServerHelloRetryRequest hrr _) ->
         fatal Illegal_parameter "client sent the same hello in response to hello retry"
       | Correct (ServerMode m cert _) ->
         trace ("negotiated after HRR "^string_of_pv m.n_protocol_version^" "^string_of_ciphersuite m.n_cipher_suite);
@@ -1543,11 +1573,11 @@ let server_ClientHello #region ns offer log =
     | Error z ->
       trace ("negotiation failed: "^string_of_error z);
       Error z
-    | Correct (ServerHelloRetryRequest hrr) ->
+    | Correct (ServerHelloRetryRequest hrr cs) ->
       // Internal HRR caused by group negotiation
       // We do not invoke the server nego callback in this case
       // record the initial offer and return the HRR to HS
-      let ha = verifyDataHashAlg_of_ciphersuite hrr.hrr_cipher_suite in
+      let ha = verifyDataHashAlg_of_ciphersuite cs in
       let digest = HandshakeLog.hash_tag #ha log in
       let cookie = Ticket.create_cookie hrr digest empty_bytes in
       let hrr = { hrr with hrr_extensions =
@@ -1567,17 +1597,17 @@ let server_ClientHello #region ns offer log =
       | Nego_retry cextra ->
         let hrr = ({
           hrr_sessionID = offer.ch_sessionID;
-          hrr_cipher_suite = m.n_cipher_suite;
+          hrr_cipher_suite = name_of_cipherSuite m.n_cipher_suite;
           hrr_extensions = [
             Extensions.E_supported_versions (Extensions.ServerPV TLS_1p3);
           ]}) in
-        let ha = verifyDataHashAlg_of_ciphersuite hrr.hrr_cipher_suite in
+        let ha = verifyDataHashAlg_of_ciphersuite m.n_cipher_suite in
         let digest = HandshakeLog.hash_tag #ha log in
         let cookie = Ticket.create_cookie hrr digest cextra in
         let hrr = { hrr with hrr_extensions =
           (Extensions.E_cookie cookie) :: hrr.hrr_extensions; } in
         ns.state := (S_HRR offer hrr);
-        Correct (ServerHelloRetryRequest hrr)
+        Correct (ServerHelloRetryRequest hrr m.n_cipher_suite)
       | Nego_accept sexts ->
         trace ("negotiated "^string_of_pv m.n_protocol_version^" "^string_of_ciphersuite m.n_cipher_suite);
         ns.state := S_ClientHello m cert;
