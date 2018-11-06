@@ -1,0 +1,375 @@
+[
+  "­Œ‡ßÆcEt0/Cª±ùlg",
+  [
+    [
+      "Parsers.CipherSuite.cipherSuite_repr_eq",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "equation_Parsers.CipherSuite.cipherSuite_repr"
+      ],
+      0,
+      "60d012a81aa841bfcb04266ef9c93aa8"
+    ],
+    [
+      "Parsers.CipherSuite.cipherSuite",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
+      0,
+      "8908041276b3d3fdfd19d123ff0e742d"
+    ],
+    [
+      "Parsers.CipherSuite.__proj__Unknown_cipherSuite__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.CipherSuite.Unknown_cipherSuite",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Parsers.CipherSuite_Tm_refine_9440a8e44f3f2e8c1b37d1e73887a302"
+      ],
+      0,
+      "ba4b426f496e44ae99836d61f3c9ed63"
+    ],
+    [
+      "Parsers.CipherSuite.cipherSuite_enum",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq"
+      ],
+      0,
+      "1a6d3c28d53509283ee4a9308348635c"
+    ],
+    [
+      "Parsers.CipherSuite.synth_cipherSuite",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq"
+      ],
+      0,
+      "05139d50e20fdd331fe19b2769d6060d"
+    ],
+    [
+      "Parsers.CipherSuite.synth_cipherSuite",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_FStar.UInt16.t__uu___haseq",
+        "data_elim_LowParse.Spec.Enum.Unknown",
+        "disc_equation_LowParse.Spec.Enum.Known",
+        "disc_equation_LowParse.Spec.Enum.Unknown",
+        "equation_LowParse.Spec.Enum.unknown_enum_repr",
+        "equation_Parsers.CipherSuite.cipherSuite_enum",
+        "fuel_guarded_inversion_LowParse.Spec.Enum.maybe_enum_key",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_LowParse.Spec.Enum.Unknown__0",
+        "refinement_interpretation_LowParse.Spec.Enum_Tm_refine_42952339d1ff6a9a240497d58590f0b2"
+      ],
+      0,
+      "50d3d55e8f3dff5de61097d82e7ab466"
+    ],
+    [
+      "Parsers.CipherSuite.synth_cipherSuite_inv",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_f537159ed795b314b4e58c260361ae86",
+        "Prims_pretyping_f8666440faa91836cc5a13998af863fc",
+        "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq", "b2t_def",
+        "bool_inversion", "bool_typing",
+        "equation_Parsers.CipherSuite.cipherSuite_enum",
+        "equation_Prims.l_imp", "equation_Prims.squash", "l_imp-interp",
+        "primitive_Prims.op_Negation", "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Parsers.CipherSuite_Tm_refine_2f7ba899e0e3d7ffef61da505727a28d",
+        "refinement_interpretation_Parsers.CipherSuite_Tm_refine_bb6826c112591e3d653ee57675b6b461",
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "typing_Parsers.CipherSuite.uu___is_Unknown_cipherSuite",
+        "unit_typing"
+      ],
+      0,
+      "9d1fecf9ce74d8d7c2c90f373eb08a09"
+    ],
+    [
+      "Parsers.CipherSuite.lemma_synth_cipherSuite_inv'",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq",
+        "equation_LowParse.Spec.Combinators.synth_inverse",
+        "equation_Parsers.CipherSuite.cipherSuite_enum",
+        "equation_Prims.l_Forall", "equation_Prims.squash",
+        "l_quant_interp__17173",
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "token_correspondence_Parsers.CipherSuite.synth_cipherSuite",
+        "token_correspondence_Parsers.CipherSuite.synth_cipherSuite_inv"
+      ],
+      0,
+      "3906995de828bbe7e50c6e80645e4031"
+    ],
+    [
+      "Parsers.CipherSuite.lemma_synth_cipherSuite_inj",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq"
+      ],
+      0,
+      "8622a1900bb66f3711fb5a3903f607a0"
+    ],
+    [
+      "Parsers.CipherSuite.lemma_synth_cipherSuite_inv",
+      1,
+      0,
+      0,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq",
+        "constructor_distinct_LowParse.Spec.Enum.Known",
+        "constructor_distinct_LowParse.Spec.Enum.Unknown",
+        "equation_LowParse.Spec.Combinators.synth_inverse",
+        "equation_Parsers.CipherSuite.cipherSuite_enum",
+        "equation_Parsers.CipherSuite.synth_cipherSuite",
+        "equation_Parsers.CipherSuite.synth_cipherSuite_inv",
+        "projection_inverse_LowParse.Spec.Enum.Known__0",
+        "projection_inverse_LowParse.Spec.Enum.Known_e",
+        "projection_inverse_LowParse.Spec.Enum.Known_key",
+        "projection_inverse_LowParse.Spec.Enum.Known_repr",
+        "projection_inverse_LowParse.Spec.Enum.Unknown__0",
+        "projection_inverse_LowParse.Spec.Enum.Unknown_e",
+        "projection_inverse_LowParse.Spec.Enum.Unknown_key",
+        "projection_inverse_LowParse.Spec.Enum.Unknown_repr",
+        "token_correspondence_Parsers.CipherSuite.synth_cipherSuite",
+        "token_correspondence_Parsers.CipherSuite.synth_cipherSuite_inv"
+      ],
+      0,
+      "3035a5ab24ca64d3f8597b81c7b75270"
+    ],
+    [
+      "Parsers.CipherSuite.parse_maybe_cipherSuite_key",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq"
+      ],
+      0,
+      "2b9d7b1b80ba695d13d7b3973a90de04"
+    ],
+    [
+      "Parsers.CipherSuite.serialize_maybe_cipherSuite_key",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq",
+        "equation_Parsers.CipherSuite.parse_maybe_cipherSuite_key"
+      ],
+      0,
+      "6f2bba5e40a0bbd5f4444615f9db39a8"
+    ],
+    [
+      "Parsers.CipherSuite.cipherSuite_parser",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq"
+      ],
+      0,
+      "e6f98738951b006cd285ce27b41c92c3"
+    ],
+    [
+      "Parsers.CipherSuite.cipherSuite_serializer",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq",
+        "equation_Parsers.CipherSuite.cipherSuite_parser"
+      ],
+      0,
+      "5a66419f58f77f3133191c6b1319153b"
+    ],
+    [
+      "Parsers.CipherSuite.parse32_maybe_cipherSuite_key",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq",
+        "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
+        "equation_Parsers.CipherSuite.cipherSuite_enum",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Prims.Cons_a",
+        "projection_inverse_Prims.Cons_hd",
+        "projection_inverse_Prims.Cons_tl"
+      ],
+      0,
+      "f11b28691bad31e9f865f4b11414b92f"
+    ],
+    [
+      "Parsers.CipherSuite.parse32_maybe_cipherSuite_key",
+      2,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq",
+        "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
+        "equation_Parsers.CipherSuite.cipherSuite_enum",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Prims.Cons_a",
+        "projection_inverse_Prims.Cons_hd",
+        "projection_inverse_Prims.Cons_tl"
+      ],
+      0,
+      "b8f61525ec389e81d837709fee787623"
+    ],
+    [
+      "Parsers.CipherSuite.parse32_maybe_cipherSuite_key",
+      3,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq"
+      ],
+      0,
+      "b389939fe8b271e52ac2039a0b03b5c7"
+    ],
+    [
+      "Parsers.CipherSuite.parse32_maybe_cipherSuite_key",
+      4,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq"
+      ],
+      0,
+      "370529ccbc0bee6fb50120b6072233c4"
+    ],
+    [
+      "Parsers.CipherSuite.cipherSuite_parser32",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq",
+        "equation_Parsers.CipherSuite.cipherSuite_parser"
+      ],
+      0,
+      "a031d31fce9c9ed3d11e0e5bae95d5d0"
+    ],
+    [
+      "Parsers.CipherSuite.serialize32_maybe_cipherSuite_key",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq",
+        "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
+        "equation_Parsers.CipherSuite.cipherSuite_enum",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Prims.Cons_a",
+        "projection_inverse_Prims.Cons_hd",
+        "projection_inverse_Prims.Cons_tl"
+      ],
+      0,
+      "0e6f002ed5725faabd2b2b882a640c22"
+    ],
+    [
+      "Parsers.CipherSuite.serialize32_maybe_cipherSuite_key",
+      2,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq",
+        "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
+        "equation_Parsers.CipherSuite.cipherSuite_enum",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Prims.Cons_a",
+        "projection_inverse_Prims.Cons_hd",
+        "projection_inverse_Prims.Cons_tl"
+      ],
+      0,
+      "436b1b64c808d71d7b38af2955483c59"
+    ],
+    [
+      "Parsers.CipherSuite.serialize32_maybe_cipherSuite_key",
+      3,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq"
+      ],
+      0,
+      "eb3cc9284377186a3f6276148215ec30"
+    ],
+    [
+      "Parsers.CipherSuite.serialize32_maybe_cipherSuite_key",
+      4,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq"
+      ],
+      0,
+      "cd304565b14c2fb6c11ab49565619b40"
+    ],
+    [
+      "Parsers.CipherSuite.cipherSuite_serializer32",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq",
+        "equation_Parsers.CipherSuite.cipherSuite_parser",
+        "equation_Parsers.CipherSuite.cipherSuite_serializer"
+      ],
+      0,
+      "03f7dd8029baa832fc868ccb6ec52778"
+    ],
+    [
+      "Parsers.CipherSuite.cipherSuite_size32",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "a29036e12cb9fa568c3c8f22a868910a"
+    ]
+  ]
+]

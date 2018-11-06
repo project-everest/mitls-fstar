@@ -1,0 +1,40 @@
+[
+  "E\u0013}>\n–\u0002*p\u0010~°¡\u001f\u0002«",
+  [
+    [
+      "Parsers.CipherSuite.cipherSuite_repr_eq",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "equation_Parsers.CipherSuite.cipherSuite_repr"
+      ],
+      0,
+      "1c56b0b739b89dd903b8191d07baeeb6"
+    ],
+    [
+      "Parsers.CipherSuite.cipherSuite",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
+      0,
+      "3ed1e708840cafaeb533e078401fc5b5"
+    ],
+    [
+      "Parsers.CipherSuite.__proj__Unknown_cipherSuite__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.CipherSuite.Unknown_cipherSuite",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Parsers.CipherSuite_Tm_refine_9440a8e44f3f2e8c1b37d1e73887a302"
+      ],
+      0,
+      "3672d7cc027d750dcc50f656ab84191f"
+    ]
+  ]
+]
