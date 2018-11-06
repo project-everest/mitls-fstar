@@ -17,6 +17,7 @@ module ST = FStar.HyperStack.ST
 
 module M = TLS.HSL.Msg
 module LP = LowParse.Low.Base
+module LM = LowStar.Modifies
 
 type loc = LowStar.Modifies.loc
 type buffer8 = B.buffer uint8
@@ -34,17 +35,27 @@ type buffer8 = B.buffer uint8
  * We also keep msgs: list of all subsequences in the buffer that are serializations of valid msgs
  *                    in each subsequence, we also keep a ghost repr of its parsing
  *)
-abstract noeq
+abstract
+noeq
 type message (len:uint32)= {
   from:(x:uint32{x <= len});
   to: (x:uint32{from <= x /\ x <= len});
   msg: M.msg
 }
-abstract noeq type hsl_state =
+
+[@unifier_hint_injective]
+unfold
+let reference (t:Type) = reference t
+
+let lbuffer8 (l:uint32) = buf:buffer8{B.len buf == l}
+
+abstract 
+noeq
+type hsl_state =
   | Mk_state: len:uint32 ->
-              buf:buffer8{B.len buf == len} ->
+              buf:lbuffer8 len ->
               p0:reference uint32 ->
-              p1:reference uint32 ->
+              p1:reference (x:uint32{x <= len}) ->
               msgs:reference (G.erased (list (message len))) -> //can we have an erased_reference?
               hsl_state
 
@@ -61,7 +72,7 @@ let hsl_get_buf (st:hsl_state)
 
 abstract 
 let hsl_get_p1 (st:hsl_state) (h:HS.mem) 
-  : GTot uint32
+  : GTot (x:uint32{x <= hsl_get_len st})
   = HS.sel h st.p1
   
 abstract 
@@ -72,24 +83,30 @@ let hsl_get_msgs (st:hsl_state) (h:HS.mem)
 let liveness (st:hsl_state) (h:HS.mem) =
   B.live h (hsl_get_buf st)
 
+let message_is_parsed 
+       (#len:uint32)
+       (m:message len) 
+       (b:lbuffer8 len)
+       (h:HS.mem)
+   : prop 
+   =  let delta = m.to - m.from in
+      let sub = B.gsub b m.from delta in
+      match LP.parse M.msg_parser (B.as_seq h sub) with
+      | None -> False
+      | Some (msg, consumed) ->
+         msg == m.msg /\
+         consumed == v delta (* unsure about the latter part *)
+
 abstract
 let msgs_inv (st:hsl_state) (h:HS.mem) =
   let msgs = hsl_get_msgs st h in
   let p0 = HS.sel h st.p0 in
   let p1 = hsl_get_p1 st h in
   p0 <= p1 /\
-  p1 <= st.len /\
   (forall (m:message st.len). {:pattern List.Tot.memP m msgs}
         List.Tot.memP m msgs ==>
         m.to <= p0  /\
-        (let delta = m.to - m.from in
-         let sub = B.gsub st.buf m.from delta in
-         match LP.parse M.msg_parser (B.as_seq h sub) with
-         | None -> False
-         | Some (msg, consumed) ->
-           msg == m.msg /\
-           consumed == v delta (* unsure about the latter part *)
-         ))
+        message_is_parsed m st.buf h)
 
 abstract
 let st_inv (st:hsl_state) (h:HS.mem) =
@@ -114,62 +131,69 @@ let st_inv (st:hsl_state) (h:HS.mem) =
       How much can we do with monotonicity, e.g., the msgs reference would be convenient to model monotonically
 *)
 
-// (* Finally, the abstract invariant and its elimination *)
-// abstract let hsl_invariant (st:hsl_state) (h:mem) = hsl_invariant_predicate st h
+(*
+ * From the st_inv, clients can only conclude liveness of the internal buffer
+ *)
+let st_inv_elim (st:hsl_state) (h:HS.mem)
+  :Lemma (requires (st_inv st h))
+         (ensures  (B.live h (hsl_get_buf st)))
+         [SMTPat (st_inv st h)]
+  = ()
 
-// (*
-//  * This is a place where we can control what clients get to derive from the invariant
-//  * For now, we put everything in here
-//  *)
-// let lemma_hsl_invariant_elim (st:hsl_state) (h:mem)
-//   :Lemma (requires (hsl_invariant st h))
-//          (ensures  (hsl_invariant_predicate st h))
-//          [SMTPat (hsl_invariant st h)]
-//   = ()
+(*
+ * HSL footprint = p0, p1, buffer contents between 0 and p1, and msgs
+ * This is not abstract, so that the client (Record) can append the buffer after p1, and use the framing lemma
+ *)
+abstract
+let fp (st:hsl_state) =
+   let open B in
+   loc_union (loc_mreference st.p0)
+             (loc_union (loc_mreference st.p1)
+                        (loc_mreference st.msgs))
 
-// (*
-//  * HSL footprint = p0, p1, buffer contents between 0 and p1, and msgs
-//  * This is not abstract, so that the client (Record) can append the buffer after p1, and use the framing lemma
-//  *)
-// let hsl_footprint (st:hsl_state) (h:mem{hsl_invariant st h}) =
-//   loc_union (loc_union (loc_buffer (Buffer.gsub (hsl_get_buf st) 0ul (sel h (hsl_get_p1 st))))
-//                        (loc_mreference (hsl_get_p0 st)))
-//             (loc_union (loc_mreference (hsl_get_p1 st))
-//                        (loc_mreference (hsl_get_msgs st)))
+let footprint (st:hsl_state) (h:HS.mem) =
+  let open B in
+  loc_union (fp st) 
+            (loc_buffer (B.gsub (hsl_get_buf st) 
+                                 0ul
+                                 (hsl_get_p1 st h)))
 
-// (*
-//  * Framing the HSL invariant across its footprint
-//  *)
-// let lemma_frame_hsl_invariant (st:hsl_state) (l:loc) (h0 h1:mem)
-//   :Lemma (requires (hsl_invariant st h0                  /\
-//                     loc_disjoint l (hsl_footprint st h0) /\
-//                     Mods.modifies l h0 h1))
-//          (ensures  (hsl_invariant st h1 /\
-//                     hsl_footprint st h1 == hsl_footprint st h0))
-//   = ()
 
-// (*
-//  * Creating of HSL state
-//  *)
-// let hsl_create (len:uint_32{len > 0ul})
-//   :ST hsl_state (requires (fun h0       -> True))
-//                 (ensures  (fun h0 st h1 -> Buffer.len (hsl_get_buf st) == len               /\
-//                                         hsl_invariant st h1                              /\
-//                                         fresh_loc (loc_buffer (hsl_get_buf st)) h0 h1    /\
-//                                         fresh_loc (loc_mreference (hsl_get_p0 st)) h0 h1 /\
-//                                         fresh_loc (loc_mreference (hsl_get_p1 st)) h0 h1 /\
-//                                         fresh_loc (loc_mreference (hsl_get_msgs st)) h0 h1 /\
-//                                         sel h1 (hsl_get_p1 st) == 0ul                    /\
-//                                         Mods.modifies loc_none h0 h1))
-//   = let h0 = ST.get () in
-//     let buf = Buffer.gcmalloc root 0ul len in
-//     let h00 = ST.get () in
-//     let p0 = ralloc root 0ul in
-//     let p1 = ralloc root 0ul in
-//     let msgs = ralloc root [] in
-//     let h2 = ST.get () in
-//     let st = Mk_state len buf p0 p1 msgs in
-//     st
+(*
+ * Framing the HSL invariant across its footprint
+ *)
+let frame_st_inv (st:hsl_state) (l:loc) (h0 h1:HS.mem)
+  : Lemma 
+      (requires 
+         st_inv st h0 /\
+         B.loc_disjoint l (footprint st h0) /\
+         LM.modifies l h0 h1)
+      (ensures 
+         st_inv st h1 /\
+         footprint st h1 == footprint st h0)
+  = //the pattern in msgs_inv include is w.r.t the old state
+    //assert this equality to unify the two messages in the E-matching graph
+    assert (hsl_get_msgs st h0 == hsl_get_msgs st h1)
+
+(*
+ * `create`: Client provides a buffer to HSL
+ * 
+ *)
+let create (len:uint_32{len > 0ul}) (b:lbuffer8 len)
+  : ST hsl_state 
+       (requires fun h0 -> 
+          B.live h0 b)
+       (ensures fun h0 st h1 ->
+          hsl_get_len st == len /\
+          st_inv st h1 /\
+          B.fresh_loc (fp st) h0 h1 /\
+          hsl_get_p1 st h1 == 0ul /\
+          hsl_get_msgs st h1 == [] /\
+          LM.modifies B.loc_none h0 h1)
+  = let p0 = ralloc HS.root 0ul in
+    let p1 = ralloc HS.root 0ul in
+    let msgs = ralloc HS.root (Ghost.hide []) in
+    Mk_state len b p0 p1 msgs
 
 // (*
 //  * Auxiliary function for processing the buffer
@@ -177,17 +201,27 @@ let st_inv (st:hsl_state) (h:HS.mem) =
 //  * Processes the buffer between p1 and p, one at a time
 //  * Returns new p0, and updated list of indices
 //  *)
-// private let rec aux_process (b:Buffer.buffer uint_32) (p0 p1 p:uint_32) (l:list (uint_32 & uint_32))
-//   :ST (uint_32 & list (uint_32 & uint_32))
-//       (requires (fun h0 -> Buffer.live h0 b /\
-//                         p <= Buffer.len b /\ p1 <= p /\ p0 <= p1 /\
-//                         null_terminator_invariant_helper b p0 p1 h0 /\
-//                         msgs_list_invariant_helper b l p0 h0))
-//       (ensures  (fun h0 (r, l) h1 -> Buffer.live h1 b /\
-//                                   r <= p /\
-//                                   null_terminator_invariant_helper b r p h1 /\
-//                                   msgs_list_invariant_helper b l r h1 /\
-//                                   Mods.modifies loc_none h0 h1))
+// private 
+// let rec aux_process 
+//            #len 
+//            (b:lbuffer8 len) 
+//            (p0 p1 p:uint_32) 
+//            (l:list (uint_32 & uint_32))
+//   : ST (uint_32 & list (uint_32 & uint_32))
+//        (requires fun h0 ->
+//          Buffer.live h0 b /\
+//          p <= Buffer.len b /\
+//          p1 <= p /\
+//          p0 <= p1 /\
+//          null_terminator_invariant_helper b p0 p1 h0 /\
+//          msgs_list_invariant_helper b l p0 h0))
+//        (ensures fun h0 (r, l) h1 -> 
+//          Buffer.live h1 b /\
+//          r <= p /\
+//          null_terminator_invariant_helper b r p h1 /\
+//          msgs_list_invariant_helper b l r h1 /\
+//          Mods.modifies loc_none h0 h1)
+         
 //   = if p = p1 then p0, l  //done
 //     else
 //       let c = Buffer.index b p1 in
@@ -198,25 +232,120 @@ let st_inv (st:hsl_state) (h:HS.mem) =
 
 // #reset-options "--max_fuel 0 --max_ifuel 1 --initial_ifuel 1 --z3rlimit 16"
 
-// (*
-//  * Main process function that client (Record) calls once it has appended some data to the input buffer
-//  * It updates the p0 and p1 pointers, so that p1 points to p (the input index)
-//  * Also updates the msgs
-//  * And maintains the invariant
-//  *)
-// let hsl_process (st:hsl_state) (p:uint_32)
-//   :ST unit (requires (fun h0      -> hsl_invariant st h0 /\  //invariant holds
-//                                   p <= hsl_get_len st /\  //the new index upto which client wrote is in bounds
-//                                   sel h0 (hsl_get_p1 st) < p))  //p1 < p, i.e. some new data is there
-//            (ensures  (fun h0 _ h1 -> hsl_invariant st h1 /\  //invariants holds again
-//                                   sel h1 (hsl_get_p1 st) == p /\  //p1 has been updated to p
-//                                   Mods.modifies (Mods.loc_union (Mods.loc_mreference (hsl_get_p0 st))
-//                                                 (Mods.loc_union (Mods.loc_mreference (hsl_get_msgs st))
-//                                                                 (Mods.loc_mreference (hsl_get_p1 st)))) h0 h1))
-//   = let new_p0, new_msgs = aux_process st.buf !st.p0 !st.p1 p !st.msgs in
-//     st.p0 := new_p0;
-//     st.p1 := p;
-//     st.msgs := new_msgs
+let extends (l1 l2:list 'a)  = exists l3. l1 == l2 @ l3
+val append_memP: #t:Type ->  l1:list t
+              -> l2:list t
+              -> a:t
+              -> Lemma (List.Tot.memP a (l1@l2) <==> (List.Tot.memP a l1 \/ List.Tot.memP a l2))
+                       (* [SMTPat (mem a (l1@l2))] *)
+let rec append_memP #t l1 l2 a = match l1 with
+  | [] -> ()
+  | hd::tl -> append_memP tl l2 a
+
+let extends_mem (l1 l2:list 'a)
+  : Lemma (requires l1 `extends` l2)
+          (ensures  forall m. List.Tot.memP m l2 ==> List.Tot.memP m l1)
+  = FStar.Classical.exists_elim 
+       (forall m. List.Tot.memP m l2 ==> List.Tot.memP m l1) ()
+       (fun (l3:list 'a{l1 == l2@l3}) ->
+           FStar.Classical.forall_intro (append_memP l2 l3))
+
+let parse_it (b:buffer8) 
+  : ST (option (M.msg & nat))
+       (requires fun h ->
+         B.live h b)
+       (ensures fun h0 eopt h1 ->
+         let eopt' = LP.parse M.msg_parser (B.as_seq h0 b) in
+         LM.modifies B.loc_none h0 h1 /\ 
+         (match eopt, eopt' with
+         | None, None -> True
+         | Some (m, n), Some (m', n') ->  m==m' /\ n == n'
+         | _ -> False))
+  = admit()         
+
+let bind (x:G.erased 'a) (g:'a -> G.erased 'b) : G.erased 'b =
+  let x = G.reveal x in
+  g x
+  
+let ghost_append (x y:Ghost.erased (list 'a))
+  : Ghost.erased (list 'a)
+  = l1 <-- x ;
+    l2 <-- y ;
+    G.hide (l1 @ l2) 
+let extends_refl (l:list 'a) : Lemma (l `extends` l) = admit()
+let extends_snoc (l:list 'a) (x:'a) : Lemma (List.Tot.snoc (l, x) `extends` l) = admit()
+let invert_memP_snoc (l:list 'a) (x:'a) 
+  : Lemma (FStar.List.Tot.(forall m.{:pattern (memP m (snoc (l, x)))} memP m (snoc (l, x)) <==> memP m l \/ m == x))
+  = admit()
+
+let extend_st_inv (st:hsl_state) (h0 h1:HS.mem)
+  : Lemma 
+      (requires 
+         st_inv st h0 /\
+         LM.modifies (fp st) h0 h1 /\
+         hsl_get_msgs st h0 == hsl_get_msgs st h1 /\
+         HS.sel h0 st.p0 <= HS.sel h1 st.p0 /\
+         HS.sel h1 st.p0 <= hsl_get_p1 st h1 /\
+         hsl_get_p1 st h0 <= hsl_get_p1 st h1)
+      (ensures 
+         st_inv st h1)
+  = ()
+
+// let extend_st_inv (st:hsl_state) (h0 h1:HS.mem)
+//   : Lemma 
+//       (requires 
+//          st_inv st h0 /\
+//          LM.modifies (fp st) h0 h1 /\
+//          HS.sel h0 st.p0 <= HS.sel h1 st.p0 /\
+//          HS.sel h1 st.p0 <= hsl_get_p1 st h1 /\
+//          hsl_get_p1 st h0 <= hsl_get_p1 st h1 /\
+//          (let msgs1 = hsl_get_msgs st h1 in
+//           let msgs0 = hsl_get_msgs st h0 in         
+//           msgs1 `extends` msgs0 /\
+//           (forall (m:msg). List.Tot.memP m
+         
+//          )
+//       (ensures 
+//          st_inv st h1)
+//   = ()
+
+#set-options "--max_fuel 0 --max_ifuel 0"
+(*
+ * Main process function that client (Record) calls once it has appended some data to the input buffer
+ * It updates the p0 and p1 pointers, so that p1 points to p (the input index)
+ * Also updates the msgs
+ * And maintains the invariant
+ *)
+let process (st:hsl_state) (p:uint32)
+  : ST unit 
+       (requires fun h0 ->
+         st_inv st h0 /\  //invariant holds
+         hsl_get_p1 st h0 <= p /\ //p1 < p, i.e. some new data is there
+         p <= hsl_get_len st)  //the new index upto which client wrote is in bounds
+       (ensures fun h0 _ h1 ->
+         st_inv st h1 /\  //invariants holds again
+         hsl_get_p1 st h1 == p /\
+         LM.modifies (fp st) h0 h1 /\
+         hsl_get_msgs st h1 `extends` hsl_get_msgs st h0)
+  = let h0 = ST.get() in 
+    let msgs = !st.msgs in
+    st.p1 := p;
+    let p1 = p in
+    let p0 = !st.p0 in
+    let delta = p1 - p0 in
+    let sub_buf = B.sub st.buf !st.p0 delta in
+    match parse_it sub_buf with
+    | None -> 
+      let h1 = ST.get() in
+      assert (hsl_get_msgs st h1 == hsl_get_msgs st h0);
+      extends_refl (G.reveal msgs)
+    | Some (msg, n) -> 
+      let last = {from=p0; to=p1; msg} in
+      extends_snoc (G.reveal msgs) last;
+      invert_memP_snoc (G.reveal msgs) last;
+      st.msgs := ghost_append (!st.msgs) (Ghost.hide [ last ]);
+      let h1 = ST.get() in
+      assume (st_inv st h1)      //TODO
 
 // #set-options "--z3rlimit_factor 2"
 // let top_level () : St unit =
