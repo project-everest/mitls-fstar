@@ -247,7 +247,11 @@ void ProcessConnect(TLS_CONNECT_WORK_ITEM* item)
         for (SEC_APPLICATION_PROTOCOL_LIST *pList = pListStart; pList < pListEnd;pList = GetNextList(pList)) {
             switch (pList->ProtoNegoExt) {
             case SecApplicationProtocolNegotiationExt_ALPN:
-                ret = FFI_mitls_configure_alpn(state->state, (const char*)pList->ProtocolList);
+                mitls_alpn alpn;
+
+                alpn.alpn = pList->ProtocolList,
+                alpn.alpn_len = strlen((const char*)pList->ProtocolList);
+                ret = FFI_mitls_configure_alpn(state->state, &alpn, 1);
                 if (ret == 0) {
                     _Print("FFI_mitls_configure_alpn failed");
                     state->status = SEC_E_INTERNAL_ERROR;
@@ -346,7 +350,7 @@ void ProcessRecv(TLS_RECV_WORK_ITEM* item)
     }
     if (!OutputBuffer) {
         _Print("Couldn't find a SECBUFFER_DATA to write into!");
-        FFI_mitls_free_packet(state->state, pReceived);
+        FFI_mitls_free(state->state, pReceived);
         state->status = SEC_E_INTERNAL_ERROR;
         return;
     } else if (cbOutputBuffer < cbReceived) {
@@ -377,7 +381,7 @@ void ProcessRecv(TLS_RECV_WORK_ITEM* item)
         }
     }
 
-    FFI_mitls_free_packet(state->state, pReceived);
+    FFI_mitls_free(state->state, pReceived);
     state->status = SEC_E_OK;
 }
 

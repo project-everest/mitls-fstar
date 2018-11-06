@@ -26,8 +26,14 @@ with other versions of Visual Studio too.
 
 The Debug and Release targets build a standalone SSP.
 
-The Detours targets require MSR Detours to be installed and built, in a 
-directory named Detours, under the current directory.
+The Detours targets require MSR Detours to be installed and built.  To do this:
+- clone Detours from https://github.com/microsoft/detours to
+mitls-fstar\apps\sspi\Detours (so the Detours directory contains README.md, makefile,
+src\ and samples\ directories)
+- build Detours for amd64:
+    - open a VS2017 x64 command prompt
+    - cd mitls-fstar\apps\sspi\Detours
+    - nmake
 
 Installing
 ==========
@@ -35,7 +41,9 @@ Copy the miTLS_SSP.dll to a directory on the machine which does not contain
 any spaces in the pathname.  Make sure libmitls.dll, libmipki.dll, and their
 Cygwin and mingw32 dependencies are on your PATH.
 
-set PATH=c:\users\barrybo\everest\mitls-fstar\src\windows\mitls;c:\users\barrybo\everest\mitls-fstar\src\pki;C:\cygwin64\usr\x86_64-w64-mingw32\sys-root\mingw\bin;%PATH%
+set PATH=c:\users\barrybo\everest\mitls-fstar\src\windows\mitls;%PATH%
+set PATH=c:\users\barrybo\everest\mitls-fstar\src\pki;%PATH%
+set PATH=c:\users\barrybo\everest\mitls-fstar\src\windows\evercrypt;%PATH%
 
 Then from an elevated command prompt, run:
   regsvr32 miTLS_SSP.dll
@@ -55,7 +63,9 @@ Using
 Make sure libmitls.dll and its Cygwin and mingw32 dependencies are on your 
 PATH.
 
-set PATH=c:\users\barrybo\everest\mitls-fstar\src\windows\mitls;c:\users\barrybo\everest\mitls-fstar\src\pki;C:\cygwin64\usr\x86_64-w64-mingw32\sys-root\mingw\bin;%PATH%
+set PATH=c:\users\barrybo\everest\mitls-fstar\src\windows\mitls;%PATH%
+set PATH=c:\users\barrybo\everest\mitls-fstar\src\pki;%PATH%
+set PATH=c:\users\barrybo\everest\mitls-fstar\src\windows\evercrypt;%PATH%
 
 Once the registry key is present, Windows sspicli.dll, loaded into Windows
 applications, will enumerate the SecurityProviders key and load all of the
@@ -75,3 +85,7 @@ set MITLS_SCHANNEL_VERSION to a string, "1.2" or "1.3".
 
 Set MITLS_SCHANNEL_CIPHER_SUITES to override the default cipher suites.
 
+Example
+=======
+set MITLS_ATTACH_SSP=curl.exe
+%windir%\system32\curl.exe https://www.bing.com
