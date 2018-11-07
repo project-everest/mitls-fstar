@@ -6,29 +6,81 @@ module B = LowStar.Buffer
 module U32 = FStar.UInt32
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
-module I32 = FStar.Int32
-module Cast = FStar.Int.Cast
 
-#reset-options "--z3rlimit 64 --z3cliopt smt.arith.nl=false"
+// #reset-options "--z3rlimit 64 --z3cliopt smt.arith.nl=false"
+
+let valid_nondep_then_intro
+  (h: HS.mem)
+  (#k1: parser_kind)
+  (#t1: Type0)
+  (p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type0)
+  (p2: parser k2 t2)
+  (s: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (valid p1 h s pos /\ valid p2 h s (get_valid_pos p1 h s pos)))
+  (ensures (  
+    let pos1 = get_valid_pos p1 h s pos in
+    valid_content_pos (nondep_then p1 p2) h s pos (contents p1 h s pos, contents p2 h s pos1) (get_valid_pos p2 h s pos1)
+  ))
+= let pos1 = get_valid_pos p1 h s pos in
+  nondep_then_eq p1 p2 (B.as_seq h (B.gsub s.base pos (s.len `U32.sub` pos)));
+  valid_facts p1 h s pos;
+  valid_facts p2 h s pos1;
+  valid_facts (nondep_then p1 p2) h s pos
+
+let valid_nondep_then_elim
+  (h: HS.mem)
+  (#k1: parser_kind)
+  (#t1: Type0)
+  (p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type0)
+  (p2: parser k2 t2)
+  (s: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (valid (nondep_then p1 p2) h s pos))
+  (ensures (
+    valid p1 h s pos /\ (
+    let pos1 = get_valid_pos p1 h s pos in
+    valid p2 h s (get_valid_pos p1 h s pos) /\
+    valid_content_pos (nondep_then p1 p2) h s pos (contents p1 h s pos, contents p2 h s pos1) (get_valid_pos p2 h s pos1)
+  )))
+= nondep_then_eq p1 p2 (B.as_seq h (B.gsub s.base pos (s.len `U32.sub` pos)));
+  valid_facts (nondep_then p1 p2) h s pos;
+  valid_facts p1 h s pos;
+  let pos1 = get_valid_pos p1 h s pos in
+  valid_facts p2 h s pos1
 
 inline_for_extraction
 let validate32_nondep_then
+  [| validator_cls |]
   (#k1: parser_kind)
   (#t1: Type0)
   (#p1: parser k1 t1)
-  (p1' : validator32 p1)
+  (p1' : validator p1)
   (#k2: parser_kind)
   (#t2: Type0)
   (#p2: parser k2 t2)
-  (p2' : validator32 p2)
-: Tot (validator32 (nondep_then p1 p2))
-= fun (input: buffer8) (len: I32.t) ->
+  (p2' : validator p2)
+: Tot (validator (nondep_then p1 p2))
+= fun (input: slice) (pos: U32.t) ->
   let h = HST.get () in
-  let x1 = p1' input len in
-  if x1 `I32.lt` 0l
-  then x1 // TODO: more coding on error
+  [@inline_let] let _ = nondep_then_eq p1 p2 (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos))) in
+  [@inline_let] let _ = valid_equiv (nondep_then p1 p2) h input pos in
+  [@inline_let] let _ = valid_equiv p1 h input pos in
+  let pos1 = p1' input pos in
+  if pos1 `U32.gt` validator_max_length
+  then begin
+    admit ();
+    pos1
+  end
   else
-    p2' (B.offset input (Cast.int32_to_uint32 (len `I32.sub` x1))) x1
+    [@inline_let] let _ = valid_equiv p2 h input pos1 in
+    p2' input pos1
 
 #reset-options "--z3rlimit 32 --z3cliopt smt.arith.nl=false"
 

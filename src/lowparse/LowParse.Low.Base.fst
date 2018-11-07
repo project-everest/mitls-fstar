@@ -6,9 +6,6 @@ module M = LowStar.ModifiesPat
 module U32 = FStar.UInt32
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
-module I32 = FStar.Int32
-module Cast = FStar.Int.Cast
-module MA = LowParse.Math
 
 inline_for_extraction
 type buffer8 = B.buffer FStar.UInt8.t
@@ -147,6 +144,25 @@ let contents_eq
   (ensures (valid' p h s pos /\ contents p h s pos == contents' p h s pos))
 = ()
 
+let content_length'
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (sl: slice)
+  (pos: U32.t)
+: Ghost nat
+  (requires (valid' p h sl pos))
+  (ensures (fun res ->
+    U32.v pos + res <= U32.v sl.len /\
+    k.parser_kind_low <= res /\ (
+    match k.parser_kind_high with
+    | None -> True
+    | Some max -> res <= max
+  )))
+= let Some (_, consumed) = parse p (B.as_seq h (B.gsub sl.base pos (sl.len `U32.sub` pos))) in
+  consumed
+
 abstract
 let content_length
   (#k: parser_kind)
@@ -164,8 +180,7 @@ let content_length
     | None -> True
     | Some max -> res <= max
   )))
-= let Some (_, consumed) = parse p (B.as_seq h (B.gsub sl.base pos (sl.len `U32.sub` pos))) in
-  consumed
+= content_length' p h sl pos
 
 abstract
 let serialized_length
@@ -193,6 +208,19 @@ let serialized_length_eq
   (x: t)
 : Lemma
   (serialized_length s x == Seq.length (serialize s x))
+= ()
+
+abstract
+let content_length_eq_gen
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (sl: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (valid p h sl pos))
+  (ensures (valid' p h sl pos /\ content_length p h sl pos == content_length' p h sl pos))
 = ()
 
 abstract
@@ -250,6 +278,19 @@ let valid_pos
 = valid p h sl pos /\
   U32.v pos + content_length p h sl pos == U32.v pos'
 
+abstract
+let get_valid_pos
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (sl: slice)
+  (pos: U32.t)
+: Ghost U32.t
+  (requires (valid p h sl pos))
+  (ensures (fun pos' -> valid_pos p h sl pos pos'))
+= pos `U32.add` U32.uint_to_t (content_length p h sl pos)
+
 unfold 
 let valid_content_pos
   (#k: parser_kind)
@@ -262,6 +303,23 @@ let valid_content_pos
   (pos' : U32.t)
 = valid_pos p h sl pos pos' /\
   contents p h sl pos == x
+
+abstract
+let valid_facts
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (sl: slice)
+  (pos: U32.t)
+: Lemma
+  ((valid p h sl pos <==> valid' p h sl pos) /\
+   (valid p h sl pos ==> (
+     contents p h sl pos == contents' p h sl pos /\
+     content_length p h sl pos == content_length' p h sl pos
+  )))
+= ()
+
 
 class validator_cls = {
   validator_max_length: U32.t;
@@ -277,8 +335,7 @@ let validator [| validator_cls |] (#k: parser_kind) (#t: Type) (p: parser k t) :
     B.modifies B.loc_none h h' /\ (
     if U32.v res <= U32.v validator_max_length
     then
-      valid p h sl pos /\
-      U32.v pos + content_length p h sl pos == U32.v res
+      valid_pos p h sl pos res
     else
       (~ (valid p h sl pos))
   )))
@@ -803,6 +860,10 @@ let valid_exact_ext_elim
   assert (injective_postcond p (B.as_seq h (B.gsub s1.base pos1 (pos1' `U32.sub` pos1))) (B.as_seq h (B.gsub s2.base pos2 (pos2' `U32.sub` pos2))))
 
 (*
+module I32 = FStar.Int32
+module Cast = FStar.Int.Cast
+module MA = LowParse.Math
+
 let int32_to_uint32_pos
   (x: I32.t)
 : Lemma
