@@ -10,6 +10,525 @@ module I32 = FStar.Int32
 module Cast = FStar.Int.Cast
 module MA = LowParse.Math
 
+inline_for_extraction
+type buffer8 = B.buffer FStar.UInt8.t
+
+noeq
+type slice = {
+  base: buffer8;
+  len: (len: U32.t { len == B.len base } );
+}
+
+let live_slice (h: HS.mem) (s: slice) : GTot Type0 = B.live h s.base
+
+abstract
+let loc_slice_from (s: slice) (pos: U32.t) : GTot B.loc =
+  if U32.v pos <= U32.v s.len
+  then B.loc_buffer (B.gsub s.base pos (s.len `U32.sub` pos))
+  else B.loc_none
+
+abstract
+let loc_includes_union_l_loc_slice_from (l1 l2: B.loc) (s: slice) (pos: U32.t) : Lemma
+  (requires (B.loc_includes l1 (loc_slice_from s pos) \/ B.loc_includes l2 (loc_slice_from s pos)))
+  (ensures (B.loc_includes (B.loc_union l1 l2) (loc_slice_from s pos)))
+  [SMTPat (B.loc_includes (B.loc_union l1 l2) (loc_slice_from s pos))]
+= ()
+
+abstract
+let loc_slice_from_includes_r (s: slice) (pos: U32.t) : Lemma
+  (B.loc_includes (B.loc_buffer s.base) (loc_slice_from s pos))
+  [SMTPat (loc_slice_from s pos)]
+= ()
+
+abstract
+let loc_slice_from_eq
+  (s: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (U32.v pos <= U32.v s.len))
+  (ensures (loc_slice_from s pos == B.loc_buffer (B.gsub s.base pos (s.len `U32.sub` pos))))
+= ()
+
+abstract
+let loc_slice_from_includes_l
+  (s: slice)
+  (pos1 pos2: U32.t)
+: Lemma
+  (requires (U32.v pos1 <= U32.v pos2))
+  (ensures (B.loc_includes (loc_slice_from s pos1) (loc_slice_from s pos2)))
+  [SMTPat (B.loc_includes (loc_slice_from s pos1) (loc_slice_from s pos2))]
+= ()
+
+let valid'
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (s: slice)
+  (pos: U32.t)
+: GTot Type0
+= U32.v pos <= U32.v s.len /\
+  live_slice h s /\
+  Some? (parse p (B.as_seq h (B.gsub s.base pos (s.len `U32.sub` pos))))
+
+abstract
+let valid
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (s: slice)
+  (pos: U32.t)
+: GTot Type0
+= valid' p h s pos
+
+abstract
+let valid_equiv
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (s: slice)
+  (pos: U32.t)
+: Lemma
+  (valid p h s pos <==> valid' p h s pos)
+= ()
+
+abstract
+let valid_elim
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (s: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (valid p h s pos))
+  (ensures (valid' p h s pos))
+  [SMTPat (valid p h s pos)]
+= ()
+
+let contents'
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (s: slice)
+  (pos: U32.t)
+: Ghost t
+  (requires (valid' p h s pos))
+  (ensures (fun _ -> True))
+= let Some (v, _) = parse p (B.as_seq h (B.gsub s.base pos (s.len `U32.sub` pos))) in
+  v
+
+abstract
+let contents
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (s: slice)
+  (pos: U32.t)
+: Ghost t
+  (requires (valid p h s pos))
+  (ensures (fun _ -> True))
+= contents' p h s pos
+
+abstract
+let contents_eq
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (s: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (valid p h s pos))
+  (ensures (valid' p h s pos /\ contents p h s pos == contents' p h s pos))
+= ()
+
+abstract
+let content_length
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (sl: slice)
+  (pos: U32.t)
+: Ghost nat
+  (requires (valid p h sl pos))
+  (ensures (fun res ->
+    U32.v pos + res <= U32.v sl.len /\
+    k.parser_kind_low <= res /\ (
+    match k.parser_kind_high with
+    | None -> True
+    | Some max -> res <= max
+  )))
+= let Some (_, consumed) = parse p (B.as_seq h (B.gsub sl.base pos (sl.len `U32.sub` pos))) in
+  consumed
+
+abstract
+let serialized_length
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (s: serializer p)
+  (x: t)
+: Ghost nat
+  (requires True)
+  (ensures (fun res ->
+    k.parser_kind_low <= res /\ (
+    match k.parser_kind_high with
+    | None -> True
+    | Some max -> res <= max
+  )))
+= Seq.length (serialize s x)
+
+abstract
+let serialized_length_eq
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (s: serializer p)
+  (x: t)
+: Lemma
+  (serialized_length s x == Seq.length (serialize s x))
+= ()
+
+abstract
+let content_length_eq
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (s: serializer p)
+  (h: HS.mem)
+  (sl: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (valid p h sl pos))
+  (ensures (content_length p h sl pos == serialized_length s (contents p h sl pos)))
+= let b = B.as_seq h (B.gsub sl.base pos (sl.len `U32.sub` pos)) in
+  let Some (x, consumed) = parse p b in
+  assert (x == contents p h sl pos);
+  let ps' = parse p (serialize s x) in
+  assert (serializer_correct p s);
+  assert (Some? ps');
+  assert (injective_precond p b (serialize s x))
+
+abstract
+let valid_frame
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (sl: slice)
+  (pos: U32.t)
+  (l: B.loc)
+  (h': HS.mem)
+: Lemma
+  (requires (valid p h sl pos /\ B.modifies l h h' /\ B.loc_disjoint (loc_slice_from sl pos) l))
+  (ensures (valid p h' sl pos /\ contents p h' sl pos == contents p h sl pos /\ content_length p h' sl pos == content_length p h sl pos))
+  [SMTPatOr [
+    [SMTPat (valid p h sl pos); SMTPat (B.modifies l h h')];
+    [SMTPat (valid p h' sl pos); SMTPat (B.modifies l h h')];
+    [SMTPat (contents p h sl pos); SMTPat (B.modifies l h h')];
+    [SMTPat (contents p h' sl pos); SMTPat (B.modifies l h h')];
+    [SMTPat (content_length p h sl pos); SMTPat (B.modifies l h h')];
+    [SMTPat (content_length p h' sl pos); SMTPat (B.modifies l h h')];
+  ]]
+= ()
+
+unfold 
+let valid_content_pos
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (sl: slice)
+  (pos: U32.t)
+  (x: t)
+  (pos' : U32.t)
+= valid p h sl pos /\
+  contents p h sl pos == x /\
+  U32.v pos + content_length p h sl pos == U32.v pos'
+
+class validator_cls = {
+  validator_max_length: U32.t;
+}
+
+inline_for_extraction
+let validator [| validator_cls |] (#k: parser_kind) (#t: Type) (p: parser k t) : Tot Type =
+  (sl: slice) ->
+  (pos: U32.t) ->
+  HST.Stack U32.t
+  (requires (fun h -> live_slice h sl /\ U32.v pos <= U32.v sl.len /\ U32.v sl.len <= U32.v validator_max_length))
+  (ensures (fun h res h' ->
+    B.modifies B.loc_none h h' /\ (
+    if U32.v res <= U32.v validator_max_length
+    then
+      valid p h sl pos /\
+      U32.v pos + content_length p h sl pos == U32.v res
+    else
+      (~ (valid p h sl pos))
+  )))
+
+inline_for_extraction
+let jumper
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+: Tot Type
+= (sl: slice) ->
+  (pos: U32.t) ->
+  HST.Stack U32.t
+  (requires (fun h -> valid p h sl pos))
+  (ensures (fun h pos' h' ->
+    B.modifies B.loc_none h h' /\
+    U32.v pos + content_length p h sl pos == U32.v pos'
+  ))
+
+let gaccessor
+  (#k1: parser_kind)
+  (#t1: Type)
+  (p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (p2: parser k2 t2)
+  (pre: t1 -> GTot Type0)
+  (rel: t1 -> t2 -> GTot Type0)
+: Tot Type
+= (h: HS.mem) ->
+  (sl: slice) ->
+  (pos: U32.t) ->
+  Ghost U32.t
+  (requires (valid p1 h sl pos /\ pre (contents p1 h sl pos))) 
+  (ensures (fun pos' ->
+    valid p2 h sl pos' /\
+    U32.v pos <= U32.v pos' /\
+    rel (contents p1 h sl pos) (contents p2 h sl pos')
+  ))
+
+inline_for_extraction
+let accessor
+  (#k1: parser_kind)
+  (#t1: Type)
+  (p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (p2: parser k2 t2)
+  (pre: t1 -> GTot Type0)
+  (rel: t1 -> t2 -> GTot Type0)
+  (g: gaccessor p1 p2 pre rel)
+: Tot Type
+= (sl: slice) ->
+  (pos: U32.t) ->
+  HST.Stack U32.t
+  (requires (fun h -> valid p1 h sl pos /\ pre (contents p1 h sl pos))) 
+  (ensures (fun h pos' h' ->
+    B.modifies B.loc_none h h' /\
+    pos' == g h sl pos
+  ))
+
+inline_for_extraction
+let leaf_reader
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+: Tot Type
+= (sl: slice) ->
+  (pos: U32.t) ->
+  HST.Stack t
+  (requires (fun h -> valid p h sl pos))
+  (ensures (fun h res h' ->
+    B.modifies B.loc_none h h' /\
+    res == contents p h sl pos
+  ))
+
+inline_for_extraction
+let max_uint32 : U32.t = 4294967295ul
+
+let max_uint32_correct
+  (x: U32.t)
+: Lemma
+  (U32.v x <= U32.v max_uint32)
+= ()
+
+inline_for_extraction
+let leaf_writer_weak
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (s: serializer p)
+: Tot Type
+= (x: t) ->
+  (sl: slice) ->
+  (pos: U32.t) ->
+  HST.Stack U32.t
+  (requires (fun h -> live_slice h sl /\ U32.v pos <= U32.v sl.len /\ U32.v sl.len < U32.v max_uint32))
+  (ensures (fun h pos' h' ->
+    B.modifies (loc_slice_from sl pos) h h' /\ (
+    if pos' = max_uint32
+    then U32.v pos + serialized_length s x > U32.v sl.len
+    else valid_content_pos p h' sl pos x pos'
+  )))
+
+abstract
+let loc_slice_from_to
+  (sl: slice)
+  (pos pos' : U32.t)
+: GTot B.loc
+= if U32.v pos' > U32.v sl.len
+  then loc_slice_from sl pos
+  else if U32.v pos > U32.v pos'
+  then B.loc_none
+  else B.loc_buffer (B.gsub sl.base pos (pos' `U32.sub` pos))
+
+abstract
+let loc_includes_union_l_loc_slice_from_to (l1 l2: B.loc) (s: slice) (pos pos' : U32.t) : Lemma
+  (requires (B.loc_includes l1 (loc_slice_from_to s pos pos') \/ B.loc_includes l2 (loc_slice_from_to s pos pos')))
+  (ensures (B.loc_includes (B.loc_union l1 l2) (loc_slice_from_to s pos pos')))
+  [SMTPat (B.loc_includes (B.loc_union l1 l2) (loc_slice_from_to s pos pos'))]
+= ()
+
+abstract
+let loc_slice_from_to_includes_r
+  (sl: slice)
+  (pos pos' : U32.t)
+: Lemma
+  (B.loc_includes (loc_slice_from sl pos) (loc_slice_from_to sl pos pos'))
+  [SMTPat (loc_slice_from_to sl pos pos')]
+= ()
+
+abstract
+let loc_slice_from_to_eq
+  (sl: slice)
+  (pos pos' : U32.t)
+: Lemma
+  (requires (U32.v pos <= U32.v pos' /\ U32.v pos' <= U32.v sl.len))
+  (ensures (loc_slice_from_to sl pos pos' == B.loc_buffer (B.gsub sl.base pos (pos' `U32.sub` pos))))
+= ()
+
+abstract
+let loc_slice_from_to_includes_l
+  (sl: slice)
+  (posl posr posl' posr' : U32.t)
+: Lemma
+  (requires (U32.v posl <= U32.v posl' /\ U32.v posr' <= U32.v posr))
+  (ensures (loc_slice_from_to sl posl posr `B.loc_includes` loc_slice_from_to sl posl' posr'))
+  [SMTPat (loc_slice_from_to sl posl posr `B.loc_includes` loc_slice_from_to sl posl' posr')]
+= ()
+
+abstract
+let loc_slice_from_to_disjoint
+  (sl: slice)
+  (posl1 posr1 posl2 posr2 : U32.t)
+: Lemma
+  (requires (U32.v posr1 <= U32.v posl2))
+  (ensures (B.loc_disjoint (loc_slice_from_to sl posl1 posr1) (loc_slice_from_to sl posl2 posr2)))
+  [SMTPat (B.loc_disjoint (loc_slice_from_to sl posl1 posr1) (loc_slice_from_to sl posl2 posr2))]
+= ()
+
+abstract
+let loc_slice_from_loc_slice_from_to_disjoint
+  (sl: slice)
+  (pos1 pos2 pos' : U32.t)
+: Lemma
+  (requires (U32.v pos2 <= U32.v pos'))
+  (ensures (B.loc_disjoint (loc_slice_from_to sl pos1 pos2) (loc_slice_from sl pos')))
+  [SMTPat (B.loc_disjoint (loc_slice_from_to sl pos1 pos2) (loc_slice_from sl pos'))]
+= ()
+
+inline_for_extraction
+let leaf_writer_strong
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (s: serializer p)
+: Tot Type
+= (x: t) ->
+  (sl: slice) ->
+  (pos: U32.t) ->
+  HST.Stack U32.t
+  (requires (fun h -> live_slice h sl /\ U32.v pos + serialized_length s x <= U32.v sl.len))
+  (ensures (fun h pos' h' ->
+    B.modifies (loc_slice_from_to sl pos pos') h h' /\
+    valid_content_pos p h' sl pos x pos'
+  ))
+
+#set-options "--z3rlimit 16"
+
+inline_for_extraction
+let copy_strong
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (src: slice)
+  (spos spos' : U32.t)
+  (dst: slice)
+  (dpos: U32.t)
+: HST.Stack U32.t
+  (requires (fun h ->
+    k.parser_kind_subkind == Some ParserStrong /\
+    valid p h src spos /\ (
+    let clen = content_length p h src spos in
+    U32.v spos + clen == U32.v spos' /\
+    U32.v dpos + clen <= U32.v dst.len /\
+    live_slice h dst /\
+    B.loc_disjoint (loc_slice_from_to src spos spos') (loc_slice_from_to dst dpos (dpos `U32.add` (U32.uint_to_t clen)))
+  )))
+  (ensures (fun h dpos' h' ->
+    B.modifies (loc_slice_from_to dst dpos dpos') h h' /\
+    valid_content_pos p h' dst dpos (contents p h src spos) dpos'
+  ))
+= let h0 = HST.get () in
+  let len = spos' `U32.sub` spos in
+  let src' = B.sub src.base spos len in
+  let dst' = B.sub dst.base dpos len in
+  B.blit src' 0ul dst' 0ul len;
+  let h = HST.get () in
+  [@inline_let] let dpos' = dpos `U32.add` len in
+  assert (
+    B.modifies (loc_slice_from_to dst dpos dpos') h0 h
+  );
+  assert (no_lookahead_on p (B.as_seq h0 (B.gsub src.base spos (src.len `U32.sub` spos))) (B.as_seq h (B.gsub dst.base dpos (dst.len `U32.sub` dpos))));
+  assert (no_lookahead_on_postcond p (B.as_seq h0 (B.gsub src.base spos (src.len `U32.sub` spos))) (B.as_seq h (B.gsub dst.base dpos (dst.len `U32.sub` dpos))));
+  assert (injective_precond p (B.as_seq h0 (B.gsub src.base spos (src.len `U32.sub` spos))) (B.as_seq h (B.gsub dst.base dpos (dst.len `U32.sub` dpos))));  
+  dpos'
+
+#reset-options
+
+inline_for_extraction
+let copy_weak
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (src: slice)
+  (spos spos' : U32.t)
+  (dst: slice)
+  (dpos: U32.t)
+: HST.Stack U32.t
+  (requires (fun h ->
+    k.parser_kind_subkind == Some ParserStrong /\
+    valid p h src spos /\
+    U32.v spos + content_length p h src spos  == U32.v spos' /\
+    live_slice h dst /\
+    U32.v dpos <= U32.v dst.len /\
+    U32.v dst.len < U32.v max_uint32 /\
+    B.loc_disjoint (loc_slice_from_to src spos spos') (loc_slice_from dst dpos)
+  ))
+  (ensures (fun h dpos' h' ->
+    B.modifies (loc_slice_from dst dpos) h h' /\ (
+    if dpos' = max_uint32
+    then
+      U32.v dpos + content_length p h src spos > U32.v dst.len
+    else
+      valid_content_pos p h' dst dpos (contents p h src spos) dpos'
+  )))
+= if (dst.len `U32.sub` dpos) `U32.lt` (spos' `U32.sub` spos)
+  then max_uint32
+  else copy_strong p src spos spos' dst dpos
+
+(*
 let int32_to_uint32_pos
   (x: I32.t)
 : Lemma
@@ -25,9 +544,6 @@ let uint32_to_int32_bounded
   (ensures (I32.v (Cast.uint32_to_int32 x) == U32.v x))
   [SMTPat (I32.v (Cast.uint32_to_int32 x))]
 = MA.modulo_lemma (U32.v x) (pow2 32)
-
-inline_for_extraction
-type buffer8 = B.buffer FStar.UInt8.t
 
 inline_for_extraction
 type pointer (t: Type) = (b: B.buffer t { B.length b == 1 } )
@@ -279,494 +795,6 @@ let read_from_buffer
   )))
 = p2' (a12 input)
 
-let exactly_contains_valid_data'
-  (#k: parser_kind)
-  (#t: Type)
-  (h: HS.mem)
-  (p: parser k t)
-  (b: buffer8)
-  (lo: U32.t)
-  (x: t)
-  (hi: U32.t)
-: GTot Type0
-= B.live h b /\
-  U32.v lo <= U32.v hi /\
-  U32.v hi <= B.length b /\
-  parse p (B.as_seq h (B.gsub b lo (U32.sub hi lo))) == Some (x, U32.v hi - U32.v lo)
-
-abstract
-let exactly_contains_valid_data
-  (#k: parser_kind)
-  (#t: Type)
-  (h: HS.mem)
-  (p: parser k t)
-  (b: buffer8)
-  (lo: U32.t)
-  (x: t)
-  (hi: U32.t)
-: GTot Type0
-= exactly_contains_valid_data' h p b lo x hi
-
-abstract
-let exactly_contains_valid_data_equiv
-  (#k: parser_kind)
-  (#t: Type)
-  (h: HS.mem)
-  (p: parser k t)
-  (b: buffer8)
-  (lo: U32.t)
-  (x: t)
-  (hi: U32.t)
-: Lemma
-  (exactly_contains_valid_data h p b lo x hi <==> exactly_contains_valid_data' h p b lo x hi)
-= ()
-
-abstract
-let exactly_contains_valid_data_elim
-  (#k: parser_kind)
-  (#t: Type)
-  (h: HS.mem)
-  (p: parser k t)
-  (b: buffer8)
-  (lo: U32.t)
-  (x: t)
-  (hi: U32.t)
-: Lemma
-  (requires (exactly_contains_valid_data h p b lo x hi))
-  (ensures (
-    B.live h b /\
-    U32.v lo <= U32.v hi /\
-    U32.v hi <= B.length b /\ (
-    let hilo = U32.v hi - U32.v lo in
-    k.parser_kind_low <= hilo /\ (
-    match k.parser_kind_high with
-    | Some l -> hilo <= l
-    | _ -> True
-  ))))
-  [SMTPat (exactly_contains_valid_data h p b lo x hi)]
-= ()
-
-abstract
-let exactly_contains_valid_data_injective
-  (#k: parser_kind)
-  (#t: Type)
-  (h: HS.mem)
-  (p: parser k t)
-  (b: buffer8)
-  (lo: U32.t)
-  (x1: t)
-  (hi: U32.t)
-  (x2: t)
-: Lemma
-  (requires (
-    exactly_contains_valid_data h p b lo x1 hi /\
-    exactly_contains_valid_data h p b lo x2 hi
-  ))
-  (ensures (
-    x1 == x2
-  ))
-  [SMTPat (exactly_contains_valid_data h p b lo x1 hi);
-   SMTPat (exactly_contains_valid_data h p b lo x2 hi);]
-= ()
-
-abstract
-let exactly_contains_valid_data_injective_strong'
-  (#k: parser_kind)
-  (#t: Type)
-  (h: HS.mem)
-  (p: parser k t)
-  (b: buffer8)
-  (lo: U32.t)
-  (x1: t)
-  (hi1: U32.t)
-  (x2: t)
-  (hi2: U32.t)
-: Lemma
-  (requires (
-    exactly_contains_valid_data h p b lo x1 hi1 /\
-    exactly_contains_valid_data h p b lo x2 hi2 /\
-    k.parser_kind_subkind == Some ParserStrong /\
-    U32.v hi1 <= U32.v hi2
-  ))
-  (ensures (
-    x1 == x2 /\ hi1 == hi2
-  ))
-= assert (no_lookahead_on p (B.as_seq h (B.gsub b lo (U32.sub hi1 lo))) (B.as_seq h (B.gsub b lo (U32.sub hi2 lo))));
-  assert (injective_precond p (B.as_seq h (B.gsub b lo (U32.sub hi2 lo))) (B.as_seq h (B.gsub b lo (U32.sub hi1 lo)))) 
-
-abstract
-let exactly_contains_valid_data_injective_strong
-  (#k: parser_kind)
-  (#t: Type)
-  (h: HS.mem)
-  (p: parser k t)
-  (b: buffer8)
-  (lo: U32.t)
-  (x1: t)
-  (hi1: U32.t)
-  (x2: t)
-  (hi2: U32.t)
-: Lemma
-  (requires (
-    exactly_contains_valid_data h p b lo x1 hi1 /\
-    exactly_contains_valid_data h p b lo x2 hi2 /\
-    k.parser_kind_subkind == Some ParserStrong
-  ))
-  (ensures (
-    x1 == x2 /\ hi1 == hi2
-  ))
-  [SMTPat (exactly_contains_valid_data h p b lo x1 hi1);
-   SMTPat (exactly_contains_valid_data h p b lo x2 hi2);]
-= if U32.v hi1 <= U32.v hi2
-  then exactly_contains_valid_data_injective_strong' h p b lo x1 hi1 x2 hi2
-  else exactly_contains_valid_data_injective_strong' h p b lo x2 hi2 x1 hi1
-
-abstract
-let loc_jbuffer
-  (b: buffer8)
-  (lo: U32.t)
-  (hi: U32.t)
-: GTot M.loc
-= if U32.v lo <= U32.v hi && U32.v hi <= B.length b
-  then M.loc_buffer (B.gsub b lo (U32.sub hi lo))
-  else M.loc_none
-
-abstract
-let loc_jbuffer_eq
-  (b: buffer8)
-  (i j: U32.t)
-: Lemma
-  (requires (U32.v i <= U32.v j /\ U32.v j <= B.length b))
-  (ensures (loc_jbuffer b i j == M.loc_buffer (B.gsub b i (U32.sub j i))))
-//  [SMTPat (loc_jbuffer b i j)] // test by uncommenting this and commenting the following 3 lemmas
-= ()
-
-abstract
-let loc_jbuffer_includes_r
-  (b: buffer8)
-  (lo hi: U32.t)
-: Lemma
-  (M.loc_buffer b `M.loc_includes` loc_jbuffer b lo hi)
-  [SMTPat (loc_jbuffer b lo hi)]
-= ()
-
-abstract
-let loc_includes_union_l_jbuffer
-  (l1 l2: M.loc)
-  (b: buffer8)
-  (i j: U32.t)
-: Lemma
-  (requires (M.loc_includes l1 (loc_jbuffer b i j) \/ M.loc_includes l2 (loc_jbuffer b i j)))
-  (ensures (M.loc_includes (l1 `M.loc_union` l2) (loc_jbuffer b i j)))
-  [SMTPat (M.loc_includes (l1 `M.loc_union` l2) (loc_jbuffer b i j))]
-= ()
-
-abstract
-let loc_disjoint_jbuffer
-  (b: buffer8)
-  (i j k: U32.t)
-: Lemma
-  (requires (U32.v i <= U32.v j /\ U32.v j <= U32.v k))
-  (ensures (M.loc_disjoint (loc_jbuffer b i j) (loc_jbuffer b j k)))
-  [SMTPat (loc_jbuffer b i j); SMTPat (loc_jbuffer b j k)]
-= ()
-
-abstract
-let exactly_contains_valid_data_invariant
-  (#k: parser_kind)
-  (#t: Type)
-  (l: M.loc)
-  (h h' : HS.mem)
-  (p: parser k t)
-  (b: buffer8)
-  (lo: U32.t)
-  (x: t)
-  (hi: U32.t)
-: Lemma
-  (requires (
-    M.modifies l h h' /\
-    exactly_contains_valid_data h p b lo x hi /\
-    M.loc_disjoint l (loc_jbuffer b lo hi)
-  ))
-  (ensures (
-    exactly_contains_valid_data h' p b lo x hi
-  ))
-  [SMTPat (M.modifies l h h'); SMTPat (exactly_contains_valid_data h p b lo x hi)]
-= ()
-
-let contains_valid_serialized_data_or_fail'
-  (#k: parser_kind)
-  (#t: Type)
-  (h: HS.mem)
-  (#p: parser k t)
-  (s: serializer p)
-  (b: buffer8)
-  (lo: I32.t)
-  (x: t)
-  (hi: I32.t)
-: GTot Type0
-= B.live h b /\
-  I32.v lo <= B.length b /\ (
-  if I32.v lo < 0
-  then I32.v hi < 0
-  else
-    let sd = serialize s x in
-    if I32.v lo + Seq.length sd > B.length b
-    then I32.v hi < 0
-    else
-      I32.v lo <= I32.v hi /\
-      I32.v hi <= B.length b /\
-      Seq.slice (B.as_seq h b) (I32.v lo) (I32.v hi) == sd
-  )
-
-abstract
-let contains_valid_serialized_data_or_fail
-  (#k: parser_kind)
-  (#t: Type)
-  (h: HS.mem)
-  (#p: parser k t)
-  (s: serializer p)
-  (b: buffer8)
-  (lo: I32.t)
-  (x: t)
-  (hi: I32.t)
-= contains_valid_serialized_data_or_fail' h s b lo x hi
-
-abstract
-let contains_valid_serialized_data_or_fail_equiv
-  (#k: parser_kind)
-  (#t: Type)
-  (h: HS.mem)
-  (#p: parser k t)
-  (s: serializer p)
-  (b: buffer8)
-  (lo: I32.t)
-  (x: t)
-  (hi: I32.t)
-: Lemma
-  (contains_valid_serialized_data_or_fail h s b lo x hi <==> contains_valid_serialized_data_or_fail' h s b lo x hi)
-= ()
-
-abstract
-let contains_valid_serialized_data_or_fail_elim
-  (#k: parser_kind)
-  (#t: Type)
-  (h: HS.mem)
-  (#p: parser k t)
-  (s: serializer p)
-  (b: buffer8)
-  (lo: I32.t)
-  (x: t)
-  (hi: I32.t)
-: Lemma
-  (requires (contains_valid_serialized_data_or_fail h s b lo x hi))
-  (ensures (
-    B.live h b /\
-    I32.v lo <= B.length b /\ (
-    if I32.v lo < 0
-    then I32.v hi < 0
-    else if I32.v hi < 0
-    then match k.parser_kind_high with
-      | None -> True
-      | Some sz' -> I32.v lo + sz' > B.length b
-    else
-      I32.v lo <= I32.v hi /\
-      I32.v hi <= B.length b /\ (
-      let sz = I32.v hi - I32.v lo in
-      k.parser_kind_low <= sz /\ (
-      match k.parser_kind_high with
-      | None -> True
-      | Some sz' -> sz <= sz'
-  )))))
-  [SMTPat (contains_valid_serialized_data_or_fail h s b lo x hi)]
-= ()
-
-abstract
-let contains_valid_serialized_data_or_fail_exactly_contains_valid_data
-  (#k: parser_kind)
-  (#t: Type)
-  (h: HS.mem)
-  (#p: parser k t)
-  (s: serializer p)
-  (b: buffer8)
-  (lo: I32.t)
-  (x: t)
-  (hi: I32.t)
-: Lemma
-  (requires (
-    contains_valid_serialized_data_or_fail h s b lo x hi /\
-    I32.v lo >= 0 /\
-    I32.v hi >= 0
-  ))
-  (ensures (
-    exactly_contains_valid_data h p b (Cast.int32_to_uint32 lo) x (Cast.int32_to_uint32 hi)
-  ))
-= ()
-
-abstract
-let exactly_contains_valid_data_contains_valid_serialized_data_or_fail
-  (#k: parser_kind)
-  (#t: Type)
-  (h: HS.mem)
-  (#p: parser k t)
-  (s: serializer p)
-  (b: buffer8)
-  (lo: U32.t)
-  (x: t)
-  (hi: U32.t)
-: Lemma
-  (requires (
-    exactly_contains_valid_data h p b lo x hi /\
-    U32.v hi <= 2147483647
-  ))
-  (ensures (
-    contains_valid_serialized_data_or_fail h s b (Cast.uint32_to_int32 lo) x (Cast.uint32_to_int32 hi)
-  ))
-= 
-  let sd = serialize s x in
-  serializer_correct_implies_complete p s;
-  assert (parse p sd == Some (x, Seq.length sd));
-  assert (injective_precond p sd (B.as_seq h (B.gsub b lo (U32.sub hi lo))));
-  assert (injective_postcond p sd (B.as_seq h (B.gsub b lo (U32.sub hi lo))))
-
-abstract
-let loc_ibuffer
-  (b: buffer8)
-  (i: I32.t)
-  (j: I32.t)
-: GTot B.loc
-= if I32.v i < 0 || I32.v i > B.length b || (I32.v j >= 0 && I32.v j < I32.v i)
-  then M.loc_none
-  else if I32.v j < 0 || I32.v j > B.length b
-  then M.loc_buffer (B.gsub b (Cast.int32_to_uint32 i) (B.len b ` U32.sub` Cast.int32_to_uint32 i))
-  else M.loc_buffer (B.gsub b (Cast.int32_to_uint32 i) (Cast.int32_to_uint32 (j `I32.sub` i)))
-
-abstract
-let loc_ibuffer_eq
-  (b: buffer8)
-  (i: I32.t)
-  (j: I32.t)
-: Lemma
-  (requires (
-    I32.v i <= B.length b /\ (
-    if I32.v i < 0
-    then I32.v j < 0
-    else if I32.v j < 0
-    then True
-    else I32.v i <= I32.v j /\ I32.v j <= B.length b
-  )))
-  (ensures (
-    loc_ibuffer b i j == (
-      if I32.v i < 0
-      then M.loc_none
-      else if I32.v j < 0
-      then M.loc_buffer (B.gsub b (Cast.int32_to_uint32 i) (B.len b ` U32.sub` Cast.int32_to_uint32 i))
-      else M.loc_buffer (B.gsub b (Cast.int32_to_uint32 i) (Cast.int32_to_uint32 (j `I32.sub` i)))
-  )))
-= ()
-
-abstract
-let contains_valid_serialized_data_or_fail_loc_ibuffer_eq
-  (#k: parser_kind)
-  (#t: Type)
-  (h : HS.mem)
-  (#p: parser k t)
-  (s: serializer p)
-  (b: buffer8)
-  (i: I32.t)
-  (x: t)
-  (j: I32.t)
-: Lemma
-  (requires (contains_valid_serialized_data_or_fail h s b i x j))
-  (ensures (contains_valid_serialized_data_or_fail' h s b i x j /\
-    loc_ibuffer b i j == (
-      if I32.v i < 0
-      then M.loc_none
-      else if I32.v j < 0
-      then M.loc_buffer (B.gsub b (Cast.int32_to_uint32 i) (B.len b ` U32.sub` Cast.int32_to_uint32 i))
-      else M.loc_buffer (B.gsub b (Cast.int32_to_uint32 i) (Cast.int32_to_uint32 (j `I32.sub` i)))
-  )))
-= ()
-
-abstract
-let loc_buffer_includes_ibuffer
-  (b: buffer8)
-  (i: I32.t)
-  (j: I32.t)
-: Lemma
-  (B.loc_buffer b `B.loc_includes` loc_ibuffer b i j)
-  [SMTPat (loc_ibuffer b i j)]
-= ()
-
-abstract
-let loc_includes_union_r_ibuffer
-  (l1 l2: M.loc)
-  (b: buffer8)
-  (i j: I32.t)
-: Lemma
-  (requires (M.loc_includes l1 (loc_ibuffer b i j) \/ M.loc_includes l2 (loc_ibuffer b i j)))
-  (ensures (M.loc_includes (l1 `M.loc_union` l2) (loc_ibuffer b i j)))
-  [SMTPat (M.loc_includes (l1 `M.loc_union` l2) (loc_ibuffer b i j))]
-= ()
-
-abstract
-let loc_disjoint_ibuffer
-  (b: buffer8)
-  (i j k: I32.t)
-: Lemma
-  (M.loc_disjoint (loc_ibuffer b i j) (loc_ibuffer b j k))
-  [SMTPat (loc_ibuffer b i j); SMTPat (loc_ibuffer b j k)]
-= ()
-
-abstract
-let contains_valid_serialized_data_or_fail_invariant
-  (#k: parser_kind)
-  (#t: Type)
-  (l: M.loc)
-  (h h' : HS.mem)
-  (#p: parser k t)
-  (s: serializer p)
-  (b: buffer8)
-  (lo: I32.t)
-  (x: t)
-  (hi: I32.t)
-: Lemma
-  (requires (
-    M.modifies l h h' /\
-    contains_valid_serialized_data_or_fail h s b lo x hi /\
-    B.live h' b /\
-    M.loc_disjoint l (loc_ibuffer b lo hi)
-  ))
-  (ensures (
-    contains_valid_serialized_data_or_fail h' s b lo x hi
-  ))
-  [SMTPat (M.modifies l h h'); SMTPat (contains_valid_serialized_data_or_fail h s b lo x hi)]
-= ()
-
-abstract
-let contains_valid_serialized_data_or_fail_loc_includes_loc_ibuffer
-  (#k1: parser_kind)
-  (#t1: Type)
-  (h1 : HS.mem)
-  (#p1: parser k1 t1)
-  (s1: serializer p1)
-  (b: buffer8)
-  (i0: I32.t)
-  (x1: t1)
-  (i1: I32.t)
-  (#k2: parser_kind)
-  (#t2: Type)
-  (h2: HS.mem)
-  (#p2: parser k2 t2)
-  (s2: serializer p2)
-  (x2: t2)
-  (i2: I32.t)
-: Lemma
-  (requires (contains_valid_serialized_data_or_fail h1 s1 b i0 x1 i1 /\ contains_valid_serialized_data_or_fail h2 s2 b i1 x2 i2))
-  (ensures (M.loc_includes (loc_ibuffer b i0 i2) (loc_ibuffer b i0 i1) /\ M.loc_includes (loc_ibuffer b i0 i2) (loc_ibuffer b i1 i2)))
-  [SMTPat (contains_valid_serialized_data_or_fail h1 s1 b i0 x1 i1); SMTPat (contains_valid_serialized_data_or_fail h2 s2 b i1 x2 i2)]
-= ()
-
 inline_for_extraction
 let serializer32
   (#k: parser_kind)
@@ -851,3 +879,10 @@ let serializer32_fail_of_serializer
     end
   end
   
+(* Low-level serialization *)
+
+assume
+val valid (h: HS.mem) (b: LL.buffer8) (off: U32.t) (#k: parser_kind) (#t: Type) (p: parser k t) : GTot Type0
+
+assume
+val contents (h: HS.mem) (b: LL.buffer8) (off: U32.t) (#k: parser_kind) (#t: Type) (
