@@ -17,10 +17,8 @@ module ST = FStar.HyperStack.ST
 
 module M = TLS.HSL.Msg
 module LP = LowParse.Low.Base
-module LM = LowStar.Modifies
 
 type loc = LowStar.Modifies.loc
-type buffer8 = B.buffer uint8
 
 (*
  * We currently model the reading side of TLS
@@ -36,7 +34,6 @@ type buffer8 = B.buffer uint8
  *                    in each subsequence, we also keep a ghost repr of its parsing
  *)
 abstract
-noeq
 type message (len:uint32)= {
   from:(x:uint32{x <= len});
   to: (x:uint32{from <= x /\ x <= len});
@@ -47,7 +44,7 @@ type message (len:uint32)= {
 unfold
 let reference (t:Type) = reference t
 
-let lbuffer8 (l:uint32) = buf:buffer8{B.len buf == l}
+let lbuffer8 (l:uint32) = buf:B.buffer uint8{B.len buf == l}
 
 abstract 
 noeq
@@ -67,7 +64,7 @@ let hsl_get_len (st:hsl_state)
 
 abstract 
 let hsl_get_buf (st:hsl_state) 
-  : GTot (b:buffer8{B.len b == hsl_get_len st})
+  : GTot (b:lbuffer8 (hsl_get_len st))
   = st.buf
 
 abstract 
@@ -125,12 +122,6 @@ let st_inv (st:hsl_state) (h:HS.mem) =
   (* Main stateful invariant *)
   msgs_inv st h
 
-(* Questions:
-      Is the HSL state recycled? i.e., what happens when the buffer is filled?
-      Is it worth keeping HSL state after a flight has been parsed?
-      How much can we do with monotonicity, e.g., the msgs reference would be convenient to model monotonically
-*)
-
 (*
  * From the st_inv, clients can only conclude liveness of the internal buffer
  *)
@@ -167,7 +158,7 @@ let frame_st_inv (st:hsl_state) (l:loc) (h0 h1:HS.mem)
       (requires 
          st_inv st h0 /\
          B.loc_disjoint l (footprint st h0) /\
-         LM.modifies l h0 h1)
+         B.modifies l h0 h1)
       (ensures 
          st_inv st h1 /\
          footprint st h1 == footprint st h0)
@@ -189,7 +180,7 @@ let create (len:uint_32{len > 0ul}) (b:lbuffer8 len)
           B.fresh_loc (fp st) h0 h1 /\
           hsl_get_p1 st h1 == 0ul /\
           hsl_get_msgs st h1 == [] /\
-          LM.modifies B.loc_none h0 h1)
+          B.modifies B.loc_none h0 h1)
   = let p0 = ralloc HS.root 0ul in
     let p1 = ralloc HS.root 0ul in
     let msgs = ralloc HS.root (Ghost.hide []) in
@@ -226,16 +217,16 @@ let parse_it (#len:uint32)
        (requires fun h ->
          B.live h b)
        (ensures fun h0 eopt h1 ->
-         let eopt' = LP.parse M.msg_parser (B.as_seq h0 b) in
-         LM.modifies B.loc_none h0 h1 /\ 
+         let sub_b = B.gsub b from (to - from) in  //we should parse the sub-buffer between from and to
+         let eopt' = LP.parse M.msg_parser (B.as_seq h0 sub_b) in
+         B.modifies B.loc_none h0 h1 /\ 
          (match eopt, eopt' with
          | None, None -> True
          | Some (m, n), Some (m', n') -> 
-            v from + n' <= v to /\
+            //v from + n' <= v to /\  //this is derivable from the type of LP.parse
             n == u (v from + n') /\
             m == G.hide ({from=from; to=n; msg=m'}) /\
-            message_is_parsed #len (G.reveal m) b h1 // /\
-            // (G.reveal m).to == n
+            message_is_parsed #len (G.reveal m) b h1
          | _ -> False))
   = admit()         
 
@@ -255,8 +246,8 @@ let extend_st_inv_snoc (st:hsl_state) (h0 h1:HS.mem) (x:message st.len)
   : Lemma 
       (requires 
          st_inv st h0 /\
-         LM.modifies (fp st) h0 h1 /\
-         HS.sel h0 st.p0 <= HS.sel h1 st.p0 /\
+         B.modifies (fp st) h0 h1 /\
+         HS.sel h0 st.p0 <= HS.sel h1 st.p0 /\  //st.p0 is not abstraction safe
          HS.sel h1 st.p0 <= hsl_get_p1 st h1 /\
          hsl_get_p1 st h0 <= hsl_get_p1 st h1 /\
          (let msgs1 = hsl_get_msgs st h1 in
@@ -273,7 +264,14 @@ let extend_st_inv_snoc (st:hsl_state) (h0 h1:HS.mem) (x:message st.len)
     let p0 = HS.sel h1 st.p0 in
     invert_memP_snoc msgs0 x      
 
-#set-options "--z3rlimit_factor 3 --initial_ifuel 1 --max_ifuel 1"
+(* Questions:
+      Is the HSL state recycled? i.e., what happens when the buffer is filled?
+      Is it worth keeping HSL state after a flight has been parsed?
+      How much can we do with monotonicity, e.g., the msgs reference would be convenient to model monotonically?
+      Will there be a case when process could end up parsing multiple messages?
+*)
+
+#set-options "--initial_ifuel 1 --max_ifuel 1 --max_fuel 0 --z3rlimit 20"
 (*
  * Main process function that client (Record) calls once it has appended some data to the input buffer
  * It updates the p0 and p1 pointers, so that p1 points to p (the input index)
@@ -289,18 +287,18 @@ let process (st:hsl_state) (p:uint32)
        (ensures fun h0 _ h1 ->
          st_inv st h1 /\  //invariants holds again
          hsl_get_p1 st h1 == p /\
-         LM.modifies (fp st) h0 h1 /\
+         B.modifies (fp st) h0 h1 /\
          hsl_get_msgs st h1 `extends` hsl_get_msgs st h0)
   = let h0 = ST.get() in 
     let msgs = !st.msgs in
     st.p1 := p;
     let p0 = !st.p0 in
     match parse_it #st.len p0 p st.buf with
-    | None -> 
+    | None ->
       let h1 = ST.get() in
       assert (hsl_get_msgs st h1 == hsl_get_msgs st h0);
       extends_refl (G.reveal msgs)
-    | Some (last, n) -> 
+    | Some (last, n) ->
       extends_snoc (G.reveal msgs) (G.reveal last);
       st.msgs := ghost_snoc (!st.msgs) last;
       st.p0 := n;
