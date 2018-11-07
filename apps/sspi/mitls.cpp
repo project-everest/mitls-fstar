@@ -677,6 +677,21 @@ int MITLS_CALLCONV MITLS_recv_callback(void *ctx, unsigned char *buffer, size_t 
         }
     }
 
+    if (state->ActualInputToken.cbBuffer < buffer_size && state->item->Type == TLS_CONNECT) {
+        // Although the docs for InitializeSecurityContext() say SEC_E_INCOMPLETE_MESSAGE
+        // is returned if the whole message hasn't been read, it really returns
+        // SEC_I_CONTINUE_NEEDED with a 0-byte output buffer, to begin reading from a
+        // fresh TLS record.
+        _Print("Insufficient data ready for read, during handshake.  Use SEC_I_CONTINUE_NEEDED\n");
+        _PrintPSecBuffer(state->pOutputBuffer);
+        state->status = SEC_I_CONTINUE_NEEDED;
+        SetEvent(state->hOutputIsReady);
+        WaitForSingleObject(state->hNextCallReady, INFINITE);
+        if (state->fDeleteOnComplete) {
+            goto AbortRecv;
+        }
+    }
+
     while (state->ActualInputToken.cbBuffer < buffer_size) {
         if (state->OutputBufferBusy) {
             _Print("Unexpected send() inside a recv() loop");
