@@ -629,7 +629,9 @@ int MITLS_CALLCONV MITLS_send_callback(void *ctx, const unsigned char *buffer, s
         return -1;
     }
     memcpy(pOutToken->pvBuffer, buffer, buffer_size);
-    pOutToken->BufferType = SECBUFFER_DATA; // indicate that the buffer contains data  bugbug: this might be overwriting SECBUFFER_TOKEN
+    if (pOutToken->BufferType != SECBUFFER_TOKEN) {
+        pOutToken->BufferType = SECBUFFER_DATA; // indicate that the buffer contains data
+    }
     pOutToken->cbBuffer = (DWORD)buffer_size;
     state->OutputBufferBusy = true;
 
@@ -889,10 +891,7 @@ SEC_ENTRY MITLS_InitializeSecurityContextA(
     HANDLE h[2] = { item->hWorkItemCompleted, state->hOutputIsReady };
     WaitForMultipleObjects(ARRAYSIZE(h), h, FALSE, INFINITE);
 
-    *pfContextAttr = ISC_REQ_SEQUENCE_DETECT|
-        ISC_RET_SEQUENCE_DETECT|
-        ISC_RET_CONFIDENTIALITY|
-        ISC_RET_ALLOCATED_MEMORY;
+    *pfContextAttr = fContextReq;
 
     if (state->status == SEC_E_OK) {
         // Finished the work item
@@ -924,7 +923,7 @@ SEC_ENTRY MITLS_InitializeSecurityContextA(
         }
         _Print("MITLS_InitializeSecurityContextA - returning %x", state->status);
         _PrintPSecBufferDesc("pInput", pInput);
-        _PrintPSecBufferDesc("pOuptut", pOutput);
+        _PrintPSecBufferDesc("pOutput", pOutput);
         if (phNewContext) {
             phNewContext->dwLower = 0;
             phNewContext->dwUpper = (ULONG_PTR)state;
@@ -1129,7 +1128,8 @@ MITLS_SetContextAttributesW(
     //            or SECPKG_ATTR_UI_INFO
     //            or SECPKG_ATTR_EARLY_START
     //            or SECPKG_ATTR_KEYING_MATERIAL_INFO
-    if (ulAttribute == SECPKG_ATTR_EARLY_START) {
+    if (ulAttribute == SECPKG_ATTR_EARLY_START ||
+        ulAttribute == SECPKG_ATTR_UI_INFO) {
         return SEC_E_OK; // accept and ignore
     }
     return SEC_E_UNSUPPORTED_FUNCTION;
