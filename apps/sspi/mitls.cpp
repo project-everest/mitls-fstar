@@ -36,6 +36,12 @@ typedef struct _MitlsCredHandle {
 
 typedef struct _TLS_WORK_ITEM TLS_WORK_ITEM;
 
+typedef struct {
+    unsigned long cbBuffer;             // Size of the buffer, in bytes
+    unsigned long cbWritten;            // Number of bytes written to the buffer so far
+    void *pvBuffer;
+} OutputBufferDesc;
+
 typedef struct _ConnectionState {
     // Each connection has an associated worker thread
     std::queue<TLS_WORK_ITEM*> mitlsQueue;
@@ -65,6 +71,9 @@ typedef struct _ConnectionState {
     // the buffer pointer and length can change.
     SecBuffer ActualInputToken;
     DWORD cbInputConsumed; // to support SEC_E_INCOMPLETE_MESSAGE
+
+    unsigned int cSendBuffers;
+    OutputBufferDesc *pSendOutput;
 
     bool fShuttingDownConnection;
     bool fDeleteOnComplete;
@@ -334,7 +343,7 @@ void ProcessRecv(TLS_RECV_WORK_ITEM* item)
     unsigned char *pReceived = FFI_mitls_receive(state->state, &cbReceived);
     if (pReceived == NULL) {
         // Failed
-        _Print("MITLS Reecive failed");
+        _Print("MITLS Receive failed");
         state->status = SEC_E_INTERNAL_ERROR;
         return;
     }
@@ -573,13 +582,16 @@ int MITLS_CALLCONV MITLS_send_callback(void *ctx, const unsigned char *buffer, s
 
     if (state->item->Type == TLS_SEND) {
         const unsigned char *pb = buffer;
-        size_t cb = buffer_size;
-        for (ULONG i = 0; cb && i < state->pOutput->cBuffers; ++i) {
-            size_t cbcopy = min(cb, state->pOutput->pBuffers[i].cbBuffer);
-            memcpy(state->pOutput->pBuffers[i].pvBuffer, pb, cbcopy);
-            state->pOutput->pBuffers[i].cbBuffer = (DWORD)cbcopy;
-            pb += cbcopy;
-            cb -= cbcopy;
+        unsigned int cb = (unsigned int)buffer_size;
+        for (ULONG i = 0; cb && i < state->cSendBuffers; ++i) {
+            unsigned int cbcopy = min(cb, (state->pSendOutput[i].cbBuffer-state->pSendOutput[i].cbWritten));
+            if (cbcopy) {
+                void *pvDest = (void*)((intptr_t)state->pSendOutput[i].pvBuffer + state->pSendOutput[i].cbWritten);
+                memcpy(pvDest, pb, cbcopy);
+                state->pSendOutput[i].cbWritten += cbcopy;
+                pb += cbcopy;
+                cb -= cbcopy;
+            }
         }
         if (cb) {
             _Print("Insufficient buffer space in pOutput");
@@ -1215,9 +1227,9 @@ SECURITY_STATUS SEC_ENTRY MITLS_QueryContextAttributesW(
         PSecPkgContext_StreamSizes p = (PSecPkgContext_StreamSizes)pBuffer;
         // Values captured from native schannel TLS 1.2.  BUGBUG: Fetch from miTLS
         p->cbBlockSize = 0x10;
-        p->cbHeader = 0x15;
+        p->cbHeader = 0x15; //  0xd;
         p->cbMaximumMessage = 0x4000;
-        p->cbTrailer = 0x40;
+        p->cbTrailer = 0x40; // 0x10;
         p->cBuffers = 4;
         return SEC_E_OK;
     }
@@ -1261,6 +1273,9 @@ SECURITY_STATUS SEC_ENTRY MITLS_EncryptMessage(PCtxtHandle         phContext,
     if (pMessage->cBuffers < 3) {
         _Print("ERROR: Not enough input buffers to encrypt");
         return SEC_E_DECRYPT_FAILURE;
+    } if (pMessage->cBuffers > 4) {
+        _Print("ERROR: Too many input buffers to encrypt");
+        return SEC_E_DECRYPT_FAILURE;
     }
     SecBuffer ActualInput;
     PSecBuffer pApplicationProtocols;
@@ -1269,14 +1284,23 @@ SECURITY_STATUS SEC_ENTRY MITLS_EncryptMessage(PCtxtHandle         phContext,
         return st;
     }
 
+    OutputBufferDesc pOutputs[4];
+    for (unsigned int i = 0; i < pMessage->cBuffers; ++i) {
+        pOutputs[i].cbBuffer = pMessage->pBuffers[i].cbBuffer;
+        pOutputs[i].pvBuffer = pMessage->pBuffers[i].pvBuffer;
+        pOutputs[i].cbWritten = 0;
+    }
+
     ConnectionState *state = (ConnectionState*)phContext->dwUpper;
     state->ActualInputToken = ActualInput;
     state->cbInputConsumed = 0;
     TLS_WORK_ITEM *item = new TLS_WORK_ITEM();
     state->item = item;
     state->pOutputBuffer = NULL;
+    state->pOutput = NULL;
     state->OutputBufferBusy = false;
-    state->pOutput = pMessage;
+    state->cSendBuffers = pMessage->cBuffers;
+    state->pSendOutput = pOutputs;
     item->Type = TLS_SEND;
     item->ThreadId = GetCurrentThreadId();
     item->hWorkItemCompleted = CreateEventW(NULL, FALSE, FALSE, NULL);
@@ -1292,6 +1316,10 @@ SECURITY_STATUS SEC_ENTRY MITLS_EncryptMessage(PCtxtHandle         phContext,
     _Print("MITLS_EncryptMessage - waiting for item");
     WaitForSingleObject(item->hWorkItemCompleted, INFINITE);
     _Print("MITLS_EncryptMessage - done");
+
+    for (unsigned int i = 0; i < pMessage->cBuffers; ++i) {
+        pMessage->pBuffers[i].cbBuffer = pOutputs[i].cbWritten;
+    }
 
     delete item;
     state->item = NULL;
