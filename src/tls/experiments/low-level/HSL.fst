@@ -195,52 +195,14 @@ let create (len:uint_32{len > 0ul}) (b:lbuffer8 len)
     let msgs = ralloc HS.root (Ghost.hide []) in
     Mk_state len b p0 p1 msgs
 
-// (*
-//  * Auxiliary function for processing the buffer
-//  *
-//  * Processes the buffer between p1 and p, one at a time
-//  * Returns new p0, and updated list of indices
-//  *)
-// private 
-// let rec aux_process 
-//            #len 
-//            (b:lbuffer8 len) 
-//            (p0 p1 p:uint_32) 
-//            (l:list (uint_32 & uint_32))
-//   : ST (uint_32 & list (uint_32 & uint_32))
-//        (requires fun h0 ->
-//          Buffer.live h0 b /\
-//          p <= Buffer.len b /\
-//          p1 <= p /\
-//          p0 <= p1 /\
-//          null_terminator_invariant_helper b p0 p1 h0 /\
-//          msgs_list_invariant_helper b l p0 h0))
-//        (ensures fun h0 (r, l) h1 -> 
-//          Buffer.live h1 b /\
-//          r <= p /\
-//          null_terminator_invariant_helper b r p h1 /\
-//          msgs_list_invariant_helper b l r h1 /\
-//          Mods.modifies loc_none h0 h1)
-         
-//   = if p = p1 then p0, l  //done
-//     else
-//       let c = Buffer.index b p1 in
-//       if c = 0ul then  //found a 0
-//         if p0 = p1 then aux_process b (p1 + 1ul) (p1 + 1ul) p l  //if the subsequence is empty, just go ahead
-//         else aux_process b (p1 + 1ul) (p1 + 1ul) p ((p0, p1)::l)  //else add it to the list
-//       else aux_process b p0 (p1 + 1ul) p l
-
-// #reset-options "--max_fuel 0 --max_ifuel 1 --initial_ifuel 1 --z3rlimit 16"
-
+(* MOVE TO LIST LIBRARY *)
 let extends (l1 l2:list 'a)  = exists l3. l1 == l2 @ l3
-val append_memP: #t:Type ->  l1:list t
-              -> l2:list t
-              -> a:t
-              -> Lemma (List.Tot.memP a (l1@l2) <==> (List.Tot.memP a l1 \/ List.Tot.memP a l2))
-                       (* [SMTPat (mem a (l1@l2))] *)
-let rec append_memP #t l1 l2 a = match l1 with
-  | [] -> ()
-  | hd::tl -> append_memP tl l2 a
+
+let rec append_memP (#t:Type) (l1 l2:list t) (a:t)
+  : Lemma (List.Tot.memP a (l1@l2) <==> (List.Tot.memP a l1 \/ List.Tot.memP a l2))
+  = match l1 with
+    | [] -> ()
+    | hd::tl -> append_memP tl l2 a
 
 let extends_mem (l1 l2:list 'a)
   : Lemma (requires l1 `extends` l2)
@@ -250,8 +212,17 @@ let extends_mem (l1 l2:list 'a)
        (fun (l3:list 'a{l1 == l2@l3}) ->
            FStar.Classical.forall_intro (append_memP l2 l3))
 
-let parse_it (b:buffer8) 
-  : ST (option (M.msg & nat))
+let extends_refl (l:list 'a) : Lemma (l `extends` l) = admit()
+let extends_snoc (l:list 'a) (x:'a) : Lemma (List.Tot.snoc (l, x) `extends` l) = admit()
+let invert_memP_snoc (l:list 'a) (x:'a) 
+  : Lemma (FStar.List.Tot.(forall m.{:pattern (memP m (snoc (l, x)))} memP m (snoc (l, x)) <==> memP m l \/ m == x))
+  = admit()
+
+let parse_it (#len:uint32) 
+             (from:uint32)
+             (to:uint32{from <= to /\ to <= len})
+             (b:lbuffer8 len)
+  : ST (option (G.erased (message len) & uint32))
        (requires fun h ->
          B.live h b)
        (ensures fun h0 eopt h1 ->
@@ -259,57 +230,50 @@ let parse_it (b:buffer8)
          LM.modifies B.loc_none h0 h1 /\ 
          (match eopt, eopt' with
          | None, None -> True
-         | Some (m, n), Some (m', n') ->  m==m' /\ n == n'
+         | Some (m, n), Some (m', n') -> 
+            v from + n' <= v to /\
+            n == u (v from + n') /\
+            m == G.hide ({from=from; to=n; msg=m'}) /\
+            message_is_parsed #len (G.reveal m) b h1 // /\
+            // (G.reveal m).to == n
          | _ -> False))
   = admit()         
 
+(* TODO: Move to Ghost library *)
 let bind (x:G.erased 'a) (g:'a -> G.erased 'b) : G.erased 'b =
   let x = G.reveal x in
   g x
   
-let ghost_append (x y:Ghost.erased (list 'a))
-  : Ghost.erased (list 'a)
-  = l1 <-- x ;
-    l2 <-- y ;
-    G.hide (l1 @ l2) 
-let extends_refl (l:list 'a) : Lemma (l `extends` l) = admit()
-let extends_snoc (l:list 'a) (x:'a) : Lemma (List.Tot.snoc (l, x) `extends` l) = admit()
-let invert_memP_snoc (l:list 'a) (x:'a) 
-  : Lemma (FStar.List.Tot.(forall m.{:pattern (memP m (snoc (l, x)))} memP m (snoc (l, x)) <==> memP m l \/ m == x))
-  = admit()
-
-let extend_st_inv (st:hsl_state) (h0 h1:HS.mem)
+let ghost_snoc (x:G.erased (list 'a)) (y:G.erased 'a)
+  : G.erased (list 'a)
+  = yy <-- y;
+    xx <-- x;
+    G.hide (List.Tot.snoc (xx, yy))
+    
+#set-options "--max_fuel 0 --max_ifuel 0"
+let extend_st_inv_snoc (st:hsl_state) (h0 h1:HS.mem) (x:message st.len)
   : Lemma 
       (requires 
          st_inv st h0 /\
          LM.modifies (fp st) h0 h1 /\
-         hsl_get_msgs st h0 == hsl_get_msgs st h1 /\
          HS.sel h0 st.p0 <= HS.sel h1 st.p0 /\
          HS.sel h1 st.p0 <= hsl_get_p1 st h1 /\
-         hsl_get_p1 st h0 <= hsl_get_p1 st h1)
+         hsl_get_p1 st h0 <= hsl_get_p1 st h1 /\
+         (let msgs1 = hsl_get_msgs st h1 in
+          let msgs0 = hsl_get_msgs st h0 in
+          let p0 = HS.sel h1 st.p0 in
+          msgs1 == List.Tot.snoc (msgs0, x) /\
+          x.to <= p0 /\
+          message_is_parsed x st.buf h1))
       (ensures 
          st_inv st h1)
-  = ()
+  = 
+    let msgs1 = hsl_get_msgs st h1 in
+    let msgs0 = hsl_get_msgs st h0 in
+    let p0 = HS.sel h1 st.p0 in
+    invert_memP_snoc msgs0 x      
 
-// let extend_st_inv (st:hsl_state) (h0 h1:HS.mem)
-//   : Lemma 
-//       (requires 
-//          st_inv st h0 /\
-//          LM.modifies (fp st) h0 h1 /\
-//          HS.sel h0 st.p0 <= HS.sel h1 st.p0 /\
-//          HS.sel h1 st.p0 <= hsl_get_p1 st h1 /\
-//          hsl_get_p1 st h0 <= hsl_get_p1 st h1 /\
-//          (let msgs1 = hsl_get_msgs st h1 in
-//           let msgs0 = hsl_get_msgs st h0 in         
-//           msgs1 `extends` msgs0 /\
-//           (forall (m:msg). List.Tot.memP m
-         
-//          )
-//       (ensures 
-//          st_inv st h1)
-//   = ()
-
-#set-options "--max_fuel 0 --max_ifuel 0"
+#set-options "--z3rlimit_factor 3 --initial_ifuel 1 --max_ifuel 1"
 (*
  * Main process function that client (Record) calls once it has appended some data to the input buffer
  * It updates the p0 and p1 pointers, so that p1 points to p (the input index)
@@ -330,22 +294,19 @@ let process (st:hsl_state) (p:uint32)
   = let h0 = ST.get() in 
     let msgs = !st.msgs in
     st.p1 := p;
-    let p1 = p in
     let p0 = !st.p0 in
-    let delta = p1 - p0 in
-    let sub_buf = B.sub st.buf !st.p0 delta in
-    match parse_it sub_buf with
+    match parse_it #st.len p0 p st.buf with
     | None -> 
       let h1 = ST.get() in
       assert (hsl_get_msgs st h1 == hsl_get_msgs st h0);
       extends_refl (G.reveal msgs)
-    | Some (msg, n) -> 
-      let last = {from=p0; to=p1; msg} in
-      extends_snoc (G.reveal msgs) last;
-      invert_memP_snoc (G.reveal msgs) last;
-      st.msgs := ghost_append (!st.msgs) (Ghost.hide [ last ]);
+    | Some (last, n) -> 
+      extends_snoc (G.reveal msgs) (G.reveal last);
+      st.msgs := ghost_snoc (!st.msgs) last;
+      st.p0 := n;
       let h1 = ST.get() in
-      assume (st_inv st h1)      //TODO
+      extend_st_inv_snoc st h0 h1 (G.reveal last)
+
 
 // #set-options "--z3rlimit_factor 2"
 // let top_level () : St unit =
