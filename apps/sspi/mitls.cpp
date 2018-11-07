@@ -399,12 +399,10 @@ void ProcessDisconnect(TLS_DISCONNECT_WORK_ITEM* item)
     ConnectionState *state = item->state;
 
     FFI_mitls_close(state->state);
-    delete item;
     state->item = NULL;
     state->state = NULL;
     state->status = SEC_E_OK;
     free((void*)state->HostName);
-    free(state);
 }
 
 DWORD WINAPI MITLS_Threadproc(
