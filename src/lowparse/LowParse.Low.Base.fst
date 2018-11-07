@@ -239,6 +239,18 @@ let valid_frame
 = ()
 
 unfold 
+let valid_pos
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (sl: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+= valid p h sl pos /\
+  U32.v pos + content_length p h sl pos == U32.v pos'
+
+unfold 
 let valid_content_pos
   (#k: parser_kind)
   (#t: Type)
@@ -248,9 +260,8 @@ let valid_content_pos
   (pos: U32.t)
   (x: t)
   (pos' : U32.t)
-= valid p h sl pos /\
-  contents p h sl pos == x /\
-  U32.v pos + content_length p h sl pos == U32.v pos'
+= valid_pos p h sl pos pos' /\
+  contents p h sl pos == x
 
 class validator_cls = {
   validator_max_length: U32.t;
@@ -462,16 +473,15 @@ let copy_strong
   (#k: parser_kind)
   (#t: Type)
   (p: parser k t)
-  (src: slice)
+  (src: slice) // FIXME: length is useless here
   (spos spos' : U32.t)
   (dst: slice)
   (dpos: U32.t)
 : HST.Stack U32.t
   (requires (fun h ->
     k.parser_kind_subkind == Some ParserStrong /\
-    valid p h src spos /\ (
+    valid_pos p h src spos spos' /\ (
     let clen = content_length p h src spos in
-    U32.v spos + clen == U32.v spos' /\
     U32.v dpos + clen <= U32.v dst.len /\
     live_slice h dst /\
     B.loc_disjoint (loc_slice_from_to src spos spos') (loc_slice_from_to dst dpos (dpos `U32.add` (U32.uint_to_t clen)))
@@ -502,15 +512,14 @@ let copy_weak
   (#k: parser_kind)
   (#t: Type)
   (p: parser k t)
-  (src: slice)
+  (src: slice) // FIXME: length is useless here
   (spos spos' : U32.t)
   (dst: slice)
   (dpos: U32.t)
 : HST.Stack U32.t
   (requires (fun h ->
     k.parser_kind_subkind == Some ParserStrong /\
-    valid p h src spos /\
-    U32.v spos + content_length p h src spos  == U32.v spos' /\
+    valid_pos p h src spos spos' /\
     live_slice h dst /\
     U32.v dpos <= U32.v dst.len /\
     U32.v dst.len < U32.v max_uint32 /\
@@ -527,6 +536,173 @@ let copy_weak
 = if (dst.len `U32.sub` dpos) `U32.lt` (spos' `U32.sub` spos)
   then max_uint32
   else copy_strong p src spos spos' dst dpos
+
+
+(* Case where we do not have the strong prefix property (e.g. lists): we need an extra length *)
+
+let valid_exact'
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (s: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+: GTot Type0
+= U32.v pos <= U32.v pos' /\
+  U32.v pos' <= U32.v s.len /\
+  live_slice h s /\ (
+  let len' = pos' `U32.sub` pos in
+  match parse p (B.as_seq h (B.gsub s.base pos len')) with
+  | None -> False
+  | Some (_, consumed) -> (consumed <: nat) == U32.v len'
+  )
+
+abstract
+let valid_exact
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (s: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+: GTot Type0
+= valid_exact' p h s pos pos'
+
+abstract
+let valid_exact_elim
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (s: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+: Lemma
+  (requires (valid_exact p h s pos pos'))
+  (ensures (valid_exact' p h s pos pos'))
+  [SMTPat (valid_exact p h s pos pos')]
+= ()
+
+abstract
+let valid_exact_equiv
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (s: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+: Lemma
+  (valid_exact p h s pos pos' <==> valid_exact' p h s pos pos')
+= ()
+
+let contents_exact'
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (s: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+: Ghost t
+  (requires (valid_exact' p h s pos pos'))
+  (ensures (fun _ -> True))
+= let (Some (v, _)) = parse p (B.as_seq h (B.gsub s.base pos (pos' `U32.sub` pos))) in
+  v
+
+abstract
+let contents_exact
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (s: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+: Ghost t
+  (requires (valid_exact p h s pos pos'))
+  (ensures (fun _ -> True))
+= contents_exact' p h s pos pos'
+
+abstract
+let contents_exact_eq
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (s: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+: Lemma
+  (requires (valid_exact p h s pos pos'))
+  (ensures (valid_exact' p h s pos pos' /\ contents_exact p h s pos pos' == contents_exact' p h s pos pos'))
+= ()
+
+abstract
+let valid_exact_frame
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (s: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+  (l: B.loc)
+  (h' : HS.mem)
+: Lemma
+  (requires (valid_exact p h s pos pos' /\ B.modifies l h h' /\ B.loc_disjoint l (loc_slice_from_to s pos pos')))
+  (ensures (valid_exact p h' s pos pos' /\ contents_exact p h' s pos pos' == contents_exact p h s pos pos'))
+  [SMTPatOr [
+    [SMTPat (valid_exact p h s pos pos'); SMTPat (B.modifies l h h')];
+    [SMTPat (valid_exact p h' s pos pos'); SMTPat (B.modifies l h h')];
+    [SMTPat (contents_exact p h s pos pos'); SMTPat (B.modifies l h h')];
+    [SMTPat (contents_exact p h' s pos pos'); SMTPat (B.modifies l h h')];
+  ]]
+= ()
+
+abstract
+let valid_valid_exact
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (s: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (valid p h s pos /\ k.parser_kind_subkind == Some ParserStrong))
+  (ensures (
+    let npos' = U32.v pos + content_length p h s pos in
+    npos' <= U32.v s.len /\ (
+    let pos' = U32.uint_to_t npos' in
+    valid_exact p h s pos pos' /\
+    contents_exact p h s pos pos' == contents p h s pos
+  )))
+= let npos' = U32.v pos + content_length p h s pos in
+  assert (npos' <= U32.v s.len);
+  let pos' = U32.uint_to_t npos' in
+  assert (no_lookahead_on p (B.as_seq h (B.gsub s.base pos (s.len `U32.sub` pos))) (B.as_seq h (B.gsub s.base pos (pos' `U32.sub` pos))));
+  assert (injective_precond p (B.as_seq h (B.gsub s.base pos (s.len `U32.sub` pos))) (B.as_seq h (B.gsub s.base pos (pos' `U32.sub` pos))));
+  assert (injective_postcond p (B.as_seq h (B.gsub s.base pos (s.len `U32.sub` pos))) (B.as_seq h (B.gsub s.base pos (pos' `U32.sub` pos))))
+
+abstract
+let valid_exact_valid
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (s: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+: Lemma
+  (requires (valid_exact p h s pos pos' /\ k.parser_kind_subkind == Some ParserStrong))
+  (ensures (
+    valid_content_pos p h s pos (contents_exact p h s pos pos') pos'
+  ))
+= assert (no_lookahead_on p (B.as_seq h (B.gsub s.base pos (pos' `U32.sub`pos))) (B.as_seq h (B.gsub s.base pos (s.len `U32.sub` pos))));
+  assert (injective_precond p (B.as_seq h (B.gsub s.base pos (pos' `U32.sub` pos))) (B.as_seq h (B.gsub s.base pos (s.len `U32.sub` pos))));
+  assert (injective_postcond p (B.as_seq h (B.gsub s.base pos (pos' `U32.sub` pos))) (B.as_seq h (B.gsub s.base pos (s.len `U32.sub` pos))))
 
 (*
 let int32_to_uint32_pos
