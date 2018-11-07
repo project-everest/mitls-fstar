@@ -508,7 +508,7 @@ let copy_strong
 #reset-options
 
 inline_for_extraction
-let copy_weak
+let copy_weak_with_length
   (#k: parser_kind)
   (#t: Type)
   (p: parser k t)
@@ -536,6 +536,36 @@ let copy_weak
 = if (dst.len `U32.sub` dpos) `U32.lt` (spos' `U32.sub` spos)
   then max_uint32
   else copy_strong p src spos spos' dst dpos
+
+inline_for_extraction
+let copy_weak
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (jmp: jumper p)
+  (src: slice)
+  (spos : U32.t)
+  (dst: slice)
+  (dpos: U32.t)
+: HST.Stack U32.t
+  (requires (fun h ->
+    k.parser_kind_subkind == Some ParserStrong /\
+    valid p h src spos /\
+    live_slice h dst /\
+    U32.v dpos <= U32.v dst.len /\
+    U32.v dst.len < U32.v max_uint32 /\
+    B.loc_disjoint (loc_slice_from src spos) (loc_slice_from dst dpos)
+  ))
+  (ensures (fun h dpos' h' ->
+    B.modifies (loc_slice_from dst dpos) h h' /\ (
+    if dpos' = max_uint32
+    then
+      U32.v dpos + content_length p h src spos > U32.v dst.len
+    else
+      valid_content_pos p h' dst dpos (contents p h src spos) dpos'
+  )))
+= let spos' = jmp src spos in
+  copy_weak_with_length p src spos spos' dst dpos
 
 
 (* Case where we do not have the strong prefix property (e.g. lists): we need an extra length *)
@@ -687,6 +717,23 @@ let valid_valid_exact
   assert (injective_postcond p (B.as_seq h (B.gsub s.base pos (s.len `U32.sub` pos))) (B.as_seq h (B.gsub s.base pos (pos' `U32.sub` pos))))
 
 abstract
+let valid_pos_valid_exact
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (s: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+: Lemma
+  (requires (valid_pos p h s pos pos' /\ k.parser_kind_subkind == Some ParserStrong))
+  (ensures (
+    valid_exact p h s pos pos' /\
+    contents_exact p h s pos pos' == contents p h s pos
+  ))
+= valid_valid_exact p h s pos
+
+abstract
 let valid_exact_valid
   (#k: parser_kind)
   (#t: Type)
@@ -703,6 +750,57 @@ let valid_exact_valid
 = assert (no_lookahead_on p (B.as_seq h (B.gsub s.base pos (pos' `U32.sub`pos))) (B.as_seq h (B.gsub s.base pos (s.len `U32.sub` pos))));
   assert (injective_precond p (B.as_seq h (B.gsub s.base pos (pos' `U32.sub` pos))) (B.as_seq h (B.gsub s.base pos (s.len `U32.sub` pos))));
   assert (injective_postcond p (B.as_seq h (B.gsub s.base pos (pos' `U32.sub` pos))) (B.as_seq h (B.gsub s.base pos (s.len `U32.sub` pos))))
+
+abstract
+let valid_exact_ext_intro
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (s1: slice)
+  (pos1: U32.t)
+  (pos1' : U32.t)
+  (s2: slice)
+  (pos2: U32.t)
+  (pos2' : U32.t)
+: Lemma
+  (requires (
+    valid_exact p h s1 pos1 pos1' /\
+    live_slice h s2 /\
+    U32.v pos1' - U32.v pos1 == U32.v pos2' - U32.v pos2 /\
+    U32.v pos2' <= U32.v s2.len /\
+    B.as_seq h (B.gsub s1.base pos1 (pos1' `U32.sub` pos1)) `Seq.equal` B.as_seq h (B.gsub s2.base pos2 (pos2' `U32.sub` pos2))
+  ))
+  (ensures (
+    valid_exact p h s2 pos2 pos2' /\
+    contents_exact p h s2 pos2 pos2' == contents_exact p h s1 pos1 pos1'
+  ))
+= ()
+
+abstract
+let valid_exact_ext_elim
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (s1: slice)
+  (pos1: U32.t)
+  (pos1' : U32.t)
+  (s2: slice)
+  (pos2: U32.t)
+  (pos2' : U32.t)
+: Lemma
+  (requires (
+    valid_exact p h s1 pos1 pos1' /\
+    valid_exact p h s2 pos2 pos2' /\
+    contents_exact p h s1 pos1 pos1' == contents_exact p h s2 pos2 pos2'
+  ))
+  (ensures (
+    U32.v pos2' - U32.v pos2 == U32.v pos1' - U32.v pos1 /\
+    B.as_seq h (B.gsub s1.base pos1 (pos1' `U32.sub` pos1)) == B.as_seq h (B.gsub s2.base pos2 (pos2' `U32.sub` pos2))
+  ))
+= assert (injective_precond p (B.as_seq h (B.gsub s1.base pos1 (pos1' `U32.sub` pos1))) (B.as_seq h (B.gsub s2.base pos2 (pos2' `U32.sub` pos2))));
+  assert (injective_postcond p (B.as_seq h (B.gsub s1.base pos1 (pos1' `U32.sub` pos1))) (B.as_seq h (B.gsub s2.base pos2 (pos2' `U32.sub` pos2))))
 
 (*
 let int32_to_uint32_pos
