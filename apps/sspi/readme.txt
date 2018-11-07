@@ -34,6 +34,8 @@ src\ and samples\ directories)
     - open a VS2017 x64 command prompt
     - cd mitls-fstar\apps\sspi\Detours
     - nmake
+- also make sure the entire 'everest make drop qbuild' has completed
+- now build the miTLS_SSP.sln.
 
 Installing
 ==========
@@ -85,7 +87,19 @@ set MITLS_SCHANNEL_VERSION to a string, "1.2" or "1.3".
 
 Set MITLS_SCHANNEL_CIPHER_SUITES to override the default cipher suites.
 
-Example
-=======
+Examples
+========
 set MITLS_ATTACH_SSP=curl.exe
 %windir%\system32\curl.exe https://www.bing.com
+
+set MITLS_ATTACH_SSP=powershell.exe
+powershell.exe wget https://www.bing.com
+
+set MITLS_ATTACH_SSP=iexplore.exe
+"\Program Files\internet explorer\iexplore.exe" https://www.bing.com
+ - Use Internet Options / Advanced and check "Enable 64-bit Processes for
+   Enhanced Protected Mode"
+ - note, iexplore will open bing.com and fetch the contents, but
+   it will also fail to negotiate with other TLS servers, such as
+   iecvlist.microsoft.com, as its signature algorithms don't match
+   what miTLS offers by default.
