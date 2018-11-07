@@ -1,5 +1,6 @@
 module LowParse.SLow
 include LowParse.SLow.Base
+include LowParse.Spec.Tac.Combinators
 include LowParse.SLow.Combinators
 include LowParse.SLow.Int
 include LowParse.SLow.List
