@@ -261,13 +261,13 @@ let parse_it (#len:uint32)
     match res with
     | None -> None
     | Some (x, consumed) ->
-      let message () :GTot (message len) =
+      let to_message () :GTot (message len) =
         { from = from;
 	  to = from + IntCast.int32_to_uint32 consumed;
 	  msg = G.reveal x }
       in
       let h1 = ST.get () in
-      let gm = G.elift1 message (G.hide ()) in
+      let gm = G.elift1 to_message (G.hide ()) in
       assume (message_is_parsed #len (G.reveal gm) b h1); 
       Some (gm, from + IntCast.int32_to_uint32 consumed)
 
