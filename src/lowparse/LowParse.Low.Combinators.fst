@@ -7,6 +7,8 @@ module U32 = FStar.UInt32
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 
+#set-options "--z3rlimit 16"
+
 let valid_nondep_then
   (h: HS.mem)
   (#k1: parser_kind)

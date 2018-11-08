@@ -258,34 +258,6 @@ let content_length_eq
   assert (Some? ps');
   assert (injective_precond p b (serialize s x))
 
-abstract
-let valid_frame
-  (#k: parser_kind)
-  (#t: Type)
-  (p: parser k t)
-  (h: HS.mem)
-  (sl: slice)
-  (pos: U32.t)
-  (l: B.loc)
-  (h': HS.mem)
-: Lemma
-  (requires (valid p h sl pos /\ B.modifies l h h' /\ B.loc_disjoint (loc_slice_from sl pos) l))
-  (ensures (
-    valid p h' sl pos /\
-    contents p h' sl pos == contents p h sl pos /\
-    content_length p h' sl pos == content_length p h sl pos
-  ))
-  [SMTPatOr [
-    [SMTPat (valid p h sl pos); SMTPat (B.modifies l h h')];
-    [SMTPat (valid p h' sl pos); SMTPat (B.modifies l h h')];
-    [SMTPat (contents p h sl pos); SMTPat (B.modifies l h h')];
-    [SMTPat (contents p h' sl pos); SMTPat (B.modifies l h h')];
-    [SMTPat (content_length p h sl pos); SMTPat (B.modifies l h h')];
-    [SMTPat (content_length p h' sl pos); SMTPat (B.modifies l h h')];
-  ]]
-= ()
-
-unfold 
 let valid_pos
   (#k: parser_kind)
   (#t: Type)
@@ -310,7 +282,6 @@ let get_valid_pos
   (ensures (fun pos' -> valid_pos p h sl pos pos'))
 = pos `U32.add` U32.uint_to_t (content_length p h sl pos)
 
-unfold 
 let valid_content_pos
   (#k: parser_kind)
   (#t: Type)
@@ -322,6 +293,31 @@ let valid_content_pos
   (pos' : U32.t)
 = valid_pos p h sl pos pos' /\
   contents p h sl pos == x
+
+abstract
+let valid_frame
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (sl: slice)
+  (pos: U32.t)
+  (l: B.loc)
+  (h': HS.mem)
+: Lemma
+  (requires (valid p h sl pos /\ B.modifies l h h' /\ B.loc_disjoint (loc_slice_from sl pos) l))
+  (ensures (
+    valid_content_pos p h' sl pos (contents p h sl pos) (get_valid_pos p h sl pos)
+  ))
+  [SMTPatOr [
+    [SMTPat (valid p h sl pos); SMTPat (B.modifies l h h')];
+    [SMTPat (valid p h' sl pos); SMTPat (B.modifies l h h')];
+    [SMTPat (contents p h sl pos); SMTPat (B.modifies l h h')];
+    [SMTPat (contents p h' sl pos); SMTPat (B.modifies l h h')];
+    [SMTPat (content_length p h sl pos); SMTPat (B.modifies l h h')];
+    [SMTPat (content_length p h' sl pos); SMTPat (B.modifies l h h')];
+  ]]
+= ()
 
 abstract
 let valid_facts
@@ -1399,6 +1395,29 @@ let valid_exact_valid
 = assert (no_lookahead_on p (B.as_seq h (B.gsub s.base pos (pos' `U32.sub`pos))) (B.as_seq h (B.gsub s.base pos (s.len `U32.sub` pos))));
   assert (injective_precond p (B.as_seq h (B.gsub s.base pos (pos' `U32.sub` pos))) (B.as_seq h (B.gsub s.base pos (s.len `U32.sub` pos))));
   assert (injective_postcond p (B.as_seq h (B.gsub s.base pos (pos' `U32.sub` pos))) (B.as_seq h (B.gsub s.base pos (s.len `U32.sub` pos))))
+
+let valid_pos_frame_strong
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (sl: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+  (l: B.loc)
+  (h': HS.mem)
+: Lemma
+  (requires (valid_pos p h sl pos pos' /\ B.modifies l h h' /\ B.loc_disjoint (loc_slice_from_to sl pos pos') l /\ k.parser_kind_subkind == Some ParserStrong))
+  (ensures (
+    valid_content_pos p h' sl pos (contents p h sl pos) pos'
+  ))
+  [SMTPatOr [
+    [SMTPat (valid_pos p h sl pos pos'); SMTPat (valid p h' sl pos); SMTPat (B.modifies l h h')];
+    [SMTPat (valid_pos p h sl pos pos'); SMTPat (contents p h' sl pos); SMTPat (B.modifies l h h')];
+    [SMTPat (valid_pos p h sl pos pos'); SMTPat (content_length p h' sl pos); SMTPat (B.modifies l h h')];
+  ]]
+= valid_pos_valid_exact p h sl pos pos';
+  valid_exact_valid p h' sl pos pos'
 
 abstract
 let valid_exact_ext_intro
