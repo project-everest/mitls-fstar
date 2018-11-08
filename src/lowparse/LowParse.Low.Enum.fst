@@ -2,29 +2,9 @@ module LowParse.Low.Enum
 include LowParse.Spec.Enum
 include LowParse.Low.Combinators
 
-inline_for_extraction
-let validate32_maybe_enum_key (#key #repr: eqtype) (#k: parser_kind) (#p: parser k repr) (v: validator32 p) (e: enum key repr) : Tot (validator32 (parse_maybe_enum_key p e)) =
-  validate32_synth v (maybe_enum_key_of_repr e) ()
-
 module I32 = FStar.Int32
 module HST = FStar.HyperStack.ST
 module B = LowStar.Buffer
-
-inline_for_extraction
-let validate32_enum_key (#key #repr: eqtype) (#k: parser_kind) (#p: parser k repr) (v: validator32 p) (p32: parser32 p) (e: enum key repr) (destr: maybe_enum_destr_t bool e) : Tot (validator32 (parse_enum_key p e)) =
-  fun input sz ->
-    let h = HST.get () in
-    parse_enum_key_eq p e (B.as_seq h input);
-    let consumed = v input sz in
-    if consumed `I32.lt` 0l
-    then consumed
-    else
-      let r = p32 input in
-      if destr eq2 (default_if bool) (fun _ -> ()) (fun _ _ _ -> ()) (Known?) r
-      then consumed
-      else (-1l)
-
-(* QuackyDucky-specific: "flat" enums with baked-in Unknown case *)
 
 inline_for_extraction
 let is_known
@@ -36,56 +16,115 @@ let is_known
   | Known _ -> true
   | _ -> false
 
-#set-options "--z3rlimit 16"
-
 inline_for_extraction
-let validate32_flat_maybe_enum_key
+let validate_enum_key
+  [| validator_cls |]
   (#key #repr: eqtype)
-  (#t: Type)
-  (#k: parser_kind)
-  (#p: parser k repr)
-  (v: validator32 p)
-  (p32: parser32 p)
+  (#k: parser_kind) (#p: parser k repr) (v: validator p) (p32: leaf_reader p)
   (e: enum key repr)
-  (f: (maybe_enum_key e -> GTot t))
-  (filter_spec: (t -> GTot bool))
   (destr: maybe_enum_destr_t bool e)
-  (u: squash (
-    synth_injective f
-  ))
-  (lemma: (
-    (k: maybe_enum_key e) -> 
-    Lemma
-    (Unknown? k <==> not (filter_spec (f k)))
-  ))
-: Tot (validator32 ((parse_maybe_enum_key p e `parse_synth` f) `parse_filter` filter_spec))
-= fun input sz ->
-  let h = HST.get () in
-  parse_synth_eq (parse_maybe_enum_key p e) f (B.as_seq h input);
-  parse_filter_eq (parse_maybe_enum_key p e `parse_synth` f) filter_spec (B.as_seq h input);
-  let consumed = v input sz in
-  if consumed `I32.lt` 0l
-  then consumed
-  else begin
-    Classical.forall_intro lemma;
-    let r = p32 input in
-    if destr eq2 (default_if bool) (fun _ -> ()) (fun _ _ _ -> ()) (is_known e) r
-    then consumed
-    else (-1l)
-  end
-
-#reset-options
+: Tot (validator (parse_enum_key p e)) =
+  validate_synth
+    (validate_filter v p32 (parse_enum_key_cond e)
+      (fun r -> destr eq2 (default_if bool) (fun _ -> ()) (fun _ _ _ -> ()) (is_known e) r))
+    (parse_enum_key_synth e)
+    ()
 
 inline_for_extraction
-let validate_nochk32_maybe_enum_key (#key #repr: eqtype) (#k: parser_kind) (#p: parser k repr) (v: validator_nochk32 p) (e: enum key repr) : Tot (validator_nochk32 (parse_maybe_enum_key p e)) =
-  validate_nochk32_synth v (maybe_enum_key_of_repr e) ()
-
-inline_for_extraction
-let validate_nochk32_enum_key
+let validate_maybe_enum_key
+  [| validator_cls |]
   (#key #repr: eqtype)
-  (#k: parser_kind)
-  (#p: parser k repr)
-  (v: validator_nochk32 p)
+  (#k: parser_kind) (#p: parser k repr) (v: validator p)
   (e: enum key repr)
-: Tot (validator_nochk32 (parse_enum_key p e))
-= validate_nochk32_filter v (fun r -> list_mem r (list_map snd e))
+: Tot (validator (parse_maybe_enum_key p e))
+= validate_synth
+    v
+    (maybe_enum_key_of_repr e)
+    ()
+
+inline_for_extraction
+let jump_enum_key
+  (#key #repr: eqtype)
+  (#k: parser_kind) (#p: parser k repr) (j: jumper p)
+  (e: enum key repr)
+: Tot (jumper (parse_enum_key p e))
+= jump_synth
+    (jump_filter j (parse_enum_key_cond e))
+    (parse_enum_key_synth e)
+    ()
+
+inline_for_extraction
+let jump_maybe_enum_key
+  (#key #repr: eqtype)
+  (#k: parser_kind) (#p: parser k repr) (j: jumper p)
+  (e: enum key repr)
+: Tot (jumper (parse_maybe_enum_key p e))
+= jump_synth j (maybe_enum_key_of_repr e) ()
+
+inline_for_extraction
+let read_maybe_enum_key
+  (#key #repr: eqtype)
+  (#k: parser_kind) (#p: parser k repr) (j: leaf_reader p)
+  (e: enum key repr)
+  (destr: maybe_enum_destr_t (maybe_enum_key e) e)
+: Tot (leaf_reader (parse_maybe_enum_key p e))
+= parse32_synth
+    _
+    (maybe_enum_key_of_repr e)
+    (fun x -> destr _ (default_if _) (fun _ -> ()) (fun _ _ _ -> ()) (fun k -> k) x)
+    j
+    ()
+
+inline_for_extraction
+let read_enum_key_t
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (k: maybe_enum_key e)
+: Tot Type
+= squash (Known? k) -> Tot (k' : enum_key e { match k with Known k_ -> k_ == k' } )
+
+inline_for_extraction
+let read_enum_key_f
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (k: maybe_enum_key e)
+: Tot (read_enum_key_t e k)
+= fun (sq: squash (Known? k)) ->
+    match k with Known k_ -> (k_ <: (k_ : enum_key e { match k with Known k' -> k' == k_ } ))
+
+inline_for_extraction
+let read_enum_key_eq
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (k: maybe_enum_key e)
+: Tot (read_enum_key_t e k -> read_enum_key_t e k -> GTot Type0)
+= fun _ _ -> True
+
+inline_for_extraction
+let read_enum_key_if
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (k: maybe_enum_key e)
+: Tot (if_combinator _ (read_enum_key_eq e k))
+= fun
+  (cond: bool)
+  (sv_true: (cond_true cond -> Tot (read_enum_key_t e k)))
+  (sv_false: (cond_false cond -> Tot (read_enum_key_t e k)))
+  (sq: squash (Known? k)) ->
+  if cond
+  then sv_true () sq
+  else sv_false () sq
+
+inline_for_extraction
+let read_enum_key
+  (#key #repr: eqtype)
+  (#k: parser_kind) (#p: parser k repr) (p32: leaf_reader p)
+  (e: enum key repr)
+  (destr: dep_maybe_enum_destr_t e (read_enum_key_t e))
+: Tot (leaf_reader (parse_enum_key p e))
+= parse32_synth
+    (parse_filter p (parse_enum_key_cond e))
+    (parse_enum_key_synth e)
+    (fun r -> destr (read_enum_key_eq e) (read_enum_key_if e) (fun _ _ -> ()) (fun _ _ _ _ -> ()) (read_enum_key_f e) r ())
+    (parse32_filter p32 (parse_enum_key_cond e))
+    ()
