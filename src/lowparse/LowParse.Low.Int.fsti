@@ -11,46 +11,55 @@ module B = LowStar.Buffer
 module M = LowStar.Modifies
 
 inline_for_extraction
-val parse32_u8: parser32 parse_u8
+val parse32_u8: leaf_reader parse_u8
 
 inline_for_extraction
-val parse32_u16: parser32 parse_u16
+val parse32_u16: leaf_reader parse_u16
 
 inline_for_extraction
-val parse32_u32: parser32 parse_u32
+val parse32_u32: leaf_reader parse_u32
 
 inline_for_extraction
-let validate32_u8 : validator32 parse_u8 =
-  validate32_total_constant_size parse_u8 1l ()
+let validate_u8 [| validator_cls |] () : validator parse_u8 =
+  validate_total_constant_size parse_u8 1ul ()
 
 inline_for_extraction
-let validate32_u16 : validator32 parse_u16 =
-  validate32_total_constant_size parse_u16 2l ()
+let validate_u16 [| validator_cls |] () : validator parse_u16 =
+  validate_total_constant_size parse_u16 2ul ()
 
 inline_for_extraction
-let validate32_u32 : validator32 parse_u32 =
-  validate32_total_constant_size parse_u32 4l ()
+let validate_u32 [| validator_cls |] () : validator parse_u32 =
+  validate_total_constant_size parse_u32 4ul ()
 
 inline_for_extraction
-let validate_nochk32_u8 : validator_nochk32 parse_u8 =
-  validate_nochk32_constant_size parse_u8 1ul ()
+let jump_u8 : jumper parse_u8 =
+  jump_constant_size parse_u8 1ul ()
 
 inline_for_extraction
-let validate_nochk32_u16 : validator_nochk32 parse_u16 =
-  validate_nochk32_constant_size parse_u16 2ul ()
+let jump_u16 : jumper parse_u16 =
+  jump_constant_size parse_u16 2ul ()
 
 inline_for_extraction
-let validate_nochk32_u32 : validator_nochk32 parse_u32 =
-  validate_nochk32_constant_size parse_u32 4ul ()
+let jump_u32 : jumper parse_u32 =
+  jump_constant_size parse_u32 4ul ()
 
 inline_for_extraction
-val serialize32_u16 : serializer32 serialize_u16
+val emit_u8 : leaf_writer_strong serialize_u8
 
 inline_for_extraction
-val serialize32_u32 : serializer32 serialize_u32
+let emit_u8_weak : leaf_writer_weak serialize_u8 =
+  leaf_writer_weak_of_strong_constant_size emit_u8 1ul ()
 
 inline_for_extraction
-val serialize32_u16_fail : serializer32_fail serialize_u16
+val emit_u16 : leaf_writer_strong serialize_u16
 
 inline_for_extraction
-val serialize32_u32_fail : serializer32_fail serialize_u32
+let emit_u16_weak : leaf_writer_weak serialize_u16 =
+  leaf_writer_weak_of_strong_constant_size emit_u16 2ul ()
+
+inline_for_extraction
+val emit_u32 : leaf_writer_strong serialize_u32
+
+inline_for_extraction
+let emit_u32_weak : leaf_writer_weak serialize_u32 =
+  leaf_writer_weak_of_strong_constant_size emit_u32 4ul ()

@@ -11,50 +11,35 @@ module HST = FStar.HyperStack.ST
 module HS = FStar.HyperStack
 module B = LowStar.Buffer
 
-#set-options "--z3rlimit 32"
-
 inline_for_extraction
 let parse32_u8 =
-  (fun input ->
-    let h = HST.get () in
-    let _ = Unique.parse_u8_unique (B.as_seq h input) in
-    Aux.parse32_u8 input
-  )
+  leaf_reader_ext Aux.parse32_u8 parse_u8 (fun x -> Unique.parse_u8_unique x)
 
 inline_for_extraction
 let parse32_u16 =
-  (fun input ->
-    let h = HST.get () in
-    let _ = Unique.parse_u16_unique (B.as_seq h input) in
-    Aux.parse32_u16 input
-  )
+  leaf_reader_ext Aux.parse32_u16 parse_u16 (fun x -> Unique.parse_u16_unique x)
 
 inline_for_extraction
 let parse32_u32 =
-  (fun input ->
-    let h = HST.get () in
-    let _ = Unique.parse_u32_unique (B.as_seq h input) in
-    Aux.parse32_u32 input
-  )
+  leaf_reader_ext Aux.parse32_u32 parse_u32 (fun x -> Unique.parse_u32_unique x)
 
-let serialize32_u16 = fun out lo v ->
-  let _ = Unique.serialize_u16_unique v in
-  Aux.serialize32_u16 out lo v;
-  let h = HST.get () in
-  let _ = Unique.parse_u16_unique (B.as_seq h (B.gsub out lo 2ul)) in
-  exactly_contains_valid_data_equiv h Aux.parse_u16 out lo v (U32.add lo 2ul);
-  exactly_contains_valid_data_equiv h parse_u16 out lo v (U32.add lo 2ul);
-  ()
+inline_for_extraction
+let serialize32_u8 : serializer32 serialize_u8 = fun v b ->
+  [@inline_let] let _ = Unique.serialize_u8_unique v in
+  Aux.serialize32_u8 v b
 
-let serialize32_u32 = fun out lo v ->
-  let _ = Unique.serialize_u32_unique v in
-  Aux.serialize32_u32 out lo v;
-  let h = HST.get () in
-  let _ = Unique.parse_u32_unique (B.as_seq h (B.gsub out lo 4ul)) in
-  exactly_contains_valid_data_equiv h Aux.parse_u32 out lo v (U32.add lo 4ul);
-  exactly_contains_valid_data_equiv h parse_u32 out lo v (U32.add lo 4ul);
-  ()
+inline_for_extraction
+let serialize32_u16 : serializer32 serialize_u16 = fun v b ->
+  [@inline_let] let _ = Unique.serialize_u16_unique v in
+  Aux.serialize32_u16 v b
 
-let serialize32_u16_fail = serializer32_fail_of_serializer serialize32_u16 2l
+inline_for_extraction
+let serialize32_u32 : serializer32 serialize_u32 = fun v b ->
+  [@inline_let] let _ = Unique.serialize_u32_unique v in
+  Aux.serialize32_u32 v b
 
-let serialize32_u32_fail = serializer32_fail_of_serializer serialize32_u32 4l
+let emit_u8 = leaf_writer_strong_of_serializer32 serialize32_u8 ()
+
+let emit_u16 = leaf_writer_strong_of_serializer32 serialize32_u16 ()
+
+let emit_u32 = leaf_writer_strong_of_serializer32 serialize32_u32 ()

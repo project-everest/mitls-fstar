@@ -1010,6 +1010,25 @@ let leaf_reader
   ))
 
 inline_for_extraction
+let leaf_reader_ext
+  (#k1: parser_kind)
+  (#t: Type)
+  (#p1: parser k1 t)
+  (p32: leaf_reader p1)
+  (#k2: parser_kind)
+  (p2: parser k2 t)
+  (lem: (
+    (x: bytes) ->
+    Lemma
+    (parse p2 x == parse p1 x)
+  ))
+: Tot (leaf_reader p2)
+= fun sl pos ->
+  let h = HST.get () in
+  [@inline_let] let _ = lem (B.as_seq h (B.gsub sl.base pos (sl.len `U32.sub` pos))) in
+  p32 sl pos
+
+inline_for_extraction
 let leaf_writer_weak
   (#k: parser_kind)
   (#t: Type)
