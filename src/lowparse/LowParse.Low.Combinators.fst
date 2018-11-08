@@ -7,9 +7,7 @@ module U32 = FStar.UInt32
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 
-// #reset-options "--z3rlimit 64 --z3cliopt smt.arith.nl=false"
-
-let valid_nondep_then_intro
+let valid_nondep_then
   (h: HS.mem)
   (#k1: parser_kind)
   (#t1: Type0)
@@ -20,43 +18,27 @@ let valid_nondep_then_intro
   (s: slice)
   (pos: U32.t)
 : Lemma
-  (requires (valid p1 h s pos /\ valid p2 h s (get_valid_pos p1 h s pos)))
-  (ensures (  
-    let pos1 = get_valid_pos p1 h s pos in
-    valid_content_pos (nondep_then p1 p2) h s pos (contents p1 h s pos, contents p2 h s pos1) (get_valid_pos p2 h s pos1)
-  ))
-= let pos1 = get_valid_pos p1 h s pos in
-  nondep_then_eq p1 p2 (B.as_seq h (B.gsub s.base pos (s.len `U32.sub` pos)));
-  valid_facts p1 h s pos;
-  valid_facts p2 h s pos1;
-  valid_facts (nondep_then p1 p2) h s pos
-
-let valid_nondep_then_elim
-  (h: HS.mem)
-  (#k1: parser_kind)
-  (#t1: Type0)
-  (p1: parser k1 t1)
-  (#k2: parser_kind)
-  (#t2: Type0)
-  (p2: parser k2 t2)
-  (s: slice)
-  (pos: U32.t)
-: Lemma
-  (requires (valid (nondep_then p1 p2) h s pos))
-  (ensures (
+  (requires (live_slice h s))
+  (ensures ((
+    valid (nondep_then p1 p2) h s pos \/
+    (valid p1 h s pos /\ valid p2 h s (get_valid_pos p1 h s pos))
+  ) ==> (
     valid p1 h s pos /\ (
     let pos1 = get_valid_pos p1 h s pos in
     valid p2 h s (get_valid_pos p1 h s pos) /\
     valid_content_pos (nondep_then p1 p2) h s pos (contents p1 h s pos, contents p2 h s pos1) (get_valid_pos p2 h s pos1)
-  )))
-= nondep_then_eq p1 p2 (B.as_seq h (B.gsub s.base pos (s.len `U32.sub` pos)));
+  ))))
+= valid_facts p1 h s pos;
   valid_facts (nondep_then p1 p2) h s pos;
-  valid_facts p1 h s pos;
-  let pos1 = get_valid_pos p1 h s pos in
-  valid_facts p2 h s pos1
+  if valid_dec p1 h s pos
+  then begin
+    let pos1 = get_valid_pos p1 h s pos in
+    nondep_then_eq p1 p2 (B.as_seq h (B.gsub s.base pos (s.len `U32.sub` pos)));
+    valid_facts p2 h s pos1
+  end
 
 inline_for_extraction
-let validate32_nondep_then
+let validate_nondep_then
   [| validator_cls |]
   (#k1: parser_kind)
   (#t1: Type0)
@@ -69,101 +51,146 @@ let validate32_nondep_then
 : Tot (validator (nondep_then p1 p2))
 = fun (input: slice) (pos: U32.t) ->
   let h = HST.get () in
-  [@inline_let] let _ = nondep_then_eq p1 p2 (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos))) in
-  [@inline_let] let _ = valid_equiv (nondep_then p1 p2) h input pos in
-  [@inline_let] let _ = valid_equiv p1 h input pos in
+  [@inline_let] let _ = valid_nondep_then h p1 p2 input pos in
   let pos1 = p1' input pos in
   if pos1 `U32.gt` validator_max_length
   then begin
-    admit ();
     pos1
   end
   else
-    [@inline_let] let _ = valid_equiv p2 h input pos1 in
+    [@inline_let] let _ = valid_facts p2 h input pos1 in
     p2' input pos1
 
-#reset-options "--z3rlimit 32 --z3cliopt smt.arith.nl=false"
-
 inline_for_extraction
-let validate_nochk32_nondep_then
+let jump_nondep_then
   (#k1: parser_kind)
   (#t1: Type0)
   (#p1: parser k1 t1)
-  (p1' : validator_nochk32 p1)
+  (p1' : jumper p1)
   (#k2: parser_kind)
   (#t2: Type0)
   (#p2: parser k2 t2)
-  (p2' : validator_nochk32 p2)
-: Tot (validator_nochk32 (nondep_then p1 p2))
-= fun (input: buffer8) ->
-  let off1 = p1' input in
-  let off2 = p2' (B.offset input off1) in
-  U32.add off1 off2
+  (p2' : jumper p2)
+: Tot (jumper (nondep_then p1 p2))
+= fun (input: slice) (pos: U32.t) ->
+  let h = HST.get () in
+  [@inline_let] let _ = valid_nondep_then h p1 p2 input pos in
+  p2' input (p1' input pos)
 
-#reset-options
+let valid_synth
+  (h: HS.mem)
+  (#k: parser_kind)
+  (#t1: Type0)
+  (#t2: Type0)
+  (p1: parser k t1)
+  (f2: t1 -> GTot t2)
+  (input: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (
+    live_slice h input /\ synth_injective f2
+  ))
+  (ensures (
+    (valid (parse_synth p1 f2) h input pos \/ valid p1 h input pos) ==> (
+      valid p1 h input pos /\
+      valid_content_pos (parse_synth p1 f2) h input pos (f2 (contents p1 h input pos)) (get_valid_pos p1 h input pos)
+  )))
+= valid_facts p1 h input pos;
+  valid_facts (parse_synth p1 f2) h input pos;
+  if valid_dec p1 h input pos
+  then parse_synth_eq p1 f2 (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos)))
 
 inline_for_extraction
-let validate32_synth
+let validate_synth
+  [| validator_cls |]
   (#k: parser_kind)
   (#t1: Type0)
   (#t2: Type0)
   (#p1: parser k t1)
-  (p1' : validator32 p1)
+  (p1' : validator p1)
   (f2: t1 -> GTot t2)
   (u: unit {
     synth_injective f2
   })
-: Tot (validator32 (parse_synth p1 f2))
-= fun (input: buffer8) (len: I32.t) ->
-  p1' input len
+: Tot (validator (parse_synth p1 f2))
+= fun (input: slice) (pos: U32.t) ->
+  let h = HST.get () in
+  [@inline_let] let _ = valid_synth h p1 f2 input pos in
+  p1' input pos
 
 inline_for_extraction
-let validate_nochk32_synth
+let jump_synth
   (#k: parser_kind)
   (#t1: Type0)
   (#t2: Type0)
   (#p1: parser k t1)
-  (p1' : validator_nochk32 p1)
+  (p1' : jumper p1)
   (f2: t1 -> GTot t2)
   (u: unit {
     synth_injective f2
   })
-: Tot (validator_nochk32 (parse_synth p1 f2))
-= fun (input: buffer8) ->
-  p1' input
+: Tot (jumper (parse_synth p1 f2))
+= fun (input: slice) (pos: U32.t) ->
+  let h = HST.get () in
+  [@inline_let] let _ = valid_synth h p1 f2 input pos in
+  p1' input pos
 
-inline_for_extraction
-let validate32_total_constant_size
+let valid_total_constant_size
+  (h: HS.mem)
   (#k: parser_kind)
   (#t: Type0)
   (p: parser k t)
-  (sz: I32.t)
-  (u: unit {
+  (sz: U32.t)
+  (input: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (
     k.parser_kind_high == Some k.parser_kind_low /\
-    k.parser_kind_low == I32.v sz /\
+    k.parser_kind_low == U32.v sz /\
+    k.parser_kind_metadata.parser_kind_metadata_total = true
+  ))
+  (ensures (
+    (valid p h input pos <==> (live_slice h input /\ U32.v input.len - U32.v pos >= k.parser_kind_low)) /\
+    (valid p h input pos ==> content_length p h input pos == k.parser_kind_low)
+  ))
+= valid_facts p h input pos
+
+inline_for_extraction
+let validate_total_constant_size
+  [| validator_cls |]
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (sz: U32.t)
+  (u: unit {
+    U32.v sz <= U32.v validator_max_length /\
+    k.parser_kind_high == Some k.parser_kind_low /\
+    k.parser_kind_low == U32.v sz /\
     k.parser_kind_metadata.parser_kind_metadata_total = true
   })
-: Tot (validator32 p)
-= fun (input: buffer8) (len: I32.t) ->
-  if I32.lt len sz
-  then -1l
+: Tot (validator p)
+= fun (input: slice) (pos: U32.t) ->
+  let h = HST.get () in
+  [@inline_let] let _ = valid_total_constant_size h p sz input pos in
+  if U32.lt (input.len `U32.sub` pos) sz
+  then validator_max_length `U32.add` 1ul // FIXME: more control over failures
   else
-    let h = HST.get () in // TODO: WHY WHY WHY?
-    len `I32.sub` sz
+    pos `U32.add` sz
 
 inline_for_extraction
-let validate32_ret
+let validate_ret
+  [| validator_cls |]
   (#t: Type)
   (v: t)
-: Tot (validator32 (parse_ret v))
-= validate32_total_constant_size (parse_ret v) 0l ()
+: Tot (validator (parse_ret v))
+= validate_total_constant_size (parse_ret v) 0ul ()
 
 inline_for_extraction
-let validate32_empty : validator32 parse_empty
-= validate32_ret ()
+let validate_empty [| validator_cls |] () : Tot (validator parse_empty)
+= validate_ret ()
 
 inline_for_extraction
-let validate_nochk32_constant_size
+let jump_constant_size
   (#k: parser_kind)
   (#t: Type0)
   (p: parser k t)
@@ -172,47 +199,11 @@ let validate_nochk32_constant_size
     k.parser_kind_high == Some k.parser_kind_low /\
     k.parser_kind_low == U32.v sz
   })
-: Tot (validator_nochk32 p)
-= fun (input: buffer8) ->
-  let h = HST.get () in // TODO: WHY WHY WHY?
-  sz
-
-inline_for_extraction
-let accessor_weaken
-  (#k1: parser_kind)
-  (#t1: Type)
-  (#p1: parser k1 t1)
-  (#k2: parser_kind)
-  (#t2: Type)
-  (#p2: parser k2 t2)
-  (#rel: (t1 -> t2 -> GTot Type0))
-  (a: accessor p1 p2 rel)
-  (rel': (t1 -> t2 -> GTot Type0))
-  (u: unit { forall x1 x2 . rel x1 x2 ==> rel' x1 x2 } )
-: Tot (accessor p1 p2 rel')
-= fun input -> a input
-
-let rel_compose (#t1 #t2 #t3: Type) (r12: t1 -> t2 -> GTot Type0) (r23: t2 -> t3 -> GTot Type0) (x1: t1) (x3: t3) : GTot Type0 =
-  exists x2 . r12 x1 x2 /\ r23 x2 x3
-
-inline_for_extraction
-let accessor_compose
-  (#k1: parser_kind)
-  (#t1: Type)
-  (#p1: parser k1 t1)
-  (#k2: parser_kind)
-  (#t2: Type)
-  (#p2: parser k2 t2)
-  (#k3: parser_kind)
-  (#t3: Type)
-  (#p3: parser k3 t3)
-  (#rel12: (t1 -> t2 -> GTot Type0))
-  (#rel23: (t2 -> t3 -> GTot Type0))
-  (a12: accessor p1 p2 rel12)
-  (a23: accessor p2 p3 rel23)
-: Tot (accessor p1 p3 (rel12 `rel_compose` rel23))
-= fun input ->
-    a23 (a12 input)
+: Tot (jumper p)
+= fun (input: slice) (pos: U32.t) ->
+  let h = HST.get () in
+  [@inline_let] let _ = valid_facts p h input pos in
+  pos `U32.add` sz
 
 inline_for_extraction
 let accessor_synth
