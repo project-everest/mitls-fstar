@@ -205,6 +205,46 @@ let jump_constant_size
   [@inline_let] let _ = valid_facts p h input pos in
   pos `U32.add` sz
 
+let clens_synth
+  (#t1: Type)
+  (#t2: Type)
+  (f: t1 -> GTot t2)
+  (g: t2 -> GTot t1)
+  (u: unit { synth_inverse f g /\ synth_injective f } )
+: Tot (clens (fun (x: t1) -> True) t2)
+= {
+  clens_get = (fun (x: t1) -> f x);
+  clens_put = (fun (x: t1) (y: t2) -> g y);
+  clens_get_put = (fun (x: t1) (y: t2) -> ());
+  clens_put_put = (fun (x: t1) (y y' : t2) -> ());
+  clens_put_get = (fun (x: t1) -> ());
+}
+
+let gaccessor_synth'
+  (#k: parser_kind)
+  (#t1: Type)
+  (p1: parser k t1)
+  (#t2: Type)
+  (f: t1 -> GTot t2)
+  (g: t2 -> GTot t1)
+  (u: unit { synth_inverse f g /\ synth_inverse g f } )
+  (input: bytes)
+: Ghost nat
+  (requires (gaccessor_pre (parse_synth p1 f) p1 (clens_synth g f ()) input))
+  (ensures (fun pos' -> gaccessor_post (parse_synth p1 f) p1 (clens_synth g f ()) input pos'))
+= 0
+
+let gaccessor_synth
+  (#k: parser_kind)
+  (#t1: Type)
+  (p1: parser k t1)
+  (#t2: Type)
+  (f: t1 -> GTot t2)
+  (g: t2 -> GTot t1)
+  (u: unit { synth_inverse f g /\ synth_inverse g f } )
+: Tot (gaccessor (parse_synth p1 f) p1 (clens_synth g f ()))
+= gaccessor_synth' p1 f g u
+
 inline_for_extraction
 let accessor_synth
   (#k: parser_kind)
@@ -212,41 +252,133 @@ let accessor_synth
   (#t2: Type)
   (p1: parser k t1)
   (f: t1 -> GTot t2)
-  (u: unit {  synth_injective f } )
-: Tot (accessor (parse_synth p1 f) p1 (fun x y -> f y == x))
-= fun input ->
-  let h = HST.get () in // FIXME: WHY WHY WHY?
-  input
+  (g: t2 -> GTot t1)
+  (u: unit { synth_inverse f g /\ synth_inverse g f } )
+: Tot (accessor (gaccessor_synth p1 f g u))
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let] let _ = slice_access_eq h (gaccessor_synth p1 f g u) input pos in
+  pos
 
-inline_for_extraction
-val nondep_then_fst
+let clens_fst
+  (t1: Type)
+  (t2: Type)
+: Tot (clens (fun (x: (t1 & t2)) -> True) t1)
+= {
+  clens_get = fst;
+  clens_put = (fun x y -> (y, snd x));
+  clens_get_put = (fun x y -> ());
+  clens_put_put = (fun x y y' -> ());
+  clens_put_get = (fun x -> ());
+}
+
+let clens_snd
+  (t1: Type)
+  (t2: Type)
+: Tot (clens (fun (x: (t1 & t2)) -> True) t2)
+= {
+  clens_get = snd;
+  clens_put = (fun x y -> (fst x, y));
+  clens_get_put = (fun x y -> ());
+  clens_put_put = (fun x y y' -> ());
+  clens_put_get = (fun x -> ());
+}
+
+let gaccessor_fst'
   (#k1: parser_kind)
-  (#t1: Type0)
+  (#t1: Type)
   (p1: parser k1 t1)
   (#k2: parser_kind)
-  (#t2: Type0)
+  (#t2: Type)
   (p2: parser k2 t2)
-: Tot (accessor (p1 `nondep_then` p2) p1 (fun x y -> y == fst x))
+  (input: bytes)
+: Ghost nat
+  (requires (gaccessor_pre (p1 `nondep_then` p2) p1 (clens_fst _ _) input))
+  (ensures (fun pos' -> gaccessor_post (p1 `nondep_then` p2) p1 (clens_fst _ _) input pos'))
+= 0
 
-let nondep_then_fst #k1 #t1 p1 #k2 #t2 p2 input =
-  let h = HST.get () in // FIXME: WHY WHY WHY?
-  input
+let gaccessor_fst
+  (#k1: parser_kind)
+  (#t1: Type)
+  (p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (p2: parser k2 t2)
+: Tot (gaccessor (p1 `nondep_then` p2) p1 (clens_fst _ _))
+= gaccessor_fst' p1 p2
+
+let gaccessor_snd'
+  (#k1: parser_kind)
+  (#t1: Type)
+  (p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (p2: parser k2 t2)
+  (input: bytes)
+: Ghost nat
+  (requires (gaccessor_pre (p1 `nondep_then` p2) p2 (clens_snd _ _) input))
+  (ensures (fun pos' -> gaccessor_post (p1 `nondep_then` p2) p2 (clens_snd _ _) input pos'))
+= let (Some (_, consumed)) = parse p1 input in
+  consumed
+
+let gaccessor_snd
+  (#k1: parser_kind)
+  (#t1: Type)
+  (p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (p2: parser k2 t2)
+: Tot (gaccessor (p1 `nondep_then` p2) p2 (clens_snd _ _))
+= gaccessor_snd' p1 p2
+
+let clens_fst_snd_disjoint
+  (t1 t2: Type)
+: Lemma
+  (clens_disjoint (clens_fst t1 t2) (clens_snd t1 t2))
+= clens_disjoint_l_intro (clens_fst t1 t2) (clens_snd t1 t2) (fun x1 x2 -> ());
+  clens_disjoint_l_intro (clens_snd t1 t2) (clens_fst t1 t2) (fun x1 x2 -> ())
+
+let gaccessor_fst_snd_disjoint
+  (#k1: parser_kind)
+  (#t1: Type)
+  (p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (p2: parser k2 t2)
+: Lemma
+  (gaccessors_disjoint (gaccessor_fst p1 p2) (gaccessor_snd p1 p2))
+= clens_fst_snd_disjoint t1 t2;
+  gaccessors_disjoint_intro (gaccessor_fst p1 p2) (gaccessor_snd p1 p2) () (fun x -> ())
 
 inline_for_extraction
-val nondep_then_snd
+let accessor_fst
   (#k1: parser_kind)
-  (#t1: Type0)
-  (#p1: parser k1 t1)
-  (p1' : validator_nochk32 p1)
+  (#t1: Type)
+  (p1: parser k1 t1)
   (#k2: parser_kind)
-  (#t2: Type0)
+  (#t2: Type)
   (p2: parser k2 t2)
-: Tot (accessor (p1 `nondep_then` p2) p2 (fun x y -> y == snd x))
+: Tot (accessor (gaccessor_fst p1 p2))
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let] let _ = slice_access_eq h (gaccessor_fst p1 p2) input pos in
+  pos
 
-#push-options "--z3rlimit 50"
-let nondep_then_snd #k1 #t1 #p1 p1' #k2 #t2 p2 input =
-  B.offset input (p1' input)
-#pop-options
+inline_for_extraction
+let accessor_snd
+  (#k1: parser_kind)
+  (#t1: Type)
+  (#p1: parser k1 t1)
+  (j1: jumper p1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (p2: parser k2 t2)
+: Tot (accessor (gaccessor_snd p1 p2))
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let] let _ = slice_access_eq h (gaccessor_snd p1 p2) input pos in
+  [@inline_let] let _ = valid_facts p1 h input pos in
+  j1 input pos
 
 inline_for_extraction
 let make_total_constant_size_parser32
@@ -263,73 +395,78 @@ let make_total_constant_size_parser32
       h == h' /\
       res == f (B.as_seq h s)
   ))))
-: Tot (parser32 (make_total_constant_size_parser sz t f))
-= fun (input: buffer8) ->
-  f' (B.sub input 0ul sz')
+: Tot (leaf_reader (make_total_constant_size_parser sz t f))
+= fun sl pos ->
+  let h = HST.get () in
+  [@inline_let] let _ = valid_facts (make_total_constant_size_parser sz t f) h sl pos in
+  f' (B.sub sl.base pos sz')
+
+let valid_filter
+  (h: HS.mem)
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (f: (t -> GTot bool))
+  (input: slice)
+  (pos: U32.t)
+: Lemma
+  (
+    (valid (parse_filter p f) h input pos \/ (valid p h input pos /\ f (contents p h input pos))) ==> (
+    valid p h input pos /\
+    f (contents p h input pos) == true /\
+    valid_content_pos (parse_filter p f) h input pos (contents p h input pos) (get_valid_pos p h input pos)
+  ))
+= valid_facts (parse_filter p f) h input pos;
+  valid_facts p h input pos
 
 inline_for_extraction
-let validate32_filter
+let validate_filter
+  [| validator_cls |]
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
-  (v32: validator32 p)
-  (p32: parser32 p)
+  (v32: validator p)
+  (p32: leaf_reader p)
   (f: (t -> GTot bool))
   (f' : ((x: t) -> Tot (y: bool { y == f x } )))
-: Tot (validator32 (parse_filter p f))
-= fun input len ->
-  let res = v32 input len in
-  if res `I32.lt` 0l
+: Tot (validator (parse_filter p f))
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let] let _ = valid_filter h p f input pos in
+  let res = v32 input pos in
+  if res `U32.gt` validator_max_length
   then res
   else
-    let va = p32 input in
+    let va = p32 input pos in
     if f' va
     then res
-    else -1l
+    else validator_max_length `U32.add` 1ul // FIXME: more control on error
 
 inline_for_extraction
-let validate_nochk32_filter
+let jump_filter
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
-  (v32: validator_nochk32 p)
+  (j: jumper p)
   (f: (t -> GTot bool))
-: Tot (validator_nochk32 (parse_filter p f))
-= fun input -> v32 input
-
-module MO = LowStar.Modifies
-
-inline_for_extraction
-let parse32_filter'
-  (#k: parser_kind)
-  (#t: Type0)
-  (#p: parser k t)
-  (p32: parser32 p)
-  (f: (t -> GTot bool))
-  (input: buffer8)
-: HST.Stack (x: t { f x == true } )
-  (requires (fun h -> B.live h input /\ Some? (parse (parse_filter p f) (B.as_seq h input))))
-  (ensures (fun h res h' ->
-    MO.modifies MO.loc_none h h' /\
-    B.live h' input /\ (
-    let z = parse p (B.as_seq h input) in
-    Some? z /\ (
-    let (Some (v, _)) = z in
-    f res == true /\
-    v == res
-  ))))
-= p32 input
+: Tot (jumper (parse_filter p f))
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let] let _ = valid_filter h p f input pos in
+  j input pos
 
 inline_for_extraction
 let parse32_filter
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
-  (p32: parser32 p)
+  (p32: leaf_reader p)
   (f: (t -> GTot bool))
-: Tot (parser32 (parse_filter p f))
-= fun input ->
-  parse32_filter' p32 f input
+: Tot (leaf_reader (parse_filter p f))
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let] let _ = valid_filter h p f input pos in
+  (p32 input pos <: (res: t { f res == true } )) // FIXME: WHY WHY WHY do we need this coercion?
 
 inline_for_extraction
 let parse32_synth
@@ -339,14 +476,16 @@ let parse32_synth
   (p1: parser k t1)
   (f2: t1 -> GTot t2)
   (f2': (x: t1) -> Tot (y: t2 { y == f2 x } )) 
-  (p1' : parser32 p1)
+  (p1' : leaf_reader p1)
   (u: unit {
     synth_injective f2
   })
-: Tot (parser32 (parse_synth p1 f2))
-= fun input ->
-  let res = p1' input in
-  f2' res <: t2
+: Tot (leaf_reader (parse_synth p1 f2))
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let] let _ = valid_synth h p1 f2 input pos in
+  let res = p1' input pos in
+  f2' res <: t2 // FIXME: WHY WHY WHY this coercion AND the separate let binding?
 
 inline_for_extraction
 let parse32_synth'
@@ -355,36 +494,14 @@ let parse32_synth'
   (#t2: Type0)
   (p1: parser k t1)
   (f2: t1 -> Tot t2)
-  (p1' : parser32 p1)
+  (p1' : leaf_reader p1)
   (u: unit {
     synth_injective f2
   })
-: Tot (parser32 (parse_synth p1 f2))
+: Tot (leaf_reader (parse_synth p1 f2))
 = parse32_synth p1 f2 (fun x -> f2 x) p1' u
 
-inline_for_extraction
-let validate32_and_then
-  (#k1: parser_kind)
-  (#t1: Type0)
-  (#p1: parser k1 t1)
-  (v1: validator32 p1)
-  (p1': parser32 p1)
-  (#k2: parser_kind)
-  (#t2: Type0)
-  (#p2: (t1 -> parser k2 t2))
-  (v2: ((x1: t1) -> validator32 (p2 x1)))
-  (u: unit {
-    and_then_cases_injective p2
-  })
-: Tot (validator32 (p1 `and_then` p2))
-= fun input len ->
-  let res = v1 input len in
-  if res `I32.lt` 0l
-  then res
-  else
-    let va = p1' input in
-    v2 va (B.offset input (Cast.int32_to_uint32 (len `I32.sub` res))) res
-
+(*
 #set-options "--z3rlimit 32"
 
 inline_for_extraction
@@ -414,123 +531,3 @@ let validate32_filter_and_then
     then
       v2 va (B.offset input (Cast.int32_to_uint32 (len `I32.sub` res))) res
     else -1l
-
-// #reset-options
-
-let exactly_contains_valid_data_nondep_then
-  (h: HS.mem)
-  (#k1: parser_kind)
-  (#t1: Type)
-  (p1: parser k1 t1)
-  (#k2: parser_kind)
-  (#t2: Type)
-  (p2: parser k2 t2)
-  (b: buffer8)
-  (lo: U32.t)
-  (x1: t1)
-  (mi: U32.t)
-  (x2: t2)
-  (hi: U32.t)
-: Lemma
-  (requires (
-    k1.parser_kind_subkind == Some ParserStrong /\
-    exactly_contains_valid_data h p1 b lo x1 mi /\
-    exactly_contains_valid_data h p2 b mi x2 hi
-  ))
-  (ensures (
-    exactly_contains_valid_data h (p1 `nondep_then` p2) b lo (x1, x2) hi
-  ))
-  [SMTPat (exactly_contains_valid_data h p1 b lo x1 mi);
-   SMTPat (exactly_contains_valid_data h p2 b mi x2 hi);]
-= exactly_contains_valid_data_equiv h p1 b lo x1 mi;
-  exactly_contains_valid_data_equiv h p2 b mi x2 hi;
-  exactly_contains_valid_data_equiv h (p1 `nondep_then` p2) b lo (x1, x2) hi;
-  nondep_then_eq p1 p2 (B.as_seq h (B.gsub b lo (U32.sub hi lo)));
-  assert (no_lookahead_on p1 (B.as_seq h (B.gsub b lo (U32.sub mi lo))) (B.as_seq h (B.gsub b lo (U32.sub hi lo))));
-  assert (injective_precond p1 (B.as_seq h (B.gsub b lo (U32.sub mi lo))) (B.as_seq h (B.gsub b lo (U32.sub hi lo))))
-
-let seq_append_slice
-  (#t: Type)
-  (s: Seq.seq t)
-  (l1 l2 l3: nat)
-: Lemma
-  (requires (l1 <= l2 /\ l2 <= l3 /\ l3 <= Seq.length s))
-  (ensures (Seq.append (Seq.slice s l1 l2) (Seq.slice s l2 l3) == Seq.slice s l1 l3))
-= assert (Seq.append (Seq.slice s l1 l2) (Seq.slice s l2 l3) `Seq.equal` Seq.slice s l1 l3)
-
-let contains_valid_serialized_data_or_fail_nondep_then
-  (h: HS.mem)
-  (#k1: parser_kind)
-  (#t1: Type)
-  (#p1: parser k1 t1)
-  (s1: serializer p1)
-  (#k2: parser_kind)
-  (#t2: Type)
-  (#p2: parser k2 t2)
-  (s2: serializer p2)
-  (b: buffer8)
-  (lo: I32.t)
-  (x1: t1)
-  (mi: I32.t)
-  (x2: t2)
-  (hi: I32.t)
-: Lemma
-  (requires (
-    k1.parser_kind_subkind == Some ParserStrong /\
-    contains_valid_serialized_data_or_fail h s1 b lo x1 mi /\
-    contains_valid_serialized_data_or_fail h s2 b mi x2 hi
-  ))
-  (ensures (
-    contains_valid_serialized_data_or_fail h (serialize_nondep_then _ s1 () _ s2) b lo (x1, x2) hi
-  ))
-  [SMTPat (contains_valid_serialized_data_or_fail h s1 b lo x1 mi);
-   SMTPat (contains_valid_serialized_data_or_fail h s2 b mi x2 hi);]
-= contains_valid_serialized_data_or_fail_equiv h s1 b lo x1 mi;
-  contains_valid_serialized_data_or_fail_equiv h s2 b mi x2 hi;
-  contains_valid_serialized_data_or_fail_equiv h (serialize_nondep_then _ s1 () _ s2) b lo (x1, x2) hi;
-  if I32.v lo < 0
-  then ()
-  else if I32.v mi < 0
-  then ()
-  else if I32.v hi < 0
-  then ()
-  else
-    seq_append_slice (B.as_seq h b) (I32.v lo) (I32.v mi) (I32.v hi)
-
-let exactly_contains_valid_data_synth
-  (#k: parser_kind)
-  (#t1 #t2: Type)
-  (p: parser k t1)
-  (f: t1 -> GTot t2 { synth_injective f } )
-  (h: HS.mem)
-  (b: buffer8)
-  (lo: U32.t)
-  (x: t1)
-  (hi: U32.t)
-: Lemma
-  (requires (
-    exactly_contains_valid_data h p b lo x hi
-  ))
-  (ensures (
-    exactly_contains_valid_data h (p `parse_synth` f) b lo (f x) hi
-  ))
-= exactly_contains_valid_data_equiv h p b lo x hi;
-  exactly_contains_valid_data_equiv h (p `parse_synth` f) b lo (f x) hi
-
-let contains_valid_serialized_data_or_fail_synth
-  (#k: parser_kind)
-  (#t1 #t2: Type)
-  (#p: parser k t1)
-  (s: serializer p)
-  (f: t1 -> GTot t2 { synth_injective f } )
-  (g: t2 -> GTot t1 { synth_inverse f g } )
-  (h : HS.mem)
-  (b: buffer8)
-  (lo: I32.t)
-  (x: t1)
-  (hi: I32.t)
-: Lemma
-  (requires (contains_valid_serialized_data_or_fail h s b lo x hi))
-  (ensures (contains_valid_serialized_data_or_fail h (serialize_synth _ f s g ()) b lo (f x) hi))
-= contains_valid_serialized_data_or_fail_equiv h s b lo x hi;
-  contains_valid_serialized_data_or_fail_equiv h (serialize_synth _ f s g ()) b lo (f x) hi

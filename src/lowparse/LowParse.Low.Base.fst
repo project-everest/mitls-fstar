@@ -989,7 +989,7 @@ let accessor_compose
   (#t3: Type)
   (#p3: parser k3 t3)
   (#cl23: clens pre2 t3)
-  (a23: gaccessor p2 p3 cl23)
+  (#a23: gaccessor p2 p3 cl23)
   (a23' : accessor a23)
 : Tot (accessor (gaccessor_compose a12 a23))
 = fun input pos -> 
