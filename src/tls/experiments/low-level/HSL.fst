@@ -15,8 +15,12 @@ module B = LowStar.Buffer
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
 
-module M = TLS.HSL.Msg
+module M = TLS.HSL.Msg.Manual
 module LP = LowParse.Low.Base
+
+module I32 = FStar.Int32
+module U32 = FStar.UInt32
+module IntCast = FStar.Int.Cast
 
 type loc = LowStar.Modifies.loc
 
@@ -209,13 +213,35 @@ let invert_memP_snoc (l:list 'a) (x:'a)
   : Lemma (FStar.List.Tot.(forall m.{:pattern (memP m (snoc (l, x)))} memP m (snoc (l, x)) <==> memP m l \/ m == x))
   = admit()
 
+(*
+ * LP questions: (a) can we have a function that returns both the ghost repr and #bytes consumed?
+ *               (b) can validators provide h0 == h1?
+ *)
+
+(*
+ * Returns ther ghost repr and length consumed
+ *)
+let ghost_validate32 (#k:LP.parser_kind) (#t:Type0) (#p:LP.parser k t)
+  (v:LP.validator32 p) (input:B.buffer uint8) (sz:I32.t)
+  :ST.Stack (option (G.erased t & I32.t))
+            (requires (fun h0        -> LP.is_slice h0 input sz))
+	    (ensures  (fun h0 res h1 -> B.modifies B.loc_none h0 h1 /\
+	                              (match LP.parse_from_slice p h0 input sz with
+				       | None -> res == None
+				       | Some (x, len) -> res == (Some (G.hide x, I32.int_to_t len)))))
+  = let h0 = ST.get () in
+    let res = v input sz in
+    if res `I32.lt` 0l then None
+    else
+      let f () :GTot t = fst (Some?.v (LP.parse_from_slice p h0 input sz)) in
+      Some (G.elift1 f (G.hide ()), sz - res)
+
 let parse_it (#len:uint32) 
              (from:uint32)
              (to:uint32{from <= to /\ to <= len})
              (b:lbuffer8 len)
   : ST (option (G.erased (message len) & uint32))
-       (requires fun h ->
-         B.live h b)
+       (requires fun h -> U32.v (to - from) < 2147483648 /\ B.live h b)
        (ensures fun h0 eopt h1 ->
          let sub_b = B.gsub b from (to - from) in  //we should parse the sub-buffer between from and to
          let eopt' = LP.parse M.msg_parser (B.as_seq h0 sub_b) in
@@ -228,7 +254,22 @@ let parse_it (#len:uint32)
             m == G.hide ({from=from; to=n; msg=m'}) /\
             message_is_parsed #len (G.reveal m) b h1
          | _ -> False))
-  = admit()         
+  = let h0 = ST.get () in
+    let sub_b = B.sub b from (to - from) in
+    let len_i32 = IntCast.uint32_to_int32 (to - from) in
+    let res = ghost_validate32 M.msg_validator32 sub_b len_i32 in
+    match res with
+    | None -> None
+    | Some (x, consumed) ->
+      let message () :GTot (message len) =
+        { from = from;
+	  to = from + IntCast.int32_to_uint32 consumed;
+	  msg = G.reveal x }
+      in
+      let h1 = ST.get () in
+      let gm = G.elift1 message (G.hide ()) in
+      assume (message_is_parsed #len (G.reveal gm) b h1); 
+      Some (gm, from + IntCast.int32_to_uint32 consumed)
 
 (* TODO: Move to Ghost library *)
 let bind (x:G.erased 'a) (g:'a -> G.erased 'b) : G.erased 'b =
@@ -293,6 +334,7 @@ let process (st:hsl_state) (p:uint32)
     let msgs = !st.msgs in
     st.p1 := p;
     let p0 = !st.p0 in
+    assume (U32.v (p - p0) < 2147483648);
     match parse_it #st.len p0 p st.buf with
     | None ->
       let h1 = ST.get() in
