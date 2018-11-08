@@ -343,7 +343,7 @@ let valid_facts
 (* Accessors *)
 
 noeq
-type clens (t1: Type) (clens_cond: t1 -> GTot Type0) (t2: Type) = {
+type clens (#t1: Type) (clens_cond: t1 -> GTot Type0) (t2: Type) = {
   clens_get: (x1: t1) -> Ghost t2 (requires (clens_cond x1)) (ensures (fun _ -> True));
   clens_put: (x1: t1) -> t2 -> Ghost t1 (requires (clens_cond x1)) (ensures (fun x1' -> clens_cond x1'));
   clens_get_put: (x1: t1) -> (x2: t2) -> Lemma (requires (clens_cond x1)) (ensures (clens_get (clens_put x1 x2) == x2));
@@ -352,7 +352,7 @@ type clens (t1: Type) (clens_cond: t1 -> GTot Type0) (t2: Type) = {
 }
 
 let clens_get_put'
-  (#t1: Type) (#clens_cond: t1 -> GTot Type0) (#t2: Type) (l: clens t1 clens_cond t2)
+  (#t1: Type) (#clens_cond: t1 -> GTot Type0) (#t2: Type) (l: clens clens_cond t2)
   (x1: t1) (x2: t2)
 : Lemma
   (requires (clens_cond x1))
@@ -361,7 +361,7 @@ let clens_get_put'
 = l.clens_get_put x1 x2
 
 let clens_put_put'
-  (#t1: Type) (#clens_cond: t1 -> GTot Type0) (#t2: Type) (l: clens t1 clens_cond t2)
+  (#t1: Type) (#clens_cond: t1 -> GTot Type0) (#t2: Type) (l: clens clens_cond t2)
   (x1: t1) (x2: t2) (x2' : t2)
 : Lemma
   (requires (clens_cond x1))
@@ -370,7 +370,7 @@ let clens_put_put'
 = l.clens_put_put x1 x2 x2'
 
 let clens_put_get'
-  (#t1: Type) (#clens_cond: t1 -> GTot Type0) (#t2: Type) (l: clens t1 clens_cond t2)
+  (#t1: Type) (#clens_cond: t1 -> GTot Type0) (#t2: Type) (l: clens clens_cond t2)
   (x1: t1)
 : Lemma
   (requires (clens_cond x1))
@@ -384,8 +384,8 @@ let clens_disjoint_l
   (#clens_cond2: t0 -> GTot Type0)
   (#clens_cond3: t0 -> GTot Type0)
   (#t2 #t3: Type)
-  (l2: clens t0 clens_cond2 t2)
-  (l3: clens t0 clens_cond3 t3)
+  (l2: clens clens_cond2 t2)
+  (l3: clens clens_cond3 t3)
 : GTot Type0
 = (forall (x0: t0) (x2: t2) . (clens_cond2 x0 /\ clens_cond3 x0) ==> 
   (let x0' = l2.clens_put x0 x2 in clens_cond3 x0' /\ l3.clens_get x0' == l3.clens_get x0))
@@ -396,8 +396,8 @@ let clens_disjoint_l_elim
   (#clens_cond2: t0 -> GTot Type0)
   (#clens_cond3: t0 -> GTot Type0)
   (#t2 #t3: Type)
-  (l2: clens t0 clens_cond2 t2)
-  (l3: clens t0 clens_cond3 t3)
+  (l2: clens clens_cond2 t2)
+  (l3: clens clens_cond3 t3)
   (x0: t0) (x2: t2)
 : Lemma
   (requires (clens_disjoint_l l2 l3 /\ clens_cond2 x0 /\ clens_cond3 x0))
@@ -411,8 +411,8 @@ let clens_disjoint_l_intro
   (#clens_cond2: t0 -> GTot Type0)
   (#clens_cond3: t0 -> GTot Type0)
   (#t2 #t3: Type)
-  (l2: clens t0 clens_cond2 t2)
-  (l3: clens t0 clens_cond3 t3)
+  (l2: clens clens_cond2 t2)
+  (l3: clens clens_cond3 t3)
   (lem: (
     (x0: t0) ->
     (x2: t2) ->
@@ -437,8 +437,8 @@ let clens_disjoint
   (#clens_cond2: t0 -> GTot Type0)
   (#clens_cond3: t0 -> GTot Type0)
   (#t2 #t3: Type)
-  (l2: clens t0 clens_cond2 t2)
-  (l3: clens t0 clens_cond3 t3)
+  (l2: clens clens_cond2 t2)
+  (l3: clens clens_cond3 t3)
 : GTot Type0
 = clens_disjoint_l l2 l3 /\ clens_disjoint_l l3 l2
 
@@ -447,8 +447,8 @@ let clens_disjoint_sym
   (#clens_cond2: t0 -> GTot Type0)
   (#clens_cond3: t0 -> GTot Type0)
   (#t2 #t3: Type)
-  (l2: clens t0 clens_cond2 t2)
-  (l3: clens t0 clens_cond3 t3)
+  (l2: clens clens_cond2 t2)
+  (l3: clens clens_cond3 t3)
 : Lemma
   (clens_disjoint l2 l3 <==> clens_disjoint l3 l2)
   [SMTPat (clens_disjoint l2 l3)]
@@ -458,7 +458,7 @@ let clens_compose_cond
   (#t1: Type)
   (#clens_cond1: t1 -> GTot Type0)
   (#t2: Type)
-  (l12: clens t1 clens_cond1 t2)
+  (l12: clens clens_cond1 t2)
   (clens_cond2: t2 -> GTot Type0)
   (x1: t1)
 : GTot Type0
@@ -471,9 +471,9 @@ let clens_compose
   (#t2: Type)
   (#clens_cond2: t2 -> GTot Type0)
   (#t3: Type)
-  (l12: clens t1 clens_cond1 t2)
-  (l23: clens t2 clens_cond2 t3)
-: Tot (clens t1 (clens_compose_cond l12 clens_cond2) t3)
+  (l12: clens clens_cond1 t2)
+  (l23: clens clens_cond2 t3)
+: Tot (clens (clens_compose_cond l12 clens_cond2) t3)
 = {
   clens_get = (fun x1 -> l23.clens_get (l12.clens_get x1));
   clens_put = (fun x1 x3 ->
@@ -492,16 +492,56 @@ let clens_disjoint_compose
   (#clens_cond2: t0 -> GTot Type0)
   (#clens_cond3: t0 -> GTot Type0)
   (#t2 #t3: Type)
-  (l2: clens t0 clens_cond2 t2)
-  (l3: clens t0 clens_cond3 t3)
+  (l2: clens clens_cond2 t2)
+  (l3: clens clens_cond3 t3)
   (#clens_cond3': t3 -> GTot Type0)
   (#t3' : Type)
-  (l3' : clens t3 clens_cond3' t3')
+  (l3' : clens clens_cond3' t3')
 : Lemma
   (requires (clens_disjoint l2 l3))
   (ensures (clens_disjoint l2 (clens_compose l3 l3')))
   [SMTPat (clens_disjoint l2 (clens_compose l3 l3'))]
 = ()
+
+let gaccessor_pre
+  (#k1: parser_kind)
+  (#t1: Type)
+  (p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (p2: parser k2 t2)
+  (#pre: t1 -> GTot Type0)
+  (cl: clens pre t2)
+  (sl: bytes)
+: GTot Type0
+= match parse p1 sl with
+  | Some (x1, _) -> pre x1
+  | _ -> False
+
+let gaccessor_post
+  (#k1: parser_kind)
+  (#t1: Type)
+  (p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (p2: parser k2 t2)
+  (#pre: t1 -> GTot Type0)
+  (cl: clens pre t2)
+  (sl: bytes)
+  (pos' : nat)
+: GTot Type0
+= pos' <= Seq.length sl /\
+  begin match parse p1 sl with
+  | Some (x1, consumed1) ->
+    begin match parse p2 (Seq.slice sl pos' (Seq.length sl)) with
+    | Some (x2, consumed2) ->
+      pre x1 /\
+      x2 == cl.clens_get x1 /\
+      pos' + consumed2 <= consumed1
+    | _ -> False
+    end
+  | _ -> False
+  end
 
 let gaccessor
   (#k1: parser_kind)
@@ -510,29 +550,13 @@ let gaccessor
   (#k2: parser_kind)
   (#t2: Type)
   (p2: parser k2 t2)
-  (pre: t1 -> GTot Type0)
-  (cl: clens t1 pre t2)
+  (#pre: t1 -> GTot Type0)
+  (cl: clens pre t2)
 : Tot Type
 = (sl: bytes) ->
   Ghost nat
-  (requires (
-    match parse p1 sl with
-    | Some (x1, _) -> pre x1
-    | _ -> False
-  ))
-  (ensures (fun pos' ->
-    pos' <= Seq.length sl /\
-    begin match parse p1 sl with
-    | Some (x1, consumed1) ->
-      begin match parse p2 (Seq.slice sl pos' (Seq.length sl)) with
-      | Some (x2, consumed2) ->
-        x2 == cl.clens_get x1 /\
-        pos' + consumed2 <= consumed1
-      | _ -> False
-      end
-    | _ -> False
-    end
-  ))
+  (requires (gaccessor_pre p1 p2 cl sl))
+  (ensures (fun pos' -> gaccessor_post p1 p2 cl sl pos'))
 
 abstract
 let gaccessors_disjoint
@@ -543,14 +567,14 @@ let gaccessors_disjoint
   (#t2: Type)
   (#p2: parser k2 t2)
   (#pre2: t1 -> GTot Type0)
-  (#cl2: clens t1 pre2 t2)
-  (g2: gaccessor p1 p2 pre2 cl2)
+  (#cl2: clens pre2 t2)
+  (g2: gaccessor p1 p2 cl2)
   (#k3: parser_kind)
   (#t3: Type)
   (#p3: parser k3 t3)
   (#pre3: t1 -> GTot Type0)
-  (#cl3: clens t1 pre3 t3)
-  (g3: gaccessor p1 p3 pre3 cl3)
+  (#cl3: clens pre3 t3)
+  (g3: gaccessor p1 p3 cl3)
 : GTot Type0
 = clens_disjoint cl2 cl3 /\
   (forall (sl: bytes) . (
@@ -575,14 +599,14 @@ let gaccessors_disjoint_clens_disjoint
   (#t2: Type)
   (#p2: parser k2 t2)
   (#pre2: t1 -> GTot Type0)
-  (#cl2: clens t1 pre2 t2)
-  (g2: gaccessor p1 p2 pre2 cl2)
+  (#cl2: clens pre2 t2)
+  (g2: gaccessor p1 p2 cl2)
   (#k3: parser_kind)
   (#t3: Type)
   (#p3: parser k3 t3)
   (#pre3: t1 -> GTot Type0)
-  (#cl3: clens t1 pre3 t3)
-  (g3: gaccessor p1 p3 pre3 cl3)
+  (#cl3: clens pre3 t3)
+  (g3: gaccessor p1 p3 cl3)
 : Lemma
   (requires (gaccessors_disjoint g2 g3))
   (ensures (clens_disjoint cl2 cl3))
@@ -598,14 +622,14 @@ let gaccessors_disjoint_elim
   (#t2: Type)
   (#p2: parser k2 t2)
   (#pre2: t1 -> GTot Type0)
-  (#cl2: clens t1 pre2 t2)
-  (g2: gaccessor p1 p2 pre2 cl2)
+  (#cl2: clens pre2 t2)
+  (g2: gaccessor p1 p2 cl2)
   (#k3: parser_kind)
   (#t3: Type)
   (#p3: parser k3 t3)
   (#pre3: t1 -> GTot Type0)
-  (#cl3: clens t1 pre3 t3)
-  (g3: gaccessor p1 p3 pre3 cl3)
+  (#cl3: clens pre3 t3)
+  (g3: gaccessor p1 p3 cl3)
   (sl: bytes)
 : Lemma
   (requires (gaccessors_disjoint g2 g3 /\ (
@@ -632,14 +656,14 @@ let gaccessors_disjoint_intro
   (#t2: Type)
   (#p2: parser k2 t2)
   (#pre2: t1 -> GTot Type0)
-  (#cl2: clens t1 pre2 t2)
-  (g2: gaccessor p1 p2 pre2 cl2)
+  (#cl2: clens pre2 t2)
+  (g2: gaccessor p1 p2 cl2)
   (#k3: parser_kind)
   (#t3: Type)
   (#p3: parser k3 t3)
   (#pre3: t1 -> GTot Type0)
-  (#cl3: clens t1 pre3 t3)
-  (g3: gaccessor p1 p3 pre3 cl3)
+  (#cl3: clens pre3 t3)
+  (g3: gaccessor p1 p3 cl3)
   (clens_disj: squash (clens_disjoint cl2 cl3))
   (lem: (
     (sl: bytes) ->
@@ -682,6 +706,95 @@ let gaccessors_disjoint_intro
  in
  Classical.forall_intro lem'
 
+let gaccessor_compose'
+  (#k1: parser_kind)
+  (#t1: Type)
+  (#p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (#p2: parser k2 t2)
+  (#pre1: (t1 -> GTot Type0))
+  (#cl12: clens pre1 t2)
+  (a12: gaccessor p1 p2 cl12)
+  (#pre2: (t2 -> GTot Type0))
+  (#k3: parser_kind)
+  (#t3: Type)
+  (#p3: parser k3 t3)
+  (#cl23: clens pre2 t3)
+  (a23: gaccessor p2 p3 cl23)
+  (input: bytes)
+: Ghost nat
+  (requires (gaccessor_pre p1 p3 (clens_compose cl12 cl23) input))
+  (ensures (fun pos' -> True))
+=
+  let pos2 = a12 input in
+  let input2 = Seq.slice input pos2 (Seq.length input) in
+  pos2 + a23 input2
+
+let gaccessor_compose_correct
+  (#k1: parser_kind)
+  (#t1: Type)
+  (#p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (#p2: parser k2 t2)
+  (#pre1: (t1 -> GTot Type0))
+  (#cl12: clens pre1 t2)
+  (a12: gaccessor p1 p2 cl12)
+  (#pre2: (t2 -> GTot Type0))
+  (#k3: parser_kind)
+  (#t3: Type)
+  (#p3: parser k3 t3)
+  (#cl23: clens pre2 t3)
+  (a23: gaccessor p2 p3 cl23)
+  (input: bytes)
+: Lemma
+  (requires (gaccessor_pre p1 p3 (clens_compose cl12 cl23) input))
+  (ensures (gaccessor_post p1 p3 (clens_compose cl12 cl23) input (gaccessor_compose' a12 a23 input)))
+= ()
+
+let gaccessor_compose_
+  (#k1: parser_kind)
+  (#t1: Type)
+  (#p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (#p2: parser k2 t2)
+  (#pre1: (t1 -> GTot Type0))
+  (#cl12: clens pre1 t2)
+  (a12: gaccessor p1 p2 cl12)
+  (#pre2: (t2 -> GTot Type0))
+  (#k3: parser_kind)
+  (#t3: Type)
+  (#p3: parser k3 t3)
+  (#cl23: clens pre2 t3)
+  (a23: gaccessor p2 p3 cl23)
+  (input: bytes)
+: Ghost nat
+  (requires (gaccessor_pre p1 p3 (clens_compose cl12 cl23) input))
+  (ensures (fun pos' -> gaccessor_post p1 p3 (clens_compose cl12 cl23) input pos'))
+= gaccessor_compose_correct a12 a23 input;
+  gaccessor_compose' a12 a23 input
+
+let gaccessor_compose
+  (#k1: parser_kind)
+  (#t1: Type)
+  (#p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (#p2: parser k2 t2)
+  (#pre1: (t1 -> GTot Type0))
+  (#cl12: clens pre1 t2)
+  (a12: gaccessor p1 p2 cl12)
+  (#pre2: (t2 -> GTot Type0))
+  (#k3: parser_kind)
+  (#t3: Type)
+  (#p3: parser k3 t3)
+  (#cl23: clens pre2 t3)
+  (a23: gaccessor p2 p3 cl23)
+: Tot (gaccessor p1 p3 (clens_compose cl12 cl23))
+= gaccessor_compose_ a12 a23
+
 let slice_access'
   (h: HS.mem)
   (#k1: parser_kind)
@@ -691,8 +804,8 @@ let slice_access'
   (#t2: Type)
   (#p2: parser k2 t2)
   (#pre: t1 -> GTot Type0)
-  (#cl: clens t1 pre t2)
-  (g: gaccessor p1 p2 pre cl)
+  (#cl: clens pre t2)
+  (g: gaccessor p1 p2 cl)
   (sl: slice)
   (pos: U32.t)
 : Ghost U32.t
@@ -713,8 +826,8 @@ let slice_access
   (#t2: Type)
   (#p2: parser k2 t2)
   (#pre: t1 -> GTot Type0)
-  (#cl: clens t1 pre t2)
-  (g: gaccessor p1 p2 pre cl)
+  (#cl: clens pre t2)
+  (g: gaccessor p1 p2 cl)
   (sl: slice)
   (pos: U32.t)
 : Ghost U32.t
@@ -741,8 +854,8 @@ let slice_access_eq
   (#t2: Type)
   (#p2: parser k2 t2)
   (#pre: t1 -> GTot Type0)
-  (#cl: clens t1 pre t2)
-  (g: gaccessor p1 p2 pre cl)
+  (#cl: clens pre t2)
+  (g: gaccessor p1 p2 cl)
   (sl: slice)
   (pos: U32.t)
 : Lemma
@@ -767,8 +880,8 @@ let slice_access_frame
   (#t2: Type)
   (#p2: parser k2 t2)
   (#pre: t1 -> GTot Type0)
-  (#cl: clens t1 pre t2)
-  (g: gaccessor p1 p2 pre cl)
+  (#cl: clens pre t2)
+  (g: gaccessor p1 p2 cl)
   (sl: slice)
   (pos: U32.t)
   (l: B.loc)
@@ -845,8 +958,8 @@ let accessor
   (#t2: Type)
   (#p2: parser k2 t2)
   (#pre: t1 -> GTot Type0)
-  (#cl: clens t1 pre t2)
-  (g: gaccessor p1 p2 pre cl)
+  (#cl: clens pre t2)
+  (g: gaccessor p1 p2 cl)
 : Tot Type
 = (sl: slice) ->
   (pos: U32.t) ->
@@ -856,6 +969,34 @@ let accessor
     B.modifies B.loc_none h h' /\
     pos' == slice_access h g sl pos
   ))
+
+#push-options "--z3rlimit 16"
+
+inline_for_extraction
+let accessor_compose
+  (#k1: parser_kind)
+  (#t1: Type)
+  (#p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (#p2: parser k2 t2)
+  (#pre1: (t1 -> GTot Type0))
+  (#cl12: clens pre1 t2)
+  (#a12: gaccessor p1 p2 cl12)
+  (a12' : accessor a12)
+  (#pre2: (t2 -> GTot Type0))
+  (#k3: parser_kind)
+  (#t3: Type)
+  (#p3: parser k3 t3)
+  (#cl23: clens pre2 t3)
+  (a23: gaccessor p2 p3 cl23)
+  (a23' : accessor a23)
+: Tot (accessor (gaccessor_compose a12 a23))
+= fun input pos -> 
+  let pos2 = a12' input pos in
+  a23' input pos2
+
+#pop-options
 
 inline_for_extraction
 let leaf_reader
