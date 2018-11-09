@@ -677,6 +677,10 @@ let clens_id (t: Type) : Tot (clens (fun (x: t) -> True) t) = {
   clens_get = (fun x -> x);
 }
 
+let clens_eq (#t: Type) (#clens_cond1: t -> GTot Type0) (#t': Type) (cl1: clens clens_cond1 t') (#clens_cond2: t -> GTot Type0) (cl2: clens clens_cond2 t') : GTot Type0 =
+  (forall (x: t) . {:pattern (clens_cond1 x) \/ (clens_cond2 x)} clens_cond1 x <==> clens_cond2 x) /\
+  (forall (x: t) . {:pattern (cl1.clens_get x) \/ (cl2.clens_get x)} (clens_cond1 x \/ clens_cond2 x) ==> (cl1.clens_get x == cl2.clens_get x))
+
 (*
 let clens_get_put'
   (#t1: Type) (#clens_cond: t1 -> GTot Type0) (#t2: Type) (l: clens clens_cond t2)
@@ -893,6 +897,7 @@ let gaccessor_post'
     let (pos', len') = res in pos' + len' <= Seq.length sl /\
     (gaccessor_pre p1 p2 cl sl ==> gaccessor_post p1 p2 cl sl res)
 
+[@unifier_hint_injective]
 let gaccessor
   (#k1: parser_kind)
   (#t1: Type)
@@ -1054,6 +1059,22 @@ let gaccessor_id
   (p: parser k t)
 : Tot (gaccessor p p (clens_id _))
 = fun (input: bytes) -> ((0, Seq.length input) <: Ghost (nat & nat) (requires True) (ensures (fun res -> gaccessor_post' p p (clens_id _) input res)))
+
+let gaccessor_ext
+  (#k1: parser_kind)
+  (#t1: Type)
+  (#p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (#p2: parser k2 t2)
+  (#pre: (t1 -> GTot Type0))
+  (#cl: clens pre t2)
+  (g: gaccessor p1 p2 cl)
+  (#pre': (t1 -> GTot Type0))
+  (cl': clens pre' t2)
+  (sq: clens_eq cl cl')
+: Tot (gaccessor p1 p2 cl')
+= fun (input: bytes) -> (g input <: Ghost (nat & nat) (requires True) (ensures (fun res -> gaccessor_post' p1 p2 cl' input res)))
 
 let gaccessor_compose
   (#k1: parser_kind)
@@ -1254,6 +1275,7 @@ let slice_access_frame
   ]]
 = ()
 
+[@unifier_hint_injective]
 inline_for_extraction
 let accessor
   (#k1: parser_kind)
@@ -1285,6 +1307,24 @@ let accessor_id
   let h = HST.get () in
   [@inline_let] let _ = slice_access_eq h (gaccessor_id p) input pos in
   pos
+
+inline_for_extraction
+let accessor_ext
+  (#k1: parser_kind)
+  (#t1: Type)
+  (#p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (#p2: parser k2 t2)
+  (#pre: (t1 -> GTot Type0))
+  (#cl: clens pre t2)
+  (#g: gaccessor p1 p2 cl)
+  (a: accessor g)
+  (#pre': (t1 -> GTot Type0))
+  (cl': clens pre' t2)
+  (sq: clens_eq cl cl')
+: Tot (accessor (gaccessor_ext g cl' sq))
+= fun input pos -> a input pos
 
 #push-options "--z3rlimit 16"
 
