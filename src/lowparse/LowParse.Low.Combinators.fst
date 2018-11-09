@@ -216,10 +216,12 @@ let clens_synth
 : Tot (clens (fun (x: t1) -> True) t2)
 = {
   clens_get = (fun (x: t1) -> f x);
+(*  
   clens_put = (fun (x: t1) (y: t2) -> g y);
   clens_get_put = (fun (x: t1) (y: t2) -> ());
   clens_put_put = (fun (x: t1) (y y' : t2) -> ());
   clens_put_get = (fun (x: t1) -> ());
+*)
 }
 
 let gaccessor_synth'
@@ -231,10 +233,10 @@ let gaccessor_synth'
   (g: t2 -> GTot t1)
   (u: unit { synth_inverse f g /\ synth_inverse g f } )
   (input: bytes)
-: Ghost nat
-  (requires (gaccessor_pre (parse_synth p1 f) p1 (clens_synth g f ()) input))
-  (ensures (fun pos' -> gaccessor_post (parse_synth p1 f) p1 (clens_synth g f ()) input pos'))
-= 0
+: Ghost (nat & nat)
+  (requires (True))
+  (ensures (fun pos' -> gaccessor_post' (parse_synth p1 f) p1 (clens_synth g f ()) input pos'))
+= (0, Seq.length input)
 
 let gaccessor_synth
   (#k: parser_kind)
@@ -268,10 +270,12 @@ let clens_fst
 : Tot (clens (fun (x: (t1 & t2)) -> True) t1)
 = {
   clens_get = fst;
+(*  
   clens_put = (fun x y -> (y, snd x));
   clens_get_put = (fun x y -> ());
   clens_put_put = (fun x y y' -> ());
   clens_put_get = (fun x -> ());
+*)
 }
 
 let clens_snd
@@ -280,34 +284,46 @@ let clens_snd
 : Tot (clens (fun (x: (t1 & t2)) -> True) t2)
 = {
   clens_get = snd;
+(*  
   clens_put = (fun x y -> (fst x, y));
   clens_get_put = (fun x y -> ());
   clens_put_put = (fun x y y' -> ());
   clens_put_get = (fun x -> ());
+*)
 }
 
 let gaccessor_fst'
   (#k1: parser_kind)
   (#t1: Type)
   (p1: parser k1 t1)
+  (sq: squash (k1.parser_kind_subkind == Some ParserStrong))
   (#k2: parser_kind)
   (#t2: Type)
   (p2: parser k2 t2)
   (input: bytes)
-: Ghost nat
-  (requires (gaccessor_pre (p1 `nondep_then` p2) p1 (clens_fst _ _) input))
-  (ensures (fun pos' -> gaccessor_post (p1 `nondep_then` p2) p1 (clens_fst _ _) input pos'))
-= 0
+: Ghost (nat & nat)
+  (requires True)
+  (ensures (fun pos' -> gaccessor_post' (p1 `nondep_then` p2) p1 (clens_fst _ _) input pos'))
+= (0, (match parse p1 input with
+  | Some (_, consumed) ->
+    let _ =
+      assert (no_lookahead_on p1 input (Seq.slice input 0 consumed));
+      assert (injective_postcond p1 input (Seq.slice input 0 consumed))
+    in
+    consumed
+  | _ -> 0 // dummy
+  ))
 
 let gaccessor_fst
   (#k1: parser_kind)
   (#t1: Type)
   (p1: parser k1 t1)
+  (sq: squash (k1.parser_kind_subkind == Some ParserStrong))
   (#k2: parser_kind)
   (#t2: Type)
   (p2: parser k2 t2)
 : Tot (gaccessor (p1 `nondep_then` p2) p1 (clens_fst _ _))
-= gaccessor_fst' p1 p2
+= gaccessor_fst' p1 sq p2
 
 let gaccessor_snd'
   (#k1: parser_kind)
@@ -317,11 +333,12 @@ let gaccessor_snd'
   (#t2: Type)
   (p2: parser k2 t2)
   (input: bytes)
-: Ghost nat
-  (requires (gaccessor_pre (p1 `nondep_then` p2) p2 (clens_snd _ _) input))
-  (ensures (fun pos' -> gaccessor_post (p1 `nondep_then` p2) p2 (clens_snd _ _) input pos'))
-= let (Some (_, consumed)) = parse p1 input in
-  consumed
+: Ghost (nat & nat)
+  (requires (True))
+  (ensures (fun pos' -> gaccessor_post' (p1 `nondep_then` p2) p2 (clens_snd _ _) input pos'))
+= match parse p1 input with
+  | None -> (0, 0) // dummy
+  | Some (_, consumed) -> (consumed, Seq.length input - consumed)
 
 let gaccessor_snd
   (#k1: parser_kind)
@@ -333,37 +350,41 @@ let gaccessor_snd
 : Tot (gaccessor (p1 `nondep_then` p2) p2 (clens_snd _ _))
 = gaccessor_snd' p1 p2
 
+(*
 let clens_fst_snd_disjoint
   (t1 t2: Type)
 : Lemma
   (clens_disjoint (clens_fst t1 t2) (clens_snd t1 t2))
 = clens_disjoint_l_intro (clens_fst t1 t2) (clens_snd t1 t2) (fun x1 x2 -> ());
   clens_disjoint_l_intro (clens_snd t1 t2) (clens_fst t1 t2) (fun x1 x2 -> ())
+*)
 
 let gaccessor_fst_snd_disjoint
   (#k1: parser_kind)
   (#t1: Type)
   (p1: parser k1 t1)
+  (sq: squash (k1.parser_kind_subkind == Some ParserStrong))
   (#k2: parser_kind)
   (#t2: Type)
   (p2: parser k2 t2)
 : Lemma
-  (gaccessors_disjoint (gaccessor_fst p1 p2) (gaccessor_snd p1 p2))
-= clens_fst_snd_disjoint t1 t2;
-  gaccessors_disjoint_intro (gaccessor_fst p1 p2) (gaccessor_snd p1 p2) () (fun x -> ())
+  (gaccessors_disjoint (gaccessor_fst p1 sq p2) (gaccessor_snd p1 p2))
+= // clens_fst_snd_disjoint t1 t2;
+  gaccessors_disjoint_intro (gaccessor_fst p1 sq p2) (gaccessor_snd p1 p2) (* *) (fun x -> ())
 
 inline_for_extraction
 let accessor_fst
   (#k1: parser_kind)
   (#t1: Type)
   (p1: parser k1 t1)
+  (sq: squash (k1.parser_kind_subkind == Some ParserStrong))
   (#k2: parser_kind)
   (#t2: Type)
   (p2: parser k2 t2)
-: Tot (accessor (gaccessor_fst p1 p2))
+: Tot (accessor (gaccessor_fst p1 sq p2))
 = fun input pos ->
   let h = HST.get () in
-  [@inline_let] let _ = slice_access_eq h (gaccessor_fst p1 p2) input pos in
+  [@inline_let] let _ = slice_access_eq h (gaccessor_fst p1 sq p2) input pos in
   pos
 
 inline_for_extraction
@@ -372,15 +393,24 @@ let accessor_snd
   (#t1: Type)
   (#p1: parser k1 t1)
   (j1: jumper p1)
+  (sq: squash (k1.parser_kind_subkind == Some ParserStrong))
   (#k2: parser_kind)
   (#t2: Type)
   (p2: parser k2 t2)
 : Tot (accessor (gaccessor_snd p1 p2))
 = fun input pos ->
   let h = HST.get () in
-  [@inline_let] let _ = slice_access_eq h (gaccessor_snd p1 p2) input pos in
-  [@inline_let] let _ = valid_facts p1 h input pos in
-  j1 input pos
+  [@inline_let] let _ = valid_nondep_then h p1 p2 input pos in
+  let res = j1 input pos in
+  [@inline_let] let _ =
+    slice_access_eq_inv h (gaccessor_snd p1 p2) input pos;
+    valid_facts p1 h input pos;
+    let large = (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos))) in
+    let small = (B.as_seq h (B.gsub input.base pos (U32.uint_to_t (content_length (nondep_then p1 p2) h input pos)))) in
+    assert (no_lookahead_on p1 large small);
+    assert (injective_postcond p1 large small)
+  in
+  res
 
 inline_for_extraction
 let make_total_constant_size_parser32
