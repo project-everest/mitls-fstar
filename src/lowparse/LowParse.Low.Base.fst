@@ -673,6 +673,10 @@ type clens (#t1: Type) (clens_cond: t1 -> GTot Type0) (t2: Type) = {
 *)
 }
 
+let clens_id (t: Type) : Tot (clens (fun (x: t) -> True) t) = {
+  clens_get = (fun x -> x);
+}
+
 (*
 let clens_get_put'
   (#t1: Type) (#clens_cond: t1 -> GTot Type0) (#t2: Type) (l: clens clens_cond t2)

@@ -71,18 +71,71 @@ let jump_fldata_strong
 : Tot (jumper (parse_fldata_strong s sz))
 = jump_constant_size (parse_fldata_strong s sz) sz32 ()
 
-(*
+let gaccessor_fldata'
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (sz: nat)
+  (input: bytes)
+: Ghost (nat * nat)
+  (requires (True))
+  (ensures (fun res -> gaccessor_post' (parse_fldata p sz) p (clens_id _) input res))
+= (0, Seq.length input)
+
+let gaccessor_fldata
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (sz: nat)
+: Tot (gaccessor (parse_fldata p sz) p (clens_id _))
+= gaccessor_fldata' p sz
+
 inline_for_extraction
 let accessor_fldata
   (#k: parser_kind)
   (#t: Type0)
   (p: parser k t)
   (sz: nat)
-  (sz32: U32.t { U32.v sz32 == sz } )
-: Tot (accessor (parse_fldata p sz) p (fun x y -> x == y))
-= fun x ->
-  let h = HST.get () in // TODO: WHY WHY WHY is this necessary?
-  B.sub x 0ul sz32
+  (sq: squash (k.parser_kind_subkind == Some ParserStrong))
+: Tot (accessor (gaccessor_fldata p sz))
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let] let _ = slice_access_eq h (gaccessor_fldata p sz) input pos in
+  pos
+
+let clens_fldata_strong
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (sz: nat)
+: Tot (clens #(parse_fldata_strong_t s sz) (fun _ -> True) t)
+= {
+  clens_get = (fun (x: parse_fldata_strong_t s sz) -> (x <: t));
+}
+
+inline_for_extraction
+let gaccessor_fldata_strong'
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (sz: nat)
+  (input: bytes)
+: Ghost (nat & nat)
+  (requires True)
+  (ensures (fun res -> gaccessor_post' (parse_fldata_strong s sz) p (clens_fldata_strong s sz) input res))
+= (0, Seq.length input)
+
+inline_for_extraction
+let gaccessor_fldata_strong
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (sz: nat)
+: Tot (gaccessor (parse_fldata_strong s sz) p (clens_fldata_strong s sz))
+= gaccessor_fldata_strong' s sz
 
 inline_for_extraction
 let accessor_fldata_strong
@@ -91,7 +144,9 @@ let accessor_fldata_strong
   (#p: parser k t)
   (s: serializer p)
   (sz: nat)
-  (sz32: U32.t { U32.v sz32 == sz } )
-: Tot (accessor (parse_fldata_strong s sz) p (fun x y -> x == y))
-= fun x -> accessor_fldata p sz sz32 x
-
+  (sq: squash (k.parser_kind_subkind == Some ParserStrong))
+: Tot (accessor (gaccessor_fldata_strong s sz))
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let] let _ = slice_access_eq h (gaccessor_fldata_strong s sz) input pos in
+  pos
