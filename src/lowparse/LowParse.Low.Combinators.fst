@@ -608,33 +608,76 @@ let write_synth_weak
   [@inline_let] let _ = valid_synth h p1 f2 input pos in
   pos'
 
-(*
-#set-options "--z3rlimit 32"
+(* Special case for vldata and maybe also sum types *)
 
 inline_for_extraction
-let validate32_filter_and_then
+let validate_filter_and_then
+  [| validator_cls |]
   (#k1: parser_kind)
   (#t1: Type0)
   (#p1: parser k1 t1)
-  (v1: validator32 p1)
-  (p1': parser32 p1)
+  (v1: validator p1)
+  (p1': leaf_reader p1)
   (f: (t1 -> GTot bool))
   (f' : ((x: t1) -> Tot (y: bool { y == f x } )))
   (#k2: parser_kind)
   (#t2: Type0)
   (#p2: ((x: t1 { f x == true} ) -> parser k2 t2))
-  (v2: ((x1: t1 { f x1 == true } ) -> validator32 (p2 x1)))
+  (v2: ((x1: t1 { f x1 == true } ) -> validator (p2 x1)))
   (u: unit {
     and_then_cases_injective p2
   })
-: Tot (validator32 (parse_filter p1 f `and_then` p2))
-= fun input len ->
-  let res = v1 input len in
-  if res `I32.lt` 0l
+: Tot (validator (parse_filter p1 f `and_then` p2))
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let]
+  let _ = valid_facts (parse_filter p1 f `and_then` p2) h input pos in
+  [@inline_let]
+  let _ = valid_facts p1 h input pos in
+  let res = v1 input pos in
+  if validator_max_length `U32.lt` res
   then res
   else
-    let va = p1' input in
+    let va = p1' input pos in
     if f' va
     then
-      v2 va (B.offset input (Cast.int32_to_uint32 (len `I32.sub` res))) res
-    else -1l
+      [@inline_let]
+      let _ = valid_facts (p2 va) h input res in
+      v2 va input res
+    else validator_max_length `U32.add` 1ul // TODO: more control on error
+
+inline_for_extraction
+let validate_weaken
+  [| validator_cls |]
+  (k1: parser_kind)
+  (#k2: parser_kind)
+  (#t: Type0)
+  (#p2: parser k2 t)
+  (v2: validator p2)
+  (sq: squash (k1 `is_weaker_than` k2))
+: Tot (validator (weaken k1 p2))
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let]
+  let _ = valid_facts (weaken k1 p2) h input pos in
+  [@inline_let]
+  let _ = valid_facts p2 h input pos in
+  v2 input pos
+
+inline_for_extraction
+let validate_strengthen
+  [| validator_cls |]
+  (k2: parser_kind)
+  (#k1: parser_kind)
+  (#t: Type)
+  (#p1: parser k1 t)
+  (v1: validator p1)
+  (sq: squash (parser_kind_prop k2 p1))
+: Tot (validator (strengthen k2 p1))
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let]
+  let _ = valid_facts (strengthen k2 p1) h input pos in
+  [@inline_let]
+  let _ = valid_facts p1 h input pos in
+  v1 input pos
