@@ -154,6 +154,7 @@ let footprint (st:hsl_state) (h:HS.mem) =
                                  (hsl_get_p1 st h)))
 
 
+#set-options "--z3rlimit_factor 2"
 (*
  * Framing the HSL invariant across its footprint
  *)
@@ -268,7 +269,10 @@ let parse_it (#len:uint32)
       in
       let h1 = ST.get () in
       let gm = G.elift1 to_message (G.hide ()) in
-      assume (message_is_parsed #len (G.reveal gm) b h1); 
+      assert (LP.no_lookahead_on M.msg_parser (B.as_seq h1 sub_b) (B.as_seq h1 (B.gsub sub_b 0ul (IntCast.int32_to_uint32 consumed))));
+      //assert (LP.no_lookahead_on_postcond M.msg_parser (B.as_seq h1 sub_b) (B.as_seq h1 (B.gsub sub_b 0ul (IntCast.int32_to_uint32 consumed))));
+      assert (LP.injective_postcond M.msg_parser (B.as_seq h1 sub_b) (B.as_seq h1 (B.gsub sub_b 0ul (IntCast.int32_to_uint32 consumed))));
+      //assert (message_is_parsed #len (G.reveal gm) b h1); 
       Some (gm, from + IntCast.int32_to_uint32 consumed)
 
 (* TODO: Move to Ghost library *)
