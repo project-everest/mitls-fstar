@@ -393,7 +393,6 @@ let accessor_snd
   (#t1: Type)
   (#p1: parser k1 t1)
   (j1: jumper p1)
-  (sq: squash (k1.parser_kind_subkind == Some ParserStrong))
   (#k2: parser_kind)
   (#t2: Type)
   (p2: parser k2 t2)

@@ -71,24 +71,13 @@ let jump_fldata_strong
 : Tot (jumper (parse_fldata_strong s sz))
 = jump_constant_size (parse_fldata_strong s sz) sz32 ()
 
-let gaccessor_fldata'
-  (#k: parser_kind)
-  (#t: Type0)
-  (p: parser k t)
-  (sz: nat)
-  (input: bytes)
-: Ghost (nat * nat)
-  (requires (True))
-  (ensures (fun res -> gaccessor_post' (parse_fldata p sz) p (clens_id _) input res))
-= (0, Seq.length input)
-
 let gaccessor_fldata
   (#k: parser_kind)
   (#t: Type0)
   (p: parser k t)
   (sz: nat)
 : Tot (gaccessor (parse_fldata p sz) p (clens_id _))
-= gaccessor_fldata' p sz
+= fun (input: bytes) -> ((0, Seq.length input) <: Ghost (nat & nat) (requires (True)) (ensures (fun res -> gaccessor_post' (parse_fldata p sz) p (clens_id _) input res)))
 
 inline_for_extraction
 let accessor_fldata
@@ -96,7 +85,6 @@ let accessor_fldata
   (#t: Type0)
   (p: parser k t)
   (sz: nat)
-  (sq: squash (k.parser_kind_subkind == Some ParserStrong))
 : Tot (accessor (gaccessor_fldata p sz))
 = fun input pos ->
   let h = HST.get () in
@@ -115,19 +103,6 @@ let clens_fldata_strong
 }
 
 inline_for_extraction
-let gaccessor_fldata_strong'
-  (#k: parser_kind)
-  (#t: Type0)
-  (#p: parser k t)
-  (s: serializer p)
-  (sz: nat)
-  (input: bytes)
-: Ghost (nat & nat)
-  (requires True)
-  (ensures (fun res -> gaccessor_post' (parse_fldata_strong s sz) p (clens_fldata_strong s sz) input res))
-= (0, Seq.length input)
-
-inline_for_extraction
 let gaccessor_fldata_strong
   (#k: parser_kind)
   (#t: Type0)
@@ -135,7 +110,9 @@ let gaccessor_fldata_strong
   (s: serializer p)
   (sz: nat)
 : Tot (gaccessor (parse_fldata_strong s sz) p (clens_fldata_strong s sz))
-= gaccessor_fldata_strong' s sz
+= fun (input: bytes) -> ((0, Seq.length input) <: Ghost (nat & nat)
+    (requires True)
+    (ensures (fun res -> gaccessor_post' (parse_fldata_strong s sz) p (clens_fldata_strong s sz) input res)))
 
 inline_for_extraction
 let accessor_fldata_strong
@@ -144,7 +121,6 @@ let accessor_fldata_strong
   (#p: parser k t)
   (s: serializer p)
   (sz: nat)
-  (sq: squash (k.parser_kind_subkind == Some ParserStrong))
 : Tot (accessor (gaccessor_fldata_strong s sz))
 = fun input pos ->
   let h = HST.get () in
