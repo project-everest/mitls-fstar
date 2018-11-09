@@ -118,13 +118,6 @@ let parse32_enum_key_gen
 
 #reset-options
 
-let enum_repr_of_key'_t
-  (#key #repr: eqtype)
-  (e: enum key repr)
-: Tot Type0
-= (x: enum_key e) ->
-  Tot (r: enum_repr e { r == enum_repr_of_key e x } )
-
 inline_for_extraction
 let serialize32_enum_key_gen
   (#k: parser_kind)
@@ -164,54 +157,6 @@ let size32_enum_key_gen
   (f: enum_repr_of_key'_t e)
 : Tot (size32 s')
 = fun (input: enum_key e) -> ((s32 (f input)) <: (r: UInt32.t { size32_postcond (serialize_enum_key p s e) input r } ))
-
-inline_for_extraction
-let enum_repr_of_key_cons
-  (#key #repr: eqtype)
-  (e: enum key repr)
-  (f : enum_repr_of_key'_t (enum_tail' e))
-: Pure (enum_repr_of_key'_t e)
-  (requires (Cons? e))
-  (ensures (fun _ -> True))
-= (fun (e' : list (key * repr) { e' == e } ) -> match e' with
-     | (k, r) :: _ ->
-     (fun (x: enum_key e) -> (
-      if k = x
-      then (r <: repr)
-      else (f (x <: key) <: repr)
-     ) <: (r: enum_repr e { enum_repr_of_key e x == r } )))
-     e
-
-inline_for_extraction
-let enum_repr_of_key_cons'
-  (key repr: eqtype)
-  (e: enum key repr)
-  (u: unit { Cons? e } )
-  (f : enum_repr_of_key'_t (enum_tail' e))
-: Tot (enum_repr_of_key'_t e)
-= enum_repr_of_key_cons e f
-
-inline_for_extraction
-let enum_repr_of_key_cons_nil
-  (#key #repr: eqtype)
-  (e: enum key repr)
-: Pure (enum_repr_of_key'_t e)
-  (requires (Cons? e /\ Nil? (enum_tail' e)))
-  (ensures (fun _ -> True))
-= (fun (e' : list (key * repr) { e' == e } ) -> match e' with
-     | [(k, r)] ->
-     (fun (x: enum_key e) ->
-      (r <: (r: enum_repr e { enum_repr_of_key e x == r } ))))
-     e
-
-inline_for_extraction
-let enum_repr_of_key_cons_nil'
-  (key repr: eqtype)
-  (e: enum key repr)
-  (u1: unit { Cons? e } )
-  (u2: unit { Nil? (enum_tail' e) } )
-: Tot (enum_repr_of_key'_t e)
-= enum_repr_of_key_cons_nil e
 
 inline_for_extraction
 let serialize32_maybe_enum_key_gen'

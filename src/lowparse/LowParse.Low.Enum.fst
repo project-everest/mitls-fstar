@@ -128,3 +128,69 @@ let read_enum_key
     (fun r -> destr (read_enum_key_eq e) (read_enum_key_if e) (fun _ _ -> ()) (fun _ _ _ _ -> ()) (read_enum_key_f e) r ())
     (read_filter p32 (parse_enum_key_cond e))
     ()
+
+inline_for_extraction
+let write_enum_key
+  (#key #repr: eqtype)
+  (#k: parser_kind) (#p: parser k repr) (#s: serializer p) (s32: leaf_writer_strong s)
+  (e: enum key repr)
+  (destr: enum_repr_of_key'_t e)
+: Tot (leaf_writer_strong (serialize_enum_key _ s e))
+= [@inline_let] let _ = serialize_enum_key_synth_inverse e in
+  write_synth
+    (write_filter s32 (parse_enum_key_cond e))
+    (parse_enum_key_synth e)
+    (serialize_enum_key_synth_recip e)
+    (fun k -> destr k)
+    ()
+
+inline_for_extraction
+let write_enum_key_weak
+  (#key #repr: eqtype)
+  (#k: parser_kind) (#p: parser k repr) (#s: serializer p) (s32: leaf_writer_weak s)
+  (e: enum key repr)
+  (destr: enum_repr_of_key'_t e)
+: Tot (leaf_writer_weak (serialize_enum_key _ s e))
+= [@inline_let] let _ = serialize_enum_key_synth_inverse e in
+  write_synth_weak
+    (write_filter_weak s32 (parse_enum_key_cond e))
+    (parse_enum_key_synth e)
+    (serialize_enum_key_synth_recip e)
+    (fun k -> destr k)
+    ()
+
+inline_for_extraction
+let write_maybe_enum_key
+  (#key #repr: eqtype)
+  (#k: parser_kind) (#p: parser k repr) (#s: serializer p) (s32: leaf_writer_strong s)
+  (e: enum key repr)
+  (destr: enum_repr_of_key'_t e)
+: Tot (leaf_writer_strong (serialize_maybe_enum_key _ s e))
+= [@inline_let] let _ = serialize_enum_key_synth_inverse e in
+  write_synth
+    s32
+    (maybe_enum_key_of_repr e)
+    (repr_of_maybe_enum_key e)
+    (fun k ->
+      match k with 
+      | Unknown r -> r
+      | Known k -> destr k)
+    ()
+
+inline_for_extraction
+let write_maybe_enum_key_weak
+  (#key #repr: eqtype)
+  (#k: parser_kind) (#p: parser k repr) (#s: serializer p) (s32: leaf_writer_weak s)
+  (e: enum key repr)
+  (destr: enum_repr_of_key'_t e)
+: Tot (leaf_writer_weak (serialize_maybe_enum_key _ s e))
+= [@inline_let] let _ = serialize_enum_key_synth_inverse e in
+  write_synth_weak
+    s32
+    (maybe_enum_key_of_repr e)
+    (repr_of_maybe_enum_key e)
+    (fun k ->
+      match k with 
+      | Unknown r -> r
+      | Known k -> destr k)
+    ()

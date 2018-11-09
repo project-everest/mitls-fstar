@@ -205,28 +205,19 @@ let enum_key_of_repr_of_key
   (enum_key_of_repr e (enum_repr_of_key e k) == k)
 = assoc_flip_intro e (enum_repr_of_key e k) k
 
-let bare_serialize_enum_key
-  (#k: parser_kind)
+let serialize_enum_key_synth_recip 
   (#key #repr: eqtype)
-  (p: parser k repr)
-  (s: serializer p)
   (e: enum key repr)
-: Tot (bare_serializer (enum_key e))
-= fun (k: enum_key e) -> s (enum_repr_of_key e k)
+  (k: enum_key e)
+: GTot (r: repr { parse_enum_key_cond e r == true } )
+= enum_repr_of_key e k
 
-#set-options "--z3rlimit 32"
-
-let bare_serialize_enum_key_correct
-  (#k: parser_kind)
+let serialize_enum_key_synth_inverse
   (#key #repr: eqtype)
-  (p: parser k repr)
-  (s: serializer p)
   (e: enum key repr)
 : Lemma
-  (serializer_correct (parse_enum_key p e) (bare_serialize_enum_key p s e))
+  (synth_inverse (parse_enum_key_synth e) (serialize_enum_key_synth_recip e))
 = Classical.forall_intro (enum_key_of_repr_of_key e)
-
-#reset-options
 
 let serialize_enum_key
   (#k: parser_kind)
@@ -235,8 +226,13 @@ let serialize_enum_key
   (s: serializer p)
   (e: enum key repr)
 : Tot (serializer (parse_enum_key p e))
-= bare_serialize_enum_key_correct p s e;
-  bare_serialize_enum_key p s e
+= serialize_enum_key_synth_inverse e;
+  serialize_synth
+    (parse_filter p (parse_enum_key_cond e))
+    (parse_enum_key_synth e)
+    (serialize_filter s (parse_enum_key_cond e))
+    (serialize_enum_key_synth_recip e)
+    ()
 
 inline_for_extraction
 let unknown_enum_repr (#key #repr: eqtype) (e: enum key repr) : Tot Type0 =
@@ -1094,3 +1090,60 @@ let forall_maybe_enum_key
     assert (f x)
   in
   Classical.forall_intro g
+
+(* Converting enum keys to their representation, using combinators *)
+
+let enum_repr_of_key'_t
+  (#key #repr: eqtype)
+  (e: enum key repr)
+: Tot Type0
+= (x: enum_key e) ->
+  Tot (r: enum_repr e { r == enum_repr_of_key e x } )
+
+inline_for_extraction
+let enum_repr_of_key_cons
+  (#key #repr: eqtype)
+  (e: enum key repr)
+  (f : enum_repr_of_key'_t (enum_tail' e))
+: Pure (enum_repr_of_key'_t e)
+  (requires (Cons? e))
+  (ensures (fun _ -> True))
+= (fun (e' : list (key * repr) { e' == e } ) -> match e' with
+     | (k, r) :: _ ->
+     (fun (x: enum_key e) -> (
+      if k = x
+      then (r <: repr)
+      else (f (x <: key) <: repr)
+     ) <: (r: enum_repr e { enum_repr_of_key e x == r } )))
+     e
+
+inline_for_extraction
+let enum_repr_of_key_cons'
+  (key repr: eqtype)
+  (e: enum key repr)
+  (u: unit { Cons? e } )
+  (f : enum_repr_of_key'_t (enum_tail' e))
+: Tot (enum_repr_of_key'_t e)
+= enum_repr_of_key_cons e f
+
+inline_for_extraction
+let enum_repr_of_key_cons_nil
+  (#key #repr: eqtype)
+  (e: enum key repr)
+: Pure (enum_repr_of_key'_t e)
+  (requires (Cons? e /\ Nil? (enum_tail' e)))
+  (ensures (fun _ -> True))
+= (fun (e' : list (key * repr) { e' == e } ) -> match e' with
+     | [(k, r)] ->
+     (fun (x: enum_key e) ->
+      (r <: (r: enum_repr e { enum_repr_of_key e x == r } ))))
+     e
+
+inline_for_extraction
+let enum_repr_of_key_cons_nil'
+  (key repr: eqtype)
+  (e: enum key repr)
+  (u1: unit { Cons? e } )
+  (u2: unit { Nil? (enum_tail' e) } )
+: Tot (enum_repr_of_key'_t e)
+= enum_repr_of_key_cons_nil e
