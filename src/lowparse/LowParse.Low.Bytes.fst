@@ -2,29 +2,116 @@ module LowParse.Low.Bytes
 include LowParse.Spec.Bytes
 include LowParse.Low.Combinators
 include LowParse.Low.VLData
-
-module I32 = FStar.Int32
-
-inline_for_extraction
-let validate32_flbytes
-  (sz: nat)
-  (sz32: I32.t { I32.v sz32 == sz } )
-: Tot (validator32 (parse_flbytes sz))
-= validate32_total_constant_size (parse_flbytes sz) sz32 ()
+include LowParse.Low.Int
 
 module U32 = FStar.UInt32
+module HS = FStar.HyperStack
+module B = LowStar.Buffer
+module BY = LowParse.Bytes32
+module HST = FStar.HyperStack.ST
+module U8 = FStar.UInt8
 
 inline_for_extraction
-let validate_nochk32_flbytes
+let validate_flbytes
+  [| validator_cls |]
+  (sz: nat)
+  (sz32: U32.t { U32.v sz32 == sz /\ sz <= U32.v validator_max_length } )
+: Tot (validator (parse_flbytes sz))
+= validate_total_constant_size (parse_flbytes sz) sz32 ()
+
+inline_for_extraction
+let jump_flbytes
   (sz: nat)
   (sz32: U32.t { U32.v sz32 == sz } )
-: Tot (validator_nochk32 (parse_flbytes sz))
-= validate_nochk32_constant_size (parse_flbytes sz) sz32 ()
+: Tot (jumper (parse_flbytes sz))
+= jump_constant_size (parse_flbytes sz) sz32 ()
 
-module HST = FStar.HyperStack.ST
-module B = LowStar.Buffer
+let valid_flbytes_intro
+  (h: HS.mem)
+  (sz: nat { sz < 4294967296 } )
+  (s: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (U32.v pos + sz <= U32.v s.len /\ live_slice h s))
+  (ensures (
+    valid_content_pos (parse_flbytes sz) h s pos (BY.hide (B.as_seq h (B.gsub s.base pos (U32.uint_to_t sz)))) (pos `U32.add` U32.uint_to_t sz)
+  ))
+= valid_facts (parse_flbytes sz) h s pos
+
+let clens_flbytes_slice
+  (sz: nat)
+  (from: U32.t)
+  (to: U32.t {U32.v from <= U32.v to /\ U32.v to <= sz } )
+: Tot (clens #(BY.lbytes sz) (fun _ -> True) (BY.lbytes (U32.v to - U32.v from)))
+= {
+  clens_get = (fun (x: BY.lbytes sz) -> (BY.slice x from to <: BY.lbytes (U32.v to - U32.v from)));
+}
+
+let gaccessor_flbytes_slice
+  (sz: nat { sz < 4294967296 } )
+  (from: U32.t)
+  (to: U32.t {U32.v from <= U32.v to /\ U32.v to <= sz } )
+: Tot (gaccessor (parse_flbytes sz) (parse_flbytes (U32.v to - U32.v from)) (clens_flbytes_slice sz from to))
+= fun (input: bytes) -> (
+  begin
+    if Seq.length input < sz
+    then (0, 0) // dummy
+    else (U32.v from, U32.v to - U32.v from)
+  end <: Ghost (nat & nat) (requires True) (ensures (fun res -> gaccessor_post' (parse_flbytes sz) (parse_flbytes (U32.v to - U32.v from)) (clens_flbytes_slice sz from to) input res )))
+
+inline_for_extraction
+let accessor_flbytes_slice
+  (sz: nat { sz < 4294967296 } )
+  (from: U32.t)
+  (to: U32.t {U32.v from <= U32.v to /\ U32.v to <= sz } )
+: Tot (accessor (gaccessor_flbytes_slice sz from to))
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let] let _ = slice_access_eq h (gaccessor_flbytes_slice sz from to) input pos in
+  pos `U32.add` from
+
+let clens_flbytes_get
+  (sz: nat)
+  (i: U32.t { U32.v i < sz } )
+: Tot (clens #(BY.lbytes sz) (fun _ -> True) byte)
+= {
+  clens_get = (fun (x: BY.lbytes sz) -> (BY.get x i <: byte));
+}
+
+let gaccessor_flbytes_get
+  (sz: nat { sz < 4294967296 } )
+  (i: U32.t { U32.v i < sz } )
+: Tot (gaccessor (parse_flbytes sz) (parse_u8) (clens_flbytes_get sz i))
+= fun (input: bytes) -> (
+  begin
+    let res =
+      if Seq.length input <= U32.v i
+      then (0, 0) // dummy
+      else (U32.v i, 1)
+    in
+    let g () : Lemma
+      (requires (gaccessor_pre (parse_flbytes sz) parse_u8 (clens_flbytes_get sz i) input))
+      (ensures (gaccessor_post (parse_flbytes sz) parse_u8 (clens_flbytes_get sz i) input res))
+    = assert (res == (U32.v i, 1));
+      parse_u8_spec (Seq.slice input (U32.v i) (U32.v i + 1))
+    in
+    Classical.move_requires g ();
+    res
+  end <: Ghost (nat & nat) (requires True) (ensures (fun res -> gaccessor_post' (parse_flbytes sz) parse_u8 (clens_flbytes_get sz i) input res )))
+
+inline_for_extraction
+let accessor_flbytes_get
+  (sz: nat { sz < 4294967296 } )
+  (i: U32.t { U32.v i < sz } )
+: Tot (accessor (gaccessor_flbytes_get sz i))
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let] let _ = slice_access_eq h (gaccessor_flbytes_get sz i) input pos in
+  pos `U32.add` i
+
+(*
+
 module M = LowStar.Modifies
-module BY = LowParse.Bytes32
 
 inline_for_extraction
 let read_byte

@@ -22,6 +22,17 @@ val parse_u8_spec
     U8.v v == E.be_to_n (Seq.slice b 0 1)
   )))
 
+val parse_u8_spec'
+  (b: bytes)
+: Lemma
+  (requires (Seq.length b >= 1))
+  (ensures (
+    let pp = parse parse_u8 b in
+    Some? pp /\ (
+    let (Some (v, consumed)) = pp in
+    v == Seq.index b 0
+  )))
+
 val serialize_u8 : serializer parse_u8
 
 inline_for_extraction
