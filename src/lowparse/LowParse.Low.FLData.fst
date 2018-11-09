@@ -5,63 +5,73 @@ include LowParse.Spec.FLData
 module B = LowStar.Buffer
 module U32 = FStar.UInt32
 module HST = FStar.HyperStack.ST
-module I32 = FStar.Int32
-module Cast = FStar.Int.Cast
-
-#reset-options "--z3rlimit 32 --z3cliopt smt.arith.nl=false"
+module HS = FStar.HyperStack
 
 inline_for_extraction
-let validate32_fldata
+let validate_fldata
+  [| validator_cls |]
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
-  (v: validator32 p)
+  (v: validator p)
   (sz: nat)
-  (sz32: I32.t { I32.v sz32 == sz } )
-: Tot (validator32 (parse_fldata p sz))
-= fun input len ->
-  if len `I32.lt` sz32
-  then -1l
+  (sz32: U32.t { U32.v sz32 == sz } )
+: Tot (validator (parse_fldata p sz))
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let] let _ = valid_facts (parse_fldata p sz) h input pos in
+  if (input.len `U32.sub` pos) `U32.lt` sz32
+  then validator_max_length `U32.add` 1ul
   else
-    if v (B.sub input 0ul (Cast.int32_to_uint32 sz32)) sz32 <> 0l
-    then -2l
-    else len `I32.sub` sz32
-
-#reset-options
+    let base' = B.sub input.base pos sz32 in
+    [@inline_let] let input' = { base = base'; len = sz32; } in
+    [@inline_let] let _ = valid_facts p h input' 0ul in
+    let pos' = v input' 0ul in
+    if validator_max_length `U32.lt` pos'
+    then pos' // error propagation
+    else if pos' <> sz32
+    then validator_max_length `U32.add` 1ul // TODO: more error control
+    else pos `U32.add` pos'
 
 inline_for_extraction
-let validate32_fldata_strong
+let validate_fldata_strong
+  [| validator_cls |]
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
   (s: serializer p)
-  (v: validator32 p)
+  (v: validator p)
   (sz: nat)
-  (sz32: I32.t { I32.v sz32 == sz } )
-: Tot (validator32 (parse_fldata_strong s sz))
-= fun input len -> validate32_fldata v sz sz32 input len
+  (sz32: U32.t { U32.v sz32 == sz } )
+: Tot (validator (parse_fldata_strong s sz))
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let] let _ = valid_facts (parse_fldata p sz) h input pos in
+  [@inline_let] let _ = valid_facts (parse_fldata_strong s sz) h input pos in
+  validate_fldata v sz sz32 input pos
 
 inline_for_extraction
-let validate_nochk32_fldata
+let jump_fldata
   (#k: parser_kind)
   (#t: Type0)
   (p: parser k t)
   (sz: nat)
   (sz32: U32.t { U32.v sz32 == sz } )
-: Tot (validator_nochk32 (parse_fldata p sz))
-= validate_nochk32_constant_size (parse_fldata p sz) sz32 ()
+: Tot (jumper (parse_fldata p sz))
+= jump_constant_size (parse_fldata p sz) sz32 ()
 
 inline_for_extraction
-let validate_nochk32_fldata_strong
+let jump_fldata_strong
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
   (s: serializer p)
   (sz: nat)
   (sz32: U32.t { U32.v sz32 == sz } )
-: Tot (validator_nochk32 (parse_fldata_strong s sz))
-= validate_nochk32_constant_size (parse_fldata_strong s sz) sz32 ()
+: Tot (jumper (parse_fldata_strong s sz))
+= jump_constant_size (parse_fldata_strong s sz) sz32 ()
 
+(*
 inline_for_extraction
 let accessor_fldata
   (#k: parser_kind)
