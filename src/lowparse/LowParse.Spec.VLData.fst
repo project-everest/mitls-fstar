@@ -16,11 +16,17 @@ let integer_size_values (i: integer_size) : Lemma
 
 #reset-options
 
+let bounded_integer_prop
+  (i: integer_size)
+  (u: U32.t)
+: GTot Type0
+= U32.v u < (match i with 1 -> 256 | 2 -> 65536 | 3 -> 16777216 | 4 -> 4294967296)
+
 inline_for_extraction
 let bounded_integer
   (i: integer_size)
 : Tot Type0
-= (u: U32.t { U32.v u < pow2 (FStar.Mul.op_Star 8 i) } )
+= (u: U32.t { bounded_integer_prop i u } )
 
 let decode_bounded_integer
   (i: integer_size)
@@ -28,7 +34,6 @@ let decode_bounded_integer
 : GTot (bounded_integer i)
 = E.lemma_be_to_n_is_bounded b;
   U32.uint_to_t (E.be_to_n b)
-
 
 #set-options "--z3rlimit 16"
 let decode_bounded_integer_injective'

@@ -143,6 +143,70 @@ let write_bounded_integer_weak
   | 3 -> write_bounded_integer_3_weak ()
   | 4 -> write_bounded_integer_4_weak ()
 
+module HS = FStar.HyperStack
+
+#push-options "--z3rlimit 32 --initial_ifuel 4 --max_ifuel 4"
+
+let valid_vldata_gen_intro
+  (h: HS.mem)
+  (sz: integer_size)
+  (f: (bounded_integer sz -> GTot bool))
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (input: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+: Lemma
+  (requires (
+    U32.v pos + sz <= U32.v input.len /\ (
+    let pos_payload = pos `U32.add` U32.uint_to_t sz in
+    valid_exact p h input pos_payload pos' /\ (
+    let len_payload = pos' `U32.sub` pos_payload in
+    bounded_integer_prop sz len_payload /\
+    f len_payload == true /\
+    valid (parse_bounded_integer sz) h input pos /\
+    contents (parse_bounded_integer sz) h input pos == len_payload
+  ))))
+  (ensures (
+    valid_content_pos (parse_vldata_gen sz f p) h input pos (contents_exact p h input (pos `U32.add` U32.uint_to_t sz) pos') pos'
+  ))
+= valid_facts (parse_vldata_gen sz f p) h input pos;
+  valid_facts (parse_bounded_integer sz) h input pos;
+  parse_vldata_gen_eq sz f p (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos)));
+  contents_exact_eq p h input (pos `U32.add` U32.uint_to_t sz) pos'
+
+#pop-options
+
+inline_for_extraction
+let finalize_vldata_gen
+  (sz: integer_size)
+  (f: (bounded_integer sz -> GTot bool))
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (input: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+: HST.Stack unit
+  (requires (fun h ->
+    U32.v pos + sz <= U32.v input.len /\ (
+    let pos_payload = pos `U32.add` U32.uint_to_t sz in
+    valid_exact p h input pos_payload pos' /\ (
+    let len_payload = pos' `U32.sub` pos_payload in
+    bounded_integer_prop sz len_payload /\
+    f len_payload == true
+  ))))
+  (ensures (fun h _ h' ->
+    B.modifies (loc_slice_from_to input pos (pos `U32.add` U32.uint_to_t sz)) h h' /\
+    valid_content_pos (parse_vldata_gen sz f p) h' input pos (contents_exact p h input (pos `U32.add` U32.uint_to_t sz) pos') pos'
+  ))
+= [@inline_let]
+  let len_payload = pos' `U32.sub` (pos `U32.add` U32.uint_to_t sz) in
+  let _ = write_bounded_integer sz len_payload input pos in
+  let h = HST.get () in
+  valid_vldata_gen_intro h sz f p input pos pos'
+
 (*
 #set-options "--z3rlimit 64"
 
