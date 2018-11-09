@@ -119,6 +119,30 @@ let validate_bounded_vldata_strong
   let _ = valid_facts (parse_bounded_vldata min max p) h input pos in
   validate_bounded_vldata min min32 max max32 v sz32 () input pos
 
+inline_for_extraction
+let write_bounded_integer
+  (i: integer_size)
+: Tot (leaf_writer_strong (serialize_bounded_integer i))
+= [@inline_let]
+  let _ = integer_size_values i in
+  match i with
+  | 1 -> write_bounded_integer_1 ()
+  | 2 -> write_bounded_integer_2 ()
+  | 3 -> write_bounded_integer_3 ()
+  | 4 -> write_bounded_integer_4 ()
+
+inline_for_extraction
+let write_bounded_integer_weak
+  (i: integer_size)
+: Tot (leaf_writer_weak (serialize_bounded_integer i))
+= [@inline_let]
+  let _ = integer_size_values i in
+  match i with
+  | 1 -> write_bounded_integer_1_weak ()
+  | 2 -> write_bounded_integer_2_weak ()
+  | 3 -> write_bounded_integer_3_weak ()
+  | 4 -> write_bounded_integer_4_weak ()
+
 (*
 #set-options "--z3rlimit 64"
 
