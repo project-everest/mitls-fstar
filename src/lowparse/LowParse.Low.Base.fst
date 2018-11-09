@@ -337,17 +337,20 @@ let valid_facts
 = ()
 
 
-(* Accessors *)
+(* Accessors for reading only (no in-place serialization yet) *)
 
 noeq
 type clens (#t1: Type) (clens_cond: t1 -> GTot Type0) (t2: Type) = {
   clens_get: (x1: t1) -> Ghost t2 (requires (clens_cond x1)) (ensures (fun _ -> True));
+(*  
   clens_put: (x1: t1) -> t2 -> Ghost t1 (requires (clens_cond x1)) (ensures (fun x1' -> clens_cond x1'));
   clens_get_put: (x1: t1) -> (x2: t2) -> Lemma (requires (clens_cond x1)) (ensures (clens_get (clens_put x1 x2) == x2));
   clens_put_put: (x1: t1) -> (x2: t2) -> (x2' : t2) -> Lemma (requires (clens_cond x1)) (ensures (clens_put (clens_put x1 x2) x2' == clens_put x1 x2'));
   clens_put_get: (x1: t1) -> Lemma (requires (clens_cond x1)) (ensures (clens_put x1 (clens_get x1) == x1));
+*)
 }
 
+(*
 let clens_get_put'
   (#t1: Type) (#clens_cond: t1 -> GTot Type0) (#t2: Type) (l: clens clens_cond t2)
   (x1: t1) (x2: t2)
@@ -450,6 +453,7 @@ let clens_disjoint_sym
   (clens_disjoint l2 l3 <==> clens_disjoint l3 l2)
   [SMTPat (clens_disjoint l2 l3)]
 = ()
+*)
 
 let clens_compose_cond
   (#t1: Type)
@@ -473,6 +477,7 @@ let clens_compose
 : Tot (clens (clens_compose_cond l12 clens_cond2) t3)
 = {
   clens_get = (fun x1 -> l23.clens_get (l12.clens_get x1));
+(*  
   clens_put = (fun x1 x3 ->
     let x2' = l23.clens_put (l12.clens_get x1) x3 in
     let x1' = l12.clens_put x1 x2' in
@@ -481,8 +486,10 @@ let clens_compose
   clens_get_put = (fun x1 x3 -> ());
   clens_put_put = (fun x1 x3 x3' -> ());
   clens_put_get = (fun x1 -> ());
+*)
 }
 
+(*
 abstract
 let clens_disjoint_compose
   (#t0: Type)
@@ -499,6 +506,7 @@ let clens_disjoint_compose
   (ensures (clens_disjoint l2 (clens_compose l3 l3')))
   [SMTPat (clens_disjoint l2 (clens_compose l3 l3'))]
 = ()
+*)
 
 let gaccessor_pre
   (#k1: parser_kind)
@@ -512,7 +520,7 @@ let gaccessor_pre
   (sl: bytes)
 : GTot Type0
 = match parse p1 sl with
-  | Some (x1, _) -> pre x1
+  | Some (x1, consumed) -> (consumed <: nat) == Seq.length sl /\ pre x1
   | _ -> False
 
 let gaccessor_post
@@ -525,16 +533,18 @@ let gaccessor_post
   (#pre: t1 -> GTot Type0)
   (cl: clens pre t2)
   (sl: bytes)
-  (pos' : nat)
+  (res : nat & nat)
 : GTot Type0
-= pos' <= Seq.length sl /\
+= let (pos', len) = res in
+  pos' + len <= Seq.length sl /\
   begin match parse p1 sl with
   | Some (x1, consumed1) ->
-    begin match parse p2 (Seq.slice sl pos' (Seq.length sl)) with
+    begin match parse p2 (Seq.slice sl pos' (pos' + len)) with
     | Some (x2, consumed2) ->
       pre x1 /\
       x2 == cl.clens_get x1 /\
-      pos' + consumed2 <= consumed1
+      pos' + consumed2 <= consumed1 /\
+      consumed2 == len
     | _ -> False
     end
   | _ -> False
@@ -551,7 +561,7 @@ let gaccessor
   (cl: clens pre t2)
 : Tot Type
 = (sl: bytes) ->
-  Ghost nat
+  Ghost (nat & nat)
   (requires (gaccessor_pre p1 p2 cl sl))
   (ensures (fun pos' -> gaccessor_post p1 p2 cl sl pos'))
 
@@ -573,20 +583,18 @@ let gaccessors_disjoint
   (#cl3: clens pre3 t3)
   (g3: gaccessor p1 p3 cl3)
 : GTot Type0
-= clens_disjoint cl2 cl3 /\
+= // clens_disjoint cl2 cl3 /\
   (forall (sl: bytes) . (
      match parse p1 sl with
-     | Some (x1, _) -> pre2 x1 /\ pre3 x1
+     | Some (x1, consumed1) -> pre2 x1 /\ pre3 x1 /\ consumed1 == Seq.length sl
      | _ -> False
    ) ==> (
-   let pos2 = g2 sl in
-   let pos3 = g3 sl in
-   match parse p2 (Seq.slice sl pos2 (Seq.length sl)), parse p3 (Seq.slice sl pos3 (Seq.length sl)) with
-   | Some (_, consumed2), Some (_, consumed3) ->
-     pos2 + consumed2 <= pos3 \/ pos3 + consumed3 <= pos2
-   | _ -> True
+   let (pos2, consumed2) = g2 sl in
+   let (pos3, consumed3) = g3 sl in
+   pos2 + consumed2 <= pos3 \/ pos3 + consumed3 <= pos2
   ))
 
+(*
 abstract
 let gaccessors_disjoint_clens_disjoint
   (#k1: parser_kind)
@@ -609,6 +617,7 @@ let gaccessors_disjoint_clens_disjoint
   (ensures (clens_disjoint cl2 cl3))
   [SMTPat (gaccessors_disjoint g2 g3)]
 = ()
+*)
 
 abstract
 let gaccessors_disjoint_elim
@@ -631,16 +640,13 @@ let gaccessors_disjoint_elim
 : Lemma
   (requires (gaccessors_disjoint g2 g3 /\ (
      match parse p1 sl with
-     | Some (x1, _) -> pre2 x1 /\ pre3 x1
+     | Some (x1, consumed1) -> pre2 x1 /\ pre3 x1 /\ consumed1 == Seq.length sl
      | _ -> False
   )))
   (ensures (
-    let pos2 = g2 sl in
-    let pos3 = g3 sl in
-    match parse p2 (Seq.slice sl pos2 (Seq.length sl)), parse p3 (Seq.slice sl pos3 (Seq.length sl)) with
-     | Some (_, consumed2), Some (_, consumed3) ->
-       pos2 + consumed2 <= pos3 \/ pos3 + consumed3 <= pos2
-     | _ -> True
+    let (pos2, consumed2) = g2 sl in
+    let (pos3, consumed3) = g3 sl in
+    pos2 + consumed2 <= pos3 \/ pos3 + consumed3 <= pos2
   ))
 = ()
 
@@ -661,25 +667,22 @@ let gaccessors_disjoint_intro
   (#pre3: t1 -> GTot Type0)
   (#cl3: clens pre3 t3)
   (g3: gaccessor p1 p3 cl3)
-  (clens_disj: squash (clens_disjoint cl2 cl3))
+//  (clens_disj: squash (clens_disjoint cl2 cl3))
   (lem: (
     (sl: bytes) ->
     Lemma
     (requires (
       match parse p1 sl with
-      | Some (x1, _) -> pre2 x1 /\ pre3 x1
+      | Some (x1, consumed1) -> pre2 x1 /\ pre3 x1 /\ consumed1 == Seq.length sl
       | _ -> False
     ))
     (ensures ((
       match parse p1 sl with
-      | Some (x1, _) -> pre2 x1 /\ pre3 x1
+      | Some (x1, consumed1) -> pre2 x1 /\ pre3 x1 /\ consumed1 == Seq.length sl
       | _ -> False) /\ (
-      let pos2 = g2 sl in
-      let pos3 = g3 sl in
-      match parse p2 (Seq.slice sl pos2 (Seq.length sl)), parse p3 (Seq.slice sl pos3 (Seq.length sl)) with
-      | Some (_, consumed2), Some (_, consumed3) ->
-        pos2 + consumed2 <= pos3 \/ pos3 + consumed3 <= pos2
-      | _ -> True
+      let (pos2, consumed2) = g2 sl in
+      let (pos3, consumed3) = g3 sl in
+      pos2 + consumed2 <= pos3 \/ pos3 + consumed3 <= pos2
     )))
   ))
 : Lemma
@@ -689,15 +692,12 @@ let gaccessors_disjoint_intro
  : Lemma
    ((
      match parse p1 sl with
-     | Some (x1, _) -> pre2 x1 /\ pre3 x1
+     | Some (x1, consumed1) -> pre2 x1 /\ pre3 x1 /\ consumed1 == Seq.length sl
      | _ -> False
    ) ==> (
-   let pos2 = g2 sl in
-   let pos3 = g3 sl in
-   match parse p2 (Seq.slice sl pos2 (Seq.length sl)), parse p3 (Seq.slice sl pos3 (Seq.length sl)) with
-   | Some (_, consumed2), Some (_, consumed3) ->
-     pos2 + consumed2 <= pos3 \/ pos3 + consumed3 <= pos2
-   | _ -> True
+   let (pos2, consumed2) = g2 sl in
+   let (pos3, consumed3) = g3 sl in
+   pos2 + consumed2 <= pos3 \/ pos3 + consumed3 <= pos2
    ))
  = Classical.move_requires lem sl
  in
@@ -720,13 +720,14 @@ let gaccessor_compose'
   (#cl23: clens pre2 t3)
   (a23: gaccessor p2 p3 cl23)
   (input: bytes)
-: Ghost nat
+: Ghost (nat & nat)
   (requires (gaccessor_pre p1 p3 (clens_compose cl12 cl23) input))
   (ensures (fun pos' -> True))
 =
-  let pos2 = a12 input in
-  let input2 = Seq.slice input pos2 (Seq.length input) in
-  pos2 + a23 input2
+  let (pos2, consumed2) = a12 input in
+  let input2 = Seq.slice input pos2 (pos2 + consumed2) in
+  let (pos3, consumed3) = a23 input2 in
+  (pos2 + pos3, consumed3)
 
 let gaccessor_compose_correct
   (#k1: parser_kind)
@@ -767,7 +768,7 @@ let gaccessor_compose_
   (#cl23: clens pre2 t3)
   (a23: gaccessor p2 p3 cl23)
   (input: bytes)
-: Ghost nat
+: Ghost (nat & nat)
   (requires (gaccessor_pre p1 p3 (clens_compose cl12 cl23) input))
   (ensures (fun pos' -> gaccessor_post p1 p3 (clens_compose cl12 cl23) input pos'))
 = gaccessor_compose_correct a12 a23 input;
@@ -807,11 +808,21 @@ let slice_access'
   (pos: U32.t)
 : Ghost U32.t
   (requires (
+    k1.parser_kind_subkind == Some ParserStrong /\
     valid' p1 h sl pos /\
     pre (contents' p1 h sl pos)
   ))
   (ensures (fun pos' -> True))
-= pos `U32.add` U32.uint_to_t (g (B.as_seq h (B.gsub sl.base pos (sl.len `U32.sub` pos))))
+= 
+  let small = B.as_seq h (B.gsub sl.base pos (U32.uint_to_t (content_length' p1 h sl pos))) in
+  let _ =
+    let large = B.as_seq h (B.gsub sl.base pos (sl.len `U32.sub` pos)) in
+    assert (no_lookahead_on p1 large small);
+    assert (injective_postcond p1 large small)
+  in
+  pos `U32.add` U32.uint_to_t (fst (g small))
+
+(* HERE *)
 
 abstract
 let slice_access
@@ -829,6 +840,8 @@ let slice_access
   (pos: U32.t)
 : Ghost U32.t
   (requires (
+    k1.parser_kind_subkind == Some ParserStrong /\
+    k2.parser_kind_subkind == Some ParserStrong /\
     valid p1 h sl pos /\
     pre (contents p1 h sl pos)
   ))
@@ -839,7 +852,16 @@ let slice_access
     U32.v pos <= U32.v pos' /\
     U32.v pos' + content_length p2 h sl pos' <= U32.v pos + content_length p1 h sl pos
   ))
-= slice_access' h g sl pos
+= let res = slice_access' h g sl pos in
+//  let _ =
+    let input = B.as_seq h (B.gsub sl.base pos (U32.uint_to_t (content_length' p1 h sl pos))) in
+    let output_small = B.as_seq h (B.gsub sl.base res (U32.uint_to_t (snd (g input)))) in
+    let output_large = B.as_seq h (B.gsub sl.base res (sl.len `U32.sub` res)) in
+    assert (no_lookahead_on p2 output_small output_large);
+    assert (injective_postcond p2 output_small output_large);
+    admit ();
+//  in
+  res
 
 abstract
 let slice_access_eq
@@ -857,6 +879,8 @@ let slice_access_eq
   (pos: U32.t)
 : Lemma
   (requires (
+    k1.parser_kind_subkind == Some ParserStrong /\
+    k2.parser_kind_subkind == Some ParserStrong /\
     valid p1 h sl pos /\
     pre (contents p1 h sl pos)
   ))
