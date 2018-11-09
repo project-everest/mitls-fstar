@@ -1234,7 +1234,7 @@ let slice_access_eq
   ))
 = ()
 
-#push-options "--z3rlimit 32"
+#push-options "--z3rlimit 16"
 
 abstract
 let slice_access_eq_inv
@@ -1260,11 +1260,11 @@ let slice_access_eq_inv
   (ensures (
     let pos2 = slice_access h g sl pos in
     g (B.as_seq h (B.gsub sl.base pos (U32.uint_to_t (content_length p1 h sl pos)))) ==
-      (U32.v pos2, content_length p2 h sl pos2)
+      (U32.v pos2 - U32.v pos, content_length p2 h sl pos2)
   ))
-= let res = slice_access h g sl pos in
+= let res = slice_access' h g sl pos in
     let input_large = B.as_seq h (B.gsub sl.base pos (sl.len `U32.sub` pos)) in
-    let input_small = B.as_seq h (B.gsub sl.base pos (U32.uint_to_t (content_length p1 h sl pos))) in
+    let input_small = B.as_seq h (B.gsub sl.base pos (U32.uint_to_t (content_length' p1 h sl pos))) in
     assert (no_lookahead_on p1 input_large input_small);
     assert (injective_postcond p1 input_large input_small);
     let output_small = B.as_seq h (B.gsub sl.base res (U32.uint_to_t (snd (g input_small)))) in
@@ -1272,10 +1272,9 @@ let slice_access_eq_inv
     assert (no_lookahead_on p2 output_small output_large);
     assert (no_lookahead_on_postcond p2 output_small output_large);
     assert (injective_precond p2 output_small output_large);
-    assert (injective_postcond p2 output_small output_large);
-//    assert (gaccessor_post p1 p2 cl input_small (U32.v res, content_length p2 h sl res));
-    assume (fst (g input_small) == U32.v res);
-    assume (snd (g input_small) == content_length p2 h sl res)
+    assert (injective_postcond p2 output_small output_large)
+
+#pop-options
 
 abstract
 let slice_access_frame
@@ -1334,6 +1333,8 @@ let accessor
     pos' == slice_access h g sl pos
   ))
 
+#push-options "--z3rlimit 16"
+
 inline_for_extraction
 let accessor_compose
   (#k1: parser_kind)
@@ -1363,6 +1364,8 @@ let accessor_compose
   slice_access_eq_inv h a23 input pos2;
   slice_access_eq_inv h (gaccessor_compose a12 a23) input pos;
   pos3
+
+#pop-options
 
 (* Validators *)
 
