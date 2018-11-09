@@ -471,6 +471,40 @@ let read_filter
   (p32 input pos <: (res: t { f res == true } )) // FIXME: WHY WHY WHY do we need this coercion?
 
 inline_for_extraction
+let write_filter
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (#s: serializer p)
+  (s32: leaf_writer_strong s)
+  (f: (t -> GTot bool))
+: Tot (leaf_writer_strong (serialize_filter s f))
+= fun x input pos ->
+  [@inline_let] let _ = serialized_length_eq s x in
+  [@inline_let] let _ = serialized_length_eq (serialize_filter s f) x in 
+  let res = s32 x input pos in
+  let h = HST.get () in
+  [@inline_let] let _ = valid_filter h p f input pos in
+  res
+
+inline_for_extraction
+let write_filter_weak
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (#s: serializer p)
+  (s32: leaf_writer_weak s)
+  (f: (t -> GTot bool))
+: Tot (leaf_writer_weak (serialize_filter s f))
+= fun x input pos ->
+  [@inline_let] let _ = serialized_length_eq s x in
+  [@inline_let] let _ = serialized_length_eq (serialize_filter s f) x in 
+  let res = s32 x input pos in
+  let h = HST.get () in
+  [@inline_let] let _ = valid_filter h p f input pos in
+  res
+
+inline_for_extraction
 let read_synth
   (#k: parser_kind)
   (#t1: Type0)
@@ -502,6 +536,48 @@ let read_synth'
   })
 : Tot (leaf_reader (parse_synth p1 f2))
 = read_synth p1 f2 (fun x -> f2 x) p1' u
+
+inline_for_extraction
+let write_synth
+  (#k: parser_kind)
+  (#t1: Type)
+  (#p1: parser k t1)
+  (#s1: serializer p1)
+  (s1' : leaf_writer_strong s1)
+  (#t2: Type)
+  (f2: t1 -> GTot t2)
+  (g1: t2 -> GTot t1)
+  (g1' : (x2: t2) -> Tot (x1: t1 { x1 == g1 x2 } ))
+  (u: squash (synth_injective f2 /\ synth_inverse f2 g1))
+: Tot (leaf_writer_strong (serialize_synth p1 f2 s1 g1 ()))
+= fun x input pos ->
+  [@inline_let] let _ = serialized_length_eq (serialize_synth p1 f2 s1 g1 ()) x in
+  [@inline_let] let _ = serialized_length_eq s1 (g1 x) in
+  let pos' = s1' (g1' x) input pos in
+  let h = HST.get () in
+  [@inline_let] let _ = valid_synth h p1 f2 input pos in
+  pos'
+
+inline_for_extraction
+let write_synth_weak
+  (#k: parser_kind)
+  (#t1: Type)
+  (#p1: parser k t1)
+  (#s1: serializer p1)
+  (s1' : leaf_writer_weak s1)
+  (#t2: Type)
+  (f2: t1 -> GTot t2)
+  (g1: t2 -> GTot t1)
+  (g1' : (x2: t2) -> Tot (x1: t1 { x1 == g1 x2 } ))
+  (u: squash (synth_injective f2 /\ synth_inverse f2 g1))
+: Tot (leaf_writer_weak (serialize_synth p1 f2 s1 g1 ()))
+= fun x input pos ->
+  [@inline_let] let _ = serialized_length_eq (serialize_synth p1 f2 s1 g1 ()) x in
+  [@inline_let] let _ = serialized_length_eq s1 (g1 x) in
+  let pos' = s1' (g1' x) input pos in
+  let h = HST.get () in
+  [@inline_let] let _ = valid_synth h p1 f2 input pos in
+  pos'
 
 (*
 #set-options "--z3rlimit 32"

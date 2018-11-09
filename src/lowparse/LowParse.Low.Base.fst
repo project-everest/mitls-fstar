@@ -250,6 +250,7 @@ let content_length_eq
 : Lemma
   (requires (valid p h sl pos))
   (ensures (content_length p h sl pos == serialized_length s (contents p h sl pos)))
+  [SMTPat (serialized_length s (contents p h sl pos))]
 = let b = B.as_seq h (B.gsub sl.base pos (sl.len `U32.sub` pos)) in
   let Some (x, consumed) = parse p b in
   assert (x == contents p h sl pos);
