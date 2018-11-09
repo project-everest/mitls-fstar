@@ -362,7 +362,6 @@ let is_weaker_than
 unfold let coerce_to_bare_parser (t:Type0) (k2:parser_kind) (p:parser k2 t)
   :Tot (bare_parser t) = p
 
-unfold
 let weaken (k1: parser_kind) (#k2: parser_kind) (#t: Type0) (p2: parser k2 t) : Pure (parser k1 t)
   (requires (k1 `is_weaker_than` k2))
   (ensures (fun _ -> True))
@@ -371,7 +370,6 @@ let weaken (k1: parser_kind) (#k2: parser_kind) (#t: Type0) (p2: parser k2 t) : 
 #reset-options
 
 // inline_for_extraction
-unfold
 let strengthen (k: parser_kind) (#t: Type0) (f: bare_parser t) : Pure (parser k t)
   (requires (parser_kind_prop k f))
   (ensures (fun _ -> True))

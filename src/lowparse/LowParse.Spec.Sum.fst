@@ -322,6 +322,8 @@ let parse_sum_eq''
 = parse_sum_eq' t p pc input;
   parse_enum_key_eq p (sum_enum t) input
 
+#set-options "--z3rlimit 16"
+
 let parse_sum_eq
   (#kt: parser_kind)
   (t: sum)
@@ -345,6 +347,8 @@ let parse_sum_eq
     let input_k = Seq.slice input consumed_k (Seq.length input) in
     synth_sum_case_injective t k;
     parse_synth_eq (dsnd (pc k)) (synth_sum_case t k) input_k
+
+#reset-options
 
 inline_for_extraction
 let synth_sum_case_recip (s: sum) (k: sum_key s) (x: sum_cases s k) : Tot (sum_type_of_tag s k) =
