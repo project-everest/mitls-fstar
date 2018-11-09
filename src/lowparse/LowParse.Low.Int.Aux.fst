@@ -10,7 +10,7 @@ module U32 = FStar.UInt32
 module B = LowStar.Buffer
 
 inline_for_extraction
-let parse32_u16 : leaf_reader parse_u16 =
+let read_u16 : leaf_reader parse_u16 =
   decode_u16_injective ();
     make_total_constant_size_parser32 2 2ul
       #U16.t
@@ -20,7 +20,7 @@ let parse32_u16 : leaf_reader parse_u16 =
         E.be_to_n_2 _ _ (E.u16 ()) input)
 
 inline_for_extraction
-let parse32_u32 : leaf_reader parse_u32 =
+let read_u32 : leaf_reader parse_u32 =
     decode_u32_injective ();
     make_total_constant_size_parser32 4 4ul
       #U32.t
@@ -30,7 +30,7 @@ let parse32_u32 : leaf_reader parse_u32 =
         E.be_to_n_4 _ _ (E.u32 ()) input)
 
 inline_for_extraction
-let parse32_u8 : leaf_reader parse_u8 =
+let read_u8 : leaf_reader parse_u8 =
   decode_u8_injective ();
   make_total_constant_size_parser32 1 1ul
     decode_u8

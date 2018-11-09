@@ -458,7 +458,7 @@ let jump_filter
   j input pos
 
 inline_for_extraction
-let parse32_filter
+let read_filter
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
@@ -471,7 +471,7 @@ let parse32_filter
   (p32 input pos <: (res: t { f res == true } )) // FIXME: WHY WHY WHY do we need this coercion?
 
 inline_for_extraction
-let parse32_synth
+let read_synth
   (#k: parser_kind)
   (#t1: Type0)
   (#t2: Type0)
@@ -490,7 +490,7 @@ let parse32_synth
   f2' res <: t2 // FIXME: WHY WHY WHY this coercion AND the separate let binding?
 
 inline_for_extraction
-let parse32_synth'
+let read_synth'
   (#k: parser_kind)
   (#t1: Type0)
   (#t2: Type0)
@@ -501,7 +501,7 @@ let parse32_synth'
     synth_injective f2
   })
 : Tot (leaf_reader (parse_synth p1 f2))
-= parse32_synth p1 f2 (fun x -> f2 x) p1' u
+= read_synth p1 f2 (fun x -> f2 x) p1' u
 
 (*
 #set-options "--z3rlimit 32"

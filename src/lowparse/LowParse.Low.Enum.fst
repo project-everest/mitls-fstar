@@ -68,7 +68,7 @@ let read_maybe_enum_key
   (e: enum key repr)
   (destr: maybe_enum_destr_t (maybe_enum_key e) e)
 : Tot (leaf_reader (parse_maybe_enum_key p e))
-= parse32_synth
+= read_synth
     _
     (maybe_enum_key_of_repr e)
     (fun x -> destr _ (default_if _) (fun _ -> ()) (fun _ _ _ -> ()) (fun k -> k) x)
@@ -122,9 +122,9 @@ let read_enum_key
   (e: enum key repr)
   (destr: dep_maybe_enum_destr_t e (read_enum_key_t e))
 : Tot (leaf_reader (parse_enum_key p e))
-= parse32_synth
+= read_synth
     (parse_filter p (parse_enum_key_cond e))
     (parse_enum_key_synth e)
     (fun r -> destr (read_enum_key_eq e) (read_enum_key_if e) (fun _ _ -> ()) (fun _ _ _ _ -> ()) (read_enum_key_f e) r ())
-    (parse32_filter p32 (parse_enum_key_cond e))
+    (read_filter p32 (parse_enum_key_cond e))
     ()

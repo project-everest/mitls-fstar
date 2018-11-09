@@ -11,13 +11,13 @@ module B = LowStar.Buffer
 module M = LowStar.Modifies
 
 inline_for_extraction
-val parse32_u8: leaf_reader parse_u8
+val read_u8: leaf_reader parse_u8
 
 inline_for_extraction
-val parse32_u16: leaf_reader parse_u16
+val read_u16: leaf_reader parse_u16
 
 inline_for_extraction
-val parse32_u32: leaf_reader parse_u32
+val read_u32: leaf_reader parse_u32
 
 inline_for_extraction
 let validate_u8 [| validator_cls |] () : validator parse_u8 =
@@ -44,22 +44,22 @@ let jump_u32 : jumper parse_u32 =
   jump_constant_size parse_u32 4ul ()
 
 inline_for_extraction
-val emit_u8 : leaf_writer_strong serialize_u8
+val write_u8 : leaf_writer_strong serialize_u8
 
 inline_for_extraction
-let emit_u8_weak : leaf_writer_weak serialize_u8 =
-  leaf_writer_weak_of_strong_constant_size emit_u8 1ul ()
+let write_u8_weak : leaf_writer_weak serialize_u8 =
+  leaf_writer_weak_of_strong_constant_size write_u8 1ul ()
 
 inline_for_extraction
-val emit_u16 : leaf_writer_strong serialize_u16
+val write_u16 : leaf_writer_strong serialize_u16
 
 inline_for_extraction
-let emit_u16_weak : leaf_writer_weak serialize_u16 =
-  leaf_writer_weak_of_strong_constant_size emit_u16 2ul ()
+let write_u16_weak : leaf_writer_weak serialize_u16 =
+  leaf_writer_weak_of_strong_constant_size write_u16 2ul ()
 
 inline_for_extraction
-val emit_u32 : leaf_writer_strong serialize_u32
+val write_u32 : leaf_writer_strong serialize_u32
 
 inline_for_extraction
-let emit_u32_weak : leaf_writer_weak serialize_u32 =
-  leaf_writer_weak_of_strong_constant_size emit_u32 4ul ()
+let write_u32_weak : leaf_writer_weak serialize_u32 =
+  leaf_writer_weak_of_strong_constant_size write_u32 4ul ()
