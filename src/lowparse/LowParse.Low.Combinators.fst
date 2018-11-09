@@ -412,7 +412,7 @@ let accessor_snd
   res
 
 inline_for_extraction
-let make_total_constant_size_parser32
+let make_total_constant_size_reader
   (sz: nat)
   (sz' : U32.t { U32.v sz' == sz } )
   (#t: Type0)

@@ -12,7 +12,7 @@ module B = LowStar.Buffer
 inline_for_extraction
 let read_u16 : leaf_reader parse_u16 =
   decode_u16_injective ();
-    make_total_constant_size_parser32 2 2ul
+    make_total_constant_size_reader 2 2ul
       #U16.t
       decode_u16
       ()
@@ -22,7 +22,7 @@ let read_u16 : leaf_reader parse_u16 =
 inline_for_extraction
 let read_u32 : leaf_reader parse_u32 =
     decode_u32_injective ();
-    make_total_constant_size_parser32 4 4ul
+    make_total_constant_size_reader 4 4ul
       #U32.t
       decode_u32
       ()
@@ -32,7 +32,7 @@ let read_u32 : leaf_reader parse_u32 =
 inline_for_extraction
 let read_u8 : leaf_reader parse_u8 =
   decode_u8_injective ();
-  make_total_constant_size_parser32 1 1ul
+  make_total_constant_size_reader 1 1ul
     decode_u8
     ()
     (fun b -> B.index b 0ul)
