@@ -62,6 +62,40 @@ let validate_vldata_gen
 
 #push-options "--z3rlimit 32 --initial_ifuel 4 --max_ifuel 4"
 
+module HS = FStar.HyperStack
+
+let valid_vldata_gen_elim
+  (h: HS.mem)
+  (sz: integer_size)
+  (f: (bounded_integer sz -> GTot bool))
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (input: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (
+    valid (parse_vldata_gen sz f p) h input pos
+  ))
+  (ensures (
+    valid (parse_bounded_integer sz) h input pos /\ (
+    let len_payload = contents (parse_bounded_integer sz) h input pos in
+    f len_payload == true /\
+    sz + U32.v len_payload == content_length (parse_vldata_gen sz f p) h input pos /\ (
+    let pos_payload = pos `U32.add` U32.uint_to_t sz in
+    valid_exact p h input pos_payload (pos_payload `U32.add` len_payload) /\
+    contents_exact p h input pos_payload (pos_payload `U32.add` len_payload) == contents (parse_vldata_gen sz f p) h input pos
+  ))))
+= valid_facts (parse_vldata_gen sz f p) h input pos;
+  valid_facts (parse_bounded_integer sz) h input pos;
+  parse_vldata_gen_eq sz f p (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos)));
+  let len_payload = contents (parse_bounded_integer sz) h input pos in
+  let pos_payload = pos `U32.add` U32.uint_to_t sz in
+  valid_exact_equiv p h input pos_payload (pos_payload `U32.add` len_payload);
+  contents_exact_eq p h input pos_payload (pos_payload `U32.add` len_payload)
+
+#pop-options
+
 inline_for_extraction
 let jump_vldata_gen
   (sz: integer_size) // must be a constant
@@ -72,12 +106,8 @@ let jump_vldata_gen
 : Tot (jumper (parse_vldata_gen sz f p))
 = fun input pos ->
   let h = HST.get () in
-  [@inline_let] let _ = valid_facts (parse_vldata_gen sz f p) h input pos in
-  [@inline_let] let _ = valid_facts (parse_bounded_integer sz) h input pos in
-  [@inline_let] let _ = parse_vldata_gen_eq sz f p (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos))) in
-  (pos `U32.add` U32.uint_to_t sz) `U32.add` read_bounded_integer sz input pos
-
-#pop-options
+  [@inline_let] let _ = valid_vldata_gen_elim h sz f p input pos in
+  pos `U32.add` (U32.uint_to_t sz `U32.add` read_bounded_integer sz input pos)
 
 inline_for_extraction
 let validate_bounded_vldata
@@ -186,8 +216,6 @@ let write_bounded_integer_weak
   | 2 -> write_bounded_integer_2_weak ()
   | 3 -> write_bounded_integer_3_weak ()
   | 4 -> write_bounded_integer_4_weak ()
-
-module HS = FStar.HyperStack
 
 #push-options "--z3rlimit 32 --initial_ifuel 4 --max_ifuel 4"
 
