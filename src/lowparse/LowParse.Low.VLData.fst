@@ -60,6 +60,25 @@ let validate_vldata_gen
     (validate_vldata_payload sz f v)
     ()
 
+#push-options "--z3rlimit 32 --initial_ifuel 4 --max_ifuel 4"
+
+inline_for_extraction
+let jump_vldata_gen
+  (sz: integer_size) // must be a constant
+  (f: ((x: bounded_integer sz) -> GTot bool))
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+: Tot (jumper (parse_vldata_gen sz f p))
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let] let _ = valid_facts (parse_vldata_gen sz f p) h input pos in
+  [@inline_let] let _ = valid_facts (parse_bounded_integer sz) h input pos in
+  [@inline_let] let _ = parse_vldata_gen_eq sz f p (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos))) in
+  (pos `U32.add` U32.uint_to_t sz) `U32.add` read_bounded_integer sz input pos
+
+#pop-options
+
 inline_for_extraction
 let validate_bounded_vldata
   [| validator_cls |]
@@ -85,6 +104,26 @@ let validate_bounded_vldata
     ()
 
 inline_for_extraction
+let jump_bounded_vldata
+  (min: nat) // must be a constant
+  (max: nat) // must be a constant
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (u: unit {
+    min <= max /\
+    max > 0 /\
+    max < 4294967296
+  })
+: Tot (jumper (parse_bounded_vldata min max p))
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let] let sz = log256' max in
+  [@inline_let] let _ = valid_facts (parse_bounded_vldata min max p) h input pos in
+  [@inline_let] let _ = valid_facts (parse_vldata_gen sz (in_bounds min max) p) h input pos in
+  jump_vldata_gen sz (in_bounds min max) p input pos
+
+inline_for_extraction
 let validate_bounded_vldata_strong
   [| validator_cls |]
   (min: nat) // must be a constant
@@ -105,6 +144,24 @@ let validate_bounded_vldata_strong
   [@inline_let]
   let _ = valid_facts (parse_bounded_vldata min max p) h input pos in
   validate_bounded_vldata min max v () input pos
+
+inline_for_extraction
+let jump_bounded_vldata_strong
+  (min: nat) // must be a constant
+  (max: nat)
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (u: unit {
+    min <= max /\ max > 0 /\ max < 4294967296
+  })
+: Tot (jumper (parse_bounded_vldata_strong min max s))
+= fun (input: slice) pos ->
+  let h = HST.get () in
+  [@inline_let] let _ = valid_facts (parse_bounded_vldata_strong min max s) h input pos in
+  [@inline_let] let _ = valid_facts (parse_bounded_vldata min max p) h input pos in
+  jump_bounded_vldata min max p () input pos
 
 inline_for_extraction
 let write_bounded_integer
