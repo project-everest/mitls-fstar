@@ -8,7 +8,7 @@ module HST = FStar.HyperStack.ST
 module HS = FStar.HyperStack
 
 inline_for_extraction
-let validate_fldata
+let validate_fldata_gen
   [| validator_cls |]
   (#k: parser_kind)
   (#t: Type0)
@@ -32,6 +32,45 @@ let validate_fldata
     else if pos' <> sz32
     then validator_max_length `U32.add` 1ul // TODO: more error control
     else pos `U32.add` pos'
+
+inline_for_extraction
+let validate_fldata_consumes_all
+  [| validator_cls |]
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (v: validator p)
+  (sz: nat)
+  (sz32: U32.t { U32.v sz32 == sz } )
+  (sq: squash (k.parser_kind_subkind == Some ParserConsumesAll))
+: Tot (validator (parse_fldata p sz))
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let] let _ = valid_facts (parse_fldata p sz) h input pos in
+  if (input.len `U32.sub` pos) `U32.lt` sz32
+  then validator_max_length `U32.add` 1ul
+  else
+    let base' = B.sub input.base pos sz32 in
+    [@inline_let] let input' = { base = base'; len = sz32; } in
+    [@inline_let] let _ = valid_facts p h input' 0ul in
+    let pos' = v input' 0ul in
+    if validator_max_length `U32.lt` pos'
+    then pos' // error propagation
+    else pos `U32.add` pos'
+
+inline_for_extraction
+let validate_fldata
+  [| validator_cls |]
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (v: validator p)
+  (sz: nat)
+  (sz32: U32.t { U32.v sz32 == sz } )
+: Tot (validator (parse_fldata p sz))
+= if k.parser_kind_subkind = Some ParserConsumesAll
+  then validate_fldata_consumes_all v sz sz32 ()
+  else validate_fldata_gen v sz sz32
 
 inline_for_extraction
 let validate_fldata_strong
