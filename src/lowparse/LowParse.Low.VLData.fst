@@ -21,10 +21,9 @@ let read_bounded_integer
 inline_for_extraction
 let validate_bounded_integer
   [| validator_cls |]
-  (i: integer_size)
-  (i32: U32.t { U32.v i32 == i } )
+  (i: integer_size) // must be a constant
 : Tot (validator (parse_bounded_integer i))
-= validate_total_constant_size (parse_bounded_integer i) i32 ()
+= validate_total_constant_size (parse_bounded_integer i) (U32.uint_to_t i) ()
 
 inline_for_extraction
 let validate_vldata_payload
@@ -42,8 +41,7 @@ let validate_vldata_payload
 inline_for_extraction
 let validate_vldata_gen
   [| validator_cls |]
-  (sz: integer_size)
-  (sz32: U32.t { U32.v sz32 == sz } )
+  (sz: integer_size) // must be a constant
   (f: ((x: bounded_integer sz) -> GTot bool))
   (f' : ((x: bounded_integer sz) -> Tot (y: bool { y == f x })))
   (#k: parser_kind)
@@ -54,7 +52,7 @@ let validate_vldata_gen
 = parse_fldata_and_then_cases_injective sz f p;
   parse_vldata_gen_kind_correct sz;
   validate_filter_and_then
-    (validate_bounded_integer sz sz32)
+    (validate_bounded_integer sz)
     (read_bounded_integer sz)
     f
     f'
@@ -65,21 +63,16 @@ let validate_vldata_gen
 inline_for_extraction
 let validate_bounded_vldata
   [| validator_cls |]
-  (min: nat)
-  (min32: U32.t)
-  (max: nat)
-  (max32: U32.t)
+  (min: nat) // must be a constant
+  (max: nat) // must be a constant
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
   (v: validator p)
-  (sz32: U32.t)
   (u: unit {
-    U32.v min32 == min /\
-    U32.v max32 == max /\
     min <= max /\
     max > 0 /\
-    U32.v sz32 == log256' max
+    max <= U32.v validator_max_length
   })
 : Tot (validator (parse_bounded_vldata min max p))
 = [@inline_let]
@@ -88,27 +81,21 @@ let validate_bounded_vldata
   let _ = parse_bounded_vldata_correct min max p in
   validate_strengthen
     (parse_bounded_vldata_kind min max)
-    (validate_vldata_gen sz sz32 (in_bounds min max) (fun i -> not (U32.lt i min32 || U32.lt max32 i)) v)
+    (validate_vldata_gen sz (in_bounds min max) (fun i -> not (U32.lt i (U32.uint_to_t min) || U32.lt (U32.uint_to_t max) i)) v)
     ()
 
 inline_for_extraction
 let validate_bounded_vldata_strong
   [| validator_cls |]
-  (min: nat)
-  (min32: U32.t)
+  (min: nat) // must be a constant
   (max: nat)
-  (max32: U32.t)
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
   (s: serializer p)
   (v: validator p)
-  (sz32: U32.t)
   (u: unit {
-    U32.v min32 == min /\
-    U32.v max32 == max /\
-    min <= max /\ max > 0 /\
-    U32.v sz32 == log256' max
+    min <= max /\ max > 0 /\ max <= U32.v validator_max_length
   })
 : Tot (validator (parse_bounded_vldata_strong min max s))
 = fun input pos ->
@@ -117,7 +104,7 @@ let validate_bounded_vldata_strong
   let _ = valid_facts (parse_bounded_vldata_strong min max s) h input pos in
   [@inline_let]
   let _ = valid_facts (parse_bounded_vldata min max p) h input pos in
-  validate_bounded_vldata min min32 max max32 v sz32 () input pos
+  validate_bounded_vldata min max v () input pos
 
 inline_for_extraction
 let write_bounded_integer
