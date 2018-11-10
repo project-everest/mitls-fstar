@@ -109,6 +109,45 @@ let accessor_flbytes_get
   [@inline_let] let _ = slice_access_eq h (gaccessor_flbytes_get sz i) input pos in
   pos `U32.add` i
 
+(* Temporary: flbytes as leaf values *)
+
+inline_for_extraction
+let serialize32_flbytes
+  (sz: nat)
+  (sz32: U32.t { U32.v sz32 == sz } )
+: Tot (serializer32 (serialize_flbytes sz))
+= fun (src: BY.lbytes sz) (dst: buffer8) ->
+  begin if sz32 <> 0ul
+  then
+    let dst' = B.sub dst 0ul sz32 in
+    BY.store_bytes src dst'
+  end;
+  sz32
+
+inline_for_extraction
+let write_flbytes
+  (sz: nat)
+  (sz32: U32.t { U32.v sz32 == sz } ) 
+: Tot (leaf_writer_strong (serialize_flbytes sz))
+= leaf_writer_strong_of_serializer32 (serialize32_flbytes sz sz32) ()
+
+inline_for_extraction
+let write_flbytes_weak
+  (sz: nat { sz < 4294967295 } ) // need to return that value if output buffer is too small
+  (sz32: U32.t { U32.v sz32 == sz } ) 
+: Tot (leaf_writer_weak (serialize_flbytes sz))
+= leaf_writer_weak_of_strong_constant_size (write_flbytes sz sz32) sz32 ()
+
+inline_for_extraction
+let read_flbytes
+  (sz: nat)
+  (sz32: U32.t { U32.v sz32 == sz } )
+: Tot (leaf_reader (parse_flbytes sz))
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let] let _ = valid_facts (parse_flbytes sz) h input pos in
+  BY.of_buffer sz32 (B.sub input.base pos sz32)
+
 (*
 
 module M = LowStar.Modifies
