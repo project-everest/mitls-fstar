@@ -176,6 +176,29 @@ let parse_bounded_vlbytes
 : Tot (parser (parse_bounded_vldata_kind min max) (parse_bounded_vlbytes_t min max))
 = parse_synth (parse_bounded_vlbytes' min max) (synth_bounded_vlbytes min max)
 
+#push-options "--z3rlimit 32"
+
+let parse_bounded_vlbytes_eq
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (input: bytes)
+: Lemma
+  (parse (parse_bounded_vlbytes min max) input == (
+    let sz = log256' max in
+    match parse (parse_bounded_integer sz) input with
+    | None -> None
+    | Some (header, consumed_header) ->
+      if min <= U32.v header && U32.v header <= max && sz + U32.v header <= Seq.length input
+      then
+        Some (B32.hide (Seq.slice input sz (sz + U32.v header)), consumed_header + U32.v header)
+      else
+        None
+  ))
+= let sz = log256' max in
+  parse_vldata_gen_eq sz (in_bounds min max) parse_all_bytes input
+
+#pop-options
+
 let serialize_bounded_vlbytes'
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )

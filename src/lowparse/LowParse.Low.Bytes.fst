@@ -148,6 +148,181 @@ let read_flbytes
   [@inline_let] let _ = valid_facts (parse_flbytes sz) h input pos in
   BY.of_buffer sz32 (B.sub input.base pos sz32)
 
+
+inline_for_extraction
+let validate_all_bytes
+  [| validator_cls |]
+  ()
+: Tot (validator parse_all_bytes)
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let] let _ = valid_facts parse_all_bytes h input pos in
+  input.len
+
+inline_for_extraction
+let validate_bounded_vlbytes
+  [| validator_cls |]
+  (min: nat) // must be a constant
+  (max: nat { min <= max /\ max > 0 /\ max <= U32.v validator_max_length  } )
+: Tot (validator (parse_bounded_vlbytes min max))
+= validate_synth
+    (validate_bounded_vldata_strong min max serialize_all_bytes (validate_all_bytes ()) ())
+    (synth_bounded_vlbytes min max)
+    ()
+
+inline_for_extraction
+let jump_all_bytes
+  ()
+: Tot (jumper parse_all_bytes)
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let] let _ = valid_facts parse_all_bytes h input pos in
+  input.len
+
+inline_for_extraction
+let jump_bounded_vlbytes
+  (min: nat) // must be a constant
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296  } )
+: Tot (jumper (parse_bounded_vlbytes min max))
+= jump_synth
+    (jump_bounded_vldata_strong min max serialize_all_bytes ())
+    (synth_bounded_vlbytes min max)
+    ()
+
+let valid_exact_all_bytes_elim
+  (h: HS.mem)
+  (input: slice)
+  (pos pos' : U32.t)
+: Lemma
+  (requires (valid_exact parse_all_bytes h input pos pos'))
+  (ensures (
+    let x = contents_exact parse_all_bytes h input pos pos' in
+    let length = U32.v pos' - U32.v pos in
+    BY.length x == length /\
+    valid_content_pos (parse_flbytes length) h input pos x pos'
+  ))
+= valid_exact_equiv parse_all_bytes h input pos pos' ;
+  contents_exact_eq parse_all_bytes h input pos pos' ;
+  let length = U32.v pos' - U32.v pos in
+  valid_facts (parse_flbytes length) h input pos ;
+  assert (no_lookahead_on (parse_flbytes length) (B.as_seq h (B.gsub input.base pos (pos' `U32.sub` pos))) (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos))));
+  assert (injective_postcond (parse_flbytes length) (B.as_seq h (B.gsub input.base pos (pos' `U32.sub` pos))) (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos))))
+
+#push-options "--z3rlimit 32"
+
+let valid_bounded_vlbytes_elim
+  (h: HS.mem)
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (input: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (
+    valid (parse_bounded_vlbytes min max) h input pos
+  ))
+  (ensures (
+    let sz = log256' max in
+    valid (parse_bounded_integer sz) h input pos /\ (
+    let len_payload = contents (parse_bounded_integer sz) h input pos in
+    min <= U32.v len_payload /\ U32.v len_payload <= max /\
+    sz + U32.v len_payload == content_length (parse_bounded_vlbytes min max) h input pos /\ (
+    let pos_payload = pos `U32.add` U32.uint_to_t sz in
+    let x = contents (parse_bounded_vlbytes min max) h input pos in
+    BY.len x == len_payload /\
+    valid_pos (parse_bounded_vlbytes min max) h input pos (pos_payload `U32.add` len_payload) /\
+    valid_content_pos (parse_flbytes (U32.v len_payload)) h input pos_payload x (pos_payload `U32.add` len_payload)
+  ))))
+= valid_synth h (parse_bounded_vlbytes' min max) (synth_bounded_vlbytes min max) input pos;
+  valid_bounded_vldata_strong_elim h min max serialize_all_bytes input pos;
+  let sz = log256' max in
+  let len_payload = contents (parse_bounded_integer sz) h input pos in
+  let pos_payload = pos `U32.add` U32.uint_to_t sz in
+  valid_exact_all_bytes_elim h input pos_payload (pos_payload `U32.add` len_payload);
+  ()
+
+#pop-options
+
+inline_for_extraction
+let bounded_vlbytes_payload_length
+  (min: nat) // must be a constant
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (input: slice)
+  (pos: U32.t)
+: HST.Stack U32.t
+  (requires (fun h -> valid (parse_bounded_vlbytes min max) h input pos))
+  (ensures (fun h len h' ->
+    B.modifies B.loc_none h h' /\
+    U32.v pos + log256' max + U32.v len <= U32.v input.len /\ (
+    let x = contents (parse_bounded_vlbytes min max) h input pos in
+    BY.len x == len /\
+    valid_content_pos (parse_flbytes (U32.v len)) h input (pos `U32.add` U32.uint_to_t (log256' max)) x (get_valid_pos (parse_bounded_vlbytes min max) h input pos)
+  )))
+= let h = HST.get () in
+  [@inline_let] let _ = valid_bounded_vlbytes_elim h min max input pos in
+  read_bounded_integer (log256' max) input pos
+
+let clens_vlbytes_length_cond
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (length: nat)
+  (x: parse_bounded_vlbytes_t min max)
+: GTot Type0
+= BY.length x == length
+
+let clens_vlbytes_length
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (length: nat)
+: Tot (clens (clens_vlbytes_length_cond min max length) (BY.lbytes length))
+= {
+  clens_get = (fun (x: parse_bounded_vlbytes_t min max) -> (x <: Ghost (BY.lbytes length) (requires (clens_vlbytes_length_cond min max length x)) (ensures (fun _ -> True))));
+}
+
+(*
+#reset-options "--z3rlimit 64 --max_fuel 2 --initial_fuel 2 --max_ifuel 6 --initial_ifuel 6 --z3cliopt smt.arith.nl=false"
+
+let gaccessor_vlbytes_length
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (length: nat { length < 4294967296 } )
+: Tot (gaccessor (parse_bounded_vlbytes min max) (parse_flbytes length) (clens_vlbytes_length min max length))
+= fun (input: bytes) -> (begin
+    let res = if Seq.length input >= log256' max + length
+    then (log256' max, length)
+    else (0, 0)
+    in
+    let g () : Lemma
+      (requires (gaccessor_pre (parse_bounded_vlbytes min max) (parse_flbytes length) (clens_vlbytes_length min max length) input))
+      (ensures (gaccessor_post (parse_bounded_vlbytes min max) (parse_flbytes length) (clens_vlbytes_length min max length) input res))
+    = assert (Some? (parse (parse_bounded_vlbytes min max) input));
+      let (Some (payload_length, consumed_header)) = parse (parse_bounded_integer (log256' max)) input in
+      assert (consumed_header == log256' max);
+      let pos'  = log256' max + U32.v payload_length in
+      assert (pos' <= Seq.length input);
+      let (Some (x, consumed_payload)) = parse parse_all_bytes (Seq.slice input (log256' max) pos') in
+      admit ()
+    in
+    Classical.move_requires g ();
+    res
+  end <: Ghost (nat & nat) (requires True) (ensures (fun res -> gaccessor_post' (parse_bounded_vlbytes min max) (parse_flbytes length) (clens_vlbytes_length min max length) input res)))
+
+
+admit ()
+
+(*
+let h = HST.get () in
+  [@inline_let] let _ = valid_facts (parse_bounded_vlbytes min max) h input pos in
+  [@inline_let]
+  let sz = log256' max in
+  [@inline_let] let _ = valid_facts (parse_bounded_integer sz) h input pos in
+  let len = read_bounded_integer sz input pos in
+  [@inline_let] let pos' = pos `U32.add` U32.uint_to_t (log256' max) in
+  [@inline_let] let _ = valid_facts (parse_flbytes (U32.v len)) h input pos' in
+  [@inline_let] let _ = no_lookahead_on (parse_flbytes (U32.v len)) (B.as_seq h (B.gsub input.base pos' len)) (B.as_seq h (B.gsub input.base pos' (input.len `U32.sub` pos'))) in
+  [@inline_let] let _ = injective_postcond (parse_flbytes (U32.v len)) (B.as_seq h (B.gsub input.base pos' len)) (B.as_seq h (B.gsub input.base pos' (input.len `U32.sub` pos'))) in
+  len
+
+
 (*
 
 module M = LowStar.Modifies
