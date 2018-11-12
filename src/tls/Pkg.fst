@@ -96,11 +96,9 @@ type modifies_footprint (fp:mem->GTot rset) h0 h1 =
 inline_for_extraction
 noeq type pkg (ip: ipkg) = | Pkg:
   key: (i:ip.t {ip.registered i} -> Type0)  (* indexed state of the functionality *) ->
-  $info: (ip.t -> Type0)                    (* creation-time arguments, typically refined using i:ip.t *) ->
-  len: (#i:ip.t -> info i -> keylen)        (* computes the key-material length from those arguments *) ->
-  ideal: Type0                              (* type-level access to the ideal flag of the package *) ->
-  //17-11-13 do we need to know that ideal ==> model?
-  //17-11-13 is type-level access enough?
+  info: (ip.t -> Type0)                     (* creation-time arguments, typically refined using i:ip.t *) ->
+  len: (#i:ip.t -> info i -> keylen)         (* computes the key-material length from those arguments *) ->
+  ideal: Type0{ideal ==> model}             (* type-level access to the ideal flag of the package *) ->
 
   // when modelling, we maintain a global table of all allocated
   // instances of the package. Only the package modifies the table.
@@ -166,7 +164,7 @@ type fresh_regions (s:rset) (h0:mem) (h1:mem) =
 inline_for_extraction
 noeq type local_pkg (ip: ipkg) =
 | LocalPkg:
-  $key: (i:ip.t{ip.registered i} -> Type0) ->
+  key: (i:ip.t{ip.registered i} -> Type0) ->
   info: (ip.t -> Type0) ->
   len: (#i:ip.t -> info i -> keylen) ->
   ideal: Type0 ->
