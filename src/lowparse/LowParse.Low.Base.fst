@@ -566,6 +566,7 @@ let valid_pos_valid_exact
     valid_exact p h s pos pos' /\
     contents_exact p h s pos pos' == contents p h s pos
   ))
+  [SMTPat (valid_exact p h s pos pos'); SMTPat (valid p h s pos)]
 = valid_valid_exact p h s pos
 
 abstract
@@ -582,6 +583,7 @@ let valid_exact_valid
   (ensures (
     valid_content_pos p h s pos (contents_exact p h s pos pos') pos'
   ))
+  [SMTPat (valid_exact p h s pos pos'); SMTPat (valid p h s pos)]
 = assert (no_lookahead_on p (B.as_seq h (B.gsub s.base pos (pos' `U32.sub`pos))) (B.as_seq h (B.gsub s.base pos (s.len `U32.sub` pos))));
   assert (injective_precond p (B.as_seq h (B.gsub s.base pos (pos' `U32.sub` pos))) (B.as_seq h (B.gsub s.base pos (s.len `U32.sub` pos))));
   assert (injective_postcond p (B.as_seq h (B.gsub s.base pos (pos' `U32.sub` pos))) (B.as_seq h (B.gsub s.base pos (s.len `U32.sub` pos))))

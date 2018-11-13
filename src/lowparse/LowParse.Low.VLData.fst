@@ -399,6 +399,7 @@ let valid_bounded_vldata_strong_intro
   valid_facts (parse_bounded_vldata min max p) h input pos;
   valid_bounded_vldata_intro h min max p input pos pos'
 
+inline_for_extraction
 let finalize_bounded_vldata_strong
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )

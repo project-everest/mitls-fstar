@@ -20,8 +20,6 @@ let synth_inner (x: (U16.t * U16.t)) : Tot inner =
 let parse_inner' : LP.parser _ inner =
   parse_inner_raw `LPC.parse_synth` synth_inner
 
-let parse_inner_kind = LP.get_parser_kind parse_inner'
-
 let parse_inner = parse_inner'
 
 let synth_inner_recip (x: inner) : Tot (U16.t * U16.t) =
@@ -37,8 +35,13 @@ let serialize_inner_raw : LP.serializer parse_inner_raw =
 
 let serialize_inner = LPC.serialize_synth _ synth_inner serialize_inner_raw synth_inner_recip ()
 
-let serialize_inner_intro =
-  LPC.contains_valid_serialized_data_or_fail_synth serialize_inner_raw synth_inner synth_inner_recip
+#set-options "--z3rlimit 16"
+
+let serialize_inner_intro h b lo =
+  LPC.valid_synth h parse_inner_raw synth_inner b lo;
+  LPC.valid_nondep_then h LPI.parse_u16 LPI.parse_u16 b lo
+
+#reset-options
 
 let parse_t_raw =
   parse_inner ` LPC.nondep_then` LPI.parse_u32
@@ -66,4 +69,10 @@ let serialize_t_raw : LP.serializer parse_t_raw =
 
 let serialize_t = LPC.serialize_synth _ synth_t serialize_t_raw synth_t_recip ()
 
-let serialize_t_intro = LPC.contains_valid_serialized_data_or_fail_synth serialize_t_raw synth_t synth_t_recip
+#set-options "--z3rlimit 32"
+
+let serialize_t_intro h b lo =
+  LPC.valid_synth h parse_t_raw synth_t b lo;
+  LPC.valid_nondep_then h parse_inner LPI.parse_u32 b lo
+
+#reset-options
