@@ -7,11 +7,17 @@
 module Hashing.Spec
 
 include EverCrypt.Hash
+include Spec.Hash.Helpers
 
 open FStar.Integers
 open FStar.Bytes
 type tag (a:alg) = Bytes.lbytes32 (tagLen a)
+let maxTagLen = 64ul
 type anyTag = lbytes (Integers.v maxTagLen)
+
+// JP: override the definition from evercrypt (which uses <) with miTLS
+// compatible definitions (which uses <=)
+let maxLength a = EverCrypt.Hash.maxLength a - 1
 
 let macable a = b:bytes {length b + blockLength a < pow2 32}
 // 32-bit implementation restriction
@@ -38,7 +44,9 @@ val hmac:
 let hmac a k text =
   let k = Bytes.reveal k in
   let text = Bytes.reveal text in
-  assert_norm (Seq.length text + blockLength a <= maxLength a);
+  assert_norm (pow2 32 < pow2 61);
+  assert_norm (pow2 61 < pow2 125);
+  assert (Seq.length text + blockLength a <= maxLength a);
   let t: EverCrypt.Hash.tag a = EverCrypt.HMAC.hmac a k text in
   Bytes.hide t
 
@@ -49,10 +57,10 @@ let emptyHash : a:alg -> Tot (tag a) =
   function
   | MD5 -> bytes_of_hex "d41d8cd98f00b204e9800998ecf8427e"
   | SHA1 -> bytes_of_hex "da39a3ee5e6b4b0d3255bfef95601890afd80709"
-  | SHA224 -> bytes_of_hex "2bc9476102bb288234c415a2b01f828ea62ac5b3e42f"
-  | SHA256 -> bytes_of_hex "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-  | SHA384 -> bytes_of_hex "38b060a751ac96384cd9327eb1b1e36a21fdb71114be07434c0cc7bf63f6e1da274edebfe76f65fbd51ad2f14898b95b"
-  | SHA512 -> bytes_of_hex "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"
+  | SHA2_224 -> bytes_of_hex "2bc9476102bb288234c415a2b01f828ea62ac5b3e42f"
+  | SHA2_256 -> bytes_of_hex "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  | SHA2_384 -> bytes_of_hex "38b060a751ac96384cd9327eb1b1e36a21fdb71114be07434c0cc7bf63f6e1da274edebfe76f65fbd51ad2f14898b95b"
+  | SHA2_512 -> bytes_of_hex "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"
 #reset-options
 
 // A "placeholder" hash whose bytes are all 0, used for key-derivation in Handshake.Secret
