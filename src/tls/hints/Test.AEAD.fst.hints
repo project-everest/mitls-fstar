@@ -8,10 +8,10 @@
       1,
       [
         "@query", "assumption_EverCrypt.aead_alg__uu___haseq",
-        "assumption_Prims.HasEq_string", "equation_TLSConstants.aeadAlg"
+        "equation_CipherSuite.aeadAlg"
       ],
       0,
-      "28618ae2ef6b331b9b338cb7f4a1f9b8"
+      "01995d35f25219a1cbbb4b592de69737"
     ],
     [
       "Test.AEAD.iter",
@@ -31,7 +31,7 @@
         "typing_tok_C.EXIT_FAILURE@tok", "typing_tok_C.EXIT_SUCCESS@tok"
       ],
       0,
-      "c63dce763c3604b3a6ef713dbb26f388"
+      "0ffd24aef0017b9da60e683344b7f457"
     ]
   ]
 ]

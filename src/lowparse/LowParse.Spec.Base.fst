@@ -176,7 +176,7 @@ let consumes_all
   (#t: Type0)
   (p: bare_parser t)
 : GTot Type0
-= forall (b: bytes) . Some? (parse p b) ==> (
+= forall (b: bytes) . {:pattern (parse p b)} Some? (parse p b) ==> (
     let (Some (_, len)) = parse p b in
     Seq.length b == len
   )
@@ -188,7 +188,7 @@ let parses_at_least
   (#t: Type0)
   (f: bare_parser t)
 : GTot Type0
-= forall (s: bytes) .
+= forall (s: bytes) . {:pattern (parse f s)}
   Some? (parse f s) ==> (
     let (_, consumed) = Some?.v (parse f s) in
     sz <= (consumed <: nat)
@@ -230,7 +230,7 @@ let parses_at_most
   (#t: Type0)
   (f: bare_parser t)
 : GTot Type0
-= forall (s: bytes) .
+= forall (s: bytes) . {:pattern (parse f s)}
   Some? (parse f s) ==> (
     let (_, consumed) = Some?.v (parse f s) in
     sz >= (consumed <: nat)
@@ -241,7 +241,7 @@ let is_constant_size_parser
   (#t: Type0)
   (f: bare_parser t)
 : GTot Type0
-= forall (s: bytes) .
+= forall (s: bytes) . {:pattern (parse f s)}
   Some? (parse f s) ==> (
     let (_, consumed) = Some?.v (parse f s) in
     sz == (consumed <: nat)
@@ -494,7 +494,7 @@ let serializer_correct
   (p: parser k t)
   (f: bare_serializer t)
 : GTot Type0
-= forall (x: t) . parse p (f x) == Some (x, Seq.length (f x))
+= forall (x: t) .{:pattern (parse p (f x))} parse p (f x) == Some (x, Seq.length (f x))
 
 let serializer_correct_ext
   (#k1: parser_kind)
@@ -515,7 +515,7 @@ let serializer_complete
   (p: parser k t)
   (f: bare_serializer t)
 : GTot Type0
-= forall (s: bytes) .
+= forall (s: bytes) . {:pattern (parse p s)}
   Some? (parse p s) ==> (
     let (Some (x, len)) = parse p s in
     f x == Seq.slice s 0 len
@@ -608,7 +608,10 @@ let serializer_unique
   (x: t)
 : Lemma
   (s1 x == s2 x)
-= serializer_correct_implies_complete p s2
+= (* need these because of patterns *)
+  let _ = parse p (s1 x) in
+  let _ = parse p (s2 x) in
+  serializer_correct_implies_complete p s2
 
 let serializer_injective
   (#k: parser_kind)
@@ -619,7 +622,8 @@ let serializer_injective
 : Lemma
   (requires (s x1 == s x2))
   (ensures (x1 == x2))
-= ()
+= (* patterns, again *)
+  assert (parse p (s x1) == parse p (s x2))
 
 let serializer_parser_unique'
   (#k1: parser_kind)
@@ -635,19 +639,19 @@ let serializer_parser_unique'
     is_strong p2 /\
     serializer_correct p1 s /\
     serializer_correct p2 s /\
-    Some? (p1 x)
+    Some? (parse p1 x)
   ))
   (ensures (
-    p1 x == p2 x
+    parse p1 x == parse p2 x
   ))
 = serializer_correct_implies_complete p1 s;
-  let (Some (y, len)) = p1 x in
+  let (Some (y, len)) = parse p1 x in
   let x' = Seq.slice x 0 len in
   assert (s y == x');
   let len' = Seq.length x' in
   assert (len == len');
-  assert (p1 x' == Some (y, len'));
-  assert (p2 x' == Some (y, len'));
+  assert (parse p1 x' == Some (y, len'));
+  assert (parse p2 x' == Some (y, len'));
   assert (no_lookahead_on p2 x' x);
   assert (no_lookahead_on_postcond p2 x' x);
   assert (injective_postcond p2 x' x)
@@ -690,7 +694,7 @@ let serialize_length
    | Some y -> x <= y
   ))
   [SMTPat (Seq.length (serialize s x))]
-= ()
+= assert (Some? (parse p (serialize s x)))
 
 let seq_upd_seq
   (#t: Type)

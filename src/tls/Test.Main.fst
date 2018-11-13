@@ -51,6 +51,7 @@ let main (): St C.exit_code =
       // 2018.04.25: Enable once the regression is fixed
       "Handshake", handshake;
       "IV", iv;
+      "Rekey", KDF.Rekey.test_rekey;
       (* ADD NEW TESTS HERE *)
     ];
     C.EXIT_SUCCESS

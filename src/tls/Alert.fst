@@ -36,7 +36,7 @@ let alertBytes_then_parse (a:alert) : Lemma (parse (alertBytes a) == Correct a) 
 let parse_then_alertBytes (x:lbytes 2) : 
   Lemma (
     match parse x with
-    | Correct a -> alertBytes a `equal` x
+    | Correct a -> alertBytes a == x
     | _ -> True) = 
   LowParseWrappers.lemma_pinverse_serializer32_parser32_constant_length alert_serializer32 2 () alert_parser32 "" x
 

@@ -14,7 +14,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "45517fa18f1c25e8f9b5f23f8faaf592"
+      "1a0ec8b318fc1a34a3039343db19c468"
     ],
     [
       "AEADProvider.dbg",
@@ -26,7 +26,7 @@
         "equation_DebugFlags.debug_AEP"
       ],
       0,
-      "dfd3681d61e6ebe6882da5774ef54c14"
+      "e188a03aeb3b38b19d8951f0912f4a51"
     ],
     [
       "AEADProvider.alg",
@@ -35,12 +35,12 @@
       1,
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "disc_equation_TLSConstants.AEAD", "equation_AEADProvider.id",
-        "refinement_interpretation_Crypto.Indexing_Tm_refine_15bf079f4ce5823e739071012326443f",
-        "typing_TLSConstants.uu___is_AEAD"
+        "disc_equation_CipherSuite.AEAD", "equation_AEADProvider.id",
+        "refinement_interpretation_Crypto.Indexing_Tm_refine_27bc248aea929afc1c455a4ca114e85e",
+        "typing_CipherSuite.uu___is_AEAD"
       ],
       0,
-      "f5532f2b3f9db13ecace9b77c1ca69a6"
+      "ead7c80e64ab48011418013d8f722840"
     ],
     [
       "AEADProvider.alg'",
@@ -49,12 +49,12 @@
       1,
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "disc_equation_TLSConstants.AEAD", "equation_AEADProvider.id",
-        "refinement_interpretation_Crypto.Indexing_Tm_refine_15bf079f4ce5823e739071012326443f",
-        "typing_TLSConstants.uu___is_AEAD"
+        "disc_equation_CipherSuite.AEAD", "equation_AEADProvider.id",
+        "refinement_interpretation_Crypto.Indexing_Tm_refine_27bc248aea929afc1c455a4ca114e85e",
+        "typing_CipherSuite.uu___is_AEAD"
       ],
       0,
-      "6d4eeb109ed3a3ea0ba0a541c2f79f74"
+      "92bd3ccb3707ce9927a1a94d6b545c59"
     ],
     [
       "AEADProvider.aeadAlg_for_evercrypt",
@@ -66,7 +66,7 @@
         "refinement_interpretation_AEADProvider_Tm_refine_b549bf3deb28db882d1c0fc679cf41b7"
       ],
       0,
-      "a85ee92ec339684baef2118b916eea88"
+      "a340a94e0394cafd81ea148dd6c45760"
     ],
     [
       "AEADProvider.iv",
@@ -79,7 +79,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "823f0fdc197796473ded98d037e9c9a9"
+      "c4134a86596f8dc7007a2f0ee477d410"
     ],
     [
       "AEADProvider.salt_length",
@@ -95,12 +95,12 @@
         "disc_equation_EverCrypt.AES256_CCM8",
         "disc_equation_EverCrypt.AES256_GCM",
         "disc_equation_EverCrypt.CHACHA20_POLY1305",
-        "equation_AEADProvider.alg_", "equation_TLSConstants.aeadAlg",
+        "equation_AEADProvider.alg_", "equation_CipherSuite.aeadAlg",
         "fuel_guarded_inversion_EverCrypt.aead_alg",
         "typing_AEADProvider.alg_"
       ],
       0,
-      "2cb4a71683bdd1e9871a88b4d565d242"
+      "94f980542311573857021c574551d9e6"
     ],
     [
       "AEADProvider.explicit_iv_length",
@@ -116,12 +116,12 @@
         "disc_equation_EverCrypt.AES256_CCM8",
         "disc_equation_EverCrypt.AES256_GCM",
         "disc_equation_EverCrypt.CHACHA20_POLY1305",
-        "equation_AEADProvider.alg_", "equation_TLSConstants.aeadAlg",
+        "equation_AEADProvider.alg_", "equation_CipherSuite.aeadAlg",
         "fuel_guarded_inversion_EverCrypt.aead_alg",
         "typing_AEADProvider.alg_"
       ],
       0,
-      "7525bdbd485f8a3293b1759ed4e6e2e0"
+      "4b47ab06fa2e715e0ae0a44326c0be3c"
     ],
     [
       "AEADProvider.key",
@@ -138,7 +138,7 @@
         "typing_AEADProvider.key_length"
       ],
       0,
-      "e04d0d296b5ec9abc70ff2796fa5ebf8"
+      "a4d25e0f07632bd8820cc4c4bc504691"
     ],
     [
       "AEADProvider.salt",
@@ -153,7 +153,7 @@
         "projection_inverse_BoxInt_proj_0", "typing_AEADProvider.salt_length"
       ],
       0,
-      "08705cce5c5cf7524b2bcd4298429dd2"
+      "f9babd34166efe9741ca03fc58c671d3"
     ],
     [
       "AEADProvider.noncelen",
@@ -162,7 +162,7 @@
       1,
       [ "@query" ],
       0,
-      "5134fcf715d18b63f428d05518abb5f3"
+      "7852daddbc1e53849d3d7d4b85fe5992"
     ],
     [
       "AEADProvider.nonce",
@@ -184,7 +184,7 @@
         "typing_AEADProvider.salt_length"
       ],
       0,
-      "1c7b945eed79a4e31b95498d52038457"
+      "7dfb90e94c50f087649ac826727109c8"
     ],
     [
       "AEADProvider.coerce_iv",
@@ -197,7 +197,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "91ecfe8a22cd93e606a235af112de716"
+      "8cfc3240b61ee33d2a9307938e9e6e3c"
     ],
     [
       "AEADProvider.create_nonce",
@@ -211,20 +211,14 @@
         "@query", "Prims_pretyping_ae567c2fb75be05905677af440075565",
         "b2t_def", "bool_inversion", "bool_typing",
         "constructor_distinct_EverCrypt.AES128_GCM",
-        "constructor_distinct_EverCrypt.AES256_GCM",
         "constructor_distinct_EverCrypt.CHACHA20_POLY1305",
         "constructor_distinct_Parsers.ProtocolVersion.TLS_1p3",
-        "constructor_distinct_Prims.Nil",
-        "constructor_distinct_TLSConstants.TLS_AES_256_GCM_SHA384",
-        "data_elim_TLSInfo.ID12",
+        "constructor_distinct_Prims.Nil", "data_elim_TLSInfo.ID12",
         "disc_equation_EverCrypt.CHACHA20_POLY1305",
         "disc_equation_Parsers.ProtocolVersion.TLS_1p3",
         "disc_equation_TLSInfo.PlaintextID",
-        "equality_tok_EverCrypt.AES256_GCM@tok",
         "equality_tok_EverCrypt.CHACHA20_POLY1305@tok",
-        "equality_tok_EverCrypt.Hash.SHA384@tok",
         "equality_tok_Parsers.ProtocolVersion.TLS_1p3@tok",
-        "equality_tok_TLSConstants.TLS_AES_256_GCM_SHA384@tok",
         "equation_AEADProvider.alg", "equation_AEADProvider.alg_",
         "equation_AEADProvider.id", "equation_AEADProvider.iv_length",
         "equation_AEADProvider.key_length", "equation_AEADProvider.nonce",
@@ -239,8 +233,7 @@
         "equation_LowParse.SLow.Base.u32_max", "equation_Mem.disjoint",
         "equation_Mem.rgn", "equation_Mem.tls_define_region",
         "equation_Mem.tls_rgn", "equation_Mem.tls_tables_region",
-        "equation_Nonce.random", "equation_TLSConstants.cipherSuite_of_name",
-        "equation_TLSConstants.custom_extension",
+        "equation_Nonce.random", "equation_TLSConstants.custom_extension",
         "equation_TLSInfo.pv_of_id", "equation_TLSInfo.random",
         "equation_TLSInfo.srand",
         "equation_with_fuel_FStar.List.Tot.Base.length.fuel_instrumented",
@@ -262,16 +255,14 @@
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
-        "projection_inverse_Prims.Cons_hd", "projection_inverse_Prims.Nil_a",
-        "projection_inverse_TLSConstants.CipherSuite13__0",
-        "refinement_interpretation_Crypto.Indexing_Tm_refine_15bf079f4ce5823e739071012326443f",
+        "projection_inverse_Prims.Nil_a",
+        "refinement_interpretation_Crypto.Indexing_Tm_refine_27bc248aea929afc1c455a4ca114e85e",
         "refinement_interpretation_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
         "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
         "refinement_interpretation_LowParse.SLow.Base_Tm_refine_37aada3d4a501a6616c90a97d93560d2",
         "refinement_interpretation_Mem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
         "refinement_interpretation_Mem_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
         "refinement_interpretation_Mem_Tm_refine_f70be9b0cc50942af80d22e44fc9b9c4",
-        "token_correspondence_TLSConstants.cipherSuite_of_name",
         "typing_AEADProvider.key_length",
         "typing_AEADProvider.salt_of_state", "typing_FStar.Bytes.len",
         "typing_FStar.Bytes.reveal", "typing_FStar.UInt32.v",
@@ -279,7 +270,7 @@
         "typing_Mem.tls_define_region"
       ],
       0,
-      "a1d7a0d8a00ab29f6c89debe6f97ca9f"
+      "ad4781e951fbbee440ef3fe5ba588de2"
     ],
     [
       "AEADProvider.leak",
@@ -339,7 +330,7 @@
         "typing_Specializations.Providers.AEAD.use_provider", "unit_typing"
       ],
       0,
-      "44df8bd2727d5a66eefd8591b3ca3e8a"
+      "19518643a338538bcc5310c88d582d0c"
     ],
     [
       "AEADProvider.adata",
@@ -351,7 +342,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "d7f597c4eb2dde650f496a3b8adac54a"
+      "2d68f934c40f74f9eda630ac3fa8dde2"
     ],
     [
       "AEADProvider.cipherlen",
@@ -374,7 +365,7 @@
         "typing_AEADProvider.taglen"
       ],
       0,
-      "a48c3516826fe32dc7e1e19d6ad5329d"
+      "997c606808241219a4eebe8aae591be5"
     ],
     [
       "AEADProvider.from_bytes",
@@ -437,7 +428,7 @@
         "typing_LowStar.Monotonic.Buffer.loc_unused_in"
       ],
       0,
-      "accffb0ab5f9ff47f4eef41bf3081d72"
+      "4ee33e51f4ab8f250cb023f096b9ae44"
     ]
   ]
 ]

@@ -40,7 +40,10 @@ let wrap_serializer32_constant_length
 = [@inline_let]
   let y = s32 x in
   [@inline_let]
-  let _ = le_antisym (length y) len in
+  let _ =
+    serialize_length s x;
+    le_antisym (length y) len
+  in
   y
 
 inline_for_extraction
@@ -108,7 +111,7 @@ let lemma_pinverse_serializer32_parser32_constant_length
   (msg: string)
   (x: lbytes len)
 : Lemma
-  (lemma_pinverse_f_g #t #(lbytes len) equal (wrap_serializer32_constant_length s32 len u) (wrap_parser32_constant_length s32 len u p32 msg) x)
+  (lemma_pinverse_f_g #t #(lbytes len) eq2 (wrap_serializer32_constant_length s32 len u) (wrap_parser32_constant_length s32 len u p32 msg) x)
 = if (Some? (p32 x))
   then begin
     let (Some (y, consumed)) = p32 x in

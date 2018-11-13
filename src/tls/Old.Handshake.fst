@@ -713,7 +713,7 @@ let serverHello (m:Nego.mode) =
     sh_protocol_version = pv;
     sh_server_random = m.n_server_random;
     sh_sessionID = m.n_sessionID;
-    sh_cipher_suite = m.n_cipher_suite;
+    sh_cipher_suite = name_of_cipherSuite m.n_cipher_suite;
     sh_compression = NullCompression;
     sh_extensions =
       match pv, m.n_server_extensions with
@@ -755,7 +755,7 @@ let server_ClientHello hs offer obinders =
     // the HRR group
     match Nego.server_ClientHello hs.nego offer hs.log with
     | Error z -> InError z
-    | Correct (Nego.ServerHelloRetryRequest hrr) ->
+    | Correct (Nego.ServerHelloRetryRequest hrr _) ->
       HandshakeLog.send hs.log (HelloRetryRequest hrr);
       // Note: no handshake state machine transition
       InAck false false

@@ -9,6 +9,7 @@ SOURCES = \
   buffer_bytes.c \
   C.c \
   Cert.c \
+  CipherSuite.c \
   CommonDH.c \
   Connection.c \
   Content.c \

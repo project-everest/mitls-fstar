@@ -154,8 +154,10 @@ let parse_ret (#t:Type) (v:t) : Tot (parser parse_ret_kind t) =
 let parse_empty : parser parse_ret_kind unit =
   parse_ret ()
 
-let serialize_empty : serializer parse_empty =
-  fun _ -> Seq.empty
+let serialize_empty' : serializer parse_empty =
+  fun (x:unit) -> Seq.empty
+
+let serialize_empty : serializer parse_empty = serialize_empty'
 
 #set-options "--z3rlimit 16"
 
@@ -182,9 +184,9 @@ let fail_parser
 inline_for_extraction
 let parse_false_kind = strong_parser_kind 0 0 ({ parser_kind_metadata_total = false })
 
-let parse_false : parser parse_false_kind False = fail_parser _ _
+let parse_false : parser parse_false_kind (squash False) = fail_parser _ _
 
-let serialize_false : serializer parse_false = fun input -> false_elim (FStar.Squash.return_squash input)
+let serialize_false : serializer parse_false = fun input -> false_elim ()
 
 /// monadic bind for the parser monad
 
@@ -1024,6 +1026,15 @@ let synth_inverse_synth_injective
 : Lemma
   (requires (synth_inverse g f))
   (ensures (synth_injective f))
+= ()
+
+let synth_inverse_synth_injective'
+  (#t1: Type0)
+  (#t2: Type0)
+  (g: (t2 -> GTot t1))
+  (f: (t1 -> GTot t2))
+  (u: squash (synth_inverse g f))
+: Tot (squash (synth_injective f))
 = ()
 
 let serialize_synth
