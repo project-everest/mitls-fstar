@@ -364,6 +364,7 @@ let size32_t
   let _ = assert_norm (LP.size32_sum_gen_precond (LP.get_parser_kind LP.parse_u8) (LP.weaken_parse_dsum_cases_kind t_sum parse_known_cases (LP.get_parser_kind LP.parse_u16))) in
   LP.size32_dsum t_sum _ size32_key _ _ size32_known_cases LP.size32_u16 (_ by (LP.dep_enum_destr_tac ())) ()
 
+(*
 module LL = LowParse.Low
 
 let validate32_case_B : LL.validator32 parse_case_B =
@@ -390,6 +391,7 @@ let validate32_t : LL.validator32 parse_t =
     validate32_known_cases
     LL.validate32_u16
     (_ by (LP.dep_maybe_enum_destr_t_tac ()))
+*)
 
 (*
 inline_for_extraction
