@@ -268,7 +268,7 @@ let bounded_vlbytes_payload_length
   [@inline_let] let _ = valid_bounded_vlbytes_elim h min max input pos in
   read_bounded_integer (log256' max) input pos
 
-let clens_vlbytes_length_cond
+let clens_vlbytes_cond
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
   (length: nat)
@@ -276,36 +276,56 @@ let clens_vlbytes_length_cond
 : GTot Type0
 = BY.length x == length
 
-let clens_vlbytes_length
+let clens_vlbytes
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
   (length: nat)
-: Tot (clens (clens_vlbytes_length_cond min max length) (BY.lbytes length))
+: Tot (clens (clens_vlbytes_cond min max length) (BY.lbytes length))
 = {
-  clens_get = (fun (x: parse_bounded_vlbytes_t min max) -> (x <: Ghost (BY.lbytes length) (requires (clens_vlbytes_length_cond min max length x)) (ensures (fun _ -> True))));
+  clens_get = (fun (x: parse_bounded_vlbytes_t min max) -> (x <: Ghost (BY.lbytes length) (requires (clens_vlbytes_cond min max length x)) (ensures (fun _ -> True))));
 }
 
 
 #push-options "--z3rlimit 16 --max_fuel 2 --initial_fuel 2 --max_ifuel 6 --initial_ifuel 6"
 
-let gaccessor_vlbytes_length
+let gaccessor_vlbytes
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
   (length: nat { length < 4294967296 } )
-: Tot (gaccessor (parse_bounded_vlbytes min max) (parse_flbytes length) (clens_vlbytes_length min max length))
+: Tot (gaccessor (parse_bounded_vlbytes min max) (parse_flbytes length) (clens_vlbytes min max length))
 = fun (input: bytes) -> (begin
     let res = if Seq.length input = log256' max + length
     then (log256' max, length)
     else (0, 0)
     in
     let g () : Lemma
-      (requires (gaccessor_pre (parse_bounded_vlbytes min max) (parse_flbytes length) (clens_vlbytes_length min max length) input))
-      (ensures (gaccessor_post (parse_bounded_vlbytes min max) (parse_flbytes length) (clens_vlbytes_length min max length) input res))
+      (requires (gaccessor_pre (parse_bounded_vlbytes min max) (parse_flbytes length) (clens_vlbytes min max length) input))
+      (ensures (gaccessor_post (parse_bounded_vlbytes min max) (parse_flbytes length) (clens_vlbytes min max length) input res))
     = parse_bounded_vlbytes_eq min max input
     in
     Classical.move_requires g ();
     res
-  end <: Ghost (nat & nat) (requires True) (ensures (fun res -> gaccessor_post' (parse_bounded_vlbytes min max) (parse_flbytes length) (clens_vlbytes_length min max length) input res)))
+  end <: Ghost (nat & nat) (requires True) (ensures (fun res -> gaccessor_post' (parse_bounded_vlbytes min max) (parse_flbytes length) (clens_vlbytes min max length) input res)))
+
+#pop-options
+
+#push-options "--z3rlimit 32 --max_fuel 2 --initial_fuel 2 --max_ifuel 6 --initial_ifuel 6"
+
+inline_for_extraction
+let accessor_vlbytes
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (length: U32.t)
+: Tot (accessor (gaccessor_vlbytes min max (U32.v length)))
+= fun sl pos ->
+  let h = HST.get () in
+  [@inline_let]
+  let _ =
+    slice_access_eq h (gaccessor_vlbytes min max (U32.v length)) sl pos;
+    valid_bounded_vlbytes_elim h min max sl pos;
+    parse_bounded_vlbytes_eq min max (B.as_seq h (B.gsub sl.base pos (sl.len `U32.sub` pos)))
+  in
+  pos `U32.add` U32.uint_to_t (log256' max)
 
 #pop-options
 
