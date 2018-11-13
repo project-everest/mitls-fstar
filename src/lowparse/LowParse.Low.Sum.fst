@@ -5,129 +5,146 @@ include LowParse.Spec.Sum
 module U32 = FStar.UInt32
 module HST = FStar.HyperStack.ST
 module B = LowStar.Buffer
-module I32 = FStar.Int32
-module Cast = FStar.Int.Cast
 
 inline_for_extraction
-let validate32_sum_aux_payload_t
+let validate_sum_aux_payload_t
+  [| validator_cls |]
   (t: sum)
   (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
   (k: maybe_enum_key (sum_enum t))
 : Tot Type
-= (input: B.buffer byte) ->
-  (len: I32.t) ->
-  HST.Stack I32.t
-  (requires (fun h -> is_slice h input len))
+= (input: slice) ->
+  (pos: U32.t) ->
+  HST.Stack U32.t
+  (requires (fun h -> live_slice h input /\ U32.v pos <= U32.v input.len /\ U32.v input.len <= U32.v validator_max_length))
   (ensures (fun h res h' ->
     B.modifies B.loc_none h h' /\ (
     match k with
-    | Unknown _ -> I32.v res < 0
+    | Unknown _ -> U32.v res > U32.v validator_max_length
     | Known k' ->
-      validator32_postcond (dsnd (pc k')) input len h res h'
+      if U32.v res <= U32.v validator_max_length
+      then
+        valid_pos (dsnd (pc k')) h input pos res
+      else
+        (~ (valid (dsnd (pc k')) h input pos))
   )))
 
-let validate32_sum_aux_payload_eq
+let validate_sum_aux_payload_eq
+  [| cls: validator_cls |]
   (t: sum)
   (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
   (k: maybe_enum_key (sum_enum t))
-: Tot (validate32_sum_aux_payload_t t pc k -> validate32_sum_aux_payload_t t pc k -> GTot Type0)
+: Tot (validate_sum_aux_payload_t t pc k -> validate_sum_aux_payload_t #cls t pc k -> GTot Type0)
 = fun _ _ -> True
 
 inline_for_extraction
-let validate32_sum_aux_payload_if'
+let validate_sum_aux_payload_if'
+  [| validator_cls |]
   (t: sum)
   (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
   (k: maybe_enum_key (sum_enum t))
   (cond: bool)
-  (ift: ((cond_true cond) -> Tot (validate32_sum_aux_payload_t t pc k)))
-  (iff: ((cond_false cond) -> Tot (validate32_sum_aux_payload_t t pc k)))
-: Tot (validate32_sum_aux_payload_t t pc k)
-= fun input len ->
+  (ift: ((cond_true cond) -> Tot (validate_sum_aux_payload_t t pc k)))
+  (iff: ((cond_false cond) -> Tot (validate_sum_aux_payload_t t pc k)))
+: Tot (validate_sum_aux_payload_t t pc k)
+= fun input pos ->
   if cond
   then begin
-    (ift () <: validate32_sum_aux_payload_t t pc k) input len
+    (ift () <: validate_sum_aux_payload_t t pc k) input pos
   end else
-    (iff () <: validate32_sum_aux_payload_t t pc k) input len
+    (iff () <: validate_sum_aux_payload_t t pc k) input pos
 
 inline_for_extraction
-let validate32_sum_aux_payload_if
+let validate_sum_aux_payload_if
+  [| validator_cls |]
   (t: sum)
   (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
   (k: maybe_enum_key (sum_enum t))
-: Tot (if_combinator _ (validate32_sum_aux_payload_eq t pc k))
-= validate32_sum_aux_payload_if' t pc k
+: Tot (if_combinator _ (validate_sum_aux_payload_eq t pc k))
+= validate_sum_aux_payload_if' t pc k
 
-#reset-options "--z3rlimit 128 --z3cliopt smt.arith.nl=false --query_stats --initial_ifuel 1 --max_ifuel 1 --smtencoding.elim_box true --smtencoding.l_arith_repr native --z3refresh"
+#reset-options "--z3rlimit 256 --z3cliopt smt.arith.nl=false --initial_ifuel 8 --max_ifuel 8 --initial_fuel 2 --max_fuel 2"
+// --query_stats  --smtencoding.elim_box true --smtencoding.l_arith_repr native --z3refresh"
 
 inline_for_extraction
-let validate32_sum_aux
+let validate_sum_aux
+  [| validator_cls |]
   (t: sum)
   (#kt: parser_kind)
   (#p: parser kt (sum_repr_type t))
-  (v: validator32 p)
-  (p32: parser32 p)
+  (v: validator p)
+  (p32: leaf_reader p)
   (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
-  (v_payload: ((k: sum_repr_type t)) -> Tot (validate32_sum_aux_payload_t t pc (maybe_enum_key_of_repr (sum_enum t) k)))
-: Tot (validator32 (parse_sum t p pc))
-= fun input len ->
+  (v_payload: ((k: sum_repr_type t)) -> Tot (validate_sum_aux_payload_t t pc (maybe_enum_key_of_repr (sum_enum t) k)))
+: Tot (validator (parse_sum t p pc))
+= fun input pos ->
   let h = HST.get () in
   [@inline_let]
-  let _ = parse_sum_eq'' t p pc (B.as_seq h input) in
-  let len_after_tag = v input len in
-  if len_after_tag `I32.lt` 0l
+  let _ = parse_sum_eq'' t p pc (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos))) in
+  [@inline_let]
+  let _ = valid_facts (parse_sum t p pc) h input pos in
+  [@inline_let]
+  let _ = valid_facts p h input pos in
+  let len_after_tag = v input pos in
+  if validator_max_length `U32.lt` len_after_tag
   then len_after_tag
   else begin
     let h1 = HST.get () in
-    let k' = p32 input in
-    let off = Cast.int32_to_uint32 (len `I32.sub` len_after_tag) in
-    let input_k = B.offset input off in
+    let k' = p32 input pos in
     [@inline_let]
-    let _ = assert (U32.v off == I32.v len - I32.v len_after_tag) in
-    [@inline_let]
-    let _ = assert (parse p (B.as_seq h input) == Some (k', U32.v off)) in
-    v_payload k' input_k len_after_tag
+    let _ =
+      match maybe_enum_key_of_repr (sum_enum t) k' with
+      | Known k -> valid_facts (dsnd (pc k)) h input len_after_tag
+      | _ -> ()
+    in
+    v_payload k' input len_after_tag
   end
 
 #reset-options
 
 inline_for_extraction
-let validate32_sum_aux_payload'
+let validate_sum_aux_payload'
+  [| cls: validator_cls |]
   (t: sum)
   (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
-  (pc32: ((x: sum_key t) -> Tot (validator32 (dsnd (pc x)))))
+  (pc32: ((x: sum_key t) -> Tot (validator #cls (dsnd (pc x)))))
   (k: maybe_enum_key (sum_enum t))
-: Tot (validate32_sum_aux_payload_t t pc k)
-= fun input_k len_after_tag ->
+: Tot (validate_sum_aux_payload_t #cls t pc k)
+= fun input pos ->
     match k with
     | Known k ->
       [@inline_let]
       let _ = synth_sum_case_injective t k in
-      validate32_synth (pc32 k) (synth_sum_case t k) () input_k len_after_tag
-    | _ -> (-1l)
+      pc32 k input pos
+      // validate_synth (pc32 k) (synth_sum_case t k) () input pos
+    | _ -> validator_max_length `U32.add` 1ul
 
 inline_for_extraction
-let validate32_sum_aux_payload
+let validate_sum_aux_payload
+  [| validator_cls |]
   (t: sum)
   (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
-  (pc32: ((x: sum_key t) -> Tot (validator32 (dsnd (pc x)))))
-  (destr: dep_maybe_enum_destr_t (sum_enum t) (validate32_sum_aux_payload_t t pc))
+  (pc32: ((x: sum_key t) -> Tot (validator (dsnd (pc x)))))
+  (destr: dep_maybe_enum_destr_t (sum_enum t) (validate_sum_aux_payload_t t pc))
   (k: sum_repr_type t)
-: Tot (validate32_sum_aux_payload_t t pc (maybe_enum_key_of_repr (sum_enum t) k))
-= destr (validate32_sum_aux_payload_eq t pc) (validate32_sum_aux_payload_if t pc) (fun _ _ -> ()) (fun _ _ _ _ -> ()) (validate32_sum_aux_payload' t pc pc32) k
+: Tot (validate_sum_aux_payload_t t pc (maybe_enum_key_of_repr (sum_enum t) k))
+= destr (validate_sum_aux_payload_eq t pc) (validate_sum_aux_payload_if t pc) (fun _ _ -> ()) (fun _ _ _ _ -> ()) (validate_sum_aux_payload' t pc pc32) k
 
 inline_for_extraction
-let validate32_sum
+let validate_sum
+  [| validator_cls |]
   (t: sum)
   (#kt: parser_kind)
   (#p: parser kt (sum_repr_type t))
-  (v: validator32 p)
-  (p32: parser32 p)
+  (v: validator p)
+  (p32: leaf_reader p)
   (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
-  (pc32: ((x: sum_key t) -> Tot (validator32 (dsnd (pc x)))))
-  (destr: dep_maybe_enum_destr_t (sum_enum t) (validate32_sum_aux_payload_t t pc))
-: Tot (validator32 (parse_sum t p pc))
-= validate32_sum_aux t v p32 pc (validate32_sum_aux_payload t pc pc32 destr)
+  (pc32: ((x: sum_key t) -> Tot (validator (dsnd (pc x)))))
+  (destr: dep_maybe_enum_destr_t (sum_enum t) (validate_sum_aux_payload_t t pc))
+: Tot (validator (parse_sum t p pc))
+= validate_sum_aux t v p32 pc (validate_sum_aux_payload t pc pc32 destr)
 
+(*
 inline_for_extraction
 let validate32_dsum_type_of_tag
   (s: dsum)
