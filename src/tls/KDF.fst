@@ -180,8 +180,6 @@ type local_kdf_invariant (#ideal:iflag) (#u:usage ideal) (#i:regid) (k:secret u 
           let i'': i:regid{Pkg?.ideal pkg' ==> ~(honest i)} = i' in
 	  let len' = Pkg?.len pkg' a' in
           let lb = FStar.Bytes.bytes_of_string lbl in
-          let _ = assume(Bytes.length lb < 1024) in
-	  let _ = assume(0 < UInt32.v len' /\ UInt32.v len' < 255) in
           let raw' = HKDF.expand_spec #a.ha raw lb len' in
           k' == Pkg?.coerceT pkg' i'' a' raw')
     else True))
@@ -506,7 +504,6 @@ val derive:
       let (| a, raw |) = secret_corrupt k in
       let lb = Bytes.bytes_of_string lbl in
       let len' = LocalPkg?.len child_pkg a' in
-      let _ = assume(0 < UInt32.v len' /\ UInt32.v len' < 255 /\ Bytes.length lb < 1024) in
       r == (LocalPkg?.coerceT child_pkg) (derive i lbl ctx) a'
       (HKDF.expand_spec #a.ha raw lb len'))) /\
     (model ==> (LocalPkg?.post child_pkg) a' r h1))
@@ -565,8 +562,6 @@ let derive #ideal #t #i k lbl ctx child_pkg a' =
     let len' = (LocalPkg?.len child_pkg) a' in 
     let (| a, key |) = secret_corrupt k in
     let lb = FStar.Bytes.bytes_of_string lbl in
-    assume(Bytes.length lb < 1024); // FIXME refine definition of label
-    assume(0 < UInt32.v len' /\ UInt32.v len' < 255); // FIXME refine keylen
     let raw = HKDF.expand #(a.ha) key lb len' in
     let dk = (LocalPkg?.coerce child_pkg) i' a' raw in
     let h2 = get() in

@@ -75,7 +75,7 @@ noeq type ipkg = | Idx:
 
 
 /// Derived key length restriction when using HKDF
-type keylen = l:UInt32.t {UInt32.v l <= 256}
+type keylen = l:UInt32.t {0 < UInt32.v l /\ UInt32.v l <= 255}
 
 
 (* Definedness *)
