@@ -32,11 +32,11 @@ let size32_empty : size32 #_ #_ #parse_empty serialize_empty
 inline_for_extraction
 let parse32_false : parser32 parse_false = fun _ -> None
 
-noextract // to make compilation of extracted C code fail if this serializer ever appears
-let serialize32_false : serializer32 #_ #_ #parse_false serialize_false = fun input -> false_elim (FStar.Squash.return_squash input)
+inline_for_extraction
+let serialize32_false : serializer32 #_ #_ #parse_false serialize_false = fun input -> B32.empty_bytes
 
-noextract // to make compilation of extracted C code fail if this serializer ever appears
-let size32_false : size32 #_ #_ #parse_false serialize_false = fun input -> false_elim (FStar.Squash.return_squash input)
+inline_for_extraction
+let size32_false : size32 #_ #_ #parse_false serialize_false = fun input -> 0ul
 
 inline_for_extraction
 let parse32_and_then
@@ -114,6 +114,10 @@ let serialize32_nondep_then
   | (fs, sn) ->
     let output1 = s1' fs in
     let output2 = s2' sn in
+    [@inline_let]
+    let _ = assert (B32.length output1 == Seq.length (serialize s1 fs)) in
+    [@inline_let]
+    let _ = assert (B32.length output2 == Seq.length (serialize s2 sn)) in
   ((B32.append output1 output2) <:
     (res: bytes32 { serializer32_correct (serialize_nondep_then p1 s1 u p2 s2) input res } ))
 

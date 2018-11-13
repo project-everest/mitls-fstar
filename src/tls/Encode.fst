@@ -199,7 +199,7 @@ let verify (i:id) k ad rg p =
     let v = MAC.verify k text p.tag in
     if v && p.ok
     then Correct p.f 
-    else Error(AD_bad_record_mac,"")
+    else fatal Bad_record_mac ""
 
 (* KB we need to add some refinement to ensure that verify
    will not fail for MACed values *)

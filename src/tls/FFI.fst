@@ -74,7 +74,7 @@ private
 let errno description txt : St int =
   let txt0 =
     match description with
-    | Some ad -> TLSError.string_of_ad ad
+    | Some ad -> TLSError.string_of_alert ad
     | None    -> "(None)"
   in
   trace ("returning error: "^txt0^" "^txt^"\n");
@@ -105,7 +105,7 @@ let connect ctx send recv config_1 : ML (Connection.connection * int) =
       err := Some 0;
       true
     | Read (DataStream.Alert a) ->
-      err := Some (errno (Some a) ("received "^(TLSError.string_of_ad a)^" alert from peer"));
+      err := Some (errno (Some a) ("received "^TLSError.string_of_alert a^" alert from peer"));
       true
     | ReadError description txt ->
       err := Some (errno description txt);
@@ -151,7 +151,7 @@ let accept_connected ctx send recv config_1 : ML (Connection.connection * int) =
         err := Some 0;
         true
       | Read (DataStream.Alert a) ->
-        err := Some (errno (Some a) ("received "^(TLSError.string_of_ad a)^" alert from peer"));
+        err := Some (errno (Some a) ("received "^TLSError.string_of_alert a^" alert from peer"));
         true
       | ReadError description txt ->
         err := Some (errno description txt);

@@ -125,7 +125,7 @@ val create:
     usage k == u /\
     Pkg.fresh_regions (footprint k) h0 h1)
 
-#reset-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 0 --max_ifuel 0"
+#reset-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 0 --max_ifuel 0"
 
 noextract
 let create ip _ _ i u =

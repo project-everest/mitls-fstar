@@ -105,57 +105,14 @@ let string_of_pv = function
   | TLS_1p3 -> "1.3"
   | Unknown_protocolVersion x -> "Unknown protocol version: " ^ string_of_int (UInt16.v x)
 
-
-/// Various elements used in ciphersuites
-
-(** Key exchange algorithms **)
-type kexAlg =
-  | Kex_RSA
-  | Kex_DH
-  | Kex_PSK
-  | Kex_PSK_DHE
-  | Kex_PSK_ECDHE
-  | Kex_DHE
-  | Kex_ECDHE
-
-(** Crypto algorithm names are defined in EverCrypt **)
-type blockCipher = EverCrypt.block_cipher_alg
-type streamCipher = EverCrypt.stream_cipher_alg
-type aeadAlg = EverCrypt.aead_alg
-
-(** Modes for the initialization vectors *)
-type ivMode =
-  | Fresh
-  | Stale
-
-(** Encryption types *)
-type encAlg =
-  | Block of blockCipher
-  | Stream of streamCipher
-
-(** TLS-specific hash and MAC algorithms *)
-
-//18-09-08 eliminate once EverCrypt/Hashing are stable.
-
-type hash_alg = Hashing.Spec.alg
-type hashAlg = Hashing.Spec.tls_alg
-type macAlg = Hashing.Spec.alg
-
-let hashSize = Hashing.Spec.tls_tagLen
-let macKeySize = Hashing.Spec.tagLen
-let macSize = Hashing.Spec.tagLen
-
-(** Authenticated Encryption modes *)
-type aeAlg =
-  | MACOnly: hash_alg -> aeAlg
-  | MtE: encAlg -> hash_alg -> aeAlg
-  | AEAD: aeadAlg -> hash_alg -> aeAlg // the hash algorithm is for the ciphersuite; it is not used by the record layer.
+include CipherSuite
 
 let aeAlg_hash = function
   | MACOnly ha -> ha
   | MtE _ ha -> ha
   | AEAD _ ha -> ha
 
+#set-options "--z3rlimit 100"
 (** Determine if this algorithm provide padding support with TLS 1.2 *)
 let lhae = function
   | MtE (Block _) _                         -> true
@@ -221,13 +178,6 @@ let max_TLSCiphertext_fragment_length_13 = max_TLSPlaintext_fragment_length + 25
 
 /// SIGNATURE ALGORITHMS
 /// 18-02-22 QD fodder
-
-(** Signature algorithms *)
-type sigAlg =
- | RSASIG
- | DSA
- | ECDSA
- | RSAPSS
  
 (* This is the old version of the inverse predicate. According to CF,
    verification was harder with this style, so we moved to the new style with
@@ -345,7 +295,7 @@ let parseSignatureScheme b =
     then
       Correct (SIG_UNKNOWN b)
     else // Unreachable
-      Error(AD_decode_error, "Parsed invalid SignatureScheme " ^ print_bytes b)
+      fatal Decode_error ("Parsed invalid SignatureScheme " ^ print_bytes b)
 
 val sigHashAlg_of_signatureScheme:
   scheme:signatureScheme{~(SIG_UNKNOWN? scheme)} -> sigAlg * hashAlg
@@ -460,6 +410,7 @@ let rec compressionMethodsBytes cms =
 
 #reset-options
 
+<<<<<<< HEAD
 
 /// CIPHERSUITES, with new structure for TLS 1.3
 /// 18-02-22 QD fodder, will require a manual translation as we
@@ -1117,6 +1068,8 @@ let rec names_of_cipherSuites css =
     end
 
 
+=======
+>>>>>>> master
 #reset-options "--admit_smt_queries true"
 
 // Some of these could be hidden in Handshake.Secret
@@ -1190,6 +1143,11 @@ let verifyDataHashAlg_of_ciphersuite_aux =
 let verifyDataHashAlg_of_ciphersuite : require_some verifyDataHashAlg_of_ciphersuite_aux =
   fun x -> Some?.v (verifyDataHashAlg_of_ciphersuite_aux x)
 
+let verifyDataHashAlg_of_ciphersuitename (n: cipherSuiteName) =
+  match cipherSuite_of_name n with
+  | None -> None
+  | Some c -> verifyDataHashAlg_of_ciphersuite_aux c
+
 (** Determine which session hash algorithm is to be used with the protocol version and ciphersuite *)
 val sessionHashAlg: pv:protocolVersion -> cs:cipherSuite{pvcs pv cs} -> Tot hashAlg
 let sessionHashAlg pv cs =
@@ -1260,7 +1218,7 @@ let parseCertType b =
   | 2z -> Correct DSA_sign
   | 3z -> Correct RSA_fixed_dh
   | 4z -> Correct DSA_fixed_dh
-  | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+  | _ -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")
 
 (** Lemmas associated to serializing/parsing of certificate types *)
 val inverse_certType: x:_ -> Lemma
@@ -1344,19 +1302,19 @@ let rec parseDistinguishedNameList data res =
     Correct res
   else
     if length data < 2 then
-      Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+      fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")
     else
       match vlsplit 2 data with
       | Error z -> Error z
       | Correct (nameBytes,data) ->
         begin
           match iutf8_opt nameBytes with
-          | None -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+          | None -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")
           | Some name ->
             if length (utf8_encode name) < 256 then
               let res = name :: res in
               parseDistinguishedNameList data res
-            else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+            else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")
         end
 
 // TODO: move all the definitions below to a separate file / figure out whether
@@ -1447,7 +1405,7 @@ let rec parseSignatureSchemeList_aux: b:bytes -> algs:list signatureScheme -> b'
       match parseSignatureScheme alg with
       | Correct sha -> parseSignatureSchemeList_aux b (sha::algs) bytes
       | Error z     -> Error z
-      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse sig hash algs")
+      else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse sig hash algs")
     else Correct algs
 
 let parseSignatureSchemeList b =
@@ -1458,7 +1416,7 @@ let parseSignatureSchemeList b =
     | Correct l -> Correct l
     | Error z -> Error z
     end
-  | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse sig hash algs")
+  | Error z -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "Failed to parse sig hash algs")
 
 
 

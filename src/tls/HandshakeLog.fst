@@ -274,7 +274,6 @@ let setParams l pv ha kexo dho =
       l := State st.transcript st.outgoing st.outgoing_next_keys st.outgoing_complete
               st.incoming st.parsed hs (Some pv) kexo dho
 
-// TR: verifies up to this point
 #set-options "--admit_smt_queries true"
 
 (*
@@ -317,8 +316,8 @@ let send l m =
     | OpenHash p ->
       (match m with
       | HelloRetryRequest hrr ->
-        let ha = verifyDataHashAlg_of_ciphersuite hrr.hrr_cipher_suite in
-        let hmsg = Hashing.compute ha p in
+        let Some cs = cipherSuite_of_name hrr.hrr_cipher_suite in
+        let hmsg = Hashing.compute (verifyDataHashAlg_of_ciphersuite cs) p in
         let hht = (bytes_of_hex "fe0000") @| (bytes_of_int 1 (length hmsg)) @| hmsg in
         OpenHash (hht @| mb)
       | _ -> OpenHash (p @| mb))
@@ -522,8 +521,9 @@ let rec hashHandshakeMessages t p hs n nb =
       | OpenHash b ->
         let hs = match m with
           | HelloRetryRequest hrr ->
-            let ha = verifyDataHashAlg_of_ciphersuite hrr.hrr_cipher_suite in
-            let hmsg = Hashing.compute ha b in
+            let hmsg = match cipherSuite_of_name hrr.hrr_cipher_suite with
+              | Some cs -> Hashing.compute (verifyDataHashAlg_of_ciphersuite cs) b
+              | None -> b in
             let hht = (bytes_of_hex "fe0000") @| (Parse.vlbytes 1 hmsg) in
             trace ("Replacing CH1 in transcript with "^(hex_of_bytes hht));
             trace ("HRR bytes: "^(hex_of_bytes mb));
@@ -578,10 +578,10 @@ let receive_CCS #a l =
   if length st.incoming > 0
   then (
     trace ("too many bytes: "^print_bytes st.incoming);
-    Error (AD_unexpected_message, "unexpected fragment after CCS"))
+    fatal Unexpected_message "unexpected fragment after CCS")
   else
   match st.hashes with
-  | OpenHash b -> Error (AD_internal_error, "the hash is open")
+  | OpenHash b -> fatal Internal_error "the hash is open"
   | FixedHash a acc tl ->
     begin
       let nt = append_hs_transcript st.transcript st.parsed in

@@ -69,14 +69,14 @@ let deltaRepr  i rg f = f
 type delta (i:id) =
   | Data of fragment i fragment_range
   | Close
-  | Alert of alertDescription
+  | Alert of alert
 
 val final: i:id -> delta i -> Tot bool
 let final i d =
   match d with
   | Data f  -> false
   | Close   -> true
-  | Alert a -> isFatal a
+  | Alert a -> a.level = Fatal
 
 let rec finalized (i:id) (s:list (delta i)): bool =
   match s with 

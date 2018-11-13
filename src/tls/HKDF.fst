@@ -69,6 +69,13 @@ HKDF-Expand(PRK, info, L) -> OKM
    ...
 *)
 
+assume val expand_spec:
+  #ha:Hashing.alg ->
+  prk: Hashing.Spec.tag ha ->
+  info: bytes {Bytes.length info < 1024 (* somewhat arbitrary *) } ->
+  len: UInt32.t {0 < v len /\ v len <= op_Multiply 255 (tagLength ha)} ->
+  GTot (lbytes32 len)
+
 val expand:
   #ha:Hashing.alg ->
   prk: lbytes (EverCrypt.Hash.tagLength ha) ->
@@ -76,7 +83,8 @@ val expand:
   len: UInt32.t {0 < v len /\ v len <= op_Multiply 255 (tagLength ha)} ->
   ST (lbytes32 len)
   (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> modifies_none h0 h1))
+  (ensures (fun h0 t h1 -> modifies_none h0 h1 /\
+    t == expand_spec #ha prk info len))
 
 #set-options "--z3rlimit 100" 
 let expand #ha prk info len =
@@ -102,13 +110,13 @@ let expand #ha prk info len =
     EverCrypt.HKDF.hkdf_expand ha tag_p prk_p tlen info_p infolen len;
     pop_frame ()
   );
-  // FIXME(adl) a functional spec would have helped here
 
   let tag = of_buffer len tag_p in
   pop_frame();
   let h11 = HyperStack.ST.get() in
   //18-09-01 todo, as in Hashing.compute; similarly missing Stack vs ST. 
   assume(modifies_none h00 h11);
+  assume(tag == expand_spec #ha prk info len); // FIXME(adl) I need a functional spec for KDF
   tag
 #reset-options ""
 

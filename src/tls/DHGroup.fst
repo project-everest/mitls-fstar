@@ -237,5 +237,5 @@ let parse_partial (bs:bytes) =
         Correct ((| Explicit dhp, gy |), rem)
       ) 
       else
-        Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-  | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+        fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")
+  | _ -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")

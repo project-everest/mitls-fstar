@@ -100,11 +100,11 @@ let parseHeader (h5:header) =
       match parseVersion pv2 with
       | Error z -> Error z
       | Correct (Unknown_protocolVersion _) ->
-        Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Parsed unknown protocol version")
+        fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "Parsed unknown protocol version")
       | Correct pv ->
           let len = int_of_bytes len2 in
           if len <= 0 || len > max_TLSCiphertext_fragment_length
-          then Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Wrong fragment length")
+          then fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "Wrong fragment length")
           else correct(ct,pv,len)
 
 
@@ -222,7 +222,7 @@ let rec read tcp s =
   //assert(p0 <^ headerLen \/ Buffer.disjoint header dest);
   //assert(p0 <^ headerLen \/ Buffer.as_seq h0 header == Buffer.as_seq h1 header);
   if res = -1l then
-    ReadError (AD_internal_error, "Transport.recv")
+    ReadError (fatalAlert Internal_error, "Transport.recv")
   else
   if res = 0l
   then ( trace "WouldBlock"; ReadWouldBlock )
