@@ -17,7 +17,6 @@ SOURCES = \
   EverCrypt_Bytes.c \
   EverCrypt_Hacl.c \
   EverCrypt_Hash.c \
-  EverCrypt_Helpers.c \
   EverCrypt_HKDF.c \
   EverCrypt_HMAC.c \
   EverCrypt_StaticConfig.c \
@@ -25,8 +24,6 @@ SOURCES = \
   evercrypt_vale_stubs.c \
   EverCrypt_ValeGlue.c \
   Flag.c \
-  FStar.c \
-  Hacl.c \
   Hacl_Chacha20.c \
   Hacl_Chacha20Poly1305.c \
   Hacl_Curve25519.c \
@@ -38,7 +35,6 @@ SOURCES = \
   Hacl_SHA2_256.c \
   Hacl_SHA2_384.c \
   Hacl_SHA2_512.c \
-  Prims.c \
   vale_aes_glue.c \
   Vale_Hash_SHA2_256.c \
   sha256_main_i.c

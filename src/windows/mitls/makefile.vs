@@ -7,7 +7,6 @@ SOURCES = \
   AEADProvider.c \
   Alert.c \
   buffer_bytes.c \
-  BufferBytes.c \
   C.c \
   Cert.c \
   CommonDH.c \
@@ -16,7 +15,6 @@ SOURCES = \
   Crypto_Plain.c \
   Extensions.c \
   FFI.c \
-  FFICallbacks.c \
   Flags.c \
   Format.c \
   FStar.c \
@@ -25,7 +23,6 @@ SOURCES = \
   Hashing.c \
   kremlinit.c \
   LowParse.c \
-  LowStar.c \
   Mem.c \
   mitlsffi.c \
   Negotiation.c \
@@ -34,7 +31,6 @@ SOURCES = \
   Parse.c \
   Parsers.c \
   PMS.c \
-  Prims.c \
   PSK.c \
   QUIC.c \
   Random.c \
