@@ -144,6 +144,61 @@ let validate_sum
 : Tot (validator (parse_sum t p pc))
 = validate_sum_aux t v p32 pc (validate_sum_aux_payload t pc pc32 destr)
 
+module HS = FStar.HyperStack
+
+#reset-options "--z3rlimit 256 --z3cliopt smt.arith.nl=false --initial_ifuel 8 --max_ifuel 8 --initial_fuel 2 --max_fuel 2"
+
+let valid_sum_intro
+  (h: HS.mem)
+  (t: sum)
+  (#kt: parser_kind)
+  (p: parser kt (sum_repr_type t))
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (input: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (
+    valid (parse_enum_key p (sum_enum t)) h input pos /\ (
+    let k = contents (parse_enum_key p (sum_enum t)) h input pos in
+    valid (dsnd (pc k)) h input (get_valid_pos (parse_enum_key p (sum_enum t)) h input pos)
+  )))
+  (ensures (
+    let k = contents (parse_enum_key p (sum_enum t)) h input pos in
+    let pos_payload = get_valid_pos (parse_enum_key p (sum_enum t)) h input pos in
+    valid_content_pos
+      (parse_sum t p pc) h input pos
+      (synth_sum_case t k (contents (dsnd (pc k)) h input pos_payload))
+      (get_valid_pos (dsnd (pc k)) h input pos_payload)
+  ))
+= valid_facts (parse_enum_key p (sum_enum t)) h input pos;
+  let k = contents (parse_enum_key p (sum_enum t)) h input pos in
+  let pos_payload = get_valid_pos (parse_enum_key p (sum_enum t)) h input pos in
+  valid_facts (dsnd (pc k)) h input pos_payload;
+  valid_facts (parse_sum t p pc) h input pos;
+  parse_sum_eq t p pc (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos)))
+
+#reset-options
+
+(*
+let clens_sum_payload
+  (s: sum)
+  (k: sum_key s)
+: Tot (clens #(sum_type s) (fun (x: sum_type s) -> sum_tag_of_data s x == k) (sum_type_of_tag s k))
+= {
+  clens_get = (fun (x: sum_type s) -> synth_sum_case_recip s k x <: Ghost (sum_type_of_tag s k) (requires (sum_tag_of_data s x == k)) (ensures (fun _ -> True)));
+}
+
+let gaccessor_clens_sum_payload
+  (t: sum)
+  (#kt: parser_kind)
+  (p: parser kt (sum_repr_type t))
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (k: sum_key t)
+: Tot (gaccessor (parse_sum t p pc) (dsnd (pc k)) (clens_sum_payload t k))
+= fun (input: bytes) ->
+  if Seq.length input >= 
+  
+
 (*
 inline_for_extraction
 let validate32_dsum_type_of_tag
