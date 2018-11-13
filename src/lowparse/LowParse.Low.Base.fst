@@ -683,6 +683,25 @@ let clens_eq (#t: Type) (#clens_cond1: t -> GTot Type0) (#t': Type) (cl1: clens 
   (forall (x: t) . {:pattern (clens_cond1 x) \/ (clens_cond2 x)} clens_cond1 x <==> clens_cond2 x) /\
   (forall (x: t) . {:pattern (cl1.clens_get x) \/ (cl2.clens_get x)} (clens_cond1 x \/ clens_cond2 x) ==> (cl1.clens_get x == cl2.clens_get x))
 
+let clens_eq_intro
+  (#t: Type) (#clens_cond1: t -> GTot Type0) (#t': Type) (cl1: clens clens_cond1 t') (#clens_cond2: t -> GTot Type0) (cl2: clens clens_cond2 t')
+  (cond: (
+    (x: t) ->
+    Lemma
+    (clens_cond1 x <==> clens_cond2 x)
+  ))
+  (get: (
+    (x: t) ->
+    Lemma
+    (requires (clens_cond1 x /\ clens_cond2 x))
+    (ensures (clens_cond1 x /\ clens_cond2 x /\ cl1.clens_get x == cl2.clens_get x))
+  ))
+: Lemma
+  (clens_eq cl1 cl2)
+= Classical.forall_intro cond;
+  Classical.forall_intro (Classical.move_requires get)
+  
+
 (*
 let clens_get_put'
   (#t1: Type) (#clens_cond: t1 -> GTot Type0) (#t2: Type) (l: clens clens_cond t2)
@@ -1074,7 +1093,7 @@ let gaccessor_ext
   (g: gaccessor p1 p2 cl)
   (#pre': (t1 -> GTot Type0))
   (cl': clens pre' t2)
-  (sq: clens_eq cl cl')
+  (sq: squash (clens_eq cl cl'))
 : Tot (gaccessor p1 p2 cl')
 = fun (input: bytes) -> (g input <: Ghost (nat & nat) (requires True) (ensures (fun res -> gaccessor_post' p1 p2 cl' input res)))
 
@@ -1324,7 +1343,7 @@ let accessor_ext
   (a: accessor g)
   (#pre': (t1 -> GTot Type0))
   (cl': clens pre' t2)
-  (sq: clens_eq cl cl')
+  (sq: squash (clens_eq cl cl'))
 : Tot (accessor (gaccessor_ext g cl' sq))
 = fun input pos -> a input pos
 
