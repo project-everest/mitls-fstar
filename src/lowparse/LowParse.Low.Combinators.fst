@@ -39,6 +39,24 @@ let valid_nondep_then
     valid_facts p2 h s pos1
   end
 
+let valid_nondep_then_intro
+  (h: HS.mem)
+  (#k1: parser_kind)
+  (#t1: Type0)
+  (p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type0)
+  (p2: parser k2 t2)
+  (s: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (valid p1 h s pos /\ valid p2 h s (get_valid_pos p1 h s pos)))
+  (ensures ((
+    let pos1 = get_valid_pos p1 h s pos in
+    valid_content_pos (nondep_then p1 p2) h s pos (contents p1 h s pos, contents p2 h s pos1) (get_valid_pos p2 h s pos1)
+  )))
+= valid_nondep_then h p1 p2 s pos
+
 inline_for_extraction
 let validate_nondep_then
   [| validator_cls |]
@@ -101,6 +119,25 @@ let valid_synth
   valid_facts (parse_synth p1 f2) h input pos;
   if valid_dec p1 h input pos
   then parse_synth_eq p1 f2 (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos)))
+
+let valid_synth_intro
+  (h: HS.mem)
+  (#k: parser_kind)
+  (#t1: Type0)
+  (#t2: Type0)
+  (p1: parser k t1)
+  (f2: t1 -> GTot t2)
+  (input: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (
+    synth_injective f2 /\
+    valid p1 h input pos
+  ))
+  (ensures (
+    valid_content_pos (parse_synth p1 f2) h input pos (f2 (contents p1 h input pos)) (get_valid_pos p1 h input pos)
+  ))
+= valid_synth h p1 f2 input pos
 
 inline_for_extraction
 let validate_synth
