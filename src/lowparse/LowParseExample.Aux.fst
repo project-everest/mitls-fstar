@@ -385,22 +385,30 @@ let serialize32_t : LP.serializer32 serialize_t =
 
 module LL = LowParse.Low
 
-let validate32_case_B
-: LL.validator32 parse_case_B
-= LL.validate32_filter LL.validate32_u16 LL.parse32_u16 parse_case_B_filter (fun x -> x `U16.gt` 0us)
+module U32 = FStar.UInt32
 
 inline_for_extraction
-let validate32_cases 
-  (x: LP.enum_key case_enum)
-: Tot (LL.validator32 (dsnd (parse_cases x)))
-= match x with
-  | Case_B -> validate32_case_B
-  | Case_A -> LL.validate32_u8 `LL.validate32_nondep_then` LL.validate32_u8
-  | _ -> LL.validate32_u16
+instance valcls : LL.validator_cls = { LL.validator_max_length =
+  (let r = 4294967290ul in
+  assert_norm (4 <= U32.v r /\ U32.v r < U32.v LL.max_uint32);
+  r); }
 
-let validate32_t
-: LL.validator32 parse_t
-= LL.validate32_sum t_sum LL.validate32_u8 LL.parse32_u8 _ validate32_cases (_ by (LP.dep_maybe_enum_destr_t_tac ()))
+let validate_case_B
+: LL.validator parse_case_B
+= LL.validate_filter (LL.validate_u16 ()) LL.read_u16 parse_case_B_filter (fun x -> x `U16.gt` 0us)
+
+inline_for_extraction
+let validate_cases 
+  (x: LP.enum_key case_enum)
+: Tot (LL.validator (dsnd (parse_cases x)))
+= match x with
+  | Case_B -> (validate_case_B <: LL.validator (dsnd (parse_cases x)))
+  | Case_A -> (((LL.validate_u8 ()) `LL.validate_nondep_then` (LL.validate_u8 ())) <: LL.validator (dsnd (parse_cases x)))
+  | _ -> (LL.validate_u16 () <: LL.validator (dsnd (parse_cases x)))
+
+let validate_t
+: LL.validator parse_t
+= LL.validate_sum t_sum (LL.validate_u8 ()) LL.read_u8 _ validate_cases (_ by (LP.dep_maybe_enum_destr_t_tac ()))
 
 (*
 // inline_for_extraction

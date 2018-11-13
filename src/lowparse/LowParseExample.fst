@@ -35,10 +35,10 @@ let m (x: LowParseExample.Aux.t) : Tot FStar.Bytes.bytes =
   LowParseExample.Aux.serialize32_t x
 
 // For now, extract the validator for compilation purposes only
-let v (x: LowStar.Buffer.buffer FStar.UInt8.t) (len: FStar.Int32.t) : FStar.HyperStack.ST.Stack FStar.Int32.t
+let v (x: LowParse.Low.slice) : FStar.HyperStack.ST.Stack FStar.UInt32.t
   (requires (fun _ -> False))
   (ensures (fun _ _ _ -> True))
-= LowParseExample.Aux.validate32_t x len
+= LowParseExample.Aux.validate_t x 0ul
 
 (*
 let msz ( x: LowParseExample.Aux.t) : Tot FStar.UInt32.t =

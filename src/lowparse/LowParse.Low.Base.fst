@@ -1379,6 +1379,7 @@ class validator_cls = {
   validator_max_length: (u: U32.t { 4 <= U32.v u /\ U32.v u < U32.v max_uint32 } )
 }
 
+[@unifier_hint_injective]
 inline_for_extraction
 let validator [| validator_cls |] (#k: parser_kind) (#t: Type) (p: parser k t) : Tot Type =
   (sl: slice) ->
@@ -1394,6 +1395,7 @@ let validator [| validator_cls |] (#k: parser_kind) (#t: Type) (p: parser k t) :
       (~ (valid p h sl pos))
   )))
 
+[@unifier_hint_injective]
 inline_for_extraction
 let jumper
   (#k: parser_kind)
@@ -1409,6 +1411,7 @@ let jumper
     U32.v pos + content_length p h sl pos == U32.v pos'
   ))
 
+[@unifier_hint_injective]
 inline_for_extraction
 let leaf_reader
   (#k: parser_kind)
@@ -1424,6 +1427,7 @@ let leaf_reader
     res == contents p h sl pos
   ))
 
+[@unifier_hint_injective]
 inline_for_extraction
 let leaf_reader_ext
   (#k1: parser_kind)
@@ -1443,6 +1447,7 @@ let leaf_reader_ext
   [@inline_let] let _ = lem (B.as_seq h (B.gsub sl.base pos (sl.len `U32.sub` pos))) in
   p32 sl pos
 
+[@unifier_hint_injective]
 inline_for_extraction
 let leaf_writer_weak
   (#k: parser_kind)
@@ -1462,6 +1467,7 @@ let leaf_writer_weak
     else valid_content_pos p h' sl pos x pos'
   )))
 
+[@unifier_hint_injective]
 inline_for_extraction
 let leaf_writer_strong
   (#k: parser_kind)
@@ -1479,6 +1485,7 @@ let leaf_writer_strong
     valid_content_pos p h' sl pos x pos'
   ))
 
+[@unifier_hint_injective]
 inline_for_extraction
 let serializer32
   (#k: parser_kind)
