@@ -1,5 +1,5 @@
 [
-  "l\u001dÔŒŸü—•\n\u0014¾\u0000%ë÷¥",
+  "ñªièL5+ã\u0013a¤ž\"ÒdG",
   [
     [
       "HKDF.extract",
@@ -90,9 +90,22 @@
       1,
       2,
       1,
-      [ "@query" ],
+      [
+        "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_FStar.Integers.Unsigned",
+        "constructor_distinct_FStar.Integers.W32",
+        "equality_tok_FStar.Integers.W32@tok",
+        "equation_EverCrypt.Hash.maxTagLen",
+        "equation_EverCrypt.Hash.tagLen",
+        "equation_EverCrypt.Hash.tagLength", "equation_FStar.Bytes.lbytes",
+        "equation_FStar.Integers.v", "lemma_FStar.UInt32.uv_inv",
+        "projection_inverse_FStar.Integers.Unsigned__0",
+        "refinement_interpretation_EverCrypt.Hash_Tm_refine_e295d1a089abf8fd7758b0cf33f12cde",
+        "refinement_interpretation_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
+        "typing_EverCrypt.Hash.tagLen", "typing_FStar.Bytes.len"
+      ],
       0,
-      "9584c5a966aaafe5856ef9f1804e1391"
+      "1d8cd6c88cd9162728546d29ab3e462a"
     ],
     [
       "HKDF.expand",
@@ -101,7 +114,7 @@
       1,
       [ "@query" ],
       0,
-      "df8375cc2d121c401b4348014cd680c2"
+      "2da08f43ee437ac3a99e8347b10739e2"
     ],
     [
       "HKDF.expand",
@@ -275,7 +288,7 @@
         "typing_Mem.is_tls_rgn", "typing_Mem.tls_define_region"
       ],
       0,
-      "49eec1d8c7e414b5d038772a6811c5aa"
+      "1dcd70cc8a1c3ce183a0dec5a3270c9d"
     ],
     [
       "HKDF.tls13_prefix",
@@ -284,7 +297,7 @@
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "fb40dba3f3931a537466aee0739bc933"
+      "8d935bc85fcb794d42787c9fe4660fd1"
     ],
     [
       "HKDF.quic_prefix",
@@ -293,7 +306,7 @@
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0,
-      "df2d5514251f03b9033373e0e977bc2c"
+      "63da308de8f88271d698938a3298817d"
     ],
     [
       "HKDF.format",
@@ -359,7 +372,7 @@
         "typing_Mem.is_tls_rgn", "typing_Mem.tls_define_region"
       ],
       0,
-      "f59593092978666a99903e6e92a1e729"
+      "7289d9c0e86ffe2d17cb2867fd7ab749"
     ],
     [
       "HKDF.expand_label",
@@ -368,7 +381,7 @@
       1,
       [ "@query" ],
       0,
-      "240f4d608f9d94472273ca289ae5b9bd"
+      "a9938050e10c9ec1265aef7b993aa078"
     ],
     [
       "HKDF.expand_label",
@@ -377,7 +390,7 @@
       1,
       [ "@query" ],
       0,
-      "a6d59d6aa2b177d63fb2d07248fdd551"
+      "3c488dabd82e35f48fb766a1acf8711f"
     ],
     [
       "HKDF.expand_label",
@@ -450,7 +463,7 @@
         "typing_Mem.tls_define_region", "typing_Parse.vlbytes"
       ],
       0,
-      "7965aa1ab021fc4098d5bd3c0d6875f3"
+      "d79331e6de496484e96ffb5a2f179d68"
     ],
     [
       "HKDF.derive_secret",
@@ -459,7 +472,7 @@
       1,
       [ "@query" ],
       0,
-      "2fd93c879b82b63196a3bf03b1e07480"
+      "01fb40fb74c1ef3255b661e069b9c229"
     ],
     [
       "HKDF.derive_secret",
@@ -468,7 +481,7 @@
       1,
       [ "@query" ],
       0,
-      "edaedba770e94d9486f0e9551c9a5d59"
+      "fe467d4df0d595097f802635e804df77"
     ],
     [
       "HKDF.derive_secret",
@@ -532,7 +545,7 @@
         "typing_Mem.tls_define_region"
       ],
       0,
-      "6d05ea6108f1a1afcf550db464751e50"
+      "c53acba5766ca0bab774d1564d32c612"
     ]
   ]
 ]
