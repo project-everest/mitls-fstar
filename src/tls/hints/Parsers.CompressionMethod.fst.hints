@@ -1,1 +1,377 @@
-[ "!:\fM–¢\u007f\u0003*\u0002S 3Õ¸\"", [] ]
+[
+  "\u0007◊w∂…ø êJ¨wOñÍ™U",
+  [
+    [
+      "Parsers.CompressionMethod.compressionMethod_repr_eq",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "equation_Parsers.CompressionMethod.compressionMethod_repr"
+      ],
+      0,
+      "3e690f371742150715fc812665a172b3"
+    ],
+    [
+      "Parsers.CompressionMethod.compressionMethod",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
+      0,
+      "5af829e7e3d771f91a146c218aaabe83"
+    ],
+    [
+      "Parsers.CompressionMethod.__proj__Unknown_compressionMethod__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.CompressionMethod.Unknown_compressionMethod",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Parsers.CompressionMethod_Tm_refine_024d66cc355bb4f5c02304d3ef6c059f"
+      ],
+      0,
+      "c11592f539d50a6f0be0b869f5d5742e"
+    ],
+    [
+      "Parsers.CompressionMethod.compressionMethod_enum",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+      ],
+      0,
+      "57bfe9985ec2027aa2b7636593fa1084"
+    ],
+    [
+      "Parsers.CompressionMethod.synth_compressionMethod",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+      ],
+      0,
+      "b1a6e66fa8afb4652e8525b03446cb7c"
+    ],
+    [
+      "Parsers.CompressionMethod.synth_compressionMethod",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_FStar.UInt8.t__uu___haseq",
+        "data_elim_LowParse.Spec.Enum.Unknown",
+        "disc_equation_LowParse.Spec.Enum.Known",
+        "disc_equation_LowParse.Spec.Enum.Unknown",
+        "equation_LowParse.Spec.Enum.unknown_enum_repr",
+        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "fuel_guarded_inversion_LowParse.Spec.Enum.maybe_enum_key",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_LowParse.Spec.Enum.Unknown__0",
+        "refinement_interpretation_LowParse.Spec.Enum_Tm_refine_42952339d1ff6a9a240497d58590f0b2"
+      ],
+      0,
+      "7c5cc5f610dd6e26a5fa38805740c43e"
+    ],
+    [
+      "Parsers.CompressionMethod.synth_compressionMethod_inv",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_f537159ed795b314b4e58c260361ae86",
+        "Prims_pretyping_f8666440faa91836cc5a13998af863fc",
+        "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "b2t_def", "bool_inversion", "bool_typing",
+        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Prims.l_imp", "equation_Prims.squash", "l_imp-interp",
+        "primitive_Prims.op_Negation", "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Parsers.CompressionMethod_Tm_refine_6c62fe0923ba96eeef1e7e6fcb82ed91",
+        "refinement_interpretation_Parsers.CompressionMethod_Tm_refine_8f298af8c6d13fcf45122e9d42fdb6a4",
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "typing_Parsers.CompressionMethod.uu___is_Unknown_compressionMethod",
+        "unit_typing"
+      ],
+      0,
+      "70e5faadf9d69eb114af7322fbd59334"
+    ],
+    [
+      "Parsers.CompressionMethod.lemma_synth_compressionMethod_inv'",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "equation_LowParse.Spec.Combinators.synth_inverse",
+        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Prims.l_Forall", "equation_Prims.squash",
+        "l_quant_interp__16812",
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod",
+        "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod_inv"
+      ],
+      0,
+      "1f178639ffc241ec176b06327a79c23e"
+    ],
+    [
+      "Parsers.CompressionMethod.lemma_synth_compressionMethod_inj",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+      ],
+      0,
+      "a1afe1d60d402c5a21933b93e5097adb"
+    ],
+    [
+      "Parsers.CompressionMethod.lemma_synth_compressionMethod_inv",
+      1,
+      0,
+      0,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "constructor_distinct_LowParse.Spec.Enum.Known",
+        "constructor_distinct_LowParse.Spec.Enum.Unknown",
+        "equation_LowParse.Spec.Combinators.synth_inverse",
+        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.CompressionMethod.synth_compressionMethod",
+        "equation_Parsers.CompressionMethod.synth_compressionMethod_inv",
+        "fuel_guarded_inversion_Parsers.CompressionMethod.compressionMethod",
+        "inversion-interp", "projection_inverse_LowParse.Spec.Enum.Known__0",
+        "projection_inverse_LowParse.Spec.Enum.Known_e",
+        "projection_inverse_LowParse.Spec.Enum.Known_key",
+        "projection_inverse_LowParse.Spec.Enum.Known_repr",
+        "projection_inverse_LowParse.Spec.Enum.Unknown__0",
+        "projection_inverse_LowParse.Spec.Enum.Unknown_e",
+        "projection_inverse_LowParse.Spec.Enum.Unknown_key",
+        "projection_inverse_LowParse.Spec.Enum.Unknown_repr",
+        "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod",
+        "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod_inv"
+      ],
+      0,
+      "67604a7f4f3963b5940a8dc26ab864bc"
+    ],
+    [
+      "Parsers.CompressionMethod.parse_maybe_compressionMethod_key",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+      ],
+      0,
+      "c0cab5ad54d6014f76739e6fa9106ddc"
+    ],
+    [
+      "Parsers.CompressionMethod.serialize_maybe_compressionMethod_key",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "equation_Parsers.CompressionMethod.parse_maybe_compressionMethod_key"
+      ],
+      0,
+      "0c4db70fd682447156a5df621792510e"
+    ],
+    [
+      "Parsers.CompressionMethod.compressionMethod_parser",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+      ],
+      0,
+      "ded59935307f1ff542a8b80ce6eb89fe"
+    ],
+    [
+      "Parsers.CompressionMethod.compressionMethod_serializer",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "equation_Parsers.CompressionMethod.compressionMethod_parser"
+      ],
+      0,
+      "b21c8e159032ade551502603f77c6bcc"
+    ],
+    [
+      "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
+        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Prims.Cons_a",
+        "projection_inverse_Prims.Cons_hd",
+        "projection_inverse_Prims.Cons_tl"
+      ],
+      0,
+      "587f8e3f976ff2b0c9f86338cd7c4145"
+    ],
+    [
+      "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
+      2,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
+        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Prims.Cons_a",
+        "projection_inverse_Prims.Cons_hd",
+        "projection_inverse_Prims.Cons_tl"
+      ],
+      0,
+      "c5a90b27a5d4ca71ba321bfc3336a5fa"
+    ],
+    [
+      "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
+      3,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+      ],
+      0,
+      "ec5170f95136f930ca56510dbf8b9f89"
+    ],
+    [
+      "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
+      4,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+      ],
+      0,
+      "90b0f526b13a8ce02336eb30010611d5"
+    ],
+    [
+      "Parsers.CompressionMethod.compressionMethod_parser32",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "equation_Parsers.CompressionMethod.compressionMethod_parser"
+      ],
+      0,
+      "77730148fc649cb0f2a70a9605e30f46"
+    ],
+    [
+      "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
+        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Prims.Cons_a",
+        "projection_inverse_Prims.Cons_hd",
+        "projection_inverse_Prims.Cons_tl"
+      ],
+      0,
+      "493ac12bfb62e30fb0e52c5df8275807"
+    ],
+    [
+      "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
+      2,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
+        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Prims.Cons_a",
+        "projection_inverse_Prims.Cons_hd",
+        "projection_inverse_Prims.Cons_tl"
+      ],
+      0,
+      "87bd28a09754e2db822b3d6e0277d938"
+    ],
+    [
+      "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
+      3,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+      ],
+      0,
+      "96287e81941adee85608cfe19d85ca2f"
+    ],
+    [
+      "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
+      4,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+      ],
+      0,
+      "499cb84ccda21f43d0e416990372ce2e"
+    ],
+    [
+      "Parsers.CompressionMethod.compressionMethod_serializer32",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "equation_Parsers.CompressionMethod.compressionMethod_parser",
+        "equation_Parsers.CompressionMethod.compressionMethod_serializer"
+      ],
+      0,
+      "593704ef91eb2636910ea1798c54e638"
+    ],
+    [
+      "Parsers.CompressionMethod.compressionMethod_size32",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "0580d6ea482ecdcc5f45b693ccac910d"
+    ]
+  ]
+]

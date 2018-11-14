@@ -1,1 +1,375 @@
-[ "n¬'o.sÓ2\u001c>õUO}\u0002\u001f", [] ]
+[
+  "iá-P÷\u0006\u0010`∆#Veù˚.=",
+  [
+    [
+      "Parsers.ECCurveType.EcCurveType.ecCurveType_repr_eq",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "equation_Parsers.ECCurveType.EcCurveType.ecCurveType_repr"
+      ],
+      0,
+      "432d4dd1c1d231655d1b2a3cb38848e7"
+    ],
+    [
+      "Parsers.ECCurveType.EcCurveType.ecCurveType",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
+      0,
+      "e1ae22639037875a6acca732bad38aef"
+    ],
+    [
+      "Parsers.ECCurveType.EcCurveType.__proj__Unknown_ecCurveType__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.ECCurveType.EcCurveType.Unknown_ecCurveType",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Parsers.ECCurveType.EcCurveType_Tm_refine_5c3734000392ee8460683125cd88121b"
+      ],
+      0,
+      "ef3e29dac2dc35a2d2c42fa0c392ed46"
+    ],
+    [
+      "Parsers.ECCurveType.EcCurveType.ecCurveType_enum",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.ECCurveType.EcCurveType.ecCurveType__uu___haseq"
+      ],
+      0,
+      "d5b0beec40c8138a4d8b9dc2d3db6607"
+    ],
+    [
+      "Parsers.ECCurveType.EcCurveType.synth_ecCurveType",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.ECCurveType.EcCurveType.ecCurveType__uu___haseq"
+      ],
+      0,
+      "9ca22d655073f1268426c31bd12506d9"
+    ],
+    [
+      "Parsers.ECCurveType.EcCurveType.synth_ecCurveType",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_FStar.UInt8.t__uu___haseq",
+        "data_elim_LowParse.Spec.Enum.Unknown",
+        "disc_equation_LowParse.Spec.Enum.Known",
+        "disc_equation_LowParse.Spec.Enum.Unknown",
+        "equation_LowParse.Spec.Enum.unknown_enum_repr",
+        "equation_Parsers.ECCurveType.EcCurveType.ecCurveType_enum",
+        "fuel_guarded_inversion_LowParse.Spec.Enum.maybe_enum_key",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_LowParse.Spec.Enum.Unknown__0",
+        "refinement_interpretation_LowParse.Spec.Enum_Tm_refine_42952339d1ff6a9a240497d58590f0b2"
+      ],
+      0,
+      "bcf29a7d16bcd4c00b459e90d0c2be13"
+    ],
+    [
+      "Parsers.ECCurveType.EcCurveType.synth_ecCurveType_inv",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_f537159ed795b314b4e58c260361ae86",
+        "Prims_pretyping_f8666440faa91836cc5a13998af863fc",
+        "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.ECCurveType.EcCurveType.ecCurveType__uu___haseq",
+        "b2t_def", "bool_inversion", "bool_typing",
+        "equation_Parsers.ECCurveType.EcCurveType.ecCurveType_enum",
+        "equation_Prims.l_imp", "equation_Prims.squash", "l_imp-interp",
+        "primitive_Prims.op_Negation", "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Parsers.ECCurveType.EcCurveType_Tm_refine_cde5fc4f7f14ef200c8281c777526a9d",
+        "refinement_interpretation_Parsers.ECCurveType.EcCurveType_Tm_refine_eaffcf02bc3dffd83d1db1faf4339aab",
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "typing_Parsers.ECCurveType.EcCurveType.uu___is_Unknown_ecCurveType",
+        "unit_typing"
+      ],
+      0,
+      "ea74d20e3ed0663a74d7bbc7f96f6e7c"
+    ],
+    [
+      "Parsers.ECCurveType.EcCurveType.lemma_synth_ecCurveType_inv'",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.ECCurveType.EcCurveType.ecCurveType__uu___haseq",
+        "equation_LowParse.Spec.Combinators.synth_inverse",
+        "equation_Parsers.ECCurveType.EcCurveType.ecCurveType_enum",
+        "equation_Prims.l_Forall", "equation_Prims.squash",
+        "l_quant_interp__16826",
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "token_correspondence_Parsers.ECCurveType.EcCurveType.synth_ecCurveType",
+        "token_correspondence_Parsers.ECCurveType.EcCurveType.synth_ecCurveType_inv"
+      ],
+      0,
+      "8737b0c9530430592326892b5b19817c"
+    ],
+    [
+      "Parsers.ECCurveType.EcCurveType.lemma_synth_ecCurveType_inj",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.ECCurveType.EcCurveType.ecCurveType__uu___haseq"
+      ],
+      0,
+      "7851b0666e49e0bffd27cf60880f5f56"
+    ],
+    [
+      "Parsers.ECCurveType.EcCurveType.lemma_synth_ecCurveType_inv",
+      1,
+      0,
+      0,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.ECCurveType.EcCurveType.ecCurveType__uu___haseq",
+        "constructor_distinct_LowParse.Spec.Enum.Known",
+        "constructor_distinct_LowParse.Spec.Enum.Unknown",
+        "equation_LowParse.Spec.Combinators.synth_inverse",
+        "equation_Parsers.ECCurveType.EcCurveType.ecCurveType_enum",
+        "equation_Parsers.ECCurveType.EcCurveType.synth_ecCurveType",
+        "equation_Parsers.ECCurveType.EcCurveType.synth_ecCurveType_inv",
+        "projection_inverse_LowParse.Spec.Enum.Known__0",
+        "projection_inverse_LowParse.Spec.Enum.Known_e",
+        "projection_inverse_LowParse.Spec.Enum.Known_key",
+        "projection_inverse_LowParse.Spec.Enum.Known_repr",
+        "projection_inverse_LowParse.Spec.Enum.Unknown__0",
+        "projection_inverse_LowParse.Spec.Enum.Unknown_e",
+        "projection_inverse_LowParse.Spec.Enum.Unknown_key",
+        "projection_inverse_LowParse.Spec.Enum.Unknown_repr",
+        "token_correspondence_Parsers.ECCurveType.EcCurveType.synth_ecCurveType",
+        "token_correspondence_Parsers.ECCurveType.EcCurveType.synth_ecCurveType_inv"
+      ],
+      0,
+      "5fa8065fbf45fd4c52bb684b0a2bcd16"
+    ],
+    [
+      "Parsers.ECCurveType.EcCurveType.parse_maybe_ecCurveType_key",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.ECCurveType.EcCurveType.ecCurveType__uu___haseq"
+      ],
+      0,
+      "5035aab585d47f47a155e015c34883a8"
+    ],
+    [
+      "Parsers.ECCurveType.EcCurveType.serialize_maybe_ecCurveType_key",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.ECCurveType.EcCurveType.ecCurveType__uu___haseq",
+        "equation_Parsers.ECCurveType.EcCurveType.parse_maybe_ecCurveType_key"
+      ],
+      0,
+      "2ed01fd862814bdf81df13d9cb43ea9b"
+    ],
+    [
+      "Parsers.ECCurveType.EcCurveType.ecCurveType_parser",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.ECCurveType.EcCurveType.ecCurveType__uu___haseq"
+      ],
+      0,
+      "bdd82a8741d6068efb0f662f3638741d"
+    ],
+    [
+      "Parsers.ECCurveType.EcCurveType.ecCurveType_serializer",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.ECCurveType.EcCurveType.ecCurveType__uu___haseq",
+        "equation_Parsers.ECCurveType.EcCurveType.ecCurveType_parser"
+      ],
+      0,
+      "130e516f562d3e0a93df0ef8bb7961ec"
+    ],
+    [
+      "Parsers.ECCurveType.EcCurveType.parse32_maybe_ecCurveType_key",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.ECCurveType.EcCurveType.ecCurveType__uu___haseq",
+        "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
+        "equation_Parsers.ECCurveType.EcCurveType.ecCurveType_enum",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Prims.Cons_a",
+        "projection_inverse_Prims.Cons_hd",
+        "projection_inverse_Prims.Cons_tl"
+      ],
+      0,
+      "3f7ca0929828b726b5f176eb79d71128"
+    ],
+    [
+      "Parsers.ECCurveType.EcCurveType.parse32_maybe_ecCurveType_key",
+      2,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.ECCurveType.EcCurveType.ecCurveType__uu___haseq",
+        "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
+        "equation_Parsers.ECCurveType.EcCurveType.ecCurveType_enum",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Prims.Cons_a",
+        "projection_inverse_Prims.Cons_hd",
+        "projection_inverse_Prims.Cons_tl"
+      ],
+      0,
+      "6b3c44d5f32be1b77b2570e1af8145da"
+    ],
+    [
+      "Parsers.ECCurveType.EcCurveType.parse32_maybe_ecCurveType_key",
+      3,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.ECCurveType.EcCurveType.ecCurveType__uu___haseq"
+      ],
+      0,
+      "347f0730e786d35b847ccf4f0245438a"
+    ],
+    [
+      "Parsers.ECCurveType.EcCurveType.parse32_maybe_ecCurveType_key",
+      4,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.ECCurveType.EcCurveType.ecCurveType__uu___haseq"
+      ],
+      0,
+      "3f04a11ed84e69742c1130097e18a707"
+    ],
+    [
+      "Parsers.ECCurveType.EcCurveType.ecCurveType_parser32",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.ECCurveType.EcCurveType.ecCurveType__uu___haseq",
+        "equation_Parsers.ECCurveType.EcCurveType.ecCurveType_parser"
+      ],
+      0,
+      "39ba1c1867fa473405fd69551bb51db6"
+    ],
+    [
+      "Parsers.ECCurveType.EcCurveType.serialize32_maybe_ecCurveType_key",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.ECCurveType.EcCurveType.ecCurveType__uu___haseq",
+        "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
+        "equation_Parsers.ECCurveType.EcCurveType.ecCurveType_enum",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Prims.Cons_a",
+        "projection_inverse_Prims.Cons_hd",
+        "projection_inverse_Prims.Cons_tl"
+      ],
+      0,
+      "e7352cfbcff176c017a5198474a06361"
+    ],
+    [
+      "Parsers.ECCurveType.EcCurveType.serialize32_maybe_ecCurveType_key",
+      2,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.ECCurveType.EcCurveType.ecCurveType__uu___haseq",
+        "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
+        "equation_Parsers.ECCurveType.EcCurveType.ecCurveType_enum",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Prims.Cons_a",
+        "projection_inverse_Prims.Cons_hd",
+        "projection_inverse_Prims.Cons_tl"
+      ],
+      0,
+      "3ad2990f5526beef56b9efe18a57e8d5"
+    ],
+    [
+      "Parsers.ECCurveType.EcCurveType.serialize32_maybe_ecCurveType_key",
+      3,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.ECCurveType.EcCurveType.ecCurveType__uu___haseq"
+      ],
+      0,
+      "c356b6fe8e36f210ee9ea759b142e383"
+    ],
+    [
+      "Parsers.ECCurveType.EcCurveType.serialize32_maybe_ecCurveType_key",
+      4,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.ECCurveType.EcCurveType.ecCurveType__uu___haseq"
+      ],
+      0,
+      "a8de9a0a611bd3fc6655359780f032e5"
+    ],
+    [
+      "Parsers.ECCurveType.EcCurveType.ecCurveType_serializer32",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "assumption_Parsers.ECCurveType.EcCurveType.ecCurveType__uu___haseq",
+        "equation_Parsers.ECCurveType.EcCurveType.ecCurveType_parser",
+        "equation_Parsers.ECCurveType.EcCurveType.ecCurveType_serializer"
+      ],
+      0,
+      "86d1c0bee28cd7a86cae0ab3c4521e16"
+    ],
+    [
+      "Parsers.ECCurveType.EcCurveType.ecCurveType_size32",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "208749ec7d8fda85ae00460ee282edd3"
+    ]
+  ]
+]

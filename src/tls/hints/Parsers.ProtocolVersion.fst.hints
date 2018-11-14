@@ -1,1 +1,375 @@
-[ "Y/o=D1ò3ê»gÇ\u001drŸç", [] ]
+[
+  "cp\u001f;‰òØ\tS?éÛìsí,",
+  [
+    [
+      "Parsers.ProtocolVersion.protocolVersion_repr_eq",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "equation_Parsers.ProtocolVersion.protocolVersion_repr"
+      ],
+      0,
+      "2b28379b7256e5ee3d42edf22512ac29"
+    ],
+    [
+      "Parsers.ProtocolVersion.protocolVersion",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
+      0,
+      "acca541eb3b46ecf21bd9f30c93f0f17"
+    ],
+    [
+      "Parsers.ProtocolVersion.__proj__Unknown_protocolVersion__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.ProtocolVersion.Unknown_protocolVersion",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Parsers.ProtocolVersion_Tm_refine_de0484a62d509e9de813bfe30726d436"
+      ],
+      0,
+      "46ef44382beb6c4488232123891fffda"
+    ],
+    [
+      "Parsers.ProtocolVersion.protocolVersion_enum",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
+      ],
+      0,
+      "0a362225da9303805ddd5ca5b3510a77"
+    ],
+    [
+      "Parsers.ProtocolVersion.synth_protocolVersion",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
+      ],
+      0,
+      "5708ae35ee0ce08975fc7c8e430dcb6b"
+    ],
+    [
+      "Parsers.ProtocolVersion.synth_protocolVersion",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_FStar.UInt16.t__uu___haseq",
+        "data_elim_LowParse.Spec.Enum.Unknown",
+        "disc_equation_LowParse.Spec.Enum.Known",
+        "disc_equation_LowParse.Spec.Enum.Unknown",
+        "equation_LowParse.Spec.Enum.unknown_enum_repr",
+        "equation_Parsers.ProtocolVersion.protocolVersion_enum",
+        "fuel_guarded_inversion_LowParse.Spec.Enum.maybe_enum_key",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_LowParse.Spec.Enum.Unknown__0",
+        "refinement_interpretation_LowParse.Spec.Enum_Tm_refine_42952339d1ff6a9a240497d58590f0b2"
+      ],
+      0,
+      "ac349d63ecc88fd7ca2b820f5f46c472"
+    ],
+    [
+      "Parsers.ProtocolVersion.synth_protocolVersion_inv",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_f537159ed795b314b4e58c260361ae86",
+        "Prims_pretyping_f8666440faa91836cc5a13998af863fc",
+        "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq",
+        "b2t_def", "bool_inversion", "bool_typing",
+        "equation_Parsers.ProtocolVersion.protocolVersion_enum",
+        "equation_Prims.l_imp", "equation_Prims.squash", "l_imp-interp",
+        "primitive_Prims.op_Negation", "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Parsers.ProtocolVersion_Tm_refine_50c38c98a0b56c240bec156a692f6e9d",
+        "refinement_interpretation_Parsers.ProtocolVersion_Tm_refine_d90b1e16322b7158745ca5d3e3fab916",
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "typing_Parsers.ProtocolVersion.uu___is_Unknown_protocolVersion",
+        "unit_typing"
+      ],
+      0,
+      "ed59c4dd91cf6eeb6ac35f0b163a7c4b"
+    ],
+    [
+      "Parsers.ProtocolVersion.lemma_synth_protocolVersion_inv'",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq",
+        "equation_LowParse.Spec.Combinators.synth_inverse",
+        "equation_Parsers.ProtocolVersion.protocolVersion_enum",
+        "equation_Prims.l_Forall", "equation_Prims.squash",
+        "l_quant_interp__16840",
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "token_correspondence_Parsers.ProtocolVersion.synth_protocolVersion",
+        "token_correspondence_Parsers.ProtocolVersion.synth_protocolVersion_inv"
+      ],
+      0,
+      "d3f1155f30bbf0c31c5b12178bbe23b3"
+    ],
+    [
+      "Parsers.ProtocolVersion.lemma_synth_protocolVersion_inj",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
+      ],
+      0,
+      "ec6f002b1fb6b7773cdc3a95e42b6bae"
+    ],
+    [
+      "Parsers.ProtocolVersion.lemma_synth_protocolVersion_inv",
+      1,
+      0,
+      0,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq",
+        "constructor_distinct_LowParse.Spec.Enum.Known",
+        "constructor_distinct_LowParse.Spec.Enum.Unknown",
+        "equation_LowParse.Spec.Combinators.synth_inverse",
+        "equation_Parsers.ProtocolVersion.protocolVersion_enum",
+        "equation_Parsers.ProtocolVersion.synth_protocolVersion",
+        "equation_Parsers.ProtocolVersion.synth_protocolVersion_inv",
+        "projection_inverse_LowParse.Spec.Enum.Known__0",
+        "projection_inverse_LowParse.Spec.Enum.Known_e",
+        "projection_inverse_LowParse.Spec.Enum.Known_key",
+        "projection_inverse_LowParse.Spec.Enum.Known_repr",
+        "projection_inverse_LowParse.Spec.Enum.Unknown__0",
+        "projection_inverse_LowParse.Spec.Enum.Unknown_e",
+        "projection_inverse_LowParse.Spec.Enum.Unknown_key",
+        "projection_inverse_LowParse.Spec.Enum.Unknown_repr",
+        "token_correspondence_Parsers.ProtocolVersion.synth_protocolVersion",
+        "token_correspondence_Parsers.ProtocolVersion.synth_protocolVersion_inv"
+      ],
+      0,
+      "17e910db65882428a057ca5a850ab626"
+    ],
+    [
+      "Parsers.ProtocolVersion.parse_maybe_protocolVersion_key",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
+      ],
+      0,
+      "d4cea8b885a4cfbcba0f058c7bc527ac"
+    ],
+    [
+      "Parsers.ProtocolVersion.serialize_maybe_protocolVersion_key",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq",
+        "equation_Parsers.ProtocolVersion.parse_maybe_protocolVersion_key"
+      ],
+      0,
+      "5bc311f8d730b29c80c7dfe685667578"
+    ],
+    [
+      "Parsers.ProtocolVersion.protocolVersion_parser",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
+      ],
+      0,
+      "06a5d0290540538250da8f6339d06334"
+    ],
+    [
+      "Parsers.ProtocolVersion.protocolVersion_serializer",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq",
+        "equation_Parsers.ProtocolVersion.protocolVersion_parser"
+      ],
+      0,
+      "b61dbdbccb698e19c53da979227c54c6"
+    ],
+    [
+      "Parsers.ProtocolVersion.parse32_maybe_protocolVersion_key",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq",
+        "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
+        "equation_Parsers.ProtocolVersion.protocolVersion_enum",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Prims.Cons_a",
+        "projection_inverse_Prims.Cons_hd",
+        "projection_inverse_Prims.Cons_tl"
+      ],
+      0,
+      "9ef082af94125d8846cd7e8e08120ab0"
+    ],
+    [
+      "Parsers.ProtocolVersion.parse32_maybe_protocolVersion_key",
+      2,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq",
+        "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
+        "equation_Parsers.ProtocolVersion.protocolVersion_enum",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Prims.Cons_a",
+        "projection_inverse_Prims.Cons_hd",
+        "projection_inverse_Prims.Cons_tl"
+      ],
+      0,
+      "98aa98ee90508fff6197105993fd2694"
+    ],
+    [
+      "Parsers.ProtocolVersion.parse32_maybe_protocolVersion_key",
+      3,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
+      ],
+      0,
+      "c009c55302c3f8bb336c1ef799e1fe0d"
+    ],
+    [
+      "Parsers.ProtocolVersion.parse32_maybe_protocolVersion_key",
+      4,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
+      ],
+      0,
+      "a093c915a714b4e47c0f184da0887068"
+    ],
+    [
+      "Parsers.ProtocolVersion.protocolVersion_parser32",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq",
+        "equation_Parsers.ProtocolVersion.protocolVersion_parser"
+      ],
+      0,
+      "c6ab602efc3108e1e5b9d06f69db6d3e"
+    ],
+    [
+      "Parsers.ProtocolVersion.serialize32_maybe_protocolVersion_key",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq",
+        "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
+        "equation_Parsers.ProtocolVersion.protocolVersion_enum",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Prims.Cons_a",
+        "projection_inverse_Prims.Cons_hd",
+        "projection_inverse_Prims.Cons_tl"
+      ],
+      0,
+      "9054f3313939059fbc1d7cb5dc175e3d"
+    ],
+    [
+      "Parsers.ProtocolVersion.serialize32_maybe_protocolVersion_key",
+      2,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq",
+        "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
+        "equation_Parsers.ProtocolVersion.protocolVersion_enum",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Prims.Cons_a",
+        "projection_inverse_Prims.Cons_hd",
+        "projection_inverse_Prims.Cons_tl"
+      ],
+      0,
+      "33b63ea86a57cf3da362ba5186c8c7cb"
+    ],
+    [
+      "Parsers.ProtocolVersion.serialize32_maybe_protocolVersion_key",
+      3,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
+      ],
+      0,
+      "c6e5cf12b3271da79724d6ed45c860d8"
+    ],
+    [
+      "Parsers.ProtocolVersion.serialize32_maybe_protocolVersion_key",
+      4,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
+      ],
+      0,
+      "0b106339ebd5b47a199a268ac391a12a"
+    ],
+    [
+      "Parsers.ProtocolVersion.protocolVersion_serializer32",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq",
+        "equation_Parsers.ProtocolVersion.protocolVersion_parser",
+        "equation_Parsers.ProtocolVersion.protocolVersion_serializer"
+      ],
+      0,
+      "ef996249428b4bdf1976970b6a6ca63d"
+    ],
+    [
+      "Parsers.ProtocolVersion.protocolVersion_size32",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "be4d0cdc9dbe306a5183a6514b8ef6cd"
+    ]
+  ]
+]

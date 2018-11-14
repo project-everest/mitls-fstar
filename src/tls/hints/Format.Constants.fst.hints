@@ -1,1 +1,44 @@
-[ "_×»ªF|c\u001f†CèŸ,é\u000fô", [] ]
+[
+  "_×»ªF|c\u001f†CèŸ,é\u000fô",
+  [
+    [
+      "Format.Constants.is_constantByte",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
+      0,
+      "42cf8ea49af90504ad6e0d6b07b5dd19"
+    ],
+    [
+      "Format.Constants.constantByte_parser32",
+      1,
+      2,
+      1,
+      [ "@query", "equation_Format.Constants.constantByte_parser" ],
+      0,
+      "22da007d2c04cba188c289767047621e"
+    ],
+    [
+      "Format.Constants.constantByte_serializer",
+      1,
+      2,
+      1,
+      [ "@query", "equation_Format.Constants.constantByte_parser" ],
+      0,
+      "71ec4e2e70625c3d79e69d5bb6d11b28"
+    ],
+    [
+      "Format.Constants.constantByte_serializer32",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_Format.Constants.constantByte_parser",
+        "equation_Format.Constants.constantByte_serializer"
+      ],
+      0,
+      "3641e7e109bf9d934bc09e6a95a22cd9"
+    ]
+  ]
+]
