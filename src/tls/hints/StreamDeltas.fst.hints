@@ -1,1 +1,106 @@
-[ "˛Z$ûÿ}’÷ºÊK\u007f\u0002≠P+", [] ]
+[
+  "˛Z$ûÿ}’÷ºÊK\u007f\u0002≠P+",
+  [
+    [
+      "StreamDeltas.project_one_frag",
+      1,
+      1,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
+        "equation_DataStream.fragment",
+        "equation_FStar.Pervasives.Native.fst",
+        "equation_FStar.Pervasives.Native.snd", "equation_FStar.UInt.fits",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "equation_FStar.UInt.uint_t", "equation_FStar.UInt32.n",
+        "equation_Prims.nat", "equation_Range.fragment_range",
+        "equation_Range.frange", "equation_Range.range",
+        "equation_Range.wider", "equation_Range.within",
+        "equation_StreamDeltas.id",
+        "equation_TLSConstants.max_TLSPlaintext_fragment_length",
+        "function_token_typing_FStar.UInt32.n", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_LessThanOrEqual",
+        "proj_equation_FStar.Pervasives.Native.Mktuple2__1",
+        "proj_equation_FStar.Pervasives.Native.Mktuple2__2",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
+        "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
+        "refinement_interpretation_DataStream_Tm_refine_d8bdfb1b483f1471db6abe90c9377c69",
+        "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
+        "refinement_interpretation_Range_Tm_refine_e48af6218e3040b64df43b6a7c255461",
+        "refinement_interpretation_TLSInfo_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b",
+        "typing_DataStream.ghost_repr", "typing_FStar.Bytes.len",
+        "typing_FStar.UInt32.v"
+      ],
+      0,
+      "9bc038b5ede19ff3026ec267723428cd"
+    ],
+    [
+      "StreamDeltas.stream_deltas_snoc",
+      1,
+      1,
+      1,
+      [
+        "@query", "equation_FStar.Seq.Properties.snoc",
+        "equation_StreamDeltas.project_deltas"
+      ],
+      0,
+      "813d10f39c0c9503afebd92a5ea5d4c4"
+    ],
+    [
+      "StreamDeltas.project_fragment_deltas",
+      1,
+      1,
+      1,
+      [ "@query" ],
+      0,
+      "c473feb4fb24a21843dd62dfb6fc390a"
+    ],
+    [
+      "StreamDeltas.project_fragment_deltas",
+      2,
+      1,
+      1,
+      [
+        "@query", "equation_TLSInfo.authId",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "8251cd1ad7d34bc541cb521ca8c57fe4"
+    ],
+    [
+      "StreamDeltas.stream_deltas_snoc2",
+      1,
+      1,
+      1,
+      [
+        "@query", "equation_TLSInfo.authId",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "d9b7794a5a55fca13fc4c3f94595566e"
+    ],
+    [
+      "StreamDeltas.encrypt",
+      1,
+      1,
+      1,
+      [ "@query" ],
+      0,
+      "92d8eae553f1a008bd5858330d0068c2"
+    ],
+    [
+      "StreamDeltas.encrypt",
+      2,
+      1,
+      1,
+      [
+        "@query", "equation_TLSInfo.authId",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "c2c703a8627624c775f71e1e1ad6ef49"
+    ]
+  ]
+]

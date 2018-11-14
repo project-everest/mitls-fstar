@@ -18,7 +18,9 @@ SOURCES = \
   EverCrypt_HMAC.c \
   EverCrypt_StaticConfig.c \
   EverCrypt_Vale.c \
+  EverCrypt_Kremlib.c \
   evercrypt_vale_stubs.c \
+  AEAD_Poly1305_64.c \
   Hacl_Chacha20.c \
   Hacl_Chacha20Poly1305.c \
   Hacl_Curve25519.c \
