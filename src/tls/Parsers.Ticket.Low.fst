@@ -48,13 +48,16 @@ let write_boolean =
     (fun x -> synth_boolean_inv x)
     ()
 
+#reset-options "--max_fuel 0 --max_ifuel 0"
+
 let valid_ticketContents12_intro h input pos =
+  synth_ticketContents12_injective();
   LP.valid_synth h ticketContents12'_parser synth_ticketContents12 input pos;
   LP.valid_nondep_then h (protocolVersion_parser `LP.nondep_then` cipherSuite_parser `LP.nondep_then` boolean_parser) ticketContents12_master_secret_parser input pos;
   LP.valid_nondep_then h (protocolVersion_parser `LP.nondep_then` cipherSuite_parser) boolean_parser input pos;
   LP.valid_nondep_then h protocolVersion_parser cipherSuite_parser input pos
 
-#reset-options "--z3rlimit 256 --max_ifuel 8 --initial_ifuel 8 --max_fuel 2 --z3cliopt smt.arith.nl=false --using_facts_from '* -FStar.Tactics -FStar.Reflection'"
+#set-options "--z3rlimit 16 --print_z3_statistics"
 
 let valid_ticketContents13_intro h input pos =
   let cs = LP.contents cipherSuite_parser h input pos in
@@ -92,13 +95,13 @@ let valid_ticketContents13_intro h input pos =
   `LP.nondep_then` LP.parse_u32
   `LP.nondep_then` LP.parse_u32
   ) ticketContents13_custom_data_parser input pos;
+  assert_norm (ticketContents13' == LP.get_parser_type (
+    cipherSuite_parser
+    `LP.nondep_then` ticketContents13_rms_parser
+    `LP.nondep_then` ticketContents13_nonce_parser
+    `LP.nondep_then` LP.parse_u32
+    `LP.nondep_then` LP.parse_u32
+    `LP.nondep_then` ticketContents13_custom_data_parser
+  )); // because of refinements
   synth_ticketContents13_injective ();
-  LP.valid_synth_intro h ticketContents13'_parser synth_ticketContents13 input pos;
-  assert_norm (synth_ticketContents13 (((((cs, rms), nonce), creation_time), age_add), custom_data) == ({
-    cs = cs;
-    rms = rms;
-    nonce = nonce;
-    creation_time = creation_time;
-    age_add = age_add;
-    custom_data = custom_data;
-  }))
+  LP.valid_synth_intro h ticketContents13'_parser synth_ticketContents13 input pos
