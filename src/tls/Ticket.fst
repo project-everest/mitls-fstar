@@ -11,6 +11,8 @@ open TLSInfo
 
 module AE = AEADProvider
 
+module PTL = Parsers.Ticket.Low // just to 1/ verify that module, and 2/ pollute the context with some Spec definitions (integers, vlbytes), and see what happens
+
 #set-options "--admit_smt_queries true"
 
 val discard: bool -> ST unit
