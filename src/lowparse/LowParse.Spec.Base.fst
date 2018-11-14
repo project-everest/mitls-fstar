@@ -325,12 +325,21 @@ let parser
 : Tot Type0
 = (f: bare_parser t { parser_kind_prop k f } )
 
+inline_for_extraction
 let get_parser_kind
   (#k: parser_kind)
   (#t: Type0)
   (p: parser k t)
 : Tot parser_kind
 = k
+
+inline_for_extraction
+let get_parser_type
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+: Tot Type0
+= t
 
 let parser_kind_prop_intro
   (k: parser_kind)
