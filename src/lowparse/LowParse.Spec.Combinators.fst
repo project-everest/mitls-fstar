@@ -1028,6 +1028,15 @@ let synth_inverse_synth_injective
   (ensures (synth_injective f))
 = ()
 
+let synth_inverse_synth_injective'
+  (#t1: Type0)
+  (#t2: Type0)
+  (g: (t2 -> GTot t1))
+  (f: (t1 -> GTot t2))
+  (u: squash (synth_inverse g f))
+: Tot (squash (synth_injective f))
+= ()
+
 let serialize_synth
   (#k: parser_kind)
   (#t1: Type0)
