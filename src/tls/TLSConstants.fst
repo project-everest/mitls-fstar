@@ -302,46 +302,46 @@ val sigHashAlg_of_signatureScheme:
 let sigHashAlg_of_signatureScheme =
   let open Hashing.Spec in
   function
-  | RSA_PKCS1_SHA256       -> (RSASIG, Hash SHA256)
-  | RSA_PKCS1_SHA384       -> (RSASIG, Hash SHA384)
-  | RSA_PKCS1_SHA512       -> (RSASIG, Hash SHA512)
-  | ECDSA_SECP256R1_SHA256 -> (ECDSA,  Hash SHA256)
-  | ECDSA_SECP384R1_SHA384 -> (ECDSA,  Hash SHA384)
-  | ECDSA_SECP521R1_SHA512 -> (ECDSA,  Hash SHA512)
-  | RSA_PSS_SHA256         -> (RSAPSS, Hash SHA256)
-  | RSA_PSS_SHA384         -> (RSAPSS, Hash SHA384)
-  | RSA_PSS_SHA512         -> (RSAPSS, Hash SHA512)
-//  | ED25519_SHA512         -> (EdDSA,  Hash SHA512)
+  | RSA_PKCS1_SHA256       -> (RSASIG, Hash SHA2_256)
+  | RSA_PKCS1_SHA384       -> (RSASIG, Hash SHA2_384)
+  | RSA_PKCS1_SHA512       -> (RSASIG, Hash SHA2_512)
+  | ECDSA_SECP256R1_SHA256 -> (ECDSA,  Hash SHA2_256)
+  | ECDSA_SECP384R1_SHA384 -> (ECDSA,  Hash SHA2_384)
+  | ECDSA_SECP521R1_SHA512 -> (ECDSA,  Hash SHA2_512)
+  | RSA_PSS_SHA256         -> (RSAPSS, Hash SHA2_256)
+  | RSA_PSS_SHA384         -> (RSAPSS, Hash SHA2_384)
+  | RSA_PSS_SHA512         -> (RSAPSS, Hash SHA2_512)
+//  | ED25519_SHA512         -> (EdDSA,  Hash SHA2_512)
 //  | ED448_SHAKE256         -> (EdDSA,  Hash SHAKE256)
   | RSA_PKCS1_SHA1         -> (RSASIG, Hash SHA1)
   | RSA_PKCS1_MD5SHA1      -> (RSASIG, MD5SHA1)
   | ECDSA_SHA1             -> (ECDSA,  Hash SHA1)
   | DSA_SHA1               -> (DSA,    Hash SHA1)
-  | DSA_SHA256             -> (DSA,    Hash SHA256)
-  | DSA_SHA384             -> (DSA,    Hash SHA384)
-  | DSA_SHA512             -> (DSA,    Hash SHA512)
+  | DSA_SHA256             -> (DSA,    Hash SHA2_256)
+  | DSA_SHA384             -> (DSA,    Hash SHA2_384)
+  | DSA_SHA512             -> (DSA,    Hash SHA2_512)
 
 val signatureScheme_of_sigHashAlg: sigAlg -> hashAlg -> signatureScheme
 let signatureScheme_of_sigHashAlg sa ha =
   let open Hashing.Spec in
   match sa, ha with
-  | (RSASIG, Hash SHA256) -> RSA_PKCS1_SHA256
-  | (RSASIG, Hash SHA384) -> RSA_PKCS1_SHA384
-  | (RSASIG, Hash SHA512) -> RSA_PKCS1_SHA512
-  | (ECDSA,  Hash SHA256) -> ECDSA_SECP256R1_SHA256
-  | (ECDSA,  Hash SHA384) -> ECDSA_SECP384R1_SHA384
-  | (ECDSA,  Hash SHA512) -> ECDSA_SECP521R1_SHA512
-  | (RSAPSS, Hash SHA256) -> RSA_PSS_SHA256
-  | (RSAPSS, Hash SHA384) -> RSA_PSS_SHA384
-  | (RSAPSS, Hash SHA512) -> RSA_PSS_SHA512
-  //| (EdDSA,  Hash SHA512) -> ED25519_SHA512
+  | (RSASIG, Hash SHA2_256) -> RSA_PKCS1_SHA256
+  | (RSASIG, Hash SHA2_384) -> RSA_PKCS1_SHA384
+  | (RSASIG, Hash SHA2_512) -> RSA_PKCS1_SHA512
+  | (ECDSA,  Hash SHA2_256) -> ECDSA_SECP256R1_SHA256
+  | (ECDSA,  Hash SHA2_384) -> ECDSA_SECP384R1_SHA384
+  | (ECDSA,  Hash SHA2_512) -> ECDSA_SECP521R1_SHA512
+  | (RSAPSS, Hash SHA2_256) -> RSA_PSS_SHA256
+  | (RSAPSS, Hash SHA2_384) -> RSA_PSS_SHA384
+  | (RSAPSS, Hash SHA2_512) -> RSA_PSS_SHA512
+  //| (EdDSA,  Hash SHA2_512) -> ED25519_SHA512
   //| (EdDSA,  Hash SHAKE256) -> ED448_SHAKE256
   | (RSASIG, Hash SHA1)   -> RSA_PKCS1_SHA1
   | (ECDSA,  Hash SHA1)   -> ECDSA_SHA1
   | (DSA,    Hash SHA1)   -> DSA_SHA1
-  | (DSA,    Hash SHA256) -> DSA_SHA256
-  | (DSA,    Hash SHA384) -> DSA_SHA384
-  | (DSA,    Hash SHA512) -> DSA_SHA512
+  | (DSA,    Hash SHA2_256) -> DSA_SHA256
+  | (DSA,    Hash SHA2_384) -> DSA_SHA384
+  | (DSA,    Hash SHA2_512) -> DSA_SHA512
   | (RSASIG, MD5SHA1)     -> RSA_PKCS1_MD5SHA1
   | _ -> // Map everything else to OBSOLETE 0x0000
     lemma_repr_bytes_values 0x0000;
@@ -427,7 +427,7 @@ type prePrfAlg =
   | PRF_SSL3_nested         // MD5(SHA1(...)) for extraction and keygen
   | PRF_SSL3_concat         // MD5 @| SHA1    for VerifyData tags
   | PRF_TLS_1p01 of prflabel                       // MD5 xor SHA1
-  | PRF_TLS_1p2 : prflabel -> macAlg -> prePrfAlg  // typically SHA256 but may depend on CS
+  | PRF_TLS_1p2 : prflabel -> macAlg -> prePrfAlg  // typically SHA2_256 but may depend on CS
   | PRF_TLS_1p3 // TBC
 
 (** PRF associations *)
@@ -444,9 +444,9 @@ type vdAlg_t = protocolVersion * cipherSuite
 val prfMacAlg_of_ciphersuite_aux: cipherSuite -> Tot (option macAlg)
 let prfMacAlg_of_ciphersuite_aux =
   let open Hashing.Spec in function
-  | CipherSuite  _ _  (MtE  _ _ )   -> Some SHA256
+  | CipherSuite  _ _  (MtE  _ _ )   -> Some SHA2_256
   | CipherSuite  _ _  (AEAD _ hAlg) -> Some hAlg
-  | CipherSuite  _ _  (MACOnly _)   -> Some SHA256 //MK was (MACOnly hAlg) should it also be be (HMAC hAlg)?
+  | CipherSuite  _ _  (MACOnly _)   -> Some SHA2_256 //MK was (MACOnly hAlg) should it also be be (HMAC hAlg)?
   | _                               -> None
 
 (** Determine if the tuple PV and CS is the correct association with PRF *)
@@ -473,9 +473,9 @@ let prfMacAlg_of_ciphersuite : require_some prfMacAlg_of_ciphersuite_aux =
 private
 let verifyDataHashAlg_of_ciphersuite_aux =
   let open Hashing.Spec in function
-  | CipherSuite _ _ (MtE  _ _) -> Some SHA256
+  | CipherSuite _ _ (MtE  _ _) -> Some SHA2_256
   | CipherSuite _ _ (AEAD _ hAlg) -> Some hAlg
-  | CipherSuite _ _ (MACOnly hAlg) -> Some SHA256
+  | CipherSuite _ _ (MACOnly hAlg) -> Some SHA2_256
   | CipherSuite13 _ hAlg -> Some hAlg
   | _ -> None
 

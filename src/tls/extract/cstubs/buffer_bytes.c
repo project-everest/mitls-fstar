@@ -1,4 +1,4 @@
-#include "FStar.h"
+#include "Mitls_Kremlib.h"
 
 FStar_Bytes_bytes BufferBytes_to_bytes(Prims_nat l, uint8_t *buf) {
   if (buf == NULL || l == 0)

@@ -7,7 +7,6 @@ SOURCES = \
   AEADProvider.c \
   Alert.c \
   buffer_bytes.c \
-  C.c \
   Cert.c \
   CipherSuite.c \
   CommonDH.c \
@@ -18,7 +17,6 @@ SOURCES = \
   FFI.c \
   Flags.c \
   Format.c \
-  FStar.c \
   HandshakeLog.c \
   HandshakeMessages.c \
   Hashing.c \
@@ -43,7 +41,8 @@ SOURCES = \
   TLS.c \
   TLSConstants.c \
   TLSError.c \
-  TLSInfo.c
+  TLSInfo.c \
+  Mitls_Kremlib.c
 
 libmitls_code.lib: $(SOURCES:.c=.obj) $(PLATFORM_OBJS)
   lib /nologo /out:libmitls_code.lib $**

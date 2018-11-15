@@ -1,5 +1,5 @@
 [
-  "wcç˘xÖ§m}$$†ÅSˆ$",
+  "Hb\nÓªs\"\u000eáZ¯±˜ø•¢",
   [
     [
       "Range.rbytes",
@@ -9,14 +9,15 @@
       [
         "@MaxIFuel_assumption", "@query",
         "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "equation_FStar.UInt.uint_t", "equation_FStar.UInt32.n",
+        "equation_FStar.UInt32.n", "equation_Prims.nat",
         "function_token_typing_FStar.UInt32.n",
-        "lemma_FStar.Buffer.lemma_size",
-        "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
-        "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
+        "function_token_typing_FStar.UInt8.t",
+        "lemma_FStar.Bytes.length_reveal",
+        "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length"
       ],
       0,
-      "5578a85a91715a88e61a5e63c7481649"
+      "ceb76309025ba03f7286f2dbd2a55804"
     ],
     [
       "Range.point",
@@ -32,7 +33,7 @@
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__2"
       ],
       0,
-      "a0693bff9ffa0d7b7e4215a0108dd650"
+      "8b77ac939367c98e932a7130a1aaec53"
     ],
     [
       "Range.sum",
@@ -53,7 +54,7 @@
         "refinement_interpretation_Range_Tm_refine_9eec96cf9e7424057db89d430151765e"
       ],
       0,
-      "ee642486f62483f1a05916ec4535dbda"
+      "b5089106912b3bdfb063d9cb43a9352c"
     ],
     [
       "Range.aeAlg",
@@ -65,7 +66,7 @@
         "refinement_interpretation_Crypto.Indexing_Tm_refine_27bc248aea929afc1c455a4ca114e85e"
       ],
       0,
-      "302d6f6a529e56d7dea0ebeb5c445284"
+      "4ee473ec78e5380a5c416e9deb59bbcd"
     ],
     [
       "Range.ivSize",
@@ -92,7 +93,7 @@
         "typing_EverCrypt.block_cipher_blockLen", "typing_FStar.UInt32.v"
       ],
       0,
-      "9a9c7a80fd4e68779423f2b784ff6515"
+      "75da7042c266ae10e27936c0cee5cd20"
     ],
     [
       "Range.fixedPadSize",
@@ -112,7 +113,7 @@
         "typing_CipherSuite.__proj__MtE__item___0"
       ],
       0,
-      "731fdd42af885a1ede7817f048846b56"
+      "52109fba36320042608497495bd6e21c"
     ],
     [
       "Range.maxPadSize",
@@ -152,7 +153,7 @@
         "typing_EverCrypt.block_cipher_blockLen", "typing_FStar.UInt32.v"
       ],
       0,
-      "1c0683b41b99083716024ae17188a3d9"
+      "507bf84c74bf27752616e07ee04f3e8b"
     ],
     [
       "Range.minimalPadding",
@@ -175,29 +176,29 @@
         "equation_FStar.Monotonic.HyperHeap.disjoint",
         "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
         "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
-        "equation_FStar.UInt.uint_t", "equation_FStar.UInt16.n",
-        "equation_FStar.UInt32.n", "equation_FStar.UInt8.n",
-        "equation_LowParse.SLow.Base.u32_max", "equation_Mem.disjoint",
-        "equation_Mem.rgn", "equation_Mem.tls_define_region",
-        "equation_Mem.tls_rgn", "equation_Mem.tls_tables_region",
-        "equation_Nonce.random", "equation_Prims.nat",
+        "equation_FStar.UInt.uint_t", "equation_FStar.UInt32.n",
+        "equation_FStar.UInt8.n", "equation_LowParse.SLow.Base.u32_max",
+        "equation_Mem.disjoint", "equation_Mem.rgn",
+        "equation_Mem.tls_define_region", "equation_Mem.tls_rgn",
+        "equation_Mem.tls_tables_region", "equation_Nonce.random",
+        "equation_Prims.nat", "equation_Spec.Hash.Helpers.size_block_w",
         "equation_TLSInfo.aeAlg_of_id", "equation_TLSInfo.random",
         "equation_TLSInfo.srand", "fuel_guarded_inversion_CipherSuite.aeAlg",
         "fuel_guarded_inversion_CipherSuite.encAlg",
         "fuel_guarded_inversion_EverCrypt.block_cipher_alg",
         "fuel_guarded_inversion_TLSInfo.id",
         "function_token_typing_FStar.Bytes.empty_bytes",
-        "function_token_typing_FStar.UInt16.n",
         "function_token_typing_FStar.UInt32.n",
         "function_token_typing_FStar.UInt8.n",
         "function_token_typing_LowParse.SLow.Base.u32_max",
         "function_token_typing_Mem.tls_define_region",
-        "function_token_typing_Mem.tls_tables_region", "int_inversion",
-        "lemma_FStar.Buffer.lemma_size", "lemma_FStar.UInt32.uv_inv",
-        "lemma_FStar.UInt32.vu_inv", "primitive_Prims.op_AmpAmp",
-        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Modulus",
-        "primitive_Prims.op_Negation", "primitive_Prims.op_Subtraction",
-        "proj_equation_CipherSuite.MtE__0",
+        "function_token_typing_Mem.tls_tables_region",
+        "function_token_typing_Spec.Hash.Helpers.size_block_w",
+        "int_inversion", "lemma_FStar.Buffer.lemma_size",
+        "lemma_FStar.UInt32.uv_inv", "lemma_FStar.UInt32.vu_inv",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Modulus", "primitive_Prims.op_Negation",
+        "primitive_Prims.op_Subtraction", "proj_equation_CipherSuite.MtE__0",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_CipherSuite_Tm_refine_ddf57db2035acee292e3094b64854033",
@@ -214,7 +215,7 @@
         "typing_Mem.disjoint", "typing_Mem.tls_define_region"
       ],
       0,
-      "a6876ef6ff126f6d103be3852ea175b2"
+      "585cc74f06412e7aba932731d19b67e7"
     ],
     [
       "Range.minimalPadding_at_least_fixedPadSize",
@@ -235,28 +236,29 @@
         "equation_FStar.Monotonic.HyperHeap.disjoint",
         "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
         "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
-        "equation_FStar.UInt.uint_t", "equation_FStar.UInt16.n",
-        "equation_FStar.UInt32.n", "equation_FStar.UInt8.n",
-        "equation_LowParse.SLow.Base.u32_max", "equation_Mem.disjoint",
-        "equation_Mem.rgn", "equation_Mem.tls_define_region",
-        "equation_Mem.tls_rgn", "equation_Mem.tls_tables_region",
-        "equation_Nonce.random", "equation_Prims.nat",
-        "equation_Range.fixedPadSize", "equation_Range.minimalPadding",
+        "equation_FStar.UInt.uint_t", "equation_FStar.UInt32.n",
+        "equation_FStar.UInt8.n", "equation_LowParse.SLow.Base.u32_max",
+        "equation_Mem.disjoint", "equation_Mem.rgn",
+        "equation_Mem.tls_define_region", "equation_Mem.tls_rgn",
+        "equation_Mem.tls_tables_region", "equation_Nonce.random",
+        "equation_Prims.nat", "equation_Range.fixedPadSize",
+        "equation_Range.minimalPadding",
+        "equation_Spec.Hash.Helpers.size_block_w",
         "equation_TLSInfo.aeAlg_of_id", "equation_TLSInfo.random",
         "equation_TLSInfo.srand",
         "fuel_guarded_inversion_EverCrypt.block_cipher_alg",
         "fuel_guarded_inversion_TLSInfo.id",
         "function_token_typing_FStar.Bytes.empty_bytes",
-        "function_token_typing_FStar.UInt16.n",
         "function_token_typing_FStar.UInt32.n",
         "function_token_typing_FStar.UInt8.n",
         "function_token_typing_LowParse.SLow.Base.u32_max",
         "function_token_typing_Mem.tls_define_region",
-        "function_token_typing_Mem.tls_tables_region", "int_inversion",
-        "lemma_FStar.UInt32.uv_inv", "lemma_FStar.UInt32.vu_inv",
-        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
-        "primitive_Prims.op_Modulus", "primitive_Prims.op_Negation",
-        "primitive_Prims.op_Subtraction",
+        "function_token_typing_Mem.tls_tables_region",
+        "function_token_typing_Spec.Hash.Helpers.size_block_w",
+        "int_inversion", "lemma_FStar.UInt32.uv_inv",
+        "lemma_FStar.UInt32.vu_inv", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Modulus",
+        "primitive_Prims.op_Negation", "primitive_Prims.op_Subtraction",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_CipherSuite.AEAD__0",
@@ -272,11 +274,11 @@
         "typing_EverCrypt.block_cipher_blockLen", "typing_FStar.Bytes.len",
         "typing_FStar.UInt.fits", "typing_FStar.UInt32.v",
         "typing_LowParse.SLow.Base.u32_max", "typing_Mem.disjoint",
-        "typing_Mem.tls_define_region", "typing_Range.minimalPadding",
-        "typing_TLSInfo.aeAlg_of_id"
+        "typing_Mem.tls_define_region", "typing_Range.fixedPadSize",
+        "typing_Range.minimalPadding", "typing_TLSInfo.aeAlg_of_id"
       ],
       0,
-      "e4cc0d904e047196a225ecb0160aaa35"
+      "0a1870543ac768eb607b4ba7d13fd92b"
     ],
     [
       "Range.minMaxPad",
@@ -302,22 +304,23 @@
         "equation_FStar.Pervasives.Native.snd", "equation_FStar.UInt.fits",
         "equation_FStar.UInt.max_int", "equation_FStar.UInt.min_int",
         "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
-        "equation_FStar.UInt16.n", "equation_FStar.UInt32.n",
-        "equation_FStar.UInt8.n", "equation_LowParse.SLow.Base.u32_max",
-        "equation_Mem.disjoint", "equation_Mem.rgn",
-        "equation_Mem.tls_define_region", "equation_Mem.tls_rgn",
-        "equation_Mem.tls_tables_region", "equation_Nonce.random",
-        "equation_Prims.nat", "equation_Range.fixedPadSize",
-        "equation_Range.id2", "equation_Range.maxPadSize",
-        "equation_TLSInfo.random", "equation_TLSInfo.srand",
-        "function_token_typing_FStar.UInt16.n",
-        "function_token_typing_FStar.UInt32.n",
+        "equation_FStar.UInt32.n", "equation_FStar.UInt8.n",
+        "equation_LowParse.SLow.Base.u32_max", "equation_Mem.disjoint",
+        "equation_Mem.rgn", "equation_Mem.tls_define_region",
+        "equation_Mem.tls_rgn", "equation_Mem.tls_tables_region",
+        "equation_Nonce.random", "equation_Prims.nat",
+        "equation_Range.fixedPadSize", "equation_Range.id2",
+        "equation_Range.maxPadSize",
+        "equation_Spec.Hash.Helpers.size_block_w", "equation_TLSInfo.random",
+        "equation_TLSInfo.srand", "function_token_typing_FStar.UInt32.n",
         "function_token_typing_FStar.UInt8.n",
         "function_token_typing_LowParse.SLow.Base.u32_max",
         "function_token_typing_Mem.tls_define_region",
-        "function_token_typing_Mem.tls_tables_region", "int_inversion",
-        "lemma_FStar.UInt32.vu_inv", "primitive_Prims.op_AmpAmp",
-        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Negation",
+        "function_token_typing_Mem.tls_tables_region",
+        "function_token_typing_Spec.Hash.Helpers.size_block_w",
+        "int_inversion", "lemma_FStar.UInt32.vu_inv",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Negation",
         "proj_equation_FStar.Pervasives.Native.Mktuple2__1",
         "proj_equation_FStar.Pervasives.Native.Mktuple2__2",
         "projection_inverse_BoxBool_proj_0",
@@ -341,7 +344,7 @@
         "unit_typing"
       ],
       0,
-      "d1d3ebf3badb98aa5307127fae62e5d2"
+      "f609f3732d1176fec3633b5e3837cc38"
     ],
     [
       "Range.valid_clen",
@@ -360,7 +363,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "e31c23c03ebadd589a94043149ec563e"
+      "613d06ecedf2ba97538109cd5f39c583"
     ],
     [
       "Range.min0",
@@ -372,7 +375,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "bb31f65a873b4b1424510192663eb6db"
+      "5333b0367c7ee9f88f261729dbbfc214"
     ],
     [
       "Range.minP",
@@ -386,7 +389,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "07c00770682697899dcfa73bc0496f79"
+      "92cdeddd5a5fe8cb84d387f15844f323"
     ],
     [
       "Range.cipherRangeClass",
@@ -415,28 +418,29 @@
         "equation_FStar.Pervasives.Native.snd", "equation_FStar.UInt.fits",
         "equation_FStar.UInt.max_int", "equation_FStar.UInt.min_int",
         "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
-        "equation_FStar.UInt16.n", "equation_FStar.UInt32.n",
-        "equation_FStar.UInt8.n", "equation_LowParse.SLow.Base.u32_max",
-        "equation_Mem.disjoint", "equation_Mem.rgn",
-        "equation_Mem.tls_define_region", "equation_Mem.tls_rgn",
-        "equation_Mem.tls_tables_region", "equation_Nonce.random",
-        "equation_Prims.nat", "equation_Range.aeAlg",
-        "equation_Range.fixedPadSize", "equation_Range.id2",
-        "equation_Range.ivSize", "equation_Range.maxPadSize",
-        "equation_Range.min0", "equation_Range.minP", "equation_Range.range",
+        "equation_FStar.UInt32.n", "equation_FStar.UInt8.n",
+        "equation_LowParse.SLow.Base.u32_max", "equation_Mem.disjoint",
+        "equation_Mem.rgn", "equation_Mem.tls_define_region",
+        "equation_Mem.tls_rgn", "equation_Mem.tls_tables_region",
+        "equation_Nonce.random", "equation_Prims.nat",
+        "equation_Range.aeAlg", "equation_Range.fixedPadSize",
+        "equation_Range.id2", "equation_Range.ivSize",
+        "equation_Range.maxPadSize", "equation_Range.min0",
+        "equation_Range.minP", "equation_Range.range",
         "equation_Range.valid_clen",
+        "equation_Spec.Hash.Helpers.size_block_w",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "equation_TLSInfo.aeAlg_of_id", "equation_TLSInfo.random",
         "equation_TLSInfo.srand", "fuel_guarded_inversion_CipherSuite.aeAlg",
         "fuel_guarded_inversion_CipherSuite.encAlg",
-        "function_token_typing_FStar.UInt16.n",
         "function_token_typing_FStar.UInt32.n",
         "function_token_typing_FStar.UInt8.n",
         "function_token_typing_LowParse.SLow.Base.u32_max",
         "function_token_typing_Mem.tls_define_region",
-        "function_token_typing_Mem.tls_tables_region", "int_inversion",
-        "lemma_FStar.UInt32.vu_inv", "primitive_Prims.op_AmpAmp",
-        "primitive_Prims.op_GreaterThanOrEqual",
+        "function_token_typing_Mem.tls_tables_region",
+        "function_token_typing_Spec.Hash.Helpers.size_block_w",
+        "int_inversion", "lemma_FStar.UInt32.vu_inv",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_GreaterThanOrEqual",
         "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Negation",
         "primitive_Prims.op_Subtraction",
         "proj_equation_CipherSuite.AEAD__0",
@@ -467,7 +471,7 @@
         "typing_Range.valid_clen", "unit_typing"
       ],
       0,
-      "a2190025f88a6f0b1dcb2d2db3ff1874"
+      "46661e46725eb48e6477fedb972b0428"
     ],
     [
       "Range.cipherRangeClass",
@@ -515,7 +519,7 @@
         "typing_Range.valid_clen"
       ],
       0,
-      "2672d4ade62bd937106037df6af3ebcd"
+      "81f8ab1f9b1c04cbe915ff4f701513e4"
     ],
     [
       "Range.cipherRangeClass_width",
@@ -527,7 +531,7 @@
         "refinement_interpretation_Range_Tm_refine_b8e8fca9b36c908b7b7c647450fae7dc"
       ],
       0,
-      "169d886c237f3a2fe4f32e80d9017351"
+      "89fd6ae27861351ad5cdeea36b170ebc"
     ],
     [
       "Range.cipherRangeClass_width",
@@ -565,7 +569,7 @@
         "typing_Range.minP"
       ],
       0,
-      "c09c41594c47fad662a3f66559dd0997"
+      "852ee4d303ed834908202e486db2cb3b"
     ],
     [
       "Range.targetLength",
@@ -579,10 +583,9 @@
         "disc_equation_CipherSuite.AEAD",
         "disc_equation_CipherSuite.MACOnly", "disc_equation_CipherSuite.MtE",
         "disc_equation_TLSInfo.ID12", "disc_equation_TLSInfo.PlaintextID",
-        "equation_CipherSuite.hash_alg", "equation_EverCrypt.Hash.maxTagLen",
-        "equation_FStar.UInt.uint_t", "equation_FStar.UInt32.n",
-        "equation_Prims.eqtype", "equation_Prims.nat",
-        "equation_Range.hashLen", "equation_Range.id2",
+        "equation_CipherSuite.hash_alg", "equation_FStar.UInt.uint_t",
+        "equation_FStar.UInt32.n", "equation_Prims.eqtype",
+        "equation_Prims.nat", "equation_Range.hashLen", "equation_Range.id2",
         "equation_Range.range", "equation_TLSInfo.aeAlg_of_id",
         "fuel_guarded_inversion_CipherSuite.aeAlg",
         "function_token_typing_FStar.UInt32.n",
@@ -592,17 +595,18 @@
         "proj_equation_TLSInfo.ID12_aeAlg",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_EverCrypt.Hash_Tm_refine_e295d1a089abf8fd7758b0cf33f12cde",
+        "projection_inverse_CipherSuite.MACOnly__0",
         "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
+        "refinement_interpretation_Hacl.Hash.Definitions_Tm_refine_a635e2afdd65247735f361323e0a9d9c",
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "refinement_interpretation_Range_Tm_refine_9eec96cf9e7424057db89d430151765e",
         "refinement_interpretation_TLSInfo_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee",
         "typing_FStar.Pervasives.Native.fst", "typing_FStar.UInt32.v",
-        "typing_Range.hashLen"
+        "typing_Range.hashLen", "typing_Spec.Hash.Helpers.size_hash"
       ],
       0,
-      "1ee7ba07abaa856f5d59921f67f1c182"
+      "74cfe3bd36eff0f88776b0897ba349b4"
     ],
     [
       "Range.targetLength",
@@ -621,7 +625,6 @@
         "disc_equation_TLSInfo.PlaintextID",
         "equation_AEADProvider.explicit_iv_length",
         "equation_CipherSuite.aeadAlg", "equation_CipherSuite.hash_alg",
-        "equation_EverCrypt.Hash.maxTagLen",
         "equation_FStar.Monotonic.HyperHeap.disjoint",
         "equation_FStar.Pervasives.Native.fst",
         "equation_FStar.Pervasives.Native.snd", "equation_FStar.UInt.uint_t",
@@ -658,8 +661,8 @@
         "projection_inverse_CipherSuite.MtE__1",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
-        "refinement_interpretation_EverCrypt.Hash_Tm_refine_e295d1a089abf8fd7758b0cf33f12cde",
         "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
+        "refinement_interpretation_Hacl.Hash.Definitions_Tm_refine_a635e2afdd65247735f361323e0a9d9c",
         "refinement_interpretation_Mem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
         "refinement_interpretation_Mem_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
         "refinement_interpretation_Mem_Tm_refine_f70be9b0cc50942af80d22e44fc9b9c4",
@@ -669,10 +672,10 @@
         "typing_CipherSuite.macSize", "typing_EverCrypt.aead_tagLen",
         "typing_FStar.UInt32.v", "typing_Mem.disjoint",
         "typing_Mem.tls_define_region", "typing_Range.hashLen",
-        "typing_Range.valid_clen"
+        "typing_Range.valid_clen", "typing_Spec.Hash.Helpers.size_hash"
       ],
       0,
-      "497e60a6502f4ae399a19b12e7a017af"
+      "e72bf9777c7edc43fb7ae9c696fe8595"
     ],
     [
       "Range.targetLength_at_most_max_TLSCiphertext_fragment_length",
@@ -686,10 +689,9 @@
         "disc_equation_CipherSuite.AEAD",
         "disc_equation_CipherSuite.MACOnly", "disc_equation_CipherSuite.MtE",
         "disc_equation_TLSInfo.ID12", "disc_equation_TLSInfo.PlaintextID",
-        "equation_CipherSuite.hash_alg", "equation_EverCrypt.Hash.maxTagLen",
-        "equation_FStar.UInt.uint_t", "equation_FStar.UInt32.n",
-        "equation_Prims.eqtype", "equation_Prims.nat",
-        "equation_Range.hashLen", "equation_Range.id2",
+        "equation_CipherSuite.hash_alg", "equation_FStar.UInt.uint_t",
+        "equation_FStar.UInt32.n", "equation_Prims.eqtype",
+        "equation_Prims.nat", "equation_Range.hashLen", "equation_Range.id2",
         "equation_Range.range",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "equation_TLSInfo.aeAlg_of_id",
@@ -701,18 +703,18 @@
         "proj_equation_TLSInfo.ID12_aeAlg",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_EverCrypt.Hash_Tm_refine_e295d1a089abf8fd7758b0cf33f12cde",
         "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
+        "refinement_interpretation_Hacl.Hash.Definitions_Tm_refine_a635e2afdd65247735f361323e0a9d9c",
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "refinement_interpretation_Range_Tm_refine_9eec96cf9e7424057db89d430151765e",
         "refinement_interpretation_Range_Tm_refine_f8054d286b7c08b0d6a58aca2e2920ec",
         "refinement_interpretation_TLSInfo_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee",
         "typing_FStar.Pervasives.Native.fst", "typing_FStar.UInt32.v",
-        "typing_Range.hashLen"
+        "typing_Range.hashLen", "typing_Spec.Hash.Helpers.size_hash"
       ],
       0,
-      "102917401b6539f9af68279e837b2f7e"
+      "f9d494d589ca3480031b93be9d778f25"
     ],
     [
       "Range.targetLength_at_most_max_TLSCiphertext_fragment_length",
@@ -726,7 +728,7 @@
         "disc_equation_CipherSuite.AEAD",
         "disc_equation_CipherSuite.MACOnly", "disc_equation_CipherSuite.MtE",
         "disc_equation_TLSInfo.ID12", "disc_equation_TLSInfo.PlaintextID",
-        "equation_CipherSuite.hash_alg", "equation_EverCrypt.Hash.maxTagLen",
+        "equation_CipherSuite.hash_alg",
         "equation_FStar.Pervasives.Native.snd", "equation_FStar.UInt.uint_t",
         "equation_FStar.UInt32.n", "equation_Prims.eqtype",
         "equation_Prims.nat", "equation_Range.hashLen", "equation_Range.id2",
@@ -739,17 +741,17 @@
         "proj_equation_TLSInfo.ID12_aeAlg",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_EverCrypt.Hash_Tm_refine_e295d1a089abf8fd7758b0cf33f12cde",
         "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
+        "refinement_interpretation_Hacl.Hash.Definitions_Tm_refine_a635e2afdd65247735f361323e0a9d9c",
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "refinement_interpretation_Range_Tm_refine_9eec96cf9e7424057db89d430151765e",
         "refinement_interpretation_TLSInfo_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee",
         "typing_FStar.Pervasives.Native.snd", "typing_FStar.UInt32.v",
-        "typing_Range.hashLen"
+        "typing_Range.hashLen", "typing_Spec.Hash.Helpers.size_hash"
       ],
       0,
-      "4ac675aef1d0e8ad9ee378f79ff48513"
+      "9e2578042e50aa04373fb0781a598c7b"
     ],
     [
       "Range.targetLength_at_most_max_TLSCiphertext_fragment_length",
@@ -758,58 +760,64 @@
       2,
       [
         "@MaxIFuel_assumption", "@query",
+        "CipherSuite_pretyping_b921fb931693574e29d051e3968ebf28",
         "FStar.UInt32_pretyping_041e3a67a2d2b51fd702f1f88cfc3b44",
         "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "Prims_pretyping_f8666440faa91836cc5a13998af863fc", "b2t_def",
-        "bool_inversion", "bool_typing",
+        "Prims_pretyping_f8666440faa91836cc5a13998af863fc",
+        "Spec.Hash.Helpers_pretyping_c66639ba342e21800b30cad69227f5f3",
+        "b2t_def", "bool_inversion", "bool_typing",
         "constructor_distinct_EverCrypt.AES128_GCM",
-        "constructor_distinct_EverCrypt.CHACHA20_POLY1305",
-        "constructor_distinct_FStar.Integers.Unsigned",
-        "constructor_distinct_FStar.Integers.W32",
         "constructor_distinct_FStar.UInt32.t",
-        "constructor_distinct_Prims.unit", "constructor_distinct_Tm_unit",
-        "data_elim_CipherSuite.AEAD", "data_elim_CipherSuite.Block",
+        "constructor_distinct_Parsers.ProtocolVersion.SSL_3p0",
+        "constructor_distinct_Prims.unit",
+        "constructor_distinct_Spec.Hash.Helpers.SHA1",
+        "constructor_distinct_Spec.Hash.Helpers.hash_alg",
+        "constructor_distinct_Tm_unit", "data_elim_CipherSuite.Block",
         "data_elim_CipherSuite.MACOnly", "data_elim_CipherSuite.MtE",
         "data_elim_TLSInfo.ID12", "disc_equation_CipherSuite.AEAD",
         "disc_equation_TLSInfo.ID12", "disc_equation_TLSInfo.PlaintextID",
-        "equality_tok_FStar.Integers.W32@tok",
         "equality_tok_Parsers.ProtocolVersion.TLS_1p3@tok",
         "equation_AEADProvider.alg_",
         "equation_AEADProvider.explicit_iv_length",
         "equation_AEADProvider.id", "equation_CipherSuite.aeadAlg",
         "equation_CipherSuite.blockCipher", "equation_CipherSuite.hash_alg",
-        "equation_CipherSuite.macAlg", "equation_EverCrypt.Hash.maxTagLen",
+        "equation_CipherSuite.macAlg", "equation_CipherSuite.macSize",
         "equation_EverCrypt.aead_tagLen",
         "equation_EverCrypt.block_cipher_blockLen",
         "equation_FStar.Bytes.lbytes", "equation_FStar.Int31.n",
         "equation_FStar.Monotonic.HyperHeap.disjoint",
         "equation_FStar.Pervasives.Native.fst",
         "equation_FStar.Pervasives.Native.snd", "equation_FStar.UInt.fits",
-        "equation_FStar.UInt.lte", "equation_FStar.UInt.max_int",
-        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
-        "equation_FStar.UInt.uint_t", "equation_FStar.UInt16.n",
-        "equation_FStar.UInt32.lte", "equation_FStar.UInt32.n",
-        "equation_FStar.UInt32.n_minus_one", "equation_FStar.UInt64.n",
-        "equation_FStar.UInt8.n", "equation_LowParse.SLow.Base.u32_max",
-        "equation_Mem.disjoint", "equation_Mem.rgn",
-        "equation_Mem.tls_define_region", "equation_Mem.tls_rgn",
-        "equation_Mem.tls_tables_region", "equation_Nonce.random",
-        "equation_Prims.nat", "equation_Range.cipherRangeClass",
-        "equation_Range.id2", "equation_Range.ivSize",
-        "equation_Range.maxPadSize", "equation_Range.range",
+        "equation_FStar.UInt.max_int", "equation_FStar.UInt.min_int",
+        "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
+        "equation_FStar.UInt32.n", "equation_FStar.UInt32.n_minus_one",
+        "equation_FStar.UInt64.n", "equation_FStar.UInt8.n",
+        "equation_Hacl.Hash.Definitions.size_hash_ul",
+        "equation_LowParse.SLow.Base.u32_max", "equation_Mem.disjoint",
+        "equation_Mem.rgn", "equation_Mem.tls_define_region",
+        "equation_Mem.tls_rgn", "equation_Mem.tls_tables_region",
+        "equation_Nonce.random", "equation_Prims.nat",
+        "equation_Range.cipherRangeClass", "equation_Range.fixedPadSize",
+        "equation_Range.hashLen", "equation_Range.id2",
+        "equation_Range.ivSize", "equation_Range.maxPadSize",
+        "equation_Range.minP", "equation_Range.range",
         "equation_Range.targetLength", "equation_Range.wider",
+        "equation_Spec.Hash.Helpers.size_block_w",
+        "equation_Spec.Hash.Helpers.size_hash",
+        "equation_Spec.Hash.Helpers.size_hash_final_w",
+        "equation_Spec.Hash.Helpers.size_word",
+        "equation_TLSConstants.macAlg_of_aeAlg",
         "equation_TLSConstants.max_TLSCiphertext_fragment_length",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "equation_TLSConstants.protocolVersion",
-        "equation_TLSInfo.aeAlg_of_id", "equation_TLSInfo.pv_of_id",
-        "equation_TLSInfo.random", "equation_TLSInfo.srand",
-        "fuel_guarded_inversion_CipherSuite.aeAlg",
+        "equation_TLSInfo.aeAlg_of_id", "equation_TLSInfo.macAlg_of_id",
+        "equation_TLSInfo.pv_of_id", "equation_TLSInfo.random",
+        "equation_TLSInfo.srand", "fuel_guarded_inversion_CipherSuite.aeAlg",
         "fuel_guarded_inversion_CipherSuite.encAlg",
         "fuel_guarded_inversion_EverCrypt.aead_alg",
         "fuel_guarded_inversion_FStar.Pervasives.Native.tuple2",
-        "function_token_typing_EverCrypt.Hash.maxTagLen",
+        "fuel_guarded_inversion_Spec.Hash.Helpers.hash_alg",
         "function_token_typing_FStar.Int31.n",
-        "function_token_typing_FStar.UInt16.n",
         "function_token_typing_FStar.UInt32.n",
         "function_token_typing_FStar.UInt32.n_minus_one",
         "function_token_typing_FStar.UInt64.n",
@@ -817,27 +825,30 @@
         "function_token_typing_LowParse.SLow.Base.u32_max",
         "function_token_typing_Mem.tls_define_region",
         "function_token_typing_Mem.tls_tables_region",
-        "function_token_typing_Prims.nat", "int_inversion",
+        "function_token_typing_Prims.nat",
+        "function_token_typing_Spec.Hash.Helpers.size_block_w",
+        "int_inversion", "int_typing", "lemma_FStar.UInt32.uv_inv",
         "lemma_FStar.UInt32.vu_inv", "primitive_Prims.op_Addition",
-        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_GreaterThanOrEqual",
+        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Multiply",
         "primitive_Prims.op_Negation", "primitive_Prims.op_Subtraction",
         "proj_equation_FStar.Pervasives.Native.Mktuple2__1",
         "proj_equation_FStar.Pervasives.Native.Mktuple2__2",
         "proj_equation_TLSInfo.ID12_aeAlg",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
-        "projection_inverse_FStar.Integers.Unsigned__0",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
         "refinement_interpretation_Crypto.Indexing_Tm_refine_27bc248aea929afc1c455a4ca114e85e",
-        "refinement_interpretation_EverCrypt.Hash_Tm_refine_e295d1a089abf8fd7758b0cf33f12cde",
         "refinement_interpretation_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
         "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
+        "refinement_interpretation_Hacl.Hash.Definitions_Tm_refine_a635e2afdd65247735f361323e0a9d9c",
         "refinement_interpretation_LowParse.SLow.Base_Tm_refine_37aada3d4a501a6616c90a97d93560d2",
         "refinement_interpretation_Mem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
         "refinement_interpretation_Mem_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
         "refinement_interpretation_Mem_Tm_refine_f70be9b0cc50942af80d22e44fc9b9c4",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Range_Tm_refine_04c0254a1b90c560e05e6da679f528cf",
         "refinement_interpretation_Range_Tm_refine_648a322424e792807926a503124d7d47",
         "refinement_interpretation_Range_Tm_refine_799afd81acaa65853ad95b636224e5d3",
         "refinement_interpretation_Range_Tm_refine_82c069f829c9672dc3265909821054a5",
@@ -847,20 +858,20 @@
         "refinement_interpretation_TLSInfo_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee",
         "refinement_interpretation_TLSInfo_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b",
         "refinement_interpretation_TLSInfo_Tm_refine_c05ce9ff00b708cd92d521f714e36edc",
-        "typing_AEADProvider.explicit_iv_length",
+        "typing_AEADProvider.alg_", "typing_AEADProvider.explicit_iv_length",
         "typing_CipherSuite.macSize", "typing_EverCrypt.aead_tagLen",
         "typing_EverCrypt.block_cipher_blockLen", "typing_FStar.Bytes.len",
         "typing_FStar.Pervasives.Native.fst", "typing_FStar.UInt.fits",
-        "typing_FStar.UInt32.lte", "typing_FStar.UInt32.v",
-        "typing_LowParse.SLow.Base.u32_max", "typing_Mem.disjoint",
-        "typing_Mem.tls_define_region", "typing_Range.cipherRangeClass",
-        "typing_Range.hashLen", "typing_Range.ivSize",
-        "typing_Range.maxPadSize", "typing_Range.targetLength",
+        "typing_FStar.UInt32.v", "typing_LowParse.SLow.Base.u32_max",
+        "typing_Mem.disjoint", "typing_Mem.tls_define_region",
+        "typing_Range.cipherRangeClass", "typing_Range.hashLen",
+        "typing_Range.ivSize", "typing_Range.maxPadSize",
+        "typing_Range.minP", "typing_Range.targetLength",
         "typing_TLSInfo.aeAlg_of_id", "typing_TLSInfo.macAlg_of_id",
         "unit_typing"
       ],
       0,
-      "843bd029a90b8c7429250be38cb7eb32"
+      "89d1aad514313d0a467b30bcce45524d"
     ],
     [
       "Range.rangeClass",
@@ -895,7 +906,7 @@
         "typing_FStar.Pervasives.Native.fst", "typing_TLSInfo.aeAlg_of_id"
       ],
       0,
-      "51fa4e2cc3ba83d230d7a56f465d78e9"
+      "022be04b1e69bf3fae7866a063a10f44"
     ],
     [
       "Range.rangeClass",
@@ -958,7 +969,7 @@
         "typing_Range.maxPadSize", "typing_TLSInfo.aeAlg_of_id"
       ],
       0,
-      "52132319e23bc3c41dc051def2d6e78b"
+      "f2a64c5ee37a0831c05301262990d710"
     ],
     [
       "Range.fragment_range",
@@ -976,7 +987,7 @@
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__2"
       ],
       0,
-      "839a65b241842d2403c9628704894ab5"
+      "73388f794724f57354dcf0da80fbab92"
     ],
     [
       "Range.frange",
@@ -995,7 +1006,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "8bb6967ede083a0b8f6b82e74dd21e9b"
+      "1b14eb1045517ffd199b051b6016d849"
     ],
     [
       "Range.frange_any",
@@ -1009,7 +1020,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "1805a66e2b31059b0b0de50363915566"
+      "141207b25f857d2e2d72175537e211d5"
     ]
   ]
 ]

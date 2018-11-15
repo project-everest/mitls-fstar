@@ -16,6 +16,8 @@ INCLUDE_PATHS = \
 	$(HACL_HOME)/secure_api/utils \
 	$(HACL_HOME)/secure_api/concrete_specializations \
 	$(HACL_HOME)/code/lib \
+	$(HACL_HOME)/code/hash-new \
+	$(HACL_HOME)/specs \
 	$(KREMLIN_HOME)/include \
         $(KREMLIN_HOME)/kremlib/compat \
         $(KREMLIN_HOME)/kremlib \

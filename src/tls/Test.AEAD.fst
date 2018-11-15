@@ -30,10 +30,10 @@ let id13 alg =
     li_ch0_cr = cr;
     li_ch0_ed_psk = Bytes.utf8_encode "whatever";
     li_ch0_ed_ae = alg;
-    li_ch0_ed_hash = Hashing.Spec.SHA256; } in
+    li_ch0_ed_hash = Hashing.Spec.SHA2_256; } in
   let li = LogInfo_CH0 ch0 in
   let i = ExpandedSecret
-      (EarlySecretID (NoPSK Hashing.Spec.SHA256))
+      (EarlySecretID (NoPSK Hashing.Spec.SHA2_256))
       ClientEarlyTrafficSecret
       (Bytes.utf8_encode "whatever") in
   let kid: keyId = KeyID #li i in

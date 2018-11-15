@@ -12,7 +12,7 @@
         "refinement_interpretation_Pkg.Tree_Tm_refine_b53ae398bac700dcd61b3b5668ccba51"
       ],
       0,
-      "efb0b7856281d2374fdf9d03cd1e7b83"
+      "ecbb5cdfcd98724f3eaadfdee0ddcfd9"
     ],
     [
       "Pkg.Tree.__proj__Node__item__node",
@@ -25,7 +25,7 @@
         "refinement_interpretation_Pkg.Tree_Tm_refine_38d2bec63e374d1a01ada0c25be39dfe"
       ],
       0,
-      "ca9222695dcf992253055f7caea3fd13"
+      "fb527769703db6fc3e016caf39037356"
     ],
     [
       "Pkg.Tree.__proj__Node__item__children",
@@ -40,7 +40,7 @@
         "refinement_interpretation_Pkg.Tree_Tm_refine_38d2bec63e374d1a01ada0c25be39dfe"
       ],
       0,
-      "9430e9a54e50d1a240207b54a81889bd"
+      "9b30530ced58491d0defea324e3cfac9"
     ],
     [
       "Pkg.Tree.depth",
@@ -60,7 +60,7 @@
         "subterm_ordering_Pkg.Tree.Node"
       ],
       0,
-      "bea2bd5a2378da32c0664923d89fb246"
+      "c1c766cddff426abc14c43fbe40ba03a"
     ],
     [
       "Pkg.Tree.depth",
@@ -83,7 +83,7 @@
         "subterm_ordering_Prims.Cons"
       ],
       0,
-      "4d8e30130a366e90b617bc214667e116"
+      "a230d4283118242e595a41028a8c7f1c"
     ],
     [
       "Pkg.Tree.find_lbl",
@@ -101,7 +101,7 @@
         "subterm_ordering_Prims.Cons"
       ],
       0,
-      "d11c8460e1d20defb48c7913f04f0d94"
+      "17e805365196d7d7d80b5dac445d320e"
     ],
     [
       "Pkg.Tree.down",
@@ -109,13 +109,14 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query",
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
         "disc_equation_FStar.Pervasives.Native.Some", "equation_Idx.label",
-        "equation_Pkg.Tree.has_lbl",
-        "refinement_interpretation_Pkg.Tree_Tm_refine_a1a90e425eba159b7a03d90ce1de1acc"
+        "equation_Pkg.Tree.has_lbl", "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Pkg.Tree_Tm_refine_a1a90e425eba159b7a03d90ce1de1acc",
+        "typing_Pkg.Tree.has_lbl"
       ],
       0,
-      "37cf9882ad5505676b732a9cecff0ded"
+      "10271a24a3a04f389c85ffc8e32ca213"
     ],
     [
       "Pkg.Tree.child",
@@ -131,7 +132,7 @@
         "refinement_interpretation_Pkg.Tree_Tm_refine_aef4d5729ca66bc6359aab246e16d856"
       ],
       0,
-      "e3b134e49ea7974f3159532013ecfbec"
+      "f885654c26c3cc0f2f000c48c82dc449"
     ]
   ]
 ]
