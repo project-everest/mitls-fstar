@@ -23,6 +23,11 @@ function fetch_mlcrypto() {
     export_home OPENSSL "$(pwd)/mlcrypto/openssl"
 }
 
+function fetch_and_make_mlcrypto() {
+    fetch_mlcrypto
+    make -C mlcrypto -j $threads
+}
+
 # Windows only: Visual Studio's command line to set up environment (VS_ENV_CMD)
 if [[ $OS == "Windows_NT" ]] ; then
   # Starting from Visual Studio 2017, version 15.2 or later,
@@ -278,7 +283,7 @@ function mitls_verify() {
                 echo This is a LowParse CI-only branch. No miTLS CI here.
             else
                 # miTLS CI proper starts here
-                fetch_mlcrypto &&
+                fetch_and_make_mlcrypto &&
                 fetch_and_make_vale &&
                 fetch_hacl &&
                     # Only building a subset of HACL* for now, no verification
