@@ -309,7 +309,7 @@ let gaccessor_vlbytes
 
 #pop-options
 
-#push-options "--z3rlimit 32 --max_fuel 2 --initial_fuel 2 --max_ifuel 6 --initial_ifuel 6"
+#push-options "--z3rlimit 64 --max_fuel 2 --initial_fuel 2 --max_ifuel 6 --initial_ifuel 6"
 
 inline_for_extraction
 let accessor_vlbytes

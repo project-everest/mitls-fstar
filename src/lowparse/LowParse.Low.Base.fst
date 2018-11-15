@@ -117,6 +117,21 @@ let valid_elim
 : Lemma
   (requires (valid p h s pos))
   (ensures (valid' p h s pos))
+//  [SMTPat (valid p h s pos)]
+= ()
+
+abstract
+let valid_elim'
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (s: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (valid p h s pos))
+  (ensures (U32.v pos + k.parser_kind_low <= U32.v s.len /\
+  live_slice h s))
   [SMTPat (valid p h s pos)]
 = ()
 
@@ -283,6 +298,17 @@ let get_valid_pos
   (ensures (fun pos' -> valid_pos p h sl pos pos'))
 = pos `U32.add` U32.uint_to_t (content_length p h sl pos)
 
+let valid_content
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (sl: slice)
+  (pos: U32.t)
+  (x: t)
+= valid p h sl pos /\
+  contents p h sl pos == x
+
 let valid_content_pos
   (#k: parser_kind)
   (#t: Type)
@@ -293,7 +319,7 @@ let valid_content_pos
   (x: t)
   (pos' : U32.t)
 = valid_pos p h sl pos pos' /\
-  contents p h sl pos == x
+  valid_content p h sl pos x
 
 abstract
 let valid_frame
@@ -306,10 +332,12 @@ let valid_frame
   (l: B.loc)
   (h': HS.mem)
 : Lemma
-  (requires (valid p h sl pos /\ B.modifies l h h' /\ B.loc_disjoint (loc_slice_from sl pos) l))
+  (requires (live_slice h sl /\ B.modifies l h h' /\ B.loc_disjoint (loc_slice_from sl pos) l))
   (ensures (
+    (valid p h sl pos \/ valid p h' sl pos) ==> (
+    valid p h sl pos /\
     valid_content_pos p h' sl pos (contents p h sl pos) (get_valid_pos p h sl pos)
-  ))
+  )))
   [SMTPatOr [
     [SMTPat (valid p h sl pos); SMTPat (B.modifies l h h')];
     [SMTPat (valid p h' sl pos); SMTPat (B.modifies l h h')];
@@ -447,6 +475,30 @@ let valid_exact_elim
 : Lemma
   (requires (valid_exact p h s pos pos'))
   (ensures (valid_exact' p h s pos pos'))
+//  [SMTPat (valid_exact p h s pos pos')]
+= ()
+
+abstract
+let valid_exact_elim'
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (s: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+: Lemma
+  (requires (valid_exact p h s pos pos'))
+  (ensures (
+    live_slice h s /\
+    U32.v pos <= U32.v pos' /\
+    U32.v pos' <= U32.v s.len /\ (
+    let length = U32.v pos' - U32.v pos in
+    k.parser_kind_low <= length /\ (
+    match k.parser_kind_high with
+    | Some high -> length <= high
+    | _ -> True
+  ))))
   [SMTPat (valid_exact p h s pos pos')]
 = ()
 
@@ -517,8 +569,11 @@ let valid_exact_frame
   (l: B.loc)
   (h' : HS.mem)
 : Lemma
-  (requires (valid_exact p h s pos pos' /\ B.modifies l h h' /\ B.loc_disjoint l (loc_slice_from_to s pos pos')))
-  (ensures (valid_exact p h' s pos pos' /\ contents_exact p h' s pos pos' == contents_exact p h s pos pos'))
+  (requires (live_slice h s /\ B.modifies l h h' /\ B.loc_disjoint l (loc_slice_from_to s pos pos')))
+  (ensures (
+    (valid_exact p h s pos pos' \/ valid_exact p h' s pos pos') ==> (
+    valid_exact p h' s pos pos' /\ contents_exact p h' s pos pos' == contents_exact p h s pos pos'
+  )))
   [SMTPatOr [
     [SMTPat (valid_exact p h s pos pos'); SMTPat (B.modifies l h h')];
     [SMTPat (valid_exact p h' s pos pos'); SMTPat (B.modifies l h h')];
@@ -566,8 +621,24 @@ let valid_pos_valid_exact
     valid_exact p h s pos pos' /\
     contents_exact p h s pos pos' == contents p h s pos
   ))
-  [SMTPat (valid_exact p h s pos pos'); SMTPat (valid p h s pos)]
 = valid_valid_exact p h s pos
+
+let valid_pos_valid_exact_pat
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (s: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+: Lemma
+  (requires (valid_pos p h s pos pos' /\ k.parser_kind_subkind == Some ParserStrong))
+  (ensures (
+    valid_exact p h s pos pos' /\
+    contents_exact p h s pos pos' == contents p h s pos
+  ))
+  [SMTPat (valid_exact p h s pos pos'); SMTPat (valid p h s pos)]
+= valid_pos_valid_exact p h s pos pos'
 
 abstract
 let valid_exact_valid
@@ -583,10 +654,69 @@ let valid_exact_valid
   (ensures (
     valid_content_pos p h s pos (contents_exact p h s pos pos') pos'
   ))
-  [SMTPat (valid_exact p h s pos pos'); SMTPat (valid p h s pos)]
 = assert (no_lookahead_on p (B.as_seq h (B.gsub s.base pos (pos' `U32.sub`pos))) (B.as_seq h (B.gsub s.base pos (s.len `U32.sub` pos))));
   assert (injective_precond p (B.as_seq h (B.gsub s.base pos (pos' `U32.sub` pos))) (B.as_seq h (B.gsub s.base pos (s.len `U32.sub` pos))));
   assert (injective_postcond p (B.as_seq h (B.gsub s.base pos (pos' `U32.sub` pos))) (B.as_seq h (B.gsub s.base pos (s.len `U32.sub` pos))))
+
+let valid_exact_valid_pat
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (s: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+: Lemma
+  (requires (valid_exact p h s pos pos' /\ k.parser_kind_subkind == Some ParserStrong))
+  (ensures (
+    valid_content_pos p h s pos (contents_exact p h s pos pos') pos'
+  ))
+  [SMTPat (valid_exact p h s pos pos'); SMTPat (valid p h s pos)]
+= valid_exact_valid p h s pos pos'
+
+let valid_pos_frame_strong_1
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (sl: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+  (l: B.loc)
+  (h': HS.mem)
+: Lemma
+  (requires (
+    valid_pos p h sl pos pos' /\
+    B.modifies l h h' /\ B.loc_disjoint (loc_slice_from_to sl pos pos') l /\ k.parser_kind_subkind == Some ParserStrong))
+  (ensures (
+    valid_pos p h sl pos pos' /\
+    valid_content_pos p h' sl pos (contents p h sl pos) pos'
+  ))
+= valid_pos_valid_exact p h sl pos pos';
+  valid_exact_valid p h' sl pos pos'
+
+let valid_pos_frame_strong_2
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (sl: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+  (l: B.loc)
+  (h': HS.mem)
+: Lemma
+  (requires (
+    live_slice h sl /\
+    valid_pos p h' sl pos pos' /\
+    B.modifies l h h' /\ B.loc_disjoint (loc_slice_from_to sl pos pos') l /\ k.parser_kind_subkind == Some ParserStrong))
+  (ensures (
+    valid_pos p h sl pos pos' /\
+    valid_pos p h' sl pos pos' /\
+    valid_content_pos p h sl pos (contents p h' sl pos) pos'
+  ))
+= valid_pos_valid_exact p h' sl pos pos';
+  valid_exact_valid p h sl pos pos'
 
 let valid_pos_frame_strong
   (#k: parser_kind)
@@ -599,17 +729,21 @@ let valid_pos_frame_strong
   (l: B.loc)
   (h': HS.mem)
 : Lemma
-  (requires (valid_pos p h sl pos pos' /\ B.modifies l h h' /\ B.loc_disjoint (loc_slice_from_to sl pos pos') l /\ k.parser_kind_subkind == Some ParserStrong))
+  (requires (
+    live_slice h sl /\
+    B.modifies l h h' /\ B.loc_disjoint (loc_slice_from_to sl pos pos') l /\ k.parser_kind_subkind == Some ParserStrong))
   (ensures (
+    (valid_pos p h sl pos pos' \/ valid_pos p h' sl pos pos') ==> (
+    valid_pos p h sl pos pos' /\
     valid_content_pos p h' sl pos (contents p h sl pos) pos'
-  ))
+  )))
   [SMTPatOr [
     [SMTPat (valid_pos p h sl pos pos'); SMTPat (valid p h' sl pos); SMTPat (B.modifies l h h')];
     [SMTPat (valid_pos p h sl pos pos'); SMTPat (contents p h' sl pos); SMTPat (B.modifies l h h')];
     [SMTPat (valid_pos p h sl pos pos'); SMTPat (content_length p h' sl pos); SMTPat (B.modifies l h h')];
   ]]
-= valid_pos_valid_exact p h sl pos pos';
-  valid_exact_valid p h' sl pos pos'
+= Classical.move_requires (valid_pos_frame_strong_1 p h sl pos pos' l) h';
+  Classical.move_requires (valid_pos_frame_strong_2 p h sl pos pos' l) h'
 
 abstract
 let valid_exact_ext_intro
