@@ -108,3 +108,25 @@ val finalize_case_ticketContents12
     /\
     pos' == LP.get_valid_pos ticketContents12_parser h input pos1
   ))
+
+val finalize_case_ticketContents13
+  (input: LP.slice)
+  (pos: U32.t)
+: HST.Stack U32.t
+  (requires (fun h ->
+    U32.v pos + 1 <= 4294967295 /\
+    LP.valid ticketContents13_parser h input (pos `U32.add` 1ul) // special case because enum values have a constant-size representation here
+  ))
+  (ensures (fun h pos' h' ->
+    let pos1 = pos `U32.add` 1ul in
+    B.modifies (LP.loc_slice_from_to input pos pos1) h h' /\
+    LP.valid_content_pos
+      ticketContents_parser
+      h'
+      input
+      pos
+      (Case_ticket13 (LP.contents ticketContents13_parser h input pos1))
+      pos'
+    /\
+    pos' == LP.get_valid_pos ticketContents13_parser h input pos1
+  ))
