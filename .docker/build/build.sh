@@ -239,7 +239,7 @@ function fetch_vale() {
 function fetch_and_make_vale() {
     fetch_vale
 
-    run_vale_scons
+    run_vale_scons "-j $threads --FSTAR-MY-VERSION"
 }
 
 
