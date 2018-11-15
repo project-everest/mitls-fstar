@@ -7,6 +7,117 @@ out_file=$2
 threads=$3
 branchname=$4
 
+# Windows only: Visual Studio's command line to set up environment (VS_ENV_CMD)
+if [[ $OS == "Windows_NT" ]] ; then
+  # Starting from Visual Studio 2017, version 15.2 or later,
+  # we can determine the location of a VS install
+  # using vswhere.exe, see:
+  # https://docs.microsoft.com/en-us/visualstudio/extensibility/locating-visual-studio
+  if
+    VSWHERE_WINDOWS="$(cmd.exe /C 'echo %ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe' | sed 's!\r!!g')" &&
+    VSWHERE=$(cygpath -u "$VSWHERE_WINDOWS") &&
+    VS_HOME=$("$VSWHERE" -requires Microsoft.VisualStudio.Component.FSharp -format value -property InstallationPath | sed 's!\r!!g') &&
+    [[ -n "$VS_HOME" ]]
+  then
+    # Visual Studio 2017 (15.2) or later
+    # vcvarsall.bat has been superseded by vsdevcmd.bat, see:
+    # https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/compiler-options/how-to-set-environment-variables-for-the-visual-studio-command-line
+    VSDEVCMD_PATH=$(cygpath -u "$VS_HOME")/Common7/Tools
+    VSDEVCMD=$(cygpath -w "$VSDEVCMD_PATH/VsDevCmd.bat")
+    # Here we assume that BOTH the target platform
+    # and the host platform are amd64.
+    VS_ENV_CMD='"'"$VSDEVCMD"'" -arch=amd64 -host_arch=amd64'
+  else
+    # Older versions are based on vcvarsall.bat
+    if [[ -v VS140COMNTOOLS ]]; then
+      # Visual Studio 2015 (14.x)
+      VS_TOOLS_PATH="$VS140COMNTOOLS"
+    elif [[ -v VS120COMNTOOLS ]]; then
+      # Visual Studio 2012 (12.x)
+      VS_TOOLS_PATH="$VS120COMNTOOLS"
+    elif [[ -v VS110COMNTOOLS ]]; then
+      # Visual Studio 2010 (10.x)
+      VS_TOOLS_PATH="$VS110COMNTOOLS"
+    else
+      # Not found
+      echo Could not find Visual Studio
+      exit 1
+    fi
+    VCVARSALL_PATH="$VS_TOOLS_PATH"/../../VC
+    VCVARSALL=$(cygpath -d "$VCVARSALL_PATH/vcvarsall.bat")
+    # Here we assume that BOTH the target platform
+    # and the host platform are amd64.
+    VS_ENV_CMD="$VCVARSALL amd64"
+  fi
+fi
+
+SCONS_PYTHON_MAJOR=3
+SCONS_PYTHON_MINOR=6
+SCONS_PYTHON_MAJOR_MINOR=$SCONS_PYTHON_MAJOR.$SCONS_PYTHON_MINOR
+
+run_scons () {
+  short_dir="$1"
+  shift
+  cmd="$1"
+
+  if [[ $OS == "Windows_NT" ]] ; then
+    DIR=$(cygpath -w "$(pwd)"/"$short_dir")
+  else
+    DIR="$short_dir"
+  fi
+
+  if [[ $OS == "Windows_NT" ]]; then
+    # Instead of invoking cmd.exe /c, which would force us to
+    # rely on its flaky semantics for double quotes,
+    # we go through a batch file.
+    THIS_PID=$$
+    # Find an unambiguous file name for our .bat file
+    SCONS_EXECS=0
+    while
+      SCONS_INVOKE_FILE="everest$THIS_PID""scons$SCONS_EXECS"".bat" &&
+      [[ -e "$SCONS_INVOKE_FILE" ]]
+    do
+      SCONS_EXECS=$(($SCONS_EXECS + 1))
+    done
+    # Then create, run and remove the .bat file
+    cat > "$SCONS_INVOKE_FILE" <<EOF
+call $VS_ENV_CMD
+cd "$DIR"
+EOF
+    if command -v scons.bat > /dev/null 2>&1 ; then
+      echo "call scons.bat $cmd $parallel_opt" >> "$SCONS_INVOKE_FILE"
+    else
+      PYDIR=$(cygpath -d $(windows_scons_python_dir))
+      echo "$PYDIR/python.exe $PYDIR/Scripts/scons.py $cmd $parallel_opt" >> "$SCONS_INVOKE_FILE"
+    fi
+    chmod +x "$SCONS_INVOKE_FILE"
+    "./$SCONS_INVOKE_FILE"
+    SCONS_RETCODE=$?
+    rm -f "$SCONS_INVOKE_FILE"
+    return $SCONS_RETCODE
+  else
+    python$SCONS_PYTHON_MAJOR_MINOR $(which scons) -C "$DIR" $cmd $parallel_opt
+  fi
+}
+
+run_vale_scons () {
+  if [[ $OS == "Windows_NT" ]] ; then
+    # Use the same Z3 for Dafny as for F*
+    # i.e. the one in the PATH
+    Z3PATH_UNIX=$(which z3.exe)
+    Z3PATH=$(cygpath -w "$Z3PATH_UNIX")
+    # Here the path to z3 might have whitespaces,
+    # so it must be enclosed into double quotes
+    # to be treated correctly by scons and Dafny.
+    # Moreover, it must fit in the single argument to
+    # run_vale_scons, which is why we cannot quote the command
+    # as a member of the verify_commands array
+    run_scons vale "--DARGS=/z3exe:\"$Z3PATH\" $1"
+  else
+    run_scons vale "$1"
+  fi
+}
+
 function export_home() {
     local home_path=""
     if command -v cygpath >/dev/null 2>&1; then
@@ -128,7 +239,7 @@ function fetch_vale() {
 function fetch_and_make_vale() {
     fetch_vale
 
-    (cd vale && scons -j $threads --FSTAR-MY-VERSION)
+    run_vale_scons
 }
 
 
@@ -147,11 +258,6 @@ function mitls_verify() {
     { echo false > mitls_success ; } && {
         # Perform LowParse CI and miTLS CI in parallel
         {
-            # Test LowParse examples
-            make -C src/lowparse -f Makefile.LowParseExamples -j $threads -k &&
-            { echo true > lowparse_examples_success ; }
-        } &
-        {
             if echo "$CI_BRANCH" | grep '^taramana_lowparse_ci_' ; then
                 echo This is a LowParse CI-only branch. No miTLS CI here.
             else
@@ -168,6 +274,11 @@ function mitls_verify() {
                     make -C src/tls -j $threads test -k
             fi &&
             { echo true > mitls_success ; }
+        } &
+        {
+            # Test LowParse examples
+            make -C src/lowparse -f Makefile.LowParseExamples -j $threads -k &&
+            { echo true > lowparse_examples_success ; }
         } &
         wait
     } &&
