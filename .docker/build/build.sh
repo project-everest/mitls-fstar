@@ -7,6 +7,22 @@ out_file=$2
 threads=$3
 branchname=$4
 
+function fetch_mlcrypto() {
+    if [ ! -d mlcrypto ]; then
+        git clone https://github.com/project-everest/MLCrypto mlcrypto
+    fi
+
+    cd mlcrypto
+    git fetch origin
+    local ref=$(if [ -f ../.mlcrypto_version ]; then cat ../.mlcrypto_version | tr -d '\r\n'; else echo origin/master; fi)
+    echo Switching to MLCrypto $ref
+    git reset --hard $ref
+    git submodule update
+    cd ..
+    export_home MLCRYPTO "$(pwd)/mlcrypto"
+    export_home OPENSSL "$(pwd)/mlcrypto/openssl"
+}
+
 # Windows only: Visual Studio's command line to set up environment (VS_ENV_CMD)
 if [[ $OS == "Windows_NT" ]] ; then
   # Starting from Visual Studio 2017, version 15.2 or later,
@@ -262,6 +278,7 @@ function mitls_verify() {
                 echo This is a LowParse CI-only branch. No miTLS CI here.
             else
                 # miTLS CI proper starts here
+                fetch_mlcrypto &&
                 fetch_and_make_vale &&
                 fetch_hacl &&
                     # Only building a subset of HACL* for now, no verification
