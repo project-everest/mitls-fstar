@@ -128,7 +128,7 @@ function fetch_vale() {
 function fetch_and_make_vale() {
     fetch_vale
 
-    scons -j $threads --FSTAR-MY-VERSION || has_error="true"
+    (cd vale && scons -j $threads --FSTAR-MY-VERSION)
 }
 
 
