@@ -110,6 +110,28 @@ function build_pki_if() {
     fi
 }
 
+function fetch_vale() {
+    if [ ! -d vale ]; then
+        git clone https://github.com/project-everest/vale vale
+    fi
+
+    cd vale
+    git fetch origin
+    local ref=$(if [ -f ../.vale_version ]; then cat ../.vale_version | tr -d '\r\n'; else echo origin/master; fi)
+    echo Switching to Vale $ref
+    git reset --hard $ref
+    nuget restore tools/Vale/src/packages.config -PackagesDirectory tools/FsLexYacc
+    cd ..
+    export_home VALE "$(pwd)/vale"
+}
+
+function fetch_and_make_vale() {
+    fetch_vale
+
+    scons -j $threads --FSTAR-MY-VERSION || has_error="true"
+}
+
+
 function mitls_verify() {
     export_home MITLS "$(pwd)"
 
@@ -134,6 +156,7 @@ function mitls_verify() {
                 echo This is a LowParse CI-only branch. No miTLS CI here.
             else
                 # miTLS CI proper starts here
+                fetch_and_make_vale &&
                 fetch_hacl &&
                     # Only building a subset of HACL* for now, no verification
                     OTHERFLAGS="--admit_smt_queries true $OTHERFLAGS" \
