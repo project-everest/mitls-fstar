@@ -137,7 +137,7 @@ function mitls_verify() {
                 fetch_hacl &&
                     # Only building a subset of HACL* for now, no verification
                     OTHERFLAGS="--admit_smt_queries true $OTHERFLAGS" \
-                    VALE_SCONS_PARALLEL_OPT="-j $threads --NO-VERIFY" \
+                    VALE_SCONS_PARALLEL_OPT="-j $threads --NO-VERIFY --FSTAR-MY-VERSION --VALE-MY-VERSION" \
                     make -C hacl-star providers.build -j $threads &&
                     make -C libs/ffi -j $threads &&
                     build_pki_if &&
