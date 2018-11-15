@@ -145,22 +145,22 @@ let cipherSuite'_of_name : cipherSuiteName -> Tot (option cipherSuite')  =
   let open Hashing.Spec in function
   | TLS_NULL_WITH_NULL_NULL                -> Some ( NullCipherSuite)
 
-  | TLS_AES_128_GCM_SHA256                 -> Some ( CipherSuite13 AES128_GCM       SHA256)
-  | TLS_AES_256_GCM_SHA384                 -> Some ( CipherSuite13 AES256_GCM       SHA384)
-  | TLS_CHACHA20_POLY1305_SHA256           -> Some ( CipherSuite13 CHACHA20_POLY1305 SHA256)
-  | TLS_AES_128_CCM_SHA256                 -> Some ( CipherSuite13 AES128_CCM       SHA256)
-  | TLS_AES_128_CCM_8_SHA256               -> Some ( CipherSuite13 AES128_CCM8     SHA256)
+  | TLS_AES_128_GCM_SHA256                 -> Some ( CipherSuite13 AES128_GCM       SHA2_256)
+  | TLS_AES_256_GCM_SHA384                 -> Some ( CipherSuite13 AES256_GCM       SHA2_384)
+  | TLS_CHACHA20_POLY1305_SHA256           -> Some ( CipherSuite13 CHACHA20_POLY1305 SHA2_256)
+  | TLS_AES_128_CCM_SHA256                 -> Some ( CipherSuite13 AES128_CCM       SHA2_256)
+  | TLS_AES_128_CCM_8_SHA256               -> Some ( CipherSuite13 AES128_CCM8     SHA2_256)
 
   | TLS_RSA_WITH_NULL_MD5                  -> Some ( CipherSuite Kex_RSA None (MACOnly MD5))
   | TLS_RSA_WITH_NULL_SHA                  -> Some ( CipherSuite Kex_RSA None (MACOnly SHA1))
-  | TLS_RSA_WITH_NULL_SHA256               -> Some ( CipherSuite Kex_RSA None (MACOnly SHA256))
+  | TLS_RSA_WITH_NULL_SHA256               -> Some ( CipherSuite Kex_RSA None (MACOnly SHA2_256))
   | TLS_RSA_WITH_RC4_128_MD5               -> Some ( CipherSuite Kex_RSA None (MtE (Stream RC4_128) MD5))
   | TLS_RSA_WITH_RC4_128_SHA               -> Some ( CipherSuite Kex_RSA None (MtE (Stream RC4_128) SHA1))
   | TLS_RSA_WITH_3DES_EDE_CBC_SHA          -> Some ( CipherSuite Kex_RSA None (MtE (Block TDES_EDE_CBC) SHA1))
   | TLS_RSA_WITH_AES_128_CBC_SHA           -> Some ( CipherSuite Kex_RSA None (MtE (Block AES128_CBC) SHA1))
   | TLS_RSA_WITH_AES_256_CBC_SHA           -> Some ( CipherSuite Kex_RSA None (MtE (Block AES256_CBC) SHA1))
-  | TLS_RSA_WITH_AES_128_CBC_SHA256        -> Some ( CipherSuite Kex_RSA None (MtE (Block AES128_CBC) SHA256))
-  | TLS_RSA_WITH_AES_256_CBC_SHA256        -> Some ( CipherSuite Kex_RSA None (MtE (Block AES256_CBC) SHA256))
+  | TLS_RSA_WITH_AES_128_CBC_SHA256        -> Some ( CipherSuite Kex_RSA None (MtE (Block AES128_CBC) SHA2_256))
+  | TLS_RSA_WITH_AES_256_CBC_SHA256        -> Some ( CipherSuite Kex_RSA None (MtE (Block AES256_CBC) SHA2_256))
 
   | TLS_DHE_DSS_WITH_3DES_EDE_CBC_SHA      -> Some ( CipherSuite Kex_DHE (Some DSA) (MtE (Block TDES_EDE_CBC) SHA1))
   | TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA      -> Some ( CipherSuite Kex_DHE (Some RSASIG) (MtE (Block TDES_EDE_CBC) SHA1))
@@ -168,48 +168,48 @@ let cipherSuite'_of_name : cipherSuiteName -> Tot (option cipherSuite')  =
   | TLS_DHE_RSA_WITH_AES_128_CBC_SHA       -> Some ( CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES128_CBC) SHA1))
   | TLS_DHE_DSS_WITH_AES_256_CBC_SHA       -> Some ( CipherSuite Kex_DHE (Some DSA) (MtE (Block AES256_CBC) SHA1))
   | TLS_DHE_RSA_WITH_AES_256_CBC_SHA       -> Some ( CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES256_CBC) SHA1))
-  | TLS_DHE_DSS_WITH_AES_128_CBC_SHA256    -> Some ( CipherSuite Kex_DHE (Some DSA) (MtE (Block AES128_CBC) SHA256))
-  | TLS_DHE_RSA_WITH_AES_128_CBC_SHA256    -> Some ( CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES128_CBC) SHA256))
-  | TLS_DHE_DSS_WITH_AES_256_CBC_SHA256    -> Some ( CipherSuite Kex_DHE (Some DSA) (MtE (Block AES256_CBC) SHA256))
-  | TLS_DHE_RSA_WITH_AES_256_CBC_SHA256    -> Some ( CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES256_CBC) SHA256))
+  | TLS_DHE_DSS_WITH_AES_128_CBC_SHA256    -> Some ( CipherSuite Kex_DHE (Some DSA) (MtE (Block AES128_CBC) SHA2_256))
+  | TLS_DHE_RSA_WITH_AES_128_CBC_SHA256    -> Some ( CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES128_CBC) SHA2_256))
+  | TLS_DHE_DSS_WITH_AES_256_CBC_SHA256    -> Some ( CipherSuite Kex_DHE (Some DSA) (MtE (Block AES256_CBC) SHA2_256))
+  | TLS_DHE_RSA_WITH_AES_256_CBC_SHA256    -> Some ( CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES256_CBC) SHA2_256))
 
   | TLS_ECDHE_RSA_WITH_RC4_128_SHA         -> Some ( CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Stream RC4_128) SHA1))
   | TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA    -> Some ( CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block TDES_EDE_CBC) SHA1))
   | TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA     -> Some ( CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES128_CBC) SHA1))
-  | TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256  -> Some ( CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES128_CBC) SHA256))
+  | TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256  -> Some ( CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES128_CBC) SHA2_256))
   | TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA     -> Some ( CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES256_CBC) SHA1))
-  | TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384  -> Some ( CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES256_CBC) SHA384))
+  | TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384  -> Some ( CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES256_CBC) SHA2_384))
 
-  | TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 -> Some ( CipherSuite Kex_ECDHE (Some ECDSA) (AEAD AES128_GCM SHA256))
-  | TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256  -> Some ( CipherSuite Kex_ECDHE (Some RSASIG) (AEAD AES128_GCM SHA256))
-  | TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 -> Some ( CipherSuite Kex_ECDHE (Some ECDSA) (AEAD AES256_GCM SHA384))
-  | TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384  -> Some ( CipherSuite Kex_ECDHE (Some RSASIG) (AEAD AES256_GCM SHA384))
+  | TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 -> Some ( CipherSuite Kex_ECDHE (Some ECDSA) (AEAD AES128_GCM SHA2_256))
+  | TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256  -> Some ( CipherSuite Kex_ECDHE (Some RSASIG) (AEAD AES128_GCM SHA2_256))
+  | TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 -> Some ( CipherSuite Kex_ECDHE (Some ECDSA) (AEAD AES256_GCM SHA2_384))
+  | TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384  -> Some ( CipherSuite Kex_ECDHE (Some RSASIG) (AEAD AES256_GCM SHA2_384))
 
   | TLS_DH_anon_WITH_RC4_128_MD5           -> Some ( CipherSuite Kex_DHE None (MtE (Stream RC4_128) MD5))
   | TLS_DH_anon_WITH_3DES_EDE_CBC_SHA      -> Some ( CipherSuite Kex_DHE None (MtE (Block TDES_EDE_CBC) SHA1))
   | TLS_DH_anon_WITH_AES_128_CBC_SHA       -> Some ( CipherSuite Kex_DHE None (MtE (Block AES128_CBC) SHA1))
   | TLS_DH_anon_WITH_AES_256_CBC_SHA       -> Some ( CipherSuite Kex_DHE None (MtE (Block AES256_CBC) SHA1))
-  | TLS_DH_anon_WITH_AES_128_CBC_SHA256    -> Some ( CipherSuite Kex_DHE None (MtE (Block AES128_CBC) SHA256))
-  | TLS_DH_anon_WITH_AES_256_CBC_SHA256    -> Some ( CipherSuite Kex_DHE None (MtE (Block AES256_CBC) SHA256))
+  | TLS_DH_anon_WITH_AES_128_CBC_SHA256    -> Some ( CipherSuite Kex_DHE None (MtE (Block AES128_CBC) SHA2_256))
+  | TLS_DH_anon_WITH_AES_256_CBC_SHA256    -> Some ( CipherSuite Kex_DHE None (MtE (Block AES256_CBC) SHA2_256))
 
-  | TLS_RSA_WITH_AES_128_GCM_SHA256        -> Some ( CipherSuite Kex_RSA None          (AEAD AES128_GCM SHA256))
-  | TLS_RSA_WITH_AES_256_GCM_SHA384        -> Some ( CipherSuite Kex_RSA None          (AEAD AES256_GCM SHA384))
-  | TLS_DHE_RSA_WITH_AES_128_GCM_SHA256    -> Some ( CipherSuite Kex_DHE (Some RSASIG) (AEAD AES128_GCM SHA256))
-  | TLS_DHE_RSA_WITH_AES_256_GCM_SHA384    -> Some ( CipherSuite Kex_DHE (Some RSASIG) (AEAD AES256_GCM SHA384))
-  | TLS_DH_RSA_WITH_AES_128_GCM_SHA256     -> Some ( CipherSuite Kex_DH  (Some RSASIG) (AEAD AES128_GCM SHA256))
-  | TLS_DH_RSA_WITH_AES_256_GCM_SHA384     -> Some ( CipherSuite Kex_DH  (Some RSASIG) (AEAD AES256_GCM SHA384))
-  | TLS_DHE_DSS_WITH_AES_128_GCM_SHA256    -> Some ( CipherSuite Kex_DHE (Some DSA)    (AEAD AES128_GCM SHA256))
-  | TLS_DHE_DSS_WITH_AES_256_GCM_SHA384    -> Some ( CipherSuite Kex_DHE (Some DSA)    (AEAD AES256_GCM SHA384))
-  | TLS_DH_DSS_WITH_AES_128_GCM_SHA256     -> Some ( CipherSuite Kex_DH  (Some DSA)    (AEAD AES128_GCM SHA256))
-  | TLS_DH_DSS_WITH_AES_256_GCM_SHA384     -> Some ( CipherSuite Kex_DH  (Some DSA)    (AEAD AES256_GCM SHA384))
-  | TLS_DH_anon_WITH_AES_128_GCM_SHA256    -> Some ( CipherSuite Kex_DHE None          (AEAD AES128_GCM SHA256))
-  | TLS_DH_anon_WITH_AES_256_GCM_SHA384    -> Some ( CipherSuite Kex_DHE None          (AEAD AES256_GCM SHA384))
-  | TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256    -> Some ( CipherSuite Kex_ECDHE (Some RSASIG) (AEAD CHACHA20_POLY1305 SHA256))
-  | TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256  -> Some ( CipherSuite Kex_ECDHE (Some ECDSA) (AEAD CHACHA20_POLY1305 SHA256))
-  | TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256      -> Some ( CipherSuite Kex_DHE (Some RSASIG) (AEAD CHACHA20_POLY1305 SHA256))
-  | TLS_PSK_WITH_CHACHA20_POLY1305_SHA256          -> Some ( CipherSuite Kex_PSK None (AEAD CHACHA20_POLY1305 SHA256))
-  | TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256    -> Some ( CipherSuite Kex_PSK_ECDHE None (AEAD CHACHA20_POLY1305 SHA256))
-  | TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256      -> Some ( CipherSuite Kex_PSK_DHE None (AEAD CHACHA20_POLY1305 SHA256))
+  | TLS_RSA_WITH_AES_128_GCM_SHA256        -> Some ( CipherSuite Kex_RSA None          (AEAD AES128_GCM SHA2_256))
+  | TLS_RSA_WITH_AES_256_GCM_SHA384        -> Some ( CipherSuite Kex_RSA None          (AEAD AES256_GCM SHA2_384))
+  | TLS_DHE_RSA_WITH_AES_128_GCM_SHA256    -> Some ( CipherSuite Kex_DHE (Some RSASIG) (AEAD AES128_GCM SHA2_256))
+  | TLS_DHE_RSA_WITH_AES_256_GCM_SHA384    -> Some ( CipherSuite Kex_DHE (Some RSASIG) (AEAD AES256_GCM SHA2_384))
+  | TLS_DH_RSA_WITH_AES_128_GCM_SHA256     -> Some ( CipherSuite Kex_DH  (Some RSASIG) (AEAD AES128_GCM SHA2_256))
+  | TLS_DH_RSA_WITH_AES_256_GCM_SHA384     -> Some ( CipherSuite Kex_DH  (Some RSASIG) (AEAD AES256_GCM SHA2_384))
+  | TLS_DHE_DSS_WITH_AES_128_GCM_SHA256    -> Some ( CipherSuite Kex_DHE (Some DSA)    (AEAD AES128_GCM SHA2_256))
+  | TLS_DHE_DSS_WITH_AES_256_GCM_SHA384    -> Some ( CipherSuite Kex_DHE (Some DSA)    (AEAD AES256_GCM SHA2_384))
+  | TLS_DH_DSS_WITH_AES_128_GCM_SHA256     -> Some ( CipherSuite Kex_DH  (Some DSA)    (AEAD AES128_GCM SHA2_256))
+  | TLS_DH_DSS_WITH_AES_256_GCM_SHA384     -> Some ( CipherSuite Kex_DH  (Some DSA)    (AEAD AES256_GCM SHA2_384))
+  | TLS_DH_anon_WITH_AES_128_GCM_SHA256    -> Some ( CipherSuite Kex_DHE None          (AEAD AES128_GCM SHA2_256))
+  | TLS_DH_anon_WITH_AES_256_GCM_SHA384    -> Some ( CipherSuite Kex_DHE None          (AEAD AES256_GCM SHA2_384))
+  | TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256    -> Some ( CipherSuite Kex_ECDHE (Some RSASIG) (AEAD CHACHA20_POLY1305 SHA2_256))
+  | TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256  -> Some ( CipherSuite Kex_ECDHE (Some ECDSA) (AEAD CHACHA20_POLY1305 SHA2_256))
+  | TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256      -> Some ( CipherSuite Kex_DHE (Some RSASIG) (AEAD CHACHA20_POLY1305 SHA2_256))
+  | TLS_PSK_WITH_CHACHA20_POLY1305_SHA256          -> Some ( CipherSuite Kex_PSK None (AEAD CHACHA20_POLY1305 SHA2_256))
+  | TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256    -> Some ( CipherSuite Kex_PSK_ECDHE None (AEAD CHACHA20_POLY1305 SHA2_256))
+  | TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256      -> Some ( CipherSuite Kex_PSK_DHE None (AEAD CHACHA20_POLY1305 SHA2_256))
 
   | _ -> None
 
@@ -220,22 +220,22 @@ let name_of_cipherSuite' =
   let open Hashing.Spec in function
   | NullCipherSuite                                                      -> Correct TLS_NULL_WITH_NULL_NULL
 
-  | CipherSuite13 AES128_GCM SHA256                                     -> Correct TLS_AES_128_GCM_SHA256
-  | CipherSuite13 AES256_GCM SHA384                                     -> Correct TLS_AES_256_GCM_SHA384
-  | CipherSuite13 CHACHA20_POLY1305 SHA256                               -> Correct TLS_CHACHA20_POLY1305_SHA256
-  | CipherSuite13 AES128_CCM SHA256                                     -> Correct TLS_AES_128_CCM_SHA256
-  | CipherSuite13 AES128_CCM8 SHA256                                   -> Correct TLS_AES_128_CCM_8_SHA256
+  | CipherSuite13 AES128_GCM SHA2_256                                     -> Correct TLS_AES_128_GCM_SHA256
+  | CipherSuite13 AES256_GCM SHA2_384                                     -> Correct TLS_AES_256_GCM_SHA384
+  | CipherSuite13 CHACHA20_POLY1305 SHA2_256                               -> Correct TLS_CHACHA20_POLY1305_SHA256
+  | CipherSuite13 AES128_CCM SHA2_256                                     -> Correct TLS_AES_128_CCM_SHA256
+  | CipherSuite13 AES128_CCM8 SHA2_256                                   -> Correct TLS_AES_128_CCM_8_SHA256
 
   | CipherSuite Kex_RSA None (MACOnly MD5)                               -> Correct TLS_RSA_WITH_NULL_MD5
   | CipherSuite Kex_RSA None (MACOnly SHA1)                              -> Correct TLS_RSA_WITH_NULL_SHA
-  | CipherSuite Kex_RSA None (MACOnly SHA256)                            -> Correct TLS_RSA_WITH_NULL_SHA256
+  | CipherSuite Kex_RSA None (MACOnly SHA2_256)                            -> Correct TLS_RSA_WITH_NULL_SHA256
   | CipherSuite Kex_RSA None (MtE (Stream RC4_128) MD5)                  -> Correct TLS_RSA_WITH_RC4_128_MD5
   | CipherSuite Kex_RSA None (MtE (Stream RC4_128) SHA1)                 -> Correct TLS_RSA_WITH_RC4_128_SHA
   | CipherSuite Kex_RSA None (MtE (Block TDES_EDE_CBC) SHA1)             -> Correct TLS_RSA_WITH_3DES_EDE_CBC_SHA
   | CipherSuite Kex_RSA None (MtE (Block AES128_CBC) SHA1)              -> Correct TLS_RSA_WITH_AES_128_CBC_SHA
   | CipherSuite Kex_RSA None (MtE (Block AES256_CBC) SHA1)              -> Correct TLS_RSA_WITH_AES_256_CBC_SHA
-  | CipherSuite Kex_RSA None (MtE (Block AES128_CBC) SHA256)            -> Correct TLS_RSA_WITH_AES_128_CBC_SHA256
-  | CipherSuite Kex_RSA None (MtE (Block AES256_CBC) SHA256)            -> Correct TLS_RSA_WITH_AES_256_CBC_SHA256
+  | CipherSuite Kex_RSA None (MtE (Block AES128_CBC) SHA2_256)            -> Correct TLS_RSA_WITH_AES_128_CBC_SHA256
+  | CipherSuite Kex_RSA None (MtE (Block AES256_CBC) SHA2_256)            -> Correct TLS_RSA_WITH_AES_256_CBC_SHA256
 
   | CipherSuite Kex_DHE (Some DSA)    (MtE (Block TDES_EDE_CBC) SHA1)    -> Correct TLS_DHE_DSS_WITH_3DES_EDE_CBC_SHA
   | CipherSuite Kex_DHE (Some RSASIG) (MtE (Block TDES_EDE_CBC) SHA1)    -> Correct TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA
@@ -243,49 +243,49 @@ let name_of_cipherSuite' =
   | CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES128_CBC) SHA1)     -> Correct TLS_DHE_RSA_WITH_AES_128_CBC_SHA
   | CipherSuite Kex_DHE (Some DSA)    (MtE (Block AES256_CBC) SHA1)     -> Correct TLS_DHE_DSS_WITH_AES_256_CBC_SHA
   | CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES256_CBC) SHA1)     -> Correct TLS_DHE_RSA_WITH_AES_256_CBC_SHA
-  | CipherSuite Kex_DHE (Some DSA)    (MtE (Block AES128_CBC) SHA256)   -> Correct TLS_DHE_DSS_WITH_AES_128_CBC_SHA256
-  | CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES128_CBC) SHA256)   -> Correct TLS_DHE_RSA_WITH_AES_128_CBC_SHA256
-  | CipherSuite Kex_DHE (Some DSA)    (MtE (Block AES256_CBC) SHA256)   -> Correct TLS_DHE_DSS_WITH_AES_256_CBC_SHA256
-  | CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES256_CBC) SHA256)   -> Correct TLS_DHE_RSA_WITH_AES_256_CBC_SHA256
+  | CipherSuite Kex_DHE (Some DSA)    (MtE (Block AES128_CBC) SHA2_256)   -> Correct TLS_DHE_DSS_WITH_AES_128_CBC_SHA256
+  | CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES128_CBC) SHA2_256)   -> Correct TLS_DHE_RSA_WITH_AES_128_CBC_SHA256
+  | CipherSuite Kex_DHE (Some DSA)    (MtE (Block AES256_CBC) SHA2_256)   -> Correct TLS_DHE_DSS_WITH_AES_256_CBC_SHA256
+  | CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES256_CBC) SHA2_256)   -> Correct TLS_DHE_RSA_WITH_AES_256_CBC_SHA256
 
   | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Stream RC4_128) SHA1)      -> Correct TLS_ECDHE_RSA_WITH_RC4_128_SHA
   | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block TDES_EDE_CBC) SHA1)  -> Correct TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA
   | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES128_CBC) SHA1)   -> Correct TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA
-  | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES128_CBC) SHA256) -> Correct TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256
+  | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES128_CBC) SHA2_256) -> Correct TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256
   | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES256_CBC) SHA1)   -> Correct TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA
-  | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES256_CBC) SHA384) -> Correct TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384
+  | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES256_CBC) SHA2_384) -> Correct TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384
 
-  | CipherSuite Kex_ECDHE (Some RSASIG) (AEAD AES128_GCM SHA256)        -> Correct TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
-  | CipherSuite Kex_ECDHE (Some ECDSA) (AEAD AES128_GCM SHA256)        -> Correct TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
-  | CipherSuite Kex_ECDHE (Some RSASIG) (AEAD AES256_GCM SHA384)        -> Correct TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
-  | CipherSuite Kex_ECDHE (Some ECDSA) (AEAD AES256_GCM SHA384)        -> Correct TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+  | CipherSuite Kex_ECDHE (Some RSASIG) (AEAD AES128_GCM SHA2_256)        -> Correct TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+  | CipherSuite Kex_ECDHE (Some ECDSA) (AEAD AES128_GCM SHA2_256)        -> Correct TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+  | CipherSuite Kex_ECDHE (Some RSASIG) (AEAD AES256_GCM SHA2_384)        -> Correct TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+  | CipherSuite Kex_ECDHE (Some ECDSA) (AEAD AES256_GCM SHA2_384)        -> Correct TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
 
   | CipherSuite Kex_DHE None (MtE (Stream RC4_128) MD5)                  -> Correct TLS_DH_anon_WITH_RC4_128_MD5
   | CipherSuite Kex_DHE None (MtE (Block TDES_EDE_CBC) SHA1)             -> Correct TLS_DH_anon_WITH_3DES_EDE_CBC_SHA
   | CipherSuite Kex_DHE None (MtE (Block AES128_CBC) SHA1)              -> Correct TLS_DH_anon_WITH_AES_128_CBC_SHA
   | CipherSuite Kex_DHE None (MtE (Block AES256_CBC) SHA1)              -> Correct TLS_DH_anon_WITH_AES_256_CBC_SHA
-  | CipherSuite Kex_DHE None (MtE (Block AES128_CBC) SHA256)            -> Correct TLS_DH_anon_WITH_AES_128_CBC_SHA256
-  | CipherSuite Kex_DHE None (MtE (Block AES256_CBC) SHA256)            -> Correct TLS_DH_anon_WITH_AES_256_CBC_SHA256
+  | CipherSuite Kex_DHE None (MtE (Block AES128_CBC) SHA2_256)            -> Correct TLS_DH_anon_WITH_AES_128_CBC_SHA256
+  | CipherSuite Kex_DHE None (MtE (Block AES256_CBC) SHA2_256)            -> Correct TLS_DH_anon_WITH_AES_256_CBC_SHA256
 
-  | CipherSuite Kex_RSA None          (AEAD AES128_GCM SHA256)          -> Correct TLS_RSA_WITH_AES_128_GCM_SHA256
-  | CipherSuite Kex_RSA None          (AEAD AES256_GCM SHA384)          -> Correct TLS_RSA_WITH_AES_256_GCM_SHA384
-  | CipherSuite Kex_DHE (Some RSASIG) (AEAD AES128_GCM SHA256)          -> Correct TLS_DHE_RSA_WITH_AES_128_GCM_SHA256
-  | CipherSuite Kex_DHE (Some RSASIG) (AEAD AES256_GCM SHA384)          -> Correct TLS_DHE_RSA_WITH_AES_256_GCM_SHA384
-  | CipherSuite Kex_DH  (Some RSASIG) (AEAD AES128_GCM SHA256)          -> Correct TLS_DH_RSA_WITH_AES_128_GCM_SHA256
-  | CipherSuite Kex_DH  (Some RSASIG) (AEAD AES256_GCM SHA384)          -> Correct TLS_DH_RSA_WITH_AES_256_GCM_SHA384
-  | CipherSuite Kex_DHE (Some DSA)    (AEAD AES128_GCM SHA256)          -> Correct TLS_DHE_DSS_WITH_AES_128_GCM_SHA256
-  | CipherSuite Kex_DHE (Some DSA)    (AEAD AES256_GCM SHA384)          -> Correct TLS_DHE_DSS_WITH_AES_256_GCM_SHA384
-  | CipherSuite Kex_DH  (Some DSA)    (AEAD AES128_GCM SHA256)          -> Correct TLS_DH_DSS_WITH_AES_128_GCM_SHA256
-  | CipherSuite Kex_DH  (Some DSA)    (AEAD AES256_GCM SHA384)          -> Correct TLS_DH_DSS_WITH_AES_256_GCM_SHA384
-  | CipherSuite Kex_DHE None          (AEAD AES128_GCM SHA256)          -> Correct TLS_DH_anon_WITH_AES_128_GCM_SHA256
-  | CipherSuite Kex_DHE None          (AEAD AES256_GCM SHA384)          -> Correct TLS_DH_anon_WITH_AES_256_GCM_SHA384
+  | CipherSuite Kex_RSA None          (AEAD AES128_GCM SHA2_256)          -> Correct TLS_RSA_WITH_AES_128_GCM_SHA256
+  | CipherSuite Kex_RSA None          (AEAD AES256_GCM SHA2_384)          -> Correct TLS_RSA_WITH_AES_256_GCM_SHA384
+  | CipherSuite Kex_DHE (Some RSASIG) (AEAD AES128_GCM SHA2_256)          -> Correct TLS_DHE_RSA_WITH_AES_128_GCM_SHA256
+  | CipherSuite Kex_DHE (Some RSASIG) (AEAD AES256_GCM SHA2_384)          -> Correct TLS_DHE_RSA_WITH_AES_256_GCM_SHA384
+  | CipherSuite Kex_DH  (Some RSASIG) (AEAD AES128_GCM SHA2_256)          -> Correct TLS_DH_RSA_WITH_AES_128_GCM_SHA256
+  | CipherSuite Kex_DH  (Some RSASIG) (AEAD AES256_GCM SHA2_384)          -> Correct TLS_DH_RSA_WITH_AES_256_GCM_SHA384
+  | CipherSuite Kex_DHE (Some DSA)    (AEAD AES128_GCM SHA2_256)          -> Correct TLS_DHE_DSS_WITH_AES_128_GCM_SHA256
+  | CipherSuite Kex_DHE (Some DSA)    (AEAD AES256_GCM SHA2_384)          -> Correct TLS_DHE_DSS_WITH_AES_256_GCM_SHA384
+  | CipherSuite Kex_DH  (Some DSA)    (AEAD AES128_GCM SHA2_256)          -> Correct TLS_DH_DSS_WITH_AES_128_GCM_SHA256
+  | CipherSuite Kex_DH  (Some DSA)    (AEAD AES256_GCM SHA2_384)          -> Correct TLS_DH_DSS_WITH_AES_256_GCM_SHA384
+  | CipherSuite Kex_DHE None          (AEAD AES128_GCM SHA2_256)          -> Correct TLS_DH_anon_WITH_AES_128_GCM_SHA256
+  | CipherSuite Kex_DHE None          (AEAD AES256_GCM SHA2_384)          -> Correct TLS_DH_anon_WITH_AES_256_GCM_SHA384
 
-  | CipherSuite Kex_ECDHE (Some RSASIG) (AEAD CHACHA20_POLY1305 SHA256)  -> Correct TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
-  | CipherSuite Kex_ECDHE (Some ECDSA) (AEAD CHACHA20_POLY1305 SHA256)   -> Correct TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
-  | CipherSuite Kex_DHE (Some RSASIG) (AEAD CHACHA20_POLY1305 SHA256)    -> Correct TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256
-  | CipherSuite Kex_PSK None (AEAD CHACHA20_POLY1305 SHA256)             -> Correct TLS_PSK_WITH_CHACHA20_POLY1305_SHA256
-  | CipherSuite Kex_PSK_ECDHE None (AEAD CHACHA20_POLY1305 SHA256)       -> Correct TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256
-  | CipherSuite Kex_PSK_DHE None (AEAD CHACHA20_POLY1305 SHA256)         -> Correct TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256
+  | CipherSuite Kex_ECDHE (Some RSASIG) (AEAD CHACHA20_POLY1305 SHA2_256)  -> Correct TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+  | CipherSuite Kex_ECDHE (Some ECDSA) (AEAD CHACHA20_POLY1305 SHA2_256)   -> Correct TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
+  | CipherSuite Kex_DHE (Some RSASIG) (AEAD CHACHA20_POLY1305 SHA2_256)    -> Correct TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+  | CipherSuite Kex_PSK None (AEAD CHACHA20_POLY1305 SHA2_256)             -> Correct TLS_PSK_WITH_CHACHA20_POLY1305_SHA256
+  | CipherSuite Kex_PSK_ECDHE None (AEAD CHACHA20_POLY1305 SHA2_256)       -> Correct TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256
+  | CipherSuite Kex_PSK_DHE None (AEAD CHACHA20_POLY1305 SHA2_256)         -> Correct TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256
 
   | _ -> fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "Invoked on a unknown ciphersuite")
 

@@ -222,7 +222,7 @@ private let rec server_loop_12 config sock : ML unit =
   let next = match nego with | {Negotiation.n_extensions = n} -> n in
   let cs = sh.sh_cipher_suite in
   let CipherSuite kex (Some sa) ae = cs in
-  let alg = (sa, Hash Hashing.Spec.SHA256) in
+  let alg = (sa, Hash Hashing.Spec.SHA2_256) in
   let ems = next.ne_extended_ms in
 
   // Send ServerCertificate
@@ -481,7 +481,7 @@ private let rec server_loop_13 config sock : ML unit =
 
   let kex = TLSConstants.Kex_ECDHE in
   let pv = TLS_1p3 in
-  let h = Hashing.Spec.SHA256 in
+  let h = Hashing.Spec.SHA2_256 in
   let sa = CoreCrypto.RSASIG in
   let cs = CipherSuite kex (Some sa) (AEAD CoreCrypto.AES_128_GCM h) in
 

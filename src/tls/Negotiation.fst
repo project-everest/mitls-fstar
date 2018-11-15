@@ -458,7 +458,7 @@ let computeOffer r cfg nonce ks resume now =
     // we send the hash of the ticket as SID to disambiguate the state machine
     | Some (tid, _), true, _ ->
       // FIXME Cannot compute hash in Tot
-      //let sid = Hashing.compute Hashing.Spec.SHA256 t
+      //let sid = Hashing.compute Hashing.Spec.SHA2_256 t
       let sid = if length tid <= 32 then tid else fst (split tid 32ul) in
       Some tid, sid
     | None, true, _ -> Some (empty_bytes), empty_bytes

@@ -37,7 +37,7 @@ type ticket_key =
 
 private let dummy_id (a:aeadAlg) : St AE.id =
   assume false;
-  let h = Hashing.Spec.SHA256 in
+  let h = Hashing.Spec.SHA2_256 in
   let li = LogInfo_CH0 ({
     li_ch0_cr = Bytes.create 32ul 0z;
     li_ch0_ed_psk = empty_bytes;

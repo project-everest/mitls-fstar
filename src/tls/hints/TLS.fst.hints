@@ -7,14 +7,12 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query",
-        "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "@query", "equation_FStar.HyperStack.ST.equal_stack_domains",
         "equation_FStar.Monotonic.Heap.equal_dom",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "c57a3c74f7e45ea186e5640fb6714bc8"
+      "a0629a69cc4a4cb3a2df93601e0df074"
     ],
     [
       "TLS.trace",
@@ -22,12 +20,11 @@
       2,
       1,
       [
-        "@query", "equation_FStar.HyperStack.ST.equal_stack_domains",
-        "equation_FStar.Monotonic.Heap.equal_dom",
-        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
+        "@query", "equation_DebugFlags.debug",
+        "equation_DebugFlags.debug_TLS"
       ],
       0,
-      "a821fcdfae8778581b1d0a51540f8b01"
+      "e2f2455c17d8b012c60756bf78a77fdf"
     ]
   ]
 ]

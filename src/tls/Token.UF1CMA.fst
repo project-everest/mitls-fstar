@@ -113,7 +113,9 @@ val create:
     Pkg.fresh_regions (footprint k) h0 h1)
 
 let create ip _ _ i u =
-  assert_norm(EverCrypt.HMAC.keysized u.alg (EverCrypt.Hash.tagLength u.alg));
+  assert_norm (pow2 32 < pow2 61);
+  assert_norm (pow2 61 < pow2 125);
+  assert(EverCrypt.HMAC.keysized u.alg (EverCrypt.Hash.tagLength u.alg));
   let kv: keyrepr u = Random.sample32 (Hashing.tagLen u.alg) in
   let ck = MAC u kv in
   let k : ir_key ip i =
@@ -131,7 +133,9 @@ let coerceT (ip: ipkg) (ha_of_i: ip.Pkg.t -> ha) (good_of_i: ip.Pkg.t -> bool)
   (u: info {u.alg = ha_of_i i /\ u.good == good_of_i i})
   (kv: lbytes32 (keylen u)) : GTot (key ip i)
   =
-  assert_norm(EverCrypt.HMAC.keysized u.alg (EverCrypt.Hash.tagLength u.alg));
+  assert_norm (pow2 32 < pow2 61);
+  assert_norm (pow2 61 < pow2 125);
+  assert(EverCrypt.HMAC.keysized u.alg (EverCrypt.Hash.tagLength u.alg));
   let ck = MAC u kv in
   if model then
     let k : ir_key ip i = RealKey ck in k
@@ -150,7 +154,9 @@ val coerce:
     Pkg.fresh_regions (footprint k) h0 h1)
 
 let coerce ip _ _ i u kv =
-  assert_norm(EverCrypt.HMAC.keysized u.alg (EverCrypt.Hash.tagLength u.alg));
+  assert_norm (pow2 32 < pow2 61);
+  assert_norm (pow2 61 < pow2 125);
+  assert(EverCrypt.HMAC.keysized u.alg (EverCrypt.Hash.tagLength u.alg));
   let ck = MAC u kv in
   if model then
     let k : ir_key ip i = RealKey ck in k
@@ -242,13 +248,13 @@ open FStar.Tactics
 private type id = nat
 private let ip : ipkg = Pkg.Idx id (fun _ -> True) (fun _ -> True) (fun _ -> true)
 
-private let test (r:rgn {~(is_tls_rgn r)}) (t': Hashing.Spec.tag Hashing.SHA256)
+private let test (r:rgn {~(is_tls_rgn r)}) (t': Hashing.Spec.tag Hashing.SHA2_256)
   : ST unit
   (requires fun h0 -> model)
   (ensures fun h0 _ h1 -> True)
   =
   // testing usability of local packages
-  let a = Hashing.SHA256 in
+  let a = Hashing.SHA2_256 in
   let ha_of_i (i:ip.Pkg.t) = a in
   let good_of_i (i:ip.Pkg.t) = true in // a property worth MACing!
 

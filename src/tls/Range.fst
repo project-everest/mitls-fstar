@@ -263,7 +263,7 @@ let targetLength i (l,h) =
 *)
 
 #reset-options
-#set-options "--initial_fuel 0 --initial_ifuel 2 --max_fuel 0 --max_ifuel 2"
+#set-options "--initial_fuel 0 --initial_ifuel 2 --max_fuel 0 --max_ifuel 2 --z3rlimit 200"
 
 val targetLength_at_most_max_TLSCiphertext_fragment_length: i:id2
    -> r:range{
@@ -273,7 +273,6 @@ val targetLength_at_most_max_TLSCiphertext_fragment_length: i:id2
        | MtE a _ -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + UInt32.v (macSize (macAlg_of_id i)))
        | AEAD _ _ -> fst r = snd r)}
    -> Lemma (targetLength i r <= max_TLSCiphertext_fragment_length)
-#set-options "--z3rlimit 60"
 //without hints, this next query succeeds in around 19s on a powerful desktop; that's too close the default 20s timeout for CI
 //with hints, it takes about 3.5s on the same machine. So, for CI with hints, the 60s timeouts is very generous but harmless
 //At least with the long timeout it should work reliably with or without hints
@@ -296,7 +295,7 @@ let targetLength_converges i r =
   | MtE a _ -> ()
   | AEAD _ _ -> ()
 
-#reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
+#reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1 --z3rlimit 200"
 val rangeClass: i:id2 -> r:range -> HyperStack.All.ML (r':range
   { snd r <= max_TLSPlaintext_fragment_length
     /\ ((~(AEAD? (aeAlg_of_id i))

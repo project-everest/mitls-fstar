@@ -7,14 +7,12 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query",
-        "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "@query", "equation_FStar.HyperStack.ST.equal_stack_domains",
         "equation_FStar.Monotonic.Heap.equal_dom",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "f5ec25453dbba7ef8c0b69a0c4ade896"
+      "a93b11775cc1d37f4d6d9aaf26f1047f"
     ],
     [
       "Old.KeySchedule.dbg",
@@ -22,12 +20,10 @@
       2,
       1,
       [
-        "@query", "equation_FStar.HyperStack.ST.equal_stack_domains",
-        "equation_FStar.Monotonic.Heap.equal_dom",
-        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
+        "@query", "equation_DebugFlags.debug", "equation_DebugFlags.debug_KS"
       ],
       0,
-      "1dcec556153aeaa54c7e86ff3e083ab1"
+      "fdec823e55faf74dc5a45dd67c3a85b0"
     ]
   ]
 ]

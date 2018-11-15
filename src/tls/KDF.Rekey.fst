@@ -43,7 +43,7 @@ let is_kdf_p (p: pkg ii) d children = // same as ksd_subtree
 //let test_rekey(): St C.exit_code = C.EXIT_SUCCESS
 
 inline_for_extraction noextract
-let ivlen (i:id) : keylen = EverCrypt.Hash.tagLen Hashing.Spec.SHA256
+let ivlen (i:id) : keylen = EverCrypt.Hash.tagLen Hashing.Spec.SHA2_256
 
 let is_iv_p (p:pkg ii) =
   Pkg?.key p == IV.raw ii ivlen /\
@@ -187,11 +187,11 @@ let test_rekey(): St C.exit_code
   let h0 = get() in
 
   let i2:regid = if model then magic() else unit in
-  let a2 : KDF.info0 i2 = KDF.Info Hashing.Spec.SHA256 None in
+  let a2 : KDF.info0 i2 = KDF.Info Hashing.Spec.SHA2_256 None in
   let kdf2 = fake_kdf 2 t2 i2 a2 (Random.sample32 32ul) in
 
   let i1 = derive i2 "RE" Expand in
-  let a1 : KDF.info0 i1 = KDF.Info Hashing.Spec.SHA256 None in
+  let a1 : KDF.info0 i1 = KDF.Info Hashing.Spec.SHA2_256 None in
   [@inline_let] let cpkg' = concrete_pkg t2 "RE" in
   let (| (), kdf1 |) = KDF.derive #(flagKDF 3) #t2 #i2 kdf2 "RE" Expand cpkg' a1 in
   let t1 = _down t2 in
@@ -203,7 +203,7 @@ let test_rekey(): St C.exit_code
   print ("IV1: "^(Bytes.hex_of_bytes iv1));
 
   let i0 = derive i1 "RE" Expand in
-  let a0  : KDF.info0 i0 = KDF.Info Hashing.Spec.SHA256 None in
+  let a0  : KDF.info0 i0 = KDF.Info Hashing.Spec.SHA2_256 None in
   [@inline_let] let cpkg' = concrete_pkg #1 t1 "RE" in
   let (| (), kdf0 |) = KDF.derive #(flagKDF 1) #t1 #i1 kdf1 "RE" Expand cpkg' a0 in
 

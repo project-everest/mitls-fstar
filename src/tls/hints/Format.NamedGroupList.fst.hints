@@ -52,22 +52,15 @@
       2,
       1,
       [
-        "@fuel_correspondence_FStar.List.Tot.Base.length.fuel_instrumented",
-        "@query",
-        "Format.NamedGroup_pretyping_6535743a126d9361a26fc83141a3dd2c",
-        "constructor_distinct_FStar.Pervasives.Native.None",
-        "data_typing_intro_Format.NamedGroup.SECP384R1@tok",
+        "@query", "constructor_distinct_FStar.Pervasives.Native.None",
         "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_Format.NamedGroupList.maxCount",
-        "equation_Format.NamedGroupList.minCount",
         "equation_LowParse.Spec.List.parse_list_kind", "equation_Prims.nat",
-        "primitive_Prims.op_LessThanOrEqual",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high"
       ],
       0,
-      "549aae0641f5da9a322070d78c6b6d5f"
+      "5cd028471875911d2c5b272aa9777a36"
     ],
     [
       "Format.NamedGroupList.synth_namedGroupList",

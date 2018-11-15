@@ -9,15 +9,13 @@ CONCRETE_FLAVOR = -OpenSSL
 endif
 
 # Target C compilation units for miTLS sources. Requires -minimal
-MITLS_BUNDLES = -drop Spec.Loops \
-  -bundle 'LowParse.\*' \
-  -bundle LowParseWrappers \
+MITLS_BUNDLES = \
+  -bundle 'LowParse.\*,LowParseWrappers[rename=LowParse]' \
   -bundle 'Format.\*' \
   -bundle 'EverCrypt=EverCrypt,EverCrypt.\*' \
-  -bundle 'FStar.\*' \
-  -bundle 'LowStar.\*' \
+  -bundle 'FStar.\*,LowStar.\*,C,C.\*[rename=Mitls_Kremlib]' \
   -bundle 'Parsers.\*' \
-  -bundle 'C=C,C.\*' \
+  -bundle 'Spec.\*' \
   -bundle TLSConstants=TLSConstants,QD.TLS_protocolVersion,List.Helpers \
   -bundle Hashing=Hashing.Spec,Hashing,Hashing.CRF,HMAC,HKDF,HMAC.UFCMA \
   -bundle Old.Handshake=Old.HMAC.UFCMA,Old.Epochs,Old.KeySchedule,Old.Handshake \

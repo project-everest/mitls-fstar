@@ -13,7 +13,7 @@ module B = FStar.Bytes
 // idealizing HMAC
 // for concreteness; the rest of the module is parametric in a
 
-let a = HMac Hashing.Spec.SHA256
+let a = HMac Hashing.Spec.SHA2_256
 
 type id = i:id { ID12? i /\ ~(AEAD? (aeAlg_of_id i)) }
 
