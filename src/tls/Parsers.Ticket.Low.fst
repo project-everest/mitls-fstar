@@ -4,6 +4,7 @@ open Parsers.CipherSuite
 open Parsers.Boolean
 open Parsers.TicketContents12
 open Parsers.TicketContents13
+open Parsers.TicketVersion
 open Parsers.TicketContents
 
 module HS = FStar.HyperStack
@@ -17,6 +18,8 @@ friend Parsers.CipherSuite
 friend Parsers.Boolean
 friend Parsers.TicketContents12
 friend Parsers.TicketContents13
+friend Parsers.TicketVersion
+friend Parsers.TicketContents
 
 let write_protocolVersion =
   lemma_synth_protocolVersion_inj ();
@@ -105,3 +108,27 @@ let valid_ticketContents13_intro h input pos =
   )); // because of refinements
   synth_ticketContents13_injective ();
   LP.valid_synth_intro h ticketContents13'_parser synth_ticketContents13 input pos
+
+inline_for_extraction
+let write_ticketVersion_key : LP.leaf_writer_strong serialize_ticketVersion_key =
+  LP.write_enum_key LP.write_u8 ticketVersion_enum (_ by (LPT.enum_repr_of_key_tac ticketVersion_enum))
+
+inline_for_extraction
+let jump_ticketContents12 : LP.jumper ticketContents12_parser =
+  LP.jump_constant_size ticketContents12_parser 53ul ()
+
+#reset-options "--z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 0 --max_ifuel 0 --print_z3_statistics --z3refresh --using_facts_from '* -Parsers +Parsers.Ticket.Low +Parsers.TicketContents12 +Parsers.TicketVersion +Parsers.TicketContents -LowParse +LowParse.Spec.Base +LowParse.Low.Base +LowParse.Spec.Combinators +LowParse.Spec.Enum +LowParse.Spec.Sum +LowParse.Low.Sum -FStar.Tactics -FStar.Reflection' --print_implicits"
+
+let finalize_case_ticketContents12 input pos =
+  [@inline_let] let _ =
+    assert_norm (LP.list_mem Ticket12 (LP.list_map fst ticketVersion_enum) == true);
+    assert_norm ((LP.get_parser_kind parse_ticketVersion_key).LP.parser_kind_low == 1);
+    assert_norm ((LP.get_parser_kind parse_ticketVersion_key).LP.parser_kind_high == Some 1)
+  in
+  let pos1 = write_ticketVersion_key Ticket12 input pos in
+  let h = HST.get () in
+  [@inline_let] let _ =
+    LP.valid_sum_intro h ticketContents_sum ticketVersion_repr_parser parse_ticketContents_cases input pos
+  in
+  [@inline_let] let _ = assert_norm (LP.parse_sum_kind (LP.get_parser_kind ticketVersion_repr_parser) ticketContents_sum parse_ticketContents_cases == ticketContents_parser_kind) in
+  jump_ticketContents12 input pos1

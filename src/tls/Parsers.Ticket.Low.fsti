@@ -4,6 +4,7 @@ open Parsers.CipherSuite
 open Parsers.Boolean
 open Parsers.TicketContents12
 open Parsers.TicketContents13
+open Parsers.TicketVersion
 open Parsers.TicketContents
 
 module HS = FStar.HyperStack
@@ -83,25 +84,27 @@ val valid_ticketContents13_intro
       (LP.get_valid_pos (LPB.parse_bounded_vlbytes 0 65535) h input pos5)
   ))
 
-module HST = FStar.HyperStack
+module HST = FStar.HyperStack.ST
 module B = LowStar.Buffer
 
-
-(*
-val write_ticketContents12
-  (pv: protocolVersion)
-  (cs: cipherSuite)
-  (b: boolean)
-  (ms: FStar.Bytes.lbytes 48)
-  (output: LP.slice)
+val finalize_case_ticketContents12
+  (input: LP.slice)
   (pos: U32.t)
 : HST.Stack U32.t
   (requires (fun h ->
-    LP.live_slice h output /\
-    U32.v pos + 53 <= U32.v output.len
+    U32.v pos + 1 <= 4294967295 /\
+    LP.valid ticketContents12_parser h input (pos `U32.add` 1ul) // special case because enum values have a constant-size representation here
   ))
   (ensures (fun h pos' h' ->
-    B.modifies (B.loc_slice_from_to output pos pos') h h' /\
-    LP.valid_content_pos ticketContents12_parser 
-    U32.v pos' == U32.v pos + 53
+    let pos1 = pos `U32.add` 1ul in
+    B.modifies (LP.loc_slice_from_to input pos pos1) h h' /\
+    LP.valid_content_pos
+      ticketContents_parser
+      h'
+      input
+      pos
+      (Case_ticket12 (LP.contents ticketContents12_parser h input pos1))
+      pos'
+    /\
+    pos' == LP.get_valid_pos ticketContents12_parser h input pos1
   ))
