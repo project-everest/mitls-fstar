@@ -97,6 +97,10 @@ let set_ticket_key (a:aeadAlg) (kv:bytes) : St bool =
 let set_sealing_key (a:aeadAlg) (kv:bytes) : St bool =
   set_internal_key true a kv
 
+[@unifier_hint_injective]
+inline_for_extraction
+let vlbytespl (min max: nat) = (x: bytes { min <= length x /\ length x <= max })
+
 // TODO absolute bare bone for functionality
 // We should expand with certificates, mode, etc
 type ticket =
@@ -106,18 +110,18 @@ type ticket =
     cs: cipherSuite{CipherSuite? cs} ->
     ems: bool ->
     msId: msId ->
-    ms: bytes ->
+    ms: lbytes 48 ->
     ticket
   // 1.3 RMS PSK
   | Ticket13:
     cs: cipherSuite{CipherSuite13? cs} ->
     li: logInfo ->
     rmsId: pre_rmsId li ->
-    rms: bytes ->
-    nonce: bytes ->
+    rms: vlbytespl 32 255 ->
+    nonce: vlbytespl 0 255 ->
     ticket_created: UInt32.t ->
     ticket_age_add: UInt32.t ->
-    custom: bytes ->
+    custom: vlbytespl 0 65535 ->
     ticket
 
 // Currently we use dummy indexes until we can serialize them properly
@@ -211,6 +215,66 @@ let serialize = function
     (versionBytes TLS_1p3) @| (cipherSuiteNameBytes (name_of_cipherSuite cs))
     @| (bytes_of_int32 created) @| (bytes_of_int32 age)
     @| (vlbytes 2 custom) @| (vlbytes 2 rms)
+
+#reset-options
+
+module PTL = Parsers.Ticket.Low
+module TC = Parsers.TicketContents
+module TC12 = Parsers.TicketContents12
+module TC13 = Parsers.TicketContents13
+module PB = Parsers.Boolean
+module LPB = LowParse.Low.Bytes
+module U32 = FStar.UInt32
+module B = LowStar.Buffer
+
+let ticketContents_of_ticket (t: ticket) : GTot TC.ticketContents =
+  match t with
+  | Ticket12 pv cs ems _ ms ->
+    TC.Case_ticket12 ({
+      TC12.pv = pv;
+      TC12.cs = name_of_cipherSuite cs;
+      TC12.ems = (if ems then PB.B_true else PB.B_false);
+      TC12.master_secret = ms;
+    })
+  | Ticket13 cs _ _ rms nonce created age custom ->
+    TC.Case_ticket13 ({
+      TC13.cs = name_of_cipherSuite cs;
+      TC13.rms = rms;
+      TC13.nonce = nonce;
+      TC13.creation_time = created;
+      TC13.age_add = age;
+      TC13.custom_data = custom;
+    })
+
+#reset-options "--max_fuel 0 --max_ifuel 1 --initial_ifuel 1 --z3rlimit 16 --z3cliopt smt.arith.nl=false --z3refresh"
+
+let write_ticket (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
+  (requires (fun h -> LPB.live_slice h sl /\ U32.v pos <= U32.v sl.LPB.len /\ U32.v sl.LPB.len <= U32.v LPB.max_uint32 ))
+  (ensures (fun h pos' h' ->
+    let tc = ticketContents_of_ticket t in
+    B.modifies (LPB.loc_slice_from sl pos) h h' /\ (
+    if pos' = LPB.max_uint32
+    then True
+    else
+      LPB.valid_content_pos TC.ticketContents_parser h' sl pos tc pos'
+  )))
+= match t with
+  | Ticket12 pv cs ems _ ms ->
+    if (sl.LPB.len `U32.sub` pos) `U32.lt` 54ul
+    then LPB.max_uint32
+    else
+      let pos1 = pos `U32.add` 1ul in
+      let pos2 = PTL.write_protocolVersion pv sl pos1 in
+      let pos3 = PTL.write_cipherSuite (name_of_cipherSuite cs) sl pos2 in
+      let pos4 = PTL.write_boolean (if ems then PB.B_true else PB.B_false) sl pos3 in
+      let _ = LPB.write_flbytes 48ul ms sl pos4 in
+      let h = get () in
+      PTL.valid_ticketContents12_intro h sl pos1;
+      let pos5' = PTL.finalize_case_ticketContents12 sl pos in
+      pos5'
+  | _ -> admit ()
+
+#set-options "--admit_smt_queries true"
 
 let ticket_encrypt (seal:bool) plain : St bytes =
   let Key tid wr _ = if seal then get_sealing_key () else get_ticket_key () in
