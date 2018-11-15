@@ -104,27 +104,6 @@ function fetch_and_make_qd() {
         (cd qd && git clean -fdx && make -j $threads $target)
 }
 
-function fetch_mlcrypto() {
-    if [ ! -d mlcrypto ]; then
-        git clone https://github.com/project-everest/MLCrypto mlcrypto
-    fi
-
-    cd mlcrypto
-    git fetch origin
-    local ref=$(if [ -f ../.mlcrypto_version ]; then cat ../.mlcrypto_version | tr -d '\r\n'; else echo origin/master; fi)
-    echo Switching to MLCrypto $ref
-    git reset --hard $ref
-    git submodule update
-    cd ..
-    export_home MLCRYPTO "$(pwd)/mlcrypto"
-    export_home OPENSSL "$(pwd)/mlcrypto/openssl"
-}
-
-function fetch_and_make_mlcrypto() {
-    fetch_mlcrypto
-    make -C mlcrypto -j $threads
-}
-
 function build_pki_if() {
     if [[ -d src/pki ]]; then
         make -C src/pki -j $threads
@@ -156,11 +135,10 @@ function mitls_verify() {
             else
                 # miTLS CI proper starts here
                 fetch_hacl &&
-                    fetch_and_make_mlcrypto &&
-                    # Only building a subset of HACL* for now
-                    make -C hacl-star/code extract-c -j $threads &&
-                    OTHERFLAGS="--admit_smt_queries true $OTHERFLAGS" make -C hacl-star/providers -j $threads &&
-                    make -C hacl-star/secure_api -j $threads &&
+                    # Only building a subset of HACL* for now, no verification
+                    OTHERFLAGS="--admit_smt_queries true $OTHERFLAGS" \
+                    VALE_SCONS_PARALLEL_OPT="-j $threads --NO-VERIFY" \
+                    make -C hacl-star providers.build -j $threads &&
                     make -C libs/ffi -j $threads &&
                     build_pki_if &&
                     make -C src/tls -j $threads all -k &&
