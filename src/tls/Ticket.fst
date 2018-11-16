@@ -246,7 +246,7 @@ let ticketContents_of_ticket (t: ticket) : GTot TC.ticketContents =
       TC13.custom_data = custom;
     })
 
-#reset-options "--max_fuel 0 --max_ifuel 1 --initial_ifuel 1 --z3rlimit 16 --z3cliopt smt.arith.nl=false --z3refresh"
+#reset-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1 --z3rlimit 256 --z3cliopt smt.arith.nl=false --z3refresh"
 
 let write_ticket (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
   (requires (fun h -> LPB.live_slice h sl /\ U32.v pos <= U32.v sl.LPB.len /\ U32.v sl.LPB.len <= U32.v LPB.max_uint32 ))
@@ -262,7 +262,7 @@ let write_ticket (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
   | Ticket12 pv cs ems _ ms ->
     if (sl.LPB.len `U32.sub` pos) `U32.lt` 54ul
     then LPB.max_uint32
-    else
+    else begin
       let pos1 = pos `U32.add` 1ul in
       let pos2 = PTL.write_protocolVersion pv sl pos1 in
       let pos3 = PTL.write_cipherSuite (name_of_cipherSuite cs) sl pos2 in
@@ -270,9 +270,32 @@ let write_ticket (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
       let _ = LPB.write_flbytes 48ul ms sl pos4 in
       let h = get () in
       PTL.valid_ticketContents12_intro h sl pos1;
-      let pos5' = PTL.finalize_case_ticketContents12 sl pos in
-      pos5'
-  | _ -> admit ()
+      PTL.finalize_case_ticketContents12 sl pos
+    end
+  | Ticket13 cs _ _ rms nonce created age custom ->
+    if (sl.LPB.len `U32.sub` pos) `U32.lt` (15ul `U32.add` len rms `U32.add` len nonce `U32.add` len custom)
+    then LPB.max_uint32
+    else begin
+      let pos1 = pos `U32.add` 1ul in
+      let pos2 = PTL.write_cipherSuite (name_of_cipherSuite cs) sl pos1 in
+      let len_rms = len rms in
+      let _ = LPB.write_flbytes len_rms rms sl (pos2 `U32.add` 1ul) in
+      let pos3 = LPB.finalize_bounded_vlbytes 32 255 sl pos2 len_rms in
+      let len_nonce = len nonce in
+      let _ = LPB.write_flbytes len_nonce nonce sl (pos3 `U32.add` 1ul) in
+      let pos4 = LPB.finalize_bounded_vlbytes 0 255 sl pos3 len_nonce in
+      let pos5 = LPB.write_u32 created sl pos4 in
+      let pos6 = LPB.write_u32 age sl pos5 in
+      LPB.max_uint32
+(*      
+      let len_custom = len custom in
+      let _ = LPB.write_flbytes len_custom custom sl (pos6 `U32.add` 2ul) in
+      let _ = LPB.finalize_bounded_vlbytes 0 65535 sl pos6 len_custom in
+      let h = get () in
+      PTL.valid_ticketContents13_intro h sl pos1;
+      PTL.finalize_case_ticketContents13 sl pos
+*)
+    end
 
 #set-options "--admit_smt_queries true"
 

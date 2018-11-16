@@ -270,7 +270,7 @@ let parse_maybe_enum_key_eq
   | Some (x, consumed) -> Some (maybe_enum_key_of_repr e x, consumed)
   | _ -> None
   ))
-= ()
+= parse_synth_eq p (maybe_enum_key_of_repr e) input
 
 let parse_enum_key_eq
   (#k: parser_kind)

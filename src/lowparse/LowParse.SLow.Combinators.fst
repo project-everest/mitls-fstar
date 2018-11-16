@@ -51,7 +51,9 @@ let parse32_and_then
   (p32' : ((x: t) -> Tot (parser32 (p' x))))
 : Tot (parser32 (p `and_then` p'))
 = fun (input: bytes32) ->
-  ((match p32 input with
+  ((
+  [@inline_let] let _ = and_then_eq p p' (B32.reveal input) in
+  match p32 input with
   | Some (v, l) ->
     let input' = B32.slice input l (B32.len input) in
     begin match p32' v input' with
@@ -74,7 +76,9 @@ let parse32_nondep_then
   (p2' : parser32 p2)
 : Tot (parser32 (nondep_then p1 p2))
 = fun (input: bytes32) ->
-  ((match p1' input with
+  ((
+  [@inline_let] let _ = nondep_then_eq p1 p2 (B32.reveal input) in
+  match p1' input with
   | Some (v, l) ->
     let input' = B32.slice input l (B32.len input) in
     begin match p2' input' with
@@ -110,6 +114,8 @@ let serialize32_nondep_then
   })
 : Tot (serializer32 (serialize_nondep_then p1 s1 u p2 s2))
 = fun (input: t1 * t2) ->
+  [@inline_let]
+  let _ = serialize_nondep_then_eq p1 s1 u p2 s2 input in
   match input with
   | (fs, sn) ->
     let output1 = s1' fs in
@@ -156,6 +162,7 @@ let parse32_synth
 : Tot (parser32 (parse_synth p1 f2))
 = fun (input: bytes32) ->
   ((
+    [@inline_let] let _ = parse_synth_eq p1 f2 (B32.reveal input) in
     match p1' input with
     | Some (v1, consumed) -> Some (f2' v1, consumed)
     | _ -> None
@@ -192,6 +199,7 @@ let serialize32_synth
   })
 : Tot (serializer32 (serialize_synth p1 f2 s1 g1 u))
 = fun (input: t2) ->
+    [@inline_let] let _ = serialize_synth_eq p1 f2 s1 g1 u input in
     let x = g1' input in
     (s1' x <: (res: bytes32 { serializer32_correct (serialize_synth p1 f2 s1 g1 u) input res } ))
 
@@ -222,6 +230,7 @@ let parse32_filter
 : Tot (parser32 (parse_filter p f))
 = fun (input: bytes32) ->
   ((
+    [@inline_let] let _ = parse_filter_eq p f (B32.reveal input) in
     match p32 input with
     | Some (v, consumed) ->
       if g v
@@ -301,6 +310,7 @@ let size32_nondep_then
   (s2' : size32 s2)
 : Tot (size32 (serialize_nondep_then _ s1 u _ s2))
 = fun x ->
+  [@inline_let] let _ = serialize_nondep_then_eq p1 s1 u p2 s2 x in
   match x with
   | (x1, x2) ->
     let v1 = s1' x1 in
@@ -336,6 +346,7 @@ let size32_synth
   })
 : Tot (size32 (serialize_synth p1 f2 s1 g1 u))
 = fun (input: t2) ->
+    [@inline_let] let _ = serialize_synth_eq p1 f2 s1 g1 u input in
     let x = g1' input in
     let y = s1' x in
     (y <: (res: U32.t { size32_postcond (serialize_synth p1 f2 s1 g1 u) input res } ))

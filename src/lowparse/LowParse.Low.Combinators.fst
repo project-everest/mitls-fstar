@@ -32,11 +32,14 @@ let valid_nondep_then
   ))))
 = valid_facts p1 h s pos;
   valid_facts (nondep_then p1 p2) h s pos;
-  if valid_dec p1 h s pos
+  if U32.v pos <= U32.v s.len
   then begin
-    let pos1 = get_valid_pos p1 h s pos in
     nondep_then_eq p1 p2 (B.as_seq h (B.gsub s.base pos (s.len `U32.sub` pos)));
-    valid_facts p2 h s pos1
+    if valid_dec p1 h s pos
+    then begin
+      let pos1 = get_valid_pos p1 h s pos in
+      valid_facts p2 h s pos1
+    end
   end
 
 let valid_nondep_then_intro
@@ -117,7 +120,7 @@ let valid_synth
   )))
 = valid_facts p1 h input pos;
   valid_facts (parse_synth p1 f2) h input pos;
-  if valid_dec p1 h input pos
+  if U32.v pos <= U32.v input.len
   then parse_synth_eq p1 f2 (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos)))
 
 let valid_synth_intro
@@ -273,7 +276,8 @@ let gaccessor_synth'
 : Ghost (nat & nat)
   (requires (True))
   (ensures (fun pos' -> gaccessor_post' (parse_synth p1 f) p1 (clens_synth g f ()) input pos'))
-= (0, Seq.length input)
+= parse_synth_eq p1 f input;
+  (0, Seq.length input)
 
 let gaccessor_synth
   (#k: parser_kind)
@@ -341,7 +345,8 @@ let gaccessor_fst'
 : Ghost (nat & nat)
   (requires True)
   (ensures (fun pos' -> gaccessor_post' (p1 `nondep_then` p2) p1 (clens_fst _ _) input pos'))
-= (0, (match parse p1 input with
+= nondep_then_eq p1 p2 input;
+  (0, (match parse p1 input with
   | Some (_, consumed) ->
     let _ =
       assert (no_lookahead_on p1 input (Seq.slice input 0 consumed));
@@ -373,7 +378,8 @@ let gaccessor_snd'
 : Ghost (nat & nat)
   (requires (True))
   (ensures (fun pos' -> gaccessor_post' (p1 `nondep_then` p2) p2 (clens_snd _ _) input pos'))
-= match parse p1 input with
+= nondep_then_eq p1 p2 input;
+  match parse p1 input with
   | None -> (0, 0) // dummy
   | Some (_, consumed) -> (consumed, Seq.length input - consumed)
 
@@ -485,7 +491,9 @@ let valid_filter
     valid_content_pos (parse_filter p f) h input pos (contents p h input pos) (get_valid_pos p h input pos)
   ))
 = valid_facts (parse_filter p f) h input pos;
-  valid_facts p h input pos
+  valid_facts p h input pos;
+  if U32.v pos <= U32.v input.len
+  then parse_filter_eq p f (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos)))
 
 inline_for_extraction
 let validate_filter
@@ -617,6 +625,7 @@ let write_synth
   (u: squash (synth_injective f2 /\ synth_inverse f2 g1))
 : Tot (leaf_writer_strong (serialize_synth p1 f2 s1 g1 ()))
 = fun x input pos ->
+  [@inline_let] let _ = serialize_synth_eq p1 f2 s1 g1 () x in
   [@inline_let] let _ = serialized_length_eq (serialize_synth p1 f2 s1 g1 ()) x in
   [@inline_let] let _ = serialized_length_eq s1 (g1 x) in
   let pos' = s1' (g1' x) input pos in
@@ -638,6 +647,7 @@ let write_synth_weak
   (u: squash (synth_injective f2 /\ synth_inverse f2 g1))
 : Tot (leaf_writer_weak (serialize_synth p1 f2 s1 g1 ()))
 = fun x input pos ->
+  [@inline_let] let _ = serialize_synth_eq p1 f2 s1 g1 () x in
   [@inline_let] let _ = serialized_length_eq (serialize_synth p1 f2 s1 g1 ()) x in
   [@inline_let] let _ = serialized_length_eq s1 (g1 x) in
   let pos' = s1' (g1' x) input pos in
@@ -668,9 +678,13 @@ let validate_filter_and_then
 = fun input pos ->
   let h = HST.get () in
   [@inline_let]
-  let _ = valid_facts (parse_filter p1 f `and_then` p2) h input pos in
-  [@inline_let]
-  let _ = valid_facts p1 h input pos in
+  let _ =
+    let sinput = B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos)) in
+    valid_facts (parse_filter p1 f `and_then` p2) h input pos;
+    and_then_eq (parse_filter p1 f) p2 sinput;
+    parse_filter_eq p1 f sinput;
+    valid_facts p1 h input pos
+  in
   let res = v1 input pos in
   if validator_max_length `U32.lt` res
   then res
