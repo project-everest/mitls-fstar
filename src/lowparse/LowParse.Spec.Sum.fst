@@ -81,6 +81,61 @@ let parse_tagged_union_eq
     let input_tg = Seq.slice input consumed_tg (Seq.length input) in
     parse_synth_eq #k #(refine_with_tag tag_of_data tg) (p tg) (synth_tagged_union_data tag_of_data tg) input_tg
 
+let bare_parse_tagged_union
+  (#kt: parser_kind)
+  (#tag_t: Type0)
+  (pt: parser kt tag_t)
+  (#data_t: Type0)
+  (tag_of_data: (data_t -> GTot tag_t))
+  (k': (t: tag_t) -> Tot parser_kind)
+  (p: (t: tag_t) -> Tot (parser (k' t) (refine_with_tag tag_of_data t)))
+  (input: bytes)
+: GTot (option (data_t * consumed_length input))
+= match parse pt input with
+  | None -> None
+  | Some (tg, consumed_tg) ->
+    let input_tg = Seq.slice input consumed_tg (Seq.length input) in
+    begin match parse (p tg) input_tg with
+    | Some (x, consumed_x) -> Some ((x <: data_t), consumed_tg + consumed_x)
+    | None -> None
+    end
+
+let parse_tagged_union_eq_gen
+  (#kt: parser_kind)
+  (#tag_t: Type0)
+  (pt: parser kt tag_t)
+  (#data_t: Type0)
+  (tag_of_data: (data_t -> GTot tag_t))
+  (#k: parser_kind)
+  (p: (t: tag_t) -> Tot (parser k (refine_with_tag tag_of_data t)))
+  (#kt': parser_kind)
+  (pt': parser kt' tag_t)
+  (lem_pt: (
+    (input: bytes) -> 
+    Lemma
+    (parse pt input == parse pt' input)
+  ))
+  (k': (t: tag_t) -> Tot parser_kind)
+  (p': (t: tag_t) -> Tot (parser (k' t) (refine_with_tag tag_of_data t)))
+  (lem_p' : (
+    (k: tag_t) ->
+    (input: bytes) ->
+    Lemma
+    (parse (p k) input == parse (p' k) input)
+  ))
+  (input: bytes)
+: Lemma
+  (parse (parse_tagged_union pt tag_of_data p) input == bare_parse_tagged_union pt' tag_of_data k' p' input)
+= parse_tagged_union_payload_and_then_cases_injective tag_of_data p;
+  and_then_eq pt (parse_tagged_union_payload tag_of_data p) input;
+  lem_pt input;
+  match parse pt input with
+  | None -> ()
+  | Some (tg, consumed_tg) ->
+    let input_tg = Seq.slice input consumed_tg (Seq.length input) in
+    parse_synth_eq #k #(refine_with_tag tag_of_data tg) (p tg) (synth_tagged_union_data tag_of_data tg) input_tg;
+    lem_p' tg input_tg
+
 let bare_serialize_tagged_union
   (#kt: parser_kind)
   (#tag_t: Type0)
@@ -263,6 +318,39 @@ let parse_sum_cases
 = synth_sum_case_injective s x;
   weaken (weaken_parse_cases_kind s f) (dsnd (f x)) `parse_synth` (synth_sum_case s x)
 
+let parse_sum_cases_eq
+  (s: sum)
+  (f: (x: sum_key s) -> Tot (k: parser_kind & parser k (sum_type_of_tag s x)))
+  (x: sum_key s)
+  (input: bytes)
+: Lemma
+  (parse (parse_sum_cases s f x) input == (match parse (dsnd (f x)) input with
+  | None -> None
+  | Some (y, consumed) -> Some (synth_sum_case s x y, consumed)
+  ))
+= synth_sum_case_injective s x;
+  parse_synth_eq (weaken (weaken_parse_cases_kind s f) (dsnd (f x))) (synth_sum_case s x) input
+
+let parse_sum_cases'
+  (s: sum)
+  (f: (x: sum_key s) -> Tot (k: parser_kind & parser k (sum_type_of_tag s x)))
+  (x: sum_key s)
+: Tot (parser (dfst (f x)) (sum_cases s x))
+=
+  synth_sum_case_injective s x;
+  dsnd (f x) `parse_synth` synth_sum_case s x
+
+let parse_sum_cases_eq'
+  (s: sum)
+  (f: (x: sum_key s) -> Tot (k: parser_kind & parser k (sum_type_of_tag s x)))
+  (x: sum_key s)
+  (input: bytes)
+: Lemma
+  (parse (parse_sum_cases s f x) input == parse (parse_sum_cases' s f x) input)
+= synth_sum_case_injective s x;
+  parse_synth_eq (weaken (weaken_parse_cases_kind s f) (dsnd (f x))) (synth_sum_case s x) input;
+  parse_synth_eq (dsnd (f x)) (synth_sum_case s x) input
+
 let parse_sum'
   (#kt: parser_kind)
   (t: sum)
@@ -295,87 +383,6 @@ let parse_sum
 : Tot (parser (parse_sum_kind kt t pc) (sum_type t))
 = parse_sum' t p (parse_sum_cases t pc)
 
-let bare_parse_sum0
-  (#kt: parser_kind)
-  (t: sum)
-  (p: parser kt (sum_repr_type t))
-  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
-: Tot (bare_parser (sum_type t))
-= fun (input: bytes) ->
-  match parse (parse_enum_key p (sum_enum t)) input with
-  | None -> None
-  | Some (k, consumed_k) ->
-    let input_k = Seq.slice input consumed_k (Seq.length input) in
-    begin match parse (parse_sum_cases t pc k) input_k with
-    | None -> None
-    | Some (x, consumed_x) -> Some ((x <: sum_type t), (consumed_k + consumed_x <: consumed_length input))
-    end
-    
-let parse_sum_eq0
-  (#kt: parser_kind)
-  (t: sum)
-  (p: parser kt (sum_repr_type t))
-  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
-  (input: bytes)
-: Lemma
-  (parse (parse_sum t p pc) input == bare_parse_sum0 t p pc input)
-= parse_tagged_union_eq #(parse_filter_kind kt) #(sum_key t) (parse_enum_key p (sum_enum t)) #(sum_type t) (sum_tag_of_data t) (parse_sum_cases t pc) input
-
-let bare_parse_sum1
-  (#kt: parser_kind)
-  (t: sum)
-  (p: parser kt (sum_repr_type t))
-  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
-: Tot (bare_parser (sum_type t))
-= fun (input: bytes) ->
-  match parse (parse_enum_key p (sum_enum t)) input with
-  | None -> None
-  | Some (k, consumed_k) ->
-    let input_k = Seq.slice input consumed_k (Seq.length input) in
-    begin match parse (synth_sum_case_injective t k; parse_synth (weaken (weaken_parse_cases_kind t pc) (dsnd (pc k))) (synth_sum_case t k)) input_k with
-    | None -> None
-    | Some (x, consumed_x) -> Some ((x <: sum_type t), (consumed_k + consumed_x <: consumed_length input))
-    end
-
-#set-options "--z3rlimit 16 --max_ifuel 2 --initial_ifuel 2"
-
-let parse_sum_eq1
-  (#kt: parser_kind)
-  (t: sum)
-  (p: parser kt (sum_repr_type t))
-  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
-  (input: bytes)
-: Lemma
-  (bare_parse_sum0 t p pc input == bare_parse_sum1 t p pc input)
-= assert_norm (bare_parse_sum0 t p pc input == bare_parse_sum1 t p pc input);
-  admit ()
-
-//  parse_sum_eq0 t p pc input;
-  match parse (parse_enum_key p (sum_enum t)) input with
-  | None -> ()
-  | Some (k, consumed_k) ->
-    let input_k = Seq.slice input consumed_k (Seq.length input) in
-    synth_sum_case_injective t k;
-    assert (parse (parse_sum_cases t pc k) input_k == parse (parse_synth (weaken (weaken_parse_cases_kind t pc) (dsnd (pc k))) (synth_sum_case t k)) input_k);
-    ()
-
-(*
-  match parse (parse_enum_key p (sum_enum t)) input with
-  | None -> ()
-  | Some (k, consumed_k) ->
-    synth_sum_case_injective t k
-
-  match parse (parse_enum_key p (sum_enum t)) input with
-  | None -> ()
-  | Some (k, consumed_k) ->
-    let input_k = Seq.slice input consumed_k (Seq.length input) in
-    synth_sum_case_injective t k;
-    parse_synth_eq (dsnd (pc k)) (synth_sum_case t k) input_k;
-    parse_synth_eq (weaken (weaken_parse_cases_kind t pc) (dsnd (pc k))) (synth_sum_case t k) input_k;
-    admit ()
-
-#set-options "--z3rlimit 32"
-
 let parse_sum_eq'
   (#kt: parser_kind)
   (t: sum)
@@ -387,23 +394,27 @@ let parse_sum_eq'
   | None -> None
   | Some (k, consumed_k) ->
     let input_k = Seq.slice input consumed_k (Seq.length input) in
-    synth_sum_case_injective t k;
-    begin match parse (parse_synth (dsnd (pc k)) (synth_sum_case t k)) input_k with
+    begin match
+//      parse (synth_sum_case_injective t k; parse_synth (dsnd (pc k)) (synth_sum_case t k)) input_k
+      parse (parse_sum_cases' t pc k) input_k
+    with
     | None -> None
     | Some (x, consumed_x) -> Some ((x <: sum_type t), consumed_k + consumed_x)
     end
   ))
-= parse_tagged_union_eq #(parse_filter_kind kt) #(sum_key t) (parse_enum_key p (sum_enum t)) #(sum_type t) (sum_tag_of_data t) (parse_sum_cases t pc) input;
-  match parse (parse_enum_key p (sum_enum t)) input with
-  | None -> ()
-  | Some (k, consumed_k) ->
-    let input_k = Seq.slice input consumed_k (Seq.length input) in
-    synth_sum_case_injective t k;
-    parse_synth_eq (dsnd (pc k)) (synth_sum_case t k) input_k;
-    parse_synth_eq (weaken (weaken_parse_cases_kind t pc) (dsnd (pc k))) (synth_sum_case t k) input_k;
-    admit ()
-
-#reset-options
+= parse_tagged_union_eq_gen
+    #(parse_filter_kind kt)
+    #(sum_key t)
+    (parse_enum_key p (sum_enum t))
+    #(sum_type t)
+    (sum_tag_of_data t)
+    (parse_sum_cases t pc)
+    (parse_enum_key p (sum_enum t))
+    (fun input -> ())
+    (fun k -> dfst (pc k))
+    (parse_sum_cases' t pc)
+    (fun k input -> parse_sum_cases_eq' t pc k input)
+    input
 
 let parse_sum_eq''
   (#kt: parser_kind)
@@ -419,8 +430,7 @@ let parse_sum_eq''
     let k = maybe_enum_key_of_repr (sum_enum t) k' in
     begin match k with
     | Known k ->
-      synth_sum_case_injective t k;
-      begin match parse (parse_synth (dsnd (pc k)) (synth_sum_case t k)) input_k with
+      begin match parse (parse_sum_cases' t pc k) input_k with
       | None -> None
       | Some (x, consumed_x) -> Some ((x <: sum_type t), consumed_k + consumed_x)
       end
@@ -429,8 +439,6 @@ let parse_sum_eq''
   ))
 = parse_sum_eq' t p pc input;
   parse_enum_key_eq p (sum_enum t) input
-
-#set-options "--z3rlimit 16"
 
 let parse_sum_eq
   (#kt: parser_kind)
@@ -448,15 +456,13 @@ let parse_sum_eq
     | Some (x, consumed_x) -> Some ((synth_sum_case t k x <: sum_type t), consumed_k + consumed_x)
     end
   ))
-= parse_tagged_union_eq #(parse_filter_kind kt) #(sum_key t) (parse_enum_key p (sum_enum t)) #(sum_type t) (sum_tag_of_data t) (parse_sum_cases t pc) input;
+= parse_sum_eq' t p pc input;
   match parse (parse_enum_key p (sum_enum t)) input with
   | None -> ()
   | Some (k, consumed_k) ->
     let input_k = Seq.slice input consumed_k (Seq.length input) in
     synth_sum_case_injective t k;
     parse_synth_eq (dsnd (pc k)) (synth_sum_case t k) input_k
-
-#reset-options
 
 inline_for_extraction
 let synth_sum_case_recip (s: sum) (k: sum_key s) (x: sum_cases s k) : Tot (sum_type_of_tag s k) =
@@ -467,16 +473,14 @@ let synth_sum_case_inverse (s: sum) (k: sum_key s) : Lemma
   (synth_inverse (synth_sum_case s k) (synth_sum_case_recip s k))
 = Classical.forall_intro (Sum?.synth_case_synth_case_recip s)
 
-let serialize_sum_cases
+let serialize_sum_cases'
   (s: sum)
   (f: (x: sum_key s) -> Tot (k: parser_kind & parser k (sum_type_of_tag s x)))
   (sr: (x: sum_key s) -> Tot (serializer (dsnd (f x))))
   (x: sum_key s)
-: Tot (serializer (parse_sum_cases s f x))
+: Tot (serializer (parse_sum_cases' s f x))
 = synth_sum_case_injective s x;
   synth_sum_case_inverse s x;
-  serialize_ext
-    (dsnd (f x) `parse_synth` (synth_sum_case s x))
     (serialize_synth
       _
       (synth_sum_case s x)
@@ -484,6 +488,17 @@ let serialize_sum_cases
       (synth_sum_case_recip s x)
       ()
     )
+
+let serialize_sum_cases
+  (s: sum)
+  (f: (x: sum_key s) -> Tot (k: parser_kind & parser k (sum_type_of_tag s x)))
+  (sr: (x: sum_key s) -> Tot (serializer (dsnd (f x))))
+  (x: sum_key s)
+: Tot (serializer (parse_sum_cases s f x))
+= Classical.forall_intro (parse_sum_cases_eq' s f x);
+  serialize_ext
+    (parse_sum_cases' s f x)
+    (serialize_sum_cases' s f sr x)
     (parse_sum_cases s f x)
 
 let serialize_sum'
@@ -521,8 +536,6 @@ let serialize_sum
 = // FIXME: WHY WHY WHY is implicit argument inference failing here? (i.e. introducing an eta-expansion)
   serialize_sum' t s #_ #(parse_sum_cases t pc) (serialize_sum_cases t pc sc)
 
-#set-options "--z3rlimit 32"
-
 let serialize_sum_eq
   (#kt: parser_kind)
   (t: sum)
@@ -539,9 +552,10 @@ let serialize_sum_eq
     serialize (serialize_enum_key _ s (sum_enum t)) tg `Seq.append`
     serialize (sc tg) (synth_sum_case_recip t tg x)
   )))
-= ()
-
-#reset-options
+= let tg = sum_tag_of_data t x in
+  synth_sum_case_injective t tg;
+  synth_sum_case_inverse t tg;
+  serialize_synth_eq (dsnd (pc tg)) (synth_sum_case t tg) (sc tg)  (synth_sum_case_recip t tg) () x
 
 inline_for_extraction
 let make_sum
@@ -815,6 +829,47 @@ let parse_dsum_cases
 = synth_dsum_case_injective s x;
   parse_dsum_type_of_tag s f g x `parse_synth` synth_dsum_case s x
 
+let parse_dsum_cases_kind
+  (s: dsum)
+  (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag s x)))
+  (#k: parser_kind)
+  (g: parser k (dsum_type_of_unknown_tag s))
+  (x: dsum_key s)
+: Tot parser_kind
+= match x with
+  | Known k -> dfst (f k)
+  | _ -> k
+
+let parse_dsum_cases'
+  (s: dsum)
+  (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag s x)))
+  (#k: parser_kind)
+  (g: parser k (dsum_type_of_unknown_tag s))
+  (x: dsum_key s)
+: Tot (parser (parse_dsum_cases_kind s f g x) (dsum_cases s x))
+= synth_dsum_case_injective s x;
+  match x with
+  | Known x' -> (dsnd (f x') `parse_synth` synth_dsum_case s (Known x')) <: parser (parse_dsum_cases_kind s f g x) (dsum_cases s x)
+  | Unknown x' -> g `parse_synth`  synth_dsum_case s (Unknown x') <: parser (parse_dsum_cases_kind s f g x) (dsum_cases s x)
+
+let parse_dsum_cases_eq'
+  (s: dsum)
+  (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag s x)))
+  (#k: parser_kind)
+  (g: parser k (dsum_type_of_unknown_tag s))
+  (x: dsum_key s)
+  (input: bytes)
+: Lemma
+  (parse (parse_dsum_cases s f g x) input == parse (parse_dsum_cases' s f g x) input)
+= synth_dsum_case_injective s x;
+  match x with
+  | Known x' ->
+    parse_synth_eq (weaken (weaken_parse_dsum_cases_kind s f k) (dsnd (f x'))) (synth_dsum_case s x) input;
+    parse_synth_eq (dsnd (f x')) (synth_dsum_case s (Known x')) input
+  | Unknown x' ->
+    parse_synth_eq (weaken (weaken_parse_dsum_cases_kind s f k) g) (synth_dsum_case s x) input;
+    parse_synth_eq g (synth_dsum_case s (Unknown x')) input
+
 let parse_dsum'
   (#kt: parser_kind)
   (t: dsum)
@@ -850,8 +905,6 @@ let parse_dsum
 : Tot (parser (parse_dsum_kind kt t f k) (dsum_type t))
 = parse_dsum' t p (parse_dsum_cases t f g)
 
-#set-options "--z3rlimit 32"
-
 let parse_dsum_eq''
   (#kt: parser_kind)
   (t: dsum)
@@ -874,6 +927,26 @@ let parse_dsum_eq''
 = parse_tagged_union_eq #(kt) #(dsum_key t) (parse_maybe_enum_key p (dsum_enum t)) #(dsum_type t) (dsum_tag_of_data t) (parse_dsum_cases t f g) input;
   parse_synth_eq p (maybe_enum_key_of_repr (dsum_enum t)) input
 
+let parse_dsum_eq_
+  (#kt: parser_kind)
+  (t: dsum)
+  (p: parser kt (dsum_repr_type t))
+  (f: (x: dsum_known_key t) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag t x)))
+  (#k': parser_kind)
+  (g: parser k' (dsum_type_of_unknown_tag t))
+  (input: bytes)
+: Lemma
+  (parse (parse_dsum t p f g) input == (match parse (parse_maybe_enum_key p (dsum_enum t)) input with
+  | None -> None
+  | Some (k, consumed_k) ->
+    let input_k = Seq.slice input consumed_k (Seq.length input) in
+    begin match parse (parse_dsum_cases' t f g k) input_k with
+      | None -> None
+      | Some (x, consumed_x) -> Some ((x <: dsum_type t), consumed_k + consumed_x)
+    end
+  ))
+= parse_tagged_union_eq_gen (parse_maybe_enum_key p (dsum_enum t)) (dsum_tag_of_data t) (parse_dsum_cases t f g) (parse_maybe_enum_key p (dsum_enum t)) (fun input -> ()) (parse_dsum_cases_kind t f g) (parse_dsum_cases' t f g) (fun tg input -> parse_dsum_cases_eq' t f g tg input) input
+
 let parse_dsum_eq'
   (#kt: parser_kind)
   (t: dsum)
@@ -888,22 +961,13 @@ let parse_dsum_eq'
   | Some (k', consumed_k) ->
     let k = maybe_enum_key_of_repr (dsum_enum t) k' in
     let input_k = Seq.slice input consumed_k (Seq.length input) in
-    synth_dsum_case_injective t k;
-    begin match k with
-    | Known k' ->
-      begin match parse (dsnd (f k') `parse_synth` synth_dsum_case t k) input_k with
+    begin match parse (parse_dsum_cases' t f g k) input_k with
       | None -> None
       | Some (x, consumed_x) -> Some ((x <: dsum_type t), consumed_k + consumed_x)
-      end
-    | Unknown k' ->
-      begin match parse (g `parse_synth` synth_dsum_case t k) input_k with
-      | None -> None
-      | Some (x, consumed_x) -> Some ((x <: dsum_type t), consumed_k + consumed_x)
-      end
     end
   ))
-= parse_tagged_union_eq #(kt) #(dsum_key t) (parse_maybe_enum_key p (dsum_enum t)) #(dsum_type t) (dsum_tag_of_data t) (parse_dsum_cases t f g) input;
-  parse_synth_eq p (maybe_enum_key_of_repr (dsum_enum t)) input
+= parse_dsum_eq_ t p f g input;
+  parse_maybe_enum_key_eq p (dsum_enum t) input
 
 let parse_dsum_eq
   (#kt: parser_kind)
@@ -931,7 +995,7 @@ let parse_dsum_eq
       end
     end
   ))
-= parse_tagged_union_eq #(kt) #(dsum_key t) (parse_maybe_enum_key p (dsum_enum t)) #(dsum_type t) (dsum_tag_of_data t) (parse_dsum_cases t f g) input;
+= parse_dsum_eq_ t p f g input;
   let j = parse (parse_maybe_enum_key p (dsum_enum t)) input in
   match j with
   | None -> ()
@@ -940,12 +1004,12 @@ let parse_dsum_eq
     synth_dsum_case_injective t k;
     begin match k with
     | Known k_ ->
+      parse_synth_eq (dsnd (f k_)) (synth_dsum_case t k) input_k;
       parse_synth_eq (weaken (weaken_parse_dsum_cases_kind t f k') (dsnd (f k_))) (synth_dsum_case t k) input_k
     | Unknown k_ ->
+      parse_synth_eq g (synth_dsum_case t k) input_k;
       parse_synth_eq (weaken (weaken_parse_dsum_cases_kind t f k') g) (synth_dsum_case t k) input_k
     end
-
-#reset-options
 
 let synth_dsum_case_inverse
   (s: dsum)
@@ -1170,7 +1234,17 @@ let serialize_dsum_eq
     | Known k -> serialize (sr k) (synth_dsum_case_recip s tg x)
     | Unknown k -> serialize sg (synth_dsum_case_recip s tg x)
   ))))
-= serialize_dsum_eq' s st f sr g sg x
+= serialize_dsum_eq' s st f sr g sg x;
+  let tg = dsum_tag_of_data s x in
+  synth_dsum_case_injective s tg;
+  synth_dsum_case_inverse s tg;
+    serialize_synth_eq
+    _
+    (synth_dsum_case s tg)
+    (serialize_dsum_type_of_tag s f sr g sg tg)
+    (synth_dsum_case_recip s tg)
+    ()
+    x
 
 (*
 let serialize_dsum_upd
