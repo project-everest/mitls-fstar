@@ -151,6 +151,7 @@ let parse_vldata_gen_kind_correct
   let kr = and_then_kind (parse_filter_kind (parse_bounded_integer_kind sz)) (parse_vldata_payload_kind sz) in
   assert_norm (kl == kr)
 
+abstract
 let parse_vldata_gen
   (sz: integer_size)
   (f: (bounded_integer sz -> GTot bool))
@@ -163,6 +164,8 @@ let parse_vldata_gen
   (parse_filter (parse_bounded_integer sz) f)
   `and_then`
   parse_vldata_payload sz f p
+
+#set-options "--z3rlimit 16"
 
 let parse_vldata_gen_eq
   (sz: integer_size)
@@ -190,25 +193,12 @@ let parse_vldata_gen_eq
     end
     else None
   ))
-= parse_filter_eq (parse_bounded_integer sz) f input;
-  match parse (parse_bounded_integer sz) input with
-  | None -> ()
-  | Some (len, consumed_len) ->
-    if f len
-    then
-      let input1 = Seq.slice input consumed_len (Seq.length input) in
-      if Seq.length input1 < U32.v len
-      then ()
-      else begin
-        let input' = Seq.slice input consumed_len (consumed_len + U32.v len) in
-        assert (input' == Seq.slice input1 0 (U32.v len));
-        assert (parse (parse_vldata_gen sz f p) input == (match parse_fldata' p (U32.v len) input1 with
-        | None -> None
-        | Some (x, consumed_x) -> Some (x, consumed_len + consumed_x)
-        ));
-        ()
-      end
-    else ()
+= parse_fldata_and_then_cases_injective sz f p;
+  parse_vldata_gen_kind_correct sz;
+  and_then_eq (parse_filter (parse_bounded_integer sz) f) (parse_vldata_payload sz f p) input;
+  parse_filter_eq (parse_bounded_integer sz) f input
+
+#reset-options
 
 let unconstrained_bounded_integer
   (sz: integer_size)
@@ -566,8 +556,6 @@ let parse_bounded_vldata_strong'
   (parse_strengthen (parse_bounded_vldata min max p) (parse_bounded_vldata_strong_pred min max s) (parse_bounded_vldata_strong_correct min max s))
   )
 
-#reset-options "--z3cliopt smt.arith.nl=false --using_facts_from '*  -FStar.UInt8 -FStar.UInt16' --z3rlimit 32"
-
 let parse_bounded_vldata_strong'_consumed
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
@@ -587,7 +575,7 @@ let parse_bounded_vldata_strong'_consumed
       Some? max' /\
       consumed <= Some?.v max'
   )))
-= ()
+= parse_vldata_gen_eq (log256' max) (in_bounds min max) p input
 
 let parse_bounded_vldata_strong'_parser_kind_prop
   (min: nat)
@@ -599,8 +587,6 @@ let parse_bounded_vldata_strong'_parser_kind_prop
 : Lemma
   (parser_kind_prop (parse_bounded_vldata_strong_kind min max k) (parse_bounded_vldata_strong' min max s))
 = Classical.forall_intro (Classical.move_requires (parse_bounded_vldata_strong'_consumed min max s))
-
-#reset-options
 
 let parse_bounded_vldata_strong
   (min: nat)

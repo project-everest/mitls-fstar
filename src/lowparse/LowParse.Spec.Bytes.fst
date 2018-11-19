@@ -176,7 +176,7 @@ let parse_bounded_vlbytes
 : Tot (parser (parse_bounded_vldata_kind min max) (parse_bounded_vlbytes_t min max))
 = parse_synth (parse_bounded_vlbytes' min max) (synth_bounded_vlbytes min max)
 
-#push-options "--z3rlimit 32"
+#set-options "--z3rlimit 16"
 
 let parse_bounded_vlbytes_eq
   (min: nat)
@@ -195,9 +195,10 @@ let parse_bounded_vlbytes_eq
         None
   ))
 = let sz = log256' max in
+  parse_synth_eq (parse_bounded_vlbytes' min max) (synth_bounded_vlbytes min max) input;
   parse_vldata_gen_eq sz (in_bounds min max) parse_all_bytes input
 
-#pop-options
+#reset-options
 
 let serialize_bounded_vlbytes'
   (min: nat)
@@ -218,6 +219,7 @@ let serialize_bounded_vlbytes
     )
     ()
 
+(*
 let serialize_bounded_vlbytes_upd
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
