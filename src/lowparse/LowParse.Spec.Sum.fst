@@ -40,6 +40,7 @@ let parse_tagged_union_payload_and_then_cases_injective
     parse_synth_eq #k #(refine_with_tag tag_of_data x2) (p x2) (synth_tagged_union_data tag_of_data x2) b2
   )
 
+abstract
 val parse_tagged_union
   (#kt: parser_kind)
   (#tag_t: Type0)
@@ -151,6 +152,7 @@ let bare_serialize_tagged_union
   let tg = tag_of_data d in
   Seq.append (st tg) (serialize (s tg) d)
 
+abstract
 let bare_serialize_tagged_union_correct
   (#kt: parser_kind)
   (#tag_t: Type0)
@@ -197,6 +199,7 @@ let bare_serialize_tagged_union_correct
   in
   Classical.forall_intro prf
 
+abstract
 let serialize_tagged_union
   (#kt: parser_kind)
   (#tag_t: Type0)
@@ -212,6 +215,24 @@ let serialize_tagged_union
   (ensures (fun _ -> True))
 = bare_serialize_tagged_union_correct st tag_of_data s;
   bare_serialize_tagged_union st tag_of_data s
+
+abstract
+let serialize_tagged_union_eq
+  (#kt: parser_kind)
+  (#tag_t: Type0)
+  (#pt: parser kt tag_t)
+  (st: serializer pt)
+  (#data_t: Type0)
+  (tag_of_data: (data_t -> GTot tag_t))
+  (#k: parser_kind)
+  (#p: (t: tag_t) -> Tot (parser k (refine_with_tag tag_of_data t)))
+  (s: (t: tag_t) -> Tot (serializer (p t)))
+  (input: data_t)
+: Lemma
+  (requires (kt.parser_kind_subkind == Some ParserStrong))
+  (ensures (serialize (serialize_tagged_union st tag_of_data s) input == bare_serialize_tagged_union st tag_of_data s input))
+  [SMTPat (serialize (serialize_tagged_union st tag_of_data s) input)]
+= ()
 
 let synth_case_recip'
     (#key: eqtype)
