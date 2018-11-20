@@ -151,6 +151,7 @@ let parse_vldata_gen_kind_correct
   let kr = and_then_kind (parse_filter_kind (parse_bounded_integer_kind sz)) (parse_vldata_payload_kind sz) in
   assert_norm (kl == kr)
 
+abstract
 let parse_vldata_gen
   (sz: integer_size)
   (f: (bounded_integer sz -> GTot bool))
@@ -163,6 +164,24 @@ let parse_vldata_gen
   (parse_filter (parse_bounded_integer sz) f)
   `and_then`
   parse_vldata_payload sz f p
+
+abstract
+let parse_vldata_gen_eq_def
+  (sz: integer_size)
+  (f: (bounded_integer sz -> GTot bool))
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+: Lemma
+  (and_then_cases_injective (parse_vldata_payload sz f p) /\
+  parse_vldata_gen_kind sz == and_then_kind (parse_filter_kind (parse_bounded_integer_kind sz)) (parse_vldata_payload_kind sz) /\
+  parse_vldata_gen sz f p ==
+  ((parse_filter (parse_bounded_integer sz) f)
+  `and_then`
+  parse_vldata_payload sz f p))
+= parse_fldata_and_then_cases_injective sz f p;
+  parse_vldata_gen_kind_correct sz
+
 
 #set-options "--z3rlimit 16"
 

@@ -127,9 +127,7 @@ let parse32_vldata_gen
   (p32: parser32 p)
 : Tot (parser32 (parse_vldata_gen sz f p))
 = [@inline_let]
-  let _ = parse_fldata_and_then_cases_injective sz f p in
-  [@inline_let]
-  let _ = parse_vldata_gen_kind_correct sz in
+  let _ = parse_vldata_gen_eq_def sz f p in
   parse32_and_then
     (parse32_filter (parse32_bounded_integer sz) f f')
     (parse_vldata_payload sz f p)

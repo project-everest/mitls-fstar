@@ -49,8 +49,7 @@ let validate_vldata_gen
   (#p: parser k t)
   (v: validator p)
 : Tot (validator (parse_vldata_gen sz f p))
-= parse_fldata_and_then_cases_injective sz f p;
-  parse_vldata_gen_kind_correct sz;
+= parse_vldata_gen_eq_def sz f p;
   validate_filter_and_then
     (validate_bounded_integer sz)
     (read_bounded_integer sz)
