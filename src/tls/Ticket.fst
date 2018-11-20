@@ -253,8 +253,8 @@ let write_ticket12 (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
   (ensures (fun h pos' h' ->
     let tc = ticketContents_of_ticket t in
     B.modifies (LPB.loc_slice_from sl pos) h h' /\ (
-    if pos' = LPB.max_uint32
-    then True
+    if (sl.LPB.len `U32.sub` pos) `U32.lt` 54ul
+    then pos' = LPB.max_uint32
     else
       LPB.valid_content_pos TC.ticketContents_parser h' sl pos tc pos'
   )))
@@ -277,6 +277,7 @@ let write_ticket12 (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
 
 module HS = FStar.HyperStack
 
+(*
 let write_ticket13_interm
   (h: HS.mem) (t: ticket) (sl: LPB.slice) (pos: U32.t) (pos6: U32.t)
 : GTot Type0
@@ -324,6 +325,33 @@ let write_ticket13_part1 (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
     let pos5 = LPB.write_u32 created sl pos4 in
     let pos6 = LPB.write_u32 age sl pos5 in
     pos6
+*)
+
+(*
+let valid_pos_frame_strong
+  (#k: LPB.parser_kind)
+  (#t: Type)
+  (p: LPB.parser k t)
+  (h: HS.mem)
+  (sl: LPB.slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+  (l: B.loc)
+  (h': HS.mem)
+: Lemma
+  (requires (
+    LPB.live_slice h sl /\
+    B.modifies l h h' /\ B.loc_disjoint (LPB.loc_slice_from_to sl pos pos') l /\ k.LPB.parser_kind_subkind == Some LPB.ParserStrong /\
+    LPB.valid_pos p h sl pos pos'
+  ))
+  (ensures (
+    LPB.valid_pos p h sl pos pos' /\
+    LPB.valid_content_pos p h' sl pos (LPB.contents p h sl pos) pos'
+  ))
+= LPB.valid_pos_frame_strong p h sl pos pos' l h'
+*)
+
+// #reset-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1 --z3rlimit 128 --z3cliopt smt.arith.nl=false --z3refresh --using_facts_from '* -FStar.Tactics -FStar.Reflection' --log_queries"
 
 let write_ticket13 (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
   (requires (fun h -> LPB.live_slice h sl /\ U32.v pos <= U32.v sl.LPB.len /\ U32.v sl.LPB.len <= U32.v LPB.max_uint32 /\ Ticket13? t))
@@ -341,14 +369,78 @@ let write_ticket13 (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
     if (sl.LPB.len `U32.sub` pos) `U32.lt` (15ul `U32.add` len rms `U32.add` len nonce `U32.add` len custom)
     then LPB.max_uint32
     else begin
-      let pos6 = write_ticket13_part1 t sl pos in
+      let pos1 = pos `U32.add` 1ul in
+      let pos2 = PTL.write_cipherSuite (name_of_cipherSuite cs) sl pos1 in
+      let h2 = get () in
+      B.modifies_loc_includes (LPB.loc_slice_from sl pos) h0 h2 (LPB.loc_slice_from_to sl pos1 pos2);
+      let len_rms = len rms in
+      let pos25 = LPB.write_flbytes len_rms rms sl (pos2 `U32.add` 1ul) in
+      let h25 = get () in
+      LPB.valid_pos_frame_strong cipherSuite_parser h2 sl pos1 pos2 (LPB.loc_slice_from_to sl (pos2 `U32.add` 1ul) pos25) h25;
+      B.modifies_loc_includes (LPB.loc_slice_from sl pos) h2 h25 (LPB.loc_slice_from_to sl (pos2 `U32.add` 1ul) pos25);
+      B.modifies_trans (LPB.loc_slice_from sl pos) h0 h2 (LPB.loc_slice_from sl pos) h25;
+      B.loc_union_idem (LPB.loc_slice_from sl pos);
+      let pos3 = LPB.finalize_bounded_vlbytes 32 255 sl pos2 len_rms in
+      let h3 = get () in
+      LPB.valid_pos_frame_strong cipherSuite_parser h25 sl pos1 pos2 (LPB.loc_slice_from_to sl pos2 (pos2 `U32.add` 1ul)) h3;
+      B.modifies_loc_includes (LPB.loc_slice_from sl pos) h25 h3 (LPB.loc_slice_from_to sl pos2 (pos2 `U32.add` 1ul));
+      B.modifies_trans (LPB.loc_slice_from sl pos) h0 h25 (LPB.loc_slice_from sl pos) h3;
+      let len_nonce = len nonce in
+      let pos35 = LPB.write_flbytes len_nonce nonce sl (pos3 `U32.add` 1ul) in
+      let h35 = get () in
+      LPB.valid_pos_frame_strong cipherSuite_parser h3 sl pos1 pos2 (LPB.loc_slice_from_to sl (pos3 `U32.add` 1ul) pos35) h35;
+      LPB.valid_pos_frame_strong (LPB.parse_bounded_vlbytes 32 255) h3 sl pos2 pos3 (LPB.loc_slice_from_to sl (pos3 `U32.add` 1ul) pos35) h35;
+      B.modifies_loc_includes (LPB.loc_slice_from sl pos) h3 h35 (LPB.loc_slice_from_to sl (pos3 `U32.add` 1ul) pos35);
+      B.modifies_trans (LPB.loc_slice_from sl pos) h0 h3 (LPB.loc_slice_from sl pos) h35;
+      let pos4 = LPB.finalize_bounded_vlbytes 0 255 sl pos3 len_nonce in
+      let h4 = get () in
+      LPB.valid_pos_frame_strong cipherSuite_parser h35 sl pos1 pos2 (LPB.loc_slice_from_to sl pos3 (pos3 `U32.add` 1ul)) h4;
+      LPB.valid_pos_frame_strong (LPB.parse_bounded_vlbytes 32 255) h35 sl pos2 pos3 (LPB.loc_slice_from_to sl pos3 (pos3 `U32.add` 1ul)) h4;
+      B.modifies_loc_includes (LPB.loc_slice_from sl pos) h35 h4 (LPB.loc_slice_from_to sl pos3 (pos3 `U32.add` 1ul));
+      B.modifies_trans (LPB.loc_slice_from sl pos) h0 h35 (LPB.loc_slice_from sl pos) h4;
+      let pos5 = LPB.write_u32 created sl pos4 in
+      let h5 = get () in
+      LPB.valid_pos_frame_strong cipherSuite_parser h4 sl pos1 pos2 (LPB.loc_slice_from_to sl pos4 pos5) h5;
+      LPB.valid_pos_frame_strong (LPB.parse_bounded_vlbytes 32 255) h4 sl pos2 pos3 (LPB.loc_slice_from_to sl pos4 pos5) h5;
+      LPB.valid_pos_frame_strong (LPB.parse_bounded_vlbytes 0 255) h4 sl pos3 pos4 (LPB.loc_slice_from_to sl pos4 pos5) h5;
+      B.modifies_loc_includes (LPB.loc_slice_from sl pos) h4 h5 (LPB.loc_slice_from_to sl pos4 pos5);
+      B.modifies_trans (LPB.loc_slice_from sl pos) h0 h4 (LPB.loc_slice_from sl pos) h5;
+      let pos6 = LPB.write_u32 age sl pos5 in
+      let h6 = get () in
+      LPB.valid_pos_frame_strong cipherSuite_parser h5 sl pos1 pos2 (LPB.loc_slice_from_to sl pos5 pos6) h6;
+      LPB.valid_pos_frame_strong (LPB.parse_bounded_vlbytes 32 255) h5 sl pos2 pos3 (LPB.loc_slice_from_to sl pos5 pos6) h6;
+      LPB.valid_pos_frame_strong (LPB.parse_bounded_vlbytes 0 255) h5 sl pos3 pos4 (LPB.loc_slice_from_to sl pos5 pos6) h6;
+      LPB.valid_pos_frame_strong LPB.parse_u32 h5 sl pos4 pos5 (LPB.loc_slice_from_to sl pos5 pos6) h6;
+      B.modifies_loc_includes (LPB.loc_slice_from sl pos) h5 h6 (LPB.loc_slice_from_to sl pos5 pos6);
+      B.modifies_trans (LPB.loc_slice_from sl pos) h0 h5 (LPB.loc_slice_from sl pos) h6;
+//      let pos6 = write_ticket13_part1 t sl pos in
       let len_custom = len custom in
       let pos6' = pos6 `U32.add` 2ul in
-      let _ = LPB.write_flbytes len_custom custom sl (pos6 `U32.add` 2ul) in
-      let _ = LPB.finalize_bounded_vlbytes 0 65535 sl pos6 len_custom in
+      let pos65 = LPB.write_flbytes len_custom custom sl (pos6 `U32.add` 2ul) in
+      let h65 = get () in
+      LPB.valid_pos_frame_strong cipherSuite_parser h6 sl pos1 pos2 (LPB.loc_slice_from_to sl pos6' pos65) h65;
+      LPB.valid_pos_frame_strong (LPB.parse_bounded_vlbytes 32 255) h6 sl pos2 pos3 (LPB.loc_slice_from_to sl pos6' pos65) h65;
+      LPB.valid_pos_frame_strong (LPB.parse_bounded_vlbytes 0 255) h6 sl pos3 pos4 (LPB.loc_slice_from_to sl pos6' pos65) h65;
+      LPB.valid_pos_frame_strong LPB.parse_u32 h6 sl pos4 pos5 (LPB.loc_slice_from_to sl pos6' pos65) h65;
+      LPB.valid_pos_frame_strong LPB.parse_u32 h6 sl pos5 pos6 (LPB.loc_slice_from_to sl pos6' pos65) h65;
+      B.modifies_loc_includes (LPB.loc_slice_from sl pos) h6 h65 (LPB.loc_slice_from_to sl (pos6 `U32.add` 2ul) pos65);
+      B.modifies_trans (LPB.loc_slice_from sl pos) h0 h6 (LPB.loc_slice_from sl pos) h65;
+      let pos7 = LPB.finalize_bounded_vlbytes 0 65535 sl pos6 len_custom in
       let h = get () in
+      let h7 = h in
+      LPB.valid_pos_frame_strong cipherSuite_parser h65 sl pos1 pos2 (LPB.loc_slice_from_to sl pos6 pos6') h;
+      LPB.valid_pos_frame_strong (LPB.parse_bounded_vlbytes 32 255) h65 sl pos2 pos3 (LPB.loc_slice_from_to sl pos6 pos6') h;
+      LPB.valid_pos_frame_strong (LPB.parse_bounded_vlbytes 0 255) h65 sl pos3 pos4 (LPB.loc_slice_from_to sl pos6 pos6') h;
+      LPB.valid_pos_frame_strong LPB.parse_u32 h65 sl pos4 pos5 (LPB.loc_slice_from_to sl pos6 pos6') h;
+      LPB.valid_pos_frame_strong LPB.parse_u32 h65 sl pos5 pos6 (LPB.loc_slice_from_to sl pos6 pos6') h;
+      B.modifies_loc_includes (LPB.loc_slice_from sl pos) h65 h (LPB.loc_slice_from_to sl pos6 (pos6 `U32.add` 2ul));
+      B.modifies_trans (LPB.loc_slice_from sl pos) h0 h65 (LPB.loc_slice_from sl pos) h;
       PTL.valid_ticketContents13_intro h sl (pos `U32.add` 1ul);
-      PTL.finalize_case_ticketContents13 sl pos
+      let res = PTL.finalize_case_ticketContents13 sl pos in
+      let h = get () in
+      B.modifies_loc_includes (LPB.loc_slice_from sl pos) h7 h (LPB.loc_slice_from_to sl pos (pos `U32.add` 1ul));
+      B.modifies_trans (LPB.loc_slice_from sl pos) h0 h7 (LPB.loc_slice_from sl pos) h;
+      res
     end
 
 let write_ticket (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
