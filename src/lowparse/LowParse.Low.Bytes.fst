@@ -249,6 +249,22 @@ let valid_bounded_vlbytes_elim
 
 #pop-options
 
+let valid_bounded_vlbytes_elim_length
+  (h: HS.mem)
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (input: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (
+    valid (parse_bounded_vlbytes min max) h input pos
+  ))
+  (ensures (
+    content_length (parse_bounded_vlbytes min max) h input pos == log256' max + BY.length (contents (parse_bounded_vlbytes min max) h input pos)
+  ))
+  [SMTPat (valid (parse_bounded_vlbytes min max) h input pos)]
+= valid_bounded_vlbytes_elim h min max input pos
+
 inline_for_extraction
 let bounded_vlbytes_payload_length
   (min: nat) // must be a constant

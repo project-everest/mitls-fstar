@@ -298,6 +298,21 @@ let get_valid_pos
   (ensures (fun pos' -> valid_pos p h sl pos pos'))
 = pos `U32.add` U32.uint_to_t (content_length p h sl pos)
 
+abstract
+let valid_pos_get_valid_pos
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (sl: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+: Lemma
+  (requires (valid_pos p h sl pos pos'))
+  (ensures (get_valid_pos p h sl pos == pos'))
+  [SMTPat (valid_pos p h sl pos pos'); SMTPat (get_valid_pos p h sl pos)]
+= ()
+
 let valid_content
   (#k: parser_kind)
   (#t: Type)
