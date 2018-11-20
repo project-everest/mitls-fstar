@@ -234,6 +234,24 @@ let serialize_enum_key
     (serialize_enum_key_synth_recip e)
     ()
 
+let serialize_enum_key_eq
+  (#k: parser_kind)
+  (#key #repr: eqtype)
+  (#p: parser k repr)
+  (s: serializer p)
+  (e: enum key repr)
+  (x: enum_key e)
+: Lemma
+  (serialize (serialize_enum_key p s e) x == serialize s (enum_repr_of_key e x))
+= serialize_enum_key_synth_inverse e;
+  serialize_synth_eq
+    (parse_filter p (parse_enum_key_cond e))
+    (parse_enum_key_synth e)
+    (serialize_filter s (parse_enum_key_cond e))
+    (serialize_enum_key_synth_recip e)
+    ()
+    x
+
 inline_for_extraction
 let unknown_enum_repr (#key #repr: eqtype) (e: enum key repr) : Tot Type0 =
   (r: repr { list_mem r (list_map snd e) == false } )
@@ -309,6 +327,17 @@ let serialize_maybe_enum_key
   (e: enum key repr)
 : Tot (serializer (parse_maybe_enum_key p e))
 = serialize_synth p (maybe_enum_key_of_repr e) s (repr_of_maybe_enum_key e) ()
+
+let serialize_maybe_enum_key_eq
+  (#k: parser_kind)
+  (#key #repr: eqtype)
+  (#p: parser k repr)
+  (s: serializer p)
+  (e: enum key repr)
+  (x: maybe_enum_key e)
+: Lemma
+  (serialize (serialize_maybe_enum_key p s e) x == serialize s (repr_of_maybe_enum_key e x))
+= serialize_synth_eq p (maybe_enum_key_of_repr e) s (repr_of_maybe_enum_key e) () x 
 
 let is_total_enum (#key: eqtype) (#repr: eqtype) (l: list (key * repr)) : GTot Type0 =
   forall (k: key) . list_mem k (list_map fst l)

@@ -90,7 +90,7 @@ let parse32_maybe_enum_key_gen
 : Tot (parser32 p')
 = parse32_synth p (maybe_enum_key_of_repr e) f p32 ()
 
-#set-options "--z3rlimit 64 --max_fuel 8 --max_ifuel 8"
+module B32 = LowParse.Bytes32
 
 inline_for_extraction
 let parse32_enum_key_gen
@@ -107,6 +107,11 @@ let parse32_enum_key_gen
   (pe: parser32 (parse_maybe_enum_key p e))
 : Tot (parser32 p')
 = (fun (input: bytes32) -> ((
+    [@inline_let]
+    let _ =
+      parse_enum_key_eq p e (B32.reveal input);
+      parse_maybe_enum_key_eq p e (B32.reveal input)
+    in
     match pe input with
     | Some (k, consumed) ->
       begin match k with
@@ -115,8 +120,6 @@ let parse32_enum_key_gen
       end
     | _ -> None
   ) <: (res: option (enum_key e * U32.t) { parser32_correct (parse_enum_key p e) input res } )))
-
-#reset-options
 
 inline_for_extraction
 let serialize32_enum_key_gen
@@ -136,7 +139,10 @@ let serialize32_enum_key_gen
   (u3: unit { s' == serialize_enum_key p s e } )
   (f: enum_repr_of_key'_t e)
 : Tot (serializer32 s')
-= fun (input: enum_key e) -> ((s32 (f input)) <: (r: bytes32 { serializer32_correct (serialize_enum_key p s e) input r } ))
+= fun (input: enum_key e) -> (
+    [@inline_let]
+    let _ = serialize_enum_key_eq s e input in
+    (s32 (f input)) <: (r: bytes32 { serializer32_correct (serialize_enum_key p s e) input r } ))
 
 inline_for_extraction
 let size32_enum_key_gen
@@ -156,7 +162,10 @@ let size32_enum_key_gen
   (u3: unit { s' == serialize_enum_key p s e } )
   (f: enum_repr_of_key'_t e)
 : Tot (size32 s')
-= fun (input: enum_key e) -> ((s32 (f input)) <: (r: UInt32.t { size32_postcond (serialize_enum_key p s e) input r } ))
+= fun (input: enum_key e) -> (
+    [@inline_let]
+    let _ = serialize_enum_key_eq s e input in
+    (s32 (f input)) <: (r: UInt32.t { size32_postcond (serialize_enum_key p s e) input r } ))
 
 inline_for_extraction
 let serialize32_maybe_enum_key_gen'
@@ -169,8 +178,13 @@ let serialize32_maybe_enum_key_gen'
   (f: serializer32 (serialize_enum_key p s e))
 : Tot (serializer32 (serialize_maybe_enum_key p s e))
 = fun (input: maybe_enum_key e) -> ((
+    [@inline_let]
+    let _ = serialize_maybe_enum_key_eq s e input in
     match input with
-    | Known k -> f k
+    | Known k ->
+        [@inline_let]
+        let _ = serialize_enum_key_eq s e k in
+        f k
     | Unknown r -> s32 r
    ) <: (r: bytes32 { serializer32_correct (serialize_maybe_enum_key p s e) input r } ))
 
@@ -206,8 +220,13 @@ let size32_maybe_enum_key_gen'
   (f: size32 (serialize_enum_key p s e))
 : Tot (size32 (serialize_maybe_enum_key p s e))
 = fun (input: maybe_enum_key e) -> ((
+    [@inline_let]
+    let _ = serialize_maybe_enum_key_eq s e input in
     match input with
-    | Known k -> f k
+    | Known k ->
+      [@inline_let]
+      let _ = serialize_enum_key_eq s e k in
+      f k
     | Unknown r -> s32 r
    ) <: (r: U32.t { size32_postcond (serialize_maybe_enum_key p s e) input r } ))
 

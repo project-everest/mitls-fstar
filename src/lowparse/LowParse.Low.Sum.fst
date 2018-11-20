@@ -63,7 +63,7 @@ let validate_sum_aux_payload_if
 : Tot (if_combinator _ (validate_sum_aux_payload_eq t pc k))
 = validate_sum_aux_payload_if' t pc k
 
-#reset-options "--z3rlimit 256 --z3cliopt smt.arith.nl=false --initial_ifuel 8 --max_ifuel 8 --initial_fuel 2 --max_fuel 2"
+#reset-options "--z3rlimit 64 --z3cliopt smt.arith.nl=false --initial_ifuel 8 --max_ifuel 8 --initial_fuel 2 --max_fuel 2"
 // --query_stats  --smtencoding.elim_box true --smtencoding.l_arith_repr native --z3refresh"
 
 inline_for_extraction
@@ -146,7 +146,7 @@ let validate_sum
 
 module HS = FStar.HyperStack
 
-#reset-options "--z3rlimit 256 --z3cliopt smt.arith.nl=false --initial_ifuel 8 --max_ifuel 8 --initial_fuel 2 --max_fuel 2"
+#reset-options "--z3rlimit 64 --z3cliopt smt.arith.nl=false --initial_ifuel 8 --max_ifuel 8 --initial_fuel 2 --max_fuel 2"
 
 let valid_sum_intro
   (h: HS.mem)

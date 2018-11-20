@@ -34,7 +34,20 @@ let parse32_sum_eq_refl (t: sum) : Tot (r_reflexive_t _ (parse32_sum_eq t)) =
 let parse32_sum_eq_trans (t: sum) : Tot (r_transitive_t _ (parse32_sum_eq t)) =
   fun _ _ _ -> ()
 
-#set-options "--z3rlimit 32"
+inline_for_extraction
+let parse32_sum_cases'
+  (t: sum)
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (pc32: ((x: sum_key t) -> Tot (parser32 (dsnd (pc x)))))
+  (k: sum_key t)
+: Tot (parser32 (parse_sum_cases' t pc k))
+= [@inline_let]
+  let _ = synth_sum_case_injective t k in
+        parse32_synth'
+            (dsnd (pc k))
+            (synth_sum_case t k)
+            (pc32 k)
+            ()
 
 let parse32_sum_aux
   (#kt: parser_kind)
@@ -51,20 +64,11 @@ let parse32_sum_aux
     match p32 input with
     | None -> None
     | Some (k, consumed_k) ->
-      begin
         let input_k = B32.b32slice input consumed_k (B32.len input) in
-        synth_sum_case_injective t k;
-        match
-          parse32_synth'
-            (dsnd (pc k))
-            (synth_sum_case t k)
-            (pc32 k)
-            ()
-            input_k
-        with
+        match parse32_sum_cases' t pc pc32 k input_k with
         | None -> None
-        | Some (x, consumed_x) -> Some ((x <: sum_type t), consumed_k `U32.add` consumed_x)
-      end
+        | Some (x, consumed_x) ->
+          Some ((x <: sum_type t), consumed_k `U32.add` consumed_x)
   in
   (res <: (res: option (sum_type t * U32.t) { parser32_correct (parse_sum t p pc) input res } ))
 
@@ -86,49 +90,19 @@ let parse32_sum'
     match p32 input with
     | None -> None
     | Some (k, consumed_k) ->
-      let input_k = B32.b32slice input consumed_k (B32.len input) in
-      synth_sum_case_injective t k;
-      [@inline_let]
-      let f
-        (k: sum_key t)
-      : Tot (option (sum_type t * U32.t))
-      = synth_sum_case_injective t k;
-        parse32_synth'
-          (dsnd (pc k))
-          (synth_sum_case t k)
-          (pc32 k)
-          ()
-          input_k
-      in
-      [@inline_let]
-      let f_prop
-        (k: sum_key t)
-      : Lemma
-        (match f k with
-          | None -> True
-          | Some (_, consumed_x) ->
-            FStar.UInt.size (U32.v consumed_k + U32.v consumed_x) 32
-        )
-      = match f k with
-        | None -> ()
-        | Some (_, consumed_x) ->
-          assert (U32.v consumed_k + U32.v consumed_x <= B32.length input)
-      in
-      [@inline_let]
-      let j : option (sum_type t * U32.t) = destr (eq2 #(option (sum_type t * U32.t))) (default_if _) (fun _ -> ()) (fun _ _ _ -> ()) (fun k -> f k) k in
-      [@inline_let]
-      let _ : squash (j == f k) = assert (j == f k) in
-      [@inline_let]
-      let _ = f_prop k in
-      begin match j with
-      | None -> None
-      | Some (x, consumed_x) ->
-        Some (x, consumed_k `U32.add` consumed_x)
-      end
+        let input_k = B32.b32slice input consumed_k (B32.len input) in
+        destr
+          (eq2 #(option (sum_type t * U32.t))) (default_if _)
+          (fun _ -> ()) (fun _ _ _ -> ())
+          (fun k ->
+            match parse32_sum_cases' t pc pc32 k input_k with
+            | None -> None
+            | Some (x, consumed_x) ->
+              Some ((x <: sum_type t), consumed_k `U32.add` consumed_x)
+          )
+          k
   in
   res
-
-#reset-options
 
 inline_for_extraction
 let parse32_sum
@@ -289,7 +263,31 @@ let size32_sum
 
 (* Sum with default case *)
 
-#set-options "--z3rlimit 32"
+inline_for_extraction
+let parse32_dsum_cases'
+  (t: dsum)
+  (f: (x: dsum_known_key t) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag t x)))
+  (f32: (x: dsum_known_key t) -> Tot (parser32 (dsnd (f x))))
+  (#k': parser_kind)
+  (g: parser k' (dsum_type_of_unknown_tag t))
+  (g32: parser32 g)
+  (x: dsum_key t)
+: Tot (parser32 (parse_dsum_cases' t f g x))
+= [@inline_let]
+  let _ = synth_dsum_case_injective t x in
+  match x with
+  | Known x' ->
+    parse32_synth'
+      (dsnd (f x'))
+      (synth_dsum_case t (Known x'))
+      (f32 x')
+      ()
+  | Unknown x' ->
+    parse32_synth'
+      g
+      (synth_dsum_case t (Unknown x'))
+      g32
+      ()
 
 let parse32_dsum_aux
   (#kt: parser_kind)
@@ -310,39 +308,11 @@ let parse32_dsum_aux
     | Some (k', consumed_k) ->
       let k = maybe_enum_key_of_repr (dsum_enum t) k' in
       let input_k = B32.b32slice input consumed_k (B32.len input) in
-      synth_dsum_case_injective t k;
-      begin match k with
-      | Known k_ ->
-        begin
-          match
-            parse32_synth'
-              (dsnd (f k_))
-              (synth_dsum_case t k)
-              (f32 k_)
-              ()
-              input_k
-          with
-          | None -> None
-          | Some (x, consumed_x) ->
-            assert (U32.v consumed_k + U32.v consumed_x <= B32.length input);
-            Some ((x <: dsum_type t), consumed_k `U32.add` consumed_x)
-        end
-      | Unknown k_ ->
-        synth_dsum_case_injective t k;
-        begin
-          match
-            parse32_synth'
-              g
-              (synth_dsum_case t k)
-              g32
-              ()
-              input_k
-          with
-          | None -> None
-          | Some (x, consumed_x) ->
-            assert (U32.v consumed_k + U32.v consumed_x <= B32.length input);
-            Some ((x <: dsum_type t), consumed_k `U32.add` consumed_x)
-        end
+      begin match parse32_dsum_cases' t f f32 g g32 k input_k with
+        | None -> None
+        | Some (x, consumed_x) ->
+          assert (U32.v consumed_k + U32.v consumed_x <= B32.length input);
+          Some ((x <: dsum_type t), consumed_k `U32.add` consumed_x)
       end
   in
   (res <: (res: option (dsum_type t * U32.t) { parser32_correct (parse_dsum t p f g) input res } ))
@@ -369,46 +339,13 @@ let parse32_dsum'
     let input_k = B32.b32slice input consumed_k (B32.len input) in
     [@inline_let]
     let f (k: maybe_enum_key (dsum_enum t)) : Tot (option (dsum_type t * U32.t)) =
-      [@inline_let]
-      let _ = synth_dsum_case_injective t k in
-      begin match k with
-      | Known k_ ->
-        begin
-          match
-            parse32_synth'
-              (dsnd (f k_))
-              (synth_dsum_case t k)
-              (f32 k_)
-              ()
-              input_k
-          with
-          | None -> None
-          | Some (x, consumed_x) ->
-            [@inline_let]
-            let _ = assert (U32.v consumed_k + U32.v consumed_x <= B32.length input) in
-            Some ((x <: dsum_type t), consumed_k `U32.add` consumed_x)
-        end
-      | Unknown k_ ->
-        begin
-          match
-            parse32_synth'
-              g
-              (synth_dsum_case t k)
-              g32
-              ()
-              input_k
-          with
-          | None -> None
-          | Some (x, consumed_x) ->
-            [@inline_let]
-            let _ = assert (U32.v consumed_k + U32.v consumed_x <= B32.length input) in
-            Some ((x <: dsum_type t), consumed_k `U32.add` consumed_x)
-        end
-      end
+      match parse32_dsum_cases' t f f32 g g32 k input_k with
+        | None -> None
+        | Some (x, consumed_x) ->
+          assert (U32.v consumed_k + U32.v consumed_x <= B32.length input);
+          Some ((x <: dsum_type t), consumed_k `U32.add` consumed_x)
     in
     destr (eq2 #_) (default_if _) (fun _ -> ()) (fun _ _ _ -> ()) f k'
-
-#reset-options
 
 inline_for_extraction
 let parse32_dsum
@@ -480,8 +417,6 @@ let serialize32_dsum_known_destr_if
 : Tot (if_combinator _ (serialize32_dsum_known_destr_eq t k))
 = fif _ _ _ (default_if _)
 
-#set-options "--z3rlimit 32"
-
 inline_for_extraction
 let serialize32_dsum
   (#kt: parser_kind)
@@ -516,8 +451,6 @@ let serialize32_dsum
   [@inline_let]
   let _ = assert (serializer32_correct (serialize_dsum t s f sf g sg) x res) in
   (res <: (res: B32.bytes { serializer32_correct (serialize_dsum t s f sf g sg) x res } ))
-
-#reset-options
 
 inline_for_extraction
 let size32_dsum_type_of_tag

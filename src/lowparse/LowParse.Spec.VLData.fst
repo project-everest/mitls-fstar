@@ -151,7 +151,6 @@ let parse_vldata_gen_kind_correct
   let kr = and_then_kind (parse_filter_kind (parse_bounded_integer_kind sz)) (parse_vldata_payload_kind sz) in
   assert_norm (kl == kr)
 
-abstract
 let parse_vldata_gen
   (sz: integer_size)
   (f: (bounded_integer sz -> GTot bool))
