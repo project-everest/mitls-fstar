@@ -1792,6 +1792,32 @@ let copy_strong
   assert (injective_precond p (B.as_seq h0 (B.gsub src.base spos (src.len `U32.sub` spos))) (B.as_seq h (B.gsub dst.base dpos (dst.len `U32.sub` dpos))));  
   dpos'
 
+inline_for_extraction
+let copy_strong'
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (j: jumper p)
+  (src: slice) // FIXME: length is useless here
+  (spos : U32.t)
+  (dst: slice)
+  (dpos: U32.t)
+: HST.Stack U32.t
+  (requires (fun h ->
+    k.parser_kind_subkind == Some ParserStrong /\
+    valid p h src spos /\ (
+    let clen = content_length p h src spos in
+    U32.v dpos + clen <= U32.v dst.len /\
+    live_slice h dst /\
+    B.loc_disjoint (loc_slice_from src spos) (loc_slice_from_to dst dpos (dpos `U32.add` (U32.uint_to_t clen)))
+  )))
+  (ensures (fun h dpos' h' ->
+    B.modifies (loc_slice_from_to dst dpos dpos') h h' /\
+    valid_content_pos p h' dst dpos (contents p h src spos) dpos'
+  ))
+= let spos' = j src spos in
+  copy_strong p src spos spos' dst dpos
+
 #reset-options
 
 inline_for_extraction
