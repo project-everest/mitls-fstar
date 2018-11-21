@@ -25,6 +25,12 @@ let loc_slice_from (s: slice) (pos: U32.t) : GTot B.loc =
   else B.loc_none
 
 abstract
+let loc_slice_from_includes_intro (s: slice) (pos: U32.t) : Lemma
+  (B.loc_includes (B.loc_buffer s.base) (loc_slice_from s pos))
+  [SMTPat (loc_slice_from s pos)]
+= ()
+
+abstract
 let loc_includes_union_l_loc_slice_from (l1 l2: B.loc) (s: slice) (pos: U32.t) : Lemma
   (requires (B.loc_includes l1 (loc_slice_from s pos) \/ B.loc_includes l2 (loc_slice_from s pos)))
   (ensures (B.loc_includes (B.loc_union l1 l2) (loc_slice_from s pos)))
@@ -409,6 +415,12 @@ let loc_slice_from_to
   else B.loc_buffer (B.gsub sl.base pos (pos' `U32.sub` pos))
 
 abstract
+let loc_slice_from_to_includes_intro (s: slice) (pos pos': U32.t) : Lemma
+  (B.loc_includes (loc_slice_from s pos) (loc_slice_from_to s pos pos'))
+  [SMTPat (loc_slice_from_to s pos pos')]
+= ()
+
+abstract
 let loc_includes_union_l_loc_slice_from_to (l1 l2: B.loc) (s: slice) (pos pos' : U32.t) : Lemma
   (requires (B.loc_includes l1 (loc_slice_from_to s pos pos') \/ B.loc_includes l2 (loc_slice_from_to s pos pos')))
   (ensures (B.loc_includes (B.loc_union l1 l2) (loc_slice_from_to s pos pos')))
@@ -789,13 +801,33 @@ let valid_pos_frame_strong
     valid_pos p h sl pos pos' /\
     valid_content_pos p h' sl pos (contents p h sl pos) pos'
   )))
-  [SMTPatOr [
-    [SMTPat (valid_pos p h sl pos pos'); SMTPat (valid p h' sl pos); SMTPat (B.modifies_inert l h h')];
-    [SMTPat (valid_pos p h sl pos pos'); SMTPat (contents p h' sl pos); SMTPat (B.modifies_inert l h h')];
-    [SMTPat (valid_pos p h sl pos pos'); SMTPat (content_length p h' sl pos); SMTPat (B.modifies_inert l h h')];
-  ]]
 = Classical.move_requires (valid_pos_frame_strong_1 p h sl pos pos' l) h';
   Classical.move_requires (valid_pos_frame_strong_2 p h sl pos pos' l) h'
+
+let valid_frame_strong
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (sl: slice)
+  (pos: U32.t)
+  (l: B.loc)
+  (h': HS.mem)
+: Lemma
+  (requires (
+    live_slice h sl /\
+    valid p h sl pos /\
+    B.modifies_inert l h h' /\ B.loc_disjoint (loc_slice_from_to sl pos (get_valid_pos p h sl pos)) l /\ k.parser_kind_subkind == Some ParserStrong))
+  (ensures (
+    valid_content_pos p h' sl pos (contents p h sl pos) (get_valid_pos p h sl pos)
+  ))
+  [SMTPatOr [
+//    [SMTPat (valid p h sl pos); SMTPat (B.modifies_inert l h h')];
+    [SMTPat (valid p h' sl pos); SMTPat (B.modifies_inert l h h')];
+    [SMTPat (contents p h' sl pos); SMTPat (B.modifies_inert l h h')];
+    [SMTPat (content_length p h' sl pos); SMTPat (B.modifies_inert l h h')];
+  ]]
+= valid_pos_frame_strong p h sl pos (get_valid_pos p h sl pos) l h'
 
 abstract
 let valid_exact_ext_intro
