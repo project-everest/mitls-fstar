@@ -32,24 +32,9 @@ let loc_includes_union_l_loc_slice_from (l1 l2: B.loc) (s: slice) (pos: U32.t) :
 = ()
 
 abstract
-let loc_slice_from_includes_buffer (b: buffer8) (s: slice) (pos: U32.t) : Lemma
-  (requires (b == s.base))
-  (ensures (B.loc_includes (B.loc_buffer b) (loc_slice_from s pos)))
-  [SMTPat (B.loc_includes (B.loc_buffer b) (loc_slice_from s pos))]
-= ()
-
-abstract
-let loc_slice_from_includes_addresses (r: HS.rid) (addrs: Set.set nat) (tg: bool) (s: slice) (pos: U32.t) : Lemma
-  (requires (B.frameOf s.base == r /\ B.as_addr s.base `Set.mem` addrs))
-  (ensures (B.loc_includes (B.loc_addresses tg r addrs) (loc_slice_from s pos)))
-  [SMTPat (B.loc_includes (B.loc_addresses tg r addrs) (loc_slice_from s pos))]
-= ()
-
-abstract
-let loc_slice_from_includes_regions (rs: Set.set HS.rid) (tg: bool) (s: slice) (pos: U32.t) : Lemma
-  (requires (B.frameOf s.base `Set.mem` rs))
-  (ensures (B.loc_includes (B.loc_regions tg rs) (loc_slice_from s pos)))
-  [SMTPat (B.loc_includes (B.loc_regions tg rs) (loc_slice_from s pos))]
+let loc_slice_from_includes_r (s: slice) (pos: U32.t) : Lemma
+  (B.loc_includes (B.loc_buffer s.base) (loc_slice_from s pos))
+  [SMTPat (loc_slice_from s pos)]
 = ()
 
 abstract
@@ -416,34 +401,12 @@ let loc_includes_union_l_loc_slice_from_to (l1 l2: B.loc) (s: slice) (pos pos' :
 = ()
 
 abstract
-let loc_slice_from_to_includes_buffer (b: buffer8) (s: slice) (pos pos' : U32.t) : Lemma
-  (requires (b == s.base))
-  (ensures (B.loc_includes (B.loc_buffer b) (loc_slice_from_to s pos pos')))
-  [SMTPat (B.loc_includes (B.loc_buffer b) (loc_slice_from_to s pos pos'))]
-= ()
-
-abstract
-let loc_slice_from_to_includes_addresses (r: HS.rid) (addrs: Set.set nat) (tg: bool) (s: slice) (pos pos' : U32.t) : Lemma
-  (requires (B.frameOf s.base == r /\ B.as_addr s.base `Set.mem` addrs))
-  (ensures (B.loc_includes (B.loc_addresses tg r addrs) (loc_slice_from_to s pos pos')))
-  [SMTPat (B.loc_includes (B.loc_addresses tg r addrs) (loc_slice_from_to s pos pos'))]
-= ()
-
-abstract
-let loc_slice_from_to_includes_regions (rs: Set.set HS.rid) (tg: bool) (s: slice) (pos pos' : U32.t) : Lemma
-  (requires (B.frameOf s.base `Set.mem` rs))
-  (ensures (B.loc_includes (B.loc_regions tg rs) (loc_slice_from_to s pos pos')))
-  [SMTPat (B.loc_includes (B.loc_regions tg rs) (loc_slice_from_to s pos pos'))]
-= ()
-
-abstract
 let loc_slice_from_to_includes_r
   (sl: slice)
-  (pos0 pos pos' : U32.t)
+  (pos pos' : U32.t)
 : Lemma
-  (requires (U32.v pos0 <= U32.v pos))
-  (ensures (B.loc_includes (loc_slice_from sl pos0) (loc_slice_from_to sl pos pos')))
-  [SMTPat (B.loc_includes (loc_slice_from sl pos0) (loc_slice_from_to sl pos pos'))]
+  (B.loc_includes (loc_slice_from sl pos) (loc_slice_from_to sl pos pos'))
+  [SMTPat (loc_slice_from_to sl pos pos')]
 = ()
 
 abstract
