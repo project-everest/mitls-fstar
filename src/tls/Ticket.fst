@@ -277,6 +277,64 @@ let write_ticket12 (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
 
 module HS = FStar.HyperStack
 
+let emit_ticket13
+  (cs: cipherSuiteName)
+  (rms: LPB.slice)
+  (nonce: LPB.slice)
+  (creation_time: U32.t)
+  (age_add: U32.t)
+  (custom_data: LPB.slice)
+  (out: LPB.slice)
+  (pos: U32.t)
+: Stack U32.t
+  (requires (fun h ->
+    LPB.live_slice h out /\
+    U32.v pos <= U32.v out.LPB.len /\
+    U32.v out.LPB.len < U32.v LPB.max_uint32 /\
+    LPB.valid (LPB.parse_bounded_vlbytes 32 255) h rms 0ul /\
+    LPB.valid (LPB.parse_bounded_vlbytes 0 255) h nonce 0ul /\
+    LPB.valid (LPB.parse_bounded_vlbytes 0 65535) h custom_data 0ul /\
+    B.loc_disjoint (LPB.loc_slice_from out pos) (LPB.loc_slice_from rms 0ul) /\
+    B.loc_disjoint (LPB.loc_slice_from out pos) (LPB.loc_slice_from nonce 0ul) /\
+    B.loc_disjoint (LPB.loc_slice_from out pos) (LPB.loc_slice_from custom_data 0ul)
+  ))
+  (ensures (fun h pos' h' ->
+    B.modifies (LPB.loc_slice_from out pos) h h' /\ (
+    if pos' = LPB.max_uint32
+    then True
+    else
+      LPB.valid_content_pos
+        TC13.ticketContents13_parser
+        h'
+        out
+        pos
+        ({
+          TC13.cs = cs;
+          TC13.rms = LPB.contents (LPB.parse_bounded_vlbytes 32 255) h rms 0ul;
+          TC13.nonce = LPB.contents (LPB.parse_bounded_vlbytes 0 255) h nonce 0ul;
+          TC13.creation_time = creation_time;
+          TC13.age_add = age_add;
+          TC13.custom_data = LPB.contents (LPB.parse_bounded_vlbytes 0 65535) h custom_data 0ul;
+        })
+        pos'
+  )))
+= let len_rms = LPB.jump_bounded_vlbytes 32 255 rms 0ul in
+  let len_nonce = LPB.jump_bounded_vlbytes 0 255 nonce 0ul in
+  let len_custom_data = LPB.jump_bounded_vlbytes 0 65535 custom_data 0ul in
+  if (out.LPB.len `U32.sub` pos) `U32.lt` (10ul `U32.add` len_rms `U32.add` len_nonce `U32.add` len_custom_data)
+  then LPB.max_uint32
+  else begin
+      let pos2 = PTL.write_cipherSuite cs out pos in
+      let pos3 = LPB.copy_strong (LPB.parse_bounded_vlbytes 32 255) rms 0ul len_rms out pos2 in
+      let pos4 = LPB.copy_strong (LPB.parse_bounded_vlbytes 0 255) nonce 0ul len_nonce out pos3 in
+      let pos5 = LPB.write_u32 creation_time out pos4 in
+      let pos6 = LPB.write_u32 age_add out pos5 in
+      let pos7 = LPB.copy_strong (LPB.parse_bounded_vlbytes 0 65535) custom_data 0ul len_custom_data out pos6 in
+      let h = get () in
+      PTL.valid_ticketContents13_intro h out pos;
+      pos7
+    end
+
 (*
 let write_ticket13_interm
   (h: HS.mem) (t: ticket) (sl: LPB.slice) (pos: U32.t) (pos6: U32.t)
