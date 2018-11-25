@@ -157,6 +157,29 @@ let parse_list_eq
   ))
 = ()
 
+abstract
+let parse_list_eq'
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (b: bytes)
+: Lemma
+  (requires (k.parser_kind_low > 0))
+  (ensures (parse (parse_list p) b == (
+    if Seq.length b = 0
+    then 
+      Some ([], (0 <: consumed_length b))
+    else
+      match parse p b with
+      | None -> None
+      | Some (v, n) ->
+        begin match parse (parse_list p) (Seq.slice b n (Seq.length b)) with
+	  | Some (l, n') -> Some (v :: l, (n + n' <: consumed_length b))
+	  | _ -> None
+        end
+  )))
+= ()
+
 let rec bare_serialize_list
   (#k: parser_kind)
   (#t: Type0)

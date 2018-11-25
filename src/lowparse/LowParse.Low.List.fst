@@ -1,6 +1,5 @@
 module LowParse.Low.List
 
-(*
 include LowParse.Spec.List
 include LowParse.Low.Combinators
 
@@ -10,9 +9,76 @@ module CL = C.Loops
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 module G = FStar.Ghost
-module M = LowStar.Modifies
-module I32 = FStar.Int32
-module Cast = FStar.Int.Cast
+
+(*
+let valid_exact_list_nil
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (h: HS.mem)
+  (sl: slice)
+  (pos : U32.t)
+: Lemma
+  (requires (U32.v pos <= U32.v sl.len /\ live_slice h sl))
+  (ensures (
+    valid_exact (parse_list p) h sl pos pos /\
+    contents_exact (parse_list p) h sl pos pos == []
+  ))
+= parse_list_eq p (B.as_seq h (B.gsub sl.base pos 0ul));
+  valid_exact_equiv (parse_list p) h sl pos pos;
+  contents_exact_eq (parse_list p) h sl pos pos
+
+let valid_exact_list_cons
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (h: HS.mem)
+  (sl: slice)
+  (pos : U32.t)
+  (pos' : U32.t)
+: Lemma
+  (requires (
+    k.parser_kind_subkind == Some ParserStrong /\
+    k.parser_kind_low > 0 /\
+    valid p h sl pos /\
+    valid_exact (parse_list p) h sl (get_valid_pos p h sl pos) pos'
+  ))
+  (ensures (
+    valid_exact (parse_list p) h sl pos pos' /\
+    contents_exact (parse_list p) h sl pos pos' == contents p h sl pos :: contents_exact (parse_list p) h sl (get_valid_pos p h sl pos) pos'
+  ))
+= let sq = B.as_seq h (B.gsub sl.base pos (pos' `U32.sub` pos)) in
+  parse_list_eq' p sq;
+  let pos1 = get_valid_pos p h sl pos in
+  valid_exact_equiv (parse_list p) h sl pos pos';
+  valid_facts p h sl pos;
+  let sq0 = B.as_seq h (B.gsub sl.base pos (sl.len `U32.sub` pos)) in
+  assert (no_lookahead_on p sq0 sq);
+  assert (injective_postcond p sq0 sq);
+  valid_exact_equiv (parse_list p) h sl pos1 pos';  
+  contents_exact_eq (parse_list p) h sl pos pos';
+  contents_exact_eq (parse_list p) h sl pos1 pos'
+
+let valid_exact_list_cons_recip
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (h: HS.mem)
+  (sl: slice)
+  (pos : U32.t)
+  (pos' : U32.t)
+: Lemma
+  (requires (
+    k.parser_kind_subkind == Some ParserStrong /\
+    pos <> pos' /\
+    valid_exact (parse_list p) h sl pos pos'
+  ))
+  (ensures (
+    valid p h sl pos /\ (
+    let pos1 = 
+    valid_exact (parse_list p) h sl pos pos' /\
+    contents_exact (parse_list p) h sl pos pos' == contents p h sl pos :: contents_exact (parse_list p) h sl (get_valid_pos p h sl pos) pos'
+  ))
 
 let validate32_list_inv'
   (#k: parser_kind)
