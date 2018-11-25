@@ -104,6 +104,7 @@ let validate_list_inv
   (p: parser k t)
   (g0 g1: G.erased HS.mem)
   (sl: slice)
+  (pos0: U32.t)
   (bpos: B.pointer U32.t)
   (h: HS.mem)
   (stop: bool)
@@ -113,6 +114,7 @@ let validate_list_inv
   B.disjoint sl.base bpos /\
   k.parser_kind_subkind == Some ParserStrong /\
   k.parser_kind_low > 0 /\
+  U32.v pos0 <= U32.v sl.len /\
   U32.v sl.len <= U32.v validator_max_length /\
   live_slice h0 sl /\
   B.live h1 bpos /\
@@ -123,10 +125,11 @@ let validate_list_inv
     U32.v pos1 > U32.v validator_max_length
   then
     stop == true /\
-    (~ (valid_exact (parse_list p) h0 sl 0ul sl.len))
+    (~ (valid_exact (parse_list p) h0 sl pos0 sl.len))
   else
+    U32.v pos0 <= U32.v pos1 /\
     U32.v pos1 <= U32.v sl.len /\
-    (valid_exact (parse_list p) h0 sl 0ul sl.len <==> valid_exact (parse_list p) h0 sl pos1 sl.len) /\
+    (valid_exact (parse_list p) h0 sl pos0 sl.len <==> valid_exact (parse_list p) h0 sl pos1 sl.len) /\
     (stop == true ==> pos1 == sl.len)
   )
 
@@ -139,12 +142,13 @@ let validate_list_body
   (v: validator p)
   (g0 g1: G.erased HS.mem)
   (sl: slice)
+  (pos0: U32.t)
   (bpos: B.pointer U32.t)
 : HST.Stack bool
-  (requires (fun h -> validate_list_inv p g0 g1 sl bpos h false))
+  (requires (fun h -> validate_list_inv p g0 g1 sl pos0 bpos h false))
   (ensures (fun h res h' ->
-    validate_list_inv p g0 g1 sl bpos h false /\
-    validate_list_inv p g0 g1 sl bpos h' res
+    validate_list_inv p g0 g1 sl pos0 bpos h false /\
+    validate_list_inv p g0 g1 sl pos0 bpos h' res
   ))
 = let pos1 = B.index bpos 0ul in
   assert (U32.v pos1 <= U32.v sl.len);
@@ -158,7 +162,41 @@ let validate_list_body
     pos1 `U32.gt` validator_max_length
   end
 
-#push-options "--z3rlimit 16"
+inline_for_extraction
+let validate_list'
+  [| validator_cls |]
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (v: validator p)
+  (sl: slice)
+  (pos: U32.t)
+: HST.Stack bool
+  (requires (fun h ->
+    k.parser_kind_subkind == Some ParserStrong /\
+    k.parser_kind_low > 0 /\
+    U32.v pos <= U32.v sl.len /\
+    U32.v sl.len <= U32.v validator_max_length /\
+    live_slice h sl
+  ))
+  (ensures (fun h res h' ->
+    B.modifies B.loc_none h h' /\
+    (res == true <==> valid_exact (parse_list p) h sl pos sl.len)
+  ))
+= let h0 = HST.get () in
+  let g0 = G.hide h0 in
+  HST.push_frame ();
+  let h02 = HST.get () in
+  B.fresh_frame_modifies h0 h02;
+  let bpos = B.alloca pos 1ul in
+  let h1 = HST.get () in
+  let g1 = G.hide h1 in
+  C.Loops.do_while (validate_list_inv p g0 g1 sl pos bpos) (fun _ -> validate_list_body v g0 g1 sl pos bpos);
+  valid_exact_list_nil p h0 sl sl.len;
+  let posf = B.index bpos 0ul in
+  let res = posf `U32.lte` validator_max_length in
+  HST.pop_frame ();
+  res
 
 inline_for_extraction
 let validate_list
@@ -167,49 +205,21 @@ let validate_list
   (#t: Type0)
   (#p: parser k t)
   (v: validator p)
-  (sl: slice)
-  (pos: U32.t)
-  (pos' : U32.t)
-: HST.Stack bool
-  (requires (fun h ->
+  (u: squash (
     k.parser_kind_subkind == Some ParserStrong /\
-    k.parser_kind_low > 0 /\
-    U32.v pos <= U32.v pos' /\
-    U32.v pos' <= U32.v sl.len /\
-    U32.v sl.len <= U32.v validator_max_length /\
-    live_slice h sl
+    k.parser_kind_low > 0
   ))
-  (ensures (fun h res h' ->
-    B.modifies B.loc_none h h' /\
-    (res == true <==> valid_exact (parse_list p) h sl pos pos')
-  ))
-= let h0 = HST.get () in
-  let g0 = G.hide h0 in
-  let len = pos' `U32.sub` pos in
-  let b = B.sub sl.base pos (pos' `U32.sub` pos) in
-  let sl' = ({ base = b; len = len; }) in
-  let h01 = HST.get () in
-  HST.push_frame ();
-  let h02 = HST.get () in
-  B.fresh_frame_modifies h01 h02;
-  let bpos = B.alloca 0ul 1ul in
-  let h1 = HST.get () in
-  let g1 = G.hide h1 in
-  C.Loops.do_while (validate_list_inv p g0 g1 sl' bpos) (fun _ -> validate_list_body v g0 g1 sl' bpos);
-  valid_exact_list_nil p h0 sl' len;
-  let posf = B.index bpos 0ul in
-  let res = posf `U32.lte` validator_max_length in
-  HST.pop_frame ();
-  [@inline_let]
-  let f () : Lemma
-    (valid_exact (parse_list p) h0 sl pos pos' <==> valid_exact (parse_list p) h0 sl' 0ul len)
-  = valid_exact_equiv (parse_list p) h0 sl pos pos';
-    valid_exact_equiv (parse_list p) h0 sl' 0ul len
-  in
-  [@inline_let] let _ = f () in
-  res
+: Tot (validator (parse_list p))
+= fun
+  (sl: slice)
+  (pos: U32.t) ->
+  let h = HST.get () in
+  valid_valid_exact_consumes_all (parse_list p) h sl pos;
+  if validate_list' v sl pos
+  then sl.len
+  else validator_max_length `U32.add` 1ul // FIXME: more control on error
 
-#pop-options
+
 
 (*
 #reset-options "--z3rlimit 128 --max_fuel 16 --max_ifuel 16 --z3cliopt smt.arith.nl=false"

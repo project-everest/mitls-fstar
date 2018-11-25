@@ -647,6 +647,23 @@ let valid_exact_frame
 = ()
 
 abstract
+let valid_valid_exact_consumes_all
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (s: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (k.parser_kind_subkind == Some ParserConsumesAll))
+  (ensures (
+    (valid p h s pos \/ valid_exact p h s pos s.len) ==>
+    (valid_exact p h s pos s.len /\
+    valid_content_pos p h s pos (contents_exact p h s pos s.len) s.len)
+  ))
+= ()
+
+abstract
 let valid_valid_exact
   (#k: parser_kind)
   (#t: Type)
