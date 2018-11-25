@@ -345,7 +345,7 @@ let accessor_vlbytes
 
 #pop-options
 
-#push-options "--z3rlimit 64 --max_fuel 2 --initial_fuel 2 --max_ifuel 6 --initial_ifuel 6"
+#push-options "--z3rlimit 128 --max_fuel 2 --initial_fuel 2 --max_ifuel 6 --initial_ifuel 6"
 
 let valid_bounded_vlbytes_intro
   (h: HS.mem)
