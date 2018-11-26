@@ -269,6 +269,7 @@ let jump_sum_aux_payload'
       [@inline_let]
       let _ = synth_sum_case_injective t k in
       pc32 k input pos
+    | _ -> 0ul // dummy, but we MUST NOT remove this branch, otherwise extraction fails
 
 inline_for_extraction
 let jump_sum_aux_payload
