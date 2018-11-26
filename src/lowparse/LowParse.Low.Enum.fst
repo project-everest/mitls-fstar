@@ -18,7 +18,6 @@ let is_known
 
 inline_for_extraction
 let validate_enum_key
-  [| validator_cls |]
   (#key #repr: eqtype)
   (#k: parser_kind) (#p: parser k repr) (v: validator p) (p32: leaf_reader p)
   (e: enum key repr)
@@ -32,7 +31,6 @@ let validate_enum_key
 
 inline_for_extraction
 let validate_maybe_enum_key
-  [| validator_cls |]
   (#key #repr: eqtype)
   (#k: parser_kind) (#p: parser k repr) (v: validator p)
   (e: enum key repr)

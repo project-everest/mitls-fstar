@@ -6,7 +6,7 @@ module HST = FStar.HyperStack.ST
 module U32 = FStar.UInt32
 
 inline_for_extraction
-let validate_option [| validator_cls |] (#k: parser_kind) (#t: Type) (#p: parser k t) (v: validator p) : Tot (validator (parse_option p)) =
+let validate_option (#k: parser_kind) (#t: Type) (#p: parser k t) (v: validator p) : Tot (validator (parse_option p)) =
   fun input pos ->
   let h = HST.get () in
   [@inline_let] let _ = valid_facts (parse_option p) h input pos in

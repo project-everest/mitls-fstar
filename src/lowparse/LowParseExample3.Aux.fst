@@ -20,9 +20,6 @@ let parse_t : parser _ t =
   `parse_synth` synth_t
 
 inline_for_extraction
-instance valcls : validator_cls = { validator_max_length = 4294967290ul; }
-
-inline_for_extraction
 let validate_t : validator parse_t =
   validate_total_constant_size parse_t 8ul ()
 (*

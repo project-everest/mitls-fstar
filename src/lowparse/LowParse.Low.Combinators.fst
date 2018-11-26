@@ -62,7 +62,6 @@ let valid_nondep_then_intro
 
 inline_for_extraction
 let validate_nondep_then
-  [| validator_cls |]
   (#k1: parser_kind)
   (#t1: Type0)
   (#p1: parser k1 t1)
@@ -144,7 +143,6 @@ let valid_synth_intro
 
 inline_for_extraction
 let validate_synth
-  [| validator_cls |]
   (#k: parser_kind)
   (#t1: Type0)
   (#t2: Type0)
@@ -199,7 +197,6 @@ let valid_total_constant_size
 
 inline_for_extraction
 let validate_total_constant_size
-  [| validator_cls |]
   (#k: parser_kind)
   (#t: Type0)
   (p: parser k t)
@@ -215,20 +212,19 @@ let validate_total_constant_size
   let h = HST.get () in
   [@inline_let] let _ = valid_total_constant_size h p sz input pos in
   if U32.lt (input.len `U32.sub` pos) sz
-  then validator_max_length `U32.add` 1ul // FIXME: more control over failures
+  then validator_error_not_enough_data
   else
     pos `U32.add` sz
 
 inline_for_extraction
 let validate_ret
-  [| validator_cls |]
   (#t: Type)
   (v: t)
 : Tot (validator (parse_ret v))
 = validate_total_constant_size (parse_ret v) 0ul ()
 
 inline_for_extraction
-let validate_empty [| validator_cls |] () : Tot (validator parse_empty)
+let validate_empty () : Tot (validator parse_empty)
 = validate_ret ()
 
 inline_for_extraction
@@ -497,7 +493,6 @@ let valid_filter
 
 inline_for_extraction
 let validate_filter
-  [| validator_cls |]
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
@@ -516,7 +511,7 @@ let validate_filter
     let va = p32 input pos in
     if f' va
     then res
-    else validator_max_length `U32.add` 1ul // FIXME: more control on error
+    else validator_error_generic
 
 inline_for_extraction
 let jump_filter
@@ -659,7 +654,6 @@ let write_synth_weak
 
 inline_for_extraction
 let validate_filter_and_then
-  [| validator_cls |]
   (#k1: parser_kind)
   (#t1: Type0)
   (#p1: parser k1 t1)
@@ -695,11 +689,10 @@ let validate_filter_and_then
       [@inline_let]
       let _ = valid_facts (p2 va) h input res in
       v2 va input res
-    else validator_max_length `U32.add` 1ul // TODO: more control on error
+    else validator_error_generic
 
 inline_for_extraction
 let validate_weaken
-  [| validator_cls |]
   (k1: parser_kind)
   (#k2: parser_kind)
   (#t: Type0)
@@ -717,7 +710,6 @@ let validate_weaken
 
 inline_for_extraction
 let validate_strengthen
-  [| validator_cls |]
   (k2: parser_kind)
   (#k1: parser_kind)
   (#t: Type)

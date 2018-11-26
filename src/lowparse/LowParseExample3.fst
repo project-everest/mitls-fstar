@@ -18,11 +18,11 @@ let dummy
   (input: slice)
   (which: U32.t)
 : HST.Stack U32.t
-  (requires (fun h -> live_slice h input /\ U32.v input.len <= 4294967290))
+  (requires (fun h -> live_slice h input /\ U32.v input.len <= U32.v validator_max_length))
   (ensures (fun _ _ _ -> True))
 = HST.push_frame ();
   let res =
-    if validate_t input 0ul `U32.lte` 4294967290ul
+    if validate_t input 0ul `U32.lte` validator_max_length
     then
       if which = 42ul
       then

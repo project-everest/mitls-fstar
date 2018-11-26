@@ -8,7 +8,6 @@ module B = LowStar.Buffer
 
 inline_for_extraction
 let validate_sum_aux_payload_t
-  [| validator_cls |]
   (t: sum)
   (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
   (k: maybe_enum_key (sum_enum t))
@@ -30,16 +29,14 @@ let validate_sum_aux_payload_t
   )))
 
 let validate_sum_aux_payload_eq
-  [| cls: validator_cls |]
   (t: sum)
   (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
   (k: maybe_enum_key (sum_enum t))
-: Tot (validate_sum_aux_payload_t t pc k -> validate_sum_aux_payload_t #cls t pc k -> GTot Type0)
+: Tot (validate_sum_aux_payload_t t pc k -> validate_sum_aux_payload_t t pc k -> GTot Type0)
 = fun _ _ -> True
 
 inline_for_extraction
 let validate_sum_aux_payload_if'
-  [| validator_cls |]
   (t: sum)
   (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
   (k: maybe_enum_key (sum_enum t))
@@ -56,7 +53,6 @@ let validate_sum_aux_payload_if'
 
 inline_for_extraction
 let validate_sum_aux_payload_if
-  [| validator_cls |]
   (t: sum)
   (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
   (k: maybe_enum_key (sum_enum t))
@@ -68,7 +64,6 @@ let validate_sum_aux_payload_if
 
 inline_for_extraction
 let validate_sum_aux
-  [| validator_cls |]
   (t: sum)
   (#kt: parser_kind)
   (#p: parser kt (sum_repr_type t))
@@ -104,12 +99,11 @@ let validate_sum_aux
 
 inline_for_extraction
 let validate_sum_aux_payload'
-  [| cls: validator_cls |]
   (t: sum)
   (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
-  (pc32: ((x: sum_key t) -> Tot (validator #cls (dsnd (pc x)))))
+  (pc32: ((x: sum_key t) -> Tot (validator (dsnd (pc x)))))
   (k: maybe_enum_key (sum_enum t))
-: Tot (validate_sum_aux_payload_t #cls t pc k)
+: Tot (validate_sum_aux_payload_t t pc k)
 = fun input pos ->
     match k with
     | Known k ->
@@ -117,11 +111,10 @@ let validate_sum_aux_payload'
       let _ = synth_sum_case_injective t k in
       pc32 k input pos
       // validate_synth (pc32 k) (synth_sum_case t k) () input pos
-    | _ -> validator_max_length `U32.add` 1ul
+    | _ -> validator_error_generic
 
 inline_for_extraction
 let validate_sum_aux_payload
-  [| validator_cls |]
   (t: sum)
   (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
   (pc32: ((x: sum_key t) -> Tot (validator (dsnd (pc x)))))
@@ -132,7 +125,6 @@ let validate_sum_aux_payload
 
 inline_for_extraction
 let validate_sum
-  [| validator_cls |]
   (t: sum)
   (#kt: parser_kind)
   (#p: parser kt (sum_repr_type t))

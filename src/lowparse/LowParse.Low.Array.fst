@@ -81,7 +81,6 @@ let array_nth #k #t #p s array_byte_size elem_count array_byte_size32 elem_byte_
 
 inline_for_extraction
 let validate_array
-  [| validator_cls |]
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
@@ -118,7 +117,6 @@ let jump_array
 
 inline_for_extraction
 let validate_vlarray
-  [| validator_cls |]
   (array_byte_size_min: nat)
   (array_byte_size_max: nat)
   (#k: parser_kind)

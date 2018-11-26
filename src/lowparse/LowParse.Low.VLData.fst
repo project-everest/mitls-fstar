@@ -20,14 +20,12 @@ let read_bounded_integer
 
 inline_for_extraction
 let validate_bounded_integer
-  [| validator_cls |]
   (i: integer_size) // must be a constant
 : Tot (validator (parse_bounded_integer i))
 = validate_total_constant_size (parse_bounded_integer i) (U32.uint_to_t i) ()
 
 inline_for_extraction
 let validate_vldata_payload
-  [| validator_cls |]
   (sz: integer_size)
   (f: ((x: bounded_integer sz) -> GTot bool))
   (#k: parser_kind)
@@ -40,7 +38,6 @@ let validate_vldata_payload
 
 inline_for_extraction
 let validate_vldata_gen
-  [| validator_cls |]
   (sz: integer_size) // must be a constant
   (f: ((x: bounded_integer sz) -> GTot bool))
   (f' : ((x: bounded_integer sz) -> Tot (y: bool { y == f x })))
@@ -111,7 +108,6 @@ let jump_vldata_gen
 
 inline_for_extraction
 let validate_bounded_vldata
-  [| validator_cls |]
   (min: nat) // must be a constant
   (max: nat) // must be a constant
   (#k: parser_kind)
@@ -155,7 +151,6 @@ let jump_bounded_vldata
 
 inline_for_extraction
 let validate_bounded_vldata_strong
-  [| validator_cls |]
   (min: nat) // must be a constant
   (max: nat)
   (#k: parser_kind)

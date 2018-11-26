@@ -387,12 +387,6 @@ module LL = LowParse.Low
 
 module U32 = FStar.UInt32
 
-inline_for_extraction
-instance valcls : LL.validator_cls = { LL.validator_max_length =
-  (let r = 4294967290ul in
-  assert_norm (4 <= U32.v r /\ U32.v r < U32.v LL.max_uint32);
-  r); }
-
 let validate_case_B
 : LL.validator parse_case_B
 = LL.validate_filter (LL.validate_u16 ()) LL.read_u16 parse_case_B_filter (fun x -> x `U16.gt` 0us)

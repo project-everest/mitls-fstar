@@ -13,7 +13,6 @@ module U8 = FStar.UInt8
 
 inline_for_extraction
 let validate_flbytes
-  [| validator_cls |]
   (sz: nat)
   (sz32: U32.t { U32.v sz32 == sz /\ sz <= U32.v validator_max_length } )
 : Tot (validator (parse_flbytes sz))
@@ -158,7 +157,6 @@ let read_flbytes
 
 inline_for_extraction
 let validate_all_bytes
-  [| validator_cls |]
   ()
 : Tot (validator parse_all_bytes)
 = fun input pos ->
@@ -168,7 +166,6 @@ let validate_all_bytes
 
 inline_for_extraction
 let validate_bounded_vlbytes
-  [| validator_cls |]
   (min: nat) // must be a constant
   (max: nat { min <= max /\ max > 0 /\ max <= U32.v validator_max_length  } )
 : Tot (validator (parse_bounded_vlbytes min max))

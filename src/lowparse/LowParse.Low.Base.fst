@@ -1627,15 +1627,34 @@ let max_uint32_correct
   (U32.v x <= U32.v max_uint32)
 = ()
 
+(*
+
+Error codes for validators
+
+TODO: replace with type classes
+
 inline_for_extraction
-class validator_cls = {
-  // FIXME: ideally, the min bound on validator_max_length should not be a hard constant
-  validator_max_length: (u: U32.t { 4 <= U32.v u /\ U32.v u < U32.v max_uint32 } )
+let default_validator_cls : validator_cls = {
+  validator_max_length = 4294967279ul;
 }
+
+*)
+
+inline_for_extraction
+let validator_max_length : (u: U32.t { 4 <= U32.v u /\ U32.v u < U32.v max_uint32 } ) = 4294967279ul
+
+inline_for_extraction
+type validator_error = (u: U32.t { U32.v u > U32.v validator_max_length } )
+
+inline_for_extraction
+let validator_error_generic : validator_error = validator_max_length `U32.add` 1ul
+
+inline_for_extraction
+let validator_error_not_enough_data : validator_error = validator_max_length `U32.add` 2ul
 
 [@unifier_hint_injective]
 inline_for_extraction
-let validator [| validator_cls |] (#k: parser_kind) (#t: Type) (p: parser k t) : Tot Type =
+let validator (#k: parser_kind) (#t: Type) (p: parser k t) : Tot Type =
   (sl: slice) ->
   (pos: U32.t) ->
   HST.Stack U32.t

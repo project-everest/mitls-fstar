@@ -20,15 +20,15 @@ inline_for_extraction
 val read_u32: leaf_reader parse_u32
 
 inline_for_extraction
-let validate_u8 [| validator_cls |] () : validator parse_u8 =
+let validate_u8 () : validator parse_u8 =
   validate_total_constant_size parse_u8 1ul ()
 
 inline_for_extraction
-let validate_u16 [| validator_cls |] () : validator parse_u16 =
+let validate_u16 () : validator parse_u16 =
   validate_total_constant_size parse_u16 2ul ()
 
 inline_for_extraction
-let validate_u32 [| validator_cls |] () : validator parse_u32 =
+let validate_u32 () : validator parse_u32 =
   validate_total_constant_size parse_u32 4ul ()
 
 inline_for_extraction

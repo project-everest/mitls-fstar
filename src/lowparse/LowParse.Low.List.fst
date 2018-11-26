@@ -98,7 +98,6 @@ let valid_exact_list_cons_recip
   contents_exact_eq (parse_list p) h sl pos1 pos'
 
 let validate_list_inv
-  [| validator_cls |]
   (#k: parser_kind)
   (#t: Type0)
   (p: parser k t)
@@ -135,7 +134,6 @@ let validate_list_inv
 
 inline_for_extraction
 let validate_list_body
-  [| validator_cls |]
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
@@ -164,7 +162,6 @@ let validate_list_body
 
 inline_for_extraction
 let validate_list'
-  [| validator_cls |]
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
@@ -200,7 +197,6 @@ let validate_list'
 
 inline_for_extraction
 let validate_list
-  [| validator_cls |]
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
@@ -217,7 +213,7 @@ let validate_list
   valid_valid_exact_consumes_all (parse_list p) h sl pos;
   if validate_list' v sl pos
   then sl.len
-  else validator_max_length `U32.add` 1ul // FIXME: more control on error
+  else validator_error_generic
 
 
 
