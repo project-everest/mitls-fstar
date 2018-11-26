@@ -66,6 +66,7 @@ reading the length header, "parsing" the payload will always succeed,
 by just returning it unchanged (unless the length of the input
 is greater than 2^32) *)
 
+inline_for_extraction
 let parse_all_bytes_kind =
   {
     parser_kind_low = 0;

@@ -111,6 +111,7 @@ let parse_list_bare_injective
 
 #reset-options
 
+inline_for_extraction
 let parse_list_kind =
   {
     parser_kind_low = 0;

@@ -44,6 +44,7 @@ let parse_fldata_injective
   Classical.forall_intro_2 (fun b -> Classical.move_requires (f b))
 
 // unfold
+inline_for_extraction
 let parse_fldata_kind
   (sz: nat)
 : Tot parser_kind
