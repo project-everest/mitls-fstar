@@ -275,6 +275,7 @@ let write_ticket12 (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
 
 // #reset-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1 --z3rlimit 64 --z3cliopt smt.arith.nl=false --z3cliopt trace=true --z3refresh --using_facts_from '* -FStar.Tactics -FStar.Reflection' --log_queries"
 
+(*
 module HS = FStar.HyperStack
 
 let write_ticket13_interm
@@ -366,6 +367,7 @@ let write_ticket (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
     write_ticket12 t sl pos
   | Ticket13 cs _ _ rms nonce created age custom ->
     write_ticket13 t sl pos
+*)
 
 #set-options "--admit_smt_queries true"
 
