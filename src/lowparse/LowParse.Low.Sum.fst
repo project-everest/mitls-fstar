@@ -189,111 +189,96 @@ let gaccessor_clens_sum_payload
 : Tot (gaccessor (parse_sum t p pc) (dsnd (pc k)) (clens_sum_payload t k))
 = fun (input: bytes) ->
   if Seq.length input >= 
-  
-
-(*
-inline_for_extraction
-let validate32_dsum_type_of_tag
-  (s: dsum)
-  (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag s x)))
-  (vf: (x: dsum_known_key s) -> Tot (validator32 (dsnd (f x))))
-  (#k: parser_kind)
-  (g: parser k (dsum_type_of_unknown_tag s))
-  (vg: validator32 g)
-  (x: dsum_key s)
-: Tot (validator32 (parse_dsum_type_of_tag s f g x))
-= match x with
-  | Known x -> (fun input len -> vf x input len)
-  | Unknown _ -> (fun input len -> vg input len)
+*)
 
 inline_for_extraction
-let validate32_dsum_cases_t
+let validate_dsum_cases_t
   (s: dsum)
   (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag s x)))
   (#k: parser_kind)
   (g: parser k (dsum_type_of_unknown_tag s))
   (x: dsum_key s)
 : Tot Type
-= validator32 (parse_dsum_cases s f g x)
+= validator (parse_dsum_cases' s f g x)
 
-inline_for_extraction
-let validate32_dsum_cases
-  (s: dsum)
-  (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag s x)))
-  (vf: (x: dsum_known_key s) -> Tot (validator32 (dsnd (f x))))
-  (#k: parser_kind)
-  (g: parser k (dsum_type_of_unknown_tag s))
-  (vg: validator32 g)
-  (x: dsum_key s)
-: Tot (validate32_dsum_cases_t s f g x)
-= [@inline_let]
-  let _ = synth_dsum_case_injective s x in
-  validate32_synth (validate32_dsum_type_of_tag s f vf g vg x) (synth_dsum_case s x) ()
-
-let validate32_dsum_cases_eq
+let validate_dsum_cases_eq
   (s: dsum)
   (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag s x)))
   (#k: parser_kind)
   (g: parser k (dsum_type_of_unknown_tag s))
   (x: dsum_key s)
-  (v1 v2 : validate32_dsum_cases_t s f g x)
+  (v1 v2 : validate_dsum_cases_t s f g x)
 : GTot Type0
 = True
 
 inline_for_extraction
-let validate32_dsum_cases_if'
+let validate_dsum_cases_if'
   (s: dsum)
   (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag s x)))
   (#k: parser_kind)
   (g: parser k (dsum_type_of_unknown_tag s))
   (x: dsum_key s)
   (cond: bool)
-  (ift: (cond_true cond -> Tot (validate32_dsum_cases_t s f g x)))
-  (iff: (cond_false cond -> Tot (validate32_dsum_cases_t s f g x)))
-: Tot (validate32_dsum_cases_t s f g x)
+  (ift: (cond_true cond -> Tot (validate_dsum_cases_t s f g x)))
+  (iff: (cond_false cond -> Tot (validate_dsum_cases_t s f g x)))
+: Tot (validate_dsum_cases_t s f g x)
 = fun input len ->
   if cond
-  then (ift () <: validate32_dsum_cases_t s f g x) input len
-  else (iff () <: validate32_dsum_cases_t s f g x) input len
+  then (ift () <: validate_dsum_cases_t s f g x) input len
+  else (iff () <: validate_dsum_cases_t s f g x) input len
 
 inline_for_extraction
-let validate32_dsum_cases_if
+let validate_dsum_cases_if
   (s: dsum)
   (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag s x)))
   (#k: parser_kind)
   (g: parser k (dsum_type_of_unknown_tag s))
   (x: dsum_key s)
-: Tot (if_combinator _ (validate32_dsum_cases_eq s f g x))
-= validate32_dsum_cases_if' s f g x
-
-#reset-options "--z3rlimit 64 --z3cliopt smt.arith.nl=false --query_stats --initial_ifuel 1 --max_ifuel 1 --smtencoding.elim_box true --smtencoding.l_arith_repr native --z3refresh"
+: Tot (if_combinator _ (validate_dsum_cases_eq s f g x))
+= validate_dsum_cases_if' s f g x
 
 inline_for_extraction
-let validate32_dsum
+let validate_dsum_cases
+  (s: dsum)
+  (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag s x)))
+  (f' : (x: dsum_known_key s) -> Tot (validator (dsnd (f x))))
+  (#k: parser_kind)
+  (#g: parser k (dsum_type_of_unknown_tag s))
+  (g' : validator g)
+  (x: dsum_key s)
+: Tot (validate_dsum_cases_t s f g x)
+= synth_dsum_case_injective s x;
+  match x with
+  | Known x' -> validate_synth (f' x') (synth_dsum_case s (Known x')) () <: validator (parse_dsum_cases' s f g x)
+  | Unknown x' -> validate_synth g' (synth_dsum_case s (Unknown x')) () <: validator (parse_dsum_cases' s f g x)
+
+inline_for_extraction
+let validate_dsum
   (#kt: parser_kind)
   (t: dsum)
   (#p: parser kt (dsum_repr_type t))
-  (v: validator32 p)
-  (p32: parser32 p)
+  (v: validator p)
+  (p32: leaf_reader p)
   (f: (x: dsum_known_key t) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag t x)))
-  (f32: (x: dsum_known_key t) -> Tot (validator32 (dsnd (f x))))
+  (f32: (x: dsum_known_key t) -> Tot (validator (dsnd (f x))))
   (#k': parser_kind)
   (#g: parser k' (dsum_type_of_unknown_tag t))
-  (g32: validator32 g)
-//  (v32: (x: dsum_repr_type t) -> Tot (validate32_dsum_cases_t t f g (maybe_enum_key_of_repr (dsum_enum t) x)))
-  (destr: dep_maybe_enum_destr_t (dsum_enum t) (validate32_dsum_cases_t t f g))
-: Tot (validator32 (parse_dsum t p f g))
-= fun input len ->
+  (g32: validator g)
+  (destr: dep_maybe_enum_destr_t (dsum_enum t) (validate_dsum_cases_t t f g))
+: Tot (validator (parse_dsum t p f g))
+= fun input pos ->
   let h = HST.get () in
   [@inline_let]
-  let _ = parse_dsum_eq'' t p f g (B.as_seq h input) in
-  let len_after_tag = v input len in
-  if len_after_tag `I32.lt` 0l
-  then len_after_tag
+  let _ = parse_dsum_eq' t p f g (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos))) in
+  [@inline_let]
+  let _ = valid_facts (parse_dsum t p f g) h input pos in
+  [@inline_let]
+  let _ = valid_facts p h input pos in
+  let pos_after_tag = v input pos in
+  if validator_max_length `U32.lt` pos_after_tag
+  then pos_after_tag
   else
-    let tg = p32 input in
-    let input_after_tag = B.offset input (Cast.int32_to_uint32 (len `I32.sub` len_after_tag)) in
-//    v32 tg input_after_tag len_after_tag
-    destr (validate32_dsum_cases_eq t f g) (validate32_dsum_cases_if t f g) (fun _ _ -> ()) (fun _ _ _ _ -> ()) (validate32_dsum_cases t f f32 g g32) tg input_after_tag len_after_tag
-
-#reset-options
+    let tg = p32 input pos in
+    [@inline_let]
+    let _ = valid_facts (parse_dsum_cases' t f g (maybe_enum_key_of_repr (dsum_enum t) tg)) h input pos_after_tag in
+    destr (validate_dsum_cases_eq t f g) (validate_dsum_cases_if t f g) (fun _ _ -> ()) (fun _ _ _ _ -> ()) (validate_dsum_cases t f f32 g32) tg input pos_after_tag
