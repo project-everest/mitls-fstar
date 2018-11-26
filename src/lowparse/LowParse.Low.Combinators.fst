@@ -228,6 +228,14 @@ let validate_empty () : Tot (validator parse_empty)
 = validate_ret ()
 
 inline_for_extraction
+let validate_false () : Tot (validator parse_false)
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let]
+  let _ = valid_facts parse_false h input pos in
+  validator_error_generic
+
+inline_for_extraction
 let jump_constant_size
   (#k: parser_kind)
   (#t: Type0)
@@ -242,6 +250,14 @@ let jump_constant_size
   let h = HST.get () in
   [@inline_let] let _ = valid_facts p h input pos in
   pos `U32.add` sz
+
+inline_for_extraction
+let jump_empty : jumper parse_empty
+= jump_constant_size parse_empty 0ul ()
+
+inline_for_extraction
+let jump_false : jumper parse_false
+= jump_constant_size parse_false 0ul ()
 
 let clens_synth
   (#t1: Type)
