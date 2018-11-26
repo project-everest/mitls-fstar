@@ -278,6 +278,7 @@ type parser_kind_metadata_t = {
   parser_kind_metadata_total: bool;
 }
 
+inline_for_extraction
 type parser_kind' = {
   parser_kind_low: nat;
   parser_kind_high: option nat;
