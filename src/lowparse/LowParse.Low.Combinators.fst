@@ -292,6 +292,7 @@ let gaccessor_synth'
 = parse_synth_eq p1 f input;
   (0, Seq.length input)
 
+abstract
 let gaccessor_synth
   (#k: parser_kind)
   (#t1: Type)
@@ -302,6 +303,20 @@ let gaccessor_synth
   (u: unit { synth_inverse f g /\ synth_inverse g f } )
 : Tot (gaccessor (parse_synth p1 f) p1 (clens_synth g f ()))
 = gaccessor_synth' p1 f g u
+
+abstract
+let gaccessor_synth_eq
+  (#k: parser_kind)
+  (#t1: Type)
+  (p1: parser k t1)
+  (#t2: Type)
+  (f: t1 -> GTot t2)
+  (g: t2 -> GTot t1)
+  (u: unit { synth_inverse f g /\ synth_inverse g f } )
+  (input: bytes)
+: Lemma
+  (gaccessor_synth p1 f g u input == gaccessor_synth' p1 f g u input)
+= ()
 
 inline_for_extraction
 let accessor_synth
@@ -315,7 +330,10 @@ let accessor_synth
 : Tot (accessor (gaccessor_synth p1 f g u))
 = fun input pos ->
   let h = HST.get () in
-  [@inline_let] let _ = slice_access_eq h (gaccessor_synth p1 f g u) input pos in
+  [@inline_let] let _ =
+    Classical.forall_intro (gaccessor_synth_eq p1 f g u);
+    slice_access_eq h (gaccessor_synth p1 f g u) input pos
+  in
   pos
 
 let clens_fst
@@ -371,6 +389,7 @@ let gaccessor_fst'
   | _ -> 0 // dummy
   ))
 
+abstract
 let gaccessor_fst
   (#k1: parser_kind)
   (#t1: Type)
@@ -381,6 +400,20 @@ let gaccessor_fst
   (p2: parser k2 t2)
 : Tot (gaccessor (p1 `nondep_then` p2) p1 (clens_fst _ _))
 = gaccessor_fst' p1 sq p2
+
+abstract
+let gaccessor_fst_eq
+  (#k1: parser_kind)
+  (#t1: Type)
+  (p1: parser k1 t1)
+  (sq: squash (k1.parser_kind_subkind == Some ParserStrong))
+  (#k2: parser_kind)
+  (#t2: Type)
+  (p2: parser k2 t2)
+  (input: bytes)
+: Lemma
+  (gaccessor_fst p1 sq p2 input == gaccessor_fst' p1 sq p2 input)
+= ()
 
 let gaccessor_fst_then
   (#k1: parser_kind)
@@ -414,6 +447,7 @@ let gaccessor_snd'
   | None -> (0, 0) // dummy
   | Some (_, consumed) -> (consumed, Seq.length input - consumed)
 
+abstract
 let gaccessor_snd
   (#k1: parser_kind)
   (#t1: Type)
@@ -424,6 +458,19 @@ let gaccessor_snd
 : Tot (gaccessor (p1 `nondep_then` p2) p2 (clens_snd _ _))
 = gaccessor_snd' p1 p2
 
+abstract
+let gaccessor_snd_eq
+  (#k1: parser_kind)
+  (#t1: Type)
+  (p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (p2: parser k2 t2)
+  (input: bytes)
+: Lemma
+  (gaccessor_snd p1 p2 input == gaccessor_snd' p1 p2 input)
+= ()
+
 (*
 let clens_fst_snd_disjoint
   (t1 t2: Type)
@@ -433,6 +480,7 @@ let clens_fst_snd_disjoint
   clens_disjoint_l_intro (clens_snd t1 t2) (clens_fst t1 t2) (fun x1 x2 -> ())
 *)
 
+abstract
 let gaccessor_fst_snd_disjoint
   (#k1: parser_kind)
   (#t1: Type)
@@ -460,6 +508,24 @@ let accessor_fst
   let h = HST.get () in
   [@inline_let] let _ = slice_access_eq h (gaccessor_fst p1 sq p2) input pos in
   pos
+
+inline_for_extraction
+let accessor_fst_then
+  (#k1: parser_kind)
+  (#t1: Type)
+  (#p1: parser k1 t1)
+  (#k' : parser_kind)
+  (#t' : Type)
+  (#p': parser k' t')
+  (#cl: clens t1 t')
+  (#g: gaccessor p1 p' cl)
+  (a: accessor g)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (p2: parser k2 t2)
+  (u: squash (k1.parser_kind_subkind == Some ParserStrong))
+: Tot (accessor (gaccessor_fst_then g p2 u))
+= accessor_compose (accessor_fst p1 u p2) a u
 
 inline_for_extraction
 let accessor_snd

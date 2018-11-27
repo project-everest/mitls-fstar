@@ -1325,13 +1325,50 @@ let gaccessors_disjoint_intro
  in
  Classical.forall_intro lem'
 
+let gaccessor_id'
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (input: bytes)
+: Ghost (nat & nat)
+  (requires True)
+  (ensures (fun res -> gaccessor_post' p p (clens_id _) input res))
+= (0, Seq.length input)
+
+abstract
 let gaccessor_id
   (#k: parser_kind)
   (#t: Type)
   (p: parser k t)
 : Tot (gaccessor p p (clens_id _))
-= fun (input: bytes) -> ((0, Seq.length input) <: Ghost (nat & nat) (requires True) (ensures (fun res -> gaccessor_post' p p (clens_id _) input res)))
+= gaccessor_id' p
 
+abstract
+let gaccessor_id_eq
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (input: bytes)
+: Lemma
+  (gaccessor_id p input == gaccessor_id' p input)
+= ()
+
+let gaccessor_ext'
+  (#k1: parser_kind)
+  (#t1: Type)
+  (#p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (#p2: parser k2 t2)
+  (#cl: clens t1 t2)
+  (g: gaccessor p1 p2 cl)
+  (cl': clens t1 t2)
+  (sq: squash (clens_eq cl cl'))
+  (input: bytes)
+: Ghost (nat & nat) (requires True) (ensures (fun res -> gaccessor_post' p1 p2 cl' input res))
+= g input
+
+abstract
 let gaccessor_ext
   (#k1: parser_kind)
   (#t1: Type)
@@ -1344,8 +1381,47 @@ let gaccessor_ext
   (cl': clens t1 t2)
   (sq: squash (clens_eq cl cl'))
 : Tot (gaccessor p1 p2 cl')
-= fun (input: bytes) -> (g input <: Ghost (nat & nat) (requires True) (ensures (fun res -> gaccessor_post' p1 p2 cl' input res)))
+= gaccessor_ext' g cl' sq
 
+abstract
+let gaccessor_ext_eq
+  (#k1: parser_kind)
+  (#t1: Type)
+  (#p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (#p2: parser k2 t2)
+  (#cl: clens t1 t2)
+  (g: gaccessor p1 p2 cl)
+  (cl': clens t1 t2)
+  (sq: squash (clens_eq cl cl'))
+  (input: bytes)
+: Lemma
+  (gaccessor_ext g cl sq input == gaccessor_ext' g cl sq input)
+= ()
+
+let gaccessor_compose'
+  (#k1: parser_kind)
+  (#t1: Type)
+  (#p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (#p2: parser k2 t2)
+  (#cl12: clens t1 t2)
+  (a12: gaccessor p1 p2 cl12)
+  (#k3: parser_kind)
+  (#t3: Type)
+  (#p3: parser k3 t3)
+  (#cl23: clens t2 t3)
+  (a23: gaccessor p2 p3 cl23)
+  (input: bytes)
+: Ghost (nat & nat) (requires True) (ensures (fun res -> gaccessor_post' p1 p3 (clens_compose cl12 cl23) input res))
+= let (pos2, consumed2) = a12 input in
+  let input2 = Seq.slice input pos2 (pos2 + consumed2) in
+  let (pos3, consumed3) = a23 input2 in
+  (pos2 + pos3, consumed3)
+
+abstract
 let gaccessor_compose
   (#k1: parser_kind)
   (#t1: Type)
@@ -1361,12 +1437,27 @@ let gaccessor_compose
   (#cl23: clens t2 t3)
   (a23: gaccessor p2 p3 cl23)
 : Tot (gaccessor p1 p3 (clens_compose cl12 cl23))
-= fun
-  (input: bytes) ->
-  ((let (pos2, consumed2) = a12 input in
-  let input2 = Seq.slice input pos2 (pos2 + consumed2) in
-  let (pos3, consumed3) = a23 input2 in
-  (pos2 + pos3, consumed3)) <: Ghost (nat & nat) (requires True) (ensures (fun res -> gaccessor_post' p1 p3 (clens_compose cl12 cl23) input res)))
+= gaccessor_compose' a12 a23
+
+abstract
+let gaccessor_compose_eq
+  (#k1: parser_kind)
+  (#t1: Type)
+  (#p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (#p2: parser k2 t2)
+  (#cl12: clens t1 t2)
+  (a12: gaccessor p1 p2 cl12)
+  (#k3: parser_kind)
+  (#t3: Type)
+  (#p3: parser k3 t3)
+  (#cl23: clens t2 t3)
+  (a23: gaccessor p2 p3 cl23)
+  (input: bytes)
+: Lemma
+  (gaccessor_compose a12 a23 input == gaccessor_compose' a12 a23 input)
+= ()
 
 let slice_access'
   (h: HS.mem)
@@ -1548,7 +1639,7 @@ let accessor
   (#t2: Type)
   (#p2: parser k2 t2)
   (#cl: clens t1 t2)
-  (g: gaccessor p1 p2 cl)
+  ($g: gaccessor p1 p2 cl)
 : Tot Type
 = (sl: slice) ->
   (pos: U32.t) ->
