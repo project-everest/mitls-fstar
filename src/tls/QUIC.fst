@@ -50,12 +50,13 @@ private let errno description txt: ST error
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> h0 == h1)
 =
+  let open TLSError in 
   trace ("returning error"^
     (match description with
-    | Some ad -> " "^TLSError.string_of_ad ad
+    | Some ad -> " "^string_of_alert ad
     | None    -> "")^": "^txt);
-  let b2 = Alert.alertBytes (match description with | Some a -> a | None -> TLSError.AD_internal_error) in
-  Parse.uint16_of_bytes b2
+  let a = match description with | Some a -> a | None -> fatalAlert Internal_error in
+  Parse.uint16_of_bytes (Alert.alertBytes a)
 
 module Handshake = Old.Handshake
 

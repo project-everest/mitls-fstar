@@ -1,5 +1,5 @@
-#include "FStar.h"
-#include "Prims.h"
+#include <kremlib.h>
+#include <kremlin/internal/compat.h>
 
 typedef uint8_t FStar_Bytes_byte;
 

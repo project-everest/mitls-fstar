@@ -527,6 +527,7 @@ let esId_ae (i:pre_esId{ApplicationPSK? i \/ ResumptionPSK? i}) =
   | ApplicationPSK #h #ae _ -> ae
   | ResumptionPSK #li _ -> logInfo_ae li
 
+noextract
 type valid_hlen (b:bytes) (h:hash_alg) =
   len b = Hashing.Spec.tagLen h
 

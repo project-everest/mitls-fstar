@@ -1,5 +1,5 @@
 [
-  "∂úÍôÿ¨Yà◊k8-Ø›ô\u0017",
+  "\u0010∂O⁄ROIΩùç\u0004Z˝Y#Í",
   [
     [
       "HandshakeLog.gforall",
@@ -13,7 +13,7 @@
         "fuel_guarded_inversion_Prims.list", "subterm_ordering_Prims.Cons"
       ],
       0,
-      "0384d1b321e0a565bbcf3fe6006a6e6a"
+      "47d05b1b304d8fdc549a1354f7433db6"
     ],
     [
       "HandshakeLog.append_transcript",
@@ -25,7 +25,7 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_fb118621c0b0f2173d7d8e9b92378a43"
       ],
       0,
-      "50f901ac9f9f1f25b0d27b428307cfb4"
+      "9d3a9a883515d2e8b7ebfca6ef7db612"
     ],
     [
       "HandshakeLog.discard",
@@ -33,14 +33,12 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query",
-        "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "@query", "equation_FStar.HyperStack.ST.equal_stack_domains",
         "equation_FStar.Monotonic.Heap.equal_dom",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "fe8d8ebb76b54a4439eef0b0e8512961"
+      "1098e90bdd753131f1b3292d8316642d"
     ],
     [
       "HandshakeLog.trace",
@@ -52,7 +50,7 @@
         "equation_DebugFlags.debug_HSL"
       ],
       0,
-      "78736e347365e59c654e58bd55967f07"
+      "fb698710e4f1cea0c259a6deda63529f"
     ],
     [
       "HandshakeLog.elift1_def",
@@ -65,7 +63,7 @@
         "typing_FStar.Ghost.elift1"
       ],
       0,
-      "fec380bb758a34ff5ce087cc1d04fca1"
+      "daff8295a4e55bdfc125b295379f4c6d"
     ],
     [
       "HandshakeLog.bind_log",
@@ -74,11 +72,10 @@
       1,
       [
         "@query", "equation_HandshakeLog.erased_transcript",
-        "equation_HandshakeLog.reveal_log",
-        "projection_inverse_BoxBool_proj_0"
+        "equation_HandshakeLog.reveal_log"
       ],
       0,
-      "26180a5499e8a3de6bbc79b4af631ef7"
+      "d21532a20daade55493ae0a6c305088d"
     ],
     [
       "HandshakeLog.empty_hs_transcript",
@@ -97,7 +94,7 @@
         "projection_inverse_Prims.Nil_a"
       ],
       0,
-      "72ccbf96c6120324e5da2ac091ef3634"
+      "8add70edce2047454f7648e700088e64"
     ],
     [
       "HandshakeLog.append_hs_transcript",
@@ -109,7 +106,7 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_3e2c9291fd3b066a107ccf5a30cfc03a"
       ],
       0,
-      "5341c57536442164fdc658b302855e7f"
+      "ce4708e51fd0826bab28996b05e5ea6e"
     ],
     [
       "HandshakeLog.extend_hs_transcript",
@@ -121,7 +118,7 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_cc2d11896931b330efd1e867bcf17db1"
       ],
       0,
-      "1fa3bff8fce5f196f5aa903bc9c0e27e"
+      "1a520dbfa304a285bed7583e8ea1828a"
     ],
     [
       "HandshakeLog.gforall_list_to_list_refined",
@@ -145,7 +142,7 @@
         "subterm_ordering_Prims.Cons"
       ],
       0,
-      "52a7330df820715b361204ca36576833"
+      "5e137f5a5c779d536d9656e2b88eb1e9"
     ],
     [
       "HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux",
@@ -170,42 +167,16 @@
         "token_correspondence_HandshakeMessages.valid_hs_msg_prop"
       ],
       0,
-      "f72fc44eafb5b2b3a29252270e1fd1d6"
+      "494c512773851dd1f9b3b6e3e7527145"
     ],
     [
       "HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux_inj",
       1,
       2,
       1,
-      [
-        "@MaxFuel_assumption", "@MaxIFuel_assumption",
-        "@fuel_correspondence_HandshakeLog.gforall.fuel_instrumented",
-        "@fuel_correspondence_HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux.fuel_instrumented",
-        "@fuel_irrelevance_HandshakeLog.gforall.fuel_instrumented",
-        "@fuel_irrelevance_HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux.fuel_instrumented",
-        "@query", "binder_x_00307fb773434c329a2c095a1079a695_1",
-        "binder_x_00307fb773434c329a2c095a1079a695_2",
-        "constructor_distinct_Prims.Cons", "constructor_distinct_Prims.Nil",
-        "disc_equation_Prims.Cons",
-        "equality_tok_TLSConstants.TLS_AES_128_GCM_SHA256@tok",
-        "equation_HandshakeLog.msg",
-        "equation_QD.TLS_protocolVersion.protocolVersion",
-        "equation_with_fuel_HandshakeLog.gforall.fuel_instrumented",
-        "equation_with_fuel_HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux.fuel_instrumented",
-        "fuel_guarded_inversion_Prims.list", "primitive_Prims.op_AmpAmp",
-        "proj_equation_FStar.Pervasives.Native.Mktuple2__1",
-        "proj_equation_FStar.Pervasives.Native.Mktuple2__2",
-        "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
-        "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
-        "projection_inverse_Prims.Cons_a",
-        "projection_inverse_Prims.Cons_hd",
-        "projection_inverse_Prims.Cons_tl",
-        "refinement_interpretation_HandshakeLog_Tm_refine_422458d7c599567ec8c612cf0b1dfa4a",
-        "subterm_ordering_Prims.Cons"
-      ],
+      [ "@query" ],
       0,
-      "1043557879e394c4a3c977dcb1794d9e"
+      "583486be9798f97034fcfce84a2ffc45"
     ],
     [
       "HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux_inj",
@@ -222,7 +193,7 @@
         "binder_x_718914cfaa5a44f510262238628a20d4_2",
         "constructor_distinct_Prims.Cons", "constructor_distinct_Prims.Nil",
         "disc_equation_Prims.Cons",
-        "equality_tok_TLSConstants.TLS_AES_128_GCM_SHA256@tok",
+        "equality_tok_Parsers.CipherSuite.TLS_AES_128_GCM_SHA256@tok",
         "equation_HandshakeLog.msg", "equation_TLSConstants.protocolVersion",
         "equation_with_fuel_HandshakeLog.gforall.fuel_instrumented",
         "equation_with_fuel_HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux.fuel_instrumented",
@@ -239,7 +210,7 @@
         "subterm_ordering_Prims.Cons"
       ],
       0,
-      "2a911c7fa560de7ab718a1dc6a716fb8"
+      "3eb0bde95ba3b913564d460f0be68c3d"
     ],
     [
       "HandshakeLog.transcript_bytes",
@@ -254,7 +225,7 @@
         "refinement_interpretation_HandshakeLog_Tm_refine_7913c46ed823df5e60659625cd966658"
       ],
       0,
-      "5a86ca72fb2ee13f77497995b03a798f"
+      "c2ef37b83c4fd6abec2c66ed9bcba24d"
     ]
   ]
 ]

@@ -12,7 +12,7 @@
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "4981a902d501e1b50dbe33877a0b3c08"
+      "040a374f676cf619d37be9ba447f2ec5"
     ],
     [
       "StAE.frag_plain_len",
@@ -21,7 +21,7 @@
       1,
       [ "@query" ],
       0,
-      "7a00474e74ac1c9f776178ca5b66a55b"
+      "bc16eafdcdaaa60ea3a93f2bca2b6588"
     ],
     [
       "StAE.frag_cipher_len",
@@ -30,7 +30,7 @@
       1,
       [ "@query", "equation_StAE.is_stream" ],
       0,
-      "db8f0947daafb4d94009145cc6dec64d"
+      "a7d045e3f903c3f912f8abf06ac10f93"
     ],
     [
       "StAE.aeKeySize",
@@ -39,18 +39,15 @@
       1,
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "constructor_distinct_TLSConstants.AEAD",
-        "disc_equation_TLSConstants.AEAD", "disc_equation_TLSInfo.ID12",
-        "disc_equation_TLSInfo.ID13", "disc_equation_TLSInfo.PlaintextID",
+        "disc_equation_TLSInfo.ID12", "disc_equation_TLSInfo.PlaintextID",
         "equation_StAE.is_stlhae", "equation_StAE.is_stream",
-        "equation_StAE.stae_id", "equation_TLSInfo.aeAlg_of_id",
-        "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_TLSConstants.AEAD__0",
-        "projection_inverse_TLSConstants.AEAD__1",
-        "refinement_interpretation_StAE_Tm_refine_7f2a2c302ee268d1f2067f3ad49e35d9"
+        "equation_StAE.stae_id", "primitive_Prims.op_AmpAmp",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_StAE_Tm_refine_7f2a2c302ee268d1f2067f3ad49e35d9",
+        "typing_StAE.is_stlhae"
       ],
       0,
-      "a6859e2542875eeef1b9590e0446d3e0"
+      "44a20a2545bb8fd8d911538796c3a10c"
     ],
     [
       "StAE.keyBytes",
@@ -62,37 +59,38 @@
         "Prims_pretyping_ae567c2fb75be05905677af440075565", "bool_inversion",
         "bool_typing", "constructor_distinct_EverCrypt.AES128_GCM",
         "constructor_distinct_EverCrypt.AES256_GCM",
-        "data_elim_TLSInfo.ID12", "disc_equation_TLSConstants.AEAD",
+        "data_elim_TLSInfo.ID12", "disc_equation_CipherSuite.AEAD",
         "disc_equation_TLSInfo.ID12", "disc_equation_TLSInfo.ID13",
         "equality_tok_EverCrypt.AES128_GCM@tok",
         "equality_tok_EverCrypt.AES256_GCM@tok",
-        "equality_tok_QD.TLS_protocolVersion.TLS_1p3@tok",
+        "equality_tok_Parsers.ProtocolVersion.TLS_1p3@tok",
         "equation_AEADProvider.alg_", "equation_AEADProvider.iv_length",
-        "equation_AEADProvider.salt_length", "equation_FStar.UInt.uint_t",
-        "equation_FStar.UInt32.n",
-        "equation_QD.TLS_protocolVersion.protocolVersion",
+        "equation_AEADProvider.salt_length", "equation_CipherSuite.aeadAlg",
+        "equation_FStar.UInt.uint_t", "equation_FStar.UInt32.n",
         "equation_StAE.aeKeySize", "equation_StAE.is_stlhae",
         "equation_StAE.is_stream", "equation_StAE.stae_id",
         "equation_StreamAE.id", "equation_StreamPlain.id",
-        "equation_TLSConstants.aeadAlg", "equation_TLSInfo.aeAlg_of_id",
-        "equation_TLSInfo.pv_of_id", "function_token_typing_FStar.UInt32.n",
+        "equation_TLSConstants.protocolVersion",
+        "equation_TLSInfo.aeAlg_of_id", "equation_TLSInfo.pv_of_id",
+        "function_token_typing_FStar.UInt32.n",
         "lemma_FStar.Buffer.lemma_size", "primitive_Prims.op_Addition",
         "primitive_Prims.op_AmpAmp", "primitive_Prims.op_BarBar",
-        "primitive_Prims.op_Equality", "proj_equation_TLSConstants.AEAD__0",
+        "primitive_Prims.op_Equality", "proj_equation_CipherSuite.AEAD__0",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_CipherSuite_Tm_refine_b3a78002179c7237486d80315a411afc",
         "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
         "refinement_interpretation_StAE_Tm_refine_7f2a2c302ee268d1f2067f3ad49e35d9",
         "refinement_interpretation_StreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88",
-        "refinement_interpretation_TLSConstants_Tm_refine_f0bffa42328d7c5602e43036b75f4e6e",
+        "refinement_interpretation_TLSInfo_Tm_refine_5a42b69505c74575f4084030e217c997",
         "refinement_interpretation_TLSInfo_Tm_refine_771d00c42e1fa557a792d8f0bf7b724d",
-        "refinement_interpretation_TLSInfo_Tm_refine_b371b18aea91964c12c83acc49841360",
+        "typing_CipherSuite.__proj__AEAD__item___0",
         "typing_EverCrypt.aead_keyLen", "typing_FStar.UInt32.v",
-        "typing_StAE.is_stream", "typing_StreamAE.alg",
-        "typing_TLSConstants.__proj__AEAD__item___0"
+        "typing_StAE.is_stlhae", "typing_StAE.is_stream",
+        "typing_StreamAE.alg"
       ],
       0,
-      "0fae0c6ce77970fc9484a190b49f0001"
+      "f518c8cb8bc3bf0094fbbeeed6c60fa7"
     ]
   ]
 ]

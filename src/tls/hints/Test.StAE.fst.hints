@@ -1,5 +1,5 @@
 [
-  "rz¯ÎÈ\u0014Ü†\u000b}\bÓFÕ\u0011H",
+  "…òP¢Êò\u0016W„\u0017ôê4Qâ˝",
   [
     [
       "Test.StAE.ok",
@@ -20,7 +20,7 @@
         "typing_FStar.Monotonic.HyperStack.is_eternal_color"
       ],
       0,
-      "498b1ffe999d7e1d1c62720440ca4e87"
+      "c399fe8fe56109847a46ef069a86d40e"
     ],
     [
       "Test.StAE.discard",
@@ -28,14 +28,12 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query",
-        "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "@query", "equation_FStar.HyperStack.ST.equal_stack_domains",
         "equation_FStar.Monotonic.Heap.equal_dom",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "838e84c76d40b1e91621274d24c4e32a"
+      "528590a94cf8180874de939edd005358"
     ],
     [
       "Test.StAE.eprint",
@@ -53,8 +51,8 @@
         "equation_FStar.HyperStack.ST.is_live_for_rw_in",
         "equation_FStar.HyperStack.ST.mref",
         "equation_FStar.HyperStack.ST.ref",
-        "equation_FStar.Monotonic.HyperStack.mref", "equation_Prims.l_True",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
+        "equation_FStar.Monotonic.HyperStack.mref", "equation_Prims.eqtype",
+        "equation_Prims.l_True",
         "function_token_typing_FStar.Heap.trivial_preorder",
         "function_token_typing_Flags.model",
         "function_token_typing_Prims.bool",
@@ -65,11 +63,12 @@
         "primitive_Prims.op_Negation", "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_FStar.HyperStack.ST_Tm_refine_1a1278f1aecd37594ba20d888b7fd230",
         "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_ecfe710eaddaa768c46a7d024350dcbc",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "true_interp", "typing_FStar.Heap.trivial_preorder",
         "typing_FStar.Monotonic.HyperStack.is_mm"
       ],
       0,
-      "ee889528b15af3f75adb195ccc824ad3"
+      "a6d9166738aab6099aff11ab69e221a5"
     ],
     [
       "Test.StAE.nprint",
@@ -78,7 +77,7 @@
       1,
       [ "@query" ],
       0,
-      "0394719a5188fa3b3f5a428d44ec50a9"
+      "29626b08eb24373e46581ba8c5097c3d"
     ]
   ]
 ]

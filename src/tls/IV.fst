@@ -20,10 +20,10 @@ type rawlen (#ip:ipkg) (len_of_i:ip.t -> keylen) (i:ip.t) = len:keylen {len == l
 
 type raw (ip:ipkg) (len_of_i:ip.t -> keylen) (i:ip.t{ip.registered i}) = Bytes.lbytes32 (len_of_i i)
 
-noextract
+noextract inline_for_extraction
 let shared_footprint_raw (ip:ipkg) (len_of_i:ip.t -> keylen): rset = Set.empty
 
-noextract
+noextract inline_for_extraction
 let footprint_raw (ip:ipkg) (len_of_i:ip.t -> keylen)
   (#i:ip.t {ip.registered i}) (k:raw ip len_of_i i)
   : GTot (s:rset{s `Set.disjoint` shared_footprint_raw ip len_of_i})
@@ -33,7 +33,7 @@ let footprint_raw (ip:ipkg) (len_of_i:ip.t -> keylen)
   Set.lemma_equal_elim (fp `Set.intersect` sfp) Set.empty;
   fp
 
-inline_for_extraction
+noextract inline_for_extraction
 let create_raw (ip:ipkg) (len_of_i:ip.t -> keylen)
   (i:ip.t{ip.registered i}) (len:keylen {len = len_of_i i}):
   ST (raw ip len_of_i i)
@@ -94,7 +94,9 @@ inline_for_extraction
 noextract
 private let ip : ipkg = Pkg.Idx id (fun _ -> True) (fun _ -> True) (fun _ -> true)
 
-private let len_of_i (i:id): keylen = UInt32.uint_to_t i
+private let len_of_i (i:id): keylen =
+  if i > 0 && i < 32 then UInt32.uint_to_t i
+  else 32ul
 
 let test() : ST unit
   (requires fun h0 -> True)

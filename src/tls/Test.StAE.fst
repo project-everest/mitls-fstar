@@ -36,9 +36,9 @@ let nprint s : St unit = print s
 private let pre_id (role:role) =
   let cr  = Bytes.create 32ul 0z in
   let sr  = Bytes.create 32ul 0z in
-  let kdf = PRF_TLS_1p2 kdf_label Hashing.Spec.SHA256 in
+  let kdf = PRF_TLS_1p2 kdf_label Hashing.Spec.SHA2_256 in
   let msid = StandardMS PMS.DummyPMS (cr @| sr) kdf in
-  ID12 TLS_1p2 msid kdf (AEAD EverCrypt.AES256_GCM Hashing.Spec.SHA256) cr sr role
+  ID12 TLS_1p2 msid kdf (AEAD EverCrypt.AES256_GCM Hashing.Spec.SHA2_256) cr sr role
 
 let id12 = pre_id Client
 
@@ -48,10 +48,10 @@ let id13 =
     li_ch0_cr = cr;
     li_ch0_ed_psk = Bytes.utf8_encode "whatever";
     li_ch0_ed_ae = EverCrypt.AES256_GCM;
-    li_ch0_ed_hash = Hashing.Spec.SHA256; } in
+    li_ch0_ed_hash = Hashing.Spec.SHA2_256; } in
   let li = LogInfo_CH0 ch0 in
   let i = ExpandedSecret
-      (EarlySecretID (NoPSK Hashing.Spec.SHA256))
+      (EarlySecretID (NoPSK Hashing.Spec.SHA2_256))
       ClientEarlyTrafficSecret
       (Bytes.utf8_encode "whatever") in
   let kid: keyId = KeyID #li i in

@@ -7,43 +7,28 @@ all: libevercrypt.dll libevercrypt.lib
 #  add a couple missing ones... looks like make-source-drop is more
 #  authoritative
 SOURCES = \
-  AEAD_Poly1305_64.c \
-  C_C.c \
-  Crypto_Symmetric_AES.c \
-  Crypto_Symmetric_AES128.c \
   EverCrypt.c \
   EverCrypt_AutoConfig.c \
+  EverCrypt_AutoConfig2.c \
   EverCrypt_BCrypt.c \
   EverCrypt_Bytes.c \
   EverCrypt_Hacl.c \
   EverCrypt_Hash.c \
-  EverCrypt_Helpers.c \
   EverCrypt_HKDF.c \
   EverCrypt_HMAC.c \
-  EverCrypt_Specs.c \
   EverCrypt_StaticConfig.c \
   EverCrypt_Vale.c \
+  EverCrypt_Kremlib.c \
   evercrypt_vale_stubs.c \
-  EverCrypt_ValeGlue.c \
-  Flag.c \
-  FStar.c \
-  Hacl.c \
+  AEAD_Poly1305_64.c \
   Hacl_Chacha20.c \
   Hacl_Chacha20Poly1305.c \
   Hacl_Curve25519.c \
   Hacl_Ed25519.c \
-  Hacl_HMAC_SHA2_256.c \
-  Hacl_Policies.c \
   Hacl_Poly1305_64.c \
-  Hacl_Salsa20.c \
-  Hacl_SHA2_256.c \
-  Hacl_SHA2_384.c \
-  Hacl_SHA2_512.c \
-  LowStar.c \
-  Prims.c \
-  vale_aes_glue.c \
-  Vale_Hash_SHA2_256.c \
-  sha256_main_i.c
+  Hacl_Hash.c \
+  Hacl_Legacy.c \
+  vale_aes_glue.c
 
 {amd64\}.asm.obj:
     ml64 /nologo /c $< /Fo$@
@@ -54,7 +39,8 @@ SOURCES = \
 !if "$(PLATFORM)"=="x86"
 PLATFORM_OBJS = aes-i686.obj
 !else if "$(PLATFORM)"=="X64" || "$(VSCMD_ARG_TGT_ARCH)"=="x64"
-PLATFORM_OBJS = aes-x86_64.obj sha256-x86_64.obj aesgcm-x86_64.obj
+PLATFORM_OBJS = aes-x86_64-msvc.obj sha256-x86_64-msvc.obj \
+  aesgcm-x86_64-msvc.obj cpuid-x86_64-msvc.obj
 !else
 PLATFORM_OBJS = 
 !endif

@@ -28,14 +28,15 @@ let rec existsb2 (f: 'a -> 'b -> bool) (x:'a) (y:list 'b) : bool =
  Define extension.
  *************************************************)
 
-let error s = Error (AD_decode_error, ("Extensions parsing: "^s))
-
 //17-05-01 deprecated---use TLSError.result instead?
 // SI: seems to be only used internally by parseServerName. Remove.
 (** local, failed-to-parse exc. *)
 private type canFail (a:Type) =
-| ExFail of alertDescription * string
+| ExFail of error 
 | ExOK of list a
+
+let error s = fatal Decode_error ("Extensions parsing: "^s)
+
 
 (* PRE-SHARED KEYS AND KEY EXCHANGES *)
 
@@ -340,7 +341,7 @@ val parseVersions:
 let rec parseVersions b =
   match length b with
   | 0 -> let r = [] in assert_norm (List.Tot.length r == 0); Correct r
-  | 1 -> Error (AD_decode_error, "malformed version list")
+  | 1 -> error "malformed version list"
   | _ ->
     let b2, b' = split b 2ul in
     match TLSConstants.parseVersion b2 with
@@ -359,7 +360,7 @@ let parseSupportedVersions b =
     (match parseVersion b with
     | Error z -> Error z
     | Correct (Unknown_protocolVersion _) ->
-      Error (AD_illegal_parameter, "server selected a version we don't support")
+      fatal Illegal_parameter "server selected a version we don't support"
     | Correct pv -> Correct (ServerPV pv))
   else
     (match vlparse 1 b with
@@ -419,11 +420,11 @@ private let rec parseServerName_aux
       	    end
       	  in
       	  if existsb2 snidup cur l then
-      	    ExFail(AD_unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Duplicate SNI type")
+      	    ExFail(fatalAlert Unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Duplicate SNI type")
       	  else ExOK(cur :: l)
       	end
       end
-    else ExFail(AD_decode_error, "Failed to parse SNI (list header)")
+    else ExFail(fatalAlert Decode_error, "Failed to parse SNI (list header)")
 
 private val parseServerName: r:ext_msg -> b:bytes -> Tot (result (list serverName))
 let parseServerName mt b =
@@ -433,20 +434,20 @@ let parseServerName mt b =
     if length b = 0 then correct []
     else
     	let msg = "Failed to parse SNI list: should be empty in ServerHello, has size " ^ string_of_int (length b) in
-    	Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ msg)
+    	error (perror __SOURCE_FILE__ __LINE__ msg)
   | EM_ClientHello ->
     if length b >= 2 then
     	begin
     	match vlparse 2 b with
-    	| Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
+    	| Error z -> error (perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
     	| Correct b ->
       	(match parseServerName_aux b with
       	| ExFail(x,y) -> Error(x,y)
-      	| ExOK [] -> Error(AD_unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Empty SNI extension")
+      	| ExOK [] -> fatal Unrecognized_name (perror __SOURCE_FILE__ __LINE__ "Empty SNI extension")
       	| ExOK l -> correct l)
     	end
     else
-      Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
+      error (perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
   | _ -> error "SNI extension cannot appear in this message type"
 #reset-options
 
@@ -891,7 +892,7 @@ let extensionsBytes_is_injective
 private val addOnce: extension -> list extension -> Tot (result (list extension))
 let addOnce ext extList =
   if existsb2 sameExt ext extList then
-    Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Same extension received more than once")
+    fatal Handshake_failure (perror __SOURCE_FILE__ __LINE__ "Same extension received more than once")
   else
     let res = FStar.List.Tot.append extList [ext] in
     correct res
@@ -1283,7 +1284,7 @@ let serverToNegotiatedExtension cfg cExtL cs ri resuming res sExt =
   | Error z -> Error z
   | Correct pv0 ->
     if not (List.Helpers.exists_b_aux sExt sameExt cExtL) then
-      Error(AD_unsupported_extension, perror __SOURCE_FILE__ __LINE__ "server sent an unexpected extension")
+      fatal Unsupported_extension (perror __SOURCE_FILE__ __LINE__ "server sent an unexpected extension")
     else match sExt with
     (*
     | E_renegotiation_info sri ->
@@ -1301,26 +1302,26 @@ let serverToNegotiatedExtension cfg cExtL cs ri resuming res sExt =
       *)
     | E_supported_versions v ->
       (match pv0, v with
-      | _, ClientPV _ -> Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "list of protocol versions in ServerHello")
+      | _, ClientPV _ -> fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "list of protocol versions in ServerHello")
       | TLS_1p2, ServerPV pv -> correct pv
-      | _ -> Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "failed extension-based version negotiation"))
+      | _ -> fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "failed extension-based version negotiation"))
     | E_server_name _ ->
       // RFC 6066, bottom of page 6
       //When resuming a session, the server MUST NOT include a server_name extension in the server hello
-      if resuming then Error(AD_unsupported_extension, perror __SOURCE_FILE__ __LINE__ "server sent SNI acknowledge in resumption")
+      if resuming then fatal Unsupported_extension (perror __SOURCE_FILE__ __LINE__ "server sent SNI acknowledge in resumption")
       else res
     | E_session_ticket _ -> res
     | E_alpn sal -> if List.Tot.length sal = 1 then res
-      else Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Multiple ALPN selected by server")
+      else fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "Multiple ALPN selected by server")
     | E_extended_ms -> res
     | E_ec_point_format spf -> res // Can be sent in resumption, apparently (RFC 4492, 5.2)
     | E_key_share (CommonDH.ServerKeyShare sks) -> res
     | E_pre_shared_key (ServerPSK pski) -> res // bound check in Nego
       | E_supported_groups named_group_list ->
-      if resuming then Error(AD_unsupported_extension, perror __SOURCE_FILE__ __LINE__ "server sent supported groups in resumption")
+      if resuming then fatal Unsupported_extension (perror __SOURCE_FILE__ __LINE__ "server sent supported groups in resumption")
       else res
     | e ->
-      Error(AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ ("unhandled server extension: "^(string_of_extension e)))
+      fatal Handshake_failure (perror __SOURCE_FILE__ __LINE__ ("unhandled server extension: "^(string_of_extension e)))
 
 private
 let rec serverToNegotiatedExtensions_aux cfg cExtL cs ri resuming rpv (sExtL:list extension) =
@@ -1335,9 +1336,9 @@ let rec serverToNegotiatedExtensions_aux cfg cExtL cs ri resuming rpv (sExtL:lis
 let negotiateClientExtensions pv cfg cExtL sExtL cs ri resuming =
   match pv, cExtL, sExtL with
   | SSL_3p0, _, None -> Correct (SSL_3p0)
-  | SSL_3p0, _, Some _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Received extensions in SSL 3.0 ServerHello")
-  | _, None, _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "negotiation failed: missing extensions in TLS ClientHello (shouldn't happen)")
-  | pv, _, None -> if pv <> TLS_1p3 then Correct (pv) else Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Cannot negotiate TLS 1.3 explicitly")
+  | SSL_3p0, _, Some _ -> fatal Internal_error (perror __SOURCE_FILE__ __LINE__ "Received extensions in SSL 3.0 ServerHello")
+  | _, None, _ -> fatal Internal_error (perror __SOURCE_FILE__ __LINE__ "negotiation failed: missing extensions in TLS ClientHello (shouldn't happen)")
+  | pv, _, None -> if pv <> TLS_1p3 then Correct (pv) else fatal Internal_error (perror __SOURCE_FILE__ __LINE__ "Cannot negotiate TLS 1.3 explicitly")
   | pv, Some cExtL, Some sExtL ->
     serverToNegotiatedExtensions_aux cfg cExtL cs ri resuming (correct pv) sExtL
 
@@ -1428,7 +1429,7 @@ let negotiateServerExtensions pv cExtL csl cfg cs ri pski ks resuming =
           in Correct cre
 *)
      | _ ->
-       Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "No extensions in ClientHello")
+       fatal Internal_error (perror __SOURCE_FILE__ __LINE__ "No extensions in ClientHello")
      end
 
 // https://tools.ietf.org/html/rfc5246#section-7.4.1.4.1

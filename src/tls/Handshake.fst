@@ -622,7 +622,7 @@ let client_ServerHello (s:hs) ks (sh:sh) (* digest:Hashing.anyTag *): St incomin
             InAck false false
            end
           else
-            InError (AD_handshake_failure, "inconsitent protocol version or ciphersuite during resumption")
+            InError (fatalAlert Handshake_failure, "inconsistent protocol version or ciphersuite during resumption")
          end
         else
          begin // 1.2 full handshake
@@ -724,7 +724,7 @@ let client13_ServerFinished hs ee ocr oc_digest ocv (svd:bytes) digestCertVerify
   let i2 = Secret.ams_of_hms i in 
   let verified_Finished = HMAC.UFCMA.verify sfin_key digestCertVerify svd in 
   if (not verified_Finished)
-  then InError (AD_decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestCertVerify )
+  then InError (fatalAlert Decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestCertVerify )
   else
   let oc, digestCert = // push this to Nego?
     match oc_digest with 
@@ -782,8 +782,8 @@ let client12_NewSessionTicket (hs:hs) (resume:bool) (digest:Hashing.anyTag) (ost
     tcb.new_ticket tcb.ticket_context sni tid (TicketInfo_12 (pv, cs, Nego.emsFlag mode)) ms;
     InAck true false
   | None, false -> InAck true false
-  | Some t, false -> InError (AD_unexpected_message, "unexpected NewSessionTicket message")
-  | None, true -> InError (AD_unexpected_message, "missing expected NewSessionTicket message")
+  | Some t, false -> InError (fatalAlert Unexpected_message, "unexpected NewSessionTicket message")
+  | None, true -> InError (fatalAlert Unexpected_message, "missing expected NewSessionTicket message")
 
 // Process an incoming ticket (1.3)
 let client13_NewSessionTicket (hs:hs) (st13:sticket13)
@@ -819,7 +819,7 @@ let client13_NewSessionTicket (hs:hs) (st13:sticket13)
     (let tcb = cfg.ticket_callback in
     tcb.new_ticket tcb.ticket_context sni tid (TicketInfo_13 pskInfo) psk;
     InAck false false)
-  else InError (AD_illegal_parameter, "QUIC tickets must allow 0xFFFFFFFF bytes of ealy data")
+  else InError (fatalAlert Illegal_parameter, "QUIC tickets must allow 0xFFFFFFFF bytes of ealy data")
 
 let client_ServerFinished hs f digestClientFinished =
   let sfin_key = KeySchedule.ks_12_finished_key hs.ks in
@@ -833,7 +833,7 @@ let client_ServerFinished hs f digestClientFinished =
     InAck false true // Client 1.2 ATK
     )
   else
-    InError (AD_decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestClientFinished)
+    InError (fatalAlert Decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestClientFinished)
 
 // Server finished in 1.2 resumption
 let client_R_ServerFinished hs f digestNewSessionTicket digestServerFinished
@@ -851,7 +851,7 @@ let client_R_ServerFinished hs f digestNewSessionTicket digestServerFinished
     InAck false false // send_CCS_tag buffers the complete
   )
   else
-    InError (AD_decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestNewSessionTicket)
+    InError (fatalAlert Decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestNewSessionTicket)
 
 (* -------------------- Handshake Server ------------------------ *)
 
@@ -865,7 +865,7 @@ let server_ServerHelloDone hs =
   let Some (chain, sa) = mode.Nego.n_server_cert in // Server cert chosen in Nego.server_ClientHello
   match Nego.chosenGroup mode with
   | None ->
-    InError (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "no shared supported group")
+    InError (fatalAlert Handshake_failure, perror __SOURCE_FILE__ __LINE__ "no shared supported group")
   | Some g  ->
     // ad hoc signing of the nonces and server key share
     let kex_s = KEX_S_DHE (Some?.v mode.Nego.n_server_share) in
@@ -929,7 +929,7 @@ let server_ClientHello hs offer obinders =
     // Check consistency across the truncated PSK extension (is is redundant?)
     let opsk = Nego.find_clientPske offer in
     if not (consistent_truncation opsk obinders)
-    then InError (AD_illegal_parameter, "unexpected number of binders")
+    then InError (fatalAlert Illegal_parameter, "unexpected number of binders")
     else
 
     // Negotiation proceeds in two steps, first resumption / server share
@@ -1057,7 +1057,7 @@ let server_ClientCCS1 hs cke (* clientCert *) digestCCS1 =
     // let ems = n.n_extensions.ne_extended_ms in // ask Nego?
     trace "process Client CCS";
     match cke.cke_kex_c with
-      | KEX_C_RSA _ | KEX_C_DH -> InError(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Expected DHE/ECDHE CKE")
+      | KEX_C_RSA _ | KEX_C_DH -> InError(fatalAlert Decode_error, perror __SOURCE_FILE__ __LINE__ "Expected DHE/ECDHE CKE")
       | KEX_C_DHE gyb
       | KEX_C_ECDHE gyb ->
         begin
@@ -1065,7 +1065,7 @@ let server_ClientCCS1 hs cke (* clientCert *) digestCCS1 =
           // ADL: the type of gyb will change from bytes to g & share g; for now we parse here.
           let Some (|g,  _|) = mode.Nego.n_server_share in
           match CommonDH.parse g gyb with
-          | None -> InError(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Cannot parse client share in CKE")
+          | None -> InError(fatalAlert Decode_error, perror __SOURCE_FILE__ __LINE__ "Cannot parse client share in CKE")
           | Some gy ->
             let app_keys = Secret.server12_cke_dh hs.ks (| g, gy |) digestCCS1 in
             register hs app_keys;
@@ -1087,7 +1087,7 @@ let server_ClientFinished2 hs cvd digestSF digestCF =
   if cvd = expected_cvd then
     (hs.state := S_Complete; InAck false false)
   else
-    InError (AD_decode_error, "Client Finished MAC did not verify: expected digest "^print_bytes digestSF)
+    InError (fatalAlert Decode_error, "Client Finished MAC did not verify: expected digest "^print_bytes digestSF)
 
 (* receive ClientFinish *)
 val server_ClientFinished:
@@ -1121,7 +1121,7 @@ let server_ClientFinished hs cvd digestCCS digestClientFinished =
       hs.state := S_Complete;
       InAck false false // Server 1.2 ATK; will switch write key and signal completion after sending
     else
-      InError (AD_decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestClientFinished)
+      InError (fatalAlert Decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestClientFinished)
 
 (* send EncryptedExtensions; Certificate13; CertificateVerify; Finish (1.3) *)
 val server_ServerFinished_13: hs -> i:id -> ST (result (outgoing i))
@@ -1191,7 +1191,7 @@ let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinishe
    trace "Process Client Finished";
    match clientAuth with
    | Some  (c,cv,digest) ->
-      InError(AD_internal_error,
+      InError(fatalAlert Internal_error,
         perror __SOURCE_FILE__ __LINE__ "Client CertificateVerify validation not implemented")
    | None ->
        let (| i, cfin_key |) = KeySchedule.ks_server_13_client_finished hs.ks in
@@ -1230,7 +1230,7 @@ let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinishe
           Epochs.incr_reader hs.epochs; // finally start reading with AKTs
           InAck true true  // Server 1.3 ATK
         end
-       else InError (AD_decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestClientFinished)
+       else InError (fatalAlert Decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestClientFinished)
 
 (* TODO: resumption *)
 assume val server_send_server_finished_res: hs -> ST unit
@@ -1306,7 +1306,7 @@ let rec recv_fragment (hs:hs) #i rg f =
     | Correct None -> InAck false false // nothing happened
     | Correct (Some (ms,ts)) ->
       match !hs.state, ms, ts with
-      | C_Idle, _, _ -> InError (AD_unexpected_message, "Client hasn't sent hello yet")
+      | C_Idle, _, _ -> InError (fatalAlert Unexpected_message, "Client hasn't sent hello yet")
 
       | C_wait_ServerHello, [HelloRetryRequest hrr], [] ->
         client_HelloRetryRequest hs hrr
@@ -1420,7 +1420,7 @@ let recv_ccs (hs:hs) =
 
         | _, _, _ ->
           trace "WARNING: bad CCS";
-          InError(AD_unexpected_message, "CCS received at wrong time")
+          InError(fatalAlert Unexpected_message, "CCS received at wrong time")
 
 
 let authorize s ch = FStar.Error.unexpected "authorize: not yet implemented"

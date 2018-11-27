@@ -15,7 +15,7 @@ type info = TLSInfo.logInfo
 ///
 /// We provide an instance of ipkg to track key derivation (here using constant labels)
 /// these labels are specific to HKDF, for now strings e.g. "e exp master".
-type label = string
+type label = s:string{Bytes.length (Bytes.bytes_of_string s) < 250}
 
 /// the middle extraction takes an optional DH secret, identified by this triple
 /// we use our own datatype to simplify typechecking
@@ -89,15 +89,28 @@ let digest_info (a:kdfa) (info:TLSInfo.logInfo) (hv: Hashing.Spec.anyTag) =
 /// * usage restriction: the log after DH must include the DH identifier of the parent.
 ///   (Hence, we should either forbid successive DHs or authenticate them all.)
 ///
-val wellformed_id: pre_id -> Type0
-let rec wellformed_id = function
+val pre_wellformed_id: pre_id -> Type0
+let rec pre_wellformed_id = function
   | Preshared a _ -> True
-  | Derive i l (ExpandLog info hv) -> wellformed_id i /\ digest_info (ha_of_id i) info hv
+  | Derive i l (ExpandLog info hv) -> pre_wellformed_id i /\ digest_info (ha_of_id i) info hv
   | Derive i lbl ctx ->
       //TODO "ctx either extends the parent's, or includes its idh" /\
-      wellformed_id i
+      pre_wellformed_id i
 
-type id = i:pre_id {wellformed_id i}
+/// Indexes are used concretely in model code, so we
+/// erase them conditionally on model
+type id = 
+  (if model then i:pre_id {pre_wellformed_id i}
+  else unit)
+
+unfold type wellformed_id (i:id) =
+  (if model then pre_wellformed_id i else True)
+
+unfold let wellformed_derive (i:id) (l:label) (ctx:context) =
+  (if model then pre_wellformed_id (Derive i l ctx) else True)
+
+unfold let derive (i:id) (l:label) (ctx:context{wellformed_derive i l ctx}) : id =
+  (if model then Derive i l ctx else ())
 
 type honest_idh (c:context) =
   ExtractDH? c /\ IDH? (ExtractDH?.v c) /\
@@ -111,10 +124,10 @@ type honest_idh (c:context) =
 /// ---EXCEPT if ctx is ExtractDH g gx gy with CommonDH.honest_dhr gy
 ///
 type honesty_invariant (m:DM.t id (MDM.opt (fun _ -> bool))) =
-  (forall (i:id) (l:label) (c:context{wellformed_id (Derive i l c)}).
+  (forall (i:id) (l:label) (c:context{wellformed_derive i l c}).
   {:pattern (DM.sel m (Derive i l c))}
-  Some? (DM.sel m (Derive i l c)) ==> Some? (DM.sel m i) /\
-  (DM.sel m i = Some false ==> (honest_idh c \/ DM.sel m (Derive i l c) = Some false)))
+  Some? (DM.sel m (derive i l c)) ==> Some? (DM.sel m i) /\
+  (DM.sel m i = Some false ==> (honest_idh c \/ DM.sel m (derive i l c) = Some false)))
 
 //17-12-08 removed [private] twice, as we need to recall it in ODH :(
 type i_honesty_table =
@@ -219,16 +232,17 @@ let lemma_honest_corrupt (i:regid)
 
 #set-options "--z3rlimit 100" 
 inline_for_extraction
-let lemma_corrupt_invariant (i:regid) (lbl:label)
-  (ctx:context {wellformed_id (Derive i lbl ctx) /\ registered (Derive i lbl ctx)})
+let lemma_corrupt_invariant (i:regid) (lbl:label) (ctx:context)
   : ST unit
-  (requires fun h0 -> ~(honest_idh ctx))
-  (ensures fun h0 _ h1 ->
-    corrupt i ==> corrupt (Derive i lbl ctx) /\ h0 == h1)
+  (requires fun h0 -> ~(honest_idh ctx) /\
+    wellformed_derive i lbl ctx /\ registered (derive i lbl ctx))
+  (ensures fun h0 _ h1 -> h0 == h1 /\
+    corrupt i ==> corrupt (derive i lbl ctx))
   =
-  lemma_honest_corrupt i;
-  lemma_honest_corrupt (Derive i lbl ctx);
-  if model then
+  if not model then () else
+  begin
+    lemma_honest_corrupt i;
+    lemma_honest_corrupt (derive i lbl ctx);
     let log : i_honesty_table = honesty_table in
     recall log;
     testify (MDM.defined log i);
@@ -237,12 +251,12 @@ let lemma_corrupt_invariant (i:regid) (lbl:label)
     | Some false ->
       let m = !log in
       // No annotation, but the proof relies on the global log invariant
-      testify (MDM.defined log (Derive i lbl ctx));
-      MDM.contains_stable log (Derive i lbl ctx) false;
-      mr_witness log (MDM.contains log (Derive i lbl ctx) false)
-  else ()
+      testify (MDM.defined log (derive i lbl ctx));
+      MDM.contains_stable log (derive i lbl ctx) false;
+      mr_witness log (MDM.contains log (derive i lbl ctx) false)
+  end
 
-noextract
+inline_for_extraction noextract
 let get_honesty (i:id {registered i}) : ST bool
   (requires fun h0 -> True)
   (ensures fun h0 b h1 -> h0 == h1 /\ (b <==> honest i))
@@ -280,35 +294,41 @@ let get_honesty (i:id {registered i}) : ST bool
 
 // TODO(adl) preservation of the honesty table invariant
 let rec lemma_honesty_update (m:DM.t id (MDM.opt (fun _ -> bool)))
-  (i:regid) (l:label) (c:context{wellformed_id (Derive i l c)}) (b:bool{b <==> honest i})
-  : Lemma (honesty_invariant (DM.upd m (Derive i l c) (Some b)))
+  (i:regid) (l:label) (c:context) (b:bool{b <==> honest i})
+  : Lemma (requires wellformed_derive i l c)
+    (ensures honesty_invariant (DM.upd m (derive i l c) (Some b)))
 // : Lemma (requires Some? (m i ) /\ None? (m (Derive i l c)) /\ m i == Some false ==> not b)
 //         (ensures honesty_invariant (MDM.upd m (Derive i l c) b))
   = admit() // easy
 
 #reset-options "--admit_smt_queries true"
-let register_derive (i:id{registered i}) (l:label) (c:context{wellformed_id (Derive i l c)})
-  : ST (i:id{registered i} * bool)
-  (requires fun h0 -> True)
+inline_for_extraction noextract
+let register_derive (i:regid) (l:label) (c:context)
+  : ST (regid * bool)
+  (requires fun h0 -> wellformed_derive i l c)
   (ensures fun h0 (i', b) h1 ->
     (if model then modifies_one tls_honest_region h0 h1 else h0 == h1)
-    /\ (i' == Derive i l c)
+    /\ i' == derive i l c
     /\ (b2t b <==> honest i'))
   =
-  let i':id = Derive i l c in
   if model then
+    let i':id = Derive i l c in
     let log : i_honesty_table = honesty_table in
     recall log;
     match MDM.lookup log i' with
-    | Some b -> lemma_honest_corrupt i'; (i', b)
+    | Some b ->
+//      MDM.contains_stable log i' true;
+//      mr_witness log (MDM.contains log i' true);
+      assume (registered i'); // FIXME
+      lemma_honest_corrupt i'; (i', b)
     | None ->
       let b = get_honesty i in
       let h = get () in
-      // lemma_honesty_update log i l c b;
+//      lemma_honesty_update (sel h log) i l c b;
       MDM.extend log i' b;
       lemma_honest_corrupt i';
       (i', b)
-  else (i', false)
+  else ((), false)
 #reset-options
 
 // 17-10-21 WIDE/NARROW INDEXES (old)

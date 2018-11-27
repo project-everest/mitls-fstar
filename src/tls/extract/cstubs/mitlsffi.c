@@ -817,7 +817,7 @@ unsigned char *MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* 
 
 static int get_exporter(Connection_connection cxn, int early, /* out */ mitls_secret *secret)
 {
-  FStar_Pervasives_Native_option__K___EverCrypt_Hash_alg_EverCrypt_aead_alg_FStar_Bytes_bytes ret;
+  FStar_Pervasives_Native_option__K___Spec_Hash_Helpers_hash_alg_EverCrypt_aead_alg_FStar_Bytes_bytes ret;
 
   ret = FFI_ffiGetExporter(cxn, (early) ? true : false);
   if (ret.tag != FStar_Pervasives_Native_Some) {

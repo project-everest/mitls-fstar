@@ -249,7 +249,7 @@ val negotiateClientExtensions:
 val negotiateServerExtensions:
   protocolVersion ->
   option (list extension) ->
-  valid_cipher_suites ->
+  list cipherSuiteName ->
   config ->
   cipherSuite ->
   option (cVerifyData * sVerifyData) ->
