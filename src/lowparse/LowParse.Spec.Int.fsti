@@ -1,5 +1,5 @@
 module LowParse.Spec.Int
-include LowParse.Spec.Combinators
+include LowParse.Spec.Combinators // for total_constant_size_parser_kind
 
 module Seq = FStar.Seq
 module E = LowParse.BigEndian
@@ -7,6 +7,7 @@ module U8  = FStar.UInt8
 module U16 = FStar.UInt16
 module U32 = FStar.UInt32
 
+inline_for_extraction
 let parse_u8_kind : parser_kind = total_constant_size_parser_kind 1
 
 val parse_u8: parser parse_u8_kind U8.t
@@ -54,6 +55,7 @@ val parse_u16_spec
 
 val serialize_u16 : serializer parse_u16
 
+inline_for_extraction
 let parse_u32_kind : parser_kind =
   total_constant_size_parser_kind 4
 
