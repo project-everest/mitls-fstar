@@ -900,7 +900,8 @@ let valid_exact_ext_elim
 (* Accessors for reading only (no in-place serialization yet) *)
 
 noeq
-type clens (#t1: Type) (clens_cond: t1 -> GTot Type0) (t2: Type) = {
+type clens (t1: Type) (t2: Type) = {
+  clens_cond: t1 -> GTot Type0;
   clens_get: (x1: t1) -> Ghost t2 (requires (clens_cond x1)) (ensures (fun _ -> True));
 (*  
   clens_put: (x1: t1) -> t2 -> Ghost t1 (requires (clens_cond x1)) (ensures (fun x1' -> clens_cond x1'));
@@ -910,26 +911,27 @@ type clens (#t1: Type) (clens_cond: t1 -> GTot Type0) (t2: Type) = {
 *)
 }
 
-let clens_id (t: Type) : Tot (clens (fun (x: t) -> True) t) = {
+let clens_id (t: Type) : Tot (clens t t) = {
+  clens_cond = (fun _ -> True);
   clens_get = (fun x -> x);
 }
 
-let clens_eq (#t: Type) (#clens_cond1: t -> GTot Type0) (#t': Type) (cl1: clens clens_cond1 t') (#clens_cond2: t -> GTot Type0) (cl2: clens clens_cond2 t') : GTot Type0 =
-  (forall (x: t) . {:pattern (clens_cond1 x) \/ (clens_cond2 x)} clens_cond1 x <==> clens_cond2 x) /\
-  (forall (x: t) . {:pattern (cl1.clens_get x) \/ (cl2.clens_get x)} (clens_cond1 x \/ clens_cond2 x) ==> (cl1.clens_get x == cl2.clens_get x))
+let clens_eq (#t: Type) (#t': Type) (cl1: clens t t') (cl2: clens t t') : GTot Type0 =
+  (forall (x: t) . {:pattern (cl1.clens_cond x) \/ (cl2.clens_cond x)} cl1.clens_cond x <==> cl2.clens_cond x) /\
+  (forall (x: t) . {:pattern (cl1.clens_get x) \/ (cl2.clens_get x)} (cl1.clens_cond x \/ cl2.clens_cond x) ==> (cl1.clens_get x == cl2.clens_get x))
 
 let clens_eq_intro
-  (#t: Type) (#clens_cond1: t -> GTot Type0) (#t': Type) (cl1: clens clens_cond1 t') (#clens_cond2: t -> GTot Type0) (cl2: clens clens_cond2 t')
+  (#t: Type) (#t': Type) (cl1: clens t t') (cl2: clens t t')
   (cond: (
     (x: t) ->
     Lemma
-    (clens_cond1 x <==> clens_cond2 x)
+    (cl1.clens_cond x <==> cl2.clens_cond x)
   ))
   (get: (
     (x: t) ->
     Lemma
-    (requires (clens_cond1 x /\ clens_cond2 x))
-    (ensures (clens_cond1 x /\ clens_cond2 x /\ cl1.clens_get x == cl2.clens_get x))
+    (requires (cl1.clens_cond x /\ cl2.clens_cond x))
+    (ensures (cl1.clens_cond x /\ cl2.clens_cond x /\ cl1.clens_get x == cl2.clens_get x))
   ))
 : Lemma
   (clens_eq cl1 cl2)
@@ -937,15 +939,15 @@ let clens_eq_intro
   Classical.forall_intro (Classical.move_requires get)
 
 let clens_eq_intro'
-  (#t: Type) (#clens_cond1: t -> GTot Type0) (#t': Type) (cl1: clens clens_cond1 t') (#clens_cond2: t -> GTot Type0) (cl2: clens clens_cond2 t')
+  (#t: Type) (#t': Type) (cl1: clens t t') (cl2: clens t t')
   (cond: (
     (x: t) ->
-    Tot (squash (clens_cond1 x <==> clens_cond2 x))
+    Tot (squash (cl1.clens_cond x <==> cl2.clens_cond x))
   ))
   (get: (
     (x: t) ->
-    (sq: squash (clens_cond1 x /\ clens_cond2 x)) ->
-    Tot (squash (clens_cond1 x /\ clens_cond2 x /\ cl1.clens_get x == cl2.clens_get x))
+    (sq: squash (cl1.clens_cond x /\ cl2.clens_cond x)) ->
+    Tot (squash (cl1.clens_cond x /\ cl2.clens_cond x /\ cl1.clens_get x == cl2.clens_get x))
   ))
 : Tot (squash (clens_eq cl1 cl2))
 = clens_eq_intro cl1 cl2 (fun x -> cond x) (fun x -> get x ())
@@ -1058,25 +1060,23 @@ let clens_disjoint_sym
 
 let clens_compose_cond
   (#t1: Type)
-  (#clens_cond1: t1 -> GTot Type0)
   (#t2: Type)
-  (l12: clens clens_cond1 t2)
+  (l12: clens t1 t2)
   (clens_cond2: t2 -> GTot Type0)
   (x1: t1)
 : GTot Type0
-= clens_cond1 x1 /\
+= l12.clens_cond x1 /\
   clens_cond2 (l12.clens_get x1)
 
 let clens_compose
   (#t1: Type)
-  (#clens_cond1: t1 -> GTot Type0)
   (#t2: Type)
-  (#clens_cond2: t2 -> GTot Type0)
   (#t3: Type)
-  (l12: clens clens_cond1 t2)
-  (l23: clens clens_cond2 t3)
-: Tot (clens (clens_compose_cond l12 clens_cond2) t3)
+  (l12: clens t1 t2)
+  (l23: clens t2 t3)
+: Tot (clens t1 t3)
 = {
+  clens_cond = (clens_compose_cond l12 l23.clens_cond);
   clens_get = (fun x1 -> l23.clens_get (l12.clens_get x1));
 (*  
   clens_put = (fun x1 x3 ->
@@ -1116,12 +1116,11 @@ let gaccessor_pre
   (#k2: parser_kind)
   (#t2: Type)
   (p2: parser k2 t2)
-  (#pre: t1 -> GTot Type0)
-  (cl: clens pre t2)
+  (cl: clens t1 t2)
   (sl: bytes)
 : GTot Type0
 = match parse p1 sl with
-  | Some (x1, consumed) -> (consumed <: nat) == Seq.length sl /\ pre x1
+  | Some (x1, consumed) -> (consumed <: nat) == Seq.length sl /\ cl.clens_cond x1
   | _ -> False
 
 let gaccessor_post
@@ -1131,8 +1130,7 @@ let gaccessor_post
   (#k2: parser_kind)
   (#t2: Type)
   (p2: parser k2 t2)
-  (#pre: t1 -> GTot Type0)
-  (cl: clens pre t2)
+  (cl: clens t1 t2)
   (sl: bytes)
   (res : nat & nat)
 : GTot Type0
@@ -1142,7 +1140,7 @@ let gaccessor_post
   | Some (x1, consumed1) ->
     begin match parse p2 (Seq.slice sl pos' (pos' + len)) with
     | Some (x2, consumed2) ->
-      pre x1 /\
+      cl.clens_cond x1 /\
       x2 == cl.clens_get x1 /\
       pos' + consumed2 <= consumed1 /\
       consumed2 == len
@@ -1158,8 +1156,7 @@ let gaccessor_post'
   (#k2: parser_kind)
   (#t2: Type)
   (p2: parser k2 t2)
-  (#pre: t1 -> GTot Type0)
-  (cl: clens pre t2)
+  (cl: clens t1 t2)
   (sl : bytes)
   (res: nat & nat)
 : GTot Type0
@@ -1175,8 +1172,7 @@ let gaccessor
   (#k2: parser_kind)
   (#t2: Type)
   (p2: parser k2 t2)
-  (#pre: t1 -> GTot Type0)
-  (cl: clens pre t2)
+  (cl: clens t1 t2)
 : Tot Type
 = (sl: bytes) ->
   Ghost (nat & nat)
@@ -1184,6 +1180,18 @@ let gaccessor
   (ensures (fun res ->
     gaccessor_post' p1 p2 cl sl res
   ))
+
+let get_gaccessor_clens
+  (#k1: parser_kind)
+  (#t1: Type)
+  (#p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (#p2: parser k2 t2)
+  (#cl: clens t1 t2)
+  (g: gaccessor p1 p2 cl)
+: Tot (clens t1 t2)
+= cl
 
 abstract
 let gaccessors_disjoint
@@ -1193,20 +1201,18 @@ let gaccessors_disjoint
   (#k2: parser_kind)
   (#t2: Type)
   (#p2: parser k2 t2)
-  (#pre2: t1 -> GTot Type0)
-  (#cl2: clens pre2 t2)
+  (#cl2: clens t1 t2)
   (g2: gaccessor p1 p2 cl2)
   (#k3: parser_kind)
   (#t3: Type)
   (#p3: parser k3 t3)
-  (#pre3: t1 -> GTot Type0)
-  (#cl3: clens pre3 t3)
+  (#cl3: clens t1 t3)
   (g3: gaccessor p1 p3 cl3)
 : GTot Type0
 = // clens_disjoint cl2 cl3 /\
   (forall (sl: bytes) . (
      match parse p1 sl with
-     | Some (x1, consumed1) -> pre2 x1 /\ pre3 x1 /\ consumed1 == Seq.length sl
+     | Some (x1, consumed1) -> cl2.clens_cond x1 /\ cl3.clens_cond x1 /\ consumed1 == Seq.length sl
      | _ -> False
    ) ==> (
    let (pos2, consumed2) = g2 sl in
@@ -1247,20 +1253,18 @@ let gaccessors_disjoint_elim
   (#k2: parser_kind)
   (#t2: Type)
   (#p2: parser k2 t2)
-  (#pre2: t1 -> GTot Type0)
-  (#cl2: clens pre2 t2)
+  (#cl2: clens t1 t2)
   (g2: gaccessor p1 p2 cl2)
   (#k3: parser_kind)
   (#t3: Type)
   (#p3: parser k3 t3)
-  (#pre3: t1 -> GTot Type0)
-  (#cl3: clens pre3 t3)
+  (#cl3: clens t1 t3)
   (g3: gaccessor p1 p3 cl3)
   (sl: bytes)
 : Lemma
   (requires (gaccessors_disjoint g2 g3 /\ (
      match parse p1 sl with
-     | Some (x1, consumed1) -> pre2 x1 /\ pre3 x1 /\ consumed1 == Seq.length sl
+     | Some (x1, consumed1) -> cl2.clens_cond x1 /\ cl3.clens_cond x1 /\ consumed1 == Seq.length sl
      | _ -> False
   )))
   (ensures (
@@ -1278,14 +1282,12 @@ let gaccessors_disjoint_intro
   (#k2: parser_kind)
   (#t2: Type)
   (#p2: parser k2 t2)
-  (#pre2: t1 -> GTot Type0)
-  (#cl2: clens pre2 t2)
+  (#cl2: clens t1 t2)
   (g2: gaccessor p1 p2 cl2)
   (#k3: parser_kind)
   (#t3: Type)
   (#p3: parser k3 t3)
-  (#pre3: t1 -> GTot Type0)
-  (#cl3: clens pre3 t3)
+  (#cl3: clens t1 t3)
   (g3: gaccessor p1 p3 cl3)
 //  (clens_disj: squash (clens_disjoint cl2 cl3))
   (lem: (
@@ -1293,12 +1295,12 @@ let gaccessors_disjoint_intro
     Lemma
     (requires (
       match parse p1 sl with
-      | Some (x1, consumed1) -> pre2 x1 /\ pre3 x1 /\ consumed1 == Seq.length sl
+      | Some (x1, consumed1) -> cl2.clens_cond x1 /\ cl3.clens_cond x1 /\ consumed1 == Seq.length sl
       | _ -> False
     ))
     (ensures ((
       match parse p1 sl with
-      | Some (x1, consumed1) -> pre2 x1 /\ pre3 x1 /\ consumed1 == Seq.length sl
+      | Some (x1, consumed1) -> cl2.clens_cond x1 /\ cl3.clens_cond x1 /\ consumed1 == Seq.length sl
       | _ -> False) /\ (
       let (pos2, consumed2) = g2 sl in
       let (pos3, consumed3) = g3 sl in
@@ -1312,7 +1314,7 @@ let gaccessors_disjoint_intro
  : Lemma
    ((
      match parse p1 sl with
-     | Some (x1, consumed1) -> pre2 x1 /\ pre3 x1 /\ consumed1 == Seq.length sl
+     | Some (x1, consumed1) -> cl2.clens_cond x1 /\ cl3.clens_cond x1 /\ consumed1 == Seq.length sl
      | _ -> False
    ) ==> (
    let (pos2, consumed2) = g2 sl in
@@ -1337,11 +1339,9 @@ let gaccessor_ext
   (#k2: parser_kind)
   (#t2: Type)
   (#p2: parser k2 t2)
-  (#pre: (t1 -> GTot Type0))
-  (#cl: clens pre t2)
-  ($g: gaccessor p1 p2 cl)
-  (#pre': (t1 -> GTot Type0))
-  (cl': clens pre' t2)
+  (#cl: clens t1 t2)
+  (g: gaccessor p1 p2 cl)
+  (cl': clens t1 t2)
   (sq: squash (clens_eq cl cl'))
 : Tot (gaccessor p1 p2 cl')
 = fun (input: bytes) -> (g input <: Ghost (nat & nat) (requires True) (ensures (fun res -> gaccessor_post' p1 p2 cl' input res)))
@@ -1353,14 +1353,12 @@ let gaccessor_compose
   (#k2: parser_kind)
   (#t2: Type)
   (#p2: parser k2 t2)
-  (#pre1: (t1 -> GTot Type0))
-  (#cl12: clens pre1 t2)
+  (#cl12: clens t1 t2)
   (a12: gaccessor p1 p2 cl12)
-  (#pre2: (t2 -> GTot Type0))
   (#k3: parser_kind)
   (#t3: Type)
   (#p3: parser k3 t3)
-  (#cl23: clens pre2 t3)
+  (#cl23: clens t2 t3)
   (a23: gaccessor p2 p3 cl23)
 : Tot (gaccessor p1 p3 (clens_compose cl12 cl23))
 = fun
@@ -1378,8 +1376,7 @@ let slice_access'
   (#k2: parser_kind)
   (#t2: Type)
   (#p2: parser k2 t2)
-  (#pre: t1 -> GTot Type0)
-  (#cl: clens pre t2)
+  (#cl: clens t1 t2)
   (g: gaccessor p1 p2 cl)
   (sl: slice)
   (pos: U32.t)
@@ -1403,8 +1400,7 @@ let slice_access
   (#k2: parser_kind)
   (#t2: Type)
   (#p2: parser k2 t2)
-  (#pre: t1 -> GTot Type0)
-  (#cl: clens pre t2)
+  (#cl: clens t1 t2)
   (g: gaccessor p1 p2 cl)
   (sl: slice)
   (pos: U32.t)
@@ -1413,7 +1409,7 @@ let slice_access
     k1.parser_kind_subkind == Some ParserStrong /\
     k2.parser_kind_subkind == Some ParserStrong /\
     valid p1 h sl pos /\
-    pre (contents p1 h sl pos)
+    cl.clens_cond (contents p1 h sl pos)
   ))
   (ensures (fun pos' ->
     valid p2 h sl pos' /\
@@ -1448,8 +1444,7 @@ let slice_access_eq
   (#k2: parser_kind)
   (#t2: Type)
   (#p2: parser k2 t2)
-  (#pre: t1 -> GTot Type0)
-  (#cl: clens pre t2)
+  (#cl: clens t1 t2)
   (g: gaccessor p1 p2 cl)
   (sl: slice)
   (pos: U32.t)
@@ -1458,11 +1453,11 @@ let slice_access_eq
     k1.parser_kind_subkind == Some ParserStrong /\
     k2.parser_kind_subkind == Some ParserStrong /\
     valid p1 h sl pos /\
-    pre (contents p1 h sl pos)
+    cl.clens_cond (contents p1 h sl pos)
   ))
   (ensures (
     valid' p1 h sl pos /\
-    pre (contents' p1 h sl pos) /\
+    cl.clens_cond (contents' p1 h sl pos) /\
     slice_access h g sl pos == slice_access' h g sl pos
   ))
 = ()
@@ -1478,8 +1473,7 @@ let slice_access_eq_inv
   (#k2: parser_kind)
   (#t2: Type)
   (#p2: parser k2 t2)
-  (#pre: t1 -> GTot Type0)
-  (#cl: clens pre t2)
+  (#cl: clens t1 t2)
   (g: gaccessor p1 p2 cl)
   (sl: slice)
   (pos: U32.t)
@@ -1488,7 +1482,7 @@ let slice_access_eq_inv
     k1.parser_kind_subkind == Some ParserStrong /\
     k2.parser_kind_subkind == Some ParserStrong /\
     valid p1 h sl pos /\
-    pre (contents p1 h sl pos)
+    cl.clens_cond (contents p1 h sl pos)
   ))
   (ensures (
     let pos2 = slice_access h g sl pos in
@@ -1518,8 +1512,7 @@ let slice_access_frame
   (#k2: parser_kind)
   (#t2: Type)
   (#p2: parser k2 t2)
-  (#pre: t1 -> GTot Type0)
-  (#cl: clens pre t2)
+  (#cl: clens t1 t2)
   (g: gaccessor p1 p2 cl)
   (sl: slice)
   (pos: U32.t)
@@ -1530,13 +1523,13 @@ let slice_access_frame
     k1.parser_kind_subkind == Some ParserStrong /\
     k2.parser_kind_subkind == Some ParserStrong /\
     valid p1 h sl pos /\
-    pre (contents p1 h sl pos) /\
+    cl.clens_cond (contents p1 h sl pos) /\
     B.modifies_inert l h h' /\
     B.loc_disjoint l (loc_slice_from_to sl pos (get_valid_pos p1 h sl pos))
   ))
   (ensures (
     valid p1 h' sl pos /\
-    pre (contents p1 h' sl pos) /\
+    cl.clens_cond (contents p1 h' sl pos) /\
     slice_access h' g sl pos == slice_access h g sl pos
   ))
   [SMTPatOr [
@@ -1554,14 +1547,13 @@ let accessor
   (#k2: parser_kind)
   (#t2: Type)
   (#p2: parser k2 t2)
-  (#pre: t1 -> GTot Type0)
-  (#cl: clens pre t2)
+  (#cl: clens t1 t2)
   (g: gaccessor p1 p2 cl)
 : Tot Type
 = (sl: slice) ->
   (pos: U32.t) ->
   HST.Stack U32.t
-  (requires (fun h -> k1.parser_kind_subkind == Some ParserStrong /\ k2.parser_kind_subkind == Some ParserStrong /\ valid p1 h sl pos /\ pre (contents p1 h sl pos))) 
+  (requires (fun h -> k1.parser_kind_subkind == Some ParserStrong /\ k2.parser_kind_subkind == Some ParserStrong /\ valid p1 h sl pos /\ cl.clens_cond (contents p1 h sl pos))) 
   (ensures (fun h pos' h' ->
     B.modifies B.loc_none h h' /\
     pos' == slice_access h g sl pos
@@ -1586,12 +1578,10 @@ let accessor_ext
   (#k2: parser_kind)
   (#t2: Type)
   (#p2: parser k2 t2)
-  (#pre: (t1 -> GTot Type0))
-  (#cl: clens pre t2)
+  (#cl: clens t1 t2)
   (#g: gaccessor p1 p2 cl)
   (a: accessor g)
-  (#pre': (t1 -> GTot Type0))
-  (cl': clens pre' t2)
+  (cl': clens t1 t2)
   (sq: squash (clens_eq cl cl'))
 : Tot (accessor (gaccessor_ext g cl' sq))
 = fun input pos -> a input pos
@@ -1606,15 +1596,13 @@ let accessor_compose
   (#k2: parser_kind)
   (#t2: Type)
   (#p2: parser k2 t2)
-  (#pre1: (t1 -> GTot Type0))
-  (#cl12: clens pre1 t2)
+  (#cl12: clens t1 t2)
   (#a12: gaccessor p1 p2 cl12)
   (a12' : accessor a12)
-  (#pre2: (t2 -> GTot Type0))
   (#k3: parser_kind)
   (#t3: Type)
   (#p3: parser k3 t3)
-  (#cl23: clens pre2 t3)
+  (#cl23: clens t2 t3)
   (#a23: gaccessor p2 p3 cl23)
   (a23' : accessor a23)
   (sq: squash (k2.parser_kind_subkind == Some ParserStrong))

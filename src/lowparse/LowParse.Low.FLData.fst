@@ -132,8 +132,9 @@ let clens_fldata_strong
   (#p: parser k t)
   (s: serializer p)
   (sz: nat)
-: Tot (clens #(parse_fldata_strong_t s sz) (fun _ -> True) t)
+: Tot (clens (parse_fldata_strong_t s sz) t)
 = {
+  clens_cond = (fun _ -> True);
   clens_get = (fun (x: parse_fldata_strong_t s sz) -> (x <: t));
 }
 

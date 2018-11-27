@@ -31,7 +31,8 @@ let validate_t : validator parse_t =
 
 let synth_t_recip x = ((x.a, x.b), x.c)
 
-let clens_a : clens #t (fun _ -> True) U16.t = {
+let clens_a : clens t U16.t = {
+  clens_cond =  (fun _ -> True);
   clens_get = (fun x -> x.a);
 }
 
@@ -59,7 +60,8 @@ let access_a : accessor gaccess_a =
     ()
 
 
-let clens_b : clens #t (fun _ -> True) U32.t = {
+let clens_b : clens t U32.t = {
+  clens_cond =  (fun _ -> True);
   clens_get = (fun x -> x.b);
 }
 
@@ -86,7 +88,8 @@ let access_b : accessor gaccess_b =
     clens_b
     ()
 
-let clens_c : clens #t (fun _ -> True) U16.t = {
+let clens_c : clens t U16.t = {
+  clens_cond =  (fun _ -> True);
   clens_get = (fun x -> x.c);
 }
 

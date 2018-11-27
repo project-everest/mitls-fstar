@@ -265,8 +265,9 @@ let clens_synth
   (f: t1 -> GTot t2)
   (g: t2 -> GTot t1)
   (u: unit { synth_inverse f g /\ synth_injective f } )
-: Tot (clens (fun (x: t1) -> True) t2)
+: Tot (clens t1 t2)
 = {
+  clens_cond = (fun (x: t1) -> True);
   clens_get = (fun (x: t1) -> f x);
 (*  
   clens_put = (fun (x: t1) (y: t2) -> g y);
@@ -320,8 +321,9 @@ let accessor_synth
 let clens_fst
   (t1: Type)
   (t2: Type)
-: Tot (clens (fun (x: (t1 & t2)) -> True) t1)
+: Tot (clens (t1 & t2) t1)
 = {
+  clens_cond = (fun (x: (t1 & t2)) -> True);
   clens_get = fst;
 (*  
   clens_put = (fun x y -> (y, snd x));
@@ -334,8 +336,9 @@ let clens_fst
 let clens_snd
   (t1: Type)
   (t2: Type)
-: Tot (clens (fun (x: (t1 & t2)) -> True) t2)
+: Tot (clens (t1 & t2) t2)
 = {
+  clens_cond = (fun (x: (t1 & t2)) -> True);
   clens_get = snd;
 (*  
   clens_put = (fun x y -> (fst x, y));
@@ -386,8 +389,7 @@ let gaccessor_fst_then
   (#k' : parser_kind)
   (#t' : Type)
   (#p': parser k' t')
-  (#pre: (t1 -> GTot Type0))
-  (#cl: clens pre t')
+  (#cl: clens t1 t')
   (g: gaccessor p1 p' cl)
   (#k2: parser_kind)
   (#t2: Type)

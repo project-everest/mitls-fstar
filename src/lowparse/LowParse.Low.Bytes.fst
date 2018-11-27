@@ -52,8 +52,9 @@ let clens_flbytes_slice
   (sz: nat)
   (from: U32.t)
   (to: U32.t {U32.v from <= U32.v to /\ U32.v to <= sz } )
-: Tot (clens #(BY.lbytes sz) (fun _ -> True) (BY.lbytes (U32.v to - U32.v from)))
+: Tot (clens (BY.lbytes sz) (BY.lbytes (U32.v to - U32.v from)))
 = {
+  clens_cond =  (fun _ -> True);
   clens_get = (fun (x: BY.lbytes sz) -> (BY.slice x from to <: BY.lbytes (U32.v to - U32.v from)));
 }
 
@@ -83,8 +84,9 @@ let accessor_flbytes_slice
 let clens_flbytes_get
   (sz: nat)
   (i: U32.t { U32.v i < sz } )
-: Tot (clens #(BY.lbytes sz) (fun _ -> True) byte)
+: Tot (clens (BY.lbytes sz) byte)
 = {
+  clens_cond =  (fun _ -> True);
   clens_get = (fun (x: BY.lbytes sz) -> (BY.get x i <: byte));
 }
 
@@ -293,8 +295,9 @@ let clens_vlbytes
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
   (length: nat)
-: Tot (clens (clens_vlbytes_cond min max length) (BY.lbytes length))
+: Tot (clens (parse_bounded_vlbytes_t min max) (BY.lbytes length))
 = {
+  clens_cond = (clens_vlbytes_cond min max length);
   clens_get = (fun (x: parse_bounded_vlbytes_t min max) -> (x <: Ghost (BY.lbytes length) (requires (clens_vlbytes_cond min max length x)) (ensures (fun _ -> True))));
 }
 
