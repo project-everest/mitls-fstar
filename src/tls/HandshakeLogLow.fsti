@@ -3,6 +3,7 @@ module HandshakeLogLow
 open FStar.Integers
 open FStar.HyperStack.ST
 
+module G = FStar.Ghost
 module List = FStar.List.Tot
 
 module HS = FStar.HyperStack
@@ -10,6 +11,7 @@ module B = LowStar.Buffer
 
 module C = TLSConstants
 module Hash = Hashing
+module HashSpec = Hashing.Spec
 module HSM = HandshakeMessages
 
 
@@ -212,3 +214,33 @@ val set_params (st:hsl_state) (_:C.protocolVersion) (a:Hashing.alg) (_:option Ci
 
 /// Receive API
 /// Until a full flight is received, we lose "writing" capability -- as per the comment in HandshakeLog
+
+val tags (a:Hash.alg) (prior:list msg) (ms:list msg) (hs:list HashSpec.anyTag) :Tot Type0  //TODO: this is implemented in HandshakeLog.fsti, copy
+
+//TODO: relate the parsing of the input buffer contents with the returned erased transcript
+//      we might need beginning index API in the input buffer too
+val receive (st:hsl_state) (p:uint_32)
+  : ST (TLSError.result (option (G.erased (list msg) & list HashSpec.anyTag)))  //TODO: erased transcript and concrete hash?
+       (requires (fun h0 ->
+                  hsl_invariant h0 st /\  //invariant should hold
+                  hsl_input_index h0 st <= p /\  //TODO: should have written >= 0 bytes (> 0?)
+		  p <= hsl_input_buf_len st))  //p should be in the input buffer range
+       (ensures  (fun h0 r h1 ->
+                  let open FStar.Error in
+                  let oa = hash_alg h0 st in
+		  let t0 = transcript h0 st in
+		  let t1 = transcript h1 st in
+		  B.modifies (hsl_local_footprint st) h0 h1 /\  //only local footprint is modified
+		  hash_alg h1 st == oa /\  //hash alg remains same
+		  hsl_invariant h1 st /\  //invariant holds
+		  hsl_input_index h1 st == p /\  //input index is advanced to p
+		  (match r with
+                   | Error _ -> True  //underspecified
+		   | Correct None -> t0 == t1  //waiting for more data
+		   | Correct (Some (ms, hs)) ->
+		     let ms = G.reveal ms in
+		     t1 == t0 @ ms /\  //added ms to the transcript
+		     writing h1 st /\  //Handshake can now write
+		     (match oa with
+                      | Some a -> tags a t0 ms hs  //hashed properly
+		      | None -> hs == []))))
