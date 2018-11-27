@@ -379,6 +379,23 @@ let gaccessor_fst
 : Tot (gaccessor (p1 `nondep_then` p2) p1 (clens_fst _ _))
 = gaccessor_fst' p1 sq p2
 
+let gaccessor_fst_then
+  (#k1: parser_kind)
+  (#t1: Type)
+  (#p1: parser k1 t1)
+  (#k' : parser_kind)
+  (#t' : Type)
+  (#p': parser k' t')
+  (#pre: (t1 -> GTot Type0))
+  (#cl: clens pre t')
+  (g: gaccessor p1 p' cl)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (p2: parser k2 t2)
+  (u: squash (k1.parser_kind_subkind == Some ParserStrong))
+: Tot (gaccessor (p1 `nondep_then` p2) p' (clens_fst _ _ `clens_compose` cl))
+= gaccessor_fst p1 u p2 `gaccessor_compose` g
+
 let gaccessor_snd'
   (#k1: parser_kind)
   (#t1: Type)

@@ -935,7 +935,21 @@ let clens_eq_intro
   (clens_eq cl1 cl2)
 = Classical.forall_intro cond;
   Classical.forall_intro (Classical.move_requires get)
-  
+
+let clens_eq_intro'
+  (#t: Type) (#clens_cond1: t -> GTot Type0) (#t': Type) (cl1: clens clens_cond1 t') (#clens_cond2: t -> GTot Type0) (cl2: clens clens_cond2 t')
+  (cond: (
+    (x: t) ->
+    Tot (squash (clens_cond1 x <==> clens_cond2 x))
+  ))
+  (get: (
+    (x: t) ->
+    (sq: squash (clens_cond1 x /\ clens_cond2 x)) ->
+    Tot (squash (clens_cond1 x /\ clens_cond2 x /\ cl1.clens_get x == cl2.clens_get x))
+  ))
+: Tot (squash (clens_eq cl1 cl2))
+= clens_eq_intro cl1 cl2 (fun x -> cond x) (fun x -> get x ())
+ 
 
 (*
 let clens_get_put'
@@ -1325,7 +1339,7 @@ let gaccessor_ext
   (#p2: parser k2 t2)
   (#pre: (t1 -> GTot Type0))
   (#cl: clens pre t2)
-  (g: gaccessor p1 p2 cl)
+  ($g: gaccessor p1 p2 cl)
   (#pre': (t1 -> GTot Type0))
   (cl': clens pre' t2)
   (sq: squash (clens_eq cl cl'))
@@ -1582,7 +1596,7 @@ let accessor_ext
 : Tot (accessor (gaccessor_ext g cl' sq))
 = fun input pos -> a input pos
 
-#push-options "--z3rlimit 16"
+#push-options "--z3rlimit 32"
 
 inline_for_extraction
 let accessor_compose
