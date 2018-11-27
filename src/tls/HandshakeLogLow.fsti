@@ -14,6 +14,8 @@ module Hash = Hashing
 module HashSpec = Hashing.Spec
 module HSM = HandshakeMessages
 
+module LP = LowParse.Low.Base
+
 
 /// HandshakeMessages related definitions
 
@@ -217,30 +219,54 @@ val set_params (st:hsl_state) (_:C.protocolVersion) (a:Hashing.alg) (_:option Ci
 
 val tags (a:Hash.alg) (prior:list msg) (ms:list msg) (hs:list HashSpec.anyTag) :Tot Type0  //TODO: this is implemented in HandshakeLog.fsti, copy
 
-//TODO: relate the parsing of the input buffer contents with the returned erased transcript
-//      we might need beginning index API in the input buffer too
+/// TODO: Should come from QD
+
+val hs_transcript_parser : LP.parser (LP.strong_parser_kind 8 8 ({ LP.parser_kind_metadata_total = true })) hs_transcript
+
+(* msgs is parsing of the input sub-buffer between p0 and p1 *)
+unfold private let parsing_of (msgs:hs_transcript) (st:hsl_state)
+                              (p0:uint_32) (p1:uint_32{p0 <= p1 /\ p1 <= hsl_input_buf_len st})
+			      (h:HS.mem)
+  = let delta = p1 - p0 in
+    let sub = B.gsub (hsl_input_buf st) p0 delta in
+    match LP.parse hs_transcript_parser (B.as_seq h sub) with
+    | None -> False
+    | Some (parse, consumed) ->
+      parse == msgs /\ consumed == v delta (* unsure about the latter part *)
+
+unfold private let receive_post (st:hsl_state) (p:uint_32)
+  : HS.mem -> (TLSError.result (option (G.erased hs_transcript &
+                               uint_32 & uint_32 &
+                               list HashSpec.anyTag))) -> HS.mem -> Type0
+  = fun h0 r h1 ->  
+    let open FStar.Error in
+    let oa = hash_alg h0 st in
+    let t0 = transcript h0 st in
+    let t1 = transcript h1 st in
+    B.modifies (hsl_local_footprint st) h0 h1 /\  //only local footprint is modified
+    hash_alg h1 st == oa /\  //hash alg remains same
+    hsl_invariant h1 st /\  //invariant holds
+    hsl_input_index h1 st == p /\  //input index is advanced to p
+    (match r with
+     | Error _ -> True  //underspecified
+     | Correct None -> t0 == t1  //waiting for more data
+     | Correct (Some (ms, p0, p1, hs)) ->
+       let ms = G.reveal ms in
+       t1 == t0 @ ms /\  //added ms to the transcript
+       writing h1 st /\  //Handshake can now write
+       p <= hsl_input_buf_len st /\
+       p0 <= p1 /\ p1 <= p /\  //returned indices are valid in the input buffer
+       parsing_of ms st p0 p1 h1 /\  //ms is a valid parsing of input buffer contents between p0 and p1
+       (match oa with
+        | Some a -> tags a t0 ms hs  //hashed properly
+        | None -> hs == []))
+
 val receive (st:hsl_state) (p:uint_32)
-  : ST (TLSError.result (option (G.erased (list msg) & list HashSpec.anyTag)))  //TODO: erased transcript and concrete hash?
+  : ST (TLSError.result (option (G.erased hs_transcript &  //ghost transcript, list msg or hs_transcript
+                                 uint_32 & uint_32 &  //buffer indices in the input buffer
+                                 list HashSpec.anyTag)))  //TODO: erased transcript and concrete hash?
        (requires (fun h0 ->
                   hsl_invariant h0 st /\  //invariant should hold
                   hsl_input_index h0 st <= p /\  //TODO: should have written >= 0 bytes (> 0?)
 		  p <= hsl_input_buf_len st))  //p should be in the input buffer range
-       (ensures  (fun h0 r h1 ->
-                  let open FStar.Error in
-                  let oa = hash_alg h0 st in
-		  let t0 = transcript h0 st in
-		  let t1 = transcript h1 st in
-		  B.modifies (hsl_local_footprint st) h0 h1 /\  //only local footprint is modified
-		  hash_alg h1 st == oa /\  //hash alg remains same
-		  hsl_invariant h1 st /\  //invariant holds
-		  hsl_input_index h1 st == p /\  //input index is advanced to p
-		  (match r with
-                   | Error _ -> True  //underspecified
-		   | Correct None -> t0 == t1  //waiting for more data
-		   | Correct (Some (ms, hs)) ->
-		     let ms = G.reveal ms in
-		     t1 == t0 @ ms /\  //added ms to the transcript
-		     writing h1 st /\  //Handshake can now write
-		     (match oa with
-                      | Some a -> tags a t0 ms hs  //hashed properly
-		      | None -> hs == []))))
+       (ensures  (receive_post st p))
