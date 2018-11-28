@@ -117,6 +117,18 @@ let parse32_sum
 = fun input ->
   (parse32_sum' t p p32 pc pc32 destr input <: (res: option (sum_type t * U32.t) { parser32_correct (parse_sum t p pc) input res } ))
 
+inline_for_extraction
+let parse32_sum2
+  (#kt: parser_kind)
+  (t: sum)
+  (p: parser kt (sum_repr_type t))
+  (p32: parser32 p)
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (pc32: ((x: sum_key t) -> Tot (parser32 (dsnd (pc x)))))
+  (destr: enum_destr_t (option (sum_type t * U32.t)) (sum_enum t))
+  (f: maybe_enum_key_of_repr'_t (sum_enum t))
+: Tot (parser32 (parse_sum t p pc))
+= parse32_sum t p (parse32_enum_key p32 (sum_enum t) f) pc pc32 destr
 
 let serialize32_sum_aux
   (#kt: parser_kind)
@@ -195,6 +207,22 @@ let serialize32_sum
 #reset-options
 
 inline_for_extraction
+let serialize32_sum2
+  (#kt: parser_kind)
+  (t: sum)
+  (#p: parser kt (sum_repr_type t))
+  (s: serializer p)
+  (s32: serializer32 s)
+  (#pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (sc: ((x: sum_key t) -> Tot (serializer (dsnd (pc x)))))
+  (sc32: ((x: sum_key t) -> Tot (serializer32 (sc x))))
+  (destr: dep_enum_destr (sum_enum t) (serialize32_sum_destr_codom t))
+  (f: enum_repr_of_key'_t (sum_enum t))
+  (u: squash (serializer32_sum_gen_precond kt (weaken_parse_cases_kind t pc)))
+: Tot (serializer32 (serialize_sum t s sc))
+= serialize32_sum t s (serialize32_enum_key s32 (sum_enum t) f) sc sc32 destr u
+
+inline_for_extraction
 let size32_sum_destr_codom
   (t: sum)
   (k: sum_key t)
@@ -260,6 +288,22 @@ let size32_sum
   (res <: (res: U32.t { size32_postcond (serialize_sum t s sc) x res } ))
 
 #reset-options
+
+inline_for_extraction
+let size32_sum2
+  (#kt: parser_kind)
+  (t: sum)
+  (#p: parser kt (sum_repr_type t))
+  (s: serializer p)
+  (s32: size32 s)
+  (#pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (sc: ((x: sum_key t) -> Tot (serializer (dsnd (pc x)))))
+  (sc32: ((x: sum_key t) -> Tot (size32 (sc x))))
+  (destr: dep_enum_destr (sum_enum t) (size32_sum_destr_codom t))
+  (f: enum_repr_of_key'_t (sum_enum t))
+  (u: squash (size32_sum_gen_precond kt (weaken_parse_cases_kind t pc)))
+: Tot (size32 (serialize_sum t s sc))
+= size32_sum t s (size32_enum_key s32 (sum_enum t) f) sc sc32 destr u
 
 (* Sum with default case *)
 
