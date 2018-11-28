@@ -1,5 +1,5 @@
 [
-  "\u001a{íü©\u0012\u0011Îd2Ê î7Í¶",
+  "ÑÌl–sM\u000eÒØ)â…l‘AÜ",
   [
     [
       "KDF.Rekey.discard",
@@ -12,7 +12,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "35a6ebf441e0b8ee9d2640edf65e7b84"
+      "84146a652a41e564d328f493038e3ae6"
     ],
     [
       "KDF.Rekey.ivlen",
@@ -20,11 +20,27 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query",
+        "@MaxFuel_assumption", "@MaxIFuel_assumption",
+        "@fuel_correspondence_Prims.pow2.fuel_instrumented",
+        "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
+        "FStar.Integers_pretyping_6ad08c58c10cb742e34ff2d7d8900d61",
         "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
         "bool_inversion", "bool_typing",
+        "constructor_distinct_FStar.Integers.Signed",
+        "constructor_distinct_FStar.Integers.Unsigned",
+        "constructor_distinct_FStar.Integers.W16",
+        "constructor_distinct_FStar.Integers.W31",
+        "constructor_distinct_FStar.Integers.W32",
+        "constructor_distinct_FStar.Integers.W8",
+        "constructor_distinct_FStar.Integers.Winfinite",
         "constructor_distinct_Spec.Hash.Helpers.SHA2_256",
+        "data_typing_intro_FStar.Integers.Unsigned@tok",
+        "equality_tok_FStar.Integers.W16@tok",
+        "equality_tok_FStar.Integers.W31@tok",
+        "equality_tok_FStar.Integers.W32@tok",
+        "equality_tok_FStar.Integers.Winfinite@tok",
         "equality_tok_Spec.Hash.Helpers.SHA2_256@tok",
+        "equation_FStar.Integers.fixed_width",
         "equation_FStar.Monotonic.HyperHeap.disjoint",
         "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
         "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
@@ -32,25 +48,31 @@
         "equation_Hacl.Hash.Definitions.size_hash_ul",
         "equation_Mem.disjoint", "equation_Mem.rgn",
         "equation_Mem.tls_define_region", "equation_Mem.tls_rgn",
-        "equation_Mem.tls_tables_region",
+        "equation_Mem.tls_tables_region", "equation_Prims.nat",
+        "equation_Spec.Hash.Helpers.size_hash_final_w",
         "function_token_typing_FStar.UInt32.n",
         "function_token_typing_Mem.tls_define_region",
         "function_token_typing_Mem.tls_tables_region",
-        "lemma_FStar.UInt32.vu_inv", "primitive_Prims.op_AmpAmp",
-        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Negation",
+        "lemma_FStar.UInt.pow2_values", "lemma_FStar.UInt32.vu_inv",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Negation", "primitive_Prims.op_Subtraction",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_FStar.Integers.Signed__0",
+        "projection_inverse_FStar.Integers.Unsigned__0",
+        "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
+        "projection_inverse_FStar.Pervasives.Native.Some_v",
+        "refinement_interpretation_FStar.Integers_Tm_refine_d12d61266a2f2128b6a00b00566f8446",
         "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
-        "refinement_interpretation_Hacl.Hash.Definitions_Tm_refine_a635e2afdd65247735f361323e0a9d9c",
         "refinement_interpretation_Mem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
         "refinement_interpretation_Mem_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
         "refinement_interpretation_Mem_Tm_refine_f70be9b0cc50942af80d22e44fc9b9c4",
-        "typing_FStar.UInt32.v", "typing_Hacl.Hash.Definitions.size_hash_ul",
+        "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "typing_Mem.disjoint", "typing_Mem.tls_define_region",
-        "typing_tok_Spec.Hash.Helpers.SHA2_256@tok"
+        "typing_tok_FStar.Integers.W32@tok"
       ],
       0,
-      "649982154d70c6066e60466b5c2e13c8"
+      "c959dcc2f99570857095946c82fb1916"
     ],
     [
       "KDF.Rekey.is_iv_p",
@@ -65,7 +87,7 @@
         "projection_inverse_Pkg.LocalPkg_key"
       ],
       0,
-      "c41901d44022360a587c69aacfae92dc"
+      "a08ef00194805392f0dfedd8d70a172a"
     ],
     [
       "KDF.Rekey.lemma_KDF_depth",
@@ -78,7 +100,7 @@
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "4304e074076f7b9c629ecfb24579e02d"
+      "92b0054a11c790150ba78ee6932bd787"
     ],
     [
       "KDF.Rekey.is_kdf_p",
@@ -98,7 +120,7 @@
         "token_correspondence_Pkg.__proj__Idx__item__registered"
       ],
       0,
-      "63a111314f7fa5a7e808c16a3c241143"
+      "fa4eb70a5032840d133a69ea9eb5d84e"
     ],
     [
       "KDF.Rekey._mchildren",
@@ -111,7 +133,7 @@
         "equation_Pkg.Tree.children", "function_token_typing_Flags.model"
       ],
       0,
-      "e8e84d9ebefd4d3ebc25f97e25cbd97f"
+      "72830638a7574e3769a8939842ab35e1"
     ],
     [
       "KDF.Rekey.is_rekey_tree'",
@@ -127,7 +149,7 @@
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "0d85fe93743021dccdb8dfb9ff7c19e7"
+      "6993cb7d38311e718022b8d840ee9166"
     ],
     [
       "KDF.Rekey.is_rekey_tree'",
@@ -169,7 +191,7 @@
         "well-founded-ordering-on-nat"
       ],
       0,
-      "51190567d4758809bbb75fb8190948b1"
+      "dbead6c9b9ca6eefce399115f7681865"
     ],
     [
       "KDF.Rekey.is_rekey_tree",
@@ -182,7 +204,7 @@
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "3e7d4e8a28f5782a465a14f83b204671"
+      "6d727f827b415257455bd35e70ec70b5"
     ],
     [
       "KDF.Rekey.is_rekey_tree",
@@ -196,7 +218,7 @@
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "af287ea8008666bc619a16c4cdea8037"
+      "9ccb8f7d8ea846876fee7e43bcbf6f39"
     ],
     [
       "KDF.Rekey.mk_rekey'",
@@ -216,7 +238,7 @@
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "ddcf22e68efede7cdae5d2dd72b34fb1"
+      "51084121fad5a1da9810a5408e9639a4"
     ],
     [
       "KDF.Rekey.lift_children'",
@@ -231,7 +253,30 @@
         "refinement_interpretation_KDF.Rekey_Tm_refine_9e87d544a3ae8ab48d17583131b478b0"
       ],
       0,
-      "11fe4dbe609246c5ce8b3f270edffb56"
+      "f281431e599906515519b04df0c328bc"
+    ],
+    [
+      "KDF.Rekey.mklabel",
+      1,
+      2,
+      1,
+      [
+        "@MaxFuel_assumption", "@MaxIFuel_assumption",
+        "@fuel_correspondence_FStar.List.Tot.Base.length.fuel_instrumented",
+        "@fuel_irrelevance_FStar.List.Tot.Base.length.fuel_instrumented",
+        "@query", "constructor_distinct_Tm_unit",
+        "equation_FStar.String.char", "equation_FStar.String.strlen",
+        "equation_Prims.nat",
+        "equation_with_fuel_FStar.List.Tot.Base.length.fuel_instrumented",
+        "int_inversion", "primitive_Prims.op_Addition",
+        "primitive_Prims.op_LessThan", "primitive_Prims.op_Multiply",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "string_inversion", "typing_FStar.String.strlen"
+      ],
+      0,
+      "8c3ddc124ffc79aa19f4b3708de8736a"
     ],
     [
       "KDF.Rekey.mk_rekey'",
@@ -241,29 +286,20 @@
       [
         "@MaxFuel_assumption", "@MaxIFuel_assumption",
         "@fuel_correspondence_FStar.List.Tot.Base.for_all.fuel_instrumented",
-        "@fuel_correspondence_FStar.List.Tot.Base.length.fuel_instrumented",
         "@fuel_correspondence_KDF.Rekey.is_rekey_tree_.fuel_instrumented",
         "@fuel_irrelevance_FStar.List.Tot.Base.for_all.fuel_instrumented",
-        "@fuel_irrelevance_FStar.List.Tot.Base.length.fuel_instrumented",
         "@fuel_irrelevance_KDF.Rekey.is_rekey_tree_.fuel_instrumented",
-        "@query", "CipherSuite_pretyping_a28d28f7b8cb96d4d3e4560dc0fb29e3",
+        "@query",
         "Format.NamedGroup_interpretation_Tm_arrow_069531487c3a05a4c162bc4bd3242307",
         "Prims_interpretation_Tm_arrow_9cb3c953faf527c316d427b2ce8bd81b",
         "Prims_pretyping_ae567c2fb75be05905677af440075565",
         "Prims_pretyping_f537159ed795b314b4e58c260361ae86", "b2t_def",
         "bool_inversion", "bool_typing",
-        "constructor_distinct_FStar.Pervasives.Native.Some",
-        "constructor_distinct_Parsers.CipherSuite.TLS_AES_128_GCM_SHA256",
         "constructor_distinct_Pkg.Tree.Leaf",
         "constructor_distinct_Pkg.Tree.Node",
         "constructor_distinct_Prims.Cons", "constructor_distinct_Prims.Nil",
-        "data_typing_intro_CipherSuite.SCSV@tok", "eq2-interp",
-        "equality_tok_Format.NamedGroup.SECP521R1@tok",
-        "equality_tok_Format.NamedGroup.X25519@tok",
+        "eq2-interp", "equality_tok_Format.NamedGroup.SECP521R1@tok",
         "equality_tok_Parsers.CipherSuite.TLS_AES_128_GCM_SHA256@tok",
-        "equation_CipherSuite.cipherSuite",
-        "equation_CipherSuite.cipherSuite__of_name",
-        "equation_CipherSuite.cipherSuite_of_name",
         "equation_CommonDH.namedGroups",
         "equation_CommonDH.supportedNamedGroups",
         "equation_DebugFlags.debug", "equation_FStar.Bytes.lbytes",
@@ -284,10 +320,11 @@
         "equation_Format.NamedGroupList.minCount",
         "equation_Format.NamedGroupList.namedGroupList",
         "equation_HKDF.tls13_prefix", "equation_IV.idealRaw",
-        "equation_IV.local_raw_pkg", "equation_Idx.id", "equation_Idx.ii",
-        "equation_Idx.label", "equation_KDF.Rekey._mchildren",
-        "equation_KDF.Rekey.flagKDF", "equation_KDF.Rekey.idealKDF",
-        "equation_KDF.Rekey.is_iv_p", "equation_KDF.Rekey.is_kdf_p",
+        "equation_IV.local_raw_pkg", "equation_IV.shared_footprint_raw",
+        "equation_Idx.id", "equation_Idx.ii", "equation_Idx.label",
+        "equation_KDF.Rekey._mchildren", "equation_KDF.Rekey.flagKDF",
+        "equation_KDF.Rekey.idealKDF", "equation_KDF.Rekey.is_iv_p",
+        "equation_KDF.Rekey.is_kdf_p", "equation_KDF.Rekey.mklabel",
         "equation_KDF.iflag", "equation_KDF.local_kdf_pkg",
         "equation_Mem.disjoint", "equation_Mem.i_mem_table",
         "equation_Mem.is_tls_rgn", "equation_Mem.mem_table",
@@ -299,7 +336,6 @@
         "equation_Prims.l_False", "equation_Prims.nat",
         "equation_TLSInfo.default_groups",
         "equation_with_fuel_FStar.List.Tot.Base.for_all.fuel_instrumented",
-        "equation_with_fuel_FStar.List.Tot.Base.length.fuel_instrumented",
         "equation_with_fuel_KDF.Rekey.is_rekey_tree_.fuel_instrumented",
         "false_interp", "fuel_guarded_inversion_Pkg.Tree.tree_",
         "function_token_typing_CommonDH.is_supported_group",
@@ -336,8 +372,6 @@
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
-        "projection_inverse_FStar.Pervasives.Native.Some_a",
-        "projection_inverse_FStar.Pervasives.Native.Some_v",
         "projection_inverse_Pkg.Idx_t",
         "projection_inverse_Pkg.LocalPkg_ideal",
         "projection_inverse_Pkg.LocalPkg_key",
@@ -368,7 +402,6 @@
         "typing_FStar.Map.concat", "typing_FStar.Map.restrict",
         "typing_FStar.Monotonic.HyperHeap.includes",
         "typing_FStar.Monotonic.HyperStack.get_hmap",
-        "typing_FStar.Monotonic.HyperStack.is_stack_region",
         "typing_FStar.Set.complement", "typing_FStar.Set.singleton",
         "typing_FStar.UInt32.v", "typing_KDF.Rekey.flagKDF",
         "typing_KDF.Rekey.flagKDF_", "typing_Mem.disjoint",
@@ -376,7 +409,7 @@
         "typing_Pkg.__proj__Pkg__item__define_table"
       ],
       0,
-      "291c08161defdff91d02e821e4605cda"
+      "66513ced3d18fb77c86c43ba0a3bddc3"
     ],
     [
       "KDF.Rekey.mk_rekey",
@@ -400,7 +433,7 @@
         "true_interp"
       ],
       0,
-      "234434935e2593b4f402174654e507fb"
+      "d5f9bafbae1452543aae9e1ea810f461"
     ],
     [
       "KDF.Rekey._cpkg",
@@ -415,7 +448,7 @@
         "projection_inverse_Pkg.Idx_t"
       ],
       0,
-      "6f52d112ae10845c476b14b925af6ddc"
+      "3371b3825aa7b6cd80f017e594ef31f7"
     ],
     [
       "KDF.Rekey.concrete_pkg",
@@ -428,7 +461,7 @@
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "b1b8fc3770568410117bbb83b9a0dcf4"
+      "eca83f8c2da01c48722ff39312e97266"
     ],
     [
       "KDF.Rekey.concrete_pkg",
@@ -500,7 +533,7 @@
         "typing_KDF.Rekey.flagKDF", "typing_KDF.Rekey.flagKDF_"
       ],
       0,
-      "2acce0eaac1e29cc638f05f4260b940e"
+      "bf152ac0ca83a680f59c02470d9dddf4"
     ],
     [
       "KDF.Rekey.fake_kdf",
@@ -513,7 +546,7 @@
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "348eb6fbb5f043c8cf69c1832a13a70d"
+      "d0a41cca05b67c5bf06088bddf72da9b"
     ],
     [
       "KDF.Rekey.fake_kdf",
@@ -589,7 +622,7 @@
         "typing_KDF.Rekey.flagKDF_"
       ],
       0,
-      "5b4832d9eff5fa662c64a80b3055fbe2"
+      "1b5f803f8da35e54f62411a092640793"
     ],
     [
       "KDF.Rekey._down",
@@ -602,7 +635,7 @@
         "refinement_interpretation_Prims_Tm_refine_f048236b5f8051f83b495ea5eaa6127b"
       ],
       0,
-      "69913651f4944985c596da3bca36b73d"
+      "94017068bc02f26f355fe10f6c67b956"
     ],
     [
       "KDF.Rekey._down",
@@ -631,7 +664,7 @@
         "true_interp"
       ],
       0,
-      "4d0bf4c0debc2a4f043e1c7970206d98"
+      "cfd5577c65f1783a2d07881105950a49"
     ]
   ]
 ]
