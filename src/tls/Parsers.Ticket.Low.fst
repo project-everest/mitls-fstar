@@ -60,7 +60,7 @@ let valid_ticketContents12_intro h input pos =
   LP.valid_nondep_then h (protocolVersion_parser `LP.nondep_then` cipherSuite_parser) boolean_parser input pos;
   LP.valid_nondep_then h protocolVersion_parser cipherSuite_parser input pos
 
-#set-options "--z3rlimit 16 --print_z3_statistics"
+#set-options "--z3rlimit 32 --print_z3_statistics"
 
 let valid_ticketContents13_intro h input pos =
   let cs = LP.contents cipherSuite_parser h input pos in
@@ -113,10 +113,6 @@ inline_for_extraction
 let write_ticketVersion_key : LP.leaf_writer_strong serialize_ticketVersion_key =
   LP.write_enum_key LP.write_u8 ticketVersion_enum (_ by (LPT.enum_repr_of_key_tac ticketVersion_enum))
 
-inline_for_extraction
-let jump_ticketContents12 : LP.jumper ticketContents12_parser =
-  LP.jump_constant_size ticketContents12_parser 53ul ()
-
 #reset-options "--z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 0 --max_ifuel 0 --print_z3_statistics --z3refresh --using_facts_from '* -Parsers +Parsers.Ticket.Low +Parsers.TicketContents12 +Parsers.TicketVersion +Parsers.TicketContents -LowParse +LowParse.Spec.Base +LowParse.Low.Base +LowParse.Spec.Combinators +LowParse.Spec.Enum +LowParse.Spec.Sum +LowParse.Low.Sum -FStar.Tactics -FStar.Reflection' --print_implicits"
 
 let finalize_case_ticketContents12 input pos =
@@ -131,35 +127,7 @@ let finalize_case_ticketContents12 input pos =
     LP.valid_sum_intro h ticketContents_sum ticketVersion_repr_parser parse_ticketContents_cases input pos
   in
   [@inline_let] let _ = assert_norm (LP.parse_sum_kind (LP.get_parser_kind ticketVersion_repr_parser) ticketContents_sum parse_ticketContents_cases == ticketContents_parser_kind) in
-  jump_ticketContents12 input pos1
-
-#reset-options "--max_fuel 0 --max_ifuel 0 --z3rlimit 16 --print_z3_statistics"
-
-inline_for_extraction
-let jump_ticketContents13 : LP.jumper ticketContents13_parser =
-  assert_norm (ticketContents13' == LP.get_parser_type (
-    cipherSuite_parser
-    `LP.nondep_then` ticketContents13_rms_parser
-    `LP.nondep_then` ticketContents13_nonce_parser
-    `LP.nondep_then` LP.parse_u32
-    `LP.nondep_then` LP.parse_u32
-    `LP.nondep_then` ticketContents13_custom_data_parser
-  )); // because of refinements
-  synth_ticketContents13_injective ();
-  LP.jump_synth
-    (LP.jump_constant_size cipherSuite_parser 2ul ()
-    `LP.jump_nondep_then`
-    LP.jump_bounded_vlbytes 32 255
-    `LP.jump_nondep_then`
-    LP.jump_bounded_vlbytes 0 255
-    `LP.jump_nondep_then`
-    LP.jump_u32
-    `LP.jump_nondep_then`
-    LP.jump_u32
-    `LP.jump_nondep_then`
-    LP.jump_bounded_vlbytes 0 65535)
-    synth_ticketContents13
-    ()
+  ticketContents12_jumper input pos1
 
 #reset-options "--z3rlimit 16 --z3cliopt smt.arith.nl=false --max_fuel 0 --max_ifuel 0 --print_z3_statistics --z3refresh --using_facts_from '* -Parsers +Parsers.Ticket.Low +Parsers.TicketContents13 +Parsers.TicketVersion +Parsers.TicketContents -LowParse +LowParse.Spec.Base +LowParse.Low.Base +LowParse.Spec.Combinators +LowParse.Spec.Enum +LowParse.Spec.Sum +LowParse.Low.Sum -FStar.Tactics -FStar.Reflection' --print_implicits"
 
@@ -175,4 +143,4 @@ let finalize_case_ticketContents13 input pos =
     LP.valid_sum_intro h ticketContents_sum ticketVersion_repr_parser parse_ticketContents_cases input pos
   in
   [@inline_let] let _ = assert_norm (LP.parse_sum_kind (LP.get_parser_kind ticketVersion_repr_parser) ticketContents_sum parse_ticketContents_cases == ticketContents_parser_kind) in
-  jump_ticketContents13 input pos1
+  ticketContents13_jumper input pos1
