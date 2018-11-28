@@ -94,7 +94,9 @@ inline_for_extraction
 noextract
 private let ip : ipkg = Pkg.Idx id (fun _ -> True) (fun _ -> True) (fun _ -> true)
 
-private let len_of_i (i:id): keylen = UInt32.uint_to_t i
+private let len_of_i (i:id): keylen =
+  if i > 0 && i < 32 then UInt32.uint_to_t i
+  else 32ul
 
 let test() : ST unit
   (requires fun h0 -> True)

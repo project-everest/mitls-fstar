@@ -80,14 +80,6 @@ let kdf_range (#ideal:iflag) (u:usage ideal) (i:regid{model}) (d:domain u i) =
   (let Domain lbl ctx = d in derived_key u i lbl ctx)
 
 noextract
-type ideal_or_real (it:Type0) (rt:Type0) =
-  | Ideal: v:it -> ideal_or_real it rt
-  | Real: v:rt -> ideal_or_real it rt
-
-unfold type ir_key (safe:(i:regid -> GTot Type0)) (it:squash model -> Type0) (rt:Type0) (i:regid) =
-  (if model then s:ideal_or_real (it ()) rt{safe i <==> Ideal? s} else rt)
-
-noextract
 noeq private type table (#ideal:iflag) (u:usage ideal) (i:regid) (s:squash model) =
   | KDF_table:
     r:subrgn kdf_tables_region ->
@@ -102,29 +94,7 @@ let safe (#ideal:iflag) (u:usage ideal) (i:regid) =
   honest i /\ b2t ideal
 
 type secret (#ideal:iflag) (u:usage ideal) (i:regid) =
-  ir_key (safe u) (table u i) (real_secret i) i
-
-noextract
-let secret_ideal (#ideal:iflag) (#u:usage ideal) (#i:regid{safe u i}) (t:secret u i): table u i () =
-  [@inline_let] let t : s:ideal_or_real (table u i ()) (real_secret i) {safe u i <==> Ideal? s} = t in
-  Ideal?.v t
-
-noextract
-let ideal_secret (#ideal:iflag) (#u:usage ideal) (#i:regid{safe u i}) (t:table u i ()) : secret u i =
-  [@inline_let] let t : s:ideal_or_real (table u i ()) (real_secret i) {safe u i <==> Ideal? s} = Ideal t in t
-
-inline_for_extraction
-let secret_corrupt (#ideal:iflag) (#u:usage ideal) (#i:regid{~(safe u i)}) (t:secret u i) : real_secret i =
-  if model then
-   let t : s:ideal_or_real (table u i ()) (real_secret i) {safe u i <==> Ideal? s} = t in
-   Real?.v t
-  else t
-
-inline_for_extraction
-let corrupt_secret (#ideal:iflag) (#u:usage ideal) (#i:regid{~(safe u i)}) (t:real_secret i) : secret u i =
-  if model then
-    let s : s:ideal_or_real (table u i ()) (real_secret i) {safe u i <==> Ideal? s} = Real t in s
-  else t
+  Model.ir (safe u) (table u i) (real_secret i) i
 
 /// Real KDF schemes, parameterized by an algorithm computed from the
 /// index (existing code).
@@ -136,12 +106,8 @@ let lemma_honest_parent (i:regid) (lbl:label) (ctx:context)
 
 inline_for_extraction
 let get_info (#ideal:iflag) (#u:usage ideal) (#i:regid) (k:secret u i) =
-  if model then
-    let t : s:ideal_or_real (table u i ()) (real_secret i) {safe u i <==> Ideal? s} = k in
-    match t with
-    | Real (| a, _ |) -> a
-    | Ideal _ -> index_info i
-  else dfst (secret_corrupt k)
+  if Model.is_safe k then index_info i
+  else dfst (Model.real k)
 
 // For KDF, we require that being fresh in the KDF table implies being fresh
 // in the derived package's definition table
@@ -157,15 +123,13 @@ type local_kdf_invariant (#ideal:iflag) (#u:usage ideal) (#i:regid) (k:secret u 
       // Nice: we get this from the tree structure for free!
       assert(Pkg?.ideal pkg' ==> b2t ideal);
       let dt = itable pkg'.define_table in
-      let kdf : ir:ideal_or_real (table u i ()) (real_secret i) {safe u i <==> Ideal? ir} = k in
-      // We need this for coerce
-      assert(safe u i <==> Ideal? kdf);
-      match kdf with
-      | Ideal kdft ->
+      match Model.is_safe k with
+      | true ->
         // the entries in the KDF table match those of the child's define_table
-        let KDF_table r t : table u i () = kdft in
+        let KDF_table r t : table u i () = Model.ideal k () in
         MDM.sel (sel h t) (Domain lbl ctx) == MDM.sel (sel h dt) i'
-      | Real (| a, raw |) ->
+      | false ->
+        let (| a, raw |) = Model.real k in
         assert(~(safe u i));
         assert(honest i' ==> honest i);
         assert(Pkg?.ideal pkg' ==> ~(honest i')); // to call coerceT
@@ -180,8 +144,6 @@ type local_kdf_invariant (#ideal:iflag) (#u:usage ideal) (#i:regid) (k:secret u 
           let i'': i:regid{Pkg?.ideal pkg' ==> ~(honest i)} = i' in
 	  let len' = Pkg?.len pkg' a' in
           let lb = FStar.Bytes.bytes_of_string lbl in
-          let _ = assume(Bytes.length lb < 1024) in
-	  let _ = assume(0 < UInt32.v len' /\ UInt32.v len' < 255) in
           let raw' = HKDF.expand_spec #a.ha raw lb len' in
           k' == Pkg?.coerceT pkg' i'' a' raw')
     else True))
@@ -195,11 +157,9 @@ let kdf_shared_footprint (#ideal:iflag) (u:usage ideal) : rset =
 let kdf_footprint (#ideal:iflag) (#u:usage ideal) (#i:regid) (k:secret u i)
   : GTot (s:rset{s `Set.disjoint` kdf_shared_footprint u}) =
   assume false; // WIP(adl) Fix rset for define_region subrgn
-  if model then
-    let k : ideal_or_real (table u i ()) (real_secret i) = k in
-    match k with
-    | Ideal (KDF_table r _) -> Set.singleton r
-    | Real k -> Set.empty
+  if Model.is_safe k then
+    let KDF_table r _ = Model.ideal k () in
+    Set.singleton r
   else Set.empty
 
 let local_kdf_invariant_framing (#ideal:iflag) (#u:usage ideal) (i:regid) (k:secret u i) (h0:mem) (r:rid) (h1:mem)
@@ -218,7 +178,7 @@ let local_kdf_invariant_framing (#ideal:iflag) (#u:usage ideal) (i:regid) (k:sec
 type kdf_post (#ideal:iflag) (#u:usage ideal) (#i:regid)
   (a:info0 i) (k:secret u i) (h:mem) =
   (safe u i ==>
-    (let KDF_table r t = secret_ideal k in
+    (let KDF_table r t = Model.ideal k () in
      sel h t == MDM.empty #(domain u i) #(kdf_range u i)))
 
 // Framing for the kdf_post depends only on kdf_footprint k
@@ -236,7 +196,7 @@ val coerceT:
   repr: lbytes32 (secret_len a) ->
   GTot (secret u i)
 let coerceT #ideal u i a repr =
-  corrupt_secret #ideal #u #i (| a, repr |)
+  Model.mk_real (| a, repr |)
 
 val coerce:
   #ideal: iflag ->
@@ -253,7 +213,7 @@ val coerce:
 
 #reset-options "--z3rlimit 100" 
 let coerce #ideal u i a repr =
-  let k = corrupt_secret #ideal #u #i (| a, repr |) in
+  let k = Model.mk_real (| a, repr |) in
   let h1 = get() in
   // WIP stronger packaging
   (if model then assume(local_kdf_invariant k h1));
@@ -304,7 +264,7 @@ let create #ideal u i a =
     assert(Mem.fresh_region r h1 h2);
     let t : table u i () = KDF_table r (alloc r) in
     let h3 = get() in
-    let k : secret u i = ideal_secret t in
+    let k : secret u i = Model.mk_ideal t in
     assume(kdf_footprint k == Set.singleton r);
     assume(local_kdf_invariant k h3);
     assert(fresh_regions (kdf_footprint k) h0 h3);
@@ -312,17 +272,15 @@ let create #ideal u i a =
    end
   else
    begin
-    let k = corrupt_secret #ideal #u #i (| a, sample (secret_len a) |) in
+    let k = Model.mk_real (| a, sample (secret_len a) |) in
     assume(local_kdf_invariant k h1);
     k
    end
-
 
 /// We are using many KDF packages (one for each usage),
 /// idealized one at a time.  (Having one proof step for each nested
 /// level of key derivation seems unavoidable: we need to idealize
 /// parents before childrens.)
-
 
 noextract inline_for_extraction
 let local_kdf_pkg (ideal:iflag) (u:usage ideal) : local_pkg ii =
@@ -443,10 +401,10 @@ type modifies_derive (#ideal:iflag) (#u:usage ideal) (#i:regid) (k:secret u i)
   (if u `has_lbl` lbl then
     let modset = Set.singleton tls_define_region in
     let modset = Set.union modset (Set.singleton tls_honest_region) in
-    let k : ideal_or_real (table u i ()) (real_secret i) = k in
-    let modset = match k with
-    | Ideal (KDF_table r _) -> Set.union modset (Set.singleton r)
-    | Real k -> modset in
+    let modset =
+      if Model.is_safe k then
+        let KDF_table r _ = Model.ideal k () in Set.union modset (Set.singleton r)
+      else modset in
     let utable = (child u lbl).define_table in
     modifies modset h0 h1
     /\ HS.modifies_ref tls_define_region (Set.singleton (mem_addr (itable utable))) h0 h1
@@ -454,6 +412,7 @@ type modifies_derive (#ideal:iflag) (#u:usage ideal) (#i:regid) (k:secret u i)
 
 unfold type rid = i:(Idx?.t ii){(Idx?.registered ii) i}
 
+(** Ugly coercion, required because the type equality is proved by normalization **)
 noextract
 private let _mem_coerce (#t0:eqtype) (#t1:t0 -> Type) (dt:mem_table t1) (#ideal:iflag) (t:tree (b2t ideal){kdf_subtree ideal t})
   : Pure (mem_table (secret (u_of_t t)))
@@ -468,11 +427,9 @@ let kdf_dt (#ideal:iflag) (t:tree (b2t ideal){kdf_subtree ideal t})
     _mem_coerce (Pkg?.define_table p) t
   else ()
 
-// FIXME(adl) work in progress Nov 7 2018
-// experimenting with erasure of tree and "concrete package"
-
 // FIXME(adl) only works for packages built from local_pkg
 // need to extend to global state packages
+// WIP(adl) hopefully, this all packages will fit this case now
 let compatible_packages (lp:local_pkg ii) (p:pkg ii) =
   Pkg?.key p == LocalPkg?.key lp /\
   p == memoization lp p.define_table
@@ -503,10 +460,9 @@ val derive:
     modifies_derive k lbl ctx h0 h1 /\
     tree_invariant t h1 /\
     (~(safe (u_of_t t) i) ==> (
-      let (| a, raw |) = secret_corrupt k in
+      let (| a, raw |) = Model.real k in
       let lb = Bytes.bytes_of_string lbl in
       let len' = LocalPkg?.len child_pkg a' in
-      let _ = assume(0 < UInt32.v len' /\ UInt32.v len' < 255 /\ Bytes.length lb < 1024) in
       r == (LocalPkg?.coerceT child_pkg) (derive i lbl ctx) a'
       (HKDF.expand_spec #a.ha raw lb len'))) /\
     (model ==> (LocalPkg?.post child_pkg) a' r h1))
@@ -539,7 +495,7 @@ let derive #ideal #t #i k lbl ctx child_pkg a' =
     if (u `has_lbl` lbl) && ideal && honest then
      begin
       let x: domain u i = Domain lbl ctx in
-      let KDF_table kdf_r kdf_t : table u i () = secret_ideal k in
+      let KDF_table kdf_r kdf_t : table u i () = Model.ideal k () in
       let v: option (derived_key u i lbl ctx) = MDM.lookup kdf_t x in
       match v with
       | Some dk -> (| (), dk |)
@@ -554,7 +510,7 @@ let derive #ideal #t #i k lbl ctx child_pkg a' =
     else
      begin
       let dlen = (LocalPkg?.len child_pkg) a' in 
-      let raw = HKDF.expand #((get_info k).ha) (dsnd (secret_corrupt k)) (FStar.Bytes.bytes_of_string lbl) dlen in
+      let raw = HKDF.expand #((get_info k).ha) (dsnd (Model.real k)) (FStar.Bytes.bytes_of_string lbl) dlen in
       let dk = (LocalPkg?.coerce child_pkg) i' a' raw in
       (| (), dk |)
      end
@@ -563,10 +519,8 @@ let derive #ideal #t #i k lbl ctx child_pkg a' =
    begin
     assert(h1 == h0);
     let len' = (LocalPkg?.len child_pkg) a' in 
-    let (| a, key |) = secret_corrupt k in
+    let (| a, key |) = Model.real k in
     let lb = FStar.Bytes.bytes_of_string lbl in
-    assume(Bytes.length lb < 1024); // FIXME refine definition of label
-    assume(0 < UInt32.v len' /\ UInt32.v len' < 255); // FIXME refine keylen
     let raw = HKDF.expand #(a.ha) key lb len' in
     let dk = (LocalPkg?.coerce child_pkg) i' a' raw in
     let h2 = get() in

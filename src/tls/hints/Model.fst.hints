@@ -1,0 +1,143 @@
+[
+  "ËÏÓE÷é\"∏'JªêF›{%",
+  [
+    [
+      "Model.ideal_or_real",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "88b3d8df1c525153487da00c5b5cad52"
+    ],
+    [
+      "Model.__proj__Ideal__item__v",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_Model.Ideal",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Model_Tm_refine_f8f3d75a17721bb6e0dd00975446a581"
+      ],
+      0,
+      "fcefa4c9965db73894536b725bd97e75"
+    ],
+    [
+      "Model.__proj__Real__item__v",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_Model.Real",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Model_Tm_refine_8ba51edc114520debef30f4a30c696ca"
+      ],
+      0,
+      "81787c54f4f37317f1723189b76f72bd"
+    ],
+    [
+      "Model.ir",
+      1,
+      2,
+      1,
+      [ "@query", "projection_inverse_BoxBool_proj_0" ],
+      0,
+      "80bccffc31ee4b29158d409146261d36"
+    ],
+    [
+      "Model.model_on",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
+        "equation_Mem.model", "equation_Model.ir", "equation_Prims.squash",
+        "function_token_typing_Flags.model",
+        "refinement_interpretation_Model_Tm_refine_3a337cb56cd3c8b5d5f50adb86c4c664",
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+      ],
+      0,
+      "99feddc867201297863f34f21acad261"
+    ],
+    [
+      "Model.ideal",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
+        "equation_Mem.model", "equation_Model.ir", "equation_Prims.squash",
+        "function_token_typing_Flags.model",
+        "refinement_interpretation_Model_Tm_refine_3a337cb56cd3c8b5d5f50adb86c4c664",
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "unit_inversion"
+      ],
+      0,
+      "1b9403ecc9015d90c46ab6034b62714c"
+    ],
+    [
+      "Model.real",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_Model.Ideal",
+        "disc_equation_Model.Real", "equation_Model.ir",
+        "fuel_guarded_inversion_Model.ideal_or_real",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Model_Tm_refine_3a337cb56cd3c8b5d5f50adb86c4c664"
+      ],
+      0,
+      "76dcba5772479acc098273cbc9c14f4a"
+    ],
+    [
+      "Model.mk_ideal",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
+        "constructor_distinct_Model.Ideal", "disc_equation_Model.Ideal",
+        "equation_Mem.model", "equation_Model.ir", "equation_Prims.squash",
+        "function_token_typing_Flags.model",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Model.Ideal_it",
+        "projection_inverse_Model.Ideal_rt",
+        "projection_inverse_Model.Ideal_v",
+        "refinement_interpretation_Model_Tm_refine_3a337cb56cd3c8b5d5f50adb86c4c664",
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "unit_inversion"
+      ],
+      0,
+      "8475baa82c2986743d3505213bfa1ab1"
+    ],
+    [
+      "Model.mk_real",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "constructor_distinct_Model.Real",
+        "disc_equation_Model.Ideal", "equation_Model.ir",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Model_Tm_refine_3a337cb56cd3c8b5d5f50adb86c4c664"
+      ],
+      0,
+      "6addc86cd67d48d12148a9f5e8d7d992"
+    ],
+    [
+      "Model.is_safe",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion", "bool_typing",
+        "equation_Mem.model", "function_token_typing_Flags.model",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "b0c8ba35ac323124ca9c6d4db005fd14"
+    ]
+  ]
+]

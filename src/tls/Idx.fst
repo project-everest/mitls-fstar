@@ -15,7 +15,7 @@ type info = TLSInfo.logInfo
 ///
 /// We provide an instance of ipkg to track key derivation (here using constant labels)
 /// these labels are specific to HKDF, for now strings e.g. "e exp master".
-type label = string
+type label = s:string{Bytes.length (Bytes.bytes_of_string s) < 250}
 
 /// the middle extraction takes an optional DH secret, identified by this triple
 /// we use our own datatype to simplify typechecking
