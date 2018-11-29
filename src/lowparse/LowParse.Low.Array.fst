@@ -45,39 +45,127 @@ let rec list_nth_constant_size_parser_correct #k #t p b i =
     list_nth_constant_size_parser_correct p (Seq.slice b k.parser_kind_low (Seq.length b)) (i - 1)
   end
 
-(*
-inline_for_extraction
-val array_nth
+let clens_array_nth
+  (t: Type)
+  (elem_count: nat)
+  (i: nat { i < elem_count } )
+: Tot (clens (array t elem_count) t)
+= {
+  clens_cond = (fun _ -> True);
+  clens_get = (fun (l: array t elem_count) -> L.index l i);
+}
+
+#reset-options "--z3rlimit 16"
+
+abstract
+let array_nth_ghost'
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
   (s: serializer p)
   (array_byte_size: nat)
   (elem_count: nat)
-  (array_byte_size32: U32.t)
-  (elem_byte_size32: U32.t)
-  (i: U32.t)
-  (u: unit {
+  (i: nat {
     fldata_array_precond p array_byte_size elem_count == true /\
-    U32.v elem_byte_size32 == k.parser_kind_low /\
-    U32.v array_byte_size32 == array_byte_size /\
-    U32.v i < elem_count
+    array_byte_size < 4294967296 /\
+    elem_count < 4294967296 /\
+    i < elem_count
   })
-: Tot (accessor (parse_array s array_byte_size elem_count) p (fun x y -> y == L.index x (U32.v i)))
+  (input: bytes)
+: GTot (nat * nat)
+= if (i `Prims.op_Multiply` k.parser_kind_low) + k.parser_kind_low <= Seq.length input
+  then (i `Prims.op_Multiply` k.parser_kind_low, k.parser_kind_low)
+  else (0, 0) // dummy
+
+abstract
+let array_nth_ghost_correct'
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (array_byte_size: nat)
+  (elem_count: nat)
+  (i: nat {
+    fldata_array_precond p array_byte_size elem_count == true /\
+    array_byte_size < 4294967296 /\
+    elem_count < 4294967296 /\
+    i < elem_count
+  })
+  (input: bytes)
+: Lemma
+  (requires (gaccessor_pre (parse_array s array_byte_size elem_count) p (clens_array_nth t elem_count i) input))
+  (ensures (gaccessor_post' (parse_array s array_byte_size elem_count) p (clens_array_nth t elem_count i) input (array_nth_ghost' s array_byte_size elem_count i input)))
+= fldata_to_array_inj s array_byte_size elem_count ();
+  parse_synth_eq (parse_fldata_strong (serialize_list _ s) array_byte_size) (fldata_to_array s array_byte_size elem_count ()) input;
+  list_nth_constant_size_parser_correct p input i;
+  let off = i `Prims.op_Multiply` k.parser_kind_low in
+  parse_strong_prefix p (Seq.slice input off (Seq.length input)) (Seq.slice input off (off + k.parser_kind_low))
+
+abstract
+let array_nth_ghost_correct
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (array_byte_size: nat)
+  (elem_count: nat)
+  (i: nat {
+    fldata_array_precond p array_byte_size elem_count == true /\
+    array_byte_size < 4294967296 /\
+    elem_count < 4294967296 /\
+    i < elem_count
+  })
+  (input: bytes)
+: Lemma
+  (gaccessor_post' (parse_array s array_byte_size elem_count) p (clens_array_nth t elem_count i) input (array_nth_ghost' s array_byte_size elem_count i input))
+= Classical.move_requires (array_nth_ghost_correct' s array_byte_size elem_count i) input
+
+abstract
+let array_nth_ghost
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (array_byte_size: nat)
+  (elem_count: nat)
+  (i: nat {
+    fldata_array_precond p array_byte_size elem_count == true /\
+    array_byte_size < 4294967296 /\
+    elem_count < 4294967296 /\
+    i < elem_count
+  })
+: Tot (gaccessor (parse_array s array_byte_size elem_count) p (clens_array_nth t elem_count i))
+= fun input -> ((
+  array_nth_ghost_correct s array_byte_size elem_count i input;
+  array_nth_ghost' s array_byte_size elem_count i input) <: Ghost (nat & nat) (requires True) (ensures (fun res -> gaccessor_post' (parse_array s array_byte_size elem_count) p (clens_array_nth t elem_count i) input res)))
 
 module B = LowStar.Buffer
 
-#set-options "--z3rlimit 16"
-
-let array_nth #k #t #p s array_byte_size elem_count array_byte_size32 elem_byte_size32 i u =
-  fun input ->
+inline_for_extraction
+let array_nth
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (array_byte_size: nat)
+  (elem_count: nat)
+  (i: U32.t {
+    fldata_array_precond p (array_byte_size) (elem_count) == true /\
+    array_byte_size < 4294967296 /\
+    elem_count < 4294967296 /\
+    U32.v i < elem_count
+  })
+: Tot (accessor (array_nth_ghost s (array_byte_size) (elem_count) (U32.v i)))
+= fun input pos ->
   let h = HST.get () in
-  list_nth_constant_size_parser_correct p (B.as_seq h (gsub input 0ul array_byte_size32)) (U32.v i);
-  B.offset (B.sub input 0ul array_byte_size32) (i `U32.mul` elem_byte_size32) <: buffer8
-
-#reset-options
-
-*)
+  [@inline_let] let _ =
+    valid_facts (parse_array s (array_byte_size) (elem_count)) h input pos;
+    slice_access_eq h (array_nth_ghost s (array_byte_size) (elem_count) (U32.v i)) input pos;
+    fldata_to_array_inj s (array_byte_size) (elem_count) ();
+    parse_synth_eq (parse_fldata_strong (serialize_list _ s) (array_byte_size)) (fldata_to_array s array_byte_size elem_count ()) (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos)));
+    list_nth_constant_size_parser_correct p (B.as_seq h (B.gsub (B.gsub input.base pos (input.len `U32.sub` pos)) 0ul (U32.uint_to_t array_byte_size))) (U32.v i)
+  in
+  pos `U32.add` (i `U32.mul` U32.uint_to_t k.parser_kind_low)
 
 inline_for_extraction
 let validate_array
