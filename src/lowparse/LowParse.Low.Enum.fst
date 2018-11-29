@@ -84,11 +84,13 @@ let read_enum_key_t
 inline_for_extraction
 let read_enum_key_f
   (#key #repr: eqtype)
-  (e: enum key repr)
+  (e: enum key repr { Cons? e } )
   (k: maybe_enum_key e)
 : Tot (read_enum_key_t e k)
 = fun (sq: squash (Known? k)) ->
-    match k with Known k_ -> (k_ <: (k_ : enum_key e { match k with Known k' -> k' == k_ } ))
+    match k with
+    | Known k_ -> (k_ <: (k_ : enum_key e { match k with Known k' -> k' == k_ } ))
+    | _ -> (match e with (k, _) :: _ -> k) // dummy, but needed to make extraction work
 
 inline_for_extraction
 let read_enum_key_eq
@@ -117,7 +119,7 @@ inline_for_extraction
 let read_enum_key
   (#key #repr: eqtype)
   (#k: parser_kind) (#p: parser k repr) (p32: leaf_reader p)
-  (e: enum key repr)
+  (e: enum key repr { Cons? e })
   (destr: dep_maybe_enum_destr_t e (read_enum_key_t e))
 : Tot (leaf_reader (parse_enum_key p e))
 = read_synth
