@@ -1761,6 +1761,47 @@ let validator (#k: parser_kind) (#t: Type) (p: parser k t) : Tot Type =
       (~ (valid p h sl pos))
   )))
 
+let valid_total_constant_size
+  (h: HS.mem)
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (sz: U32.t)
+  (input: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (
+    k.parser_kind_high == Some k.parser_kind_low /\
+    k.parser_kind_low == U32.v sz /\
+    k.parser_kind_metadata.parser_kind_metadata_total = true
+  ))
+  (ensures (
+    (valid p h input pos <==> (live_slice h input /\ U32.v input.len - U32.v pos >= k.parser_kind_low)) /\
+    (valid p h input pos ==> content_length p h input pos == k.parser_kind_low)
+  ))
+= valid_facts p h input pos
+
+inline_for_extraction
+let validate_total_constant_size
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (sz: U32.t)
+  (u: unit {
+    U32.v sz <= U32.v validator_max_length /\
+    k.parser_kind_high == Some k.parser_kind_low /\
+    k.parser_kind_low == U32.v sz /\
+    k.parser_kind_metadata.parser_kind_metadata_total = true
+  })
+: Tot (validator p)
+= fun (input: slice) (pos: U32.t) ->
+  let h = HST.get () in
+  [@inline_let] let _ = valid_total_constant_size h p sz input pos in
+  if U32.lt (input.len `U32.sub` pos) sz
+  then validator_error_not_enough_data
+  else
+    pos `U32.add` sz
+
 [@unifier_hint_injective]
 inline_for_extraction
 let jumper
@@ -1776,6 +1817,22 @@ let jumper
     B.modifies B.loc_none h h' /\
     U32.v pos + content_length p h sl pos == U32.v pos'
   ))
+
+inline_for_extraction
+let jump_constant_size
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (sz: U32.t)
+  (u: unit {
+    k.parser_kind_high == Some k.parser_kind_low /\
+    k.parser_kind_low == U32.v sz
+  })
+: Tot (jumper p)
+= fun (input: slice) (pos: U32.t) ->
+  let h = HST.get () in
+  [@inline_let] let _ = valid_facts p h input pos in
+  pos `U32.add` sz
 
 [@unifier_hint_injective]
 inline_for_extraction
