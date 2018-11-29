@@ -168,7 +168,7 @@ let validate_list'
   (v: validator p)
   (sl: slice)
   (pos: U32.t)
-: HST.Stack bool
+: HST.Stack U32.t
   (requires (fun h ->
     k.parser_kind_subkind == Some ParserStrong /\
     k.parser_kind_low > 0 /\
@@ -178,7 +178,10 @@ let validate_list'
   ))
   (ensures (fun h res h' ->
     B.modifies B.loc_none h h' /\
-    (res == true <==> valid_exact (parse_list p) h sl pos sl.len)
+    (* we could return a boolean, but we would like to return the last
+       validation error code if it fails. (alas, we cannot capture
+       that fact in the spec.) *)
+    (U32.v res <= U32.v validator_max_length <==> valid_exact (parse_list p) h sl pos sl.len)
   ))
 = let h0 = HST.get () in
   let g0 = G.hide h0 in
@@ -191,9 +194,8 @@ let validate_list'
   C.Loops.do_while (validate_list_inv p g0 g1 sl pos bpos) (fun _ -> validate_list_body v g0 g1 sl pos bpos);
   valid_exact_list_nil p h0 sl sl.len;
   let posf = B.index bpos 0ul in
-  let res = posf `U32.lte` validator_max_length in
   HST.pop_frame ();
-  res
+  posf
 
 inline_for_extraction
 let validate_list
@@ -211,9 +213,10 @@ let validate_list
   (pos: U32.t) ->
   let h = HST.get () in
   valid_valid_exact_consumes_all (parse_list p) h sl pos;
-  if validate_list' v sl pos
+  let error = validate_list' v sl pos in 
+  if error `U32.lte` validator_max_length
   then sl.len
-  else validator_error_generic
+  else error
 
 
 
