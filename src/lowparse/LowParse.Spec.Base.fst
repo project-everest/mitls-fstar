@@ -488,6 +488,31 @@ let coerce_parser
   (ensures (fun _ -> True))
 = p
 
+let parse_strong_prefix
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (input1: bytes)
+  (input2: bytes)
+: Lemma
+  (requires (
+    k.parser_kind_subkind == Some ParserStrong /\ (
+    match parse p input1 with
+    | Some (x, consumed) ->
+      consumed <= Seq.length input2 /\
+      Seq.slice input1 0 consumed `Seq.equal` Seq.slice input2 0 consumed
+    | _ -> False
+  )))
+  (ensures (
+    match parse p input1 with
+    | Some (x, consumed) ->
+      consumed <= Seq.length input2 /\
+      parse p input2 == Some (x, consumed)
+    | _ -> False
+  ))
+= assert (no_lookahead_on p input1 input2);
+  assert (injective_postcond p input1 input2)
+
 (* Pure serializers *)
 
 inline_for_extraction
