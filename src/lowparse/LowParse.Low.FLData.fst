@@ -27,7 +27,10 @@ let validate_fldata_gen
     [@inline_let] let _ = valid_facts p h input' 0ul in
     let pos' = v input' 0ul in
     if validator_max_length `U32.lt` pos'
-    then pos' // error propagation
+    then
+      if pos' = validator_error_not_enough_data
+      then validator_error_generic (* the size was fixed ahead of time, so if the parser runs out of data, then that size was wrong in the first place. *) 
+      else pos' // error propagation
     else if pos' <> sz32
     then validator_error_generic
     else pos `U32.add` pos'
@@ -53,7 +56,10 @@ let validate_fldata_consumes_all
     [@inline_let] let _ = valid_facts p h input' 0ul in
     let pos' = v input' 0ul in
     if validator_max_length `U32.lt` pos'
-    then pos' // error propagation
+    then
+      if pos' = validator_error_not_enough_data
+      then validator_error_generic (* the size was fixed ahead of time, so if the parser runs out of data, then that size was wrong in the first place. *) 
+      else pos' // error propagation
     else pos `U32.add` pos'
 
 inline_for_extraction
