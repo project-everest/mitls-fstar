@@ -97,6 +97,39 @@ let valid_exact_list_cons_recip
   contents_exact_eq (parse_list p) h sl pos pos';
   contents_exact_eq (parse_list p) h sl pos1 pos'
 
+module L = FStar.List.Tot
+
+abstract
+let rec valid_exact_list_append
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (h: HS.mem)
+  (sl: slice)
+  (pos1 pos2 pos3 : U32.t)
+: Lemma
+  (requires (
+    k.parser_kind_subkind == Some ParserStrong /\
+    k.parser_kind_low > 0 /\
+    valid_exact (parse_list p) h sl pos1 pos2 /\
+    valid_exact (parse_list p) h sl pos2 pos3
+  ))
+  (ensures (
+    valid_exact (parse_list p) h sl pos1 pos3 /\
+    contents_exact (parse_list p) h sl pos1 pos3 == contents_exact (parse_list p) h sl pos1 pos2 `L.append` contents_exact (parse_list p) h sl pos2 pos3
+  ))
+  (decreases (U32.v pos2 - U32.v pos1))
+= if pos1 = pos2
+  then
+    valid_exact_list_nil p h sl pos1
+  else begin
+    valid_exact_list_cons_recip p h sl pos1 pos2;
+    let pos15 = get_valid_pos p h sl pos1 in
+    valid_exact_list_append p h sl pos15 pos2 pos3;
+    valid_exact_list_cons p h sl pos1 pos3
+  end
+
+
 let validate_list_inv
   (#k: parser_kind)
   (#t: Type0)
@@ -218,7 +251,174 @@ let validate_list
   then sl.len
   else error
 
+(* fold_left on lists *)
 
+#set-options "--z3rlimit 16"
+
+inline_for_extraction
+let list_fold_left_gen
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t { k.parser_kind_subkind == Some ParserStrong /\ k.parser_kind_low > 0 } )
+  (j: jumper p)
+  (sl: slice)
+  (pos pos' : U32.t)
+  (h0: HS.mem)
+  (l: Ghost.erased B.loc { B.loc_disjoint (Ghost.reveal l) (loc_slice_from_to sl pos pos') } )
+  (inv: (HS.mem -> list t -> list t -> GTot Type0))
+  (inv_frame: (h: HS.mem) -> (l1: list t) -> (l2: list t) -> (h' : HS.mem) -> Lemma (requires (
+    B.modifies (B.loc_unused_in h0) h h' /\
+    inv h l1 l2
+  )) (ensures (inv h' l1 l2)))
+  (body: (
+    (pos1: U32.t) ->
+    (pos2: U32.t) ->
+    HST.Stack unit
+    (requires (fun h ->
+      valid_exact (parse_list p) h sl pos pos1 /\
+      valid_pos p h sl pos1 pos2 /\
+      valid_exact (parse_list p) h sl pos2 pos' /\
+      inv h (contents_exact (parse_list p) h sl pos pos1) (contents p h sl pos1 :: contents_exact (parse_list p) h sl pos2 pos')
+    ))
+    (ensures (fun h _ h' ->
+      B.modifies (Ghost.reveal l) h h' /\
+      inv h' (contents_exact (parse_list p) h sl pos pos1 `L.append` [contents p h sl pos1]) (contents_exact (parse_list p) h sl pos2 pos')
+    ))
+  ))
+: HST.Stack unit
+  (requires (fun h ->
+    h == h0 /\
+    valid_exact (parse_list p) h sl pos pos' /\
+    inv h [] (contents_exact (parse_list p) h sl pos pos')
+  ))
+  (ensures (fun h _ h' ->
+    B.modifies (Ghost.reveal l) h h' /\
+    inv h' (contents_exact (parse_list p) h sl pos pos') []
+  ))
+= HST.push_frame ();
+  let h1 = HST.get () in
+  B.fresh_frame_modifies h0 h1;
+  let bpos : B.pointer U32.t = B.alloca pos 1ul in
+  let h2 = HST.get () in
+  let test_pre (h: HS.mem) : GTot Type0 =
+    B.live h bpos /\ (
+    let pos1 = Seq.index (B.as_seq h bpos) 0 in
+    valid_exact (parse_list p) h0 sl pos pos1 /\
+    valid_exact (parse_list p) h0 sl pos1 pos' /\
+    B.modifies (Ghost.reveal l `B.loc_union` B.loc_buffer bpos) h2 h /\
+    inv h (contents_exact (parse_list p) h0 sl pos pos1) (contents_exact (parse_list p) h0 sl pos1 pos')
+  )
+  in
+  let test_post (cond: bool) (h: HS.mem) : GTot Type0 =
+    test_pre h /\
+    cond == (U32.v (Seq.index (B.as_seq h bpos) 0) < U32.v pos')
+  in
+  valid_exact_list_nil p h0 sl pos;
+  inv_frame h0 [] (contents_exact (parse_list p) h0 sl pos pos') h1;
+  inv_frame h1 [] (contents_exact (parse_list p) h0 sl pos pos') h2;
+  C.Loops.while
+    #test_pre
+    #test_post
+    (fun (_: unit) -> B.index bpos 0ul `U32.lt` pos' <: HST.Stack bool (requires (fun h -> test_pre h)) (ensures (fun h x h1 -> test_post x h1)))
+    (fun _ ->
+      let h51 = HST.get () in
+      let pos1 = B.index bpos 0ul in
+      valid_exact_list_cons_recip p h0 sl pos1 pos';
+      assert (B.modifies (Ghost.reveal l `B.loc_union` B.loc_buffer bpos) h0 h51);
+      assert (B.loc_includes (loc_slice_from_to sl pos pos') (loc_slice_from_to sl pos1 pos'));
+      assert (B.loc_includes (loc_slice_from_to sl pos pos') (loc_slice_from_to sl pos pos1));
+      valid_exact_list_cons_recip p h51 sl pos1 pos';
+      let pos2 = j sl pos1 in
+      let h52 = HST.get () in
+      inv_frame h51 (contents_exact (parse_list p) h0 sl pos pos1) (contents_exact (parse_list p) h1 sl pos1 pos') h52;
+      body pos1 pos2;
+      let h53 = HST.get () in
+      assert (B.loc_includes (loc_slice_from_to sl pos pos') (loc_slice_from_to sl pos1 pos2));
+      assert (B.loc_includes (loc_slice_from_to sl pos pos') (loc_slice_from_to sl pos2 pos'));
+      valid_exact_list_nil p h0 sl pos2;
+      valid_pos_frame_strong p h0 sl pos1 pos2 (Ghost.reveal l `B.loc_union` B.loc_buffer bpos) h53;
+      valid_exact_list_cons p h0 sl pos1 pos2;
+      valid_exact_list_append p h0 sl pos pos1 pos2;
+      B.upd bpos 0ul pos2;
+      let h54 = HST.get () in
+      inv_frame h53 (contents_exact (parse_list p) h0 sl pos pos2) (contents_exact (parse_list p) h0 sl pos2 pos') h54
+    )
+    ;
+  valid_exact_list_nil p h0 sl pos';
+  let h3 = HST.get () in
+  HST.pop_frame ();
+  let h4 = HST.get () in
+  B.popped_modifies h3 h4;
+  B.loc_regions_unused_in h0 (Set.singleton (HS.get_tip h3));  
+  inv_frame h3 (contents_exact (parse_list p) h0 sl pos pos') [] h4;
+  B.loc_includes_union_l (B.loc_all_regions_from false (HS.get_tip h1)) (Ghost.reveal l) (Ghost.reveal l);
+  B.modifies_fresh_frame_popped h0 h1 (Ghost.reveal l) h3 h4
+
+#reset-options
+
+inline_for_extraction
+let list_fold_left
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t { k.parser_kind_subkind == Some ParserStrong /\ k.parser_kind_low > 0 } )
+  (j: jumper p)
+  (sl: slice)
+  (pos pos' : U32.t)
+  (h0: HS.mem)
+  (l: Ghost.erased B.loc { B.loc_disjoint (Ghost.reveal l) (loc_slice_from_to sl pos pos') } )
+  (inv: (HS.mem -> list t -> list t -> GTot Type0))
+  (inv_frame: (h: HS.mem) -> (l1: list t) -> (l2: list t) -> (h' : HS.mem) -> Lemma (requires (
+    B.modifies (B.loc_unused_in h0) h h' /\
+    inv h l1 l2
+  )) (ensures (inv h' l1 l2)))
+  (body: (
+    (pos1: U32.t) ->
+    (pos2: U32.t) ->
+    (l1: Ghost.erased (list t)) ->
+    (l2: Ghost.erased (list t)) ->
+    HST.Stack unit
+    (requires (fun h ->
+      valid_exact (parse_list p) h sl pos pos' /\
+      valid_pos p h sl pos1 pos2 /\
+      B.loc_includes (loc_slice_from_to sl pos pos') (loc_slice_from_to sl pos1 pos2) /\ (
+      let x = contents p h sl pos1 in
+      inv h (Ghost.reveal l1) (x :: Ghost.reveal l2) /\
+      contents_exact (parse_list p) h sl pos pos' == Ghost.reveal l1 `L.append` (x :: Ghost.reveal l2)
+    )))
+    (ensures (fun h _ h' ->
+      B.modifies (Ghost.reveal l) h h' /\
+      inv h' (Ghost.reveal l1 `L.append` [contents p h sl pos1]) (Ghost.reveal l2)
+    ))
+  ))
+: HST.Stack unit
+  (requires (fun h ->
+    h == h0 /\
+    valid_exact (parse_list p) h sl pos pos' /\
+    inv h [] (contents_exact (parse_list p) h sl pos pos')
+  ))
+  (ensures (fun h _ h' ->
+    B.modifies (Ghost.reveal l) h h' /\
+    inv h' (contents_exact (parse_list p) h sl pos pos') []
+  ))
+= list_fold_left_gen
+    p
+    j
+    sl
+    pos pos'
+    h0
+    l
+    inv
+    inv_frame
+    (fun pos1 pos2 ->
+      let h = HST.get () in
+      valid_exact_list_cons p h sl pos1 pos';
+      valid_exact_list_append p h sl pos pos1 pos';
+      body
+        pos1
+        pos2
+        (Ghost.hide (contents_exact (parse_list p) h sl pos pos1))
+        (Ghost.hide (contents_exact (parse_list p) h sl pos2 pos'))
+    )
 
 (*
 #reset-options "--z3rlimit 128 --max_fuel 16 --max_ifuel 16 --z3cliopt smt.arith.nl=false"
