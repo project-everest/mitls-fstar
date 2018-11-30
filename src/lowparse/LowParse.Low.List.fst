@@ -375,15 +375,15 @@ let list_fold_left
     (pos1: U32.t) ->
     (pos2: U32.t) ->
     (l1: Ghost.erased (list t)) ->
+    (x: Ghost.erased t) ->
     (l2: Ghost.erased (list t)) ->
     HST.Stack unit
     (requires (fun h ->
       valid_exact (parse_list p) h sl pos pos' /\
-      valid_pos p h sl pos1 pos2 /\
+      valid_content_pos p h sl pos1 (G.reveal x) pos2 /\
       B.loc_includes (loc_slice_from_to sl pos pos') (loc_slice_from_to sl pos1 pos2) /\ (
-      let x = contents p h sl pos1 in
-      inv h (Ghost.reveal l1) (x :: Ghost.reveal l2) pos1 /\
-      contents_exact (parse_list p) h sl pos pos' == Ghost.reveal l1 `L.append` (x :: Ghost.reveal l2)
+      inv h (Ghost.reveal l1) (Ghost.reveal x :: Ghost.reveal l2) pos1 /\
+      contents_exact (parse_list p) h sl pos pos' == Ghost.reveal l1 `L.append` (Ghost.reveal x :: Ghost.reveal l2)
     )))
     (ensures (fun h _ h' ->
       B.modifies (Ghost.reveal l) h h' /\
@@ -417,6 +417,7 @@ let list_fold_left
         pos1
         pos2
         (Ghost.hide (contents_exact (parse_list p) h sl pos pos1))
+        (Ghost.hide (contents p h sl pos1))
         (Ghost.hide (contents_exact (parse_list p) h sl pos2 pos'))
     )
 
@@ -463,7 +464,7 @@ let list_length
       B.modifies_only_not_unused_in (B.loc_buffer blen) h2 h';
       B.loc_unused_in_not_unused_in_disjoint h2
     )
-    (fun pos1 pos2 l1 l2 ->
+    (fun pos1 pos2 l1 x l2 ->
       B.upd blen 0ul (B.index blen 0ul `U32.add` 1ul);
       Classical.forall_intro_2 (list_length_append #t)
     )
