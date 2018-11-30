@@ -265,11 +265,11 @@ let list_fold_left_gen
   (pos pos' : U32.t)
   (h0: HS.mem)
   (l: Ghost.erased B.loc { B.loc_disjoint (Ghost.reveal l) (loc_slice_from_to sl pos pos') } )
-  (inv: (HS.mem -> list t -> list t -> GTot Type0))
-  (inv_frame: (h: HS.mem) -> (l1: list t) -> (l2: list t) -> (h' : HS.mem) -> Lemma (requires (
+  (inv: (HS.mem -> list t -> list t -> U32.t -> GTot Type0))
+  (inv_frame: (h: HS.mem) -> (l1: list t) -> (l2: list t) -> (pos1: U32.t) -> (h' : HS.mem) -> Lemma (requires (
     B.modifies (B.loc_unused_in h0) h h' /\
-    inv h l1 l2
-  )) (ensures (inv h' l1 l2)))
+    inv h l1 l2 pos1
+  )) (ensures (inv h' l1 l2 pos1)))
   (body: (
     (pos1: U32.t) ->
     (pos2: U32.t) ->
@@ -278,22 +278,22 @@ let list_fold_left_gen
       valid_exact (parse_list p) h sl pos pos1 /\
       valid_pos p h sl pos1 pos2 /\
       valid_exact (parse_list p) h sl pos2 pos' /\
-      inv h (contents_exact (parse_list p) h sl pos pos1) (contents p h sl pos1 :: contents_exact (parse_list p) h sl pos2 pos')
+      inv h (contents_exact (parse_list p) h sl pos pos1) (contents p h sl pos1 :: contents_exact (parse_list p) h sl pos2 pos') pos1
     ))
     (ensures (fun h _ h' ->
       B.modifies (Ghost.reveal l) h h' /\
-      inv h' (contents_exact (parse_list p) h sl pos pos1 `L.append` [contents p h sl pos1]) (contents_exact (parse_list p) h sl pos2 pos')
+      inv h' (contents_exact (parse_list p) h sl pos pos1 `L.append` [contents p h sl pos1]) (contents_exact (parse_list p) h sl pos2 pos') pos2
     ))
   ))
 : HST.Stack unit
   (requires (fun h ->
     h == h0 /\
     valid_exact (parse_list p) h sl pos pos' /\
-    inv h [] (contents_exact (parse_list p) h sl pos pos')
+    inv h [] (contents_exact (parse_list p) h sl pos pos') pos
   ))
   (ensures (fun h _ h' ->
     B.modifies (Ghost.reveal l) h h' /\
-    inv h' (contents_exact (parse_list p) h sl pos pos') []
+    inv h' (contents_exact (parse_list p) h sl pos pos') [] pos'
   ))
 = HST.push_frame ();
   let h1 = HST.get () in
@@ -306,7 +306,7 @@ let list_fold_left_gen
     valid_exact (parse_list p) h0 sl pos pos1 /\
     valid_exact (parse_list p) h0 sl pos1 pos' /\
     B.modifies (Ghost.reveal l `B.loc_union` B.loc_buffer bpos) h2 h /\
-    inv h (contents_exact (parse_list p) h0 sl pos pos1) (contents_exact (parse_list p) h0 sl pos1 pos')
+    inv h (contents_exact (parse_list p) h0 sl pos pos1) (contents_exact (parse_list p) h0 sl pos1 pos') pos1
   )
   in
   let test_post (cond: bool) (h: HS.mem) : GTot Type0 =
@@ -314,8 +314,8 @@ let list_fold_left_gen
     cond == (U32.v (Seq.index (B.as_seq h bpos) 0) < U32.v pos')
   in
   valid_exact_list_nil p h0 sl pos;
-  inv_frame h0 [] (contents_exact (parse_list p) h0 sl pos pos') h1;
-  inv_frame h1 [] (contents_exact (parse_list p) h0 sl pos pos') h2;
+  inv_frame h0 [] (contents_exact (parse_list p) h0 sl pos pos') pos h1;
+  inv_frame h1 [] (contents_exact (parse_list p) h0 sl pos pos') pos h2;
   C.Loops.while
     #test_pre
     #test_post
@@ -330,7 +330,7 @@ let list_fold_left_gen
       valid_exact_list_cons_recip p h51 sl pos1 pos';
       let pos2 = j sl pos1 in
       let h52 = HST.get () in
-      inv_frame h51 (contents_exact (parse_list p) h0 sl pos pos1) (contents_exact (parse_list p) h1 sl pos1 pos') h52;
+      inv_frame h51 (contents_exact (parse_list p) h0 sl pos pos1) (contents_exact (parse_list p) h1 sl pos1 pos') pos1 h52;
       body pos1 pos2;
       let h53 = HST.get () in
       assert (B.loc_includes (loc_slice_from_to sl pos pos') (loc_slice_from_to sl pos1 pos2));
@@ -341,7 +341,7 @@ let list_fold_left_gen
       valid_exact_list_append p h0 sl pos pos1 pos2;
       B.upd bpos 0ul pos2;
       let h54 = HST.get () in
-      inv_frame h53 (contents_exact (parse_list p) h0 sl pos pos2) (contents_exact (parse_list p) h0 sl pos2 pos') h54
+      inv_frame h53 (contents_exact (parse_list p) h0 sl pos pos2) (contents_exact (parse_list p) h0 sl pos2 pos') pos2 h54
     )
     ;
   valid_exact_list_nil p h0 sl pos';
@@ -350,7 +350,7 @@ let list_fold_left_gen
   let h4 = HST.get () in
   B.popped_modifies h3 h4;
   B.loc_regions_unused_in h0 (Set.singleton (HS.get_tip h3));  
-  inv_frame h3 (contents_exact (parse_list p) h0 sl pos pos') [] h4;
+  inv_frame h3 (contents_exact (parse_list p) h0 sl pos pos') [] pos' h4;
   B.loc_includes_union_l (B.loc_all_regions_from false (HS.get_tip h1)) (Ghost.reveal l) (Ghost.reveal l);
   B.modifies_fresh_frame_popped h0 h1 (Ghost.reveal l) h3 h4
 
@@ -366,11 +366,11 @@ let list_fold_left
   (pos pos' : U32.t)
   (h0: HS.mem)
   (l: Ghost.erased B.loc { B.loc_disjoint (Ghost.reveal l) (loc_slice_from_to sl pos pos') } )
-  (inv: (HS.mem -> list t -> list t -> GTot Type0))
-  (inv_frame: (h: HS.mem) -> (l1: list t) -> (l2: list t) -> (h' : HS.mem) -> Lemma (requires (
+  (inv: (HS.mem -> list t -> list t -> U32.t -> GTot Type0))
+  (inv_frame: (h: HS.mem) -> (l1: list t) -> (l2: list t) -> (pos1: U32.t) -> (h' : HS.mem) -> Lemma (requires (
     B.modifies (B.loc_unused_in h0) h h' /\
-    inv h l1 l2
-  )) (ensures (inv h' l1 l2)))
+    inv h l1 l2 pos1
+  )) (ensures (inv h' l1 l2 pos1)))
   (body: (
     (pos1: U32.t) ->
     (pos2: U32.t) ->
@@ -382,23 +382,23 @@ let list_fold_left
       valid_pos p h sl pos1 pos2 /\
       B.loc_includes (loc_slice_from_to sl pos pos') (loc_slice_from_to sl pos1 pos2) /\ (
       let x = contents p h sl pos1 in
-      inv h (Ghost.reveal l1) (x :: Ghost.reveal l2) /\
+      inv h (Ghost.reveal l1) (x :: Ghost.reveal l2) pos1 /\
       contents_exact (parse_list p) h sl pos pos' == Ghost.reveal l1 `L.append` (x :: Ghost.reveal l2)
     )))
     (ensures (fun h _ h' ->
       B.modifies (Ghost.reveal l) h h' /\
-      inv h' (Ghost.reveal l1 `L.append` [contents p h sl pos1]) (Ghost.reveal l2)
+      inv h' (Ghost.reveal l1 `L.append` [contents p h sl pos1]) (Ghost.reveal l2) pos2
     ))
   ))
 : HST.Stack unit
   (requires (fun h ->
     h == h0 /\
     valid_exact (parse_list p) h sl pos pos' /\
-    inv h [] (contents_exact (parse_list p) h sl pos pos')
+    inv h [] (contents_exact (parse_list p) h sl pos pos') pos
   ))
   (ensures (fun h _ h' ->
     B.modifies (Ghost.reveal l) h h' /\
-    inv h' (contents_exact (parse_list p) h sl pos pos') []
+    inv h' (contents_exact (parse_list p) h sl pos pos') [] pos'
   ))
 = list_fold_left_gen
     p
@@ -419,6 +419,58 @@ let list_fold_left
         (Ghost.hide (contents_exact (parse_list p) h sl pos pos1))
         (Ghost.hide (contents_exact (parse_list p) h sl pos2 pos'))
     )
+
+let list_length_append (#t: Type) (l1 l2: list t) : Lemma (L.length (l1 `L.append` l2) == L.length l1 + L.length l2) = L.append_length l1 l2
+
+inline_for_extraction
+let list_length
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t { k.parser_kind_subkind == Some ParserStrong /\ k.parser_kind_low > 0 } )
+  (j: jumper p)
+  (sl: slice)
+  (pos pos' : U32.t)
+: HST.Stack U32.t
+  (requires (fun h ->
+    valid_exact (parse_list p) h sl pos pos'
+  ))
+  (ensures (fun h res h' ->
+    B.modifies B.loc_none h h' /\
+    U32.v res == L.length (contents_exact (parse_list p) h sl pos pos')
+  ))
+= let h0 = HST.get () in
+  HST.push_frame ();
+  let h1 = HST.get () in
+  B.fresh_frame_modifies h0 h1;
+  let blen : B.pointer U32.t = B.alloca 0ul 1ul in
+  let h2 = HST.get () in
+  list_fold_left
+    p
+    j
+    sl
+    pos
+    pos'
+    h2
+    (Ghost.hide (B.loc_buffer blen))
+    (fun h l1 l2 pos1 ->
+      B.modifies (B.loc_buffer blen) h2 h /\
+      B.live h blen /\ (
+      let len = U32.v (Seq.index (B.as_seq h blen) 0) in
+      len <= U32.v pos1 /\ // necessary to prove that length computations do not overflow
+      len == L.length l1
+    ))
+    (fun h l1 l2 pos1 h' ->
+      B.modifies_only_not_unused_in (B.loc_buffer blen) h2 h';
+      B.loc_unused_in_not_unused_in_disjoint h2
+    )
+    (fun pos1 pos2 l1 l2 ->
+      B.upd blen 0ul (B.index blen 0ul `U32.add` 1ul);
+      Classical.forall_intro_2 (list_length_append #t)
+    )
+    ;
+  let len = B.index blen 0ul in
+  HST.pop_frame ();
+  len
 
 (*
 #reset-options "--z3rlimit 128 --max_fuel 16 --max_ifuel 16 --z3cliopt smt.arith.nl=false"
