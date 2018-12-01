@@ -509,13 +509,14 @@ let list_filter
   (pos_out : U32.t)
 : HST.Stack U32.t
   (requires (fun h ->
-    B.loc_disjoint (loc_slice_from_to sl pos pos') (loc_slice_from sl_out pos_out) /\
+    U32.v pos_out + U32.v pos' - U32.v pos <= U32.v sl_out.len /\
     valid_exact (parse_list p) h sl pos pos' /\
-    live_slice h sl_out /\
-    U32.v pos_out + U32.v pos' - U32.v pos <= U32.v sl_out.len
+    B.loc_disjoint (loc_slice_from_to sl pos pos') (loc_slice_from_to sl_out pos_out (pos_out `U32.add` (pos' `U32.sub` pos))) /\
+    live_slice h sl_out
   ))
   (ensures (fun h pos_out' h' ->
-    B.modifies (loc_slice_from sl_out pos_out) h h' /\
+    B.modifies (loc_slice_from_to sl_out pos_out pos_out') h h' /\
+    U32.v pos_out' - U32.v pos_out <= U32.v pos' - U32.v pos /\
     valid_exact (parse_list p) h' sl_out pos_out pos_out' /\
     contents_exact (parse_list p) h' sl_out pos_out pos_out' == L.filter f (contents_exact (parse_list p) h sl pos pos')
   ))
@@ -526,12 +527,12 @@ let list_filter
   let bpos_out' : B.pointer U32.t = B.alloca pos_out 1ul in
   let h2 = HST.get () in
   let inv (h: HS.mem) (l1 l2: list t) (pos1: U32.t) : GTot Type0 =
-    B.modifies (B.loc_buffer bpos_out' `B.loc_union` loc_slice_from sl_out pos_out) h2 h /\
     B.live h bpos_out' /\ (
       let pos_out' = Seq.index (B.as_seq h bpos_out') 0 in
+      B.modifies (B.loc_buffer bpos_out' `B.loc_union` loc_slice_from_to sl_out pos_out pos_out') h2 h /\
       valid_exact (parse_list p) h sl_out pos_out pos_out' /\
       contents_exact (parse_list p) h sl_out pos_out pos_out' == L.filter f l1 /\
-      U32.v pos_out' + U32.v pos' - U32.v pos1 <= U32.v sl_out.len // necessary to prove that length computations do not overflow
+      U32.v pos_out' - U32.v pos1 <= U32.v pos_out - U32.v pos // necessary to prove that length computations do not overflow
     )
   in
   valid_exact_list_nil p h2 sl_out pos_out;
@@ -542,10 +543,11 @@ let list_filter
     pos
     pos'
     h2
-    (Ghost.hide (B.loc_buffer bpos_out' `B.loc_union` loc_slice_from sl_out pos_out))
+    (Ghost.hide (B.loc_buffer bpos_out' `B.loc_union` loc_slice_from_to sl_out pos_out (pos_out `U32.add` (pos' `U32.sub` pos))))
     inv
     (fun h l1 l2 pos1 h' ->
-      B.modifies_only_not_unused_in (B.loc_buffer bpos_out' `B.loc_union` loc_slice_from sl_out pos_out) h2 h';
+      let pos_out' = Seq.index (B.as_seq h bpos_out') 0 in
+      B.modifies_only_not_unused_in (B.loc_buffer bpos_out' `B.loc_union` loc_slice_from_to sl_out pos_out pos_out') h2 h';
       B.loc_unused_in_not_unused_in_disjoint h2
     )
     (fun pos1 pos2 l1 x l2 ->
@@ -553,6 +555,7 @@ let list_filter
       list_filter_append f (G.reveal l1) [G.reveal x];
       if f' sl pos1 x
       then begin
+        assert (B.loc_includes (loc_slice_from_to sl_out pos_out (pos_out `U32.add` (pos' `U32.sub` pos))) (loc_slice_from_to sl_out pos_out1 (pos_out1 `U32.add` (pos2 `U32.sub` pos1))));
         let pos_out2 = copy_strong p sl pos1 pos2 sl_out pos_out1 in
         B.upd bpos_out' 0ul pos_out2;
         let h' = HST.get () in
