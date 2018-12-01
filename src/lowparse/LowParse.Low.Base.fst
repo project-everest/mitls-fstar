@@ -1985,15 +1985,15 @@ let copy_strong
 : HST.Stack U32.t
   (requires (fun h ->
     k.parser_kind_subkind == Some ParserStrong /\
-    valid_pos p h src spos spos' /\ (
-    let clen = content_length p h src spos in
-    U32.v dpos + clen <= U32.v dst.len /\
+    valid_pos p h src spos spos' /\
+    U32.v dpos + U32.v spos' - U32.v spos <= U32.v dst.len /\
     live_slice h dst /\
-    B.loc_disjoint (loc_slice_from_to src spos spos') (loc_slice_from_to dst dpos (dpos `U32.add` (U32.uint_to_t clen)))
+    B.loc_disjoint (loc_slice_from_to src spos spos') (loc_slice_from_to dst dpos (dpos `U32.add` (spos' `U32.sub` spos))
   )))
   (ensures (fun h dpos' h' ->
     B.modifies (loc_slice_from_to dst dpos dpos') h h' /\
-    valid_content_pos p h' dst dpos (contents p h src spos) dpos'
+    valid_content_pos p h' dst dpos (contents p h src spos) dpos' /\
+    dpos' `U32.sub` dpos == spos' `U32.sub` spos
   ))
 = let h0 = HST.get () in
   let len = spos' `U32.sub` spos in

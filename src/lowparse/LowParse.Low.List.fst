@@ -253,7 +253,7 @@ let validate_list
 
 (* fold_left on lists *)
 
-#set-options "--z3rlimit 16"
+#push-options "--z3rlimit 16"
 
 inline_for_extraction
 let list_fold_left_gen
@@ -354,7 +354,7 @@ let list_fold_left_gen
   B.loc_includes_union_l (B.loc_all_regions_from false (HS.get_tip h1)) (Ghost.reveal l) (Ghost.reveal l);
   B.modifies_fresh_frame_popped h0 h1 (Ghost.reveal l) h3 h4
 
-#reset-options
+#pop-options
 
 inline_for_extraction
 let list_fold_left
@@ -381,10 +381,11 @@ let list_fold_left
     (requires (fun h ->
       valid_exact (parse_list p) h sl pos pos' /\
       valid_content_pos p h sl pos1 (G.reveal x) pos2 /\
-      B.loc_includes (loc_slice_from_to sl pos pos') (loc_slice_from_to sl pos1 pos2) /\ (
+      U32.v pos <= U32.v pos1 /\ U32.v pos2 <= U32.v pos' /\
+      B.loc_includes (loc_slice_from_to sl pos pos') (loc_slice_from_to sl pos1 pos2) /\
       inv h (Ghost.reveal l1) (Ghost.reveal x :: Ghost.reveal l2) pos1 /\
       contents_exact (parse_list p) h sl pos pos' == Ghost.reveal l1 `L.append` (Ghost.reveal x :: Ghost.reveal l2)
-    )))
+    ))
     (ensures (fun h _ h' ->
       B.modifies (Ghost.reveal l) h h' /\
       inv h' (Ghost.reveal l1 `L.append` [contents p h sl pos1]) (Ghost.reveal l2) pos2
@@ -472,6 +473,101 @@ let list_length
   let len = B.index blen 0ul in
   HST.pop_frame ();
   len
+
+abstract
+let rec list_filter_append
+  (#t: Type)
+  (f: (t -> Tot bool))
+  (l1 l2: list t)
+: Lemma
+  (L.filter f (l1 `L.append` l2) == L.filter f l1 `L.append` L.filter f l2)
+= match l1 with
+  | [] -> ()
+  | a :: q ->
+    list_filter_append f q l2
+
+#push-options "--z3rlimit 16"
+
+inline_for_extraction
+let list_filter
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t { k.parser_kind_subkind == Some ParserStrong /\ k.parser_kind_low > 0 } )
+  (j: jumper p)
+  (f: (t -> Tot bool))
+  (f' : (
+    (sl: slice) ->
+    (pos: U32.t) ->
+    (x: Ghost.erased t) ->
+    HST.Stack bool
+    (requires (fun h -> valid_content p h sl pos (G.reveal x)))
+    (ensures (fun h res h' -> B.modifies B.loc_none h h' /\ res == f (G.reveal x)))
+  ))
+  (sl: slice)
+  (pos pos' : U32.t)
+  (sl_out : slice)
+  (pos_out : U32.t)
+: HST.Stack U32.t
+  (requires (fun h ->
+    B.loc_disjoint (loc_slice_from_to sl pos pos') (loc_slice_from sl_out pos_out) /\
+    valid_exact (parse_list p) h sl pos pos' /\
+    live_slice h sl_out /\
+    U32.v pos_out + U32.v pos' - U32.v pos <= U32.v sl_out.len
+  ))
+  (ensures (fun h pos_out' h' ->
+    B.modifies (loc_slice_from sl_out pos_out) h h' /\
+    valid_exact (parse_list p) h' sl_out pos_out pos_out' /\
+    contents_exact (parse_list p) h' sl_out pos_out pos_out' == L.filter f (contents_exact (parse_list p) h sl pos pos')
+  ))
+= let h0 = HST.get () in
+  HST.push_frame ();
+  let h1 = HST.get () in
+  B.fresh_frame_modifies h0 h1;
+  let bpos_out' : B.pointer U32.t = B.alloca pos_out 1ul in
+  let h2 = HST.get () in
+  let inv (h: HS.mem) (l1 l2: list t) (pos1: U32.t) : GTot Type0 =
+    B.modifies (B.loc_buffer bpos_out' `B.loc_union` loc_slice_from sl_out pos_out) h2 h /\
+    B.live h bpos_out' /\ (
+      let pos_out' = Seq.index (B.as_seq h bpos_out') 0 in
+      valid_exact (parse_list p) h sl_out pos_out pos_out' /\
+      contents_exact (parse_list p) h sl_out pos_out pos_out' == L.filter f l1 /\
+      U32.v pos_out' + U32.v pos' - U32.v pos1 <= U32.v sl_out.len // necessary to prove that length computations do not overflow
+    )
+  in
+  valid_exact_list_nil p h2 sl_out pos_out;
+  list_fold_left
+    p
+    j
+    sl
+    pos
+    pos'
+    h2
+    (Ghost.hide (B.loc_buffer bpos_out' `B.loc_union` loc_slice_from sl_out pos_out))
+    inv
+    (fun h l1 l2 pos1 h' ->
+      B.modifies_only_not_unused_in (B.loc_buffer bpos_out' `B.loc_union` loc_slice_from sl_out pos_out) h2 h';
+      B.loc_unused_in_not_unused_in_disjoint h2
+    )
+    (fun pos1 pos2 l1 x l2 ->
+      let pos_out1 = B.index bpos_out' 0ul in
+      list_filter_append f (G.reveal l1) [G.reveal x];
+      if f' sl pos1 x
+      then begin
+        let pos_out2 = copy_strong p sl pos1 pos2 sl_out pos_out1 in
+        B.upd bpos_out' 0ul pos_out2;
+        let h' = HST.get () in
+        valid_exact_list_nil p h' sl_out pos_out2;
+        valid_exact_list_cons p h' sl_out pos_out1 pos_out2;
+        valid_exact_list_append p h' sl_out pos_out pos_out1 pos_out2
+      end else
+        L.append_l_nil (L.filter f (G.reveal l1))
+    )
+    ;
+  let pos_out' = B.index bpos_out' 0ul in
+  HST.pop_frame ();
+  pos_out'
+
+#pop-options
 
 (*
 #reset-options "--z3rlimit 128 --max_fuel 16 --max_ifuel 16 --z3cliopt smt.arith.nl=false"
