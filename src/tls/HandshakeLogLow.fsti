@@ -17,6 +17,8 @@ module HSM = HandshakeMessages
 
 module LP = LowParse.Low.Base
 
+#reset-options "--max_fuel 0 --max_ifuel 0 --using_facts_from '* -LowParse'"
+
 
 /// HandshakeMessages related definitions
 
@@ -247,6 +249,97 @@ val set_params (st:hsl_state) (_:C.protocolVersion) (a:Hashing.alg) (_:option Ci
 
 val tags (a:Hash.alg) (prior:list msg) (ms:list msg) (hs:list HashSpec.anyTag) :Tot Type0  //TODO: this is implemented in HandshakeLog.fsti, copy
 
+/// Receive returns flight_t with postcondition that the indices are valid parsings in the input buffer
+/// Taken from the match in Handshakre receive function
+
+type flight_t =
+  | F_HRR: init:uint_32 -> len:uint_32 -> flight_t
+  | F_SH: init:uint_32 -> len:uint_32 -> flight_t
+  | F_C_SKE_SHD: c_init:uint_32 -> c_len:uint_32 ->
+                 ske_init:uint_32 -> ske_len:uint_32 -> flight_t
+  | F_C_SKE_CR_SHD: c_init:uint_32 -> c_len:uint_32 ->
+                    ske_init:uint_32 -> ske_len:uint_32 ->
+                    cr_init:uint_32 -> cr_len:uint_32 -> flight_t
+  | F_EE_C13_CV_Fin: ee_init:uint_32 -> ee_len:uint_32 ->
+                     c13_init:uint_32 -> c13_len:uint_32 ->
+		     cv_init:uint_32 -> cv_len:uint_32 ->
+		     fin_init:uint_32 -> fin_len:uint_32 -> flight_t
+  | F_EE_CR13_C13_CV_Fin: ee_init:uint_32 -> ee_len:uint_32 ->
+                          cr13_init:uint_32 -> cr13_len:uint_32 ->
+			  c13_init:uint_32 -> c13_len:uint_32 ->
+			  cv_init:uint_32 -> cv_len:uint_32 ->
+			  fin_init:uint_32 -> fin_len:uint_32 -> flight_t
+  | F_EE_Fin: ee_init:uint_32 -> ee_len:uint_32 ->
+              fin_init:uint_32 -> fin_len:uint_32 -> flight_t
+  | F_Fin: fin_init:uint_32 -> fin_len:uint_32 -> flight_t
+  | F_CH: ch_init:uint_32 -> ch_len:uint_32 -> flight_t
+  | F_CH_Bind: ch_init:uint_32 -> ch_len:uint_32 ->
+               bind_init:uint_32 -> bind_len:uint_32 -> flight_t
+  | F_C13_CV_Fin: c13_init:uint_32 -> c13_len:uint_32 ->
+                  cv_init:uint_32 -> cv_len:uint_32 ->
+		  fin_init:uint_32 -> fin_len:uint_32 -> flight_t
+  | F_EoED: flight_t
+  | F_NST13: nst13_init:uint_32 -> nst13_len:uint_32 -> flight_t
+
+#reset-options "--max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
+
+/// TODO: should come from QD
+
+type parser_t (a:Type) = LP.parser (LP.strong_parser_kind 8 8 ({ LP.parser_kind_metadata_total = true })) a
+
+val hrr_parser : parser_t HSM.hrr
+val sh_parser : parser_t HSM.sh
+val c_parser : parser_t HSM.crt
+val ske_parser : parser_t HSM.ske
+val cr_parser : parser_t HSM.cr
+
+unfold let valid_parsing (#a:Type) (m:a) (parser:parser_t a) (buf:B.buffer uint_8) (h:HS.mem) =
+  match LP.parse parser (B.as_seq h buf) with
+  | None -> False
+  | Some (parse, consumed) -> parse == m /\ consumed == B.length buf
+
+unfold let valid_init_and_len (init len:uint_32) (st:hsl_state) =
+  init <= len /\ within_bounds (Unsigned W32) (v init + v len) /\ init + len <= hsl_input_buf_len st  
+
+/// Predicate for flight being a valid parsing
+/// In addition to this, the postcondition of receive also establishes valid parsing of the transcript itself
+
+let flight_parsing_of (flt:flight_t) (msgs:hs_transcript) (st:hsl_state) (h:HS.mem) =
+  match flt with
+  | F_HRR init len ->
+    valid_init_and_len init len st /\
+    (match msgs with
+     | [ HSM.HelloRetryRequest r ] -> valid_parsing r hrr_parser (B.gsub (hsl_input_buf st) init len) h
+     | _ -> False)
+
+  | F_SH init len ->
+    valid_init_and_len init len st /\
+    (match msgs with
+     | [ HSM.ServerHello sh ] -> valid_parsing sh sh_parser (B.gsub (hsl_input_buf st) init len) h
+     | _ -> False)
+
+  | F_C_SKE_SHD c_init c_len ske_init ske_len ->
+    valid_init_and_len c_init c_len st /\ valid_init_and_len ske_init ske_len st /\
+    (match msgs with
+     | [ HSM.Certificate c; HSM.ServerKeyExchange ske; HSM.ServerHelloDone ] ->
+       valid_parsing c c_parser (B.gsub (hsl_input_buf st) c_init c_len) h /\
+       valid_parsing ske ske_parser (B.gsub (hsl_input_buf st) ske_init ske_len) h
+     | _ -> False)
+
+  | F_C_SKE_CR_SHD c_init c_len ske_init ske_len cr_init cr_len ->
+    valid_init_and_len c_init c_len st /\ valid_init_and_len ske_init ske_len st /\ valid_init_and_len cr_init cr_len st /\
+    (match msgs with
+     | [ HSM.Certificate c; HSM.ServerKeyExchange ske; HSM.CertificateRequest cr; HSM.ServerHelloDone ] ->
+       valid_parsing c c_parser (B.gsub (hsl_input_buf st) c_init c_len) h /\
+       valid_parsing ske ske_parser (B.gsub (hsl_input_buf st) ske_init ske_len) h /\
+       valid_parsing cr cr_parser (B.gsub (hsl_input_buf st) cr_init cr_len) h
+     | _ -> False)
+
+  //TODO: fill other entries similarly
+
+  | _ -> False
+       
+  
 /// TODO: Should come from QD
 
 val hs_transcript_parser : LP.parser (LP.strong_parser_kind 8 8 ({ LP.parser_kind_metadata_total = true })) hs_transcript
@@ -262,7 +355,9 @@ unfold private let transcript_parsing_of (msgs:hs_transcript) (st:hsl_state)
     | Some (parse, consumed) -> parse == msgs /\ consumed == v delta
 
 unfold private let receive_post (st:hsl_state) (p:uint_32)
-  : HS.mem -> (TLSError.result (option (G.erased hs_transcript &
+  : HS.mem -> (TLSError.result (option (
+                               flight_t &
+                               G.erased hs_transcript &
                                uint_32 & uint_32 &
                                list HashSpec.anyTag))) -> HS.mem -> Type0
   = fun h0 r h1 ->  
@@ -278,21 +373,22 @@ unfold private let receive_post (st:hsl_state) (p:uint_32)
     (match r with
      | Error _ -> True  //underspecified
      | Correct None -> t0 == t1  //waiting for more data
-     | Correct (Some (ms, p0, p1, hs)) ->
+     | Correct (Some (flt, ms, p0, p1, hs)) ->
        let ms = G.reveal ms in
        t1 == t0 @ ms /\  //added ms to the transcript
        writing h1 st /\  //Handshake can now write
        p <= hsl_input_buf_len st /\
        p0 <= p1 /\ p1 <= p /\  //returned indices are valid in the input buffer
        transcript_parsing_of ms st p0 p1 h1 /\  //ms is a valid parsing of input buffer contents between p0 and p1
+       flight_parsing_of flt ms st h1 /\  //the indices in the returned flight are valid parsings
        (match oa with
         | Some a -> tags a t0 ms hs  //hashed properly
         | None -> hs == []))
 
-//TODO: return a list of message flight constructors so that Handshake does not have to parse it again
 //TODO: delay the hashing OR Handshake explicitly calls Log to compute the digest 
 val receive (st:hsl_state) (p:uint_32)
-  : ST (TLSError.result (option (G.erased hs_transcript &  //ghost transcript, list msg or hs_transcript
+  : ST (TLSError.result (option (flight_t &  //returned flight
+                                 G.erased hs_transcript &  //ghost transcript, list msg or hs_transcript
                                  uint_32 & uint_32 &  //buffer indices in the input buffer
                                  list HashSpec.anyTag)))  //TODO: erased transcript and concrete hash?
        (requires (fun h0 ->
@@ -309,7 +405,7 @@ val receive (st:hsl_state) (p:uint_32)
 
 /// TODO: should come from QD
 
-val msg_parser : LP.parser (LP.strong_parser_kind 8 8 ({ LP.parser_kind_metadata_total = true })) msg
+val msg_parser : parser_t msg
 
 unfold private let msg_parsing_of (m:msg) (st:hsl_state)
                                   (p0:uint_32) (p1:uint_32{p0 <= p1 /\ p1 <= hsl_output_buf_len st})
