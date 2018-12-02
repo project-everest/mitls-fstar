@@ -101,6 +101,9 @@ val hsl_state : Type0
 
 
 /// With an abstract, state dependent invariant
+///
+/// TODO: Overwrite buffers for new flights OR content remains same?
+///       For the I/O buffers
 
 val hsl_invariant : HS.mem -> hsl_state -> Type0
 
@@ -203,7 +206,7 @@ unfold private let create_post (r:Mem.rgn)
     transcript h1 st == [] /\  //empty transcript
     B.modifies B.loc_none h0 h1  //did not modify anything
   
-val create (r:Mem.rgn) (pv:option C.protocolVersion)
+val create (r:Mem.rgn) (pv:option C.protocolVersion)  //TODO: pv is always None?
            (input_len:uint_32) (input_buf:lbuffer8 input_len)
 	   (output_len:uint_32) (output_buf:lbuffer8 output_len)
   : ST hsl_state (requires (fun h0 -> 
@@ -286,6 +289,8 @@ unfold private let receive_post (st:hsl_state) (p:uint_32)
         | Some a -> tags a t0 ms hs  //hashed properly
         | None -> hs == []))
 
+//TODO: return a list of message flight constructors so that Handshake does not have to parse it again
+//TODO: delay the hashing OR Handshake explicitly calls Log to compute the digest 
 val receive (st:hsl_state) (p:uint_32)
   : ST (TLSError.result (option (G.erased hs_transcript &  //ghost transcript, list msg or hs_transcript
                                  uint_32 & uint_32 &  //buffer indices in the input buffer
