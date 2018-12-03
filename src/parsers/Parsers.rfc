@@ -1393,7 +1393,7 @@ struct {
 
 struct {
   TicketVersion version;
-  select(v) {
+  select(version) {
     case ticket12: TicketContents12;
     case ticket13: TicketContents13;
   } contents;

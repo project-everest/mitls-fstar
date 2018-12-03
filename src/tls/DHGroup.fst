@@ -108,7 +108,7 @@ let dh_initiator #g x gy =
 
 
 private
-let dhparam_parser_kind = let vlpk = LP.parse_bounded_vldata_kind 0 65535 in
+let dhparam_parser_kind = let vlpk = LP.parse_bounded_vldata_strong_kind 0 65535 LP.parse_list_kind in
                           LP.and_then_kind vlpk
                             (LP.and_then_kind vlpk
                               (LP.and_then_kind vlpk vlpk))
@@ -131,7 +131,7 @@ let unsynth_vlb16 (x:vlb16)
   = x
 
 private 
-let vlb16_parser: LP.parser (LP.parse_bounded_vldata_kind 0 65535) vlb16 =
+let vlb16_parser: LP.parser (LP.parse_bounded_vldata_strong_kind 0 65535 LP.parse_list_kind) vlb16 =
   let p = LP.parse_bounded_vlbytes 0 65535 in
   LP.parse_synth p synth_vlb16
 

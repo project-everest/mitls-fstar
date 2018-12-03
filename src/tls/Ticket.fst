@@ -223,7 +223,7 @@ module TC = Parsers.TicketContents
 module TC12 = Parsers.TicketContents12
 module TC13 = Parsers.TicketContents13
 module PB = Parsers.Boolean
-module LPB = LowParse.Low.Bytes
+module LPB = LowParse.Low.Base
 module U32 = FStar.UInt32
 module B = LowStar.Buffer
 
@@ -264,10 +264,10 @@ let write_ticket12 (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
     then LPB.max_uint32
     else begin
       let pos1 = pos `U32.add` 1ul in
-      let pos2 = PTL.write_protocolVersion pv sl pos1 in
-      let pos3 = PTL.write_cipherSuite (name_of_cipherSuite cs) sl pos2 in
-      let pos4 = PTL.write_boolean (if ems then PB.B_true else PB.B_false) sl pos3 in
-      let _ = LPB.write_flbytes 48ul ms sl pos4 in
+      let pos2 = PTL.protocolVersion_writer pv sl pos1 in
+      let pos3 = PTL.cipherSuite_writer (name_of_cipherSuite cs) sl pos2 in
+      let pos4 = PTL.boolean_writer (if ems then PB.B_true else PB.B_false) sl pos3 in
+      let _ = PTL.write_ticketContents12_master_secret ms sl pos4 in
       let h = get () in
       PTL.valid_ticketContents12_intro h sl pos1;
       PTL.finalize_case_ticketContents12 sl pos
