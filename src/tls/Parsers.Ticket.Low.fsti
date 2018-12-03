@@ -1,23 +1,16 @@
 module Parsers.Ticket.Low
-open Parsers.ProtocolVersion
-open Parsers.CipherSuite
-open Parsers.Boolean
-open Parsers.TicketContents12
-open Parsers.TicketContents13
-open Parsers.TicketVersion
-open Parsers.TicketContents
+include Parsers.ProtocolVersion
+include Parsers.CipherSuite
+include Parsers.Boolean
+include Parsers.TicketContents12
+include Parsers.TicketContents13
+include Parsers.TicketVersion
+include Parsers.TicketContents
 
 module HS = FStar.HyperStack
 module LP = LowParse.Low.Base
-module LPB = LowParse.Spec.Bytes
 module U32 = FStar.UInt32
 module LPI = LowParse.Spec.Int
-
-val write_protocolVersion : LP.leaf_writer_strong protocolVersion_serializer
-
-val write_cipherSuite : LP.leaf_writer_strong cipherSuite_serializer
-
-val write_boolean : LP.leaf_writer_strong boolean_serializer
 
 val valid_ticketContents12_intro
   (h: HS.mem)
