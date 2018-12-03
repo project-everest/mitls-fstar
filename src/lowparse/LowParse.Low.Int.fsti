@@ -1,6 +1,6 @@
 module LowParse.Low.Int
 include LowParse.Spec.Int
-include LowParse.Low.Combinators
+include LowParse.Low.Base
 
 module U16 = FStar.UInt16
 module U32 = FStar.UInt32

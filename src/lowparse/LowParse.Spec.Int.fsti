@@ -1,5 +1,5 @@
 module LowParse.Spec.Int
-include LowParse.Spec.Combinators // for total_constant_size_parser_kind
+include LowParse.Spec.Base
 
 module Seq = FStar.Seq
 module E = LowParse.BigEndian

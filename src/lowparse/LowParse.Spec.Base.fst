@@ -301,6 +301,14 @@ let strong_parser_kind (lo hi: nat) (md: parser_kind_metadata_t) : Pure parser_k
     parser_kind_metadata = md;
   }
 
+inline_for_extraction
+let total_constant_size_parser_kind
+  (sz: nat)
+: Tot parser_kind
+= strong_parser_kind sz sz ({
+    parser_kind_metadata_total = true;
+  })
+
 let parser_kind_prop (#t: Type0) (k: parser_kind) (f: bare_parser t) : GTot Type0 =
   injective f /\
   parses_at_least k.parser_kind_low f /\
