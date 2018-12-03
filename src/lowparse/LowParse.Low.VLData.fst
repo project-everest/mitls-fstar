@@ -125,7 +125,7 @@ let validate_bounded_vldata
   [@inline_let]
   let _ = parse_bounded_vldata_correct min max p in
   validate_strengthen
-    (parse_bounded_vldata_kind min max)
+    (parse_bounded_vldata_strong_kind min max k)
     (validate_vldata_gen sz (in_bounds min max) (fun i -> not (U32.lt i (U32.uint_to_t min) || U32.lt (U32.uint_to_t max) i)) v)
     ()
 

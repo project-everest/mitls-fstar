@@ -178,7 +178,7 @@ let parse32_bounded_vldata_strong'
 : Tot (option (parse_bounded_vldata_strong_t min max #k #t #p s * U32.t))
 = let res =
     parse32_strengthen
-      #(parse_bounded_vldata_kind min max)
+      #(parse_bounded_vldata_strong_kind min max k)
       #t
       #(parse_bounded_vldata min max #k #t p)
       (parse32_bounded_vldata min min32 max max32 #k #t #p p32)
@@ -210,7 +210,7 @@ let parse32_bounded_vldata_strong_correct
     parser32_correct (parse_bounded_vldata_strong min max s) input res)
 = let res =
     parse32_strengthen
-      #(parse_bounded_vldata_kind min max)
+      #(parse_bounded_vldata_strong_kind min max k)
       #t
       #(parse_bounded_vldata min max #k #t p)
       (parse32_bounded_vldata min min32 max max32 #k #t #p p32)

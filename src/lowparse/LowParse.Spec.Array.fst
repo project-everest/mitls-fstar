@@ -290,7 +290,7 @@ let parse_vlarray
   (u: unit {
     vldata_vlarray_precond array_byte_size_min array_byte_size_max p elem_count_min elem_count_max == true  
   })
-: Tot (parser (parse_bounded_vldata_kind array_byte_size_min array_byte_size_max) (vlarray t elem_count_min elem_count_max))
+: Tot (parser (parse_bounded_vldata_strong_kind array_byte_size_min array_byte_size_max k) (vlarray t elem_count_min elem_count_max))
 = vldata_to_vlarray_inj array_byte_size_min array_byte_size_max s elem_count_min elem_count_max u;
   parse_bounded_vldata_strong array_byte_size_min array_byte_size_max (serialize_list _ s)
   `parse_synth`
