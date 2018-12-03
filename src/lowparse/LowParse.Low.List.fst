@@ -62,6 +62,36 @@ let valid_exact_list_cons
   contents_exact_eq (parse_list p) h sl pos pos';
   contents_exact_eq (parse_list p) h sl pos1 pos'
 
+abstract
+let rec valid_list_valid_exact_list
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (h: HS.mem)
+  (sl: slice)
+  (pos : U32.t)
+  (pos' : U32.t)
+: Lemma
+  (requires (
+    k.parser_kind_subkind == Some ParserStrong /\
+    k.parser_kind_low > 0 /\
+    valid_list p h sl pos pos'
+  ))
+  (ensures (
+    valid_exact (parse_list p) h sl pos pos' /\
+    contents_exact (parse_list p) h sl pos pos' == contents_list p h sl pos pos'
+  ))
+  (decreases (U32.v pos' - U32.v pos))
+= valid_list_equiv p h sl pos pos';
+  contents_list_eq p h sl pos pos' ;
+  if pos = pos'
+  then valid_exact_list_nil p h sl pos
+  else begin
+    let pos1 = get_valid_pos p h sl pos in
+    valid_list_valid_exact_list p h sl pos1 pos';
+    valid_exact_list_cons p h sl pos pos'
+  end
+
 let valid_exact_list_cons_recip
   (#k: parser_kind)
   (#t: Type0)
@@ -96,6 +126,37 @@ let valid_exact_list_cons_recip
   valid_exact_equiv (parse_list p) h sl pos1 pos';  
   contents_exact_eq (parse_list p) h sl pos pos';
   contents_exact_eq (parse_list p) h sl pos1 pos'
+
+abstract
+let rec valid_exact_list_valid_list
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (h: HS.mem)
+  (sl: slice)
+  (pos : U32.t)
+  (pos' : U32.t)
+: Lemma
+  (requires (
+    k.parser_kind_subkind == Some ParserStrong /\
+    k.parser_kind_low > 0 /\
+    valid_exact (parse_list p) h sl pos pos'
+  ))
+  (ensures (
+    valid_list p h sl pos pos' /\
+    contents_exact (parse_list p) h sl pos pos' == contents_list p h sl pos pos'
+  ))
+  (decreases (U32.v pos' - U32.v pos))
+= valid_list_equiv p h sl pos pos';
+  if pos = pos'
+  then
+    valid_exact_list_nil p h sl pos
+  else begin
+    valid_exact_list_cons_recip p h sl pos pos';
+    let pos1 = get_valid_pos p h sl pos in
+    valid_exact_list_valid_list p h sl pos1 pos'
+  end;
+  contents_list_eq p h sl pos pos'
 
 module L = FStar.List.Tot
 

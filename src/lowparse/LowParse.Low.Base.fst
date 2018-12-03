@@ -636,6 +636,7 @@ let valid_exact_frame
   (requires (live_slice h s /\ B.modifies_inert l h h' /\ B.loc_disjoint l (loc_slice_from_to s pos pos')))
   (ensures (
     (valid_exact p h s pos pos' \/ valid_exact p h' s pos pos') ==> (
+    valid_exact p h s pos pos' /\
     valid_exact p h' s pos pos' /\ contents_exact p h' s pos pos' == contents_exact p h s pos pos'
   )))
   [SMTPatOr [
@@ -2116,3 +2117,187 @@ let loc_disjoint_loc_slice_from_to
   (ensures (B.loc_disjoint l (loc_slice_from_to s pos1 pos2)))
   [SMTPat (B.loc_disjoint l (loc_slice_from_to s pos1 pos2)); SMTPat (B.loc_disjoint l (loc_slice_from s pos))]
 = assert (B.loc_includes (loc_slice_from s pos) (loc_slice_from s pos1))
+
+
+(* lists, to avoid putting LowParse.*.List into the user context *)
+
+abstract
+let rec valid_list
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (sl: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+: GTot Type0
+  (decreases (U32.v pos' - U32.v pos))
+= k.parser_kind_subkind == Some ParserStrong /\
+  k.parser_kind_low > 0 /\
+  live_slice h sl /\
+  U32.v pos' <= U32.v sl.len /\ (
+  if pos = pos'
+  then True
+  else
+    valid p h sl pos /\ (
+    let pos1 = get_valid_pos p h sl pos in
+    U32.v pos1 <= U32.v pos' /\
+    valid_list p h sl pos1 pos'
+  ))
+
+abstract
+let rec valid_list_equiv
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (sl: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+: Lemma
+  (valid_list p h sl pos pos' <==> (
+    k.parser_kind_subkind == Some ParserStrong /\
+    k.parser_kind_low > 0 /\
+    live_slice h sl /\
+    U32.v pos' <= U32.v sl.len /\ (
+    if pos = pos'
+    then True
+    else
+      valid p h sl pos /\ (
+      let pos1 = get_valid_pos p h sl pos in
+      U32.v pos1 <= U32.v pos' /\
+      valid_list p h sl pos1 pos'
+  ))))
+= ()
+
+abstract
+let valid_list_elim
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (sl: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+: Lemma
+  (requires (valid_list p h sl pos pos'))
+  (ensures (
+    k.parser_kind_subkind == Some ParserStrong /\
+    k.parser_kind_low > 0 /\
+    live_slice h sl /\
+    U32.v pos <= U32.v pos' /\
+    U32.v pos' <= U32.v sl.len
+  ))
+  [SMTPat (valid_list p h sl pos pos')]
+= ()
+
+abstract
+let rec contents_list
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (sl: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+: Ghost (list t)
+  (requires (valid_list p h sl pos pos'))
+  (ensures (fun _ -> True))
+  (decreases (U32.v pos' - U32.v pos))
+= if pos = pos'
+  then []
+  else
+    contents p h sl pos :: contents_list p h sl (get_valid_pos p h sl pos) pos'
+
+abstract
+let contents_list_eq
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (sl: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+: Lemma
+  (requires (valid_list p h sl pos pos'))
+  (ensures (contents_list p h sl pos pos' == (
+    if pos = pos'
+    then []
+    else
+      contents p h sl pos :: contents_list p h sl (get_valid_pos p h sl pos) pos'
+  )))
+= ()
+
+abstract
+let rec valid_list_frame_1
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (s: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+  (l: B.loc)
+  (h' : HS.mem)
+: Lemma
+  (requires (live_slice h s /\ B.modifies_inert l h h' /\ B.loc_disjoint l (loc_slice_from_to s pos pos') /\ valid_list p h s pos pos'))
+  (ensures (
+    valid_list p h s pos pos' /\ valid_list p h' s pos pos' /\ contents_list p h' s pos pos' == contents_list p h s pos pos'
+  ))
+  (decreases (U32.v pos' - U32.v pos))
+= if pos = pos'
+  then ()
+  else valid_list_frame_1 p h s (get_valid_pos p h s pos) pos' l h'
+
+abstract
+let rec valid_list_frame_2
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (s: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+  (l: B.loc)
+  (h' : HS.mem)
+: Lemma
+  (requires (live_slice h s /\ B.modifies_inert l h h' /\ B.loc_disjoint l (loc_slice_from_to s pos pos') /\ valid_list p h' s pos pos'))
+  (ensures (
+    valid_list p h' s pos pos' /\ valid_list p h s pos pos' /\ contents_list p h' s pos pos' == contents_list p h s pos pos'
+  ))
+  (decreases (U32.v pos' - U32.v pos))
+= if pos = pos'
+  then ()
+  else begin
+    let pos1 = get_valid_pos p h' s pos in
+    valid_valid_exact p h' s pos;
+    valid_exact_valid p h s pos pos1;
+    valid_list_frame_2 p h s pos1 pos' l h'
+  end
+
+abstract
+let valid_list_frame
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (h: HS.mem)
+  (s: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+  (l: B.loc)
+  (h' : HS.mem)
+: Lemma
+  (requires (live_slice h s /\ B.modifies_inert l h h' /\ B.loc_disjoint l (loc_slice_from_to s pos pos')))
+  (ensures (
+    (valid_list p h s pos pos' \/ valid_list p h' s pos pos') ==> (
+    valid_list p h s pos pos' /\
+    valid_list p h' s pos pos' /\ contents_list p h' s pos pos' == contents_list p h s pos pos'
+  )))
+  [SMTPatOr [
+    [SMTPat (valid_list p h s pos pos'); SMTPat (B.modifies_inert l h h')];
+    [SMTPat (valid_list p h' s pos pos'); SMTPat (B.modifies_inert l h h')];
+    [SMTPat (contents_list p h s pos pos'); SMTPat (B.modifies_inert l h h')];
+    [SMTPat (contents_list p h' s pos pos'); SMTPat (B.modifies_inert l h h')];
+  ]]
+= Classical.move_requires (valid_list_frame_1 p h s pos pos' l) h';
+  Classical.move_requires (valid_list_frame_2 p h s pos pos' l) h'
