@@ -143,6 +143,7 @@ let parse_ret' (#t:Type) (v:t) : Tot (bare_parser t) =
   fun (b: bytes) -> Some (v, (0 <: consumed_length b))
 
 // unfold
+inline_for_extraction
 let parse_ret_kind : parser_kind =
   strong_parser_kind 0 0 ({
     parser_kind_metadata_total = true;
