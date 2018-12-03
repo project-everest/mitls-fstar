@@ -267,7 +267,7 @@ let write_ticket12 (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
       let pos2 = PTL.write_protocolVersion pv sl pos1 in
       let pos3 = PTL.write_cipherSuite (name_of_cipherSuite cs) sl pos2 in
       let pos4 = PTL.write_boolean (if ems then PB.B_true else PB.B_false) sl pos3 in
-      let _ = LPB.write_flbytes 48ul ms sl pos4 in
+      let _ = PTL.write_ticketContents12_master_secret ms sl pos4 in
       let h = get () in
       PTL.valid_ticketContents12_intro h sl pos1;
       PTL.finalize_case_ticketContents12 sl pos

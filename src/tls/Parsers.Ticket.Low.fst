@@ -17,6 +17,7 @@ friend Parsers.ProtocolVersion
 friend Parsers.CipherSuite
 friend Parsers.Boolean
 friend Parsers.TicketContents12
+friend Parsers.TicketContents12_master_secret
 friend Parsers.TicketContents13
 friend Parsers.TicketVersion
 friend Parsers.TicketContents
@@ -144,3 +145,8 @@ let finalize_case_ticketContents13 input pos =
   in
   [@inline_let] let _ = assert_norm (LP.parse_sum_kind (LP.get_parser_kind ticketVersion_repr_parser) ticketContents_sum parse_ticketContents_cases == ticketContents_parser_kind) in
   ticketContents13_jumper input pos1
+
+#reset-options "--max_fuel 0 --max_ifuel 0"
+
+let write_ticketContents12_master_secret = 
+  LP.write_flbytes 48ul
