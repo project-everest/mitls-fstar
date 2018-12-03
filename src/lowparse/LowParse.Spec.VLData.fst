@@ -743,6 +743,54 @@ let serialize_bounded_vldata_strong
 = Classical.forall_intro (serialize_bounded_vldata_strong_correct min max s);
   serialize_bounded_vldata_strong' min max s
 
+let serialize_bounded_vldata_precond
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (k: parser_kind)
+: GTot bool
+= match k.parser_kind_high with
+  | None -> false
+  | Some max' -> min <= k.parser_kind_low && max' <= max
+
+let serialize_bounded_vldata_correct
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p { serialize_bounded_vldata_precond min max k } )
+  (x: t)
+: Lemma
+  ( let Some (_, consumed) = parse p (serialize s x) in
+    let y = serialize_bounded_vldata_strong' min max s (x <: parse_bounded_vldata_strong_t min max s) in
+    parse (parse_bounded_vldata min max p) y == Some (x, Seq.length y))
+= let Some (_, consumed) = parse p (serialize s x) in
+  serialize_bounded_vldata_strong_correct min max s x;
+  ()
+
+let serialize_bounded_vldata'
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p { serialize_bounded_vldata_precond min max k } )
+  (x: t)
+: GTot (y: bytes { parse (parse_bounded_vldata min max p) y == Some (x, Seq.length y) } )
+= let Some (_, consumed) = parse p (serialize s x) in
+  serialize_bounded_vldata_correct min max s x;
+  serialize_bounded_vldata_strong' min max s x
+
+let serialize_bounded_vldata
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p  { serialize_bounded_vldata_precond min max k } )
+: Tot (serializer (parse_bounded_vldata min max p))
+= serialize_bounded_vldata' min max s
+
 let serialize_bounded_vldata_strong_upd
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )

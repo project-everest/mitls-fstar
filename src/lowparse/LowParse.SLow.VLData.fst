@@ -309,6 +309,25 @@ let serialize32_bounded_vldata_strong
   serialize32_bounded_vldata_strong_correct min max s32 input;
   (serialize32_bounded_vldata_strong' min max s32 input <: (res: bytes32 { serializer32_correct (serialize_bounded_vldata_strong min max s) input res } ))
 
+inline_for_extraction
+let serialize32_bounded_vldata
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967292 } ) // NOTE here: max must be less than 2^32 - 4
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (#s: serializer p)
+  (s32: partial_serializer32 s  { serialize_bounded_vldata_precond min max k } )
+: Tot (serializer32 (serialize_bounded_vldata min max s))
+= fun (input: t) ->
+  [@inline_let]
+  let _ : unit = 
+    let Some (_, consumed) = parse p (serialize s input) in
+    ()
+  in
+  serialize32_bounded_vldata_strong_correct min max s32 input;
+  (serialize32_bounded_vldata_strong' min max s32 input <: (res: bytes32 { serializer32_correct (serialize_bounded_vldata min max s) input res } ))
+
 #reset-options "--z3rlimit 32 --z3cliopt smt.arith.nl=false"
 
 inline_for_extraction
