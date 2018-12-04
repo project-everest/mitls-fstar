@@ -224,8 +224,95 @@ let jump_sum_aux_payload_if
 : Tot (if_combinator _ (jump_sum_aux_payload_eq t pc k))
 = jump_sum_aux_payload_if' t pc k
 
-#reset-options "--z3rlimit 64 --z3cliopt smt.arith.nl=false --initial_ifuel 8 --max_ifuel 8 --initial_fuel 2 --max_fuel 2"
-// --query_stats  --smtencoding.elim_box true --smtencoding.l_arith_repr native --z3refresh"
+let parse_sum_eq3
+  (#kt: parser_kind)
+  (t: sum)
+  (p: parser kt (sum_repr_type t))
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (input: bytes)
+  (k' : sum_repr_type t)
+  (consumed_k: consumed_length input)
+: Lemma
+  (requires (Some? (parse (parse_sum t p pc) input) /\ parse p input == Some (k', consumed_k)))
+  (ensures (
+    let input_k = Seq.slice input consumed_k (Seq.length input) in
+    let k = maybe_enum_key_of_repr (sum_enum t) k' in
+    begin match k with
+    | Known k ->
+      Some? (parse (dsnd (pc k)) input_k)
+    | _ -> False
+    end
+  ))
+= parse_sum_eq'' t p pc input
+
+let parse_sum_eq4
+  (#kt: parser_kind)
+  (t: sum)
+  (p: parser kt (sum_repr_type t))
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (input: bytes)
+  (k' : sum_repr_type t)
+  (consumed_k: consumed_length input)
+  (consumed_payload: nat)
+: Lemma
+  (requires (Some? (parse (parse_sum t p pc) input) /\ parse p input == Some (k', consumed_k) /\ (
+    let input_k = Seq.slice input consumed_k (Seq.length input) in
+    let k = maybe_enum_key_of_repr (sum_enum t) k' in
+    begin match k with
+    | Known k ->
+      Some? (parse (dsnd (pc k)) input_k) /\ (
+      let Some (_, consumed_payload') = parse (dsnd (pc k)) input_k in
+      consumed_payload' == consumed_payload
+      )
+    | _ -> False
+    end
+  )))
+  (ensures (
+      let Some (_, consumed) = parse (parse_sum t p pc) input in
+      consumed == consumed_k + consumed_payload
+  ))
+= parse_sum_eq'' t p pc input
+
+#push-options "--z3rlimit 16"
+
+let valid_sum_elim
+  (h: HS.mem)
+  (t: sum)
+  (#kt: parser_kind)
+  (p: parser kt (sum_repr_type t))
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (input: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (
+    valid (parse_sum t p pc) h input pos
+  ))
+  (ensures (
+    valid p h input pos /\ (
+    let pos_payload = get_valid_pos p h input pos in
+    let k' = maybe_enum_key_of_repr (sum_enum t) (contents p h input pos) in
+    match k' with
+    | Known k ->
+      valid (dsnd (pc k)) h input pos_payload /\
+      valid_pos
+        (parse_sum t p pc) h input pos
+        (get_valid_pos (dsnd (pc k)) h input pos_payload)
+    | _ -> False
+  )))
+= let _ = parse_sum_eq'' t p pc (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos))) in
+  [@inline_let]
+  let _ = valid_facts (parse_sum t p pc) h input pos in
+  let sinput = B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos)) in
+  let Some (k', consumed_k) = parse p sinput in
+  let pos_after_tag = U32.uint_to_t (U32.v pos + consumed_k) in
+  [@inline_let]
+  let _ = valid_facts p h input pos in
+  assert (valid_content_pos p h input pos k' pos_after_tag);
+  match maybe_enum_key_of_repr (sum_enum t) k' with
+  | Known k -> valid_facts (dsnd (pc k)) h input pos_after_tag
+  | _ -> ()
+
+#pop-options
 
 inline_for_extraction
 let jump_sum_aux
@@ -240,21 +327,10 @@ let jump_sum_aux
 = fun input pos ->
   let h = HST.get () in
   [@inline_let]
-  let _ = parse_sum_eq'' t p pc (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos))) in
-  [@inline_let]
-  let _ = valid_facts (parse_sum t p pc) h input pos in
-  [@inline_let]
-  let _ = valid_facts p h input pos in
+  let _ = valid_sum_elim h t p pc input pos in
   let pos_after_tag = v input pos in
   let k' = p32 input pos in
-  [@inline_let]
-  let _ =
-    match maybe_enum_key_of_repr (sum_enum t) k' with
-    | Known k -> valid_facts (dsnd (pc k)) h input pos_after_tag
-  in
   v_payload k' input pos_after_tag
-
-#reset-options
 
 inline_for_extraction
 let jump_sum_aux_payload'
