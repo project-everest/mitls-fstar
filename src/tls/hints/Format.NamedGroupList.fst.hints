@@ -1,5 +1,5 @@
 [
-  "°ÛyùÙåÓR\u0011ÍÕ˚úêH",
+  "|}\u0010ùk\u0003\u0007\u0019„6¡∂Ñ¸óˇ",
   [
     [
       "Format.NamedGroupList.bytesize",
@@ -20,7 +20,7 @@
         "refinement_interpretation_Format.NamedGroupList_Tm_refine_be73026b04c1694daf246c1dc10927a4"
       ],
       0,
-      "4917069186be12d161cd22c89d71cd82"
+      "2715f29859c2097007dced0ac09629ed"
     ],
     [
       "Format.NamedGroupList.nglist_serializer",
@@ -44,7 +44,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "5a8809c34bfe4bf5cfdec23876058a98"
+      "394045514c414b5b626674e10f7125b6"
     ],
     [
       "Format.NamedGroupList.synth_namedGroupList",
@@ -60,7 +60,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high"
       ],
       0,
-      "360618bb33adc372594353e80cca768e"
+      "43aa7ca90c9fb179d80613c9fd5e03a1"
     ],
     [
       "Format.NamedGroupList.synth_namedGroupList",
@@ -77,7 +77,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "7d5e8a543409de64f06d93c6a098fc92"
+      "ac74a3060f03a33576a66c4453b01955"
     ],
     [
       "Format.NamedGroupList.synth_namedGroupList_recip",
@@ -93,7 +93,23 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high"
       ],
       0,
-      "11fef2b6b84e929ef75dcfd03eb8734a"
+      "93ac925d9f149381a83fae27b3104f55"
+    ],
+    [
+      "Format.NamedGroupList.namedGroupList_parser_kind'",
+      1,
+      2,
+      1,
+      [
+        "@query", "constructor_distinct_FStar.Pervasives.Native.None",
+        "disc_equation_FStar.Pervasives.Native.Some",
+        "equation_LowParse.Spec.List.parse_list_kind", "equation_Prims.nat",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high"
+      ],
+      0,
+      "4576329c849bcc4a4e733458b9c7cefe"
     ],
     [
       "Format.NamedGroupList.namedGroupList_parser_kind",
@@ -106,7 +122,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "85960d1c95c89f12514c872bbd780a5e"
+      "f40c380c5a9496f69480443b6f6a2545"
     ],
     [
       "Format.NamedGroupList.namedGroupList_parser",
@@ -126,7 +142,7 @@
         "token_correspondence_Format.NamedGroupList.synth_namedGroupList"
       ],
       0,
-      "4a1b18ff905a70984946ee9add72da02"
+      "bf12893ab5f1eb12a3b56a5bd6296b78"
     ],
     [
       "Format.NamedGroupList.namedGroupList_parser32",
@@ -150,7 +166,7 @@
         "token_correspondence_Format.NamedGroupList.synth_namedGroupList"
       ],
       0,
-      "2114b842063911135a0df26099901d0d"
+      "9aa6b7914588408bfbe9048a01587e54"
     ],
     [
       "Format.NamedGroupList.namedGroupList_serializer",
@@ -188,7 +204,7 @@
         "token_correspondence_Format.NamedGroupList.synth_namedGroupList_recip"
       ],
       0,
-      "709774589c1593755aaca240cacc45a8"
+      "9ac92e283a5bb2d4de672b25c55839b0"
     ],
     [
       "Format.NamedGroupList.namedGroupList_serializer32",
@@ -227,7 +243,7 @@
         "token_correspondence_Format.NamedGroupList.synth_namedGroupList_recip"
       ],
       0,
-      "34a4fdd809ef703248c89a53820faf25"
+      "743a6f016b255d5b2f4e86153afc4b80"
     ]
   ]
 ]
