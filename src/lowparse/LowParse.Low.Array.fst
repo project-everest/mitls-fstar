@@ -245,3 +245,46 @@ let jump_vlarray
     (jump_bounded_vldata_strong array_byte_size_min array_byte_size_max (serialize_list _ s) ())
     (vldata_to_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max ())
     ()
+
+inline_for_extraction
+let finalize_vlarray
+  (array_byte_size_min: nat)
+  (array_byte_size_max: nat)
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (elem_count_min: nat)
+  (elem_count_max: nat)
+  (sl: slice)
+  (pos pos' : U32.t)
+: HST.Stack unit
+  (requires (fun h ->
+    vldata_vlarray_precond array_byte_size_min array_byte_size_max p elem_count_min elem_count_max == true /\ (
+    let vpos1 = U32.v pos + log256' array_byte_size_max in
+    vpos1 < 4294967296 /\ (
+    let pos1 = U32.uint_to_t vpos1 in
+    let len = U32.v pos' - vpos1 in
+    valid_list p h sl pos1 pos' /\ (
+    let count = L.length (contents_list p h sl pos1 pos') in
+    ((array_byte_size_min <= len /\ len <= array_byte_size_max) \/ (elem_count_min <= count /\ count <= elem_count_max))
+  )))))
+  (ensures (fun h _ h' ->
+    let pos1 = (U32.uint_to_t (U32.v pos + log256' array_byte_size_max)) in
+    let l = contents_list p h sl pos1 pos' in
+    B.modifies (loc_slice_from_to sl pos pos1) h h' /\
+    elem_count_min <= L.length l /\ L.length l <= elem_count_max /\
+    valid_content_pos (parse_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max ()) h' sl pos l pos'
+  ))
+= let h = HST.get () in
+  let pos1 = pos `U32.add` U32.uint_to_t (log256' array_byte_size_max) in
+  valid_list_valid_exact_list p h sl pos1 pos';
+  let l = Ghost.hide (contents_list p h sl pos1 pos') in
+  let _ : squash (let count = L.length (Ghost.reveal l) in elem_count_min <= count /\ count <= elem_count_max) =
+    valid_exact_serialize (serialize_list _ s) h sl pos1 pos' ;
+    Classical.move_requires (vldata_to_vlarray_correct array_byte_size_min array_byte_size_max s elem_count_min elem_count_max) (Ghost.reveal l) 
+  in
+  vlarray_to_vldata_correct array_byte_size_min array_byte_size_max s elem_count_min elem_count_max (Ghost.reveal l);
+  finalize_bounded_vldata_strong array_byte_size_min array_byte_size_max (serialize_list _ s) sl pos pos' ;
+  let h = HST.get () in
+  valid_synth h (parse_bounded_vldata_strong array_byte_size_min array_byte_size_max (serialize_list _ s)) (vldata_to_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max ())  sl pos

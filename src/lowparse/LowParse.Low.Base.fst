@@ -673,6 +673,26 @@ let contents_exact_eq
   assert_norm (contents_exact p h s pos pos' == contents_exact' p h s pos pos')
 
 abstract
+let valid_exact_serialize
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (s: serializer p)
+  (h: HS.mem)
+  (sl: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+: Lemma
+  (requires (valid_exact p h sl pos pos'))
+  (ensures (
+    serialize s (contents_exact p h sl pos pos') == B.as_seq h (B.gsub sl.base pos (pos' `U32.sub` pos)
+  )))
+= valid_exact_equiv p h sl pos pos' ;
+  contents_exact_eq p h sl pos pos' ;
+  serializer_correct_implies_complete p s;
+  ()
+
+abstract
 let valid_exact_frame
   (#k: parser_kind)
   (#t: Type)
