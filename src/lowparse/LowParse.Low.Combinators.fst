@@ -753,6 +753,23 @@ let validate_weaken
   v2 input pos
 
 inline_for_extraction
+let jump_weaken
+  (k1: parser_kind)
+  (#k2: parser_kind)
+  (#t: Type0)
+  (#p2: parser k2 t)
+  (v2: jumper p2)
+  (sq: squash (k1 `is_weaker_than` k2))
+: Tot (jumper (weaken k1 p2))
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let]
+  let _ = valid_facts (weaken k1 p2) h input pos in
+  [@inline_let]
+  let _ = valid_facts p2 h input pos in
+  v2 input pos
+
+inline_for_extraction
 let validate_strengthen
   (k2: parser_kind)
   (#k1: parser_kind)

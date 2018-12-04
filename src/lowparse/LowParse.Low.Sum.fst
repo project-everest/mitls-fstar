@@ -7,6 +7,67 @@ module HST = FStar.HyperStack.ST
 module B = LowStar.Buffer
 
 inline_for_extraction
+let validate_sum_cases_aux
+  (t: sum)
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (vc: ((x: sum_key t) -> Tot (validator (dsnd (pc x)))))
+  (k: sum_key t)
+: Tot (validator (parse_sum_cases t pc k))
+= [@inline_let]
+  let _ = synth_sum_case_injective t k in
+  validate_synth
+    (validate_weaken
+      (weaken_parse_cases_kind t pc)
+      (vc k)
+      ()
+    )
+    (synth_sum_case t k)
+    ()
+
+inline_for_extraction
+let validate_sum_cases_t
+  (t: sum)
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (k: sum_key t)
+: Tot Type
+= validator (parse_sum_cases t pc k)
+
+let validate_sum_cases_t_eq
+  (t: sum)
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (k: sum_key t)
+  (x y : validate_sum_cases_t t pc k)
+: GTot Type0
+= True
+
+inline_for_extraction
+let validate_sum_cases_t_if
+  (t: sum)
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (k: sum_key t)
+: Tot (if_combinator _ (validate_sum_cases_t_eq t pc k))
+= fun cond (sv_true: cond_true cond -> Tot (validate_sum_cases_t t pc k)) (sv_false: cond_false cond -> Tot (validate_sum_cases_t t pc k)) input pos ->
+  if cond
+  then sv_true () input pos
+  else sv_false () input pos
+
+inline_for_extraction
+let validate_sum_cases 
+  (t: sum)
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (vc: ((x: sum_key t) -> Tot (validator (dsnd (pc x)))))
+  (destr: dep_enum_destr (sum_enum t) (validate_sum_cases_t t pc))
+  (k: sum_key t)
+: Tot (validator (parse_sum_cases t pc k))
+= destr
+    _
+    (validate_sum_cases_t_if t pc)
+    (fun _ _ -> ())
+    (fun _ _ _ _ -> ())
+    (validate_sum_cases_aux t pc vc)
+    k
+
+inline_for_extraction
 let validate_sum_aux_payload_t
   (t: sum)
   (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
@@ -170,6 +231,67 @@ let valid_sum_intro
   parse_sum_eq t p pc (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos)))
 
 #reset-options
+
+inline_for_extraction
+let jump_sum_cases_aux
+  (t: sum)
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (vc: ((x: sum_key t) -> Tot (jumper (dsnd (pc x)))))
+  (k: sum_key t)
+: Tot (jumper (parse_sum_cases t pc k))
+= [@inline_let]
+  let _ = synth_sum_case_injective t k in
+  jump_synth
+    (jump_weaken
+      (weaken_parse_cases_kind t pc)
+      (vc k)
+      ()
+    )
+    (synth_sum_case t k)
+    ()
+
+inline_for_extraction
+let jump_sum_cases_t
+  (t: sum)
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (k: sum_key t)
+: Tot Type
+= jumper (parse_sum_cases t pc k)
+
+let jump_sum_cases_t_eq
+  (t: sum)
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (k: sum_key t)
+  (x y : jump_sum_cases_t t pc k)
+: GTot Type0
+= True
+
+inline_for_extraction
+let jump_sum_cases_t_if
+  (t: sum)
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (k: sum_key t)
+: Tot (if_combinator _ (jump_sum_cases_t_eq t pc k))
+= fun cond (sv_true: cond_true cond -> Tot (jump_sum_cases_t t pc k)) (sv_false: cond_false cond -> Tot (jump_sum_cases_t t pc k)) input pos ->
+  if cond
+  then sv_true () input pos
+  else sv_false () input pos
+
+inline_for_extraction
+let jump_sum_cases 
+  (t: sum)
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (vc: ((x: sum_key t) -> Tot (jumper (dsnd (pc x)))))
+  (destr: dep_enum_destr (sum_enum t) (jump_sum_cases_t t pc))
+  (k: sum_key t)
+: Tot (jumper (parse_sum_cases t pc k))
+= destr
+    _
+    (jump_sum_cases_t_if t pc)
+    (fun _ _ -> ())
+    (fun _ _ _ _ -> ())
+    (jump_sum_cases_aux t pc vc)
+    k
 
 inline_for_extraction
 let jump_sum_aux_payload_t
@@ -438,7 +560,7 @@ let validate_dsum_cases_if
 = validate_dsum_cases_if' s f g x
 
 inline_for_extraction
-let validate_dsum_cases
+let validate_dsum_cases'
   (s: dsum)
   (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag s x)))
   (f' : (x: dsum_known_key s) -> Tot (validator (dsnd (f x))))
@@ -452,6 +574,52 @@ let validate_dsum_cases
   match x with
   | Known x' -> validate_synth (f' x') (synth_dsum_case s (Known x')) () <: validator (parse_dsum_cases' s f g x)
   | Unknown x' -> validate_synth g' (synth_dsum_case s (Unknown x')) () <: validator (parse_dsum_cases' s f g x)
+
+inline_for_extraction
+let validate_dsum_cases'_destr
+  (s: dsum)
+  (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag s x)))
+  (f' : (x: dsum_known_key s) -> Tot (validator (dsnd (f x))))
+  (#k: parser_kind)
+  (#g: parser k (dsum_type_of_unknown_tag s))
+  (g' : validator g)
+  (destr: dep_enum_destr _ (fun k -> validate_dsum_cases_t s f g (Known k)))
+  (x: dsum_key s)
+: Tot (validate_dsum_cases_t s f g x)
+= fun input pos ->
+  match x with
+  | Known k ->
+    destr
+      _
+      (fun k -> validate_dsum_cases_if s f g (Known k))
+      (fun _ _ -> ())
+      (fun _ _ _ _ -> ())
+      (fun k -> validate_dsum_cases' s f f' g' (Known k))
+      k
+      input
+      pos
+  | Unknown r -> validate_dsum_cases' s f f' g' (Unknown r) input pos
+
+inline_for_extraction
+let validate_dsum_cases
+  (s: dsum)
+  (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag s x)))
+  (f' : (x: dsum_known_key s) -> Tot (validator (dsnd (f x))))
+  (#k: parser_kind)
+  (#g: parser k (dsum_type_of_unknown_tag s))
+  (g' : validator g)
+  (destr: dep_enum_destr _ (fun k -> validate_dsum_cases_t s f g (Known k)))
+  (x: dsum_key s)
+: Tot (validator (parse_dsum_cases s f g x))
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let]
+  let _ =
+    valid_facts (parse_dsum_cases' s f g x) h input pos;
+    valid_facts (parse_dsum_cases s f g x) h input pos;
+    parse_dsum_cases_eq' s f g x (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos)))
+  in
+  validate_dsum_cases'_destr s f f' g' destr x input pos
 
 inline_for_extraction
 let validate_dsum
@@ -482,7 +650,7 @@ let validate_dsum
     let tg = p32 input pos in
     [@inline_let]
     let _ = valid_facts (parse_dsum_cases' t f g (maybe_enum_key_of_repr (dsum_enum t) tg)) h input pos_after_tag in
-    destr (validate_dsum_cases_eq t f g) (validate_dsum_cases_if t f g) (fun _ _ -> ()) (fun _ _ _ _ -> ()) (validate_dsum_cases t f f32 g32) tg input pos_after_tag
+    destr (validate_dsum_cases_eq t f g) (validate_dsum_cases_if t f g) (fun _ _ -> ()) (fun _ _ _ _ -> ()) (validate_dsum_cases' t f f32 g32) tg input pos_after_tag
 
 
 inline_for_extraction
@@ -532,7 +700,7 @@ let jump_dsum_cases_if
 = jump_dsum_cases_if' s f g x
 
 inline_for_extraction
-let jump_dsum_cases
+let jump_dsum_cases'
   (s: dsum)
   (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag s x)))
   (f' : (x: dsum_known_key s) -> Tot (jumper (dsnd (f x))))
@@ -545,6 +713,54 @@ let jump_dsum_cases
   match x with
   | Known x' -> jump_synth (f' x') (synth_dsum_case s (Known x')) () <: jumper (parse_dsum_cases' s f g x)
   | Unknown x' -> jump_synth g' (synth_dsum_case s (Unknown x')) () <: jumper (parse_dsum_cases' s f g x)
+
+inline_for_extraction
+let jump_dsum_cases'_destr
+  (s: dsum)
+  (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag s x)))
+  (f' : (x: dsum_known_key s) -> Tot (jumper (dsnd (f x))))
+  (#k: parser_kind)
+  (#g: parser k (dsum_type_of_unknown_tag s))
+  (g' : jumper g)
+  (destr: dep_enum_destr _ (fun k -> jump_dsum_cases_t s f g (Known k)))
+  (x: dsum_key s)
+: Tot (jump_dsum_cases_t s f g x)
+= fun input pos ->
+  match x with
+  | Known k ->
+    destr
+      _
+      (fun k -> jump_dsum_cases_if s f g (Known k))
+      (fun _ _ -> ())
+      (fun _ _ _ _ -> ())
+      (fun k -> jump_dsum_cases' s f f' g' (Known k))
+      k
+      input
+      pos
+  | Unknown r -> jump_dsum_cases' s f f' g' (Unknown r) input pos
+
+inline_for_extraction
+let jump_dsum_cases
+  (s: dsum)
+  (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag s x)))
+  (f' : (x: dsum_known_key s) -> Tot (jumper (dsnd (f x))))
+  (#k: parser_kind)
+  (#g: parser k (dsum_type_of_unknown_tag s))
+  (g' : jumper g)
+  (destr: dep_enum_destr _ (fun k -> jump_dsum_cases_t s f g (Known k)))
+  (x: dsum_key s)
+: Tot (jumper (parse_dsum_cases s f g x))
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let]
+  let _ =
+    valid_facts (parse_dsum_cases' s f g x) h input pos;
+    valid_facts (parse_dsum_cases s f g x) h input pos;
+    parse_dsum_cases_eq' s f g x (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos)))
+  in
+  jump_dsum_cases'_destr s f f' g' destr x input pos
+
+#push-options "--z3rlimit 16"
 
 inline_for_extraction
 let jump_dsum
@@ -572,4 +788,6 @@ let jump_dsum
   let tg = p32 input pos in
   [@inline_let]
   let _ = valid_facts (parse_dsum_cases' t f g (maybe_enum_key_of_repr (dsum_enum t) tg)) h input pos_after_tag in
-  destr (jump_dsum_cases_eq t f g) (jump_dsum_cases_if t f g) (fun _ _ -> ()) (fun _ _ _ _ -> ()) (jump_dsum_cases t f f32 g32) tg input pos_after_tag
+  destr (jump_dsum_cases_eq t f g) (jump_dsum_cases_if t f g) (fun _ _ -> ()) (fun _ _ _ _ -> ()) (jump_dsum_cases' t f f32 g32) tg input pos_after_tag
+
+#pop-options
