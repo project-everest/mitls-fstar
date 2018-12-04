@@ -173,7 +173,7 @@ Certificate Status request (OCSP)
 https://tools.ietf.org/html/rfc6066#section-8
 **/
 
-enum {
+enum /*@open*/ {
   ocsp(1), (255)
 } CertificateStatusType;
 
@@ -185,10 +185,16 @@ struct {
   OCSPExtensions request_extensions;
 } OCSPStatusRequest;
 
+/*
+Note: it looks like this sum is extensible, but it
+actually isn't because OCSPStatusRequest is not
+a VLData type, hence, it's not possible to define
+a default case for unknown status types */
 struct {
   CertificateStatusType status_type;
   select (status_type) {
     case ocsp: OCSPStatusRequest;
+    default: Fail;
   } request;
 } CertificateStatusRequest;
 
@@ -198,6 +204,7 @@ struct {
   CertificateStatusType status_type;
   select (status_type) {
     case ocsp: OCSPResponse;
+    default: Fail;
   } response;
 } CertificateStatus;
 
@@ -1331,7 +1338,7 @@ the corresponding struct
 */
 struct {
   SignatureScheme algorithm;
-  opaque signature<0..2^16-1>;
+  opaque sig<0..2^16-1>;
 } Signature;
 
 /*
@@ -1424,8 +1431,8 @@ struct {
 struct {
   ECBasisType basis;
   select (basis) {
-    case ec_trinomial: Char2Trinomial;
-    case ec_pentanomial: Char2Pentanomial;
+    case ec_basis_trinomial: Char2Trinomial;
+    case ec_basis_pentanomial: Char2Pentanomial;
   } repr;
 } Char2Representation;
 

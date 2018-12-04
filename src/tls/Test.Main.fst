@@ -52,6 +52,7 @@ let main (): St C.exit_code =
       "Handshake", handshake;
       "IV", iv;
       "Rekey", KDF.Rekey.test_rekey;
+//      "Parsers", Parsers.main;
       (* ADD NEW TESTS HERE *)
     ];
     C.EXIT_SUCCESS
