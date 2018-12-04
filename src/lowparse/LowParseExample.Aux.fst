@@ -354,6 +354,8 @@ let serialize_t : LP.serializer parse_t =
 let serialize32_case_B: LP.serializer32 serialize_case_B =
   LP.serialize32_filter LP.serialize32_u16 parse_case_B_filter
 
+#push-options "--z3rlimit 20"
+
 inline_for_extraction
 let serialize32_cases
   (x: LP.sum_key t_sum)
@@ -362,6 +364,8 @@ let serialize32_cases
   | Case_A -> (LP.serialize32_nondep_then LP.serialize32_u8 () LP.serialize32_u8 () <: LP.serializer32 (serialize_cases x))
   | Case_B -> (serialize32_case_B <: LP.serializer32 (serialize_cases x))
   | _ -> (LP.serialize32_u16 <: LP.serializer32 (serialize_cases x))
+
+#pop-options
 
 // inline_for_extraction
 let serialize32_key : LP.serializer32 (LP.serialize_enum_key _ LP.serialize_u8 case_enum) =

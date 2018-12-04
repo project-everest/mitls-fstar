@@ -320,6 +320,8 @@ let serialize_t
 let serialize32_case_B: LP.serializer32 serialize_case_B =
   LP.serialize32_filter LP.serialize32_u16 parse_case_B_filter
 
+#push-options "--z3rlimit 24"
+
 inline_for_extraction
 let serialize32_known_cases
   (x: LP.dsum_known_key t_sum)
@@ -328,6 +330,8 @@ let serialize32_known_cases
   | Case_A -> LP.serialize32_nondep_then LP.serialize32_u8 () LP.serialize32_u8 ()
   | Case_B -> serialize32_case_B
   | _ -> LP.serialize32_u16
+
+#pop-options
 
 let serialize32_key: LP.serializer32 (LP.serialize_maybe_enum_key _ LP.serialize_u8 case_enum) =
   _ by (LP.serialize32_maybe_enum_key_tac LP.serialize32_u8 case_enum ())
