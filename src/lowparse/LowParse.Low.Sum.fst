@@ -447,7 +447,8 @@ let validate_dsum_cases
   (g' : validator g)
   (x: dsum_key s)
 : Tot (validate_dsum_cases_t s f g x)
-= synth_dsum_case_injective s x;
+= [@inline_let]
+  let _ = synth_dsum_case_injective s x in
   match x with
   | Known x' -> validate_synth (f' x') (synth_dsum_case s (Known x')) () <: validator (parse_dsum_cases' s f g x)
   | Unknown x' -> validate_synth g' (synth_dsum_case s (Unknown x')) () <: validator (parse_dsum_cases' s f g x)
