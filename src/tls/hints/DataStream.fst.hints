@@ -12,7 +12,7 @@
         "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87"
       ],
       0,
-      "6c4595e9a91d5dae166fa78fd0645552"
+      "f5d2701ff50079407aaba9bd9bb5ece4"
     ],
     [
       "DataStream.repr",
@@ -21,7 +21,7 @@
       1,
       [ "@query", "equation_DataStream.ghost_repr" ],
       0,
-      "2397ad0033db28c300761f9f5c2e55da"
+      "18ded466c01c79fae989d2adae326983"
     ],
     [
       "DataStream.mk_fragment",
@@ -33,7 +33,7 @@
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "5f86c3928c43f7ac6b236d0c18edde11"
+      "59aa57104fadf68c186dc499d4f6dd1d"
     ],
     [
       "DataStream.appFragment",
@@ -42,7 +42,7 @@
       1,
       [ "@query", "equation_DataStream.ghost_repr" ],
       0,
-      "2f56efadb9bc8f970dc844f7100bf6b9"
+      "e776ff68b4e23ebd3e096bfe8fd0ef05"
     ],
     [
       "DataStream.appBytes",
@@ -51,7 +51,7 @@
       1,
       [ "@query", "equation_DataStream.ghost_repr" ],
       0,
-      "38647e7dfea4628fc798946845eead28"
+      "6b56a2b797320ef87216058ad7f0d5eb"
     ],
     [
       "DataStream.delta",
@@ -68,7 +68,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "065f3cdab6580509f20d6dc0636addec"
+      "3fcd55886d156e868cc8892b13ad72a9"
     ],
     [
       "DataStream.__proj__Data__item___0",
@@ -81,7 +81,7 @@
         "refinement_interpretation_DataStream_Tm_refine_0d466ae495b3961c5a09f777ca3640cd"
       ],
       0,
-      "11c0f0082f4db0e4d9fdb8890e4fcf56"
+      "1bc414c36a7f6d60f9f232cf76c32c97"
     ],
     [
       "DataStream.__proj__Alert__item___0",
@@ -94,7 +94,7 @@
         "refinement_interpretation_DataStream_Tm_refine_36ed55116eca5cfa741045f75917d7b2"
       ],
       0,
-      "5367f6a469b6b47f03283f6113f34099"
+      "574df7b8ae2033500b9f74c3429172ab"
     ],
     [
       "DataStream.final",
@@ -109,7 +109,7 @@
         "fuel_guarded_inversion_DataStream.delta"
       ],
       0,
-      "1e3900bc58baa5cc1352a8fea740eb17"
+      "42e4c809755ba9a4fa45304c834f846d"
     ],
     [
       "DataStream.finalized",
@@ -126,7 +126,7 @@
         "subterm_ordering_Prims.Cons"
       ],
       0,
-      "b42de943300bd63ed4725279d5695e29"
+      "054069db835b0660bca36431120e9f28"
     ],
     [
       "DataStream.wellformed",
@@ -140,7 +140,7 @@
         "fuel_guarded_inversion_Prims.list"
       ],
       0,
-      "6439602df58a8aafa473fcc2a963acfe"
+      "1db05c8daede21ddfe16fc3561d9ffe3"
     ],
     [
       "DataStream.empty_is_well_formed",
@@ -148,14 +148,16 @@
       2,
       1,
       [
-        "@MaxFuel_assumption",
+        "@MaxFuel_assumption", "@MaxIFuel_assumption",
         "@fuel_correspondence_DataStream.wellformed.fuel_instrumented",
         "@query", "constructor_distinct_Prims.Nil",
+        "data_typing_intro_Prims.Nil@tok",
         "equation_with_fuel_DataStream.wellformed.fuel_instrumented",
-        "projection_inverse_BoxBool_proj_0", "projection_inverse_Prims.Nil_a"
+        "kinding_DataStream.delta@tok", "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Prims.Nil_a"
       ],
       0,
-      "6f15075872a10fed8785cc496f8ca996"
+      "1aa1c67d73fcf36d161c0ea72e1ff090"
     ],
     [
       "DataStream.__proj__State__item__log",
@@ -171,7 +173,7 @@
         "refinement_interpretation_DataStream_Tm_refine_b9e1232437f6bc2669aefd956955c539"
       ],
       0,
-      "0271a04031c1e1a0310634dc00862a58"
+      "777ec57cd9688be6956934ff2c948b72"
     ],
     [
       "DataStream.__proj__State__item__ctr",
@@ -183,7 +185,7 @@
         "projection_inverse_DataStream.State_region"
       ],
       0,
-      "a85d520a3c0bfd073d911b7f8d9936a3"
+      "365adf24064a7bb86f17714f979df31c"
     ],
     [
       "DataStream.gen",
@@ -204,7 +206,7 @@
         "refinement_interpretation_DataStream_Tm_refine_d9e35989bf511ab9e96c77a6d6447b81"
       ],
       0,
-      "3a3ef8d2b77129e442fac9e01e1b4e2c"
+      "ff24ae0cb1ad0f04fab9871246fa7ac2"
     ]
   ]
 ]
