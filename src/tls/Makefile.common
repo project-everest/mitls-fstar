@@ -12,6 +12,17 @@ SHELL=/bin/bash
 # Paths and Commands
 
 INCLUDE_PATHS = \
+  $(HACL_HOME)/vale/code/arch/x64/interop/fsti \
+  $(HACL_HOME)/vale/code/arch/x64 \
+  $(HACL_HOME)/vale/specs/defs \
+  $(HACL_HOME)/vale/specs/hardware \
+  $(HACL_HOME)/vale/code/crypto/sha \
+  $(HACL_HOME)/vale/code/arch \
+  $(HACL_HOME)/vale/code/lib/collections \
+  $(HACL_HOME)/vale/code/lib/util \
+  $(HACL_HOME)/vale/specs/crypto \
+  $(HACL_HOME)/vale/specs/math \
+  $(HACL_HOME)/vale/obj/cache_checked \
 	$(HACL_HOME)/secure_api \
 	$(HACL_HOME)/secure_api/utils \
 	$(HACL_HOME)/secure_api/concrete_specializations \
