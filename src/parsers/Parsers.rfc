@@ -254,7 +254,7 @@ struct {
 } ECPointFormatList;
 
 /**
-  Signature algorithms, This re-interprets the RFC5246 type into the RFC8446 one
+Signature algorithms, This re-interprets the RFC5246 type into the RFC8446 one
   https://tools.ietf.org/html/rfc5246#section-7.4.1.4.1
   https://tools.ietf.org/html/rfc8446#section-4.2.3
 **/
@@ -335,7 +335,7 @@ https://tools.ietf.org/html/rfc7301#section-3.1
 opaque ProtocolName<1..2^8-1>;
 
 struct {
-    ProtocolName protocol_name_list<2..2^16-1>;
+  ProtocolName protocol_name_list<2..2^16-1>;
 } ProtocolNameList;
 
 /**
@@ -346,12 +346,15 @@ https://tools.ietf.org/html/rfc6962#section-3.3.1
 opaque SerializedSCT<1..2^16-1>;
 
 struct {
-    SerializedSCT sct_list<1..2^16-1>;
+  SerializedSCT sct_list<1..2^16-1>;
 } SignedCertificateTimestampList;
 
 /**
 Client certificate type
 https://tools.ietf.org/html/rfc7250#section-3
+
+The use of select(ClientOrServerExtension) is
+replaced by separate types of client/server extensions.
 **/
 
 enum /*@open*/ {
@@ -362,19 +365,11 @@ enum /*@open*/ {
 
 struct {
   CertificateType client_certificate_types<1..2^8-1>;
-} ClientCertTypeClientExtension;
-
-struct {
-  CertificateType client_certificate_type;
-} ClientCertTypeServerExtension;
+} ClientCertTypeExtension;
 
 struct {
   CertificateType server_certificate_types<1..2^8-1>;
-} ServerCertTypeClientExtension;
-
-struct {
-  CertificateType server_certificate_type;
-} ServerCertTypeServerExtension;
+} ServerCertTypeExtension;
 
 /**
 Padding
@@ -439,11 +434,7 @@ https://tools.ietf.org/html/rfc8446#section-4.2.1
 
 struct {
   ProtocolVersion versions<2..254>;
-} SupportedVersionsClient;
-
-struct {
-  ProtocolVersion selected_version;
-} SupportedVersionsServer;
+} SupportedVersions;
 
 /**
 Cookie (TLS 1.3 HelloRetryRequest and ClientHello)
@@ -491,7 +482,7 @@ struct {
 } OIDFilter;
 
 struct {
-    OIDFilter filters<0..2^16-1>;
+  OIDFilter filters<0..2^16-1>;
 } OIDFilterExtension;
 
 /**
@@ -550,7 +541,7 @@ struct {
     case secp521r1: UncompressedPointRepresentation66;
 
     case x25519: MontgomeryPoint32;
-    case x448:   MontgomeryPoint56;
+    case x448: MontgomeryPoint56;
 
     case ffdhe2048: ServerDHParams;
     case ffdhe3072: ServerDHParams;
@@ -611,6 +602,12 @@ https://tools.ietf.org/html/rfc8446#section-4.2
 
 opaque UnknownExtension<0..2^16-1>;
 
+/*
+Extensions that may appear in ServerHello.
+Note that this is more general than the table for 1.3,
+as some extensions moved to other messages but may still
+appear in ServerHello in 1.2 handshakes.
+*/
 struct {
   ExtensionType extension_type;
   uint16 ext_len;
@@ -623,27 +620,30 @@ struct {
     case use_srtp: UseSRTPData;
     case heartbeat: HeartbeatMode;
     case application_layer_protocol_negotiation: ProtocolNameList;
-    case signed_certificate_timestamp: SignedCertificateTimestampList;
-    case client_certificate_type: ClientCertTypeClientExtension;
-    case server_certificate_type: ServerCertTypeClientExtension;
-    case padding: PaddingExtension;
+    case signed_certificate_timestamp: SignedCertificateTimestampList; /* For 1.2, in 1.3 this is sent with certificate */
+    case client_certificate_type: CertificateType;
+    case server_certificate_type: CertificateType;
+    case padding: Fail;
     case encrypt_then_mac: Empty;
     case extended_master_secret: Empty;
-    case session_ticket: SessionTicket;
-    case pre_shared_key: PreSharedKeyClientExtension;
-    case early_data: Empty;
-    case supported_versions: SupportedVersionsClient;
-    case cookie: Cookie;
-    case psk_key_exchange_modes: PskKeyExchangeModes;
-    case certificate_authorities: CertificateAuthoritiesExtension;
-    case oid_filters: OIDFilterExtension;
-    case post_handshake_auth: Empty;
-    case signature_algorithms_cert: SignatureSchemeList;
-    case key_share: KeyShareClientHello;
+    case session_ticket: Empty;
+    case pre_shared_key: PreSharedKeyServerExtension;
+    case early_data: Fail;
+    case supported_versions: ProtocolVersion;
+    case cookie: Fail;
+    case psk_key_exchange_modes: Fail;
+    case certificate_authorities: Fail;
+    case oid_filters: Fail;
+    case post_handshake_auth: Fail;
+    case signature_algorithms_cert: Fail;
+    case key_share: KeyShareEntry;
     default: UnknownExtension;
   } extension_data[ext_len];
-} ClientHelloExtension;
+} ServerHelloExtension;
 
+/*
+ClientHello extensions (all protocol versions)
+*/
 struct {
   ExtensionType extension_type;
   uint16 ext_len;
@@ -658,16 +658,16 @@ struct {
     case use_srtp: SRTPProtectionProfiles;
     case heartbeat: HeartbeatMode;
     case application_layer_protocol_negotiation: ProtocolNameList;
-    case signed_certificate_timestamp: SignedCertificateTimestampList;
-    case client_certificate_type: ClientCertTypeClientExtension;
-    case server_certificate_type: ServerCertTypeClientExtension;
+    case signed_certificate_timestamp: Empty;
+    case client_certificate_type: ClientCertTypeExtension;
+    case server_certificate_type: ServerCertTypeExtension;
     case padding: PaddingExtension;
     case encrypt_then_mac: Empty;
     case extended_master_secret: Empty;
     case session_ticket: SessionTicket;
     case pre_shared_key: PreSharedKeyClientExtension;
     case early_data: Empty;
-    case supported_versions: SupportedVersionsClient;
+    case supported_versions: SupportedVersions;
     case cookie: Cookie;
     case psk_key_exchange_modes: PskKeyExchangeModes;
     case certificate_authorities: CertificateAuthoritiesExtension;
@@ -677,17 +677,33 @@ struct {
     case key_share: KeyShareClientHello;
     default: UnknownExtension;
   } extension_data[ext_len];
-} ServerHelloExtension;
+} ClientHelloExtension;
 
+/*
+EncryptedExtensions (1.3).
+The parser cannot verify that extensions are not sent both in CH and EE
+*/
 struct {
   ExtensionType extension_type;
   uint16 ext_len;
   select(extension_type)
   {
+    case server_name: ServerNameList;
+    case max_fragment_length: MaxFragmentLength;
+    case supported_groups: NamedGroupList;
+    case use_srtp: SRTPProtectionProfiles;
+    case heartbeat: HeartbeatMode;
+    case application_layer_protocol_negotiation: ProtocolNameList;
+    case client_certificate_type: ClientCertTypeExtension;
+    case server_certificate_type: ServerCertTypeExtension;
+    case early_data: Empty;
     default: UnknownExtension;
   } extension_data[ext_len];
 } EncryptedExtension;
 
+/*
+Extensions that may appear in the NewSessionTicket[1.3] message
+*/
 struct {
   ExtensionType extension_type;
   uint16 ext_len;
@@ -697,20 +713,33 @@ struct {
   } extension_data[ext_len];
 } NewSessionTicketExtension;
 
+/*
+Extensions that may appear in the CertificateRequest[1.3] message
+*/
 struct {
   ExtensionType extension_type;
   uint16 ext_len;
   select(extension_type)
   {
+    case status_request: CertificateStatusRequest;
+    case signed_certificate_timestamp: Empty;
+    case certificate_authorities: CertificateAuthoritiesExtension;
+    case oid_filters: OIDFilterExtension;
+    case signature_algorithms_cert: SignatureSchemeList;
     default: UnknownExtension;
   } extension_data[ext_len];
 } CertificateRequestExtension;
 
+/*
+Extensions that may appear in the Certificate[1.3] message
+*/
 struct {
   ExtensionType extension_type;
   uint16 body_len;
   select(extension_type)
   {
+    case status_request: CertificateStatus;
+    case signed_certificate_timestamp: SignedCertificateTimestampList;
     default: UnknownExtension;
   } extension_data[body_len];
 } CertificateExtension;
@@ -759,7 +788,7 @@ struct {
 /* Record Types */
 
 enum {
-  invalid(0),
+  /* invalid(0), if it is invalid it should be a parsing error! */
   change_cipher_spec(20),
   alert(21),
   handshake(22),
@@ -1184,7 +1213,7 @@ struct {
 
 struct {
   opaque cert_data<1..2^24-1>;
-	CertificateExtension extensions<0..2^16-1>;
+  CertificateExtension extensions<0..2^16-1>;
 } CertificateEntry13;
 
 struct {
@@ -1295,8 +1324,34 @@ struct {
   ASN1Cert certificate_list<0..2^24-1>;
 } Certificate12;
 
+/*
+From https://tools.ietf.org/html/rfc5246#section-4.7
+The "digitally-signed" keyword is replaced by inlining
+the corresponding struct
+*/
+struct {
+  SignatureScheme algorithm;
+  opaque signature<0..2^16-1>;
+} Signature;
+
+/*
+In TLS <= 1.2, the key exchange is not explicitly
+sent on the network. This forces the parsing of
+ServerKeyExchange and ClientKeyExchange to be
+staged, as their security depends on the correct
+negotiation of the mode to output the kex.
+
+We use a custom attribute to express dependencies
+on a value not sent over the network. This pattern
+should be avoided, and fortunately, does not appear
+in TLS 1.3.
+
+See https://www.smacktls.com/ for examples of what
+can go wrong because of badly specified TLS message
+formats.
+*/
 enum {
-  dhe_dss, dhe_rsa, dh_anon, rsa, dh_dss, dh_rsa,
+  dh_anon, dhe, ecdhe, rsa,
   (255)
 } KeyExchangeAlgorithm;
 
@@ -1304,6 +1359,12 @@ struct {
   ServerDHParams params;
 } DHAnonServerKeyExchange;
 
+/*
+Not used on the network, but this parser is used
+to build the contents of the signature. The
+injectivity of this parser is used for authenticating
+the connection through the nonces.
+*/
 struct {
   opaque client_random[32];
   opaque server_random[32];
@@ -1312,18 +1373,117 @@ struct {
 
 struct {
   SignedDHParams params;
-  SignatureScheme algorithm;
-  opaque signature<0..2^16-1>;
+  Signature sig;
 } SignedDHKeyExchange;
+
+/*
+For ECDH key exchange, formats are
+extracted from https://tools.ietf.org/html/rfc4492#section-5.4
+*/
+
+enum {
+  ec_basis_trinomial,
+  ec_basis_pentanomial,
+  (255)
+} ECBasisType;
+
+enum {
+  explicit_prime (1),
+  explicit_char2 (2),
+  named_curve (3),
+  (255)
+} ECCurveType;
+
+struct {
+  opaque point <1..2^8-1>;
+} ECPoint;
+
+struct {
+  opaque a <1..2^8-1>;
+  opaque b <1..2^8-1>;
+} ECCurve;
+
+struct {
+  opaque prime_p<1..2^8-1>;
+  ECCurve curve;
+  ECPoint base;
+  opaque order<1..2^8-1>;
+  opaque cofactor<1..2^8-1>;
+} ExplicitPrimeECParams;
+
+struct {
+  opaque k<1..2^8-1>;
+} Char2Trinomial;
+
+struct {
+  opaque k1<1..2^8-1>;
+  opaque k2<1..2^8-1>;
+  opaque k3<1..2^8-1>;
+} Char2Pentanomial;
+
+struct {
+  ECBasisType basis;
+  select (basis) {
+    case ec_trinomial: Char2Trinomial;
+    case ec_pentanomial: Char2Pentanomial;
+  } repr;
+} Char2Representation;
+
+struct {
+  uint16 m;
+  Char2Representation repr;
+  ECCurve curve;
+  ECPoint base;
+  opaque order <1..2^8-1>;
+  opaque cofactor <1..2^8-1>;
+} ExplicitChar2ECParams;
+
+struct {
+  ECCurveType curve_type;
+  select (curve_type) {
+    case explicit_prime: ExplicitPrimeECParams;
+    case explicit_char2: ExplicitChar2ECParams;
+    case named_curve: NamedGroup;
+  } curve;
+} ECParameters;
+
+struct {
+  ECParameters curve_params;
+  opaque public<1..2^8-1>;
+} ServerECDHParams;
+
+/*
+Only used for the actual signature contents,
+not sent over the network. We rely on injectivity
+of this parser to authenticate the connection
+*/
+struct {
+  opaque client_random[32];
+  opaque server_random[32];
+  ServerECDHParams params;
+} SignedECDHParams;
+
+struct {
+  ServerECDHParams params;
+  Signature sig;
+} SignedECDHKeyExchange;
 
 struct {
   /*@implicit*/ KeyExchangeAlgorithm kex;
   select (kex) {
     case dh_anon: DHAnonServerKeyExchange;
-    case dhe_dss: SignedDHKeyExchange;
-    case dhe_rsa: SignedDHKeyExchange;
+    case dhe: SignedDHKeyExchange;
+    case ecdhe: SignedECDHKeyExchange;
+    /* Force a parsing error if handshake tries to parse SKE in RSA kex */
+    case rsa: Fail;
   } key_exchange;
 } ServerKeyExchange;
+
+/*
+Client key exchange.
+See https://tools.ietf.org/html/rfc5246#section-7.4.7
+and https://tools.ietf.org/html/rfc4492#section-5.7
+*/
 
 struct {
   ProtocolVersion client_version;
@@ -1338,15 +1498,28 @@ struct {
   opaque dh_Yc<1..2^16-1>;
 } ClientDiffieHellmanPublic;
 
+/*
+FIXME static ECDH case
+  enum { implicit, explicit } PublicValueEncoding;
+
+This is not sent on the network and would require a second layer of staging
+We'd rather not support this as the standard is inconsistent between client
+and server key exchange messages (one is omitted, the other is empty).
+
+The confusing and inconsistent formats for static DH are the root cause of
+severe state machine attacks, and support should be strongly discouraged.
+*/
+struct {
+  ECPoint ecdh_Yc;
+} ClientECDiffieHellmanPublic;
+
 struct {
   /*@implicit*/ KeyExchangeAlgorithm kex;
   select (kex) {
-      case rsa:     EncryptedPreMasterSecret;
-      case dhe_dss: ClientDiffieHellmanPublic;
-      case dhe_rsa: ClientDiffieHellmanPublic;
-      case dh_dss:  Empty;
-      case dh_rsa:  Empty;
-      case dh_anon: Empty;
+      case rsa: EncryptedPreMasterSecret;
+      case dhe: ClientDiffieHellmanPublic;
+      case ecdhe: ClientECDiffieHellmanPublic;
+      case dh_anon: ClientDiffieHellmanPublic;
   } exchange_keys;
 } ClientKeyExchange;
 
