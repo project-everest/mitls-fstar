@@ -17,7 +17,7 @@
         "typing_AEAD.ivlen", "typing_FStar.UInt32.v"
       ],
       0,
-      "432cdbc68709969857738856dcd7ca48"
+      "cd3899a37289dd368219590668ac6f0e"
     ],
     [
       "AEAD.aadmax",
@@ -26,7 +26,7 @@
       1,
       [ "@query" ],
       0,
-      "b7d27df380bfd2f4bb135b1be52676cc"
+      "240e2ceec3ce460810495a7c95c6fe0d"
     ],
     [
       "AEAD.cipher",
@@ -48,7 +48,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "55abaf644e9a33800d4bf019867a0f79"
+      "71df69626fe674c69c837a76480e9aaa"
     ],
     [
       "AEAD.cipher32",
@@ -74,7 +74,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "986a3b4e655bc51bc6d8b00f01d05352"
+      "bd7f33ef159343aecdf469403b1bd80c"
     ],
     [
       "AEAD.mk_entry",
@@ -89,11 +89,11 @@
         "equation_Crypto.Symmetric.Bytes.lbytes", "equation_Prims.nat",
         "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_AEAD_Tm_refine_412b460ecffcfc792ce1deea32dccd76",
-        "refinement_interpretation_LowParse.Spec.Combinators_Tm_refine_b769c0bf16cb286238e7b11ff583e99b",
+        "refinement_interpretation_EverCrypt.HMAC_Tm_refine_b769c0bf16cb286238e7b11ff583e99b",
         "typing_Crypto.Plain.as_bytes"
       ],
       0,
-      "23573afdcbbd3959719b22b90f974df7"
+      "09a4f36b4865b43bb11f3d3d60d957a7"
     ],
     [
       "AEAD.entry_injective",
@@ -113,15 +113,15 @@
         "function_token_typing_FStar.UInt32.n", "int_inversion",
         "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_AEAD_Tm_refine_412b460ecffcfc792ce1deea32dccd76",
+        "refinement_interpretation_EverCrypt.HMAC_Tm_refine_b769c0bf16cb286238e7b11ff583e99b",
         "refinement_interpretation_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
         "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
-        "refinement_interpretation_LowParse.Spec.Combinators_Tm_refine_b769c0bf16cb286238e7b11ff583e99b",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "typing_Crypto.Plain.as_bytes", "typing_FStar.Bytes.len",
         "typing_FStar.UInt32.v"
       ],
       0,
-      "c831443ce803a332dd2c8a4b40bd5c9c"
+      "82722aabec79891b2e45f204ad9de03e"
     ],
     [
       "AEAD.fresh_addresses",
@@ -136,7 +136,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "0751d710c9df93e36a29a11b9f5087af"
+      "fa2bf71be518c0b30def304fb7be0a16"
     ],
     [
       "AEAD.fresh_addresses",
@@ -151,7 +151,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "07901e9f406b8fff5fc70786bd88cdb6"
+      "3f89f4f71fb4b2deb284fc0cb6241fa7"
     ],
     [
       "AEAD.ok_plain_len_32",
@@ -168,7 +168,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "57567b2b30f61ffa19ed28a537ac1cd5"
+      "d7c77c61ccf9d43c7776ab3366f8cddd"
     ],
     [
       "AEAD.frame_log",
@@ -181,7 +181,7 @@
         "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
       ],
       0,
-      "5ba0cd2c1f77b061df50ce0f47f9896c"
+      "6916b6424e1d4e63e1867bf920e6bc01"
     ],
     [
       "AEAD.gen",
@@ -199,7 +199,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "31ce5a917359f4f77365e21f86d358be"
+      "6b5186fc4f4b197bbb2ff02843b468cd"
     ]
   ]
 ]

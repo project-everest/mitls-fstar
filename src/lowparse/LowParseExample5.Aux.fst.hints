@@ -16,7 +16,7 @@
         "token_correspondence_LowParseExample5.Aux.synth_inner"
       ],
       0,
-      "5c39f03bace19f1448df06b49b01d7f5"
+      "3947b186849580f9a41f2dc83528df6a"
     ],
     [
       "LowParseExample5.Aux.parse_inner",
@@ -27,7 +27,7 @@
         "@query", "constructor_distinct_FStar.Pervasives.Native.Some",
         "disc_equation_FStar.Pervasives.Native.Some",
         "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_LowParse.Spec.Combinators.total_constant_size_parser_kind",
+        "equation_LowParse.Spec.Base.total_constant_size_parser_kind",
         "equation_LowParse.Spec.Int.parse_u16_kind", "equation_Prims.nat",
         "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
         "primitive_Prims.op_Equality",
@@ -48,7 +48,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind_metadata_t_parser_kind_metadata_total"
       ],
       0,
-      "2b389612a9a716df15a5381307248885"
+      "c8479acf710bccdca13f70b753222b71"
     ],
     [
       "LowParseExample5.Aux.serialize_inner_raw",
@@ -57,14 +57,13 @@
       1,
       [
         "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_LowParse.Spec.Combinators.total_constant_size_parser_kind",
+        "equation_LowParse.Spec.Base.total_constant_size_parser_kind",
         "equation_LowParse.Spec.Int.parse_u16_kind",
-        "equation_LowParseExample5.Aux.parse_inner_raw",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "c30d7ebd47b95847b06ebb430997ae80"
+      "ff98fb2fa83f781831c4396be493dc92"
     ],
     [
       "LowParseExample5.Aux.serialize_inner",
@@ -76,9 +75,9 @@
         "constructor_distinct_FStar.Pervasives.Native.Some",
         "disc_equation_FStar.Pervasives.Native.Some",
         "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_LowParse.Spec.Base.total_constant_size_parser_kind",
         "equation_LowParse.Spec.Combinators.synth_injective",
         "equation_LowParse.Spec.Combinators.synth_inverse",
-        "equation_LowParse.Spec.Combinators.total_constant_size_parser_kind",
         "equation_LowParse.Spec.Int.parse_u16_kind",
         "equation_LowParseExample5.Aux.synth_inner",
         "equation_LowParseExample5.Aux.synth_inner_recip",
@@ -112,7 +111,7 @@
         "token_correspondence_LowParseExample5.Aux.synth_inner_recip"
       ],
       0,
-      "bc7b470a2e038fd6210d42e2325a36fd"
+      "c2f9e08580de75f4ed1632e67c9ab106"
     ],
     [
       "LowParseExample5.Aux.serialize_inner_intro",
@@ -131,7 +130,7 @@
         "equation_LowParse.Low.Base.buffer8",
         "equation_LowParse.Low.Base.valid_pos",
         "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_LowParse.Spec.Combinators.total_constant_size_parser_kind",
+        "equation_LowParse.Spec.Base.total_constant_size_parser_kind",
         "equation_LowParse.Spec.Int.parse_u16_kind",
         "equation_LowStar.Buffer.buffer", "equation_Prims.nat",
         "equation_Prims.squash",
@@ -162,7 +161,7 @@
         "typing_LowStar.Monotonic.Buffer.len"
       ],
       0,
-      "84e1bbfe56ef962f731ea5ab728fe9ac"
+      "ebd1694dfb64f4a24211ef701329e4d4"
     ],
     [
       "LowParseExample5.Aux.serialize_inner_intro",
@@ -189,10 +188,10 @@
         "equation_LowParse.Low.Base.valid_pos",
         "equation_LowParse.Low.Base.validator_max_length",
         "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_LowParse.Spec.Base.total_constant_size_parser_kind",
         "equation_LowParse.Spec.Combinators.and_then_kind",
         "equation_LowParse.Spec.Combinators.and_then_metadata",
         "equation_LowParse.Spec.Combinators.synth_injective",
-        "equation_LowParse.Spec.Combinators.total_constant_size_parser_kind",
         "equation_LowParse.Spec.Int.parse_u16_kind",
         "equation_LowParseExample5.Aux.parse_inner",
         "equation_LowParseExample5.Aux.parse_inner_",
@@ -253,7 +252,7 @@
         "typing_LowParse.Spec.Combinators.and_then_kind"
       ],
       0,
-      "a08709e8844035b2aa27d0ac18e4174c"
+      "290523bb48245190215112b11a081026"
     ],
     [
       "LowParseExample5.Aux.parse_t'",
@@ -270,7 +269,7 @@
         "token_correspondence_LowParseExample5.Aux.synth_t"
       ],
       0,
-      "10ae206fa8decd463a06b8001dfba40b"
+      "998e14710f39982b37a9bcfff312b928"
     ],
     [
       "LowParseExample5.Aux.parse_t_kind",
@@ -278,20 +277,15 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query",
-        "constructor_distinct_FStar.Pervasives.Native.Some",
+        "@query", "constructor_distinct_FStar.Pervasives.Native.Some",
         "disc_equation_FStar.Pervasives.Native.Some",
         "equation_LowParse.Spec.Base.get_parser_kind",
-        "equation_LowParse.Spec.Base.parser_kind",
         "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_LowParse.Spec.Base.total_constant_size_parser_kind",
         "equation_LowParse.Spec.Combinators.and_then_kind",
-        "equation_LowParse.Spec.Combinators.total_constant_size_parser_kind",
-        "equation_LowParse.Spec.Int.parse_u16_kind",
         "equation_LowParse.Spec.Int.parse_u32_kind",
-        "equation_LowParseExample5.Aux.parse_inner_",
         "equation_LowParseExample5.Aux.parse_inner_kind",
         "equation_LowParseExample5.Aux.parse_t_", "equation_Prims.nat",
-        "function_token_typing_LowParseExample5.Aux.parse_inner_kind",
         "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
         "primitive_Prims.op_Equality",
         "proj_equation_FStar.Pervasives.Native.Some_v",
@@ -308,11 +302,10 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
-        "projection_inverse_LowParse.Spec.Base.Mkparser_kind_metadata_t_parser_kind_metadata_total",
-        "refinement_interpretation_LowParseExample5.Aux_Tm_refine_f8632554367f02d7aa2ab024b23736aa"
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind_metadata_t_parser_kind_metadata_total"
       ],
       0,
-      "dde53f76537e5119b035d2d712c28b15"
+      "d18ae5ad301f5154500f7af28fb8c524"
     ],
     [
       "LowParseExample5.Aux.serialize_t_raw",
@@ -326,7 +319,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "89cc50869ea50960b100a9dc0c5212fa"
+      "f8470cc84ade33a27be5b15931736438"
     ],
     [
       "LowParseExample5.Aux.serialize_t",
@@ -353,7 +346,7 @@
         "token_correspondence_LowParseExample5.Aux.synth_t_recip"
       ],
       0,
-      "047a0f2d7a0bd8e2ab8935e0df611b1d"
+      "500888cb19885326de2e685ccb76635f"
     ],
     [
       "LowParseExample5.Aux.serialize_t_intro",
@@ -372,7 +365,7 @@
         "equation_LowParse.Low.Base.buffer8",
         "equation_LowParse.Low.Base.valid_pos",
         "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_LowParse.Spec.Combinators.total_constant_size_parser_kind",
+        "equation_LowParse.Spec.Base.total_constant_size_parser_kind",
         "equation_LowParse.Spec.Int.parse_u32_kind",
         "equation_LowParseExample5.Aux.parse_inner",
         "equation_LowParseExample5.Aux.parse_inner_",
@@ -409,7 +402,7 @@
         "typing_LowStar.Monotonic.Buffer.len"
       ],
       0,
-      "2b8972d3c2f5e7b312784f1c49ce9559"
+      "0db958428c259028c42a06e80aee195a"
     ],
     [
       "LowParseExample5.Aux.serialize_t_intro",
@@ -432,9 +425,9 @@
         "equation_LowParse.Spec.Base.get_parser_kind",
         "equation_LowParse.Spec.Base.parser_kind",
         "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_LowParse.Spec.Base.total_constant_size_parser_kind",
         "equation_LowParse.Spec.Combinators.and_then_kind",
         "equation_LowParse.Spec.Combinators.synth_injective",
-        "equation_LowParse.Spec.Combinators.total_constant_size_parser_kind",
         "equation_LowParse.Spec.Int.parse_u32_kind",
         "equation_LowParseExample5.Aux.parse_inner",
         "equation_LowParseExample5.Aux.parse_inner_",
@@ -495,7 +488,7 @@
         "typing_LowParseExample5.Aux.parse_t_kind"
       ],
       0,
-      "aa04fe6243f903f28d56314cfc5e18d0"
+      "4856c563c503e9cfa1dc7caccb36c133"
     ]
   ]
 ]
