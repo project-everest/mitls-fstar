@@ -34,7 +34,7 @@ let validate_vldata_payload
   (v: validator p)
   (i: bounded_integer sz { f i == true } )
 : Tot (validator (parse_vldata_payload sz f p i))
-= validate_weaken (parse_vldata_payload_kind sz) (validate_fldata v (U32.v i) i) ()
+= validate_weaken (parse_vldata_payload_kind sz k) (validate_fldata v (U32.v i) i) ()
 
 inline_for_extraction
 let validate_vldata_gen

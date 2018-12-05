@@ -89,9 +89,11 @@ let parse_vldata_payload_size
 // unfold
 let parse_vldata_payload_kind
   (sz: integer_size)
+  (k: parser_kind)
 : parser_kind
 = strong_parser_kind 0 (parse_vldata_payload_size sz) ({
     parser_kind_metadata_total = false;
+    parser_kind_metadata_fail = k.parser_kind_metadata.parser_kind_metadata_fail;
   })
 
 let parse_vldata_payload
@@ -101,8 +103,8 @@ let parse_vldata_payload
   (#t: Type0)
   (p: parser k t)
   (i: bounded_integer sz { f i == true } )
-: Tot (parser (parse_vldata_payload_kind sz) t)
-= weaken (parse_vldata_payload_kind sz) (parse_fldata p (U32.v i))
+: Tot (parser (parse_vldata_payload_kind sz k) t)
+= weaken (parse_vldata_payload_kind sz k) (parse_fldata p (U32.v i))
 
 #set-options "--z3rlimit 64"
 
@@ -138,17 +140,20 @@ let parse_fldata_and_then_cases_injective
 // unfold
 let parse_vldata_gen_kind
   (sz: integer_size)
+  (k: parser_kind)
 : Tot parser_kind
 = strong_parser_kind sz (sz + parse_vldata_payload_size sz) ({
     parser_kind_metadata_total = false;
+    parser_kind_metadata_fail = k.parser_kind_metadata.parser_kind_metadata_fail;
   })
 
 let parse_vldata_gen_kind_correct
   (sz: integer_size)
+  (k: parser_kind)
 : Lemma
-  ( (parse_vldata_gen_kind sz) == (and_then_kind (parse_filter_kind (parse_bounded_integer_kind sz)) (parse_vldata_payload_kind sz)))
-= let kl = parse_vldata_gen_kind sz in
-  let kr = and_then_kind (parse_filter_kind (parse_bounded_integer_kind sz)) (parse_vldata_payload_kind sz) in
+  ( (parse_vldata_gen_kind sz k) == (and_then_kind (parse_filter_kind (parse_bounded_integer_kind sz)) (parse_vldata_payload_kind sz k)))
+= let kl = parse_vldata_gen_kind sz k in
+  let kr = and_then_kind (parse_filter_kind (parse_bounded_integer_kind sz)) (parse_vldata_payload_kind sz k) in
   assert_norm (kl == kr)
 
 abstract
@@ -158,9 +163,9 @@ let parse_vldata_gen
   (#k: parser_kind)
   (#t: Type0)
   (p: parser k t)
-: Tot (parser (parse_vldata_gen_kind sz) t)
+: Tot (parser (parse_vldata_gen_kind sz k) t)
 = parse_fldata_and_then_cases_injective sz f p;
-  parse_vldata_gen_kind_correct sz;
+  parse_vldata_gen_kind_correct sz k;
   (parse_filter (parse_bounded_integer sz) f)
   `and_then`
   parse_vldata_payload sz f p
@@ -174,13 +179,13 @@ let parse_vldata_gen_eq_def
   (p: parser k t)
 : Lemma
   (and_then_cases_injective (parse_vldata_payload sz f p) /\
-  parse_vldata_gen_kind sz == and_then_kind (parse_filter_kind (parse_bounded_integer_kind sz)) (parse_vldata_payload_kind sz) /\
+  parse_vldata_gen_kind sz k == and_then_kind (parse_filter_kind (parse_bounded_integer_kind sz)) (parse_vldata_payload_kind sz k) /\
   parse_vldata_gen sz f p ==
   ((parse_filter (parse_bounded_integer sz) f)
   `and_then`
   parse_vldata_payload sz f p))
 = parse_fldata_and_then_cases_injective sz f p;
-  parse_vldata_gen_kind_correct sz
+  parse_vldata_gen_kind_correct sz k
 
 
 #set-options "--z3rlimit 16"
@@ -212,7 +217,7 @@ let parse_vldata_gen_eq
     else None
   ))
 = parse_fldata_and_then_cases_injective sz f p;
-  parse_vldata_gen_kind_correct sz;
+  parse_vldata_gen_kind_correct sz k;
   and_then_eq (parse_filter (parse_bounded_integer sz) f) (parse_vldata_payload sz f p) input;
   parse_filter_eq (parse_bounded_integer sz) f input
 
@@ -372,6 +377,7 @@ let parse_bounded_vldata_strong_kind
   (* the size of the length prefix must conform to the max bound given by the user, not on the metadata *)
   strong_parser_kind (log256' max + min') (log256' max + max') ({
     parser_kind_metadata_total = false;
+    parser_kind_metadata_fail = k.parser_kind_metadata.parser_kind_metadata_fail;
   })
 
 let parse_bounded_vldata_elim'

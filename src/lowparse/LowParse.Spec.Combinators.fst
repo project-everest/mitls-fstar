@@ -83,6 +83,7 @@ let constant_size_parser_kind
 : Tot parser_kind
 = strong_parser_kind sz sz ({
     parser_kind_metadata_total = false;
+    parser_kind_metadata_fail = false;
   })
 
 let make_constant_size_parser
@@ -139,6 +140,7 @@ inline_for_extraction
 let parse_ret_kind : parser_kind =
   strong_parser_kind 0 0 ({
     parser_kind_metadata_total = true;
+    parser_kind_metadata_fail = false;
   })
 
 let parse_ret (#t:Type) (v:t) : Tot (parser parse_ret_kind t) =
@@ -175,7 +177,7 @@ let fail_parser
   strengthen k p
 
 inline_for_extraction
-let parse_false_kind = strong_parser_kind 0 0 ({ parser_kind_metadata_total = false })
+let parse_false_kind = strong_parser_kind 0 0 ({ parser_kind_metadata_total = false; parser_kind_metadata_fail = true; })
 
 let parse_false : parser parse_false_kind (squash False) = fail_parser _ _
 
@@ -357,6 +359,7 @@ let and_then_metadata
 : Tot parser_kind_metadata_t
 = {
     parser_kind_metadata_total = k1.parser_kind_metadata_total && k2.parser_kind_metadata_total;
+    parser_kind_metadata_fail = k1.parser_kind_metadata_fail || k2.parser_kind_metadata_fail;
   }
 
 // unfold
@@ -1240,6 +1243,7 @@ let parse_filter_kind (k: parser_kind) : Tot parser_kind =
     parser_kind_high = k.parser_kind_high;
     parser_kind_metadata = {
       parser_kind_metadata_total = false;
+      parser_kind_metadata_fail = k.parser_kind_metadata.parser_kind_metadata_fail;
     };
     parser_kind_subkind = k.parser_kind_subkind;
   }
@@ -1248,6 +1252,7 @@ let parse_filter_kind (k: parser_kind) : Tot parser_kind =
 let parse_filter_payload_kind : parser_kind =
   strong_parser_kind 0 0 ({
     parser_kind_metadata_total = false;
+    parser_kind_metadata_fail = false;
   })
 
 let parse_filter_payload

@@ -89,6 +89,12 @@ let fldata_to_array_inj
     x1 == x2)
 = ()
 
+inline_for_extraction
+let parse_array_kind
+  (array_byte_size: nat)
+: Tot parser_kind
+= parse_fldata_kind array_byte_size parse_list_kind
+
 let parse_array
   (#k: parser_kind)
   (#t: Type0)
@@ -96,7 +102,7 @@ let parse_array
   (s: serializer p)
   (array_byte_size: nat)
   (elem_count: nat)
-: Pure (parser (parse_fldata_kind array_byte_size) (array t elem_count))
+: Pure (parser (parse_array_kind array_byte_size) (array t elem_count))
   (requires (
     fldata_array_precond p array_byte_size elem_count == true
   ))

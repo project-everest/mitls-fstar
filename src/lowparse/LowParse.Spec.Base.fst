@@ -276,6 +276,7 @@ let parser_subkind_prop (k: parser_subkind) (#t: Type0) (f: bare_parser t) : GTo
 
 type parser_kind_metadata_t = {
   parser_kind_metadata_total: bool;
+  parser_kind_metadata_fail: bool;
 }
 
 inline_for_extraction
@@ -307,14 +308,19 @@ let total_constant_size_parser_kind
 : Tot parser_kind
 = strong_parser_kind sz sz ({
     parser_kind_metadata_total = true;
+    parser_kind_metadata_fail = false;
   })
+
+let parser_always_fails (#t: Type0) (f: bare_parser t) : GTot Type0 =
+  forall input . {:pattern (f input)} f input == None
 
 let parser_kind_prop (#t: Type0) (k: parser_kind) (f: bare_parser t) : GTot Type0 =
   injective f /\
   parses_at_least k.parser_kind_low f /\
   (Some? k.parser_kind_high ==> (parses_at_most (Some?.v k.parser_kind_high) f)) /\
   (((k.parser_kind_high == Some k.parser_kind_low) /\ (k.parser_kind_metadata.parser_kind_metadata_total == true)) ==> is_total_constant_size_parser k.parser_kind_low f) /\
-  (Some? k.parser_kind_subkind ==> parser_subkind_prop (Some?.v k.parser_kind_subkind) f)
+  (Some? k.parser_kind_subkind ==> parser_subkind_prop (Some?.v k.parser_kind_subkind) f) /\
+  (k.parser_kind_metadata.parser_kind_metadata_fail == true ==> parser_always_fails f)
 
 let parser_kind_prop_ext
   (#t: Type0)
@@ -374,7 +380,8 @@ let is_weaker_than
     Some?.v k2.parser_kind_high <= Some?.v k1.parser_kind_high
   )) /\
   (k1.parser_kind_metadata.parser_kind_metadata_total == true ==> k2.parser_kind_metadata.parser_kind_metadata_total == true) /\
-  (Some? k1.parser_kind_subkind ==> k1.parser_kind_subkind == k2.parser_kind_subkind)
+  (Some? k1.parser_kind_subkind ==> k1.parser_kind_subkind == k2.parser_kind_subkind) /\
+  (k1.parser_kind_metadata.parser_kind_metadata_fail == true ==> k2.parser_kind_metadata.parser_kind_metadata_fail == true)
 
 (* AR: see bug#1349 *)
 unfold let coerce_to_bare_parser (t:Type0) (k2:parser_kind) (p:parser k2 t)
@@ -392,6 +399,8 @@ let strengthen (k: parser_kind) (#t: Type0) (f: bare_parser t) : Pure (parser k 
   (requires (parser_kind_prop k f))
   (ensures (fun _ -> True))
 = f
+
+#push-options "--z3rlimit 16"
 
 let glb
   (k1 k2: parser_kind)
@@ -413,9 +422,12 @@ let glb
     );
     parser_kind_metadata = {
       parser_kind_metadata_total = k1.parser_kind_metadata.parser_kind_metadata_total && k2.parser_kind_metadata.parser_kind_metadata_total;
+      parser_kind_metadata_fail = k1.parser_kind_metadata.parser_kind_metadata_fail && k2.parser_kind_metadata.parser_kind_metadata_fail;      
     };
     parser_kind_subkind = if k1.parser_kind_subkind = k2.parser_kind_subkind then k1.parser_kind_subkind else None
   }
+
+#pop-options
 
 let default_parser_kind : (x: parser_kind {
   forall (t: Type0) (p: bare_parser t) .
@@ -426,6 +438,7 @@ let default_parser_kind : (x: parser_kind {
     parser_kind_high = None;
     parser_kind_metadata = {
       parser_kind_metadata_total = false;
+      parser_kind_metadata_fail = false;
     };
     parser_kind_subkind = None;
   }

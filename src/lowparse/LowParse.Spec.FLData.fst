@@ -47,9 +47,11 @@ let parse_fldata_injective
 inline_for_extraction
 let parse_fldata_kind
   (sz: nat)
+  (k: parser_kind)
 : Tot parser_kind
 = strong_parser_kind sz sz ({
     parser_kind_metadata_total = false;
+    parser_kind_metadata_fail = k.parser_kind_metadata.parser_kind_metadata_fail;
   })
 
 inline_for_extraction
@@ -58,7 +60,7 @@ val parse_fldata
   (#t: Type0)
   (p: parser k t)
   (sz: nat)
-: Tot (parser (parse_fldata_kind sz) t)
+: Tot (parser (parse_fldata_kind sz k) t)
 
 let parse_fldata #b #t p sz =
   parse_fldata_injective p sz;
@@ -134,7 +136,7 @@ let parse_fldata_strong
   (#p: parser k t)
   (s: serializer p)
   (sz: nat)
-: Tot (parser (parse_fldata_kind sz) (parse_fldata_strong_t s sz))
+: Tot (parser (parse_fldata_kind sz k) (parse_fldata_strong_t s sz))
 = coerce_parser
   (parse_fldata_strong_t s sz)
   (parse_strengthen (parse_fldata p sz) (parse_fldata_strong_pred s sz) (parse_fldata_strong_correct s sz))
