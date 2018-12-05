@@ -116,10 +116,7 @@ let parse_list_kind =
   {
     parser_kind_low = 0;
     parser_kind_high = None;
-    parser_kind_metadata = {
-      parser_kind_metadata_total = false;
-      parser_kind_metadata_fail = false;
-    };
+    parser_kind_metadata = None;
     parser_kind_subkind = Some ParserConsumesAll;
   }
 

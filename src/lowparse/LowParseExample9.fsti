@@ -49,7 +49,7 @@ inline_for_extraction
 let t (k: kt) : Tot Type = (x: tt { tag_of_tt x == k } )
 
 inline_for_extraction
-let parse_t_kind : LP.parser_kind = LP.strong_parser_kind 1 4 ({ LP.parser_kind_metadata_total = true; LP.parser_kind_metadata_fail = false; })
+let parse_t_kind : LP.parser_kind = LP.strong_parser_kind 1 4 (Some LP.ParserKindMetadataTotal)
 
 val parse_t (k: kt) : Tot (LP.parser parse_t_kind (t k))
 

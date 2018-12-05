@@ -91,10 +91,11 @@ let parse_vldata_payload_kind
   (sz: integer_size)
   (k: parser_kind)
 : parser_kind
-= strong_parser_kind 0 (parse_vldata_payload_size sz) ({
-    parser_kind_metadata_total = false;
-    parser_kind_metadata_fail = k.parser_kind_metadata.parser_kind_metadata_fail;
-  })
+= strong_parser_kind 0 (parse_vldata_payload_size sz) (
+    match k.parser_kind_metadata with
+    | Some ParserKindMetadataFail -> Some ParserKindMetadataFail
+    | _ -> None
+  )
 
 let parse_vldata_payload
   (sz: integer_size)
@@ -142,10 +143,11 @@ let parse_vldata_gen_kind
   (sz: integer_size)
   (k: parser_kind)
 : Tot parser_kind
-= strong_parser_kind sz (sz + parse_vldata_payload_size sz) ({
-    parser_kind_metadata_total = false;
-    parser_kind_metadata_fail = k.parser_kind_metadata.parser_kind_metadata_fail;
-  })
+= strong_parser_kind sz (sz + parse_vldata_payload_size sz) (
+    match k.parser_kind_metadata with
+    | Some ParserKindMetadataFail -> Some ParserKindMetadataFail
+    | _ -> None
+  )
 
 let parse_vldata_gen_kind_correct
   (sz: integer_size)
@@ -375,10 +377,11 @@ let parse_bounded_vldata_strong_kind
   [@inline_let]
   let max' = if max' < min' then min' else max' in
   (* the size of the length prefix must conform to the max bound given by the user, not on the metadata *)
-  strong_parser_kind (log256' max + min') (log256' max + max') ({
-    parser_kind_metadata_total = false;
-    parser_kind_metadata_fail = k.parser_kind_metadata.parser_kind_metadata_fail;
-  })
+  strong_parser_kind (log256' max + min') (log256' max + max') (
+    match k.parser_kind_metadata with
+    | Some ParserKindMetadataFail -> Some ParserKindMetadataFail
+    | _ -> None
+  )
 
 let parse_bounded_vldata_elim'
   (min: nat)

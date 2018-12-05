@@ -49,10 +49,11 @@ let parse_fldata_kind
   (sz: nat)
   (k: parser_kind)
 : Tot parser_kind
-= strong_parser_kind sz sz ({
-    parser_kind_metadata_total = false;
-    parser_kind_metadata_fail = k.parser_kind_metadata.parser_kind_metadata_fail;
-  })
+= strong_parser_kind sz sz (
+    match k.parser_kind_metadata with
+    | Some ParserKindMetadataFail -> Some ParserKindMetadataFail
+    | _ -> None
+  )
 
 inline_for_extraction
 val parse_fldata

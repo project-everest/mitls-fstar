@@ -24,7 +24,7 @@ type t = {
 
 inline_for_extraction
 noextract
-let parse_inner_kind : LP.parser_kind = LP.strong_parser_kind 4 4 ({ LP.parser_kind_metadata_total = true; LP.parser_kind_metadata_fail = false; })
+let parse_inner_kind : LP.parser_kind = LP.strong_parser_kind 4 4 (Some LP.ParserKindMetadataTotal)
 
 val parse_inner: LP.parser parse_inner_kind inner
 
