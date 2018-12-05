@@ -320,7 +320,7 @@ let serialize_t
 let serialize32_case_B: LP.serializer32 serialize_case_B =
   LP.serialize32_filter LP.serialize32_u16 parse_case_B_filter
 
-#push-options "--z3rlimit 24"
+#push-options "--z3rlimit 32"
 
 inline_for_extraction
 let serialize32_known_cases
