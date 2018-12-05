@@ -785,3 +785,27 @@ let validate_strengthen
   [@inline_let]
   let _ = valid_facts p1 h input pos in
   v1 input pos
+
+inline_for_extraction
+let validate_compose_context
+  (#pk: parser_kind)
+  (#kt1 #kt2: Type)
+  (f: (kt2 -> Tot kt1))
+  (t: (kt1 -> Tot Type0))
+  (p: ((k: kt1) -> Tot (parser pk (t k))))
+  (v: ((k: kt1) -> Tot (validator (p k))))
+  (k: kt2)
+: Tot (validator (p (f k)))
+= fun input pos -> v (f k) input pos
+
+inline_for_extraction
+let jump_compose_context
+  (#pk: parser_kind)
+  (#kt1 #kt2: Type)
+  (f: (kt2 -> Tot kt1))
+  (t: (kt1 -> Tot Type0))
+  (p: ((k: kt1) -> Tot (parser pk (t k))))
+  (v: ((k: kt1) -> Tot (jumper (p k))))
+  (k: kt2)
+: Tot (jumper (p (f k)))
+= fun input pos -> v (f k) input pos

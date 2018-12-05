@@ -367,3 +367,41 @@ let size32_synth'
   })
 : Tot (size32 (serialize_synth p1 f2 s1 g1 u))
 = size32_synth p1 f2 s1 s1' g1 (fun x -> g1 x) u
+
+inline_for_extraction
+let parse32_compose_context
+  (#pk: parser_kind)
+  (#kt1 #kt2: Type)
+  (f: (kt2 -> Tot kt1))
+  (t: (kt1 -> Tot Type0))
+  (p: ((k: kt1) -> Tot (parser pk (t k))))
+  (p32: ((k: kt1) -> Tot (parser32 (p k))))
+  (k: kt2)
+: Tot (parser32 (p (f k)))
+= fun input -> p32 (f k) input
+
+inline_for_extraction
+let serialize32_compose_context
+  (#pk: parser_kind)
+  (#kt1 #kt2: Type)
+  (f: (kt2 -> Tot kt1))
+  (t: (kt1 -> Tot Type0))
+  (p: ((k: kt1) -> Tot (parser pk (t k))))
+  (s: ((k: kt1) -> Tot (serializer (p k))))
+  (s32: ((k: kt1) -> Tot (serializer32 (s k))))
+  (k: kt2)
+: Tot (serializer32 (s (f k)))
+= fun input -> s32 (f k) input
+
+inline_for_extraction
+let size32_compose_context
+  (#pk: parser_kind)
+  (#kt1 #kt2: Type)
+  (f: (kt2 -> Tot kt1))
+  (t: (kt1 -> Tot Type0))
+  (p: ((k: kt1) -> Tot (parser pk (t k))))
+  (s: ((k: kt1) -> Tot (serializer (p k))))
+  (s32: ((k: kt1) -> Tot (size32 (s k))))
+  (k: kt2)
+: Tot (size32 (s (f k)))
+= fun input -> s32 (f k) input
