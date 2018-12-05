@@ -377,9 +377,9 @@ let is_strong
 let is_weaker_than
   (k1 k2: parser_kind)
 : GTot Type0
-= (Some? k1.parser_kind_subkind ==> k1.parser_kind_subkind == k2.parser_kind_subkind) /\
-  (Some? k1.parser_kind_metadata ==> k1.parser_kind_metadata == k2.parser_kind_metadata) /\
+= (Some? k1.parser_kind_metadata ==> k1.parser_kind_metadata == k2.parser_kind_metadata) /\
   ((k1.parser_kind_metadata <> Some ParserKindMetadataFail /\ k2.parser_kind_metadata <> Some ParserKindMetadataFail) ==> (
+  (Some? k1.parser_kind_subkind ==> k1.parser_kind_subkind == k2.parser_kind_subkind) /\
   k1.parser_kind_low <= k2.parser_kind_low /\
   (Some? k1.parser_kind_high ==> (
     Some? k2.parser_kind_high /\
@@ -422,7 +422,19 @@ let glb
     k `is_weaker_than` k2
 //    (forall k' . (k' `is_weaker_than` k1 /\ k' `is_weaker_than` k2) ==> k' `is_weaker_than` k)
   ))
-= {
+= match k1.parser_kind_metadata, k2.parser_kind_metadata with
+  | _, Some ParserKindMetadataFail ->
+  {
+    k1 with
+    parser_kind_metadata = (match k1.parser_kind_metadata with Some ParserKindMetadataFail -> Some ParserKindMetadataFail | _ -> None);
+  }
+  | Some ParserKindMetadataFail, _ ->
+  {
+    k2 with
+    parser_kind_metadata = None;
+  }
+  | _ ->
+  {
     parser_kind_low = (if k1.parser_kind_low < k2.parser_kind_low then k1.parser_kind_low else k2.parser_kind_low);
     parser_kind_high = (
       if Some? k1.parser_kind_high && Some? k2.parser_kind_high
