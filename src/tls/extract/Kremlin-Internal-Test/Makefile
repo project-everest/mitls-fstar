@@ -10,6 +10,8 @@ MLCRYPTO_HOME	?= ../../../../../MLCrypto
 EVERCRYPT_HOME	?= ../../../../../hacl-star/providers
 
 LDOPTS += -L$(EVERCRYPT_HOME)/dist/compact -levercrypt
+LDOPTS += -L$(EVERCRYPT_HOME)/../code/dist/compact -lhacl
+LDOPTS += -L$(KREMLIN_HOME)/kremlib/dist/generic -lkremlib
 
 ifeq ($(OS),Windows_NT)
   ifeq ($(shell uname -o),Cygwin)
