@@ -9,7 +9,7 @@ KREMLIN_HOME    ?= ../../../../../kremlin
 MLCRYPTO_HOME	?= ../../../../../MLCrypto
 EVERCRYPT_HOME	?= ../../../../../hacl-star/providers
 
-LDOPTS += -L$(EVERCRYPT_HOME)/out -levercrypt
+LDOPTS += -L$(EVERCRYPT_HOME)/dist/compact -levercrypt
 
 ifeq ($(OS),Windows_NT)
   ifeq ($(shell uname -o),Cygwin)
@@ -74,7 +74,7 @@ else
 CFLAGS += -DNO_OPENSSL
 endif
 
-LDOPTS += -L$(MITLS_HOME)/src/pki -lmipki $(KREMLIN_HOME)/kremlib/out/libkremlib.a 
+LDOPTS += -L$(MITLS_HOME)/src/pki -lmipki $(KREMLIN_HOME)/kremlib/dist/generic/libkremlib.a
 
 %.d: %.c
 	@set -e; rm -f $@; \
