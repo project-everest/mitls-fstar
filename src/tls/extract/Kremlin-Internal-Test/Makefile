@@ -51,7 +51,7 @@ else
 endif
 endif
 
-INCLUDE_DIRS 	= kreminc include stub pki ffi .
+INCLUDE_DIRS 	= $(KREMLIN_HOME)/include include stub pki ffi .
 
 # Note: see comment in Makefile.Kremlin to see why we're re-extracting
 # Crypto.Symmetric.Bytes rather than using the one from secure/
