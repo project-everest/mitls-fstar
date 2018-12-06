@@ -861,6 +861,17 @@ let parse_dsum_cases_kind
   | Known k -> dfst (f k)
   | _ -> k
 
+let parse_dsum_type_of_tag'
+  (s: dsum)
+  (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag s x)))
+  (#k: parser_kind)
+  (g: parser k (dsum_type_of_unknown_tag s))
+  (x: dsum_key s)
+: Tot (parser (parse_dsum_cases_kind s f g x) (dsum_type_of_tag s x))
+= match x with
+    | Known x' -> (dsnd (f x')) <: parser (parse_dsum_cases_kind s f g x) (dsum_type_of_tag s x)
+    | Unknown x' -> g <: parser (parse_dsum_cases_kind s f g x) (dsum_type_of_tag s x)
+
 let parse_dsum_cases'
   (s: dsum)
   (f: (x: dsum_known_key s) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag s x)))
@@ -1031,6 +1042,28 @@ let parse_dsum_eq
       parse_synth_eq g (synth_dsum_case t k) input_k;
       parse_synth_eq (weaken (weaken_parse_dsum_cases_kind t f k') g) (synth_dsum_case t k) input_k
     end
+
+let parse_dsum_eq3
+  (#kt: parser_kind)
+  (t: dsum)
+  (p: parser kt (dsum_repr_type t))
+  (f: (x: dsum_known_key t) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag t x)))
+  (#k': parser_kind)
+  (g: parser k' (dsum_type_of_unknown_tag t))
+  (input: bytes)
+: Lemma
+  (parse (parse_dsum t p f g) input == (match parse p input with
+  | None -> None
+  | Some (r, consumed_k) ->
+    let k = maybe_enum_key_of_repr (dsum_enum t) r in
+    let input_k = Seq.slice input consumed_k (Seq.length input) in
+    begin match parse (parse_dsum_type_of_tag' t f g k) input_k with
+    | None -> None
+    | Some (x, consumed_x) -> Some ((synth_dsum_case t k x <: dsum_type t), consumed_k + consumed_x)
+    end
+  ))
+= parse_dsum_eq t p f g input;
+  parse_maybe_enum_key_eq p (dsum_enum t) input
 
 let synth_dsum_case_inverse
   (s: dsum)
