@@ -233,6 +233,37 @@ let valid_sum_intro
 #reset-options
 
 inline_for_extraction
+let finalize_sum_case
+  (t: sum)
+  (#kt: parser_kind)
+  (#p: parser kt (sum_repr_type t))
+  (s: serializer p)
+  (w: leaf_writer_strong s)
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (destr: enum_repr_of_key'_t (sum_enum t))
+  (k: sum_key t)
+  (input: slice)
+  (pos: U32.t)
+: HST.Stack unit
+  (requires (fun h ->
+    let len_tag = serialized_length (serialize_enum_key _ s (sum_enum t)) k in
+    U32.v pos + len_tag < 4294967296 /\ (
+    let pos_payload = pos `U32.add` U32.uint_to_t len_tag in
+    valid (dsnd (pc k)) h input pos_payload
+  )))
+  (ensures (fun h _ h' ->
+    let len_tag = serialized_length (serialize_enum_key _ s (sum_enum t)) k in
+    let pos_payload = pos `U32.add` U32.uint_to_t len_tag in
+    B.modifies (loc_slice_from_to input pos pos_payload) h h' /\
+    valid_content_pos (parse_sum t p pc) h' input pos (synth_sum_case t k (contents (dsnd (pc k)) h input pos_payload)) (get_valid_pos (dsnd (pc k)) h input pos_payload)
+  ))
+= let pos1 = write_enum_key w (sum_enum t) destr k input pos in
+  let h = HST.get () in
+  [@inline_let]
+  let _ = valid_sum_intro h t p pc input pos in
+  ()
+
+inline_for_extraction
 let jump_sum_cases_aux
   (t: sum)
   (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
@@ -712,6 +743,155 @@ let validate_dsum
     let _ = valid_facts (parse_dsum_cases' t f g (maybe_enum_key_of_repr (dsum_enum t) tg)) h input pos_after_tag in
     destr (validate_dsum_cases_eq t f g) (validate_dsum_cases_if t f g) (fun _ _ -> ()) (fun _ _ _ _ -> ()) (validate_dsum_cases' t f f32 g32) tg input pos_after_tag
 
+
+#reset-options "--z3rlimit 64 --z3cliopt smt.arith.nl=false --initial_ifuel 8 --max_ifuel 8 --initial_fuel 2 --max_fuel 2"
+
+let valid_dsum_intro_known
+  (h: HS.mem)
+  (t: dsum)
+  (#kt: parser_kind)
+  (p: parser kt (dsum_repr_type t))
+  (f: ((x: dsum_known_key t) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag t x))))
+  (#ku: parser_kind)
+  (g: parser ku (dsum_type_of_unknown_tag t))
+  (input: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (
+    valid (parse_maybe_enum_key p (dsum_enum t)) h input pos /\ (
+    let k' = contents (parse_maybe_enum_key p (dsum_enum t)) h input pos in
+    Known? k' /\ (
+    let Known k = k' in
+    valid (dsnd (f k)) h input (get_valid_pos (parse_maybe_enum_key p (dsum_enum t)) h input pos)
+  ))))
+  (ensures (
+    let Known k = contents (parse_maybe_enum_key p (dsum_enum t)) h input pos in
+    let pos_payload = get_valid_pos (parse_maybe_enum_key p (dsum_enum t)) h input pos in
+    valid_content_pos
+      (parse_dsum t p f g) h input pos
+      (synth_dsum_case t (Known k) (contents (dsnd (f k)) h input pos_payload))
+      (get_valid_pos (dsnd (f k)) h input pos_payload)
+  ))
+= valid_facts (parse_maybe_enum_key p (dsum_enum t)) h input pos;
+  let Known k = contents (parse_maybe_enum_key p (dsum_enum t)) h input pos in
+  let pos_payload = get_valid_pos (parse_maybe_enum_key p (dsum_enum t)) h input pos in
+  valid_facts (dsnd (f k)) h input pos_payload;
+  valid_facts (parse_dsum t p f g) h input pos;
+  parse_dsum_eq t p f g (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos)))
+
+let valid_dsum_intro_unknown
+  (h: HS.mem)
+  (t: dsum)
+  (#kt: parser_kind)
+  (p: parser kt (dsum_repr_type t))
+  (f: ((x: dsum_known_key t) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag t x))))
+  (#ku: parser_kind)
+  (g: parser ku (dsum_type_of_unknown_tag t))
+  (input: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (
+    valid (parse_maybe_enum_key p (dsum_enum t)) h input pos /\ (
+    let k' = contents (parse_maybe_enum_key p (dsum_enum t)) h input pos in
+    Unknown? k' /\
+    valid g h input (get_valid_pos (parse_maybe_enum_key p (dsum_enum t)) h input pos)
+  )))
+  (ensures (
+    let Unknown r = contents (parse_maybe_enum_key p (dsum_enum t)) h input pos in
+    let pos_payload = get_valid_pos (parse_maybe_enum_key p (dsum_enum t)) h input pos in
+    valid_content_pos
+      (parse_dsum t p f g) h input pos
+      (synth_dsum_case t (Unknown r) (contents g h input pos_payload))
+      (get_valid_pos g h input pos_payload)
+  ))
+= valid_facts (parse_maybe_enum_key p (dsum_enum t)) h input pos;
+  let Unknown r = contents (parse_maybe_enum_key p (dsum_enum t)) h input pos in
+  let pos_payload = get_valid_pos (parse_maybe_enum_key p (dsum_enum t)) h input pos in
+  valid_facts g h input pos_payload;
+  valid_facts (parse_dsum t p f g) h input pos;
+  parse_dsum_eq t p f g (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos)))
+
+#reset-options
+
+inline_for_extraction
+let finalize_dsum_case_known
+  (h: HS.mem)
+  (t: dsum)
+  (#kt: parser_kind)
+  (#p: parser kt (dsum_repr_type t))
+  (s: serializer p)
+  (w: leaf_writer_strong s)
+  (f: ((x: dsum_known_key t) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag t x))))
+  (#ku: parser_kind)
+  (g: parser ku (dsum_type_of_unknown_tag t))
+  (destr: enum_repr_of_key'_t (dsum_enum t))
+  (k: dsum_known_key t)
+  (input: slice)
+  (pos: U32.t)
+: HST.Stack unit
+  (requires (fun h ->
+    let len_tag = serialized_length (serialize_enum_key _ s (dsum_enum t)) k in
+    U32.v pos + len_tag < 4294967296 /\ (
+    let pos_payload = pos `U32.add` U32.uint_to_t len_tag in
+    valid (dsnd (f k)) h input pos_payload
+  )))
+  (ensures (fun h _ h' ->
+    let len_tag = serialized_length (serialize_enum_key _ s (dsum_enum t)) k in
+    let pos_payload = pos `U32.add` U32.uint_to_t len_tag in
+    B.modifies (loc_slice_from_to input pos pos_payload) h h' /\
+    valid_content_pos (parse_dsum t p f g) h' input pos (synth_dsum_case t (Known k) (contents (dsnd (f k)) h input pos_payload)) (get_valid_pos (dsnd (f k)) h input pos_payload)
+  ))
+= let pos1 = write_enum_key w (dsum_enum t) destr k input pos in
+  let h = HST.get () in
+  [@inline_let]
+  let _ =
+    valid_facts (parse_enum_key p (dsum_enum t)) h input pos;
+    valid_facts (parse_maybe_enum_key p (dsum_enum t)) h input pos;
+    let sq = (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos))) in
+    parse_enum_key_eq p (dsum_enum t) sq;
+    parse_maybe_enum_key_eq p (dsum_enum t) sq;
+    valid_dsum_intro_known h t p f g input pos
+  in
+  ()
+
+inline_for_extraction
+let finalize_dsum_case_unknown
+  (h: HS.mem)
+  (t: dsum)
+  (#kt: parser_kind)
+  (#p: parser kt (dsum_repr_type t))
+  (s: serializer p)
+  (w: leaf_writer_strong s)
+  (f: ((x: dsum_known_key t) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag t x))))
+  (#ku: parser_kind)
+  (g: parser ku (dsum_type_of_unknown_tag t))
+  (r: unknown_enum_repr (dsum_enum t))
+  (input: slice)
+  (pos: U32.t)
+: HST.Stack unit
+  (requires (fun h ->
+    let len_tag = serialized_length s r in
+    U32.v pos + len_tag < 4294967296 /\ (
+    let pos_payload = pos `U32.add` U32.uint_to_t len_tag in
+    valid g h input pos_payload
+  )))
+  (ensures (fun h _ h' ->
+    let len_tag = serialized_length s r in
+    let pos_payload = pos `U32.add` U32.uint_to_t len_tag in
+    B.modifies (loc_slice_from_to input pos pos_payload) h h' /\
+    valid_content_pos (parse_dsum t p f g) h' input pos (synth_dsum_case t (Unknown r) (contents g h input pos_payload)) (get_valid_pos g h input pos_payload)
+  ))
+= let pos1 = w r input pos in
+  let h = HST.get () in
+  [@inline_let]
+  let _ =
+    valid_facts (parse_maybe_enum_key p (dsum_enum t)) h input pos;
+    valid_facts p h input pos;
+    let sq = (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos))) in
+    parse_maybe_enum_key_eq p (dsum_enum t) sq;
+    valid_dsum_intro_unknown h t p f g input pos
+  in
+  ()
 
 inline_for_extraction
 let jump_dsum_cases_t
