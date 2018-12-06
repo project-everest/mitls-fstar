@@ -289,6 +289,58 @@ let finalize_vlarray
   let h = HST.get () in
   valid_synth h (parse_bounded_vldata_strong array_byte_size_min array_byte_size_max (serialize_list _ s)) (vldata_to_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max ())  sl pos
 
+let clens_vlarray_nth
+  (t: Type)
+  (min max: nat)
+  (i: nat)
+: Tot (clens (vlarray t min max) t)
+= {
+  clens_cond = (fun (l: vlarray t min max) -> i < L.length l);
+  clens_get = (fun (l: vlarray t min max) -> L.index l i);
+}
+
+inline_for_extraction
+let vlarray_list_length
+  (array_byte_size_min: nat)
+  (array_byte_size_max: nat)
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (elem_count_min: nat)
+  (elem_count_max: nat)
+  (sl: slice)
+  (pos: U32.t)
+: HST.Stack U32.t
+  (requires (fun h ->
+    vldata_vlarray_precond array_byte_size_min array_byte_size_max p elem_count_min elem_count_max == true /\
+    valid (parse_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max ()) h sl pos
+  ))
+  (ensures (fun h res h' ->
+    B.modifies B.loc_none h h' /\
+    U32.v res == L.length (contents (parse_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max ()) h sl pos)
+  ))
+= let h = HST.get () in
+  [@inline_let]
+  let _ : unit =
+    let l = contents (parse_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max ()) h sl pos in
+    let sq = B.as_seq h (B.gsub sl.base pos (sl.len `U32.sub` pos)) in
+    valid_facts (parse_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max ()) h sl pos;
+    valid_facts (parse_bounded_integer (log256' array_byte_size_max)) h sl pos;
+    vldata_to_vlarray_inj array_byte_size_min array_byte_size_max s elem_count_min elem_count_max ();
+    parse_synth_eq
+      (parse_bounded_vldata_strong array_byte_size_min array_byte_size_max (serialize_list _ s))
+      (vldata_to_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max ())
+      sq;
+    parse_vldata_gen_eq (log256' array_byte_size_max) (in_bounds array_byte_size_min array_byte_size_max) (parse_list p) sq;
+    let psq = parse (parse_bounded_integer (log256' array_byte_size_max)) sq in
+    let Some (ln, _) = psq in
+    list_length_constant_size_parser_correct p (Seq.slice sq (log256' array_byte_size_max) (log256' array_byte_size_max + U32.v ln));
+    LowParse.Math.multiple_division_lemma (L.length l) k.parser_kind_low
+  in
+  let blen = read_bounded_integer (log256' array_byte_size_max) sl pos in
+  blen `U32.div` U32.uint_to_t k.parser_kind_low
+
 #push-options "--z3rlimit 16"
 
 module HS = FStar.HyperStack
