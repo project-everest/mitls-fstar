@@ -6,9 +6,7 @@ module U8 = FStar.UInt8
 module U32 = FStar.UInt32
 
 let parse_option_kind (k: parser_kind) : Tot parser_kind = {
-  parser_kind_metadata = {
-    parser_kind_metadata_total = false;
-  };
+  parser_kind_metadata = None;
   parser_kind_low = 0;
   parser_kind_high = k.parser_kind_high;
   parser_kind_subkind = None;

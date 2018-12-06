@@ -81,9 +81,7 @@ let make_constant_size_parser_injective
 let constant_size_parser_kind
   (sz: nat)
 : Tot parser_kind
-= strong_parser_kind sz sz ({
-    parser_kind_metadata_total = false;
-  })
+= strong_parser_kind sz sz None
 
 let make_constant_size_parser
   (sz: nat)
@@ -137,9 +135,7 @@ let parse_ret' (#t:Type) (v:t) : Tot (bare_parser t) =
 // unfold
 inline_for_extraction
 let parse_ret_kind : parser_kind =
-  strong_parser_kind 0 0 ({
-    parser_kind_metadata_total = true;
-  })
+  strong_parser_kind 0 0 (Some ParserKindMetadataTotal)
 
 let parse_ret (#t:Type) (v:t) : Tot (parser parse_ret_kind t) =
   parse_ret' v
@@ -157,7 +153,7 @@ let serialize_empty : serializer parse_empty = serialize_empty'
 let fail_parser_kind_precond
   (k: parser_kind)
 : GTot Type0
-= k.parser_kind_metadata.parser_kind_metadata_total == false /\
+= k.parser_kind_metadata <> Some ParserKindMetadataTotal /\
   (Some? k.parser_kind_high ==> k.parser_kind_low <= Some?.v k.parser_kind_high)
 
 let fail_parser'
@@ -175,7 +171,7 @@ let fail_parser
   strengthen k p
 
 inline_for_extraction
-let parse_false_kind = strong_parser_kind 0 0 ({ parser_kind_metadata_total = false })
+let parse_false_kind = strong_parser_kind 0 0 (Some ParserKindMetadataFail)
 
 let parse_false : parser parse_false_kind (squash False) = fail_parser _ _
 
@@ -355,9 +351,11 @@ let and_then_no_lookahead_on #t #t' p p' x x' =
 let and_then_metadata
   (k1 k2: parser_kind_metadata_t)
 : Tot parser_kind_metadata_t
-= {
-    parser_kind_metadata_total = k1.parser_kind_metadata_total && k2.parser_kind_metadata_total;
-  }
+= match k1, k2 with
+  | Some ParserKindMetadataFail, _ -> k1
+  | _, Some ParserKindMetadataFail -> k2
+  | Some ParserKindMetadataTotal, Some ParserKindMetadataTotal -> k1
+  | _ -> None
 
 // unfold
 let and_then_kind
@@ -1234,21 +1232,22 @@ let lift_parser
 (** Refinements *)
 
 // unfold
+inline_for_extraction
 let parse_filter_kind (k: parser_kind) : Tot parser_kind =
   {
     parser_kind_low = k.parser_kind_low;
     parser_kind_high = k.parser_kind_high;
-    parser_kind_metadata = {
-      parser_kind_metadata_total = false;
-    };
+    parser_kind_metadata =
+      begin match k.parser_kind_metadata with
+      | Some ParserKindMetadataFail -> Some ParserKindMetadataFail
+      | _ -> None
+      end;
     parser_kind_subkind = k.parser_kind_subkind;
   }
 
 // unfold
 let parse_filter_payload_kind : parser_kind =
-  strong_parser_kind 0 0 ({
-    parser_kind_metadata_total = false;
-  })
+  strong_parser_kind 0 0 None
 
 let parse_filter_payload
   (#t: Type0)

@@ -34,7 +34,7 @@ let validate_vldata_payload
   (v: validator p)
   (i: bounded_integer sz { f i == true } )
 : Tot (validator (parse_vldata_payload sz f p i))
-= validate_weaken (parse_vldata_payload_kind sz) (validate_fldata v (U32.v i) i) ()
+= validate_weaken (parse_vldata_payload_kind sz k) (validate_fldata v (U32.v i) i) ()
 
 inline_for_extraction
 let validate_vldata_gen
@@ -107,6 +107,29 @@ let jump_vldata_gen
   pos `U32.add` (U32.uint_to_t sz `U32.add` read_bounded_integer sz input pos)
 
 inline_for_extraction
+let validate_bounded_vldata'
+  (min: nat) // must be a constant
+  (max: nat {
+    min <= max /\
+    max > 0 /\
+    max <= U32.v validator_max_length
+  }) // must be a constant
+  (l: nat { l >= log256' max /\ l <= 4 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (v: validator p)
+: Tot (validator (parse_bounded_vldata' min max l p))
+= [@inline_let]
+  let sz : integer_size = l in
+  [@inline_let]
+  let _ = parse_bounded_vldata_correct min max sz p in
+  validate_strengthen
+    (parse_bounded_vldata_strong_kind min max sz k)
+    (validate_vldata_gen sz (in_bounds min max) (fun i -> not (U32.lt i (U32.uint_to_t min) || U32.lt (U32.uint_to_t max) i)) v)
+    ()
+
+inline_for_extraction
 let validate_bounded_vldata
   (min: nat) // must be a constant
   (max: nat) // must be a constant
@@ -120,14 +143,27 @@ let validate_bounded_vldata
     max <= U32.v validator_max_length
   })
 : Tot (validator (parse_bounded_vldata min max p))
-= [@inline_let]
-  let sz : integer_size = log256' max in
-  [@inline_let]
-  let _ = parse_bounded_vldata_correct min max p in
-  validate_strengthen
-    (parse_bounded_vldata_strong_kind min max k)
-    (validate_vldata_gen sz (in_bounds min max) (fun i -> not (U32.lt i (U32.uint_to_t min) || U32.lt (U32.uint_to_t max) i)) v)
-    ()
+= validate_bounded_vldata' min max (log256' max) v
+
+inline_for_extraction
+let jump_bounded_vldata'
+  (min: nat) // must be a constant
+  (max: nat {
+    min <= max /\
+    max > 0 /\
+    max < 4294967296
+  }) // must be a constant
+  (l: nat { l >= log256' max /\ l <= 4 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+: Tot (jumper (parse_bounded_vldata' min max l p))
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let] let sz = l in
+  [@inline_let] let _ = valid_facts (parse_bounded_vldata' min max l p) h input pos in
+  [@inline_let] let _ = valid_facts (parse_vldata_gen sz (in_bounds min max) p) h input pos in
+  jump_vldata_gen sz (in_bounds min max) p input pos
 
 inline_for_extraction
 let jump_bounded_vldata
@@ -142,12 +178,28 @@ let jump_bounded_vldata
     max < 4294967296
   })
 : Tot (jumper (parse_bounded_vldata min max p))
+= jump_bounded_vldata' min max (log256' max) p
+
+inline_for_extraction
+let validate_bounded_vldata_strong'
+  (min: nat) // must be a constant
+  (max: nat {
+    min <= max /\ max > 0 /\ max <= U32.v validator_max_length
+  })
+  (l: nat { l >= log256' max /\ l <= 4 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (v: validator p)
+: Tot (validator (parse_bounded_vldata_strong' min max l s))
 = fun input pos ->
   let h = HST.get () in
-  [@inline_let] let sz = log256' max in
-  [@inline_let] let _ = valid_facts (parse_bounded_vldata min max p) h input pos in
-  [@inline_let] let _ = valid_facts (parse_vldata_gen sz (in_bounds min max) p) h input pos in
-  jump_vldata_gen sz (in_bounds min max) p input pos
+  [@inline_let]
+  let _ = valid_facts (parse_bounded_vldata_strong' min max l s) h input pos in
+  [@inline_let]
+  let _ = valid_facts (parse_bounded_vldata' min max l p) h input pos in
+  validate_bounded_vldata' min max l v input pos
 
 inline_for_extraction
 let validate_bounded_vldata_strong
@@ -162,13 +214,25 @@ let validate_bounded_vldata_strong
     min <= max /\ max > 0 /\ max <= U32.v validator_max_length
   })
 : Tot (validator (parse_bounded_vldata_strong min max s))
-= fun input pos ->
+= validate_bounded_vldata_strong' min max (log256' max) s v
+
+inline_for_extraction
+let jump_bounded_vldata_strong'
+  (min: nat) // must be a constant
+  (max: nat {
+    min <= max /\ max > 0 /\ max < 4294967296
+  })
+  (l: nat { l >= log256' max /\ l <= 4 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+: Tot (jumper (parse_bounded_vldata_strong' min max l s))
+= fun (input: slice) pos ->
   let h = HST.get () in
-  [@inline_let]
-  let _ = valid_facts (parse_bounded_vldata_strong min max s) h input pos in
-  [@inline_let]
-  let _ = valid_facts (parse_bounded_vldata min max p) h input pos in
-  validate_bounded_vldata min max v () input pos
+  [@inline_let] let _ = valid_facts (parse_bounded_vldata_strong' min max l s) h input pos in
+  [@inline_let] let _ = valid_facts (parse_bounded_vldata' min max l p) h input pos in
+  jump_bounded_vldata' min max l p input pos
 
 inline_for_extraction
 let jump_bounded_vldata_strong
@@ -182,11 +246,7 @@ let jump_bounded_vldata_strong
     min <= max /\ max > 0 /\ max < 4294967296
   })
 : Tot (jumper (parse_bounded_vldata_strong min max s))
-= fun (input: slice) pos ->
-  let h = HST.get () in
-  [@inline_let] let _ = valid_facts (parse_bounded_vldata_strong min max s) h input pos in
-  [@inline_let] let _ = valid_facts (parse_bounded_vldata min max p) h input pos in
-  jump_bounded_vldata min max p () input pos
+= jump_bounded_vldata_strong' min max (log256' max) s
 
 inline_for_extraction
 let write_bounded_integer

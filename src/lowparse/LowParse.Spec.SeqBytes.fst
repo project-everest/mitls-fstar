@@ -57,9 +57,7 @@ let parse_seq_all_bytes_kind =
   {
     parser_kind_low = 0;
     parser_kind_high = None;
-    parser_kind_metadata = {
-      parser_kind_metadata_total = false;
-    };
+    parser_kind_metadata = None;
     parser_kind_subkind = Some ParserConsumesAll;
   }
 
@@ -121,7 +119,7 @@ let serialize_seq_all_bytes : serializer parse_seq_all_bytes =
 let parse_bounded_seq_vlbytes'
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 })
-: Tot (parser (parse_bounded_vldata_strong_kind min max parse_seq_all_bytes_kind) (parse_bounded_vldata_strong_t min max #_ #_ #parse_seq_all_bytes serialize_seq_all_bytes))
+: Tot (parser (parse_bounded_vldata_strong_kind min max (log256' max) parse_seq_all_bytes_kind) (parse_bounded_vldata_strong_t min max #_ #_ #parse_seq_all_bytes serialize_seq_all_bytes))
 = parse_bounded_vldata_strong min max serialize_seq_all_bytes
 
 let parse_bounded_seq_vlbytes_pred
@@ -148,7 +146,7 @@ let synth_bounded_seq_vlbytes
 let parse_bounded_seq_vlbytes
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
-: Tot (parser (parse_bounded_vldata_strong_kind min max parse_seq_all_bytes_kind) (parse_bounded_seq_vlbytes_t min max))
+: Tot (parser (parse_bounded_vldata_strong_kind min max (log256' max) parse_seq_all_bytes_kind) (parse_bounded_seq_vlbytes_t min max))
 = parse_synth (parse_bounded_seq_vlbytes' min max) (synth_bounded_seq_vlbytes min max)
 
 let serialize_bounded_seq_vlbytes'
