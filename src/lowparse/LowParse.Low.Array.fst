@@ -285,6 +285,6 @@ let finalize_vlarray
     Classical.move_requires (vldata_to_vlarray_correct array_byte_size_min array_byte_size_max s elem_count_min elem_count_max) (Ghost.reveal l) 
   in
   vlarray_to_vldata_correct array_byte_size_min array_byte_size_max s elem_count_min elem_count_max (Ghost.reveal l);
-  finalize_bounded_vldata_strong array_byte_size_min array_byte_size_max (serialize_list _ s) sl pos pos' ;
+  finalize_bounded_vldata_strong_exact array_byte_size_min array_byte_size_max (serialize_list _ s) sl pos pos' ;
   let h = HST.get () in
   valid_synth h (parse_bounded_vldata_strong array_byte_size_min array_byte_size_max (serialize_list _ s)) (vldata_to_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max ())  sl pos
