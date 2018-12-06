@@ -492,15 +492,16 @@ let jump_sum
 : Tot (jumper (parse_sum t p pc))
 = jump_sum_aux t v p32 pc (jump_sum_aux_payload t pc pc32 destr)
 
-
-(*
 let clens_sum_payload
   (s: sum)
   (k: sum_key s)
-: Tot (clens #(sum_type s) (fun (x: sum_type s) -> sum_tag_of_data s x == k) (sum_type_of_tag s k))
+: Tot (clens (sum_type s) (sum_type_of_tag s k))
 = {
-  clens_get = (fun (x: sum_type s) -> synth_sum_case_recip s k x <: Ghost (sum_type_of_tag s k) (requires (sum_tag_of_data s x == k)) (ensures (fun _ -> True)));
-}
+    clens_cond = (fun (x: sum_type s) -> sum_tag_of_data s x == k);
+    clens_get = (fun (x: sum_type s) -> synth_sum_case_recip s k x <: Ghost (sum_type_of_tag s k) (requires (sum_tag_of_data s x == k)) (ensures (fun _ -> True)));
+  }
+
+#push-options "--z3rlimit 16"
 
 let gaccessor_clens_sum_payload
   (t: sum)
@@ -510,8 +511,67 @@ let gaccessor_clens_sum_payload
   (k: sum_key t)
 : Tot (gaccessor (parse_sum t p pc) (dsnd (pc k)) (clens_sum_payload t k))
 = fun (input: bytes) ->
-  if Seq.length input >= 
-*)
+  parse_sum_eq'' t p pc input;
+  let res =
+    match parse p input with
+    | Some (_, consumed) ->
+      synth_sum_case_inverse t k;
+      synth_sum_case_injective t k;
+      synth_injective_synth_inverse_synth_inverse_recip (synth_sum_case t k) (synth_sum_case_recip t k) ();
+      (consumed, Seq.length input - consumed)
+    | _ -> (0, 0) // dummy
+  in
+  (res <: (res: _ { gaccessor_post'  (parse_sum t p pc) (dsnd (pc k)) (clens_sum_payload t k) input res } ))
+
+inline_for_extraction
+let accessor_clens_sum_payload'
+  (t: sum)
+  (#kt: parser_kind)
+  (#p: parser kt (sum_repr_type t))
+  (j: jumper p { kt.parser_kind_subkind == Some ParserStrong })
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (k: sum_key t)
+  (input: slice)
+  (pos: U32.t)
+: HST.Stack U32.t
+  (requires (fun h ->
+    (get_parser_kind (parse_sum t p pc)).parser_kind_subkind == Some ParserStrong /\
+    (get_parser_kind (dsnd (pc k))).parser_kind_subkind == Some ParserStrong /\
+    valid (parse_sum t p pc) h input pos /\
+    (clens_sum_payload t k).clens_cond (contents (parse_sum t p pc) h input pos)
+  ))
+  (ensures (fun h pos' h' ->
+    B.modifies B.loc_none h h' /\
+    pos' == slice_access h (gaccessor_clens_sum_payload t p pc k) input pos
+  ))
+= 
+  let h = HST.get () in
+  [@inline_let]
+  let _ =
+    let pos' = get_valid_pos (parse_sum t p pc) h input pos in
+    let small = B.as_seq h (B.gsub input.base pos (pos' `U32.sub` pos)) in
+    let large = B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos)) in
+    slice_access_eq h (gaccessor_clens_sum_payload t p pc k) input pos;
+    valid_facts (parse_sum t p pc) h input pos;
+    parse_sum_eq'' t p pc large;
+    parse_strong_prefix p large small;
+    valid_facts p h input pos
+  in
+  j input pos
+
+#pop-options
+
+inline_for_extraction
+let accessor_clens_sum_payload
+  (t: sum)
+  (#kt: parser_kind)
+  (#p: parser kt (sum_repr_type t))
+  (j: jumper p { kt.parser_kind_subkind == Some ParserStrong })
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (k: sum_key t)
+: Tot (accessor (gaccessor_clens_sum_payload t p pc k))
+= accessor_clens_sum_payload' t j pc k
+
 
 inline_for_extraction
 let validate_dsum_cases_t

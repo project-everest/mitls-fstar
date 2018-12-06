@@ -1098,6 +1098,15 @@ let synth_inverse_synth_injective'
 : Tot (squash (synth_injective f))
 = ()
 
+let synth_injective_synth_inverse_synth_inverse_recip
+  (#t1: Type0)
+  (#t2: Type0)
+  (g: (t2 -> GTot t1))
+  (f: (t1 -> GTot t2))
+  (u: squash (synth_inverse g f /\ synth_injective g))
+: Tot (squash (synth_inverse f g))
+= ()
+
 abstract
 let serialize_synth
   (#k: parser_kind)
