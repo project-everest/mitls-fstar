@@ -289,7 +289,7 @@ let parse_vlarray_kind
   (array_byte_size_min: nat)
   (array_byte_size_max: nat { array_byte_size_min <= array_byte_size_max /\ array_byte_size_max > 0 /\ array_byte_size_max < 4294967296 } )
 : Tot parser_kind
-= parse_bounded_vldata_strong_kind array_byte_size_min array_byte_size_max parse_list_kind
+= parse_bounded_vldata_strong_kind array_byte_size_min array_byte_size_max (log256' array_byte_size_max) parse_list_kind
 
 let parse_vlarray
   (array_byte_size_min: nat)

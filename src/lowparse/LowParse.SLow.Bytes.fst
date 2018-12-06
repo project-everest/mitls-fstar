@@ -55,28 +55,40 @@ let serialize32_all_bytes
   (input <: (res: bytes32 { serializer32_correct serialize_all_bytes input res } ))
 
 inline_for_extraction
+let parse32_bounded_vlbytes'
+  (min: nat)
+  (min32: U32.t { U32.v min32 == min } )
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 })
+  (max32: U32.t { U32.v max32 == max } )
+  (l: nat { l >= log256' max /\ l <= 4 } )
+: Tot (parser32 (parse_bounded_vlbytes' min max l))
+= parse32_synth
+    _
+    (synth_bounded_vlbytes min max)
+    (fun (x: parse_bounded_vldata_strong_t min max #_ #_ #parse_all_bytes serialize_all_bytes) -> (x <: parse_bounded_vlbytes_t min max))
+    (parse32_bounded_vldata_strong' min min32 max max32 l serialize_all_bytes parse32_all_bytes)
+    ()
+
+inline_for_extraction
 let parse32_bounded_vlbytes
   (min: nat)
   (min32: U32.t { U32.v min32 == min } )
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 })
   (max32: U32.t { U32.v max32 == max } )
 : Tot (parser32 (parse_bounded_vlbytes min max))
-= parse32_synth
-    _
-    (synth_bounded_vlbytes min max)
-    (fun (x: parse_bounded_vldata_strong_t min max #_ #_ #parse_all_bytes serialize_all_bytes) -> (x <: parse_bounded_vlbytes_t min max))
-    (parse32_bounded_vldata_strong min min32 max max32 serialize_all_bytes parse32_all_bytes)
-    ()
+= parse32_bounded_vlbytes' min min32 max max32 (log256' max)
 
 inline_for_extraction
-let serialize32_bounded_vlbytes'
+let serialize32_bounded_vlbytes_aux
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967292 } ) // max MUST BE less than 2^32 - 4
-: Tot (serializer32 (serialize_bounded_vlbytes' min max))
+  (l: nat { l >= log256' max /\ l <= 4 } )
+: Tot (serializer32 (serialize_bounded_vlbytes_aux min max l))
 = 
-  serialize32_bounded_vldata_strong
+  serialize32_bounded_vldata_strong'
     min
     max
+    l
     #_
     #_
     #parse_all_bytes
@@ -84,21 +96,28 @@ let serialize32_bounded_vlbytes'
     serialize32_all_bytes
 
 inline_for_extraction
-let serialize32_bounded_vlbytes
+let serialize32_bounded_vlbytes'
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967292 } ) // max MUST BE less than 2^32 - 4
-: Tot (serializer32 (serialize_bounded_vlbytes min max))
+  (l: nat { l >= log256' max /\ l <= 4 } )
+: Tot (serializer32 (serialize_bounded_vlbytes' min max l))
 = serialize32_synth
-    (parse_bounded_vlbytes' min max)
+    (parse_bounded_vlbytes_aux min max l)
     (synth_bounded_vlbytes min max)
-    (serialize_bounded_vlbytes' min max)
-    (serialize32_bounded_vlbytes' min max)
+    (serialize_bounded_vlbytes_aux min max l)
+    (serialize32_bounded_vlbytes_aux min max l)
     (fun (x: parse_bounded_vlbytes_t min max) ->
       (x <: parse_bounded_vldata_strong_t min max #_ #_ #parse_all_bytes serialize_all_bytes)
     )
     (fun x -> x)
     ()
 
+inline_for_extraction
+let serialize32_bounded_vlbytes
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967292 } ) // max MUST BE less than 2^32 - 4
+: Tot (serializer32 (serialize_bounded_vlbytes min max))
+= serialize32_bounded_vlbytes' min max (log256' max)
 
 inline_for_extraction
 let size32_all_bytes
@@ -108,36 +127,44 @@ let size32_all_bytes
   (res <: (res: U32.t { size32_postcond serialize_all_bytes input res } ))
 
 inline_for_extraction
-let size32_bounded_vlbytes'
+let size32_bounded_vlbytes_aux
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967292 } ) // max MUST BE less than 2^32 - 4
-  (size_header_byte_size32: U32.t { U32.v size_header_byte_size32 == log256' max } )
-: Tot (size32 (serialize_bounded_vlbytes' min max))
+  (l: nat { l >= log256' max /\ l <= 4 } )
+: Tot (size32 (serialize_bounded_vlbytes_aux min max l))
 = 
-  size32_bounded_vldata_strong
+  size32_bounded_vldata_strong'
     min
     max
+    l
     #_
     #_
     #parse_all_bytes
     #serialize_all_bytes
     size32_all_bytes
-    size_header_byte_size32
+    (U32.uint_to_t l)
 
 inline_for_extraction
-let size32_bounded_vlbytes
+let size32_bounded_vlbytes'
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967292 } ) // max MUST BE less than 2^32 - 4
-  (size_header_byte_size32: U32.t { U32.v size_header_byte_size32 == log256' max } )
-: Tot (size32 (serialize_bounded_vlbytes min max))
+  (l: nat { l >= log256' max /\ l <= 4 } )
+: Tot (size32 (serialize_bounded_vlbytes' min max l))
 = 
   size32_synth
-    (parse_bounded_vlbytes' min max)
+    (parse_bounded_vlbytes_aux min max l)
     (synth_bounded_vlbytes min max)
-    (serialize_bounded_vlbytes' min max)
-    (size32_bounded_vlbytes' min max size_header_byte_size32)
+    (serialize_bounded_vlbytes_aux min max l)
+    (size32_bounded_vlbytes_aux min max l)
     (fun (x: parse_bounded_vlbytes_t min max) ->
       (x <: parse_bounded_vldata_strong_t min max #_ #_ #parse_all_bytes serialize_all_bytes)
     )
     (fun x -> x)
     ()
+
+inline_for_extraction
+let size32_bounded_vlbytes
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967292 } ) // max MUST BE less than 2^32 - 4
+: Tot (size32 (serialize_bounded_vlbytes min max))
+= size32_bounded_vlbytes' min max (log256' max)
