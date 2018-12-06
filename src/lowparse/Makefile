@@ -33,14 +33,18 @@ ROOT_FILES=LowParse.SLow.fst LowParse.Low.fst $(addprefix LowParse, $(addsuffix 
 
 EXCLUDE_KRML_FILES=$(FSTAR_OUT_DIR)/prims.krml
 
+EXAMPLE_DEPEND_FILES=$(addsuffix .depend,$(EXAMPLES))
+
+$(EXAMPLE_DEPEND_FILES): %.depend: *.fst *.fsti
+	$(MY_FSTAR) $(FSTAR_OPTIONS) $(OTHERFLAGS) --dep full LowParse$(basename $@).fst > $@
+
 clean:
 	rm -rf $(FSTAR_OUT_DIR) $(EXAMPLES) $(addsuffix .depend, $(EXAMPLES)) .depend
 
-.depend: *.fst *.fsti
+.depend: $(EXAMPLE_DEPEND_FILES)
 	$(MY_FSTAR) $(FSTAR_OPTIONS) $(OTHERFLAGS) --dep full $(ROOT_FILES) > $@
 	for f in $(EXAMPLES) ; do \
-	  $(MY_FSTAR) $(FSTAR_OPTIONS) $(OTHERFLAGS) --dep full LowParse$$f.fst > $$f.depend ; \
-	  $(MAKE) EXCLUDE_KRML_FILES='$(EXCLUDE_KRML_FILES)' EXAMPLE=$$f -f Makefile.example ; \
+	 $(MAKE) EXCLUDE_KRML_FILES='$(EXCLUDE_KRML_FILES)' EXAMPLE=$$f -f Makefile.example ; \
 	done
 
 include .depend
