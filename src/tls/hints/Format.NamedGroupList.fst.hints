@@ -1,5 +1,5 @@
 [
-  "|}\u0010ùk\u0003\u0007\u0019„6¡∂Ñ¸óˇ",
+  "ÔuπY›\u001ap=é\u0006=âSÍIÎ",
   [
     [
       "Format.NamedGroupList.bytesize",
@@ -20,7 +20,7 @@
         "refinement_interpretation_Format.NamedGroupList_Tm_refine_be73026b04c1694daf246c1dc10927a4"
       ],
       0,
-      "35a81f7276011139f4ba107b077b2efd"
+      "82fc65be705ff58b6a37e563da3ed0b5"
     ],
     [
       "Format.NamedGroupList.nglist_serializer",
@@ -44,7 +44,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "036f02ed09642a12ae1bb3f8ce003775"
+      "cdca79e64904a3387f3106cada8466cf"
     ],
     [
       "Format.NamedGroupList.synth_namedGroupList",
@@ -60,7 +60,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high"
       ],
       0,
-      "7e4ce3ea200f107d8e76a076bce90975"
+      "233eb07ac1d922fee2b5f3e77d366276"
     ],
     [
       "Format.NamedGroupList.synth_namedGroupList",
@@ -77,7 +77,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "bc67c2a4059ce47013d50d16d2f4e647"
+      "d076e34b513ddc80204b7c054eac1077"
     ],
     [
       "Format.NamedGroupList.synth_namedGroupList_recip",
@@ -93,23 +93,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high"
       ],
       0,
-      "84f3967ca969895bc78b62ccb1c9b35c"
-    ],
-    [
-      "Format.NamedGroupList.namedGroupList_parser_kind'",
-      1,
-      2,
-      1,
-      [
-        "@query", "constructor_distinct_FStar.Pervasives.Native.None",
-        "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_LowParse.Spec.List.parse_list_kind", "equation_Prims.nat",
-        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
-        "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high"
-      ],
-      0,
-      "20505822c7dfe5ef908c6719c0532ad7"
+      "0974881f588efb69cfb34f4e480c3e11"
     ],
     [
       "Format.NamedGroupList.namedGroupList_parser_kind",
@@ -122,7 +106,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "cf3f0acbc0447712122d2a2fe3d7633a"
+      "21a632a9fd9e0c4ce6089b7da6749ca9"
     ],
     [
       "Format.NamedGroupList.namedGroupList_parser",
@@ -130,19 +114,22 @@
       2,
       1,
       [
-        "@query", "constructor_distinct_FStar.Pervasives.Native.None",
+        "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_FStar.Pervasives.Native.None",
         "disc_equation_FStar.Pervasives.Native.Some",
         "equation_Format.NamedGroupList.namedGroupList",
         "equation_Format.NamedGroupList.synth_namedGroupList",
         "equation_LowParse.Spec.Combinators.synth_injective",
-        "equation_LowParse.Spec.List.parse_list_kind", "equation_Prims.nat",
+        "equation_LowParse.Spec.List.parse_list_kind",
+        "equation_LowParse.Spec.VLData.integer_size", "equation_Prims.nat",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "refinement_interpretation_LowParse.Spec.VLData_Tm_refine_546bd17e6f1845f0224f72eac33516bd",
         "token_correspondence_Format.NamedGroupList.synth_namedGroupList"
       ],
       0,
-      "9c31b483de63f47304d4c702daa2ab65"
+      "b4d91ee1512ead74321de3b0d4b6cde8"
     ],
     [
       "Format.NamedGroupList.namedGroupList_parser32",
@@ -150,23 +137,25 @@
       2,
       1,
       [
-        "@query", "constructor_distinct_FStar.Pervasives.Native.None",
+        "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_FStar.Pervasives.Native.None",
         "disc_equation_FStar.Pervasives.Native.Some",
         "equation_Format.NamedGroupList.namedGroupList",
-        "equation_Format.NamedGroupList.namedGroupList_parser",
         "equation_Format.NamedGroupList.nglist_serializer",
         "equation_Format.NamedGroupList.synth_namedGroupList",
         "equation_LowParse.Spec.Combinators.synth_injective",
         "equation_LowParse.Spec.List.parse_list_kind",
+        "equation_LowParse.Spec.VLData.integer_size",
         "equation_LowParse.Spec.VLData.parse_bounded_vldata_strong_t",
         "equation_Prims.nat",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "refinement_interpretation_LowParse.Spec.VLData_Tm_refine_546bd17e6f1845f0224f72eac33516bd",
         "token_correspondence_Format.NamedGroupList.synth_namedGroupList"
       ],
       0,
-      "d6f27d7c4367b78c0c1edb2075ae5f39"
+      "f28cd93d45040d8e24d0b8a0ee56fca8"
     ],
     [
       "Format.NamedGroupList.namedGroupList_serializer",
@@ -181,7 +170,6 @@
         "disc_equation_FStar.Pervasives.Native.Some",
         "equation_Format.NamedGroup.namedGroup_parser_kind",
         "equation_Format.NamedGroupList.namedGroupList",
-        "equation_Format.NamedGroupList.namedGroupList_parser",
         "equation_Format.NamedGroupList.nglist_serializer",
         "equation_Format.NamedGroupList.synth_namedGroupList",
         "equation_Format.NamedGroupList.synth_namedGroupList_recip",
@@ -189,7 +177,8 @@
         "equation_LowParse.Spec.Bytes.parse_all_bytes_kind",
         "equation_LowParse.Spec.Combinators.synth_injective",
         "equation_LowParse.Spec.Combinators.synth_inverse",
-        "equation_LowParse.Spec.List.parse_list_kind", "equation_Prims.nat",
+        "equation_LowParse.Spec.List.parse_list_kind",
+        "equation_LowParse.Spec.VLData.integer_size", "equation_Prims.nat",
         "function_token_typing_LowParse.Spec.Bytes.parse_all_bytes_kind",
         "primitive_Prims.op_Equality", "primitive_Prims.op_GreaterThan",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
@@ -200,11 +189,12 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "refinement_interpretation_LowParse.Spec.VLData_Tm_refine_546bd17e6f1845f0224f72eac33516bd",
         "token_correspondence_Format.NamedGroupList.synth_namedGroupList",
         "token_correspondence_Format.NamedGroupList.synth_namedGroupList_recip"
       ],
       0,
-      "b4f242e713976b6b3175f29432a883a7"
+      "277a8c9a08b5e999367f557e991b0036"
     ],
     [
       "Format.NamedGroupList.namedGroupList_serializer32",
@@ -219,8 +209,6 @@
         "disc_equation_FStar.Pervasives.Native.Some",
         "equation_Format.NamedGroup.namedGroup_parser_kind",
         "equation_Format.NamedGroupList.namedGroupList",
-        "equation_Format.NamedGroupList.namedGroupList_parser",
-        "equation_Format.NamedGroupList.namedGroupList_serializer",
         "equation_Format.NamedGroupList.nglist_serializer",
         "equation_Format.NamedGroupList.synth_namedGroupList",
         "equation_Format.NamedGroupList.synth_namedGroupList_recip",
@@ -228,7 +216,8 @@
         "equation_LowParse.Spec.Bytes.parse_all_bytes_kind",
         "equation_LowParse.Spec.Combinators.synth_injective",
         "equation_LowParse.Spec.Combinators.synth_inverse",
-        "equation_LowParse.Spec.List.parse_list_kind", "equation_Prims.nat",
+        "equation_LowParse.Spec.List.parse_list_kind",
+        "equation_LowParse.Spec.VLData.integer_size", "equation_Prims.nat",
         "function_token_typing_LowParse.Spec.Bytes.parse_all_bytes_kind",
         "primitive_Prims.op_Equality", "primitive_Prims.op_GreaterThan",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
@@ -239,11 +228,12 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "refinement_interpretation_LowParse.Spec.VLData_Tm_refine_546bd17e6f1845f0224f72eac33516bd",
         "token_correspondence_Format.NamedGroupList.synth_namedGroupList",
         "token_correspondence_Format.NamedGroupList.synth_namedGroupList_recip"
       ],
       0,
-      "4bbf8c82916234b15000d1e96b2bd101"
+      "dd0651c3230eb9795491d3960033d5df"
     ]
   ]
 ]
