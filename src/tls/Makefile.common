@@ -36,6 +36,7 @@ INCLUDE_PATHS = \
 	$(MITLS_HOME)/src/lowparse \
         $(MITLS_HOME)/src/parsers/generated \
 	$(EVERCRYPT_HOME)/evercrypt \
+	$(EVERCRYPT_HOME)/evercrypt/.cache \
 	$(SPECINC)
 
 ifeq (,$(MITLS_NODEBUG))
