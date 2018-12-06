@@ -163,6 +163,12 @@ let parse_bounded_vlbytes_t
 : Tot Type0
 = (x: B32.bytes { parse_bounded_vlbytes_pred min max x } )
 
+let parse_bounded_vlbytes_kind
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 })
+: Tot parser_kind
+= parse_bounded_vldata_strong_kind min max (log256' max) parse_all_bytes_kind
+
 let synth_bounded_vlbytes
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 })
