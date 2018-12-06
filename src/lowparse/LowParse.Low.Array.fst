@@ -288,3 +288,71 @@ let finalize_vlarray
   finalize_bounded_vldata_strong_exact array_byte_size_min array_byte_size_max (serialize_list _ s) sl pos pos' ;
   let h = HST.get () in
   valid_synth h (parse_bounded_vldata_strong array_byte_size_min array_byte_size_max (serialize_list _ s)) (vldata_to_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max ())  sl pos
+
+#push-options "--z3rlimit 16"
+
+module HS = FStar.HyperStack
+
+let valid_bounded_vldata_strong_list_valid_list
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (s: serializer p { k.parser_kind_subkind == Some ParserStrong /\ k.parser_kind_low > 0 } )
+  (input: slice)
+  (pos: U32.t)
+  (h: HS.mem)
+: Lemma
+  (requires (
+    valid (parse_bounded_vldata_strong min max (serialize_list _ s)) h input pos
+  ))
+  (ensures (
+    let pos' = get_valid_pos (parse_bounded_vldata_strong min max (serialize_list _ s)) h input pos in
+    U32.v pos + log256' max <= U32.v pos' /\ (
+    let pos1 = pos `U32.add` U32.uint_to_t (log256' max) in
+    valid_list p h input pos1 pos' /\
+    contents_list p h input pos1 pos' == contents (parse_bounded_vldata_strong min max (serialize_list _ s)) h input pos /\
+    True
+  )))
+= valid_bounded_vldata_strong_elim h min max (serialize_list _ s) input pos;
+  let pos1 = pos `U32.add` U32.uint_to_t (log256' max) in
+  let pos' = get_valid_pos (parse_bounded_vldata_strong min max (serialize_list _ s)) h input pos in
+  valid_exact_list_valid_list p h input pos1 pos'
+
+inline_for_extraction
+let bounded_vldata_strong_list_payload_size
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (s: serializer p { k.parser_kind_subkind == Some ParserStrong /\ k.parser_kind_low > 0 } )
+  (input: slice)
+  (pos: U32.t)
+: HST.Stack U32.t
+  (requires (fun h ->
+    valid (parse_bounded_vldata_strong min max (serialize_list _ s)) h input pos
+  ))
+  (ensures (fun h res h' ->
+    let pos' = get_valid_pos (parse_bounded_vldata_strong min max (serialize_list _ s)) h input pos in
+    B.modifies B.loc_none h h' /\
+    U32.v pos + log256' max <= U32.v pos' /\ (
+    let pos1 = pos `U32.add` U32.uint_to_t (log256' max) in
+    res == pos' `U32.sub` pos1 /\
+    valid_list p h input pos1 pos' /\
+    contents_list p h input pos1 pos' == contents (parse_bounded_vldata_strong min max (serialize_list _ s)) h input pos /\
+    True
+  )))
+= let h = HST.get () in
+  let pos' = jump_bounded_vldata_strong min max (serialize_list _ s) () input pos in
+  [@inline_let]
+  let _ =
+    assert (valid_pos (parse_bounded_vldata_strong min max (serialize_list _ s)) h input pos pos')
+  in
+  [@inline_let] let _ = valid_bounded_vldata_strong_list_valid_list min max p s input pos h in
+  [@inline_let] let pos1 = pos `U32.add` U32.uint_to_t (log256' max) in
+  [@inline_let] let res = pos' `U32.sub` pos1 in
+  res
+
+#pop-options
