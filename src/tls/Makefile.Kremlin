@@ -231,7 +231,7 @@ build-msvc-library: output-msvc-library
 	EVEREST_WINDOWS=$(EVEREST_WINDOWS) $(MAKE) -C $(MSVC_LIBRARY_DIR)
 
 test-msvc-library: output-library
-	EVEREST_WINDOWS=$(EVEREST_WINDOWS) $(MAKE) -C $(MSVC-LIBRARY_DIR) test
+	EVEREST_WINDOWS=$(EVEREST_WINDOWS) $(MAKE) -C $(MSVC_LIBRARY_DIR) test
 
 clean-msvc-library:
 	-@find $(LIBRARY_DIR) -type f -and -not -name Makefile -and -not -name .gitignore \
