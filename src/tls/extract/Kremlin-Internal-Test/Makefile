@@ -18,18 +18,18 @@ ifeq ($(OS),Windows_NT)
     MLCRYPTO_HOME := $(shell cygpath -u ${MLCRYPTO_HOME})
   endif
   LDOPTS += -lntdll -lbcrypt
-  PATH := $(EVERCRYPT_HOME)/out:$(MITLS_HOME)/src/pki:$(PATH)
+  PATH := $(EVERCRYPT_HOME)/dist/compact:$(MITLS_HOME)/src/pki:$(PATH)
   SO = dll
   CC ?= x86_64-w64-mingw32-gcc
   export PATH
 else ifeq ($(UNAME),Darwin)
   VARIANT = -Darwin
-  DYLD_LIBRARY_PATH := $(EVERCRYPT_HOME)/out:$(MITLS_HOME)/src/pki:$(DYLD_LIBRARY_PATH)
+  DYLD_LIBRARY_PATH := $(EVERCRYPT_HOME)/dist/compact:$(MITLS_HOME)/src/pki:$(DYLD_LIBRARY_PATH)
   SO = so
   export DYLD_LIBRARY_PATH
 else ifeq ($(UNAME),Linux)
   VARIANT = -Linux
-  LD_LIBRARY_PATH := $(EVERCRYPT_HOME)/out:$(MITLS_HOME)/src/pki:$(LD_LIBRARY_PATH)
+  LD_LIBRARY_PATH := $(EVERCRYPT_HOME)/dist/compact:$(MITLS_HOME)/src/pki:$(LD_LIBRARY_PATH)
   LDOPTS += -lpthread
   SO = so
   export LD_LIBRARY_PATH
