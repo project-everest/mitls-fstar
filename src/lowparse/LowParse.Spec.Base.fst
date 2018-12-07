@@ -274,9 +274,11 @@ let parser_subkind_prop (k: parser_subkind) (#t: Type0) (f: bare_parser t) : GTo
   | ParserConsumesAll ->
     consumes_all f
 
-type parser_kind_metadata_t = {
-  parser_kind_metadata_total: bool;
-}
+type parser_kind_metadata_some =
+  | ParserKindMetadataTotal
+  | ParserKindMetadataFail
+
+type parser_kind_metadata_t = option parser_kind_metadata_some
 
 inline_for_extraction
 type parser_kind' = {
@@ -305,16 +307,23 @@ inline_for_extraction
 let total_constant_size_parser_kind
   (sz: nat)
 : Tot parser_kind
-= strong_parser_kind sz sz ({
-    parser_kind_metadata_total = true;
-  })
+= strong_parser_kind sz sz (Some ParserKindMetadataTotal)
+
+let parser_always_fails (#t: Type0) (f: bare_parser t) : GTot Type0 =
+  forall input . f input == None
+
+let parser_kind_metadata_prop (#t: Type0) (k: parser_kind) (f: bare_parser t) : GTot Type0 =
+  match k.parser_kind_metadata with
+  | None -> True
+  | Some ParserKindMetadataTotal -> k.parser_kind_high == Some k.parser_kind_low ==> is_total_constant_size_parser k.parser_kind_low f
+  | Some ParserKindMetadataFail -> parser_always_fails f
 
 let parser_kind_prop (#t: Type0) (k: parser_kind) (f: bare_parser t) : GTot Type0 =
   injective f /\
+  (Some? k.parser_kind_subkind ==> parser_subkind_prop (Some?.v k.parser_kind_subkind) f) /\
   parses_at_least k.parser_kind_low f /\
   (Some? k.parser_kind_high ==> (parses_at_most (Some?.v k.parser_kind_high) f)) /\
-  (((k.parser_kind_high == Some k.parser_kind_low) /\ (k.parser_kind_metadata.parser_kind_metadata_total == true)) ==> is_total_constant_size_parser k.parser_kind_low f) /\
-  (Some? k.parser_kind_subkind ==> parser_subkind_prop (Some?.v k.parser_kind_subkind) f)
+  parser_kind_metadata_prop k f
 
 let parser_kind_prop_ext
   (#t: Type0)
@@ -368,13 +377,24 @@ let is_strong
 let is_weaker_than
   (k1 k2: parser_kind)
 : GTot Type0
-= k1.parser_kind_low <= k2.parser_kind_low /\
+= (Some? k1.parser_kind_metadata ==> k1.parser_kind_metadata == k2.parser_kind_metadata) /\
+  ((k1.parser_kind_metadata <> Some ParserKindMetadataFail /\ k2.parser_kind_metadata <> Some ParserKindMetadataFail) ==> (
+  (Some? k1.parser_kind_subkind ==> k1.parser_kind_subkind == k2.parser_kind_subkind) /\
+  k1.parser_kind_low <= k2.parser_kind_low /\
   (Some? k1.parser_kind_high ==> (
     Some? k2.parser_kind_high /\
     Some?.v k2.parser_kind_high <= Some?.v k1.parser_kind_high
-  )) /\
-  (k1.parser_kind_metadata.parser_kind_metadata_total == true ==> k2.parser_kind_metadata.parser_kind_metadata_total == true) /\
-  (Some? k1.parser_kind_subkind ==> k1.parser_kind_subkind == k2.parser_kind_subkind)
+  ))))
+  
+let is_weaker_than_correct
+  (k1: parser_kind)
+  (k2: parser_kind)
+  (#t: Type)
+  (f: bare_parser t)
+: Lemma
+  (requires (parser_kind_prop k2 f /\ k1 `is_weaker_than` k2))
+  (ensures (parser_kind_prop k1 f))
+= ()
 
 (* AR: see bug#1349 *)
 unfold let coerce_to_bare_parser (t:Type0) (k2:parser_kind) (p:parser k2 t)
@@ -385,13 +405,13 @@ let weaken (k1: parser_kind) (#k2: parser_kind) (#t: Type0) (p2: parser k2 t) : 
   (ensures (fun _ -> True))
 = (coerce_to_bare_parser t k2 p2) <: (parser k1 t)
 
-#reset-options
-
 // inline_for_extraction
 let strengthen (k: parser_kind) (#t: Type0) (f: bare_parser t) : Pure (parser k t)
   (requires (parser_kind_prop k f))
   (ensures (fun _ -> True))
 = f
+
+#push-options "--z3rlimit 16"
 
 let glb
   (k1 k2: parser_kind)
@@ -399,10 +419,22 @@ let glb
   (requires True)
   (ensures (fun k ->
     k `is_weaker_than` k1 /\
-    k `is_weaker_than` k2 /\
-    (forall k' . (k' `is_weaker_than` k1 /\ k' `is_weaker_than` k2) ==> k' `is_weaker_than` k)
+    k `is_weaker_than` k2
+//    (forall k' . (k' `is_weaker_than` k1 /\ k' `is_weaker_than` k2) ==> k' `is_weaker_than` k)
   ))
-= {
+= match k1.parser_kind_metadata, k2.parser_kind_metadata with
+  | _, Some ParserKindMetadataFail ->
+  {
+    k1 with
+    parser_kind_metadata = (match k1.parser_kind_metadata with Some ParserKindMetadataFail -> Some ParserKindMetadataFail | _ -> None);
+  }
+  | Some ParserKindMetadataFail, _ ->
+  {
+    k2 with
+    parser_kind_metadata = None;
+  }
+  | _ ->
+  {
     parser_kind_low = (if k1.parser_kind_low < k2.parser_kind_low then k1.parser_kind_low else k2.parser_kind_low);
     parser_kind_high = (
       if Some? k1.parser_kind_high && Some? k2.parser_kind_high
@@ -411,11 +443,11 @@ let glb
 	   else k2.parser_kind_high
       else None
     );
-    parser_kind_metadata = {
-      parser_kind_metadata_total = k1.parser_kind_metadata.parser_kind_metadata_total && k2.parser_kind_metadata.parser_kind_metadata_total;
-    };
+    parser_kind_metadata = if k1.parser_kind_metadata = k2.parser_kind_metadata then k1.parser_kind_metadata else None;
     parser_kind_subkind = if k1.parser_kind_subkind = k2.parser_kind_subkind then k1.parser_kind_subkind else None
   }
+
+#pop-options
 
 let default_parser_kind : (x: parser_kind {
   forall (t: Type0) (p: bare_parser t) .
@@ -424,9 +456,7 @@ let default_parser_kind : (x: parser_kind {
 = {
     parser_kind_low = 0;
     parser_kind_high = None;
-    parser_kind_metadata = {
-      parser_kind_metadata_total = false;
-    };
+    parser_kind_metadata = None;
     parser_kind_subkind = None;
   }
 
@@ -441,8 +471,8 @@ let rec glb_list_of
 : Pure parser_kind
   (requires True)
   (ensures (fun k ->
-    (forall kl . L.mem kl l ==> k `is_weaker_than` (f kl)) /\
-    (forall k' . (Cons? l /\ (forall kl . L.mem kl l ==> k' `is_weaker_than` (f kl))) ==> k' `is_weaker_than` k)
+    (forall kl . L.mem kl l ==> k `is_weaker_than` (f kl))
+//    (forall k' . (Cons? l /\ (forall kl . L.mem kl l ==> k' `is_weaker_than` (f kl))) ==> k' `is_weaker_than` k)
   ))
 = match l with
   | [] -> default_parser_kind
@@ -458,8 +488,8 @@ let glb_list
 : Pure parser_kind
   (requires True)
   (ensures (fun k ->
-    (forall kl . L.mem kl l ==> k `is_weaker_than` kl) /\
-    (forall k' . (Cons? l /\ (forall kl . L.mem kl l ==> k' `is_weaker_than` kl)) ==> k' `is_weaker_than` k)
+    (forall kl . L.mem kl l ==> k `is_weaker_than` kl)
+//    (forall k' . (Cons? l /\ (forall kl . L.mem kl l ==> k' `is_weaker_than` kl)) ==> k' `is_weaker_than` k)
   ))
 = glb_list_of id l
 
@@ -735,6 +765,17 @@ let serialize_length
    | Some y -> x <= y
   ))
   [SMTPat (Seq.length (serialize s x))]
+= assert (Some? (parse p (serialize s x)))
+
+let serialize_not_fail
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (s: serializer p)
+  (x: t)
+: Lemma
+  (k.parser_kind_metadata <> Some ParserKindMetadataFail)
+  [SMTPat (serialize s x)]
 = assert (Some? (parse p (serialize s x)))
 
 let seq_upd_seq

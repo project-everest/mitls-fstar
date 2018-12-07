@@ -753,6 +753,23 @@ let validate_weaken
   v2 input pos
 
 inline_for_extraction
+let jump_weaken
+  (k1: parser_kind)
+  (#k2: parser_kind)
+  (#t: Type0)
+  (#p2: parser k2 t)
+  (v2: jumper p2)
+  (sq: squash (k1 `is_weaker_than` k2))
+: Tot (jumper (weaken k1 p2))
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let]
+  let _ = valid_facts (weaken k1 p2) h input pos in
+  [@inline_let]
+  let _ = valid_facts p2 h input pos in
+  v2 input pos
+
+inline_for_extraction
 let validate_strengthen
   (k2: parser_kind)
   (#k1: parser_kind)
@@ -768,3 +785,27 @@ let validate_strengthen
   [@inline_let]
   let _ = valid_facts p1 h input pos in
   v1 input pos
+
+inline_for_extraction
+let validate_compose_context
+  (#pk: parser_kind)
+  (#kt1 #kt2: Type)
+  (f: (kt2 -> Tot kt1))
+  (t: (kt1 -> Tot Type0))
+  (p: ((k: kt1) -> Tot (parser pk (t k))))
+  (v: ((k: kt1) -> Tot (validator (p k))))
+  (k: kt2)
+: Tot (validator (p (f k)))
+= fun input pos -> v (f k) input pos
+
+inline_for_extraction
+let jump_compose_context
+  (#pk: parser_kind)
+  (#kt1 #kt2: Type)
+  (f: (kt2 -> Tot kt1))
+  (t: (kt1 -> Tot Type0))
+  (p: ((k: kt1) -> Tot (parser pk (t k))))
+  (v: ((k: kt1) -> Tot (jumper (p k))))
+  (k: kt2)
+: Tot (jumper (p (f k)))
+= fun input pos -> v (f k) input pos

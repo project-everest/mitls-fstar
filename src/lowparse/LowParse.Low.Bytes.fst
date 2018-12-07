@@ -167,14 +167,22 @@ let validate_all_bytes
   input.len
 
 inline_for_extraction
+let validate_bounded_vlbytes'
+  (min: nat) // must be a constant
+  (max: nat { min <= max /\ max > 0 /\ max <= U32.v validator_max_length  } )
+  (l: nat { l >= log256' max /\ l <= 4 } )
+: Tot (validator (parse_bounded_vlbytes' min max l))
+= validate_synth
+    (validate_bounded_vldata_strong' min max l serialize_all_bytes (validate_all_bytes ()))
+    (synth_bounded_vlbytes min max)
+    ()
+
+inline_for_extraction
 let validate_bounded_vlbytes
   (min: nat) // must be a constant
   (max: nat { min <= max /\ max > 0 /\ max <= U32.v validator_max_length  } )
 : Tot (validator (parse_bounded_vlbytes min max))
-= validate_synth
-    (validate_bounded_vldata_strong min max serialize_all_bytes (validate_all_bytes ()) ())
-    (synth_bounded_vlbytes min max)
-    ()
+= validate_bounded_vlbytes' min max (log256' max)
 
 inline_for_extraction
 let jump_all_bytes
@@ -186,14 +194,22 @@ let jump_all_bytes
   input.len
 
 inline_for_extraction
+let jump_bounded_vlbytes'
+  (min: nat) // must be a constant
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296  } )
+  (l: nat { l >= log256' max /\ l <= 4 } )
+: Tot (jumper (parse_bounded_vlbytes' min max l))
+= jump_synth
+    (jump_bounded_vldata_strong' min max l serialize_all_bytes)
+    (synth_bounded_vlbytes min max)
+    ()
+
+inline_for_extraction
 let jump_bounded_vlbytes
   (min: nat) // must be a constant
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296  } )
 : Tot (jumper (parse_bounded_vlbytes min max))
-= jump_synth
-    (jump_bounded_vldata_strong min max serialize_all_bytes ())
-    (synth_bounded_vlbytes min max)
-    ()
+= jump_bounded_vlbytes' min max (log256' max)
 
 let valid_exact_all_bytes_elim
   (h: HS.mem)
@@ -238,7 +254,7 @@ let valid_bounded_vlbytes_elim
     valid_pos (parse_bounded_vlbytes min max) h input pos (pos_payload `U32.add` len_payload) /\
     valid_content_pos (parse_flbytes (U32.v len_payload)) h input pos_payload x (pos_payload `U32.add` len_payload)
   ))))
-= valid_synth h (parse_bounded_vlbytes' min max) (synth_bounded_vlbytes min max) input pos;
+= valid_synth h (parse_bounded_vlbytes_aux min max (log256' max)) (synth_bounded_vlbytes min max) input pos;
   valid_bounded_vldata_strong_elim h min max serialize_all_bytes input pos;
   let sz = log256' max in
   let len_payload = contents (parse_bounded_integer sz) h input pos in
@@ -317,7 +333,7 @@ let gaccessor_vlbytes
     let g () : Lemma
       (requires (gaccessor_pre (parse_bounded_vlbytes min max) (parse_flbytes length) (clens_vlbytes min max length) input))
       (ensures (gaccessor_post (parse_bounded_vlbytes min max) (parse_flbytes length) (clens_vlbytes min max length) input res))
-    = parse_bounded_vlbytes_eq min max input
+    = parse_bounded_vlbytes_eq min max (log256' max) input
     in
     Classical.move_requires g ();
     res
@@ -339,7 +355,7 @@ let accessor_vlbytes
   let _ =
     slice_access_eq h (gaccessor_vlbytes min max (U32.v length)) sl pos;
     valid_bounded_vlbytes_elim h min max sl pos;
-    parse_bounded_vlbytes_eq min max (B.as_seq h (B.gsub sl.base pos (sl.len `U32.sub` pos)))
+    parse_bounded_vlbytes_eq min max (log256' max) (B.as_seq h (B.gsub sl.base pos (sl.len `U32.sub` pos)))
   in
   pos `U32.add` U32.uint_to_t (log256' max)
 
@@ -370,7 +386,7 @@ let valid_bounded_vlbytes_intro
     valid_content_pos (parse_bounded_vlbytes min max) h input pos (contents (parse_flbytes (U32.v len)) h input pos_payload) (pos_payload `U32.add` len)
   ))
 = valid_facts (parse_bounded_vlbytes min max) h input pos;
-  parse_bounded_vlbytes_eq min max (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos)));
+  parse_bounded_vlbytes_eq min max (log256' max) (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos)));
   let sz = log256' max in
   valid_facts (parse_bounded_integer sz) h input pos;
   valid_facts (parse_flbytes (U32.v len)) h input (pos `U32.add` U32.uint_to_t sz)

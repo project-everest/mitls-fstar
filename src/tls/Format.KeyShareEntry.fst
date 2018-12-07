@@ -24,7 +24,7 @@ let lemma_synth_keyShareEntry_is_injective ()
 
 inline_for_extraction
 let keyShareEntry_parser_kind' =
-  LP.and_then_kind namedGroup_parser_kind (LP.parse_bounded_vldata_strong_kind 1 65535 LP.parse_list_kind)
+  LP.and_then_kind namedGroup_parser_kind (LP.parse_bounded_vlbytes_kind 1 65535)
 
 let keyShareEntry_parser_kind_metadata = keyShareEntry_parser_kind'.LP.parser_kind_metadata
 

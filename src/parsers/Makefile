@@ -18,7 +18,7 @@ generated/Makefile: Makefile.qd
 	mkdir -p generated
 	cp Makefile.qd $@
 
-%.gen: %
+%.gen: % $(QD_HOME)/qd
 	mkdir -p generated
 #	-rm generated/$(patsubst %.rfc, %, $(basename $<)).*.{fst,fsti}
 	$(QD_HOME)/qd -prefix $(basename $<). -odir generated $<

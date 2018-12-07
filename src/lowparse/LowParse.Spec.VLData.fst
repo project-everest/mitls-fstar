@@ -89,10 +89,13 @@ let parse_vldata_payload_size
 // unfold
 let parse_vldata_payload_kind
   (sz: integer_size)
+  (k: parser_kind)
 : parser_kind
-= strong_parser_kind 0 (parse_vldata_payload_size sz) ({
-    parser_kind_metadata_total = false;
-  })
+= strong_parser_kind 0 (parse_vldata_payload_size sz) (
+    match k.parser_kind_metadata with
+    | Some ParserKindMetadataFail -> Some ParserKindMetadataFail
+    | _ -> None
+  )
 
 let parse_vldata_payload
   (sz: integer_size)
@@ -101,8 +104,8 @@ let parse_vldata_payload
   (#t: Type0)
   (p: parser k t)
   (i: bounded_integer sz { f i == true } )
-: Tot (parser (parse_vldata_payload_kind sz) t)
-= weaken (parse_vldata_payload_kind sz) (parse_fldata p (U32.v i))
+: Tot (parser (parse_vldata_payload_kind sz k) t)
+= weaken (parse_vldata_payload_kind sz k) (parse_fldata p (U32.v i))
 
 #set-options "--z3rlimit 64"
 
@@ -138,17 +141,21 @@ let parse_fldata_and_then_cases_injective
 // unfold
 let parse_vldata_gen_kind
   (sz: integer_size)
+  (k: parser_kind)
 : Tot parser_kind
-= strong_parser_kind sz (sz + parse_vldata_payload_size sz) ({
-    parser_kind_metadata_total = false;
-  })
+= strong_parser_kind sz (sz + parse_vldata_payload_size sz) (
+    match k.parser_kind_metadata with
+    | Some ParserKindMetadataFail -> Some ParserKindMetadataFail
+    | _ -> None
+  )
 
 let parse_vldata_gen_kind_correct
   (sz: integer_size)
+  (k: parser_kind)
 : Lemma
-  ( (parse_vldata_gen_kind sz) == (and_then_kind (parse_filter_kind (parse_bounded_integer_kind sz)) (parse_vldata_payload_kind sz)))
-= let kl = parse_vldata_gen_kind sz in
-  let kr = and_then_kind (parse_filter_kind (parse_bounded_integer_kind sz)) (parse_vldata_payload_kind sz) in
+  ( (parse_vldata_gen_kind sz k) == (and_then_kind (parse_filter_kind (parse_bounded_integer_kind sz)) (parse_vldata_payload_kind sz k)))
+= let kl = parse_vldata_gen_kind sz k in
+  let kr = and_then_kind (parse_filter_kind (parse_bounded_integer_kind sz)) (parse_vldata_payload_kind sz k) in
   assert_norm (kl == kr)
 
 abstract
@@ -158,9 +165,9 @@ let parse_vldata_gen
   (#k: parser_kind)
   (#t: Type0)
   (p: parser k t)
-: Tot (parser (parse_vldata_gen_kind sz) t)
+: Tot (parser (parse_vldata_gen_kind sz k) t)
 = parse_fldata_and_then_cases_injective sz f p;
-  parse_vldata_gen_kind_correct sz;
+  parse_vldata_gen_kind_correct sz k;
   (parse_filter (parse_bounded_integer sz) f)
   `and_then`
   parse_vldata_payload sz f p
@@ -174,13 +181,13 @@ let parse_vldata_gen_eq_def
   (p: parser k t)
 : Lemma
   (and_then_cases_injective (parse_vldata_payload sz f p) /\
-  parse_vldata_gen_kind sz == and_then_kind (parse_filter_kind (parse_bounded_integer_kind sz)) (parse_vldata_payload_kind sz) /\
+  parse_vldata_gen_kind sz k == and_then_kind (parse_filter_kind (parse_bounded_integer_kind sz)) (parse_vldata_payload_kind sz k) /\
   parse_vldata_gen sz f p ==
   ((parse_filter (parse_bounded_integer sz) f)
   `and_then`
   parse_vldata_payload sz f p))
 = parse_fldata_and_then_cases_injective sz f p;
-  parse_vldata_gen_kind_correct sz
+  parse_vldata_gen_kind_correct sz k
 
 
 #set-options "--z3rlimit 16"
@@ -212,7 +219,7 @@ let parse_vldata_gen_eq
     else None
   ))
 = parse_fldata_and_then_cases_injective sz f p;
-  parse_vldata_gen_kind_correct sz;
+  parse_vldata_gen_kind_correct sz k;
   and_then_eq (parse_filter (parse_bounded_integer sz) f) (parse_vldata_payload sz f p) input;
   parse_filter_eq (parse_bounded_integer sz) f input
 
@@ -354,9 +361,10 @@ inline_for_extraction
 let parse_bounded_vldata_strong_kind
   (min: nat)
   (max: nat)
+  (l: nat)
   (k: parser_kind)
 : Pure parser_kind
-  (requires (min <= max /\ max > 0 /\ max < 4294967296 ))
+  (requires (min <= max /\ max > 0 /\ max < 4294967296 /\ l >= log256' max /\ l <= 4 ))
   (ensures (fun _ -> True))
 = [@inline_let]
   let kmin = k.parser_kind_low in
@@ -370,13 +378,16 @@ let parse_bounded_vldata_strong_kind
   [@inline_let]
   let max' = if max' < min' then min' else max' in
   (* the size of the length prefix must conform to the max bound given by the user, not on the metadata *)
-  strong_parser_kind (log256' max + min') (log256' max + max') ({
-    parser_kind_metadata_total = false;
-  })
+  strong_parser_kind (l + min') (l + max') (
+    match k.parser_kind_metadata with
+    | Some ParserKindMetadataFail -> Some ParserKindMetadataFail
+    | _ -> None
+  )
 
 let parse_bounded_vldata_elim'
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (l: nat { l >= log256' max /\ l <= 4 } )
   (#k: parser_kind)
   (#t: Type0)
   (p: parser k t)
@@ -384,9 +395,9 @@ let parse_bounded_vldata_elim'
   (x: t)
   (consumed: consumed_length xbytes)
 : Lemma
-  (requires (parse (parse_vldata_gen (log256' max) (in_bounds min max) p) xbytes == Some (x, consumed)))
+  (requires (parse (parse_vldata_gen l (in_bounds min max) p) xbytes == Some (x, consumed)))
   (ensures (
-    let sz : integer_size = log256' max in
+    let sz : integer_size = l in
     let plen = parse (parse_bounded_integer sz) xbytes in
     Some? plen /\ (
     let (Some (len, consumed_len)) = plen in
@@ -401,19 +412,20 @@ let parse_bounded_vldata_elim'
     (consumed_p <: nat) == U32.v len /\
     (consumed <: nat) == sz + U32.v len
   )))))
-= parse_vldata_gen_eq (log256' max) (in_bounds min max) p xbytes
+= parse_vldata_gen_eq l (in_bounds min max) p xbytes
 
 let parse_bounded_vldata_correct
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (l: nat { l >= log256' max /\ l <= 4 } )
   (#k: parser_kind)
   (#t: Type0)
   (p: parser k t)
 : Lemma
-  (parser_kind_prop (parse_bounded_vldata_strong_kind min max k) (parse_vldata_gen (log256' max) (in_bounds min max) p))
-= let sz : integer_size = log256' max in
+  (parser_kind_prop (parse_bounded_vldata_strong_kind min max l k) (parse_vldata_gen l (in_bounds min max) p))
+= let sz : integer_size = l in
   let p' = parse_vldata_gen sz (in_bounds min max) p in
-  let k' = parse_bounded_vldata_strong_kind min max k in
+  let k' = parse_bounded_vldata_strong_kind min max l k in
   let prf
     (input: bytes)
   : Lemma
@@ -426,9 +438,20 @@ let parse_bounded_vldata_correct
       (consumed <: nat) <= Some?.v k'.parser_kind_high
     )))
   = let (Some (data, consumed)) = parse p' input in
-    parse_bounded_vldata_elim' min max p input data consumed 
+    parse_bounded_vldata_elim' min max l p input data consumed 
   in
   Classical.forall_intro (Classical.move_requires prf)
+
+let parse_bounded_vldata'
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (l: nat { l >= log256' max /\ l <= 4 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+: Tot (parser (parse_bounded_vldata_strong_kind min max l k) t)
+= parse_bounded_vldata_correct min max l p;
+  strengthen (parse_bounded_vldata_strong_kind min max l k) (parse_vldata_gen l (in_bounds min max) p)
 
 let parse_bounded_vldata
   (min: nat)
@@ -436,13 +459,13 @@ let parse_bounded_vldata
   (#k: parser_kind)
   (#t: Type0)
   (p: parser k t)
-: Tot (parser (parse_bounded_vldata_strong_kind min max k) t)
-= parse_bounded_vldata_correct min max p;
-  strengthen (parse_bounded_vldata_strong_kind min max k) (parse_vldata_gen (log256' max) (in_bounds min max) p)
+: Tot (parser (parse_bounded_vldata_strong_kind min max (log256' max) k) t)
+= parse_bounded_vldata' min max (log256' max) p
 
 let parse_bounded_vldata_elim
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (l: nat { l >= log256' max /\ l <= 4 } )
   (#k: parser_kind)
   (#t: Type0)
   (p: parser k t)
@@ -450,9 +473,9 @@ let parse_bounded_vldata_elim
   (x: t)
   (consumed: consumed_length xbytes)
 : Lemma
-  (requires (parse (parse_bounded_vldata min max p) xbytes == Some (x, consumed)))
+  (requires (parse (parse_bounded_vldata' min max l p) xbytes == Some (x, consumed)))
   (ensures (
-    let sz : integer_size = log256' max in
+    let sz : integer_size = l in
     let plen = parse (parse_bounded_integer sz) xbytes in
     Some? plen /\ (
     let (Some (len, consumed_len)) = plen in
@@ -467,20 +490,21 @@ let parse_bounded_vldata_elim
     (consumed_p <: nat) == U32.v len /\
     (consumed <: nat) == sz + U32.v len
   )))))
-= parse_bounded_vldata_elim' min max p xbytes x consumed
+= parse_bounded_vldata_elim' min max l p xbytes x consumed
 
 let parse_bounded_vldata_elim_forall
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (l: nat { l >= log256' max /\ l <= 4 } )
   (#k: parser_kind)
   (#t: Type0)
   (p: parser k t)
   (xbytes: bytes)
 : Lemma
-  (requires (Some? (parse (parse_bounded_vldata min max p) xbytes)))
+  (requires (Some? (parse (parse_bounded_vldata' min max l p) xbytes)))
   (ensures (
-    let (Some (x, consumed)) = parse (parse_bounded_vldata min max p) xbytes in
-    let sz : integer_size = log256' max in
+    let (Some (x, consumed)) = parse (parse_bounded_vldata' min max l p) xbytes in
+    let sz : integer_size = l in
     let plen = parse (parse_bounded_integer sz) xbytes in
     Some? plen /\ (
     let (Some (len, consumed_len)) = plen in
@@ -495,8 +519,8 @@ let parse_bounded_vldata_elim_forall
     (consumed_p <: nat) == U32.v len /\
     (consumed <: nat) == sz + U32.v len
   )))))
-= let (Some (x, consumed)) = parse (parse_bounded_vldata min max p) xbytes in
-  parse_bounded_vldata_elim min max p xbytes x consumed
+= let (Some (x, consumed)) = parse (parse_bounded_vldata' min max l p) xbytes in
+  parse_bounded_vldata_elim min max l p xbytes x consumed
 
 (* Serialization *)
 
@@ -525,6 +549,7 @@ let parse_bounded_vldata_strong_t
 let parse_bounded_vldata_strong_correct
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (l: nat { l >= log256' max /\ l <= 4 } )
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
@@ -533,13 +558,13 @@ let parse_bounded_vldata_strong_correct
   (consumed: consumed_length xbytes)
   (x: t)
 : Lemma
-  (requires (parse (parse_bounded_vldata min max p) xbytes == Some (x, consumed)))
+  (requires (parse (parse_bounded_vldata' min max l p) xbytes == Some (x, consumed)))
   (ensures (parse_bounded_vldata_strong_pred min max s x))
-= parse_bounded_vldata_elim min max p xbytes x consumed;
-  let sz : integer_size = log256' max in
+= parse_bounded_vldata_elim min max l p xbytes x consumed;
+  let sz : integer_size = l in
   let plen = parse (parse_bounded_integer sz) xbytes in
   let f () : Lemma (Some? plen) =
-    parse_bounded_vldata_elim min max p xbytes x consumed
+    parse_bounded_vldata_elim min max l p xbytes x consumed
   in
   f ();
   let (Some (len, _)) = plen in
@@ -549,6 +574,22 @@ let parse_bounded_vldata_strong_correct
   assert (s x == input');
   ()
 
+let parse_bounded_vldata_strong'
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (l: nat { l >= log256' max /\ l <= 4 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+: Tot (parser (parse_bounded_vldata_strong_kind min max l k) (parse_bounded_vldata_strong_t min max s)) 
+= // strengthen (parse_bounded_vldata_strong_kind min max k)
+  (
+  coerce_parser
+  (parse_bounded_vldata_strong_t min max s)
+  (parse_strengthen (parse_bounded_vldata' min max l p) (parse_bounded_vldata_strong_pred min max s) (parse_bounded_vldata_strong_correct min max l s))
+  )
+
 let parse_bounded_vldata_strong
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
@@ -556,13 +597,8 @@ let parse_bounded_vldata_strong
   (#t: Type0)
   (#p: parser k t)
   (s: serializer p)
-: Tot (parser (parse_bounded_vldata_strong_kind min max k) (parse_bounded_vldata_strong_t min max s)) 
-= // strengthen (parse_bounded_vldata_strong_kind min max k)
-  (
-  coerce_parser
-  (parse_bounded_vldata_strong_t min max s)
-  (parse_strengthen (parse_bounded_vldata min max p) (parse_bounded_vldata_strong_pred min max s) (parse_bounded_vldata_strong_correct min max s))
-  )
+: Tot (parser (parse_bounded_vldata_strong_kind min max (log256' max) k) (parse_bounded_vldata_strong_t min max s)) 
+= parse_bounded_vldata_strong' min max (log256' max) s
 
 let serialize_bounded_integer'
   (sz: integer_size)
@@ -594,9 +630,10 @@ let serialize_bounded_integer
 = serialize_bounded_integer_correct sz;
   serialize_bounded_integer' sz
 
-let serialize_bounded_vldata_strong'
+let serialize_bounded_vldata_strong_aux
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (l: nat { l >= log256' max /\ l <= 4 } )
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
@@ -604,7 +641,7 @@ let serialize_bounded_vldata_strong'
 : Tot (bare_serializer (parse_bounded_vldata_strong_t min max s))
 = (fun (x: parse_bounded_vldata_strong_t min max s) ->
   let pl = s x in
-  let sz = log256' max in
+  let sz = l in
   let nlen = Seq.length pl in
   assert (min <= nlen /\ nlen <= max);
   let len = U32.uint_to_t nlen in
@@ -699,19 +736,21 @@ let serialize_vldata_gen_correct sz f #k #t p b1 b2 =
 let serialize_bounded_vldata_strong_correct
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (l: nat { l >= log256' max /\ l <= 4 } )
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
   (s: serializer p)
   (input: parse_bounded_vldata_strong_t min max s)
 : Lemma
-  (let formatted = serialize_bounded_vldata_strong' min max s input in
-    parse (parse_bounded_vldata_strong min max s) formatted == Some (input, Seq.length formatted))
-= let sz = log256' max in
+  (let formatted = serialize_bounded_vldata_strong_aux min max l s input in
+    parse (parse_bounded_vldata_strong' min max l s) formatted == Some (input, Seq.length formatted))
+= let sz = l in
   let sp = serialize s input in
   let nlen = Seq.length sp in
   assert (min <= nlen /\ nlen <= max);
   let len = U32.uint_to_t nlen in
+  M.pow2_le_compat (FStar.Mul.op_Star 8 sz)  (FStar.Mul.op_Star 8 (log256' max));
   assert (U32.v len < pow2 (FStar.Mul.op_Star 8 sz));
   let (len: bounded_integer sz) = len in
   let slen = serialize (serialize_bounded_integer sz) len in
@@ -732,6 +771,18 @@ let serialize_bounded_vldata_strong_correct
   ;
   ()
 
+let serialize_bounded_vldata_strong'
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (l: nat { l >= log256' max /\ l <= 4 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+: Tot (serializer (parse_bounded_vldata_strong' min max l s))
+= Classical.forall_intro (serialize_bounded_vldata_strong_correct min max l s);
+  serialize_bounded_vldata_strong_aux min max l s
+
 let serialize_bounded_vldata_strong
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
@@ -740,8 +791,7 @@ let serialize_bounded_vldata_strong
   (#p: parser k t)
   (s: serializer p)
 : Tot (serializer (parse_bounded_vldata_strong min max s))
-= Classical.forall_intro (serialize_bounded_vldata_strong_correct min max s);
-  serialize_bounded_vldata_strong' min max s
+= serialize_bounded_vldata_strong' min max (log256' max) s
 
 let serialize_bounded_vldata_precond
   (min: nat)
@@ -762,10 +812,10 @@ let serialize_bounded_vldata_correct
   (x: t)
 : Lemma
   ( let Some (_, consumed) = parse p (serialize s x) in
-    let y = serialize_bounded_vldata_strong' min max s (x <: parse_bounded_vldata_strong_t min max s) in
+    let y = serialize_bounded_vldata_strong_aux min max (log256' max) s (x <: parse_bounded_vldata_strong_t min max s) in
     parse (parse_bounded_vldata min max p) y == Some (x, Seq.length y))
 = let Some (_, consumed) = parse p (serialize s x) in
-  serialize_bounded_vldata_strong_correct min max s x;
+  serialize_bounded_vldata_strong_correct min max (log256' max) s x;
   ()
 
 let serialize_bounded_vldata'
@@ -779,7 +829,7 @@ let serialize_bounded_vldata'
 : GTot (y: bytes { parse (parse_bounded_vldata min max p) y == Some (x, Seq.length y) } )
 = let Some (_, consumed) = parse p (serialize s x) in
   serialize_bounded_vldata_correct min max s x;
-  serialize_bounded_vldata_strong' min max s x
+  serialize_bounded_vldata_strong_aux min max (log256' max) s x
 
 let serialize_bounded_vldata
   (min: nat)

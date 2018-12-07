@@ -1870,7 +1870,7 @@ let valid_total_constant_size
   (requires (
     k.parser_kind_high == Some k.parser_kind_low /\
     k.parser_kind_low == U32.v sz /\
-    k.parser_kind_metadata.parser_kind_metadata_total = true
+    k.parser_kind_metadata == Some ParserKindMetadataTotal
   ))
   (ensures (
     (valid p h input pos <==> (live_slice h input /\ U32.v input.len - U32.v pos >= k.parser_kind_low)) /\
@@ -1888,7 +1888,7 @@ let validate_total_constant_size
     U32.v sz <= U32.v validator_max_length /\
     k.parser_kind_high == Some k.parser_kind_low /\
     k.parser_kind_low == U32.v sz /\
-    k.parser_kind_metadata.parser_kind_metadata_total = true
+    k.parser_kind_metadata == Some ParserKindMetadataTotal
   })
 : Tot (validator p)
 = fun (input: slice) (pos: U32.t) ->
