@@ -8,6 +8,12 @@ ifneq (,$(MITLS_USE_OPENSSL))
 CONCRETE_FLAVOR = -OpenSSL
 endif
 
+VALE_NAMESPACES='X64.*' 'Arch.*' 'Words.*' 'Vale.*' \
+  'Collections.*' 'SHA_helpers' Prop_s Collections Types_s Words_s Views AES_s \
+  Workarounds 'Math.*' Interop TypesNative_s
+
+VALE_BUNDLES=$(addprefix -bundle ,$(VALE_NAMESPACES))
+
 # Target C compilation units for miTLS sources. Requires -minimal
 MITLS_BUNDLES = \
   -bundle 'LowParse.\*,LowParseWrappers[rename=LowParse]' \
@@ -26,7 +32,8 @@ MITLS_BUNDLES = \
   -bundle Record=Record,StAE,Transport,StreamDeltas \
   -bundle PMS=PMS,RSAKey,TLSPRF \
   -bundle Crypto.Plain=Buffer.Utils,Crypto.Indexing,Crypto.Plain,Crypto.Symmetric.Bytes \
-  -bundle Flags=DebugFlags,Flags,Flag,TLSInfoFlags
+  -bundle Flags=DebugFlags,Flags,Flag,TLSInfoFlags \
+  $(VALE_BUNDLES)
 
 # To include Makefile.common, you need to specify
 # the following five variables
