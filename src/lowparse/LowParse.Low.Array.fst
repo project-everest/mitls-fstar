@@ -55,7 +55,7 @@ let clens_array_nth
   clens_get = (fun (l: array t elem_count) -> L.index l i);
 }
 
-#reset-options "--z3rlimit 16" // re-enable non-linear arith to prove that multiplying two nats yields a nat
+#reset-options // re-enable non-linear arith to prove that multiplying two nats yields a nat
 
 abstract
 let array_nth_ghost'
@@ -76,6 +76,8 @@ let array_nth_ghost'
 = if (i `Prims.op_Multiply` k.parser_kind_low) + k.parser_kind_low <= Seq.length input
   then (i `Prims.op_Multiply` k.parser_kind_low, k.parser_kind_low)
   else (0, 0) // dummy
+
+#reset-options "--z3cliopt smt.arith.nl=false"
 
 abstract
 let array_nth_ghost_correct'
@@ -299,6 +301,10 @@ let clens_vlarray_nth
   clens_get = (fun (l: vlarray t min max) -> L.index l i);
 }
 
+#reset-options // we need non-linear arithmetic here
+
+#push-options "--z3rlimit 16"
+
 inline_for_extraction
 let vlarray_list_length
   (array_byte_size_min: nat)
@@ -359,6 +365,12 @@ let vlarray_nth_ghost'
 = if (log256' array_byte_size_max + (i `Prims.op_Multiply` k.parser_kind_low) + k.parser_kind_low) <= Seq.length input
   then (log256' array_byte_size_max + (i `Prims.op_Multiply` k.parser_kind_low), k.parser_kind_low)
   else (0, 0) // dummy
+
+#pop-options
+
+#reset-options "--z3cliopt smt.arith.nl=false"
+
+#push-options "--z3rlimit 16"
 
 abstract
 let vlarray_nth_ghost_correct'
@@ -423,6 +435,8 @@ let vlarray_nth_ghost
 
 module B = LowStar.Buffer
 
+#pop-options
+
 #push-options "--z3rlimit 64"
 
 inline_for_extraction
@@ -457,8 +471,6 @@ let vlarray_nth
   (pos `U32.add` U32.uint_to_t (log256' array_byte_size_max)) `U32.add` (i `U32.mul` U32.uint_to_t k.parser_kind_low)
 
 #pop-options
-
-#push-options "--z3rlimit 16"
 
 module HS = FStar.HyperStack
 
@@ -523,5 +535,3 @@ let bounded_vldata_strong_list_payload_size
   [@inline_let] let pos1 = pos `U32.add` U32.uint_to_t (log256' max) in
   [@inline_let] let res = pos' `U32.sub` pos1 in
   res
-
-#pop-options

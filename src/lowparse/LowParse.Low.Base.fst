@@ -89,6 +89,17 @@ let loc_slice_from_includes_l
 = loc_slice_from_eq_gen s pos1;
   loc_slice_from_eq_gen s pos2
 
+abstract
+let loc_slice_from_gsub_disjoint
+  (sl: slice)
+  (b: buffer8)
+  (pos pos' len: U32.t)
+: Lemma
+  (requires (b == sl.base /\ U32.v pos' + U32.v len <= B.length b /\ U32.v pos' + U32.v len <= U32.v pos))
+  (ensures (B.loc_disjoint (loc_slice_from sl pos) (B.loc_buffer (B.gsub b pos' len))))
+  [SMTPat (B.loc_disjoint (loc_slice_from sl pos) (B.loc_buffer (B.gsub b pos' len)))]
+= loc_slice_from_eq_gen sl pos
+
 let valid'
   (#k: parser_kind)
   (#t: Type)
@@ -532,6 +543,17 @@ let loc_slice_from_to_disjoint
   [SMTPat (B.loc_disjoint (loc_slice_from_to sl posl1 posr1) (loc_slice_from_to sl posl2 posr2))]
 = loc_slice_from_to_eq_gen sl posl1 posr1;
   loc_slice_from_to_eq_gen sl posl2 posr2
+
+abstract
+let loc_slice_from_to_gsub_disjoint
+  (sl: slice)
+  (b: buffer8)
+  (pos1 pos2 pos' len: U32.t)
+: Lemma
+  (requires (b == sl.base /\ U32.v pos' + U32.v len <= B.length b /\ (U32.v pos' + U32.v len <= U32.v pos1 \/ U32.v pos2 <= U32.v pos')))
+  (ensures (B.loc_disjoint (loc_slice_from_to sl pos1 pos2) (B.loc_buffer (B.gsub b pos' len))))
+  [SMTPat (B.loc_disjoint (loc_slice_from_to sl pos1 pos2) (B.loc_buffer (B.gsub b pos' len)))]
+= loc_slice_from_to_eq_gen sl pos1 pos2
 
 abstract
 let loc_slice_from_loc_slice_from_to_disjoint
