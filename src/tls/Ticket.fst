@@ -267,10 +267,11 @@ let write_ticket12 (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
       let pos2 = PTL.protocolVersion_writer pv sl pos1 in
       let pos3 = PTL.cipherSuite_writer (name_of_cipherSuite cs) sl pos2 in
       let pos4 = PTL.boolean_writer (if ems then PB.B_true else PB.B_false) sl pos3 in
-      let _ = PTL.write_ticketContents12_master_secret ms sl pos4 in
+      let pos5 = PTL.write_ticketContents12_master_secret ms sl pos4 in
       let h = get () in
       PTL.valid_ticketContents12_intro h sl pos1;
-      PTL.finalize_case_ticketContents12 sl pos
+      PTL.finalize_case_ticketContents12 sl pos;
+      pos5
     end
 
 // #reset-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1 --z3rlimit 64 --z3cliopt smt.arith.nl=false --z3cliopt trace=true --z3refresh --using_facts_from '* -FStar.Tactics -FStar.Reflection' --log_queries"
