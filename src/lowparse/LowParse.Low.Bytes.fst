@@ -489,24 +489,26 @@ let finalize_bounded_vlbytes'
 : HST.Stack U32.t
   (requires (fun h ->
     let sz = l in
+    live_slice h input /\
     min <= U32.v len /\ U32.v len <= max /\
-    U32.v pos + sz <= 4294967295 /\ (
-    let pos_payload = pos `U32.add` U32.uint_to_t sz in
-    valid (parse_flbytes (U32.v len)) h input pos_payload
-  )))
+    U32.v pos + sz + U32.v len <= U32.v input.len
+  ))
   (ensures (fun h pos' h' ->
     let sz = l in
     let pos_payload = pos `U32.add` U32.uint_to_t sz in
     B.modifies (loc_slice_from_to input pos pos_payload) h h' /\
-    valid_content_pos (parse_bounded_vlbytes' min max l) h' input pos (contents (parse_flbytes (U32.v len)) h input pos_payload) pos' /\
+    valid_content_pos (parse_bounded_vlbytes' min max l) h' input pos (BY.hide (B.as_seq h (B.gsub input.base pos_payload len))) pos' /\
     U32.v pos' == U32.v pos_payload + U32.v len
   ))
 = [@inline_let]
   let sz = l in
-  let _ = write_bounded_integer sz len input pos in
+  let pos_payload = write_bounded_integer sz len input pos in
   let h = HST.get () in
-  [@inline_let] let _ = valid_bounded_vlbytes'_intro h min max l input pos len in
-  (pos `U32.add` U32.uint_to_t sz) `U32.add` len
+  [@inline_let] let _ =
+    valid_flbytes_intro h (U32.v len) input pos_payload;
+    valid_bounded_vlbytes'_intro h min max l input pos len
+  in
+  pos_payload `U32.add` len
 
 inline_for_extraction
 let finalize_bounded_vlbytes
@@ -518,16 +520,15 @@ let finalize_bounded_vlbytes
 : HST.Stack U32.t
   (requires (fun h ->
     let sz = log256' max in
+    live_slice h input /\
     min <= U32.v len /\ U32.v len <= max /\
-    U32.v pos + sz <= 4294967295 /\ (
-    let pos_payload = pos `U32.add` U32.uint_to_t sz in
-    valid (parse_flbytes (U32.v len)) h input pos_payload
-  )))
+    U32.v pos + sz + U32.v len <= U32.v input.len
+  ))
   (ensures (fun h pos' h' ->
     let sz = log256' max in
     let pos_payload = pos `U32.add` U32.uint_to_t sz in
     B.modifies (loc_slice_from_to input pos pos_payload) h h' /\
-    valid_content_pos (parse_bounded_vlbytes min max) h' input pos (contents (parse_flbytes (U32.v len)) h input pos_payload) pos' /\
+    valid_content_pos (parse_bounded_vlbytes min max) h' input pos (BY.hide (B.as_seq h (B.gsub input.base pos_payload len))) pos' /\
     U32.v pos' == U32.v pos_payload + U32.v len
   ))
 = finalize_bounded_vlbytes' min max (log256' max) input pos len
