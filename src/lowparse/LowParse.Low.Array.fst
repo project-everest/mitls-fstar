@@ -169,6 +169,75 @@ let array_nth
   in
   pos `U32.add` (i `U32.mul` U32.uint_to_t k.parser_kind_low)
 
+module HS = FStar.HyperStack
+
+let valid_list_valid_array
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (array_byte_size: nat)
+  (array_byte_size32: U32.t)
+  (elem_count: nat)
+  (u: unit {
+    fldata_array_precond p array_byte_size elem_count == true /\
+    U32.v array_byte_size32 == array_byte_size
+  })
+  (h: HS.mem)
+  (input: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+: Lemma
+  (requires (valid_list p h input pos pos' /\ (L.length (contents_list p h input pos pos') == elem_count \/ U32.v pos' - U32.v pos == array_byte_size)))
+  (ensures (
+    let x = contents_list p h input pos pos' in
+    L.length x == elem_count /\
+    U32.v pos' - U32.v pos == array_byte_size /\    
+    valid_content_pos (parse_array s array_byte_size elem_count) h input pos x pos'
+  ))
+= valid_list_valid_exact_list p h input pos pos' ;
+  valid_exact_equiv (parse_list p) h input pos pos' ;
+  let len32 = pos' `U32.sub` pos in
+  list_length_constant_size_parser_correct p (B.as_seq h (B.gsub (B.gsub input.base pos (input.len `U32.sub` pos)) 0ul len32));
+  contents_exact_eq (parse_list p) h input pos pos';
+  valid_facts (parse_fldata_strong (serialize_list _ s) array_byte_size) h input pos;
+  valid_synth h (parse_fldata_strong (serialize_list _ s) array_byte_size) (fldata_to_array s array_byte_size elem_count ()) input pos
+
+let valid_array_valid_list
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (array_byte_size: nat)
+  (array_byte_size32: U32.t)
+  (elem_count: nat)
+  (u: unit {
+    fldata_array_precond p array_byte_size elem_count == true /\
+    U32.v array_byte_size32 == array_byte_size
+  })
+  (h: HS.mem)
+  (input: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (
+    valid (parse_array s array_byte_size elem_count) h input pos
+  ))
+  (ensures (
+    let pos' = get_valid_pos (parse_array s array_byte_size elem_count) h input pos in
+    let x = contents (parse_array s array_byte_size elem_count) h input pos in
+    U32.v pos' - U32.v pos == array_byte_size /\
+    valid_list p h input pos pos' /\
+    contents_list p h input pos pos' == x
+  ))
+= 
+    let pos' = get_valid_pos (parse_array s array_byte_size elem_count) h input pos in
+    let x = contents (parse_array s array_byte_size elem_count) h input pos in
+    valid_synth h (parse_fldata_strong (serialize_list _ s) array_byte_size) (fldata_to_array s array_byte_size elem_count ()) input pos;
+    valid_facts (parse_fldata_strong (serialize_list _ s) array_byte_size) h input pos;
+    valid_exact_equiv (parse_list p) h input pos pos' ;
+    contents_exact_eq (parse_list p) h input pos pos' ;
+    valid_exact_list_valid_list p h input pos pos'
+
 inline_for_extraction
 let validate_array
   (#k: parser_kind)
