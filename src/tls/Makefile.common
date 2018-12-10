@@ -12,7 +12,6 @@ SHELL=/bin/bash
 # Paths and Commands
 
 INCLUDE_PATHS = \
-  $(HACL_HOME)/vale/code/arch/x64/interop/fsti \
   $(HACL_HOME)/vale/code/arch/x64 \
   $(HACL_HOME)/vale/specs/defs \
   $(HACL_HOME)/vale/specs/hardware \
@@ -38,6 +37,12 @@ INCLUDE_PATHS = \
 	$(EVERCRYPT_HOME)/evercrypt \
 	$(EVERCRYPT_HOME)/.cache \
 	$(SPECINC)
+
+HACK_DIR=$(HACL_HOME)/vale/code/arch/x64/interop/fsti
+
+ifneq (,$(wildcard $(HACK_DIR)))
+  INCLUDE_PATHS += $(HACK_DIR)
+endif
 
 ifeq (,$(MITLS_NODEBUG))
   INCLUDE_PATHS += ./concrete-flags/Debug
