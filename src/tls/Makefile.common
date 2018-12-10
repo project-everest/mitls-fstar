@@ -21,7 +21,6 @@ INCLUDE_PATHS = \
   $(HACL_HOME)/vale/code/lib/util \
   $(HACL_HOME)/vale/specs/crypto \
   $(HACL_HOME)/vale/specs/math \
-  $(HACL_HOME)/vale/obj/cache_checked \
 	$(HACL_HOME)/secure_api \
 	$(HACL_HOME)/secure_api/utils \
 	$(HACL_HOME)/secure_api/concrete_specializations \
@@ -35,13 +34,30 @@ INCLUDE_PATHS = \
 	$(MITLS_HOME)/src/lowparse \
         $(MITLS_HOME)/src/parsers/generated \
 	$(EVERCRYPT_HOME)/evercrypt \
-	$(EVERCRYPT_HOME)/.cache \
 	$(SPECINC)
 
+# We can't hard-error on these because of F* orange CI that runs over a couple
+# miTLS files without properly building HACL* first.
 HACK_DIR=$(HACL_HOME)/vale/code/arch/x64/interop/fsti
+EVERCRYPT_CACHE_DIR=$(EVERCRYPT_HOME)/.cache
+VALE_CACHE_DIR=$(HACL_HOME)/vale/obj/cache_checked
 
 ifneq (,$(wildcard $(HACK_DIR)))
   INCLUDE_PATHS += $(HACK_DIR)
+else
+  $(warning Missing Vale hack dir, seems like an incomplete build of HACL*)
+endif
+
+ifneq (,$(wildcard $(EVERCRYPT_CACHE_DIR)))
+  INCLUDE_PATHS += $(EVERCRYPT_CACHE_DIR)
+else
+  $(warning Missing EverCrypt cache dir, seems like an incomplete build of HACL*)
+endif
+
+ifneq (,$(wildcard $(VALE_CACHE_DIR)))
+  INCLUDE_PATHS += $(VALE_CACHE_DIR)
+else
+  $(warning Missing Vale cache dir, seems like an incomplete build of HACL*)
 endif
 
 ifeq (,$(MITLS_NODEBUG))
