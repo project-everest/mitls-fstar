@@ -1249,12 +1249,13 @@ opaque Finished48[48];
 opaque Finished64[64];
 
 struct {
-  /*@erased*/ DigestSize hlen;
+  /*@implicit*/ DigestSize hlen;
+  uint24 len;
   select(hlen) {
     case hash_32: Finished32;
     case hash_48: Finished48;
     case hash_64: Finished64;
-  } verify_data;
+  } verify_data[len];
 } Finished;
 
 struct {
@@ -1484,13 +1485,14 @@ struct {
 
 struct {
   /*@implicit*/ KeyExchangeAlgorithm kex;
+  uint24 len;
   select (kex) {
     case dh_anon: DHAnonServerKeyExchange;
     case dhe: SignedDHKeyExchange;
     case ecdhe: SignedECDHKeyExchange;
     /* Force a parsing error if handshake tries to parse SKE in RSA kex */
     case rsa: Fail;
-  } key_exchange;
+  } key_exchange[len];
 } ServerKeyExchange;
 
 /*
@@ -1529,12 +1531,13 @@ struct {
 
 struct {
   /*@implicit*/ KeyExchangeAlgorithm kex;
+  uint24 len;
   select (kex) {
       case rsa: EncryptedPreMasterSecret;
       case dhe: ClientDiffieHellmanPublic;
       case ecdhe: ClientECDiffieHellmanPublic;
       case dh_anon: ClientDiffieHellmanPublic;
-  } exchange_keys;
+  } exchange_keys[len];
 } ClientKeyExchange;
 
 struct {

@@ -89,6 +89,17 @@ let loc_slice_from_includes_l
 = loc_slice_from_eq_gen s pos1;
   loc_slice_from_eq_gen s pos2
 
+abstract
+let loc_slice_from_gsub_disjoint
+  (sl: slice)
+  (b: buffer8)
+  (pos pos' len: U32.t)
+: Lemma
+  (requires (b == sl.base /\ U32.v pos' + U32.v len <= B.length b /\ U32.v pos' + U32.v len <= U32.v pos))
+  (ensures (B.loc_disjoint (loc_slice_from sl pos) (B.loc_buffer (B.gsub b pos' len))))
+  [SMTPat (B.loc_disjoint (loc_slice_from sl pos) (B.loc_buffer (B.gsub b pos' len)))]
+= loc_slice_from_eq_gen sl pos
+
 let valid'
   (#k: parser_kind)
   (#t: Type)
@@ -532,6 +543,17 @@ let loc_slice_from_to_disjoint
   [SMTPat (B.loc_disjoint (loc_slice_from_to sl posl1 posr1) (loc_slice_from_to sl posl2 posr2))]
 = loc_slice_from_to_eq_gen sl posl1 posr1;
   loc_slice_from_to_eq_gen sl posl2 posr2
+
+abstract
+let loc_slice_from_to_gsub_disjoint
+  (sl: slice)
+  (b: buffer8)
+  (pos1 pos2 pos' len: U32.t)
+: Lemma
+  (requires (b == sl.base /\ U32.v pos' + U32.v len <= B.length b /\ (U32.v pos' + U32.v len <= U32.v pos1 \/ U32.v pos2 <= U32.v pos')))
+  (ensures (B.loc_disjoint (loc_slice_from_to sl pos1 pos2) (B.loc_buffer (B.gsub b pos' len))))
+  [SMTPat (B.loc_disjoint (loc_slice_from_to sl pos1 pos2) (B.loc_buffer (B.gsub b pos' len)))]
+= loc_slice_from_to_eq_gen sl pos1 pos2
 
 abstract
 let loc_slice_from_loc_slice_from_to_disjoint
@@ -1176,6 +1198,27 @@ let clens_compose
 *)
 }
 
+let clens_compose_strong_pre
+  (#t1: Type)
+  (#t2: Type)
+  (#t3: Type)
+  (l12: clens t1 t2)
+  (l23: clens t2 t3)
+: GTot Type0
+= forall (x: t1) . {:pattern (l12.clens_cond x) \/ (l23.clens_cond (l12.clens_get x))} l12.clens_cond x ==> l23.clens_cond (l12.clens_get x)
+
+let clens_compose_strong
+  (#t1: Type)
+  (#t2: Type)
+  (#t3: Type)
+  (l12: clens t1 t2)
+  (l23: clens t2 t3 { clens_compose_strong_pre l12 l23 })
+: Tot (clens t1 t3)
+= {
+  clens_cond = l12.clens_cond;
+  clens_get = (fun x1 -> l23.clens_get (l12.clens_get x1));
+}
+
 (*
 abstract
 let clens_disjoint_compose
@@ -1545,6 +1588,44 @@ let gaccessor_compose_eq
   (gaccessor_compose a12 a23 input == gaccessor_compose' a12 a23 input)
 = ()
 
+abstract
+let gaccessor_compose_strong
+  (#k1: parser_kind)
+  (#t1: Type)
+  (#p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (#p2: parser k2 t2)
+  (#cl12: clens t1 t2)
+  (a12: gaccessor p1 p2 cl12)
+  (#k3: parser_kind)
+  (#t3: Type)
+  (#p3: parser k3 t3)
+  (#cl23: clens t2 t3)
+  (a23: gaccessor p2 p3 cl23 { clens_compose_strong_pre cl12 cl23 } )
+: Tot (gaccessor p1 p3 (clens_compose_strong cl12 cl23))
+= gaccessor_compose' a12 a23
+
+abstract
+let gaccessor_compose_strong_eq
+  (#k1: parser_kind)
+  (#t1: Type)
+  (#p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (#p2: parser k2 t2)
+  (#cl12: clens t1 t2)
+  (a12: gaccessor p1 p2 cl12)
+  (#k3: parser_kind)
+  (#t3: Type)
+  (#p3: parser k3 t3)
+  (#cl23: clens t2 t3)
+  (a23: gaccessor p2 p3 cl23 { clens_compose_strong_pre cl12 cl23 } )
+  (input: bytes)
+: Lemma
+  (gaccessor_compose_strong a12 a23 input == gaccessor_compose' a12 a23 input)
+= ()
+
 let slice_access'
   (h: HS.mem)
   (#k1: parser_kind)
@@ -1805,6 +1886,31 @@ let accessor_compose
   pos3
 
 #pop-options
+
+inline_for_extraction
+let accessor_compose_strong
+  (#k1: parser_kind)
+  (#t1: Type)
+  (#p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (#p2: parser k2 t2)
+  (#cl12: clens t1 t2)
+  (#a12: gaccessor p1 p2 cl12)
+  (a12' : accessor a12)
+  (#k3: parser_kind)
+  (#t3: Type)
+  (#p3: parser k3 t3)
+  (#cl23: clens t2 t3)
+  (#a23: gaccessor p2 p3 cl23)
+  (a23' : accessor a23 { clens_compose_strong_pre cl12 cl23 } )
+  (sq: squash (k2.parser_kind_subkind == Some ParserStrong))
+: Tot (accessor (gaccessor_compose_strong a12 a23))
+= fun input pos -> 
+  let h = HST.get () in
+  slice_access_eq h (gaccessor_compose_strong a12 a23) input pos;
+  slice_access_eq h (gaccessor_compose a12 a23) input pos;
+  accessor_compose a12' a23' () input pos
 
 (* Validators *)
 

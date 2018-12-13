@@ -603,6 +603,44 @@ let accessor_clens_sum_payload
 : Tot (accessor (gaccessor_clens_sum_payload t p pc k))
 = accessor_clens_sum_payload' t j pc k
 
+let clens_sum_cases_payload
+  (s: sum)
+  (k: sum_key s)
+: Tot (clens (sum_cases s k) (sum_type_of_tag s k))
+= {
+    clens_cond = (fun (x: sum_cases s k) -> True);
+    clens_get = (fun (x: sum_cases s k) -> synth_sum_case_recip s k x <: Ghost (sum_type_of_tag s k) (requires (True)) (ensures (fun _ -> True)));
+  }
+
+let gaccessor_clens_sum_cases_payload
+  (t: sum)
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (k: sum_key t)
+: Tot (gaccessor (parse_sum_cases' t pc k) (dsnd (pc k)) (clens_sum_cases_payload t k))
+= synth_sum_case_injective t k;
+  synth_sum_case_inverse t k;
+  synth_injective_synth_inverse_synth_inverse_recip (synth_sum_case t k) (synth_sum_case_recip t k) ();
+  gaccessor_ext
+    (gaccessor_synth (dsnd (pc k)) (synth_sum_case t k) (synth_sum_case_recip t k) ())
+    (clens_sum_cases_payload t k)
+    ()
+
+inline_for_extraction
+let accessor_clens_sum_cases_payload
+  (t: sum)
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (k: sum_key t)
+: Tot (accessor (gaccessor_clens_sum_cases_payload t pc k))
+= [@inline_let]
+  let _ =
+    synth_sum_case_injective t k;
+    synth_sum_case_inverse t k;
+    synth_injective_synth_inverse_synth_inverse_recip (synth_sum_case t k) (synth_sum_case_recip t k) ()
+  in
+  accessor_ext
+    (accessor_synth (dsnd (pc k)) (synth_sum_case t k) (synth_sum_case_recip t k) ())
+    (clens_sum_cases_payload t k)
+    ()
 
 inline_for_extraction
 let validate_dsum_cases_t
@@ -1117,3 +1155,80 @@ let accessor_clens_dsum_payload
   (k: dsum_key t)
 : Tot (accessor (gaccessor_clens_dsum_payload t p f g k))
 = accessor_clens_dsum_payload' t j f g k
+
+let clens_dsum_cases_payload
+  (s: dsum)
+  (k: dsum_key s)
+: Tot (clens (dsum_cases s k) (dsum_type_of_tag s k))
+= {
+    clens_cond = (fun (x: dsum_cases s k) -> True);
+    clens_get = (fun (x: dsum_cases s k) -> synth_dsum_case_recip s k x <: Ghost (dsum_type_of_tag s k) (requires (True)) (ensures (fun _ -> True)));
+  }
+
+let gaccessor_clens_dsum_cases_known_payload
+  (t: dsum)
+  (f: (x: dsum_known_key t) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag t x)))
+  (#ku: parser_kind)
+  (g: parser ku (dsum_type_of_unknown_tag t))
+  (k: dsum_known_key t)
+: Tot (gaccessor (parse_dsum_cases' t f g (Known k)) (dsnd (f k)) (clens_dsum_cases_payload t (Known k)))
+= synth_dsum_case_injective t (Known k);
+  synth_dsum_case_inverse t (Known k);
+  synth_injective_synth_inverse_synth_inverse_recip (synth_dsum_case t (Known k)) (synth_dsum_case_recip t (Known k)) ();
+  gaccessor_ext
+    (gaccessor_synth (dsnd (f k)) (synth_dsum_case t (Known k)) (synth_dsum_case_recip t (Known k)) ())
+    (clens_dsum_cases_payload t (Known k))
+    ()
+
+inline_for_extraction
+let accessor_clens_dsum_cases_known_payload
+  (t: dsum)
+  (f: (x: dsum_known_key t) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag t x)))
+  (#ku: parser_kind)
+  (g: parser ku (dsum_type_of_unknown_tag t))
+  (k: dsum_known_key t)
+: Tot (accessor (gaccessor_clens_dsum_cases_known_payload t f g k))
+= [@inline_let]
+  let _ =
+    synth_dsum_case_injective t (Known k);
+    synth_dsum_case_inverse t (Known k);
+    synth_injective_synth_inverse_synth_inverse_recip (synth_dsum_case t (Known k)) (synth_dsum_case_recip t (Known k)) ()
+  in
+  accessor_ext
+    (accessor_synth (dsnd (f k)) (synth_dsum_case t (Known k)) (synth_dsum_case_recip t (Known k)) ())
+    (clens_dsum_cases_payload t (Known k))
+    ()
+
+let gaccessor_clens_dsum_cases_unknown_payload
+  (t: dsum)
+  (f: (x: dsum_known_key t) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag t x)))
+  (#ku: parser_kind)
+  (g: parser ku (dsum_type_of_unknown_tag t))
+  (k: dsum_unknown_key t)
+: Tot (gaccessor (parse_dsum_cases' t f g (Unknown k)) g (clens_dsum_cases_payload t (Unknown k)))
+= synth_dsum_case_injective t (Unknown k);
+  synth_dsum_case_inverse t (Unknown k);
+  synth_injective_synth_inverse_synth_inverse_recip (synth_dsum_case t (Unknown k)) (synth_dsum_case_recip t (Unknown k)) ();
+  gaccessor_ext
+    (gaccessor_synth g (synth_dsum_case t (Unknown k)) (synth_dsum_case_recip t (Unknown k)) ())
+    (clens_dsum_cases_payload t (Unknown k))
+    ()
+
+inline_for_extraction
+let accessor_clens_dsum_cases_unknown_payload
+  (t: dsum)
+  (f: (x: dsum_known_key t) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag t x)))
+  (#ku: parser_kind)
+  (g: parser ku (dsum_type_of_unknown_tag t))
+  (k: dsum_unknown_key t)
+: Tot (accessor (gaccessor_clens_dsum_cases_unknown_payload t f g k))
+= [@inline_let]
+  let _ =
+    synth_dsum_case_injective t (Unknown k);
+    synth_dsum_case_inverse t (Unknown k);
+    synth_injective_synth_inverse_synth_inverse_recip (synth_dsum_case t (Unknown k)) (synth_dsum_case_recip t (Unknown k)) ()
+  in
+  accessor_ext
+    (accessor_synth g (synth_dsum_case t (Unknown k)) (synth_dsum_case_recip t (Unknown k)) ())
+    (clens_dsum_cases_payload t (Unknown k))
+    ()

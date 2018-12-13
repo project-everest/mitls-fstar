@@ -334,6 +334,36 @@ let finalize_vldata_gen
   let h = HST.get () in
   valid_vldata_gen_intro h sz f p input pos pos'
 
+let valid_bounded_vldata'_elim
+  (h: HS.mem)
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (l: nat { l >= log256' max /\ l <= 4 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (input: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (
+    valid (parse_bounded_vldata' min max l p) h input pos
+  ))
+  (ensures (
+    let sz = l in
+    valid (parse_bounded_integer sz) h input pos /\ (
+    let len_payload = contents (parse_bounded_integer sz) h input pos in
+    min <= U32.v len_payload /\ U32.v len_payload <= max /\
+    sz + U32.v len_payload == content_length (parse_bounded_vldata' min max l p) h input pos /\ (
+    let pos_payload = pos `U32.add` U32.uint_to_t sz in
+    valid_pos (parse_bounded_vldata' min max l p) h input pos (pos_payload `U32.add` len_payload) /\
+    valid_exact p h input pos_payload (pos_payload `U32.add` len_payload) /\
+    contents_exact p h input pos_payload (pos_payload `U32.add` len_payload) == contents (parse_bounded_vldata' min max l p) h input pos
+  ))))
+= valid_facts (parse_bounded_vldata' min max l p) h input pos;
+  let sz = l in
+  valid_facts (parse_vldata_gen sz (in_bounds min max) p) h input pos;
+  valid_vldata_gen_elim h sz (in_bounds min max) p input pos
+
 let valid_bounded_vldata_elim
   (h: HS.mem)
   (min: nat)
@@ -358,10 +388,7 @@ let valid_bounded_vldata_elim
     valid_exact p h input pos_payload (pos_payload `U32.add` len_payload) /\
     contents_exact p h input pos_payload (pos_payload `U32.add` len_payload) == contents (parse_bounded_vldata min max p) h input pos
   ))))
-= valid_facts (parse_bounded_vldata min max p) h input pos;
-  let sz = log256' max in
-  valid_facts (parse_vldata_gen sz (in_bounds min max) p) h input pos;
-  valid_vldata_gen_elim h sz (in_bounds min max) p input pos
+= valid_bounded_vldata'_elim h min max (log256' max) p input pos
 
 let valid_bounded_vldata_intro
   (h: HS.mem)
@@ -392,6 +419,36 @@ let valid_bounded_vldata_intro
   valid_facts (parse_vldata_gen (log256' max) (in_bounds min max) p) h input pos;
   valid_vldata_gen_intro h (log256' max) (in_bounds min max) p input pos pos'
 
+let valid_bounded_vldata_strong'_elim
+  (h: HS.mem)
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (l: nat { l >= log256' max /\ l <= 4 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (input: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (
+    valid (parse_bounded_vldata_strong' min max l s) h input pos
+  ))
+  (ensures (
+    let sz = l in
+    valid (parse_bounded_integer sz) h input pos /\ (
+    let len_payload = contents (parse_bounded_integer sz) h input pos in
+    min <= U32.v len_payload /\ U32.v len_payload <= max /\
+    sz + U32.v len_payload == content_length (parse_bounded_vldata_strong' min max l s) h input pos /\ (
+    let pos_payload = pos `U32.add` U32.uint_to_t sz in
+    valid_pos (parse_bounded_vldata_strong' min max l s) h input pos (pos_payload `U32.add` len_payload) /\
+    valid_exact p h input pos_payload (pos_payload `U32.add` len_payload) /\
+    contents_exact p h input pos_payload (pos_payload `U32.add` len_payload) == contents (parse_bounded_vldata_strong' min max l s) h input pos
+  ))))
+= valid_facts (parse_bounded_vldata_strong' min max l s) h input pos;
+  valid_facts (parse_bounded_vldata' min max l p) h input pos;
+  valid_bounded_vldata'_elim h min max l p input pos
+
 let valid_bounded_vldata_strong_elim
   (h: HS.mem)
   (min: nat)
@@ -417,9 +474,7 @@ let valid_bounded_vldata_strong_elim
     valid_exact p h input pos_payload (pos_payload `U32.add` len_payload) /\
     contents_exact p h input pos_payload (pos_payload `U32.add` len_payload) == contents (parse_bounded_vldata_strong min max s) h input pos
   ))))
-= valid_facts (parse_bounded_vldata_strong min max s) h input pos;
-  valid_facts (parse_bounded_vldata min max p) h input pos;
-  valid_bounded_vldata_elim h min max p input pos
+= valid_bounded_vldata_strong'_elim h min max (log256' max) s input pos
   
 let valid_bounded_vldata_strong_intro
   (h: HS.mem)
