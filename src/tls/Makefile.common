@@ -38,15 +38,8 @@ INCLUDE_PATHS = \
 
 # We can't hard-error on these because of F* orange CI that runs over a couple
 # miTLS files without properly building HACL* first.
-HACK_DIR=$(HACL_HOME)/vale/code/arch/x64/interop/fsti
 EVERCRYPT_CACHE_DIR=$(EVERCRYPT_HOME)/.cache
 VALE_CACHE_DIR=$(HACL_HOME)/vale/obj/cache_checked
-
-ifneq (,$(wildcard $(HACK_DIR)))
-  INCLUDE_PATHS += $(HACK_DIR)
-else
-  $(warning Missing Vale hack dir, seems like an incomplete build of HACL*)
-endif
 
 ifneq (,$(wildcard $(EVERCRYPT_CACHE_DIR)))
   INCLUDE_PATHS += $(EVERCRYPT_CACHE_DIR)
