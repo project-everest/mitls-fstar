@@ -81,9 +81,7 @@ let make_constant_size_parser_injective
 let constant_size_parser_kind
   (sz: nat)
 : Tot parser_kind
-= strong_parser_kind sz sz ({
-    parser_kind_metadata_total = false;
-  })
+= strong_parser_kind sz sz None
 
 let make_constant_size_parser
   (sz: nat)
@@ -110,14 +108,6 @@ let make_total_constant_size_parser_precond
 = forall (s1: bytes {Seq.length s1 == sz}) (s2: bytes {Seq.length s2 == sz}) .
   f s1 == f s2 ==> Seq.equal s1 s2
 
-inline_for_extraction
-let total_constant_size_parser_kind
-  (sz: nat)
-: Tot parser_kind
-= strong_parser_kind sz sz ({
-    parser_kind_metadata_total = true;
-  })
-
 let make_total_constant_size_parser
   (sz: nat)
   (t: Type0)
@@ -143,10 +133,9 @@ let parse_ret' (#t:Type) (v:t) : Tot (bare_parser t) =
   fun (b: bytes) -> Some (v, (0 <: consumed_length b))
 
 // unfold
+inline_for_extraction
 let parse_ret_kind : parser_kind =
-  strong_parser_kind 0 0 ({
-    parser_kind_metadata_total = true;
-  })
+  strong_parser_kind 0 0 (Some ParserKindMetadataTotal)
 
 let parse_ret (#t:Type) (v:t) : Tot (parser parse_ret_kind t) =
   parse_ret' v
@@ -164,7 +153,7 @@ let serialize_empty : serializer parse_empty = serialize_empty'
 let fail_parser_kind_precond
   (k: parser_kind)
 : GTot Type0
-= k.parser_kind_metadata.parser_kind_metadata_total == false /\
+= k.parser_kind_metadata <> Some ParserKindMetadataTotal /\
   (Some? k.parser_kind_high ==> k.parser_kind_low <= Some?.v k.parser_kind_high)
 
 let fail_parser'
@@ -182,7 +171,7 @@ let fail_parser
   strengthen k p
 
 inline_for_extraction
-let parse_false_kind = strong_parser_kind 0 0 ({ parser_kind_metadata_total = false })
+let parse_false_kind = strong_parser_kind 0 0 (Some ParserKindMetadataFail)
 
 let parse_false : parser parse_false_kind (squash False) = fail_parser _ _
 
@@ -231,6 +220,23 @@ let and_then_cases_injective
 = forall (x1 x2: t) (b1 b2: bytes) .
   and_then_cases_injective_precond p' x1 x2 b1 b2 ==>
   x1 == x2
+
+let and_then_cases_injective_intro
+  (#t:Type)
+  (#t':Type)
+  (p': (t -> Tot (bare_parser t')))
+  (lem: (
+    (x1: t) -> 
+    (x2: t) ->
+    (b1: bytes) ->
+    (b2: bytes) ->
+    Lemma
+    (requires (and_then_cases_injective_precond p' x1 x2 b1 b2))
+    (ensures (x1 == x2))
+  ))
+: Lemma
+  (and_then_cases_injective p')
+= Classical.forall_intro_3 (fun x1 x2 b1 -> Classical.forall_intro (Classical.move_requires (lem x1 x2 b1)))
 
 val and_then_injective
   (#t:Type)
@@ -345,9 +351,11 @@ let and_then_no_lookahead_on #t #t' p p' x x' =
 let and_then_metadata
   (k1 k2: parser_kind_metadata_t)
 : Tot parser_kind_metadata_t
-= {
-    parser_kind_metadata_total = k1.parser_kind_metadata_total && k2.parser_kind_metadata_total;
-  }
+= match k1, k2 with
+  | Some ParserKindMetadataFail, _ -> k1
+  | _, Some ParserKindMetadataFail -> k2
+  | Some ParserKindMetadataTotal, Some ParserKindMetadataTotal -> k1
+  | _ -> None
 
 // unfold
 let and_then_kind
@@ -412,6 +420,7 @@ let and_then_correct
 
 #reset-options
 
+abstract
 val and_then
   (#k: parser_kind)
   (#t:Type)
@@ -430,8 +439,23 @@ let and_then #k #t p #k' #t' p' =
   and_then_correct p p' ;
   f
 
+abstract
+let and_then_eq
+  (#k: parser_kind)
+  (#t:Type)
+  (p:parser k t)
+  (#k': parser_kind)
+  (#t':Type)
+  (p': (t -> Tot (parser k' t')))
+  (input: bytes)
+: Lemma
+  (requires (and_then_cases_injective p'))
+  (ensures (parse (and_then p p') input == and_then_bare p p' input))
+= ()
+
 (* Special case for non-dependent parsing *)
 
+abstract
 let nondep_then
   (#k1: parser_kind)
   (#t1: Type0)
@@ -444,6 +468,7 @@ let nondep_then
 
 #set-options "--z3rlimit 16"
 
+abstract
 let nondep_then_eq
   (#k1: parser_kind)
   (#t1: Type0)
@@ -537,6 +562,7 @@ let bare_serialize_nondep_then_correct
   in
   Classical.forall_intro prf
 
+abstract
 let serialize_nondep_then
   (#k1: parser_kind)
   (#t1: Type0)
@@ -551,6 +577,23 @@ let serialize_nondep_then
 = bare_serialize_nondep_then_correct p1 s1 p2 s2;
   bare_serialize_nondep_then p1 s1 p2 s2
 
+abstract
+let serialize_nondep_then_eq
+  (#k1: parser_kind)
+  (#t1: Type0)
+  (p1: parser k1 t1)
+  (s1: serializer p1)
+  (u: unit { k1.parser_kind_subkind == Some ParserStrong } )
+  (#k2: parser_kind)
+  (#t2: Type0)
+  (p2: parser k2 t2)
+  (s2: serializer p2)
+  (input: t1 * t2)
+: Lemma
+  (serialize (serialize_nondep_then p1 s1 u p2 s2) input == bare_serialize_nondep_then p1 s1 p2 s2 input)
+= ()
+
+abstract
 let serialize_nondep_then_upd_left
   (#k1: parser_kind)
   (#t1: Type0)
@@ -576,6 +619,7 @@ let serialize_nondep_then_upd_left
   Seq.lemma_split s l1;
   Seq.lemma_append_inj (Seq.slice s 0 l1) (Seq.slice s l1 (Seq.length s)) (serialize s1 (fst x)) (serialize s2 (snd x))
 
+abstract
 let serialize_nondep_then_upd_left_chain
   (#k1: parser_kind)
   (#t1: Type0)
@@ -610,6 +654,7 @@ let serialize_nondep_then_upd_left_chain
   seq_upd_seq_right_to_left s 0 s1' i' s';
   seq_upd_seq_slice_idem s 0 (Seq.length s1')
 
+abstract
 let serialize_nondep_then_upd_bw_left
   (#k1: parser_kind)
   (#t1: Type0)
@@ -634,6 +679,7 @@ let serialize_nondep_then_upd_bw_left
 
 #reset-options "--z3refresh --z3rlimit 64 --z3cliopt smt.arith.nl=false"
 
+abstract
 let serialize_nondep_then_upd_bw_left_chain
   (#k1: parser_kind)
   (#t1: Type0)
@@ -664,6 +710,7 @@ let serialize_nondep_then_upd_bw_left_chain
   serialize_nondep_then_upd_left_chain p1 s1 u p2 s2 x y j' s';
   assert (j' == Seq.length (serialize (serialize_nondep_then p1 s1 u p2 s2) x) - (Seq.length (serialize s2 (snd x)) + i') - Seq.length s')
 
+abstract
 let serialize_nondep_then_upd_right
   (#k1: parser_kind)
   (#t1: Type0)
@@ -689,6 +736,7 @@ let serialize_nondep_then_upd_right
   Seq.lemma_split s l2;
   Seq.lemma_append_inj (Seq.slice s 0 l2) (Seq.slice s l2 (Seq.length s)) (serialize s1 (fst x)) (serialize s2 (snd x))
 
+abstract
 let serialize_nondep_then_upd_right_chain
   (#k1: parser_kind)
   (#t1: Type0)
@@ -725,6 +773,7 @@ let serialize_nondep_then_upd_right_chain
   seq_upd_seq_right_to_left s l2 s2' i' s';
   seq_upd_seq_slice_idem s l2 (Seq.length s)
 
+abstract
 let serialize_nondep_then_upd_bw_right
   (#k1: parser_kind)
   (#t1: Type0)
@@ -746,6 +795,7 @@ let serialize_nondep_then_upd_bw_right
   ))
 = serialize_nondep_then_upd_right p1 s1 u p2 s2 x y
 
+abstract
 let serialize_nondep_then_upd_bw_right_chain
   (#k1: parser_kind)
   (#t1: Type0)
@@ -920,6 +970,18 @@ let synth_injective_intro
   (ensures (synth_injective f))
 = ()
 
+let parse_synth'
+  (#k: parser_kind)
+  (#t1: Type0)
+  (#t2: Type0)
+  (p1: parser k t1)
+  (f2: t1 -> GTot t2)
+: Tot (bare_parser t2)
+= fun b -> match parse p1 b with
+  | None -> None
+  | Some (x1, consumed) -> Some (f2 x1, consumed)
+
+abstract
 let parse_synth
   (#k: parser_kind)
   (#t1: Type0)
@@ -933,6 +995,7 @@ let parse_synth
   (ensures (fun _ -> True))
 = coerce (parser k t2) (and_then p1 (fun v1 -> parse_fret f2 v1))
 
+abstract
 let parse_synth_eq
   (#k: parser_kind)
   (#t1: Type0)
@@ -942,9 +1005,7 @@ let parse_synth_eq
   (b: bytes)
 : Lemma
   (requires (synth_injective f2))
-  (ensures (parse (parse_synth p1 f2) b == (match parse p1 b with
-  | None -> None
-  | Some (x1, consumed) -> Some (f2 x1, consumed))))
+  (ensures (parse (parse_synth p1 f2) b == parse_synth' p1 f2 b))
 = ()
 
 let compose (#t1 #t2 #t3: Type) (f1: t1 -> GTot t2) (f2: t2 -> GTot t3) (x: t1) : GTot t3 =
@@ -1037,6 +1098,16 @@ let synth_inverse_synth_injective'
 : Tot (squash (synth_injective f))
 = ()
 
+let synth_injective_synth_inverse_synth_inverse_recip
+  (#t1: Type0)
+  (#t2: Type0)
+  (g: (t2 -> GTot t1))
+  (f: (t1 -> GTot t2))
+  (u: squash (synth_inverse g f /\ synth_injective g))
+: Tot (squash (synth_inverse f g))
+= ()
+
+abstract
 let serialize_synth
   (#k: parser_kind)
   (#t1: Type0)
@@ -1053,6 +1124,7 @@ let serialize_synth
 = bare_serialize_synth_correct p1 f2 s1 g1;
   bare_serialize_synth p1 f2 s1 g1
 
+abstract
 let serialize_synth_eq
   (#k: parser_kind)
   (#t1: Type0)
@@ -1070,6 +1142,7 @@ let serialize_synth_eq
   (serialize (serialize_synth p1 f2 s1 g1 u) x == serialize s1 (g1 x))
 = ()
 
+abstract
 let serialize_synth_upd_chain
   (#k: parser_kind)
   (#t1: Type0)
@@ -1104,6 +1177,7 @@ let serialize_synth_upd_chain
   ))
 = ()
 
+abstract
 let serialize_synth_upd_bw_chain
   (#k: parser_kind)
   (#t1: Type0)
@@ -1167,21 +1241,22 @@ let lift_parser
 (** Refinements *)
 
 // unfold
+inline_for_extraction
 let parse_filter_kind (k: parser_kind) : Tot parser_kind =
   {
     parser_kind_low = k.parser_kind_low;
     parser_kind_high = k.parser_kind_high;
-    parser_kind_metadata = {
-      parser_kind_metadata_total = false;
-    };
+    parser_kind_metadata =
+      begin match k.parser_kind_metadata with
+      | Some ParserKindMetadataFail -> Some ParserKindMetadataFail
+      | _ -> None
+      end;
     parser_kind_subkind = k.parser_kind_subkind;
   }
 
 // unfold
 let parse_filter_payload_kind : parser_kind =
-  strong_parser_kind 0 0 ({
-    parser_kind_metadata_total = false;
-  })
+  strong_parser_kind 0 0 None
 
 let parse_filter_payload
   (#t: Type0)
@@ -1196,6 +1271,7 @@ let parse_filter_payload
     else fail_parser parse_filter_payload_kind (x: t {f x == true} )
   )
 
+abstract
 let parse_filter
   (#k: parser_kind)
   (#t: Type0)
@@ -1204,6 +1280,7 @@ let parse_filter
 : Tot (parser (parse_filter_kind k) (x: t { f x == true }))
 = p `and_then` (parse_filter_payload f)
 
+abstract
 let parse_filter_eq
   (#k: parser_kind)
   (#t: Type0)

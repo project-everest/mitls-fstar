@@ -111,17 +111,16 @@ let parse_list_bare_injective
 
 #reset-options
 
+inline_for_extraction
 let parse_list_kind =
   {
     parser_kind_low = 0;
     parser_kind_high = None;
-    parser_kind_metadata = {
-      parser_kind_metadata_total = false;
-    };
+    parser_kind_metadata = None;
     parser_kind_subkind = Some ParserConsumesAll;
   }
 
-inline_for_extraction
+abstract
 val parse_list
   (#k: parser_kind)
   (#t: Type0)
@@ -132,6 +131,53 @@ let parse_list #k #t p =
   parse_list_bare_injective p;
   parse_list_bare_consumes_all p;
   parse_list_bare p
+
+abstract
+let parse_list_eq
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (b: bytes)
+: Lemma
+  (parse (parse_list p) b == (
+    if Seq.length b = 0
+    then 
+      Some ([], (0 <: consumed_length b))
+    else
+      match parse p b with
+      | None -> None
+      | Some (v, n) ->
+        if n = 0
+        then None (* elements cannot be empty *)
+        else
+          match parse (parse_list p) (Seq.slice b n (Seq.length b)) with
+	  | Some (l, n') -> Some (v :: l, (n + n' <: consumed_length b))
+	  | _ -> None
+  ))
+= ()
+
+abstract
+let parse_list_eq'
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (b: bytes)
+: Lemma
+  (requires (k.parser_kind_low > 0))
+  (ensures (parse (parse_list p) b == (
+    if Seq.length b = 0
+    then 
+      Some ([], (0 <: consumed_length b))
+    else
+      match parse p b with
+      | None -> None
+      | Some (v, n) ->
+        begin match parse (parse_list p) (Seq.slice b n (Seq.length b)) with
+	  | Some (l, n') -> Some (v :: l, (n + n' <: consumed_length b))
+	  | _ -> None
+        end
+  )))
+= ()
 
 let rec bare_serialize_list
   (#k: parser_kind)
@@ -185,6 +231,7 @@ let bare_serialize_list_correct
   in
   Classical.forall_intro prf
 
+abstract
 let serialize_list
   (#k: parser_kind)
   (#t: Type0)
@@ -198,6 +245,7 @@ let serialize_list
 = bare_serialize_list_correct p s;
   bare_serialize_list p s
 
+abstract
 let serialize_list_nil
   (#k: parser_kind)
   (#t: Type0)
@@ -210,6 +258,7 @@ let serialize_list_nil
   (ensures (serialize (serialize_list p s) [] == Seq.empty))
 = ()
 
+abstract
 let serialize_list_cons
   (#k: parser_kind)
   (#t: Type0)
@@ -226,6 +275,7 @@ let serialize_list_cons
   ))
 = ()
 
+abstract
 let serialize_list_singleton
   (#k: parser_kind)
   (#t: Type0)
@@ -237,6 +287,7 @@ let serialize_list_singleton
   (ensures (serialize (serialize_list p s) [a] == serialize s a))
 = Seq.append_empty_r (serialize s a)
 
+abstract
 let rec serialize_list_append
   (#k: parser_kind)
   (#t: Type0)
@@ -253,6 +304,7 @@ let rec serialize_list_append
   | [] ->
     Seq.append_empty_l (serialize (serialize_list p s) l2)
 
+abstract
 let serialize_list_cons_upd
   (#k: parser_kind)
   (#t: Type0)
@@ -283,6 +335,7 @@ let serialize_list_cons_upd
 
 #set-options "--z3rlimit 32"
 
+abstract
 let serialize_list_upd
   (#k: parser_kind)
   (#t: Type0)
@@ -314,6 +367,7 @@ let serialize_list_upd
   assert (serialize (serialize_list _ s) (l1 `L.append` (y :: l2)) == seq_upd_seq (serialize (serialize_list _ s) l1 `Seq.append` serialize (serialize_list _ s) (x :: l2)) (Seq.length (serialize (serialize_list _ s) l1) + 0) (serialize s y));
   serialize_list_append _ s l1 (x :: l2)
 
+abstract
 let serialize_list_upd_bw
   (#k: parser_kind)
   (#t: Type0)
@@ -341,6 +395,7 @@ let serialize_list_upd_bw
 
 #set-options "--z3rlimit 64"
 
+abstract
 let serialize_list_upd_chain
   (#k: parser_kind)
   (#t: Type0)
@@ -387,6 +442,7 @@ let serialize_list_upd_chain
   seq_upd_seq_seq_upd_seq_slice sl ln1 (ln1 + lx) i' s';
   ()
 
+abstract
 let serialize_list_upd_bw_chain
   (#k: parser_kind)
   (#t: Type0)
@@ -418,6 +474,7 @@ let serialize_list_upd_bw_chain
   let j' = Seq.length sx - i' - Seq.length s' in
   serialize_list_upd_chain s l1 x l2 y j' s'
 
+abstract
 let serialize_list_cons_upd_chain
   (#k: parser_kind)
   (#t: Type0)
@@ -445,6 +502,7 @@ let serialize_list_cons_upd_chain
   ))
 = serialize_list_upd_chain s [] x l2 y i' s'
 
+abstract
 let serialize_list_cons_upd_bw_chain
   (#k: parser_kind)
   (#t: Type0)
@@ -473,6 +531,7 @@ let serialize_list_cons_upd_bw_chain
 = let j' = Seq.length (serialize s x) - i' - Seq.length s' in
   serialize_list_cons_upd_chain s x l2 y j' s'
 
+abstract
 let serialize_list_snoc_upd_chain
   (#k: parser_kind)
   (#t: Type0)
@@ -500,6 +559,7 @@ let serialize_list_snoc_upd_chain
   ))
 = serialize_list_upd_chain s l1 x [] y i' s'
 
+abstract
 let serialize_list_snoc_upd_bw_chain
   (#k: parser_kind)
   (#t: Type0)
@@ -530,6 +590,7 @@ let serialize_list_snoc_upd_bw_chain
 
 #reset-options
 
+abstract
 val list_length_constant_size_parser_correct
   (#k: parser_kind)
   (#t: Type0)

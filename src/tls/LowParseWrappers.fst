@@ -79,7 +79,7 @@ let wrap_parser32_total_constant_length_precond
 : GTot Type0
 = k.parser_kind_high == Some k.parser_kind_low /\
   k.parser_kind_low == len /\
-  k.parser_kind_metadata.parser_kind_metadata_total == true
+  k.parser_kind_metadata == Some ParserKindMetadataTotal
 
 inline_for_extraction
 let wrap_parser32_total_constant_length

@@ -29,7 +29,7 @@ let init () : ST UInt32.t
 //  let h0 = get() in
 //  assume(EverCrypt.Specs.random_init_pre h0);
   assume false;
-  EverCrypt.AutoConfig.(init Default);
+  EverCrypt.AutoConfig2.(init ());
   EverCrypt.random_init ()
 
 let cleanup () : ST unit

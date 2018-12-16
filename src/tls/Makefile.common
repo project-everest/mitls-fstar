@@ -12,6 +12,15 @@ SHELL=/bin/bash
 # Paths and Commands
 
 INCLUDE_PATHS = \
+  $(HACL_HOME)/vale/code/arch/x64 \
+  $(HACL_HOME)/vale/specs/defs \
+  $(HACL_HOME)/vale/specs/hardware \
+  $(HACL_HOME)/vale/code/crypto/sha \
+  $(HACL_HOME)/vale/code/arch \
+  $(HACL_HOME)/vale/code/lib/collections \
+  $(HACL_HOME)/vale/code/lib/util \
+  $(HACL_HOME)/vale/specs/crypto \
+  $(HACL_HOME)/vale/specs/math \
 	$(HACL_HOME)/secure_api \
 	$(HACL_HOME)/secure_api/utils \
 	$(HACL_HOME)/secure_api/concrete_specializations \
@@ -26,6 +35,23 @@ INCLUDE_PATHS = \
         $(MITLS_HOME)/src/parsers/generated \
 	$(EVERCRYPT_HOME)/evercrypt \
 	$(SPECINC)
+
+# We can't hard-error on these because of F* orange CI that runs over a couple
+# miTLS files without properly building HACL* first.
+EVERCRYPT_CACHE_DIR=$(EVERCRYPT_HOME)/.cache
+VALE_CACHE_DIR=$(HACL_HOME)/vale/obj/cache_checked
+
+ifneq (,$(wildcard $(EVERCRYPT_CACHE_DIR)))
+  INCLUDE_PATHS += $(EVERCRYPT_CACHE_DIR)
+else
+  $(warning Missing EverCrypt cache dir, seems like an incomplete build of HACL*)
+endif
+
+ifneq (,$(wildcard $(VALE_CACHE_DIR)))
+  INCLUDE_PATHS += $(VALE_CACHE_DIR)
+else
+  $(warning Missing Vale cache dir, seems like an incomplete build of HACL*)
+endif
 
 ifeq (,$(MITLS_NODEBUG))
   INCLUDE_PATHS += ./concrete-flags/Debug

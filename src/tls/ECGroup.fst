@@ -81,10 +81,10 @@ let dh_initiator #g gx gy =
 val parse_curve: B.bytes -> Tot (option group)
 let parse_curve b =
   if (B.length b < 1) then None else (
-    let open Parsers.ECCurveType.EcCurveType in  
+    let open Parsers.ECCurveType in  
     let open Format.NamedGroup in
-    match ecCurveType_parser32 b with // <- parse_curve == ecCurveType_parser and-then named_group_parser
-    | Some (Parsers.ECCurveType.EcCurveType.NAMED_CURVE, _) -> 
+    match eCCurveType_parser32 b with // <- parse_curve == ecCurveType_parser and-then named_group_parser
+    | Some (Named_curve, _) -> 
       let ty, id = B.split b 1ul in
       (match namedGroup_parser32 id with
        | Some (SECP256R1, _) -> Some EC.ECC_P256
@@ -126,7 +126,6 @@ let parse_partial payload =
     if B.length payload >= 7 then
       let (curve, point) = B.split payload 3ul in
       match parse_curve curve with
-      
       | None -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "Unsupported curve")
       | Some(ecp) ->
         match vlsplit 1 point with

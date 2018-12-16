@@ -34,7 +34,7 @@ let synth_namedGroupList_recip
 (* Parsers *)
 
 inline_for_extraction
-let namedGroupList_parser_kind' = LP.parse_bounded_vldata_kind 2 65535
+let namedGroupList_parser_kind' = LP.parse_bounded_vlbytes_kind 2 65535
 
 let namedGroupList_parser_kind_metadata = namedGroupList_parser_kind'.LP.parser_kind_metadata
 

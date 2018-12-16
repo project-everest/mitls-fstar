@@ -1,0 +1,143 @@
+[
+  "ËÏÓE÷é\"∏'JªêF›{%",
+  [
+    [
+      "Model.ideal_or_real",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "eb0dece9078fa17b0020c579fda67812"
+    ],
+    [
+      "Model.__proj__Ideal__item__v",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_Model.Ideal",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Model_Tm_refine_f8f3d75a17721bb6e0dd00975446a581"
+      ],
+      0,
+      "a40ce5320ba65c682b8b7c5e415fee8c"
+    ],
+    [
+      "Model.__proj__Real__item__v",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_Model.Real",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Model_Tm_refine_8ba51edc114520debef30f4a30c696ca"
+      ],
+      0,
+      "a5d749b58d7b3cc0e31e995f3a7552fa"
+    ],
+    [
+      "Model.ir",
+      1,
+      2,
+      1,
+      [ "@query", "projection_inverse_BoxBool_proj_0" ],
+      0,
+      "4525947c2f5a6c955901ab5bece6f068"
+    ],
+    [
+      "Model.model_on",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
+        "equation_Mem.model", "equation_Model.ir", "equation_Prims.squash",
+        "function_token_typing_Flags.model",
+        "refinement_interpretation_Model_Tm_refine_3a337cb56cd3c8b5d5f50adb86c4c664",
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+      ],
+      0,
+      "4fd0410cd7667ee4a8ec7d4db8e1138d"
+    ],
+    [
+      "Model.ideal",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
+        "equation_Mem.model", "equation_Model.ir", "equation_Prims.squash",
+        "function_token_typing_Flags.model",
+        "refinement_interpretation_Model_Tm_refine_3a337cb56cd3c8b5d5f50adb86c4c664",
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "unit_inversion"
+      ],
+      0,
+      "8cda516bfee05fbe7381c755277c8743"
+    ],
+    [
+      "Model.real",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_Model.Ideal",
+        "disc_equation_Model.Real", "equation_Model.ir",
+        "fuel_guarded_inversion_Model.ideal_or_real",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Model_Tm_refine_3a337cb56cd3c8b5d5f50adb86c4c664"
+      ],
+      0,
+      "cf4239fa3384eea2cf23294b185a5580"
+    ],
+    [
+      "Model.mk_ideal",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
+        "constructor_distinct_Model.Ideal", "disc_equation_Model.Ideal",
+        "equation_Mem.model", "equation_Model.ir", "equation_Prims.squash",
+        "function_token_typing_Flags.model",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Model.Ideal_it",
+        "projection_inverse_Model.Ideal_rt",
+        "projection_inverse_Model.Ideal_v",
+        "refinement_interpretation_Model_Tm_refine_3a337cb56cd3c8b5d5f50adb86c4c664",
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "unit_inversion"
+      ],
+      0,
+      "a14b1db4e81f67a79731eb551f1f7684"
+    ],
+    [
+      "Model.mk_real",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "constructor_distinct_Model.Real",
+        "disc_equation_Model.Ideal", "equation_Model.ir",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Model_Tm_refine_3a337cb56cd3c8b5d5f50adb86c4c664"
+      ],
+      0,
+      "15803ee3a73717698f3dea60ad35aa58"
+    ],
+    [
+      "Model.is_safe",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion", "bool_typing",
+        "equation_Mem.model", "function_token_typing_Flags.model",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "ffe0979e80f074a24a6127b31870abda"
+    ]
+  ]
+]

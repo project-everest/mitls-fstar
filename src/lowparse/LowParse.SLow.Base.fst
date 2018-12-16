@@ -278,7 +278,7 @@ let parse32_total
 : Lemma
   (requires (
     k.parser_kind_high == Some k.parser_kind_low /\
-    k.parser_kind_metadata.parser_kind_metadata_total == true /\
+    k.parser_kind_metadata == Some ParserKindMetadataTotal /\
     k.parser_kind_low <= B32.length input
   ))
   (ensures (
