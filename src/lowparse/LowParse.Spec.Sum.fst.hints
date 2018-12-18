@@ -12,7 +12,7 @@
         "token_correspondence_LowParse.Spec.Sum.synth_tagged_union_data"
       ],
       0,
-      "4aae5a578c5e225e96151aa337efd96c"
+      "3ab7a5176c49a86b0fe82d5e9ef79785"
     ],
     [
       "LowParse.Spec.Sum.parse_tagged_union_payload_and_then_cases_injective",
@@ -56,6 +56,7 @@
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
+        "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
         "projection_inverse_FStar.Pervasives.Native.Some_a",
         "projection_inverse_FStar.Pervasives.Native.Some_v",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
@@ -73,7 +74,7 @@
         "typing_LowParse.Spec.Sum.refine_with_tag"
       ],
       0,
-      "10975e02c72b94bcc3d145d83331f127"
+      "d5aab6d8f997fef5f5eecfe8108c0a83"
     ],
     [
       "LowParse.Spec.Sum.parse_tagged_union_eq",
@@ -145,7 +146,7 @@
         "typing_LowParse.Spec.Sum.refine_with_tag"
       ],
       0,
-      "bdb24b4581d21f8ad64580dc1a2023d6"
+      "1e1d011f7642d5f57a1c47592ac45a6a"
     ],
     [
       "LowParse.Spec.Sum.bare_parse_tagged_union",
@@ -191,7 +192,7 @@
         "typing_LowParse.Spec.Sum.refine_with_tag"
       ],
       0,
-      "af1a82f18ea2d913b507e5a239c06e76"
+      "7d700992a7bb009cf404504004065f75"
     ],
     [
       "LowParse.Spec.Sum.parse_tagged_union_eq_gen",
@@ -251,7 +252,7 @@
         "typing_LowParse.Spec.Sum.refine_with_tag"
       ],
       0,
-      "17ab4efb492b310c82229e88aa8d1f70"
+      "023c4169f3c092800bfc60aed372a92e"
     ],
     [
       "LowParse.Spec.Sum.bare_serialize_tagged_union_correct",
@@ -321,7 +322,7 @@
         "typing_LowParse.Spec.Sum.refine_with_tag"
       ],
       0,
-      "2f9bfc35bab65c811d0c611df1241bb9"
+      "c9cae49207c5562e1743aed5b85dea92"
     ],
     [
       "LowParse.Spec.Sum.serialize_tagged_union",
@@ -330,7 +331,7 @@
       1,
       [ "@query" ],
       0,
-      "d9146a4ec582ef97970460287ea0be51"
+      "337cf8878ba2cd501fff89165478f2a6"
     ],
     [
       "LowParse.Spec.Sum.serialize_tagged_union_eq",
@@ -354,7 +355,7 @@
         "typing_LowParse.Spec.Base.default_parser_kind", "unit_typing"
       ],
       0,
-      "06381cbfeaf71dc78136b97cd075346f"
+      "32f06a0e225357c4e050a880ead11636"
     ],
     [
       "LowParse.Spec.Sum.sum",
@@ -369,7 +370,7 @@
         "refinement_interpretation_LowParse.Spec.Sum_Tm_refine_aa7b184f4f7098ab61bdee8a42ac00bb"
       ],
       0,
-      "bc46b0ebbc2842090726053b20c2f1b0"
+      "7da0ead6b1756b1be9db85f6434cf50a"
     ],
     [
       "LowParse.Spec.Sum.__proj__Sum__item__e",
@@ -383,7 +384,7 @@
         "projection_inverse_LowParse.Spec.Sum.Sum_repr"
       ],
       0,
-      "724daab8e82388c1b30be7da7a514580"
+      "ee92b077c9700aec24c3e38c70b5f2e7"
     ],
     [
       "LowParse.Spec.Sum.__proj__Sum__item__tag_of_data",
@@ -401,7 +402,7 @@
         "projection_inverse_LowParse.Spec.Sum.Sum_repr"
       ],
       0,
-      "7d82976e900ea87ffe608b5911697b1b"
+      "1ea8d241ca157ea2fa4320c32f2adc1b"
     ],
     [
       "LowParse.Spec.Sum.__proj__Sum__item__type_of_tag",
@@ -417,7 +418,7 @@
         "projection_inverse_LowParse.Spec.Sum.Sum_repr"
       ],
       0,
-      "73e9389010ce04a689f0d3be61aafb65"
+      "6681387227f8e2ba11f56f5163e74e95"
     ],
     [
       "LowParse.Spec.Sum.__proj__Sum__item__synth_case",
@@ -441,7 +442,7 @@
         "token_correspondence_LowParse.Spec.Sum.__proj__Sum__item__type_of_tag"
       ],
       0,
-      "74909ea390bce3da2ee2a2d077d1d4a7"
+      "d911699e57373243c4bb215ae842f191"
     ],
     [
       "LowParse.Spec.Sum.__proj__Sum__item__synth_case_recip",
@@ -465,7 +466,7 @@
         "token_correspondence_LowParse.Spec.Sum.__proj__Sum__item__type_of_tag"
       ],
       0,
-      "4f7081bec5e9f7b05f54548c6fb824ba"
+      "4111d2061213a004b72c72ec35f981b6"
     ],
     [
       "LowParse.Spec.Sum.__proj__Sum__item__synth_case_recip_synth_case",
@@ -492,7 +493,7 @@
         "token_correspondence_LowParse.Spec.Sum.__proj__Sum__item__type_of_tag"
       ],
       0,
-      "ae1df45b1af78373fd35ab963aaecb57"
+      "54f54e42c950bfa24851f60f900ad775"
     ],
     [
       "LowParse.Spec.Sum.__proj__Sum__item__synth_case_recip_synth_case",
@@ -528,7 +529,7 @@
         "token_correspondence_LowParse.Spec.Sum.__proj__Sum__item__type_of_tag"
       ],
       0,
-      "dd954d33e00de0151623b41640df2a21"
+      "bc2983c19036c13abf4ece3ef0b9dae8"
     ],
     [
       "LowParse.Spec.Sum.__proj__Sum__item__synth_case_synth_case_recip",
@@ -543,7 +544,7 @@
         "token_correspondence_LowParse.Spec.Sum.__proj__Sum__item__tag_of_data"
       ],
       0,
-      "1320c8d0bd49e922eaeaebfe7b11ae13"
+      "9d7cb139529bbf2d10ad9bc31976c1ad"
     ],
     [
       "LowParse.Spec.Sum.__proj__Sum__item__synth_case_synth_case_recip",
@@ -575,7 +576,7 @@
         "token_correspondence_LowParse.Spec.Sum.__proj__Sum__item__tag_of_data"
       ],
       0,
-      "ad9b3d3c1b8304071cabbc4531691215"
+      "94d51d179d4a6842944dc1dd1316b8a2"
     ],
     [
       "LowParse.Spec.Sum.sum_enum",
@@ -589,7 +590,7 @@
         "projection_inverse_LowParse.Spec.Sum.Sum_repr"
       ],
       0,
-      "40aa847615b5579f616984d13ab25b88"
+      "c443901153992b3441a15ac679757388"
     ],
     [
       "LowParse.Spec.Sum.sum_key_type_of_sum_key",
@@ -606,7 +607,7 @@
         "refinement_interpretation_LowParse.Spec.Enum_Tm_refine_f63a4a268f020733364bf5736477d275"
       ],
       0,
-      "1a2b44124df537fc0e69b576774f7466"
+      "670c1b83c797392a2e42dc18c7cfe3f2"
     ],
     [
       "LowParse.Spec.Sum.sum_tag_of_data",
@@ -624,7 +625,7 @@
         "projection_inverse_LowParse.Spec.Sum.Sum_repr"
       ],
       0,
-      "d1222754e350793dbf9a59e444e32370"
+      "b74ac1fbb7dc670cda8de5d453185db6"
     ],
     [
       "LowParse.Spec.Sum.sum_type_of_tag",
@@ -640,7 +641,7 @@
         "projection_inverse_LowParse.Spec.Sum.Sum_repr"
       ],
       0,
-      "799c7e9dd471eaaf96351bda931a548e"
+      "500ef43be2b7b8b650b10181d20b3e61"
     ],
     [
       "LowParse.Spec.Sum.weaken_parse_cases_kind",
@@ -680,7 +681,7 @@
         "typing_LowParse.Spec.Sum.sum_repr_type"
       ],
       0,
-      "3902a348f95f30c0605725531dc014c9"
+      "a10bbb45053183177b6e113765d09d38"
     ],
     [
       "LowParse.Spec.Sum.synth_sum_case",
@@ -704,7 +705,7 @@
         "token_correspondence_LowParse.Spec.Sum.sum_type_of_tag"
       ],
       0,
-      "e2d8adf70537fd4d5c122aae819d3ccd"
+      "e35ccf0b6b374db51d9cd28a4d13b672"
     ],
     [
       "LowParse.Spec.Sum.synth_sum_case_injective",
@@ -737,7 +738,7 @@
         "token_correspondence_LowParse.Spec.Sum.synth_sum_case"
       ],
       0,
-      "0fd1dddafc04677b6e2e56c0ca7e52a5"
+      "93bae936b3f4b0c887c9fe735511743d"
     ],
     [
       "LowParse.Spec.Sum.parse_sum_cases",
@@ -789,7 +790,7 @@
         "typing_LowParse.Spec.Sum_Tm_abs_162ef36bfdaee7e5794904f4d1f48ce3"
       ],
       0,
-      "80eb0a3960d012c3185ce60c4ca27cc2"
+      "ec8ffe78938aac739e7b3f3f82671315"
     ],
     [
       "LowParse.Spec.Sum.parse_sum_cases_eq",
@@ -871,7 +872,7 @@
         "typing_LowParse.Spec.Sum_Tm_abs_162ef36bfdaee7e5794904f4d1f48ce3"
       ],
       0,
-      "359ab2cf0dce3d3005c36fd456298c40"
+      "234d5dba454121028700eb6654796dbc"
     ],
     [
       "LowParse.Spec.Sum.parse_sum_cases_eq'",
@@ -937,7 +938,7 @@
         "typing_LowParse.Spec.Sum_Tm_abs_162ef36bfdaee7e5794904f4d1f48ce3"
       ],
       0,
-      "df55d4a456b8b6e51065a7e33e187728"
+      "d9707d9a389f26743282f82c930cf53f"
     ],
     [
       "LowParse.Spec.Sum.parse_sum_eq'",
@@ -1020,7 +1021,7 @@
         "typing_Prims.__proj__Mkdtuple2__item___1"
       ],
       0,
-      "394586621d2e5580a6c6fbcd8af9df47"
+      "7fd74f3040ace7ecc4d7bb4ccb11f5ad"
     ],
     [
       "LowParse.Spec.Sum.parse_sum_eq",
@@ -1132,7 +1133,7 @@
         "typing_Prims.__proj__Mkdtuple2__item___1", "unit_typing"
       ],
       0,
-      "9b733b0d2972948db2bfe20298c1c059"
+      "dd9b8046d29ddca668bc4cd681df9ab5"
     ],
     [
       "LowParse.Spec.Sum.parse_sum_eq''",
@@ -1223,7 +1224,7 @@
         "typing_Prims.__proj__Mkdtuple2__item___1", "unit_typing"
       ],
       0,
-      "db22413f7bda2dcbd82bd8b78239e8ed"
+      "2809c046358b93e026cd5080dbdac74a"
     ],
     [
       "LowParse.Spec.Sum.synth_sum_case_recip",
@@ -1253,7 +1254,7 @@
         "token_correspondence_LowParse.Spec.Sum.sum_type_of_tag"
       ],
       0,
-      "86f44ea1324a2edb851eb9116a7c229d"
+      "27e367088d46038e66781c2e8257c9b3"
     ],
     [
       "LowParse.Spec.Sum.synth_sum_case_inverse",
@@ -1283,7 +1284,7 @@
         "token_correspondence_LowParse.Spec.Sum.synth_sum_case_recip"
       ],
       0,
-      "e7b4e7d3fd04537ed07f8414b9fc3614"
+      "5ff4e160ee811b6c0807120972394db6"
     ],
     [
       "LowParse.Spec.Sum.serialize_sum_cases'",
@@ -1292,7 +1293,7 @@
       1,
       [ "@query" ],
       0,
-      "d5aca9283b3f21bdbde8939952302b64"
+      "962db485c1e5db85f142dbfa286d5ce0"
     ],
     [
       "LowParse.Spec.Sum.serialize_sum_cases",
@@ -1312,7 +1313,7 @@
         "proj_equation_Prims.Mkdtuple2__2"
       ],
       0,
-      "8e57fe3cef50bf0b768becf00182ec97"
+      "0bbfe320c5fe665137741be5e6c654c6"
     ],
     [
       "LowParse.Spec.Sum.serialize_sum'",
@@ -1326,7 +1327,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "08eded6ebee58c5d9af1b38ea3fe5124"
+      "8163c1c352948a91cd6c8675d5863726"
     ],
     [
       "LowParse.Spec.Sum.serialize_sum",
@@ -1340,7 +1341,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "d71c5056b8f3941ac2e06be1bd23bd86"
+      "10e0bfc58e95cc7cf89a1ebb3af515eb"
     ],
     [
       "LowParse.Spec.Sum.serialize_sum_eq",
@@ -1387,7 +1388,7 @@
         "unit_typing"
       ],
       0,
-      "1ce15675af17c5dfdfa4a6bb47dc29bf"
+      "a92897972f284c97523bf5e58c6b8013"
     ],
     [
       "LowParse.Spec.Sum.make_sum",
@@ -1402,7 +1403,7 @@
         "refinement_interpretation_LowParse.Spec.Sum_Tm_refine_aa7b184f4f7098ab61bdee8a42ac00bb"
       ],
       0,
-      "7fc97f2bba17b5178a04e0172ab97c91"
+      "89b392a58c5bef06a2d5380ca3b19444"
     ],
     [
       "LowParse.Spec.Sum.synth_case_recip_synth_case_post",
@@ -1415,7 +1416,7 @@
         "refinement_interpretation_LowParse.Spec.Sum_Tm_refine_aa7b184f4f7098ab61bdee8a42ac00bb"
       ],
       0,
-      "fd02340bcaed5b86fb0752874e8b1b65"
+      "6d4ae7355363232108046a49f2c67163"
     ],
     [
       "LowParse.Spec.Sum.make_sum'",
@@ -1436,7 +1437,7 @@
         "unit_typing"
       ],
       0,
-      "2b859d75e3930056b4d1a715a53f3eb3"
+      "e9af9bc1b41a36948aef11d7ccef1ef9"
     ],
     [
       "LowParse.Spec.Sum.dsum_type_of_tag'",
@@ -1450,7 +1451,7 @@
         "fuel_guarded_inversion_LowParse.Spec.Enum.maybe_enum_key"
       ],
       0,
-      "13b02156458dca928a1443bb7031a0de"
+      "772b04fa9ab803737c56a354424e7937"
     ],
     [
       "LowParse.Spec.Sum.synth_dsum_case'",
@@ -1475,7 +1476,7 @@
         "projection_inverse_LowParse.Spec.Enum.Unknown_repr"
       ],
       0,
-      "7a09b7e550c945b8697e157f11583cc8"
+      "8659901865e93b0ccdebf36a68a5aa88"
     ],
     [
       "LowParse.Spec.Sum.__proj__DSum__item__e",
@@ -1489,7 +1490,7 @@
         "projection_inverse_LowParse.Spec.Sum.DSum_repr"
       ],
       0,
-      "c8e32e3f06bd5e6d25bf21eaf8320464"
+      "708a77185e25495fee3c72e90f418150"
     ],
     [
       "LowParse.Spec.Sum.__proj__DSum__item__tag_of_data",
@@ -1507,7 +1508,7 @@
         "projection_inverse_LowParse.Spec.Sum.DSum_repr"
       ],
       0,
-      "2b339471432aa62ea6c1b57550a6dd78"
+      "05409318bfc5d12638d306517c1d0b23"
     ],
     [
       "LowParse.Spec.Sum.__proj__DSum__item__type_of_known_tag",
@@ -1523,7 +1524,7 @@
         "projection_inverse_LowParse.Spec.Sum.DSum_repr"
       ],
       0,
-      "ba420ae1836e9b6a74bbf6989e666c60"
+      "42f5c9cbd5172de032d198a72ec71505"
     ],
     [
       "LowParse.Spec.Sum.__proj__DSum__item__synth_case",
@@ -1549,7 +1550,7 @@
         "token_correspondence_LowParse.Spec.Sum.__proj__DSum__item__type_of_known_tag"
       ],
       0,
-      "c6ef556e5f178717796169c2035a6e2c"
+      "a1ded8ae6faa670bb92a5da6db4b7c95"
     ],
     [
       "LowParse.Spec.Sum.__proj__DSum__item__synth_case_recip",
@@ -1575,7 +1576,7 @@
         "token_correspondence_LowParse.Spec.Sum.__proj__DSum__item__type_of_known_tag"
       ],
       0,
-      "4179d350610f129d59b96283c52df363"
+      "fd8f30be6614c5b497f6379666df1497"
     ],
     [
       "LowParse.Spec.Sum.__proj__DSum__item__synth_case_recip_synth_case",
@@ -1602,7 +1603,7 @@
         "token_correspondence_LowParse.Spec.Sum.__proj__DSum__item__type_of_known_tag"
       ],
       0,
-      "53f03accd9b68231cb0913cc924169bb"
+      "2ded1aed18157f0d3ac837c1c7913438"
     ],
     [
       "LowParse.Spec.Sum.__proj__DSum__item__synth_case_synth_case_recip",
@@ -1618,7 +1619,7 @@
         "token_correspondence_LowParse.Spec.Sum.__proj__DSum__item__tag_of_data"
       ],
       0,
-      "681148a0c215533d053d42027529dcc1"
+      "956193509740169a1bbf90398a8bf48f"
     ],
     [
       "LowParse.Spec.Sum.__proj__DSum__item__synth_case_synth_case_recip",
@@ -1643,7 +1644,7 @@
         "token_correspondence_LowParse.Spec.Sum.__proj__DSum__item__tag_of_data"
       ],
       0,
-      "7e029f2da4b8c93c5fe870b773b54eff"
+      "7c1f2b3f86385078b0f506d5f995a510"
     ],
     [
       "LowParse.Spec.Sum.dsum_enum",
@@ -1657,7 +1658,7 @@
         "projection_inverse_LowParse.Spec.Sum.DSum_repr"
       ],
       0,
-      "c6c38b8cba7edbcd0de77d9bae5eed4c"
+      "545eb6686a79b483999185664a6d4232"
     ],
     [
       "LowParse.Spec.Sum.dsum_tag_of_data",
@@ -1675,7 +1676,7 @@
         "projection_inverse_LowParse.Spec.Sum.DSum_repr"
       ],
       0,
-      "8092e83ed47c1e3bfd751d6b5f284c35"
+      "fcf3e6a7cb7c183354ad8a663243b578"
     ],
     [
       "LowParse.Spec.Sum.dsum_type_of_known_tag",
@@ -1691,7 +1692,7 @@
         "projection_inverse_LowParse.Spec.Sum.DSum_repr"
       ],
       0,
-      "40fe991aee9ad0d61751e1ca72346430"
+      "e134fd91a62a51b90c8967538775d8ce"
     ],
     [
       "LowParse.Spec.Sum.weaken_parse_dsum_cases_kind",
@@ -1731,7 +1732,7 @@
         "typing_LowParse.Spec.Sum.dsum_repr_type"
       ],
       0,
-      "8781660af4b34a0af41283571839669d"
+      "68b954038ea322f7d1bf64e2f6e3516e"
     ],
     [
       "LowParse.Spec.Sum.synth_dsum_case",
@@ -1757,7 +1758,7 @@
         "token_correspondence_LowParse.Spec.Sum.dsum_type_of_known_tag"
       ],
       0,
-      "38e6a39f15621e2a1198fe7ee16c9025"
+      "33440fd66a8c6e7a37050d1aa9422a67"
     ],
     [
       "LowParse.Spec.Sum.synth_dsum_case_recip",
@@ -1783,7 +1784,7 @@
         "token_correspondence_LowParse.Spec.Sum.dsum_type_of_known_tag"
       ],
       0,
-      "99b31047700991fa8cdb9f4dea241cd1"
+      "94e2a2e3544cb066a4506b015c1fe491"
     ],
     [
       "LowParse.Spec.Sum.synth_dsum_case_injective",
@@ -1799,7 +1800,7 @@
         "unit_typing"
       ],
       0,
-      "9871200e536fc6d70e3873c7d3159838"
+      "52045336989668982d0eb27b323c1694"
     ],
     [
       "LowParse.Spec.Sum.parse_dsum_type_of_tag",
@@ -1884,7 +1885,7 @@
         "typing_LowParse.Spec.Sum_Tm_abs_05fc6e65c064fe8f6b93dd54c2b92d67"
       ],
       0,
-      "124d29084c1f9d4ed0bb6a48e6b75bad"
+      "53d3a6962933f7b0f192e0022e740d65"
     ],
     [
       "LowParse.Spec.Sum.parse_dsum_cases",
@@ -1893,7 +1894,7 @@
       1,
       [ "@query", "equation_LowParse.Spec.Sum.dsum_cases" ],
       0,
-      "3547af526b65fecc634aaf67baa1fde1"
+      "7ab38c7fe7ee4c2d3fc107ed0001995e"
     ],
     [
       "LowParse.Spec.Sum.parse_dsum_type_of_tag'",
@@ -1935,7 +1936,7 @@
         "token_correspondence_LowParse.Spec.Sum.dsum_type_of_tag_"
       ],
       0,
-      "ba4a804fe7accb2f2c1eeb071aeb29fb"
+      "001e55fd3ba1a2b1736abc35fbc2bc6b"
     ],
     [
       "LowParse.Spec.Sum.parse_dsum_cases'",
@@ -1978,7 +1979,7 @@
         "token_correspondence_LowParse.Spec.Sum.dsum_type_of_tag_"
       ],
       0,
-      "0b711d1466ff0ce5466900ae82aa53f8"
+      "f5e0cd5c1e41835bb890fda84ffe9ead"
     ],
     [
       "LowParse.Spec.Sum.parse_dsum_cases_eq'",
@@ -2073,7 +2074,7 @@
         "typing_LowParse.Spec.Sum_Tm_abs_05fc6e65c064fe8f6b93dd54c2b92d67"
       ],
       0,
-      "1660eceabe4117893243ebafdd6337ab"
+      "7e0bb5fae0864e1ee497940724aaf2da"
     ],
     [
       "LowParse.Spec.Sum.parse_dsum_eq''",
@@ -2176,7 +2177,7 @@
         "unit_typing"
       ],
       0,
-      "9956d54ac80961b2e2988ebce1298d9c"
+      "b2fb88a195c94d723ef28bf69241820f"
     ],
     [
       "LowParse.Spec.Sum.parse_dsum_eq_",
@@ -2251,7 +2252,7 @@
         "typing_LowParse.Spec.Sum.parse_dsum_cases_kind"
       ],
       0,
-      "db5ab44c35cb3e753f08a842fb475305"
+      "ec626de9aa98f479ae6091046fef30c3"
     ],
     [
       "LowParse.Spec.Sum.parse_dsum_eq'",
@@ -2398,7 +2399,7 @@
         "typing_LowParse.Spec.Sum.dsum_type", "unit_typing"
       ],
       0,
-      "c2c8160f4f92891847d11bcd69cfe948"
+      "55004e2b8e13a81a13ee27876295fa76"
     ],
     [
       "LowParse.Spec.Sum.parse_dsum_eq",
@@ -2556,7 +2557,7 @@
         "unit_inversion", "unit_typing"
       ],
       0,
-      "4aa9e43794f72dc56edcd462b17809e1"
+      "4dc83594a84d0433e9a1b60d9b19e5c9"
     ],
     [
       "LowParse.Spec.Sum.parse_dsum_eq3",
@@ -2657,7 +2658,7 @@
         "typing_LowParse.Spec.Sum.parse_dsum_type_of_tag_", "unit_typing"
       ],
       0,
-      "6c91d5ed685f8673585ceb03573ed33e"
+      "3827aab941d05861b0cb104744153a4e"
     ],
     [
       "LowParse.Spec.Sum.synth_dsum_case_inverse",
@@ -2690,7 +2691,7 @@
         "unit_typing"
       ],
       0,
-      "763b22a93100a73ecfb9b17009e852cd"
+      "6580d25c45d321a0f53586d03d920fae"
     ],
     [
       "LowParse.Spec.Sum.serialize_dsum_type_of_tag",
@@ -2734,7 +2735,7 @@
         "token_correspondence_LowParse.Spec.Sum.dsum_type_of_tag_"
       ],
       0,
-      "3dde2f6f9c51599bdee6aaf8744c5473"
+      "a22fe508cb63a40e53cc5cf897a77213"
     ],
     [
       "LowParse.Spec.Sum.serialize_dsum_cases",
@@ -2751,7 +2752,7 @@
         "refinement_interpretation_LowParse.Spec.Base_Tm_refine_9fc4b705eaf2fe68d9cc8785e7df72bf"
       ],
       0,
-      "6969887bea8fe662d60e154bfd2e1d73"
+      "eaccbef7fefea585bd2a473a4d65ba06"
     ],
     [
       "LowParse.Spec.Sum.serialize_dsum'",
@@ -2760,7 +2761,7 @@
       1,
       [ "@query", "equation_LowParse.Spec.Sum.parse_dsum_" ],
       0,
-      "d765ddcd6a0ea2d99421765c7135e00f"
+      "4ff537a1afca6b6978b93b24245a4281"
     ],
     [
       "LowParse.Spec.Sum.serialize_dsum",
@@ -2769,7 +2770,7 @@
       1,
       [ "@query", "equation_LowParse.Spec.Sum.parse_dsum" ],
       0,
-      "4611f4bb035f8721a88d823978110212"
+      "82359f05a51c41addd642147c90a1610"
     ],
     [
       "LowParse.Spec.Sum.synth_dsum_case_recip_synth_case_known_post",
@@ -2778,7 +2779,7 @@
       1,
       [ "@query" ],
       0,
-      "f19212ceaef2eb32e81c319df5117c24"
+      "415cba7c0a4001eaaa7c11abd1524cb5"
     ],
     [
       "LowParse.Spec.Sum.synth_dsum_case_recip_synth_case_unknown_post",
@@ -2787,7 +2788,7 @@
       1,
       [ "@query" ],
       0,
-      "a24cf3acac0d87c6a6d7cefaa54e1edd"
+      "73a79c915a266e5e6b014983e3746580"
     ],
     [
       "LowParse.Spec.Sum.make_dsum'",
@@ -2818,7 +2819,7 @@
         "refinement_interpretation_LowParse.Spec.Enum_Tm_refine_f63a4a268f020733364bf5736477d275"
       ],
       0,
-      "1fb93cb69395bfd65d9160aa0bf69876"
+      "877b740c48b214e35f45d09fb857f7cb"
     ],
     [
       "LowParse.Spec.Sum.serialize_dsum_eq'",
@@ -2859,7 +2860,7 @@
         "typing_LowParse.Spec.Base.default_parser_kind", "unit_typing"
       ],
       0,
-      "7b16b81745fc6233c3c31120b7b29fad"
+      "f6abcb442c61e03f640b61aaa83d038e"
     ],
     [
       "LowParse.Spec.Sum.serialize_dsum_eq",
@@ -2927,7 +2928,7 @@
         "unit_typing"
       ],
       0,
-      "1836eca12ed77f23eba29f0f37f78445"
+      "71ff5ef4e55c1345d5b651730edd904c"
     ]
   ]
 ]
