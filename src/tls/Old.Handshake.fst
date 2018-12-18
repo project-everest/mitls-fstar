@@ -108,7 +108,9 @@ let version_of (s:hs) = Nego.version s.nego
 let get_mode (s:hs) = Nego.getMode s.nego
 let is_server_hrr (s:hs) = Nego.is_server_hrr s.nego
 let is_0rtt_offered (s:hs) =
-let mode = get_mode s in Nego.zeroRTToffer mode.Nego.n_offer
+  let mode = get_mode s in Nego.zeroRTToffer mode.Nego.n_offer
+let is_post_handshake (s:hs) =
+  match !s.state with | C_Complete | S_Complete -> true | _ -> false
 let epochs_of (s:hs) = s.epochs
 
 (* WIP on the handshake invariant
@@ -1001,6 +1003,31 @@ let server_EOED hs (digestEOED: Hashing.anyTag)
   hs.state := S_Wait_Finished2 digestEOED;
   InAck false false
 
+let server_Ticket hs (app_data:bytes) =
+  let (| li, rmsid, rms |) = KeySchedule.ks_server_13_rms hs.ks in
+  let cfg = Nego.local_config hs.nego in
+  let mode = Nego.getMode hs.nego in
+  let cs = mode.Nego.n_cipher_suite in
+  let age_add = Random.sample32 4ul in
+  let age_add = Parse.uint32_of_bytes age_add in
+  let now = UInt32.uint_to_t (FStar.Date.secondsFromDawn()) in
+  let ticket = Ticket.Ticket13 cs li rmsid rms empty_bytes now age_add app_data in
+  let tb = Ticket.create_ticket false ticket in
+  trace ("Sending ticket: "^(print_bytes tb));
+  trace ("Application data in ticket: "^(print_bytes app_data));
+  let ticket_ext =
+    match cfg.max_early_data with
+    | Some max_ed -> [Extensions.E_early_data (Some max_ed)]
+    | None -> [] in
+  let tnonce, _ = split_ tb 12 in
+  HandshakeLog.send hs.log (NewSessionTicket13 ({
+    ticket13_lifetime = FStar.UInt32.(uint_to_t 3600);
+    ticket13_age_add = age_add;
+    ticket13_nonce = tnonce;
+    ticket13_ticket = tb;
+    ticket13_extensions = ticket_ext;
+  }))
+
 (* receive ClientFinish 1.3 *)
 val server_ClientFinished_13: hs ->
   cvd:bytes ->
@@ -1019,36 +1046,15 @@ let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinishe
        if HMAC_UFCMA.verify cfin_key digestBeforeClientFinished f
        then
         begin
-         (* NewSessionTicket is sent if client advertised a PSK_KEX mode *)
+         KeySchedule.ks_server_13_cf hs.ks digestClientFinished;
+         hs.state := S_Complete;
+         let cfg = Nego.local_config hs.nego in
          (match Nego.find_psk_key_exchange_modes mode.Nego.n_offer with
          | [] -> trace ("Not sending a ticket: no PSK key exchange mode advertised")
-         | psk_kex ->
-           let (| li, rmsid, rms |) = KeySchedule.ks_server_13_cf hs.ks digestClientFinished in
-           let cfg = Nego.local_config hs.nego in
-           let cs = mode.Nego.n_cipher_suite in
-           let age_add = Random.sample32 4ul in
-           let age_add = Parse.uint32_of_bytes age_add in
-           let now = UInt32.uint_to_t (FStar.Date.secondsFromDawn()) in
-           let ticket = Ticket.Ticket13 cs li rmsid rms empty_bytes now age_add empty_bytes in
-           let tb = Ticket.create_ticket false ticket in
-
-           trace ("Sending ticket: "^(print_bytes tb));
-           let ticket_ext =
-             match cfg.max_early_data with
-             | Some max_ed -> [Extensions.E_early_data (Some max_ed)]
-             | None -> [] in
-           let tnonce, _ = split_ tb 12 in
-           HandshakeLog.send hs.log (NewSessionTicket13 ({
-             ticket13_lifetime = FStar.UInt32.(uint_to_t 3600);
-             ticket13_age_add = age_add;
-             ticket13_nonce = tnonce;
-             ticket13_ticket = tb;
-             ticket13_extensions = ticket_ext;
-           })));
-
-          hs.state := S_Complete;
-          Epochs.incr_reader hs.epochs; // finally start reading with AKTs
-          InAck true true  // Server 1.3 ATK
+         | psk_kex -> 
+           if Some? cfg.send_ticket then server_Ticket hs (Some?.v cfg.send_ticket));
+         Epochs.incr_reader hs.epochs; // finally start reading with AKTs
+         InAck true true  // Server 1.3 ATK
         end
        else InError (fatalAlert Decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestClientFinished)
 
@@ -1083,6 +1089,11 @@ let create (parent:rid) cfg role =
 let rehandshake s c = FStar.Error.unexpected "rehandshake: not yet implemented"
 
 let rekey s c = FStar.Error.unexpected "rekey: not yet implemented"
+
+let send_ticket hs app_data =
+  if is_post_handshake hs then
+    let _ = server_Ticket hs app_data in true
+  else false
 
 let request s c = FStar.Error.unexpected "request: not yet implemented"
 

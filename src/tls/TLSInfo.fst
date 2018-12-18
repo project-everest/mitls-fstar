@@ -141,6 +141,7 @@ let defaultConfig =
   // Server
   check_client_version_in_pms_for_old_tls = true;
   request_client_certificate = false;
+  send_ticket = Some empty_bytes;
 
   // Common
   non_blocking_read = false;
