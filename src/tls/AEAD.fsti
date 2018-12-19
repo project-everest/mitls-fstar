@@ -54,10 +54,9 @@ noeq type plain_pkg =
 
 noeq type nonce_pkg =
   | NoncePkg:
-    tag: (t:Type0{hasEq t}) ->
-    nonce: (i:I.id -> tag -> t:Type0{hasEq t}) ->
-    as_bytes: (i:I.id -> t:tag -> nonce i t -> GTot (iv (I.cipherAlg_of_id i))) ->
-    repr: (i:I.id{~ (safeId i)} -> t:tag -> n:nonce i t -> Tot (r:iv (I.cipherAlg_of_id i){r == as_bytes i t n})) ->
+    nonce: (i:I.id -> t:Type0{hasEq t}) ->
+    as_bytes: (i:I.id -> nonce i -> GTot (iv (I.cipherAlg_of_id i))) ->
+    repr: (i:I.id{~ (safeId i)} -> n:nonce i -> Tot (r:iv (I.cipherAlg_of_id i){r == as_bytes i n})) ->
     nonce_pkg
     
     
@@ -84,9 +83,9 @@ let plain_as_bytes (#i:I.id) (#u:info i) (#l:plainLenM u) (p:plain u l) : GTot (
 let plain_repr (#i:unsafeid) (#u:info i) (#l:plainLenM u) (p:plain u l) : Tot (r:lbytes l{r == plain_as_bytes p}) =
   (PlainPkg?.repr u.plain) i l p
 
-let nonce_tag (#i:I.id) (u:info i) : t:Type0{hasEq t} = NoncePkg?.tag u.nonce
+//let nonce_tag (#i:I.id) (u:info i) : t:Type0{hasEq t} = NoncePkg?.tag u.nonce
 
-let nonce (#i:I.id) (u:info i) (tag:nonce_tag u) : t:Type0{hasEq t} = NoncePkg?.nonce u.nonce i tag
+let nonce (#i:I.id) (u:info i) : t:Type0{hasEq t} = NoncePkg?.nonce u.nonce i
 
 val keylen   : #i:I.id -> u:info i -> U32.t
 
@@ -103,8 +102,7 @@ type adata = b:bytes{length b <= v aadmax}
 
 type entry (i:I.id) (u:info i) =
   | Entry:
-    #tag:nonce_tag u ->
-    n: nonce u tag ->
+    n: nonce u ->
     ad: adata ->
     #l: plainLenM u ->
     p: plain u l ->
@@ -279,14 +277,14 @@ let entry_of
   mk_entry n aad p c
 *)
 
-let nonce_filter (#i:I.id) (#w:aead_writer i) (#t:nonce_tag (wgetinfo w)) (n:nonce (wgetinfo w) t) (e:entry i (wgetinfo w)) : bool =
-  Entry?.tag e = t && Entry?.n e = n
+let nonce_filter (#i:I.id) (#w:aead_writer i) (n:nonce (wgetinfo w)) (e:entry i (wgetinfo w)) : bool =
+  Entry?.n e = n
 
-let wentry_for_nonce (#i:I.id) (w:aead_writer i) (#t:nonce_tag (wgetinfo w)) (n:nonce (wgetinfo w) t) (h:mem)
+let wentry_for_nonce (#i:I.id) (w:aead_writer i) (n:nonce (wgetinfo w)) (h:mem)
   : Ghost (option (entry i (wgetinfo w))) (requires safeId i) (ensures fun _ -> True) =
-  Seq.find_l (nonce_filter #i #w #t n) (wlog w h)
+  Seq.find_l (nonce_filter #i #w n) (wlog w h)
 
-let fresh_nonce (#i:I.id) (w:aead_writer i) (#t:nonce_tag (wgetinfo w)) (n:nonce (wgetinfo w) t) (h:mem)
+let fresh_nonce (#i:I.id) (w:aead_writer i) (n:nonce (wgetinfo w)) (h:mem)
   : Ghost bool (requires safeId i) (ensures fun _ -> True) =
   None? (wentry_for_nonce w n h)
 
@@ -297,8 +295,7 @@ let fresh_nonce (#i:I.id) (w:aead_writer i) (#t:nonce_tag (wgetinfo w)) (n:nonce
 val encrypt
   (i: I.id)
   (w: aead_writer i)
-  (#t:nonce_tag (wgetinfo w))
-  (n: nonce (wgetinfo w) t)
+  (n: nonce (wgetinfo w))
   (aad: adata)
   (l: plainLenM (wgetinfo w))
   (p: plain (wgetinfo w) l)
@@ -317,8 +314,7 @@ val decrypt
   (#w: aead_writer i)
   (r: aead_reader w)
   (aad:adata)
-  (#t:nonce_tag (rgetinfo r))
-  (n: nonce (rgetinfo r) t)
+  (n: nonce (rgetinfo r))
   (l:plainLenM (wgetinfo w))
   (c:cipher i (wgetinfo w) l)
   : ST (option (plain (rgetinfo r) l))
