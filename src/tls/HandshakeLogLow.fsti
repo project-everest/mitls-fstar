@@ -252,6 +252,9 @@ val tags (a:Hash.alg) (prior:list msg) (ms:list msg) (hs:list HashSpec.anyTag) :
 /// Receive returns flight_t with postcondition that the indices are valid parsings in the input buffer
 /// Taken from the match in Handshakre receive function
 
+(*
+ * CF: make these fine grained, in collaboration with HS
+ *)
 type flight_t =
   | F_HRR: init:uint_32 -> len:uint_32 -> flight_t
   | F_SH: init:uint_32 -> len:uint_32 -> flight_t
@@ -354,6 +357,20 @@ unfold private let transcript_parsing_of (msgs:hs_transcript) (st:hsl_state)
     | None -> False
     | Some (parse, consumed) -> parse == msgs /\ consumed == v delta
 
+(*
+ * CF: Remember indices in the input buffer for transcripts
+ *     May be just keep index until t0
+ *     For incremental hashing for t1, keep states in between
+ *     Hashing can be part of the state
+ *     After delivering the flight, and before starting new flight,
+ *       remember where is hashing state (index)
+ *     Also hashing state is just Evercrypt hash state
+ *     Return hash value on the caller stack
+ *     Transcript is the hashed transcript? Add messages to transcrip
+ *       when hashed after call to HS
+ *     HSLog maintains hashed transcript
+ *       and indices for the last flight returned -- so that it can relate Hash calls from HS
+ *)
 unfold private let receive_post (st:hsl_state) (p:uint_32)
   : HS.mem -> (TLSError.result (option (
                                flight_t &
