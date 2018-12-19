@@ -33,7 +33,6 @@ let is_supported_group x = List.Tot.mem x
     FFDHE2048; FFDHE3072; FFDHE4096; FFDHE6144; FFDHE8192 ]
 type supportedNamedGroup = x:namedGroup{is_supported_group x}
 type supportedNamedGroups = xs:namedGroups{List.Tot.for_all is_supported_group xs} 
-val string_of_namedGroup: namedGroup -> string
 
 val group: t:Type0{hasEq t}
 val is_ec: group -> bool
