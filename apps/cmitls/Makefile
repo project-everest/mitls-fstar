@@ -66,4 +66,4 @@ cmitls.exe: cmitls.c ../../libs/ffi/mitlsffi.h ../../src/pki/mipki.h \
 
 test: cmitls.exe
 	./cmitls.exe google.com 443
-	./cmitls.exe tls13.cloudflare.com 443
+	./cmitls.exe www.cloudflare.com 443

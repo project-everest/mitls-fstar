@@ -1,6 +1,6 @@
 module Format.KeyShareEntry
 
-open Format.NamedGroup
+open Parsers.NamedGroup
 
 module B = FStar.Bytes
 module LP = LowParse.SLow.Base
