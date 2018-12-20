@@ -1,6 +1,20 @@
 [
-  "7ÿî€Ÿ¤Ž\u0005\u0011´Â35\u0017CÖ",
+  "Ñô\u0004.\n¨YZ“´Æ—÷\u0014ëº",
   [
+    [
+      "Parsers.Boolean.string_of_boolean",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.Boolean.B_false",
+        "disc_equation_Parsers.Boolean.B_true",
+        "fuel_guarded_inversion_Parsers.Boolean.boolean"
+      ],
+      0,
+      "ce222bef15e4854bda5833355806c358"
+    ],
     [
       "Parsers.Boolean.boolean_jumper",
       1,
@@ -18,7 +32,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "913fe4f177edffc7c0e8456d86c8a750"
+      "2a43d9a1939b31c88fe2d289c5ee83c3"
     ]
   ]
 ]
