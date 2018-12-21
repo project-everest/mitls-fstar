@@ -548,7 +548,7 @@ int TestClient(void)
     printf("===============================================\n");
     printf("Starting test client...\n");
 
-    const char request_template[] = "GET /%s HTTP/1.1\r\nHost: %s\r\n\r\n";
+    const char request_template[] = "GET /%s HTTP/1.0\r\nHost: %s\r\n\r\n";
     if (sizeof(request_template) + strlen(option_hostname) + strlen(option_file) >= sizeof(request)) {
         // Host name is too long
         printf("Host name is too long.\n");

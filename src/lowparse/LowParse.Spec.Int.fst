@@ -11,6 +11,8 @@ let parse_u8 = Aux.parse_u8
 
 let parse_u8_spec b = Aux.parse_u8_spec b
 
+let parse_u8_spec' b = ()
+
 let serialize_u8 = Aux.serialize_u8
 
 let parse_u16 = Aux.parse_u16

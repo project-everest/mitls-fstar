@@ -127,9 +127,7 @@ let parse32_vldata_gen
   (p32: parser32 p)
 : Tot (parser32 (parse_vldata_gen sz f p))
 = [@inline_let]
-  let _ = parse_fldata_and_then_cases_injective sz f p in
-  [@inline_let]
-  let _ = parse_vldata_gen_kind_correct sz in
+  let _ = parse_vldata_gen_eq_def sz f p in
   parse32_and_then
     (parse32_filter (parse32_bounded_integer sz) f f')
     (parse_vldata_payload sz f p)
@@ -149,6 +147,24 @@ let parse32_vldata
 #set-options "--z3rlimit 32"
 
 inline_for_extraction
+let parse32_bounded_vldata'
+  (min: nat)
+  (min32: U32.t { U32.v min32 == min } )
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (max32: U32.t { U32.v max32 == max } )
+  (l: nat { l >= log256' max /\ l <= 4 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (p32: parser32 p)
+: Tot (parser32 (parse_bounded_vldata' min max l p))
+= [@inline_let]
+  let _ = parse_bounded_vldata_correct min max l p in
+  [@inline_let]
+  let sz : integer_size = l in
+  (fun input -> parse32_vldata_gen sz (in_bounds min max) (fun i -> not (U32.lt i min32 || U32.lt max32 i)) p32 input)
+
+inline_for_extraction
 let parse32_bounded_vldata
   (min: nat)
   (min32: U32.t { U32.v min32 == min } )
@@ -159,18 +175,15 @@ let parse32_bounded_vldata
   (#p: parser k t)
   (p32: parser32 p)
 : Tot (parser32 (parse_bounded_vldata min max p))
-= [@inline_let]
-  let _ = parse_bounded_vldata_correct min max p in
-  [@inline_let]
-  let sz : integer_size = (log256' max) in
-  (fun input -> parse32_vldata_gen sz (in_bounds min max) (fun i -> not (U32.lt i min32 || U32.lt max32 i)) p32 input)
+= parse32_bounded_vldata' min min32 max max32 (log256' max) p32
 
 inline_for_extraction
-let parse32_bounded_vldata_strong'
+let parse32_bounded_vldata_strong_aux
   (min: nat)
   (min32: U32.t { U32.v min32 == min } )
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
   (max32: U32.t { U32.v max32 == max } )
+  (l: nat { l >= log256' max /\ l <= 4 } )
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
@@ -180,12 +193,12 @@ let parse32_bounded_vldata_strong'
 : Tot (option (parse_bounded_vldata_strong_t min max #k #t #p s * U32.t))
 = let res =
     parse32_strengthen
-      #(parse_bounded_vldata_kind min max)
+      #(parse_bounded_vldata_strong_kind min max l k)
       #t
-      #(parse_bounded_vldata min max #k #t p)
-      (parse32_bounded_vldata min min32 max max32 #k #t #p p32)
+      #(parse_bounded_vldata' min max l #k #t p)
+      (parse32_bounded_vldata' min min32 max max32 l #k #t #p p32)
       (parse_bounded_vldata_strong_pred min max #k #t #p s)
-      (parse_bounded_vldata_strong_correct min max #k #t #p s)
+      (parse_bounded_vldata_strong_correct min max l #k #t #p s)
       input
   in
   match res with
@@ -199,6 +212,7 @@ let parse32_bounded_vldata_strong_correct
   (min32: U32.t { U32.v min32 == min } )
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
   (max32: U32.t { U32.v max32 == max } )
+  (l: nat { l >= log256' max /\ l <= 4 } )
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
@@ -207,17 +221,17 @@ let parse32_bounded_vldata_strong_correct
   (input: bytes32)
 : Lemma
   ( let res : option (parse_bounded_vldata_strong_t min max s * U32.t) = 
-      parse32_bounded_vldata_strong' min min32 max max32 s p32 input
+      parse32_bounded_vldata_strong_aux min min32 max max32 l s p32 input
     in
-    parser32_correct (parse_bounded_vldata_strong min max s) input res)
+    parser32_correct (parse_bounded_vldata_strong' min max l s) input res)
 = let res =
     parse32_strengthen
-      #(parse_bounded_vldata_kind min max)
+      #(parse_bounded_vldata_strong_kind min max l k)
       #t
-      #(parse_bounded_vldata min max #k #t p)
-      (parse32_bounded_vldata min min32 max max32 #k #t #p p32)
+      #(parse_bounded_vldata' min max l #k #t p)
+      (parse32_bounded_vldata' min min32 max max32 l #k #t #p p32)
       (parse_bounded_vldata_strong_pred min max #k #t #p s)
-      (parse_bounded_vldata_strong_correct min max #k #t #p s)
+      (parse_bounded_vldata_strong_correct min max l #k #t #p s)
       input
   in
   match res with
@@ -225,7 +239,27 @@ let parse32_bounded_vldata_strong_correct
   | Some (x, consumed) ->
     let x1 : t = x in
     let res = Some ((x1 <: parse_bounded_vldata_strong_t min max #k #t #p s), consumed) in
-    assert (parser32_correct (parse_bounded_vldata_strong min max s) input res)
+    assert (parser32_correct (parse_bounded_vldata_strong' min max l s) input res)
+
+inline_for_extraction
+let parse32_bounded_vldata_strong'
+  (min: nat)
+  (min32: U32.t { U32.v min32 == min } )
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (max32: U32.t { U32.v max32 == max } )
+  (l: nat { l >= log256' max /\ l <= 4 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (p32: parser32 p)
+: Tot (parser32 #_ #(parse_bounded_vldata_strong_t min max s) (parse_bounded_vldata_strong' min max l s))
+= make_parser32
+    (parse_bounded_vldata_strong' min max l s)
+    (fun input ->
+       parse32_bounded_vldata_strong_correct min min32 max max32 l s p32 input;
+       parse32_bounded_vldata_strong_aux min min32 max max32 l s p32 input
+    )
 
 inline_for_extraction
 let parse32_bounded_vldata_strong
@@ -239,17 +273,13 @@ let parse32_bounded_vldata_strong
   (s: serializer p)
   (p32: parser32 p)
 : Tot (parser32 #_ #(parse_bounded_vldata_strong_t min max s) (parse_bounded_vldata_strong min max s))
-= make_parser32
-    (parse_bounded_vldata_strong min max s)
-    (fun input ->
-       parse32_bounded_vldata_strong_correct min min32 max max32 s p32 input;
-       parse32_bounded_vldata_strong' min min32 max max32 s p32 input
-    )
+= parse32_bounded_vldata_strong' min min32 max max32 (log256' max) s p32
 
 inline_for_extraction
-let serialize32_bounded_vldata_strong'
+let serialize32_bounded_vldata_strong_aux
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967292 } ) // NOTE here: max must be less than 2^32 - 4
+  (l: nat { l >= log256' max /\ l <= 4 } )
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
@@ -257,7 +287,7 @@ let serialize32_bounded_vldata_strong'
   (s32: partial_serializer32 s)
 : Tot (parse_bounded_vldata_strong_t min max s -> Tot bytes32)
 = [@inline_let]
-  let sz : integer_size = log256' max in
+  let sz : integer_size = l in
   [@inline_let]
   let ser : serializer32 (serialize_bounded_integer sz) = serialize32_bounded_integer sz in
   (fun (input: parse_bounded_vldata_strong_t min max s) ->
@@ -273,6 +303,7 @@ let serialize32_bounded_vldata_strong'
 let serialize32_bounded_vldata_strong_correct
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967292 } ) // NOTE here: max must be less than 2^32 - 4
+  (l: nat { l >= log256' max /\ l <= 4 } )
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
@@ -280,8 +311,8 @@ let serialize32_bounded_vldata_strong_correct
   (s32: partial_serializer32 s)
   (input: parse_bounded_vldata_strong_t min max s)
 : Lemma
-  (serializer32_correct (serialize_bounded_vldata_strong min max s) input (serialize32_bounded_vldata_strong' min max s32 input))
-= let sz : integer_size = log256' max in
+  (serializer32_correct (serialize_bounded_vldata_strong' min max l s) input (serialize32_bounded_vldata_strong_aux min max l s32 input))
+= let sz : integer_size = l in
   let ser : serializer32 (serialize_bounded_integer sz) = serialize32_bounded_integer sz in
   let pl = s32 input in
   assert (B32.reveal pl == s input);
@@ -294,8 +325,23 @@ let serialize32_bounded_vldata_strong_correct
   seq_slice_append_r (B32.reveal slen) (B32.reveal pl);
   let res : bytes32 = B32.b32append slen pl in
   assert (B32.reveal res == Seq.append (B32.reveal slen) (B32.reveal pl));
-  assert (B32.reveal res == serialize_bounded_vldata_strong' min max s input);
-  assert (serializer32_correct (serialize_bounded_vldata_strong min max s) input res)
+  assert (B32.reveal res == serialize_bounded_vldata_strong_aux min max l s input);
+  assert (serializer32_correct (serialize_bounded_vldata_strong' min max l s) input res)
+
+inline_for_extraction
+let serialize32_bounded_vldata_strong'
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967292 } ) // NOTE here: max must be less than 2^32 - 4
+  (l: nat { l >= log256' max /\ l <= 4 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (#s: serializer p)
+  (s32: partial_serializer32 s)
+: Tot (serializer32 (serialize_bounded_vldata_strong' min max l s))
+= fun (input: parse_bounded_vldata_strong_t min max s) ->
+  serialize32_bounded_vldata_strong_correct min max l s32 input;
+  (serialize32_bounded_vldata_strong_aux min max l s32 input <: (res: bytes32 { serializer32_correct (serialize_bounded_vldata_strong' min max l s) input res } ))
 
 inline_for_extraction
 let serialize32_bounded_vldata_strong
@@ -307,9 +353,26 @@ let serialize32_bounded_vldata_strong
   (#s: serializer p)
   (s32: partial_serializer32 s)
 : Tot (serializer32 (serialize_bounded_vldata_strong min max s))
-= fun (input: parse_bounded_vldata_strong_t min max s) ->
-  serialize32_bounded_vldata_strong_correct min max s32 input;
-  (serialize32_bounded_vldata_strong' min max s32 input <: (res: bytes32 { serializer32_correct (serialize_bounded_vldata_strong min max s) input res } ))
+= serialize32_bounded_vldata_strong' min max (log256' max) s32
+
+inline_for_extraction
+let serialize32_bounded_vldata
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967292 } ) // NOTE here: max must be less than 2^32 - 4
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (#s: serializer p)
+  (s32: partial_serializer32 s  { serialize_bounded_vldata_precond min max k } )
+: Tot (serializer32 (serialize_bounded_vldata min max s))
+= fun (input: t) ->
+  [@inline_let]
+  let _ : unit = 
+    let Some (_, consumed) = parse p (serialize s input) in
+    ()
+  in
+  serialize32_bounded_vldata_strong_correct min max (log256' max) s32 input;
+  (serialize32_bounded_vldata_strong_aux min max (log256' max) s32 input <: (res: bytes32 { serializer32_correct (serialize_bounded_vldata min max s) input res } ))
 
 #reset-options "--z3rlimit 32 --z3cliopt smt.arith.nl=false"
 
@@ -351,6 +414,28 @@ let check_vldata_payload_size32
   y
 
 inline_for_extraction
+let size32_bounded_vldata_strong'
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967292 } ) // NOTE here: max must be less than 2^32 - 4, otherwise add overflows
+  (l: nat { l >= log256' max /\ l <= 4 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (#s: serializer p)
+  (s32: size32 s)
+  (sz32: U32.t { U32.v sz32 == l } )
+: Tot (size32 (serialize_bounded_vldata_strong' min max l s))
+= (fun (input: parse_bounded_vldata_strong_t min max s) ->
+    let len = s32 input in
+    [@inline_let]
+    let _ = assert_norm (U32.v u32_max == 4294967295) in
+    [@inline_let]
+    let _ = assert (min <= U32.v len /\ U32.v len <= max) in
+    [@inline_let]
+    let res : U32.t = U32.add sz32 len in
+    (res <: (res: U32.t { size32_postcond (serialize_bounded_vldata_strong' min max l s) input res  } )))
+
+inline_for_extraction
 let size32_bounded_vldata_strong
   (min: nat)
   (max: nat { min <= max /\ max > 0 /\ max < 4294967292 } ) // NOTE here: max must be less than 2^32 - 4, otherwise add overflows
@@ -361,12 +446,23 @@ let size32_bounded_vldata_strong
   (s32: size32 s)
   (sz32: U32.t { U32.v sz32 == log256' max } )
 : Tot (size32 (serialize_bounded_vldata_strong min max s))
-= (fun (input: parse_bounded_vldata_strong_t min max s) ->
-    let len = s32 input in
-    [@inline_let]
-    let _ = assert_norm (U32.v u32_max == 4294967295) in
-    [@inline_let]
-    let _ = assert (min <= U32.v len /\ U32.v len <= max) in
-    [@inline_let]
-    let res : U32.t = U32.add sz32 len in
-    (res <: (res: U32.t { size32_postcond (serialize_bounded_vldata_strong min max s) input res  } )))
+= size32_bounded_vldata_strong' min max (log256' max) s32 sz32
+
+inline_for_extraction
+let size32_bounded_vldata
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967292 } ) // NOTE here: max must be less than 2^32 - 4
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (#s: serializer p)
+  (s32: size32 s  { serialize_bounded_vldata_precond min max k } )
+  (sz32: U32.t { U32.v sz32 == log256' max } )
+: Tot (size32 (serialize_bounded_vldata min max s))
+= fun (input: t) ->
+  [@inline_let]
+  let _ : unit = 
+    let Some (_, consumed) = parse p (serialize s input) in
+    ()
+  in
+  (size32_bounded_vldata_strong min max s32 sz32 input <: (res: U32.t { size32_postcond (serialize_bounded_vldata min max s) input res } ))

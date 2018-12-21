@@ -1,1 +1,38 @@
-[ "AÚœ≈ÿı+óøÖÍÎ‡,\u001a*", [] ]
+[
+  "\u0017;ÅV9^e‰vë:!·±Ox",
+  [
+    [
+      "Parsers.AlertLevel.string_of_alertLevel",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.AlertLevel.Fatal",
+        "disc_equation_Parsers.AlertLevel.Warning",
+        "fuel_guarded_inversion_Parsers.AlertLevel.alertLevel"
+      ],
+      0,
+      "52c474a3b26b1b3fd8b9ee009bd21851"
+    ],
+    [
+      "Parsers.AlertLevel.alertLevel_jumper",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.default_parser_kind",
+        "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.AlertLevel.alertLevel_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
+      ],
+      0,
+      "b168135d22d3a224450af839081ae7bd"
+    ]
+  ]
+]

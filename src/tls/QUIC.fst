@@ -73,7 +73,8 @@ let ffiConfig (host:bytes) =
     max_version = TLS_1p3;
     is_quic = true;
     peer_name = h;
-    non_blocking_read = true
+    non_blocking_read = true;
+    send_ticket = None;
   }
 
 type chSummary = {
@@ -81,7 +82,17 @@ type chSummary = {
   ch_alpn: bytes;
   ch_extensions: bytes;
   ch_cookie: option bytes;
+  ch_ticket_data: option bytes;
 }
+
+let rec find_ticket_content (l:list Extensions.pskIdentity)
+  : St (option bytes) =
+  match l with
+  | [] -> None
+  | (id,_)::t ->
+    match Ticket.check_ticket false id with
+    | Some (Ticket.Ticket13 _ _ _ _ _ _ _ app_data) -> Some app_data
+    | _ -> find_ticket_content t
 
 let peekClientHello (ch:bytes) (has_record:bool) : ML (option chSummary) =
   if length ch < 40 then (trace "peekClientHello: too short"; None) else
@@ -112,6 +123,10 @@ let peekClientHello (ch:bytes) (has_record:bool) : ML (option chSummary) =
           let sni = Negotiation.get_sni ch in
           let alpn = Extensions.alpnBytes (Negotiation.get_alpn ch) in
           let ext = HandshakeMessages.optionExtensionsBytes ch.HandshakeMessages.ch_extensions in
+	  let ticket_data =
+	    match Negotiation.find_clientPske ch with
+	    | None -> None
+	    | Some (psk,_) -> find_ticket_content psk in
           let cookie =
             match Negotiation.find_cookie ch with
             | None -> None
@@ -120,7 +135,7 @@ let peekClientHello (ch:bytes) (has_record:bool) : ML (option chSummary) =
               | None -> None
               | Some (hrr, digest, extra) -> Some extra
             in
-          Some ({ch_sni = sni; ch_alpn = alpn; ch_extensions = ext; ch_cookie = cookie; })
+          Some ({ch_sni = sni; ch_alpn = alpn; ch_extensions = ext; ch_cookie = cookie; ch_ticket_data = ticket_data })
 
 module H = Old.Handshake
 module HSL = HandshakeLog
@@ -143,6 +158,7 @@ type hs_out = {
   is_complete: bool;
   is_writable: bool;
   is_early_rejected: bool;
+  is_post_handshake: bool;
 }
 
 type hs_result =
@@ -187,6 +203,7 @@ let process_hs (hs:H.hs) (ctx:hs_in) : ML hs_result =
         is_complete = false;
         is_writable = false;
 	is_early_rejected = false;
+	is_post_handshake = false;
       })
     else
       let i = currentId hs Writer in
@@ -201,6 +218,7 @@ let process_hs (hs:H.hs) (ctx:hs_in) : ML hs_result =
 	  is_complete = complete;
 	  is_writable = is_writable;
 	  is_early_rejected = false;
+	  is_post_handshake = false;
 	})
    end
   else
@@ -214,6 +232,7 @@ let process_hs (hs:H.hs) (ctx:hs_in) : ML hs_result =
     | H.InAck nk complete ->
       let consumed = UInt32.uint_to_t len in
       let j = H.i hs Writer in
+      let post_hs = H.is_post_handshake hs in
       let reject_0rtt = 
         if H.role_of hs = Client && j = 2 then // FIXME: early reject vs. late reject
 	  let mode = H.get_mode hs in
@@ -233,6 +252,7 @@ let process_hs (hs:H.hs) (ctx:hs_in) : ML hs_result =
           is_complete = complete || complete';
 	  is_writable = is_writable;
 	  is_early_rejected = reject_0rtt;
+	  is_post_handshake = post_hs;
         })
 
 type raw_key = {
@@ -266,3 +286,5 @@ let get_key (hs:Old.Handshake.hs) (ectr:nat) (rw:bool) : ML (option raw_key) =
       pn_key = pn;
     })
     
+let send_ticket (hs:Old.Handshake.hs) (b:bytes) : ML bool =
+  Old.Handshake.send_ticket hs b

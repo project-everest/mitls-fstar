@@ -1,0 +1,143 @@
+[
+  "ËÏÓE÷é\"∏'JªêF›{%",
+  [
+    [
+      "Model.ideal_or_real",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "9ac75618f7998f241ec75451c74cca2b"
+    ],
+    [
+      "Model.__proj__Ideal__item__v",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_Model.Ideal",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Model_Tm_refine_f8f3d75a17721bb6e0dd00975446a581"
+      ],
+      0,
+      "1fa58b07698e0feab4239572f0b3ba57"
+    ],
+    [
+      "Model.__proj__Real__item__v",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_Model.Real",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Model_Tm_refine_8ba51edc114520debef30f4a30c696ca"
+      ],
+      0,
+      "b2687e4593959806a57db662590a9b8e"
+    ],
+    [
+      "Model.ir",
+      1,
+      2,
+      1,
+      [ "@query", "projection_inverse_BoxBool_proj_0" ],
+      0,
+      "a692061987e2fdf786ed42dd9e59fbc6"
+    ],
+    [
+      "Model.model_on",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
+        "equation_Mem.model", "equation_Model.ir", "equation_Prims.squash",
+        "function_token_typing_Flags.model",
+        "refinement_interpretation_Model_Tm_refine_3a337cb56cd3c8b5d5f50adb86c4c664",
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+      ],
+      0,
+      "ba40cb4200b581ba693944b49bf78c8c"
+    ],
+    [
+      "Model.ideal",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
+        "equation_Mem.model", "equation_Model.ir", "equation_Prims.squash",
+        "function_token_typing_Flags.model",
+        "refinement_interpretation_Model_Tm_refine_3a337cb56cd3c8b5d5f50adb86c4c664",
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "unit_inversion"
+      ],
+      0,
+      "81eb40db2e79570675f0b392d0330558"
+    ],
+    [
+      "Model.real",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_Model.Ideal",
+        "disc_equation_Model.Real", "equation_Model.ir",
+        "fuel_guarded_inversion_Model.ideal_or_real",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Model_Tm_refine_3a337cb56cd3c8b5d5f50adb86c4c664"
+      ],
+      0,
+      "18d69941a1687abfd09e32e3d235f159"
+    ],
+    [
+      "Model.mk_ideal",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
+        "constructor_distinct_Model.Ideal", "disc_equation_Model.Ideal",
+        "equation_Mem.model", "equation_Model.ir", "equation_Prims.squash",
+        "function_token_typing_Flags.model",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Model.Ideal_it",
+        "projection_inverse_Model.Ideal_rt",
+        "projection_inverse_Model.Ideal_v",
+        "refinement_interpretation_Model_Tm_refine_3a337cb56cd3c8b5d5f50adb86c4c664",
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "unit_inversion"
+      ],
+      0,
+      "48e18b9018d04a85144ee56e8fb0db99"
+    ],
+    [
+      "Model.mk_real",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "constructor_distinct_Model.Real",
+        "disc_equation_Model.Ideal", "equation_Model.ir",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Model_Tm_refine_3a337cb56cd3c8b5d5f50adb86c4c664"
+      ],
+      0,
+      "b44bc415d1465618a8c1f09a1ed8d3b9"
+    ],
+    [
+      "Model.is_safe",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion", "bool_typing",
+        "equation_Mem.model", "function_token_typing_Flags.model",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "e72e59d74c34d082c6402f0675ef1439"
+    ]
+  ]
+]

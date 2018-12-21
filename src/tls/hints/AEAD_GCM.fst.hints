@@ -12,7 +12,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "4460f5fd240b85a155873798901b1c6a"
+      "b9a38a6b2721930b799c7fe4f9af02a8"
     ],
     [
       "AEAD_GCM.alg",
@@ -27,7 +27,7 @@
         "refinement_interpretation_AEAD_GCM_Tm_refine_dd822fca68570d6ca21c42711549ab9b"
       ],
       0,
-      "aca5d62e9b26ad7b43851ec683c52d7e"
+      "8a5377e82a193d05e4fd47078978f62a"
     ],
     [
       "AEAD_GCM.cipher",
@@ -45,7 +45,7 @@
         "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length"
       ],
       0,
-      "f8b719b2a76bfa3fe4a00d9fcd60da0b"
+      "80857881aa826269fe86d14e06e2b61a"
     ],
     [
       "AEAD_GCM.key",
@@ -58,7 +58,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "6660b603d4ff7b2d939b9def3186b929"
+      "992e1cb2636e9ee6e5df12338978cd13"
     ],
     [
       "AEAD_GCM.iv",
@@ -71,7 +71,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "d31bd1ae71230a9ee1649f3e4288343e"
+      "bdad142da2e57b749f8619678e56d129"
     ],
     [
       "AEAD_GCM.max_ctr",
@@ -80,7 +80,7 @@
       1,
       [ "@query", "projection_inverse_BoxInt_proj_0" ],
       0,
-      "6fdba48b3c5ff25fbcc19d9d8312087f"
+      "2f3150e28e036eb83250036dfdac421c"
     ],
     [
       "AEAD_GCM.dplain",
@@ -98,7 +98,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "991461cce57974a6febf388be50798f9"
+      "734915e19fe95635b5d76ffe37de2238"
     ],
     [
       "AEAD_GCM.entry",
@@ -136,7 +136,7 @@
         "typing_Range.cipherRangeClass"
       ],
       0,
-      "7cbff1626eea541513ed68a51ecb4d6c"
+      "36ce25e8f364e99bb3c886e6b7b970a3"
     ],
     [
       "AEAD_GCM.__proj__Entry__item__p",
@@ -150,7 +150,7 @@
         "projection_inverse_AEAD_GCM.Entry_c"
       ],
       0,
-      "57aec292bc2cf40a1329e1bc8e848457"
+      "449f94872f699b033a10e6b5d7fefb00"
     ],
     [
       "AEAD_GCM.ideal_log",
@@ -159,7 +159,7 @@
       1,
       [ "@query" ],
       0,
-      "d1cd4418383d96526f1cd5810be46881"
+      "902b3c7154471fd44ca5f37001d396a6"
     ],
     [
       "AEAD_GCM.ilog",
@@ -172,7 +172,7 @@
         "refinement_interpretation_AEAD_GCM_Tm_refine_1a550ee78acf3c05cdaf52f117149073"
       ],
       0,
-      "5231f5989ced81b61849e7748677d8bc"
+      "51d82e1649fa26b38a198fae94a00510"
     ],
     [
       "AEAD_GCM.ideal_ctr",
@@ -181,7 +181,7 @@
       1,
       [ "@query" ],
       0,
-      "2fa315c301a2cb971a946315c37ac096"
+      "b59c7b7a43dd711b753d9e532b8a4fb7"
     ],
     [
       "AEAD_GCM.concrete_ctr",
@@ -189,12 +189,15 @@
       2,
       1,
       [
-        "@query", "equation_FStar.Monotonic.Seq.increases",
+        "@query", "equation_AEAD_GCM.counter",
+        "equation_FStar.Monotonic.Seq.increases",
         "equation_FStar.Preorder.preorder_rel",
+        "equation_FStar.Preorder.reflexive",
+        "equation_FStar.Preorder.transitive",
         "token_correspondence_FStar.Monotonic.Seq.increases"
       ],
       0,
-      "864a677a469ff95ff7b13fa73822be0b"
+      "23dc5da0c396a413d30304bc2dc83a7f"
     ],
     [
       "AEAD_GCM.ctr_ref",
@@ -202,13 +205,16 @@
       2,
       1,
       [
-        "@query", "equation_FStar.Monotonic.Seq.increases",
-        "equation_FStar.Preorder.preorder_rel", "equation_TLSInfo.authId",
+        "@query", "equation_AEAD_GCM.counter",
+        "equation_FStar.Monotonic.Seq.increases",
+        "equation_FStar.Preorder.preorder_rel",
+        "equation_FStar.Preorder.reflexive",
+        "equation_FStar.Preorder.transitive", "equation_TLSInfo.authId",
         "projection_inverse_BoxBool_proj_0",
         "token_correspondence_FStar.Monotonic.Seq.increases"
       ],
       0,
-      "db29376b86b0acddd92ba24cc939010d"
+      "5c5faa99da2cb0a97f6b6655e53eb6bf"
     ],
     [
       "AEAD_GCM.ctr",
@@ -249,7 +255,7 @@
         "typing_FStar.Monotonic.HyperStack.is_eternal_color"
       ],
       0,
-      "451239fedc53ddad0c15d1920b8dc528"
+      "97e1b4ab506f5baadc9ea12b335a0a66"
     ],
     [
       "AEAD_GCM.state",
@@ -269,7 +275,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "45dfa960e9ff61c147d51bb0e4204f7f"
+      "36077aa225423355ebe441180331befa"
     ],
     [
       "AEAD_GCM.__proj__State__item__log_region",
@@ -285,7 +291,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "37eaea8e6655ca7c0772326a8d865636"
+      "73642f1a829a8aa3a033b6079824cf93"
     ],
     [
       "AEAD_GCM.__proj__State__item__log_region",
@@ -303,7 +309,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "4aac1d9c68b658733d0d7ec86846eb60"
+      "bcc6dd9fd059f5ec952c9fb5cde3aeea"
     ],
     [
       "AEAD_GCM.__proj__State__item__aead",
@@ -316,7 +322,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "f32a2deb0a7526b574c515f76339e231"
+      "e6f419a800b6ae31957bc009505ff4e7"
     ],
     [
       "AEAD_GCM.__proj__State__item__aead",
@@ -329,7 +335,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "73c0a093f239d4bfb8a06cc6f63d1b0f"
+      "2cd7283ec117f05b60ba3a3fca012af6"
     ],
     [
       "AEAD_GCM.__proj__State__item__log",
@@ -341,7 +347,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "1b362eee3437a455cd537b841bb672dc"
+      "6d2b7bca18b62f8c8078f99a12126f4b"
     ],
     [
       "AEAD_GCM.__proj__State__item__counter",
@@ -355,7 +361,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "70a646142e54844b237651ebc2830159"
+      "ee2a1ea7944ec1e6bf5780c066b26cf2"
     ],
     [
       "AEAD_GCM.genPost",
@@ -379,9 +385,11 @@
         "equation_FStar.Monotonic.HyperStack.mref",
         "equation_FStar.Monotonic.HyperStack.mreference",
         "equation_FStar.Monotonic.Seq.increases",
-        "equation_FStar.Pervasives.Native.snd",
+        "equation_FStar.Pervasives.Native.fst",
         "equation_FStar.Preorder.preorder",
-        "equation_FStar.Preorder.preorder_rel", "equation_FStar.UInt32.n",
+        "equation_FStar.Preorder.preorder_rel",
+        "equation_FStar.Preorder.reflexive",
+        "equation_FStar.Preorder.transitive", "equation_FStar.UInt32.n",
         "equation_LHAEPlain.id", "equation_Mem.rgn", "equation_Prims.nat",
         "equation_Range.point", "equation_Range.range",
         "equation_Range.zero", "equation_TLSInfo.authId",
@@ -395,9 +403,9 @@
         "proj_equation_AEAD_GCM.State_log_region",
         "proj_equation_AEAD_GCM.State_region",
         "proj_equation_FStar.Monotonic.HyperStack.MkRef_frame",
-        "proj_equation_FStar.Pervasives.Native.Mktuple2__2",
+        "proj_equation_FStar.Pervasives.Native.Mktuple2__1",
         "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
+        "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
         "refinement_interpretation_AEAD_GCM_Tm_refine_80ee3ad59f065c2121c141d7e5848762",
         "refinement_interpretation_AEAD_GCM_Tm_refine_94c5b10e9459214333881c323a5c3428",
         "refinement_interpretation_AEAD_GCM_Tm_refine_dd822fca68570d6ca21c42711549ab9b",
@@ -409,11 +417,11 @@
         "refinement_interpretation_Range_Tm_refine_9eec96cf9e7424057db89d430151765e",
         "token_correspondence_FStar.Monotonic.Seq.increases",
         "typing_AEAD_GCM.__proj__State__item__counter",
-        "typing_FStar.Pervasives.Native.snd",
+        "typing_FStar.Pervasives.Native.fst",
         "typing_tok_TLSConstants.Writer@tok"
       ],
       0,
-      "80bb5de4deec8d9f2345cdc9e2315e97"
+      "c7bfc6ab69cb69c33a41869a0a0d1111"
     ],
     [
       "AEAD_GCM.gen",
@@ -560,7 +568,7 @@
         "typing_Mem.disjoint", "typing_Mem.tls_define_region"
       ],
       0,
-      "27c11e9730778e6bb73a3855b7b2d6bd"
+      "43db61d2a02e051dc90c59bbd5889c30"
     ],
     [
       "AEAD_GCM.genReader",
@@ -570,13 +578,15 @@
       [
         "@MaxIFuel_assumption", "@query",
         "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "data_elim_AEAD_GCM.State", "disc_equation_CipherSuite.AEAD",
-        "disc_equation_TLSInfo.ID12", "disc_equation_TLSInfo.PlaintextID",
+        "data_elim_AEAD_GCM.State", "disc_equation_TLSInfo.ID12",
+        "disc_equation_TLSInfo.PlaintextID",
         "equality_tok_TLSConstants.Reader@tok", "equation_AEAD_GCM.alg",
         "equation_AEAD_GCM.counter", "equation_AEAD_GCM.id",
         "equation_AEAD_GCM.log_ref", "equation_AEAD_GCM.reader",
         "equation_FStar.Monotonic.Seq.increases",
-        "equation_FStar.Preorder.preorder_rel", "equation_FStar.UInt32.n",
+        "equation_FStar.Preorder.preorder_rel",
+        "equation_FStar.Preorder.reflexive",
+        "equation_FStar.Preorder.transitive", "equation_FStar.UInt32.n",
         "equation_LHAEPlain.id", "equation_Mem.rgn", "equation_Prims.eqtype",
         "equation_Prims.nat", "equation_TLSInfo.authId",
         "fuel_guarded_inversion_AEAD_GCM.state",
@@ -593,7 +603,7 @@
         "unit_inversion", "unit_typing"
       ],
       0,
-      "06d4e4754753c3cf5784a74a2fdf5af1"
+      "829f4fe0e535d6b64beeade9a53dea8a"
     ],
     [
       "AEAD_GCM.genReader",
@@ -624,6 +634,7 @@
         "equation_FStar.HyperStack.ST.m_rref",
         "equation_FStar.HyperStack.ST.modifies_none",
         "equation_FStar.HyperStack.ST.mref",
+        "equation_FStar.HyperStack.ST.mreference",
         "equation_FStar.HyperStack.ST.ralloc_post",
         "equation_FStar.Monotonic.HyperHeap.disjoint",
         "equation_FStar.Monotonic.HyperHeap.hmap",
@@ -641,8 +652,10 @@
         "equation_FStar.Monotonic.HyperStack.sel",
         "equation_FStar.Monotonic.HyperStack.upd",
         "equation_FStar.Monotonic.Seq.increases",
-        "equation_FStar.Pervasives.Native.fst",
-        "equation_FStar.Preorder.preorder_rel", "equation_FStar.Set.subset",
+        "equation_FStar.Pervasives.Native.snd",
+        "equation_FStar.Preorder.preorder_rel",
+        "equation_FStar.Preorder.reflexive",
+        "equation_FStar.Preorder.transitive", "equation_FStar.Set.subset",
         "equation_FStar.UInt32.n", "equation_LHAEPlain.id",
         "equation_Mem.rgn", "equation_Mem.tls_rgn", "equation_Prims.nat",
         "equation_Range.point", "equation_Range.range",
@@ -654,8 +667,11 @@
         "function_token_typing_FStar.Monotonic.Heap.heap",
         "function_token_typing_FStar.Monotonic.HyperHeap.rid",
         "function_token_typing_FStar.Monotonic.HyperHeap.root",
+        "function_token_typing_FStar.Monotonic.Seq.increases",
         "function_token_typing_FStar.UInt32.n",
         "function_token_typing_Flags.model",
+        "function_token_typing_LowStar.Monotonic.Buffer.loc_none",
+        "function_token_typing_LowStar.Monotonic.Buffer.region_liveness_insensitive_locs",
         "function_token_typing_Mem.tls_region",
         "function_token_typing_Prims.nat",
         "function_token_typing_Range.zero", "int_inversion",
@@ -671,6 +687,7 @@
         "lemma_FStar.Map.lemma_SelUpd2", "lemma_FStar.Map.lemma_UpdDomain",
         "lemma_FStar.Map.lemma_equal_elim",
         "lemma_FStar.Map.lemma_equal_intro",
+        "lemma_FStar.Monotonic.Heap.lemma_contains_implies_used",
         "lemma_FStar.Monotonic.Heap.lemma_sel_upd1",
         "lemma_FStar.Monotonic.Heap.lemma_upd_contains",
         "lemma_FStar.Monotonic.HyperHeap.lemma_disjoint_includes",
@@ -682,6 +699,10 @@
         "lemma_FStar.Set.lemma_equal_elim", "lemma_FStar.Set.mem_complement",
         "lemma_FStar.Set.mem_empty", "lemma_FStar.Set.mem_singleton",
         "lemma_FStar.Set.mem_subset", "lemma_FStar.Set.mem_union",
+        "lemma_LowStar.Monotonic.Buffer.loc_includes_none",
+        "lemma_LowStar.Monotonic.Buffer.modifies_inert_intro",
+        "lemma_LowStar.Monotonic.Buffer.modifies_inert_liveness_insensitive_region_mreference_weak",
+        "lemma_LowStar.Monotonic.Buffer.modifies_ralloc_post",
         "primitive_Prims.op_AmpAmp", "primitive_Prims.op_BarBar",
         "primitive_Prims.op_Equality", "primitive_Prims.op_GreaterThan",
         "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Negation",
@@ -689,14 +710,14 @@
         "proj_equation_AEAD_GCM.State_log",
         "proj_equation_AEAD_GCM.State_log_region",
         "proj_equation_AEAD_GCM.State_region",
-        "proj_equation_FStar.Pervasives.Native.Mktuple2__1",
+        "proj_equation_FStar.Pervasives.Native.Mktuple2__2",
         "projection_inverse_AEAD_GCM.State_counter",
         "projection_inverse_AEAD_GCM.State_log",
         "projection_inverse_AEAD_GCM.State_log_region",
         "projection_inverse_AEAD_GCM.State_region",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
-        "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
+        "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
         "projection_inverse_FStar.Pervasives.Native.Mktuple3__1",
         "projection_inverse_FStar.Pervasives.Native.Mktuple3__2",
         "projection_inverse_FStar.Pervasives.Native.Mktuple3__3",
@@ -707,8 +728,10 @@
         "refinement_interpretation_AEAD_GCM_Tm_refine_dd822fca68570d6ca21c42711549ab9b",
         "refinement_interpretation_AEAD_GCM_Tm_refine_dfa0644d93f46e07c11ed7db39b0b8fb",
         "refinement_interpretation_Crypto.Indexing_Tm_refine_27bc248aea929afc1c455a4ca114e85e",
+        "refinement_interpretation_FStar.HyperStack.ST_Tm_refine_003cbb363565c5358e7ed8a8d7dba6d4",
         "refinement_interpretation_FStar.HyperStack.ST_Tm_refine_1a1278f1aecd37594ba20d888b7fd230",
         "refinement_interpretation_FStar.HyperStack.ST_Tm_refine_f596a1e23d65ebe54b463345ece4e00f",
+        "refinement_interpretation_FStar.HyperStack.ST_Tm_refine_f66e3e9c5cfa5dc28f9d0303f6e78009",
         "refinement_interpretation_FStar.Monotonic.HyperHeap_Tm_refine_b4ddecfc36eb649aced773e3e29ae4e3",
         "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9a74d818566e70513bc032cc3b65a144",
         "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_ecfe710eaddaa768c46a7d024350dcbc",
@@ -732,18 +755,18 @@
         "typing_FStar.Monotonic.HyperHeap.extends",
         "typing_FStar.Monotonic.HyperHeap.includes",
         "typing_FStar.Monotonic.HyperStack.as_ref",
+        "typing_FStar.Monotonic.HyperStack.contains",
         "typing_FStar.Monotonic.HyperStack.get_hmap",
         "typing_FStar.Monotonic.HyperStack.get_rid_ctr",
         "typing_FStar.Monotonic.HyperStack.get_tip",
-        "typing_FStar.Monotonic.HyperStack.live_region",
-        "typing_FStar.Pervasives.Native.fst", "typing_FStar.Set.complement",
+        "typing_FStar.Pervasives.Native.snd", "typing_FStar.Set.complement",
         "typing_FStar.Set.empty", "typing_FStar.Set.mem",
         "typing_FStar.Set.singleton", "typing_FStar.Set.union",
         "typing_FStar.StrongExcludedMiddle.strong_excluded_middle",
         "typing_tok_TLSConstants.Writer@tok", "unit_inversion"
       ],
       0,
-      "b15a7514846c6fae29403bff06135946"
+      "a76ff718ed6194f51a8e6e8a14466128"
     ],
     [
       "AEAD_GCM.leak",
@@ -763,7 +786,7 @@
         "refinement_interpretation_StatefulPlain_Tm_refine_329f7cdd508b70bf332607897e0b8a7b"
       ],
       0,
-      "be6f6dd3b60e76954dc710ba4bceaf7a"
+      "6cfec9ed8b651dfdf4f7f46d6900cef0"
     ],
     [
       "AEAD_GCM.lemma_12",
@@ -782,7 +805,7 @@
         "refinement_interpretation_TLSInfo_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee"
       ],
       0,
-      "0ca7987d39d3f728742a3c9db577836a"
+      "06b55605ff6e8a3f1b0f0e5952ea59ab"
     ],
     [
       "AEAD_GCM.encrypt",
@@ -809,17 +832,21 @@
         "equation_FStar.Monotonic.Seq.increases",
         "equation_FStar.Preorder.preorder",
         "equation_FStar.Preorder.preorder_rel",
-        "equation_FStar.Preorder.relation", "equation_FStar.UInt32.n",
+        "equation_FStar.Preorder.reflexive",
+        "equation_FStar.Preorder.relation",
+        "equation_FStar.Preorder.transitive", "equation_FStar.UInt32.n",
         "equation_LHAEPlain.id", "equation_Mem.rgn", "equation_Prims.eqtype",
         "equation_Prims.logical", "equation_Prims.nat",
         "equation_Range.range",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "equation_TLSInfo.aeAlg_of_id", "equation_TLSInfo.authId",
+        "equation_Types_s.twobits", "equation_Words_s.natN",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mreference_",
         "function_token_typing_FStar.UInt32.n",
-        "function_token_typing_Prims.int", "function_token_typing_Prims.nat",
-        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "function_token_typing_Prims.nat",
+        "function_token_typing_Types_s.twobits",
+        "haseqFStar.Seq.Base_Tm_refine_5514fbe9e08dfda40f950a7b9f1b2b98",
         "primitive_Prims.op_Addition", "primitive_Prims.op_Equality",
         "proj_equation_AEAD_GCM.State_counter",
         "projection_inverse_BoxBool_proj_0",
@@ -843,7 +870,7 @@
         "typing_FStar.Pervasives.Native.snd"
       ],
       0,
-      "3729e7e7c6cf7e8481bfc103492b44c6"
+      "16ecf1e431f8857e6bc2806d075693a3"
     ],
     [
       "AEAD_GCM.encrypt",
@@ -857,7 +884,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "86feb82a714684331ab5e71bd6aea3f3"
+      "2bb8b032d9a02a85213a0d3bc9aa7c0a"
     ],
     [
       "AEAD_GCM.encrypt",
@@ -997,7 +1024,7 @@
         "typing_Mem.tls_define_region", "typing_tok_TLSConstants.Writer@tok"
       ],
       0,
-      "bdc954cb6117a4213f16ea3adb2f5353"
+      "7be8c67e3a06a279473480fe522f35f1"
     ],
     [
       "AEAD_GCM.matches",
@@ -1015,7 +1042,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "b64d30676c111de44d4e41ef4c6387e1"
+      "47b7e991f4e109591c107620fdc5a75b"
     ],
     [
       "AEAD_GCM.decrypt",
@@ -1038,13 +1065,16 @@
         "equation_FStar.Monotonic.Seq.increases",
         "equation_FStar.Preorder.preorder",
         "equation_FStar.Preorder.preorder_rel",
-        "equation_FStar.Preorder.relation", "equation_FStar.UInt32.n",
+        "equation_FStar.Preorder.reflexive",
+        "equation_FStar.Preorder.relation",
+        "equation_FStar.Preorder.transitive", "equation_FStar.UInt32.n",
         "equation_LHAEPlain.id", "equation_Prims.eqtype",
         "equation_Prims.logical", "equation_Prims.nat",
-        "equation_TLSInfo.authId", "fuel_guarded_inversion_AEAD_GCM.state",
+        "equation_TLSInfo.authId", "equation_Types_s.twobits",
+        "equation_Words_s.natN", "fuel_guarded_inversion_AEAD_GCM.state",
         "function_token_typing_FStar.UInt32.n",
-        "function_token_typing_Prims.int",
-        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "function_token_typing_Types_s.twobits",
+        "haseqFStar.Seq.Base_Tm_refine_5514fbe9e08dfda40f950a7b9f1b2b98",
         "proj_equation_AEAD_GCM.State_counter",
         "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_AEAD_GCM_Tm_refine_80ee3ad59f065c2121c141d7e5848762",
@@ -1061,7 +1091,7 @@
         "typing_FStar.Monotonic.Seq.increases"
       ],
       0,
-      "6fd9c871a8d0458253fb0f7112854e0e"
+      "17252a820d72b71e733f4fdb2d84383c"
     ],
     [
       "AEAD_GCM.decrypt",
@@ -1156,17 +1186,23 @@
         "equation_FStar.Pervasives.Native.snd",
         "equation_FStar.Preorder.preorder",
         "equation_FStar.Preorder.preorder_rel",
+        "equation_FStar.Preorder.reflexive",
         "equation_FStar.Preorder.relation",
+        "equation_FStar.Preorder.transitive",
         "equation_FStar.Seq.Properties.split", "equation_FStar.UInt.fits",
         "equation_FStar.UInt.max_int", "equation_FStar.UInt.min_int",
         "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
         "equation_FStar.UInt16.n", "equation_FStar.UInt32.n",
-        "equation_FStar.UInt8.n", "equation_FStar.UInt8.n_minus_one",
-        "equation_LHAEPlain.ad_Length", "equation_LHAEPlain.adata",
-        "equation_LHAEPlain.id", "equation_LHAEPlain.parseAD",
+        "equation_FStar.UInt8.n", "equation_LHAEPlain.ad_Length",
+        "equation_LHAEPlain.adata", "equation_LHAEPlain.id",
+        "equation_LHAEPlain.parseAD",
+        "equation_LowParse.Low.Base.validator_error",
+        "equation_LowParse.Low.Base.validator_error_generic",
+        "equation_LowParse.Low.Base.validator_max_length",
         "equation_LowParse.SLow.Base.u32_max", "equation_Mem.disjoint",
         "equation_Mem.rgn", "equation_Mem.tls_define_region",
         "equation_Mem.tls_rgn", "equation_Mem.tls_tables_region",
+        "equation_Parsers.ProtocolVersion.protocolVersion_parser_kind",
         "equation_Prims.eqtype", "equation_Prims.logical",
         "equation_Prims.nat", "equation_Prims.pos", "equation_Range.aeAlg",
         "equation_Range.cipherRangeClass", "equation_Range.fragment_range",
@@ -1178,9 +1214,12 @@
         "equation_StatefulPlain.id", "equation_StatefulPlain.wf_ad_rg",
         "equation_StatefulPlain.wf_payload_ad_rg",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
-        "equation_TLSError.error", "equation_TLSError.result",
-        "equation_TLSInfo.aeAlg_of_id", "equation_TLSInfo.authId",
-        "equation_TLSInfo.pv_of_id", "fuel_guarded_inversion_AEAD_GCM.state",
+        "equation_TLSConstants.protocolVersion_",
+        "equation_TLSConstants.versionBytes", "equation_TLSError.error",
+        "equation_TLSError.result", "equation_TLSInfo.aeAlg_of_id",
+        "equation_TLSInfo.authId", "equation_TLSInfo.pv_of_id",
+        "equation_Types_s.twobits", "equation_Words_s.natN",
+        "fuel_guarded_inversion_AEAD_GCM.state",
         "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mreference_",
         "function_token_typing_Content.ccsBytes",
         "function_token_typing_DebugFlags.debug",
@@ -1192,18 +1231,20 @@
         "function_token_typing_FStar.UInt16.n",
         "function_token_typing_FStar.UInt32.n",
         "function_token_typing_FStar.UInt8.n",
-        "function_token_typing_FStar.UInt8.n_minus_one",
         "function_token_typing_FStar.UInt8.t",
         "function_token_typing_Flags.model",
+        "function_token_typing_LowParse.Low.Base.validator_error_generic",
         "function_token_typing_LowParse.SLow.Base.u32_max",
         "function_token_typing_LowStar.Monotonic.Buffer.address_liveness_insensitive_locs",
         "function_token_typing_LowStar.Monotonic.Buffer.loc_none",
+        "function_token_typing_LowStar.Monotonic.Buffer.region_liveness_insensitive_locs",
         "function_token_typing_Mem.tls_define_region",
         "function_token_typing_Mem.tls_tables_region",
-        "function_token_typing_Prims.int", "function_token_typing_Prims.nat",
+        "function_token_typing_Prims.nat",
         "function_token_typing_Range.zero",
         "function_token_typing_TLSError.error",
-        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "function_token_typing_Types_s.twobits",
+        "haseqFStar.Seq.Base_Tm_refine_5514fbe9e08dfda40f950a7b9f1b2b98",
         "int_inversion", "int_typing", "kinding_Parsers.Alert.alert@tok",
         "lemma_FStar.Buffer.lemma_size", "lemma_FStar.Bytes.hide_reveal",
         "lemma_FStar.Bytes.lemma_repr_bytes_values",
@@ -1214,7 +1255,7 @@
         "lemma_FStar.Map.lemma_ContainsDom",
         "lemma_FStar.Map.lemma_InDomConcat",
         "lemma_FStar.Map.lemma_InDomRestrict",
-        "lemma_FStar.Map.lemma_InDomUpd1", "lemma_FStar.Map.lemma_InDomUpd2",
+        "lemma_FStar.Map.lemma_InDomUpd2",
         "lemma_FStar.Map.lemma_SelConcat1",
         "lemma_FStar.Map.lemma_SelConcat2",
         "lemma_FStar.Map.lemma_SelRestrict", "lemma_FStar.Map.lemma_SelUpd1",
@@ -1237,6 +1278,7 @@
         "lemma_LowStar.Monotonic.Buffer.loc_includes_none",
         "lemma_LowStar.Monotonic.Buffer.modifies_inert_intro",
         "lemma_LowStar.Monotonic.Buffer.modifies_inert_liveness_insensitive_mreference_weak",
+        "lemma_LowStar.Monotonic.Buffer.modifies_inert_liveness_insensitive_region_mreference_weak",
         "lemma_LowStar.Monotonic.Buffer.modifies_inert_mreference_elim",
         "lemma_LowStar.Monotonic.Buffer.modifies_none_modifies",
         "lemma_StatefulPlain.lemma_makeAD_parseAD",
@@ -1276,6 +1318,7 @@
         "refinement_interpretation_FStar.HyperStack.ST_Tm_refine_f596a1e23d65ebe54b463345ece4e00f",
         "refinement_interpretation_FStar.Integers_Tm_refine_d12d61266a2f2128b6a00b00566f8446",
         "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9a74d818566e70513bc032cc3b65a144",
+        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_d58d7e3b4b6ce757231e9089061120a0",
         "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_ecfe710eaddaa768c46a7d024350dcbc",
         "refinement_interpretation_FStar.Preorder_Tm_refine_bd10f09297e0e7dc08314f7d9211801c",
         "refinement_interpretation_FStar.Seq.Base_Tm_refine_aebc5aa9049e78f605051015a3436e68",
@@ -1283,6 +1326,7 @@
         "refinement_interpretation_FStar.UInt_Tm_refine_8ae4abcfc6bc8d4903b7e1f40e070ec2",
         "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
         "refinement_interpretation_LHAEPlain_Tm_refine_f8c9ecb99f1f86087d11ef54ab5e87fc",
+        "refinement_interpretation_LowParse.Low.Base_Tm_refine_6d8cf9e2ee38619b8f17325c8d9e815e",
         "refinement_interpretation_LowParse.SLow.Base_Tm_refine_37aada3d4a501a6616c90a97d93560d2",
         "refinement_interpretation_Mem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
         "refinement_interpretation_Mem_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
@@ -1294,6 +1338,7 @@
         "refinement_interpretation_Range_Tm_refine_9eec96cf9e7424057db89d430151765e",
         "refinement_interpretation_StatefulPlain_Tm_refine_7d61ecdb8382c52d9c2b4c182b7fd246",
         "refinement_interpretation_TLSInfo_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee",
+        "refinement_interpretation_TLSInfo_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b",
         "token_correspondence_FStar.Monotonic.Seq.increases",
         "typing_AEADProvider.explicit_iv_length",
         "typing_AEADProvider.plain", "typing_AEADProvider.salt_length",
@@ -1303,12 +1348,11 @@
         "typing_AEAD_GCM.__proj__State__item__region", "typing_AEAD_GCM.alg",
         "typing_AEAD_GCM.counter", "typing_AEAD_GCM.ctr",
         "typing_AEAD_GCM.max_ctr", "typing_Alert.parse",
-        "typing_EverCrypt.aead_tagLen", "typing_FStar.Bytes.lbytes",
-        "typing_FStar.Bytes.len", "typing_FStar.Bytes.reveal",
-        "typing_FStar.Map.concat", "typing_FStar.Map.contains",
-        "typing_FStar.Map.domain", "typing_FStar.Map.restrict",
-        "typing_FStar.Map.sel", "typing_FStar.Map.upd",
-        "typing_FStar.Monotonic.Heap.contains",
+        "typing_EverCrypt.aead_tagLen", "typing_FStar.Bytes.len",
+        "typing_FStar.Bytes.reveal", "typing_FStar.Map.concat",
+        "typing_FStar.Map.contains", "typing_FStar.Map.domain",
+        "typing_FStar.Map.restrict", "typing_FStar.Map.sel",
+        "typing_FStar.Map.upd", "typing_FStar.Monotonic.Heap.contains",
         "typing_FStar.Monotonic.Heap.upd",
         "typing_FStar.Monotonic.HyperStack.as_addr",
         "typing_FStar.Monotonic.HyperStack.as_ref",
@@ -1317,8 +1361,10 @@
         "typing_FStar.Monotonic.HyperStack.get_tip",
         "typing_FStar.Monotonic.HyperStack.live_region",
         "typing_FStar.Monotonic.HyperStack.sel",
+        "typing_FStar.Monotonic.HyperStack.upd",
         "typing_FStar.Monotonic.Seq.increases",
         "typing_FStar.Pervasives.Native.fst",
+        "typing_FStar.Pervasives.Native.snd",
         "typing_FStar.Pervasives.Native.uu___is_None",
         "typing_FStar.Pervasives.Native.uu___is_Some",
         "typing_FStar.Seq.Base.length", "typing_FStar.Set.complement",
@@ -1330,12 +1376,13 @@
         "typing_LowStar.Monotonic.Buffer.loc_addresses",
         "typing_Mem.disjoint", "typing_Mem.tls_define_region",
         "typing_Range.cipherRangeClass", "typing_Range.valid_clen",
+        "typing_TLSConstants.versionBytes", "typing_TLSInfo.pv_of_id",
         "typing_tok_Content.Change_cipher_spec@tok",
         "typing_tok_FStar.Integers.W32@tok",
         "typing_tok_TLSConstants.Reader@tok", "unit_typing"
       ],
       0,
-      "71956a1eb7343b90dc373171d14f6a9f"
+      "eae3c0b569481329d6992c6ffabfa9a8"
     ]
   ]
 ]

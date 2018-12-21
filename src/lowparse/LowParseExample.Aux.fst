@@ -354,6 +354,8 @@ let serialize_t : LP.serializer parse_t =
 let serialize32_case_B: LP.serializer32 serialize_case_B =
   LP.serialize32_filter LP.serialize32_u16 parse_case_B_filter
 
+#push-options "--z3rlimit 20"
+
 inline_for_extraction
 let serialize32_cases
   (x: LP.sum_key t_sum)
@@ -362,6 +364,8 @@ let serialize32_cases
   | Case_A -> (LP.serialize32_nondep_then LP.serialize32_u8 () LP.serialize32_u8 () <: LP.serializer32 (serialize_cases x))
   | Case_B -> (serialize32_case_B <: LP.serializer32 (serialize_cases x))
   | _ -> (LP.serialize32_u16 <: LP.serializer32 (serialize_cases x))
+
+#pop-options
 
 // inline_for_extraction
 let serialize32_key : LP.serializer32 (LP.serialize_enum_key _ LP.serialize_u8 case_enum) =
@@ -385,22 +389,24 @@ let serialize32_t : LP.serializer32 serialize_t =
 
 module LL = LowParse.Low
 
-let validate32_case_B
-: LL.validator32 parse_case_B
-= LL.validate32_filter LL.validate32_u16 LL.parse32_u16 parse_case_B_filter (fun x -> x `U16.gt` 0us)
+module U32 = FStar.UInt32
+
+let validate_case_B
+: LL.validator parse_case_B
+= LL.validate_filter (LL.validate_u16 ()) LL.read_u16 parse_case_B_filter (fun x -> x `U16.gt` 0us)
 
 inline_for_extraction
-let validate32_cases 
+let validate_cases 
   (x: LP.enum_key case_enum)
-: Tot (LL.validator32 (dsnd (parse_cases x)))
+: Tot (LL.validator (dsnd (parse_cases x)))
 = match x with
-  | Case_B -> validate32_case_B
-  | Case_A -> LL.validate32_u8 `LL.validate32_nondep_then` LL.validate32_u8
-  | _ -> LL.validate32_u16
+  | Case_B -> (validate_case_B <: LL.validator (dsnd (parse_cases x)))
+  | Case_A -> (((LL.validate_u8 ()) `LL.validate_nondep_then` (LL.validate_u8 ())) <: LL.validator (dsnd (parse_cases x)))
+  | _ -> (LL.validate_u16 () <: LL.validator (dsnd (parse_cases x)))
 
-let validate32_t
-: LL.validator32 parse_t
-= LL.validate32_sum t_sum LL.validate32_u8 LL.parse32_u8 _ validate32_cases (_ by (LP.dep_maybe_enum_destr_t_tac ()))
+let validate_t
+: LL.validator parse_t
+= LL.validate_sum t_sum (LL.validate_u8 ()) LL.read_u8 _ validate_cases (_ by (LP.dep_maybe_enum_destr_t_tac ()))
 
 (*
 // inline_for_extraction

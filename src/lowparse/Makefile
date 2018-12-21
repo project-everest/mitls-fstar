@@ -28,19 +28,23 @@ LOW_LEVEL=LowParse_TestLib_Low_c.c
 
 MY_KREMLIN=$(KREMLIN_HOME)/krml -bundle 'LowParse.\*'  -add-include '"kremlin/internal/compat.h"'
 
-EXAMPLES=Example Example2 Example3 Example4 Example5 Example6 Example7
+EXAMPLES=Example Example2 Example3 Example5 Example6 Example7 Example8 Example9
 ROOT_FILES=LowParse.SLow.fst LowParse.Low.fst $(addprefix LowParse, $(addsuffix .fst, $(EXAMPLES))) LowParse.TestLib.SLow.fst LowParse.TestLib.Low.fst
 
 EXCLUDE_KRML_FILES=$(FSTAR_OUT_DIR)/prims.krml
 
+EXAMPLE_DEPEND_FILES=$(addsuffix .depend,$(EXAMPLES))
+
+$(EXAMPLE_DEPEND_FILES): %.depend: *.fst *.fsti
+	$(MY_FSTAR) $(FSTAR_OPTIONS) $(OTHERFLAGS) --dep full LowParse$(basename $@).fst > $@
+
 clean:
 	rm -rf $(FSTAR_OUT_DIR) $(EXAMPLES) $(addsuffix .depend, $(EXAMPLES)) .depend
 
-.depend: *.fst *.fsti
+.depend: $(EXAMPLE_DEPEND_FILES)
 	$(MY_FSTAR) $(FSTAR_OPTIONS) $(OTHERFLAGS) --dep full $(ROOT_FILES) > $@
 	for f in $(EXAMPLES) ; do \
-	  $(MY_FSTAR) $(FSTAR_OPTIONS) $(OTHERFLAGS) --dep full LowParse$$f.fst > $$f.depend ; \
-	  $(MAKE) EXCLUDE_KRML_FILES='$(EXCLUDE_KRML_FILES)' EXAMPLE=$$f -f Makefile.example ; \
+	 $(MAKE) EXCLUDE_KRML_FILES='$(EXCLUDE_KRML_FILES)' EXAMPLE=$$f -f Makefile.example ; \
 	done
 
 include .depend
@@ -79,10 +83,11 @@ extract-all: $(EXAMPLES)
 Example: KREMLIN_ARGS=$(INTERMEDIATE_LEVEL)
 Example2: KREMLIN_ARGS=$(INTERMEDIATE_LEVEL)
 Example3: KREMLIN_ARGS=$(LOW_LEVEL)
-Example4: KREMLIN_ARGS=
 Example5: KREMLIN_ARGS=
 Example6: KREMLIN_ARGS=
 Example7: KREMLIN_ARGS=
+Example8: KREMLIN_ARGS=$(LOW_LEVEL)
+Example9: KREMLIN_ARGS=$(LOW_LEVEL)
 
 .PHONY: all verify-all clean extract-all $(EXAMPLES)
 

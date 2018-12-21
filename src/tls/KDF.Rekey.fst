@@ -103,6 +103,15 @@ private noextract
 let lift_children' (#p:Type0) (u:children' p)
   : Pure (children p) (requires model) (ensures fun u' -> u' == u) = u
 
+// utf8_encode gives this but not bytes_of_string
+assume val lemma_bytes_of_string_length: s:string -> Lemma
+  (Bytes.length (Bytes.bytes_of_string s) <= op_Multiply 4 (String.length s))
+
+inline_for_extraction noextract let mklabel (s:string) : Pure label
+  (requires normalize (String.length s < 32))
+  (ensures fun l -> True) =
+  lemma_bytes_of_string_length s; s
+
 #set-options "--z3rlimit 30"
 noextract
 let rec mk_rekey' n =
@@ -116,7 +125,7 @@ let rec mk_rekey' n =
     let iv = memoization_ST (IV.local_raw_pkg ii ivlen) in
     assume(b2t Flags.flag_Raw ==> idealKDF n);
     let iv_leaf : tree' (idealKDF n) = Leaf iv in
-    let u : children (idealKDF n) = lift_children' ["IV", iv_leaf; "RE",re] in
+    let u : children (idealKDF n) = lift_children' [mklabel "IV", iv_leaf; mklabel "RE",re] in
     let p = memoization_ST (KDF.local_kdf_pkg (flagKDF n) u) in
     Node p u
   )

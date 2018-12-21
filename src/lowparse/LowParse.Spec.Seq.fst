@@ -1,4 +1,6 @@
 module LowParse.Spec.Seq
+
+(*
 include LowParse.Spec.Combinators
 
 module Seq = FStar.Seq
@@ -56,9 +58,10 @@ val parse_seq_aux_correct
   ))
   (decreases (Seq.length b))
 
-#set-options "--z3rlimit 32"
-
 let rec parse_seq_aux_correct #k #t p b =
+  seq_of_list_inj t;
+  parse_synth_eq (PL.parse_list p) (Seq.seq_of_list) b;
+  PL.parse_list_eq p b;
   if Seq.length b = 0
   then ()
   else

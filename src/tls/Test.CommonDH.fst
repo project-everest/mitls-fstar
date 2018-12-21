@@ -8,8 +8,8 @@ open FStar.HyperStack.ST
 
 open TLSError
 open TLSConstants
-open Format.NamedGroup
-open Format.NamedGroupList
+open Parsers.NamedGroup
+open Parsers.NamedGroupList
 
 module DH = CommonDH
 
@@ -42,15 +42,15 @@ let test group =
  
 let groups : namedGroupList =
   [
-    SECP256R1;
-    SECP384R1;
-    SECP521R1;
+    Secp256r1;
+    Secp384r1;
+    Secp521r1;
     X25519;
-    FFDHE2048;
-    FFDHE3072;
-    FFDHE4096;
-    FFDHE6144;
-    FFDHE8192;
+    Ffdhe2048;
+    Ffdhe3072;
+    Ffdhe4096;
+    Ffdhe6144;
+    Ffdhe8192;
     // TODO: Not implemented; see ECGroup.fst
     //X448
   ]

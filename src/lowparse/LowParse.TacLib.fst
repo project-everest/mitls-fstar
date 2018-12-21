@@ -8,10 +8,14 @@ let conclude ()
 : Tac unit
 = // dump "conclude before";
   norm [delta; iota; primops];
-  first [
-    trefl;
-    trivial;
-  ];
+  begin if lax_on ()
+    then smt ()
+    else
+    first [
+      trefl;
+      trivial;
+    ]
+  end;
 //  dump "conclude after";
   qed ()
 

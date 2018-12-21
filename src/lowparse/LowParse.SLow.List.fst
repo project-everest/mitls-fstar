@@ -19,7 +19,8 @@ let rec parse_list_tailrec'
   (aux: list t)
 : GTot (option (list t))
   (decreases (B32.length b))
-= if B32.len b = 0ul
+= parse_list_eq p (B32.reveal b);
+  if B32.len b = 0ul
   then 
     Some (L.rev aux)
   else
@@ -56,7 +57,8 @@ let rec parse_list_tailrec'_correct'
     | None -> None
   )))
   (decreases (B32.length b))
-= if B32.len b = 0ul
+= parse_list_eq p (B32.reveal b);
+  if B32.len b = 0ul
   then
     L.append_l_nil (L.rev aux)
   else
@@ -201,7 +203,6 @@ let parse32_list
     match parse_list_tailrec p32 input with
     | None -> None
     | Some res ->
-      parse_list_bare_consumed p (B32.reveal input);
       Some (res, B32.len input)
   ) <: (res: option (list t * U32.t) { parser32_correct (parse_list p) input res } ))
 
@@ -224,6 +225,7 @@ let rec partial_serialize32_list'
   (decreases input)
 = match input with
   | [] ->
+    serialize_list_nil p s;
     let res = B32.empty_bytes in
     assert (Seq.equal (B32.reveal res) (Seq.empty));
     res
@@ -255,6 +257,7 @@ let rec partial_serialize32_list_tailrec'
   (decreases input)
 = match input with
   | [] ->
+    serialize_list_nil p s;
     Seq.append_empty_r (B32.reveal accu);
     accu
   | a :: q ->
@@ -311,6 +314,8 @@ let partial_serialize32_list'_body
   match input' with
   | [] -> (false, x)
   | a :: q ->
+    [@inline_let]
+    let _ = serialize_list_cons p s a q in
     let sa = s32 a in
     let accu' = B32.append accu sa in
     (true, (accu', q))
@@ -408,8 +413,13 @@ let size32_list_body
 = fun accu ->
   let (len, rem) = accu in
   match rem with
-    | [] -> (false, accu)
+    | [] ->
+      [@inline_let]
+      let _ = serialize_list_nil p s in
+      (false, accu)
     | a :: q ->
+      [@inline_let]
+      let _ = serialize_list_cons p s a q in
       let sza = s32 a in
       let len' = add_overflow len sza in
       if len' = u32_max

@@ -8,7 +8,6 @@ all: libevercrypt.dll libevercrypt.lib
 #  authoritative
 SOURCES = \
   EverCrypt.c \
-  EverCrypt_AutoConfig.c \
   EverCrypt_AutoConfig2.c \
   EverCrypt_BCrypt.c \
   EverCrypt_Bytes.c \
@@ -16,9 +15,9 @@ SOURCES = \
   EverCrypt_Hash.c \
   EverCrypt_HKDF.c \
   EverCrypt_HMAC.c \
+  EverCrypt_Kremlib.c \
   EverCrypt_StaticConfig.c \
   EverCrypt_Vale.c \
-  EverCrypt_Kremlib.c \
   evercrypt_vale_stubs.c \
   AEAD_Poly1305_64.c \
   Hacl_Chacha20.c \
@@ -27,8 +26,8 @@ SOURCES = \
   Hacl_Ed25519.c \
   Hacl_Poly1305_64.c \
   Hacl_Hash.c \
-  Hacl_Legacy.c \
-  vale_aes_glue.c
+  Hacl_AES.c \
+  evercrypt_vale_stubs.c
 
 {amd64\}.asm.obj:
     ml64 /nologo /c $< /Fo$@

@@ -6,7 +6,6 @@ module LP = LowParse.Low.Base
 
 module U32 = FStar.UInt32
 module U16 = FStar.UInt16
-module I32 = FStar.Int32
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 module B = LowStar.Buffer
@@ -23,7 +22,9 @@ type t = {
   last: U32.t;
 }
 
-val parse_inner_kind: (k: LP.parser_kind { k.LP.parser_kind_subkind == Some LP.ParserStrong /\ k.LP.parser_kind_high == Some 4 })
+inline_for_extraction
+noextract
+let parse_inner_kind : LP.parser_kind = LP.strong_parser_kind 4 4 (Some LP.ParserKindMetadataTotal)
 
 val parse_inner: LP.parser parse_inner_kind inner
 
@@ -31,19 +32,21 @@ val serialize_inner: LP.serializer parse_inner
 
 val serialize_inner_intro
   (h: HS.mem)
-  (b: LP.buffer8)
-  (lo: I32.t)
-  (x: U16.t * U16.t)
-  (hi: I32.t)
+  (b: LP.slice)
+  (lo: U32.t)
 : Lemma
   (requires (
-    LP.contains_valid_serialized_data_or_fail h (LPC.serialize_nondep_then _ LPI.serialize_u16 () _ LPI.serialize_u16) b lo x hi
+    LP.valid LPI.parse_u16 h b lo /\
+    LP.valid LPI.parse_u16 h b (LP.get_valid_pos LPI.parse_u16 h b lo)
   ))
   (ensures (
-    let (l, r) = x in
-    LP.contains_valid_serialized_data_or_fail h serialize_inner b lo ({ left = l; right = r; }) hi
+    LP.valid_content_pos parse_inner h b lo
+      ({
+        left = LP.contents LPI.parse_u16 h b lo;
+        right = LP.contents LPI.parse_u16 h b (LP.get_valid_pos LPI.parse_u16 h b lo);
+      })
+      (lo `U32.add` 4ul)
   ))
-  [SMTPat (LP.contains_valid_serialized_data_or_fail h (LPC.serialize_nondep_then _ LPI.serialize_u16 () _ LPI.serialize_u16) b lo x hi)]
 
 val parse_t_kind : (k: LP.parser_kind { k.LP.parser_kind_subkind == Some LP.ParserStrong /\ k.LP.parser_kind_high == Some 8 })
 
@@ -53,16 +56,18 @@ val serialize_t : LP.serializer parse_t
 
 val serialize_t_intro
   (h: HS.mem)
-  (b: LP.buffer8)
-  (lo: I32.t)
-  (x: inner * U32.t)
-  (hi: I32.t)
+  (b: LP.slice)
+  (lo: U32.t)
 : Lemma
   (requires (
-    LP.contains_valid_serialized_data_or_fail h (LPC.serialize_nondep_then _ serialize_inner () _ LPI.serialize_u32) b lo x hi
+    LP.valid parse_inner h b lo /\
+    LP.valid LPI.parse_u32 h b (LP.get_valid_pos parse_inner h b lo)
   ))
   (ensures (
-    let (l, r) = x in
-    LP.contains_valid_serialized_data_or_fail h serialize_t b lo ({ inner = l; last = r; }) hi
+    LP.valid_content_pos parse_t h b lo
+      ({
+        inner = LP.contents parse_inner h b lo;
+        last = LP.contents LPI.parse_u32 h b (LP.get_valid_pos parse_inner h b lo);
+      })
+      (lo `U32.add` 8ul)
   ))
-  [SMTPat (LP.contains_valid_serialized_data_or_fail h (LPC.serialize_nondep_then _ serialize_inner () _ LPI.serialize_u32) b lo x hi)]

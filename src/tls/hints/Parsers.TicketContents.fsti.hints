@@ -1,0 +1,60 @@
+[
+  "\u001c\u001dù^HgÜé\"çÔës$\u0018ß",
+  [
+    [
+      "Parsers.TicketContents.ticketContents",
+      1,
+      2,
+      1,
+      [
+        "@query",
+        "assumption_Parsers.TicketContents12.ticketContents12__uu___haseq",
+        "assumption_Parsers.TicketContents13.ticketContents13__uu___haseq"
+      ],
+      0,
+      "9d6a5cdd225de6b003f010c038e4fa9f"
+    ],
+    [
+      "Parsers.TicketContents.__proj__Case_ticket12__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.TicketContents.Case_ticket12",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Parsers.TicketContents_Tm_refine_a01328d2df31c2e1a9ec67a74b088384"
+      ],
+      0,
+      "3afffc41755df9416be706fe6581bdbb"
+    ],
+    [
+      "Parsers.TicketContents.__proj__Case_ticket13__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.TicketContents.Case_ticket13",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Parsers.TicketContents_Tm_refine_9a6575d8c0942976c2d5c1c12a234833"
+      ],
+      0,
+      "6ab74f8ad29182934d1dd798f27ac11f"
+    ],
+    [
+      "Parsers.TicketContents.tag_of_ticketContents",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.TicketContents.Case_ticket12",
+        "disc_equation_Parsers.TicketContents.Case_ticket13",
+        "fuel_guarded_inversion_Parsers.TicketContents.ticketContents"
+      ],
+      0,
+      "dceb84337e199cea1a8ec13a4e54c093"
+    ]
+  ]
+]

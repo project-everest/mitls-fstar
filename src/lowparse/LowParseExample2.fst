@@ -82,7 +82,7 @@ let size32_t : LP.size32 serialize_t_spec =
     _
     synth_t
     _
-    (LP.size32_bounded_vlbytes 0 65535 2ul)
+    (LP.size32_bounded_vlbytes 0 65535)
     synth_t_recip
     (fun x -> synth_t_recip x)
     ()

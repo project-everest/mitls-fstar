@@ -8,7 +8,9 @@ MLCRYPTO_HOME	?= ../../../../../MLCrypto
 EVERCRYPT_HOME	?= ../../../../../hacl-star/providers
 KREMLIN_HOME    ?= ../../../../../kremlin
 
-LDOPTS += -L$(EVERCRYPT_HOME)/out -levercrypt
+LDOPTS += -L$(EVERCRYPT_HOME)/dist/compact -levercrypt
+LDOPTS += -L$(EVERCRYPT_HOME)/../code/dist/compact -lhacl
+LDOPTS += -L$(KREMLIN_HOME)/kremlib/dist/generic -lkremlib
 
 ifeq ($(OS),Windows_NT)
   PATH := $(MITLS_HOME)/src/pki:$(PATH)
@@ -48,7 +50,7 @@ else
 endif
 endif
 
-INCLUDE_DIRS 	= kreminc include stub ffi .
+INCLUDE_DIRS 	= $(KREMLIN_HOME)/include include stub ffi .
 
 # we are now packaging most miTLS modules into meaningful C compilation units
 # See src/tls/Makefile.Kremlin for the list of bundles that are used
@@ -81,7 +83,7 @@ all: libmitls.$(SO)
 -include $(addsuffix .d,$(FILES))
 
 libmitls.$(SO): $(addsuffix .o,$(FILES))
-	$(CC) $^ -shared -o $@ $(LDOPTS) $(KREMLIN_HOME)/kremlib/out/libkremlib.a
+	$(CC) $^ -shared -o $@ $(LDOPTS) $(KREMLIN_HOME)/kremlib/dist/generic/libkremlib.a
 
 clean:
 	rm -fr $(addsuffix .o,$(FILES)) $(addsuffix .c,$(FILES)) libmitls.$(SO)

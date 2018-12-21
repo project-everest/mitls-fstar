@@ -1,5 +1,5 @@
 [
-  "\u0001ë#­<œÿ–š-ÁüÓ±œ\u0019",
+  "ë•\fKU\u0012\u0003&Êå#êÖ‚±µ",
   [
     [
       "LowParse.Spec.Int.parse_u8_spec",
@@ -15,7 +15,27 @@
         "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
       ],
       0,
-      "b23f69d44d50a8857c03e879f0fada5b"
+      "40237dc23831942b8a35a60166e05dd9"
+    ],
+    [
+      "LowParse.Spec.Int.parse_u8_spec'",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
+        "disc_equation_FStar.Pervasives.Native.Some",
+        "equation_Prims.squash", "function_token_typing_FStar.UInt8.t",
+        "kinding_FStar.Pervasives.Native.tuple2@tok",
+        "primitive_Prims.op_GreaterThanOrEqual",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "typing_FStar.Pervasives.Native.uu___is_Some",
+        "typing_LowParse.Spec.Base.consumed_length"
+      ],
+      0,
+      "677e99acc17af94ab3904fde32670fb6"
     ],
     [
       "LowParse.Spec.Int.parse_u16_spec",
@@ -35,7 +55,7 @@
         "typing_LowParse.Spec.Base.consumed_length"
       ],
       0,
-      "4ad6e18f823a931f1ae64236a2b33e1c"
+      "e226e07bc2a8baca19f9584eca85eed2"
     ],
     [
       "LowParse.Spec.Int.parse_u32_spec",
@@ -55,7 +75,7 @@
         "typing_LowParse.Spec.Base.consumed_length"
       ],
       0,
-      "2118d08888fba5e93158ded8f2d6c5de"
+      "26ab6a30a0879d38eb6dcfa48cfbbf34"
     ]
   ]
 ]
