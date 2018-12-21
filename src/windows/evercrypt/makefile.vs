@@ -26,7 +26,7 @@ SOURCES = \
   Hacl_Ed25519.c \
   Hacl_Poly1305_64.c \
   Hacl_Hash.c \
-  Hacl_Legacy.c \
+  Hacl_AES.c \
   evercrypt_vale_stubs.c
 
 {amd64\}.asm.obj:
