@@ -87,16 +87,16 @@ let pre_pubshare #g ks =
 
 let namedGroup_of_group (g:group): Tot (option namedGroup) =
   match g with
-  | ECDH EC.ECC_P256 -> Some SECP256R1
-  | ECDH EC.ECC_P384 -> Some SECP384R1
-  | ECDH EC.ECC_P521 -> Some SECP521R1
+  | ECDH EC.ECC_P256 -> Some Secp256r1
+  | ECDH EC.ECC_P384 -> Some Secp384r1
+  | ECDH EC.ECC_P521 -> Some Secp521r1
   | ECDH EC.ECC_X25519 -> Some X25519
   | ECDH EC.ECC_X448 -> Some X448
-  | FFDH (DHGroup.Named DHGroup.FFDHE2048) -> Some FFDHE2048
-  | FFDH (DHGroup.Named DHGroup.FFDHE3072) -> Some FFDHE3072
-  | FFDH (DHGroup.Named DHGroup.FFDHE4096) -> Some FFDHE4096
-  | FFDH (DHGroup.Named DHGroup.FFDHE6144) -> Some FFDHE6144
-  | FFDH (DHGroup.Named DHGroup.FFDHE8192) -> Some FFDHE8192
+  | FFDH (DHGroup.Named DHGroup.FFDHE2048) -> Some Ffdhe2048
+  | FFDH (DHGroup.Named DHGroup.FFDHE3072) -> Some Ffdhe3072
+  | FFDH (DHGroup.Named DHGroup.FFDHE4096) -> Some Ffdhe4096
+  | FFDH (DHGroup.Named DHGroup.FFDHE6144) -> Some Ffdhe6144
+  | FFDH (DHGroup.Named DHGroup.FFDHE8192) -> Some Ffdhe8192
   | _ -> None
 
 let lemma_namedGroup_of_group (g:group)
@@ -106,21 +106,21 @@ let lemma_namedGroup_of_group (g:group)
 
 let group_of_namedGroup (ng:namedGroup): Tot (option group) =
   match ng with
-  | SECP256R1 -> Some (ECDH EC.ECC_P256)
-  | SECP384R1 -> Some (ECDH EC.ECC_P384)
-  | SECP521R1 -> Some (ECDH EC.ECC_P521)
+  | Secp256r1 -> Some (ECDH EC.ECC_P256)
+  | Secp384r1 -> Some (ECDH EC.ECC_P384)
+  | Secp521r1 -> Some (ECDH EC.ECC_P521)
   | X25519    -> Some (ECDH EC.ECC_X25519)
   | X448      -> Some (ECDH EC.ECC_X448)
-  | FFDHE2048 -> Some (FFDH (DHGroup.Named DHGroup.FFDHE2048))
-  | FFDHE3072 -> Some (FFDH (DHGroup.Named DHGroup.FFDHE3072))
-  | FFDHE4096 -> Some (FFDH (DHGroup.Named DHGroup.FFDHE4096))
-  | FFDHE6144 -> Some (FFDH (DHGroup.Named DHGroup.FFDHE6144))
-  | FFDHE8192 -> Some (FFDH (DHGroup.Named DHGroup.FFDHE8192))
+  | Ffdhe2048 -> Some (FFDH (DHGroup.Named DHGroup.FFDHE2048))
+  | Ffdhe3072 -> Some (FFDH (DHGroup.Named DHGroup.FFDHE3072))
+  | Ffdhe4096 -> Some (FFDH (DHGroup.Named DHGroup.FFDHE4096))
+  | Ffdhe6144 -> Some (FFDH (DHGroup.Named DHGroup.FFDHE6144))
+  | Ffdhe8192 -> Some (FFDH (DHGroup.Named DHGroup.FFDHE8192))
   | _         -> None
 
-let is_ecdhe (ng:namedGroup): Tot bool = List.mem ng [ SECP256R1; SECP384R1; SECP521R1; X25519; X448 ]
+let is_ecdhe (ng:namedGroup): Tot bool = List.mem ng [ Secp256r1; Secp384r1; Secp521r1; X25519; X448 ]
 
-let is_ffdhe (ng:namedGroup): Tot bool = List.mem ng [ FFDHE2048; FFDHE3072; FFDHE4096; FFDHE6144; FFDHE8192 ]
+let is_ffdhe (ng:namedGroup): Tot bool = List.mem ng [ Ffdhe2048; Ffdhe3072; Ffdhe4096; Ffdhe6144; Ffdhe8192 ]
 
 // let lemma_group_of_namedGroup (ng:namedGroup)
 //   : Lemma (Some? (group_of_namedGroup ng) <==> (SEC? ng \/ FFDHE? ng))
@@ -667,7 +667,7 @@ let parseKeyShareEntry b =
   // cwinter: this was marked as TODO?
   // assume false; // TODO registration
   let open Format.KeyShareEntry in
-  let open Format.NamedGroup in
+  let open Parsers.NamedGroup in
   let prsr = keyShareEntry_parser32 in
   (match prsr b with
    | Some (x, _) ->

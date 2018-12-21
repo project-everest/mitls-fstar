@@ -1,5 +1,5 @@
 [
-  "÷≠jlñﬁ~@§êHô-Róí",
+  "\\‡¨/\u0006\tŸÜı“eY°pÂ\u001c",
   [
     [
       "Parsers.ProtocolVersion.protocolVersion_repr_eq",
@@ -11,7 +11,7 @@
         "equation_Parsers.ProtocolVersion.protocolVersion_repr"
       ],
       0,
-      "cd574679581e037432597522602dc425"
+      "aa1e7ff7974783e7c0f9cf03bbea6990"
     ],
     [
       "Parsers.ProtocolVersion.protocolVersion",
@@ -20,7 +20,7 @@
       1,
       [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
       0,
-      "adf3de3577e45b4502c1d447708cf015"
+      "63a1410626257a46d6f3143b88975447"
     ],
     [
       "Parsers.ProtocolVersion.__proj__Unknown_protocolVersion__item___0",
@@ -34,7 +34,25 @@
         "refinement_interpretation_Parsers.ProtocolVersion_Tm_refine_de0484a62d509e9de813bfe30726d436"
       ],
       0,
-      "f934006aab297b680081f991c0a96ed9"
+      "ea563cebc7bc8ec598906bbd6511eb98"
+    ],
+    [
+      "Parsers.ProtocolVersion.string_of_protocolVersion",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.ProtocolVersion.SSL_3p0",
+        "disc_equation_Parsers.ProtocolVersion.TLS_1p0",
+        "disc_equation_Parsers.ProtocolVersion.TLS_1p1",
+        "disc_equation_Parsers.ProtocolVersion.TLS_1p2",
+        "disc_equation_Parsers.ProtocolVersion.TLS_1p3",
+        "disc_equation_Parsers.ProtocolVersion.Unknown_protocolVersion",
+        "fuel_guarded_inversion_Parsers.ProtocolVersion.protocolVersion"
+      ],
+      0,
+      "0c8e29dfe9b9c1fea67c54eff561558a"
     ],
     [
       "Parsers.ProtocolVersion.protocolVersion_validator",
@@ -60,7 +78,7 @@
         "refinement_interpretation_LowParse.Low.Base_Tm_refine_07033d2b2c1d2fb6c1dd88a8f1110ac2"
       ],
       0,
-      "eb80c41a48f8aac5c00a8f88b69cb080"
+      "e56ebc8be3e3c55bf49c3fb3fdf89527"
     ],
     [
       "Parsers.ProtocolVersion.protocolVersion_jumper",
@@ -76,7 +94,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "4338467d11675a6319dead0d36c0a678"
+      "0d666a72330ea6490e63339fc2d74197"
     ]
   ]
 ]

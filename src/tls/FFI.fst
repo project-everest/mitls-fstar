@@ -246,14 +246,14 @@ let sas = [
 ]
 
 let ngs = [
-  ("P-521",     CommonDH.SECP521R1);
-  ("P-384",     CommonDH.SECP384R1);
-  ("P-256",     CommonDH.SECP256R1);
+  ("P-521",     CommonDH.Secp521r1);
+  ("P-384",     CommonDH.Secp384r1);
+  ("P-256",     CommonDH.Secp256r1);
   ("X25519",    CommonDH.X25519);
   ("X448",      CommonDH.X448);
-  ("FFDHE4096", CommonDH.FFDHE4096);
-  ("FFDHE3072", CommonDH.FFDHE3072);
-  ("FFDHE2048", CommonDH.FFDHE2048);
+  ("Ffdhe4096", CommonDH.Ffdhe4096);
+  ("Ffdhe3072", CommonDH.Ffdhe3072);
+  ("Ffdhe2048", CommonDH.Ffdhe2048);
 ]
 
 let aeads = [

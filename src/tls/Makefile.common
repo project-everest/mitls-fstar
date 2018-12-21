@@ -24,8 +24,8 @@ INCLUDE_PATHS = \
 	$(HACL_HOME)/secure_api \
 	$(HACL_HOME)/secure_api/utils \
 	$(HACL_HOME)/secure_api/concrete_specializations \
-	$(HACL_HOME)/code/lib \
-	$(HACL_HOME)/code/hash-new \
+	$(HACL_HOME)/code/hash \
+	$(HACL_HOME)/code/old/lib \
 	$(HACL_HOME)/specs \
 	$(KREMLIN_HOME)/include \
         $(KREMLIN_HOME)/kremlib/compat \
@@ -39,18 +39,11 @@ INCLUDE_PATHS = \
 # We can't hard-error on these because of F* orange CI that runs over a couple
 # miTLS files without properly building HACL* first.
 EVERCRYPT_CACHE_DIR=$(EVERCRYPT_HOME)/.cache
-VALE_CACHE_DIR=$(HACL_HOME)/vale/obj/cache_checked
 
 ifneq (,$(wildcard $(EVERCRYPT_CACHE_DIR)))
   INCLUDE_PATHS += $(EVERCRYPT_CACHE_DIR)
 else
   $(warning Missing EverCrypt cache dir, seems like an incomplete build of HACL*)
-endif
-
-ifneq (,$(wildcard $(VALE_CACHE_DIR)))
-  INCLUDE_PATHS += $(VALE_CACHE_DIR)
-else
-  $(warning Missing Vale cache dir, seems like an incomplete build of HACL*)
 endif
 
 ifeq (,$(MITLS_NODEBUG))
