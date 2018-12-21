@@ -742,8 +742,8 @@ let dsum_unknown_key (t: dsum) : Tot Type0 =
 
 inline_for_extraction
 let dsum_type (t: dsum) : Tot Type0 =
-  let (DSum _ _ _ data _ _ _ _ _ _ _) = t in
-  data
+  match t with 
+  | DSum _ _ _ data _ _ _ _ _ _ _ -> data
 
 inline_for_extraction
 let dsum_tag_of_data (t: dsum) : Tot ((x: dsum_type t) -> Tot (dsum_key t)) =

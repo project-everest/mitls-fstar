@@ -61,11 +61,13 @@ let parse32_sum_aux
   parse_sum_eq' t p pc (B32.reveal input);
   [@inline_let]
   let res : option (sum_type t * U32.t) =
-    match p32 input with
+    let pi = p32 input in
+    match pi with
     | None -> None
     | Some (k, consumed_k) ->
         let input_k = B32.b32slice input consumed_k (B32.len input) in
-        match parse32_sum_cases' t pc pc32 k input_k with
+        let pcases1 = parse32_sum_cases' t pc pc32 k input_k in
+        match pcases1 with
         | None -> None
         | Some (x, consumed_x) ->
           Some ((x <: sum_type t), consumed_k `U32.add` consumed_x)
@@ -141,7 +143,8 @@ let parse32_sum'
   (ensures (fun res -> res == parse32_sum_aux t p p32 pc pc32 input))
 = [@inline_let]
   let res : option (sum_type t * U32.t) =
-    match p32 input with
+    let pi = p32 input in
+    match pi with
     | None -> None
     | Some (k, consumed_k) ->
         let input_k = B32.b32slice input consumed_k (B32.len input) in
@@ -149,7 +152,8 @@ let parse32_sum'
           (eq2 #(option (sum_type t * U32.t))) (default_if _)
           (fun _ -> ()) (fun _ _ _ -> ())
           (fun k ->
-            match parse32_sum_cases' t pc pc32 k input_k with
+            let pcases2 = parse32_sum_cases' t pc pc32 k input_k in
+            match pcases2 with
             | None -> None
             | Some (x, consumed_x) ->
               Some ((x <: sum_type t), consumed_k `U32.add` consumed_x)
@@ -615,12 +619,14 @@ let parse32_dsum_aux
 = fun input ->
   parse_dsum_eq' t p f g (B32.reveal input);
   let res : option (dsum_type t * U32.t) =
-    match p32 input with
+    let pi = p32 input in 
+    match pi with
     | None -> None
     | Some (k', consumed_k) ->
       let k = maybe_enum_key_of_repr (dsum_enum t) k' in
       let input_k = B32.b32slice input consumed_k (B32.len input) in
-      begin match parse32_dsum_cases' t f f32 g g32 k input_k with
+      let pcases3 = parse32_dsum_cases' t f f32 g g32 k input_k in
+      begin match pcases3 with
         | None -> None
         | Some (x, consumed_x) ->
           assert (U32.v consumed_k + U32.v consumed_x <= B32.length input);
@@ -645,13 +651,15 @@ let parse32_dsum'
 : Pure (option (dsum_type t * U32.t))
   (requires True)
   (ensures (fun res -> res == parse32_dsum_aux t p32 f f32 g32 input))
-= match p32 input with
-  | None -> None
+= let pi = p32 input in
+  match pi with
+  | None -> None #(dsum_type t * U32.t)
   | Some (k', consumed_k) ->
     let input_k = B32.b32slice input consumed_k (B32.len input) in
     [@inline_let]
     let f (k: maybe_enum_key (dsum_enum t)) : Tot (option (dsum_type t * U32.t)) =
-      match parse32_dsum_cases' t f f32 g g32 k input_k with
+      let pcases4 = parse32_dsum_cases' t f f32 g g32 k input_k in
+      match pcases4 with
         | None -> None
         | Some (x, consumed_x) ->
           assert (U32.v consumed_k + U32.v consumed_x <= B32.length input);
@@ -972,8 +980,11 @@ let size32_dsum
 = fun x ->
   [@inline_let]
   let _ = serialize_dsum_eq' t s f sf g sg x in
+  // [@inline_let]
   let tg = dsum_tag_of_data t x in
+  // [@inline_let]
   let s1 = s32 tg in
+  // [@inline_let]  
   let s2 = match tg with
     | Known tg' -> destr (size32_dsum_known_destr_eq t) (size32_dsum_known_destr_if t) (fun _ _ -> ()) (fun _ _ _ _ -> ()) (fun tg_ -> size32_dsum_cases_aux t f sf sf32 sg32 (Known tg_)) tg' x
     | Unknown tg' -> size32_dsum_cases_aux t f sf sf32 sg32 (Unknown tg') x
@@ -984,6 +995,7 @@ let size32_dsum
   let _ = assert (s2 == (size32_dsum_cases_aux t f sf sf32 sg32 tg x)) in
   [@inline_let]
   let _ = assert (U32.v s1 + U32.v s2 < 4294967295) in
+  [@inline_let]
   let res = s1 `U32.add` s2 in
   [@inline_let]
   let _ = assert (size32_postcond (serialize_dsum t s f sf g sg) x res) in
