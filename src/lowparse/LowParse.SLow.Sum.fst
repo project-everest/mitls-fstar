@@ -61,11 +61,21 @@ let parse32_sum_aux
   parse_sum_eq' t p pc (B32.reveal input);
   [@inline_let]
   let res : option (sum_type t * U32.t) =
+    //NS: hoist nested match
+    //we do not expect the case analysis to
+    //on `p32 input` to reduce; hoist it for more efficient
+    //normalization.
+    //Note, in some simple cases, e.g., parsing raw enums
+    //this r the pcases below maybe statically evaluated
+    //to a `Some v`; this forgoes reduction in those simple
+    //cases for more efficient extraction in more complex
+    //common cases
     let pi = p32 input in
     match pi with
     | None -> None
     | Some (k, consumed_k) ->
         let input_k = B32.b32slice input consumed_k (B32.len input) in
+        //NS: hoist nested match
         let pcases1 = parse32_sum_cases' t pc pc32 k input_k in
         match pcases1 with
         | None -> None
@@ -143,6 +153,7 @@ let parse32_sum'
   (ensures (fun res -> res == parse32_sum_aux t p p32 pc pc32 input))
 = [@inline_let]
   let res : option (sum_type t * U32.t) =
+    //NS: hoist nested match
     let pi = p32 input in
     match pi with
     | None -> None
@@ -152,6 +163,7 @@ let parse32_sum'
           (eq2 #(option (sum_type t * U32.t))) (default_if _)
           (fun _ -> ()) (fun _ _ _ -> ())
           (fun k ->
+            //NS: hoist nested match
             let pcases2 = parse32_sum_cases' t pc pc32 k input_k in
             match pcases2 with
             | None -> None
@@ -619,12 +631,14 @@ let parse32_dsum_aux
 = fun input ->
   parse_dsum_eq' t p f g (B32.reveal input);
   let res : option (dsum_type t * U32.t) =
+    //NS: hoist nested match
     let pi = p32 input in 
     match pi with
     | None -> None
     | Some (k', consumed_k) ->
       let k = maybe_enum_key_of_repr (dsum_enum t) k' in
       let input_k = B32.b32slice input consumed_k (B32.len input) in
+      //NS: hoist nested match
       let pcases3 = parse32_dsum_cases' t f f32 g g32 k input_k in
       begin match pcases3 with
         | None -> None
@@ -651,13 +665,15 @@ let parse32_dsum'
 : Pure (option (dsum_type t * U32.t))
   (requires True)
   (ensures (fun res -> res == parse32_dsum_aux t p32 f f32 g32 input))
-= let pi = p32 input in
+= //NS: hoist nested match
+  let pi = p32 input in
   match pi with
   | None -> None #(dsum_type t * U32.t)
   | Some (k', consumed_k) ->
     let input_k = B32.b32slice input consumed_k (B32.len input) in
     [@inline_let]
     let f (k: maybe_enum_key (dsum_enum t)) : Tot (option (dsum_type t * U32.t)) =
+      //NS: hoist nested match
       let pcases4 = parse32_dsum_cases' t f f32 g g32 k input_k in
       match pcases4 with
         | None -> None
@@ -981,10 +997,15 @@ let size32_dsum
   [@inline_let]
   let _ = serialize_dsum_eq' t s f sf g sg x in
   // [@inline_let]
+  //NS: I considered inlining these, but it's not worth it
+  //Retaining the comment to remind ourselves that this experiment
+  //was already attempted
   let tg = dsum_tag_of_data t x in
   // [@inline_let]
+  //NS: idem
   let s1 = s32 tg in
   // [@inline_let]  
+  //NS: idem
   let s2 = match tg with
     | Known tg' -> destr (size32_dsum_known_destr_eq t) (size32_dsum_known_destr_if t) (fun _ _ -> ()) (fun _ _ _ _ -> ()) (fun tg_ -> size32_dsum_cases_aux t f sf sf32 sg32 (Known tg_)) tg' x
     | Unknown tg' -> size32_dsum_cases_aux t f sf sf32 sg32 (Unknown tg') x

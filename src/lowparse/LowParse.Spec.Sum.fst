@@ -742,6 +742,9 @@ let dsum_unknown_key (t: dsum) : Tot Type0 =
 
 inline_for_extraction
 let dsum_type (t: dsum) : Tot Type0 =
+  //NS: this was rewritten from `let DSum ... data .. = t in data`
+  //to workaround a glitch in desugaring the above, which introduces
+  //an additional, unreduced let binding for extraction
   match t with 
   | DSum _ _ _ data _ _ _ _ _ _ _ -> data
 
