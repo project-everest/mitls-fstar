@@ -848,13 +848,22 @@ noeq type ticket_cb = {
   new_ticket: ticket_cb_fun;
 }
 
+
+/// extensions handled by the application (in wire format)
+/// ------------------------------------------------------
+
+// 18-12-22 TODO use a vl wire format instead of a list
+// 18-12-22 TODO enforce the tag is unknown
 type custom_extension = UInt16.t * b:bytes {length b < 65533}
 type custom_extensions = l:list custom_extension{List.Tot.length l < 32}
 
 (* Helper functions for the C API to construct the list from array *)
 let empty_custom_extensions () : list custom_extension = []
-let add_custom_extension (l:list custom_extension) (hd:UInt16.t) (b:bytes {length b < 65533}) =
-  (hd, b) :: l
+let add_custom_extension 
+  (l:list custom_extension) 
+  (hd:UInt16.t) 
+  (b:bytes {length b < 65533}) = (hd, b) :: l
+
 
 type nego_action =
   | Nego_abort: nego_action
@@ -915,15 +924,15 @@ type cert_cb = {
 
 abstract
 let mk_cert_cb
-    app_ctx
-    cert_select_ptr
-    cert_select_cb
-    cert_format_ptr
-    cert_format_cb
-    cert_sign_ptr
-    cert_sign_cb
-    cert_verify_ptr
-    cert_verify_cb = {
+  app_ctx
+  cert_select_ptr
+  cert_select_cb
+  cert_format_ptr
+  cert_format_cb
+  cert_sign_ptr
+  cert_sign_cb
+  cert_verify_ptr
+  cert_verify_cb = {
   app_context  = app_ctx;
   cert_select_ptr = cert_select_ptr;
   cert_select_cb = cert_select_cb;
@@ -936,20 +945,29 @@ let mk_cert_cb
 }
 
 noeq type config : Type0 = {
-    (* Supported versions, ciphersuites, groups, signature algorithms *)
-    min_version: protocolVersion;
+    // supported versions, implicitly preferring the latest versions
+    min_version: protocolVersion; 
     max_version: protocolVersion;
-    is_quic: bool; // Use QUIC labels for key derivations
 
+    // use QUIC labels for key derivations
+    is_quic: bool; 
+
+    // supported parameters, ordered by decreasing preference. 
     cipher_suites: x:valid_cipher_suites{List.Tot.length x < 256};
     named_groups: CommonDH.supportedNamedGroups;
     signature_algorithms: signatureSchemeList;
 
     (* Client side *)
-    hello_retry: bool;          // honor hello retry requests from the server
+
+    // honor hello retry requests from the server
+    hello_retry: bool;          
+
+    // propose share from these groups (it should it be a subset of [named_groups]).
     offer_shares: CommonDH.supportedNamedGroups;
-    //18-02-20 should it be a subset of named_groups?
+
     custom_extensions: custom_extensions;
+
+    // propose these tickets 
     use_tickets: list (psk_identifier * ticket_seal);
 
     (* Server side *)

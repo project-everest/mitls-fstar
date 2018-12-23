@@ -127,7 +127,7 @@ let inv (s:hs) (h:HS.mem) =
 *)
 
 // the states of the HS sub-module will be subject to a joint invariant
-// for example the Nego state is a function of ours.
+// for example the Negotiation control state is a function of ours.
 
 
 let stateType (s:hs) = seq (epoch s.region (nonce s)) * machineState
@@ -292,7 +292,7 @@ let verify_binder hs (bkey:(i:binderId & bk:KeySchedule.binderKey i)) (tag:btag 
   HMAC_UFCMA.verify bk digest_CH0 tag
 
 // Compute and send the PSK binders if necessary
-// may be called both by client_ClientHello and client_HelloRetryRequest
+// may be called by [client_ClientHello] and [client_HelloRetryRequest]
 let client_Binders hs offer =
   match Nego.resume hs.nego with
   | _, [] -> () // No PSK, no binders

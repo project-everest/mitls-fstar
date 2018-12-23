@@ -2,7 +2,7 @@
 (**
 This modules defines TLS 1.3 Extensions.
 
-- An AST, and it's associated parsing and formatting functions.
+- An AST, and its associated parsing and formatting functions.
 - Nego calls prepareExtensions : config -> list extensions.
 
 @summary: TLS 1.3 Extensions.
@@ -148,10 +148,12 @@ val unknown: unknownTag
 val is_unknown: x: lbytes 2 -> b:bool {b2t b <==> unknown x}
 type extension = extension' unknown
 
-// TLSConstants defines the application-level type for custom extensions
+// TLSConstants defines a separate application-level type for custom
+// extensions. We should also probably reveal the app extension
+// filter, and use separate ones for clientHello, serverHello, and
+// HRR.
 val ext_of_custom: custom_extensions -> list extension
 val custom_of_ext: list extension -> custom_extensions
-val app_ext_filter: option (list extension) -> option (list extension)
 
 let encryptedExtension (ext: extension) : bool =
   match ext with
@@ -198,6 +200,9 @@ val extensionsBytes_is_injective:
   (requires Bytes.equal (extensionsBytes ext1) (extensionsBytes ext2))
   (ensures ext1 == ext2)
 
+val app_extensions_bytes: option (list extension) -> bytes
+
+
 (*************************************************
  Extension parsing
 **************************************************)
@@ -215,36 +220,8 @@ val parseOptExtensions: ext_msg -> bytes -> result (option (list extension) * op
 /// 18-02-21 the rest of this module has nothing to do with formats,
 /// could go to Negotiation or to a new Nego.Extensions module
 
-val prepareExtensions:
-  protocolVersion ->
-  protocolVersion ->
-  k:valid_cipher_suites{List.Tot.length k < 256} ->
-  option bytes -> // SNI
-  option alpn -> // ALPN
-  custom_extensions -> // application-handled extensions
-  bool -> // EMS
-  bool ->
-  bool -> // EDI (Nego checks that PSK is compatible)
-  option bytes -> // session_ticket
-  signatureSchemeList ->
-  //18-02-26 
-  // list CommonDH.namedGroup -> // FIXME: was: list valid_namedGroup, but the latter type disappeared
-  list CommonDH.supportedNamedGroup ->
-  option (cVerifyData * sVerifyData) ->
-  option CommonDH.keyShare ->
-  list (PSK.pskid * pskInfo) ->
-  now: UInt32.t -> // for obfuscated ticket age
-  l:list extension{List.Tot.length l < 256}
 
-val negotiateClientExtensions:
-  protocolVersion ->
-  config ->
-  option (list extension) ->
-  option (list extension) ->
-  cipherSuite ->
-  option (cVerifyData * sVerifyData) ->
-  bool ->
-  result protocolVersion
+
 
 val negotiateServerExtensions:
   protocolVersion ->

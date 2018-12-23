@@ -3,7 +3,7 @@
 This modules defines TLS 1.3 Extensions.
 
 - An AST, and it's associated parsing and formatting functions.
-- Nego calls prepareExtensions : config -> list extensions.
+- Nego calls prepareClientExtensions : config -> list extensions.
 
 @summary: TLS 1.3 Extensions.
 *)
@@ -27,13 +27,6 @@ let rec existsb2 (f: 'a -> 'b -> bool) (x:'a) (y:list 'b) : bool =
 (*************************************************
  Define extension.
  *************************************************)
-
-//17-05-01 deprecated---use TLSError.result instead?
-// SI: seems to be only used internally by parseServerName. Remove.
-(** local, failed-to-parse exc. *)
-private type canFail (a:Type) =
-| ExFail of error 
-| ExOK of list a
 
 let error s = fatal Decode_error ("Extensions parsing: "^s)
 
@@ -394,24 +387,25 @@ let snidup: serverName -> serverName -> Tot bool
       	| SNI_UNKNOWN(a,_), SNI_UNKNOWN(b,_) -> a = b
       	| _ -> false
 
+
 #reset-options "--admit_smt_queries true"
 private let rec parseServerName_aux
-  : b:bytes -> Tot (canFail serverName) (decreases (length b))
+  : b:bytes -> Tot (result (list serverName)) (decreases (length b))
   = fun b ->
-    if b = empty_bytes then ExOK []
+    if b = empty_bytes then Correct []
     else if length b >= 3 then
       let ty,v = split b 1ul in
       begin
       match vlsplit 2 v with
       | Error(q) ->
           let x, y = q in
-	      ExFail(x, "Failed to parse SNI length: "^ (FStar.Bytes.print_bytes b))
+	      Error(x, "Failed to parse SNI length: " ^ FStar.Bytes.print_bytes b)
       | Correct(x) ->
         let cur, next = x in
       	begin
       	match parseServerName_aux next with
-      	| ExFail(x,y) -> ExFail(x,y)
-      	| ExOK l ->
+      	| Error q -> Error q 
+      	| Correct l ->
       	  let cur =
       	    begin
       	    match ty.[0ul] with
@@ -420,11 +414,11 @@ private let rec parseServerName_aux
       	    end
       	  in
       	  if existsb2 snidup cur l then
-      	    ExFail(fatalAlert Unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Duplicate SNI type")
-      	  else ExOK(cur :: l)
+      	    Error (fatalAlert Unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Duplicate SNI type")
+      	  else Correct (cur :: l)
       	end
       end
-    else ExFail(fatalAlert Decode_error, "Failed to parse SNI (list header)")
+    else Error (fatalAlert Decode_error, "Failed to parse SNI (list header)")
 
 private val parseServerName: r:ext_msg -> b:bytes -> Tot (result (list serverName))
 let parseServerName mt b =
@@ -442,9 +436,9 @@ let parseServerName mt b =
     	| Error z -> error (perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
     	| Correct b ->
       	(match parseServerName_aux b with
-      	| ExFail(x,y) -> Error(x,y)
-      	| ExOK [] -> fatal Unrecognized_name (perror __SOURCE_FILE__ __LINE__ "Empty SNI extension")
-      	| ExOK l -> correct l)
+      	| Error(x,y) -> Error(x,y)
+      	| Correct [] -> fatal Unrecognized_name (perror __SOURCE_FILE__ __LINE__ "Empty SNI extension")
+      	| Correct l -> correct l)
     	end
     else
       error (perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
@@ -545,28 +539,51 @@ let is_unknown x =
   x <> twobytes (0x00z, 0x0Bz) &&
   x <> twobytes (0x00z, 0x10z)
 
-(* Application extensions *)
+(* Custom extensions, handled by the application *)
+
+val unknown_of_custom: custom_extension -> extension 
+let unknown_of_custom (h,b) = 
+  let bh = bytes_of_uint16 h in
+  assume (unknown bh);
+  E_unknown_extension (bytes_of_uint16 h) b
+
+val custom_of_unknown: (e:extension {E_unknown_extension? e}) -> custom_extension 
+let custom_of_unknown (E_unknown_extension h b) = uint16_of_bytes h, b
+
+// ad hoc tail recursive function for Kremlin? 
 private val ext_of_custom_aux: acc:list extension -> el:custom_extensions -> Tot (l:list extension)
 let rec ext_of_custom_aux acc = function
   | [] -> acc
-  | (h, b) :: t -> 
-  let bh = bytes_of_uint16 h in
-  assume (unknown bh);
-  ext_of_custom_aux (E_unknown_extension bh b :: acc) t
+  | ce :: t -> 
+  ext_of_custom_aux (unknown_of_custom ce :: acc) t
 #reset-options
 
 let ext_of_custom el = List.Tot.rev (ext_of_custom_aux [] el)
 
+// spec:
+// let unknown_extensions (ces: custom_extensions) = List.map unknown_of_custom ces 
+
+//18-12-22 unused now that we have app_filter? 
 #reset-options "--admit_smt_queries true"
 private val custom_of_ext_aux: acc:custom_extensions -> l:list extension -> Tot (el:custom_extensions)
 let rec custom_of_ext_aux acc = function
   | [] -> acc
-  | (E_unknown_extension hd b) :: t -> custom_of_ext_aux ((uint16_of_bytes hd, b) :: acc) t
-  | _ :: t -> custom_of_ext_aux acc t
+  | e :: t ->
+      let acc = 
+        if E_unknown_extension? e 
+        then custom_of_unknown e :: acc else acc in 
+      custom_of_ext_aux acc t
 
 let custom_of_ext el = List.Tot.rev (custom_of_ext_aux [] el)
+
+// spec:
+// let custom_extensions (es: list extension) = 
+//   List.map custom_of_unknown (List.filter E_unknown_extension? es)
 #reset-options
 
+
+// Filter for the extensions we expose to the application in the
+// Negotiation callback.
 private let app_filter (e:extension) =
   match e with
   | E_server_name _
@@ -576,12 +593,6 @@ private let app_filter (e:extension) =
   | E_supported_groups _
   | E_unknown_extension _ _ -> true
   | _ -> false
-
-// Filter for extensions that we expose to the application by nego callback
-let app_ext_filter =
-  function
-  | None -> None
-  | Some l -> Some (List.Tot.filter app_filter l)
 
 #reset-options "--admit_smt_queries true"
 private
@@ -885,6 +896,12 @@ let extensionsBytes_is_injective
   (ensures (Bytes.equal (extensionsBytes ext1) (extensionsBytes ext2) ==> ext1 == ext2))
 = Classical.move_requires (extensionsBytes_is_injective_strong ext1 empty_bytes ext2) empty_bytes
 
+let app_extensions_bytes = 
+  function
+  | None -> empty_bytes
+  | Some exts -> extensionsBytes (List.Tot.filter app_filter exts) 
+
+
 (*************************************************
  Extension parsing
 **************************************************)
@@ -1058,11 +1075,6 @@ let parseOptExtensions mt data =
  Other extension functionality
  *************************************************)
 
-(* JK: Need to get rid of such functions *)
-private let rec list_valid_cs_is_list_cs (l:valid_cipher_suites): list cipherSuite =
-  match l with
-  | [] -> []
-  | hd :: tl -> hd :: list_valid_cs_is_list_cs tl
 
 #set-options "--admit_smt_queries true"
 private let rec list_valid_ng_is_list_ng (l:CommonDH.supportedNamedGroups) : CommonDH.namedGroups =
@@ -1089,260 +1101,16 @@ vector is permitted.
 
 *)
 #set-options "--admit_smt_queries true"
-(* SI: implement prepareExtensions prep combinators, of type exts->data->exts, per ext group.
+(* SI: implement prepareClientExtensions prep combinators, of type exts->data->exts, per ext group.
    For instance, PSK, HS, etc extensions should all be done in one function each.
-   This seems to make this prepareExtensions more modular. *)
+   This seems to make this prepareClientExtensions more modular. *)
 
-// We define these functions at top-level so that Kremlin can compute their pointers
-// when passed to higher-order functions.
-// REMARK: could use __proj__MkpskInfo__item__allow_psk_resumption, but it's a mouthful.
-private let allow_psk_resumption x = x.allow_psk_resumption
-private let allow_dhe_resumption x = x.allow_dhe_resumption
-private let allow_resumption ((_,x):PSK.pskid * pskInfo) =
-  x.allow_psk_resumption || x.allow_dhe_resumption
-private let send_supported_groups cs = isDHECipherSuite cs || CipherSuite13? cs
-private let compute_binder_len (ctr:nat) (pski:pskInfo) =
-  let h = PSK.pskInfo_hash pski in
-  ctr + 1 + (UInt32.v (Hashing.Spec.tagLen h))
 
-private val obfuscate_age: UInt32.t -> list (PSK.pskid * pskInfo) -> list pskIdentity
-let rec obfuscate_age now = function
-  | [] -> []
-  | (id, ctx) :: t ->
-    let age = FStar.UInt32.((now -%^ ctx.time_created) *%^ 1000ul) in
-    (id, PSK.encode_age age ctx.ticket_age_add) :: (obfuscate_age now t)
 
-let prepareExtensions minpv pv cs host alps custom ems sren edi ticket sigAlgs namedGroups ri ks psks now =
-    let res = ext_of_custom custom in
-    (* Always send supported extensions.
-       The configuration options will influence how strict the tests will be *)
-    (* let cri = *)
-    (*    match ri with *)
-    (*    | None -> FirstConnection *)
-    (*    | Some (cvd, svd) -> ClientRenegotiationInfo cvd in *)
-    (* let res = [E_renegotiation_info(cri)] in *)
-    let res =
-      match minpv, pv with
-      | TLS_1p3, TLS_1p3 -> E_supported_versions (ClientPV [TLS_1p3]) :: res
-      | TLS_1p2, TLS_1p3 -> E_supported_versions (ClientPV [TLS_1p3; TLS_1p2]) :: res
-      // REMARK: The case below is not mandatory. This behaviour should be configurable
-      // | TLS_1p2, TLS_1p2 -> E_supported_versions [TLS_1p2] :: res
-      | _ -> res
-    in
-    let res =
-      match pv, ks with
-      | TLS_1p3, Some ks -> E_key_share ks::res
-      | _,_ -> res
-    in
-    let res =
-      match host with
-      | Some dns -> E_server_name [SNI_DNS dns] :: res
-      | None -> res
-    in
-    let res =
-      match alps with
-      | Some al -> E_alpn al :: res
-      | None -> res
-    in
-    let res =
-      match ticket with
-      | Some t -> E_session_ticket t :: res
-      | None -> res
-    in
-    // Include extended_master_secret when resuming
-    let res = if ems then E_extended_ms :: res else res in
-    // TLS 1.3#23: we never include signature_algorithms_cert, as it
-    // is not yet enabled in our API; hence sigAlgs are used both for
-    // TLS signing and certificate signing.
-    let res = E_signature_algorithms sigAlgs :: res in
-    let res =
-      if List.Tot.existsb isECDHECipherSuite (list_valid_cs_is_list_cs cs) then
-	      E_ec_point_format [ECP_UNCOMPRESSED] :: res
-      else res
-    in
-    let res =
-      if List.Tot.existsb send_supported_groups (list_valid_cs_is_list_cs cs) then
-        E_supported_groups (list_valid_ng_is_list_ng namedGroups) :: res
-      else res
-    in
-    let res =
-      match pv with
-      | TLS_1p3 ->
-        if List.Tot.filter allow_resumption psks <> [] then
-          let (pskids, pskinfos) : list PSK.pskid * list pskInfo = List.Tot.split psks in
-          let psk_kex = [] in
-          let psk_kex =
-            if List.Tot.existsb allow_psk_resumption pskinfos
-            then PSK_KE :: psk_kex else psk_kex in
-          let psk_kex =
-            if List.Tot.existsb allow_dhe_resumption pskinfos
-            then PSK_DHE_KE :: psk_kex else psk_kex in
-          let res = E_psk_key_exchange_modes psk_kex :: res in
-          let binder_len = List.Tot.fold_left compute_binder_len 0 pskinfos in
-          let pskidentities = obfuscate_age now psks in
-          let res =
-            if edi then (E_early_data None) :: res
-            else res in
-          E_pre_shared_key (ClientPSK pskidentities binder_len) :: res // MUST BE LAST
-        else
-          E_psk_key_exchange_modes [PSK_KE; PSK_DHE_KE] :: res
-      | _ -> res
-    in
-    let res = List.Tot.rev res in
-    assume (List.Tot.length res < 256);  // JK: Specs in type config in TLSInfo unsufficient
-    res
-#reset-options
 
-(*
-// TODO the code above is too restrictive, should support further extensions
-// TODO we need an inverse; broken due to extension ordering. Use pure views instead?
-val matchExtensions: list extension{List.Tot.length l < 256} -> Tot (
-  protocolVersion *
-  k:valid_cipher_suites{List.Tot.length k < 256} *
-  bool *
-  bool *
-  list signatureScheme -> list (x:namedGroup{SEC? x \/ FFDHE? x}) *
-  option (cVerifyData * sVerifyData) *
-  option CommonDH.keyShare )
-let matchExtensions ext = admit()
 
-let prepareExtensions_inverse pv cs sres sren sigAlgs namedGroups ri ks:
-  Lemma(
-    matchExtensions (prepareExtensions pv cs sres sren sigAlgs namedGroups ri ks) =
-    (pv, cs, sres, sren, sigAlgs, namedGroups, ri, ks)) = ()
-*)
 
-(*************************************************
- SI:
- The rest of the code might be dead.
- Some of the it is called by Nego, but it might be that
- it needs to move to Nego.
- *************************************************)
 
-(* SI: is renego deadcode? *)
-(*
-type renegotiationInfo =
-  | FirstConnection
-  | ClientRenegotiationInfo of (cVerifyData)
-  | ServerRenegotiationInfo of (cVerifyData * sVerifyData)
-
-val renegotiationInfoBytes: renegotiationInfo -> Tot bytes
-let renegotiationInfoBytes ri =
-  match ri with
-  | FirstConnection ->
-    lemma_repr_bytes_values 0;
-    vlbytes 1 empty_bytes
-  | ClientRenegotiationInfo(cvd) ->
-    lemma_repr_bytes_values (length cvd);
-    vlbytes 1 cvd
-  | ServerRenegotiationInfo(cvd, svd) ->
-    lemma_repr_bytes_values (length (cvd @| svd));
-    vlbytes 1 (cvd @| svd)
-
-val parseRenegotiationInfo: pinverse_t renegotiationInfoBytes
-let parseRenegotiationInfo b =
-  if length b >= 1 then
-    match vlparse 1 b with
-    | Correct(payload) ->
-	let (len, _) = split b 1 in
-	(match int_of_bytes len with
-	| 0 -> Correct (FirstConnection)
-	| 12 | 36 -> Correct (ClientRenegotiationInfo payload) // TLS 1.2 / SSLv3 client verify data sizes
-	| 24 -> // TLS 1.2 case
-	    let cvd, svd = split payload 12 in
-	    Correct (ServerRenegotiationInfo (cvd, svd))
-	| 72 -> // SSLv3
-	    let cvd, svd = split payload 36 in
-	    Correct (ServerRenegotiationInfo (cvd, svd))
-	| _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Inappropriate length for renegotiation info data (expected 12/24 for client/server in TLS1.x, 36/72 for SSL3"))
-    | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse renegotiation info length")
-  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Renegotiation info bytes are too short")
-*)
-
-(* JP: manual hoisting *)
-let rec containsExt (l: list extension) (ext: extension): bool =
-  match l with
-  | [] -> false
-  | ext' :: l' -> sameExt ext ext' || containsExt l' ext
-
-(* TODO (adl):
-   The negotiation of renegotiation indication is incorrect,
-   Needs to be consistent with clientToNegotiatedExtension
-*)
-#set-options "--admit_smt_queries true"
-private val serverToNegotiatedExtension:
-  config ->
-  list extension ->
-  cipherSuite ->
-  option (cVerifyData * sVerifyData) ->
-  bool ->
-  result protocolVersion ->
-  extension ->
-  result protocolVersion
-let serverToNegotiatedExtension cfg cExtL cs ri resuming res sExt =
-  match res with
-  | Error z -> Error z
-  | Correct pv0 ->
-    if not (List.Helpers.exists_b_aux sExt sameExt cExtL) then
-      fatal Unsupported_extension (perror __SOURCE_FILE__ __LINE__ "server sent an unexpected extension")
-    else match sExt with
-    (*
-    | E_renegotiation_info sri ->
-      if List.Tot.existsb E_renegotiation_info? cExtL then
-      begin
-      match sri, replace_subtyping ri with
-      | FirstConnection, None -> correct ()
-      | ServerRenegotiationInfo(cvds,svds), Some(cvdc, svdc) ->
-        if equalBytes cvdc cvds && equalBytes svdc svds then
-          correct l
-        else
-          Error(AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Mismatch in contents of renegotiation indication")
-      | _ -> Error(AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Detected a renegotiation attack")
-      end
-      *)
-    | E_supported_versions v ->
-      (match pv0, v with
-      | _, ClientPV _ -> fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "list of protocol versions in ServerHello")
-      | TLS_1p2, ServerPV pv -> correct pv
-      | _ -> fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "failed extension-based version negotiation"))
-    | E_server_name _ ->
-      // RFC 6066, bottom of page 6
-      //When resuming a session, the server MUST NOT include a server_name extension in the server hello
-      if resuming then fatal Unsupported_extension (perror __SOURCE_FILE__ __LINE__ "server sent SNI acknowledge in resumption")
-      else res
-    | E_session_ticket _ -> res
-    | E_alpn sal -> if List.Tot.length sal = 1 then res
-      else fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "Multiple ALPN selected by server")
-    | E_extended_ms -> res
-    | E_ec_point_format spf -> res // Can be sent in resumption, apparently (RFC 4492, 5.2)
-    | E_key_share (CommonDH.ServerKeyShare sks) -> res
-    | E_pre_shared_key (ServerPSK pski) -> res // bound check in Nego
-      | E_supported_groups named_group_list ->
-      if resuming then fatal Unsupported_extension (perror __SOURCE_FILE__ __LINE__ "server sent supported groups in resumption")
-      else res
-    | e ->
-      fatal Handshake_failure (perror __SOURCE_FILE__ __LINE__ ("unhandled server extension: "^(string_of_extension e)))
-
-private
-let rec serverToNegotiatedExtensions_aux cfg cExtL cs ri resuming rpv (sExtL:list extension) =
-  match sExtL with
-  | [] -> rpv
-  | hd::tl ->
-    match serverToNegotiatedExtension cfg cExtL cs ri resuming rpv hd with
-    | Error z -> Error z
-    | rpv ->
-      serverToNegotiatedExtensions_aux cfg cExtL cs ri resuming rpv tl
-
-let negotiateClientExtensions pv cfg cExtL sExtL cs ri resuming =
-  match pv, cExtL, sExtL with
-  | SSL_3p0, _, None -> Correct (SSL_3p0)
-  | SSL_3p0, _, Some _ -> fatal Internal_error (perror __SOURCE_FILE__ __LINE__ "Received extensions in SSL 3.0 ServerHello")
-  | _, None, _ -> fatal Internal_error (perror __SOURCE_FILE__ __LINE__ "negotiation failed: missing extensions in TLS ClientHello (shouldn't happen)")
-  | pv, _, None -> if pv <> TLS_1p3 then Correct (pv) else fatal Internal_error (perror __SOURCE_FILE__ __LINE__ "Cannot negotiate TLS 1.3 explicitly")
-  | pv, Some cExtL, Some sExtL ->
-    serverToNegotiatedExtensions_aux cfg cExtL cs ri resuming (correct pv) sExtL
-
-#reset-options
 
 #reset-options "--using_facts_from '* -LowParse.Spec.Base'"
 

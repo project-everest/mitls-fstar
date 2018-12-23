@@ -2479,7 +2479,7 @@
         "typing_FStar.UInt32.v", "well-founded-ordering-on-nat"
       ],
       0,
-      "4c3b611b84e52d05fb50531ef8924ce6"
+      "bd28802870bb145f9e0f44bbacc7e152"
     ],
     [
       "Crypto.Symmetric.Bytes.uint32_bytes",
@@ -2551,7 +2551,7 @@
         "well-founded-ordering-on-nat"
       ],
       0,
-      "630e13f5976f8eca88f9ceb493ed7f70"
+      "c5c9ca8b4bc7c2acced69bfb66f674f7"
     ],
     [
       "Crypto.Symmetric.Bytes.uint32_be",
@@ -2654,7 +2654,7 @@
         "typing_FStar.UInt32.v", "well-founded-ordering-on-nat"
       ],
       0,
-      "244b09feeb402a70ce30ea3a034351ab"
+      "74513e05e83d01fafac44c1f98e6f415"
     ],
     [
       "Crypto.Symmetric.Bytes.uint32_be",
@@ -2736,7 +2736,7 @@
         "well-founded-ordering-on-nat"
       ],
       0,
-      "df66bfae14897d38508d1074b6826593"
+      "9a3f78f30b69f5ee993444832ed86694"
     ],
     [
       "Crypto.Symmetric.Bytes.little_bytes",
@@ -2866,7 +2866,7 @@
         "well-founded-ordering-on-nat"
       ],
       0,
-      "531f7d2431a49b37b0f4baa58caab11a"
+      "c329da7f0d377db83ffa254d7c4cf9c6"
     ],
     [
       "Crypto.Symmetric.Bytes.big_bytes",
@@ -2933,7 +2933,7 @@
         "typing_FStar.UInt32.v", "well-founded-ordering-on-nat"
       ],
       0,
-      "5d777f5d2167f1c712cdc402b7b4cce5"
+      "c82c3861b9b5625b2da93ffcd08e0fb5"
     ],
     [
       "Crypto.Symmetric.Bytes.store_uint128",
@@ -3442,7 +3442,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "e3d79db1fae72da7a23c8ff74ab7d3fe"
+      "3617417c556d8470d95791892cff8132"
     ],
     [
       "Crypto.Symmetric.Bytes.lemma_big_endian_inj",
@@ -3722,24 +3722,23 @@
       [
         "@MaxIFuel_assumption", "@query",
         "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "equation_Crypto.Symmetric.Bytes.word", "equation_FStar.UInt32.n",
-        "equation_Prims.eqtype", "equation_Prims.nat",
-        "function_token_typing_FStar.UInt32.n",
-        "function_token_typing_FStar.UInt8.t",
+        "equation_Crypto.Symmetric.Bytes.word", "equation_Prims.eqtype",
+        "equation_Prims.nat", "function_token_typing_FStar.UInt8.t",
+        "function_token_typing_Prims.__cache_version_number__",
         "function_token_typing_Prims.int",
         "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "int_inversion", "primitive_Prims.op_LessThanOrEqual",
         "primitive_Prims.op_Subtraction",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_Crypto.Symmetric.Bytes_Tm_refine_40041eaaf586b799d37afb6b628d2a1a",
+        "refinement_interpretation_Crypto.Symmetric.Bytes_Tm_refine_2f4c9fa19b9201d61c8f4fda4392efbe",
         "refinement_interpretation_FStar.Endianness_Tm_refine_970228ddd2ee8ce0b4130c67e22cc2e8",
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "typing_FStar.Seq.Base.length"
       ],
       0,
-      "ed71a173b7b9804da5f69cbb51936990"
+      "5e2c9e8c16bfa1103c9519b358871aec"
     ],
     [
       "Crypto.Symmetric.Bytes.lemma_little_endian_is_injective",
@@ -3783,7 +3782,7 @@
         "typing_FStar.Seq.Base.length", "well-founded-ordering-on-nat"
       ],
       0,
-      "398a757f455750321ba1992b8e4089af"
+      "71ded0997b387e6fdf88f8aaf83f1725"
     ],
     [
       "Crypto.Symmetric.Bytes.lemma_little_endian_inj",
