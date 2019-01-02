@@ -86,24 +86,31 @@ val parseVersion: pinverse_t versionBytes
 let parseVersion x =
   LowParseWrappers.wrap_parser32_constant_length protocolVersion_serializer32 2 () protocolVersion_parser32 parse_protocolVersion_error_msg x
 
+// where is it defined?
+let uint16_min (x y: UInt16.t) = if FStar.UInt16.(x <=^ y) then x else y 
+
 (** Determine the oldest protocol versions for TLS *)
-let minPV (a:protocolVersion) (b:protocolVersion) =
+let minPV (a b: Parsers.ProtocolVersion.protocolVersion) =
   match a,b with
   | SSL_3p0, _  | _, SSL_3p0 -> SSL_3p0
   | TLS_1p0, _  | _, TLS_1p0 -> TLS_1p0
   | TLS_1p1, _  | _, TLS_1p1 -> TLS_1p1
   | TLS_1p2, _  | _, TLS_1p2 -> TLS_1p2
   | TLS_1p3, _  | _, TLS_1p3 -> TLS_1p3
+  | Unknown_protocolVersion x, 
+    Unknown_protocolVersion y -> Unknown_protocolVersion (uint16_min x y)
 
+let leqPV a b = (a = minPV a b)
 let geqPV a b = (b = minPV a b)
 
-let string_of_pv = function
-  | SSL_3p0 -> "SSL3"
-  | TLS_1p0 -> "1.0"
-  | TLS_1p1 -> "1.1"
-  | TLS_1p2 -> "1.2"
-  | TLS_1p3 -> "1.3"
-  | Unknown_protocolVersion x -> "Unknown protocol version: " ^ string_of_int (UInt16.v x)
+let string_of_pv = Parsers.ProtocolVersion.string_of_protocolVersion
+  // function
+  // | SSL_3p0 -> "SSL3"
+  // | TLS_1p0 -> "1.0"
+  // | TLS_1p1 -> "1.1"
+  // | TLS_1p2 -> "1.2"
+  // | TLS_1p3 -> "1.3"
+  // | Unknown_protocolVersion x -> "Unknown protocol version: " ^ string_of_int (UInt16.v x)
 
 include CipherSuite
 
