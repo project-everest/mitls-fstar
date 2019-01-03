@@ -52,15 +52,15 @@ let default_groups : CommonDH.supportedNamedGroups =
   let open CommonDH in
   let groups = [
     // X448
-    SECP521R1;
-    SECP384R1;
+    Secp521r1;
+    Secp384r1;
     X25519;
-    SECP256R1;
-    FFDHE4096;
-    FFDHE3072;
-    FFDHE2048;
+    Secp256r1;
+    Ffdhe4096;
+    Ffdhe3072;
+    Ffdhe2048;
   ] in
-  assert_norm (List.Tot.length groups <= Format.NamedGroupList.maxCount);
+  assert_norm (List.Tot.length groups <= Parsers.NamedGroupList.max_count);
   assert_norm (List.Tot.for_all is_supported_group groups);
   groups
 
@@ -134,13 +134,14 @@ let defaultConfig =
 
   // Client
   hello_retry = true;
-  offer_shares = [Format.NamedGroup.X25519];
+  offer_shares = [Parsers.NamedGroup.X25519];
   custom_extensions = [];
   use_tickets = [];
 
   // Server
   check_client_version_in_pms_for_old_tls = true;
   request_client_certificate = false;
+  send_ticket = Some empty_bytes;
 
   // Common
   non_blocking_read = false;

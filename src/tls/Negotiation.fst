@@ -574,9 +574,9 @@ val chosenGroup: mode -> option CommonDH.group
 let chosenGroup mode =
   match kexAlg mode with
   | Kex_PSK_DHE
-  | Kex_DHE -> CommonDH.group_of_namedGroup CommonDH.FFDHE2048
+  | Kex_DHE -> CommonDH.group_of_namedGroup CommonDH.Ffdhe2048
   | Kex_PSK_ECDHE
-  | Kex_ECDHE -> CommonDH.group_of_namedGroup CommonDH.SECP256R1
+  | Kex_ECDHE -> CommonDH.group_of_namedGroup CommonDH.Secp256r1
 
 val zeroRTToffer: offer -> bool
 let zeroRTToffer o = Some? (find_early_data o)

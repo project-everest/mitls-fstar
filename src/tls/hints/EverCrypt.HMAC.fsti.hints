@@ -1,5 +1,5 @@
 [
-  "†ûá2O\b\u0012ø…±ß\u000fyìP®",
+  "Åô.¥øBz¬ã£œB§æÛ∞",
   [
     [
       "EverCrypt.HMAC.ha",
@@ -8,7 +8,7 @@
       1,
       [ "@query", "assumption_Spec.Hash.Helpers.hash_alg__uu___haseq" ],
       0,
-      "8ca6ee632d2298db5e07e77aec5d2e34"
+      "1b1c9752115006f621ef7f253e686406"
     ],
     [
       "EverCrypt.HMAC.lbytes",
@@ -22,7 +22,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "4732a9577109aa97a45692515cad8965"
+      "5c14e86eaa778a30435e455a7da47dd3"
     ],
     [
       "EverCrypt.HMAC.hmac",
@@ -41,10 +41,10 @@
         "primitive_Prims.op_Multiply", "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "b73730ddcef3968edeced299d95253aa"
+      "d4059a1db6807ae04d45096963dd9bee"
     ],
     [
-      "EverCrypt.HMAC.compute",
+      "EverCrypt.HMAC.compute_st",
       1,
       0,
       1,
@@ -75,7 +75,7 @@
         "typing_LowStar.Buffer.trivial_preorder"
       ],
       0,
-      "30544b7a51b2f157e6d6623b0aa3f30f"
+      "0ec606fd43ec3eeb1c7cb8fff17f1a72"
     ]
   ]
 ]

@@ -1,6 +1,6 @@
 module Format.KeyShareEntry
 
-open Format.NamedGroup
+open Parsers.NamedGroup
 open Format.UncompressedPointRepresentation
 
 module B = FStar.Bytes
