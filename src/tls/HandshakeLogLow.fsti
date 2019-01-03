@@ -348,9 +348,9 @@ let flight_parsing_of (flt:flight_t) (msgs:hs_transcript) (st:hsl_state) (h:HS.m
 val hs_transcript_parser : LP.parser (LP.strong_parser_kind 8 8 ({ LP.parser_kind_metadata_total = true })) hs_transcript
 
 (* msgs is parsing of the input sub-buffer between p0 and p1 *)
-unfold private let transcript_parsing_of (msgs:hs_transcript) (st:hsl_state)
-                                         (p0:uint_32) (p1:uint_32{p0 <= p1 /\ p1 <= hsl_input_buf_len st})
-			                 (h:HS.mem)
+unfold private let msg_list_parsing_of (msgs:hs_transcript) (st:hsl_state)
+                                       (p0:uint_32) (p1:uint_32{p0 <= p1 /\ p1 <= hsl_input_buf_len st})
+			               (h:HS.mem)
   = let delta = p1 - p0 in
     let sub = B.gsub (hsl_input_buf st) p0 delta in
     match LP.parse hs_transcript_parser (B.as_seq h sub) with
@@ -387,6 +387,7 @@ unfold private let receive_post (st:hsl_state) (p:uint_32)
     hsl_invariant h1 st /\  //invariant holds
     hsl_output_index h1 st == hsl_output_index h0 st /\  //output index remains same
     hsl_input_index h1 st == p /\  //input index is advanced to p
+    t0 == t1 /\  //transcript remains same, as it represents the hashed transcript
     (match r with
      | Error _ -> True  //underspecified
      | Correct None -> t0 == t1  //waiting for more data
@@ -396,7 +397,7 @@ unfold private let receive_post (st:hsl_state) (p:uint_32)
        writing h1 st /\  //Handshake can now write
        p <= hsl_input_buf_len st /\
        p0 <= p1 /\ p1 <= p /\  //returned indices are valid in the input buffer
-       transcript_parsing_of ms st p0 p1 h1 /\  //ms is a valid parsing of input buffer contents between p0 and p1
+       msg_list_parsing_of ms st p0 p1 h1 /\  //ms is a valid parsing of input buffer contents between p0 and p1
        flight_parsing_of flt ms st h1 /\  //the indices in the returned flight are valid parsings
        (match oa with
         | Some a -> tags a t0 ms hs  //hashed properly
