@@ -910,6 +910,7 @@ let parseCertificateRequest pv data =
       else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "empty certificate_types in Certificate Request")
   else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "Certificate Request message is too short")
 
+(* unused, and needs restructuring 
 let mk_certificateRequestBytes sign cs version =
   certificateRequestBytes (
     {cr_cert_types = defaultCertTypes sign cs;
@@ -918,6 +919,7 @@ let mk_certificateRequestBytes sign cs version =
         | TLS_1p2 -> Some (default_signatureScheme version cs)
         | _ -> None);
      cr_certificate_authorities = []})
+*)
 
 let parseCertificateRequest13 (body:bytes): result cr13 = error "Certificate requests not yet implemented"
 

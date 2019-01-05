@@ -1071,17 +1071,9 @@ let parseOptExtensions mt data =
     | Error z -> Error z
     | Correct (ee,obinders) -> Correct (Some ee, obinders))
 
-(*************************************************
- Other extension functionality
- *************************************************)
 
+#reset-options 
 
-#set-options "--admit_smt_queries true"
-private let rec list_valid_ng_is_list_ng (l:CommonDH.supportedNamedGroups) : CommonDH.namedGroups =
-  match l with
-  | [] -> []
-  | hd :: tl -> hd :: list_valid_ng_is_list_ng tl
-#reset-options
 
 
 (* SI: API. Called by Nego. *)
@@ -1100,123 +1092,10 @@ If containing a “supported_groups” extension, it MUST also contain a
 vector is permitted.
 
 *)
-#set-options "--admit_smt_queries true"
+//#set-options "--admit_smt_queries true"
 (* SI: implement prepareClientExtensions prep combinators, of type exts->data->exts, per ext group.
    For instance, PSK, HS, etc extensions should all be done in one function each.
    This seems to make this prepareClientExtensions more modular. *)
 
 
 
-
-
-
-
-
-#reset-options "--using_facts_from '* -LowParse.Spec.Base'"
-
-private val clientToServerExtension: protocolVersion
-  -> config
-  -> cipherSuite
-  -> option (cVerifyData * sVerifyData)
-  -> option nat // PSK index
-  -> option CommonDH.keyShare
-  -> bool
-  -> extension
-  -> option extension
-let clientToServerExtension pv cfg cs ri pski ks resuming cext =
-  match cext with
-  | E_supported_versions _ ->
-    if pv = TLS_1p3 then Some (E_supported_versions (ServerPV pv))
-    else None
-  | E_key_share _ ->
-    if pv = TLS_1p3 then Option.mapTot E_key_share ks // ks should be in one of client's groups
-    else None
-  | E_alpn cal ->
-    (match cfg.alpn with
-    | None -> None
-    | Some sal ->
-      let common = List.Helpers.filter_aux sal List.Helpers.mem_rev cal in
-      match common with
-      | a :: _ -> Some (E_alpn [a])
-      | _ -> None)
-  | E_server_name server_name_list ->
-    if resuming then None // RFC 6066 page 6
-    else
-      (match List.Tot.tryFind SNI_DNS? server_name_list with
-      | Some name -> Some (E_server_name []) // Acknowledge client's choice
-      | _ -> None)
-  | E_extended_ms ->
-    if pv = TLS_1p3 || not cfg.extended_master_secret then None
-    else Some E_extended_ms
-  | E_ec_point_format ec_point_format_list -> // REMARK: ignores client's list
-    if pv = TLS_1p3 then None // No ec_point_format in TLS 1.3
-    else Some (E_ec_point_format [ECP_UNCOMPRESSED])
-  | E_pre_shared_key _ ->
-    if pski = None || pv <> TLS_1p3 then None
-    else
-      let x = Some?.v pski in
-      begin
-        assume (x < 65536);
-        Some (E_pre_shared_key (ServerPSK (UInt16.uint_to_t x)))
-      end
-  | E_supported_groups named_group_list ->
-    if pv = TLS_1p3 then
-      // REMARK: Purely informative, can only appear in EncryptedExtensions
-      Some (E_supported_groups (list_valid_ng_is_list_ng cfg.named_groups))
-    else None
-  | E_early_data b -> // EE
-    if Some? cfg.max_early_data && pski = Some 0 then Some (E_early_data None) else None
-  | E_session_ticket b ->
-     if pv = TLS_1p3 || not cfg.enable_tickets then None
-     else Some (E_session_ticket empty_bytes) // TODO we may not always want to refresh the ticket
-  | _ -> None
-
-(* SI: API. Called by Handshake. *)
-let rec choose_clientToServerExtension pv cfg cs ri pski ks resuming (cExtL:list extension) =
-  match cExtL with
-  | [] -> []
-  | hd::cExtL ->
-    match clientToServerExtension pv cfg cs ri pski ks resuming hd with
-    | None -> choose_clientToServerExtension pv cfg cs ri pski ks resuming cExtL
-    | Some e -> e::choose_clientToServerExtension pv cfg cs ri pski ks resuming cExtL
-
-let negotiateServerExtensions pv cExtL csl cfg cs ri pski ks resuming =
-   match cExtL with
-   | Some cExtL ->
-     let sexts = choose_clientToServerExtension pv cfg cs ri pski ks resuming cExtL in
-     Correct (Some sexts)
-   | None ->
-     begin
-     match pv with
-(* SI: deadcode ?
-       | SSL_3p0 ->
-          let cre =
-              if contains_TLS_EMPTY_RENEGOTIATION_INFO_SCSV (list_valid_cs_is_list_cs csl) then
-                 Some [E_renegotiation_info (FirstConnection)] //, {ne_default with ne_secure_renegotiation = RI_Valid})
-              else None //, ne_default in
-          in Correct cre
-*)
-     | _ ->
-       fatal Internal_error (perror __SOURCE_FILE__ __LINE__ "No extensions in ClientHello")
-     end
-
-// https://tools.ietf.org/html/rfc5246#section-7.4.1.4.1
-private val default_signatureScheme_fromSig: protocolVersion -> sigAlg ->
-  HyperStack.All.ML (l:list signatureScheme{List.Tot.length l == 1})
-let default_signatureScheme_fromSig pv sigAlg =
-  let open Hashing.Spec in
-  match sigAlg with
-  | RSASIG ->
-    begin
-    match pv with
-    | TLS_1p2 -> [ RSA_PKCS1_SHA1 ]
-    | TLS_1p0 | TLS_1p1 | SSL_3p0 -> [ RSA_PKCS1_SHA1 ] // was MD5SHA1
-    | TLS_1p3 -> unexpected "[default_signatureScheme_fromSig] invoked on TLS 1.3"
-    end
-  | ECDSA -> [ ECDSA_SHA1 ]
-  | _ -> unexpected "[default_signatureScheme_fromSig] invoked on an invalid signature algorithm"
-
-(* SI: API. Called by HandshakeMessages. *)
-let default_signatureScheme pv cs =
-  default_signatureScheme_fromSig pv (sigAlg_of_ciphersuite cs)
-#reset-options

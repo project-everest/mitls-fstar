@@ -606,22 +606,18 @@ let rec parseCertificateTypeList data =
 
 #set-options "--max_ifuel 4 --initial_ifuel 1 --max_fuel 4 --initial_fuel 1"
 
-(** Determine the certificate signature algorithms allowed according to the ciphersuite *)
-val defaultCertTypes: bool -> cipherSuite -> HyperStack.All.ML (l:list certType{List.Tot.length l <= 1})
-
-//17-12-26 TODO: get rid of this single use of ML
+(** Determine the certificate signature algorithm from the ciphersuite *)
+val defaultCertTypes: bool -> cipherSuite -> result certType
 let defaultCertTypes sign cs =
-  let alg = sigAlg_of_ciphersuite cs in
-    if sign then
-      match alg with
-      | RSASIG -> [RSA_sign]
-      | DSA -> [DSA_sign]
-      | _ -> unexpected "[defaultCertTypes] invoked on an invalid ciphersuite"
-    else
-      match alg with
-      | RSASIG -> [RSA_fixed_dh]
-      | DSA -> [DSA_fixed_dh]
-      | _ -> unexpected "[defaultCertTypes] invoked on an invalid ciphersuite"
+  match sigAlg_of_ciphersuite cs with 
+  | Error z -> Error z 
+  | Correct alg -> 
+    match alg with
+    | RSASIG -> Correct(if sign then RSA_sign else RSA_fixed_dh)
+    | DSA    -> Correct(if sign then DSA_sign else DSA_fixed_dh)
+    | _      -> fatal Internal_error "[defaultCertTypes] invoked on an invalid ciphersuite"
+
+
 
 #set-options "--max_ifuel 2 --initial_ifuel 2 --max_fuel 1 --initial_fuel 1"
 
@@ -677,6 +673,34 @@ let rec parseDistinguishedNameList data res =
 ///
 let signatureSchemeList =
   algs:list signatureScheme{0 < List.Tot.length algs /\ op_Multiply 2 (List.Tot.length algs) < 65536}
+
+// was in Extensions, still called in HandshakeMessages. 
+val default_signatureScheme:
+  protocolVersion -> cipherSuite -> result signatureScheme
+
+// https://tools.ietf.org/html/rfc5246#section-7.4.1.4.1
+private val default_signatureScheme_fromSig: 
+  protocolVersion -> 
+  sigAlg ->
+  result signatureScheme
+let default_signatureScheme_fromSig pv sigAlg =
+  let open Hashing.Spec in
+  match sigAlg with
+  | RSASIG ->
+    begin
+    match pv with
+    | TLS_1p2 -> correct RSA_PKCS1_SHA1
+    | TLS_1p0 | TLS_1p1 | SSL_3p0 -> correct RSA_PKCS1_SHA1 // was MD5SHA1
+    | TLS_1p3 -> fatal Internal_error "[default_signatureScheme_fromSig] invoked on TLS 1.3"
+    end
+  | ECDSA -> correct ECDSA_SHA1
+  | _ -> fatal Internal_error "[default_signatureScheme_fromSig] invoked on an invalid signature algorithm"
+
+(* still called by HandshakeMessages *)
+let default_signatureScheme pv cs =
+  match sigAlg_of_ciphersuite cs with 
+  | Error z -> Error z 
+  | Correct sa -> default_signatureScheme_fromSig pv sa
 
 // used in FFI
 (** Serializing function for a SignatureScheme list *)

@@ -55,6 +55,7 @@ let string_of_result f = function
   | Error z -> "Error: "^string_of_error z
   | Correct v -> f v
 
+// best not inlined as its code is verbose
 let fatal #t a s: result t = Error(fatalAlert a, s)
 
 val resT: r:result 'a { FStar.Error.Correct? r } -> Tot 'a

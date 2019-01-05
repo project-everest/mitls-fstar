@@ -134,6 +134,8 @@ We do not yet support the extensions below (authenticated but ignored)
 
 
 val bindersLen: #p: unknownTag -> el: list (extension' p) -> nat
+
+// 19-01-05 TODO move these functions to Negotiation.
 val string_of_extension: #p: unknownTag -> extension' p -> string
 val string_of_extensions: #p: unknownTag -> list (extension' p) -> string
 
@@ -213,27 +215,4 @@ val parseExtensions:    ext_msg -> bytes -> result (extensions * option binders)
 (** Called by HandshakeMessages; returns either Some,Some or None; why not using extensions here too? *)
 val parseOptExtensions: ext_msg -> bytes -> result (option (list extension) * option binders)
 
-(*************************************************
- Other extension functionality
- *************************************************)
 
-/// 18-02-21 the rest of this module has nothing to do with formats,
-/// could go to Negotiation or to a new Nego.Extensions module
-
-
-
-
-val negotiateServerExtensions:
-  protocolVersion ->
-  option (list extension) ->
-  list cipherSuiteName ->
-  config ->
-  cipherSuite ->
-  option (cVerifyData * sVerifyData) ->
-  option nat ->
-  option CommonDH.keyShare ->
-  bool ->
-  result (option (list extension))
-
-val default_signatureScheme:
-  protocolVersion -> cipherSuite -> HyperStack.All.ML signatureSchemeList
