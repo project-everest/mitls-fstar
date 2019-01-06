@@ -239,6 +239,18 @@ let retry_offer_ok o1 hrr o2 =
   o1.compression_method = o2.compression_method &&
   List.Helpers.forall_aux (o1.extensions, hrr) retry_extension_ok o2.extensions
 
+
+(*
+// typeckecks but yields unsafe C.
+let small (a:option (list bool)) = None? a || List.length (Some?.v a) < 10
+
+// uglier, yields good C, possible recommended style in Low*
+let small2 (a:option (list bool)) = 
+  if None? a then true else List.length (Some?.v a) < 10
+
+// we miss an early inlining semantics to get both with [let ( || ) = if a then true else b]
+*)
+
 open Mem 
 
 (*

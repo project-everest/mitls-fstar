@@ -89,7 +89,7 @@ HEADERS 	= $(addprefix -add-include ,'"hacks.h"' \
 
 KRML_COMMAND	= $(KREMLIN_HOME)/krml -minimal \
   -add-include '"kremlib.h"' \
-  -fnoanonymous-unions -warn-error -9-7-6@4-14-15 \
+  -fnoanonymous-unions -warn-error @4 \
   -fsopts --debug,yes -verbose \
   -library EverCrypt,EverCrypt.* \
   $(DROP_MODULES) $(HEADERS) \
