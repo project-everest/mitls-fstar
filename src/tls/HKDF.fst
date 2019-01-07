@@ -216,11 +216,10 @@ val format:
   label: string{length (bytes_of_string label) < 256 - 6} ->
   digest: bytes{length digest < 256} ->
   len: UInt32.t {v len <= op_Multiply 255 (tagLength ha)} ->
-  is_quic: bool ->
   Tot (b: bytes {length b < 1024})
 
 /// since derivations depend on the concrete info, we will need to
-/// prove format injective on (at least) label digest is_quic.
+/// prove format injective on (at least) label digest.
 
 // RFC-like grammar: 
 // struct {
@@ -231,9 +230,8 @@ val format:
 
 
 inline_for_extraction private 
-let format ha label digest len is_quic =
-  let prefix = if is_quic then quic_prefix else tls13_prefix in
-  let label_bytes = prefix @| bytes_of_string label in
+let format ha label digest len =
+  let label_bytes = tls13_prefix @| bytes_of_string label in
   assume (7 <= length label_bytes);
   Parsers.HKDF.HkdfLabel.(hkdfLabel_serializer32 ({
     length  = (FStar.Int.Cast.uint32_to_uint16 len);
@@ -249,13 +247,12 @@ val expand_label:
   label: string{length (bytes_of_string label) < 256 - 6} -> // -9?
   hv: bytes{length hv < 256} ->
   len: UInt32.t {0 < v len /\ v len <= op_Multiply 255 (tagLength ha)} ->
-  is_quic: bool ->
   ST (lbytes32 len)
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> modifies_none h0 h1))
 
-let expand_label #ha secret label digest len is_quic =
-  let info = format ha label digest len is_quic in 
+let expand_label #ha secret label digest len =
+  let info = format ha label digest len in
   expand #ha secret info len
 
 (*-------------------------------------------------------------------*)
@@ -272,14 +269,13 @@ val derive_secret:
   secret: lbytes (EverCrypt.Hash.tagLength ha) ->
   label: string{length (bytes_of_string label) < 256-6} ->
   digest: bytes{length digest < 256} ->
-  is_quic: bool ->
   ST (lbytes32 (Hashing.Spec.tagLen ha))
   (requires fun h -> True)
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
 
-let derive_secret ha secret label digest is_quic =
+let derive_secret ha secret label digest =
   let len = Hashing.Spec.tagLen ha in
-  expand_label secret label digest len is_quic
+  expand_label secret label digest len
 
 (*
 /// renamed to expand_secret for uniformity

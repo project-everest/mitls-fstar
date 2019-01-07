@@ -222,6 +222,7 @@ typedef struct {
 
 #define QFLAG_COMPLETE 0x01
 #define QFLAG_APPLICATION_KEY 0x02
+#define QFLAG_POST_HANDSHAKE 0x04
 #define QFLAG_REJECTED_0RTT 0x10
 
 typedef struct {
@@ -251,10 +252,11 @@ typedef enum {
 extern int MITLS_CALLCONV FFI_mitls_quic_create(quic_state **state, const quic_config *cfg);
 extern int MITLS_CALLCONV FFI_mitls_quic_process(quic_state *state, quic_process_ctx *ctx);
 extern int MITLS_CALLCONV FFI_mitls_quic_get_record_key(quic_state *state, quic_raw_key *key, int32_t epoch, quic_direction rw);
+extern int MITLS_CALLCONV FFI_mitls_quic_send_ticket(quic_state *state, const unsigned char *ticket_data, size_t ticket_data_len);
 extern void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state);
 
-// N.B. *cookie must be freed with FFI_mitls_global_free as it is allocated in the global region
-extern int MITLS_CALLCONV FFI_mitls_get_hello_summary(const unsigned char *buffer, size_t buffer_len, int has_record, mitls_hello_summary *summary, unsigned char **cookie, size_t *cookie_len);
+// N.B. *cookie and *ticket_data must be freed with FFI_mitls_global_free as they are allocated in the global region
+extern int MITLS_CALLCONV FFI_mitls_get_hello_summary(const unsigned char *buffer, size_t buffer_len, int has_record, mitls_hello_summary *summary, unsigned char **cookie, size_t *cookie_len, unsigned char **ticket_data, size_t *ticket_data_len);
 
 // *ext_data points to a location in exts - no freeing required
 extern int MITLS_CALLCONV FFI_mitls_find_custom_extension(int is_server, const unsigned char *exts, size_t exts_len, uint16_t ext_type, unsigned char **ext_data, size_t *ext_data_len);

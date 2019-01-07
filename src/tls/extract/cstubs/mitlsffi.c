@@ -869,6 +869,7 @@ typedef struct quic_state {
    HEAP_REGION rgn;
    uint8_t is_server;
    uint8_t is_complete;
+   uint8_t is_post_hs;
    Old_Handshake_hs hs;
 } quic_state;
 
@@ -1055,6 +1056,7 @@ int MITLS_CALLCONV FFI_mitls_quic_process(quic_state *st, quic_process_ctx *ctx)
     if(out.is_complete) st->is_complete = 1;
     if(out.is_writable) ctx->flags |= QFLAG_APPLICATION_KEY;
     if(out.is_early_rejected) ctx->flags |= QFLAG_REJECTED_0RTT;
+    if(out.is_post_handshake) st->is_post_hs = 1;
     r = 1;
   }
   else
@@ -1068,6 +1070,7 @@ int MITLS_CALLCONV FFI_mitls_quic_process(quic_state *st, quic_process_ctx *ctx)
   ctx->cur_reader_key = epochs.fst;
   ctx->cur_writer_key = epochs.snd;
   if(st->is_complete) ctx->flags |= QFLAG_COMPLETE;
+  if(st->is_post_hs) ctx->flags |= QFLAG_POST_HANDSHAKE;
   
   LEAVE_HEAP_REGION();
   return r;
@@ -1098,6 +1101,20 @@ int MITLS_CALLCONV FFI_mitls_quic_get_record_key(quic_state *st, quic_raw_key *k
   return res;
 }
 
+int MITLS_CALLCONV FFI_mitls_quic_send_ticket(quic_state *st, const unsigned char *ticket_data, size_t ticket_data_len)
+{
+  int r = 0;
+  ENTER_HEAP_REGION(st->rgn);
+  FStar_Bytes_bytes data = {
+   .data = KRML_HOST_MALLOC(ticket_data_len),
+   .length = ticket_data_len
+  };
+  memcpy((unsigned char*)data.data, ticket_data, ticket_data_len);
+  r = QUIC_send_ticket(st->hs, data);
+  LEAVE_HEAP_REGION();
+  return r;
+}
+
 void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state)
 {
     HEAP_REGION rgn = state->rgn;
@@ -1123,14 +1140,18 @@ static const unsigned char *FFI_mitls_memmem(
 	return NULL;
 }
 
-int MITLS_CALLCONV FFI_mitls_get_hello_summary(const unsigned char *buffer, size_t buffer_len, int has_record,
-  mitls_hello_summary *summary, unsigned char **cookie, size_t *cookie_len)
+int MITLS_CALLCONV FFI_mitls_get_hello_summary(
+  const unsigned char *buffer, size_t buffer_len,
+  int has_record, mitls_hello_summary *summary,
+  unsigned char **cookie, size_t *cookie_len,
+  unsigned char **ticket_data, size_t *ticket_data_len)
 {
   HEAP_REGION rgn;
   int ret = 0;
   FStar_Pervasives_Native_option__QUIC_chSummary ch;
 
   *cookie = NULL; *cookie_len = 0;
+  *ticket_data = NULL; *ticket_data_len = 0;
   memset(&ch, 0, sizeof(ch));
 
   CREATE_HEAP_REGION(&rgn);
@@ -1169,6 +1190,15 @@ int MITLS_CALLCONV FFI_mitls_get_hello_summary(const unsigned char *buffer, size
     LEAVE_GLOBAL_HEAP_REGION();
   }
 
+  if(ret && ch.v.ch_ticket_data.tag == FStar_Pervasives_Native_Some)
+  {
+    ENTER_GLOBAL_HEAP_REGION();
+    *ticket_data_len = ch.v.ch_ticket_data.v.length;
+    *ticket_data = KRML_HOST_MALLOC(*ticket_data_len);
+    memcpy(*ticket_data, ch.v.ch_ticket_data.v.data, *ticket_data_len);
+    LEAVE_GLOBAL_HEAP_REGION();
+  }
+  
   DESTROY_HEAP_REGION(rgn);
   return ret;
 }

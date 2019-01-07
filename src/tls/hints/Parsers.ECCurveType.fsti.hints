@@ -1,6 +1,21 @@
 [
-  "³RĞÂm\u0010\u001cõÍ:Z2àqä",
+  "ªc¶\fİëÄ¡€`·ÊÜbÆ",
   [
+    [
+      "Parsers.ECCurveType.string_of_eCCurveType",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.ECCurveType.Explicit_char2",
+        "disc_equation_Parsers.ECCurveType.Explicit_prime",
+        "disc_equation_Parsers.ECCurveType.Named_curve",
+        "fuel_guarded_inversion_Parsers.ECCurveType.eCCurveType"
+      ],
+      0,
+      "34160f723f1cb4f753a731af928b0094"
+    ],
     [
       "Parsers.ECCurveType.eCCurveType_jumper",
       1,
@@ -18,7 +33,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "719c57f8cc4b4db60222cfac887fdb1a"
+      "ad01e7fab7acad87b6a8f3db5470dfd0"
     ]
   ]
 ]

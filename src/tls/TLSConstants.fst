@@ -953,6 +953,7 @@ noeq type config : Type0 = {
     use_tickets: list (psk_identifier * ticket_seal);
 
     (* Server side *)
+    send_ticket: option bytes;
     check_client_version_in_pms_for_old_tls: bool;
     request_client_certificate: bool; // TODO: generalize to CertificateRequest contents: a list of CAs.
 

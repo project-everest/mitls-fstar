@@ -16,21 +16,21 @@ open Parse
 open TLSError
 open FStar.HyperStack.ST
 
-include Format.NamedGroup
-module FNGL = Format.NamedGroupList
+include Parsers.NamedGroup
+module NGL = Parsers.NamedGroupList
 
-let namedGroups = Format.NamedGroupList.namedGroupList
-let namedGroupList = Format.NamedGroupList.namedGroupList
+let namedGroups = NGL.namedGroupList
+let namedGroupList = NGL.namedGroupList
 
 let namedGroupBytes x = namedGroup_serializer32 x
 let parseNamedGroup x = namedGroup_parser32 x
-let namedGroupsBytes x = FNGL.namedGroupList_serializer32 x
-let parseNamedGroups x = FNGL.namedGroupList_parser32 x
+let namedGroupsBytes x = NGL.namedGroupList_serializer32 x
+let parseNamedGroups x = NGL.namedGroupList_parser32 x
 
 // was "valid", not "supported"; should probably be defined from the crypto provider.
 let is_supported_group x = List.Tot.mem x 
-  [ SECP256R1; SECP384R1; SECP521R1; X25519; X448; 
-    FFDHE2048; FFDHE3072; FFDHE4096; FFDHE6144; FFDHE8192 ]
+  [ Secp256r1; Secp384r1; Secp521r1; X25519; X448; 
+    Ffdhe2048; Ffdhe3072; Ffdhe4096; Ffdhe6144; Ffdhe8192 ]
 type supportedNamedGroup = x:namedGroup{is_supported_group x}
 type supportedNamedGroups = xs:namedGroups{List.Tot.for_all is_supported_group xs} 
 

@@ -32,6 +32,9 @@ val is_server_hrr: hs -> ST bool
 val is_0rtt_offered: hs -> ST bool
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> h0 == h1)
+val is_post_handshake: hs -> ST bool
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 -> h0 == h1)
 
 // annoyingly, we will need specification-level variants too.
 
@@ -127,6 +130,11 @@ val rehandshake: s:hs -> config -> ST bool
 // Idle client starts an abbreviated handshake resuming the current session
 val rekey: s:hs -> config -> ST bool
   (requires (fun h -> hs_inv s h /\ role_of s = Client))
+  (ensures (fun h0 _ h1 -> modifies_internal h0 s h1))
+
+// Post-handshake servers can send new tickets that include arbitrary app data
+val send_ticket: s:hs -> app_data:Bytes.bytes -> ST bool
+  (requires (fun h -> hs_inv s h /\ role_of s = Server))
   (ensures (fun h0 _ h1 -> modifies_internal h0 s h1))
 
 // (Idle) Server requests an handshake

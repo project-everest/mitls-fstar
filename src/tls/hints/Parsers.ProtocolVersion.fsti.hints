@@ -1,5 +1,5 @@
 [
-  "÷≠jlñﬁ~@§êHô-Róí",
+  "∫{W>T\u0002…^ÌŸuêKô\"Û",
   [
     [
       "Parsers.ProtocolVersion.protocolVersion_repr_eq",
@@ -11,7 +11,7 @@
         "equation_Parsers.ProtocolVersion.protocolVersion_repr"
       ],
       0,
-      "71a4ddaae80648916c01e9358671b5aa"
+      "ca00365471c8b01cd55a7b7c122abca8"
     ],
     [
       "Parsers.ProtocolVersion.protocolVersion",
@@ -20,7 +20,7 @@
       1,
       [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
       0,
-      "5bd5a736b13a2d5ac14551bfd3f6856a"
+      "9c029cc6d691a46b7d435b950e36f621"
     ],
     [
       "Parsers.ProtocolVersion.__proj__Unknown_protocolVersion__item___0",
@@ -34,7 +34,25 @@
         "refinement_interpretation_Parsers.ProtocolVersion_Tm_refine_de0484a62d509e9de813bfe30726d436"
       ],
       0,
-      "3bdf1dbbb3684368a0fb458e8b2a8d63"
+      "1790618dd9e4fda29e44ca5d734e5f56"
+    ],
+    [
+      "Parsers.ProtocolVersion.string_of_protocolVersion",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.ProtocolVersion.SSL_3p0",
+        "disc_equation_Parsers.ProtocolVersion.TLS_1p0",
+        "disc_equation_Parsers.ProtocolVersion.TLS_1p1",
+        "disc_equation_Parsers.ProtocolVersion.TLS_1p2",
+        "disc_equation_Parsers.ProtocolVersion.TLS_1p3",
+        "disc_equation_Parsers.ProtocolVersion.Unknown_protocolVersion",
+        "fuel_guarded_inversion_Parsers.ProtocolVersion.protocolVersion"
+      ],
+      0,
+      "65ff5f69338023d0f33571e58235b19b"
     ],
     [
       "Parsers.ProtocolVersion.protocolVersion_validator",
@@ -60,7 +78,7 @@
         "refinement_interpretation_LowParse.Low.Base_Tm_refine_07033d2b2c1d2fb6c1dd88a8f1110ac2"
       ],
       0,
-      "7e00f248ea6f933e55924d8a57dbb363"
+      "ae12dccd955cb3e0258ba656fa9935dc"
     ],
     [
       "Parsers.ProtocolVersion.protocolVersion_jumper",
@@ -76,7 +94,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "15ba84d1b6a3814862cf3b229dcfb58c"
+      "7fa4a9b33abc9c4c61fa4f3e4aa22038"
     ]
   ]
 ]

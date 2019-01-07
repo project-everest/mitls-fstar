@@ -82,14 +82,14 @@ val parse_curve: B.bytes -> Tot (option group)
 let parse_curve b =
   if (B.length b < 1) then None else (
     let open Parsers.ECCurveType in  
-    let open Format.NamedGroup in
+    let open Parsers.NamedGroup in
     match eCCurveType_parser32 b with // <- parse_curve == ecCurveType_parser and-then named_group_parser
     | Some (Named_curve, _) -> 
       let ty, id = B.split b 1ul in
       (match namedGroup_parser32 id with
-       | Some (SECP256R1, _) -> Some EC.ECC_P256
-       | Some (SECP384R1, _) -> Some EC.ECC_P384
-       | Some (SECP521R1, _) -> Some EC.ECC_P521
+       | Some (Secp256r1, _) -> Some EC.ECC_P256
+       | Some (Secp384r1, _) -> Some EC.ECC_P384
+       | Some (Secp521r1, _) -> Some EC.ECC_P521
        | Some (X25519, _   ) -> Some EC.ECC_X25519
        | Some (X448, _     ) -> Some EC.ECC_X448
        | _                   -> None)
@@ -164,12 +164,12 @@ let serialize_point #g s =
     x
 
 let curve_id g : Tot (B.lbytes 2) =
-  let open Format.NamedGroup in
+  let open Parsers.NamedGroup in
   let r = namedGroup_serializer32 ( // <- curve_id == namedGroup_serializer
     match g with
-    | EC.ECC_P256   -> SECP256R1
-    | EC.ECC_P384   -> SECP384R1
-    | EC.ECC_P521   -> SECP521R1
+    | EC.ECC_P256   -> Secp256r1
+    | EC.ECC_P384   -> Secp384r1
+    | EC.ECC_P521   -> Secp521r1
     | EC.ECC_X25519 -> X25519
     | EC.ECC_X448   -> X448) in
   assume (B.length r = 2);

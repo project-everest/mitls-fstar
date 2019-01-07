@@ -11,7 +11,7 @@
         "equation_Parsers.ProtocolVersion.protocolVersion_repr"
       ],
       0,
-      "17223119892f07ccf17e98a361a734ca"
+      "b0021416e0c0516da9adf1234f18a4a3"
     ],
     [
       "Parsers.ProtocolVersion.protocolVersion",
@@ -20,7 +20,7 @@
       1,
       [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
       0,
-      "921f39c6a18896e5a4d244de9566b01f"
+      "4bfddf29c823f4bd7d46b1f50304d5f5"
     ],
     [
       "Parsers.ProtocolVersion.__proj__Unknown_protocolVersion__item___0",
@@ -34,7 +34,25 @@
         "refinement_interpretation_Parsers.ProtocolVersion_Tm_refine_de0484a62d509e9de813bfe30726d436"
       ],
       0,
-      "b658cb52ed1ef3fed8e527389e4bf5d8"
+      "79c641951ac3ae964b21c653951d0a26"
+    ],
+    [
+      "Parsers.ProtocolVersion.string_of_protocolVersion",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.ProtocolVersion.SSL_3p0",
+        "disc_equation_Parsers.ProtocolVersion.TLS_1p0",
+        "disc_equation_Parsers.ProtocolVersion.TLS_1p1",
+        "disc_equation_Parsers.ProtocolVersion.TLS_1p2",
+        "disc_equation_Parsers.ProtocolVersion.TLS_1p3",
+        "disc_equation_Parsers.ProtocolVersion.Unknown_protocolVersion",
+        "fuel_guarded_inversion_Parsers.ProtocolVersion.protocolVersion"
+      ],
+      0,
+      "b93dd0b9cb6025ac356b73e6e987f900"
     ],
     [
       "Parsers.ProtocolVersion.protocolVersion_enum",
@@ -60,7 +78,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "f11517399d72b6b70a3149c083de3bb0"
+      "9750f2aa2bcda48649dc5760fc6dd546"
     ],
     [
       "Parsers.ProtocolVersion.synth_protocolVersion",
@@ -74,7 +92,7 @@
         "haseqParsers.ProtocolVersion_Tm_refine_d31c1668bb31fee16b77c90d865d15ca"
       ],
       0,
-      "28d81797c44584376e9cfee468c81e58"
+      "a376febf606c0cee06d642cfc340e426"
     ],
     [
       "Parsers.ProtocolVersion.synth_protocolVersion",
@@ -150,7 +168,7 @@
         "typing_LowParse.Spec.Enum.list_map"
       ],
       0,
-      "9ea474810ec2ce768e0297dd69f68ae2"
+      "17ba5b19effd79c8d2bfd38b2287a007"
     ],
     [
       "Parsers.ProtocolVersion.synth_protocolVersion_inv",
@@ -174,7 +192,7 @@
         "unit_typing"
       ],
       0,
-      "904add07aaabf6686a861b79851dc389"
+      "67982da43060b33c863cb3973fdafa06"
     ],
     [
       "Parsers.ProtocolVersion.lemma_synth_protocolVersion_inv'",
@@ -188,13 +206,13 @@
         "equation_LowParse.Spec.Combinators.synth_inverse",
         "equation_Parsers.ProtocolVersion.protocolVersion_enum",
         "equation_Prims.l_Forall", "equation_Prims.squash",
-        "l_quant_interp__18289",
+        "l_quant_interp__19000",
         "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
         "token_correspondence_Parsers.ProtocolVersion.synth_protocolVersion",
         "token_correspondence_Parsers.ProtocolVersion.synth_protocolVersion_inv"
       ],
       0,
-      "83587cb17b4afe3016fe5736a1571aab"
+      "42f661235d2741a04c784dc23949ede9"
     ],
     [
       "Parsers.ProtocolVersion.lemma_synth_protocolVersion_inj",
@@ -220,7 +238,7 @@
         "refinement_interpretation_Parsers.ProtocolVersion_Tm_refine_d31c1668bb31fee16b77c90d865d15ca"
       ],
       0,
-      "5ca04e1f652b4e0e10c64ae22fc5edc6"
+      "55e465c87db3fa5e7936ec435edf12aa"
     ],
     [
       "Parsers.ProtocolVersion.lemma_synth_protocolVersion_inv",
@@ -248,7 +266,7 @@
         "token_correspondence_Parsers.ProtocolVersion.synth_protocolVersion_inv"
       ],
       0,
-      "f8e66ab92f39f62eed6fb1436ff7defa"
+      "8ad7b7dbb275866bd2e84aa3ec52ea81"
     ],
     [
       "Parsers.ProtocolVersion.parse_maybe_protocolVersion_key",
@@ -262,7 +280,7 @@
         "haseqParsers.ProtocolVersion_Tm_refine_d31c1668bb31fee16b77c90d865d15ca"
       ],
       0,
-      "5a66ded2c1cfd4006aea68a41954d8a8"
+      "e9abe66369917b7ea4e0a745148fba8b"
     ],
     [
       "Parsers.ProtocolVersion.serialize_maybe_protocolVersion_key",
@@ -277,7 +295,7 @@
         "haseqParsers.ProtocolVersion_Tm_refine_d31c1668bb31fee16b77c90d865d15ca"
       ],
       0,
-      "9ab8575d3ba42b206638ddf2efdf9d04"
+      "4647b713cb85a1575f5054ee6ce2b73d"
     ],
     [
       "Parsers.ProtocolVersion.protocolVersion_parser",
@@ -293,7 +311,7 @@
         "token_correspondence_Parsers.ProtocolVersion.synth_protocolVersion"
       ],
       0,
-      "55c35f3737d8da8ae18af3bf83e44048"
+      "6409e3cbf27e2cc69798f5c4cac5deb1"
     ],
     [
       "Parsers.ProtocolVersion.protocolVersion_serializer",
@@ -336,7 +354,7 @@
         "token_correspondence_Parsers.ProtocolVersion.synth_protocolVersion_inv"
       ],
       0,
-      "fb8d8617cb6c57427716a98c09f0c872"
+      "66ec352ad16c0705f315406579f17856"
     ],
     [
       "Parsers.ProtocolVersion.parse32_maybe_protocolVersion_key",
@@ -356,7 +374,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "82272fc2799d1b0c257fd15334c30bc8"
+      "acecbc5b973e05b6d6dbafa857972b7f"
     ],
     [
       "Parsers.ProtocolVersion.parse32_maybe_protocolVersion_key",
@@ -376,7 +394,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "5dc0a2718ce9b09a8aaad063083072a5"
+      "7880c4c52968aa439202f04ee1cd2b1c"
     ],
     [
       "Parsers.ProtocolVersion.parse32_maybe_protocolVersion_key",
@@ -390,7 +408,7 @@
         "haseqParsers.ProtocolVersion_Tm_refine_d31c1668bb31fee16b77c90d865d15ca"
       ],
       0,
-      "2361f9f399ce7c52b282b14530ba6c82"
+      "d0837b61b0e9c175e68662699b339ae0"
     ],
     [
       "Parsers.ProtocolVersion.parse32_maybe_protocolVersion_key",
@@ -404,7 +422,7 @@
         "haseqParsers.ProtocolVersion_Tm_refine_d31c1668bb31fee16b77c90d865d15ca"
       ],
       0,
-      "7562f9ec9cad7d42922605581ab37b5a"
+      "f885705ad418080c51f99b767e839676"
     ],
     [
       "Parsers.ProtocolVersion.protocolVersion_parser32",
@@ -421,7 +439,7 @@
         "token_correspondence_Parsers.ProtocolVersion.synth_protocolVersion"
       ],
       0,
-      "bb151e6905df53e7bb4dc9a47cd67d2e"
+      "08b66e3e4ee727de8611c34c17267232"
     ],
     [
       "Parsers.ProtocolVersion.serialize32_maybe_protocolVersion_key",
@@ -441,7 +459,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "ea7ca5dc560a52d6ffc2ddc6357ece37"
+      "b15c1be67505efa1260bc54ba80cc9c2"
     ],
     [
       "Parsers.ProtocolVersion.serialize32_maybe_protocolVersion_key",
@@ -461,7 +479,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "08e3eb4d14f6d36adcc052f42742b15b"
+      "d8f09ba90ef08287cc96b7416b12e545"
     ],
     [
       "Parsers.ProtocolVersion.serialize32_maybe_protocolVersion_key",
@@ -475,7 +493,7 @@
         "haseqParsers.ProtocolVersion_Tm_refine_d31c1668bb31fee16b77c90d865d15ca"
       ],
       0,
-      "eb375750cb155e536b4a0bf05abb1b61"
+      "5826028299177ebde328f9b4bd397706"
     ],
     [
       "Parsers.ProtocolVersion.serialize32_maybe_protocolVersion_key",
@@ -489,7 +507,7 @@
         "haseqParsers.ProtocolVersion_Tm_refine_d31c1668bb31fee16b77c90d865d15ca"
       ],
       0,
-      "d88ef64f1a17e692deecba8f886a4b2a"
+      "ec695b10c3bfd45a638c844044024087"
     ],
     [
       "Parsers.ProtocolVersion.protocolVersion_serializer32",
@@ -533,7 +551,7 @@
         "typing_Parsers.ProtocolVersion.synth_protocolVersion_inv"
       ],
       0,
-      "d360f1bf1ca9cb6069b0370a88434d37"
+      "4389fca2975832d689016d22fb5788ae"
     ],
     [
       "Parsers.ProtocolVersion.protocolVersion_size32",
@@ -542,7 +560,7 @@
       1,
       [ "@query" ],
       0,
-      "2a71e334484c9cc1a5528877f5ca130a"
+      "f0e1f67599d05812a9940ccba0d3ce87"
     ],
     [
       "Parsers.ProtocolVersion.protocolVersion_validator",
@@ -568,7 +586,7 @@
         "refinement_interpretation_LowParse.Low.Base_Tm_refine_07033d2b2c1d2fb6c1dd88a8f1110ac2"
       ],
       0,
-      "7788f8baf6823d1100732c67363dfbd4"
+      "e0e0e21abc9e88129935f4bc6c84a579"
     ],
     [
       "Parsers.ProtocolVersion.protocolVersion_jumper",
@@ -584,7 +602,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "9b3432ef1d65c9c9d054331704b26e08"
+      "48d32785cdbca2550a4de4f8de4c37bf"
     ],
     [
       "Parsers.ProtocolVersion.read_maybe_protocolVersion_key",
@@ -596,7 +614,7 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "6f8fa07fe9fdfefd3feb4c4fdc17c510"
+      "c8bcd267b798f334ae9c6e7196ffbb25"
     ],
     [
       "Parsers.ProtocolVersion.protocolVersion_reader",
@@ -608,7 +626,7 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "47dc2c9ede039a2ed8d56e105c5d90d4"
+      "9f195f6ad9c27d3574b7836b3407aca1"
     ],
     [
       "Parsers.ProtocolVersion.write_maybe_protocolVersion_key",
@@ -620,7 +638,7 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "be4f86dd484c64defb411b3d83902d00"
+      "d620a10447e6e468ddcc98b3b91e356f"
     ],
     [
       "Parsers.ProtocolVersion.protocolVersion_writer",
@@ -632,7 +650,7 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "c1b67338b4c375c6cfc319c67f43d93d"
+      "4398e7b6ae6c14906c63d5c79ddfa6f1"
     ]
   ]
 ]

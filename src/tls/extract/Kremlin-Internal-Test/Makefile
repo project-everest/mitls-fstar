@@ -9,25 +9,27 @@ KREMLIN_HOME    ?= ../../../../../kremlin
 MLCRYPTO_HOME	?= ../../../../../MLCrypto
 EVERCRYPT_HOME	?= ../../../../../hacl-star/providers
 
-LDOPTS += -L$(EVERCRYPT_HOME)/out -levercrypt
+LDOPTS += -L$(EVERCRYPT_HOME)/dist/compact -levercrypt
+LDOPTS += -L$(EVERCRYPT_HOME)/../dist/compact -lhacl
+LDOPTS += -L$(KREMLIN_HOME)/kremlib/dist/generic -lkremlib
 
 ifeq ($(OS),Windows_NT)
   ifeq ($(shell uname -o),Cygwin)
     MLCRYPTO_HOME := $(shell cygpath -u ${MLCRYPTO_HOME})
   endif
   LDOPTS += -lntdll -lbcrypt
-  PATH := $(EVERCRYPT_HOME)/out:$(MITLS_HOME)/src/pki:$(PATH)
+  PATH := $(EVERCRYPT_HOME)/dist/compact:$(MITLS_HOME)/src/pki:$(PATH)
   SO = dll
   CC ?= x86_64-w64-mingw32-gcc
   export PATH
 else ifeq ($(UNAME),Darwin)
   VARIANT = -Darwin
-  DYLD_LIBRARY_PATH := $(EVERCRYPT_HOME)/out:$(MITLS_HOME)/src/pki:$(DYLD_LIBRARY_PATH)
+  DYLD_LIBRARY_PATH := $(EVERCRYPT_HOME)/dist/compact:$(MITLS_HOME)/src/pki:$(DYLD_LIBRARY_PATH)
   SO = so
   export DYLD_LIBRARY_PATH
 else ifeq ($(UNAME),Linux)
   VARIANT = -Linux
-  LD_LIBRARY_PATH := $(EVERCRYPT_HOME)/out:$(MITLS_HOME)/src/pki:$(LD_LIBRARY_PATH)
+  LD_LIBRARY_PATH := $(EVERCRYPT_HOME)/dist/compact:$(MITLS_HOME)/src/pki:$(LD_LIBRARY_PATH)
   LDOPTS += -lpthread
   SO = so
   export LD_LIBRARY_PATH
@@ -51,7 +53,7 @@ else
 endif
 endif
 
-INCLUDE_DIRS 	= kreminc include stub pki ffi .
+INCLUDE_DIRS 	= $(KREMLIN_HOME)/include include stub pki ffi .
 
 # Note: see comment in Makefile.Kremlin to see why we're re-extracting
 # Crypto.Symmetric.Bytes rather than using the one from secure/
@@ -74,7 +76,7 @@ else
 CFLAGS += -DNO_OPENSSL
 endif
 
-LDOPTS += -L$(MITLS_HOME)/src/pki -lmipki $(KREMLIN_HOME)/kremlib/out/libkremlib.a 
+LDOPTS += -L$(MITLS_HOME)/src/pki -lmipki $(KREMLIN_HOME)/kremlib/dist/generic/libkremlib.a
 
 %.d: %.c
 	@set -e; rm -f $@; \

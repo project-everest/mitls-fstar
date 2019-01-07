@@ -1,12 +1,18 @@
 all: build
 
-build: build-internal-test build-library build-external-test
+build: build-internal-test build-library build-msvc-library build-external-test
 
-test: test-internal-test test-library test-external-test
+test: test-internal-test test-library test-msvc-library test-external-test
 
 ifneq (,$(MITLS_USE_OPENSSL))
 CONCRETE_FLAVOR = -OpenSSL
 endif
+
+VALE_NAMESPACES='X64.*' 'Arch.*' 'Words.*' 'Vale.*' \
+  'Collections.*' 'SHA_helpers' Prop_s Collections[rename=Collections_] Types_s Words_s Views AES_s \
+  Workarounds 'Math.*' Interop TypesNative_s
+
+VALE_BUNDLES=$(addprefix -bundle ,$(VALE_NAMESPACES))
 
 # Target C compilation units for miTLS sources. Requires -minimal
 MITLS_BUNDLES = \
@@ -26,7 +32,8 @@ MITLS_BUNDLES = \
   -bundle Record=Record,StAE,Transport,StreamDeltas \
   -bundle PMS=PMS,RSAKey,TLSPRF \
   -bundle Crypto.Plain=Buffer.Utils,Crypto.Indexing,Crypto.Plain,Crypto.Symmetric.Bytes \
-  -bundle Flags=DebugFlags,Flags,Flag,TLSInfoFlags
+  -bundle Flags=DebugFlags,Flags,Flag,TLSInfoFlags \
+  $(VALE_BUNDLES)
 
 # To include Makefile.common, you need to specify
 # the following five variables
@@ -42,7 +49,7 @@ OTHERFLAGS := $(filter-out --record_hints,$(OTHERFLAGS))
 include Makefile.common
 VFLAGS     += --admit_smt_queries true
 
-clean: clean-internal-test clean-library clean-external-test
+clean: clean-internal-test clean-library clean-msvc-library clean-external-test
 	rm -f $(DEP_FILE)
 
 # Tiny bit of autodetection to grab the right Vale files
@@ -108,9 +115,6 @@ endef
 
 # All the files that we bring from external projects
 ALL_EXTERNAL_FILES	= \
-  $(addprefix kreminc/,kremlib.h) \
-  $(addprefix kreminc/kremlin/,c_endianness.h \
-    $(addprefix internal/,builtin.h callconv.h debug.h target.h types.h compat.h)) \
   $(addprefix stub/,log_to_choice.h buffer_bytes.c RegionAllocator.c RegionAllocator.h) \
   $(addprefix include/,hacks.h regions.h) \
   $(addprefix pki/,mipki.h) \
@@ -126,7 +130,6 @@ ALL_EXTERNAL_FILES	= \
 INTERNAL_TEST_DIR=extract/Kremlin-Internal-Test
 
 $(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/secure,$(SECURE_OUT)))
-$(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/kreminc,$(KREMLIN_HOME)/include))
 $(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/include,extract/include))
 $(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/stub,extract/cstubs))
 $(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/ffi,$(MITLS_HOME)/libs/ffi))
@@ -160,7 +163,6 @@ clean-internal-test:
 LIBRARY_DIR=extract/Kremlin-Library
 
 $(eval $(call COPY_template,$(LIBRARY_DIR)/secure,$(SECURE_OUT)))
-$(eval $(call COPY_template,$(LIBRARY_DIR)/kreminc,$(KREMLIN_HOME)/include))
 $(eval $(call COPY_template,$(LIBRARY_DIR)/include,extract/include))
 $(eval $(call COPY_template,$(LIBRARY_DIR)/stub,extract/cstubs))
 $(eval $(call COPY_template,$(LIBRARY_DIR)/ffi,$(MITLS_HOME)/libs/ffi))
@@ -192,6 +194,46 @@ test-library: output-library
 	EVEREST_WINDOWS=$(EVEREST_WINDOWS) $(MAKE) -C $(LIBRARY_DIR) test
 
 clean-library:
+	-@find $(LIBRARY_DIR) -type f -and -not -name Makefile -and -not -name .gitignore \
+        | xargs rm -f
+
+################################################################################
+# The library does not perform bundling
+
+MSVC_LIBRARY_DIR=extract/Kremlin-Msvc-Library
+
+$(eval $(call COPY_template,$(MSVC_LIBRARY_DIR)/secure,$(SECURE_OUT)))
+$(eval $(call COPY_template,$(MSVC_LIBRARY_DIR)/include,extract/include))
+$(eval $(call COPY_template,$(MSVC_LIBRARY_DIR)/stub,extract/cstubs))
+$(eval $(call COPY_template,$(MSVC_LIBRARY_DIR)/ffi,$(MITLS_HOME)/libs/ffi))
+$(eval $(call COPY_template,$(MSVC_LIBRARY_DIR)/uint128,$(UINT128_DIR)))
+
+$(MSVC_LIBRARY_DIR)/TLS.c: $(filter-out $(EXTRACT_DIR)/prims.krml $(EXTRACT_DIR)/PKI.krml $(EXTRACT_DIR)/Test_%.krml,$(ALL_KRML_FILES))
+ifdef VERBOSE
+	@echo -e "\033[1;32m=== Extracting $@ ...\033[;37m"
+endif
+	$(KRML_COMMAND) $^ -falloca -ftail-calls -tmpdir $(MSVC_LIBRARY_DIR) -skip-compilation
+
+msvc-library-copy: $(addprefix $(MSVC_LIBRARY_DIR)/, $(filter-out pki/mipki.h, $(ALL_EXTERNAL_FILES))) \
+  $(MSVC_LIBRARY_DIR)/stub/mitlsffi.c \
+  $(MSVC_LIBRARY_DIR)/stub/RegionAllocator.c $(MSVC_LIBRARY_DIR)/stub/RegionAllocator.h
+
+# Sanity-checks, replaced with dependencies
+
+$(MSVC_LIBRARY_DIR)/Crypto_AEAD_Main.h: $(SECURE_OUT)/Crypto_AEAD_Main.h
+
+$(SECURE_OUT)/Crypto_AEAD_Main.h:
+	$(error HACL_HOME is $(HACL_HOME) and I cannot find $(SECURE_OUT)/Crypto_AEAD_Main.h -- please run make in $(HACL_HOME)/secure_api -- thanks)
+
+output-msvc-library: msvc-library-copy $(MSVC_LIBRARY_DIR)/TLS.c
+
+build-msvc-library: output-msvc-library
+	EVEREST_WINDOWS=$(EVEREST_WINDOWS) $(MAKE) -C $(MSVC_LIBRARY_DIR)
+
+test-msvc-library: output-library
+	EVEREST_WINDOWS=$(EVEREST_WINDOWS) $(MAKE) -C $(MSVC_LIBRARY_DIR) test
+
+clean-msvc-library:
 	-@find $(LIBRARY_DIR) -type f -and -not -name Makefile -and -not -name .gitignore \
         | xargs rm -f
 

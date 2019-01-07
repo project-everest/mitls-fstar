@@ -25,12 +25,9 @@ SOURCES = \
   fstar_uint32.c \
   fstar_uint64.c \
   fstar_uint8.c \
-  fstar_uint16_generated.c \
-  fstar_uint32_generated.c \
-  fstar_uint64_generated.c \
-  fstar_uint8_generated.c \
   prims.c \
-  testlib.c
+  testlib.c \
+  FStar_UInt_8_16_32_64.c
 
 
 libkremlib.lib: $(SOURCES:.c=.obj)
