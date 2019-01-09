@@ -291,9 +291,11 @@ unfold let valid_parsing (m:HSM.hs_msg) (begin_idx:uint_32) (end_idx:uint_32) (s
 /// Validitity postcondition on the flights
 
 let valid_flight_hrr (flt:flight_hrr) (flight_end:uint_32) (st:hsl_state) (h:HS.mem) =
+  flt.begin_hrr == hsl_input_hash_index h st /\
   valid_parsing (HSM.HelloRetryRequest (G.reveal flt.hrr_msg)) flt.begin_hrr flight_end st h
 
 let valid_flight_c_ske_shd (flt:flight_c_ske_shd) (flight_end:uint_32) (st:hsl_state) (h:HS.mem) =
+  flt.begin_c == hsl_input_hash_index h st /\
   (* c msg *)
   valid_parsing (HSM.Certificate (G.reveal flt.c_msg)) flt.begin_c flt.begin_ske st h /\
   (* ske msg *)
@@ -349,7 +351,14 @@ val receive_flight_c_ske_shd (st:hsl_state) (p:uint_32)
 		     valid_flight_c_ske_shd flt eof st h1 /\  //flight specific postcondition
 		     receive_post_common st p eof h1)))
 
-val hash_input (st:hsl_state) (p:uint_32) (
+val hash_input (st:hsl_state) (p:uint_32) (m:G.erased (HSM.hs_msg))
+  : ST unit (fun h0      -> hsl_invariant h0 st /\ valid_parsing (G.reveal m) (hsl_input_hash_index h0 st) p st h0)
+            (fun h0 _ h1 ->
+	     //bunch of postconditions to say that buffer indices etc. remain same
+	     writing h1 st /\  //HS maintains writing state across flights
+	     B.modifies (hsl_local_footprint st) h0 h1 /\
+	     transcript h1 st == transcript h0 st @ [G.reveal m])
+
 
 
 // unfold private let receive_post (st:hsl_state) (p:uint_32)
