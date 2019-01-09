@@ -169,7 +169,6 @@ val hash_alg : HS.mem -> hsl_state -> GTot (option Hash.alg)
 
 val transcript : HS.mem -> hsl_state -> GTot hs_transcript
 
-
 /// Invariant elimination
 
 val elim_hsl_invariant (st:hsl_state) (h:HS.mem)
@@ -259,13 +258,15 @@ type flight_t =
   | F_HRR: init:uint_32 -> len:uint_32 -> flight_t
   | F_SH: init:uint_32 -> len:uint_32 -> flight_t
   | F_C_SKE_SHD: c_init:uint_32 -> c_len:uint_32 ->
-                 ske_init:uint_32 -> ske_len:uint_32 -> flight_t
+                 ske_init:uint_32 -> ske_len:uint_32 -> 
+		 -> erased certificate -> erased ske ->
+		 flight_t
   | F_C_SKE_CR_SHD: c_init:uint_32 -> c_len:uint_32 ->
                     ske_init:uint_32 -> ske_len:uint_32 ->
                     cr_init:uint_32 -> cr_len:uint_32 -> flight_t
-  | F_EE_C13_CV_Fin: ee_init:uint_32 -> ee_len:uint_32 ->
-                     c13_init:uint_32 -> c13_len:uint_32 ->
-		     cv_init:uint_32 -> cv_len:uint_32 ->
+  | F_EE_C13_CV_Fin: ee_init:uint_32 ->
+                     c13_init:uint_32 ->
+		     cv_init:uint_32 ->
 		     fin_init:uint_32 -> fin_len:uint_32 -> flight_t
   | F_EE_CR13_C13_CV_Fin: ee_init:uint_32 -> ee_len:uint_32 ->
                           cr13_init:uint_32 -> cr13_len:uint_32 ->
@@ -283,6 +284,81 @@ type flight_t =
 		  fin_init:uint_32 -> fin_len:uint_32 -> flight_t
   | F_EoED: flight_t
   | F_NST13: nst13_init:uint_32 -> nst13_len:uint_32 -> flight_t
+
+
+/// Current flight that has been dispatched to Handshake but is in the process of being hashed
+
+val current_flight (st:hsl_state) (h:HS.mem) : GTot flight_t
+
+
+type flgithval current_hash_index (st:hsl_state) (h:HS.mem) : GTot uint_32
+
+/// Framing of current flight, current flight index w.r.t. modifications to local state
+
+
+let is_valid_hash_index (st:hsl_state) (i:uint_32) (h:HS.mem) : GTot bool =
+  let flt = current_flight st h in
+  match flt with
+  | F_HRR init len -> i == init + len
+  | _ -> admit ()
+
+let end_of_flight_index (st:hsl_state) (h:HS.memt) : GTot uint_32 =
+  let flt = current_flight st h in
+  match flt with
+  | F_HRR init len -> init + len
+  | _ -> admit ()
+
+
+/// Do we need to provide 
+
+(*
+ * Separate into two: one that computes hash and one that returns it
+ * Transcript should reflect partial flights that have been hashed
+ * Additional state in HSL to maintain this
+ *)
+val hash (st:hsl_state) (i:uint_32)
+  : ST unit (requires (fun h0 -> is_valid_hash_index st i /\ i > current_hash_index st h))
+            (ensures  (fun h0 _ h1 -> current_hash_index st h1 == i /\ modifies (hsl_local_footprint st) h0 h1 /\
+	               i == end_of_flight_index st h0 ==>
+		         (writing h1 st /\
+			  transcript h1 st == transcript h0 st @ current_hs_flight st h0)))
+
+
+
+Option a.
+
+HSL doesn't care what you hash on the receive side.
+HS maintains enough invariants to make sure
+it has hashed the input messages using the ghost messages HSL.receive returned.
+HS maintains the postcondition that transcript has increased when it calls HSL.hash
+Generic precondition of calling HSL.hash
+
+Pros: helps with binders, can hash in the middle of messages
+
+Cons: writing capability maintenance moves to HS for the input flight hashing part, except when HSL is in the middle of reading a flight, HSL switches to writing when it has received a flight
+
+hash (i:uint_32) (j:uint_32)
+     (msgs:erased (list msgs){msgs is parsing of input buffer from i to j})
+     (* can we make it so that it is not erased (list (erased msg)) *)
+  : ensures (transcript is appended to by msgs)
+
+
+On the writing side, it is the same--hashing is done by HSL when HS calls HSL.send
+
+send (...)
+  : ensures (transcript is extedned automatically)
+
+
+-- State of hash
+-- State of incoming flight, what we are trying to receive
+-- Internal state of HSL is like a tree what all flights can we receive
+-- Precondition of receive depending on the states
+   Next kind of flight? Should HSL keep track of it?
+-- No flight_t and having ad-hoc receive messages
+
+
+Whatever we send is a valid receive flight at the other end?
+Peer state machine will accept what we send
 
 #reset-options "--max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 
@@ -321,7 +397,7 @@ let flight_parsing_of (flt:flight_t) (msgs:hs_transcript) (st:hsl_state) (h:HS.m
      | [ HSM.ServerHello sh ] -> valid_parsing sh sh_parser (B.gsub (hsl_input_buf st) init len) h
      | _ -> False)
 
-  | F_C_SKE_SHD c_init c_len ske_init ske_len ->
+  | F_C_SKE_SHD c_init ske_init ske_len ->
     valid_init_and_len c_init c_len st /\ valid_init_and_len ske_init ske_len st /\
     (match msgs with
      | [ HSM.Certificate c; HSM.ServerKeyExchange ske; HSM.ServerHelloDone ] ->
@@ -371,12 +447,15 @@ unfold private let msg_list_parsing_of (msgs:hs_transcript) (st:hsl_state)
  *     HSLog maintains hashed transcript
  *       and indices for the last flight returned -- so that it can relate Hash calls from HS
  *)
+
+(* pair of ints can be computed from flight_t *)
+(* flight_t with indices and erased messages with postconditions for relating them *)
+
 unfold private let receive_post (st:hsl_state) (p:uint_32)
   : HS.mem -> (TLSError.result (option (
                                flight_t &
-                               G.erased hs_transcript &
-                               uint_32 & uint_32 &
-                               list HashSpec.anyTag))) -> HS.mem -> Type0
+                               G.erased (list msg) &
+                               uint_32 & uint_32))) -> HS.mem -> Type0
   = fun h0 r h1 ->  
     let open FStar.Error in
     let oa = hash_alg h0 st in
