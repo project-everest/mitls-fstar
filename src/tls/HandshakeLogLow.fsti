@@ -351,14 +351,20 @@ val receive_flight_c_ske_shd (st:hsl_state) (p:uint_32)
 		     valid_flight_c_ske_shd flt eof st h1 /\  //flight specific postcondition
 		     receive_post_common st p eof h1)))
 
-val hash_input (st:hsl_state) (p:uint_32) (m:G.erased (HSM.hs_msg))
-  : ST unit (fun h0      -> hsl_invariant h0 st /\ valid_parsing (G.reveal m) (hsl_input_hash_index h0 st) p st h0)
+val hash_input (st:hsl_state) (p0 p1:uint_32) (m:G.erased (HSM.hs_msg))
+  : ST unit (fun h0      -> hsl_invariant h0 st /\ valid_parsing (G.reveal m) p0 p1 st h0)
             (fun h0 _ h1 ->
 	     //bunch of postconditions to say that buffer indices etc. remain same
 	     writing h1 st /\  //HS maintains writing state across flights
 	     B.modifies (hsl_local_footprint st) h0 h1 /\
 	     transcript h1 st == transcript h0 st @ [G.reveal m])
 
+(*
+ * framing for local footprints, and input index etc. since they are stateful
+ * output index may be we don't need (no incremental serializations)
+ * do we need the writing bit, it was inconclusive the other day
+ * reset of HSL state?
+ *)
 
 
 // unfold private let receive_post (st:hsl_state) (p:uint_32)
