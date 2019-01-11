@@ -27,6 +27,7 @@ INCLUDE_PATHS = \
 	$(HACL_HOME)/code/hash \
 	$(HACL_HOME)/code/old/lib \
 	$(HACL_HOME)/specs \
+	$(HACL_HOME)/specs/derived \
 	$(KREMLIN_HOME)/include \
         $(KREMLIN_HOME)/kremlib/compat \
         $(KREMLIN_HOME)/kremlib \

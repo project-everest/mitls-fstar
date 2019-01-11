@@ -7,7 +7,7 @@
 module Hashing.Spec
 
 include EverCrypt.Hash
-include Spec.Hash.Helpers
+include Spec.Hash.Definitions
 
 open FStar.Integers
 open FStar.Bytes
