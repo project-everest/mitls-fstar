@@ -506,7 +506,7 @@ module B = LowStar.Buffer
 
 #pop-options
 
-#push-options "--z3rlimit 64"
+#push-options "--z3rlimit 128"
 
 inline_for_extraction
 let vlarray_nth

@@ -172,7 +172,7 @@ endif
 			--odir $(EXTRACT_DIR) \
 			$(addprefix --include , $(INCLUDE_PATHS)) \
 			--extract_module $(basename $(notdir $(subst .checked,,$<))) \
-			$(subst $(CACHE_DIR)/,,$(subst .checked,,$<)) \
+			$(notdir $(subst .checked,,$<)) \
 	)
 
 # Avoids polluting the KreMLin source tree with a random .o file

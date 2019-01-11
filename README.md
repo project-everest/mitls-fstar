@@ -5,11 +5,8 @@ This repository contains the new F* development a port of the stable [F# develop
 
 | Build  | Status |
 | ------------- | ------------- |
-| Windows CI  | <img src="https://msresearch-ext.visualstudio.com/_apis/public/build/definitions/83f09286-c288-4766-89cd-d267b6d93772/12/badge" /> |
-| Windows Nightly  | <img src="https://msresearch-ext.visualstudio.com/_apis/public/build/definitions/83f09286-c288-4766-89cd-d267b6d93772/14/badge" />  |
-| Linux CI  | <img src="https://msresearch-ext.visualstudio.com/_apis/public/build/definitions/83f09286-c288-4766-89cd-d267b6d93772/20/badge" /> |
-| Linux Nightly  | <img src="https://msresearch-ext.visualstudio.com/_apis/public/build/definitions/83f09286-c288-4766-89cd-d267b6d93772/15/badge" /> |
-
+| Windows  | [![Build status](https://msr-project-everest.visualstudio.com/Everest/_apis/build/status/miTLS/miTLS-Windows?branchName=master)](https://msr-project-everest.visualstudio.com/Everest/_build/latest?definitionId=26) |
+| Linux  | [![Build status](https://msr-project-everest.visualstudio.com/Everest/_apis/build/status/miTLS/miTLS-Linux?branchName=master)](https://msr-project-everest.visualstudio.com/Everest/_build/latest?definitionId=10) |
 
 ### miTLS website
 
