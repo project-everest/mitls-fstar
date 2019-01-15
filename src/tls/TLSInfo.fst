@@ -34,24 +34,20 @@ let default_cipherSuites = [
   TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256;
   ]
 
-let default_signature_schemes = [
-  ECDSA_SECP521R1_SHA512;
-  ECDSA_SECP384R1_SHA384;
-  ECDSA_SECP256R1_SHA256;
-  RSA_PSS_SHA512;
-  RSA_PSS_SHA384;
-  RSA_PSS_SHA256;
-  RSA_PKCS1_SHA512;
-  RSA_PKCS1_SHA384;
-  RSA_PKCS1_SHA256;
-  ECDSA_SHA1;
-  RSA_PKCS1_SHA1
-  ]
+let default_signature_schemes =
+  let schemes = [
+    Ecdsa_secp256r1_sha256; Ecdsa_secp384r1_sha384; Ecdsa_secp521r1_sha512;
+    Rsa_pss_rsae_sha256; Rsa_pss_rsae_sha384; Rsa_pss_rsae_sha512;
+    Rsa_pkcs1_sha256; Rsa_pkcs1_sha384; Rsa_pkcs1_sha512;
+    Ecdsa_sha1; Rsa_pkcs1_sha1
+  ] in
+  assert_norm (List.Tot.length schemes <= Parsers.SignatureSchemeList.max_count);
+  assert_norm (List.Tot.for_all is_supported_signatureScheme schemes);
+  schemes
 
 let default_groups : CommonDH.supportedNamedGroups =
   let open CommonDH in
   let groups = [
-    // X448
     Secp521r1;
     Secp384r1;
     X25519;

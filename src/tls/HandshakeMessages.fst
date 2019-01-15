@@ -1007,7 +1007,7 @@ let signatureBytes sig =
   match sig.sig_algorithm with
   | None -> sig_bytes
   | Some sigalg ->
-    let sig_algorithm_bytes = signatureSchemeBytes sigalg in
+    let sig_algorithm_bytes = signatureScheme_serializer32 sigalg in
     sig_algorithm_bytes @| sig_bytes
 
 val signatureBytes_is_injective: sig1:signature -> sig2:signature ->
@@ -1027,7 +1027,7 @@ let signatureBytes_is_injective sig1 sig2 =
       //                  (vlbytes2 sig1.sig_signature)
       //                  (signatureSchemeBytes sigalg2)
       //                  (vlbytes2 sig2.sig_signature);
-      signatureSchemeBytes_is_injective sigalg1 sigalg2;
+//      signatureSchemeBytes_is_injective sigalg1 sigalg2;
       lemma_vlbytes_inj 2 sig1.sig_signature sig2.sig_signature
       end
     end
@@ -1037,8 +1037,8 @@ let parseSignature pv data =
   if pv `geqPV` TLS_1p2 then
     if length data >= 4 then
       let alg, sig = split data 2ul in
-      match parseSignatureScheme alg with
-      | Correct sigalg ->
+      match signatureScheme_parser32 alg with
+      | Some (sigalg, _) ->
         begin
         match vlparse 2 sig with
         | Correct sigv ->
@@ -1047,7 +1047,7 @@ let parseSignature pv data =
         | _ ->
           fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "Signature: incorrect signature length")
         end
-      | Error _ -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "Signature: invalid signature scheme")
+      | None -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "Signature: invalid signature scheme")
     else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "Signature: message too short")
   else
     if length data >= 2 then
