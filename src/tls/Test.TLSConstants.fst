@@ -14,26 +14,26 @@ let test_signatureSchemeListBytes ()
           (requires (fun _ -> True))
           (ensures (fun _ _ _ -> True)) =
   let algs = [
-    RSA_PKCS1_SHA256
-  ; RSA_PKCS1_SHA384
-  ; RSA_PKCS1_SHA512
-  // ECDSA algorithms
-  ; ECDSA_SECP256R1_SHA256
-  ; ECDSA_SECP384R1_SHA384
-  ; ECDSA_SECP521R1_SHA512
-  // RSASSA-PSS algorithms
-  ; RSA_PSS_SHA256
-  ; RSA_PSS_SHA384
-  ; RSA_PSS_SHA512
-  // Legacy algorithms
-  ; RSA_PKCS1_SHA1
-  ; RSA_PKCS1_MD5SHA1 // Only used internally, with codepoint 0xFFFF (PRIVATE_USE)
-  ; ECDSA_SHA1
-  // Reserved Code Points
-  ; DSA_SHA1
-  ; DSA_SHA256
-  ; DSA_SHA384
-  ; DSA_SHA512 ] in
+   Rsa_pkcs1_md5
+  ; Rsa_pkcs1_sha1
+  ; Ecdsa_md5
+  ; Ecdsa_sha1
+  ; Rsa_pkcs1_sha256
+  ; Rsa_pkcs1_sha384
+  ; Rsa_pkcs1_sha512
+  ; Ecdsa_secp256r1_sha256
+  ; Ecdsa_secp384r1_sha384
+  ; Ecdsa_secp521r1_sha512
+  ;Rsa_pss_rsae_sha256
+  ; Rsa_pss_rsae_sha384
+  ; Rsa_pss_rsae_sha512
+  ; Ed25519
+  ; Ed448
+  ; Rsa_pss_pss_sha256
+  ; Rsa_pss_pss_sha384
+  ; Rsa_pss_pss_sha512
+  ; Unknown_signatureScheme 0xFFFFus
+  ] in
   let bytes = signatureSchemeListBytes algs in
   match parseSignatureSchemeList bytes with
   | Correct algs' ->

@@ -251,9 +251,9 @@ let ngs = [
   ("P-256",     CommonDH.Secp256r1);
   ("X25519",    CommonDH.X25519);
   ("X448",      CommonDH.X448);
-  ("Ffdhe4096", CommonDH.Ffdhe4096);
-  ("Ffdhe3072", CommonDH.Ffdhe3072);
-  ("Ffdhe2048", CommonDH.Ffdhe2048);
+  ("FFDHE4096", CommonDH.Ffdhe4096);
+  ("FFDHE3072", CommonDH.Ffdhe3072);
+  ("FFDHE2048", CommonDH.Ffdhe2048);
 ]
 
 let aeads = [
