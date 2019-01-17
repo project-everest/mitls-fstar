@@ -26,7 +26,7 @@ val finalize_case_ticketContents12
       h'
       input
       pos
-      (Case_ticket12 (LP.contents ticketContents12_parser h input pos1))
+      (T_ticket12 (LP.contents ticketContents12_parser h input pos1))
       (LP.get_valid_pos ticketContents12_parser h input pos1)
   ))
 
@@ -46,6 +46,6 @@ val finalize_case_ticketContents13
       h'
       input
       pos
-      (Case_ticket13 (LP.contents ticketContents13_parser h input pos1))
+      (T_ticket13 (LP.contents ticketContents13_parser h input pos1))
       (LP.get_valid_pos ticketContents13_parser h input pos1)
   ))
