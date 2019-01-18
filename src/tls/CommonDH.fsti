@@ -134,12 +134,10 @@ val register_dhr: #g:group -> gx:ishare g -> gy:pre_share g -> ST (rshare g gx)
 
 /// Parsing and formatting
 
-(*
 val parse: g:group -> bytes -> Tot (option (pre_share g))
 val parse_partial: bool -> bytes -> Tot (result ((g:group & pre_share g) * bytes))
 val serialize: #g:group -> pre_share g -> Tot bytes
 val serialize_raw: #g:group -> pre_share g -> Tot bytes // used for printing
-*)
 
 val validate: keyShareEntry -> option (g:group & pre_share g)
 val validate_many: keyShareClientHello -> list (g:group & pre_share g)

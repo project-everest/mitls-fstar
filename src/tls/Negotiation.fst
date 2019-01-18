@@ -326,7 +326,7 @@ let rec ticket13_pskinfo (#a:Type0) (acc:list (a * pskInfo))
 
 #set-options "--admit_smt_queries true"
 val computeOffer: r:role -> cfg:config -> nonce:TLSInfo.random
-  -> ks:option CommonDH.keyShareEntry -> resumeInfo -> now:UInt32.t
+  -> ks:option keyShareClientHello -> resumeInfo -> now:UInt32.t
   -> Tot offer
 
 let computeOffer r cfg nonce ks resume now =
@@ -556,10 +556,10 @@ let rec map_ST f x = match x with
 let i_psk_info i = (i, PSK.psk_info i)
 
 val client_ClientHello: #region:rgn -> t region Client
-  -> option CommonDH.keyShareEntry
+  -> option keyShareClientHello
   -> St offer
 
-let client_ClientHello #region ns oks =
+let client_ClientHello #region ns os =
   //17-04-22 fix this in the definition of offer?
   match HST.op_Bang ns.state with
   | C_Init _ ->
@@ -570,7 +570,7 @@ let client_ClientHello #region ns oks =
         then "Offering a PSK compatible with 0-RTT"
         else "No PSK or 0-RTT disabled");
       let now = UInt32.uint_to_t (FStar.Date.secondsFromDawn()) in
-      let offer = computeOffer Client ns.cfg ns.nonce oks ns.resume now in
+      let offer = computeOffer Client ns.cfg ns.nonce os ns.resume now in
       let etags = List.Tot.map tag_of_clientHelloExtension offer.ch_extensions in
       trace ("offering client extensions "^string_of_extensions etags);
       trace ("offering cipher suites "^string_of_ciphersuitenames offer.ch_cipher_suites);
@@ -1484,7 +1484,7 @@ let server_ServerShare #region ns ks app_exts =
       mode.n_cipher_suite
       None  // option (TI.cVerifyData*TI.sVerifyData)
       mode.n_pski
-      (Option.mapTot (fun (| g, gy |) -> CommonDH.format gy) ks)
+      (match ks with None -> None | Some (| g, gx |) -> Some (CommonDH.format gx))
       (mode.n_sessionID = mode.n_offer.ch_sessionID)
     with
     | Error z -> Error z
@@ -1505,6 +1505,7 @@ let server_ServerShare #region ns ks app_exts =
         mode.n_pski
         sexts
         (Some ee)
+	ks
         mode.n_client_cert_request
         mode.n_server_cert
         mode.n_client_share

@@ -164,7 +164,7 @@ val prepareExtensions:
   signatureSchemeList ->
   list CommonDH.supportedNamedGroup ->
   option (cVerifyData * sVerifyData) ->
-  option CommonDH.keyShareEntry ->
+  option keyShareClientHello ->
   list (PSK.pskid * pskInfo) ->
   now: UInt32.t -> // for obfuscated ticket age
   clientHelloExtensions
