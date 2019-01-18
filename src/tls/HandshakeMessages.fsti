@@ -70,12 +70,10 @@ noeq type ch = {
   ch_sessionID: sessionID;
   ch_cipher_suites: k: list cipherSuiteName{List.Tot.length k < 256};
   ch_compressions: cl:list compression{List.Tot.length cl > 0 /\ List.Tot.length cl < 256};
-  ch_extensions: option (ce:list extension{List.Tot.length ce < 256});
+  ch_extensions: clientHelloExtensions;
 }
-let bindersLen_of_ch ch =
-  match ch.ch_extensions with
-  | None -> 0
-  | Some el -> Extensions.bindersLen el
+
+let bindersLen_of_ch ch = bindersLen ch.ch_extensions
 
 // ServerHello: supporting two different syntaxes depending on the embedded pv
 // https://tools.ietf.org/html/rfc5246#section-7.4.1.2
@@ -86,13 +84,14 @@ noeq type sh = {
   sh_sessionID: sessionID; // omitted in TLS 1.3
   sh_cipher_suite: cipherSuiteName;
   sh_compression: compression; // omitted in TLS 1.3
-  sh_extensions: option (se:list extension{List.Tot.length se < 256});
+  sh_extensions: serverHelloExtensions;
 }
+
 // Hello retry request
 noeq type hrr = {
   hrr_sessionID: sessionID;
   hrr_cipher_suite: cipherSuiteName;
-  hrr_extensions: he:list extension{List.Tot.length he < 256};
+  hrr_extensions: hRRExtensions;
 }
 
 // TLS 1.2 KeyExchange
@@ -113,7 +112,7 @@ noeq type cke = {cke_kex_c: kex_c}
 /// Server Parameters
 /// https://tlswg.github.io/tls13-spec/draft-ietf-tls-tls13.html#rfc.section.4.3
 
-type ee = l:list extension{List.Tot.length l < 256}
+type ee = encryptedExtensions
 
 // CertificateRequest
 (** CertificateRequest for TLS 1.0-1.2
@@ -127,7 +126,6 @@ type cr = {
   cr_certificate_authorities: dl:list dn{List.Tot.length dl < 65536};
 }
 type cr13 = cr //17-05-05 TBC
-
 
 /// Authentication Messages
 /// https://tlswg.github.io/tls13-spec/draft-ietf-tls-tls13.html#rfc.section.4.4
@@ -166,8 +164,15 @@ noeq type sticket13 = {
   ticket13_age_add: UInt32.t;
   ticket13_nonce: (b:bytes{length b > 0 /\ length b < 256});
   ticket13_ticket: (b:bytes{length b < 65535});
-  ticket13_extensions: es: list extension; }
+  ticket13_extensions: newSessionTicketExtensions;
+}
 
+type binders = Parsers.OfferedPsks_binders.offeredPsks_binders
+let bindersBytes (b:binders) =
+  LowParseWrappers.wrap_serializer32 offeredPsks_binders_serializer32 b
+let parseBinders (b:bytes) =
+  let err = perror __SOURCE_FILE__ __LINE__ "binders" in
+  LowParseWrappers.wrap_parser32 offeredPsks_binders_parser32 err b
 
 noeq type hs_msg =
   // shared
@@ -195,9 +200,8 @@ noeq type hs_msg =
   | KeyUpdate of bool  // true when the sender is the requester
 
   // formatted, but never parsed as messages
-  | Binders of Extensions.binders
+  | Binders of binders
   | MessageHash of Hashing.Spec.anyTag
-
 
 /// Handshake message format (minimized)
 
@@ -248,9 +252,6 @@ val versionBytes_is_injective:
   pv1:protocolVersion ->
   pv2:protocolVersion ->
   Lemma (versionBytes pv1 = versionBytes pv2 ==> pv1 = pv2)
-
-// To expose extensions to application, we switch to network format
-val optionExtensionsBytes: exts:option (ce:list extension{List.Tot.length ce < 256}) -> Tot (b:bytes{length b <= 2 + 65535})
 
 #set-options "--admit_smt_queries true"
 val clientHelloBytes_is_injective_strong:
@@ -328,14 +329,14 @@ let associated_to_pv (pv:option protocolVersion) (msg:hs_msg) : GTot bool  =
   | ServerKeyExchange _ | CertificateRequest _ | CertificateVerify _ -> Some? pv
   | _ -> true
 
-#reset-options "--using_facts_from '* -LowParse.Spec.Base'"
+#reset-options "--using_facts_from '* -LowParse.Spec.Base' --admit_smt_queries true"
 
 let valid_hs_msg_prop (pv:option protocolVersion) (msg:hs_msg): GTot bool =
   associated_to_pv pv msg && (
   match msg, pv with
   | EncryptedExtensions ee, _ -> 
-      length (extensionListBytes ee) + bindersLen ee < 65536 &&
-       repr_bytes (length (extensionsBytes ee)) <= 3
+      encryptedExtensions_bytesize ee < 65536 &&
+       repr_bytes (encryptedExtensions_bytesize ee) <= 3
   | Certificate13 crt, _ -> length (Cert.certificateListBytes13 crt.crt_chain13) < 16777212
   | Certificate crt, _ -> length (Cert.certificateListBytes crt.crt_chain) < 16777212
   | ServerKeyExchange ske, Some pv ->

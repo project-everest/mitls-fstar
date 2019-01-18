@@ -622,15 +622,13 @@ request_client_certificate: single_assign ServerCertificateRequest // uses this 
 
 
 /// 18-02-22 QD fodder; their formatting is in Extensions.
-///
-type serverName =
-  | SNI_DNS of b:bytes{repr_bytes (length b) <= 2}
-  | SNI_UNKNOWN of (n:nat{repr_bytes n <= 1}) * (b:bytes{repr_bytes (length b) <= 2})
 
-type alpn_entry = b:bytes{0 < length b /\ length b < 256}
-type alpn = l:list alpn_entry{List.Tot.length l < 256}
+include Parsers.ServerName
+include Parsers.ProtocolName
+include Parsers.ProtocolNameList
+include Parsers.PskIdentity
 
-type psk_identifier = identifier:bytes{length identifier < 65536}
+type psk_identifier = pskIdentity_identity
 
 type pskInfo = {
   ticket_nonce: option bytes;
@@ -662,13 +660,21 @@ noeq type ticket_cb = {
   new_ticket: ticket_cb_fun;
 }
 
-type custom_extension = UInt16.t * b:bytes {length b < 65533}
-type custom_extensions = l:list custom_extension{List.Tot.length l < 32}
+/// Custom Extensions
+
+include Parsers.ExtensionType
+include Parsers.UnknownExtension
+
+type custom_id = v:UInt16.t{~(known_extensionType_repr v)}
+type custom_extension = custom_id * unknownExtension
+type custom_extensions = l:list custom_extension
 
 (* Helper functions for the C API to construct the list from array *)
 let empty_custom_extensions () : list custom_extension = []
 let add_custom_extension (l:list custom_extension) (hd:UInt16.t) (b:bytes {length b < 65533}) =
   (hd, b) :: l
+
+/// Nego Callback
 
 type nego_action =
   | Nego_abort: nego_action
@@ -684,6 +690,8 @@ noeq type nego_cb = {
   nego_context: FStar.Dyn.dyn;
   negotiate: nego_cb_fun;
 }
+
+/// Cert callbacks
 
 type cert_repr = b:bytes {length b < 16777216}
 type cert_type = FFICallbacks.callbacks
@@ -783,7 +791,7 @@ noeq type config : Type0 = {
     nego_callback: nego_cb;// Callback to decide stateless retry and negotiate extra extensions
     cert_callbacks: cert_cb;      // Certificate callbacks, called on all PKI-related operations
 
-    alpn: option alpn;   // ALPN offers (for client) or preferences (for server)
+    alpn: option protocolNameList;   // ALPN offers (for client) or preferences (for server)
     peer_name: option bytes;     // The expected name to match against the peer certificate
   }
 

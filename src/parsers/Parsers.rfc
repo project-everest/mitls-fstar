@@ -564,51 +564,12 @@ https://tools.ietf.org/html/rfc8446#section-4.2
 opaque UnknownExtension<0..2^16-1>;
 
 /*
-Extensions that may appear in ServerHello.
-Note that this is more general than the table for 1.3,
-as some extensions moved to other messages but may still
-appear in ServerHello in 1.2 handshakes.
-*/
-struct {
-  ExtensionType extension_type;
-  uint16 ext_len;
-  select(extension_type)
-  {
-    case server_name: Empty; /* Acknowledge, for TLS 1.2 SH */
-    case max_fragment_length: MaxFragmentLength; /* Must echo back the same offer */
-    case status_request: Empty; /* Actual data sent in protocol message */
-    case ec_point_formats: ECPointFormatList;
-    case use_srtp: UseSRTPData;
-    case heartbeat: HeartbeatMode;
-    case application_layer_protocol_negotiation: ProtocolNameList;
-    case signed_certificate_timestamp: SignedCertificateTimestampList; /* For 1.2, in 1.3 this is sent with certificate */
-    case client_certificate_type: CertificateType;
-    case server_certificate_type: CertificateType;
-    case padding: Fail;
-    case encrypt_then_mac: Empty;
-    case extended_master_secret: Empty;
-    case session_ticket: Empty;
-    case pre_shared_key: PreSharedKeyServerExtension;
-    case early_data: Fail;
-    case supported_versions: ProtocolVersion;
-    case cookie: Fail;
-    case psk_key_exchange_modes: Fail;
-    case certificate_authorities: Fail;
-    case oid_filters: Fail;
-    case post_handshake_auth: Fail;
-    case signature_algorithms_cert: Fail;
-    case key_share: KeyShareEntry;
-    default: UnknownExtension;
-  } e[ext_len]; /*extension_data, renamed for brevity*/
-} ServerHelloExtension;
-
-/*
 ClientHello extensions (all protocol versions)
 */
 struct {
-  ExtensionType extension_type;
-  uint16 ext_len;
-  select(extension_type)
+  ExtensionType type;
+  uint16 len;
+  select(type)
   {
     case server_name: ServerNameList;
     case max_fragment_length: MaxFragmentLength;
@@ -637,17 +598,60 @@ struct {
     case signature_algorithms_cert: SignatureSchemeList;
     case key_share: KeyShareClientHello;
     default: UnknownExtension;
-  } e[ext_len]; /*extension_data*/
+  } CHE[len]; /*extension_data*/
 } ClientHelloExtension;
+
+ClientHelloExtension ClientHelloExtensions<0..2^16-1>;
+
+/*
+Extensions that may appear in ServerHello.
+Note that this is more general than the table for 1.3,
+as some extensions moved to other messages but may still
+appear in ServerHello in 1.2 handshakes.
+*/
+struct {
+  ExtensionType type;
+  uint16 len;
+  select(type)
+  {
+    case server_name: Empty; /* Acknowledge, for TLS 1.2 SH */
+    case max_fragment_length: MaxFragmentLength; /* Must echo back the same offer */
+    case status_request: Empty; /* Actual data sent in protocol message */
+    case ec_point_formats: ECPointFormatList;
+    case use_srtp: UseSRTPData;
+    case heartbeat: HeartbeatMode;
+    case application_layer_protocol_negotiation: ProtocolNameList;
+    case signed_certificate_timestamp: SignedCertificateTimestampList; /* For 1.2, in 1.3 this is sent with certificate */
+    case client_certificate_type: CertificateType;
+    case server_certificate_type: CertificateType;
+    case padding: Fail;
+    case encrypt_then_mac: Empty;
+    case extended_master_secret: Empty;
+    case session_ticket: Empty;
+    case pre_shared_key: PreSharedKeyServerExtension;
+    case early_data: Fail;
+    case supported_versions: ProtocolVersion;
+    case cookie: Fail;
+    case psk_key_exchange_modes: Fail;
+    case certificate_authorities: Fail;
+    case oid_filters: Fail;
+    case post_handshake_auth: Fail;
+    case signature_algorithms_cert: Fail;
+    case key_share: KeyShareEntry;
+    default: UnknownExtension;
+  } SHE[len]; /*extension_data, renamed for brevity*/
+} ServerHelloExtension;
+
+ServerHelloExtension ServerHelloExtensions<0..2^16-1>;
 
 /*
 EncryptedExtensions (1.3).
 The parser cannot verify that extensions are not sent both in CH and EE
 */
 struct {
-  ExtensionType extension_type;
-  uint16 ext_len;
-  select(extension_type)
+  ExtensionType type;
+  uint16 len;
+  select(type)
   {
     case server_name: ServerNameList;
     case max_fragment_length: MaxFragmentLength;
@@ -659,28 +663,50 @@ struct {
     case server_certificate_type: ServerCertTypeExtension;
     case early_data: Empty;
     default: UnknownExtension;
-  } e[ext_len]; /*extension_data*/
+  } EE[len]; /*extension_data*/
 } EncryptedExtension;
+
+EncryptedExtension EncryptedExtensions<0..2^16-1>;
 
 /*
 Extensions that may appear in the NewSessionTicket[1.3] message
 */
 struct {
-  ExtensionType extension_type;
-  uint16 ext_len;
-  select(extension_type)
+  ExtensionType type;
+  uint16 len;
+  select(type)
   {
+    case early_data: EarlyDataIndicationNewSessionTicket;
     default: UnknownExtension;
-  } e[ext_len]; /*extension_data*/
+  } NSTE[len]; /*extension_data*/
 } NewSessionTicketExtension;
+
+NewSessionTicketExtension NewSessionTicketExtensions<0..2^16-1>;
+
+/*
+Extensions that may appear in the HelloRetryRequest[1.3] message
+*/
+struct {
+  ExtensionType type;
+  uint16 len;
+  select(type)
+  {
+    case supported_versions: ProtocolVersion;
+    case cookie: Cookie;
+    case key_share: NamedGroup;
+    default: UnknownExtension;
+  } HRRE[len]; /*extension_data*/
+} HRRExtension;
+
+HRRExtension HRRExtensions<0..2^16-1>;
 
 /*
 Extensions that may appear in the CertificateRequest[1.3] message
 */
 struct {
-  ExtensionType extension_type;
-  uint16 ext_len;
-  select(extension_type)
+  ExtensionType type;
+  uint16 len;
+  select(type)
   {
     case status_request: CertificateStatusRequest;
     case signed_certificate_timestamp: Empty;
@@ -688,24 +714,29 @@ struct {
     case oid_filters: OIDFilterExtension;
     case signature_algorithms_cert: SignatureSchemeList;
     default: UnknownExtension;
-  } e[ext_len]; /*extension_data*/
+  } CRE[len]; /*extension_data*/
 } CertificateRequestExtension;
+
+CertificateRequestExtension CertificateRequestExtensions<0..2^16-1>;
 
 /*
 Extensions that may appear in the Certificate[1.3] message
 */
 struct {
-  ExtensionType extension_type;
-  uint16 body_len;
-  select(extension_type)
+  ExtensionType type;
+  uint16 len;
+  select(type)
   {
     case status_request: CertificateStatus;
     case signed_certificate_timestamp: SignedCertificateTimestampList;
     default: UnknownExtension;
-  } e[body_len]; /*extension_data*/
+  } CE[len]; /*extension_data*/
 } CertificateExtension;
 
+CertificateExtension CertificateExtensions<0..2^16-1>;
+
 /* End of extensions */
+
 /* Alert Types */
 
 enum { warning(1), fatal(2), (255) } AlertLevel;
@@ -1160,8 +1191,8 @@ struct {
   SessionID session_id;
   CipherSuite cipher_suites<2..2^16-2>;
   CompressionMethod compression_method<1..2^8-1>;
-  /*@option*/ ClientHelloExtension extensions<2..2^16-1>;
- } ClientHello;
+  ClientHelloExtensions extensions;
+} ClientHello;
 
 struct {
   ProtocolVersion version;
@@ -1169,21 +1200,19 @@ struct {
   SessionID session_id;
   CipherSuite cipher_suite;
   CompressionMethod compression_method;
-  ServerHelloExtension extensions<2..2^16-1>;
+  ServerHelloExtensions extensions;
 } ServerHello;
 
 /** TLS 1.3 Handshake Messages */
 
-EncryptedExtension EncryptedExtensions<0..2^16-1>;
-
 struct {
   opaque certificate_request_context<0..2^8-1>;
-  CertificateRequestExtension extensions<2..2^16-1>;
+  CertificateRequestExtensions extensions;
 } CertificateRequest13;
 
 struct {
   opaque cert_data<1..2^24-1>;
-  CertificateExtension extensions<0..2^16-1>;
+  CertificateExtensions extensions;
 } CertificateEntry13;
 
 struct {
