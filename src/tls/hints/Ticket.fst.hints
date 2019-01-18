@@ -1,5 +1,5 @@
 [
-  "Œ=\u0014ÁÊðANLŽ°\u0007{Zê}",
+  "^Þ\u0014¨Ëdø\"7\n£ñú7\u0001Ü",
   [
     [
       "Ticket.ticketContents_of_ticket",
@@ -12,7 +12,7 @@
         "fuel_guarded_inversion_Ticket.ticket"
       ],
       0,
-      "159fa66de0b6cb1dbfae6432a80d52b7"
+      "e5da2b5d4c08b59265544d59ad4ed2a3"
     ],
     [
       "Ticket.write_ticket12",
@@ -27,24 +27,21 @@
         "assumption_FStar.UInt32.t__uu___haseq", "b2t_def", "bool_inversion",
         "bool_typing", "constructor_distinct_FStar.Pervasives.Native.Some",
         "data_elim_Ticket.Ticket12", "disc_equation_Ticket.Ticket12",
-        "equality_tok_HandshakeMessages.HT_hello_request@tok",
         "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
         "equality_tok_Parsers.Boolean.B_false@tok",
         "equality_tok_Parsers.Boolean.B_true@tok",
         "equation_CipherSuite.cipherSuite",
         "equation_CipherSuite.cipherSuiteName",
         "equation_CipherSuite.name_of_cipherSuite",
-        "equation_FStar.Bytes.lbytes",
         "equation_FStar.HyperStack.ST.equal_domains",
         "equation_FStar.Monotonic.Heap.equal_dom",
         "equation_FStar.Monotonic.HyperHeap.disjoint",
         "equation_FStar.Monotonic.HyperHeap.hmap",
         "equation_FStar.Monotonic.HyperStack.mem",
-        "equation_FStar.Pervasives.Native.snd", "equation_FStar.UInt.fits",
-        "equation_FStar.UInt.lt", "equation_FStar.UInt.max_int",
-        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
-        "equation_FStar.UInt.uint_t", "equation_FStar.UInt32.lt",
-        "equation_FStar.UInt32.n", "equation_HandshakeMessages.hs_msg_bytes",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.lt",
+        "equation_FStar.UInt.max_int", "equation_FStar.UInt.min_int",
+        "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
+        "equation_FStar.UInt32.lt", "equation_FStar.UInt32.n",
         "equation_LowParse.Low.Base.max_uint32",
         "equation_LowParse.Low.Base.valid_content",
         "equation_LowParse.Low.Base.valid_content_pos",
@@ -70,9 +67,7 @@
         "function_token_typing_FStar.Monotonic.Heap.heap",
         "function_token_typing_FStar.Monotonic.HyperHeap.rid",
         "function_token_typing_FStar.UInt32.n",
-        "function_token_typing_FStar.UInt8.t",
         "function_token_typing_Flags.model",
-        "function_token_typing_HandshakeMessages.helloRequestBytes",
         "function_token_typing_LowParse.Low.Base.max_uint32",
         "function_token_typing_LowParse.SLow.Base.u32_max",
         "function_token_typing_Mem.tls_define_region",
@@ -97,8 +92,6 @@
         "kinding_Parsers.ProtocolVersion.protocolVersion@tok",
         "kinding_Parsers.TicketContents12.ticketContents12@tok",
         "lemma_FStar.Buffer.lemma_size",
-        "lemma_FStar.Bytes.lemma_repr_bytes_values",
-        "lemma_FStar.Bytes.length_reveal",
         "lemma_FStar.HyperStack.ST.lemma_equal_domains_trans",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_all_regions_intro",
         "lemma_FStar.Set.lemma_equal_refl", "lemma_FStar.UInt.pow2_values",
@@ -139,13 +132,8 @@
         "projection_inverse_Ticket.Ticket12_ms",
         "projection_inverse_Ticket.Ticket12_msId",
         "projection_inverse_Ticket.Ticket12_pv",
-        "refinement_interpretation_FStar.Bytes_Tm_refine_354f545ee65a1c9e171be4483c883249",
-        "refinement_interpretation_FStar.Bytes_Tm_refine_b02a045f4b2f34f8079245d96d4798f8",
-        "refinement_interpretation_FStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
         "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9a74d818566e70513bc032cc3b65a144",
         "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
-        "refinement_interpretation_HandshakeMessages_Tm_refine_04cf2ff9eac5cf3788a287bbecc7b88b",
-        "refinement_interpretation_HandshakeMessages_Tm_refine_0de33fb4f810860e8ada2758d8317ee7",
         "refinement_interpretation_LowParse.Low.Base_Tm_refine_04ecb3a98e8473bc206c5decfb4fb020",
         "refinement_interpretation_LowParse.Low.Base_Tm_refine_0f9ab505c545736bae03060859c3f78d",
         "refinement_interpretation_LowParse.Low.Base_Tm_refine_263f7acb830fb3008a685a851eda63b7",
@@ -162,15 +150,9 @@
         "refinement_interpretation_Ticket_Tm_refine_763a30d980e0748bc265e4d89542019c",
         "refinement_interpretation_Ticket_Tm_refine_cffb9affaf4288451dbb6656a32a975d",
         "refinement_interpretation_Ticket_Tm_refine_f9875f92f4cd2b00f76e49f2b10e7c36",
-        "typing_CipherSuite.name_of_cipherSuite", "typing_FStar.Bytes.bytes",
-        "typing_FStar.Bytes.len", "typing_FStar.Bytes.reveal",
-        "typing_FStar.Bytes.split", "typing_FStar.Map.domain",
+        "typing_CipherSuite.name_of_cipherSuite", "typing_FStar.Map.domain",
         "typing_FStar.Monotonic.HyperStack.get_hmap",
-        "typing_FStar.Pervasives.Native.__proj__Mktuple2__item___2",
-        "typing_FStar.Pervasives.Native.snd", "typing_FStar.Seq.Base.length",
         "typing_FStar.UInt32.v",
-        "typing_HandshakeMessages.helloRequestBytes",
-        "typing_HandshakeMessages.messageBytes",
         "typing_LowParse.Low.Base.__proj__Mkslice__item__len",
         "typing_LowParse.Low.Base.content_length",
         "typing_LowParse.Low.Base.get_valid_pos",
@@ -179,12 +161,11 @@
         "typing_LowParse.Low.Base.serialized_length",
         "typing_LowStar.Monotonic.Buffer.loc_union", "typing_Mem.disjoint",
         "typing_Mem.tls_define_region", "typing_Ticket.uu___is_Ticket12",
-        "typing_tok_HandshakeMessages.HT_hello_request@tok",
         "typing_tok_Parsers.Boolean.B_false@tok",
         "typing_tok_Parsers.Boolean.B_true@tok"
       ],
       0,
-      "81c98ba54a527615fae4248a6a51afe1"
+      "31c8553be549376adb348ea08e5b8eef"
     ]
   ]
 ]
