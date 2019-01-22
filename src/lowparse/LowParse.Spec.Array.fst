@@ -395,3 +395,30 @@ let serialize_vlarray
     (serialize_bounded_vldata_strong array_byte_size_min array_byte_size_max (serialize_list _ s))
     (vlarray_to_vldata array_byte_size_min array_byte_size_max s elem_count_min elem_count_max u)
     ()
+
+let length_serialize_vlarray
+  (array_byte_size_min: nat)
+  (array_byte_size_max: nat)
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (elem_count_min: nat)
+  (elem_count_max: nat)
+  (u: unit {
+    vldata_vlarray_precond array_byte_size_min array_byte_size_max p elem_count_min elem_count_max == true  
+  })
+  (x: vlarray t elem_count_min elem_count_max)
+: Lemma
+  (Seq.length (serialize (serialize_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max u) x) == log256' array_byte_size_max + (L.length x `FStar.Mul.op_Star` k.parser_kind_low))
+= vldata_to_vlarray_inj array_byte_size_min array_byte_size_max s elem_count_min elem_count_max u;
+  vlarray_to_vldata_to_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max u;
+  serialize_synth_eq
+    _
+    (vldata_to_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max u)
+    (serialize_bounded_vldata_strong array_byte_size_min array_byte_size_max (serialize_list _ s))
+    (vlarray_to_vldata array_byte_size_min array_byte_size_max s elem_count_min elem_count_max u)
+    ()
+    x
+  ;
+  list_length_constant_size_parser_correct p (serialize (serialize_list _ s) x)
