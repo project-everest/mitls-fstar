@@ -184,6 +184,32 @@ let serialize_array
     (array_to_fldata s array_byte_size elem_count u)
     ()
 
+let length_serialize_array
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (array_byte_size: nat)
+  (elem_count: nat)
+  (u: unit {
+    fldata_array_precond p array_byte_size elem_count == true
+  })
+  (x: array t elem_count)
+: Lemma
+  (Seq.length (serialize (serialize_array s array_byte_size elem_count u) x) == L.length x `FStar.Mul.op_Star` k.parser_kind_low)
+= 
+  fldata_to_array_inj s array_byte_size elem_count u;
+  array_to_fldata_to_array s array_byte_size elem_count u u;
+  serialize_synth_eq
+    _
+    (fldata_to_array s array_byte_size elem_count u)
+    (serialize_fldata_strong (serialize_list _ s) array_byte_size)
+    (array_to_fldata s array_byte_size elem_count u)
+    ()
+    x
+  ;
+  list_length_constant_size_parser_correct p (serialize (serialize_list _ s) x)
+
 
 let vlarray_pred (#t: Type) (min max: nat) (s: list t) : GTot Type0 =
     let l = L.length s in
