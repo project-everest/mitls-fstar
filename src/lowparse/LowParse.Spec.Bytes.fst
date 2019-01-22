@@ -241,6 +241,23 @@ let serialize_bounded_vlbytes
 : Tot (serializer (parse_bounded_vlbytes min max))
 = serialize_bounded_vlbytes' min max (log256' max)
 
+let length_serialize_bounded_vlbytes
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (x: parse_bounded_vlbytes_t min max)
+: Lemma
+  (Seq.length (serialize (serialize_bounded_vlbytes min max) x) == log256' max + B32.length x)
+= let l = log256'  max in
+  serialize_synth_eq
+    (parse_bounded_vlbytes_aux min max l)
+    (synth_bounded_vlbytes min max)
+    (serialize_bounded_vlbytes_aux min max l)
+    (fun (x: parse_bounded_vlbytes_t min max) ->
+      (x <: parse_bounded_vldata_strong_t min max #_ #_ #parse_all_bytes serialize_all_bytes)
+    )
+    ()
+    x
+
 (*
 let serialize_bounded_vlbytes_upd
   (min: nat)
