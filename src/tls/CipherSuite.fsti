@@ -119,17 +119,16 @@ let isOnlyMACCipherSuite cs =
   | _ -> false
 
 (** Determine the signature algorithm associated to a ciphersuite *)
-// 2018.05.14 SZ: TODO: turn this into a total function
-let sigAlg_of_ciphersuite (cs:cipherSuite') : Dv sigAlg =
+let sigAlg_of_ciphersuite (cs:cipherSuite') : result sigAlg =
   match cs with
   | CipherSuite Kex_RSA None _
   | CipherSuite Kex_ECDHE (Some RSASIG) _
   | CipherSuite Kex_DHE (Some RSASIG) _
-  | CipherSuite Kex_DH (Some RSASIG) _   -> RSASIG
+  | CipherSuite Kex_DH (Some RSASIG) _   -> correct RSASIG
   | CipherSuite Kex_DHE (Some DSA) _
-  | CipherSuite Kex_DH (Some DSA) _      -> DSA
-  | CipherSuite Kex_ECDHE (Some ECDSA) _ -> ECDSA
-  | _ -> unexpected "[sigAlg_of_ciphersuite] invoked on a wrong ciphersuite"
+  | CipherSuite Kex_DH (Some DSA) _      -> correct DSA
+  | CipherSuite Kex_ECDHE (Some ECDSA) _ -> correct ECDSA
+  | _ -> fatal Internal_error "[sigAlg_of_ciphersuite] invoked on wrong ciphersuite"
 
 /// 18-02-22 The parsers and formatters below are used only in
 /// HandshakeMessages, should move there and disappear

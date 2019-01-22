@@ -1,11 +1,25 @@
 (* Copyright (C) 2012--2017 Microsoft Research and INRIA *)
 (**
-This modules defines TLS 1.3 Extensions.
 
-- An AST, and it's associated parsing and formatting functions.
-- Nego calls prepareExtensions : config -> list extensions.
+This modules groups QD types, parsers, and formatters for all
+extensions, collected from TLS 1.2. TLS 1.3, and various other
+RFCs---see the RFC source file for specific comments and details.
 
-@summary: TLS 1.3 Extensions.
+Several handshake messages include a list of extensions. Extensions
+are organized by name, but their presence and contents depend on the
+enclosing message. To this end, we provide a separate top-level type
+of list of extensions for
+
+  ClientHello,
+  HelloRetryRequest, ServerHello, EncryptedExtensions
+  CertificateRequest, Certificate, 
+  NewSessionTicket 
+
+with some sharing of their individual contents types.
+
+Their semantics is handled in Negotiation. 
+
+@summary: TLS Extensions.
 *)
 module Extensions
 
@@ -143,6 +157,35 @@ val custom_of_eext: encryptedExtensions -> custom_extensions
 
 val bindersLen: clientHelloExtensions -> nat
 
+
+
+/// We could specify which extensions are mandatory, and which are
+/// applicative, based on table in
+/// https://tlswg.github.io/tls13-spec/#rfc.section.4.2.
+///
+/// However, some rules, e.g. which server extensions need to be
+/// encrypted, are now enforced by typing.
+/// 
+//
+// // M=Mandatory, AF=mandatory for Application Features in https://tlswg.github.io/tls13-spec/#rfc.section.8.2.
+// noeq type extension' (p: unknownTag) =
+//   | E_server_name of list serverName (* M, AF *) (* RFC 6066 *)
+//   | E_supported_groups of list CommonDH.namedGroup (* M, AF *) (* RFC 7919 *)
+//   | E_signature_algorithms of signatureSchemeList (* M, AF *) (* RFC 5246 *)
+//   | E_signature_algorithms_cert of signatureSchemeList (* TLS 1.3#23 addition; TLS 1.2 should also support it *)
+//   | E_key_share of CommonDH.keyShare (* M, AF *)
+//   | E_pre_shared_key of psk (* M, AF *)
+//   | E_session_ticket of bytes
+//   | E_early_data of earlyDataIndication
+//   | E_supported_versions of protocol_versions   (* M, AF *)
+//   | E_cookie of b:bytes {0 < length b /\ length b < 65536}  (* M *)
+//   | E_psk_key_exchange_modes of client_psk_kexes (* client-only; mandatory when proposing PSKs *)
+//   | E_extended_ms
+//   | E_ec_point_format of list point_format
+//   | E_alpn of alpn
+//   | E_unknown_extension: x: lbytes 2 {p x} -> bytes -> extension' p (* header, payload *)
+
+(* GONE:
 (*************************************************
  Other extension functionality
  *************************************************)
@@ -193,3 +236,4 @@ val negotiateServerExtensions:
 
 val default_signatureScheme:
   protocolVersion -> cipherSuite -> HyperStack.All.ML signatureSchemeList
+*)

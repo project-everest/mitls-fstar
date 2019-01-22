@@ -91,7 +91,10 @@ enum /*@open*/ {
   host_name(0), (255)
 } NameType;
 
-opaque HostName<1..2^16-1>;
+/**
+RFC says 1..2^16-1 but we need at least 9 extra bytes for inclusion in extensions 
+*/ 
+opaque HostName<1..2^16-10>;
 opaque UnknownName<1..2^16-1>;
 
 struct {

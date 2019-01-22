@@ -1,7 +1,10 @@
 (**
 An abstract interface for Diffie-Hellman operations
 
-When the key extraction stack is idealized (ideal_KEF), this module
+We use two partially-overlapping representations of groups:
+[namedGroup] in wire format, and [group] as share indexes.
+
+When key-extraction is idealized (ideal_KEF), this module
 records the honesty of shares using two layers of types
 
 [pre_share] is for syntactically valid shares (used in parsing modules);
