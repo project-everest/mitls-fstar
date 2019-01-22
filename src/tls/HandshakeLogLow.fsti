@@ -68,19 +68,21 @@ let weak_valid_transcript (msgs:list msg) =
   match msgs with
   | []
   | [ClientHello _]
-  | (ClientHello _)::(ServerHello _)::_ -> True
+  | ClientHello _ :: ServerHello _ :: _ -> True
   | _ -> False
 
 let transcript_version (msgs:list msg) :option C.protocolVersion =
   let open HSM in
   match msgs with
-  | (ClientHello _)::(ServerHello sh)::_ -> Some sh.sh_protocol_version
+  | ClientHello _ :: ServerHello sh :: _ -> Some sh.sh_protocol_version
   | _ -> None
 
 let valid_transcript (msgs:list msg) =
   let version_opt = transcript_version msgs in
   weak_valid_transcript msgs /\
-  (forall (m:msg).{:pattern List.memP m msgs} List.memP m msgs ==> HSM.valid_hs_msg_prop version_opt m)
+  (forall (m:msg).{:pattern List.memP m msgs} 
+    List.memP m msgs ==>
+    HSM.valid_hs_msg_prop version_opt m)
 
 
 /// Finally define the hs_transcript type
@@ -102,17 +104,9 @@ type lbuffer8 (l:uint_32) = b:B.buffer uint_8{B.len b == l}
 val hsl_state : Type0
 
 
-/// With an abstract, state dependent invariant
-///
-/// TODO: Overwrite buffers for new flights OR content remains same?
-///       For the I/O buffers
-
-val hsl_invariant : HS.mem -> hsl_state -> Type0
-
-
 /// Length of the input buffer that HSL reads from
 
-val hsl_input_buf_len : hsl_state -> GTot uint_32
+val hsl_input_buf_len : hsl_state -> uint_32
 
 
 /// Input buffer itself
@@ -126,9 +120,12 @@ val hsl_input_buf : st:hsl_state -> GTot (lbuffer8 (hsl_input_buf_len st))
 val hsl_input_index : HS.mem -> st:hsl_state -> GTot (i:uint_32{i <= hsl_input_buf_len st})
 
 
+val hsl_input_hash_index (h:HS.mem) (st:hsl_state) : GTot uint_32
+
+
 /// Length of the output buffer, Handshake writes to it
 
-val hsl_output_buf_len : hsl_state -> GTot uint_32
+val hsl_output_buf_len : hsl_state -> uint_32
 
 
 /// Output buffer itself
@@ -142,13 +139,13 @@ val hsl_output_buf : st:hsl_state -> GTot (lbuffer8 (hsl_output_buf_len st))
 val hsl_output_index : HS.mem -> st:hsl_state -> GTot (i:uint_32{i <= hsl_output_buf_len st})
 
 
-val hsl_input_hash_index (h:HS.mem) (st:hsl_state) : GTot uint_32
+val hsl_output_hash_index (h:HS.mem) (st:hsl_state) : GTot uint_32
 
 
 /// HSL footprint
 /// Local footprint is abstract and is allocated in the region provided at the creation time
 
-val hsl_local_footprint : hsl_state -> B.loc
+val hsl_local_footprint : hsl_state -> GTot B.loc
 
 let hsl_footprint (h:HS.mem) (st:hsl_state) : GTot B.loc =
   let open B in
@@ -172,14 +169,24 @@ val hash_alg : HS.mem -> hsl_state -> GTot (option Hash.alg)
 
 val transcript : HS.mem -> hsl_state -> GTot hs_transcript
 
+
+/// With an abstract, state dependent invariant
+///
+/// TODO: Overwrite buffers for new flights OR content remains same?
+///       For the I/O buffers
+
+val hsl_invariant : HS.mem -> hsl_state -> Type0
+
+
 /// Invariant elimination
 
 val elim_hsl_invariant (st:hsl_state) (h:HS.mem)
   : Lemma (requires (hsl_invariant h st))
-          (ensures  (B.live h (hsl_input_buf st) /\ B.live h (hsl_output_buf st) /\
-	             B.loc_pairwise_disjoint [hsl_local_footprint st; B.loc_buffer (hsl_input_buf st);
-		                              B.loc_buffer (hsl_output_buf st)] /\
-	             valid_transcript (transcript h st)))
+          (ensures  (B.live h (hsl_input_buf st) /\
+                     B.live h (hsl_output_buf st) /\
+	             B.all_disjoint [hsl_local_footprint st;
+                                     B.loc_buffer (hsl_input_buf st);
+		                     B.loc_buffer (hsl_output_buf st)]))
 	  [SMTPat (hsl_invariant h st)]
 
 /// Invariant framing
@@ -188,7 +195,6 @@ val frame_hsl_invariant (st:hsl_state) (h0 h1:HS.mem) (l:B.loc)
   : Lemma (requires (hsl_invariant h0 st /\ B.modifies l h0 h1 /\ B.loc_disjoint (hsl_footprint h0 st) l))
           (ensures  (hsl_footprint h0 st == hsl_footprint h1 st /\ hsl_invariant h1 st))
           [SMTPat (hsl_invariant h1 st); SMTPat (B.modifies l h0 h1)]
-
 
 /// Creation of the log
 
