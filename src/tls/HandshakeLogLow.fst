@@ -192,6 +192,6 @@ let hsl_invariant h s = hsl_invariant' h s
 
 let elim_hsl_invariant (st:hsl_state) (h:HS.mem) = ()
 
-#push-options "--max_fuel 0 --z3rlimit_factor 2"
+#push-options "--max_fuel 0 --max_ifuel 0 --z3rlimit_factor 2"
 let frame_hsl_invariant (s:hsl_state) (h0 h1:HS.mem) (l:B.loc) = ()
 #pop-options
