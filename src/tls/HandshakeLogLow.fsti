@@ -171,13 +171,6 @@ val elim_hsl_invariant (st:hsl_state) (h:HS.mem)
                                      B.loc_buffer (hsl_input_buf st)]))
 	  [SMTPat (hsl_invariant st h)]
 
-/// Invariant framing
-
-val frame_hsl_invariant (st:hsl_state) (h0 h1:HS.mem) (l:B.loc)
-  : Lemma (requires (hsl_invariant st h0 /\ B.modifies l h0 h1 /\ B.loc_disjoint (hsl_footprint st h0) l))
-          (ensures  (hsl_footprint st h0 == hsl_footprint st h1 /\ hsl_invariant st h1))
-          [SMTPat (hsl_invariant st h1); SMTPat (B.modifies l h0 h1)]
-
 /// Frame the mem-dependent functions
 
 unfold let state_framing (st:hsl_state) (h0 h1:HS.mem)
@@ -190,6 +183,14 @@ unfold let state_framing (st:hsl_state) (h0 h1:HS.mem)
 val frame_hsl_state (st:hsl_state) (h0 h1:HS.mem) (l:B.loc)
   : Lemma (requires (B.modifies l h0 h1 /\ B.loc_disjoint (hsl_footprint st h0) l))
           (ensures  (state_framing st h0 h1))
+
+/// Invariant framing
+
+val frame_hsl_invariant (st:hsl_state) (h0 h1:HS.mem) (l:B.loc)
+  : Lemma (requires (hsl_invariant st h0 /\ B.modifies l h0 h1 /\ B.loc_disjoint (hsl_footprint st h0) l))
+          (ensures  (hsl_footprint st h0 == hsl_footprint st h1 /\ hsl_invariant st h1))
+          [SMTPat (hsl_invariant st h1); SMTPat (B.modifies l h0 h1)]
+
 
 /// Creation of the log
 

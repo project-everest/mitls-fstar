@@ -265,8 +265,13 @@ let hsl_invariant s h =
   //                           #(transcript h s)
   //                           (get_tx h s)
 
-let elim_hsl_invariant st h = admit ()
+let elim_hsl_invariant st h =
+  match B.deref h st.hash_state with
+  | None -> ()
+  | Some (| _, _ |) -> ()
+
+let frame_hsl_state s h0 h1 l = admit ()
 
 #push-options "--max_fuel 0 --max_ifuel 0 --z3rlimit_factor 2"
-let frame_hsl_invariant (s:hsl_state) (h0 h1:HS.mem) (l:B.loc) = admit ()
+let frame_hsl_invariant s h0 h1 l = admit ()
 #pop-options
