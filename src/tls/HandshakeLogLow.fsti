@@ -15,10 +15,8 @@ module HashSpec = Hashing.Spec
 module HSM = HandshakeMessages
 
 module LP = LowParse.Low.Base
-
+open HandshakeLog.Common
 #reset-options "--max_fuel 0 --max_ifuel 0 --using_facts_from '* -LowParse'"
-
-type hbytes = Spec.Hash.Definitions.bytes
 
 /// HandshakeMessages related definitions
 
@@ -60,35 +58,6 @@ let tagged : msg -> bool =
   | _ -> false
 // NB CCS is not explicitly handled here, but can trigger tagging and end-of-flights -- comment copied from HandshakeLog
 
-
-/// Towards defining validity of a transcript
-
-let weak_valid_transcript (msgs:list msg) =
-  let open HSM in
-  match msgs with
-  | []
-  | [ClientHello _]
-  | ClientHello _ :: ServerHello _ :: _ -> True
-  | _ -> False
-
-let transcript_version (msgs:list msg) :option C.protocolVersion =
-  let open HSM in
-  match msgs with
-  | ClientHello _ :: ServerHello sh :: _ -> Some sh.sh_protocol_version
-  | _ -> None
-
-let valid_transcript (msgs:list msg) =
-  let version_opt = transcript_version msgs in
-  weak_valid_transcript msgs /\
-  (forall (m:msg).{:pattern List.memP m msgs} 
-    List.memP m msgs ==>
-    HSM.valid_hs_msg_prop version_opt m)
-
-
-/// Finally define the hs_transcript type
-
-type hs_transcript = list msg
-
 /// HSL main API
 
 type lbuffer8 (l:uint_32) = b:B.buffer uint_8{B.len b == l}
@@ -98,144 +67,79 @@ type lbuffer8 (l:uint_32) = b:B.buffer uint_8{B.len b == l}
 
 val hsl_state : Type0
 
-
-/// Length of the input buffer that HSL reads from
-
-val hsl_input_buf_len : hsl_state -> uint_32
-
-
-/// Input buffer itself
-
-val hsl_input_buf : st:hsl_state -> GTot (lbuffer8 (hsl_input_buf_len st))
-
-
 /// Index of the input buffer where HSL is at
 /// Client (Record) should only add to the buffer at and after this index
 
-val hsl_input_index : st:hsl_state -> HS.mem -> GTot (i:uint_32{i <= hsl_input_buf_len st})
+val index_from : st:hsl_state -> HS.mem -> GTot uint_32
+val index_to : st:hsl_state -> HS.mem -> GTot uint_32
 
+/// Bytes parsed so far
+
+val parsed_bytes : st:hsl_state -> HS.mem -> GTot hbytes
+
+val invariant : hsl_state -> HS.mem -> prop
 
 /// HSL footprint
-/// Local footprint is abstract and is allocated in the region provided at the creation time
-
-val hsl_local_footprint : hsl_state -> HS.mem -> GTot B.loc
-
-let hsl_footprint (st:hsl_state) (h:HS.mem) : GTot B.loc =
-  let open B in
-  loc_union (hsl_local_footprint st h)  //local footprint
-            (loc_buffer (gsub (hsl_input_buf st) 0ul (hsl_input_index st h)))  //input buffer upto index
-
-
-/// State dependent predicate
-/// If true, HandShake can write
-
-val writing : hsl_state -> HS.mem -> GTot bool
-
-
-/// Hashing algorithm in use
-
-val hash_alg : hsl_state -> HS.mem -> GTot (option Hash.alg)
-
-
-/// Transcript of the messages so far, in both directions
-
-val transcript : hsl_state -> HS.mem -> GTot hs_transcript
-
-
-/// TODO: define using high-level serializers from LowParse
-
-val format_hs_msg (m:msg) : Tot hbytes
-
-#push-options "--max_ifuel 1"
-let rec transcript_bytes (l:list msg) : Tot hbytes =
-  match l with
-  | []   -> Seq.empty
-  | m::tl -> Seq.append (format_hs_msg m) (transcript_bytes tl)
-#pop-options
-
-
-/// With an abstract, state dependent invariant
-///
-/// TODO: Overwrite buffers for new flights OR content remains same?
-///       For the I/O buffers
-
-val hsl_invariant : hsl_state -> HS.mem -> Type0
-
-
-/// Invariant elimination
-
-val elim_hsl_invariant (st:hsl_state) (h:HS.mem)
-  : Lemma (requires (hsl_invariant st h))
-          (ensures  (B.live h (hsl_input_buf st) /\
-	             B.all_disjoint [hsl_local_footprint st h;
-                                     B.loc_buffer (hsl_input_buf st)]))
-	  [SMTPat (hsl_invariant st h)]
+val footprint : hsl_state -> GTot B.loc
 
 /// Frame the mem-dependent functions
 
 unfold let state_framing (st:hsl_state) (h0 h1:HS.mem)
-  = hsl_local_footprint st h0 == hsl_local_footprint st h1 /\
-    hsl_input_index st h0 == hsl_input_index st h1 /\
-    writing st h0 == writing st h1                 /\
-    hash_alg st h0 == hash_alg st h1               /\
-    transcript st h0 == transcript st h1
+  = index_from st h0 == index_from st h1 /\
+    index_to st h0 == index_to st h1 /\  
+    parsed_bytes st h0 == parsed_bytes st h1
 
 val frame_hsl_state (st:hsl_state) (h0 h1:HS.mem) (l:B.loc)
-  : Lemma (requires (B.modifies l h0 h1 /\ B.loc_disjoint (hsl_footprint st h0) l))
-          (ensures  (state_framing st h0 h1))
-
-/// Invariant framing
-
-val frame_hsl_invariant (st:hsl_state) (h0 h1:HS.mem) (l:B.loc)
-  : Lemma (requires (hsl_invariant st h0 /\ B.modifies l h0 h1 /\ B.loc_disjoint (hsl_footprint st h0) l))
-          (ensures  (hsl_footprint st h0 == hsl_footprint st h1 /\ hsl_invariant st h1))
-          [SMTPat (hsl_invariant st h1); SMTPat (B.modifies l h0 h1)]
-
+  : Lemma
+    (requires 
+      B.modifies l h0 h1 /\
+      B.loc_disjoint (footprint st) l /\
+      invariant st h0)
+    (ensures 
+      state_framing st h0 h1 /\
+      invariant st h1)
 
 /// Creation of the log
-
-unfold private let create_post (r:Mem.rgn)
-                               (input_len:uint_32) (input_buf:lbuffer8 input_len)
+unfold
+private
+let create_post (r:Mem.rgn)
   : HS.mem -> hsl_state -> HS.mem -> Type0
-
   = fun h0 st h1 ->
-    hsl_input_buf_len st == input_len /\ hsl_input_buf st == input_buf /\
-    hsl_input_index st h1 == 0ul /\  //input index is 0
-    B.fresh_loc (hsl_local_footprint st h1) h0 h1 /\  //local footprint is fresh
-    B.loc_includes (B.loc_regions true (Set.singleton r)) (hsl_local_footprint st h1) /\  //TODO: local footprint is in r only
-    hsl_invariant st h1 /\  //invariant holds
-    writing st h1 /\  //Handshake can write
-    hash_alg st h1 == None /\  //hash_alg is not set
-    transcript st h1 == [] /\  //empty transcript
-    B.modifies B.loc_none h0 h1  //did not modify anything
+    index_from st h1 = 0ul /\
+    index_to st h1 = 0ul /\    
+    parsed_bytes st h0 == Seq.empty /\
+    B.fresh_loc (footprint st) h0 h1 /\  //local footprint is fresh
+    B.loc_includes (B.loc_regions true (Set.singleton r)) (footprint st) /\
+    B.modifies B.loc_none h0 h1 /\ //did not modify anything
+    invariant st h1
   
-val create (r:Mem.rgn) (pv:option C.protocolVersion)  //TODO: pv is always None?
-           (input_len:uint_32) (input_buf:lbuffer8 input_len)
-  : ST hsl_state (requires (fun h0 -> B.live h0 input_buf))
-                 (ensures  (create_post r input_len input_buf))
+val create (r:Mem.rgn)
+  : ST hsl_state 
+       (requires fun h0 -> True)
+       (ensures create_post r)
 
 
-/// Setting parameters such as the hashing algorithm
+// /// Setting parameters such as the hashing algorithm
 
-unfold private let set_params_post (st:hsl_state) (a:Hashing.alg)
-  : HS.mem -> unit -> HS.mem -> Type0
+// unfold private let set_params_post (st:hsl_state) (a:Hashing.alg)
+//   : HS.mem -> unit -> HS.mem -> Type0
 
-  = fun h0 _ h1 ->
-    //TODO: this is quite weak
-    //      it increases the local footprint with a fresh loc
-    //      exists l. hsl_local_footprint st h1 == loc_union l hsl_local_footprint st h0?
-    //      can we do it without the quantifier?
-    B.modifies (hsl_local_footprint st h1) h0 h1 /\  //modifies only local footprint
-    transcript st h1 == transcript st h0 /\  //transcript remains same
-    writing st h1 == writing st h0 /\  //writing capability remains same
-    hsl_input_index st h1 == hsl_input_index st h0 /\  //input index remains same
-    hash_alg st h1 == Some a /\  //hash algorithm is set
-    hsl_invariant st h1  //invariant holds
+//   = fun h0 _ h1 ->
+//     //TODO: this is quite weak
+//     //      it increases the local footprint with a fresh loc
+//     //      exists l. hsl_local_footprint st h1 == loc_union l hsl_local_footprint st h0?
+//     //      can we do it without the quantifier?
+//     B.modifies (hsl_local_footprint st h1) h0 h1 /\  //modifies only local footprint
+//     transcript st h1 == transcript st h0 /\  //transcript remains same
+//     writing st h1 == writing st h0 /\  //writing capability remains same
+//     hsl_input_index st h1 == hsl_input_index st h0 /\  //input index remains same
+//     hash_alg st h1 == Some a /\  //hash algorithm is set
+//     hsl_invariant st h1  //invariant holds
 
-val set_params (st:hsl_state) (_:C.protocolVersion) (a:Hashing.alg) (_:option CipherSuite.kexAlg)
-               (_:option CommonDH.group)
-  : ST unit (requires (fun h0 -> hash_alg st h0 == None /\ hsl_invariant st h0))
-            (ensures  (set_params_post st a))
+// val set_params (st:hsl_state) (_:C.protocolVersion) (a:Hashing.alg) (_:option CipherSuite.kexAlg)
+//                (_:option CommonDH.group)
+//   : ST unit (requires (fun h0 -> hash_alg st h0 == None /\ hsl_invariant st h0))
+//             (ensures  (set_params_post st a))
 
 
 /// Receive API
@@ -266,126 +170,68 @@ type flight_c_ske_shd = {
 
 /// AR: other flights would be defined similarly, not defining them since it would change when we use QD types
 
+let b8 = B.buffer uint_8
 
-/// TODO: LowParse definition of saying buf is a valid serialization of m
-
-val valid_parsing_aux (m:HSM.hs_msg) (buf:B.buffer uint_8) (h:HS.mem) : Type0
-
-/// Helper to enforce spatial safety of indices in the st input buffer
-/// and that the buffer is a serialization of m
-
-unfold let valid_parsing (m:HSM.hs_msg) (begin_idx:uint_32) (end_idx:uint_32) (st:hsl_state) (h:HS.mem) =
-  begin_idx <= end_idx /\ end_idx <= hsl_input_buf_len st /\
-  (let buf = B.gsub (hsl_input_buf st) begin_idx (end_idx - begin_idx) in
-   valid_parsing_aux m buf h)
 
 /// Validitity postcondition on the flights
+let valid_flight_t 'a =
+  (flt:'a) -> (flight_end:uint_32) -> (b:b8) -> (h:HS.mem) -> Type0
+let valid_flight_hrr : valid_flight_t flight_hrr =
+  fun (flt:flight_hrr) (flight_end:uint_32) (b:b8) (h:HS.mem) ->
+    valid_parsing (HSM.HelloRetryRequest (G.reveal flt.hrr_msg)) flt.begin_hrr flight_end b h
 
-let valid_flight_hrr (flt:flight_hrr) (flight_end:uint_32) (st:hsl_state) (h:HS.mem) =
-  valid_parsing (HSM.HelloRetryRequest (G.reveal flt.hrr_msg)) flt.begin_hrr flight_end st h
-
-let valid_flight_c_ske_shd (flt:flight_c_ske_shd) (flight_end:uint_32) (st:hsl_state) (h:HS.mem) =
+let valid_flight_c_ske_shd (flt:flight_c_ske_shd) (flight_end:uint_32) (b:b8) (h:HS.mem) =
   (* c msg *)
-  valid_parsing (HSM.Certificate (G.reveal flt.c_msg)) flt.begin_c flt.begin_ske st h /\
+  valid_parsing (HSM.Certificate (G.reveal flt.c_msg)) flt.begin_c flt.begin_ske b h /\
   (* ske msg *)
-  valid_parsing (HSM.ServerKeyExchange (G.reveal flt.ske_msg)) flt.begin_ske flt.begin_shd st h /\
+  valid_parsing (HSM.ServerKeyExchange (G.reveal flt.ske_msg)) flt.begin_ske flt.begin_shd b h /\
   (* shd *)
-  valid_parsing HSM.ServerHelloDone flt.begin_shd flight_end st h
+  valid_parsing HSM.ServerHelloDone flt.begin_shd flight_end b h
 
 (* ... and so on for other flights *)
 
-unfold private let receive_pre (st:hsl_state) (p:uint_32) : HS.mem -> Type0
-  = fun h0 ->
-    hsl_invariant st h0 /\        //invariant should hold
-    hsl_input_index st h0 <= p /\  //should have written >= 0 bytes (> 0?)
-    p <= hsl_input_buf_len st   //p should be in the input buffer range
+unfold 
+private
+let basic_pre_post (st:hsl_state) (b:b8) (p:uint_32{p <= B.len b}) : HS.mem -> Type0
+  = fun h ->
+    let from = index_from st h in
+    let to = index_to st h in
+    invariant st h /\
+    from <= to /\
+    to <= p /\
+    B.as_seq h (B.gsub b from (to - from)) == parsed_bytes st h
 
-unfold private let receive_post_basic (st:hsl_state) (p:uint_32) (h0 h1:HS.mem) =
-  hsl_local_footprint st h0 == hsl_local_footprint st h1 /\  //local footprint remains same
-  B.modifies (hsl_local_footprint st h0) h0 h1 /\  //only local footprint is modified
-  hash_alg st h1 == hash_alg st h0 /\  //hash alg remains same
-  hsl_invariant st h1 /\  //invariant holds in h1
-  hsl_input_index st h1 == p /\  //input index is advanced to p
-  transcript st h0 == transcript st h1  //transcript remains same, as it represents the hashed transcript
+unfold
+private
+let receive_post 
+      (st:hsl_state)
+      (b:b8)
+      (p:uint_32{p <= B.len b})
+      (f:valid_flight_t 'a)
+      (h0:HS.mem)
+      (x:TLSError.result (option 'a))
+      (h1:HS.mem) =
+  basic_pre_post st b p h1 /\
+  B.modifies (footprint st) h0 h1 /\  //only local footprint is modified
+  index_from st h0 == index_from st h1 /\
+  index_to st h1 <= p /\
+  (let open FStar.Error in
+   match x with
+   | Error _ -> True  //underspecified
+   | Correct None -> True  //waiting for more data
+   | Correct (Some flt) ->
+     f flt p b h1 /\  //flight specific postcondition
+     index_to st h1 == p)
 
-unfold private let receive_post_common (st:hsl_state) (p:uint_32) (eof:uint_32) (h1:HS.mem) =
-  writing st h1 /\ eof <= p
+val receive_flight_hrr (st:hsl_state) (b:b8) (p:uint_32{p <= B.len b})
+  : ST (TLSError.result (option flight_hrr))    //end input buffer index for the flight
+       (requires basic_pre_post st b p)
+       (ensures  receive_post st b p valid_flight_hrr)
 
-val receive_flight_hrr (st:hsl_state) (p:uint_32)
-  : ST (TLSError.result (option (flight_hrr &  //returned flight
-                                 uint_32)))    //end input buffer index for the flight
-       (requires (receive_pre st p))
-       (ensures  (fun h0 r h1 ->
-                  let open FStar.Error in
-                  receive_post_basic st p h0 h1 /\  //this is unconditional on parsing success/failure
-		  (match r with
-		   | Error _ -> True  //underspecified
-		   | Correct None -> True  //waiting for more data
-		   | Correct (Some (flt, eof)) ->
-		     valid_flight_hrr flt eof st h1 /\  //flight specific postcondition
-		     receive_post_common st p eof h1)))
-
-val receive_flight_c_ske_shd (st:hsl_state) (p:uint_32)
-  : ST (TLSError.result (option (flight_c_ske_shd &  //returned flight
-                                 uint_32)))          //end input buffer index for the flight
-       (requires (receive_pre st p))
-       (ensures  (fun h0 r h1 ->
-                  let open FStar.Error in
-                  receive_post_basic st p h0 h1 /\  //this is unconditional on parsing success/failure
-		  (match r with
-		   | Error _ -> True  //underspecified
-		   | Correct None -> True  //waiting for more data
-		   | Correct (Some (flt, eof)) ->
-		     valid_flight_c_ske_shd flt eof st h1 /\  //flight specific postcondition
-		     receive_post_common st p eof h1)))
-
-/// For hashing, the state is maintained by the client (HS)
-/// Through postconditions of receive, it should be able to prove the preconditions
-
-val hash_input (st:hsl_state) (p0 p1:uint_32) (m:G.erased (HSM.hs_msg))
-  : ST unit (fun h0      -> hsl_invariant st h0 /\ valid_parsing (G.reveal m) p0 p1 st h0)
-            (fun h0 _ h1 ->
-	     hsl_invariant st h1 /\
-	     state_framing st h0 h1 /\
-	     B.modifies (hsl_local_footprint st h1) h0 h1 /\
-	     transcript st h1 == transcript st h0 @ [G.reveal m])  //transcript is of hashed messages
-
-/// TODO: this hashes predicate will be defined in terms of the underlying hash module (e.g. incremental or CRF)
-
-val buf_is_hash_of_b (a:Hash.alg) (buf:Hacl.Hash.Definitions.hash_t a) (b:hbytes) : Type0
-
-let buf_is_hash_of_transcript (a:Hash.alg) (st:hsl_state) (h:HS.mem)
-                              (buf:Hacl.Hash.Definitions.hash_t a)
-  = buf_is_hash_of_b a buf (transcript_bytes (transcript st h))
-
-val extract_hash (#a:Hash.alg) (st:hsl_state) (tag:Hacl.Hash.Definitions.hash_t a)
-  : ST unit (fun h0 ->
-             hsl_invariant st h0 /\
-             Some? (hash_alg st h0) /\ Some?.v (hash_alg st h0) == a /\
-             B.live h0 tag /\
-	     B.loc_disjoint (hsl_footprint st h0) (B.loc_buffer tag))
-	    (fun h0 _ h1 ->
-	     hsl_invariant st h1 /\
-	     state_framing st h0 h1 /\
-	     B.(modifies (loc_union (loc_buffer tag) (hsl_local_footprint st h1)) h0 h1) /\
-	     buf_is_hash_of_transcript a st h1 tag)
-
-
-val send (st:hsl_state) (outbuf:B.buffer uint_8) (p0 p1:uint_32) (m:G.erased msg)
-  : ST unit (fun h0 ->
-             writing st h0 /\
-             hsl_invariant st h0 /\
-	     B.live h0 outbuf /\
-             p0 <= p1 /\ p1 <= B.len outbuf /\
-             valid_parsing_aux (G.reveal m) (B.gsub outbuf p0 (p1 - p0)) h0)
-	    (fun h0 _ h1 ->
-	     hsl_local_footprint st h0 == hsl_local_footprint st h1 /\
-             hsl_input_index st h0 == hsl_input_index st h1 /\
-             hash_alg st h0 == hash_alg st h1 /\
-	     writing st h1 /\
-	     hsl_invariant st h1 /\
-	     transcript st h1 == transcript st h0 @ [G.reveal m] /\
-	     B.modifies (hsl_local_footprint st h1) h0 h1)
+val receive_flight_c_ske_shd (st:hsl_state) (b:b8) (p:uint_32{p <= B.len b})
+  : ST (TLSError.result (option flight_c_ske_shd))
+       (requires basic_pre_post st b p)
+       (ensures  receive_post st b p valid_flight_c_ske_shd)
 
 
 (*
