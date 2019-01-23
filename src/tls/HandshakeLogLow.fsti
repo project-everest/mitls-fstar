@@ -120,9 +120,6 @@ val hsl_input_buf : st:hsl_state -> GTot (lbuffer8 (hsl_input_buf_len st))
 val hsl_input_index : HS.mem -> st:hsl_state -> GTot (i:uint_32{i <= hsl_input_buf_len st})
 
 
-val hsl_input_hash_index (h:HS.mem) (st:hsl_state) : GTot uint_32
-
-
 /// Length of the output buffer, Handshake writes to it
 
 val hsl_output_buf_len : hsl_state -> uint_32
@@ -137,9 +134,6 @@ val hsl_output_buf : st:hsl_state -> GTot (lbuffer8 (hsl_output_buf_len st))
 /// Client (Handshake) should only add to the buffer at and after this index
 
 val hsl_output_index : HS.mem -> st:hsl_state -> GTot (i:uint_32{i <= hsl_output_buf_len st})
-
-
-val hsl_output_hash_index (h:HS.mem) (st:hsl_state) : GTot uint_32
 
 
 /// HSL footprint
@@ -208,7 +202,6 @@ unfold private let create_post (r:Mem.rgn)
     hsl_output_buf_len st == output_len /\ hsl_output_buf st == output_buf /\  //I/O bufs are as given
     hsl_input_index h1 st == 0ul /\  //input index is 0
     hsl_output_index h1 st == 0ul /\  //output index is 0
-    hsl_input_hash_index h1 st == 0ul /\
     B.fresh_loc (hsl_local_footprint st) h0 h1 /\  //local footprint is fresh
     B.loc_includes (B.loc_regions true (Set.singleton r)) (hsl_local_footprint st) /\  //TODO: local footprint is in r only
     hsl_invariant h1 st /\  //invariant holds
@@ -237,7 +230,6 @@ unfold private let set_params_post (st:hsl_state) (a:Hashing.alg)
     writing h1 st == writing h0 st /\  //writing capability remains same
     hsl_input_index h1 st == hsl_input_index h0 st /\  //input index remains same
     hsl_output_index h1 st == hsl_output_index h0 st /\  //output index remains same
-    hsl_input_hash_index h1 st == hsl_input_hash_index h0 st /\  //output index remains same
     hash_alg h1 st == Some a /\  //hash algorithm is set
     hsl_invariant h1 st  //invariant holds
                          //NB: we are not saying hsl_footprint is same explicitly, it is derivable though, as shown below
@@ -286,9 +278,12 @@ type flight_c_ske_shd = {
 
 
 /// LowParse definition of saying buf is a valid serialization of m
+
 val valid_parsing_aux (m:HSM.hs_msg) (buf:B.buffer uint_8) (h:HS.mem) : Type0
 
 /// Helper to enforce spatial safety of indices in the st input buffer
+/// and that the buffer is a serialization of m
+
 unfold let valid_parsing (m:HSM.hs_msg) (begin_idx:uint_32) (end_idx:uint_32) (st:hsl_state) (h:HS.mem) =
   begin_idx <= end_idx /\ end_idx <= hsl_input_buf_len st /\
   (let buf = B.gsub (hsl_input_buf st) begin_idx (end_idx - begin_idx) in
@@ -297,11 +292,9 @@ unfold let valid_parsing (m:HSM.hs_msg) (begin_idx:uint_32) (end_idx:uint_32) (s
 /// Validitity postcondition on the flights
 
 let valid_flight_hrr (flt:flight_hrr) (flight_end:uint_32) (st:hsl_state) (h:HS.mem) =
-  flt.begin_hrr == hsl_input_hash_index h st /\
   valid_parsing (HSM.HelloRetryRequest (G.reveal flt.hrr_msg)) flt.begin_hrr flight_end st h
 
 let valid_flight_c_ske_shd (flt:flight_c_ske_shd) (flight_end:uint_32) (st:hsl_state) (h:HS.mem) =
-  flt.begin_c == hsl_input_hash_index h st /\
   (* c msg *)
   valid_parsing (HSM.Certificate (G.reveal flt.c_msg)) flt.begin_c flt.begin_ske st h /\
   (* ske msg *)
@@ -323,7 +316,6 @@ unfold private let receive_post_basic (st:hsl_state) (p:uint_32) (h0 h1:HS.mem) 
   hsl_invariant h1 st /\  //invariant holds in h1
   hsl_output_index h1 st == hsl_output_index h0 st /\  //output index remains same
   hsl_input_index h1 st == p /\  //input index is advanced to p
-  hsl_input_hash_index h1 st == hsl_input_hash_index h0 st /\
   transcript h0 st == transcript h1 st  //transcript remains same, as it represents the hashed transcript
 
 unfold private let receive_post_common (st:hsl_state) (p:uint_32) (eof:uint_32) (h1:HS.mem) =
@@ -356,6 +348,9 @@ val receive_flight_c_ske_shd (st:hsl_state) (p:uint_32)
 		   | Correct (Some (flt, eof)) ->
 		     valid_flight_c_ske_shd flt eof st h1 /\  //flight specific postcondition
 		     receive_post_common st p eof h1)))
+
+/// For hashing, the state is maintained by the client (HS)
+/// Through postconditions of receive, it should be able to prove the preconditions
 
 val hash_input (st:hsl_state) (p0 p1:uint_32) (m:G.erased (HSM.hs_msg))
   : ST unit (fun h0      -> hsl_invariant h0 st /\ valid_parsing (G.reveal m) p0 p1 st h0)
