@@ -1,5 +1,5 @@
 [
-  "v^k­.‡Í Ú¹ÞÇ@•\u0001Ã",
+  "ˆ¨ævàŒ>q\u0000\u001fìh2»ˆª",
   [
     [
       "Parsers.TicketContents.ticketContents",
@@ -12,35 +12,35 @@
         "assumption_Parsers.TicketContents13.ticketContents13__uu___haseq"
       ],
       0,
-      "07ccd3a42c805e03fffdb4cdb8d0b039"
+      "1bdc75b8f51b6bc71d5b033161af30a7"
     ],
     [
-      "Parsers.TicketContents.__proj__Case_ticket12__item___0",
+      "Parsers.TicketContents.__proj__T_ticket12__item___0",
       1,
       2,
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "disc_equation_Parsers.TicketContents.Case_ticket12",
+        "disc_equation_Parsers.TicketContents.T_ticket12",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Parsers.TicketContents_Tm_refine_a01328d2df31c2e1a9ec67a74b088384"
+        "refinement_interpretation_Parsers.TicketContents_Tm_refine_b299865d9bccd2c126569cc5790eb2d3"
       ],
       0,
-      "63368bee47e864fe6a108663d352037b"
+      "1d845f2f748194d7f985258ffab93d96"
     ],
     [
-      "Parsers.TicketContents.__proj__Case_ticket13__item___0",
+      "Parsers.TicketContents.__proj__T_ticket13__item___0",
       1,
       2,
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "disc_equation_Parsers.TicketContents.Case_ticket13",
+        "disc_equation_Parsers.TicketContents.T_ticket13",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Parsers.TicketContents_Tm_refine_9a6575d8c0942976c2d5c1c12a234833"
+        "refinement_interpretation_Parsers.TicketContents_Tm_refine_25cd0b2d227621ce4018fcecfa2c2182"
       ],
       0,
-      "ad813700db5697b778d45d879672be22"
+      "264649e6ddf6dae7b2e4666ab369aa24"
     ],
     [
       "Parsers.TicketContents.tag_of_ticketContents",
@@ -49,12 +49,24 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "disc_equation_Parsers.TicketContents.Case_ticket12",
-        "disc_equation_Parsers.TicketContents.Case_ticket13",
+        "disc_equation_Parsers.TicketContents.T_ticket12",
+        "disc_equation_Parsers.TicketContents.T_ticket13",
         "fuel_guarded_inversion_Parsers.TicketContents.ticketContents"
       ],
       0,
-      "d156c18b06a4ea8b8f6aec01544de992"
+      "1e2ba63265b8b1b9c3cab6bb570e33d6"
+    ],
+    [
+      "Parsers.TicketContents.lemma_valid_ticketContents_valid_ticketVersion",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.squash",
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+      ],
+      0,
+      "33543b286150f9ccf96e6121cbf0d329"
     ]
   ]
 ]

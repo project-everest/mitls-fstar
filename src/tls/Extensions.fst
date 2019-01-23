@@ -1433,22 +1433,11 @@ let negotiateServerExtensions pv cExtL csl cfg cs ri pski ks resuming =
      end
 
 // https://tools.ietf.org/html/rfc5246#section-7.4.1.4.1
-private val default_signatureScheme_fromSig: protocolVersion -> sigAlg ->
-  HyperStack.All.ML (l:list signatureScheme{List.Tot.length l == 1})
-let default_signatureScheme_fromSig pv sigAlg =
-  let open Hashing.Spec in
-  match sigAlg with
-  | RSASIG ->
-    begin
-    match pv with
-    | TLS_1p2 -> [ RSA_PKCS1_SHA1 ]
-    | TLS_1p0 | TLS_1p1 | SSL_3p0 -> [ RSA_PKCS1_SHA1 ] // was MD5SHA1
-    | TLS_1p3 -> unexpected "[default_signatureScheme_fromSig] invoked on TLS 1.3"
-    end
-  | ECDSA -> [ ECDSA_SHA1 ]
-  | _ -> unexpected "[default_signatureScheme_fromSig] invoked on an invalid signature algorithm"
-
 (* SI: API. Called by HandshakeMessages. *)
 let default_signatureScheme pv cs =
-  default_signatureScheme_fromSig pv (sigAlg_of_ciphersuite cs)
+  let open Hashing.Spec in
+  match sigAlg_of_ciphersuite cs with
+  | ECDSA -> [ Ecdsa_sha1 ]
+  | _ -> [ Rsa_pkcs1_sha1 ]
+
 #reset-options

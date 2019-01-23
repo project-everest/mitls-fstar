@@ -490,32 +490,32 @@ typedef struct {
   pfn_FFI_cert_verify_cb verify;
 } wrapped_cert_cb;
 
-static TLSConstants_signatureScheme_tags tls_of_pki(mitls_signature_scheme sa)
+static Parsers_SignatureScheme_signatureScheme_tags tls_of_pki(mitls_signature_scheme sa)
 {
   switch(sa)
   {
     //  rsa_pkcs1_sha1(0x0201),
-    case 0x0201: return TLSConstants_RSA_PKCS1_SHA1;
+    case 0x0201: return Parsers_SignatureScheme_Rsa_pkcs1_sha1;
     //  rsa_pkcs1_sha256(0x0401),
-    case 0x0401: return TLSConstants_RSA_PKCS1_SHA256;
+    case 0x0401: return Parsers_SignatureScheme_Rsa_pkcs1_sha256;
     //  rsa_pkcs1_sha384(0x0501),
-    case 0x0501: return TLSConstants_RSA_PKCS1_SHA384;
+    case 0x0501: return Parsers_SignatureScheme_Rsa_pkcs1_sha384;
     //  rsa_pkcs1_sha512(0x0601),
-    case 0x0601: return TLSConstants_RSA_PKCS1_SHA512;
+    case 0x0601: return Parsers_SignatureScheme_Rsa_pkcs1_sha512;
     //  rsa_pss_sha256(0x0804),
-    case 0x0804: return TLSConstants_RSA_PSS_SHA256;
+    case 0x0804: return Parsers_SignatureScheme_Rsa_pss_rsae_sha256;
     //  rsa_pss_sha384(0x0805),
-    case 0x0805: return TLSConstants_RSA_PSS_SHA384;
+    case 0x0805: return Parsers_SignatureScheme_Rsa_pss_rsae_sha384;
     //  rsa_pss_sha512(0x0806),
-    case 0x0806: return TLSConstants_RSA_PSS_SHA512;
+    case 0x0806: return Parsers_SignatureScheme_Rsa_pss_rsae_sha512;
     //  ecdsa_sha1(0x0203),
-    case 0x0203: return TLSConstants_ECDSA_SHA1;
+    case 0x0203: return Parsers_SignatureScheme_Ecdsa_sha1;
     //  ecdsa_secp256r1_sha256(0x0403),
-    case 0x0403: return TLSConstants_ECDSA_SECP256R1_SHA256;
+    case 0x0403: return Parsers_SignatureScheme_Ecdsa_secp256r1_sha256;
     //  ecdsa_secp384r1_sha384(0x0503),
-    case 0x0503: return TLSConstants_ECDSA_SECP384R1_SHA384;
+    case 0x0503: return Parsers_SignatureScheme_Ecdsa_secp384r1_sha384;
     //  ecdsa_secp521r1_sha512(0x0603),
-    case 0x0603: return TLSConstants_ECDSA_SECP521R1_SHA512;
+    case 0x0603: return Parsers_SignatureScheme_Ecdsa_secp521r1_sha512;
     //  ed25519(0x0807),
     //  ed448(0x0808),
     default:
@@ -524,32 +524,32 @@ static TLSConstants_signatureScheme_tags tls_of_pki(mitls_signature_scheme sa)
   }
 }
 
-static mitls_signature_scheme pki_of_tls(TLSConstants_signatureScheme_tags sa)
+static mitls_signature_scheme pki_of_tls(Parsers_SignatureScheme_signatureScheme_tags sa)
 {
   switch(sa)
   {
     //  rsa_pkcs1_sha1(0x0201),
-    case TLSConstants_RSA_PKCS1_SHA1: return 0x0201;
+    case Parsers_SignatureScheme_Rsa_pkcs1_sha1: return 0x0201;
     //  rsa_pkcs1_sha256(0x0401),
-    case TLSConstants_RSA_PKCS1_SHA256: return 0x0401;
+    case Parsers_SignatureScheme_Rsa_pkcs1_sha256: return 0x0401;
     //  rsa_pkcs1_sha384(0x0501),
-    case TLSConstants_RSA_PKCS1_SHA384: return 0x0501;
+    case Parsers_SignatureScheme_Rsa_pkcs1_sha384: return 0x0501;
     //  rsa_pkcs1_sha512(0x0601),
-    case TLSConstants_RSA_PKCS1_SHA512: return 0x0601;
+    case Parsers_SignatureScheme_Rsa_pkcs1_sha512: return 0x0601;
     //  rsa_pss_sha256(0x0804),
-    case TLSConstants_RSA_PSS_SHA256: return 0x0804;
+    case Parsers_SignatureScheme_Rsa_pss_rsae_sha256: return 0x0804;
     //  rsa_pss_sha384(0x0805),
-    case TLSConstants_RSA_PSS_SHA384: return 0x0805;
+    case Parsers_SignatureScheme_Rsa_pss_rsae_sha384: return 0x0805;
     //  rsa_pss_sha512(0x0806),
-    case TLSConstants_RSA_PSS_SHA512: return 0x0806;
+    case Parsers_SignatureScheme_Rsa_pss_rsae_sha512: return 0x0806;
     //  ecdsa_sha1(0x0203),
-    case TLSConstants_ECDSA_SHA1: return 0x0203;
+    case Parsers_SignatureScheme_Ecdsa_sha1: return 0x0203;
     //  ecdsa_secp256r1_sha256(0x0403),
-    case TLSConstants_ECDSA_SECP256R1_SHA256: return 0x0403;
+    case Parsers_SignatureScheme_Ecdsa_secp256r1_sha256: return 0x0403;
     //  ecdsa_secp384r1_sha384(0x0503),
-    case TLSConstants_ECDSA_SECP384R1_SHA384: return 0x0503;
+    case Parsers_SignatureScheme_Ecdsa_secp384r1_sha384: return 0x0503;
     //  ecdsa_secp521r1_sha512(0x0603),
-    case TLSConstants_ECDSA_SECP521R1_SHA512: return 0x0603;
+    case Parsers_SignatureScheme_Ecdsa_secp521r1_sha512: return 0x0603;
     //  ed25519(0x0807), ed448(0x0808),
     default:
       KRML_HOST_PRINTF("pki_of_tls: unsupported (%d)\n", sa);
@@ -557,7 +557,7 @@ static mitls_signature_scheme pki_of_tls(TLSConstants_signatureScheme_tags sa)
   }
 }
 
-static size_t list_sa_len(Prims_list__TLSConstants_signatureScheme *l)
+static size_t list_sa_len(Prims_list__Parsers_SignatureScheme_signatureScheme *l)
 {
   if (l->tag == Prims_Cons)
   {
@@ -566,16 +566,16 @@ static size_t list_sa_len(Prims_list__TLSConstants_signatureScheme *l)
   return 0;
 }
 
-static FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme
+static FStar_Pervasives_Native_option__K___uint64_t_Parsers_SignatureScheme_signatureScheme
   wrapped_select(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st, Parsers_ProtocolVersion_protocolVersion pv,
     FStar_Bytes_bytes sni, FStar_Bytes_bytes alpn,
-    Prims_list__TLSConstants_signatureScheme *sal)
+    Prims_list__Parsers_SignatureScheme_signatureScheme *sal)
 {
   wrapped_cert_cb* s = (wrapped_cert_cb*)cbs;
   size_t sigalgs_len = list_sa_len(sal);
   mitls_signature_scheme selected;
   mitls_signature_scheme *sigalgs = alloca(sigalgs_len*sizeof(mitls_signature_scheme));
-  Prims_list__TLSConstants_signatureScheme *cur = sal;
+  Prims_list__Parsers_SignatureScheme_signatureScheme *cur = sal;
 
   for(size_t i = 0; i < sigalgs_len; i++)
   {
@@ -583,7 +583,7 @@ static FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme
     cur = cur->tl;
   }
 
-  FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme res;
+  FStar_Pervasives_Native_option__K___uint64_t_Parsers_SignatureScheme_signatureScheme res;
   void* chain = s->select(s->cb_state, convert_pv(pv),
     (const unsigned char*)sni.data, sni.length,
     (const unsigned char*)alpn.data, alpn.length,
@@ -592,7 +592,7 @@ static FStar_Pervasives_Native_option__K___uint64_t_TLSConstants_signatureScheme
   if(chain == NULL) {
     res.tag = FStar_Pervasives_Native_None;
   } else {
-    K___uint64_t_TLSConstants_signatureScheme sig;
+    K___uint64_t_Parsers_SignatureScheme_signatureScheme sig;
     // silence a GCC warning about sig.snd._0.length possibly uninitialized
     memset(&sig, 0, sizeof(sig));
     res.tag = FStar_Pervasives_Native_Some;
@@ -615,7 +615,7 @@ static Prims_list__FStar_Bytes_bytes* wrapped_format(FStar_Dyn_dyn cbs, FStar_Dy
 
 static FStar_Pervasives_Native_option__FStar_Bytes_bytes wrapped_sign(
   FStar_Dyn_dyn cbs, FStar_Dyn_dyn st, uint64_t cert,
-  TLSConstants_signatureScheme sa, FStar_Bytes_bytes tbs)
+  Parsers_SignatureScheme_signatureScheme sa, FStar_Bytes_bytes tbs)
 {
   wrapped_cert_cb* s = (wrapped_cert_cb*)cbs;
   unsigned char* sig = KRML_HOST_MALLOC(MAX_SIGNATURE_LEN);
@@ -634,7 +634,7 @@ static FStar_Pervasives_Native_option__FStar_Bytes_bytes wrapped_sign(
 }
 
 static bool wrapped_verify(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
-  Prims_list__FStar_Bytes_bytes *certs, TLSConstants_signatureScheme sa,
+  Prims_list__FStar_Bytes_bytes *certs, Parsers_SignatureScheme_signatureScheme sa,
   FStar_Bytes_bytes tbs, FStar_Bytes_bytes sig)
 {
   wrapped_cert_cb* s = (wrapped_cert_cb*)cbs;
@@ -817,7 +817,7 @@ unsigned char *MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* 
 
 static int get_exporter(Connection_connection cxn, int early, /* out */ mitls_secret *secret)
 {
-  FStar_Pervasives_Native_option__K___Spec_Hash_Helpers_hash_alg_EverCrypt_aead_alg_FStar_Bytes_bytes ret;
+  FStar_Pervasives_Native_option__K___Spec_Hash_Definitions_hash_alg_EverCrypt_aead_alg_FStar_Bytes_bytes ret;
 
   ret = FFI_ffiGetExporter(cxn, (early) ? true : false);
   if (ret.tag != FStar_Pervasives_Native_Some) {

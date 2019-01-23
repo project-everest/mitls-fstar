@@ -58,9 +58,7 @@ type rw =
   | Reader
   | Writer
 
-/// 18-02-22 QD fodder?
-///
-(** Protocol version negotiated values *)
+/// PROTOCOL VERSION
 
 include Parsers.ProtocolVersion // for TLS_1p3, etc.
 
@@ -97,13 +95,10 @@ let minPV (a:protocolVersion) (b:protocolVersion) =
 
 let geqPV a b = (b = minPV a b)
 
-let string_of_pv = function
-  | SSL_3p0 -> "SSL3"
-  | TLS_1p0 -> "1.0"
-  | TLS_1p1 -> "1.1"
-  | TLS_1p2 -> "1.2"
-  | TLS_1p3 -> "1.3"
-  | Unknown_protocolVersion x -> "Unknown protocol version: " ^ string_of_int (UInt16.v x)
+// TODO, remove alias
+inline_for_extraction noextract let string_of_pv = string_of_protocolVersion 
+
+/// CIPHER SUITES
 
 include CipherSuite
 
@@ -175,180 +170,92 @@ let max_TLSCompressed_fragment_length    = max_TLSPlaintext_fragment_length + 10
 let max_TLSCiphertext_fragment_length    = max_TLSPlaintext_fragment_length + 2048
 let max_TLSCiphertext_fragment_length_13 = max_TLSPlaintext_fragment_length + 256
 
-
-/// SIGNATURE ALGORITHMS
-/// 18-02-22 QD fodder
+/// SIGNATURE SCHEME
  
-(* This is the old version of the inverse predicate. According to CF,
-   verification was harder with this style, so we moved to the new style with
-   pinverse_t + lemmas. The type abbrevations lemma_inverse_* minimize the
-   syntactic overhead.
-
-  logic type pinverse (#a:Type) (#b:Type) (r:b -> b -> Type) (=f:a -> Tot b) =
-    y:b -> Tot (xopt:result a{(forall (x:a). r (f x) y <==> (xopt = Correct x))})
-*)
-
-(** Payload of signature_algorithms extension, using format from TLS 1.3 spec
-    https://tlswg.github.io/tls13-spec/#signature-algorithms
-    https://tools.ietf.org/html/rfc5246#section-7.4.1.4.1
-*)
-type signatureScheme =
-  | RSA_PKCS1_SHA256
-  | RSA_PKCS1_SHA384
-  | RSA_PKCS1_SHA512
-  // ECDSA algorithms
-  | ECDSA_SECP256R1_SHA256
-  | ECDSA_SECP384R1_SHA384
-  | ECDSA_SECP521R1_SHA512
-  // RSASSA-PSS algorithms
-  | RSA_PSS_SHA256
-  | RSA_PSS_SHA384
-  | RSA_PSS_SHA512
-  // EdDSA algorithms
-  //  | ED25519_SHA512
-  //  | ED448_SHAKE256
-  // Legacy algorithms
-  | RSA_PKCS1_SHA1
-  | RSA_PKCS1_MD5SHA1 // Only used internally, with codepoint 0xFFFF (PRIVATE_USE)
-  | ECDSA_SHA1
-  // Reserved Code Points
-  | DSA_SHA1
-  | DSA_SHA256
-  | DSA_SHA384
-  | DSA_SHA512
-  | SIG_UNKNOWN of (codepoint: lbytes 2 {
-      let v = int_of_bytes codepoint in
-         v <> 0x0401 /\ v <> 0x0501 /\ v <> 0x0601 /\ v <> 0x0403
-       /\ v <> 0x0503 /\ v <> 0x0603 /\ v <> 0x0804 /\ v <> 0x0805
-       /\ v <> 0x0806
-       // /\ v <> 0x0807 /\ v <> 0x0808
-       /\ v <> 0x0201
-       /\ v <> 0x0203 /\ v <> 0x0202 /\ v <> 0x0402 /\ v <> 0x0502
-       /\ v <> 0x0602 /\ v <> 0xFFFF })
+// signatureScheme enum
+include Parsers.SignatureScheme
 
 let is_handshake13_signatureScheme = function
-  | ECDSA_SECP256R1_SHA256
-  | ECDSA_SECP384R1_SHA384
-  | ECDSA_SECP521R1_SHA512
-  //| ED25519_SHA512
-  //| ED448_SHAKE256
-  | RSA_PSS_SHA256
-  | RSA_PSS_SHA384
-  | RSA_PSS_SHA512 -> true
+  | Ecdsa_secp256r1_sha256
+  | Ecdsa_secp384r1_sha384
+  | Ecdsa_secp521r1_sha512
+  | Ed25519
+  | Ed448
+  | Rsa_pss_rsae_sha256
+  | Rsa_pss_rsae_sha384
+  | Rsa_pss_rsae_sha512
+  | Rsa_pss_pss_sha256
+  | Rsa_pss_pss_sha384
+  | Rsa_pss_pss_sha512 -> true
   | _ -> false
 
-val signatureSchemeBytes: s:signatureScheme -> lbytes 2
-let signatureSchemeBytes = function
-  | RSA_PKCS1_SHA256       -> twobytes (0x04z, 0x01z)
-  | RSA_PKCS1_SHA384       -> twobytes (0x05z, 0x01z)
-  | RSA_PKCS1_SHA512       -> twobytes (0x06z, 0x01z)
-  | ECDSA_SECP256R1_SHA256 -> twobytes (0x04z, 0x03z)
-  | ECDSA_SECP384R1_SHA384 -> twobytes (0x05z, 0x03z)
-  | ECDSA_SECP521R1_SHA512 -> twobytes (0x06z, 0x03z)
-  | RSA_PSS_SHA256         -> twobytes (0x08z, 0x04z)
-  | RSA_PSS_SHA384         -> twobytes (0x08z, 0x05z)
-  | RSA_PSS_SHA512         -> twobytes (0x08z, 0x06z)
-  //| ED25519_SHA512         -> twobytes (0x08z, 0x07z)
-  //| ED448_SHAKE256         -> twobytes (0x08z, 0x08z)
-  | RSA_PKCS1_SHA1         -> twobytes (0x02z, 0x01z)
-  | RSA_PKCS1_MD5SHA1      -> twobytes (0xFFz, 0xFFz)
-  | ECDSA_SHA1             -> twobytes (0x02z, 0x03z)
-  | DSA_SHA1               -> twobytes (0x02z, 0x02z)
-  | DSA_SHA256             -> twobytes (0x04z, 0x02z)
-  | DSA_SHA384             -> twobytes (0x05z, 0x02z)
-  | DSA_SHA512             -> twobytes (0x06z, 0x02z)
-  | SIG_UNKNOWN codepoint  -> codepoint
+let is_supported_signatureScheme = function
+  | Rsa_pkcs1_sha1
+  | Ecdsa_sha1
+  | Rsa_pkcs1_sha256
+  | Rsa_pkcs1_sha384
+  | Rsa_pkcs1_sha512
+  | Ecdsa_secp256r1_sha256
+  | Ecdsa_secp384r1_sha384
+  | Ecdsa_secp521r1_sha512
+  | Rsa_pss_rsae_sha256
+  | Rsa_pss_rsae_sha384
+  | Rsa_pss_rsae_sha512
+  | Rsa_pss_pss_sha256
+  | Rsa_pss_pss_sha384
+  | Rsa_pss_pss_sha512 -> true
+  | _ -> false
 
-assume val signatureSchemeBytes_is_injective:
-  s1: signatureScheme -> s2: signatureScheme ->
-  Lemma
-  (requires signatureSchemeBytes s1 == signatureSchemeBytes s2)
-  (ensures s1 == s2)
+type supported_signatureScheme = s:signatureScheme{is_supported_signatureScheme s}
 
-val parseSignatureScheme: pinverse_t signatureSchemeBytes
-let parseSignatureScheme b =
-  match b.[0ul], b.[1ul] with
-  | (0x04z, 0x01z) -> Correct RSA_PKCS1_SHA256
-  | (0x05z, 0x01z) -> Correct RSA_PKCS1_SHA384
-  | (0x06z, 0x01z) -> Correct RSA_PKCS1_SHA512
-  | (0x04z, 0x03z) -> Correct ECDSA_SECP256R1_SHA256
-  | (0x05z, 0x03z) -> Correct ECDSA_SECP384R1_SHA384
-  | (0x06z, 0x03z) -> Correct ECDSA_SECP521R1_SHA512
-  | (0x08z, 0x04z) -> Correct RSA_PSS_SHA256
-  | (0x08z, 0x05z) -> Correct RSA_PSS_SHA384
-  | (0x08z, 0x06z) -> Correct RSA_PSS_SHA512
-  //| (0x08z, 0x07z) -> Correct ED25519_SHA512
-  //| (0x08z, 0x08z) -> Correct ED448_SHAKE256
-  | (0x02z, 0x01z) -> Correct RSA_PKCS1_SHA1
-  | (0xFFz, 0xFFz) -> Correct RSA_PKCS1_MD5SHA1
-  | (0x02z, 0x03z) -> Correct ECDSA_SHA1
-  | (0x02z, 0x02z) -> Correct DSA_SHA1
-  | (0x04z, 0x02z) -> Correct DSA_SHA256
-  | (0x05z, 0x02z) -> Correct DSA_SHA384
-  | (0x06z, 0x02z) -> Correct DSA_SHA512
-  | (x, y) ->
-    let v = int_of_bytes b in
-    if v <> 0x0401 && v <> 0x0501 && v <> 0x0601 && v <> 0x0403
-       && v <> 0x0503 && v <> 0x0603 && v <> 0x0804 && v <> 0x0805
-       && v <> 0x0806 && v <> 0x0201 && v <> 0xFFFF && v <> 0x0203
-       && v <> 0x0202 && v <> 0x0402 && v <> 0x0502 && v <> 0x0602
-    then
-      Correct (SIG_UNKNOWN b)
-    else // Unreachable
-      fatal Decode_error ("Parsed invalid SignatureScheme " ^ print_bytes b)
-
-val sigHashAlg_of_signatureScheme:
-  scheme:signatureScheme{~(SIG_UNKNOWN? scheme)} -> sigAlg * hashAlg
-let sigHashAlg_of_signatureScheme =
+let sigHashAlg_of_signatureScheme (s:supported_signatureScheme) : (sigAlg * hashAlg) =
   let open Hashing.Spec in
-  function
-  | RSA_PKCS1_SHA256       -> (RSASIG, Hash SHA2_256)
-  | RSA_PKCS1_SHA384       -> (RSASIG, Hash SHA2_384)
-  | RSA_PKCS1_SHA512       -> (RSASIG, Hash SHA2_512)
-  | ECDSA_SECP256R1_SHA256 -> (ECDSA,  Hash SHA2_256)
-  | ECDSA_SECP384R1_SHA384 -> (ECDSA,  Hash SHA2_384)
-  | ECDSA_SECP521R1_SHA512 -> (ECDSA,  Hash SHA2_512)
-  | RSA_PSS_SHA256         -> (RSAPSS, Hash SHA2_256)
-  | RSA_PSS_SHA384         -> (RSAPSS, Hash SHA2_384)
-  | RSA_PSS_SHA512         -> (RSAPSS, Hash SHA2_512)
-//  | ED25519_SHA512         -> (EdDSA,  Hash SHA2_512)
-//  | ED448_SHAKE256         -> (EdDSA,  Hash SHAKE256)
-  | RSA_PKCS1_SHA1         -> (RSASIG, Hash SHA1)
-  | RSA_PKCS1_MD5SHA1      -> (RSASIG, MD5SHA1)
-  | ECDSA_SHA1             -> (ECDSA,  Hash SHA1)
-  | DSA_SHA1               -> (DSA,    Hash SHA1)
-  | DSA_SHA256             -> (DSA,    Hash SHA2_256)
-  | DSA_SHA384             -> (DSA,    Hash SHA2_384)
-  | DSA_SHA512             -> (DSA,    Hash SHA2_512)
+  match s with
+  | Rsa_pkcs1_sha1 -> (RSASIG, Hash SHA1)
+  | Ecdsa_sha1 -> (ECDSA, Hash SHA1)
+  | Rsa_pkcs1_sha256 -> (RSASIG, Hash SHA2_256)
+  | Rsa_pkcs1_sha384 -> (RSASIG, Hash SHA2_384)
+  | Rsa_pkcs1_sha512 -> (RSASIG, Hash SHA2_512)
+  | Ecdsa_secp256r1_sha256 -> (ECDSA, Hash SHA2_256)
+  | Ecdsa_secp384r1_sha384 -> (ECDSA, Hash SHA2_384)
+  | Ecdsa_secp521r1_sha512 -> (ECDSA, Hash SHA2_512)
+  | Rsa_pss_rsae_sha256 -> (RSAPSS, Hash SHA2_256)
+  | Rsa_pss_rsae_sha384 -> (RSAPSS, Hash SHA2_384)
+  | Rsa_pss_rsae_sha512 -> (RSAPSS, Hash SHA2_512)
+  | Rsa_pss_pss_sha256 -> (RSAPSS, Hash SHA2_256)
+  | Rsa_pss_pss_sha384 -> (RSAPSS, Hash SHA2_384)
+  | Rsa_pss_pss_sha512 -> (RSAPSS, Hash SHA2_512)
 
 val signatureScheme_of_sigHashAlg: sigAlg -> hashAlg -> signatureScheme
 let signatureScheme_of_sigHashAlg sa ha =
   let open Hashing.Spec in
   match sa, ha with
-  | (RSASIG, Hash SHA2_256) -> RSA_PKCS1_SHA256
-  | (RSASIG, Hash SHA2_384) -> RSA_PKCS1_SHA384
-  | (RSASIG, Hash SHA2_512) -> RSA_PKCS1_SHA512
-  | (ECDSA,  Hash SHA2_256) -> ECDSA_SECP256R1_SHA256
-  | (ECDSA,  Hash SHA2_384) -> ECDSA_SECP384R1_SHA384
-  | (ECDSA,  Hash SHA2_512) -> ECDSA_SECP521R1_SHA512
-  | (RSAPSS, Hash SHA2_256) -> RSA_PSS_SHA256
-  | (RSAPSS, Hash SHA2_384) -> RSA_PSS_SHA384
-  | (RSAPSS, Hash SHA2_512) -> RSA_PSS_SHA512
-  //| (EdDSA,  Hash SHA2_512) -> ED25519_SHA512
-  //| (EdDSA,  Hash SHAKE256) -> ED448_SHAKE256
-  | (RSASIG, Hash SHA1)   -> RSA_PKCS1_SHA1
-  | (ECDSA,  Hash SHA1)   -> ECDSA_SHA1
-  | (DSA,    Hash SHA1)   -> DSA_SHA1
-  | (DSA,    Hash SHA2_256) -> DSA_SHA256
-  | (DSA,    Hash SHA2_384) -> DSA_SHA384
-  | (DSA,    Hash SHA2_512) -> DSA_SHA512
-  | (RSASIG, MD5SHA1)     -> RSA_PKCS1_MD5SHA1
-  | _ -> // Map everything else to OBSOLETE 0x0000
-    lemma_repr_bytes_values 0x0000;
-    int_of_bytes_of_int #2 0x0000;
-    SIG_UNKNOWN (bytes_of_int 2 0)
+  | (RSASIG, Hash MD5) -> Rsa_pkcs1_md5
+  | (RSASIG, Hash SHA1) -> Rsa_pkcs1_sha1
+  | (RSASIG, Hash SHA2_256) -> Rsa_pkcs1_sha256
+  | (RSASIG, Hash SHA2_384) -> Rsa_pkcs1_sha384
+  | (RSASIG, Hash SHA2_512) -> Rsa_pkcs1_sha512
+  | (ECDSA,  Hash MD5) -> Ecdsa_md5
+  | (ECDSA,  Hash SHA1) -> Ecdsa_sha1
+  | (ECDSA,  Hash SHA2_256) -> Ecdsa_secp256r1_sha256
+  | (ECDSA,  Hash SHA2_384) -> Ecdsa_secp384r1_sha384
+  | (ECDSA,  Hash SHA2_512) -> Ecdsa_secp521r1_sha512
+  | (RSAPSS, Hash SHA2_256) -> Rsa_pss_rsae_sha256
+  | (RSAPSS, Hash SHA2_384) -> Rsa_pss_rsae_sha384
+  | (RSAPSS, Hash SHA2_512) -> Rsa_pss_rsae_sha512
+  | _ -> Unknown_signatureScheme 0us
 
+include Parsers.SignatureSchemeList
 
+val signatureSchemeListBytes: algs:signatureSchemeList
+  -> Tot (b:bytes{4 <= length b /\ length b < 65538})
+let signatureSchemeListBytes algs =
+  signatureSchemeList_serializer32 algs
+
+val parseSignatureSchemeList: pinverse_t signatureSchemeListBytes
+let parseSignatureSchemeList b =
+  let emsg = perror __SOURCE_FILE__ __LINE__ "Failed to parse signature scheme list" in
+  LowParseWrappers.wrap_parser32 signatureSchemeList_parser32 emsg b
 
 /// COMPRESSION (LARGELY DEPRECATED IN TLS 1.3)
 
@@ -664,99 +571,6 @@ let rec parseDistinguishedNameList data res =
 // to [pinverse_t]; we should write corresponding inversion lemmas.
 
 
-
-/// SIGNATURES
-/// 18-02-22 QD fodder
-///
-let signatureSchemeList =
-  algs:list signatureScheme{0 < List.Tot.length algs /\ op_Multiply 2 (List.Tot.length algs) < 65536}
-
-// used in FFI
-(** Serializing function for a SignatureScheme list *)
-
-// FIXME(adl) this is serializing in reverse order (shb @| b)
-let rec signatureSchemeListBytes_aux
-  (algs: signatureSchemeList)
-  (b:bytes)
-  (algs':list signatureScheme{ length b + op_Multiply 2 (List.Tot.length algs') == op_Multiply 2 (List.Tot.length algs) })
-: Tot (r:bytes{length r == op_Multiply 2 (List.Tot.length algs)})
-  (decreases algs')
-= match algs' with
-  | [] -> b
-  | alg::algs' ->
-    let shb = signatureSchemeBytes alg in
-    signatureSchemeListBytes_aux algs (shb @| b) algs'
-
-private
-let rec signatureSchemeListBytes_aux_is_injective
-  (algs1: signatureSchemeList)
-  (b1: bytes)
-  (algs1': list signatureScheme{ length b1 + op_Multiply 2 (List.Tot.length algs1') == op_Multiply 2 (List.Tot.length algs1) })
-  (algs2: signatureSchemeList { List.Tot.length algs1 == List.Tot.length algs2 } )
-  (b2: bytes { length b1 == length b2 } )
-  (algs2': list signatureScheme{ length b2 + op_Multiply 2 (List.Tot.length algs2') == op_Multiply 2 (List.Tot.length algs2) })
-: Lemma
-  (requires (Bytes.equal (signatureSchemeListBytes_aux algs1 b1 algs1') (signatureSchemeListBytes_aux algs2 b2 algs2')))
-  (ensures (b1 == b2 /\ algs1' == algs2'))
-  (decreases algs1')
-= admit()
-  // match algs1', algs2' with
-  // | [], [] -> ()
-  // | alg1::algs1_, alg2::algs2_ ->
-  //   let shb1 = signatureSchemeBytes alg1 in
-  //   let shb2 = signatureSchemeBytes alg2 in
-  //   signatureSchemeListBytes_aux_is_injective algs1 (shb1 @| b1) algs1_ algs2 (shb2 @| b2) algs2_;
-  //   //lemma_append_inj shb1 b1 shb2 b2; //TODO bytes NS 09/27
-  //   signatureSchemeBytes_is_injective alg1 alg2
-
-val signatureSchemeListBytes: algs:signatureSchemeList
-  -> Tot (b:bytes{4 <= length b /\ length b < 65538})
-let signatureSchemeListBytes algs =
-  let pl = signatureSchemeListBytes_aux algs empty_bytes algs in
-  lemma_repr_bytes_values (length pl);
-  vlbytes 2 pl
-
-/// 18-02-24 missing length bounds:
-// let signatureSchemeListBytes_is_injective
-//   (algs1: signatureSchemeList)
-//   (s1: bytes)
-//   (algs2: signatureSchemeList)
-//   (s2: bytes)
-// : Lemma
-//   (requires (Bytes.equal (signatureSchemeListBytes algs1 @| s1) (signatureSchemeListBytes algs2 @| s2)))
-//   (ensures (algs1 == algs2 /\ s1 == s2))
-// = let pl1 = signatureSchemeListBytes_aux algs1 empty_bytes algs1 in
-//   lemma_repr_bytes_values (length pl1);
-//   let pl2 = signatureSchemeListBytes_aux algs2 empty_bytes algs2 in
-//   lemma_repr_bytes_values (length pl2);
-//   lemma_vlbytes_inj_strong 2 pl1 s1 pl2 s2;
-//   signatureSchemeListBytes_aux_is_injective algs1 empty_bytes algs1 algs2 empty_bytes algs2
-
-(** Parsing function for a SignatureScheme list *)
-// FIXME(adl) this is parsing in reverse order (sha::algs)
-val parseSignatureSchemeList: pinverse_t signatureSchemeListBytes
-let rec parseSignatureSchemeList_aux: b:bytes -> algs:list signatureScheme -> b':bytes{length b' + op_Multiply 2 (List.Tot.length algs) == length b} ->
-    Tot
-      (result (algs:list signatureScheme{op_Multiply 2 (List.Tot.length algs) == length b}))
-      (decreases (length b')) = fun b algs b' ->
-    if length b' > 0 then
-      if length b' >= 2 then
-      let alg, bytes = split b' 2ul in
-      match parseSignatureScheme alg with
-      | Correct sha -> parseSignatureSchemeList_aux b (sha::algs) bytes
-      | Error z     -> Error z
-      else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse sig hash algs")
-    else Correct algs
-
-let parseSignatureSchemeList b =
-  match vlparse 2 b with
-  | Correct b ->
-    begin
-    match parseSignatureSchemeList_aux b [] b with // Silly, but necessary for typechecking
-    | Correct l -> Correct l
-    | Error z -> Error z
-    end
-  | Error z -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "Failed to parse sig hash algs")
 
 
 

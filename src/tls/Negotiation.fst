@@ -36,100 +36,8 @@ let string_of_option_extensions (o: option extensions) = match o with
   | None -> "None"
   | Some es -> "[ "^Extensions.string_of_extensions es^"]"
 
-#reset-options "--admit_smt_queries true" // TODO: complete the pattern below
-let string_of_ciphersuitename (csn:cipherSuiteName) = match csn with
-  | TLS_NULL_WITH_NULL_NULL -> "TLS_NULL_WITH_NULL_NULL"
-
-  | TLS_AES_128_GCM_SHA256 -> "TLS_AES_128_GCM_SHA256"
-  | TLS_AES_256_GCM_SHA384 -> "TLS_AES_256_GCM_SHA384"
-  | TLS_CHACHA20_POLY1305_SHA256 -> "TLS_CHACHA20_POLY1305_SHA256"
-  | TLS_AES_128_CCM_SHA256 -> "TLS_AES_128_CCM_SHA256"
-  | TLS_AES_128_CCM_8_SHA256 -> "TLS_AES_128_CCM_8_SHA256"
-
-  | TLS_RSA_WITH_NULL_MD5 -> "TLS_RSA_WITH_NULL_MD5"
-  | TLS_RSA_WITH_NULL_SHA -> "TLS_RSA_WITH_NULL_SHA"
-  | TLS_RSA_WITH_NULL_SHA256 -> "TLS_RSA_WITH_NULL_SHA256"
-  | TLS_RSA_WITH_RC4_128_MD5 -> "TLS_RSA_WITH_RC4_128_MD5"
-  | TLS_RSA_WITH_RC4_128_SHA -> "TLS_RSA_WITH_RC4_128_SHA"
-  | TLS_RSA_WITH_3DES_EDE_CBC_SHA -> "TLS_RSA_WITH_3DES_EDE_CBC_SHA"
-  | TLS_RSA_WITH_AES_128_CBC_SHA -> "TLS_RSA_WITH_AES_128_CBC_SHA"
-  | TLS_RSA_WITH_AES_256_CBC_SHA -> "TLS_RSA_WITH_AES_256_CBC_SHA"
-  | TLS_RSA_WITH_AES_128_CBC_SHA256 -> "TLS_RSA_WITH_AES_128_CBC_SHA256"
-  | TLS_RSA_WITH_AES_256_CBC_SHA256 -> "TLS_RSA_WITH_AES_256_CBC_SHA256"
-
-  | TLS_DHE_DSS_WITH_3DES_EDE_CBC_SHA -> "TLS_DHE_DSS_WITH_3DES_EDE_CBC_SHA"
-  | TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA -> "TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA"
-  | TLS_DHE_DSS_WITH_AES_128_CBC_SHA -> "TLS_DHE_DSS_WITH_AES_128_CBC_SHA"
-  | TLS_DHE_RSA_WITH_AES_128_CBC_SHA -> "TLS_DHE_RSA_WITH_AES_128_CBC_SHA"
-  | TLS_DHE_DSS_WITH_AES_256_CBC_SHA -> "TLS_DHE_DSS_WITH_AES_256_CBC_SHA"
-  | TLS_DHE_RSA_WITH_AES_256_CBC_SHA -> "TLS_DHE_RSA_WITH_AES_256_CBC_SHA"
-  | TLS_DHE_DSS_WITH_AES_128_CBC_SHA256 -> "TLS_DHE_DSS_WITH_AES_128_CBC_SHA256"
-  | TLS_DHE_RSA_WITH_AES_128_CBC_SHA256 -> "TLS_DHE_RSA_WITH_AES_128_CBC_SHA256"
-  | TLS_DHE_DSS_WITH_AES_256_CBC_SHA256 -> "TLS_DHE_DSS_WITH_AES_256_CBC_SHA256"
-  | TLS_DHE_RSA_WITH_AES_256_CBC_SHA256 -> "TLS_DHE_RSA_WITH_AES_256_CBC_SHA256"
-
-  | TLS_ECDHE_RSA_WITH_RC4_128_SHA -> "TLS_ECDHE_RSA_WITH_RC4_128_SHA"
-  | TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA -> "TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA"
-  | TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA -> "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA"
-  | TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256 -> "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256"
-  | TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA -> "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA"
-  | TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384 -> "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384"
-
-  | TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 -> "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"
-  | TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 -> "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
-  | TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 -> "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"
-  | TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 -> "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
-
-  | TLS_DH_anon_WITH_RC4_128_MD5 -> "TLS_DH_anon_WITH_RC4_128_MD5"
-  | TLS_DH_anon_WITH_3DES_EDE_CBC_SHA -> "TLS_DH_anon_WITH_3DES_EDE_CBC_SHA"
-  | TLS_DH_anon_WITH_AES_128_CBC_SHA -> "TLS_DH_anon_WITH_AES_128_CBC_SHA"
-  | TLS_DH_anon_WITH_AES_256_CBC_SHA -> "TLS_DH_anon_WITH_AES_256_CBC_SHA"
-  | TLS_DH_anon_WITH_AES_128_CBC_SHA256 -> "TLS_DH_anon_WITH_AES_128_CBC_SHA256"
-  | TLS_DH_anon_WITH_AES_256_CBC_SHA256 -> "TLS_DH_anon_WITH_AES_256_CBC_SHA256"
-
-  | TLS_RSA_WITH_AES_128_GCM_SHA256 -> "TLS_RSA_WITH_AES_128_GCM_SHA256"
-  | TLS_RSA_WITH_AES_256_GCM_SHA384 -> "TLS_RSA_WITH_AES_256_GCM_SHA384"
-  | TLS_DHE_RSA_WITH_AES_128_GCM_SHA256 -> "TLS_DHE_RSA_WITH_AES_128_GCM_SHA256"
-  | TLS_DHE_RSA_WITH_AES_256_GCM_SHA384 -> "TLS_DHE_RSA_WITH_AES_256_GCM_SHA384"
-  | TLS_DH_RSA_WITH_AES_128_GCM_SHA256 -> "TLS_DH_RSA_WITH_AES_128_GCM_SHA256"
-  | TLS_DH_RSA_WITH_AES_256_GCM_SHA384 -> "TLS_DH_RSA_WITH_AES_256_GCM_SHA384"
-  | TLS_DHE_DSS_WITH_AES_128_GCM_SHA256 -> "TLS_DHE_DSS_WITH_AES_128_GCM_SHA256"
-  | TLS_DHE_DSS_WITH_AES_256_GCM_SHA384 -> "TLS_DHE_DSS_WITH_AES_256_GCM_SHA384"
-  | TLS_DH_DSS_WITH_AES_128_GCM_SHA256 -> "TLS_DH_DSS_WITH_AES_128_GCM_SHA256"
-  | TLS_DH_DSS_WITH_AES_256_GCM_SHA384 -> "TLS_DH_DSS_WITH_AES_256_GCM_SHA384"
-  | TLS_DH_anon_WITH_AES_128_GCM_SHA256 -> "TLS_DH_anon_WITH_AES_128_GCM_SHA256"
-  | TLS_DH_anon_WITH_AES_256_GCM_SHA384 -> "TLS_DH_anon_WITH_AES_256_GCM_SHA384"
-
-  | TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
-  | TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256"
-  | TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
-  | TLS_PSK_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_PSK_WITH_CHACHA20_POLY1305_SHA256"
-  | TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256"
-  | TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256"
-#reset-options
-
-let string_of_ciphersuite (cs:cipherSuite) = string_of_ciphersuitename (name_of_cipherSuite cs)
-
-let string_of_signatureScheme = function
-  | RSA_PKCS1_SHA256       -> "RSA_PKCS1_SHA256"
-  | RSA_PKCS1_SHA384       -> "RSA_PKCS1_SHA384"
-  | RSA_PKCS1_SHA512       -> "RSA_PKCS1_SHA512"
-  | ECDSA_SECP256R1_SHA256 -> "ECDSA_SECP256R1_SHA256"
-  | ECDSA_SECP384R1_SHA384 -> "ECDSA_SECP384R1_SHA384"
-  | ECDSA_SECP521R1_SHA512 -> "ECDSA_SECP521R1_SHA512"
-  | RSA_PSS_SHA256         -> "RSA_PSS_SHA256"
-  | RSA_PSS_SHA384         -> "RSA_PSS_SHA384"
-  | RSA_PSS_SHA512         -> "RSA_PSS_SHA512"
-  //| ED25519                -> "ED25519"
-  //| ED448                  -> "ED448"
-  | RSA_PKCS1_SHA1         -> "RSA_PKCS1_SHA1"
-  | RSA_PKCS1_MD5SHA1         -> "RSA_PKCS1_MD5SHA1"
-  | ECDSA_SHA1             -> "ECDSA_SHA1"
-  | DSA_SHA1               -> "DSA_SHA1"
-  | DSA_SHA256             -> "DSA_SHA256"
-  | DSA_SHA384             -> "DSA_SHA384"
-  | DSA_SHA512             -> "DSA_SHA512"
-  | SIG_UNKNOWN codepoint  -> "UNKNOWN " ^ (print_bytes codepoint)
+let string_of_ciphersuite (cs:cipherSuite) =
+  string_of_cipherSuite (name_of_cipherSuite cs)
 
 private
 let accum_string_of_signatureSchemes s sa =
@@ -144,8 +52,14 @@ let string_of_ciphersuites csl =
   List.Tot.fold_left accum_string_of_ciphersuite "" csl
 
 private
+let accum_string_of_namedGroups s ng =
+    s ^ "; " ^ (Parsers.NamedGroup.string_of_namedGroup ng)
+let string_of_namedGroups ngl =
+  List.Tot.fold_left accum_string_of_namedGroups "" ngl
+
+private
 let accum_string_of_ciphersuitename s cs =
-    s ^ "; " ^ string_of_ciphersuitename cs
+    s ^ "; " ^ string_of_cipherSuite cs
 let string_of_ciphersuitenames csl =
   List.Tot.fold_left accum_string_of_ciphersuitename "" csl
 
@@ -902,7 +816,6 @@ let isSentinelRandomValue c_pv s_pv s_random =
   geqPV c_pv TLS_1p3 && geqPV TLS_1p2 s_pv && (down @| abyte 1z) = s_random ||
   geqPV c_pv TLS_1p2 && geqPV TLS_1p1 s_pv && (down @| abyte 0z) = s_random
 
-
 (** Confirms that the version negotiated by the server was:
   - within the range specified by client config AND
   - is not an unnecessary downgrade AND
@@ -1442,7 +1355,7 @@ let computeServerMode cfg co serverRandom =
       then fatal Illegal_parameter "Compression is deprecated" else
       let salgs =
         match find_signature_algorithms co with
-        | None -> [SIG_UNKNOWN (twobytes (0xFFz, 0xFFz)); ECDSA_SHA1]
+        | None -> [Unknown_signatureScheme 0xFFFFus; Ecdsa_sha1]
         | Some sigalgs -> List.Helpers.filter_aux cfg.signature_algorithms List.Helpers.mem_rev sigalgs
         in
       match cert_select_cb cfg pv (get_sni co) (nego_alpn co cfg) salgs with
@@ -1507,6 +1420,9 @@ val server_ClientHello: #region:rgn -> t region Server ->
 let server_ClientHello #region ns offer log =
   trace ("offered client extensions "^string_of_option_extensions offer.ch_extensions);
   trace ("offered cipher suites "^(string_of_ciphersuitenames offer.ch_cipher_suites));
+  trace (match find_supported_groups offer with
+    | Some ngl -> "offered groups "^(string_of_namedGroups ngl)
+    | None -> "no groups offered, only PSK (1.3) and FFDH (1.2) can be used");
   trace (match (offered_versions TLS_1p0 offer) with
         | Error z -> "Error: "^string_of_error z
         | Correct v -> List.Tot.fold_left accum_string_of_pv "offered versions" v);

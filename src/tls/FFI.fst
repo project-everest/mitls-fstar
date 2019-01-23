@@ -232,17 +232,17 @@ let css = [
 ]
 
 let sas = [
-  ("RSAPSS+SHA512", RSA_PSS_SHA512);
-  ("RSAPSS+SHA384", RSA_PSS_SHA384);
-  ("RSAPSS+SHA256", RSA_PSS_SHA256);
-  ("RSA+SHA512",    RSA_PKCS1_SHA512);
-  ("RSA+SHA384",    RSA_PKCS1_SHA384);
-  ("RSA+SHA256",    RSA_PKCS1_SHA256);
-  ("RSA+SHA1",      RSA_PKCS1_SHA1);
-  ("ECDSA+SHA512",  ECDSA_SECP521R1_SHA512);
-  ("ECDSA+SHA384",  ECDSA_SECP384R1_SHA384);
-  ("ECDSA+SHA256",  ECDSA_SECP256R1_SHA256);
-  ("ECDSA+SHA1",    ECDSA_SHA1);
+  ("RSAPSS+SHA512", Rsa_pss_rsae_sha256);
+  ("RSAPSS+SHA384", Rsa_pss_rsae_sha384);
+  ("RSAPSS+SHA256", Rsa_pss_rsae_sha512);
+  ("ECDSA+SHA512",  Ecdsa_secp521r1_sha512);
+  ("ECDSA+SHA384",  Ecdsa_secp384r1_sha384);
+  ("ECDSA+SHA256",  Ecdsa_secp256r1_sha256);
+  ("RSA+SHA512",    Rsa_pkcs1_sha512);
+  ("RSA+SHA384",    Rsa_pkcs1_sha384);
+  ("RSA+SHA256",    Rsa_pkcs1_sha256);
+  ("RSA+SHA1",      Rsa_pkcs1_sha1);
+  ("ECDSA+SHA1",    Ecdsa_sha1);
 ]
 
 let ngs = [
@@ -251,9 +251,9 @@ let ngs = [
   ("P-256",     CommonDH.Secp256r1);
   ("X25519",    CommonDH.X25519);
   ("X448",      CommonDH.X448);
-  ("Ffdhe4096", CommonDH.Ffdhe4096);
-  ("Ffdhe3072", CommonDH.Ffdhe3072);
-  ("Ffdhe2048", CommonDH.Ffdhe2048);
+  ("FFDHE4096", CommonDH.Ffdhe4096);
+  ("FFDHE3072", CommonDH.Ffdhe3072);
+  ("FFDHE2048", CommonDH.Ffdhe2048);
 ]
 
 let aeads = [

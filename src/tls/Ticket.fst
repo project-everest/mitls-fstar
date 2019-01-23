@@ -230,14 +230,14 @@ module B = LowStar.Buffer
 let ticketContents_of_ticket (t: ticket) : GTot TC.ticketContents =
   match t with
   | Ticket12 pv cs ems _ ms ->
-    TC.Case_ticket12 ({
+    TC.T_ticket12 ({
       TC12.pv = pv;
       TC12.cs = name_of_cipherSuite cs;
       TC12.ems = (if ems then PB.B_true else PB.B_false);
       TC12.master_secret = ms;
     })
   | Ticket13 cs _ _ rms nonce created age custom ->
-    TC.Case_ticket13 ({
+    TC.T_ticket13 ({
       TC13.cs = name_of_cipherSuite cs;
       TC13.rms = rms;
       TC13.nonce = nonce;

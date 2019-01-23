@@ -42,59 +42,6 @@ enum /*@open*/ {
   (65535)
 } ProtocolVersion;
 
-/*
-Notes on style rewrite for extensions and HelloRetryRequest
-
-struct {
-  ExtensionType type;
-  select(type)
-  {
-    case server_name: NameList;
-    case cert_status: CertificateStatus;
-  } body;
-} Extensions_clientHello
-
-opaque ExtBody<1..2^16-1>;
-
-struct {
-  ExtensionType type;
-  select(type)
-  {
-    case server_name: NameList;
-    case cert_status: CertificateStatusRequest;
-    default: ExtBody;
-  } body;
-} Extensions_serverHello
-
-enum /*@open*/ /*@abstract*/ {
-  hello_retry_request(0xcf21ad74e59a6111be1d8c021e65b891c2a211167abb8c5e079e09e2c8a8339c),
-  (2^256-1)
-} ServerRandom
-
-struct {
-  HRRExtensions ext;
-} HRRBody;
-
-struct {
-  //...
-  // Extension ext<1..2^16-1>
-  Extensions_serverHello ext;
-} ServerHelloBody
-
-struct {
-  ServerRandom server_random;
-  select(server_random)
-  {
-    case hello_retry_request: HRRBody;
-    default: ServerHelloBody;
-  }
-} ServerHello;
-
-struct {
-  Extensions_serverHello ext;
-} ServerHello;
-*/
-
 /**
 TLS extensions are defined in many sources:
 
@@ -152,7 +99,7 @@ struct {
   select (name_type) {
     case host_name: HostName;
     default: UnknownName;
-  } name;
+  } sni; /*name*/
 } ServerName;
 
 struct {
@@ -195,7 +142,7 @@ struct {
   select (status_type) {
     case ocsp: OCSPStatusRequest;
     default: Fail;
-  } request;
+  } csr; /*request*/
 } CertificateStatusRequest;
 
 opaque OCSPResponse<1..2^24-1>;
@@ -205,7 +152,7 @@ struct {
   select (status_type) {
     case ocsp: OCSPResponse;
     default: Fail;
-  } response;
+  } cs; /*response*/
 } CertificateStatus;
 
 /**
@@ -564,7 +511,7 @@ struct {
     case ffdhe8192: ServerDHParams;
 
     default: KeyExchangeData;
-  } key_exchange;
+  } ks; /*key_exchange*/
 } KeyShareEntry;
 
 struct {
@@ -652,7 +599,7 @@ struct {
     case signature_algorithms_cert: Fail;
     case key_share: KeyShareEntry;
     default: UnknownExtension;
-  } extension_data[ext_len];
+  } e[ext_len]; /*extension_data, renamed for brevity*/
 } ServerHelloExtension;
 
 /*
@@ -690,7 +637,7 @@ struct {
     case signature_algorithms_cert: SignatureSchemeList;
     case key_share: KeyShareClientHello;
     default: UnknownExtension;
-  } extension_data[ext_len];
+  } e[ext_len]; /*extension_data*/
 } ClientHelloExtension;
 
 /*
@@ -712,7 +659,7 @@ struct {
     case server_certificate_type: ServerCertTypeExtension;
     case early_data: Empty;
     default: UnknownExtension;
-  } extension_data[ext_len];
+  } e[ext_len]; /*extension_data*/
 } EncryptedExtension;
 
 /*
@@ -724,7 +671,7 @@ struct {
   select(extension_type)
   {
     default: UnknownExtension;
-  } extension_data[ext_len];
+  } e[ext_len]; /*extension_data*/
 } NewSessionTicketExtension;
 
 /*
@@ -741,7 +688,7 @@ struct {
     case oid_filters: OIDFilterExtension;
     case signature_algorithms_cert: SignatureSchemeList;
     default: UnknownExtension;
-  } extension_data[ext_len];
+  } e[ext_len]; /*extension_data*/
 } CertificateRequestExtension;
 
 /*
@@ -755,7 +702,7 @@ struct {
     case status_request: CertificateStatus;
     case signed_certificate_timestamp: SignedCertificateTimestampList;
     default: UnknownExtension;
-  } extension_data[body_len];
+  } e[body_len]; /*extension_data*/
 } CertificateExtension;
 
 /* End of extensions */
@@ -810,13 +757,22 @@ enum {
   (255)
 } ContentType;
 
+/*
+We use the same parser for 1.2 and 1.3,
+but some checks must be done in the record
+(in 1.3, content_type = 23, record_version=TLS_1p3)
+*/
 struct {
   ContentType content_type;
-  ProtocolVersion legacy_record_version;
+  ProtocolVersion record_version;
   opaque fragment<0..2^16-1>;
 } TLSPlaintext;
 
 /*
+In TLS 1.3, the content type and padding must be
+parsed with an ad-hoc parser as the format is outside
+the specification language
+
 struct {
   opaque content[TLSPlaintext.length];
   ContentType type;
@@ -1250,12 +1206,11 @@ opaque Finished64[64];
 
 struct {
   /*@implicit*/ DigestSize hlen;
-  uint24 len;
   select(hlen) {
     case hash_32: Finished32;
     case hash_48: Finished48;
     case hash_64: Finished64;
-  } verify_data[len];
+  } verify_data;
 } Finished;
 
 struct {
@@ -1299,7 +1254,7 @@ struct {
   select (msg_type) {
     case client_hello: ClientHello;
     case server_hello: ServerHello;
-  } body[length];
+  } m[length]; /*body*/
 } Handshake;
 
 struct {
@@ -1314,7 +1269,7 @@ struct {
     case finished:              Finished;
     case new_session_ticket:    NewSessionTicket13;
     case key_update:            KeyUpdate;
-  } body[length];
+  } m[length]; /*body*/
 } Handshake13;
 
 struct {
@@ -1485,14 +1440,13 @@ struct {
 
 struct {
   /*@implicit*/ KeyExchangeAlgorithm kex;
-  uint24 len;
   select (kex) {
     case dh_anon: DHAnonServerKeyExchange;
     case dhe: SignedDHKeyExchange;
     case ecdhe: SignedECDHKeyExchange;
     /* Force a parsing error if handshake tries to parse SKE in RSA kex */
     case rsa: Fail;
-  } key_exchange[len];
+  } ske; /*key_exchange*/
 } ServerKeyExchange;
 
 /*
@@ -1531,13 +1485,12 @@ struct {
 
 struct {
   /*@implicit*/ KeyExchangeAlgorithm kex;
-  uint24 len;
   select (kex) {
       case rsa: EncryptedPreMasterSecret;
       case dhe: ClientDiffieHellmanPublic;
       case ecdhe: ClientECDiffieHellmanPublic;
       case dh_anon: ClientDiffieHellmanPublic;
-  } exchange_keys[len];
+  } cke; /*exchange_keys*/
 } ClientKeyExchange;
 
 struct {
@@ -1552,7 +1505,7 @@ struct {
     case certificate_verify:  CertificateVerify12;
     case client_key_exchange: ClientKeyExchange;
     case finished:            Finished;
-  } body[length];
+  } m[length]; /*body*/
 } Handshake12;
 
 /*
@@ -1586,6 +1539,6 @@ struct {
   select(version) {
     case ticket12: TicketContents12;
     case ticket13: TicketContents13;
-  } contents;
+  } t;
 } TicketContents;
 
