@@ -563,19 +563,6 @@ let computeOffer cfg nonce ks resume now =
 /// pure code as spec & implementation so far.
 /// was in Extensions.
 
-// consider also processing app_extensions here.
-val server_negotiateExtensions:
-  protocolVersion ->
-  config ->
-  cipherSuite ->
-  option (cVerifyData * sVerifyData) ->
-  option (pski:nat {pski < 65536}) -> 
-  option Extensions.serverHelloExtension_SHE_key_share ->
-  bool ->
-  option (list clientHelloExtension) (* client extensions *) ->
-  list cipherSuiteName ->
-  result (list serverHelloExtension)
-
 #reset-options "--using_facts_from '* -LowParse.Spec.Base' --z3rlimit 100"
 
 // respond to client extensions in two steps
@@ -678,19 +665,6 @@ let rec encrypted_clientExtensions pv cfg cs ri pski ks resuming (ches:list clie
     match encrypted_clientExtension pv cfg cs ri pski ks resuming che with
     | None -> es
     | Some e -> e::es
-
-//let server_negotiateExtensions pv cfg cs ri pski ks resuming cExtL csl =
-//  server_clientExtensions pv cfg cs ri pski ks resuming cExtL
-(* SI: deadcode ?
-     begin
-     match pv with
-       | SSL_3p0 ->
-          let cre =
-              if contains_TLS_EMPTY_RENEGOTIATION_INFO_SCSV (list_valid_cs_is_list_cs csl) then
-                 Some [E_renegotiation_info (FirstConnection)] //, {ne_default with ne_secure_renegotiation = RI_Valid})
-              else None //, ne_default in
-          in Correct cre
-*)
 
 type tickets = list (psk_identifier * Ticket.ticket) 
 
@@ -1763,7 +1737,7 @@ let valid_ch2_extension (o1, hrr) (e:clientHelloExtension) =
     match e with
     | CHE_key_share ecl ->
           (match ecl, group_of_hrr hrr with
-          | [ks], Some g' -> tag_of_keyShareEntry ks = g'
+          | [ks], Some g' -> CommonDH.group_of_namedGroup (tag_of_keyShareEntry ks) = Some g'
 //19-01-21 do we need this case? 
 //        | _, None -> (
 //          let shares1 = find_key_shares o1 in

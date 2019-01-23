@@ -85,12 +85,12 @@ type chSummary = {
   ch_ticket_data: option bytes;
 }
 
-let rec find_ticket_content (l:list Extensions.pskIdentity)
+let rec find_ticket_content (l:Extensions.offeredPsks_identities)
   : St (option bytes) =
   match l with
   | [] -> None
-  | (id,_)::t ->
-    match Ticket.check_ticket false id with
+  | id::t ->
+    match Ticket.check_ticket false id.Extensions.identity with
     | Some (Ticket.Ticket13 _ _ _ _ _ _ _ app_data) -> Some app_data
     | _ -> find_ticket_content t
 
@@ -121,12 +121,12 @@ let peekClientHello (ch:bytes) (has_record:bool) : ML (option chSummary) =
         | Error (_, msg) -> trace ("peekClientHello: bad client hello: "^msg); None
         | Correct (ch, _) ->
           let sni = Negotiation.get_sni ch in
-          let alpn = Extensions.alpnBytes (Negotiation.get_alpn ch) in
-          let ext = HandshakeMessages.optionExtensionsBytes ch.HandshakeMessages.ch_extensions in
+          let alpn = Extensions.protocolNameList_serializer32 (Negotiation.get_alpn ch) in
+          let ext = Extensions.clientHelloExtensions_serializer32 ch.HandshakeMessages.ch_extensions in
 	  let ticket_data =
 	    match Negotiation.find_clientPske ch with
 	    | None -> None
-	    | Some (psk,_) -> find_ticket_content psk in
+	    | Some psk -> find_ticket_content psk.Extensions.identities in
           let cookie =
             match Negotiation.find_cookie ch with
             | None -> None
