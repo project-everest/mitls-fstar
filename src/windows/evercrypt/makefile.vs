@@ -11,7 +11,6 @@ SOURCES = \
   EverCrypt_AutoConfig2.c \
   EverCrypt_BCrypt.c \
   EverCrypt_Bytes.c \
-  EverCrypt_Hacl.c \
   EverCrypt_Hash.c \
   EverCrypt_HKDF.c \
   EverCrypt_HMAC.c \

@@ -347,8 +347,8 @@ let size32_synth
 : Tot (size32 (serialize_synth p1 f2 s1 g1 u))
 = fun (input: t2) ->
     [@inline_let] let _ = serialize_synth_eq p1 f2 s1 g1 u input in
-    let x = g1' input in
-    let y = s1' x in
+    [@inline_let] let x = g1' input in
+    [@inline_let] let y = s1' x in
     (y <: (res: U32.t { size32_postcond (serialize_synth p1 f2 s1 g1 u) input res } ))
 
 inline_for_extraction

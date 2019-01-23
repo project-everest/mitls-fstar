@@ -446,6 +446,7 @@ let valid_sum_elim
     let k' = maybe_enum_key_of_repr (sum_enum t) (contents p h input pos) in
     match k' with
     | Known k ->
+      k == sum_tag_of_data t (contents (parse_sum t p pc) h input pos) /\
       valid (dsnd (pc k)) h input pos_payload /\
       valid_pos
         (parse_sum t p pc) h input pos
@@ -466,6 +467,49 @@ let valid_sum_elim
   | _ -> ()
 
 #pop-options
+
+let valid_sum_elim_tag
+  (h: HS.mem)
+  (t: sum)
+  (#kt: parser_kind)
+  (p: parser kt (sum_repr_type t))
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))
+  (input: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (
+    valid (parse_sum t p pc) h input pos
+  ))
+  (ensures (
+    valid (parse_enum_key p (sum_enum t)) h input pos /\
+    contents (parse_enum_key p (sum_enum t)) h input pos == sum_tag_of_data t (contents (parse_sum t p pc) h input pos)
+  ))
+= let _ = parse_sum_eq' t p pc (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos))) in
+  let _ = valid_facts (parse_sum t p pc) h input pos in
+  let _ = valid_facts (parse_enum_key p (sum_enum t)) h input pos in
+  ()
+
+inline_for_extraction
+let read_sum_tag
+  (t: sum)
+  (#kt: parser_kind)
+  (#p: parser kt (sum_repr_type t))
+  (p32: leaf_reader p)
+  (destr: dep_maybe_enum_destr_t (sum_enum t) (read_enum_key_t (sum_enum t)))
+  (pc: ((x: sum_key t) -> Tot (k: parser_kind & parser k (sum_type_of_tag t x))))  
+  (input: slice)
+  (pos: U32.t)
+: HST.Stack (sum_key t)
+  (requires (fun h ->
+    valid (parse_sum t p pc) h input pos
+  ))
+  (ensures (fun h res h' ->
+    B.modifies B.loc_none h h' /\
+    res == sum_tag_of_data t (contents (parse_sum t p pc) h input pos)
+  ))
+= let h = HST.get () in
+  [@inline_let] let _ = valid_sum_elim_tag h t p pc input pos in
+  read_enum_key p32 (sum_enum t) destr input pos
 
 inline_for_extraction
 let jump_sum_aux
@@ -930,6 +974,53 @@ let finalize_dsum_case_unknown
     valid_dsum_intro_unknown h t p f g input pos
   in
   ()
+
+let valid_dsum_elim_tag
+  (h: HS.mem)
+  (t: dsum)
+  (#kt: parser_kind)
+  (p: parser kt (dsum_repr_type t))
+  (f: ((x: dsum_known_key t) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag t x))))
+  (#ku: parser_kind)
+  (g: parser ku (dsum_type_of_unknown_tag t))
+  (input: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (
+    valid (parse_dsum t p f g) h input pos
+  ))
+  (ensures (
+    valid (parse_maybe_enum_key p (dsum_enum t)) h input pos /\
+    contents (parse_maybe_enum_key p (dsum_enum t)) h input pos == dsum_tag_of_data t (contents (parse_dsum t p f g) h input pos)
+  ))
+= let _ = parse_dsum_eq_ t p f g (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos))) in
+  let _ = valid_facts (parse_dsum t p f g) h input pos in
+  let _ = valid_facts (parse_maybe_enum_key p (dsum_enum t)) h input pos in
+  ()
+
+inline_for_extraction
+let read_dsum_tag
+  (t: dsum)
+  (#kt: parser_kind)
+  (#p: parser kt (dsum_repr_type t))
+  (p32: leaf_reader p)
+  (destr: maybe_enum_destr_t (maybe_enum_key (dsum_enum t)) (dsum_enum t))  
+  (f: ((x: dsum_known_key t) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag t x))))
+  (#ku: parser_kind)
+  (g: parser ku (dsum_type_of_unknown_tag t))
+  (input: slice)
+  (pos: U32.t)
+: HST.Stack (dsum_key t)
+  (requires (fun h ->
+    valid (parse_dsum t p f g) h input pos
+  ))
+  (ensures (fun h res h' ->
+    B.modifies B.loc_none h h' /\
+    res == dsum_tag_of_data t (contents (parse_dsum t p f g) h input pos)
+  ))
+= let h = HST.get () in
+  [@inline_let] let _ = valid_dsum_elim_tag h t p f g input pos in
+  read_maybe_enum_key p32 (dsum_enum t) destr input pos 
 
 inline_for_extraction
 let jump_dsum_cases_t

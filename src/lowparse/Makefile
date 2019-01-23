@@ -49,7 +49,7 @@ clean:
 
 include .depend
 
-ALL_CHECKED_FILES=$(addprefix $(FSTAR_OUT_DIR)/, $(addsuffix .checked, $(notdir $(ALL_FST_FILES))))
+ALL_CHECKED_FILES=$(addprefix $(FSTAR_OUT_DIR)/, $(addsuffix .checked, $(notdir $(ALL_UNCHECKED_FST_FILES))))
 
 verify-all: $(ALL_CHECKED_FILES)
 

@@ -9,7 +9,7 @@ CONCRETE_FLAVOR = -OpenSSL
 endif
 
 VALE_NAMESPACES='X64.*' 'Arch.*' 'Words.*' 'Vale.*' \
-  'Collections.*' 'SHA_helpers' Prop_s Collections Types_s Words_s Views AES_s \
+  'Collections.*' 'SHA_helpers' Prop_s Collections[rename=Collections_] Types_s Words_s Views AES_s \
   Workarounds 'Math.*' Interop TypesNative_s
 
 VALE_BUNDLES=$(addprefix -bundle ,$(VALE_NAMESPACES))
