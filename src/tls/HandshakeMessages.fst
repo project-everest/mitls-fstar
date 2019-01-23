@@ -209,12 +209,12 @@ let clientHelloBytes ch =
   (*   | [] -> empty_bytes  *)
   (*   | cl -> vlbytes 1 (compressionMethodsBytes cl) in *)
   let cmB = vlbytes 1 (compressionMethodsBytes ch.ch_compressions) in
-  let extB =
-    match ch.ch_extensions with
-    | Some ext ->
-      assume (repr_bytes (length (extensionListBytes ext)) <= 2 /\ length (Extensions.extensionListBytes ext) + bindersLen ext < 65536); // TODO: FIXME
-      extensionsBytes ext
-    | None -> empty_bytes in
+  let extB = Extensions.clientHelloExtensions_serializer32 ch.ch_extensions in
+//    match ch.ch_extensions with
+//    | Some ext ->
+//      assume (repr_bytes (length (extensionListBytes ext)) <= 2 /\ length (Extensions.extensionListBytes ext) + bindersLen ext < 65536); // TODO: FIXME
+//      extensionsBytes ext
+//    | None -> empty_bytes in
   let data = verB @| (ch.ch_client_random @| (sidB @| (csB @| (cmB @| extB)))) in
   let binders_len = bindersLen_of_ch ch in
   lemma_repr_bytes_values (length data + binders_len);
@@ -225,15 +225,6 @@ let clientHelloBytes ch =
 let versionBytes_is_injective pv1 pv2 =
   cut (pv1 <> pv2 ==> (Bytes.get (versionBytes pv1) 0ul <> Bytes.get (versionBytes pv2) 0ul
                    \/ Bytes.get (versionBytes pv1) 1ul <> Bytes.get (versionBytes pv2) 1ul))
-
-(* JK: additional conditions are required on the size of the extensions after serialization *)
-//val optionExtensionsBytes: exts:option (ce:list extension{List.Tot.length ce < 256}) -> Tot (b:bytes{length b <= 2 + 65535})
-let optionExtensionsBytes exts =
-  match exts with
-  | Some ext ->
-    assume (repr_bytes (length (extensionListBytes ext)) <= 2 /\ length (Extensions.extensionListBytes ext) + bindersLen ext < 65536); // TODO: FIXME
-    extensionsBytes ext
-  | None -> empty_bytes
 
 //#reset-options
 val list_valid_to_valid_list_lemma: cs1:valid_cipher_suites{List.Tot.length cs1 < 256} ->
@@ -259,24 +250,9 @@ let rec compressionMethodsBytes_is_injective l1 l2 =
       assert (compressionBytes hd = compressionBytes hd' ==> hd = hd'))
   | _ -> ()
 
-val optionExtensionsBytes_is_injective: ext1:option (ce:list extension{List.Tot.length ce < 256}) ->
-  ext2:option (ce2:list extension{List.Tot.length ce2 < 256}) ->
-  Lemma (requires True)
-  (ensures (Bytes.equal (optionExtensionsBytes ext1) (optionExtensionsBytes ext2) ==> ext1 == ext2))
-let optionExtensionsBytes_is_injective ext1 ext2 =
-  if optionExtensionsBytes ext1 = optionExtensionsBytes ext2
-  then begin
-    (* JK: TODO: make the assumes part of the specifications *)
-    assume (Some? ext1 ==> (let (Some e1) = ext1 in (repr_bytes (length (extensionListBytes e1)) <= 2 /\ length (Extensions.extensionListBytes e1) + bindersLen e1 < 65536))); // TODO: FIXME
-    assume (Some? ext2 ==> (let (Some e2) = ext2 in (repr_bytes (length (extensionListBytes e2)) <= 2 /\ length (Extensions.extensionListBytes e2) + bindersLen e2 < 65536))); // TODO: FIXME
-    match ext1, ext2 with
-    | Some e1, Some e2 ->
-      extensionsBytes_is_injective e1 e2
-    | _ -> ()
-  end else ()
-
 let clientHelloBytes_is_injective_strong msg1 s1 msg2 s2 =
-  if clientHelloBytes msg1 @| s1 = clientHelloBytes msg2 @| s2 then begin
+  if clientHelloBytes msg1 @| s1 = clientHelloBytes msg2 @| s2 then
+   begin
     let legacyVersion1 = minPV TLS_1p2 msg1.ch_protocol_version in
     let verB1 = versionBytes legacyVersion1 in
     lemma_repr_bytes_values (length msg1.ch_sessionID);
@@ -285,12 +261,7 @@ let clientHelloBytes_is_injective_strong msg1 s1 msg2 s2 =
     lemma_repr_bytes_values (List.Tot.length msg1.ch_compressions);
     let cmb1 = compressionMethodsBytes msg1.ch_compressions in
     let cmB1 = vlbytes 1 cmb1 in
-    let extB1 = match msg1.ch_extensions with
-    | Some ext ->
-      assume (repr_bytes (length (extensionListBytes ext)) <= 2 /\ length (Extensions.extensionListBytes ext) + bindersLen ext < 65536); // TODO: FIXME
-      extensionsBytes ext
-    | None -> empty_bytes
-    in
+    let extB1 = Extensions.clientHelloExtensions_serializer32 msg1.ch_extensions in
     let tail3_1 = cmB1 @| extB1 in
     let tail4_1 = csB1 @| tail3_1 in
     let tail5_1 = sidB1 @| tail4_1 in
@@ -307,12 +278,7 @@ let clientHelloBytes_is_injective_strong msg1 s1 msg2 s2 =
     lemma_repr_bytes_values (List.Tot.length msg2.ch_compressions);
     let cmb2 = compressionMethodsBytes msg2.ch_compressions in
     let cmB2 = vlbytes 1 cmb2 in
-    let extB2 = match msg2.ch_extensions with
-    | Some ext ->
-      assume (repr_bytes (length (extensionListBytes ext)) <= 2 /\ length (Extensions.extensionListBytes ext) + bindersLen ext < 65536); // TODO: FIXME
-      extensionsBytes ext
-    | None -> empty_bytes
-    in
+    let extB2 = Extensions.clientHelloExtensions_serializer32 msg2.ch_extensions in
     let tail3_2 = cmB2 @| extB2 in
     let tail4_2 = csB2 @| tail3_2 in
     let tail5_2 = sidB2 @| tail4_2 in
@@ -357,7 +323,8 @@ let clientHelloBytes_is_injective_strong msg1 s1 msg2 s2 =
     let _ : squash (msg1.ch_compressions == msg2.ch_compressions) =
       compressionMethodsBytes_is_injective msg1.ch_compressions msg2.ch_compressions
     in
-    assert (length extB1 + binders_len1 == length extB2 + binders_len2);
+    assert (length extB1 + binders_len1 == length extB2 + binders_len2)
+(*
     match msg1.ch_extensions with
     | None ->
       assert (msg2.ch_extensions == None)
@@ -368,6 +335,7 @@ let clientHelloBytes_is_injective_strong msg1 s1 msg2 s2 =
       assume (repr_bytes (length (extensionListBytes e1)) <= 2 /\ length (Extensions.extensionListBytes e1) + bindersLen e1 < 65536); // TODO: FIXME
       assume (repr_bytes (length (extensionListBytes e2)) <= 2 /\ length (Extensions.extensionListBytes e2) + bindersLen e2 < 65536); // TODO: FIXME
       extensionsBytes_is_injective_strong e1 s1 e2 s2
+*)
   end else ()
 
 val clientHelloBytes_is_injective: msg1:ch -> msg2:ch ->
@@ -377,13 +345,14 @@ val clientHelloBytes_is_injective: msg1:ch -> msg2:ch ->
 let clientHelloBytes_is_injective msg1 msg2 =
   clientHelloBytes_is_injective_strong msg1 empty_bytes msg2 empty_bytes
 
-(* JK: to work around a subtyping difficulty in parseClientHello *)
+(* JK: to work around a subtyping difficulty in parseClientHello
 val coercion_helper: o:option (list extension){Some? o ==>  List.Tot.length (Some?.v o) < 256}
    -> Tot (option (l:list extension{List.Tot.length l < 256}))
 let coercion_helper e =
   match e with
   | None -> None
   | Some li -> cut (List.Tot.length li < 256); Some li
+*)
 
 let parseVLCipherSuites (b: bytes) : Tot (option ((l: list cipherSuiteName { 1 <= List.Tot.length l /\ List.Tot.length l <= 255 } ) * bytes)) =
   match LowParse.SLow.parse32_vlarray 2 2ul 65534 65534ul Parsers.CipherSuite.cipherSuite_serializer Parsers.CipherSuite.cipherSuite_parser32 1 255 () b with
@@ -391,6 +360,10 @@ let parseVLCipherSuites (b: bytes) : Tot (option ((l: list cipherSuiteName { 1 <
     let rem = FStar.Bytes.slice b consumed (FStar.Bytes.len b) in
     Some (l, rem)
   | None -> None
+
+private let find_binders = function
+  | CHE_pre_shared_key psk -> true
+  | _ -> false
 
 let parseClientHello data =
   if length data < 35 then error "ClientHello is too short" else
@@ -416,16 +389,16 @@ let parseClientHello data =
             | Correct (x) ->
               let cmBytes, extensions = x in
               let cm = parseCompressions cmBytes in
-               (match parseOptExtensions EM_ClientHello extensions with
-                | Error z -> Error z
-                | Correct (x) ->
-                    let exts, obinders = x in
-                    if (match exts with
-                        | None -> true
-                        | Some l -> List.Tot.length l < 256)
-                        && List.Tot.length cm < 256 &&  List.Tot.length cm > 0
-                    then Correct (cm, (coercion_helper exts, obinders))
-                    else error "bad extension lengths"))
+	      (match Extensions.clientHelloExtensions_parser32 extensions with
+	      | None -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "Invalid extensions")
+	      | Some (che, l) ->
+	        if len extensions = l then
+		  let obinders =
+		    match List.Tot.find find_binders che with
+		    | None -> None
+		    | Some (CHE_pre_shared_key psk) -> Some psk.binders in
+		  Correct (cm, (che, obinders))
+		else error "bad extension lengths"))
             in
             ( match compExts with
               | Error z -> Error z
@@ -449,10 +422,7 @@ let serverHelloBytes sh =
   let sidB = vlbytes 1 sh.sh_sessionID in
   let csB = cipherSuiteNameBytes sh.sh_cipher_suite in
   let cmB = compressionBytes sh.sh_compression in
-  let extB =
-    match sh.sh_extensions with
-    | Some ext -> extensionsBytes ext
-    | None -> empty_bytes in  // JK: in TLS1.3 case should be vlbytes 2 empty_bytes
+  let extB = serverHelloExtensions_serializer32 sh.sh_extensions in
   let data:bytes = verB @| (sh.sh_server_random @| (sidB @| (csB @| (cmB @| extB)))) in
   lemma_repr_bytes_values (length data);
   messageBytes HT_server_hello data
@@ -468,9 +438,7 @@ let serverHelloBytes_is_injective msg1 msg2 =
     let sidB1 = vlbytes 1 msg1.sh_sessionID in
       let csB1 = cipherSuiteNameBytes msg1.sh_cipher_suite in
       let cmB1 =  compressionBytes msg1.sh_compression in
-      let extB1 = match msg1.sh_extensions with
-      | Some ext -> extensionsBytes ext
-      | None -> empty_bytes in
+      let extB1 = serverHelloExtensions_serializer32 msg1.sh_extensions in
       let data1:bytes = match msg1.sh_protocol_version with
       | TLS_1p3 -> verB1 @| (msg1.sh_server_random @| (csB1 @| extB1))
       | _       -> verB1 @| (msg1.sh_server_random @| (sidB1 @| (csB1 @| (cmB1 @| extB1)))) in
@@ -480,9 +448,7 @@ let serverHelloBytes_is_injective msg1 msg2 =
       let sidB2 = vlbytes 1 msg2.sh_sessionID in
       let csB2 = cipherSuiteNameBytes msg2.sh_cipher_suite in
       let cmB2 = compressionBytes msg2.sh_compression in
-      let extB2:bytes = match msg2.sh_extensions with
-      | Some ext -> extensionsBytes ext
-      | None -> empty_bytes in
+      let extB2:bytes = serverHelloExtensions_serializer32 msg2.sh_extensions in
       let data2:bytes = match msg2.sh_protocol_version with
       | TLS_1p3 -> verB2 @| (msg2.sh_server_random @| (csB2 @| extB2))
       | _       -> verB2 @| (msg2.sh_server_random @| (sidB2 @| (csB2 @| (cmB2 @| extB2)))) in
@@ -513,7 +479,7 @@ let serverHelloBytes_is_injective msg1 msg2 =
   //TODO bytes NS 09/27
   //lemma_append_inj csB1 extB1 csB2 extB2;
 //  cipherSuiteBytes_is_injective msg1.sh_cipher_suite msg2.sh_cipher_suite;
-  optionExtensionsBytes_is_injective msg1.sh_extensions msg2.sh_extensions;
+//  optionExtensionsBytes_is_injective msg1.sh_extensions msg2.sh_extensions;
   ())
       else (
   cut (Bytes.equal (snd s1) (snd s2));
@@ -546,7 +512,7 @@ let serverHelloBytes_is_injective msg1 msg2 =
   //TODO bytes NS 09/27
   //lemma_append_inj cmB1 extB1 cmB2 extB2;
 //  cipherSuiteBytes_is_injective msg1.sh_cipher_suite msg2.sh_cipher_suite;
-  optionExtensionsBytes_is_injective msg1.sh_extensions msg2.sh_extensions;
+//  optionExtensionsBytes_is_injective msg1.sh_extensions msg2.sh_extensions;
   cut(msg1.sh_protocol_version = msg2.sh_protocol_version);
   cut(msg1.sh_server_random = msg2.sh_server_random);
   cut(Bytes.equal sidB1 sidB2);
@@ -587,10 +553,10 @@ let parseServerHello data =
                    | Unknown_compressionMethod _ ->
                      fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "server selected a compression mode")
                    | NullCompression ->
-                     let em = // FIXME what can we do about this horrible, atrocious hack?
-                       if bytes_of_hex "cf21ad74e59a6111be1d8c021e65b891c2a211167abb8c5e079e09e2c8a8339c" = serverRandomBytes
-                       then EM_HelloRetryRequest else EM_ServerHello in
-                      (match parseOptExtensions em data with
+                     // FIXME what can we do about this horrible, atrocious hack?
+                     let is_hrr =
+                       bytes_of_hex "cf21ad74e59a6111be1d8c021e65b891c2a211167abb8c5e079e09e2c8a8339c" = serverRandomBytes in
+                      (match serverHelloExtensions_parser32 data with
                        | Error z -> Error z
                        | Correct (x) ->
                          let exts,obinders = x in
