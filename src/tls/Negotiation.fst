@@ -668,7 +668,7 @@ let rec encrypted_clientExtensions pv cfg cs ri pski ks resuming (ches:list clie
     | None -> es
     | Some e -> e::es
 
-(* dead code since we don't support SSL3 ?
+(* dead code since we don't support SSL3.
      begin
      match pv with
        | SSL_3p0 ->
@@ -1743,7 +1743,7 @@ let valid_ch2_extension (o1, hrr) (e:clientHelloExtension) =
     match e with
     | CHE_key_share ecl ->
           (match ecl, group_of_hrr hrr with
-          | [ks], Some g' -> tag_of_keyShareEntry ks = g'
+          | [ks], Some g' -> CommonDH.group_of_namedGroup (tag_of_keyShareEntry ks) = Some g'
 //19-01-21 do we need this case? 
 //        | _, None -> (
 //          let shares1 = find_key_shares o1 in

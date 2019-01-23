@@ -557,21 +557,17 @@ let parseServerHello data =
                      let is_hrr =
                        bytes_of_hex "cf21ad74e59a6111be1d8c021e65b891c2a211167abb8c5e079e09e2c8a8339c" = serverRandomBytes in
                       (match serverHelloExtensions_parser32 data with
-                       | Error z -> Error z
-                       | Correct (x) ->
+                       | None -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "invalid server extensions")
+                       | Some (she, l) ->
                          let exts,obinders = x in
-                         if (match exts with
-                             | None -> true
-                             | Some l -> List.Tot.length l < 256)
-                         then
-                           let exts = coercion_helper exts in
+                         if len data = l then
                            correct ({
                              sh_protocol_version = serverVer;
                              sh_server_random = serverRandomBytes;
                              sh_sessionID = sid;
                              sh_cipher_suite = cs;
                              sh_compression = NullCompression;
-                             sh_extensions = exts})
+                             sh_extensions = she})
                          else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ ""))))
            else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")
          else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")
@@ -878,11 +874,12 @@ let parseCertificateRequest pv data =
 
 let mk_certificateRequestBytes sign cs version =
   certificateRequestBytes (
-    {cr_cert_types = defaultCertTypes sign cs;
-     cr_sig_algorithms =
-       (match version with
+    {cr_cert_types = (match defaultCertTypes sign cs with
+      | Correct a -> [a] | _ -> [RSA_sign]);
+     cr_sig_algorithms = None
+       (*match version with
         | TLS_1p2 -> Some (default_signatureScheme version cs)
-        | _ -> None);
+        | _ -> None*);
      cr_certificate_authorities = []})
 
 let parseCertificateRequest13 (body:bytes): result cr13 = error "Certificate requests not yet implemented"
@@ -1173,7 +1170,7 @@ let sessionTicketBytes13 t =
     bytes_of_int32 t.ticket13_age_add @|
     vlbytes 1 t.ticket13_nonce @|
     vlbytes 2 t.ticket13_ticket @|
-    extensionsBytes t.ticket13_extensions in
+    newSessionTicketExtensions_serializer32 t.ticket13_extensions in
   lemma_repr_bytes_values (length payload);
   messageBytes HT_session_ticket payload
 
@@ -1231,31 +1228,22 @@ let parseSessionTicket13 b =
       let nonce, rest = x in
       begin
         match vlsplit 2 rest with
-        | Correct (x) ->
-          let ticket, rest = x in
+        | Correct (ticket, rest) ->
           begin
-          match vlsplit 2 rest with
-          | Correct (x) ->
-            let exts, eof = x in
-            if length eof > 0 then
-              fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: dangling bytes")
-            else
-              begin
-              match parseExtensions EM_NewSessionTicket (vlbytes 2 exts) with
-              | Correct (exts,None) ->
-                Correct ({ ticket13_lifetime = lifetime;
-                           ticket13_age_add = age;
-                           ticket13_nonce = nonce;
-                           ticket13_ticket = ticket;
-                           ticket13_extensions = exts})
-              | Error _ -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: invalid extensions")
-              end
-          | Error _ -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: incorrect length")
+          match newSessionTicketExtensions_parser32 rest with
+          | Some (exts, l) ->
+	    if len rest = l then
+            Correct ({ ticket13_lifetime = lifetime;
+                       ticket13_age_add = age;
+                       ticket13_nonce = nonce;
+                       ticket13_ticket = ticket;
+                       ticket13_extensions = exts})
+	    else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "dangling bytes after NST extensions")
+          | None -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: incorrect length")
           end
         | Error _ -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: incorrect length")
         end
       end
-
 
 (* Hello retry request *)
 // val helloRetryRequestBytes: hrr -> Tot (b:bytes{hs_msg_bytes HT_server_hello b})
@@ -1266,7 +1254,7 @@ let helloRetryRequestBytes hrr =
     sh_sessionID = hrr.hrr_sessionID;
     sh_cipher_suite = hrr.hrr_cipher_suite;
     sh_compression = NullCompression;
-    sh_extensions = Some hrr.hrr_extensions
+    sh_extensions = [];
   })
   (*
   let pvb = versionBytes hrr.hrr_protocol_version in
@@ -1304,45 +1292,28 @@ let helloRetryRequestBytes_is_injective h1 h2 = admit()
 *)
 
 (* Encrypted_extensions *)
-let valid_ee : Type0 = msg:ee{repr_bytes (length (extensionsBytes msg)) <= 3}
+let valid_ee : Type0 = msg:ee{repr_bytes (encryptedExtensions_bytesize msg) <= 3}
 
 val encryptedExtensionsBytes: e:valid_ee -> Tot (b:bytes{hs_msg_bytes HT_encrypted_extensions b})
 let encryptedExtensionsBytes ee =
-    let payload = extensionsBytes ee in
+    let payload = encryptedExtensions_serializer32 ee in
     messageBytes HT_encrypted_extensions payload
 
 val encryptedExtensionsBytes_is_injective: e1:valid_ee -> e2:valid_ee ->
   Lemma (requires True)
   (ensures (Bytes.equal (encryptedExtensionsBytes e1) (encryptedExtensionsBytes e2) ==> e1 == e2))
-let encryptedExtensionsBytes_is_injective e1 e2 =
-  let payload1 = extensionsBytes e1 in
-  let payload2 = extensionsBytes e2 in
-  messageBytes_is_injective HT_encrypted_extensions payload1 HT_encrypted_extensions payload2;
-  extensionsBytes_is_injective e1 e2
-
-(* JK : TODO *)
-assume val lemma_extensionsBytes_length: mt:ext_msg -> b:bytes ->
-  Lemma (requires True)
-  (ensures (
-    match parseExtensions mt b with
-    | Error _ -> True
-    | Correct (ee, obinders) ->
-    let len = match obinders with
-      | Some binders -> length (bindersBytes binders)
-      | _ -> 0 in
-    length (extensionsBytes ee) + len == length b))
+let encryptedExtensionsBytes_is_injective e1 e2 = admit()
 
 (* val parseEncryptedExtensions: b:bytes{repr_bytes(length b) <= 3} ->  *)
 (*     Tot (result (s:valid_ee{Bytes.equal (encryptedExtensionsBytes s) (messageBytes HT_encrypted_extensions b)})) *)
 val parseEncryptedExtensions: b:bytes{repr_bytes(length b) <= 3} ->
     Tot (result valid_ee)
 let parseEncryptedExtensions payload  =
-  match parseExtensions EM_EncryptedExtensions payload with
-  | Error z -> Error z
-  | Correct (exts,None) ->
-    if List.Tot.length exts >= 256 then  error "too many extensions" else
-    ( lemma_extensionsBytes_length EM_EncryptedExtensions payload;
-      Correct exts)
+  match encryptedExtensions_parser32 payload with
+  | None -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "encrypted extensions")
+  | Some (exts, l) ->
+    if len payload = l then Correct exts
+    else error "dangling bytes after encrypted extensions"
 
 (*
 (* Next protocol message *)
@@ -1641,7 +1612,7 @@ let helloRetryRequest_of_serverHello (sh: sh) : Tot (option hrr) =
   then (Some ({
         hrr_sessionID = sh.sh_sessionID;
         hrr_cipher_suite = sh.sh_cipher_suite;
-        hrr_extensions = Some?.v (sh.sh_extensions)
+        hrr_extensions = [];
       }))
   else None
 
