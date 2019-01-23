@@ -87,12 +87,7 @@ let valid_transcript (msgs:list msg) =
 
 /// Finally define the hs_transcript type
 
-type hs_transcript : Type0 = msgs:list msg{valid_transcript msgs}
-
-/// Bytes from the transcript
-
-val transcript_bytes: hs_transcript -> GTot bytes
-
+type hs_transcript = list msg
 
 /// HSL main API
 
@@ -120,22 +115,6 @@ val hsl_input_buf : st:hsl_state -> GTot (lbuffer8 (hsl_input_buf_len st))
 val hsl_input_index : HS.mem -> st:hsl_state -> GTot (i:uint_32{i <= hsl_input_buf_len st})
 
 
-/// Length of the output buffer, Handshake writes to it
-
-val hsl_output_buf_len : hsl_state -> uint_32
-
-
-/// Output buffer itself
-
-val hsl_output_buf : st:hsl_state -> GTot (lbuffer8 (hsl_output_buf_len st))
-
-
-/// Index of the output buffer where HSL is at
-/// Client (Handshake) should only add to the buffer at and after this index
-
-val hsl_output_index : HS.mem -> st:hsl_state -> GTot (i:uint_32{i <= hsl_output_buf_len st})
-
-
 /// HSL footprint
 /// Local footprint is abstract and is allocated in the region provided at the creation time
 
@@ -144,8 +123,7 @@ val hsl_local_footprint : hsl_state -> GTot B.loc
 let hsl_footprint (h:HS.mem) (st:hsl_state) : GTot B.loc =
   let open B in
   loc_union (hsl_local_footprint st)  //local footprint
-            (loc_union (loc_buffer (gsub (hsl_output_buf st) 0ul (hsl_output_index h st)))  //output buffer upto index
-                       (loc_buffer (gsub (hsl_input_buf st) 0ul (hsl_input_index h st))))  //input buffer upto index
+            (loc_buffer (gsub (hsl_input_buf st) 0ul (hsl_input_index h st)))  //input buffer upto index
 
 
 /// State dependent predicate
@@ -177,10 +155,8 @@ val hsl_invariant : HS.mem -> hsl_state -> Type0
 val elim_hsl_invariant (st:hsl_state) (h:HS.mem)
   : Lemma (requires (hsl_invariant h st))
           (ensures  (B.live h (hsl_input_buf st) /\
-                     B.live h (hsl_output_buf st) /\
 	             B.all_disjoint [hsl_local_footprint st;
-                                     B.loc_buffer (hsl_input_buf st);
-		                     B.loc_buffer (hsl_output_buf st)]))
+                                     B.loc_buffer (hsl_input_buf st)]))
 	  [SMTPat (hsl_invariant h st)]
 
 /// Invariant framing
@@ -190,18 +166,27 @@ val frame_hsl_invariant (st:hsl_state) (h0 h1:HS.mem) (l:B.loc)
           (ensures  (hsl_footprint h0 st == hsl_footprint h1 st /\ hsl_invariant h1 st))
           [SMTPat (hsl_invariant h1 st); SMTPat (B.modifies l h0 h1)]
 
+/// Frame the mem-dependent functions
+
+unfold let state_framing (st:hsl_state) (h0 h1:HS.mem)
+  = hsl_input_index h0 st == hsl_input_index h1 st /\
+    writing h0 st == writing h1 st                 /\
+    hash_alg h0 st == hash_alg h1 st               /\
+    transcript h0 st == transcript h1 st
+
+val frame_hsl_state (st:hsl_state) (h0 h1:HS.mem) (l:B.loc)
+  : Lemma (requires (B.modifies l h0 h1 /\ B.loc_disjoint (hsl_footprint h0 st) l))
+          (ensures  (state_framing st h0 h1))
+
 /// Creation of the log
 
 unfold private let create_post (r:Mem.rgn)
                                (input_len:uint_32) (input_buf:lbuffer8 input_len)
-	                       (output_len:uint_32) (output_buf:lbuffer8 output_len)
   : HS.mem -> hsl_state -> HS.mem -> Type0
 
   = fun h0 st h1 ->
     hsl_input_buf_len st == input_len /\ hsl_input_buf st == input_buf /\
-    hsl_output_buf_len st == output_len /\ hsl_output_buf st == output_buf /\  //I/O bufs are as given
     hsl_input_index h1 st == 0ul /\  //input index is 0
-    hsl_output_index h1 st == 0ul /\  //output index is 0
     B.fresh_loc (hsl_local_footprint st) h0 h1 /\  //local footprint is fresh
     B.loc_includes (B.loc_regions true (Set.singleton r)) (hsl_local_footprint st) /\  //TODO: local footprint is in r only
     hsl_invariant h1 st /\  //invariant holds
@@ -212,11 +197,8 @@ unfold private let create_post (r:Mem.rgn)
   
 val create (r:Mem.rgn) (pv:option C.protocolVersion)  //TODO: pv is always None?
            (input_len:uint_32) (input_buf:lbuffer8 input_len)
-	   (output_len:uint_32) (output_buf:lbuffer8 output_len)
-  : ST hsl_state (requires (fun h0 -> 
-                            B.live h0 input_buf /\ B.live h0 output_buf /\
-                            B.loc_disjoint (B.loc_buffer input_buf) (B.loc_buffer output_buf)))  //disjoint I/O buffers
-                 (ensures  (create_post r input_len input_buf output_len output_buf))
+  : ST hsl_state (requires (fun h0 -> B.live h0 input_buf))
+                 (ensures  (create_post r input_len input_buf))
 
 
 /// Setting parameters such as the hashing algorithm
@@ -229,7 +211,6 @@ unfold private let set_params_post (st:hsl_state) (a:Hashing.alg)
     transcript h1 st == transcript h0 st /\  //transcript remains same
     writing h1 st == writing h0 st /\  //writing capability remains same
     hsl_input_index h1 st == hsl_input_index h0 st /\  //input index remains same
-    hsl_output_index h1 st == hsl_output_index h0 st /\  //output index remains same
     hash_alg h1 st == Some a /\  //hash algorithm is set
     hsl_invariant h1 st  //invariant holds
                          //NB: we are not saying hsl_footprint is same explicitly, it is derivable though, as shown below
@@ -249,13 +230,11 @@ val set_params (st:hsl_state) (_:C.protocolVersion) (a:Hashing.alg) (_:option Ci
 /// Receive API
 /// Until a full flight is received, we lose "writing" capability -- as per the comment in HandshakeLog
 
-val tags (a:Hash.alg) (prior:list msg) (ms:list msg) (hs:list HashSpec.anyTag) :Tot Type0  //TODO: this is implemented in HandshakeLog.fsti, copy
-
 /// Receive returns flight_t with postcondition that the indices are valid parsings in the input buffer
 /// Taken from the match in Handshakre receive function
 
 /// ad-hoc flight types
-/// HS would ask HSL to parse specific flight types, depending on where its state machine is
+/// HS would ask HSL to parse specific flight types, depending on where its own state machine is
 
 noeq
 type flight_hrr = {
@@ -277,7 +256,7 @@ type flight_c_ske_shd = {
 /// AR: other flights would be defined similarly, not defining them since it would change when we use QD types
 
 
-/// LowParse definition of saying buf is a valid serialization of m
+/// TODO: LowParse definition of saying buf is a valid serialization of m
 
 val valid_parsing_aux (m:HSM.hs_msg) (buf:B.buffer uint_8) (h:HS.mem) : Type0
 
@@ -314,7 +293,6 @@ unfold private let receive_post_basic (st:hsl_state) (p:uint_32) (h0 h1:HS.mem) 
   B.modifies (hsl_local_footprint st) h0 h1 /\  //only local footprint is modified
   hash_alg h1 st == hash_alg h0 st /\  //hash alg remains same
   hsl_invariant h1 st /\  //invariant holds in h1
-  hsl_output_index h1 st == hsl_output_index h0 st /\  //output index remains same
   hsl_input_index h1 st == p /\  //input index is advanced to p
   transcript h0 st == transcript h1 st  //transcript remains same, as it represents the hashed transcript
 
@@ -352,19 +330,70 @@ val receive_flight_c_ske_shd (st:hsl_state) (p:uint_32)
 /// For hashing, the state is maintained by the client (HS)
 /// Through postconditions of receive, it should be able to prove the preconditions
 
+/// TODO: define using high-level serializers from LowParse
+
+val msg_to_bytes (m:msg) : Tot bytes
+
+#push-options "--max_ifuel 1"
+let rec transcript_bytes (l:list msg) : Tot bytes =
+  match l with
+  | []   -> empty_bytes
+  | m::tl ->
+    let b1 = msg_to_bytes m in
+    let b2 = transcript_bytes tl in
+    assume (UInt.size (length b1 + length b2) UInt32.n);  //TODO: what should we do about this?
+    append b1 b2
+#pop-options
+
+
+/// TODO: this hashes predicate will be defined in terms of the underlying hash module (e.g. incremental or CRF)
+
+val hashes_bytes (a:Hash.alg) (buf:Hacl.Hash.Definitions.hash_t a) (b:bytes) : Type0
+
+let hashes_transcript (a:Hash.alg) (st:hsl_state) (h:HS.mem)
+                      (buf:Hacl.Hash.Definitions.hash_t a) (b:bytes)
+  = hashes_bytes a buf (transcript_bytes (transcript h st))
+
 val hash_input (st:hsl_state) (p0 p1:uint_32) (m:G.erased (HSM.hs_msg))
   : ST unit (fun h0      -> hsl_invariant h0 st /\ valid_parsing (G.reveal m) p0 p1 st h0)
             (fun h0 _ h1 ->
-	     //bunch of postconditions to say that buffer indices etc. remain same
-	     writing h1 st /\  //HS maintains writing state across flights
+	     state_framing st h0 h1 /\
 	     B.modifies (hsl_local_footprint st) h0 h1 /\
-	     transcript h1 st == transcript h0 st @ [G.reveal m])
+	     transcript h1 st == transcript h0 st @ [G.reveal m])  //transcript is of hashed messages
+
+val extract_hash (#a:Hash.alg) (st:hsl_state) (tag:Hacl.Hash.Definitions.hash_t a)
+  : ST unit (fun h0 ->
+             hsl_invariant h0 st /\
+             Some? (hash_alg h0 st) /\ Some?.v (hash_alg h0 st) == a /\
+             B.live h0 tag /\
+	     B.loc_disjoint (hsl_footprint h0 st) (B.loc_buffer tag))
+	    (fun h0 _ h1 ->
+	     hsl_invariant h1 st /\
+	     state_framing st h0 h1 /\
+	     B.(modifies (loc_union (loc_buffer tag) (hsl_local_footprint st)) h0 h1) /\
+	     hashes_transcript a st h1 tag (transcript_bytes (transcript h1 st)))
+
+
+val send (st:hsl_state) (outbuf:B.buffer uint_8) (p0 p1:uint_32) (m:G.erased msg)
+  : ST unit (fun h0 ->
+             writing h0 st /\
+             hsl_invariant h0 st /\
+	     B.live h0 outbuf /\
+             p0 <= p1 /\ p1 <= B.len outbuf /\
+             valid_parsing_aux (G.reveal m) (B.gsub outbuf p0 (p1 - p0)) h0)
+	    (fun h0 _ h1 ->
+	     writing h1 st /\
+	     hsl_invariant h1 st /\
+	     transcript h1 st == transcript h0 st @ [G.reveal m] /\
+	     B.modifies (hsl_local_footprint st) h0 h1)
+
 
 (*
  * framing for local footprints, and input index etc. since they are stateful
  * output index may be we don't need (no incremental serializations)
  * do we need the writing bit, it was inconclusive the other day
  * reset of HSL state?
+ * currently we are not telling the client that parsing of the input buffer for current flight started at the end index of last flight, may be that's ok?
  *)
 
 
