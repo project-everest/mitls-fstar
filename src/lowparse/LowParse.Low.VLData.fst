@@ -501,12 +501,14 @@ let valid_bounded_vldata_strong_intro
   (ensures (
     let sz = log256' max in
     let x = contents_exact p h input (pos `U32.add` U32.uint_to_t sz) pos' in
+    Seq.length (serialize s x) == U32.v pos'  - (U32.v pos + sz) /\
     parse_bounded_vldata_strong_pred min max s x /\
     valid_content_pos (parse_bounded_vldata_strong min max s) h input pos x pos'
   ))
 = valid_facts (parse_bounded_vldata_strong min max s) h input pos;
   valid_facts (parse_bounded_vldata min max p) h input pos;
-  valid_bounded_vldata_intro h min max p input pos pos'
+  valid_bounded_vldata_intro h min max p input pos pos';
+  valid_exact_serialize s h input (pos `U32.add` U32.uint_to_t (log256' max)) pos'
 
 inline_for_extraction
 let finalize_bounded_vldata_strong_exact
@@ -532,6 +534,7 @@ let finalize_bounded_vldata_strong_exact
     let sz = log256' max in
     let x = contents_exact p h input (pos `U32.add` U32.uint_to_t sz) pos' in
     B.modifies (loc_slice_from_to input pos (pos `U32.add` U32.uint_to_t sz)) h h' /\
+    Seq.length (serialize s x) == U32.v pos'  - (U32.v pos + sz) /\
     parse_bounded_vldata_strong_pred min max s x /\
     valid_content_pos (parse_bounded_vldata_strong min max s) h' input pos x pos'
   ))

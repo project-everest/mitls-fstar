@@ -629,6 +629,7 @@ let finalize_bounded_vldata_strong_list
     let sz = log256' max in
     let x = contents_list p h input (pos `U32.add` U32.uint_to_t sz) pos' in
     B.modifies (loc_slice_from_to input pos (pos `U32.add` U32.uint_to_t sz)) h h' /\
+    Seq.length (serialize (serialize_list _ s) x) == U32.v pos' - (U32.v pos + sz) /\
     parse_bounded_vldata_strong_pred min max (serialize_list _ s) x /\
     valid_content_pos (parse_bounded_vldata_strong min max (serialize_list _ s)) h' input pos x pos'
   ))
