@@ -21,7 +21,7 @@ open HandshakeMessages
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 
-open Extensions
+open Extensions // for its aggregated datatypes
 
 (**
   Debugging flag.
@@ -36,6 +36,7 @@ unfold val trace: s:string -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
 unfold let trace = if DebugFlags.debug_NGO then print else (fun _ -> ())
+
 
 // tracing; hopefully extracted only in debug-mode. 
 
@@ -563,19 +564,6 @@ let computeOffer cfg nonce ks resume now =
 /// pure code as spec & implementation so far.
 /// was in Extensions.
 
-// consider also processing app_extensions here.
-val server_negotiateExtensions:
-  protocolVersion ->
-  config ->
-  cipherSuite ->
-  option (cVerifyData * sVerifyData) ->
-  option (pski:nat {pski < 65536}) -> 
-  option Extensions.serverHelloExtension_SHE_key_share ->
-  bool ->
-  option (list clientHelloExtension) (* client extensions *) ->
-  list cipherSuiteName ->
-  result (list serverHelloExtension)
-
 #reset-options "--using_facts_from '* -LowParse.Spec.Base' --z3rlimit 100"
 
 // respond to client extensions in two steps
@@ -600,13 +588,13 @@ private val encrypted_clientExtension:
   clientHelloExtension -> option encryptedExtension 
 
 //19-01-22  recheck what this does
-let alpn_response cfg cal = 
+let alpn_response cfg cal: option serverHelloExtension_SHE_application_layer_protocol_negotiation = 
   match cfg.alpn with
   | None -> None
   | Some sal ->
     let common = List.Helpers.filter_aux sal List.Helpers.mem_rev cal in
     match common with
-    | a :: _ -> Some [a]
+    | a :: _ -> Some (assume False;[a])
     | _ -> None
 
 let server_name_response snl resuming = 
@@ -616,7 +604,7 @@ let server_name_response snl resuming =
     match List.Tot.tryFind Sni_host_name? snl with
     | Some name -> Some () // acknowledge client's choice
     | _ -> None )
-
+ 
 let server_clientExtension pv cfg cs ri pski ks resuming ce =
   if pv = TLS_1p3 then 
     match ce with 
@@ -661,7 +649,8 @@ let encrypted_clientExtension pv cfg cs ri pski ks resuming ce =
     else None
   | _ -> None
 
-(* 19-01-05 boring, and not tail-recursive, use an iterator instead? *)
+// 19-01-05 boring, and not tail-recursive, use an iterator instead?
+// we defer the length check on the result
 let rec server_clientExtensions pv cfg cs ri pski ks resuming (ches:list clientHelloExtension) =
   match ches with
   | [] -> []
@@ -679,9 +668,7 @@ let rec encrypted_clientExtensions pv cfg cs ri pski ks resuming (ches:list clie
     | None -> es
     | Some e -> e::es
 
-//let server_negotiateExtensions pv cfg cs ri pski ks resuming cExtL csl =
-//  server_clientExtensions pv cfg cs ri pski ks resuming cExtL
-(* SI: deadcode ?
+(* dead code since we don't support SSL3 ?
      begin
      match pv with
        | SSL_3p0 ->
@@ -709,6 +696,7 @@ let rec unseal_tickets
     unseal_tickets acc r )
 #reset-options
 
+
 let create region r cfg nonce =
   let resume = unseal_tickets [] cfg.use_tickets in
   assume False; //18-12-16 ??
@@ -723,7 +711,7 @@ let create region r cfg nonce =
     let state = Mem.ralloc region (S_Init nonce) in
     NS cfg resume nonce state
 
-
+#set-options "--query_stats --max_fuel 0 --max_ifuel 0 --z3rlimit 100" 
 // For QUIC: we need a different signal when returning HRR (special packet type)
 let is_server_hrr (#region:rgn) (#role:TLSConstants.role) (ns:t region role) =
   match !ns.state with
@@ -744,7 +732,7 @@ let kexAlg m =
       if Some? m.n_server_share then Kex_PSK_ECDHE
       else Kex_PSK)
   else (
-    //18-12-16 partial pattern matching
+    //18-12-16 TODO partial pattern matching
     assume(CipherSuite? m.n_cipher_suite); 
     let CipherSuite kex _ _ = m.n_cipher_suite in kex )
 
@@ -798,8 +786,8 @@ let getMode #region #role ns =
   | S_Mode mode _
   | S_Complete mode _ ->  mode
   | _ -> admit() //18-12-16 TODO incomplete pattern, add a pre?
-#reset-options 
 
+#reset-options "--z3rlimit 100"
 let version #region #role ns =
   match !ns.state with
   | C_Init _ -> ns.cfg.max_version
@@ -814,6 +802,7 @@ let version #region #role ns =
   | S_ClientHello mode _
   | S_Mode mode _
   | S_Complete mode _ -> mode.n_protocol_version
+//19-01-23 slow TC??
 
 let is_hrr #region #role ns = C_HRR? (!ns.state)
 
@@ -843,27 +832,18 @@ let sign #region #role ns tbs =
 
 (* CLIENT *)
 
-//18-12-16 use it vs h0 == h1? 
-effect ST0 (a:Type) = ST a (fun _ -> True) (fun h0 _ h1 -> modifies_none h0 h1)
-val map_ST: ('a -> ST0 'b) -> list 'a -> ST0 (list 'b)
-let rec map_ST f x = match x with
-  | [] -> []
-  | a::tl -> f a :: (
-    assume False; //18-12-16 TODO
-    map_ST f tl)
+// effect ST0 (a:Type) = ST a (fun _ -> True) (fun h0 _ h1 -> modifies_none h0 h1)
+// val map_ST: ('a -> ST0 'b) -> list 'a -> ST0 (list 'b)
+// let rec map_ST f x = match x with
+//   | [] -> []
+//   | a::tl -> f a :: (
+//     assume False; //18-12-16 TODO
+//     map_ST f tl)
 
-let i_psk_info i = (i, PSK.psk_info i)
+// let i_psk_info i = (i, PSK.psk_info i)
 
 #set-options "--z3rlimit 100" 
 let client_ClientHello #region ns oks =
-  //17-04-22 fix this in the definition of offer?
-(*
-  let oks' =
-    match oks with
-    | Some ks -> Some (CommonDH.ClientKeyShare ks)
-    | None -> None in
-  assume False; //18-12-16 TODO incomplete pattern and more 
-*)
   match !ns.state with
   | C_Init _ ->
       trace(
@@ -1207,7 +1187,7 @@ let is_share_eq (g:CommonDH.group) (s:keyShareEntry) =
 let matching_share 
   (cext:clientHelloExtensions)
   (g:CommonDH.group) :
-  option (g:CommonDH.group & CommonDH.share g) 
+  option share // i.e. (g:CommonDH.group & CommonDH.share g) 
 =
   match List.Tot.find CHE_key_share? cext with
   | None -> None

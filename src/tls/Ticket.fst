@@ -11,7 +11,9 @@ open TLSInfo
 
 module AE = AEADProvider
 
-module PTL = Parsers.Ticket.Low // just to 1/ verify that module, and 2/ pollute the context with some Spec definitions (integers, vlbytes), and see what happens
+module PTL = Parsers.Ticket.Low 
+// just to 1/ verify that module, and 2/ pollute the context with some
+// Spec definitions (integers, vlbytes), and see what happens
 
 #set-options "--admit_smt_queries true"
 
@@ -248,8 +250,13 @@ let ticketContents_of_ticket (t: ticket) : GTot TC.ticketContents =
 
 #reset-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1 --z3rlimit 64 --z3cliopt smt.arith.nl=false --z3refresh --using_facts_from '* -FStar.Tactics -FStar.Reflection' --log_queries"
 
-let write_ticket12 (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
-  (requires (fun h -> LPB.live_slice h sl /\ U32.v pos <= U32.v sl.LPB.len /\ Ticket12? t ))
+let write_ticket12 
+  (t: ticket) 
+  (sl: LPB.slice) (pos: U32.t) : Stack U32.t
+  (requires (fun h -> 
+    LPB.live_slice h sl /\ 
+    U32.v pos <= U32.v sl.LPB.len /\ 
+    Ticket12? t ))
   (ensures (fun h pos' h' ->
     let tc = ticketContents_of_ticket t in
     B.modifies (LPB.loc_slice_from sl pos) h h' /\ (

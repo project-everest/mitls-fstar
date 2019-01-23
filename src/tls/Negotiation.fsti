@@ -6,6 +6,10 @@ module Negotiation
 /// Defines datatypes holding the TLS parameters: [offer] and [mode]
 /// used in Handshake, FFI, QUIC.
 
+// What's an appropriate abstraction for this interface? Provide both
+// pure specs and the supporting state machine? Keep offer and mode
+// transparent?
+
 // application-specific negotation relies on a callback in the
 // configuration.
 
@@ -21,8 +25,6 @@ open HandshakeMessages
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 
-/// What's an appropriate abstraction? Provide both pure specs and the
-/// supporting state machine? Keep offer and mode transparent?
 
 type pre_share = g:CommonDH.group & CommonDH.pre_share g
 type share = g:CommonDH.group & CommonDH.share g
@@ -85,6 +87,11 @@ noeq type mode =
     n_client_share: option share ->
     // { both shares are in the same negotiated group }
     mode
+
+//19-01-23 collecting refinements we may need
+// m.n_protocol_version is supported 
+// m.n_protocol_version = TLS_1p2 ==> CipherSuite? m.n_cipher_suite 
+
 
 type resumeInfo =
   option (psk_identifier * t:Ticket.ticket{Ticket.Ticket12? t}) *
