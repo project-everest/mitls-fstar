@@ -48,6 +48,18 @@ let valid_pos_flbytes_elim
   [SMTPat (valid_pos (parse_flbytes sz) h s pos pos')]
 = valid_facts (parse_flbytes sz) h s pos
 
+let valid_flbytes_elim
+  (h: HS.mem)
+  (sz: nat { sz < 4294967296 } )
+  (s: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (valid (parse_flbytes sz) h s pos))
+  (ensures (
+    valid_content_pos (parse_flbytes sz) h s pos (BY.hide (B.as_seq h (B.gsub s.base pos (U32.uint_to_t sz)))) (pos `U32.add` U32.uint_to_t sz)
+  ))
+= valid_flbytes_intro h sz s pos
+
 let clens_flbytes_slice
   (sz: nat)
   (from: U32.t)
@@ -341,6 +353,57 @@ let bounded_vlbytes_payload_length
     valid_content_pos (parse_flbytes (U32.v len)) h input (pos `U32.add` U32.uint_to_t (log256' max)) x (get_valid_pos (parse_bounded_vlbytes min max) h input pos)
   )))
 = bounded_vlbytes'_payload_length min max (log256' max) input pos
+
+(* Get the content buffer *)
+
+#push-options "--z3rlimit 32"
+
+inline_for_extraction
+let get_vlbytes'_contents
+  (min: nat) // must be a constant
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (l: nat { l >= log256' max /\ l <= 4 } )
+  (input: slice)
+  (pos: U32.t)
+: HST.Stack buffer8
+  (requires (fun h -> valid (parse_bounded_vlbytes' min max l) h input pos))
+  (ensures (fun h b h' ->
+    let x = contents (parse_bounded_vlbytes' min max l) h input pos in
+    B.modifies B.loc_none h h' /\
+    U32.v pos + l + BY.length x <= U32.v input.len /\
+    b == B.gsub input.base (pos `U32.add` U32.uint_to_t l) (BY.len x) /\
+    B.as_seq h b == BY.reveal x
+  ))
+= 
+  let h = HST.get () in
+  [@inline_let] let _ = valid_bounded_vlbytes'_elim h min max l input pos in
+  let len = read_bounded_integer l input pos in
+  [@inline_let] let _ = valid_facts (parse_flbytes (U32.v len)) h input (pos `U32.add` U32.uint_to_t l) in
+  B.sub input.base (pos `U32.add` U32.uint_to_t l) len
+
+#pop-options
+
+inline_for_extraction
+let get_vlbytes_contents
+  (min: nat) // must be a constant
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (input: slice)
+  (pos: U32.t)
+: HST.Stack buffer8
+  (requires (fun h -> valid (parse_bounded_vlbytes min max) h input pos))
+  (ensures (fun h b h' ->
+    let l = log256' max in
+    let x = contents (parse_bounded_vlbytes min max) h input pos in
+    B.modifies B.loc_none h h' /\
+    U32.v pos + l + BY.length x <= U32.v input.len /\
+    b == B.gsub input.base (pos `U32.add` U32.uint_to_t l) (BY.len x) /\
+    B.as_seq h b == BY.reveal x
+  ))
+= get_vlbytes'_contents min max (log256' max) input pos
+
+(* In fact, the following accessors are not useful in practice,
+   because users would need to have the flbytes parser combinator in
+   their scope *)
 
 let clens_vlbytes_cond
   (min: nat)
