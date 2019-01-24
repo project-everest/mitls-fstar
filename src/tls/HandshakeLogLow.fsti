@@ -61,6 +61,8 @@ let tagged : msg -> bool =
 
 type lbuffer8 (l:uint_32) = b:B.buffer uint_8{B.len b == l}
 
+type range_t = t:(uint_32 & uint_32){fst t <= snd t}
+
 
 /// Abstract HSL state
 
@@ -76,9 +78,6 @@ val region_of : hsl_state -> GTot Mem.rgn
 ///   first call, and that the buffer bytes between from and to of the first call are the same.
 ///   When the flight is complete, these indices are set to None, and for the next flight the
 ///   caller can pass different buffer with different indices if it wants.
-
-
-type range_t = t:(uint_32 & uint_32){fst t <= snd t}
 
 val index_from_to : st:hsl_state -> HS.mem -> GTot (option range_t)
 
@@ -116,10 +115,11 @@ private
 let create_post (r:Mem.rgn)
   : HS.mem -> hsl_state -> HS.mem -> Type0
   = fun h0 st h1 ->
+    region_of st == r /\
     index_from_to st h1 = None /\
-    parsed_bytes st h0 == Seq.empty /\
+    parsed_bytes st h1 == Seq.empty /\
     B.fresh_loc (footprint st) h0 h1 /\  //local footprint is fresh
-    region_of st `region_includes` footprint st /\    
+    r `region_includes` footprint st /\    
     B.modifies B.loc_none h0 h1 /\ //did not modify anything
     invariant st h1
   
