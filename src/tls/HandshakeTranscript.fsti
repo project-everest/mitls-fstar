@@ -30,6 +30,7 @@ val footprint : state -> HS.mem -> GTot B.loc
 val transcript : state -> HS.mem -> GTot transcript_t
 
 /// Hashing algorithm in use
+
 val hash_alg : state -> HS.mem -> GTot (option Hash.alg)
 
 let region_includes r l = B.loc_regions true (Set.singleton r) `B.loc_includes` l
@@ -58,7 +59,8 @@ val create (r:Mem.rgn)
          region_of s == r /\
          modifies loc_none h0 h1 /\
          fresh_loc (footprint s h1) h0 h1 /\
-         r `region_includes` footprint s h1)
+         r `region_includes` footprint s h1 /\
+	 hash_alg s h1 == None)
 
 val set_hash_alg (s:state)
   : ST unit
