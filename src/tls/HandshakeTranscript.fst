@@ -97,19 +97,27 @@ let create r =
   let tx = B.malloc r (G.hide []) 1ul in
   { rgn = r; hash_state = hash_state; tx = tx }
 
+#set-options "--z3rlimit 20 --max_fuel 1"
 let set_hash_alg a s =
   let h0 = ST.get () in
 
   let hash_st = IncHash.create_in a s.rgn in
+
+  let h1 = ST.get () in
+
   B.upd s.hash_state 0ul (Some (| a, hash_st |));
 
   let h2 = ST.get () in
 
-  assume (invariant s h2);
-  assume (B.(fresh_loc (IncHash.footprint hash_st h2) h0 h2))  //AR: the postcondition in IncHash is in terms of Hash.fresh_loc, that needs fixing
+  //AR: this does not have a pattern, so need to call explicitly
+  IncHash.modifies_disjoint_preserves (B.loc_buffer s.hash_state) h1 h2 hash_st;
+
+  //AR: the postcondition in IncHash is in terms of Hash.fresh_loc, that needs fixing 
+  assume (B.(fresh_loc (IncHash.footprint hash_st h2) h0 h2));  
+
+  //AR: surprising that we can't prove it ...
+  assume (B.live h2 hash_st.IncHash.buf)
 
 let extend_hash s b p0 p1 msg = admit()
 let buf_is_hash_of_b (a:Hash.alg) (buf:Hacl.Hash.Definitions.hash_t a) (b:hbytes) : prop = admit()
 let extract_hash (#a:Hash.alg) (s:state) (tag:Hacl.Hash.Definitions.hash_t a) = admit()
-
-
