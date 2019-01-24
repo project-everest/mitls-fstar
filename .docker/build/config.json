@@ -1,0 +1,31 @@
+{
+    "ProjectName" : "mitls-fstar",
+
+    "BaseContainerIsEverestImage" : true,
+    "BaseContainerImageName" : "fstar",
+    "BaseContainerImageTagOrCommitId": "latest",
+    "BranchName" : "master",
+    "GithubCommitUrl" : "https://github.com/FStarLang/FStar/commit",
+    "OnDemandBuildDefinition" : "FStar\\FStar-{agentOS}",
+
+    "DockerFile": ".docker/build/{agentOS}/Dockerfile",
+    "DependencyFiles" : [
+        ".docker/build/build_helper.sh",
+        ".docker/build/build.sh"
+    ],
+
+    "DockerCacheEnabled" : true,
+    "CIBuildTarget" : "mitls_verify",
+    "NightlyBuildTarget" : "mitls_verify_and_hints",
+    "HasLogsToExtract" : true,
+
+    "NotificationEnabled" : true,
+    "NotificationChannel" : "#mitls-build",
+    "PublicBranches" : [ "master" ],
+
+    "kremlin_version" : "origin/master",
+    "hacl_version" : "origin/fstar-master",
+    "mlcrypto_version" : "origin/master",
+    "vale_version" : "origin/master",
+    "qd_version" : "origin/master"
+}
