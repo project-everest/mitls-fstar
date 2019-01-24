@@ -16,7 +16,13 @@ module HSM = HandshakeMessages
 module LP = LowParse.Low.Base
 open HandshakeLog.Common
 
-#reset-options "--max_fuel 0 --max_ifuel 0 --using_facts_from '* -LowParse -FStar.Tactics -FStar.Reflection'"
+
+#reset-options
+   "--max_fuel 0 --max_ifuel 0 --log_queries --query_stats \
+    --using_facts_from 'Prims FStar LowStar -FStar.Reflection -FStar.Tactics -FStar.UInt128 -FStar.Math' \
+    --using_facts_from 'Mem HandshakeLogLow HandshakeLog.Common Types_s Words_s Spec.Hash.Definitions.bytes' \
+    --using_facts_from 'TLSError'"
+
 
 /// HandshakeMessages related definitions
 
@@ -177,23 +183,38 @@ let valid_flight_c_ske_shd (flt:flight_c_ske_shd) (flight_end:uint_32) (b:b8) (h
 
 (* ... and so on for other flights *)
 
+let range_extension (r0:option range_t) (from to:uint_32) =
+    from <= to /\
+    (match r0 with
+     | None -> True  //nothing to prove if prev_from_to is not set
+     | Some r ->
+       from = snd r)
+
+let get_range (r0:option range_t) : range_t =
+  match r0 with
+  | None -> 0ul, 0ul
+  | Some r -> r
+  
 unfold 
 private
 let basic_pre_post (st:hsl_state) (b:b8) (from to:uint_32) : HS.mem -> Type0
   = fun h ->
     let prev_from_to = index_from_to st h in
-
     invariant st h /\
+    range_extension prev_from_to from to /\
+    to <= B.len b /\
+    (let start, finish = get_range prev_from_to in
+     B.as_seq h (B.gsub b start (finish - start)) == parsed_bytes st h)
 
-    from <= to /\ to <= B.len b /\
-
-    (match prev_from_to with
-     | None -> True  //nothing to prove if prev_from_to is not set
-     | Some t ->
-       let (prev_from, prev_to) : range_t = t in
-       from == prev_to /\
-       B.as_seq h (B.gsub b prev_from (prev_to - prev_from)) == parsed_bytes st h)
-
+#push-options "--max_ifuel 2 --initial_ifuel 2"
+let update_window (r0:option range_t)
+                  (from:uint_32)
+                  (to:uint_32{range_extension r0 from to})
+  : option range_t
+  = match r0 with
+    | None -> Some (from, to)
+    | Some (from_0, _) -> Some (from_0, to)
+  
 unfold
 private
 let receive_post 
@@ -207,22 +228,21 @@ let receive_post
   basic_pre_post st b from to h0 /\
   B.modifies (footprint st) h0 h1 /\  //only local footprint is modified
   (let open FStar.Error in
-   match x with
-   | Error _ -> True  //underspecified
-   | Correct None ->  //waiting for more data
-     (match index_from_to st h0 with
-      | None ->  //this is the first call that resulted in a partial flight
-        index_from_to st h1 == Some (from, to) /\ parsed_bytes st h1 == B.as_seq h0 (B.gsub b from (to - from))
-      | Some t ->  //this flight has been partially parsed before also
-        let (prev_from, _) : range_t = t in
-        index_from_to st h1 == Some (prev_from, to) /\
-        parsed_bytes st h1 == B.as_seq h0 (B.gsub b prev_from (to - prev_from)))
-   | Correct (Some flt) ->
+   match x, index_from_to st h1 with
+   | Error _, _ -> True  //underspecified
+   | Correct None, Some r ->  //waiting for more data
+     let start = fst r in
+     let finish = snd r in
+     finish == to /\
+     parsed_bytes st h1 == B.as_seq h0 (B.gsub b start (finish - start)) /\
+     index_from_to st h1 == update_window (index_from_to st h0) from to
+   | Correct (Some flt), None ->
      f flt to b h1 /\  //flight specific postcondition
      //Internal state for partial parse is reset
      //Ready to receive another flight
-     index_from_to st h1 == None /\
-     parsed_bytes st h1 == Seq.empty)
+     parsed_bytes st h1 == Seq.empty
+   | _ -> False)
+#pop-options
 
 val receive_flight_hrr (st:hsl_state) (b:b8) (from to:uint_32)
   : ST (TLSError.result (option flight_hrr))    //end input buffer index for the flight
