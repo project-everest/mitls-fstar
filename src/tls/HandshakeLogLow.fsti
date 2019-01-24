@@ -221,7 +221,12 @@ let receive_post
    | Correct None -> True  //waiting for more data
    | Correct (Some flt) ->
      f flt p b h1 /\  //flight specific postcondition
-     index_to st h1 == p)
+     //Internal state for partial parse is reset
+     //Ready to receive another flight
+     index_from st h1 == index_to st h1 /\
+     index_from st h1 == 0 /\
+     parsed_bytes st h1 == Seq.empty)
+
 
 val receive_flight_hrr (st:hsl_state) (b:b8) (p:uint_32{p <= B.len b})
   : ST (TLSError.result (option flight_hrr))    //end input buffer index for the flight
