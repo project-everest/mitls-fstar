@@ -224,7 +224,7 @@ let receive_post
      //Internal state for partial parse is reset
      //Ready to receive another flight
      index_from st h1 == index_to st h1 /\
-     index_from st h1 == 0 /\
+     index_from st h1 == 0ul /\
      parsed_bytes st h1 == Seq.empty)
 
 
