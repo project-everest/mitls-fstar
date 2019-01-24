@@ -11,11 +11,10 @@ module B = LowStar.Buffer
 
 module C = TLSConstants
 module Hash = Hashing
-module HashSpec = Hashing.Spec
 module HSM = HandshakeMessages
 
-module LP = LowParse.Low.Base
 open HandshakeLog.Common
+
 module IncHash = EverCrypt.Hash.Incremental
 
 noeq
@@ -27,7 +26,7 @@ type state = {
   })
 }
 
-let region_of (s:state) = s.rgn
+let region_of s = s.rgn
 
 [@BigOps.__reduce__]
 unfold
@@ -51,10 +50,9 @@ let transcript s h = G.reveal (B.deref h s.tx)
 let hash_alg s h =
   match B.deref h s.hash_state with
   | None -> None
-  | Some (| h, _ |) -> Some h
+  | Some (| a, _ |) -> Some a
 
-unfold
-let invariant' s h =
+let invariant s h =
   B.all_disjoint (footprint_locs s h) /\
   region_of s `region_includes` footprint s h /\
   B.live h s.hash_state /\
@@ -64,20 +62,22 @@ let invariant' s h =
    | Some (| a, hash_st |) ->
      IncHash.hashes #a h hash_st (transcript_bytes (transcript s h)))
 
-let invariant s h = invariant' s h
-open FStar.Tactics
-#reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection' --log_queries --query_stats"
-#push-options "--max_fuel 0 --max_ifuel 2 --initial_ifuel 2 --z3rlimit_factor 2"
-module T = FStar.Tactics
 let frame_inc_hashes (#a:Hash.alg) (hash_st:IncHash.state a) (h0 h1 : HS.mem) (b:hbytes) (l:B.loc)
   : Lemma
     (requires
       B.loc_disjoint l (IncHash.footprint hash_st h0) /\
+      B.modifies l h0 h1 /\
       IncHash.hashes #a h0 hash_st b)
     (ensures
       IncHash.hashes #a h1 hash_st b)
-  = admit()
+  = assert (IncHash.footprint hash_st h0 == B.(loc_union (loc_buffer (hash_st.IncHash.buf))
+                                                         (EverCrypt.Hash.footprint (hash_st.IncHash.hash_state) h0)));
+    IncHash.modifies_disjoint_preserves l h0 h1 hash_st
 
+open FStar.Tactics
+#reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection' --log_queries --query_stats"
+#push-options "--max_fuel 0 --max_ifuel 2 --initial_ifuel 2 --z3rlimit_factor 2"
+module T = FStar.Tactics
 let framing s l h0 h1 =
   assert (footprint' s h0 == footprint s h0)
     by (T.norm [delta_only [`%footprint]]);
