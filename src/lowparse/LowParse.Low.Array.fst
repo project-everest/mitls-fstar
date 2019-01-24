@@ -372,7 +372,7 @@ let clens_vlarray_nth
 
 #reset-options // we need non-linear arithmetic here
 
-#push-options "--z3rlimit 16"
+#push-options "--z3rlimit 512"
 
 inline_for_extraction
 let vlarray_list_length
@@ -392,8 +392,13 @@ let vlarray_list_length
     valid (parse_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max ()) h sl pos
   ))
   (ensures (fun h res h' ->
+    let x = (contents (parse_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max ()) h sl pos) in
+    let pos' = get_valid_pos (parse_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max ()) h sl pos in
     B.modifies B.loc_none h h' /\
-    U32.v res == L.length (contents (parse_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max ()) h sl pos)
+    U32.v res == L.length x /\
+    U32.v pos' == U32.v pos + (log256' array_byte_size_max) + (U32.v res `FStar.Mul.op_Star` k.parser_kind_low) /\
+    valid_list p h sl (pos `U32.add` U32.uint_to_t (log256' array_byte_size_max)) pos' /\
+    contents_list p h sl (pos `U32.add` U32.uint_to_t (log256' array_byte_size_max)) pos' == x
   ))
 = let h = HST.get () in
   [@inline_let]
@@ -411,10 +416,19 @@ let vlarray_list_length
     let psq = parse (parse_bounded_integer (log256' array_byte_size_max)) sq in
     let Some (ln, _) = psq in
     list_length_constant_size_parser_correct p (Seq.slice sq (log256' array_byte_size_max) (log256' array_byte_size_max + U32.v ln));
-    LowParse.Math.multiple_division_lemma (L.length l) k.parser_kind_low
+    LowParse.Math.multiple_division_lemma (L.length l) k.parser_kind_low;
+    let pos_payload = pos `U32.add` U32.uint_to_t (log256' array_byte_size_max) in
+    let pos' = pos_payload `U32.add` ln in
+    valid_exact_equiv (parse_list p) h sl pos_payload pos';
+    contents_exact_eq (parse_list p) h sl pos_payload pos';
+    valid_exact_list_valid_list p h sl pos_payload pos'
   in
   let blen = read_bounded_integer (log256' array_byte_size_max) sl pos in
   blen `U32.div` U32.uint_to_t k.parser_kind_low
+
+#pop-options
+
+#push-options "--z3rlimit 16"
 
 abstract
 let vlarray_nth_ghost'
