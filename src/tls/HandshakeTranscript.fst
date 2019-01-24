@@ -118,6 +118,11 @@ let set_hash_alg a s =
   //AR: surprising that we can't prove it ...
   assume (B.live h2 hash_st.IncHash.buf)
 
+let lemma_transcript_bytes (hd:HSM.hs_msg) (l:transcript_t)
+  : Lemma (transcript_bytes (hd::l) ==
+           Seq.append (transcript_bytes l) (format_hs_msg hd))
+  = admit ()
+
 #set-options "--z3rlimit 50"
 let extend_hash s b p0 p1 msg =
   let hash_st_opt = B.index s.hash_state 0ul in
@@ -148,7 +153,7 @@ let extend_hash s b p0 p1 msg =
     IncHash.modifies_disjoint_preserves (B.loc_union (B.loc_buffer s.hash_state)
                                                      (B.loc_buffer s.tx)) h1 h3 new_hash_st;
 
-    assume (transcript_bytes (transcript s h3) == Seq.append (G.reveal prev_bytes) (B.as_seq h0 sub_b))
+    lemma_transcript_bytes (G.reveal msg) (transcript s h0)
 
 let buf_is_hash_of_b (a:Hash.alg) (buf:Hacl.Hash.Definitions.hash_t a) (b:hbytes) : prop = admit()
 let extract_hash (#a:Hash.alg) (s:state) (tag:Hacl.Hash.Definitions.hash_t a) = admit()

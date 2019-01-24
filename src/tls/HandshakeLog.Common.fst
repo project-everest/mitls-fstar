@@ -19,10 +19,15 @@ module LP = LowParse.Low.Base
 type hbytes = Spec.Hash.Definitions.bytes
 
 
+/// TODO: define using high-level serializers from LowParse
+
+assume val format_hs_msg (m:HSM.hs_msg) : Tot hbytes
+
+
 /// TODO: LowParse definition of saying buf is a valid serialization of m
 
-assume
-val valid_parsing_aux (m:HSM.hs_msg) (buf:B.buffer uint_8) (h:HS.mem) : Type0
+let valid_parsing_aux (m:HSM.hs_msg) (buf:B.buffer uint_8) (h:HS.mem) =
+  format_hs_msg m == B.as_seq h buf
 
 
 /// Helper to enforce spatial safety of indices in the st input buffer
@@ -33,8 +38,3 @@ let valid_parsing (m:HSM.hs_msg) (from to:uint_32) (b:B.buffer uint_8) (h:HS.mem
   to <= B.len b /\
   (let buf = B.gsub b from (to - from) in
    valid_parsing_aux m buf h)
-
-
-/// TODO: define using high-level serializers from LowParse
-
-val format_hs_msg (m:HSM.hs_msg) : Tot hbytes
