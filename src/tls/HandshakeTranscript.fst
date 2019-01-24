@@ -78,10 +78,12 @@ let frame_inc_hashes (#a:Hash.alg) (hash_st:IncHash.state a) (h0 h1 : HS.mem) (b
                                                          (EverCrypt.Hash.footprint (hash_st.IncHash.hash_state) h0)));
     IncHash.modifies_disjoint_preserves l h0 h1 hash_st
 
-#reset-options "--using_facts_from '* -LowParse -FStar.Tactics -FStar.Reflection' --max_fuel 0 --max_ifuel 1 --initial_ifuel 1"
+#set-options "--max_fuel 0 --max_ifuel 1 --initial_ifuel 1"
 module T = FStar.Tactics
 let framing s l h0 h1 =
   assert (footprint' s h0 == footprint s h0)
+    by (T.norm [delta_only [`%footprint]]);
+  assert (footprint' s h1 == footprint s h1)
     by (T.norm [delta_only [`%footprint]]);
   match B.deref h0 s.hash_state with
     | None -> ()
@@ -89,14 +91,14 @@ let framing s l h0 h1 =
       assert (B.loc_disjoint l (IncHash.footprint hash_st h0));
       frame_inc_hashes #a hash_st h0 h1 (transcript_bytes (transcript s h0)) l
 
-#reset-options "--using_facts_from '* -LowParse -FStar.Tactics -FStar.Reflection' --max_fuel 0 --max_ifuel 0"
+#set-options "--max_fuel 0 --max_ifuel 0"
 
 let create r =
   let hash_state = B.malloc r None 1ul in
   let tx = B.malloc r (G.hide []) 1ul in
   { rgn = r; hash_state = hash_state; tx = tx }
 
-#set-options "--z3rlimit 20 --max_fuel 1"
+#set-options "--z3rlimit 20 --initial_fuel 1 --max_fuel 1"
 let set_hash_alg a s =
   let h0 = ST.get () in
 
@@ -167,7 +169,5 @@ let extract_hash #a s tag =
 
     assume (Seq.length (G.reveal prev_bytes) < Spec.Hash.Definitions.max_input_length a);
 
-   
-    assert (B.(modifies (loc_union (IncHash.footprint hash_st h1) (loc_buffer tag)) h0 h1));
-    //AR: need weakening of modifies
-    assume (B.(modifies (loc_union (footprint s h1) (loc_buffer tag)) h0 h1))
+    assume (B.(loc_includes (loc_union (footprint s h1) (loc_buffer tag))
+                            (loc_union (IncHash.footprint hash_st h1) (loc_buffer tag))))
