@@ -100,7 +100,7 @@ val extend_hash (s:state)
          hash_alg s h1 == hash_alg s h0 /\
          transcript s h1 == extend_transcript s (G.reveal msg) h0))
 
-val buf_is_hash_of_b (a:Hash.alg) (buf:Hacl.Hash.Definitions.hash_t a) (b:hbytes) : prop
+val buf_is_hash_of_b (a:Hash.alg) (buf:Hacl.Hash.Definitions.hash_t a) (h:HS.mem) (b:hbytes) : prop
 val extract_hash (#a:Hash.alg) (s:state) (tag:Hacl.Hash.Definitions.hash_t a)
   : ST unit (fun h0 ->
              invariant s h0 /\
@@ -111,4 +111,4 @@ val extract_hash (#a:Hash.alg) (s:state) (tag:Hacl.Hash.Definitions.hash_t a)
              let open B in
 	     frame_state s h0 h1 /\
              modifies (loc_union (footprint s h1) (loc_buffer tag)) h0 h1 /\
-             buf_is_hash_of_b a tag (transcript_bytes (transcript s h1)))
+             buf_is_hash_of_b a tag h1 (transcript_bytes (transcript s h1)))
