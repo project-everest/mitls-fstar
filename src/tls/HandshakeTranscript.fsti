@@ -18,7 +18,7 @@ open HandshakeLog.Common
 
 let transcript_t = list HSM.hs_msg
 let transcript_bytes (t:transcript_t) : GTot hbytes =
-  List.fold_right_gtot t (fun x a -> Seq.append (format_hs_msg x) a) Seq.empty
+  List.fold_right_gtot t (fun x a -> Seq.append a (format_hs_msg x)) Seq.empty
 
 val state : Type0
 

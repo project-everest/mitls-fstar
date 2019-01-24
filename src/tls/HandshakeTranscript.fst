@@ -10,7 +10,6 @@ module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
 module B = LowStar.Buffer
 
-module C = TLSConstants
 module Hash = Hashing
 module HSM = HandshakeMessages
 
@@ -18,7 +17,7 @@ open HandshakeLog.Common
 
 module IncHash = EverCrypt.Hash.Incremental
 
-#reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection' --max_fuel 0 --max_ifuel 0"
+#reset-options "--using_facts_from '* -LowParse -FStar.Tactics -FStar.Reflection' --max_fuel 0 --max_ifuel 0"
 
 noeq
 type state = {
@@ -79,7 +78,7 @@ let frame_inc_hashes (#a:Hash.alg) (hash_st:IncHash.state a) (h0 h1 : HS.mem) (b
                                                          (EverCrypt.Hash.footprint (hash_st.IncHash.hash_state) h0)));
     IncHash.modifies_disjoint_preserves l h0 h1 hash_st
 
-#reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection' --max_fuel 0 --max_ifuel 1 --initial_ifuel 1"
+#reset-options "--using_facts_from '* -LowParse -FStar.Tactics -FStar.Reflection' --max_fuel 0 --max_ifuel 1 --initial_ifuel 1"
 module T = FStar.Tactics
 let framing s l h0 h1 =
   assert (footprint' s h0 == footprint s h0)
@@ -90,7 +89,7 @@ let framing s l h0 h1 =
       assert (B.loc_disjoint l (IncHash.footprint hash_st h0));
       frame_inc_hashes #a hash_st h0 h1 (transcript_bytes (transcript s h0)) l
 
-#reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection' --max_fuel 0 --max_ifuel 0"
+#reset-options "--using_facts_from '* -LowParse -FStar.Tactics -FStar.Reflection' --max_fuel 0 --max_ifuel 0"
 
 let create r =
   let hash_state = B.malloc r None 1ul in
@@ -121,9 +120,9 @@ let set_hash_alg a s =
 let lemma_transcript_bytes (hd:HSM.hs_msg) (l:transcript_t)
   : Lemma (transcript_bytes (hd::l) ==
            Seq.append (transcript_bytes l) (format_hs_msg hd))
-  = admit ()
+  = ()
 
-#set-options "--z3rlimit 50"
+#set-options "--max_fuel 0 --max_ifuel 0"
 let extend_hash s b p0 p1 msg =
   let hash_st_opt = B.index s.hash_state 0ul in
   match hash_st_opt with
@@ -141,8 +140,6 @@ let extend_hash s b p0 p1 msg =
     let h1 = ST.get () in
 
     B.upd s.hash_state 0ul (Some (| a, new_hash_st |));
-
-    let h2 = ST.get () in
 
     let e_tx = G.elift2 Cons msg e_tx in
     B.upd s.tx 0ul e_tx;
