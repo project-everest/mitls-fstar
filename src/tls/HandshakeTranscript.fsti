@@ -63,7 +63,7 @@ val create (r:Mem.rgn)
 	 hash_alg s h1 == None /\
 	 transcript s h1 == [])
 
-val set_hash_alg (s:state)
+val set_hash_alg (a:Hash.alg) (s:state)
   : ST unit
        (requires fun h ->
          invariant s h /\
@@ -71,6 +71,8 @@ val set_hash_alg (s:state)
        (ensures fun h0 _ h1 ->
          let open B in
          invariant s h1 /\
+	 hash_alg s h1 == Some a /\
+	 transcript s h1 == transcript s h0 /\
          (exists l. fresh_loc l h0 h1 /\
                footprint s h1 == B.loc_union l (footprint s h0) /\
                region_of s `region_includes` footprint s h1))
