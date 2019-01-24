@@ -90,6 +90,7 @@ val extend_hash (s:state)
   : ST unit
        (requires fun h ->
          invariant s h /\
+	 B.live h b /\
          valid_parsing (G.reveal msg) p0 p1 b h)
        (ensures (fun h0 _ h1 ->
          invariant s h1 /\

@@ -118,6 +118,16 @@ let set_hash_alg a s =
   //AR: surprising that we can't prove it ...
   assume (B.live h2 hash_st.IncHash.buf)
 
-let extend_hash s b p0 p1 msg = admit()
+let extend_hash s b p0 p1 msg =
+  let hash_st_opt = B.index s.hash_state 0ul in
+  match hash_st_opt with
+  | None -> ()
+  | Some (| a, hash_st |) ->
+    let e_tx = B.index s.tx 0ul in
+    let prev_bytes = G.elift1 transcript_bytes e_tx in
+    let sub_b = B.sub b p0 (p1 - p0) in
+    IncHash.update a hash_st prev_bytes sub_b (p1 - p0);
+    admit ()
+
 let buf_is_hash_of_b (a:Hash.alg) (buf:Hacl.Hash.Definitions.hash_t a) (b:hbytes) : prop = admit()
 let extract_hash (#a:Hash.alg) (s:state) (tag:Hacl.Hash.Definitions.hash_t a) = admit()
