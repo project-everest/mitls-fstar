@@ -107,5 +107,8 @@ val extract_hash (#a:Hash.alg) (s:state) (tag:Hacl.Hash.Definitions.hash_t a)
             (fun h0 _ h1 ->
              let open B in
              invariant s h1 /\
-             modifies (B.loc_buffer tag) h0 h1 /\
+	     hash_alg s h1 == hash_alg s h0 /\
+	     footprint s h1 == footprint s h0 /\
+	     transcript s h1 == transcript s h0 /\
+             modifies (B.(loc_union (footprint s h0) (loc_buffer tag))) h0 h1 /\
              buf_is_hash_of_b a tag (transcript_bytes (transcript s h1)))
