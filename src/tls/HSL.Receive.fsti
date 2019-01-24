@@ -1,4 +1,4 @@
-module HandshakeLogLow
+module HSL.Receive
 
 open FStar.Integers
 open FStar.HyperStack.ST
@@ -9,18 +9,15 @@ module List = FStar.List.Tot
 module HS = FStar.HyperStack
 module B = LowStar.Buffer
 
-module C = TLSConstants
-module Hash = Hashing
 module HSM = HandshakeMessages
-
 module LP = LowParse.Low.Base
-open HandshakeLog.Common
+open HSL.Common
 
 
 #reset-options
    "--max_fuel 0 --max_ifuel 0 --log_queries --query_stats \
     --using_facts_from 'Prims FStar LowStar -FStar.Reflection -FStar.Tactics -FStar.UInt128 -FStar.Math' \
-    --using_facts_from 'Mem HandshakeLogLow HandshakeLog.Common Types_s Words_s Spec.Hash.Definitions.bytes' \
+    --using_facts_from 'Mem HSL Types_s Words_s Spec.Hash.Definitions.bytes' \
     --using_facts_from 'TLSError'"
 
 

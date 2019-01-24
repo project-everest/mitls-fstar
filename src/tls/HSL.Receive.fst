@@ -1,4 +1,4 @@
-module HandshakeLogLow
+module HSL.Receive
 
 open FStar.Integers
 open FStar.HyperStack.ST
@@ -9,27 +9,16 @@ module List = FStar.List.Tot
 module HS = FStar.HyperStack
 module B = LowStar.Buffer
 
-module C = TLSConstants
-module Hash = Hashing
 module HSM = HandshakeMessages
-
 module LP = LowParse.Low.Base
 
-module IncHash = EverCrypt.Hash.Incremental
-
-open HandshakeLog.Common
+open HSL.Common
 
 #reset-options
    "--log_queries --query_stats \
     --using_facts_from 'Prims FStar LowStar -FStar.Reflection -FStar.Tactics -FStar.UInt128 -FStar.Math' \
-    --using_facts_from 'Mem HandshakeLogLow HandshakeLog.Common Types_s Words_s Spec.Hash.Definitions.bytes' \
+    --using_facts_from 'Mem HSL Types_s Words_s Spec.Hash.Definitions.bytes' \
     --using_facts_from 'TLSError'"
-
-type partial_flight =
-  | Init
-  | HRR
-  | C_SKE_SHD_0: begin_ske:uint_32 -> partial_flight
-
 
 noeq
 type hsl_state = {
@@ -68,17 +57,5 @@ let create r =
 let receive_flight_hrr (st:hsl_state) (b:b8) (from to:uint_32) =
   admit()
 
-let receive_flight_c_ske_shd (st:hsl_state) (b:b8) (from to:uint_32) = admit()
-
-
-// /// There's only one message in this flight
-// /// So, there's no incremental parsing to be performed
-// let receive_flight_hrr st b from to =
-//   match !* st.from_to with
-//   | None ->
-//   | Some (from, to) ->
-
-
-//   : ST (TLSError.result (option flight_hrr))    //end input buffer index for the flight
-//        (requires basic_pre_post st b  from to)
-//        (ensures  receive_post st b from to valid_flight_hrr)
+let receive_flight_c_ske_shd (st:hsl_state) (b:b8) (from to:uint_32) =
+  admit()

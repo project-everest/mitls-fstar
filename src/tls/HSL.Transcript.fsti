@@ -1,4 +1,4 @@
-module HandshakeTranscript
+module HSL.Transcript
 
 open FStar.Integers
 open FStar.HyperStack.ST
@@ -12,9 +12,13 @@ module B = LowStar.Buffer
 module Hash = Hashing
 module HSM = HandshakeMessages
 
-open HandshakeLog.Common
+open HSL.Common
 
-#set-options "--max_fuel 0 --max_ifuel 0"
+#reset-options
+   "--log_queries --query_stats \
+    --using_facts_from 'Prims FStar LowStar -FStar.Reflection -FStar.Tactics -FStar.UInt128 -FStar.Math' \
+    --using_facts_from 'Mem HSL Types_s Words_s Spec.Hash.Definitions.bytes' \
+    --using_facts_from 'TLSError'"
 
 let transcript_t = list HSM.hs_msg
 let transcript_bytes (t:transcript_t) : GTot hbytes =

@@ -1,4 +1,4 @@
-module HandshakeTranscript
+module HSL.Transcript
 
 open FStar.Integers
 open FStar.HyperStack.ST
@@ -13,11 +13,15 @@ module B = LowStar.Buffer
 module Hash = Hashing
 module HSM = HandshakeMessages
 
-open HandshakeLog.Common
+open HSL.Common
 
 module IncHash = EverCrypt.Hash.Incremental
 
-#reset-options "--using_facts_from '* -LowParse -FStar.Tactics -FStar.Reflection' --max_fuel 0 --max_ifuel 0"
+#reset-options
+   "--log_queries --query_stats \
+    --using_facts_from 'Prims FStar LowStar -FStar.Reflection -FStar.Tactics -FStar.UInt128 -FStar.Math' \
+    --using_facts_from 'Mem HSL Types_s Words_s Range Spec.Hash Hacl.Hash.Definitions' \
+    --using_facts_from 'TLSError EverCrypt'"
 
 noeq
 type state = {
@@ -78,7 +82,7 @@ let frame_inc_hashes (#a:Hash.alg) (hash_st:IncHash.state a) (h0 h1 : HS.mem) (b
                                                          (EverCrypt.Hash.footprint (hash_st.IncHash.hash_state) h0)));
     IncHash.modifies_disjoint_preserves l h0 h1 hash_st
 
-#set-options "--max_fuel 0 --max_ifuel 1 --initial_ifuel 1"
+#push-options "--max_fuel 1 --initial_fuel 1 --max_ifuel 1 --initial_ifuel 1"
 module T = FStar.Tactics
 let framing s l h0 h1 =
   assert (footprint' s h0 == footprint s h0)
@@ -91,14 +95,12 @@ let framing s l h0 h1 =
       assert (B.loc_disjoint l (IncHash.footprint hash_st h0));
       frame_inc_hashes #a hash_st h0 h1 (transcript_bytes (transcript s h0)) l
 
-#set-options "--max_fuel 0 --max_ifuel 0"
 
 let create r =
   let hash_state = B.malloc r None 1ul in
   let tx = B.malloc r (G.hide []) 1ul in
   { rgn = r; hash_state = hash_state; tx = tx }
 
-#set-options "--z3rlimit 20 --initial_fuel 1 --max_fuel 1"
 let set_hash_alg a s =
   let h0 = ST.get () in
 
@@ -124,7 +126,7 @@ let lemma_transcript_bytes (hd:HSM.hs_msg) (l:transcript_t)
            Seq.append (transcript_bytes l) (format_hs_msg hd))
   = ()
 
-#set-options "--max_fuel 0 --max_ifuel 0"
+#push-options "--z3rlimit_factor 4 --max_fuel 0"
 let extend_hash s b p0 p1 msg =
   let hash_st_opt = B.index s.hash_state 0ul in
   match hash_st_opt with
@@ -162,7 +164,6 @@ let extract_hash #a s tag =
     let prev_bytes = G.elift1 transcript_bytes e_tx in
 
     let h0 = ST.get () in
-
     IncHash.finish a hash_st prev_bytes tag;
 
     let h1 = ST.get () in

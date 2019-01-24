@@ -1,4 +1,4 @@
-module HandshakeLog.Common
+module HSL.Common
 
 open FStar.Integers
 open FStar.HyperStack.ST
