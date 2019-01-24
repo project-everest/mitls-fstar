@@ -91,10 +91,11 @@ val extend_hash (s:state)
        (requires fun h ->
          invariant s h /\
 	 B.live h b /\
-	 B.loc_disjoint b (footprint s h) /\
+	 B.loc_disjoint (B.loc_buffer b) (footprint s h) /\
          valid_parsing (G.reveal msg) p0 p1 b h)
        (ensures (fun h0 _ h1 ->
          invariant s h1 /\
+	 B.modifies (footprint s h1) h0 h1 /\
          footprint s h1 == footprint s h0 /\
          hash_alg s h1 == hash_alg s h0 /\
          transcript s h1 == extend_transcript s (G.reveal msg) h0))

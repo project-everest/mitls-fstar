@@ -126,7 +126,9 @@ let extend_hash s b p0 p1 msg =
     let e_tx = B.index s.tx 0ul in
     let prev_bytes = G.elift1 transcript_bytes e_tx in
     let sub_b = B.sub b p0 (p1 - p0) in
-    IncHash.update a hash_st prev_bytes sub_b (p1 - p0);
+    assume (Seq.length (G.reveal prev_bytes) + UInt32.v (p1 - p0) < pow2 61);
+    let new_hash_st = IncHash.update a hash_st prev_bytes sub_b (p1 - p0) in
+    B.upd s.hash_state 0ul (Some (| a, new_hash_st |));
     admit ()
 
 let buf_is_hash_of_b (a:Hash.alg) (buf:Hacl.Hash.Definitions.hash_t a) (b:hbytes) : prop = admit()
