@@ -17,6 +17,8 @@ open HandshakeLog.Common
 
 module IncHash = EverCrypt.Hash.Incremental
 
+#reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection' --max_fuel 0 --max_ifuel 0"
+
 noeq
 type state = {
   rgn:Mem.rgn;
@@ -62,6 +64,7 @@ let invariant s h =
    | Some (| a, hash_st |) ->
      IncHash.hashes #a h hash_st (transcript_bytes (transcript s h)))
 
+private
 let frame_inc_hashes (#a:Hash.alg) (hash_st:IncHash.state a) (h0 h1 : HS.mem) (b:hbytes) (l:B.loc)
   : Lemma
     (requires
@@ -74,22 +77,20 @@ let frame_inc_hashes (#a:Hash.alg) (hash_st:IncHash.state a) (h0 h1 : HS.mem) (b
                                                          (EverCrypt.Hash.footprint (hash_st.IncHash.hash_state) h0)));
     IncHash.modifies_disjoint_preserves l h0 h1 hash_st
 
-open FStar.Tactics
-#reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection' --log_queries --query_stats"
-#push-options "--max_fuel 0 --max_ifuel 2 --initial_ifuel 2 --z3rlimit_factor 2"
+#reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection' --max_fuel 0 --max_ifuel 1 --initial_ifuel 1"
 module T = FStar.Tactics
 let framing s l h0 h1 =
   assert (footprint' s h0 == footprint s h0)
     by (T.norm [delta_only [`%footprint]]);
-  assert (invariant s h0 <==> invariant' s h0)
-    by (T.norm [delta_only [`%invariant]]);
   match B.deref h0 s.hash_state with
     | None -> ()
     | Some (| a, hash_st |) ->
       assert (B.loc_disjoint l (IncHash.footprint hash_st h0));
       frame_inc_hashes #a hash_st h0 h1 (transcript_bytes (transcript s h0)) l
 
-let create (r:Mem.rgn) = admit()
+#reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection' --max_fuel 0 --max_ifuel 0"
+
+let create r = admit ()
 let set_hash_alg (s:state) = admit()
 let extend_hash s b p0 p1 msg = admit()
 let buf_is_hash_of_b (a:Hash.alg) (buf:Hacl.Hash.Definitions.hash_t a) (b:hbytes) : prop = admit()
