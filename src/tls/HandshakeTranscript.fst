@@ -7,6 +7,7 @@ module G = FStar.Ghost
 module List = FStar.List.Tot
 
 module HS = FStar.HyperStack
+module ST = FStar.HyperStack.ST
 module B = LowStar.Buffer
 
 module C = TLSConstants
@@ -45,7 +46,7 @@ let footprint' (s:state) (h:HS.mem) =
   let open B in
   loc_union_l (footprint_locs s h)
 
-let footprint s h = normalize_term (footprint' s h)
+let footprint s h = BigOps.normal (footprint' s h)
 
 let transcript s h = G.reveal (B.deref h s.tx)
 
@@ -90,7 +91,11 @@ let framing s l h0 h1 =
 
 #reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection' --max_fuel 0 --max_ifuel 0"
 
-let create r = admit ()
+let create r =
+  let hash_state = B.malloc r None 1ul in
+  let tx = B.malloc r (G.hide []) 1ul in
+  { rgn = r; hash_state = hash_state; tx = tx }
+
 let set_hash_alg (s:state) = admit()
 let extend_hash s b p0 p1 msg = admit()
 let buf_is_hash_of_b (a:Hash.alg) (buf:Hacl.Hash.Definitions.hash_t a) (b:hbytes) : prop = admit()
