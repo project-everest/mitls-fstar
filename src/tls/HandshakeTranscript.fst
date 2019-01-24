@@ -118,6 +118,7 @@ let set_hash_alg a s =
   //AR: surprising that we can't prove it ...
   assume (B.live h2 hash_st.IncHash.buf)
 
+#set-options "--z3rlimit 50"
 let extend_hash s b p0 p1 msg =
   let hash_st_opt = B.index s.hash_state 0ul in
   match hash_st_opt with
@@ -127,9 +128,27 @@ let extend_hash s b p0 p1 msg =
     let prev_bytes = G.elift1 transcript_bytes e_tx in
     let sub_b = B.sub b p0 (p1 - p0) in
     assume (Seq.length (G.reveal prev_bytes) + UInt32.v (p1 - p0) < pow2 61);
+
+    let h0 = ST.get () in
+
     let new_hash_st = IncHash.update a hash_st prev_bytes sub_b (p1 - p0) in
+
+    let h1 = ST.get () in
+
     B.upd s.hash_state 0ul (Some (| a, new_hash_st |));
-    admit ()
+
+    let h2 = ST.get () in
+
+    let e_tx = G.elift2 Cons msg e_tx in
+    B.upd s.tx 0ul e_tx;
+
+    let h3 = ST.get () in
+
+    //AR: this does not have a pattern, so need to call explicitly
+    IncHash.modifies_disjoint_preserves (B.loc_union (B.loc_buffer s.hash_state)
+                                                     (B.loc_buffer s.tx)) h1 h3 new_hash_st;
+
+    assume (invariant s h3)
 
 let buf_is_hash_of_b (a:Hash.alg) (buf:Hacl.Hash.Definitions.hash_t a) (b:hbytes) : prop = admit()
 let extract_hash (#a:Hash.alg) (s:state) (tag:Hacl.Hash.Definitions.hash_t a) = admit()
