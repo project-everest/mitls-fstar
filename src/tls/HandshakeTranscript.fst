@@ -155,5 +155,26 @@ let extend_hash s b p0 p1 msg =
 
     lemma_transcript_bytes (G.reveal msg) (transcript s h0)
 
-let buf_is_hash_of_b (a:Hash.alg) (buf:Hacl.Hash.Definitions.hash_t a) (b:hbytes) : prop = admit()
-let extract_hash (#a:Hash.alg) (s:state) (tag:Hacl.Hash.Definitions.hash_t a) = admit()
+let buf_is_hash_of_b a buf h b =
+  assume (Seq.length b < Spec.Hash.Definitions.max_input_length a);
+  B.as_seq h buf == Spec.Hash.hash a b
+
+let extract_hash #a s tag =
+  let hash_st_opt = B.index s.hash_state 0ul in
+  match hash_st_opt with
+  | Some (| a, hash_st |) ->
+    let e_tx = B.index s.tx 0ul in
+    let prev_bytes = G.elift1 transcript_bytes e_tx in
+
+    let h0 = ST.get () in
+
+    IncHash.finish a hash_st prev_bytes tag;
+
+    let h1 = ST.get () in
+
+    assume (Seq.length (G.reveal prev_bytes) < Spec.Hash.Definitions.max_input_length a);
+
+   
+    assert (B.(modifies (loc_union (IncHash.footprint hash_st h1) (loc_buffer tag)) h0 h1));
+    //AR: need weakening of modifies
+    assume (B.(modifies (loc_union (footprint s h1) (loc_buffer tag)) h0 h1))
