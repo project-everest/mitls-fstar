@@ -787,8 +787,10 @@ let getMode #region #role ns =
   | S_Complete mode _ ->  mode
   | _ -> admit() //18-12-16 TODO incomplete pattern, add a pre?
 
-#reset-options "--z3rlimit 100"
+#reset-options "--query_stats --z3rlimit 100"
 let version #region #role ns =
+//  let x = !ns.state in
+//  TLS_1p3
   match !ns.state with
   | C_Init _ -> ns.cfg.max_version
   | C_Offer _ -> ns.cfg.max_version
@@ -1058,11 +1060,14 @@ private let unsupported msg = fatal Unsupported_extension (perror __SOURCE_FILE_
 // 18-12-23 various checks on the received server extensions (still
 // missing e.g. check on mandatory responses)
 
-let same_extension_type (s: serverHelloExtension) (c: clientHelloExtension) = 
+let same_she_che_type (s: serverHelloExtension) (c: clientHelloExtension) = 
   tag_of_clientHelloExtension c = tag_of_serverHelloExtension s 
 
+let same_che_che_type (c0 c1: clientHelloExtension) = 
+  tag_of_clientHelloExtension c0 = tag_of_clientHelloExtension c1 
+
 let checkServerExtension resuming (ces: clientHelloExtensions) (se: serverHelloExtension): result unit = 
-  if List.Helpers.exists_b_aux se same_extension_type ces then unsupported "received unsolicited server extension"
+  if List.Helpers.exists_b_aux se same_she_che_type ces then unsupported "received unsolicited server extension"
   else 
     match se with
     | SHE_server_name _ -> 
@@ -1740,28 +1745,28 @@ let accum_string_of_pv s pv = s ^ " " ^ string_of_pv pv
 
 private
 let valid_ch2_extension (o1, hrr) (e:clientHelloExtension) =
-    match e with
-    | CHE_key_share ecl ->
-          (match ecl, group_of_hrr hrr with
-          | [ks], Some g' -> CommonDH.group_of_namedGroup (tag_of_keyShareEntry ks) = Some g'
+  match e with
+  | CHE_key_share ecl ->
+    (match ecl, group_of_hrr hrr with
+    | [ks], Some g' -> CommonDH.group_of_namedGroup (tag_of_keyShareEntry ks) = Some g'
 //19-01-21 do we need this case? 
 //        | _, None -> (
 //          let shares1 = find_key_shares o1 in
 //          CommonDH.clientKeyShareBytes shares1 = CommonDH.clientKeyShareBytes ecl)
           | _ -> false)
-    | CHE_early_data _ -> false // Forbidden
-    | CHE_cookie c -> true // FIXME we will send cookie
-        // If we add cookie support we need to treat this case separately
-        // | Extensions.E_cookie c -> c = S_HRR?.cookie ns.state
-    | e ->
-          (match find_client_extension_aux e (fun e1 e2 -> tag_of_clientHelloExtension e1 = tag_of_clientHelloExtension e2) o1 with
-          | None -> (IO.debug_print_string "Extra extension\n") `kand` false
-          // This allows the client to send less extensions,
-          // but the ones that are sent must be exactly the same
-          | Some e' ->
-            //FIXME: Extensions.E_pre_shared_key "may be updated" 4.1.2
-            true) // FIXME
-            //(extensionBytes e) = (extensionBytes e'))
+  | CHE_early_data _ -> false // Forbidden
+  | CHE_cookie c -> true // FIXME we will send cookie
+      // If we add cookie support we need to treat this case separately
+      // | Extensions.E_cookie c -> c = S_HRR?.cookie ns.state
+  | e ->
+    (match find_client_extension_aux e same_che_che_type o1 with
+    | None -> (IO.debug_print_string "Extra extension\n") `kand` false
+    // This allows the client to send less extensions,
+    // but the ones that are sent must be exactly the same
+    | Some e' ->
+      //FIXME: Extensions.E_pre_shared_key "may be updated" 4.1.2
+      true) // FIXME
+      //(extensionBytes e) = (extensionBytes e'))
 
 let server_ClientHello #region ns offer log =
   trace ("offered client extensions "^string_of_ches offer.ch_extensions);
@@ -1932,3 +1937,4 @@ let server_ServerShare #region ns oks app_ees =
   ns.state := S_Mode mode cert;
   Correct mode 
 
+ 
