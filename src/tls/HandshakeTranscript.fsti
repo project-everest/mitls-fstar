@@ -91,6 +91,7 @@ val extend_hash (s:state)
        (requires fun h ->
          invariant s h /\
 	 B.live h b /\
+	 B.loc_disjoint b (footprint s h) /\
          valid_parsing (G.reveal msg) p0 p1 b h)
        (ensures (fun h0 _ h1 ->
          invariant s h1 /\
