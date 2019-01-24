@@ -60,7 +60,8 @@ val create (r:Mem.rgn)
          modifies loc_none h0 h1 /\
          fresh_loc (footprint s h1) h0 h1 /\
          r `region_includes` footprint s h1 /\
-	 hash_alg s h1 == None)
+	 hash_alg s h1 == None /\
+	 transcript s h1 == [])
 
 val set_hash_alg (s:state)
   : ST unit
