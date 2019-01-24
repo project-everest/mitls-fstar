@@ -77,14 +77,14 @@ val set_hash_alg (a:Hash.alg) (s:state)
                footprint s h1 == B.loc_union l (footprint s h0) /\
                region_of s `region_includes` footprint s h1))
 
-let extend_transcript (s:state) (msg:HSM.hs_msg) (h:HS.mem) =
+let extend_transcript (s:state) (msg:HSM.hs_msg) (h:HS.mem) : GTot transcript_t =
   match hash_alg s h with
   | None -> []
   | Some _ -> msg :: transcript s h
 
 val extend_hash (s:state)
                 (b:B.buffer uint_8)
-                (p0:uint_32{p0 <= B.len b})
+                (p0:uint_32)
                 (p1:uint_32{p0 <= p1 /\ p1 <= B.len b})
                 (msg:G.erased HSM.hs_msg)
   : ST unit
@@ -92,8 +92,8 @@ val extend_hash (s:state)
          invariant s h /\
          valid_parsing (G.reveal msg) p0 p1 b h)
        (ensures (fun h0 _ h1 ->
-         invariant s h0 /\
-         footprint s h0 == footprint s h1 /\
+         invariant s h1 /\
+         footprint s h1 == footprint s h0 /\
          hash_alg s h1 == hash_alg s h0 /\
          transcript s h1 == extend_transcript s (G.reveal msg) h0))
 
