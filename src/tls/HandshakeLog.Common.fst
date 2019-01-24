@@ -38,3 +38,5 @@ let valid_parsing (m:HSM.hs_msg) (from to:uint_32) (b:B.buffer uint_8) (h:HS.mem
   to <= B.len b /\
   (let buf = B.gsub b from (to - from) in
    valid_parsing_aux m buf h)
+
+let region_includes r l = B.loc_regions true (Set.singleton r) `B.loc_includes` l

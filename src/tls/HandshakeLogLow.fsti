@@ -11,17 +11,16 @@ module B = LowStar.Buffer
 
 module C = TLSConstants
 module Hash = Hashing
-module HashSpec = Hashing.Spec
 module HSM = HandshakeMessages
 
 module LP = LowParse.Low.Base
 open HandshakeLog.Common
-#reset-options "--max_fuel 0 --max_ifuel 0 --using_facts_from '* -LowParse'"
+
+#reset-options "--max_fuel 0 --max_ifuel 0 --using_facts_from '* -LowParse -FStar.Tactics -FStar.Reflection'"
 
 /// HandshakeMessages related definitions
 
 type msg = HSM.hs_msg
-
 
 /// Specifies which messages indicate the end of incoming flights
 /// Triggers their Handshake processing
@@ -67,15 +66,27 @@ type lbuffer8 (l:uint_32) = b:B.buffer uint_8{B.len b == l}
 
 val hsl_state : Type0
 
-/// Index of the input buffer where HSL is at
-/// Client (Record) should only add to the buffer at and after this index
+val region_of : hsl_state -> GTot Mem.rgn
 
-val index_from : st:hsl_state -> HS.mem -> GTot uint_32
-val index_to : st:hsl_state -> HS.mem -> GTot uint_32
+/// These are indices that are used if the client is calling receive again for the same flight
+/// For example, say the client calls receive with a buffer, and HSL signals to the client
+///   that the data in the buffer is incomplete. In that case, HSL will set these indices,
+///   and the next time client calls receive for the same flight, it will pass the new indices
+///   with the precondition that from index in the second call is same as the to index in the
+///   first call, and that the buffer bytes between from and to of the first call are the same.
+///   When the flight is complete, these indices are set to None, and for the next flight the
+///   caller can pass different buffer with different indices if it wants.
+
+
+type range_t = t:(uint_32 & uint_32){fst t <= snd t}
+
+val index_from_to : st:hsl_state -> HS.mem -> GTot (option range_t)
 
 /// Bytes parsed so far
 
 val parsed_bytes : st:hsl_state -> HS.mem -> GTot hbytes
+
+/// The invariant is quite light, includes liveness of local state etc.
 
 val invariant : hsl_state -> HS.mem -> prop
 
@@ -85,8 +96,7 @@ val footprint : hsl_state -> GTot B.loc
 /// Frame the mem-dependent functions
 
 unfold let state_framing (st:hsl_state) (h0 h1:HS.mem)
-  = index_from st h0 == index_from st h1 /\
-    index_to st h0 == index_to st h1 /\  
+  = index_from_to st h0 == index_from_to st h1 /\
     parsed_bytes st h0 == parsed_bytes st h1
 
 val frame_hsl_state (st:hsl_state) (h0 h1:HS.mem) (l:B.loc)
@@ -99,17 +109,17 @@ val frame_hsl_state (st:hsl_state) (h0 h1:HS.mem) (l:B.loc)
       state_framing st h0 h1 /\
       invariant st h1)
 
+
 /// Creation of the log
 unfold
 private
 let create_post (r:Mem.rgn)
   : HS.mem -> hsl_state -> HS.mem -> Type0
   = fun h0 st h1 ->
-    index_from st h1 = 0ul /\
-    index_to st h1 = 0ul /\    
+    index_from_to st h1 = None /\
     parsed_bytes st h0 == Seq.empty /\
     B.fresh_loc (footprint st) h0 h1 /\  //local footprint is fresh
-    B.loc_includes (B.loc_regions true (Set.singleton r)) (footprint st) /\
+    region_of st `region_includes` footprint st /\    
     B.modifies B.loc_none h0 h1 /\ //did not modify anything
     invariant st h1
   
@@ -117,29 +127,6 @@ val create (r:Mem.rgn)
   : ST hsl_state 
        (requires fun h0 -> True)
        (ensures create_post r)
-
-
-// /// Setting parameters such as the hashing algorithm
-
-// unfold private let set_params_post (st:hsl_state) (a:Hashing.alg)
-//   : HS.mem -> unit -> HS.mem -> Type0
-
-//   = fun h0 _ h1 ->
-//     //TODO: this is quite weak
-//     //      it increases the local footprint with a fresh loc
-//     //      exists l. hsl_local_footprint st h1 == loc_union l hsl_local_footprint st h0?
-//     //      can we do it without the quantifier?
-//     B.modifies (hsl_local_footprint st h1) h0 h1 /\  //modifies only local footprint
-//     transcript st h1 == transcript st h0 /\  //transcript remains same
-//     writing st h1 == writing st h0 /\  //writing capability remains same
-//     hsl_input_index st h1 == hsl_input_index st h0 /\  //input index remains same
-//     hash_alg st h1 == Some a /\  //hash algorithm is set
-//     hsl_invariant st h1  //invariant holds
-
-// val set_params (st:hsl_state) (_:C.protocolVersion) (a:Hashing.alg) (_:option CipherSuite.kexAlg)
-//                (_:option CommonDH.group)
-//   : ST unit (requires (fun h0 -> hash_alg st h0 == None /\ hsl_invariant st h0))
-//             (ensures  (set_params_post st a))
 
 
 /// Receive API
@@ -192,51 +179,60 @@ let valid_flight_c_ske_shd (flt:flight_c_ske_shd) (flight_end:uint_32) (b:b8) (h
 
 unfold 
 private
-let basic_pre_post (st:hsl_state) (b:b8) (p:uint_32{p <= B.len b}) : HS.mem -> Type0
+let basic_pre_post (st:hsl_state) (b:b8) (from to:uint_32) : HS.mem -> Type0
   = fun h ->
-    let from = index_from st h in
-    let to = index_to st h in
+    let prev_from_to = index_from_to st h in
+
     invariant st h /\
-    from <= to /\
-    to <= p /\
-    B.as_seq h (B.gsub b from (to - from)) == parsed_bytes st h
+
+    from <= to /\ to <= B.len b /\
+
+    (match prev_from_to with
+     | None -> True  //nothing to prove if prev_from_to is not set
+     | Some t ->
+       let (prev_from, prev_to) : range_t = t in
+       from == prev_to /\
+       B.as_seq h (B.gsub b prev_from (prev_to - prev_from)) == parsed_bytes st h)
 
 unfold
 private
 let receive_post 
       (st:hsl_state)
       (b:b8)
-      (p:uint_32{p <= B.len b})
+      (from to:uint_32)
       (f:valid_flight_t 'a)
       (h0:HS.mem)
       (x:TLSError.result (option 'a))
       (h1:HS.mem) =
-  basic_pre_post st b p h1 /\
+  basic_pre_post st b from to h0 /\
   B.modifies (footprint st) h0 h1 /\  //only local footprint is modified
-  index_from st h0 == index_from st h1 /\
-  index_to st h1 <= p /\
   (let open FStar.Error in
    match x with
    | Error _ -> True  //underspecified
-   | Correct None -> True  //waiting for more data
+   | Correct None ->  //waiting for more data
+     (match index_from_to st h0 with
+      | None ->  //this is the first call that resulted in a partial flight
+        index_from_to st h1 == Some (from, to) /\ parsed_bytes st h1 == B.as_seq h0 (B.gsub b from (to - from))
+      | Some t ->  //this flight has been partially parsed before also
+        let (prev_from, _) : range_t = t in
+        index_from_to st h1 == Some (prev_from, to) /\
+        parsed_bytes st h1 == B.as_seq h0 (B.gsub b prev_from (to - prev_from)))
    | Correct (Some flt) ->
-     f flt p b h1 /\  //flight specific postcondition
+     f flt to b h1 /\  //flight specific postcondition
      //Internal state for partial parse is reset
      //Ready to receive another flight
-     index_from st h1 == index_to st h1 /\
-     index_from st h1 == 0ul /\
+     index_from_to st h1 == None /\
      parsed_bytes st h1 == Seq.empty)
 
-
-val receive_flight_hrr (st:hsl_state) (b:b8) (p:uint_32{p <= B.len b})
+val receive_flight_hrr (st:hsl_state) (b:b8) (from to:uint_32)
   : ST (TLSError.result (option flight_hrr))    //end input buffer index for the flight
-       (requires basic_pre_post st b p)
-       (ensures  receive_post st b p valid_flight_hrr)
+       (requires basic_pre_post st b  from to)
+       (ensures  receive_post st b from to valid_flight_hrr)
 
-val receive_flight_c_ske_shd (st:hsl_state) (b:b8) (p:uint_32{p <= B.len b})
+val receive_flight_c_ske_shd (st:hsl_state) (b:b8) (from to:uint_32)
   : ST (TLSError.result (option flight_c_ske_shd))
-       (requires basic_pre_post st b p)
-       (ensures  receive_post st b p valid_flight_c_ske_shd)
+       (requires basic_pre_post st b from to)
+       (ensures  receive_post st b from to valid_flight_c_ske_shd)
 
 
 (*

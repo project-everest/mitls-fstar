@@ -155,10 +155,6 @@ let extend_hash s b p0 p1 msg =
 
     lemma_transcript_bytes (G.reveal msg) (transcript s h0)
 
-let buf_is_hash_of_b a buf h b =
-  assume (Seq.length b < Spec.Hash.Definitions.max_input_length a);
-  B.as_seq h buf == Spec.Hash.hash a b
-
 let extract_hash #a s tag =
   let hash_st_opt = B.index s.hash_state 0ul in
   match hash_st_opt with

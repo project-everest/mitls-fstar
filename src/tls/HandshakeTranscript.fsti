@@ -32,8 +32,6 @@ val transcript : state -> HS.mem -> GTot transcript_t
 
 val hash_alg : state -> HS.mem -> GTot (option Hash.alg)
 
-let region_includes r l = B.loc_regions true (Set.singleton r) `B.loc_includes` l
-
 val invariant : state -> HS.mem -> prop
 
 unfold let frame_state (s:state) (h0 h1:HS.mem) : prop =
@@ -100,7 +98,10 @@ val extend_hash (s:state)
          hash_alg s h1 == hash_alg s h0 /\
          transcript s h1 == extend_transcript s (G.reveal msg) h0))
 
-val buf_is_hash_of_b (a:Hash.alg) (buf:Hacl.Hash.Definitions.hash_t a) (h:HS.mem) (b:hbytes) : prop
+let buf_is_hash_of_b (a:Hash.alg) (buf:Hacl.Hash.Definitions.hash_t a) (h:HS.mem) (b:hbytes)
+  = assume (Seq.length b < Spec.Hash.Definitions.max_input_length a);  //AR: need to sort this out
+    B.as_seq h buf == Spec.Hash.hash a b
+
 val extract_hash (#a:Hash.alg) (s:state) (tag:Hacl.Hash.Definitions.hash_t a)
   : ST unit (fun h0 ->
              invariant s h0 /\
