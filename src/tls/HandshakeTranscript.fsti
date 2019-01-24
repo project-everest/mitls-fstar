@@ -9,13 +9,12 @@ module List = FStar.List.Tot
 module HS = FStar.HyperStack
 module B = LowStar.Buffer
 
-module C = TLSConstants
 module Hash = Hashing
-module HashSpec = Hashing.Spec
 module HSM = HandshakeMessages
 
-module LP = LowParse.Low.Base
 open HandshakeLog.Common
+
+#set-options "--max_fuel 0 --max_ifuel 0"
 
 let transcript_t = list HSM.hs_msg
 let transcript_bytes (t:transcript_t) : GTot hbytes =
@@ -37,18 +36,19 @@ let region_includes r l = B.loc_regions true (Set.singleton r) `B.loc_includes` 
 
 val invariant : state -> HS.mem -> prop
 
+unfold let frame_state (s:state) (h0 h1:HS.mem) : prop =
+  hash_alg s h0 == hash_alg s h1 /\
+  footprint s h0 == footprint s h1 /\
+  transcript s h0 == transcript s h1 /\
+  invariant s h1
+
 val framing (s:state) (l:B.loc) (h0 h1: HS.mem)
   : Lemma
       (requires
         B.modifies l h0 h1 /\
         B.loc_disjoint l (footprint s h0) /\
         invariant s h0)
-      (ensures
-        hash_alg s h0 == hash_alg s h1 /\
-        footprint s h0 == footprint s h1 /\
-        transcript s h0 == transcript s h1 /\
-        invariant s h1)
-
+      (ensures frame_state s h0 h1)
 
 val create (r:Mem.rgn)
   : ST state
@@ -106,9 +106,6 @@ val extract_hash (#a:Hash.alg) (s:state) (tag:Hacl.Hash.Definitions.hash_t a)
              B.loc_disjoint (footprint s h0) (B.loc_buffer tag))
             (fun h0 _ h1 ->
              let open B in
-             invariant s h1 /\
-	     hash_alg s h1 == hash_alg s h0 /\
-	     footprint s h1 == footprint s h0 /\
-	     transcript s h1 == transcript s h0 /\
-             modifies (B.(loc_union (footprint s h0) (loc_buffer tag))) h0 h1 /\
+	     frame_state s h0 h1 /\
+             modifies (loc_union (footprint s h1) (loc_buffer tag)) h0 h1 /\
              buf_is_hash_of_b a tag (transcript_bytes (transcript s h1)))
