@@ -637,7 +637,8 @@ let finalize_bounded_vldata_strong_list
     let pos_payload = pos `U32.add` U32.uint_to_t sz in
     valid_list p h input pos_payload pos' /\ (
     let len_payload = pos' `U32.sub` pos_payload in
-    min <= U32.v len_payload /\ U32.v len_payload <= max
+    let len_ser = Seq.length (serialize (serialize_list _ s) (contents_list p h input pos_payload pos')) in
+    ((min <= U32.v len_payload /\ U32.v len_payload <= max) \/ (min <= len_ser /\ len_ser <= max))
   ))))
   (ensures (fun h _ h' ->
     let sz = log256' max in
