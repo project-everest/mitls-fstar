@@ -501,12 +501,14 @@ let valid_bounded_vldata_strong_intro
   (ensures (
     let sz = log256' max in
     let x = contents_exact p h input (pos `U32.add` U32.uint_to_t sz) pos' in
+    Seq.length (serialize s x) == U32.v pos'  - (U32.v pos + sz) /\
     parse_bounded_vldata_strong_pred min max s x /\
     valid_content_pos (parse_bounded_vldata_strong min max s) h input pos x pos'
   ))
 = valid_facts (parse_bounded_vldata_strong min max s) h input pos;
   valid_facts (parse_bounded_vldata min max p) h input pos;
-  valid_bounded_vldata_intro h min max p input pos pos'
+  valid_bounded_vldata_intro h min max p input pos pos';
+  valid_exact_serialize s h input (pos `U32.add` U32.uint_to_t (log256' max)) pos'
 
 inline_for_extraction
 let finalize_bounded_vldata_strong_exact
@@ -526,12 +528,14 @@ let finalize_bounded_vldata_strong_exact
     let pos_payload = pos `U32.add` U32.uint_to_t sz in
     valid_exact p h input pos_payload pos' /\ (
     let len_payload = pos' `U32.sub` pos_payload in
-    min <= U32.v len_payload /\ U32.v len_payload <= max
+    let len_ser = Seq.length (serialize s (contents_exact p h input pos_payload pos')) in
+    ((min <= U32.v len_payload /\ U32.v len_payload <= max) \/ (min <= len_ser /\ len_ser <= max))
   ))))
   (ensures (fun h _ h' ->
     let sz = log256' max in
     let x = contents_exact p h input (pos `U32.add` U32.uint_to_t sz) pos' in
     B.modifies (loc_slice_from_to input pos (pos `U32.add` U32.uint_to_t sz)) h h' /\
+    Seq.length (serialize s x) == U32.v pos'  - (U32.v pos + sz) /\
     parse_bounded_vldata_strong_pred min max s x /\
     valid_content_pos (parse_bounded_vldata_strong min max s) h' input pos x pos'
   ))
@@ -539,6 +543,12 @@ let finalize_bounded_vldata_strong_exact
   let sz = log256' max in
   [@inline_let]
   let len_payload = pos' `U32.sub` (pos `U32.add` U32.uint_to_t sz) in
+  let h = HST.get () in
+  [@inline_let]
+  let _ =
+    serialized_length_eq s (contents_exact p h input (pos `U32.add` U32.uint_to_t sz) pos');
+    valid_exact_serialize s h input (pos `U32.add` U32.uint_to_t sz) pos'
+  in
   let _ = write_bounded_integer sz len_payload input pos in
   let h = HST.get () in
   valid_bounded_vldata_strong_intro h min max s input pos pos'
@@ -562,7 +572,8 @@ let finalize_bounded_vldata_strong
     valid_pos p h input pos_payload pos' /\
     k.parser_kind_subkind == Some ParserStrong /\ (
     let len_payload = pos' `U32.sub` pos_payload in
-    min <= U32.v len_payload /\ U32.v len_payload <= max
+    let len_ser = Seq.length (serialize s (contents p h input pos_payload)) in
+    ((min <= U32.v len_payload /\ U32.v len_payload <= max) \/ (min <= len_ser /\ len_ser <= max))
   ))))
   (ensures (fun h _ h' ->
     let sz = log256' max in
@@ -579,7 +590,71 @@ let finalize_bounded_vldata_strong
     valid_pos_valid_exact p h input pos_payload pos'
   in
   finalize_bounded_vldata_strong_exact min max s input pos pos'
-  
+
+inline_for_extraction
+let finalize_bounded_vldata_exact
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (input: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+: HST.Stack unit
+  (requires (fun h ->
+    let sz = log256' max in
+    U32.v pos + sz <= U32.v input.len /\ (
+    let pos_payload = pos `U32.add` U32.uint_to_t sz in
+    valid_exact p h input pos_payload pos' /\
+    min <= k.parser_kind_low /\
+    Some? k.parser_kind_high /\
+    Some?.v k.parser_kind_high <= max
+  )))
+  (ensures (fun h _ h' ->
+    let sz = log256' max in
+    let x = contents_exact p h input (pos `U32.add` U32.uint_to_t sz) pos' in
+    B.modifies (loc_slice_from_to input pos (pos `U32.add` U32.uint_to_t sz)) h h' /\
+    valid_content_pos (parse_bounded_vldata min max p) h' input pos x pos'
+  ))
+= [@inline_let]
+  let sz = log256' max in
+  [@inline_let]
+  let len_payload = pos' `U32.sub` (pos `U32.add` U32.uint_to_t sz) in
+  let h = HST.get () in
+  let _ = write_bounded_integer sz len_payload input pos in
+  let h = HST.get () in
+  valid_bounded_vldata_intro h min max p input pos pos'
+
+inline_for_extraction
+let finalize_bounded_vldata
+  (min: nat)
+  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (input: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+: HST.Stack unit
+  (requires (fun h ->
+    let sz = log256' max in
+    U32.v pos + sz <= U32.v input.len /\ (
+    let pos_payload = pos `U32.add` U32.uint_to_t sz in
+    valid_pos p h input pos_payload pos' /\
+    k.parser_kind_subkind == Some ParserStrong /\
+    min <= k.parser_kind_low /\
+    Some? k.parser_kind_high /\
+    Some?.v k.parser_kind_high <= max
+  )))
+  (ensures (fun h _ h' ->
+    let sz = log256' max in
+    let x = contents p h input (pos `U32.add` U32.uint_to_t sz) in
+    B.modifies (loc_slice_from_to input pos (pos `U32.add` U32.uint_to_t sz)) h h' /\
+    valid_content_pos (parse_bounded_vldata min max p) h' input pos x pos'
+  ))
+= finalize_bounded_vldata_exact min max p input pos pos'
+
 inline_for_extraction
 let weak_finalize_bounded_vldata_strong_exact
   (min: nat)
