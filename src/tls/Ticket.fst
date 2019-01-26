@@ -12,8 +12,6 @@ open TLSInfo
 module AE = AEADProvider
 
 module PTL = Parsers.Ticket.Low 
-// just to 1/ verify that module, and 2/ pollute the context with some
-// Spec definitions (integers, vlbytes), and see what happens
 
 #set-options "--admit_smt_queries true"
 
@@ -103,7 +101,10 @@ let set_sealing_key (a:aeadAlg) (kv:bytes) : St bool =
 inline_for_extraction
 let vlbytespl (min max: nat) = (x: bytes { min <= length x /\ length x <= max })
 
-// TODO absolute bare bone for functionality
+//19-01-25 To be replaced by Parsers.TicketContents{12,13}
+//19-01-25 TODO here: remove msId.
+//19-01-25 TODO qd/lp: boolean --> bool as primitive type. 
+// absolute bare bone for functionality
 // We should expand with certificates, mode, etc
 type ticket =
   // 1.2 ticket
@@ -111,7 +112,7 @@ type ticket =
     pv: protocolVersion ->
     cs: cipherSuite{CipherSuite? cs} ->
     ems: bool ->
-    msId: msId ->
+    msId: msId -> 
     ms: lbytes 48 ->
     ticket
   // 1.3 RMS PSK
@@ -449,3 +450,54 @@ let check_ticket12 b =
   match check_ticket false b with
   | Some (Ticket12 pv cs ems msId ms) -> Some (pv, cs, ems, msId, ms)
   | _ -> None
+
+open LowParse.Low.Base 
+open Parsers.TicketContents12
+
+#reset-options ""
+val check_ticket12_low: 
+  x:slice -> 
+  pos: UInt32.t -> 
+  Stack (Parsers.ProtocolVersion.protocolVersion * UInt32.t)
+  (requires (fun h0 -> valid ticketContents12_parser h0 x pos))
+  (ensures (fun h0 (pv,ms_pos) h1 -> 
+    let t12 = contents ticketContents12_parser h0 x pos in
+    LowStar.Modifies.(modifies loc_none h0 h1) /\ 
+    pv == t12.pv /\
+    valid_content ticketContents12_master_secret_parser h0 x ms_pos t12.master_secret
+    ))
+
+#push-options "--z3rlimit 128 --max_ifuel 1 --max_fuel 0"
+
+let check_ticket12_low x pos = 
+  let pv_pos = accessor_ticketContents12_pv x pos in
+  let pv = protocolVersion_reader x pv_pos in
+  let ms_pos = accessor_ticketContents12_master_secret x pos in 
+  (pv, ms_pos)
+
+(* 19-01-25 better names? 
+let check_ticket12_low x pos = 
+  let pv_pos = ticketContents12_pv_pos x pos in
+  let ms_pos = ticketContents12_master_secret_pos x pos in 
+  let pv = protocolVersion_read x pv_pos in
+  (pv, ms_pos)
+*)
+
+(* 19-01-25 worse because of ghost usability? 
+val check_ticket12_low: 
+  ticket: erased TicketContents12.ticketContents12 -> 
+  x:LL.slice -> 
+  pos: UIn32.t -> 
+  Stack (protocolVersion * UInt32.t)
+  (requires (fun h0 -> LL.valid_content ticket12_parser h0 x pos ticket))
+  (ensures (fun h0 (pv, ms, ms_pos) h1 -> 
+    LowStar.Modifies.(modifies loc_none h0 h1) /\ 
+    pv == t12.pv /\
+    ms = t12.ms /\ 
+    LL.valid_content ticketContents12_master_secret_parser h0 x ms_pos ms
+    ))
+*)    
+
+   
+    
+
