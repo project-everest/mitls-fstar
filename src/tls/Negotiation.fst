@@ -23,6 +23,8 @@ module HST = FStar.HyperStack.ST
 
 open Extensions // for its aggregated datatypes
 
+#reset-options "--using_facts_from '* -LowParse'"
+
 (**
   Debugging flag.
   F* normalizer will erase debug prints at extraction when set to false.
@@ -285,7 +287,7 @@ assume val sz_CHE_server_name: sns: Parsers.ServerNameList.serverNameList -> Lem
   [SMTPat (clientHelloExtension_bytesize (CHE_server_name sns))]
 
 
-#push-options "--query_stats --z3rlimit 100 --max_fuel 0 --max_ifuel 0"
+#push-options "--max_fuel 0 --max_ifuel 0"
 let sni cfg: list clientHelloExtension = 
   match cfg.peer_name with 
   | None     -> []
@@ -320,12 +322,10 @@ private let rec list_valid_cs_is_list_cs (l:valid_cipher_suites): list cipherSui
   | [] -> []
   | hd :: tl -> hd :: list_valid_cs_is_list_cs tl
 
-#set-options "--z3rlimit 100"
 let ec_extension cfg: list clientHelloExtension  = 
   if List.Tot.existsb isECDHECipherSuite (list_valid_cs_is_list_cs cfg.cipher_suites) 
   then [CHE_ec_point_formats [Uncompressed]]
   else []
-#reset-options 
 
 // We define these functions at top-level so that Kremlin can compute their pointers
 // when passed to higher-order functions.
@@ -337,12 +337,12 @@ private let allow_resumption ((_,x):PSK.pskid * pskInfo) =
 
 private let send_supported_groups cs = isDHECipherSuite cs || CipherSuite13? cs
 
-#set-options "--admit_smt_queries true"
+#push-options "--admit_smt_queries true"
 private let rec list_valid_ng_is_list_ng (l:CommonDH.supportedNamedGroups) : CommonDH.namedGroups =
   match l with
   | [] -> []
   | hd :: tl -> hd :: list_valid_ng_is_list_ng tl
-#reset-options
+#pop-options
 
 private let compute_binder_len (ctr:nat) (pski:pskInfo) =
   let h = PSK.pskInfo_hash pski in
@@ -384,7 +384,6 @@ let final_extensions cfg edi psks now: list clientHelloExtension =
 // 19-01-19 TODO! was in old Extensions; probably requires changing config and callbacks, and some refinement to avoid clashes with internal extenions
 let ext_of_custom x: list clientHelloExtension = []
  
-#set-options "--z3rlimit 100"
 let prepareClientExtensions 
   (cfg: config)
   edi
@@ -560,11 +559,10 @@ let computeOffer cfg nonce ks resume now =
     ch_extensions = (assume False; extensions)
   })
 
+
 /// Negotiating server extensions.
 /// pure code as spec & implementation so far.
 /// was in Extensions.
-
-#reset-options "--using_facts_from '* -LowParse.Spec.Base' --z3rlimit 100"
 
 // respond to client extensions in two steps
 private val server_clientExtension:
@@ -604,7 +602,8 @@ let server_name_response snl resuming =
     match List.Tot.tryFind Sni_host_name? snl with
     | Some name -> Some () // acknowledge client's choice
     | _ -> None )
- 
+
+#push-options "--z3rlimit 50 --max_fuel 2 --max_ifuel 2 --initial_fuel 2 --initial_ifuel 2"
 let server_clientExtension pv cfg cs ri pski ks resuming ce =
   if pv = TLS_1p3 then 
     match ce with 
@@ -630,7 +629,8 @@ let server_clientExtension pv cfg cs ri pski ks resuming ce =
       then Some (SHE_session_ticket ()) // TODO we may not always want to refresh the ticket
       else None
     | _ -> None // TODO: recheck completeness
-  
+#pop-options
+
 let encrypted_clientExtension pv cfg cs ri pski ks resuming ce = 
   match ce with
 //19-01-22 RECHECK RFC
@@ -681,7 +681,7 @@ let rec encrypted_clientExtensions pv cfg cs ri pski ks resuming (ches:list clie
 
 type tickets = list (psk_identifier * Ticket.ticket) 
 
-#set-options "--z3rlimit 100"  //why is it required?
+#set-options "--z3rlimit 50"
 let rec unseal_tickets 
   (acc: tickets)
   (l:list (psk_identifier * ticket_seal)): 
@@ -694,8 +694,6 @@ let rec unseal_tickets
       | Some t -> (tid, t) :: acc
       | None -> trace ("WARNING: failed to unseal the session data for ticket "^print_bytes tid^" (check sealing key)"); acc in
     unseal_tickets acc r )
-#reset-options
-
 
 let create region r cfg nonce =
   let resume = unseal_tickets [] cfg.use_tickets in
@@ -711,7 +709,6 @@ let create region r cfg nonce =
     let state = Mem.ralloc region (S_Init nonce) in
     NS cfg resume nonce state
 
-#set-options "--query_stats --max_fuel 0 --max_ifuel 0 --z3rlimit 100" 
 // For QUIC: we need a different signal when returning HRR (special packet type)
 let is_server_hrr (#region:rgn) (#role:TLSConstants.role) (ns:t region role) =
   match !ns.state with
@@ -776,7 +773,6 @@ let local_config #region #role ns = ns.cfg
 let nonce        #region #role ns = ns.nonce
 let resume       #region #role ns = ns.resume
 
-#set-options "--z3rlimit 100"
 let getMode #region #role ns =
   match !ns.state with
   | C_Mode mode
@@ -787,11 +783,10 @@ let getMode #region #role ns =
   | S_Complete mode _ ->  mode
   | _ -> admit() //18-12-16 TODO incomplete pattern, add a pre?
 
-#reset-options "--query_stats --z3rlimit 100"
 let version #region #role ns =
-//  let x = !ns.state in
+  let x = !ns.state in
 //  TLS_1p3
-  match !ns.state with
+  match x with
   | C_Init _ -> ns.cfg.max_version
   | C_Offer _ -> ns.cfg.max_version
   | C_HRR o _ -> ns.cfg.max_version
@@ -843,6 +838,10 @@ let sign #region #role ns tbs =
 //     map_ST f tl)
 
 // let i_psk_info i = (i, PSK.psk_info i)
+
+(*
+ * AR: 1/27: this seems wip, since the precondition does not have liveness of ns.state etc.
+ *)
 
 #set-options "--z3rlimit 100" 
 let client_ClientHello #region ns oks =
