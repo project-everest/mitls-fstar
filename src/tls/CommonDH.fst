@@ -639,7 +639,7 @@ let validate_many ksl =
 
 let format #g gx =
   match keyShareEntry_parser32 (serialize gx) with
-  | None -> magic()
+  | None -> Ks_Unknown_namedGroup 0us (serialize gx)
   | Some (v, _) -> v
 
 (*
