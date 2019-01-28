@@ -2996,3 +2996,70 @@ let list_filter
   pos_out'
 
 #pop-options
+
+#push-options "--z3rlimit 16"
+
+inline_for_extraction
+let list_nth
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (j: jumper p)
+  (sl: slice)
+  (pos pos' : U32.t)
+  (i: U32.t)
+: HST.Stack U32.t
+  (requires (fun h ->
+    valid_list p h sl pos pos' /\
+    U32.v i < L.length (contents_list p h sl pos pos')
+  ))
+  (ensures (fun h res h' ->
+    B.modifies B.loc_none h h' /\
+    valid_list p h sl pos res /\
+    valid p h sl res /\
+    valid_list p h sl (get_valid_pos p h sl res) pos' /\
+    L.length (contents_list p h sl pos res) == U32.v i /\
+    contents p h sl res == L.index (contents_list p h sl pos pos') (U32.v i)
+  ))
+= let h0 = HST.get () in
+  HST.push_frame ();
+  let bpos1 = B.alloca pos 1ul in
+  let bi1 = B.alloca 0ul 1ul in
+  let h1 = HST.get () in
+  valid_list_nil p h0 sl pos;
+  C.Loops.do_while
+    (fun h b ->
+      B.modifies (B.loc_union (B.loc_buffer bpos1) (B.loc_buffer bi1)) h1 h /\ (
+      let pos1 = B.get h bpos1 0 in
+      let i1 = B.get h bi1 0 in
+      U32.v i1 <= U32.v i /\
+      valid_list p h0 sl pos pos1 /\
+      valid_list p h0 sl pos1 pos' /\
+      L.length (contents_list p h0 sl pos pos1) == U32.v i1 /\ (
+      let tl = contents_list p h0 sl pos1 pos' in
+      U32.v i - U32.v i1 < L.length tl /\
+      L.index (contents_list p h0 sl pos pos') (U32.v i) == L.index tl (U32.v i - U32.v i1) /\
+      (b == true ==> i == i1)
+    )))
+    (fun _ ->
+      let i1 = B.index bi1 0ul in
+      if i1 = i
+      then true
+      else
+        let pos1 = B.index bpos1 0ul in
+        let _ = valid_list_cons_recip p h0 sl pos1 pos' in
+        let _ = valid_list_snoc p h0 sl pos pos1 in
+        let pos2 = j sl pos1 in
+        let _ = assert (pos2 == get_valid_pos p h0 sl pos1) in
+        let _ = list_length_append (contents_list p h0 sl pos pos1) [contents p h0 sl pos1] in
+        let i2 = i1 `U32.add` 1ul in
+        let _ = B.upd bpos1 0ul pos2 in
+        let _ = B.upd bi1 0ul i2 in
+        i2 = i
+    );
+  let res = B.index bpos1 0ul in
+  let _ = valid_list_cons_recip p h0 sl res pos' in
+  HST.pop_frame ();
+  res
+
+#pop-options
