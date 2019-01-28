@@ -123,7 +123,7 @@ Certificate Status request (OCSP)
 https://tools.ietf.org/html/rfc6066#section-8
 **/
 
-enum /*@open*/ {
+enum {
   ocsp(1), (255)
 } CertificateStatusType;
 
@@ -139,23 +139,36 @@ struct {
 Note: it looks like this sum is extensible, but it
 actually isn't because OCSPStatusRequest is not
 a VLData type, hence, it's not possible to define
-a default case for unknown status types */
+a default case for unknown status types.
+
+For this reason, CertificateStatusType is not
+marked as an open enum.
+*/
 struct {
   CertificateStatusType status_type;
+/*
   select (status_type) {
     case ocsp: OCSPStatusRequest;
-    default: Fail;
   } csr; /*request*/
+*/
+  OCSPStatusRequest request;
 } CertificateStatusRequest;
 
 opaque OCSPResponse<1..2^24-1>;
 
+/*
+Since OCSPResponse is vlbytes, this select
+could be left open.
+*/
 struct {
   CertificateStatusType status_type;
-  select (status_type) {
+/*
+select (status_type) {
     case ocsp: OCSPResponse;
     default: Fail;
   } cs; /*response*/
+*/
+  OCSPResponse response;
 } CertificateStatus;
 
 /**
