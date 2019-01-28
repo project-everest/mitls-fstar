@@ -1,5 +1,5 @@
 [
-  "\u001b’QO<åi¯À÷\u001c4\u0016-“o",
+  "\u0013·V»‰ä‡4Å^s÷úLÙ\"",
   [
     [
       "Parsers.SignatureScheme.signatureScheme_repr_eq",
@@ -11,7 +11,7 @@
         "equation_Parsers.SignatureScheme.signatureScheme_repr"
       ],
       0,
-      "730229d3e0419343dfcaa412c59f6c10"
+      "4fc1611d70d17dc14416f0ed348c37a2"
     ],
     [
       "Parsers.SignatureScheme.signatureScheme",
@@ -20,7 +20,7 @@
       1,
       [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
       0,
-      "8438f5d57d23b99be2de07da75b68398"
+      "4ad6244a21d500ab6ab2a7a553d02d00"
     ],
     [
       "Parsers.SignatureScheme.__proj__Unknown_signatureScheme__item___0",
@@ -34,7 +34,7 @@
         "refinement_interpretation_Parsers.SignatureScheme_Tm_refine_6afb231d92048d3d933f911d448a58e1"
       ],
       0,
-      "ec27ed39218860ecc98110f57f26d62a"
+      "a9e150fdae38a7033b8c2b429b417eaf"
     ],
     [
       "Parsers.SignatureScheme.string_of_signatureScheme",
@@ -65,7 +65,7 @@
         "fuel_guarded_inversion_Parsers.SignatureScheme.signatureScheme"
       ],
       0,
-      "11c7d8b2c3fe869d70f953ac986178ed"
+      "914cc76f774b2880edd9a3d9155ed4c4"
     ],
     [
       "Parsers.SignatureScheme.signatureScheme_enum",
@@ -77,7 +77,7 @@
         "assumption_Parsers.SignatureScheme.signatureScheme__uu___haseq"
       ],
       0,
-      "b2f3018a74caa7761cbb973ff3d353a6"
+      "22b30382f496be77aa13bf4417322687"
     ],
     [
       "Parsers.SignatureScheme.synth_signatureScheme",
@@ -89,7 +89,7 @@
         "assumption_Parsers.SignatureScheme.signatureScheme__uu___haseq"
       ],
       0,
-      "d85f8e9b0b0975e2b853aa2d442717d7"
+      "1910786046803561112c75769ffb9964"
     ],
     [
       "Parsers.SignatureScheme.synth_signatureScheme",
@@ -110,7 +110,7 @@
         "refinement_interpretation_LowParse.Spec.Enum_Tm_refine_42952339d1ff6a9a240497d58590f0b2"
       ],
       0,
-      "61fd46711b7a815688c5a472cee5e29f"
+      "ff8537248b9a8d5d2769d057a56779c9"
     ],
     [
       "Parsers.SignatureScheme.synth_signatureScheme_inv",
@@ -134,7 +134,7 @@
         "unit_typing"
       ],
       0,
-      "2b616857359dfc26bda97b45de48554d"
+      "0765915c5a491321264f1b6d6dc1c5cb"
     ],
     [
       "Parsers.SignatureScheme.lemma_synth_signatureScheme_inv'",
@@ -148,13 +148,13 @@
         "equation_LowParse.Spec.Combinators.synth_inverse",
         "equation_Parsers.SignatureScheme.signatureScheme_enum",
         "equation_Prims.l_Forall", "equation_Prims.squash",
-        "l_quant_interp__19158",
+        "l_quant_interp__19157",
         "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
         "token_correspondence_Parsers.SignatureScheme.synth_signatureScheme",
         "token_correspondence_Parsers.SignatureScheme.synth_signatureScheme_inv"
       ],
       0,
-      "3bbf2bff89a5be7eb77bdafd22845a09"
+      "e881216c82e7d9b7cf0d76a684aad6e2"
     ],
     [
       "Parsers.SignatureScheme.lemma_synth_signatureScheme_inj",
@@ -166,7 +166,7 @@
         "assumption_Parsers.SignatureScheme.signatureScheme__uu___haseq"
       ],
       0,
-      "bcde05b81a75561b57b9b1e93b41caf9"
+      "da6d6c30cebf2a0d93a0210fe2632280"
     ],
     [
       "Parsers.SignatureScheme.lemma_synth_signatureScheme_inv",
@@ -194,7 +194,7 @@
         "token_correspondence_Parsers.SignatureScheme.synth_signatureScheme_inv"
       ],
       0,
-      "8bef297a3c5a3ceaba161908b067a59a"
+      "383cd9f31b6500e87dd9090e70f2108a"
     ],
     [
       "Parsers.SignatureScheme.parse_maybe_signatureScheme_key",
@@ -206,7 +206,7 @@
         "assumption_Parsers.SignatureScheme.signatureScheme__uu___haseq"
       ],
       0,
-      "effb6b9c4daa606c8bc2cf10dcb006c3"
+      "35eae56a20422fb9dc8f8849107768cf"
     ],
     [
       "Parsers.SignatureScheme.serialize_maybe_signatureScheme_key",
@@ -218,7 +218,7 @@
         "assumption_Parsers.SignatureScheme.signatureScheme__uu___haseq"
       ],
       0,
-      "8c55775afc667e13473bb4b468ab02f9"
+      "1cfec85da4cf6e518356cc40494fed6d"
     ],
     [
       "Parsers.SignatureScheme.signatureScheme_parser",
@@ -230,7 +230,7 @@
         "assumption_Parsers.SignatureScheme.signatureScheme__uu___haseq"
       ],
       0,
-      "77f4e6178133311eb757ba08acf24baf"
+      "5ff70f031cf3e5ac66aa05120066dec6"
     ],
     [
       "Parsers.SignatureScheme.signatureScheme_serializer",
@@ -242,7 +242,22 @@
         "assumption_Parsers.SignatureScheme.signatureScheme__uu___haseq"
       ],
       0,
-      "6315311cfe27609cac34f91f5fa5dfd4"
+      "b279726e0de9abccaaa42043e0a173d0"
+    ],
+    [
+      "Parsers.SignatureScheme.signatureScheme_bytesize_eq",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.serialize",
+        "equation_Parsers.SignatureScheme.signatureScheme_bytesize",
+        "equation_Parsers.SignatureScheme.signatureScheme_parser",
+        "equation_Parsers.SignatureScheme.signatureScheme_parser_kind",
+        "equation_Parsers.SignatureScheme.signatureScheme_serializer"
+      ],
+      0,
+      "08978725c44ecefc5f9756fab078c059"
     ],
     [
       "Parsers.SignatureScheme.parse32_maybe_signatureScheme_key",
@@ -260,7 +275,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "d2c2b52a099b35b56bc939ed7bc770e4"
+      "f8e334200184726b15b16c40e2235a11"
     ],
     [
       "Parsers.SignatureScheme.parse32_maybe_signatureScheme_key",
@@ -278,7 +293,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "d557eef75ce7d812aa1a691a1426dccd"
+      "dd79ab86aacff1ae0c032f41d649e961"
     ],
     [
       "Parsers.SignatureScheme.parse32_maybe_signatureScheme_key",
@@ -290,7 +305,7 @@
         "assumption_Parsers.SignatureScheme.signatureScheme__uu___haseq"
       ],
       0,
-      "baeb1b5b5d468993a3e4d446711e0738"
+      "28a49639db34ae42bb5e5d9fe883cdd9"
     ],
     [
       "Parsers.SignatureScheme.parse32_maybe_signatureScheme_key",
@@ -302,7 +317,7 @@
         "assumption_Parsers.SignatureScheme.signatureScheme__uu___haseq"
       ],
       0,
-      "42ed17cbfe74f9e1124bac867f3fefd5"
+      "1a9678445a82934edf4431c9a8b83ea4"
     ],
     [
       "Parsers.SignatureScheme.signatureScheme_parser32",
@@ -314,7 +329,7 @@
         "assumption_Parsers.SignatureScheme.signatureScheme__uu___haseq"
       ],
       0,
-      "54a8f4cd2cd79e8b697c24ec7226001a"
+      "06cd8725f59f59e5122a83fab07d07e5"
     ],
     [
       "Parsers.SignatureScheme.serialize32_maybe_signatureScheme_key",
@@ -332,7 +347,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "7c41426164f46c2f428b95a64d45af80"
+      "6b2359bee257fd1bb3e37c516197eea4"
     ],
     [
       "Parsers.SignatureScheme.serialize32_maybe_signatureScheme_key",
@@ -350,7 +365,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "15dccbf649bb58d5f2f4fb1d620813bd"
+      "8472bac14dd45f4e690f35c1dca3ac4e"
     ],
     [
       "Parsers.SignatureScheme.serialize32_maybe_signatureScheme_key",
@@ -362,7 +377,7 @@
         "assumption_Parsers.SignatureScheme.signatureScheme__uu___haseq"
       ],
       0,
-      "dfd846d03748ab929103f505fe1243e1"
+      "13d971f3616389d3b1b560a5669870c7"
     ],
     [
       "Parsers.SignatureScheme.serialize32_maybe_signatureScheme_key",
@@ -374,7 +389,7 @@
         "assumption_Parsers.SignatureScheme.signatureScheme__uu___haseq"
       ],
       0,
-      "ee1a27b624b4c9bd266d9b4de2b77053"
+      "4775c1c9dde79e933565cfa79d8fbe81"
     ],
     [
       "Parsers.SignatureScheme.signatureScheme_serializer32",
@@ -386,7 +401,7 @@
         "assumption_Parsers.SignatureScheme.signatureScheme__uu___haseq"
       ],
       0,
-      "ce1ad7b3f98d7737425dcbd280f8bedb"
+      "8b0790688f2ca9d72f305338e2392037"
     ],
     [
       "Parsers.SignatureScheme.signatureScheme_size32",
@@ -395,7 +410,7 @@
       1,
       [ "@query" ],
       0,
-      "d0087d42626320ea0ae08c9c7ecb29c2"
+      "aa0e682939ce5b98157a38f6dc581bc1"
     ],
     [
       "Parsers.SignatureScheme.signatureScheme_validator",
@@ -419,7 +434,7 @@
         "refinement_interpretation_LowParse.Low.Base_Tm_refine_07033d2b2c1d2fb6c1dd88a8f1110ac2"
       ],
       0,
-      "1044fe2d444daf613e840cbeffdda648"
+      "67c6d3be56fbb30fa31e7fba0118f1e6"
     ],
     [
       "Parsers.SignatureScheme.signatureScheme_jumper",
@@ -435,7 +450,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "e9865f22a6ebfdfd55b46546f18a2c27"
+      "64dd680a3bdd644869f8af6d7f00a3fa"
     ],
     [
       "Parsers.SignatureScheme.read_maybe_signatureScheme_key",
@@ -447,7 +462,7 @@
         "assumption_Parsers.SignatureScheme.signatureScheme__uu___haseq"
       ],
       0,
-      "54626897dfa1f9e5aaf1702ba4080924"
+      "c15bc1508caa947295bad158e974588a"
     ],
     [
       "Parsers.SignatureScheme.signatureScheme_reader",
@@ -459,7 +474,7 @@
         "assumption_Parsers.SignatureScheme.signatureScheme__uu___haseq"
       ],
       0,
-      "e3771d9ab2bdc9ffcd451a12e3a019f1"
+      "808f6586fc90ba0b7acfcf06e3e06dea"
     ],
     [
       "Parsers.SignatureScheme.write_maybe_signatureScheme_key",
@@ -471,7 +486,7 @@
         "assumption_Parsers.SignatureScheme.signatureScheme__uu___haseq"
       ],
       0,
-      "084aea06caeb751478ac96d23d1951bd"
+      "e5ed125b6eb836f0138b1a416ed48838"
     ],
     [
       "Parsers.SignatureScheme.signatureScheme_writer",
@@ -483,7 +498,38 @@
         "assumption_Parsers.SignatureScheme.signatureScheme__uu___haseq"
       ],
       0,
-      "cf8678185e712f9300232572c0e1296b"
+      "d5afa05c4730d1d040c3ea1842e98177"
+    ],
+    [
+      "Parsers.SignatureScheme.signatureScheme_bytesize_eqn",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_FStar.Pervasives.Native.Some",
+        "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.SignatureScheme.signatureScheme_parser",
+        "equation_Parsers.SignatureScheme.signatureScheme_parser_kind",
+        "equation_Parsers.SignatureScheme.signatureScheme_serializer",
+        "equation_Prims.nat",
+        "function_token_typing_Parsers.SignatureScheme.signatureScheme_parser",
+        "function_token_typing_Parsers.SignatureScheme.signatureScheme_parser_kind",
+        "function_token_typing_Parsers.SignatureScheme.signatureScheme_serializer",
+        "int_inversion",
+        "kinding_Parsers.SignatureScheme.signatureScheme@tok",
+        "lemma_LowParse.Spec.Base.serialize_length",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_FStar.Pervasives.Native.Some_v",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "typing_Parsers.SignatureScheme.signatureScheme_bytesize"
+      ],
+      0,
+      "6c69a3dc487124d2a2da66caae6fbde1"
     ]
   ]
 ]
