@@ -1747,7 +1747,7 @@ let valid_ch2_extension (o1, hrr) (e:clientHelloExtension) =
   match e with
   | CHE_key_share ecl ->
     (match ecl, group_of_hrr hrr with
-    | [ks], Some g' -> CommonDH.group_of_namedGroup (tag_of_keyShareEntry ks) = Some g'
+    | [ks], Some ng -> tag_of_keyShareEntry ks = ng
 //19-01-21 do we need this case? 
 //        | _, None -> (
 //          let shares1 = find_key_shares o1 in

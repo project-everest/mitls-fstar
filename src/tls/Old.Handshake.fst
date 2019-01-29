@@ -378,7 +378,8 @@ let client_HelloRetryRequest (hs:hs) (hrr:hrr) : St incoming =
     | None ->
       // this case should only ever happen in QUIC stateless retry address validation
       trace "Server did not specify a group in HRR, re-using the previous choice"; None
-    | Some g ->
+    | Some ng ->
+        let Some g = CommonDH.group_of_namedGroup ng in
         let s = KeySchedule.ks_client_13_hello_retry hs.ks g in
 	Some (| g, s |)
     in

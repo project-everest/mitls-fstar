@@ -247,7 +247,7 @@ val client_ClientHello:
   // oks: optional client key shares created by ks_client_init
   // now: stateful time for age obfuscation (return it ghostly?)
 
-val group_of_hrr: HandshakeMessages.hrr -> option CommonDH.group
+val group_of_hrr: HandshakeMessages.hrr -> option CommonDH.namedGroup
 
 val client_HelloRetryRequest:
   #region:rgn -> t region Client -> 
