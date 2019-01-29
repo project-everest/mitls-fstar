@@ -720,6 +720,7 @@ let serverHello (m:Nego.mode) =
     sh_cipher_suite = name_of_cipherSuite m.n_cipher_suite;
     sh_compression = NullCompression;
     sh_extensions = m.n_server_extensions;
+    sh_hrrext = [];
    })
 
 val  consistent_truncation: option Extensions.offeredPsks -> option binders -> bool

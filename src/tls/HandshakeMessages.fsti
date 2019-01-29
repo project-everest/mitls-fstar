@@ -85,6 +85,7 @@ noeq type sh = {
   sh_cipher_suite: cipherSuiteName;
   sh_compression: compression; // omitted in TLS 1.3
   sh_extensions: serverHelloExtensions;
+  sh_hrrext: hRRExtensions;
 }
 
 // Hello retry request

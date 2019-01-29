@@ -422,7 +422,12 @@ let serverHelloBytes sh =
   let sidB = vlbytes 1 sh.sh_sessionID in
   let csB = cipherSuiteNameBytes sh.sh_cipher_suite in
   let cmB = compressionBytes sh.sh_compression in
-  let extB = serverHelloExtensions_serializer32 sh.sh_extensions in
+  let extB = 
+    if sh.sh_hrrext = [] then
+      serverHelloExtensions_serializer32 sh.sh_extensions
+    else
+      hRRExtensions_serializer32 sh.sh_hrrext
+    in
   let data:bytes = verB @| (sh.sh_server_random @| (sidB @| (csB @| (cmB @| extB)))) in
   lemma_repr_bytes_values (length data);
   messageBytes HT_server_hello data
@@ -553,13 +558,25 @@ let parseServerHello data =
                    | Unknown_compressionMethod _ ->
                      fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "server selected a compression mode")
                    | NullCompression ->
-                     // FIXME what can we do about this horrible, atrocious hack?
-                     let is_hrr =
-                       bytes_of_hex "cf21ad74e59a6111be1d8c021e65b891c2a211167abb8c5e079e09e2c8a8339c" = serverRandomBytes in
+                     if bytes_of_hex "cf21ad74e59a6111be1d8c021e65b891c2a211167abb8c5e079e09e2c8a8339c" = serverRandomBytes then
+		       (match hRRExtensions_parser32 data with
+		       | None -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "invalid HRR extensions")
+		       | Some (hre, l) ->
+		         if len data = l then
+			   correct ({
+                             sh_protocol_version = serverVer;
+                             sh_server_random = serverRandomBytes;
+                             sh_sessionID = sid;
+                             sh_cipher_suite = cs;
+                             sh_compression = NullCompression;
+                             sh_extensions = [];
+			     sh_hrrext = hre;
+			   })
+			 else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ ""))
+		     else
                       (match serverHelloExtensions_parser32 data with
                        | None -> fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "invalid server extensions")
                        | Some (she, l) ->
-                         let exts,obinders = x in
                          if len data = l then
                            correct ({
                              sh_protocol_version = serverVer;
@@ -567,7 +584,9 @@ let parseServerHello data =
                              sh_sessionID = sid;
                              sh_cipher_suite = cs;
                              sh_compression = NullCompression;
-                             sh_extensions = she})
+                             sh_extensions = she;
+			     sh_hrrext = [];
+			   })
                          else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ ""))))
            else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")
          else fatal Decode_error (perror __SOURCE_FILE__ __LINE__ "")
@@ -1255,6 +1274,7 @@ let helloRetryRequestBytes hrr =
     sh_cipher_suite = hrr.hrr_cipher_suite;
     sh_compression = NullCompression;
     sh_extensions = [];
+    sh_hrrext = hrr.hrr_extensions;
   })
   (*
   let pvb = versionBytes hrr.hrr_protocol_version in
@@ -1612,7 +1632,7 @@ let helloRetryRequest_of_serverHello (sh: sh) : Tot (option hrr) =
   then (Some ({
         hrr_sessionID = sh.sh_sessionID;
         hrr_cipher_suite = sh.sh_cipher_suite;
-        hrr_extensions = [];
+        hrr_extensions = sh.sh_hrrext;
       }))
   else None
 
