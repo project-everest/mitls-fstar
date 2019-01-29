@@ -897,7 +897,6 @@ let valid_dsum_intro_unknown
 
 inline_for_extraction
 let finalize_dsum_case_known
-  (h: HS.mem)
   (t: dsum)
   (#kt: parser_kind)
   (#p: parser kt (dsum_repr_type t))
@@ -938,7 +937,6 @@ let finalize_dsum_case_known
 
 inline_for_extraction
 let finalize_dsum_case_unknown
-  (h: HS.mem)
   (t: dsum)
   (#kt: parser_kind)
   (#p: parser kt (dsum_repr_type t))

@@ -1,5 +1,5 @@
 [
-  "âÁ\u0005Ív…0_èRh!ËΩBn",
+  "ï:A–A¨C\u001aÓÀ=ë\u0000\u0016EI",
   [
     [
       "Parsers.TicketContents13.ticketContents13",
@@ -20,7 +20,20 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "8c5b8f50408617a4397624230e9bd714"
+      "7a699c1bb837f4518b1f9589d086b0a5"
+    ],
+    [
+      "Parsers.TicketContents13.ticketContents13_valid",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.squash",
+        "l_and-interp",
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+      ],
+      0,
+      "66dd5a7dc0ff096ef677444bb71c7309"
     ]
   ]
 ]

@@ -1,5 +1,5 @@
 [
-  "¬Ön\u0001…\u0016Bvâ¹\u0007ùC4È",
+  "ËsÅÄ1Ë5œ 2¿ÉMõ>+",
   [
     [
       "Parsers.TicketContents12.ticketContents12",
@@ -18,7 +18,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "21eaff325fbbfbd2c28e286028a5f2de"
+      "1817d178875edb99a1956c82a1acb8f7"
     ],
     [
       "Parsers.TicketContents12.ticketContents12_jumper",
@@ -37,7 +37,20 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "d3609c013df86a233a3e34c79e9e3d16"
+      "00e253f44d418f162cc25064934e9ea2"
+    ],
+    [
+      "Parsers.TicketContents12.ticketContents12_valid",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.squash",
+        "l_and-interp",
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+      ],
+      0,
+      "e09e5cba9a57ed8a6aa336617a01427e"
     ]
   ]
 ]

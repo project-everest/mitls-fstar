@@ -1,5 +1,5 @@
 [
-  "Û˜G©æbëfÚñ]∑e Ô}",
+  "–'\u0012\u001fÜñ€ôù]≠Ò\bª$f",
   [
     [
       "Parsers.TicketContents13_nonce.ticketContents13_nonce_parser",
@@ -13,7 +13,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "5754ba16e05e246fa4a6c833061da6bb"
+      "109b1590f0d9478ceddb1e14f1d71d6b"
     ],
     [
       "Parsers.TicketContents13_nonce.ticketContents13_nonce_serializer",
@@ -27,7 +27,23 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "c24368b024d9e2a69a1b300e27e6c984"
+      "a0ab773d482604f29105748d3ee98259"
+    ],
+    [
+      "Parsers.TicketContents13_nonce.ticketContents13_nonce_bytesize_eq",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.serialize",
+        "equation_Parsers.TicketContents13_nonce.ticketContents13_nonce",
+        "equation_Parsers.TicketContents13_nonce.ticketContents13_nonce_bytesize",
+        "equation_Parsers.TicketContents13_nonce.ticketContents13_nonce_parser",
+        "equation_Parsers.TicketContents13_nonce.ticketContents13_nonce_parser_kind",
+        "equation_Parsers.TicketContents13_nonce.ticketContents13_nonce_serializer"
+      ],
+      0,
+      "57a9253a4e4338f0590cd7858268a42d"
     ],
     [
       "Parsers.TicketContents13_nonce.ticketContents13_nonce_parser32",
@@ -41,7 +57,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "0ffb48a13aae52ec027a4661cd1fd6c9"
+      "a28107cca3fe178c54607c349b19da10"
     ],
     [
       "Parsers.TicketContents13_nonce.ticketContents13_nonce_serializer32",
@@ -55,7 +71,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "8cafc29f36ddb995d60b4d98d5ab8954"
+      "357d42ce9d2af0d907f47b37ff20024b"
     ],
     [
       "Parsers.TicketContents13_nonce.ticketContents13_nonce_size32",
@@ -69,7 +85,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "08cb1578008725c0e4d676d27d51ed97"
+      "5ed2cb18e085d5e8e29bba1d8ab44440"
     ],
     [
       "Parsers.TicketContents13_nonce.ticketContents13_nonce_validator",
@@ -105,7 +121,7 @@
         "typing_LowParse.Low.Base.validator_max_length"
       ],
       0,
-      "b5846bbf3f11ab6feb608f5656e66b83"
+      "d49d66dac250bf4fe7a7b21ad592a8a9"
     ],
     [
       "Parsers.TicketContents13_nonce.ticketContents13_nonce_jumper",
@@ -119,7 +135,39 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "84689f4cce8adcf048ac139297540efe"
+      "4069e44574e095ea35d4e5a14a9f7b3c"
+    ],
+    [
+      "Parsers.TicketContents13_nonce.ticketContents13_nonce_bytesize_eqn",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
+        "bool_inversion", "bool_typing", "equation_FStar.UInt.fits",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "equation_FStar.UInt.uint_t",
+        "equation_LowParse.Low.Base.validator_max_length",
+        "equation_LowParse.Spec.Base.serialize",
+        "equation_LowParse.Spec.Bytes.parse_bounded_vlbytes_pred",
+        "equation_LowParse.Spec.Bytes.parse_bounded_vlbytes_t",
+        "equation_LowParse.Spec.VLData.log256_",
+        "equation_Parsers.TicketContents13_nonce.ticketContents13_nonce",
+        "equation_Parsers.TicketContents13_nonce.ticketContents13_nonce_bytesize",
+        "equation_Parsers.TicketContents13_nonce.ticketContents13_nonce_serializer",
+        "function_token_typing_Prims.__cache_version_number__",
+        "l_and-interp", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_LessThan", "primitive_Prims.op_LessThanOrEqual",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
+        "refinement_interpretation_Parsers.TicketContents13_nonce_Tm_refine_7ff0f9a372eb29179e72facc8f4a42b7",
+        "typing_FStar.Bytes.len", "typing_FStar.UInt32.v",
+        "typing_LowParse.Low.Base.validator_max_length"
+      ],
+      0,
+      "44dea0c073b816a2e4918e7b66ce3f4e"
     ]
   ]
 ]
