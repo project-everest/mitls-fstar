@@ -11,9 +11,8 @@ type parse_ifthenelse_param = {
   parse_ifthenelse_tag_t: Type;
   parse_ifthenelse_tag_parser: parser parse_ifthenelse_tag_kind parse_ifthenelse_tag_t;
   parse_ifthenelse_tag_cond: (parse_ifthenelse_tag_t -> Tot bool);
-  parse_ifthenelse_payload_kind: (bool -> Tot parser_kind);
   parse_ifthenelse_payload_t: (bool -> Tot Type);
-  parse_ifthenelse_payload_parser: ((b: bool) -> Tot (parser (parse_ifthenelse_payload_kind b) (parse_ifthenelse_payload_t b)));
+  parse_ifthenelse_payload_parser: ((b: bool) -> Tot (k: parser_kind & parser k (parse_ifthenelse_payload_t b)));
   parse_ifthenelse_t: Type;
   parse_ifthenelse_synth: ((t: parse_ifthenelse_tag_t) -> (parse_ifthenelse_payload_t (parse_ifthenelse_tag_cond t)) -> GTot parse_ifthenelse_t);
   parse_ifthenelse_synth_injective: (
@@ -31,7 +30,7 @@ inline_for_extraction
 let parse_ifthenelse_payload_kind
   (p: parse_ifthenelse_param)
 : Tot parser_kind
-= glb (p.parse_ifthenelse_payload_kind true) (p.parse_ifthenelse_payload_kind false)
+= glb (dfst (p.parse_ifthenelse_payload_parser true)) (dfst (p.parse_ifthenelse_payload_parser false))
 
 inline_for_extraction
 let parse_ifthenelse_kind
@@ -43,7 +42,7 @@ let parse_ifthenelse_synth_injective (p: parse_ifthenelse_param) (t: p.parse_ift
   Classical.forall_intro_2 (fun x1 x2 -> Classical.move_requires (p.parse_ifthenelse_synth_injective t x1 t) x2)
 
 let parse_ifthenelse_payload (p: parse_ifthenelse_param) (t: p.parse_ifthenelse_tag_t) : Tot (parser (parse_ifthenelse_payload_kind p) p.parse_ifthenelse_t) =
-  weaken (parse_ifthenelse_payload_kind p) (parse_synth (p.parse_ifthenelse_payload_parser (p.parse_ifthenelse_tag_cond t)) (p.parse_ifthenelse_synth t))
+  weaken (parse_ifthenelse_payload_kind p) (parse_synth (dsnd (p.parse_ifthenelse_payload_parser (p.parse_ifthenelse_tag_cond t))) (p.parse_ifthenelse_synth t))
 
 let parse_ifthenelse_payload_and_then_cases_injective  (p: parse_ifthenelse_param) : Lemma
   (and_then_cases_injective (parse_ifthenelse_payload p))
@@ -51,10 +50,10 @@ let parse_ifthenelse_payload_and_then_cases_injective  (p: parse_ifthenelse_para
 = and_then_cases_injective_intro
     (parse_ifthenelse_payload p)
     (fun t1 t2 b1 b2 ->
-      parse_synth_eq (p.parse_ifthenelse_payload_parser (p.parse_ifthenelse_tag_cond t1)) (p.parse_ifthenelse_synth t1) b1;
-      parse_synth_eq (p.parse_ifthenelse_payload_parser (p.parse_ifthenelse_tag_cond t2)) (p.parse_ifthenelse_synth t2) b2;
-      let Some (x1, _) = parse (p.parse_ifthenelse_payload_parser (p.parse_ifthenelse_tag_cond t1)) b1 in
-      let Some (x2, _) = parse (p.parse_ifthenelse_payload_parser (p.parse_ifthenelse_tag_cond t2)) b2 in
+      parse_synth_eq (dsnd (p.parse_ifthenelse_payload_parser (p.parse_ifthenelse_tag_cond t1))) (p.parse_ifthenelse_synth t1) b1;
+      parse_synth_eq (dsnd (p.parse_ifthenelse_payload_parser (p.parse_ifthenelse_tag_cond t2))) (p.parse_ifthenelse_synth t2) b2;
+      let Some (x1, _) = parse (dsnd (p.parse_ifthenelse_payload_parser (p.parse_ifthenelse_tag_cond t1))) b1 in
+      let Some (x2, _) = parse (dsnd (p.parse_ifthenelse_payload_parser (p.parse_ifthenelse_tag_cond t2))) b2 in
       p.parse_ifthenelse_synth_injective t1 x1 t2 x2
     )
 
@@ -71,7 +70,7 @@ let parse_ifthenelse_eq
     | Some (t, consumed_t) ->
       let b = p.parse_ifthenelse_tag_cond t in
       let input' = Seq.slice input consumed_t (Seq.length input) in
-      match parse (p.parse_ifthenelse_payload_parser b) input' with
+      match parse (dsnd (p.parse_ifthenelse_payload_parser b)) input' with
       | None -> None
       | Some (x, consumed_x) -> Some (p.parse_ifthenelse_synth t x, consumed_t + consumed_x)
   ))
@@ -84,17 +83,17 @@ let parse_ifthenelse_eq
       let f : (p.parse_ifthenelse_payload_t (p.parse_ifthenelse_tag_cond t) -> GTot p.parse_ifthenelse_t) = (p.parse_ifthenelse_synth) t in
       let f' = coerce (p.parse_ifthenelse_payload_t b -> GTot p.parse_ifthenelse_t) f in
       parse_synth_eq
-        #(p.parse_ifthenelse_payload_kind b)
+        #(dfst (p.parse_ifthenelse_payload_parser b))
         #(p.parse_ifthenelse_payload_t b)
         #(p.parse_ifthenelse_t)
-        (p.parse_ifthenelse_payload_parser b) f' input'
+        (dsnd (p.parse_ifthenelse_payload_parser b)) f' input'
 
 noextract
 inline_for_extraction
 noeq
 type serialize_ifthenelse_param (p: parse_ifthenelse_param) = {
   serialize_ifthenelse_tag_serializer: serializer p.parse_ifthenelse_tag_parser;
-  serialize_ifthenelse_payload_serializer: ((b: bool) -> Tot (serializer (p.parse_ifthenelse_payload_parser b)));
+  serialize_ifthenelse_payload_serializer: ((b: bool) -> Tot (serializer (dsnd (p.parse_ifthenelse_payload_parser b))));
   serialize_ifthenelse_synth_recip: (p.parse_ifthenelse_t -> GTot ( t: p.parse_ifthenelse_tag_t & (p.parse_ifthenelse_payload_t (p.parse_ifthenelse_tag_cond t))));
   serialize_ifthenelse_synth_inverse: (
     (x: p.parse_ifthenelse_t) ->

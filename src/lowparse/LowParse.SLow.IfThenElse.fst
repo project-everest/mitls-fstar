@@ -10,7 +10,7 @@ let parse32_ifthenelse
   (p: parse_ifthenelse_param)
   (pt32: parser32 p.parse_ifthenelse_tag_parser)
   (b32: (t: p.parse_ifthenelse_tag_t) -> Tot (b: bool { b == p.parse_ifthenelse_tag_cond t } ))
-  (pp32: (b: bool) -> Tot (parser32 (p.parse_ifthenelse_payload_parser b)))
+  (pp32: (b: bool) -> Tot (parser32 (dsnd (p.parse_ifthenelse_payload_parser b))))
   (synt: (b: bool) -> (t: p.parse_ifthenelse_tag_t { b == p.parse_ifthenelse_tag_cond t } ) -> (pl: p.parse_ifthenelse_payload_t b) -> Tot (y: p.parse_ifthenelse_t { y == p.parse_ifthenelse_synth t pl } ))
 : Tot (parser32 (parse_ifthenelse p))
 = fun input ->
@@ -43,10 +43,10 @@ let serialize32_ifthenelse
     let tk = p.parse_ifthenelse_tag_kind in
     tk.parser_kind_subkind == Some ParserStrong /\
     Some? tk.parser_kind_high /\
-    Some? (p.parse_ifthenelse_payload_kind true).parser_kind_high /\
-    Some? (p.parse_ifthenelse_payload_kind false).parser_kind_high /\
-    Some?.v tk.parser_kind_high + Some?.v (p.parse_ifthenelse_payload_kind true).parser_kind_high < 4294967296 /\
-    Some?.v tk.parser_kind_high + Some?.v (p.parse_ifthenelse_payload_kind false).parser_kind_high < 4294967296
+    Some? (dfst (p.parse_ifthenelse_payload_parser true)).parser_kind_high /\
+    Some? (dfst (p.parse_ifthenelse_payload_parser false)).parser_kind_high /\
+    Some?.v tk.parser_kind_high + Some?.v (dfst (p.parse_ifthenelse_payload_parser true)).parser_kind_high < 4294967296 /\
+    Some?.v tk.parser_kind_high + Some?.v (dfst (p.parse_ifthenelse_payload_parser false)).parser_kind_high < 4294967296
   })
   (st32: serializer32 s.serialize_ifthenelse_tag_serializer)
   (syntt: (x: p.parse_ifthenelse_t) -> Tot (t: p.parse_ifthenelse_tag_t { t == dfst (s.serialize_ifthenelse_synth_recip x) } ))
@@ -74,10 +74,10 @@ let size32_ifthenelse
     let tk = p.parse_ifthenelse_tag_kind in
     tk.parser_kind_subkind == Some ParserStrong /\
     Some? tk.parser_kind_high /\
-    Some? (p.parse_ifthenelse_payload_kind true).parser_kind_high /\
-    Some? (p.parse_ifthenelse_payload_kind false).parser_kind_high /\
-    Some?.v tk.parser_kind_high + Some?.v (p.parse_ifthenelse_payload_kind true).parser_kind_high < 4294967296 /\
-    Some?.v tk.parser_kind_high + Some?.v (p.parse_ifthenelse_payload_kind false).parser_kind_high < 4294967296
+    Some? (dfst (p.parse_ifthenelse_payload_parser true)).parser_kind_high /\
+    Some? (dfst (p.parse_ifthenelse_payload_parser false)).parser_kind_high /\
+    Some?.v tk.parser_kind_high + Some?.v (dfst (p.parse_ifthenelse_payload_parser true)).parser_kind_high < 4294967296 /\
+    Some?.v tk.parser_kind_high + Some?.v (dfst (p.parse_ifthenelse_payload_parser false)).parser_kind_high < 4294967296
   })
   (st32: size32 s.serialize_ifthenelse_tag_serializer)
   (syntt: (x: p.parse_ifthenelse_t) -> Tot (t: p.parse_ifthenelse_tag_t { t == dfst (s.serialize_ifthenelse_synth_recip x) } ))
