@@ -9,56 +9,60 @@ module List = FStar.List.Tot
 module HS = FStar.HyperStack
 module B = LowStar.Buffer
 
-module HSM = HandshakeMessages
+//module HSM = HandshakeMessages
 module LP = LowParse.Low.Base
 open HSL.Common
 
+open Parsers.Handshake13
 
 #reset-options
-   "--max_fuel 0 --max_ifuel 0 --log_queries --query_stats \
-    --using_facts_from 'Prims FStar LowStar -FStar.Reflection -FStar.Tactics -FStar.UInt128 -FStar.Math' \
-    --using_facts_from 'Mem HSL Types_s Words_s Spec.Hash.Definitions.bytes' \
-    --using_facts_from 'TLSError'"
+   "--max_fuel 0 --max_ifuel 0 \
+    --using_facts_from '* -FStar.Tactics -FStar.Reflection -FStar.UInt128 -FStar.Math -LowParse +LowParse.Low.Base +LowParse.Spec.Base'"
 
 
-/// HandshakeMessages related definitions
-
-type msg = HSM.hs_msg
-
-/// Specifies which messages indicate the end of incoming flights
-/// Triggers their Handshake processing
-
-let end_of_flight : msg -> bool =
-  let open HandshakeMessages in
-  function
-  | ClientHello _
-  | HelloRetryRequest _
-  | EndOfEarlyData
-  | ServerHello _
-  | ServerHelloDone
-  | NewSessionTicket13 _
-  | Finished _ -> true
-  | _ -> false
-// No support for binders yet -- comment copied from HandshakeLog
+    // --using_facts_from 'Prims FStar LowStar -FStar.Reflection -FStar.Tactics -FStar.UInt128 -FStar.Math' \
+    // --using_facts_from 'Mem HSL Types_s Words_s Spec.Hash.Definitions.bytes' \
+    // --using_facts_from 'TLSError'"
 
 
-/// Specifies which messages require an intermediate transcript hash
-/// in incoming flights. In doubt, we hash!
+// /// HandshakeMessages related definitions
 
-let tagged : msg -> bool =
-  let open HSM in
-  function
-  | ClientHello _
-  | ServerHello _
-  | EndOfEarlyData        // for Client finished -- comment (and other comments below) copied from HandshakeLog
-  | Certificate13 _       // for CertVerify payload in TLS 1.3
-  | EncryptedExtensions _ // For PSK handshake: [EE; Finished]
-  | CertificateVerify _   // for ServerFinish payload in TLS 1.3
-  | ClientKeyExchange _   // only for client signing
-  | NewSessionTicket _    // for server finished in TLS 1.2
-  | Finished _ -> true     // for 2nd Finished
-  | _ -> false
-// NB CCS is not explicitly handled here, but can trigger tagging and end-of-flights -- comment copied from HandshakeLog
+// type msg = HSM.hs_msg
+
+// /// Specifies which messages indicate the end of incoming flights
+// /// Triggers their Handshake processing
+
+// let end_of_flight : msg -> bool =
+//   let open HandshakeMessages in
+//   function
+//   | ClientHello _
+//   | HelloRetryRequest _
+//   | EndOfEarlyData
+//   | ServerHello _
+//   | ServerHelloDone
+//   | NewSessionTicket13 _
+//   | Finished _ -> true
+//   | _ -> false
+// // No support for binders yet -- comment copied from HandshakeLog
+
+
+// /// Specifies which messages require an intermediate transcript hash
+// /// in incoming flights. In doubt, we hash!
+
+// let tagged : msg -> bool =
+//   let open HSM in
+//   function
+//   | ClientHello _
+//   | ServerHello _
+//   | EndOfEarlyData        // for Client finished -- comment (and other comments below) copied from HandshakeLog
+//   | Certificate13 _       // for CertVerify payload in TLS 1.3
+//   | EncryptedExtensions _ // For PSK handshake: [EE; Finished]
+//   | CertificateVerify _   // for ServerFinish payload in TLS 1.3
+//   | ClientKeyExchange _   // only for client signing
+//   | NewSessionTicket _    // for server finished in TLS 1.2
+//   | Finished _ -> true     // for 2nd Finished
+//   | _ -> false
+// // NB CCS is not explicitly handled here, but can trigger tagging and end-of-flights -- comment copied from HandshakeLog
 
 /// HSL main API
 
@@ -112,6 +116,8 @@ val frame_hsl_state (st:hsl_state) (h0 h1:HS.mem) (l:B.loc)
       invariant st h1)
 
 
+/// AR: 01/29: verifying this create_post takes a long time, TODO: profile
+
 /// Creation of the log
 unfold
 private
@@ -135,50 +141,35 @@ val create (r:Mem.rgn)
 /// Receive API
 /// Until a full flight is received, we lose "writing" capability -- as per the comment in HandshakeLog
 
-/// Receive returns flight_t with postcondition that the indices are valid parsings in the input buffer
-/// Taken from the match in Handshakre receive function
-
 /// ad-hoc flight types
 /// HS would ask HSL to parse specific flight types, depending on where its own state machine is
 
-noeq
-type flight_hrr = {
-  begin_hrr : uint_32;          //begin index in the input buffer
-  hrr_msg   : G.erased HSM.hrr  //erased HelloRetryrequest hrr_msg
-}
+type b8 = B.buffer uint_8
+
+module HSM13 = Parsers.Handshake13
+
+module EE  = Parsers.Handshake13_m_encrypted_extensions
+module Fin = Parsers.Handshake13_m_finished
 
 noeq
-type flight_c_ske_shd = {
-  begin_c   : uint_32;
-  begin_ske : uint_32;
-  begin_shd : uint_32;
-  c_msg     : G.erased HSM.crt;
-  ske_msg   : G.erased HSM.ske;
-  
-  //no payload in the SHD message
+type flight_ee_fin = {
+  begin_ee  : uint_32;
+  begin_fin : uint_32;
+  ee_msg    : G.erased EE.handshake13_m_encrypted_extensions;
+  fin_msg   : G.erased Fin.handshake13_m_finished
 }
 
-/// AR: other flights would be defined similarly, not defining them since it would change when we use QD types
-
-let b8 = B.buffer uint_8
-
-
-/// Validitity postcondition on the flights
 let valid_flight_t 'a =
   (flt:'a) -> (flight_end:uint_32) -> (b:b8) -> (h:HS.mem) -> Type0
-let valid_flight_hrr : valid_flight_t flight_hrr =
-  fun (flt:flight_hrr) (flight_end:uint_32) (b:b8) (h:HS.mem) ->
-    valid_parsing (HSM.HelloRetryRequest (G.reveal flt.hrr_msg)) flt.begin_hrr flight_end b h
 
-let valid_flight_c_ske_shd (flt:flight_c_ske_shd) (flight_end:uint_32) (b:b8) (h:HS.mem) =
-  (* c msg *)
-  valid_parsing (HSM.Certificate (G.reveal flt.c_msg)) flt.begin_c flt.begin_ske b h /\
-  (* ske msg *)
-  valid_parsing (HSM.ServerKeyExchange (G.reveal flt.ske_msg)) flt.begin_ske flt.begin_shd b h /\
-  (* shd *)
-  valid_parsing HSM.ServerHelloDone flt.begin_shd flight_end b h
+val valid_parsing (msg:HSM13.handshake13) (from to:uint_32) (buf:b8) (h:HS.mem) : prop
 
-(* ... and so on for other flights *)
+let valid_flight_ee_fin : valid_flight_t flight_ee_fin =
+  fun (flt:flight_ee_fin) (flight_end:uint_32) (b:b8) (h:HS.mem) ->
+  valid_parsing (HSM13.M_encrypted_extensions (G.reveal flt.ee_msg)) flt.begin_ee flt.begin_fin b h /\
+  valid_parsing (HSM13.M_finished (G.reveal flt.fin_msg)) flt.begin_fin flight_end b h
+
+/// AR: 01/29: up to this point proofs are fine, but beyond this the performance drops
 
 let range_extension (r0:option range_t) (from to:uint_32) =
     from <= to /\
@@ -192,8 +183,7 @@ let get_range (r0:option range_t) : range_t =
   | None -> 0ul, 0ul
   | Some r -> r
   
-unfold 
-private
+unfold private
 let basic_pre_post (st:hsl_state) (b:b8) (from to:uint_32) : HS.mem -> Type0
   = fun h ->
     let prev_from_to = index_from_to st h in
@@ -203,7 +193,7 @@ let basic_pre_post (st:hsl_state) (b:b8) (from to:uint_32) : HS.mem -> Type0
     (let start, finish = get_range prev_from_to in
      B.as_seq h (B.gsub b start (finish - start)) == parsed_bytes st h)
 
-#push-options "--max_ifuel 2 --initial_ifuel 2"
+#push-options "--max_ifuel 2 --initial_ifuel 2 --z3rlimit 20"
 let update_window (r0:option range_t)
                   (from:uint_32)
                   (to:uint_32{range_extension r0 from to})
@@ -211,9 +201,8 @@ let update_window (r0:option range_t)
   = match r0 with
     | None -> Some (from, to)
     | Some (from_0, _) -> Some (from_0, to)
-  
-unfold
-private
+
+unfold private
 let receive_post 
       (st:hsl_state)
       (b:b8)
@@ -241,15 +230,15 @@ let receive_post
    | _ -> False)
 #pop-options
 
-val receive_flight_hrr (st:hsl_state) (b:b8) (from to:uint_32)
-  : ST (TLSError.result (option flight_hrr))    //end input buffer index for the flight
+val receive_flight_ee_fin (st:hsl_state) (b:b8) (from to:uint_32)
+  : ST (TLSError.result (option flight_ee_fin))    //end input buffer index for the flight
        (requires basic_pre_post st b  from to)
-       (ensures  receive_post st b from to valid_flight_hrr)
+       (ensures  receive_post st b from to valid_flight_ee_fin)
 
-val receive_flight_c_ske_shd (st:hsl_state) (b:b8) (from to:uint_32)
-  : ST (TLSError.result (option flight_c_ske_shd))
-       (requires basic_pre_post st b from to)
-       (ensures  receive_post st b from to valid_flight_c_ske_shd)
+// val receive_flight_c_ske_shd (st:hsl_state) (b:b8) (from to:uint_32)
+//   : ST (TLSError.result (option flight_c_ske_shd))
+//        (requires basic_pre_post st b from to)
+//        (ensures  receive_post st b from to valid_flight_c_ske_shd)
 
 
 (*
