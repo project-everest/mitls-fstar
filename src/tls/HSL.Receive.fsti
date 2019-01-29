@@ -162,14 +162,28 @@ type flight_ee_fin = {
 let valid_flight_t 'a =
   (flt:'a) -> (flight_end:uint_32) -> (b:b8) -> (h:HS.mem) -> Type0
 
-val valid_parsing (msg:HSM13.handshake13) (from to:uint_32) (buf:b8) (h:HS.mem) : prop
+
+/// AR: 01/29: up to this point proofs are fine, but beyond this the performance drops
+
+let valid_parsing (msg:HSM13.handshake13) (from to:uint_32) (buf:b8{from <= to /\ B.len buf == to - from}) (h:HS.mem) =
+  let parser = HSM13.handshake13_parser in
+  let slice = { LP.base = buf; LP.len = to - from } in
+  LP.valid parser h slice from /\
+  LP.contents parser h slice from == msg /\
+  LP.content_length parser h slice from == UInt32.v (to - from)
 
 let valid_flight_ee_fin : valid_flight_t flight_ee_fin =
   fun (flt:flight_ee_fin) (flight_end:uint_32) (b:b8) (h:HS.mem) ->
-  valid_parsing (HSM13.M_encrypted_extensions (G.reveal flt.ee_msg)) flt.begin_ee flt.begin_fin b h /\
-  valid_parsing (HSM13.M_finished (G.reveal flt.fin_msg)) flt.begin_fin flight_end b h
 
-/// AR: 01/29: up to this point proofs are fine, but beyond this the performance drops
+  flt.begin_ee <= flt.begin_fin /\
+  flt.begin_fin <= flight_end /\
+  flight_end <= B.len b /\
+
+  (let ee_buf = B.gsub b flt.begin_ee (flt.begin_fin - flt.begin_ee) in
+   let fin_buf = B.gsub b flt.begin_fin (flight_end - flt.begin_fin) in
+   
+   valid_parsing (HSM13.M_encrypted_extensions (G.reveal flt.ee_msg)) flt.begin_ee flt.begin_fin ee_buf h /\
+   valid_parsing (HSM13.M_finished (G.reveal flt.fin_msg)) flt.begin_fin flight_end fin_buf h)
 
 let range_extension (r0:option range_t) (from to:uint_32) =
     from <= to /\
