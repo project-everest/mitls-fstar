@@ -1,5 +1,5 @@
 [
-  "Q¿ßŽ7®•\u0012‹\u0005vFa+óÄ",
+  "ËÿR¯-g\u001béèÜB§²«¸½",
   [
     [
       "Parsers.AlertLevel.string_of_alertLevel",
@@ -13,7 +13,7 @@
         "fuel_guarded_inversion_Parsers.AlertLevel.alertLevel"
       ],
       0,
-      "288e7c4521916073b5cb152408827005"
+      "a87f27b6fd52f0c4e5203a19297b3b34"
     ],
     [
       "Parsers.AlertLevel.alertLevel_enum",
@@ -25,7 +25,7 @@
         "assumption_Parsers.AlertLevel.alertLevel__uu___haseq"
       ],
       0,
-      "f007d075ab0f2ef664aa53192ec2440c"
+      "519d64e0d4644934bb86986965d10513"
     ],
     [
       "Parsers.AlertLevel.synth_alertLevel",
@@ -37,7 +37,7 @@
         "assumption_Parsers.AlertLevel.alertLevel__uu___haseq"
       ],
       0,
-      "505f0e0f55945dc8cc4427f196f3a011"
+      "51b3b2e7569a008d9b31a55a06adc3d5"
     ],
     [
       "Parsers.AlertLevel.synth_alertLevel_inv",
@@ -52,7 +52,7 @@
         "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
       ],
       0,
-      "e5abe3937d9743d831896d2b97606e7a"
+      "f9976341dc3f6bc5645b1bf83dd1eded"
     ],
     [
       "Parsers.AlertLevel.lemma_synth_alertLevel_inj",
@@ -67,7 +67,7 @@
         "token_correspondence_Parsers.AlertLevel.synth_alertLevel"
       ],
       0,
-      "76f93c066c13fc13742a0b067d2d190e"
+      "418da8e8587e49637f387cb5a1839f1c"
     ],
     [
       "Parsers.AlertLevel.lemma_synth_alertLevel_inv",
@@ -84,7 +84,7 @@
         "token_correspondence_Parsers.AlertLevel.synth_alertLevel_inv"
       ],
       0,
-      "e3211fb96b735c306e68d9bfc868aa9d"
+      "5ec2695f058a61aecf0259c9d2d2d138"
     ],
     [
       "Parsers.AlertLevel.parse_alertLevel_key",
@@ -96,7 +96,7 @@
         "assumption_Parsers.AlertLevel.alertLevel__uu___haseq"
       ],
       0,
-      "3d1d0e1a7e734824f09e97eb4b0ba22f"
+      "e8e057457f6b9e2b574027bebfa4a0ac"
     ],
     [
       "Parsers.AlertLevel.serialize_alertLevel_key",
@@ -109,7 +109,7 @@
         "equation_Parsers.AlertLevel.parse_alertLevel_key"
       ],
       0,
-      "946991676d461fc4e9e918437aea0ad9"
+      "ced1cc5dfb5d906657448f3a80f099a7"
     ],
     [
       "Parsers.AlertLevel.alertLevel_parser",
@@ -130,7 +130,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "1d085e4ed8d4e31abe332c725b91410d"
+      "b34e57251b1ee9f0e4b8c847234c929b"
     ],
     [
       "Parsers.AlertLevel.alertLevel_serializer",
@@ -151,7 +151,22 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "9ad2667bd78989dd8299e5ecc23f12f0"
+      "6f12442db79ae98daaa4f515c9d821ba"
+    ],
+    [
+      "Parsers.AlertLevel.alertLevel_bytesize_eq",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.serialize",
+        "equation_Parsers.AlertLevel.alertLevel_bytesize",
+        "equation_Parsers.AlertLevel.alertLevel_parser",
+        "equation_Parsers.AlertLevel.alertLevel_parser_kind",
+        "equation_Parsers.AlertLevel.alertLevel_serializer"
+      ],
+      0,
+      "6ec00d94f0ef116b322ba4b97b0716ee"
     ],
     [
       "Parsers.AlertLevel.parse32_alertLevel_key",
@@ -163,7 +178,7 @@
         "assumption_Parsers.AlertLevel.alertLevel__uu___haseq"
       ],
       0,
-      "27ec97fb7bb99cb3ce302398c099ed5c"
+      "f41abf5864fd5ff65dd2e29d58843fb1"
     ],
     [
       "Parsers.AlertLevel.parse32_alertLevel_key",
@@ -175,7 +190,7 @@
         "assumption_Parsers.AlertLevel.alertLevel__uu___haseq"
       ],
       0,
-      "b2bfa96451c1c266ba645f31ab98011b"
+      "85c1699b8687da6bd2f0e229bfeaab90"
     ],
     [
       "Parsers.AlertLevel.parse32_alertLevel_key",
@@ -187,7 +202,7 @@
         "assumption_Parsers.AlertLevel.alertLevel__uu___haseq"
       ],
       0,
-      "173977d66e704c032d291c851b80d8bd"
+      "08f84a4eadb2f764a2b0e66557583e19"
     ],
     [
       "Parsers.AlertLevel.parse32_alertLevel_key",
@@ -199,7 +214,7 @@
         "assumption_Parsers.AlertLevel.alertLevel__uu___haseq"
       ],
       0,
-      "253ac685062acb58232cf1a989f09b4f"
+      "9da080b43d8b5f49592cc142915f7f0f"
     ],
     [
       "Parsers.AlertLevel.parse32_alertLevel_key",
@@ -211,7 +226,7 @@
         "assumption_Parsers.AlertLevel.alertLevel__uu___haseq"
       ],
       0,
-      "32a70756983457e4ae8d99491c974d19"
+      "127281e2ea8734e2aacf470d0388b8aa"
     ],
     [
       "Parsers.AlertLevel.alertLevel_parser32",
@@ -232,7 +247,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "53905a8ce68c24216c12bd084a7f5075"
+      "3a7289232fe72430be6cd12326864349"
     ],
     [
       "Parsers.AlertLevel.serialize32_alertLevel_key",
@@ -250,7 +265,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "e11f67fd27c25ed476113228f2a7a949"
+      "56ae680c245e236f946bf0d81d8a9d64"
     ],
     [
       "Parsers.AlertLevel.serialize32_alertLevel_key",
@@ -268,7 +283,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "476cc039937f54690c133e44847e0911"
+      "23b52f4a4922e38c9a748acaad5132a6"
     ],
     [
       "Parsers.AlertLevel.serialize32_alertLevel_key",
@@ -280,7 +295,7 @@
         "assumption_Parsers.AlertLevel.alertLevel__uu___haseq"
       ],
       0,
-      "fb570056a0c57e70ecd01fc22df44fdc"
+      "b18d1f3fcddd0646445d27e79d792962"
     ],
     [
       "Parsers.AlertLevel.serialize32_alertLevel_key",
@@ -292,7 +307,7 @@
         "assumption_Parsers.AlertLevel.alertLevel__uu___haseq"
       ],
       0,
-      "b21a7241d424bc8e457beff45548640e"
+      "a0fc7d8e0d65d7a5021b41c9e6fd1f53"
     ],
     [
       "Parsers.AlertLevel.alertLevel_serializer32",
@@ -313,7 +328,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "85b792a89ca5865fa43c76df70e0e462"
+      "dc6603431714f23c117900bb794fe155"
     ],
     [
       "Parsers.AlertLevel.alertLevel_size32",
@@ -322,7 +337,7 @@
       1,
       [ "@query" ],
       0,
-      "9f7c2f1c85061f7b4ed50b2aabd5f9c7"
+      "d078c37242672fe2829a03b051eeafc6"
     ],
     [
       "Parsers.AlertLevel.validate_alertLevel_key",
@@ -334,7 +349,7 @@
         "assumption_Parsers.AlertLevel.alertLevel__uu___haseq"
       ],
       0,
-      "1e4af083f4165d098485d7a2db7d66f1"
+      "b91d486bb203dbed32d956918b664821"
     ],
     [
       "Parsers.AlertLevel.alertLevel_validator",
@@ -355,7 +370,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "e4aa9ca497a94765a9993b80a7c3734b"
+      "dafcb3ebd5eaebf35039acc358cdf9f7"
     ],
     [
       "Parsers.AlertLevel.alertLevel_jumper",
@@ -374,7 +389,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "21b3c140cf91dc619773c4be1b2282a7"
+      "35915ae9d177bde963eaa38199018e77"
     ],
     [
       "Parsers.AlertLevel.read_alertLevel_key",
@@ -392,7 +407,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "b687c202308439ffe3fe40f9236bde94"
+      "4003408d654612bcf747848eb8dad860"
     ],
     [
       "Parsers.AlertLevel.alertLevel_reader",
@@ -413,7 +428,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "7be9403d6fcd630d16d5ccccae8eed81"
+      "8c962d8e46b809ea031a895325ecfbca"
     ],
     [
       "Parsers.AlertLevel.write_alertLevel_key",
@@ -425,7 +440,7 @@
         "assumption_Parsers.AlertLevel.alertLevel__uu___haseq"
       ],
       0,
-      "a808d13a8dcb5eb8c656624aaf4d4364"
+      "1372ff13633b3992ad040c89b10a9f11"
     ],
     [
       "Parsers.AlertLevel.alertLevel_writer",
@@ -446,7 +461,46 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "13b2a2f5fc7d8df0121ba873f33d5afb"
+      "1995be7d337defb2081b7d8ccd7cd380"
+    ],
+    [
+      "Parsers.AlertLevel.alertLevel_bytesize_eqn",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_FStar.Pervasives.Native.Some",
+        "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataFail",
+        "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataTotal",
+        "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
+        "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_LowParse.Spec.Base.total_constant_size_parser_kind",
+        "equation_Parsers.AlertLevel.alertLevel_parser",
+        "equation_Parsers.AlertLevel.alertLevel_parser_kind",
+        "equation_Parsers.AlertLevel.alertLevel_serializer",
+        "equation_Prims.nat",
+        "function_token_typing_Parsers.AlertLevel.alertLevel_parser",
+        "function_token_typing_Parsers.AlertLevel.alertLevel_parser_kind",
+        "function_token_typing_Parsers.AlertLevel.alertLevel_serializer",
+        "int_inversion", "kinding_Parsers.AlertLevel.alertLevel@tok",
+        "lemma_LowParse.Spec.Base.serialize_length",
+        "proj_equation_FStar.Pervasives.Native.Some_v",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_FStar.Pervasives.Native.Some_v",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "typing_Parsers.AlertLevel.alertLevel_bytesize"
+      ],
+      0,
+      "67044f3812c5bde2c0238d7fbd359d4a"
     ]
   ]
 ]
