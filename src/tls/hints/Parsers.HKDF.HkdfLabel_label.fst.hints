@@ -1,5 +1,5 @@
 [
-  "Š¯X;ï§Ñ€š$°IãT©\u0004",
+  "\u0019\u000eá~T.Ê³‰ñS½/2¥Þ",
   [
     [
       "Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_parser",
@@ -13,7 +13,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "ddddbc91089fb981bfab4a57283a6556"
+      "92fce7becb2970f52ddf760aae828883"
     ],
     [
       "Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_serializer",
@@ -27,7 +27,23 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "c02fd45b8190b106d9da47f5f4df9805"
+      "475ab0728b679bdc780c35a0338b40ef"
+    ],
+    [
+      "Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_bytesize_eq",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.serialize",
+        "equation_Parsers.HKDF.HkdfLabel_label.hkdfLabel_label",
+        "equation_Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_bytesize",
+        "equation_Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_parser",
+        "equation_Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_parser_kind",
+        "equation_Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_serializer"
+      ],
+      0,
+      "d70dede2040d5e8801a07abc27dab3c2"
     ],
     [
       "Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_parser32",
@@ -41,7 +57,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "a9066946ba3c89a99f96b0673262976d"
+      "d4eb757cd19de5ead2eba40a3aef1094"
     ],
     [
       "Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_serializer32",
@@ -55,7 +71,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "076d708e7b4d7a85aed195d90987d38a"
+      "f3dbaf6a7956df63f502b36d724c0b1d"
     ],
     [
       "Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_size32",
@@ -69,7 +85,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "f3ee270558fd20eddb83740451e95274"
+      "23ba3341f8c0618193f80042c53682f4"
     ],
     [
       "Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_validator",
@@ -106,7 +122,7 @@
         "typing_LowParse.Low.Base.validator_max_length"
       ],
       0,
-      "d189a9acd91699d022082818bbdeb356"
+      "d18d2d2d6e9781ac452ee0f7b6280883"
     ],
     [
       "Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_jumper",
@@ -120,7 +136,38 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "d6cfae5a8cfd6d9e6a68d5a1e45e2697"
+      "39ef55ac6c089870ce8200358256dd6a"
+    ],
+    [
+      "Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_bytesize_eqn",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.size",
+        "equation_FStar.UInt.uint_t",
+        "equation_LowParse.Low.Base.validator_max_length",
+        "equation_LowParse.Spec.Base.serialize",
+        "equation_LowParse.Spec.Bytes.parse_bounded_vlbytes_pred",
+        "equation_LowParse.Spec.Bytes.parse_bounded_vlbytes_t",
+        "equation_LowParse.Spec.VLData.log256_",
+        "equation_Parsers.HKDF.HkdfLabel_label.hkdfLabel_label",
+        "equation_Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_bytesize",
+        "equation_Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_serializer",
+        "function_token_typing_Prims.__cache_version_number__",
+        "l_and-interp", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_LessThan", "primitive_Prims.op_LessThanOrEqual",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
+        "refinement_interpretation_Parsers.HKDF.HkdfLabel_label_Tm_refine_181fb1ab8c701e832da62afba1d3eae6",
+        "typing_FStar.UInt32.v",
+        "typing_LowParse.Low.Base.validator_max_length"
+      ],
+      0,
+      "269a08e758137e8a6286dc34cd4596e7"
     ]
   ]
 ]

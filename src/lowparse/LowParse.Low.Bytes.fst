@@ -168,6 +168,88 @@ let read_flbytes
   [@inline_let] let _ = valid_facts (parse_flbytes (U32.v sz32)) h input pos in
   BY.of_buffer sz32 (B.sub input.base pos sz32)
 
+(* Equality test between a vlbytes and a constant lbytes *)
+
+#push-options "--z3rlimit 32"
+
+inline_for_extraction
+let buffer_equals_bytes
+  (const: BY.bytes)
+  (b: buffer8)
+  (pos: U32.t)
+: HST.Stack bool
+  (requires (fun h ->
+    B.live h b /\
+    U32.v pos + BY.length const <= B.length b
+  ))
+  (ensures (fun h res h' ->
+    B.modifies B.loc_none h h' /\
+    (res == true <==> B.as_seq h (B.gsub b pos (BY.len const)) == BY.reveal const)
+  ))
+= let h0 = HST.get () in
+  HST.push_frame ();
+  let len = BY.len const in
+  let bi = B.alloca 0ul 1ul in
+  let bres = B.alloca true 1ul in
+  let h1 = HST.get () in
+  [@inline_let] let inv (h: HS.mem) (stop: bool) : GTot Type0 =
+      B.modifies (B.loc_union (B.loc_buffer bi) (B.loc_buffer bres)) h1 h /\ (
+      let length = U32.v len in
+      let i32 = (Seq.index (B.as_seq h bi) 0) in
+      let i = U32.v i32 in
+      let res = Seq.index (B.as_seq h bres) 0 in
+      i <= length /\
+      (stop == false ==> res == true) /\
+      ((stop == true /\ res == true) ==> i == length) /\
+      (res == true <==> B.as_seq h0 (B.gsub b pos i32) `Seq.equal` Seq.slice (BY.reveal const) 0 i)
+    )
+  in
+  C.Loops.do_while
+    inv
+    (fun _ ->
+      let i = B.index bi 0ul in
+      if i = len
+      then
+        true
+      else begin
+        let i' = i `U32.add` 1ul in
+        [@inline_let] let _ =
+          let s1 = (B.as_seq h0 (B.gsub b pos i)) in
+          let c1 = (B.get h0 b (U32.v pos + U32.v i)) in
+          let s2 = (Seq.slice (BY.reveal const) 0 (U32.v i)) in
+          let c2 = (BY.index const (U32.v i)) in
+          assert (B.as_seq h0 (B.gsub b pos i') `Seq.equal` Seq.snoc s1 c1);
+          assert (Seq.slice (BY.reveal const) 0 (U32.v i') `Seq.equal` Seq.snoc s2 c2);
+          Classical.move_requires (Seq.lemma_snoc_inj s1 s2 c1) c2
+        in
+        let res = B.index b (pos `U32.add` i) = BY.get const i in
+        B.upd bres 0ul res;
+        B.upd bi 0ul i';
+        not res
+      end
+    );
+  let res = B.index bres 0ul in
+  HST.pop_frame ();
+  res
+
+#pop-options
+
+inline_for_extraction
+let valid_slice_equals_bytes
+  (const: BY.bytes)
+  (input: slice)
+  (pos: U32.t)
+: HST.Stack bool
+  (requires (fun h ->
+    valid (parse_flbytes (BY.length const)) h input pos
+  ))
+  (ensures (fun h res h' ->
+    B.modifies B.loc_none h h' /\
+    (res == true <==> contents (parse_flbytes (BY.length const)) h input pos == const
+  )))
+= let h = HST.get () in
+  [@inline_let] let _ = valid_facts (parse_flbytes (BY.length const)) h input pos in
+  buffer_equals_bytes const input.base pos
 
 inline_for_extraction
 let validate_all_bytes

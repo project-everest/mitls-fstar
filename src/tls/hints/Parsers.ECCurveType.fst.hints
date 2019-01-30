@@ -1,5 +1,5 @@
 [
-  "5„î\u0018rt6µÃˆÍ¢­Fê®",
+  "\u0015O\u0011jÃY‰(­J”°\u0013©ï¿",
   [
     [
       "Parsers.ECCurveType.string_of_eCCurveType",
@@ -14,7 +14,7 @@
         "fuel_guarded_inversion_Parsers.ECCurveType.eCCurveType"
       ],
       0,
-      "567d4281a6f5c26a3598a0b311a8a54e"
+      "fea69d534a24dbe3e56dd349b42c0471"
     ],
     [
       "Parsers.ECCurveType.eCCurveType_enum",
@@ -26,7 +26,7 @@
         "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq"
       ],
       0,
-      "2e6a9397a305c4c0bdc47cf9db2f850c"
+      "8793b8fce0276d6dff275b4b0f4c1c98"
     ],
     [
       "Parsers.ECCurveType.synth_eCCurveType",
@@ -38,7 +38,7 @@
         "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq"
       ],
       0,
-      "fff7c366a232c8d373679f0e70cc3885"
+      "5c546a4f891a00860f01c5b75905fbff"
     ],
     [
       "Parsers.ECCurveType.synth_eCCurveType_inv",
@@ -53,7 +53,7 @@
         "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
       ],
       0,
-      "0a84fcfe92492ae0b51b0e9a15d04169"
+      "740dc49594592a440ca59fcf94357bff"
     ],
     [
       "Parsers.ECCurveType.lemma_synth_eCCurveType_inj",
@@ -68,7 +68,7 @@
         "token_correspondence_Parsers.ECCurveType.synth_eCCurveType"
       ],
       0,
-      "46bc443e14b67303b7a28c737c79dad4"
+      "af47b9bbb8fddc12944efb4dd3901ba6"
     ],
     [
       "Parsers.ECCurveType.lemma_synth_eCCurveType_inv",
@@ -85,7 +85,7 @@
         "token_correspondence_Parsers.ECCurveType.synth_eCCurveType_inv"
       ],
       0,
-      "dd481f03a200a9ab059a8248a2931dbe"
+      "4de87952a6a2d8a887b2c36fff7e337f"
     ],
     [
       "Parsers.ECCurveType.parse_eCCurveType_key",
@@ -97,7 +97,7 @@
         "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq"
       ],
       0,
-      "105375cf6c53d080ff0a65eb0661b259"
+      "05b01ec8815c18da3b17568bdff07911"
     ],
     [
       "Parsers.ECCurveType.serialize_eCCurveType_key",
@@ -109,7 +109,7 @@
         "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq"
       ],
       0,
-      "41c8245994951ef397adcf1b7cf9af4a"
+      "665b808bb6348cb126af9b5bd351bd8c"
     ],
     [
       "Parsers.ECCurveType.eCCurveType_parser",
@@ -130,7 +130,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "3bce700baa1a893d8bcefe3e30d05545"
+      "1ebacaaf81fb07b84a628802f6abd425"
     ],
     [
       "Parsers.ECCurveType.eCCurveType_serializer",
@@ -151,7 +151,22 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "b4e74e64bba021d87fa2fa3ad2ba669b"
+      "4b76adc2ca33ffc17ff5ca5ff80996d7"
+    ],
+    [
+      "Parsers.ECCurveType.eCCurveType_bytesize_eq",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.serialize",
+        "equation_Parsers.ECCurveType.eCCurveType_bytesize",
+        "equation_Parsers.ECCurveType.eCCurveType_parser",
+        "equation_Parsers.ECCurveType.eCCurveType_parser_kind",
+        "equation_Parsers.ECCurveType.eCCurveType_serializer"
+      ],
+      0,
+      "66c998796c8fd39b5bef2e2948eb97ee"
     ],
     [
       "Parsers.ECCurveType.parse32_eCCurveType_key",
@@ -163,7 +178,7 @@
         "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq"
       ],
       0,
-      "43be812ece674ca371eb245e4b06372b"
+      "7edf2afc7e413ccffbf3ebbb0507d23a"
     ],
     [
       "Parsers.ECCurveType.parse32_eCCurveType_key",
@@ -175,7 +190,7 @@
         "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq"
       ],
       0,
-      "8cd7724e05d21b244f3c812612d2f6df"
+      "a58fcb1e72a046b39c17ac4194654032"
     ],
     [
       "Parsers.ECCurveType.parse32_eCCurveType_key",
@@ -187,7 +202,7 @@
         "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq"
       ],
       0,
-      "2bdcde4ce3221ced46b89988b60bf2bd"
+      "2baa763280fb0e4f02908288085d5e5e"
     ],
     [
       "Parsers.ECCurveType.parse32_eCCurveType_key",
@@ -199,7 +214,7 @@
         "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq"
       ],
       0,
-      "c9d71310534a7f77227eea925d4a99cf"
+      "5ce34e046bd2ad61dbb68b2b5cc17721"
     ],
     [
       "Parsers.ECCurveType.parse32_eCCurveType_key",
@@ -211,7 +226,7 @@
         "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq"
       ],
       0,
-      "79ad0456ede2eb6130f04b0cf6b3be93"
+      "23f5e475771b0eb3f2c2658bd55e3c95"
     ],
     [
       "Parsers.ECCurveType.eCCurveType_parser32",
@@ -232,7 +247,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "187e4c0337e1a8b8592f6e6c7f0bea46"
+      "b8229fa0af5aa50413a61f9fccf36d76"
     ],
     [
       "Parsers.ECCurveType.serialize32_eCCurveType_key",
@@ -250,7 +265,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "5ead89723839281687b9921dece88234"
+      "b64baf99013a47dfced9d1b5448bd163"
     ],
     [
       "Parsers.ECCurveType.serialize32_eCCurveType_key",
@@ -268,7 +283,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "522f171cebec10ff683f1cab74a2516a"
+      "641bb89c1a7b75ce8c46cbb9615943a0"
     ],
     [
       "Parsers.ECCurveType.serialize32_eCCurveType_key",
@@ -280,7 +295,7 @@
         "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq"
       ],
       0,
-      "748c91cd1854a1c959d8620f66a76aaf"
+      "923448661201ea230d6efeb81b75c509"
     ],
     [
       "Parsers.ECCurveType.serialize32_eCCurveType_key",
@@ -292,7 +307,7 @@
         "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq"
       ],
       0,
-      "241ced036b1f60dc6d957885e1ea2d3a"
+      "838bd77b9f04f7befe2b0c90f603a2f5"
     ],
     [
       "Parsers.ECCurveType.eCCurveType_serializer32",
@@ -313,7 +328,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "1833b2da2d68e19c88b94d45f684641b"
+      "8a306c9e0ce8b6ba71ca0ded0d159c8e"
     ],
     [
       "Parsers.ECCurveType.eCCurveType_size32",
@@ -322,7 +337,7 @@
       1,
       [ "@query" ],
       0,
-      "22afc7108b8d06fd81d04a4a28c48ab6"
+      "c0fc34d186a4fccc9ddec3d56eba6af7"
     ],
     [
       "Parsers.ECCurveType.validate_eCCurveType_key",
@@ -334,7 +349,7 @@
         "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq"
       ],
       0,
-      "1b20fa61ed079840073ee4ec73bb9aed"
+      "3d4afe2e50267547fe90888615abb0a3"
     ],
     [
       "Parsers.ECCurveType.eCCurveType_validator",
@@ -355,7 +370,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "3f48585676211485e33e655efe441778"
+      "9b63c072bf97fbf06d0ccfe1b25b603b"
     ],
     [
       "Parsers.ECCurveType.eCCurveType_jumper",
@@ -374,7 +389,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "8c1f065196c746613b9aef8885f60ed3"
+      "c4a2cee4379385ea46596994b74a3577"
     ],
     [
       "Parsers.ECCurveType.read_eCCurveType_key",
@@ -392,7 +407,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "fd21399b2fb3ce4f5085cf396d441e63"
+      "1bda82b2a22cc61c844d3f37c3d13c88"
     ],
     [
       "Parsers.ECCurveType.eCCurveType_reader",
@@ -413,7 +428,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "e7c94c59fd4f1b6ef54b76a92ecfdd27"
+      "e3930eafd99cafe200205b1aafa573c3"
     ],
     [
       "Parsers.ECCurveType.write_eCCurveType_key",
@@ -425,7 +440,7 @@
         "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq"
       ],
       0,
-      "bf9171423989aef7c18e5a457dc74d1a"
+      "9bb2a21e611974ccddb103899c7942ce"
     ],
     [
       "Parsers.ECCurveType.eCCurveType_writer",
@@ -446,7 +461,46 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "0da386204e7fac4c9f86a7da6b62e599"
+      "7484c9deaf0da8b1349694db2733d352"
+    ],
+    [
+      "Parsers.ECCurveType.eCCurveType_bytesize_eqn",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_FStar.Pervasives.Native.Some",
+        "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataFail",
+        "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataTotal",
+        "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
+        "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_LowParse.Spec.Base.total_constant_size_parser_kind",
+        "equation_Parsers.ECCurveType.eCCurveType_parser",
+        "equation_Parsers.ECCurveType.eCCurveType_parser_kind",
+        "equation_Parsers.ECCurveType.eCCurveType_serializer",
+        "equation_Prims.nat",
+        "function_token_typing_Parsers.ECCurveType.eCCurveType_parser",
+        "function_token_typing_Parsers.ECCurveType.eCCurveType_parser_kind",
+        "function_token_typing_Parsers.ECCurveType.eCCurveType_serializer",
+        "int_inversion", "kinding_Parsers.ECCurveType.eCCurveType@tok",
+        "lemma_LowParse.Spec.Base.serialize_length",
+        "proj_equation_FStar.Pervasives.Native.Some_v",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_FStar.Pervasives.Native.Some_v",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "typing_Parsers.ECCurveType.eCCurveType_bytesize"
+      ],
+      0,
+      "3b89cdafcbc3acd219c78d5bba096909"
     ]
   ]
 ]
