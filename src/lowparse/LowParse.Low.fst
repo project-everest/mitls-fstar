@@ -10,5 +10,6 @@ include LowParse.Low.VLData
 include LowParse.Low.Enum
 include LowParse.Low.Option
 include LowParse.Low.Sum
+include LowParse.Low.IfThenElse
 
 let inversion_tuple2 (a b: Type) : Lemma (inversion (tuple2 a b)) [SMTPat (tuple2 a b)] = allow_inversion (tuple2 a b)
