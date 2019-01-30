@@ -12,7 +12,7 @@
         "fuel_guarded_inversion_Ticket.ticket"
       ],
       0,
-      "b56eff2d80a1d5c598dd15885e584b46"
+      "b0a5c5926f57cbeab2b8726cb3c55268"
     ],
     [
       "Ticket.write_ticket12",
@@ -103,13 +103,9 @@
         "lemma_LowParse.Low.Base.valid_elim_",
         "lemma_LowParse.Low.Base.valid_frame_strong",
         "lemma_LowParse.Low.Base.valid_pos_get_valid_pos",
-        "lemma_LowStar.Monotonic.Buffer.loc_disjoint_union_r_",
-        "lemma_LowStar.Monotonic.Buffer.loc_includes_union_r_",
-        "lemma_LowStar.Monotonic.Buffer.loc_union_comm",
-        "lemma_LowStar.Monotonic.Buffer.modifies_inert_intro",
         "lemma_LowStar.Monotonic.Buffer.modifies_loc_includes",
         "lemma_LowStar.Monotonic.Buffer.modifies_refl",
-        "lemma_LowStar.Monotonic.Buffer.modifies_trans",
+        "lemma_LowStar.Monotonic.Buffer.modifies_trans_linear",
         "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
         "primitive_Prims.op_Equality", "primitive_Prims.op_LessThan",
         "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Negation",
@@ -158,14 +154,13 @@
         "typing_LowParse.Low.Base.get_valid_pos",
         "typing_LowParse.Low.Base.loc_slice_from",
         "typing_LowParse.Low.Base.loc_slice_from_to",
-        "typing_LowParse.Low.Base.serialized_length",
-        "typing_LowStar.Monotonic.Buffer.loc_union", "typing_Mem.disjoint",
+        "typing_LowParse.Low.Base.serialized_length", "typing_Mem.disjoint",
         "typing_Mem.tls_define_region", "typing_Ticket.uu___is_Ticket12",
         "typing_tok_Parsers.Boolean.B_false@tok",
         "typing_tok_Parsers.Boolean.B_true@tok"
       ],
       0,
-      "64fc373b23ee9dda0e61bd542ef4c018"
+      "374518a122fc11dda46b1d16c5b0f82d"
     ]
   ]
 ]

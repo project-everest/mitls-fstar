@@ -11,6 +11,8 @@ open FStar.Integers
 
 module ST = FStar.HyperStack.ST
 
+module B = LowStar.Buffer
+
 // defining those on FStar.Bytes, not on EverCrypt's seq Uin8.t
 type hashable (a:alg) = b:bytes {length b <= maxLength a}
 type tag (a:alg) = lbytes32 (tagLen a)
@@ -26,10 +28,11 @@ val compute: a:alg -> text:hashable a -> Stack (tag a)
   (requires fun h0 -> True)
   (ensures fun h0 t h1 -> 
     let v = reveal text in 
-    modifies Set.empty h0 h1 /\
+    B.modifies B.loc_none h0 h1 /\
     Seq.length v <= maxLength a /\
     t = h a text)
 
+#push-options "--max_fuel 0 --max_ifuel 0"
 let compute a text = 
   let h00 = ST.get() in 
   push_frame(); 
@@ -49,18 +52,12 @@ let compute a text =
     let input = LowStar.Buffer.alloca 0uy len in 
     store_bytes text input;
     EverCrypt.Hash.hash a output input len;
-    pop_frame();
-    let h1 = ST.get() in
-    assert(LowStar.Modifies.(modifies (loc_buffer output) h0 h1))
+    pop_frame()
     );
   let t = Bytes.of_buffer tlen output in
   pop_frame();
-  //18-09-01 missing an inverse of modifies_none_modifies?
-  let h11 = ST.get() in 
-  assert(LowStar.Modifies.(modifies loc_none h00 h11));
-  assume(modifies Set.empty h00 h11);
   t
-
+#pop-options
 
 
 (* IMPLEMENTATION PLACEHOLDER, 
@@ -83,7 +80,7 @@ abstract val extend: #a:alg -> v:accv a -> b:bytes -> Tot (v':accv a {length (co
 
 abstract val finalize: #a:alg -> v:accv a -> ST (t:tag a {t == h a (content v)})
   (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> modifies Set.empty h0 h1))
+  (ensures (fun h0 t h1 -> B.(modifies loc_none h0 h1)))
 
 let start a = Inputs empty_bytes
 let extend #a (Inputs b0) b1 =
