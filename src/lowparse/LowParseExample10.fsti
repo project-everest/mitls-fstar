@@ -2,6 +2,7 @@ module LowParseExample10
 
 module LPB = LowParse.SLow.Bytes
 module LPI = LowParse.SLow.Int
+module LL = LowParse.Low.Base
 module U8 = FStar.UInt8
 module U16 = FStar.UInt16
 module U32 = FStar.UInt32
@@ -49,6 +50,10 @@ val parse32_t : LPB.parser32 parse_t
 val serialize32_t : LPB.serializer32 serialize_t
 
 val size32_t : LPB.size32 serialize_t
+
+val validate_t : LL.validator parse_t
+
+val jump_t : LL.jumper parse_t
 
 val main: FStar.Int32.t -> LowStar.Buffer.buffer (LowStar.Buffer.buffer C.char) ->
   FStar.HyperStack.ST.Stack C.exit_code (fun _ -> true) (fun _ _ _ -> true)

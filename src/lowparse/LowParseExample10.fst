@@ -1,10 +1,13 @@
 module LowParseExample10
 
 module LP = LowParse.SLow
+module LL = LowParse.Low
 module U8 = FStar.UInt8
 module U16 = FStar.UInt16
 module U32 = FStar.UInt32
 module BY = LowParse.Bytes32
+module B = LowStar.Buffer
+module HST = FStar.HyperStack.ST
 
 inline_for_extraction
 let t_tag_cond (x: msg_type) : Tot bool =
@@ -86,5 +89,28 @@ let size32_t =
     (fun x -> t_tag_cond x)
     (fun b -> if b then (fun (HelloRetryRequest y) -> y) else (fun (Other m) -> m.contents))
     (fun b -> if b then LP.size32_u32 else LP.size32_u16)
+
+inline_for_extraction
+let test_HelloRetryRequest : LL.test_ifthenelse_tag parse_t_param
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let] let _ =
+    let pos' = LL.get_valid_pos parse_t_param.LP.parse_ifthenelse_tag_parser h input pos in
+    LL.valid_facts parse_t_param.LP.parse_ifthenelse_tag_parser h input pos;
+    let s1 = B.as_seq h (B.gsub input.LL.base pos (pos' `U32.sub` pos)) in
+    let s2 = BY.reveal msg_type_HelloRetryRequest in
+    assert (s1 `Seq.equal` s2 ==> s1 == s2)
+  in
+  if B.index input.LL.base pos = BY.get msg_type_HelloRetryRequest 0ul then
+  if B.index input.LL.base (pos `U32.add` 1ul) = BY.get msg_type_HelloRetryRequest 1ul then
+  if B.index input.LL.base (pos `U32.add` 2ul) = BY.get msg_type_HelloRetryRequest 2ul then
+    true
+  else false
+  else false
+  else false
+
+let validate_t = LL.validate_ifthenelse parse_t_param (LL.validate_flbytes 3 3ul) test_HelloRetryRequest (fun b -> if b then LL.validate_u32 () else LL.validate_u16 ())
+
+let jump_t = LL.jump_ifthenelse parse_t_param (LL.jump_flbytes 3 3ul) test_HelloRetryRequest (fun b -> if b then LL.jump_u32 else LL.jump_u16)
 
 let main _ _ = C.EXIT_SUCCESS
