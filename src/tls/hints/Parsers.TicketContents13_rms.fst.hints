@@ -1,5 +1,5 @@
 [
-  "ô|\u000e õ]@}ª\u001fp\u0003$¾é-",
+  "¦¡\u000f=E\u001aîï)äâhÅvêq",
   [
     [
       "Parsers.TicketContents13_rms.ticketContents13_rms_parser",
@@ -13,7 +13,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "efa4b49ac9fc7b21f0714b74ec12642f"
+      "4fc54ffbed16b2bae0e5faf8965a01b9"
     ],
     [
       "Parsers.TicketContents13_rms.ticketContents13_rms_serializer",
@@ -27,7 +27,23 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "f5119b4bc5c46e2703025f81318d57b9"
+      "193269aa85d3bcc4c4732466cb7070eb"
+    ],
+    [
+      "Parsers.TicketContents13_rms.ticketContents13_rms_bytesize_eq",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.serialize",
+        "equation_Parsers.TicketContents13_rms.ticketContents13_rms",
+        "equation_Parsers.TicketContents13_rms.ticketContents13_rms_bytesize",
+        "equation_Parsers.TicketContents13_rms.ticketContents13_rms_parser",
+        "equation_Parsers.TicketContents13_rms.ticketContents13_rms_parser_kind",
+        "equation_Parsers.TicketContents13_rms.ticketContents13_rms_serializer"
+      ],
+      0,
+      "3696108d6aa443febab93e5184c7e17b"
     ],
     [
       "Parsers.TicketContents13_rms.ticketContents13_rms_parser32",
@@ -41,7 +57,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "6edfa96bdc908908cbc2ff76a1e6ddb6"
+      "5b09b2f14b5ea234446cace871c875a2"
     ],
     [
       "Parsers.TicketContents13_rms.ticketContents13_rms_serializer32",
@@ -55,7 +71,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "9b202dc7eef99e3af855131639897b06"
+      "ec16a241bb890b5a5f60be4a8eedf977"
     ],
     [
       "Parsers.TicketContents13_rms.ticketContents13_rms_size32",
@@ -69,7 +85,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "d4ea7778ff741f38f99878c3890f34b8"
+      "c36822f6cbc53c6017ef2979a6d5a7ed"
     ],
     [
       "Parsers.TicketContents13_rms.ticketContents13_rms_validator",
@@ -106,7 +122,7 @@
         "typing_LowParse.Low.Base.validator_max_length"
       ],
       0,
-      "91d1e433860e8933bea49b7bc79ddd61"
+      "8c215228887b56cc069df9a6f1d25ed2"
     ],
     [
       "Parsers.TicketContents13_rms.ticketContents13_rms_jumper",
@@ -120,7 +136,38 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "689506adb83bf3e972d7389a8d8a27f4"
+      "3e1e12849e9128b8745bb216d2e69304"
+    ],
+    [
+      "Parsers.TicketContents13_rms.ticketContents13_rms_bytesize_eqn",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.size",
+        "equation_FStar.UInt.uint_t",
+        "equation_LowParse.Low.Base.validator_max_length",
+        "equation_LowParse.Spec.Base.serialize",
+        "equation_LowParse.Spec.Bytes.parse_bounded_vlbytes_pred",
+        "equation_LowParse.Spec.Bytes.parse_bounded_vlbytes_t",
+        "equation_LowParse.Spec.VLData.log256_",
+        "equation_Parsers.TicketContents13_rms.ticketContents13_rms",
+        "equation_Parsers.TicketContents13_rms.ticketContents13_rms_bytesize",
+        "equation_Parsers.TicketContents13_rms.ticketContents13_rms_serializer",
+        "function_token_typing_Prims.__cache_version_number__",
+        "l_and-interp", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_LessThan", "primitive_Prims.op_LessThanOrEqual",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
+        "refinement_interpretation_Parsers.TicketContents13_rms_Tm_refine_a2072dd47f2a1746c84c8369c0d289e3",
+        "typing_FStar.UInt32.v",
+        "typing_LowParse.Low.Base.validator_max_length"
+      ],
+      0,
+      "f944d4102dd5c4401764b2e356a57434"
     ]
   ]
 ]
