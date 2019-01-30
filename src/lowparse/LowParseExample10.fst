@@ -99,4 +99,41 @@ let validate_t = LL.validate_ifthenelse parse_t_param (LL.validate_flbytes 3 3ul
 
 let jump_t = LL.jump_ifthenelse parse_t_param (LL.jump_flbytes 3 3ul) test_HelloRetryRequest (fun b -> if b then LL.jump_u32 else LL.jump_u16)
 
+let t_elim h input pos = LL.valid_ifthenelse_elim parse_t_param h input pos
+
+let t_test_HelloRetryRequest input pos =
+  let h = HST.get () in
+  t_elim h input pos;
+  test_HelloRetryRequest input pos
+
+let t_gaccessor_HelloRetryRequest =
+  LL.gaccessor_ext
+    (LL.gaccessor_ifthenelse_payload serialize_t_param true)
+    clens_HelloRetryRequest
+    ()
+
+let t_accessor_HelloRetryRequest =
+  LL.accessor_ext
+    (LL.accessor_ifthenelse_payload serialize_t_param (LL.jump_flbytes 3 3ul) true)
+    clens_HelloRetryRequest
+    ()
+
+let t_gaccessor_other =
+  LL.gaccessor_ext
+    (LL.gaccessor_ifthenelse_payload serialize_t_param false)
+    clens_other
+    ()
+
+let t_accessor_other =
+  LL.accessor_ext
+    (LL.accessor_ifthenelse_payload serialize_t_param (LL.jump_flbytes 3 3ul) false)
+    clens_other
+    ()
+
+let t_intro_HelloRetryRequest h input pos =
+  LL.valid_ifthenelse_intro parse_t_param h input pos
+
+let t_intro_other h input pos =
+  LL.valid_ifthenelse_intro parse_t_param h input pos
+
 let main _ _ = C.EXIT_SUCCESS
