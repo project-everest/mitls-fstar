@@ -133,7 +133,7 @@ let parse_nlist_eq
   (#t: Type0)
   (p: parser k t)
   (b: bytes)
-: Tot (squash (
+: Lemma (
   parse (parse_nlist n p) b == (
     if n = 0
     then Some ([], 0)
@@ -145,7 +145,7 @@ let parse_nlist_eq
       | _ -> None
       end
     | _ -> None
-  )))
+  ))
 = if n = 0
   then ()
   else begin
