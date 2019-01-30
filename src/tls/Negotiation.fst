@@ -50,10 +50,12 @@ let rec string_of_list #a f s xs =
   | [x] -> s^" "^f x^"]" 
   | x::xs -> string_of_list f (s^" "^f x) xs
 
+let string_of_keyShare (x:keyShareEntry) = string_of_namedGroup (tag_of_keyShareEntry x)
 let string_of_ciphersuite x = string_of_cipherSuite (name_of_cipherSuite x)
 let string_of_ciphersuites xs = string_of_list string_of_ciphersuite "[" xs 
 let string_of_signatureSchemes xs = string_of_list string_of_signatureScheme "[" xs
-let strong_of_namedGroups xs = string_of_list string_of_namedGroup xs
+let string_of_namedGroups xs = string_of_list string_of_namedGroup "[" xs
+let string_of_keyShares xs = string_of_list string_of_keyShare "[" xs
 let string_of_che  x = string_of_extensionType (tag_of_clientHelloExtension x)
 let string_of_hrre x = string_of_extensionType (tag_of_hRRExtension x)
 let string_of_she  x = string_of_extensionType (tag_of_serverHelloExtension x)
@@ -1619,7 +1621,8 @@ let computeServerMode cfg co serverRandom =
         let sigalgs =
           List.Helpers.filter_aux cfg.signature_algorithms List.Helpers.mem_rev sigalgs
         in
-        if sigalgs = [] then None
+        if sigalgs = [] then
+	  (trace "No shared signature algorithm, restricting to PSK"; None)
         // FIXME(adl) workaround for a bug in TLSConstants that causes signature schemes list to be parsed in reverse order
         else cert_select_cb cfg TLS_1p3 (get_sni co) (nego_alpn co cfg) (List.Tot.rev sigalgs)
       in
@@ -1770,10 +1773,12 @@ let valid_ch2_extension (o1, hrr) (e:clientHelloExtension) =
 let server_ClientHello #region ns offer log =
   trace ("offered client extensions "^string_of_ches offer.ch_extensions);
   trace ("offered cipher suites "^string_of_ciphersuitenames offer.ch_cipher_suites);
-//19-01-21 TODO string_of_namedGroups? 
-//  trace (match find_supported_groups offer with
-//    | Some ngl -> "offered groups "^string_of_namedGroups ngl
-//    | None -> "no groups offered, only PSK (1.3) and FFDH (1.2) can be used");
+  trace (match find_supported_groups offer with
+    | Some ngl -> "offered groups "^(string_of_namedGroups ngl)^", supported groups "^(string_of_namedGroups ns.cfg.named_groups)
+    | None -> "no groups offered, only PSK (1.3) and FFDH (1.2) can be used");
+  trace (match find_client_extension CHE_key_share? offer with
+    | Some (CHE_key_share ksl) -> "offered shares on groups "^string_of_keyShares ksl
+    | None -> "no key shares offered, only PSK and HRR possible");
   trace (match (offered_versions TLS_1p0 offer) with
         | Error z -> "Error: "^string_of_error z
         | Correct v -> List.Tot.fold_left accum_string_of_pv "offered versions" v);
@@ -1841,6 +1846,7 @@ let server_ClientHello #region ns offer log =
       // Internal HRR caused by group negotiation
       // We do not invoke the server nego callback in this case
       // record the initial offer and return the HRR to HS
+      trace ("no common group, sending a retry request...");
       let ha = verifyDataHashAlg_of_ciphersuite cs in
       let digest = HandshakeLog.hash_tag #ha log in
       let cookie = Ticket.create_cookie hrr digest empty_bytes in

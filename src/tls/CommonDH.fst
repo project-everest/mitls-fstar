@@ -619,8 +619,10 @@ let validate kse =
     let g = ECDH EC.ECC_P521 in
     (match parse g (Parsers.UncompressedPointRepresentation66.uncompressedPointRepresentation66_serializer32 p66) with None -> None | Some gx -> Some (| g, gx |))
   | Ks_x25519 x25519 ->
+    let open Parsers.MontgomeryPoint32 in
     let g = ECDH EC.ECC_X25519 in
-    (match parse g (Parsers.MontgomeryPoint32.montgomeryPoint32_serializer32 x25519) with None -> None | Some gx -> Some (| g, gx |))  
+    (match parse g x25519 with
+    | None -> None | Some gx -> Some (| g, gx |))  
   | Ks_ffdhe2048 dhp
   | Ks_ffdhe3072 dhp
   | Ks_ffdhe4096 dhp
@@ -638,9 +640,13 @@ let validate_many ksl =
   List.Tot.choose validate ksl
 
 let format #g gx =
-  match keyShareEntry_parser32 (serialize gx) with
+  let raw = serialize_raw gx in
+  match namedGroup_of_group g with
   | None -> Ks_Unknown_namedGroup 0us (serialize gx)
-  | Some (v, _) -> v
+  | Some ng ->   
+    match keyShareEntry_parser32 (namedGroup_serializer32 ng @| raw) with
+    | None -> Ks_Unknown_namedGroup 0us (serialize gx)
+    | Some (v, _) -> v
 
 (*
 val key_params: key -> Tot params

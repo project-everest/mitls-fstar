@@ -490,15 +490,8 @@ struct {
     opaque Y[66];
 } UncompressedPointRepresentation66;
 
-struct {
-    uint8 legacy_form = 4;
-    opaque point[32];
-} MontgomeryPoint32;
-
-struct {
-    uint8 legacy_form = 4;
-    opaque point[56];
-} MontgomeryPoint56;
+opaque MontgomeryPoint32[32];
+opaque MontgomeryPoint56[56];
 
 /* https://tools.ietf.org/html/rfc5246#section-7.4.3 */
 struct {
