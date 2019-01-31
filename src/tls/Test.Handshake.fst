@@ -87,6 +87,7 @@ let test config: St unit =
             let _ = Handshake.recv_fragment client rg nst in
             nprint "Done"
           | _ -> eprint "client failed to emit session ticket")
+        | Error z -> eprint ("Failed to process server finished flight: "^string_of_error z)
         | _ -> eprint "client failed to return finished flight")
       | _ -> eprint "server failed to return end of second flight")
     | Error (_,s) -> eprint ("server failed to build second flight: "^s)

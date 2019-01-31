@@ -155,8 +155,9 @@ $(CACHE_DIR)/C.%.checked \
 $(CACHE_DIR)/LowParse.%.checked \
 : VFLAGS = --admit_smt_queries true
 
+$(EXTRACT_DIR)/Parsers_%.krml \
 $(CACHE_DIR)/Parsers.%.checked \
-: VFLAGS = --__temp_fast_implicits
+: VFLAGS = --__temp_fast_implicits --admit_smt_queries true
 
 $(CACHE_DIR)/FStar.%.checked \
 $(CACHE_DIR)/LowStar.%.checked \

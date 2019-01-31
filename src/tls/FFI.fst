@@ -475,11 +475,11 @@ let ffiSplitChain (chain:bytes) : ML (list cert_repr) =
   | Correct chain -> chain
 
 private let rec ext_filter (ext_type:UInt16.t) = function
-  | Extensions.CHE_Unknown_extensionType t v -> ext_type = t
+  | Extensions.CHE_Unknown_extensionType t _ -> ext_type = t
   | _ -> false
 
 private let rec eext_filter (ext_type:UInt16.t) = function
-  | Extensions.EE_Unknown_extensionType t v -> ext_type = t
+  | Extensions.EE_Unknown_extensionType t _ -> ext_type = t
   | _ -> false
 
 let ffiFindCustomExtension (server:bool) (exts:bytes) (ext_type:UInt16.t) : ML (option bytes) =

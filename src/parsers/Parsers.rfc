@@ -570,8 +570,6 @@ https://tools.ietf.org/html/rfc8446#section-4.2
 
 **/
 
-opaque UnknownExtension<0..2^16-1>;
-
 /*
 ClientHello extensions (all protocol versions)
 */
@@ -606,7 +604,7 @@ struct {
     case post_handshake_auth: Empty;
     case signature_algorithms_cert: SignatureSchemeList;
     case key_share: KeyShareClientHello;
-    default: UnknownExtension;
+    default: opaque;
   } CHE[len]; /*extension_data*/
 } ClientHelloExtension;
 
@@ -647,7 +645,7 @@ struct {
     case post_handshake_auth: Fail;
     case signature_algorithms_cert: Fail;
     case key_share: KeyShareEntry;
-    default: UnknownExtension;
+    default: opaque;
   } SHE[len]; /*extension_data, renamed for brevity*/
 } ServerHelloExtension;
 
@@ -671,7 +669,7 @@ struct {
     case client_certificate_type: ClientCertTypeExtension;
     case server_certificate_type: ServerCertTypeExtension;
     case early_data: Empty;
-    default: UnknownExtension;
+    default: opaque;
   } EE[len]; /*extension_data*/
 } EncryptedExtension;
 
@@ -686,7 +684,7 @@ struct {
   select(type)
   {
     case early_data: EarlyDataIndicationNewSessionTicket;
-    default: UnknownExtension;
+    default: opaque;
   } NSTE[len]; /*extension_data*/
 } NewSessionTicketExtension;
 
@@ -703,7 +701,7 @@ struct {
     case supported_versions: ProtocolVersion;
     case cookie: Cookie;
     case key_share: NamedGroup;
-    default: UnknownExtension;
+    default: opaque;
   } HRRE[len]; /*extension_data*/
 } HRRExtension;
 
@@ -722,7 +720,7 @@ struct {
     case certificate_authorities: CertificateAuthoritiesExtension;
     case oid_filters: OIDFilterExtension;
     case signature_algorithms_cert: SignatureSchemeList;
-    default: UnknownExtension;
+    default: opaque;
   } CRE[len]; /*extension_data*/
 } CertificateRequestExtension;
 
@@ -738,7 +736,7 @@ struct {
   {
     case status_request: CertificateStatus;
     case signed_certificate_timestamp: SignedCertificateTimestampList;
-    default: UnknownExtension;
+    default: opaque;
   } CE[len]; /*extension_data*/
 } CertificateExtension;
 

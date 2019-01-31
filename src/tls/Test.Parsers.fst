@@ -17,10 +17,7 @@ open TLSConstants
 // No need to verify test for now
 #set-options "--admit_smt_queries true"
 
-noextract let discard _ : ST unit
-  (requires (fun _ -> True)) (ensures (fun h0 _ h1 -> h0 == h1))
-  = ()
-inline_for_extraction noextract
+let discard _ : ST unit (requires (fun _ -> True)) (ensures (fun h0 _ h1 -> h0 == h1)) = ()
 let bprint s = discard (FStar.IO.debug_print_string (s^"\n"))
 
 let from_bytes (b:B.bytes{B.length b <> 0}) : StackInline LPL.buffer8
@@ -41,11 +38,11 @@ let from_bytes (b:B.bytes{B.length b <> 0}) : StackInline LPL.buffer8
 
 let test_clientHello () : St bool =
   (* From Chrome 70 *)
-  let chb = B.bytes_of_hex "010001fc0303b30cf9db2c59d0480d35bbb18033ec4f1028e6e55152b1b12dd7c9a1d481c59d208e0ba25081bc93271b829c0ca05d1981455fe006e36342a9ad5694c78ed81fae00221a1a130113021303c02bc02fc02cc030cca9cca8c013c014009c009d002f0035000a010001918a8a0000ff0100010000000010000e00000b74657374332e68742e76630017000000230000000d00140012040308040401050308050501080606010201000500050100000000001200000010000e000c02683208687474702f312e3175500000000b000201000033002b0029aaaa000100001d0020ab558f928509b78605488a081ca63f24c99777251885e31bfe1d976fe5e8f22b002d00020101002b000b0a8a8a0304030303020301000a000a0008aaaa001d00170018001b0003020002fafa000100001500c9000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" in
+  let chb = B.bytes_of_hex "0303c4168caa4297df69306988b842fe1f62f7cf07dcb2ad03aeb0012eae4b84e3cc203b03c8b3c20860716b6d8c405a9f64306ae660c77a51fe01f7c7c8f301458c9a00228a8a130113021303c02bc02fc02cc030cca9cca8c013c014009c009d002f0035000a010001914a4a0000ff010001000000000e000c0000096c6f63616c686f73740017000000230000000d00140012040308040401050308050501080606010201000500050100000000001200000010000e000c02683208687474702f312e3175500000000b000201000033002b00294a4a000100001d00209aad9849cf973510294b18ad9dfbcce2ee087b21276ba16f89570254796dcb75002d00020101002b000b0a9a9a0304030303020301000a000a00084a4a001d00170018001b00030200025a5a000100001500cb0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" in
   print !$" - ClientHello (intermediate)\n";
   let b =
     match ClientHello.clientHello_parser32 chb with
-    | None -> false
+    | None -> bprint " failed to parse CH!\n"; false
     | Some (ch, len) ->
       if B.len chb <> len then
 	(print !$"leftover bytes after parsing!\n"; false)
@@ -53,9 +50,28 @@ let test_clientHello () : St bool =
 	if ClientHello.clientHello_serializer32 ch <> chb then
 	(print !$"roundtrip serialization failed!\n"; false)
 	else
-          true
+          (print !$"  + Roundtrip serialization matches!\n"; true)
     in
-  print !$" - ClientHello (low-level)\n";  
+  let b' =
+    let open HandshakeMessages in
+    let open Parsers.CertificateEntry13 in
+    let open Parsers.CertificateExtension in
+    let open Parsers.CertificateStatus in
+    let open Parsers.CertificateStatusType in
+    let ext = CE_status_request ({status_type = Ocsp; response = B.bytes_of_hex "00"}) in
+    let cert1 = { cert_data = B.bytes_of_hex "3003000000"; extensions = [ext] } in
+    let cert2 = { cert_data = B.bytes_of_string "hello world"; extensions = [] } in
+    let m = { crt_request_context = B.empty_bytes; crt_chain13 = [cert1; cert2] } in
+    let b = handshakeMessageBytes (Some TLS_1p3) (Certificate13 m) in
+    bprint (sprintf " - Certificate13 test: %s\n" (B.hex_of_bytes b));
+    match parseMessage b with
+    | Error z -> bprint (" Parsing error: "^string_of_error z); false
+    | Correct None -> bprint " Message not fully parsed!\n"; false
+    | Correct (Some (| rem, hst, payload, _ |)) -> bprint " Roundtrip OK!\n"; true
+    in
+  b && b'
+  (*
+  print !$" - ClientHello (low-level)\n";
   let b' =
     let open FStar.UInt32 in
     let lb = from_bytes chb in
@@ -68,7 +84,9 @@ let test_clientHello () : St bool =
       bprint (sprintf " Read client_random: %s" (B.hex_of_bytes (B.of_buffer 32ul p_random)));
       true
     in
-  b && b'
+  b && b' *)
+
+
 
 // called from Test.Main
 let main () : St C.exit_code =
