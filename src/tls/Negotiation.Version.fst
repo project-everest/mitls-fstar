@@ -122,23 +122,20 @@ let write_supportedVersion cfg pv out pl p0 =
     p1
   ) else p0
 
-let write_supportedVersions cfg out p0 = 
-  if out.len - p0 < 10ul then fatal Internal_error "output buffer" else 
-  let pvl = p0 + 2ul in // extension tag
-  let pl0 = pvl + 1ul in // length of the list of ciphersuites. 
+let write_supportedVersions cfg out p0 =
+  if out.len - p0 < 10ul then fatal Internal_error "output buffer" else
+  let pl_extension = p0 + 2ul in // extension payload, after the extension tag
+  let pl_CHE_supported_versions = pl_extension + 2ul in // CHE_supported_versions payload, after the CHE_supported_versions length
+  let pl_supported_versions = pl_CHE_supported_versions + 1ul in // supported_versions payload, after the supported_versions list length
   let h = get () in
-  valid_list_nil protocolVersion_parser h out pl0; 
-  let pl = write_supportedVersion cfg TLS_1p3 out pl0 pl0 in 
-  let pl = write_supportedVersion cfg TLS_1p2 out pl0 pl in
-  if pl = pl0 then fatal Internal_error "configuration must include a supported protocol version" else 
+  valid_list_nil protocolVersion_parser h out pl_supported_versions; 
+  let pl = write_supportedVersion cfg TLS_1p3 out pl_supported_versions pl_supported_versions in 
+  let pl = write_supportedVersion cfg TLS_1p2 out pl_supported_versions pl in
+  if pl = pl_supported_versions then fatal Internal_error "configuration must include a supported protocol version" else 
     let h = get () in
-    valid_list_cons_recip protocolVersion_parser h out pl0 pl; 
-    Extensions.finalize_supportedVersions out pvl pl;
-    let h = get () in
-
-    //19-01-26 stuck here.
-    // assume(valid clientHelloExtension_CHE_supported_versions_parser h out pvl);
-    assume False;
+    valid_list_cons_recip protocolVersion_parser h out pl_supported_versions pl;
+    Extensions.finalize_supportedVersions out pl_CHE_supported_versions pl;
+    Extensions.clientHelloExtension_CHE_supported_versions_finalize out pl_extension pl;
     Extensions.finalize_clientHelloExtension_supported_versions out p0;
     Correct pl
 // this kind of code is hard to get right, as the programmer needs to
