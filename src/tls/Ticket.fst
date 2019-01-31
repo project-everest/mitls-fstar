@@ -11,8 +11,6 @@ open TLSInfo
 
 module AE = AEADProvider
 
-module PTL = Parsers.Ticket.Low 
-
 #set-options "--admit_smt_queries true"
 
 val discard: bool -> ST unit
@@ -221,7 +219,6 @@ let serialize = function
 
 #reset-options
 
-module PTL = Parsers.Ticket.Low
 module TC = Parsers.TicketContents
 module TC12 = Parsers.TicketContents12
 module TC13 = Parsers.TicketContents13
@@ -272,21 +269,26 @@ let write_ticket12
     then LPB.max_uint32
     else begin
       let pos1 = pos `U32.add` 1ul in
-      let pos2 = PTL.protocolVersion_writer pv sl pos1 in
-      let pos3 = PTL.cipherSuite_writer (name_of_cipherSuite cs) sl pos2 in
-      let pos4 = PTL.boolean_writer (if ems then PB.B_true else PB.B_false) sl pos3 in
-      let pos5 = PTL.write_ticketContents12_master_secret ms sl pos4 in
+      let pos2 = Parsers.ProtocolVersion.protocolVersion_writer pv sl pos1 in
+      let pos3 = Parsers.CipherSuite.cipherSuite_writer (name_of_cipherSuite cs) sl pos2 in
+      let pos4 = Parsers.Boolean.boolean_writer (if ems then PB.B_true else PB.B_false) sl pos3 in
+      FStar.Bytes.store_bytes ms (B.sub sl.LPB.base pos4 48ul);
       let h = get () in
-      PTL.valid_ticketContents12_intro h sl pos1;
-      PTL.finalize_case_ticketContents12 sl pos;
+      Parsers.TicketContents12_master_secret.ticketContents12_master_secret_intro h sl pos4;
+      let pos5 = pos4 `U32.add` 48ul in
+      let h = get () in
+      Parsers.TicketContents12.ticketContents12_valid h sl pos1;
+      Parsers.TicketContents.finalize_ticketContents_ticket12 sl pos;
       pos5
     end
 
 // #reset-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1 --z3rlimit 64 --z3cliopt smt.arith.nl=false --z3cliopt trace=true --z3refresh --using_facts_from '* -FStar.Tactics -FStar.Reflection' --log_queries"
 
-(*
 module HS = FStar.HyperStack
 
+module LPI = LowParse.Low.Int
+
+(*
 let write_ticket13_interm
   (h: HS.mem) (t: ticket) (sl: LPB.slice) (pos: U32.t) (pos6: U32.t)
 : GTot Type0
@@ -334,6 +336,9 @@ let write_ticket13_part1 (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
     let pos5 = LPB.write_u32 created sl pos4 in
     let pos6 = LPB.write_u32 age sl pos5 in
     pos6
+*)
+
+#reset-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1 --z3rlimit 256 --z3cliopt smt.arith.nl=false --z3refresh --using_facts_from '* -FStar.Tactics -FStar.Reflection' --log_queries"
 
 let write_ticket13 (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
   (requires (fun h -> LPB.live_slice h sl /\ U32.v pos <= U32.v sl.LPB.len /\ U32.v sl.LPB.len <= U32.v LPB.max_uint32 /\ Ticket13? t))
@@ -351,15 +356,26 @@ let write_ticket13 (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
     if (sl.LPB.len `U32.sub` pos) `U32.lt` (15ul `U32.add` len rms `U32.add` len nonce `U32.add` len custom)
     then LPB.max_uint32
     else begin
-      let pos6 = write_ticket13_part1 t sl pos in
+      let pos1 = pos `U32.add` 1ul in
+      let pos2 = Parsers.CipherSuite.cipherSuite_writer (name_of_cipherSuite cs) sl pos1 in
+      let len_rms = len rms in
+      let _ = FStar.Bytes.store_bytes rms (B.sub sl.LPB.base (pos2 `U32.add` 1ul) len_rms) in
+      let pos3 = Parsers.TicketContents13_rms.ticketContents13_rms_finalize sl pos2 len_rms in
+      let len_nonce = len nonce in
+      let _ = if len_nonce <> 0ul then FStar.Bytes.store_bytes nonce (B.sub sl.LPB.base (pos3 `U32.add` 1ul) len_nonce) in
+      let pos4 = Parsers.TicketContents13_nonce.ticketContents13_nonce_finalize sl pos3 len_nonce in
+      let pos5 = LPI.write_u32 created sl pos4 in
+      let pos6 = LPI.write_u32 age sl pos5 in
       let len_custom = len custom in
-      let pos6' = pos6 `U32.add` 2ul in
-      let _ = LPB.write_flbytes len_custom custom sl (pos6 `U32.add` 2ul) in
-      let _ = LPB.finalize_bounded_vlbytes 0 65535 sl pos6 len_custom in
+      let _ = if len_custom <> 0ul then FStar.Bytes.store_bytes custom (B.sub sl.LPB.base (pos6 `U32.add` 2ul) len_custom) in
+      let pos7 = Parsers.TicketContents13_custom_data.ticketContents13_custom_data_finalize sl pos6 len_custom in
       let h = get () in
-      PTL.valid_ticketContents13_intro h sl (pos `U32.add` 1ul);
-      PTL.finalize_case_ticketContents13 sl pos
+      Parsers.TicketContents13.ticketContents13_valid h sl (pos `U32.add` 1ul);
+      Parsers.TicketContents.finalize_ticketContents_ticket13 sl pos;
+      pos7
     end
+
+#reset-options
 
 let write_ticket (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
   (requires (fun h -> LPB.live_slice h sl /\ U32.v pos <= U32.v sl.LPB.len /\ U32.v sl.LPB.len <= U32.v LPB.max_uint32 ))
@@ -376,7 +392,6 @@ let write_ticket (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
     write_ticket12 t sl pos
   | Ticket13 cs _ _ rms nonce created age custom ->
     write_ticket13 t sl pos
-*)
 
 #set-options "--admit_smt_queries true"
 
