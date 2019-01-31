@@ -56,6 +56,13 @@ let loc_slice_from_includes_buffer (b: buffer8) (s: slice) (pos: U32.t) : Lemma
 = loc_slice_from_eq_gen s pos
 
 abstract
+let loc_slice_from_includes_gsub (s: slice) (pos: U32.t) (b: buffer8) (pos' len: U32.t) : Lemma
+  (requires (b == s.base /\ U32.v pos <= U32.v pos' /\ U32.v pos' + U32.v len <= B.length b))
+  (ensures (B.loc_includes (loc_slice_from s pos) (B.loc_buffer (B.gsub b pos' len))))
+  [SMTPat (B.loc_includes (loc_slice_from s pos) (B.loc_buffer (B.gsub b pos' len)))]
+= loc_slice_from_eq_gen s pos
+
+abstract
 let loc_slice_from_includes_addresses (r: HS.rid) (addrs: Set.set nat) (tg: bool) (s: slice) (pos: U32.t) : Lemma
   (requires (B.frameOf s.base == r /\ B.as_addr s.base `Set.mem` addrs))
   (ensures (B.loc_includes (B.loc_addresses tg r addrs) (loc_slice_from s pos)))
