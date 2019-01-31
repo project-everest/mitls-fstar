@@ -1168,6 +1168,14 @@ let clens_dsum_payload
     clens_get = (fun (x: dsum_type s) -> synth_dsum_case_recip s k x <: Ghost (dsum_type_of_tag s k) (requires (dsum_tag_of_data s x == k)) (ensures (fun _ -> True)));
   }
 
+let clens_dsum_unknown_payload
+  (s: dsum)
+: Tot (clens (dsum_type s) (dsum_type_of_unknown_tag s))
+= {
+    clens_cond = (fun (x: dsum_type s) -> Unknown? (dsum_tag_of_data s x));
+    clens_get = (fun (x: dsum_type s) -> synth_dsum_case_recip s (dsum_tag_of_data s x) x <: Ghost (dsum_type_of_unknown_tag s) (requires (Unknown? (dsum_tag_of_data s x))) (ensures (fun _ -> True)));
+  }
+
 #push-options "--z3rlimit 16"
 
 let gaccessor_clens_dsum_payload
@@ -1244,6 +1252,81 @@ let accessor_clens_dsum_payload
   (k: dsum_key t)
 : Tot (accessor (gaccessor_clens_dsum_payload t p f g k))
 = accessor_clens_dsum_payload' t j f g k
+
+#push-options "--z3rlimit 16"
+
+let gaccessor_clens_dsum_unknown_payload
+  (#kt: parser_kind)
+  (t: dsum)
+  (p: parser kt (dsum_repr_type t))
+  (f: (x: dsum_known_key t) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag t x)))
+  (#ku: parser_kind)
+  (g: parser ku (dsum_type_of_unknown_tag t))
+: Tot (gaccessor (parse_dsum t p f g) g (clens_dsum_unknown_payload t))
+= fun (input: bytes) ->
+  parse_dsum_eq3 t p f g input;
+  let res =
+    match parse p input with
+    | Some (tg, consumed) ->
+      let k = maybe_enum_key_of_repr (dsum_enum t) tg in
+      synth_dsum_case_inverse t k;
+      synth_dsum_case_injective t k;
+      synth_injective_synth_inverse_synth_inverse_recip (synth_dsum_case t k) (synth_dsum_case_recip t k) ();
+      (consumed, Seq.length input - consumed)
+    | _ -> (0, 0) // dummy
+  in
+  (res <: (res: _ { gaccessor_post'  (parse_dsum t p f g) g (clens_dsum_unknown_payload t) input res } ))
+
+inline_for_extraction
+let accessor_clens_dsum_unknown_payload'
+  (#kt: parser_kind)
+  (t: dsum)
+  (#p: parser kt (dsum_repr_type t))
+  (j: jumper p { kt.parser_kind_subkind == Some ParserStrong })
+  (f: (x: dsum_known_key t) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag t x)))
+  (#ku: parser_kind)
+  (g: parser ku (dsum_type_of_unknown_tag t))
+  (input: slice)
+  (pos: U32.t)
+: HST.Stack U32.t
+  (requires (fun h ->
+    (get_parser_kind (parse_dsum t p f g)).parser_kind_subkind == Some ParserStrong /\
+    (get_parser_kind g).parser_kind_subkind == Some ParserStrong /\
+    valid (parse_dsum t p f g) h input pos /\
+    (clens_dsum_unknown_payload t).clens_cond (contents (parse_dsum t p f g) h input pos)
+  ))
+  (ensures (fun h pos' h' ->
+    B.modifies B.loc_none h h' /\
+    pos' == slice_access h (gaccessor_clens_dsum_unknown_payload t p f g) input pos
+  ))
+= 
+  let h = HST.get () in
+  [@inline_let]
+  let _ =
+    let pos' = get_valid_pos (parse_dsum t p f g) h input pos in
+    let small = B.as_seq h (B.gsub input.base pos (pos' `U32.sub` pos)) in
+    let large = B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos)) in
+    slice_access_eq h (gaccessor_clens_dsum_unknown_payload t p f g) input pos;
+    valid_facts (parse_dsum t p f g) h input pos;
+    parse_dsum_eq3 t p f g large;
+    parse_strong_prefix p large small;
+    valid_facts p h input pos
+  in
+  j input pos
+
+#pop-options
+
+inline_for_extraction
+let accessor_clens_dsum_unknown_payload
+  (#kt: parser_kind)
+  (t: dsum)
+  (#p: parser kt (dsum_repr_type t))
+  (j: jumper p { kt.parser_kind_subkind == Some ParserStrong })
+  (f: (x: dsum_known_key t) -> Tot (k: parser_kind & parser k (dsum_type_of_known_tag t x)))
+  (#ku: parser_kind)
+  (g: parser ku (dsum_type_of_unknown_tag t))
+: Tot (accessor (gaccessor_clens_dsum_unknown_payload t p f g))
+= accessor_clens_dsum_unknown_payload' t j f g
 
 let clens_dsum_cases_payload
   (s: dsum)
