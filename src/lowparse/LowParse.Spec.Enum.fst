@@ -1114,7 +1114,7 @@ let rec list_forallp (#t: Type) (p: t -> GTot Type0) (l: list t) : GTot Type0 =
   | a :: q -> p a /\ list_forallp p q
 
 let rec list_forallp_mem (#t: eqtype) (p: t -> GTot Type0) (l: list t) : Lemma
-  (list_forallp p l <==> (forall x . {:pattern (L.mem x l) \/ (p x)} L.mem x l ==> p x))
+  (list_forallp p l <==> (forall x . L.mem x l ==> p x))
 = match l with
   | [] -> ()
   | _ :: q -> list_forallp_mem p q
@@ -1149,7 +1149,7 @@ let forall_maybe_enum_key
     (x: value) ->
     Tot (squash (list_mem x (list_map snd e) == false ==> f (Unknown x)))
   ))
-: Tot (squash (forall (x: maybe_enum_key e) . {:pattern (f x)} f x))
+: Tot (squash (forall (x: maybe_enum_key e) . f x))
 = let g
     (x: maybe_enum_key e)
   : Lemma
