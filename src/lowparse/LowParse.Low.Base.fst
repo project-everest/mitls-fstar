@@ -56,6 +56,13 @@ let loc_slice_from_includes_buffer (b: buffer8) (s: slice) (pos: U32.t) : Lemma
 = loc_slice_from_eq_gen s pos
 
 abstract
+let loc_slice_from_includes_gsub (s: slice) (pos: U32.t) (b: buffer8) (pos' len: U32.t) : Lemma
+  (requires (b == s.base /\ U32.v pos <= U32.v pos' /\ U32.v pos' + U32.v len <= B.length b))
+  (ensures (B.loc_includes (loc_slice_from s pos) (B.loc_buffer (B.gsub b pos' len))))
+  [SMTPat (B.loc_includes (loc_slice_from s pos) (B.loc_buffer (B.gsub b pos' len)))]
+= loc_slice_from_eq_gen s pos
+
+abstract
 let loc_slice_from_includes_addresses (r: HS.rid) (addrs: Set.set nat) (tg: bool) (s: slice) (pos: U32.t) : Lemma
   (requires (B.frameOf s.base == r /\ B.as_addr s.base `Set.mem` addrs))
   (ensures (B.loc_includes (B.loc_addresses tg r addrs) (loc_slice_from s pos)))
@@ -419,19 +426,19 @@ let valid_frame
   (l: B.loc)
   (h': HS.mem)
 : Lemma
-  (requires (live_slice h sl /\ B.modifies_inert l h h' /\ B.loc_disjoint (loc_slice_from sl pos) l))
+  (requires (live_slice h sl /\ B.modifies l h h' /\ B.loc_disjoint (loc_slice_from sl pos) l))
   (ensures (
     (valid p h sl pos \/ valid p h' sl pos) ==> (
     valid p h sl pos /\
     valid_content_pos p h' sl pos (contents p h sl pos) (get_valid_pos p h sl pos)
   )))
   [SMTPatOr [
-    [SMTPat (valid p h sl pos); SMTPat (B.modifies_inert l h h')];
-    [SMTPat (valid p h' sl pos); SMTPat (B.modifies_inert l h h')];
-    [SMTPat (contents p h sl pos); SMTPat (B.modifies_inert l h h')];
-    [SMTPat (contents p h' sl pos); SMTPat (B.modifies_inert l h h')];
-    [SMTPat (content_length p h sl pos); SMTPat (B.modifies_inert l h h')];
-    [SMTPat (content_length p h' sl pos); SMTPat (B.modifies_inert l h h')];
+    [SMTPat (valid p h sl pos); SMTPat (B.modifies l h h')];
+    [SMTPat (valid p h' sl pos); SMTPat (B.modifies l h h')];
+    [SMTPat (contents p h sl pos); SMTPat (B.modifies l h h')];
+    [SMTPat (contents p h' sl pos); SMTPat (B.modifies l h h')];
+    [SMTPat (content_length p h sl pos); SMTPat (B.modifies l h h')];
+    [SMTPat (content_length p h' sl pos); SMTPat (B.modifies l h h')];
   ]]
 = loc_slice_from_eq_gen sl pos;
   valid_facts p h sl pos;
@@ -726,17 +733,17 @@ let valid_exact_frame
   (l: B.loc)
   (h' : HS.mem)
 : Lemma
-  (requires (live_slice h s /\ B.modifies_inert l h h' /\ B.loc_disjoint l (loc_slice_from_to s pos pos')))
+  (requires (live_slice h s /\ B.modifies l h h' /\ B.loc_disjoint l (loc_slice_from_to s pos pos')))
   (ensures (
     (valid_exact p h s pos pos' \/ valid_exact p h' s pos pos') ==> (
     valid_exact p h s pos pos' /\
     valid_exact p h' s pos pos' /\ contents_exact p h' s pos pos' == contents_exact p h s pos pos'
   )))
   [SMTPatOr [
-    [SMTPat (valid_exact p h s pos pos'); SMTPat (B.modifies_inert l h h')];
-    [SMTPat (valid_exact p h' s pos pos'); SMTPat (B.modifies_inert l h h')];
-    [SMTPat (contents_exact p h s pos pos'); SMTPat (B.modifies_inert l h h')];
-    [SMTPat (contents_exact p h' s pos pos'); SMTPat (B.modifies_inert l h h')];
+    [SMTPat (valid_exact p h s pos pos'); SMTPat (B.modifies l h h')];
+    [SMTPat (valid_exact p h' s pos pos'); SMTPat (B.modifies l h h')];
+    [SMTPat (contents_exact p h s pos pos'); SMTPat (B.modifies l h h')];
+    [SMTPat (contents_exact p h' s pos pos'); SMTPat (B.modifies l h h')];
   ]]
 = valid_exact_equiv p h s pos pos' ;
   valid_exact_equiv p h' s pos pos' ;
@@ -869,7 +876,7 @@ let valid_pos_frame_strong_1
 : Lemma
   (requires (
     valid_pos p h sl pos pos' /\
-    B.modifies_inert l h h' /\ B.loc_disjoint (loc_slice_from_to sl pos pos') l /\ k.parser_kind_subkind == Some ParserStrong))
+    B.modifies l h h' /\ B.loc_disjoint (loc_slice_from_to sl pos pos') l /\ k.parser_kind_subkind == Some ParserStrong))
   (ensures (
     valid_pos p h sl pos pos' /\
     valid_content_pos p h' sl pos (contents p h sl pos) pos'
@@ -891,7 +898,7 @@ let valid_pos_frame_strong_2
   (requires (
     live_slice h sl /\
     valid_pos p h' sl pos pos' /\
-    B.modifies_inert l h h' /\ B.loc_disjoint (loc_slice_from_to sl pos pos') l /\ k.parser_kind_subkind == Some ParserStrong))
+    B.modifies l h h' /\ B.loc_disjoint (loc_slice_from_to sl pos pos') l /\ k.parser_kind_subkind == Some ParserStrong))
   (ensures (
     valid_pos p h sl pos pos' /\
     valid_pos p h' sl pos pos' /\
@@ -913,7 +920,7 @@ let valid_pos_frame_strong
 : Lemma
   (requires (
     live_slice h sl /\
-    B.modifies_inert l h h' /\ B.loc_disjoint (loc_slice_from_to sl pos pos') l /\ k.parser_kind_subkind == Some ParserStrong))
+    B.modifies l h h' /\ B.loc_disjoint (loc_slice_from_to sl pos pos') l /\ k.parser_kind_subkind == Some ParserStrong))
   (ensures (
     (valid_pos p h sl pos pos' \/ valid_pos p h' sl pos pos') ==> (
     valid_pos p h sl pos pos' /\
@@ -935,15 +942,15 @@ let valid_frame_strong
   (requires (
     live_slice h sl /\
     valid p h sl pos /\
-    B.modifies_inert l h h' /\ B.loc_disjoint (loc_slice_from_to sl pos (get_valid_pos p h sl pos)) l /\ k.parser_kind_subkind == Some ParserStrong))
+    B.modifies l h h' /\ B.loc_disjoint (loc_slice_from_to sl pos (get_valid_pos p h sl pos)) l /\ k.parser_kind_subkind == Some ParserStrong))
   (ensures (
     valid_content_pos p h' sl pos (contents p h sl pos) (get_valid_pos p h sl pos)
   ))
   [SMTPatOr [
 //    [SMTPat (valid p h sl pos); SMTPat (B.modifies_inert l h h')];
-    [SMTPat (valid p h' sl pos); SMTPat (B.modifies_inert l h h')];
-    [SMTPat (contents p h' sl pos); SMTPat (B.modifies_inert l h h')];
-    [SMTPat (content_length p h' sl pos); SMTPat (B.modifies_inert l h h')];
+    [SMTPat (valid p h' sl pos); SMTPat (B.modifies l h h')];
+    [SMTPat (contents p h' sl pos); SMTPat (B.modifies l h h')];
+    [SMTPat (content_length p h' sl pos); SMTPat (B.modifies l h h')];
   ]]
 = valid_pos_frame_strong p h sl pos (get_valid_pos p h sl pos) l h'
 
@@ -1781,7 +1788,7 @@ let slice_access_frame
     k2.parser_kind_subkind == Some ParserStrong /\
     valid p1 h sl pos /\
     cl.clens_cond (contents p1 h sl pos) /\
-    B.modifies_inert l h h' /\
+    B.modifies l h h' /\
     B.loc_disjoint l (loc_slice_from_to sl pos (get_valid_pos p1 h sl pos))
   ))
   (ensures (
@@ -1790,8 +1797,8 @@ let slice_access_frame
     slice_access h' g sl pos == slice_access h g sl pos
   ))
   [SMTPatOr [
-    [SMTPat (slice_access h g sl pos); SMTPat (B.modifies_inert l h h')];
-    [SMTPat (slice_access h' g sl pos); SMTPat (B.modifies_inert l h h')];
+    [SMTPat (slice_access h g sl pos); SMTPat (B.modifies l h h')];
+    [SMTPat (slice_access h' g sl pos); SMTPat (B.modifies l h h')];
   ]]
 = valid_facts p1 h sl pos;
   valid_facts p1 h' sl pos;
@@ -2545,7 +2552,7 @@ let rec valid_list_frame_1
   (l: B.loc)
   (h' : HS.mem)
 : Lemma
-  (requires (B.modifies_inert l h h' /\ B.loc_disjoint l (loc_slice_from_to s pos pos') /\ valid_list p h s pos pos'))
+  (requires (B.modifies l h h' /\ B.loc_disjoint l (loc_slice_from_to s pos pos') /\ valid_list p h s pos pos'))
   (ensures (
     valid_list p h s pos pos' /\ valid_list p h' s pos pos' /\ contents_list p h' s pos pos' == contents_list p h s pos pos'
   ))
@@ -2575,7 +2582,7 @@ let rec valid_list_frame_2
   (l: B.loc)
   (h' : HS.mem)
 : Lemma
-  (requires (live_slice h s /\ B.modifies_inert l h h' /\ B.loc_disjoint l (loc_slice_from_to s pos pos') /\ valid_list p h' s pos pos'))
+  (requires (live_slice h s /\ B.modifies l h h' /\ B.loc_disjoint l (loc_slice_from_to s pos pos') /\ valid_list p h' s pos pos'))
   (ensures (
     valid_list p h' s pos pos' /\ valid_list p h s pos pos' /\ contents_list p h' s pos pos' == contents_list p h s pos pos'
   ))
@@ -2606,17 +2613,17 @@ let valid_list_frame
   (l: B.loc)
   (h' : HS.mem)
 : Lemma
-  (requires (live_slice h s /\ B.modifies_inert l h h' /\ B.loc_disjoint l (loc_slice_from_to s pos pos')))
+  (requires (live_slice h s /\ B.modifies l h h' /\ B.loc_disjoint l (loc_slice_from_to s pos pos')))
   (ensures (
     (valid_list p h s pos pos' \/ valid_list p h' s pos pos') ==> (
     valid_list p h s pos pos' /\
     valid_list p h' s pos pos' /\ contents_list p h' s pos pos' == contents_list p h s pos pos'
   )))
   [SMTPatOr [
-    [SMTPat (valid_list p h s pos pos'); SMTPat (B.modifies_inert l h h')];
-    [SMTPat (valid_list p h' s pos pos'); SMTPat (B.modifies_inert l h h')];
-    [SMTPat (contents_list p h s pos pos'); SMTPat (B.modifies_inert l h h')];
-    [SMTPat (contents_list p h' s pos pos'); SMTPat (B.modifies_inert l h h')];
+    [SMTPat (valid_list p h s pos pos'); SMTPat (B.modifies l h h')];
+    [SMTPat (valid_list p h' s pos pos'); SMTPat (B.modifies l h h')];
+    [SMTPat (contents_list p h s pos pos'); SMTPat (B.modifies l h h')];
+    [SMTPat (contents_list p h' s pos pos'); SMTPat (B.modifies l h h')];
   ]]
 = Classical.move_requires (valid_list_frame_1 p h s pos pos' l) h';
   Classical.move_requires (valid_list_frame_2 p h s pos pos' l) h'
@@ -2674,6 +2681,7 @@ let valid_list_snoc
 
 (* fold_left on lists *)
 
+#push-options "--z3rlimit 20"
 inline_for_extraction
 private
 let list_fold_left_gen
@@ -2717,7 +2725,7 @@ let list_fold_left_gen
   ))
 = HST.push_frame ();
   let h1 = HST.get () in
-  B.fresh_frame_modifies h0 h1;
+  //B.fresh_frame_modifies h0 h1;
   let bpos : B.pointer U32.t = B.alloca pos 1ul in
   let h2 = HST.get () in
   let test_pre (h: HS.mem) : GTot Type0 =
@@ -2744,17 +2752,17 @@ let list_fold_left_gen
       let h51 = HST.get () in
       let pos1 = B.index bpos 0ul in
       valid_list_cons_recip p h0 sl pos1 pos';
-      assert (B.modifies (Ghost.reveal l `B.loc_union` B.loc_buffer bpos) h0 h51);
-      assert (B.loc_includes (loc_slice_from_to sl pos pos') (loc_slice_from_to sl pos1 pos'));
-      assert (B.loc_includes (loc_slice_from_to sl pos pos') (loc_slice_from_to sl pos pos1));
+      //assert (B.modifies (Ghost.reveal l `B.loc_union` B.loc_buffer bpos) h0 h51);
+      //assert (B.loc_includes (loc_slice_from_to sl pos pos') (loc_slice_from_to sl pos1 pos'));
+      //assert (B.loc_includes (loc_slice_from_to sl pos pos') (loc_slice_from_to sl pos pos1));
       valid_list_cons_recip p h51 sl pos1 pos';
       let pos2 = j sl pos1 in
       let h52 = HST.get () in
       inv_frame h51 (contents_list p h0 sl pos pos1) (contents_list p h1 sl pos1 pos') pos1 h52;
       body pos1 pos2;
       let h53 = HST.get () in
-      assert (B.loc_includes (loc_slice_from_to sl pos pos') (loc_slice_from_to sl pos1 pos2));
-      assert (B.loc_includes (loc_slice_from_to sl pos pos') (loc_slice_from_to sl pos2 pos'));
+      //assert (B.loc_includes (loc_slice_from_to sl pos pos') (loc_slice_from_to sl pos1 pos2));
+      //assert (B.loc_includes (loc_slice_from_to sl pos pos') (loc_slice_from_to sl pos2 pos'));
       valid_pos_frame_strong p h0 sl pos1 pos2 (Ghost.reveal l `B.loc_union` B.loc_buffer bpos) h53;
       valid_list_snoc p h0 sl pos pos1;
       B.upd bpos 0ul pos2;
@@ -2771,11 +2779,12 @@ let list_fold_left_gen
   let h3 = HST.get () in
   HST.pop_frame ();
   let h4 = HST.get () in
-  B.popped_modifies h3 h4;
+  //B.popped_modifies h3 h4;
   B.loc_regions_unused_in h0 (Set.singleton (HS.get_tip h3));  
-  inv_frame h3 (contents_list p h0 sl pos pos') [] pos' h4;
-  B.loc_includes_union_l (B.loc_all_regions_from false (HS.get_tip h1)) (Ghost.reveal l) (Ghost.reveal l);
-  B.modifies_fresh_frame_popped h0 h1 (Ghost.reveal l) h3 h4
+  inv_frame h3 (contents_list p h0 sl pos pos') [] pos' h4
+  //B.loc_includes_union_l (B.loc_all_regions_from false (HS.get_tip h1)) (Ghost.reveal l) (Ghost.reveal l)
+  //B.modifies_fresh_frame_popped h0 h1 (Ghost.reveal l) h3 h4
+#pop-options
 
 module G = FStar.Ghost
 
@@ -2946,7 +2955,7 @@ let list_filter
 = let h0 = HST.get () in
   HST.push_frame ();
   let h1 = HST.get () in
-  B.fresh_frame_modifies h0 h1;
+  //B.fresh_frame_modifies h0 h1;
   let bpos_out' : B.pointer U32.t = B.alloca pos_out 1ul in
   let h2 = HST.get () in
   let inv (h: HS.mem) (l1 l2: list t) (pos1: U32.t) : GTot Type0 =
