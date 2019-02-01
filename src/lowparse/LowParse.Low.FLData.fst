@@ -47,7 +47,10 @@ let validate_fldata_consumes_all
 : Tot (validator (parse_fldata p sz))
 = fun input pos ->
   let h = HST.get () in
-  [@inline_let] let _ = valid_facts (parse_fldata p sz) h input pos in
+  [@inline_let] let _ =
+    valid_facts (parse_fldata p sz) h input pos;
+    parse_fldata_consumes_all_correct p sz (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos)))
+  in
   if (input.len `U32.sub` pos) `U32.lt` sz32
   then validator_error_not_enough_data
   else

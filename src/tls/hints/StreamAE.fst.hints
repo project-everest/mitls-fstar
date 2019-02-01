@@ -18,7 +18,7 @@
         "refinement_interpretation_StreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88"
       ],
       0,
-      "db6c6f4420e49c15b2fb7e433d5315ec"
+      "e6c20729b7258d10b81edb6b38d786c6"
     ],
     [
       "StreamAE.ltag",
@@ -36,7 +36,7 @@
         "typing_StreamAE.alg"
       ],
       0,
-      "79a14777caff6b1787f3ccbed0cca2c4"
+      "c8aee6b7cee5555da1245f8c393a7ab6"
     ],
     [
       "StreamAE.cipherLen",
@@ -53,7 +53,7 @@
         "typing_StreamAE.ltag"
       ],
       0,
-      "7a2bed87b1da5ef66771938bfbc1c893"
+      "b219686065d9f9727aea7ecd127ebb53"
     ],
     [
       "StreamAE.lenCipher",
@@ -66,7 +66,7 @@
         "refinement_interpretation_StreamAE_Tm_refine_6f387ae5df4fef454344d7e3c6d84f49"
       ],
       0,
-      "ead4a52a4ef369023a751b2c9a60c378"
+      "3460ecfe1e0e9baa7036ab824d3e229c"
     ],
     [
       "StreamAE.entry",
@@ -96,7 +96,7 @@
         "refinement_interpretation_TLSInfo_Tm_refine_771d00c42e1fa557a792d8f0bf7b724d"
       ],
       0,
-      "a6a583c9e637c28e9b26b29a22ffc92a"
+      "c8dd8201253fcf5d2204b190408504d4"
     ],
     [
       "StreamAE.__proj__Entry__item__c",
@@ -108,7 +108,7 @@
         "projection_inverse_StreamAE.Entry_l"
       ],
       0,
-      "c5fe69ad11b6507f75571794bd1eb96e"
+      "f096f77085a27c1772bb373207d399a8"
     ],
     [
       "StreamAE.__proj__Entry__item__p",
@@ -120,7 +120,7 @@
         "projection_inverse_StreamAE.Entry_l"
       ],
       0,
-      "bc880bf4eab96a23a20ec9c4c6f34371"
+      "73ca954010476b9bd0ff4528d0d07d26"
     ],
     [
       "StreamAE.key",
@@ -136,7 +136,7 @@
         "projection_inverse_CipherSuite.AEAD__1"
       ],
       0,
-      "736015beb6a19778367145e2ad9e1df6"
+      "1c7fae815d619c7c5edc317f8e6606db"
     ],
     [
       "StreamAE.iv",
@@ -152,7 +152,7 @@
         "projection_inverse_CipherSuite.AEAD__1"
       ],
       0,
-      "7ed112f07d3e91054636fc339bd4b291"
+      "38a32c00b574526bbafd6bed6e3c774e"
     ],
     [
       "StreamAE.ilog",
@@ -165,7 +165,7 @@
         "refinement_interpretation_StreamAE_Tm_refine_fa1dfb0079bf92ebd93dd5b7fd4e607d"
       ],
       0,
-      "79a421c3dca0c37e3433a10c65a209e2"
+      "6b18bdc3787fb1977f310572d058ddfa"
     ],
     [
       "StreamAE.max_ctr",
@@ -174,7 +174,7 @@
       1,
       [ "@query", "projection_inverse_BoxInt_proj_0" ],
       0,
-      "420bb1835d9916c67590fb168f926ecd"
+      "97029b03979a68724b104de3f75dc5a2"
     ],
     [
       "StreamAE.concrete_ctr",
@@ -189,7 +189,7 @@
         "token_correspondence_FStar.Monotonic.Seq.increases"
       ],
       0,
-      "75a0fec1d49f59eb953ae51292c298f8"
+      "60e91eb7b04c44bf9268361f7ec902ed"
     ],
     [
       "StreamAE.ctr_ref",
@@ -205,7 +205,7 @@
         "token_correspondence_FStar.Monotonic.Seq.increases"
       ],
       0,
-      "6b7bc5f252469c76e0e05f0e15e7ecdc"
+      "5cc9288b9634738c92941c14c0bee8a5"
     ],
     [
       "StreamAE.ctr",
@@ -245,7 +245,7 @@
         "typing_FStar.Monotonic.HyperStack.is_eternal_color"
       ],
       0,
-      "3f18007296d37bb51e9b0eb1cc420d72"
+      "d67aab88a6dd5c058c23b754a3060d3e"
     ],
     [
       "StreamAE.state",
@@ -269,7 +269,7 @@
         "refinement_interpretation_StreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88"
       ],
       0,
-      "20c673fd0da258e39240aa2a3b8286d3"
+      "d75054096d35e8b74358122ca3b6588b"
     ],
     [
       "StreamAE.__proj__State__item__log_region",
@@ -285,7 +285,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "05be3bd8abb250bef57167cc2f63584d"
+      "af7548e8903fec88e0cc6f52a9527837"
     ],
     [
       "StreamAE.__proj__State__item__log_region",
@@ -303,7 +303,7 @@
         "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "dd2512c483341875728dd0fef729fd20"
+      "cc7e8d1cdfef929b8241434d42b7b523"
     ],
     [
       "StreamAE.__proj__State__item__aead",
@@ -321,7 +321,7 @@
         "projection_inverse_CipherSuite.AEAD__1"
       ],
       0,
-      "4c0aff113aa4220bc88d7849b3c71000"
+      "e672dbf1e467ee6a9d500f57d920732f"
     ],
     [
       "StreamAE.__proj__State__item__aead",
@@ -339,7 +339,7 @@
         "projection_inverse_CipherSuite.AEAD__1"
       ],
       0,
-      "62e14ca4ebded2e56abd557fcbfdbbdb"
+      "4c320cfe3a3964641095afc31c4b1a66"
     ],
     [
       "StreamAE.__proj__State__item__log",
@@ -348,7 +348,7 @@
       1,
       [ "@query" ],
       0,
-      "b93cb99c05bd81427b7d303bbb37a65b"
+      "0b8381df69fa308c5a63dc05c758a095"
     ],
     [
       "StreamAE.__proj__State__item__log",
@@ -360,7 +360,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "5c1a4eef5b2311248c831da171a47295"
+      "eb5ec3fe94e753199b5fd5f24a0e85f0"
     ],
     [
       "StreamAE.__proj__State__item__counter",
@@ -369,7 +369,7 @@
       1,
       [ "@query" ],
       0,
-      "b3f2802401b447f5f0f1f6cec3d6a030"
+      "63e30a72737fbbc4c11bd68bf4753f8a"
     ],
     [
       "StreamAE.__proj__State__item__counter",
@@ -383,7 +383,7 @@
         "projection_inverse_StreamAE.State_region"
       ],
       0,
-      "0bb5cb8af6092d64caa2058ba417b660"
+      "7aa0f4b45142f24b63a88590ee243b94"
     ]
   ]
 ]
