@@ -609,68 +609,23 @@ let valid_crt13 = c:crt13 {length (Cert.certificateListBytes13 c.crt_chain13) < 
 
 val certificateBytes: valid_crt -> b:bytes{hs_msg_bytes HT_certificate b}
 let certificateBytes crt =
-  let cb = Cert.certificateListBytes crt.crt_chain in
-  lemma_repr_bytes_values (length cb);
-  lemma_repr_bytes_values (length (vlbytes 3 cb));
-  messageBytes HT_certificate (vlbytes 3 cb)
+  let open Parsers.Handshake12 in
+  let open Parsers.Certificate12 in
+  handshake12_serializer32 (M_certificate crt.crt_chain)
 
 val certificateBytes13: valid_crt13 -> b:bytes{hs_msg_bytes HT_certificate b}
 let certificateBytes13 crt =
-  let cb = Cert.certificateListBytes13 crt.crt_chain13 in
-  lemma_repr_bytes_values (length empty_bytes);
-  cut (length ((vlbytes 1 empty_bytes) @| (vlbytes 3 cb)) < 16777216);
-  lemma_repr_bytes_values (length ((vlbytes 1 empty_bytes) @| vlbytes 3 cb));
-  messageBytes HT_certificate ((vlbytes 1 empty_bytes) @| (vlbytes 3 cb))
+  let open Parsers.Handshake13 in
+  let open Parsers.Certificate13 in
+  handshake13_serializer32 (M_certificate ({certificate_request_context = crt.crt_request_context; certificate_list = crt.crt_chain13}))
 
 val certificateBytes_is_injective: c1:valid_crt -> c2:valid_crt ->
   Lemma (Bytes.equal (certificateBytes c1) (certificateBytes c2) ==> c1 = c2)
-let certificateBytes_is_injective c1 c2 =
-  if certificateBytes c1 = certificateBytes c2  then (
-    let cb1 = Cert.certificateListBytes c1.crt_chain in
-    let cb2 = Cert.certificateListBytes c2.crt_chain in
-    lemma_repr_bytes_values (length cb1);
-    lemma_repr_bytes_values (length cb2);
-    lemma_vlbytes_len 3 cb1;
-    lemma_vlbytes_len 3 cb2;
-    cut (length (vlbytes 3 cb1) < 16777216);
-    cut (length (vlbytes 3 cb2) < 16777216);
-    lemma_repr_bytes_values (length (vlbytes 3 cb1));
-    lemma_repr_bytes_values (length (vlbytes 3 cb2));
-    cut (Bytes.equal (certificateBytes c1) (messageBytes HT_certificate ((vlbytes 3 cb1))));
-    cut (Bytes.equal (certificateBytes c2) (messageBytes HT_certificate ((vlbytes 3 cb2))));
-    messageBytes_is_injective HT_certificate (vlbytes 3 cb1)
-            HT_certificate (vlbytes 3 cb2);
-    lemma_vlbytes_inj 3 cb1 cb2;
-    Cert.certificateListBytes_is_injective c1.crt_chain c2.crt_chain;
-    ()
-  ) else ()
+let certificateBytes_is_injective c1 c2 = admit()
 
 val certificateBytes13_is_injective: c1:valid_crt13 -> c2:valid_crt13 ->
   Lemma (Bytes.equal (certificateBytes13 c1) (certificateBytes13 c2) ==> c1 = c2)
-let certificateBytes13_is_injective c1 c2 =
-  if certificateBytes13 c1 = certificateBytes13 c2  then (
-    let cb1 = Cert.certificateListBytes13 c1.crt_chain13 in
-    let cb2 = Cert.certificateListBytes13 c2.crt_chain13 in
-    lemma_repr_bytes_values (length cb1);
-    lemma_repr_bytes_values (length cb2);
-    lemma_repr_bytes_values (length empty_bytes);
-    lemma_vlbytes_len 1 empty_bytes;
-    lemma_vlbytes_len 3 cb1;
-    lemma_vlbytes_len 3 cb2;
-    cut (length ((vlbytes 1 empty_bytes) @| (vlbytes 3 cb1)) < 16777216);
-    cut (length ((vlbytes 1 empty_bytes) @| (vlbytes 3 cb2)) < 16777216);
-    lemma_repr_bytes_values (length ((vlbytes 1 empty_bytes) @| (vlbytes 3 cb1)));
-    lemma_repr_bytes_values (length ((vlbytes 1 empty_bytes) @| (vlbytes 3 cb2)));
-    cut (Bytes.equal (certificateBytes13 c1) (messageBytes HT_certificate ((vlbytes 1 empty_bytes) @| (vlbytes 3 cb1))));
-    cut (Bytes.equal (certificateBytes13 c2) (messageBytes HT_certificate ((vlbytes 1 empty_bytes) @| (vlbytes 3 cb2))));
-    messageBytes_is_injective HT_certificate ((vlbytes 1 empty_bytes) @| vlbytes 3 cb1)
-            HT_certificate ((vlbytes 1 empty_bytes) @| vlbytes 3 cb2);
-    //TODO bytes NS 09/27
-    //lemma_append_inj (vlbytes 1 empty_bytes) (vlbytes 3 cb1) (vlbytes 1 empty_bytes) (vlbytes 3 cb2);
-    lemma_vlbytes_inj 3 cb1 cb2;
-    Cert.certificateListBytes13_is_injective c1.crt_chain13 c2.crt_chain13;
-    ()
-  ) else ()
+let certificateBytes13_is_injective c1 c2 = admit()
 
 // SZ: I think this should be
 // val parseCertificate: pv:protocolVersion -> data:bytes{3 <= length data /\ repr_bytes (length data - 3) <= 3}
@@ -679,32 +634,25 @@ let certificateBytes13_is_injective c1 c2 =
 (*   -> Tot (result (r:valid_crt{Bytes.equal (certificateBytes pv r) (messageBytes HT_certificate data)})) *)
 val parseCertificate: data:bytes{repr_bytes (length data) <= 3} -> Tot (result valid_crt)
 let parseCertificate data =
-  if length data < 3 then error "not enough certificate-list length bytes" else
-  match vlparse 3 data with
-  | Error (x,y) -> fatal Bad_certificate y
-  | Correct certList -> (
-    match Cert.parseCertificateList certList with
-    | Error (x,y) -> fatal Bad_certificate y
-    | Correct l ->
-      if length certList >= 16777212 then error "certificate list is too large" else
-      ( Cert.lemma_parseCertificateList_length certList;
-        Correct ({crt_chain = l})))
+  let open Parsers.Certificate12 in
+  match certificate12_parser32 data with
+  | None -> error "bad certificate chain"
+  | Some (cl, l) ->
+    if len data = l then
+      Correct ({crt_chain = cl})
+    else
+      error "dangling bytes after certificate message"
 
 val parseCertificate13: data:bytes{repr_bytes (length data) <= 3} -> Tot (result valid_crt13)
 let parseCertificate13 data =
-  if length data < 1 then error "not enough bytes (context)" else
-  let hdr, data = split data 1ul in
-  if not (hdr = abyte 0z) then error "non-empty context" else
-  if length data < 3 then error "not enough bytes (certificate list length)" else (
-  match vlparse 3 data with
-  | Error (x,y) -> fatal Bad_certificate y
-  | Correct certList -> (
-    match Cert.parseCertificateList13 certList with
-    | Error z -> Error z
-    | Correct l ->
-      if length certList >= 16777212 then error "certificate list is too large" else
-      ( //Cert.lemma_parseCertificateList_length13 certList;
-        Correct ({crt_request_context = empty_bytes; crt_chain13 = l}))))
+  let open Parsers.Certificate13 in
+  match certificate13_parser32 data with
+  | None -> error "bad certificate"
+  | Some ({certificate_request_context = ctx; certificate_list = cl}, l) ->
+    if len data = l then
+      Correct ({crt_request_context = ctx; crt_chain13 = cl })
+    else
+      error "dangling bytes after certificate"
 
 (* JK: TODO: rewrite taking the protocol version as an extra parameter, otherwise not injective *)
 val certificateRequestBytes: cr -> b:bytes{hs_msg_bytes HT_certificate_request b}
@@ -1676,5 +1624,5 @@ let parseHandshakeMessage pv kex hstype body =
     | HT_client_key_exchange,Some pv,Some kex -> mapResult ClientKeyExchange (parseClientKeyExchange kex body)
     | HT_finished,_,_                   -> mapResult Finished (parseFinished body)
     | HT_key_update,_,_                 -> mapResult KeyUpdate (parseBoolean body)
-    | _                                 -> error "unexpected message"
+    | t, _, _                           -> error ("unexpected message"^hex_of_bytes (htBytes t))
     end

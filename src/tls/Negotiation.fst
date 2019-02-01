@@ -1067,8 +1067,9 @@ let same_she_che_type (s: serverHelloExtension) (c: clientHelloExtension) =
 let same_che_che_type (c0 c1: clientHelloExtension) = 
   tag_of_clientHelloExtension c0 = tag_of_clientHelloExtension c1 
 
-let checkServerExtension resuming (ces: clientHelloExtensions) (se: serverHelloExtension): result unit = 
-  if List.Helpers.exists_b_aux se same_she_che_type ces then unsupported "received unsolicited server extension"
+let checkServerExtension resuming (ces: clientHelloExtensions) (se: serverHelloExtension): result unit =
+  if not (List.Helpers.exists_b_aux se same_she_che_type ces) then
+    unsupported "received unsolicited server extension"
   else 
     match se with
     | SHE_server_name _ -> 

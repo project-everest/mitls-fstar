@@ -350,7 +350,11 @@ struct {
 
 /**
 Padding
-**/
+
+The padding extension re-uses the vldata of the extension
+for the vlbyte of the padding. Because we want to avoid having
+to distribute the vldata in every extension type, we prefer to
+define the extension as opaque.
 
 struct {
   uint8 zero = 0;
@@ -359,14 +363,26 @@ struct {
 struct {
   ZeroByte padding<0..2^16-1>;
 } PaddingExtension;
+*/
 
 /**
 Ticket
-**/
+
+N.B. The original RFC 4507 defined a proper SessionTicket type
+as a vlbytes. This no longer works because of the changes in
+Appendix A of RFC 5077: the vldata length of the extension is
+used for the contents of the ticket. Therefore, the whole
+extension contents must be marked "opaque".
+
+It is interesting to note that Appendix A of RFC 5077 is completely
+wrong: RFC 4507 was less ambiguous than RFC 5077. It is now
+impossible to use empty tickets, as this can no longer be distinguished
+from the client offering no ticket.
 
 struct {
   opaque ticket_data<0..2^16-1>;
 } SessionTicket;
+*/
 
 /**
 Pre-shared key extension
@@ -500,10 +516,9 @@ struct {
     opaque dh_Ys<1..2^16-1>;
 } ServerDHParams;
 
-opaque KeyExchangeData<1..2^16-1>;
-
 struct {
   NamedGroup group;
+  uint16 len;
   select(group)
   {
     case secp256r1: UncompressedPointRepresentation32;
@@ -519,8 +534,8 @@ struct {
     case ffdhe6144: ServerDHParams;
     case ffdhe8192: ServerDHParams;
 
-    default: KeyExchangeData;
-  } ks; /*key_exchange*/
+    default: opaque;
+  } ks[len]; /*key_exchange*/
 } KeyShareEntry;
 
 struct {
@@ -590,10 +605,10 @@ struct {
     case signed_certificate_timestamp: Empty;
     case client_certificate_type: ClientCertTypeExtension;
     case server_certificate_type: ServerCertTypeExtension;
-    case padding: PaddingExtension;
+    case padding: opaque; /*PaddingExtension*/
     case encrypt_then_mac: Empty;
     case extended_master_secret: Empty;
-    case session_ticket: SessionTicket;
+    case session_ticket: opaque; /* see note in SessionTicket */
     case pre_shared_key: PreSharedKeyClientExtension;
     case early_data: Empty;
     case supported_versions: SupportedVersions;

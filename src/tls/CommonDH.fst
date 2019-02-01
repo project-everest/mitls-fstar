@@ -640,7 +640,7 @@ let validate_many ksl =
   List.Tot.choose validate ksl
 
 let format #g gx =
-  let raw = serialize_raw gx in
+  let raw = vlbytes2 (serialize_raw gx) in
   match namedGroup_of_group g with
   | None -> Ks_Unknown_namedGroup 0us (serialize gx)
   | Some ng ->   

@@ -762,6 +762,9 @@ let mk_cert_cb
   cert_verify_cb = cert_verify_cb
 }
 
+
+type alpn = Parsers.ClientHelloExtension.clientHelloExtension_CHE_application_layer_protocol_negotiation
+
 noeq type config : Type0 = {
     // supported versions, implicitly preferring the latest versions
     min_version: protocolVersion; 
@@ -809,8 +812,7 @@ noeq type config : Type0 = {
 
     // ALPN offers (for client) or preferences (for server)
     // we use the wire-format type, structurally shared between clients and servers. 
-    alpn: option Parsers.ClientHelloExtension.clientHelloExtension_CHE_application_layer_protocol_negotiation;
-
+    alpn: option alpn;
     peer_name: option (n:Parsers.HostName.hostName{Bytes.length n <= 65535 - 5}); // The expected name to match against the peer certificate
     // 19-01-19 Hoisted parser refinements for, to be propagated. 
   }

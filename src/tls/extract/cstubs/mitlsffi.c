@@ -639,6 +639,10 @@ static bool wrapped_verify(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
 {
   wrapped_cert_cb* s = (wrapped_cert_cb*)cbs;
   FStar_Bytes_bytes chain = Cert_certificateListBytes(certs);
+  if(chain.length > 3){ // Strip the outer list length
+    chain.length -= 3;
+    chain.data += 3;
+  }
   mitls_signature_scheme sigalg = pki_of_tls(sa.tag);
 
   int r = (s->verify(s->cb_state,
