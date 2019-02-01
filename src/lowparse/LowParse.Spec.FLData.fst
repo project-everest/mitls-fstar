@@ -94,7 +94,7 @@ let parse_fldata_consumes_all_correct
   (sz: nat)
 : Lemma
   (requires (k.parser_kind_subkind == Some ParserConsumesAll))
-  (ensures (forall b . parse (parse_fldata p sz) b == parse (parse_fldata_consumes_all p sz) b))
+  (ensures (forall b . {:pattern (parse (parse_fldata p sz) b)} parse (parse_fldata p sz) b == parse (parse_fldata_consumes_all p sz) b))
 = ()
 
 let parse_fldata_strong_pred

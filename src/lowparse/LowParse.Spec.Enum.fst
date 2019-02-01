@@ -340,7 +340,7 @@ let serialize_maybe_enum_key_eq
 = serialize_synth_eq p (maybe_enum_key_of_repr e) s (repr_of_maybe_enum_key e) () x 
 
 let is_total_enum (#key: eqtype) (#repr: eqtype) (l: list (key * repr)) : GTot Type0 =
-  forall (k: key) . list_mem k (list_map fst l)
+  forall (k: key) . {:pattern (list_mem k (list_map fst l))} list_mem k (list_map fst l)
 
 let total_enum (key: eqtype) (repr: eqtype) : Tot eqtype =
   (l: enum key repr { is_total_enum l } )
@@ -471,7 +471,7 @@ let r_reflexive_prop
   (t: Type)
   (r: (t -> t -> GTot Type0))
 : GTot Type0
-= forall (x: t) . r x x
+= forall (x: t) . {:pattern (r x x)} r x x
 
 inline_for_extraction
 let r_reflexive_t
@@ -492,7 +492,7 @@ let r_transitive_prop
   (t: Type)
   (r: (t -> t -> GTot Type0))
 : GTot Type0
-= forall (x y z: t) . (r x y /\ r y z) ==> r x z
+= forall (x y z: t) . {:pattern (r x y); (r y z)} (r x y /\ r y z) ==> r x z
 
 inline_for_extraction
 let r_transitive_t
@@ -536,7 +536,48 @@ let feq
   (eq: (v -> v -> GTot Type0))
   (f1 f2: (u -> Tot v))
 : GTot Type0
-= (forall (x: u) . eq (f1 x) (f2 x))
+= (forall (x: u) . {:pattern (f1 x); (f2 x)} eq (f1 x) (f2 x))
+
+(* #!$% patterns on forall, the following proofs should be trivial and now they aren't *)
+
+let feq_elim
+  (u v: Type)
+  (eq: (v -> v -> GTot Type0))
+  (f1 f2: (u -> Tot v))
+  (x: u)
+: Lemma
+  (requires (feq u v eq f1 f2))
+  (ensures (f1 x `eq` f2 x))
+= ()
+
+let feq_intro
+  (u v: Type)
+  (eq: (v -> v -> GTot Type0))
+  (f1 f2: (u -> Tot v))
+  (phi: (x: u) -> Lemma (f1 x `eq` f2 x))
+: Lemma (feq _ _ eq f1 f2)
+= Classical.forall_intro phi
+
+let feq_trans
+  (u v: Type)
+  (eq: (v -> v -> GTot Type0))
+: Pure (r_transitive_t _ (feq _ _ eq))
+  (requires (r_transitive_prop _ eq))
+  (ensures (fun _ -> True))
+= let phi
+    (f1 f2 f3: (u -> Tot v))
+  : Lemma
+    (requires (feq _ _ eq f1 f2 /\ feq _ _ eq f2 f3))
+    (ensures (feq _ _ eq f1 f3))
+  = feq_intro _ _ eq f1 f3 (fun x -> assert (f1 x `eq` f2 x /\ f2 x `eq` f3 x))
+  in
+  let phi2
+    (f1 f2 f3: (u -> Tot v))
+  : Lemma
+    ((feq _ _ eq f1 f2 /\ feq _ _ eq f2 f3) ==> feq _ _ eq f1 f3)
+  = Classical.move_requires (phi f1 f2) f3
+  in
+  phi2
 
 inline_for_extraction
 let fif
@@ -1073,7 +1114,7 @@ let rec list_forallp (#t: Type) (p: t -> GTot Type0) (l: list t) : GTot Type0 =
   | a :: q -> p a /\ list_forallp p q
 
 let rec list_forallp_mem (#t: eqtype) (p: t -> GTot Type0) (l: list t) : Lemma
-  (list_forallp p l <==> (forall x . L.mem x l ==> p x))
+  (list_forallp p l <==> (forall x . {:pattern (L.mem x l) \/ (p x)} L.mem x l ==> p x))
 = match l with
   | [] -> ()
   | _ :: q -> list_forallp_mem p q
@@ -1108,7 +1149,7 @@ let forall_maybe_enum_key
     (x: value) ->
     Tot (squash (list_mem x (list_map snd e) == false ==> f (Unknown x)))
   ))
-: Tot (squash (forall (x: maybe_enum_key e) . f x))
+: Tot (squash (forall (x: maybe_enum_key e) . {:pattern (f x)} f x))
 = let g
     (x: maybe_enum_key e)
   : Lemma

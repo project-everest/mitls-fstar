@@ -614,7 +614,7 @@ let synth_case_recip_synth_case_post
 : GTot Type0
 = 
   list_mem x (list_map fst e) ==> (
-    forall (y: type_of_tag x) .
+    forall (y: type_of_tag x) . {:pattern (synth_case_recip' e tag_of_data type_of_tag synth_case_recip (synth_case x y))}
     synth_case_recip' e tag_of_data type_of_tag synth_case_recip (synth_case x y) == y
   )
 
@@ -1164,7 +1164,7 @@ let synth_dsum_case_recip_synth_case_known_post
 : GTot Type0
 = 
   list_mem x (list_map fst e) ==> (
-    forall (y: type_of_known_tag x) .
+    forall (y: type_of_known_tag x) . {:pattern (synth_case_recip (Known x) (synth_case (Known x) y))}
     synth_case_recip (Known x) (synth_case (Known x) y) == y
   )
 
@@ -1181,7 +1181,7 @@ let synth_dsum_case_recip_synth_case_unknown_post
 : GTot Type0
 = 
   list_mem x (list_map snd e) == false ==> (
-    forall (y: type_of_unknown_tag) .
+    forall (y: type_of_unknown_tag) . {:pattern (synth_case_recip (Unknown x) (synth_case (Unknown x) y))}
     synth_case_recip (Unknown x) (synth_case (Unknown x) y) == y
   )
 

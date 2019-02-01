@@ -38,7 +38,7 @@ let make_constant_size_parser_precond
   (t: Type0)
   (f: ((s: bytes {Seq.length s == sz}) -> GTot (option t)))
 : GTot Type0
-= forall (s1: bytes {Seq.length s1 == sz}) (s2: bytes {Seq.length s2 == sz}) .
+= forall (s1: bytes {Seq.length s1 == sz}) (s2: bytes {Seq.length s2 == sz}) . {:pattern (f s1); (f s2)}
     make_constant_size_parser_precond_precond sz t f s1 s2 ==> Seq.equal s1 s2
 
 let make_constant_size_parser_precond'
@@ -46,7 +46,7 @@ let make_constant_size_parser_precond'
   (t: Type0)
   (f: ((s: bytes {Seq.length s == sz}) -> GTot (option t)))
 : GTot Type0
-= forall (s1: bytes {Seq.length s1 == sz}) (s2: bytes {Seq.length s2 == sz}) .
+= forall (s1: bytes {Seq.length s1 == sz}) (s2: bytes {Seq.length s2 == sz}) . {:pattern (f s1); (f s2)}
     make_constant_size_parser_precond_precond sz t f s1 s2 ==> s1 == s2
 
 let make_constant_size_parser_injective
@@ -105,7 +105,7 @@ let make_total_constant_size_parser_precond
   (t: Type0)
   (f: ((s: bytes {Seq.length s == sz}) -> GTot t))
 : GTot Type0
-= forall (s1: bytes {Seq.length s1 == sz}) (s2: bytes {Seq.length s2 == sz}) .
+= forall (s1: bytes {Seq.length s1 == sz}) (s2: bytes {Seq.length s2 == sz}) . {:pattern (f s1); (f s2)}
   f s1 == f s2 ==> Seq.equal s1 s2
 
 let make_total_constant_size_parser
@@ -205,10 +205,10 @@ let and_then_cases_injective_precond
   (x1 x2: t)
   (b1 b2: bytes)
 : GTot Type0
-= Some? ((p' x1) b1) /\
-  Some? ((p' x2) b2) /\ (
-    let (Some (v1, _)) = (p' x1) b1 in
-    let (Some (v2, _)) = (p' x2) b2 in
+= Some? (parse (p' x1) b1) /\
+  Some? (parse (p' x2) b2) /\ (
+    let (Some (v1, _)) = parse (p' x1) b1 in
+    let (Some (v2, _)) = parse (p' x2) b2 in
     v1 == v2
   )
 
@@ -217,7 +217,7 @@ let and_then_cases_injective
   (#t':Type)
   (p': (t -> Tot (bare_parser t')))
 : GTot Type0
-= forall (x1 x2: t) (b1 b2: bytes) .
+= forall (x1 x2: t) (b1 b2: bytes) . {:pattern (parse (p' x1) b1); (parse (p' x2) b2)}
   and_then_cases_injective_precond p' x1 x2 b1 b2 ==>
   x1 == x2
 
@@ -959,7 +959,7 @@ let synth_injective
   (#t2: Type0)
   (f: (t1 -> GTot t2))
 : GTot Type0
-= forall (x x' : t1) . f x == f x' ==> x == x'
+= forall (x x' : t1) . {:pattern (f x); (f x')} f x == f x' ==> x == x'
 
 let synth_injective_intro
   (#t1: Type0)
@@ -1025,8 +1025,8 @@ let make_total_constant_size_parser_compose
   (ensures (
     make_total_constant_size_parser_precond sz t1 f1 /\
     make_total_constant_size_parser_precond sz t2 (f1 `compose` g2) /\
-    (forall x x' . g2 x == g2 x' ==> x == x') /\
-    (forall input . parse (make_total_constant_size_parser sz t2 (f1 `compose` g2)) input == parse (make_total_constant_size_parser sz t1 f1 `parse_synth` g2) input)
+    (forall x x' . {:pattern (g2 x); (g2 x')}  g2 x == g2 x' ==> x == x') /\
+    (forall input . {:pattern (parse (make_total_constant_size_parser sz t2 (f1 `compose` g2)) input)} parse (make_total_constant_size_parser sz t2 (f1 `compose` g2)) input == parse (make_total_constant_size_parser sz t1 f1 `parse_synth` g2) input)
   ))
 = ()
 
@@ -1067,7 +1067,7 @@ let synth_inverse
   (f2: (t1 -> GTot t2))
   (g1: (t2 -> GTot t1))
 : GTot Type0
-= (forall (x : t2) . f2 (g1 x) == x)
+= (forall (x : t2) . {:pattern (f2 (g1 x))} f2 (g1 x) == x)
 
 let synth_inverse_intro
   (#t1: Type0)
@@ -1078,6 +1078,17 @@ let synth_inverse_intro
   (requires (forall (x : t2) . f2 (g1 x) == x))
   (ensures (synth_inverse f2 g1))
 = ()
+
+let synth_inverse_synth_injective_pat
+  (#t1: Type0)
+  (#t2: Type0)
+  (f: (t1 -> GTot t2))
+  (g: (t2 -> GTot t1))
+: Lemma
+  (requires (synth_inverse g f))
+  (ensures (synth_injective f))
+  [SMTPat (synth_inverse g f)]
+= assert (forall x1 x2. f x1 == f x2 ==> g (f x1) == g (f x2))
 
 let synth_inverse_synth_injective
   (#t1: Type0)
@@ -1105,7 +1116,7 @@ let synth_injective_synth_inverse_synth_inverse_recip
   (f: (t1 -> GTot t2))
   (u: squash (synth_inverse g f /\ synth_injective g))
 : Tot (squash (synth_inverse f g))
-= ()
+= assert (forall x . g (f (g x)) == g x)
 
 abstract
 let serialize_synth
@@ -1175,7 +1186,9 @@ let serialize_synth_upd_chain
     Seq.length s == Seq.length (serialize s1 x1) /\
     serialize (serialize_synth p1 f2 s1 g1 u) y2 == seq_upd_seq s i' s'
   ))
-= ()
+= (* I don't know which are THE terms to exhibit among x1, x2, y1, y2 to make the patterns trigger *)
+  assert (forall w w' . f2 w == f2 w' ==> w == w');
+  assert (forall w . f2 (g1 w) == w)
 
 abstract
 let serialize_synth_upd_bw_chain
@@ -1210,7 +1223,9 @@ let serialize_synth_upd_bw_chain
     Seq.length s == Seq.length (serialize s1 x1) /\
     serialize (serialize_synth p1 f2 s1 g1 u) y2 == seq_upd_bw_seq s i' s'
   ))
-= ()
+= (* I don't know which are THE terms to exhibit among x1, x2, y1, y2 to make the patterns trigger *)
+  assert (forall w w' . f2 w == f2 w' ==> w == w');
+  assert (forall w . f2 (g1 w) == w)
 
 (** Tot vs. Ghost *)
 
