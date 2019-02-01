@@ -98,6 +98,7 @@ let make_constant_size_parser
   (ensures (fun _ -> True))
 = let p : bare_parser t = make_constant_size_parser_aux sz t f in
   make_constant_size_parser_injective sz t f;
+  parser_kind_prop_equiv (constant_size_parser_kind sz) p;
   p
 
 let make_total_constant_size_parser_precond
@@ -122,6 +123,7 @@ let make_total_constant_size_parser
   ))
   (ensures (fun _ -> True))
 = let p : bare_parser t = make_constant_size_parser sz t (fun x -> Some (f x)) in
+  parser_kind_prop_equiv (total_constant_size_parser_kind sz) p;
   p
 
 
@@ -138,6 +140,7 @@ let parse_ret_kind : parser_kind =
   strong_parser_kind 0 0 (Some ParserKindMetadataTotal)
 
 let parse_ret (#t:Type) (v:t) : Tot (parser parse_ret_kind t) =
+  parser_kind_prop_equiv parse_ret_kind (parse_ret' v);
   parse_ret' v
 
 let parse_empty : parser parse_ret_kind unit =
@@ -168,6 +171,7 @@ let fail_parser
   (requires (fail_parser_kind_precond k))
   (ensures (fun _ -> True))
 = let p = fail_parser' t in
+  parser_kind_prop_equiv k p;
   strengthen k p
 
 inline_for_extraction
@@ -394,7 +398,9 @@ let and_then_no_lookahead
     and_then_cases_injective p'
   ))
   (ensures ((k.parser_kind_subkind == Some ParserStrong /\ k'.parser_kind_subkind == Some ParserStrong) ==> no_lookahead (and_then_bare p p')))
-= if k.parser_kind_subkind = Some ParserStrong && k.parser_kind_subkind = Some ParserStrong then
+= parser_kind_prop_equiv k p;
+  Classical.forall_intro (fun (x: t) -> parser_kind_prop_equiv k' (p' x));
+  if k.parser_kind_subkind = Some ParserStrong && k.parser_kind_subkind = Some ParserStrong then
     Classical.forall_intro_2 (fun x -> Classical.move_requires (and_then_no_lookahead_on p p' x))
   else ()
 
@@ -415,7 +421,10 @@ let and_then_correct
     injective (and_then_bare p p') /\
     parser_kind_prop (and_then_kind k k') (and_then_bare p p')
   ))
-= and_then_injective p p';
+= parser_kind_prop_equiv k p;
+  Classical.forall_intro (fun x -> parser_kind_prop_equiv k' (p' x));
+  parser_kind_prop_equiv (and_then_kind k k') (and_then_bare p p');
+  and_then_injective p p';
   and_then_no_lookahead p p'
 
 #reset-options
@@ -532,7 +541,9 @@ let bare_serialize_nondep_then_correct
 : Lemma
   (requires (k1.parser_kind_subkind == Some ParserStrong))
   (ensures (serializer_correct (nondep_then p1 p2) (bare_serialize_nondep_then p1 s1 p2 s2)))
-= let prf
+= parser_kind_prop_equiv k1 p1;
+  parser_kind_prop_equiv k2 p2;
+  let prf
     (x: t1 * t2)
   : Lemma (parse (nondep_then p1 p2) (bare_serialize_nondep_then p1 s1 p2 s2 x) == Some (x, Seq.length (bare_serialize_nondep_then p1 s1 p2 s2 x)))
   = let v1' = parse p1 (bare_serialize_nondep_then p1 s1 p2 s2 x) in
@@ -883,7 +894,8 @@ let bare_parse_strengthen_injective
   (prf: parse_strengthen_prf p1 p2)
 : Lemma
   (injective (bare_parse_strengthen p1 p2 prf))
-= let p' : bare_parser (x: t1 { p2 x } ) = bare_parse_strengthen p1 p2 prf in
+= parser_kind_prop_equiv k p1;
+  let p' : bare_parser (x: t1 { p2 x } ) = bare_parse_strengthen p1 p2 prf in
   assert (forall (b1 b2: bytes) . injective_precond p' b1 b2 ==> injective_precond p1 b1 b2);
   assert (forall (b1 b2: bytes) . injective_postcond p1 b1 b2 ==> injective_postcond p' b1 b2)
 
@@ -896,8 +908,10 @@ let bare_parse_strengthen_correct
 : Lemma
   (injective (bare_parse_strengthen p1 p2 prf) /\
   parser_kind_prop k (bare_parse_strengthen p1 p2 prf))
-= bare_parse_strengthen_no_lookahead p1 p2 prf;
+= parser_kind_prop_equiv k p1;
+  bare_parse_strengthen_no_lookahead p1 p2 prf;
   bare_parse_strengthen_injective p1 p2 prf;
+  parser_kind_prop_equiv k (bare_parse_strengthen p1 p2 prf);
   ()
 
 let parse_strengthen
@@ -952,6 +966,7 @@ let parse_fret' (#t #t':Type) (f: t -> GTot t') (v:t) : Tot (bare_parser t') =
 
 unfold
 let parse_fret (#t #t':Type) (f: t -> GTot t') (v:t) : Tot (parser parse_ret_kind t') =
+  [@inline_let] let _ = parser_kind_prop_equiv parse_ret_kind (parse_fret' f v) in
   parse_fret' f v
 
 let synth_injective
@@ -1278,13 +1293,16 @@ let parse_filter_payload
   (f: (t -> GTot bool))
   (v: t)
 : Tot (parser parse_filter_payload_kind (x: t { f x == true }))
-= lift_parser (fun () ->
+= let p = lift_parser (fun () ->
     if f v
     then
       let v' : (x: t { f x == true } ) = v in
       weaken parse_filter_payload_kind (parse_ret v')
     else fail_parser parse_filter_payload_kind (x: t {f x == true} )
   )
+  in
+  parser_kind_prop_equiv parse_filter_payload_kind p;
+  p
 
 abstract
 let parse_filter

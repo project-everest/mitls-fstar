@@ -76,7 +76,8 @@ let parse_list_bare_injective
   (p: parser k t)
 : Lemma
   (ensures (injective (parse_list_bare p)))
-= let f () : Lemma
+= parser_kind_prop_equiv k p;
+  let f () : Lemma
     (injective p)
   = ()
   in
@@ -130,6 +131,7 @@ val parse_list
 let parse_list #k #t p =
   parse_list_bare_injective p;
   parse_list_bare_consumes_all p;
+  parser_kind_prop_equiv parse_list_kind (parse_list_bare p);
   parse_list_bare p
 
 abstract
@@ -205,7 +207,8 @@ let bare_serialize_list_correct
 : Lemma
   (requires (serialize_list_precond k))
   (ensures (serializer_correct (parse_list p) (bare_serialize_list p s)))
-= let f () : Lemma (serialize_list_precond k) = () in
+= parser_kind_prop_equiv k p;
+  let f () : Lemma (serialize_list_precond k) = () in
   let rec prf
     (l: list t)
   : Lemma
@@ -215,19 +218,20 @@ let bare_serialize_list_correct
     | a :: q ->
       let pa = parse p (bare_serialize_list p s l) in
       f ();
-      assert (no_lookahead_on p (s a) (bare_serialize_list p s l));
-      seq_slice_append_l (s a) (bare_serialize_list p s q);
-      assert (no_lookahead_on_precond p (s a) (bare_serialize_list p s l));
-      assert (no_lookahead_on_postcond p (s a) (bare_serialize_list p s l));
+      parser_kind_prop_equiv k p;
+      assert (no_lookahead_on p (serialize s a) (bare_serialize_list p s l));
+      seq_slice_append_l (serialize s a) (bare_serialize_list p s q);
+      assert (no_lookahead_on_precond p (serialize s a) (bare_serialize_list p s l));
+      assert (no_lookahead_on_postcond p (serialize s a) (bare_serialize_list p s l));
       assert (Some? pa);
-      assert (injective_precond p (s a) (bare_serialize_list p s l));
-      assert (injective_postcond p (s a) (bare_serialize_list p s l));
+      assert (injective_precond p (serialize s a) (bare_serialize_list p s l));
+      assert (injective_postcond p (serialize s a) (bare_serialize_list p s l));
       let (Some (a', lena)) = pa in
       assert (a == a');
-      assert (lena == Seq.length (s a));
+      assert (lena == Seq.length (serialize s a));
       assert (lena > 0);
       prf q;
-      seq_slice_append_r (s a) (bare_serialize_list p s q)
+      seq_slice_append_r (serialize s a) (bare_serialize_list p s q)
   in
   Classical.forall_intro prf
 
@@ -610,6 +614,7 @@ val list_length_constant_size_parser_correct
   (decreases (Seq.length b))
 
 let rec list_length_constant_size_parser_correct #k #t p b =
+  parser_kind_prop_equiv k p;
   let n = k.parser_kind_low in
   if Seq.length b = 0
   then ()

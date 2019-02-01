@@ -12,7 +12,9 @@ let parse_u8_unique
   (b: bytes)
 : Lemma
   (parse Aux.parse_u8 b == parse I.parse_u8 b)
-= if Seq.length b < 1
+= parser_kind_prop_equiv (get_parser_kind Aux.parse_u8) Aux.parse_u8;
+  parser_kind_prop_equiv (get_parser_kind I.parse_u8) I.parse_u8;
+  if Seq.length b < 1
   then ()
   else begin
     I.parse_u8_spec b;
@@ -38,7 +40,9 @@ let parse_u16_unique
   (b: bytes)
 : Lemma
   (parse Aux.parse_u16 b == parse I.parse_u16 b)
-= if Seq.length b < 2
+= parser_kind_prop_equiv (get_parser_kind Aux.parse_u16) Aux.parse_u16;
+  parser_kind_prop_equiv (get_parser_kind I.parse_u16) I.parse_u16;
+  if Seq.length b < 2
   then ()
   else begin
     I.parse_u16_spec b;
@@ -64,7 +68,9 @@ let parse_u32_unique
   (b: bytes)
 : Lemma
   (parse Aux.parse_u32 b == parse I.parse_u32 b)
-= if Seq.length b < 4
+= parser_kind_prop_equiv (get_parser_kind Aux.parse_u32) Aux.parse_u32;
+  parser_kind_prop_equiv (get_parser_kind I.parse_u32) I.parse_u32;
+  if Seq.length b < 4
   then ()
   else begin
     I.parse_u32_spec b;

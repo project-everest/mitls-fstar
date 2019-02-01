@@ -117,7 +117,8 @@ let parse_fldata_and_then_cases_injective
   (p: parser k t)
 : Lemma
   (and_then_cases_injective (parse_vldata_payload sz f p))
-= let g
+= parser_kind_prop_equiv k p;
+  let g
     (len1 len2: (len: bounded_integer sz { f len == true } ))
     (b1 b2: bytes)
   : Lemma
@@ -423,8 +424,11 @@ let parse_bounded_vldata_correct
   (p: parser k t)
 : Lemma
   (parser_kind_prop (parse_bounded_vldata_strong_kind min max l k) (parse_vldata_gen l (in_bounds min max) p))
-= let sz : integer_size = l in
+= parser_kind_prop_equiv (parse_bounded_vldata_strong_kind min max l k) (parse_vldata_gen l (in_bounds min max) p);
+  let sz : integer_size = l in
   let p' = parse_vldata_gen sz (in_bounds min max) p in
+  parser_kind_prop_equiv (get_parser_kind p') p';
+  parser_kind_prop_equiv k p;
   let k' = parse_bounded_vldata_strong_kind min max l k in
   let prf
     (input: bytes)
@@ -438,7 +442,7 @@ let parse_bounded_vldata_correct
       (consumed <: nat) <= Some?.v k'.parser_kind_high
     )))
   = let (Some (data, consumed)) = parse p' input in
-    parse_bounded_vldata_elim' min max l p input data consumed 
+    parse_bounded_vldata_elim' min max l p input data consumed
   in
   Classical.forall_intro (Classical.move_requires prf)
 

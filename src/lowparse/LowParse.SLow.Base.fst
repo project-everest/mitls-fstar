@@ -236,7 +236,8 @@ let parser32_injective
     U32.v consumed2 <= B32.length input2 /\
     B32.b32slice input1 0ul consumed1 == B32.b32slice input2 0ul consumed2
   )))
-= assert (injective_precond p (B32.reveal input1) (B32.reveal input2));
+= parser_kind_prop_equiv k p;
+  assert (injective_precond p (B32.reveal input1) (B32.reveal input2));
   assert (injective_postcond p (B32.reveal input1) (B32.reveal input2))
 
 let serializer32_injective
@@ -267,7 +268,7 @@ let parse32_size
     let (Some hi) = k.parser_kind_high in
     U32.v consumed <= hi
   ))))
-= ()
+= parser_kind_prop_equiv k p
 
 let parse32_total
   (#k: parser_kind)
@@ -284,7 +285,7 @@ let parse32_total
   (ensures (
     Some? (p32 input)
   ))
-= ()
+= parser_kind_prop_equiv k p
   
 inline_for_extraction
 let u32_max : (y: U32.t { forall (x: U32.t) . {:pattern (U32.v x)} U32.v x <= U32.v y } ) =

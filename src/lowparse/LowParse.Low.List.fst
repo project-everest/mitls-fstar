@@ -56,6 +56,7 @@ let valid_exact_list_cons
   valid_exact_equiv (parse_list p) h sl pos pos';
   valid_facts p h sl pos;
   let sq0 = B.as_seq h (B.gsub sl.base pos (sl.len `U32.sub` pos)) in
+  parser_kind_prop_equiv k p;
   assert (no_lookahead_on p sq0 sq);
   assert (injective_postcond p sq0 sq);
   valid_exact_equiv (parse_list p) h sl pos1 pos';  
@@ -118,6 +119,7 @@ let valid_exact_list_cons_recip
   valid_exact_equiv (parse_list p) h sl pos pos';
   valid_facts p h sl pos;
   let sq0 = B.as_seq h (B.gsub sl.base pos (sl.len `U32.sub` pos)) in
+  parser_kind_prop_equiv k p;
   assert (no_lookahead_on p sq sq0);
   assert (injective_postcond p sq sq0);
   let pos1 = get_valid_pos p h sl pos in

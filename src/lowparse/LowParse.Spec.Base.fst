@@ -318,13 +318,24 @@ let parser_kind_metadata_prop (#t: Type0) (k: parser_kind) (f: bare_parser t) : 
   | Some ParserKindMetadataTotal -> k.parser_kind_high == Some k.parser_kind_low ==> is_total_constant_size_parser k.parser_kind_low f
   | Some ParserKindMetadataFail -> parser_always_fails f
 
-let parser_kind_prop (#t: Type0) (k: parser_kind) (f: bare_parser t) : GTot Type0 =
+let parser_kind_prop' (#t: Type0) (k: parser_kind) (f: bare_parser t) : GTot Type0 =
   injective f /\
   (Some? k.parser_kind_subkind ==> parser_subkind_prop (Some?.v k.parser_kind_subkind) f) /\
   parses_at_least k.parser_kind_low f /\
   (Some? k.parser_kind_high ==> (parses_at_most (Some?.v k.parser_kind_high) f)) /\
   parser_kind_metadata_prop k f
 
+abstract
+let parser_kind_prop = parser_kind_prop'
+
+abstract
+let parser_kind_prop_equiv
+  (#t: Type0) (k: parser_kind) (f: bare_parser t)
+: Lemma
+  (parser_kind_prop k f <==> parser_kind_prop' k f)
+= ()
+
+abstract
 let parser_kind_prop_ext
   (#t: Type0)
   (k: parser_kind)

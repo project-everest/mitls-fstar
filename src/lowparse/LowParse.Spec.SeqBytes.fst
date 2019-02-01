@@ -84,7 +84,8 @@ let parse_seq_all_bytes_injective () : Lemma
 
 let parse_seq_all_bytes_correct () : Lemma
   (parser_kind_prop parse_seq_all_bytes_kind parse_seq_all_bytes')
-= parse_seq_all_bytes_injective ()
+= parser_kind_prop_equiv parse_seq_all_bytes_kind parse_seq_all_bytes';
+  parse_seq_all_bytes_injective ()
 
 let parse_seq_all_bytes : parser parse_seq_all_bytes_kind bytes =
   parse_seq_all_bytes_correct ();
