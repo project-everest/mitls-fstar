@@ -176,12 +176,10 @@ function build_pki_if() {
 }
 
 function fetch_vale() {
-    # NOTE: the name of the directory where Vale is downloaded MUST NOT be vale, because the latter already exists
-    # so let's call it vale
     if [[ ! -d vale ]]; then
         mkdir vale
     fi
-    vale_version=$(<vale/.vale_version)
+    vale_version=$(<hacl-star/vale/.vale_version)
     vale_version=${vale_version%$'\r'}  # remove Windows carriage return, if it exists
     wget "https://github.com/project-everest/vale/releases/download/v${vale_version}/vale-release-${vale_version}.zip" -O vale/vale-release.zip
     rm -rf "vale/vale-release-${vale_version}"
@@ -212,8 +210,8 @@ function mitls_verify() {
             else
                 # miTLS CI proper starts here
                 fetch_and_make_mlcrypto &&
-                fetch_vale &&
                 fetch_hacl &&
+                fetch_vale &&
                     # Only building a subset of HACL* for now, no verification
                     OTHERFLAGS="--admit_smt_queries true $OTHERFLAGS" \
                     VALE_SCONS_PARALLEL_OPT="-j $threads --NO-VERIFY --FSTAR-MY-VERSION --VALE-MY-VERSION" \
