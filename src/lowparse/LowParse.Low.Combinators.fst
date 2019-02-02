@@ -325,6 +325,7 @@ let gaccessor_fst'
   (0, (match parse p1 input with
   | Some (_, consumed) ->
     let _ =
+      parser_kind_prop_equiv k1 p1;
       assert (no_lookahead_on p1 input (Seq.slice input 0 consumed));
       assert (injective_postcond p1 input (Seq.slice input 0 consumed))
     in
@@ -489,6 +490,7 @@ let accessor_snd
     valid_facts p1 h input pos;
     let large = (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos))) in
     let small = (B.as_seq h (B.gsub input.base pos (U32.uint_to_t (content_length (nondep_then p1 p2) h input pos)))) in
+    parser_kind_prop_equiv k1 p1;
     assert (no_lookahead_on p1 large small);
     assert (injective_postcond p1 large small)
   in

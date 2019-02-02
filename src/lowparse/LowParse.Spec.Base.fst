@@ -87,7 +87,7 @@ let injective_postcond_ext
 = ()
 
 let injective (#t: Type0) (p: bare_parser t) : GTot Type0 =
-  forall (b1 b2: bytes) .
+  forall (b1 b2: bytes) . {:pattern (injective_precond p b1 b2) \/ (injective_postcond p b1 b2)}
   injective_precond p b1 b2 ==>
   injective_postcond p b1 b2
 
@@ -155,7 +155,7 @@ let no_lookahead
   (#t: Type0)
   (f: bare_parser t)
 : GTot Type0
-= forall (x x' : bytes) . no_lookahead_on f x x'
+= forall (x x' : bytes) . {:pattern (no_lookahead_on_precond f x x') \/ (no_lookahead_on_postcond f x x')} no_lookahead_on f x x'
 
 let no_lookahead_ext
   (#t: Type0)
@@ -260,8 +260,8 @@ let is_total_constant_size_parser
   (#t: Type0)
   (f: bare_parser t)
 : GTot Type0
-= forall (s: bytes) . {:pattern (f s) }
-  (Seq.length s < sz) == (None? (f s))
+= forall (s: bytes) . {:pattern (parse f s) }
+  (Seq.length s < sz) == (None? (parse f s))
 
 type parser_subkind =
   | ParserStrong
@@ -310,7 +310,7 @@ let total_constant_size_parser_kind
 = strong_parser_kind sz sz (Some ParserKindMetadataTotal)
 
 let parser_always_fails (#t: Type0) (f: bare_parser t) : GTot Type0 =
-  forall input . f input == None
+  forall input . {:pattern (parse f input)} parse f input == None
 
 let parser_kind_metadata_prop (#t: Type0) (k: parser_kind) (f: bare_parser t) : GTot Type0 =
   match k.parser_kind_metadata with
@@ -318,13 +318,24 @@ let parser_kind_metadata_prop (#t: Type0) (k: parser_kind) (f: bare_parser t) : 
   | Some ParserKindMetadataTotal -> k.parser_kind_high == Some k.parser_kind_low ==> is_total_constant_size_parser k.parser_kind_low f
   | Some ParserKindMetadataFail -> parser_always_fails f
 
-let parser_kind_prop (#t: Type0) (k: parser_kind) (f: bare_parser t) : GTot Type0 =
+let parser_kind_prop' (#t: Type0) (k: parser_kind) (f: bare_parser t) : GTot Type0 =
   injective f /\
   (Some? k.parser_kind_subkind ==> parser_subkind_prop (Some?.v k.parser_kind_subkind) f) /\
   parses_at_least k.parser_kind_low f /\
   (Some? k.parser_kind_high ==> (parses_at_most (Some?.v k.parser_kind_high) f)) /\
   parser_kind_metadata_prop k f
 
+abstract
+let parser_kind_prop = parser_kind_prop'
+
+abstract
+let parser_kind_prop_equiv
+  (#t: Type0) (k: parser_kind) (f: bare_parser t)
+: Lemma
+  (parser_kind_prop k f <==> parser_kind_prop' k f)
+= ()
+
+abstract
 let parser_kind_prop_ext
   (#t: Type0)
   (k: parser_kind)
@@ -450,7 +461,7 @@ let glb
 #pop-options
 
 let default_parser_kind : (x: parser_kind {
-  forall (t: Type0) (p: bare_parser t) .
+  forall (t: Type0) (p: bare_parser t) . {:pattern (parser_kind_prop x p)}
   injective p ==> parser_kind_prop x p
 })
 = {
@@ -471,7 +482,7 @@ let rec glb_list_of
 : Pure parser_kind
   (requires True)
   (ensures (fun k ->
-    (forall kl . L.mem kl l ==> k `is_weaker_than` (f kl))
+    (forall kl . {:pattern (L.mem kl l)} L.mem kl l ==> k `is_weaker_than` (f kl))
 //    (forall k' . (Cons? l /\ (forall kl . L.mem kl l ==> k' `is_weaker_than` (f kl))) ==> k' `is_weaker_than` k)
   ))
 = match l with
@@ -488,7 +499,7 @@ let glb_list
 : Pure parser_kind
   (requires True)
   (ensures (fun k ->
-    (forall kl . L.mem kl l ==> k `is_weaker_than` kl)
+    (forall kl . {:pattern (L.mem kl l)} L.mem kl l ==> k `is_weaker_than` kl)
 //    (forall k' . (Cons? l /\ (forall kl . L.mem kl l ==> k' `is_weaker_than` kl)) ==> k' `is_weaker_than` k)
   ))
 = glb_list_of id l

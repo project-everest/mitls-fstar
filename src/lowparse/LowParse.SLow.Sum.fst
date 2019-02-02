@@ -31,8 +31,7 @@ let parse32_sum_if (t: sum) : Tot (if_combinator _ (parse32_sum_eq t)) =
 let parse32_sum_eq_refl (t: sum) : Tot (r_reflexive_t _ (parse32_sum_eq t)) =
   fun _ -> ()
 
-let parse32_sum_eq_trans (t: sum) : Tot (r_transitive_t _ (parse32_sum_eq t)) =
-  fun _ _ _ -> ()
+let parse32_sum_eq_trans (t: sum) : Tot (r_transitive_t _ (parse32_sum_eq t)) = feq_trans _ _ (eq2 #_)
 
 inline_for_extraction
 let parse32_sum_cases'
@@ -305,6 +304,12 @@ let serialize32_sum_destr_eq
 : Tot (serialize32_sum_destr_codom t k -> serialize32_sum_destr_codom t k -> GTot Type0)
 = _ by (T.apply (`feq); T.apply (`eq2))
 
+let serialize32_sum_destr_trans
+  (t: sum)
+  (k: sum_key t)
+: Tot (r_transitive_t _ (serialize32_sum_destr_eq t k))
+= feq_trans _ _ (eq2 #_)
+
 inline_for_extraction
 let serialize32_sum_destr_if
   (t: sum)
@@ -333,14 +338,22 @@ let serialize32_sum
   let _ = serialize_sum_eq t s sc x in
   let tg = sum_tag_of_data t x in
   let s1 = s32 tg in
-  let s2 = destr
+  [@inline_let]
+  let phi tg x = sc32 tg (synth_sum_case_recip t tg x) in
+  [@inline_let]
+  let phi'tg = destr
     (serialize32_sum_destr_eq t)
     (serialize32_sum_destr_if t)
     (fun _ _ -> ())
-    (fun _ _ _ _ -> ())
-    (fun tg x -> sc32 tg (synth_sum_case_recip t tg x))
+    (serialize32_sum_destr_trans t)
+    phi
     tg
-    x
+  in
+  let s2 = phi'tg x in
+  [@inline_let]
+  let _ =
+    let phitg = phi tg in
+    feq_elim _ _ (eq2 #_) phitg phi'tg x
   in
   let res = s1 `B32.b32append` s2 in
   (res <: (res: B32.bytes { serializer32_correct (serialize_sum t s sc) x res } ))
@@ -447,6 +460,12 @@ let size32_sum_destr_eq
 : Tot (size32_sum_destr_codom t k -> size32_sum_destr_codom t k -> GTot Type0)
 = _ by (T.apply (`feq); T.apply (`eq2))
 
+let size32_sum_destr_trans
+  (t: sum)
+  (k: sum_key t)
+: Tot (r_transitive_t _ (size32_sum_destr_eq t k))
+= feq_trans _ _ (eq2 #_)
+
 inline_for_extraction
 let size32_sum_destr_if
   (t: sum)
@@ -486,16 +505,24 @@ let size32_sum
   serialize_sum_eq t s sc x;
   let tg = sum_tag_of_data t x in
   let s1 = s32 tg in
-  let s2 = destr
+  [@inline_let]
+  let phi tg x = sc32 tg (synth_sum_case_recip t tg x) in
+  [@inline_let]
+  let phi'tg = destr
     (size32_sum_destr_eq t)
     (size32_sum_destr_if t)
     (fun _ _ -> ())
-    (fun _ _ _ _ -> ())
-    (fun tg x -> sc32 tg (synth_sum_case_recip t tg x))
+    (size32_sum_destr_trans t)
+    phi
     tg
-    x
   in
-  assert_norm (U32.v u32_max == 4294967295);
+  let s2 = phi'tg x in
+  [@inline_let]
+  let _ =
+    feq_elim _ _ (eq2 #_) (phi tg) phi'tg x;
+    assert_norm (U32.v u32_max == 4294967295)
+  in
+  [@inline_let]
   let res = s1 `U32.add` s2 in
   (res <: (res: U32.t { size32_postcond (serialize_sum t s sc) x res } ))
 
@@ -812,6 +839,12 @@ let serialize32_dsum_known_destr_eq
 : Tot (serialize32_dsum_known_destr_codom t k -> serialize32_dsum_known_destr_codom t k -> GTot Type0)
 = _ by (T.apply (`feq); T.apply (`eq2))
 
+let serialize32_dsum_known_destr_eq_trans
+  (t: dsum)
+  (k: dsum_known_key t)
+: Tot (r_transitive_t _ (serialize32_dsum_known_destr_eq t k))
+= feq_trans _ _ (eq2 #_)
+
 inline_for_extraction
 let serialize32_dsum_known_destr_if
   (t: dsum)
@@ -842,7 +875,16 @@ let serialize32_dsum
   let tg = dsum_tag_of_data t x in
   let s1 = s32 tg in
   let s2 = match tg with
-    | Known tg' -> destr (serialize32_dsum_known_destr_eq t) (serialize32_dsum_known_destr_if t) (fun _ _ -> ()) (fun _ _ _ _ -> ()) (fun tg_ -> serialize32_dsum_cases_aux t f sf sf32 sg32 (Known tg_)) tg' x
+    | Known tg' ->
+      [@inline_let]
+      let phi tg_ = serialize32_dsum_cases_aux t f sf sf32 sg32 (Known tg_) in
+      [@inline_let]
+      let phi'tg' = destr (serialize32_dsum_known_destr_eq t) (serialize32_dsum_known_destr_if t) (fun _ _ -> ()) (serialize32_dsum_known_destr_eq_trans t) phi tg' in
+      [@inline_let]
+      let res = phi'tg' x in
+      [@inline_let]
+      let _ = feq_elim _ _ (eq2 #_) (phi tg') phi'tg' x in
+      res
     | Unknown tg' -> serialize32_dsum_cases_aux t f sf sf32 sg32 (Unknown tg') x
   in
   [@inline_let]
@@ -967,6 +1009,12 @@ let size32_dsum_known_destr_eq
 : Tot (size32_dsum_known_destr_codom t k -> size32_dsum_known_destr_codom t k -> GTot Type0)
 = _ by (T.apply (`feq); T.apply (`eq2))
 
+let size32_dsum_known_destr_eq_trans
+  (t: dsum)
+  (k: dsum_known_key t)
+: Tot (r_transitive_t _ (size32_dsum_known_destr_eq t k))
+= feq_trans _ _ (eq2 #_)
+
 inline_for_extraction
 let size32_dsum_known_destr_if
   (t: dsum)
@@ -1007,7 +1055,16 @@ let size32_dsum
   // [@inline_let]  
   //NS: idem
   let s2 = match tg with
-    | Known tg' -> destr (size32_dsum_known_destr_eq t) (size32_dsum_known_destr_if t) (fun _ _ -> ()) (fun _ _ _ _ -> ()) (fun tg_ -> size32_dsum_cases_aux t f sf sf32 sg32 (Known tg_)) tg' x
+    | Known tg' ->
+      [@inline_let]
+      let phi tg_ = size32_dsum_cases_aux t f sf sf32 sg32 (Known tg_) in
+      [@inline_let]
+      let phi'tg' = destr (size32_dsum_known_destr_eq t) (size32_dsum_known_destr_if t) (fun _ _ -> ()) (size32_dsum_known_destr_eq_trans t) phi tg' in
+      [@inline_let]
+      let res = phi'tg' x in
+      [@inline_let]
+      let _ = feq_elim _ _ (eq2 #_) (phi tg') phi'tg' x in
+      res
     | Unknown tg' -> size32_dsum_cases_aux t f sf sf32 sg32 (Unknown tg') x
   in
   [@inline_let]
