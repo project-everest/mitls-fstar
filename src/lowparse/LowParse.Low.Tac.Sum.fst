@@ -15,8 +15,7 @@ let sum_accessor_ext (ty: term) : Tac unit =
           let x = intro () in
           destruct (binder_to_term x);
           to_all_goals (fun _ ->
-            let arg = intro () in
-            let eqn = intro () in
+            let eqn = intros_until_eq_hyp () in
             rewrite eqn;
             norm [delta; zeta; iota; primops];
             trivial ()
@@ -27,8 +26,7 @@ let sum_accessor_ext (ty: term) : Tac unit =
           let x = intro () in
           destruct (binder_to_term x);
           to_all_goals (fun _ ->
-            let arg = intro () in
-            let eqn = intro () in
+            let eqn = intros_until_eq_hyp () in
             rewrite eqn;
             norm [delta; zeta; iota; primops];
             let u = intro () in
