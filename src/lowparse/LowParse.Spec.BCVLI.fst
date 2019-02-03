@@ -187,3 +187,72 @@ let bare_serialize_bcvli_correct : squash
 #pop-options
 
 let serialize_bcvli : serializer parse_bcvli = bare_serialize_bcvli
+
+module U8 = FStar.UInt8
+
+let bounded_integer_of_le_1_eq
+  (b: bytes { Seq.length b == 1 } )
+: Lemma
+  (U32.v (bounded_integer_of_le 1 b) == U8.v (Seq.index b 0))
+= ()
+
+let bounded_integer_of_le_2_eq
+  (b: bytes { Seq.length b == 2 } )
+: Lemma
+  (U32.v (bounded_integer_of_le 2 b) == U8.v (Seq.index b 0) + 256 `FStar.Mul.op_Star` U8.v (Seq.index b 1))
+= ()
+
+#push-options "--max_fuel 5 --z3rlimit 16"
+
+let bounded_integer_of_le_4_eq
+  (b: bytes { Seq.length b == 4 } )
+: Lemma
+  (U32.v (bounded_integer_of_le 4 b) == U8.v (Seq.index b 0) + 256 `FStar.Mul.op_Star` (U8.v (Seq.index b 1) + 256 `FStar.Mul.op_Star` (U8.v (Seq.index b 2) + 256 `FStar.Mul.op_Star` U8.v (Seq.index b 3))))
+= ()
+
+#pop-options
+
+let serialize_bounded_integer_le_1_eq
+  (x: bounded_integer 1)
+  (i: nat { i < 1 } )
+: Lemma
+  (U8.v (Seq.index (serialize (serialize_bounded_integer_le 1) x) i) == U32.v x % 256)
+= ()
+
+#push-options "--max_fuel 5 --z3rlimit 64"
+
+let serialize_bounded_integer_le_2_eq
+  (x: bounded_integer 2)
+  (i: nat { i < 2 } )
+: Lemma
+  (U8.v (Seq.index (serialize (serialize_bounded_integer_le 2) x) i) == (
+    let rem = U32.v x % 256 in
+    let div = U32.v x / 256 in
+    if i = 0
+    then rem
+    else div % 256
+  ))
+= ()
+
+let serialize_bounded_integer_le_4_eq
+  (x: bounded_integer 4)
+  (i: nat { i < 4 } )
+: Lemma
+  (U8.v (Seq.index (serialize (serialize_bounded_integer_le 4) x) i) == (
+    let rem0 = U32.v x % 256 in
+    let div0 = U32.v x / 256 in
+    let rem1 = div0 % 256 in
+    let div1 = div0 / 256 in
+    let rem2 = div1 % 256 in
+    let div2 = div1 / 256 in
+    if i = 0
+    then rem0
+    else if i = 1
+    then rem1
+    else if i = 2
+    then rem2
+    else div2 % 256
+  ))
+= ()
+
+#pop-options
