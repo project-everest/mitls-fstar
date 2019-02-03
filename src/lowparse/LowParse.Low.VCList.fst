@@ -250,3 +250,62 @@ let jump_nlist
   res
 
 #pop-options
+
+let rec valid_nlist_valid_list
+  (n: nat)
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (h: HS.mem)
+  (sl: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (
+    k.parser_kind_low > 0 /\
+    k.parser_kind_subkind == Some ParserStrong /\
+    valid (parse_nlist n p) h sl pos
+  ))
+  (ensures (
+    let pos' = get_valid_pos (parse_nlist n p) h sl pos in
+    valid_list p h sl pos pos' /\
+    contents_list p h sl pos pos' == contents (parse_nlist n p) h sl pos
+  ))
+= if n = 0
+  then begin
+    valid_nlist_nil_recip p h sl pos;
+    valid_list_nil p h sl pos
+  end else begin
+    valid_nlist_cons_recip n p h sl pos;
+    let pos1 = get_valid_pos p h sl pos in
+    let pos' = get_valid_pos (parse_nlist n p) h sl pos in
+    valid_nlist_valid_list (n - 1) p h sl pos1;
+    valid_list_cons p h sl pos pos'
+  end
+
+let rec valid_list_valid_nlist
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (h: HS.mem)
+  (sl: slice)
+  (pos: U32.t)
+  (pos' : U32.t)
+: Lemma
+  (requires (
+    valid_list p h sl pos pos'
+  ))
+  (ensures (
+    let x = contents_list p h sl pos pos' in
+    valid_content_pos (parse_nlist (L.length x) p) h sl pos x pos'
+  ))
+  (decreases (U32.v pos' - U32.v pos))
+= if pos = pos'
+  then begin
+    valid_list_nil p h sl pos;
+    valid_nlist_nil p h sl pos
+  end else begin
+    valid_list_cons_recip p h sl pos pos' ;
+    let pos1 = get_valid_pos p h sl pos in
+    valid_list_valid_nlist p h sl pos1 pos' ;
+    valid_nlist_cons (L.length (contents_list p h sl pos1 pos')) p h sl pos
+  end
