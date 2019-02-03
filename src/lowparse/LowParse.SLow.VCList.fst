@@ -153,3 +153,65 @@ let parse32_nlist
       Some (list_rev accu, consumed)
     | None -> None
   ) <: Tot (res: _ { parser32_correct (parse_nlist (U32.v n) p) input res } ))
+
+let serialize32_nlist_precond
+  (n: U32.t)
+  (k: parser_kind)
+: GTot Type0
+= k.parser_kind_subkind == Some ParserStrong /\ (
+    match k.parser_kind_high with
+    | None -> False
+    | Some hi -> U32.v n `FStar.Mul.op_Star` hi < 4294967296
+  )
+
+#push-options "--z3rlimit 16"
+
+inline_for_extraction
+let serialize32_nlist
+  (n: U32.t)
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (#s: serializer p)
+  (s32: serializer32 s)
+  (u: squash (
+    serialize32_nlist_precond n k
+  ))
+: Tot (serializer32 (serialize_nlist (U32.v n) s))
+= fun (input: nlist (U32.v n) t) -> ((
+    [@inline_let] let _ =
+      B32.reveal_empty ();
+      parse_nlist_kind_high (U32.v n) k;
+      Seq.append_empty_l (serialize (serialize_nlist (U32.v n) s) input)
+    in
+    let x = C.Loops.total_while
+      (fun (x: (list t * bytes32)) -> L.length (fst x))
+      (fun (continue: bool) (x: (list t * bytes32)) ->
+        serialize (serialize_nlist (U32.v n) s) input == B32.reveal (snd x) `Seq.append` serialize (serialize_nlist (L.length (fst x)) s) (fst x) /\
+        (continue == false ==> fst x == [])
+      )
+      (fun (x: (list t * bytes32)) ->
+         match x with
+         | [], res -> (false, x)
+         | a :: q, res ->
+           let sa = s32 a in
+           [@inline_let] let _ =
+             serialize_nlist_cons (L.length q) s a q;
+             Seq.append_assoc (B32.reveal res) (B32.reveal sa) (serialize (serialize_nlist (L.length q) s) q);
+             assert (B32.length res + B32.length sa + Seq.length (serialize (serialize_nlist (L.length q) s) q) == Seq.length (serialize (serialize_nlist (U32.v n) s) input))
+           in
+           let res' = res `B32.append` sa in
+           (true, (q, res'))
+      )
+      (input, B32.empty_bytes)
+    in
+    match x with
+    | (_, res) ->
+      [@inline_let] let _ =
+        serialize_nlist_nil _ s;
+        Seq.append_empty_r (B32.reveal res)
+      in
+      res
+  ) <: (res: _ { serializer32_correct (serialize_nlist (U32.v n) s) input res }))
+
+#pop-options
