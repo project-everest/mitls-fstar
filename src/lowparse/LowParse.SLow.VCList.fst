@@ -214,4 +214,46 @@ let serialize32_nlist
       res
   ) <: (res: _ { serializer32_correct (serialize_nlist (U32.v n) s) input res }))
 
+inline_for_extraction
+let size32_nlist
+  (n: U32.t)
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (#s: serializer p)
+  (s32: size32 s)
+  (u: squash (
+    serialize32_nlist_precond n k
+  ))
+: Tot (size32 (serialize_nlist (U32.v n) s))
+= fun (input: nlist (U32.v n) t) -> ((
+    [@inline_let] let _ =
+      B32.reveal_empty ();
+      parse_nlist_kind_high (U32.v n) k
+    in
+    let x = C.Loops.total_while
+      (fun (x: (list t * U32.t)) -> L.length (fst x))
+      (fun (continue: bool) (x: (list t * U32.t)) ->
+        Seq.length (serialize (serialize_nlist (U32.v n) s) input) == U32.v (snd x) + Seq.length (serialize (serialize_nlist (L.length (fst x)) s) (fst x)) /\
+        (continue == false ==> fst x == [])
+      )
+      (fun (x: (list t * U32.t)) ->
+         match x with
+         | [], res -> (false, x)
+         | a :: q, res ->
+           let sa = s32 a in
+           [@inline_let] let _ =
+             serialize_nlist_cons (L.length q) s a q;
+             assert (U32.v res + U32.v sa + Seq.length (serialize (serialize_nlist (L.length q) s) q) == Seq.length (serialize (serialize_nlist (U32.v n) s) input))
+           in
+           let res' = res `U32.add` sa in
+           (true, (q, res'))
+      )
+      (input, 0ul)
+    in
+    match x with
+    | (_, res) ->
+      res
+  ) <: (res: _ { size32_postcond (serialize_nlist (U32.v n) s) input res }))
+
 #pop-options
