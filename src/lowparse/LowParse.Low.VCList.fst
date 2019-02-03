@@ -373,3 +373,62 @@ let jump_vclist
   jump_nlist n v input pos1
 
 #pop-options
+
+let valid_vclist_elim
+  (min: nat)
+  (max: nat { min <= max /\ max < 4294967296 } )
+  (#lk: parser_kind)
+  (lp: parser lk U32.t { lk.parser_kind_subkind == Some ParserStrong })
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (h: HS.mem)
+  (input: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (valid (parse_vclist min max lp p) h input pos))
+  (ensures (
+    valid lp h input pos /\ (
+    let len = contents lp h input pos in
+    let pos1 = get_valid_pos lp h input pos in
+    let x = contents (parse_vclist min max lp p) h input pos in
+    L.length x == U32.v len /\
+    valid_content_pos (parse_nlist (U32.v len) p) h input pos1 x (get_valid_pos (parse_vclist min max lp p) h input pos)
+  )))
+= valid_facts (parse_vclist min max lp p) h input pos;
+  parse_vclist_eq min max lp p (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos)));
+  valid_facts lp h input pos;
+  let len = contents lp h input pos in
+  let pos1 = get_valid_pos lp h input pos in
+  valid_facts (parse_nlist (U32.v len) p) h input pos1
+
+let valid_vclist_intro
+  (min: nat)
+  (max: nat { min <= max /\ max < 4294967296 } )
+  (#lk: parser_kind)
+  (lp: parser lk U32.t { lk.parser_kind_subkind == Some ParserStrong })
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (h: HS.mem)
+  (input: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (
+    valid lp h input pos /\ (
+    let pos1 = get_valid_pos lp h input pos in
+    let len = contents lp h input pos in
+    min <= U32.v len /\ U32.v len <= max /\
+    valid (parse_nlist (U32.v len) p) h input pos1
+  )))
+  (ensures (
+    let pos1 = get_valid_pos lp h input pos in
+    let len = contents lp h input pos in
+    valid_content_pos (parse_vclist min max lp p) h input pos (contents (parse_nlist (U32.v len) p) h input pos1) (get_valid_pos (parse_nlist (U32.v len) p) h input pos1)
+  ))
+= valid_facts (parse_vclist min max lp p) h input pos;
+  parse_vclist_eq min max lp p (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos)));
+  valid_facts lp h input pos;
+  let len = contents lp h input pos in
+  let pos1 = get_valid_pos lp h input pos in
+  valid_facts (parse_nlist (U32.v len) p) h input pos1
