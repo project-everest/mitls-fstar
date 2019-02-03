@@ -65,6 +65,8 @@ let valid_nlist_cons
   valid_facts (parse_nlist (n + 1) p) h sl pos;
   parse_nlist_eq (n + 1) p (B.as_seq h (B.gsub sl.base pos (sl.len `U32.sub` pos)))
 
+#push-options "--z3rlimit 16"
+
 let valid_nlist_cons_recip
   (n: nat)
   (#k: parser_kind)
@@ -95,6 +97,8 @@ let valid_nlist_cons_recip
   valid_facts p h sl pos;
   let pos1 = get_valid_pos p h sl pos in
   valid_facts (parse_nlist (n - 1) p) h sl pos1
+
+#pop-options
 
 let valid_nlist_cons'
   (n: nat)

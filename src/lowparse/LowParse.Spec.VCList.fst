@@ -64,8 +64,6 @@ let rec parse_nlist_kind'
   then parse_ret_kind
   else k `and_then_kind` parse_nlist_kind' (n - 1) k
 
-#reset-options // enable non-linear arithmetic
-
 let rec parse_nlist_kind_low
   (n: nat)
   (k: parser_kind)
@@ -73,7 +71,10 @@ let rec parse_nlist_kind_low
   ((parse_nlist_kind' n k).parser_kind_low == n `mul` k.parser_kind_low)
 = if n = 0
   then ()
-  else parse_nlist_kind_low (n - 1) k
+  else begin
+    LowParse.Math.distributivity_add_left (n - 1) 1 k.parser_kind_low;
+    parse_nlist_kind_low (n - 1) k
+  end
 
 let rec parse_nlist_kind_high
   (n: nat)
@@ -85,7 +86,13 @@ let rec parse_nlist_kind_high
   ))
 = if n = 0
   then ()
-  else parse_nlist_kind_high (n - 1) k
+  else begin
+    begin match k.parser_kind_high with
+    | None -> ()
+    | Some b -> LowParse.Math.distributivity_add_left (n - 1) 1 b
+    end;
+    parse_nlist_kind_high (n - 1) k
+  end
 
 let rec parse_nlist_kind_metadata
   (n: nat)
@@ -137,6 +144,7 @@ let rec parse_nlist'
 = if n = 0
   then parse_ret nlist_nil
   else begin
+    [@inline_let] let _ = assert (parse_nlist_kind n k == parse_nlist_kind' n k) in
     parse_synth
       (p `nondep_then` parse_nlist' (n - 1) p)
       (synth_nlist (n - 1))
@@ -326,7 +334,6 @@ let parse_vclist_and_then_cases_injective
     parse_synth_eq (parse_nlist (U32.v x2) p) (synth_vclist_payload min max x2) b2
   )
 
-abstract
 let parse_vclist
   (min: nat)
   (max: nat { min <= max } )
