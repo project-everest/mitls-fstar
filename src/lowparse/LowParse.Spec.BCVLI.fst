@@ -104,3 +104,86 @@ let parse_bcvli_eq (b: bytes) : Lemma
     parse_filter_eq (parse_bounded_integer_le 2) (fun x -> U32.v x >= 253) b';
     parse_synth_eq (parse_bounded_integer_le 4 `parse_filter` (fun x -> U32.v x >= 65536)) (fun x -> (x <: U32.t)) b';
     parse_filter_eq (parse_bounded_integer_le 4) (fun x -> U32.v x >= 65536) b'
+
+
+let serialize_bounded_integer_le'
+  (sz: integer_size)
+: Tot (bare_serializer (bounded_integer sz))
+= (fun (x: bounded_integer sz) ->
+    let res = E.n_to_le (U32.uint_to_t sz) (U32.v x) in
+    res
+  )
+
+let serialize_bounded_integer_le_correct
+  (sz: integer_size)
+: Lemma
+  (serializer_correct (parse_bounded_integer_le sz) (serialize_bounded_integer_le' sz))
+= let prf
+    (x: bounded_integer sz)
+  : Lemma
+    (
+      let res = serialize_bounded_integer_le' sz x in
+      Seq.length res == (sz <: nat) /\
+      parse (parse_bounded_integer_le sz) res == Some (x, (sz <: nat))
+    )
+  = ()
+  in
+  Classical.forall_intro prf
+
+let serialize_bounded_integer_le
+  (sz: integer_size)
+: Tot (serializer (parse_bounded_integer_le sz))
+= serialize_bounded_integer_le_correct sz;
+  serialize_bounded_integer_le' sz
+
+let bare_serialize_bcvli (x: U32.t) : GTot bytes =
+  let c1 : bounded_integer 1 =
+    if U32.v x <= 252 then
+      x
+    else if U32.v x <= 65535 then
+      253ul
+    else
+      254ul
+  in
+  Seq.append
+    (serialize (serialize_bounded_integer_le 1) c1)
+    (
+      if U32.v c1 <= 252 then Seq.empty else
+      if U32.v c1 = 253 then serialize (serialize_bounded_integer_le 2) x else
+      serialize (serialize_bounded_integer_le 4) x
+    )
+
+#push-options "--z3rlimit 32"
+
+let bare_serialize_bcvli_correct : squash
+  (serializer_correct parse_bcvli bare_serialize_bcvli)
+= let prf (x: U32.t) : Lemma
+    (let y = bare_serialize_bcvli x in
+     parse parse_bcvli y == Some (x, Seq.length y))
+  = let y = bare_serialize_bcvli x in
+    let c1 : bounded_integer 1 =
+      if U32.v x <= 252 then
+        x
+      else if U32.v x <= 65535 then
+        253ul
+      else
+        254ul
+    in
+    let sc1 = serialize (serialize_bounded_integer_le 1) c1 in
+    parse_strong_prefix (parse_bounded_integer_le 1) sc1 y;
+    let y' = Seq.slice y (Seq.length sc1) (Seq.length y) in
+    parse_bcvli_eq y;
+    if U32.v c1 <= 252 then begin
+      assert (y `Seq.equal` sc1)
+    end else if U32.v c1 = 253 then begin
+      assert (U32.v x <= 65535);
+      assert (y' `Seq.equal` serialize (serialize_bounded_integer_le 2) x)
+    end else begin
+      assert (y' `Seq.equal` serialize (serialize_bounded_integer_le 4) x)
+    end
+  in
+  Classical.forall_intro (Classical.move_requires prf)
+
+#pop-options
+
+let serialize_bcvli : serializer parse_bcvli = bare_serialize_bcvli
