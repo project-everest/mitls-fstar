@@ -14,3 +14,4 @@ include LowParse.Spec.Bytes
 include LowParse.Spec.Option
 include LowParse.Spec.IfThenElse
 include LowParse.Spec.VCList
+include LowParse.Spec.BCVLI
