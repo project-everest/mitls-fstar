@@ -143,7 +143,7 @@ let validate_nlist
   (n: U32.t)
   (#k: parser_kind)
   (#t: Type0)
-  (p: parser k t)
+  (#p: parser k t)
   (v: validator p)
 : Tot (validator (parse_nlist (U32.v n) p))
 = fun input pos ->
@@ -192,6 +192,55 @@ let validate_nlist
   [@inline_let] let _ =
     if U32.v res <= U32.v validator_max_length
     then valid_nlist_nil p h0 input res
+  in
+  HST.pop_frame ();
+  res
+
+inline_for_extraction
+let jump_nlist
+  (n: U32.t)
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (v: jumper p)
+: Tot (jumper (parse_nlist (U32.v n) p))
+= fun input pos ->
+  let h0 = HST.get () in
+  HST.push_frame ();
+  let bpos1 = B.alloca pos 1ul in
+  let br = B.alloca n 1ul in
+  let h1 = HST.get () in
+  C.Loops.do_while
+    (fun h stop ->
+      B.modifies (B.loc_buffer bpos1 `B.loc_union` B.loc_buffer br) h1 h /\ (
+      let pos1 = B.get h bpos1 0 in
+      let r = B.get h br 0 in
+      U32.v r <= U32.v n /\
+      U32.v pos <= U32.v pos1 /\
+      U32.v pos1 <= U32.v input.len /\
+      valid (parse_nlist (U32.v n) p) h0 input pos /\ valid (parse_nlist (U32.v r) p) h0 input pos1 /\
+      get_valid_pos (parse_nlist (U32.v n) p) h0 input pos == get_valid_pos (parse_nlist (U32.v r) p) h0 input pos1 /\
+      (stop == true ==> r == 0ul)
+    ))
+    (fun _ ->
+      let r = B.index br 0ul in
+      if r = 0ul
+      then true
+      else
+        let pos1 = B.index bpos1 0ul in
+        [@inline_let]
+        let _ =
+          valid_nlist_cons_recip (U32.v r) p h0 input pos1
+        in
+        let pos2 = v input pos1 in
+        let _ = B.upd br 0ul (r `U32.sub` 1ul) in
+        let _ = B.upd bpos1 0ul pos2 in
+        false
+    )
+  ;
+  let res = B.index bpos1 0ul in
+  [@inline_let] let _ =
+    valid_nlist_nil p h0 input res
   in
   HST.pop_frame ();
   res
