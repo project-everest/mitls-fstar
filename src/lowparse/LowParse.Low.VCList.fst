@@ -309,3 +309,67 @@ let rec valid_list_valid_nlist
     valid_list_valid_nlist p h sl pos1 pos' ;
     valid_nlist_cons (L.length (contents_list p h sl pos1 pos')) p h sl pos
   end
+
+(* vclist *)
+
+#push-options "--z3rlimit 16"
+
+inline_for_extraction
+let validate_vclist
+  (min: U32.t)
+  (max: U32.t { U32.v min <= U32.v max } )
+  (#lk: parser_kind)
+  (#lp: parser lk U32.t)
+  (lv: validator lp)
+  (lr: leaf_reader lp)
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (v: validator p)
+: Tot (validator (parse_vclist (U32.v min) (U32.v max) lp p))
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let] let _ =
+    valid_facts (parse_vclist (U32.v min) (U32.v max) lp p) h input pos;
+    parse_vclist_eq (U32.v min) (U32.v max) lp p (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos)));
+    valid_facts lp h input pos
+  in
+  let pos1 = lv input pos in
+  if validator_max_length `U32.lt` pos1
+  then pos1 // error
+  else
+    let n = lr input pos in
+    if n `U32.lt` min || max `U32.lt` n
+    then validator_error_generic
+    else
+      [@inline_let]
+      let _ = valid_facts (parse_nlist (U32.v n) p) h input pos1 in
+      validate_nlist n v input pos1
+
+inline_for_extraction
+let jump_vclist
+  (min: nat)
+  (max: nat { min <= max } )
+  (#lk: parser_kind)
+  (#lp: parser lk U32.t)
+  (lv: jumper lp)
+  (lr: leaf_reader lp)
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (v: jumper p)
+: Tot (jumper (parse_vclist min max lp p))
+= fun input pos ->
+  let h = HST.get () in
+  [@inline_let] let _ =
+    valid_facts (parse_vclist min max lp p) h input pos;
+    parse_vclist_eq min max lp p (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos)));
+    valid_facts lp h input pos
+  in
+  let pos1 = lv input pos in
+  let n = lr input pos in
+  [@inline_let]
+  let _ = valid_facts (parse_nlist (U32.v n) p) h input pos1 in
+  jump_nlist n v input pos1
+
+#pop-options
