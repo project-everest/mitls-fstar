@@ -1,1 +1,50 @@
-[ "\u0013Øc¢\u0003„l&ê∏Ÿ‹p–ó", [] ]
+[
+  "\u0001\\s:RRRæ¡\u0014fﬂŸŸ\b\r",
+  [
+    [
+      "LowParse.Bytes.bytes_equal",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "d8511d6a47aa719dfc221212678f6af0"
+    ],
+    [
+      "LowParse.Bytes.bytes_equal_intro",
+      1,
+      2,
+      1,
+      [ "@query", "equation_LowParse.Bytes.bytes_equal" ],
+      0,
+      "9ee7992745c1cb04d2d9a185da4edc2f"
+    ],
+    [
+      "LowParse.Bytes.bytes_equal_refl",
+      1,
+      2,
+      1,
+      [ "@query", "lemma_LowParse.Bytes.bytes_equal_intro" ],
+      0,
+      "cf388fb74df43827032322d94e55da4a"
+    ],
+    [
+      "LowParse.Bytes.bytes_equal_elim",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_LowParse.Bytes.byte",
+        "equation_LowParse.Bytes.bytes",
+        "equation_LowParse.Bytes.bytes_equal", "equation_Prims.nat",
+        "function_token_typing_FStar.UInt8.t",
+        "lemma_FStar.Seq.Base.lemma_eq_elim",
+        "lemma_FStar.Seq.Base.lemma_eq_intro", "lemma_FStar.UInt8.uv_inv",
+        "refinement_interpretation_FStar.Seq.Base_Tm_refine_36f208f2b1019ab7b5d9be73f4c89349",
+        "typing_FStar.Seq.Base.index"
+      ],
+      0,
+      "3dff9171853e8898779cc005f1d3063f"
+    ]
+  ]
+]
