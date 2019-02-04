@@ -15,3 +15,4 @@ include LowParse.SLow.Tac.Sum
 include LowParse.SLow.Option
 include LowParse.SLow.IfThenElse
 include LowParse.SLow.VCList
+include LowParse.SLow.BCVLI
