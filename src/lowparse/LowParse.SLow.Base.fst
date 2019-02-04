@@ -107,6 +107,16 @@ let serializer32_correct
 : GTot Type0
 = B32.reveal res == s input
 
+let serializer32_correct'
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (s: serializer p)
+  (input: t)
+  (res: bytes32)
+: GTot Type0
+= B32.reveal res `bytes_equal` s input
+
 [@unifier_hint_injective]
 inline_for_extraction
 let serializer32
