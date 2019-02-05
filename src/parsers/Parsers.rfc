@@ -757,6 +757,12 @@ struct {
 
 CertificateExtension CertificateExtensions<0..2^16-1>;
 
+/* The payload of an unknown extension. (TODO: rename this type, since it DOES NOT include the extension type. */
+struct {
+  uint16 len;
+  opaque payload[len];
+} UnknownExtension;
+
 /* End of extensions */
 
 /* Alert Types */
