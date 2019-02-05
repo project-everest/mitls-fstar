@@ -118,9 +118,6 @@ include Parsers.ServerDHParams
 include Parsers.KeyShareEntry
 include Parsers.KeyShareClientHello
 
-(* Unknown *)
-include Parsers.UnknownExtension
-
 (* New Session Ticket *)
 include Parsers.NewSessionTicketExtension
 include Parsers.NewSessionTicketExtensions
