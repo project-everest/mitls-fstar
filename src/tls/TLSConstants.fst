@@ -665,6 +665,7 @@ noeq type ticket_cb = {
 /// Custom Extensions
 
 include Parsers.ExtensionType
+include Parsers.UnknownExtension
 
 // 18-12-22 TODO use a vl wire format instead of a list
 type custom_id = v:UInt16.t{~(known_extensionType_repr v)}
