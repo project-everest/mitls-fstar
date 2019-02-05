@@ -14,7 +14,12 @@ function fetch_mlcrypto() {
 
     cd mlcrypto
     git fetch origin
-    local ref=$(if [ -f ../.mlcrypto_version ]; then cat ../.mlcrypto_version | tr -d '\r\n'; else echo origin/master; fi)
+    local ref=$(jq -c -r '.RepoVersions["mlcrypto_version"]' "$rootPath/.docker/build/config.json" )
+    if [[ $ref == "" || $ref == "null" ]]; then
+        echo "Unable to find RepoVersions.mlcrypto_version on $rootPath/.docker/build/config.json"
+        return -1
+    fi
+
     echo Switching to MLCrypto $ref
     git reset --hard $ref
     git submodule update
@@ -99,7 +104,12 @@ function fetch_hacl() {
 
     cd hacl-star
     git fetch origin
-    local ref=$(if [ -f ../.hacl_version ]; then cat ../.hacl_version | tr -d '\r\n'; else echo origin/master; fi)
+    local ref=$(jq -c -r '.RepoVersions["hacl_version"]' "$rootPath/.docker/build/config.json" )
+    if [[ $ref == "" || $ref == "null" ]]; then
+        echo "Unable to find RepoVersions.hacl_version on $rootPath/.docker/build/config.json"
+        return -1
+    fi
+
     echo Switching to HACL $ref
     git reset --hard $ref
     git clean -fdx
@@ -116,7 +126,12 @@ function fetch_kremlin() {
 
     cd kremlin
     git fetch origin
-    local ref=$(if [ -f ../.kremlin_version ]; then cat ../.kremlin_version | tr -d '\r\n'; else echo origin/master; fi)
+    local ref=$(jq -c -r '.RepoVersions["kremlin_version"]' "$rootPath/.docker/build/config.json" )
+    if [[ $ref == "" || $ref == "null" ]]; then
+        echo "Unable to find RepoVersions.kremlin_version on $rootPath/.docker/build/config.json"
+        return -1
+    fi
+
     echo Switching to KreMLin $ref
     git reset --hard $ref
     cd ..
@@ -147,7 +162,12 @@ function fetch_qd() {
 
     cd qd
     git fetch origin
-    local ref=$(if [ -f ../.qd_version ]; then cat ../.qd_version | tr -d '\r\n'; else echo origin/master; fi)
+    local ref=$(jq -c -r '.RepoVersions["qd_version"]' "$rootPath/.docker/build/config.json" )
+    if [[ $ref == "" || $ref == "null" ]]; then
+        echo "Unable to find RepoVersions.qd_version on $rootPath/.docker/build/config.json"
+        return -1
+    fi
+
     echo Switching to QuackyDucky $ref
     git reset --hard $ref
     cd ..
@@ -332,5 +352,6 @@ export MAKEFLAGS="$MAKEFLAGS -Otarget"
 
 export_home FSTAR "$(pwd)/FStar"
 cd mitls-fstar
+rootPath=$(pwd)
 exec_build
 cd ..
