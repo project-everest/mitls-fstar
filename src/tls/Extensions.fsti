@@ -67,11 +67,8 @@ include Parsers.SignedCertificateTimestampList
 include Parsers.ProtocolName
 include Parsers.ProtocolNameList
 
-(* Padding *)
-include Parsers.PaddingExtension
-
 (* Ticket *)
-include Parsers.SessionTicket
+include Parsers.TicketContents
 
 (* EDI (NewSessionTicket) *)
 include Parsers.EarlyDataIndicationNewSessionTicket

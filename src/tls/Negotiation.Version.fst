@@ -248,7 +248,7 @@ let isSentinelRandomValue client_pv server_pv server_random =
 val accept:
   cfg: config ->
   pv: protocolVersion ->
-  ses: Parsers.ServerHello_extensions.serverHello_extensions ->
+  ses: Parsers.ServerHelloExtensions.serverHelloExtensions ->
   sr: TLSInfo.random ->
   result (pv: Parsers.ProtocolVersion.protocolVersion{ supported cfg pv })
 
