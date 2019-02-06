@@ -34,7 +34,8 @@ let parse_fldata_injective
   (sz: nat)
 : Lemma
   (ensures (injective (parse_fldata' p sz)))
-= let f
+= parser_kind_prop_equiv k p;
+  let f
     (b1 b2: bytes)
   : Lemma
     (requires (injective_precond (parse_fldata' p sz) b1 b2))
@@ -65,6 +66,8 @@ val parse_fldata
 
 let parse_fldata #b #t p sz =
   parse_fldata_injective p sz;
+  parser_kind_prop_equiv b p;
+  parser_kind_prop_equiv (parse_fldata_kind sz b) (parse_fldata' p sz);
   parse_fldata' p sz  
 
 val parse_fldata_consumes_all
@@ -73,7 +76,7 @@ val parse_fldata_consumes_all
   (p: parser k t)
   (sz: nat)
 : Pure (bare_parser t)
-  (requires (consumes_all p))
+  (requires (k.parser_kind_subkind == Some ParserConsumesAll))
   (ensures (fun _ -> True))
 
 let parse_fldata_consumes_all #k #t p sz =
@@ -92,10 +95,11 @@ let parse_fldata_consumes_all_correct
   (#t: Type0)
   (p: parser k t)
   (sz: nat)
+  (b: bytes)
 : Lemma
   (requires (k.parser_kind_subkind == Some ParserConsumesAll))
-  (ensures (forall b . parse (parse_fldata p sz) b == parse (parse_fldata_consumes_all p sz) b))
-= ()
+  (ensures (parse (parse_fldata p sz) b == parse (parse_fldata_consumes_all p sz) b))
+= parser_kind_prop_equiv k p
 
 let parse_fldata_strong_pred
   (#k: parser_kind)

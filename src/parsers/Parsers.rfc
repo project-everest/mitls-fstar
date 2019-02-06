@@ -91,7 +91,10 @@ enum /*@open*/ {
   host_name(0), (255)
 } NameType;
 
-opaque HostName<1..2^16-1>;
+/**
+RFC says 1..2^16-1 but we need at least 9 extra bytes for inclusion in extensions 
+*/ 
+opaque HostName<1..2^16-10>;
 opaque UnknownName<1..2^16-1>;
 
 struct {
@@ -120,7 +123,7 @@ Certificate Status request (OCSP)
 https://tools.ietf.org/html/rfc6066#section-8
 **/
 
-enum /*@open*/ {
+enum {
   ocsp(1), (255)
 } CertificateStatusType;
 
@@ -136,23 +139,36 @@ struct {
 Note: it looks like this sum is extensible, but it
 actually isn't because OCSPStatusRequest is not
 a VLData type, hence, it's not possible to define
-a default case for unknown status types */
+a default case for unknown status types.
+
+For this reason, CertificateStatusType is not
+marked as an open enum.
+*/
 struct {
   CertificateStatusType status_type;
+/*
   select (status_type) {
     case ocsp: OCSPStatusRequest;
-    default: Fail;
   } csr; /*request*/
+*/
+  OCSPStatusRequest request;
 } CertificateStatusRequest;
 
 opaque OCSPResponse<1..2^24-1>;
 
+/*
+Since OCSPResponse is vlbytes, this select
+could be left open.
+*/
 struct {
   CertificateStatusType status_type;
-  select (status_type) {
+/*
+select (status_type) {
     case ocsp: OCSPResponse;
     default: Fail;
   } cs; /*response*/
+*/
+  OCSPResponse response;
 } CertificateStatus;
 
 /**
@@ -334,7 +350,11 @@ struct {
 
 /**
 Padding
-**/
+
+The padding extension re-uses the vldata of the extension
+for the vlbyte of the padding. Because we want to avoid having
+to distribute the vldata in every extension type, we prefer to
+define the extension as opaque.
 
 struct {
   uint8 zero = 0;
@@ -343,14 +363,26 @@ struct {
 struct {
   ZeroByte padding<0..2^16-1>;
 } PaddingExtension;
+*/
 
 /**
 Ticket
-**/
+
+N.B. The original RFC 4507 defined a proper SessionTicket type
+as a vlbytes. This no longer works because of the changes in
+Appendix A of RFC 5077: the vldata length of the extension is
+used for the contents of the ticket. Therefore, the whole
+extension contents must be marked "opaque".
+
+It is interesting to note that Appendix A of RFC 5077 is completely
+wrong: RFC 4507 was less ambiguous than RFC 5077. It is now
+impossible to use empty tickets, as this can no longer be distinguished
+from the client offering no ticket.
 
 struct {
   opaque ticket_data<0..2^16-1>;
 } SessionTicket;
+*/
 
 /**
 Pre-shared key extension
@@ -474,15 +506,8 @@ struct {
     opaque Y[66];
 } UncompressedPointRepresentation66;
 
-struct {
-    uint8 legacy_form = 4;
-    opaque point[32];
-} MontgomeryPoint32;
-
-struct {
-    uint8 legacy_form = 4;
-    opaque point[56];
-} MontgomeryPoint56;
+opaque MontgomeryPoint32[32];
+opaque MontgomeryPoint56[56];
 
 /* https://tools.ietf.org/html/rfc5246#section-7.4.3 */
 struct {
@@ -491,10 +516,9 @@ struct {
     opaque dh_Ys<1..2^16-1>;
 } ServerDHParams;
 
-opaque KeyExchangeData<1..2^16-1>;
-
 struct {
   NamedGroup group;
+  uint16 len;
   select(group)
   {
     case secp256r1: UncompressedPointRepresentation32;
@@ -510,8 +534,8 @@ struct {
     case ffdhe6144: ServerDHParams;
     case ffdhe8192: ServerDHParams;
 
-    default: KeyExchangeData;
-  } ks; /*key_exchange*/
+    default: opaque;
+  } ks[len]; /*key_exchange*/
 } KeyShareEntry;
 
 struct {
@@ -561,7 +585,45 @@ https://tools.ietf.org/html/rfc8446#section-4.2
 
 **/
 
-opaque UnknownExtension<0..2^16-1>;
+/*
+ClientHello extensions (all protocol versions)
+*/
+struct {
+  ExtensionType type;
+  uint16 len;
+  select(type)
+  {
+    case server_name: ServerNameList;
+    case max_fragment_length: MaxFragmentLength;
+    case status_request: CertificateStatusRequest;
+    case supported_groups: NamedGroupList;
+    case ec_point_formats: ECPointFormatList;
+    case signature_algorithms: SignatureSchemeList;
+    case use_srtp: SRTPProtectionProfiles;
+    case heartbeat: HeartbeatMode;
+    case application_layer_protocol_negotiation: ProtocolNameList;
+    case signed_certificate_timestamp: Empty;
+    case client_certificate_type: ClientCertTypeExtension;
+    case server_certificate_type: ServerCertTypeExtension;
+    case padding: opaque; /*PaddingExtension*/
+    case encrypt_then_mac: Empty;
+    case extended_master_secret: Empty;
+    case session_ticket: opaque; /* see note in SessionTicket */
+    case pre_shared_key: PreSharedKeyClientExtension;
+    case early_data: Empty;
+    case supported_versions: SupportedVersions;
+    case cookie: Cookie;
+    case psk_key_exchange_modes: PskKeyExchangeModes;
+    case certificate_authorities: CertificateAuthoritiesExtension;
+    case oid_filters: OIDFilterExtension;
+    case post_handshake_auth: Empty;
+    case signature_algorithms_cert: SignatureSchemeList;
+    case key_share: KeyShareClientHello;
+    default: opaque;
+  } CHE[len]; /*extension_data*/
+} ClientHelloExtension;
+
+ClientHelloExtension ClientHelloExtensions<0..2^16-1>;
 
 /*
 Extensions that may appear in ServerHello.
@@ -570,9 +632,9 @@ as some extensions moved to other messages but may still
 appear in ServerHello in 1.2 handshakes.
 */
 struct {
-  ExtensionType extension_type;
-  uint16 ext_len;
-  select(extension_type)
+  ExtensionType type;
+  uint16 len;
+  select(type)
   {
     case server_name: Empty; /* Acknowledge, for TLS 1.2 SH */
     case max_fragment_length: MaxFragmentLength; /* Must echo back the same offer */
@@ -598,56 +660,20 @@ struct {
     case post_handshake_auth: Fail;
     case signature_algorithms_cert: Fail;
     case key_share: KeyShareEntry;
-    default: UnknownExtension;
-  } e[ext_len]; /*extension_data, renamed for brevity*/
+    default: opaque;
+  } SHE[len]; /*extension_data, renamed for brevity*/
 } ServerHelloExtension;
 
-/*
-ClientHello extensions (all protocol versions)
-*/
-struct {
-  ExtensionType extension_type;
-  uint16 ext_len;
-  select(extension_type)
-  {
-    case server_name: ServerNameList;
-    case max_fragment_length: MaxFragmentLength;
-    case status_request: CertificateStatusRequest;
-    case supported_groups: NamedGroupList;
-    case ec_point_formats: ECPointFormatList;
-    case signature_algorithms: SignatureSchemeList;
-    case use_srtp: SRTPProtectionProfiles;
-    case heartbeat: HeartbeatMode;
-    case application_layer_protocol_negotiation: ProtocolNameList;
-    case signed_certificate_timestamp: Empty;
-    case client_certificate_type: ClientCertTypeExtension;
-    case server_certificate_type: ServerCertTypeExtension;
-    case padding: PaddingExtension;
-    case encrypt_then_mac: Empty;
-    case extended_master_secret: Empty;
-    case session_ticket: SessionTicket;
-    case pre_shared_key: PreSharedKeyClientExtension;
-    case early_data: Empty;
-    case supported_versions: SupportedVersions;
-    case cookie: Cookie;
-    case psk_key_exchange_modes: PskKeyExchangeModes;
-    case certificate_authorities: CertificateAuthoritiesExtension;
-    case oid_filters: OIDFilterExtension;
-    case post_handshake_auth: Empty;
-    case signature_algorithms_cert: SignatureSchemeList;
-    case key_share: KeyShareClientHello;
-    default: UnknownExtension;
-  } e[ext_len]; /*extension_data*/
-} ClientHelloExtension;
+ServerHelloExtension ServerHelloExtensions<0..2^16-1>;
 
 /*
 EncryptedExtensions (1.3).
 The parser cannot verify that extensions are not sent both in CH and EE
 */
 struct {
-  ExtensionType extension_type;
-  uint16 ext_len;
-  select(extension_type)
+  ExtensionType type;
+  uint16 len;
+  select(type)
   {
     case server_name: ServerNameList;
     case max_fragment_length: MaxFragmentLength;
@@ -658,54 +684,87 @@ struct {
     case client_certificate_type: ClientCertTypeExtension;
     case server_certificate_type: ServerCertTypeExtension;
     case early_data: Empty;
-    default: UnknownExtension;
-  } e[ext_len]; /*extension_data*/
+    default: opaque;
+  } EE[len]; /*extension_data*/
 } EncryptedExtension;
+
+EncryptedExtension EncryptedExtensions<0..2^16-1>;
 
 /*
 Extensions that may appear in the NewSessionTicket[1.3] message
 */
 struct {
-  ExtensionType extension_type;
-  uint16 ext_len;
-  select(extension_type)
+  ExtensionType type;
+  uint16 len;
+  select(type)
   {
-    default: UnknownExtension;
-  } e[ext_len]; /*extension_data*/
+    case early_data: EarlyDataIndicationNewSessionTicket;
+    default: opaque;
+  } NSTE[len]; /*extension_data*/
 } NewSessionTicketExtension;
+
+NewSessionTicketExtension NewSessionTicketExtensions<0..2^16-1>;
+
+/*
+Extensions that may appear in the HelloRetryRequest[1.3] message
+*/
+struct {
+  ExtensionType type;
+  uint16 len;
+  select(type)
+  {
+    case supported_versions: ProtocolVersion;
+    case cookie: Cookie;
+    case key_share: NamedGroup;
+    default: opaque;
+  } HRRE[len]; /*extension_data*/
+} HRRExtension;
+
+HRRExtension HRRExtensions<0..2^16-1>;
 
 /*
 Extensions that may appear in the CertificateRequest[1.3] message
 */
 struct {
-  ExtensionType extension_type;
-  uint16 ext_len;
-  select(extension_type)
+  ExtensionType type;
+  uint16 len;
+  select(type)
   {
     case status_request: CertificateStatusRequest;
     case signed_certificate_timestamp: Empty;
     case certificate_authorities: CertificateAuthoritiesExtension;
     case oid_filters: OIDFilterExtension;
     case signature_algorithms_cert: SignatureSchemeList;
-    default: UnknownExtension;
-  } e[ext_len]; /*extension_data*/
+    default: opaque;
+  } CRE[len]; /*extension_data*/
 } CertificateRequestExtension;
+
+CertificateRequestExtension CertificateRequestExtensions<0..2^16-1>;
 
 /*
 Extensions that may appear in the Certificate[1.3] message
 */
 struct {
-  ExtensionType extension_type;
-  uint16 body_len;
-  select(extension_type)
+  ExtensionType type;
+  uint16 len;
+  select(type)
   {
     case status_request: CertificateStatus;
     case signed_certificate_timestamp: SignedCertificateTimestampList;
-    default: UnknownExtension;
-  } e[body_len]; /*extension_data*/
+    default: opaque;
+  } CE[len]; /*extension_data*/
 } CertificateExtension;
 
+CertificateExtension CertificateExtensions<0..2^16-1>;
+
+/* The payload of an unknown extension. (TODO: rename this type, since it DOES NOT include the extension type. */
+struct {
+  uint16 len;
+  opaque payload[len];
+} UnknownExtension;
+
 /* End of extensions */
+
 /* Alert Types */
 
 enum { warning(1), fatal(2), (255) } AlertLevel;
@@ -1160,8 +1219,8 @@ struct {
   SessionID session_id;
   CipherSuite cipher_suites<2..2^16-2>;
   CompressionMethod compression_method<1..2^8-1>;
-  /*@option*/ ClientHelloExtension extensions<2..2^16-1>;
- } ClientHello;
+  ClientHelloExtensions extensions;
+} ClientHello;
 
 struct {
   ProtocolVersion version;
@@ -1169,21 +1228,19 @@ struct {
   SessionID session_id;
   CipherSuite cipher_suite;
   CompressionMethod compression_method;
-  ServerHelloExtension extensions<2..2^16-1>;
+  ServerHelloExtensions extensions;
 } ServerHello;
 
 /** TLS 1.3 Handshake Messages */
 
-EncryptedExtension EncryptedExtensions<0..2^16-1>;
-
 struct {
   opaque certificate_request_context<0..2^8-1>;
-  CertificateRequestExtension extensions<2..2^16-1>;
+  CertificateRequestExtensions extensions;
 } CertificateRequest13;
 
 struct {
   opaque cert_data<1..2^24-1>;
-  CertificateExtension extensions<0..2^16-1>;
+  CertificateExtensions extensions;
 } CertificateEntry13;
 
 struct {

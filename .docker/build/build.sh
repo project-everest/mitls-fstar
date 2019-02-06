@@ -14,7 +14,12 @@ function fetch_mlcrypto() {
 
     cd mlcrypto
     git fetch origin
-    local ref=$(if [ -f ../.mlcrypto_version ]; then cat ../.mlcrypto_version | tr -d '\r\n'; else echo origin/master; fi)
+    local ref=$(jq -c -r '.RepoVersions["mlcrypto_version"]' "$rootPath/.docker/build/config.json" )
+    if [[ $ref == "" || $ref == "null" ]]; then
+        echo "Unable to find RepoVersions.mlcrypto_version on $rootPath/.docker/build/config.json"
+        return -1
+    fi
+
     echo Switching to MLCrypto $ref
     git reset --hard $ref
     git submodule update
@@ -72,73 +77,6 @@ if [[ $OS == "Windows_NT" ]] ; then
   fi
 fi
 
-SCONS_PYTHON_MAJOR=3
-SCONS_PYTHON_MINOR=6
-SCONS_PYTHON_MAJOR_MINOR=$SCONS_PYTHON_MAJOR.$SCONS_PYTHON_MINOR
-
-run_scons () {
-  short_dir="$1"
-  shift
-  cmd="$1"
-
-  if [[ $OS == "Windows_NT" ]] ; then
-    DIR=$(cygpath -w "$(pwd)"/"$short_dir")
-  else
-    DIR="$short_dir"
-  fi
-
-  if [[ $OS == "Windows_NT" ]]; then
-    # Instead of invoking cmd.exe /c, which would force us to
-    # rely on its flaky semantics for double quotes,
-    # we go through a batch file.
-    THIS_PID=$$
-    # Find an unambiguous file name for our .bat file
-    SCONS_EXECS=0
-    while
-      SCONS_INVOKE_FILE="everest$THIS_PID""scons$SCONS_EXECS"".bat" &&
-      [[ -e "$SCONS_INVOKE_FILE" ]]
-    do
-      SCONS_EXECS=$(($SCONS_EXECS + 1))
-    done
-    # Then create, run and remove the .bat file
-    cat > "$SCONS_INVOKE_FILE" <<EOF
-call $VS_ENV_CMD
-cd "$DIR"
-EOF
-    if command -v scons.bat > /dev/null 2>&1 ; then
-      echo "call scons.bat $cmd $parallel_opt" >> "$SCONS_INVOKE_FILE"
-    else
-      PYDIR=$(cygpath -d $(windows_scons_python_dir))
-      echo "$PYDIR/python.exe $PYDIR/Scripts/scons.py $cmd $parallel_opt" >> "$SCONS_INVOKE_FILE"
-    fi
-    chmod +x "$SCONS_INVOKE_FILE"
-    "./$SCONS_INVOKE_FILE"
-    SCONS_RETCODE=$?
-    rm -f "$SCONS_INVOKE_FILE"
-    return $SCONS_RETCODE
-  else
-    python$SCONS_PYTHON_MAJOR_MINOR $(which scons) -C "$DIR" $cmd $parallel_opt
-  fi
-}
-
-run_vale_scons () {
-  if [[ $OS == "Windows_NT" ]] ; then
-    # Use the same Z3 for Dafny as for F*
-    # i.e. the one in the PATH
-    Z3PATH_UNIX=$(which z3.exe)
-    Z3PATH=$(cygpath -w "$Z3PATH_UNIX")
-    # Here the path to z3 might have whitespaces,
-    # so it must be enclosed into double quotes
-    # to be treated correctly by scons and Dafny.
-    # Moreover, it must fit in the single argument to
-    # run_vale_scons, which is why we cannot quote the command
-    # as a member of the verify_commands array
-    run_scons vale "--DARGS=/z3exe:\"$Z3PATH\" $1"
-  else
-    run_scons vale "$1"
-  fi
-}
-
 function export_home() {
     local home_path=""
     if command -v cygpath >/dev/null 2>&1; then
@@ -166,7 +104,12 @@ function fetch_hacl() {
 
     cd hacl-star
     git fetch origin
-    local ref=$(if [ -f ../.hacl_version ]; then cat ../.hacl_version | tr -d '\r\n'; else echo origin/master; fi)
+    local ref=$(jq -c -r '.RepoVersions["hacl_version"]' "$rootPath/.docker/build/config.json" )
+    if [[ $ref == "" || $ref == "null" ]]; then
+        echo "Unable to find RepoVersions.hacl_version on $rootPath/.docker/build/config.json"
+        return -1
+    fi
+
     echo Switching to HACL $ref
     git reset --hard $ref
     git clean -fdx
@@ -183,7 +126,12 @@ function fetch_kremlin() {
 
     cd kremlin
     git fetch origin
-    local ref=$(if [ -f ../.kremlin_version ]; then cat ../.kremlin_version | tr -d '\r\n'; else echo origin/master; fi)
+    local ref=$(jq -c -r '.RepoVersions["kremlin_version"]' "$rootPath/.docker/build/config.json" )
+    if [[ $ref == "" || $ref == "null" ]]; then
+        echo "Unable to find RepoVersions.kremlin_version on $rootPath/.docker/build/config.json"
+        return -1
+    fi
+
     echo Switching to KreMLin $ref
     git reset --hard $ref
     cd ..
@@ -214,7 +162,12 @@ function fetch_qd() {
 
     cd qd
     git fetch origin
-    local ref=$(if [ -f ../.qd_version ]; then cat ../.qd_version | tr -d '\r\n'; else echo origin/master; fi)
+    local ref=$(jq -c -r '.RepoVersions["qd_version"]' "$rootPath/.docker/build/config.json" )
+    if [[ $ref == "" || $ref == "null" ]]; then
+        echo "Unable to find RepoVersions.qd_version on $rootPath/.docker/build/config.json"
+        return -1
+    fi
+
     echo Switching to QuackyDucky $ref
     git reset --hard $ref
     cd ..
@@ -243,26 +196,19 @@ function build_pki_if() {
 }
 
 function fetch_vale() {
-    if [ ! -d vale ]; then
-        git clone https://github.com/project-everest/vale vale
+    if [[ ! -d vale ]]; then
+        mkdir vale
     fi
-
-    cd vale
-    git fetch origin
-    local ref=$(if [ -f ../.vale_version ]; then cat ../.vale_version | tr -d '\r\n'; else echo origin/master; fi)
-    echo Switching to Vale $ref
-    git reset --hard $ref
-    nuget restore tools/Vale/src/packages.config -PackagesDirectory tools/FsLexYacc
-    cd ..
+    vale_version=$(<hacl-star/vale/.vale_version)
+    vale_version=${vale_version%$'\r'}  # remove Windows carriage return, if it exists
+    wget "https://github.com/project-everest/vale/releases/download/v${vale_version}/vale-release-${vale_version}.zip" -O vale/vale-release.zip
+    rm -rf "vale/vale-release-${vale_version}"
+    unzip -o vale/vale-release.zip -d vale
+    rm -rf "vale/bin"
+    mv "vale/vale-release-${vale_version}/bin" vale/
+    chmod +x vale/bin/*.exe
     export_home VALE "$(pwd)/vale"
 }
-
-function fetch_and_make_vale() {
-    fetch_vale
-
-    run_vale_scons "-j $threads --FSTAR-MY-VERSION"
-}
-
 
 function mitls_verify() {
     export_home MITLS "$(pwd)"
@@ -284,8 +230,8 @@ function mitls_verify() {
             else
                 # miTLS CI proper starts here
                 fetch_and_make_mlcrypto &&
-                fetch_and_make_vale &&
                 fetch_hacl &&
+                fetch_vale &&
                     # Only building a subset of HACL* for now, no verification
                     OTHERFLAGS="--admit_smt_queries true $OTHERFLAGS" \
                     VALE_SCONS_PARALLEL_OPT="-j $threads --NO-VERIFY --FSTAR-MY-VERSION --VALE-MY-VERSION" \
@@ -406,5 +352,6 @@ export MAKEFLAGS="$MAKEFLAGS -Otarget"
 
 export_home FSTAR "$(pwd)/FStar"
 cd mitls-fstar
+rootPath=$(pwd)
 exec_build
 cd ..

@@ -294,32 +294,26 @@ let rec map_ST f x = match x with
   | [] -> []
   | a::tl -> f a :: map_ST f tl
 
-private let group_of_cks = function
-  | CommonDH.Share g _ -> Some?.v (CommonDH.namedGroup_of_group g)
-  | CommonDH.UnknownShare g _ -> g
-
 private let keygen (g:CommonDH.group)
   : St (g:CommonDH.group & CommonDH.ikeyshare g)
   = (| g, CommonDH.keygen g |)
 
 val ks_client_init: ks:ks -> ogl: option CommonDH.supportedNamedGroups
-  -> ST (option CommonDH.clientKeyShare)
+  -> ST (option keyShareClientHello)
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_Init? (C?.s kss))
   (ensures fun h0 ogxl h1 ->
     let KS #rid st _ = ks in
     (None? ogl ==> None? ogxl) /\
-    (Some? ogl ==> (Some? ogxl /\ Some?.v ogl == List.Tot.map group_of_cks (Some?.v ogxl))) /\
+    (Some? ogl ==> (Some? ogxl /\ Some?.v ogl == List.Tot.map tag_of_keyShareEntry (Some?.v ogxl))) /\
     modifies (Set.singleton rid) h0 h1 /\
     HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
 
 private
 let serialize_share (gx:(g:CommonDH.group & CommonDH.ikeyshare g)) =
-    let (| g, gx |) = gx in
-    match CommonDH.namedGroup_of_group g with
-      | None -> None // Impossible
-      | Some ng -> Some (CommonDH.Share g (CommonDH.ipubshare #g gx))
+  let (| g, gx |) = gx in
+  CommonDH.format #g (CommonDH.ipubshare gx)
 
 private val map_ST_keygen: list CommonDH.group -> ST0 (list (g:CommonDH.group & CommonDH.ikeyshare g))
 private let rec map_ST_keygen l =
@@ -338,7 +332,7 @@ let ks_client_init ks ogl =
   | Some gl -> // TLS 1.3
     let groups = List.Tot.map group_of_valid_namedGroup gl in
     let gs = map_ST_keygen groups in
-    let gxl = List.Tot.choose serialize_share gs in
+    let gxl = List.Tot.map serialize_share gs in
     st := C (C_13_wait_SH cr [] gs);
     Some gxl
 
@@ -461,7 +455,7 @@ val ks_server_13_init:
   cs:cipherSuite ->
   pskid:option PSK.pskid ->
   g_gx:option (g:CommonDH.group & CommonDH.share g) ->
-  ST (option CommonDH.serverKeyShare * option (i:binderId & binderKey i))
+  ST (option (g:CommonDH.group & CommonDH.share g) * option (i:binderId & binderKey i))
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     S? kss /\ S_Init? (S?.s kss)
@@ -519,14 +513,14 @@ let ks_server_13_init ks cr cs pskid g_gx =
   let saltId = Salt (EarlySecretID esId) in
   let salt = HKDF.derive_secret h es "derived" (H.emptyHash h) in
   dbg ("Handshake salt:                  "^print_bytes salt);
-  let (gy: option CommonDH.keyShareEntry), (hsId: pre_hsId), (hs: Hashing.Spec.tag h) =
+  let gy, (hsId: pre_hsId), (hs: Hashing.Spec.tag h) =
     match g_gx with
     | Some (| g, gx |) ->
       let gy, gxy = CommonDH.dh_responder g gx in
       dbg ("DH shared secret: "^(print_bytes gxy));
       let hsId = HSID_DHE saltId g gx gy in
       let hs : hs hsId = HKDF.extract #h salt gxy in
-      Some (CommonDH.Share g gy), hsId, hs
+      Some (| g, gy |), hsId, hs
     | None ->
       let hsId = HSID_PSK saltId in
       let hs : hs hsId = HKDF.extract #h salt (H.zeroHash h) in

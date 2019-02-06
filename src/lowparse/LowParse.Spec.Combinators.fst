@@ -38,7 +38,7 @@ let make_constant_size_parser_precond
   (t: Type0)
   (f: ((s: bytes {Seq.length s == sz}) -> GTot (option t)))
 : GTot Type0
-= forall (s1: bytes {Seq.length s1 == sz}) (s2: bytes {Seq.length s2 == sz}) .
+= forall (s1: bytes {Seq.length s1 == sz}) (s2: bytes {Seq.length s2 == sz}) . {:pattern (f s1); (f s2)}
     make_constant_size_parser_precond_precond sz t f s1 s2 ==> Seq.equal s1 s2
 
 let make_constant_size_parser_precond'
@@ -46,7 +46,7 @@ let make_constant_size_parser_precond'
   (t: Type0)
   (f: ((s: bytes {Seq.length s == sz}) -> GTot (option t)))
 : GTot Type0
-= forall (s1: bytes {Seq.length s1 == sz}) (s2: bytes {Seq.length s2 == sz}) .
+= forall (s1: bytes {Seq.length s1 == sz}) (s2: bytes {Seq.length s2 == sz}) . {:pattern (f s1); (f s2)}
     make_constant_size_parser_precond_precond sz t f s1 s2 ==> s1 == s2
 
 let make_constant_size_parser_injective
@@ -98,6 +98,7 @@ let make_constant_size_parser
   (ensures (fun _ -> True))
 = let p : bare_parser t = make_constant_size_parser_aux sz t f in
   make_constant_size_parser_injective sz t f;
+  parser_kind_prop_equiv (constant_size_parser_kind sz) p;
   p
 
 let make_total_constant_size_parser_precond
@@ -105,7 +106,7 @@ let make_total_constant_size_parser_precond
   (t: Type0)
   (f: ((s: bytes {Seq.length s == sz}) -> GTot t))
 : GTot Type0
-= forall (s1: bytes {Seq.length s1 == sz}) (s2: bytes {Seq.length s2 == sz}) .
+= forall (s1: bytes {Seq.length s1 == sz}) (s2: bytes {Seq.length s2 == sz}) . {:pattern (f s1); (f s2)}
   f s1 == f s2 ==> Seq.equal s1 s2
 
 let make_total_constant_size_parser
@@ -122,6 +123,7 @@ let make_total_constant_size_parser
   ))
   (ensures (fun _ -> True))
 = let p : bare_parser t = make_constant_size_parser sz t (fun x -> Some (f x)) in
+  parser_kind_prop_equiv (total_constant_size_parser_kind sz) p;
   p
 
 
@@ -138,6 +140,7 @@ let parse_ret_kind : parser_kind =
   strong_parser_kind 0 0 (Some ParserKindMetadataTotal)
 
 let parse_ret (#t:Type) (v:t) : Tot (parser parse_ret_kind t) =
+  parser_kind_prop_equiv parse_ret_kind (parse_ret' v);
   parse_ret' v
 
 let parse_empty : parser parse_ret_kind unit =
@@ -168,6 +171,7 @@ let fail_parser
   (requires (fail_parser_kind_precond k))
   (ensures (fun _ -> True))
 = let p = fail_parser' t in
+  parser_kind_prop_equiv k p;
   strengthen k p
 
 inline_for_extraction
@@ -205,10 +209,10 @@ let and_then_cases_injective_precond
   (x1 x2: t)
   (b1 b2: bytes)
 : GTot Type0
-= Some? ((p' x1) b1) /\
-  Some? ((p' x2) b2) /\ (
-    let (Some (v1, _)) = (p' x1) b1 in
-    let (Some (v2, _)) = (p' x2) b2 in
+= Some? (parse (p' x1) b1) /\
+  Some? (parse (p' x2) b2) /\ (
+    let (Some (v1, _)) = parse (p' x1) b1 in
+    let (Some (v2, _)) = parse (p' x2) b2 in
     v1 == v2
   )
 
@@ -217,7 +221,7 @@ let and_then_cases_injective
   (#t':Type)
   (p': (t -> Tot (bare_parser t')))
 : GTot Type0
-= forall (x1 x2: t) (b1 b2: bytes) .
+= forall (x1 x2: t) (b1 b2: bytes) . {:pattern (parse (p' x1) b1); (parse (p' x2) b2)}
   and_then_cases_injective_precond p' x1 x2 b1 b2 ==>
   x1 == x2
 
@@ -394,7 +398,9 @@ let and_then_no_lookahead
     and_then_cases_injective p'
   ))
   (ensures ((k.parser_kind_subkind == Some ParserStrong /\ k'.parser_kind_subkind == Some ParserStrong) ==> no_lookahead (and_then_bare p p')))
-= if k.parser_kind_subkind = Some ParserStrong && k.parser_kind_subkind = Some ParserStrong then
+= parser_kind_prop_equiv k p;
+  Classical.forall_intro (fun (x: t) -> parser_kind_prop_equiv k' (p' x));
+  if k.parser_kind_subkind = Some ParserStrong && k.parser_kind_subkind = Some ParserStrong then
     Classical.forall_intro_2 (fun x -> Classical.move_requires (and_then_no_lookahead_on p p' x))
   else ()
 
@@ -415,7 +421,10 @@ let and_then_correct
     injective (and_then_bare p p') /\
     parser_kind_prop (and_then_kind k k') (and_then_bare p p')
   ))
-= and_then_injective p p';
+= parser_kind_prop_equiv k p;
+  Classical.forall_intro (fun x -> parser_kind_prop_equiv k' (p' x));
+  parser_kind_prop_equiv (and_then_kind k k') (and_then_bare p p');
+  and_then_injective p p';
   and_then_no_lookahead p p'
 
 #reset-options
@@ -532,7 +541,9 @@ let bare_serialize_nondep_then_correct
 : Lemma
   (requires (k1.parser_kind_subkind == Some ParserStrong))
   (ensures (serializer_correct (nondep_then p1 p2) (bare_serialize_nondep_then p1 s1 p2 s2)))
-= let prf
+= parser_kind_prop_equiv k1 p1;
+  parser_kind_prop_equiv k2 p2;
+  let prf
     (x: t1 * t2)
   : Lemma (parse (nondep_then p1 p2) (bare_serialize_nondep_then p1 s1 p2 s2 x) == Some (x, Seq.length (bare_serialize_nondep_then p1 s1 p2 s2 x)))
   = let v1' = parse p1 (bare_serialize_nondep_then p1 s1 p2 s2 x) in
@@ -883,7 +894,8 @@ let bare_parse_strengthen_injective
   (prf: parse_strengthen_prf p1 p2)
 : Lemma
   (injective (bare_parse_strengthen p1 p2 prf))
-= let p' : bare_parser (x: t1 { p2 x } ) = bare_parse_strengthen p1 p2 prf in
+= parser_kind_prop_equiv k p1;
+  let p' : bare_parser (x: t1 { p2 x } ) = bare_parse_strengthen p1 p2 prf in
   assert (forall (b1 b2: bytes) . injective_precond p' b1 b2 ==> injective_precond p1 b1 b2);
   assert (forall (b1 b2: bytes) . injective_postcond p1 b1 b2 ==> injective_postcond p' b1 b2)
 
@@ -896,8 +908,10 @@ let bare_parse_strengthen_correct
 : Lemma
   (injective (bare_parse_strengthen p1 p2 prf) /\
   parser_kind_prop k (bare_parse_strengthen p1 p2 prf))
-= bare_parse_strengthen_no_lookahead p1 p2 prf;
+= parser_kind_prop_equiv k p1;
+  bare_parse_strengthen_no_lookahead p1 p2 prf;
   bare_parse_strengthen_injective p1 p2 prf;
+  parser_kind_prop_equiv k (bare_parse_strengthen p1 p2 prf);
   ()
 
 let parse_strengthen
@@ -952,6 +966,7 @@ let parse_fret' (#t #t':Type) (f: t -> GTot t') (v:t) : Tot (bare_parser t') =
 
 unfold
 let parse_fret (#t #t':Type) (f: t -> GTot t') (v:t) : Tot (parser parse_ret_kind t') =
+  [@inline_let] let _ = parser_kind_prop_equiv parse_ret_kind (parse_fret' f v) in
   parse_fret' f v
 
 let synth_injective
@@ -959,7 +974,7 @@ let synth_injective
   (#t2: Type0)
   (f: (t1 -> GTot t2))
 : GTot Type0
-= forall (x x' : t1) . f x == f x' ==> x == x'
+= forall (x x' : t1) . {:pattern (f x); (f x')} f x == f x' ==> x == x'
 
 let synth_injective_intro
   (#t1: Type0)
@@ -1025,8 +1040,8 @@ let make_total_constant_size_parser_compose
   (ensures (
     make_total_constant_size_parser_precond sz t1 f1 /\
     make_total_constant_size_parser_precond sz t2 (f1 `compose` g2) /\
-    (forall x x' . g2 x == g2 x' ==> x == x') /\
-    (forall input . parse (make_total_constant_size_parser sz t2 (f1 `compose` g2)) input == parse (make_total_constant_size_parser sz t1 f1 `parse_synth` g2) input)
+    (forall x x' . {:pattern (g2 x); (g2 x')}  g2 x == g2 x' ==> x == x') /\
+    (forall input . {:pattern (parse (make_total_constant_size_parser sz t2 (f1 `compose` g2)) input)} parse (make_total_constant_size_parser sz t2 (f1 `compose` g2)) input == parse (make_total_constant_size_parser sz t1 f1 `parse_synth` g2) input)
   ))
 = ()
 
@@ -1067,7 +1082,7 @@ let synth_inverse
   (f2: (t1 -> GTot t2))
   (g1: (t2 -> GTot t1))
 : GTot Type0
-= (forall (x : t2) . f2 (g1 x) == x)
+= (forall (x : t2) . {:pattern (f2 (g1 x))} f2 (g1 x) == x)
 
 let synth_inverse_intro
   (#t1: Type0)
@@ -1078,6 +1093,17 @@ let synth_inverse_intro
   (requires (forall (x : t2) . f2 (g1 x) == x))
   (ensures (synth_inverse f2 g1))
 = ()
+
+let synth_inverse_synth_injective_pat
+  (#t1: Type0)
+  (#t2: Type0)
+  (f: (t1 -> GTot t2))
+  (g: (t2 -> GTot t1))
+: Lemma
+  (requires (synth_inverse g f))
+  (ensures (synth_injective f))
+  [SMTPat (synth_inverse g f)]
+= assert (forall x1 x2. f x1 == f x2 ==> g (f x1) == g (f x2))
 
 let synth_inverse_synth_injective
   (#t1: Type0)
@@ -1105,7 +1131,7 @@ let synth_injective_synth_inverse_synth_inverse_recip
   (f: (t1 -> GTot t2))
   (u: squash (synth_inverse g f /\ synth_injective g))
 : Tot (squash (synth_inverse f g))
-= ()
+= assert (forall x . g (f (g x)) == g x)
 
 abstract
 let serialize_synth
@@ -1175,7 +1201,9 @@ let serialize_synth_upd_chain
     Seq.length s == Seq.length (serialize s1 x1) /\
     serialize (serialize_synth p1 f2 s1 g1 u) y2 == seq_upd_seq s i' s'
   ))
-= ()
+= (* I don't know which are THE terms to exhibit among x1, x2, y1, y2 to make the patterns trigger *)
+  assert (forall w w' . f2 w == f2 w' ==> w == w');
+  assert (forall w . f2 (g1 w) == w)
 
 abstract
 let serialize_synth_upd_bw_chain
@@ -1210,7 +1238,9 @@ let serialize_synth_upd_bw_chain
     Seq.length s == Seq.length (serialize s1 x1) /\
     serialize (serialize_synth p1 f2 s1 g1 u) y2 == seq_upd_bw_seq s i' s'
   ))
-= ()
+= (* I don't know which are THE terms to exhibit among x1, x2, y1, y2 to make the patterns trigger *)
+  assert (forall w w' . f2 w == f2 w' ==> w == w');
+  assert (forall w . f2 (g1 w) == w)
 
 (** Tot vs. Ghost *)
 
@@ -1263,13 +1293,16 @@ let parse_filter_payload
   (f: (t -> GTot bool))
   (v: t)
 : Tot (parser parse_filter_payload_kind (x: t { f x == true }))
-= lift_parser (fun () ->
+= let p = lift_parser (fun () ->
     if f v
     then
       let v' : (x: t { f x == true } ) = v in
       weaken parse_filter_payload_kind (parse_ret v')
     else fail_parser parse_filter_payload_kind (x: t {f x == true} )
   )
+  in
+  parser_kind_prop_equiv parse_filter_payload_kind p;
+  p
 
 abstract
 let parse_filter

@@ -83,7 +83,7 @@ let fldata_to_array_inj
     fldata_array_precond p array_byte_size elem_count == true
   })
 : Lemma
-  (forall (x1 x2: parse_fldata_strong_t (serialize_list _ s) array_byte_size) .
+  (forall (x1 x2: parse_fldata_strong_t (serialize_list _ s) array_byte_size) . {:pattern (fldata_to_array s array_byte_size elem_count u x1); (fldata_to_array s array_byte_size elem_count u x2)}
     fldata_to_array s array_byte_size elem_count u x1 == 
     fldata_to_array s array_byte_size elem_count u x2 ==>
     x1 == x2)
@@ -160,7 +160,7 @@ let array_to_fldata_to_array
     fldata_array_precond p array_byte_size elem_count == true
   })
 : Lemma
-  (forall (x: array t elem_count) .
+  (forall (x: array t elem_count) . {:pattern (fldata_to_array s array_byte_size elem_count u1 (array_to_fldata s array_byte_size elem_count u2 x))}
     fldata_to_array s array_byte_size elem_count u1 (array_to_fldata s array_byte_size elem_count u2 x) == x)
 = ()
 
@@ -305,6 +305,9 @@ let vldata_to_vlarray_inj
   })
 : Lemma
   (forall (x1 x2: parse_bounded_vldata_strong_t array_byte_size_min array_byte_size_max (serialize_list _ s)) .
+    {:pattern
+      (vldata_to_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max u x1);
+      (vldata_to_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max u x2)}
     vldata_to_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max u x1 ==
     vldata_to_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max u x2 ==>
     x1 == x2)
@@ -395,6 +398,10 @@ let vlarray_to_vldata_to_vlarray
   })
 : Lemma
   (forall (x: vlarray t elem_count_min elem_count_max) .
+    {:pattern
+      (vldata_to_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max u
+        (vlarray_to_vldata array_byte_size_min array_byte_size_max s elem_count_min elem_count_max u x))
+    }
     vldata_to_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max u
       (vlarray_to_vldata array_byte_size_min array_byte_size_max s elem_count_min elem_count_max u x)
     == x)

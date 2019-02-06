@@ -66,13 +66,19 @@ let test config: St unit =
     | Correct(HandshakeLog.Outgoing (Some f) _ _) ->
       let (|rg, sh|) = f in
       nprint ("<---server-hello---- "^first_bytes sh);
-      let _ = Handshake.recv_fragment client rg sh in
+      let r = Handshake.recv_fragment client rg sh in
+      (match r with
+      | Handshake.InError z -> nprint ("FAILED: "^string_of_error z)
+      | _ -> ());
       let out2 = Handshake.next_fragment server i in
       (match out2 with
       | Correct(HandshakeLog.Outgoing (Some f) _ _) ->
         let (|rg, sf|) = f in
-        nprint ("<--server-finished-- "^first_bytes sf);
-        let _ = Handshake.recv_fragment client rg sf in
+        nprint ("<--server-finished-- \n"^first_bytes sf);
+        let r = Handshake.recv_fragment client rg sf in
+	(match r with
+	| Handshake.InError z -> nprint ("FAILED: "^string_of_error z)
+	| _ -> ());
         let out3 = Handshake.next_fragment client i in
         (match out3 with
         | Correct(HandshakeLog.Outgoing (Some f) _ _) ->
@@ -87,6 +93,7 @@ let test config: St unit =
             let _ = Handshake.recv_fragment client rg nst in
             nprint "Done"
           | _ -> eprint "client failed to emit session ticket")
+        | Error z -> eprint ("Failed to process server finished flight: "^string_of_error z)
         | _ -> eprint "client failed to return finished flight")
       | _ -> eprint "server failed to return end of second flight")
     | Error (_,s) -> eprint ("server failed to build second flight: "^s)

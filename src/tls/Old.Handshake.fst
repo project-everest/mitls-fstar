@@ -302,7 +302,7 @@ let client_Binders hs offer =
     HandshakeLog.send hs.log (Binders binders);
 
     // Nego ensures that EDI is not sent in a 2nd ClientHello
-    if Some? (Nego.find_early_data offer) then
+    if Nego.find_early_data offer then
      begin
       trace "setting up 0RTT";
       let (| bid, _ |) :: _ = binderKeys in
@@ -362,15 +362,15 @@ let client_ClientHello hs i =
   let shares = KeySchedule.ks_client_init hs.ks groups in
 
   // Compute & send the ClientHello offer
-  let offer = Nego.client_ClientHello hs.nego shares in
-  HandshakeLog.send hs.log (ClientHello offer);
-
-  // Comptue and send PSK binders & 0-RTT signals
-  client_Binders hs offer;
-
-  // we may still need to keep parts of ch
-  hs.state := C_Wait_ServerHello;
-  Correct ()
+  match Nego.client_ClientHello hs.nego shares with
+  | Error z -> Error z
+  | Correct offer ->
+    HandshakeLog.send hs.log (ClientHello offer);
+    // Comptue and send PSK binders & 0-RTT signals
+    client_Binders hs offer;
+    // we may still need to keep parts of ch
+    hs.state := C_Wait_ServerHello;
+    Correct ()
 
 let client_HelloRetryRequest (hs:hs) (hrr:hrr) : St incoming =
   trace "client_HelloRetryRequest";
@@ -378,7 +378,10 @@ let client_HelloRetryRequest (hs:hs) (hrr:hrr) : St incoming =
     | None ->
       // this case should only ever happen in QUIC stateless retry address validation
       trace "Server did not specify a group in HRR, re-using the previous choice"; None
-    | Some g -> let s = KeySchedule.ks_client_13_hello_retry hs.ks g in Some (| g, s |)
+    | Some ng ->
+        let Some g = CommonDH.group_of_namedGroup ng in
+        let s = KeySchedule.ks_client_13_hello_retry hs.ks g in
+	Some (| g, s |)
     in
   match Nego.client_HelloRetryRequest hs.nego hrr s with
   | Error z -> InError z
@@ -607,12 +610,13 @@ let client_NewSessionTicket_12 (hs:hs) (resume:bool) (digest:Hashing.anyTag) (os
 // Process an incoming ticket (1.3)
 let client_NewSessionTicket_13 (hs:hs) (st13:sticket13)
   : St incoming =
+  let open Parsers.NewSessionTicketExtension in
   let tid = st13.ticket13_ticket in
   trace ("Received ticket: "^(hex_of_bytes tid));
   let mode = Nego.getMode hs.nego in
   let CipherSuite13 ae h = mode.Nego.n_cipher_suite in
   let t_ext = st13.ticket13_extensions in
-  let ed = List.Tot.find Extensions.E_early_data? t_ext in
+  let ed = List.Tot.find NSTE_early_data? t_ext in
   let now = UInt32.uint_to_t (FStar.Date.secondsFromDawn()) in
   let pskInfo = PSK.({
     ticket_nonce = Some st13.ticket13_nonce;
@@ -631,7 +635,7 @@ let client_NewSessionTicket_13 (hs:hs) (st13:sticket13)
     if cfg.is_quic then
       (match ed with
       | None -> true
-      | Some (Extensions.E_early_data (Some x)) -> x = 0xfffffffful
+      | Some (NSTE_early_data x) -> x = 0xfffffffful
       | _ -> false)
     else true in
   if valid_ed then
@@ -706,8 +710,6 @@ let server_ServerHelloDone hs =
       InAck false false // Server 1.2 ATK
       end
 
-// the ServerHello message is a simple function of the mode.
-let not_encryptedExtension e = not (Extensions.encryptedExtension e)
 let serverHello (m:Nego.mode) =
   let open Nego in
   let pv = m.n_protocol_version in
@@ -717,23 +719,20 @@ let serverHello (m:Nego.mode) =
     sh_sessionID = m.n_sessionID;
     sh_cipher_suite = name_of_cipherSuite m.n_cipher_suite;
     sh_compression = NullCompression;
-    sh_extensions =
-      match pv, m.n_server_extensions with
-      | TLS_1p3, Some exts ->
-        Some (List.Tot.filter not_encryptedExtension exts)
-      | _ -> m.n_server_extensions
+    sh_extensions = m.n_server_extensions;
+    sh_hrrext = [];
    })
 
-val  consistent_truncation: option (list Extensions.pskIdentity * nat) -> option Extensions.binders -> bool
+val  consistent_truncation: option Extensions.offeredPsks -> option binders -> bool
 let consistent_truncation x y =
   match x, y with
   | None, None -> true
   | None, Some _ -> false
   | Some _, None -> false
-  | Some (psks,_), Some binders -> List.length psks = List.length binders
+  | Some psks, Some binders -> List.length psks.Extensions.identities = List.length binders
 
 (* receive ClientHello, choose a protocol version and mode *)
-val server_ClientHello: hs -> HandshakeMessages.ch -> option Extensions.binders -> ST incoming
+val server_ClientHello: hs -> HandshakeMessages.ch -> option binders -> ST incoming
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let server_ClientHello hs offer obinders =
@@ -814,12 +813,13 @@ let server_ClientHello hs offer obinders =
         | Some i -> (
             trace ("accepted TLS 1.3 psk #"^string_of_int i);
             // we should statically know that the offer list is big enough, hence the binder list too.
-            let Some (psks,tlen) = opsk in
-            let Some (id, _) = List.Tot.nth psks i in
+            let Some psks = opsk in
+	    let tlen = Extensions.offeredPsks_binders_size32 psks.Extensions.binders in
+            let Some id = List.Tot.nth psks.Extensions.identities i in
             let Some tag = List.Tot.nth (Some?.v obinders) i in
-            assume(PSK.registered_psk id);
-            let server_share, Some binderKey = KeySchedule.ks_server_13_init hs.ks cr cs (Some id) g_gx in
-            if verify_binder hs binderKey tag tlen
+            assume(PSK.registered_psk id.Extensions.identity);
+            let server_share, Some binderKey = KeySchedule.ks_server_13_init hs.ks cr cs (Some id.Extensions.identity) g_gx in
+            if verify_binder hs binderKey tag (UInt32.v tlen)
             then Correct server_share
             else
               //( trace ("WARNING: binder verification failed, tlen="^string_of_int tlen); Correct server_share))
@@ -829,9 +829,8 @@ let server_ClientHello hs offer obinders =
           | Kex_DHE | Kex_ECDHE ->
             let Some g = Nego.chosenGroup mode in
             let gy = KeySchedule.ks_server_12_init_dh hs.ks cr pv cs (Nego.emsFlag mode) g in
-            Correct (Some (CommonDH.Share g gy))
+            Correct (Some (| g, gy |))
           | _ -> fatal Handshake_failure "Unsupported RSA key exchange" in
-
       match key_share_result with
       | Error z -> InError z
       | Correct optional_server_share ->
@@ -954,11 +953,10 @@ let server_ServerFinished_13 hs i =
     let kex = Nego.kexAlg mode in
     let pv = mode.Nego.n_protocol_version in
     let cs = mode.Nego.n_cipher_suite in
-    let exts = Some?.v mode.Nego.n_server_extensions in
+    let exts = mode.Nego.n_server_extensions in
+    let eexts = match mode.Nego.n_encrypted_extensions with | None -> [] | Some ee -> ee in
     let sh_alg = sessionHashAlg pv cs in
     let halg = verifyDataHashAlg_of_ciphersuite cs in // Same as sh_alg but different type FIXME
-
-    let eexts = List.Tot.filter Extensions.encryptedExtension exts in
 
     let digestFinished =
       match kex with
@@ -1016,8 +1014,9 @@ let server_Ticket hs (app_data:bytes) =
   trace ("Sending ticket: "^(print_bytes tb));
   trace ("Application data in ticket: "^(print_bytes app_data));
   let ticket_ext =
+    let open Parsers.NewSessionTicketExtension in
     match cfg.max_early_data with
-    | Some max_ed -> [Extensions.E_early_data (Some max_ed)]
+    | Some max_ed -> [NSTE_early_data max_ed]
     | None -> [] in
   let tnonce, _ = split_ tb 12 in
   HandshakeLog.send hs.log (NewSessionTicket13 ({
@@ -1034,6 +1033,7 @@ val server_ClientFinished_13: hs ->
   Hashing.anyTag -> // Digest either up to ServerFinished or up to CertificateVerify with client certg
   Hashing.anyTag -> // Digest up to ClientFinished
   option (HandshakeMessages.crt13 * HandshakeMessages.cv * Hashing.anyTag) -> St incoming
+
 let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinished clientAuth =
    trace "Process Client Finished";
    match clientAuth with

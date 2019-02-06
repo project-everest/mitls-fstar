@@ -116,7 +116,8 @@ let gaccessor_flbytes_get
     let g () : Lemma
       (requires (gaccessor_pre (parse_flbytes sz) parse_u8 (clens_flbytes_get sz i) input))
       (ensures (gaccessor_post (parse_flbytes sz) parse_u8 (clens_flbytes_get sz i) input res))
-    = assert (res == (U32.v i, 1));
+    = parser_kind_prop_equiv (get_parser_kind parse_u8) parse_u8;
+      assert (res == (U32.v i, 1));
       parse_u8_spec (Seq.slice input (U32.v i) (U32.v i + 1))
     in
     Classical.move_requires g ();
@@ -668,6 +669,7 @@ let gaccessor_vlbytes'_get
       (requires (gaccessor_pre (parse_bounded_vlbytes' min max l) parse_u8 (clens_vlbytes_get min max i) input))
       (ensures (gaccessor_post (parse_bounded_vlbytes' min max l) parse_u8 (clens_vlbytes_get min max i) input res))
     = parse_bounded_vlbytes_eq min max l input;
+      parser_kind_prop_equiv (get_parser_kind parse_u8) parse_u8;
       assert (res == (l + U32.v i, 1));
       parse_u8_spec (Seq.slice input (l + U32.v i) (l + U32.v i + 1))
     in

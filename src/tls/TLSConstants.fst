@@ -84,15 +84,21 @@ val parseVersion: pinverse_t versionBytes
 let parseVersion x =
   LowParseWrappers.wrap_parser32_constant_length protocolVersion_serializer32 2 () protocolVersion_parser32 parse_protocolVersion_error_msg x
 
+// 19-01-18 where is it defined?
+let uint16_min (x y: UInt16.t) = if FStar.UInt16.(x <=^ y) then x else y 
+
 (** Determine the oldest protocol versions for TLS *)
-let minPV (a:protocolVersion) (b:protocolVersion) =
+let minPV (a b: Parsers.ProtocolVersion.protocolVersion) =
   match a,b with
   | SSL_3p0, _  | _, SSL_3p0 -> SSL_3p0
   | TLS_1p0, _  | _, TLS_1p0 -> TLS_1p0
   | TLS_1p1, _  | _, TLS_1p1 -> TLS_1p1
   | TLS_1p2, _  | _, TLS_1p2 -> TLS_1p2
   | TLS_1p3, _  | _, TLS_1p3 -> TLS_1p3
+  | Unknown_protocolVersion x, 
+    Unknown_protocolVersion y -> Unknown_protocolVersion (uint16_min x y)
 
+let leqPV a b = (a = minPV a b)
 let geqPV a b = (b = minPV a b)
 
 // TODO, remove alias
@@ -506,22 +512,18 @@ let rec parseCertificateTypeList data =
 
 #set-options "--max_ifuel 4 --initial_ifuel 1 --max_fuel 4 --initial_fuel 1"
 
-(** Determine the certificate signature algorithms allowed according to the ciphersuite *)
-val defaultCertTypes: bool -> cipherSuite -> HyperStack.All.ML (l:list certType{List.Tot.length l <= 1})
-
-//17-12-26 TODO: get rid of this single use of ML
+(** Determine the certificate signature algorithm from the ciphersuite *)
+val defaultCertTypes: bool -> cipherSuite -> result certType
 let defaultCertTypes sign cs =
-  let alg = sigAlg_of_ciphersuite cs in
-    if sign then
-      match alg with
-      | RSASIG -> [RSA_sign]
-      | DSA -> [DSA_sign]
-      | _ -> unexpected "[defaultCertTypes] invoked on an invalid ciphersuite"
-    else
-      match alg with
-      | RSASIG -> [RSA_fixed_dh]
-      | DSA -> [DSA_fixed_dh]
-      | _ -> unexpected "[defaultCertTypes] invoked on an invalid ciphersuite"
+  match sigAlg_of_ciphersuite cs with 
+  | Error z -> Error z 
+  | Correct alg -> 
+    match alg with
+    | RSASIG -> Correct(if sign then RSA_sign else RSA_fixed_dh)
+    | DSA    -> Correct(if sign then DSA_sign else DSA_fixed_dh)
+    | _      -> fatal Internal_error "[defaultCertTypes] invoked on an invalid ciphersuite"
+
+
 
 #set-options "--max_ifuel 2 --initial_ifuel 2 --max_fuel 1 --initial_fuel 1"
 
@@ -622,15 +624,13 @@ request_client_certificate: single_assign ServerCertificateRequest // uses this 
 
 
 /// 18-02-22 QD fodder; their formatting is in Extensions.
-///
-type serverName =
-  | SNI_DNS of b:bytes{repr_bytes (length b) <= 2}
-  | SNI_UNKNOWN of (n:nat{repr_bytes n <= 1}) * (b:bytes{repr_bytes (length b) <= 2})
 
-type alpn_entry = b:bytes{0 < length b /\ length b < 256}
-type alpn = l:list alpn_entry{List.Tot.length l < 256}
+include Parsers.ServerName
+include Parsers.ProtocolName
+include Parsers.ProtocolNameList
+include Parsers.PskIdentity
 
-type psk_identifier = identifier:bytes{length identifier < 65536}
+type psk_identifier = pskIdentity_identity
 
 type pskInfo = {
   ticket_nonce: option bytes;
@@ -662,13 +662,24 @@ noeq type ticket_cb = {
   new_ticket: ticket_cb_fun;
 }
 
-type custom_extension = UInt16.t * b:bytes {length b < 65533}
-type custom_extensions = l:list custom_extension{List.Tot.length l < 32}
+/// Custom Extensions
+
+include Parsers.ExtensionType
+include Parsers.UnknownExtension
+
+// 18-12-22 TODO use a vl wire format instead of a list
+type custom_id = v:UInt16.t{~(known_extensionType_repr v)}
+type custom_extension = custom_id * unknownExtension
+type custom_extensions = l:list custom_extension
 
 (* Helper functions for the C API to construct the list from array *)
 let empty_custom_extensions () : list custom_extension = []
-let add_custom_extension (l:list custom_extension) (hd:UInt16.t) (b:bytes {length b < 65533}) =
-  (hd, b) :: l
+let add_custom_extension 
+  (l:list custom_extension) 
+  (hd:UInt16.t) 
+  (b:bytes {length b < 65533}) = (hd, b) :: l
+
+/// Nego Callback
 
 type nego_action =
   | Nego_abort: nego_action
@@ -684,6 +695,8 @@ noeq type nego_cb = {
   nego_context: FStar.Dyn.dyn;
   negotiate: nego_cb_fun;
 }
+
+/// Cert callbacks
 
 type cert_repr = b:bytes {length b < 16777216}
 type cert_type = FFICallbacks.callbacks
@@ -729,15 +742,15 @@ type cert_cb = {
 
 abstract
 let mk_cert_cb
-    app_ctx
-    cert_select_ptr
-    cert_select_cb
-    cert_format_ptr
-    cert_format_cb
-    cert_sign_ptr
-    cert_sign_cb
-    cert_verify_ptr
-    cert_verify_cb = {
+  app_ctx
+  cert_select_ptr
+  cert_select_cb
+  cert_format_ptr
+  cert_format_cb
+  cert_sign_ptr
+  cert_sign_cb
+  cert_verify_ptr
+  cert_verify_cb = {
   app_context  = app_ctx;
   cert_select_ptr = cert_select_ptr;
   cert_select_cb = cert_select_cb;
@@ -749,21 +762,35 @@ let mk_cert_cb
   cert_verify_cb = cert_verify_cb
 }
 
-noeq type config : Type0 = {
-    (* Supported versions, ciphersuites, groups, signature algorithms *)
-    min_version: protocolVersion;
-    max_version: protocolVersion;
-    is_quic: bool; // Use QUIC labels for key derivations
 
+type alpn = Parsers.ClientHelloExtension.clientHelloExtension_CHE_application_layer_protocol_negotiation
+
+noeq type config : Type0 = {
+    // supported versions, implicitly preferring the latest versions
+    min_version: protocolVersion; 
+    max_version: protocolVersion;
+
+    // use QUIC labels for key derivations
+    is_quic: bool; 
+
+    // supported parameters, ordered by decreasing preference. 
     cipher_suites: x:valid_cipher_suites{List.Tot.length x < 256};
-    named_groups: CommonDH.supportedNamedGroups;
+
+    //19-01-22 carried by CH,EE,SH...; was CommonDH.supportedNamedGroups, overly restrictive. 
+    named_groups: Parsers.ClientHelloExtension.clientHelloExtension_CHE_supported_groups;
     signature_algorithms: signatureSchemeList;
 
     (* Client side *)
-    hello_retry: bool;          // honor hello retry requests from the server
+
+    // honor hello retry requests from the server
+    hello_retry: bool;          
+
+    // propose share from these groups (it should it be a subset of [named_groups]).
     offer_shares: CommonDH.supportedNamedGroups;
-    //18-02-20 should it be a subset of named_groups?
+
     custom_extensions: custom_extensions;
+
+    // propose these tickets 
     use_tickets: list (psk_identifier * ticket_seal);
 
     (* Server side *)
@@ -783,8 +810,11 @@ noeq type config : Type0 = {
     nego_callback: nego_cb;// Callback to decide stateless retry and negotiate extra extensions
     cert_callbacks: cert_cb;      // Certificate callbacks, called on all PKI-related operations
 
-    alpn: option alpn;   // ALPN offers (for client) or preferences (for server)
-    peer_name: option bytes;     // The expected name to match against the peer certificate
+    // ALPN offers (for client) or preferences (for server)
+    // we use the wire-format type, structurally shared between clients and servers. 
+    alpn: option alpn;
+    peer_name: option (n:Parsers.HostName.hostName{Bytes.length n <= 65535 - 5}); // The expected name to match against the peer certificate
+    // 19-01-19 Hoisted parser refinements for, to be propagated. 
   }
 
 let cert_select_cb (c:config) (pv:protocolVersion) (sni:bytes) (alpn:bytes) (sig:signatureSchemeList)

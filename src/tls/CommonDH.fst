@@ -605,6 +605,49 @@ let serialize_raw #g s =
     let S_EC _ s = s in
     ECGroup.serialize_point #g s
 
+open EverCrypt
+
+let validate kse =
+  match kse with
+  | Ks_secp256r1 p32 ->
+    let g = ECDH EC.ECC_P256 in
+    (match parse g (Parsers.UncompressedPointRepresentation32.uncompressedPointRepresentation32_serializer32 p32) with None -> None | Some gx -> Some (| g, gx |))
+  | Ks_secp384r1 p48 ->
+    let g = ECDH EC.ECC_P384 in
+    (match parse g (Parsers.UncompressedPointRepresentation48.uncompressedPointRepresentation48_serializer32 p48) with None -> None | Some gx -> Some (| g, gx |))
+  | Ks_secp521r1 p66 ->
+    let g = ECDH EC.ECC_P521 in
+    (match parse g (Parsers.UncompressedPointRepresentation66.uncompressedPointRepresentation66_serializer32 p66) with None -> None | Some gx -> Some (| g, gx |))
+  | Ks_x25519 x25519 ->
+    let open Parsers.MontgomeryPoint32 in
+    let g = ECDH EC.ECC_X25519 in
+    (match parse g x25519 with
+    | None -> None | Some gx -> Some (| g, gx |))  
+  | Ks_ffdhe2048 dhp
+  | Ks_ffdhe3072 dhp
+  | Ks_ffdhe4096 dhp
+  | Ks_ffdhe6144 dhp
+  | Ks_ffdhe8192 dhp ->
+    (match group_of_namedGroup (tag_of_keyShareEntry kse) with
+    | None -> None
+    | Some g ->
+      match parse g (Parsers.ServerDHParams.serverDHParams_serializer32 dhp) with
+      | None -> None
+      | Some gx -> Some (| g, gx |))
+  | _ -> None
+
+let validate_many ksl =
+  List.Tot.choose validate ksl
+
+let format #g gx =
+  let raw = vlbytes2 (serialize_raw gx) in
+  match namedGroup_of_group g with
+  | None -> Ks_Unknown_namedGroup 0us (serialize gx)
+  | Some ng ->   
+    match keyShareEntry_parser32 (namedGroup_serializer32 ng @| raw) with
+    | None -> Ks_Unknown_namedGroup 0us (serialize gx)
+    | Some (v, _) -> v
+
 (*
 val key_params: key -> Tot params
 let key_params k =
@@ -637,10 +680,6 @@ let checkElement (p:parameters) (e:element) : option element  =
         | Some p -> Some ({dhe_nil with dhe_ec = Some p})
       end
     | _ -> failwith "impossible"
-*)
-
-
-
 
 // TODO imported from TLSConstants, in a broken state
 // This may not belong to CommonDH.
@@ -773,3 +812,4 @@ let keyShareBytes = function
   | ClientKeyShare cks -> clientKeyShareBytes cks
   | ServerKeyShare sks -> serverKeyShareBytes sks
   | HRRKeyShare ng -> namedGroupBytes ng
+*)

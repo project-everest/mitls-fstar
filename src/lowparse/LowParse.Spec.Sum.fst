@@ -174,27 +174,28 @@ let bare_serialize_tagged_union_correct
     let t = tag_of_data x in
     let (u: refine_with_tag tag_of_data t) = x in
     let v1' = parse pt (bare_serialize_tagged_union st tag_of_data s x) in
-    let v1 = parse pt (st t) in
+    let v1 = parse pt (serialize st t) in
     assert (Some? v1);
-    assert (no_lookahead_on pt (st t) (bare_serialize_tagged_union st tag_of_data s x));
-    let (Some (_, len')) = parse pt (st t) in
-    assert (len' == Seq.length (st t));
+    parser_kind_prop_equiv kt pt;
+    assert (no_lookahead_on pt (serialize st t) (bare_serialize_tagged_union st tag_of_data s x));
+    let (Some (_, len')) = parse pt (serialize st t) in
+    assert (len' == Seq.length (serialize st t));
     assert (len' <= Seq.length (bare_serialize_tagged_union st tag_of_data s x));
-    assert (Seq.slice (st t) 0 len' == st t);
-    seq_slice_append_l (st t) (serialize (s t) u);
-    assert (no_lookahead_on_precond pt (st t) (bare_serialize_tagged_union st tag_of_data s x));
-    assert (no_lookahead_on_postcond pt (st t) (bare_serialize_tagged_union st tag_of_data s x));
+    assert (Seq.slice (serialize st t) 0 len' == st t);
+    seq_slice_append_l (serialize st t) (serialize (s t) u);
+    assert (no_lookahead_on_precond pt (serialize st t) (bare_serialize_tagged_union st tag_of_data s x));
+    assert (no_lookahead_on_postcond pt (serialize st t) (bare_serialize_tagged_union st tag_of_data s x));
     assert (Some? v1');
-    assert (injective_precond pt (st t) (bare_serialize_tagged_union st tag_of_data s x));
-    assert (injective_postcond pt (st t) (bare_serialize_tagged_union st tag_of_data s x));
+    assert (injective_precond pt (serialize st t) (bare_serialize_tagged_union st tag_of_data s x));
+    assert (injective_postcond pt (serialize st t) (bare_serialize_tagged_union st tag_of_data s x));
     let (Some (x1, len1)) = v1 in
     let (Some (x1', len1')) = v1' in
     assert (x1 == x1');
     assert ((len1 <: nat) == (len1' <: nat));
     assert (x1 == t);
-    assert (len1 == Seq.length (st t));
-    assert (bare_serialize_tagged_union st tag_of_data s x == Seq.append (st t) (serialize (s t) u));
-    seq_slice_append_r (st t) (serialize (s t) u);
+    assert (len1 == Seq.length (serialize st t));
+    assert (bare_serialize_tagged_union st tag_of_data s x == Seq.append (serialize st t) (serialize (s t) u));
+    seq_slice_append_r (serialize st t) (serialize (s t) u);
     ()
   in
   Classical.forall_intro prf
@@ -614,7 +615,7 @@ let synth_case_recip_synth_case_post
 : GTot Type0
 = 
   list_mem x (list_map fst e) ==> (
-    forall (y: type_of_tag x) .
+    forall (y: type_of_tag x) . {:pattern (synth_case_recip' e tag_of_data type_of_tag synth_case_recip (synth_case x y))}
     synth_case_recip' e tag_of_data type_of_tag synth_case_recip (synth_case x y) == y
   )
 
@@ -1164,7 +1165,7 @@ let synth_dsum_case_recip_synth_case_known_post
 : GTot Type0
 = 
   list_mem x (list_map fst e) ==> (
-    forall (y: type_of_known_tag x) .
+    forall (y: type_of_known_tag x) . {:pattern (synth_case_recip (Known x) (synth_case (Known x) y))}
     synth_case_recip (Known x) (synth_case (Known x) y) == y
   )
 
@@ -1181,7 +1182,7 @@ let synth_dsum_case_recip_synth_case_unknown_post
 : GTot Type0
 = 
   list_mem x (list_map snd e) == false ==> (
-    forall (y: type_of_unknown_tag) .
+    forall (y: type_of_unknown_tag) . {:pattern (synth_case_recip (Unknown x) (synth_case (Unknown x) y))}
     synth_case_recip (Unknown x) (synth_case (Unknown x) y) == y
   )
 

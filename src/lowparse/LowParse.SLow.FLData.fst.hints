@@ -8,7 +8,7 @@
       1,
       [ "@query" ],
       0,
-      "2fdcf25fd14bde75d41ecaa3d134d739"
+      "608c3766b318c03005fee153450ae1d6"
     ],
     [
       "LowParse.SLow.FLData.parse32_fldata",
@@ -57,7 +57,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "093868439e8ec6ee45abc0149b6b0c49"
+      "e479af9ae22fb8361f56e517eed24e1d"
     ],
     [
       "LowParse.SLow.FLData.parse32_fldata_strong",
@@ -66,7 +66,7 @@
       1,
       [ "@query" ],
       0,
-      "fa812bfceb927eac3ef293b80a35875e"
+      "c49c260ac220c11838ab5e8e50a3a88d"
     ],
     [
       "LowParse.SLow.FLData.parse32_fldata_strong",
@@ -79,15 +79,15 @@
         "bool_inversion",
         "constructor_distinct_FStar.Pervasives.Native.None",
         "constructor_distinct_FStar.Pervasives.Native.Some",
+        "constructor_distinct_Tm_unit",
         "data_elim_FStar.Pervasives.Native.Some",
         "disc_equation_FStar.Pervasives.Native.None",
         "disc_equation_FStar.Pervasives.Native.Some", "eq2-interp",
-        "equality_tok_LowParse.Spec.Base.ParserKindMetadataFail@tok",
+        "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
         "equation_FStar.UInt.fits", "equation_FStar.UInt.lt",
         "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
         "equation_FStar.UInt.uint_t", "equation_FStar.UInt32.lt",
-        "equation_FStar.UInt32.n", "equation_LowParse.Bytes.byte",
-        "equation_LowParse.Bytes.bytes",
+        "equation_LowParse.Bytes.byte", "equation_LowParse.Bytes.bytes",
         "equation_LowParse.SLow.Base.bytes32",
         "equation_LowParse.SLow.Base.parser32_correct",
         "equation_LowParse.SLow.FLData.parse32_fldata",
@@ -95,10 +95,7 @@
         "equation_LowParse.Spec.Base.parse",
         "equation_LowParse.Spec.Base.parser",
         "equation_LowParse.Spec.Base.parser_kind",
-        "equation_LowParse.Spec.Base.parser_kind_prop",
-        "equation_LowParse.Spec.Base.parses_at_most",
         "equation_LowParse.Spec.Base.serialize",
-        "equation_LowParse.Spec.Base.strong_parser_kind",
         "equation_LowParse.Spec.Combinators.bare_parse_strengthen",
         "equation_LowParse.Spec.Combinators.parse_strengthen",
         "equation_LowParse.Spec.FLData.parse_fldata",
@@ -106,45 +103,42 @@
         "equation_LowParse.Spec.FLData.parse_fldata_strong",
         "equation_LowParse.Spec.FLData.parse_fldata_strong_pred",
         "equation_LowParse.Spec.FLData.parse_fldata_strong_t",
-        "equation_Prims.eq2", "equation_Prims.nat",
+        "equation_Prims.nat",
         "fuel_guarded_inversion_FStar.Pervasives.Native.option",
         "fuel_guarded_inversion_FStar.Pervasives.Native.tuple2",
         "fuel_guarded_inversion_LowParse.Spec.Base.parser_kind_",
-        "function_token_typing_FStar.UInt32.n",
         "function_token_typing_FStar.UInt32.t",
+        "function_token_typing_Prims.__cache_version_number__",
+        "int_inversion",
         "interpretation_LowParse.SLow.FLData_Tm_abs_369c4820f7295365bb870ca61c1b8158",
         "interpretation_LowParse.Spec.Combinators_Tm_abs_e2fa71601cf0b140e4d974d4d9ca1816",
         "kinding_FStar.Pervasives.Native.tuple2@tok", "l_and-interp",
         "lemma_FStar.Bytes.length_reveal",
         "lemma_FStar.Pervasives.invertOption", "primitive_Prims.op_AmpAmp",
-        "primitive_Prims.op_LessThan", "primitive_Prims.op_LessThanOrEqual",
-        "proj_equation_FStar.Pervasives.Native.Some_v",
-        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
-        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThan",
+        "primitive_Prims.op_LessThanOrEqual",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
         "projection_inverse_FStar.Pervasives.Native.None_a",
         "projection_inverse_FStar.Pervasives.Native.Some_a",
         "projection_inverse_FStar.Pervasives.Native.Some_v",
-        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
-        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
         "refinement_interpretation_FStar.UInt32_Tm_refine_6c25b42778726de94cd4dac42edb4860",
         "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
         "refinement_interpretation_LowParse.SLow.FLData_Tm_refine_7416852a5204081aef336a6907b6698c",
-        "refinement_interpretation_LowParse.Spec.Base_Tm_refine_956bc881132332bd221131ea988e10db",
+        "refinement_interpretation_LowParse.Spec.Base_Tm_refine_20492d3ac772c9d4255c715e5a6098f6",
         "refinement_interpretation_LowParse.Spec.Base_Tm_refine_9fc4b705eaf2fe68d9cc8785e7df72bf",
+        "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "token_correspondence_LowParse.SLow.FLData.parse32_fldata",
         "typing_FStar.Bytes.reveal",
         "typing_FStar.Pervasives.Native.uu___is_Some",
         "typing_FStar.UInt32.v", "typing_LowParse.Spec.Base.parse",
-        "typing_LowParse.Spec.FLData.parse_fldata",
         "typing_LowParse.Spec.FLData.parse_fldata_",
         "typing_LowParse.Spec.FLData.parse_fldata_strong",
         "typing_LowParse.Spec.FLData.parse_fldata_strong_t"
       ],
       0,
-      "27cd8027fb32cd82bfbf41419b69f10d"
+      "353854254eee3e6c43c5d9621dd72ac0"
     ],
     [
       "LowParse.SLow.FLData.serialize32_fldata_strong",
@@ -171,7 +165,7 @@
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "a2e7a0b0efc17a3ecee5f8e94fcb9e6a"
+      "0521ec840ea3d6fd4986b3d45b892116"
     ],
     [
       "LowParse.SLow.FLData.size32_fldata_strong",
@@ -180,7 +174,7 @@
       1,
       [ "@query" ],
       0,
-      "fa86f0c38eae49628b4c40f0f38f9b2e"
+      "4883a3e9d68b4204ee5a8923f27b4e43"
     ],
     [
       "LowParse.SLow.FLData.size32_fldata_strong",
@@ -199,7 +193,7 @@
         "refinement_interpretation_FStar.UInt32_Tm_refine_6c25b42778726de94cd4dac42edb4860"
       ],
       0,
-      "6030cc363208f4afe7561889be85161d"
+      "89e6068ecdd90ae493ba34bd19cb8633"
     ]
   ]
 ]

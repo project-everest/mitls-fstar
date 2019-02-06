@@ -48,11 +48,10 @@ let main (): St C.exit_code =
       "AEAD", AEAD.main;
       "StAE", StAE.main;
       "CommonDH", CommonDH.main;
-      // 2018.04.25: Enable once the regression is fixed
+      "Parsers", Parsers.main;
       "Handshake", handshake;
       "IV", iv;
       "Rekey", KDF.Rekey.test_rekey;
-//      "Parsers", Parsers.main;
       (* ADD NEW TESTS HERE *)
     ];
     C.EXIT_SUCCESS

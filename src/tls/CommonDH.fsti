@@ -1,7 +1,10 @@
 (**
 An abstract interface for Diffie-Hellman operations
 
-When the key extraction stack is idealized (ideal_KEF), this module
+We use two partially-overlapping representations of groups:
+[namedGroup] in wire format, and [group] as share indexes.
+
+When key-extraction is idealized (ideal_KEF), this module
 records the honesty of shares using two layers of types
 
 [pre_share] is for syntactically valid shares (used in parsing modules);
@@ -18,6 +21,8 @@ open FStar.HyperStack.ST
 
 include Parsers.NamedGroup
 module NGL = Parsers.NamedGroupList
+include Parsers.KeyShareEntry
+include Parsers.KeyShareClientHello
 
 let namedGroups = NGL.namedGroupList
 let namedGroupList = NGL.namedGroupList
@@ -131,11 +136,17 @@ val register_dhr: #g:group -> gx:ishare g -> gy:pre_share g -> ST (rshare g gx)
   (ensures fun h0 s h1 -> modifies_one dh_region h0 h1)
 
 /// Parsing and formatting
-///
+
 val parse: g:group -> bytes -> Tot (option (pre_share g))
 val parse_partial: bool -> bytes -> Tot (result ((g:group & pre_share g) * bytes))
 val serialize: #g:group -> pre_share g -> Tot bytes
 val serialize_raw: #g:group -> pre_share g -> Tot bytes // used for printing
+
+val validate: keyShareEntry -> option (g:group & pre_share g)
+val validate_many: keyShareClientHello -> list (g:group & pre_share g)
+val format: #g:group -> s:pre_share g -> keyShareEntry
+
+(*
 
 // TODO: replace "bytes" by either DH or ECDH parameters
 // should that go elsewhere? YES.
@@ -178,4 +189,4 @@ val keyShareBytes: ks:keyShare -> Tot (b:bytes{
   ServerKeyShare? ks ==> (4 <= length b) /\
   HRRKeyShare? ks ==> (2 = length b)})
 
-
+*)

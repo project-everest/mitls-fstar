@@ -186,7 +186,8 @@ let valid_elim'
   (ensures (U32.v pos + k.parser_kind_low <= U32.v s.len /\
   live_slice h s))
   [SMTPat (valid p h s pos)]
-= valid_equiv p h s pos
+= parser_kind_prop_equiv k p;
+  valid_equiv p h s pos
 
 let contents'
   (#k: parser_kind)
@@ -247,6 +248,7 @@ let content_length'
     | Some max -> res <= max
   )))
 = let Some (_, consumed) = parse p (B.as_seq h (B.gsub sl.base pos (sl.len `U32.sub` pos))) in
+  parser_kind_prop_equiv k p;
   consumed
 
 [@"opaque_to_smt"]
@@ -343,7 +345,8 @@ let content_length_eq
   (requires (valid p h sl pos))
   (ensures (content_length p h sl pos == serialized_length s (contents p h sl pos)))
   [SMTPat (serialized_length s (contents p h sl pos))]
-= content_length_eq_gen p h sl pos;
+= parser_kind_prop_equiv k p;
+  content_length_eq_gen p h sl pos;
   contents_eq p h sl pos;
   let b = B.as_seq h (B.gsub sl.base pos (sl.len `U32.sub` pos)) in
   let Some (x, consumed) = parse p b in
@@ -654,7 +657,8 @@ let valid_exact_elim'
     | _ -> True
   ))))
   [SMTPat (valid_exact p h s pos pos')]
-= valid_exact_equiv p h s pos pos'
+= parser_kind_prop_equiv k p;
+  valid_exact_equiv p h s pos pos'
 
 let contents_exact'
   (#k: parser_kind)
@@ -766,7 +770,8 @@ let valid_valid_exact_consumes_all
     (valid_exact p h s pos s.len /\
     valid_content_pos p h s pos (contents_exact p h s pos s.len) s.len)
   ))
-= valid_facts p h s pos;
+= parser_kind_prop_equiv k p;
+  valid_facts p h s pos;
   valid_exact_equiv p h s pos s.len;
   Classical.move_requires (contents_exact_eq p h s pos) s.len
 
@@ -1009,6 +1014,7 @@ let valid_exact_ext_elim
   valid_exact_equiv p h s2 pos2 pos2' ;
   contents_exact_eq p h s1 pos1 pos1' ;
   contents_exact_eq p h s2 pos2 pos2' ;
+  parser_kind_prop_equiv k p;
   assert (injective_precond p (B.as_seq h (B.gsub s1.base pos1 (pos1' `U32.sub` pos1))) (B.as_seq h (B.gsub s2.base pos2 (pos2' `U32.sub` pos2))));
   assert (injective_postcond p (B.as_seq h (B.gsub s1.base pos1 (pos1' `U32.sub` pos1))) (B.as_seq h (B.gsub s2.base pos2 (pos2' `U32.sub` pos2))))
 
@@ -1989,7 +1995,8 @@ let valid_total_constant_size
     (valid p h input pos <==> (live_slice h input /\ U32.v input.len - U32.v pos >= k.parser_kind_low)) /\
     (valid p h input pos ==> content_length p h input pos == k.parser_kind_low)
   ))
-= valid_facts p h input pos
+= parser_kind_prop_equiv k p;
+  valid_facts p h input pos
 
 inline_for_extraction
 let validate_total_constant_size
