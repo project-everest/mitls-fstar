@@ -10,13 +10,14 @@ SHELL=/bin/bash
 
 
 # Paths and Commands
+# NOTE: SPECINC helps define the flag (concrete, ideal, real, etc.)
 
 INCLUDE_PATHS = \
 	$(KREMLIN_HOME)/include \
         $(KREMLIN_HOME)/kremlib \
 	$(MITLS_HOME)/src/lowparse \
         $(MITLS_HOME)/src/parsers/generated \
-        
+        $(SPECINC)
 
 # We can't hard-error on these because of F* orange CI that runs over a couple
 # miTLS files without properly building HACL* first.
