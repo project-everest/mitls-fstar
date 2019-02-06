@@ -12,30 +12,11 @@ SHELL=/bin/bash
 # Paths and Commands
 
 INCLUDE_PATHS = \
-  $(HACL_HOME)/vale/code/arch/x64 \
-  $(HACL_HOME)/vale/specs/defs \
-  $(HACL_HOME)/vale/specs/hardware \
-  $(HACL_HOME)/vale/code/crypto/sha \
-  $(HACL_HOME)/vale/code/arch \
-  $(HACL_HOME)/vale/code/lib/collections \
-  $(HACL_HOME)/vale/code/lib/util \
-  $(HACL_HOME)/vale/specs/crypto \
-  $(HACL_HOME)/vale/specs/math \
-	$(HACL_HOME)/secure_api \
-	$(HACL_HOME)/secure_api/utils \
-	$(HACL_HOME)/secure_api/concrete_specializations \
-	$(HACL_HOME)/code/hash \
-	$(HACL_HOME)/code/old/lib \
-	$(HACL_HOME)/specs \
-	$(HACL_HOME)/specs/derived \
 	$(KREMLIN_HOME)/include \
-        $(KREMLIN_HOME)/kremlib/compat \
         $(KREMLIN_HOME)/kremlib \
-	$(MITLS_HOME)/libs/ffi \
 	$(MITLS_HOME)/src/lowparse \
         $(MITLS_HOME)/src/parsers/generated \
-	$(EVERCRYPT_HOME)/evercrypt \
-	$(SPECINC)
+        
 
 # We can't hard-error on these because of F* orange CI that runs over a couple
 # miTLS files without properly building HACL* first.
