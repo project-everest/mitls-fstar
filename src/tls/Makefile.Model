@@ -14,7 +14,7 @@ VFLAGS += $(HINTS_ENABLED)
 
 BENCHMARK_FILES=Benchmark.Negotiation.fst HSL.Common.fst Benchmark.Ticket.fst
 
-ROOTS    += IV.fst HMAC.UFCMA.fst Token.UF1CMA.fst Pkg.Tree.fst AEAD.Pkg.fst $(BENCHMARK_FILES)
+ROOTS = $(BENCHMARK_FILES)
 
 
 model verify: $(addprefix $(CACHE_DIR)/, $(addsuffix .checked, $(notdir $(ALL_UNCHECKED_FST_FILES))))

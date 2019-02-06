@@ -1,8 +1,7 @@
 EXTRACT='Nothing'
 FLAVOR?=Model
 
-# ADL (31 Aug. 2018) Disabling ocaml-all during transition to EverCrypt
-all: refresh-depend model-all kremlin-all #ocaml-all
+all: model-benchmark
 
 clean-depend:
 	rm -f cache/OCaml/.depend cache/Kremlin/.depend cache/Model/.depend

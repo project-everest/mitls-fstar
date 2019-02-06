@@ -219,38 +219,9 @@ function mitls_verify() {
 
     fetch_and_make_kremlin all &&
     fetch_and_make_qd &&
-    # Build LowParse first, it is a dependency of miTLS anyway
-    make -C src/lowparse -f Makefile.LowParse -j $threads -k &&
-    { echo false > lowparse_examples_success ; } &&
-    { echo false > mitls_success ; } && {
-        # Perform LowParse CI and miTLS CI in parallel
-        {
-            if echo "$CI_BRANCH" | grep '^taramana_lowparse_ci_' ; then
-                echo This is a LowParse CI-only branch. No miTLS CI here.
-            else
-                # miTLS CI proper starts here
-                fetch_and_make_mlcrypto &&
-                fetch_hacl &&
-                fetch_vale &&
-                    # Only building a subset of HACL* for now, no verification
-                    OTHERFLAGS="--admit_smt_queries true $OTHERFLAGS" \
-                    VALE_SCONS_PARALLEL_OPT="-j $threads --NO-VERIFY --FSTAR-MY-VERSION --VALE-MY-VERSION" \
-                    make -C hacl-star providers.build -j $threads &&
-                    make -C libs/ffi -j $threads &&
-                    build_pki_if &&
-                    make -C src/tls -j $threads all -k &&
-                    make -C src/tls -j $threads test -k
-            fi &&
-            { echo true > mitls_success ; }
-        } &
-        {
-            # Test LowParse examples
-            make -C src/lowparse -f Makefile.LowParseExamples -j $threads -k &&
-            { echo true > lowparse_examples_success ; }
-        } &
-        wait
-    } &&
-    $(cat lowparse_examples_success) &&
+    { echo false > mitls_success ; } &&
+    make -C src/tls -j $threads all -k &&
+    { echo true > mitls_success ; } &&
     $(cat mitls_success)
 }
 
