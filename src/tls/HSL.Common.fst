@@ -9,14 +9,14 @@ module List = FStar.List.Tot
 module HS = FStar.HyperStack
 module B = LowStar.Buffer
 
-module C = TLSConstants
-module Hash = Hashing
-module HashSpec = Hashing.Spec
+// module C = TLSConstants
+// module Hash = Hashing
+// module HashSpec = Hashing.Spec
 module HSM = Parsers.Handshake
 
 module LP = LowParse.Low.Base
 
-type hbytes = Spec.Hash.Definitions.bytes
+type hbytes = LowParse.Spec.Base.bytes // Spec.Hash.Definitions.bytes
 
 /// TODO: define using high-level serializers from LowParse
 

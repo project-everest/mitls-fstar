@@ -45,3 +45,5 @@ VFLAGS=
 
 todo:
 	grep -nH -i -e admit -e assume -e '--lax' -e todo -e magic Make* `find . -regex '.*.fst[i]*'` | grep -v 'assume val'
+
+benchmark: model-benchmark
