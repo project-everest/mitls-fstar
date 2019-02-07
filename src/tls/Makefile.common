@@ -16,7 +16,6 @@ INCLUDE_PATHS = \
 	$(KREMLIN_HOME)/include \
         $(KREMLIN_HOME)/kremlib \
 	$(MITLS_HOME)/src/lowparse \
-	$(MITLS_HOME)/src/lowparse/.fstar-out \
         $(MITLS_HOME)/src/parsers/generated \
         $(MITLS_HOME)/src/parsers/generated/cache \
         $(SPECINC)
