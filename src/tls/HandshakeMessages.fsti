@@ -328,7 +328,7 @@ let associated_to_pv (pv:option protocolVersion) (msg:hs_msg) : GTot bool  =
   | ServerKeyExchange _ | CertificateRequest _ | CertificateVerify _ -> Some? pv
   | _ -> true
 
-#reset-options "--using_facts_from '* -LowParse.Spec.Base'"
+#reset-options "--using_facts_from '* -LowParse.Spec.Base' --z3rlimit_factor 2"
 
 let valid_hs_msg_prop (pv:option protocolVersion) (msg:hs_msg): GTot bool =
   associated_to_pv pv msg && (
