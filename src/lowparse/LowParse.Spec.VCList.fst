@@ -267,7 +267,7 @@ let parse_vclist_payload_kind
     parser_kind_subkind = (if max = 0 then Some ParserStrong else if min = 0 && k.parser_kind_subkind <> Some ParserStrong then None else k.parser_kind_subkind);
   }
 
-#push-options "--z3rlimit 16"
+#push-options "--z3rlimit 32"
 
 let parse_vclist_payload_kind_is_weaker_than
   (min: nat)
