@@ -6,4 +6,8 @@ lowparse:
 examples: lowparse
 	+$(MAKE) -f Makefile.LowParseExamples
 
-.PHONY: lowparse examples
+clean:
+	+$(MAKE) -f Makefile.LowParseExamples clean
+	+$(MAKE) -f Makefile.LowParse clean
+
+.PHONY: lowparse examples clean

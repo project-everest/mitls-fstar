@@ -2,31 +2,43 @@ all: verify-all extract-all
 
 FSTAR_OUT_DIR?=.fstar-out
 
-FSTAR_HOME ?= ../../../FStar
-KREMLIN_HOME ?= ../../../kremlin
+ifndef FSTAR_HOME
+  FSTAR_EXE=$(shell which fstar.exe)
+  ifneq $(.SHELLSTATUS),0
+    FSTAR_HOME=../../../FStar
+  endif
+endif
+ifdef FSTAR_HOME
+  FSTAR_EXE=$(FSTAR_HOME)/bin/fstar.exe
+endif
 
-#ifndef FSTAR_HOME
-# $(error FSTAR_HOME must be defined.)
-#endif
-#
-#ifndef KREMLIN_HOME
-## $(error KREMLIN_HOME must be defined.)
-#endif
+ifndef KREMLIN_HOME
+  KREMLIB=$(shell ocamlfind query kremlin)
+  ifneq $(.SHELLSTATUS),0
+    KREMLIN_HOME=../../../kremlin
+  endif
+endif
+ifdef KREMLIN_HOME
+  KREMLIB=$(KREMLIN_HOME)/kremlib
+  KREMLIN_EXE=$(KREMLIN_HOME)/krml
+else
+  KREMLIN_EXE=krml
+endif
 
-INCLUDE_KREMLIN=--include $(KREMLIN_HOME)/kremlib
+INCLUDE_KREMLIN=--include $(KREMLIB)
 
 FSTAR_OPTIONS += --use_hints --use_two_phase_tc true --include . # --use_extracted_interfaces
 
 # NOTE: the cache dir and out dir for F* MUST be the same, because the
 # .krml files should be generated only once.
 
-MY_FSTAR=$(FSTAR_HOME)/bin/fstar.exe --cache_checked_modules --cache_dir $(FSTAR_OUT_DIR) --odir $(FSTAR_OUT_DIR) $(addprefix --include , $(INCLUDE_PATHS)) $(INCLUDE_KREMLIN)
+MY_FSTAR=$(FSTAR_EXE) --cache_checked_modules --cache_dir $(FSTAR_OUT_DIR) --odir $(FSTAR_OUT_DIR) $(addprefix --include , $(INCLUDE_PATHS)) $(INCLUDE_KREMLIN)
 
 INTERMEDIATE_LEVEL=LowParse_TestLib_SLow_c.c -ccopt -Wno-error-tautological-compare
 
 LOW_LEVEL=LowParse_TestLib_Low_c.c
 
-MY_KREMLIN=$(KREMLIN_HOME)/krml -bundle 'LowParse.\*'  -add-include '"kremlin/internal/compat.h"'
+MY_KREMLIN=$(KREMLIN_EXE) -bundle 'LowParse.\*'  -add-include '"kremlin/internal/compat.h"'
 
 EXAMPLES=Example Example2 Example3 Example5 Example6 Example7 Example8 Example9 Example10 Example11
 ROOT_FILES=LowParse.SLow.fst LowParse.Low.fst $(addprefix LowParse, $(addsuffix .fst, $(EXAMPLES))) LowParse.TestLib.SLow.fst LowParse.TestLib.Low.fst
