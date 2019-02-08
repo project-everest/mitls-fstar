@@ -267,8 +267,6 @@ let parse_vclist_payload_kind
     parser_kind_subkind = (if max = 0 then Some ParserStrong else if min = 0 && k.parser_kind_subkind <> Some ParserStrong then None else k.parser_kind_subkind);
   }
 
-#push-options "--z3rlimit 32"
-
 let parse_vclist_payload_kind_is_weaker_than
   (min: nat)
   (max: nat)
@@ -277,9 +275,10 @@ let parse_vclist_payload_kind_is_weaker_than
 : Lemma
   (parse_vclist_payload_kind min max k `is_weaker_than` parse_nlist_kind n k)
   [SMTPat (parse_vclist_payload_kind min max k `is_weaker_than` parse_nlist_kind n k)]
-= ()
-
-#pop-options
+= FStar.Math.Lemmas.lemma_mult_le_right k.parser_kind_low min n;
+  match k.parser_kind_high with
+  | None -> ()
+  | Some high -> FStar.Math.Lemmas.lemma_mult_le_right high n max
 
 inline_for_extraction
 let synth_vclist_payload
