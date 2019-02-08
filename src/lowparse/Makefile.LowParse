@@ -8,7 +8,7 @@ all: verify-all
 
 ifndef FSTAR_HOME
   FSTAR_EXE=$(shell which fstar.exe)
-  ifneq $(.SHELLSTATUS),0
+  ifneq ($(.SHELLSTATUS),0)
     FSTAR_HOME=../../../FStar
   endif
 endif
@@ -18,7 +18,7 @@ endif
 
 ifndef KREMLIN_HOME
   KREMLIB=$(shell ocamlfind query kremlin)
-  ifneq $(.SHELLSTATUS),0
+  ifneq ($(.SHELLSTATUS),0)
     KREMLIN_HOME=../../../kremlin
   endif
 endif
