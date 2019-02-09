@@ -13,6 +13,7 @@ SHELL=/bin/bash
 
 INCLUDE_PATHS = \
   $(HACL_HOME)/vale/code/arch/x64 \
+  $(HACL_HOME)/vale/code/arch/x64/interop \
   $(HACL_HOME)/vale/specs/defs \
   $(HACL_HOME)/vale/specs/hardware \
   $(HACL_HOME)/vale/code/crypto/sha \
@@ -35,7 +36,21 @@ INCLUDE_PATHS = \
 	$(MITLS_HOME)/src/lowparse \
         $(MITLS_HOME)/src/parsers/generated \
 	$(EVERCRYPT_HOME)/evercrypt \
+	$(EVERCRYPT_HOME)/evercrypt/config/default \
+	$(EVERCRYPT_HOME)/evercrypt/fst \
 	$(SPECINC)
+
+VALE_OBJ_DIR=$(HACL_HOME)/vale/obj
+ifneq (,$(wildcard $(VALE_OBJ_DIR)))
+  INCLUDE_PATHS += $(VALE_OBJ_DIR)/code/thirdPartyPorts/OpenSSL/sha/ \
+    $(VALE_OBJ_DIR)/code/lib/util/x64/ \
+    $(VALE_OBJ_DIR)/code/lib/util/x64/stdcalls/ \
+    $(VALE_OBJ_DIR)/code/arch/x64 \
+    $(VALE_OBJ_DIR)/cache_checked
+else
+  $(warning Missing vale obj dir, seems like an incomplete build of HACL*)  
+endif
+
 
 # We can't hard-error on these because of F* orange CI that runs over a couple
 # miTLS files without properly building HACL* first.

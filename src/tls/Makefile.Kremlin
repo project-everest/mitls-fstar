@@ -91,7 +91,7 @@ KRML_COMMAND	= $(KREMLIN_HOME)/krml -minimal \
   -add-include '"kremlib.h"' \
   -fnoanonymous-unions -warn-error -9-7-6@4-14-15 \
   -fsopts --debug,yes -verbose \
-  -library EverCrypt,EverCrypt.* \
+  -library EverCrypt,EverCrypt.*,Hacl.*,Interop_assumptions,Check_sha_stdcall,Sha_update_bytes_stdcall,Check_aesni_stdcall \
   $(DROP_MODULES) $(HEADERS) \
   $(MITLS_BUNDLES) $(KOPTS)
 
