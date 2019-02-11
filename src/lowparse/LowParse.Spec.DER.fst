@@ -17,16 +17,14 @@ let der_length_max : nat = normalize_term (pow2 (8 * 126) - 1)
 
 let _ = intro_ambient der_length_max
 
-let _ : unit = _ by (FStar.Tactics.(print (string_of_int der_length_max); exact (`())))
+// let _ : unit = _ by (FStar.Tactics.(print (string_of_int der_length_max); exact (`())))
 
 let der_length_t = (x: nat { x <= der_length_max })
 
-inline_for_extraction
-let parse_der_length_payload_kind : parser_kind = strong_parser_kind 0 126 None
-
+noextract
 let rec log256
   (x: nat { x > 0 })
-: GTot (y: nat { y > 0 /\ pow2 (8 * (y - 1)) <= x /\ x < pow2 (8 * y)})
+: Tot (y: nat { y > 0 /\ pow2 (8 * (y - 1)) <= x /\ x < pow2 (8 * y)})
 = assert_norm (pow2 8 == 256);
   if x < 256
   then 1
@@ -51,9 +49,36 @@ let log256_unique
 = Math.pow2_lt_recip (8 * (y - 1)) (8 * log256 x);
   Math.pow2_lt_recip (8 * (log256 x - 1)) (8 * y)
 
+let log256_le
+  (x1 x2: nat)
+: Lemma
+  (requires (0 < x1 /\ x1 <= x2))
+  (ensures (log256 x1 <= log256 x2))
+= Math.pow2_lt_recip (8 * (log256 x1 - 1)) (8 * log256 x2)
+
+let der_length_payload_size_of_tag
+  (x: U8.t)
+: Tot (y: nat { y <= 126 })
+= assert_norm (der_length_max == pow2 (8 * 126) - 1);
+  assert_norm (pow2 7 == 128);
+  assert_norm (pow2 8 == 256);
+  assert_norm (256 < der_length_max);
+  assert (U8.v x <= der_length_max);
+  let x' = U8.v x in
+  if x' <= 128 || x' = 255
+  then
+    0
+  else
+    U8.v x % pow2 7
+
+inline_for_extraction
+let parse_der_length_payload_kind (x: U8.t) : Tot parser_kind =
+  let len = der_length_payload_size_of_tag x in
+  strong_parser_kind len len None
+
 let tag_of_der_length
   (x: der_length_t)
-: GTot U8.t
+: Tot U8.t
 = if x < 128
   then U8.uint_to_t x
   else
@@ -61,6 +86,31 @@ let tag_of_der_length
     assert_norm (der_length_max == pow2 (8 * 126) - 1);
     Math.pow2_lt_recip (8 * (len_len - 1)) (8 * 126);
     128uy `U8.add` U8.uint_to_t len_len
+
+inline_for_extraction
+let der_length_payload_size
+  (x: der_length_t)
+: Tot (y: nat { y <= 126 })
+= der_length_payload_size_of_tag (tag_of_der_length x)
+
+let der_length_payload_size_le
+  (x1 x2: der_length_t)
+: Lemma
+  (requires (x1 <= x2))
+  (ensures (der_length_payload_size x1 <= der_length_payload_size x2))
+= if x1 < 128 || x2 < 128
+  then ()
+  else
+    let len_len2 = log256 x2 in
+    let len_len1 = log256 x1 in
+    log256_le x1 x2;
+    assert_norm (pow2 7 == 128);
+    Math.lemma_mod_plus len_len1 1 (pow2 7);
+    Math.lemma_mod_plus len_len2 1 (pow2 7);
+    assert_norm (der_length_max == pow2 (8 * 126) - 1);
+    Math.pow2_lt_recip (8 * (len_len2 - 1)) (8 * 126);
+    Math.small_modulo_lemma_1 len_len1 (pow2 7);
+    Math.small_modulo_lemma_1 len_len2 (pow2 7)
 
 let synth_be_int
   (len: nat)
@@ -111,7 +161,7 @@ let synth_der_length_greater
 
 let parse_der_length_payload
   (x: U8.t)
-: Tot (parser parse_der_length_payload_kind (refine_with_tag tag_of_der_length x))
+: Tot (parser (parse_der_length_payload_kind x) (refine_with_tag tag_of_der_length x))
 = assert_norm (der_length_max == pow2 (8 * 126) - 1);
   assert_norm (pow2 7 == 128);
   assert_norm (pow2 8 == 256);
@@ -120,36 +170,240 @@ let parse_der_length_payload
   let (x' : der_length_t) = U8.v x in
   if x' < 128
   then begin
-    weaken parse_der_length_payload_kind (parse_ret (x' <: refine_with_tag tag_of_der_length x))
+    weaken (parse_der_length_payload_kind x) (parse_ret (x' <: refine_with_tag tag_of_der_length x))
   end else
    if x = 128uy
    then 
-    fail_parser parse_der_length_payload_kind (refine_with_tag tag_of_der_length x) // DER representation of 0 is covered by the x<128 case
+    fail_parser (parse_der_length_payload_kind x) (refine_with_tag tag_of_der_length x) // DER representation of 0 is covered by the x<128 case
    else if x = 255uy
    then 
-    fail_parser parse_der_length_payload_kind (refine_with_tag tag_of_der_length x) // forbidden in BER already
+    fail_parser (parse_der_length_payload_kind x) (refine_with_tag tag_of_der_length x) // forbidden in BER already
    else if x = 129uy
    then
-    weaken parse_der_length_payload_kind
+    weaken (parse_der_length_payload_kind x)
       ((parse_u8 `parse_filter` (fun y -> U8.v y >= 128))
         `parse_synth` synth_der_length_129 x)
   else begin
     let len : nat = U8.v x % pow2 7 in
     synth_be_int_injective len; // FIXME: WHY WHY WHY does the pattern not trigger, even with higher rlimit?
-    weaken parse_der_length_payload_kind
+    weaken (parse_der_length_payload_kind x)
       (((parse_seq_flbytes len `parse_synth` (synth_be_int len))
         `parse_filter` (fun (y: nat { y < pow2 (8 * len) } ) -> y >= pow2 (8 * (len - 1))))
        `parse_synth` synth_der_length_greater x len)
-  end        
-        
-inline_for_extraction
-let parse_der_length_kind : parser_kind = and_then_kind parse_u8_kind parse_der_length_payload_kind
+  end
 
-let parse_der_length : parser parse_der_length_kind der_length_t
+inline_for_extraction
+let parse_der_length_payload_kind_weak : parser_kind =
+  strong_parser_kind 0 126 None
+
+inline_for_extraction
+let parse_der_length_weak_kind : parser_kind = and_then_kind parse_u8_kind parse_der_length_payload_kind_weak
+
+let parse_der_length_weak : parser parse_der_length_weak_kind der_length_t
 = parse_tagged_union
     parse_u8
     tag_of_der_length
-    parse_der_length_payload
+    (fun x -> weaken parse_der_length_payload_kind_weak (parse_der_length_payload x))
+
+inline_for_extraction
+let parse_bounded_der_length_payload_kind
+  (min: der_length_t)
+  (max: der_length_t { min <= max } )
+: Tot parser_kind =
+  [@inline_let] let _ = der_length_payload_size_le min max in
+  strong_parser_kind (der_length_payload_size min) (der_length_payload_size max) None
+
+let bounded_int
+  (min: der_length_t)
+  (max: der_length_t { min <= max })
+: Tot Type0
+= (x: int { min <= x /\ x <= max })
+
+let parse_bounded_der_length_tag_cond
+  (min: der_length_t)
+  (max: der_length_t { min <= max })
+  (x: U8.t)
+: GTot bool
+= let len = der_length_payload_size_of_tag x in der_length_payload_size min <= len && len <= der_length_payload_size max
+
+inline_for_extraction
+let tag_of_bounded_der_length
+  (min: der_length_t)
+  (max: der_length_t { min <= max })
+  (x: bounded_int min max)
+: Tot (y: U8.t { parse_bounded_der_length_tag_cond min max y == true } )
+= [@inline_let]
+  let _ = der_length_payload_size_le min x; der_length_payload_size_le x max in
+  tag_of_der_length x
+
+let parse_bounded_der_length_payload
+  (min: der_length_t)
+  (max: der_length_t { min <= max })
+  (x: U8.t { parse_bounded_der_length_tag_cond min max x == true } )
+: Tot (parser (parse_bounded_der_length_payload_kind min max) (refine_with_tag (tag_of_bounded_der_length min max) x))
+= weaken (parse_bounded_der_length_payload_kind min max)
+    (parse_der_length_payload x
+      `parse_filter` (fun (y: refine_with_tag tag_of_der_length x) -> min <= y && y <= max)
+      `parse_synth` (fun (y: refine_with_tag tag_of_der_length x { min <= y && y <= max }) -> (y <: refine_with_tag (tag_of_bounded_der_length min max) x)))
+
+inline_for_extraction
+let parse_bounded_der_length_kind
+  (min: der_length_t)
+  (max: der_length_t { min <= max } )
+: Tot parser_kind
+= and_then_kind
+    (parse_filter_kind parse_u8_kind)
+    (parse_bounded_der_length_payload_kind min max)
+
+let parse_bounded_der_length
+  (min: der_length_t)
+  (max: der_length_t { min <= max })
+: Tot (parser (parse_bounded_der_length_kind min max) (bounded_int min max))
+= parse_tagged_union
+    (parse_u8 `parse_filter` parse_bounded_der_length_tag_cond min max)
+    (tag_of_bounded_der_length min max)
+    (parse_bounded_der_length_payload min max)
+
+(* equality *)
+
+let parse_bounded_der_length_payload_unfold
+  (min: der_length_t)
+  (max: der_length_t { min <= max })
+  (x: U8.t { parse_bounded_der_length_tag_cond min max x == true } )
+  (input' : bytes)
+: Lemma
+  (parse (parse_bounded_der_length_payload min max x) input' == (
+      match parse (parse_der_length_payload x) input' with
+      | None -> None
+      | Some (y, consumed_y) ->
+        if min <= y && y <= max
+        then Some (y, consumed_y)
+        else None
+  ))
+= 
+      parse_synth_eq
+        (parse_der_length_payload x
+                                  `parse_filter` (fun (y: refine_with_tag tag_of_der_length x) -> min <= y && y <= max))
+                                    (fun (y: refine_with_tag tag_of_der_length x { min <= y && y <= max }) -> (y <: refine_with_tag (tag_of_bounded_der_length min max) x))
+        input' ;
+        parse_filter_eq
+          (parse_der_length_payload x)
+          (fun (y: refine_with_tag tag_of_der_length x) -> min <= y && y <= max)
+          input'
+
+let parse_bounded_der_length_unfold_aux
+  (min: der_length_t)
+  (max: der_length_t { min <= max })
+  (input: bytes)
+: Lemma
+  (parse (parse_bounded_der_length min max) input == (match parse parse_u8 input with
+  | None -> None
+  | Some (x, consumed_x) ->
+    let len = der_length_payload_size_of_tag x in
+    if der_length_payload_size min <= len && len <= der_length_payload_size max then
+      let input' = Seq.slice input consumed_x (Seq.length input) in
+      match parse (parse_bounded_der_length_payload min max x) input'
+      with
+      | Some (y, consumed_y) -> Some (y, consumed_x + consumed_y)
+      | None -> None
+    else None
+ ))
+= parse_tagged_union_eq
+    (parse_u8 `parse_filter` parse_bounded_der_length_tag_cond min max)
+    (tag_of_bounded_der_length min max)
+    (parse_bounded_der_length_payload min max)
+    input;
+  parse_filter_eq parse_u8 (parse_bounded_der_length_tag_cond min max) input
+
+let parse_bounded_der_length_unfold
+  (min: der_length_t)
+  (max: der_length_t { min <= max })
+  (input: bytes)
+: Lemma
+  (parse (parse_bounded_der_length min max) input == (match parse parse_u8 input with
+  | None -> None
+  | Some (x, consumed_x) ->
+    let len = der_length_payload_size_of_tag x in
+    if der_length_payload_size min <= len && len <= der_length_payload_size max then
+      let input' = Seq.slice input consumed_x (Seq.length input) in
+      match parse (parse_der_length_payload x) input' with
+      | None -> None
+      | Some (y, consumed_y) ->
+        if min <= y && y <= max
+        then Some (y, consumed_x + consumed_y)
+        else None
+    else None
+ ))
+= parse_bounded_der_length_unfold_aux min max input;
+  match parse parse_u8 input with
+  | None -> ()
+  | Some (x, consumed_x) ->
+    let len = der_length_payload_size_of_tag x in
+    if der_length_payload_size min <= len && len <= der_length_payload_size max then
+      let input' = Seq.slice input consumed_x (Seq.length input) in
+      parse_bounded_der_length_payload_unfold min max (x <:   (x: U8.t { parse_bounded_der_length_tag_cond min max x == true } )
+) input'
+    else ()
+
+let parse_bounded_der_length_weak
+  (min: der_length_t)
+  (max: der_length_t { min <= max })
+: Tot (parser (parse_filter_kind parse_der_length_weak_kind) (bounded_int min max))
+= parse_der_length_weak
+    `parse_filter` (fun y -> min <= y && y <= max)
+    `parse_synth` (fun (y: der_length_t {min <= y && y <= max}) -> (y <: bounded_int min max))
+
+let parse_bounded_der_length_weak_unfold
+  (min: der_length_t)
+  (max: der_length_t { min <= max })
+  (input: bytes)
+: Lemma
+  (parse (parse_bounded_der_length_weak min max) input == (
+    match parse parse_u8 input with
+    | None -> None
+    | Some (x, consumed_x) ->
+      let input' = Seq.slice input consumed_x (Seq.length input) in
+      begin match parse (parse_der_length_payload x) input' with
+      | None -> None
+      | Some (y, consumed_y) ->
+        if min <= y && y <= max
+        then Some (y, consumed_x + consumed_y)
+        else None
+      end
+  ))
+= parse_synth_eq
+    (parse_der_length_weak
+      `parse_filter` (fun y -> min <= y && y <= max))
+    (fun (y: der_length_t {min <= y && y <= max}) -> (y <: bounded_int min max))
+    input;
+  parse_filter_eq parse_der_length_weak (fun y -> min <= y && y <= max) input;
+  parse_tagged_union_eq
+    parse_u8
+    tag_of_der_length
+    (fun x -> weaken parse_der_length_payload_kind_weak (parse_der_length_payload x))
+    input
+
+let parse_bounded_der_length_eq
+  (min: der_length_t)
+  (max: der_length_t { min <= max })
+  (input: bytes)
+: Lemma
+  (ensures (parse (parse_bounded_der_length min max) input == parse (parse_bounded_der_length_weak min max) input))
+= parse_bounded_der_length_unfold min max input;
+  parse_bounded_der_length_weak_unfold min max input;
+  match parse parse_u8 input with
+    | None -> ()
+    | Some (x, consumed_x) ->
+      let input' = Seq.slice input consumed_x (Seq.length input) in
+      begin match parse (parse_der_length_payload x) input' with
+      | None -> ()
+      | Some (y, consumed_y) ->
+        if min <= y && y <= max
+        then (der_length_payload_size_le min y; der_length_payload_size_le y max)
+        else ()
+      end
+
+(* serializer *)
 
 let tag_of_der_length_lt_128
   (x: der_length_t)
@@ -233,15 +487,15 @@ let serialize_der_length_payload
   let (x' : der_length_t) = U8.v x in
   if x' < 128
   then begin
-    serialize_weaken parse_der_length_payload_kind (serialize_ret (x' <: refine_with_tag tag_of_der_length x) (fun (y: refine_with_tag tag_of_der_length x) -> tag_of_der_length_lt_128 y))
+    serialize_weaken (parse_der_length_payload_kind x) (serialize_ret (x' <: refine_with_tag tag_of_der_length x) (fun (y: refine_with_tag tag_of_der_length x) -> tag_of_der_length_lt_128 y))
   end else
    if x = 128uy || x = 255uy
    then
-     fail_serializer parse_der_length_payload_kind (refine_with_tag tag_of_der_length x) (fun y -> tag_of_der_length_invalid y)
+     fail_serializer (parse_der_length_payload_kind x) (refine_with_tag tag_of_der_length x) (fun y -> tag_of_der_length_invalid y)
    else if x = 129uy
    then begin
      serialize_weaken
-       parse_der_length_payload_kind
+       (parse_der_length_payload_kind x)
        (serialize_synth
           (parse_filter parse_u8 (fun y -> U8.v y >= 128))
           (synth_der_length_129 x)
@@ -253,7 +507,7 @@ let serialize_der_length_payload
     let len : nat = U8.v x % pow2 7 in
     synth_be_int_injective len; // FIXME: WHY WHY WHY does the pattern not trigger, even with higher rlimit?
     serialize_weaken
-      parse_der_length_payload_kind
+      (parse_der_length_payload_kind x)
       (serialize_synth
         _
         (synth_der_length_greater x len)
@@ -271,3 +525,33 @@ let serialize_der_length_payload
         ()
       )
    end
+
+let serialize_der_length_weak : serializer parse_der_length_weak =
+  serialize_tagged_union
+    serialize_u8
+    tag_of_der_length
+    (fun x -> serialize_weaken parse_der_length_payload_kind_weak (serialize_der_length_payload x))
+
+let serialize_bounded_der_length_weak
+  (min: der_length_t)
+  (max: der_length_t { min <= max })
+: Tot (serializer (parse_bounded_der_length_weak min max))
+= serialize_synth
+    _
+    (fun (y: der_length_t {min <= y && y <= max}) -> (y <: bounded_int min max))
+    (serialize_filter
+      serialize_der_length_weak
+      (fun y -> min <= y && y <= max)
+    )
+    (fun (y : bounded_int min max) -> (y <: (y: der_length_t {min <= y && y <= max})))
+    ()
+
+let serialize_bounded_der_length
+  (min: der_length_t)
+  (max: der_length_t { min <= max })
+: Tot (serializer (parse_bounded_der_length min max))
+= Classical.forall_intro (parse_bounded_der_length_eq min max);
+  serialize_ext
+    _
+    (serialize_bounded_der_length_weak min max)
+    (parse_bounded_der_length min max)
