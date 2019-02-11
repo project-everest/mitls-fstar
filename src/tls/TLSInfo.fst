@@ -130,7 +130,7 @@ let defaultConfig =
 
   // Client
   hello_retry = true;
-  offer_shares = [Parsers.NamedGroup.X25519];
+  offer_shares = CommonDH.as_supportedNamedGroups [Parsers.NamedGroup.X25519];
   custom_extensions = [];
   use_tickets = [];
 

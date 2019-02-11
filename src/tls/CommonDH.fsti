@@ -34,6 +34,14 @@ let is_supported_group x = List.Tot.mem x
 type supportedNamedGroup = x:namedGroup{is_supported_group x}
 type supportedNamedGroups = xs:namedGroups{List.Tot.for_all is_supported_group xs} 
 
+let as_supportedNamedGroups
+  (xs:namedGroups)
+  : Pure supportedNamedGroups
+    (requires (b2t (norm [primops; iota; zeta; delta_only [`%List.Tot.for_all; `%is_supported_group; `%List.Tot.mem]]
+                                     (List.Tot.for_all is_supported_group xs))))
+    (ensures (fun x -> True))
+  = xs
+
 val group: t:Type0{hasEq t}
 val is_ec: group -> bool
 val string_of_group: group -> string
