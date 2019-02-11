@@ -9,6 +9,22 @@ module U32 = FStar.UInt32
 
 #reset-options "--z3cliopt smt.arith.nl=false --max_fuel 0"
 
+inline_for_extraction
+let validate_u16_le () : validator parse_u16_le =
+  validate_total_constant_size parse_u16_le 2ul ()
+
+inline_for_extraction
+let validate_u32_le () : validator parse_u32_le =
+  validate_total_constant_size parse_u32_le 4ul ()
+
+inline_for_extraction
+let jump_u16_le : jumper parse_u16_le =
+  jump_constant_size parse_u16_le 2ul ()
+
+inline_for_extraction
+let jump_u32_le : jumper parse_u32_le =
+  jump_constant_size parse_u32_le 4ul ()
+
 let read_bounded_integer_le_1 : leaf_reader (parse_bounded_integer_le 1) =
   [@inline_let] let _ = bounded_integer_of_le_injective 1 in
   make_total_constant_size_reader 1 1ul #(bounded_integer 1) (bounded_integer_of_le 1) () (fun b ->
