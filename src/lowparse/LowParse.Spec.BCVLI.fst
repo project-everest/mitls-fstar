@@ -44,6 +44,27 @@ let parse_bounded_integer_le
 = bounded_integer_of_le_injective i;
   make_total_constant_size_parser i (bounded_integer i) (bounded_integer_of_le i)
 
+module U16 = FStar.UInt16
+module Cast = FStar.Int.Cast
+
+inline_for_extraction
+let synth_u16_le
+  (x: bounded_integer 2)
+: Tot U16.t
+= Cast.uint32_to_uint16 x
+
+let synth_u16_le_injective : squash (synth_injective synth_u16_le) = ()
+
+let parse_u16_le : parser parse_u16_kind U16.t = parse_bounded_integer_le 2 `parse_synth` synth_u16_le
+
+inline_for_extraction
+let synth_u32_le
+  (x: bounded_integer 4)
+: Tot U32.t
+= x
+
+let parse_u32_le : parser parse_u32_kind U32.t = parse_bounded_integer_le 4 `parse_synth` synth_u32_le
+
 inline_for_extraction
 let parse_bcvli_payload_kind = {
   parser_kind_low = 0;
@@ -114,6 +135,8 @@ let serialize_bounded_integer_le'
     res
   )
 
+#push-options "--z3rlimit 16"
+
 let serialize_bounded_integer_le_correct
   (sz: integer_size)
 : Lemma
@@ -130,11 +153,47 @@ let serialize_bounded_integer_le_correct
   in
   Classical.forall_intro prf
 
+#pop-options
+
 let serialize_bounded_integer_le
   (sz: integer_size)
 : Tot (serializer (parse_bounded_integer_le sz))
 = serialize_bounded_integer_le_correct sz;
   serialize_bounded_integer_le' sz
+
+inline_for_extraction
+let synth_u16_le_recip
+  (x: U16.t)
+: Tot (bounded_integer 2)
+= Cast.uint16_to_uint32 x
+
+#push-options "--z3rlimit 16"
+
+let synth_u16_le_inverse : squash (synth_inverse synth_u16_le synth_u16_le_recip) = ()
+
+let serialize_u16_le : serializer parse_u16_le =
+  serialize_synth
+    _
+    synth_u16_le
+    (serialize_bounded_integer_le 2)
+    synth_u16_le_recip
+    ()
+
+#pop-options
+
+inline_for_extraction
+let synth_u32_le_recip
+  (x: U32.t)
+: Tot (bounded_integer 4)
+= x
+
+let serialize_u32_le : serializer parse_u32_le =
+  serialize_synth
+    _
+    synth_u32_le
+    (serialize_bounded_integer_le 4)
+    synth_u32_le_recip
+    ()
 
 let bare_serialize_bcvli (x: U32.t) : GTot bytes =
   let c1 : bounded_integer 1 =

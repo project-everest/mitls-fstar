@@ -72,6 +72,22 @@ let parse32_bounded_integer_le_4
     ()
     bounded_integer_of_le_32_4
 
+inline_for_extraction
+let parse32_u16_le : parser32 parse_u16_le =
+  parse32_synth'
+    _
+    synth_u16_le
+    parse32_bounded_integer_le_2
+    ()
+
+inline_for_extraction
+let parse32_u32_le : parser32 parse_u32_le =
+  parse32_synth'
+    _
+    synth_u32_le
+    parse32_bounded_integer_le_4
+    ()
+
 let parse32_bcvli
 : parser32 parse_bcvli
 = fun input -> ((
@@ -138,6 +154,26 @@ let serialize32_bounded_integer_le_4  : serializer32 (serialize_bounded_integer_
     (B32.create 1ul rem0 `B32.append` B32.create 1ul rem1) `B32.append`
     (B32.create 1ul rem2 `B32.append` B32.create 1ul rem3)
   ) <: (res: bytes32 { serializer32_correct' (serialize_bounded_integer_le 4) x res } ))
+
+inline_for_extraction
+let serialize32_u16_le : serializer32 serialize_u16_le =
+  serialize32_synth' 
+    _
+    synth_u16_le
+    _
+    serialize32_bounded_integer_le_2
+    synth_u16_le_recip
+    ()
+
+inline_for_extraction
+let serialize32_u32_le : serializer32 serialize_u32_le =
+  serialize32_synth' 
+    _
+    synth_u32_le
+    _
+    serialize32_bounded_integer_le_4
+    synth_u32_le_recip
+    ()
 
 let serialize32_bcvli
 : serializer32 serialize_bcvli

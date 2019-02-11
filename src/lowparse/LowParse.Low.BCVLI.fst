@@ -40,7 +40,20 @@ let read_bounded_integer_le_4 : leaf_reader (parse_bounded_integer_le 4) =
     Cast.uint8_to_uint32 r0 `U32.add` (256ul `U32.mul` (Cast.uint8_to_uint32 r1 `U32.add` (256ul `U32.mul` (Cast.uint8_to_uint32 r2 `U32.add` (256ul `U32.mul` Cast.uint8_to_uint32 r3)))))
   )
 
-#push-options "--z3rlimit 16"
+let read_u16_le : leaf_reader parse_u16_le =
+  [@inline_let] let _ = synth_u16_le_injective in
+  read_synth'
+    _
+    synth_u16_le
+    read_bounded_integer_le_2
+    ()
+
+let read_u32_le : leaf_reader parse_u32_le =
+  read_synth'
+    _
+    synth_u32_le
+    read_bounded_integer_le_4
+    ()
 
 let validate_bcvli : validator parse_bcvli =
   fun input pos ->
@@ -130,8 +143,6 @@ let read_bcvli : leaf_reader parse_bcvli =
 
 module U8 = FStar.UInt8
 
-#pop-options
-
 inline_for_extraction
 let serialize32_bounded_integer_le_1
 : serializer32 (serialize_bounded_integer_le 1)
@@ -194,6 +205,13 @@ let serialize32_bounded_integer_le_4
 #pop-options
 
 let write_bounded_integer_le_4 : leaf_writer_strong (serialize_bounded_integer_le 4) = leaf_writer_strong_of_serializer32 serialize32_bounded_integer_le_4 ()
+
+let write_u16_le : leaf_writer_strong serialize_u16_le =
+  [@inline_let] let _ = synth_u16_le_injective; synth_u16_le_inverse in
+  write_synth write_bounded_integer_le_2 synth_u16_le synth_u16_le_recip (fun x -> synth_u16_le_recip x) ()
+
+let write_u32_le : leaf_writer_strong serialize_u32_le =
+  write_synth write_bounded_integer_le_4 synth_u32_le synth_u32_le_recip (fun x -> synth_u32_le_recip x) ()
 
 #push-options "--z3rlimit 16"
 
