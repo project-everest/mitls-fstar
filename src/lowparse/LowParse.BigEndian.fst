@@ -172,3 +172,23 @@ let rec be_to_n_inj
     Seq.lemma_split b1 (Seq.length b1 - 1);
     Seq.lemma_split b2 (Seq.length b2 - 1)
   end
+
+let rec n_to_be''
+  (len: nat)
+  (n: nat { n < pow2 (8 * len) } )
+: GTot (res: Seq.seq U8.t { Seq.length res == len /\ n == be_to_n res } )
+  (decreases len)
+= if len = 0
+  then begin
+    Seq.empty
+  end else begin
+    let len' = len - 1 in
+    Math.pow2_plus 8 (8 * len');
+    let (n' : nat { n' < pow2 (8 * len') } ) = n / 256 in
+    let b' = n_to_be'' len' n' in
+    let b'' = Seq.create 1 (U8.uint_to_t (n % 256)) in
+    let res = Seq.append b' b'' in
+    Seq.lemma_eq_intro b' (Seq.slice res 0 len');
+    res
+  end
+

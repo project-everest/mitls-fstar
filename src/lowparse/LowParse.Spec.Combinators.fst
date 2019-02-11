@@ -143,13 +143,20 @@ let parse_ret (#t:Type) (v:t) : Tot (parser parse_ret_kind t) =
   parser_kind_prop_equiv parse_ret_kind (parse_ret' v);
   parse_ret' v
 
+let serialize_ret
+  (#t: Type)
+  (v: t)
+  (v_unique: (v' : t) -> Lemma (v == v'))
+: Tot (serializer (parse_ret v))
+= mk_serializer
+    (parse_ret v)
+    (fun (x: t) -> Seq.empty)
+    (fun x -> v_unique x)
+
 let parse_empty : parser parse_ret_kind unit =
   parse_ret ()
 
-let serialize_empty' : serializer parse_empty =
-  fun (x:unit) -> Seq.empty
-
-let serialize_empty : serializer parse_empty = serialize_empty'
+let serialize_empty : serializer parse_empty = serialize_ret () (fun _ -> ())
 
 #set-options "--z3rlimit 16"
 
@@ -173,6 +180,16 @@ let fail_parser
 = let p = fail_parser' t in
   parser_kind_prop_equiv k p;
   strengthen k p
+
+let fail_serializer
+  (k: parser_kind {fail_parser_kind_precond k} )
+  (t: Type0)
+  (prf: (x: t) -> Lemma False)
+: Tot (serializer (fail_parser k t))
+= mk_serializer
+    (fail_parser k t)
+    (fun x -> prf x; false_elim ())
+    (fun x -> prf x)
 
 inline_for_extraction
 let parse_false_kind = strong_parser_kind 0 0 (Some ParserKindMetadataFail)
@@ -590,6 +607,16 @@ let synth_inverse_intro
   (requires (forall (x : t2) . f2 (g1 x) == x))
   (ensures (synth_inverse f2 g1))
 = ()
+
+let synth_inverse_intro'
+  (#t1: Type0)
+  (#t2: Type0)
+  (f2: (t1 -> GTot t2))
+  (g1: (t2 -> GTot t1))
+  (prf: (x: t2) -> Lemma (f2 (g1 x) == x))
+: Lemma
+  (ensures (synth_inverse f2 g1))
+= Classical.forall_intro prf
 
 let synth_inverse_synth_injective_pat
   (#t1: Type0)
@@ -1567,6 +1594,15 @@ let serialize_filter
 : Tot (serializer (parse_filter p f))
 = serialize_filter_correct s f;
   serialize_filter' s f
+
+let serialize_weaken
+  (#k: parser_kind)
+  (#t: Type0)
+  (k' : parser_kind)
+  (#p: parser k t)
+  (s: serializer p { k' `is_weaker_than` k })
+: Tot (serializer (weaken k' p))
+= serialize_ext _ s (weaken k' p)
 
 (* Helpers to define `if` combinators *)
 
