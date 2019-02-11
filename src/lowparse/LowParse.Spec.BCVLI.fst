@@ -249,6 +249,8 @@ let serialize_bcvli : serializer parse_bcvli = bare_serialize_bcvli
 
 module U8 = FStar.UInt8
 
+#push-options "--max_fuel 5 --z3rlimit 16"
+
 let bounded_integer_of_le_1_eq
   (b: bytes { Seq.length b == 1 } )
 : Lemma
@@ -260,8 +262,6 @@ let bounded_integer_of_le_2_eq
 : Lemma
   (U32.v (bounded_integer_of_le 2 b) == U8.v (Seq.index b 0) + 256 `FStar.Mul.op_Star` U8.v (Seq.index b 1))
 = ()
-
-#push-options "--max_fuel 5 --z3rlimit 16"
 
 let bounded_integer_of_le_4_eq
   (b: bytes { Seq.length b == 4 } )

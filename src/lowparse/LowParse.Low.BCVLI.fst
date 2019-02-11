@@ -55,6 +55,8 @@ let read_u32_le : leaf_reader parse_u32_le =
     read_bounded_integer_le_4
     ()
 
+#push-options "--z3rlimit 16"
+
 let validate_bcvli : validator parse_bcvli =
   fun input pos ->
   let h = HST.get () in
@@ -140,6 +142,8 @@ let read_bcvli : leaf_reader parse_bcvli =
     if r = 253ul
     then read_bounded_integer_le_2 input pos1 <: U32.t
     else read_bounded_integer_le_4 input pos1 <: U32.t
+
+#pop-options
 
 module U8 = FStar.UInt8
 
