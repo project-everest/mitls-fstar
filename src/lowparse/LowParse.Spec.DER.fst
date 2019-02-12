@@ -57,6 +57,7 @@ let log256_le
   (ensures (log256 x1 <= log256 x2))
 = Math.pow2_lt_recip (8 * (log256 x1 - 1)) (8 * log256 x2)
 
+inline_for_extraction
 let der_length_payload_size_of_tag
   (x: U8.t)
 : Tot (y: nat { y <= 126 })
@@ -88,7 +89,7 @@ let tag_of_der_length
     Math.pow2_lt_recip (8 * (len_len - 1)) (8 * 126);
     128uy `U8.add` U8.uint_to_t len_len
 
-inline_for_extraction
+noextract
 let der_length_payload_size
   (x: der_length_t)
 : Tot (y: nat { y <= 126 })
@@ -279,7 +280,7 @@ let parse_der_length_weak : parser parse_der_length_weak_kind der_length_t
     tag_of_der_length
     (fun x -> weaken parse_der_length_payload_kind_weak (parse_der_length_payload x))
 
-inline_for_extraction
+noextract
 let parse_bounded_der_length_payload_kind
   (min: der_length_t)
   (max: der_length_t { min <= max } )
@@ -320,7 +321,7 @@ let parse_bounded_der_length_payload
       `parse_filter` (fun (y: refine_with_tag tag_of_der_length x) -> min <= y && y <= max)
       `parse_synth` (fun (y: refine_with_tag tag_of_der_length x { min <= y && y <= max }) -> (y <: refine_with_tag (tag_of_bounded_der_length min max) x)))
 
-inline_for_extraction
+noextract
 let parse_bounded_der_length_kind
   (min: der_length_t)
   (max: der_length_t { min <= max } )
@@ -839,6 +840,13 @@ let parse_der_length_payload32_unfold
 
 #pop-options
 
+let log256_eq
+  (x: nat)
+: Lemma
+  (requires (x > 0 /\ x < 4294967296))
+  (ensures (log256 x == log256' x))
+= log256_unique x (log256' x)
+
 let bounded_int32
   (min: der_length_t)
   (max: der_length_t { min <= max })
@@ -852,44 +860,87 @@ let synth_bounded_der_length32
 : Tot (bounded_int32 min max)
 = U32.uint_to_t x
 
+inline_for_extraction
+let tag_of_der_length32'
+  (x: der_length_t { x < 4294967296 } )
+: Tot (z: U8.t { z == tag_of_der_length x })
+= if x < 128
+  then U8.uint_to_t x
+  else
+    [@inline_let]
+    let len_len = log256' x in
+    [@inline_let] let _ =
+      log256_eq x;
+      assert_norm (der_length_max == pow2 (8 * 126) - 1);
+      Math.pow2_lt_recip (8 * (len_len - 1)) (8 * 126)
+    in
+    128uy `U8.add` U8.uint_to_t len_len
+
+inline_for_extraction
+let parse_bounded_der_length_payload32_kind
+  (min: der_length_t)
+  (max: der_length_t { min <= max /\ max < 4294967296 } )
+: Tot (y: parser_kind {y == parse_bounded_der_length_payload_kind min max } ) =
+  [@inline_let] let _ = der_length_payload_size_le min max in
+  strong_parser_kind (der_length_payload_size_of_tag (tag_of_der_length32' min)) (der_length_payload_size_of_tag (tag_of_der_length32' max)) None
+
+inline_for_extraction
+let parse_bounded_der_length32_kind
+  (min: der_length_t)
+  (max: der_length_t { min <= max /\ max < 4294967296 } )
+: Tot (y: parser_kind { y == parse_bounded_der_length_kind min max } )
+= and_then_kind
+    (parse_filter_kind parse_u8_kind)
+    (parse_bounded_der_length_payload32_kind min max)
+
 let parse_bounded_der_length32
   (min: der_length_t)
   (max: der_length_t { min <= max /\ max < 4294967296 })
-: Tot (parser (parse_bounded_der_length_kind min max) (bounded_int32 min max))
+: Tot (parser (parse_bounded_der_length32_kind min max) (bounded_int32 min max))
 = parse_bounded_der_length min max `parse_synth` synth_bounded_der_length32 min max
-
-(*
-let parse_bounded_der_length_payload32_unfold
-  (min: der_length_t)
-  (max: der_length_t { min <= max /\ max < 4294967296 })
-  (x: U8.t { parse_bounded_der_length_tag_cond min max x == true } )
-  (input' : bytes)
-: Lemma
-  (parse (parse_bounded_der_length_payload min max x `parse_synth` synth_bounded_int32 min max) input' == (
-      match parse (parse_der_length_payload x) input' with
-      | None -> None
-      | Some (y, consumed_y) ->
-        if min <= y && y <= max
-        then Some (y, consumed_y)
-        else None
-  ))
-*)
 
 let parse_bounded_der_length32_unfold
   (min: der_length_t)
   (max: der_length_t { min <= max /\ max < 4294967296 })
   (input: bytes)
 : Lemma
-  (parse (parse_bounded_der_length32 min max) input == (match parse parse_u8 input with
-  | None -> None
-  | Some (x, consumed_x) ->
-    let len = der_length_payload_size_of_tag x in
-    if der_length_payload_size min <= len && len <= der_length_payload_size max then
+  (let res = parse (parse_bounded_der_length32 min max) input in
+   match parse parse_u8 input with
+   | None -> res == None
+   | Some (x, consumed_x) ->
+     let len = der_length_payload_size_of_tag x in
+     if der_length_payload_size min <= len && len <= der_length_payload_size max then
       let input' = Seq.slice input consumed_x (Seq.length input) in
-          match parse (parse_bounded_der_length_payload min max x `parse_synth` synth_bounded_der_length32 min max) input'
-      with
-      | Some (y, consumed_y) -> Some (y, consumed_x + consumed_y)
-      | None -> None
-    else None
- ))
-= admit ()
+      len <= 4 /\ (
+      match parse (parse_der_length_payload32 x) input' with
+      | Some (y, consumed_y) ->
+        if min <= U32.v y && U32.v y <= max
+        then res == Some (y, consumed_x + consumed_y)
+        else res == None
+      | None -> res == None
+     ) else
+       res == None
+ )
+= parse_synth_eq (parse_bounded_der_length min max) (synth_bounded_der_length32 min max) input;
+  parse_bounded_der_length_unfold min max input;
+  match parse parse_u8 input with
+   | None -> ()
+   | Some (x, consumed_x) ->
+     let len = der_length_payload_size_of_tag x in
+     if der_length_payload_size min <= len && len <= der_length_payload_size max then
+      let input' = Seq.slice input consumed_x (Seq.length input) in
+      assert_norm (4294967296 <= der_length_max);
+      der_length_payload_size_le max 4294967295;
+      assert_norm (pow2 (8 * 3) == 16777216);
+      assert_norm (pow2 (8 * 4) == 4294967296);
+      log256_unique 4294967295 4;
+      parse_synth_eq (parse_der_length_payload x) (synth_der_length_payload32 x) input' ;
+      match parse (parse_der_length_payload x) input' with
+      | None -> ()
+      | Some (y, _) ->
+        if y >= 128 then begin
+          assert_norm (der_length_max == pow2 (8 * 126) - 1);
+          Math.pow2_lt_recip (8 * (log256 y - 1)) (8 * 126);
+          assert (U8.v (tag_of_der_length y) == 128 + log256 y)
+        end
+     else ()
