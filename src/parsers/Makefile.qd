@@ -75,6 +75,10 @@ ALL_KRML_FILES := $(filter-out kremlin/prims.krml,$(ALL_KRML_FILES))
 
 extract: $(ALL_KRML_FILES) # from .depend
 
+codegen: $(ALL_KRML_FILES)
+	-@mkdir out
+	$(KREMLIN) -skip-compilation $^
+
 %.fst-in %.fsti-in:
 	@echo $(FSTAR_OPTIONS) --hint_file hints/$(notdir $(subst -in,.hints,$@))
 
