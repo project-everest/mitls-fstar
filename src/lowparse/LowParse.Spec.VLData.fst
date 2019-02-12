@@ -530,7 +530,7 @@ let parse_bounded_vldata_elim_forall
 
 let parse_bounded_vldata_strong_pred
   (min: nat)
-  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (max: nat)
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
@@ -542,7 +542,7 @@ let parse_bounded_vldata_strong_pred
 
 let parse_bounded_vldata_strong_t
   (min: nat)
-  (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
+  (max: nat)
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)

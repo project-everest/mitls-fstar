@@ -1,6 +1,7 @@
 module LowParse.Spec.DER
 include LowParse.Spec.Combinators
 include LowParse.Spec.SeqBytes
+include LowParse.Spec.VLData // for in_bounds
 
 include LowParse.Spec.Int
 open FStar.Mul
@@ -69,7 +70,7 @@ let der_length_payload_size_of_tag
   then
     0
   else
-    U8.v x % pow2 7
+    U8.v x - 128
 
 inline_for_extraction
 let parse_der_length_payload_kind (x: U8.t) : Tot parser_kind =
@@ -105,17 +106,15 @@ let der_length_payload_size_le
     let len_len1 = log256 x1 in
     log256_le x1 x2;
     assert_norm (pow2 7 == 128);
-    Math.lemma_mod_plus len_len1 1 (pow2 7);
-    Math.lemma_mod_plus len_len2 1 (pow2 7);
     assert_norm (der_length_max == pow2 (8 * 126) - 1);
-    Math.pow2_lt_recip (8 * (len_len2 - 1)) (8 * 126);
-    Math.small_modulo_lemma_1 len_len1 (pow2 7);
-    Math.small_modulo_lemma_1 len_len2 (pow2 7)
+    Math.pow2_lt_recip (8 * (len_len2 - 1)) (8 * 126)
+
+let lint (len: nat) : Tot Type0 = (x: nat { x < pow2 (8 * len) })
 
 let synth_be_int
   (len: nat)
   (b: Seq.lseq byte len)
-: GTot (x: nat { x < pow2 (8 * len) })
+: GTot (lint len)
 = E.lemma_be_to_n_is_bounded b;
   E.be_to_n b
 
@@ -143,17 +142,14 @@ let synth_der_length_129
 
 let synth_der_length_greater
   (x: U8.t { U8.v x > 129 /\ U8.v x < 255 } )
-  (len: nat { len == U8.v x % 128 } )
-  (y: (y: nat { y < pow2 (8 * len) } ) { y >= pow2 (8 * (len - 1)) } )
+  (len: nat { len == U8.v x - 128 } )
+  (y: lint len { y >= pow2 (8 * (len - 1)) } )
 : Tot (refine_with_tag tag_of_der_length x)
 = assert_norm (der_length_max == pow2 (8 * 126) - 1);
   assert_norm (pow2 7 == 128);
   assert_norm (pow2 8 == 256);
   assert_norm (256 < der_length_max);
   assert (U8.v x <= der_length_max);
-  Math.lemma_mod_lt (U8.v x) (pow2 7);
-  Math.lemma_div_mod (U8.v x) (pow2 7);
-  Math.division_definition (U8.v x) (pow2 7) 1;
   Math.pow2_le_compat (8 * 126) (8 * len);
   Math.pow2_le_compat (8 * (len - 1)) 7;
   log256_unique y len;
@@ -184,12 +180,177 @@ let parse_der_length_payload
       ((parse_u8 `parse_filter` (fun y -> U8.v y >= 128))
         `parse_synth` synth_der_length_129 x)
   else begin
-    let len : nat = U8.v x % pow2 7 in
+    let len : nat = U8.v x - 128 in
     synth_be_int_injective len; // FIXME: WHY WHY WHY does the pattern not trigger, even with higher rlimit?
     weaken (parse_der_length_payload_kind x)
       (((parse_seq_flbytes len `parse_synth` (synth_be_int len))
-        `parse_filter` (fun (y: nat { y < pow2 (8 * len) } ) -> y >= pow2 (8 * (len - 1))))
+        `parse_filter` (fun (y: lint len) -> y >= pow2 (8 * (len - 1))))
        `parse_synth` synth_der_length_greater x len)
+  end
+
+module U32 = FStar.UInt32
+
+let tag_of_der_length32
+  (x: U32.t)
+: GTot U8.t
+= let _ = assert_norm (pow2 32 - 1 <= der_length_max) in
+  tag_of_der_length (U32.v x)
+
+let der_length_payload_size_of_tag_inv32
+  (x: der_length_t)
+: Lemma
+  (requires (x < 4294967296))
+  (ensures (
+    tag_of_der_length x == (
+      if x < 128
+      then U8.uint_to_t x
+      else if x < 256
+      then 129uy
+      else if x < 65536
+      then 130uy
+      else if x < 16777216
+      then 131uy
+      else 132uy
+  )))
+= if x < 128
+  then ()
+  else
+    let len_len = log256 x in
+    assert_norm (der_length_max == pow2 (8 * 126) - 1);
+    Math.pow2_lt_recip (8 * (len_len - 1)) (8 * 126);
+    assert_norm (pow2 (8 * 1) == 256);
+    assert_norm (pow2 (8 * 2) == 65536);
+    assert_norm (pow2 (8 * 3) == 16777216);
+    assert_norm (pow2 (8 * 4) == 4294967296);
+    if x < 256
+    then
+      log256_unique x 1
+    else if x < 65536
+    then
+      log256_unique x 2
+    else if x < 16777216
+    then
+      log256_unique x 3
+    else
+      log256_unique x 4
+
+let synth_der_length_payload32
+  (x: U8.t { der_length_payload_size_of_tag x <= 4 } )
+  (y: refine_with_tag tag_of_der_length x)
+: GTot (refine_with_tag tag_of_der_length32 x)
+= let _ =
+    assert_norm (der_length_max == pow2 (8 * 126) - 1);
+    let _ = assert_norm (pow2 (8 * 2) == 65536) in
+    let _ = assert_norm (pow2 (8 * 3) == 16777216) in
+    let _ = assert_norm (pow2 (8 * 4) == 4294967296) in    
+    if y >= 128 then begin
+      Math.pow2_lt_recip (8 * (log256 y - 1)) (8 * 126);
+      assert (U8.v (tag_of_der_length y) == 128 + log256 y)
+    end
+  in
+  U32.uint_to_t y
+
+let synth_der_length_payload32_injective
+  (x: U8.t { der_length_payload_size_of_tag x <= 4 } )
+: Lemma
+  (synth_injective (synth_der_length_payload32 x))
+  [SMTPat (synth_injective (synth_der_length_payload32 x))]
+= assert_norm (der_length_max == pow2 (8 * 126) - 1);
+  let _ = assert_norm (pow2 (8 * 2) == 65536) in
+  let _ = assert_norm (pow2 (8 * 3) == 16777216) in
+  let _ = assert_norm (pow2 (8 * 4) == 4294967296) in
+  synth_injective_intro' (synth_der_length_payload32 x) (fun (y1 y2: refine_with_tag tag_of_der_length x) ->
+    if y1 >= 128 then begin
+      Math.pow2_lt_recip (8 * (log256 y1 - 1)) (8 * 126);
+      assert (U8.v (tag_of_der_length y1) == 128 + log256 y1)
+    end;
+    if y2 >= 128 then begin
+      Math.pow2_lt_recip (8 * (log256 y2 - 1)) (8 * 126);
+      assert (U8.v (tag_of_der_length y2) == 128 + log256 y2)
+    end
+  )
+
+let parse_der_length_payload32
+  (x: U8.t { der_length_payload_size_of_tag x <= 4 } )
+: Tot (parser (parse_der_length_payload_kind x) (refine_with_tag tag_of_der_length32 x))
+= parse_der_length_payload x `parse_synth` synth_der_length_payload32 x
+
+let parse_der_length_payload_unfold
+  (x: U8.t)
+  (input: bytes)
+: Lemma
+  (
+    let y = parse (parse_der_length_payload x) input in
+    (256 < der_length_max) /\ (
+    if U8.v x < 128
+    then tag_of_der_length (U8.v x) == x /\ y == Some (U8.v x, 0)
+    else if x = 128uy || x = 255uy
+    then y == None
+    else if x = 129uy
+    then
+      match parse parse_u8 input with
+      | None -> y == None
+      | Some (z, consumed) ->
+        if U8.v z < 128
+        then y == None
+        else tag_of_der_length (U8.v z) == x /\ y == Some (U8.v z, consumed)
+    else
+      let len : nat = U8.v x - 128 in
+      synth_injective (synth_be_int len) /\ (
+      let res : option (lint len & consumed_length input) = parse (parse_synth (parse_seq_flbytes len) (synth_be_int len)) input in
+      match res with
+      | None -> y == None
+      | Some (z, consumed) ->
+        len > 0 /\ (
+        if z >= pow2 (8 * (len - 1))
+        then z <= der_length_max /\ tag_of_der_length z == x /\ y == Some ((z <: refine_with_tag tag_of_der_length x), consumed)
+        else y == None
+  ))))
+= assert_norm (der_length_max == pow2 (8 * 126) - 1);
+  assert_norm (pow2 7 == 128);
+  assert_norm (pow2 8 == 256);
+  assert_norm (256 < der_length_max);
+  assert (U8.v x <= der_length_max);
+  let (x' : der_length_t) = U8.v x in
+  if x' < 128
+  then begin
+    ()
+  end else
+   if x = 128uy
+   then 
+    ()
+   else if x = 255uy
+   then 
+    ()
+   else if x = 129uy
+   then begin
+     parse_synth_eq (parse_u8 `parse_filter` (fun y -> U8.v y >= 128)) (synth_der_length_129 x) input;
+     parse_filter_eq parse_u8 (fun y -> U8.v y >= 128) input;
+     match parse parse_u8 input with
+     | None -> ()
+     | Some (y, _) ->
+       if U8.v y >= 128
+       then begin
+         log256_unique (U8.v y) 1       
+       end else ()
+  end else begin
+    let len : nat = U8.v x - 128 in
+    synth_be_int_injective len; // FIXME: WHY WHY WHY does the pattern not trigger, even with higher rlimit?
+    parse_synth_eq ((parse_seq_flbytes len `parse_synth` (synth_be_int len))
+        `parse_filter` (fun (y: lint len) -> y >= pow2 (8 * (len - 1)))) (synth_der_length_greater x len) input;
+    parse_filter_eq (parse_seq_flbytes len `parse_synth` (synth_be_int len)) (fun (y: lint len) -> y >= pow2 (8 * (len - 1))) input;
+    assert (len > 1);
+    let res : option (lint len & consumed_length input) = parse (parse_seq_flbytes len `parse_synth` (synth_be_int len)) input in
+    match res with
+    | None -> ()
+    | Some (y, _) ->
+      if y >= pow2 (8 * (len - 1))
+      then begin
+        let (y: lint len { y >= pow2 (8 * (len - 1)) } ) = y in
+        Math.pow2_le_compat (8 * 126) (8 * len);
+        Math.pow2_le_compat (8 * (len - 1)) 7;
+        log256_unique y len
+      end else ()
   end
 
 inline_for_extraction
@@ -264,6 +425,25 @@ let parse_bounded_der_length
     (tag_of_bounded_der_length min max)
     (parse_bounded_der_length_payload min max)
 
+let bounded_int32
+  (min: der_length_t)
+  (max: der_length_t { min <= max })
+: Tot Type0
+= (x: U32.t { in_bounds min max x } )
+
+let synth_bounded_der_length32
+  (min: der_length_t)
+  (max: der_length_t { min <= max /\ max < 4294967296 })
+  (x: bounded_int min max)
+: Tot (bounded_int32 min max)
+= U32.uint_to_t x
+
+let parse_bounded_der_length32
+  (min: der_length_t)
+  (max: der_length_t { min <= max /\ max < 4294967296 })
+: Tot (parser (parse_bounded_der_length_kind min max) (bounded_int32 min max))
+= parse_bounded_der_length min max `parse_synth` synth_bounded_der_length32 min max
+
 (* equality *)
 
 let parse_bounded_der_length_payload_unfold
@@ -290,6 +470,23 @@ let parse_bounded_der_length_payload_unfold
           (parse_der_length_payload x)
           (fun (y: refine_with_tag tag_of_der_length x) -> min <= y && y <= max)
           input'
+
+(*
+let parse_bounded_der_length_payload32_unfold
+  (min: der_length_t)
+  (max: der_length_t { min <= max /\ max < 4294967296 })
+  (x: U8.t { parse_bounded_der_length_tag_cond min max x == true } )
+  (input' : bytes)
+: Lemma
+  (parse (parse_bounded_der_length_payload min max x `parse_synth` synth_bounded_int32 min max) input' == (
+      match parse (parse_der_length_payload x) input' with
+      | None -> None
+      | Some (y, consumed_y) ->
+        if min <= y && y <= max
+        then Some (y, consumed_y)
+        else None
+  ))
+*)
 
 let parse_bounded_der_length_unfold_aux
   (min: der_length_t)
@@ -403,6 +600,25 @@ let parse_bounded_der_length_eq
         else ()
       end
 
+let parse_bounded_der_length32_unfold
+  (min: der_length_t)
+  (max: der_length_t { min <= max /\ max < 4294967296 })
+  (input: bytes)
+: Lemma
+  (parse (parse_bounded_der_length32 min max) input == (match parse parse_u8 input with
+  | None -> None
+  | Some (x, consumed_x) ->
+    let len = der_length_payload_size_of_tag x in
+    if der_length_payload_size min <= len && len <= der_length_payload_size max then
+      let input' = Seq.slice input consumed_x (Seq.length input) in
+          match parse (parse_bounded_der_length_payload min max x `parse_synth` synth_bounded_der_length32 min max) input'
+      with
+      | Some (y, consumed_y) -> Some (y, consumed_x + consumed_y)
+      | None -> None
+    else None
+ ))
+= admit ()
+
 (* serializer *)
 
 let tag_of_der_length_lt_128
@@ -450,7 +666,7 @@ let synth_der_length_129_recip
 
 let synth_be_int_recip
   (len: nat)
-  (x: nat { x < pow2 (8 * len) })
+  (x: lint len)
 : GTot (b: Seq.lseq byte len)
 = E.n_to_be'' len x
 
@@ -464,7 +680,7 @@ let synth_der_length_greater_recip
   (x: U8.t { U8.v x > 129 /\ U8.v x < 255 } )
   (len: nat { len == U8.v x % 128 } )
   (y: refine_with_tag tag_of_der_length x)
-: Tot (y: (y: nat { y < pow2 (8 * len) } ) { y >= pow2 (8 * (len - 1)) } )
+: Tot (y: lint len { y >= pow2 (8 * (len - 1)) } )
 = assert_norm (der_length_max == pow2 (8 * 126) - 1);
   Math.pow2_lt_recip (8 * (log256 y - 1)) (8 * 126);
   y
@@ -504,7 +720,7 @@ let serialize_der_length_payload
           (synth_inverse_intro' (synth_der_length_129 x) (synth_der_length_129_recip x) (fun (y: refine_with_tag tag_of_der_length x) -> tag_of_der_length_eq_129 y))
        )
    end else begin
-    let len : nat = U8.v x % pow2 7 in
+    let len : nat = U8.v x - 128 in
     synth_be_int_injective len; // FIXME: WHY WHY WHY does the pattern not trigger, even with higher rlimit?
     serialize_weaken
       (parse_der_length_payload_kind x)
@@ -519,7 +735,7 @@ let serialize_der_length_payload
             (synth_be_int_recip len)
             ()
           )
-          (fun (y: nat { y < pow2 (8 * len) } ) -> y >= pow2 (8 * (len - 1)))
+          (fun (y: lint len) -> y >= pow2 (8 * (len - 1)))
         )
         (synth_der_length_greater_recip x len)
         ()
