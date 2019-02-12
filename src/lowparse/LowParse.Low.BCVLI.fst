@@ -9,6 +9,22 @@ module U32 = FStar.UInt32
 
 #reset-options "--z3cliopt smt.arith.nl=false --max_fuel 0"
 
+inline_for_extraction
+let validate_u16_le () : validator parse_u16_le =
+  validate_total_constant_size parse_u16_le 2ul ()
+
+inline_for_extraction
+let validate_u32_le () : validator parse_u32_le =
+  validate_total_constant_size parse_u32_le 4ul ()
+
+inline_for_extraction
+let jump_u16_le : jumper parse_u16_le =
+  jump_constant_size parse_u16_le 2ul ()
+
+inline_for_extraction
+let jump_u32_le : jumper parse_u32_le =
+  jump_constant_size parse_u32_le 4ul ()
+
 let read_bounded_integer_le_1 : leaf_reader (parse_bounded_integer_le 1) =
   [@inline_let] let _ = bounded_integer_of_le_injective 1 in
   make_total_constant_size_reader 1 1ul #(bounded_integer 1) (bounded_integer_of_le 1) () (fun b ->
@@ -39,6 +55,21 @@ let read_bounded_integer_le_4 : leaf_reader (parse_bounded_integer_le 4) =
     let r3 = B.index b 3ul in
     Cast.uint8_to_uint32 r0 `U32.add` (256ul `U32.mul` (Cast.uint8_to_uint32 r1 `U32.add` (256ul `U32.mul` (Cast.uint8_to_uint32 r2 `U32.add` (256ul `U32.mul` Cast.uint8_to_uint32 r3)))))
   )
+
+let read_u16_le : leaf_reader parse_u16_le =
+  [@inline_let] let _ = synth_u16_le_injective in
+  read_synth'
+    _
+    synth_u16_le
+    read_bounded_integer_le_2
+    ()
+
+let read_u32_le : leaf_reader parse_u32_le =
+  read_synth'
+    _
+    synth_u32_le
+    read_bounded_integer_le_4
+    ()
 
 #push-options "--z3rlimit 16"
 
@@ -128,9 +159,9 @@ let read_bcvli : leaf_reader parse_bcvli =
     then read_bounded_integer_le_2 input pos1 <: U32.t
     else read_bounded_integer_le_4 input pos1 <: U32.t
 
-module U8 = FStar.UInt8
-
 #pop-options
+
+module U8 = FStar.UInt8
 
 inline_for_extraction
 let serialize32_bounded_integer_le_1
@@ -194,6 +225,13 @@ let serialize32_bounded_integer_le_4
 #pop-options
 
 let write_bounded_integer_le_4 : leaf_writer_strong (serialize_bounded_integer_le 4) = leaf_writer_strong_of_serializer32 serialize32_bounded_integer_le_4 ()
+
+let write_u16_le : leaf_writer_strong serialize_u16_le =
+  [@inline_let] let _ = synth_u16_le_injective; synth_u16_le_inverse in
+  write_synth write_bounded_integer_le_2 synth_u16_le synth_u16_le_recip (fun x -> synth_u16_le_recip x) ()
+
+let write_u32_le : leaf_writer_strong serialize_u32_le =
+  write_synth write_bounded_integer_le_4 synth_u32_le synth_u32_le_recip (fun x -> synth_u32_le_recip x) ()
 
 #push-options "--z3rlimit 16"
 
