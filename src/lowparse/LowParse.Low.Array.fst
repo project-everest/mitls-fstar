@@ -456,7 +456,7 @@ let vlarray_nth_ghost'
 
 #reset-options "--z3cliopt smt.arith.nl=false"
 
-#push-options "--z3rlimit 16"
+#push-options "--z3rlimit 32 --max_ifuel 4"
 
 abstract
 let vlarray_nth_ghost_correct'
@@ -524,7 +524,7 @@ module B = LowStar.Buffer
 
 #pop-options
 
-#push-options "--z3rlimit 128"
+#push-options "--z3rlimit 128 --max_ifuel 4 --initial_ifuel 4"
 
 inline_for_extraction
 let vlarray_nth

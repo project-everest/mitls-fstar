@@ -61,3 +61,4 @@ let serialize32_u32
     [@inline_let]
     let res : bytes32 = Aux.serialize32_u32 input in
     (res <: (res: bytes32 { serializer32_correct #_ #_ #parse_u32 serialize_u32 input res } )))
+

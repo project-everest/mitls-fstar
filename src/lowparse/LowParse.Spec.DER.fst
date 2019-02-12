@@ -745,6 +745,8 @@ let be_int_of_bounded_integer_injective
   assert_norm (pow2 (8 * 3) == 16777216);
   assert_norm (pow2 (8 * 4) == 4294967296)
 
+#push-options "--max_ifuel 4 --z3rlimit 16"
+
 let parse_seq_flbytes_synth_be_int_eq
   (len: integer_size)
   (input: bytes)
@@ -764,11 +766,11 @@ let parse_seq_flbytes_synth_be_int_eq
     let _ = synth_be_int_injective len in
     let _ = be_int_of_bounded_integer_injective len in
     parse_synth_eq (parse_seq_flbytes len `parse_synth` synth_be_int len) (be_int_of_bounded_integer len) input;
-    parse_synth_eq (parse_seq_flbytes len) (synth_be_int len) input
+    parse_synth_eq (parse_seq_flbytes len) (synth_be_int len) input;
+    parser_kind_prop_equiv (parse_bounded_integer_kind len) (parse_bounded_integer len);
+    parse_bounded_integer_spec len input
 
 module Cast = FStar.Int.Cast
-
-#push-options "--max_ifuel 2"
 
 let parse_der_length_payload32_unfold
   (x: U8.t { der_length_payload_size_of_tag x <= 4 } )

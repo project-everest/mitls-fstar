@@ -2,14 +2,6 @@ module LowParse.Low.Int
 include LowParse.Spec.Int
 include LowParse.Low.Base
 
-module U16 = FStar.UInt16
-module U32 = FStar.UInt32
-module I32 = FStar.Int32
-module HST = FStar.HyperStack.ST
-module HS = FStar.HyperStack
-module B = LowStar.Buffer
-module M = LowStar.Modifies
-
 inline_for_extraction
 val read_u8: leaf_reader parse_u8
 

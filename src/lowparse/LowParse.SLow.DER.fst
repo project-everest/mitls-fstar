@@ -1,8 +1,8 @@
 module LowParse.SLow.DER
 include LowParse.Spec.DER
 include LowParse.SLow.Combinators
-include LowParse.SLow.VLData // for bounded_integer
 include LowParse.SLow.Int // for parse32_u8
+include LowParse.SLow.BoundedInt // for bounded_integer
 open FStar.Mul
 
 module Seq = FStar.Seq

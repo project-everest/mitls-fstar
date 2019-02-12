@@ -87,7 +87,7 @@ $(FSTAR_OUT_DIR)/%.krml:
 $(EXAMPLES): %: %/a.out
 
 %/a.out:
-	$(MY_KREMLIN) $(KREMLIN_ARGS) -tmpdir $(EXAMPLE) -bundle LowParse$(EXAMPLE)'.Aux' -no-prefix LowParse$(EXAMPLE) $(EXAMPLE_KRML_FILES) -o $@
+	$(MY_KREMLIN) $(KREMLIN_ARGS) -tmpdir $(EXAMPLE) -bundle LowParse$(EXAMPLE)'.Aux' -warn-error '@2' -no-prefix LowParse$(EXAMPLE) $(EXAMPLE_KRML_FILES) -o $@
 	$@
 
 extract-all: $(EXAMPLES)
