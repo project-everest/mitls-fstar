@@ -78,6 +78,7 @@ let parse_der_length_payload_kind (x: U8.t) : Tot parser_kind =
   let len = der_length_payload_size_of_tag x in
   strong_parser_kind len len None
 
+noextract
 let tag_of_der_length
   (x: der_length_t)
 : Tot U8.t
