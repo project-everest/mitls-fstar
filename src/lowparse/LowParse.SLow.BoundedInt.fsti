@@ -92,3 +92,14 @@ val serialize32_u16_le : serializer32 serialize_u16_le
 
 inline_for_extraction
 val serialize32_u32_le : serializer32 serialize_u32_le
+
+inline_for_extraction
+let size32_u16_le: size32 serialize_u16_le =
+  assert_norm (size32_constant_precond serialize_u16_le 2ul);
+  size32_constant serialize_u16_le 2ul ()
+
+inline_for_extraction
+let size32_u32_le: size32 serialize_u32_le =
+  assert_norm (size32_constant_precond serialize_u32_le 4ul);
+  size32_constant serialize_u32_le 4ul ()
+
