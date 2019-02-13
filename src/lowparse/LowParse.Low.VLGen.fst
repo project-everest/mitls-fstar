@@ -192,4 +192,156 @@ let accessor_vlgen_payload
   in
   jk input pos
 
+module HS = FStar.HyperStack
+
+let valid_bounded_vlgen_intro
+  (min: nat)
+  (max: nat { min <= max /\ max < 4294967296 } )
+  (#sk: parser_kind)
+  (pk: parser sk (bounded_int32 (min) (max)))
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (s: serializer p)
+  (h: HS.mem)
+  (input: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (
+    valid pk h input pos /\ (
+    let pos1 = get_valid_pos pk h input pos in
+    let len = contents pk h input pos in
+    U32.v pos1 + U32.v len < 4294967296 /\
+    valid_exact p h input pos1 (pos1 `U32.add` len)
+  )))
+  (ensures (
+    valid pk h input pos /\ (
+    let pos1 = get_valid_pos pk h input pos in
+    let len = contents pk h input pos in
+    U32.v pos1 + U32.v len < 4294967296 /\
+    valid_exact p h input pos1 (pos1 `U32.add` len) /\ (
+    let x = contents_exact p h input pos1 (pos1 `U32.add` len) in
+    parse_bounded_vldata_strong_pred min max s x /\
+    valid_content_pos (parse_bounded_vlgen min max pk s) h input pos x (pos1 `U32.add` len)
+  ))))
+= valid_facts pk h input pos;
+  let pos1 = get_valid_pos pk h input pos in
+  let len = contents pk h input pos in
+  valid_exact_equiv p h input pos1 (pos1 `U32.add` len);
+  contents_exact_eq p h input pos1 (pos1 `U32.add` len);
+  parse_bounded_vlgen_unfold min max pk s (bytes_of_slice_from h input pos);
+  valid_facts (parse_bounded_vlgen min max pk s) h input pos
+
+let valid_bounded_vlgen_intro_strong_prefix
+  (min: nat)
+  (max: nat { min <= max /\ max < 4294967296 } )
+  (#sk: parser_kind)
+  (pk: parser sk (bounded_int32 (min) (max)))
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (s: serializer p)
+  (h: HS.mem)
+  (input: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (
+    valid pk h input pos /\ (
+    let pos1 = get_valid_pos pk h input pos in
+    let len = contents pk h input pos in
+    U32.v pos1 + U32.v len < 4294967296 /\
+    k.parser_kind_subkind == Some ParserStrong /\
+    valid_pos p h input pos1 (pos1 `U32.add` len)
+  )))
+  (ensures (
+    valid pk h input pos /\ (
+    let pos1 = get_valid_pos pk h input pos in
+    let len = contents pk h input pos in
+    U32.v pos1 + U32.v len < 4294967296 /\
+    k.parser_kind_subkind == Some ParserStrong /\
+    valid_pos p h input pos1 (pos1 `U32.add` len) /\ (
+    let x = contents p h input pos1 in
+    parse_bounded_vldata_strong_pred min max s x /\
+    valid_content_pos (parse_bounded_vlgen min max pk s) h input pos x (pos1 `U32.add` len)
+  ))))
+=   let pos1 = get_valid_pos pk h input pos in
+    let len = contents pk h input pos in
+    valid_pos_valid_exact p h input pos1 (pos1 `U32.add` len);
+    valid_bounded_vlgen_intro min max pk s h input pos
+
+let valid_vlgen_intro
+  (min: nat)
+  (max: nat { min <= max /\ max < 4294967296 } )
+  (#sk: parser_kind)
+  (pk: parser sk (bounded_int32 (min) (max)))
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (s: serializer p)
+  (h: HS.mem)
+  (input: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (
+    valid pk h input pos /\ (
+    let pos1 = get_valid_pos pk h input pos in
+    let len = contents pk h input pos in
+    U32.v pos1 + U32.v len < 4294967296 /\
+    valid_exact p h input pos1 (pos1 `U32.add` len) /\
+    parse_vlgen_precond min max k
+  )))
+  (ensures (
+    valid pk h input pos /\ (
+    let pos1 = get_valid_pos pk h input pos in
+    let len = contents pk h input pos in
+    U32.v pos1 + U32.v len < 4294967296 /\
+    valid_exact p h input pos1 (pos1 `U32.add` len) /\ (
+    let x = contents_exact p h input pos1 (pos1 `U32.add` len) in
+    valid_content_pos (parse_vlgen min max pk s) h input pos x (pos1 `U32.add` len)
+  ))))
+= valid_facts pk h input pos;
+  let pos1 = get_valid_pos pk h input pos in
+  let len = contents pk h input pos in
+  valid_exact_equiv p h input pos1 (pos1 `U32.add` len);
+  contents_exact_eq p h input pos1 (pos1 `U32.add` len);
+  parse_vlgen_unfold min max pk s (bytes_of_slice_from h input pos);
+  valid_facts (parse_vlgen min max pk s) h input pos
+
+let valid_vlgen_intro_strong_prefix
+  (min: nat)
+  (max: nat { min <= max /\ max < 4294967296 } )
+  (#sk: parser_kind)
+  (pk: parser sk (bounded_int32 (min) (max)))
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (s: serializer p)
+  (h: HS.mem)
+  (input: slice)
+  (pos: U32.t)
+: Lemma
+  (requires (
+    valid pk h input pos /\ (
+    let pos1 = get_valid_pos pk h input pos in
+    let len = contents pk h input pos in
+    U32.v pos1 + U32.v len < 4294967296 /\
+    k.parser_kind_subkind == Some ParserStrong /\
+    valid_pos p h input pos1 (pos1 `U32.add` len) /\
+    parse_vlgen_precond min max k
+  )))
+  (ensures (
+    valid pk h input pos /\ (
+    let pos1 = get_valid_pos pk h input pos in
+    let len = contents pk h input pos in
+    U32.v pos1 + U32.v len < 4294967296 /\
+    k.parser_kind_subkind == Some ParserStrong /\
+    valid_pos p h input pos1 (pos1 `U32.add` len) /\ (
+    let x = contents p h input pos1 in
+    valid_content_pos (parse_vlgen min max pk s) h input pos x (pos1 `U32.add` len)
+  ))))
+=   let pos1 = get_valid_pos pk h input pos in
+    let len = contents pk h input pos in
+    valid_pos_valid_exact p h input pos1 (pos1 `U32.add` len);
+    valid_vlgen_intro min max pk s h input pos
+
 #pop-options
