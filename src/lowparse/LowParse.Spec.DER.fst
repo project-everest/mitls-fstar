@@ -14,11 +14,14 @@ module Seq = FStar.Seq
 
 #reset-options "--z3cliopt smt.arith.nl=false --max_fuel 0 --max_ifuel 0"
 
-let der_length_max : nat = normalize_term (pow2 (8 * 126) - 1)
+let der_length_max : nat = _ by (FStar.Tactics.(exact (norm_term [delta; iota; zeta; primops] (`(pow2 (8 * 126) - 1)))))
+
+let _ : unit = _ by (FStar.Tactics.(print (string_of_int der_length_max); exact (`())))
+
+let der_length_max_eq : squash (der_length_max == pow2 (8 * 126) - 1) =
+  assert_norm (der_length_max == pow2 (8 * 126) - 1)
 
 let _ = intro_ambient der_length_max
-
-// let _ : unit = _ by (FStar.Tactics.(print (string_of_int der_length_max); exact (`())))
 
 let der_length_t = (x: nat { x <= der_length_max })
 
@@ -947,3 +950,52 @@ let parse_bounded_der_length32_unfold
           assert (U8.v (tag_of_der_length y) == 128 + log256 y)
         end
      else ()
+
+inline_for_extraction
+let der_length_payload_size_of_tag8
+  (x: U8.t)
+: Tot (y: U8.t { U8.v y == der_length_payload_size_of_tag x } )
+= [@inline_let]
+  let _ =
+    assert_norm (der_length_max == pow2 (8 * 126) - 1);
+    assert_norm (pow2 7 == 128);
+    assert_norm (pow2 8 == 256);
+    assert_norm (256 < der_length_max);
+    assert (U8.v x <= der_length_max)
+  in
+  if x `U8.lt` 129uy || x = 255uy
+  then
+    0uy
+  else
+    x `U8.sub` 128uy
+
+inline_for_extraction
+let log256_32
+  (n: U32.t { U32.v n > 0 } )
+: Tot (y: U8.t { U8.v y == log256' (U32.v n) } )
+= if n `U32.lt` 256ul
+  then 1uy
+  else if n `U32.lt` 65536ul
+  then 2uy
+  else if n `U32.lt` 16777216ul
+  then 3uy
+  else 4uy
+
+inline_for_extraction
+let tag_of_der_length32_impl
+  (x: U32.t)
+: Tot (y: U8.t { U32.v x < der_length_max /\ y == tag_of_der_length (U32.v x) } )
+= [@inline_let]
+  let _ = assert_norm (4294967296 <= der_length_max) in
+  if x `U32.lt` 128ul
+  then begin
+    [@inline_let] let _ = FStar.Math.Lemmas.small_modulo_lemma_1 (U32.v x) 256 in
+    Cast.uint32_to_uint8 x <: U8.t
+  end else
+    let len_len = log256_32 x in
+    [@inline_let] let _ =
+      log256_eq (U32.v x);
+      assert_norm (der_length_max == pow2 (8 * 126) - 1);
+      Math.pow2_lt_recip (8 * (U8.v len_len - 1)) (8 * 126)
+    in
+    128uy `U8.add` len_len

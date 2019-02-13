@@ -14,7 +14,7 @@ module Cast = FStar.Int.Cast
 
 #push-options "--z3rlimit 32"
 
-let validate_bounded_der_length_payload32
+let validate_der_length_payload32
   (x: U8.t { der_length_payload_size_of_tag x <= 4 } )
 : Tot (validator (parse_der_length_payload32 x))
 = fun input pos ->
@@ -76,7 +76,7 @@ let validate_bounded_der_length_payload32
           then validator_error_generic
           else v
 
-let jump_bounded_der_length_payload32
+let jump_der_length_payload32
   (x: U8.t { der_length_payload_size_of_tag x <= 4 } )
 : Tot (jumper (parse_der_length_payload32 x))
 = fun input pos ->
@@ -102,7 +102,7 @@ let jump_bounded_der_length_payload32
       in
       pos `U32.add` Cast.uint8_to_uint32 len
 
-let read_bounded_der_length_payload32
+let read_der_length_payload32
   (x: U8.t { der_length_payload_size_of_tag x <= 4 } )
 : Tot (leaf_reader (parse_der_length_payload32 x))
 = fun input pos ->
@@ -145,5 +145,76 @@ let read_bounded_der_length_payload32
         let res = read_bounded_integer_4 () input pos in
         [@inline_let] let _ = assert (tag_of_der_length32 res == x) in
         (res <: refine_with_tag tag_of_der_length32 x)
+
+let validate_bounded_der_length32
+  (min: U32.t)
+  (max: U32.t { U32.v min <= U32.v max } )
+: Tot (
+  validator (parse_bounded_der_length32 (U32.v min) (U32.v max)))
+= fun input pos ->
+    let h = HST.get () in
+    [@inline_let]
+    let _ =
+      valid_facts (parse_bounded_der_length32 (U32.v min) (U32.v max)) h input pos;
+      parse_bounded_der_length32_unfold (U32.v min) (U32.v max) (bytes_of_slice_from h input pos);
+      valid_facts parse_u8 h input pos
+    in
+    let v = validate_u8 () input pos in
+    if validator_max_length `U32.lt` v
+    then v
+    else
+      let x = read_u8 input pos in
+      let len = der_length_payload_size_of_tag8 x in
+      if (len `U8.lt` der_length_payload_size_of_tag8 (tag_of_der_length32_impl min)) || (der_length_payload_size_of_tag8 (tag_of_der_length32_impl max) `U8.lt` len)
+      then validator_error_generic
+      else
+        [@inline_let] let _ = valid_facts (parse_der_length_payload32 x) h input v in
+        let v2 = validate_der_length_payload32 x input v in
+        if validator_max_length `U32.lt` v2
+        then v2
+        else
+          let y = read_der_length_payload32 x input v in
+          if y `U32.lt` min || max `U32.lt` y
+          then validator_error_generic
+          else v2
+
+let jump_bounded_der_length32
+  (min: U32.t)
+  (max: U32.t { U32.v min <= U32.v max } )
+: Tot (
+  jumper (parse_bounded_der_length32 (U32.v min) (U32.v max)))
+= fun input pos ->
+    let h = HST.get () in
+    [@inline_let]
+    let _ =
+      valid_facts (parse_bounded_der_length32 (U32.v min) (U32.v max)) h input pos;
+      parse_bounded_der_length32_unfold (U32.v min) (U32.v max) (bytes_of_slice_from h input pos);
+      valid_facts parse_u8 h input pos
+    in
+    let v = jump_u8 input pos in
+    let x = read_u8 input pos in
+    let len = der_length_payload_size_of_tag8 x in
+    [@inline_let] let _ = valid_facts (parse_der_length_payload32 x) h input v in
+    jump_der_length_payload32 x input v
+
+let read_bounded_der_length32
+  (min: U32.t)
+  (max: U32.t { U32.v min <= U32.v max } )
+: Tot (
+  leaf_reader (parse_bounded_der_length32 (U32.v min) (U32.v max)))
+= fun input pos ->
+    let h = HST.get () in
+    [@inline_let]
+    let _ =
+      valid_facts (parse_bounded_der_length32 (U32.v min) (U32.v max)) h input pos;
+      parse_bounded_der_length32_unfold (U32.v min) (U32.v max) (bytes_of_slice_from h input pos);
+      valid_facts parse_u8 h input pos
+    in
+    let v = jump_u8 input pos in
+    let x = read_u8 input pos in
+    let len = der_length_payload_size_of_tag8 x in
+    [@inline_let] let _ = valid_facts (parse_der_length_payload32 x) h input v in
+    let y = read_der_length_payload32 x input v in
+    (y <: bounded_int32 (U32.v min) (U32.v max))
 
 #pop-options
