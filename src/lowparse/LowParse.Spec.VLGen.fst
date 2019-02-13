@@ -131,6 +131,41 @@ let parse_bounded_vlgen
     (tag_of_bounded_vlgen_payload min max s)
     (parse_bounded_vlgen_payload min max s)
 
+let parse_bounded_vlgen_unfold_aux
+  (min: nat)
+  (max: nat { min <= max /\ max < 4294967296 } )
+  (#sk: parser_kind)
+  (pk: parser sk (bounded_int32 min max))
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (s: serializer p)
+  (input: bytes)
+: Lemma
+  (let res = parse (parse_bounded_vlgen min max pk s) input in
+    match parse pk input with
+    | None -> res == None
+    | Some (len, sz) ->
+      begin
+        let input' = Seq.slice input sz (Seq.length input) in
+        match parse (parse_fldata_strong s (U32.v len)) input' with
+        | Some (x, consumed_x) ->
+          Seq.length (serialize s x) = U32.v len /\
+          res == Some (x, sz + U32.v len)
+      | _ -> res == None
+    end
+  )
+= parse_tagged_union_eq
+    pk
+    (tag_of_bounded_vlgen_payload min max s)
+    (parse_bounded_vlgen_payload min max s)
+    input;
+  match parse pk input with
+  | None -> ()
+  | Some (len, sz) ->
+    let input1 = Seq.slice input sz (Seq.length input) in
+    parse_bounded_vlgen_payload_unfold min max s len input1
+
 let parse_bounded_vlgen_unfold
   (min: nat)
   (max: nat { min <= max /\ max < 4294967296 } )
