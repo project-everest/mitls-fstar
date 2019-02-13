@@ -18,6 +18,12 @@ type slice = {
 
 let live_slice (h: HS.mem) (s: slice) : GTot Type0 = B.live h s.base
 
+let buffer_of_slice_from (s: slice) (pos: U32.t) : Ghost buffer8 (requires (U32.v pos <= U32.v s.len)) (ensures (fun _ -> True)) =
+  B.gsub s.base pos (s.len `U32.sub` pos)
+
+let bytes_of_slice_from (h: HS.mem) (s: slice) (pos: U32.t) : Ghost bytes (requires  (U32.v pos <= U32.v s.len)) (ensures (fun _ -> True)) =
+  B.as_seq h (buffer_of_slice_from s pos)
+
 private
 let loc_slice_from' (s: slice) (pos: U32.t) : GTot B.loc =
   if U32.v pos <= U32.v s.len

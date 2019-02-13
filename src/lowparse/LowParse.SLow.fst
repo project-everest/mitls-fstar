@@ -16,3 +16,5 @@ include LowParse.SLow.Option
 include LowParse.SLow.IfThenElse
 include LowParse.SLow.VCList
 include LowParse.SLow.BCVLI
+include LowParse.SLow.DER
+include LowParse.SLow.VLGen

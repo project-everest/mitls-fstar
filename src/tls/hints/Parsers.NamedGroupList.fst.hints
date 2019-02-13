@@ -1,19 +1,33 @@
 [
-  "®3hÖ¶¤K(&Â9¨\u0011Ç?",
+  "98-õñ¹cÄü™tâ—>ýÒ",
   [
+    [
+      "Parsers.NamedGroupList.namedGroupList_precond",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "03d262fb9781f0cf83ab4ed6a07550c2"
+    ],
     [
       "Parsers.NamedGroupList.namedGroupList_parser",
       1,
       2,
       1,
       [
-        "@query", "constructor_distinct_FStar.Pervasives.Native.None",
+        "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_FStar.Pervasives.Native.None", "eq2-interp",
         "equation_LowParse.Spec.List.parse_list_kind",
+        "equation_Parsers.NamedGroupList.namedGroupList_precond",
+        "equation_Prims.eq2", "equation_Prims.squash",
+        "function_token_typing_Parsers.NamedGroupList.namedGroupList_precond",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
-        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
+        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
       ],
       0,
-      "7030bf6d408f662f17f24c53d7520457"
+      "cc8e8e200408ef1e95a3c1f9925bce31"
     ],
     [
       "Parsers.NamedGroupList.namedGroupList_serializer",
@@ -59,7 +73,7 @@
         "typing_LowParse.Low.Base.validator_max_length"
       ],
       0,
-      "0d32fa3565aa6ef9ebdc8ee9da6ef700"
+      "5d66709a0ee590e86164f62f7ff82c29"
     ],
     [
       "Parsers.NamedGroupList.namedGroupList_bytesize_eq",
@@ -75,7 +89,7 @@
         "equation_Parsers.NamedGroupList.namedGroupList_serializer"
       ],
       0,
-      "8a94ecfd980bd2c9e4d2670d0db2a854"
+      "0dd0c486c0bc1612476dcbe54a5c2931"
     ],
     [
       "Parsers.NamedGroupList.namedGroupList_parser32",
@@ -120,7 +134,7 @@
         "typing_LowParse.Low.Base.validator_max_length"
       ],
       0,
-      "8ff582ede2169c9c4f8eff93dd7a314e"
+      "90b129cd4450fdf95223e6c1c3f6a462"
     ],
     [
       "Parsers.NamedGroupList.namedGroupList_serializer32",
@@ -166,7 +180,7 @@
         "typing_LowParse.Low.Base.validator_max_length"
       ],
       0,
-      "00bc89fbf711f144d3be65e916a58fa0"
+      "b610e95c8975979984773f0722ac9ca4"
     ],
     [
       "Parsers.NamedGroupList.namedGroupList_size32",
@@ -191,7 +205,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "02dd2ad2df9ba16049622d08c3371307"
+      "e94b0519a4f66b4f6d442f91adad4521"
     ],
     [
       "Parsers.NamedGroupList.namedGroupList_validator",
@@ -243,7 +257,7 @@
         "typing_LowParse.Low.Base.validator_max_length"
       ],
       0,
-      "558b5c82d72ccd28f66e1bd70dd79b1b"
+      "f74cf62cb3f4569b9afd660c147ea030"
     ],
     [
       "Parsers.NamedGroupList.namedGroupList_jumper",
@@ -289,7 +303,7 @@
         "typing_LowParse.Low.Base.validator_max_length"
       ],
       0,
-      "902363ff0b0caa6a600b84a76e4cfbfd"
+      "2aaa75f70520179a5667772a735ecb95"
     ],
     [
       "Parsers.NamedGroupList.finalize_namedGroupList",
@@ -336,7 +350,7 @@
         "typing_LowParse.Low.Base.validator_max_length"
       ],
       0,
-      "5ad3c0caeed9cf7f6a396cab6166bbf1"
+      "b95d44cba2d9519beae7882a77614dcc"
     ],
     [
       "Parsers.NamedGroupList.finalize_namedGroupList",
@@ -437,7 +451,7 @@
         "typing_Parsers.NamedGroup.namedGroup_serializer", "unit_typing"
       ],
       0,
-      "a27a830910430566fc87660520ceaf22"
+      "6b62599dafd2b49e43fef8fc753129b5"
     ],
     [
       "Parsers.NamedGroupList.namedGroupList_bytesize_eqn",
@@ -493,7 +507,7 @@
         "typing_LowParse.Low.Base.validator_max_length", "unit_inversion"
       ],
       0,
-      "03dadc1ce6756631538e2edda0e6e095"
+      "5a76700b6f504d6abb2c5aad0ed5a634"
     ]
   ]
 ]

@@ -43,3 +43,6 @@ val parse_then_serialize_t'
     U32.v consumed <= B32.length x /\
     serialize_t' y == B32.slice x 0ul consumed
   ))
+
+val main: Int32.t -> FStar.Buffer.buffer (FStar.Buffer.buffer C.char) ->
+  Stack C.exit_code (fun _ -> true) (fun _ _ _ -> true)
