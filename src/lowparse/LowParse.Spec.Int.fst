@@ -1,11 +1,6 @@
 module LowParse.Spec.Int
 
 module Aux = LowParse.Spec.Int.Aux
-module Seq = FStar.Seq
-module E = LowParse.BigEndian
-module U8  = FStar.UInt8
-module U16 = FStar.UInt16
-module U32 = FStar.UInt32
 
 let parse_u8 = Aux.parse_u8
 
@@ -14,6 +9,8 @@ let parse_u8_spec b = Aux.parse_u8_spec b
 let parse_u8_spec' b = ()
 
 let serialize_u8 = Aux.serialize_u8
+
+let serialize_u8_spec x = ()
 
 let parse_u16 = Aux.parse_u16
 

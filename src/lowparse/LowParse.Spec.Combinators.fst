@@ -693,6 +693,28 @@ let serialize_synth_eq
 = ()
 
 abstract
+let serialize_synth_eq'
+  (#k: parser_kind)
+  (#t1: Type0)
+  (#t2: Type0)
+  (p1: parser k t1)
+  (f2: t1 -> GTot t2)
+  (s1: serializer p1)
+  (g1: t2 -> GTot t1)
+  (u: unit {
+    synth_inverse f2 g1 /\
+    synth_injective f2
+  })
+  (x: t2)
+  (y1: bytes)
+  (q1: squash (y1 == serialize (serialize_synth p1 f2 s1 g1 u) x))
+  (y2: bytes)
+  (q2: squash (y2 == serialize s1 (g1 x)))
+: Lemma
+  (ensures (y1 == y2))
+= serialize_synth_eq p1 f2 s1 g1 u x
+
+abstract
 let serialize_synth_upd_chain
   (#k: parser_kind)
   (#t1: Type0)
@@ -1524,17 +1546,20 @@ let parse_filter_kind (k: parser_kind) : Tot parser_kind =
 let parse_filter_payload_kind : parser_kind =
   strong_parser_kind 0 0 None
 
+let parse_filter_refine (#t: Type) (f: (t -> GTot bool)) =
+  (x: t { f x == true } )
+
 let parse_filter_payload
   (#t: Type0)
   (f: (t -> GTot bool))
   (v: t)
-: Tot (parser parse_filter_payload_kind (x: t { f x == true }))
+: Tot (parser parse_filter_payload_kind (parse_filter_refine f))
 = let p = lift_parser (fun () ->
     if f v
     then
       let v' : (x: t { f x == true } ) = v in
       weaken parse_filter_payload_kind (parse_ret v')
-    else fail_parser parse_filter_payload_kind (x: t {f x == true} )
+    else fail_parser parse_filter_payload_kind (parse_filter_refine f)
   )
   in
   parser_kind_prop_equiv parse_filter_payload_kind p;
@@ -1546,7 +1571,7 @@ let parse_filter
   (#t: Type0)
   (p: parser k t)
   (f: (t -> GTot bool))
-: Tot (parser (parse_filter_kind k) (x: t { f x == true }))
+: Tot (parser (parse_filter_kind k) (parse_filter_refine f))
 = p `and_then` (parse_filter_payload f)
 
 abstract
