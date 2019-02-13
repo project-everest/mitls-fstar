@@ -218,3 +218,87 @@ let read_bounded_der_length32
     (y <: bounded_int32 (U32.v min) (U32.v max))
 
 #pop-options
+
+#push-options "--z3rlimit 64"
+
+inline_for_extraction
+let serialize32_bounded_der_length32'
+  (min: U32.t)
+  (max: U32.t { U32.v min <= U32.v max } )
+  (y' : bounded_int32 (U32.v min) (U32.v max))
+  (b: buffer8) 
+: HST.Stack U32.t
+  (requires (fun h -> B.live h b /\ Seq.length (serialize (serialize_bounded_der_length32 (U32.v min) (U32.v max)) y') <= B.length b))
+  (ensures (fun h len h' ->
+    let sx = serialize (serialize_bounded_der_length32 (U32.v min) (U32.v max)) y' in
+    Seq.length sx == U32.v len /\ (
+    let b' = B.gsub b 0ul len in
+    B.modifies (B.loc_buffer b') h h' /\
+    B.live h b /\
+    B.as_seq h' b' `Seq.equal` sx
+  )))
+= [@inline_let]
+  let _ =
+    serialize_bounded_der_length32_unfold (U32.v min) (U32.v max) y'
+  in
+  let x = tag_of_der_length32_impl y' in
+  if x `U8.lt` 128uy
+  then begin
+    let b' = B.sub b 0ul 1ul in
+    B.upd b' 0ul x;
+    1ul
+  end else
+  if x = 129uy
+  then begin
+    let b' = B.sub b 0ul 2ul in
+    B.upd b' 0ul x;
+    B.upd b' 1ul (Cast.uint32_to_uint8 y');
+    2ul
+  end else
+  if x = 130uy
+  then begin
+    let b0 = B.sub b 0ul 3ul in
+    let b05 = B.sub b0 0ul 1ul in
+    B.upd b05 0ul x;
+    let b1 = B.offset b0 1ul in
+    let z = serialize32_bounded_integer_2 () y' b1 in
+    let h = HST.get () in
+    assert (B.as_seq h b0 `Seq.equal` (B.as_seq h b05 `Seq.append` B.as_seq h b1));
+    3ul // 1ul `U32.add` z
+  end else
+  if x = 131uy
+  then begin
+    let b0 = B.sub b 0ul 4ul in
+    let b05 = B.sub b0 0ul 1ul in
+    B.upd b05 0ul x;
+    let b1 = B.offset b0 1ul in
+    let z = serialize32_bounded_integer_3 () y' b1 in
+    let h = HST.get () in
+    assert (B.as_seq h b0 `Seq.equal` (B.as_seq h b05 `Seq.append` B.as_seq h b1));
+    4ul // 1ul `U32.add` z
+  end else begin
+    let b0 = B.sub b 0ul 5ul in
+    let b05 = B.sub b0 0ul 1ul in
+    B.upd b05 0ul x;
+    let b1 = B.offset b0 1ul in
+    let z = serialize32_bounded_integer_4 () y' b1 in
+    let h = HST.get () in
+    assert (B.as_seq h b0 `Seq.equal` (B.as_seq h b05 `Seq.append` B.as_seq h b1));
+    5ul // 1ul `U32.add` z
+  end
+
+#pop-options
+
+inline_for_extraction
+let serialize32_bounded_der_length32
+  (min: U32.t)
+  (max: U32.t { U32.v min <= U32.v max } )
+: Tot (serializer32 (serialize_bounded_der_length32 (U32.v min) (U32.v max)))
+= fun (y' : bounded_int32 (U32.v min) (U32.v max)) b ->
+  serialize32_bounded_der_length32' min max y' b
+
+let write_bounded_der_length32
+  (min: U32.t)
+  (max: U32.t { U32.v min <= U32.v max } )
+: Tot (leaf_writer_strong (serialize_bounded_der_length32 (U32.v min) (U32.v max)))
+= leaf_writer_strong_of_serializer32 (serialize32_bounded_der_length32 min max) ()
