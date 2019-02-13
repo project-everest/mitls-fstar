@@ -79,6 +79,35 @@ let parse_bounded_vlgen_payload
       `parse_synth`
       synth_bounded_vlgen_payload min max s sz)
 
+let parse_bounded_vlgen_payload_unfold
+  (min: nat)
+  (max: nat { min <= max /\ max < 4294967296 } )
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (s: serializer p)
+  (sz: bounded_int32 min max)
+  (input: bytes)
+: Lemma
+  (parse (parse_bounded_vlgen_payload min max s sz) input == (match parse (parse_fldata_strong s (U32.v sz)) input with
+  | None -> None
+  | Some (x, consumed) -> Some (x, consumed)
+  ))
+= let bounds_off =
+    k.parser_kind_low > U32.v sz || (
+    match k.parser_kind_high with
+    | None -> false
+    | Some kmax -> kmax < U32.v sz
+  )
+  in
+  if bounds_off
+  then ()
+  else
+    parse_synth_eq
+      (parse_fldata_strong s (U32.v sz))
+      (synth_bounded_vlgen_payload min max s sz)
+      input
+
 inline_for_extraction
 let parse_bounded_vlgen_kind
   (sk: parser_kind)
@@ -101,6 +130,50 @@ let parse_bounded_vlgen
     pk
     (tag_of_bounded_vlgen_payload min max s)
     (parse_bounded_vlgen_payload min max s)
+
+let parse_bounded_vlgen_unfold
+  (min: nat)
+  (max: nat { min <= max /\ max < 4294967296 } )
+  (#sk: parser_kind)
+  (pk: parser sk (bounded_int32 min max))
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (s: serializer p)
+  (input: bytes)
+: Lemma
+  (let res = parse (parse_bounded_vlgen min max pk s) input in
+    match parse pk input with
+    | None -> res == None
+    | Some (len, sz) ->
+      begin
+        if Seq.length input < sz + U32.v len
+        then res == None
+        else
+        let input' = Seq.slice input sz (sz + U32.v len) in
+        match parse p input' with
+        | Some (x, consumed_x) ->
+          if consumed_x = U32.v len
+          then
+            Seq.length (serialize s x) = U32.v len /\
+            res == Some (x, sz + U32.v len)
+        else res == None
+      | _ -> res == None
+    end
+  )
+= parse_tagged_union_eq
+    pk
+    (tag_of_bounded_vlgen_payload min max s)
+    (parse_bounded_vlgen_payload min max s)
+    input;
+  match parse pk input with
+  | None -> ()
+  | Some (len, sz) ->
+    let input1 = Seq.slice input sz (Seq.length input) in
+    parse_bounded_vlgen_payload_unfold min max s len input1;
+    if Seq.length input < sz + U32.v len
+    then ()
+    else Seq.slice_slice input sz (Seq.length input) 0 (U32.v len)
 
 inline_for_extraction
 let synth_vlgen
@@ -136,6 +209,42 @@ let parse_vlgen
 = parse_bounded_vlgen min max pk s
   `parse_synth`
   synth_vlgen min max s
+
+let parse_vlgen_unfold
+  (min: nat)
+  (max: nat { min <= max /\ max < 4294967296 } )
+  (#sk: parser_kind)
+  (pk: parser sk (bounded_int32 min max))
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (s: serializer p { parse_vlgen_precond min max k })
+  (input: bytes)
+: Lemma
+  (let res = parse (parse_vlgen min max pk s) input in
+    match parse pk input with
+    | None -> res == None
+    | Some (len, sz) ->
+      begin
+        if Seq.length input < sz + U32.v len
+        then res == None
+        else
+        let input' = Seq.slice input sz (sz + U32.v len) in
+        match parse p input' with
+        | Some (x, consumed_x) ->
+          if consumed_x = U32.v len
+          then
+            Seq.length (serialize s x) = U32.v len /\
+            res == Some (x, sz + U32.v len)
+        else res == None
+      | _ -> res == None
+    end
+  )
+= parse_synth_eq
+    (parse_bounded_vlgen min max pk s)
+    (synth_vlgen min max s)
+    input;
+  parse_bounded_vlgen_unfold min max pk s input
 
 inline_for_extraction
 let synth_bounded_vlgen_payload_recip
@@ -178,6 +287,25 @@ let serialize_bounded_vlgen_payload
         ()
       )
 
+let serialize_bounded_vlgen_payload_unfold
+  (min: nat)
+  (max: nat { min <= max /\ max < 4294967296 } )
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (s: serializer p)
+  (sz: bounded_int32 min max)
+  (input: refine_with_tag (tag_of_bounded_vlgen_payload min max s) sz)
+: Lemma
+  (serialize (serialize_bounded_vlgen_payload min max s sz) input == serialize s input)
+= serialize_synth_eq
+        (parse_fldata_strong s (U32.v sz))
+        (synth_bounded_vlgen_payload min max s sz)
+        (serialize_fldata_strong s (U32.v sz))
+        (synth_bounded_vlgen_payload_recip min max s sz)
+        ()
+        input
+
 let serialize_bounded_vlgen
   (min: nat)
   (max: nat { min <= max /\ max < 4294967296 } )
@@ -193,6 +321,30 @@ let serialize_bounded_vlgen
     ssk
     (tag_of_bounded_vlgen_payload min max s)
     (serialize_bounded_vlgen_payload min max s)
+
+let serialize_bounded_vlgen_unfold
+  (min: nat)
+  (max: nat { min <= max /\ max < 4294967296 } )
+  (#sk: parser_kind)
+  (#pk: parser sk (bounded_int32 min max))
+  (ssk: serializer pk { sk.parser_kind_subkind == Some ParserStrong } )
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (s: serializer p)
+  (input: parse_bounded_vldata_strong_t min max s)
+: Lemma
+  (serialize (serialize_bounded_vlgen min max ssk s) input == (
+    let sp = serialize s input in
+    serialize ssk (U32.uint_to_t (Seq.length sp)) `Seq.append` sp
+  ))
+= serialize_tagged_union_eq
+    ssk
+    (tag_of_bounded_vlgen_payload min max s)
+    (serialize_bounded_vlgen_payload min max s)
+    input;
+  let tg : bounded_int32 min max = tag_of_bounded_vlgen_payload min max s input in
+  serialize_bounded_vlgen_payload_unfold min max s tg input
 
 inline_for_extraction
 let synth_vlgen_recip
@@ -227,3 +379,28 @@ let serialize_vlgen
     (serialize_bounded_vlgen min max ssk s)
     (synth_vlgen_recip min max s)
     ()
+
+let serialize_vlgen_unfold
+  (min: nat)
+  (max: nat { min <= max /\ max < 4294967296 } )
+  (#sk: parser_kind)
+  (#pk: parser sk (bounded_int32 min max))
+  (ssk: serializer pk { sk.parser_kind_subkind == Some ParserStrong } )
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (s: serializer p { parse_vlgen_precond min max k })
+  (input: t)
+: Lemma
+  (serialize (serialize_vlgen min max ssk s) input == (
+    let sp = serialize s input in
+    serialize ssk (U32.uint_to_t (Seq.length sp)) `Seq.append` sp
+  ))
+= serialize_synth_eq
+    (parse_bounded_vlgen min max pk s)
+    (synth_vlgen min max s)
+    (serialize_bounded_vlgen min max ssk s)
+    (synth_vlgen_recip min max s)
+    ()
+    input;
+  serialize_bounded_vlgen_unfold min max ssk s input
