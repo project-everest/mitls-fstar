@@ -97,7 +97,7 @@
         "typing_Parsers.TicketVersion.ticketVersion_enum"
       ],
       0,
-      "a80e0df5ea51eed24bee6ae5b97cf4b5"
+      "64531a468a1601a758e43cf90ff6ebfc"
     ],
     [
       "Parsers.TicketContents.Low.finalize_case_ticketContents12",
@@ -127,9 +127,7 @@
         "bool_inversion", "bool_typing",
         "constructor_distinct_FStar.Pervasives.Native.None",
         "constructor_distinct_FStar.Pervasives.Native.Some",
-        "constructor_distinct_LowParse.Spec.Base.ParserConsumesAll",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataTotal",
-        "constructor_distinct_LowParse.Spec.Base.ParserStrong",
         "constructor_distinct_Parsers.TicketVersion.Ticket12",
         "constructor_distinct_Parsers.TicketVersion.Ticket13",
         "constructor_distinct_Prims.Cons", "constructor_distinct_Prims.Nil",
@@ -137,7 +135,6 @@
         "data_typing_intro_LowParse.Spec.Base.ParserConsumesAll@tok",
         "data_typing_intro_Parsers.TicketVersion.Ticket13@tok",
         "disc_equation_FStar.Pervasives.Native.Some",
-        "equality_tok_LowParse.Spec.Base.ParserConsumesAll@tok",
         "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
         "equality_tok_LowParse.Spec.Base.ParserStrong@tok",
         "equality_tok_LowParse.Spec.Sum.Sum@tok",
@@ -156,6 +153,7 @@
         "equation_LowParse.Spec.Base.parser_kind_metadata_t",
         "equation_LowParse.Spec.Base.strong_parser_kind",
         "equation_LowParse.Spec.Base.total_constant_size_parser_kind",
+        "equation_LowParse.Spec.BoundedInt.parse_bounded_integer_kind",
         "equation_LowParse.Spec.Combinators.and_then_kind",
         "equation_LowParse.Spec.Combinators.and_then_metadata",
         "equation_LowParse.Spec.Combinators.parse_filter_kind",
@@ -177,7 +175,6 @@
         "equation_LowParse.Spec.Sum.sum_type_of_tag",
         "equation_LowParse.Spec.Sum.synth_sum_case",
         "equation_LowParse.Spec.Sum.weaken_parse_cases_kind",
-        "equation_LowParse.Spec.VLData.parse_bounded_integer_kind",
         "equation_Parsers.TicketContents.parse_ticketContents_cases",
         "equation_Parsers.TicketContents.synth_ticketContents_cases",
         "equation_Parsers.TicketContents.ticketContents_case_of_ticketVersion",
@@ -276,13 +273,11 @@
         "typing_LowParse.Low.Base.max_uint32",
         "typing_LowParse.Low.Base.serialized_length",
         "typing_LowParse.Low.Base.validator_max_length",
-        "typing_LowParse.Spec.Base.__proj__Mkparser_kind___item__parser_kind_low",
         "typing_LowParse.Spec.Base.glb_list_of",
         "typing_LowParse.Spec.Enum.enum_tail",
         "typing_LowParse.Spec.Enum.enum_tail_",
         "typing_LowParse.Spec.Enum.list_map",
         "typing_LowParse.Spec.Enum.list_mem",
-        "typing_LowParse.Spec.Int.parse_u8_kind",
         "typing_LowParse.Spec.Sum.sum_enum",
         "typing_LowParse.Spec.Sum.sum_key",
         "typing_LowParse.Spec.Sum.sum_key_type",
@@ -295,7 +290,7 @@
         "typing_Parsers.TicketVersion.ticketVersion_parser_kind"
       ],
       0,
-      "078e0fd6da48647f8b30a39407d1ccbc"
+      "e732b2c45238a0d6f522fd99349e3e57"
     ],
     [
       "Parsers.TicketContents.Low.finalize_case_ticketContents13",
@@ -357,7 +352,7 @@
         "typing_LowParse.Spec.Int.parse_u8_kind"
       ],
       0,
-      "6152c19cbcb404482c18aae717cdd1be"
+      "268242cc78b81e300920a2577d368e5f"
     ],
     [
       "Parsers.TicketContents.Low.finalize_case_ticketContents13",
@@ -415,6 +410,7 @@
         "equation_LowParse.Spec.Base.parser_kind_metadata_t",
         "equation_LowParse.Spec.Base.strong_parser_kind",
         "equation_LowParse.Spec.Base.total_constant_size_parser_kind",
+        "equation_LowParse.Spec.BoundedInt.parse_bounded_integer_kind",
         "equation_LowParse.Spec.Combinators.and_then_kind",
         "equation_LowParse.Spec.Combinators.and_then_metadata",
         "equation_LowParse.Spec.Combinators.parse_filter_kind",
@@ -436,7 +432,6 @@
         "equation_LowParse.Spec.Sum.sum_type_of_tag",
         "equation_LowParse.Spec.Sum.synth_sum_case",
         "equation_LowParse.Spec.Sum.weaken_parse_cases_kind",
-        "equation_LowParse.Spec.VLData.parse_bounded_integer_kind",
         "equation_Parsers.TicketContents.parse_ticketContents_cases",
         "equation_Parsers.TicketContents.synth_ticketContents_cases",
         "equation_Parsers.TicketContents.ticketContents_case_of_ticketVersion",
@@ -535,13 +530,11 @@
         "typing_LowParse.Low.Base.max_uint32",
         "typing_LowParse.Low.Base.serialized_length",
         "typing_LowParse.Low.Base.validator_max_length",
-        "typing_LowParse.Spec.Base.__proj__Mkparser_kind___item__parser_kind_low",
         "typing_LowParse.Spec.Base.glb_list_of",
         "typing_LowParse.Spec.Enum.enum_tail",
         "typing_LowParse.Spec.Enum.enum_tail_",
         "typing_LowParse.Spec.Enum.list_map",
         "typing_LowParse.Spec.Enum.list_mem",
-        "typing_LowParse.Spec.Int.parse_u8_kind",
         "typing_LowParse.Spec.Sum.sum_enum",
         "typing_LowParse.Spec.Sum.sum_key",
         "typing_LowParse.Spec.Sum.sum_key_type",
@@ -556,7 +549,7 @@
         "typing_tok_Parsers.TicketVersion.Ticket13@tok"
       ],
       0,
-      "f9585770f7caf9df3637a6fe27d8bac8"
+      "0af2c286c4b1ae2ea495e963021463b5"
     ]
   ]
 ]
