@@ -17,3 +17,4 @@ include LowParse.Spec.VCList
 include LowParse.Spec.BCVLI
 include LowParse.Spec.DER
 include LowParse.Spec.AllIntegers
+include LowParse.Spec.VLGen
