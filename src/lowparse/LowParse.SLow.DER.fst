@@ -17,6 +17,7 @@ module Cast = FStar.Int.Cast
 
 #push-options "--z3rlimit 16"
 
+inline_for_extraction
 let parse32_der_length_payload32
   (x: U8.t { der_length_payload_size_of_tag x <= 4 } )
 : Tot (parser32 (parse_der_length_payload32 x))
@@ -69,12 +70,14 @@ let parse32_der_length_payload32
 
 #push-options "--max_ifuel 2"
 
+inline_for_extraction
 let parse32_bounded_der_length32
-  (min: U32.t)
-  (max: U32.t { U32.v min <= U32.v max } )
+  (vmin: der_length_t)
+  (min: U32.t { U32.v min == vmin } )
+  (vmax: der_length_t)
+  (max: U32.t { U32.v max == vmax /\ U32.v min <= U32.v max } )
 : Tot (
-      [@inline_let] let _ = assert_norm (4294967296 <= der_length_max) in
-      parser32 (parse_bounded_der_length32 (U32.v min) (U32.v max)))
+      parser32 (parse_bounded_der_length32 vmin vmax))
 = [@inline_let] let _ = assert_norm (4294967296 <= der_length_max) in
   fun (input: bytes32) -> ((
     [@inline_let]
@@ -85,7 +88,11 @@ let parse32_bounded_der_length32
     | None -> None
     | Some (x, consumed_x) ->
       let len = der_length_payload_size_of_tag8 x in
-      if len `U8.lt` der_length_payload_size_of_tag8 (tag_of_der_length32_impl min) || der_length_payload_size_of_tag8 (tag_of_der_length32_impl max) `U8.lt` len
+      let tg1 = (tag_of_der_length32_impl min)  in
+      let l1 = der_length_payload_size_of_tag8 tg1 in
+      let tg2 = (tag_of_der_length32_impl max) in
+      let l2 = der_length_payload_size_of_tag8 tg2 in
+      if len `U8.lt` l1 || l2 `U8.lt` len
       then None
       else begin
         let input' = B32.slice input consumed_x (B32.len input) in
@@ -100,13 +107,14 @@ let parse32_bounded_der_length32
 
 #pop-options
 
+inline_for_extraction
 let serialize32_bounded_der_length32
-  (min: U32.t)
-  (max: U32.t { U32.v min <= U32.v max } )
-: Tot (serializer32 (serialize_bounded_der_length32 (U32.v min) (U32.v max)))
-= fun (y' : bounded_int32 (U32.v min) (U32.v max)) -> ((
+  (vmin: der_length_t)
+  (vmax: der_length_t { vmin <= vmax /\ vmax < 4294967296 } )
+: Tot (serializer32 (serialize_bounded_der_length32 (vmin) (vmax)))
+= fun (y' : bounded_int32 (vmin) (vmax)) -> ((
     [@inline_let]
-    let _ = serialize_bounded_der_length32_unfold (U32.v min) (U32.v max) y' in
+    let _ = serialize_bounded_der_length32_unfold (vmin) (vmax) y' in
     let x = tag_of_der_length32_impl y' in
     let sx = B32.create 1ul x in
     if x `U8.lt` 128uy
@@ -118,15 +126,16 @@ let serialize32_bounded_der_length32
     else if x = 131uy
     then sx `B32.b32append` serialize32_bounded_integer_3 y'
     else sx `B32.b32append` serialize32_bounded_integer_4 y'
-  ) <: (res: _ { serializer32_correct (serialize_bounded_der_length32 (U32.v min) (U32.v max)) y' res } ))
+  ) <: (res: _ { serializer32_correct (serialize_bounded_der_length32 (vmin) (vmax)) y' res } ))
 
+inline_for_extraction
 let size32_bounded_der_length32
-  (min: U32.t)
-  (max: U32.t { U32.v min <= U32.v max } )
-: Tot (size32 (serialize_bounded_der_length32 (U32.v min) (U32.v max)))
-= fun (y' : bounded_int32 (U32.v min) (U32.v max)) -> ((
+  (vmin: der_length_t)
+  (vmax: der_length_t { vmin <= vmax /\ vmax < 4294967296 } )
+: Tot (size32 (serialize_bounded_der_length32 (vmin) (vmax)))
+= fun (y' : bounded_int32 (vmin) (vmax)) -> ((
     [@inline_let]
-    let _ = serialize_bounded_der_length32_size (U32.v min) (U32.v max) y' in
+    let _ = serialize_bounded_der_length32_size (vmin) (vmax) y' in
     if y' `U32.lt` 128ul
     then 1ul
     else if y' `U32.lt` 256ul
@@ -136,7 +145,7 @@ let size32_bounded_der_length32
     else if y' `U32.lt` 16777216ul
     then 4ul
     else 5ul
-  ) <: (res: _ { size32_postcond (serialize_bounded_der_length32 (U32.v min) (U32.v max)) y' res } ))
+  ) <: (res: _ { size32_postcond (serialize_bounded_der_length32 (vmin) (vmax)) y' res } ))
 
 #pop-options
   

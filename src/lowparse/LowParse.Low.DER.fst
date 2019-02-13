@@ -14,6 +14,7 @@ module Cast = FStar.Int.Cast
 
 #push-options "--z3rlimit 32"
 
+inline_for_extraction
 let validate_der_length_payload32
   (x: U8.t { der_length_payload_size_of_tag x <= 4 } )
 : Tot (validator (parse_der_length_payload32 x))
@@ -76,6 +77,7 @@ let validate_der_length_payload32
           then validator_error_generic
           else v
 
+inline_for_extraction
 let jump_der_length_payload32
   (x: U8.t { der_length_payload_size_of_tag x <= 4 } )
 : Tot (jumper (parse_der_length_payload32 x))
@@ -102,6 +104,7 @@ let jump_der_length_payload32
       in
       pos `U32.add` Cast.uint8_to_uint32 len
 
+inline_for_extraction
 let read_der_length_payload32
   (x: U8.t { der_length_payload_size_of_tag x <= 4 } )
 : Tot (leaf_reader (parse_der_length_payload32 x))
@@ -146,11 +149,14 @@ let read_der_length_payload32
         [@inline_let] let _ = assert (tag_of_der_length32 res == x) in
         (res <: refine_with_tag tag_of_der_length32 x)
 
+inline_for_extraction
 let validate_bounded_der_length32
-  (min: U32.t)
-  (max: U32.t { U32.v min <= U32.v max } )
+  (vmin: der_length_t)
+  (min: U32.t { U32.v min == vmin } )
+  (vmax: der_length_t)
+  (max: U32.t { U32.v max == vmax /\ U32.v min <= U32.v max } )
 : Tot (
-  validator (parse_bounded_der_length32 (U32.v min) (U32.v max)))
+  validator (parse_bounded_der_length32 (vmin) (vmax)))
 = fun input pos ->
     let h = HST.get () in
     [@inline_let]
@@ -165,7 +171,11 @@ let validate_bounded_der_length32
     else
       let x = read_u8 input pos in
       let len = der_length_payload_size_of_tag8 x in
-      if (len `U8.lt` der_length_payload_size_of_tag8 (tag_of_der_length32_impl min)) || (der_length_payload_size_of_tag8 (tag_of_der_length32_impl max) `U8.lt` len)
+      let tg1 = tag_of_der_length32_impl min in
+      let l1 = der_length_payload_size_of_tag8 tg1 in
+      let tg2 = tag_of_der_length32_impl max in
+      let l2 = der_length_payload_size_of_tag8 tg2 in
+      if (len `U8.lt` l1) || ( l2 `U8.lt` len)
       then validator_error_generic
       else
         [@inline_let] let _ = valid_facts (parse_der_length_payload32 x) h input v in
@@ -178,17 +188,18 @@ let validate_bounded_der_length32
           then validator_error_generic
           else v2
 
+inline_for_extraction
 let jump_bounded_der_length32
-  (min: U32.t)
-  (max: U32.t { U32.v min <= U32.v max } )
+  (vmin: der_length_t)
+  (vmax: der_length_t { vmin <= vmax /\ vmax < 4294967296 } )
 : Tot (
-  jumper (parse_bounded_der_length32 (U32.v min) (U32.v max)))
+  jumper (parse_bounded_der_length32 (vmin) (vmax)))
 = fun input pos ->
     let h = HST.get () in
     [@inline_let]
     let _ =
-      valid_facts (parse_bounded_der_length32 (U32.v min) (U32.v max)) h input pos;
-      parse_bounded_der_length32_unfold (U32.v min) (U32.v max) (bytes_of_slice_from h input pos);
+      valid_facts (parse_bounded_der_length32 (vmin) (vmax)) h input pos;
+      parse_bounded_der_length32_unfold (vmin) (vmax) (bytes_of_slice_from h input pos);
       valid_facts parse_u8 h input pos
     in
     let v = jump_u8 input pos in
@@ -197,17 +208,18 @@ let jump_bounded_der_length32
     [@inline_let] let _ = valid_facts (parse_der_length_payload32 x) h input v in
     jump_der_length_payload32 x input v
 
+inline_for_extraction
 let read_bounded_der_length32
-  (min: U32.t)
-  (max: U32.t { U32.v min <= U32.v max } )
+  (vmin: der_length_t)
+  (vmax: der_length_t { vmin <= vmax /\ vmax < 4294967296 } )
 : Tot (
-  leaf_reader (parse_bounded_der_length32 (U32.v min) (U32.v max)))
+  leaf_reader (parse_bounded_der_length32 (vmin) (vmax)))
 = fun input pos ->
     let h = HST.get () in
     [@inline_let]
     let _ =
-      valid_facts (parse_bounded_der_length32 (U32.v min) (U32.v max)) h input pos;
-      parse_bounded_der_length32_unfold (U32.v min) (U32.v max) (bytes_of_slice_from h input pos);
+      valid_facts (parse_bounded_der_length32 (vmin) (vmax)) h input pos;
+      parse_bounded_der_length32_unfold (vmin) (vmax) (bytes_of_slice_from h input pos);
       valid_facts parse_u8 h input pos
     in
     let v = jump_u8 input pos in
@@ -215,7 +227,7 @@ let read_bounded_der_length32
     let len = der_length_payload_size_of_tag8 x in
     [@inline_let] let _ = valid_facts (parse_der_length_payload32 x) h input v in
     let y = read_der_length_payload32 x input v in
-    (y <: bounded_int32 (U32.v min) (U32.v max))
+    (y <: bounded_int32 (vmin) (vmax))
 
 #pop-options
 
@@ -223,14 +235,14 @@ let read_bounded_der_length32
 
 inline_for_extraction
 let serialize32_bounded_der_length32'
-  (min: U32.t)
-  (max: U32.t { U32.v min <= U32.v max } )
-  (y' : bounded_int32 (U32.v min) (U32.v max))
+  (min: der_length_t)
+  (max: der_length_t { min <= max /\ max < 4294967296 } )
+  (y' : bounded_int32 (min) (max))
   (b: buffer8) 
 : HST.Stack U32.t
-  (requires (fun h -> B.live h b /\ Seq.length (serialize (serialize_bounded_der_length32 (U32.v min) (U32.v max)) y') <= B.length b))
+  (requires (fun h -> B.live h b /\ Seq.length (serialize (serialize_bounded_der_length32 ( min) (max)) y') <= B.length b))
   (ensures (fun h len h' ->
-    let sx = serialize (serialize_bounded_der_length32 (U32.v min) (U32.v max)) y' in
+    let sx = serialize (serialize_bounded_der_length32 (min) (max)) y' in
     Seq.length sx == U32.v len /\ (
     let b' = B.gsub b 0ul len in
     B.modifies (B.loc_buffer b') h h' /\
@@ -239,7 +251,7 @@ let serialize32_bounded_der_length32'
   )))
 = [@inline_let]
   let _ =
-    serialize_bounded_der_length32_unfold (U32.v min) (U32.v max) y'
+    serialize_bounded_der_length32_unfold (min) (max) y'
   in
   let x = tag_of_der_length32_impl y' in
   if x `U8.lt` 128uy
@@ -291,14 +303,14 @@ let serialize32_bounded_der_length32'
 
 inline_for_extraction
 let serialize32_bounded_der_length32
-  (min: U32.t)
-  (max: U32.t { U32.v min <= U32.v max } )
-: Tot (serializer32 (serialize_bounded_der_length32 (U32.v min) (U32.v max)))
-= fun (y' : bounded_int32 (U32.v min) (U32.v max)) b ->
-  serialize32_bounded_der_length32' min max y' b
+  (vmin: der_length_t)
+  (vmax: der_length_t { vmin <= vmax /\ vmax < 4294967296 } )
+: Tot (serializer32 (serialize_bounded_der_length32 (vmin) (vmax)))
+= fun (y' : bounded_int32 (vmin) (vmax)) b ->
+  serialize32_bounded_der_length32' vmin vmax y' b
 
 let write_bounded_der_length32
-  (min: U32.t)
-  (max: U32.t { U32.v min <= U32.v max } )
-: Tot (leaf_writer_strong (serialize_bounded_der_length32 (U32.v min) (U32.v max)))
-= leaf_writer_strong_of_serializer32 (serialize32_bounded_der_length32 min max) ()
+  (vmin: der_length_t)
+  (vmax: der_length_t { vmin <= vmax /\ vmax < 4294967296 } )
+: Tot (leaf_writer_strong (serialize_bounded_der_length32 (vmin) (vmax)))
+= leaf_writer_strong_of_serializer32 (serialize32_bounded_der_length32 vmin vmax) ()

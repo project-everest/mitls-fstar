@@ -8,8 +8,10 @@ module B32 = LowParse.Bytes32
 
 inline_for_extraction
 let parse32_bounded_vlgen
-  (min: U32.t)
-  (max: U32.t { U32.v min <= U32.v max } )
+  (vmin: der_length_t)
+  (min: U32.t { U32.v min == vmin } )
+  (vmax: der_length_t)
+  (max: U32.t { U32.v max == vmax /\ U32.v min <= U32.v max } )
   (#sk: parser_kind)
   (#pk: parser sk (bounded_int32 (U32.v min) (U32.v max)))
   (pk32: parser32 pk)
@@ -18,7 +20,7 @@ let parse32_bounded_vlgen
   (#p: parser k t)
   (s: serializer p)
   (p32: parser32 p)
-: Tot (parser32 (parse_bounded_vlgen (U32.v min) (U32.v max) pk s))
+: Tot (parser32 (parse_bounded_vlgen (vmin) (vmax) pk s))
 = fun (input: bytes32) -> ((
     [@inline_let]
     let _ = parse_bounded_vlgen_unfold_aux (U32.v min) (U32.v max) pk s (B32.reveal input) in
@@ -33,8 +35,10 @@ let parse32_bounded_vlgen
 
 inline_for_extraction
 let parse32_vlgen
-  (min: U32.t)
-  (max: U32.t { U32.v min <= U32.v max } )
+  (vmin: nat)
+  (min: U32.t { U32.v min == vmin } )
+  (vmax: nat)
+  (max: U32.t { U32.v max == vmax /\ U32.v min <= U32.v max } )
   (#sk: parser_kind)
   (#pk: parser sk (bounded_int32 (U32.v min) (U32.v max)))
   (pk32: parser32 pk)
@@ -43,11 +47,11 @@ let parse32_vlgen
   (#p: parser k t)
   (s: serializer p { parse_vlgen_precond (U32.v min) (U32.v max) k } )
   (p32: parser32 p)
-: Tot (parser32 (parse_vlgen (U32.v min) (U32.v max) pk s))
+: Tot (parser32 (parse_vlgen (vmin) (vmax) pk s))
 = parse32_synth'
     _
     (synth_vlgen (U32.v min) (U32.v max) s)
-    (parse32_bounded_vlgen min max pk32 s p32)
+    (parse32_bounded_vlgen vmin min vmax max pk32 s p32)
     ()
 
 let serialize32_bounded_vlgen_precond
