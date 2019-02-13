@@ -1212,3 +1212,22 @@ let serialize_bounded_der_length32_unfold
       log256_eq (U32.v y');
       serialize_bounded_integer_spec len y'
     end
+
+let serialize_bounded_der_length32_size
+  (min: der_length_t)
+  (max: der_length_t { min <= max /\ max < 4294967296 })
+  (y': bounded_int32 min max)
+: Lemma
+  (
+    Seq.length (serialize (serialize_bounded_der_length32 min max) y') == (
+      if y' `U32.lt` 128ul
+      then 1
+      else if y' `U32.lt` 256ul
+      then 2
+      else if y' `U32.lt` 65536ul
+      then 3
+      else if y' `U32.lt` 16777216ul
+      then 4
+      else 5
+ ))
+= serialize_bounded_der_length32_unfold min max y'

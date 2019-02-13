@@ -100,5 +100,43 @@ let parse32_bounded_der_length32
 
 #pop-options
 
+let serialize32_bounded_der_length32
+  (min: U32.t)
+  (max: U32.t { U32.v min <= U32.v max } )
+: Tot (serializer32 (serialize_bounded_der_length32 (U32.v min) (U32.v max)))
+= fun (y' : bounded_int32 (U32.v min) (U32.v max)) -> ((
+    [@inline_let]
+    let _ = serialize_bounded_der_length32_unfold (U32.v min) (U32.v max) y' in
+    let x = tag_of_der_length32_impl y' in
+    let sx = B32.create 1ul x in
+    if x `U8.lt` 128uy
+    then sx
+    else if x = 129uy
+    then sx `B32.b32append` B32.create 1ul (Cast.uint32_to_uint8 y')
+    else if x = 130uy
+    then sx `B32.b32append` serialize32_bounded_integer_2 y'
+    else if x = 131uy
+    then sx `B32.b32append` serialize32_bounded_integer_3 y'
+    else sx `B32.b32append` serialize32_bounded_integer_4 y'
+  ) <: (res: _ { serializer32_correct (serialize_bounded_der_length32 (U32.v min) (U32.v max)) y' res } ))
+
+let size32_bounded_der_length32
+  (min: U32.t)
+  (max: U32.t { U32.v min <= U32.v max } )
+: Tot (size32 (serialize_bounded_der_length32 (U32.v min) (U32.v max)))
+= fun (y' : bounded_int32 (U32.v min) (U32.v max)) -> ((
+    [@inline_let]
+    let _ = serialize_bounded_der_length32_size (U32.v min) (U32.v max) y' in
+    if y' `U32.lt` 128ul
+    then 1ul
+    else if y' `U32.lt` 256ul
+    then 2ul
+    else if y' `U32.lt` 65536ul
+    then 3ul
+    else if y' `U32.lt` 16777216ul
+    then 4ul
+    else 5ul
+  ) <: (res: _ { size32_postcond (serialize_bounded_der_length32 (U32.v min) (U32.v max)) y' res } ))
+
 #pop-options
   
