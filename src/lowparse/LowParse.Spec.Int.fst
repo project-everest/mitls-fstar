@@ -10,6 +10,8 @@ let parse_u8_spec' b = ()
 
 let serialize_u8 = Aux.serialize_u8
 
+let serialize_u8_spec x = ()
+
 let parse_u16 = Aux.parse_u16
 
 let parse_u16_spec b = Aux.parse_u16_spec b

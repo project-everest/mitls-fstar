@@ -555,6 +555,34 @@ let synth_der_length_greater_inverse
   (synth_inverse (synth_der_length_greater x len) (synth_der_length_greater_recip x len))
 = ()
 
+private
+let serialize_der_length_payload_greater 
+  (x: U8.t { not (U8.v x < 128 || x = 128uy || x = 255uy || x = 129uy) } )
+  (len: nat { len == U8.v x - 128 } )
+=
+      (serialize_synth
+        #_
+        #(parse_filter_refine #(lint len) (fun (y: lint len) -> y >= pow2 (8 * (len - 1))))
+        #(refine_with_tag tag_of_der_length x)
+        _
+        (synth_der_length_greater x len)
+        (serialize_filter
+          (serialize_synth
+            #_
+            #(Seq.lseq byte len)
+            #(lint len)
+            _
+            (synth_be_int len)
+            (serialize_seq_flbytes len)
+            (synth_be_int_recip len)
+            ()
+          )
+          (fun (y: lint len) -> y >= pow2 (8 * (len - 1)))
+        )
+        (synth_der_length_greater_recip x len)
+        ()
+      )
+
 let serialize_der_length_payload
   (x: U8.t)
 : Tot (serializer (parse_der_length_payload x))
@@ -587,11 +615,91 @@ let serialize_der_length_payload
     synth_be_int_injective len; // FIXME: WHY WHY WHY does the pattern not trigger, even with higher rlimit?
     serialize_weaken
       (parse_der_length_payload_kind x)
-      (serialize_synth
+      (serialize_der_length_payload_greater x len)
+   end
+
+let serialize_der_length_weak : serializer parse_der_length_weak =
+  serialize_tagged_union
+    serialize_u8
+    tag_of_der_length
+    (fun x -> serialize_weaken parse_der_length_payload_kind_weak (serialize_der_length_payload x))
+
+#push-options "--max_ifuel 6 --z3rlimit 64"
+
+let serialize_der_length_weak_unfold
+  (y: der_length_t)
+: Lemma
+  (let res = serialize serialize_der_length_weak y in
+    let x = tag_of_der_length y in
+    let s1 = Seq.create 1 x in
+    if x `U8.lt` 128uy
+    then res `Seq.equal` s1
+    else if x = 129uy
+    then y <= 255 /\ res `Seq.equal` (s1 `Seq.append` Seq.create 1 (U8.uint_to_t y))
+    else
+      let len = log256 y in
+      res `Seq.equal` (s1 `Seq.append` E.n_to_be'' len y)
+  )
+= let x = tag_of_der_length y in
+  serialize_u8_spec x;
+  assert_norm (der_length_max == pow2 (8 * 126) - 1);
+  assert_norm (pow2 7 == 128);
+  assert_norm (pow2 8 == 256);
+  assert_norm (256 < der_length_max);
+  assert (U8.v x <= der_length_max);
+  let (x' : der_length_t) = U8.v x in
+  if x' < 128
+  then begin
+    ()
+  end else
+   if x = 128uy || x = 255uy
+   then
+    tag_of_der_length_invalid y
+   else if x = 129uy
+   then begin
+       tag_of_der_length_eq_129 y;
+       assert (U8.v (synth_der_length_129_recip x y) == y);
+       let s1 = serialize (       serialize_synth #_ #(parse_filter_refine #U8.t (fun y -> U8.v y >= 128))  #(refine_with_tag tag_of_der_length x)
+          (parse_filter parse_u8 (fun y -> U8.v y >= 128))
+          (synth_der_length_129 x)
+          (serialize_filter serialize_u8 (fun y -> U8.v y >= 128))
+          (synth_der_length_129_recip x)
+          (synth_inverse_intro' (synth_der_length_129 x) (synth_der_length_129_recip x) (fun (y: refine_with_tag tag_of_der_length x) -> tag_of_der_length_eq_129 y))) 
+          y
+       in
+       serialize_synth_eq'
+ #_ #(parse_filter_refine #U8.t (fun y -> U8.v y >= 128))
+ #(refine_with_tag tag_of_der_length x)
+ (parse_filter parse_u8 (fun y -> U8.v y >= 128))
+          (synth_der_length_129 x)
+          (serialize_filter serialize_u8 (fun y -> U8.v y >= 128))
+          (synth_der_length_129_recip x)
+          (synth_inverse_intro' (synth_der_length_129 x) (synth_der_length_129_recip x) (fun (y: refine_with_tag tag_of_der_length x) -> tag_of_der_length_eq_129 y))
+          y
+          s1
+          ()
+          (serialize serialize_u8 (synth_der_length_129_recip x y))
+          ()
+          ;
+       serialize_u8_spec (U8.uint_to_t y);
+       ()
+   end else begin
+    let len : nat = U8.v x - 128 in
+    synth_be_int_injective len; // FIXME: WHY WHY WHY does the pattern not trigger, even with higher rlimit?
+    assert (
+      serialize (serialize_der_length_payload x) y == serialize (serialize_der_length_payload_greater x len) y
+    );
+      serialize_synth_eq'
+        #_
+        #(parse_filter_refine #(lint len) (fun (y: lint len) -> y >= pow2 (8 * (len - 1))))
+        #(refine_with_tag tag_of_der_length x)
         _
         (synth_der_length_greater x len)
         (serialize_filter
           (serialize_synth
+            #_
+            #(Seq.lseq byte len)
+            #(lint len)
             _
             (synth_be_int len)
             (serialize_seq_flbytes len)
@@ -602,14 +710,37 @@ let serialize_der_length_payload
         )
         (synth_der_length_greater_recip x len)
         ()
-      )
-   end
+        y
+        (serialize (serialize_der_length_payload_greater x len) y)
+        (_ by (FStar.Tactics.trefl ()))
+        (serialize
+          (serialize_synth
+            #_
+            #(Seq.lseq byte len)
+            #(lint len)
+            _
+            (synth_be_int len)
+            (serialize_seq_flbytes len)
+            (synth_be_int_recip len)
+            ()
+          )
+          (synth_der_length_greater_recip x len y)
+        )
+        ()
+        ;
+     serialize_synth_eq
+            _
+            (synth_be_int len)
+            (serialize_seq_flbytes len)
+            (synth_be_int_recip len)
+            ()
+            (synth_der_length_greater_recip x len y);
+     Math.pow2_lt_recip (8 * (log256 y - 1)) (8 * 126);
+     ()
+   end;
+  ()
 
-let serialize_der_length_weak : serializer parse_der_length_weak =
-  serialize_tagged_union
-    serialize_u8
-    tag_of_der_length
-    (fun x -> serialize_weaken parse_der_length_payload_kind_weak (serialize_der_length_payload x))
+#pop-options
 
 let serialize_bounded_der_length_weak
   (min: der_length_t)
@@ -635,6 +766,33 @@ let serialize_bounded_der_length
     (serialize_bounded_der_length_weak min max)
     (parse_bounded_der_length min max)
 
+let serialize_bounded_der_length_unfold
+  (min: der_length_t)
+  (max: der_length_t { min <= max })
+  (y: bounded_int min max)
+: Lemma
+  (let res = serialize (serialize_bounded_der_length min max) y in
+    let x = tag_of_der_length y in
+    let s1 = Seq.create 1 x in
+    if x `U8.lt` 128uy
+    then res `Seq.equal` s1
+    else if x = 129uy
+    then y <= 255 /\ res `Seq.equal` (s1 `Seq.append` Seq.create 1 (U8.uint_to_t y))
+    else
+      let len = log256 y in
+      res `Seq.equal` (s1 `Seq.append` E.n_to_be'' len y)
+  )
+= serialize_synth_eq
+    _
+    (fun (y: der_length_t {min <= y && y <= max}) -> (y <: bounded_int min max))
+    (serialize_filter
+      serialize_der_length_weak
+      (fun y -> min <= y && y <= max)
+    )
+    (fun (y : bounded_int min max) -> (y <: (y: der_length_t {min <= y && y <= max})))
+    ()
+    y;
+  serialize_der_length_weak_unfold y
 
 (* 32-bit spec *)
 
@@ -863,7 +1021,7 @@ let synth_bounded_der_length32
   (min: der_length_t)
   (max: der_length_t { min <= max /\ max < 4294967296 })
   (x: bounded_int min max)
-: Tot (bounded_int32 min max)
+: GTot (bounded_int32 min max)
 = U32.uint_to_t x
 
 inline_for_extraction
@@ -999,3 +1157,58 @@ let tag_of_der_length32_impl
       Math.pow2_lt_recip (8 * (U8.v len_len - 1)) (8 * 126)
     in
     128uy `U8.add` len_len
+
+let synth_bounded_der_length32_recip
+  (min: der_length_t)
+  (max: der_length_t { min <= max /\ max < 4294967296 })
+  (x: bounded_int32 min max)
+: GTot (bounded_int min max)
+= U32.v x
+
+let serialize_bounded_der_length32
+  (min: der_length_t)
+  (max: der_length_t { min <= max /\ max < 4294967296 })
+: Tot (serializer (parse_bounded_der_length32 min max))
+= serialize_synth
+    _
+    (synth_bounded_der_length32 min max)
+    (serialize_bounded_der_length min max)
+    (synth_bounded_der_length32_recip min max)
+    ()
+
+let serialize_bounded_der_length32_unfold
+  (min: der_length_t)
+  (max: der_length_t { min <= max /\ max < 4294967296 })
+  (y': bounded_int32 min max)
+: Lemma
+  (
+    let res = serialize (serialize_bounded_der_length32 min max) y' in
+    let x = tag_of_der_length32_impl y' in
+    let s1 = Seq.create 1 x in
+    if x `U8.lt` 128uy
+    then res `Seq.equal` s1
+    else if x = 129uy
+    then U32.v y' <= 255 /\ res `Seq.equal` (s1 `Seq.append` Seq.create 1 (Cast.uint32_to_uint8 y'))
+    else
+      let len = log256' (U32.v y') in
+      res `Seq.equal` (s1 `Seq.append` serialize (serialize_bounded_integer len) y')
+  )
+= serialize_synth_eq
+    _
+    (synth_bounded_der_length32 min max)
+    (serialize_bounded_der_length min max)
+    (synth_bounded_der_length32_recip min max)
+    ()
+    y';
+  serialize_bounded_der_length_unfold min max (U32.v y');
+    let x = tag_of_der_length32_impl y' in
+    if x `U8.lt` 128uy
+    then ()
+    else if x = 129uy
+    then FStar.Math.Lemmas.small_modulo_lemma_1 (U32.v y') 256
+    else begin
+      assert (x <> 128uy /\ x <> 255uy);
+      let len = log256' (U32.v y') in
+      log256_eq (U32.v y');
+      serialize_bounded_integer_spec len y'
+    end

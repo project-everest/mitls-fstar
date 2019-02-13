@@ -6,7 +6,7 @@ module Seq = FStar.Seq
 module U8  = FStar.UInt8
 module U16 = FStar.UInt16
 module U32 = FStar.UInt32
-module E = FStar.Kremlin.Endianness
+module E = LowParse.BigEndian
 
 (* bounded integers *)
 
@@ -54,6 +54,12 @@ val parse_bounded_integer_spec
 val serialize_bounded_integer
   (sz: integer_size)
 : Tot (serializer (parse_bounded_integer sz))
+
+val serialize_bounded_integer_spec
+  (sz: integer_size)
+  (x: bounded_integer sz)
+: Lemma
+  (serialize (serialize_bounded_integer sz) x == E.n_to_be'' sz (U32.v x))
 
 val parse_bounded_integer_le
   (i: integer_size)

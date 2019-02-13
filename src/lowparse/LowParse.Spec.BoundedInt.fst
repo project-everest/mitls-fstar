@@ -88,6 +88,8 @@ sz
 = serialize_bounded_integer_correct sz;
   serialize_bounded_integer' sz
 
+let serialize_bounded_integer_spec sz x = ()
+
 let bounded_integer_of_le
   (i: integer_size)
   (b: bytes { Seq.length b == i } )
