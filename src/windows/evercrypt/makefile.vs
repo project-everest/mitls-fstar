@@ -10,11 +10,9 @@ SOURCES = \
   EverCrypt.c \
   EverCrypt_AutoConfig2.c \
   EverCrypt_BCrypt.c \
-  EverCrypt_Bytes.c \
   EverCrypt_Hash.c \
   EverCrypt_HKDF.c \
   EverCrypt_HMAC.c \
-  EverCrypt_Kremlib.c \
   EverCrypt_StaticConfig.c \
   EverCrypt_Vale.c \
   evercrypt_vale_stubs.c \
@@ -26,6 +24,8 @@ SOURCES = \
   Hacl_Poly1305_64.c \
   Hacl_Hash.c \
   Hacl_AES.c \
+  Hacl_Kremlib.c \
+  Hacl_SHA3.c \
   evercrypt_vale_stubs.c
 
 {amd64\}.asm.obj:
