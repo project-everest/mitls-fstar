@@ -8,8 +8,8 @@ MLCRYPTO_HOME	?= ../../../../../MLCrypto
 EVERCRYPT_HOME	?= ../../../../../hacl-star/providers
 KREMLIN_HOME    ?= ../../../../../kremlin
 
-LDOPTS += -L$(EVERCRYPT_HOME)/dist/compact -levercrypt
-LDOPTS += -L$(EVERCRYPT_HOME)/../dist/compact -lhacl
+LDOPTS += -levercrypt
+LDOPTS += -L$(EVERCRYPT_HOME)/../dist/compact
 LDOPTS += -L$(KREMLIN_HOME)/kremlib/dist/generic -lkremlib
 
 ifeq ($(OS),Windows_NT)
