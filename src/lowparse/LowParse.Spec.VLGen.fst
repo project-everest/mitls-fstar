@@ -1,7 +1,7 @@
 module LowParse.Spec.VLGen
 include LowParse.Spec.Combinators
 include LowParse.Spec.AllIntegers
-include LowParse.Spec.FLData
+include LowParse.Spec.VLData // for parse_bounded_vldata_strong_t
 
 (* TODO: this module should deprecate and replace LowParse.Spec.VLData *)
 
