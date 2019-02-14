@@ -349,7 +349,7 @@ private let rec list_valid_ng_is_list_ng (l:CommonDH.supportedNamedGroups) : Com
 // We fill binders with placeholders to use QD clientHelloextensions_serializer32
 private let compute_binder_ph (pski:pskInfo) =
   let h = PSK.pskInfo_hash pski in
-  create (Hashing.Spec.tagLen h) 0us
+  create (Hashing.Spec.tagLen h) 0uy
 
 let supported_group_extension cfg: list clientHelloExtension =   
   if List.Tot.existsb send_supported_groups (list_valid_cs_is_list_cs cfg.cipher_suites) 
