@@ -16,6 +16,7 @@ INCLUDE_PATHS = \
   $(HACL_HOME)/vale/code/arch/x64/interop \
   $(HACL_HOME)/vale/specs/defs \
   $(HACL_HOME)/vale/specs/hardware \
+  $(HACL_HOME)/vale/specs/interop \
   $(HACL_HOME)/vale/code/crypto/sha \
   $(HACL_HOME)/vale/code/arch \
   $(HACL_HOME)/vale/code/lib/collections \
@@ -37,6 +38,8 @@ INCLUDE_PATHS = \
   $(MITLS_HOME)/src/parsers/generated \
   $(EVERCRYPT_HOME)/evercrypt \
   $(SPECINC) \
+  $(EVERCRYPT_HOME)/evercrypt/fst \
+  $(EVERCRYPT_HOME)/evercrypt/config/default \
   $(HACL_HOME)/obj
 
 ifeq (,$(MITLS_NODEBUG))
