@@ -1,6 +1,7 @@
 module LowParse.SLow.BCVLI
 include LowParse.Spec.BCVLI
 include LowParse.SLow.Combinators // for make_total_constant_size_parser32
+include LowParse.SLow.BoundedInt // for bounded_integer_le
 
 module B32 = LowParse.Bytes32
 module Seq = FStar.Seq
@@ -8,69 +9,6 @@ module U32 = FStar.UInt32
 module Cast = FStar.Int.Cast
 
 #push-options "--max_fuel 0"
-
-inline_for_extraction
-let bounded_integer_of_le_32_1
-  (b: B32.lbytes 1)
-: Tot (y: bounded_integer 1 { y == bounded_integer_of_le 1 (B32.reveal b) } )
-= [@inline_let] let _ =
-    bounded_integer_of_le_1_eq (B32.reveal b)
-  in
-  Cast.uint8_to_uint32 (B32.get b 0ul)
-
-let parse32_bounded_integer_le_1
-: parser32 (parse_bounded_integer_le 1)
-= [@inline_let] let _ =
-    bounded_integer_of_le_injective 1
-  in
-  make_total_constant_size_parser32
-    1
-    1ul
-    (bounded_integer_of_le 1)
-    ()
-    bounded_integer_of_le_32_1
-
-inline_for_extraction
-let bounded_integer_of_le_32_2
-  (b: B32.lbytes 2)
-: Tot (y: bounded_integer 2 { y == bounded_integer_of_le 2 (B32.reveal b) } )
-= [@inline_let] let _ =
-    bounded_integer_of_le_2_eq (B32.reveal b)
-  in
-  Cast.uint8_to_uint32 (B32.get b 0ul) `U32.add` (256ul `U32.mul` Cast.uint8_to_uint32 (B32.get b 1ul))
-
-let parse32_bounded_integer_le_2
-: parser32 (parse_bounded_integer_le 2)
-= [@inline_let] let _ =
-    bounded_integer_of_le_injective 2
-  in
-  make_total_constant_size_parser32
-    2
-    2ul
-    (bounded_integer_of_le 2)
-    ()
-    bounded_integer_of_le_32_2
-
-inline_for_extraction
-let bounded_integer_of_le_32_4
-  (b: B32.lbytes 4)
-: Tot (y: bounded_integer 4 { y == bounded_integer_of_le 4 (B32.reveal b) } )
-= [@inline_let] let _ =
-    bounded_integer_of_le_4_eq (B32.reveal b)
-  in
-  Cast.uint8_to_uint32 (B32.get b 0ul) `U32.add` (256ul `U32.mul` ( Cast.uint8_to_uint32 (B32.get b 1ul) `U32.add` (256ul `U32.mul` (Cast.uint8_to_uint32 (B32.get b 2ul) `U32.add` (256ul `U32.mul` Cast.uint8_to_uint32 (B32.get b 3ul))))))
-
-let parse32_bounded_integer_le_4
-: parser32 (parse_bounded_integer_le 4)
-= [@inline_let] let _ =
-    bounded_integer_of_le_injective 4
-  in
-  make_total_constant_size_parser32
-    4
-    4ul
-    (bounded_integer_of_le 4)
-    ()
-    bounded_integer_of_le_32_4
 
 let parse32_bcvli
 : parser32 parse_bcvli
@@ -102,42 +40,6 @@ let parse32_bcvli
   ) <: (res: _ { parser32_correct parse_bcvli input res } ))
 
 module U8 = FStar.UInt8
-
-let serialize32_bounded_integer_le_1  : serializer32 (serialize_bounded_integer_le 1)
-= fun (x: bounded_integer 1) -> ((
-    [@inline_let] let _ =
-      serialize_bounded_integer_le_1_eq x 0
-    in
-    B32.create 1ul (Cast.uint32_to_uint8 x)
-  ) <: (res: bytes32 { serializer32_correct' (serialize_bounded_integer_le 1) x res } ))
-
-let serialize32_bounded_integer_le_2  : serializer32 (serialize_bounded_integer_le 2)
-= fun (x: bounded_integer 2) -> ((
-    [@inline_let] let _ =
-      serialize_bounded_integer_le_2_eq x 0;
-      serialize_bounded_integer_le_2_eq x 1
-    in
-    B32.create 1ul (Cast.uint32_to_uint8 x) `B32.append` B32.create 1ul (Cast.uint32_to_uint8 (x `U32.div` 256ul))
-  ) <: (res: bytes32 { serializer32_correct' (serialize_bounded_integer_le 2) x res } ))
-
-let serialize32_bounded_integer_le_4  : serializer32 (serialize_bounded_integer_le 4)
-= fun (x: bounded_integer 4) -> ((
-    [@inline_let] let _ =
-      serialize_bounded_integer_le_4_eq x 0;
-      serialize_bounded_integer_le_4_eq x 1;
-      serialize_bounded_integer_le_4_eq x 2;
-      serialize_bounded_integer_le_4_eq x 3
-    in
-    let rem0 = Cast.uint32_to_uint8 x in
-    let div0 = x `U32.div` 256ul in
-    let rem1 = Cast.uint32_to_uint8 div0 in
-    let div1 = div0 `U32.div` 256ul in
-    let rem2 = Cast.uint32_to_uint8 div1 in
-    let div2 = div1 `U32.div` 256ul in
-    let rem3 = Cast.uint32_to_uint8 div2 in
-    (B32.create 1ul rem0 `B32.append` B32.create 1ul rem1) `B32.append`
-    (B32.create 1ul rem2 `B32.append` B32.create 1ul rem3)
-  ) <: (res: bytes32 { serializer32_correct' (serialize_bounded_integer_le 4) x res } ))
 
 let serialize32_bcvli
 : serializer32 serialize_bcvli

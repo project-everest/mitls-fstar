@@ -635,6 +635,20 @@ let serializer
 : Tot Type0
 = (f: bare_serializer t { serializer_correct p f } )
 
+let mk_serializer
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (f: bare_serializer t)
+  (prf: (
+    (x: t) ->
+    Lemma
+    (parse p (f x) == Some (x, Seq.length (f x)))
+  ))
+: Tot (serializer p)
+= Classical.forall_intro prf;
+  f
+
 unfold
 let coerce_serializer
   (t2: Type0)

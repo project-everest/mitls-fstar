@@ -1,48 +1,14 @@
 module LowParse.Spec.BCVLI
-include LowParse.Spec.Int
-include LowParse.Spec.VLData // for bounded_integer
+include LowParse.Spec.Combinators // for parse_ret
+include LowParse.Spec.BoundedInt // for bounded_integer
 
 module E = FStar.Kremlin.Endianness
 
 module U32 = FStar.UInt32
 module Seq = FStar.Seq
 
-let bounded_integer_of_le
-  (i: integer_size)
-  (b: bytes { Seq.length b == i } )
-: GTot (bounded_integer i)
-= E.lemma_le_to_n_is_bounded b;
-  U32.uint_to_t (E.le_to_n b)
-
-#set-options "--z3rlimit 16"
-let bounded_integer_of_le_injective'
-  (i: integer_size)
-  (b1: bytes { Seq.length b1 == i } )
-  (b2: bytes { Seq.length b2 == i } )
-: Lemma
-  (bounded_integer_of_le i b1 == bounded_integer_of_le i b2 ==> Seq.equal b1 b2)
-= if bounded_integer_of_le i b1 = bounded_integer_of_le i b2
-  then begin
-    E.lemma_le_to_n_is_bounded b1;
-    E.lemma_le_to_n_is_bounded b2;
-    assert (U32.v (U32.uint_to_t (E.le_to_n b1)) == E.le_to_n b1);
-    assert (U32.v (U32.uint_to_t (E.le_to_n b2)) == E.le_to_n b2);
-    assert (E.le_to_n b1 == E.le_to_n b2);
-    E.le_to_n_inj b1 b2
-  end else ()
-#reset-options
-
-let bounded_integer_of_le_injective
-  (i: integer_size)
-: Lemma
-  (make_total_constant_size_parser_precond i (bounded_integer i) (bounded_integer_of_le i))
-= Classical.forall_intro_2 (bounded_integer_of_le_injective' i)
-
-let parse_bounded_integer_le
-  (i: integer_size)
-: Tot (parser (parse_bounded_integer_kind i) (bounded_integer i))
-= bounded_integer_of_le_injective i;
-  make_total_constant_size_parser i (bounded_integer i) (bounded_integer_of_le i)
+module U16 = FStar.UInt16
+module Cast = FStar.Int.Cast
 
 inline_for_extraction
 let parse_bcvli_payload_kind = {
@@ -105,37 +71,6 @@ let parse_bcvli_eq (b: bytes) : Lemma
     parse_synth_eq (parse_bounded_integer_le 4 `parse_filter` (fun x -> U32.v x >= 65536)) (fun x -> (x <: U32.t)) b';
     parse_filter_eq (parse_bounded_integer_le 4) (fun x -> U32.v x >= 65536) b'
 
-
-let serialize_bounded_integer_le'
-  (sz: integer_size)
-: Tot (bare_serializer (bounded_integer sz))
-= (fun (x: bounded_integer sz) ->
-    let res = E.n_to_le (U32.uint_to_t sz) (U32.v x) in
-    res
-  )
-
-let serialize_bounded_integer_le_correct
-  (sz: integer_size)
-: Lemma
-  (serializer_correct (parse_bounded_integer_le sz) (serialize_bounded_integer_le' sz))
-= let prf
-    (x: bounded_integer sz)
-  : Lemma
-    (
-      let res = serialize_bounded_integer_le' sz x in
-      Seq.length res == (sz <: nat) /\
-      parse (parse_bounded_integer_le sz) res == Some (x, (sz <: nat))
-    )
-  = ()
-  in
-  Classical.forall_intro prf
-
-let serialize_bounded_integer_le
-  (sz: integer_size)
-: Tot (serializer (parse_bounded_integer_le sz))
-= serialize_bounded_integer_le_correct sz;
-  serialize_bounded_integer_le' sz
-
 let bare_serialize_bcvli (x: U32.t) : GTot bytes =
   let c1 : bounded_integer 1 =
     if U32.v x <= 252 then
@@ -189,70 +124,3 @@ let bare_serialize_bcvli_correct : squash
 let serialize_bcvli : serializer parse_bcvli = bare_serialize_bcvli
 
 module U8 = FStar.UInt8
-
-let bounded_integer_of_le_1_eq
-  (b: bytes { Seq.length b == 1 } )
-: Lemma
-  (U32.v (bounded_integer_of_le 1 b) == U8.v (Seq.index b 0))
-= ()
-
-let bounded_integer_of_le_2_eq
-  (b: bytes { Seq.length b == 2 } )
-: Lemma
-  (U32.v (bounded_integer_of_le 2 b) == U8.v (Seq.index b 0) + 256 `FStar.Mul.op_Star` U8.v (Seq.index b 1))
-= ()
-
-#push-options "--max_fuel 5 --z3rlimit 16"
-
-let bounded_integer_of_le_4_eq
-  (b: bytes { Seq.length b == 4 } )
-: Lemma
-  (U32.v (bounded_integer_of_le 4 b) == U8.v (Seq.index b 0) + 256 `FStar.Mul.op_Star` (U8.v (Seq.index b 1) + 256 `FStar.Mul.op_Star` (U8.v (Seq.index b 2) + 256 `FStar.Mul.op_Star` U8.v (Seq.index b 3))))
-= ()
-
-#pop-options
-
-let serialize_bounded_integer_le_1_eq
-  (x: bounded_integer 1)
-  (i: nat { i < 1 } )
-: Lemma
-  (U8.v (Seq.index (serialize (serialize_bounded_integer_le 1) x) i) == U32.v x % 256)
-= ()
-
-#push-options "--max_fuel 5 --z3rlimit 64"
-
-let serialize_bounded_integer_le_2_eq
-  (x: bounded_integer 2)
-  (i: nat { i < 2 } )
-: Lemma
-  (U8.v (Seq.index (serialize (serialize_bounded_integer_le 2) x) i) == (
-    let rem = U32.v x % 256 in
-    let div = U32.v x / 256 in
-    if i = 0
-    then rem
-    else div % 256
-  ))
-= ()
-
-let serialize_bounded_integer_le_4_eq
-  (x: bounded_integer 4)
-  (i: nat { i < 4 } )
-: Lemma
-  (U8.v (Seq.index (serialize (serialize_bounded_integer_le 4) x) i) == (
-    let rem0 = U32.v x % 256 in
-    let div0 = U32.v x / 256 in
-    let rem1 = div0 % 256 in
-    let div1 = div0 / 256 in
-    let rem2 = div1 % 256 in
-    let div2 = div1 / 256 in
-    if i = 0
-    then rem0
-    else if i = 1
-    then rem1
-    else if i = 2
-    then rem2
-    else div2 % 256
-  ))
-= ()
-
-#pop-options

@@ -35,3 +35,45 @@ let mult_decomp
 : Lemma
   (i * j == j + (i - 1) * j)
 = ()
+
+let lemma_div_pow2_le (a: int) (n m: nat) : Lemma
+  (requires (m <= n /\ a <= pow2 n))
+  (ensures (m <= n /\ a <= pow2 n /\ a / pow2 m <= pow2 (n - m)))
+= if a = pow2 n
+  then pow2_multiplication_division_lemma_1 1 m n
+  else lemma_div_lt a n m
+
+let lemma_div_pow2_ge (a: int) (n m: nat) : Lemma
+  (requires (m <= n /\ pow2 n <= a))
+  (ensures (pow2 (n - m) <= a / pow2 m))
+= pow2_multiplication_division_lemma_1 1 m n;
+  lemma_div_le (pow2 n) a (pow2 m)
+
+let pow2_le_recip
+  (a b: nat)
+: Lemma
+  (requires (pow2 a <= pow2 b))
+  (ensures (a <= b))
+= Classical.move_requires (pow2_lt_compat a) b
+
+let pow2_lt_recip
+  (a b: nat)
+: Lemma
+  (requires (pow2 a < pow2 b))
+  (ensures (a < b))
+= Classical.move_requires (pow2_le_compat a) b
+
+let lemma_mult_lt' (a: pos) (b c: int) : Lemma
+  (requires (b < c))
+  (ensures (a * b < a * c))
+= ()
+
+let lemma_mult_lt_recip  (a: pos) (b c: int) : Lemma
+  (requires (a * b < a * c))
+  (ensures (b < c))
+= ()
+
+let lemma_mult_le_recip (a: pos) (b c: int) : Lemma
+  (requires (a * b <= a * c))
+  (ensures (b <= c))
+= ()
