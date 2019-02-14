@@ -237,7 +237,7 @@ function mitls_verify() {
                     # not for checked files.
                     OTHERFLAGS="--admit_smt_queries true $OTHERFLAGS" \
                     make -C hacl-star vale-fst -j $threads &&
-                    make -C hacl-star compile-compact -j $threads &&
+                    make -C hacl-star compile-compact compile-generic compile-evercrypt-external-headers -j $threads &&
                     make -C libs/ffi -j $threads &&
                     build_pki_if &&
                     make -C src/tls -j $threads all -k &&
