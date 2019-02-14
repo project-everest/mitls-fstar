@@ -71,7 +71,7 @@ let jump_bounded_vlgen
   (#k: parser_kind)
   (#t: Type)
   (#p: parser k t)
-  (s: serializer p { parse_vlgen_precond (vmin) (vmax) k })
+  (s: serializer p)
   (v: jumper p)
 : Tot (jumper (parse_bounded_vlgen (vmin) (vmax) pk s))
 = fun input pos ->

@@ -58,10 +58,16 @@ let serialize32_bounded_vlgen_precond
   (min: nat)
   (max: nat { min <= max } )
   (sk: parser_kind)
+  (k: parser_kind)
 : GTot bool
 = match sk.parser_kind_high with
   | None -> false
-  | Some kmax -> kmax + max < 4294967296
+  | Some kmax -> 
+    let max' = match k.parser_kind_high with
+    | None -> max
+    | Some km -> if km < max then km else max
+    in
+    kmax + max' < 4294967296
 
 inline_for_extraction
 let serialize32_bounded_vlgen
@@ -70,12 +76,12 @@ let serialize32_bounded_vlgen
   (#sk: parser_kind)
   (#pk: parser sk (bounded_int32 min max))
   (#ssk: serializer pk)
-  (ssk32: serializer32 ssk { sk.parser_kind_subkind == Some ParserStrong /\ serialize32_bounded_vlgen_precond min max sk } )
+  (ssk32: serializer32 ssk { sk.parser_kind_subkind == Some ParserStrong } )
   (#k: parser_kind)
   (#t: Type)
   (#p: parser k t)
   (#s: serializer p)
-  (s32: serializer32 s)
+  (s32: serializer32 s { serialize32_bounded_vlgen_precond min max sk k } )
 : Tot (serializer32 (serialize_bounded_vlgen min max ssk s))
 = fun (input: parse_bounded_vldata_strong_t min max s) -> ((
     [@inline_let]
@@ -92,12 +98,12 @@ let serialize32_vlgen
   (#sk: parser_kind)
   (#pk: parser sk (bounded_int32 min max))
   (#ssk: serializer pk)
-  (ssk32: serializer32 ssk { sk.parser_kind_subkind == Some ParserStrong /\ serialize32_bounded_vlgen_precond min max sk } )
+  (ssk32: serializer32 ssk { sk.parser_kind_subkind == Some ParserStrong } )
   (#k: parser_kind)
   (#t: Type)
   (#p: parser k t)
   (#s: serializer p)
-  (s32: serializer32 s { parse_vlgen_precond min max k } )
+  (s32: serializer32 s { parse_vlgen_precond min max k /\ serialize32_bounded_vlgen_precond min max sk k } )
 : Tot (serializer32 (serialize_vlgen min max ssk s))
 = serialize32_synth'
     _
@@ -114,12 +120,12 @@ let size32_bounded_vlgen
   (#sk: parser_kind)
   (#pk: parser sk (bounded_int32 min max))
   (#ssk: serializer pk)
-  (ssk32: size32 ssk { sk.parser_kind_subkind == Some ParserStrong /\ serialize32_bounded_vlgen_precond min max sk } )
+  (ssk32: size32 ssk { sk.parser_kind_subkind == Some ParserStrong } )
   (#k: parser_kind)
   (#t: Type)
   (#p: parser k t)
   (#s: serializer p)
-  (s32: size32 s)
+  (s32: size32 s {  serialize32_bounded_vlgen_precond min max sk k } )
 : Tot (size32 (serialize_bounded_vlgen min max ssk s))
 = fun (input: parse_bounded_vldata_strong_t min max s) -> ((
     [@inline_let]
@@ -135,12 +141,12 @@ let size32_vlgen
   (#sk: parser_kind)
   (#pk: parser sk (bounded_int32 min max))
   (#ssk: serializer pk)
-  (ssk32: size32 ssk { sk.parser_kind_subkind == Some ParserStrong /\ serialize32_bounded_vlgen_precond min max sk } )
+  (ssk32: size32 ssk { sk.parser_kind_subkind == Some ParserStrong } )
   (#k: parser_kind)
   (#t: Type)
   (#p: parser k t)
   (#s: serializer p)
-  (s32: size32 s { parse_vlgen_precond min max k } )
+  (s32: size32 s { parse_vlgen_precond min max k /\ serialize32_bounded_vlgen_precond min max sk k } )
 : Tot (size32 (serialize_vlgen min max ssk s))
 = size32_synth'
     _
