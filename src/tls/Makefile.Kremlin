@@ -8,11 +8,20 @@ ifneq (,$(MITLS_USE_OPENSSL))
 CONCRETE_FLAVOR = -OpenSSL
 endif
 
-VALE_NAMESPACES='X64.*' 'Arch.*' 'Words.*' 'Vale.*' \
-  'Collections.*' 'SHA_helpers' Prop_s Collections[rename=Collections_] Types_s Words_s Views AES_s \
-  Workarounds 'Math.*' Interop TypesNative_s
+VALE_BUNDLES=\
+  -bundle CanonCommMonoid,CanonCommSemiring,CanonCommSwaps[rename=Unused] \
+  -bundle FastUtil_helpers,FastHybrid_helpers,FastSqr_helpers,FastMul_helpers[rename=Unused2] \
+  -bundle Opaque_s,Map16,Test.Vale_memcpy,Fast_defs,Interop_Printer,Memcpy[rename=Unused3] \
+  -bundle X64.*,Arch.*,Words.*,Vale.*,Collections.*,Collections,SHA_helpers,Interop,Interop.*[rename=Unused4] \
+  -bundle Prop_s,Types_s,Words_s,Views,AES_s,Workarounds,Math.*,Interop,TypesNative_s[rename=Unused5] \
+  -bundle GF128_s,GF128,Poly1305.Spec_s,GCTR,GCTR_s,GHash_s,GCM_helpers,GHash[rename=Unused6] \
+  -bundle AES_helpers,AES256_helpers,GCM_s,GCM,Interop_assumptions[rename=Unused7] \
+  -bundle 'Check_aesni_stdcall,Check_sha_stdcall,Sha_update_bytes_stdcall[rename=Vale]' \
+  -bundle 'Sha_stdcalls' \
+  -bundle 'Poly_stdcalls' \
+  -bundle 'Fast_stdcalls' \
+  -bundle 'Cpuid_stdcalls' \
 
-VALE_BUNDLES=$(addprefix -bundle ,$(VALE_NAMESPACES))
 
 # Target C compilation units for miTLS sources. Requires -minimal
 MITLS_BUNDLES = \
