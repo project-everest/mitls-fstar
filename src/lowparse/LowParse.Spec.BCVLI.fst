@@ -1,14 +1,8 @@
 module LowParse.Spec.BCVLI
-include LowParse.Spec.Combinators // for parse_ret
-include LowParse.Spec.BoundedInt // for bounded_integer
-
-module E = FStar.Kremlin.Endianness
+open LowParse.Spec.Combinators // for parse_ret
 
 module U32 = FStar.UInt32
 module Seq = FStar.Seq
-
-module U16 = FStar.UInt16
-module Cast = FStar.Int.Cast
 
 inline_for_extraction
 let parse_bcvli_payload_kind = {
@@ -36,31 +30,11 @@ let parse_bcvli_payload_and_then_cases_injective : squash (and_then_cases_inject
 
 #pop-options
 
-inline_for_extraction
-let parse_bcvli_kind = and_then_kind (parse_bounded_integer_kind 1) parse_bcvli_payload_kind
-
 let parse_bcvli : parser parse_bcvli_kind U32.t =
   parse_bounded_integer_le 1 `and_then` parse_bcvli_payload
 
-let parse_bcvli_eq (b: bytes) : Lemma
-  (parse parse_bcvli b == (match parse (parse_bounded_integer_le 1) b with
-  | None -> None
-  | Some (x32, consumed_x) ->
-    let x = U32.v x32 in
-    if x <= 252 then Some (x32, consumed_x) else
-    let b' = Seq.slice b consumed_x (Seq.length b) in
-    if x = 253 then
-      match parse (parse_bounded_integer_le 2) b' with
-      | None -> None
-      | Some (y, consumed_y) ->
-        if U32.v y < 253 then None (* redundant representations not supported, non-malleability *) else Some (y, consumed_x + consumed_y)
-    else if x = 254 then
-      match parse (parse_bounded_integer_le 4) b' with
-      | None -> None
-      | Some (y, consumed_y) ->
-        if U32.v y < 65536 then None (* redundant representations not supported, non-malleability *) else Some (y, consumed_x + consumed_y)
-    else None (* 64-bit integers not supported *)
-  ))
+let parse_bcvli_eq
+b
 = and_then_eq (parse_bounded_integer_le 1) parse_bcvli_payload b;
   match parse (parse_bounded_integer_le 1) b with
   | None -> ()
@@ -123,4 +97,4 @@ let bare_serialize_bcvli_correct : squash
 
 let serialize_bcvli : serializer parse_bcvli = bare_serialize_bcvli
 
-module U8 = FStar.UInt8
+let serialize_bcvli_eq x = ()
