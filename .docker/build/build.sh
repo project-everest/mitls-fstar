@@ -236,7 +236,8 @@ function mitls_verify() {
                     # This is only for libevercrypt.so for now,
                     # not for checked files.
                     OTHERFLAGS="--admit_smt_queries true $OTHERFLAGS" \
-                    make -C hacl-star -j $threads &&
+                    make -C hacl-star vale-fst -j $threads &&
+                    make -C hacl-star compile-compact -j $threads &&
                     make -C libs/ffi -j $threads &&
                     build_pki_if &&
                     make -C src/tls -j $threads all -k &&
