@@ -1358,7 +1358,7 @@ the corresponding struct
 */
 struct {
   SignatureScheme algorithm;
-  opaque sig<0..2^16-1>;
+  opaque signature_payload<0..2^16-1>;
 } Signature;
 
 /*
@@ -1400,7 +1400,7 @@ struct {
 
 struct {
   SignedDHParams params;
-  Signature sig;
+  Signature signature;
 } SignedDHKeyExchange;
 
 /*
@@ -1492,7 +1492,7 @@ struct {
 
 struct {
   ServerECDHParams params;
-  Signature sig;
+  Signature signature;
 } SignedECDHKeyExchange;
 
 struct {
