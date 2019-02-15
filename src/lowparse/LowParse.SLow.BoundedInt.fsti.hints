@@ -1,5 +1,5 @@
 [
-  "ï˜1]$\u000eC\u0015zÍ¢ç¯|",
+  "ËÄdê÷œË €‰‰y˜d˜.",
   [
     [
       "LowParse.SLow.BoundedInt.parse32_bounded_integer",
@@ -17,7 +17,7 @@
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "f4041c93d671f845a0c05fec47db2b3d"
+      "67d9df685aac8ea76de9b4fad106d794"
     ],
     [
       "LowParse.SLow.BoundedInt.serialize32_bounded_integer",
@@ -35,7 +35,25 @@
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "b97e5cdd234a1f361d0be39f466d637f"
+      "da95264c423605826ac26a0142eab009"
+    ],
+    [
+      "LowParse.SLow.BoundedInt.size32_u16_le",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "cefefc84a71297f53ef09800891d89e1"
+    ],
+    [
+      "LowParse.SLow.BoundedInt.size32_u32_le",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "da51b1891ff61f79ebba2507a029d2cf"
     ]
   ]
 ]

@@ -12,14 +12,12 @@
         "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
         "FStar.UInt16_pretyping_9807ddb0e569187e389675611f2acf1e",
         "FStar.UInt32_pretyping_041e3a67a2d2b51fd702f1f88cfc3b44",
-        "LowParse.Spec.Base_pretyping_e24e8cabdb5c58cdc1d812d5f6f285ec",
         "LowParseExample5.Aux_pretyping_cac943f9d7fc04a4bbf376772bf213fa",
         "LowParseExample5.Aux_pretyping_cf5820b6f3fdeff72448f817fba147c8",
         "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
         "bool_inversion", "bool_typing",
         "constructor_distinct_FStar.Pervasives.Native.Some",
         "data_elim_LowParse.Spec.Base.Mkparser_kind_",
-        "data_typing_intro_LowParse.Spec.Base.ParserConsumesAll@tok",
         "equality_tok_LowParse.Spec.Base.ParserStrong@tok",
         "equation_FStar.HyperStack.ST.equal_domains",
         "equation_FStar.HyperStack.ST.inline_stack_inv",
@@ -46,13 +44,14 @@
         "equation_LowParse.Spec.Base.parser_kind",
         "equation_LowParse.Spec.Base.strong_parser_kind",
         "equation_LowParse.Spec.Base.total_constant_size_parser_kind",
+        "equation_LowParse.Spec.BoundedInt.log256_",
         "equation_LowParse.Spec.Int.parse_u16_kind",
         "equation_LowParse.Spec.Int.parse_u32_kind",
-        "equation_LowParse.Spec.VLData.log256_",
         "equation_LowParse.Spec.VLData.parse_bounded_vldata_strong",
         "equation_LowParse.Spec.VLData.parse_bounded_vldata_strong_t",
         "equation_LowParseExample5.Aux.parse_inner_kind",
         "equation_LowStar.Monotonic.Buffer.length", "equation_Prims.nat",
+        "equation_with_fuel_Prims.pow2.fuel_instrumented",
         "fuel_guarded_inversion_LowParse.Spec.Base.parser_kind_",
         "function_token_typing_FStar.Monotonic.Heap.heap",
         "function_token_typing_FStar.UInt16.t",
@@ -86,8 +85,8 @@
         "lemma_LowStar.Monotonic.Buffer.length_null_2",
         "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
         "primitive_Prims.op_Equality", "primitive_Prims.op_LessThan",
-        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Negation",
-        "primitive_Prims.op_Subtraction",
+        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Multiply",
+        "primitive_Prims.op_Negation", "primitive_Prims.op_Subtraction",
         "proj_equation_LowParse.Low.Base.Mkslice_base",
         "proj_equation_LowParse.Low.Base.Mkslice_len",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
@@ -158,7 +157,7 @@
         "typing_LowStar.Monotonic.Buffer.len"
       ],
       0,
-      "63640b6c58f316b14229a1af5c8e7828"
+      "d331e344c23ef23bcc11a6d62dadf37d"
     ],
     [
       "LowParseExample5.main",
@@ -324,7 +323,7 @@
         "typing_tok_C.EXIT_SUCCESS@tok"
       ],
       0,
-      "2b6ac0737543e7a4402540ef3c7b8e73"
+      "b06cd2a009e82803997e77cdef217439"
     ]
   ]
 ]
