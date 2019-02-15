@@ -19,16 +19,6 @@ INCLUDE_PATHS = \
         $(MITLS_HOME)/src/parsers/generated \
         $(SPECINC)
 
-# We can't hard-error on these because of F* orange CI that runs over a couple
-# miTLS files without properly building HACL* first.
-EVERCRYPT_CACHE_DIR=$(EVERCRYPT_HOME)/.cache
-
-ifneq (,$(wildcard $(EVERCRYPT_CACHE_DIR)))
-  INCLUDE_PATHS += $(EVERCRYPT_CACHE_DIR)
-else
-  $(warning Missing EverCrypt cache dir, seems like an incomplete build of HACL*)
-endif
-
 ifeq (,$(MITLS_NODEBUG))
   INCLUDE_PATHS += ./concrete-flags/Debug
 else

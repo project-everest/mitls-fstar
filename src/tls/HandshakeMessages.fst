@@ -209,14 +209,18 @@ let clientHelloBytes ch =
   (*   | [] -> empty_bytes  *)
   (*   | cl -> vlbytes 1 (compressionMethodsBytes cl) in *)
   let cmB = vlbytes 1 (compressionMethodsBytes ch.ch_compressions) in
+  let binders_len = Extensions.bindersLen ch.ch_extensions in
   let extB = Extensions.clientHelloExtensions_serializer32 ch.ch_extensions in
+  let extB =
+    if binders_len = 0 then extB
+    else slice_ extB 0 (length extB - binders_len)
+    in
 //    match ch.ch_extensions with
 //    | Some ext ->
 //      assume (repr_bytes (length (extensionListBytes ext)) <= 2 /\ length (Extensions.extensionListBytes ext) + bindersLen ext < 65536); // TODO: FIXME
 //      extensionsBytes ext
 //    | None -> empty_bytes in
   let data = verB @| (ch.ch_client_random @| (sidB @| (csB @| (cmB @| extB)))) in
-  let binders_len = bindersLen_of_ch ch in
   lemma_repr_bytes_values (length data + binders_len);
   let b = messageBytes_extra HT_client_hello data binders_len in
   assume (FStar.Bytes.length b >= 41 /\ hs_msg_bytes HT_client_hello b); // TODO: FIXME

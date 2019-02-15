@@ -346,10 +346,10 @@ private let rec list_valid_ng_is_list_ng (l:CommonDH.supportedNamedGroups) : Com
   | hd :: tl -> hd :: list_valid_ng_is_list_ng tl
 #pop-options
 
-private let compute_binder_len (ctr:nat) (pski:pskInfo) =
+// We fill binders with placeholders to use QD clientHelloextensions_serializer32
+private let compute_binder_ph (pski:pskInfo) =
   let h = PSK.pskInfo_hash pski in
-  ctr + 1 + (UInt32.v (Hashing.Spec.tagLen h))
-
+  create (Hashing.Spec.tagLen h) 0uy
 
 let supported_group_extension cfg: list clientHelloExtension =   
   if List.Tot.existsb send_supported_groups (list_valid_cs_is_list_cs cfg.cipher_suites) 
@@ -373,18 +373,16 @@ let final_extensions cfg edi psks now: list clientHelloExtension =
       let psk_kex =
         (if List.Tot.existsb allow_psk_resumption pskinfos then [Psk_ke] else []) @ 
         (if List.Tot.existsb allow_dhe_resumption pskinfos then [Psk_dhe_ke] else []) in
-      let binder_len = List.Tot.fold_left compute_binder_len 0 pskinfos in
+      let binders = List.Tot.map compute_binder_ph pskinfos in
       let pskidentities = obfuscate_age now psks in
       [CHE_psk_key_exchange_modes psk_kex] @
       (if edi then [CHE_early_data ()] else []) @
-      [CHE_pre_shared_key ({ identities = pskidentities; binders = [] })] // MUST BE LAST
+      // MUST BE LAST
+      [CHE_pre_shared_key ({ identities = pskidentities; binders = binders })]
     else
       [CHE_psk_key_exchange_modes [Psk_ke; Psk_dhe_ke]] )
   | _ -> []
 // 19-01-19 We may need better dummy binders! 
-
-// 19-01-19 TODO! was in old Extensions; probably requires changing config and callbacks, and some refinement to avoid clashes with internal extenions
-let ext_of_custom x: list clientHelloExtension = []
  
 let prepareClientExtensions 
   (cfg: config)
@@ -400,7 +398,7 @@ let prepareClientExtensions
   | Correct supported_versions -> Correct(
 
   // 18-12-22 TODO cfg.safe_renegotiation is ignored? 
-  ext_of_custom cfg.custom_extensions @
+  Extensions.cext_of_custom cfg.custom_extensions @
   (* Always send supported extensions.
      The configuration options will influence how strict the tests will be *)
   (* let cri = *)

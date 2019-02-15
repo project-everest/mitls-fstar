@@ -36,6 +36,11 @@ val parse_u8_spec'
 
 val serialize_u8 : serializer parse_u8
 
+val serialize_u8_spec
+  (x: U8.t)
+: Lemma
+  (serialize serialize_u8 x `Seq.equal` Seq.create 1 x)
+
 inline_for_extraction
 let parse_u16_kind : parser_kind =
   total_constant_size_parser_kind 2

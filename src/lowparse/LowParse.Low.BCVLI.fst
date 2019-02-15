@@ -1,6 +1,7 @@
 module LowParse.Low.BCVLI
 include LowParse.Spec.BCVLI
 include LowParse.Low.Combinators
+include LowParse.Low.BoundedInt
 
 module B = LowStar.Buffer
 module HST = FStar.HyperStack.ST
@@ -8,37 +9,6 @@ module Cast = FStar.Int.Cast
 module U32 = FStar.UInt32
 
 #reset-options "--z3cliopt smt.arith.nl=false --max_fuel 0"
-
-let read_bounded_integer_le_1 : leaf_reader (parse_bounded_integer_le 1) =
-  [@inline_let] let _ = bounded_integer_of_le_injective 1 in
-  make_total_constant_size_reader 1 1ul #(bounded_integer 1) (bounded_integer_of_le 1) () (fun b ->
-    let h = HST.get () in
-    [@inline_let] let _ = bounded_integer_of_le_1_eq (B.as_seq h b) in
-    let r = B.index b 0ul in
-    Cast.uint8_to_uint32 r
-  )
-
-let read_bounded_integer_le_2 : leaf_reader (parse_bounded_integer_le 2) =
-  [@inline_let] let _ = bounded_integer_of_le_injective 2 in
-  make_total_constant_size_reader 2 2ul #(bounded_integer 2) (bounded_integer_of_le 2) () (fun b ->
-    let h = HST.get () in
-    [@inline_let] let _ = bounded_integer_of_le_2_eq (B.as_seq h b) in
-    let r0 = B.index b 0ul in
-    let r1 = B.index b 1ul in
-    Cast.uint8_to_uint32 r0 `U32.add` (256ul `U32.mul` Cast.uint8_to_uint32 r1)
-  )
-
-let read_bounded_integer_le_4 : leaf_reader (parse_bounded_integer_le 4) =
-  [@inline_let] let _ = bounded_integer_of_le_injective 4 in
-  make_total_constant_size_reader 4 4ul #(bounded_integer 4) (bounded_integer_of_le 4) () (fun b ->
-    let h = HST.get () in
-    [@inline_let] let _ = bounded_integer_of_le_4_eq (B.as_seq h b) in
-    let r0 = B.index b 0ul in
-    let r1 = B.index b 1ul in
-    let r2 = B.index b 2ul in
-    let r3 = B.index b 3ul in
-    Cast.uint8_to_uint32 r0 `U32.add` (256ul `U32.mul` (Cast.uint8_to_uint32 r1 `U32.add` (256ul `U32.mul` (Cast.uint8_to_uint32 r2 `U32.add` (256ul `U32.mul` Cast.uint8_to_uint32 r3)))))
-  )
 
 #push-options "--z3rlimit 16"
 
@@ -128,72 +98,9 @@ let read_bcvli : leaf_reader parse_bcvli =
     then read_bounded_integer_le_2 input pos1 <: U32.t
     else read_bounded_integer_le_4 input pos1 <: U32.t
 
+#pop-options
+
 module U8 = FStar.UInt8
-
-#pop-options
-
-inline_for_extraction
-let serialize32_bounded_integer_le_1
-: serializer32 (serialize_bounded_integer_le 1)
-= fun x b ->
-  [@inline_let]
-  let _ = serialize_bounded_integer_le_1_eq x 0 in
-  let r0 = (Cast.uint32_to_uint8 x <: U8.t) in
-  let b' = B.sub b 0ul 1ul in
-  B.upd b' 0ul r0;
-  1ul
-
-let write_bounded_integer_le_1 : leaf_writer_strong (serialize_bounded_integer_le 1) = leaf_writer_strong_of_serializer32 serialize32_bounded_integer_le_1 ()
-
-inline_for_extraction
-let serialize32_bounded_integer_le_2
-: serializer32 (serialize_bounded_integer_le 2)
-= fun x b ->
-  [@inline_let]
-  let _ =
-    serialize_bounded_integer_le_2_eq x 0;
-    serialize_bounded_integer_le_2_eq x 1
-  in
-  let r0 = (Cast.uint32_to_uint8 x <: U8.t) in
-  let d0 = x `U32.div` 256ul in
-  let r1 = (Cast.uint32_to_uint8 d0 <: U8.t) in
-  let b' = B.sub b 0ul 2ul in
-  B.upd b' 0ul r0;
-  B.upd b' 1ul r1;
-  2ul
-
-let write_bounded_integer_le_2 : leaf_writer_strong (serialize_bounded_integer_le 2) = leaf_writer_strong_of_serializer32 serialize32_bounded_integer_le_2 ()
-
-#push-options "--z3rlimit 16"
-
-inline_for_extraction
-let serialize32_bounded_integer_le_4
-: serializer32 (serialize_bounded_integer_le 4)
-= fun x b ->
-  [@inline_let]
-  let _ =
-    serialize_bounded_integer_le_4_eq x 0;
-    serialize_bounded_integer_le_4_eq x 1;
-    serialize_bounded_integer_le_4_eq x 2;
-    serialize_bounded_integer_le_4_eq x 3
-  in
-  let r0 = (Cast.uint32_to_uint8 x <: U8.t) in
-  let d0 = x `U32.div` 256ul in
-  let r1 = (Cast.uint32_to_uint8 d0 <: U8.t) in
-  let d1 = d0 `U32.div` 256ul in
-  let r2 = (Cast.uint32_to_uint8 d1<: U8.t) in
-  let d2 = d1 `U32.div` 256ul in
-  let r3 = (Cast.uint32_to_uint8 d2<: U8.t) in
-  let b'  = B.sub b 0ul 4ul in
-  B.upd b' 0ul r0;
-  B.upd b' 1ul r1;
-  B.upd b' 2ul r2;
-  B.upd b' 3ul r3;
-  4ul
-
-#pop-options
-
-let write_bounded_integer_le_4 : leaf_writer_strong (serialize_bounded_integer_le 4) = leaf_writer_strong_of_serializer32 serialize32_bounded_integer_le_4 ()
 
 #push-options "--z3rlimit 16"
 
@@ -210,7 +117,8 @@ let serialize32_bcvli'
     B.live h b /\
     B.as_seq h' b' `Seq.equal` serialize serialize_bcvli x
   )))
-= let c : bounded_integer 1 =
+= [@inline_let] let _ = serialize_bcvli_eq x in
+  let c : bounded_integer 1 =
     if x `U32.lt` 253ul
     then x
     else if x `U32.lt` 65536ul

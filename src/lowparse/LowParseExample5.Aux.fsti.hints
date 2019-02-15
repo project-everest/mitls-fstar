@@ -14,7 +14,6 @@
         "data_elim_LowParse.Low.Base.Mkslice", "equation_FStar.UInt.fits",
         "equation_FStar.UInt.max_int", "equation_FStar.UInt.min_int",
         "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
-        "equation_FStar.UInt32.n", "equation_FStar.UInt32.n_minus_one",
         "equation_LowParse.Low.Base.buffer8",
         "equation_LowParse.Low.Base.valid_pos",
         "equation_LowParse.Spec.Base.strong_parser_kind",
@@ -24,11 +23,8 @@
         "equation_Prims.squash",
         "fuel_guarded_inversion_LowParse.Low.Base.slice",
         "function_token_typing_FStar.UInt16.t",
-        "function_token_typing_FStar.UInt32.n",
-        "function_token_typing_FStar.UInt32.n_minus_one",
         "function_token_typing_FStar.UInt8.t",
-        "function_token_typing_LowParse.Spec.Int.parse_u16",
-        "function_token_typing_LowParse.Spec.Int.parse_u16_kind",
+        "function_token_typing_Prims.__cache_version_number__",
         "int_inversion", "l_and-interp",
         "lemma_LowParse.Low.Base.valid_elim_", "primitive_Prims.op_Addition",
         "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
@@ -45,11 +41,13 @@
         "typing_FStar.UInt32.v",
         "typing_LowParse.Low.Base.__proj__Mkslice__item__base",
         "typing_LowParse.Low.Base.content_length",
+        "typing_LowParse.Spec.Int.parse_u16",
+        "typing_LowParse.Spec.Int.parse_u16_kind",
         "typing_LowStar.Buffer.trivial_preorder",
         "typing_LowStar.Monotonic.Buffer.len"
       ],
       0,
-      "3f3d4f8efc2592731b659327d313ba30"
+      "45a21f86ee29f6b6f81aa56f46809ab8"
     ],
     [
       "LowParseExample5.Aux.serialize_t_intro",
@@ -64,7 +62,6 @@
         "data_elim_LowParse.Low.Base.Mkslice", "equation_FStar.UInt.fits",
         "equation_FStar.UInt.max_int", "equation_FStar.UInt.min_int",
         "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
-        "equation_FStar.UInt32.n", "equation_FStar.UInt32.n_minus_one",
         "equation_LowParse.Low.Base.buffer8",
         "equation_LowParse.Low.Base.valid_pos",
         "equation_LowParse.Spec.Base.strong_parser_kind",
@@ -74,14 +71,9 @@
         "equation_LowStar.Buffer.buffer", "equation_Prims.nat",
         "equation_Prims.squash",
         "fuel_guarded_inversion_LowParse.Low.Base.slice",
-        "function_token_typing_FStar.UInt32.n",
-        "function_token_typing_FStar.UInt32.n_minus_one",
         "function_token_typing_FStar.UInt32.t",
         "function_token_typing_FStar.UInt8.t",
-        "function_token_typing_LowParse.Spec.Int.parse_u32",
-        "function_token_typing_LowParse.Spec.Int.parse_u32_kind",
-        "function_token_typing_LowParseExample5.Aux.parse_inner",
-        "function_token_typing_LowParseExample5.Aux.parse_inner_kind",
+        "function_token_typing_Prims.__cache_version_number__",
         "int_inversion", "kinding_LowParseExample5.Aux.inner@tok",
         "l_and-interp", "lemma_LowParse.Low.Base.valid_elim_",
         "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
@@ -99,11 +91,15 @@
         "typing_FStar.UInt32.v",
         "typing_LowParse.Low.Base.__proj__Mkslice__item__base",
         "typing_LowParse.Low.Base.content_length",
+        "typing_LowParse.Spec.Int.parse_u32",
+        "typing_LowParse.Spec.Int.parse_u32_kind",
+        "typing_LowParseExample5.Aux.parse_inner",
+        "typing_LowParseExample5.Aux.parse_inner_kind",
         "typing_LowStar.Buffer.trivial_preorder",
         "typing_LowStar.Monotonic.Buffer.len"
       ],
       0,
-      "b1de5de7c996a8f963d2fa9881c15db1"
+      "ae8c747c2e16eb65faa949e91f9ba00d"
     ]
   ]
 ]

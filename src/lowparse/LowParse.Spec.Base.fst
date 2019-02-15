@@ -635,6 +635,20 @@ let serializer
 : Tot Type0
 = (f: bare_serializer t { serializer_correct p f } )
 
+let mk_serializer
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (f: bare_serializer t)
+  (prf: (
+    (x: t) ->
+    Lemma
+    (parse p (f x) == Some (x, Seq.length (f x)))
+  ))
+: Tot (serializer p)
+= Classical.forall_intro prf;
+  f
+
 unfold
 let coerce_serializer
   (t2: Type0)
@@ -1018,3 +1032,9 @@ let seq_upd_bw_seq_right
   (requires (Seq.length s' <= Seq.length s))
   (ensures (seq_upd_bw_seq s 0 s' == Seq.append (Seq.slice s 0 (Seq.length s - Seq.length s')) s'))
 = seq_upd_seq_right s s'
+
+(* for tagged unions *)
+
+inline_for_extraction
+let refine_with_tag (#tag_t: Type0) (#data_t: Type0) (tag_of_data: (data_t -> GTot tag_t)) (x: tag_t) : Tot Type0 =
+  (y: data_t { tag_of_data y == x } )

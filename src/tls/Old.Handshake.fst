@@ -365,6 +365,7 @@ let client_ClientHello hs i =
   match Nego.client_ClientHello hs.nego shares with
   | Error z -> Error z
   | Correct offer ->
+    trace ("Binders length: "^string_of_int (Extensions.bindersLen offer.ch_extensions));
     HandshakeLog.send hs.log (ClientHello offer);
     // Comptue and send PSK binders & 0-RTT signals
     client_Binders hs offer;

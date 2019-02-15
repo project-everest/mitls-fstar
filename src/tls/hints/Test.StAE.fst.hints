@@ -11,16 +11,16 @@
         "equation_FStar.HyperStack.ST.is_eternal_region",
         "equation_FStar.Monotonic.HyperStack.is_eternal_color",
         "equation_FStar.UInt.min_int",
-        "function_token_typing_FStar.Monotonic.HyperHeap.root",
         "lemma_FStar.Monotonic.HyperHeap.lemma_root_has_color_zero",
         "primitive_Prims.op_LessThanOrEqual",
         "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_FStar.Pervasives_Tm_refine_2fbd657fe85bcb2423f9c7e5f9b3bcb5",
         "typing_FStar.Monotonic.HyperHeap.color",
+        "typing_FStar.Monotonic.HyperHeap.root",
         "typing_FStar.Monotonic.HyperStack.is_eternal_color"
       ],
       0,
-      "60acba0545734b1f95bb4817f77c64fd"
+      "8286225e1aa14b08e649731c689c3c3e"
     ],
     [
       "Test.StAE.discard",
@@ -33,7 +33,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "8cb6892ed0c2b7729e240a7868de4a05"
+      "3da801504a141914ef13c56cc09f2454"
     ],
     [
       "Test.StAE.eprint",
@@ -68,7 +68,7 @@
         "typing_FStar.Monotonic.HyperStack.is_mm"
       ],
       0,
-      "0022e710cf669c41cff89c9bfb9873b8"
+      "99c01bcda0514e2fb522f4614a4556ab"
     ],
     [
       "Test.StAE.nprint",
@@ -77,7 +77,7 @@
       1,
       [ "@query" ],
       0,
-      "8a42fd64910b2d133162efe1a6ac3f4d"
+      "508ae8417abbca4c068bdf371bed3540"
     ]
   ]
 ]

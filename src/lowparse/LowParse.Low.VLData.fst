@@ -1,28 +1,11 @@
 module LowParse.Low.VLData
-include LowParse.Low.VLData.Aux
+include LowParse.Spec.VLData
+include LowParse.Low.BoundedInt // for bounded_integer
 include LowParse.Low.FLData
 
 module B = LowStar.Buffer
 module HST = FStar.HyperStack.ST
 module U32 = FStar.UInt32
-
-inline_for_extraction
-let read_bounded_integer
-  (i: integer_size)
-: Tot (leaf_reader (parse_bounded_integer i))
-= [@inline_let]
-  let _ = integer_size_values i in
-  match i with
-  | 1 -> read_bounded_integer_1 ()
-  | 2 -> read_bounded_integer_2 ()
-  | 3 -> read_bounded_integer_3 ()
-  | 4 -> read_bounded_integer_4 ()
-
-inline_for_extraction
-let validate_bounded_integer
-  (i: integer_size) // must be a constant
-: Tot (validator (parse_bounded_integer i))
-= validate_total_constant_size (parse_bounded_integer i) (U32.uint_to_t i) ()
 
 inline_for_extraction
 let validate_vldata_payload
@@ -247,30 +230,6 @@ let jump_bounded_vldata_strong
   })
 : Tot (jumper (parse_bounded_vldata_strong min max s))
 = jump_bounded_vldata_strong' min max (log256' max) s
-
-inline_for_extraction
-let write_bounded_integer
-  (i: integer_size)
-: Tot (leaf_writer_strong (serialize_bounded_integer i))
-= [@inline_let]
-  let _ = integer_size_values i in
-  match i with
-  | 1 -> write_bounded_integer_1 ()
-  | 2 -> write_bounded_integer_2 ()
-  | 3 -> write_bounded_integer_3 ()
-  | 4 -> write_bounded_integer_4 ()
-
-inline_for_extraction
-let write_bounded_integer_weak
-  (i: integer_size)
-: Tot (leaf_writer_weak (serialize_bounded_integer i))
-= [@inline_let]
-  let _ = integer_size_values i in
-  match i with
-  | 1 -> write_bounded_integer_1_weak ()
-  | 2 -> write_bounded_integer_2_weak ()
-  | 3 -> write_bounded_integer_3_weak ()
-  | 4 -> write_bounded_integer_4_weak ()
 
 #push-options "--z3rlimit 32 --initial_ifuel 4 --max_ifuel 4"
 
@@ -752,6 +711,7 @@ let gaccessor_bounded_vldata_payload
     if Seq.length input < sz
     then (assert (None? (parse (parse_bounded_integer sz) input)); (0, 0)) // dummy
     else begin
+      parser_kind_prop_equiv (parse_bounded_integer_kind sz) (parse_bounded_integer sz);
       assert (Some? (parse (parse_bounded_integer sz) input));
       let Some (_, consumed) = parse (parse_bounded_integer sz) input in
       assert (consumed == sz);

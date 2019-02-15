@@ -12,7 +12,7 @@
         "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
       ],
       0,
-      "83b8949581a2203ea72c0be17853c4f1"
+      "b3f1b41d1e826f93de6313bab64f28d5"
     ],
     [
       "Parsers.TicketContents13.Low.valid_ticketContents13_intro",
@@ -21,12 +21,14 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "Prims_pretyping_f8666440faa91836cc5a13998af863fc",
         "constructor_distinct_FStar.Pervasives.Native.None",
         "constructor_distinct_FStar.Pervasives.Native.Some",
+        "constructor_distinct_LowParse.Spec.Base.ParserConsumesAll",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataFail",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataTotal",
-        "disc_equation_FStar.Pervasives.Native.Some", "eq2-interp",
+        "constructor_distinct_LowParse.Spec.Base.ParserStrong",
+        "disc_equation_FStar.Pervasives.Native.Some",
+        "equality_tok_LowParse.Spec.Base.ParserConsumesAll@tok",
         "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
         "equality_tok_LowParse.Spec.Base.ParserStrong@tok",
         "equation_LowParse.Low.Base.valid_content",
@@ -50,22 +52,12 @@
         "equation_Parsers.TicketContents13_nonce.ticketContents13_nonce_parser_kind",
         "equation_Parsers.TicketContents13_rms.ticketContents13_rms",
         "equation_Parsers.TicketContents13_rms.ticketContents13_rms_parser_kind",
-        "equation_Prims.nat", "equation_Prims.squash",
+        "equation_Prims.nat",
         "fuel_guarded_inversion_LowParse.Low.Base.slice",
         "function_token_typing_FStar.UInt32.t",
-        "function_token_typing_LowParse.Spec.Int.parse_u32",
-        "function_token_typing_LowParse.Spec.Int.parse_u32_kind",
-        "function_token_typing_Parsers.CipherSuite.cipherSuite_parser",
-        "function_token_typing_Parsers.CipherSuite.cipherSuite_parser_kind",
         "function_token_typing_Parsers.TicketContents13.ticketContents13_",
-        "function_token_typing_Parsers.TicketContents13.ticketContents13__parser",
-        "function_token_typing_Parsers.TicketContents13.ticketContents13__parser_kind",
         "function_token_typing_Parsers.TicketContents13_nonce.ticketContents13_nonce",
-        "function_token_typing_Parsers.TicketContents13_nonce.ticketContents13_nonce_parser",
-        "function_token_typing_Parsers.TicketContents13_nonce.ticketContents13_nonce_parser_kind",
         "function_token_typing_Parsers.TicketContents13_rms.ticketContents13_rms",
-        "function_token_typing_Parsers.TicketContents13_rms.ticketContents13_rms_parser",
-        "function_token_typing_Parsers.TicketContents13_rms.ticketContents13_rms_parser_kind",
         "kinding_FStar.Pervasives.Native.tuple2@tok",
         "kinding_Parsers.CipherSuite.cipherSuite@tok",
         "lemma_LowParse.Low.Base.valid_pos_get_valid_pos",
@@ -86,12 +78,21 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
-        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
         "typing_LowParse.Spec.Combinators.and_then_kind",
-        "typing_LowParse.Spec.Combinators.nondep_then", "unit_typing"
+        "typing_LowParse.Spec.Combinators.nondep_then",
+        "typing_LowParse.Spec.Int.parse_u32",
+        "typing_LowParse.Spec.Int.parse_u32_kind",
+        "typing_Parsers.CipherSuite.cipherSuite_parser",
+        "typing_Parsers.CipherSuite.cipherSuite_parser_kind",
+        "typing_Parsers.TicketContents13.ticketContents13__parser",
+        "typing_Parsers.TicketContents13.ticketContents13__parser_kind",
+        "typing_Parsers.TicketContents13_nonce.ticketContents13_nonce_parser",
+        "typing_Parsers.TicketContents13_nonce.ticketContents13_nonce_parser_kind",
+        "typing_Parsers.TicketContents13_rms.ticketContents13_rms_parser",
+        "typing_Parsers.TicketContents13_rms.ticketContents13_rms_parser_kind"
       ],
       0,
-      "04681ed4e28811d1b2985f0d01707c4f"
+      "f4cee33c129284c1cbdfac2fa25c38e6"
     ]
   ]
 ]
