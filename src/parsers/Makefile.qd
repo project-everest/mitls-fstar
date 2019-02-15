@@ -18,8 +18,7 @@ DEPEND_FILE=.depend$(LAX_EXT)
 CACHE_DIR=cache$(LAX_EXT)
 CHECKED_EXT=.checked$(LAX_EXT)
 
-HINT_FILE=--hint_file hints/$(notdir $(subst .checked,,$<)).hints
-FSTAR_OPTIONS = --odir kremlin --cache_dir $(CACHE_DIR) $(LAX_OPT) --cache_checked_modules --use_hints \
+FSTAR_OPTIONS = --odir kremlin --cache_dir $(CACHE_DIR) $(LAX_OPT) --cache_checked_modules \
 		--include $(MITLS_HOME)/src/lowparse --include $(KREMLIN_HOME)/kremlib $(OTHERFLAGS) --protect_top_level_axioms true
 
 FSTAR = $(FSTAR_HOME)/bin/fstar.exe --trace_error $(FSTAR_OPTIONS)
@@ -47,20 +46,17 @@ $(CACHE_DIR)/LowParse.%$(CHECKED_EXT):
 	@touch -c $@
 
 $(CACHE_DIR)/%$(CHECKED_EXT):
-	$(FSTAR) $(HINT_FILE) --record_hints $<
+	$(FSTAR) $(HINT_FILE) $<
 	@touch -c $@
 
 kremlin/%.krml:
 	$(FSTAR) --codegen Kremlin $(patsubst %$(CHECKED_EXT),%,$(notdir $<)) --extract_module $(basename $(patsubst %$(CHECKED_EXT),%,$(notdir $<))) --warn_error '@241'
 	@touch -c $@
 
-$(DEPEND_FILE): $(QD_FILES) Makefile hints
+$(DEPEND_FILE): $(QD_FILES) Makefile
 	$(FSTAR) --dep full $(QD_FILES) > $@
 
 depend: $(DEPEND_FILE)
-
-hints:
-	-@mkdir hints
 
 -include $(DEPEND_FILE)
 
@@ -80,7 +76,7 @@ codegen: $(ALL_KRML_FILES)
 	$(KREMLIN) -skip-compilation $^
 
 %.fst-in %.fsti-in:
-	@echo $(FSTAR_OPTIONS) --hint_file hints/$(notdir $(subst -in,.hints,$@))
+	@echo $(FSTAR_OPTIONS)
 
 clean:
 	-rm -rf cache cache.lax .depend .depend.lax out
