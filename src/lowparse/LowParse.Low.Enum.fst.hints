@@ -8,7 +8,7 @@
       1,
       [ "@query", "disc_equation_LowParse.Spec.Enum.Known" ],
       0,
-      "f441a8ad875c4c5f21896f648581dc85"
+      "6c6def7b1417b26fc2bede8bf767f043"
     ],
     [
       "LowParse.Low.Enum.validate_enum_key",
@@ -26,18 +26,15 @@
         "Prims_interpretation_Tm_arrow_9cb3c953faf527c316d427b2ce8bd81b",
         "Prims_pretyping_ae567c2fb75be05905677af440075565",
         "Prims_pretyping_f537159ed795b314b4e58c260361ae86", "b2t_def",
-        "bool_typing", "constructor_distinct_FStar.Pervasives.Native.Some",
-        "constructor_distinct_LowParse.Spec.Enum.Known",
+        "bool_typing", "constructor_distinct_LowParse.Spec.Enum.Known",
         "constructor_distinct_LowParse.Spec.Enum.Unknown",
         "constructor_distinct_Prims.Nil",
         "data_elim_LowParse.Spec.Enum.Unknown", "data_elim_Prims.Cons",
-        "disc_equation_FStar.Pervasives.Native.None",
-        "equality_tok_LowParse.Spec.Base.ParserKindMetadataFail@tok",
-        "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
         "equation_FStar.UInt.fits", "equation_FStar.UInt.size",
         "equation_FStar.UInt.uint_t",
-        "equation_LowParse.Low.Base.validator_max_length",
+        "equation_LowParse.Low.Base.max_uint32",
         "equation_LowParse.Low.Enum.is_known",
+        "equation_LowParse.Spec.Combinators.parse_filter_refine",
         "equation_LowParse.Spec.Combinators.synth_injective",
         "equation_LowParse.Spec.Enum.enum",
         "equation_LowParse.Spec.Enum.enum_repr",
@@ -63,21 +60,21 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "refinement_interpretation_Tm_refine_42952339d1ff6a9a240497d58590f0b2",
         "refinement_interpretation_Tm_refine_4678c84f1c3636490366d1f0f0d8db38",
+        "refinement_interpretation_Tm_refine_47a1a40ac1f83f95f3b324d5e73614ef",
         "refinement_interpretation_Tm_refine_a347709bfeba48709474ad26f4f6be87",
         "refinement_interpretation_Tm_refine_a93ee9f22122db6b942ffee06822ff42",
         "refinement_interpretation_Tm_refine_c37e04f9455b1fbf4702b2e5fcc26710",
-        "refinement_interpretation_Tm_refine_d9c6796d05e4f586ed83f23e0cc87eb8",
         "refinement_interpretation_Tm_refine_ff9441126166844650678431ddb446e5",
+        "token_correspondence_LowParse.Spec.Enum.parse_enum_key_cond",
         "token_correspondence_LowParse.Spec.Enum.parse_enum_key_synth",
-        "typing_FStar.UInt32.v",
-        "typing_LowParse.Low.Base.validator_max_length",
+        "typing_FStar.UInt32.v", "typing_LowParse.Low.Base.max_uint32",
         "typing_LowParse.Spec.Enum.enum_key_of_repr",
         "typing_LowParse.Spec.Enum.list_map",
         "typing_LowParse.Spec.Enum.list_mem",
         "typing_LowParse.Spec.Enum.maybe_enum_key_of_repr"
       ],
       0,
-      "80a5de6a0f381941462174a6d1f02b20"
+      "a195562f804434ffd5a9516a9f8af018"
     ],
     [
       "LowParse.Low.Enum.validate_maybe_enum_key",
@@ -109,7 +106,7 @@
         "typing_LowParse.Spec.Enum.enum_key_of_repr"
       ],
       0,
-      "09862a466f2f59944363431d06379bda"
+      "b580d1e8e07c45f3018d61841bdf02fe"
     ],
     [
       "LowParse.Low.Enum.jump_enum_key",
@@ -119,12 +116,17 @@
       [
         "@MaxFuel_assumption", "@MaxIFuel_assumption",
         "@fuel_correspondence_FStar.List.Tot.Base.assoc.fuel_instrumented",
-        "@query", "constructor_distinct_FStar.Pervasives.Native.None",
+        "@query",
+        "LowParse.Spec.Enum_interpretation_Tm_arrow_3141118a2f0db5af49f5db63364c7faf",
+        "Prims_interpretation_Tm_arrow_9cb3c953faf527c316d427b2ce8bd81b",
+        "constructor_distinct_FStar.Pervasives.Native.None",
         "constructor_distinct_FStar.Pervasives.Native.Some",
         "data_elim_Prims.Cons",
+        "equation_LowParse.Spec.Combinators.parse_filter_refine",
         "equation_LowParse.Spec.Combinators.synth_injective",
         "equation_LowParse.Spec.Enum.enum",
         "equation_LowParse.Spec.Enum.enum_key",
+        "equation_LowParse.Spec.Enum.enum_key_of_repr",
         "equation_LowParse.Spec.Enum.enum_repr",
         "equation_LowParse.Spec.Enum.parse_enum_key_cond",
         "equation_LowParse.Spec.Enum.parse_enum_key_synth",
@@ -132,20 +134,22 @@
         "equation_with_fuel_FStar.List.Tot.Base.assoc.fuel_instrumented",
         "fuel_guarded_inversion_FStar.Pervasives.Native.tuple2",
         "fuel_guarded_inversion_Prims.list",
+        "function_token_typing_LowParse.Spec.Enum.parse_enum_key_synth",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_FStar.Pervasives.Native.Some_v",
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "refinement_interpretation_Tm_refine_4678c84f1c3636490366d1f0f0d8db38",
+        "refinement_interpretation_Tm_refine_47a1a40ac1f83f95f3b324d5e73614ef",
         "refinement_interpretation_Tm_refine_a93ee9f22122db6b942ffee06822ff42",
         "refinement_interpretation_Tm_refine_c37e04f9455b1fbf4702b2e5fcc26710",
         "refinement_interpretation_Tm_refine_d9c6796d05e4f586ed83f23e0cc87eb8",
         "refinement_interpretation_Tm_refine_f63a4a268f020733364bf5736477d275",
+        "token_correspondence_LowParse.Spec.Enum.parse_enum_key_cond",
         "token_correspondence_LowParse.Spec.Enum.parse_enum_key_synth",
-        "typing_LowParse.Spec.Enum.enum_key_of_repr",
-        "typing_LowParse.Spec.Enum.parse_enum_key_synth"
+        "typing_LowParse.Spec.Enum.enum_key_of_repr"
       ],
       0,
-      "aa971e8c1d56d5173112eb337ed63f9d"
+      "1cea450d18c0ccae6768a6029f241f15"
     ],
     [
       "LowParse.Low.Enum.jump_maybe_enum_key",
@@ -177,7 +181,7 @@
         "typing_LowParse.Spec.Enum.enum_key_of_repr"
       ],
       0,
-      "06e093ad917319b3dc380dd7d2b208d1"
+      "e696382e64fc82dcb4b836666ff9d6ae"
     ],
     [
       "LowParse.Low.Enum.read_maybe_enum_key",
@@ -235,7 +239,7 @@
         "typing_LowParse.Spec.Enum.list_map"
       ],
       0,
-      "2b93304e6e8831add9cd9e4631909d65"
+      "ddad3535f7fd547c683ff3f327416a03"
     ],
     [
       "LowParse.Low.Enum.read_enum_key_t",
@@ -249,7 +253,7 @@
         "typing_LowParse.Spec.Enum.uu___is_Known"
       ],
       0,
-      "f4cfbe769ad8041a0f1d37ebfee9c6f9"
+      "5d69807183df24c35306d4733c2c1774"
     ],
     [
       "LowParse.Low.Enum.read_enum_key_f",
@@ -266,7 +270,7 @@
         "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
       ],
       0,
-      "be527f1fac727952621ac000be87fd5a"
+      "4d719cdb5335cdb49238d207d70253fc"
     ],
     [
       "LowParse.Low.Enum.read_enum_key_if",
@@ -287,7 +291,7 @@
         "unit_typing"
       ],
       0,
-      "9130c8a085fc61feb8f9633cfaa040a7"
+      "44e5860db292f254825dd720f6da278a"
     ],
     [
       "LowParse.Low.Enum.read_enum_key",
@@ -300,6 +304,7 @@
         "data_elim_Prims.Cons", "disc_equation_LowParse.Spec.Enum.Known",
         "disc_equation_Prims.Cons",
         "equation_LowParse.Low.Enum.read_enum_key_eq",
+        "equation_LowParse.Spec.Combinators.parse_filter_refine",
         "equation_LowParse.Spec.Combinators.synth_injective",
         "equation_LowParse.Spec.Enum.enum",
         "equation_LowParse.Spec.Enum.enum_repr",
@@ -316,16 +321,17 @@
         "projection_inverse_LowParse.Spec.Enum.Known_key",
         "projection_inverse_LowParse.Spec.Enum.Known_repr",
         "refinement_interpretation_Tm_refine_4678c84f1c3636490366d1f0f0d8db38",
+        "refinement_interpretation_Tm_refine_47a1a40ac1f83f95f3b324d5e73614ef",
         "refinement_interpretation_Tm_refine_6c2b861fd5f23eba3be55da298beec1a",
         "refinement_interpretation_Tm_refine_a93ee9f22122db6b942ffee06822ff42",
         "refinement_interpretation_Tm_refine_c37e04f9455b1fbf4702b2e5fcc26710",
-        "refinement_interpretation_Tm_refine_d9c6796d05e4f586ed83f23e0cc87eb8",
         "token_correspondence_LowParse.Low.Enum.read_enum_key_eq",
+        "token_correspondence_LowParse.Spec.Enum.parse_enum_key_cond",
         "token_correspondence_LowParse.Spec.Enum.parse_enum_key_synth",
         "true_interp", "typing_LowParse.Spec.Enum.enum_key_of_repr"
       ],
       0,
-      "710f5a46177d1ffdae416ec753d1a366"
+      "2ef435b58b9aea2572393f39132dcb8c"
     ],
     [
       "LowParse.Low.Enum.write_enum_key",
@@ -347,8 +353,10 @@
         "bool_inversion", "bool_typing", "constructor_distinct_Prims.Nil",
         "data_elim_Prims.Cons", "equation_FStar.UInt.fits",
         "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
-        "equation_LowParse.Low.Base.validator_max_length",
+        "equation_LowParse.Low.Base.max_uint32",
+        "equation_LowParse.Spec.Combinators.parse_filter_refine",
         "equation_LowParse.Spec.Combinators.synth_injective",
+        "equation_LowParse.Spec.Combinators.synth_inverse",
         "equation_LowParse.Spec.Enum.enum",
         "equation_LowParse.Spec.Enum.enum_key",
         "equation_LowParse.Spec.Enum.enum_repr",
@@ -371,22 +379,22 @@
         "refinement_interpretation_Tm_refine_265ae623270486ffca0ac639e4ca2c02",
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "refinement_interpretation_Tm_refine_4678c84f1c3636490366d1f0f0d8db38",
+        "refinement_interpretation_Tm_refine_47a1a40ac1f83f95f3b324d5e73614ef",
         "refinement_interpretation_Tm_refine_a347709bfeba48709474ad26f4f6be87",
         "refinement_interpretation_Tm_refine_a93ee9f22122db6b942ffee06822ff42",
         "refinement_interpretation_Tm_refine_c0c63865f3bf84ade6c98d617f056b3f",
         "refinement_interpretation_Tm_refine_c37e04f9455b1fbf4702b2e5fcc26710",
-        "refinement_interpretation_Tm_refine_d9c6796d05e4f586ed83f23e0cc87eb8",
         "refinement_interpretation_Tm_refine_ff9441126166844650678431ddb446e5",
+        "token_correspondence_LowParse.Spec.Enum.parse_enum_key_cond",
         "token_correspondence_LowParse.Spec.Enum.parse_enum_key_synth",
-        "typing_FStar.UInt32.v",
-        "typing_LowParse.Low.Base.validator_max_length",
+        "typing_FStar.UInt32.v", "typing_LowParse.Low.Base.max_uint32",
         "typing_LowParse.Spec.Enum.enum_key_of_repr",
         "typing_LowParse.Spec.Enum.list_map",
         "typing_LowParse.Spec.Enum.list_mem",
         "typing_LowParse.Spec.Enum.parse_enum_key_cond"
       ],
       0,
-      "eaab69abab5573b5489c754bc25f85a7"
+      "7b58927e6dbda263ab22110797d5ef14"
     ],
     [
       "LowParse.Low.Enum.write_enum_key_weak",
@@ -409,7 +417,9 @@
         "data_elim_Prims.Cons", "equation_FStar.UInt.fits",
         "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
         "equation_LowParse.Low.Base.validator_max_length",
+        "equation_LowParse.Spec.Combinators.parse_filter_refine",
         "equation_LowParse.Spec.Combinators.synth_injective",
+        "equation_LowParse.Spec.Combinators.synth_inverse",
         "equation_LowParse.Spec.Enum.enum",
         "equation_LowParse.Spec.Enum.enum_key",
         "equation_LowParse.Spec.Enum.enum_repr",
@@ -429,15 +439,17 @@
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_FStar.Pervasives.Native.Some_v",
         "projection_inverse_Prims.Nil_a",
+        "refinement_interpretation_Tm_refine_07033d2b2c1d2fb6c1dd88a8f1110ac2",
         "refinement_interpretation_Tm_refine_265ae623270486ffca0ac639e4ca2c02",
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "refinement_interpretation_Tm_refine_4678c84f1c3636490366d1f0f0d8db38",
+        "refinement_interpretation_Tm_refine_47a1a40ac1f83f95f3b324d5e73614ef",
         "refinement_interpretation_Tm_refine_a347709bfeba48709474ad26f4f6be87",
         "refinement_interpretation_Tm_refine_a93ee9f22122db6b942ffee06822ff42",
         "refinement_interpretation_Tm_refine_c0c63865f3bf84ade6c98d617f056b3f",
         "refinement_interpretation_Tm_refine_c37e04f9455b1fbf4702b2e5fcc26710",
-        "refinement_interpretation_Tm_refine_d9c6796d05e4f586ed83f23e0cc87eb8",
         "refinement_interpretation_Tm_refine_ff9441126166844650678431ddb446e5",
+        "token_correspondence_LowParse.Spec.Enum.parse_enum_key_cond",
         "token_correspondence_LowParse.Spec.Enum.parse_enum_key_synth",
         "typing_FStar.UInt32.v",
         "typing_LowParse.Low.Base.validator_max_length",
@@ -447,7 +459,7 @@
         "typing_LowParse.Spec.Enum.parse_enum_key_cond"
       ],
       0,
-      "4c76211ef5a4c9486ff83bc19abfc085"
+      "814979cb01584fa325871dc380197328"
     ],
     [
       "LowParse.Low.Enum.write_maybe_enum_key",
@@ -522,7 +534,7 @@
         "typing_LowParse.Spec.Enum.list_map"
       ],
       0,
-      "45e789a9d64fa0310044042101688724"
+      "4c2ec84f726f2a5dc1d0d16d3fc98268"
     ],
     [
       "LowParse.Low.Enum.write_maybe_enum_key_weak",
@@ -597,7 +609,7 @@
         "typing_LowParse.Spec.Enum.list_map"
       ],
       0,
-      "4014bd244cd890afab9a5a47221f10fd"
+      "31b83c15bb444430dadabaefc0cc7b89"
     ]
   ]
 ]

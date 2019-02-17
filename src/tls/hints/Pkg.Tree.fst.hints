@@ -12,7 +12,7 @@
         "refinement_interpretation_Tm_refine_b53ae398bac700dcd61b3b5668ccba51"
       ],
       0,
-      "fb559e992e8fc59404c75e66e0404cf9"
+      "8d028fa2f930c0fb047a63973dd97808"
     ],
     [
       "Pkg.Tree.__proj__Node__item__node",
@@ -25,7 +25,7 @@
         "refinement_interpretation_Tm_refine_38d2bec63e374d1a01ada0c25be39dfe"
       ],
       0,
-      "e3fce1e36eb279079029d404727b6cba"
+      "9421c188f87695df7eb52a3b3270ae6b"
     ],
     [
       "Pkg.Tree.__proj__Node__item__children",
@@ -40,7 +40,7 @@
         "refinement_interpretation_Tm_refine_38d2bec63e374d1a01ada0c25be39dfe"
       ],
       0,
-      "de9485c9b7f8da7af9e8112a2b043236"
+      "33d84443df0fb16753fa7fbc4fbd68f8"
     ],
     [
       "Pkg.Tree.depth",
@@ -59,7 +59,7 @@
         "subterm_ordering_Pkg.Tree.Node"
       ],
       0,
-      "0ba6bde2dbfe1c90f2afd353d774a1e9"
+      "808bfe6a8674158921917c7390867025"
     ],
     [
       "Pkg.Tree.depth",
@@ -81,7 +81,7 @@
         "subterm_ordering_Prims.Cons"
       ],
       0,
-      "d954897e5bec848e2cee5f26efaf65c0"
+      "eeb36b09d212b9bb363a4ba613cf4f30"
     ],
     [
       "Pkg.Tree.find_lbl",
@@ -103,7 +103,7 @@
         "subterm_ordering_Prims.Cons", "typing_Flags.model"
       ],
       0,
-      "3bb34a7b4341b366aa2ebad9fb8b0eae"
+      "90ce2de8ffa6a538ebeab31aebe59a7c"
     ],
     [
       "Pkg.Tree.down",
@@ -111,14 +111,13 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "@MaxIFuel_assumption", "@query",
         "disc_equation_FStar.Pervasives.Native.Some", "equation_Idx.label",
         "equation_Pkg.Tree.has_lbl", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_a1a90e425eba159b7a03d90ce1de1acc",
-        "typing_Pkg.Tree.has_lbl"
+        "refinement_interpretation_Tm_refine_a1a90e425eba159b7a03d90ce1de1acc"
       ],
       0,
-      "2fe8da8be6b35e13ae6493d844302e0d"
+      "282376ababe8d6f067a713100ecfc719"
     ],
     [
       "Pkg.Tree.child",
@@ -134,7 +133,7 @@
         "typing_Flags.model"
       ],
       0,
-      "bef11bb25474b588b6ec38043c061b8e"
+      "3415bb0c2e4cccc453524126a38d7e64"
     ]
   ]
 ]

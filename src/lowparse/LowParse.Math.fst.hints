@@ -1,5 +1,5 @@
 [
-  " y@ô¬oã√∞îä7\u0000ıö@",
+  "aÏ2•ı˘±£CıÁΩçï‡\u0014",
   [
     [
       "LowParse.Math.mul_reg_r",
@@ -12,7 +12,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "53606cf6022e31b22286db5b9d345c31"
+      "92eb378bf2540e2387d62fd93df1cc9f"
     ],
     [
       "LowParse.Math.mul_reg_l",
@@ -25,7 +25,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "482eb4b9a32af0fd266999452638eb9c"
+      "a04d62cc16265ef2246831a34b5da9cc"
     ],
     [
       "LowParse.Math.lt_mul_add_reg_r",
@@ -40,7 +40,7 @@
         "refinement_interpretation_Tm_refine_f048236b5f8051f83b495ea5eaa6127b"
       ],
       0,
-      "710db3cf222a3f5ecdd498c9ea37bf90"
+      "3c53804c56ce29b73e288a70c701a06b"
     ],
     [
       "LowParse.Math.mult_decomp",
@@ -53,7 +53,112 @@
         "primitive_Prims.op_Subtraction", "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "b35df120c2eb70963f1462bb29336fee"
+      "99032e3f016e815bca1e82f52580e19d"
+    ],
+    [
+      "LowParse.Math.lemma_div_pow2_le",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption",
+        "@fuel_correspondence_Prims.pow2.fuel_instrumented", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "equation_Prims.nat", "equation_Prims.pos",
+        "function_token_typing_Prims.__cache_version_number__",
+        "int_inversion", "primitive_Prims.op_Equality",
+        "primitive_Prims.op_Multiply", "primitive_Prims.op_Subtraction",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Tm_refine_f048236b5f8051f83b495ea5eaa6127b",
+        "typing_Prims.pow2"
+      ],
+      0,
+      "bc61227d6605463fdc6d424d879427c8"
+    ],
+    [
+      "LowParse.Math.lemma_div_pow2_ge",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption",
+        "@fuel_correspondence_Prims.pow2.fuel_instrumented", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "Prims_pretyping_f8666440faa91836cc5a13998af863fc", "b2t_def",
+        "equation_Prims.l_and", "equation_Prims.nat", "equation_Prims.pos",
+        "equation_Prims.squash",
+        "function_token_typing_Prims.__cache_version_number__",
+        "int_inversion", "l_and-interp",
+        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Multiply",
+        "primitive_Prims.op_Subtraction",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Tm_refine_f048236b5f8051f83b495ea5eaa6127b",
+        "typing_Prims.pow2", "unit_typing"
+      ],
+      0,
+      "0e1be068de1521c8119e9b44d988f95f"
+    ],
+    [
+      "LowParse.Math.pow2_le_recip",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "def607dec9ab510e617375b2864d45f0"
+    ],
+    [
+      "LowParse.Math.pow2_lt_recip",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "ce4be2a9e544f0338c8a3a16a4007b43"
+    ],
+    [
+      "LowParse.Math.lemma_mult_lt'",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.pos",
+        "primitive_Prims.op_Multiply", "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_f048236b5f8051f83b495ea5eaa6127b"
+      ],
+      0,
+      "5128207870c2b489edd67baa5ce40159"
+    ],
+    [
+      "LowParse.Math.lemma_mult_lt_recip",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.pos",
+        "primitive_Prims.op_Multiply", "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_f048236b5f8051f83b495ea5eaa6127b"
+      ],
+      0,
+      "fa3cfa40ef11d04d8472500eff1e1a4b"
+    ],
+    [
+      "LowParse.Math.lemma_mult_le_recip",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.pos",
+        "primitive_Prims.op_Multiply", "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_f048236b5f8051f83b495ea5eaa6127b"
+      ],
+      0,
+      "dce126c199ebbb4b91b757dcff77e615"
     ]
   ]
 ]
