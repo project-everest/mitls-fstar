@@ -1,1 +1,170 @@
-[ "ÍåÏ¨£.‹v‹¨©ïð×\u0005Ã", [] ]
+[
+  "ÍåÏ¨£.‹v‹¨©ïð×\u0005Ã",
+  [
+    [
+      "Parsers.TicketContents13_custom_data.ticketContents13_custom_data_parser",
+      1,
+      2,
+      1,
+      [
+        "@query", "constructor_distinct_FStar.Pervasives.Native.None",
+        "equation_LowParse.Spec.Bytes.parse_all_bytes_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
+      ],
+      0,
+      "f0e4650e2a7f510a128173d044c5b049"
+    ],
+    [
+      "Parsers.TicketContents13_custom_data.ticketContents13_custom_data_serializer",
+      1,
+      2,
+      1,
+      [
+        "@query", "constructor_distinct_FStar.Pervasives.Native.None",
+        "equation_LowParse.Spec.Bytes.parse_all_bytes_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
+      ],
+      0,
+      "e9f1a04a9a7944466941c48cbf4af655"
+    ],
+    [
+      "Parsers.TicketContents13_custom_data.ticketContents13_custom_data_bytesize_eq",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.serialize",
+        "equation_Parsers.TicketContents13_custom_data.ticketContents13_custom_data",
+        "equation_Parsers.TicketContents13_custom_data.ticketContents13_custom_data_bytesize"
+      ],
+      0,
+      "777183ec6078e0b1a76fd02f82bc6b6d"
+    ],
+    [
+      "Parsers.TicketContents13_custom_data.ticketContents13_custom_data_parser32",
+      1,
+      2,
+      1,
+      [
+        "@query", "constructor_distinct_FStar.Pervasives.Native.None",
+        "equation_LowParse.Spec.Bytes.parse_all_bytes_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
+      ],
+      0,
+      "52ee3de16c9bd2961b236ac34b06098a"
+    ],
+    [
+      "Parsers.TicketContents13_custom_data.ticketContents13_custom_data_serializer32",
+      1,
+      2,
+      1,
+      [
+        "@query", "constructor_distinct_FStar.Pervasives.Native.None",
+        "equation_LowParse.Spec.Bytes.parse_all_bytes_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
+      ],
+      0,
+      "cee7846ff84d0cf42c488970c62e2c50"
+    ],
+    [
+      "Parsers.TicketContents13_custom_data.ticketContents13_custom_data_size32",
+      1,
+      2,
+      1,
+      [
+        "@query", "constructor_distinct_FStar.Pervasives.Native.None",
+        "equation_LowParse.Spec.Bytes.parse_all_bytes_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
+      ],
+      0,
+      "d5d170b26a2f1a578877d6004bebf573"
+    ],
+    [
+      "Parsers.TicketContents13_custom_data.ticketContents13_custom_data_validator",
+      1,
+      2,
+      1,
+      [
+        "@MaxFuel_assumption", "@MaxIFuel_assumption",
+        "@fuel_correspondence_Prims.pow2.fuel_instrumented",
+        "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
+        "LowParse.Spec.Base_pretyping_753dfb8f8ba156874c914a94190399fd",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
+        "bool_inversion", "bool_typing",
+        "constructor_distinct_FStar.Pervasives.Native.None",
+        "data_typing_intro_LowParse.Spec.Base.ParserKindMetadataFail@tok",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "equation_FStar.UInt.uint_t",
+        "equation_LowParse.Low.Base.validator_max_length",
+        "equation_LowParse.Spec.Bytes.parse_all_bytes_kind",
+        "equation_Prims.nat",
+        "function_token_typing_Prims.__cache_version_number__", "int_typing",
+        "lemma_FStar.UInt.pow2_values", "lemma_FStar.UInt32.vu_inv",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Subtraction",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
+        "refinement_interpretation_Tm_refine_07033d2b2c1d2fb6c1dd88a8f1110ac2",
+        "refinement_interpretation_Tm_refine_a347709bfeba48709474ad26f4f6be87",
+        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "typing_FStar.UInt32.v",
+        "typing_LowParse.Low.Base.validator_max_length"
+      ],
+      0,
+      "acc07053ec04375926323743bd59b0ce"
+    ],
+    [
+      "Parsers.TicketContents13_custom_data.ticketContents13_custom_data_jumper",
+      1,
+      2,
+      1,
+      [
+        "@query", "constructor_distinct_FStar.Pervasives.Native.None",
+        "equation_LowParse.Spec.Bytes.parse_all_bytes_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
+      ],
+      0,
+      "d9ff46fdad030802d1924a3e2b1ce239"
+    ],
+    [
+      "Parsers.TicketContents13_custom_data.ticketContents13_custom_data_bytesize_eqn",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
+        "bool_inversion", "bool_typing", "equation_FStar.UInt.fits",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "equation_FStar.UInt.uint_t",
+        "equation_LowParse.Spec.Base.serialize",
+        "equation_LowParse.Spec.BoundedInt.log256_",
+        "equation_LowParse.Spec.Bytes.parse_bounded_vlbytes_pred",
+        "equation_Parsers.TicketContents13_custom_data.ticketContents13_custom_data",
+        "equation_Parsers.TicketContents13_custom_data.ticketContents13_custom_data_bytesize",
+        "equation_Parsers.TicketContents13_custom_data.ticketContents13_custom_data_serializer",
+        "function_token_typing_Prims.__cache_version_number__",
+        "l_and-interp", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_LessThan", "primitive_Prims.op_LessThanOrEqual",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "refinement_interpretation_Tm_refine_a347709bfeba48709474ad26f4f6be87",
+        "refinement_interpretation_Tm_refine_bc1a96f20b06a0bd0d936da7c6c01d5c",
+        "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
+      ],
+      0,
+      "e2363666121062526dad9d25c54a59a6"
+    ]
+  ]
+]

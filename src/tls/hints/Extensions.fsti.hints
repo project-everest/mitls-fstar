@@ -1,1 +1,62 @@
-[ "&7\u0007•‚ëöV›u‡À~×N\u001b", [] ]
+[
+  "&7\u0007•‚ëöV›u‡À~×N\u001b",
+  [
+    [
+      "Extensions.__proj__ClientPSK__item__identities",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Extensions.ClientPSK",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_cab4c514d894d44191c3b7b5218d7d8f"
+      ],
+      0,
+      "fb84e7e5933402ea0fd10a56f249777e"
+    ],
+    [
+      "Extensions.__proj__ClientPSK__item__binders_len",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Extensions.ClientPSK",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_cab4c514d894d44191c3b7b5218d7d8f"
+      ],
+      0,
+      "8716081dc9d6bdc48da9da19fd7bc267"
+    ],
+    [
+      "Extensions.__proj__ServerPSK__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Extensions.ServerPSK",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_80c71bcae317d0bd7f6fdc245fb17d57"
+      ],
+      0,
+      "4202eb4a694529182ed6405451632099"
+    ],
+    [
+      "Extensions.client_psk_kexes",
+      1,
+      2,
+      1,
+      [
+        "@query", "Extensions_pretyping_073179e59ad896fbb3b76dfbf7e350cf",
+        "assumption_Extensions.psk_kex__uu___haseq",
+        "assumption_Prims.list__uu___haseq",
+        "data_typing_intro_Extensions.PSK_DHE_KE@tok",
+        "kinding_Extensions.psk_kex@tok"
+      ],
+      0,
+      "9277fc1f482bce81efdc924ee17521f0"
+    ]
+  ]
+]

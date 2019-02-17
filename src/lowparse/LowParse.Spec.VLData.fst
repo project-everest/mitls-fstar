@@ -1,6 +1,6 @@
 module LowParse.Spec.VLData
 include LowParse.Spec.FLData
-include LowParse.Spec.BoundedInt // for bounded_integer, etc.
+include LowParse.Spec.AllIntegers // for bounded_integer, in_bounds, etc.
 
 module Seq = FStar.Seq
 module U32 = FStar.UInt32
@@ -209,96 +209,7 @@ let parse_vldata_eq
 
 (** Explicit bounds on size *)
 
-inline_for_extraction
-val log256'
-  (n: nat)
-: Pure integer_size
-  (requires (n > 0 /\ n < 4294967296))
-  (ensures (fun l ->
-    pow2 (FStar.Mul.op_Star 8 (l - 1)) <= n /\
-    n < pow2 (FStar.Mul.op_Star 8 l)
-  ))
-
-#reset-options "--z3rlimit 16 --z3cliopt smt.arith.nl=false"
-
-let log256' n =
-  [@inline_let]
-  let _ = assert_norm (pow2 32 == 4294967296) in
-  [@inline_let]
-  let _ = assert (n < pow2 32) in
-  [@inline_let]
-  let z0 = 1 in
-  [@inline_let]
-  let z1 = 256 in
-  [@inline_let]
-  let _ = assert_norm (z1 == Prims.op_Multiply 256 z0) in
-  [@inline_let]
-  let l = 1 in
-  [@inline_let]
-  let _ = assert_norm (pow2 (Prims.op_Multiply 8 l) == z1) in
-  [@inline_let]
-  let _ = assert_norm (pow2 (Prims.op_Multiply 8 (l - 1)) == z0) in
-  if n < z1
-  then begin
-    [@inline_let]
-    let _ = assert (pow2 (Prims.op_Multiply 8 (l - 1)) <= n) in
-    [@inline_let]
-    let _ = assert (n < pow2 (Prims.op_Multiply 8 l)) in
-    l
-  end else begin
-    [@inline_let]
-    let z2 = 65536 in
-    [@inline_let]
-    let _ = assert_norm (z2 == Prims.op_Multiply 256 z1) in
-    [@inline_let]
-    let l = 2 in
-    [@inline_let]
-    let _ = assert_norm (pow2 (Prims.op_Multiply 8 l) == z2) in
-    if n < z2
-    then begin
-      [@inline_let]
-      let _ = assert (pow2 (Prims.op_Multiply 8 (l - 1)) <= n) in
-      [@inline_let]
-      let _ = assert (n < pow2 (Prims.op_Multiply 8 l)) in
-      l
-    end else begin
-      [@inline_let]
-      let z3 = 16777216 in
-      [@inline_let]
-      let _ = assert_norm (z3 == Prims.op_Multiply 256 z2) in
-      [@inline_let]
-      let l = 3 in
-      [@inline_let]
-      let _ = assert_norm (pow2 (Prims.op_Multiply 8 l) == z3) in
-      if n < z3
-      then begin
-        [@inline_let]
-	let _ = assert (pow2 (Prims.op_Multiply 8 (l - 1)) <= n) in
-        [@inline_let]
-	let _ = assert (n < pow2 (Prims.op_Multiply 8 l)) in
-        l    
-      end else begin
-        [@inline_let]
-        let l = 4 in
-        [@inline_let]
-        let _ = assert_norm (pow2 (Prims.op_Multiply 8 l) == Prims.op_Multiply 256 z3) in
-        [@inline_let]
-	let _ = assert (pow2 (Prims.op_Multiply 8 (l - 1)) <= n) in
-        [@inline_let]
-	let _ = assert (n < pow2 (Prims.op_Multiply 8 l)) in
-        l
-      end
-    end
-  end
-
 #reset-options
-
-let in_bounds
-  (min: nat)
-  (max: nat)
-  (x: U32.t)
-: GTot bool
-= not (U32.v x < min || max < U32.v x)
 
 inline_for_extraction
 let parse_bounded_vldata_strong_kind

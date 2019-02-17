@@ -1,1 +1,35 @@
-[ "ïbõ*È²ŸlÂ ð-Iz2;", [] ]
+[
+  "ïbõ*È²ŸlÂ ð-Iz2;",
+  [
+    [
+      "Parsers.Boolean.string_of_boolean",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.Boolean.B_false",
+        "disc_equation_Parsers.Boolean.B_true",
+        "fuel_guarded_inversion_Parsers.Boolean.boolean"
+      ],
+      0,
+      "b19b82e881c11c9d5eea4cf1f11cc7dd"
+    ],
+    [
+      "Parsers.Boolean.boolean_jumper",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.Boolean.boolean_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
+      ],
+      0,
+      "c58969fc5da8cc6cf8f95cb3a0e5eee6"
+    ]
+  ]
+]

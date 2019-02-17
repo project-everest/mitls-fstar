@@ -1,1 +1,59 @@
-[ "¥Óˆ<¿.\u0010áÌ«ˆ¥\u000eËÖØ", [] ]
+[
+  "¥Óˆ<¿.\u0010áÌ«ˆ¥\u000eËÖØ",
+  [
+    [
+      "DHGroup.params",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_FStar.Pervasives.Native.option__uu___haseq",
+        "haseqTm_refine_31e1e9e28de29ed74e8782cc7196c42f",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "refinement_kinding_Tm_refine_31e1e9e28de29ed74e8782cc7196c42f",
+        "typing_FStar.Bytes.bytes"
+      ],
+      0,
+      "df5fbbd74c385bfe8b5d76cfdac8ab51"
+    ],
+    [
+      "DHGroup.group",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_DHGroup.ffdhe__uu___haseq",
+        "assumption_DHGroup.params__uu___haseq"
+      ],
+      0,
+      "fb4267336778542dfc76a6bd9cbacda4"
+    ],
+    [
+      "DHGroup.__proj__Named__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_DHGroup.Named",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_1f67f6deaf7b51138cd35ad2f4568e94"
+      ],
+      0,
+      "213553d91e22cc034f8d6d170a48a309"
+    ],
+    [
+      "DHGroup.__proj__Explicit__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_DHGroup.Explicit",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_dc91833cf9fb025d258378587c7faffb"
+      ],
+      0,
+      "bc9cc6ffce287229fe0d32d7509a91d6"
+    ]
+  ]
+]

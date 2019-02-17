@@ -1,1 +1,64 @@
-[ "u\u0004°™ˆ€°â~Ê¸Nª¿ñ\t", [] ]
+[
+  "u\u0004°™ˆ€°â~Ê¸Nª¿ñ\t",
+  [
+    [
+      "BufferBytes.to_bytes",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption",
+        "@fuel_correspondence_Prims.pow2.fuel_instrumented", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
+        "equation_BufferBytes.lbuffer", "equation_FStar.Buffer.length",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
+        "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
+        "function_token_typing_Prims.__cache_version_number__",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Subtraction",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_2cce8b21947d7cc0465fdc87c7a1f882",
+        "refinement_interpretation_Tm_refine_a347709bfeba48709474ad26f4f6be87",
+        "refinement_interpretation_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
+        "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
+      ],
+      0,
+      "5a394e5f0962a916ba949fbfcfa5fe09"
+    ],
+    [
+      "BufferBytes.store_bytes",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "5e3b21423d1f49e3ed744a5d8c234b97"
+    ],
+    [
+      "BufferBytes.from_bytes",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "equation_BufferBytes.lbuffer", "equation_FStar.UInt.fits",
+        "equation_FStar.UInt.max_int", "equation_Prims.nat",
+        "function_token_typing_FStar.UInt8.t",
+        "function_token_typing_Prims.__cache_version_number__",
+        "lemma_FStar.Bytes.length_reveal", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Subtraction",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_2cce8b21947d7cc0465fdc87c7a1f882",
+        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Tm_refine_d97a5daffaf6c18dca76447dc0fc5507",
+        "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length"
+      ],
+      0,
+      "6b3010d8eb5d694ecb1d3758c0029b79"
+    ]
+  ]
+]

@@ -32,7 +32,7 @@ val compute: a:alg -> text:hashable a -> Stack (tag a)
     Seq.length v <= maxLength a /\
     t = h a text)
 
-#push-options "--max_fuel 0 --max_ifuel 0"
+#push-options "--max_fuel 0 --max_ifuel 0 --z3rlimit 40"
 let compute a text = 
   let h00 = ST.get() in 
   push_frame(); 

@@ -1,1 +1,104 @@
-[ "«p.¤}+\"Qp\u0004@Lí‘ý\u0017", [] ]
+[
+  "«p.¤}+\"Qp\u0004@Lí‘ý\u0017",
+  [
+    [
+      "TLSError.string_of_result",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_FStar.Error.Correct",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
+        "function_token_typing_TLSError.error",
+        "lemma_FStar.Error.invertOptResult",
+        "projection_inverse_BoxBool_proj_0",
+        "typing_FStar.Error.uu___is_Correct"
+      ],
+      0,
+      "7cf7d90464105e6fb2e2e74c8d61d24c"
+    ],
+    [
+      "TLSError.resT",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_FStar.Error.Correct", "equation_TLSError.error",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_beedc2a801d7d2c429f84212cb5b7279"
+      ],
+      0,
+      "f0cafb91286124868e23e6adacef5d1a"
+    ],
+    [
+      "TLSError.mapResult",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_FStar.Error.Correct",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
+        "equation_TLSError.result", "function_token_typing_TLSError.error",
+        "lemma_FStar.Error.invertOptResult",
+        "typing_FStar.Error.uu___is_Correct",
+        "typing_FStar.Error.uu___is_Error"
+      ],
+      0,
+      "75c2efc751225c57e8b6d426d7d81b70"
+    ],
+    [
+      "TLSError.bindResult",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_FStar.Error.Correct",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
+        "equation_TLSError.result", "function_token_typing_TLSError.error",
+        "lemma_FStar.Error.invertOptResult",
+        "typing_FStar.Error.uu___is_Correct",
+        "typing_FStar.Error.uu___is_Error"
+      ],
+      0,
+      "5cd342c16c32746b1906858675202921"
+    ],
+    [
+      "TLSError.resultMap",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_FStar.Error.Correct",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
+        "equation_TLSError.result", "function_token_typing_TLSError.error",
+        "lemma_FStar.Error.invertOptResult",
+        "typing_FStar.Error.uu___is_Correct",
+        "typing_FStar.Error.uu___is_Error"
+      ],
+      0,
+      "1381890e9422747a9ccf38119b90e8d3"
+    ],
+    [
+      "TLSError.resultBind",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_FStar.Error.Correct",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
+        "equation_TLSError.result", "function_token_typing_TLSError.error",
+        "lemma_FStar.Error.invertOptResult",
+        "typing_FStar.Error.uu___is_Correct",
+        "typing_FStar.Error.uu___is_Error"
+      ],
+      0,
+      "f4d72e4e642ac9acb041b256707d0fa6"
+    ]
+  ]
+]

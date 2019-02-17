@@ -791,10 +791,6 @@ let serialize_synth_upd_bw_chain
 (* Strengthened versions of and_then *)
 
 inline_for_extraction
-let refine_with_tag (#tag_t: Type0) (#data_t: Type0) (tag_of_data: (data_t -> GTot tag_t)) (x: tag_t) : Tot Type0 =
-  (y: data_t { tag_of_data y == x } )
-
-inline_for_extraction
 let synth_tagged_union_data
   (#tag_t: Type0)
   (#data_t: Type0)
