@@ -39,13 +39,11 @@ ifeq (,$(wildcard $(MITLS_HOME)/src/pki/libmipki.$(SO)))
   $(error MITLS_HOME is $(MITLS_HOME) and I cannot find $(MITLS_HOME)/src/pki/libmipki.$(SO) -- please run make in $(MITLS_HOME)/src/pki)
 endif
 
-ifneq (,$(EVEREST_WINDOWS))
-CFLAGS+= # -DKRML_NOSTRUCT_PASSING
-endif
-
+# TODO: this should branch on EVERCRYPT_CONFIG instead
 ifndef NO_OPENSSL
 ifeq ($(OS),Windows_NT)
   PATH := $(MLCRYPTO_HOME)/openssl:$(PATH)
+  LDOPTS += -lcrypto
 else ifeq ($(UNAME),Darwin)
   DYLD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(DYLD_LIBRARY_PATH)
 else
