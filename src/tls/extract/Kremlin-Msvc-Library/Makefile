@@ -36,11 +36,13 @@ endif
 # Force-include RegionAllocator.h and enable heap regions in all builds
 CFLAGS := $(CFLAGS) -include RegionAllocator.h -DUSE_HEAP_REGIONS
 
-# TODO: this should branch on EVERCRYPT_CONFIG instead
+ifneq (,$(EVEREST_WINDOWS))
+CFLAGS+= # -DKRML_NOSTRUCT_PASSING
+endif
+
 ifndef NO_OPENSSL
 ifeq ($(OS),Windows_NT)
   PATH := $(MLCRYPTO_HOME)/openssl:$(PATH)
-  LDOPTS += -lcrypto
 else ifeq ($(UNAME),Darwin)
   DYLD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(DYLD_LIBRARY_PATH)
 else
