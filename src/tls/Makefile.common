@@ -11,6 +11,8 @@ SHELL=/bin/bash
 
 # Paths and Commands
 
+EVERCRYPT_CONFIG ?= default
+
 INCLUDE_PATHS = \
   $(HACL_HOME)/vale/code/arch/x64 \
   $(HACL_HOME)/vale/code/arch/x64/interop \
@@ -39,7 +41,7 @@ INCLUDE_PATHS = \
   $(EVERCRYPT_HOME)/evercrypt \
   $(SPECINC) \
   $(EVERCRYPT_HOME)/evercrypt/fst \
-  $(EVERCRYPT_HOME)/evercrypt/config/default \
+  $(EVERCRYPT_HOME)/evercrypt/config/$(EVERCRYPT_CONFIG) \
   $(HACL_HOME)/obj
 
 ifeq (,$(MITLS_NODEBUG))
