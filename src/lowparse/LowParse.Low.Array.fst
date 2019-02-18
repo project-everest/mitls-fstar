@@ -458,6 +458,7 @@ let vlarray_nth_ghost'
 
 #push-options "--z3rlimit 32 --max_ifuel 4"
 
+#push-options "--max_fuel 0"
 abstract
 let vlarray_nth_ghost_correct'
   (array_byte_size_min: nat)
@@ -479,10 +480,12 @@ let vlarray_nth_ghost_correct'
   vldata_to_vlarray_inj array_byte_size_min array_byte_size_max s elem_count_min elem_count_max ();
   parse_synth_eq (parse_bounded_vldata_strong array_byte_size_min array_byte_size_max (serialize_list _ s)) (vldata_to_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max ()) input;
   parse_vldata_gen_eq (log256' array_byte_size_max) (in_bounds array_byte_size_min array_byte_size_max) (parse_list p) input;
+  assume (log256' array_byte_size_max <= Seq.length input);  //AR: 02/17
   let input' = Seq.slice input (log256' array_byte_size_max) (Seq.length input) in
   list_nth_constant_size_parser_correct p input' i;
   let off = i `Prims.op_Multiply` k.parser_kind_low in
   parse_strong_prefix p (Seq.slice input' off (Seq.length input')) (Seq.slice input' off (off + k.parser_kind_low))
+#pop-options
 
 abstract
 let vlarray_nth_ghost_correct

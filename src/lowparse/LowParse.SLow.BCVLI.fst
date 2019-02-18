@@ -44,6 +44,7 @@ module U8 = FStar.UInt8
 let serialize32_bcvli
 : serializer32 serialize_bcvli
 = fun x -> ((
+    [@inline_let] let _ = serialize_bcvli_eq x in
     let c1 : bounded_integer 1 =
       if x `U32.lt` 253ul
       then x
@@ -62,6 +63,7 @@ let serialize32_bcvli
 let size32_bcvli
 : size32 serialize_bcvli
 = fun x -> ((
+    [@inline_let] let _ = serialize_bcvli_eq x in
     if x `U32.lt` 253ul
     then 1ul
     else if x `U32.lt` 65536ul

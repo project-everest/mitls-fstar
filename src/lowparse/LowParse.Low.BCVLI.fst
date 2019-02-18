@@ -117,7 +117,8 @@ let serialize32_bcvli'
     B.live h b /\
     B.as_seq h' b' `Seq.equal` serialize serialize_bcvli x
   )))
-= let c : bounded_integer 1 =
+= [@inline_let] let _ = serialize_bcvli_eq x in
+  let c : bounded_integer 1 =
     if x `U32.lt` 253ul
     then x
     else if x `U32.lt` 65536ul
