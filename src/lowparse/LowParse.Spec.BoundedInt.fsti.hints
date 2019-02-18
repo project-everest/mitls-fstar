@@ -1,5 +1,5 @@
 [
-  "ã\u0019^OîFÄ\u001fpºÀÅ¯`ª¸",
+  "ÛÉ46#÷5é\u001cW!˛\"CÅ\u001a",
   [
     [
       "LowParse.Spec.BoundedInt.bounded_integer_prop",
@@ -17,7 +17,7 @@
         "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "aade348cd408068bda2d7d9357c28ffa"
+      "746239141e0393688640933a395bc365"
     ],
     [
       "LowParse.Spec.BoundedInt.parse_bounded_integer_spec",
@@ -45,7 +45,7 @@
         "typing_LowParse.Spec.BoundedInt.bounded_integer"
       ],
       0,
-      "93a5770291bd7dd5e73b98d2abf9f9b7"
+      "4a6a6537fc927b1fa8d8fc0200b9e3fc"
     ],
     [
       "LowParse.Spec.BoundedInt.serialize_bounded_integer_spec",
@@ -76,7 +76,32 @@
         "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "685b12fdd27ca29c1c1a1eb884fe2528"
+      "c07f6144a80306c4741b438c84cb99b5"
+    ],
+    [
+      "LowParse.Spec.BoundedInt.log256'",
+      1,
+      2,
+      1,
+      [
+        "@MaxFuel_assumption", "@MaxIFuel_assumption",
+        "@fuel_correspondence_Prims.pow2.fuel_instrumented",
+        "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "equation_LowParse.Spec.BoundedInt.integer_size",
+        "equation_Prims.nat",
+        "function_token_typing_Prims.__cache_version_number__",
+        "int_inversion", "int_typing", "lemma_FStar.UInt.pow2_values",
+        "primitive_Prims.op_LessThan", "primitive_Prims.op_Multiply",
+        "primitive_Prims.op_Subtraction",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_356a45e66ba68bc6bc0181a81e4787d5",
+        "refinement_interpretation_Tm_refine_546bd17e6f1845f0224f72eac33516bd",
+        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
+      ],
+      0,
+      "bfbc44c9ca3eb588731b2f2dd4941eba"
     ]
   ]
 ]
