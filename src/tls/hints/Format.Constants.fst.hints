@@ -8,19 +8,16 @@
       1,
       [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
       0,
-      "6ddbc0ac85ea3c50e612841679ebdf06"
+      "3a102b3a037754bda3c138b5123d2344"
     ],
     [
       "Format.Constants.constantByte_serializer32",
       1,
       2,
       1,
-      [
-        "@query", "equation_Format.Constants.constantByte_parser",
-        "equation_Format.Constants.constantByte_serializer"
-      ],
+      [ "@query", "equation_Format.Constants.constantByte_serializer" ],
       0,
-      "8d1cbd354a0d92b040745354e5d29bbd"
+      "fa45c2f8af932dc88b6d6557cba4dd94"
     ]
   ]
 ]

@@ -15,10 +15,10 @@
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_CipherSuite.AEAD__0",
         "projection_inverse_CipherSuite.AEAD__1",
-        "refinement_interpretation_StreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88"
+        "refinement_interpretation_Tm_refine_f39bd1782581f69a042cf0a284ec6a88"
       ],
       0,
-      "bf1f45576fd024d7fcd75860b6359b39"
+      "fd5b811bc7ae8237f5e13fdd58c696d8"
     ],
     [
       "StreamAE.ltag",
@@ -29,14 +29,14 @@
         "@MaxIFuel_assumption", "@query",
         "Prims_pretyping_ae567c2fb75be05905677af440075565",
         "equation_CipherSuite.aeadAlg", "equation_FStar.UInt.uint_t",
-        "equation_FStar.UInt32.n", "function_token_typing_FStar.UInt32.n",
+        "function_token_typing_Prims.__cache_version_number__",
         "lemma_FStar.Buffer.lemma_size",
-        "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
+        "refinement_interpretation_Tm_refine_a347709bfeba48709474ad26f4f6be87",
         "typing_EverCrypt.aead_tagLen", "typing_FStar.UInt32.v",
         "typing_StreamAE.alg"
       ],
       0,
-      "343401dc2f3fdb2daf4f383a6cc19e68"
+      "d8fbfe14ff175f5a8427a0416746849a"
     ],
     [
       "StreamAE.cipherLen",
@@ -48,12 +48,12 @@
         "equation_StreamAE.ltag", "equation_StreamPlain.plainLen",
         "equation_StreamPlain.plainLength", "primitive_Prims.op_Addition",
         "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "refinement_interpretation_StreamPlain_Tm_refine_5578a0666d07a326e9829f08acb9cc9a",
+        "refinement_interpretation_Tm_refine_5578a0666d07a326e9829f08acb9cc9a",
+        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "typing_StreamAE.ltag"
       ],
       0,
-      "fd0dcfea400a647f2a992bcd54b53f8e"
+      "26df2dd8c55f5b114b41acb5a3692314"
     ],
     [
       "StreamAE.lenCipher",
@@ -63,10 +63,10 @@
       [
         "@MaxIFuel_assumption", "@query", "primitive_Prims.op_Subtraction",
         "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_StreamAE_Tm_refine_6f387ae5df4fef454344d7e3c6d84f49"
+        "refinement_interpretation_Tm_refine_6f387ae5df4fef454344d7e3c6d84f49"
       ],
       0,
-      "4d49004ed64e742c026677853a2264e9"
+      "c12a2a8958713747b7affef5fccc5124"
     ],
     [
       "StreamAE.entry",
@@ -84,18 +84,18 @@
         "equation_StreamPlain.plain", "equation_StreamPlain.plainLen",
         "function_token_typing_Prims.__cache_version_number__",
         "function_token_typing_Prims.int",
-        "haseqFStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
-        "haseqStreamPlain_Tm_refine_5578a0666d07a326e9829f08acb9cc9a",
-        "haseqStreamPlain_Tm_refine_923fa03846ebb6ef4b538b7dfb7607cf",
-        "int_inversion", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
-        "refinement_interpretation_StreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88",
-        "refinement_interpretation_StreamPlain_Tm_refine_5578a0666d07a326e9829f08acb9cc9a",
-        "refinement_interpretation_TLSInfo_Tm_refine_771d00c42e1fa557a792d8f0bf7b724d",
+        "haseqTm_refine_5578a0666d07a326e9829f08acb9cc9a",
+        "haseqTm_refine_923fa03846ebb6ef4b538b7dfb7607cf",
+        "haseqTm_refine_b0383769854f2b8d05d9f8fb03a8cbd4", "int_inversion",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "refinement_interpretation_Tm_refine_5578a0666d07a326e9829f08acb9cc9a",
+        "refinement_interpretation_Tm_refine_771d00c42e1fa557a792d8f0bf7b724d",
+        "refinement_interpretation_Tm_refine_f39bd1782581f69a042cf0a284ec6a88",
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "b1a321cb242d1db4cd02b18f3945582a"
+      "0fcae46d9ec88a2237509f8bf6dbd4c4"
     ],
     [
       "StreamAE.__proj__Entry__item__c",
@@ -107,7 +107,7 @@
         "projection_inverse_StreamAE.Entry_l"
       ],
       0,
-      "81e17e40ee3f5768d6ea7e2083d6091f"
+      "64c33b8eb87b18774fc84cdf5b1f41ae"
     ],
     [
       "StreamAE.__proj__Entry__item__p",
@@ -119,7 +119,7 @@
         "projection_inverse_StreamAE.Entry_l"
       ],
       0,
-      "8dbc7ae37817b0c91a62b620401b2f0d"
+      "93f792e5d0c1325cfa25fb627e31c454"
     ],
     [
       "StreamAE.key",
@@ -135,7 +135,7 @@
         "projection_inverse_CipherSuite.AEAD__1"
       ],
       0,
-      "7a9b5d498ab32d6067a8b0be3d95451a"
+      "c17738d917ea3cd46ccdb61b8b30750c"
     ],
     [
       "StreamAE.iv",
@@ -151,7 +151,7 @@
         "projection_inverse_CipherSuite.AEAD__1"
       ],
       0,
-      "d79071880a64d2fc3df3411f67a7f883"
+      "a90a35de39be178a398ead605b526f02"
     ],
     [
       "StreamAE.ilog",
@@ -161,10 +161,10 @@
       [
         "@MaxIFuel_assumption", "@query", "equation_TLSInfo.authId",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_StreamAE_Tm_refine_fa1dfb0079bf92ebd93dd5b7fd4e607d"
+        "refinement_interpretation_Tm_refine_fa1dfb0079bf92ebd93dd5b7fd4e607d"
       ],
       0,
-      "99c4504f8e4c0e4f8ccfeb2f57736456"
+      "0a1102af152047ccf7eca3a5af54961d"
     ],
     [
       "StreamAE.max_ctr",
@@ -173,7 +173,7 @@
       1,
       [ "@query", "projection_inverse_BoxInt_proj_0" ],
       0,
-      "f73f77cbf4cb1c9bcc3c03c522b7a684"
+      "9206434d403da7e06e886a0c969c95ad"
     ],
     [
       "StreamAE.concrete_ctr",
@@ -188,7 +188,7 @@
         "token_correspondence_FStar.Monotonic.Seq.increases"
       ],
       0,
-      "5a4725dd7f59f1515b9d995b8d95a424"
+      "b70bc74cd3d923b131921b32c87c9c1d"
     ],
     [
       "StreamAE.ctr_ref",
@@ -204,7 +204,7 @@
         "token_correspondence_FStar.Monotonic.Seq.increases"
       ],
       0,
-      "e1acf5f46fa0ef6b91c0c757d9e64d45"
+      "d0cd471f7cda93c2abbd3184c2fb0526"
     ],
     [
       "StreamAE.ctr",
@@ -223,28 +223,28 @@
         "equation_FStar.Monotonic.HyperStack.is_eternal_color",
         "equation_FStar.Monotonic.HyperStack.mref",
         "equation_FStar.Monotonic.HyperStack.mreference",
-        "equation_FStar.Preorder.preorder", "equation_FStar.UInt32.n",
-        "equation_Prims.nat", "equation_StreamAE.counter",
-        "equation_StreamAE.ctr_ref", "equation_TLSInfo.authId",
+        "equation_FStar.Preorder.preorder", "equation_Prims.nat",
+        "equation_StreamAE.counter", "equation_StreamAE.ctr_ref",
+        "equation_TLSInfo.authId",
         "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mreference_",
-        "function_token_typing_FStar.UInt32.n",
-        "function_token_typing_StreamAE.max_ctr",
+        "function_token_typing_Prims.__cache_version_number__",
         "primitive_Prims.op_Negation",
         "proj_equation_FStar.Monotonic.HyperStack.MkRef_frame",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_FStar.HyperStack.ST_Tm_refine_08d14059b664746699a12b0c359d3b8d",
-        "refinement_interpretation_FStar.HyperStack.ST_Tm_refine_1a1278f1aecd37594ba20d888b7fd230",
-        "refinement_interpretation_FStar.HyperStack.ST_Tm_refine_f596a1e23d65ebe54b463345ece4e00f",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_ecfe710eaddaa768c46a7d024350dcbc",
-        "refinement_interpretation_FStar.Preorder_Tm_refine_bd10f09297e0e7dc08314f7d9211801c",
-        "refinement_interpretation_FStar.UInt_Tm_refine_8ae4abcfc6bc8d4903b7e1f40e070ec2",
-        "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "refinement_interpretation_StreamAE_Tm_refine_09ca3975302a8dca67cedeefb22ab80c",
+        "refinement_interpretation_Tm_refine_08d14059b664746699a12b0c359d3b8d",
+        "refinement_interpretation_Tm_refine_09ca3975302a8dca67cedeefb22ab80c",
+        "refinement_interpretation_Tm_refine_1a1278f1aecd37594ba20d888b7fd230",
+        "refinement_interpretation_Tm_refine_8ae4abcfc6bc8d4903b7e1f40e070ec2",
+        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Tm_refine_bd10f09297e0e7dc08314f7d9211801c",
+        "refinement_interpretation_Tm_refine_ecfe710eaddaa768c46a7d024350dcbc",
+        "refinement_interpretation_Tm_refine_f596a1e23d65ebe54b463345ece4e00f",
         "typing_FStar.Monotonic.HyperHeap.color",
-        "typing_FStar.Monotonic.HyperStack.is_eternal_color"
+        "typing_FStar.Monotonic.HyperStack.is_eternal_color",
+        "typing_StreamAE.max_ctr"
       ],
       0,
-      "a6d2dfc0c4c7ed8caf335fe686378b9a"
+      "efbea2a5be242594327687046009e2ca"
     ],
     [
       "StreamAE.state",
@@ -259,16 +259,17 @@
         "disc_equation_TLSInfo.PlaintextID", "equation_Mem.rgn",
         "equation_Prims.eqtype", "equation_StreamAE.id",
         "equation_StreamPlain.id", "equation_TLSInfo.aeAlg_of_id",
-        "haseqMem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
+        "equation_TLSInfo.authId",
+        "haseqTm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_CipherSuite.AEAD__0",
         "projection_inverse_CipherSuite.AEAD__1",
-        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
-        "refinement_interpretation_StreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "refinement_interpretation_Tm_refine_f39bd1782581f69a042cf0a284ec6a88",
         "typing_FStar.Monotonic.HyperHeap.rid"
       ],
       0,
-      "15c81fc127e58d2a853f3e9267c98e13"
+      "e44abe2feef376faadfec6dec3f64f30"
     ],
     [
       "StreamAE.__proj__State__item__log_region",
@@ -279,12 +280,12 @@
         "@MaxIFuel_assumption", "@query",
         "assumption_TLSConstants.rw__uu___haseq", "equation_Mem.rgn",
         "equation_Prims.eqtype",
-        "haseqMem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
-        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "haseqTm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "typing_FStar.Monotonic.HyperHeap.rid"
       ],
       0,
-      "7b8996fcd77bbc6f00d30824c09deaee"
+      "2e98d3baccee7222b2e97e7ef07b9a5f"
     ],
     [
       "StreamAE.__proj__State__item__log_region",
@@ -295,14 +296,14 @@
         "@MaxIFuel_assumption", "@query",
         "assumption_TLSConstants.rw__uu___haseq", "equation_Mem.rgn",
         "equation_Prims.eqtype", "fuel_guarded_inversion_StreamAE.state",
-        "haseqMem_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
+        "haseqTm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
         "proj_equation_StreamAE.State_region",
         "projection_inverse_StreamAE.State_region",
-        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "typing_FStar.Monotonic.HyperHeap.rid"
       ],
       0,
-      "cc3345e0717347ff7a21f706ea454156"
+      "bdedbe94b8db80b48f0e56809a4c0e11"
     ],
     [
       "StreamAE.__proj__State__item__aead",
@@ -314,13 +315,13 @@
         "constructor_distinct_CipherSuite.AEAD",
         "disc_equation_CipherSuite.AEAD", "disc_equation_TLSInfo.ID13",
         "disc_equation_TLSInfo.PlaintextID", "equation_TLSInfo.aeAlg_of_id",
-        "fuel_guarded_inversion_StreamAE.state",
+        "equation_TLSInfo.authId", "fuel_guarded_inversion_StreamAE.state",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_CipherSuite.AEAD__0",
         "projection_inverse_CipherSuite.AEAD__1"
       ],
       0,
-      "6b50d23fca1525c53b44e54635c4969b"
+      "e568ee59a45b18193bfdc79cb20d0147"
     ],
     [
       "StreamAE.__proj__State__item__aead",
@@ -332,13 +333,13 @@
         "constructor_distinct_CipherSuite.AEAD",
         "disc_equation_CipherSuite.AEAD", "disc_equation_TLSInfo.ID13",
         "disc_equation_TLSInfo.PlaintextID", "equation_TLSInfo.aeAlg_of_id",
-        "fuel_guarded_inversion_StreamAE.state",
+        "equation_TLSInfo.authId", "fuel_guarded_inversion_StreamAE.state",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_CipherSuite.AEAD__0",
         "projection_inverse_CipherSuite.AEAD__1"
       ],
       0,
-      "881aecc587ab5ba13e2d241580d9b163"
+      "c4b9522d86f3a9051c7d31acd3698b18"
     ],
     [
       "StreamAE.__proj__State__item__log",
@@ -347,7 +348,7 @@
       1,
       [ "@query" ],
       0,
-      "1b678241c33d231cadc1d67a760d09e4"
+      "f4c47e19b696f870c01b15e749c9c971"
     ],
     [
       "StreamAE.__proj__State__item__log",
@@ -359,7 +360,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "e84f3a21477c83f40040bbc7af81b3e2"
+      "7fe46b6c76120a02661730a9a799f7b5"
     ],
     [
       "StreamAE.__proj__State__item__counter",
@@ -368,7 +369,7 @@
       1,
       [ "@query" ],
       0,
-      "30fe0e140a7ffee9c2c96e4c5eb487d9"
+      "6df3779a58a6a44781753a25a1ef9d91"
     ],
     [
       "StreamAE.__proj__State__item__counter",
@@ -382,7 +383,7 @@
         "projection_inverse_StreamAE.State_region"
       ],
       0,
-      "724d9bf46ff8a01d0e6a9224e6b71761"
+      "b245752d33ca7e7241db89a8ca2b1d5b"
     ]
   ]
 ]

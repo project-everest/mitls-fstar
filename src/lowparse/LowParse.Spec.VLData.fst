@@ -168,6 +168,31 @@ let parse_vldata_gen_eq
   parser_kind_prop_equiv (parse_bounded_integer_kind sz) (parse_bounded_integer sz);
   ()
 
+let parse_vldata_gen_eq_some_elim
+  (sz: integer_size)
+  (f: (bounded_integer sz -> GTot bool))
+  (#k: parser_kind)
+  (#t: Type0)
+  (p: parser k t)
+  (input: bytes)
+: Lemma
+  (requires (Some? (parse (parse_vldata_gen sz f p) input)))
+  (ensures (
+    let pbi = parse (parse_bounded_integer sz) input in
+    Some? pbi /\ (
+    let Some (len, consumed_len) = pbi in
+    consumed_len == sz /\
+    f len /\
+    Seq.length input >= sz + U32.v len /\ (
+    let input' = Seq.slice input sz (sz + U32.v len) in
+    let pp = parse p input' in
+    Some? pp /\ (
+    let Some (x, consumed_x) = pp in
+    consumed_x = U32.v len /\
+    parse (parse_vldata_gen sz f p) input == Some (x, sz + U32.v len)
+  )))))
+= parse_vldata_gen_eq sz f p input
+
 let unconstrained_bounded_integer
   (sz: integer_size)
   (i: bounded_integer sz)
