@@ -454,11 +454,11 @@ let vlarray_nth_ghost'
 
 #pop-options
 
-#reset-options "--z3cliopt smt.arith.nl=false"
+#reset-options "--z3cliopt smt.arith.nl=false --z3refresh"
 
-#push-options "--z3rlimit 32 --max_ifuel 4"
+#push-options "--z3rlimit 128 --max_ifuel 8 --initial_ifuel 8 --max_fuel 4 --initial_fuel 4"
 
-#push-options "--max_fuel 0"
+// #push-options "--max_fuel 0"
 abstract
 let vlarray_nth_ghost_correct'
   (array_byte_size_min: nat)
@@ -479,12 +479,17 @@ let vlarray_nth_ghost_correct'
 = parser_kind_prop_equiv k p;
   vldata_to_vlarray_inj array_byte_size_min array_byte_size_max s elem_count_min elem_count_max ();
   parse_synth_eq (parse_bounded_vldata_strong array_byte_size_min array_byte_size_max (serialize_list _ s)) (vldata_to_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max ()) input;
-  parse_vldata_gen_eq (log256' array_byte_size_max) (in_bounds array_byte_size_min array_byte_size_max) (parse_list p) input;
-  assume (log256' array_byte_size_max <= Seq.length input);  //AR: 02/17
+  parse_vldata_gen_eq_some_elim (log256' array_byte_size_max) (in_bounds array_byte_size_min array_byte_size_max) (parse_list p) input;
+  assert (Some? (parse (parse_bounded_integer (log256' array_byte_size_max)) input)); 
+  let Some (len, _) = parse (parse_bounded_integer (log256' array_byte_size_max)) input in
+  assert (Seq.length input >= log256' array_byte_size_max + U32.v len);
+// assert (log256' array_byte_size_max <= Seq.length input);
   let input' = Seq.slice input (log256' array_byte_size_max) (Seq.length input) in
   list_nth_constant_size_parser_correct p input' i;
   let off = i `Prims.op_Multiply` k.parser_kind_low in
   parse_strong_prefix p (Seq.slice input' off (Seq.length input')) (Seq.slice input' off (off + k.parser_kind_low))
+// #pop-options
+
 #pop-options
 
 abstract
@@ -525,9 +530,7 @@ let vlarray_nth_ghost
 
 module B = LowStar.Buffer
 
-#pop-options
-
-#push-options "--z3rlimit 256 --max_fuel 8 --initial_fuel 8 --max_ifuel 4 --initial_ifuel 4"
+#push-options "--z3rlimit 256 --max_fuel 4 --initial_fuel 4 --max_ifuel 8 --initial_ifuel 8"
 
 inline_for_extraction
 let vlarray_nth
