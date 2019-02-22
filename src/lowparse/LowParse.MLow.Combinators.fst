@@ -62,8 +62,8 @@ let valid_nondep_then_intro
   )))
 = valid_nondep_then h p1 p2 s pos
 
-assume
-val validate_nondep_then
+inline_for_extraction
+let validate_nondep_then
   (#k1: parser_kind)
   (#t1: Type0)
   (#p1: parser k1 t1)
@@ -73,7 +73,6 @@ val validate_nondep_then
   (#p2: parser k2 t2)
   (p2' : validator p2)
 : Tot (validator (nondep_then p1 p2))
-(*
 = fun   (#rrel #rel: B.srel byte)
   (input: slice rrel rel) (pos: U32.t) ->
   let h = HST.get () in
@@ -86,10 +85,9 @@ val validate_nondep_then
   else
     [@inline_let] let _ = valid_facts p2 h input pos1 in
     p2' input pos1
-*)
 
-assume
-val jump_nondep_then
+inline_for_extraction
+let jump_nondep_then
   (#k1: parser_kind)
   (#t1: Type0)
   (#p1: parser k1 t1)
@@ -99,13 +97,11 @@ val jump_nondep_then
   (#p2: parser k2 t2)
   (p2' : jumper p2)
 : Tot (jumper (nondep_then p1 p2))
-(*
 = fun  (#rrel #rel: B.srel byte)
   (input: slice rrel rel) (pos: U32.t) ->
   let h = HST.get () in
   [@inline_let] let _ = valid_nondep_then h p1 p2 input pos in
   p2' input (p1' input pos)
-*)
 
 let valid_synth
   (#rrel #rel: B.srel byte)
@@ -465,7 +461,6 @@ let accessor_fst
   [@inline_let] let _ = slice_access_eq h (gaccessor_fst p1 sq p2) input pos in
   pos
 
-(*
 inline_for_extraction
 let accessor_fst_then
   (#k1: parser_kind)
@@ -483,7 +478,6 @@ let accessor_fst_then
   (u: squash (k1.parser_kind_subkind == Some ParserStrong))
 : Tot (accessor (gaccessor_fst_then g p2 u))
 = accessor_compose (accessor_fst p1 u p2) a u
-*)
 
 inline_for_extraction
 let accessor_snd
@@ -554,8 +548,8 @@ let valid_filter
   if U32.v pos <= U32.v input.len
   then parse_filter_eq p f (bytes_of_slice_from h input pos)
 
-assume
-val validate_filter
+inline_for_extraction
+let validate_filter
   (#k: parser_kind)
   (#t: Type0)
   (#p: parser k t)
@@ -564,7 +558,6 @@ val validate_filter
   (f: (t -> GTot bool))
   (f' : ((x: t) -> Tot (y: bool { y == f x } )))
 : Tot (validator (parse_filter p f))
-(*
 = fun #rrel #rel input pos ->
   let h = HST.get () in
   [@inline_let] let _ = valid_filter h p f input pos in
@@ -576,7 +569,6 @@ val validate_filter
     if f' va
     then res
     else validator_error_generic
-*)
 
 inline_for_extraction
 let jump_filter
@@ -717,8 +709,8 @@ let write_synth_weak
 
 (* Special case for vldata and maybe also sum types *)
 
-assume
-val validate_filter_and_then
+inline_for_extraction
+let validate_filter_and_then
   (#k1: parser_kind)
   (#t1: Type0)
   (#p1: parser k1 t1)
@@ -734,7 +726,6 @@ val validate_filter_and_then
     and_then_cases_injective p2
   })
 : Tot (validator (parse_filter p1 f `and_then` p2))
-(*
 = fun #rrel #rel input pos ->
   let h = HST.get () in
   [@inline_let]
@@ -756,7 +747,6 @@ val validate_filter_and_then
       let _ = valid_facts (p2 va) h input res in
       v2 va input res
     else validator_error_generic
-*)
 
 inline_for_extraction
 let validate_weaken
