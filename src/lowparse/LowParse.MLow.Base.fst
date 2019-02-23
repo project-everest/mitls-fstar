@@ -3232,3 +3232,103 @@ let list_nth
   res
 
 #pop-options
+
+(* Monotonicity *)
+
+inline_for_extraction
+let compl_t (t: Type) = U32.t -> t -> U32.t -> Tot (B.spred byte)
+
+let wvalid 
+  (#t: Type) (#k: parser_kind) (p: parser k t) (#rrel #rel: B.srel byte) (s: slice rrel rel)
+  (compl: compl_t t)
+  (pos: U32.t)
+  (gpos' : Ghost.erased U32.t)
+  (gv: Ghost.erased t)
+  (x: Seq.seq byte)
+: GTot Type0
+= 
+  U32.v pos <= U32.v (Ghost.reveal gpos') /\
+  U32.v (Ghost.reveal gpos') <= U32.v s.len /\
+  Seq.length x == U32.v s.len /\
+  parse p (Seq.slice x (U32.v pos) (U32.v s.len)) == Some (Ghost.reveal gv, U32.v (Ghost.reveal gpos') - U32.v pos) /\
+  compl pos (Ghost.reveal gv) (Ghost.reveal gpos') x
+
+inline_for_extraction
+noeq
+type irepr (#t: Type) (#k: parser_kind) (p: parser k t) (#rrel #rel: B.srel byte) (s: slice rrel rel) (compl: compl_t t) =
+  | IRepr:
+      (pos: U32.t) ->
+      (gpos' : Ghost.erased U32.t) ->
+      (gv: Ghost.erased t) ->
+      (irepr_correct: squash (
+        U32.v pos <= U32.v (Ghost.reveal gpos') /\
+        U32.v (Ghost.reveal gpos') <= U32.v s.len /\
+        B.witnessed s.base (wvalid p s compl pos gpos' gv)
+      )) ->
+      irepr p s compl
+
+inline_for_extraction
+let irepr_pos
+  (#t: Type) (#k: parser_kind) (#p: parser k t) (#rrel #rel: B.srel byte) (#s: slice rrel rel) (#compl: compl_t t) (x: irepr p s compl) : Tot U32.t =
+  IRepr?.pos x
+
+let irepr_pos'
+  (#t: Type) (#k: parser_kind) (#p: parser k t) (#rrel #rel: B.srel byte) (#s: slice rrel rel) (#compl: compl_t t) (x: irepr p s compl) : Ghost U32.t
+  (requires True)
+  (ensures (fun y -> U32.v (irepr_pos x) <= U32.v y /\ U32.v y <= U32.v s.len))
+= Ghost.reveal (IRepr?.gpos' x)
+
+let irepr_v
+  (#t: Type) (#k: parser_kind) (#p: parser k t) (#rrel #rel: B.srel byte) (#s: slice rrel rel) (#compl: compl_t t) (x: irepr p s compl) : GTot t
+= Ghost.reveal (IRepr?.gv x)
+
+inline_for_extraction
+let witness_valid_gen
+  (#t: Type)
+  (#k: parser_kind)
+  (#p: parser k t)
+  (#rrel #rel: B.srel byte)
+  (s: slice rrel rel)
+  (compl: compl_t t)
+  (pos: U32.t)
+: HST.Stack (irepr p s compl)
+  (requires (fun h ->
+    valid p h s pos /\
+    B.stable_on (wvalid p s compl pos (Ghost.hide (get_valid_pos p h s pos)) (Ghost.hide (contents p h s pos))) rel /\
+    compl pos (contents p h s pos) (get_valid_pos p h s pos) (B.as_seq h s.base)
+  ))
+  (ensures (fun h res h' ->
+    h' == h /\
+    irepr_pos res == pos /\
+    valid_content_pos p h s pos (irepr_v res) (irepr_pos' res)
+  ))
+= let h = HST.get () in
+  [@inline_let]
+  let gpos' = Ghost.hide (get_valid_pos p h s pos) in
+  [@inline_let]
+  let gv = Ghost.hide (contents p h s pos) in
+  [@inline_let]
+  let _ = valid_facts p h s pos in
+  B.witness_p s.base (wvalid p s compl pos gpos' gv);
+  IRepr pos gpos' gv ()
+
+inline_for_extraction
+let recall_valid_gen
+  (#t: Type)
+  (#k: parser_kind)
+  (#p: parser k t)
+  (#rrel #rel: B.srel byte)
+  (#s: slice rrel rel)
+  (#compl: compl_t t)
+  (i: irepr p s compl)
+: HST.Stack unit
+  (requires (fun h -> B.recallable s.base \/ live_slice h s))
+  (ensures (fun h _ h' ->
+    h' == h /\
+    live_slice h s /\
+    valid_content_pos p h s (irepr_pos i) (irepr_v i) (irepr_pos' i)
+  ))
+= let h = HST.get () in
+  [@inline_let]
+  let _ = valid_facts p h s (irepr_pos i) in
+  B.recall_p s.base (wvalid p s compl (irepr_pos i) (IRepr?.gpos' i) (IRepr?.gv i))
