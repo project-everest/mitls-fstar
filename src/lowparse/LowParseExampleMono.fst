@@ -48,6 +48,14 @@ module HST = FStar.HyperStack.ST
 module B = LowStar.Monotonic.Buffer
 
 inline_for_extraction
+let irepr
+  (#t: Type)
+  (#k: parser_kind)
+  (p: parser k t)
+  (s: slice freezable_preorder freezable_preorder)
+= irepr p s (compl t)
+
+inline_for_extraction
 noextract
 let witness_valid
   (#t: Type)
@@ -55,7 +63,7 @@ let witness_valid
   (#p: parser k t)
   (s: slice freezable_preorder freezable_preorder)
   (pos: U32.t)
-: HST.Stack (irepr p s (compl t))
+: HST.Stack (irepr p s)
   (requires (fun h ->
     k.parser_kind_subkind == Some ParserStrong /\
     valid p h s pos /\
@@ -82,7 +90,7 @@ let recall_valid
   (#k: parser_kind)
   (#p: parser k t)
   (#s: slice freezable_preorder freezable_preorder)
-  (i: irepr p s (compl t))
+  (i: irepr p s)
 : HST.Stack unit
   (requires (fun h -> B.recallable s.base \/ live_slice h s))
   (ensures (fun h _ h' ->
