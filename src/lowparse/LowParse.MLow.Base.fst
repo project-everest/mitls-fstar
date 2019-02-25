@@ -3326,7 +3326,8 @@ let recall_valid_gen
   (ensures (fun h _ h' ->
     h' == h /\
     live_slice h s /\
-    valid_content_pos p h s (irepr_pos i) (irepr_v i) (irepr_pos' i)
+    valid_content_pos p h s (irepr_pos i) (irepr_v i) (irepr_pos' i) /\
+    compl (irepr_pos i) (irepr_v i) (irepr_pos' i) (B.as_seq h s.base)
   ))
 = let h = HST.get () in
   [@inline_let]

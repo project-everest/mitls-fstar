@@ -95,7 +95,9 @@ let recall_valid
   (ensures (fun h _ h' ->
     h' == h /\
     live_slice h s /\
-    valid_content_pos p h s (irepr_pos i) (irepr_v i) (irepr_pos' i)
+    valid_content_pos p h s (irepr_pos i) (irepr_v i) (irepr_pos' i) /\
+    U32.v (irepr_pos i) >= 4 /\
+    U32.v (irepr_pos' i) <= get_w (B.as_seq h s.base)
   ))
 = recall_valid_gen i
 
