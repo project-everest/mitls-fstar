@@ -41,7 +41,7 @@ assume val frozen_until (f:FB.fbuffer)
       FB.get_w (B.as_seq h0 f) == UInt32.v x)
 
 let read_components2 (i:irepr P.pair_parser)
-  : Stack (irepr LPI.parse_u32 * irepr LPI.parse_u16)
+  : Stack (x: (irepr LPI.parse_u32 * irepr LPI.parse_u16) { LM.irepr_v i == {P.fst = LM.irepr_v (fst x); P.snd = LM.irepr_v (snd x)} } )
     (requires fun h ->
       True)
     (ensures fun h0 x h1 ->
