@@ -12,10 +12,10 @@ let compl
   (pos' : U32.t)
   (x: Seq.seq byte)
 : GTot Type0
-= U32.v pos >= 1 /\
-  Seq.length x > 0 /\ (
-  let len = U8.v (Seq.index x 0) in
-  len >= 1 /\ len <= Seq.length x /\
+= U32.v pos >= 4 /\
+  Seq.length x >= 4 /\ (
+  let len = get_w x in
+  len >= 4 /\ len <= Seq.length x /\
   U32.v pos' <= len
   )
 
@@ -35,8 +35,7 @@ let wvalid_stable
 = let pf (s1 s2: Seq.seq byte) : Lemma
     (requires (wvalid p s (compl t) pos gpos' v' s1 /\ freezable_preorder s1 s2))
     (ensures (wvalid p s (compl t) pos gpos' v' s1 /\ freezable_preorder s1 s2 /\ wvalid p s (compl t) pos gpos' v' s2))
-  = freezable_preorder_equiv s1 s2;
-    parse_strong_prefix p (Seq.slice s1 (U32.v pos) (U32.v s.len)) (Seq.slice s2 (U32.v pos) (U32.v s.len))
+  = parse_strong_prefix p (Seq.slice s1 (U32.v pos) (U32.v s.len)) (Seq.slice s2 (U32.v pos) (U32.v s.len))
   in
   let pf' (s1 s2: Seq.seq byte) : Lemma
     ((wvalid p s (compl t) pos gpos' v' s1 /\ freezable_preorder s1 s2) ==> wvalid p s (compl t) pos gpos' v' s2)
@@ -68,10 +67,10 @@ let witness_valid
     k.parser_kind_subkind == Some ParserStrong /\
     valid p h s pos /\
     (* conditions on global size header *)
-    U32.v pos >= 1 /\
-    U32.v s.len > 0 /\ (
-    let len = U8.v (Seq.index (B.as_seq h s.base)  0) in
-    len >= 1 /\ len <= U32.v s.len /\
+    U32.v pos >= 4 /\
+    U32.v s.len >= 4 /\ (
+    let len = get_w (B.as_seq h s.base) in
+    len >= 4 /\ len <= U32.v s.len /\
     U32.v (get_valid_pos p h s pos) <= len
   )))
   (ensures (fun h res h' ->
