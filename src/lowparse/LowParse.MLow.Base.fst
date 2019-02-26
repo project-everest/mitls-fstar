@@ -2239,6 +2239,66 @@ let leaf_writer_weak
   )))
 *)
 
+let writable
+  (#t: Type)
+  (#rrel #rel: B.srel t)
+  (b: B.mbuffer t rrel rel)
+  (pos pos' : nat)
+  (h: HS.mem)
+: GTot Type0
+= let s = B.as_seq h b in
+  B.live h b /\
+  ((pos <= pos' /\ pos' <= B.length b) ==> (
+    (forall (s1:Seq.lseq t (pos' - pos)) . {:pattern (Seq.replace_subseq s pos pos' s1)}
+      forall (s2:Seq.lseq t (pos' - pos)) . {:pattern (Seq.replace_subseq s pos pos' s2)}
+      Seq.replace_subseq s pos pos' s1 `rel` Seq.replace_subseq s pos pos' s2
+  )))
+
+let writable_intro
+  (#t: Type)
+  (#rrel #rel: B.srel t)
+  (b: B.mbuffer t rrel rel)
+  (pos pos' : nat)
+  (h: HS.mem)
+  (s: squash (B.live h b /\ pos <= pos' /\ pos' <= B.length b))
+  (f: (
+    (s1: Seq.lseq t (pos' - pos)) ->
+    (s2: Seq.lseq t (pos' - pos)) ->
+    Lemma
+    (let s = B.as_seq h b in
+      Seq.replace_subseq s pos pos' s1 `rel` Seq.replace_subseq s pos pos' s2)
+  ))
+: Lemma
+  (writable b pos pos' h)
+= Classical.forall_intro_2 f
+
+let writable_upd
+  (#t: Type)
+  (#rrel #rel: B.srel t)
+  (b: B.mbuffer t rrel rel)
+  (pos pos' : nat)
+  (h: HS.mem)
+  (i: nat)
+  (v: t)
+: Lemma
+  (requires (writable b pos pos' h /\ pos <= i /\ i < pos' /\ pos' <= B.length b))
+  (ensures (
+    let s = B.as_seq h b in
+    s `rel` Seq.upd s i v /\
+    writable b pos pos' (B.g_upd b i v h)
+  ))
+= let s = B.as_seq h b in
+  let h' = B.g_upd b i v h in
+  let s' = B.as_seq h' b in
+  B.g_upd_seq_as_seq b (Seq.upd s i v) h;
+  let sl = Seq.slice s pos pos' in
+  assert (s `Seq.equal` Seq.replace_subseq s pos pos' sl);
+  assert (s' `Seq.equal` Seq.replace_subseq s pos pos' (Seq.upd sl (i - pos) v));
+  writable_intro b pos pos' h' () (fun s1 s2 ->
+    assert (Seq.replace_subseq s' pos pos' s1 `Seq.equal` Seq.replace_subseq s pos pos' s1);
+    assert (Seq.replace_subseq s' pos pos' s2 `Seq.equal` Seq.replace_subseq s pos pos' s2)
+  )
+
 [@unifier_hint_injective]
 inline_for_extraction
 let leaf_writer_strong
@@ -2257,7 +2317,7 @@ let leaf_writer_strong
     let len = serialized_length s x in
     live_slice h sl /\
     U32.v pos + len <= U32.v sl.len /\
-    rel sq (Seq.slice sq 0 (U32.v pos) `Seq.append` serialize s x `Seq.append` Seq.slice sq (U32.v pos + len) (Seq.length sq))
+    writable sl.base (U32.v pos) (U32.v pos + len) h
   ))
   (ensures (fun h pos' h' ->
     B.modifies (loc_slice_from_to sl pos pos') h h' /\
@@ -2282,7 +2342,7 @@ let serializer32
     let sq = B.as_seq h b in
     B.live h b /\
     U32.v pos + len <= B.length b /\
-    rel sq (Seq.slice sq 0 (U32.v pos) `Seq.append` serialize s x `Seq.append` Seq.slice sq (U32.v pos + len) (Seq.length sq))
+    writable b (U32.v pos) (U32.v pos + len) h
   ))
   (ensures (fun h pos' h' ->
     U32.v pos + Seq.length (serialize s x) == U32.v pos' /\ (

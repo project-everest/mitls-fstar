@@ -9,6 +9,7 @@ module U16 = FStar.UInt16
 module U32 = FStar.UInt32
 module B = LowStar.Monotonic.Buffer
 module HST = FStar.HyperStack.ST
+module Cast = FStar.Int.Cast
 
 (*
 inline_for_extraction
@@ -44,24 +45,39 @@ inline_for_extraction
 let serialize32_u8 : serializer32 #_ #_ #parse_u8 serialize_u8 =
   fun v (#rrel #rel: B.srel byte) out pos ->
   let h = HST.get () in
-  assert (
-    let sq = B.as_seq h out in
-    Seq.upd sq (U32.v pos) v `Seq.equal` (Seq.slice sq 0 (U32.v pos) `Seq.append` serialize serialize_u8 v `Seq.append` Seq.slice sq (U32.v pos + 1) (Seq.length sq))
-  );
+  writable_upd out (U32.v pos) (U32.v pos + 1) h (U32.v pos) v;
   B.upd' out pos v;
-  let h' = HST.get () in
   B.g_upd_modifies_strong out (U32.v pos) v h;
   B.g_upd_seq_as_seq out (Seq.upd (B.as_seq h out) (U32.v pos) v) h;
   pos `U32.add` 1ul
 
-(*
+#push-options "--z3rlimit 16"
+
 inline_for_extraction
 let serialize32_u16 : serializer32 #_ #_ #parse_u16 serialize_u16 =
-  fun v out ->
-  let out' = B.sub out 0ul 2ul in
-  E.n_to_be_2 U16.t 16 (E.u16 ()) v out';
-  2ul
+  fun v (#rrel #rel: B.srel byte) out pos ->
+  let h0 = HST.get () in
+  serialize_u16_eq v;
+  let b1 = Cast.uint16_to_uint8 v in
+  let d0 = U16.div v 256us in
+  let b0 = Cast.uint16_to_uint8 d0 in
+  let h = HST.get () in
+  writable_upd out (U32.v pos) (U32.v pos + 2) h (U32.v pos) b0;
+  B.upd' out pos b0;
+  B.g_upd_modifies_strong out (U32.v pos) b0 h;
+  B.g_upd_seq_as_seq out (Seq.upd (B.as_seq h out) (U32.v pos) b0) h;
+  let h = HST.get () in
+  writable_upd out (U32.v pos) (U32.v pos + 2) h (U32.v pos + 1) b1;
+  B.upd' out (pos `U32.add` 1ul) b1;
+  B.g_upd_modifies_strong out (U32.v pos + 1) b1 h;
+  B.g_upd_seq_as_seq out (Seq.upd (B.as_seq h out) (U32.v pos + 1) b1) h;
+  B.loc_includes_loc_buffer_from_to out pos (pos `U32.add` 2ul) pos (pos `U32.add` 1ul);
+  B.loc_includes_loc_buffer_from_to out pos (pos `U32.add` 2ul) (pos `U32.add` 1ul) (pos `U32.add` 2ul);
+  pos `U32.add` 2ul
 
+#pop-options
+
+(*
 inline_for_extraction
 let serialize32_u32 : serializer32 #_ #_ #parse_u32 serialize_u32 =
   fun v out ->
