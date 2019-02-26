@@ -96,10 +96,45 @@ let recall_valid
     h' == h /\
     live_slice h s /\
     valid_content_pos p h s (irepr_pos i) (irepr_v i) (irepr_pos' i) /\
+    U32.v s.len >= 4 /\
     U32.v (irepr_pos i) >= 4 /\
     U32.v (irepr_pos' i) <= get_w (B.as_seq h s.base)
   ))
 = recall_valid_gen i
+
+inline_for_extraction
+noextract
+let iaccess
+  (#k1: parser_kind)
+  (#t1: Type)
+  (#p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (#p2: parser k2 t2)
+  (#cl: clens t1 t2)
+  (#g: gaccessor p1 p2 cl)
+  ($a: accessor g)
+  (#s: slice freezable_preorder freezable_preorder)
+  (i1: irepr p1 s)
+: HST.Stack (irepr p2 s)
+  (requires (fun h ->
+    k1.parser_kind_subkind == Some ParserStrong /\
+    k2.parser_kind_subkind == Some ParserStrong /\
+    cl.clens_cond (irepr_v i1) /\
+    witnessed s.base (w_pred 4) /\
+    (B.recallable s.base \/ live_slice h s)
+  ))
+  (ensures (fun h i2 h' ->
+    B.modifies B.loc_none h h' /\
+    valid_content_pos p1 h s (irepr_pos i1) (irepr_v i1) (irepr_pos' i1) /\
+    valid_content_pos p2 h s (irepr_pos i2) (irepr_v i2) (irepr_pos' i2) /\
+    irepr_pos i2 == slice_access h g s (irepr_pos i1) /\
+    irepr_v i2 == cl.clens_get (irepr_v i1)
+  ))
+= recall_valid i1;
+  let x = a s (irepr_pos i1) in
+  recall_w_default s.base;
+  witness_valid s x
 
 val main: FStar.Int32.t -> LowStar.Buffer.buffer (LowStar.Buffer.buffer C.char) ->
   FStar.HyperStack.ST.Stack C.exit_code (fun _ -> true) (fun _ _ _ -> true)
