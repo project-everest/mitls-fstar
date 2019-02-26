@@ -9,11 +9,13 @@ module List = FStar.List.Tot
 module HS = FStar.HyperStack
 module B = LowStar.Buffer
 
-//module HSM = HandshakeMessages
 module LP = LowParse.Low.Base
+
 open HSL.Common
 
-open Parsers.Handshake13
+module HSM = Parsers.Handshake
+module HSM12 = Parsers.Handshake12
+module HSM13 = Parsers.Handshake13
 
 #reset-options
    "--max_fuel 0 --max_ifuel 0 \
