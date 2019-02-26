@@ -49,10 +49,6 @@ let read_components2 (i:irepr P.pair_parser)
   = LM.recall_valid i;
     let x = P.accessor_pair_fst buf (IRepr?.pos i) in
     FB.recall_w_default buf.base;
-    assert (UInt32.v x >= 4);
-    let h = get () in
-    let len = frozen_until buf.base in
-    assert (FStar.UInt32.(get_valid_pos LPI.parse_u32 h buf x <=^ len));
     let x : irepr LPI.parse_u32 = LM.witness_valid buf x in
 
     havoc();
@@ -61,9 +57,6 @@ let read_components2 (i:irepr P.pair_parser)
     let y : UInt32.t = P.accessor_pair_snd buf (IRepr?.pos i) in
     FB.recall_w_default buf.base;
     assert (UInt32.v y >= 4);
-    let h = get () in
-    let len = frozen_until buf.base in
-    assert (FStar.UInt32.(get_valid_pos LPI.parse_u16 h buf y <=^ len));
     let y : irepr LPI.parse_u16 = LM.witness_valid buf y in
     x, y
 
@@ -74,5 +67,6 @@ let read_components3 (i:irepr P.pair_parser)
     (ensures fun h0 x h1 ->
       True)
 = let xfst = LM.iaccess P.accessor_pair_fst i in
+  havoc();
   let xsnd = LM.iaccess P.accessor_pair_snd i in
   (xfst, xsnd)
