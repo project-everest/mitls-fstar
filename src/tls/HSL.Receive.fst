@@ -14,17 +14,13 @@ module LP = LowParse.Low.Base
 
 open HSL.Common
 
-#reset-options
-   "--log_queries --query_stats \
-    --using_facts_from 'Prims FStar LowStar -FStar.Reflection -FStar.Tactics -FStar.UInt128 -FStar.Math' \
-    --using_facts_from 'Mem HSL Types_s Words_s Spec.Hash.Definitions.bytes' \
-    --using_facts_from 'TLSError'"
+#reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection'"
 
 noeq
 type hsl_state = {
-  rgn:Mem.rgn;
-  from_to:B.pointer (option range_t);
-  parsed_bytes:(p:B.pointer (G.erased hbytes){
+  rgn: Mem.rgn;
+  from_to: B.pointer (option range_t);
+  parsed_bytes: (p:B.pointer (G.erased bytes){
    let open B in
    let locs =
      [loc_buffer from_to;
@@ -54,8 +50,5 @@ let create r =
   let parsed_bytes = B.malloc r (G.hide (Seq.empty)) 1ul in
   { rgn = r; from_to = from_to; parsed_bytes = parsed_bytes }
 
-let receive_flight_hrr (st:hsl_state) (b:b8) (from to:uint_32) =
-  admit()
-
-let receive_flight_c_ske_shd (st:hsl_state) (b:b8) (from to:uint_32) =
+let receive_flight_ee_fin (st:hsl_state) (b:b8) (from to:uint_32) =
   admit()
