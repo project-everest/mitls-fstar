@@ -1075,29 +1075,30 @@ let valid_exact_ext_intro
   (#k: parser_kind)
   (#t: Type)
   (p: parser k t)
-  (h: HS.mem)
+  (h1: HS.mem)
   (s1: slice rrel rel)
   (pos1: U32.t)
   (pos1' : U32.t)
+  (h2: HS.mem)
   (s2: slice rrel rel)
   (pos2: U32.t)
   (pos2' : U32.t)
 : Lemma
   (requires (
-    valid_exact p h s1 pos1 pos1' /\
-    live_slice h s2 /\
+    valid_exact p h1 s1 pos1 pos1' /\
+    live_slice h2 s2 /\
     U32.v pos1' - U32.v pos1 == U32.v pos2' - U32.v pos2 /\
     U32.v pos2' <= U32.v s2.len /\
-    bytes_of_slice_from_to h s1 pos1 pos1' `Seq.equal` bytes_of_slice_from_to h s2 pos2 pos2'
+    bytes_of_slice_from_to h1 s1 pos1 pos1' `Seq.equal` bytes_of_slice_from_to h2 s2 pos2 pos2'
   ))
   (ensures (
-    valid_exact p h s2 pos2 pos2' /\
-    contents_exact p h s2 pos2 pos2' == contents_exact p h s1 pos1 pos1'
+    valid_exact p h2 s2 pos2 pos2' /\
+    contents_exact p h2 s2 pos2 pos2' == contents_exact p h1 s1 pos1 pos1'
   ))
-= valid_exact_equiv p h s1 pos1 pos1' ;
-  valid_exact_equiv p h s2 pos2 pos2' ;
-  contents_exact_eq p h s1 pos1 pos1' ;
-  contents_exact_eq p h s2 pos2 pos2'
+= valid_exact_equiv p h1 s1 pos1 pos1' ;
+  valid_exact_equiv p h2 s2 pos2 pos2' ;
+  contents_exact_eq p h1 s1 pos1 pos1' ;
+  contents_exact_eq p h2 s2 pos2 pos2'
 
 abstract
 let valid_exact_ext_elim
@@ -1105,30 +1106,31 @@ let valid_exact_ext_elim
   (#k: parser_kind)
   (#t: Type)
   (p: parser k t)
-  (h: HS.mem)
+  (h1: HS.mem)
   (s1: slice rrel rel)
   (pos1: U32.t)
   (pos1' : U32.t)
+  (h2: HS.mem)
   (s2: slice rrel rel)
   (pos2: U32.t)
   (pos2' : U32.t)
 : Lemma
   (requires (
-    valid_exact p h s1 pos1 pos1' /\
-    valid_exact p h s2 pos2 pos2' /\
-    contents_exact p h s1 pos1 pos1' == contents_exact p h s2 pos2 pos2'
+    valid_exact p h1 s1 pos1 pos1' /\
+    valid_exact p h2 s2 pos2 pos2' /\
+    contents_exact p h1 s1 pos1 pos1' == contents_exact p h2 s2 pos2 pos2'
   ))
   (ensures (
     U32.v pos2' - U32.v pos2 == U32.v pos1' - U32.v pos1 /\
-    bytes_of_slice_from_to h s1 pos1 pos1' == bytes_of_slice_from_to h s2 pos2 pos2'
+    bytes_of_slice_from_to h1 s1 pos1 pos1' == bytes_of_slice_from_to h2 s2 pos2 pos2'
   ))
-= valid_exact_equiv p h s1 pos1 pos1' ;
-  valid_exact_equiv p h s2 pos2 pos2' ;
-  contents_exact_eq p h s1 pos1 pos1' ;
-  contents_exact_eq p h s2 pos2 pos2' ;
+= valid_exact_equiv p h1 s1 pos1 pos1' ;
+  valid_exact_equiv p h2 s2 pos2 pos2' ;
+  contents_exact_eq p h1 s1 pos1 pos1' ;
+  contents_exact_eq p h2 s2 pos2 pos2' ;
   parser_kind_prop_equiv k p;
-  assert (injective_precond p (bytes_of_slice_from_to h s1 pos1 pos1') (bytes_of_slice_from_to h s2 pos2 pos2'));
-  assert (injective_postcond p (bytes_of_slice_from_to h s1 pos1 pos1') (bytes_of_slice_from_to h s2 pos2 pos2'))
+  assert (injective_precond p (bytes_of_slice_from_to h1 s1 pos1 pos1') (bytes_of_slice_from_to h2 s2 pos2 pos2'));
+  assert (injective_postcond p (bytes_of_slice_from_to h1 s1 pos1 pos1') (bytes_of_slice_from_to h2 s2 pos2 pos2'))
 
 (* Accessors for reading only (no in-place serialization yet) *)
 
