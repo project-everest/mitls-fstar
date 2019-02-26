@@ -15,7 +15,7 @@
         "fuel_guarded_inversion_EverCrypt.ec_curve"
       ],
       0,
-      "f80a20a91667e77f6792248298d471e3"
+      "b34470f9cbb142671c8854c6777d51af"
     ],
     [
       "ECGroup.point",
@@ -25,12 +25,12 @@
       [
         "@MaxIFuel_assumption", "@query", "equation_ECGroup.bytelen",
         "equation_FStar.Bytes.lbytes",
-        "function_token_typing_FStar.Bytes.bytes",
-        "haseqFStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
-        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+        "haseqTm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
       ],
       0,
-      "5eba37c5cc69ec95b4d20c1dfd4d31b1"
+      "e12338f0d7d51bbd43d6c02f6a2444b4"
     ],
     [
       "ECGroup.pre_keyshare",
@@ -45,14 +45,13 @@
         "equation_TLS.Curve25519.keyshare", "equation_TLS.Curve25519.point",
         "equation_TLS.Curve25519.scalar",
         "fuel_guarded_inversion_ECGroup.point",
-        "function_token_typing_FStar.Bytes.bytes",
         "function_token_typing_TLS.Curve25519.scalar",
-        "haseqFStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
-        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
-        "typing_ECGroup._key"
+        "haseqTm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_ECGroup._key", "typing_FStar.Bytes.bytes"
       ],
       0,
-      "5bfdcbb099222e20a78c9d7221dc026f"
+      "301c86779566893673aa0e6d9dd4269e"
     ],
     [
       "ECGroup.__proj__KS_CC__item___0",
@@ -62,10 +61,10 @@
       [
         "@MaxIFuel_assumption", "@query", "disc_equation_ECGroup.KS_CC",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_ECGroup_Tm_refine_75033e3d62eeb30c851e43b03e75be19"
+        "refinement_interpretation_Tm_refine_75033e3d62eeb30c851e43b03e75be19"
       ],
       0,
-      "2fcbb5ec43ddac83beef5fac773f3cbb"
+      "0b891e6cd4f8cc0a0293b86fdcf142dd"
     ],
     [
       "ECGroup.__proj__KS_CC__item___1",
@@ -75,10 +74,10 @@
       [
         "@MaxIFuel_assumption", "@query", "disc_equation_ECGroup.KS_CC",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_ECGroup_Tm_refine_75033e3d62eeb30c851e43b03e75be19"
+        "refinement_interpretation_Tm_refine_75033e3d62eeb30c851e43b03e75be19"
       ],
       0,
-      "460b83edac33c8dd0f532ac6e11fc827"
+      "891d6f68b0d7c99813af115b17c0109a"
     ],
     [
       "ECGroup.__proj__KS_X25519__item___0",
@@ -88,10 +87,10 @@
       [
         "@MaxIFuel_assumption", "@query", "disc_equation_ECGroup.KS_X25519",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_ECGroup_Tm_refine_81c6f60dc95eec95122f242ef166cd95"
+        "refinement_interpretation_Tm_refine_81c6f60dc95eec95122f242ef166cd95"
       ],
       0,
-      "f40ce98972de31ce2b20d2879437385e"
+      "806ae56c633107ea69854b197ff9c818"
     ],
     [
       "ECGroup.__proj__KS_X448__item__pub",
@@ -101,10 +100,10 @@
       [
         "@MaxIFuel_assumption", "@query", "disc_equation_ECGroup.KS_X448",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_ECGroup_Tm_refine_c9a2fe89d4710b6fd3ffa98ede9374a0"
+        "refinement_interpretation_Tm_refine_c9a2fe89d4710b6fd3ffa98ede9374a0"
       ],
       0,
-      "18c858d86b4a32b0c56630b77f552c47"
+      "c07f1b0d02e6fee5cae6f46414b250eb"
     ],
     [
       "ECGroup.__proj__KS_X448__item__priv",
@@ -114,10 +113,10 @@
       [
         "@MaxIFuel_assumption", "@query", "disc_equation_ECGroup.KS_X448",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_ECGroup_Tm_refine_c9a2fe89d4710b6fd3ffa98ede9374a0"
+        "refinement_interpretation_Tm_refine_c9a2fe89d4710b6fd3ffa98ede9374a0"
       ],
       0,
-      "a8a7def3ddc0d74920c64fbe0581dab0"
+      "9aa8b34f944bfd576fcf371a98a19159"
     ],
     [
       "ECGroup.pre_share",
@@ -128,12 +127,12 @@
         "@MaxIFuel_assumption", "@query",
         "assumption_ECGroup.point__uu___haseq",
         "equation_FStar.Bytes.lbytes", "equation_TLS.Curve25519.point",
-        "function_token_typing_FStar.Bytes.bytes",
-        "haseqFStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
-        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+        "haseqTm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
       ],
       0,
-      "1914e8ce6c49c7f41df03943042405e1"
+      "9591f25cbdee7977c7682166504538ca"
     ],
     [
       "ECGroup.__proj__S_CC__item___0",
@@ -141,24 +140,12 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "assumption_Prims.HasEq_int", "data_elim_ECGroup.S_CC",
-        "disc_equation_ECGroup.S_CC", "equation_FStar.UInt.uint_t",
-        "equation_FStar.UInt32.n",
-        "fuel_guarded_inversion_CoreCrypto.ec_point",
-        "function_token_typing_FStar.UInt32.n",
-        "haseqECGroup_Tm_refine_79d2cf0d6ed3db26581f07568712f445",
-        "haseqECGroup_Tm_refine_a8698f94727f8312ae07c7e01fdaff78",
+        "@MaxIFuel_assumption", "@query", "disc_equation_ECGroup.S_CC",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_ECGroup_Tm_refine_05591511480b117eab365732eb8db81f",
-        "refinement_interpretation_ECGroup_Tm_refine_6ef310c066e847a1aecbd2e883cd341c",
-        "refinement_interpretation_FStar.UInt_Tm_refine_a347709bfeba48709474ad26f4f6be87",
-        "typing_CoreCrypto.__proj__Mkec_point__item__ecx",
-        "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
+        "refinement_interpretation_Tm_refine_05591511480b117eab365732eb8db81f"
       ],
       0,
-      "419996ad396b1f2fb90c876a533d477e"
+      "375244e6875980e63b47ba18755b77e5"
     ],
     [
       "ECGroup.__proj__S_X25519__item___0",
@@ -168,10 +155,10 @@
       [
         "@MaxIFuel_assumption", "@query", "disc_equation_ECGroup.S_X25519",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_ECGroup_Tm_refine_3fe025d9655cfc205e806357ac63a5cb"
+        "refinement_interpretation_Tm_refine_3fe025d9655cfc205e806357ac63a5cb"
       ],
       0,
-      "8cbc32508da49026f11a26aef36620f8"
+      "1effd3eca3a2553d4aef96a78c456cc5"
     ],
     [
       "ECGroup.__proj__S_X448__item___0",
@@ -181,10 +168,10 @@
       [
         "@MaxIFuel_assumption", "@query", "disc_equation_ECGroup.S_X448",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_ECGroup_Tm_refine_699fa5fe2bf10284a105031d3185a838"
+        "refinement_interpretation_Tm_refine_699fa5fe2bf10284a105031d3185a838"
       ],
       0,
-      "716ca596c8055e6501799eda9dad2420"
+      "da5edb3a907f2a3936f251cafc39bdcc"
     ]
   ]
 ]

@@ -3,237 +3,6 @@ include LowParse.Spec.Enum
 
 module Seq = FStar.Seq
 
-inline_for_extraction
-let refine_with_tag (#tag_t: Type0) (#data_t: Type0) (tag_of_data: (data_t -> GTot tag_t)) (x: tag_t) : Tot Type0 =
-  (y: data_t { tag_of_data y == x } )
-
-inline_for_extraction
-let synth_tagged_union_data
-  (#tag_t: Type0)
-  (#data_t: Type0)
-  (tag_of_data: (data_t -> GTot tag_t))
-  (tg: tag_t)
-  (x: refine_with_tag tag_of_data tg)
-: Tot data_t
-= x
-
-let parse_tagged_union_payload
-  (#tag_t: Type0)
-  (#data_t: Type0)
-  (tag_of_data: (data_t -> GTot tag_t))
-  (#k: parser_kind)
-  (p: (t: tag_t) -> Tot (parser k (refine_with_tag tag_of_data t)))
-  (tg: tag_t)
-: Tot (parser k data_t)
-= parse_synth #k #(refine_with_tag tag_of_data tg) (p tg) (synth_tagged_union_data tag_of_data tg)
-
-let parse_tagged_union_payload_and_then_cases_injective
-  (#tag_t: Type0)
-  (#data_t: Type0)
-  (tag_of_data: (data_t -> GTot tag_t))
-  (#k: parser_kind)
-  (p: (t: tag_t) -> Tot (parser k (refine_with_tag tag_of_data t)))
-: Lemma
-  (and_then_cases_injective (parse_tagged_union_payload tag_of_data p))
-= and_then_cases_injective_intro (parse_tagged_union_payload tag_of_data p) (fun x1 x2 b1 b2 ->
-    parse_synth_eq #k #(refine_with_tag tag_of_data x1) (p x1) (synth_tagged_union_data tag_of_data x1) b1;
-    parse_synth_eq #k #(refine_with_tag tag_of_data x2) (p x2) (synth_tagged_union_data tag_of_data x2) b2
-  )
-
-abstract
-val parse_tagged_union
-  (#kt: parser_kind)
-  (#tag_t: Type0)
-  (pt: parser kt tag_t)
-  (#data_t: Type0)
-  (tag_of_data: (data_t -> GTot tag_t))
-  (#k: parser_kind)
-  (p: (t: tag_t) -> Tot (parser k (refine_with_tag tag_of_data t)))
-: Tot (parser (and_then_kind kt k) data_t)
-
-let parse_tagged_union #kt #tag_t pt #data_t tag_of_data #k p =
-  parse_tagged_union_payload_and_then_cases_injective tag_of_data p;
-  pt `and_then` parse_tagged_union_payload tag_of_data p
-
-let parse_tagged_union_eq
-  (#kt: parser_kind)
-  (#tag_t: Type0)
-  (pt: parser kt tag_t)
-  (#data_t: Type0)
-  (tag_of_data: (data_t -> GTot tag_t))
-  (#k: parser_kind)
-  (p: (t: tag_t) -> Tot (parser k (refine_with_tag tag_of_data t)))
-  (input: bytes)
-: Lemma
-  (parse (parse_tagged_union pt tag_of_data p) input == (match parse pt input with
-  | None -> None
-  | Some (tg, consumed_tg) ->
-    let input_tg = Seq.slice input consumed_tg (Seq.length input) in
-    begin match parse (p tg) input_tg with
-    | Some (x, consumed_x) -> Some ((x <: data_t), consumed_tg + consumed_x)
-    | None -> None
-    end
-  ))
-= parse_tagged_union_payload_and_then_cases_injective tag_of_data p;
-  and_then_eq pt (parse_tagged_union_payload tag_of_data p) input;
-  match parse pt input with
-  | None -> ()
-  | Some (tg, consumed_tg) ->
-    let input_tg = Seq.slice input consumed_tg (Seq.length input) in
-    parse_synth_eq #k #(refine_with_tag tag_of_data tg) (p tg) (synth_tagged_union_data tag_of_data tg) input_tg
-
-let bare_parse_tagged_union
-  (#kt: parser_kind)
-  (#tag_t: Type0)
-  (pt: parser kt tag_t)
-  (#data_t: Type0)
-  (tag_of_data: (data_t -> GTot tag_t))
-  (k': (t: tag_t) -> Tot parser_kind)
-  (p: (t: tag_t) -> Tot (parser (k' t) (refine_with_tag tag_of_data t)))
-  (input: bytes)
-: GTot (option (data_t * consumed_length input))
-= match parse pt input with
-  | None -> None
-  | Some (tg, consumed_tg) ->
-    let input_tg = Seq.slice input consumed_tg (Seq.length input) in
-    begin match parse (p tg) input_tg with
-    | Some (x, consumed_x) -> Some ((x <: data_t), consumed_tg + consumed_x)
-    | None -> None
-    end
-
-let parse_tagged_union_eq_gen
-  (#kt: parser_kind)
-  (#tag_t: Type0)
-  (pt: parser kt tag_t)
-  (#data_t: Type0)
-  (tag_of_data: (data_t -> GTot tag_t))
-  (#k: parser_kind)
-  (p: (t: tag_t) -> Tot (parser k (refine_with_tag tag_of_data t)))
-  (#kt': parser_kind)
-  (pt': parser kt' tag_t)
-  (lem_pt: (
-    (input: bytes) -> 
-    Lemma
-    (parse pt input == parse pt' input)
-  ))
-  (k': (t: tag_t) -> Tot parser_kind)
-  (p': (t: tag_t) -> Tot (parser (k' t) (refine_with_tag tag_of_data t)))
-  (lem_p' : (
-    (k: tag_t) ->
-    (input: bytes) ->
-    Lemma
-    (parse (p k) input == parse (p' k) input)
-  ))
-  (input: bytes)
-: Lemma
-  (parse (parse_tagged_union pt tag_of_data p) input == bare_parse_tagged_union pt' tag_of_data k' p' input)
-= parse_tagged_union_payload_and_then_cases_injective tag_of_data p;
-  and_then_eq pt (parse_tagged_union_payload tag_of_data p) input;
-  lem_pt input;
-  match parse pt input with
-  | None -> ()
-  | Some (tg, consumed_tg) ->
-    let input_tg = Seq.slice input consumed_tg (Seq.length input) in
-    parse_synth_eq #k #(refine_with_tag tag_of_data tg) (p tg) (synth_tagged_union_data tag_of_data tg) input_tg;
-    lem_p' tg input_tg
-
-let bare_serialize_tagged_union
-  (#kt: parser_kind)
-  (#tag_t: Type0)
-  (#pt: parser kt tag_t)
-  (st: serializer pt)
-  (#data_t: Type0)
-  (tag_of_data: (data_t -> GTot tag_t))
-  (#k: parser_kind)
-  (#p: (t: tag_t) -> Tot (parser k (refine_with_tag tag_of_data t)))
-  (s: (t: tag_t) -> Tot (serializer (p t)))
-: Tot (bare_serializer data_t)
-= fun (d: data_t) ->
-  let tg = tag_of_data d in
-  Seq.append (st tg) (serialize (s tg) d)
-
-abstract
-let bare_serialize_tagged_union_correct
-  (#kt: parser_kind)
-  (#tag_t: Type0)
-  (#pt: parser kt tag_t)
-  (st: serializer pt)
-  (#data_t: Type0)
-  (tag_of_data: (data_t -> GTot tag_t))
-  (#k: parser_kind)
-  (#p: (t: tag_t) -> Tot (parser k (refine_with_tag tag_of_data t)))
-  (s: (t: tag_t) -> Tot (serializer (p t)))
-: Lemma
-  (requires (kt.parser_kind_subkind == Some ParserStrong))
-  (ensures (serializer_correct (parse_tagged_union pt tag_of_data p) (bare_serialize_tagged_union st tag_of_data s)))
-= (* same proof as nondep_then *)
-  let prf
-    (x: data_t)
-  : Lemma (parse (parse_tagged_union pt tag_of_data p) (bare_serialize_tagged_union st tag_of_data s x) == Some (x, Seq.length (bare_serialize_tagged_union  st tag_of_data s x)))
-  = parse_tagged_union_eq pt tag_of_data p (bare_serialize_tagged_union st tag_of_data s x);
-    let t = tag_of_data x in
-    let (u: refine_with_tag tag_of_data t) = x in
-    let v1' = parse pt (bare_serialize_tagged_union st tag_of_data s x) in
-    let v1 = parse pt (st t) in
-    assert (Some? v1);
-    assert (no_lookahead_on pt (st t) (bare_serialize_tagged_union st tag_of_data s x));
-    let (Some (_, len')) = parse pt (st t) in
-    assert (len' == Seq.length (st t));
-    assert (len' <= Seq.length (bare_serialize_tagged_union st tag_of_data s x));
-    assert (Seq.slice (st t) 0 len' == st t);
-    seq_slice_append_l (st t) (serialize (s t) u);
-    assert (no_lookahead_on_precond pt (st t) (bare_serialize_tagged_union st tag_of_data s x));
-    assert (no_lookahead_on_postcond pt (st t) (bare_serialize_tagged_union st tag_of_data s x));
-    assert (Some? v1');
-    assert (injective_precond pt (st t) (bare_serialize_tagged_union st tag_of_data s x));
-    assert (injective_postcond pt (st t) (bare_serialize_tagged_union st tag_of_data s x));
-    let (Some (x1, len1)) = v1 in
-    let (Some (x1', len1')) = v1' in
-    assert (x1 == x1');
-    assert ((len1 <: nat) == (len1' <: nat));
-    assert (x1 == t);
-    assert (len1 == Seq.length (st t));
-    assert (bare_serialize_tagged_union st tag_of_data s x == Seq.append (st t) (serialize (s t) u));
-    seq_slice_append_r (st t) (serialize (s t) u);
-    ()
-  in
-  Classical.forall_intro prf
-
-abstract
-let serialize_tagged_union
-  (#kt: parser_kind)
-  (#tag_t: Type0)
-  (#pt: parser kt tag_t)
-  (st: serializer pt)
-  (#data_t: Type0)
-  (tag_of_data: (data_t -> GTot tag_t))
-  (#k: parser_kind)
-  (#p: (t: tag_t) -> Tot (parser k (refine_with_tag tag_of_data t)))
-  (s: (t: tag_t) -> Tot (serializer (p t)))
-: Pure (serializer (parse_tagged_union pt tag_of_data p))
-  (requires (kt.parser_kind_subkind == Some ParserStrong))
-  (ensures (fun _ -> True))
-= bare_serialize_tagged_union_correct st tag_of_data s;
-  bare_serialize_tagged_union st tag_of_data s
-
-abstract
-let serialize_tagged_union_eq
-  (#kt: parser_kind)
-  (#tag_t: Type0)
-  (#pt: parser kt tag_t)
-  (st: serializer pt)
-  (#data_t: Type0)
-  (tag_of_data: (data_t -> GTot tag_t))
-  (#k: parser_kind)
-  (#p: (t: tag_t) -> Tot (parser k (refine_with_tag tag_of_data t)))
-  (s: (t: tag_t) -> Tot (serializer (p t)))
-  (input: data_t)
-: Lemma
-  (requires (kt.parser_kind_subkind == Some ParserStrong))
-  (ensures (serialize (serialize_tagged_union st tag_of_data s) input == bare_serialize_tagged_union st tag_of_data s input))
-  [SMTPat (serialize (serialize_tagged_union st tag_of_data s) input)]
-= ()
-
 let synth_case_recip'
     (#key: eqtype)
     (#repr: eqtype)
@@ -614,7 +383,7 @@ let synth_case_recip_synth_case_post
 : GTot Type0
 = 
   list_mem x (list_map fst e) ==> (
-    forall (y: type_of_tag x) .
+    forall (y: type_of_tag x) . {:pattern (synth_case_recip' e tag_of_data type_of_tag synth_case_recip (synth_case x y))}
     synth_case_recip' e tag_of_data type_of_tag synth_case_recip (synth_case x y) == y
   )
 
@@ -1164,7 +933,7 @@ let synth_dsum_case_recip_synth_case_known_post
 : GTot Type0
 = 
   list_mem x (list_map fst e) ==> (
-    forall (y: type_of_known_tag x) .
+    forall (y: type_of_known_tag x) . {:pattern (synth_case_recip (Known x) (synth_case (Known x) y))}
     synth_case_recip (Known x) (synth_case (Known x) y) == y
   )
 
@@ -1181,7 +950,7 @@ let synth_dsum_case_recip_synth_case_unknown_post
 : GTot Type0
 = 
   list_mem x (list_map snd e) == false ==> (
-    forall (y: type_of_unknown_tag) .
+    forall (y: type_of_unknown_tag) . {:pattern (synth_case_recip (Unknown x) (synth_case (Unknown x) y))}
     synth_case_recip (Unknown x) (synth_case (Unknown x) y) == y
   )
 

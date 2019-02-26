@@ -298,7 +298,7 @@ let findSetting_css (x:string) =
     | None -> failwith ("Unknown ciphersuite: "^x)
     | Some a -> a
 
-let rec split_string (c:FStar.Char.char) (x:string) : list string =
+let rec split_string (c:FStar.Char.char) (x:string) : Ex (list string) =
   let i = String.index_of x c in
   if i < 0
   then [x]

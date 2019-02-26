@@ -13,7 +13,7 @@
         "fuel_guarded_inversion_Parsers.Boolean.boolean"
       ],
       0,
-      "5c751beb03401cf20bbf81f535bbac9f"
+      "03e63ed505e302eb140ce036404f97a3"
     ],
     [
       "Parsers.Boolean.boolean_jumper",
@@ -21,18 +21,15 @@
       2,
       1,
       [
-        "@query", "equation_LowParse.Spec.Base.default_parser_kind",
-        "equation_LowParse.Spec.Base.strong_parser_kind",
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
         "equation_Parsers.Boolean.boolean_parser_kind",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
-        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
-        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
-        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "a18ce046e1f140f1de83acb73cdf0c17"
+      "d016e6f6b4042504fbbb4ccb0503bf98"
     ]
   ]
 ]

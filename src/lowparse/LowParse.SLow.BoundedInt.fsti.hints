@@ -1,0 +1,59 @@
+[
+  "ËÄdê÷œË €‰‰y˜d˜.",
+  [
+    [
+      "LowParse.SLow.BoundedInt.parse32_bounded_integer",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "equation_LowParse.Spec.BoundedInt.integer_size",
+        "equation_Prims.nat",
+        "function_token_typing_Prims.__cache_version_number__",
+        "int_inversion", "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_546bd17e6f1845f0224f72eac33516bd",
+        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
+      ],
+      0,
+      "6d379f1d2a4e2c24e2dedf7776a94ee4"
+    ],
+    [
+      "LowParse.SLow.BoundedInt.serialize32_bounded_integer",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "equation_LowParse.Spec.BoundedInt.integer_size",
+        "equation_Prims.nat",
+        "function_token_typing_Prims.__cache_version_number__",
+        "int_inversion", "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_546bd17e6f1845f0224f72eac33516bd",
+        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
+      ],
+      0,
+      "806af33bf811891ae20b9c1b230967c7"
+    ],
+    [
+      "LowParse.SLow.BoundedInt.size32_u16_le",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "e1b2153fdb07cf9bfc3bf1f8a1b93c12"
+    ],
+    [
+      "LowParse.SLow.BoundedInt.size32_u32_le",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "1f44e7f7eca27620214f18f423de8be6"
+    ]
+  ]
+]

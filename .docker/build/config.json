@@ -23,9 +23,10 @@
     "NotificationChannel" : "#mitls-build",
     "PublicBranches" : [ "master" ],
 
-    "kremlin_version" : "origin/master",
-    "hacl_version" : "origin/fstar-master",
-    "mlcrypto_version" : "origin/master",
-    "vale_version" : "origin/master",
-    "qd_version" : "origin/master"
+    "RepoVersions" : {
+        "kremlin_version" : "origin/master",
+        "hacl_version" : "origin/fstar-master",
+        "mlcrypto_version" : "origin/master",
+        "qd_version" : "origin/master"
+    }
 }

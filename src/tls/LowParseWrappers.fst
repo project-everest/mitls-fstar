@@ -93,7 +93,8 @@ let wrap_parser32_total_constant_length
   (u: unit { wrap_parser32_total_constant_length_precond p32 len } )
   (x: lbytes len)
 : Tot (y: t { s32 y == x } )
-= match p32 x with
+= [@inline_let] let _ = parser_kind_prop_equiv k p in
+  match p32 x with
   | Some (y, consumed) ->
     [@inline_let]
     let _ = parser32_then_serializer32' p32 s32 x y consumed in

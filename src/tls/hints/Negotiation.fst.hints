@@ -7,14 +7,12 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query",
-        "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "@query", "equation_FStar.HyperStack.ST.equal_stack_domains",
         "equation_FStar.Monotonic.Heap.equal_dom",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "ca78ab6c51f1346673a59427f454cb57"
+      "9a34bc3efbb7e3296c60bd2b2bd5856c"
     ],
     [
       "Negotiation.trace",
@@ -26,7 +24,7 @@
         "equation_DebugFlags.debug_NGO"
       ],
       0,
-      "029a433f1699550e2436cae88433ec28"
+      "898352f4de067ad9677aac999c57606b"
     ],
     [
       "Negotiation.string_of_option_extensions",
@@ -44,7 +42,7 @@
         "typing_FStar.Pervasives.Native.uu___is_Some"
       ],
       0,
-      "6e2d6dffda9f0b36a51b9f8ab5b2ff1c"
+      "109c040bdb07b66d5ac71f3297fc4b34"
     ],
     [
       "Negotiation.resumption_offer_12",
@@ -53,11 +51,11 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "function_token_typing_FStar.Bytes.bytes",
-        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
       ],
       0,
-      "c2974075309ffb256ce55ba0c02844cc"
+      "8f5c7b3af6992fd7e817d8bb7d5e420a"
     ],
     [
       "Negotiation.__proj__OfferTicket__item___0",
@@ -68,10 +66,10 @@
         "@MaxIFuel_assumption", "@query",
         "disc_equation_Negotiation.OfferTicket",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Negotiation_Tm_refine_081bfe5b8951a3764f42adb98a5e8a44"
+        "refinement_interpretation_Tm_refine_081bfe5b8951a3764f42adb98a5e8a44"
       ],
       0,
-      "9f9f7d134615a89dc181297a0662777f"
+      "9fb1f2a8cf3d196267c103d3b3949a48"
     ],
     [
       "Negotiation.__proj__OfferSid__item___0",
@@ -82,10 +80,10 @@
         "@MaxIFuel_assumption", "@query",
         "disc_equation_Negotiation.OfferSid",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Negotiation_Tm_refine_275bdec0501ce3a0442f80dcb62a3a71"
+        "refinement_interpretation_Tm_refine_275bdec0501ce3a0442f80dcb62a3a71"
       ],
       0,
-      "b10140ee958b3ed5ae78f05a535dd872"
+      "dd9d6f114881b11c4a546e7b4f97cddf"
     ],
     [
       "Negotiation.find_client_extension",
@@ -105,7 +103,7 @@
         "typing_HandshakeMessages.__proj__Mkch__item__ch_extensions"
       ],
       0,
-      "7196f6b82b89c2211624ef433745f029"
+      "b78ece33a61dd1691c73ffb26ac7edcf"
     ],
     [
       "Negotiation.find_client_extension_aux",
@@ -125,7 +123,7 @@
         "typing_HandshakeMessages.__proj__Mkch__item__ch_extensions"
       ],
       0,
-      "05545ed16b12e652a20deecfb14005a0"
+      "9bdd4525456c28b66a234d1a0ea4d1e4"
     ],
     [
       "Negotiation.find_supported_versions",
@@ -134,7 +132,7 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "Prims_pretyping_f537159ed795b314b4e58c260361ae86",
+        "Prims_pretyping_f537159ed795b314b4e58c260361ae86", "bool_typing",
         "data_elim_FStar.Pervasives.Native.Some",
         "disc_equation_Extensions.E_supported_versions",
         "disc_equation_FStar.Pervasives.Native.None",
@@ -142,16 +140,15 @@
         "equation_Extensions.extension",
         "equation_Negotiation.find_client_extension",
         "fuel_guarded_inversion_FStar.Pervasives.Native.option",
-        "function_token_typing_Flags.model",
-        "partial_app_typing_0702dc4e524d2ea33b4b9bbc7145cffe__14330",
+        "partial_app_typing_0702dc4e524d2ea33b4b9bbc7145cffe",
         "proj_equation_FStar.Pervasives.Native.Some_v",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_FStar.List.Tot.Base_Tm_refine_3b1cb9ec3355fed185c658f53954b3fa",
+        "refinement_interpretation_Tm_refine_3b1cb9ec3355fed185c658f53954b3fa",
         "token_correspondence_Extensions.uu___is_E_supported_versions",
         "typing_Negotiation.find_client_extension"
       ],
       0,
-      "47fdf50cd4dd4364c835fdea76bb312a"
+      "ab1435bf6cc47a46e3939fc5efd0643b"
     ],
     [
       "Negotiation.find_signature_algorithms",
@@ -160,7 +157,7 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "Prims_pretyping_f537159ed795b314b4e58c260361ae86",
+        "Prims_pretyping_f537159ed795b314b4e58c260361ae86", "bool_typing",
         "data_elim_FStar.Pervasives.Native.Some",
         "disc_equation_Extensions.E_signature_algorithms",
         "disc_equation_FStar.Pervasives.Native.None",
@@ -168,16 +165,15 @@
         "equation_Extensions.extension",
         "equation_Negotiation.find_client_extension",
         "fuel_guarded_inversion_FStar.Pervasives.Native.option",
-        "function_token_typing_Flags.model",
-        "partial_app_typing_0702dc4e524d2ea33b4b9bbc7145cffe__14330",
+        "partial_app_typing_0702dc4e524d2ea33b4b9bbc7145cffe",
         "proj_equation_FStar.Pervasives.Native.Some_v",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_FStar.List.Tot.Base_Tm_refine_3b1cb9ec3355fed185c658f53954b3fa",
+        "refinement_interpretation_Tm_refine_3b1cb9ec3355fed185c658f53954b3fa",
         "token_correspondence_Extensions.uu___is_E_signature_algorithms",
         "typing_Negotiation.find_client_extension"
       ],
       0,
-      "cccf64a25f0df07f35970f2f15b613c7"
+      "59aa9d9f98b910be01264fa12feff953"
     ],
     [
       "Negotiation.find_signature_algorithms_cert",
@@ -186,7 +182,7 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "Prims_pretyping_f537159ed795b314b4e58c260361ae86",
+        "Prims_pretyping_f537159ed795b314b4e58c260361ae86", "bool_typing",
         "data_elim_FStar.Pervasives.Native.Some",
         "disc_equation_Extensions.E_signature_algorithms_cert",
         "disc_equation_FStar.Pervasives.Native.None",
@@ -194,16 +190,15 @@
         "equation_Extensions.extension",
         "equation_Negotiation.find_client_extension",
         "fuel_guarded_inversion_FStar.Pervasives.Native.option",
-        "function_token_typing_Flags.model",
-        "partial_app_typing_0702dc4e524d2ea33b4b9bbc7145cffe__14330",
+        "partial_app_typing_0702dc4e524d2ea33b4b9bbc7145cffe",
         "proj_equation_FStar.Pervasives.Native.Some_v",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_FStar.List.Tot.Base_Tm_refine_3b1cb9ec3355fed185c658f53954b3fa",
+        "refinement_interpretation_Tm_refine_3b1cb9ec3355fed185c658f53954b3fa",
         "token_correspondence_Extensions.uu___is_E_signature_algorithms_cert",
         "typing_Negotiation.find_client_extension"
       ],
       0,
-      "83a14c2b1dde340212d363b234b767ee"
+      "bdc21ecadf82f6dafb4e8587805250fc"
     ],
     [
       "Negotiation.find_cookie",
@@ -212,7 +207,7 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "Prims_pretyping_f537159ed795b314b4e58c260361ae86",
+        "Prims_pretyping_f537159ed795b314b4e58c260361ae86", "bool_typing",
         "data_elim_FStar.Pervasives.Native.Some",
         "disc_equation_Extensions.E_cookie",
         "disc_equation_FStar.Pervasives.Native.None",
@@ -220,16 +215,15 @@
         "equation_Extensions.extension",
         "equation_Negotiation.find_client_extension",
         "fuel_guarded_inversion_FStar.Pervasives.Native.option",
-        "function_token_typing_Flags.model",
-        "partial_app_typing_0702dc4e524d2ea33b4b9bbc7145cffe__14330",
+        "partial_app_typing_0702dc4e524d2ea33b4b9bbc7145cffe",
         "proj_equation_FStar.Pervasives.Native.Some_v",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_FStar.List.Tot.Base_Tm_refine_3b1cb9ec3355fed185c658f53954b3fa",
+        "refinement_interpretation_Tm_refine_3b1cb9ec3355fed185c658f53954b3fa",
         "token_correspondence_Extensions.uu___is_E_cookie",
         "typing_Negotiation.find_client_extension"
       ],
       0,
-      "bb45e78f012558b7a0793e9a13f367e9"
+      "714728e047ba9089733e433067d58ebb"
     ],
     [
       "Negotiation.find_sessionTicket",
@@ -238,7 +232,7 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "Prims_pretyping_f537159ed795b314b4e58c260361ae86",
+        "Prims_pretyping_f537159ed795b314b4e58c260361ae86", "bool_typing",
         "data_elim_FStar.Pervasives.Native.Some",
         "disc_equation_Extensions.E_session_ticket",
         "disc_equation_FStar.Pervasives.Native.None",
@@ -246,16 +240,15 @@
         "equation_Extensions.extension",
         "equation_Negotiation.find_client_extension",
         "fuel_guarded_inversion_FStar.Pervasives.Native.option",
-        "function_token_typing_Flags.model",
-        "partial_app_typing_0702dc4e524d2ea33b4b9bbc7145cffe__14330",
+        "partial_app_typing_0702dc4e524d2ea33b4b9bbc7145cffe",
         "proj_equation_FStar.Pervasives.Native.Some_v",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_FStar.List.Tot.Base_Tm_refine_3b1cb9ec3355fed185c658f53954b3fa",
+        "refinement_interpretation_Tm_refine_3b1cb9ec3355fed185c658f53954b3fa",
         "token_correspondence_Extensions.uu___is_E_session_ticket",
         "typing_Negotiation.find_client_extension"
       ],
       0,
-      "ad8e84d78e4b19d524d0e78a0aef2b74"
+      "c78aa8b448408b4cb759bb61c743a474"
     ],
     [
       "Negotiation.find_clientPske",
@@ -269,7 +262,7 @@
         "fuel_guarded_inversion_Extensions.psk"
       ],
       0,
-      "02e88d9f92eb8a24dcdf295bd51d4213"
+      "cf31a19d14426b85f3060b25cb8aabc9"
     ],
     [
       "Negotiation.find_serverPske",
@@ -289,7 +282,7 @@
         "typing_HandshakeMessages.__proj__Mksh__item__sh_extensions"
       ],
       0,
-      "15f7520da4598b002f1549896c67d5fe"
+      "970f8842fdb7a8d7910446da3a8dd098"
     ],
     [
       "Negotiation.find_serverKeyShare",
@@ -309,7 +302,7 @@
         "typing_HandshakeMessages.__proj__Mksh__item__sh_extensions"
       ],
       0,
-      "a0366be4e1ba3f6c7f2d65226d190df1"
+      "f5eb1208ae1d57f8a410bd1ce43f5bbf"
     ],
     [
       "Negotiation.pski",
@@ -321,7 +314,7 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "a414098c100678f8383eae081ecd95e5"
+      "e23ce2c506996c3bfd018965e4e81e46"
     ],
     [
       "Negotiation.find_supported_groups",
@@ -330,7 +323,7 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "Prims_pretyping_f537159ed795b314b4e58c260361ae86",
+        "Prims_pretyping_f537159ed795b314b4e58c260361ae86", "bool_typing",
         "data_elim_FStar.Pervasives.Native.Some",
         "disc_equation_Extensions.E_supported_groups",
         "disc_equation_FStar.Pervasives.Native.None",
@@ -338,34 +331,36 @@
         "equation_Extensions.extension",
         "equation_Negotiation.find_client_extension",
         "fuel_guarded_inversion_FStar.Pervasives.Native.option",
-        "function_token_typing_Flags.model",
-        "partial_app_typing_0702dc4e524d2ea33b4b9bbc7145cffe__14330",
+        "partial_app_typing_0702dc4e524d2ea33b4b9bbc7145cffe",
         "proj_equation_FStar.Pervasives.Native.Some_v",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_FStar.List.Tot.Base_Tm_refine_3b1cb9ec3355fed185c658f53954b3fa",
+        "refinement_interpretation_Tm_refine_3b1cb9ec3355fed185c658f53954b3fa",
         "token_correspondence_Extensions.uu___is_E_supported_groups",
         "typing_Negotiation.find_client_extension"
       ],
       0,
-      "ac2a9ef26a16fc59151c129769647b17"
+      "88b41a211d15579d3e26b2c33d9f8e9c"
     ],
     [
       "Negotiation.list_of_ClientKeyShare",
       1,
       2,
-      2,
+      1,
       [
         "@MaxIFuel_assumption", "@query",
         "binder_x_fe0beb630ee1a45f8db7b988d406aeb9_0",
-        "data_elim_Prims.Cons", "disc_equation_CommonDH.Share",
+        "disc_equation_CommonDH.Share",
         "disc_equation_CommonDH.UnknownShare", "disc_equation_Prims.Cons",
         "disc_equation_Prims.Nil",
         "fuel_guarded_inversion_CommonDH.keyShareEntry",
-        "fuel_guarded_inversion_Prims.list", "proj_equation_Prims.Cons_hd",
-        "subterm_ordering_Prims.Cons"
+        "fuel_guarded_inversion_Prims.list",
+        "kinding_CommonDH.keyShareEntry@tok", "proj_equation_Prims.Cons_hd",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_7aac12c24449a22c34d98a0ea8ed4a32",
+        "subterm_ordering_Prims.Cons", "typing_Prims.__proj__Cons__item__hd"
       ],
       0,
-      "aadcb982f5598262e0df8dca931e7ca9"
+      "5ad10c38a1bd1d091db8721204d1c50d"
     ],
     [
       "Negotiation.find_early_data",
@@ -374,7 +369,7 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "Prims_pretyping_f537159ed795b314b4e58c260361ae86",
+        "Prims_pretyping_f537159ed795b314b4e58c260361ae86", "bool_typing",
         "data_elim_FStar.Pervasives.Native.Some",
         "disc_equation_Extensions.E_early_data",
         "disc_equation_FStar.Pervasives.Native.None",
@@ -382,16 +377,15 @@
         "equation_Extensions.extension",
         "equation_Negotiation.find_client_extension",
         "fuel_guarded_inversion_FStar.Pervasives.Native.option",
-        "function_token_typing_Flags.model",
-        "partial_app_typing_0702dc4e524d2ea33b4b9bbc7145cffe__14330",
+        "partial_app_typing_0702dc4e524d2ea33b4b9bbc7145cffe",
         "proj_equation_FStar.Pervasives.Native.Some_v",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_FStar.List.Tot.Base_Tm_refine_3b1cb9ec3355fed185c658f53954b3fa",
+        "refinement_interpretation_Tm_refine_3b1cb9ec3355fed185c658f53954b3fa",
         "token_correspondence_Extensions.uu___is_E_early_data",
         "typing_Negotiation.find_client_extension"
       ],
       0,
-      "c61dc2b8952cd24af79b6859cd8731ed"
+      "825999bd52da0bdb42bbdf21e58f89f9"
     ],
     [
       "Negotiation.__proj__Mode__item__n_pski",
@@ -403,7 +397,7 @@
         "projection_inverse_Negotiation.Mode_n_offer"
       ],
       0,
-      "80a0e8a4debceff34bd2d6d00445bba8"
+      "bd15c07aa91d11a57ebaf51edef1bba0"
     ],
     [
       "Negotiation.find_server_extension",
@@ -423,7 +417,7 @@
         "typing_Negotiation.__proj__Mode__item__n_server_extensions"
       ],
       0,
-      "29842ca7c803ee7af5dcb1e22f97792f"
+      "6b87798218fd0df6236b13e6fe890def"
     ],
     [
       "Negotiation.is_resumption12",
@@ -432,12 +426,12 @@
       1,
       [
         "@MaxIFuel_assumption", "@query", "equation_TLSInfo.sessionID",
-        "function_token_typing_FStar.Bytes.bytes",
-        "haseqFStar.Bytes_Tm_refine_52a9caf224ab604bf7278394dbe1c2fe",
-        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+        "haseqTm_refine_52a9caf224ab604bf7278394dbe1c2fe",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
       ],
       0,
-      "470605026fe257d679ee88aac65742bf"
+      "c2a246e5d6b06b9b9bf3ed15b437e58e"
     ],
     [
       "Negotiation.is_cacheable12",
@@ -445,19 +439,13 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "assumption_Prims.HasEq_int", "equation_FStar.UInt32.n",
-        "equation_TLSInfo.sessionID",
-        "function_token_typing_FStar.Bytes.bytes",
-        "function_token_typing_FStar.UInt32.n",
-        "haseqFStar.Bytes_Tm_refine_52a9caf224ab604bf7278394dbe1c2fe",
-        "haseqLowStar.Buffer_Tm_refine_1ec852aff28ab568526a8c54c3e853ec",
-        "haseqNegotiation_Tm_refine_8dd624998df0c763a2a76bfc5bdc14ca",
-        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+        "@MaxIFuel_assumption", "@query", "equation_TLSInfo.sessionID",
+        "haseqTm_refine_52a9caf224ab604bf7278394dbe1c2fe",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
       ],
       0,
-      "bdcc5686f1984fdc090fb3305d78e45c"
+      "5e6b1b47f7b54c95ecfd89e5bf2a4f2a"
     ],
     [
       "Negotiation.__proj__C_Init__item__n_client_random",
@@ -467,10 +455,10 @@
       [
         "@MaxIFuel_assumption", "@query", "disc_equation_Negotiation.C_Init",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Negotiation_Tm_refine_f824580933b3e5c204f427df2ea87d5d"
+        "refinement_interpretation_Tm_refine_f824580933b3e5c204f427df2ea87d5d"
       ],
       0,
-      "de4fe1cc2e76f7f2bab11437157951f1"
+      "7ada5afb64628139d42ea72dc8329a24"
     ],
     [
       "Negotiation.__proj__C_Offer__item__n_offer",
@@ -481,10 +469,10 @@
         "@MaxIFuel_assumption", "@query",
         "disc_equation_Negotiation.C_Offer",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Negotiation_Tm_refine_ce40c987ecf6efe9977a30194a918c6e"
+        "refinement_interpretation_Tm_refine_ce40c987ecf6efe9977a30194a918c6e"
       ],
       0,
-      "461812fd2500f17337f6c8d600884dfa"
+      "6550a2a074b42787a4a940e5c9d56822"
     ],
     [
       "Negotiation.__proj__C_HRR__item__n_offer",
@@ -494,10 +482,10 @@
       [
         "@MaxIFuel_assumption", "@query", "disc_equation_Negotiation.C_HRR",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Negotiation_Tm_refine_4c285493f7adcf31dfd5565912bc8c98"
+        "refinement_interpretation_Tm_refine_4c285493f7adcf31dfd5565912bc8c98"
       ],
       0,
-      "cc96478c264034451117fb65840af6c5"
+      "c88263a9a4472dfec2adcea3f25db3b1"
     ],
     [
       "Negotiation.__proj__C_HRR__item__n_hrr",
@@ -506,14 +494,11 @@
       1,
       [
         "@MaxIFuel_assumption", "@query", "disc_equation_Negotiation.C_HRR",
-        "fuel_guarded_inversion_TLSConstants.config",
-        "proj_equation_Negotiation.C_HRR_n_offer",
         "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_Negotiation.C_HRR_n_offer",
-        "refinement_interpretation_Negotiation_Tm_refine_4c285493f7adcf31dfd5565912bc8c98"
+        "refinement_interpretation_Tm_refine_4c285493f7adcf31dfd5565912bc8c98"
       ],
       0,
-      "40b8efa0fb4f907cc7a2d13aa0ae3405"
+      "8c357852603f188ffa7013771ac1bb02"
     ],
     [
       "Negotiation.__proj__C_WaitFinished1__item__n_partialmode",
@@ -524,10 +509,10 @@
         "@MaxIFuel_assumption", "@query",
         "disc_equation_Negotiation.C_WaitFinished1",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Negotiation_Tm_refine_939ce2fde9ef14ae506a678a7092f418"
+        "refinement_interpretation_Tm_refine_939ce2fde9ef14ae506a678a7092f418"
       ],
       0,
-      "01fa81ae59aa266567e911a464fcfcb9"
+      "d4d223583b8b5be85361c97e8f917b9d"
     ],
     [
       "Negotiation.__proj__C_Mode__item__n_mode",
@@ -537,10 +522,10 @@
       [
         "@MaxIFuel_assumption", "@query", "disc_equation_Negotiation.C_Mode",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Negotiation_Tm_refine_43182a47fdfd7b1070a6e10da1df33cb"
+        "refinement_interpretation_Tm_refine_43182a47fdfd7b1070a6e10da1df33cb"
       ],
       0,
-      "2d2701f46bd0133eb5ccfcbbb7bd97b1"
+      "5a902d2dea98eeaa2a6458febec9d85a"
     ],
     [
       "Negotiation.__proj__C_WaitFinished2__item__n_mode",
@@ -551,10 +536,10 @@
         "@MaxIFuel_assumption", "@query",
         "disc_equation_Negotiation.C_WaitFinished2",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Negotiation_Tm_refine_d37045c605d3e4dd6cc3448462659bad"
+        "refinement_interpretation_Tm_refine_d37045c605d3e4dd6cc3448462659bad"
       ],
       0,
-      "7f8328612e6c161300deebccf7cdd47b"
+      "7e00bb0e6ea41d2e1877438f23ca07c2"
     ],
     [
       "Negotiation.__proj__C_WaitFinished2__item__n_client_certificate",
@@ -565,10 +550,10 @@
         "@MaxIFuel_assumption", "@query",
         "disc_equation_Negotiation.C_WaitFinished2",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Negotiation_Tm_refine_d37045c605d3e4dd6cc3448462659bad"
+        "refinement_interpretation_Tm_refine_d37045c605d3e4dd6cc3448462659bad"
       ],
       0,
-      "368cf57ffc782461d0ea433508775e3d"
+      "584f77d41718cb58d283006b98d3f699"
     ],
     [
       "Negotiation.__proj__C_Complete__item__n_mode",
@@ -579,10 +564,10 @@
         "@MaxIFuel_assumption", "@query",
         "disc_equation_Negotiation.C_Complete",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Negotiation_Tm_refine_adfbeb973f138ebfd624cef06c951607"
+        "refinement_interpretation_Tm_refine_adfbeb973f138ebfd624cef06c951607"
       ],
       0,
-      "1d66b77fb9faf1f4be787d5d8ff7ea4e"
+      "ce0f34487b60dfc56392bf8dfcb3919c"
     ],
     [
       "Negotiation.__proj__C_Complete__item__n_client_certificate",
@@ -593,10 +578,10 @@
         "@MaxIFuel_assumption", "@query",
         "disc_equation_Negotiation.C_Complete",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Negotiation_Tm_refine_adfbeb973f138ebfd624cef06c951607"
+        "refinement_interpretation_Tm_refine_adfbeb973f138ebfd624cef06c951607"
       ],
       0,
-      "10d3366cf2c528606e2283830488f4cc"
+      "ba7994a5e149f2a48fde09450c6a16f3"
     ],
     [
       "Negotiation.__proj__S_Init__item__n_server_random",
@@ -606,10 +591,10 @@
       [
         "@MaxIFuel_assumption", "@query", "disc_equation_Negotiation.S_Init",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Negotiation_Tm_refine_8876f1ee849d4ee1bb53d2b51ce16214"
+        "refinement_interpretation_Tm_refine_8876f1ee849d4ee1bb53d2b51ce16214"
       ],
       0,
-      "e1242fb22dbecc83da158bed93c5f08e"
+      "f9b53a3a62188d67d1f2a34590b85d8c"
     ],
     [
       "Negotiation.__proj__S_HRR__item__n_offer",
@@ -619,10 +604,10 @@
       [
         "@MaxIFuel_assumption", "@query", "disc_equation_Negotiation.S_HRR",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Negotiation_Tm_refine_e49aff01f1b4c208743d67bc8e8a3825"
+        "refinement_interpretation_Tm_refine_e49aff01f1b4c208743d67bc8e8a3825"
       ],
       0,
-      "3769038e381eb82ddeb1f98bfe1dc83e"
+      "5e77ba80d658234e5c50a34bed2ae4c5"
     ],
     [
       "Negotiation.__proj__S_HRR__item__n_hrr",
@@ -632,10 +617,10 @@
       [
         "@MaxIFuel_assumption", "@query", "disc_equation_Negotiation.S_HRR",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Negotiation_Tm_refine_e49aff01f1b4c208743d67bc8e8a3825"
+        "refinement_interpretation_Tm_refine_e49aff01f1b4c208743d67bc8e8a3825"
       ],
       0,
-      "119e1449bff8c3d1482d358e57f5a5b3"
+      "4dfa0c27159e4fb8a5b57662c8be42d2"
     ],
     [
       "Negotiation.__proj__S_ClientHello__item__n_mode",
@@ -646,10 +631,10 @@
         "@MaxIFuel_assumption", "@query",
         "disc_equation_Negotiation.S_ClientHello",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Negotiation_Tm_refine_377470996a4b896d8a26514bddd1b6f4"
+        "refinement_interpretation_Tm_refine_377470996a4b896d8a26514bddd1b6f4"
       ],
       0,
-      "cbf29126777d97fd0cf7941ca4f8c20c"
+      "d448eaac478d7ab8e594c22fc3dee80b"
     ],
     [
       "Negotiation.__proj__S_ClientHello__item__n_selected_cert",
@@ -660,10 +645,10 @@
         "@MaxIFuel_assumption", "@query",
         "disc_equation_Negotiation.S_ClientHello",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Negotiation_Tm_refine_377470996a4b896d8a26514bddd1b6f4"
+        "refinement_interpretation_Tm_refine_377470996a4b896d8a26514bddd1b6f4"
       ],
       0,
-      "f58338a05164dfcb09052fa6f96afa5d"
+      "f32c8d8b4533c5213acf47c38cd81759"
     ],
     [
       "Negotiation.__proj__S_Mode__item__n_mode",
@@ -673,10 +658,10 @@
       [
         "@MaxIFuel_assumption", "@query", "disc_equation_Negotiation.S_Mode",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Negotiation_Tm_refine_e37291de1d7103c73251cd3b62ef5f82"
+        "refinement_interpretation_Tm_refine_e37291de1d7103c73251cd3b62ef5f82"
       ],
       0,
-      "92a398fa46a1cc965a85fa45396655ae"
+      "536b1b15846b207e2180c8be100fe1a7"
     ],
     [
       "Negotiation.__proj__S_Mode__item__n_selected_cert",
@@ -686,10 +671,10 @@
       [
         "@MaxIFuel_assumption", "@query", "disc_equation_Negotiation.S_Mode",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Negotiation_Tm_refine_e37291de1d7103c73251cd3b62ef5f82"
+        "refinement_interpretation_Tm_refine_e37291de1d7103c73251cd3b62ef5f82"
       ],
       0,
-      "06568081a315238ff19b2bbdd4b6edad"
+      "c6aa397c0516b4eca2dc053c7dafeba4"
     ],
     [
       "Negotiation.__proj__S_Complete__item__n_mode",
@@ -700,10 +685,10 @@
         "@MaxIFuel_assumption", "@query",
         "disc_equation_Negotiation.S_Complete",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Negotiation_Tm_refine_386efaf75601b26efd171ce33b377102"
+        "refinement_interpretation_Tm_refine_386efaf75601b26efd171ce33b377102"
       ],
       0,
-      "3820d23317ef6fb7017b572dc3188e65"
+      "cf6301270be2ecf98221594ab6002ab0"
     ],
     [
       "Negotiation.__proj__S_Complete__item__n_client_certificate",
@@ -714,10 +699,10 @@
         "@MaxIFuel_assumption", "@query",
         "disc_equation_Negotiation.S_Complete",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Negotiation_Tm_refine_386efaf75601b26efd171ce33b377102"
+        "refinement_interpretation_Tm_refine_386efaf75601b26efd171ce33b377102"
       ],
       0,
-      "e94dbd3bca2b261432afbe2367c8e263"
+      "c330e8dc960e2b8df5cbcfee8b405b6f"
     ]
   ]
 ]

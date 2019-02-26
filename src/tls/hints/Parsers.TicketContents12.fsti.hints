@@ -13,12 +13,12 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq",
         "equation_FStar.Bytes.lbytes",
         "equation_Parsers.TicketContents12_master_secret.ticketContents12_master_secret",
-        "function_token_typing_FStar.Bytes.bytes",
-        "haseqFStar.Bytes_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
-        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+        "haseqTm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
       ],
       0,
-      "23f35c7e3263196e96731f4883823c8a"
+      "204df28abd3abd45cd45eb21a444b983"
     ],
     [
       "Parsers.TicketContents12.ticketContents12_jumper",
@@ -26,18 +26,15 @@
       2,
       1,
       [
-        "@query", "equation_LowParse.Spec.Base.default_parser_kind",
-        "equation_LowParse.Spec.Base.strong_parser_kind",
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
         "equation_Parsers.TicketContents12.ticketContents12_parser_kind",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
-        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
-        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
-        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "f66072cb06dd5a27675bec0dc5cedabd"
+      "5a122c38ff5d3f5fb136fbab8a0cc0a0"
     ],
     [
       "Parsers.TicketContents12.ticketContents12_valid",
@@ -47,10 +44,10 @@
       [
         "@MaxIFuel_assumption", "@query", "equation_Prims.squash",
         "l_and-interp",
-        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
       ],
       0,
-      "00464f69ce60553a79487b0ea6696f09"
+      "4f7b49b9f67a6fae9ec90c66c4bef9dd"
     ]
   ]
 ]

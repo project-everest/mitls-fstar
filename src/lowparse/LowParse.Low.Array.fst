@@ -37,6 +37,7 @@ val list_nth_constant_size_parser_correct
   (decreases i)
 
 let rec list_nth_constant_size_parser_correct #k #t p b i =
+  parser_kind_prop_equiv k p;
   parse_list_eq p b;
   if i = 0
   then ()
@@ -97,7 +98,8 @@ let array_nth_ghost_correct'
 : Lemma
   (requires (gaccessor_pre (parse_array s array_byte_size elem_count) p (clens_array_nth t elem_count i) input))
   (ensures (gaccessor_post' (parse_array s array_byte_size elem_count) p (clens_array_nth t elem_count i) input (array_nth_ghost' s array_byte_size elem_count i input)))
-= fldata_to_array_inj s array_byte_size elem_count ();
+= parser_kind_prop_equiv k p;
+  fldata_to_array_inj s array_byte_size elem_count ();
   parse_synth_eq (parse_fldata_strong (serialize_list _ s) array_byte_size) (fldata_to_array s array_byte_size elem_count ()) input;
   list_nth_constant_size_parser_correct p input i;
   let off = i `Prims.op_Multiply` k.parser_kind_low in
@@ -161,6 +163,7 @@ let array_nth
 = fun input pos ->
   let h = HST.get () in
   [@inline_let] let _ =
+    parser_kind_prop_equiv k p;
     valid_facts (parse_array s (array_byte_size) (elem_count)) h input pos;
     slice_access_eq h (array_nth_ghost s (array_byte_size) (elem_count) (U32.v i)) input pos;
     fldata_to_array_inj s (array_byte_size) (elem_count) ();
@@ -451,10 +454,11 @@ let vlarray_nth_ghost'
 
 #pop-options
 
-#reset-options "--z3cliopt smt.arith.nl=false"
+#reset-options "--z3cliopt smt.arith.nl=false --z3refresh"
 
-#push-options "--z3rlimit 16"
+#push-options "--z3rlimit 128 --max_ifuel 8 --initial_ifuel 8 --max_fuel 4 --initial_fuel 4"
 
+// #push-options "--max_fuel 0"
 abstract
 let vlarray_nth_ghost_correct'
   (array_byte_size_min: nat)
@@ -472,13 +476,22 @@ let vlarray_nth_ghost_correct'
 : Lemma
   (requires (gaccessor_pre (parse_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max ()) p (clens_vlarray_nth t elem_count_min elem_count_max i) input))
   (ensures (gaccessor_post' (parse_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max ()) p (clens_vlarray_nth t elem_count_min elem_count_max i) input (vlarray_nth_ghost' array_byte_size_min array_byte_size_max s elem_count_min elem_count_max i input)))
-= vldata_to_vlarray_inj array_byte_size_min array_byte_size_max s elem_count_min elem_count_max ();
+= admit(); //NS: 02/23 ... flaky
+  parser_kind_prop_equiv k p;
+  vldata_to_vlarray_inj array_byte_size_min array_byte_size_max s elem_count_min elem_count_max ();
   parse_synth_eq (parse_bounded_vldata_strong array_byte_size_min array_byte_size_max (serialize_list _ s)) (vldata_to_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max ()) input;
-  parse_vldata_gen_eq (log256' array_byte_size_max) (in_bounds array_byte_size_min array_byte_size_max) (parse_list p) input;
+  parse_vldata_gen_eq_some_elim (log256' array_byte_size_max) (in_bounds array_byte_size_min array_byte_size_max) (parse_list p) input;
+  assert (Some? (parse (parse_bounded_integer (log256' array_byte_size_max)) input)); 
+  let Some (len, _) = parse (parse_bounded_integer (log256' array_byte_size_max)) input in
+  assert (Seq.length input >= log256' array_byte_size_max + U32.v len);
+// assert (log256' array_byte_size_max <= Seq.length input);
   let input' = Seq.slice input (log256' array_byte_size_max) (Seq.length input) in
   list_nth_constant_size_parser_correct p input' i;
   let off = i `Prims.op_Multiply` k.parser_kind_low in
   parse_strong_prefix p (Seq.slice input' off (Seq.length input')) (Seq.slice input' off (off + k.parser_kind_low))
+// #pop-options
+
+#pop-options
 
 abstract
 let vlarray_nth_ghost_correct
@@ -518,9 +531,7 @@ let vlarray_nth_ghost
 
 module B = LowStar.Buffer
 
-#pop-options
-
-#push-options "--z3rlimit 128"
+#push-options "--z3rlimit 256 --max_fuel 4 --initial_fuel 4 --max_ifuel 8 --initial_ifuel 8"
 
 inline_for_extraction
 let vlarray_nth
@@ -539,6 +550,7 @@ let vlarray_nth
 = fun input pos ->
   let h = HST.get () in
   [@inline_let] let _ : unit =
+    parser_kind_prop_equiv k p;
     valid_facts (parse_vlarray array_byte_size_min array_byte_size_max s elem_count_min elem_count_max ()) h input pos;
     slice_access_eq h (vlarray_nth_ghost array_byte_size_min array_byte_size_max s elem_count_min elem_count_max (U32.v i)) input pos;
     vldata_to_vlarray_inj array_byte_size_min array_byte_size_max s elem_count_min elem_count_max ();

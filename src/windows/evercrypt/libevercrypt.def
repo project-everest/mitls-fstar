@@ -50,9 +50,6 @@ EXPORTS
     EverCrypt_aead_encrypt
     EverCrypt_aead_decrypt
     EverCrypt_aead_free
-    EverCrypt_Bytes_x25519
-    EverCrypt_Bytes_chacha20_poly1305_encrypt
-    EverCrypt_Bytes_chacha20_poly1305_decrypt
     EverCrypt_chacha20_poly1305_encrypt
     EverCrypt_chacha20_poly1305_decrypt
     EverCrypt_AutoConfig2_init

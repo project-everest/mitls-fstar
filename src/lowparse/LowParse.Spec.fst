@@ -13,3 +13,8 @@ include LowParse.Spec.SeqBytes
 include LowParse.Spec.Bytes
 include LowParse.Spec.Option
 include LowParse.Spec.IfThenElse
+include LowParse.Spec.VCList
+include LowParse.Spec.BCVLI
+include LowParse.Spec.DER
+include LowParse.Spec.AllIntegers
+include LowParse.Spec.VLGen

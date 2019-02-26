@@ -13,7 +13,7 @@
         "fuel_guarded_inversion_Parsers.AlertLevel.alertLevel"
       ],
       0,
-      "8ff774944912e48a7210acea5d281528"
+      "2795bbc8431e48d84c8a36fbc4c5fd77"
     ],
     [
       "Parsers.AlertLevel.alertLevel_jumper",
@@ -21,18 +21,15 @@
       2,
       1,
       [
-        "@query", "equation_LowParse.Spec.Base.default_parser_kind",
-        "equation_LowParse.Spec.Base.strong_parser_kind",
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
         "equation_Parsers.AlertLevel.alertLevel_parser_kind",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
-        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
-        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
-        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "3f675fc1c1d3b3ddae8c9fad908b98c6"
+      "900cfb3d42d624e85e793dacfc307d33"
     ]
   ]
 ]

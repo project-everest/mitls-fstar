@@ -67,3 +67,22 @@ let rec intros_until_squash
   if tm `term_eq` (`squash)
   then i
   else intros_until_squash ()
+
+noextract
+let rec intros_until_eq_hyp
+  ()
+: Tac binder
+= let i = intro () in
+  let (sq, ar) = app_head_tail (type_of_binder i) in
+  let cond =
+    if sq `term_eq` (`squash) then
+      match ar with
+      | (ar1, _) :: _ ->
+        let (eq, _) = app_head_tail ar1 in
+        eq `term_eq` (`eq2)
+      | _ -> false
+    else false
+  in
+  if cond
+  then i
+  else intros_until_eq_hyp ()

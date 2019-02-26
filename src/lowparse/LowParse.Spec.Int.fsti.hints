@@ -1,5 +1,5 @@
 [
-  "ë•\fKU\u0012\u0003&Êå#êÖ‚±µ",
+  "¢X³+ÂAE\u0016M>í¹\b^\u0003¦",
   [
     [
       "LowParse.Spec.Int.parse_u8_spec",
@@ -9,13 +9,16 @@
       [
         "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
         "bool_typing", "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_Prims.squash", "primitive_Prims.op_GreaterThanOrEqual",
+        "equation_Prims.squash", "function_token_typing_FStar.UInt8.t",
+        "kinding_FStar.Pervasives.Native.tuple2@tok",
+        "primitive_Prims.op_GreaterThanOrEqual",
         "primitive_Prims.op_LessThanOrEqual",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "typing_FStar.Pervasives.Native.uu___is_Some",
+        "typing_LowParse.Spec.Base.consumed_length"
       ],
       0,
-      "bbed0485cefa75226474de1c84976a87"
+      "83d609c209e0f7e83a355a87f8addad3"
     ],
     [
       "LowParse.Spec.Int.parse_u8_spec'",
@@ -30,12 +33,12 @@
         "primitive_Prims.op_GreaterThanOrEqual",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
         "typing_FStar.Pervasives.Native.uu___is_Some",
         "typing_LowParse.Spec.Base.consumed_length"
       ],
       0,
-      "0912c1e0a50a48b7149c34a8157e2159"
+      "0181919698548bc47c1551600d5ef1c8"
     ],
     [
       "LowParse.Spec.Int.parse_u16_spec",
@@ -49,13 +52,12 @@
         "kinding_FStar.Pervasives.Native.tuple2@tok",
         "primitive_Prims.op_GreaterThanOrEqual",
         "primitive_Prims.op_LessThanOrEqual",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
         "typing_FStar.Pervasives.Native.uu___is_Some",
         "typing_LowParse.Spec.Base.consumed_length"
       ],
       0,
-      "2fe32f3f5d7e3372bea86034c7eddd55"
+      "6922c3bbfc2d70821861f98b563ecd01"
     ],
     [
       "LowParse.Spec.Int.parse_u32_spec",
@@ -69,13 +71,12 @@
         "kinding_FStar.Pervasives.Native.tuple2@tok",
         "primitive_Prims.op_GreaterThanOrEqual",
         "primitive_Prims.op_LessThanOrEqual",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Prims_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
         "typing_FStar.Pervasives.Native.uu___is_Some",
         "typing_LowParse.Spec.Base.consumed_length"
       ],
       0,
-      "68ab0cb305f1a4a540652db6699b764f"
+      "9abf04db35baaf3c35898f4713b14b62"
     ]
   ]
 ]
