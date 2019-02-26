@@ -268,7 +268,7 @@ val send_CCS_tag: #a:alg -> s:log -> m:msg -> complete:bool -> ST (tag a)
     hashed a bs /\ h == Hashing.h a bs ))
 
 // Setting signals 'drops' the writing state, to prevent further writings until the signals have been transmitted
-val send_signals: s:log -> next_keys:option (bool * bool) -> complete:bool -> ST unit
+val send_signals: s:log -> next_keys:option (bool * bool * bool) -> complete:bool -> ST unit
   (requires fun h0 ->
     writing h0 s /\
     (Some? next_keys || complete))
@@ -294,9 +294,10 @@ type fragment (i:id) = ( rg: frange i & rbytes rg )
 //let out_msg i rg b : msg i = (|rg, b|)
 
 type next_keys_use = {
-  out_appdata  : bool; // the new key enables sending AppData fragments
-  out_ccs_first: bool; // send a CCS fragment *before* installing the new key
-  out_skip_0RTT: bool; // skip void server-to-client 0RTT epoch
+  out_appdata  : bool;   // the new key enables sending AppData fragments
+  out_ccs_first: bool;   // send a CCS fragment *before* installing the new key
+  out_skip_0RTT: bool;   // skip void server-to-client 0RTT epoch
+  out_0RTT_reject: bool; // 0-RTT was rejected (client or server)
 }
 
 // What the HS asks the record layer to do, in that order.
