@@ -154,7 +154,7 @@ struct {
   OCSPStatusRequest request;
 } CertificateStatusRequest;
 
-opaque OCSPResponse<1..2^24-1>;
+opaque OCSPResponse<1..2^24-1 : uint24>;
 
 /*
 Since OCSPResponse is vlbytes, this select
@@ -1239,7 +1239,7 @@ struct {
 } CertificateRequest13;
 
 struct {
-  opaque cert_data<1..2^24-1>;
+  opaque cert_data<1..2^24-1 : uint24>;
   CertificateExtensions extensions;
 } CertificateEntry13;
 
@@ -1253,10 +1253,23 @@ struct {
   opaque signature<0..2^16-1>;
 } CertificateVerify13;
 
+/*
+We can force the application to validate
+the length of the Finished message by
+providing the expected size during staged
+parsing (due to implicit tag).
+
+Alternatively, we use the explicit length
+in the handshake header to turn Finished into
+opaque<0..2^24-1> (handshake must validate
+this length)
+
 enum {
-  hash_32, hash_48, hash_64, (255)
+  hash_legacy, hash_20, hash_32, hash_48, hash_64, (255)
 } DigestSize;
 
+opaque Finished12[12];
+opaque Finished20[20];
 opaque Finished32[32];
 opaque Finished48[48];
 opaque Finished64[64];
@@ -1264,11 +1277,13 @@ opaque Finished64[64];
 struct {
   /*@implicit*/ DigestSize hlen;
   select(hlen) {
+    case hash_legacy: Finished12;
     case hash_32: Finished32;
     case hash_48: Finished48;
     case hash_64: Finished64;
   } verify_data;
 } Finished;
+*/
 
 struct {
   uint32 ticket_lifetime;
@@ -1305,6 +1320,12 @@ enum {
   (255)
 } HandshakeType;
 
+/* Just the header, useful for defragmenting handshake messages */
+struct {
+  HandshakeType msg_type;
+  uint24 length;
+} HandshakeHeader;
+
 struct {
   HandshakeType msg_type;
   uint24 length;
@@ -1323,7 +1344,7 @@ struct {
     case certificate_request:   CertificateRequest13;
     case certificate:           Certificate13;
     case certificate_verify:    CertificateVerify13;
-    case finished:              Finished;
+    case finished:              opaque; /* Finished; */
     case new_session_ticket:    NewSessionTicket13;
     case key_update:            KeyUpdate;
   } m[length]; /*body*/
@@ -1333,7 +1354,7 @@ struct {
   opaque signature<0..2^16-1>;
 } CertificateVerify12;
 
-opaque ASN1Cert<1..2^24-1>;
+opaque ASN1Cert<1..2^24-1 : uint24>;
 
 enum /*@open*/ {
   rsa_sign(1), dss_sign(2), rsa_fixed_dh(3), dss_fixed_dh(4),
@@ -1540,6 +1561,14 @@ struct {
   ECPoint ecdh_Yc;
 } ClientECDiffieHellmanPublic;
 
+/*
+Note the implicit attribute on the tag - this causes
+QD to emit a parametric parser, where the application
+must provide the value of the kex.
+
+See "A cross-protocol attack on the TLS protocol"
+(Mavrogiannopoulos et al) for why this is a bad idea.
+*/
 struct {
   /*@implicit*/ KeyExchangeAlgorithm kex;
   select (kex) {
@@ -1550,6 +1579,17 @@ struct {
   } cke; /*exchange_keys*/
 } ClientKeyExchange;
 
+/*
+https://tools.ietf.org/html/rfc5077#section-3.3
+*/
+struct {
+  uint32 lifetime_hint;
+  opaque ticket<0..2^16-1>;
+} NewSessionTicket12;
+
+/*
+Add Heartbeat?
+*/
 struct {
   HandshakeType msg_type;
   uint24 length;
@@ -1561,7 +1601,8 @@ struct {
     case server_hello_done:   Empty;
     case certificate_verify:  CertificateVerify12;
     case client_key_exchange: ClientKeyExchange;
-    case finished:            Finished;
+    case new_session_ticket:  NewSessionTicket12;
+    case finished:            opaque; /* Finished; */
   } m[length]; /*body*/
 } Handshake12;
 

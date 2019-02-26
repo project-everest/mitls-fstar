@@ -488,7 +488,7 @@ let rec parseMessages pvo kexo buf =
           Correct(true, rem, [ClientHello ch], [to_log]))
         | Correct (ch, Some binders) -> (
           trace ("parsed [ClientHello; Binders] -- end of flight "^(if length rem > 0 then " (bytes waiting)" else ""));
-          let chBytes, bindersBytes = split_ to_log (length to_log - HandshakeMessages.bindersLen_of_ch ch) in
+          let chBytes, bindersBytes = split to_log FStar.UInt32.(len to_log -^ Extensions.bindersLen ch.ch_extensions) in
           Correct(true, rem, [ClientHello ch; Binders binders], [chBytes; bindersBytes])))
       else (
         match parseHandshakeMessage pvo kexo hstype pl with

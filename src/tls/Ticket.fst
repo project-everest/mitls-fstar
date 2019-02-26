@@ -407,7 +407,10 @@ let create_ticket (seal:bool) t =
   let plain = serialize t in
   ticket_encrypt seal plain
 
-let create_cookie (hrr:HandshakeMessages.hrr) (digest:bytes) (extra:bytes) =
+// FIXME(adl): restore HRR support in QD
+let create_cookie (*hrr:HandshakeMessages.hrr*) (digest:bytes) (extra:bytes) =
+  empty_bytes
+(*
   let hrm = HandshakeMessages.HelloRetryRequest hrr in
   let hrb = vlbytes 3 (HandshakeMessages.handshakeMessageBytes None hrm) in
   let plain = hrb @| (vlbytes 1 digest) @| (vlbytes 2 extra) in
@@ -415,9 +418,11 @@ let create_cookie (hrr:HandshakeMessages.hrr) (digest:bytes) (extra:bytes) =
   trace ("Encrypting cookie: "^(hex_of_bytes plain));
   trace ("Encrypted cookie:  "^(hex_of_bytes cipher));
   cipher
+*)
 
-val check_cookie: b:bytes -> St (option (HandshakeMessages.hrr * bytes * bytes))
-let check_cookie b =
+val check_cookie: b:bytes -> St (option ((*HandshakeMessages.hrr*) bytes * bytes * bytes))
+let check_cookie b = None
+(*
   trace ("Decrypting cookie "^(hex_of_bytes b));
   if length b < 32 then None else
   match ticket_decrypt false b with
@@ -438,6 +443,7 @@ let check_cookie b =
           | Error _ -> trace ("Cookie decode error: application data"); None
           | Correct extra ->
             Some (hrr, digest, extra)
+*)
 
 let ticket_pskinfo (t:ticket) =
   match t with

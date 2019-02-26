@@ -35,8 +35,7 @@ let bindersLen_aux = function
 
 let bindersLen che =
   match List.Tot.find bindersLen_aux che with
-  | None -> 0
+  | None -> 0ul
   | Some (CHE_pre_shared_key psk) ->
-    let j = Parsers.OfferedPsks_binders.offeredPsks_binders_size32 psk.binders in
-    UInt32.v j
+    Parsers.OfferedPsks_binders.offeredPsks_binders_size32 psk.binders
 

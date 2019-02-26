@@ -4,6 +4,7 @@ Handshake protocol messages
 *)
 module HandshakeMessages
 
+(*
 open FStar.Seq
 open FStar.Bytes
 open FStar.Error
@@ -198,6 +199,7 @@ let cipherSuitesVLBytes (l: list cipherSuiteName { List.Tot.length l < 256 } ) :
   LowParse.SLow.serialize32_vlarray 2 65534 #_ #_ #_ #Parsers.CipherSuite.cipherSuite_serializer Parsers.CipherSuite.cipherSuite_serializer32 1 255 () l
 
 let clientHelloBytes ch =
+  let open FStar.UInt32 in
   //17-04-26 this will complicate injectivity, now conditional on an extension.
   let legacyVersion = minPV TLS_1p2 ch.ch_protocol_version in
   let verB = versionBytes legacyVersion in
@@ -205,24 +207,16 @@ let clientHelloBytes ch =
   let sidB = vlbytes 1 ch.ch_sessionID in
   let csB:bytes = cipherSuitesVLBytes ch.ch_cipher_suites in
   lemma_repr_bytes_values (List.Tot.length ch.ch_compressions);
-  (* let cmB = match ch.ch_compressions with *)
-  (*   | [] -> empty_bytes  *)
-  (*   | cl -> vlbytes 1 (compressionMethodsBytes cl) in *)
   let cmB = vlbytes 1 (compressionMethodsBytes ch.ch_compressions) in
   let binders_len = Extensions.bindersLen ch.ch_extensions in
-  let extB = Extensions.clientHelloExtensions_serializer32 ch.ch_extensions in
+  let ext = Extensions.clientHelloExtensions_serializer32 ch.ch_extensions in
   let extB =
-    if binders_len = 0 then extB
-    else slice_ extB 0 (length extB - binders_len)
+    if binders_len = 0ul then ext
+    else slice ext 0ul (len ext -^ binders_len)
     in
-//    match ch.ch_extensions with
-//    | Some ext ->
-//      assume (repr_bytes (length (extensionListBytes ext)) <= 2 /\ length (Extensions.extensionListBytes ext) + bindersLen ext < 65536); // TODO: FIXME
-//      extensionsBytes ext
-//    | None -> empty_bytes in
   let data = verB @| (ch.ch_client_random @| (sidB @| (csB @| (cmB @| extB)))) in
-  lemma_repr_bytes_values (length data + binders_len);
-  let b = messageBytes_extra HT_client_hello data binders_len in
+  lemma_repr_bytes_values (length data + v binders_len);
+  let b = messageBytes_extra HT_client_hello data (v binders_len) in
   assume (FStar.Bytes.length b >= 41 /\ hs_msg_bytes HT_client_hello b); // TODO: FIXME
   b
 
@@ -271,7 +265,7 @@ let clientHelloBytes_is_injective_strong msg1 s1 msg2 s2 =
     let tail5_1 = sidB1 @| tail4_1 in
     let tail6_1 = msg1.ch_client_random @| tail5_1 in
     let data1 = verB1 @| tail6_1 in
-    let binders_len1 = bindersLen_of_ch msg1 in
+    let binders_len1 = FStar.UInt32.v (Extensions.bindersLen msg1.ch_extensions) in
     lemma_repr_bytes_values (length data1 + binders_len1);
     assert (clientHelloBytes msg1 == messageBytes_extra HT_client_hello data1 binders_len1);
     let legacyVersion2 = minPV TLS_1p2 msg2.ch_protocol_version in
@@ -288,7 +282,7 @@ let clientHelloBytes_is_injective_strong msg1 s1 msg2 s2 =
     let tail5_2 = sidB2 @| tail4_2 in
     let tail6_2 = msg2.ch_client_random @| tail5_2 in
     let data2 = verB2 @| tail6_2 in
-    let binders_len2 = bindersLen_of_ch msg2 in
+    let binders_len2 = FStar.UInt32.v (Extensions.bindersLen msg2.ch_extensions) in
     lemma_repr_bytes_values (length data2 + binders_len2);
     assert (clientHelloBytes msg2 == messageBytes_extra HT_client_hello data2 binders_len2);
     messageBytes_extra_injective HT_client_hello data1 binders_len1 s1 HT_client_hello data2 binders_len2 s2;
@@ -1630,3 +1624,4 @@ let parseHandshakeMessage pv kex hstype body =
     | HT_key_update,_,_                 -> mapResult KeyUpdate (parseBoolean body)
     | t, _, _                           -> error ("unexpected message"^hex_of_bytes (htBytes t))
     end
+*)

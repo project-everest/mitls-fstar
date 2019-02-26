@@ -3,16 +3,35 @@
 Handshake protocol messages
 *)
 module HandshakeMessages
-open FStar.Seq
-open FStar.Bytes
+
 open FStar.Error
 open TLSError
 open TLSConstants
-open Extensions
-open TLSInfo
-open Range
-open CommonDH
-open Parse
+
+module E = Extensions
+module B = FStar.Bytes
+
+include Parsers.HandshakeType
+include Parsers.HandshakeHeader
+
+include Parsers.Handshake
+include Parsers.Handshake12
+include Parsers.Handshake13
+
+include Parsers.ClientHello
+include Parsers.ServerHello
+include Parsers.NewSessionTicket12
+include Parsers.NewSessionTicket13
+include Parsers.EncryptedExtensions
+include Parsers.Certificate12
+include Parsers.Certificate13
+include Parsers.ServerKeyExchange
+include Parsers.CertificateRequest12
+include Parsers.CertificateRequest13
+include Parsers.CertificateVerify12
+include Parsers.CertificateVerify13
+include Parsers.ClientKeyExchange
+include Parsers.KeyUpdate
 
 // e18-02-21 carved out an interface, far from perfect...
 // In particular, it exposes the separate parsing of message headers
@@ -20,6 +39,8 @@ open Parse
 // least keep it private
 
 /// Handshake types
+
+(*
 
 type handshakeType =
   | HT_hello_request
@@ -72,8 +93,6 @@ noeq type ch = {
   ch_compressions: cl:list compression{List.Tot.length cl > 0 /\ List.Tot.length cl < 256};
   ch_extensions: clientHelloExtensions;
 }
-
-let bindersLen_of_ch ch = bindersLen ch.ch_extensions
 
 // ServerHello: supporting two different syntaxes depending on the embedded pv
 // https://tools.ietf.org/html/rfc5246#section-7.4.1.2
@@ -275,9 +294,9 @@ val parseClientHello: body:bytes -> Pure (result (ch * option binders))
     | Error _ -> True
     | Correct(ch, None) -> clientHelloBytes ch == htBytes HT_client_hello @| body
     | Correct(ch, Some binders) ->
-        let len = length body - bindersLen_of_ch ch in 
-        0 <= len /\
-        ( let truncated_body, suffix = split_ body len in
+        let len = FStar.UInt32.(len body -^ Extensions.bindersLen ch.ch_extensions) in
+        0 <= FStar.UInt32.v len /\
+        ( let truncated_body, suffix = split body len in
           clientHelloBytes ch == htBytes HT_client_hello @| truncated_body /\
           bindersBytes binders == suffix // ADL: FIXME must strip the length from binders
   )))
@@ -397,3 +416,5 @@ val parseHandshakeMessage:
   ht:handshakeType ->
   b:bytes{repr_bytes (length b) <= 3} ->
   Tot (result hs_msg)
+
+*)

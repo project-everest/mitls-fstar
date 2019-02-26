@@ -347,7 +347,9 @@ private let rec list_valid_ng_is_list_ng (l:CommonDH.supportedNamedGroups) : Com
 #pop-options
 
 // We fill binders with placeholders to use QD clientHelloextensions_serializer32
-private let compute_binder_ph (pski:pskInfo) =
+private let compute_binder_ph (pski:pskInfo)
+  : (b:bytes{32 <= length b /\ length b <= 255}) =
+  assume false; // FIXME: prove that hash in SHA256, SHA384, or SHA512
   let h = PSK.pskInfo_hash pski in
   create (Hashing.Spec.tagLen h) 0uy
 

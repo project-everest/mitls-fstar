@@ -57,6 +57,9 @@ let test_clientHello () : St bool =
     let open FStar.UInt32 in
     let lb = from_bytes chb in
     let slice = { LPL.base = lb; LPL.len = B.len chb } in
+    let _ = Handshake13.handshake13_validator slice 0ul in
+    let _ = Handshake12.handshake12_validator slice 0ul in
+    let _ = Handshake.handshake_validator slice 0ul in
     if ClientHello.clientHello_validator slice 0ul >^ LPL.validator_max_length then
       (print !$"Validator failed on ClientHello!\n"; false)
     else
