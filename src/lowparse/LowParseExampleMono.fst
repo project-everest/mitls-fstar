@@ -4,6 +4,7 @@ open LowStar.FreezableBuffer
 
 module U32 = FStar.UInt32
 module U8 = FStar.UInt8
+module HS = FStar.HyperStack
 
 let compl
   (t: Type)
@@ -135,6 +136,29 @@ let iaccess
   let x = a s (irepr_pos i1) in
   recall_w_default s.base;
   witness_valid s x
+
+let freezable_buffer_writable_intro
+  (b: mbuffer byte freezable_preorder freezable_preorder)
+  (pos pos' : nat)
+  (h: HS.mem)
+: Lemma
+  (requires (
+    B.length b >= 4 /\ (
+    let len = get_w (B.as_seq h b) in
+    B.live h b /\
+    4 <= len /\
+    len <= pos
+  )))
+  (ensures (writable b pos pos' h))
+  [SMTPat (writable b pos pos' h)]
+= if pos <= pos' && pos' <= B.length b
+  then
+    let s = B.as_seq h b in
+    let slen = Seq.slice s 0 4 in
+    writable_intro b pos pos' h () (fun s1 s2 ->
+      assert (Seq.slice (Seq.replace_subseq s pos pos' s1) 0 4 `Seq.equal` slen);
+      assert (Seq.slice (Seq.replace_subseq s pos pos' s2) 0 4 `Seq.equal` slen)
+    )
 
 val main: FStar.Int32.t -> LowStar.Buffer.buffer (LowStar.Buffer.buffer C.char) ->
   FStar.HyperStack.ST.Stack C.exit_code (fun _ -> true) (fun _ _ _ -> true)
