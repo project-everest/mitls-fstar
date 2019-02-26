@@ -613,6 +613,7 @@ let write_filter
   [@inline_let] let _ = valid_filter h p f input pos in
   res
 
+(*
 inline_for_extraction
 let write_filter_weak
   (#k: parser_kind)
@@ -629,6 +630,7 @@ let write_filter_weak
   let h = HST.get () in
   [@inline_let] let _ = valid_filter h p f input pos in
   res
+*)
 
 inline_for_extraction
 let read_synth
@@ -685,6 +687,7 @@ let write_synth
   [@inline_let] let _ = valid_synth h p1 f2 input pos in
   pos'
 
+(*
 inline_for_extraction
 let write_synth_weak
   (#k: parser_kind)
@@ -706,6 +709,7 @@ let write_synth_weak
   let h = HST.get () in
   [@inline_let] let _ = valid_synth h p1 f2 input pos in
   pos'
+*)
 
 (* Special case for vldata and maybe also sum types *)
 

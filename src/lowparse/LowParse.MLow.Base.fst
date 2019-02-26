@@ -2215,6 +2215,7 @@ let leaf_reader_ext
   in
   p32 sl pos
 
+(*
 [@unifier_hint_injective]
 inline_for_extraction
 let leaf_writer_weak
@@ -2236,6 +2237,7 @@ let leaf_writer_weak
     then U32.v pos + serialized_length s x > U32.v sl.len
     else valid_content_pos p h' sl pos x pos'
   )))
+*)
 
 [@unifier_hint_injective]
 inline_for_extraction
@@ -2250,7 +2252,13 @@ let leaf_writer_strong
   (sl: slice rrel rel) ->
   (pos: U32.t) ->
   HST.Stack U32.t
-  (requires (fun h -> live_slice h sl /\ U32.v pos + serialized_length s x <= U32.v sl.len))
+  (requires (fun h ->
+    let sq = B.as_seq h sl.base in
+    let len = serialized_length s x in
+    live_slice h sl /\
+    U32.v pos + len <= U32.v sl.len /\
+    rel sq (Seq.slice sq 0 (U32.v pos) `Seq.append` serialize s x `Seq.append` Seq.slice sq (U32.v pos + len) (Seq.length sq))
+  ))
   (ensures (fun h pos' h' ->
     B.modifies (loc_slice_from_to sl pos pos') h h' /\
     valid_content_pos p h' sl pos x pos'
@@ -2269,7 +2277,13 @@ let serializer32
   (b: B.mbuffer byte rrel rel) ->
   (pos: U32.t) ->
   HST.Stack U32.t
-  (requires (fun h -> B.live h b /\ U32.v pos + Seq.length (serialize s x) <= B.length b))
+  (requires (fun h ->
+    let len = Seq.length (serialize s x) in
+    let sq = B.as_seq h b in
+    B.live h b /\
+    U32.v pos + len <= B.length b /\
+    rel sq (Seq.slice sq 0 (U32.v pos) `Seq.append` serialize s x `Seq.append` Seq.slice sq (U32.v pos + len) (Seq.length sq))
+  ))
   (ensures (fun h pos' h' ->
     U32.v pos + Seq.length (serialize s x) == U32.v pos' /\ (
     B.modifies (B.loc_buffer_from_to b pos pos') h h' /\
@@ -2299,6 +2313,7 @@ let leaf_writer_strong_of_serializer32
   in
   pos'
 
+(*
 inline_for_extraction
 let leaf_writer_weak_of_strong_constant_size
   (#k: parser_kind)
@@ -2317,6 +2332,7 @@ let leaf_writer_weak_of_strong_constant_size
   if (input.len `U32.sub` pos) `U32.lt` sz
   then max_uint32
   else s32 x input pos
+*)
 
 (*
 #push-options "--z3rlimit 16"
