@@ -6,10 +6,8 @@ module FB = LowStar.FreezableBuffer
 module LM = LowParseExampleMono
 
 assume val buf :
-  s:slice FB.freezable_preorder FB.freezable_preorder{
-    FB.recallable s.base /\
-    UInt32.v (s.len) >= 4 /\
-    FB.witnessed s.base (FB.w_pred 4)
+  s: LM.fslice{
+    FB.recallable s.base
   }
 let irepr #t #k (p:parser k t) = LM.irepr p buf
 
@@ -72,9 +70,9 @@ let read_components3 (i:irepr P.pair_parser)
   (xfst, xsnd)
 
 module HS = FStar.HyperStack
-let frozen_until (h:HS.mem) : GTot nat =
-  FB.get_w (B.as_seq h buf.base)
 module U32 = FStar.UInt32
+
+let frozen_until = LM.frozen_until buf.base
 
 module LMI = LowParse.MLow.Int
 
@@ -150,6 +148,28 @@ let iwrite_pair (u0:UInt32.t) (u1:UInt16.t) (p:UInt32.t)
    = let i0 = iwrite_u32 u0 p in
      havoc_l some_loc;
      let i1 = iwrite_u16 u1 U32.(p +^ 4ul) in
+     let h = get () in
+     LM.recall_valid i0;
+     LM.recall_valid i1;
+     Pair.pair_valid h buf p;
+     LM.witness_valid buf p
+
+(* with the iwrite wrapper *)
+
+let iwrite_pair1 (u0:UInt32.t) (u1:UInt16.t) (p:UInt32.t)
+  : Stack (irepr P.pair_parser)
+    (requires fun h ->
+      frozen_until h <= U32.v p /\
+      U32.v p + 6 < U32.v buf.len)
+    (ensures fun h0 i h1 ->
+      LM.irepr_pos i == p /\
+      LM.irepr_pos' i == U32.(p +^ 6ul) /\
+      LM.irepr_v i == P.({fst=u0; snd=u1})  /\
+      frozen_until h1 == U32.v p + 6 /\
+      B.modifies (B.loc_union some_loc (B.loc_buffer buf.base)) h0 h1)
+   = let i0 = LM.iwrite write_u32 u0 buf p in
+     havoc_l some_loc;
+     let i1 = LM.iwrite write_u16 u1 buf U32.(p +^ 4ul) in
      let h = get () in
      LM.recall_valid i0;
      LM.recall_valid i1;

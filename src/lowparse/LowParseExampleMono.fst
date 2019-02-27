@@ -5,6 +5,8 @@ open LowStar.FreezableBuffer
 module U32 = FStar.UInt32
 module U8 = FStar.UInt8
 module HS = FStar.HyperStack
+module HST = FStar.HyperStack.ST
+module B = LowStar.Monotonic.Buffer
 
 let compl
   (t: Type)
@@ -20,11 +22,24 @@ let compl
   U32.v pos' <= len
   )
 
+inline_for_extraction
+type fslice = (s: slice freezable_preorder freezable_preorder {
+  B.length s.base >= 4 /\
+  B.witnessed s.base (w_pred 4)
+})
+
+inline_for_extraction
+let make_fslice
+  (b: fbuffer)
+  (len: U32.t { U32.v len == B.length b } )
+: Tot fslice
+= ({ base = b; len = len; })
+
 let wvalid_stable
   (#k: parser_kind)
   (#t: Type)
   (p: parser k t)
-  (s: slice freezable_preorder freezable_preorder)
+  (s: fslice)
   (pos: U32.t)
   (gpos' : Ghost.erased U32.t)
   (v' : Ghost.erased t)
@@ -44,16 +59,16 @@ let wvalid_stable
   in
   Classical.forall_intro_2 pf'
 
-module HST = FStar.HyperStack.ST
-module B = LowStar.Monotonic.Buffer
-
 inline_for_extraction
 let irepr
   (#t: Type)
   (#k: parser_kind)
   (p: parser k t)
-  (s: slice freezable_preorder freezable_preorder)
+  (s: fslice)
 = irepr p s (compl t)
+
+let frozen_until (buf: fbuffer) (h:HS.mem) : GTot nat =
+  get_w (B.as_seq h buf)
 
 inline_for_extraction
 noextract
@@ -61,17 +76,15 @@ let witness_valid
   (#t: Type)
   (#k: parser_kind)
   (#p: parser k t)
-  (s: slice freezable_preorder freezable_preorder)
+  (s: fslice)
   (pos: U32.t)
 : HST.Stack (irepr p s)
   (requires (fun h ->
     k.parser_kind_subkind == Some ParserStrong /\
     valid p h s pos /\
     (* conditions on global size header *)
-    U32.v pos >= 4 /\
-    U32.v s.len >= 4 /\ (
-    let len = get_w (B.as_seq h s.base) in
-    len >= 4 /\ len <= U32.v s.len /\
+    U32.v pos >= 4 /\ (
+    let len = frozen_until s.base h in
     U32.v (get_valid_pos p h s pos) <= len
   )))
   (ensures (fun h res h' ->
@@ -80,6 +93,7 @@ let witness_valid
     valid_content_pos p h s pos (irepr_v res) (irepr_pos' res)
   ))
 = let h = HST.get () in
+  recall_w_default s.base;
   wvalid_stable p s pos (Ghost.hide (get_valid_pos p h s pos)) (Ghost.hide (contents p h s pos));
   witness_valid_gen s (compl t) pos
 
@@ -89,7 +103,7 @@ let recall_valid
   (#t: Type)
   (#k: parser_kind)
   (#p: parser k t)
-  (#s: slice freezable_preorder freezable_preorder)
+  (#s: fslice)
   (i: irepr p s)
 : HST.Stack unit
   (requires (fun h -> B.recallable s.base \/ live_slice h s))
@@ -115,7 +129,7 @@ let iaccess
   (#cl: clens t1 t2)
   (#g: gaccessor p1 p2 cl)
   ($a: accessor g)
-  (#s: slice freezable_preorder freezable_preorder)
+  (#s: fslice)
   (i1: irepr p1 s)
 : HST.Stack (irepr p2 s)
   (requires (fun h ->
@@ -138,17 +152,16 @@ let iaccess
   witness_valid s x
 
 let freezable_buffer_writable_intro
-  (b: mbuffer byte freezable_preorder freezable_preorder)
+  (b: fbuffer)
   (pos pos' : nat)
   (h: HS.mem)
 : Lemma
   (requires (
-    B.length b >= 4 /\ (
-    let len = get_w (B.as_seq h b) in
+    let len = frozen_until b h in
     B.live h b /\
     4 <= len /\
     len <= pos
-  )))
+  ))
   (ensures (writable b pos pos' h))
   [SMTPat (writable b pos pos' h)]
 = if pos <= pos' && pos' <= B.length b
@@ -159,6 +172,47 @@ let freezable_buffer_writable_intro
       assert (Seq.slice (Seq.replace_subseq s pos pos' s1) 0 4 `Seq.equal` slen);
       assert (Seq.slice (Seq.replace_subseq s pos pos' s2) 0 4 `Seq.equal` slen)
     )
+
+inline_for_extraction
+let iwrite
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (#s: serializer p)
+  (w: leaf_writer_strong s)
+  (v: t)
+  (sl: fslice)
+  (pos: U32.t)
+: HST.Stack (irepr p sl)
+  (requires (fun h ->
+    k.parser_kind_subkind == Some ParserStrong /\ // for valid_exact_ext_intro
+    k.parser_kind_high == Some k.parser_kind_low /\
+    frozen_until sl.base h <= U32.v pos /\
+    U32.v pos + k.parser_kind_low < U32.v sl.len /\ // TODO: change to <=
+    (recallable sl.base \/ live_slice h sl)
+  ))
+  (ensures (fun h i h' ->
+    irepr_v i == v /\
+    irepr_pos i == pos /\
+    irepr_pos' i == pos `U32.add` U32.uint_to_t k.parser_kind_low /\
+    frozen_until sl.base h' == U32.v (irepr_pos' i) /\
+    B.modifies (B.loc_buffer sl.base) h h'
+  ))
+=    recall_w_default (sl.base <: fbuffer);
+     B.recall_p sl.base (w_pred 4);
+     let h0 = HST.get () in
+     loc_slice_from_to_eq sl 0ul 4ul; // for the length header
+     let len = w v sl pos `U32.sub` pos in
+     let h1 = HST.get () in
+     let pos' = pos `U32.add` len in
+     B.modifies_buffer_from_to_elim sl.base 0ul 4ul (loc_slice_from_to sl pos pos') h0 h1;
+     recall_w_default sl.base;
+     freeze sl.base pos' ;
+     let h2 = HST.get () in
+     valid_pos_valid_exact p h1 sl pos pos' ;
+     valid_exact_ext_intro p h1 sl pos pos' h2 sl pos pos' ;
+     witness_valid sl pos
+  
 
 val main: FStar.Int32.t -> LowStar.Buffer.buffer (LowStar.Buffer.buffer C.char) ->
   FStar.HyperStack.ST.Stack C.exit_code (fun _ -> true) (fun _ _ _ -> true)
