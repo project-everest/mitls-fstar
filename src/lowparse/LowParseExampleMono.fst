@@ -113,7 +113,7 @@ let recall_valid
     valid_content_pos p h s (irepr_pos i) (irepr_v i) (irepr_pos' i) /\
     U32.v s.len >= 4 /\
     U32.v (irepr_pos i) >= 4 /\
-    U32.v (irepr_pos' i) <= get_w (B.as_seq h s.base)
+    U32.v (irepr_pos' i) <= frozen_until s.base h
   ))
 = recall_valid_gen i
 
@@ -205,6 +205,20 @@ let freeze_valid
      valid_exact_ext_intro p h1 sl pos pos' h2 sl pos pos' ;
      witness_valid sl pos
 
+let frozen_until_frame
+  (sl: fslice)
+  (l: B.loc)
+  (h h' : HS.mem)
+: Lemma
+  (requires (live_slice h sl /\ B.modifies l h h' /\ B.loc_disjoint l (loc_slice_from_to sl 0ul 4ul)))
+  (ensures (frozen_until sl.base h' == frozen_until sl.base h))
+  [SMTPatOr [
+    [SMTPat (B.modifies l h h'); SMTPat (frozen_until sl.base h);];
+    [SMTPat (B.modifies l h h'); SMTPat (frozen_until sl.base h');];
+  ]]
+= loc_slice_from_to_eq sl 0ul 4ul;
+  B.modifies_buffer_from_to_elim sl.base 0ul 4ul l h h'
+
 inline_for_extraction
 noextract
 let iwrite
@@ -231,11 +245,7 @@ let iwrite
     B.modifies (B.loc_buffer sl.base) h h'
   ))
 =    B.recall_p sl.base (w_pred 4); // to recover liveness
-     let h0 = HST.get () in
-     loc_slice_from_to_eq sl 0ul 4ul; // for the length header
      let pos' = w v sl pos in
-     let h1 = HST.get () in
-     B.modifies_buffer_from_to_elim sl.base 0ul 4ul (loc_slice_from_to sl pos pos') h0 h1;
      freeze_valid p sl pos pos'
 
 val main: FStar.Int32.t -> LowStar.Buffer.buffer (LowStar.Buffer.buffer C.char) ->

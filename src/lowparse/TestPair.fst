@@ -175,3 +175,24 @@ let iwrite_pair1 (u0:UInt32.t) (u1:UInt16.t) (p:UInt32.t)
      LM.recall_valid i1;
      Pair.pair_valid h buf p;
      LM.witness_valid buf p
+
+(* with only one freeze, thanks to frozen_until_frame that preserves the value of the length header across LowParse writers *)
+
+let iwrite_pair2 (u0:UInt32.t) (u1:UInt16.t) (p:UInt32.t)
+  : Stack (irepr P.pair_parser)
+    (requires fun h ->
+      frozen_until h <= U32.v p /\
+      U32.v p + 6 < U32.v buf.len)
+    (ensures fun h0 i h1 ->
+      LM.irepr_pos i == p /\
+      LM.irepr_pos' i == U32.(p +^ 6ul) /\
+      LM.irepr_v i == P.({fst=u0; snd=u1})  /\
+      frozen_until h1 == U32.v p + 6 /\
+      B.modifies (B.loc_union some_loc (B.loc_buffer buf.base)) h0 h1)
+= FB.recall_w_default buf.base; // for writable
+  B.recall buf.base; // for live
+  let p1 = write_u32 u0 buf p in
+  let p2 = write_u16 u1 buf p1 in
+  let h = get () in
+  Pair.pair_valid h buf p;
+  LM.freeze_valid Pair.pair_parser buf p p2
