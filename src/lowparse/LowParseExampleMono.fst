@@ -136,7 +136,6 @@ let iaccess
     k1.parser_kind_subkind == Some ParserStrong /\
     k2.parser_kind_subkind == Some ParserStrong /\
     cl.clens_cond (irepr_v i1) /\
-    witnessed s.base (w_pred 4) /\
     (B.recallable s.base \/ live_slice h s)
   ))
   (ensures (fun h i2 h' ->
@@ -150,6 +149,43 @@ let iaccess
   let x = a s (irepr_pos i1) in
   recall_w_default s.base;
   witness_valid s x
+
+inline_for_extraction
+noextract
+let iread
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (r: leaf_reader p)
+  (#s: fslice)
+  (i: irepr p s)
+: HST.Stack t
+  (requires (fun h -> (B.recallable s.base \/ live_slice h s)))
+  (ensures (fun h res h' ->
+    B.modifies B.loc_none h h' /\
+    valid_content_pos p h s (irepr_pos i) (irepr_v i) (irepr_pos' i) /\
+    res == irepr_v i
+  ))
+= recall_valid i;
+  r s (irepr_pos i)
+
+inline_for_extraction
+let ijump
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (j: jumper p)
+  (#s: fslice)
+  (i: irepr p s)
+: HST.Stack U32.t
+  (requires (fun h -> (B.recallable s.base \/ live_slice h s)))
+  (ensures (fun h res h' ->
+    B.modifies B.loc_none h h' /\
+    valid_content_pos p h s (irepr_pos i) (irepr_v i) (irepr_pos' i) /\
+    res == irepr_pos' i
+  ))
+= recall_valid i;
+  j s (irepr_pos i)
 
 let freezable_buffer_writable_intro
   (b: fbuffer)
