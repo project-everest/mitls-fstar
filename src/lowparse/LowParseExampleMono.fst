@@ -174,6 +174,39 @@ let freezable_buffer_writable_intro
     )
 
 inline_for_extraction
+noextract
+let freeze_valid
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (sl: fslice)
+  (pos: U32.t)
+  (pos' : U32.t)
+: HST.Stack (irepr p sl)
+  (requires (fun h ->
+    (B.recallable sl.base \/ live_slice h sl) /\
+    frozen_until sl.base h <= U32.v pos /\
+    valid_pos p h sl pos pos' /\
+    U32.v pos' < U32.v sl.len /\ // TODO: remove once replaced with <= in FreezableBuffer
+    k.parser_kind_subkind == Some ParserStrong // for valid_exact_ext_intro
+  ))
+  (ensures (fun h res h' ->
+    B.modifies (B.loc_buffer sl.base) h h' /\
+    frozen_until sl.base h' == U32.v pos' /\
+    irepr_pos res == pos /\
+    irepr_pos' res == pos' /\
+    irepr_v res == contents p h sl pos
+  ))
+=    B.recall_p sl.base (w_pred 4); // to recover liveness
+     let h1 = HST.get () in
+     freeze sl.base pos' ;
+     let h2 = HST.get () in
+     valid_pos_valid_exact p h1 sl pos pos' ;
+     valid_exact_ext_intro p h1 sl pos pos' h2 sl pos pos' ;
+     witness_valid sl pos
+
+inline_for_extraction
+noextract
 let iwrite
   (#k: parser_kind)
   (#t: Type)
@@ -186,33 +219,24 @@ let iwrite
 : HST.Stack (irepr p sl)
   (requires (fun h ->
     k.parser_kind_subkind == Some ParserStrong /\ // for valid_exact_ext_intro
-    k.parser_kind_high == Some k.parser_kind_low /\
     frozen_until sl.base h <= U32.v pos /\
-    U32.v pos + k.parser_kind_low < U32.v sl.len /\ // TODO: change to <=
+    U32.v pos + serialized_length s v < U32.v sl.len /\ // TODO: change to <=
     (recallable sl.base \/ live_slice h sl)
   ))
   (ensures (fun h i h' ->
     irepr_v i == v /\
     irepr_pos i == pos /\
-    irepr_pos' i == pos `U32.add` U32.uint_to_t k.parser_kind_low /\
+    irepr_pos' i == pos `U32.add` U32.uint_to_t (serialized_length s v) /\
     frozen_until sl.base h' == U32.v (irepr_pos' i) /\
     B.modifies (B.loc_buffer sl.base) h h'
   ))
-=    recall_w_default (sl.base <: fbuffer);
-     B.recall_p sl.base (w_pred 4);
+=    B.recall_p sl.base (w_pred 4); // to recover liveness
      let h0 = HST.get () in
      loc_slice_from_to_eq sl 0ul 4ul; // for the length header
-     let len = w v sl pos `U32.sub` pos in
+     let pos' = w v sl pos in
      let h1 = HST.get () in
-     let pos' = pos `U32.add` len in
      B.modifies_buffer_from_to_elim sl.base 0ul 4ul (loc_slice_from_to sl pos pos') h0 h1;
-     recall_w_default sl.base;
-     freeze sl.base pos' ;
-     let h2 = HST.get () in
-     valid_pos_valid_exact p h1 sl pos pos' ;
-     valid_exact_ext_intro p h1 sl pos pos' h2 sl pos pos' ;
-     witness_valid sl pos
-  
+     freeze_valid p sl pos pos'
 
 val main: FStar.Int32.t -> LowStar.Buffer.buffer (LowStar.Buffer.buffer C.char) ->
   FStar.HyperStack.ST.Stack C.exit_code (fun _ -> true) (fun _ _ _ -> true)
