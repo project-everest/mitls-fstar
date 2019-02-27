@@ -7,6 +7,8 @@ module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 module Seq = FStar.Seq
 
+#reset-options "--z3cliopt smt.arith.nl=false"
+
 noeq
 type slice (rrel rel: B.srel byte) = {
   base: B.mbuffer byte rrel rel;
@@ -1775,7 +1777,7 @@ let slice_access'
   let small = bytes_of_slice_from_to h sl pos (pos `U32.add` U32.uint_to_t (content_length' p1 h sl pos)) in
   pos `U32.add` U32.uint_to_t (fst (g small))
 
-#push-options "--z3rlimit 16"
+#push-options "--z3rlimit 256 --max_fuel 0 --max_ifuel 6 --initial_ifuel 6"
 
 [@"opaque_to_smt"]
 abstract
@@ -1806,7 +1808,8 @@ let slice_access
     U32.v pos <= U32.v pos' /\
     U32.v pos' + content_length p2 h sl pos' <= U32.v pos + content_length p1 h sl pos
   ))
-= valid_facts p1 h sl pos;
+= assert_norm (pow2 32 == 4294967296);
+  valid_facts p1 h sl pos;
   let res = slice_access' h g sl pos in
   valid_facts p2 h sl res;
   let _ =
@@ -1850,7 +1853,7 @@ let slice_access_eq
 = valid_facts p1 h sl pos;
   assert_norm (slice_access h g sl pos == slice_access' h g sl pos)
 
-#push-options "--z3rlimit 64"
+#push-options "--z3rlimit 256 --max_fuel 0 --max_ifuel 6 --initial_ifuel 6"
 
 abstract
 let slice_access_eq_inv
