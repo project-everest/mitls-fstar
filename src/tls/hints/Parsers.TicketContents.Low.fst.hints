@@ -74,7 +74,7 @@
         "typing_tok_Parsers.TicketVersion.Ticket12@tok"
       ],
       0,
-      "f96a2b3cabea01fb02c10e9d973a6733"
+      "455eadf7101c8823fdcb12158941ae82"
     ],
     [
       "Parsers.TicketContents.Low.finalize_case_ticketContents12",
@@ -242,9 +242,8 @@
         "typing_FStar.Monotonic.HyperHeap.rid",
         "typing_FStar.Monotonic.HyperStack.get_hmap",
         "typing_FStar.Monotonic.HyperStack.get_tip",
-        "typing_FStar.UInt.fits", "typing_FStar.UInt32.add",
-        "typing_FStar.UInt32.uint_to_t", "typing_FStar.UInt32.v",
-        "typing_LowParse.Low.Base.max_uint32",
+        "typing_FStar.UInt32.add", "typing_FStar.UInt32.uint_to_t",
+        "typing_FStar.UInt32.v", "typing_LowParse.Low.Base.max_uint32",
         "typing_LowParse.Low.Base.serialized_length",
         "typing_LowParse.Low.Base.validator_max_length",
         "typing_LowParse.Spec.Combinators.parse_filter_kind",
@@ -265,7 +264,7 @@
         "typing_tok_Parsers.TicketVersion.Ticket13@tok"
       ],
       0,
-      "d0c966113d6f38ea0dcaa18109217b47"
+      "f700d678172cefa4c964126ca26d9acb"
     ],
     [
       "Parsers.TicketContents.Low.finalize_case_ticketContents13",
@@ -338,7 +337,7 @@
         "typing_tok_Parsers.TicketVersion.Ticket12@tok"
       ],
       0,
-      "25131fba6e6ae2a29ad9bc16a9a42500"
+      "0e0cf74aac0f77f089368b51af6b3ece"
     ],
     [
       "Parsers.TicketContents.Low.finalize_case_ticketContents13",
@@ -380,6 +379,7 @@
         "data_typing_intro_Prims.Nil@tok",
         "disc_equation_FStar.Pervasives.Native.None",
         "disc_equation_FStar.Pervasives.Native.Some",
+        "equality_tok_LowParse.Spec.Base.ParserKindMetadataFail@tok",
         "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
         "equality_tok_LowParse.Spec.Sum.Sum@tok",
         "equality_tok_Parsers.TicketVersion.Ticket12@tok",
@@ -396,6 +396,7 @@
         "equation_LowParse.Low.Base.validator_max_length",
         "equation_LowParse.Spec.Base.default_parser_kind",
         "equation_LowParse.Spec.Base.glb",
+        "equation_LowParse.Spec.Base.is_weaker_than",
         "equation_LowParse.Spec.Base.parser_kind",
         "equation_LowParse.Spec.Base.parser_kind_metadata_t",
         "equation_LowParse.Spec.Base.strong_parser_kind",
@@ -512,8 +513,9 @@
         "typing_FStar.Monotonic.HyperHeap.rid",
         "typing_FStar.Monotonic.HyperStack.get_hmap",
         "typing_FStar.Monotonic.HyperStack.get_tip",
-        "typing_FStar.UInt32.add", "typing_FStar.UInt32.uint_to_t",
-        "typing_FStar.UInt32.v", "typing_LowParse.Low.Base.max_uint32",
+        "typing_FStar.UInt.fits", "typing_FStar.UInt32.add",
+        "typing_FStar.UInt32.uint_to_t", "typing_FStar.UInt32.v",
+        "typing_LowParse.Low.Base.max_uint32",
         "typing_LowParse.Low.Base.serialized_length",
         "typing_LowParse.Low.Base.validator_max_length",
         "typing_LowParse.Spec.Base.__proj__Mkparser_kind___item__parser_kind_high",
@@ -532,7 +534,8 @@
         "typing_Parsers.TicketContents.ticketContents_sum",
         "typing_Parsers.TicketVersion.ticketVersion_enum",
         "typing_Parsers.TicketVersion.ticketVersion_repr_serializer",
-        "typing_Tm_abs_162ef36bfdaee7e5794904f4d1f48ce3"
+        "typing_Tm_abs_162ef36bfdaee7e5794904f4d1f48ce3",
+        "typing_tok_Parsers.TicketVersion.Ticket13@tok"
       ],
       0,
       "61d4a5fcc61c42aba1425f619509d937"
