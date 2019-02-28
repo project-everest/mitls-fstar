@@ -225,7 +225,6 @@ let freeze_valid
     (B.recallable sl.base \/ live_slice h sl) /\
     buffer_frozen_until sl.base h <= U32.v pos /\
     valid_pos p h sl pos pos' /\
-    U32.v pos' < U32.v sl.len /\ // TODO: remove once replaced with <= in FreezableBuffer
     k.parser_kind_subkind == Some ParserStrong // for valid_exact_ext_intro
   ))
   (ensures (fun h res h' ->
@@ -272,7 +271,7 @@ let iwrite
   (requires (fun h ->
     k.parser_kind_subkind == Some ParserStrong /\ // for valid_exact_ext_intro
     buffer_frozen_until sl.base h <= U32.v pos /\
-    U32.v pos + serialized_length s v < U32.v sl.len /\ // TODO: change to <=
+    U32.v pos + serialized_length s v <= U32.v sl.len /\
     (recallable sl.base \/ live_slice h sl)
   ))
   (ensures (fun h i h' ->
