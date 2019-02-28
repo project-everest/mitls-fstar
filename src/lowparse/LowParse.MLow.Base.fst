@@ -1777,7 +1777,9 @@ let slice_access'
   let small = bytes_of_slice_from_to h sl pos (pos `U32.add` U32.uint_to_t (content_length' p1 h sl pos)) in
   pos `U32.add` U32.uint_to_t (fst (g small))
 
-#push-options "--z3rlimit 256 --max_fuel 0 --max_ifuel 6 --initial_ifuel 6"
+// #push-options "--z3rlimit 512 --max_fuel 0 --max_ifuel 6 --initial_ifuel 6"
+
+#push-options "--z3rlimit 16"
 
 [@"opaque_to_smt"]
 abstract
