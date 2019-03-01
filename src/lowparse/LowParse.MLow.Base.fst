@@ -2267,7 +2267,7 @@ let writable_intro
   (b: B.mbuffer t rrel rel)
   (pos pos' : nat)
   (h: HS.mem)
-  (s: squash (B.live h b /\ pos <= pos' /\ pos' <= B.length b))
+  (_: squash (B.live h b /\ pos <= pos' /\ pos' <= B.length b))
   (f: (
     (s1: Seq.lseq t (pos' - pos)) ->
     (s2: Seq.lseq t (pos' - pos)) ->
@@ -2278,6 +2278,127 @@ let writable_intro
 : Lemma
   (writable b pos pos' h)
 = Classical.forall_intro_2 f
+
+#push-options "--z3rlimit 16"
+
+let writable_weaken
+  (#t: Type)
+  (#rrel #rel: B.srel t)
+  (b: B.mbuffer t rrel rel)
+  (pos pos' : nat)
+  (h: HS.mem)
+  (lpos lpos' : nat)
+: Lemma
+  (requires (writable b pos pos' h /\ pos <= lpos /\ lpos <= lpos' /\ lpos' <= pos' /\ pos' <= B.length b))
+  (ensures (writable b lpos lpos' h))
+= writable_intro b lpos lpos' h () (fun s1 s2 ->
+    let s = B.as_seq h b in
+    let sl = Seq.slice s pos pos'  in
+    let j1 = Seq.replace_subseq s pos pos' (Seq.replace_subseq sl (lpos - pos) (lpos' - pos) s1) in
+    let j2 = Seq.replace_subseq s pos pos' (Seq.replace_subseq sl (lpos - pos) (lpos' - pos) s2) in
+    assert (Seq.replace_subseq s lpos lpos' s1 `Seq.equal` j1);
+    assert (Seq.replace_subseq s lpos lpos' s2 `Seq.equal` j2);
+    assert (j1 `rel` j2)
+  )
+
+#pop-options
+
+let writable_replace_subseq_elim
+  (#t: Type)
+  (#rrel #rel: B.srel t)
+  (b: B.mbuffer t rrel rel)
+  (pos pos' : nat)
+  (h: HS.mem)
+  (sl' : Seq.seq t)
+: Lemma
+  (requires (
+    writable b pos pos' h /\
+    pos <= pos' /\
+    pos' <= B.length b /\
+    Seq.length sl' == pos' - pos
+  ))
+  (ensures (
+    let s = B.as_seq h b in
+    let s' = Seq.replace_subseq s pos pos' sl' in
+    s `rel` s'
+  ))
+= let s = B.as_seq h b in
+  let sl = Seq.slice s pos pos' in
+  assert (s `Seq.equal` Seq.replace_subseq s pos pos' sl)
+
+let writable_replace_subseq
+  (#t: Type)
+  (#rrel #rel: B.srel t)
+  (b: B.mbuffer t rrel rel)
+  (pos pos' : nat)
+  (h: HS.mem)
+  (sl' : Seq.seq t)
+  (h' : HS.mem)
+: Lemma
+  (requires (
+    writable b pos pos' h /\
+    pos <= pos' /\
+    pos' <= B.length b /\
+    Seq.length sl' == pos' - pos /\
+    B.as_seq h' b `Seq.equal` Seq.replace_subseq (B.as_seq h b) pos pos' sl' /\
+    B.live h' b
+  ))
+  (ensures (
+    let s = B.as_seq h b in
+    let s' = Seq.replace_subseq s pos pos' sl' in
+    s `rel` s' /\
+    writable b pos pos' h'
+  ))
+= let s = B.as_seq h b in
+  let s' = Seq.replace_subseq s pos pos' sl' in
+  let sl = Seq.slice s pos pos' in
+  assert (s `Seq.equal` Seq.replace_subseq s pos pos' sl);
+  assert (s' `Seq.equal` Seq.replace_subseq s pos pos' sl');
+  writable_intro b pos pos' h' () (fun s1 s2 ->
+    assert (Seq.replace_subseq s' pos pos' s1 `Seq.equal` Seq.replace_subseq s pos pos' s1);
+    assert (Seq.replace_subseq s' pos pos' s2 `Seq.equal` Seq.replace_subseq s pos pos' s2)
+  ) 
+
+let writable_ext
+  (#t: Type)
+  (#rrel #rel: B.srel t)
+  (b: B.mbuffer t rrel rel)
+  (pos pos' : nat)
+  (h: HS.mem)
+  (h' : HS.mem)
+: Lemma
+  (requires (
+    writable b pos pos' h /\
+    pos <= pos' /\
+    pos' <= B.length b /\
+    B.as_seq h' b `Seq.equal` B.as_seq h b /\
+    B.live h' b
+  ))
+  (ensures (
+    writable b pos pos' h'
+  ))
+= writable_replace_subseq b pos pos' h (Seq.slice (B.as_seq h b) pos pos') h'
+
+let writable_upd_seq
+  (#t: Type)
+  (#rrel #rel: B.srel t)
+  (b: B.mbuffer t rrel rel)
+  (pos pos' : nat)
+  (sl' : Seq.seq t)
+  (h: HS.mem)
+: Lemma
+  (requires (writable b pos pos' h /\ pos <= pos' /\ pos' <= B.length b /\ Seq.length sl' == pos' - pos))
+  (ensures (
+    let s = B.as_seq h b in
+    let s' = Seq.replace_subseq s pos pos' sl' in
+    s `rel` s' /\
+    writable b pos pos' (B.g_upd_seq b s' h)
+  ))
+= let s = B.as_seq h b in
+  let s' = Seq.replace_subseq s pos pos' sl' in
+  let h' = B.g_upd_seq b s' h in
+  B.g_upd_seq_as_seq b s' h; // for live
+  writable_replace_subseq b pos pos' h sl' h'
 
 let writable_upd
   (#t: Type)
@@ -2295,16 +2416,9 @@ let writable_upd
     writable b pos pos' (B.g_upd b i v h)
   ))
 = let s = B.as_seq h b in
-  let h' = B.g_upd b i v h in
-  let s' = B.as_seq h' b in
-  B.g_upd_seq_as_seq b (Seq.upd s i v) h;
-  let sl = Seq.slice s pos pos' in
-  assert (s `Seq.equal` Seq.replace_subseq s pos pos' sl);
-  assert (s' `Seq.equal` Seq.replace_subseq s pos pos' (Seq.upd sl (i - pos) v));
-  writable_intro b pos pos' h' () (fun s1 s2 ->
-    assert (Seq.replace_subseq s' pos pos' s1 `Seq.equal` Seq.replace_subseq s pos pos' s1);
-    assert (Seq.replace_subseq s' pos pos' s2 `Seq.equal` Seq.replace_subseq s pos pos' s2)
-  )
+  let sl' = Seq.upd (Seq.slice s pos pos') (i - pos) v in
+  writable_upd_seq b pos pos' sl' h;
+  assert (Seq.upd s i v `Seq.equal` Seq.replace_subseq s pos pos' sl')
 
 [@unifier_hint_injective]
 inline_for_extraction
@@ -2401,17 +2515,45 @@ let leaf_writer_weak_of_strong_constant_size
   else s32 x input pos
 *)
 
-(*
+inline_for_extraction
+let blit_strong
+  (#a:Type0) (#rrel1 #rrel2 #rel1 #rel2: B.srel a)
+  (src: B.mbuffer a rrel1 rel1)
+  (idx_src:U32.t)
+  (dst: B.mbuffer a rrel2 rel2)
+  (idx_dst:U32.t)
+  (len:U32.t)
+: HST.Stack unit
+  (requires (fun h ->
+    B.live h src /\ B.live h dst /\
+    B.disjoint src dst /\ // TODO: replace with loc_disjoint (loc_buffer_from_to ...)
+    U32.v idx_src + U32.v len <= B.length src /\
+    U32.v idx_dst + U32.v len <= B.length dst /\
+    rel2 (B.as_seq h dst)
+         (Seq.replace_subseq (B.as_seq h dst) (U32.v idx_dst) (U32.v idx_dst + U32.v len)
+	   (Seq.slice (B.as_seq h src) (U32.v idx_src) (U32.v idx_src + U32.v len)))))
+  (ensures (fun h _ h' ->
+    B.modifies (B.loc_buffer_from_to dst idx_dst (idx_dst `U32.add` len)) h h' /\
+    B.live h' dst /\
+    Seq.slice (B.as_seq h' dst) (U32.v idx_dst) (U32.v idx_dst + U32.v len) ==
+    Seq.slice (B.as_seq h src) (U32.v idx_src) (U32.v idx_src + U32.v len)
+  ))
+= let h = HST.get () in
+  B.blit src idx_src dst idx_dst len;
+  let h' = HST.get () in
+  B.modifies_loc_buffer_from_to_intro dst idx_dst (idx_dst `U32.add` len) B.loc_none h h'
+
 #push-options "--z3rlimit 16"
 
 inline_for_extraction
 let copy_strong
+  (#rrel1 #rrel2 #rel1 #rel2: B.srel byte)
   (#k: parser_kind)
   (#t: Type)
   (p: parser k t)
-  (src: slice) // FIXME: length is useless here
+  (src: slice rrel1 rel1) // FIXME: length is useless here
   (spos spos' : U32.t)
-  (dst: slice)
+  (dst: slice rrel2 rel2)
   (dpos: U32.t)
 : HST.Stack U32.t
   (requires (fun h ->
@@ -2419,8 +2561,9 @@ let copy_strong
     valid_pos p h src spos spos' /\
     U32.v dpos + U32.v spos' - U32.v spos <= U32.v dst.len /\
     live_slice h dst /\
-    B.loc_disjoint (loc_slice_from_to src spos spos') (loc_slice_from_to dst dpos (dpos `U32.add` (spos' `U32.sub` spos))
-  )))
+    writable dst.base (U32.v dpos) (U32.v dpos + (U32.v spos' - U32.v spos)) h /\
+    B.disjoint src.base dst.base // TODO: change to:  B.loc_disjoint (loc_slice_from_to src spos spos') (loc_slice_from_to dst dpos (dpos `U32.add` (spos' `U32.sub` spos))
+  ))
   (ensures (fun h dpos' h' ->
     B.modifies (loc_slice_from_to dst dpos dpos') h h' /\
     valid_content_pos p h' dst dpos (contents p h src spos) dpos' /\
@@ -2428,16 +2571,15 @@ let copy_strong
   ))
 = let h0 = HST.get () in
   let len = spos' `U32.sub` spos in
-  let src' = B.sub src.base spos len in
-  let dst' = B.sub dst.base dpos len in
   valid_facts p h0 src spos;
   loc_slice_from_to_eq_gen src spos spos';
   loc_slice_from_to_eq_gen dst dpos (dpos `U32.add` (spos' `U32.sub` spos));
-  B.blit src' 0ul dst' 0ul len;
+  writable_replace_subseq_elim dst.base (U32.v dpos) (U32.v dpos + (U32.v spos' - U32.v spos)) h0 (Seq.slice (B.as_seq h0 src.base) (U32.v spos) (U32.v spos'));
+  blit_strong src.base spos dst.base dpos len;
   let h = HST.get () in
   [@inline_let] let dpos' = dpos `U32.add` len in
   loc_slice_from_to_eq_gen dst dpos dpos';
-  parse_strong_prefix p (B.as_seq h0 (B.gsub src.base spos (src.len `U32.sub` spos))) (B.as_seq h (B.gsub dst.base dpos (dst.len `U32.sub` dpos)));
+  parse_strong_prefix p (bytes_of_slice_from h0 src spos) (bytes_of_slice_from h dst dpos);
   valid_facts p h dst dpos;
   dpos'
 
@@ -2445,13 +2587,14 @@ let copy_strong
 
 inline_for_extraction
 let copy_strong'
+  (#rrel1 #rrel2 #rel1 #rel2: B.srel byte)
   (#k: parser_kind)
   (#t: Type)
   (#p: parser k t)
   (j: jumper p)
-  (src: slice) // FIXME: length is useless here
+  (src: slice rrel1 rel1) // FIXME: length is useless here
   (spos : U32.t)
-  (dst: slice)
+  (dst: slice rrel2 rel2)
   (dpos: U32.t)
 : HST.Stack U32.t
   (requires (fun h ->
@@ -2460,7 +2603,8 @@ let copy_strong'
     let clen = content_length p h src spos in
     U32.v dpos + clen <= U32.v dst.len /\
     live_slice h dst /\
-    B.loc_disjoint (loc_slice_from src spos) (loc_slice_from_to dst dpos (dpos `U32.add` (U32.uint_to_t clen)))
+    writable dst.base (U32.v dpos) (U32.v dpos + clen) h /\
+    B.disjoint src.base dst.base // TODO: change to B.loc_disjoint (loc_slice_from src spos) (loc_slice_from_to dst dpos (dpos `U32.add` (U32.uint_to_t clen)))
   )))
   (ensures (fun h dpos' h' ->
     B.modifies (loc_slice_from_to dst dpos dpos') h h' /\
@@ -2471,12 +2615,13 @@ let copy_strong'
 
 inline_for_extraction
 let copy_weak_with_length
+  (#rrel1 #rrel2 #rel1 #rel2: B.srel byte)
   (#k: parser_kind)
   (#t: Type)
   (p: parser k t)
-  (src: slice) // FIXME: length is useless here
+  (src: slice rrel1 rel1) // FIXME: length is useless here
   (spos spos' : U32.t)
-  (dst: slice)
+  (dst: slice rrel2 rel2)
   (dpos: U32.t)
 : HST.Stack U32.t
   (requires (fun h ->
@@ -2485,7 +2630,8 @@ let copy_weak_with_length
     live_slice h dst /\
     U32.v dpos <= U32.v dst.len /\
     U32.v dst.len < U32.v max_uint32 /\
-    B.loc_disjoint (loc_slice_from_to src spos spos') (loc_slice_from dst dpos)
+    writable dst.base (U32.v dpos) (U32.v dpos + (U32.v spos' - U32.v spos)) h /\
+    B.disjoint src.base dst.base // TODO: copy to B.loc_disjoint (loc_slice_from_to src spos spos') (loc_slice_from dst dpos)
   ))
   (ensures (fun h dpos' h' ->
     B.modifies (loc_slice_from dst dpos) h h' /\ (
@@ -2501,13 +2647,14 @@ let copy_weak_with_length
 
 inline_for_extraction
 let copy_weak
+  (#rrel1 #rrel2 #rel1 #rel2: B.srel byte)
   (#k: parser_kind)
   (#t: Type)
   (p: parser k t)
   (jmp: jumper p)
-  (src: slice)
+  (src: slice rrel1 rel1)
   (spos : U32.t)
-  (dst: slice)
+  (dst: slice rrel2 rel2)
   (dpos: U32.t)
 : HST.Stack U32.t
   (requires (fun h ->
@@ -2516,7 +2663,8 @@ let copy_weak
     live_slice h dst /\
     U32.v dpos <= U32.v dst.len /\
     U32.v dst.len < U32.v max_uint32 /\
-    B.loc_disjoint (loc_slice_from src spos) (loc_slice_from dst dpos)
+    writable dst.base (U32.v dpos) (U32.v dpos + (content_length p h src spos)) h /\
+    B.disjoint src.base dst.base // TODO: change to B.loc_disjoint (loc_slice_from src spos) (loc_slice_from dst dpos)
   ))
   (ensures (fun h dpos' h' ->
     B.modifies (loc_slice_from dst dpos) h h' /\ (
@@ -2528,7 +2676,6 @@ let copy_weak
   )))
 = let spos' = jmp src spos in
   copy_weak_with_length p src spos spos' dst dpos
-*)
 
 let loc_includes_loc_slice_from_loc_slice_from_to
   (#rrel #rel: B.srel byte)
