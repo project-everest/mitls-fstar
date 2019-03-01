@@ -1196,18 +1196,28 @@ let compute_cs13 cfg o psks shares server_cert =
   Correct (compute_cs13_aux 0 o psks g_gx ncs psk_kex server_cert, g_hrr)
 
 // Registration and filtering of PSK identities
-let rec filter_psk (l:list Extensions.pskIdentity)
+let rec filter_psk (max_age:UInt32.t) (l:list Extensions.pskIdentity)
   : St (list (PSK.pskid * PSK.pskInfo))
   =
   match l with
   | [] -> []
-  | (id, _) :: t ->
+  | (id, age) :: t ->
     (match Ticket.check_ticket13 id with
-    | Some info -> (id, info) :: (filter_psk t)
+    | Some info ->
+      let real_age = PSK.decode_age age info.ticket_age_add in
+      if FStar.UInt32.(real_age <=^ max_age *%^ 1000ul) then
+        (trace ("Loaded PSK from ticket <"^print_bytes id^">");
+	(id, info) :: (filter_psk max_age t))
+      else
+        (trace ("Ticket <"^(print_bytes id)^"> is too old"); filter_psk max_age t)
     | None ->
       (match PSK.psk_lookup id with
-      | Some info -> trace ("Loaded PSK from ticket <"^print_bytes id^">"); (id, info) :: (filter_psk t)
-      | None -> trace ("WARNING: the PSK <"^print_bytes id^"> has been filtered"); filter_psk t))
+      | Some info ->
+        trace ("Loaded PSK from table <"^print_bytes id^">");
+	(id, info) :: (filter_psk max_age t)
+      | None ->
+        trace ("WARNING: ignored PSK <"^print_bytes id^">");
+	filter_psk max_age t))
 
 // Registration of DH shares
 let rec register_shares (l:list pre_share)
@@ -1261,7 +1271,7 @@ let computeServerMode cfg co serverRandom =
     begin
     let pske = // Filter and register offered PSKs
       match find_clientPske co with
-      | Some (pske,_) -> filter_psk pske
+      | Some (pske,_) -> filter_psk cfg.max_ticket_age pske
       | None -> [] in
     let shares = register_shares (gs_of co) in
     let scert =
