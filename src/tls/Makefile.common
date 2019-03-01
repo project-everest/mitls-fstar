@@ -50,11 +50,6 @@ INCLUDE_PATHS = \
   $(EVERCRYPT_HOME)/evercrypt/config/$(EVERCRYPT_CONFIG) \
   $(HACL_HOME)/obj
 
-PARSERS_CACHE_DIR=$(MITLS_HOME)/src/parsers/generated/cache
-ifneq (,$(PARSERS_CACHE_DIR))
-  INCLUDE_PATHS += $(PARSERS_CACHE_DIR)
-endif
-
 ifeq (,$(MITLS_NODEBUG))
   INCLUDE_PATHS += ./concrete-flags/Debug
 else
