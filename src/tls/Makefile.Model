@@ -9,9 +9,12 @@ include Makefile.common
 HINTS_ENABLED ?= --use_hints --use_hint_hashes --record_hints
 VFLAGS += $(HINTS_ENABLED)
 
+HSL_FILES = HSL.Common.fst HSL.Send.fsti HSL.Transcript.fsti HSL.Receive.fst HSL.Receive.fsti HSL.Transcript.fst
+
+
 # Verification is performed in dependency order too. If we want to verify 
 # something that nothing depends on yet, we need to add it to ROOTS here.
-ROOTS    += IV.fst HMAC.UFCMA.fst Token.UF1CMA.fst Pkg.Tree.fst AEAD.Pkg.fst
+ROOTS    += IV.fst HMAC.UFCMA.fst Token.UF1CMA.fst Pkg.Tree.fst AEAD.Pkg.fst $(HSL_FILES)
 
 model verify: $(addprefix $(CACHE_DIR)/, $(addsuffix .checked, $(notdir $(ALL_UNCHECKED_FST_FILES))))
 
