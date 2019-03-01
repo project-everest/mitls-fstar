@@ -14,7 +14,7 @@ module LP = LowParse.Low.Base
 
 open HSL.Common
 
-#reset-options "--using_facts_from '* -FStar.Tactics -FStar.Reflection'"
+#reset-options "--max_fuel 0 --max_ifuel 0 --using_facts_from '* -FStar.Tactics -FStar.Reflection'"
 
 noeq
 type hsl_state = {
@@ -50,5 +50,10 @@ let create r =
   let parsed_bytes = B.malloc r (G.hide (Seq.empty)) 1ul in
   { rgn = r; from_to = from_to; parsed_bytes = parsed_bytes }
 
-let receive_flight_ee_fin (st:hsl_state) (b:b8) (from to:uint_32) =
-  admit()
+let receive_flight13_ee_c_cv_fin _ _ _ _ = admit()
+let receive_flight13_ee_cr_c_cv_fin _ _ _ _ = admit ()
+let receive_flight13_ee_fin _ _ _ _ = admit ()
+let receive_flight13_fin _ _ _ _ = admit ()
+let receive_flight13_c_cv_fin _ _ _ _ = admit ()
+let receive_flight13_eoed _ _ _ _ = admit ()
+let receive_flight13_nst _ _ _ _ = admit ()
