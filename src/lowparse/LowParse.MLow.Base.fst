@@ -2526,9 +2526,9 @@ let blit_strong
 : HST.Stack unit
   (requires (fun h ->
     B.live h src /\ B.live h dst /\
-    B.disjoint src dst /\ // TODO: replace with loc_disjoint (loc_buffer_from_to ...)
     U32.v idx_src + U32.v len <= B.length src /\
     U32.v idx_dst + U32.v len <= B.length dst /\
+    B.loc_disjoint (B.loc_buffer_from_to src idx_src (idx_src `U32.add` len)) (B.loc_buffer_from_to dst idx_dst (idx_dst `U32.add` len)) /\
     rel2 (B.as_seq h dst)
          (Seq.replace_subseq (B.as_seq h dst) (U32.v idx_dst) (U32.v idx_dst + U32.v len)
 	   (Seq.slice (B.as_seq h src) (U32.v idx_src) (U32.v idx_src + U32.v len)))))
@@ -2562,7 +2562,7 @@ let copy_strong
     U32.v dpos + U32.v spos' - U32.v spos <= U32.v dst.len /\
     live_slice h dst /\
     writable dst.base (U32.v dpos) (U32.v dpos + (U32.v spos' - U32.v spos)) h /\
-    B.disjoint src.base dst.base // TODO: change to:  B.loc_disjoint (loc_slice_from_to src spos spos') (loc_slice_from_to dst dpos (dpos `U32.add` (spos' `U32.sub` spos))
+    B.loc_disjoint (loc_slice_from_to src spos spos') (loc_slice_from_to dst dpos (dpos `U32.add` (spos' `U32.sub` spos)))
   ))
   (ensures (fun h dpos' h' ->
     B.modifies (loc_slice_from_to dst dpos dpos') h h' /\
@@ -2604,7 +2604,7 @@ let copy_strong'
     U32.v dpos + clen <= U32.v dst.len /\
     live_slice h dst /\
     writable dst.base (U32.v dpos) (U32.v dpos + clen) h /\
-    B.disjoint src.base dst.base // TODO: change to B.loc_disjoint (loc_slice_from src spos) (loc_slice_from_to dst dpos (dpos `U32.add` (U32.uint_to_t clen)))
+    B.loc_disjoint (loc_slice_from src spos) (loc_slice_from_to dst dpos (dpos `U32.add` (U32.uint_to_t clen)))
   )))
   (ensures (fun h dpos' h' ->
     B.modifies (loc_slice_from_to dst dpos dpos') h h' /\
@@ -2631,7 +2631,7 @@ let copy_weak_with_length
     U32.v dpos <= U32.v dst.len /\
     U32.v dst.len < U32.v max_uint32 /\
     writable dst.base (U32.v dpos) (U32.v dpos + (U32.v spos' - U32.v spos)) h /\
-    B.disjoint src.base dst.base // TODO: copy to B.loc_disjoint (loc_slice_from_to src spos spos') (loc_slice_from dst dpos)
+    B.loc_disjoint (loc_slice_from_to src spos spos') (loc_slice_from dst dpos)
   ))
   (ensures (fun h dpos' h' ->
     B.modifies (loc_slice_from dst dpos) h h' /\ (
@@ -2664,7 +2664,7 @@ let copy_weak
     U32.v dpos <= U32.v dst.len /\
     U32.v dst.len < U32.v max_uint32 /\
     writable dst.base (U32.v dpos) (U32.v dpos + (content_length p h src spos)) h /\
-    B.disjoint src.base dst.base // TODO: change to B.loc_disjoint (loc_slice_from src spos) (loc_slice_from dst dpos)
+    B.loc_disjoint (loc_slice_from src spos) (loc_slice_from dst dpos)
   ))
   (ensures (fun h dpos' h' ->
     B.modifies (loc_slice_from dst dpos) h h' /\ (
