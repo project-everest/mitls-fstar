@@ -50,6 +50,11 @@ INCLUDE_PATHS = \
   $(EVERCRYPT_HOME)/evercrypt/config/$(EVERCRYPT_CONFIG) \
   $(HACL_HOME)/obj
 
+PARSERS_CACHE_DIR=$(MITLS_HOME)/src/parsers/generated/cache
+ifneq (,$(PARSERS_CACHE_DIR))
+  INCLUDE_PATHS += $(PARSERS_CACHE_DIR)
+endif
+
 ifeq (,$(MITLS_NODEBUG))
   INCLUDE_PATHS += ./concrete-flags/Debug
 else
@@ -187,7 +192,6 @@ extract/copied/%.c: $(KREMLIN_HOME)/kremlib/%.c
 # Don't delete these files otherwise one can't run Makefile.OCaml and
 # Makefile.Kremlin in parallel
 .PRECIOUS: extract/copied/%.c
-
 
 # Rules for Interactive Mode
 %.fst-in %.fsti-in: 
