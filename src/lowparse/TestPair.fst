@@ -82,7 +82,6 @@ let iwrite_u16 (u:UInt16.t) (p:UInt32.t)
      B.recall buf.LM.base;
      let h0 = get () in
      let p' = LMI.write_u16 u buf p in
-     LM.loc_slice_from_to_eq buf 0ul 4ul;
      let h1 = get () in
      let p' = p `U32.add` 2ul in
      B.modifies_buffer_from_to_elim buf.LM.base 0ul 4ul (LM.loc_slice_from_to buf p p') h0 h1;
@@ -108,7 +107,6 @@ let iwrite_u32 (u:UInt32.t) (p:UInt32.t)
      B.recall buf.LM.base;
      let h0 = get () in
      let p' = LMI.write_u32 u buf p in
-     LM.loc_slice_from_to_eq buf 0ul 4ul;
      let h1 = get () in
      let p' = p `U32.add` 4ul in
      B.modifies_buffer_from_to_elim buf.LM.base 0ul 4ul (LM.loc_slice_from_to buf p p') h0 h1;

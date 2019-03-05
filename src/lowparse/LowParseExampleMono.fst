@@ -253,8 +253,7 @@ let frozen_until_frame
     [SMTPat (B.modifies l h h'); SMTPat (buffer_frozen_until sl.base h);];
     [SMTPat (B.modifies l h h'); SMTPat (buffer_frozen_until sl.base h');];
   ]]
-= loc_slice_from_to_eq sl 0ul 4ul;
-  B.modifies_buffer_from_to_elim sl.base 0ul 4ul l h h'
+= B.modifies_buffer_from_to_elim sl.base 0ul 4ul l h h'
 
 inline_for_extraction
 noextract
