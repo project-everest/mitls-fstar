@@ -284,6 +284,38 @@ let iwrite
      let pos' = w v sl pos in
      freeze_valid p sl pos pos'
 
+inline_for_extraction
+noextract
+let icopy
+  (#rrel #rel: B.srel byte)
+  (#k: parser_kind)
+  (#t: Type)
+  (p: parser k t)
+  (src: LowParse.MLow.Base.slice rrel rel)
+  (spos spos' : U32.t)
+  (dst: slice)
+  (dpos: U32.t)
+: HST.Stack (irepr p dst)
+  (requires (fun h ->
+    k.parser_kind_subkind == Some ParserStrong /\
+    valid_pos p h src spos spos' /\
+    U32.v dpos + U32.v spos' - U32.v spos <= U32.v dst.len /\
+    B.loc_disjoint (loc_slice_from_to src spos spos') (loc_slice_from_to dst dpos (dpos `U32.add` (spos' `U32.sub` spos))) /\ (
+    let len = buffer_frozen_until dst.base h in
+    (recallable dst.base \/ live_slice h dst) /\
+    len <= U32.v dpos
+  )))
+  (ensures (fun h i h' ->
+    B.modifies (B.loc_buffer dst.base) h h' /\
+    irepr_pos i == dpos /\
+    irepr_v i == contents p h src spos /\
+    buffer_frozen_until dst.base h' == U32.v (irepr_pos' i)
+  ))
+= B.recall_p dst.base (frozen_until_at_least 4); // to recover liveness
+  let dpos' = copy_strong p src spos spos' dst dpos in
+  let i = freeze_valid p dst dpos dpos' in
+  i
+
 val main: FStar.Int32.t -> LowStar.Buffer.buffer (LowStar.Buffer.buffer C.char) ->
   FStar.HyperStack.ST.Stack C.exit_code (fun _ -> true) (fun _ _ _ -> true)
 let main _ _ = C.EXIT_SUCCESS
