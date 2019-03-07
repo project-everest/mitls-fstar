@@ -347,9 +347,10 @@ private let rec list_valid_ng_is_list_ng (l:CommonDH.supportedNamedGroups) : Com
 #pop-options
 
 // We fill binders with placeholders to use QD clientHelloextensions_serializer32
-private let compute_binder_ph (pski:pskInfo) =
+private let compute_binder_ph (pski:pskInfo) : Tot FStar.Bytes.bytes =
   let h = PSK.pskInfo_hash pski in
-  create (Hashing.Spec.tagLen h) 0uy
+  let len : UInt32.t = Hashing.Spec.tagLen h in
+  FStar.Bytes.create len 0uy
 
 let supported_group_extension cfg: list clientHelloExtension =   
   if List.Tot.existsb send_supported_groups (list_valid_cs_is_list_cs cfg.cipher_suites) 
@@ -681,7 +682,7 @@ let rec encrypted_clientExtensions pv cfg cs ri pski ks resuming (ches:list clie
 
 type tickets = list (psk_identifier * Ticket.ticket) 
 
-#set-options "--z3rlimit 50"
+#push-options "--z3rlimit 50"
 let rec unseal_tickets 
   (acc: tickets)
   (l:list (psk_identifier * ticket_seal)): 
@@ -826,6 +827,7 @@ let sign #region #role ns tbs =
     let alg = if mode.n_protocol_version `geqPV` TLS_1p2 then Some sa else None in
     Correct ({sig_algorithm = alg; sig_signature = sigv})
 
+#pop-options
 
 (* CLIENT *)
 
@@ -843,7 +845,9 @@ let sign #region #role ns tbs =
  * AR: 1/27: this seems wip, since the precondition does not have liveness of ns.state etc.
  *)
 
-#set-options "--z3rlimit 100" 
+#set-options "--admit_smt_queries true" // TR: added according to AR's remark above
+
+#push-options "--z3rlimit 100" 
 let client_ClientHello #region ns oks =
   match !ns.state with
   | C_Init _ ->
@@ -878,7 +882,9 @@ let choose_extension (s:option share) (e:clientHelloExtension) =
     | _ -> Some e)
   | e -> Some e
 
-#set-options "--z3rlimit 100"
+#pop-options
+
+#push-options "--z3rlimit 100"
 let client_HelloRetryRequest #region (ns:t region Client) hrr (s:option share) =
   let { hrr_sessionID = sid;
         hrr_cipher_suite = cs;
@@ -912,7 +918,7 @@ let client_HelloRetryRequest #region (ns:t region Client) hrr (s:option share) =
       ns.state := (C_HRR offer' ri);
       Correct(offer')
      end
-#reset-options 
+#pop-options 
 
 
 // usable on both sides; following https://tlswg.github.io/tls13-spec/#rfc.section.4.2.1
@@ -1295,7 +1301,6 @@ let client_ServerHello #region ns sh =
       Correct mode )
   | _ -> 
     fatal Internal_error "to be statically excluded" 
-#reset-options ""
 
 //19-01-04 should we check that we have a matching client share? 
 
@@ -1304,7 +1309,7 @@ let client_ServerHello #region ns sh =
 // why an option? why csr instead of the two nonces? we'll need to prove some injectivity property, which seems to rely on nonces not being all zeros
 
 
-#set-options "--z3rlimit 30"
+#push-options "--z3rlimit 30"
 let to_be_signed pv role csr tbs =
   if pv = TLS_1p3 then 
     let pad = Bytes.create_ 64 32uy in
@@ -1318,7 +1323,7 @@ let to_be_signed pv role csr tbs =
     pad @| ctx @| abyte 0z @| tbs
   else
     Some?.v csr @| tbs
-#reset-options 
+#pop-options 
 
 
 // 19-01-06 we can't use || and && because of Kremlin's let bindings :(
@@ -1351,7 +1356,7 @@ let filter_ske_salg12 (osa: option signatureScheme) (sa: signatureScheme) =
   then fatal Handshake_failure "Signature algorithm negotiation failed"
   else correct sa
 
-#set-options "--z3rlimit 200"
+#push-options "--z3rlimit 200"
 let accept_salg12 mode (osa: option signatureScheme): result signatureScheme  =
   assume(
     pvcs mode.n_protocol_version mode.n_cipher_suite /\ 
@@ -1881,7 +1886,7 @@ let server_ClientHello #region ns offer log =
         trace ("negotiated "^string_of_pv m.n_protocol_version^" "^string_of_ciphersuite m.n_cipher_suite);
         ns.state := S_ClientHello m cert;
         Correct (ServerMode m cert (Extensions.eext_of_custom sexts))
-#reset-options ""
+#pop-options
 
 (* still useful?
 let share_of_serverKeyShare (ks:CommonDH.serverKeyShare) : share =

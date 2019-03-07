@@ -642,10 +642,16 @@ let validate_many ksl =
 let format #g gx =
   let raw = vlbytes2 (serialize_raw gx) in
   match namedGroup_of_group g with
-  | None -> Ks_Unknown_namedGroup 0us (serialize gx)
+  | None ->
+    let b = serialize gx in
+    [@inline_let] let _ = assume (FStar.Bytes.length b <= 65535) in
+    Ks_Unknown_namedGroup 0us b
   | Some ng ->   
     match keyShareEntry_parser32 (namedGroup_serializer32 ng @| raw) with
-    | None -> Ks_Unknown_namedGroup 0us (serialize gx)
+    | None ->
+      let b = serialize gx in
+      [@inline_let] let _ = assume (FStar.Bytes.length b <= 65535) in
+      Ks_Unknown_namedGroup 0us b
     | Some (v, _) -> v
 
 (*

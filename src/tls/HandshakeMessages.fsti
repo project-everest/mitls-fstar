@@ -7,8 +7,8 @@ open FStar.Seq
 open FStar.Bytes
 open FStar.Error
 open TLSError
-open TLSConstants
 open Extensions
+open TLSConstants // MUST be open after Extensions because of protocolVersion
 open TLSInfo
 open Range
 open CommonDH
