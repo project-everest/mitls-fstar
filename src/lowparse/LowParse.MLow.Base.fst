@@ -1534,7 +1534,7 @@ let slice_access'
 
 // #push-options "--z3rlimit 512 --max_fuel 0 --max_ifuel 6 --initial_ifuel 6"
 
-#push-options "--z3rlimit 16"
+#push-options "--z3rlimit 32"
 
 [@"opaque_to_smt"]
 abstract
