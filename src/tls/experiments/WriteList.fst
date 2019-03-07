@@ -5,16 +5,18 @@ module B = LowStar.Buffer
 module HST = FStar.HyperStack.ST
 open FStar.Integers
 
-val write_list
+inline_for_extraction
+let list_writer
   (#k: parser_kind)
   (#t: Type)
   (#p: parser k t)
   (#s: serializer p)
   (w: leaf_writer_weak s)
   (l: list t)
-  (sl: slice)
-  (pos: U32.t)
-: HST.Stack U32.t
+  =
+   (sl: slice)
+ -> (pos: U32.t)
+ -> HST.Stack U32.t
   (requires (fun h ->
     live_slice h sl /\
     pos <= sl.len /\
@@ -32,18 +34,36 @@ val write_list
       contents_list p h' sl pos pos' == l
   )))
 
-let rec write_list #k #t #p #s w l sl pos =
-  match l with
-  | [] ->
+inline_for_extraction
+let write_list_nil
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (#s: serializer p)
+  (w: leaf_writer_weak s)
+: Tot (list_writer w [])
+= fun sl pos ->
     let h = HST.get () in
     valid_list_nil p h sl pos;
     pos
-  | a :: q ->
+
+inline_for_extraction
+let write_list_cons
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (#s: serializer p)
+  (w: leaf_writer_weak s)
+  (a: t)
+  (#q: list t)
+  (wq: list_writer w q)
+: Tot (list_writer w (a :: q))
+= fun sl pos ->
     let pos1 = w a sl pos in
     if pos1 = max_uint32
     then pos1
     else begin
-      let pos' = write_list w q sl pos1 in
+      let pos' = wq sl pos1 in
       let h' = HST.get () in
       [@inline_let]
       let _ =
@@ -55,3 +75,67 @@ let rec write_list #k #t #p #s w l sl pos =
       in
       pos'
     end
+
+val write_list
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (#s: serializer p)
+  (w: leaf_writer_weak s)
+  (l: list t)
+: list_writer w l
+
+
+let rec write_list #k #t #p #s w l=
+  match l with
+  | [] -> write_list_nil w
+  | a :: q ->
+    write_list_cons
+      w
+      a
+      (write_list w q)
+
+inline_for_extraction
+let write_list'
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (#s: serializer p)
+  (w: leaf_writer_weak s)
+  (l: list t)
+ : list_writer w l
+ = Pervasives.norm [delta_only [`%write_list]; zeta; iota]
+        (write_list w l)
+
+let test
+    (#k: parser_kind)
+    (#t: Type)
+    (#p: parser k t)
+    (#s: serializer p)
+    (w: leaf_writer_weak s)
+    (elt : t)
+ : list_writer w [elt;elt]
+ = write_list' w [elt;elt]
+
+(* Extracts to
+
+   let pos1 = w elt sl pos  in
+                  if
+                    pos1 =
+                      (FStar_UInt32.uint_to_t (Prims.parse_int "4294967295"))
+                  then pos1
+                  else
+                    (let pos' =
+                       let pos11 = w elt sl pos1  in
+                       if
+                         pos11 =
+                           (FStar_UInt32.uint_to_t
+                              (Prims.parse_int "4294967295"))
+                       then pos11
+                       else
+                         (let pos' =
+                            let h1 = FStar_HyperStack_ST.get ()  in pos11  in
+                          let h' = FStar_HyperStack_ST.get ()  in pos')
+                        in
+                     let h' = FStar_HyperStack_ST.get ()  in pos')
+*)
