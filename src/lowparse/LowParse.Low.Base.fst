@@ -1839,6 +1839,33 @@ let accessor
     pos' == slice_access h g sl pos
   ))
 
+[@unifier_hint_injective]
+inline_for_extraction
+let make_accessor_from_pure
+  (#k1: parser_kind)
+  (#t1: Type)
+  (#p1: parser k1 t1)
+  (#k2: parser_kind)
+  (#t2: Type)
+  (#p2: parser k2 t2)
+  (#cl: clens t1 t2)
+  ($g: gaccessor p1 p2 cl)
+  (f: (
+    (input: Ghost.erased bytes) ->
+    Pure U32.t
+    (requires (Seq.length (Ghost.reveal input) < 4294967296 /\ gaccessor_pre p1 p2 cl (Ghost.reveal input)))
+    (ensures (fun y -> U32.v y == fst (g (Ghost.reveal input))))
+  ))
+: Tot (accessor g)
+= fun (sl: slice) (pos: U32.t) ->
+  let h = HST.get () in
+  [@inline_let] let _ =
+    slice_access_eq_inv h g sl pos;
+    valid_facts p1 h sl pos;
+    parse_strong_prefix p1 (B.as_seq h (B.gsub sl.base pos (sl.len `U32.sub` pos))) (B.as_seq h (B.gsub sl.base pos (get_valid_pos p1 h sl pos `U32.sub` pos)))
+  in
+  pos `U32.add` f (Ghost.hide (B.as_seq h (B.gsub sl.base pos (get_valid_pos p1 h sl pos `U32.sub` pos))))
+
 inline_for_extraction
 let accessor_id
   (#k: parser_kind)
