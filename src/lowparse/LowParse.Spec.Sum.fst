@@ -63,8 +63,8 @@ let sum_key_type_of_sum_key (t: sum) (k: sum_key t) : Pure (sum_key_type t)
 
 inline_for_extraction
 let sum_type (t: sum) : Tot Type0 =
-  let (Sum _ _ _ data _ _ _ _ _ _) = t in
-  data
+  match t with
+  | Sum _ _ _ data _ _ _ _ _ _ -> data
 
 inline_for_extraction
 let sum_tag_of_data (t: sum) : Tot ((x: sum_type t) -> Tot (sum_key t)) =
@@ -77,8 +77,8 @@ let sum_cases (t: sum) (x: sum_key t) : Type0 =
 
 inline_for_extraction
 let sum_type_of_tag (t: sum) : (x: sum_key t) -> Type =
-  let (Sum _ _ _ _ _ type_of_tag _ _ _ _) = t in
-  type_of_tag
+  match t with
+  | Sum _ _ _ _ _ type_of_tag _ _ _ _ -> type_of_tag
 
 let weaken_parse_cases_kind
   (s: sum)
