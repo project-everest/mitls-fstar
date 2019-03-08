@@ -109,6 +109,7 @@ val write_supportedVersion
     )
   (ensures fun h0 p1 h1 -> 
     valid_list protocolVersion_parser h1 out pl p1 /\
+    v p0 <= v p1 /\
     v p1 - v p0 <= 2 /\ 
     LowStar.Buffer.modifies (loc_slice_from_to out p0 p1) h0 h1 /\
     contents_list protocolVersion_parser h1 out pl p1 == snoc_supportedVersion cfg pv (contents_list protocolVersion_parser h0 out pl p0))

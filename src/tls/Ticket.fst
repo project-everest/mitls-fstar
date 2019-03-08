@@ -338,6 +338,19 @@ let write_ticket13_part1 (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
     pos6
 *)
 
+inline_for_extraction
+val store_bytes_strong: src: FStar.Bytes.bytes ->
+  dst:lbuffer (len src) ->
+  Stack unit
+    (requires (fun h0 -> B.live h0 dst))
+    (ensures  (fun h0 r h1 ->
+      B.(modifies (loc_buffer dst) h0 h1) /\
+      Seq.equal (FStar.Bytes.reveal src) (B.as_seq h1 dst)))
+let store_bytes_strong src dst =
+  if FStar.Bytes.len src = 0ul
+  then ()
+  else FStar.Bytes.store_bytes src dst
+
 #reset-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1 --z3rlimit 256 --z3cliopt smt.arith.nl=false --z3refresh --using_facts_from '* -FStar.Tactics -FStar.Reflection' --log_queries"
 
 let write_ticket13 (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
@@ -351,6 +364,7 @@ let write_ticket13 (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
       LPB.valid_content_pos TC.ticketContents_parser h' sl pos tc pos'
   )))
 = let h0 = get () in
+  [@inline_let] let _ = assert_norm (pow2 32 == 4294967296) in
   match t with
   | Ticket13 cs _ _ rms nonce created age custom ->
     if (sl.LPB.len `U32.sub` pos) `U32.lt` (15ul `U32.add` len rms `U32.add` len nonce `U32.add` len custom)
@@ -362,12 +376,12 @@ let write_ticket13 (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
       let _ = FStar.Bytes.store_bytes rms (B.sub sl.LPB.base (pos2 `U32.add` 1ul) len_rms) in
       let pos3 = Parsers.TicketContents13_rms.ticketContents13_rms_finalize sl pos2 len_rms in
       let len_nonce = len nonce in
-      let _ = if len_nonce <> 0ul then FStar.Bytes.store_bytes nonce (B.sub sl.LPB.base (pos3 `U32.add` 1ul) len_nonce) in
+      let _ = store_bytes_strong nonce (B.sub sl.LPB.base (pos3 `U32.add` 1ul) len_nonce) in
       let pos4 = Parsers.TicketContents13_nonce.ticketContents13_nonce_finalize sl pos3 len_nonce in
       let pos5 = LPI.write_u32 created sl pos4 in
       let pos6 = LPI.write_u32 age sl pos5 in
       let len_custom = len custom in
-      let _ = if len_custom <> 0ul then FStar.Bytes.store_bytes custom (B.sub sl.LPB.base (pos6 `U32.add` 2ul) len_custom) in
+      let _ = store_bytes_strong custom (B.sub sl.LPB.base (pos6 `U32.add` 2ul) len_custom) in
       let pos7 = Parsers.TicketContents13_custom_data.ticketContents13_custom_data_finalize sl pos6 len_custom in
       let h = get () in
       Parsers.TicketContents13.ticketContents13_valid h sl (pos `U32.add` 1ul);
