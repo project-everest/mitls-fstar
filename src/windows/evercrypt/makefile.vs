@@ -21,7 +21,6 @@ SOURCES = \
   Hacl_Chacha20Poly1305.c \
   Hacl_Curve25519.c \
   Hacl_Ed25519.c \
-  Hacl_Poly1305_64.c \
   Hacl_Hash.c \
   Hacl_AES.c \
   Hacl_Kremlib.c \
