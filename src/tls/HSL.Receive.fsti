@@ -169,12 +169,14 @@ let receive_post
 let valid_parsing13
   (msg:HSM13.handshake13)
   (buf:b8)
+  (from:uint_32) (to:uint_32)
   (h:HS.mem)
   = let parser = HSM13.handshake13_parser in
     let slice = { LP.base = buf; LP.len = B.len buf } in
-    LP.valid parser h slice 0ul /\
-    LP.contents parser h slice 0ul == msg /\
-    LP.content_length parser h slice 0ul == B.length buf
+    from <= to /\
+    LP.valid parser h slice from /\
+    LP.contents parser h slice from == msg /\
+    LP.content_length parser h slice from == UInt32.v (to - from)
 
 
 (****** Flight [ EncryptedExtensions; Certificate13; CertificateVerify; Finished ] ******)
@@ -201,21 +203,10 @@ let valid_flight13_ee_c_cv_fin
   : valid_flight_t flight13_ee_c_cv_fin
   = fun (flt:flight13_ee_c_cv_fin) (flight_begin:uint_32) (flight_end:uint_32) (b:b8) (h:HS.mem) ->
 
-    flight_begin <= flt.begin_c /\
-    flt.begin_c <= flt.begin_cv /\
-    flt.begin_cv <= flt.begin_fin /\
-    flt.begin_fin <= flight_end /\
-    flight_end <= B.len b /\
-
-    (let ee_buf = B.gsub b flight_begin (flt.begin_c - flight_begin) in
-     let c_buf = B.gsub b flt.begin_c (flt.begin_cv - flt.begin_c) in
-     let cv_buf = B.gsub b flt.begin_cv (flt.begin_fin - flt.begin_cv) in
-     let fin_buf = B.gsub b flt.begin_fin (flight_end - flt.begin_fin) in
-
-     valid_parsing13 (HSM13.M_encrypted_extensions (G.reveal flt.ee_msg)) ee_buf h /\
-     valid_parsing13 (HSM13.M_certificate (G.reveal flt.c_msg)) c_buf h /\
-     valid_parsing13 (HSM13.M_certificate_verify (G.reveal flt.cv_msg)) cv_buf h /\
-     valid_parsing13 (HSM13.M_finished (G.reveal flt.fin_msg)) fin_buf h)
+    valid_parsing13 (HSM13.M_encrypted_extensions (G.reveal flt.ee_msg)) b flight_begin flt.begin_c h /\
+    valid_parsing13 (HSM13.M_certificate (G.reveal flt.c_msg)) b flt.begin_c flt.begin_cv h /\
+    valid_parsing13 (HSM13.M_certificate_verify (G.reveal flt.cv_msg)) b flt.begin_cv flt.begin_fin h /\
+    valid_parsing13 (HSM13.M_finished (G.reveal flt.fin_msg)) b flt.begin_fin flight_end h
 
 
 val receive_flight13_ee_c_cv_fin
@@ -248,24 +239,11 @@ let valid_flight13_ee_cr_c_cv_fin
   : valid_flight_t flight13_ee_cr_c_cv_fin
   = fun (flt:flight13_ee_cr_c_cv_fin) (flight_begin:uint_32) (flight_end:uint_32) (b:b8) (h:HS.mem) ->
 
-    flight_begin <= flt.begin_cr /\
-    flt.begin_cr <= flt.begin_c /\
-    flt.begin_c <= flt.begin_cv /\
-    flt.begin_cv <= flt.begin_fin /\
-    flt.begin_fin <= flight_end /\
-    flight_end <= B.len b /\
-
-    (let ee_buf = B.gsub b flight_begin (flt.begin_cr - flight_begin) in
-     let cr_buf = B.gsub b flt.begin_cr (flt.begin_c - flt.begin_cr) in 
-     let c_buf = B.gsub b flt.begin_c (flt.begin_cv - flt.begin_c) in
-     let cv_buf = B.gsub b flt.begin_cv (flt.begin_fin - flt.begin_cv) in
-     let fin_buf = B.gsub b flt.begin_fin (flight_end - flt.begin_fin) in
-
-     valid_parsing13 (HSM13.M_encrypted_extensions (G.reveal flt.ee_msg)) ee_buf h /\
-     valid_parsing13 (HSM13.M_certificate_request (G.reveal flt.cr_msg)) cr_buf h /\
-     valid_parsing13 (HSM13.M_certificate (G.reveal flt.c_msg)) c_buf h /\
-     valid_parsing13 (HSM13.M_certificate_verify (G.reveal flt.cv_msg)) cv_buf h /\
-     valid_parsing13 (HSM13.M_finished (G.reveal flt.fin_msg)) fin_buf h)
+    valid_parsing13 (HSM13.M_encrypted_extensions (G.reveal flt.ee_msg)) b flight_begin flt.begin_cr h /\
+    valid_parsing13 (HSM13.M_certificate_request (G.reveal flt.cr_msg)) b flt.begin_cr flt.begin_c h /\
+    valid_parsing13 (HSM13.M_certificate (G.reveal flt.c_msg)) b flt.begin_c flt.begin_cv h /\
+    valid_parsing13 (HSM13.M_certificate_verify (G.reveal flt.cv_msg)) b flt.begin_cv flt.begin_fin h /\
+    valid_parsing13 (HSM13.M_finished (G.reveal flt.fin_msg)) b flt.begin_fin flight_end h
 
 
 val receive_flight13_ee_cr_c_cv_fin
@@ -288,15 +266,8 @@ type flight13_ee_fin = {
 let valid_flight13_ee_fin : valid_flight_t flight13_ee_fin =
   fun (flt:flight13_ee_fin) (flight_begin:uint_32) (flight_end:uint_32) (b:b8) (h:HS.mem) ->
 
-  flight_begin <= flt.begin_fin /\
-  flt.begin_fin <= flight_end /\
-  flight_end <= B.len b /\
-
-  (let ee_buf = B.gsub b flight_begin (flt.begin_fin - flight_begin) in
-   let fin_buf = B.gsub b flt.begin_fin (flight_end - flt.begin_fin) in
-   
-   valid_parsing13 (HSM13.M_encrypted_extensions (G.reveal flt.ee_msg)) ee_buf h /\
-   valid_parsing13 (HSM13.M_finished (G.reveal flt.fin_msg)) fin_buf h)
+  valid_parsing13 (HSM13.M_encrypted_extensions (G.reveal flt.ee_msg)) b flight_begin flt.begin_fin h /\
+  valid_parsing13 (HSM13.M_finished (G.reveal flt.fin_msg)) b flt.begin_fin flight_end h
 
 val receive_flight13_ee_fin (st:hsl_state) (b:b8) (from to:uint_32)
   : ST (TLSError.result (option flight13_ee_fin))
@@ -315,12 +286,7 @@ type flight13_fin = {
 let valid_flight13_fin : valid_flight_t flight13_fin =
   fun (flt:flight13_fin) (flight_begin:uint_32) (flight_end:uint_32) (b:b8) (h:HS.mem) ->
 
-  flight_begin <= flight_end /\
-  flight_end <= B.len b /\
-
-  (let fin_buf = B.gsub b flight_begin (flight_end - flight_begin) in
-   
-   valid_parsing13 (HSM13.M_finished (G.reveal flt.fin_msg)) fin_buf h)
+  valid_parsing13 (HSM13.M_finished (G.reveal flt.fin_msg)) b flight_begin flight_end h
 
 val receive_flight13_fin (st:hsl_state) (b:b8) (from to:uint_32)
   : ST (TLSError.result (option flight13_fin))
@@ -345,18 +311,9 @@ let valid_flight13_c_cv_fin
   : valid_flight_t flight13_c_cv_fin
   = fun (flt:flight13_c_cv_fin) (flight_begin:uint_32) (flight_end:uint_32) (b:b8) (h:HS.mem) ->
 
-    flight_begin <= flt.begin_cv /\
-    flt.begin_cv <= flt.begin_fin /\
-    flt.begin_fin <= flight_end /\
-    flight_end <= B.len b /\
-
-    (let c_buf = B.gsub b flight_begin (flt.begin_cv - flight_begin) in
-     let cv_buf = B.gsub b flt.begin_cv (flt.begin_fin - flt.begin_cv) in
-     let fin_buf = B.gsub b flt.begin_fin (flight_end - flt.begin_fin) in
-
-     valid_parsing13 (HSM13.M_certificate (G.reveal flt.c_msg)) c_buf h /\
-     valid_parsing13 (HSM13.M_certificate_verify (G.reveal flt.cv_msg)) cv_buf h /\
-     valid_parsing13 (HSM13.M_finished (G.reveal flt.fin_msg)) fin_buf h)
+    valid_parsing13 (HSM13.M_certificate (G.reveal flt.c_msg)) b flight_begin flt.begin_cv h /\
+    valid_parsing13 (HSM13.M_certificate_verify (G.reveal flt.cv_msg)) b flt.begin_cv flt.begin_fin h /\
+    valid_parsing13 (HSM13.M_finished (G.reveal flt.fin_msg)) b flt.begin_fin flight_end h
 
 
 val receive_flight13_c_cv_fin
@@ -379,12 +336,7 @@ type flight13_eoed = {
 let valid_flight13_eoed : valid_flight_t flight13_eoed =
   fun (flt:flight13_eoed) (flight_begin:uint_32) (flight_end:uint_32) (b:b8) (h:HS.mem) ->
 
-  flight_begin <= flight_end /\
-  flight_end <= B.len b /\
-
-  (let eoed_buf = B.gsub b flight_begin (flight_end - flight_begin) in
-   
-   valid_parsing13 (HSM13.M_end_of_early_data (G.reveal flt.eoed_msg)) eoed_buf h)
+  valid_parsing13 (HSM13.M_end_of_early_data (G.reveal flt.eoed_msg)) b flight_begin flight_end h
 
 val receive_flight13_eoed (st:hsl_state) (b:b8) (from to:uint_32)
   : ST (TLSError.result (option flight13_eoed))
@@ -405,12 +357,7 @@ type flight13_nst = {
 let valid_flight13_nst : valid_flight_t flight13_nst =
   fun (flt:flight13_nst) (flight_begin:uint_32) (flight_end:uint_32) (b:b8) (h:HS.mem) ->
 
-  flight_begin <= flight_end /\
-  flight_end <= B.len b /\
-
-  (let nst_buf = B.gsub b flight_begin (flight_end - flight_begin) in
-   
-   valid_parsing13 (HSM13.M_new_session_ticket (G.reveal flt.nst_msg)) nst_buf h)
+  valid_parsing13 (HSM13.M_new_session_ticket (G.reveal flt.nst_msg)) b flight_begin flight_end h
 
 val receive_flight13_nst (st:hsl_state) (b:b8) (from to:uint_32)
   : ST (TLSError.result (option flight13_nst))
