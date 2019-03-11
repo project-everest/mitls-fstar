@@ -2835,3 +2835,35 @@ let list_nth
   res
 
 #pop-options
+
+(* Example: trivial printers *)
+
+inline_for_extraction
+let print_list
+  (#k: parser_kind)
+  (#t: Type0)
+  (#p: parser k t)
+  (j: jumper p)
+  (print: (sl: slice) -> (pos: U32.t) -> HST.Stack unit (requires (fun h -> valid p h sl pos)) (ensures (fun h _ h' -> B.modifies B.loc_none h h')))
+  (sl: slice)
+  (pos pos' : U32.t)
+: HST.Stack unit
+  (requires (fun h ->
+    valid_list p h sl pos pos'
+  ))
+  (ensures (fun h _ h' ->
+    B.modifies B.loc_none h h'
+  ))
+= let h0 = HST.get () in
+  list_fold_left
+    p
+    j
+    sl
+    pos pos'
+    h0
+    (Ghost.hide B.loc_none)
+    (fun _ _ _ _ -> True)
+    (fun _ _ _ _ _ -> ())
+    (fun pos1 _ _ _ _ ->
+      print sl pos1
+    )
