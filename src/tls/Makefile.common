@@ -20,24 +20,41 @@ else
 endif
 
 INCLUDE_PATHS = \
+  $(HACL_HOME)/vale/code/arch \
   $(HACL_HOME)/vale/code/arch/x64 \
   $(HACL_HOME)/vale/code/arch/x64/interop \
+  $(HACL_HOME)/vale/code/crypto/aes \
+  $(HACL_HOME)/vale/code/crypto/aes/x64 \
+  $(HACL_HOME)/vale/code/crypto/aes/x64/stdcalls \
+  $(HACL_HOME)/vale/code/crypto/ecc/curve25519 \
+  $(HACL_HOME)/vale/code/crypto/poly1305/x64 \
+  $(HACL_HOME)/vale/code/crypto/sha \
+  $(HACL_HOME)/vale/code/lib/collections \
+  $(HACL_HOME)/vale/code/lib/math \
+  $(HACL_HOME)/vale/code/lib/util \
+  $(HACL_HOME)/vale/code/lib/util/x64 \
+  $(HACL_HOME)/vale/code/lib/util/x64/stdcalls \
+  $(HACL_HOME)/vale/code/test \
+  $(HACL_HOME)/vale/code/thirdPartyPorts/Intel/aes/x64 \
+  $(HACL_HOME)/vale/code/thirdPartyPorts/OpenSSL/poly1305/x64 \
+  $(HACL_HOME)/vale/code/thirdPartyPorts/OpenSSL/sha \
+  $(HACL_HOME)/vale/code/thirdPartyPorts/rfc7748/curve25519/x64 \
+  $(HACL_HOME)/vale/specs/crypto \
   $(HACL_HOME)/vale/specs/defs \
   $(HACL_HOME)/vale/specs/hardware \
   $(HACL_HOME)/vale/specs/interop \
-  $(HACL_HOME)/vale/code/crypto/sha \
-  $(HACL_HOME)/vale/code/arch \
-  $(HACL_HOME)/vale/code/lib/collections \
-  $(HACL_HOME)/vale/code/lib/util \
-  $(HACL_HOME)/vale/specs/crypto \
   $(HACL_HOME)/vale/specs/math \
   $(HACL_HOME)/secure_api \
   $(HACL_HOME)/secure_api/utils \
   $(HACL_HOME)/secure_api/concrete_specializations \
   $(HACL_HOME)/code/hash \
+  $(HACL_HOME)/code/poly1305 \
+  $(HACL_HOME)/code/curve25519 \
+  $(HACL_HOME)/code/chacha20 \
   $(HACL_HOME)/code/old/lib \
   $(HACL_HOME)/specs \
   $(HACL_HOME)/specs/derived \
+  $(HACL_HOME)/lib \
   $(KREMLIN_HOME)/include \
   $(KREMLIN_HOME)/kremlib/compat \
   $(KREMLIN_HOME)/kremlib \

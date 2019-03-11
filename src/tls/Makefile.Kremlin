@@ -31,6 +31,7 @@ MITLS_BUNDLES = \
   -bundle 'FStar.\*,LowStar.\*,C,C.\*[rename=Mitls_Kremlib]' \
   -bundle 'Parsers.\*' \
   -bundle 'Spec.\*' \
+  -bundle Lib.*[rename=Hacl_Lib] \
   -bundle TLSConstants=TLSConstants,QD.TLS_protocolVersion,List.Helpers \
   -bundle Hashing=Hashing.Spec,Hashing,Hashing.CRF,HMAC,HKDF,HMAC.UFCMA \
   -bundle Old.Handshake=Old.HMAC.UFCMA,Old.Epochs,Old.KeySchedule,Old.Handshake \
