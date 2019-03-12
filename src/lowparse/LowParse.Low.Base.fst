@@ -2446,7 +2446,7 @@ let valid_list_snoc
 
 (* fold_left on lists *)
 
-#push-options "--z3rlimit 20"
+#push-options "--z3rlimit 32"
 inline_for_extraction
 private
 let list_fold_left_gen
@@ -2463,48 +2463,55 @@ let list_fold_left_gen
     B.modifies (B.loc_unused_in h0) h h' /\
     inv h l1 l2 pos1
   )) (ensures (inv h' l1 l2 pos1)))
+  (post_interrupt: ((h: HS.mem) -> GTot Type0))
+  (post_interrupt_frame: (h: HS.mem) -> (h' : HS.mem) -> Lemma (requires (
+    B.modifies (B.loc_unused_in h0) h h' /\
+    post_interrupt h
+  )) (ensures (post_interrupt h')))
   (body: (
     (pos1: U32.t) ->
     (pos2: U32.t) ->
-    HST.Stack unit
+    HST.Stack bool
     (requires (fun h ->
       valid_list p h sl pos pos1 /\
       valid_pos p h sl pos1 pos2 /\
       valid_list p h sl pos2 pos' /\
       inv h (contents_list p h sl pos pos1) (contents p h sl pos1 :: contents_list p h sl pos2 pos') pos1
     ))
-    (ensures (fun h _ h' ->
+    (ensures (fun h continue h' ->
       B.modifies (Ghost.reveal l) h h' /\
-      inv h' (contents_list p h sl pos pos1 `L.append` [contents p h sl pos1]) (contents_list p h sl pos2 pos') pos2
+      (if continue then inv h' (contents_list p h sl pos pos1 `L.append` [contents p h sl pos1]) (contents_list p h sl pos2 pos') pos2 else post_interrupt h')
     ))
   ))
-: HST.Stack unit
+: HST.Stack bool
   (requires (fun h ->
     h == h0 /\
     valid_list p h sl pos pos' /\
     inv h [] (contents_list p h sl pos pos') pos
   ))
-  (ensures (fun h _ h' ->
+  (ensures (fun h res h' ->
     B.modifies (Ghost.reveal l) h h' /\
-    inv h' (contents_list p h sl pos pos') [] pos'
+    (if res then inv h' (contents_list p h sl pos pos') [] pos' else post_interrupt h')
   ))
 = HST.push_frame ();
   let h1 = HST.get () in
   //B.fresh_frame_modifies h0 h1;
   let bpos : B.pointer U32.t = B.alloca pos 1ul in
+  let bcontinue : B.pointer bool = B.alloca true 1ul in
   let h2 = HST.get () in
   let test_pre (h: HS.mem) : GTot Type0 =
-    B.live h bpos /\ (
+    B.live h bpos /\ B.live h bcontinue /\ (
     let pos1 = Seq.index (B.as_seq h bpos) 0 in
+    let continue = Seq.index (B.as_seq h bcontinue) 0 in
     valid_list p h0 sl pos pos1 /\
     valid_list p h0 sl pos1 pos' /\
-    B.modifies (Ghost.reveal l `B.loc_union` B.loc_buffer bpos) h2 h /\
-    inv h (contents_list p h0 sl pos pos1) (contents_list p h0 sl pos1 pos') pos1
+    B.modifies (Ghost.reveal l `B.loc_union` B.loc_buffer bpos `B.loc_union` B.loc_buffer bcontinue) h2 h /\
+    (if continue then inv h (contents_list p h0 sl pos pos1) (contents_list p h0 sl pos1 pos') pos1 else post_interrupt h)
   )
   in
   let test_post (cond: bool) (h: HS.mem) : GTot Type0 =
     test_pre h /\
-    cond == (U32.v (Seq.index (B.as_seq h bpos) 0) < U32.v pos')
+    cond == ((U32.v (Seq.index (B.as_seq h bpos) 0) < U32.v pos') && Seq.index (B.as_seq h bcontinue) 0)
   in
   valid_list_nil p h0 sl pos;
   inv_frame h0 [] (contents_list p h0 sl pos pos') pos h1;
@@ -2524,29 +2531,50 @@ let list_fold_left_gen
       let pos2 = j sl pos1 in
       let h52 = HST.get () in
       inv_frame h51 (contents_list p h0 sl pos pos1) (contents_list p h1 sl pos1 pos') pos1 h52;
-      body pos1 pos2;
+      let continue = body pos1 pos2 in
       let h53 = HST.get () in
       //assert (B.loc_includes (loc_slice_from_to sl pos pos') (loc_slice_from_to sl pos1 pos2));
       //assert (B.loc_includes (loc_slice_from_to sl pos pos') (loc_slice_from_to sl pos2 pos'));
-      valid_pos_frame_strong p h0 sl pos1 pos2 (Ghost.reveal l `B.loc_union` B.loc_buffer bpos) h53;
+      valid_pos_frame_strong p h0 sl pos1 pos2 (Ghost.reveal l `B.loc_union` B.loc_buffer bpos `B.loc_union` B.loc_buffer bcontinue) h53;
       valid_list_snoc p h0 sl pos pos1;
       B.upd bpos 0ul pos2;
+      B.upd bcontinue 0ul continue;
       let h54 = HST.get () in
-      inv_frame h53 (contents_list p h0 sl pos pos2) (contents_list p h0 sl pos2 pos') pos2 h54
+      [@inline_let]
+      let _ =
+        if continue
+        then inv_frame h53 (contents_list p h0 sl pos pos2) (contents_list p h0 sl pos2 pos') pos2 h54
+        else post_interrupt_frame h53 h54
+      in
+      ()
   in
   C.Loops.while
     #test_pre
     #test_post
-    (fun (_: unit) -> B.index bpos 0ul `U32.lt` pos' <: HST.Stack bool (requires (fun h -> test_pre h)) (ensures (fun h x h1 -> test_post x h1)))
+    (fun (_: unit) -> (
+      let pos = B.index bpos 0ul in
+      let continue = B.index bcontinue 0ul in
+      let h1 = HST.get () in
+      [@inline_let]
+      let x = (pos `U32.lt` pos') && continue in
+      x) <: HST.Stack bool (requires (fun h -> test_pre h)) (ensures (fun h x h1 -> test_post x h1)))
     while_body
     ;
   valid_list_nil p h0 sl pos';
+  let res = B.index bcontinue 0ul in
   let h3 = HST.get () in
   HST.pop_frame ();
   let h4 = HST.get () in
   //B.popped_modifies h3 h4;
-  B.loc_regions_unused_in h0 (Set.singleton (HS.get_tip h3));  
-  inv_frame h3 (contents_list p h0 sl pos pos') [] pos' h4
+  B.loc_regions_unused_in h0 (Set.singleton (HS.get_tip h3));
+  [@inline_let]
+  let _ =
+    if res
+    then inv_frame h3 (contents_list p h0 sl pos pos') [] pos' h4
+    else post_interrupt_frame h3 h4
+  in
+  res
+  
   //B.loc_includes_union_l (B.loc_all_regions_from false (HS.get_tip h1)) (Ghost.reveal l) (Ghost.reveal l)
   //B.modifies_fresh_frame_popped h0 h1 (Ghost.reveal l) h3 h4
 #pop-options
@@ -2598,7 +2626,7 @@ let list_fold_left
     B.modifies (Ghost.reveal l) h h' /\
     inv h' (contents_list p h sl pos pos') [] pos'
   ))
-= list_fold_left_gen
+= let _ = list_fold_left_gen
     p
     j
     sl
@@ -2607,6 +2635,8 @@ let list_fold_left
     l
     inv
     inv_frame
+    (fun _ -> False)
+    (fun _ _ -> ())
     (fun pos1 pos2 ->
       let h = HST.get () in
       valid_list_cons p h sl pos1 pos';
@@ -2617,7 +2647,11 @@ let list_fold_left
         (Ghost.hide (contents_list p h sl pos pos1))
         (Ghost.hide (contents p h sl pos1))
         (Ghost.hide (contents_list p h sl pos2 pos'))
+        ;
+      true
     )
+  in
+  ()
 
 let list_length_append (#t: Type) (l1 l2: list t) : Lemma (L.length (l1 `L.append` l2) == L.length l1 + L.length l2) = L.append_length l1 l2
 
