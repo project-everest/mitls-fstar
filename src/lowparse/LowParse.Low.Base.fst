@@ -2498,20 +2498,22 @@ let list_fold_left_gen
   //B.fresh_frame_modifies h0 h1;
   let bpos : B.pointer U32.t = B.alloca pos 1ul in
   let bcontinue : B.pointer bool = B.alloca true 1ul in
+  let btest: B.pointer bool = B.alloca (pos `U32.lt` pos') 1ul in
   let h2 = HST.get () in
   let test_pre (h: HS.mem) : GTot Type0 =
-    B.live h bpos /\ B.live h bcontinue /\ (
+    B.live h bpos /\ B.live h bcontinue /\ B.live h btest /\ (
     let pos1 = Seq.index (B.as_seq h bpos) 0 in
     let continue = Seq.index (B.as_seq h bcontinue) 0 in
     valid_list p h0 sl pos pos1 /\
     valid_list p h0 sl pos1 pos' /\
-    B.modifies (Ghost.reveal l `B.loc_union` B.loc_buffer bpos `B.loc_union` B.loc_buffer bcontinue) h2 h /\
+    B.modifies (Ghost.reveal l `B.loc_union` B.loc_region_only true (HS.get_tip h1)) h2 h /\
+    Seq.index (B.as_seq h btest) 0 == ((U32.v (Seq.index (B.as_seq h bpos) 0) < U32.v pos') && Seq.index (B.as_seq h bcontinue) 0) /\
     (if continue then inv h (contents_list p h0 sl pos pos1) (contents_list p h0 sl pos1 pos') pos1 else post_interrupt h)
   )
   in
   let test_post (cond: bool) (h: HS.mem) : GTot Type0 =
     test_pre h /\
-    cond == ((U32.v (Seq.index (B.as_seq h bpos) 0) < U32.v pos') && Seq.index (B.as_seq h bcontinue) 0)
+    cond == Seq.index (B.as_seq h btest) 0
   in
   valid_list_nil p h0 sl pos;
   inv_frame h0 [] (contents_list p h0 sl pos pos') pos h1;
@@ -2535,10 +2537,13 @@ let list_fold_left_gen
       let h53 = HST.get () in
       //assert (B.loc_includes (loc_slice_from_to sl pos pos') (loc_slice_from_to sl pos1 pos2));
       //assert (B.loc_includes (loc_slice_from_to sl pos pos') (loc_slice_from_to sl pos2 pos'));
-      valid_pos_frame_strong p h0 sl pos1 pos2 (Ghost.reveal l `B.loc_union` B.loc_buffer bpos `B.loc_union` B.loc_buffer bcontinue) h53;
+      B.loc_regions_unused_in h0 (Set.singleton (HS.get_tip h1));
+      B.modifies_only_not_unused_in (Ghost.reveal l) h0 h53;
+      valid_pos_frame_strong p h0 sl pos1 pos2 (Ghost.reveal l) h53;
       valid_list_snoc p h0 sl pos pos1;
       B.upd bpos 0ul pos2;
       B.upd bcontinue 0ul continue;
+      B.upd btest 0ul ((pos2 `U32.lt` pos') && continue);
       let h54 = HST.get () in
       [@inline_let]
       let _ =
@@ -2552,12 +2557,7 @@ let list_fold_left_gen
     #test_pre
     #test_post
     (fun (_: unit) -> (
-      let pos = B.index bpos 0ul in
-      let continue = B.index bcontinue 0ul in
-      let h1 = HST.get () in
-      [@inline_let]
-      let x = (pos `U32.lt` pos') && continue in
-      x) <: HST.Stack bool (requires (fun h -> test_pre h)) (ensures (fun h x h1 -> test_post x h1)))
+      B.index btest 0ul) <: HST.Stack bool (requires (fun h -> test_pre h)) (ensures (fun h x h1 -> test_post x h1)))
     while_body
     ;
   valid_list_nil p h0 sl pos';
