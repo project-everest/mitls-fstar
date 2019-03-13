@@ -2448,7 +2448,6 @@ let valid_list_snoc
 
 #push-options "--z3rlimit 32"
 inline_for_extraction
-private
 let list_fold_left_gen
   (#k: parser_kind)
   (#t: Type0)
@@ -2803,6 +2802,17 @@ let list_filter
 
 #pop-options
 
+let rec list_index_append (#t: Type) (l1 l2: list t) (i: int) : Lemma
+  (requires (L.length l1 <= i /\ i < L.length l1 + L.length l2))
+  (ensures (
+    L.length (L.append l1 l2) == L.length l1 + L.length l2 /\
+    L.index (L.append l1 l2) i == L.index l2 (i - L.length l1)
+  ))
+= list_length_append l1 l2;
+  match l1 with
+  | [] -> ()
+  | a :: q -> list_index_append q l2 (i - 1)
+
 #push-options "--z3rlimit 32"
 
 inline_for_extraction
@@ -2829,42 +2839,70 @@ let list_nth
   ))
 = let h0 = HST.get () in
   HST.push_frame ();
-  let bpos1 = B.alloca pos 1ul in
-  let bi1 = B.alloca 0ul 1ul in
   let h1 = HST.get () in
+  let bpos1 = B.alloca pos 1ul in
+  let bk = B.alloca 0ul 1ul in
+  let h2 = HST.get () in
   valid_list_nil p h0 sl pos;
-  C.Loops.do_while
-    (fun h b ->
-      B.modifies (B.loc_union (B.loc_buffer bpos1) (B.loc_buffer bi1)) h1 h /\ (
-      let pos1 = B.get h bpos1 0 in
-      let i1 = B.get h bi1 0 in
-      U32.v i1 <= U32.v i /\
+  let _ : bool = list_fold_left_gen
+    p
+    j
+    sl
+    pos pos'
+    h2
+    (Ghost.hide (B.loc_region_only true (HS.get_tip h1)))
+    (fun h l1 l2 pos1 ->
+      let k = Seq.index (B.as_seq h bk) 0 in
+      B.modifies (B.loc_region_only true (HS.get_tip h1)) h2 h /\
+      B.live h bpos1 /\
+      B.live h bk /\
       valid_list p h0 sl pos pos1 /\
       valid_list p h0 sl pos1 pos' /\
-      L.length (contents_list p h0 sl pos pos1) == U32.v i1 /\ (
-      let tl = contents_list p h0 sl pos1 pos' in
-      U32.v i - U32.v i1 < L.length tl /\
-      L.index (contents_list p h0 sl pos pos') (U32.v i) == L.index tl (U32.v i - U32.v i1) /\
-      (b == true ==> i == i1)
-    )))
-    (fun _ ->
-      let i1 = B.index bi1 0ul in
-      if i1 = i
-      then true
-      else
-        let pos1 = B.index bpos1 0ul in
-        let _ = valid_list_cons_recip p h0 sl pos1 pos' in
-        let _ = valid_list_snoc p h0 sl pos pos1 in
-        let pos2 = j sl pos1 in
-        let _ = assert (pos2 == get_valid_pos p h0 sl pos1) in
-        let _ = list_length_append (contents_list p h0 sl pos pos1) [contents p h0 sl pos1] in
-        let i2 = i1 `U32.add` 1ul in
-        let _ = B.upd bpos1 0ul pos2 in
-        let _ = B.upd bi1 0ul i2 in
-        i2 = i
-    );
+      L.length (contents_list p h0 sl pos pos1) == U32.v k /\
+      U32.v k <= U32.v i
+    )
+    (fun h _ _ _ h' ->
+//      assert (B.loc_not_unused_in h2 `B.loc_includes` B.loc_buffer bpos1);
+//      assert (B.loc_not_unused_in h2 `B.loc_includes` B.loc_buffer bk);
+      B.loc_unused_in_not_unused_in_disjoint h2;
+      B.modifies_only_not_unused_in (B.loc_region_only true (HS.get_tip h1)) h2 h'
+    )
+    (fun h ->
+      let pos1 = Seq.index (B.as_seq h bpos1) 0 in
+      B.live h bpos1 /\
+      valid p h0 sl pos1 /\
+      valid_list p h0 sl pos pos1 /\
+      valid_list p h0 sl (get_valid_pos p h0 sl pos1) pos' /\
+      L.length (contents_list p h0 sl pos pos1) == U32.v i /\
+      contents p h0 sl pos1 == L.index (contents_list p h0 sl pos pos') (U32.v i)
+    )
+    (fun _ _ -> 
+      B.loc_unused_in_not_unused_in_disjoint h2
+    )
+    (fun pos1 pos2 ->
+      let k = B.index bk 0ul in
+      if k = i
+      then begin
+        B.upd bpos1 0ul pos1;
+        valid_list_cons_recip p h0 sl pos1 pos';
+        list_index_append (contents_list p h0 sl pos pos1) (contents_list p h0 sl pos1 pos') (U32.v i);
+        valid_list_append p h0 sl pos pos1 pos' ;
+        assert (contents p h0 sl pos1 == L.index (contents_list p h0 sl pos pos') (U32.v i));
+        false
+      end else begin
+        B.upd bk 0ul (k `U32.add` 1ul);
+        let h = HST.get () in
+        B.modifies_only_not_unused_in B.loc_none h0 h;
+        valid_list_snoc p h0 sl pos pos1;
+        assert (valid p h0 sl pos1);
+        assert (pos2 == get_valid_pos p h0 sl pos1);
+        assert (valid_list p h0 sl pos pos2);
+        list_length_append (contents_list p h0 sl pos pos1) [contents p h0 sl pos1];
+        true
+      end
+    )
+  in
   let res = B.index bpos1 0ul in
-  let _ = valid_list_cons_recip p h0 sl res pos' in
   HST.pop_frame ();
   res
 
