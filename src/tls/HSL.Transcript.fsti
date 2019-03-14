@@ -24,15 +24,22 @@ open Parsers.Handshake13
 module HSM = Parsers.Handshake
 module HSM12 = Parsers.Handshake12
 module HSM13 = Parsers.Handshake13
+module PV = Parsers.ProtocolVersion
 
 open HSL.Common
-module IncHash = EverCrypt.Hash.Incremental.
+module IncHash = EverCrypt.Hash.Incremental
 
 type bytes = Spec.Hash.Definitions.bytes
 
 type alg = Spec.Hash.Definitions.hash_alg
 
-val hello_retry_request : Type0 //TODO: This does not yet seem to be modeled in Parsers.rfc
+// assume
+val is_hrr (sh:Parsers.ServerHello.serverHello)
+       : bool
+
+inline_for_extraction
+let hello_retry_request : Type0 = (s: Parsers.ServerHello.serverHello { is_hrr s } )
+//TODO: This does not yet seem to be modeled in Parsers.rfc
 
 type retry = Parsers.ClientHello.clientHello
            & hello_retry_request
@@ -49,11 +56,12 @@ type retry = Parsers.ClientHello.clientHello
 /// Question: How much refinement do we need in this type?  e.g.,
 /// number and shape of the h-prefix of the last two cases
 
-assume val max_transcript_size : pos
+unfold
+let max_transcript_size : pos = 15
 
 let bounded_list 'a n = l:list 'a{List.length l < n}
 
-let can_extend_bounded_list #a #n (l:bounded_list a n) = List.length + 1 < n
+let can_extend_bounded_list #a #n (l:bounded_list a n) = List.length l + 1 < n
 
 noeq
 type transcript_t =
@@ -79,7 +87,7 @@ let transcript_n (n:nat{n < max_transcript_size}) =
   t:transcript_t{
     match t with
     | Start _
-    | Hello _ -> True
+    | Hello _ _ -> True
     | Transcript12 _ _ rest -> List.length rest < n
     | Transcript13 _ _ _ rest -> List.length rest < n
   }
@@ -93,7 +101,11 @@ let transcript_n (n:nat{n < max_transcript_size}) =
 /// use snoc
 ///
 /// Note: we want this to be in Tot
-val transcript_bytes (t:transcript_t) : GTot bytes
+
+unfold // to recover Z3 linearity
+let max_message_size = 16777219 // should be at least max (handshake12_parser_kind.parser_kind_high, handshake13_parser_kind.parser_kind_high, handshake_parser_kind.parser_kind_high)
+
+val transcript_bytes (t:transcript_t) : GTot (b: bytes { Seq.length b < max_transcript_size `Prims.op_Multiply` max_message_size })
 
 
 /// `state`: Abstract state of the module
@@ -103,21 +115,21 @@ val transcript_bytes (t:transcript_t) : GTot bytes
 /// The API provides a way to set the hash algorithm later
 ///
 /// We may need a way to free the state also
-val state (a:Hash.alg) : Type0
+val state (a:alg) : Type0
 
-val invariant #a (s:state a) (t:transcript_t) (h:HS.mem) : Type0
+val invariant (#a: _) (s:state a) (t:transcript_t) (h:HS.mem) : Type0
 
-val footprint (#a:_) (s:state a) (h:HS.mem) : GTot loc
+val footprint (#a:_) (s:state a) (h:HS.mem) : GTot B.loc
 
-val region_of (#a_:) (s:state a)
-  : GTot rid
+val region_of (#a: _) (s:state a)
+  : GTot HS.rid
 
-val frame_invariant (#a:_) (s:state a) (h0 h1:HS.mem) (l:loc)
+val frame_invariant (#a:_) (s:state a) (t: transcript_t) (h0 h1:HS.mem) (l:B.loc)
   : Lemma
     (requires
       invariant s t h0 /\
-      disjoint l (footprint s h0) /\
-      modifies s h0 h1)
+      B.loc_disjoint l (footprint s h0) /\
+      B.modifies l h0 h1)
     (ensures
       invariant s t h1 /\
       footprint s h0 == footprint s h1)
@@ -138,8 +150,8 @@ val create (r:Mem.rgn) (a:alg)
        (ensures fun h0 s h1 ->
          invariant s (Start None) h1 /\
          region_of s == r /\
-         r `loc_includes` footprint s h1 /\
-         modifies loc_none h0 h1 /\
+         B.loc_region_only true r `B.loc_includes` footprint s h1 /\
+         B.modifies B.loc_none h0 h1 /\
          B.fresh_loc (footprint s h1) h0 h1)
 
 
@@ -168,32 +180,30 @@ let extend_hash_post_common
     footprint s h1 == footprint s h0
 
 
-assume val nego_version (ch:Parsers.ClientHello.clientHello)
+// assume 
+val nego_version (ch:Parsers.ClientHello.clientHello)
                         (sh:Parsers.ServerHello.serverHello)
        : Parsers.ProtocolVersion.protocolVersion
 
-assume val is_hrr (sh:Parsers.ServerHello.serverHello)
-       : bool
-
 let extend_with_hsm (t:transcript_t) (m:HSM.handshake)
   : option transcript_t
-  match t, m with
-  | Start retry, M_client_hello ch ->
+= match t, m with
+  | Start retry, HSM.M_client_hello ch ->
     //Missing: consistency between retry and ch
     Some (Hello retry ch)
 
-  | Hello retry ch, M_server_hello sh ->
+  | Hello retry ch, HSM.M_server_hello sh ->
     if None? retry
     && is_hrr sh
-    && nego_version ch sh = TLS_1p3
+    && nego_version ch sh = PV.TLS_1p3
     then Some (Start (Some (ch, sh)))
     else
       begin
       match nego_version ch sh, retry with
-      | TLS_1p2, None ->
+      | PV.TLS_1p2, None ->
         Some (Transcript12 ch sh [])
 
-      | TLS_1p3, _ ->
+      | PV.TLS_1p3, _ ->
         Some (Transcript13 retry ch sh [])
 
       | _ -> None
@@ -202,19 +212,21 @@ let extend_with_hsm (t:transcript_t) (m:HSM.handshake)
   | _ ->
     None
 
-let extend_with_hsm12 (t:transcript_t) (m:HSM12.handshake12)
+let extend_with_hsm12 (t:transcript_n (max_transcript_size - 1)) (m:HSM12.handshake12)
   : option transcript_t
-  match t with
+= match t with
   | Transcript12 ch sh rest ->
+    List.append_length rest [m];
     Some (Transcript12 ch sh (List.snoc (rest, m)))
 
   | _ -> None
 
 
-let extend_with_hsm13 (t:transcript_t) (m:HSM13.handshake13)
+let extend_with_hsm13 (t:transcript_n (max_transcript_size - 1)) (m:HSM13.handshake13)
   : option transcript_t
-  match t with
+= match t with
   | Transcript13 retry ch sh rest ->
+    List.append_length rest [m];
     Some (Transcript13 retry ch sh (List.snoc (rest, m)))
 
   | _ -> None
@@ -225,18 +237,18 @@ val extend_hash_hsm
   (b:LowParse.Low.Base.slice)
   (p0:uint_32)
   (p1:uint_32)
-  (tx:G.erased transcript_t)
-  : Stack G.erased transcript_t
+  (tx:G.erased (transcript_n (max_transcript_size - 1)))
+  : Stack (G.erased transcript_t)
        (requires fun h ->
          let tx = G.reveal tx in
          extend_hash_pre_common s b tx h /\
-         valid_pos HSM.handshake_parser h b p0 p1 /\
-         (let msg = contents HSM.handshake_parser h b p0 in
+         LP.valid_pos HSM.handshake_parser h b p0 p1 /\
+         (let msg = LP.contents HSM.handshake_parser h b p0 in
           Some? (extend_with_hsm tx msg)))
        (ensures fun h0 tx' h1 ->
          let tx' = G.reveal tx' in
-         let msg = contents HSM.handshake_parser h b p0 in
-         tx' == Some?.v (extend_with_hsm tx msg) /\
+         let msg = LP.contents HSM.handshake_parser h0 b p0 in
+         tx' == Some?.v (extend_with_hsm (G.reveal tx) msg) /\
          extend_hash_post_common s b tx' h0 h1)
 
 val extend_hash_hsm12
@@ -245,18 +257,18 @@ val extend_hash_hsm12
   (b:LowParse.Low.Base.slice)
   (p0:uint_32)
   (p1:uint_32)
-  (tx:G.erased transcript_t)
-  : Stack G.erased transcript_t
+  (tx:G.erased (transcript_n (max_transcript_size - 1)))
+  : Stack (G.erased transcript_t)
        (requires fun h ->
          let tx = G.reveal tx in
          extend_hash_pre_common s b tx h /\
-         valid_pos HSM12.handshake12_parser h b p0 p1 /\
-         (let msg = contents HSM12.handshake12_parser h b p0 in
+         LP.valid_pos HSM12.handshake12_parser h b p0 p1 /\
+         (let msg = LP.contents HSM12.handshake12_parser h b p0 in
           Some? (extend_with_hsm12 tx msg)))
        (ensures fun h0 tx' h1 ->
          let tx' = G.reveal tx' in
-         let msg = contents HSM12.handshake12_parser h b p0 in
-         tx' == Some?.v (extend_with_hsm12 tx msg) /\
+         let msg = LP.contents HSM12.handshake12_parser h0 b p0 in
+         tx' == Some?.v (extend_with_hsm12 (G.reveal tx) msg) /\
          extend_hash_post_common s b tx' h0 h1)
 
 val extend_hash_hsm13
@@ -265,27 +277,27 @@ val extend_hash_hsm13
   (b:LowParse.Low.Base.slice)
   (p0:uint_32)
   (p1:uint_32)
-  (tx:G.erased transcript_t)
-  : Stack G.erased transcript_t
+  (tx:G.erased (transcript_n (max_transcript_size - 1)))
+  : Stack (G.erased transcript_t)
        (requires fun h ->
          let tx = G.reveal tx in
          extend_hash_pre_common s b tx h /\
-         valid_pos HSM13.handshake13_parser h b p0 p1 /\
-         (let msg = contents HSM13.handshake13_parser h b p0 in
+         LP.valid_pos HSM13.handshake13_parser h b p0 p1 /\
+         (let msg = LP.contents HSM13.handshake13_parser h b p0 in
           Some? (extend_with_hsm13 tx msg)))
        (ensures fun h0 tx' h1 ->
          let tx' = G.reveal tx' in
-         let msg = contents HSM13.handshake13_parser h b p0 in
-         tx' == Some?.v (extend_with_hsm13 tx msg) /\
+         let msg = LP.contents HSM13.handshake13_parser h0 b p0 in
+         tx' == Some?.v (extend_with_hsm13 (G.reveal tx) msg) /\
          extend_hash_post_common s b tx' h0 h1)
 
-let buf_is_hash_of_b (a:alg) (tag:Hacl.Hash.Definitions.hash_t a) (h:HS.mem) (b:bytes)
-  = assume (Seq.length b < Spec.Hash.Definitions.max_input_length a);  //AR: need to sort this out
-    admit ();  //AR: TODO: strange behavior with interleaving
-               //          verifying just the .fsti does not need this admit
-               //          but when verifying the .fst, this definition does not verify
-               //          my suspicion is some options going wrong
-    B.as_seq h tag == Spec.Hash.hash a b
+
+let max_message_size_lt_max_input_length (a: alg) : Lemma
+  (max_transcript_size `Prims.op_Multiply` max_message_size < Spec.Hash.Definitions.max_input_length a)
+  [SMTPat (Spec.Hash.Definitions.max_input_length a)] 
+ =
+  assert_norm (max_transcript_size `Prims.op_Multiply` max_message_size < pow2 61);
+  assert_norm (max_transcript_size `Prims.op_Multiply` max_message_size < pow2 125)
 
 val extract_hash
   (#a:alg)
@@ -301,12 +313,13 @@ val extract_hash
        (ensures (fun h0 _ h1 ->
          let open B in
          let tx = G.reveal tx in
-         frame_state s h0 h1 /\
+//         frame_state s h0 h1 /\
          invariant s tx h1 /\
          modifies (loc_union (footprint s h1) (loc_buffer tag)) h0 h1 /\
          B.as_seq h1 tag == Spec.Hash.hash a (transcript_bytes tx)))
 
 
+(*
 val free
 
 val extract
