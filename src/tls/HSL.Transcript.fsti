@@ -24,12 +24,25 @@ open Parsers.Handshake13
 module HSM = Parsers.Handshake
 module HSM12 = Parsers.Handshake12
 module HSM13 = Parsers.Handshake13
+module PV = Parsers.ProtocolVersion
 
 open HSL.Common
+module IncHash = EverCrypt.Hash.Incremental
 
 type bytes = Spec.Hash.Definitions.bytes
 
 type alg = Spec.Hash.Definitions.hash_alg
+
+// assume
+val is_hrr (sh:Parsers.ServerHello.serverHello)
+       : bool
+
+inline_for_extraction
+let hello_retry_request : Type0 = (s: Parsers.ServerHello.serverHello { is_hrr s } )
+//TODO: This does not yet seem to be modeled in Parsers.rfc
+
+type retry = Parsers.ClientHello.clientHello
+           & hello_retry_request
 
 /// `transcript_t`: Transcript for 1.2 and 1.3 have a shared prefix
 /// and then fork to version-specific message types
@@ -42,11 +55,42 @@ type alg = Spec.Hash.Definitions.hash_alg
 ///
 /// Question: How much refinement do we need in this type?  e.g.,
 /// number and shape of the h-prefix of the last two cases
-noeq type transcript_t =
-  | Transcript_nil: transcript_t (* Why not Transcript_hello_server [] ?*)
-  | Transcript_hello_server: h:list HSM.handshake -> transcript_t
-  | Transcript12: h:list HSM.handshake(* { h negotiates TLS1.2 } *) -> m:list HSM12.handshake12 -> transcript_t
-  | Transcript13: h:list HSM.handshake(* { h negotiates TLS1.3 } *) -> m:list HSM13.handshake13 -> transcript_t
+
+unfold
+let max_transcript_size : pos = 15
+
+let bounded_list 'a n = l:list 'a{List.length l < n}
+
+let can_extend_bounded_list #a #n (l:bounded_list a n) = List.length l + 1 < n
+
+noeq
+type transcript_t =
+  | Start: retried:option retry ->
+           transcript_t
+
+  | Hello: retried:option retry ->
+           ch:Parsers.ClientHello.clientHello ->
+           transcript_t
+
+  | Transcript12: ch:Parsers.ClientHello.clientHello ->
+                  sh:Parsers.ServerHello.serverHello -> //Should prescribe the protocol version
+                  rest:bounded_list HSM12.handshake12 max_transcript_size ->
+                  transcript_t
+
+  | Transcript13: retried:option retry ->
+                  ch:Parsers.ClientHello.clientHello ->
+                  sh:Parsers.ServerHello.serverHello -> //Should prescribe the protocol version
+                  rest:bounded_list HSM13.handshake13 max_transcript_size -> //but requires a dependence on Nego
+                  transcript_t
+
+let transcript_n (n:nat{n < max_transcript_size}) =
+  t:transcript_t{
+    match t with
+    | Start _
+    | Hello _ _ -> True
+    | Transcript12 _ _ rest -> List.length rest < n
+    | Transcript13 _ _ _ rest -> List.length rest < n
+  }
 
 /// `transcript_bytes`: The input of the hash algorithm computed by
 /// concatenated the message formatting of the messages
@@ -55,17 +99,13 @@ noeq type transcript_t =
 /// formatting is a fold right. This is convenient here, but is
 /// potentially contentious since other parts of the code
 /// use snoc
-let transcript_bytes (t:transcript_t) : GTot bytes =
-  match t with
-  | Transcript_nil -> Seq.empty
-  | Transcript_hello_server h ->
-    List.fold_right_gtot h (fun x a -> Seq.append a (format_hs_msg x)) Seq.empty
-  | Transcript12 h m ->
-    Seq.append (List.fold_right_gtot h (fun x a -> Seq.append a (format_hs_msg x)) Seq.empty)
-               (List.fold_right_gtot m (fun x a -> Seq.append a (format_hs12_msg x)) Seq.empty)
-  | Transcript13 h m ->
-    Seq.append (List.fold_right_gtot h (fun x a -> Seq.append a (format_hs_msg x)) Seq.empty)
-               (List.fold_right_gtot m (fun x a -> Seq.append a (format_hs13_msg x)) Seq.empty)
+///
+/// Note: we want this to be in Tot
+
+unfold // to recover Z3 linearity
+let max_message_size = 16777219 // should be at least max (handshake12_parser_kind.parser_kind_high, handshake13_parser_kind.parser_kind_high, handshake_parser_kind.parser_kind_high)
+
+val transcript_bytes (t:transcript_t) : GTot (b: bytes { Seq.length b < max_transcript_size `Prims.op_Multiply` max_message_size })
 
 
 /// `state`: Abstract state of the module
@@ -75,51 +115,25 @@ let transcript_bytes (t:transcript_t) : GTot bytes =
 /// The API provides a way to set the hash algorithm later
 ///
 /// We may need a way to free the state also
-val state : Type0
+val state (a:alg) : Type0
 
-/// `region_of`: The caller provides a region in which to allocate the
-/// transcript instance
-val region_of : state -> GTot Mem.rgn
+val invariant (#a: _) (s:state a) (t:transcript_t) (h:HS.mem) : Type0
 
-/// `footprint`: Abstract footprint of this instance, used for framing
-///
-/// Q: Do we need a lemma or a refined result type to say that it is
-/// included in the region? Note, the create and set_hash_alg functions
-/// provide it as a postcondition
-///
-/// The footprint is the fragment of the HS.mem read by the
-/// `transcript`, `hash_alg` and `invariant` functions (and
-/// `footprint` itself). See below, `frame_state`
-val footprint : state -> HS.mem -> GTot B.loc
+val footprint (#a:_) (s:state a) (h:HS.mem) : GTot B.loc
 
-/// `transcript`: The current (ghost) transcript
-val transcript : state -> HS.mem -> GTot transcript_t
+val region_of (#a: _) (s:state a)
+  : GTot HS.rid
 
-/// `hash_alg`: Hashing algorithm in use
-val hash_alg : state -> HS.mem -> GTot (option alg)
-
-/// `invariant`: Main abstract invariant of this module
-val invariant : state -> HS.mem -> prop
-
-/// `frame_state`: The postcondition of the framing lemma for
-/// the main spec. functions and predicates provided by this module
-/// They all only depend on the dynamic footprint `footprint`
-///
-/// Q: Why unfold?
-unfold let frame_state (s:state) (h0 h1:HS.mem) : prop =
-  hash_alg s h0 == hash_alg s h1 /\
-  footprint s h0 == footprint s h1 /\
-  transcript s h0 == transcript s h1 /\
-  invariant s h1
-
-/// `framing`: the framing lemma itself
-val framing (s:state) (l:B.loc) (h0 h1: HS.mem)
+val frame_invariant (#a:_) (s:state a) (t: transcript_t) (h0 h1:HS.mem) (l:B.loc)
   : Lemma
-      (requires
-        B.modifies l h0 h1 /\
-        B.loc_disjoint l (footprint s h0) /\
-        invariant s h0)
-      (ensures frame_state s h0 h1)
+    (requires
+      invariant s t h0 /\
+      B.loc_disjoint l (footprint s h0) /\
+      B.modifies l h0 h1)
+    (ensures
+      invariant s t h1 /\
+      footprint s h0 == footprint s h1)
+
 
 /// `create`:
 ///
@@ -130,41 +144,188 @@ val framing (s:state) (l:B.loc) (h0 h1: HS.mem)
 ///
 ///   -- The transcript's initial state is empty and the hash alg is
 ///      not chosen yet
-val create (r:Mem.rgn)
-  : ST state
+val create (r:Mem.rgn) (a:alg)
+  : ST (state a)
        (requires fun _ -> True)
        (ensures fun h0 s h1 ->
-         let open B in
-         invariant s h1 /\
+         invariant s (Start None) h1 /\
          region_of s == r /\
-         modifies loc_none h0 h1 /\
-         fresh_loc (footprint s h1) h0 h1 /\
-         r `region_includes` footprint s h1 /\
-         hash_alg s h1 == None /\
-         transcript s h1 == Transcript_nil)
+         B.loc_region_only true r `B.loc_includes` footprint s h1 /\
+         B.modifies B.loc_none h0 h1 /\
+         B.fresh_loc (footprint s h1) h0 h1)
 
-/// `set_hash_alg`:
-///    -- Sets the hash algorithm once and for all
-///    -- Note, the footprint grows to include some fresh location `l`
-val set_hash_alg (a:alg) (s:state)
-  : ST unit
+
+module LP = LowParse.Low.Base
+
+unfold
+let extend_hash_pre_common
+  #a
+  (s:state a)
+  (b:LP.slice)
+  (t:transcript_t)
+  (h:HS.mem)
+  = invariant s t h /\
+    LP.live_slice h b /\
+    B.loc_disjoint (B.loc_buffer LP.(b.base)) (footprint s h)
+
+unfold
+let extend_hash_post_common
+  #a
+  (s:state a)
+  (b:LP.slice)
+  (t:transcript_t)
+  (h0 h1:HS.mem)
+  = invariant s t h1 /\
+    B.modifies (footprint s h1) h0 h1 /\
+    footprint s h1 == footprint s h0
+
+
+// assume 
+val nego_version (ch:Parsers.ClientHello.clientHello)
+                        (sh:Parsers.ServerHello.serverHello)
+       : Parsers.ProtocolVersion.protocolVersion
+
+let extend_with_hsm (t:transcript_t) (m:HSM.handshake)
+  : option transcript_t
+= match t, m with
+  | Start retry, HSM.M_client_hello ch ->
+    //Missing: consistency between retry and ch
+    Some (Hello retry ch)
+
+  | Hello retry ch, HSM.M_server_hello sh ->
+    if None? retry
+    && is_hrr sh
+    && nego_version ch sh = PV.TLS_1p3
+    then Some (Start (Some (ch, sh)))
+    else
+      begin
+      match nego_version ch sh, retry with
+      | PV.TLS_1p2, None ->
+        Some (Transcript12 ch sh [])
+
+      | PV.TLS_1p3, _ ->
+        Some (Transcript13 retry ch sh [])
+
+      | _ -> None
+      end
+
+  | _ ->
+    None
+
+let extend_with_hsm12 (t:transcript_n (max_transcript_size - 1)) (m:HSM12.handshake12)
+  : option transcript_t
+= match t with
+  | Transcript12 ch sh rest ->
+    List.append_length rest [m];
+    Some (Transcript12 ch sh (List.snoc (rest, m)))
+
+  | _ -> None
+
+
+let extend_with_hsm13 (t:transcript_n (max_transcript_size - 1)) (m:HSM13.handshake13)
+  : option transcript_t
+= match t with
+  | Transcript13 retry ch sh rest ->
+    List.append_length rest [m];
+    Some (Transcript13 retry ch sh (List.snoc (rest, m)))
+
+  | _ -> None
+
+val extend_hash_hsm
+  (#a:_)
+  (s:state a)
+  (b:LowParse.Low.Base.slice)
+  (p0:uint_32)
+  (p1:uint_32)
+  (tx:G.erased (transcript_n (max_transcript_size - 1)))
+  : Stack (G.erased transcript_t)
        (requires fun h ->
-         invariant s h /\
-         hash_alg s h == None)
-       (ensures fun h0 _ h1 ->
-         let open B in
-         invariant s h1 /\
-         hash_alg s h1 == Some a /\
-         transcript s h1 == transcript s h0 /\
-         (exists l. fresh_loc l h0 h1 /\
-               footprint s h1 == B.loc_union l (footprint s h0) /\
-               region_of s `region_includes` footprint s h1))
+         let tx = G.reveal tx in
+         extend_hash_pre_common s b tx h /\
+         LP.valid_pos HSM.handshake_parser h b p0 p1 /\
+         (let msg = LP.contents HSM.handshake_parser h b p0 in
+          Some? (extend_with_hsm tx msg)))
+       (ensures fun h0 tx' h1 ->
+         let tx' = G.reveal tx' in
+         let msg = LP.contents HSM.handshake_parser h0 b p0 in
+         tx' == Some?.v (extend_with_hsm (G.reveal tx) msg) /\
+         extend_hash_post_common s b tx' h0 h1)
 
-let can_extend_with_hsm (t:transcript_t) =
-  match t with
-  | Transcript_nil -> True
-  | Transcript_hello_server _ -> True
-  | _ -> False
+val extend_hash_hsm12
+  (#a:_)
+  (s:state a)
+  (b:LowParse.Low.Base.slice)
+  (p0:uint_32)
+  (p1:uint_32)
+  (tx:G.erased (transcript_n (max_transcript_size - 1)))
+  : Stack (G.erased transcript_t)
+       (requires fun h ->
+         let tx = G.reveal tx in
+         extend_hash_pre_common s b tx h /\
+         LP.valid_pos HSM12.handshake12_parser h b p0 p1 /\
+         (let msg = LP.contents HSM12.handshake12_parser h b p0 in
+          Some? (extend_with_hsm12 tx msg)))
+       (ensures fun h0 tx' h1 ->
+         let tx' = G.reveal tx' in
+         let msg = LP.contents HSM12.handshake12_parser h0 b p0 in
+         tx' == Some?.v (extend_with_hsm12 (G.reveal tx) msg) /\
+         extend_hash_post_common s b tx' h0 h1)
+
+val extend_hash_hsm13
+  (#a:_)
+  (s:state a)
+  (b:LowParse.Low.Base.slice)
+  (p0:uint_32)
+  (p1:uint_32)
+  (tx:G.erased (transcript_n (max_transcript_size - 1)))
+  : Stack (G.erased transcript_t)
+       (requires fun h ->
+         let tx = G.reveal tx in
+         extend_hash_pre_common s b tx h /\
+         LP.valid_pos HSM13.handshake13_parser h b p0 p1 /\
+         (let msg = LP.contents HSM13.handshake13_parser h b p0 in
+          Some? (extend_with_hsm13 tx msg)))
+       (ensures fun h0 tx' h1 ->
+         let tx' = G.reveal tx' in
+         let msg = LP.contents HSM13.handshake13_parser h0 b p0 in
+         tx' == Some?.v (extend_with_hsm13 (G.reveal tx) msg) /\
+         extend_hash_post_common s b tx' h0 h1)
+
+
+let max_message_size_lt_max_input_length (a: alg) : Lemma
+  (max_transcript_size `Prims.op_Multiply` max_message_size < Spec.Hash.Definitions.max_input_length a)
+  [SMTPat (Spec.Hash.Definitions.max_input_length a)] 
+ =
+  assert_norm (max_transcript_size `Prims.op_Multiply` max_message_size < pow2 61);
+  assert_norm (max_transcript_size `Prims.op_Multiply` max_message_size < pow2 125)
+
+val extract_hash
+  (#a:alg)
+  (s:state a)
+  (tag:Hacl.Hash.Definitions.hash_t a)
+  (tx:G.erased transcript_t)
+  : ST unit
+       (requires (fun h0 ->
+         let tx = G.reveal tx in
+         invariant s tx h0 /\
+         B.live h0 tag /\
+         B.loc_disjoint (footprint s h0) (B.loc_buffer tag)))
+       (ensures (fun h0 _ h1 ->
+         let open B in
+         let tx = G.reveal tx in
+//         frame_state s h0 h1 /\
+         invariant s tx h1 /\
+         modifies (loc_union (footprint s h1) (loc_buffer tag)) h0 h1 /\
+         B.as_seq h1 tag == Spec.Hash.hash a (transcript_bytes tx)))
+
+
+(*
+val free
+
+val extract
+
+
+
 
 let can_extend_with_hsm12 (t:transcript_t) =
   match t with
@@ -202,23 +363,7 @@ let extend_transcript13
     | Transcript_hello_server msgs -> Transcript13 msgs [msg]
     | Transcript13 hmsgs msgs -> Transcript13 hmsgs (msg::msgs)
 
-unfold let extend_hash_pre_common
-  (s:state)
-  (b:B.buffer uint_8)
-  (h:HS.mem)
-  = invariant s h /\
-    B.live h b /\
-    B.loc_disjoint (B.loc_buffer b) (footprint s h) /\
-    Some? (hash_alg s h)
 
-unfold let extend_hash_post_common
-  (s:state)
-  (b:B.buffer uint_8)
-  (h0 h1:HS.mem)
-  = invariant s h1 /\
-    B.modifies (footprint s h1) h0 h1 /\
-    footprint s h1 == footprint s h0 /\
-    hash_alg s h1 == hash_alg s h0
 
 // val extend_unhashed_transcript
 //      (s:state)
@@ -229,20 +374,6 @@ unfold let extend_hash_post_common
 //       invariant s h /\
 
 
-val extend_hash
-  (s:state)
-  (b:B.buffer uint_8) //Should this be a LowParse.Low.Base.slice and a irepr?
-  (p0:uint_32)
-  (p1:uint_32)
-  (msg:G.erased HSM.handshake)
-  : ST unit
-       (requires fun h ->
-         extend_hash_pre_common s b h /\
-         can_extend_with_hsm (transcript s h) /\
-         valid_parsing (G.reveal msg) p0 p1 b h)
-       (ensures (fun h0 _ h1 ->
-         extend_hash_post_common s b h0 h1 /\
-         transcript s h1 == extend_transcript (transcript s h0) (G.reveal msg)))
 
 val extend_hash12
   (s:state)
@@ -274,30 +405,7 @@ val extend_hash13
          extend_hash_post_common s b h0 h1 /\
          transcript s h1 == extend_transcript13 (transcript s h0) (G.reveal msg)))
 
-let buf_is_hash_of_b (a:alg) (tag:Hacl.Hash.Definitions.hash_t a) (h:HS.mem) (b:bytes)
-  = assume (Seq.length b < Spec.Hash.Definitions.max_input_length a);  //AR: need to sort this out
-    admit ();  //AR: TODO: strange behavior with interleaving
-               //          verifying just the .fsti does not need this admit
-               //          but when verifying the .fst, this definition does not verify
-               //          my suspicion is some options going wrong
-    B.as_seq h tag == Spec.Hash.hash a b
 
-val extract_hash
-  (#a:alg)
-  (s:state)
-  (tag:Hacl.Hash.Definitions.hash_t a)
-  : ST unit
-       (requires (fun h0 ->
-         invariant s h0 /\
-         hash_alg s h0 == Some a /\
-         B.live h0 tag /\
-         B.loc_disjoint (footprint s h0) (B.loc_buffer tag)))
-       (ensures (fun h0 _ h1 ->
-         let open B in
-         frame_state s h0 h1 /\
-         invariant s h1 /\
-         modifies (loc_union (footprint s h1) (loc_buffer tag)) h0 h1 /\
-         buf_is_hash_of_b a tag h1 (transcript_bytes (transcript s h1))))
 
 (* We need some form of collision resistance adapted to transcripts.
    i.e., if the hashes of two transcripts match then the transcripts
