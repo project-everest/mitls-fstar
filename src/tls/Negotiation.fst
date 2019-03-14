@@ -54,6 +54,37 @@ let string_of_keyShare (x:keyShareEntry) = string_of_namedGroup (tag_of_keyShare
 let string_of_ciphersuite x = string_of_cipherSuite (name_of_cipherSuite x)
 let string_of_ciphersuites xs = string_of_list string_of_ciphersuite "[" xs 
 let string_of_signatureSchemes xs = string_of_list string_of_signatureScheme "[" xs
+
+module LP = LowParse.Low.Base
+module U32 = FStar.UInt32
+module HST = FStar.HyperStack.ST
+module B = LowStar.Buffer
+
+#reset-options
+
+let print_namedGroupList
+  (sl: LP.slice)
+  (pos: U32.t)
+: HST.Stack unit
+  (requires (fun h -> LP.valid namedGroupList_parser h sl pos))
+  (ensures (fun h _ h' -> B.modifies B.loc_none h h'))
+= let _ = namedGroupList_count sl pos in
+  let pos' = namedGroupList_jumper sl pos in
+  LowStar.Printf.print_string "[";
+  LP.print_list namedGroup_jumper
+    (fun sl pos ->
+      let s = namedGroup_reader sl pos in
+      LowStar.Printf.print_string (string_of_namedGroup s);
+      let pos1 = namedGroup_jumper sl pos in
+      if pos1 <> pos' then LowStar.Printf.print_string " ")
+    sl
+    (pos `U32.add` 2ul)
+    pos';
+  LowStar.Printf.print_string "]"
+
+#reset-options "--using_facts_from '* -LowParse'"
+
+
 let string_of_namedGroups xs = string_of_list string_of_namedGroup "[" xs
 let string_of_keyShares xs = string_of_list string_of_keyShare "[" xs
 let string_of_che  x = string_of_extensionType (tag_of_clientHelloExtension x)
