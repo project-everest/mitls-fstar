@@ -70,17 +70,17 @@ let print_namedGroupList
   (ensures (fun h _ h' -> B.modifies B.loc_none h h'))
 = let _ = namedGroupList_count sl pos in
   let pos' = namedGroupList_jumper sl pos in
-  LowStar.Printf.print_string "[";
+  print "[";
   LP.print_list namedGroup_jumper
     (fun sl pos ->
       let s = namedGroup_reader sl pos in
-      LowStar.Printf.print_string (string_of_namedGroup s);
+      print (string_of_namedGroup s);
       let pos1 = namedGroup_jumper sl pos in
-      if pos1 <> pos' then LowStar.Printf.print_string " ")
+      if pos1 <> pos' then print " ")
     sl
     (pos `U32.add` 2ul)
     pos';
-  LowStar.Printf.print_string "]"
+  print "]"
 
 #reset-options "--using_facts_from '* -LowParse'"
 
