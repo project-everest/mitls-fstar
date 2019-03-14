@@ -4,7 +4,7 @@ MITLS_HOME      ?= ../..
 KREMLIN_HOME    ?= ../../../kremlin
 MLCRYPTO_HOME   ?= ../../../MLCrypto
 EVERCRYPT_HOME	?= $(HACL_HOME)/providers
-FLAVOR          ?= Model
+FLAVOR          ?= Kremlin
 
 SHELL=/bin/bash
 
@@ -87,7 +87,11 @@ endif
 # Project Files
 
 # Add more roots here!
-ROOTS ?= QUIC.fst Test.Main.fst
+ROOTS ?= QUIC.fst Test.Main.fst \
+  HSL.Common.fst HSL.Send.fsti HSL.Transcript.fsti HSL.Receive.fst HSL.Receive.fsti \
+  IV.fst HMAC.UFCMA.fst Token.UF1CMA.fst Pkg.Tree.fst AEAD.Pkg.fst \
+  # HSL.Transcript.fst
+
 
 EVERYTHING=$(wildcard *.fst *.fsti Make* $(MITLS_HOME)/src/pki/* $(MITLS_HOME)/libs/ffi/* ideal-flags/* concrete-flags/* concrete-flags/$(FLAVOR)/*)
 
@@ -105,10 +109,10 @@ endif
 	$(subst \\,, \
 		$(FSTAR) --cache_dir $(CACHE_DIR) --odir $(EXTRACT_DIR) --extract $(EXTRACT) \
 			--dep full \
+			$(VFLAGS) \
 			$(addprefix --include , $(INCLUDE_PATHS)) \
 			$(ROOTS) > $(DEP_FILE) \
 	)
-	sed -i.opt -e "s/cmx/cmo/g" -e "s/source/old/g" $(DEP_FILE)
 
 $(DEP_FILE).dot:
 ifdef VERBOSE
@@ -128,7 +132,6 @@ $(DEP_FILE).pdf: $(DEP_FILE).dot
 
 depend: $(DEP_FILE)
 
--include $(DEP_FILE).opt
 -include $(DEP_FILE)
 
 # REMARK:
@@ -157,7 +160,9 @@ depend: $(DEP_FILE)
 # solve this problem too. If there is an up to date $(DEP_FILE), or none at 
 # all, then the dependency can be ignored. 
 
-VFLAGS += $(HINTS_OPTS)
+# can't enumerate all the already_cached namespaces: Vale doesn't work (not
+# everything is under Vale) and '* -Mitls' doesn't work either.
+VFLAGS += $(HINTS_OPTS) --cmi --already_cached 'FStar LowStar C Hacl EverCrypt X64 Vale'
 
 %.checked: | $(DEP_FILE)
 ifdef VERBOSE
@@ -186,13 +191,16 @@ $(CACHE_DIR)/LowParse.%.checked \
 $(CACHE_DIR)/Parsers.%.checked \
 : OTHERFLAGS := $(filter-out --record_hints,$(OTHERFLAGS))
 
-$(EXTRACT_DIR)/%.$(EXTENSION):
+
+
+# Gave up on OCaml extraction. This is for Kremlin only
+$(EXTRACT_DIR)/%.krml:
 ifdef VERBOSE
 	@echo -e "\033[1;32m=== Extracting $@ ...\033[;37m"
 endif
 	$(subst \\,, \
 		$(FSTAR) $(VFLAGS) \
-			--codegen $(firstword $(subst -, ,$(FLAVOR))) \
+			--codegen Kremlin \
 			--cache_dir $(CACHE_DIR) \
 			$(HINTS_OPTS) \
 			--odir $(EXTRACT_DIR) \
