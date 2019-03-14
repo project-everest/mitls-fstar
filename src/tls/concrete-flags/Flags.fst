@@ -16,3 +16,15 @@ inline_for_extraction let flag_KEF0 (d:nat) = false
 inline_for_extraction let flag_PRF1 (d:nat) = false
 inline_for_extraction let flag_ODH (d:nat) = false
 inline_for_extraction let flag_KEF2 (d:nat) = false
+
+inline_for_extraction let debug = true
+inline_for_extraction let debug_CDH = true
+inline_for_extraction let debug_Epochs = true
+inline_for_extraction let debug_FFI = true
+inline_for_extraction let debug_HS = true
+inline_for_extraction let debug_HSL = true
+inline_for_extraction let debug_KS = true
+inline_for_extraction let debug_NGO = true
+inline_for_extraction let debug_QUIC = true
+inline_for_extraction let debug_Record = true
+inline_for_extraction let debug_TLS = true

@@ -1,11 +1,10 @@
 EXTRACT='Nothing'
-FLAVOR?=Model
+FLAVOR?=Kremlin
 
-# ADL (31 Aug. 2018) Disabling ocaml-all during transition to EverCrypt
-all: refresh-depend model-all kremlin-all #ocaml-all
+all: refresh-depend kremlin-all
 
 clean-depend:
-	rm -f cache/OCaml/.depend cache/Kremlin/.depend cache/Model/.depend
+	rm -f cache/Kremlin/.depend
 
 refresh-depend: clean-depend
 	+$(MAKE) -C ../parsers gen
@@ -16,33 +15,25 @@ SHELL=/bin/bash
 clean-c:
 	rm -rf extract/Kremlin-{Library,Internal-Test}/{*.c,*/*.c}
 
-ocaml-%: refresh-depend
-	+$(MAKE) -f Makefile.OCaml $*
-
-kremlin-%: refresh-depend
+kremlin-% verify-%: refresh-depend
 	+$(MAKE) -f Makefile.Kremlin $*
-
-model-% verify-%: refresh-depend
-	+$(MAKE) -f Makefile.Model $*
 
 quic-%: refresh-depend
 	+$(MAKE) -C ../../apps/quicMinusNet $* -k
 
-#ADL (31 Aug. 2018) Disabling ocaml-test during transition to EverCrypt
 #TR (2019-03-06): disabling quic-test until merge into master
-test: refresh-depend model-test kremlin-test #quic-test #ocaml-test
+test: refresh-depend kremlin-test #quic-test
 
-clean: ocaml-clean kremlin-clean quic-clean model-clean
+clean: ocaml-clean kremlin-clean quic-clean
 	rm -rf extract/Kremlin extract/OCaml extract/copied
 	+$(MAKE) -C ../parsers clean
 
-VFLAGS=
 %.fst-in %.fsti-in:
 	+$(MAKE) -f Makefile.$(FLAVOR) $@
 
 %.fst-ver %.fsti-ver: refresh-depend
-	rm -f cache/Model/$(notdir $(subst -ver,,$@)).checked
-	+$(MAKE) -f Makefile.Model cache/Model/$(notdir $(subst -ver,,$@)).checked
+	rm -f cache/Kremlin/$(notdir $(subst -ver,,$@)).checked
+	+$(MAKE) -f Makefile.Kremlin cache/Kremlin/$(notdir $(subst -ver,,$@)).checked
 
 todo:
 	grep -nH -i -e admit -e assume -e '--lax' -e todo -e magic Make* `find . -regex '.*.fst[i]*'` | grep -v 'assume val'
