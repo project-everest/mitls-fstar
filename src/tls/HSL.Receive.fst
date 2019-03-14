@@ -70,7 +70,7 @@ let advanced_parsed_bytes (st:_) (b:b8) (from to:uint_32)
 let reset_parsed_bytes
 
 // let receive_flight13_fin st b from to =
-//   if to - from > LP.validator_max_length then Error "Input buffer too large" else // needed because validators can work only for slices of size <= LP.validator_max_length, to provide for error codes
+//   if to > LP.validator_max_length then Error "Input buffer too large" else // needed because validators can work only for slices of size <= LP.validator_max_length, to provide for error codes
 //   let open LP in
 //   let b_slice =
 //     let b = B.sub b 0ul to in
