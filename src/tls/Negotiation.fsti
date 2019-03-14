@@ -25,6 +25,18 @@ open HandshakeMessages
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 
+module LP = LowParse.Low.Base
+module U32 = FStar.UInt32
+module HST = FStar.HyperStack.ST
+module B = LowStar.Buffer
+
+val print_namedGroupList
+  (sl: LP.slice)
+  (pos: U32.t)
+: HST.Stack unit
+  (requires (fun h -> LP.valid Parsers.NamedGroupList.namedGroupList_parser h sl pos))
+  (ensures (fun h _ h' -> B.modifies B.loc_none h h'))
+
 
 type pre_share = g:CommonDH.group & CommonDH.pre_share g
 type share = g:CommonDH.group & CommonDH.share g
