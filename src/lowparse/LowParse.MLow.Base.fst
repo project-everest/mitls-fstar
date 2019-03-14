@@ -3111,7 +3111,7 @@ let list_filter
 #pop-options
 *)
 
-#push-options "--z3rlimit 16"
+#push-options "--z3rlimit 32"
 
 inline_for_extraction
 let list_nth
