@@ -53,7 +53,42 @@ let create r =
 let receive_flight13_ee_c_cv_fin _ _ _ _ = admit()
 let receive_flight13_ee_cr_c_cv_fin _ _ _ _ = admit ()
 let receive_flight13_ee_fin _ _ _ _ = admit ()
-let receive_flight13_fin _ _ _ _ = admit ()
+
+#set-options "--log_queries --query_stats --print_z3_statistics"
+let advanced_parsed_bytes (st:_) (b:b8) (from to:uint_32)
+  : Stack unit
+    (requires fun h ->
+      basic_pre_post st b from to h)
+    (ensures fun h0 _ h1 ->
+      B.modifies (footprint st) h0 h1 /\  //only local footprint is modified
+      (let start, finish  = update_window (index_from_to st h0) from to in
+      index_from_to st h1 == Some (start, finish) /\
+      finish == to /\
+      parsed_bytes st h1 == B.as_seq h0 (B.gsub b start (finish - start)))) = admit()
+
+(*
+let reset_parsed_bytes
+
+// let receive_flight13_fin st b from to =
+//   let open LP in
+//   let b_slice =
+//     let b = B.sub b 0ul to in
+//     {
+//       base = b;
+//       len = to
+//     }
+//   in
+//   let pos = HSM13.handshake13_validator b_slice from in
+//   if pos = LP.validator_error_not_enough_data
+//   then (advanced_parsed_bytes st b from to;
+//         Correct None)
+//   else if pos > LP.validator_max_length
+//   then Error "Invalid finish message"
+//   else let flt = ... in
+//        reset_parsed_bytes;
+//        Correct (Some flt)
+*)
+
 let receive_flight13_c_cv_fin _ _ _ _ = admit ()
 let receive_flight13_eoed _ _ _ _ = admit ()
 let receive_flight13_nst _ _ _ _ = admit ()

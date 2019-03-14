@@ -105,7 +105,10 @@ let transcript_n (n:nat{n < max_transcript_size}) =
 unfold // to recover Z3 linearity
 let max_message_size = 16777219 // should be at least max (handshake12_parser_kind.parser_kind_high, handshake13_parser_kind.parser_kind_high, handshake_parser_kind.parser_kind_high)
 
-val transcript_bytes (t:transcript_t) : GTot (b: bytes { Seq.length b < max_transcript_size `Prims.op_Multiply` max_message_size })
+//it takes the algorithm because it needs to compute the hash of the 
+//client hello in case of hrr
+val transcript_bytes (a:alg) (t:transcript_t) 
+  : GTot (b: bytes { Seq.length b < max_transcript_size `Prims.op_Multiply` max_message_size })
 
 
 /// `state`: Abstract state of the module
@@ -299,6 +302,11 @@ let max_message_size_lt_max_input_length (a: alg) : Lemma
   assert_norm (max_transcript_size `Prims.op_Multiply` max_message_size < pow2 61);
   assert_norm (max_transcript_size `Prims.op_Multiply` max_message_size < pow2 125)
 
+val hashed_transcript : alg -> transcript_t -> prop
+
+let transcript_hash (a:alg) (tx:transcript_t) =
+  Spec.Hash.hash a (transcript_bytes a tx)
+  
 val extract_hash
   (#a:alg)
   (s:state a)
@@ -313,16 +321,43 @@ val extract_hash
        (ensures (fun h0 _ h1 ->
          let open B in
          let tx = G.reveal tx in
-//         frame_state s h0 h1 /\
          invariant s tx h1 /\
          modifies (loc_union (footprint s h1) (loc_buffer tag)) h0 h1 /\
-         B.as_seq h1 tag == Spec.Hash.hash a (transcript_bytes tx)))
+         B.as_seq h1 tag == transcript_hash a tx /\
+         hashed_transcript a tx))
 
+inline_for_extraction
+val crf_injective (a:alg) (tx0 tx1:G.erased transcript_t) 
+  : Stack unit  // should be STTot
+    (requires fun h0 ->
+      hashed_transcript a tx0 /\
+      hashed_transcript a tx1)
+    (ensures fun h0 _ h1 ->
+      h0 == h1 /\
+      (crf a /\
+       transcript_hash a tx0 == transcript_hash a tx1  ==>
+       tx0 == tx1))
+
+let sample_usage 
+    #a 
+    (received_hash:tag a{exists tx0. good tx0 /\ hashed_transcript a tx0})
+    (tx1:erased transcript_t{nice tx1 /\ hashed_transcript a tx1})
+  :  Stack unit
+     (requires fun _ -> 
+       transcript_hash a tx1 == received_hash)
+     (ensures fun h0 _ h1 ->
+       good tx1 /\
+       h0 == h1)
+  = //This is one way out of it ... 
+    let tx0 =
+      let (| w, _ |) = FStar.IndefiniteDescription.indefinite_description _ (hashed_transcript a) in
+      Ghost.hide w
+    in
+    crf_injective a tx0 tx1 
+    //Another might be to look into the table that maps the hashes to the transcript
 
 (*
 val free
-
-val extract
 
 
 

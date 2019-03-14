@@ -122,10 +122,10 @@ let basic_pre_post (st:hsl_state) (b:b8) (from to:uint_32) : HS.mem -> Type0
 let update_window (r0:option range_t)
                   (from:uint_32)
                   (to:uint_32{range_extension r0 from to})
-  : option range_t
+  : range_t
   = match r0 with
-    | None -> Some (from, to)
-    | Some (from_0, _) -> Some (from_0, to)
+    | None -> (from, to)
+    | Some (from_0, _) -> (from_0, to)
 
 let valid_flight_t 'a =
   (flt:'a) -> (flight_begin:uint_32) -> (flight_end:uint_32) -> (b:b8) -> (h:HS.mem) -> Type0
@@ -149,7 +149,7 @@ let receive_post
        let finish = snd r in
        finish == to /\
        parsed_bytes st h1 == B.as_seq h0 (B.gsub b start (finish - start)) /\
-       index_from_to st h1 == update_window (index_from_to st h0) from to
+       index_from_to st h1 == Some (update_window (index_from_to st h0) from to)
      | Correct (Some flt), None ->
        f flt from to b h1 /\  //flight specific postcondition
        //Internal state for partial parse is reset
