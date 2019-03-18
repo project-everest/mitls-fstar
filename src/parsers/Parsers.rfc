@@ -1311,6 +1311,7 @@ struct {
   select (msg_type) {
     case client_hello: ClientHello;
     case server_hello: ServerHello;
+    case message_hash: opaque;
   } m[length]; /*body*/
 } Handshake;
 
