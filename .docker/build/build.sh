@@ -96,6 +96,14 @@ function export_home() {
     fi
 }
 
+function build_hacl_vale () {
+    # Only building a subset of HACL* for now, no verification.
+    # This is only for libevercrypt.so for now,
+    # not for checked files.
+    make -C hacl-star vale-fst -j $threads &&
+    make -C hacl-star compile-compact compile-generic compile-evercrypt-external-headers -j $threads
+}
+
 # By default, HACL* master works against F* stable. Can also be overridden.
 function fetch_hacl() {
     if [ ! -d hacl-star ]; then
@@ -232,12 +240,7 @@ function mitls_verify() {
                 fetch_and_make_mlcrypto &&
                 fetch_hacl &&
                 fetch_vale &&
-                    # Only building a subset of HACL* for now, no verification.
-                    # This is only for libevercrypt.so for now,
-                    # not for checked files.
-                    OTHERFLAGS="--admit_smt_queries true $OTHERFLAGS" \
-                    make -C hacl-star vale-fst -j $threads &&
-                    make -C hacl-star compile-compact compile-generic compile-evercrypt-external-headers -j $threads &&
+                    OTHERFLAGS="--admit_smt_queries true $OTHERFLAGS" build_hacl_vale &&
                     make -C libs/ffi -j $threads &&
                     build_pki_if &&
                     make -C src/tls -j $threads all -k &&
