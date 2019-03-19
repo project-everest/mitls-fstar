@@ -20,7 +20,7 @@ generated/Makefile: Makefile.qd
 
 %.gen: % $(QD_HOME)/qd
 	mkdir -p generated
-#	-rm generated/$(patsubst %.rfc, %, $(basename $<)).*.{fst,fsti}
+	rm -rf generated/*.fst generated/*.fsti
 	$(QD_HOME)/qd -prefix $(basename $<). -odir generated $<
 	touch $@
 
