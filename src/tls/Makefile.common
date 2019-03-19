@@ -72,8 +72,9 @@ else
   INCLUDE_PATHS += ./concrete-flags/NoDebug
 endif
 
+
 PARSERS_CACHE_DIR=$(MITLS_HOME)/src/parsers/generated/cache
-ifneq (,$(PARSERS_CACHE_DIR))
+ifneq (,$(wildcard $(PARSERS_CACHE_DIR)))
   INCLUDE_PATHS += $(PARSERS_CACHE_DIR)
 endif
 
