@@ -20,16 +20,18 @@ open Mem
 open TLSError
 open TLSInfo
 open TLSConstants
-open HandshakeMessages
 
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
-
+module HSM = HandshakeMessages
+module CH = Parsers.ClientHello
+module SH = Parsers.ServerHello
 
 type pre_share = g:CommonDH.group & CommonDH.pre_share g
 type share = g:CommonDH.group & CommonDH.share g
 
-let offer = HandshakeMessages.ch 
+let offer = CH.clientHello
+type hrr = unit
 
 (*
   We keep both the server's HelloRetryRequest
@@ -51,6 +53,11 @@ type pski (o:offer) = n:nat {
   (match find_clientPske o with
   | Some psks -> n < List.length psks.Extensions.identities
   | _ -> False) }
+
+type cr =
+| NoRequest
+| CertRequest12 of HSM.certificateRequest12
+| CertRequest13 of HSM.certificateRequest13
 
 (**
   The final negotiated outcome, including key shares and long-term identities.
@@ -80,7 +87,7 @@ noeq type mode =
     n_server_share: option share -> 
 
     // more from either ...ServerHelloDone (1.2) or ServerFinished (1.3)
-    n_client_cert_request: option HandshakeMessages.cr ->
+    n_client_cert_request: cr ->
     n_server_cert: option (Cert.chain13 * signatureScheme) ->
 
     // more from either CH+SH (1.3) or CKE (1.2)
@@ -231,7 +238,7 @@ val is_hrr: reader bool
 val sign: 
   #region:rgn -> #role:TLSConstants.role -> ns:t region role -> 
   bytes -> 
-  ST (result HandshakeMessages.signature)
+  ST (result HandshakeMessages.certificateVerify13)
   (requires (fun h0 -> h0 `HS.contains` ns.state ))
   (ensures (fun h0 _ h1 -> h0 == h1))
 
@@ -247,7 +254,7 @@ val client_ClientHello:
   // oks: optional client key shares created by ks_client_init
   // now: stateful time for age obfuscation (return it ghostly?)
 
-val group_of_hrr: HandshakeMessages.hrr -> option CommonDH.namedGroup
+val group_of_hrr: hrr -> option CommonDH.namedGroup
 
 val client_HelloRetryRequest:
   #region:rgn -> t region Client -> 
@@ -259,7 +266,7 @@ val client_HelloRetryRequest:
 val client_ServerHello: 
   #region:rgn -> 
   t region Client ->
-  HandshakeMessages.sh ->
+  HandshakeMessages.serverHello ->
   St (result mode) 
   // [C_Offer | C_HRR_offer ==> C_Mode] with TODO hrr.  
   // ensures client_mode ns offer sh == Correct mode
@@ -274,19 +281,20 @@ val to_be_signed:
 
 val client_ServerKeyExchange: 
   #region:rgn -> t region Client ->
-  serverCert:HandshakeMessages.crt ->
-  HandshakeMessages.ske ->
-  ocr:option HandshakeMessages.cr ->
+  serverCert:HandshakeMessages.certificate12 ->
+  kex: Parsers.KeyExchangeAlgorithm.keyExchangeAlgorithm ->
+  ske: HandshakeMessages.serverKeyExchange kex ->
+  ocr:option HandshakeMessages.certificateRequest12 ->
   St (result mode)
   // [C_Mode ==> C_Mode] setting [server_share; client_cert_request; server_cert] in mode,
   // requires mode.n_protocol_version = TLS_1p2
 
 val clientComplete_13: 
   #region:rgn -> t region Client ->
-  ee: HandshakeMessages.ee ->
-  optCertRequest: option HandshakeMessages.cr13 ->
+  ee: HandshakeMessages.encryptedExtensions ->
+  optCertRequest: option HandshakeMessages.certificateRequest13 ->
   optServerCert: option Cert.chain13 -> // Not sent with PSK
-  optCertVerify: option HandshakeMessages.cv -> // Not sent with PSK
+  optCertVerify: option HandshakeMessages.certificateVerify13 -> // Not sent with PSK
   digest: option (b:bytes{length b <= 32}) ->
   St (result mode) // it needs to be computed, whether returned or not
   // [C_Mode ==> C_Complete] setting [sexts optCertRequest schain] in mode and recording [ccert]
@@ -304,7 +312,7 @@ type extra_sext = list (s:Extensions.encryptedExtension{Extensions.EE_Unknown_ex
 //17-03-30 still missing a few for servers.
 noeq type serverMode =
   | ServerHelloRetryRequest: hrr:hrr ->
-    cs:cipherSuite{name_of_cipherSuite cs = hrr.hrr_cipher_suite} ->
+    cs:cipherSuite{(*name_of_cipherSuite cs = hrr.hrr_cipher_suite*) True} ->
     serverMode
   | ServerMode: mode -> certNego -> extra_sext -> serverMode
 
@@ -316,7 +324,7 @@ val get_alpn: offer -> Tot Extensions.clientHelloExtension_CHE_application_layer
 
 val server_ClientHello: 
   #region:rgn -> t region Server ->
-  HandshakeMessages.ch -> 
+  HandshakeMessages.clientHello -> 
   log:HandshakeLog.t ->
   St (result serverMode)
   // [S_Init | S_HRR ==> S_ClientHello m cert] 

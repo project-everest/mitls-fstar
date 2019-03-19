@@ -1332,6 +1332,7 @@ struct {
   select (msg_type) {
     case client_hello: ClientHello;
     case server_hello: ServerHello;
+    case message_hash: opaque;
   } m[length]; /*body*/
 } Handshake;
 
@@ -1347,7 +1348,7 @@ struct {
     case finished:              opaque; /* Finished; */
     case new_session_ticket:    NewSessionTicket13;
     case key_update:            KeyUpdate;
-  } m[length]; /*body*/
+  } m13[length]; /*body*/
 } Handshake13;
 
 struct {
@@ -1603,7 +1604,7 @@ struct {
     case client_key_exchange: ClientKeyExchange;
     case new_session_ticket:  NewSessionTicket12;
     case finished:            opaque; /* Finished; */
-  } m[length]; /*body*/
+  } m12[length]; /*body*/
 } Handshake12;
 
 /*

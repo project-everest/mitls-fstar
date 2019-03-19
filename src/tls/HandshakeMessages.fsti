@@ -32,6 +32,7 @@ include Parsers.CertificateVerify12
 include Parsers.CertificateVerify13
 include Parsers.ClientKeyExchange
 include Parsers.KeyUpdate
+include Parsers.KeyExchangeAlgorithm
 
 // e18-02-21 carved out an interface, far from perfect...
 // In particular, it exposes the separate parsing of message headers

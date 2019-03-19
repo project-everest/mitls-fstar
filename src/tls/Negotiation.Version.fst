@@ -149,10 +149,11 @@ let write_supportedVersions cfg out p0 =
 /// range of versions supported by the server configuration and
 /// outputs the negotiated version if true
 
-// temporary; will use Parsers.ClientHello.clientHello 
-type ch = HandshakeMessages.ch
-let offered_version o = o.HandshakeMessages.ch_protocol_version 
-let offered_extensions o = o.HandshakeMessages.ch_extensions 
+module CH = Parsers.ClientHello
+
+type ch = CH.clientHello
+let offered_version o = o.CH.version 
+let offered_extensions o = o.CH.extensions 
 
 /// We ignore the "minimal protocol version" signalled in the packet
 /// header; this is fine since our server never accepts any proposal
