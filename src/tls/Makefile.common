@@ -25,7 +25,6 @@ INCLUDE_PATHS = \
   $(HACL_HOME)/vale/code/arch/x64/interop \
   $(HACL_HOME)/vale/code/crypto/aes \
   $(HACL_HOME)/vale/code/crypto/aes/x64 \
-  $(HACL_HOME)/vale/code/crypto/aes/x64/stdcalls \
   $(HACL_HOME)/vale/code/crypto/ecc/curve25519 \
   $(HACL_HOME)/vale/code/crypto/poly1305/x64 \
   $(HACL_HOME)/vale/code/crypto/sha \
@@ -71,6 +70,11 @@ ifeq (,$(MITLS_NODEBUG))
   INCLUDE_PATHS += ./concrete-flags/Debug
 else
   INCLUDE_PATHS += ./concrete-flags/NoDebug
+endif
+
+PARSERS_CACHE_DIR=$(MITLS_HOME)/src/parsers/generated/cache
+ifneq (,$(PARSERS_CACHE_DIR))
+  INCLUDE_PATHS += $(PARSERS_CACHE_DIR)
 endif
 
 HINTS_DIR  ?= hints
