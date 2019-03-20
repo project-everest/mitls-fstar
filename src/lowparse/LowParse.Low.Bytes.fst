@@ -142,7 +142,7 @@ let accessor_flbytes_get
 
 (* TODO: convert store_bytes to monotonic buffers, using the "writable" predicate *)
 
-#push-options "--z3rlimit 16"
+#push-options "--z3rlimit 32"
 
 inline_for_extraction
 let store_bytes
