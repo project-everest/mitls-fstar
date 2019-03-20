@@ -13,7 +13,7 @@ VFLAGS += $(HINTS_ENABLED)
 # something that nothing depends on yet, we need to add it to ROOTS here.
 ROOTS    += IV.fst HMAC.UFCMA.fst Token.UF1CMA.fst Pkg.Tree.fst AEAD.Pkg.fst
 
-model verify: $(addprefix $(CACHE_DIR)/, $(addsuffix .checked, $(notdir $(ALL_UNCHECKED_FST_FILES))))
+model verify: $(ALL_CHECKED_FILES)
 
 test: model
 	echo No verification-specific tests as of yet.
