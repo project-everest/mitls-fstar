@@ -184,16 +184,11 @@ let store_bytes
       then true
       else begin
         let x = BY.get src (src_from `U32.add` i) in
-        let h = HST.get () in
-        writable_upd dst (U32.v dst_pos) (U32.v dst_pos + U32.v len) h (U32.v dst_pos + U32.v i) x;
-        B.g_upd_modifies_strong dst (U32.v dst_pos + U32.v i) x h;
-        B.upd' dst (dst_pos `U32.add` i) x;
+        mbuffer_upd dst (Ghost.hide (U32.v dst_pos)) (Ghost.hide (U32.v dst_pos + U32.v len)) (dst_pos `U32.add` i) x;
         let i' = i `U32.add` 1ul in
         B.upd bi 0ul i';
         let h' = HST.get () in
         Seq.lemma_split (Seq.slice (B.as_seq h' dst) (U32.v dst_pos) (U32.v dst_pos + U32.v i')) (U32.v i);
-        B.g_upd_seq_as_seq dst (Seq.upd (B.as_seq h dst) (U32.v dst_pos + U32.v i) x) h;
-        B.modifies_buffer_from_to_elim dst dst_pos (dst_pos `U32.add` i) (B.loc_union (B.loc_region_only true (HS.get_tip h1)) (B.loc_buffer_from_to dst (dst_pos `U32.add` i) ((dst_pos `U32.add` i) `U32.add` 1ul))) h h';
         i' = len
       end
     )
@@ -208,7 +203,7 @@ let serialize32_flbytes
 : Tot (serializer32 (serialize_flbytes (U32.v sz32)))
 = fun (x: BY.lbytes (U32.v sz32)) #rrel #rel b pos ->
   let _ = store_bytes x 0ul sz32 b pos in
-  pos `U32.add` sz32
+  sz32
 
 inline_for_extraction
 let write_flbytes

@@ -2190,6 +2190,33 @@ let writable_modifies
   B.modifies_buffer_from_to_elim b (U32.uint_to_t pos') (B.len b) (l `B.loc_union` B.loc_buffer_from_to b (U32.uint_to_t pos) (U32.uint_to_t pos')) h h';
   writable_replace_subseq b pos pos' h (Seq.slice (B.as_seq h' b) pos pos') h'
 
+inline_for_extraction
+noextract
+let mbuffer_upd
+  (#t: Type)
+  (#rrel #rel: _)
+  (b: B.mbuffer t rrel rel)
+  (pos pos' : Ghost.erased nat)
+  (i: U32.t)
+  (v: t)
+: HST.Stack unit
+  (requires (fun h ->
+    writable b (Ghost.reveal pos) (Ghost.reveal pos') h /\
+    Ghost.reveal pos <= U32.v i /\
+    U32.v i + 1 <= Ghost.reveal pos' /\
+    Ghost.reveal pos' <= B.length b
+  ))
+  (ensures (fun h _ h' ->
+    B.modifies (B.loc_buffer_from_to b i (i `U32.add` 1ul)) h h' /\
+    writable b (Ghost.reveal pos) (Ghost.reveal pos') h' /\
+    B.as_seq h' b == Seq.upd (B.as_seq h b) (U32.v i) v
+  ))
+= let h = HST.get () in
+  writable_upd b (Ghost.reveal pos) (Ghost.reveal pos') h (U32.v i) v;
+  B.g_upd_modifies_strong b (U32.v i) v h;
+  B.g_upd_seq_as_seq b (Seq.upd (B.as_seq h b) (U32.v i) v) h;
+  B.upd' b i v
+
 [@unifier_hint_injective]
 inline_for_extraction
 let leaf_writer_weak
@@ -2261,11 +2288,11 @@ let serializer32
     U32.v pos + len <= B.length b /\
     writable b (U32.v pos) (U32.v pos + len) h
   ))
-  (ensures (fun h pos' h' ->
-    U32.v pos + Seq.length (serialize s x) == U32.v pos' /\ (
-    B.modifies (B.loc_buffer_from_to b pos pos') h h' /\
+  (ensures (fun h len h' ->
+    Seq.length (serialize s x) == U32.v len /\ (
+    B.modifies (B.loc_buffer_from_to b pos (pos `U32.add` len)) h h' /\
     B.live h b /\
-    Seq.slice (B.as_seq h' b) (U32.v pos) (U32.v pos') `Seq.equal` serialize s x
+    Seq.slice (B.as_seq h' b) (U32.v pos) (U32.v pos + U32.v len) `Seq.equal` serialize s x
   )))
 
 inline_for_extraction
@@ -2279,7 +2306,9 @@ let leaf_writer_strong_of_serializer32
 : Tot (leaf_writer_strong s)
 = fun x #rrel #rel input pos ->
   let h0 = HST.get () in
-  let pos' = s32 x input.base pos in
+  let len = s32 x input.base pos in
+  [@inline_let]
+  let pos' = pos `U32.add` len in
   let h = HST.get () in
   [@inline_let] let _ =
     let large = bytes_of_slice_from h input pos in

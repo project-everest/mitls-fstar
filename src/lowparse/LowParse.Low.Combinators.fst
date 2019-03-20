@@ -2,7 +2,7 @@ module LowParse.Low.Combinators
 include LowParse.Low.Base
 include LowParse.Spec.Combinators
 
-module B = LowStar.Buffer
+module B = LowStar.Monotonic.Buffer
 module U32 = FStar.UInt32
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
@@ -504,7 +504,6 @@ let accessor_snd
   in
   res
 
-(*
 inline_for_extraction
 let make_total_constant_size_reader
   (sz: nat)
@@ -514,18 +513,17 @@ let make_total_constant_size_reader
   (u: unit {
     make_total_constant_size_parser_precond sz t f
   })
-  (f' : ((s: buffer8) -> HST.Stack t
-    (requires (fun h -> B.live h s /\ B.length s == sz))
+  (f' : ((#rrel: _) -> (#rel: _) -> (s: B.mbuffer byte rrel rel) -> (pos: U32.t) -> HST.Stack t
+    (requires (fun h -> B.live h s /\ U32.v pos + sz <= B.length s))
     (ensures (fun h res h' ->
-      h == h' /\
-      res == f (B.as_seq h s)
+      B.modifies B.loc_none h h' /\
+      res == f (Seq.slice (B.as_seq h s) (U32.v pos) (U32.v pos + sz))
   ))))
 : Tot (leaf_reader (make_total_constant_size_parser sz t f))
-= fun sl pos ->
+= fun #rrel #rel sl pos ->
   let h = HST.get () in
   [@inline_let] let _ = valid_facts (make_total_constant_size_parser sz t f) h sl pos in
-  f' (B.sub sl.base pos sz')
-*)
+  f' sl.base pos
 
 let valid_filter
   (#rrel #rel: B.srel byte)
