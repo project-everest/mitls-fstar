@@ -10,6 +10,7 @@ module HST = FStar.HyperStack.ST
 #set-options "--z3rlimit 16"
 
 let valid_nondep_then
+  (#rrel #rel: B.srel byte)
   (h: HS.mem)
   (#k1: parser_kind)
   (#t1: Type0)
@@ -17,7 +18,7 @@ let valid_nondep_then
   (#k2: parser_kind)
   (#t2: Type0)
   (p2: parser k2 t2)
-  (s: slice)
+  (s: slice rrel rel)
   (pos: U32.t)
 : Lemma
   (requires (live_slice h s))
@@ -34,7 +35,7 @@ let valid_nondep_then
   valid_facts (nondep_then p1 p2) h s pos;
   if U32.v pos <= U32.v s.len
   then begin
-    nondep_then_eq p1 p2 (B.as_seq h (B.gsub s.base pos (s.len `U32.sub` pos)));
+    nondep_then_eq p1 p2 (bytes_of_slice_from h s pos);
     if valid_dec p1 h s pos
     then begin
       let pos1 = get_valid_pos p1 h s pos in
@@ -43,6 +44,7 @@ let valid_nondep_then
   end
 
 let valid_nondep_then_intro
+  (#rrel #rel: B.srel byte)
   (h: HS.mem)
   (#k1: parser_kind)
   (#t1: Type0)
@@ -50,7 +52,7 @@ let valid_nondep_then_intro
   (#k2: parser_kind)
   (#t2: Type0)
   (p2: parser k2 t2)
-  (s: slice)
+  (s: slice rrel rel)
   (pos: U32.t)
 : Lemma
   (requires (valid p1 h s pos /\ valid p2 h s (get_valid_pos p1 h s pos)))
@@ -71,7 +73,8 @@ let validate_nondep_then
   (#p2: parser k2 t2)
   (p2' : validator p2)
 : Tot (validator (nondep_then p1 p2))
-= fun (input: slice) (pos: U32.t) ->
+= fun   (#rrel #rel: B.srel byte)
+  (input: slice rrel rel) (pos: U32.t) ->
   let h = HST.get () in
   [@inline_let] let _ = valid_nondep_then h p1 p2 input pos in
   let pos1 = p1' input pos in
@@ -94,19 +97,21 @@ let jump_nondep_then
   (#p2: parser k2 t2)
   (p2' : jumper p2)
 : Tot (jumper (nondep_then p1 p2))
-= fun (input: slice) (pos: U32.t) ->
+= fun  (#rrel #rel: B.srel byte)
+  (input: slice rrel rel) (pos: U32.t) ->
   let h = HST.get () in
   [@inline_let] let _ = valid_nondep_then h p1 p2 input pos in
   p2' input (p1' input pos)
 
 let valid_synth
+  (#rrel #rel: B.srel byte)
   (h: HS.mem)
   (#k: parser_kind)
   (#t1: Type0)
   (#t2: Type0)
   (p1: parser k t1)
   (f2: t1 -> GTot t2)
-  (input: slice)
+  (input: slice rrel rel)
   (pos: U32.t)
 : Lemma
   (requires (
@@ -120,16 +125,17 @@ let valid_synth
 = valid_facts p1 h input pos;
   valid_facts (parse_synth p1 f2) h input pos;
   if U32.v pos <= U32.v input.len
-  then parse_synth_eq p1 f2 (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos)))
+  then parse_synth_eq p1 f2 (bytes_of_slice_from h input pos)
 
 let valid_synth_intro
+  (#rrel #rel: B.srel byte)
   (h: HS.mem)
   (#k: parser_kind)
   (#t1: Type0)
   (#t2: Type0)
   (p1: parser k t1)
   (f2: t1 -> GTot t2)
-  (input: slice)
+  (input: slice rrel rel)
   (pos: U32.t)
 : Lemma
   (requires (
@@ -153,7 +159,8 @@ let validate_synth
     synth_injective f2
   })
 : Tot (validator (parse_synth p1 f2))
-= fun (input: slice) (pos: U32.t) ->
+= fun   (#rrel #rel: B.srel byte)
+  (input: slice rrel rel) (pos: U32.t) ->
   let h = HST.get () in
   [@inline_let] let _ = valid_synth h p1 f2 input pos in
   p1' input pos
@@ -170,7 +177,8 @@ let jump_synth
     synth_injective f2
   })
 : Tot (jumper (parse_synth p1 f2))
-= fun (input: slice) (pos: U32.t) ->
+= fun   (#rrel #rel: B.srel byte)
+  (input: slice rrel rel) (pos: U32.t) ->
   let h = HST.get () in
   [@inline_let] let _ = valid_synth h p1 f2 input pos in
   p1' input pos
@@ -188,7 +196,7 @@ let validate_empty () : Tot (validator parse_empty)
 
 inline_for_extraction
 let validate_false () : Tot (validator parse_false)
-= fun input pos ->
+= fun #rrel #rel input pos ->
   let h = HST.get () in
   [@inline_let]
   let _ = valid_facts parse_false h input pos in
@@ -271,7 +279,7 @@ let accessor_synth
   (g: t2 -> GTot t1)
   (u: unit { synth_inverse f g /\ synth_inverse g f } )
 : Tot (accessor (gaccessor_synth p1 f g u))
-= fun input pos ->
+= fun #rrel #rel input pos ->
   let h = HST.get () in
   [@inline_let] let _ =
     Classical.forall_intro (gaccessor_synth_eq p1 f g u);
@@ -448,7 +456,7 @@ let accessor_fst
   (#t2: Type)
   (p2: parser k2 t2)
 : Tot (accessor (gaccessor_fst p1 sq p2))
-= fun input pos ->
+= fun #rrel #rel input pos ->
   let h = HST.get () in
   [@inline_let] let _ = slice_access_eq h (gaccessor_fst p1 sq p2) input pos in
   pos
@@ -481,21 +489,22 @@ let accessor_snd
   (#t2: Type)
   (p2: parser k2 t2)
 : Tot (accessor (gaccessor_snd p1 p2))
-= fun input pos ->
+= fun #rrel #rel input pos ->
   let h = HST.get () in
   [@inline_let] let _ = valid_nondep_then h p1 p2 input pos in
   let res = j1 input pos in
   [@inline_let] let _ =
     slice_access_eq_inv h (gaccessor_snd p1 p2) input pos;
     valid_facts p1 h input pos;
-    let large = (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos))) in
-    let small = (B.as_seq h (B.gsub input.base pos (U32.uint_to_t (content_length (nondep_then p1 p2) h input pos)))) in
+    let large = bytes_of_slice_from h input pos in
+    let small = bytes_of_slice_from_to h input pos (pos `U32.add` U32.uint_to_t (content_length (nondep_then p1 p2) h input pos)) in
     parser_kind_prop_equiv k1 p1;
     assert (no_lookahead_on p1 large small);
     assert (injective_postcond p1 large small)
   in
   res
 
+(*
 inline_for_extraction
 let make_total_constant_size_reader
   (sz: nat)
@@ -516,14 +525,16 @@ let make_total_constant_size_reader
   let h = HST.get () in
   [@inline_let] let _ = valid_facts (make_total_constant_size_parser sz t f) h sl pos in
   f' (B.sub sl.base pos sz')
+*)
 
 let valid_filter
+  (#rrel #rel: B.srel byte)
   (h: HS.mem)
   (#k: parser_kind)
   (#t: Type0)
   (p: parser k t)
   (f: (t -> GTot bool))
-  (input: slice)
+  (input: slice rrel rel)
   (pos: U32.t)
 : Lemma
   (
@@ -535,7 +546,7 @@ let valid_filter
 = valid_facts (parse_filter p f) h input pos;
   valid_facts p h input pos;
   if U32.v pos <= U32.v input.len
-  then parse_filter_eq p f (B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos)))
+  then parse_filter_eq p f (bytes_of_slice_from h input pos)
 
 inline_for_extraction
 let validate_filter
@@ -547,7 +558,7 @@ let validate_filter
   (f: (t -> GTot bool))
   (f' : ((x: t) -> Tot (y: bool { y == f x } )))
 : Tot (validator (parse_filter p f))
-= fun input pos ->
+= fun #rrel #rel input pos ->
   let h = HST.get () in
   [@inline_let] let _ = valid_filter h p f input pos in
   let res = v32 input pos in
@@ -567,7 +578,7 @@ let jump_filter
   (j: jumper p)
   (f: (t -> GTot bool))
 : Tot (jumper (parse_filter p f))
-= fun input pos ->
+= fun #rrel #rel input pos ->
   let h = HST.get () in
   [@inline_let] let _ = valid_filter h p f input pos in
   j input pos
@@ -580,7 +591,7 @@ let read_filter
   (p32: leaf_reader p)
   (f: (t -> GTot bool))
 : Tot (leaf_reader (parse_filter p f))
-= fun input pos ->
+= fun #rrel #rel input pos ->
   let h = HST.get () in
   [@inline_let] let _ = valid_filter h p f input pos in
   (p32 input pos <: (res: t { f res == true } )) // FIXME: WHY WHY WHY do we need this coercion?
@@ -594,7 +605,7 @@ let write_filter
   (s32: leaf_writer_strong s)
   (f: (t -> GTot bool))
 : Tot (leaf_writer_strong (serialize_filter s f))
-= fun x input pos ->
+= fun x #rrel #rel input pos ->
   [@inline_let] let _ = serialized_length_eq s x in
   [@inline_let] let _ = serialized_length_eq (serialize_filter s f) x in 
   let res = s32 x input pos in
@@ -611,7 +622,7 @@ let write_filter_weak
   (s32: leaf_writer_weak s)
   (f: (t -> GTot bool))
 : Tot (leaf_writer_weak (serialize_filter s f))
-= fun x input pos ->
+= fun x #rrel #rel input pos ->
   [@inline_let] let _ = serialized_length_eq s x in
   [@inline_let] let _ = serialized_length_eq (serialize_filter s f) x in 
   let res = s32 x input pos in
@@ -632,7 +643,7 @@ let read_synth
     synth_injective f2
   })
 : Tot (leaf_reader (parse_synth p1 f2))
-= fun input pos ->
+= fun #rrel #rel input pos ->
   let h = HST.get () in
   [@inline_let] let _ = valid_synth h p1 f2 input pos in
   let res = p1' input pos in
@@ -665,7 +676,7 @@ let write_synth
   (g1' : (x2: t2) -> Tot (x1: t1 { x1 == g1 x2 } ))
   (u: squash (synth_injective f2 /\ synth_inverse f2 g1))
 : Tot (leaf_writer_strong (serialize_synth p1 f2 s1 g1 ()))
-= fun x input pos ->
+= fun x #rrel #rel input pos ->
   [@inline_let] let _ = serialize_synth_eq p1 f2 s1 g1 () x in
   [@inline_let] let _ = serialized_length_eq (serialize_synth p1 f2 s1 g1 ()) x in
   [@inline_let] let _ = serialized_length_eq s1 (g1 x) in
@@ -687,7 +698,7 @@ let write_synth_weak
   (g1' : (x2: t2) -> Tot (x1: t1 { x1 == g1 x2 } ))
   (u: squash (synth_injective f2 /\ synth_inverse f2 g1))
 : Tot (leaf_writer_weak (serialize_synth p1 f2 s1 g1 ()))
-= fun x input pos ->
+= fun x #rrel #rel input pos ->
   [@inline_let] let _ = serialize_synth_eq p1 f2 s1 g1 () x in
   [@inline_let] let _ = serialized_length_eq (serialize_synth p1 f2 s1 g1 ()) x in
   [@inline_let] let _ = serialized_length_eq s1 (g1 x) in
@@ -715,11 +726,11 @@ let validate_filter_and_then
     and_then_cases_injective p2
   })
 : Tot (validator (parse_filter p1 f `and_then` p2))
-= fun input pos ->
+= fun #rrel #rel input pos ->
   let h = HST.get () in
   [@inline_let]
   let _ =
-    let sinput = B.as_seq h (B.gsub input.base pos (input.len `U32.sub` pos)) in
+    let sinput = bytes_of_slice_from h input pos in
     valid_facts (parse_filter p1 f `and_then` p2) h input pos;
     and_then_eq (parse_filter p1 f) p2 sinput;
     parse_filter_eq p1 f sinput;
@@ -746,7 +757,7 @@ let validate_weaken
   (v2: validator p2)
   (sq: squash (k1 `is_weaker_than` k2))
 : Tot (validator (weaken k1 p2))
-= fun input pos ->
+= fun #rrel #rel input pos ->
   let h = HST.get () in
   [@inline_let]
   let _ = valid_facts (weaken k1 p2) h input pos in
@@ -763,7 +774,7 @@ let jump_weaken
   (v2: jumper p2)
   (sq: squash (k1 `is_weaker_than` k2))
 : Tot (jumper (weaken k1 p2))
-= fun input pos ->
+= fun #rrel #rel input pos ->
   let h = HST.get () in
   [@inline_let]
   let _ = valid_facts (weaken k1 p2) h input pos in
@@ -780,7 +791,7 @@ let validate_strengthen
   (v1: validator p1)
   (sq: squash (parser_kind_prop k2 p1))
 : Tot (validator (strengthen k2 p1))
-= fun input pos ->
+= fun #rrel #rel input pos ->
   let h = HST.get () in
   [@inline_let]
   let _ = valid_facts (strengthen k2 p1) h input pos in
@@ -798,7 +809,7 @@ let validate_compose_context
   (v: ((k: kt1) -> Tot (validator (p k))))
   (k: kt2)
 : Tot (validator (p (f k)))
-= fun input pos -> v (f k) input pos
+= fun #rrel #rel input pos -> v (f k) input pos
 
 inline_for_extraction
 let jump_compose_context
@@ -810,4 +821,4 @@ let jump_compose_context
   (v: ((k: kt1) -> Tot (jumper (p k))))
   (k: kt2)
 : Tot (jumper (p (f k)))
-= fun input pos -> v (f k) input pos
+= fun #rrel #rel input pos -> v (f k) input pos

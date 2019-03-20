@@ -77,3 +77,19 @@ let lemma_mult_le_recip (a: pos) (b c: int) : Lemma
   (requires (a * b <= a * c))
   (ensures (b <= c))
 = ()
+
+let le_antisym (x y: int) : Lemma
+  (requires (x <= y /\ y <= x))
+  (ensures (x == y))
+= ()
+
+let plus_minus_l (x y: int) : Lemma
+  (x + y - x == y)
+= ()
+
+let plus_minus_r (x y: int) : Lemma
+  (x + y - y == x)
+= ()
+
+inline_for_extraction
+let mult_nat (a b: nat) : Tot (c: nat { c == a `Prims.op_Multiply` b } ) = a `Prims.op_Multiply` b
