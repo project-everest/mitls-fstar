@@ -520,7 +520,7 @@ let get_vlbytes'_contents
   (min: nat) // must be a constant
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
   (l: nat { l >= log256' max /\ l <= 4 } )
-  (input: slice (BF.trivial_preorder _) (BF.trivial_preorder _))
+  (input: slice (srel_of_buffer_srel (BF.trivial_preorder _)) (srel_of_buffer_srel (BF.trivial_preorder _)))
   (pos: U32.t)
 : HST.Stack (BF.buffer byte)
   (requires (fun h -> valid (parse_bounded_vlbytes' min max l) h input pos))
@@ -544,7 +544,7 @@ inline_for_extraction
 let get_vlbytes_contents
   (min: nat) // must be a constant
   (max: nat { min <= max /\ max > 0 /\ max < 4294967296 } )
-  (input: slice (BF.trivial_preorder _) (BF.trivial_preorder _))
+  (input: slice (srel_of_buffer_srel (BF.trivial_preorder _)) (srel_of_buffer_srel (BF.trivial_preorder _)))
   (pos: U32.t)
 : HST.Stack (BF.buffer byte)
   (requires (fun h -> valid (parse_bounded_vlbytes min max) h input pos))

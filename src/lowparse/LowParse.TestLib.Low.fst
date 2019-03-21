@@ -16,6 +16,7 @@ module M = LowStar.Modifies
 (** The type of a unit test.  It takes an input buffer8, parses it,
     and returns a newly formatted buffer8.  Or it returns None if
     there is a fail to parse. *)
+inline_for_extraction
 type testbuffer_t = (#rrel: _) -> (#rel: _) -> (input: slice rrel rel) -> ST (option (slice rrel rel))
   (requires(fun h -> live_slice h input))
   (ensures(fun h0 y h1 ->
@@ -27,7 +28,7 @@ type testbuffer_t = (#rrel: _) -> (#rel: _) -> (input: slice rrel rel) -> ST (op
       live_slice h1 out
   )))
 
-assume val load_file_buffer: (filename:string) -> ST (slice (IB.immutable_preorder _) (IB.immutable_preorder _))
+assume val load_file_buffer: (filename:string) -> ST (slice (srel_of_buffer_srel (IB.immutable_preorder _)) (srel_of_buffer_srel (IB.immutable_preorder _)))
   (requires (fun h -> True))
   (ensures (fun h out h' ->
     M.modifies M.loc_none h h' /\ B.unused_in out.base h /\ live_slice h' out
@@ -39,7 +40,7 @@ module U32 = FStar.UInt32
 
 (** Corresponds to memcmp for `eqtype` *)
 assume
-val beqb: (#rrel1: _) -> (#rel1: _) -> (#rrel2: _) -> (#rel2: _) -> b1:B.mbuffer byte rrel1 rel1 -> b2:B.mbuffer byte rrel2 rel2
+val beqb: (#rrel1: _) -> (#rel1: _) -> (#rrel2: _) -> (#rel2: _) -> b1:B.mbuffer byte (buffer_srel_of_srel rrel1) (buffer_srel_of_srel rel1) -> b2:B.mbuffer byte (buffer_srel_of_srel rrel2) (buffer_srel_of_srel rel2)
   -> len:U32.t{U32.v len <= B.length b1 /\ U32.v len <= B.length b2}
   -> Stack bool
     (requires (fun h ->

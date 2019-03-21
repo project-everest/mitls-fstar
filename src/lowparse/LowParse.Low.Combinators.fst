@@ -10,7 +10,7 @@ module HST = FStar.HyperStack.ST
 #set-options "--z3rlimit 16"
 
 let valid_nondep_then
-  (#rrel #rel: B.srel byte)
+  (#rrel #rel: _)
   (h: HS.mem)
   (#k1: parser_kind)
   (#t1: Type0)
@@ -44,7 +44,7 @@ let valid_nondep_then
   end
 
 let valid_nondep_then_intro
-  (#rrel #rel: B.srel byte)
+  (#rrel #rel: _)
   (h: HS.mem)
   (#k1: parser_kind)
   (#t1: Type0)
@@ -73,7 +73,7 @@ let validate_nondep_then
   (#p2: parser k2 t2)
   (p2' : validator p2)
 : Tot (validator (nondep_then p1 p2))
-= fun   (#rrel #rel: B.srel byte)
+= fun   (#rrel #rel: _)
   (input: slice rrel rel) (pos: U32.t) ->
   let h = HST.get () in
   [@inline_let] let _ = valid_nondep_then h p1 p2 input pos in
@@ -97,14 +97,14 @@ let jump_nondep_then
   (#p2: parser k2 t2)
   (p2' : jumper p2)
 : Tot (jumper (nondep_then p1 p2))
-= fun  (#rrel #rel: B.srel byte)
+= fun  (#rrel #rel: _)
   (input: slice rrel rel) (pos: U32.t) ->
   let h = HST.get () in
   [@inline_let] let _ = valid_nondep_then h p1 p2 input pos in
   p2' input (p1' input pos)
 
 let valid_synth
-  (#rrel #rel: B.srel byte)
+  (#rrel #rel: _)
   (h: HS.mem)
   (#k: parser_kind)
   (#t1: Type0)
@@ -128,7 +128,7 @@ let valid_synth
   then parse_synth_eq p1 f2 (bytes_of_slice_from h input pos)
 
 let valid_synth_intro
-  (#rrel #rel: B.srel byte)
+  (#rrel #rel: _)
   (h: HS.mem)
   (#k: parser_kind)
   (#t1: Type0)
@@ -159,7 +159,7 @@ let validate_synth
     synth_injective f2
   })
 : Tot (validator (parse_synth p1 f2))
-= fun   (#rrel #rel: B.srel byte)
+= fun   (#rrel #rel: _)
   (input: slice rrel rel) (pos: U32.t) ->
   let h = HST.get () in
   [@inline_let] let _ = valid_synth h p1 f2 input pos in
@@ -177,7 +177,7 @@ let jump_synth
     synth_injective f2
   })
 : Tot (jumper (parse_synth p1 f2))
-= fun   (#rrel #rel: B.srel byte)
+= fun   (#rrel #rel: _)
   (input: slice rrel rel) (pos: U32.t) ->
   let h = HST.get () in
   [@inline_let] let _ = valid_synth h p1 f2 input pos in
@@ -526,7 +526,7 @@ let make_total_constant_size_reader
   f' sl.base pos
 
 let valid_filter
-  (#rrel #rel: B.srel byte)
+  (#rrel #rel: _)
   (h: HS.mem)
   (#k: parser_kind)
   (#t: Type0)
