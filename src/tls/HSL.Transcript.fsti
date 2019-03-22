@@ -25,7 +25,7 @@ module HSM = Parsers.Handshake
 module HSM12 = Parsers.Handshake12
 module HSM13 = Parsers.Handshake13
 module PV = Parsers.ProtocolVersion
-
+module LP = LowParse.Low.Base
 open HSL.Common
 module IncHash = EverCrypt.Hash.Incremental
 
@@ -63,6 +63,31 @@ let bounded_list 'a n = l:list 'a{List.length l < n}
 
 let can_extend_bounded_list #a #n (l:bounded_list a n) = List.length l + 1 < n
 
+open Parsers.ClientHello
+let client_hello_has_psk (ch:Parsers.ClientHello.clientHello) =
+  exists (ext:_). 
+    List.memP ext ch.extensions /\
+    Parsers.ClientHelloExtension.CHE_pre_shared_key? ext /\
+    True (* what else do we need? e.g., that it has as many binders as ids? *)
+  
+let client_hello_with_psk =
+  ch:Parsers.ClientHello.clientHello{
+    client_hello_has_psk ch
+  }
+
+let is_truncated_client_hello_bytes (b:bytes) =
+     exists (suffix:bytes).
+      Seq.length b > 0 /\
+      Seq.length suffix > 0 /\
+      (match LP.parse HSM.handshake_parser (b `Seq.append` suffix) with
+       | Some (HSM.M_client_hello ch, _) ->
+         client_hello_has_psk ch
+       | _ -> False)
+ 
+let truncated_client_hello_bytes = 
+  b:bytes{ is_truncated_client_hello_bytes b }
+
+
 noeq
 type transcript_t =
   | Start: retried:option retry ->
@@ -82,7 +107,12 @@ type transcript_t =
                   sh:Parsers.ServerHello.serverHello -> //Should prescribe the protocol version
                   rest:bounded_list HSM13.handshake13 max_transcript_size -> //but requires a dependence on Nego
                   transcript_t
-
+                  
+  | TruncatedClientHello:
+      retried:option retry ->
+      tch_b:truncated_client_hello_bytes ->
+      transcript_t
+      
 let transcript_n (n:nat{n < max_transcript_size}) =
   t:transcript_t{
     match t with
@@ -90,6 +120,7 @@ let transcript_n (n:nat{n < max_transcript_size}) =
     | Hello _ _ -> True
     | Transcript12 _ _ rest -> List.length rest < n
     | Transcript13 _ _ _ rest -> List.length rest < n
+    | TruncatedClientHello _ _ -> True
   }
 
 /// `transcript_bytes`: The input of the hash algorithm computed by
@@ -154,9 +185,6 @@ val create (r:Mem.rgn) (a:alg)
          B.modifies B.loc_none h0 h1 /\
          B.fresh_loc (footprint s h1) h0 h1)
 
-
-module LP = LowParse.Low.Base
-
 unfold
 let extend_hash_pre_common
   #a
@@ -181,14 +209,15 @@ let extend_hash_post_common
     B.modifies (footprint s h1) h0 h1 /\
     footprint s h1 == footprint s h0
 
-
 // assume 
 val nego_version (ch:Parsers.ClientHello.clientHello)
                         (sh:Parsers.ServerHello.serverHello)
        : Parsers.ProtocolVersion.protocolVersion
 
-let extend_with_hsm (t:transcript_t) (m:HSM.handshake)
-  : option transcript_t
+let extend_with_hsm 
+      (t:transcript_t)
+      (m:HSM.handshake)
+  : GTot (option transcript_t)
 = match t, m with
   | Start retry, HSM.M_client_hello ch ->
     //Missing: consistency between retry and ch
@@ -214,6 +243,26 @@ let extend_with_hsm (t:transcript_t) (m:HSM.handshake)
   | _ ->
     None
 
+let extend_with_tch (t:transcript_t) (tch_b:truncated_client_hello_bytes)
+  : GTot (option transcript_t) =
+  match t with
+  | Start retry ->
+    Some (TruncatedClientHello retry tch_b)
+
+  | _ -> None
+
+let extend_with_binders (t:transcript_t) (binder_b:bytes)
+  : GTot (option transcript_t) =
+  match t with
+  | TruncatedClientHello retry tch_b ->
+    (match LP.parse HSM.handshake_parser (tch_b `Seq.append` binder_b) with
+     | Some (HSM.M_client_hello ch, len) ->
+       if len = Seq.length tch_b + Seq.length binder_b
+       then Some (Hello retry ch)
+       else None
+     | _ -> None)
+  | _ -> None
+
 let extend_with_hsm12 (t:transcript_n (max_transcript_size - 1)) (m:HSM12.handshake12)
   : option transcript_t
 = match t with
@@ -232,6 +281,66 @@ let extend_with_hsm13 (t:transcript_n (max_transcript_size - 1)) (m:HSM13.handsh
     Some (Transcript13 retry ch sh (List.snoc (rest, m)))
 
   | _ -> None
+
+val extend_tch 
+  (#a:_)
+  (s:state a)
+  (#rrel #rel: _)
+  (b:LowParse.Low.Base.slice rrel rel)
+  (p0:uint_32)
+  (p1:uint_32{p0 < p1})
+  (tx:G.erased transcript_t)
+  : Stack (G.erased transcript_t)
+       (requires fun h ->
+         let tx = G.reveal tx in
+         extend_hash_pre_common s b tx h /\
+         Start? tx /\
+         LP.valid HSM.handshake_parser h b p0 /\
+         (let msg = LP.contents HSM.handshake_parser h b p0 in
+          let len = LP.content_length HSM.handshake_parser h b p0 in
+          HSM.M_client_hello? msg /\
+          client_hello_has_psk (HSM.M_client_hello?._0 msg) /\
+          UInt32.v p1 < UInt32.v p0 + len
+       ))
+       (ensures fun h0 tx' h1 ->
+         let tx = G.reveal tx in
+         let tx' = G.reveal tx' in
+         let msg = LP.contents HSM.handshake_parser h0 b p0 in
+         let tch = LP.bytes_of_slice_from_to h0 b p0 p1 in
+         is_truncated_client_hello_bytes tch /\
+         Some? (extend_with_tch tx tch) /\
+         tx' == Some?.v (extend_with_tch tx tch) /\
+         extend_hash_post_common s b tx' h0 h1)
+
+val extend_tch_binders
+  (#a:_)
+  (s:state a)
+  (#rrel #rel: _)
+  (b:LowParse.Low.Base.slice rrel rel)
+  (p0:uint_32)
+  (p1:uint_32)
+  (p2:uint_32{p0 < p1 /\ p1 < p2})
+  (tx:G.erased transcript_t)
+  : Stack (G.erased transcript_t)
+       (requires fun h ->
+         let tx = G.reveal tx in
+         extend_hash_pre_common s b tx h /\
+         TruncatedClientHello? tx /\
+         LP.valid_pos HSM.handshake_parser h b p0 p2 /\
+         (let msg = LP.contents HSM.handshake_parser h b p0 in
+          let tch_b = LP.bytes_of_slice_from_to h b p0 p1 in
+          TruncatedClientHello?.tch_b tx `Seq.equal` tch_b /\
+          HSM.M_client_hello? msg /\
+          client_hello_has_psk (HSM.M_client_hello?._0 msg)
+       ))
+       (ensures fun h0 tx' h1 ->
+         let tx = G.reveal tx in
+         let tx' = G.reveal tx' in
+         let msg = LP.contents HSM.handshake_parser h0 b p0 in
+         let binder_b = LP.bytes_of_slice_from_to h0 b p1 p2 in
+         Some? (extend_with_binders tx binder_b) /\
+         tx' == Some?.v (extend_with_binders tx binder_b) /\
+         extend_hash_post_common s b tx' h0 h1)
 
 val extend_hash_hsm
   (#a:_)
