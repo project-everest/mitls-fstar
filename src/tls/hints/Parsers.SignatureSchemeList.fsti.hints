@@ -1,5 +1,5 @@
 [
-  "Ö\u001cÚ›=´”\rÎüAlì[ÛÌ",
+  "LœÄÝ½ËNŸ\b\u0013€EDw\u0018\u001a",
   [
     [
       "Parsers.SignatureSchemeList.finalize_signatureSchemeList",
@@ -35,7 +35,69 @@
         "typing_LowParse.Low.Base.validator_max_length"
       ],
       0,
-      "063edcfb909b1270a79277ab20864a86"
+      "dcb35eb13086e2983154090873b83865"
+    ],
+    [
+      "Parsers.SignatureSchemeList.signatureSchemeList_count",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
+        "equation_FStar.Monotonic.HyperStack.mem",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "equation_FStar.UInt.uint_t", "equation_LowParse.Low.Base.valid_pos",
+        "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.SignatureSchemeList.signatureSchemeList",
+        "equation_Parsers.SignatureSchemeList.signatureSchemeList_parser_kind",
+        "equation_Prims.nat",
+        "fuel_guarded_inversion_LowParse.Low.Base.slice",
+        "function_token_typing_Prims.__cache_version_number__",
+        "int_inversion", "primitive_Prims.op_Addition",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "refinement_interpretation_Tm_refine_04ecb3a98e8473bc206c5decfb4fb020",
+        "refinement_interpretation_Tm_refine_86d2c1bfb8b9f7b59fb2c11be524698a",
+        "refinement_interpretation_Tm_refine_a347709bfeba48709474ad26f4f6be87",
+        "refinement_kinding_Tm_refine_16d32bbc9188fbeb65eb4649406f74eb",
+        "typing_FStar.UInt32.v", "typing_LowParse.Low.Base.content_length",
+        "typing_Parsers.SignatureSchemeList.signatureSchemeList_parser",
+        "typing_Parsers.SignatureSchemeList.signatureSchemeList_parser_kind"
+      ],
+      0,
+      "133723ed0529c0c9281817af53099e96"
+    ],
+    [
+      "Parsers.SignatureSchemeList.signatureSchemeList_clens_nth",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "64cf0111d78ef064f1646c9fb7f409e8"
+    ],
+    [
+      "Parsers.SignatureSchemeList.signatureSchemeList_nth",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.min_int",
+        "equation_FStar.UInt.size", "equation_Prims.nat",
+        "function_token_typing_Prims.__cache_version_number__",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
+      ],
+      0,
+      "60681b0f899bfbea30099c06f2857b8a"
     ]
   ]
 ]

@@ -1,0 +1,47 @@
+[
+  "fÑ/\f±¡È§\u0012nçƒT‚½\r",
+  [
+    [
+      "LowParseExample8.__proj__Ta__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_LowParseExample8.Ta",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_bcdd3ee542421390569c9fa7934d0e50"
+      ],
+      0,
+      "5b185dd72f57397bcf276821f0b88836"
+    ],
+    [
+      "LowParseExample8.__proj__Tb__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_LowParseExample8.Tb",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_780959ad0fbcbb93669a402612f9e15c"
+      ],
+      0,
+      "e9ca5eed333bec5d84cf68678714e5c5"
+    ],
+    [
+      "LowParseExample8.key",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_LowParseExample8.Ta",
+        "disc_equation_LowParseExample8.Tb",
+        "fuel_guarded_inversion_LowParseExample8.t_"
+      ],
+      0,
+      "1088d2681fccdc42f0ff97a8f4e2a497"
+    ]
+  ]
+]
