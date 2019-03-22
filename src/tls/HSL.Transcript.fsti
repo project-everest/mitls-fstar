@@ -201,8 +201,6 @@ unfold
 let extend_hash_post_common
   #a
   (s:state a)
-  (#rrel #rel: _)
-  (b:LP.slice rrel rel)
   (t:transcript_t)
   (h0 h1:HS.mem)
   = invariant s t h1 /\
@@ -226,8 +224,7 @@ let extend_with_hsm
   | Hello retry ch, HSM.M_server_hello sh ->
     if None? retry
     && is_hrr sh
-    && nego_version ch sh = PV.TLS_1p3
-    then Some (Start (Some (ch, sh)))
+    then None
     else
       begin
       match nego_version ch sh, retry with
@@ -310,7 +307,7 @@ val extend_tch
          is_truncated_client_hello_bytes tch /\
          Some? (extend_with_tch tx tch) /\
          tx' == Some?.v (extend_with_tch tx tch) /\
-         extend_hash_post_common s b tx' h0 h1)
+         extend_hash_post_common s tx' h0 h1)
 
 val extend_tch_binders
   (#a:_)
@@ -340,7 +337,51 @@ val extend_tch_binders
          let binder_b = LP.bytes_of_slice_from_to h0 b p1 p2 in
          Some? (extend_with_binders tx binder_b) /\
          tx' == Some?.v (extend_with_binders tx binder_b) /\
-         extend_hash_post_common s b tx' h0 h1)
+         extend_hash_post_common s tx' h0 h1)
+
+let extend_with_hrr 
+       (t:transcript_t)
+       (r:retry) =
+   match t with
+   | Start None -> Some (Start (Some r))
+   | _ -> None
+    
+val extend_hrr
+  (#a:_)
+  (s:state a)
+  (#rrel #rel: _)
+  (ch_b:LowParse.Low.Base.slice rrel rel)
+  (p0:uint_32)
+  (p1:uint_32{p0 <= p1})
+  (sh_b:LowParse.Low.Base.slice rrel rel)
+  (q0:uint_32)
+  (q1:uint_32{q0 <= q1})
+  (tx:G.erased transcript_t)
+  : Stack (G.erased transcript_t)
+      (requires fun h ->
+         let tx = G.reveal tx in
+         extend_hash_pre_common s ch_b tx h /\
+         extend_hash_pre_common s sh_b tx h /\         
+         LP.valid_pos HSM.handshake_parser h ch_b p0 p1 /\
+         LP.valid_pos HSM.handshake_parser h sh_b q0 q1 /\         
+         (let ch = LP.contents HSM.handshake_parser h ch_b p0 in
+          let sh = LP.contents HSM.handshake_parser h sh_b q0 in         
+          HSM.M_client_hello? ch /\          
+          HSM.M_server_hello? sh /\                    
+          is_hrr (HSM.M_server_hello?._0 sh) /\
+          Some? (extend_with_hrr tx (HSM.M_client_hello?._0 ch,
+                                     HSM.M_server_hello?._0 sh))))
+       (ensures fun h0 tx' h1 ->                                     
+         let tx = G.reveal tx in
+         let tx' = G.reveal tx' in
+         let ch = 
+           HSM.M_client_hello?._0 (LP.contents HSM.handshake_parser h0 ch_b p0)
+         in
+         let sh = 
+           HSM.M_server_hello?._0 (LP.contents HSM.handshake_parser h0 sh_b q0)
+         in         
+         tx' == Some?.v (extend_with_hrr tx (ch, sh)) /\
+         extend_hash_post_common s tx' h0 h1)
 
 val extend_hash_hsm
   (#a:_)
@@ -361,7 +402,7 @@ val extend_hash_hsm
          let tx' = G.reveal tx' in
          let msg = LP.contents HSM.handshake_parser h0 b p0 in
          tx' == Some?.v (extend_with_hsm (G.reveal tx) msg) /\
-         extend_hash_post_common s b tx' h0 h1)
+         extend_hash_post_common s tx' h0 h1)
 
 val extend_hash_hsm12
   (#a:_)
@@ -382,7 +423,7 @@ val extend_hash_hsm12
          let tx' = G.reveal tx' in
          let msg = LP.contents HSM12.handshake12_parser h0 b p0 in
          tx' == Some?.v (extend_with_hsm12 (G.reveal tx) msg) /\
-         extend_hash_post_common s b tx' h0 h1)
+         extend_hash_post_common s tx' h0 h1)
 
 val extend_hash_hsm13
   (#a:_)
@@ -403,8 +444,7 @@ val extend_hash_hsm13
          let tx' = G.reveal tx' in
          let msg = LP.contents HSM13.handshake13_parser h0 b p0 in
          tx' == Some?.v (extend_with_hsm13 (G.reveal tx) msg) /\
-         extend_hash_post_common s b tx' h0 h1)
-
+         extend_hash_post_common s tx' h0 h1)
 
 let max_message_size_lt_max_input_length (a: alg) : Lemma
   (max_transcript_size `Prims.op_Multiply` max_message_size < Spec.Hash.Definitions.max_input_length a)
