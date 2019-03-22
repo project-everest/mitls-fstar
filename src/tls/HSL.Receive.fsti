@@ -17,7 +17,7 @@ module HSM = Parsers.Handshake
 module HSM12 = Parsers.Handshake12
 module HSM13 = Parsers.Handshake13
 
-#reset-options "--max_fuel 0 --max_ifuel 0 --using_facts_from '* -FStar.Tactics -FStar.Reflection -LowParse'"
+#reset-options "--max_fuel 0 --max_ifuel 0 --using_facts_from '* -FStar.Tactics -FStar.Reflection'"
 
 
 /// HSL main API
@@ -172,7 +172,7 @@ let valid_parsing13
   (from:uint_32) (to:uint_32)
   (h:HS.mem)
   = let parser = HSM13.handshake13_parser in
-    let slice = { LP.base = buf; LP.len = B.len buf } in
+    let slice = LP.make_slice buf (B.len buf) in
     from <= to /\
     LP.valid parser h slice from /\
     LP.contents parser h slice from == msg /\

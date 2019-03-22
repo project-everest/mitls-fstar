@@ -250,7 +250,9 @@ let ticketContents_of_ticket (t: ticket) : GTot TC.ticketContents =
 
 let write_ticket12 
   (t: ticket) 
-  (sl: LPB.slice) (pos: U32.t) : Stack U32.t
+  (sl: LPB.slice (LPB.srel_of_buffer_srel (B.trivial_preorder _)) (LPB.srel_of_buffer_srel (B.trivial_preorder _)))
+  (pos: U32.t)
+: Stack U32.t
   (requires (fun h -> 
     LPB.live_slice h sl /\ 
     U32.v pos <= U32.v sl.LPB.len /\ 
@@ -353,7 +355,11 @@ let store_bytes_strong src dst =
 
 #reset-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1 --z3rlimit 256 --z3cliopt smt.arith.nl=false --z3refresh --using_facts_from '* -FStar.Tactics -FStar.Reflection' --log_queries"
 
-let write_ticket13 (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
+let write_ticket13
+  (t: ticket)
+  (sl: LPB.slice (LPB.srel_of_buffer_srel (B.trivial_preorder _)) (LPB.srel_of_buffer_srel (B.trivial_preorder _)))
+  (pos: U32.t)
+: Stack U32.t
   (requires (fun h -> LPB.live_slice h sl /\ U32.v pos <= U32.v sl.LPB.len /\ U32.v sl.LPB.len <= U32.v LPB.max_uint32 /\ Ticket13? t))
   (ensures (fun h pos' h' ->
     let tc = ticketContents_of_ticket t in
@@ -391,7 +397,11 @@ let write_ticket13 (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
 
 #reset-options
 
-let write_ticket (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
+let write_ticket
+  (t: ticket)
+  (sl: LPB.slice (LPB.srel_of_buffer_srel (B.trivial_preorder _)) (LPB.srel_of_buffer_srel (B.trivial_preorder _)))
+  (pos: U32.t)
+: Stack U32.t
   (requires (fun h -> LPB.live_slice h sl /\ U32.v pos <= U32.v sl.LPB.len /\ U32.v sl.LPB.len <= U32.v LPB.max_uint32 ))
   (ensures (fun h pos' h' ->
     let tc = ticketContents_of_ticket t in
@@ -485,7 +495,8 @@ open Parsers.TicketContents12
 
 #reset-options ""
 val check_ticket12_low: 
-  x:slice -> 
+  #rrel: _ -> #rel: _ ->
+  x:slice rrel rel -> 
   pos: UInt32.t -> 
   Stack (Parsers.ProtocolVersion.protocolVersion * UInt32.t)
   (requires (fun h0 -> valid ticketContents12_parser h0 x pos))
@@ -498,7 +509,7 @@ val check_ticket12_low:
 
 #push-options "--z3rlimit 128 --max_ifuel 1 --max_fuel 0"
 
-let check_ticket12_low x pos = 
+let check_ticket12_low #rrel #rel x pos = 
   let pv_pos = accessor_ticketContents12_pv x pos in
   let pv = protocolVersion_reader x pv_pos in
   let ms_pos = accessor_ticketContents12_master_secret x pos in 

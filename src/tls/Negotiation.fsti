@@ -31,7 +31,8 @@ module HST = FStar.HyperStack.ST
 module B = LowStar.Buffer
 
 val print_namedGroupList
-  (sl: LP.slice)
+  (#rrel #rel: _)
+  (sl: LP.slice rrel rel)
   (pos: U32.t)
 : HST.Stack unit
   (requires (fun h -> LP.valid Parsers.NamedGroupList.namedGroupList_parser h sl pos))

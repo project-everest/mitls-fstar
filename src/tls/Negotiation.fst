@@ -63,16 +63,12 @@ module B = LowStar.Buffer
 #reset-options
 
 let print_namedGroupList
-  (sl: LP.slice)
-  (pos: U32.t)
-: HST.Stack unit
-  (requires (fun h -> LP.valid namedGroupList_parser h sl pos))
-  (ensures (fun h _ h' -> B.modifies B.loc_none h h'))
+  #rrel #rel sl pos
 = let _ = namedGroupList_count sl pos in
   let pos' = namedGroupList_jumper sl pos in
   print "[";
   LP.print_list namedGroup_jumper
-    (fun sl pos ->
+    (fun #rrel #rel sl pos ->
       let s = namedGroup_reader sl pos in
       print (string_of_namedGroup s);
       let pos1 = namedGroup_jumper sl pos in

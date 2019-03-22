@@ -20,7 +20,7 @@ open TLSConstants
 let discard _ : ST unit (requires (fun _ -> True)) (ensures (fun h0 _ h1 -> h0 == h1)) = ()
 let bprint s = discard (FStar.IO.debug_print_string (s^"\n"))
 
-let from_bytes (b:B.bytes{B.length b <> 0}) : StackInline LPL.buffer8
+let from_bytes (b:B.bytes{B.length b <> 0}) : StackInline (LB.buffer LPL.byte)
   (requires (fun h0 -> True))
   (ensures  (fun h0 buf h1 ->
     LB.(modifies loc_none h0 h1) /\
@@ -56,7 +56,7 @@ let test_clientHello () : St bool =
   let b' =
     let open FStar.UInt32 in
     let lb = from_bytes chb in
-    let slice = { LPL.base = lb; LPL.len = B.len chb } in
+    let slice = LPL.make_slice lb (B.len chb) in
     if ClientHello.clientHello_validator slice 0ul >^ LPL.validator_max_length then
       (print !$"Validator failed on ClientHello!\n"; false)
     else

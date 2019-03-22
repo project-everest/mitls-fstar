@@ -80,12 +80,14 @@ open LowParse.Low.Base
 open Mem
 
 // migrate to LowParse? 
-let live_slice_pos h0 out p0 = live_slice h0 out /\ p0 <= out.len 
+let live_slice_pos h0 (#rrel #rel: _) (out: slice rrel rel) p0 = live_slice h0 out /\ p0 <= out.len 
 
 #push-options "--z3rlimit 100" 
 val write_supportedVersions
   (cfg:config) 
-  (out:slice) (p0:UInt32.t) : Stack (result UInt32.t) 
+  (out:slice (srel_of_buffer_srel (LowStar.Buffer.trivial_preorder _)) (srel_of_buffer_srel (LowStar.Buffer.trivial_preorder _)))
+  (p0:UInt32.t)
+: Stack (result UInt32.t) 
   (requires fun h0 -> live_slice_pos h0 out p0) 
   (ensures fun h0 r h1 -> 
     LowStar.Modifies.(modifies (loc_slice_from out p0) h0 h1) /\ (
@@ -100,7 +102,9 @@ val write_supportedVersions
 val write_supportedVersion 
   (cfg: config) 
   (pv: Parsers.ProtocolVersion.protocolVersion) 
-  (out: slice) (pl p0: UInt32.t) : Stack UInt32.t
+  (out:slice (srel_of_buffer_srel (LowStar.Buffer.trivial_preorder _)) (srel_of_buffer_srel (LowStar.Buffer.trivial_preorder _)))
+  (pl p0: UInt32.t)
+: Stack UInt32.t
   (requires fun h0 -> 
     valid_list protocolVersion_parser h0 out pl p0 /\
     v p0 + 2 <= v out.len

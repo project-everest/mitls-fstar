@@ -161,7 +161,8 @@ unfold
 let extend_hash_pre_common
   #a
   (s:state a)
-  (b:LP.slice)
+  (#rrel #rel: _)
+  (b:LP.slice rrel rel)
   (t:transcript_t)
   (h:HS.mem)
   = invariant s t h /\
@@ -172,7 +173,8 @@ unfold
 let extend_hash_post_common
   #a
   (s:state a)
-  (b:LP.slice)
+  (#rrel #rel: _)
+  (b:LP.slice rrel rel)
   (t:transcript_t)
   (h0 h1:HS.mem)
   = invariant s t h1 /\
@@ -234,7 +236,8 @@ let extend_with_hsm13 (t:transcript_n (max_transcript_size - 1)) (m:HSM13.handsh
 val extend_hash_hsm
   (#a:_)
   (s:state a)
-  (b:LowParse.Low.Base.slice)
+  (#rrel #rel: _)
+  (b:LowParse.Low.Base.slice rrel rel)
   (p0:uint_32)
   (p1:uint_32)
   (tx:G.erased (transcript_n (max_transcript_size - 1)))
@@ -254,7 +257,8 @@ val extend_hash_hsm
 val extend_hash_hsm12
   (#a:_)
   (s:state a)
-  (b:LowParse.Low.Base.slice)
+  (#rrel #rel: _)
+  (b:LowParse.Low.Base.slice rrel rel)
   (p0:uint_32)
   (p1:uint_32)
   (tx:G.erased (transcript_n (max_transcript_size - 1)))
@@ -274,7 +278,8 @@ val extend_hash_hsm12
 val extend_hash_hsm13
   (#a:_)
   (s:state a)
-  (b:LowParse.Low.Base.slice)
+  (#rrel #rel: _)
+  (b:LowParse.Low.Base.slice rrel rel)
   (p0:uint_32)
   (p1:uint_32)
   (tx:G.erased (transcript_n (max_transcript_size - 1)))
