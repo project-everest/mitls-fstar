@@ -15,7 +15,7 @@
         "haseqTm_refine_7ba5f1b760afe5ed8a71d6a3fc5f9a18"
       ],
       0,
-      "b8828b2c09ee4d647d659b70003d6076"
+      "d000427e637d3a87a2140c4b4475da25"
     ],
     [
       "Old.HMAC.UFCMA.__proj__HMAC_Finished__item___0",
@@ -29,7 +29,7 @@
         "refinement_interpretation_Tm_refine_8ad453a33e14e7e82a58b73ded495346"
       ],
       0,
-      "625f02bc74cff535153baeee59682c66"
+      "81f627c6710f2f24b6a1e561e0f8dd27"
     ],
     [
       "Old.HMAC.UFCMA.__proj__HMAC_Binder__item___0",
@@ -43,7 +43,7 @@
         "refinement_interpretation_Tm_refine_3efd608abfc651d2c63d8637ff06cddc"
       ],
       0,
-      "413d0ba4f02737e53e0743512f0f74de"
+      "845fe07b0001979d89f8f56b07f95bb5"
     ],
     [
       "Old.HMAC.UFCMA.alg",
@@ -57,7 +57,7 @@
         "fuel_guarded_inversion_Old.HMAC.UFCMA.id"
       ],
       0,
-      "140859432b578038b053d199b5696b25"
+      "66b95b64664e9304e79bfea79f97cbed"
     ],
     [
       "Old.HMAC.UFCMA.entry",
@@ -73,7 +73,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "b54d95b1a048f3dea00b6cc75acdb7fe"
+      "073cfcb19317c28ae0096168692b086d"
     ],
     [
       "Old.HMAC.UFCMA.__proj__Key__item__log",
@@ -85,7 +85,7 @@
         "projection_inverse_Old.HMAC.UFCMA.Key_region"
       ],
       0,
-      "9d94e631ecad0216fa60ac571fbac051"
+      "911b0655b7ee84c246e379f5344b9c6c"
     ],
     [
       "Old.HMAC.UFCMA.gen0",
@@ -178,7 +178,7 @@
         "typing_FStar.StrongExcludedMiddle.strong_excluded_middle"
       ],
       0,
-      "5efa6720e805bcf51dde26dc56d93c93"
+      "e5ecd6262a3cb2bb72b36cdd78b6a454"
     ],
     [
       "Old.HMAC.UFCMA.gen",
@@ -236,7 +236,7 @@
         "typing_Old.HMAC.UFCMA.region"
       ],
       0,
-      "a514c5adb07ad88998a6f094fc1bc3d7"
+      "b1bdc884bef3bfd7de5eac0636719945"
     ],
     [
       "Old.HMAC.UFCMA.coerce",
@@ -249,7 +249,7 @@
         "refinement_interpretation_Tm_refine_bffffa92f26a20f3727a2ad9ebbca1fc"
       ],
       0,
-      "4f98a34fc2c23d44368675a410e9bc45"
+      "c40d7a6910c5f52a0fd3f06bcdacc37d"
     ],
     [
       "Old.HMAC.UFCMA.leak",
@@ -264,7 +264,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "487e7cab6efcd126b0df6d75909d9cf7"
+      "6014146402a5b8b80a1aed376dec56ed"
     ],
     [
       "Old.HMAC.UFCMA.leak",
@@ -273,7 +273,7 @@
       1,
       [ "@query", "equation_Old.HMAC.UFCMA.keyval" ],
       0,
-      "2e58c5991fb83d496fd461145b45ccf4"
+      "3cb709c0a77648157dc0ba6209a5e19c"
     ],
     [
       "Old.HMAC.UFCMA.mac",
@@ -287,14 +287,20 @@
         "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
         "bool_inversion", "bool_typing",
         "constructor_distinct_FStar.Integers.Unsigned",
+        "constructor_distinct_FStar.Integers.W16",
+        "constructor_distinct_FStar.Integers.W31",
         "constructor_distinct_FStar.Integers.W32",
+        "constructor_distinct_FStar.Integers.W8",
         "constructor_distinct_Lib.IntTypes.U32",
         "constructor_distinct_Spec.Hash.Definitions.SHA1",
         "constructor_distinct_Spec.Hash.Definitions.SHA2_256",
         "constructor_distinct_Spec.Hash.Definitions.SHA2_384",
         "constructor_distinct_Spec.Hash.Definitions.SHA2_512",
         "data_elim_Old.HMAC.UFCMA.Key",
+        "equality_tok_FStar.Integers.W16@tok",
+        "equality_tok_FStar.Integers.W31@tok",
         "equality_tok_FStar.Integers.W32@tok",
+        "equality_tok_FStar.Integers.W8@tok",
         "equality_tok_Lib.IntTypes.U32@tok",
         "equality_tok_Spec.Hash.Definitions.SHA1@tok",
         "equality_tok_Spec.Hash.Definitions.SHA2_256@tok",
@@ -369,10 +375,8 @@
         "proj_equation_Old.HMAC.UFCMA.Key_log",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_FStar.Integers.Signed__0",
         "projection_inverse_FStar.Integers.Unsigned__0",
-        "projection_inverse_FStar.Pervasives.Native.Mktuple3__1",
-        "projection_inverse_FStar.Pervasives.Native.Mktuple3__2",
-        "projection_inverse_FStar.Pervasives.Native.Mktuple3__3",
         "refinement_interpretation_Tm_refine_11b98f0e865f425b7cf9947eb2d64b0f",
         "refinement_interpretation_Tm_refine_1a1278f1aecd37594ba20d888b7fd230",
         "refinement_interpretation_Tm_refine_2c9a4e54aa68f4285f51ad78e06637ca",
@@ -410,7 +414,7 @@
         "typing_TLSInfo.safe_region", "typing_tok_Lib.IntTypes.U32@tok"
       ],
       0,
-      "a853a1f2d31083c0c81dd2858b29cb1d"
+      "f3933f38b4f2b8c6ce2a529a7a34d18a"
     ]
   ]
 ]
