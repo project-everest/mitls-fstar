@@ -247,7 +247,7 @@ test-msvc-library: output-library
 	EVEREST_WINDOWS=$(EVEREST_WINDOWS) $(MAKE) -C $(MSVC_LIBRARY_DIR) test
 
 clean-msvc-library:
-	-@find $(LIBRARY_DIR) -type f -and -not -name Makefile -and -not -name .gitignore \
+	-@find $(MSVC_LIBRARY_DIR) -type f -and -not -name Makefile -and -not -name .gitignore \
         | xargs rm -f
 
 ################################################################################
