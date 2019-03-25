@@ -48,17 +48,35 @@ let receive_flight13_ee_cr_c_cv_fin _ _ _ _ = admit ()
 let receive_flight13_ee_fin _ _ _ _ = admit ()
 
 module HSM13 = Parsers.Handshake13
-
+module HSMType = Parsers.HandshakeType
+module Fin13 = Parsers.Handshake13_m_finished
 
 assume val parsing_error : TLSError.error
+assume val unexpected_flight_error : TLSError.error
+assume val bytes_remain_error : TLSError.error
 
 let receive_flight13_fin st b from to =
   let open FStar.Error in
   
-  //first use the handshake13 validator
   let pos = HSM13.handshake13_validator b from in
 
-  if pos <= LP.validator_max_length then admit ()
+  if pos <> to then Error bytes_remain_error
+
+  else if pos <= LP.validator_max_length then begin
+    let msg_t = HSMType.handshakeType_reader b from in
+    match msg_t with
+    | HSMType.Finished ->
+      let fin_payload_begin = HSM13.handshake13_accessor_finished b from in
+      let fin_payload =
+        let h = ST.get () in
+        let payload = LP.contents Fin13.handshake13_m_finished_parser h b fin_payload_begin in
+        G.hide payload
+      in
+      let inc_st = G.hide (Seq.empty, F_none) in
+      B.upd st.inc_st 0ul inc_st;
+      Correct (Some ({ fin_msg = fin_payload }))
+    | _ -> Error unexpected_flight_error
+  end
 
   else if pos = LP.validator_error_not_enough_data then begin
     let inc_st =
@@ -68,7 +86,7 @@ let receive_flight13_fin st b from to =
       G.hide (parsed_bytes, in_progress)
     in
     B.upd st.inc_st 0ul inc_st;
-    FStar.Error.Correct None
+    Correct None
   end
  
   else Error parsing_error
