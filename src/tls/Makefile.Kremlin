@@ -150,7 +150,8 @@ $(INTERNAL_TEST_DIR)/Test_Main.c: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_K
 ifdef VERBOSE
 	@echo -e "\033[1;32m=== Extracting $@ ...\033[;37m"
 endif
-	$(KRML_COMMAND) $^ -tmpdir $(INTERNAL_TEST_DIR) -no-prefix Test.Main \
+	for f in $^ ; do echo $$f ; done > $(INTERNAL_TEST_DIR)/files.rsp
+        $(KRML_COMMAND) @$(INTERNAL_TEST_DIR)/files.rsp -tmpdir $(INTERNAL_TEST_DIR) -no-prefix Test.Main \
 	  -skip-compilation -bundle 'Test.Main=Test.\*'
 
 internal-test-copy: $(addprefix $(INTERNAL_TEST_DIR)/,$(ALL_EXTERNAL_FILES)) $(INTERNAL_TEST_DIR)/stub/mipki_wrapper.c
@@ -182,7 +183,8 @@ $(LIBRARY_DIR)/TLS.c: $(filter-out $(EXTRACT_DIR)/prims.krml $(EXTRACT_DIR)/PKI.
 ifdef VERBOSE
 	@echo -e "\033[1;32m=== Extracting $@ ...\033[;37m"
 endif
-	$(KRML_COMMAND) $^ -tmpdir $(LIBRARY_DIR) -skip-compilation
+	for f in $^ ; do echo $$f ; done > $(LIBRARY_DIR)/files.rsp
+        $(KRML_COMMAND) @$(LIBRARY_DIR)/files.rsp -tmpdir $(LIBRARY_DIR) -skip-compilation
 
 library-copy: $(addprefix $(LIBRARY_DIR)/, $(filter-out pki/mipki.h, $(ALL_EXTERNAL_FILES))) \
   $(LIBRARY_DIR)/stub/mitlsffi.c \
@@ -222,7 +224,8 @@ $(MSVC_LIBRARY_DIR)/TLS.c: $(filter-out $(EXTRACT_DIR)/prims.krml $(EXTRACT_DIR)
 ifdef VERBOSE
 	@echo -e "\033[1;32m=== Extracting $@ ...\033[;37m"
 endif
-	$(KRML_COMMAND) $^ -falloca -ftail-calls -tmpdir $(MSVC_LIBRARY_DIR) -skip-compilation
+	for f in $^ ; do echo $$f ; done > $(MSVC_LIBRARY_DIR)/files.rsp
+        $(KRML_COMMAND) @$(MSVC_LIBRARY_DIR)/files.rsp -falloca -ftail-calls -tmpdir $(MSVC_LIBRARY_DIR) -skip-compilation
 
 msvc-library-copy: $(addprefix $(MSVC_LIBRARY_DIR)/, $(filter-out pki/mipki.h, $(ALL_EXTERNAL_FILES))) \
   $(MSVC_LIBRARY_DIR)/stub/mitlsffi.c \
