@@ -7,6 +7,7 @@ module G = FStar.Ghost
 module List = FStar.List.Tot
 
 module HS = FStar.HyperStack
+module ST = FStar.HyperStack.ST
 module B = LowStar.Buffer
 
 module HSM = HandshakeMessages
@@ -45,7 +46,33 @@ let create r =
 let receive_flight13_ee_c_cv_fin _ _ _ _ = admit()
 let receive_flight13_ee_cr_c_cv_fin _ _ _ _ = admit ()
 let receive_flight13_ee_fin _ _ _ _ = admit ()
-let receive_flight13_fin _ _ _ _ = admit ()
+
+module HSM13 = Parsers.Handshake13
+
+
+assume val parsing_error : TLSError.error
+
+let receive_flight13_fin st b from to =
+  let open FStar.Error in
+  
+  //first use the handshake13 validator
+  let pos = HSM13.handshake13_validator b from in
+
+  if pos <= LP.validator_max_length then admit ()
+
+  else if pos = LP.validator_error_not_enough_data then begin
+    let inc_st =
+      let h = ST.get () in
+      let parsed_bytes = LP.bytes_of_slice_from_to h b from to in
+      let in_progress = F13_fin in
+      G.hide (parsed_bytes, in_progress)
+    in
+    B.upd st.inc_st 0ul inc_st;
+    FStar.Error.Correct None
+  end
+ 
+  else Error parsing_error
+
 let receive_flight13_c_cv_fin _ _ _ _ = admit ()
 let receive_flight13_eoed _ _ _ _ = admit ()
 let receive_flight13_nst _ _ _ _ = admit ()
