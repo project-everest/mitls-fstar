@@ -45,15 +45,79 @@ let create r =
 
 let receive_flight13_ee_c_cv_fin _ _ _ _ = admit()
 let receive_flight13_ee_cr_c_cv_fin _ _ _ _ = admit ()
-let receive_flight13_ee_fin _ _ _ _ = admit ()
 
 module HSM13 = Parsers.Handshake13
 module HSMType = Parsers.HandshakeType
 module Fin13 = Parsers.Handshake13_m_finished
+module EE = Parsers.Handshake13_m_encrypted_extensions
 
 assume val parsing_error : TLSError.error
 assume val unexpected_flight_error : TLSError.error
 assume val bytes_remain_error : TLSError.error
+
+
+#set-options "--z3rlimit 50"
+let receive_flight13_ee_fin st b from to =
+  let open FStar.Error in
+  let from0 = from in
+  let pos = HSM13.handshake13_validator b from in
+
+  if pos >= to || pos = LP.validator_error_not_enough_data then begin
+    let inc_st =
+      let h = ST.get () in
+      let parsed_bytes = LP.bytes_of_slice_from_to h b from to in
+      let in_progress = F13_ee_fin in
+      G.hide (parsed_bytes, in_progress)
+    in
+    B.upd st.inc_st 0ul inc_st;
+    Correct None
+  end
+  else if pos <= LP.validator_max_length then begin
+    let msg_t = HSMType.handshakeType_reader b from in
+    match msg_t with
+    | HSMType.Encrypted_extensions ->
+      let ee_payload_begin = HSM13.handshake13_accessor_encrypted_extensions b from in
+      let ee_payload =
+        let h = ST.get () in
+        let payload = LP.contents EE.handshake13_m_encrypted_extensions_parser h b ee_payload_begin in
+        G.hide payload
+      in
+      let from = pos in
+      let pos = HSM13.handshake13_validator b from in
+
+      if pos <> to then Error bytes_remain_error
+
+      else if pos <= LP.validator_max_length then begin
+        let msg_t = HSMType.handshakeType_reader b from in
+        match msg_t with
+        | HSMType.Finished ->
+          let fin_payload_begin = HSM13.handshake13_accessor_finished b from in
+          let fin_payload =
+            let h = ST.get () in
+            let payload = LP.contents Fin13.handshake13_m_finished_parser h b fin_payload_begin in
+            G.hide payload
+          in
+          let inc_st = G.hide (Seq.empty, F_none) in
+          B.upd st.inc_st 0ul inc_st;
+          Correct (Some ({ begin_fin = from; ee_msg = ee_payload; fin_msg = fin_payload }))
+        | _ -> Error unexpected_flight_error
+      end
+
+      else if pos = LP.validator_error_not_enough_data then begin
+        let inc_st =
+          let h = ST.get () in
+          let parsed_bytes = LP.bytes_of_slice_from_to h b from0 to in
+          let in_progress = F13_ee_fin in
+          G.hide (parsed_bytes, in_progress)
+        in
+        B.upd st.inc_st 0ul inc_st;
+        Correct None
+      end
+ 
+      else Error parsing_error
+    | _ -> Error unexpected_flight_error
+  end
+  else Error parsing_error
 
 let receive_flight13_fin st b from to =
   let open FStar.Error in
