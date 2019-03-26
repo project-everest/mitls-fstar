@@ -56,6 +56,21 @@ assume val unexpected_flight_error : TLSError.error
 assume val bytes_remain_error : TLSError.error
 
 
+let parse_hsm13
+  (#a:Type) (#k:LP.parser_kind) (#p:LP.parser k a)
+  (#cl:LP.clens HSM13.handshake13 a)
+  (#gacc:LP.gaccessor HSM13.handshake13_parser p cl)
+  (acc:LP.accessor gacc)
+  (b:slice)
+  (from:uint_32)
+  : Stack (TLSError.result (option (G.erased a & uint_32)))
+    (requires fun h ->
+      LP.live_slice h b /\
+      from <= b.LP.len)
+    (ensures  fun h0 r h1 ->
+      
+  = 
+  
 #set-options "--z3rlimit 50"
 let receive_flight13_ee_fin st b from to =
   let open FStar.Error in
