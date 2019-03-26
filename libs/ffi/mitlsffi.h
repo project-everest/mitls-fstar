@@ -249,11 +249,16 @@ typedef enum {
   QUIC_Reader = 1      
 } quic_direction;
 
+// Creates a new connection state
 extern int MITLS_CALLCONV FFI_mitls_quic_create(quic_state **state, const quic_config *cfg);
 extern int MITLS_CALLCONV FFI_mitls_quic_process(quic_state *state, quic_process_ctx *ctx);
+
+// get_record_secrets can be called after the complete flag is set
 extern int MITLS_CALLCONV FFI_mitls_quic_get_record_key(quic_state *state, quic_raw_key *key, int32_t epoch, quic_direction rw);
+extern int MITLS_CALLCONV FFI_mitls_quic_get_record_secrets(quic_state *state, quic_secret *crs, quic_secret *srs);
+
+// Can be called after handshake completes to send a new ticket. Additional ticket data can be read back with get_hello_summary
 extern int MITLS_CALLCONV FFI_mitls_quic_send_ticket(quic_state *state, const unsigned char *ticket_data, size_t ticket_data_len);
-extern void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state);
 
 // N.B. *cookie and *ticket_data must be freed with FFI_mitls_global_free as they are allocated in the global region
 extern int MITLS_CALLCONV FFI_mitls_get_hello_summary(const unsigned char *buffer, size_t buffer_len, int has_record, mitls_hello_summary *summary, unsigned char **cookie, size_t *cookie_len, unsigned char **ticket_data, size_t *ticket_data_len);
@@ -263,5 +268,7 @@ extern int MITLS_CALLCONV FFI_mitls_find_custom_extension(int is_server, const u
 
 // Free 'out' variables returned by functions that do not have a state as input
 extern void MITLS_CALLCONV FFI_mitls_global_free(void* pv);
+// Free QUIC state
+extern void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state);
 
 #endif // HEADER_MITLS_FFI_H

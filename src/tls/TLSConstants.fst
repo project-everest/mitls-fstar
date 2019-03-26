@@ -801,6 +801,7 @@ noeq type config : Type0 = {
     (* Common *)
     non_blocking_read: bool;
     max_early_data: option UInt32.t;   // 0-RTT offer (client) and support (server), and data limit
+    max_ticket_age: UInt32.t;     // How long a ticket is valid for, in seconds
     safe_renegotiation: bool;     // demands this extension when renegotiating
     extended_master_secret: bool; // turn on RFC 7627 extended master secret support
     enable_tickets: bool;         // Client: offer ticket support; server: emit and accept tickets

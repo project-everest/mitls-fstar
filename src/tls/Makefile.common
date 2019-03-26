@@ -4,7 +4,14 @@ MITLS_HOME      ?= ../..
 KREMLIN_HOME    ?= ../../../kremlin
 MLCRYPTO_HOME   ?= ../../../MLCrypto
 EVERCRYPT_HOME	?= $(HACL_HOME)/providers
-FLAVOR          ?= Kremlin
+
+ifndef LOWPARSE_HOME
+  ifdef QD_HOME
+    LOWPARSE_HOME=$(QD_HOME)/src/lowparse
+  else
+    LOWPARSE_HOME=../../../quackyducky/src/lowparse
+  endif
+endif
 
 SHELL=/bin/bash
 
@@ -25,7 +32,10 @@ INCLUDE_PATHS = \
   $(HACL_HOME)/vale/code/arch/x64/interop \
   $(HACL_HOME)/vale/code/crypto/aes \
   $(HACL_HOME)/vale/code/crypto/aes/x64 \
+<<<<<<< HEAD
   $(HACL_HOME)/vale/code/crypto/aes/x64/stdcalls \
+=======
+>>>>>>> origin/master
   $(HACL_HOME)/vale/code/crypto/ecc/curve25519 \
   $(HACL_HOME)/vale/code/crypto/poly1305/x64 \
   $(HACL_HOME)/vale/code/crypto/sha \
@@ -59,7 +69,7 @@ INCLUDE_PATHS = \
   $(KREMLIN_HOME)/kremlib/compat \
   $(KREMLIN_HOME)/kremlib \
   $(MITLS_HOME)/libs/ffi \
-  $(MITLS_HOME)/src/lowparse \
+  $(LOWPARSE_HOME) \
   $(MITLS_HOME)/src/parsers/generated \
   $(EVERCRYPT_HOME)/evercrypt \
   $(SPECINC) \

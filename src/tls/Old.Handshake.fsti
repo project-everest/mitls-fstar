@@ -137,6 +137,11 @@ val send_ticket: s:hs -> app_data:Bytes.bytes -> ST bool
   (requires (fun h -> hs_inv s h /\ role_of s = Server))
   (ensures (fun h0 _ h1 -> modifies_internal h0 s h1))
 
+// Read traffic secrets, for QUIC re-keying
+val rekey_secrets: s:hs -> ST (option KeySchedule.raw_rekey_secrets)
+  (requires (fun h -> hs_inv s h))
+  (ensures (fun h0 _ h1 -> modifies_internal h0 s h1))
+
 // (Idle) Server requests an handshake
 val request: s:hs -> config -> ST bool
   (requires (fun h -> hs_inv s h /\ role_of s = Server))

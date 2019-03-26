@@ -21,10 +21,15 @@
 #endif
 
 #include "EverCrypt.h"
+#include "Spec.h"
 #include "FFI.h"
 #include "QUIC.h"
 #include "mitlsffi.h"
 #include "RegionAllocator.h"
+
+// Convert internal to external algorithm representations
+#define CONVERT_HASH(h) (h == Spec_Hash_Definitions_MD5 ? TLS_hash_MD5 : (h == Spec_Hash_Definitions_SHA1 ? TLS_hash_SHA1 : (h == Spec_Hash_Definitions_SHA2_224 ? TLS_hash_SHA224 : (h == Spec_Hash_Definitions_SHA2_256 ? TLS_hash_SHA256 : (h == Spec_Hash_Definitions_SHA2_384 ? TLS_hash_SHA384 : TLS_hash_SHA512)))))
+#define CONVERT_AEAD(ae) (ae == EverCrypt_AES128_GCM ? TLS_aead_AES_128_GCM : (ae == EverCrypt_AES256_GCM ? TLS_aead_AES_256_GCM : TLS_aead_CHACHA20_POLY1305))
 
 // This file is hand-written C code, to wrap the Kremlin-extracted
 // code to match the mitlsffi.h interface.
@@ -1091,13 +1096,32 @@ int MITLS_CALLCONV FFI_mitls_quic_get_record_key(quic_state *st, quic_raw_key *k
   if(r.tag == FStar_Pervasives_Native_Some)
   {
     QUIC_raw_key k = r.v;
-    key->alg =
-      k.alg == EverCrypt_AES128_GCM ? TLS_aead_AES_128_GCM :
-      (k.alg == EverCrypt_AES256_GCM ? TLS_aead_AES_256_GCM :
-       TLS_aead_CHACHA20_POLY1305);
+    key->alg = CONVERT_AEAD(k.alg);
     memcpy(key->aead_key, k.aead_key.data, k.aead_key.length);
     memcpy(key->aead_iv, k.aead_iv.data, k.aead_iv.length);
     memcpy(key->pne_key, k.pn_key.data, k.pn_key.length);
+    res = 1;
+  }
+  
+  LEAVE_HEAP_REGION();
+  return res;
+}
+
+int MITLS_CALLCONV FFI_mitls_quic_get_record_secrets(quic_state *st, quic_secret *crs, quic_secret *srs)
+{
+  int res = 0;
+  FStar_Pervasives_Native_option__Old_KeySchedule_raw_rekey_secrets r;
+  
+  ENTER_HEAP_REGION(st->rgn);
+  r = QUIC_get_secrets(st->hs);
+  
+  if(r.tag == FStar_Pervasives_Native_Some)
+  {
+    Old_KeySchedule_raw_rekey_secrets s = r.v;
+    srs->ae = crs->ae = CONVERT_AEAD(s.rekey_aead);
+    srs->hash = crs->hash = CONVERT_HASH(s.rekey_hash);
+    memcpy(crs->secret, s.rekey_client.data, s.rekey_client.length);
+    memcpy(srs->secret, s.rekey_server.data, s.rekey_server.length);
     res = 1;
   }
   

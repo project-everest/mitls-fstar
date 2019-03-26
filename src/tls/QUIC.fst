@@ -139,6 +139,7 @@ let peekClientHello (ch:bytes) (has_record:bool) : ML (option chSummary) =
 
 module H = Old.Handshake
 module HSL = HandshakeLog
+module KS = Old.KeySchedule
 
 let create_hs (is_server:bool) config : ML H.hs =
   quic_check config;
@@ -175,9 +176,9 @@ private let currentId (hs:H.hs) (rw:rw) : St TLSInfo.id =
 let get_epochs (hs:H.hs) : ML (int * int) =
   H.i hs Reader, H.i hs Writer
 
-private let handle_signals (hs:H.hs) (sig:option HSL.next_keys_use) : ML bool =
+private let handle_signals (hs:H.hs) (sig:option HSL.next_keys_use) : ML (bool * bool) =
   match sig with
-  | None -> false
+  | None -> false, false
   | Some use ->
     Old.Epochs.incr_writer (H.epochs_of hs);
     if use.HSL.out_skip_0RTT then
@@ -185,7 +186,7 @@ private let handle_signals (hs:H.hs) (sig:option HSL.next_keys_use) : ML bool =
       trace "Skip 0-RTT (incr writer)";
       Old.Epochs.incr_writer (H.epochs_of hs)
      end;
-    use.HSL.out_appdata
+    (use.HSL.out_appdata, use.HSL.out_0RTT_reject)
 
 private inline_for_extraction let api_error (ad, err) =
   trace ("Returning HS error: "^err);
@@ -210,14 +211,14 @@ let process_hs (hs:H.hs) (ctx:hs_in) : ML hs_result =
       match H.next_fragment_bounded hs i (UInt32.v ctx.max_output) with
       | Error z -> api_error z
       | Correct (HSL.Outgoing (Some frag) sig complete) ->
-        let is_writable = handle_signals hs sig in
+        let is_writable, reject_0rtt = handle_signals hs sig in
         HS_SUCCESS ({
 	  consumed = 0ul;
 	  output = dsnd frag;
 	  to_be_written = UInt32.uint_to_t (H.to_be_written hs);
 	  is_complete = complete;
 	  is_writable = is_writable;
-	  is_early_rejected = false;
+	  is_early_rejected = reject_0rtt;
 	  is_post_handshake = false;
 	})
    end
@@ -233,18 +234,12 @@ let process_hs (hs:H.hs) (ctx:hs_in) : ML hs_result =
       let consumed = UInt32.uint_to_t len in
       let j = H.i hs Writer in
       let post_hs = H.is_post_handshake hs in
-      let reject_0rtt = 
-        if H.role_of hs = Client && j = 2 then // FIXME: early reject vs. late reject
-	  let mode = H.get_mode hs in
-	  Negotiation.zeroRTToffer mode.Negotiation.n_offer
-	    && not (Negotiation.zeroRTT mode)
-	else false in
       let i = currentId hs Writer in
       let max_o = UInt32.v ctx.max_output in
       match H.next_fragment_bounded hs i max_o with
       | Error z -> api_error z
       | Correct (HSL.Outgoing frag sig complete' ) ->
-        let is_writable = handle_signals hs sig in
+        let is_writable, reject_0rtt = handle_signals hs sig in
         HS_SUCCESS ({
           consumed = consumed;
           output = (match frag with Some f -> dsnd f | None -> empty_bytes);
@@ -261,6 +256,9 @@ type raw_key = {
   aead_iv: bytes;
   pn_key: bytes;
 }
+
+let get_secrets (hs:Old.Handshake.hs) : ML (option KS.raw_rekey_secrets) =
+  H.rekey_secrets hs
 
 let get_key (hs:Old.Handshake.hs) (ectr:nat) (rw:bool) : ML (option raw_key) =
   let epochs = Monotonic.Seq.i_read (Old.Epochs.get_epochs (Handshake.epochs_of hs)) in

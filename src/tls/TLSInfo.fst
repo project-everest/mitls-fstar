@@ -143,6 +143,7 @@ let defaultConfig =
   // Common
   non_blocking_read = false;
   max_early_data = None;
+  max_ticket_age = 3600ul;
   safe_renegotiation = true;
   extended_master_secret = true;
   enable_tickets = true;

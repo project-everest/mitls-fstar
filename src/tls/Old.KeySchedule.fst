@@ -150,6 +150,13 @@ type rekeyId (li:logInfo) = i:expandId li{
 abstract type rekey_secrets #li (i:expandId li) =
   H.tag (expandId_hash i) * H.tag (expandId_hash i)
 
+type raw_rekey_secrets = {
+  rekey_aead: aeadAlg;
+  rekey_hash: hash_alg;
+  rekey_client: bytes;
+  rekey_server: bytes;
+}
+
 // Leaked to HS for tickets
 (*abstract*) type rms #li (i:rmsId li) = H.tag (rmsId_hash i)
 
@@ -1097,6 +1104,30 @@ let ks_client_13_rms_psk ks (nonce:bytes) : ST (bytes)
   let (| li, rmsId, rms |) = rmsi in
   dbg ("Recall RMS: "^(hex_of_bytes rms));
   HKDF.derive_secret (rmsId_hash rmsId) rms "resumption" nonce
+
+let ks_13_rekey_secrets ks : ST (option raw_rekey_secrets)
+  (requires fun h0 -> True)
+  (ensures fun h0 r h1 ->
+    let KS #rid st _ = ks in
+    modifies_none h0 h1)
+  =
+  dbg "ks_13_get_rekey";
+  let KS #r st _ = ks in
+  let ori : option (li:logInfo & i:rekeyId li & rekey_secrets i) =
+    match !st with
+    | C (C_13_postHS _ ri _) -> Some ri
+    | C (C_13_wait_CF _ _ _ ri) -> Some ri
+    | S (S_13_postHS _ ri _ ) -> Some ri
+    | S (S_13_wait_CF _ _ _ ri) -> Some ri
+    | _ -> None in
+  match ori with
+  | None -> None
+  | Some (| li, _, (crs, srs) |) -> Some ({
+    rekey_aead = logInfo_ae li;
+    rekey_hash = logInfo_hash li;
+    rekey_client = crs;
+    rekey_server = srs;
+    })
 
 (******************************************************************)
 
