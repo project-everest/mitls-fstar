@@ -374,14 +374,69 @@ private let rec list_valid_ng_is_list_ng (l:CommonDH.supportedNamedGroups) : Com
 #pop-options
 
 // We fill binders with placeholders to use QD clientHelloextensions_serializer32
-private let compute_binder_ph (pski:pskInfo) : Tot FStar.Bytes.bytes =
+private let compute_binder_ph (pski:pskInfo) : Tot pskBinderEntry =
   let h = PSK.pskInfo_hash pski in
   let len : UInt32.t = Hashing.Spec.tagLen h in
+  assume (32 <= U32.v len /\ U32.v len <= 256); // hash must not be MD5 or SHA1...
   FStar.Bytes.create len 0uy
+
+#reset-options
+
+#push-options "--z3rlimit 16"
+
+private let write_binder_ph
+  (#rrel #rel: _)
+  (sin: LP.slice rrel rel)
+  (pin: U32.t)
+  (sout: LP.slice (LP.srel_of_buffer_srel (B.trivial_preorder _)) (LP.srel_of_buffer_srel (B.trivial_preorder _)))
+  (pout_from: U32.t)
+: HST.Stack U32.t
+  (requires (fun h ->
+    B.disjoint sin.LP.base sout.LP.base /\
+    LP.live_slice h sin /\
+    LP.live_slice h sout /\
+    U32.v pout_from <= U32.v sout.LP.len /\
+    U32.v sout.LP.len < U32.v LP.max_uint32 /\ // to error code
+    LP.valid Parsers.TicketContents.ticketContents_parser h sin pin /\ (
+    let t = LP.contents Parsers.TicketContents.ticketContents_parser h sin pin in
+    Some? (Ticket.ticketContents_pskinfo t)
+  )))
+  (ensures (fun h pout_to h' ->
+    B.modifies (LP.loc_slice_from sout pout_from) h h' /\ (
+    let pski = Some?.v (Ticket.ticketContents_pskinfo (LP.contents Parsers.TicketContents.ticketContents_parser h sin pin)) in
+    let ph = compute_binder_ph pski in
+    if pout_to = LP.max_uint32
+    then
+      U32.v pout_from + LP.serialized_length pskBinderEntry_serializer ph > U32.v sout.LP.len
+    else
+      LP.valid_content_pos pskBinderEntry_parser h' sout pout_from ph pout_to
+  )))
+= let h0 = HST.get () in
+  let ph = Ghost.hide (compute_binder_ph (Some?.v (Ticket.ticketContents_pskinfo (LP.contents Parsers.TicketContents.ticketContents_parser h0 sin pin)))) in
+  let pt13 = Parsers.TicketContents.ticketContents_accessor_ticket13 sin pin in
+  let c = Parsers.CipherSuite.cipherSuite_reader sin (Parsers.TicketContents13.accessor_ticketContents13_cs sin pt13) in
+  let Some (CipherSuite13 _ h) = cipherSuite_of_name c in
+  let len : U32.t = Hashing.Spec.tagLen h in
+  assume (32 <= U32.v len /\ U32.v len <= 256); // hash must not be MD5 or SHA1...
+  if (1ul `U32.add` len) `U32.gt` (sout.LP.len `U32.sub` pout_from)
+  then begin
+    LP.serialized_length_eq pskBinderEntry_serializer (Ghost.reveal ph);
+    pskBinderEntry_bytesize_eq (Ghost.reveal ph);
+    LP.max_uint32
+  end else begin
+    let pout_payload = pout_from `U32.add` 1ul in
+    // TODO: replace with a custom fill once target slice is replaced with the stash
+    B.fill (B.sub sout.LP.base pout_payload len) 0uy len;
+    pskBinderEntry_finalize sout pout_from len
+  end
+
+#pop-options
+
+#reset-options "--using_facts_from '* -LowParse'"
 
 let supported_group_extension cfg: list clientHelloExtension =   
   if List.Tot.existsb send_supported_groups (list_valid_cs_is_list_cs cfg.cipher_suites) 
-  then [CHE_supported_groups (assume False; list_valid_ng_is_list_ng cfg.named_groups)] 
+  then [CHE_supported_groups ( (* list_valid_ng_is_list_ng *) cfg.named_groups)] 
   else [] 
 
 private val obfuscate_age: UInt32.t -> list (PSK.pskid * pskInfo) -> list pskIdentity
@@ -393,20 +448,24 @@ let rec obfuscate_age now = function
     obfuscate_age now t
 
 let final_extensions cfg edi psks now: list clientHelloExtension =
-  assume False;
   match cfg.max_version with
   | TLS_1p3 -> (
     if List.Tot.filter allow_resumption psks <> [] then
       let (pskids, pskinfos) : list PSK.pskid * list pskInfo = List.Tot.split psks in
       let psk_kex =
-        (if List.Tot.existsb allow_psk_resumption pskinfos then [Psk_ke] else []) @ 
-        (if List.Tot.existsb allow_dhe_resumption pskinfos then [Psk_dhe_ke] else []) in
+        ((if List.Tot.existsb allow_psk_resumption pskinfos then [Psk_ke] else []) <: (l: list _ { List.Tot.length l <= 1 } )) @ 
+        ((if List.Tot.existsb allow_dhe_resumption pskinfos then [Psk_dhe_ke] else []) <: (l: list _ { List.Tot.length l <= 1 } )) in
+      assume (List.Tot.length psk_kex >= 1);
       let binders = List.Tot.map compute_binder_ph pskinfos in
       let pskidentities = obfuscate_age now psks in
+      assume (let x = offeredPsks_identities_list_bytesize pskidentities in 7 <= x /\ x <= 65535);
+      assume (let x = offeredPsks_binders_list_bytesize binders in 33 <= x /\ x <= 65535);
+      let ke = ({ identities = pskidentities; binders = binders }) in
+      assume (let x = Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_bytesize ke in 0 <= x /\ x <= 65535);
       [CHE_psk_key_exchange_modes psk_kex] @
       (if edi then [CHE_early_data ()] else []) @
       // MUST BE LAST
-      [CHE_pre_shared_key ({ identities = pskidentities; binders = binders })]
+      [CHE_pre_shared_key ke]
     else
       [CHE_psk_key_exchange_modes [Psk_ke; Psk_dhe_ke]] )
   | _ -> []

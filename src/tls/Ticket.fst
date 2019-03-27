@@ -11,7 +11,7 @@ open TLSInfo
 
 module AE = AEADProvider
 
-#set-options "--admit_smt_queries true"
+#push-options "--admit_smt_queries true"
 
 val discard: bool -> ST unit
   (requires (fun _ -> True))
@@ -217,7 +217,7 @@ let serialize = function
     @| (bytes_of_int32 created) @| (bytes_of_int32 age)
     @| (vlbytes 2 custom) @| (vlbytes 2 rms)
 
-#reset-options
+#pop-options
 
 module TC = Parsers.TicketContents
 module TC12 = Parsers.TicketContents12
@@ -417,7 +417,7 @@ let write_ticket
   | Ticket13 cs _ _ rms nonce created age custom ->
     write_ticket13 t sl pos
 
-#set-options "--admit_smt_queries true"
+#push-options "--admit_smt_queries true"
 
 let ticket_encrypt (seal:bool) plain : St bytes =
   let Key tid wr _ = if seal then get_sealing_key () else get_ticket_key () in
@@ -463,6 +463,8 @@ let check_cookie b =
           | Correct extra ->
             Some (hrr, digest, extra)
 
+#pop-options
+
 let ticket_pskinfo (t:ticket) =
   match t with
   | Ticket13 cs li _ _ nonce created age_add custom ->
@@ -480,6 +482,30 @@ let ticket_pskinfo (t:ticket) =
     })
   | _ -> None
 
+let ticketContents_pskinfo (t:TC.ticketContents) : GTot (option pskInfo) =
+  match t with
+  | TC.T_ticket13 ({ TC13.cs = cs; TC13.nonce = nonce; TC13.creation_time = created; TC13.age_add = age_add; TC13.custom_data = custom }) ->
+    begin match cipherSuite_of_name cs with
+    | Some (CipherSuite13 ae h) ->
+      Some ({
+        ticket_nonce = Some nonce;
+        time_created = created;
+        ticket_age_add = age_add;
+        allow_early_data = true;
+        allow_dhe_resumption = true;
+        allow_psk_resumption = true;
+        early_ae = ae;
+        early_hash = h;
+        identities = (empty_bytes, empty_bytes);
+      })
+    | _ -> None
+    end
+  | _ -> None
+
+let ticketContents_pskinfo_ticketContents_of_ticket (t: ticket) : Lemma
+  (ticketContents_pskinfo (ticketContents_of_ticket t) == ticket_pskinfo t)
+= ()
+
 let check_ticket13 b =
   match check_ticket false b with
   | Some t -> ticket_pskinfo t
@@ -493,7 +519,6 @@ let check_ticket12 b =
 open LowParse.Low.Base 
 open Parsers.TicketContents12
 
-#reset-options ""
 val check_ticket12_low: 
   #rrel: _ -> #rel: _ ->
   x:slice rrel rel -> 
