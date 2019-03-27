@@ -123,7 +123,7 @@ let basic_pre_post (st:hsl_state) (b:slice) (from to:uint_32) (in_progress:in_pr
     
     invariant st h /\
 
-    live_slice h b /\
+    B.live h b.LP.base /\
     loc_disjoint (footprint st) (loc_buffer b.base) /\
     
     v from + length_parsed_bytes st h <= v to /\

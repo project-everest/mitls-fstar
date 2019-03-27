@@ -68,7 +68,7 @@ let parse_hsm13
   : b:slice -> from:uint_32 ->
     Stack (TLSError.result (option (G.erased a & uint_32)))
     (requires fun h ->
-      LP.live_slice h b /\
+      B.live h b.LP.base /\
       from <= b.LP.len /\
       (forall (m:HSM13.handshake13).
          (HSM13.tag_of_handshake13 m == tag) <==> cl.LP.clens_cond m))
@@ -159,27 +159,90 @@ let err_or_insufficient_data
       save_incremental_state st b from to in_progress;
       E.Correct None
 
-let parse_hsm13_ee =
-  parse_hsm13
-    HSMType.Encrypted_extensions
-    HSM13.handshake13_accessor_encrypted_extensions
+unfold let parse_pre (b:slice) (from:uint_32)
+  : HS.mem -> Type0
+  = fun (h:HS.mem) -> B.live h b.LP.base /\ from <= b.LP.len
 
-let parse_hsm13_c =
-  parse_hsm13
-    HSMType.Certificate
-    HSM13.handshake13_accessor_certificate
+let parse_hsm13_ee (b:slice) (from:uint_32)
+  : Stack (TLSError.result (option (G.erased EE.handshake13_m_encrypted_extensions & uint_32)))
+    (requires (parse_pre b from))
+    (ensures  fun h0 r h1 ->
+      B.modifies B.loc_none h0 h1 /\
+      B.live h1 b.LP.base /\
+      (match r with
+       | E.Error _ -> True
+       | E.Correct None -> True
+       | E.Correct (Some (a_msg, pos)) ->
+         valid_parsing13 (HSM13.M_encrypted_extensions (G.reveal a_msg)) b from pos h1))
+  = parse_hsm13
+      HSMType.Encrypted_extensions
+      HSM13.handshake13_accessor_encrypted_extensions
+      b from
 
-let parse_hsm13_cv =
-  parse_hsm13
-    HSMType.Certificate_verify
-    HSM13.handshake13_accessor_certificate_verify
+let parse_hsm13_c (b:slice) (from:uint_32)
+  : Stack (TLSError.result (option (G.erased C13.handshake13_m_certificate & uint_32)))
+    (requires (parse_pre b from))
+    (ensures  fun h0 r h1 ->
+      B.modifies B.loc_none h0 h1 /\
+      B.live h1 b.LP.base /\
+      (match r with
+       | E.Error _ -> True
+       | E.Correct None -> True
+       | E.Correct (Some (a_msg, pos)) ->
+         valid_parsing13 (HSM13.M_certificate (G.reveal a_msg)) b from pos h1))
+  = parse_hsm13
+      HSMType.Certificate
+      HSM13.handshake13_accessor_certificate
+      b from
 
-let parse_hsm13_fin =
-  parse_hsm13 
-    HSMType.Finished
-    HSM13.handshake13_accessor_finished
+let parse_hsm13_cv (b:slice) (from:uint_32)
+  : Stack (TLSError.result (option (G.erased CV13.handshake13_m_certificate_verify & uint_32)))
+    (requires (parse_pre b from))
+    (ensures  fun h0 r h1 ->
+      B.modifies B.loc_none h0 h1 /\
+      B.live h1 b.LP.base /\
+      (match r with
+       | E.Error _ -> True
+       | E.Correct None -> True
+       | E.Correct (Some (a_msg, pos)) ->
+         valid_parsing13 (HSM13.M_certificate_verify (G.reveal a_msg)) b from pos h1))
+  = parse_hsm13
+      HSMType.Certificate_verify
+      HSM13.handshake13_accessor_certificate_verify
+      b from
 
-#set-options "--z3rlimit 50"
+let parse_hsm13_fin (b:slice) (from:uint_32)
+  : Stack (TLSError.result (option (G.erased Fin13.handshake13_m_finished & uint_32)))
+    (requires (parse_pre b from))
+    (ensures  fun h0 r h1 ->
+      B.modifies B.loc_none h0 h1 /\
+      B.live h1 b.LP.base /\
+      (match r with
+       | E.Error _ -> True
+       | E.Correct None -> True
+       | E.Correct (Some (a_msg, pos)) ->
+         valid_parsing13 (HSM13.M_finished (G.reveal a_msg)) b from pos h1))
+  = parse_hsm13 
+      HSMType.Finished
+      HSM13.handshake13_accessor_finished
+      b from
+
+let frame_valid_parsing13
+  (msg:HSM13.handshake13)
+  (b:slice)
+  (from to:uint_32)
+  (l:B.loc)
+  (h0 h1:HS.mem)
+  : Lemma
+    (requires
+      valid_parsing13 msg b from to h0 /\
+      B.loc_disjoint l (B.loc_buffer b.LP.base) /\
+      B.modifies l h0 h1)
+    (ensures valid_parsing13 msg b from to h1)
+    [SMTPat (valid_parsing13 msg b from to h1);
+     SMTPat (B.modifies l h0 h1)]
+  = ()
+
 let receive_flight13_ee_c_cv_fin st b from to =
   let r = parse_hsm13_ee b from in
   match r with
@@ -215,7 +278,65 @@ let receive_flight13_ee_c_cv_fin st b from to =
             }))
           end
 
-let receive_flight13_ee_cr_c_cv_fin _ _ _ _ = admit ()
+let parse_hsm13_cr (b:slice) (from:uint_32)
+  : Stack (TLSError.result (option (G.erased CR13.handshake13_m_certificate_request & uint_32)))
+    (requires (parse_pre b from))
+    (ensures  fun h0 r h1 ->
+      B.modifies B.loc_none h0 h1 /\
+      B.live h1 b.LP.base /\
+      (match r with
+       | E.Error _ -> True
+       | E.Correct None -> True
+       | E.Correct (Some (a_msg, pos)) ->
+         valid_parsing13 (HSM13.M_certificate_request (G.reveal a_msg)) b from pos h1))
+  = parse_hsm13 
+      HSMType.Certificate_request
+      HSM13.handshake13_accessor_certificate_request
+      b from
+
+#push-options "--z3rlimit 20"
+let receive_flight13_ee_cr_c_cv_fin st b from to =
+  let r = parse_hsm13_ee b from in
+  match r with
+  | E.Error _ | E.Correct None ->
+    err_or_insufficient_data r F13_ee_cr_c_cv_fin st b from to
+  | E.Correct (Some (ee_payload, cr_begin)) ->
+    let r = parse_hsm13_cr b cr_begin in
+    match r with
+    | E.Error _ | E.Correct None ->
+      err_or_insufficient_data r F13_ee_cr_c_cv_fin st b from to
+    | E.Correct (Some (cr_payload, c_begin)) ->
+      let r = parse_hsm13_c b c_begin in
+      match r with
+      | E.Error _ | E.Correct None ->
+        err_or_insufficient_data r F13_ee_cr_c_cv_fin st b from to
+      | E.Correct (Some (c_payload, cv_begin)) ->
+        let r = parse_hsm13_cv b cv_begin in
+        match r with
+        | E.Error _ | E.Correct None ->
+          err_or_insufficient_data r F13_ee_cr_c_cv_fin st b from to
+        | E.Correct (Some (cv_payload, fin_begin)) ->
+          let r = parse_hsm13_fin b fin_begin in
+          match r with
+          | E.Error _ | E.Correct None ->
+            err_or_insufficient_data r F13_ee_cr_c_cv_fin st b from to
+          | E.Correct (Some (fin_payload, pos)) ->
+            if pos <> to then E.Error bytes_remain_error
+            else begin
+              reset_incremental_state st;
+              E.Correct (Some ({
+                begin_cr = cr_begin;
+                begin_c = c_begin;
+                begin_cv = cv_begin;
+                begin_fin = fin_begin;
+                ee_msg = ee_payload;
+                cr_msg = cr_payload;
+                c_msg = c_payload;
+                cv_msg = cv_payload;
+                fin_msg = fin_payload
+              }))
+            end
+#pop-options
 
 let mk_ee_fin
   (begin_fin:uint_32)
@@ -253,6 +374,85 @@ let receive_flight13_fin st b from to =
       E.Correct (Some ({ fin_msg = fin_payload }))
     end
 
-let receive_flight13_c_cv_fin _ _ _ _ = admit ()
-let receive_flight13_eoed _ _ _ _ = admit ()
-let receive_flight13_nst _ _ _ _ = admit ()
+let receive_flight13_c_cv_fin st b from to =
+  let r = parse_hsm13_c b from in
+  match r with
+  | E.Error _ | E.Correct None ->
+    err_or_insufficient_data r F13_c_cv_fin st b from to
+  | E.Correct (Some (c_payload, cv_begin)) ->
+    let r = parse_hsm13_cv b cv_begin in
+    match r with
+    | E.Error _ | E.Correct None ->
+      err_or_insufficient_data r F13_c_cv_fin st b from to
+    | E.Correct (Some (cv_payload, fin_begin)) ->
+      let r = parse_hsm13_fin b fin_begin in
+      match r with
+      | E.Error _ | E.Correct None ->
+        err_or_insufficient_data r F13_c_cv_fin st b from to
+      | E.Correct (Some (fin_payload, pos)) ->
+        if pos <> to then E.Error bytes_remain_error
+        else begin
+          reset_incremental_state st;
+          E.Correct (Some ({
+            begin_cv = cv_begin;
+            begin_fin = fin_begin;
+            c_msg = c_payload;
+            cv_msg = cv_payload;
+            fin_msg = fin_payload }))
+        end
+
+let parse_hsm13_eoed (b:slice) (from:uint_32)
+  : Stack (TLSError.result (option (G.erased EoED13.handshake13_m_end_of_early_data & uint_32)))
+    (requires (parse_pre b from))
+    (ensures  fun h0 r h1 ->
+      B.modifies B.loc_none h0 h1 /\
+      B.live h1 b.LP.base /\
+      (match r with
+       | E.Error _ -> True
+       | E.Correct None -> True
+       | E.Correct (Some (a_msg, pos)) ->
+         valid_parsing13 (HSM13.M_end_of_early_data (G.reveal a_msg)) b from pos h1))
+  = parse_hsm13 
+      HSMType.End_of_early_data
+      HSM13.handshake13_accessor_end_of_early_data
+      b from
+
+let receive_flight13_eoed st b from to =
+  let r = parse_hsm13_eoed b from in
+  match r with
+  | E.Error _ | E.Correct None ->
+    err_or_insufficient_data r F13_eoed st b from to
+  | E.Correct (Some (eoed_payload, pos)) ->
+    if pos <> to then E.Error bytes_remain_error
+    else begin
+      reset_incremental_state st;
+      E.Correct (Some ({ eoed_msg = eoed_payload }))
+    end
+
+let parse_hsm13_nst (b:slice) (from:uint_32)
+  : Stack (TLSError.result (option (G.erased NST13.handshake13_m_new_session_ticket & uint_32)))
+    (requires (parse_pre b from))
+    (ensures  fun h0 r h1 ->
+      B.modifies B.loc_none h0 h1 /\
+      B.live h1 b.LP.base /\
+      (match r with
+       | E.Error _ -> True
+       | E.Correct None -> True
+       | E.Correct (Some (a_msg, pos)) ->
+         valid_parsing13 (HSM13.M_new_session_ticket (G.reveal a_msg)) b from pos h1))
+  = parse_hsm13 
+      HSMType.New_session_ticket
+      HSM13.handshake13_accessor_new_session_ticket
+      b from
+
+let receive_flight13_nst st b from to =
+  let r = parse_hsm13_nst b from in
+  match r with
+  | E.Error _ | E.Correct None ->
+    err_or_insufficient_data r F13_nst st b from to
+  | E.Correct (Some (nst_payload, pos)) ->
+    if pos <> to then E.Error bytes_remain_error
+    else begin
+      reset_incremental_state st;
+      E.Correct (Some ({ nst_msg = nst_payload }))
+    end
