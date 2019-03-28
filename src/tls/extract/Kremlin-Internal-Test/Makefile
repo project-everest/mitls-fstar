@@ -18,7 +18,7 @@ ifeq ($(OS),Windows_NT)
     MLCRYPTO_HOME := $(shell cygpath -u ${MLCRYPTO_HOME})
   endif
   LDOPTS += -lntdll -lbcrypt
-  PATH := $(EVERCRYPT_HOME)/../dist/compact:$(MITLS_HOME)/src/pki:$(PATH)
+  PATH := $(MITLS_HOME)/src/pki:$(PATH)
   SO = dll
   CC ?= x86_64-w64-mingw32-gcc
   export PATH
