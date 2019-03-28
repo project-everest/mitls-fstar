@@ -10,24 +10,6 @@ open FStar.HyperStack.ST
 let repr #p #q (b:LP.slice p q) =
   R.repr_p SH.serverHello b SH.serverHello_parser
 
-let meta #p #q (b:LP.slice p q) (from to:R.index b) (h:HS.mem)
-  : Pure (Ghost.erased (R.repr_meta SH.serverHello))
-    (requires
-      R.valid_pos b SH.serverHello_parser from to h)
-    (ensures fun m ->
-      let open R in
-      let r = { start_pos = from;
-                end_pos = to;
-                meta = m } in
-      valid r h)
-  = let open R in
-    let v = LP.contents SH.serverHello_parser h b from in
-    Ghost.hide ({
-      parser_kind = _;
-      parser = SH.serverHello_parser;
-      value = v
-    })
-
 let mk #p #q (b:LP.slice p q) (from to:R.index b)
   : Stack (repr b)
     (requires R.valid_pos b SH.serverHello_parser from to)
@@ -36,10 +18,19 @@ let mk #p #q (b:LP.slice p q) (from to:R.index b)
       R.valid r h1)
   = let open R in
     let h = get () in
-    let m = meta b from to h in
-    { start_pos = from;
+    let m =
+      let v = LP.contents SH.serverHello_parser h b from in
+      Ghost.hide ({
+        parser_kind = _;
+        parser = SH.serverHello_parser;
+        value = v
+      })
+    in
+    {
+      start_pos = from;
       end_pos = to;
-      meta = m }
+      meta = m
+    }
 
 let cipherSuite (#b:LP.slice 'p 'q) (r:repr b)
   : Stack Parsers.CipherSuite.cipherSuite

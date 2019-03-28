@@ -12,6 +12,28 @@ open FStar.HyperStack.ST
 let repr #p #q (b:LP.slice p q) =
   R.repr_p HSM.handshake b HSM.handshake_parser
 
+let mk #p #q (b:LP.slice p q) (from to:R.index b)
+  : Stack (repr b)
+    (requires R.valid_pos b HSM.handshake_parser from to)
+    (ensures fun h0 r h1 ->
+      B.modifies B.loc_none h0 h1 /\
+      R.valid r h1)
+  = let open R in
+    let h = get () in
+    let m =
+      let v = LP.contents HSM.handshake_parser h b from in
+      Ghost.hide ({
+        parser_kind = _;
+        parser = HSM.handshake_parser;
+        value = v
+      })
+    in
+    {
+      start_pos = from;
+      end_pos = to;
+      meta = m
+    }
+
 let handshakeType (#b:LP.slice 'p 'q) (r:repr b)
   : Stack Parsers.HandshakeType.handshakeType
     (requires
