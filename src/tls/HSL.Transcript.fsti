@@ -142,15 +142,18 @@ val transcript_bytes (t:transcript_t) : GTot (b: bytes { Seq.length b < max_tran
 /// `state`: Abstract state of the module
 ///
 /// It maintains the transcript in mutable state.
-/// It is allocated before knowing what the hash algorithm is
-/// The API provides a way to set the hash algorithm later
 ///
 /// We may need a way to free the state also
 val state (a:alg) : Type0
 
-val invariant (#a: _) (s:state a) (t:transcript_t) (h:HS.mem) : Type0
+val invariant (#a: _) (s:state a) (t:transcript_t) (h:HS.mem) : Type0  
 
-val footprint (#a:_) (s:state a) (h:HS.mem) : GTot B.loc
+val footprint (#a:_) (s:state a) : GTot B.loc
+
+val elim_invariant (#a: _) (s:state a) (t:transcript_t) (h:HS.mem) 
+  : Lemma 
+    (requires invariant s t h)
+    (ensures B.loc_not_unused_in h `B.loc_includes` footprint s)
 
 val region_of (#a: _) (s:state a)
   : GTot HS.rid
@@ -159,12 +162,12 @@ val frame_invariant (#a:_) (s:state a) (t: transcript_t) (h0 h1:HS.mem) (l:B.loc
   : Lemma
     (requires
       invariant s t h0 /\
-      B.loc_disjoint l (footprint s h0) /\
+      B.loc_disjoint l (footprint s) /\
       B.modifies l h0 h1)
     (ensures
-      invariant s t h1 /\
-      footprint s h0 == footprint s h1)
-
+      invariant s t h1)
+    [SMTPat (invariant s t h1);
+     SMTPat (B.modifies l h0 h1)]
 
 /// `create`:
 ///
@@ -176,14 +179,16 @@ val frame_invariant (#a:_) (s:state a) (t: transcript_t) (h0 h1:HS.mem) (l:B.loc
 ///   -- The transcript's initial state is empty and the hash alg is
 ///      not chosen yet
 val create (r:Mem.rgn) (a:alg)
-  : ST (state a)
+  : ST (state a & G.erased transcript_t)
        (requires fun _ -> True)
-       (ensures fun h0 s h1 ->
-         invariant s (Start None) h1 /\
+       (ensures fun h0 (s, tx) h1 ->
+         let tx = G.reveal tx in
+         tx == Start None /\
+         invariant s tx h1 /\
          region_of s == r /\
-         B.loc_region_only true r `B.loc_includes` footprint s h1 /\
+         B.loc_region_only true r `B.loc_includes` footprint s /\
          B.modifies B.loc_none h0 h1 /\
-         B.fresh_loc (footprint s h1) h0 h1)
+         B.fresh_loc (footprint s) h0 h1)
 
 unfold
 let extend_hash_pre_common
@@ -195,7 +200,7 @@ let extend_hash_pre_common
   (h:HS.mem)
   = invariant s t h /\
     LP.live_slice h b /\
-    B.loc_disjoint (B.loc_buffer LP.(b.base)) (footprint s h)
+    B.loc_disjoint (B.loc_buffer LP.(b.base)) (footprint s)
 
 unfold
 let extend_hash_post_common
@@ -204,8 +209,7 @@ let extend_hash_post_common
   (t:transcript_t)
   (h0 h1:HS.mem)
   = invariant s t h1 /\
-    B.modifies (footprint s h1) h0 h1 /\
-    footprint s h1 == footprint s h0
+    B.modifies (footprint s) h0 h1
 
 // assume 
 val nego_version (ch:Parsers.ClientHello.clientHello)
@@ -463,13 +467,13 @@ val extract_hash
          let tx = G.reveal tx in
          invariant s tx h0 /\
          B.live h0 tag /\
-         B.loc_disjoint (footprint s h0) (B.loc_buffer tag)))
+         B.loc_disjoint (footprint s) (B.loc_buffer tag)))
        (ensures (fun h0 _ h1 ->
          let open B in
          let tx = G.reveal tx in
-//         frame_state s h0 h1 /\
          invariant s tx h1 /\
-         modifies (loc_union (footprint s h1) (loc_buffer tag)) h0 h1 /\
+         modifies (loc_union (footprint s) (loc_buffer tag)) h0 h1 /\
+         B.live h1 tag /\
          B.as_seq h1 tag == Spec.Hash.hash a (transcript_bytes tx)))
 
 
