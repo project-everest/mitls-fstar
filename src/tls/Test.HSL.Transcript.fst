@@ -3,20 +3,39 @@ module HT = HSL.Transcript
 module Receive = HSL.Receive
 module LP = LowParse.Low.Base
 module B = LowStar.Monotonic.Buffer
+open FStar.Integers
+let index (b:LP.slice 'p 'q) = i:uint_32{ i <= LP.(b.len) }
+
+noeq
+type repr #p #q (t:Type) (b:LP.slice p q) = {
+  start_pos: index b;
+  end_pos: (i:index b {start_pos <= i });
+  parser_kind: Ghost.erased LP.parser_kind;  //is there a way to fix the parser kind to some constant strong parser?
+  parser:LP.parser (Ghost.reveal parser_kind) t; //erased anyway
+  value: Ghost.erased t;
+}
+
+module HS = FStar.HyperStack
+
+let valid #t #p #q (#b:LP.slice p q) (r:repr t b) (h:HS.mem)
+  : Type
+  = LP.valid_pos #p #q #(Ghost.reveal r.parser_kind) #t r.parser h b r.start_pos r.end_pos /\
+    Ghost.reveal r.value == LP.contents #p #q #(Ghost.reveal r.parser_kind) #t r.parser h b r.start_pos
+
 
 let preorder : LP.srel LP.byte = Ghost.hide (LowStar.Buffer.trivial_preorder LP.byte)
 
 assume
 val input: LP.slice preorder preorder
 
-open FStar.Integers
+
 noeq
 type flight_ch = {
   begin_ch: uint_32;
   ch_msg: Ghost.erased Parsers.ClientHello.clientHello
 }
 
-module HS = FStar.HyperStack
+
 module HSM = Parsers.Handshake
 
 let valid_flight_ch
@@ -234,7 +253,7 @@ let server (from to:uint_32)
                (TX.footprint thash);
              TX.extract_hash thash tag tx_1;
              let psk = select_psk_binder_entry ch from to sh in
-             let h2 = get () in
+             let h2 = get () inaaaf
              if check_binder ch tag psk
              then ()
              else ()
