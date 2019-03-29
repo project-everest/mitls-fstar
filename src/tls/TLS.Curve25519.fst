@@ -27,7 +27,7 @@ let scalarmult (secret:Bytes.lbytes 32) (point:Bytes.lbytes 32)
   B.store_bytes point pb;
   B.store_bytes secret sb;
   assume false;
-  EverCrypt.x25519 out sb pb;
+  EverCrypt.Curve25519.ecdh out sb pb;
   pop_frame (); B.of_buffer 32ul out
 
 let keygen () : ST keyshare
