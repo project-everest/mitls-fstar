@@ -36,7 +36,7 @@ let clientHello (#b:LP.slice 'p 'q) (r:repr b)
   : Stack (RCH.repr b)
     (requires fun h ->
       R.valid r h /\
-      HSM.tag_of_handshake (R.value r) == Parsers.HandshakeType.Client_hello)
+      HSM.M_client_hello? (R.value r))
     (ensures fun h0 ch h1 ->
       B.modifies B.loc_none h0 h1 /\
       R.valid ch h1 /\
@@ -56,7 +56,7 @@ let serverHello (#b:LP.slice 'p 'q) (r:repr b)
   : Stack (RSH.repr b)
     (requires fun h ->
       R.valid r h /\
-      HSM.tag_of_handshake (R.value r) == Parsers.HandshakeType.Server_hello)
+      HSM.M_server_hello? (R.value r))
     (ensures fun h0 sh h1 ->
       B.modifies B.loc_none h0 h1 /\
       R.valid sh h1 /\
