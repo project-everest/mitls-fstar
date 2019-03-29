@@ -38,48 +38,47 @@ let handshakeType (#b:LP.slice 'p 'q) (r:repr b)
   : Stack Parsers.HandshakeType.handshakeType
     (requires
       R.valid r)
-    (ensures fun h0 _ h1 ->
-      B.modifies B.loc_none h0 h1)
+    (ensures fun h0 ht h1 ->
+      B.modifies B.loc_none h0 h1 /\
+      ht == HSM.tag_of_handshake (R.value r))
   = let open R in
     let open Parsers.HandshakeType in
     handshakeType_reader b r.start_pos
 
 let clientHello (#b:LP.slice 'p 'q) (r:repr b)
-  : Stack (option (RCH.repr b))
-    (requires
-      R.valid r)
+  : Stack (RCH.repr b)
+    (requires fun h ->
+      R.valid r h /\
+      HSM.tag_of_handshake (R.value r) == Parsers.HandshakeType.Client_hello)
     (ensures fun h0 ch h1 ->
       B.modifies B.loc_none h0 h1 /\
-      (Some? ch ==> R.valid (Some?.v ch) h1))
+      R.valid ch h1 /\
+      R.value ch == HSM.M_client_hello?._0 (R.value r))
   = let open R in
     let open Parsers.HandshakeType in
-    let tag = handshakeType_reader b r.start_pos in
-    match tag with
-    | Client_hello ->
-      let h = get () in
-      let pos' = HSM.handshake_accessor_client_hello b r.start_pos in
-      assume (LP.valid Parsers.ClientHello.clientHello_parser h b pos');
-      let end_pos = Parsers.ClientHello.clientHello_jumper b pos' in
-      let ch_repr = RCH.mk b pos' end_pos in
-      Some ch_repr
-    | _ -> None
+    let h = get () in
+    let pos' = HSM.handshake_accessor_client_hello b r.start_pos in
+    assume (LP.valid Parsers.ClientHello.clientHello_parser h b pos');
+    let end_pos = Parsers.ClientHello.clientHello_jumper b pos' in
+    let ch_repr = RCH.mk b pos' end_pos in
+    admit();
+    ch_repr
 
 let serverHello (#b:LP.slice 'p 'q) (r:repr b)
-  : Stack (option (RSH.repr b))
-    (requires
-      R.valid r)
+  : Stack (RSH.repr b)
+    (requires fun h ->
+      R.valid r h /\
+      HSM.tag_of_handshake (R.value r) == Parsers.HandshakeType.Server_hello)
     (ensures fun h0 sh h1 ->
       B.modifies B.loc_none h0 h1 /\
-      (Some? sh ==> R.valid (Some?.v sh) h1))
+      R.valid sh h1 /\
+      R.value sh == HSM.M_server_hello?._0 (R.value r))
   = let open R in
     let open Parsers.HandshakeType in
-    let tag = handshakeType_reader b r.start_pos in
-    match tag with
-    | Server_hello ->
-      let h = get () in
-      let pos' = HSM.handshake_accessor_server_hello b r.start_pos in
-      assume (LP.valid Parsers.ServerHello.serverHello_parser h b pos');
-      let end_pos = Parsers.ServerHello.serverHello_jumper b pos' in
-      let sh_repr = RSH.mk b pos' end_pos in
-      Some sh_repr
-    | _ -> None
+    let h = get () in
+    let pos' = HSM.handshake_accessor_server_hello b r.start_pos in
+    assume (LP.valid Parsers.ServerHello.serverHello_parser h b pos');
+    let end_pos = Parsers.ServerHello.serverHello_jumper b pos' in
+    let sh_repr = RSH.mk b pos' end_pos in
+    admit();
+    sh_repr

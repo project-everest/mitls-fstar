@@ -16,27 +16,15 @@ let mk #p #q (b:LP.slice p q) (from to:R.index b)
     (ensures fun h0 r h1 ->
       B.modifies B.loc_none h0 h1 /\
       R.valid r h1)
-  = let open R in
-    let h = get () in
-    let m =
-      let v = LP.contents CH.clientHello_parser h b from in
-      Ghost.hide ({
-        parser_kind = _;
-        parser = CH.clientHello_parser;
-        value = v
-      })
-    in
-    {
-      start_pos = from;
-      end_pos = to;
-      meta = m
-    }
+  = R.mk b from to CH.clientHello_parser
 
 let version (#b:LP.slice 'p 'q) (r:repr b)
   : Stack Parsers.ProtocolVersion.protocolVersion
     (requires R.valid r)
-    (ensures fun h0 _ h1 ->
-      B.modifies B.loc_none h0 h1) //underspecifying the returned value, until we figure out how much we need
+    (ensures fun h0 pv h1 ->
+      B.modifies B.loc_none h0 h1 /\
+      pv == CH.((R.value r).version))
   = let open R in
+    R.reveal_valid();
     let pos = CH.accessor_clientHello_version b r.start_pos in
     Parsers.ProtocolVersion.protocolVersion_reader b pos
