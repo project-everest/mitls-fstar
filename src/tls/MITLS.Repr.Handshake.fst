@@ -63,6 +63,7 @@ let serverHello (#b:LP.slice 'p 'q) (r:repr b)
       R.value sh == HSM.M_server_hello?._0 (R.value r))
   = let open R in
     let open Parsers.HandshakeType in
+    R.reveal_valid();
     let h = get () in
     let pos' = HSM.handshake_accessor_server_hello b r.start_pos in
     assume (LP.valid Parsers.ServerHello.serverHello_parser h b pos');
