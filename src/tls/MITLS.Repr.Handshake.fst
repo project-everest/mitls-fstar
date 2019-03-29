@@ -18,21 +18,7 @@ let mk #p #q (b:LP.slice p q) (from to:R.index b)
     (ensures fun h0 r h1 ->
       B.modifies B.loc_none h0 h1 /\
       R.valid r h1)
-  = let open R in
-    let h = get () in
-    let m =
-      let v = LP.contents HSM.handshake_parser h b from in
-      Ghost.hide ({
-        parser_kind = _;
-        parser = HSM.handshake_parser;
-        value = v
-      })
-    in
-    {
-      start_pos = from;
-      end_pos = to;
-      meta = m
-    }
+  = R.mk b from to HSM.handshake_parser
 
 let handshakeType (#b:LP.slice 'p 'q) (r:repr b)
   : Stack Parsers.HandshakeType.handshakeType
@@ -43,6 +29,7 @@ let handshakeType (#b:LP.slice 'p 'q) (r:repr b)
       ht == HSM.tag_of_handshake (R.value r))
   = let open R in
     let open Parsers.HandshakeType in
+    R.reveal_valid();
     handshakeType_reader b r.start_pos
 
 let clientHello (#b:LP.slice 'p 'q) (r:repr b)
@@ -56,6 +43,7 @@ let clientHello (#b:LP.slice 'p 'q) (r:repr b)
       R.value ch == HSM.M_client_hello?._0 (R.value r))
   = let open R in
     let open Parsers.HandshakeType in
+    R.reveal_valid();
     let h = get () in
     let pos' = HSM.handshake_accessor_client_hello b r.start_pos in
     assume (LP.valid Parsers.ClientHello.clientHello_parser h b pos');
