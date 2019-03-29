@@ -30,10 +30,6 @@ INCLUDE_PATHS = \
   $(EVERCRYPT_HOME)/evercrypt \
   $(EVERCRYPT_HOME)/evercrypt/fst \
   $(EVERCRYPT_HOME)/evercrypt/config/$(EVERCRYPT_CONFIG) \
-  $(HACL_HOME)/code/old/lib \
-  $(HACL_HOME)/secure_api \
-  $(HACL_HOME)/secure_api/utils \
-  $(HACL_HOME)/secure_api/concrete_specializations \
   $(SPECINC)
 
 ifeq (,$(MITLS_NODEBUG))
