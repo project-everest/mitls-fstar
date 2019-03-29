@@ -8,6 +8,8 @@ FSTAR_HOME=../../../../FStar
 # the latter form won't work because FSTAR_HOME will incorrectly override
 # values in recursive invocations of $(MAKE)...
 
+LOWPARSE_HOME=../../../../quackyducky/src/lowparse
+
 #OPTIONS=--fstar_home $(FSTAR_HOME)
 
 FSTARFLAGS=$(OPTIONS) $(OTHERFLAGS)
@@ -24,7 +26,7 @@ VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 \
   --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection \
   $(HINTS_ENABLED)
 
-FSTAR_INCLUDE_PATHS=--include .. --include ../../lowparse --include $(FSTAR_HOME)/../kremlin/kremlib
+FSTAR_INCLUDE_PATHS=--include .. --include $(LOWPARSE_HOME) --include $(FSTAR_HOME)/../kremlin/kremlib
 
 # Lax-checking one file at a time
 %.fst-lax: $(LIBFILES)

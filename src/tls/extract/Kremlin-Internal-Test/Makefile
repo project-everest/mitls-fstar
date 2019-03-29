@@ -18,7 +18,7 @@ ifeq ($(OS),Windows_NT)
     MLCRYPTO_HOME := $(shell cygpath -u ${MLCRYPTO_HOME})
   endif
   LDOPTS += -lntdll -lbcrypt
-  PATH := $(EVERCRYPT_HOME)/../dist/compact:$(MITLS_HOME)/src/pki:$(PATH)
+  PATH := $(MITLS_HOME)/src/pki:$(PATH)
   SO = dll
   CC ?= x86_64-w64-mingw32-gcc
   export PATH
@@ -46,10 +46,13 @@ endif
 ifndef NO_OPENSSL
 ifeq ($(OS),Windows_NT)
   PATH := $(MLCRYPTO_HOME)/openssl:$(PATH)
+  export PATH
 else ifeq ($(UNAME),Darwin)
   DYLD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(DYLD_LIBRARY_PATH)
+  export DYLD_LIBRARY_PATH
 else
   LD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(LD_LIBRARY_PATH)
+  export LD_LIBRARY_PATH
 endif
 endif
 

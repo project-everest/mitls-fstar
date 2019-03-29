@@ -43,10 +43,13 @@ endif
 ifndef NO_OPENSSL
 ifeq ($(OS),Windows_NT)
   PATH := $(MLCRYPTO_HOME)/openssl:$(PATH)
+  export PATH
 else ifeq ($(UNAME),Darwin)
   DYLD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(DYLD_LIBRARY_PATH)
+  export DYLD_LIBRARY_PATH
 else
   LD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(LD_LIBRARY_PATH)
+  export LD_LIBRARY_PATH
 endif
 endif
 
