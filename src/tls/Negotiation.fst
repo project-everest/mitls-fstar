@@ -488,7 +488,7 @@ let rec obfuscate_age_obfuscate_age_resumeInfo13
 
 #reset-options
 
-#push-options "--z3rlimit 16"
+#push-options "--z3rlimit 32"
 
 let write_obfuscate_age_resumeInfo13
   (now: U32.t)
