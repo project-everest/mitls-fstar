@@ -120,13 +120,12 @@ val server (from to:uint_32)
 #reset-options
   "--query_stats \
    --print_z3_statistics"
-#set-options "--max_fuel 0 --max_ifuel 0 --z3rlimit_factor  4"
+#set-options "--max_fuel 0 --max_ifuel 0 --z3rlimit_factor 4"
 
 let server from to
   = push_frame();
     let ch = receive_client_hello from to in
     let sh = nego ch in
-    let h1 = get () in
     let cs = R_SH.cipherSuite (R_HS.serverHello sh) in
     let _ =
     match CipherSuite.cipherSuite'_of_name cs with
