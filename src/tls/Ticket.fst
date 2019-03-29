@@ -482,7 +482,8 @@ let ticket_pskinfo (t:ticket) =
     })
   | _ -> None
 
-let ticketContents_pskinfo (t:TC.ticketContents) : GTot (option pskInfo) =
+noextract
+let ticketContents_pskinfo (t:TC.ticketContents) : Tot (option pskInfo) =
   match t with
   | TC.T_ticket13 ({ TC13.cs = cs; TC13.nonce = nonce; TC13.creation_time = created; TC13.age_add = age_add; TC13.custom_data = custom }) ->
     begin match cipherSuite_of_name cs with

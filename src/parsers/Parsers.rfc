@@ -389,8 +389,10 @@ Pre-shared key extension
 https://tools.ietf.org/html/rfc8446#section-4.2.11
 **/
 
+opaque PskIdentity_identity<1..2^16-1>;
+
 struct {
-  opaque identity<1..2^16-1>;
+  PskIdentity_identity identity;
   uint32 obfuscated_ticket_age;
 } PskIdentity;
 
@@ -1600,3 +1602,21 @@ struct {
   } t;
 } TicketContents;
 
+struct {
+  PskIdentity_identity identity;
+  TicketContents12 ticket;
+} ResumeInfo12;
+
+struct {
+  PskIdentity_identity identity;
+  TicketContents13 ticket;
+} ResumeInfo13;
+
+struct {
+  boolean has_resumeInfo12;
+  select(has_resumeInfo12) {
+    case b_true: ResumeInfo12;
+    case b_false: Empty;
+  } resumeInfo12;
+  ResumeInfo13 resumeInfo13<0..2^16-1>; /* arbitrary bound */
+} ResumeInfo;

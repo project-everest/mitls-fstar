@@ -392,12 +392,12 @@ private let write_binder_ph
   (pout_from: U32.t)
 : HST.Stack U32.t
   (requires (fun h ->
-    B.disjoint sin.LP.base sout.LP.base /\
     LP.live_slice h sin /\
     LP.live_slice h sout /\
     U32.v pout_from <= U32.v sout.LP.len /\
     U32.v sout.LP.len < U32.v LP.max_uint32 /\ // to error code
-    LP.valid Parsers.TicketContents.ticketContents_parser h sin pin /\ (
+    LP.valid Parsers.TicketContents.ticketContents_parser h sin pin /\
+    B.loc_disjoint (LP.loc_slice_from_to sin pin (LP.get_valid_pos Parsers.TicketContents.ticketContents_parser h sin pin)) (LP.loc_slice_from sout pout_from) /\ (
     let t = LP.contents Parsers.TicketContents.ticketContents_parser h sin pin in
     Some? (Ticket.ticketContents_pskinfo t)
   )))
@@ -446,6 +446,99 @@ let rec obfuscate_age now = function
     let age = FStar.UInt32.((now -%^ ctx.time_created) *%^ 1000ul) in
     {identity = id; obfuscated_ticket_age = PSK.encode_age age ctx.ticket_age_add} ::
     obfuscate_age now t
+
+module PR = Parsers.ResumeInfo
+
+(* this is how obfuscate_age should be rewritten *)
+
+let obfuscate_age_resumeInfo13 (now: U32.t) (tk: Parsers.ResumeInfo13.resumeInfo13) : Tot pskIdentity =
+    let age = FStar.UInt32.((now -%^ tk.Parsers.ResumeInfo13.ticket.Parsers.TicketContents13.creation_time) *%^ 1000ul) in
+    {identity = tk.Parsers.ResumeInfo13.identity; obfuscated_ticket_age = PSK.encode_age age tk.Parsers.ResumeInfo13.ticket.Parsers.TicketContents13.age_add}
+
+(* this function and this lemma are here only to convince oneself that obfuscate_age_resumeInfo13 is not doing anything fundamentally different from obfuscate_age *)
+
+noextract
+let list_pskid_pskinfo_of_list_resumeinfo13 (l: list Parsers.ResumeInfo13.resumeInfo13) : Tot (list (PSK.pskid * pskInfo)) = List.Tot.map
+  (fun r -> let i = r.Parsers.ResumeInfo13.identity in
+         let t = r.Parsers.ResumeInfo13.ticket in
+         assume (PSK.registered_psk i);
+         let c = cipherSuite_of_name t.Parsers.TicketContents13.cs in
+         assume (Some? c);
+         assume (CipherSuite13? (Some?.v c));
+         ((i <: PSK.pskid), Some?.v (Ticket.ticketContents_pskinfo (Parsers.TicketContents.T_ticket13 t))))
+  l
+
+let rec obfuscate_age_obfuscate_age_resumeInfo13
+  (now: U32.t)
+  (l: list Parsers.ResumeInfo13.resumeInfo13)
+: Lemma
+  (obfuscate_age now (list_pskid_pskinfo_of_list_resumeinfo13 l) == List.Tot.map (obfuscate_age_resumeInfo13 now) l)
+= match l with
+  | [] -> ()
+  | r :: q ->
+    let i = r.Parsers.ResumeInfo13.identity in
+    let t = r.Parsers.ResumeInfo13.ticket in
+    assume (PSK.registered_psk i);
+    let c = cipherSuite_of_name t.Parsers.TicketContents13.cs in
+    assume (Some? c);
+    assume (CipherSuite13? (Some?.v c));
+    obfuscate_age_obfuscate_age_resumeInfo13 now q
+
+(* then, this is the writer in terms of the new high-level function *)
+
+#reset-options
+
+#push-options "--z3rlimit 16"
+
+let write_obfuscate_age_resumeInfo13
+  (now: U32.t)
+  (#rrel #rel: _)
+  (sin: LP.slice rrel rel)
+  (pin: U32.t)
+  (sout: LP.slice (LP.srel_of_buffer_srel (B.trivial_preorder _)) (LP.srel_of_buffer_srel (B.trivial_preorder _)))
+  (pout_from: U32.t)
+: HST.Stack U32.t
+  (requires (fun h ->
+    LP.valid Parsers.ResumeInfo13.resumeInfo13_parser h sin pin /\
+    B.loc_disjoint (LP.loc_slice_from_to sin pin (LP.get_valid_pos Parsers.ResumeInfo13.resumeInfo13_parser h sin pin)) (LP.loc_slice_from sout pout_from) /\
+    LP.live_slice h sout /\
+    U32.v pout_from <= U32.v sout.LP.len /\
+    U32.v sout.LP.len < U32.v LP.max_uint32
+  ))
+  (ensures (fun h res h' ->
+    let x = obfuscate_age_resumeInfo13 now (LP.contents Parsers.ResumeInfo13.resumeInfo13_parser h sin pin) in
+    B.modifies (LP.loc_slice_from sout pout_from) h h' /\ (
+    if res = LP.max_uint32
+    then U32.v pout_from + LP.serialized_length pskIdentity_serializer x > U32.v sout.LP.len
+    else LP.valid_content_pos pskIdentity_parser h' sout pout_from x res
+  )))
+= let h = HST.get () in
+  let x = Ghost.hide (obfuscate_age_resumeInfo13 now (LP.contents Parsers.ResumeInfo13.resumeInfo13_parser h sin pin)) in
+  LP.serialized_length_eq pskIdentity_serializer (Ghost.reveal x);
+  pskIdentity_bytesize_eq (Ghost.reveal x);
+  let sin_id = Parsers.ResumeInfo13.accessor_resumeInfo13_identity sin pin in
+  pskIdentity_identity_bytesize_eq ((Ghost.reveal x).identity);
+  LP.serialized_length_eq pskIdentity_identity_serializer ((Ghost.reveal x).identity);
+  let pout_oage = LP.copy_weak _ pskIdentity_identity_jumper sin sin_id sout pout_from in
+  if pout_oage = LP.max_uint32
+  then LP.max_uint32
+  else if 4ul `U32.gt` (sout.LP.len `U32.sub` pout_oage)
+  then LP.max_uint32
+  else begin
+    let pin_tkt = Parsers.ResumeInfo13.accessor_resumeInfo13_ticket sin pin in
+    let creation_time = LowParse.Low.Int.read_u32 sin (Parsers.TicketContents13.accessor_ticketContents13_creation_time sin pin_tkt) in
+    let age = FStar.UInt32.((now -%^ creation_time) *%^ 1000ul) in
+    let age_add = LowParse.Low.Int.read_u32 sin (Parsers.TicketContents13.accessor_ticketContents13_age_add sin pin_tkt) in
+    let obfuscated_age = PSK.encode_age age age_add in
+    let pout_to = LowParse.Low.Int.write_u32 obfuscated_age sout pout_oage in
+    let h' = HST.get () in
+    pskIdentity_valid h' sout pout_from;
+    pout_to
+  end
+
+#pop-options
+
+#reset-options "--using_facts_from '* -LowParse'"
 
 let final_extensions cfg edi psks now: list clientHelloExtension =
   match cfg.max_version with
