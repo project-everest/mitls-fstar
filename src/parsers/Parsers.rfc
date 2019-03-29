@@ -1209,6 +1209,18 @@ enum /*@open*/ {
   (65535)
 } CipherSuite;
 
+struct {
+  CipherSuite cs;
+  select (cs) {
+    case TLS_AES_128_GCM_SHA256: Empty;
+    case TLS_AES_256_GCM_SHA384: Empty;
+    case TLS_CHACHA20_POLY1305_SHA256: Empty;
+    case TLS_AES_128_CCM_SHA256: Empty;
+    case TLS_AES_128_CCM_8_SHA256: Empty;
+    default: Fail;
+  } constraint;
+} CipherSuite13;
+
 opaque SessionID<0..32>;
 
 enum /*@open*/ { nullCompression(0), (255) } CompressionMethod;
@@ -1586,7 +1598,7 @@ struct {
 } TicketContents12;
 
 struct {
-  CipherSuite cs;
+  CipherSuite13 cs;
   opaque rms<32..255>;
   opaque nonce<0..255>;
   uint32 creation_time;

@@ -21,3 +21,27 @@ let name_of_cipherSuite_of_name =
 let cipherSuite_of_name_of_cipherSuite c = ()
 
 #reset-options
+
+let cipherSuiteName_of_cipherSuite13_of_cipherSuiteName _ = ()
+
+let cipherSuite13_of_cipherSuiteName_of_cipherSuite13 _ = ()
+
+let cipherSuite13_of_cipherSuite_of_cipherSuite13 _ = ()
+
+let cipherSuite_of_cipherSuite13_of_cipherSuite _ = ()
+
+let cipherSuite13_writer =
+  fun c #rrel #rel out pos ->
+  begin match c with
+  | Constraint_TLS_AES_128_GCM_SHA256 _ -> finalize_cipherSuite13_TLS_AES_128_GCM_SHA256 out pos
+  | Constraint_TLS_AES_256_GCM_SHA384 _ -> finalize_cipherSuite13_TLS_AES_256_GCM_SHA384 out pos
+  | Constraint_TLS_CHACHA20_POLY1305_SHA256 _ -> finalize_cipherSuite13_TLS_CHACHA20_POLY1305_SHA256 out pos
+  | Constraint_TLS_AES_128_CCM_SHA256 _ -> finalize_cipherSuite13_TLS_AES_128_CCM_SHA256 out pos
+  | Constraint_TLS_AES_128_CCM_8_SHA256 _ -> finalize_cipherSuite13_TLS_AES_128_CCM_8_SHA256 out pos
+  end;
+  pos `UInt32.add` 2ul
+
+let cipherSuite13_reader =
+  fun #rrel #rel inp pos ->
+  let c = cipherSuite_reader inp pos in
+  cipherSuite13_of_cipherSuiteName c

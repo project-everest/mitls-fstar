@@ -384,6 +384,23 @@ private let compute_binder_ph (pski:pskInfo) : Tot pskBinderEntry =
 
 #push-options "--z3rlimit 16"
 
+(* a rewrite of the compute_binder_ph spec *)
+
+let compute_binder_ph_ticket13 (t: Parsers.TicketContents13.ticketContents13) : Tot pskBinderEntry =
+  let pski = Ticket.ticketContents13_pskinfo t in
+  let h = PSK.pskInfo_hash pski in
+  let len : UInt32.t = Hashing.Spec.tagLen h in
+  assert (32 <= U32.v len /\ U32.v len <= 256); // hash must not be MD5 or SHA1...
+  FStar.Bytes.create len 0uy
+
+(* sanity-check: this rewrite behaves no differently than the old code *)
+
+let compute_binder_ph_ticket13_correct (t: Parsers.TicketContents13.ticketContents13) : Lemma
+  (compute_binder_ph_ticket13 t == compute_binder_ph (Ticket.ticketContents13_pskinfo t))
+= ()
+
+(* implementation of the new spec *)
+
 private let write_binder_ph
   (#rrel #rel: _)
   (sin: LP.slice rrel rel)
@@ -396,15 +413,12 @@ private let write_binder_ph
     LP.live_slice h sout /\
     U32.v pout_from <= U32.v sout.LP.len /\
     U32.v sout.LP.len < U32.v LP.max_uint32 /\ // to error code
-    LP.valid Parsers.TicketContents.ticketContents_parser h sin pin /\
-    B.loc_disjoint (LP.loc_slice_from_to sin pin (LP.get_valid_pos Parsers.TicketContents.ticketContents_parser h sin pin)) (LP.loc_slice_from sout pout_from) /\ (
-    let t = LP.contents Parsers.TicketContents.ticketContents_parser h sin pin in
-    Some? (Ticket.ticketContents_pskinfo t)
-  )))
+    LP.valid Parsers.TicketContents13.ticketContents13_parser h sin pin /\
+    B.loc_disjoint (LP.loc_slice_from_to sin pin (LP.get_valid_pos Parsers.TicketContents13.ticketContents13_parser h sin pin)) (LP.loc_slice_from sout pout_from)
+  ))
   (ensures (fun h pout_to h' ->
     B.modifies (LP.loc_slice_from sout pout_from) h h' /\ (
-    let pski = Some?.v (Ticket.ticketContents_pskinfo (LP.contents Parsers.TicketContents.ticketContents_parser h sin pin)) in
-    let ph = compute_binder_ph pski in
+    let ph = compute_binder_ph_ticket13 (LP.contents Parsers.TicketContents13.ticketContents13_parser h sin pin) in
     if pout_to = LP.max_uint32
     then
       U32.v pout_from + LP.serialized_length pskBinderEntry_serializer ph > U32.v sout.LP.len
@@ -412,12 +426,10 @@ private let write_binder_ph
       LP.valid_content_pos pskBinderEntry_parser h' sout pout_from ph pout_to
   )))
 = let h0 = HST.get () in
-  let ph = Ghost.hide (compute_binder_ph (Some?.v (Ticket.ticketContents_pskinfo (LP.contents Parsers.TicketContents.ticketContents_parser h0 sin pin)))) in
-  let pt13 = Parsers.TicketContents.ticketContents_accessor_ticket13 sin pin in
-  let c = Parsers.CipherSuite.cipherSuite_reader sin (Parsers.TicketContents13.accessor_ticketContents13_cs sin pt13) in
-  let Some (CipherSuite13 _ h) = cipherSuite_of_name c in
+  let ph = Ghost.hide (compute_binder_ph_ticket13 (LP.contents Parsers.TicketContents13.ticketContents13_parser h0 sin pin)) in
+  let c = CipherSuite.cipherSuite13_reader sin (Parsers.TicketContents13.accessor_ticketContents13_cs sin pin) in
+  let (CipherSuite13 _ h) = cipherSuite_of_cipherSuite13 c in
   let len : U32.t = Hashing.Spec.tagLen h in
-  assume (32 <= U32.v len /\ U32.v len <= 256); // hash must not be MD5 or SHA1...
   if (1ul `U32.add` len) `U32.gt` (sout.LP.len `U32.sub` pout_from)
   then begin
     LP.serialized_length_eq pskBinderEntry_serializer (Ghost.reveal ph);
@@ -462,9 +474,6 @@ let list_pskid_pskinfo_of_list_resumeinfo13 (l: list Parsers.ResumeInfo13.resume
   (fun r -> let i = r.Parsers.ResumeInfo13.identity in
          let t = r.Parsers.ResumeInfo13.ticket in
          assume (PSK.registered_psk i);
-         let c = cipherSuite_of_name t.Parsers.TicketContents13.cs in
-         assume (Some? c);
-         assume (CipherSuite13? (Some?.v c));
          ((i <: PSK.pskid), Some?.v (Ticket.ticketContents_pskinfo (Parsers.TicketContents.T_ticket13 t))))
   l
 
@@ -479,9 +488,6 @@ let rec obfuscate_age_obfuscate_age_resumeInfo13
     let i = r.Parsers.ResumeInfo13.identity in
     let t = r.Parsers.ResumeInfo13.ticket in
     assume (PSK.registered_psk i);
-    let c = cipherSuite_of_name t.Parsers.TicketContents13.cs in
-    assume (Some? c);
-    assume (CipherSuite13? (Some?.v c));
     obfuscate_age_obfuscate_age_resumeInfo13 now q
 
 (* then, this is the writer in terms of the new high-level function *)
@@ -563,7 +569,197 @@ let final_extensions cfg edi psks now: list clientHelloExtension =
       [CHE_psk_key_exchange_modes [Psk_ke; Psk_dhe_ke]] )
   | _ -> []
 // 19-01-19 We may need better dummy binders! 
- 
+
+(* a rewrite of the spec of final_extensions *)
+
+noextract
+let allow_psk_resumption_resumeInfo13 (r: Parsers.ResumeInfo13.resumeInfo13) : Tot bool =
+  (Ticket.ticketContents13_pskinfo r.Parsers.ResumeInfo13.ticket).allow_psk_resumption
+
+noextract
+let allow_dhe_resumption_resumeInfo13 (r: Parsers.ResumeInfo13.resumeInfo13) : Tot bool =
+  (Ticket.ticketContents13_pskinfo r.Parsers.ResumeInfo13.ticket).allow_dhe_resumption
+
+noextract
+let final_extensions_resumeInfo13
+  (cfg: config) (edi: bool) (l: list Parsers.ResumeInfo13.resumeInfo13) (now: U32.t)
+: GTot (option (list clientHelloExtension))
+= match cfg.max_version with
+  | TLS_1p3 ->
+    let allow_psk_resumption = List.Tot.existsb allow_psk_resumption_resumeInfo13 l in
+    let allow_dhe_resumption = List.Tot.existsb allow_dhe_resumption_resumeInfo13 l in
+    if allow_psk_resumption || allow_dhe_resumption
+    then
+      let psk_kex =
+        (if allow_psk_resumption then [Psk_ke] else []) @ (if allow_dhe_resumption then [Psk_dhe_ke] else [])
+      in
+      let binders = List.Tot.map (fun r -> compute_binder_ph_ticket13 r.Parsers.ResumeInfo13.ticket) l in
+      let pskidentities = List.Tot.map (obfuscate_age_resumeInfo13 now) l in
+      if
+        (let x = offeredPsks_identities_list_bytesize pskidentities in 7 <= x && x <= 65535) &&
+        (let x = offeredPsks_binders_list_bytesize binders in 33 <= x && x <= 65535)
+      then
+        let ke = ({ identities = pskidentities; binders = binders; }) in
+        if
+          (let x = Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_bytesize ke in 0 <= x && x <= 65535)
+        then
+          Some ([CHE_psk_key_exchange_modes psk_kex] @
+            (if edi then [CHE_early_data ()] else []) @
+            [CHE_pre_shared_key ke]
+          )
+        else None
+      else None
+    else
+      Some [CHE_psk_key_exchange_modes [Psk_ke; Psk_dhe_ke]]
+  | _ -> Some []
+
+(* TODO: sanity-check wrt. old final_extensions *)
+
+(* then, the writer *)
+
+#reset-options
+
+(* TODO: move these generic writers away, e.g. to LowParse.Low.Base *)
+
+inline_for_extraction
+noextract
+let writer
+  (#k: LP.parser_kind)
+  (#t: Type)
+  (#p: LP.parser k t)
+  (s: LP.serializer p { k.LP.parser_kind_subkind == Some LP.ParserStrong } )
+  (x: option t)
+: Tot Type
+= (sout: LP.slice (LP.srel_of_buffer_srel (B.trivial_preorder _)) (LP.srel_of_buffer_srel (B.trivial_preorder _))) ->
+  (pout_from: U32.t) ->
+  HST.Stack U32.t
+  (requires (fun h ->
+    LP.live_slice h sout /\
+    U32.v pout_from <= U32.v sout.LP.len /\
+    U32.v sout.LP.len < U32.v LP.max_uint32 - 1
+  ))
+  (ensures (fun h res h' ->
+    B.modifies (LP.loc_slice_from sout pout_from) h h' /\ (
+    if res = LP.max_uint32
+    then (Some? x ==> U32.v pout_from + LP.serialized_length s (Some?.v x) > U32.v sout.LP.len)
+    else if res = LP.max_uint32 `U32.sub` 1ul
+    then None? x
+    else
+      Some? x /\
+      LP.valid_content_pos p h' sout pout_from (Some?.v x) res
+  )))
+
+inline_for_extraction
+noextract
+let lwriter
+  (#k: LP.parser_kind)
+  (#t: Type)
+  (#p: LP.parser k t)
+  (s: LP.serializer p { k.LP.parser_kind_subkind == Some LP.ParserStrong /\ k.LP.parser_kind_low > 0 } )
+  (x: option (list t))
+: Tot Type
+= (sout: LP.slice (LP.srel_of_buffer_srel (B.trivial_preorder _)) (LP.srel_of_buffer_srel (B.trivial_preorder _))) ->
+  (pout_from: U32.t) ->
+  HST.Stack U32.t
+  (requires (fun h ->
+    LP.live_slice h sout /\
+    U32.v pout_from <= U32.v sout.LP.len /\
+    U32.v sout.LP.len < U32.v LP.max_uint32 - 1
+  ))
+  (ensures (fun h res h' ->
+    B.modifies (LP.loc_slice_from sout pout_from) h h' /\ (
+    if res = LP.max_uint32
+    then (Some? x ==> U32.v pout_from + LP.serialized_list_length s (Some?.v x) > U32.v sout.LP.len)
+    else if res = LP.max_uint32 `U32.sub` 1ul
+    then None? x
+    else
+      Some? x /\
+      LP.valid_list p h' sout pout_from res /\
+      LP.contents_list p h' sout pout_from res ==  (Some?.v x)
+  )))
+
+inline_for_extraction
+noextract
+let lwriter_nil
+  (#k: LP.parser_kind)
+  (#t: Type)
+  (#p: LP.parser k t)
+  (s: LP.serializer p { k.LP.parser_kind_subkind == Some LP.ParserStrong /\ k.LP.parser_kind_low > 0 } )
+: Tot (lwriter s (Some []))
+= fun sout pout_from ->
+  let h = HST.get () in
+  LP.valid_list_nil p h sout pout_from;
+  pout_from
+
+let write_final_extensions_resumeInfo13
+  (cfg: config)
+  (edi: bool)
+  (#rrel #rel: _)
+  (sin: LP.slice rrel rel)
+  (pin_from pin_to: U32.t)
+  (now: U32.t)
+  (sout: LP.slice (LP.srel_of_buffer_srel (B.trivial_preorder _)) (LP.srel_of_buffer_srel (B.trivial_preorder _)))
+  (pout_from: U32.t)
+: HST.Stack U32.t
+  (requires (fun h ->
+    LP.valid_list Parsers.ResumeInfo13.resumeInfo13_parser h sin pin_from pin_to /\
+    LP.live_slice h sout /\
+    U32.v pout_from <= U32.v sout.LP.len /\
+    U32.v sout.LP.len < U32.v LP.max_uint32 - 1 /\ // encode 2 types of errors
+    B.loc_disjoint (LP.loc_slice_from_to sin pin_from pin_to) (LP.loc_slice_from sout pout_from)
+  ))
+  (ensures (fun h res h' ->
+    let x = final_extensions_resumeInfo13 cfg edi (LP.contents_list Parsers.ResumeInfo13.resumeInfo13_parser h sin pin_from pin_to) now in
+    B.modifies (LP.loc_slice_from sout pout_from) h h' /\ (
+    if res = LP.max_uint32
+    then (Some? x ==> U32.v pout_from + LP.serialized_list_length Parsers.ClientHelloExtension.clientHelloExtension_serializer (Some?.v x) > U32.v sout.LP.len)
+    else if res = LP.max_uint32 `U32.sub` 1ul
+    then None? x
+    else
+      Some? x /\
+      LP.valid_list Parsers.ClientHelloExtension.clientHelloExtension_parser h' sout pout_from res /\
+      LP.contents_list Parsers.ClientHelloExtension.clientHelloExtension_parser h' sout pout_from res == Some?.v x
+  )))
+= match cfg.max_version with
+  | TLS_1p3 ->
+    let allow_psk_resumption =
+      LP.list_existsb
+        Parsers.ResumeInfo13.resumeInfo13_jumper
+        allow_psk_resumption_resumeInfo13
+        (fun #rrel #rel sl pos -> true) // currently constant, see Ticket.ticket_pskinfo
+        sin pin_from pin_to
+    in
+    let allow_dhe_resumption =
+      LP.list_existsb
+        Parsers.ResumeInfo13.resumeInfo13_jumper
+        allow_dhe_resumption_resumeInfo13
+        (fun #rrel #rel sl pos -> true) // currently constant, see Ticket.ticket_pskinfo
+        sin pin_from pin_to
+    in
+    [@inline_let]
+    let write_psk_kex
+      (pos_pkex: U32.t)
+    : HST.Stack U32.t
+      (requires (fun h -> LP.live_slice h sout /\ U32.v pos_pkex <= U32.v sout.LP.len))
+      (ensures (fun h res h' ->
+        B.modifies (LP.loc_slice_from sout pos_pkex) h h' /\ (
+        let x = (if allow_psk_resumption then [Psk_ke] else []) @ (if allow_dhe_resumption then [Psk_dhe_ke] else []) in
+        if res = LP.max_uint32
+        then U32.v pos_pkex + LP.serialized_list_length Parsers.PskKeyExchangeMode.pskKeyExchangeMode_serializer x > U32.v sout.LP.len
+        else
+          LP.valid_list Parsers.PskKeyExchangeMode.pskKeyExchangeMode_parser h' sout pos_pkex res /\
+          LP.contents_list Parsers.PskKeyExchangeMode.pskKeyExchangeMode_parser h' sout pos_pkex res == x
+      )))
+    = admit ()
+    in
+    admit ()
+  | _ ->
+    let h = HST.get () in
+    LP.valid_list_nil Parsers.ClientHelloExtension.clientHelloExtension_parser h sout pout_from;
+    pout_from
+
+#reset-options "--using_facts_from '* -LowParse'"
+
 let prepareClientExtensions 
   (cfg: config)
   edi

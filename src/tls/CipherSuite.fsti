@@ -314,13 +314,11 @@ let name_of_cipherSuite_of_name' (n: cipherSuiteName) (c: cipherSuite') : Lemma
   assert (name_of_cipherSuite_of_name_post n);
   ()
 
-inline_for_extraction
 let cipherSuite_of_name (c: cipherSuiteName) : Tot (option cipherSuite) =
   match cipherSuite'_of_name c with
   | Some v -> [@inline_let] let _ = name_of_cipherSuite_of_name' c v in Some v
   | None -> None
 
-inline_for_extraction
 let name_of_cipherSuite (c: cipherSuite) : Tot cipherSuiteName =
   [@inline_let] let _ = cipherSuite_of_name_of_cipherSuite c in
   match name_of_cipherSuite' c with
@@ -368,3 +366,64 @@ let parse_cipherSuiteName_error_msg : string =
 let parseCipherSuiteName: b:lbytes 2
   -> Tot (cm:cipherSuiteName{cipherSuiteNameBytes cm == b}) =
   LowParseWrappers.wrap_parser32_total_constant_length cipherSuite_serializer32 cipherSuite_parser32 2 ()
+
+(* CipherSuite13 *)
+
+open Parsers.CipherSuite13
+
+#push-options "--z3rlimit 32"
+
+let cipherSuite13_of_cipherSuiteName
+  (c: cipherSuiteName { let c' = cipherSuite_of_name c in Some? c' /\ CipherSuite13? (Some?.v c') } )
+: Tot cipherSuite13
+= match c with
+  | TLS_AES_128_GCM_SHA256 -> Constraint_TLS_AES_128_GCM_SHA256 ()
+  | TLS_AES_256_GCM_SHA384 -> Constraint_TLS_AES_256_GCM_SHA384 ()
+  | TLS_CHACHA20_POLY1305_SHA256 -> Constraint_TLS_CHACHA20_POLY1305_SHA256 ()
+  | TLS_AES_128_CCM_SHA256 -> Constraint_TLS_AES_128_CCM_SHA256 ()
+  | TLS_AES_128_CCM_8_SHA256 -> Constraint_TLS_AES_128_CCM_8_SHA256 ()
+
+#pop-options
+
+let cipherSuiteName_of_cipherSuite13
+  (c: cipherSuite13)
+: Tot (c1: cipherSuiteName { let c2 = cipherSuite_of_name c1 in Some? c2 /\ CipherSuite13? (Some?.v c2) } )
+= tag_of_cipherSuite13 c
+
+val cipherSuiteName_of_cipherSuite13_of_cipherSuiteName
+  (c: cipherSuiteName { let c' = cipherSuite_of_name c in Some? c' /\ CipherSuite13? (Some?.v c') } )
+: Lemma
+  (cipherSuiteName_of_cipherSuite13 (cipherSuite13_of_cipherSuiteName c) == c)
+  [SMTPat (cipherSuiteName_of_cipherSuite13 (cipherSuite13_of_cipherSuiteName c))]
+
+val cipherSuite13_of_cipherSuiteName_of_cipherSuite13
+  (c: cipherSuite13)
+: Lemma
+  (cipherSuite13_of_cipherSuiteName (cipherSuiteName_of_cipherSuite13 c) == c)
+  [SMTPat (cipherSuite13_of_cipherSuiteName (cipherSuiteName_of_cipherSuite13 c))]
+
+let cipherSuite13_of_cipherSuite
+  (c: cipherSuite { CipherSuite13? c } )
+: Tot cipherSuite13
+= cipherSuite13_of_cipherSuiteName (name_of_cipherSuite c)
+
+let cipherSuite_of_cipherSuite13
+  (c: cipherSuite13)
+: Tot (c' : cipherSuite { CipherSuite13? c' } )
+= Some?.v (cipherSuite_of_name (cipherSuiteName_of_cipherSuite13 c))
+
+val cipherSuite13_of_cipherSuite_of_cipherSuite13
+  (c: cipherSuite13)
+: Lemma
+  (cipherSuite13_of_cipherSuite (cipherSuite_of_cipherSuite13 c) == c)
+  [SMTPat (cipherSuite13_of_cipherSuite (cipherSuite_of_cipherSuite13 c))]
+
+val cipherSuite_of_cipherSuite13_of_cipherSuite
+  (c: cipherSuite { CipherSuite13? c } )
+: Lemma
+  (cipherSuite_of_cipherSuite13 (cipherSuite13_of_cipherSuite c) == c)
+  [SMTPat (cipherSuite_of_cipherSuite13 (cipherSuite13_of_cipherSuite c))]
+
+val cipherSuite13_writer : LowParse.Low.Base.leaf_writer_strong cipherSuite13_serializer
+
+val cipherSuite13_reader : LowParse.Low.Base.leaf_reader cipherSuite13_parser
