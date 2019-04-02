@@ -619,77 +619,270 @@ let final_extensions_resumeInfo13
 
 #reset-options
 
-(* TODO: move these generic writers away, e.g. to LowParse.Low.Base *)
+module LPW = LowParse.Low.Writers
+
+let make_offeredPsks_identities
+  (oidentities: option (list Parsers.PskIdentity.pskIdentity))
+: GTot (option Parsers.OfferedPsks_identities.offeredPsks_identities)
+= match oidentities with
+  | Some identities ->
+    if
+      (let x = offeredPsks_identities_list_bytesize identities in 7 <= x && x <= 65535)
+    then Some identities
+    else None
+  | _ -> None
 
 inline_for_extraction
 noextract
-let writer
-  (#k: LP.parser_kind)
-  (#t: Type)
-  (#p: LP.parser k t)
-  (s: LP.serializer p { k.LP.parser_kind_subkind == Some LP.ParserStrong } )
-  (x: option t)
-: Tot Type
-= (sout: LP.slice (LP.srel_of_buffer_srel (B.trivial_preorder _)) (LP.srel_of_buffer_srel (B.trivial_preorder _))) ->
-  (pout_from: U32.t) ->
-  HST.Stack U32.t
-  (requires (fun h ->
-    LP.live_slice h sout /\
-    U32.v pout_from <= U32.v sout.LP.len /\
-    U32.v sout.LP.len < U32.v LP.max_uint32 - 1
-  ))
-  (ensures (fun h res h' ->
-    B.modifies (LP.loc_slice_from sout pout_from) h h' /\ (
-    if res = LP.max_uint32
-    then (Some? x ==> U32.v pout_from + LP.serialized_length s (Some?.v x) > U32.v sout.LP.len)
-    else if res = LP.max_uint32 `U32.sub` 1ul
-    then None? x
+let write_offeredPsks_identities
+  (#h0: HS.mem)
+  (#sout: _)
+  (#pout_from0: _)
+  (w: LPW.olwriter Parsers.PskIdentity.pskIdentity_serializer h0 sout pout_from0)
+: Tot (y: LPW.owriter Parsers.OfferedPsks_identities.offeredPsks_identities_serializer h0 sout pout_from0 {
+    LPW.owvalue y == make_offeredPsks_identities (LPW.olwvalue w)
+  })
+= LPW.OWriter (Ghost.hide (make_offeredPsks_identities (LPW.olwvalue w))) (fun pout_from ->
+    let f () : Lemma
+      (requires (Some? (make_offeredPsks_identities (LPW.olwvalue w))))
+      (ensures (
+        match make_offeredPsks_identities (LPW.olwvalue w) with
+        | None -> False
+        | Some oi ->
+          Some? (LPW.olwvalue w) /\
+          LP.serialized_length Parsers.OfferedPsks_identities.offeredPsks_identities_serializer oi == 2 + LP.serialized_list_length Parsers.PskIdentity.pskIdentity_serializer (Some?.v (LPW.olwvalue w))
+      ))
+    = match make_offeredPsks_identities (LPW.olwvalue w) with
+      | None -> ()
+      | Some oi ->
+        LP.serialized_length_eq Parsers.OfferedPsks_identities.offeredPsks_identities_serializer oi;
+        Parsers.OfferedPsks_identities.offeredPsks_identities_bytesize_eq oi;
+        Parsers.OfferedPsks_identities.offeredPsks_identities_list_bytesize_eq (Some?.v (LPW.olwvalue w))
+    in
+    assert (U32.v pout_from <= U32.v sout.LP.len);
+    Classical.move_requires f ();
+    if 2ul `U32.gt` (sout.LP.len `U32.sub` pout_from)
+    then LP.max_uint32
     else
-      Some? x /\
-      LP.valid_content_pos p h' sout pout_from (Some?.v x) res
-  )))
+      let res = LPW.olwrite w (pout_from `U32.add` 2ul) in
+      if (LP.max_uint32 `U32.sub` 1ul) `U32.lte` res
+      then
+        res
+      else begin
+        let h = HST.get () in
+        LP.valid_list_serialized_list_length Parsers.PskIdentity.pskIdentity_serializer h sout (pout_from `U32.add` 2ul) res;
+        let len = res `U32.sub` (pout_from `U32.add` 2ul) in
+        if len `U32.lt` 7ul || 65535ul `U32.lt` len
+        then LP.max_uint32 `U32.sub` 1ul
+        else begin
+          Parsers.OfferedPsks_identities.finalize_offeredPsks_identities sout pout_from res;
+          res
+        end
+      end
+  )
+
+let make_offeredPsks_binders
+  (obinders: option (list Parsers.PskBinderEntry.pskBinderEntry))
+: GTot (option Parsers.OfferedPsks_binders.offeredPsks_binders)
+= match obinders with
+  | Some binders ->
+    if
+      (let x = offeredPsks_binders_list_bytesize binders in 33 <= x && x <= 65535)
+    then begin
+      Some binders
+    end
+    else None
+  | _ -> None
 
 inline_for_extraction
 noextract
-let lwriter
-  (#k: LP.parser_kind)
-  (#t: Type)
-  (#p: LP.parser k t)
-  (s: LP.serializer p { k.LP.parser_kind_subkind == Some LP.ParserStrong /\ k.LP.parser_kind_low > 0 } )
-  (x: option (list t))
-: Tot Type
-= (sout: LP.slice (LP.srel_of_buffer_srel (B.trivial_preorder _)) (LP.srel_of_buffer_srel (B.trivial_preorder _))) ->
-  (pout_from: U32.t) ->
-  HST.Stack U32.t
-  (requires (fun h ->
-    LP.live_slice h sout /\
-    U32.v pout_from <= U32.v sout.LP.len /\
-    U32.v sout.LP.len < U32.v LP.max_uint32 - 1
-  ))
-  (ensures (fun h res h' ->
-    B.modifies (LP.loc_slice_from sout pout_from) h h' /\ (
-    if res = LP.max_uint32
-    then (Some? x ==> U32.v pout_from + LP.serialized_list_length s (Some?.v x) > U32.v sout.LP.len)
-    else if res = LP.max_uint32 `U32.sub` 1ul
-    then None? x
+let write_offeredPsks_binders
+  (#h0: HS.mem)
+  (#sout: _)
+  (#pout_from0: _)
+  (w: LPW.olwriter Parsers.PskBinderEntry.pskBinderEntry_serializer h0 sout pout_from0)
+: Tot (y: LPW.owriter Parsers.OfferedPsks_binders.offeredPsks_binders_serializer h0 sout pout_from0 {
+    LPW.owvalue y == make_offeredPsks_binders (LPW.olwvalue w)
+  })
+= LPW.OWriter (Ghost.hide (make_offeredPsks_binders (LPW.olwvalue w))) (fun pout_from ->
+    let f () : Lemma
+      (requires (Some? (make_offeredPsks_binders (LPW.olwvalue w))))
+      (ensures (
+        match make_offeredPsks_binders (LPW.olwvalue w) with
+        | None -> False
+        | Some oi ->
+          Some? (LPW.olwvalue w) /\
+          LP.serialized_length Parsers.OfferedPsks_binders.offeredPsks_binders_serializer oi == 2 + LP.serialized_list_length Parsers.PskBinderEntry.pskBinderEntry_serializer (Some?.v (LPW.olwvalue w))
+      ))
+    = match make_offeredPsks_binders (LPW.olwvalue w) with
+      | None -> ()
+      | Some oi ->
+        LP.serialized_length_eq Parsers.OfferedPsks_binders.offeredPsks_binders_serializer oi;
+        Parsers.OfferedPsks_binders.offeredPsks_binders_bytesize_eq oi;
+        Parsers.OfferedPsks_binders.offeredPsks_binders_list_bytesize_eq (Some?.v (LPW.olwvalue w))
+    in
+    assert (U32.v pout_from <= U32.v sout.LP.len);
+    Classical.move_requires f ();
+    if 2ul `U32.gt` (sout.LP.len `U32.sub` pout_from)
+    then LP.max_uint32
     else
-      Some? x /\
-      LP.valid_list p h' sout pout_from res /\
-      LP.contents_list p h' sout pout_from res ==  (Some?.v x)
-  )))
+      let res = LPW.olwrite w (pout_from `U32.add` 2ul) in
+      if (LP.max_uint32 `U32.sub` 1ul) `U32.lte` res
+      then
+        res
+      else begin
+        let h = HST.get () in
+        LP.valid_list_serialized_list_length Parsers.PskBinderEntry.pskBinderEntry_serializer h sout (pout_from `U32.add` 2ul) res;
+        let len = res `U32.sub` (pout_from `U32.add` 2ul) in
+        if len `U32.lt` 33ul || 65535ul `U32.lt` len
+        then LP.max_uint32 `U32.sub` 1ul
+        else begin
+          Parsers.OfferedPsks_binders.finalize_offeredPsks_binders sout pout_from res;
+          res
+        end
+      end
+  )
+
+let make_preSharedKeyClientExtension
+  (oi: option Parsers.OfferedPsks_identities.offeredPsks_identities)
+  (ob: option Parsers.OfferedPsks_binders.offeredPsks_binders)
+: GTot (option Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension)
+= match oi, ob with
+  | Some i, Some b -> Some ({ Parsers.OfferedPsks.identities = i; Parsers.OfferedPsks.binders = b; })
+  | _ -> None
+
+#push-options "--z3rlimit 16"
 
 inline_for_extraction
 noextract
-let lwriter_nil
-  (#k: LP.parser_kind)
-  (#t: Type)
-  (#p: LP.parser k t)
-  (s: LP.serializer p { k.LP.parser_kind_subkind == Some LP.ParserStrong /\ k.LP.parser_kind_low > 0 } )
-: Tot (lwriter s (Some []))
-= fun sout pout_from ->
-  let h = HST.get () in
-  LP.valid_list_nil p h sout pout_from;
-  pout_from
+let write_preSharedKeyClientExtension
+  (#h0: _)
+  (#sout: _)
+  (#pout_from0: _)
+  (w_identities: LPW.owriter Parsers.OfferedPsks_identities.offeredPsks_identities_serializer h0 sout pout_from0) 
+  (w_binders: LPW.owriter Parsers.OfferedPsks_binders.offeredPsks_binders_serializer h0 sout pout_from0)
+: Tot (y: LPW.owriter Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_serializer h0 sout pout_from0 {
+    LPW.owvalue y == make_preSharedKeyClientExtension (LPW.owvalue w_identities) (LPW.owvalue w_binders)
+  })
+= LPW.OWriter (Ghost.hide (make_preSharedKeyClientExtension (LPW.owvalue w_identities) (LPW.owvalue w_binders))) (fun pout_from ->
+    Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_parser_serializer_eq ();
+    let f () : Lemma
+      (requires (Some? (make_preSharedKeyClientExtension (LPW.owvalue w_identities) (LPW.owvalue w_binders))))
+      (ensures (
+        match make_preSharedKeyClientExtension (LPW.owvalue w_identities) (LPW.owvalue w_binders) with
+        | None -> False
+        | Some w ->
+          LP.serialized_length Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_serializer w ==
+            LP.serialized_length Parsers.OfferedPsks_identities.offeredPsks_identities_serializer (Some?.v (LPW.owvalue w_identities)) +
+            LP.serialized_length Parsers.OfferedPsks_binders.offeredPsks_binders_serializer (Some?.v (LPW.owvalue w_binders))
+      ))
+    = match make_preSharedKeyClientExtension (LPW.owvalue w_identities) (LPW.owvalue w_binders) with
+      | None -> ()
+      | Some w ->
+        Parsers.OfferedPsks.offeredPsks_bytesize_eq w;
+        LP.serialized_length_eq Parsers.OfferedPsks.offeredPsks_serializer w;
+        Parsers.OfferedPsks_identities.offeredPsks_identities_bytesize_eq (Some?.v (LPW.owvalue w_identities));
+        LP.serialized_length_eq Parsers.OfferedPsks_identities.offeredPsks_identities_serializer (Some?.v (LPW.owvalue w_identities));
+        Parsers.OfferedPsks_binders.offeredPsks_binders_bytesize_eq (Some?.v (LPW.owvalue w_binders));
+        LP.serialized_length_eq Parsers.OfferedPsks_binders.offeredPsks_binders_serializer (Some?.v (LPW.owvalue w_binders))
+    in
+    Classical.move_requires f ();
+    let res1 = LPW.owrite w_identities pout_from in
+    if (LP.max_uint32 `U32.sub` 1ul) `U32.lte` res1
+    then res1
+    else begin
+      let res2 = LPW.owrite w_binders res1 in
+      if (LP.max_uint32 `U32.sub` 1ul) `U32.lte` res2
+      then
+        res2
+      else begin
+        let h = HST.get () in
+        Parsers.OfferedPsks.offeredPsks_valid h sout pout_from;
+        res2
+        end
+      end
+  )
+
+let make_clientHelloExtension_CHE_pre_shared_key
+  (o: option Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension)
+: GTot (option clientHelloExtension_CHE_pre_shared_key)
+= match o with
+  | None -> None
+  | Some x ->
+    if
+      (let l = Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_bytesize x in l <= 65535)
+    then
+      Some x
+    else
+      None
+
+inline_for_extraction
+noextract
+let write_clientHelloExtension_CHE_pre_shared_key
+  (#h0: _)
+  (#sout: _)
+  (#pout_from0: _)
+  (w: LPW.owriter Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_serializer h0 sout pout_from0)
+: Tot (y: LPW.owriter clientHelloExtension_CHE_pre_shared_key_serializer h0 sout pout_from0 {
+    LPW.owvalue y == make_clientHelloExtension_CHE_pre_shared_key (LPW.owvalue w)
+  })
+= LPW.OWriter (Ghost.hide (make_clientHelloExtension_CHE_pre_shared_key (LPW.owvalue w))) (fun pout_from ->
+    Classical.forall_intro clientHelloExtension_CHE_pre_shared_key_bytesize_eq;
+    Classical.forall_intro Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_bytesize_eq;
+    Classical.forall_intro (LP.serialized_length_eq Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_serializer);
+    Classical.forall_intro (LP.serialized_length_eq clientHelloExtension_CHE_pre_shared_key_serializer);
+    if 2ul `U32.gt` (sout.LP.len `U32.sub` pout_from)
+    then LP.max_uint32
+    else begin
+      let res = LPW.owrite w (pout_from `U32.add` 2ul) in
+      if (LP.max_uint32 `U32.sub` 1ul) `U32.lte` res
+      then begin
+        res
+      end else
+        let len = res `U32.sub` (pout_from `U32.add` 2ul) in
+        if 65535ul `U32.lt` len
+        then LP.max_uint32 `U32.sub` 1ul
+        else begin
+          clientHelloExtension_CHE_pre_shared_key_finalize sout pout_from res;
+          res
+        end
+    end
+  )
+
+inline_for_extraction
+let constr_clientHelloExtension_CHE_pre_shared_key
+  (o: option clientHelloExtension_CHE_pre_shared_key)
+: GTot (option clientHelloExtension)
+= match o with
+  | None -> None
+  | Some x -> Some (CHE_pre_shared_key x)
+
+inline_for_extraction
+noextract
+let write_constr_clientHelloExtension_CHE_pre_shared_key
+  (#h0: _)
+  (#sout: _)
+  (#pout_from0: _)
+  (w: LPW.owriter clientHelloExtension_CHE_pre_shared_key_serializer h0 sout pout_from0)
+: Tot (y: LPW.owriter clientHelloExtension_serializer h0 sout pout_from0 { LPW.owvalue y == constr_clientHelloExtension_CHE_pre_shared_key (LPW.owvalue w) } )
+= LPW.OWriter (Ghost.hide (constr_clientHelloExtension_CHE_pre_shared_key (LPW.owvalue w))) (fun pout_from ->
+    Classical.forall_intro clientHelloExtension_bytesize_eq;
+    Classical.forall_intro clientHelloExtension_CHE_pre_shared_key_bytesize_eq;
+    Classical.forall_intro (LP.serialized_length_eq clientHelloExtension_CHE_pre_shared_key_serializer);
+    Classical.forall_intro (LP.serialized_length_eq clientHelloExtension_serializer);
+    if 2ul `U32.gt` (sout.LP.len `U32.sub` pout_from)
+    then LP.max_uint32
+    else begin
+      let res = LPW.owrite w (pout_from `U32.add` 2ul) in
+      if (LP.max_uint32 `U32.sub` 1ul) `U32.lte` res
+      then begin
+        res
+      end else begin
+        finalize_clientHelloExtension_pre_shared_key sout pout_from;
+        res
+      end
+    end
+  )
 
 let write_final_extensions_resumeInfo13
   (cfg: config)
@@ -720,7 +913,8 @@ let write_final_extensions_resumeInfo13
       LP.valid_list Parsers.ClientHelloExtension.clientHelloExtension_parser h' sout pout_from res /\
       LP.contents_list Parsers.ClientHelloExtension.clientHelloExtension_parser h' sout pout_from res == Some?.v x
   )))
-= match cfg.max_version with
+= let h0 = HST.get () in
+  match cfg.max_version with
   | TLS_1p3 ->
     let allow_psk_resumption =
       LP.list_existsb
@@ -736,27 +930,63 @@ let write_final_extensions_resumeInfo13
         (fun #rrel #rel sl pos -> true) // currently constant, see Ticket.ticket_pskinfo
         sin pin_from pin_to
     in
-    [@inline_let]
-    let write_psk_kex
-      (pos_pkex: U32.t)
-    : HST.Stack U32.t
-      (requires (fun h -> LP.live_slice h sout /\ U32.v pos_pkex <= U32.v sout.LP.len))
-      (ensures (fun h res h' ->
-        B.modifies (LP.loc_slice_from sout pos_pkex) h h' /\ (
-        let x = (if allow_psk_resumption then [Psk_ke] else []) @ (if allow_dhe_resumption then [Psk_dhe_ke] else []) in
-        if res = LP.max_uint32
-        then U32.v pos_pkex + LP.serialized_list_length Parsers.PskKeyExchangeMode.pskKeyExchangeMode_serializer x > U32.v sout.LP.len
-        else
-          LP.valid_list Parsers.PskKeyExchangeMode.pskKeyExchangeMode_parser h' sout pos_pkex res /\
-          LP.contents_list Parsers.PskKeyExchangeMode.pskKeyExchangeMode_parser h' sout pos_pkex res == x
-      )))
-    = admit ()
-    in
-    admit ()
+    if allow_psk_resumption
+    then
+      [@inline_let]
+      let psk_kex : LPW.lwriter _ _ _ _ =
+        LPW.lwriter_append
+          (LPW.lwriter_ifthenelse
+            allow_psk_resumption
+            (fun _ -> LPW.lwriter_singleton (LPW.write_leaf_cs pskKeyExchangeMode_writer h0 sout pout_from Psk_ke))
+            (fun _ -> LPW.lwriter_nil _ _ _ _))
+          (LPW.lwriter_ifthenelse
+            allow_dhe_resumption
+            (fun _ -> LPW.lwriter_singleton (LPW.write_leaf_cs pskKeyExchangeMode_writer _ _ _ Psk_dhe_ke))
+            (fun _ -> LPW.lwriter_nil _ _ _ _))
+      in
+      [@inline_let]
+      let binders : LPW.lwriter _ _ _ _ =
+        LPW.lwriter_list_map
+          Parsers.ResumeInfo13.resumeInfo13_jumper
+          Parsers.PskBinderEntry.pskBinderEntry_serializer
+          (fun r -> compute_binder_ph_ticket13 r.Parsers.ResumeInfo13.ticket)
+          sin pin_from pin_to
+          h0
+          sout pout_from
+          (fun pin ->
+            LPW.Writer (Ghost.hide (compute_binder_ph_ticket13 (LP.contents Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin).Parsers.ResumeInfo13.ticket)) (fun pout ->
+             write_binder_ph sin (Parsers.ResumeInfo13.accessor_resumeInfo13_ticket sin pin) sout pout
+          ))
+      in
+      [@inline_let]
+      let pskidentities : LPW.lwriter _ _ _ _ =
+        LPW.lwriter_list_map
+          Parsers.ResumeInfo13.resumeInfo13_jumper
+          Parsers.PskIdentity.pskIdentity_serializer
+          (obfuscate_age_resumeInfo13 now)
+          sin pin_from pin_to
+          h0
+          sout pout_from
+          (fun pin ->
+            LPW.Writer (Ghost.hide (obfuscate_age_resumeInfo13 now (LP.contents Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin))) (fun pout ->
+            write_obfuscate_age_resumeInfo13 now sin pin sout pout
+          ))
+      in
+      [@inline_let]
+      let ke : LPW.owriter _ _ _ _ =
+        write_preSharedKeyClientExtension
+          (write_offeredPsks_identities (LPW.olwriter_of_lwriter pskidentities))
+          (write_offeredPsks_binders (LPW.olwriter_of_lwriter binders))
+      in
+      admit ()
+    else
+      admit ()
   | _ ->
     let h = HST.get () in
     LP.valid_list_nil Parsers.ClientHelloExtension.clientHelloExtension_parser h sout pout_from;
     pout_from
+
+#pop-options
 
 #reset-options "--using_facts_from '* -LowParse'"
 
