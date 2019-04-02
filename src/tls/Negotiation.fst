@@ -884,6 +884,125 @@ let write_constr_clientHelloExtension_CHE_pre_shared_key
     end
   )
 
+inline_for_extraction
+noextract
+let write_pskKeyExchangeModes
+  (#h0: _)
+  (#sout: _)
+  (#pout_from0: _)
+  (w: LPW.lwriter pskKeyExchangeMode_serializer h0 sout pout_from0 {
+    let l = List.Tot.length (LPW.lwvalue w) in
+    1 <= l /\ l <= 255
+  })
+: Tot (y: LPW.writer pskKeyExchangeModes_serializer h0 sout pout_from0 {
+    LPW.wvalue y == LPW.lwvalue w
+  })
+= LPW.Writer (Ghost.hide (LPW.lwvalue w)) (fun pout_from ->
+    Classical.forall_intro pskKeyExchangeModes_bytesize_eq;
+    Classical.forall_intro (LP.serialized_length_eq pskKeyExchangeModes_serializer);
+    Classical.forall_intro (LP.serialized_length_eq pskKeyExchangeMode_serializer);
+    Classical.forall_intro (LP.serialized_list_length_constant_size pskKeyExchangeMode_serializer);
+    if 1ul `U32.gt` (sout.LP.len `U32.sub` pout_from)
+    then LP.max_uint32
+    else
+      let res = LPW.lwrite w (pout_from `U32.add` 1ul) in
+      if res = LP.max_uint32
+      then begin
+        res
+      end
+      else begin
+        finalize_pskKeyExchangeModes sout pout_from res;
+        res
+      end
+  )
+
+inline_for_extraction
+noextract
+let write_clientHelloExtension_CHE_psk_key_exchange_modes
+  (#h0: _)
+  (#sout: _)
+  (#pout_from0: _)
+  (w: LPW.writer pskKeyExchangeModes_serializer h0 sout pout_from0)
+: Tot (y: LPW.writer clientHelloExtension_CHE_psk_key_exchange_modes_serializer h0 sout pout_from0 {
+    LPW.wvalue y == LPW.wvalue w
+  })
+= LPW.Writer (Ghost.hide (LPW.wvalue w)) (fun pout_from ->
+    Classical.forall_intro pskKeyExchangeModes_bytesize_eq;
+    Classical.forall_intro clientHelloExtension_CHE_psk_key_exchange_modes_bytesize_eq;
+    Classical.forall_intro (LP.serialized_length_eq pskKeyExchangeModes_serializer);
+    Classical.forall_intro (LP.serialized_length_eq clientHelloExtension_CHE_psk_key_exchange_modes_serializer);
+    if 2ul `U32.gt` (sout.LP.len `U32.sub` pout_from)
+    then LP.max_uint32
+    else
+      let res = LPW.write w (pout_from `U32.add` 2ul) in
+      if res = LP.max_uint32
+      then res
+      else begin
+        clientHelloExtension_CHE_psk_key_exchange_modes_finalize sout pout_from res;
+        res
+      end
+  )
+
+inline_for_extraction
+noextract
+let write_constr_clientHelloExtension_CHE_psk_key_exchange_modes
+  (#h0: _)
+  (#sout: _)
+  (#pout_from0: _)
+  (w: LPW.writer clientHelloExtension_CHE_psk_key_exchange_modes_serializer h0 sout pout_from0)
+: Tot (y: LPW.writer clientHelloExtension_serializer h0 sout pout_from0 { LPW.wvalue y == CHE_psk_key_exchange_modes (LPW.wvalue w) } )
+= LPW.Writer (Ghost.hide (CHE_psk_key_exchange_modes (LPW.wvalue w))) (fun pout_from ->
+    Classical.forall_intro clientHelloExtension_bytesize_eq;
+    Classical.forall_intro clientHelloExtension_CHE_psk_key_exchange_modes_bytesize_eq;
+    Classical.forall_intro (LP.serialized_length_eq clientHelloExtension_CHE_psk_key_exchange_modes_serializer);
+    Classical.forall_intro (LP.serialized_length_eq clientHelloExtension_serializer);
+    if 2ul `U32.gt` (sout.LP.len `U32.sub` pout_from)
+    then LP.max_uint32
+    else begin
+      let res = LPW.write w (pout_from `U32.add` 2ul) in
+      if res = LP.max_uint32
+      then begin
+        res
+      end else begin
+        finalize_clientHelloExtension_psk_key_exchange_modes sout pout_from;
+        res
+      end
+    end
+  )
+
+inline_for_extraction
+noextract
+let write_clientHelloExtension_CHE_early_data () : Tot (LP.leaf_writer_strong clientHelloExtension_CHE_early_data_serializer) =
+  fun _ #rrel #rel sout pos ->
+  clientHelloExtension_CHE_early_data_finalize sout pos;
+  pos `U32.add` 2ul
+
+inline_for_extraction
+noextract
+let write_constr_clientHelloExtension_CHE_early_data
+  (h0: _)
+  (sout: _)
+  (pout_from0: _)
+: Tot (y: LPW.writer clientHelloExtension_serializer h0 sout pout_from0 { LPW.wvalue y == CHE_early_data () })
+= LPW.Writer (Ghost.hide (CHE_early_data ())) (fun pout_from ->
+    Classical.forall_intro clientHelloExtension_bytesize_eq;
+    Classical.forall_intro clientHelloExtension_CHE_early_data_bytesize_eq;
+    Classical.forall_intro (LP.serialized_length_eq clientHelloExtension_CHE_early_data_serializer);
+    Classical.forall_intro (LP.serialized_length_eq clientHelloExtension_serializer);
+    if 2ul `U32.gt` (sout.LP.len `U32.sub` pout_from)
+    then LP.max_uint32
+    else
+      let res = LPW.write (LPW.write_leaf_cs (write_clientHelloExtension_CHE_early_data ()) h0 sout pout_from0 ()) (pout_from `U32.add` 2ul) in
+      if res = LP.max_uint32
+      then res
+      else begin
+        finalize_clientHelloExtension_early_data sout pout_from;
+        res        
+      end
+  )
+
+#push-options "--z3rlimit 32"
+
 let write_final_extensions_resumeInfo13
   (cfg: config)
   (edi: bool)
@@ -930,7 +1049,7 @@ let write_final_extensions_resumeInfo13
         (fun #rrel #rel sl pos -> true) // currently constant, see Ticket.ticket_pskinfo
         sin pin_from pin_to
     in
-    if allow_psk_resumption
+    if allow_psk_resumption || allow_dhe_resumption
     then
       [@inline_let]
       let psk_kex : LPW.lwriter _ _ _ _ =
@@ -978,13 +1097,51 @@ let write_final_extensions_resumeInfo13
           (write_offeredPsks_identities (LPW.olwriter_of_lwriter pskidentities))
           (write_offeredPsks_binders (LPW.olwriter_of_lwriter binders))
       in
-      admit ()
+      [@inline_let]
+      let res : LPW.olwriter _ _ _ _ =
+        LPW.olwriter_singleton
+          (LPW.owriter_of_writer
+            (write_constr_clientHelloExtension_CHE_psk_key_exchange_modes
+              (write_clientHelloExtension_CHE_psk_key_exchange_modes
+                (write_pskKeyExchangeModes psk_kex)
+          )))
+        `LPW.olwriter_append`
+        LPW.olwriter_ifthenelse
+          edi
+          (fun _ ->
+            LPW.olwriter_singleton
+              (LPW.owriter_of_writer
+                (write_constr_clientHelloExtension_CHE_early_data _ _ _)
+          ))
+          (fun _ -> LPW.olwriter_nil _ _ _ _)
+        `LPW.olwriter_append`
+        LPW.olwriter_singleton
+          (write_constr_clientHelloExtension_CHE_pre_shared_key
+            (write_clientHelloExtension_CHE_pre_shared_key ke)
+          )
+      in
+      LPW.olwrite res pout_from
     else
-      admit ()
+      LPW.olwrite
+        (LPW.olwriter_singleton
+          (LPW.owriter_of_writer
+            (write_constr_clientHelloExtension_CHE_psk_key_exchange_modes
+              (write_clientHelloExtension_CHE_psk_key_exchange_modes
+                (write_pskKeyExchangeModes
+                  (LPW.lwriter_append
+                    (LPW.lwriter_singleton
+                      (LPW.write_leaf_cs pskKeyExchangeMode_writer h0 sout pout_from Psk_ke)
+                    )
+                    (LPW.lwriter_singleton
+                      (LPW.write_leaf_cs pskKeyExchangeMode_writer _ _ _ Psk_dhe_ke)
+         )))))))
+         pout_from
   | _ ->
     let h = HST.get () in
     LP.valid_list_nil Parsers.ClientHelloExtension.clientHelloExtension_parser h sout pout_from;
     pout_from
+
+#pop-options
 
 #pop-options
 
