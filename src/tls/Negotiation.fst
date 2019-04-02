@@ -1003,7 +1003,7 @@ let write_constr_clientHelloExtension_CHE_early_data
 
 #push-options "--z3rlimit 32"
 
-let write_final_extensions_resumeInfo13
+let write_final_extensions_resumeInfo13'
   (cfg: config)
   (edi: bool)
   (#rrel #rel: _)
@@ -1144,6 +1144,29 @@ let write_final_extensions_resumeInfo13
 #pop-options
 
 #pop-options
+
+inline_for_extraction
+noextract
+let write_final_extensions_resumeInfo13
+  (cfg: config)
+  (edi: bool)
+  (#rrel #rel: _)
+  (sin: LP.slice rrel rel)
+  (pin_from pin_to: U32.t)
+  (now: U32.t)
+  (h0: HS.mem)
+  (sout: LP.slice (LP.srel_of_buffer_srel (B.trivial_preorder _)) (LP.srel_of_buffer_srel (B.trivial_preorder _)))
+  (pout_from0: U32.t {
+    LP.valid_list Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin_from pin_to /\
+    U32.v pout_from0 <= U32.v sout.LP.len /\
+    B.loc_disjoint (LP.loc_slice_from_to sin pin_from pin_to) (LP.loc_slice_from sout pout_from0)  
+  })
+: Tot (y: LPW.olwriter Parsers.ClientHelloExtension.clientHelloExtension_serializer h0 sout pout_from0 {
+    LPW.olwvalue y == final_extensions_resumeInfo13 cfg edi (LP.contents_list Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin_from pin_to) now
+  })
+= LPW.OLWriter (Ghost.hide (final_extensions_resumeInfo13 cfg edi (LP.contents_list Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin_from pin_to) now)) (fun pout_from ->
+    write_final_extensions_resumeInfo13' cfg edi sin pin_from pin_to now sout pout_from
+  )
 
 #reset-options "--using_facts_from '* -LowParse'"
 
