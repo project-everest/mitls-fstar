@@ -366,3 +366,17 @@ noeq type handshake =
 // We'll probably need a global log to reason about them.
 // We should probably do the same in the session store.
 
+(* extraction test, do not run *)
+
+val test_write_final_extensions_resumeInfo13
+  (cfg: config)
+  (edi: bool)
+  (#rrel #rel: _)
+  (sin: LP.slice rrel rel)
+  (pin_from pin_to: U32.t)
+  (now: U32.t)
+  (sout: LP.slice (LP.srel_of_buffer_srel (B.trivial_preorder _)) (LP.srel_of_buffer_srel (B.trivial_preorder _)))
+  (pout_from: U32.t)
+: HST.Stack U32.t
+  (requires (fun _ -> False))
+  (ensures (fun _ _ _ -> True))

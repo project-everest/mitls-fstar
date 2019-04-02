@@ -2731,4 +2731,16 @@ let server_ServerShare #region ns oks app_ees =
   ns.state := S_Mode mode cert;
   Correct mode 
 
- 
+let test_write_final_extensions_resumeInfo13
+  (cfg: config)
+  (edi: bool)
+  (#rrel #rel: _)
+  (sin: LP.slice rrel rel)
+  (pin_from pin_to: U32.t)
+  (now: U32.t)
+  (sout: LP.slice (LP.srel_of_buffer_srel (B.trivial_preorder _)) (LP.srel_of_buffer_srel (B.trivial_preorder _)))
+  (pout_from: U32.t)
+: HST.Stack U32.t
+  (requires (fun _ -> False))
+  (ensures (fun _ _ _ -> True))
+= write_final_extensions_resumeInfo13' cfg edi sin pin_from pin_to now sout pout_from
