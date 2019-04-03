@@ -126,7 +126,7 @@ let max_message_size = 16777219
 
 val transcript_bytes (t:transcript_t) 
 : GTot (b: bytes { 
-       Seq.length b < max_transcript_size * max_message_size 
+       Seq.length b <= (max_transcript_size + 4) * max_message_size 
   })
 
 
