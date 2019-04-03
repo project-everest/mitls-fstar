@@ -4,7 +4,7 @@ HACL_HOME     ?= ../hacl-star
 MLCRYPTO_HOME ?= ../MLCrypto
 MITLS_HOME    ?= .
 
-all: model-all ocaml-all kremlin-all test
+all: kremlin-all test
 
 model-% verify-% ocaml-% kremlin-% quic-%:
 	$(MAKE) -C $(MITLS_HOME)/src/tls $*

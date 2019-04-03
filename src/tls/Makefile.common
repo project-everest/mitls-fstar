@@ -132,8 +132,10 @@ depend: $(DEP_FILE)
 # all, then the dependency can be ignored. 
 
 # can't enumerate all the already_cached namespaces: Vale doesn't work (not
-# everything is under Vale) and '* -Mitls' doesn't work either.
-VFLAGS += $(HINTS_OPTS) --cmi --already_cached 'FStar LowStar C Hacl EverCrypt X64 Vale'
+# everything is under Vale) and '* -Mitls' doesn't work either. Instead, I used
+# this delightful command:
+# find vale -iname '*.fst' -or -iname '*.fsti' | xargs basename -a | sed 's/.fsti\?//' | sort | uniq | egrep -v '^(Vale|Interop|Words|Collections|X64|Math)' | xargs echo
+VFLAGS += --warn_error @321 $(HINTS_OPTS) --cmi --already_cached 'prims Lib LowParse FStar -FStar.Old.Endianness -FStar.Test LowStar C -C.Compat Hacl EverCrypt X64 Vale Spec Interop Collections Words Math AES256_helpers AEShash_stdcalls AES_helpers AES_s AES_stdcalls Arch.BufferFriend Arch.Types Arch.TypesNative BufferViewHelpers Cpuid_stdcalls Fadd_inline Fadd_stdcalls Fast_defs FastHybrid_helpers Fast_lemmas_external Fast_lemmas_internal FastMul_helpers FastSqr_helpers FastUtil_helpers Fmul_inline Fmul_stdcalls Fsqr_inline Fsqr_stdcalls Fsub_stdcalls Fswap_inline Fswap_stdcalls GCM GCMdecrypt_stdcalls GCMencryptOpt256_stdcalls GCMencryptOpt_stdcalls GCMencrypt_stdcalls GCM_helpers GCM_s Gcm_simplify GCTR GCTR_s GF128 GF128_s GHash GHash_s Map16 Opaque_s OptPublic Poly1305.Equiv Poly1305.Spec_s Poly_stdcalls Prop_s SHA_helpers Sha_stdcalls Simplify_Sha TypesNative_s Types_s Util.Meta Views Workarounds Words_s'
 
 %.checked: | $(DEP_FILE)
 ifdef VERBOSE
