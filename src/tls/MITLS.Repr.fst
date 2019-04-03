@@ -6,6 +6,9 @@ open FStar.Integers
 
 let index (b:LP.slice 'p 'q) = i:uint_32{ i <= LP.(b.len) }
 
+assume
+val rewritable (#p #q:_) (out:LP.slice p q) (from to:index out) (h:HS.mem) : prop
+
 let strong_parser_kind =
     k:LP.parser_kind{LP.(k.parser_kind_subkind == Some ParserStrong)}
 

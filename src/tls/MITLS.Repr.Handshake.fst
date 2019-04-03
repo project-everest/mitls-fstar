@@ -9,6 +9,8 @@ module RSH = MITLS.Repr.ServerHello
 open FStar.Integers
 open FStar.HyperStack.ST
 
+let t = HSM.handshake
+
 let repr #p #q (b:LP.slice p q) =
   R.repr_p HSM.handshake b HSM.handshake_parser
 

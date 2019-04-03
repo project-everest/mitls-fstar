@@ -7,6 +7,8 @@ module CH = Parsers.ClientHello
 open FStar.Integers
 open FStar.HyperStack.ST
 
+let t = CH.clientHello
+
 let repr #p #q (b:LP.slice p q) =
   R.repr_p CH.clientHello b CH.clientHello_parser
 
