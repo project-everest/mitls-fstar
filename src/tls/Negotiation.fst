@@ -345,14 +345,8 @@ let sigalgs_extension cfg: list clientHelloExtension =
     cfg.signature_algorithms)]
 #pop-options 
 
-(* JK: Need to get rid of such functions *)
-private let rec list_valid_cs_is_list_cs (l:valid_cipher_suites): list cipherSuite =
-  match l with
-  | [] -> []
-  | hd :: tl -> hd :: list_valid_cs_is_list_cs tl
-
 let ec_extension cfg: list clientHelloExtension  = 
-  if List.Tot.existsb isECDHECipherSuite (list_valid_cs_is_list_cs cfg.cipher_suites) 
+  if List.Tot.existsb isECDHECipherSuite cfg.cipher_suites
   then [CHE_ec_point_formats [Uncompressed]]
   else []
 
@@ -404,7 +398,7 @@ let compute_binder_ph_ticket13_correct (t: Parsers.TicketContents13.ticketConten
 #reset-options "--using_facts_from '* -LowParse'"
 
 let supported_group_extension cfg: list clientHelloExtension =   
-  if List.Tot.existsb send_supported_groups (list_valid_cs_is_list_cs cfg.cipher_suites) 
+  if List.Tot.existsb send_supported_groups cfg.cipher_suites
   then [CHE_supported_groups ( (* list_valid_ng_is_list_ng *) cfg.named_groups)] 
   else [] 
 
@@ -862,7 +856,7 @@ let rec encrypted_clientExtensions pv cfg cs ri pski ks resuming (ches:list clie
      match pv with
        | SSL_3p0 ->
           let cre =
-              if contains_TLS_EMPTY_RENEGOTIATION_INFO_SCSV (list_valid_cs_is_list_cs csl) then
+              if contains_TLS_EMPTY_RENEGOTIATION_INFO_SCSV csl then
                  Some [E_renegotiation_info (FirstConnection)] //, {ne_default with ne_secure_renegotiation = RI_Valid})
               else None //, ne_default in
           in Correct cre
