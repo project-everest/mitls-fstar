@@ -63,16 +63,12 @@ module B = LowStar.Buffer
 #reset-options
 
 let print_namedGroupList
-  (sl: LP.slice)
-  (pos: U32.t)
-: HST.Stack unit
-  (requires (fun h -> LP.valid namedGroupList_parser h sl pos))
-  (ensures (fun h _ h' -> B.modifies B.loc_none h h'))
+  #rrel #rel sl pos
 = let _ = namedGroupList_count sl pos in
   let pos' = namedGroupList_jumper sl pos in
   print "[";
   LP.print_list namedGroup_jumper
-    (fun sl pos ->
+    (fun #rrel #rel sl pos ->
       let s = namedGroup_reader sl pos in
       print (string_of_namedGroup s);
       let pos1 = namedGroup_jumper sl pos in
@@ -378,14 +374,69 @@ private let rec list_valid_ng_is_list_ng (l:CommonDH.supportedNamedGroups) : Com
 #pop-options
 
 // We fill binders with placeholders to use QD clientHelloextensions_serializer32
-private let compute_binder_ph (pski:pskInfo) : Tot FStar.Bytes.bytes =
+private let compute_binder_ph (pski:pskInfo) : Tot pskBinderEntry =
   let h = PSK.pskInfo_hash pski in
   let len : UInt32.t = Hashing.Spec.tagLen h in
+  assume (32 <= U32.v len /\ U32.v len <= 256); // hash must not be MD5 or SHA1...
   FStar.Bytes.create len 0uy
+
+#reset-options
+
+#push-options "--z3rlimit 16"
+
+private let write_binder_ph
+  (#rrel #rel: _)
+  (sin: LP.slice rrel rel)
+  (pin: U32.t)
+  (sout: LP.slice (LP.srel_of_buffer_srel (B.trivial_preorder _)) (LP.srel_of_buffer_srel (B.trivial_preorder _)))
+  (pout_from: U32.t)
+: HST.Stack U32.t
+  (requires (fun h ->
+    LP.live_slice h sin /\
+    LP.live_slice h sout /\
+    U32.v pout_from <= U32.v sout.LP.len /\
+    U32.v sout.LP.len < U32.v LP.max_uint32 /\ // to error code
+    LP.valid Parsers.TicketContents.ticketContents_parser h sin pin /\
+    B.loc_disjoint (LP.loc_slice_from_to sin pin (LP.get_valid_pos Parsers.TicketContents.ticketContents_parser h sin pin)) (LP.loc_slice_from sout pout_from) /\ (
+    let t = LP.contents Parsers.TicketContents.ticketContents_parser h sin pin in
+    Some? (Ticket.ticketContents_pskinfo t)
+  )))
+  (ensures (fun h pout_to h' ->
+    B.modifies (LP.loc_slice_from sout pout_from) h h' /\ (
+    let pski = Some?.v (Ticket.ticketContents_pskinfo (LP.contents Parsers.TicketContents.ticketContents_parser h sin pin)) in
+    let ph = compute_binder_ph pski in
+    if pout_to = LP.max_uint32
+    then
+      U32.v pout_from + LP.serialized_length pskBinderEntry_serializer ph > U32.v sout.LP.len
+    else
+      LP.valid_content_pos pskBinderEntry_parser h' sout pout_from ph pout_to
+  )))
+= let h0 = HST.get () in
+  let ph = Ghost.hide (compute_binder_ph (Some?.v (Ticket.ticketContents_pskinfo (LP.contents Parsers.TicketContents.ticketContents_parser h0 sin pin)))) in
+  let pt13 = Parsers.TicketContents.ticketContents_accessor_ticket13 sin pin in
+  let c = Parsers.CipherSuite.cipherSuite_reader sin (Parsers.TicketContents13.accessor_ticketContents13_cs sin pt13) in
+  let Some (CipherSuite13 _ h) = cipherSuite_of_name c in
+  let len : U32.t = Hashing.Spec.tagLen h in
+  assume (32 <= U32.v len /\ U32.v len <= 256); // hash must not be MD5 or SHA1...
+  if (1ul `U32.add` len) `U32.gt` (sout.LP.len `U32.sub` pout_from)
+  then begin
+    LP.serialized_length_eq pskBinderEntry_serializer (Ghost.reveal ph);
+    pskBinderEntry_bytesize_eq (Ghost.reveal ph);
+    LP.max_uint32
+  end else begin
+    let pout_payload = pout_from `U32.add` 1ul in
+    // TODO: replace with a custom fill once target slice is replaced with the stash
+    B.fill (B.sub sout.LP.base pout_payload len) 0uy len;
+    pskBinderEntry_finalize sout pout_from len
+  end
+
+#pop-options
+
+#reset-options "--using_facts_from '* -LowParse'"
 
 let supported_group_extension cfg: list clientHelloExtension =   
   if List.Tot.existsb send_supported_groups (list_valid_cs_is_list_cs cfg.cipher_suites) 
-  then [CHE_supported_groups (assume False; list_valid_ng_is_list_ng cfg.named_groups)] 
+  then [CHE_supported_groups ( (* list_valid_ng_is_list_ng *) cfg.named_groups)] 
   else [] 
 
 private val obfuscate_age: UInt32.t -> list (PSK.pskid * pskInfo) -> list pskIdentity
@@ -396,21 +447,118 @@ let rec obfuscate_age now = function
     {identity = id; obfuscated_ticket_age = PSK.encode_age age ctx.ticket_age_add} ::
     obfuscate_age now t
 
+module PR = Parsers.ResumeInfo
+
+(* this is how obfuscate_age should be rewritten *)
+
+let obfuscate_age_resumeInfo13 (now: U32.t) (tk: Parsers.ResumeInfo13.resumeInfo13) : Tot pskIdentity =
+    let age = FStar.UInt32.((now -%^ tk.Parsers.ResumeInfo13.ticket.Parsers.TicketContents13.creation_time) *%^ 1000ul) in
+    {identity = tk.Parsers.ResumeInfo13.identity; obfuscated_ticket_age = PSK.encode_age age tk.Parsers.ResumeInfo13.ticket.Parsers.TicketContents13.age_add}
+
+(* this function and this lemma are here only to convince oneself that obfuscate_age_resumeInfo13 is not doing anything fundamentally different from obfuscate_age *)
+
+noextract
+let list_pskid_pskinfo_of_list_resumeinfo13 (l: list Parsers.ResumeInfo13.resumeInfo13) : Tot (list (PSK.pskid * pskInfo)) = List.Tot.map
+  (fun r -> let i = r.Parsers.ResumeInfo13.identity in
+         let t = r.Parsers.ResumeInfo13.ticket in
+         assume (PSK.registered_psk i);
+         let c = cipherSuite_of_name t.Parsers.TicketContents13.cs in
+         assume (Some? c);
+         assume (CipherSuite13? (Some?.v c));
+         ((i <: PSK.pskid), Some?.v (Ticket.ticketContents_pskinfo (Parsers.TicketContents.T_ticket13 t))))
+  l
+
+let rec obfuscate_age_obfuscate_age_resumeInfo13
+  (now: U32.t)
+  (l: list Parsers.ResumeInfo13.resumeInfo13)
+: Lemma
+  (obfuscate_age now (list_pskid_pskinfo_of_list_resumeinfo13 l) == List.Tot.map (obfuscate_age_resumeInfo13 now) l)
+= match l with
+  | [] -> ()
+  | r :: q ->
+    let i = r.Parsers.ResumeInfo13.identity in
+    let t = r.Parsers.ResumeInfo13.ticket in
+    assume (PSK.registered_psk i);
+    let c = cipherSuite_of_name t.Parsers.TicketContents13.cs in
+    assume (Some? c);
+    assume (CipherSuite13? (Some?.v c));
+    obfuscate_age_obfuscate_age_resumeInfo13 now q
+
+(* then, this is the writer in terms of the new high-level function *)
+
+#reset-options
+
+#push-options "--z3rlimit 32"
+
+let write_obfuscate_age_resumeInfo13
+  (now: U32.t)
+  (#rrel #rel: _)
+  (sin: LP.slice rrel rel)
+  (pin: U32.t)
+  (sout: LP.slice (LP.srel_of_buffer_srel (B.trivial_preorder _)) (LP.srel_of_buffer_srel (B.trivial_preorder _)))
+  (pout_from: U32.t)
+: HST.Stack U32.t
+  (requires (fun h ->
+    LP.valid Parsers.ResumeInfo13.resumeInfo13_parser h sin pin /\
+    B.loc_disjoint (LP.loc_slice_from_to sin pin (LP.get_valid_pos Parsers.ResumeInfo13.resumeInfo13_parser h sin pin)) (LP.loc_slice_from sout pout_from) /\
+    LP.live_slice h sout /\
+    U32.v pout_from <= U32.v sout.LP.len /\
+    U32.v sout.LP.len < U32.v LP.max_uint32
+  ))
+  (ensures (fun h res h' ->
+    let x = obfuscate_age_resumeInfo13 now (LP.contents Parsers.ResumeInfo13.resumeInfo13_parser h sin pin) in
+    B.modifies (LP.loc_slice_from sout pout_from) h h' /\ (
+    if res = LP.max_uint32
+    then U32.v pout_from + LP.serialized_length pskIdentity_serializer x > U32.v sout.LP.len
+    else LP.valid_content_pos pskIdentity_parser h' sout pout_from x res
+  )))
+= let h = HST.get () in
+  let x = Ghost.hide (obfuscate_age_resumeInfo13 now (LP.contents Parsers.ResumeInfo13.resumeInfo13_parser h sin pin)) in
+  LP.serialized_length_eq pskIdentity_serializer (Ghost.reveal x);
+  pskIdentity_bytesize_eq (Ghost.reveal x);
+  let sin_id = Parsers.ResumeInfo13.accessor_resumeInfo13_identity sin pin in
+  pskIdentity_identity_bytesize_eq ((Ghost.reveal x).identity);
+  LP.serialized_length_eq pskIdentity_identity_serializer ((Ghost.reveal x).identity);
+  let pout_oage = LP.copy_weak _ pskIdentity_identity_jumper sin sin_id sout pout_from in
+  if pout_oage = LP.max_uint32
+  then LP.max_uint32
+  else if 4ul `U32.gt` (sout.LP.len `U32.sub` pout_oage)
+  then LP.max_uint32
+  else begin
+    let pin_tkt = Parsers.ResumeInfo13.accessor_resumeInfo13_ticket sin pin in
+    let creation_time = LowParse.Low.Int.read_u32 sin (Parsers.TicketContents13.accessor_ticketContents13_creation_time sin pin_tkt) in
+    let age = FStar.UInt32.((now -%^ creation_time) *%^ 1000ul) in
+    let age_add = LowParse.Low.Int.read_u32 sin (Parsers.TicketContents13.accessor_ticketContents13_age_add sin pin_tkt) in
+    let obfuscated_age = PSK.encode_age age age_add in
+    let pout_to = LowParse.Low.Int.write_u32 obfuscated_age sout pout_oage in
+    let h' = HST.get () in
+    pskIdentity_valid h' sout pout_from;
+    pout_to
+  end
+
+#pop-options
+
+#reset-options "--using_facts_from '* -LowParse'"
+
 let final_extensions cfg edi psks now: list clientHelloExtension =
-  assume False;
   match cfg.max_version with
   | TLS_1p3 -> (
     if List.Tot.filter allow_resumption psks <> [] then
       let (pskids, pskinfos) : list PSK.pskid * list pskInfo = List.Tot.split psks in
       let psk_kex =
-        (if List.Tot.existsb allow_psk_resumption pskinfos then [Psk_ke] else []) @ 
-        (if List.Tot.existsb allow_dhe_resumption pskinfos then [Psk_dhe_ke] else []) in
+        ((if List.Tot.existsb allow_psk_resumption pskinfos then [Psk_ke] else []) <: (l: list _ { List.Tot.length l <= 1 } )) @ 
+        ((if List.Tot.existsb allow_dhe_resumption pskinfos then [Psk_dhe_ke] else []) <: (l: list _ { List.Tot.length l <= 1 } )) in
+      assume (List.Tot.length psk_kex >= 1);
       let binders = List.Tot.map compute_binder_ph pskinfos in
       let pskidentities = obfuscate_age now psks in
+      assume (let x = offeredPsks_identities_list_bytesize pskidentities in 7 <= x /\ x <= 65535);
+      assume (let x = offeredPsks_binders_list_bytesize binders in 33 <= x /\ x <= 65535);
+      let ke = ({ identities = pskidentities; binders = binders }) in
+      assume (let x = Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_bytesize ke in 0 <= x /\ x <= 65535);
       [CHE_psk_key_exchange_modes psk_kex] @
       (if edi then [CHE_early_data ()] else []) @
       // MUST BE LAST
-      [CHE_pre_shared_key ({ identities = pskidentities; binders = binders })]
+      [CHE_pre_shared_key ke]
     else
       [CHE_psk_key_exchange_modes [Psk_ke; Psk_dhe_ke]] )
   | _ -> []

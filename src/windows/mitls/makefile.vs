@@ -25,6 +25,7 @@ SOURCES = \
   Mem.c \
   mitlsffi.c \
   Negotiation.c \
+  Negotiation_Version.c \
   Nonce.c \
   Old_Handshake.c \
   Parse.c \
