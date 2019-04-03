@@ -580,10 +580,65 @@ noextract
 let allow_dhe_resumption_resumeInfo13 (r: Parsers.ResumeInfo13.resumeInfo13) : Tot bool =
   (Ticket.ticketContents13_pskinfo r.Parsers.ResumeInfo13.ticket).allow_dhe_resumption
 
+module LPS = LowParse.SLow.Base
+
+#reset-options
+
+abstract
+let rec offeredPsks_identities_list_bytesize32
+  (x: list Parsers.PskIdentity.pskIdentity)
+: Tot (y: U32.t {
+    let l : nat = offeredPsks_identities_list_bytesize x in
+    if l > U32.v LP.max_uint32
+    then y == LP.max_uint32
+    else y == U32.uint_to_t l
+  })
+= match x with
+  | [] -> 0ul
+  | a :: q ->
+    Parsers.PskIdentity.pskIdentity_bytesize_eq a;
+    Parsers.PskIdentity.pskIdentity_size32 a
+    `LPS.add_overflow`
+    offeredPsks_identities_list_bytesize32 q
+
+abstract
+let rec offeredPsks_binders_list_bytesize32
+  (x: list Parsers.PskBinderEntry.pskBinderEntry)
+: Tot (y: U32.t {
+    let l : nat = offeredPsks_binders_list_bytesize x in
+    if l > U32.v LP.max_uint32
+    then y == LP.max_uint32
+    else y == U32.uint_to_t l
+  })
+= match x with
+  | [] -> 0ul
+  | a :: q ->
+    Parsers.PskBinderEntry.pskBinderEntry_bytesize_eq a;
+    Parsers.PskBinderEntry.pskBinderEntry_size32 a
+    `LPS.add_overflow`
+    offeredPsks_binders_list_bytesize32 q
+
+let check_offeredPsks_identities_list_bytesize
+  (x: list Parsers.PskIdentity.pskIdentity)
+: Tot (y: bool {y == (let l = offeredPsks_identities_list_bytesize x in 7 <= l && l <= 65535)})
+= let l = offeredPsks_identities_list_bytesize32 x in 7ul `U32.lte` l && l `U32.lte` 65535ul
+
+let check_offeredPsks_binders_list_bytesize
+  (x: list Parsers.PskBinderEntry.pskBinderEntry)
+: Tot (y: bool {y == (let l = offeredPsks_binders_list_bytesize x in 33 <= l && l <= 65535)})
+= let l = offeredPsks_binders_list_bytesize32 x in 33ul `U32.lte` l && l `U32.lte` 65535ul
+
+let check_preSharedKeyClientExtension_bytesize
+  (x: Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension)
+: Tot (y: bool {y == (let l = Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_bytesize x in 0 <= l && l <= 65535)})
+= Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_bytesize_eq x;
+  let l = Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_size32 x in
+  0ul `U32.lte` l && l `U32.lte` 65535ul
+
 noextract
 let final_extensions_resumeInfo13
   (cfg: config) (edi: bool) (l: list Parsers.ResumeInfo13.resumeInfo13) (now: U32.t)
-: GTot (option (list clientHelloExtension))
+: Tot (option (list clientHelloExtension))
 = match cfg.max_version with
   | TLS_1p3 ->
     let allow_psk_resumption = List.Tot.existsb allow_psk_resumption_resumeInfo13 l in
@@ -596,19 +651,19 @@ let final_extensions_resumeInfo13
       let binders = List.Tot.map (fun r -> compute_binder_ph_ticket13 r.Parsers.ResumeInfo13.ticket) l in
       let pskidentities = List.Tot.map (obfuscate_age_resumeInfo13 now) l in
       if
-        (let x = offeredPsks_identities_list_bytesize pskidentities in 7 <= x && x <= 65535) &&
-        (let x = offeredPsks_binders_list_bytesize binders in 33 <= x && x <= 65535)
-      then
+        check_offeredPsks_identities_list_bytesize pskidentities &&
+        check_offeredPsks_binders_list_bytesize binders
+      then begin
         let ke = ({ identities = pskidentities; binders = binders; }) in
         if
-          (let x = Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_bytesize ke in 0 <= x && x <= 65535)
+          check_preSharedKeyClientExtension_bytesize ke
         then
           Some ([CHE_psk_key_exchange_modes psk_kex] @
             (if edi then [CHE_early_data ()] else []) @
             [CHE_pre_shared_key ke]
           )
         else None
-      else None
+      end else None
     else
       Some [CHE_psk_key_exchange_modes [Psk_ke; Psk_dhe_ke]]
   | _ -> Some []
@@ -616,8 +671,6 @@ let final_extensions_resumeInfo13
 (* TODO: sanity-check wrt. old final_extensions *)
 
 (* then, the writer *)
-
-#reset-options
 
 module LPW = LowParse.Low.Writers
 
