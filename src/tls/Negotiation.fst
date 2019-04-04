@@ -259,19 +259,6 @@ let rec ticket13_pskinfo
 
 // imported from Extensions 
 
-/// The extensions included in ClientHello
-/// (specification + high-level implementation)
-/// 
-val prepareClientExtensions:
-  cfg: TLSConstants.config ->
-  bool -> // EDI (Nego checks that PSK is compatible)
-  option clientHelloExtension_CHE_session_ticket -> // session_ticket
-  option (cVerifyData * sVerifyData) ->
-  option clientHelloExtension_CHE_key_share ->
-  list (PSK.pskid * pskInfo) ->
-  now: UInt32.t -> // for obfuscated ticket age
-  l: result (list clientHelloExtension) 
-
 /// High-level extensions offered by the Client, with plenty of
 /// intermediate functions for their implementation refinements.
 
@@ -341,9 +328,27 @@ let sigalgs_extension cfg: list clientHelloExtension =
   // is not yet enabled in our API; hence sigAlgs are used both for
   // TLS signing and certificate signing.
   [CHE_signature_algorithms 
-    (assume False; // unprovable list bytesize 
+    (assume False; // unprovable list bytesize due to double vlbytes
     cfg.signature_algorithms)]
+
 #pop-options 
+
+#reset-options
+
+module LPS = LowParse.SLow.Base
+
+let check_CHE_signature_algorithms_bytesize
+  (x: signatureSchemeList)
+: Tot (y: bool {y == (let l = signatureSchemeList_bytesize x in 0 <= l && l <= 65535)})
+= signatureSchemeList_bytesize_eq x;
+  signatureSchemeList_size32 x `U32.lte` 65535ul
+
+let sigalgs_extension_new cfg: Tot (result (list clientHelloExtension)) =
+  if check_CHE_signature_algorithms_bytesize cfg.signature_algorithms
+  then Correct [CHE_signature_algorithms cfg.signature_algorithms]
+  else fatal Internal_error "sigalgs_extension: check_CHE_signature_algorithms_bytesize failed"
+
+#reset-options "--using_facts_from '* -LowParse'"
 
 let ec_extension cfg: list clientHelloExtension  = 
   if List.Tot.existsb isECDHECipherSuite cfg.cipher_suites
@@ -380,7 +385,7 @@ private let compute_binder_ph (pski:pskInfo) : Tot pskBinderEntry =
 
 (* a rewrite of the compute_binder_ph spec *)
 
-let compute_binder_ph_ticket13 (t: Parsers.TicketContents13.ticketContents13) : Tot pskBinderEntry =
+let compute_binder_ph_new (t: Parsers.TicketContents13.ticketContents13) : Tot pskBinderEntry =
   let pski = Ticket.ticketContents13_pskinfo t in
   let h = PSK.pskInfo_hash pski in
   let len : UInt32.t = Hashing.Spec.tagLen h in
@@ -389,8 +394,8 @@ let compute_binder_ph_ticket13 (t: Parsers.TicketContents13.ticketContents13) : 
 
 (* sanity-check: this rewrite behaves no differently than the old code *)
 
-let compute_binder_ph_ticket13_correct (t: Parsers.TicketContents13.ticketContents13) : Lemma
-  (compute_binder_ph_ticket13 t == compute_binder_ph (Ticket.ticketContents13_pskinfo t))
+let compute_binder_ph_new_correct (t: Parsers.TicketContents13.ticketContents13) : Lemma
+  (compute_binder_ph_new t == compute_binder_ph (Ticket.ticketContents13_pskinfo t))
 = ()
 
 #pop-options
@@ -414,7 +419,7 @@ module PR = Parsers.ResumeInfo
 
 (* this is how obfuscate_age should be rewritten *)
 
-let obfuscate_age_resumeInfo13 (now: U32.t) (tk: Parsers.ResumeInfo13.resumeInfo13) : Tot pskIdentity =
+let obfuscate_age_new (now: U32.t) (tk: Parsers.ResumeInfo13.resumeInfo13) : Tot pskIdentity =
     let age = FStar.UInt32.((now -%^ tk.Parsers.ResumeInfo13.ticket.Parsers.TicketContents13.creation_time) *%^ 1000ul) in
     {identity = tk.Parsers.ResumeInfo13.identity; obfuscated_ticket_age = PSK.encode_age age tk.Parsers.ResumeInfo13.ticket.Parsers.TicketContents13.age_add}
 
@@ -428,18 +433,18 @@ let list_pskid_pskinfo_of_list_resumeinfo13 (l: list Parsers.ResumeInfo13.resume
          ((i <: PSK.pskid), Some?.v (Ticket.ticketContents_pskinfo (Parsers.TicketContents.T_ticket13 t))))
   l
 
-let rec obfuscate_age_obfuscate_age_resumeInfo13
+let rec obfuscate_age_obfuscate_age_new
   (now: U32.t)
   (l: list Parsers.ResumeInfo13.resumeInfo13)
 : Lemma
-  (obfuscate_age now (list_pskid_pskinfo_of_list_resumeinfo13 l) == List.Tot.map (obfuscate_age_resumeInfo13 now) l)
+  (obfuscate_age now (list_pskid_pskinfo_of_list_resumeinfo13 l) == List.Tot.map (obfuscate_age_new now) l)
 = match l with
   | [] -> ()
   | r :: q ->
     let i = r.Parsers.ResumeInfo13.identity in
     let t = r.Parsers.ResumeInfo13.ticket in
     assume (PSK.registered_psk i);
-    obfuscate_age_obfuscate_age_resumeInfo13 now q
+    obfuscate_age_obfuscate_age_new now q
 
 let final_extensions cfg edi psks now: list clientHelloExtension =
   match cfg.max_version with
@@ -468,14 +473,12 @@ let final_extensions cfg edi psks now: list clientHelloExtension =
 (* a rewrite of the spec of final_extensions *)
 
 noextract
-let allow_psk_resumption_resumeInfo13 (r: Parsers.ResumeInfo13.resumeInfo13) : Tot bool =
+let allow_psk_resumption_new (r: Parsers.ResumeInfo13.resumeInfo13) : Tot bool =
   (Ticket.ticketContents13_pskinfo r.Parsers.ResumeInfo13.ticket).allow_psk_resumption
 
 noextract
-let allow_dhe_resumption_resumeInfo13 (r: Parsers.ResumeInfo13.resumeInfo13) : Tot bool =
+let allow_dhe_resumption_new (r: Parsers.ResumeInfo13.resumeInfo13) : Tot bool =
   (Ticket.ticketContents13_pskinfo r.Parsers.ResumeInfo13.ticket).allow_dhe_resumption
-
-module LPS = LowParse.SLow.Base
 
 #reset-options
 
@@ -531,41 +534,55 @@ let check_preSharedKeyClientExtension_bytesize
   0ul `U32.lte` l && l `U32.lte` 65535ul
 
 noextract
-let final_extensions_resumeInfo13
+let final_extensions_new
   (cfg: config) (edi: bool) (l: list Parsers.ResumeInfo13.resumeInfo13) (now: U32.t)
-: Tot (option (list clientHelloExtension))
+: Tot (result (list clientHelloExtension))
 = match cfg.max_version with
   | TLS_1p3 ->
-    let allow_psk_resumption = List.Tot.existsb allow_psk_resumption_resumeInfo13 l in
-    let allow_dhe_resumption = List.Tot.existsb allow_dhe_resumption_resumeInfo13 l in
+    let allow_psk_resumption = List.Tot.existsb allow_psk_resumption_new l in
+    let allow_dhe_resumption = List.Tot.existsb allow_dhe_resumption_new l in
     if allow_psk_resumption || allow_dhe_resumption
     then
       let psk_kex =
         (if allow_psk_resumption then [Psk_ke] else []) @ (if allow_dhe_resumption then [Psk_dhe_ke] else [])
       in
-      let binders = List.Tot.map (fun r -> compute_binder_ph_ticket13 r.Parsers.ResumeInfo13.ticket) l in
-      let pskidentities = List.Tot.map (obfuscate_age_resumeInfo13 now) l in
-      if
-        check_offeredPsks_identities_list_bytesize pskidentities &&
-        check_offeredPsks_binders_list_bytesize binders
-      then begin
+      let binders = List.Tot.map (fun r -> compute_binder_ph_new r.Parsers.ResumeInfo13.ticket) l in
+      let pskidentities = List.Tot.map (obfuscate_age_new now) l in
+      if not (check_offeredPsks_identities_list_bytesize pskidentities)
+      then fatal Internal_error "final_extensions: check_offeredPsks_identities_list_bytesize failed"
+      else if not (check_offeredPsks_binders_list_bytesize binders)
+      then fatal Internal_error "final_extensions: check_offeredPsks_binders_list_bytesize failed"
+      else begin
         let ke = ({ identities = pskidentities; binders = binders; }) in
         if
           check_preSharedKeyClientExtension_bytesize ke
         then
-          Some ([CHE_psk_key_exchange_modes psk_kex] @
+          Correct ([CHE_psk_key_exchange_modes psk_kex] @
             (if edi then [CHE_early_data ()] else []) @
             [CHE_pre_shared_key ke]
           )
-        else None
-      end else None
+        else fatal Internal_error "final_extensions: check_preSharedKeyClientExtension_bytesize failed"
+      end
     else
-      Some [CHE_psk_key_exchange_modes [Psk_ke; Psk_dhe_ke]]
-  | _ -> Some []
+      Correct [CHE_psk_key_exchange_modes [Psk_ke; Psk_dhe_ke]]
+  | _ -> Correct []
 
 (* TODO: sanity-check wrt. old final_extensions *)
 
 #reset-options "--using_facts_from '* -LowParse'"
+
+/// The extensions included in ClientHello
+/// (specification + high-level implementation)
+/// 
+val prepareClientExtensions:
+  cfg: TLSConstants.config ->
+  bool -> // EDI (Nego checks that PSK is compatible)
+  option clientHelloExtension_CHE_session_ticket -> // session_ticket
+  option (cVerifyData * sVerifyData) ->
+  option clientHelloExtension_CHE_key_share ->
+  list (PSK.pskid * pskInfo) ->
+  now: UInt32.t -> // for obfuscated ticket age
+  l: result (list clientHelloExtension) 
 
 let prepareClientExtensions 
   (cfg: config)
@@ -601,7 +618,6 @@ let prepareClientExtensions
   final_extensions cfg edi psks now )
   // let res = List.Tot.rev res in
   // assume (List.Tot.length res < 256);  // JK: Specs in type config in TLSInfo unsufficient
-
 
 (*
 // TODO the code above is too restrictive, should support further extensions

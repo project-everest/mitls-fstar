@@ -38,7 +38,7 @@ let write_binder_ph
   ))
   (ensures (fun h pout_to h' ->
     B.modifies (LP.loc_slice_from sout pout_from) h h' /\ (
-    let ph = compute_binder_ph_ticket13 (LP.contents Parsers.TicketContents13.ticketContents13_parser h sin pin) in
+    let ph = compute_binder_ph_new (LP.contents Parsers.TicketContents13.ticketContents13_parser h sin pin) in
     if pout_to = LP.max_uint32
     then
       U32.v pout_from + LP.serialized_length pskBinderEntry_serializer ph > U32.v sout.LP.len
@@ -46,7 +46,7 @@ let write_binder_ph
       LP.valid_content_pos pskBinderEntry_parser h' sout pout_from ph pout_to
   )))
 = let h0 = HST.get () in
-  let ph = Ghost.hide (compute_binder_ph_ticket13 (LP.contents Parsers.TicketContents13.ticketContents13_parser h0 sin pin)) in
+  let ph = Ghost.hide (compute_binder_ph_new (LP.contents Parsers.TicketContents13.ticketContents13_parser h0 sin pin)) in
   let c = CipherSuite.cipherSuite13_reader sin (Parsers.TicketContents13.accessor_ticketContents13_cs sin pin) in
   let (CipherSuite13 _ h) = cipherSuite_of_cipherSuite13 c in
   let len : U32.t = Hashing.Spec.tagLen h in
@@ -65,7 +65,7 @@ let write_binder_ph
 
 #push-options "--z3rlimit 32"
 
-let write_obfuscate_age_resumeInfo13
+let write_obfuscate_age
   (now: U32.t)
   (#rrel #rel: _)
   (sin: LP.slice rrel rel)
@@ -81,14 +81,14 @@ let write_obfuscate_age_resumeInfo13
     U32.v sout.LP.len < U32.v LP.max_uint32
   ))
   (ensures (fun h res h' ->
-    let x = obfuscate_age_resumeInfo13 now (LP.contents Parsers.ResumeInfo13.resumeInfo13_parser h sin pin) in
+    let x = obfuscate_age_new now (LP.contents Parsers.ResumeInfo13.resumeInfo13_parser h sin pin) in
     B.modifies (LP.loc_slice_from sout pout_from) h h' /\ (
     if res = LP.max_uint32
     then U32.v pout_from + LP.serialized_length pskIdentity_serializer x > U32.v sout.LP.len
     else LP.valid_content_pos pskIdentity_parser h' sout pout_from x res
   )))
 = let h = HST.get () in
-  let x = Ghost.hide (obfuscate_age_resumeInfo13 now (LP.contents Parsers.ResumeInfo13.resumeInfo13_parser h sin pin)) in
+  let x = Ghost.hide (obfuscate_age_new now (LP.contents Parsers.ResumeInfo13.resumeInfo13_parser h sin pin)) in
   LP.serialized_length_eq pskIdentity_serializer (Ghost.reveal x);
   pskIdentity_bytesize_eq (Ghost.reveal x);
   let sin_id = Parsers.ResumeInfo13.accessor_resumeInfo13_identity sin pin in
@@ -499,7 +499,7 @@ let write_constr_clientHelloExtension_CHE_early_data
 
 #push-options "--z3rlimit 32"
 
-let write_final_extensions_resumeInfo13'
+let write_final_extensions'
   (cfg: config)
   (edi: bool)
   (#rrel #rel: _)
@@ -517,7 +517,7 @@ let write_final_extensions_resumeInfo13'
     B.loc_disjoint (LP.loc_slice_from_to sin pin_from pin_to) (LP.loc_slice_from sout pout_from)
   ))
   (ensures (fun h res h' ->
-    let x = final_extensions_resumeInfo13 cfg edi (LP.contents_list Parsers.ResumeInfo13.resumeInfo13_parser h sin pin_from pin_to) now in
+    let x = option_of_result (final_extensions_new cfg edi (LP.contents_list Parsers.ResumeInfo13.resumeInfo13_parser h sin pin_from pin_to) now) in
     B.modifies (LP.loc_slice_from sout pout_from) h h' /\ (
     if res = LP.max_uint32
     then (Some? x ==> U32.v pout_from + LP.serialized_list_length Parsers.ClientHelloExtension.clientHelloExtension_serializer (Some?.v x) > U32.v sout.LP.len)
@@ -534,14 +534,14 @@ let write_final_extensions_resumeInfo13'
     let allow_psk_resumption =
       LP.list_existsb
         Parsers.ResumeInfo13.resumeInfo13_jumper
-        allow_psk_resumption_resumeInfo13
+        allow_psk_resumption_new
         (fun #rrel #rel sl pos -> true) // currently constant, see Ticket.ticket_pskinfo
         sin pin_from pin_to
     in
     let allow_dhe_resumption =
       LP.list_existsb
         Parsers.ResumeInfo13.resumeInfo13_jumper
-        allow_dhe_resumption_resumeInfo13
+        allow_dhe_resumption_new
         (fun #rrel #rel sl pos -> true) // currently constant, see Ticket.ticket_pskinfo
         sin pin_from pin_to
     in
@@ -564,12 +564,12 @@ let write_final_extensions_resumeInfo13'
         LPW.lwriter_list_map
           Parsers.ResumeInfo13.resumeInfo13_jumper
           Parsers.PskBinderEntry.pskBinderEntry_serializer
-          (fun r -> compute_binder_ph_ticket13 r.Parsers.ResumeInfo13.ticket)
+          (fun r -> compute_binder_ph_new r.Parsers.ResumeInfo13.ticket)
           sin pin_from pin_to
           h0
           sout pout_from
           (fun pin ->
-            LPW.Writer (Ghost.hide (compute_binder_ph_ticket13 (LP.contents Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin).Parsers.ResumeInfo13.ticket)) (fun pout ->
+            LPW.Writer (Ghost.hide (compute_binder_ph_new (LP.contents Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin).Parsers.ResumeInfo13.ticket)) (fun pout ->
              write_binder_ph sin (Parsers.ResumeInfo13.accessor_resumeInfo13_ticket sin pin) sout pout
           ))
       in
@@ -578,13 +578,13 @@ let write_final_extensions_resumeInfo13'
         LPW.lwriter_list_map
           Parsers.ResumeInfo13.resumeInfo13_jumper
           Parsers.PskIdentity.pskIdentity_serializer
-          (obfuscate_age_resumeInfo13 now)
+          (obfuscate_age_new now)
           sin pin_from pin_to
           h0
           sout pout_from
           (fun pin ->
-            LPW.Writer (Ghost.hide (obfuscate_age_resumeInfo13 now (LP.contents Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin))) (fun pout ->
-            write_obfuscate_age_resumeInfo13 now sin pin sout pout
+            LPW.Writer (Ghost.hide (obfuscate_age_new now (LP.contents Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin))) (fun pout ->
+            write_obfuscate_age now sin pin sout pout
           ))
       in
       [@inline_let]
@@ -643,7 +643,7 @@ let write_final_extensions_resumeInfo13'
 
 inline_for_extraction
 noextract
-let write_final_extensions_resumeInfo13
+let write_final_extensions
   (cfg: config)
   (edi: bool)
   (#rrel #rel: _)
@@ -658,13 +658,13 @@ let write_final_extensions_resumeInfo13
     B.loc_disjoint (LP.loc_slice_from_to sin pin_from pin_to) (LP.loc_slice_from sout pout_from0)  
   })
 : Tot (y: LPW.olwriter Parsers.ClientHelloExtension.clientHelloExtension_serializer h0 sout pout_from0 {
-    LPW.olwvalue y == final_extensions_resumeInfo13 cfg edi (LP.contents_list Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin_from pin_to) now
+    LPW.olwvalue y == option_of_result (final_extensions_new cfg edi (LP.contents_list Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin_from pin_to) now)
   })
-= LPW.OLWriter (Ghost.hide (final_extensions_resumeInfo13 cfg edi (LP.contents_list Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin_from pin_to) now)) (fun pout_from ->
-    write_final_extensions_resumeInfo13' cfg edi sin pin_from pin_to now sout pout_from
+= LPW.OLWriter (Ghost.hide (option_of_result (final_extensions_new cfg edi (LP.contents_list Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin_from pin_to) now))) (fun pout_from ->
+    write_final_extensions' cfg edi sin pin_from pin_to now sout pout_from
   )
 
-let test_write_final_extensions_resumeInfo13
+let test_write_final_extensions
   (cfg: config)
   (edi: bool)
   (#rrel #rel: _)
@@ -676,4 +676,4 @@ let test_write_final_extensions_resumeInfo13
 : HST.Stack U32.t
   (requires (fun _ -> False))
   (ensures (fun _ _ _ -> True))
-= write_final_extensions_resumeInfo13' cfg edi sin pin_from pin_to now sout pout_from
+= write_final_extensions' cfg edi sin pin_from pin_to now sout pout_from

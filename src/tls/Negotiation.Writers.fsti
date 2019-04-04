@@ -23,7 +23,7 @@ module B = LowStar.Buffer
 
 (* extraction test, do not run *)
 
-val test_write_final_extensions_resumeInfo13
+val test_write_final_extensions
   (cfg: config)
   (edi: bool)
   (#rrel #rel: _)
