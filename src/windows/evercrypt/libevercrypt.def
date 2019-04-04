@@ -43,7 +43,7 @@ EXPORTS
   EverCrypt_Chacha20Poly1305_aead_encrypt
   EverCrypt_AEAD_decrypt
   EverCrypt_AEAD_encrypt
-  EverCrypt_AEAD_expand_in
+  EverCrypt_AEAD_create_in
   EverCrypt_aead_create
   EverCrypt_aead_decrypt
   EverCrypt_aead_encrypt
