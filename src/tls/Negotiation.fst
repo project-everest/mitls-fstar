@@ -619,6 +619,64 @@ let prepareClientExtensions
   // let res = List.Tot.rev res in
   // assume (List.Tot.length res < 256);  // JK: Specs in type config in TLSInfo unsufficient
 
+/// The extensions included in ClientHello
+/// (specification + high-level implementation)
+/// 
+val prepareClientExtensions_new:
+  cfg: TLSConstants.config ->
+  bool -> // EDI (Nego checks that PSK is compatible)
+  option clientHelloExtension_CHE_session_ticket -> // session_ticket
+(*  option (cVerifyData * sVerifyData) -> *)
+  option clientHelloExtension_CHE_key_share ->
+  list Parsers.ResumeInfo13.resumeInfo13 ->
+  now: UInt32.t -> // for obfuscated ticket age
+  l: result (list clientHelloExtension) 
+
+let prepareClientExtensions_new
+  (cfg: config)
+  edi
+  ticket 
+(*  ri  *)
+  ks 
+  psks 
+  now
+= begin match Negotiation.Version.support cfg with
+  | Error z -> Error z
+  | Correct supported_versions ->
+    begin match sigalgs_extension_new cfg with
+    | Error z -> Error z
+    | Correct sigalgs_extension ->
+      begin match final_extensions_new cfg edi psks now with
+      | Error z -> Error z
+      | Correct final_extensions ->
+        Correct begin
+          // 18-12-22 TODO cfg.safe_renegotiation is ignored? 
+          Extensions.cext_of_custom cfg.custom_extensions @
+          (* Always send supported extensions.
+             The configuration options will influence how strict the tests will be *)
+          (* let cri = *)
+          (*    match ri with *)
+          (*    | None -> FirstConnection *)
+          (*    | Some (cvd, svd) -> ClientRenegotiationInfo cvd in *)
+          (* let res = [E_renegotiation_info(cri)] in *)
+          supported_versions ::
+          keyshares cfg ks @
+          sni cfg @
+          alpn_extension cfg @ 
+          ticket_extension ticket @
+          ems_extension cfg @ 
+          sigalgs_extension @ 
+          ec_extension cfg @ 
+          supported_group_extension cfg @ 
+          final_extensions 
+        end
+      end
+    end
+  end
+
+  // let res = List.Tot.rev res in
+  // assume (List.Tot.length res < 256);  // JK: Specs in type config in TLSInfo unsufficient
+
 (*
 // TODO the code above is too restrictive, should support further extensions
 // TODO we need an inverse; broken due to extension ordering. Use pure views instead?
@@ -757,6 +815,91 @@ let computeOffer cfg nonce ks resume now =
     ch_compressions = [NullCompression];
     ch_extensions = (assume False; extensions)
   })
+
+#reset-options
+
+abstract
+let rec clientHelloExtensions_list_bytesize32
+  (x: list clientHelloExtension)
+: Tot (y: U32.t {
+    let l : nat = clientHelloExtensions_list_bytesize x in
+    if l > U32.v LP.max_uint32
+    then y == LP.max_uint32
+    else y == U32.uint_to_t l
+  })
+= match x with
+  | [] -> 0ul
+  | a :: q ->
+    clientHelloExtension_bytesize_eq a;
+    clientHelloExtension_size32 a
+    `LPS.add_overflow`
+    clientHelloExtensions_list_bytesize32 q
+
+let check_clientHelloExtensions_list_bytesize
+  (x: list clientHelloExtension)
+: Tot (y: bool { y == (let l = clientHelloExtensions_list_bytesize x in 0 <= l && l <= 65535) })
+= let l = clientHelloExtensions_list_bytesize32 x in
+  l `U32.lte` 65535ul
+
+#reset-options "--using_facts_from '* -LowParse'"
+
+val computeOffer_new:
+  cfg:config -> 
+  nonce:TLSInfo.random -> 
+  ks: option clientHelloExtension_CHE_key_share ->
+  resume: Parsers.ResumeInfo.resumeInfo ->
+  now:UInt32.t ->
+  Tot (result (Parsers.ClientHello.clientHello))
+
+let computeOffer_new cfg nonce ks resume now =
+  if Nil? cfg.cipher_suites
+  then
+    // TODO: remove this case by strengthening the type of cfg.cipher_suites
+    fatal Internal_error "computeOffer: not enough cipher_suites in cfg"
+  else
+    let ticket12, sid =
+      match resume.Parsers.ResumeInfo.resumeInfo12, cfg.enable_tickets, cfg.min_version with
+      | _, _, TLS_1p3 -> None, empty_bytes // Don't bother sending session_ticket
+      // Similar to what OpenSSL does, when we offer a 1.2 ticket
+      // we send the hash of the ticket as SID to disambiguate the state machine
+      | Parsers.ResumeInfo_resumeInfo12.ResumeInfo12_b_true ({ Parsers.ResumeInfo12.identity = tid }), true, _ ->
+        // FIXME Cannot compute hash in Tot
+        //let sid = Hashing.compute Hashing.Spec.SHA2_256 t
+        let sid = if length tid <= 32 then tid else fst (split tid 32ul) in
+        Some tid, sid
+      | Parsers.ResumeInfo_resumeInfo12.ResumeInfo12_b_false _, true, _ -> Some empty_bytes, empty_bytes
+      | _ -> None, (empty_bytes <: FStar.Bytes.bytes)
+    in
+    let pskinfo = resume.Parsers.ResumeInfo.resumeInfo13 in
+    // Don't offer EDI if there is no PSK or first PSK doesn't have ED enabled
+    let compatible_psk =
+      match pskinfo with
+      | ({ Parsers.ResumeInfo13.ticket = i }) :: _ -> (Ticket.ticketContents13_pskinfo i).allow_early_data // Must be the first PSK
+      | _ -> false
+    in
+    match prepareClientExtensions_new
+      cfg 
+      (compatible_psk && Some? cfg.max_early_data)
+      ticket12
+(*      None //: option (cVerifyData * sVerifyData) *)
+      ks
+      pskinfo
+      now
+    with
+    | Error z -> Error z
+    | Correct extensions ->
+      if check_clientHelloExtensions_list_bytesize extensions
+      then
+        Correct ({
+          Parsers.ClientHello.version = minPV TLS_1p2 cfg.max_version; // legacy for 1.3
+          Parsers.ClientHello.random = nonce;
+          Parsers.ClientHello.session_id = sid;
+          Parsers.ClientHello.cipher_suites = nameList_of_cipherSuites cfg.cipher_suites;
+          Parsers.ClientHello.compression_method = [NullCompression];
+          Parsers.ClientHello.extensions = extensions;
+        })
+      else
+        fatal Internal_error "computeOffer: check_clientHelloExtensions_list_bytesize failed"
 
 
 /// Negotiating server extensions.
