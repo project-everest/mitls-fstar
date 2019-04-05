@@ -722,42 +722,38 @@ val server_ServerHelloDone: hs -> St incoming // why do I need an explicit val?
 let server_ServerHelloDone hs =
   trace "Sending ...ServerHelloDone";
   let mode = Nego.getMode hs.nego in
+  let cr = mode.Nego.n_offer.CH.random in
+  let csr = cr @| mode.Nego.n_server_random in
   let Some (chain, sa) = mode.Nego.n_server_cert in // Server cert chosen in Nego.server_ClientHello
-  match Nego.chosenGroup mode with
+  match mode.Nego.n_server_share with
   | None ->
     InError (fatalAlert Handshake_failure, perror __SOURCE_FILE__ __LINE__ "no shared supported group")
-  | Some g  ->
-    // ad hoc signing of the nonces and server key share
-    let kex_s = KEX_S_DHE (Some?.v mode.Nego.n_server_share) in
-    let tbs =
-      let cr = mode.Nego.n_offer.ch_client_random in
-      let sv = kex_s_to_bytes kex_s in
-      let csr = cr @| mode.Nego.n_server_random in
-      Nego.to_be_signed mode.Nego.n_protocol_version Server (Some csr) sv
-    in
+  | Some (| g, gy |)  ->
+    let sv = CommonDH.serialize gy in
+    let tbs = Nego.to_be_signed mode.Nego.n_protocol_version Server (Some csr) sv in
     match Nego.sign hs.nego tbs with
     | Error z -> InError z
-    | Correct signature ->
-      begin
-      HandshakeLog.send hs.log (Certificate ({crt_chain = Cert.chain_down chain}));
-      HandshakeLog.send hs.log (ServerKeyExchange ske);
-      HandshakeLog.send hs.log ServerHelloDone;
+    | Correct sig ->
+      let ske = sv @| Parsers.CertificateVerify13.certificateVerify13_serializer32 sig in
+      HandshakeLog.send hs.log (HSL.Msg12 (HSM.M12_certificate (Cert.chain_down chain)));
+      HandshakeLog.send hs.log (HSL.Msg12 (HSM.M12_server_key_exchange ske));
+      HandshakeLog.send hs.log (HSL.Msg12 (HSM.M12_server_hello_done ()));
       hs.state := S_Wait_CCS1;
       InAck false false // Server 1.2 ATK
-      end
 
 let serverHello (m:Nego.mode) =
   let open Nego in
   let pv = m.n_protocol_version in
-  ServerHello ({
-    sh_protocol_version = pv;
-    sh_server_random = m.n_server_random;
-    sh_sessionID = m.n_sessionID;
-    sh_cipher_suite = name_of_cipherSuite m.n_cipher_suite;
-    sh_compression = NullCompression;
-    sh_extensions = m.n_server_extensions;
-    sh_hrrext = [];
+  HSM.M_server_hello ({
+    SH.version = pv;
+    SH.random = m.n_server_random;
+    SH.session_id = m.n_sessionID;
+    SH.cipher_suite = name_of_cipherSuite m.n_cipher_suite;
+    SH.compression_method = NullCompression;
+    SH.extensions = m.n_server_extensions;
    })
+
+type binders = Parsers.OfferedPsks_binders.offeredPsks_binders
 
 val  consistent_truncation: option Extensions.offeredPsks -> option binders -> bool
 let consistent_truncation x y =
@@ -768,7 +764,7 @@ let consistent_truncation x y =
   | Some psks, Some binders -> List.length psks.Extensions.identities = List.length binders
 
 (* receive ClientHello, choose a protocol version and mode *)
-val server_ClientHello: hs -> HandshakeMessages.ch -> option binders -> ST incoming
+val server_ClientHello: hs -> HSM.clientHello -> option binders -> ST incoming
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let server_ClientHello hs offer obinders =
@@ -793,14 +789,16 @@ let server_ClientHello hs offer obinders =
     match Nego.server_ClientHello hs.nego offer hs.log with
     | Error z -> InError z
     | Correct (Nego.ServerHelloRetryRequest hrr _) ->
+      InError (fatalAlert Internal_error, "disabled HRR")
+    (*
       HandshakeLog.send hs.log (HelloRetryRequest hrr);
       // Note: no handshake state machine transition
       InAck false false
-
+     *)
     | Correct (Nego.ServerMode mode cert app_exts) ->
 
     let pv = mode.Nego.n_protocol_version in
-    let cr = mode.Nego.n_offer.ch_client_random in
+    let cr = mode.Nego.n_offer.CH.random in
     let ha = Nego.hashAlg mode in
 
     if Nego.resume_12 mode
@@ -824,16 +822,18 @@ let server_ClientHello hs offer obinders =
         let digestSessionTicket =
           if Nego.sendticket_12 mode then
             // Save hashing the SH if we don't send a ticket
-            let _ = HandshakeLog.send hs.log (serverHello mode) in
-            let ticket = {sticket_lifetime = 3600ul; sticket_ticket = tid; } in
-            HandshakeLog.send_tag #ha hs.log (NewSessionTicket ticket)
+            let _ = HandshakeLog.send hs.log (HSL.Msg (HSM.M_server_hello serverHello mode)) in
+            let ticket =
+	      let open Parsers.NewSessionTicket12 in
+	      {lifetime_hint = 3600ul; ticket = tid; } in
+            HandshakeLog.send_tag #ha hs.log (HSL.Msg12 (HSM.M12_new_session_ticket ticket))
           else
-            HandshakeLog.send_tag #ha hs.log (serverHello mode)
+            HandshakeLog.send_tag #ha hs.log (HSL.Msg (HSM.M_server_hello serverHello mode))
           in
         let digestServerFinished =
           let fink = KeySchedule.ks_12_finished_key hs.ks in
           let svd = TLSPRF.finished12 ha fink Server digestSessionTicket in
-          HandshakeLog.send_CCS_tag #ha hs.log (Finished ({fin_vd = svd})) true in
+          HandshakeLog.send_CCS_tag #ha hs.log (HSL.Msg12 (HSM.M12_finished svd)) true in
         hs.state := S_Wait_CCS2 digestServerFinished;
         InAck false false
      end // 1.2 resumption
