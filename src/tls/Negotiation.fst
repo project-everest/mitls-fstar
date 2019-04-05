@@ -1700,22 +1700,23 @@ let filter_ske_salg12 (sa: signatureScheme) (sa': signatureScheme) =
     else correct sa
 
 #push-options "--z3rlimit 200"
-let accept_salg12 mode (osa: option signatureScheme): result signatureScheme  =
+let accept_salg12 mode (sa:signatureScheme)
+  : result signatureScheme  =
   assume(
     pvcs mode.n_protocol_version mode.n_cipher_suite /\ 
     mode.n_protocol_version <> TLS_1p3); //18-12-16 TODO preconditions
   let ha0 = sessionHashAlg mode.n_protocol_version mode.n_cipher_suite in
   match sigAlg_of_ciphersuite mode.n_cipher_suite with 
   | Error z -> Error z 
-  | Correct sa -> (
+  | Correct sa' -> (
     match mode.n_protocol_version with
     | TLS_1p0 | TLS_1p1 | SSL_3p0 -> 
-      filter_ske_salg12 osa (signatureScheme_of_sigHashAlg sa ha0)
+      filter_ske_salg12 sa (signatureScheme_of_sigHashAlg sa' ha0)
     | TLS_1p2 ->
     match find_signature_algorithms mode.n_offer with
-    | None -> filter_ske_salg12 osa (signatureScheme_of_sigHashAlg sa ha0)
+    | None -> filter_ske_salg12 sa (signatureScheme_of_sigHashAlg sa' ha0)
     | Some algs -> 
-      (match List.Helpers.find_aux sa matches_sigHashAlg_of_signatureScheme algs with
+      (match List.Helpers.find_aux sa' matches_sigHashAlg_of_signatureScheme algs with
         | Some sa -> Correct sa 
         | None -> fatal Handshake_failure "Signature algorithm negotiation failed" ))
 
