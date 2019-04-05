@@ -85,3 +85,10 @@ let resultBind r f =
    (match r with
     | Error z -> Error z
     | Correct c -> f c)
+
+(* connecting with LowParse, which uses option *)
+
+let option_of_result (#t: Type) (r: result t) : Tot (option t) =
+  match r with
+  | Error _ -> None
+  | Correct c -> Some c

@@ -11,7 +11,7 @@ open TLSInfo
 
 module AE = AEADProvider
 
-#set-options "--admit_smt_queries true"
+#push-options "--admit_smt_queries true"
 
 val discard: bool -> ST unit
   (requires (fun _ -> True))
@@ -217,7 +217,7 @@ let serialize = function
     @| (bytes_of_int32 created) @| (bytes_of_int32 age)
     @| (vlbytes 2 custom) @| (vlbytes 2 rms)
 
-#reset-options
+#pop-options
 
 module TC = Parsers.TicketContents
 module TC12 = Parsers.TicketContents12
@@ -238,7 +238,7 @@ let ticketContents_of_ticket (t: ticket) : GTot TC.ticketContents =
     })
   | Ticket13 cs _ _ rms nonce created age custom ->
     TC.T_ticket13 ({
-      TC13.cs = name_of_cipherSuite cs;
+      TC13.cs = cipherSuite13_of_cipherSuite cs;
       TC13.rms = rms;
       TC13.nonce = nonce;
       TC13.creation_time = created;
@@ -250,7 +250,9 @@ let ticketContents_of_ticket (t: ticket) : GTot TC.ticketContents =
 
 let write_ticket12 
   (t: ticket) 
-  (sl: LPB.slice) (pos: U32.t) : Stack U32.t
+  (sl: LPB.slice (LPB.srel_of_buffer_srel (B.trivial_preorder _)) (LPB.srel_of_buffer_srel (B.trivial_preorder _)))
+  (pos: U32.t)
+: Stack U32.t
   (requires (fun h -> 
     LPB.live_slice h sl /\ 
     U32.v pos <= U32.v sl.LPB.len /\ 
@@ -338,9 +340,26 @@ let write_ticket13_part1 (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
     pos6
 *)
 
+inline_for_extraction
+val store_bytes_strong: src: FStar.Bytes.bytes ->
+  dst:lbuffer (len src) ->
+  Stack unit
+    (requires (fun h0 -> B.live h0 dst))
+    (ensures  (fun h0 r h1 ->
+      B.(modifies (loc_buffer dst) h0 h1) /\
+      Seq.equal (FStar.Bytes.reveal src) (B.as_seq h1 dst)))
+let store_bytes_strong src dst =
+  if FStar.Bytes.len src = 0ul
+  then ()
+  else FStar.Bytes.store_bytes src dst
+
 #reset-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1 --z3rlimit 256 --z3cliopt smt.arith.nl=false --z3refresh --using_facts_from '* -FStar.Tactics -FStar.Reflection' --log_queries"
 
-let write_ticket13 (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
+let write_ticket13
+  (t: ticket)
+  (sl: LPB.slice (LPB.srel_of_buffer_srel (B.trivial_preorder _)) (LPB.srel_of_buffer_srel (B.trivial_preorder _)))
+  (pos: U32.t)
+: Stack U32.t
   (requires (fun h -> LPB.live_slice h sl /\ U32.v pos <= U32.v sl.LPB.len /\ U32.v sl.LPB.len <= U32.v LPB.max_uint32 /\ Ticket13? t))
   (ensures (fun h pos' h' ->
     let tc = ticketContents_of_ticket t in
@@ -351,23 +370,24 @@ let write_ticket13 (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
       LPB.valid_content_pos TC.ticketContents_parser h' sl pos tc pos'
   )))
 = let h0 = get () in
+  [@inline_let] let _ = assert_norm (pow2 32 == 4294967296) in
   match t with
   | Ticket13 cs _ _ rms nonce created age custom ->
     if (sl.LPB.len `U32.sub` pos) `U32.lt` (15ul `U32.add` len rms `U32.add` len nonce `U32.add` len custom)
     then LPB.max_uint32
     else begin
       let pos1 = pos `U32.add` 1ul in
-      let pos2 = Parsers.CipherSuite.cipherSuite_writer (name_of_cipherSuite cs) sl pos1 in
+      let pos2 = CipherSuite.cipherSuite13_writer (cipherSuite13_of_cipherSuite cs) sl pos1 in
       let len_rms = len rms in
       let _ = FStar.Bytes.store_bytes rms (B.sub sl.LPB.base (pos2 `U32.add` 1ul) len_rms) in
       let pos3 = Parsers.TicketContents13_rms.ticketContents13_rms_finalize sl pos2 len_rms in
       let len_nonce = len nonce in
-      let _ = if len_nonce <> 0ul then FStar.Bytes.store_bytes nonce (B.sub sl.LPB.base (pos3 `U32.add` 1ul) len_nonce) in
+      let _ = store_bytes_strong nonce (B.sub sl.LPB.base (pos3 `U32.add` 1ul) len_nonce) in
       let pos4 = Parsers.TicketContents13_nonce.ticketContents13_nonce_finalize sl pos3 len_nonce in
       let pos5 = LPI.write_u32 created sl pos4 in
       let pos6 = LPI.write_u32 age sl pos5 in
       let len_custom = len custom in
-      let _ = if len_custom <> 0ul then FStar.Bytes.store_bytes custom (B.sub sl.LPB.base (pos6 `U32.add` 2ul) len_custom) in
+      let _ = store_bytes_strong custom (B.sub sl.LPB.base (pos6 `U32.add` 2ul) len_custom) in
       let pos7 = Parsers.TicketContents13_custom_data.ticketContents13_custom_data_finalize sl pos6 len_custom in
       let h = get () in
       Parsers.TicketContents13.ticketContents13_valid h sl (pos `U32.add` 1ul);
@@ -377,7 +397,11 @@ let write_ticket13 (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
 
 #reset-options
 
-let write_ticket (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
+let write_ticket
+  (t: ticket)
+  (sl: LPB.slice (LPB.srel_of_buffer_srel (B.trivial_preorder _)) (LPB.srel_of_buffer_srel (B.trivial_preorder _)))
+  (pos: U32.t)
+: Stack U32.t
   (requires (fun h -> LPB.live_slice h sl /\ U32.v pos <= U32.v sl.LPB.len /\ U32.v sl.LPB.len <= U32.v LPB.max_uint32 ))
   (ensures (fun h pos' h' ->
     let tc = ticketContents_of_ticket t in
@@ -393,7 +417,7 @@ let write_ticket (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
   | Ticket13 cs _ _ rms nonce created age custom ->
     write_ticket13 t sl pos
 
-#set-options "--admit_smt_queries true"
+#push-options "--admit_smt_queries true"
 
 let ticket_encrypt (seal:bool) plain : St bytes =
   let Key tid wr _ = if seal then get_sealing_key () else get_ticket_key () in
@@ -445,6 +469,8 @@ let check_cookie b = None
             Some (hrr, digest, extra)
 *)
 
+#pop-options
+
 let ticket_pskinfo (t:ticket) =
   match t with
   | Ticket13 cs li _ _ nonce created age_add custom ->
@@ -462,6 +488,35 @@ let ticket_pskinfo (t:ticket) =
     })
   | _ -> None
 
+noextract
+let ticketContents13_pskinfo (t: TC13.ticketContents13) : Tot pskInfo =
+  match t with
+  | ({ TC13.cs = cs; TC13.nonce = nonce; TC13.creation_time = created; TC13.age_add = age_add; TC13.custom_data = custom }) ->
+    begin match cipherSuite_of_cipherSuite13 cs with
+    | (CipherSuite13 ae h) ->
+      ({
+        ticket_nonce = Some nonce;
+        time_created = created;
+        ticket_age_add = age_add;
+        allow_early_data = true;
+        allow_dhe_resumption = true;
+        allow_psk_resumption = true;
+        early_ae = ae;
+        early_hash = h;
+        identities = (empty_bytes, empty_bytes);
+      })
+    end
+
+noextract
+let ticketContents_pskinfo (t:TC.ticketContents) : Tot (option pskInfo) =
+  match t with
+  | TC.T_ticket13 t13 -> Some (ticketContents13_pskinfo t13)
+  | _ -> None
+
+let ticketContents_pskinfo_ticketContents_of_ticket (t: ticket) : Lemma
+  (ticketContents_pskinfo (ticketContents_of_ticket t) == ticket_pskinfo t)
+= ()
+
 let check_ticket13 b =
   match check_ticket false b with
   | Some t -> ticket_pskinfo t
@@ -475,9 +530,9 @@ let check_ticket12 b =
 open LowParse.Low.Base 
 open Parsers.TicketContents12
 
-#reset-options ""
 val check_ticket12_low: 
-  x:slice -> 
+  #rrel: _ -> #rel: _ ->
+  x:slice rrel rel -> 
   pos: UInt32.t -> 
   Stack (Parsers.ProtocolVersion.protocolVersion * UInt32.t)
   (requires (fun h0 -> valid ticketContents12_parser h0 x pos))
@@ -490,7 +545,7 @@ val check_ticket12_low:
 
 #push-options "--z3rlimit 128 --max_ifuel 1 --max_fuel 0"
 
-let check_ticket12_low x pos = 
+let check_ticket12_low #rrel #rel x pos = 
   let pv_pos = accessor_ticketContents12_pv x pos in
   let pv = protocolVersion_reader x pv_pos in
   let ms_pos = accessor_ticketContents12_master_secret x pos in 

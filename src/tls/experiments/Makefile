@@ -8,7 +8,9 @@ FSTAR_HOME=../../../../FStar
 # the latter form won't work because FSTAR_HOME will incorrectly override
 # values in recursive invocations of $(MAKE)...
 
-OPTIONS=--fstar_home $(FSTAR_HOME)
+LOWPARSE_HOME=../../../../quackyducky/src/lowparse
+
+#OPTIONS=--fstar_home $(FSTAR_HOME)
 
 FSTARFLAGS=$(OPTIONS) $(OTHERFLAGS)
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe \
@@ -24,7 +26,7 @@ VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 \
   --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection \
   $(HINTS_ENABLED)
 
-FSTAR_INCLUDE_PATHS=--include .. --include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/ulib/hyperstack
+FSTAR_INCLUDE_PATHS=--include .. --include $(LOWPARSE_HOME) --include $(FSTAR_HOME)/../kremlin/kremlib
 
 # Lax-checking one file at a time
 %.fst-lax: $(LIBFILES)
@@ -52,9 +54,7 @@ FSTAR_INCLUDE_PATHS=--include .. --include $(CDIR) --include $(PDIR) --include $
 # Targets to get F* arguments in interactive mode
 %.fst-in: 
 	@echo $(OPTIONS) $(VERFLAGS) \
-	$(FSTAR_INCLUDE_PATHS) \
-	--include ../ideal-flags \
-	--verify_module $(basename $(notdir $@))
+	$(FSTAR_INCLUDE_PATHS)
 
 %.fsti-in: 
 	@echo $(OPTIONS) $(VERFLAGS) \

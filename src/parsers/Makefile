@@ -7,7 +7,13 @@ QD_HOME ?= ../../../quackyducky
 
 all: gen # verify
 
-gen: $(addsuffix .gen,$(wildcard *.rfc))
+gen: parsers.gen
+
+parsers.gen: $(wildcard *.rfc) $(QD_HOME)/qd
+	mkdir -p generated
+	rm -rf generated/*.fst generated/*.fsti
+	for f in $(wildcard *.rfc) ; do	$(QD_HOME)/qd -prefix $$(basename $$f .rfc). -odir generated $$f ; done
+	touch $@
 
 genmakefile: generated/Makefile
 
@@ -17,12 +23,6 @@ verify: gen genmakefile
 generated/Makefile: Makefile.qd
 	mkdir -p generated
 	cp Makefile.qd $@
-
-%.gen: % $(QD_HOME)/qd
-	mkdir -p generated
-#	-rm generated/$(patsubst %.rfc, %, $(basename $<)).*.{fst,fsti}
-	$(QD_HOME)/qd -prefix $(basename $<). -odir generated $<
-	touch $@
 
 clean:
 	rm -rf *.gen generated

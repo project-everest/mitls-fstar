@@ -96,6 +96,14 @@ function export_home() {
     fi
 }
 
+function build_hacl_vale () {
+    # Only building a subset of HACL* for now, no verification.
+    # This is only for libevercrypt.so for now,
+    # not for checked files.
+    make -C hacl-star vale-fst -j $threads &&
+    make -C hacl-star compile-compact compile-generic compile-evercrypt-external-headers -j $threads
+}
+
 # By default, HACL* master works against F* stable. Can also be overridden.
 function fetch_hacl() {
     if [ ! -d hacl-star ]; then
@@ -177,16 +185,15 @@ function fetch_qd() {
 function fetch_and_make_qd() {
     fetch_qd
 
-    # Default build target is quackyducky, unless specified otherwise
+    # Default build target is all (quackyducky lowparse), unless specified otherwise
     local target
     if [[ $1 == "" ]]; then
-        target="quackyducky"
+        target="all"
     else
         target="$1"
     fi
 
-    make -C qd -j $threads $target ||
-        (cd qd && git clean -fdx && make -j $threads $target)
+    OTHERFLAGS='--admit_smt_queries true' make -C qd -j $threads $target
 }
 
 function build_pki_if() {
@@ -219,41 +226,14 @@ function mitls_verify() {
 
     fetch_and_make_kremlin all &&
     fetch_and_make_qd &&
-    # Build LowParse first, it is a dependency of miTLS anyway
-    make -C src/lowparse -f Makefile.LowParse -j $threads -k &&
-    { echo false > lowparse_examples_success ; } &&
-    { echo false > mitls_success ; } && {
-        # Perform LowParse CI and miTLS CI in parallel
-        {
-            if echo "$CI_BRANCH" | grep '^taramana_lowparse_ci_' ; then
-                echo This is a LowParse CI-only branch. No miTLS CI here.
-            else
-                # miTLS CI proper starts here
-                fetch_and_make_mlcrypto &&
-                fetch_hacl &&
-                fetch_vale &&
-                    # Only building a subset of HACL* for now, no verification.
-                    # This is only for libevercrypt.so for now,
-                    # not for checked files.
-                    OTHERFLAGS="--admit_smt_queries true $OTHERFLAGS" \
-                    make -C hacl-star vale-fst -j $threads &&
-                    make -C hacl-star compile-compact compile-generic compile-evercrypt-external-headers -j $threads &&
-                    make -C libs/ffi -j $threads &&
-                    build_pki_if &&
-                    make -C src/tls -j $threads all -k &&
-                    make -C src/tls -j $threads test -k
-            fi &&
-            { echo true > mitls_success ; }
-        } &
-        {
-            # Test LowParse examples
-            make -C src/lowparse -f Makefile.LowParseExamples -j $threads -k &&
-            { echo true > lowparse_examples_success ; }
-        } &
-        wait
-    } &&
-    $(cat lowparse_examples_success) &&
-    $(cat mitls_success)
+    fetch_and_make_mlcrypto &&
+    fetch_hacl &&
+    fetch_vale &&
+    OTHERFLAGS="--admit_smt_queries true $OTHERFLAGS" build_hacl_vale &&
+    make -C libs/ffi -j $threads &&
+    build_pki_if &&
+    make -C src/tls -j $threads all -k &&
+    make -C src/tls -j $threads test -k
 }
 
 function mitls_verify_and_hints() {

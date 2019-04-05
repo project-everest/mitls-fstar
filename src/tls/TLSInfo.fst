@@ -45,7 +45,7 @@ let default_signature_schemes =
   assert_norm (List.Tot.for_all is_supported_signatureScheme schemes);
   schemes
 
-let default_groups : CommonDH.supportedNamedGroups =
+let default_groups : (x: CommonDH.supportedNamedGroups { let l = Parsers.NamedGroupList.namedGroupList_bytesize x in 0 <= l /\ l <= 65535 } ) =
   let open CommonDH in
   let groups = [
     Secp521r1;
@@ -58,6 +58,7 @@ let default_groups : CommonDH.supportedNamedGroups =
   ] in
   assert_norm (List.Tot.length groups <= Parsers.NamedGroupList.max_count);
   assert_norm (List.Tot.for_all is_supported_group groups);
+  assert_norm (List.Tot.length groups == 7);
   groups
 
 // By default we use an in-memory ticket table

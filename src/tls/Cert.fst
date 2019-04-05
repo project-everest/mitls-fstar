@@ -62,6 +62,7 @@ let rec certificateListBytes13_is_injective c1 c2 = admit()
 
 abstract val parseCertificateList: b:bytes -> Tot (result chain) (decreases (length b))
 let parseCertificateList b =
+  [@inline_let] let _ = assume (FStar.Bytes.repr_bytes (FStar.Bytes.length b) <= 3) in
   let err = perror __SOURCE_FILE__ __LINE__ "bad certificate 1.2 chain" in
   LowParseWrappers.wrap_parser32 certificate12_parser32 err (vlbytes 3 b)
 

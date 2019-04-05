@@ -21,12 +21,12 @@
 
     "NotificationEnabled" : true,
     "NotificationChannel" : "#mitls-build",
-    "PublicBranches" : [ "master" ],
+    "PublicBranches" : [ "master", "dev" ],
 
     "RepoVersions" : {
         "kremlin_version" : "origin/master",
         "hacl_version" : "origin/fstar-master",
         "mlcrypto_version" : "origin/master",
-        "qd_version" : "origin/taramana_lowparse"
+        "qd_version" : "origin/dev"
     }
 }

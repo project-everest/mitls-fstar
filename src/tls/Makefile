@@ -29,7 +29,8 @@ quic-%: refresh-depend
 	+$(MAKE) -C ../../apps/quicMinusNet $* -k
 
 #ADL (31 Aug. 2018) Disabling ocaml-test during transition to EverCrypt
-test: refresh-depend model-test kremlin-test quic-test #ocaml-test
+#TR (2019-03-06): disabling quic-test until merge into master
+test: refresh-depend model-test kremlin-test #quic-test #ocaml-test
 
 clean: ocaml-clean kremlin-clean quic-clean model-clean
 	rm -rf extract/Kremlin extract/OCaml extract/copied

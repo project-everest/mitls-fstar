@@ -26,6 +26,18 @@ module HST = FStar.HyperStack.ST
 module HSM = HandshakeMessages
 module CH = Parsers.ClientHello
 module SH = Parsers.ServerHello
+module LP = LowParse.Low.Base
+module U32 = FStar.UInt32
+module HST = FStar.HyperStack.ST
+module B = LowStar.Buffer
+
+val print_namedGroupList
+  (#rrel #rel: _)
+  (sl: LP.slice rrel rel)
+  (pos: U32.t)
+: HST.Stack unit
+  (requires (fun h -> LP.valid Parsers.NamedGroupList.namedGroupList_parser h sl pos))
+  (ensures (fun h _ h' -> B.modifies B.loc_none h h'))
 
 type pre_share = g:CommonDH.group & CommonDH.pre_share g
 type share = g:CommonDH.group & CommonDH.share g
@@ -360,4 +372,3 @@ noeq type handshake =
 // We tried using instead hs, but this creates circularities
 // We'll probably need a global log to reason about them.
 // We should probably do the same in the session store.
-

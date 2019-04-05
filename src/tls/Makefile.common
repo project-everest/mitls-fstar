@@ -4,56 +4,44 @@ MITLS_HOME      ?= ../..
 KREMLIN_HOME    ?= ../../../kremlin
 MLCRYPTO_HOME   ?= ../../../MLCrypto
 EVERCRYPT_HOME	?= $(HACL_HOME)/providers
+ifndef LOWPARSE_HOME
+  ifdef QD_HOME
+    LOWPARSE_HOME=$(QD_HOME)/src/lowparse
+  else
+    LOWPARSE_HOME=../../../quackyducky/src/lowparse
+  endif
+endif
 FLAVOR          ?= Model
 
 SHELL=/bin/bash
 
+include $(HACL_HOME)/Makefile.include
 
 # Paths and Commands
 
-ifneq (,$(EVEREST_WINDOWS))
-  EVERCRYPT_CONFIG = noopenssl # hacl, vale, bcrypt
-else ifneq (,$(KAIZALA))
-  EVERCRYPT_CONFIG = kaizala # hacl, openssl
-else
-  EVERCRYPT_CONFIG ?= default
-endif
-
 INCLUDE_PATHS = \
-  $(HACL_HOME)/vale/code/arch/x64 \
-  $(HACL_HOME)/vale/code/arch/x64/interop \
-  $(HACL_HOME)/vale/specs/defs \
-  $(HACL_HOME)/vale/specs/hardware \
-  $(HACL_HOME)/vale/specs/interop \
-  $(HACL_HOME)/vale/code/crypto/sha \
-  $(HACL_HOME)/vale/code/arch \
-  $(HACL_HOME)/vale/code/lib/collections \
-  $(HACL_HOME)/vale/code/lib/util \
-  $(HACL_HOME)/vale/specs/crypto \
-  $(HACL_HOME)/vale/specs/math \
-  $(HACL_HOME)/secure_api \
-  $(HACL_HOME)/secure_api/utils \
-  $(HACL_HOME)/secure_api/concrete_specializations \
-  $(HACL_HOME)/code/hash \
-  $(HACL_HOME)/code/old/lib \
-  $(HACL_HOME)/specs \
-  $(HACL_HOME)/specs/derived \
+  $(ALL_HACL_DIRS) \
   $(KREMLIN_HOME)/include \
   $(KREMLIN_HOME)/kremlib/compat \
   $(KREMLIN_HOME)/kremlib \
   $(MITLS_HOME)/libs/ffi \
-  $(MITLS_HOME)/src/lowparse \
+  $(LOWPARSE_HOME) \
   $(MITLS_HOME)/src/parsers/generated \
   $(EVERCRYPT_HOME)/evercrypt \
-  $(SPECINC) \
   $(EVERCRYPT_HOME)/evercrypt/fst \
   $(EVERCRYPT_HOME)/evercrypt/config/$(EVERCRYPT_CONFIG) \
-  $(HACL_HOME)/obj
+  $(SPECINC)
 
 ifeq (,$(MITLS_NODEBUG))
   INCLUDE_PATHS += ./concrete-flags/Debug
 else
   INCLUDE_PATHS += ./concrete-flags/NoDebug
+endif
+
+
+PARSERS_CACHE_DIR=$(MITLS_HOME)/src/parsers/generated/cache
+ifneq (,$(wildcard $(PARSERS_CACHE_DIR)))
+  INCLUDE_PATHS += $(PARSERS_CACHE_DIR)
 endif
 
 HINTS_DIR  ?= hints
@@ -192,7 +180,6 @@ extract/copied/%.c: $(KREMLIN_HOME)/kremlib/%.c
 # Don't delete these files otherwise one can't run Makefile.OCaml and
 # Makefile.Kremlin in parallel
 .PRECIOUS: extract/copied/%.c
-
 
 # Rules for Interactive Mode
 %.fst-in %.fsti-in: 
