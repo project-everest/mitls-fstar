@@ -1,5 +1,5 @@
 [
-  "«p.¤}+\"Qp\u0004@Lí‘ý\u0017",
+  "W;˜wR9ß?\u0006bm£Lp\u0010¬",
   [
     [
       "TLSError.string_of_result",
@@ -16,7 +16,7 @@
         "typing_FStar.Error.uu___is_Correct"
       ],
       0,
-      "a90bb5d391ec1fb67b87556e82732a5a"
+      "40e2512266e8e9993722ac9752e5c920"
     ],
     [
       "TLSError.resT",
@@ -30,7 +30,7 @@
         "refinement_interpretation_Tm_refine_beedc2a801d7d2c429f84212cb5b7279"
       ],
       0,
-      "728c665677c186c82cb19d20beaeab4a"
+      "94a993d156c827fd4381b8255d88b183"
     ],
     [
       "TLSError.mapResult",
@@ -47,7 +47,7 @@
         "typing_FStar.Error.uu___is_Error"
       ],
       0,
-      "eb376ee7cf4bb64a6da26fcaa4769117"
+      "5a760ad800ea92fd633b3746f1db1106"
     ],
     [
       "TLSError.bindResult",
@@ -64,7 +64,7 @@
         "typing_FStar.Error.uu___is_Error"
       ],
       0,
-      "56078cd4e43160d372b1f61a64649d95"
+      "a520afda5f999afc7d7de08c65303138"
     ],
     [
       "TLSError.resultMap",
@@ -81,7 +81,7 @@
         "typing_FStar.Error.uu___is_Error"
       ],
       0,
-      "254c11322b7aea00440e4972d3645e2a"
+      "f255c4d07c4d4f57777bc5989f70f366"
     ],
     [
       "TLSError.resultBind",
@@ -98,7 +98,24 @@
         "typing_FStar.Error.uu___is_Error"
       ],
       0,
-      "3a7a66626e3382561718bb172bd6787b"
+      "035d65582ce25e06de9bae72278b7727"
+    ],
+    [
+      "TLSError.option_of_result",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_FStar.Error.Correct",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
+        "equation_TLSError.result", "function_token_typing_TLSError.error",
+        "lemma_FStar.Error.invertOptResult",
+        "typing_FStar.Error.uu___is_Correct",
+        "typing_FStar.Error.uu___is_Error"
+      ],
+      0,
+      "9d8b5b5f91fc71cffacd9c36cd6eb9e2"
     ]
   ]
 ]

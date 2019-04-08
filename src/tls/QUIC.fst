@@ -94,6 +94,9 @@ let rec find_ticket_content (l:Extensions.offeredPsks_identities)
     | Some (Ticket.Ticket13 _ _ _ _ _ _ _ app_data) -> Some app_data
     | _ -> find_ticket_content t
 
+module HSM = HandshakeMessages
+module CH = Parsers.ClientHello
+
 let peekClientHello (ch:bytes) (has_record:bool) : ML (option chSummary) =
   if length ch < 40 then (trace "peekClientHello: too short"; None) else
   let ch =
@@ -110,32 +113,26 @@ let peekClientHello (ch:bytes) (has_record:bool) : ML (option chSummary) =
   match ch with
   | None -> None
   | Some ch ->
-    match HandshakeMessages.parseMessage ch with
-    | Error _
-    | Correct None -> trace ("peekClientHello: bad handshake header"); None
-    | Correct (Some (| _, hst, ch, _ |)) ->
-      if hst <> HandshakeMessages.HT_client_hello then
-         (trace "peekClientHello: not a client hello"; None)
-      else
-        match HandshakeMessages.parseClientHello ch with
-        | Error (_, msg) -> trace ("peekClientHello: bad client hello: "^msg); None
-        | Correct (ch, _) ->
-          let sni = Negotiation.get_sni ch in
-          let alpn = Extensions.protocolNameList_serializer32 (Negotiation.get_alpn ch) in
-          let ext = Extensions.clientHelloExtensions_serializer32 ch.HandshakeMessages.ch_extensions in
-	  let ticket_data =
-	    match Negotiation.find_clientPske ch with
-	    | None -> None
-	    | Some psk -> find_ticket_content psk.Extensions.identities in
-          let cookie =
-            match Negotiation.find_cookie ch with
+    match HSM.handshake_parser32 ch with
+    | None -> trace ("peekClientHello: bad handshake header"); None
+    | Some (HSM.M_client_hello ch, _) ->
+      let sni = Negotiation.get_sni ch in
+        let alpn = Extensions.protocolNameList_serializer32 (Negotiation.get_alpn ch) in
+        let ext = Extensions.clientHelloExtensions_serializer32 ch.CH.extensions in
+	let ticket_data =
+	  match Negotiation.find_clientPske ch with
+	  | None -> None
+	  | Some psk -> find_ticket_content psk.Extensions.identities in
+        let cookie =
+          match Negotiation.find_cookie ch with
+          | None -> None
+          | Some c ->
+            match Ticket.check_cookie c with
             | None -> None
-            | Some c ->
-              match Ticket.check_cookie c with
-              | None -> None
-              | Some (hrr, digest, extra) -> Some extra
-            in
-          Some ({ch_sni = sni; ch_alpn = alpn; ch_extensions = ext; ch_cookie = cookie; ch_ticket_data = ticket_data })
+            | Some (hrr, digest, extra) -> Some extra
+          in
+        Some ({ch_sni = sni; ch_alpn = alpn; ch_extensions = ext; ch_cookie = cookie; ch_ticket_data = ticket_data })
+    | _ -> trace ("peekClientHello: not a client hello!"); None
 
 module H = Old.Handshake
 module HSL = HandshakeLog

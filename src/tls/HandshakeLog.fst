@@ -30,19 +30,13 @@ unfold val trace: s:string -> ST unit
   (ensures (fun h0 _ h1 -> h0 == h1))
 unfold let trace = if DebugFlags.debug_HSL then print else (fun _ -> ())
 
-// FIXME(ADL): the ghost transcript is buggy in the Kremlin-extracted version
-
-let erased_transcript : Type0 =
-    if false then hs_transcript
-    else FStar.Ghost.erased hs_transcript
+let erased_transcript : Type0 = FStar.Ghost.erased hs_transcript
 
 let reveal_log (l:erased_transcript) : GTot (hs_transcript) =
-    if false then l
-    else FStar.Ghost.reveal l
+    FStar.Ghost.reveal l
 
 let hide_log (l:hs_transcript) : Tot erased_transcript =
-    if false then l
-    else FStar.Ghost.hide l
+    FStar.Ghost.hide l
 
 (** TODO: move to FStar.Ghost (breach of abstraction)  *)
 let elift1_def (#a #b: Type) (f: (a -> GTot b)) (x: FStar.Ghost.erased a) : Lemma (FStar.Ghost.elift1 f x == FStar.Ghost.hide (f (FStar.Ghost.reveal x))) = ()
@@ -69,8 +63,7 @@ let bind_log
     (ensures (fun _ -> True))
   ))
 : Tot (y: erased_transcript { y == f (reveal_log l) } )
-= if false then f l
-  else ghost_bind #hs_transcript #hs_transcript l f
+= ghost_bind #hs_transcript #hs_transcript l f
 
 let empty_hs_transcript : erased_transcript = hide_log []
 
@@ -83,12 +76,14 @@ let append_hs_transcript
 let extend_hs_transcript (l:erased_transcript) (m:msg { valid_transcript (reveal_log l @ [m]) } ) : Tot erased_transcript =
     append_hs_transcript l [m]
 
-let print_hsl (hsl:erased_transcript) : Tot bool =
+let print_hsl (hsl:erased_transcript) : Tot bool = false
+(*
     if false then
     let sl = List.Tot.map HandshakeMessages.string_of_handshakeMessage hsl in
     let s = List.Tot.fold_left (fun x y -> x^", "^y) "" sl in
     IO.debug_print_string ("Current log: " ^ s)
     else false
+*)
 
 (* TODO: move to something like List.GTot *)
 let rec gforall_list_to_list_refined
@@ -100,14 +95,11 @@ let rec gforall_list_to_list_refined
   | [] -> []
   | x :: q -> x :: gforall_list_to_list_refined f q
 
+(*
 let rec valid_transcript_to_list_valid_hs_msg_aux
   (v: option protocolVersion)
-  (l: list hs_msg { gforall (valid_hs_msg_prop v) l } )
-: Tot (list (valid_hs_msg v))
-=
-(* FIXME: WHY WHY WHY can this not be defined as:
-   gforall_list_to_list_refined (valid_hs_msg_prop v) l
-*)
+  (l: list msg )
+  : Tot (list (valid_hs_msg v)) =
   match l with
   | [] -> []
   | a :: q -> a :: valid_transcript_to_list_valid_hs_msg_aux v q
@@ -122,14 +114,31 @@ let rec valid_transcript_to_list_valid_hs_msg_aux_inj
 = match l1, l2 with
   | _ :: q1, _ :: q2 -> valid_transcript_to_list_valid_hs_msg_aux_inj v q1 q2
   | _ -> ()
-
-let transcript_bytes l =
-  let v = transcript_version l in
-  handshakeMessagesBytes v (valid_transcript_to_list_valid_hs_msg_aux v l)
+*)
 
 #set-options "--z3rlimit 64 --admit_smt_queries true"
 
-let transcript_format_injective ms0 ms1 =
+let msg_bytes = function
+| Msg h -> handshake_serializer32 h
+| Msg12 h -> handshake12_serializer32 h
+| Msg13 h -> handshake13_serializer32 h
+
+let transcript_bytes l =
+  List.Tot.fold_left (fun b m -> b @| (msg_bytes m)) empty_bytes l
+
+(*
+  : GTot bytes (decreases (List.Tot.length l)) =
+  match l with
+  | [] -> empty_bytes
+  | h::t -> (empty_bytes) @| (transcript_bytes t)
+
+  let v = transcript_version l in
+  handshakeMessagesBytes v (valid_transcript_to_list_valid_hs_msg_aux v l)
+*)
+
+
+let transcript_format_injective ms0 ms1 = admit()
+(*
   let f ()
   : Lemma
     (requires (FStar.Bytes.equal (transcript_bytes ms0) (transcript_bytes ms1)))
@@ -153,6 +162,7 @@ let transcript_format_injective ms0 ms1 =
       end
   in
   Classical.move_requires f ()
+*)
 
 //The type below includes buffers, the log, the hash, and the params needed to parse and hash the log.
 //Note that a lot of this information is available in the log itself.
@@ -291,7 +301,8 @@ let getHash #ha (LOG #reg st) =
 
 // Must be called after receiving a CH in the Init state of nego, indicating
 // that the retry is stateless.
-let load_stateless_cookie l hrr digest =
+let load_stateless_cookie l hrr digest = admit()
+(*
   let st = !l in
   // The cookie is loaded after CH2 is written to the hash buffer
   let OpenHash ch2b = st.hashes in
@@ -302,12 +313,15 @@ let load_stateless_cookie l hrr digest =
   let h = OpenHash (fake_ch @| hrb @| ch2b) in
   l := State st.transcript st.outgoing st.outgoing_next_keys st.outgoing_complete
              st.incoming st.parsed h st.pv st.kex st.dh_group
+*)
 
 (* SEND *)
-let send l m =
-  trace ("emit "^HandshakeMessages.string_of_handshakeMessage m);
+let send_truncated l m tr =
+  trace ("emit "^string_of_handshakeType (tag_of m));
   let st = !l in
-  let mb = handshakeMessageBytes st.pv m in
+  let mb = msg_bytes m in
+  let e = FStar.UInt32.(Bytes.len mb -^ tr) in
+  let mb = Bytes.slice mb 0ul e in
   let h : hashState st.transcript (st.parsed @ [m]) =
     match st.hashes with
     | FixedHash a acc hl ->
@@ -315,16 +329,33 @@ let send l m =
       FixedHash a acc hl
     | OpenHash p ->
       (match m with
+      (*
       | HelloRetryRequest hrr ->
         let Some cs = cipherSuite_of_name hrr.hrr_cipher_suite in
         let hmsg = Hashing.compute (verifyDataHashAlg_of_ciphersuite cs) p in
         let hht = (bytes_of_hex "fe0000") @| (bytes_of_int 1 (length hmsg)) @| hmsg in
-        OpenHash (hht @| mb)
+        OpenHash (hht @| mb) *)
       | _ -> OpenHash (p @| mb))
     in
   let o = st.outgoing @| mb in
   let t = extend_hs_transcript st.transcript m in
   l := State t o st.outgoing_next_keys st.outgoing_complete
+                st.incoming st.parsed h st.pv st.kex st.dh_group
+
+let send l m = send_truncated l m 0ul
+
+let send_raw l b =
+  trace ("emit raw "^hex_of_bytes b);
+  let st = !l in
+  let h : hashState st.transcript st.parsed =
+    match st.hashes with
+    | FixedHash a acc hl ->
+      let acc = Hashing.extend #a acc b in
+      FixedHash a acc hl
+    | OpenHash p -> OpenHash (p @| b)
+    in
+  let o = st.outgoing @| b in
+  l := State st.transcript o st.outgoing_next_keys st.outgoing_complete
                 st.incoming st.parsed h st.pv st.kex st.dh_group
 
 let hash_tag #a l =
@@ -335,17 +366,17 @@ let hash_tag #a l =
       Hashing.finalize #a acc
   | OpenHash b -> Hashing.compute a b
 
-let hash_tag_truncated #a l len =
+let hash_tag_truncated #a l cut =
+  let open FStar.UInt32 in
   let st = !l in
   match st.hashes with
-  | FixedHash a' acc hl -> trace "BAD HASH (statically excluded)"; admit()
-  | OpenHash b -> Hashing.compute a (fst (split_ b (length b - len)))
+  | OpenHash b -> Hashing.compute a (Bytes.slice b 0ul (len b -^ cut))
 
 // maybe just compose the two functions above?
 let send_tag #a l m =
-  trace ("emit "^HandshakeMessages.string_of_handshakeMessage m^" and hash");
+  trace ("emit "^(string_of_handshakeType (tag_of m))^" and hash");
   let st = !l in
-  let mb = handshakeMessageBytes st.pv m in
+  let mb = msg_bytes m in
   let (h,tg) : (hashState st.transcript (st.parsed @ [m]) * anyTag) =
     match st.hashes with
     | FixedHash a' acc hl ->
@@ -367,7 +398,7 @@ let send_tag #a l m =
 
 let send_CCS_tag #a l m cf =
   let st = !l in
-  let mb = handshakeMessageBytes st.pv m in
+  let mb = msg_bytes m in
   let (h,tg) : (hashState st.transcript (st.parsed @ [m]) * anyTag) =
     match st.hashes with
     | FixedHash a acc hl ->
@@ -461,7 +492,8 @@ let next_fragment l (i:id) =
 //17-04-24 avoid parsing loop? may be simpler at the level of receive.
 //17-05-09 but returning a list is convenient for handling truncated ClientHello
 val parseMessages:
-  pvo: option protocolVersion -> kexo: option kexAlg -> b: bytes ->
+  pvo: option protocolVersion ->
+  b: bytes ->
   ST (result (
     bool (* end of flight? *) *
     bytes (* remaining bytes *) *
@@ -470,39 +502,45 @@ val parseMessages:
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> modifies_none h0 h1))
 
+inline_for_extraction let msg_parser pvo buf =
+  match pvo with
+  | None ->
+    (match handshake_parser32 buf with
+    | None -> fatal Decode_error "Bad CH/SH/HRR"
+    | Some (msg,l) -> Correct (Msg msg, l))
+  | Some TLS_1p3 ->
+    (match handshake13_parser32 buf with
+    | None -> fatal Decode_error "Bad handshake13 message"
+    | Some (msg,l) -> Correct (Msg13 msg, l))
+  | _ ->
+    (match handshake12_parser32 buf with
+    | None -> fatal Decode_error "Bad handshake12 message"
+    | Some (msg,l) -> Correct (Msg12 msg, l))
+
 #reset-options "--admit_smt_queries true"
-let rec parseMessages pvo kexo buf =
-  match HandshakeMessages.parseMessage buf with
-  | Error z -> Error z
-  | Correct None -> trace "more bytes required"; Correct (false, buf, [], [])
-  | Correct (Some (| rem, hstype, pl, to_log |)) ->
-    ( // trace ("parsing " ^
-      //   (if pvo = Some TLS_1p3 then "(1.3) " else if pvo = Some TLS_1p2 then  "(1.2) " else "(?) ") ^
-      //   FStar.Bytes.print_bytes pl);
-      if hstype = HT_client_hello
-      then (
-        match parseClientHello pl with // ad hoc case: we parse into one or two messages
-        | Error z -> Error z
-        | Correct (ch, None) -> (
-          trace ("parsed [ClientHello] -- end of flight "^(if length rem > 0 then " (bytes waiting)" else ""));
-          Correct(true, rem, [ClientHello ch], [to_log]))
-        | Correct (ch, Some binders) -> (
-          trace ("parsed [ClientHello; Binders] -- end of flight "^(if length rem > 0 then " (bytes waiting)" else ""));
-          let chBytes, bindersBytes = split_ to_log (length to_log - HandshakeMessages.bindersLen_of_ch ch) in
-          Correct(true, rem, [ClientHello ch; Binders binders], [chBytes; bindersBytes])))
-      else (
-        match parseHandshakeMessage pvo kexo hstype pl with
-        | Error z -> Error z
-        | Correct msg ->
-          trace ("parsed "^HandshakeMessages.string_of_handshakeMessage msg);
-          if eoflight msg
-          then (
-            trace ("end of flight"^(if length rem > 0 then " (bytes waiting)" else ""));
-            Correct(true, rem, [msg], [to_log]) )
-          else (
-            match parseMessages pvo kexo rem with
-            | Error z -> Error z
-            | Correct (b,r,hl,bl) -> Correct (b,r,msg::hl,to_log::bl))))
+let rec parseMessages pvo buf =
+  let open FStar.UInt32 in
+  if len buf <^ 4ul then
+    Correct (false, buf, [], [])
+  else
+  match handshakeHeader_parser32 buf with 
+  | None -> fatal Decode_error "Bad message header"
+  | Some (hh, _) ->
+    trace ("Read header of type "^(string_of_handshakeType hh.msg_type)^" and length "^(string_of_int (4 + v hh.length))^" / "^(string_of_int (length buf)));
+    if hh.length +^ 4ul >^ len buf then
+      Correct (false, buf, [], [])
+    else
+      match msg_parser pvo buf with
+      | Error z -> Error z
+      | Correct (msg, l) ->
+        let to_log, rest = split buf l in
+	if eoflight (tag_of msg) then
+	  Correct (true, rest, [msg], [to_log])
+	else
+	  match parseMessages pvo rest with
+	  | Error z -> Error z
+	  | Correct (eof, r, msg_list, log_list) ->
+	    Correct (eof, r, msg::msg_list, to_log::log_list)
 
 val hashHandshakeMessages : t: erased_transcript ->
               p: list msg ->
@@ -519,7 +557,7 @@ let rec hashHandshakeMessages t p hs n nb =
     | m::mrest, mb::brest ->
       (match hs with
       | OpenHash b ->
-        let hs = match m with
+        let hs = match m with (*
           | HelloRetryRequest hrr ->
             let hmsg = match cipherSuite_of_name hrr.hrr_cipher_suite with
               | Some cs -> Hashing.compute (verifyDataHashAlg_of_ciphersuite cs) b
@@ -527,7 +565,7 @@ let rec hashHandshakeMessages t p hs n nb =
             let hht = (bytes_of_hex "fe0000") @| (Parse.vlbytes 1 hmsg) in
             trace ("Replacing CH1 in transcript with "^(hex_of_bytes hht));
             trace ("HRR bytes: "^(hex_of_bytes mb));
-            OpenHash (hht @| mb)
+            OpenHash (hht @| mb) *)
           | _ -> OpenHash (b @| mb)
         in
         hashHandshakeMessages t (p @ [m]) hs mrest brest
@@ -543,7 +581,7 @@ let rec hashHandshakeMessages t p hs n nb =
 let receive l mb =
   let st = !l in
   let ib = st.incoming @| mb in
-  match parseMessages st.pv st.kex ib with
+  match parseMessages st.pv ib with
   | Error z -> Error z
   | Correct (false,r,[],[]) -> (
        l := State

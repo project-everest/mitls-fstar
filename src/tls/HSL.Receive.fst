@@ -45,16 +45,6 @@ let create r =
   let inc_st = B.malloc r (G.hide (Seq.empty, F_none)) 1ul in
   { rgn = r; inc_st = inc_st }
 
-module HSM13 = Parsers.Handshake13
-module HSMType = Parsers.HandshakeType
-module EE  = Parsers.Handshake13_m_encrypted_extensions
-module C13 = Parsers.Handshake13_m_certificate
-module CV13 = Parsers.Handshake13_m_certificate_verify
-module Fin13 = Parsers.Handshake13_m_finished
-module CR13 = Parsers.Handshake13_m_certificate_request
-module EoED13 = Parsers.Handshake13_m_end_of_early_data
-module NST13 = Parsers.Handshake13_m_new_session_ticket
-
 assume val parsing_error : TLSError.error
 assume val unexpected_flight_error : TLSError.error
 assume val bytes_remain_error : TLSError.error
@@ -63,13 +53,13 @@ inline_for_extraction
 noextract
 let parse_hsm13
   (#a:Type) (#k:LP.parser_kind{k.LP.parser_kind_subkind == Some LP.ParserStrong})
-  (#p:LP.parser k a) (#cl:LP.clens HSM13.handshake13 a)
-  (#gacc:LP.gaccessor HSM13.handshake13_parser p cl)
-  (tag:HSMType.handshakeType{
-    forall (m:HSM13.handshake13).
-      (HSM13.tag_of_handshake13 m == tag) <==> cl.LP.clens_cond m})
-  (f:a -> HSM13.handshake13{
-    forall (m:HSM13.handshake13).
+  (#p:LP.parser k a) (#cl:LP.clens HSM.handshake13 a)
+  (#gacc:LP.gaccessor HSM.handshake13_parser p cl)
+  (tag:HSM.handshakeType{
+    forall (m:HSM.handshake13).
+      (HSM.tag_of_handshake13 m == tag) <==> cl.LP.clens_cond m})
+  (f:a -> HSM.handshake13{
+    forall (m:HSM.handshake13).
       cl.LP.clens_cond m ==> f (cl.LP.clens_get m) == m})
   (acc:LP.accessor gacc)
   : b:slice -> from:uint_32 ->
@@ -87,10 +77,10 @@ let parse_hsm13
          valid_parsing13 (f (G.reveal a_msg)) b from pos h1))
   = fun b from ->
     
-    let pos = HSM13.handshake13_validator b from in
+    let pos = HSM.handshake13_validator b from in
 
     if pos <= LP.validator_max_length then begin
-      let parsed_tag = HSMType.handshakeType_reader b from in
+      let parsed_tag = HSM.handshakeType_reader b from in
       if parsed_tag = tag then
         let payload_begin = acc b from in
         let payload =
@@ -166,41 +156,41 @@ unfold let parse_pre (b:slice) (from:uint_32)
 
 let parse_hsm13_ee
   =  parse_hsm13
-      HSMType.Encrypted_extensions HSM13.M_encrypted_extensions
-      HSM13.handshake13_accessor_encrypted_extensions
+      HSM.Encrypted_extensions HSM.M13_encrypted_extensions
+      HSM.handshake13_accessor_encrypted_extensions
       
 let parse_hsm13_c
   = parse_hsm13
-      HSMType.Certificate HSM13.M_certificate
-      HSM13.handshake13_accessor_certificate
+      HSM.Certificate HSM.M13_certificate
+      HSM.handshake13_accessor_certificate
 
 let parse_hsm13_cv
   = parse_hsm13
-      HSMType.Certificate_verify HSM13.M_certificate_verify
-      HSM13.handshake13_accessor_certificate_verify
+      HSM.Certificate_verify HSM.M13_certificate_verify
+      HSM.handshake13_accessor_certificate_verify
 
 let parse_hsm13_fin
   = parse_hsm13 
-      HSMType.Finished HSM13.M_finished
-      HSM13.handshake13_accessor_finished
+      HSM.Finished HSM.M13_finished
+      HSM.handshake13_accessor_finished
 
 let parse_hsm13_cr
   = parse_hsm13 
-      HSMType.Certificate_request HSM13.M_certificate_request
-      HSM13.handshake13_accessor_certificate_request
+      HSM.Certificate_request HSM.M13_certificate_request
+      HSM.handshake13_accessor_certificate_request
 
 let parse_hsm13_eoed
   = parse_hsm13 
-      HSMType.End_of_early_data HSM13.M_end_of_early_data
-      HSM13.handshake13_accessor_end_of_early_data
+      HSM.End_of_early_data HSM.M13_end_of_early_data
+      HSM.handshake13_accessor_end_of_early_data
 
 let parse_hsm13_nst
   = parse_hsm13 
-      HSMType.New_session_ticket HSM13.M_new_session_ticket
-      HSM13.handshake13_accessor_new_session_ticket
+      HSM.New_session_ticket HSM.M13_new_session_ticket
+      HSM.handshake13_accessor_new_session_ticket
 
 let frame_valid_parsing13
-  (msg:HSM13.handshake13)
+  (msg:HSM.handshake13)
   (b:slice)
   (from to:uint_32)
   (l:B.loc)
@@ -296,8 +286,8 @@ let receive_flight13_ee_cr_c_cv_fin st b from to =
 
 let mk_ee_fin
   (begin_fin:uint_32)
-  (ee_msg:G.erased EE.handshake13_m_encrypted_extensions) 
-  (fin_msg:G.erased Fin13.handshake13_m_finished)
+  (ee_msg:G.erased HSM.handshake13_m13_encrypted_extensions) 
+  (fin_msg:G.erased HSM.handshake13_m13_finished)
   : flight13_ee_fin
   = Mkflight13_ee_fin begin_fin ee_msg fin_msg
 
