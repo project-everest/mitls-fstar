@@ -341,14 +341,8 @@ let sigalgs_extension cfg: list clientHelloExtension =
 
 module LPS = LowParse.SLow.Base
 
-let check_CHE_signature_algorithms_bytesize
-  (x: signatureSchemeList)
-: Tot (y: bool {y == (let l = signatureSchemeList_bytesize x in 0 <= l && l <= 65535)})
-= signatureSchemeList_bytesize_eq x;
-  signatureSchemeList_size32 x `U32.lte` 65535ul
-
 let sigalgs_extension_new cfg: Tot (result (list clientHelloExtension)) =
-  if check_CHE_signature_algorithms_bytesize cfg.signature_algorithms
+  if check_clientHelloExtension_CHE_signature_algorithms_bytesize cfg.signature_algorithms
   then Correct [CHE_signature_algorithms cfg.signature_algorithms]
   else fatal Internal_error "sigalgs_extension: check_CHE_signature_algorithms_bytesize failed"
 
@@ -488,57 +482,6 @@ let allow_dhe_resumption_new (r: Parsers.ResumeInfo13.resumeInfo13) : Tot bool =
 
 #reset-options
 
-abstract
-let rec offeredPsks_identities_list_bytesize32
-  (x: list Parsers.PskIdentity.pskIdentity)
-: Tot (y: U32.t {
-    let l : nat = offeredPsks_identities_list_bytesize x in
-    if l > U32.v LP.max_uint32
-    then y == LP.max_uint32
-    else y == U32.uint_to_t l
-  })
-= match x with
-  | [] -> 0ul
-  | a :: q ->
-    Parsers.PskIdentity.pskIdentity_bytesize_eq a;
-    Parsers.PskIdentity.pskIdentity_size32 a
-    `LPS.add_overflow`
-    offeredPsks_identities_list_bytesize32 q
-
-abstract
-let rec offeredPsks_binders_list_bytesize32
-  (x: list Parsers.PskBinderEntry.pskBinderEntry)
-: Tot (y: U32.t {
-    let l : nat = offeredPsks_binders_list_bytesize x in
-    if l > U32.v LP.max_uint32
-    then y == LP.max_uint32
-    else y == U32.uint_to_t l
-  })
-= match x with
-  | [] -> 0ul
-  | a :: q ->
-    Parsers.PskBinderEntry.pskBinderEntry_bytesize_eq a;
-    Parsers.PskBinderEntry.pskBinderEntry_size32 a
-    `LPS.add_overflow`
-    offeredPsks_binders_list_bytesize32 q
-
-let check_offeredPsks_identities_list_bytesize
-  (x: list Parsers.PskIdentity.pskIdentity)
-: Tot (y: bool {y == (let l = offeredPsks_identities_list_bytesize x in 7 <= l && l <= 65535)})
-= let l = offeredPsks_identities_list_bytesize32 x in 7ul `U32.lte` l && l `U32.lte` 65535ul
-
-let check_offeredPsks_binders_list_bytesize
-  (x: list Parsers.PskBinderEntry.pskBinderEntry)
-: Tot (y: bool {y == (let l = offeredPsks_binders_list_bytesize x in 33 <= l && l <= 65535)})
-= let l = offeredPsks_binders_list_bytesize32 x in 33ul `U32.lte` l && l `U32.lte` 65535ul
-
-let check_preSharedKeyClientExtension_bytesize
-  (x: Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension)
-: Tot (y: bool {y == (let l = Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_bytesize x in 0 <= l && l <= 65535)})
-= Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_bytesize_eq x;
-  let l = Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_size32 x in
-  0ul `U32.lte` l && l `U32.lte` 65535ul
-
 noextract
 let final_extensions_new
   (cfg: config) (edi: bool) (l: list Parsers.ResumeInfo13.resumeInfo13) (now: U32.t)
@@ -561,7 +504,7 @@ let final_extensions_new
       else begin
         let ke = ({ identities = pskidentities; binders = binders; }) in
         if
-          check_preSharedKeyClientExtension_bytesize ke
+          check_clientHelloExtension_CHE_pre_shared_key_bytesize ke
         then
           Correct ([CHE_psk_key_exchange_modes psk_kex] @
             (if edi then [CHE_early_data ()] else []) @
@@ -824,29 +767,6 @@ let computeOffer cfg nonce ks resume now =
 
 #reset-options
 
-abstract
-let rec clientHelloExtensions_list_bytesize32
-  (x: list clientHelloExtension)
-: Tot (y: U32.t {
-    let l : nat = clientHelloExtensions_list_bytesize x in
-    if l > U32.v LP.max_uint32
-    then y == LP.max_uint32
-    else y == U32.uint_to_t l
-  })
-= match x with
-  | [] -> 0ul
-  | a :: q ->
-    clientHelloExtension_bytesize_eq a;
-    clientHelloExtension_size32 a
-    `LPS.add_overflow`
-    clientHelloExtensions_list_bytesize32 q
-
-let check_clientHelloExtensions_list_bytesize
-  (x: list clientHelloExtension)
-: Tot (y: bool { y == (let l = clientHelloExtensions_list_bytesize x in 0 <= l && l <= 65535) })
-= let l = clientHelloExtensions_list_bytesize32 x in
-  l `U32.lte` 65535ul
-
 #reset-options "--using_facts_from '* -LowParse'"
 
 val computeOffer_new:
@@ -855,7 +775,7 @@ val computeOffer_new:
   ks: option clientHelloExtension_CHE_key_share ->
   resume: Parsers.ResumeInfo.resumeInfo ->
   now:UInt32.t ->
-  Tot (result (Parsers.ClientHello.clientHello))
+  Tot (result offer)
 
 let computeOffer_new cfg nonce ks resume now =
   if Nil? cfg.cipher_suites
