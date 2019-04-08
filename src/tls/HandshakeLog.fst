@@ -370,7 +370,7 @@ let hash_tag_truncated #a l cut =
   let open FStar.UInt32 in
   let st = !l in
   match st.hashes with
-  | OpenHash b -> Hashing.compute a (Bytes.sub b (len b -^ cut) cut)
+  | OpenHash b -> Hashing.compute a (Bytes.slice b 0ul (len b -^ cut))
 
 // maybe just compose the two functions above?
 let send_tag #a l m =
@@ -526,7 +526,8 @@ let rec parseMessages pvo buf =
   match handshakeHeader_parser32 buf with 
   | None -> fatal Decode_error "Bad message header"
   | Some (hh, _) ->
-    if hh.length +^ 4ul <^ len buf then
+    trace ("Read header of type "^(string_of_handshakeType hh.msg_type)^" and length "^(string_of_int (4 + v hh.length))^" / "^(string_of_int (length buf)));
+    if hh.length +^ 4ul >^ len buf then
       Correct (false, buf, [], [])
     else
       match msg_parser pvo buf with

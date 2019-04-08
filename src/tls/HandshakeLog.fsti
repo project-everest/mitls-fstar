@@ -102,7 +102,7 @@ let hs_transcript: Type0 = l:list msg {valid_transcript l}
 
 let append_transcript (l:hs_transcript) (m:list msg {valid_transcript (l @ m)}): Tot hs_transcript = l @ m
 
-val transcript_bytes: hs_transcript -> Tot bytes
+val transcript_bytes: hs_transcript -> GTot bytes
 
 // formatting of the whole transcript is injective (what about binders?)
 val transcript_format_injective: ms0:hs_transcript -> ms1:hs_transcript ->

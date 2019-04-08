@@ -516,8 +516,7 @@ let client_ServerHelloDone hs c ske_bytes ocr =
       let msg = HSM.M12_client_key_exchange (
         match kex with
 	| HSM.Ecdhe -> CommonDH.serialize_raw gx
-	| HSM.Dhe -> CommonDH.serialize_raw gx
-	| _ -> magic()) in
+	| HSM.Dhe -> CommonDH.serialize_raw gx) in
       let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
       let digestClientKeyExchange = HandshakeLog.send_tag #ha hs.log (HSL.Msg12 msg)  in
       let cfin_key, app_keys = KeySchedule.ks_client_12_set_session_hash hs.ks digestClientKeyExchange in
@@ -742,9 +741,8 @@ let server_ServerHelloDone hs =
 
 let serverHello (m:Nego.mode) =
   let open Nego in
-  let pv = m.n_protocol_version in
   HSM.M_server_hello ({
-    SH.version = pv;
+    SH.version = minPV TLS_1p2 m.n_protocol_version;
     SH.random = m.n_server_random;
     SH.session_id = m.n_sessionID;
     SH.cipher_suite = name_of_cipherSuite m.n_cipher_suite;
@@ -1236,7 +1234,7 @@ let rec recv_fragment (hs:hs) #i rg f =
     | S_Wait_EOED, [Msg13 (M13_end_of_early_data ())], [digestEOED] ->
       server_EOED hs digestEOED
 
-    | C_Complete, [Msg13 (M13_new_session_ticket st13)], [] ->
+    | C_Complete, [Msg13 (M13_new_session_ticket st13)], [_] ->
       client_NewSessionTicket_13 hs st13
 
     // are we missing the case with a Certificate but no CertificateVerify?

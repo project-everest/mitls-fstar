@@ -2158,7 +2158,7 @@ let server_ClientHello #region ns offer log =
     let extension_ok =
         List.Helpers.forall_aux (o1, hrr) valid_ch2_extension o2.CH.extensions
     in
-    magic()
+    fatal Internal_error "HRR is disabled"
   (*
     if
       o1.CH.version = o2.CH.version &&
