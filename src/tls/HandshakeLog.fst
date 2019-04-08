@@ -316,10 +316,12 @@ let load_stateless_cookie l hrr digest = admit()
 *)
 
 (* SEND *)
-let send l m =
+let send_truncated l m tr =
   trace ("emit "^string_of_handshakeType (tag_of m));
   let st = !l in
   let mb = msg_bytes m in
+  let e = FStar.UInt32.(Bytes.len mb -^ tr) in
+  let mb = Bytes.slice mb 0ul e in
   let h : hashState st.transcript (st.parsed @ [m]) =
     match st.hashes with
     | FixedHash a acc hl ->
@@ -340,6 +342,22 @@ let send l m =
   l := State t o st.outgoing_next_keys st.outgoing_complete
                 st.incoming st.parsed h st.pv st.kex st.dh_group
 
+let send l m = send_truncated l m 0ul
+
+let send_raw l b =
+  trace ("emit raw "^hex_of_bytes b);
+  let st = !l in
+  let h : hashState st.transcript st.parsed =
+    match st.hashes with
+    | FixedHash a acc hl ->
+      let acc = Hashing.extend #a acc b in
+      FixedHash a acc hl
+    | OpenHash p -> OpenHash (p @| b)
+    in
+  let o = st.outgoing @| b in
+  l := State st.transcript o st.outgoing_next_keys st.outgoing_complete
+                st.incoming st.parsed h st.pv st.kex st.dh_group
+
 let hash_tag #a l =
   let st = !l in
   match st.hashes with
@@ -353,11 +371,6 @@ let hash_tag_truncated #a l cut =
   let st = !l in
   match st.hashes with
   | OpenHash b -> Hashing.compute a (Bytes.sub b (len b -^ cut) cut)
-
-let hash_suffix #a l s =
-  let st = !l in
-  match st.hashes with
-  | OpenHash b -> Hashing.compute a (b @| s)
 
 // maybe just compose the two functions above?
 let send_tag #a l m =

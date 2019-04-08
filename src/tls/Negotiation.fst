@@ -20,6 +20,10 @@ open TLSConstants
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 
+module HSM = HandshakeMessages
+module CH = Parsers.ClientHello
+module SH = Parsers.ServerHello
+
 open Extensions // for its aggregated datatypes
 
 #reset-options "--using_facts_from '* -LowParse'"
