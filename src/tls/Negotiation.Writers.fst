@@ -684,6 +684,90 @@ let test_write_final_extensions
 
 open Negotiation.Version // for write_supportedVersions
 
+
+let make_clientHelloExtension_CHE_signature_algorithms
+  (o: option signatureSchemeList)
+: GTot (option clientHelloExtension_CHE_signature_algorithms)
+= match o with
+  | None -> None
+  | Some x ->
+    if
+      (let l = signatureSchemeList_bytesize x in l <= 65535)
+    then
+      Some x
+    else
+      None
+
+inline_for_extraction
+noextract
+let write_clientHelloExtension_CHE_signature_algorithms
+  (#h0: _)
+  (#sout: _)
+  (#pout_from0: _)
+  (w: LPW.owriter signatureSchemeList_serializer h0 sout pout_from0)
+: Tot (y: LPW.owriter clientHelloExtension_CHE_signature_algorithms_serializer h0 sout pout_from0 {
+    LPW.owvalue y == make_clientHelloExtension_CHE_signature_algorithms (LPW.owvalue w)
+  })
+= LPW.OWriter (Ghost.hide (make_clientHelloExtension_CHE_signature_algorithms (LPW.owvalue w))) (fun pout_from ->
+    Classical.forall_intro clientHelloExtension_CHE_signature_algorithms_bytesize_eq;
+    Classical.forall_intro signatureSchemeList_bytesize_eq;
+    Classical.forall_intro (LP.serialized_length_eq signatureSchemeList_serializer);
+    Classical.forall_intro (LP.serialized_length_eq clientHelloExtension_CHE_signature_algorithms_serializer);
+    if 2ul `U32.gt` (sout.LP.len `U32.sub` pout_from)
+    then LP.max_uint32
+    else begin
+      let res = LPW.owrite w (pout_from `U32.add` 2ul) in
+      if (LP.max_uint32 `U32.sub` 1ul) `U32.lte` res
+      then begin
+        res
+      end else
+        let len = res `U32.sub` (pout_from `U32.add` 2ul) in
+        if 65535ul `U32.lt` len
+        then LP.max_uint32 `U32.sub` 1ul
+        else begin
+          clientHelloExtension_CHE_signature_algorithms_finalize sout pout_from res;
+          res
+        end
+    end
+  )
+
+inline_for_extraction
+let constr_clientHelloExtension_CHE_signature_algorithms
+  (o: option clientHelloExtension_CHE_signature_algorithms)
+: GTot (option clientHelloExtension)
+= match o with
+  | None -> None
+  | Some x -> Some (CHE_signature_algorithms x)
+
+inline_for_extraction
+noextract
+let write_constr_clientHelloExtension_CHE_signature_algorithms
+  (#h0: _)
+  (#sout: _)
+  (#pout_from0: _)
+  (w: LPW.owriter clientHelloExtension_CHE_signature_algorithms_serializer h0 sout pout_from0)
+: Tot (y: LPW.owriter clientHelloExtension_serializer h0 sout pout_from0 { LPW.owvalue y == constr_clientHelloExtension_CHE_signature_algorithms (LPW.owvalue w) } )
+= LPW.OWriter (Ghost.hide (constr_clientHelloExtension_CHE_signature_algorithms (LPW.owvalue w))) (fun pout_from ->
+    Classical.forall_intro clientHelloExtension_bytesize_eq;
+    Classical.forall_intro clientHelloExtension_CHE_signature_algorithms_bytesize_eq;
+    Classical.forall_intro (LP.serialized_length_eq clientHelloExtension_CHE_signature_algorithms_serializer);
+    Classical.forall_intro (LP.serialized_length_eq clientHelloExtension_serializer);
+    if 2ul `U32.gt` (sout.LP.len `U32.sub` pout_from)
+    then LP.max_uint32
+    else begin
+      let res = LPW.owrite w (pout_from `U32.add` 2ul) in
+      if (LP.max_uint32 `U32.sub` 1ul) `U32.lte` res
+      then begin
+        res
+      end else begin
+        finalize_clientHelloExtension_signature_algorithms sout pout_from;
+        res
+      end
+    end
+  )
+
+inline_for_extraction
+noextract
 let write_sigalgs_extension
   cfg
   (#rrel #rel: _)
@@ -693,10 +777,10 @@ let write_sigalgs_extension
   (sout_from0: U32.t)
   (h0: HS.mem {
     B.loc_disjoint (LPW.loc_slice_from_to sin pin_from pin_to) (LPW.loc_slice_from sout sout_from0) /\
-    LPW.valid_pos signatureSchemeList_parser h0 sin pin_from pin_to
+    LPW.valid_content_pos signatureSchemeList_parser h0 sin pin_from cfg.signature_algorithms pin_to
   })
 : Tot (
     w: LPW.olwriter clientHelloExtension_serializer h0 sout sout_from0 {
     LPW.olwvalue w == option_of_result (sigalgs_extension_new cfg)
   })
-= admit ()
+= LPW.olwriter_singleton  (write_constr_clientHelloExtension_CHE_signature_algorithms (write_clientHelloExtension_CHE_signature_algorithms (LPW.owriter_of_writer (LPW.wcopy signatureSchemeList_serializer sin pin_from pin_to sout sout_from0 h0))))
