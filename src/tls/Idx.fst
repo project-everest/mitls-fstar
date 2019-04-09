@@ -167,7 +167,7 @@ assume val bind_squash_st:
   squash a ->
   $f:(a -> ST (squash b) (requires (fun h0 -> pre h0)) (ensures (fun h0 _ h1 -> h0 == h1))) ->
   ST (squash b) (requires (fun h0 -> pre h0)) (ensures (fun h0 _ h1 -> h0 == h1))
-
+#reset-options "--smtencoding.valid_intro true --smtencoding.valid_elim true"
 #set-options "--z3rlimit 100"
 inline_for_extraction
 private let lemma_honest_or_corrupt (i:regid)
