@@ -17,6 +17,8 @@ module HST = FStar.HyperStack.ST
 open Extensions
 open Negotiation
 
+#reset-options // WHY WHY WHY is this needed?
+
 #push-options "--z3rlimit 16"
 
 (* implementation of the new spec *)
@@ -677,3 +679,24 @@ let test_write_final_extensions
   (requires (fun _ -> False))
   (ensures (fun _ _ _ -> True))
 = write_final_extensions' cfg edi sin pin_from pin_to now sout pout_from
+
+#pop-options
+
+open Negotiation.Version // for write_supportedVersions
+
+let write_sigalgs_extension
+  cfg
+  (#rrel #rel: _)
+  (sin: LP.slice rrel rel)
+  (pin_from pin_to: U32.t)
+  (sout: LP.slice (LP.srel_of_buffer_srel (B.trivial_preorder _)) (LP.srel_of_buffer_srel (B.trivial_preorder _)))
+  (sout_from0: U32.t)
+  (h0: HS.mem {
+    B.loc_disjoint (LPW.loc_slice_from_to sin pin_from pin_to) (LPW.loc_slice_from sout sout_from0) /\
+    LPW.valid_pos signatureSchemeList_parser h0 sin pin_from pin_to
+  })
+: Tot (
+    w: LPW.olwriter clientHelloExtension_serializer h0 sout sout_from0 {
+    LPW.olwvalue w == option_of_result (sigalgs_extension_new cfg)
+  })
+= admit ()
