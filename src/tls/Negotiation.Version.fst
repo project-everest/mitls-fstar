@@ -82,23 +82,6 @@ open Mem
 // migrate to LowParse? 
 let live_slice_pos h0 (#rrel #rel: _) (out: slice rrel rel) p0 = live_slice h0 out /\ p0 <= out.len 
 
-#push-options "--z3rlimit 100" 
-val write_supportedVersions
-  (cfg:config) 
-  (out:slice (srel_of_buffer_srel (LowStar.Buffer.trivial_preorder _)) (srel_of_buffer_srel (LowStar.Buffer.trivial_preorder _)))
-  (p0:UInt32.t)
-: Stack (result UInt32.t) 
-  (requires fun h0 -> live_slice_pos h0 out p0) 
-  (ensures fun h0 r h1 -> 
-    LowStar.Modifies.(modifies (loc_slice_from out p0) h0 h1) /\ (
-    match r with 
-    | Error z -> True
-    | Correct p1 -> 
-      match support cfg with 
-      | Error _ -> False 
-      | Correct che -> valid_content_pos clientHelloExtension_parser h1 out p0 che p1 ))
-#pop-options 
-
 val write_supportedVersion 
   (cfg: config) 
   (pv: Parsers.ProtocolVersion.protocolVersion) 
@@ -127,6 +110,22 @@ let write_supportedVersion cfg pv out pl p0 =
     p1
   ) else p0
 
+val write_supportedVersions
+  (cfg:config) 
+  (out:slice (srel_of_buffer_srel (LowStar.Buffer.trivial_preorder _)) (srel_of_buffer_srel (LowStar.Buffer.trivial_preorder _)))
+  (p0:UInt32.t)
+: Stack (result UInt32.t) 
+  (requires fun h0 -> live_slice_pos h0 out p0) 
+  (ensures fun h0 r h1 -> 
+    LowStar.Modifies.(modifies (loc_slice_from out p0) h0 h1) /\ (
+    match r with 
+    | Error z -> True
+    | Correct p1 -> 
+      match support cfg with 
+      | Error _ -> False 
+      | Correct che -> valid_content_pos clientHelloExtension_parser h1 out p0 che p1 ))
+#pop-options 
+
 let write_supportedVersions cfg out p0 =
   if out.len - p0 < 10ul then fatal Internal_error "output buffer" else
   let pl_extension = p0 + 2ul in // extension payload, after the extension tag
@@ -147,6 +146,171 @@ let write_supportedVersions cfg out p0 =
 // know every detail of the wire format, including its byte offsets
 // and explicit proof steps---every error takes 10' 
 
+(* another attempt based on higher-order low-level writing combinators *)
+
+module LPW = LowParse.Low.Writers
+
+(* step 1: produce all elementary combinators for lists, vldata, constructors and so on. Ideally these should be provided by QuackyDucky, but that requires cross-module inlining. *)
+
+module HST = FStar.HyperStack.ST
+
+let omake_supportedVersions
+  (l: option (list Parsers.ProtocolVersion.protocolVersion))
+: Tot (option Extensions.supportedVersions)
+= match l with
+  | None -> None
+  | Some l ->
+    let len = List.Tot.length l in
+    if 1 <= len && len <= 127
+    then Some l
+    else None
+
+inline_for_extraction
+noextract
+let owrite_supportedVersions
+  #h0
+  #sout
+  #sout_from0
+  (w: LPW.olwriter protocolVersion_serializer h0 sout sout_from0)
+: Tot (w' : LPW.owriter Extensions.supportedVersions_serializer h0 sout sout_from0 {
+    LPW.owvalue w' == omake_supportedVersions (LPW.olwvalue w)
+  })
+= LPW.OWriter (Ghost.hide (omake_supportedVersions (LPW.olwvalue w))) (fun sout_from ->
+    Classical.forall_intro Extensions.supportedVersions_bytesize_eq;
+    Classical.forall_intro (LPW.serialized_length_eq Extensions.supportedVersions_serializer);
+    Classical.forall_intro (LPW.serialized_list_length_constant_size Extensions.protocolVersion_serializer);
+    if 1ul `UInt32.gt` (sout.LPW.len `UInt32.sub` sout_from)
+    then begin
+      LPW.max_uint32
+    end else begin
+      let res = LPW.olwrite w (sout_from `UInt32.add` 1ul) in
+      if res `UInt32.gte` (LPW.max_uint32 `UInt32.sub` 1ul)
+      then begin
+        res
+      end else begin
+        let h = HST.get () in
+        LPW.valid_list_serialized_list_length Extensions.protocolVersion_serializer h sout (sout_from `UInt32.add` 1ul) res;
+        let len = res `UInt32.sub` (sout_from `UInt32.add` 1ul) in
+        if not (2ul `UInt32.lte` len && len `UInt32.lte` 254ul)
+        then
+          LPW.max_uint32 `UInt32.sub` 1ul
+        else begin
+          Extensions.finalize_supportedVersions sout sout_from res;
+          res
+        end
+      end
+    end
+  )
+
+inline_for_extraction
+noextract
+let owrite_clientHelloExtension_CHE_supported_versions
+  #h0
+  #sout
+  #sout_from0
+  (w: LPW.owriter Extensions.supportedVersions_serializer h0 sout sout_from0)
+: Tot (w' : LPW.owriter clientHelloExtension_CHE_supported_versions_serializer h0 sout sout_from0 {
+    LPW.owvalue w' == LPW.owvalue w
+  })
+= LPW.OWriter (Ghost.hide (LPW.owvalue w)) (fun sout_from ->
+    Classical.forall_intro Extensions.supportedVersions_bytesize_eq;
+    Classical.forall_intro (LPW.serialized_length_eq Extensions.supportedVersions_serializer);
+    Classical.forall_intro clientHelloExtension_CHE_supported_versions_bytesize_eq;
+    Classical.forall_intro (LPW.serialized_length_eq clientHelloExtension_CHE_supported_versions_serializer);
+    if 2ul `UInt32.gt` (sout.LPW.len `UInt32.sub` sout_from)
+    then LPW.max_uint32
+    else
+      let res = LPW.owrite w (sout_from `UInt32.add` 2ul) in
+      if res `UInt32.gte` (LPW.max_uint32 `UInt32.sub` 1ul)
+      then res
+      else begin
+        clientHelloExtension_CHE_supported_versions_finalize sout sout_from res;
+        res
+      end
+  )
+
+let omake_CHE_supported_versions (x: option clientHelloExtension_CHE_supported_versions) : Tot (option clientHelloExtension) =
+  match x with
+  | None -> None
+  | Some y -> Some (CHE_supported_versions y)
+
+inline_for_extraction
+noextract
+let owrite_constr_clientHelloExtension_CHE_supported_versions
+  #h0
+  #sout
+  #sout_from0
+  (w: LPW.owriter clientHelloExtension_CHE_supported_versions_serializer h0 sout sout_from0)
+: Tot (w' : LPW.owriter clientHelloExtension_serializer h0 sout sout_from0 {
+    LPW.owvalue w' == omake_CHE_supported_versions (LPW.owvalue w)
+  })
+= LPW.OWriter (Ghost.hide (omake_CHE_supported_versions (LPW.owvalue w))) (fun sout_from ->
+    Classical.forall_intro clientHelloExtension_CHE_supported_versions_bytesize_eq;
+    Classical.forall_intro (LPW.serialized_length_eq clientHelloExtension_CHE_supported_versions_serializer);
+    Classical.forall_intro clientHelloExtension_bytesize_eq;
+    Classical.forall_intro (LPW.serialized_length_eq clientHelloExtension_serializer);
+    if 2ul `UInt32.gt` (sout.LPW.len `UInt32.sub` sout_from)
+    then LPW.max_uint32
+    else
+      let res = LPW.owrite w (sout_from `UInt32.add` 2ul) in
+      if res `UInt32.gte` (LPW.max_uint32 `UInt32.sub` 1ul)
+      then res
+      else begin
+        finalize_clientHelloExtension_supported_versions sout sout_from;
+        res
+      end
+  )
+
+(* step 2: assemble those combinators to actually implement "support" as a writer *)
+
+inline_for_extraction
+noextract
+let write_snoc_supportedVersion
+  cfg
+  #h0
+  #sout
+  #sout_from0
+  (pv: Parsers.ProtocolVersion.protocolVersion)
+  (pvs: LPW.lwriter protocolVersion_serializer h0 sout sout_from0)
+: Tot (pvs1 : LPW.lwriter protocolVersion_serializer h0 sout sout_from0 {
+    LPW.lwvalue pvs1 == snoc_supportedVersion cfg pv (LPW.lwvalue pvs)
+  })
+= LPW.lwriter_ifthenelse
+    (supported cfg pv)
+    (fun _ -> LPW.lwriter_append pvs (LPW.lwriter_singleton (LPW.write_leaf_cs protocolVersion_writer _ _ _ pv)))
+    (fun _ -> pvs)
+
+inline_for_extraction
+noextract
+let write_supportedVersions_new
+  cfg
+  h0
+  sout
+  sout_from0
+: Tot (e: LPW.owriter clientHelloExtension_serializer h0 sout sout_from0 {
+      LPW.owvalue e == option_of_result (support cfg)
+  })
+= owrite_constr_clientHelloExtension_CHE_supported_versions
+    (owrite_clientHelloExtension_CHE_supported_versions
+      (owrite_supportedVersions
+        (LPW.olwriter_of_lwriter
+          ([@inline_let]
+            let w =
+              write_snoc_supportedVersion cfg TLS_1p3 (LPW.lwriter_nil protocolVersion_serializer h0 sout sout_from0)
+            in
+            write_snoc_supportedVersion cfg TLS_1p2 w
+    ))))
+
+let test_write_supportedVersions_new
+  cfg
+  (sout: LPW.slice (LPW.srel_of_buffer_srel (LowStar.Buffer.trivial_preorder _)) (LPW.srel_of_buffer_srel (LowStar.Buffer.trivial_preorder _)))
+  (sout_from: UInt32.t)
+: HST.Stack UInt32.t
+  (requires (fun _ -> False))
+  (ensures (fun _ _ _ -> True))
+= let h = HST.get () in
+  LPW.owrite (write_supportedVersions_new cfg h sout sout_from) sout_from
+  
 
 /// (2) Server chooses a supported version
 ///
