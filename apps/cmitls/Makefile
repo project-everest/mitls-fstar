@@ -58,11 +58,13 @@ $(MITLS_HOME)/src/tls/extract/Kremlin-Library/$(LIBMITLS):
 cmitls.exe: cmitls.c ../../libs/ffi/mitlsffi.h ../../src/pki/mipki.h \
 	$(MITLS_HOME)/src/pki/$(LIBPKI) \
 	$(MITLS_HOME)/src/tls/extract/Kremlin-Library/$(LIBMITLS)
+	echo About to compile cmitls.exe
 	$(CC) $(CFLAGS) -I../../src/pki -I../../libs/ffi \
 	  -I$(MITLS_HOME)/src/tls/extract/Kremlin-Library/stub \
 	  -I$(MITLS_HOME)/src/tls/extract/Kremlin-Library/include \
 	  -L$(subst :, -L,$(LIBPATHS)) \
 	  -Wall cmitls.c -lmitls -lmipki $(PIC) -o cmitls.exe $(WINSOCK)
+	echo Done compiling cmitls.exe
 
 test: cmitls.exe
 	echo About to run cmitls.exe
