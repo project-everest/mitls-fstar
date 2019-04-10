@@ -65,5 +65,6 @@ cmitls.exe: cmitls.c ../../libs/ffi/mitlsffi.h ../../src/pki/mipki.h \
 	  -Wall cmitls.c -lmitls -lmipki $(PIC) -o cmitls.exe $(WINSOCK)
 
 test: cmitls.exe
+	echo About to run cmitls.exe
 	./cmitls.exe google.com 443
 	./cmitls.exe www.cloudflare.com 443
