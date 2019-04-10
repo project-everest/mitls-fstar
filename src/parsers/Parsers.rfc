@@ -1673,3 +1673,84 @@ struct {
   } resumeInfo12;
   ResumeInfo13 resumeInfo13<0..2^16-1>; /* arbitrary bound */
 } ResumeInfo;
+
+struct {
+  ProtocolVersion version;
+  select (version) {
+    case SSL_3p0: Empty;
+    case TLS_1p0: Empty;
+    case TLS_1p1: Empty;
+    case TLS_1p2: Empty;
+    case TLS_1p3: Empty;
+    default: Fail;
+  } constraint;
+} KnownProtocolVersion;
+
+struct {
+  ExtensionType type;
+  uint16 len;
+  select(type)
+  {
+    default: opaque;
+  } payload[len]; /*extension_data*/
+} TaggedUnknownExtension; /* should be UnknownExtension */
+
+opaque TicketSeal<0..2^16-1>;
+
+struct {
+  PskIdentity_identity identity;
+  TicketSeal ticket_seal;
+} MiTLSConfigUseTicket;
+
+struct {
+
+  KnownProtocolVersion min_version;
+  KnownProtocolVersion max_version;
+  
+  boolean is_quic;
+  
+  CipherSuite cipher_suites<0..2^16-2>;
+  
+  uint16 named_groups_len;
+  NamedGroupList named_groups[named_groups_len]; /* to match the supported_groups case of ClientHelloExtension.CHE */
+  SignatureSchemeList signature_algorithms;
+  
+  boolean hello_retry;
+  
+  NamedGroupList offer_shares; /* TODO: maybe we should define a supportedNamedGroups type here, unless it is to be defined by the provider */
+  
+  TaggedUnknownExtension custom_extensions<0..2^16-1>;
+  
+  MiTLSConfigUseTicket use_tickets<0..2^16-1>; /* unsure about bounds */
+
+  boolean has_send_ticket;
+  select (has_send_ticket) {
+    case b_false: Empty;
+    case b_true:  TicketSeal; /* not sure about bounds, was plain bytes */
+  } send_ticket;
+  boolean check_client_version_in_pms_for_old_tls;
+  boolean request_client_certificate;
+
+  boolean non_blocking_read;
+  boolean has_max_early_data;
+  select (has_max_early_data) {
+    case b_false: Empty;
+    case b_true:  uint32;
+  } max_early_data;
+  boolean safe_renegotiation;
+  boolean extend_master_secret;
+  boolean enable_tickets;
+
+  boolean has_alpn;
+  uint16 alpn_length;
+  select (has_alpn) {
+    case b_false: Empty;
+    case b_true:  ProtocolNameList;
+  } alpn[alpn_length]; /* to match the application_layer_protocol_negotiation case of ClientHelloExtension.CHE */
+  boolean has_peer_name;
+  select (has_peer_name) {
+    case b_false: Empty;
+    case b_true:  HostName;
+  } peer_name;
+
+} MiTLSConfig;
