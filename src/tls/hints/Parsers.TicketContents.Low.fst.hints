@@ -74,7 +74,7 @@
         "typing_tok_Parsers.TicketVersion.Ticket12@tok"
       ],
       0,
-      "4ffe6a6e20c5b9b2dd272f5aed975ce8"
+      "023302559e98e422382f7ee84a04553b"
     ],
     [
       "Parsers.TicketContents.Low.finalize_case_ticketContents12",
@@ -274,7 +274,7 @@
         "typing_tok_Parsers.TicketVersion.Ticket13@tok"
       ],
       0,
-      "5b275fa7e59e9cbddfacbf3bf215e1fa"
+      "44de4166e1e8ac869a71f66b02c7be3a"
     ],
     [
       "Parsers.TicketContents.Low.finalize_case_ticketContents13",
@@ -347,7 +347,7 @@
         "typing_tok_Parsers.TicketVersion.Ticket12@tok"
       ],
       0,
-      "1e2afbb5053cd03c1948a2fc471aa713"
+      "907fdf0865f3e30651083ab59b16c53e"
     ],
     [
       "Parsers.TicketContents.Low.finalize_case_ticketContents13",
@@ -523,9 +523,8 @@
         "typing_FStar.Monotonic.HyperHeap.rid",
         "typing_FStar.Monotonic.HyperStack.get_hmap",
         "typing_FStar.Monotonic.HyperStack.get_tip",
-        "typing_FStar.UInt.fits", "typing_FStar.UInt32.add",
-        "typing_FStar.UInt32.uint_to_t", "typing_FStar.UInt32.v",
-        "typing_LowParse.Low.Base.get_valid_pos",
+        "typing_FStar.UInt32.add", "typing_FStar.UInt32.uint_to_t",
+        "typing_FStar.UInt32.v", "typing_LowParse.Low.Base.get_valid_pos",
         "typing_LowParse.Low.Base.max_uint32",
         "typing_LowParse.Low.Base.serialized_length",
         "typing_LowParse.Low.Base.validator_max_length",

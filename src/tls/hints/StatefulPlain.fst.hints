@@ -11,7 +11,7 @@
         "equation_StatefulPlain.id", "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "2dc4cef2b5107469a716cf1d32060629"
+      "1fd4d86ea1ee63ff75ecf2940fa86fb5"
     ],
     [
       "StatefulPlain.makeAD",
@@ -30,8 +30,8 @@
         "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
         "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
         "equation_FStar.UInt.uint_t",
-        "equation_LowParse.Low.Base.max_uint32", "equation_Prims.nat",
-        "equation_Spec.Poly1305.size_key",
+        "equation_LowParse.Low.Base.validator_max_length",
+        "equation_Prims.nat", "equation_Spec.Poly1305.size_key",
         "equation_StatefulPlain.ad_Length", "equation_StatefulPlain.id",
         "equation_TLSConstants.protocolVersion",
         "equation_TLSConstants.protocolVersion_",
@@ -45,6 +45,7 @@
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_Tm_refine_0285de1debfea92a55eb096492ec8fa9",
+        "refinement_interpretation_Tm_refine_07033d2b2c1d2fb6c1dd88a8f1110ac2",
         "refinement_interpretation_Tm_refine_5a42b69505c74575f4084030e217c997",
         "refinement_interpretation_Tm_refine_5a4fe33be2b93c781e552e491bb9dd31",
         "refinement_interpretation_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee",
@@ -52,11 +53,11 @@
         "refinement_interpretation_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
         "typing_Content.ctBytes", "typing_FStar.Bytes.reveal",
         "typing_FStar.UInt.fits", "typing_FStar.UInt32.v",
-        "typing_LowParse.Low.Base.max_uint32",
+        "typing_LowParse.Low.Base.validator_max_length",
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "e6ef3a7ba180af330af38d7dd7d7f754"
+      "8e0bab0fc92d190768587c4ee93dd4b7"
     ],
     [
       "StatefulPlain.lemma_12",
@@ -70,7 +71,7 @@
         "refinement_interpretation_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee"
       ],
       0,
-      "d083f64e4a41869441e246b3358e44de"
+      "55769204ab48aebb2578b481b2edc8ad"
     ],
     [
       "StatefulPlain.is_plain",
@@ -79,7 +80,7 @@
       1,
       [ "@query", "assumption_Content.contentType__uu___haseq" ],
       0,
-      "3f362b7b6b3ac65506fd7eb668978818"
+      "23319d10d9542f538c9fc51e91709626"
     ],
     [
       "StatefulPlain.assert_is_plain",
@@ -91,7 +92,7 @@
         "refinement_interpretation_Tm_refine_dfb41679c4620ddf785a536323b5453d"
       ],
       0,
-      "bc18ac9de58a6f40a73fe535430ad365"
+      "eed6bb10763b1b3fed708b9b7393f3aa"
     ],
     [
       "StatefulPlain.ghost_repr",
@@ -122,7 +123,7 @@
         "typing_Content.ghost_repr"
       ],
       0,
-      "d4af8286511c3f85c36a62ceacb951e5"
+      "6fdf08f68dc9cfe83a43e6ebba25094f"
     ],
     [
       "StatefulPlain.repr",
@@ -136,7 +137,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "a51c1bd167298ea81d35a66900b10406"
+      "10408d30bae418ec8e7b836375e6af4a"
     ],
     [
       "StatefulPlain.repr",
@@ -169,7 +170,7 @@
         "typing_Content.ghost_repr", "typing_TLSInfo.uu___is_ID12"
       ],
       0,
-      "63e1a86eb860fc569a2b1812121a7ec6"
+      "7bbbb6e4a7e6106fe34721604421862b"
     ],
     [
       "StatefulPlain.wf_ad_rg",
@@ -178,7 +179,7 @@
       1,
       [ "@query", "assumption_Content.contentType__uu___haseq" ],
       0,
-      "468878152f7f4b20d2100555a4018355"
+      "c10d06a7ac39d2ba32dd126122999d58"
     ],
     [
       "StatefulPlain.wf_payload_ad_rg",
@@ -198,7 +199,7 @@
         "typing_FStar.Seq.Base.length"
       ],
       0,
-      "ed7eaf34d91bf3e379d32a0f11b1bc46"
+      "791b95b6f002cb437cc548cc7bf2619f"
     ],
     [
       "StatefulPlain.mk_plain",
@@ -212,7 +213,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "edea077707dc1393c4217161d6ab4555"
+      "1e9480f668861f37dab988e7120df986"
     ],
     [
       "StatefulPlain.mk_plain",
@@ -278,7 +279,7 @@
         "typing_TLSInfo.uu___is_ID12"
       ],
       0,
-      "948105da1828f9c1fab1a95d8457e055"
+      "d3d25aba57b56cf0b36f3de90c91f11e"
     ],
     [
       "StatefulPlain.cipher",
@@ -295,7 +296,7 @@
         "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length"
       ],
       0,
-      "2a3835c30c516a594907e3cb29004b4d"
+      "19b327b04819e8433c480e64902bc701"
     ]
   ]
 ]
