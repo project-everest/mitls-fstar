@@ -233,7 +233,8 @@ function mitls_verify() {
     make -C libs/ffi -j $threads &&
     build_pki_if &&
     make -C src/tls -j $threads all -k &&
-    make -C src/tls -j $threads test -k
+    make -C src/tls -j $threads test -k &&
+    make -C apps/cmitls test # NO PARALLELISM for this test
 }
 
 function mitls_verify_and_hints() {
