@@ -50,10 +50,10 @@ copy: $(MITLS_HOME)/src/pki/$(LIBPKI) $(MITLS_HOME)/src/tls/extract/Kremlin-Libr
 	cp $(MITLS_HOME)/src/tls/extract/Kremlin-Library/$(LIBMITLS) .
 
 $(MITLS_HOME)/src/pki/$(LIBPKI):
-	$(MAKE) -C ../../src/pki
+	+$(MAKE) -C ../../src/pki
 
 $(MITLS_HOME)/src/tls/extract/Kremlin-Library/$(LIBMITLS):
-	$(MAKE) -j8 -C ../../src/tls -f Makefile.Kremlin build-library
+	+$(MAKE) -C ../../src/tls -f Makefile.Kremlin build-library
 
 cmitls.exe: cmitls.c ../../libs/ffi/mitlsffi.h ../../src/pki/mipki.h \
 	$(MITLS_HOME)/src/pki/$(LIBPKI) \
