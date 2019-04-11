@@ -7,6 +7,8 @@ open TLSConstants // for leqPV and the configuration
 open FStar.Error
 open TLSError
 
+module CFG = Parsers.MiTLSConfig
+
 #reset-options "--query_stats --using_facts_from '* -FStar.Reflection -FStar.Tactics -EverCrypt -Crypto -Spec -Hacl'" 
 
 /// ---- PROTOCOL VERSIONS ----
@@ -24,9 +26,11 @@ open TLSError
 
 let implemented pv = pv = TLS_1p2 || pv = TLS_1p3
 
-let supported cfg pv =
+let supported_new min_version max_version pv =
   implemented pv &&
-  cfg.min_version `leqPV` pv && pv `leqPV` cfg.max_version
+  min_version `leqPV` pv && pv `leqPV` max_version
+
+let supported cfg pv = supported_new cfg.min_version cfg.max_version pv
 
 // negotiation failures; does that help with extraction or verification?
 // private let illegal       #a msg: result a = fatal #a Illegal_parameter msg
@@ -55,12 +59,12 @@ let offer_versions cfg: option clientHelloExtension =
 
 // its tedious elaboration--complicating our spec
 let snoc_supportedVersion
-  (cfg:config) 
+  min_version max_version
   (pv:Parsers.ProtocolVersion.protocolVersion) 
   (pvs:list Parsers.ProtocolVersion.protocolVersion): 
   (pvs1:list Parsers.ProtocolVersion.protocolVersion {List.length pvs1 <= List.length pvs + 1}) 
 = 
-  if supported cfg pv then (
+  if supported_new min_version max_version pv then (
     List.lemma_snoc_length (pvs,pv);
     pvs @ [pv] ) 
   else pvs 
@@ -68,8 +72,17 @@ let snoc_supportedVersion
 // 19-01-26 slow TC, due to constructor refinements? 
 #push-options "--z3rlimit 100"
 let support cfg: result clientHelloExtension =
-  let vs = snoc_supportedVersion cfg TLS_1p3 [] in 
-  let vs = snoc_supportedVersion cfg TLS_1p2 vs in 
+  let vs = snoc_supportedVersion cfg.min_version cfg.max_version TLS_1p3 [] in 
+  let vs = snoc_supportedVersion cfg.min_version cfg.max_version TLS_1p2 vs in 
+  if List.isEmpty vs 
+  then fatal Internal_error "configuration must include a supported protocol version"
+  else Correct (CHE_supported_versions vs)
+
+let support_new (cfg: CFG.miTLSConfig) : result clientHelloExtension =
+  let min_version = Parsers.KnownProtocolVersion.tag_of_knownProtocolVersion cfg.CFG.min_version in
+  let max_version = Parsers.KnownProtocolVersion.tag_of_knownProtocolVersion cfg.CFG.max_version in
+  let vs = snoc_supportedVersion min_version max_version TLS_1p3 [] in 
+  let vs = snoc_supportedVersion min_version max_version TLS_1p2 vs in
   if List.isEmpty vs 
   then fatal Internal_error "configuration must include a supported protocol version"
   else Correct (CHE_supported_versions vs)
@@ -83,7 +96,7 @@ open Mem
 let live_slice_pos h0 (#rrel #rel: _) (out: slice rrel rel) p0 = live_slice h0 out /\ p0 <= out.len 
 
 val write_supportedVersion 
-  (cfg: config) 
+  (min_version max_version: Parsers.ProtocolVersion.protocolVersion)
   (pv: Parsers.ProtocolVersion.protocolVersion) 
   (out:slice (srel_of_buffer_srel (LowStar.Buffer.trivial_preorder _)) (srel_of_buffer_srel (LowStar.Buffer.trivial_preorder _)))
   (pl p0: UInt32.t)
@@ -99,11 +112,11 @@ val write_supportedVersion
     v p0 <= v p1 /\
     v p1 - v p0 <= 2 /\ 
     LowStar.Buffer.modifies (loc_slice_from_to out p0 p1) h0 h1 /\
-    contents_list protocolVersion_parser h1 out pl p1 == snoc_supportedVersion cfg pv (contents_list protocolVersion_parser h0 out pl p0))
+    contents_list protocolVersion_parser h1 out pl p1 == snoc_supportedVersion min_version max_version pv (contents_list protocolVersion_parser h0 out pl p0))
 
 #push-options "--z3rlimit 100"
-let write_supportedVersion cfg pv out pl p0 =
-  if supported cfg pv then (
+let write_supportedVersion min_version max_version pv out pl p0 =
+  if supported_new min_version max_version pv then (
     let p1 = protocolVersion_writer pv out p0 in
     let h1 = get () in
     valid_list_snoc protocolVersion_parser h1 out pl p0;
@@ -133,8 +146,8 @@ let write_supportedVersions cfg out p0 =
   let pl_supported_versions = pl_CHE_supported_versions + 1ul in // supported_versions payload, after the supported_versions list length
   let h = get () in
   valid_list_nil protocolVersion_parser h out pl_supported_versions; 
-  let pl = write_supportedVersion cfg TLS_1p3 out pl_supported_versions pl_supported_versions in 
-  let pl = write_supportedVersion cfg TLS_1p2 out pl_supported_versions pl in
+  let pl = write_supportedVersion cfg.min_version cfg.max_version TLS_1p3 out pl_supported_versions pl_supported_versions in 
+  let pl = write_supportedVersion cfg.min_version cfg.max_version TLS_1p2 out pl_supported_versions pl in
   if pl = pl_supported_versions then fatal Internal_error "configuration must include a supported protocol version" else 
     let h = get () in
     valid_list_cons_recip protocolVersion_parser h out pl_supported_versions pl;
@@ -266,51 +279,66 @@ let owrite_constr_clientHelloExtension_CHE_supported_versions
 inline_for_extraction
 noextract
 let write_snoc_supportedVersion
-  cfg
+  min_version max_version
   #h0
   #sout
   #sout_from0
   (pv: Parsers.ProtocolVersion.protocolVersion)
   (pvs: LPW.lwriter protocolVersion_serializer h0 sout sout_from0)
 : Tot (pvs1 : LPW.lwriter protocolVersion_serializer h0 sout sout_from0 {
-    LPW.lwvalue pvs1 == snoc_supportedVersion cfg pv (LPW.lwvalue pvs)
+    LPW.lwvalue pvs1 == snoc_supportedVersion min_version max_version pv (LPW.lwvalue pvs)
   })
 = LPW.lwriter_ifthenelse
-    (supported cfg pv)
+    (supported_new min_version max_version pv)
     (fun _ -> LPW.lwriter_append pvs (LPW.lwriter_singleton (LPW.write_leaf_cs protocolVersion_writer _ _ _ pv)))
     (fun _ -> pvs)
+
+module HS = FStar.HyperStack
+module B = LowStar.Monotonic.Buffer
 
 inline_for_extraction
 noextract
 let write_supportedVersions_new
-  cfg
-  h0
+  #scfg_rrel #scfg_rel
+  (scfg: LPW.slice scfg_rrel scfg_rel)
+  (scfg_pos: UInt32.t)
   sout
   sout_from0
-: Tot (e: LPW.owriter clientHelloExtension_serializer h0 sout sout_from0 {
-      LPW.owvalue e == option_of_result (support cfg)
+  (h0: HS.mem {
+    LPW.valid CFG.miTLSConfig_parser h0 scfg scfg_pos /\
+    B.loc_disjoint (LPW.loc_slice_from_to scfg scfg_pos (LPW.get_valid_pos CFG.miTLSConfig_parser h0 scfg scfg_pos)) (LPW.loc_slice_from sout sout_from0)    
   })
-= owrite_constr_clientHelloExtension_CHE_supported_versions
+: Tot (e: LPW.owriter clientHelloExtension_serializer h0 sout sout_from0 {
+      LPW.owvalue e == option_of_result (support_new (LPW.contents CFG.miTLSConfig_parser h0 scfg scfg_pos))
+  })
+= LPW.graccess CFG.accessor_miTLSConfig_min_version scfg scfg_pos _ _ _ `LPW.owbind` (fun pmin ->
+  LPW.graccess CFG.accessor_miTLSConfig_max_version scfg scfg_pos _ _ _ `LPW.owbind` (fun pmax ->
+  LPW.read_leaf protocolVersion_reader scfg pmin _ _ _ `LPW.owbind` (fun min_version ->
+  LPW.read_leaf protocolVersion_reader scfg pmax _ _ _ `LPW.owbind` (fun max_version ->
+  owrite_constr_clientHelloExtension_CHE_supported_versions
     (owrite_clientHelloExtension_CHE_supported_versions
       (owrite_supportedVersions
         (LPW.olwriter_of_lwriter
           ([@inline_let]
             let w =
-              write_snoc_supportedVersion cfg TLS_1p3 (LPW.lwriter_nil protocolVersion_serializer h0 sout sout_from0)
+              write_snoc_supportedVersion min_version max_version TLS_1p3 (LPW.lwriter_nil protocolVersion_serializer h0 sout sout_from0)
             in
-            write_snoc_supportedVersion cfg TLS_1p2 w
-    ))))
+            write_snoc_supportedVersion min_version max_version TLS_1p2 w
+  )))))
+  )))
 
 let test_write_supportedVersions_new
-  cfg
+  #scfg_rrel #scfg_rel
+  (scfg: LPW.slice scfg_rrel scfg_rel)
+  (scfg_pos: UInt32.t)
   (sout: LPW.slice (LPW.srel_of_buffer_srel (LowStar.Buffer.trivial_preorder _)) (LPW.srel_of_buffer_srel (LowStar.Buffer.trivial_preorder _)))
   (sout_from: UInt32.t)
 : HST.Stack UInt32.t
   (requires (fun _ -> False))
   (ensures (fun _ _ _ -> True))
 = let h = HST.get () in
-  LPW.owrite (write_supportedVersions_new cfg h sout sout_from) sout_from
-  
+  LPW.owrite (write_supportedVersions_new scfg scfg_pos sout sout_from h) sout_from
+
 
 /// (2) Server chooses a supported version
 ///
