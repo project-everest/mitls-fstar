@@ -110,12 +110,23 @@ let parse_point g b =
       | Some (bs, _) -> Some (S_X25519 bs)
       | _ -> None)
   | _ ->
-      let open Format.UncompressedPointRepresentation in
-      let cl = UInt32.uint_to_t (bytelen g) in
-      match (uncompressedPointRepresentation_parser32 cl) b with
-      | Some (ucpr, _) -> 
-          let e = { ecx = ucpr.x; ecy = ucpr.y } in Some (S_CC e)
-    | _ -> None
+    (match bytelen g with
+    | 32 ->
+      let open Parsers.UncompressedPointRepresentation32 in
+      (match uncompressedPointRepresentation32_parser32 b with
+      | None -> None
+      | Some (ecp, _) -> Some (S_CC ({ecx = ecp.x; ecy = ecp.y })))
+    | 48 ->
+      let open Parsers.UncompressedPointRepresentation48 in
+      (match uncompressedPointRepresentation48_parser32 b with
+      | None -> None
+      | Some (ecp, _) -> Some (S_CC ({ecx = ecp.x; ecy = ecp.y })))
+    | 66 ->
+      let open Parsers.UncompressedPointRepresentation66 in
+      (match uncompressedPointRepresentation66_parser32 b with
+      | None -> None
+      | Some (ecp, _) -> Some (S_CC ({ecx = ecp.x; ecy = ecp.y })))
+    | _ -> None)
 
 let parse_partial payload =
     // This really means:

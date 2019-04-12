@@ -1091,7 +1091,9 @@ let emsFlag mode =
     true
   else (
     List.existsb CHE_extended_master_secret? mode.n_offer.CH.extensions &&
-    List.existsb SHE_extended_master_secret? mode.n_server_extensions )
+    (mode.n_server_extensions = [] || 
+     List.existsb SHE_extended_master_secret? mode.n_server_extensions)
+  )
 
 // used only for TLS 1.2. FIXME: properly negotiate
 let chosenGroup mode =
