@@ -18,7 +18,6 @@ SOURCES = \
   Flags.c \
   Format.c \
   HandshakeLog.c \
-  HandshakeMessages.c \
   Hashing.c \
   kremlinit.c \
   LowParse.c \
