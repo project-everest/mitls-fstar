@@ -29,7 +29,9 @@ SOURCES = \
   Hacl_AES.c \
   Hacl_Kremlib.c \
   Hacl_SHA3.c \
-  Hacl_Poly1305.c \
+  Hacl_Poly1305_32.c \
+  Hacl_Poly1305_128.c \
+  Hacl_Poly1305_256.c \
   Hacl_Curve25519.c \
   evercrypt_vale_stubs.c
 
