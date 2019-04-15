@@ -154,7 +154,10 @@ val custom_of_eext: encryptedExtensions -> custom_extensions
 
 val bindersLen: clientHelloExtensions -> UInt32.t
 
-
+(*
+let clientHelloExtension_of_tagged_unknown_extension (x: taggedUnknownExtension) : Tot clientHelloExtension =
+  CHE_Unknown_extensionType (tag_of_taggedUnknownExtension x) 
+*)
 
 /// We could specify which extensions are mandatory, and which are
 /// applicative, based on table in

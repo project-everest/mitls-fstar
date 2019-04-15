@@ -1689,7 +1689,7 @@ struct {
 struct {
   ExtensionType type;
   uint16 len;
-  select(type)
+  /*@failmissing*/ select(type)
   {
     default: opaque;
   } payload[len]; /*extension_data*/
