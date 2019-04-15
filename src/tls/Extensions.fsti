@@ -152,7 +152,7 @@ val eext_of_custom: custom_extensions -> encryptedExtensions
 val custom_of_cext: clientHelloExtensions -> custom_extensions
 val custom_of_eext: encryptedExtensions -> custom_extensions
 
-val bindersLen: clientHelloExtensions -> nat
+val bindersLen: clientHelloExtensions -> UInt32.t
 
 
 

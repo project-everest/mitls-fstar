@@ -108,7 +108,7 @@ let main cafile cert key () = // could try with different client and server conf
      [cert, // Cert file
       key,  // Private key file
       true] in // Universal (use for any SNI)
-  test ({ defaultConfig with
+  test TLSConstants.({ defaultConfig with
     min_version = TLS_1p3;
     max_version = TLS_1p3;
     cert_callbacks = PKI.tls_callbacks pki;

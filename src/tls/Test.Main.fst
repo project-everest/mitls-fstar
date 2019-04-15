@@ -3,6 +3,8 @@ module Test.Main
 open FStar.HyperStack.ST
 open FStar.HyperStack.IO
 
+module NW = Negotiation.Writers // for extraction purposes only
+
 #set-options "--admit_smt_queries true"
 
 inline_for_extraction

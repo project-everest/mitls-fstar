@@ -39,50 +39,54 @@ open Hashing.CRF
 open FStar.Bytes
 
 let hash = Hashing.h //18-08-31 
-  
-type msg = HandshakeMessages.hs_msg
+
+type msg =
+| Msg of handshake
+| Msg12 of handshake12
+| Msg13 of handshake13
+
+let tag_of = function
+| Msg h -> tag_of_handshake h
+| Msg12 h -> tag_of_handshake12 h
+| Msg13 h -> tag_of_handshake13 h
 
 /// Specifies which messages indicate the end of incoming flights and
 /// triggers their handshake processing.
-let eoflight =
-  let open HandshakeMessages in function
-  | ClientHello _
-  | HelloRetryRequest _
-  | EndOfEarlyData
-  | ServerHello _
-  | ServerHelloDone
-  | NewSessionTicket13 _
-  | Finished _ -> true
+let eoflight = function
+  | Client_hello
+  | End_of_early_data
+  | Server_hello
+  | Server_hello_done
+  | New_session_ticket
+  | Finished -> true
   | _ -> false
-// No support for binders yet
 
 /// Specifies which messages require an intermediate transcript hash
 /// in incoming flights. In doubt, we hash!
-//val tagged: msg -> Tot bool
-let tagged (m: msg): bool =
-  match m with
-  | ClientHello _
-  | ServerHello _
-  | EndOfEarlyData        // for Client finished
-  | Certificate13 _       // for CertVerify payload in TLS 1.3
-  | EncryptedExtensions _ // For PSK handshake: [EE; Finished]
-  | CertificateVerify _   // for ServerFinish payload in TLS 1.3
-  | ClientKeyExchange _   // only for client signing
-  | NewSessionTicket _    // for server finished in TLS 1.2
-  | Finished _ -> true    // for 2nd Finished
+let tagged (m: msg) : bool =
+  match tag_of m with
+  | Client_hello
+  | Server_hello
+  | End_of_early_data        // for Client finished
+  | Certificate       // for CertVerify payload in TLS 1.3
+  | Encrypted_extensions // For PSK handshake: [EE; Finished]
+  | Certificate_verify   // for ServerFinish payload in TLS 1.3
+  | Client_key_exchange   // only for client signing
+  | New_session_ticket    // for server finished in TLS 1.2
+  | Finished -> true    // for 2nd Finished
   | _ -> false
 // NB CCS is not explicitly handled here, but can trigger tagging and end-of-flights.
 
 let weak_valid_transcript hsl =
     match hsl with
     | [] -> true
-    | [ClientHello ch] -> true
-    | (ClientHello ch) :: (ServerHello sh) :: rest -> true
+    | [Msg (M_client_hello ch)] -> true
+    | (Msg (M_client_hello ch)) :: (Msg (M_server_hello sh)) :: rest -> true
     | _ -> false
 
 let transcript_version (x: list msg {weak_valid_transcript x}) = 
     match x with
-    | (ClientHello ch) :: (ServerHello sh) :: rest -> Some sh.sh_protocol_version
+    | (Msg (M_client_hello ch)) :: (Msg (M_server_hello sh)) :: rest -> Some sh.version
     | _ -> None
 
 (* TODO: move to something like FStar.List.GTot *)
@@ -91,9 +95,8 @@ let rec gforall (#a: Type) (f: (a -> GTot bool)) (l: list a) : GTot bool =
   | [] -> true
   | x :: q -> f x && gforall f q
 
-let valid_transcript (hsl:list hs_msg) : GTot bool =
-  weak_valid_transcript hsl &&
-  gforall (valid_hs_msg_prop (transcript_version hsl)) hsl
+let valid_transcript (hsl:list msg) : GTot bool =
+  weak_valid_transcript hsl
 
 let hs_transcript: Type0 = l:list msg {valid_transcript l}
 
@@ -212,19 +215,33 @@ let write_transcript h0 h1 (s:log) (m:msg) =
     writing h1 s /\
     hashAlg h1 s == hashAlg h0 s /\
     transcript h1 s == transcript h0 s @ [m]
-
+(*
 val load_stateless_cookie: s:log -> h:hrr -> digest:bytes -> ST unit
   (requires (fun h0 -> writing h0 s /\ valid_transcript (transcript h0 s)))
   (ensures (fun h0 _ h1 -> modifies_one s h0 h1 /\ writing h1 s))
+*)
+
+val send_truncated: s:log -> m:msg -> t:UInt32.t -> ST unit
+  (requires (fun h0 ->
+    writing h0 s /\
+    valid_transcript (transcript h0 s @ [m])))
+  (ensures (fun h0 _ h1 -> write_transcript h0 h1 s m))
 
 val send: s:log -> m:msg -> ST unit
   (requires (fun h0 ->
     writing h0 s /\
     valid_transcript (transcript h0 s @ [m]) /\
-    (match m with
+    (*match m with
     | HelloRetryRequest hrr -> Some? (TLSConstants.cipherSuite_of_name hrr.hrr_cipher_suite)
-    | _ -> True)))
+    | _ ->*) True))
   (ensures (fun h0 _ h1 -> write_transcript h0 h1 s m))
+
+val send_raw: s:log -> b:bytes -> ST unit
+  (requires (fun h0 -> writing h0 s))
+  (ensures (fun h0 _ h1 ->
+    modifies_one s h0 h1 /\
+    writing h1 s /\
+    hashAlg h1 s == hashAlg h0 s))
 
 #set-options "--admit_smt_queries true"
 val hash_tag: #a:alg -> s:log -> ST (tag a)
@@ -234,15 +251,16 @@ val hash_tag: #a:alg -> s:log -> ST (tag a)
     h0 == h1 /\
     hashed a bs /\ h == Hashing.h a bs )
 
-val hash_tag_truncated: #a:alg -> s:log -> suffix_len:nat -> ST (tag a)
+val hash_tag_truncated: #a:alg -> s:log -> suffix_len:UInt32.t
+  -> ST (tag a)
   (requires fun h0 ->
     let bs = transcript_bytes (transcript h0 s) in
     None? (hashAlg h0 s) /\
-    suffix_len <= length bs )
+    UInt32.v suffix_len <= length bs )
   (ensures fun h0 h h1 ->
     let bs = transcript_bytes (transcript h1 s)  in
-    h0 == h1 /\ suffix_len <= length bs /\ (
-    let prefix, _ = split_ bs (length bs - suffix_len)  in
+    h0 == h1 /\ UInt32.v suffix_len <= length bs /\ (
+    let prefix = sub bs FStar.UInt32.(len bs -^ suffix_len) suffix_len in
     hashed a prefix /\ h == Hashing.h a prefix))
 
 val send_tag: #a:alg -> s:log -> m:msg -> ST (tag a)
@@ -252,7 +270,7 @@ val send_tag: #a:alg -> s:log -> m:msg -> ST (tag a)
   (ensures fun h0 h h1 ->
     let bs = transcript_bytes (transcript h1 s)  in
     write_transcript h0 h1 s m /\
-    hashed a bs /\ h == Hashing.h a bs )
+    hashed a bs /\ h == Hashing.h a bs)
 
 // An ad hoc variant for caching a message to be sent immediately after the CCS
 // We always increment the writer, sometimes report handshake completion.
@@ -276,7 +294,6 @@ val send_signals: s:log -> next_keys:option (bool * bool) -> complete:bool -> ST
     modifies_one s h0 h1 /\
     hashAlg h0 s == hashAlg h1 s /\
     transcript h0 s == transcript h1 s)
-
 
 // FRAGMENT INTERFACE
 //

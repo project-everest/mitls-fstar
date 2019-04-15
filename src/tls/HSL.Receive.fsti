@@ -13,9 +13,7 @@ module LP = LowParse.Low.Base
 
 open HSL.Common
 
-module HSM = Parsers.Handshake
-module HSM12 = Parsers.Handshake12
-module HSM13 = Parsers.Handshake13
+module HSM = HandshakeMessages
 
 #reset-options "--max_fuel 0 --max_ifuel 0 --using_facts_from '* -FStar.Tactics -FStar.Reflection'"
 
@@ -175,11 +173,11 @@ let receive_post
 /// Common function for slice being a valid 13 message msg
 
 let valid_parsing13
-  (msg:HSM13.handshake13)
+  (msg:HSM.handshake13)
   (buf:slice)
   (from to:uint_32)
   (h:HS.mem)
-  = let parser = HSM13.handshake13_parser in
+  = let parser = HSM.handshake13_parser in
     from <= to /\
     LP.valid parser h buf from /\
     LP.contents parser h buf from == msg /\
@@ -188,21 +186,16 @@ let valid_parsing13
 
 (****** Flight [ EncryptedExtensions; Certificate13; CertificateVerify; Finished ] ******)
 
-module EE  = Parsers.Handshake13_m_encrypted_extensions
-module C13 = Parsers.Handshake13_m_certificate
-module CV13 = Parsers.Handshake13_m_certificate_verify
-module Fin13 = Parsers.Handshake13_m_finished
-
 noeq
 type flight13_ee_c_cv_fin = {
   begin_c   : uint_32;
   begin_cv  : uint_32;
   begin_fin : uint_32;
 
-  ee_msg  : G.erased EE.handshake13_m_encrypted_extensions;
-  c_msg   : G.erased C13.handshake13_m_certificate;
-  cv_msg  : G.erased CV13.handshake13_m_certificate_verify;
-  fin_msg : G.erased Fin13.handshake13_m_finished
+  ee_msg  : G.erased HSM.handshake13_m13_encrypted_extensions;
+  c_msg   : G.erased HSM.handshake13_m13_certificate;
+  cv_msg  : G.erased HSM.handshake13_m13_certificate_verify;
+  fin_msg : G.erased HSM.handshake13_m13_finished
 }
 
 
@@ -210,10 +203,10 @@ let valid_flight13_ee_c_cv_fin
   : valid_flight_t flight13_ee_c_cv_fin
   = fun (flt:flight13_ee_c_cv_fin) (from to:uint_32) (b:slice) (h:HS.mem) ->
 
-    valid_parsing13 (HSM13.M_encrypted_extensions (G.reveal flt.ee_msg)) b from flt.begin_c h /\
-    valid_parsing13 (HSM13.M_certificate (G.reveal flt.c_msg)) b flt.begin_c flt.begin_cv h /\
-    valid_parsing13 (HSM13.M_certificate_verify (G.reveal flt.cv_msg)) b flt.begin_cv flt.begin_fin h /\
-    valid_parsing13 (HSM13.M_finished (G.reveal flt.fin_msg)) b flt.begin_fin to h
+    valid_parsing13 (HSM.M13_encrypted_extensions (G.reveal flt.ee_msg)) b from flt.begin_c h /\
+    valid_parsing13 (HSM.M13_certificate (G.reveal flt.c_msg)) b flt.begin_c flt.begin_cv h /\
+    valid_parsing13 (HSM.M13_certificate_verify (G.reveal flt.cv_msg)) b flt.begin_cv flt.begin_fin h /\
+    valid_parsing13 (HSM.M13_finished (G.reveal flt.fin_msg)) b flt.begin_fin to h
 
 
 val receive_flight13_ee_c_cv_fin
@@ -225,8 +218,6 @@ val receive_flight13_ee_c_cv_fin
 
 (****** Flight [EncryptedExtensions; Certificaterequest13; Certificate13; CertificateVerify; Finished ] ******)
 
-module CR13 = Parsers.Handshake13_m_certificate_request
-
 noeq
 type flight13_ee_cr_c_cv_fin = {
   begin_cr  : uint_32;
@@ -234,11 +225,11 @@ type flight13_ee_cr_c_cv_fin = {
   begin_cv  : uint_32;
   begin_fin : uint_32;
 
-  ee_msg  : G.erased EE.handshake13_m_encrypted_extensions;
-  cr_msg  : G.erased CR13.handshake13_m_certificate_request;
-  c_msg   : G.erased C13.handshake13_m_certificate;
-  cv_msg  : G.erased CV13.handshake13_m_certificate_verify;
-  fin_msg : G.erased Fin13.handshake13_m_finished
+  ee_msg  : G.erased HSM.handshake13_m13_encrypted_extensions;
+  cr_msg  : G.erased HSM.handshake13_m13_certificate_request;
+  c_msg   : G.erased HSM.handshake13_m13_certificate;
+  cv_msg  : G.erased HSM.handshake13_m13_certificate_verify;
+  fin_msg : G.erased HSM.handshake13_m13_finished
 }
 
 
@@ -246,11 +237,11 @@ let valid_flight13_ee_cr_c_cv_fin
   : valid_flight_t flight13_ee_cr_c_cv_fin
   = fun (flt:flight13_ee_cr_c_cv_fin) (from to:uint_32) (b:slice) (h:HS.mem) ->
 
-    valid_parsing13 (HSM13.M_encrypted_extensions (G.reveal flt.ee_msg)) b from flt.begin_cr h /\
-    valid_parsing13 (HSM13.M_certificate_request (G.reveal flt.cr_msg)) b flt.begin_cr flt.begin_c h /\
-    valid_parsing13 (HSM13.M_certificate (G.reveal flt.c_msg)) b flt.begin_c flt.begin_cv h /\
-    valid_parsing13 (HSM13.M_certificate_verify (G.reveal flt.cv_msg)) b flt.begin_cv flt.begin_fin h /\
-    valid_parsing13 (HSM13.M_finished (G.reveal flt.fin_msg)) b flt.begin_fin to h
+    valid_parsing13 (HSM.M13_encrypted_extensions (G.reveal flt.ee_msg)) b from flt.begin_cr h /\
+    valid_parsing13 (HSM.M13_certificate_request (G.reveal flt.cr_msg)) b flt.begin_cr flt.begin_c h /\
+    valid_parsing13 (HSM.M13_certificate (G.reveal flt.c_msg)) b flt.begin_c flt.begin_cv h /\
+    valid_parsing13 (HSM.M13_certificate_verify (G.reveal flt.cv_msg)) b flt.begin_cv flt.begin_fin h /\
+    valid_parsing13 (HSM.M13_finished (G.reveal flt.fin_msg)) b flt.begin_fin to h
 
 
 val receive_flight13_ee_cr_c_cv_fin
@@ -266,15 +257,15 @@ noeq
 type flight13_ee_fin = {
   begin_fin : uint_32;
 
-  ee_msg    : G.erased EE.handshake13_m_encrypted_extensions;
-  fin_msg   : G.erased Fin13.handshake13_m_finished
+  ee_msg    : G.erased HSM.handshake13_m13_encrypted_extensions;
+  fin_msg   : G.erased HSM.handshake13_m13_finished
 }
 
 let valid_flight13_ee_fin : valid_flight_t flight13_ee_fin =
   fun (flt:flight13_ee_fin) (from to:uint_32) (b:slice) (h:HS.mem) ->
 
-  valid_parsing13 (HSM13.M_encrypted_extensions (G.reveal flt.ee_msg)) b from flt.begin_fin h /\
-  valid_parsing13 (HSM13.M_finished (G.reveal flt.fin_msg)) b flt.begin_fin to h
+  valid_parsing13 (HSM.M13_encrypted_extensions (G.reveal flt.ee_msg)) b from flt.begin_fin h /\
+  valid_parsing13 (HSM.M13_finished (G.reveal flt.fin_msg)) b flt.begin_fin to h
 
 val receive_flight13_ee_fin (st:hsl_state) (b:slice) (from to:uint_32)
   : ST (TLSError.result (option flight13_ee_fin))
@@ -286,14 +277,14 @@ val receive_flight13_ee_fin (st:hsl_state) (b:slice) (from to:uint_32)
 
 noeq
 type flight13_fin = {
-  fin_msg : G.erased Fin13.handshake13_m_finished
+  fin_msg : G.erased HSM.handshake13_m13_finished
 }
 
 
 let valid_flight13_fin : valid_flight_t flight13_fin =
   fun (flt:flight13_fin) (from to:uint_32) (b:slice) (h:HS.mem) ->
 
-  valid_parsing13 (HSM13.M_finished (G.reveal flt.fin_msg)) b from to h
+  valid_parsing13 (HSM.M13_finished (G.reveal flt.fin_msg)) b from to h
 
 val receive_flight13_fin (st:hsl_state) (b:slice) (from to:uint_32)
   : ST (TLSError.result (option flight13_fin))
@@ -308,9 +299,9 @@ type flight13_c_cv_fin = {
   begin_cv  : uint_32;
   begin_fin : uint_32;
 
-  c_msg   : G.erased C13.handshake13_m_certificate;
-  cv_msg  : G.erased CV13.handshake13_m_certificate_verify;
-  fin_msg : G.erased Fin13.handshake13_m_finished
+  c_msg   : G.erased HSM.handshake13_m13_certificate;
+  cv_msg  : G.erased HSM.handshake13_m13_certificate_verify;
+  fin_msg : G.erased HSM.handshake13_m13_finished
 }
 
 
@@ -318,9 +309,9 @@ let valid_flight13_c_cv_fin
   : valid_flight_t flight13_c_cv_fin
   = fun (flt:flight13_c_cv_fin) (from to:uint_32) (b:slice) (h:HS.mem) ->
 
-    valid_parsing13 (HSM13.M_certificate (G.reveal flt.c_msg)) b from flt.begin_cv h /\
-    valid_parsing13 (HSM13.M_certificate_verify (G.reveal flt.cv_msg)) b flt.begin_cv flt.begin_fin h /\
-    valid_parsing13 (HSM13.M_finished (G.reveal flt.fin_msg)) b flt.begin_fin to h
+    valid_parsing13 (HSM.M13_certificate (G.reveal flt.c_msg)) b from flt.begin_cv h /\
+    valid_parsing13 (HSM.M13_certificate_verify (G.reveal flt.cv_msg)) b flt.begin_cv flt.begin_fin h /\
+    valid_parsing13 (HSM.M13_finished (G.reveal flt.fin_msg)) b flt.begin_fin to h
 
 
 val receive_flight13_c_cv_fin
@@ -332,18 +323,16 @@ val receive_flight13_c_cv_fin
 
 (****** Flight [ EndOfEarlyData ] ******)
 
-module EoED13 = Parsers.Handshake13_m_end_of_early_data
-
 noeq
 type flight13_eoed = {
-  eoed_msg : G.erased (EoED13.handshake13_m_end_of_early_data)
+  eoed_msg : G.erased (HSM.handshake13_m13_end_of_early_data)
 }
 
 
 let valid_flight13_eoed : valid_flight_t flight13_eoed =
   fun (flt:flight13_eoed) (from to:uint_32) (b:slice) (h:HS.mem) ->
 
-  valid_parsing13 (HSM13.M_end_of_early_data (G.reveal flt.eoed_msg)) b from to h
+  valid_parsing13 (HSM.M13_end_of_early_data (G.reveal flt.eoed_msg)) b from to h
 
 val receive_flight13_eoed (st:hsl_state) (b:slice) (from to:uint_32)
   : ST (TLSError.result (option flight13_eoed))
@@ -353,18 +342,16 @@ val receive_flight13_eoed (st:hsl_state) (b:slice) (from to:uint_32)
 
 (****** Flight [ NewSessionTicket13 ] ******)
 
-module NST13 = Parsers.Handshake13_m_new_session_ticket
-
 noeq
 type flight13_nst = {
-  nst_msg : G.erased (NST13.handshake13_m_new_session_ticket)
+  nst_msg : G.erased (HSM.handshake13_m13_new_session_ticket)
 }
 
 
 let valid_flight13_nst : valid_flight_t flight13_nst =
   fun (flt:flight13_nst) (from to:uint_32) (b:slice) (h:HS.mem) ->
 
-  valid_parsing13 (HSM13.M_new_session_ticket (G.reveal flt.nst_msg)) b from to h
+  valid_parsing13 (HSM.M13_new_session_ticket (G.reveal flt.nst_msg)) b from to h
 
 val receive_flight13_nst (st:hsl_state) (b:slice) (from to:uint_32)
   : ST (TLSError.result (option flight13_nst))

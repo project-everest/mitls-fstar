@@ -238,7 +238,7 @@ let ticketContents_of_ticket (t: ticket) : GTot TC.ticketContents =
     })
   | Ticket13 cs _ _ rms nonce created age custom ->
     TC.T_ticket13 ({
-      TC13.cs = name_of_cipherSuite cs;
+      TC13.cs = cipherSuite13_of_cipherSuite cs;
       TC13.rms = rms;
       TC13.nonce = nonce;
       TC13.creation_time = created;
@@ -377,7 +377,7 @@ let write_ticket13
     then LPB.max_uint32
     else begin
       let pos1 = pos `U32.add` 1ul in
-      let pos2 = Parsers.CipherSuite.cipherSuite_writer (name_of_cipherSuite cs) sl pos1 in
+      let pos2 = CipherSuite.cipherSuite13_writer (cipherSuite13_of_cipherSuite cs) sl pos1 in
       let len_rms = len rms in
       let _ = FStar.Bytes.store_bytes rms (B.sub sl.LPB.base (pos2 `U32.add` 1ul) len_rms) in
       let pos3 = Parsers.TicketContents13_rms.ticketContents13_rms_finalize sl pos2 len_rms in
@@ -431,7 +431,10 @@ let create_ticket (seal:bool) t =
   let plain = serialize t in
   ticket_encrypt seal plain
 
-let create_cookie (hrr:HandshakeMessages.hrr) (digest:bytes) (extra:bytes) =
+// FIXME(adl): restore HRR support in QD
+let create_cookie (*hrr:HandshakeMessages.hrr*) (digest:bytes) (extra:bytes) =
+  empty_bytes
+(*
   let hrm = HandshakeMessages.HelloRetryRequest hrr in
   let hrb = vlbytes 3 (HandshakeMessages.handshakeMessageBytes None hrm) in
   let plain = hrb @| (vlbytes 1 digest) @| (vlbytes 2 extra) in
@@ -439,9 +442,11 @@ let create_cookie (hrr:HandshakeMessages.hrr) (digest:bytes) (extra:bytes) =
   trace ("Encrypting cookie: "^(hex_of_bytes plain));
   trace ("Encrypted cookie:  "^(hex_of_bytes cipher));
   cipher
+*)
 
-val check_cookie: b:bytes -> St (option (HandshakeMessages.hrr * bytes * bytes))
-let check_cookie b =
+val check_cookie: b:bytes -> St (option ((*HandshakeMessages.hrr*) bytes * bytes * bytes))
+let check_cookie b = None
+(*
   trace ("Decrypting cookie "^(hex_of_bytes b));
   if length b < 32 then None else
   match ticket_decrypt false b with
@@ -462,6 +467,7 @@ let check_cookie b =
           | Error _ -> trace ("Cookie decode error: application data"); None
           | Correct extra ->
             Some (hrr, digest, extra)
+*)
 
 #pop-options
 
@@ -483,12 +489,12 @@ let ticket_pskinfo (t:ticket) =
   | _ -> None
 
 noextract
-let ticketContents_pskinfo (t:TC.ticketContents) : Tot (option pskInfo) =
+let ticketContents13_pskinfo (t: TC13.ticketContents13) : Tot pskInfo =
   match t with
-  | TC.T_ticket13 ({ TC13.cs = cs; TC13.nonce = nonce; TC13.creation_time = created; TC13.age_add = age_add; TC13.custom_data = custom }) ->
-    begin match cipherSuite_of_name cs with
-    | Some (CipherSuite13 ae h) ->
-      Some ({
+  | ({ TC13.cs = cs; TC13.nonce = nonce; TC13.creation_time = created; TC13.age_add = age_add; TC13.custom_data = custom }) ->
+    begin match cipherSuite_of_cipherSuite13 cs with
+    | (CipherSuite13 ae h) ->
+      ({
         ticket_nonce = Some nonce;
         time_created = created;
         ticket_age_add = age_add;
@@ -499,8 +505,12 @@ let ticketContents_pskinfo (t:TC.ticketContents) : Tot (option pskInfo) =
         early_hash = h;
         identities = (empty_bytes, empty_bytes);
       })
-    | _ -> None
     end
+
+noextract
+let ticketContents_pskinfo (t:TC.ticketContents) : Tot (option pskInfo) =
+  match t with
+  | TC.T_ticket13 t13 -> Some (ticketContents13_pskinfo t13)
   | _ -> None
 
 let ticketContents_pskinfo_ticketContents_of_ticket (t: ticket) : Lemma
