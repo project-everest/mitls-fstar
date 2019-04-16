@@ -489,6 +489,7 @@ val extend_hrr
   : Stack (G.erased transcript_t)
     (requires fun h ->
       let tx = G.reveal tx in
+      extend_pre_common s r_ch tx h /\
       extend_pre_common s r_sh tx h /\
       Some? (transition_hrr tx (R.value r_ch) (R.value r_sh)))
     (ensures fun h0 tx' h1 ->
