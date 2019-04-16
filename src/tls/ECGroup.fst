@@ -95,7 +95,6 @@ let parse_curve b =
        | _                   -> None)
     | _ -> None)
 
-#reset-options "--using_facts_from '* -LowParse'"
 let parse_point g b =
   // parser for flat bytes or uncompressedPointPepresentation
   match g with
