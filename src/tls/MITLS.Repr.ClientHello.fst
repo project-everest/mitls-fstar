@@ -1,4 +1,12 @@
 module MITLS.Repr.ClientHello
+(* Summary:
+
+   This module encapsulates wire-format representations of
+   Parsers.ClientHello messages.
+
+   Its main type, `repr b` is an instance of MITLS.Repr.repr
+   instantiated with clientHello_parser
+*)
 module LP = LowParse.Low.Base
 module B = LowStar.Monotonic.Buffer
 module HS = FStar.HyperStack
@@ -9,18 +17,10 @@ open FStar.HyperStack.ST
 
 let t = CH.clientHello
 
-let repr #p #q (b:LP.slice p q) =
+let repr (b:R.slice) =
   R.repr_p CH.clientHello b CH.clientHello_parser
 
-let mk #p #q (b:LP.slice p q) (from to:R.index b)
-  : Stack (repr b)
-    (requires R.valid_pos b CH.clientHello_parser from to)
-    (ensures fun h0 r h1 ->
-      B.modifies B.loc_none h0 h1 /\
-      R.valid r h1)
-  = R.mk b from to CH.clientHello_parser
-
-let version (#b:LP.slice 'p 'q) (r:repr b)
+let version (#b:R.slice) (r:repr b)
   : Stack Parsers.ProtocolVersion.protocolVersion
     (requires R.valid r)
     (ensures fun h0 pv h1 ->
