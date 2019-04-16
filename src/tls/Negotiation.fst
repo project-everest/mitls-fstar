@@ -642,7 +642,7 @@ let prepareClientExtensions_new
       | Correct final_extensions ->
         Correct begin
           // 18-12-22 TODO cfg.safe_renegotiation is ignored? 
-//          cfg.CFG.custom_extensions @
+          Extensions.clientHelloExtensions_of_tagged_unknown_extensions cfg.CFG.custom_extensions @
           (* Always send supported extensions.
              The configuration options will influence how strict the tests will be *)
           (* let cri = *)

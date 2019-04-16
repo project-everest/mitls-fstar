@@ -17,7 +17,7 @@ module HST = FStar.HyperStack.ST
 open Extensions
 open Negotiation
 
-#reset-options // WHY WHY WHY is this needed?
+#reset-options "--z3cliopt smt.arith.nl=false"
 
 #push-options "--z3rlimit 16"
 
@@ -499,154 +499,16 @@ let write_constr_clientHelloExtension_CHE_early_data
       end
   )
 
-#push-options "--z3rlimit 32"
+#push-options "--z3rlimit 128 --query_stats --print_z3_statistics --max_ifuel 8 --initial_ifuel 8"
 
-let write_final_extensions'
-  (cfg: config)
-  (edi: bool)
-  (#rrel #rel: _)
-  (sin: LP.slice rrel rel)
-  (pin_from pin_to: U32.t)
-  (now: U32.t)
-  (sout: LP.slice (LP.srel_of_buffer_srel (B.trivial_preorder _)) (LP.srel_of_buffer_srel (B.trivial_preorder _)))
-  (pout_from: U32.t)
-: HST.Stack U32.t
-  (requires (fun h ->
-    LP.valid_list Parsers.ResumeInfo13.resumeInfo13_parser h sin pin_from pin_to /\
-    LP.live_slice h sout /\
-    U32.v pout_from <= U32.v sout.LP.len /\
-    U32.v sout.LP.len < U32.v LP.max_uint32 - 1 /\ // encode 2 types of errors
-    B.loc_disjoint (LP.loc_slice_from_to sin pin_from pin_to) (LP.loc_slice_from sout pout_from)
-  ))
-  (ensures (fun h res h' ->
-    let x = option_of_result (final_extensions_new cfg edi (LP.contents_list Parsers.ResumeInfo13.resumeInfo13_parser h sin pin_from pin_to) now) in
-    B.modifies (LP.loc_slice_from sout pout_from) h h' /\ (
-    if res = LP.max_uint32
-    then (Some? x ==> U32.v pout_from + LP.serialized_list_length Parsers.ClientHelloExtension.clientHelloExtension_serializer (Some?.v x) > U32.v sout.LP.len)
-    else if res = LP.max_uint32 `U32.sub` 1ul
-    then None? x
-    else
-      Some? x /\
-      LP.valid_list Parsers.ClientHelloExtension.clientHelloExtension_parser h' sout pout_from res /\
-      LP.contents_list Parsers.ClientHelloExtension.clientHelloExtension_parser h' sout pout_from res == Some?.v x
-  )))
-= let h0 = HST.get () in
-  match cfg.max_version with
-  | TLS_1p3 ->
-    let allow_psk_resumption =
-      LP.list_existsb
-        Parsers.ResumeInfo13.resumeInfo13_jumper
-        allow_psk_resumption_new
-        (fun #rrel #rel sl pos -> true) // currently constant, see Ticket.ticket_pskinfo
-        sin pin_from pin_to
-    in
-    let allow_dhe_resumption =
-      LP.list_existsb
-        Parsers.ResumeInfo13.resumeInfo13_jumper
-        allow_dhe_resumption_new
-        (fun #rrel #rel sl pos -> true) // currently constant, see Ticket.ticket_pskinfo
-        sin pin_from pin_to
-    in
-    if allow_psk_resumption || allow_dhe_resumption
-    then
-      [@inline_let]
-      let psk_kex : LPW.lwriter _ _ _ _ =
-        LPW.lwriter_append
-          (LPW.lwriter_ifthenelse
-            allow_psk_resumption
-            (fun _ -> LPW.lwriter_singleton (LPW.write_leaf_cs pskKeyExchangeMode_writer h0 sout pout_from Psk_ke))
-            (fun _ -> LPW.lwriter_nil _ _ _ _))
-          (LPW.lwriter_ifthenelse
-            allow_dhe_resumption
-            (fun _ -> LPW.lwriter_singleton (LPW.write_leaf_cs pskKeyExchangeMode_writer _ _ _ Psk_dhe_ke))
-            (fun _ -> LPW.lwriter_nil _ _ _ _))
-      in
-      [@inline_let]
-      let binders : LPW.lwriter _ _ _ _ =
-        LPW.lwriter_list_map
-          Parsers.ResumeInfo13.resumeInfo13_jumper
-          Parsers.PskBinderEntry.pskBinderEntry_serializer
-          (fun r -> compute_binder_ph_new r.Parsers.ResumeInfo13.ticket)
-          sin pin_from pin_to
-          h0
-          sout pout_from
-          (fun pin ->
-            LPW.Writer (Ghost.hide (compute_binder_ph_new (LP.contents Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin).Parsers.ResumeInfo13.ticket)) (fun pout ->
-             write_binder_ph sin (Parsers.ResumeInfo13.accessor_resumeInfo13_ticket sin pin) sout pout
-          ))
-      in
-      [@inline_let]
-      let pskidentities : LPW.lwriter _ _ _ _ =
-        LPW.lwriter_list_map
-          Parsers.ResumeInfo13.resumeInfo13_jumper
-          Parsers.PskIdentity.pskIdentity_serializer
-          (obfuscate_age_new now)
-          sin pin_from pin_to
-          h0
-          sout pout_from
-          (fun pin ->
-            LPW.Writer (Ghost.hide (obfuscate_age_new now (LP.contents Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin))) (fun pout ->
-            write_obfuscate_age now sin pin sout pout
-          ))
-      in
-      [@inline_let]
-      let ke : LPW.owriter _ _ _ _ =
-        write_preSharedKeyClientExtension
-          (write_offeredPsks_identities (LPW.olwriter_of_lwriter pskidentities))
-          (write_offeredPsks_binders (LPW.olwriter_of_lwriter binders))
-      in
-      [@inline_let]
-      let res : LPW.olwriter _ _ _ _ =
-        LPW.olwriter_singleton
-          (LPW.owriter_of_writer
-            (write_constr_clientHelloExtension_CHE_psk_key_exchange_modes
-              (write_clientHelloExtension_CHE_psk_key_exchange_modes
-                (write_pskKeyExchangeModes psk_kex)
-          )))
-        `LPW.olwriter_append`
-        LPW.olwriter_ifthenelse
-          edi
-          (fun _ ->
-            LPW.olwriter_singleton
-              (LPW.owriter_of_writer
-                (write_constr_clientHelloExtension_CHE_early_data _ _ _)
-          ))
-          (fun _ -> LPW.olwriter_nil _ _ _ _)
-        `LPW.olwriter_append`
-        LPW.olwriter_singleton
-          (write_constr_clientHelloExtension_CHE_pre_shared_key
-            (write_clientHelloExtension_CHE_pre_shared_key ke)
-          )
-      in
-      LPW.olwrite res pout_from
-    else
-      LPW.olwrite
-        (LPW.olwriter_singleton
-          (LPW.owriter_of_writer
-            (write_constr_clientHelloExtension_CHE_psk_key_exchange_modes
-              (write_clientHelloExtension_CHE_psk_key_exchange_modes
-                (write_pskKeyExchangeModes
-                  (LPW.lwriter_append
-                    (LPW.lwriter_singleton
-                      (LPW.write_leaf_cs pskKeyExchangeMode_writer h0 sout pout_from Psk_ke)
-                    )
-                    (LPW.lwriter_singleton
-                      (LPW.write_leaf_cs pskKeyExchangeMode_writer _ _ _ Psk_dhe_ke)
-         )))))))
-         pout_from
-  | _ ->
-    let h = HST.get () in
-    LP.valid_list_nil Parsers.ClientHelloExtension.clientHelloExtension_parser h sout pout_from;
-    pout_from
-
-#pop-options
-
-#pop-options
+module L = FStar.List.Tot
 
 inline_for_extraction
 noextract
 let write_final_extensions
-  (cfg: config)
+  (#rrelcfg #relcfg: _)
+  (scfg: LP.slice rrelcfg relcfg)
+  (pcfg: U32.t)
   (edi: bool)
   (#rrel #rel: _)
   (sin: LP.slice rrel rel)
@@ -655,19 +517,133 @@ let write_final_extensions
   (h0: HS.mem)
   (sout: LP.slice (LP.srel_of_buffer_srel (B.trivial_preorder _)) (LP.srel_of_buffer_srel (B.trivial_preorder _)))
   (pout_from0: U32.t {
+    LP.valid Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg /\
     LP.valid_list Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin_from pin_to /\
     U32.v pout_from0 <= U32.v sout.LP.len /\
+    B.loc_disjoint (LP.loc_slice_from_to scfg pcfg (LP.get_valid_pos Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg)) (LP.loc_slice_from sout pout_from0) /\
     B.loc_disjoint (LP.loc_slice_from_to sin pin_from pin_to) (LP.loc_slice_from sout pout_from0)  
   })
 : Tot (y: LPW.olwriter Parsers.ClientHelloExtension.clientHelloExtension_serializer h0 sout pout_from0 {
+    let cfg = LP.contents Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg in
     LPW.olwvalue y == option_of_result (final_extensions_new cfg edi (LP.contents_list Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin_from pin_to) now)
   })
-= LPW.OLWriter (Ghost.hide (option_of_result (final_extensions_new cfg edi (LP.contents_list Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin_from pin_to) now))) (fun pout_from ->
-    write_final_extensions' cfg edi sin pin_from pin_to now sout pout_from
-  )
+= [@inline_let]
+  let list_length_append (#t: Type) (l1 l2: list t) : Lemma (L.length (l1 `L.append` l2) == L.length l1 + L.length l2) [SMTPat (L.length (l1 `L.append`  l2))] = L.append_length l1 l2 in
+  LPW.graccess Parsers.MiTLSConfig.accessor_miTLSConfig_max_version scfg pcfg _ _ _ `LPW.olwbind` (fun pmax_version ->
+    LPW.read_leaf Parsers.ProtocolVersion.protocolVersion_reader scfg pmax_version _ _ _ `LPW.olwbind` (fun max_version ->
+    LPW.olwriter_ifthenelse (max_version = TLS_1p3)
+      (fun _ ->
+        LPW.grlexistsb
+          Parsers.ResumeInfo13.resumeInfo13_jumper
+          allow_psk_resumption_new
+          (fun #rrel #rel sl pos -> true) // currently constant, see Ticket.ticket_pskinfo
+          sin pin_from pin_to
+          _ _ _ `LPW.olwbind` (fun allow_psk_resumption ->
+        LPW.grlexistsb
+          Parsers.ResumeInfo13.resumeInfo13_jumper
+          allow_dhe_resumption_new
+          (fun #rrel #rel sl pos -> true) // currently constant, see Ticket.ticket_pskinfo)
+          sin pin_from pin_to
+          _ _ _ `LPW.olwbind` (fun allow_dhe_resumption ->
+        LPW.olwriter_ifthenelse (allow_psk_resumption || allow_dhe_resumption)
+          (fun _ ->
+            [@inline_let]
+            let psk_kex : LPW.lwriter _ _ _ _ =
+              LPW.lwriter_append
+                (LPW.lwriter_ifthenelse
+                  allow_psk_resumption
+                  (fun _ -> LPW.lwriter_singleton (LPW.write_leaf_cs pskKeyExchangeMode_writer h0 sout pout_from0 Psk_ke))
+                  (fun _ -> LPW.lwriter_nil _ _ _ _))
+                (LPW.lwriter_ifthenelse
+                  allow_dhe_resumption
+                  (fun _ -> LPW.lwriter_singleton (LPW.write_leaf_cs pskKeyExchangeMode_writer _ _ _ Psk_dhe_ke))
+                  (fun _ -> LPW.lwriter_nil _ _ _ _))
+            in
+//            [@inline_let]
+//            let _ = assert (let n = List.Tot.length (LPW.lwvalue psk_kex) in 1 <= n /\ n <= 2) in
+            [@inline_let]
+            let binders : LPW.lwriter _ _ _ _ =
+              LPW.lwriter_list_map
+                Parsers.ResumeInfo13.resumeInfo13_jumper
+                Parsers.PskBinderEntry.pskBinderEntry_serializer
+                (fun r -> compute_binder_ph_new r.Parsers.ResumeInfo13.ticket)
+                sin pin_from pin_to
+                h0
+                sout pout_from0
+                (fun pin ->
+                  LPW.Writer (Ghost.hide (compute_binder_ph_new (LP.contents Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin).Parsers.ResumeInfo13.ticket)) (fun pout ->
+                  write_binder_ph sin (Parsers.ResumeInfo13.accessor_resumeInfo13_ticket sin pin) sout pout
+                ))
+            in
+            [@inline_let]
+            let pskidentities : LPW.lwriter _ _ _ _ =
+              LPW.lwriter_list_map
+                Parsers.ResumeInfo13.resumeInfo13_jumper
+                Parsers.PskIdentity.pskIdentity_serializer
+                (obfuscate_age_new now)
+                sin pin_from pin_to
+                h0
+                sout pout_from0
+                (fun pin ->
+                  LPW.Writer (Ghost.hide (obfuscate_age_new now (LP.contents Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin))) (fun pout ->
+                  write_obfuscate_age now sin pin sout pout
+                ))
+            in
+            [@inline_let]
+            let ke : LPW.owriter _ _ _ _ =
+              write_preSharedKeyClientExtension
+                (write_offeredPsks_identities (LPW.olwriter_of_lwriter pskidentities))
+                (write_offeredPsks_binders (LPW.olwriter_of_lwriter binders))
+            in
+            [@inline_let]
+            let res : LPW.olwriter _ _ _ _ =
+              LPW.olwriter_singleton
+                (LPW.owriter_of_writer
+                  (write_constr_clientHelloExtension_CHE_psk_key_exchange_modes
+                    (write_clientHelloExtension_CHE_psk_key_exchange_modes
+                      (write_pskKeyExchangeModes psk_kex)
+                )))
+              `LPW.olwriter_append`
+              LPW.olwriter_ifthenelse
+                edi
+                (fun _ ->
+                  LPW.olwriter_singleton
+                    (LPW.owriter_of_writer
+                      (write_constr_clientHelloExtension_CHE_early_data _ _ _)
+                ))
+                (fun _ -> LPW.olwriter_nil _ _ _ _)
+              `LPW.olwriter_append`
+              LPW.olwriter_singleton
+                (write_constr_clientHelloExtension_CHE_pre_shared_key
+                  (write_clientHelloExtension_CHE_pre_shared_key ke)
+                )
+            in
+            res
+          ) (fun _ ->
+               (LPW.olwriter_singleton
+                 (LPW.owriter_of_writer
+                   (write_constr_clientHelloExtension_CHE_psk_key_exchange_modes
+                     (write_clientHelloExtension_CHE_psk_key_exchange_modes
+                       (write_pskKeyExchangeModes
+                         (LPW.lwriter_append
+                           (LPW.lwriter_singleton
+                             (LPW.write_leaf_cs pskKeyExchangeMode_writer h0 sout pout_from0 Psk_ke)
+                           )
+                           (LPW.lwriter_singleton
+                             (LPW.write_leaf_cs pskKeyExchangeMode_writer _ _ _ Psk_dhe_ke)
+         ))))))))))
+    ) (fun _ ->
+      LPW.olwriter_nil Parsers.ClientHelloExtension.clientHelloExtension_serializer _ _ _
+  )))
+
+#pop-options
+
+#pop-options
 
 let test_write_final_extensions
-  (cfg: config)
+  (#rrelcfg #relcfg: _)
+  (scfg: LP.slice rrelcfg relcfg)
+  (pcfg: U32.t)
   (edi: bool)
   (#rrel #rel: _)
   (sin: LP.slice rrel rel)
@@ -678,7 +654,8 @@ let test_write_final_extensions
 : HST.Stack U32.t
   (requires (fun _ -> False))
   (ensures (fun _ _ _ -> True))
-= write_final_extensions' cfg edi sin pin_from pin_to now sout pout_from
+= let h0 = HST.get () in
+  LPW.olwrite (write_final_extensions scfg pcfg edi sin pin_from pin_to now h0 sout pout_from) pout_from
 
 #pop-options
 
@@ -769,18 +746,19 @@ let write_constr_clientHelloExtension_CHE_signature_algorithms
 inline_for_extraction
 noextract
 let write_sigalgs_extension
-  cfg
-  (#rrel #rel: _)
-  (sin: LP.slice rrel rel)
-  (pin_from pin_to: U32.t)
+  (#rrelcfg #relcfg: _)
+  (scfg: LP.slice rrelcfg relcfg)
+  (pcfg: U32.t)
   (sout: LP.slice (LP.srel_of_buffer_srel (B.trivial_preorder _)) (LP.srel_of_buffer_srel (B.trivial_preorder _)))
   (sout_from0: U32.t)
   (h0: HS.mem {
-    B.loc_disjoint (LPW.loc_slice_from_to sin pin_from pin_to) (LPW.loc_slice_from sout sout_from0) /\
-    LPW.valid_content_pos signatureSchemeList_parser h0 sin pin_from cfg.signature_algorithms pin_to
+    LP.valid Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg /\
+    B.loc_disjoint (LP.loc_slice_from_to scfg pcfg (LP.get_valid_pos Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg)) (LP.loc_slice_from sout sout_from0)
   })
 : Tot (
     w: LPW.olwriter clientHelloExtension_serializer h0 sout sout_from0 {
+    let cfg = LP.contents Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg in
     LPW.olwvalue w == option_of_result (sigalgs_extension_new cfg)
   })
-= LPW.olwriter_singleton  (write_constr_clientHelloExtension_CHE_signature_algorithms (write_clientHelloExtension_CHE_signature_algorithms (LPW.owriter_of_writer (LPW.wcopy signatureSchemeList_serializer sin pin_from pin_to sout sout_from0 h0))))
+= LPW.graccess Parsers.MiTLSConfig.accessor_miTLSConfig_signature_algorithms scfg pcfg _ _ _ `LPW.olwbind` (fun pin_from ->
+  LPW.olwriter_singleton (write_constr_clientHelloExtension_CHE_signature_algorithms (write_clientHelloExtension_CHE_signature_algorithms (LPW.owriter_of_writer (LPW.wjcopy signatureSchemeList_serializer signatureSchemeList_jumper scfg pin_from sout sout_from0 h0)))))
