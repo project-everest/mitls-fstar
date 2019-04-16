@@ -90,7 +90,7 @@ type repr_meta (t:Type) = {
 noeq
 type repr (t:Type) (b:slice) = {
   start_pos: index b;
-  end_pos: i:index b {start_pos <= i };
+  end_pos: i:index b {start_pos <= i /\ i <= b.LP.len};
   meta: Ghost.erased (repr_meta t)
 }
 
@@ -189,7 +189,7 @@ let mk (b:slice) (from to:index b)
     (requires fun h ->
       LP.valid_pos parser h b from to)
     (ensures fun h0 r h1 ->
-      B.modifies B.loc_none h0 h1 /\
+      h0 == h1 /\
       valid r h1 /\
       r.start_pos = from /\
       r.end_pos = to /\

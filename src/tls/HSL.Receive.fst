@@ -15,6 +15,8 @@ module LP = LowParse.Low.Base
 
 module E = FStar.Error
 
+module Repr = MITLS.Repr
+
 open HSL.Common
 
 #reset-options "--max_fuel 0 --max_ifuel 0 --using_facts_from '* -FStar.Tactics -FStar.Reflection'"
@@ -63,7 +65,7 @@ let parse_hsm13
       cl.LP.clens_cond m ==> f (cl.LP.clens_get m) == m})
   (acc:LP.accessor gacc)
   : b:slice -> from:uint_32 ->
-    Stack (TLSError.result (option (G.erased a & uint_32)))
+    Stack (TLSError.result (option (Repr.repr_p a b p & uint_32)))
     (requires fun h ->
       B.live h b.LP.base /\
       from <= b.LP.len)
@@ -72,9 +74,9 @@ let parse_hsm13
       (match r with
        | E.Error _ -> True
        | E.Correct None -> True
-       | E.Correct (Some (a_msg, pos)) ->
-         pos <= b.LP.len /\
-         valid_parsing13 (f (G.reveal a_msg)) b from pos h1))
+       | E.Correct (Some (repr, pos)) ->
+         repr.Repr.start_pos == from /\
+         repr.Repr.end_pos == pos))
   = fun b from ->
     
     let pos = HSM.handshake13_validator b from in
