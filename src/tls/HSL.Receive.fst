@@ -80,7 +80,7 @@ let parse_hsm13
     forall (m:HSM13.handshake13).
       (HSM13.tag_of_handshake13 m == tag) <==> cl.LP.clens_cond m})
   (acc:LP.accessor gacc)
-  : b:slice -> from:uint_32 ->
+  : b:R.slice -> from:uint_32 ->
     Stack (TLSError.result (option (HSM13R.repr b & uint_32)))
     (requires fun h ->
       B.live h b.LP.base /\
@@ -124,7 +124,7 @@ let err_or_insufficient_data
   (#a:Type) (#t:Type)
   (parse_result:TLSError.result (option a))
   (in_progress:in_progress_flt_t)
-  (st:hsl_state) (b:slice) (from to:uint_32)
+  (st:hsl_state) (b:R.slice) (from to:uint_32)
   : Stack (TLSError.result (option t))
     (requires fun h ->
       B.live h st.inc_st /\ B.live h b.LP.base /\

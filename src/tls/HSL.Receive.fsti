@@ -45,8 +45,6 @@ module HSM13R = MITLS.Repr.HSM13
 
 /// HSL main API
 
-type slice = sl:R.slice{v sl.LP.len <= v LP.validator_max_length}
-
 
 /// For incremental parsing, flight receiving functions have
 ///   preconditions on the current in-progress flight
@@ -132,7 +130,7 @@ val create (r:Mem.rgn)
 /// Receive API
 
 unfold
-let basic_pre_post (st:hsl_state) (b:slice) (from to:uint_32) (in_progress:in_progress_flt_t)
+let basic_pre_post (st:hsl_state) (b:R.slice) (from to:uint_32) (in_progress:in_progress_flt_t)
   : HS.mem -> Type0
   = fun h ->
     let open B in let open LP in
@@ -153,14 +151,11 @@ let basic_pre_post (st:hsl_state) (b:slice) (from to:uint_32) (in_progress:in_pr
     (in_progress_flt st h == F_none \/ in_progress_flt st h == in_progress)
 
 
-let valid_flight_t 'a =
-  (flt:'a) -> (from:uint_32) -> (to:uint_32) -> (b:slice) -> (h:HS.mem) -> Type0
-
 unfold private
 let receive_post
   (#flt:Type)
   (st:hsl_state)
-  (b:slice)
+  (b:R.slice)
   (from to:uint_32)
   (in_progress:in_progress_flt_t)
   (valid:flt -> HS.mem -> Type0)
@@ -192,7 +187,7 @@ let receive_post
 (****** Flight [ EncryptedExtensions; Certificate13; CertificateVerify; Finished ] ******)
 
 noeq
-type flight13_ee_c_cv_fin (b:slice) (from to:uint_32) = {
+type flight13_ee_c_cv_fin (b:R.slice) (from to:uint_32) = {
   ee_msg  : HSM13R.repr b;
   c_msg   : HSM13R.repr b;
   cv_msg  : HSM13R.repr b;
@@ -210,7 +205,7 @@ type flight13_ee_c_cv_fin (b:slice) (from to:uint_32) = {
 }
 
 let valid_flight13_ee_c_cv_fin
-  (#b:slice) (#from #to:uint_32)
+  (#b:R.slice) (#from #to:uint_32)
   (flt:flight13_ee_c_cv_fin b from to) (h:HS.mem)
   = R.valid flt.ee_msg h /\
     R.valid flt.c_msg h /\
@@ -218,7 +213,7 @@ let valid_flight13_ee_c_cv_fin
     R.valid flt.fin_msg h
 
 val receive_flight13_ee_c_cv_fin
-  (st:hsl_state) (b:slice) (from to:uint_32)
+  (st:hsl_state) (b:R.slice) (from to:uint_32)
   : ST (TLSError.result (option (flight13_ee_c_cv_fin b from to)))
        (requires basic_pre_post st b from to F13_ee_c_cv_fin)
        (ensures  receive_post st b from to F13_ee_c_cv_fin valid_flight13_ee_c_cv_fin)

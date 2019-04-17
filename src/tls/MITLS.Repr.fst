@@ -55,7 +55,10 @@ let trivial_preorder : LP.srel LP.byte =
 /// A mutable slice: Eventually, we might just change this one
 ///   definition to be a const slice, multiplexing over mutable and
 ///   immutable LP.slices
-let slice = LP.slice trivial_preorder trivial_preorder
+let slice =
+  sl:LP.slice trivial_preorder trivial_preorder{
+    v sl.LP.len <= v LP.validator_max_length
+  }
 
 /// `index b` is the type of valid indexes into `b`
 let index (b:slice)= i:uint_32{ i <= LP.(b.len) }
