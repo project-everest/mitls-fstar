@@ -188,7 +188,7 @@ let owrite_supportedVersions
 : Tot (w' : LPW.owriter Extensions.supportedVersions_serializer h0 sout sout_from0 {
     LPW.owvalue w' == omake_supportedVersions (LPW.olwvalue w)
   })
-= LPW.OWriter (Ghost.hide (omake_supportedVersions (LPW.olwvalue w))) (fun sout_from ->
+= LPW.OWriter (fun _ -> (omake_supportedVersions (LPW.olwvalue w))) (fun sout_from ->
     Classical.forall_intro Extensions.supportedVersions_bytesize_eq;
     Classical.forall_intro (LPW.serialized_length_eq Extensions.supportedVersions_serializer);
     Classical.forall_intro (LPW.serialized_list_length_constant_size Extensions.protocolVersion_serializer);
@@ -225,7 +225,7 @@ let owrite_clientHelloExtension_CHE_supported_versions
 : Tot (w' : LPW.owriter clientHelloExtension_CHE_supported_versions_serializer h0 sout sout_from0 {
     LPW.owvalue w' == LPW.owvalue w
   })
-= LPW.OWriter (Ghost.hide (LPW.owvalue w)) (fun sout_from ->
+= LPW.OWriter (fun _ -> (LPW.owvalue w)) (fun sout_from ->
     Classical.forall_intro Extensions.supportedVersions_bytesize_eq;
     Classical.forall_intro (LPW.serialized_length_eq Extensions.supportedVersions_serializer);
     Classical.forall_intro clientHelloExtension_CHE_supported_versions_bytesize_eq;
@@ -257,7 +257,7 @@ let owrite_constr_clientHelloExtension_CHE_supported_versions
 : Tot (w' : LPW.owriter clientHelloExtension_serializer h0 sout sout_from0 {
     LPW.owvalue w' == omake_CHE_supported_versions (LPW.owvalue w)
   })
-= LPW.OWriter (Ghost.hide (omake_CHE_supported_versions (LPW.owvalue w))) (fun sout_from ->
+= LPW.OWriter (fun _ -> (omake_CHE_supported_versions (LPW.owvalue w))) (fun sout_from ->
     Classical.forall_intro clientHelloExtension_CHE_supported_versions_bytesize_eq;
     Classical.forall_intro (LPW.serialized_length_eq clientHelloExtension_CHE_supported_versions_serializer);
     Classical.forall_intro clientHelloExtension_bytesize_eq;

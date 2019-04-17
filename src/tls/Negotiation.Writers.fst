@@ -125,7 +125,7 @@ let make_offeredPsks_identities
 = match oidentities with
   | Some identities ->
     if
-      (let x = offeredPsks_identities_list_bytesize identities in 7 <= x && x <= 65535)
+      check_offeredPsks_identities_list_bytesize identities
     then Some identities
     else None
   | _ -> None
@@ -140,7 +140,7 @@ let write_offeredPsks_identities
 : Tot (y: LPW.owriter Parsers.OfferedPsks_identities.offeredPsks_identities_serializer h0 sout pout_from0 {
     LPW.owvalue y == make_offeredPsks_identities (LPW.olwvalue w)
   })
-= LPW.OWriter (Ghost.hide (make_offeredPsks_identities (LPW.olwvalue w))) (fun pout_from ->
+= LPW.OWriter (fun _ -> (make_offeredPsks_identities (LPW.olwvalue w))) (fun pout_from ->
     let f () : Lemma
       (requires (Some? (make_offeredPsks_identities (LPW.olwvalue w))))
       (ensures (
@@ -185,7 +185,7 @@ let make_offeredPsks_binders
 = match obinders with
   | Some binders ->
     if
-      (let x = offeredPsks_binders_list_bytesize binders in 33 <= x && x <= 65535)
+      check_offeredPsks_binders_list_bytesize binders
     then begin
       Some binders
     end
@@ -202,7 +202,7 @@ let write_offeredPsks_binders
 : Tot (y: LPW.owriter Parsers.OfferedPsks_binders.offeredPsks_binders_serializer h0 sout pout_from0 {
     LPW.owvalue y == make_offeredPsks_binders (LPW.olwvalue w)
   })
-= LPW.OWriter (Ghost.hide (make_offeredPsks_binders (LPW.olwvalue w))) (fun pout_from ->
+= LPW.OWriter (fun _ -> (make_offeredPsks_binders (LPW.olwvalue w))) (fun pout_from ->
     let f () : Lemma
       (requires (Some? (make_offeredPsks_binders (LPW.olwvalue w))))
       (ensures (
@@ -245,11 +245,11 @@ let make_preSharedKeyClientExtension
   (oi: option Parsers.OfferedPsks_identities.offeredPsks_identities)
   (ob: option Parsers.OfferedPsks_binders.offeredPsks_binders)
 : GTot (option Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension)
-= match oi, ob with
-  | Some i, Some b -> Some ({ Parsers.OfferedPsks.identities = i; Parsers.OfferedPsks.binders = b; })
+= match oi with
+  | None -> None
+  | Some i ->
+  match norm [delta; iota; primops] ob with Some b -> Some ({ Parsers.OfferedPsks.identities = i; Parsers.OfferedPsks.binders = b; })
   | _ -> None
-
-#push-options "--z3rlimit 16"
 
 inline_for_extraction
 noextract
@@ -262,7 +262,7 @@ let write_preSharedKeyClientExtension
 : Tot (y: LPW.owriter Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_serializer h0 sout pout_from0 {
     LPW.owvalue y == make_preSharedKeyClientExtension (LPW.owvalue w_identities) (LPW.owvalue w_binders)
   })
-= LPW.OWriter (Ghost.hide (make_preSharedKeyClientExtension (LPW.owvalue w_identities) (LPW.owvalue w_binders))) (fun pout_from ->
+= LPW.OWriter (fun _ -> (make_preSharedKeyClientExtension (LPW.owvalue w_identities) (LPW.owvalue w_binders))) (fun pout_from ->
     Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_parser_serializer_eq ();
     let f () : Lemma
       (requires (Some? (make_preSharedKeyClientExtension (LPW.owvalue w_identities) (LPW.owvalue w_binders))))
@@ -308,7 +308,7 @@ let make_clientHelloExtension_CHE_pre_shared_key
   | None -> None
   | Some x ->
     if
-      (let l = Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_bytesize x in l <= 65535)
+      check_clientHelloExtension_CHE_pre_shared_key_bytesize x
     then
       Some x
     else
@@ -324,7 +324,7 @@ let write_clientHelloExtension_CHE_pre_shared_key
 : Tot (y: LPW.owriter clientHelloExtension_CHE_pre_shared_key_serializer h0 sout pout_from0 {
     LPW.owvalue y == make_clientHelloExtension_CHE_pre_shared_key (LPW.owvalue w)
   })
-= LPW.OWriter (Ghost.hide (make_clientHelloExtension_CHE_pre_shared_key (LPW.owvalue w))) (fun pout_from ->
+= LPW.OWriter (fun _ -> (make_clientHelloExtension_CHE_pre_shared_key (LPW.owvalue w))) (fun pout_from ->
     Classical.forall_intro clientHelloExtension_CHE_pre_shared_key_bytesize_eq;
     Classical.forall_intro Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_bytesize_eq;
     Classical.forall_intro (LP.serialized_length_eq Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_serializer);
@@ -363,7 +363,7 @@ let write_constr_clientHelloExtension_CHE_pre_shared_key
   (#pout_from0: _)
   (w: LPW.owriter clientHelloExtension_CHE_pre_shared_key_serializer h0 sout pout_from0)
 : Tot (y: LPW.owriter clientHelloExtension_serializer h0 sout pout_from0 { LPW.owvalue y == constr_clientHelloExtension_CHE_pre_shared_key (LPW.owvalue w) } )
-= LPW.OWriter (Ghost.hide (constr_clientHelloExtension_CHE_pre_shared_key (LPW.owvalue w))) (fun pout_from ->
+= LPW.OWriter (fun _ -> (constr_clientHelloExtension_CHE_pre_shared_key (LPW.owvalue w))) (fun pout_from ->
     Classical.forall_intro clientHelloExtension_bytesize_eq;
     Classical.forall_intro clientHelloExtension_CHE_pre_shared_key_bytesize_eq;
     Classical.forall_intro (LP.serialized_length_eq clientHelloExtension_CHE_pre_shared_key_serializer);
@@ -395,7 +395,7 @@ let write_pskKeyExchangeModes
 : Tot (y: LPW.writer pskKeyExchangeModes_serializer h0 sout pout_from0 {
     LPW.wvalue y == LPW.lwvalue w
   })
-= LPW.Writer (Ghost.hide (LPW.lwvalue w)) (fun pout_from ->
+= LPW.Writer (fun _ -> (LPW.lwvalue w <: pskKeyExchangeModes)) (fun pout_from ->
     Classical.forall_intro pskKeyExchangeModes_bytesize_eq;
     Classical.forall_intro (LP.serialized_length_eq pskKeyExchangeModes_serializer);
     Classical.forall_intro (LP.serialized_length_eq pskKeyExchangeMode_serializer);
@@ -424,7 +424,7 @@ let write_clientHelloExtension_CHE_psk_key_exchange_modes
 : Tot (y: LPW.writer clientHelloExtension_CHE_psk_key_exchange_modes_serializer h0 sout pout_from0 {
     LPW.wvalue y == LPW.wvalue w
   })
-= LPW.Writer (Ghost.hide (LPW.wvalue w)) (fun pout_from ->
+= LPW.Writer (fun _ -> (LPW.wvalue w)) (fun pout_from ->
     Classical.forall_intro pskKeyExchangeModes_bytesize_eq;
     Classical.forall_intro clientHelloExtension_CHE_psk_key_exchange_modes_bytesize_eq;
     Classical.forall_intro (LP.serialized_length_eq pskKeyExchangeModes_serializer);
@@ -449,7 +449,7 @@ let write_constr_clientHelloExtension_CHE_psk_key_exchange_modes
   (#pout_from0: _)
   (w: LPW.writer clientHelloExtension_CHE_psk_key_exchange_modes_serializer h0 sout pout_from0)
 : Tot (y: LPW.writer clientHelloExtension_serializer h0 sout pout_from0 { LPW.wvalue y == CHE_psk_key_exchange_modes (LPW.wvalue w) } )
-= LPW.Writer (Ghost.hide (CHE_psk_key_exchange_modes (LPW.wvalue w))) (fun pout_from ->
+= LPW.Writer (fun _ -> (CHE_psk_key_exchange_modes (LPW.wvalue w))) (fun pout_from ->
     Classical.forall_intro clientHelloExtension_bytesize_eq;
     Classical.forall_intro clientHelloExtension_CHE_psk_key_exchange_modes_bytesize_eq;
     Classical.forall_intro (LP.serialized_length_eq clientHelloExtension_CHE_psk_key_exchange_modes_serializer);
@@ -482,7 +482,7 @@ let write_constr_clientHelloExtension_CHE_early_data
   (sout: _)
   (pout_from0: _)
 : Tot (y: LPW.writer clientHelloExtension_serializer h0 sout pout_from0 { LPW.wvalue y == CHE_early_data () })
-= LPW.Writer (Ghost.hide (CHE_early_data ())) (fun pout_from ->
+= LPW.Writer (fun _ -> (CHE_early_data ())) (fun pout_from ->
     Classical.forall_intro clientHelloExtension_bytesize_eq;
     Classical.forall_intro clientHelloExtension_CHE_early_data_bytesize_eq;
     Classical.forall_intro (LP.serialized_length_eq clientHelloExtension_CHE_early_data_serializer);
@@ -499,9 +499,28 @@ let write_constr_clientHelloExtension_CHE_early_data
       end
   )
 
-#push-options "--z3rlimit 128 --query_stats --print_z3_statistics --max_ifuel 8 --initial_ifuel 8"
+// #push-options "--z3rlimit 128 --query_stats --print_z3_statistics --max_ifuel 8 --initial_ifuel 8"
 
 module L = FStar.List.Tot
+
+module CFG = Parsers.MiTLSConfig
+
+let read_config_max_version
+  (#scfg_rrel: _) (#scfg_rel: _)
+  (scfg: LPW.slice scfg_rrel scfg_rel)
+  (scfg_pos: UInt32.t)
+  (sout: _)
+  (sout_from0: _)
+  (h0: HS.mem {
+    LPW.valid CFG.miTLSConfig_parser h0 scfg scfg_pos /\
+    B.loc_disjoint (LPW.loc_slice_from_to scfg scfg_pos (LPW.get_valid_pos CFG.miTLSConfig_parser h0 scfg scfg_pos)) (LPW.loc_slice_from sout sout_from0)
+  })
+: Pure (e: LPW.greader h0 sout sout_from0 Parsers.ProtocolVersion.protocolVersion) (requires True) (ensures (fun e ->
+      LPW.grvalue e == Parsers.KnownProtocolVersion.tag_of_knownProtocolVersion (LPW.contents CFG.miTLSConfig_parser h0 scfg scfg_pos).CFG.max_version
+  ))
+= LPW.GReader (fun _ -> (Parsers.KnownProtocolVersion.tag_of_knownProtocolVersion (LPW.contents CFG.miTLSConfig_parser h0 scfg scfg_pos).CFG.max_version)) (fun _ ->
+    Parsers.ProtocolVersion.protocolVersion_reader scfg (CFG.accessor_miTLSConfig_max_version scfg scfg_pos)
+  )
 
 inline_for_extraction
 noextract
@@ -525,26 +544,27 @@ let write_final_extensions
   })
 : Tot (y: LPW.olwriter Parsers.ClientHelloExtension.clientHelloExtension_serializer h0 sout pout_from0 {
     let cfg = LP.contents Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg in
-    LPW.olwvalue y == option_of_result (final_extensions_new cfg edi (LP.contents_list Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin_from pin_to) now)
+    True // LPW.olwvalue y == option_of_result (final_extensions_new cfg edi (LP.contents_list Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin_from pin_to) now)
   })
 = [@inline_let]
   let list_length_append (#t: Type) (l1 l2: list t) : Lemma (L.length (l1 `L.append` l2) == L.length l1 + L.length l2) [SMTPat (L.length (l1 `L.append`  l2))] = L.append_length l1 l2 in
-  LPW.graccess Parsers.MiTLSConfig.accessor_miTLSConfig_max_version scfg pcfg _ _ _ `LPW.olwbind` (fun pmax_version ->
-    LPW.read_leaf Parsers.ProtocolVersion.protocolVersion_reader scfg pmax_version _ _ _ `LPW.olwbind` (fun max_version ->
+  read_config_max_version scfg pcfg _ _ _ `LPW.olwbind` (fun max_version ->
     LPW.olwriter_ifthenelse (max_version = TLS_1p3)
       (fun _ ->
         LPW.grlexistsb
           Parsers.ResumeInfo13.resumeInfo13_jumper
           allow_psk_resumption_new
-          (fun #rrel #rel sl pos -> true) // currently constant, see Ticket.ticket_pskinfo
           sin pin_from pin_to
-          _ _ _ `LPW.olwbind` (fun allow_psk_resumption ->
+          _ _ _
+          (fun _ -> LPW.greader_tot _ _ _ true) // currently constant, see Ticket.ticket_pskinfo
+          `LPW.olwbind` (fun allow_psk_resumption ->
         LPW.grlexistsb
           Parsers.ResumeInfo13.resumeInfo13_jumper
           allow_dhe_resumption_new
-          (fun #rrel #rel sl pos -> true) // currently constant, see Ticket.ticket_pskinfo)
           sin pin_from pin_to
-          _ _ _ `LPW.olwbind` (fun allow_dhe_resumption ->
+          _ _ _
+          (fun _ -> LPW.greader_tot _ _ _ true) // currently constant, see Ticket.ticket_pskinfo
+          `LPW.olwbind` (fun allow_dhe_resumption ->
         LPW.olwriter_ifthenelse (allow_psk_resumption || allow_dhe_resumption)
           (fun _ ->
             [@inline_let]
@@ -566,12 +586,12 @@ let write_final_extensions
               LPW.lwriter_list_map
                 Parsers.ResumeInfo13.resumeInfo13_jumper
                 Parsers.PskBinderEntry.pskBinderEntry_serializer
-                (fun r -> compute_binder_ph_new r.Parsers.ResumeInfo13.ticket)
+                (compute_binder_ph_new')
                 sin pin_from pin_to
                 h0
                 sout pout_from0
                 (fun pin ->
-                  LPW.Writer (Ghost.hide (compute_binder_ph_new (LP.contents Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin).Parsers.ResumeInfo13.ticket)) (fun pout ->
+                  LPW.Writer (fun _ -> (compute_binder_ph_new (LP.contents Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin).Parsers.ResumeInfo13.ticket)) (fun pout ->
                   write_binder_ph sin (Parsers.ResumeInfo13.accessor_resumeInfo13_ticket sin pin) sout pout
                 ))
             in
@@ -585,7 +605,7 @@ let write_final_extensions
                 h0
                 sout pout_from0
                 (fun pin ->
-                  LPW.Writer (Ghost.hide (obfuscate_age_new now (LP.contents Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin))) (fun pout ->
+                  LPW.Writer (fun _ -> (obfuscate_age_new now (LP.contents Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin))) (fun pout ->
                   write_obfuscate_age now sin pin sout pout
                 ))
             in
@@ -625,20 +645,229 @@ let write_final_extensions
                    (write_constr_clientHelloExtension_CHE_psk_key_exchange_modes
                      (write_clientHelloExtension_CHE_psk_key_exchange_modes
                        (write_pskKeyExchangeModes
-                         (LPW.lwriter_append
-                           (LPW.lwriter_singleton
+                         (LPW.lwriter_cons
                              (LPW.write_leaf_cs pskKeyExchangeMode_writer h0 sout pout_from0 Psk_ke)
-                           )
                            (LPW.lwriter_singleton
                              (LPW.write_leaf_cs pskKeyExchangeMode_writer _ _ _ Psk_dhe_ke)
          ))))))))))
     ) (fun _ ->
       LPW.olwriter_nil Parsers.ClientHelloExtension.clientHelloExtension_serializer _ _ _
-  )))
+  ))
+
+noextract
+let final_extensions_new2
+  (cfg: CFG.miTLSConfig) (edi: bool) (l: list Parsers.ResumeInfo13.resumeInfo13) (now: U32.t)
+: Tot (option (list clientHelloExtension))
+= if Parsers.KnownProtocolVersion.tag_of_knownProtocolVersion cfg.CFG.max_version = TLS_1p3 then begin
+    let allow_psk_resumption = List.Tot.existsb allow_psk_resumption_new l in
+    let allow_dhe_resumption = List.Tot.existsb allow_dhe_resumption_new l in
+    if allow_psk_resumption || allow_dhe_resumption
+    then
+      let psk_kex =
+        (if allow_psk_resumption then [Psk_ke] else []) @ (if allow_dhe_resumption then [Psk_dhe_ke] else [])
+      in
+      let binders = List.Tot.map (compute_binder_ph_new') l in
+      let pskidentities = List.Tot.map (obfuscate_age_new now) l in
+      if not (check_offeredPsks_identities_list_bytesize pskidentities)
+      then None
+      else if not (check_offeredPsks_binders_list_bytesize binders)
+      then None
+      else begin
+        let ke = ({ identities = pskidentities; binders = binders; }) in
+        if
+          check_clientHelloExtension_CHE_pre_shared_key_bytesize ke
+        then
+          Some ([CHE_psk_key_exchange_modes psk_kex] @
+            (if edi then [CHE_early_data ()] else []) @
+            [CHE_pre_shared_key ke]
+          )
+        else None
+      end
+    else
+      Some [CHE_psk_key_exchange_modes [Psk_ke; Psk_dhe_ke]]
+  end else Some []
+
+let final_extensions_new2_eq
+  (cfg: CFG.miTLSConfig) (edi: bool) (l: list Parsers.ResumeInfo13.resumeInfo13) (now: U32.t)
+: Lemma
+  (option_of_result (final_extensions_new cfg edi l now) == final_extensions_new2 cfg edi l now)
+= ()
+
+let final_extensions_new3
+  (cfg: CFG.miTLSConfig) (edi: bool) (l: list Parsers.ResumeInfo13.resumeInfo13) (now: U32.t)
+: GTot (option (list clientHelloExtension))
+= if
+        (match
+            cfg.CFG.max_version
+          with
+          | Parsers.KnownProtocolVersion.Constraint_SSL_3p0 _ -> SSL_3p0
+          | Parsers.KnownProtocolVersion.Constraint_TLS_1p0 _ -> TLS_1p0
+          | Parsers.KnownProtocolVersion.Constraint_TLS_1p1 _ -> TLS_1p1
+          | Parsers.KnownProtocolVersion.Constraint_TLS_1p2 _ -> TLS_1p2
+          | Parsers.KnownProtocolVersion.Constraint_TLS_1p3 _ -> TLS_1p3
+          | Parsers.KnownProtocolVersion.Constraint_Unknown_protocolVersion v _ ->
+            Unknown_protocolVersion v) =
+        TLS_1p3
+      then
+        (if
+            List.Tot.Base.existsb allow_psk_resumption_new
+              (l) ||
+            List.Tot.Base.existsb allow_dhe_resumption_new
+              (l)
+          then
+            (match
+                match
+                  if edi
+                  then Some [CHE_early_data ()] <: Prims.GTot (option (list clientHelloExtension))
+                  else Some [] <: Prims.GTot (option (list clientHelloExtension))
+                with
+                | FStar.Pervasives.Native.Some l2 ->
+                  Some
+                  ([
+                      CHE_psk_key_exchange_modes
+                      ((if
+                            List.Tot.Base.existsb allow_psk_resumption_new
+                              (l)
+                          then [Psk_ke] <: Prims.GTot (list pskKeyExchangeMode)
+                          else [] <: Prims.GTot (list pskKeyExchangeMode)) @
+                        (if
+                            List.Tot.Base.existsb allow_dhe_resumption_new
+                              (l)
+                          then [Psk_dhe_ke] <: Prims.GTot (list pskKeyExchangeMode)
+                          else [] <: Prims.GTot (list pskKeyExchangeMode)))
+                    ] @
+                    l2)
+                | _ -> None
+              with
+              | FStar.Pervasives.Native.None  -> None
+              | FStar.Pervasives.Native.Some l1 ->
+                (match
+                    match
+                      match
+                        match
+                          match
+                            if
+                              check_offeredPsks_identities_list_bytesize (List.Tot.Base.map (obfuscate_age_new 
+                                        now)
+                                    (l))
+                            then
+                              Some
+                              (List.Tot.Base.map (obfuscate_age_new now)
+                                  (l))
+                            else None
+                          with
+                          | FStar.Pervasives.Native.None  -> None
+                          | FStar.Pervasives.Native.Some i ->
+                            (match
+                                if
+                                  check_offeredPsks_binders_list_bytesize (List.Tot.Base.map compute_binder_ph_new'
+                                        (l))
+                                then
+                                  Some
+                                  (List.Tot.Base.map compute_binder_ph_new'
+                                      (l))
+                                else None
+                              with
+                              | FStar.Pervasives.Native.Some b -> Some (MkofferedPsks i b)
+                              | _ -> None)
+                            <:
+                            option Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension
+                        with
+                        | FStar.Pervasives.Native.None  -> None
+                        | FStar.Pervasives.Native.Some x ->
+                          (if check_clientHelloExtension_CHE_pre_shared_key_bytesize x
+                            then Some x
+                            else None)
+                          <:
+                          option clientHelloExtension_CHE_pre_shared_key
+                      with
+                      | FStar.Pervasives.Native.None  -> None
+                      | FStar.Pervasives.Native.Some x -> Some (CHE_pre_shared_key x)
+                    with
+                    | FStar.Pervasives.Native.None  -> None
+                    | FStar.Pervasives.Native.Some x -> Some [x]
+                  with
+                  | FStar.Pervasives.Native.Some l2 -> Some (l1 @ l2)
+                  | _ -> None)
+                <:
+                option (list clientHelloExtension))
+            <:
+            Prims.GTot (option (list clientHelloExtension))
+          else
+            Some [CHE_psk_key_exchange_modes [Psk_ke; Psk_dhe_ke]]
+            <:
+            Prims.GTot (option (list clientHelloExtension)))
+        <:
+        Prims.GTot (option (list clientHelloExtension))
+      else Some [] <: Prims.GTot (option (list clientHelloExtension))
 
 #pop-options
 
-#pop-options
+
+#push-options "--print_implicits"
+
+inline_for_extraction
+noextract
+let write_final_extensions_post
+  (#rrelcfg #relcfg: _)
+  (scfg: LP.slice rrelcfg relcfg)
+  (pcfg: U32.t)
+  (edi: bool)
+  (#rrel #rel: _)
+  (sin: LP.slice rrel rel)
+  (pin_from pin_to: U32.t)
+  (now: U32.t)
+  (h0: HS.mem)
+  (sout: LP.slice (LP.srel_of_buffer_srel (B.trivial_preorder _)) (LP.srel_of_buffer_srel (B.trivial_preorder _)))
+  (pout_from0: U32.t {
+    LP.valid Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg /\
+    LP.valid_list Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin_from pin_to /\
+    U32.v pout_from0 <= U32.v sout.LP.len /\
+    B.loc_disjoint (LP.loc_slice_from_to scfg pcfg (LP.get_valid_pos Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg)) (LP.loc_slice_from sout pout_from0) /\
+    B.loc_disjoint (LP.loc_slice_from_to sin pin_from pin_to) (LP.loc_slice_from sout pout_from0)  
+  })
+: Tot (squash 
+  (let y = write_final_extensions scfg pcfg edi sin pin_from pin_to now h0 sout pout_from0 in
+    let cfg = LP.contents Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg in
+    LPW.olwvalue y == (final_extensions_new3 cfg edi (LP.contents_list Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin_from pin_to) now)
+  ))
+= // let y = write_final_extensions scfg pcfg edi sin pin_from pin_to now h0 sout pout_from0 in
+  //  let cfg = LP.contents Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg in
+  _ by (FStar.Tactics.(norm [delta; iota; simplify]; dump "abc"; trefl ()))
+
+let final_extensions_new3_eq
+  (cfg: CFG.miTLSConfig) (edi: bool) (l: list Parsers.ResumeInfo13.resumeInfo13) (now: U32.t)
+: Lemma
+  ((final_extensions_new3 cfg edi l now) == final_extensions_new2 cfg edi l now)
+= ()
+
+inline_for_extraction
+noextract
+let write_final_extensions_post'
+  (#rrelcfg #relcfg: _)
+  (scfg: LP.slice rrelcfg relcfg)
+  (pcfg: U32.t)
+  (edi: bool)
+  (#rrel #rel: _)
+  (sin: LP.slice rrel rel)
+  (pin_from pin_to: U32.t)
+  (now: U32.t)
+  (h0: HS.mem)
+  (sout: LP.slice (LP.srel_of_buffer_srel (B.trivial_preorder _)) (LP.srel_of_buffer_srel (B.trivial_preorder _)))
+  (pout_from0: U32.t {
+    LP.valid Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg /\
+    LP.valid_list Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin_from pin_to /\
+    U32.v pout_from0 <= U32.v sout.LP.len /\
+    B.loc_disjoint (LP.loc_slice_from_to scfg pcfg (LP.get_valid_pos Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg)) (LP.loc_slice_from sout pout_from0) /\
+    B.loc_disjoint (LP.loc_slice_from_to sin pin_from pin_to) (LP.loc_slice_from sout pout_from0)  
+  })
+: Tot (squash 
+  (let y = write_final_extensions scfg pcfg edi sin pin_from pin_to now h0 sout pout_from0 in
+    let cfg = LP.contents Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg in
+    let l = LP.contents_list Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin_from pin_to in
+    LPW.olwvalue y == (final_extensions_new3 cfg edi l now)
+  ))
+= _ by (FStar.Tactics.(norm [delta; iota; simplify]; dump "abc"))
 
 let test_write_final_extensions
   (#rrelcfg #relcfg: _)

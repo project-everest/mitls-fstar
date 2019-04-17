@@ -416,7 +416,7 @@ private let compute_binder_ph (pski:pskInfo) : Tot pskBinderEntry =
 
 (* a rewrite of the compute_binder_ph spec *)
 
-let compute_binder_ph_new (t: Parsers.TicketContents13.ticketContents13) : Tot pskBinderEntry =
+let rec (* to deter delta, normalize only with zeta *) compute_binder_ph_new (t: Parsers.TicketContents13.ticketContents13) : Tot pskBinderEntry =
   let pski = Ticket.ticketContents13_pskinfo t in
   let h = PSK.pskInfo_hash pski in
   let len : UInt32.t = Hashing.Spec.tagLen h in
@@ -461,7 +461,7 @@ module PR = Parsers.ResumeInfo
 
 (* this is how obfuscate_age should be rewritten *)
 
-let obfuscate_age_new (now: U32.t) (tk: Parsers.ResumeInfo13.resumeInfo13) : Tot pskIdentity =
+let rec (* to deter delta, normalize only with zeta *) obfuscate_age_new (now: U32.t) (tk: Parsers.ResumeInfo13.resumeInfo13) : Tot pskIdentity =
     let age = FStar.UInt32.((now -%^ tk.Parsers.ResumeInfo13.ticket.Parsers.TicketContents13.creation_time) *%^ 1000ul) in
     {identity = tk.Parsers.ResumeInfo13.identity; obfuscated_ticket_age = PSK.encode_age age tk.Parsers.ResumeInfo13.ticket.Parsers.TicketContents13.age_add}
 
@@ -515,21 +515,23 @@ let final_extensions cfg edi psks now: list clientHelloExtension =
 (* a rewrite of the spec of final_extensions *)
 
 noextract
-let allow_psk_resumption_new (r: Parsers.ResumeInfo13.resumeInfo13) : Tot bool =
+let rec (* to deter delta, normalize only with zeta *) allow_psk_resumption_new (r: Parsers.ResumeInfo13.resumeInfo13) : Tot bool =
   (Ticket.ticketContents13_pskinfo r.Parsers.ResumeInfo13.ticket).allow_psk_resumption
 
 noextract
-let allow_dhe_resumption_new (r: Parsers.ResumeInfo13.resumeInfo13) : Tot bool =
+let rec (* to deter delta, normalize only with zeta *) allow_dhe_resumption_new (r: Parsers.ResumeInfo13.resumeInfo13) : Tot bool =
   (Ticket.ticketContents13_pskinfo r.Parsers.ResumeInfo13.ticket).allow_dhe_resumption
 
 #reset-options
+
+let rec compute_binder_ph_new' (r: Parsers.ResumeInfo13.resumeInfo13) : Tot pskBinderEntry  =
+  compute_binder_ph_new r.Parsers.ResumeInfo13.ticket
 
 noextract
 let final_extensions_new
   (cfg: CFG.miTLSConfig) (edi: bool) (l: list Parsers.ResumeInfo13.resumeInfo13) (now: U32.t)
 : Tot (result (list clientHelloExtension))
-= match Parsers.KnownProtocolVersion.tag_of_knownProtocolVersion cfg.CFG.max_version with
-  | TLS_1p3 ->
+= if Parsers.KnownProtocolVersion.tag_of_knownProtocolVersion cfg.CFG.max_version = TLS_1p3 then begin
     let allow_psk_resumption = List.Tot.existsb allow_psk_resumption_new l in
     let allow_dhe_resumption = List.Tot.existsb allow_dhe_resumption_new l in
     if allow_psk_resumption || allow_dhe_resumption
@@ -537,7 +539,7 @@ let final_extensions_new
       let psk_kex =
         (if allow_psk_resumption then [Psk_ke] else []) @ (if allow_dhe_resumption then [Psk_dhe_ke] else [])
       in
-      let binders = List.Tot.map (fun r -> compute_binder_ph_new r.Parsers.ResumeInfo13.ticket) l in
+      let binders = List.Tot.map compute_binder_ph_new' l in
       let pskidentities = List.Tot.map (obfuscate_age_new now) l in
       if not (check_offeredPsks_identities_list_bytesize pskidentities)
       then fatal Internal_error "final_extensions: check_offeredPsks_identities_list_bytesize failed"
@@ -556,7 +558,7 @@ let final_extensions_new
       end
     else
       Correct [CHE_psk_key_exchange_modes [Psk_ke; Psk_dhe_ke]]
-  | _ -> Correct []
+  end else Correct []
 
 (* TODO: sanity-check wrt. old final_extensions *)
 
