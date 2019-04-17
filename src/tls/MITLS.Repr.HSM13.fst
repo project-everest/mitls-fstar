@@ -100,42 +100,48 @@ unfold let repr_post
     r.start_pos <= rr.start_pos /\  //slice indices for the instance repr are contained in the slice indices of r ...
     rr.end_pos <= r.end_pos  //... useful for framing
 
+private let get_repr_common (#b:R.slice) (r:repr b)
+  (#a:Type) (#k:R.strong_parser_kind)
+  (#p:LP.parser k a) (#cl:LP.clens HSM13.handshake13 a)
+  (#gacc:LP.gaccessor HSM13.handshake13_parser p cl)
+  (acc:LP.accessor gacc) (validator:LP.validator p)
+  = let m_begin = acc b r.R.start_pos in
+    let m_end = validator b m_begin in
+
+    R.mk b m_begin m_end p
+  
 let get_ee_repr (#b:R.slice) (r:repr b{is_ee r})
   : Stack (EERepr.repr b)
     (requires repr_pre r)
     (ensures  repr_post r HSM13.M13_encrypted_extensions)
   = R.reveal_valid ();
-    let ee_begin = HSM13.handshake13_accessor_encrypted_extensions b r.R.start_pos in
-    let ee_end = HSM13.handshake13_m13_encrypted_extensions_validator b ee_begin in
-
-    R.mk b ee_begin ee_end HSM13.handshake13_m13_encrypted_extensions_parser
+    get_repr_common r
+      HSM13.handshake13_accessor_encrypted_extensions
+      HSM13.handshake13_m13_encrypted_extensions_validator
 
 let get_c_repr (#b:R.slice) (r:repr b{is_c r})
   : Stack (CRepr.repr b)
     (requires repr_pre r)
     (ensures  repr_post r HSM13.M13_certificate)
   = R.reveal_valid ();
-    let c_begin = HSM13.handshake13_accessor_certificate b r.R.start_pos in
-    let c_end = HSM13.handshake13_m13_certificate_validator b c_begin in
-    
-    R.mk b c_begin c_end HSM13.handshake13_m13_certificate_parser
+    get_repr_common r 
+      HSM13.handshake13_accessor_certificate
+      HSM13.handshake13_m13_certificate_validator
 
 let get_cv_repr (#b:R.slice) (r:repr b{is_cv r})
   : Stack (CVRepr.repr b)
     (requires repr_pre r)
     (ensures  repr_post r HSM13.M13_certificate_verify)
   = R.reveal_valid ();
-    let cv_begin = HSM13.handshake13_accessor_certificate_verify b r.R.start_pos in
-    let cv_end = HSM13.handshake13_m13_certificate_verify_validator b cv_begin in
-
-    R.mk b cv_begin cv_end HSM13.handshake13_m13_certificate_verify_parser
+    get_repr_common r
+      HSM13.handshake13_accessor_certificate_verify
+      HSM13.handshake13_m13_certificate_verify_validator
 
 let get_fin_repr (#b:R.slice) (r:repr b{is_fin r})
   : Stack (FinRepr.repr b)
     (requires repr_pre r)
     (ensures  repr_post r HSM13.M13_finished)
   = R.reveal_valid ();
-    let f_begin = HSM13.handshake13_accessor_finished b r.R.start_pos in
-    let f_end = HSM13.handshake13_m13_finished_validator b f_begin in
-    
-    R.mk b f_begin f_end HSM13.handshake13_m13_finished_parser
+    get_repr_common r
+      HSM13.handshake13_accessor_finished
+      HSM13.handshake13_m13_finished_validator
