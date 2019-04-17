@@ -178,123 +178,138 @@ let omake_supportedVersions
     then Some l
     else None
 
-inline_for_extraction
-noextract
-let owrite_supportedVersions
-  #h0
-  #sout
-  #sout_from0
+assume val owrite_supportedVersions
+  (#h0: _)
+  (#sout: _)
+  (#sout_from0: _)
   (w: LPW.olwriter protocolVersion_serializer h0 sout sout_from0)
-: Tot (w' : LPW.owriter Extensions.supportedVersions_serializer h0 sout sout_from0 {
+: Pure (w' : LPW.owriter Extensions.supportedVersions_serializer h0 sout sout_from0)
+  (requires True) (ensures (fun w'  ->
     LPW.owvalue w' == omake_supportedVersions (LPW.olwvalue w)
-  })
-= LPW.OWriter (Ghost.hide (omake_supportedVersions (LPW.olwvalue w))) (fun sout_from ->
-    Classical.forall_intro Extensions.supportedVersions_bytesize_eq;
-    Classical.forall_intro (LPW.serialized_length_eq Extensions.supportedVersions_serializer);
-    Classical.forall_intro (LPW.serialized_list_length_constant_size Extensions.protocolVersion_serializer);
-    if 1ul `UInt32.gt` (sout.LPW.len `UInt32.sub` sout_from)
-    then begin
-      LPW.max_uint32
-    end else begin
-      let res = LPW.olwrite w (sout_from `UInt32.add` 1ul) in
-      if res `UInt32.gte` (LPW.max_uint32 `UInt32.sub` 1ul)
-      then begin
-        res
-      end else begin
-        let h = HST.get () in
-        LPW.valid_list_serialized_list_length Extensions.protocolVersion_serializer h sout (sout_from `UInt32.add` 1ul) res;
-        let len = res `UInt32.sub` (sout_from `UInt32.add` 1ul) in
-        if not (2ul `UInt32.lte` len && len `UInt32.lte` 254ul)
-        then
-          LPW.max_uint32 `UInt32.sub` 1ul
-        else begin
-          Extensions.finalize_supportedVersions sout sout_from res;
-          res
-        end
-      end
-    end
-  )
+  ))
 
-inline_for_extraction
-noextract
-let owrite_clientHelloExtension_CHE_supported_versions
-  #h0
-  #sout
-  #sout_from0
+assume val owrite_clientHelloExtension_CHE_supported_versions
+  (#h0: _)
+  (#sout: _)
+  (#sout_from0: _)
   (w: LPW.owriter Extensions.supportedVersions_serializer h0 sout sout_from0)
-: Tot (w' : LPW.owriter clientHelloExtension_CHE_supported_versions_serializer h0 sout sout_from0 {
+: Pure (w' : LPW.owriter clientHelloExtension_CHE_supported_versions_serializer h0 sout sout_from0) (requires True) (ensures (fun w' ->
     LPW.owvalue w' == LPW.owvalue w
-  })
-= LPW.OWriter (Ghost.hide (LPW.owvalue w)) (fun sout_from ->
-    Classical.forall_intro Extensions.supportedVersions_bytesize_eq;
-    Classical.forall_intro (LPW.serialized_length_eq Extensions.supportedVersions_serializer);
-    Classical.forall_intro clientHelloExtension_CHE_supported_versions_bytesize_eq;
-    Classical.forall_intro (LPW.serialized_length_eq clientHelloExtension_CHE_supported_versions_serializer);
-    if 2ul `UInt32.gt` (sout.LPW.len `UInt32.sub` sout_from)
-    then LPW.max_uint32
-    else
-      let res = LPW.owrite w (sout_from `UInt32.add` 2ul) in
-      if res `UInt32.gte` (LPW.max_uint32 `UInt32.sub` 1ul)
-      then res
-      else begin
-        clientHelloExtension_CHE_supported_versions_finalize sout sout_from res;
-        res
-      end
-  )
+  ))
 
 let omake_CHE_supported_versions (x: option clientHelloExtension_CHE_supported_versions) : Tot (option clientHelloExtension) =
   match x with
   | None -> None
   | Some y -> Some (CHE_supported_versions y)
 
-inline_for_extraction
-noextract
-let owrite_constr_clientHelloExtension_CHE_supported_versions
-  #h0
-  #sout
-  #sout_from0
+assume val owrite_constr_clientHelloExtension_CHE_supported_versions
+  (#h0: _)
+  (#sout: _)
+  (#sout_from0: _)
   (w: LPW.owriter clientHelloExtension_CHE_supported_versions_serializer h0 sout sout_from0)
-: Tot (w' : LPW.owriter clientHelloExtension_serializer h0 sout sout_from0 {
+: Pure (w' : LPW.owriter clientHelloExtension_serializer h0 sout sout_from0) (requires True) (ensures (fun w'  ->
     LPW.owvalue w' == omake_CHE_supported_versions (LPW.owvalue w)
-  })
-= LPW.OWriter (Ghost.hide (omake_CHE_supported_versions (LPW.owvalue w))) (fun sout_from ->
-    Classical.forall_intro clientHelloExtension_CHE_supported_versions_bytesize_eq;
-    Classical.forall_intro (LPW.serialized_length_eq clientHelloExtension_CHE_supported_versions_serializer);
-    Classical.forall_intro clientHelloExtension_bytesize_eq;
-    Classical.forall_intro (LPW.serialized_length_eq clientHelloExtension_serializer);
-    if 2ul `UInt32.gt` (sout.LPW.len `UInt32.sub` sout_from)
-    then LPW.max_uint32
-    else
-      let res = LPW.owrite w (sout_from `UInt32.add` 2ul) in
-      if res `UInt32.gte` (LPW.max_uint32 `UInt32.sub` 1ul)
-      then res
-      else begin
-        finalize_clientHelloExtension_supported_versions sout sout_from;
-        res
-      end
-  )
+  ))
 
 (* step 2: assemble those combinators to actually implement "support" as a writer *)
 
-inline_for_extraction
-noextract
-let write_snoc_supportedVersion
-  min_version max_version
-  #h0
-  #sout
-  #sout_from0
+assume val write_snoc_supportedVersion
+  (min_version max_version: _)
+  (#h0: _)
+  (#sout: _)
+  (#sout_from0: _)
   (pv: Parsers.ProtocolVersion.protocolVersion)
   (pvs: LPW.lwriter protocolVersion_serializer h0 sout sout_from0)
-: Tot (pvs1 : LPW.lwriter protocolVersion_serializer h0 sout sout_from0 {
+: Pure (pvs1 : LPW.lwriter protocolVersion_serializer h0 sout sout_from0)
+  (requires True)
+  (ensures (fun pvs1 ->
     LPW.lwvalue pvs1 == snoc_supportedVersion min_version max_version pv (LPW.lwvalue pvs)
-  })
+  ))
+(*  
 = LPW.lwriter_ifthenelse
     (supported_new min_version max_version pv)
     (fun _ -> LPW.lwriter_append pvs (LPW.lwriter_singleton (LPW.write_leaf_cs protocolVersion_writer _ _ _ pv)))
     (fun _ -> pvs)
+*)
 
 module HS = FStar.HyperStack
 module B = LowStar.Monotonic.Buffer
+
+assume val read_config_minVersion
+  (#scfg_rrel: _) (#scfg_rel: _)
+  (scfg: LPW.slice scfg_rrel scfg_rel)
+  (scfg_pos: UInt32.t)
+  (sout: _)
+  (sout_from0: _)
+  (h0: HS.mem {
+    LPW.valid CFG.miTLSConfig_parser h0 scfg scfg_pos /\
+    B.loc_disjoint (LPW.loc_slice_from_to scfg scfg_pos (LPW.get_valid_pos CFG.miTLSConfig_parser h0 scfg scfg_pos)) (LPW.loc_slice_from sout sout_from0)    
+  })
+: Pure (e: LPW.greader h0 sout sout_from0 Parsers.ProtocolVersion.protocolVersion) (requires True) (ensures (fun e  ->
+      LPW.grvalue e == Parsers.KnownProtocolVersion.tag_of_knownProtocolVersion (LPW.contents CFG.miTLSConfig_parser h0 scfg scfg_pos).CFG.min_version
+  ))
+
+assume val read_config_maxVersion
+  (#scfg_rrel: _) (#scfg_rel: _)
+  (scfg: LPW.slice scfg_rrel scfg_rel)
+  (scfg_pos: UInt32.t)
+  (sout: _)
+  (sout_from0: _)
+  (h0: HS.mem {
+    LPW.valid CFG.miTLSConfig_parser h0 scfg scfg_pos /\
+    B.loc_disjoint (LPW.loc_slice_from_to scfg scfg_pos (LPW.get_valid_pos CFG.miTLSConfig_parser h0 scfg scfg_pos)) (LPW.loc_slice_from sout sout_from0)    
+  })
+: Pure (e: LPW.greader h0 sout sout_from0 Parsers.ProtocolVersion.protocolVersion) (requires True) (ensures (fun e ->
+      LPW.grvalue e == Parsers.KnownProtocolVersion.tag_of_knownProtocolVersion (LPW.contents CFG.miTLSConfig_parser h0 scfg scfg_pos).CFG.max_version
+  ))
+
+module B = LowStar.Buffer
+module U32 = FStar.UInt32
+open LowParse.Low.Writers
+
+abstract
+inline_for_extraction
+noextract
+let owvalue_owbind
+  (#tr: Type)
+  (#k: parser_kind)
+  (#t: Type)
+  (#p: parser k t)
+  (#s: serializer p { k.parser_kind_subkind == Some ParserStrong } )
+  (#h0: HS.mem)
+  (#sout: slice (srel_of_buffer_srel (B.trivial_preorder _)) (srel_of_buffer_srel (B.trivial_preorder _)))
+  (#pout_from0: U32.t)
+  (r: greader h0 sout pout_from0 tr)
+  (w: ((x: tr { x == grvalue r }) -> Tot (owriter s h0 sout pout_from0))) // (requires (x == grvalue r)) (ensures (fun _ -> True))))
+: Lemma
+  (let w' = LPW.owbind r w in
+  owvalue w' == owvalue (w (grvalue r)))
+= ()
+
+
+inline_for_extraction
+noextract
+let write_supportedVersions_new1
+  cfg
+  sout
+  sout_from0
+  (h0: HS.mem)
+: Pure (e: LPW.owriter clientHelloExtension_serializer h0 sout sout_from0)
+  (requires True)
+  (ensures (fun e ->
+    LPW.owvalue e == option_of_result (support_new cfg)
+  ))
+= let min_version = Parsers.KnownProtocolVersion.tag_of_knownProtocolVersion cfg.CFG.min_version in
+  let max_version = Parsers.KnownProtocolVersion.tag_of_knownProtocolVersion cfg.CFG.max_version in
+  owrite_constr_clientHelloExtension_CHE_supported_versions
+    (owrite_clientHelloExtension_CHE_supported_versions
+      (owrite_supportedVersions
+        (LPW.olwriter_of_lwriter
+          ([@inline_let]
+            let w =
+              write_snoc_supportedVersion min_version max_version TLS_1p3 (LPW.lwriter_nil protocolVersion_serializer h0 sout sout_from0)
+            in
+            write_snoc_supportedVersion min_version max_version TLS_1p2 w))))
 
 inline_for_extraction
 noextract
@@ -308,13 +323,13 @@ let write_supportedVersions_new
     LPW.valid CFG.miTLSConfig_parser h0 scfg scfg_pos /\
     B.loc_disjoint (LPW.loc_slice_from_to scfg scfg_pos (LPW.get_valid_pos CFG.miTLSConfig_parser h0 scfg scfg_pos)) (LPW.loc_slice_from sout sout_from0)    
   })
-: Tot (e: LPW.owriter clientHelloExtension_serializer h0 sout sout_from0 {
-      LPW.owvalue e == option_of_result (support_new (LPW.contents CFG.miTLSConfig_parser h0 scfg scfg_pos))
-  })
-= LPW.graccess CFG.accessor_miTLSConfig_min_version scfg scfg_pos _ _ _ `LPW.owbind` (fun pmin ->
-  LPW.graccess CFG.accessor_miTLSConfig_max_version scfg scfg_pos _ _ _ `LPW.owbind` (fun pmax ->
-  LPW.read_leaf protocolVersion_reader scfg pmin _ _ _ `LPW.owbind` (fun min_version ->
-  LPW.read_leaf protocolVersion_reader scfg pmax _ _ _ `LPW.owbind` (fun max_version ->
+: Pure (e: LPW.owriter clientHelloExtension_serializer h0 sout sout_from0)
+  (requires True)
+  (ensures (fun e ->
+    LPW.owvalue e == option_of_result (support_new (LPW.contents CFG.miTLSConfig_parser h0 scfg scfg_pos))
+  ))
+= LPW.owbind (read_config_minVersion scfg scfg_pos _ _ _) (fun min_version ->
+  LPW.owbind (read_config_maxVersion scfg scfg_pos _ _ _) (fun max_version ->
   owrite_constr_clientHelloExtension_CHE_supported_versions
     (owrite_clientHelloExtension_CHE_supported_versions
       (owrite_supportedVersions
@@ -323,9 +338,8 @@ let write_supportedVersions_new
             let w =
               write_snoc_supportedVersion min_version max_version TLS_1p3 (LPW.lwriter_nil protocolVersion_serializer h0 sout sout_from0)
             in
-            write_snoc_supportedVersion min_version max_version TLS_1p2 w
-  )))))
-  )))
+            write_snoc_supportedVersion min_version max_version TLS_1p2 w))))
+  ))
 
 let test_write_supportedVersions_new
   #scfg_rrel #scfg_rel
