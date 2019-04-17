@@ -1,4 +1,25 @@
+(*
+  Copyright 2015--2019 INRIA and Microsoft Corporation
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+
+  Authors: C.Fournet, T. Ramananandro, A. Rastogi, N. Swamy
+*)
 module HSL.Receive
+
+(*
+ * This module provides the receive flights functionality to the Handshake
+ *)
 
 open FStar.Integers
 open FStar.HyperStack.ST
@@ -15,19 +36,16 @@ open HSL.Common
 
 module HSM = HandshakeMessages
 
-module Repr = MITLS.Repr
+module R = MITLS.Repr
 
-module EE_repr = MITLS.Repr.EncryptedExtensions
-module C13_repr = MITLS.Repr.Certificate13
-module CV13_repr = MITLS.Repr.CertificateVerify13
-module Fin13_repr = MITLS.Repr.Finished13
+module HSM13R = MITLS.Repr.HSM13
 
 #reset-options "--max_fuel 0 --max_ifuel 0 --using_facts_from '* -FStar.Tactics -FStar.Reflection'"
 
 
 /// HSL main API
 
-type slice = sl:Repr.slice{v sl.LP.len <= v LP.validator_max_length}
+type slice = sl:R.slice{v sl.LP.len <= v LP.validator_max_length}
 
 
 /// For incremental parsing, flight receiving functions have
@@ -145,6 +163,7 @@ let receive_post
   (b:slice)
   (from to:uint_32)
   (in_progress:in_progress_flt_t)
+  (valid:flt -> HS.mem -> Type0)
   (h0:HS.mem)
   (x:TLSError.result (option flt))
   (h1:HS.mem)
@@ -157,7 +176,8 @@ let receive_post
        in_progress_flt st h1 == in_progress /\
        parsed_bytes st h1 ==
          Seq.slice (B.as_seq h0 b.LP.base) (v from) (v to)
-     | Correct (Some _) ->
+     | Correct (Some flt) ->
+       valid flt h1 /\
        parsed_bytes st h1 == Seq.empty /\
        in_progress_flt st h1 == F_none
      | _ -> False)
@@ -173,23 +193,35 @@ let receive_post
 
 noeq
 type flight13_ee_c_cv_fin (b:slice) (from to:uint_32) = {
-  ee_msg  : EE_repr.repr b;
-  cv_msg  : CV13_repr.repr b;
-  c_msg   : C13_repr.repr b;
-  fin_msg : m:Fin13_repr.repr b{
-    ee_msg.Repr.start_pos    == from /\
-    ee_msg.Repr.end_pos == cv_msg.Repr.start_pos /\
-    cv_msg.Repr.end_pos == c_msg.Repr.start_pos /\
-    c_msg.Repr.end_pos  == m.Repr.start_pos /\
-    m.Repr.end_pos == to
+  ee_msg  : HSM13R.repr b;
+  c_msg   : HSM13R.repr b;
+  cv_msg  : HSM13R.repr b;
+  fin_msg : m:HSM13R.repr b{
+    HSM13R.is_ee ee_msg /\
+    HSM13R.is_c c_msg /\
+    HSM13R.is_cv cv_msg /\
+    HSM13R.is_fin m /\
+    ee_msg.R.start_pos == from /\
+    ee_msg.R.end_pos == c_msg.R.start_pos /\
+    c_msg.R.end_pos == cv_msg.R.start_pos /\
+    cv_msg.R.end_pos == m.R.start_pos /\
+    m.R.end_pos == to
   }
 }
+
+let valid_flight13_ee_c_cv_fin
+  (#b:slice) (#from #to:uint_32)
+  (flt:flight13_ee_c_cv_fin b from to) (h:HS.mem)
+  = R.valid flt.ee_msg h /\
+    R.valid flt.c_msg h /\
+    R.valid flt.cv_msg h /\
+    R.valid flt.fin_msg h
 
 val receive_flight13_ee_c_cv_fin
   (st:hsl_state) (b:slice) (from to:uint_32)
   : ST (TLSError.result (option (flight13_ee_c_cv_fin b from to)))
        (requires basic_pre_post st b from to F13_ee_c_cv_fin)
-       (ensures  receive_post st b from to F13_ee_c_cv_fin)
+       (ensures  receive_post st b from to F13_ee_c_cv_fin valid_flight13_ee_c_cv_fin)
 
 
 // (****** Flight [EncryptedExtensions; Certificaterequest13; Certificate13; CertificateVerify; Finished ] ******)

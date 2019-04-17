@@ -19,20 +19,21 @@ module MITLS.Repr.Certificate13
 (* Summary:
 
    This module encapsulates wire-format representations of
-   Parsers.Certificate13 messages.
+   Parsers.Handshake13.handshake13_m13_certificate messages
 
    Its main type, `repr b` is an instance of MITLS.Repr.repr
-   instantiated with certificate13_parser
+   instantiated with handshake13_m13_certificate_parser
 *)
 module LP = LowParse.Low.Base
 module B = LowStar.Monotonic.Buffer
 module HS = FStar.HyperStack
 module R = MITLS.Repr
-module C13 = Parsers.Certificate13
 open FStar.Integers
 open FStar.HyperStack.ST
 
-let t = C13.certificate13
+module HSM13 = Parsers.Handshake13
+
+let t = HSM13.handshake13_m13_certificate
 
 let repr (b:R.slice) =
-  R.repr_p t b C13.certificate13_parser
+  R.repr_p t b HSM13.handshake13_m13_certificate_parser
