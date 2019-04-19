@@ -86,59 +86,71 @@ unfold let repr_pre (#b:R.slice) (r:repr b)
  * Common postcondition for functions that return the
  *   reprs for specific instance types
  *)
-unfold let repr_post
+unfold let repr_post_common
   (#b:R.slice)
   (#a:Type) (#k:LP.parser_kind) (#p:LP.parser k a)
   (r:repr b)  //input repr
-  (f:a -> HSM13.handshake13)  //one of the data-constructors for Parsers.Handshake13.handshake13
   : HS.mem -> R.repr_p a b p -> HS.mem -> Type0
   = fun h0 rr h1 ->
     let open R in
     B.(modifies loc_none h0 h1) /\
     valid rr h1 /\  //the returned repr is valid in h1
-    value r == f (value rr) /\  //relation between the values of the two reprs
     r.start_pos <= rr.start_pos /\  //slice indices for the instance repr are contained in the slice indices of r ...
     rr.end_pos <= r.end_pos  //... useful for framing
 
-private let get_repr_common (#b:R.slice) (r:repr b)
-  (#a:Type) (#k:R.strong_parser_kind)
-  (#p:LP.parser k a) (#cl:LP.clens HSM13.handshake13 a)
-  (#gacc:LP.gaccessor HSM13.handshake13_parser p cl)
-  (acc:LP.accessor gacc) (validator:LP.validator p)
-  = R.reveal_valid ();
-    let m_begin = acc b r.R.start_pos in
-    let m_end = validator b m_begin in
-
-    R.mk b m_begin m_end p
-  
 let get_ee_repr (#b:R.slice) (r:repr b{is_ee r})
   : Stack (EERepr.repr b)
     (requires repr_pre r)
-    (ensures  repr_post r HSM13.M13_encrypted_extensions)
-  = get_repr_common r
-      HSM13.handshake13_accessor_encrypted_extensions
-      HSM13.handshake13_m13_encrypted_extensions_validator
+    (ensures  fun h0 rr h1 ->
+      R.value r == HSM13.M13_encrypted_extensions (R.value rr) /\
+      repr_post_common r h0 rr h1)
+  = R.reveal_valid ();
+
+    let pos = HSM13.handshake13_accessor_encrypted_extensions b r.R.start_pos in
+    let pos = HSM13.handshake13_m13_encrypted_extensions_accessor b pos in
+    let end_pos = Parsers.EncryptedExtensions.encryptedExtensions_jumper b pos in
+
+    R.mk b pos end_pos Parsers.EncryptedExtensions.encryptedExtensions_parser
 
 let get_c_repr (#b:R.slice) (r:repr b{is_c r})
   : Stack (CRepr.repr b)
     (requires repr_pre r)
-    (ensures  repr_post r HSM13.M13_certificate)
-  = get_repr_common r 
-      HSM13.handshake13_accessor_certificate
-      HSM13.handshake13_m13_certificate_validator
+    (ensures  fun h0 rr h1 ->
+      let l = Parsers.Certificate13.certificate13_bytesize (R.value rr) in
+      0 <= l /\ l <= 16777215 /\
+      R.value r == HSM13.M13_certificate (R.value rr) /\
+      repr_post_common r h0 rr h1)
+  = R.reveal_valid ();
+
+    let pos = HSM13.handshake13_accessor_certificate b r.R.start_pos in
+    let pos = HSM13.handshake13_m13_certificate_accessor b pos in
+    let end_pos = Parsers.Certificate13.certificate13_jumper b pos in
+
+    R.mk b pos end_pos Parsers.Certificate13.certificate13_parser
 
 let get_cv_repr (#b:R.slice) (r:repr b{is_cv r})
   : Stack (CVRepr.repr b)
     (requires repr_pre r)
-    (ensures  repr_post r HSM13.M13_certificate_verify)
-  = get_repr_common r
-      HSM13.handshake13_accessor_certificate_verify
-      HSM13.handshake13_m13_certificate_verify_validator
+    (ensures  fun h0 rr h1 ->
+      R.value r = HSM13.M13_certificate_verify (R.value rr) /\
+      repr_post_common r h0 rr h1)
+  = R.reveal_valid ();
+
+    let pos = HSM13.handshake13_accessor_certificate_verify b r.R.start_pos in
+    let pos = HSM13.handshake13_m13_certificate_verify_accessor b pos in
+    let end_pos = Parsers.CertificateVerify13.certificateVerify13_jumper b pos in
+
+    R.mk b pos end_pos Parsers.CertificateVerify13.certificateVerify13_parser
 
 let get_fin_repr (#b:R.slice) (r:repr b{is_fin r})
   : Stack (FinRepr.repr b)
     (requires repr_pre r)
-    (ensures  repr_post r HSM13.M13_finished)
-  = get_repr_common r
-      HSM13.handshake13_accessor_finished
-      HSM13.handshake13_m13_finished_validator
+    (ensures  fun h0 rr h1 ->
+      R.value r == HSM13.M13_finished (R.value rr) /\
+      repr_post_common r h0 rr h1)
+  = R.reveal_valid ();
+
+    let pos = HSM13.handshake13_accessor_finished b r.R.start_pos in
+    let end_pos = HSM13.handshake13_m13_finished_jumper b pos in
+
+    R.mk b pos end_pos HSM13.handshake13_m13_finished_parser

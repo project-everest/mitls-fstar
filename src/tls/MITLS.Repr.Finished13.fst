@@ -37,4 +37,3 @@ let t = HSM13.handshake13_m13_finished
 
 let repr (b:R.slice) =
   R.repr_p t b HSM13.handshake13_m13_finished_parser
-

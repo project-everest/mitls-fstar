@@ -31,9 +31,9 @@ module R = MITLS.Repr
 open FStar.Integers
 open FStar.HyperStack.ST
 
-module HSM13 = Parsers.Handshake13
+module CV13 = Parsers.CertificateVerify13
 
-let t = HSM13.handshake13_m13_certificate_verify
+let t = CV13.certificateVerify13
 
 let repr (b:R.slice) =
-  R.repr_p t b HSM13.handshake13_m13_certificate_verify_parser
+  R.repr_p t b CV13.certificateVerify13_parser
