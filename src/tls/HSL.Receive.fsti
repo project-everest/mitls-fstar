@@ -1,4 +1,25 @@
+(*
+  Copyright 2015--2019 INRIA and Microsoft Corporation
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+
+  Authors: C.Fournet, T. Ramananandro, A. Rastogi, N. Swamy
+*)
 module HSL.Receive
+
+(*
+ * This module provides the receive flights functionality to the Handshake
+ *)
 
 open FStar.Integers
 open FStar.HyperStack.ST
@@ -15,17 +36,14 @@ open HSL.Common
 
 module HSM = HandshakeMessages
 
+module R = MITLS.Repr
+
+module HSM13R = MITLS.Repr.HSM13
+
 #reset-options "--max_fuel 0 --max_ifuel 0 --using_facts_from '* -FStar.Tactics -FStar.Reflection'"
 
 
 /// HSL main API
-
-type slice =
-  sl:LP.slice
-       (LP.srel_of_buffer_srel (B.trivial_preorder LP.byte))
-       (LP.srel_of_buffer_srel (B.trivial_preorder LP.byte)){
-         v sl.LP.len <= v LP.validator_max_length
-     }
 
 
 /// For incremental parsing, flight receiving functions have
@@ -111,10 +129,8 @@ val create (r:Mem.rgn)
 
 /// Receive API
 
-#push-options "--max_ifuel 2 --initial_ifuel 2 --z3rlimit 20"  //increase ifuel for inverting options and tuples
-
 unfold
-let basic_pre_post (st:hsl_state) (b:slice) (from to:uint_32) (in_progress:in_progress_flt_t)
+let basic_pre_post (st:hsl_state) (b:R.slice) (from to:uint_32) (in_progress:in_progress_flt_t)
   : HS.mem -> Type0
   = fun h ->
     let open B in let open LP in
@@ -135,18 +151,16 @@ let basic_pre_post (st:hsl_state) (b:slice) (from to:uint_32) (in_progress:in_pr
     (in_progress_flt st h == F_none \/ in_progress_flt st h == in_progress)
 
 
-let valid_flight_t 'a =
-  (flt:'a) -> (from:uint_32) -> (to:uint_32) -> (b:slice) -> (h:HS.mem) -> Type0
-
 unfold private
-let receive_post 
+let receive_post
+  (#flt:Type)
   (st:hsl_state)
-  (b:slice)
+  (b:R.slice)
   (from to:uint_32)
-  (f:valid_flight_t 'a)
   (in_progress:in_progress_flt_t)
+  (valid:uint_32 -> uint_32 -> flt -> HS.mem -> Type0)
   (h0:HS.mem)
-  (x:TLSError.result (option 'a))
+  (x:TLSError.result (option flt))
   (h1:HS.mem)
   = basic_pre_post st b from to in_progress h0 /\
     B.modifies (footprint st) h0 h1 /\
@@ -158,11 +172,10 @@ let receive_post
        parsed_bytes st h1 ==
          Seq.slice (B.as_seq h0 b.LP.base) (v from) (v to)
      | Correct (Some flt) ->
-       f flt from to b h1 /\
+       valid from to flt h1 /\
        parsed_bytes st h1 == Seq.empty /\
        in_progress_flt st h1 == F_none
      | _ -> False)
-#pop-options //remove the increased ifuel
 
 
 /// ad-hoc flight types
@@ -170,193 +183,186 @@ let receive_post
 
 /// First 13 flights
 
-/// Common function for slice being a valid 13 message msg
-
-let valid_parsing13
-  (msg:HSM.handshake13)
-  (buf:slice)
-  (from to:uint_32)
-  (h:HS.mem)
-  = let parser = HSM.handshake13_parser in
-    from <= to /\
-    LP.valid parser h buf from /\
-    LP.contents parser h buf from == msg /\
-    LP.content_length parser h buf from == UInt32.v (to - from)
-
 
 (****** Flight [ EncryptedExtensions; Certificate13; CertificateVerify; Finished ] ******)
 
 noeq
-type flight13_ee_c_cv_fin = {
-  begin_c   : uint_32;
-  begin_cv  : uint_32;
-  begin_fin : uint_32;
-
-  ee_msg  : G.erased HSM.handshake13_m13_encrypted_extensions;
-  c_msg   : G.erased HSM.handshake13_m13_certificate;
-  cv_msg  : G.erased HSM.handshake13_m13_certificate_verify;
-  fin_msg : G.erased HSM.handshake13_m13_finished
+type flight13_ee_c_cv_fin (b:R.slice) = {
+  ee_msg  : HSM13R.repr b;
+  c_msg   : HSM13R.repr b;
+  cv_msg  : HSM13R.repr b;
+  fin_msg : m:HSM13R.repr b{
+    HSM13R.is_ee ee_msg /\
+    HSM13R.is_c c_msg /\
+    HSM13R.is_cv cv_msg /\
+    HSM13R.is_fin m
+  }
 }
 
-
-let valid_flight13_ee_c_cv_fin
-  : valid_flight_t flight13_ee_c_cv_fin
-  = fun (flt:flight13_ee_c_cv_fin) (from to:uint_32) (b:slice) (h:HS.mem) ->
-
-    valid_parsing13 (HSM.M13_encrypted_extensions (G.reveal flt.ee_msg)) b from flt.begin_c h /\
-    valid_parsing13 (HSM.M13_certificate (G.reveal flt.c_msg)) b flt.begin_c flt.begin_cv h /\
-    valid_parsing13 (HSM.M13_certificate_verify (G.reveal flt.cv_msg)) b flt.begin_cv flt.begin_fin h /\
-    valid_parsing13 (HSM.M13_finished (G.reveal flt.fin_msg)) b flt.begin_fin to h
-
+unfold let valid_flight13_ee_c_cv_fin
+  (#b:R.slice) (from to:uint_32)
+  (flt:flight13_ee_c_cv_fin b) (h:HS.mem)
+  = let open R in  
+  
+    flt.ee_msg.start_pos == from /\
+    flt.ee_msg.end_pos == flt.c_msg.start_pos /\
+    flt.c_msg.end_pos == flt.cv_msg.start_pos /\
+    flt.cv_msg.end_pos == flt.fin_msg.start_pos /\
+    flt.fin_msg.end_pos == to /\
+  
+    valid flt.ee_msg h /\
+    valid flt.c_msg h /\
+    valid flt.cv_msg h /\
+    valid flt.fin_msg h
 
 val receive_flight13_ee_c_cv_fin
-  (st:hsl_state) (b:slice) (from to:uint_32)
-  : ST (TLSError.result (option flight13_ee_c_cv_fin))
+  (st:hsl_state) (b:R.slice) (from to:uint_32)
+  : ST (TLSError.result (option (flight13_ee_c_cv_fin b)))
        (requires basic_pre_post st b from to F13_ee_c_cv_fin)
-       (ensures  receive_post st b from to valid_flight13_ee_c_cv_fin F13_ee_c_cv_fin)
+       (ensures  receive_post st b from to F13_ee_c_cv_fin valid_flight13_ee_c_cv_fin)
 
 
-(****** Flight [EncryptedExtensions; Certificaterequest13; Certificate13; CertificateVerify; Finished ] ******)
+// (****** Flight [EncryptedExtensions; Certificaterequest13; Certificate13; CertificateVerify; Finished ] ******)
 
-noeq
-type flight13_ee_cr_c_cv_fin = {
-  begin_cr  : uint_32;
-  begin_c   : uint_32;
-  begin_cv  : uint_32;
-  begin_fin : uint_32;
+// noeq
+// type flight13_ee_cr_c_cv_fin = {
+//   begin_cr  : uint_32;
+//   begin_c   : uint_32;
+//   begin_cv  : uint_32;
+//   begin_fin : uint_32;
 
-  ee_msg  : G.erased HSM.handshake13_m13_encrypted_extensions;
-  cr_msg  : G.erased HSM.handshake13_m13_certificate_request;
-  c_msg   : G.erased HSM.handshake13_m13_certificate;
-  cv_msg  : G.erased HSM.handshake13_m13_certificate_verify;
-  fin_msg : G.erased HSM.handshake13_m13_finished
-}
-
-
-let valid_flight13_ee_cr_c_cv_fin
-  : valid_flight_t flight13_ee_cr_c_cv_fin
-  = fun (flt:flight13_ee_cr_c_cv_fin) (from to:uint_32) (b:slice) (h:HS.mem) ->
-
-    valid_parsing13 (HSM.M13_encrypted_extensions (G.reveal flt.ee_msg)) b from flt.begin_cr h /\
-    valid_parsing13 (HSM.M13_certificate_request (G.reveal flt.cr_msg)) b flt.begin_cr flt.begin_c h /\
-    valid_parsing13 (HSM.M13_certificate (G.reveal flt.c_msg)) b flt.begin_c flt.begin_cv h /\
-    valid_parsing13 (HSM.M13_certificate_verify (G.reveal flt.cv_msg)) b flt.begin_cv flt.begin_fin h /\
-    valid_parsing13 (HSM.M13_finished (G.reveal flt.fin_msg)) b flt.begin_fin to h
+//   ee_msg  : G.erased HSM.handshake13_m13_encrypted_extensions;
+//   cr_msg  : G.erased HSM.handshake13_m13_certificate_request;
+//   c_msg   : G.erased HSM.handshake13_m13_certificate;
+//   cv_msg  : G.erased HSM.handshake13_m13_certificate_verify;
+//   fin_msg : G.erased HSM.handshake13_m13_finished
+// }
 
 
-val receive_flight13_ee_cr_c_cv_fin
-  (st:hsl_state) (b:slice) (from to:uint_32)
-  : ST (TLSError.result (option flight13_ee_cr_c_cv_fin))
-       (requires basic_pre_post st b from to F13_ee_cr_c_cv_fin)
-       (ensures  receive_post st b from to valid_flight13_ee_cr_c_cv_fin F13_ee_cr_c_cv_fin)
+// let valid_flight13_ee_cr_c_cv_fin
+//   : valid_flight_t flight13_ee_cr_c_cv_fin
+//   = fun (flt:flight13_ee_cr_c_cv_fin) (from to:uint_32) (b:slice) (h:HS.mem) ->
+
+//     valid_parsing13 (HSM.M13_encrypted_extensions (G.reveal flt.ee_msg)) b from flt.begin_cr h /\
+//     valid_parsing13 (HSM.M13_certificate_request (G.reveal flt.cr_msg)) b flt.begin_cr flt.begin_c h /\
+//     valid_parsing13 (HSM.M13_certificate (G.reveal flt.c_msg)) b flt.begin_c flt.begin_cv h /\
+//     valid_parsing13 (HSM.M13_certificate_verify (G.reveal flt.cv_msg)) b flt.begin_cv flt.begin_fin h /\
+//     valid_parsing13 (HSM.M13_finished (G.reveal flt.fin_msg)) b flt.begin_fin to h
 
 
-(****** Flight [EncryptedExtensions; Finished] ******)
-
-noeq
-type flight13_ee_fin = {
-  begin_fin : uint_32;
-
-  ee_msg    : G.erased HSM.handshake13_m13_encrypted_extensions;
-  fin_msg   : G.erased HSM.handshake13_m13_finished
-}
-
-let valid_flight13_ee_fin : valid_flight_t flight13_ee_fin =
-  fun (flt:flight13_ee_fin) (from to:uint_32) (b:slice) (h:HS.mem) ->
-
-  valid_parsing13 (HSM.M13_encrypted_extensions (G.reveal flt.ee_msg)) b from flt.begin_fin h /\
-  valid_parsing13 (HSM.M13_finished (G.reveal flt.fin_msg)) b flt.begin_fin to h
-
-val receive_flight13_ee_fin (st:hsl_state) (b:slice) (from to:uint_32)
-  : ST (TLSError.result (option flight13_ee_fin))
-       (requires basic_pre_post st b from to F13_ee_fin)
-       (ensures  receive_post st b from to valid_flight13_ee_fin F13_ee_fin)
+// val receive_flight13_ee_cr_c_cv_fin
+//   (st:hsl_state) (b:slice) (from to:uint_32)
+//   : ST (TLSError.result (option flight13_ee_cr_c_cv_fin))
+//        (requires basic_pre_post st b from to F13_ee_cr_c_cv_fin)
+//        (ensures  receive_post st b from to valid_flight13_ee_cr_c_cv_fin F13_ee_cr_c_cv_fin)
 
 
-(****** Flight [ Finished ] ******)
+// (****** Flight [EncryptedExtensions; Finished] ******)
 
-noeq
-type flight13_fin = {
-  fin_msg : G.erased HSM.handshake13_m13_finished
-}
+// noeq
+// type flight13_ee_fin = {
+//   begin_fin : uint_32;
 
+//   ee_msg    : G.erased HSM.handshake13_m13_encrypted_extensions;
+//   fin_msg   : G.erased HSM.handshake13_m13_finished
+// }
 
-let valid_flight13_fin : valid_flight_t flight13_fin =
-  fun (flt:flight13_fin) (from to:uint_32) (b:slice) (h:HS.mem) ->
+// let valid_flight13_ee_fin : valid_flight_t flight13_ee_fin =
+//   fun (flt:flight13_ee_fin) (from to:uint_32) (b:slice) (h:HS.mem) ->
 
-  valid_parsing13 (HSM.M13_finished (G.reveal flt.fin_msg)) b from to h
+//   valid_parsing13 (HSM.M13_encrypted_extensions (G.reveal flt.ee_msg)) b from flt.begin_fin h /\
+//   valid_parsing13 (HSM.M13_finished (G.reveal flt.fin_msg)) b flt.begin_fin to h
 
-val receive_flight13_fin (st:hsl_state) (b:slice) (from to:uint_32)
-  : ST (TLSError.result (option flight13_fin))
-       (requires basic_pre_post st b from to F13_fin)
-       (ensures  receive_post st b from to valid_flight13_fin F13_fin)
-
-
-(****** Flight [ Certificate13; CertificateVerify; Finished ] ******)
-
-noeq
-type flight13_c_cv_fin = {
-  begin_cv  : uint_32;
-  begin_fin : uint_32;
-
-  c_msg   : G.erased HSM.handshake13_m13_certificate;
-  cv_msg  : G.erased HSM.handshake13_m13_certificate_verify;
-  fin_msg : G.erased HSM.handshake13_m13_finished
-}
+// val receive_flight13_ee_fin (st:hsl_state) (b:slice) (from to:uint_32)
+//   : ST (TLSError.result (option flight13_ee_fin))
+//        (requires basic_pre_post st b from to F13_ee_fin)
+//        (ensures  receive_post st b from to valid_flight13_ee_fin F13_ee_fin)
 
 
-let valid_flight13_c_cv_fin
-  : valid_flight_t flight13_c_cv_fin
-  = fun (flt:flight13_c_cv_fin) (from to:uint_32) (b:slice) (h:HS.mem) ->
+// (****** Flight [ Finished ] ******)
 
-    valid_parsing13 (HSM.M13_certificate (G.reveal flt.c_msg)) b from flt.begin_cv h /\
-    valid_parsing13 (HSM.M13_certificate_verify (G.reveal flt.cv_msg)) b flt.begin_cv flt.begin_fin h /\
-    valid_parsing13 (HSM.M13_finished (G.reveal flt.fin_msg)) b flt.begin_fin to h
-
-
-val receive_flight13_c_cv_fin
-  (st:hsl_state) (b:slice) (from to:uint_32)
-  : ST (TLSError.result (option flight13_c_cv_fin))
-       (requires basic_pre_post st b from to F13_c_cv_fin)
-       (ensures  receive_post st b from to valid_flight13_c_cv_fin F13_c_cv_fin)
+// noeq
+// type flight13_fin = {
+//   fin_msg : G.erased HSM.handshake13_m13_finished
+// }
 
 
-(****** Flight [ EndOfEarlyData ] ******)
+// let valid_flight13_fin : valid_flight_t flight13_fin =
+//   fun (flt:flight13_fin) (from to:uint_32) (b:slice) (h:HS.mem) ->
 
-noeq
-type flight13_eoed = {
-  eoed_msg : G.erased (HSM.handshake13_m13_end_of_early_data)
-}
+//   valid_parsing13 (HSM.M13_finished (G.reveal flt.fin_msg)) b from to h
 
-
-let valid_flight13_eoed : valid_flight_t flight13_eoed =
-  fun (flt:flight13_eoed) (from to:uint_32) (b:slice) (h:HS.mem) ->
-
-  valid_parsing13 (HSM.M13_end_of_early_data (G.reveal flt.eoed_msg)) b from to h
-
-val receive_flight13_eoed (st:hsl_state) (b:slice) (from to:uint_32)
-  : ST (TLSError.result (option flight13_eoed))
-       (requires basic_pre_post st b from to F13_eoed)
-       (ensures  receive_post st b from to valid_flight13_eoed F13_eoed)
+// val receive_flight13_fin (st:hsl_state) (b:slice) (from to:uint_32)
+//   : ST (TLSError.result (option flight13_fin))
+//        (requires basic_pre_post st b from to F13_fin)
+//        (ensures  receive_post st b from to valid_flight13_fin F13_fin)
 
 
-(****** Flight [ NewSessionTicket13 ] ******)
+// (****** Flight [ Certificate13; CertificateVerify; Finished ] ******)
 
-noeq
-type flight13_nst = {
-  nst_msg : G.erased (HSM.handshake13_m13_new_session_ticket)
-}
+// noeq
+// type flight13_c_cv_fin = {
+//   begin_cv  : uint_32;
+//   begin_fin : uint_32;
 
-
-let valid_flight13_nst : valid_flight_t flight13_nst =
-  fun (flt:flight13_nst) (from to:uint_32) (b:slice) (h:HS.mem) ->
-
-  valid_parsing13 (HSM.M13_new_session_ticket (G.reveal flt.nst_msg)) b from to h
-
-val receive_flight13_nst (st:hsl_state) (b:slice) (from to:uint_32)
-  : ST (TLSError.result (option flight13_nst))
-       (requires basic_pre_post st b from to F13_nst)
-       (ensures  receive_post st b from to valid_flight13_nst F13_nst)
+//   c_msg   : G.erased HSM.handshake13_m13_certificate;
+//   cv_msg  : G.erased HSM.handshake13_m13_certificate_verify;
+//   fin_msg : G.erased HSM.handshake13_m13_finished
+// }
 
 
-/// TODO: 12 flights
+// let valid_flight13_c_cv_fin
+//   : valid_flight_t flight13_c_cv_fin
+//   = fun (flt:flight13_c_cv_fin) (from to:uint_32) (b:slice) (h:HS.mem) ->
+
+//     valid_parsing13 (HSM.M13_certificate (G.reveal flt.c_msg)) b from flt.begin_cv h /\
+//     valid_parsing13 (HSM.M13_certificate_verify (G.reveal flt.cv_msg)) b flt.begin_cv flt.begin_fin h /\
+//     valid_parsing13 (HSM.M13_finished (G.reveal flt.fin_msg)) b flt.begin_fin to h
+
+
+// val receive_flight13_c_cv_fin
+//   (st:hsl_state) (b:slice) (from to:uint_32)
+//   : ST (TLSError.result (option flight13_c_cv_fin))
+//        (requires basic_pre_post st b from to F13_c_cv_fin)
+//        (ensures  receive_post st b from to valid_flight13_c_cv_fin F13_c_cv_fin)
+
+
+// (****** Flight [ EndOfEarlyData ] ******)
+
+// noeq
+// type flight13_eoed = {
+//   eoed_msg : G.erased (HSM.handshake13_m13_end_of_early_data)
+// }
+
+
+// let valid_flight13_eoed : valid_flight_t flight13_eoed =
+//   fun (flt:flight13_eoed) (from to:uint_32) (b:slice) (h:HS.mem) ->
+
+//   valid_parsing13 (HSM.M13_end_of_early_data (G.reveal flt.eoed_msg)) b from to h
+
+// val receive_flight13_eoed (st:hsl_state) (b:slice) (from to:uint_32)
+//   : ST (TLSError.result (option flight13_eoed))
+//        (requires basic_pre_post st b from to F13_eoed)
+//        (ensures  receive_post st b from to valid_flight13_eoed F13_eoed)
+
+
+// (****** Flight [ NewSessionTicket13 ] ******)
+
+// noeq
+// type flight13_nst = {
+//   nst_msg : G.erased (HSM.handshake13_m13_new_session_ticket)
+// }
+
+
+// let valid_flight13_nst : valid_flight_t flight13_nst =
+//   fun (flt:flight13_nst) (from to:uint_32) (b:slice) (h:HS.mem) ->
+
+//   valid_parsing13 (HSM.M13_new_session_ticket (G.reveal flt.nst_msg)) b from to h
+
+// val receive_flight13_nst (st:hsl_state) (b:slice) (from to:uint_32)
+//   : ST (TLSError.result (option flight13_nst))
+//        (requires basic_pre_post st b from to F13_nst)
+//        (ensures  receive_post st b from to valid_flight13_nst F13_nst)
+
+
+// /// TODO: 12 flights
