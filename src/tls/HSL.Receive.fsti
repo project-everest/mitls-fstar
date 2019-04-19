@@ -158,7 +158,7 @@ let receive_post
   (b:R.slice)
   (from to:uint_32)
   (in_progress:in_progress_flt_t)
-  (valid:flt -> HS.mem -> Type0)
+  (valid:uint_32 -> uint_32 -> flt -> HS.mem -> Type0)
   (h0:HS.mem)
   (x:TLSError.result (option flt))
   (h1:HS.mem)
@@ -172,7 +172,7 @@ let receive_post
        parsed_bytes st h1 ==
          Seq.slice (B.as_seq h0 b.LP.base) (v from) (v to)
      | Correct (Some flt) ->
-       valid flt h1 /\
+       valid from to flt h1 /\
        parsed_bytes st h1 == Seq.empty /\
        in_progress_flt st h1 == F_none
      | _ -> False)
@@ -187,7 +187,7 @@ let receive_post
 (****** Flight [ EncryptedExtensions; Certificate13; CertificateVerify; Finished ] ******)
 
 noeq
-type flight13_ee_c_cv_fin (b:R.slice) (from to:uint_32) = {
+type flight13_ee_c_cv_fin (b:R.slice) = {
   ee_msg  : HSM13R.repr b;
   c_msg   : HSM13R.repr b;
   cv_msg  : HSM13R.repr b;
@@ -195,26 +195,29 @@ type flight13_ee_c_cv_fin (b:R.slice) (from to:uint_32) = {
     HSM13R.is_ee ee_msg /\
     HSM13R.is_c c_msg /\
     HSM13R.is_cv cv_msg /\
-    HSM13R.is_fin m /\
-    ee_msg.R.start_pos == from /\
-    ee_msg.R.end_pos == c_msg.R.start_pos /\
-    c_msg.R.end_pos == cv_msg.R.start_pos /\
-    cv_msg.R.end_pos == m.R.start_pos /\
-    m.R.end_pos == to
+    HSM13R.is_fin m
   }
 }
 
-let valid_flight13_ee_c_cv_fin
-  (#b:R.slice) (#from #to:uint_32)
-  (flt:flight13_ee_c_cv_fin b from to) (h:HS.mem)
-  = R.valid flt.ee_msg h /\
-    R.valid flt.c_msg h /\
-    R.valid flt.cv_msg h /\
-    R.valid flt.fin_msg h
+unfold let valid_flight13_ee_c_cv_fin
+  (#b:R.slice) (from to:uint_32)
+  (flt:flight13_ee_c_cv_fin b) (h:HS.mem)
+  = let open R in  
+  
+    flt.ee_msg.start_pos == from /\
+    flt.ee_msg.end_pos == flt.c_msg.start_pos /\
+    flt.c_msg.end_pos == flt.cv_msg.start_pos /\
+    flt.cv_msg.end_pos == flt.fin_msg.start_pos /\
+    flt.fin_msg.end_pos == to /\
+  
+    valid flt.ee_msg h /\
+    valid flt.c_msg h /\
+    valid flt.cv_msg h /\
+    valid flt.fin_msg h
 
 val receive_flight13_ee_c_cv_fin
   (st:hsl_state) (b:R.slice) (from to:uint_32)
-  : ST (TLSError.result (option (flight13_ee_c_cv_fin b from to)))
+  : ST (TLSError.result (option (flight13_ee_c_cv_fin b)))
        (requires basic_pre_post st b from to F13_ee_c_cv_fin)
        (ensures  receive_post st b from to F13_ee_c_cv_fin valid_flight13_ee_c_cv_fin)
 
