@@ -40,6 +40,7 @@ module R = MITLS.Repr
 
 module HSM13R = MITLS.Repr.Handshake13
 module HSM12R = MITLS.Repr.Handshake12
+module HSMR   = MITLS.Repr.Handshake
 
 #reset-options "--max_fuel 0 --max_ifuel 0 --using_facts_from '* -FStar.Tactics -FStar.Reflection'"
 
@@ -61,7 +62,11 @@ type in_progress_flt_t =
   | F13_nst
   | F12_c_ske_shd
   | F12_c_ske_cr_shd
-  | F12_fin    // ... CH, SH to come ...
+  | F12_fin
+  | F12_nst
+  | F12_cke
+  | F_ch
+  | F_sh
 
 
 /// Abstract HSL state
@@ -502,4 +507,102 @@ val receive_flight12_fin (st:hsl_state) (b:R.slice) (from to:uint_32)
   : ST (TLSError.result (option (flight12_fin b)))
        (requires basic_pre_post st b from to F12_fin)
        (ensures  receive_post st b from to F12_fin valid_flight12_fin)
+
+
+(****** Flight [ NewSessionTicket12 ] ******)
+
+noeq
+type flight12_nst (b:R.slice) = {
+  nst_msg : m:HSM12R.repr b{HSM12R.is_nst m}
+}
+
+
+let valid_flight12_nst
+  (#b:R.slice) (from to:uint_32)
+  (flt:flight12_nst b) (h:HS.mem)
+  = let open R in
+
+    flt.nst_msg.start_pos == from /\
+    flt.nst_msg.end_pos == to /\
+
+    valid flt.nst_msg h
+
+val receive_flight12_nst (st:hsl_state) (b:R.slice) (from to:uint_32)
+  : ST (TLSError.result (option (flight12_nst b)))
+       (requires basic_pre_post st b from to F12_nst)
+       (ensures  receive_post st b from to F12_nst valid_flight12_nst)
+
+(****** Flight [ ClientKeyExchange12 ] ******)
+
+noeq
+type flight12_cke (b:R.slice) = {
+  cke_msg : m:HSM12R.repr b{HSM12R.is_cke m}
+}
+
+
+let valid_flight12_cke
+  (#b:R.slice) (from to:uint_32)
+  (flt:flight12_cke b) (h:HS.mem)
+  = let open R in
+
+    flt.cke_msg.start_pos == from /\
+    flt.cke_msg.end_pos == to /\
+
+    valid flt.cke_msg h
+
+val receive_flight12_cke (st:hsl_state) (b:R.slice) (from to:uint_32)
+  : ST (TLSError.result (option (flight12_cke b)))
+       (requires basic_pre_post st b from to F12_cke)
+       (ensures  receive_post st b from to F12_cke valid_flight12_cke)
+
+
+/// ServerHello and ClientHello flights
+
+
+(****** Flight [ ClientHello ] ******)
+
+
+noeq
+type flight_ch (b:R.slice) = {
+  ch_msg : m:HSMR.repr b{HSMR.is_ch m}
+}
+
+let valid_flight_ch
+  (#b:R.slice) (from to:uint_32)
+  (flt:flight_ch b) (h:HS.mem)
+  = let open R in
+
+    flt.ch_msg.start_pos == from /\
+    flt.ch_msg.end_pos == to /\
+
+    valid flt.ch_msg h
+
+val receive_flight_ch (st:hsl_state) (b:R.slice) (from to:uint_32)
+  : ST (TLSError.result (option (flight_ch b)))
+       (requires basic_pre_post st b from to F_ch)
+       (ensures  receive_post st b from to F_ch valid_flight_ch)
+
+
+(****** Flight [ ServerHello ] ******)
+
+
+noeq
+type flight_sh (b:R.slice) = {
+  sh_msg : m:HSMR.repr b{HSMR.is_sh m}
+}
+
+let valid_flight_sh
+  (#b:R.slice) (from to:uint_32)
+  (flt:flight_sh b) (h:HS.mem)
+  = let open R in
+
+    flt.sh_msg.start_pos == from /\
+    flt.sh_msg.end_pos == to /\
+
+    valid flt.sh_msg h
+
+val receive_flight_sh (st:hsl_state) (b:R.slice) (from to:uint_32)
+  : ST (TLSError.result (option (flight_sh b)))
+       (requires basic_pre_post st b from to F_sh)
+       (ensures  receive_post st b from to F_sh valid_flight_sh)
 
