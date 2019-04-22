@@ -15,7 +15,7 @@
 
   Authors: T. Ramananandro, A. Rastogi, N. Swamy
 *)
-module MITLS.Repr.HSM13
+module MITLS.Repr.Handshake13
 
 (*
  * This module provides a repr for Handshake13 messages
@@ -45,8 +45,8 @@ module CRepr    = MITLS.Repr.Certificate13
 module CVRepr   = MITLS.Repr.CertificateVerify13
 module FinRepr  = MITLS.Repr.Finished13
 module CRRepr   = MITLS.Repr.CertificateRequest13
-module EoEDRepr = MITLS.Repr.EoED13 
-module NSTRepr  = MITLS.Repr.NST13
+module EoEDRepr = MITLS.Repr.EndOfEarlyData13
+module NSTRepr  = MITLS.Repr.NewSessionTicket13
 
 type t = HSM13.handshake13
 

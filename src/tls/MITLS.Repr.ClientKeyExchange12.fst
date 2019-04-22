@@ -15,15 +15,18 @@
 
   Authors: T. Ramananandro, A. Rastogi, N. Swamy
 *)
-module MITLS.Repr.Certificate13
+module MITLS.Repr.ClientKeyExchange12
 (* Summary:
 
    This module encapsulates wire-format representations of
-   Parsers.Certificate13
+   Parsers.Handshake12.handshake12_m12_client_key_exchange messages
 
    Its main type, `repr b` is an instance of MITLS.Repr.repr
-   instantiated with Parsers.Certificate13.certificate13_parser
+   instantiated with Parsers.Handshake12.handshake12_m12_client_key_exchange_parser
 *)
+
+(**** TODO: This should probably use Repr.Opaque ****)
+
 module LP = LowParse.Low.Base
 module B = LowStar.Monotonic.Buffer
 module HS = FStar.HyperStack
@@ -31,10 +34,9 @@ module R = MITLS.Repr
 open FStar.Integers
 open FStar.HyperStack.ST
 
-module C13 = Parsers.Certificate13
+module HSM12 = Parsers.Handshake12
 
-let t = C13.certificate13
+let t = HSM12.handshake12_m12_client_key_exchange
 
 let repr (b:R.slice) =
-  R.repr_p t b C13.certificate13_parser
- 
+  R.repr_p t b HSM12.handshake12_m12_client_key_exchange_parser

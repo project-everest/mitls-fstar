@@ -15,14 +15,14 @@
 
   Authors: T. Ramananandro, A. Rastogi, N. Swamy
 *)
-module MITLS.Repr.Certificate13
+module MITLS.Repr.CertificateRequest12
 (* Summary:
 
    This module encapsulates wire-format representations of
-   Parsers.Certificate13
+   Parsers.CertificateRequest12.certificateRequest12
 
    Its main type, `repr b` is an instance of MITLS.Repr.repr
-   instantiated with Parsers.Certificate13.certificate13_parser
+   instantiated with Parsers.CertificateRequest12.certificateRequest12_parser
 *)
 module LP = LowParse.Low.Base
 module B = LowStar.Monotonic.Buffer
@@ -31,10 +31,9 @@ module R = MITLS.Repr
 open FStar.Integers
 open FStar.HyperStack.ST
 
-module C13 = Parsers.Certificate13
+module CR12 = Parsers.CertificateRequest12
 
-let t = C13.certificate13
+let t = CR12.certificateRequest12
 
 let repr (b:R.slice) =
-  R.repr_p t b C13.certificate13_parser
- 
+  R.repr_p t b CR12.certificateRequest12_parser

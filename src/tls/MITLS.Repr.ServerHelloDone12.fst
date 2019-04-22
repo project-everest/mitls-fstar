@@ -15,14 +15,14 @@
 
   Authors: T. Ramananandro, A. Rastogi, N. Swamy
 *)
-module MITLS.Repr.EoED13
+module MITLS.Repr.ServerHelloDone12
 (* Summary:
 
    This module encapsulates wire-format representations of
-   Parsers.Handshake13.handshake13_m13_end_of_early_data messages
+   Parsers.Handshake12.handshake12_m12_server_hello_done
 
    Its main type, `repr b` is an instance of MITLS.Repr.repr
-   instantiated with Parsers.Handshake13.handshake13_m13_end_of_early_data_parser
+   instantiated with Parsers.Handshake12_handshake12_m12_server_hello_done_parser
 *)
 module LP = LowParse.Low.Base
 module B = LowStar.Monotonic.Buffer
@@ -31,9 +31,9 @@ module R = MITLS.Repr
 open FStar.Integers
 open FStar.HyperStack.ST
 
-module HSM13 = Parsers.Handshake13
+module HSM12 = Parsers.Handshake12
 
-let t = HSM13.handshake13_m13_end_of_early_data
+let t = HSM12.handshake12_m12_server_hello_done
 
 let repr (b:R.slice) =
-  R.repr_p t b HSM13.handshake13_m13_end_of_early_data_parser
+  R.repr_p t b HSM12.handshake12_m12_server_hello_done_parser

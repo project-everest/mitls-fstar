@@ -15,14 +15,14 @@
 
   Authors: T. Ramananandro, A. Rastogi, N. Swamy
 *)
-module MITLS.Repr.Certificate13
+module MITLS.Repr.EndOfEarlyData13
 (* Summary:
 
    This module encapsulates wire-format representations of
-   Parsers.Certificate13
+   Parsers.Handshake13.handshake13_m13_end_of_early_data messages
 
    Its main type, `repr b` is an instance of MITLS.Repr.repr
-   instantiated with Parsers.Certificate13.certificate13_parser
+   instantiated with Parsers.Handshake13.handshake13_m13_end_of_early_data_parser
 *)
 module LP = LowParse.Low.Base
 module B = LowStar.Monotonic.Buffer
@@ -31,10 +31,9 @@ module R = MITLS.Repr
 open FStar.Integers
 open FStar.HyperStack.ST
 
-module C13 = Parsers.Certificate13
+module HSM13 = Parsers.Handshake13
 
-let t = C13.certificate13
+let t = HSM13.handshake13_m13_end_of_early_data
 
 let repr (b:R.slice) =
-  R.repr_p t b C13.certificate13_parser
- 
+  R.repr_p t b HSM13.handshake13_m13_end_of_early_data_parser
