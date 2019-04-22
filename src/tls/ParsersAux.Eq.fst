@@ -1,4 +1,4 @@
-module Parsers.Aux
+module ParsersAux.Eq
 
 friend Parsers.MiTLSConfig_alpn_b_true
 friend Parsers.ClientHelloExtension_CHE_application_layer_protocol_negotiation

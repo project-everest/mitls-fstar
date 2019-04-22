@@ -1,4 +1,4 @@
-module Parsers.Aux
+module ParsersAux.Eq
 
 (* Since QuackyDucky is not hash-consing parser definitions, we need to explicitly prove that they are equal up to extensionality *)
 

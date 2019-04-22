@@ -14,7 +14,7 @@ MITLS_BUNDLES = \
   -bundle 'Format.\*' \
   -bundle 'EverCrypt=EverCrypt,EverCrypt.\*' \
   -bundle 'FStar.\*,LowStar.\*,C,C.\*[rename=Mitls_Kremlib]' \
-  -bundle 'Parsers.\*' \
+  -bundle 'Parsers=Parsers.\*,ParsersAux.\*' \
   -bundle 'Spec.\*' \
   -bundle Lib.*[rename=Hacl_Lib] \
   -bundle TLSConstants=TLSConstants,QD.TLS_protocolVersion,List.Helpers \
