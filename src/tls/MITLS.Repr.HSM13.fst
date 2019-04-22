@@ -40,10 +40,13 @@ open FStar.HyperStack.ST
 
 module HSM13 = Parsers.Handshake13
 
-module EERepr  = MITLS.Repr.EncryptedExtensions
-module CRepr   = MITLS.Repr.Certificate13
-module CVRepr  = MITLS.Repr.CertificateVerify13
-module FinRepr = MITLS.Repr.Finished13
+module EERepr   = MITLS.Repr.EncryptedExtensions
+module CRepr    = MITLS.Repr.Certificate13
+module CVRepr   = MITLS.Repr.CertificateVerify13
+module FinRepr  = MITLS.Repr.Finished13
+module CRRepr   = MITLS.Repr.CertificateRequest13
+module EoEDRepr = MITLS.Repr.EoED13 
+module NSTRepr  = MITLS.Repr.NST13
 
 type t = HSM13.handshake13
 
@@ -154,3 +157,44 @@ let get_fin_repr (#b:R.slice) (r:repr b{is_fin r})
     let end_pos = HSM13.handshake13_m13_finished_jumper b pos in
 
     R.mk b pos end_pos HSM13.handshake13_m13_finished_parser
+
+let get_cr_repr (#b:R.slice) (r:repr b{is_cr r})
+  : Stack (CRRepr.repr b)
+    (requires repr_pre r)
+    (ensures  fun h0 rr h1 ->
+      R.value r == HSM13.M13_certificate_request (R.value rr) /\
+      repr_post_common r h0 rr h1)
+  = R.reveal_valid ();
+
+    let pos = HSM13.handshake13_accessor_certificate_request b r.R.start_pos in
+    let pos = HSM13.handshake13_m13_certificate_request_accessor b pos in
+    let end_pos = Parsers.CertificateRequest13.certificateRequest13_jumper b pos in
+
+    R.mk b pos end_pos Parsers.CertificateRequest13.certificateRequest13_parser
+
+let get_eoed_repr (#b:R.slice) (r:repr b{is_eoed r})
+  : Stack (EoEDRepr.repr b)
+    (requires repr_pre r)
+    (ensures  fun h0 rr h1 ->
+      R.value r == HSM13.M13_end_of_early_data (R.value rr) /\
+      repr_post_common r h0 rr h1)
+  = R.reveal_valid ();
+
+    let pos = HSM13.handshake13_accessor_end_of_early_data b r.R.start_pos in
+    let end_pos = HSM13.handshake13_m13_end_of_early_data_jumper b pos in
+
+    R.mk b pos end_pos HSM13.handshake13_m13_end_of_early_data_parser
+
+let get_nst_repr (#b:R.slice) (r:repr b{is_nst r})
+  : Stack (NSTRepr.repr b)
+    (requires repr_pre r)
+    (ensures  fun h0 rr h1 ->
+      R.value r == HSM13.M13_new_session_ticket (R.value rr) /\
+      repr_post_common r h0 rr h1)
+  = R.reveal_valid ();
+
+    let pos = HSM13.handshake13_accessor_new_session_ticket b r.R.start_pos in
+    let pos = HSM13.handshake13_m13_new_session_ticket_accessor b pos in
+    let end_pos = Parsers.NewSessionTicket13.newSessionTicket13_jumper b pos in
+
+    R.mk b pos end_pos Parsers.NewSessionTicket13.newSessionTicket13_parser

@@ -19,10 +19,10 @@ module MITLS.Repr.Certificate13
 (* Summary:
 
    This module encapsulates wire-format representations of
-   Parsers.Handshake13.handshake13_m13_certificate messages
+   Parsers.Certificate13
 
    Its main type, `repr b` is an instance of MITLS.Repr.repr
-   instantiated with handshake13_m13_certificate_parser
+   instantiated with Parsers.Certificate13.certificate13_parser
 *)
 module LP = LowParse.Low.Base
 module B = LowStar.Monotonic.Buffer

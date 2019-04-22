@@ -15,14 +15,14 @@
 
   Authors: T. Ramananandro, A. Rastogi, N. Swamy
 *)
-module MITLS.Repr.Finished13
+module MITLS.Repr.CertificateRequest13
 (* Summary:
 
    This module encapsulates wire-format representations of
-   Parsers.Handshake13.handshake13_m13_finished messges
+   Parsers.CertificateRequest13.certificateRequest13
 
    Its main type, `repr b` is an instance of MITLS.Repr.repr
-   instantiated with Parsers.Handshake13.handshake13_m13_finished_parser
+   instantiated with Parsers.CertificateRequest13.certificateRequest13_parser
 *)
 module LP = LowParse.Low.Base
 module B = LowStar.Monotonic.Buffer
@@ -31,9 +31,9 @@ module R = MITLS.Repr
 open FStar.Integers
 open FStar.HyperStack.ST
 
-module HSM13 = Parsers.Handshake13
+module CR13 = Parsers.CertificateRequest13
 
-let t = HSM13.handshake13_m13_finished
+let t = CR13.certificateRequest13
 
 let repr (b:R.slice) =
-  R.repr_p t b HSM13.handshake13_m13_finished_parser
+  R.repr_p t b CR13.certificateRequest13_parser

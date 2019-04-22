@@ -19,10 +19,10 @@ module MITLS.Repr.EncryptedExtensions
 (* Summary:
 
    This module encapsulates wire-format representations of
-   Parsers.Handshake13.handshake13_m13_encrypted_extensions messages
+   Parsers.EncryptedExtensions.encryptedExtensions
 
    Its main type, `repr b` is an instance of MITLS.Repr.repr
-   instantiated with handshake13_m13_encrypted_extensions_parser
+   instantiated with Parsers.EncryptedExtensions.encryptedExtensions_parser
 *)
 module LP = LowParse.Low.Base
 module B = LowStar.Monotonic.Buffer

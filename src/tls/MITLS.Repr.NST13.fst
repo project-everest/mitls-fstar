@@ -15,14 +15,14 @@
 
   Authors: T. Ramananandro, A. Rastogi, N. Swamy
 *)
-module MITLS.Repr.Finished13
+module MITLS.Repr.NST13
 (* Summary:
 
    This module encapsulates wire-format representations of
-   Parsers.Handshake13.handshake13_m13_finished messges
+   Parsers.NewSessionTicket13
 
    Its main type, `repr b` is an instance of MITLS.Repr.repr
-   instantiated with Parsers.Handshake13.handshake13_m13_finished_parser
+   instantiated with Parsers.NewSessionTicker13.newSessionticket13_parser
 *)
 module LP = LowParse.Low.Base
 module B = LowStar.Monotonic.Buffer
@@ -31,9 +31,9 @@ module R = MITLS.Repr
 open FStar.Integers
 open FStar.HyperStack.ST
 
-module HSM13 = Parsers.Handshake13
+module NST13 = Parsers.NewSessionTicket13
 
-let t = HSM13.handshake13_m13_finished
+let t = NST13.newSessionTicket13
 
 let repr (b:R.slice) =
-  R.repr_p t b HSM13.handshake13_m13_finished_parser
+  R.repr_p t b NST13.newSessionTicket13_parser

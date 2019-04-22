@@ -218,131 +218,121 @@ let receive_flight13_ee_c_cv_fin st b from to =
             }))
           end
 
-// let receive_flight13_ee_cr_c_cv_fin st b from to =
-//   let r = parse_hsm13_ee b from in
-//   match r with
-//   | E.Error _ | E.Correct None ->
-//     err_or_insufficient_data r F13_ee_cr_c_cv_fin st b from to
-//   | E.Correct (Some (ee_payload, cr_begin)) ->
-//     let r = parse_hsm13_cr b cr_begin in
-//     match r with
-//     | E.Error _ | E.Correct None ->
-//       err_or_insufficient_data r F13_ee_cr_c_cv_fin st b from to
-//     | E.Correct (Some (cr_payload, c_begin)) ->
-//       let r = parse_hsm13_c b c_begin in
-//       match r with
-//       | E.Error _ | E.Correct None ->
-//         err_or_insufficient_data r F13_ee_cr_c_cv_fin st b from to
-//       | E.Correct (Some (c_payload, cv_begin)) ->
-//         let r = parse_hsm13_cv b cv_begin in
-//         match r with
-//         | E.Error _ | E.Correct None ->
-//           err_or_insufficient_data r F13_ee_cr_c_cv_fin st b from to
-//         | E.Correct (Some (cv_payload, fin_begin)) ->
-//           let r = parse_hsm13_fin b fin_begin in
-//           match r with
-//           | E.Error _ | E.Correct None ->
-//             err_or_insufficient_data r F13_ee_cr_c_cv_fin st b from to
-//           | E.Correct (Some (fin_payload, pos)) ->
-//             if pos <> to then E.Error bytes_remain_error
-//             else begin
-//               reset_incremental_state st;
-//               E.Correct (Some ({
-//                 begin_cr = cr_begin;
-//                 begin_c = c_begin;
-//                 begin_cv = cv_begin;
-//                 begin_fin = fin_begin;
-//                 ee_msg = ee_payload;
-//                 cr_msg = cr_payload;
-//                 c_msg = c_payload;
-//                 cv_msg = cv_payload;
-//                 fin_msg = fin_payload
-//               }))
-//             end
+let receive_flight13_ee_cr_c_cv_fin st b from to =
+  let r = parse_hsm13_ee b from in
+  match r with
+  | E.Error _ | E.Correct None ->
+    err_or_insufficient_data r F13_ee_cr_c_cv_fin st b from to
+  | E.Correct (Some (ee_repr, cr_begin)) ->
+    let r = parse_hsm13_cr b cr_begin in
+    match r with
+    | E.Error _ | E.Correct None ->
+      err_or_insufficient_data r F13_ee_cr_c_cv_fin st b from to
+    | E.Correct (Some (cr_repr, c_begin)) ->
+      let r = parse_hsm13_c b c_begin in
+      match r with
+      | E.Error _ | E.Correct None ->
+        err_or_insufficient_data r F13_ee_cr_c_cv_fin st b from to
+      | E.Correct (Some (c_repr, cv_begin)) ->
+        let r = parse_hsm13_cv b cv_begin in
+        match r with
+        | E.Error _ | E.Correct None ->
+          err_or_insufficient_data r F13_ee_cr_c_cv_fin st b from to
+        | E.Correct (Some (cv_repr, fin_begin)) ->
+          let r = parse_hsm13_fin b fin_begin in
+          match r with
+          | E.Error _ | E.Correct None ->
+            err_or_insufficient_data r F13_ee_cr_c_cv_fin st b from to
+          | E.Correct (Some (fin_repr, pos)) ->
+            if pos <> to then E.Error bytes_remain_error
+            else begin
+              reset_incremental_state st;
+              E.Correct (Some ({
+                ee_msg = ee_repr;
+                cr_msg = cr_repr;
+                c_msg = c_repr;
+                cv_msg = cv_repr;
+                fin_msg = fin_repr
+              }))
+            end
 
-// let mk_ee_fin
-//   (begin_fin:uint_32)
-//   (ee_msg:G.erased HSM.handshake13_m13_encrypted_extensions) 
-//   (fin_msg:G.erased HSM.handshake13_m13_finished)
-//   : flight13_ee_fin
-//   = Mkflight13_ee_fin begin_fin ee_msg fin_msg
+let receive_flight13_ee_fin st b from to =
+  let r = parse_hsm13_ee b from in
+  match r with
+  | E.Error _ | E.Correct None ->
+    err_or_insufficient_data r F13_ee_fin st b from to
+  | E.Correct (Some (ee_repr, fin_begin)) ->
+    let r = parse_hsm13_fin b fin_begin in
+    match r with
+    | E.Error _ | E.Correct None ->
+      err_or_insufficient_data r F13_ee_fin st b from to
+    | E.Correct (Some (fin_repr, pos)) ->
+      if pos <> to then E.Error bytes_remain_error
+      else begin
+        reset_incremental_state st;
+        E.Correct (Some ({
+          ee_msg = ee_repr;
+          fin_msg = fin_repr
+        }))
+      end
 
-// let receive_flight13_ee_fin st b from to =
-//   let r = parse_hsm13_ee b from in
-//   match r with
-//   | E.Error _ | E.Correct None ->
-//     err_or_insufficient_data r F13_ee_fin st b from to
-//   | E.Correct (Some (ee_payload, fin_begin)) ->
-//     let r = parse_hsm13_fin b fin_begin in
-//     match r with
-//     | E.Error _ | E.Correct None ->
-//       err_or_insufficient_data r F13_ee_fin st b from to
-//     | E.Correct (Some (fin_payload, pos)) ->
-//       if pos <> to then E.Error bytes_remain_error
-//       else begin
-//         reset_incremental_state st;
-//         E.Correct (Some (mk_ee_fin fin_begin ee_payload fin_payload))
-//       end
+let receive_flight13_fin st b from to =
+  let r = parse_hsm13_fin b from in
+  match r with
+  | E.Error _ | E.Correct None ->
+    err_or_insufficient_data r F13_fin st b from to
+  | E.Correct (Some (fin_repr, pos)) ->
+    if pos <> to then E.Error bytes_remain_error
+    else begin
+      reset_incremental_state st;
+      E.Correct (Some ({ fin_msg = fin_repr }))
+    end
 
-// let receive_flight13_fin st b from to =
-//   let r = parse_hsm13_fin b from in
-//   match r with
-//   | E.Error _ | E.Correct None ->
-//     err_or_insufficient_data r F13_fin st b from to
-//   | E.Correct (Some (fin_payload, pos)) ->
-//     if pos <> to then E.Error bytes_remain_error
-//     else begin
-//       reset_incremental_state st;
-//       E.Correct (Some ({ fin_msg = fin_payload }))
-//     end
+let receive_flight13_c_cv_fin st b from to =
+  let r = parse_hsm13_c b from in
+  match r with
+  | E.Error _ | E.Correct None ->
+    err_or_insufficient_data r F13_c_cv_fin st b from to
+  | E.Correct (Some (c_repr, cv_begin)) ->
+    let r = parse_hsm13_cv b cv_begin in
+    match r with
+    | E.Error _ | E.Correct None ->
+      err_or_insufficient_data r F13_c_cv_fin st b from to
+    | E.Correct (Some (cv_repr, fin_begin)) ->
+      let r = parse_hsm13_fin b fin_begin in
+      match r with
+      | E.Error _ | E.Correct None ->
+        err_or_insufficient_data r F13_c_cv_fin st b from to
+      | E.Correct (Some (fin_repr, pos)) ->
+        if pos <> to then E.Error bytes_remain_error
+        else begin
+          reset_incremental_state st;
+          E.Correct (Some ({
+            c_msg = c_repr;
+            cv_msg = cv_repr;
+            fin_msg = fin_repr }))
+        end
 
-// let receive_flight13_c_cv_fin st b from to =
-//   let r = parse_hsm13_c b from in
-//   match r with
-//   | E.Error _ | E.Correct None ->
-//     err_or_insufficient_data r F13_c_cv_fin st b from to
-//   | E.Correct (Some (c_payload, cv_begin)) ->
-//     let r = parse_hsm13_cv b cv_begin in
-//     match r with
-//     | E.Error _ | E.Correct None ->
-//       err_or_insufficient_data r F13_c_cv_fin st b from to
-//     | E.Correct (Some (cv_payload, fin_begin)) ->
-//       let r = parse_hsm13_fin b fin_begin in
-//       match r with
-//       | E.Error _ | E.Correct None ->
-//         err_or_insufficient_data r F13_c_cv_fin st b from to
-//       | E.Correct (Some (fin_payload, pos)) ->
-//         if pos <> to then E.Error bytes_remain_error
-//         else begin
-//           reset_incremental_state st;
-//           E.Correct (Some ({
-//             begin_cv = cv_begin;
-//             begin_fin = fin_begin;
-//             c_msg = c_payload;
-//             cv_msg = cv_payload;
-//             fin_msg = fin_payload }))
-//         end
+let receive_flight13_eoed st b from to =
+  let r = parse_hsm13_eoed b from in
+  match r with
+  | E.Error _ | E.Correct None ->
+    err_or_insufficient_data r F13_eoed st b from to
+  | E.Correct (Some (eoed_repr, pos)) ->
+    if pos <> to then E.Error bytes_remain_error
+    else begin
+      reset_incremental_state st;
+      E.Correct (Some ({ eoed_msg = eoed_repr }))
+    end
 
-// let receive_flight13_eoed st b from to =
-//   let r = parse_hsm13_eoed b from in
-//   match r with
-//   | E.Error _ | E.Correct None ->
-//     err_or_insufficient_data r F13_eoed st b from to
-//   | E.Correct (Some (eoed_payload, pos)) ->
-//     if pos <> to then E.Error bytes_remain_error
-//     else begin
-//       reset_incremental_state st;
-//       E.Correct (Some ({ eoed_msg = eoed_payload }))
-//     end
-
-// let receive_flight13_nst st b from to =
-//   let r = parse_hsm13_nst b from in
-//   match r with
-//   | E.Error _ | E.Correct None ->
-//     err_or_insufficient_data r F13_nst st b from to
-//   | E.Correct (Some (nst_payload, pos)) ->
-//     if pos <> to then E.Error bytes_remain_error
-//     else begin
-//       reset_incremental_state st;
-//       E.Correct (Some ({ nst_msg = nst_payload }))
-//     end
+let receive_flight13_nst st b from to =
+  let r = parse_hsm13_nst b from in
+  match r with
+  | E.Error _ | E.Correct None ->
+    err_or_insufficient_data r F13_nst st b from to
+  | E.Correct (Some (nst_repr, pos)) ->
+    if pos <> to then E.Error bytes_remain_error
+    else begin
+      reset_incremental_state st;
+      E.Correct (Some ({ nst_msg = nst_repr }))
+    end
