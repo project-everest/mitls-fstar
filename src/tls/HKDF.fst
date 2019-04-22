@@ -203,12 +203,18 @@ HKDF-Expand-Label(Secret, Label, Messages, Length) =
 *)
 
 let tls13_prefix : lbytes 6 =
+  [@inline_let]
   let s = bytes_of_string "tls13 " in
-  assume(length s = 6); s
+  [@inline_let]
+  let _ = assume(length s = 6) in
+  s
 
 let quic_prefix : lbytes 5 =
+  [@inline_let]
   let s = bytes_of_string "quic " in
-  assume(length s = 5); s
+  [@inline_let]
+  let _ = assume(length s = 5) in
+  s
 
 inline_for_extraction private 
 val format:

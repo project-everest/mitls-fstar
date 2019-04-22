@@ -51,11 +51,16 @@ let handshakeType (#b:R.slice) (r:repr b)
     R.reveal_valid();
     handshakeType_reader b r.start_pos
 
-let clientHello (#b:R.slice) (r:repr b)
+let is_ch (#b:R.slice) (r:repr b) : GTot bool =
+  HSM.M_client_hello? (R.value r)
+
+let is_sh (#b:R.slice) (r:repr b) : GTot bool =
+  HSM.M_server_hello? (R.value r)
+
+let clientHello (#b:R.slice) (r:repr b{is_ch r})
   : Stack (RCH.repr b)
     (requires fun h ->
-      R.valid r h /\
-      HSM.M_client_hello? (R.value r))
+      R.valid r h)
     (ensures fun h0 ch h1 ->
       B.modifies B.loc_none h0 h1 /\
       R.valid ch h1 /\
@@ -70,11 +75,10 @@ let clientHello (#b:R.slice) (r:repr b)
     let ch_repr = R.mk b pos end_pos Parsers.ClientHello.clientHello_parser in
     ch_repr
 
-let serverHello (#b:R.slice) (r:repr b)
+let serverHello (#b:R.slice) (r:repr b{is_sh r})
   : Stack (RSH.repr b)
     (requires fun h ->
-      R.valid r h /\
-      HSM.M_server_hello? (R.value r))
+      R.valid r h)
     (ensures fun h0 sh h1 ->
       B.modifies B.loc_none h0 h1 /\
       R.valid sh h1 /\
