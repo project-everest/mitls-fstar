@@ -24,6 +24,10 @@ module MITLS.Repr.ServerHelloDone12
    Its main type, `repr b` is an instance of MITLS.Repr.repr
    instantiated with Parsers.Handshake12_handshake12_m12_server_hello_done_parser
 *)
+
+(**** TODO: Such reprs for unit types can be moved to
+      a single MITLS.Repr.Unit.fst module ****)
+
 module LP = LowParse.Low.Base
 module B = LowStar.Monotonic.Buffer
 module HS = FStar.HyperStack

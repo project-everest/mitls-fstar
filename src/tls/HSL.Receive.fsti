@@ -48,8 +48,32 @@ module HSMR   = MITLS.Repr.Handshake
 /// HSL main API
 
 
-/// For incremental parsing, flight receiving functions have
-///   preconditions on the current in-progress flight
+/// The interface supports incremental parsing. For example, let's say a client
+/// asks for a TLS1.3 flight [EE; Fin]. HSL.Receive successfully parses an EE
+/// message but figures that it needs more data (from the other end) to parse the
+/// Fin message. In that case, HSL.Receive returns a Some (Correct None) return
+/// value, and the client is then supposed to call HSL.Receive again once it has
+/// more data.
+///
+/// For this second call, in incremental parsing, HSL.Receive would only parse the
+/// Finished message -- relying on the EE message parsing from the first call.
+///
+/// However, we need to make sure that the client has not modified the input
+/// buffer between the two calls, so that the EE message parsing from the first
+/// call remains valid.
+///
+/// To enforce this, we rely on two stateful, ghost predicates: the in-progress
+/// flight, and bytes parsed so far. These two predicates are returned in the
+/// postcondition from an incomplete receive flight call, and the client is then
+/// expected to provide them as preconditions in the next call.
+///
+/// The interface provides flexibility to the clients to use different input buffers
+/// between such calls -- since the interface only requires bytes parsed so far to remain
+/// same, the client can use different buffers, indices, etc., as long as the prefix
+/// bytes remain same.
+///
+/// While the interface is designed to support such incremental parsing, as of 04/22,
+/// the implementation is not incremental.
 
 type in_progress_flt_t =
   | F_none
@@ -96,7 +120,7 @@ val invariant (st:hsl_state) (h:HS.mem) : Type0
 val footprint (st:hsl_state) : GTot B.loc
 
 
-/// State that is framed across framing kind of lemmas
+/// State that is framed across framing lemmas
 
 unfold let frame_state (st:hsl_state) (h0 h1:HS.mem) =
   parsed_bytes st h1 == parsed_bytes st h0 /\
@@ -116,7 +140,7 @@ val frame_hsl_state (st:hsl_state) (h0 h1:HS.mem) (l:B.loc)
       frame_state st h0 h1)
 
 
-/// Creation of the log
+/// Creation of an instance
 
 unfold
 let create_post (r:Mem.rgn)
@@ -138,15 +162,17 @@ val create (r:Mem.rgn)
 
 /// Receive API
 
+/// Common pre- and postcondition for receive functions
+
 unfold
-let basic_pre_post (st:hsl_state) (b:R.slice) (from to:uint_32) (in_progress:in_progress_flt_t)
+let receive_pre (st:hsl_state) (b:R.slice) (from to:uint_32) (in_progress:in_progress_flt_t)
   : HS.mem -> Type0
   = fun h ->
     let open B in let open LP in
     
     invariant st h /\
 
-    B.live h b.LP.base /\
+    B.live h b.base /\
     loc_disjoint (footprint st) (loc_buffer b.base) /\
     
     v from + length_parsed_bytes st h <= v to /\
@@ -171,7 +197,7 @@ let receive_post
   (h0:HS.mem)
   (x:TLSError.result (option flt))
   (h1:HS.mem)
-  = basic_pre_post st b from to in_progress h0 /\
+  = receive_pre st b from to in_progress h0 /\
     B.modifies (footprint st) h0 h1 /\
     (let open FStar.Error in
      match x with
@@ -190,7 +216,18 @@ let receive_post
 /// ad-hoc flight types
 /// HS would ask HSL to parse specific flight types, depending on where its own state machine is
 
-/// First 13 flights
+
+/// The receive functions return instances of MITLS.Repr.* types
+/// with appropriate valid postconditions
+///
+/// The flight types contain appropriate refinements to say, for example,
+/// that a particular HSM13 repr is EE or Fin
+///
+/// Other facts such as stitched indices and (stateful) validity are provided in
+/// the postconditions of the receive functions
+
+
+(*** 1.3 flights ***)
 
 
 (****** Flight [ EncryptedExtensions; Certificate13; CertificateVerify; Finished ] ******)
@@ -227,7 +264,7 @@ unfold let valid_flight13_ee_c_cv_fin
 val receive_flight13_ee_c_cv_fin
   (st:hsl_state) (b:R.slice) (from to:uint_32)
   : ST (TLSError.result (option (flight13_ee_c_cv_fin b)))
-       (requires basic_pre_post st b from to F13_ee_c_cv_fin)
+       (requires receive_pre st b from to F13_ee_c_cv_fin)
        (ensures  receive_post st b from to F13_ee_c_cv_fin valid_flight13_ee_c_cv_fin)
 
 
@@ -270,7 +307,7 @@ unfold let valid_flight13_ee_cr_c_cv_fin
 val receive_flight13_ee_cr_c_cv_fin
   (st:hsl_state) (b:R.slice) (from to:uint_32)
   : ST (TLSError.result (option (flight13_ee_cr_c_cv_fin b)))
-       (requires basic_pre_post st b from to F13_ee_cr_c_cv_fin)
+       (requires receive_pre st b from to F13_ee_cr_c_cv_fin)
        (ensures  receive_post st b from to F13_ee_cr_c_cv_fin valid_flight13_ee_cr_c_cv_fin)
 
 
@@ -299,7 +336,7 @@ let valid_flight13_ee_fin
 
 val receive_flight13_ee_fin (st:hsl_state) (b:R.slice) (from to:uint_32)
   : ST (TLSError.result (option (flight13_ee_fin b)))
-       (requires basic_pre_post st b from to F13_ee_fin)
+       (requires receive_pre st b from to F13_ee_fin)
        (ensures  receive_post st b from to F13_ee_fin valid_flight13_ee_fin)
 
 
@@ -323,7 +360,7 @@ let valid_flight13_fin
 
 val receive_flight13_fin (st:hsl_state) (b:R.slice) (from to:uint_32)
   : ST (TLSError.result (option (flight13_fin b)))
-       (requires basic_pre_post st b from to F13_fin)
+       (requires receive_pre st b from to F13_fin)
        (ensures  receive_post st b from to F13_fin valid_flight13_fin)
 
 
@@ -358,7 +395,7 @@ let valid_flight13_c_cv_fin
 val receive_flight13_c_cv_fin
   (st:hsl_state) (b:R.slice) (from to:uint_32)
   : ST (TLSError.result (option (flight13_c_cv_fin b)))
-       (requires basic_pre_post st b from to F13_c_cv_fin)
+       (requires receive_pre st b from to F13_c_cv_fin)
        (ensures  receive_post st b from to F13_c_cv_fin valid_flight13_c_cv_fin)
 
 
@@ -382,7 +419,7 @@ let valid_flight13_eoed
 
 val receive_flight13_eoed (st:hsl_state) (b:R.slice) (from to:uint_32)
   : ST (TLSError.result (option (flight13_eoed b)))
-       (requires basic_pre_post st b from to F13_eoed)
+       (requires receive_pre st b from to F13_eoed)
        (ensures  receive_post st b from to F13_eoed valid_flight13_eoed)
 
 
@@ -406,11 +443,11 @@ let valid_flight13_nst
 
 val receive_flight13_nst (st:hsl_state) (b:R.slice) (from to:uint_32)
   : ST (TLSError.result (option (flight13_nst b)))
-       (requires basic_pre_post st b from to F13_nst)
+       (requires receive_pre st b from to F13_nst)
        (ensures  receive_post st b from to F13_nst valid_flight13_nst)
 
 
-/// 12 flights now
+(*** 1.2 flights ***)
 
 
 (****** Flight [ Certificate12; ServerKeyExchange12; ServerHelloDone12 ] ******)
@@ -443,7 +480,7 @@ let valid_flight12_c_ske_shd
 
 val receive_flight12_c_ske_shd (st:hsl_state) (b:R.slice) (from to:uint_32)
   : ST (TLSError.result (option (flight12_c_ske_shd b)))
-       (requires basic_pre_post st b from to F12_c_ske_shd)
+       (requires receive_pre st b from to F12_c_ske_shd)
        (ensures  receive_post st b from to F12_c_ske_shd valid_flight12_c_ske_shd)
 
 
@@ -481,7 +518,7 @@ let valid_flight12_c_ske_cr_shd
 
 val receive_flight12_c_ske_cr_shd (st:hsl_state) (b:R.slice) (from to:uint_32)
   : ST (TLSError.result (option (flight12_c_ske_cr_shd b)))
-       (requires basic_pre_post st b from to F12_c_ske_cr_shd)
+       (requires receive_pre st b from to F12_c_ske_cr_shd)
        (ensures  receive_post st b from to F12_c_ske_cr_shd valid_flight12_c_ske_cr_shd)
 
 
@@ -505,7 +542,7 @@ let valid_flight12_fin
 
 val receive_flight12_fin (st:hsl_state) (b:R.slice) (from to:uint_32)
   : ST (TLSError.result (option (flight12_fin b)))
-       (requires basic_pre_post st b from to F12_fin)
+       (requires receive_pre st b from to F12_fin)
        (ensures  receive_post st b from to F12_fin valid_flight12_fin)
 
 
@@ -529,7 +566,7 @@ let valid_flight12_nst
 
 val receive_flight12_nst (st:hsl_state) (b:R.slice) (from to:uint_32)
   : ST (TLSError.result (option (flight12_nst b)))
-       (requires basic_pre_post st b from to F12_nst)
+       (requires receive_pre st b from to F12_nst)
        (ensures  receive_post st b from to F12_nst valid_flight12_nst)
 
 (****** Flight [ ClientKeyExchange12 ] ******)
@@ -552,11 +589,11 @@ let valid_flight12_cke
 
 val receive_flight12_cke (st:hsl_state) (b:R.slice) (from to:uint_32)
   : ST (TLSError.result (option (flight12_cke b)))
-       (requires basic_pre_post st b from to F12_cke)
+       (requires receive_pre st b from to F12_cke)
        (ensures  receive_post st b from to F12_cke valid_flight12_cke)
 
 
-/// ServerHello and ClientHello flights
+(*** ClientHello and ServerHello flights ***)
 
 
 (****** Flight [ ClientHello ] ******)
@@ -579,7 +616,7 @@ let valid_flight_ch
 
 val receive_flight_ch (st:hsl_state) (b:R.slice) (from to:uint_32)
   : ST (TLSError.result (option (flight_ch b)))
-       (requires basic_pre_post st b from to F_ch)
+       (requires receive_pre st b from to F_ch)
        (ensures  receive_post st b from to F_ch valid_flight_ch)
 
 
@@ -603,6 +640,5 @@ let valid_flight_sh
 
 val receive_flight_sh (st:hsl_state) (b:R.slice) (from to:uint_32)
   : ST (TLSError.result (option (flight_sh b)))
-       (requires basic_pre_post st b from to F_sh)
+       (requires receive_pre st b from to F_sh)
        (ensures  receive_post st b from to F_sh valid_flight_sh)
-
