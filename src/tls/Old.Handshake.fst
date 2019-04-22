@@ -64,10 +64,10 @@ type machineState =
     digest ->
     option HSM.certificateRequest13 ->
     i:finishedId & cfk:KeySchedule.fink i -> machineState // TLS 1.3#20 aggravation
-  | C_Wait_CCS1 of digest      // TLS resume, digest to be MACed by server
+  | C_Wait_NST of bool           // server must send NewSessionticket
+  | C_Wait_CCS of bool * digest  // TLS classic, resume & digest to be MACed by server
   | C_Wait_R_Finished1 of digest // TLS resume, digest to be MACed by server
   | C_Wait_ServerHelloDone     // TLS classic
-  | C_Wait_CCS2 of digest      // TLS classic, digest to be MACed by server
   | C_Wait_Finished2 of digest // TLS classic, digest to be MACed by server
   | C_Complete
 
@@ -452,12 +452,13 @@ let client_ServerHello (s:hs) (sh:HSM.serverHello) (* digest:Hashing.anyTag *) :
           let pv' = mode.Nego.n_protocol_version in
           let cs' = mode.Nego.n_cipher_suite in
           let sr = mode.Nego.n_server_random in
+	  let nst = Nego.sendticket_12 mode in
           if pv = pv' && cs = cs' then // TODO check full session
            begin
             let adk = KeySchedule.ks_client_12_resume s.ks sr pv cs ems msId ms in
             let digestSH = HandshakeLog.hash_tag #ha s.log in
             register s adk;
-            s.state := C_Wait_CCS1 digestSH;
+            s.state := (if nst then C_Wait_NST true else C_Wait_CCS (true, digestSH));
             InAck false false
            end
           else
@@ -503,7 +504,7 @@ let client_ServerHelloDone hs c ske_bytes ocr =
       | Some cr ->
         trace "processing certificate request (TODO)";
         HandshakeLog.send hs.log (HSL.Msg12 (HSM.M12_certificate [])));
-
+      let nst = Nego.sendticket_12 mode in
       let gy = Some?.v (mode.Nego.n_server_share) in // already set in KS
       let gx =
         KeySchedule.ks_client_12_full_dh hs.ks
@@ -513,22 +514,23 @@ let client_ServerHelloDone hs c ske_bytes ocr =
         (Nego.emsFlag mode) // a flag controlling the use of ems
         gy in
       let (|g, _|) = gy in
-      let msg = HSM.M12_client_key_exchange (
+      let gxb = CommonDH.serialize_raw gx in
+      let open Parsers.ClientKeyExchange in
+      let cke : clientKeyExchange kex =
         match kex with
-	| HSM.Ecdhe -> CommonDH.serialize_raw gx
-	| HSM.Dhe -> CommonDH.serialize_raw gx) in
+	| HSM.Ecdhe -> Cke_ecdhe gxb
+	| HSM.Dhe -> Cke_dhe gxb in
+      let msg = HSM.M12_client_key_exchange (
+        clientKeyExchange_serializer32 kex cke) in
       let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
       let digestClientKeyExchange = HandshakeLog.send_tag #ha hs.log (HSL.Msg12 msg)  in
       let cfin_key, app_keys = KeySchedule.ks_client_12_set_session_hash hs.ks digestClientKeyExchange in
       register hs app_keys;
       // we send CCS then Finished;  we will use the new keys only after CCS
-
-      trace ("digest is "^print_bytes digestClientKeyExchange);
-      //let cvd = TLSPRF.verifyData (mode.Nego.n_protocol_version,mode.Nego.n_cipher_suite) cfin_key Client digestClientKeyExchange in
       let cvd = TLSPRF.finished12 ha cfin_key Client digestClientKeyExchange in
       let fin = HSM.M12_finished cvd in
       let digestClientFinished = HandshakeLog.send_CCS_tag #ha hs.log (HSL.Msg12 fin) false in
-      hs.state := C_Wait_CCS2 digestClientFinished;
+      hs.state := (if nst then C_Wait_NST false else C_Wait_CCS (false, digestClientFinished));
       InAck false false)
 
 #set-options "--admit_smt_queries true"
@@ -610,33 +612,20 @@ let rec iutf8 (m:bytes) : St (s:string{String.length s < pow2 30 /\ utf8_encode 
 
 // Processing of the server CCS and optional NewSessionTicket
 // This is used both in full handshake and resumption
-let client_NewSessionTicket_12 (hs:hs) (resume:bool) (digest:Hashing.anyTag) (ost:option HSM.newSessionTicket12)
+let client_NewSessionTicket_12 (hs:hs) (resume:bool) (digest:Hashing.anyTag) (st: HSM.newSessionTicket12)
   : St incoming =
   let open Parsers.NewSessionTicket12 in
-  trace (
-    "Processing server CCS ("
-    ^(if resume then "resumption" else "full handshake")^"). "
-    ^(match ost with
-     | None -> "No ticket sent."
-     | Some {ticket = t} -> "Ticket: "^(print_bytes t)));
-  hs.state :=
-    (if resume then C_Wait_R_Finished1 digest
-    else C_Wait_Finished2 digest);
-  Epochs.incr_reader hs.epochs;
+  trace ("Processing ticket: "^(print_bytes st.ticket));
+  hs.state := C_Wait_CCS (resume, digest);
   let mode = Nego.getMode hs.nego in
-  match ost, Nego.sendticket_12 mode with
-  | Some {ticket = tid}, true ->
-    let cfg = Nego.local_config hs.nego in
-    let sni = iutf8 (Nego.get_sni mode.Nego.n_offer) in
-    let (msId, ms) = KeySchedule.ks_12_ms hs.ks in
-    let pv = mode.Nego.n_protocol_version in
-    let cs = mode.Nego.n_cipher_suite in
-    let tcb = cfg.ticket_callback in
-    tcb.new_ticket tcb.ticket_context sni tid (TicketInfo_12 (pv, cs, Nego.emsFlag mode)) ms;
-    InAck true false
-  | None, false -> InAck true false
-  | Some t, false -> InError (fatalAlert Unexpected_message, "unexpected NewSessionTicket message")
-  | None, true -> InError (fatalAlert Unexpected_message, "missing expected NewSessionTicket message")
+  let cfg = Nego.local_config hs.nego in
+  let sni = iutf8 (Nego.get_sni mode.Nego.n_offer) in
+  let (msId, ms) = KeySchedule.ks_12_ms hs.ks in
+  let pv = mode.Nego.n_protocol_version in
+  let cs = mode.Nego.n_cipher_suite in
+  let tcb = cfg.ticket_callback in
+  tcb.new_ticket tcb.ticket_context sni st.ticket (TicketInfo_12 (pv, cs, Nego.emsFlag mode)) ms;
+  InAck false false
 
 // Process an incoming ticket (1.3)
 let client_NewSessionTicket_13 (hs:hs) (st13:HSM.newSessionTicket13)
@@ -861,7 +850,9 @@ let server_ClientHello hs offer =
         match Nego.kexAlg mode with
           | Kex_DHE | Kex_ECDHE ->
             let Some g = Nego.chosenGroup mode in
-            let gy = KeySchedule.ks_server_12_init_dh hs.ks cr pv cs (Nego.emsFlag mode) g in
+            let cfg = Nego.local_config hs.nego in
+	    let ems = cfg.extended_master_secret && (Nego.emsFlag mode) in
+            let gy = KeySchedule.ks_server_12_init_dh hs.ks cr pv cs ems g in
             Correct (Some (| g, gy |))
           | _ -> fatal Handshake_failure "Unsupported RSA key exchange" in
       match key_share_result with
@@ -907,12 +898,25 @@ inline_for_extraction type cke_t = Parsers.Handshake12_m12_client_key_exchange.h
 let server_ClientCCS1 hs (cke:cke_t) (* clientCert *) digestCCS1 =
     // FIXME support optional client c and cv
     // let ems = n.n_extensions.ne_extended_ms in // ask Nego?
-    trace "process Client CCS";
+    trace ("process Client CCS (hash = "^hex_of_bytes digestCCS1);
     let mode = Nego.getMode hs.nego in
     let Some (|g,  _|) = mode.Nego.n_server_share in
-    match CommonDH.parse g cke with
-    | None -> InError(fatalAlert Decode_error, perror __SOURCE_FILE__ __LINE__ "Cannot parse client share in CKE")
-    | Some gy ->
+    trace ("staged parsing of share: "^(hex_of_bytes cke));
+    let open Parsers.ClientKeyExchange in
+    match convert_kex (Nego.kexAlg mode) with
+    | Error z -> InError z
+    | Correct kex ->
+    match clientKeyExchange_parser32 kex cke with
+    | None -> InError (fatalAlert Decode_error, "failed parsing of untagged CKE")
+    | Some (Cke_ecdhe gyb, l)
+    | Some (Cke_dhe gyb, l) ->
+    trace ("Inner format: "^(hex_of_bytes gyb));    
+    match len cke = l, CommonDH.parse g gyb with
+    | _, None
+    | false, _ -> InError(fatalAlert Decode_error,
+        perror __SOURCE_FILE__ __LINE__
+	  "Cannot parse client share in CKE")
+    | true, Some gy ->
       let app_keys = KeySchedule.ks_server_12_cke_dh hs.ks (| g, gy |) digestCCS1 in
       register hs app_keys;
       Epochs.incr_reader hs.epochs;
@@ -1189,11 +1193,14 @@ let rec recv_fragment (hs:hs) #i rg f =
 //        client_HelloRetryRequest hs hrr
 //  | C_Wait_ServerHello, Some ([ServerHello sh], [digest]) -> client_ServerHello hs sh digest
 
-    | C_Wait_ServerHelloDone, [Msg12 (M12_certificate c); Msg12 (M12_server_key_exchange ske); Msg12 (M12_server_hello_done ())], [] ->
+    | C_Wait_ServerHelloDone, [Msg12 (M12_certificate c); Msg12 (M12_server_key_exchange ske); Msg12 (M12_server_hello_done ())], [_] ->
       client_ServerHelloDone hs c ske None
 
-    | C_Wait_ServerHelloDone, [Msg12 (M12_certificate c); Msg12 (M12_server_key_exchange ske); Msg12 (M12_certificate_request cr); Msg12 (M12_server_hello_done ())], [] ->
+    | C_Wait_ServerHelloDone, [Msg12 (M12_certificate c); Msg12 (M12_server_key_exchange ske); Msg12 (M12_certificate_request cr); Msg12 (M12_server_hello_done ())], [_] ->
       client_ServerHelloDone hs c ske (Some cr)
+
+    | C_Wait_NST resume, [Msg12 (M12_new_session_ticket st)], [digestNewSessionTicket] ->
+      client_NewSessionTicket_12 hs resume digestNewSessionTicket st
 
     | C_Wait_Finished1, [Msg13 (M13_encrypted_extensions ee); Msg13 (M13_certificate c); Msg13 (M13_certificate_verify cv); Msg13 (M13_finished f)],
       [_; digestCert; digestCertVerify; digestServerFinished] ->
@@ -1239,8 +1246,8 @@ let rec recv_fragment (hs:hs) #i rg f =
 
     // are we missing the case with a Certificate but no CertificateVerify?
     | _,  _, _ ->
-      trace "DISCARD FLIGHT"; InAck false false
-      //InError(AD_unexpected_message, "unexpected flight")
+//      trace "DISCARD FLIGHT"; InAck false false
+      InError(fatalAlert Unexpected_message, "unexpected flight")
 
 // TODO check CCS once committed to TLS 1.3 yields an alert
 let recv_ccs (hs:hs) =
@@ -1263,16 +1270,11 @@ let recv_ccs (hs:hs) =
     | Error z -> InError z
     | Correct (ms, digests, digestCCS) ->
       match !hs.state, ms, digests with
-      // client resumption
-      | C_Wait_CCS1 _, [Msg12 (M12_new_session_ticket st)], [digestNewSessionTicket] ->
-        client_NewSessionTicket_12 hs true digestNewSessionTicket (Some st)
-      | C_Wait_CCS1 digestServerHello, [], [] ->
-        client_NewSessionTicket_12 hs true digestServerHello None
       // client full handshake
-      | C_Wait_CCS2 digest, [], [] ->
-        client_NewSessionTicket_12 hs false digest None
-      | C_Wait_CCS2 _, [Msg12 (M12_new_session_ticket st)], [digestNewSessionTicket] ->
-        client_NewSessionTicket_12 hs false digestNewSessionTicket (Some st)
+      | C_Wait_CCS (resume, digest), [], [] ->
+        Epochs.incr_reader hs.epochs;
+        hs.state := (if resume then C_Wait_R_Finished1 digest else C_Wait_Finished2 digest);
+	InAck true false
 
       | S_Wait_CCS2 digestServerFinished, [], [] -> (
         Epochs.incr_reader hs.epochs;

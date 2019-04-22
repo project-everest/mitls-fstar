@@ -104,16 +104,26 @@ let empty3 = fun _ _ _ -> []
 let none5 = fun _ _ _ _ _ -> None
 let false6 = fun _ _ _ _ _ _ -> false
 
+let defaultCertCB_app_context : FStar.Dyn.dyn = FStar.Dyn.mkdyn ()
+
+let defaultCertCB_cert_select_ptr : FStar.Dyn.dyn = FStar.Dyn.mkdyn ()
+
+let defaultCertCB_cert_format_ptr : FStar.Dyn.dyn = FStar.Dyn.mkdyn ()
+
+let defaultCertCB_cert_sign_ptr : FStar.Dyn.dyn = FStar.Dyn.mkdyn ()
+
+let defaultCertCB_cert_verify_ptr : FStar.Dyn.dyn = FStar.Dyn.mkdyn ()
+
 let defaultCertCB : cert_cb =
   TLSConstants.mk_cert_cb
-     (FStar.Dyn.mkdyn ())
-     (FStar.Dyn.mkdyn ())
+     defaultCertCB_app_context
+     defaultCertCB_cert_select_ptr
      none6
-     (FStar.Dyn.mkdyn ())
+     defaultCertCB_cert_format_ptr
      empty3
-     (FStar.Dyn.mkdyn ())
+     defaultCertCB_cert_sign_ptr
      none5
-     (FStar.Dyn.mkdyn ())
+     defaultCertCB_cert_verify_ptr
      false6
 
 val defaultConfig: config

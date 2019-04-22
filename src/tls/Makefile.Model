@@ -6,7 +6,7 @@ EXTRACT   = Nothing
 SPECINC   = $(MITLS_HOME)/src/tls/ideal-flags $(MITLS_HOME)/src/tls/concrete-flags/generic
 
 include Makefile.common
-HINTS_ENABLED ?= --use_hints --use_hint_hashes --record_hints
+HINTS_ENABLED ?=
 VFLAGS += $(HINTS_ENABLED)
 
 HSL_FILES = HSL.Common.fst HSL.Send.fsti HSL.Transcript.fsti HSL.Receive.fst HSL.Receive.fsti # HSL.Transcript.fst
