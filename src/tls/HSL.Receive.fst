@@ -21,7 +21,6 @@ open FStar.Integers
 open FStar.HyperStack.ST
 
 module G = FStar.Ghost
-module List = FStar.List.Tot
 
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
@@ -76,18 +75,26 @@ assume val parsing_error : TLSError.error
 assume val unexpected_flight_error : TLSError.error
 assume val bytes_remain_error : TLSError.error
 
-inline_for_extraction
 noextract
-let parse_hsm13
-  (#a:Type) (#k:R.strong_parser_kind)
-  (#p:LP.parser k a) (#cl:LP.clens HSM13.handshake13 a)
-  (#gacc:LP.gaccessor HSM13.handshake13_parser p cl)
+let parse_common
+  (#a1:Type) (#k1:R.strong_parser_kind)
+  (#p1:LP.parser k1 a1)
+  (validator:LP.validator #k1 #a1 p1)
+  (tag_fn:a1 -> HSMType.handshakeType{
+    forall (b:R.slice) (pos:UInt32.t) (h:HS.mem).
+      LP.valid p1 h b pos ==>
+      (LP.valid HSMType.handshakeType_parser h b pos /\
+       LP.contents HSMType.handshakeType_parser h b pos ==
+       tag_fn (LP.contents p1 h b pos))})
+  (#a2:Type) (#k2:R.strong_parser_kind)
+  (#p2:LP.parser k2 a2) (#cl:LP.clens a1 a2)
+  (#gacc:LP.gaccessor p1 p2 cl)
   (tag:HSMType.handshakeType{
-    forall (m:HSM13.handshake13).
-      (HSM13.tag_of_handshake13 m == tag) <==> cl.LP.clens_cond m})
+    forall (m:a1).
+      (tag_fn m == tag) <==> cl.LP.clens_cond m})
   (acc:LP.accessor gacc)
   : b:R.slice -> from:uint_32 ->
-    Stack (TLSError.result (option (HSM13R.repr b & uint_32)))
+    Stack (TLSError.result (option (R.repr_p a1 b p1 & uint_32)))
     (requires fun h ->
       B.live h b.LP.base /\
       from <= b.LP.len)
@@ -104,12 +111,12 @@ let parse_hsm13
          
   = fun b from ->
     
-    let pos = HSM13.handshake13_validator b from in
+    let pos = validator b from in
 
     if pos <= LP.validator_max_length then begin
       let parsed_tag = HSMType.handshakeType_reader b from in
       if parsed_tag = tag then
-        let r = R.mk b from pos HSM13.handshake13_parser in
+        let r = R.mk b from pos p1 in
         E.Correct (Some (r, pos))
       else E.Error unexpected_flight_error
     end
@@ -157,36 +164,49 @@ let err_or_insufficient_data
       B.upd st.inc_st 0ul inc_st;
       E.Correct None
 
+inline_for_extraction noextract
+let parse_hsm13 =
+  parse_common
+    HSM13.handshake13_validator
+    HSM13.tag_of_handshake13
+
+inline_for_extraction noextract
 let parse_hsm13_ee
   =  parse_hsm13
       HSMType.Encrypted_extensions
       HSM13.handshake13_accessor_encrypted_extensions
       
+inline_for_extraction noextract
 let parse_hsm13_c
   = parse_hsm13
       HSMType.Certificate
       HSM13.handshake13_accessor_certificate
 
+inline_for_extraction noextract
 let parse_hsm13_cv
   = parse_hsm13
       HSMType.Certificate_verify
       HSM13.handshake13_accessor_certificate_verify
 
+inline_for_extraction noextract
 let parse_hsm13_fin
   = parse_hsm13 
       HSMType.Finished
       HSM13.handshake13_accessor_finished
 
+inline_for_extraction noextract
 let parse_hsm13_cr
   = parse_hsm13 
       HSMType.Certificate_request
       HSM13.handshake13_accessor_certificate_request
 
+inline_for_extraction noextract
 let parse_hsm13_eoed
   = parse_hsm13 
       HSMType.End_of_early_data
       HSM13.handshake13_accessor_end_of_early_data
 
+inline_for_extraction noextract
 let parse_hsm13_nst
   = parse_hsm13 
       HSMType.New_session_ticket
@@ -343,77 +363,49 @@ let receive_flight13_nst st b from to =
       E.Correct (Some ({ nst_msg = nst_repr }))
     end
 
+inline_for_extraction noextract
+let parse_hsm12 =
+  parse_common
+    HSM12.handshake12_validator
+    HSM12.tag_of_handshake12
 
-inline_for_extraction
-noextract
-let parse_hsm12
-  (#a:Type) (#k:R.strong_parser_kind)
-  (#p:LP.parser k a) (#cl:LP.clens HSM12.handshake12 a)
-  (#gacc:LP.gaccessor HSM12.handshake12_parser p cl)
-  (tag:HSMType.handshakeType{
-    forall (m:HSM12.handshake12).
-      (HSM12.tag_of_handshake12 m == tag) <==> cl.LP.clens_cond m})
-  (acc:LP.accessor gacc)
-  : b:R.slice -> from:uint_32 ->
-    Stack (TLSError.result (option (HSM12R.repr b & uint_32)))
-    (requires fun h ->
-      B.live h b.LP.base /\
-      from <= b.LP.len)
-    (ensures fun h0 r h1 ->
-      B.modifies B.loc_none h0 h1 /\
-      (match r with
-       | E.Error _ -> True
-       | E.Correct None -> True
-       | E.Correct (Some (repr, pos)) ->
-         repr.R.start_pos == from /\
-         repr.R.end_pos == pos /\
-         R.valid repr h1 /\
-         cl.LP.clens_cond (R.value repr)))
-         
-  = fun b from ->
-    
-    let pos = HSM12.handshake12_validator b from in
-
-    if pos <= LP.validator_max_length then begin
-      let parsed_tag = HSMType.handshakeType_reader b from in
-      if parsed_tag = tag then
-        let r = R.mk b from pos HSM12.handshake12_parser in
-        E.Correct (Some (r, pos))
-      else E.Error unexpected_flight_error
-    end
-    else if pos = LP.validator_error_not_enough_data then E.Correct None
-    else E.Error parsing_error
-
+inline_for_extraction noextract
 let parse_hsm12_c
   =  parse_hsm12
       HSMType.Certificate
       HSM12.handshake12_accessor_certificate
 
+inline_for_extraction noextract
 let parse_hsm12_ske
   = parse_hsm12
       HSMType.Server_key_exchange
       HSM12.handshake12_accessor_server_key_exchange
 
+inline_for_extraction noextract
 let parse_hsm12_shd
   = parse_hsm12
       HSMType.Server_hello_done
       HSM12.handshake12_accessor_server_hello_done
 
+inline_for_extraction noextract
 let parse_hsm12_cr
   =  parse_hsm12
       HSMType.Certificate_request
       HSM12.handshake12_accessor_certificate_request
 
+inline_for_extraction noextract
 let parse_hsm12_fin
   =  parse_hsm12
       HSMType.Finished
       HSM12.handshake12_accessor_finished
 
+inline_for_extraction noextract
 let parse_hsm12_nst
   =  parse_hsm12
       HSMType.New_session_ticket
       HSM12.handshake12_accessor_new_session_ticket
 
+inline_for_extraction noextract
 let parse_hsm12_cke
   =  parse_hsm12
       HSMType.Client_key_exchange
@@ -512,57 +504,23 @@ let receive_flight12_cke st b from to =
       E.Correct (Some ({ cke_msg = cke_repr }))
     end
 
+inline_for_extraction noextract
+let parse_hsm =
+  parse_common
+    HSM.handshake_validator
+    HSM.tag_of_handshake
 
-inline_for_extraction
-noextract
-let parse_hsm
-  (#a:Type) (#k:R.strong_parser_kind)
-  (#p:LP.parser k a) (#cl:LP.clens HSM.handshake a)
-  (#gacc:LP.gaccessor HSM.handshake_parser p cl)
-  (tag:HSMType.handshakeType{
-    forall (m:HSM.handshake).
-      (HSM.tag_of_handshake m == tag) <==> cl.LP.clens_cond m})
-  (acc:LP.accessor gacc)
-  : b:R.slice -> from:uint_32 ->
-    Stack (TLSError.result (option (HSMR.repr b & uint_32)))
-    (requires fun h ->
-      B.live h b.LP.base /\
-      from <= b.LP.len)
-    (ensures fun h0 r h1 ->
-      B.modifies B.loc_none h0 h1 /\
-      (match r with
-       | E.Error _ -> True
-       | E.Correct None -> True
-       | E.Correct (Some (repr, pos)) ->
-         repr.R.start_pos == from /\
-         repr.R.end_pos == pos /\
-         R.valid repr h1 /\
-         cl.LP.clens_cond (R.value repr)))
-         
-  = fun b from ->
-    
-    let pos = HSM.handshake_validator b from in
-
-    if pos <= LP.validator_max_length then begin
-      let parsed_tag = HSMType.handshakeType_reader b from in
-      if parsed_tag = tag then
-        let r = R.mk b from pos HSM.handshake_parser in
-        E.Correct (Some (r, pos))
-      else E.Error unexpected_flight_error
-    end
-    else if pos = LP.validator_error_not_enough_data then E.Correct None
-    else E.Error parsing_error
-
+inline_for_extraction noextract
 let parse_hsm_ch
   =  parse_hsm
       HSMType.Client_hello
       HSM.handshake_accessor_client_hello
 
+inline_for_extraction noextract
 let parse_hsm_sh
   = parse_hsm
       HSMType.Server_hello
       HSM.handshake_accessor_server_hello
-
 
 let receive_flight_ch st b from to =
   let r = parse_hsm_ch b from in
@@ -587,5 +545,3 @@ let receive_flight_sh st b from to =
       reset_incremental_state st;
       E.Correct (Some ({ sh_msg = sh_repr }))
     end
-
-
