@@ -64,11 +64,10 @@ let clientHello (#b:R.slice) (r:repr b)
     let open Parsers.HandshakeType in
     R.reveal_valid();
     let h = get () in
-    let pos' = HSM.handshake_accessor_client_hello b r.start_pos in
-    assume (LP.valid Parsers.ClientHello.clientHello_parser h b pos');
-    let end_pos = Parsers.ClientHello.clientHello_jumper b pos' in
-    let ch_repr = R.mk b pos' end_pos Parsers.ClientHello.clientHello_parser in
-    assume (R.value ch_repr == HSM.M_client_hello?._0 (R.value r));
+    let pos = HSM.handshake_accessor_client_hello b r.start_pos in
+    let pos = HSM.handshake_m_client_hello_accessor b pos in
+    let end_pos = Parsers.ClientHello.clientHello_jumper b pos in
+    let ch_repr = R.mk b pos end_pos Parsers.ClientHello.clientHello_parser in
     ch_repr
 
 let serverHello (#b:R.slice) (r:repr b)
@@ -84,9 +83,8 @@ let serverHello (#b:R.slice) (r:repr b)
     let open Parsers.HandshakeType in
     R.reveal_valid();
     let h = get () in
-    let pos' = HSM.handshake_accessor_server_hello b r.start_pos in
-    assume (LP.valid Parsers.ServerHello.serverHello_parser h b pos');
-    let end_pos = Parsers.ServerHello.serverHello_jumper b pos' in
-    let sh_repr = R.mk b pos' end_pos Parsers.ServerHello.serverHello_parser in
-    assume (R.value sh_repr == HSM.M_server_hello?._0 (R.value r));
+    let pos = HSM.handshake_accessor_server_hello b r.start_pos in
+    let pos = HSM.handshake_m_server_hello_accessor b pos in
+    let end_pos = Parsers.ServerHello.serverHello_jumper b pos in
+    let sh_repr = R.mk b pos end_pos Parsers.ServerHello.serverHello_parser in
     sh_repr
