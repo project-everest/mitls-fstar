@@ -37,13 +37,6 @@ module B = LowStar.Buffer
 module HS = FStar.HyperStack
 open FStar.Integers
 module C = LowStar.ConstBuffer
-(* For now, we restrict `repr` to only use mutable slices as its
-   backing u8 store.
-
-   In the future, we may generalize this to support `const` slices,
-   i.e., reprs backed by a slice whose buffer is either mutable or
-   immutable.
-*)
 
 /// A slice is a const uint_8* and a length.
 ///
@@ -308,7 +301,7 @@ let stable_repr t b = r:repr t b { valid_if_live r }
 
 /// `valid_if_live_intro` :
 ///    An internal lemma to introduce `valid_if_live`
-#push-options "--z3rlimit_factor 4 --max_fuel 0 --max_ifuel 0"
+#push-options "--z3rlimit_factor 8 --max_fuel 0 --max_ifuel 0"
 let valid_if_live_intro #t (#b:slice) (r:repr t b) (h:HS.mem)
   : Lemma
     (requires (
