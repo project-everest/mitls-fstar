@@ -42,18 +42,26 @@ private let pre_id (role:role) =
 
 let id12 = pre_id Client
 
+let id13_cr () =
+  let x = Bytes.create 32ul 0z in
+  x
+
 let id13 =
-  let cr  = Bytes.create 32ul 0z in
+//  [@inline_let]
+  [@inline_let]
   let ch0 = {
-    li_ch0_cr = cr;
+    li_ch0_cr = id13_cr ();
     li_ch0_ed_psk = Bytes.utf8_encode "whatever";
     li_ch0_ed_ae = EverCrypt.AES256_GCM;
     li_ch0_ed_hash = Hashing.Spec.SHA2_256; } in
+  [@inline_let]
   let li = LogInfo_CH0 ch0 in
+  [@inline_let]
   let i = ExpandedSecret
       (EarlySecretID (NoPSK Hashing.Spec.SHA2_256))
       ClientEarlyTrafficSecret
       (Bytes.utf8_encode "whatever") in
+  [@inline_let]
   let kid: keyId = KeyID #li i in
   ID13 kid
 

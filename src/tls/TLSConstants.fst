@@ -740,7 +740,9 @@ type cert_cb = {
     (ensures fun h0 _ h1 -> modifies_none h0 h1));
 }
 
-abstract
+[@"opaque_to_smt"]
+inline_for_extraction
+noextract
 let mk_cert_cb
   app_ctx
   cert_select_ptr
