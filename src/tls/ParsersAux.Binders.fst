@@ -110,6 +110,8 @@ let truncate_clientHelloExtension_CHE_pre_shared_key
 : GTot LP.bytes
 = Seq.slice (LP.serialize CHE.clientHelloExtension_CHE_pre_shared_key_serializer o) 0 (U32.v (clientHelloExtension_CHE_pre_shared_key_binders_offset o))
 
+#push-options "--z3rlimit 16"
+
 let binders_offset_clientHelloExtension_CHE_pre_shared_key_set_binders
   (o: CHE.clientHelloExtension_CHE_pre_shared_key)
   (b' : Psks.offeredPsks_binders { Psks.offeredPsks_binders_bytesize b' == Psks.offeredPsks_binders_bytesize o.Psks.binders })
@@ -126,6 +128,8 @@ let binders_offset_clientHelloExtension_CHE_pre_shared_key_set_binders
   serialize_clientHelloExtension_CHE_pre_shared_key_eq o;
   serialize_clientHelloExtension_CHE_pre_shared_key_eq o';
   binders_offset_offeredPsks_set_binders o b'
+
+#pop-options
 
 module ET = Parsers.ExtensionType
 
@@ -151,6 +155,8 @@ let clientHelloExtension_set_binders
   })
 = CHE.CHE_pre_shared_key (clientHelloExtension_CHE_pre_shared_key_set_binders (CHE.CHE_pre_shared_key?._0 e) b')
 
+#push-options "--z3rlimit 16"
+
 let binders_offset_clientHelloExtension_set_binders
   (e: CHE.clientHelloExtension {CHE.CHE_pre_shared_key? e})
   (b' : Psks.offeredPsks_binders { Psks.offeredPsks_binders_bytesize b' == Psks.offeredPsks_binders_bytesize (CHE.CHE_pre_shared_key?._0 e).Psks.binders})
@@ -167,6 +173,8 @@ let binders_offset_clientHelloExtension_set_binders
   CHE.serialize_clientHelloExtension_eq_pre_shared_key e;
   CHE.serialize_clientHelloExtension_eq_pre_shared_key e';
   binders_offset_clientHelloExtension_CHE_pre_shared_key_set_binders (CHE.CHE_pre_shared_key?._0 e) b'
+
+#pop-options
 
 module CHEs = Parsers.ClientHelloExtensions
 
@@ -240,7 +248,7 @@ let list_clientHelloExtension_set_binders
   clientHelloExtensions_list_bytesize_append lt [e'];
   l'
 
-#push-options "--z3rlimit 16"
+#push-options "--z3rlimit 32"
 
 let binders_offset_list_clientHelloExtension_set_binders
   (l: list CHE.clientHelloExtension {
@@ -321,7 +329,7 @@ let clientHelloExtensions_set_binders
   )})
 = list_clientHelloExtension_set_binders l b'
 
-#push-options "--z3rlimit 16"
+#push-options "--z3rlimit 32"
 
 let binders_offset_clientHelloExtensions_set_binders
   (l: CHEs.clientHelloExtensions {
@@ -344,16 +352,112 @@ let binders_offset_clientHelloExtensions_set_binders
 
 #pop-options
 
-let set_binders m b' =
-  let c = H.M_client_hello?._0 m in
-  H.M_client_hello ({
+friend Parsers.ClientHello
+
+let serialize_clientHello_eq
+  (c: CH.clientHello)
+: Lemma
+  (LP.serialize CH.clientHello_serializer c `Seq.equal` (
+   LP.serialize Parsers.ProtocolVersion.protocolVersion_serializer c.CH.version `Seq.append`
+   LP.serialize Parsers.Random.random_serializer c.CH.random `Seq.append`
+   LP.serialize Parsers.ClientHello_cipher_suites.clientHello_cipher_suites_serializer c.CH.cipher_suites  `Seq.append`
+   LP.serialize Parsers.ClientHello_compression_method.clientHello_compression_method_serializer c.CH.compression_method `Seq.append`
+   LP.serialize CHEs.clientHelloExtensions_serializer c.CH.extensions
+ ))
+= admit ()
+
+#push-options "--z3rlimit 16"
+
+let clientHello_binders_offset
+  (c: CH.clientHello {
+    let l = c.CH.extensions in
+    Cons? l /\
+    CHE.CHE_pre_shared_key? (L.last l)
+  })
+: Tot (x: U32.t { U32.v x <= Seq.length (LP.serialize CH.clientHello_serializer c) })
+= serialize_clientHello_eq c;
+  Parsers.ProtocolVersion.protocolVersion_size32 c.CH.version `U32.add`
+  Parsers.Random.random_size32 c.CH.random `U32.add`
+  Parsers.ClientHello_cipher_suites.clientHello_cipher_suites_size32 c.CH.cipher_suites `U32.add`
+  Parsers.ClientHello_compression_method.clientHello_compression_method_size32 c.CH.compression_method `U32.add`
+  clientHelloExtensions_binders_offset c.CH.extensions
+
+#pop-options
+
+let truncate_clientHello
+  (c: CH.clientHello {
+    let l = c.CH.extensions in
+    Cons? l /\
+    CHE.CHE_pre_shared_key? (L.last l)
+  })
+: GTot LP.bytes
+= Seq.slice (LP.serialize CH.clientHello_serializer c) 0 (U32.v (clientHello_binders_offset c))
+
+let clientHello_set_binders
+  (c: CH.clientHello {
+    let l = c.CH.extensions in
+    Cons? l /\
+    CHE.CHE_pre_shared_key? (L.last l)
+  })
+  (b' : Psks.offeredPsks_binders {
+    let l = c.CH.extensions in
+    Psks.offeredPsks_binders_bytesize b' == Psks.offeredPsks_binders_bytesize (CHE.CHE_pre_shared_key?._0 (L.last l)).Psks.binders
+  })
+: Tot (c' : CH.clientHello {
+    let l' = c'.CH.extensions in
+    c'.CH.version == c.CH.version /\
+    c'.CH.random == c.CH.random /\
+    c'.CH.session_id == c.CH.session_id /\
+    c'.CH.cipher_suites == c.CH.cipher_suites /\
+    c'.CH.compression_method == c.CH.compression_method /\
+    Cons? l' /\ (
+    let l = c.CH.extensions in
+    let e = L.last l in
+    let e' = L.last l' in
+    L.init l' = L.init l /\
+    CHE.CHE_pre_shared_key? e' /\
+    (CHE.CHE_pre_shared_key?._0 e').Psks.identities == (CHE.CHE_pre_shared_key?._0 e).Psks.identities /\
+    (CHE.CHE_pre_shared_key?._0 e').Psks.binders == b' /\
+    CHEs.clientHelloExtensions_bytesize l' == CHEs.clientHelloExtensions_bytesize l
+  )})
+= {
     CH.version = c.CH.version;
     CH.random = c.CH.random;
     CH.session_id = c.CH.session_id;
     CH.cipher_suites = c.CH.cipher_suites;
     CH.compression_method = c.CH.compression_method;
     CH.extensions = clientHelloExtensions_set_binders c.CH.extensions b'
+  }
+
+#push-options "--z3rlimit 32"
+
+let binders_offset_clientHello_set_binders
+  (c: CH.clientHello {
+    let l = c.CH.extensions in
+    Cons? l /\
+    CHE.CHE_pre_shared_key? (L.last l)
   })
+  (b' : Psks.offeredPsks_binders {
+    let l = c.CH.extensions in
+    Psks.offeredPsks_binders_bytesize b' == Psks.offeredPsks_binders_bytesize (CHE.CHE_pre_shared_key?._0 (L.last l)).Psks.binders})
+: Lemma
+  (let c' = clientHello_set_binders c b' in
+  let off = clientHello_binders_offset c in
+  let tr = truncate_clientHello c in
+  clientHello_binders_offset c' == off /\
+  truncate_clientHello c' `Seq.equal` tr /\
+  LP.serialize CH.clientHello_serializer c' `Seq.equal`
+  (tr `Seq.append` LP.serialize Psks.offeredPsks_binders_serializer b'))
+= let c' = clientHello_set_binders c b' in
+  serialize_clientHello_eq c;
+  serialize_clientHello_eq c';
+  binders_offset_clientHelloExtensions_set_binders c.CH.extensions b'
+
+#pop-options
+
+let set_binders m b' =
+  let c = H.M_client_hello?._0 m in
+  H.M_client_hello (clientHello_set_binders c b')
 
 let set_binders_bytesize m b' = ()
 
@@ -364,6 +468,8 @@ let binders_offset_set_binder m b' = admit ()
 let truncate_clientHello_bytes_correct m = admit ()
 
 let truncate_clientHello_bytes_set_binders m b' = admit ()
+
+#push-options "--z3rlimit 16" 
 
 let truncate_clientHello_bytes_inj_binders_bytesize m1 m2 = admit ()
 
