@@ -9,7 +9,7 @@ module U32 = FStar.UInt32
 module L = FStar.List.Tot
 module H = Parsers.Handshake
 module CH = Parsers.ClientHello
-module CHE = Parsers.ClientHelloExtension
+module CHE = ParsersAux.ClientHelloExtension
 
 module BY = FStar.Bytes
 
@@ -129,14 +129,6 @@ let binders_offset_clientHelloExtension_CHE_pre_shared_key_set_binders
 
 module ET = Parsers.ExtensionType
 
-let serialize_clientHelloExtension_eq_pre_shared_key
-  (e: CHE.clientHelloExtension {CHE.CHE_pre_shared_key? e})
-: Lemma
-  (LP.serialize CHE.clientHelloExtension_serializer e ==
-   LP.serialize ET.extensionType_serializer ET.Pre_shared_key `Seq.append`
-   LP.serialize CHE.clientHelloExtension_CHE_pre_shared_key_serializer (CHE.CHE_pre_shared_key?._0 e))
-= admit ()
-
 let clientHelloExtension_binders_offset
   (e: CHE.clientHelloExtension {CHE.CHE_pre_shared_key? e})
 : Tot (x: U32.t { U32.v x <= Seq.length (LP.serialize CHE.clientHelloExtension_serializer e) })
@@ -172,8 +164,8 @@ let binders_offset_clientHelloExtension_set_binders
   (tr `Seq.append` LP.serialize Psks.offeredPsks_binders_serializer b'))
 = let e' = clientHelloExtension_set_binders e b' in
   let off = clientHelloExtension_binders_offset e in
-  serialize_clientHelloExtension_eq_pre_shared_key e;
-  serialize_clientHelloExtension_eq_pre_shared_key e';
+  CHE.serialize_clientHelloExtension_eq_pre_shared_key e;
+  CHE.serialize_clientHelloExtension_eq_pre_shared_key e';
   binders_offset_clientHelloExtension_CHE_pre_shared_key_set_binders (CHE.CHE_pre_shared_key?._0 e) b'
 
 module CHEs = Parsers.ClientHelloExtensions
