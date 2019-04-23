@@ -127,6 +127,27 @@ let binders_offset_clientHelloExtension_CHE_pre_shared_key_set_binders
   serialize_clientHelloExtension_CHE_pre_shared_key_eq o';
   binders_offset_offeredPsks_set_binders o b'
 
+module ET = Parsers.ExtensionType
+
+let serialize_clientHelloExtension_eq_pre_shared_key
+  (e: CHE.clientHelloExtension {CHE.CHE_pre_shared_key? e})
+: Lemma
+  (LP.serialize CHE.clientHelloExtension_serializer e ==
+   LP.serialize ET.extensionType_serializer ET.Pre_shared_key `Seq.append`
+   LP.serialize CHE.clientHelloExtension_CHE_pre_shared_key_serializer (CHE.CHE_pre_shared_key?._0 e))
+= admit ()
+
+let clientHelloExtension_binders_offset
+  (e: CHE.clientHelloExtension {CHE.CHE_pre_shared_key? e})
+: Tot (x: U32.t { U32.v x <= Seq.length (LP.serialize CHE.clientHelloExtension_serializer e) })
+= CHE.clientHelloExtension_bytesize_eq e;
+  2ul `U32.add` clientHelloExtension_CHE_pre_shared_key_binders_offset (CHE.CHE_pre_shared_key?._0 e)
+
+let truncate_clientHelloExtension
+  (e: CHE.clientHelloExtension {CHE.CHE_pre_shared_key? e})
+: GTot LP.bytes
+= Seq.slice (LP.serialize CHE.clientHelloExtension_serializer e) 0 (U32.v (clientHelloExtension_binders_offset e))
+
 let clientHelloExtension_set_binders
   (e: CHE.clientHelloExtension {CHE.CHE_pre_shared_key? e})
   (b' : Psks.offeredPsks_binders { Psks.offeredPsks_binders_bytesize b' == Psks.offeredPsks_binders_bytesize (CHE.CHE_pre_shared_key?._0 e).Psks.binders})
@@ -137,6 +158,23 @@ let clientHelloExtension_set_binders
     CHE.clientHelloExtension_bytesize e' == CHE.clientHelloExtension_bytesize e
   })
 = CHE.CHE_pre_shared_key (clientHelloExtension_CHE_pre_shared_key_set_binders (CHE.CHE_pre_shared_key?._0 e) b')
+
+let binders_offset_clientHelloExtension_set_binders
+  (e: CHE.clientHelloExtension {CHE.CHE_pre_shared_key? e})
+  (b' : Psks.offeredPsks_binders { Psks.offeredPsks_binders_bytesize b' == Psks.offeredPsks_binders_bytesize (CHE.CHE_pre_shared_key?._0 e).Psks.binders})
+: Lemma
+  (let e' = clientHelloExtension_set_binders e b' in
+  let off = clientHelloExtension_binders_offset e in
+  let tr = truncate_clientHelloExtension e in
+  clientHelloExtension_binders_offset e' == off /\
+  truncate_clientHelloExtension e' `Seq.equal` tr /\
+  LP.serialize CHE.clientHelloExtension_serializer e' `Seq.equal`
+  (tr `Seq.append` LP.serialize Psks.offeredPsks_binders_serializer b'))
+= let e' = clientHelloExtension_set_binders e b' in
+  let off = clientHelloExtension_binders_offset e in
+  serialize_clientHelloExtension_eq_pre_shared_key e;
+  serialize_clientHelloExtension_eq_pre_shared_key e';
+  binders_offset_clientHelloExtension_CHE_pre_shared_key_set_binders (CHE.CHE_pre_shared_key?._0 e) b'
 
 module CHEs = Parsers.ClientHelloExtensions
 
