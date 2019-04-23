@@ -424,7 +424,7 @@ let clientHello_set_binders
     CHE.CHE_pre_shared_key? e' /\
     (CHE.CHE_pre_shared_key?._0 e').Psks.identities == (CHE.CHE_pre_shared_key?._0 e).Psks.identities /\
     (CHE.CHE_pre_shared_key?._0 e').Psks.binders == b' /\
-    CHEs.clientHelloExtensions_bytesize l' == CHEs.clientHelloExtensions_bytesize l
+    CH.clientHello_bytesize c' == CH.clientHello_bytesize c
   )})
 = {
     CH.version = c.CH.version;
@@ -435,7 +435,7 @@ let clientHello_set_binders
     CH.extensions = clientHelloExtensions_set_binders c.CH.extensions b'
   }
 
-#push-options "--z3rlimit 32"
+#push-options "--z3rlimit 64"
 
 let binders_offset_clientHello_set_binders
   (c: CH.clientHello {
@@ -461,9 +461,96 @@ let binders_offset_clientHello_set_binders
 
 #pop-options
 
+let serialize_handshake_m_client_hello_eq
+  (c: H.handshake_m_client_hello)
+: Lemma
+  (LP.serialize H.handshake_m_client_hello_serializer c ==
+   LP.serialize (LPs.serialize_bounded_integer 3) (U32.uint_to_t (CH.clientHello_bytesize c))
+   `Seq.append`
+   LP.serialize CH.clientHello_serializer c)
+= admit ()
+
+#push-options "--z3rlimit 16"
+
+let handshake_m_client_hello_binders_offset
+  (c: H.handshake_m_client_hello {
+    let l = c.CH.extensions in
+    Cons? l /\
+    CHE.CHE_pre_shared_key? (L.last l)
+  })
+: Tot (x: U32.t { U32.v x <= Seq.length (LP.serialize H.handshake_m_client_hello_serializer c) })
+= serialize_handshake_m_client_hello_eq c;
+  3ul `U32.add` clientHello_binders_offset c
+
+#pop-options
+
+let truncate_handshake_m_client_hello
+  (c: H.handshake_m_client_hello {
+    let l = c.CH.extensions in
+    Cons? l /\
+    CHE.CHE_pre_shared_key? (L.last l)
+  })
+: GTot LP.bytes
+= Seq.slice (LP.serialize H.handshake_m_client_hello_serializer c) 0 (U32.v (handshake_m_client_hello_binders_offset c))
+
+let handshake_m_client_hello_set_binders
+  (c: H.handshake_m_client_hello {
+    let l = c.CH.extensions in
+    Cons? l /\
+    CHE.CHE_pre_shared_key? (L.last l)
+  })
+  (b' : Psks.offeredPsks_binders {
+    let l = c.CH.extensions in
+    Psks.offeredPsks_binders_bytesize b' == Psks.offeredPsks_binders_bytesize (CHE.CHE_pre_shared_key?._0 (L.last l)).Psks.binders
+  })
+: Tot (c' : H.handshake_m_client_hello {
+    let l' = c'.CH.extensions in
+    c'.CH.version == c.CH.version /\
+    c'.CH.random == c.CH.random /\
+    c'.CH.session_id == c.CH.session_id /\
+    c'.CH.cipher_suites == c.CH.cipher_suites /\
+    c'.CH.compression_method == c.CH.compression_method /\
+    Cons? l' /\ (
+    let l = c.CH.extensions in
+    let e = L.last l in
+    let e' = L.last l' in
+    L.init l' = L.init l /\
+    CHE.CHE_pre_shared_key? e' /\
+    (CHE.CHE_pre_shared_key?._0 e').Psks.identities == (CHE.CHE_pre_shared_key?._0 e).Psks.identities /\
+    (CHE.CHE_pre_shared_key?._0 e').Psks.binders == b' /\
+    H.handshake_m_client_hello_bytesize c' == H.handshake_m_client_hello_bytesize c
+  )})
+= clientHello_set_binders c b'
+
+#push-options "--z3rlimit 32"
+
+let binders_offset_handshake_m_client_hello_set_binders
+  (c: H.handshake_m_client_hello {
+    let l = c.CH.extensions in
+    Cons? l /\
+    CHE.CHE_pre_shared_key? (L.last l)
+  })
+  (b' : Psks.offeredPsks_binders {
+    let l = c.CH.extensions in
+    Psks.offeredPsks_binders_bytesize b' == Psks.offeredPsks_binders_bytesize (CHE.CHE_pre_shared_key?._0 (L.last l)).Psks.binders})
+: Lemma
+  (let c' = handshake_m_client_hello_set_binders c b' in
+  let off = handshake_m_client_hello_binders_offset c in
+  let tr = truncate_handshake_m_client_hello c in
+  handshake_m_client_hello_binders_offset c' == off /\
+  truncate_handshake_m_client_hello c' `Seq.equal` tr /\
+  LP.serialize H.handshake_m_client_hello_serializer c' `Seq.equal`
+  (tr `Seq.append` LP.serialize Psks.offeredPsks_binders_serializer b'))
+= let c' = handshake_m_client_hello_set_binders c b' in
+  serialize_handshake_m_client_hello_eq c;
+  serialize_handshake_m_client_hello_eq c';
+  binders_offset_clientHello_set_binders c b'
+
+#pop-options
+
 let set_binders m b' =
   let c = H.M_client_hello?._0 m in
-  H.M_client_hello (clientHello_set_binders c b')
+  H.M_client_hello (handshake_m_client_hello_set_binders c b')
 
 let set_binders_bytesize m b' = ()
 
