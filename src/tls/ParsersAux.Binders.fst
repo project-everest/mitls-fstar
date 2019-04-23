@@ -34,11 +34,14 @@ let offeredPsks_set_binders
   Psks.binders = b';
 }
 
+friend Parsers.OfferedPsks
+
 let serialize_offeredPsks_eq
   (o: Psks.offeredPsks)
 : Lemma
   (LP.serialize Psks.offeredPsks_serializer o == LP.serialize Psks.offeredPsks_identities_serializer o.Psks.identities `Seq.append` LP.serialize Psks.offeredPsks_binders_serializer o.Psks.binders)
-= admit ()
+= LPs.serialize_synth_eq _ Psks.synth_offeredPsks Psks.offeredPsks'_serializer Psks.synth_offeredPsks_recip () o;
+  LPs.serialize_nondep_then_eq _ Psks.offeredPsks_identities_serializer () _ Psks.offeredPsks_binders_serializer (o.Psks.identities, o.Psks.binders)
 
 let offeredPsks_binders_offset
   (o: Psks.offeredPsks)
@@ -70,13 +73,18 @@ let binders_offset_offeredPsks_set_binders
   serialize_offeredPsks_eq o;
   serialize_offeredPsks_eq o'
 
+friend Parsers.ClientHelloExtension_CHE_pre_shared_key
+friend Parsers.PreSharedKeyClientExtension
+
 let serialize_clientHelloExtension_CHE_pre_shared_key_eq
   (o: CHE.clientHelloExtension_CHE_pre_shared_key)
 : Lemma
   ( LP.serialize CHE.clientHelloExtension_CHE_pre_shared_key_serializer o ==
     LP.serialize (LPs.serialize_bounded_integer 2) (U32.uint_to_t (Psks.offeredPsks_bytesize o)) `Seq.append`
     LP.serialize Psks.offeredPsks_serializer o )
-= admit ()
+= LPs.serialize_synth_eq _ CHE.synth_clientHelloExtension_CHE_pre_shared_key CHE.clientHelloExtension_CHE_pre_shared_key'_serializer CHE.synth_clientHelloExtension_CHE_pre_shared_key_recip () o;
+  Psks.offeredPsks_bytesize_eq o;
+  LP.serialized_length_eq Psks.offeredPsks_serializer o
 
 let clientHelloExtension_CHE_pre_shared_key_set_binders
   (o: CHE.clientHelloExtension_CHE_pre_shared_key)
