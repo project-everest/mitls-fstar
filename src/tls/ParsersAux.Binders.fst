@@ -14,11 +14,69 @@ module CHE = Parsers.ClientHelloExtension
 module BY = FStar.Bytes
 
 module LPS = LowParse.SLow.Base
+module LPs = LowParse.Spec
 
 module B = LowStar.Monotonic.Buffer
 module HST = FStar.HyperStack.ST
 
 module Psks = Parsers.OfferedPsks
+
+let offeredPsks_set_binders
+  (o: Psks.offeredPsks)
+  (b' : Psks.offeredPsks_binders { Psks.offeredPsks_binders_bytesize b' == Psks.offeredPsks_binders_bytesize o.Psks.binders })
+: Tot (o' : Psks.offeredPsks {
+    o'.Psks.identities == o.Psks.identities /\
+    o'.Psks.binders == b' /\
+    Psks.offeredPsks_bytesize o' == Psks.offeredPsks_bytesize o
+  })
+= {
+  Psks.identities = o.Psks.identities;
+  Psks.binders = b';
+}
+
+let serialize_offeredPsks_eq
+  (o: Psks.offeredPsks)
+: Lemma
+  (LP.serialize Psks.offeredPsks_serializer o == LP.serialize Psks.offeredPsks_identities_serializer o.Psks.identities `Seq.append` LP.serialize Psks.offeredPsks_binders_serializer o.Psks.binders)
+= admit ()
+
+let offeredPsks_binders_offset
+  (o: Psks.offeredPsks)
+: Tot (x: U32.t {
+    let s = LP.serialize Psks.offeredPsks_serializer o in
+    U32.v x <= Seq.length s
+  })
+= serialize_offeredPsks_eq o;
+  Psks.offeredPsks_identities_size32 o.Psks.identities
+
+let truncate_offeredPsks
+  (o: Psks.offeredPsks)
+: GTot LP.bytes
+= Seq.slice (LP.serialize Psks.offeredPsks_serializer o) 0 (U32.v (offeredPsks_binders_offset o))
+
+let binders_offset_offeredPsks_set_binders
+  (o: Psks.offeredPsks)
+  (b' : Psks.offeredPsks_binders { Psks.offeredPsks_binders_bytesize b' == Psks.offeredPsks_binders_bytesize o.Psks.binders })
+: Lemma
+  (let o' = offeredPsks_set_binders o b' in
+  let off = offeredPsks_binders_offset o in
+  let tr = truncate_offeredPsks o in
+  offeredPsks_binders_offset o' == off /\
+  truncate_offeredPsks o' `Seq.equal` tr /\
+  LP.serialize Psks.offeredPsks_serializer o' `Seq.equal`
+  (tr `Seq.append` LP.serialize Psks.offeredPsks_binders_serializer b'))
+= let o' = offeredPsks_set_binders o b' in
+  let off = offeredPsks_binders_offset o in
+  serialize_offeredPsks_eq o;
+  serialize_offeredPsks_eq o'
+
+let serialize_clientHelloExtension_CHE_pre_shared_key_eq
+  (o: CHE.clientHelloExtension_CHE_pre_shared_key)
+: Lemma
+  ( LP.serialize CHE.clientHelloExtension_CHE_pre_shared_key_serializer o ==
+    LP.serialize (LPs.serialize_bounded_integer 2) (U32.uint_to_t (Psks.offeredPsks_bytesize o)) `Seq.append`
+    LP.serialize Psks.offeredPsks_serializer o )
+= admit ()
 
 let clientHelloExtension_CHE_pre_shared_key_set_binders
   (o: CHE.clientHelloExtension_CHE_pre_shared_key)
@@ -28,10 +86,38 @@ let clientHelloExtension_CHE_pre_shared_key_set_binders
     o'.Psks.binders == b' /\
     CHE.clientHelloExtension_CHE_pre_shared_key_bytesize o' == CHE.clientHelloExtension_CHE_pre_shared_key_bytesize o
   })
-= {
-  Psks.identities = o.Psks.identities;
-  Psks.binders = b';
-}
+= offeredPsks_set_binders o b'
+
+let clientHelloExtension_CHE_pre_shared_key_binders_offset
+  (o: CHE.clientHelloExtension_CHE_pre_shared_key)
+: Tot (x: U32.t {
+    let s = LP.serialize CHE.clientHelloExtension_CHE_pre_shared_key_serializer o in
+    U32.v x <= Seq.length s
+  })
+= serialize_clientHelloExtension_CHE_pre_shared_key_eq o;
+  2ul `U32.add` offeredPsks_binders_offset o
+
+let truncate_clientHelloExtension_CHE_pre_shared_key
+  (o: CHE.clientHelloExtension_CHE_pre_shared_key)
+: GTot LP.bytes
+= Seq.slice (LP.serialize CHE.clientHelloExtension_CHE_pre_shared_key_serializer o) 0 (U32.v (clientHelloExtension_CHE_pre_shared_key_binders_offset o))
+
+let binders_offset_clientHelloExtension_CHE_pre_shared_key_set_binders
+  (o: CHE.clientHelloExtension_CHE_pre_shared_key)
+  (b' : Psks.offeredPsks_binders { Psks.offeredPsks_binders_bytesize b' == Psks.offeredPsks_binders_bytesize o.Psks.binders })
+: Lemma
+  (let o' = clientHelloExtension_CHE_pre_shared_key_set_binders o b' in
+  let off = clientHelloExtension_CHE_pre_shared_key_binders_offset o in
+  let tr = truncate_clientHelloExtension_CHE_pre_shared_key o in
+  clientHelloExtension_CHE_pre_shared_key_binders_offset o' == off /\
+  truncate_clientHelloExtension_CHE_pre_shared_key o' `Seq.equal` tr /\
+  LP.serialize CHE.clientHelloExtension_CHE_pre_shared_key_serializer o' `Seq.equal`
+  (tr `Seq.append` LP.serialize Psks.offeredPsks_binders_serializer b'))
+= let o' = clientHelloExtension_CHE_pre_shared_key_set_binders o b' in
+  let off = clientHelloExtension_CHE_pre_shared_key_binders_offset o in
+  serialize_clientHelloExtension_CHE_pre_shared_key_eq o;
+  serialize_clientHelloExtension_CHE_pre_shared_key_eq o';
+  binders_offset_offeredPsks_set_binders o b'
 
 let clientHelloExtension_set_binders
   (e: CHE.clientHelloExtension {CHE.CHE_pre_shared_key? e})
@@ -94,3 +180,15 @@ let set_binders m b' =
   })
 
 let set_binders_bytesize m b' = ()
+
+let binders_offset m = admit ()
+
+let binders_offset_set_binder m b' = admit ()
+
+let truncate_clientHello_bytes_correct m = admit ()
+
+let truncate_clientHello_bytes_set_binders m b' = admit ()
+
+let truncate_clientHello_bytes_inj_binders_bytesize m1 m2 = admit ()
+
+let binders_pos #rrel #rel sl pos = admit ()
