@@ -335,6 +335,8 @@ let valid_if_live_intro #t (#b:slice) (r:repr t b) (h:HS.mem)
     ()
 #pop-options
 
+/// `recall_stable_repr` Main lemma: if the underlying buffer is live
+///    then a stable repr is valid
 let recall_stable_repr #t #b (r:stable_repr t b)
   : Stack unit
     (requires fun h ->
@@ -361,6 +363,8 @@ let recall_stable_repr #t #b (r:stable_repr t b)
      in
      I.recall_value i es
 
+/// `stash`: Main stateful operation
+///    Copies a repr into a fresh stable repr
 let stash (rgn:HS.rid) #t #b (r:repr t b)
   : Stack (s:slice &
            r':stable_repr t s)
