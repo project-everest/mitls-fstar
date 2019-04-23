@@ -33,10 +33,10 @@ module MITLS.Repr
       framing principle and SMT triggers for it.
 *)
 module LP = LowParse.Low.Base
-module B = LowStar.Monotonic.Buffer
+module B = LowStar.Buffer
 module HS = FStar.HyperStack
 open FStar.Integers
-
+module C = LowStar.ConstBuffer
 (* For now, we restrict `repr` to only use mutable slices as its
    backing u8 store.
 
@@ -45,23 +45,49 @@ open FStar.Integers
    immutable.
 *)
 
-/// A wrapper around trivial preorders from LowStar.Buffer. The
-/// explicit erasure here is because LowParse is working around a
-/// known F* issue (#1694). It will eventually be removed.
-let trivial_preorder : LP.srel LP.byte =
-  Ghost.hide (LowStar.Buffer.trivial_preorder LP.byte)
+/// A slice is a const uint_8* and a length.
+///
+/// It is a layer around LP.slice, effectively guaranteeing that no
+/// writes are performed via this pointer.
+///
+/// It allows us to uniformly represent `repr t b` backed by either
+/// mutable or immutable arrays.
+noeq
+type const_slice =
+  | MkSlice:
+      base:C.const_buffer LP.byte ->
+      len:uint_32 {
+        UInt32.v len <= C.length base /\
+        len <= LP.validator_max_length
+      } ->
+      const_slice
 
+(* Some abbreviations *)
+let slice = const_slice //dubious; revise existing code to just use const_slice
+let mut_p = LowStar.Buffer.trivial_preorder LP.byte
+let immut_p = LowStar.ImmutableBuffer.immutable_preorder LP.byte
+let preorder (c:const_slice) = C.qbuf_pre (C.as_qbuf c.base)
 
-/// A mutable slice: Eventually, we might just change this one
-///   definition to be a const slice, multiplexing over mutable and
-///   immutable LP.slices
-let slice =
-  sl:LP.slice trivial_preorder trivial_preorder{
-    v sl.LP.len <= v LP.validator_max_length
-  }
+(* conversion between LP.slices and const_slices *)
+let of_slice (x:LP.slice mut_p mut_p { LP.(x.len <= LP.validator_max_length) })
+  : Tot const_slice
+  = MkSlice (C.of_buffer LP.(x.base)) LP.(x.len)
+
+let of_islice (x:LP.slice immut_p immut_p { LP.(x.len <= LP.validator_max_length) })
+  : Tot const_slice
+  = MkSlice (C.of_ibuffer LP.(x.base)) LP.(x.len)
+
+let to_slice (x:const_slice)
+  : Tot (LP.slice (preorder x) (preorder x))
+  = let b = C.cast x.base in
+    let len = x.len in
+    LP.({
+       base = b;
+       len = len
+    })
 
 /// `index b` is the type of valid indexes into `b`
-let index (b:slice)= i:uint_32{ i <= LP.(b.len) }
+let index (b:const_slice)= i:uint_32{ i <= b.len }
 
 /// `strong_parser_kind`: We restrict our attention to the
 /// representation of types whose parsers have the strong-prefix
@@ -71,17 +97,20 @@ let strong_parser_kind =
       LP.(k.parser_kind_subkind == Some ParserStrong)
     }
 
+
 (*** Representation types ***)
 
 /// `repr_meta t`: Each representation is associated with metadata
 /// that records both
 ///  -- the parser that defines the wire-format used
 ///  -- an erased value represented by the wire format
+///  -- the bytes of the wire format
 noeq
 type repr_meta (t:Type) = {
   parser_kind: strong_parser_kind;
   parser:LP.parser parser_kind t;
   value: t;
+  repr_bytes: Seq.seq LP.byte
 }
 
 /// `repr t b`: The main type of this module.
@@ -93,7 +122,7 @@ type repr_meta (t:Type) = {
 noeq
 type repr (t:Type) (b:slice) = {
   start_pos: index b;
-  end_pos: i:index b {start_pos <= i /\ i <= b.LP.len};
+  end_pos: i:index b {start_pos <= i /\ i <= b.len};
   meta: Ghost.erased (repr_meta t)
 }
 
@@ -135,8 +164,10 @@ let repr_p (t:Type) (b:slice) #k (parser:LP.parser k t) =
 ///
 let valid' (#t:Type) (#b:slice) (r:repr t b) (h:HS.mem)
   = let m = Ghost.reveal r.meta in
+    let b = to_slice b in
     LP.valid_pos m.parser h b r.start_pos r.end_pos /\
-    m.value == LP.contents m.parser h b r.start_pos
+    m.value == LP.contents m.parser h b r.start_pos /\
+    m.repr_bytes == LP.bytes_of_slice_from_to h b r.start_pos r.end_pos
 
 
 /// `valid`: abstract validity
@@ -157,7 +188,7 @@ let reveal_valid ()
 ///         sub-slice b.[from, to)
 let fp #t (#b:slice) (r:repr t b)
   : GTot B.loc
-  = LP.loc_slice_from_to b r.start_pos r.end_pos
+  = LP.loc_slice_from_to (to_slice b) r.start_pos r.end_pos
 
 /// `frame_valid`:
 ///    A framing principle for `valid r h`
@@ -172,7 +203,7 @@ let frame_valid #t #b (r:repr t b) (l:B.loc) (h0 h1:HS.mem)
       valid r h1)
     [SMTPat (valid r h1);
      SMTPat (B.modifies l h0 h1)]
-  = B.modifies_buffer_from_to_elim LP.(b.base) r.start_pos r.end_pos l h0 h1
+  = B.modifies_buffer_from_to_elim LP.((to_slice b).base) r.start_pos r.end_pos l h0 h1
 
 
 /// `value`: A convenience function to access the underlying value
@@ -186,9 +217,10 @@ open FStar.HyperStack.ST
 ///    Constructing a `repr` from a sub-slice
 ///      b.[from, to)
 ///    known to be valid for a given wire-format parser `p`
-let mk (b:slice) (from to:index b)
+let mk (b:LP.slice mut_p mut_p{ LP.(b.len <= validator_max_length) })
+       (from to:index (of_slice b))
        (#k:strong_parser_kind) #t (parser:LP.parser k t)
-  : Stack (repr_p t b parser)
+  : Stack (repr_p t (of_slice b) parser)
     (requires fun h ->
       LP.valid_pos parser h b from to)
     (ensures fun h0 r h1 ->
@@ -203,7 +235,8 @@ let mk (b:slice) (from to:index b)
       Ghost.hide ({
         parser_kind = _;
         parser = parser;
-        value = v
+        value = v;
+        repr_bytes = LP.bytes_of_slice_from_to h b from to
       })
     in
     {
@@ -211,3 +244,148 @@ let mk (b:slice) (from to:index b)
       end_pos = to;
       meta = m
     }
+
+(*** Stable Representations ***)
+
+(*
+   By copying a representation into an immutable buffer `i`,
+   we obtain a stable representation, which remains valid so long
+   as the `i` remains live.
+
+   We achieve this by relying on support for monotonic state provided
+   by Low*, as described in the POPL '18 paper "Recalling a Witness"
+
+   TODO: The feature also relies on an as yet unimplemented feature to
+         atomically allocate and initialize a buffer to a chosen
+         value.
+*)
+
+module I = LowStar.ImmutableBuffer
+
+/// `alloc_and_blit`:
+///   A new allocate & initialize primitive that produces
+///   an initialized immutable buffer atomically.
+///
+///   This will move to the LowStar.ImmutableBuffer library
+assume
+val alloc_and_blit
+      (r:HS.rid)
+      (#a:Type0) (#p #q:B.srel a) (x:B.mbuffer a p q)
+      (len:uint_32{len <= B.len x})
+   : Stack (y:LowStar.ImmutableBuffer.ibuffer a)
+     (requires fun h ->
+       B.live h x)
+     (ensures fun h0 y h1 ->
+       let v : Ghost.erased (Seq.seq a) = Ghost.hide (B.as_seq h0 x) in
+       B.modifies B.loc_none h0 h1 /\
+       B.live h1 y /\
+       B.fresh_loc (B.loc_buffer y) h0 h1 /\
+       B.frameOf y == r /\
+       B.len y == len /\
+       B.as_seq h1 y == B.as_seq h0 x /\
+       y `I.value_is` v
+       )
+
+/// `valid_if_live`: A pure predicate on `r:repr t b` that states that
+/// so long as the underlying buffer is live in a given state `h`, that
+/// `r` is valid in that state
+let valid_if_live #t (#b:slice) (r:repr t b) =
+  C.qbuf_qual (C.as_qbuf b.base) == C.IMMUTABLE /\
+  (let i : I.ibuffer LP.byte = C.as_mbuf b.base in
+   let m = Ghost.reveal r.meta in
+   exists (h:HS.mem).{:pattern valid r h}
+      i `I.value_is` Ghost.hide m.repr_bytes /\
+      m.repr_bytes == B.as_seq h i /\
+      valid r h /\
+      (forall h'.
+        C.live h' b.base /\
+        B.as_seq h i `Seq.equal` B.as_seq h' i ==>
+        valid r h'))
+
+/// `stable_repr t b`: A representation that is valid if its buffer is
+/// live
+let stable_repr t b = r:repr t b { valid_if_live r }
+
+/// `valid_if_live_intro` :
+///    An internal lemma to introduce `valid_if_live`
+#push-options "--z3rlimit_factor 4 --max_fuel 0 --max_ifuel 0"
+let valid_if_live_intro #t (#b:slice) (r:repr t b) (h:HS.mem)
+  : Lemma
+    (requires (
+      C.qbuf_qual (C.as_qbuf b.base) == C.IMMUTABLE /\
+      valid r h /\
+      (let i : I.ibuffer LP.byte = C.as_mbuf b.base in
+       let m = Ghost.reveal r.meta in
+       B.as_seq h i == m.repr_bytes /\
+       i `I.value_is` Ghost.hide m.repr_bytes)))
+    (ensures
+      valid_if_live r)
+  = let i : I.ibuffer LP.byte = C.as_mbuf b.base in
+    let aux (h':HS.mem)
+        : Lemma
+          (requires
+            C.live h' b.base /\
+            B.as_seq h i `Seq.equal` B.as_seq h' i)
+          (ensures
+            valid r h')
+          [SMTPat (valid r h')]
+        = let m = Ghost.reveal r.meta in
+          LP.valid_ext_intro m.parser h (to_slice b) r.start_pos h' (to_slice b) r.start_pos
+    in
+    ()
+#pop-options
+
+let recall_stable_repr #t #b (r:stable_repr t b)
+  : Stack unit
+    (requires fun h ->
+      C.live h b.base)
+    (ensures fun h0 _ h1 ->
+      h0 == h1 /\
+      valid r h1)
+  = let h1 = get () in
+    let i = C.to_ibuffer b.base in
+    let aux (h:HS.mem)
+      : Lemma
+        (requires
+          valid r h /\
+          B.as_seq h i == B.as_seq h1 i)
+        (ensures
+          valid r h1)
+        [SMTPat (valid r h)]
+      = let m = Ghost.reveal r.meta in
+        LP.valid_ext_intro m.parser h (to_slice b) r.start_pos h1 (to_slice b) r.start_pos
+     in
+     let es =
+       let m = Ghost.reveal r.meta in
+       Ghost.hide m.repr_bytes
+     in
+     I.recall_value i es
+
+let stash (rgn:HS.rid) #t #b (r:repr t b)
+  : Stack (s:slice &
+           r':stable_repr t s)
+   (requires fun h ->
+     valid r h)
+   (ensures fun h0 (|s, r'|) h1 ->
+     B.modifies B.loc_none h0 h1 /\
+     valid r' h1)
+ = let r_len = r.end_pos - r.start_pos in
+   let b_sub = C.sub b.base r.start_pos r_len in
+   let buf' = alloc_and_blit rgn (C.cast b_sub) r_len in
+   let s = MkSlice (C.of_ibuffer buf') r_len in
+   let h1 = get () in
+   let _ =
+     let m = Ghost.reveal r.meta in
+     assert (LP.valid_pos m.parser h1 (to_slice b) r.start_pos r.end_pos)    ;
+     LP.valid_ext_intro m.parser h1 (to_slice b) r.start_pos h1 (to_slice s) 0ul;
+     assert (LP.valid_pos m.parser h1 (to_slice s) 0ul r_len)
+   in
+   let r' : repr t s = {
+     start_pos = 0ul;
+     end_pos = r_len;
+     meta = r.meta
+   }
+   in
+   assert (valid r' h1);
+   valid_if_live_intro r' h1;
+   (| s, r' |)
