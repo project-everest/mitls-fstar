@@ -49,7 +49,7 @@ open FStar.Integers
 /// explicit erasure here is because LowParse is working around a
 /// known F* issue (#1694). It will eventually be removed.
 let trivial_preorder : LP.srel LP.byte =
-  Ghost.hide (LowStar.Buffer.trivial_preorder LP.byte)
+  LP.srel_of_buffer_srel (LowStar.Buffer.trivial_preorder LP.byte)
 
 
 /// A mutable slice: Eventually, we might just change this one
