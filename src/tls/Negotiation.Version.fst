@@ -12,7 +12,8 @@ open TLSError
 /// ---- PROTOCOL VERSIONS ----
 ///
 /// The protocol version is negotiated in ClientHello and ServerHello,
-/// using two overlapping mechanisms for TLS_1p3 and earlier versions.  
+/// using two overlapping mechanisms: the supportedVersion extension
+/// of TLS 1.3 and the protocolVersion field of earlier versions.
 
 // 19-01-04 possible code improvements: 
 // * replace min/max_version in config with the payload of the supported_version extension.
@@ -22,21 +23,21 @@ open TLSError
 /// version can be further constrained in the connection initial
 /// configuration.
 
+// see also Negotiation.implemented_version 
 let implemented pv = pv = TLS_1p2 || pv = TLS_1p3
 
 let supported cfg pv =
   implemented pv &&
   cfg.min_version `leqPV` pv && pv `leqPV` cfg.max_version
 
-// negotiation failures; does that help with extraction or verification?
+// hoisting negotiation failures; does these help with extraction or verification?
 // private let illegal       #a msg: result a = fatal #a Illegal_parameter msg
 // private let unsupported   #a msg: result a = fatal #a Unsupported_extension msg
 // private let fatal_version #a msg: result a = fatal #a Protocol_version msg
 
 /// (1) Client offers supported versions
 ///
-/// Offer only locally-implemented versions, irrespective of the
-/// configuration. We may provide more flexible configurations by replacing
+/// We may provide more flexible configurations by replacing
 /// min/max_version with a list of supported versions.
 
 (* 
@@ -75,17 +76,27 @@ let support cfg: result clientHelloExtension =
   else Correct (CHE_supported_versions vs)
 #pop-options 
 
+// sanity check
+let mem_support (pv: Parsers.ProtocolVersion.protocolVersion) = function 
+  | Correct (CHE_supported_versions xs) -> List.mem pv xs
+  | _ -> false 
+let supported_lemma cfg pv: Lemma (supported cfg pv <==> mem_support pv (support cfg)) = ()
+
+/// implementation
+
 open FStar.Integers 
 open LowParse.Low.Base 
 open Mem
 
 // migrate to LowParse? 
+
 let live_slice_pos h0 (#rrel #rel: _) (out: slice rrel rel) p0 = live_slice h0 out /\ p0 <= out.len 
+type output = slice (srel_of_buffer_srel (LowStar.Buffer.trivial_preorder _)) (srel_of_buffer_srel (LowStar.Buffer.trivial_preorder _))
 
 #push-options "--z3rlimit 100" 
 val write_supportedVersions
   (cfg:config) 
-  (out:slice (srel_of_buffer_srel (LowStar.Buffer.trivial_preorder _)) (srel_of_buffer_srel (LowStar.Buffer.trivial_preorder _)))
+  (out:output)
   (p0:UInt32.t)
 : Stack (result UInt32.t) 
   (requires fun h0 -> live_slice_pos h0 out p0) 
@@ -102,7 +113,7 @@ val write_supportedVersions
 val write_supportedVersion 
   (cfg: config) 
   (pv: Parsers.ProtocolVersion.protocolVersion) 
-  (out:slice (srel_of_buffer_srel (LowStar.Buffer.trivial_preorder _)) (srel_of_buffer_srel (LowStar.Buffer.trivial_preorder _)))
+  (out: output)
   (pl p0: UInt32.t)
 : Stack UInt32.t
   (requires fun h0 -> 
@@ -164,13 +175,21 @@ let offered_extensions o = o.CH.extensions
 /// header; this is fine since our server never accepts any proposal
 /// below the "maximal protocol version".
 
+// does it help? 
 private let correct #a (x:a): result a = Correct x
+
+// used only for tracing
+let offered_versions ch = 
+  match List.Tot.find CHE_supported_versions? (offered_extensions ch) with
+  | None -> [offered_version ch] 
+  | Some (CHE_supported_versions vs) -> vs
+  
 
 val choose: cfg:config -> ch -> result (pv:protocolVersion{ supported cfg pv })
 let choose cfg ch =
-  let legacy_max_pv = offered_version ch in // offer.Parsers.ClientHello.version in
+  let legacy_max_pv = offered_version ch in 
   if TLS_1p3 `leqPV` legacy_max_pv then
-    fatal Protocol_version "protocol version negotiation: bad legacy proposal"
+    fatal Protocol_version "Client offered an invalid legacy protocol version "
   else
     match List.Tot.find CHE_supported_versions? (offered_extensions ch) with
     | None ->
@@ -178,13 +197,13 @@ let choose cfg ch =
       if legacy_max_pv = TLS_1p2 && supported cfg TLS_1p2 then
         correct TLS_1p2
       else
-        fatal Protocol_version "protocol version negotiation: mismatch"
+        fatal Protocol_version "Client offered an unsupported protocol version"
 
     | Some (CHE_supported_versions vs) ->
       // new extension-based negotiation: we pick the first client offer supported by the server
       match List.Helpers.find_aux cfg supported vs with
       | Some v -> correct v
-      | None -> fatal Protocol_version "protocol version negotiation: mismatch"
+      | None -> fatal Protocol_version "Client offered no supported protocol version"
 
 (*
 // 19-01-26 TODO lowering this function requires two iterators on the
@@ -250,39 +269,46 @@ let isSentinelRandomValue client_pv server_pv server_random =
   assume(length down = 7 /\ length (abyte 1z) = 1 /\ length (abyte 0z) = 1); //18-12-16 TODO how?
   (server_pv `leqPV` TLS_1p2 && TLS_1p3 `leqPV` client_pv && server_random = down @| abyte 1z) ||
   (server_pv `leqPV` TLS_1p1 && TLS_1p2 `leqPV` client_pv && server_random = down @| abyte 0z)
+// TODO do we produce them? do we get downgrade resistance from them?
 
-val accept:
-  cfg: config ->
-  pv: protocolVersion ->
-  ses: Parsers.ServerHelloExtensions.serverHelloExtensions ->
-  sr: TLSInfo.random ->
-  result (pv: Parsers.ProtocolVersion.protocolVersion{ supported cfg pv })
-
-// 18-12-23 separate protocol-version negotiation, usable as spec & implementation.
-
-#set-options "--z3rlimit 100"
-let accept cfg pv ses sr =
-  if pv = TLS_1p3 then
-    fatal Illegal_parameter "cannot negotiate TLS 1.3 explicitly"
+/// ServerHello sets the protocol version
+let chosen sh =
+  let pv0 = sh.Parsers.ServerHello.version in 
+  if TLS_1p3 `leqPV` pv0 then
+    fatal Illegal_parameter "Server selected an illegal legacy protocol version"
   else
     let open Parsers.ServerHelloExtension in
-    let chosen: Parsers.ProtocolVersion.protocolVersion (*may be unknown*) =
-      match List.Tot.find SHE_supported_versions? ses with
-      | None -> pv // old style
-      | Some (SHE_supported_versions pv) -> pv in
-    if TLS_1p3 `leqPV` chosen && pv <> TLS_1p2 then
-      fatal Illegal_parameter "extension-based version negotiation requires TLS 1.2 apparent version"
-    else
-    if isSentinelRandomValue cfg.max_version chosen sr then 
-      fatal Illegal_parameter "protocol-version downgrade attempt"
-    else 
-    if not (supported cfg chosen) then 
-      fatal Illegal_parameter "client did not offer this protocol version"
-    else
-      correct chosen
-#reset-options
+    match List.Tot.find SHE_supported_versions? sh.Parsers.ServerHello.extensions with
+      | None -> correct pv0 // old style
+      | Some (SHE_supported_versions pv1) ->
+        if TLS_1p3 `leqPV` pv1 && pv0 <> TLS_1p2 then 
+        fatal Illegal_parameter "Extension-based version negotiation requires TLS 1.2 legacy protocol version"
+        else correct pv1 
 
-(* BEYOND VERSIONS 
+/// The client checks it is compatible with its offer
+val accept:
+  cfg: config ->
+  sh: Parsers.ServerHello.serverHello ->
+//pv: protocolVersion ->
+//ses: Parsers.ServerHelloExtensions.serverHelloExtensions ->
+//sr: TLSInfo.random ->
+  result (pv: Parsers.ProtocolVersion.protocolVersion{ chosen sh = Correct pv /\ supported cfg pv })
+
+let accept cfg sh (*pv ses sr*) =
+  match chosen sh with
+  | Error z -> Error z 
+  | Correct pv -> 
+    if isSentinelRandomValue cfg.max_version pv sh.Parsers.ServerHello.random then 
+      fatal Illegal_parameter "Protocol-version downgrade attempt detected"
+    else 
+    if not (supported cfg pv) then 
+      fatal Illegal_parameter "Client did not offer the selected protocol version"
+    else
+      correct pv
+
+//19-04-19 TODO lower reader for accept 
+
+(* experiment beyond version --- to be discarded
 
 /// ----
 ///
