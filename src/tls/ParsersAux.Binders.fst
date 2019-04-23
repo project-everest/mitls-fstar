@@ -360,11 +360,17 @@ let serialize_clientHello_eq
   (LP.serialize CH.clientHello_serializer c `Seq.equal` (
    LP.serialize Parsers.ProtocolVersion.protocolVersion_serializer c.CH.version `Seq.append`
    LP.serialize Parsers.Random.random_serializer c.CH.random `Seq.append`
+   LP.serialize Parsers.SessionID.sessionID_serializer c.CH.session_id `Seq.append`
    LP.serialize Parsers.ClientHello_cipher_suites.clientHello_cipher_suites_serializer c.CH.cipher_suites  `Seq.append`
    LP.serialize Parsers.ClientHello_compression_method.clientHello_compression_method_serializer c.CH.compression_method `Seq.append`
    LP.serialize CHEs.clientHelloExtensions_serializer c.CH.extensions
  ))
-= admit ()
+= LP.serialize_synth_eq _ CH.synth_clientHello CH.clientHello'_serializer CH.synth_clientHello_recip () c;
+  LP.serialize_nondep_then_eq _ Parsers.ProtocolVersion.protocolVersion_serializer () _ Parsers.Random.random_serializer (c.CH.version, c.CH.random);
+  LP.serialize_nondep_then_eq _ (LP.serialize_nondep_then  _ Parsers.ProtocolVersion.protocolVersion_serializer () _ Parsers.Random.random_serializer) () _ Parsers.SessionID.sessionID_serializer ((c.CH.version, c.CH.random), c.CH.session_id);
+  LP.serialize_nondep_then_eq _ (LP.serialize_nondep_then  _ (LP.serialize_nondep_then  _ Parsers.ProtocolVersion.protocolVersion_serializer () _ Parsers.Random.random_serializer) () _ Parsers.SessionID.sessionID_serializer) () _ CH.clientHello_cipher_suites_serializer (((c.CH.version, c.CH.random), c.CH.session_id), c.CH.cipher_suites);
+  LP.serialize_nondep_then_eq _ (LP.serialize_nondep_then  _ (LP.serialize_nondep_then  _ (LP.serialize_nondep_then  _ Parsers.ProtocolVersion.protocolVersion_serializer () _ Parsers.Random.random_serializer) () _ Parsers.SessionID.sessionID_serializer) () _ CH.clientHello_cipher_suites_serializer) () _ CH.clientHello_compression_method_serializer ((((c.CH.version, c.CH.random), c.CH.session_id), c.CH.cipher_suites), c.CH.compression_method);
+  LP.serialize_nondep_then_eq _ (LP.serialize_nondep_then  _ (LP.serialize_nondep_then  _ (LP.serialize_nondep_then  _ (LP.serialize_nondep_then  _ Parsers.ProtocolVersion.protocolVersion_serializer () _ Parsers.Random.random_serializer) () _ Parsers.SessionID.sessionID_serializer) () _ CH.clientHello_cipher_suites_serializer) () _ CH.clientHello_compression_method_serializer) () _ CHEs.clientHelloExtensions_serializer (((((c.CH.version, c.CH.random), c.CH.session_id), c.CH.cipher_suites), c.CH.compression_method), c.CH.extensions)
 
 #push-options "--z3rlimit 16"
 
@@ -378,8 +384,8 @@ let clientHello_binders_offset
 = serialize_clientHello_eq c;
   Parsers.ProtocolVersion.protocolVersion_size32 c.CH.version `U32.add`
   Parsers.Random.random_size32 c.CH.random `U32.add`
-  Parsers.ClientHello_cipher_suites.clientHello_cipher_suites_size32 c.CH.cipher_suites `U32.add`
-  Parsers.ClientHello_compression_method.clientHello_compression_method_size32 c.CH.compression_method `U32.add`
+  Parsers.SessionID.sessionID_size32 c.CH.session_id `U32.add`
+  Parsers.ClientHello_cipher_suites.clientHello_cipher_suites_size32 c.CH.cipher_suites `U32.add` Parsers.ClientHello_compression_method.clientHello_compression_method_size32 c.CH.compression_method `U32.add`
   clientHelloExtensions_binders_offset c.CH.extensions
 
 #pop-options
