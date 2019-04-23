@@ -1,6 +1,6 @@
 module ParsersAux.Binders
 
-module LP = LowParse.Low.Base
+module LP = LowParse.Low.List
 module HS = FStar.HyperStack
 module U32 = FStar.UInt32
 
@@ -13,7 +13,7 @@ module CHE = ParsersAux.ClientHelloExtension
 
 module BY = FStar.Bytes
 
-module LPS = LowParse.SLow.Base
+module LPS = LowParse.SLow.List
 module LPs = LowParse.Spec
 
 module B = LowStar.Monotonic.Buffer
@@ -178,6 +178,97 @@ let rec clientHelloExtensions_list_bytesize_append
   | [] -> ()
   | _ :: q -> clientHelloExtensions_list_bytesize_append q l2
 
+let serialize_list_clientHelloExtension
+  (l: list CHE.clientHelloExtension {
+    Cons? l /\
+    CHE.CHE_pre_shared_key? (L.last l)
+  })
+: Lemma
+  (LP.serialize (LPs.serialize_list _ CHE.clientHelloExtension_serializer) l ==
+  LP.serialize (LPs.serialize_list _ CHE.clientHelloExtension_serializer) (L.init l) `Seq.append`
+  LP.serialize CHE.clientHelloExtension_serializer (L.last l))
+= list_append_init_last l;
+  LP.serialize_list_append _ CHE.clientHelloExtension_serializer (L.init l) [L.last l];
+  LP.serialize_list_singleton _ CHE.clientHelloExtension_serializer (L.last l)
+
+let list_clientHelloExtension_binders_offset
+  (l: list CHE.clientHelloExtension {
+    Cons? l /\
+    CHE.CHE_pre_shared_key? (L.last l) /\
+    CHEs.clientHelloExtensions_list_bytesize l <= 65535
+  })
+: Tot (x: U32.t { U32.v x <= Seq.length (LP.serialize (LPs.serialize_list _ CHE.clientHelloExtension_serializer) l) })
+= serialize_list_clientHelloExtension l;
+  CHEs.clientHelloExtensions_list_bytesize_eq l;
+  LP.serialized_list_length_eq_length_serialize_list CHE.clientHelloExtension_serializer l;
+  LPS.size32_list CHE.clientHelloExtension_size32 () (L.init l) `U32.add` clientHelloExtension_binders_offset (L.last l)
+
+let truncate_list_clientHelloExtension
+  (l: list CHE.clientHelloExtension {
+    Cons? l /\
+    CHE.CHE_pre_shared_key? (L.last l) /\
+    CHEs.clientHelloExtensions_list_bytesize l <= 65535
+  })
+: GTot LP.bytes
+= Seq.slice (LP.serialize (LP.serialize_list _ CHE.clientHelloExtension_serializer) l) 0 (U32.v (list_clientHelloExtension_binders_offset l))
+
+let list_clientHelloExtension_set_binders
+  (l: list CHE.clientHelloExtension {
+    Cons? l /\
+    CHE.CHE_pre_shared_key? (L.last l)
+  })
+  (b' : Psks.offeredPsks_binders {
+    Psks.offeredPsks_binders_bytesize b' == Psks.offeredPsks_binders_bytesize (CHE.CHE_pre_shared_key?._0 (L.last l)).Psks.binders
+  })
+: Tot (l' : list CHE.clientHelloExtension {
+    Cons? l' /\ (
+    let e = L.last l in
+    let e' = L.last l' in
+    L.init l' = L.init l /\
+    CHE.CHE_pre_shared_key? e' /\
+    (CHE.CHE_pre_shared_key?._0 e').Psks.identities == (CHE.CHE_pre_shared_key?._0 e).Psks.identities /\
+    (CHE.CHE_pre_shared_key?._0 e').Psks.binders == b' /\
+    CHEs.clientHelloExtensions_list_bytesize l' == CHEs.clientHelloExtensions_list_bytesize l
+  )})
+= list_append_init_last l;
+  let lt = L.init l in
+  let e = L.last l in
+  let e' = clientHelloExtension_set_binders (L.last l) b' in
+  let l' = lt `L.append` [e'] in
+  list_init_last_def lt e' ;
+  clientHelloExtensions_list_bytesize_append lt [e];
+  clientHelloExtensions_list_bytesize_append lt [e'];
+  l'
+
+#push-options "--z3rlimit 16"
+
+let binders_offset_list_clientHelloExtension_set_binders
+  (l: list CHE.clientHelloExtension {
+    Cons? l /\
+    CHE.CHE_pre_shared_key? (L.last l) /\
+    CHEs.clientHelloExtensions_list_bytesize l <= 65535
+  })
+  (b' : Psks.offeredPsks_binders { Psks.offeredPsks_binders_bytesize b' == Psks.offeredPsks_binders_bytesize (CHE.CHE_pre_shared_key?._0 (L.last l)).Psks.binders})
+: Lemma
+  (
+  let l' = list_clientHelloExtension_set_binders l b' in
+  let off = list_clientHelloExtension_binders_offset l in
+  let tr = truncate_list_clientHelloExtension l in
+  list_clientHelloExtension_binders_offset l' == off /\
+  truncate_list_clientHelloExtension l' `Seq.equal` tr /\
+  LP.serialize (LP.serialize_list _ CHE.clientHelloExtension_serializer) l' `Seq.equal`
+  (tr `Seq.append` LP.serialize Psks.offeredPsks_binders_serializer b'))
+= let l' = list_clientHelloExtension_set_binders l b' in
+  let off = list_clientHelloExtension_binders_offset l in
+  serialize_list_clientHelloExtension l;
+  serialize_list_clientHelloExtension l';
+  binders_offset_clientHelloExtension_set_binders (L.last l) b';
+  serialize_list_clientHelloExtension l;
+  CHEs.clientHelloExtensions_list_bytesize_eq l;
+  LP.serialized_list_length_eq_length_serialize_list CHE.clientHelloExtension_serializer l
+
+#pop-options
+
 let clientHelloExtensions_set_binders
   (l: CHEs.clientHelloExtensions {
     Cons? l /\
@@ -196,16 +287,8 @@ let clientHelloExtensions_set_binders
     (CHE.CHE_pre_shared_key?._0 e').Psks.binders == b' /\
     CHEs.clientHelloExtensions_bytesize l' == CHEs.clientHelloExtensions_bytesize l
   )})
-= list_append_init_last l;
-  let lt = L.init l in
-  let e = L.last l in
-  let e' = clientHelloExtension_set_binders (L.last l) b' in
-  let l' = lt `L.append` [e'] in
-  list_init_last_def lt e' ;
-  clientHelloExtensions_list_bytesize_append lt [e];
-  clientHelloExtensions_list_bytesize_append lt [e'];
-  l'
-  
+= list_clientHelloExtension_set_binders l b'
+
 let set_binders m b' =
   let c = H.M_client_hello?._0 m in
   H.M_client_hello ({
