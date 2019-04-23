@@ -136,7 +136,7 @@ let write_supportedVersion min_version max_version pv out pl p0 =
 
 val write_supportedVersions
   (cfg:config) 
-  (out:slice (srel_of_buffer_srel (LowStar.Buffer.trivial_preorder _)) (srel_of_buffer_srel (LowStar.Buffer.trivial_preorder _)))
+  (out:output)
   (p0:UInt32.t)
 : Stack (result UInt32.t) 
   (requires fun h0 -> live_slice_pos h0 out p0) 
