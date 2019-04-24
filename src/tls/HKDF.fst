@@ -77,7 +77,7 @@ assume val expand_spec:
   GTot (lbytes32 len)
 
 val expand:
-  #ha:Hashing.alg ->
+  #ha:EverCrypt.HMAC.supported_alg ->
   prk: lbytes (EverCrypt.Hash.tagLength ha) ->
   info: bytes {Bytes.length info < 1024 (* somewhat arbitrary *) } ->
   len: UInt32.t {0 < v len /\ v len <= op_Multiply 255 (tagLength ha)} ->
@@ -242,7 +242,7 @@ let format ha label digest len =
 /// used for computing all derived keys; 
 
 val expand_label:
-  #ha: HMAC.ha ->
+  #ha: EverCrypt.HMAC.supported_alg ->
   secret: lbytes (EverCrypt.Hash.tagLength ha) ->
   label: string{length (bytes_of_string label) < 256 - 6} -> // -9?
   hv: bytes{length hv < 256} ->
