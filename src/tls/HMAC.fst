@@ -5,7 +5,7 @@ open Mem
 
 open FStar.HyperStack.ST
 
-let ha = EverCrypt.HMAC.ha
+let ha = EverCrypt.HMAC.supported_alg
 
 (* Parametric keyed HMAC; could be coded up from two HASH calls. *)
 
@@ -50,7 +50,7 @@ let hmac a k m =
     );
 
   let t = Bytes.of_buffer lt bt in
-  assert(Bytes.reveal t == EverCrypt.HMAC.hmac a (Bytes.reveal k) (Bytes.reveal m));
+  assert(Bytes.reveal t == Spec.HMAC.hmac a (Bytes.reveal k) (Bytes.reveal m));
   assert(t = Hashing.Spec.hmac a k m);
   pop_frame();
   let h11 = HyperStack.ST.get() in
