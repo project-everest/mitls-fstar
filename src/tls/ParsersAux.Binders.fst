@@ -194,12 +194,12 @@ let list_clientHelloExtension_set_binders
     (CHE.CHE_pre_shared_key?._0 e').Psks.binders == b' /\
     CHEs.clientHelloExtensions_list_bytesize l' == CHEs.clientHelloExtensions_list_bytesize l
   )})
-= list_append_init_last l;
+= L.append_init_last l;
   let lt = L.init l in
   let e = L.last l in
   let e' = clientHelloExtension_set_binders (L.last l) b' in
   let l' = lt `L.append` [e'] in
-  list_init_last_def lt e' ;
+  L.init_last_def lt e' ;
   clientHelloExtensions_list_bytesize_append lt [e];
   clientHelloExtensions_list_bytesize_append lt [e'];
   l'

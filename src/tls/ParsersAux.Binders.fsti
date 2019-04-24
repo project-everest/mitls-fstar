@@ -12,29 +12,6 @@ module CH = Parsers.ClientHello
 module CHE = Parsers.ClientHelloExtension
 module Psks = Parsers.OfferedPsks
 
-let rec list_append_init_last (#a: Type) (l: list a { Cons? l }) : Lemma
-  (l == L.append (L.init l) [L.last l])
-= match l with
-  | a :: q ->
-    if Cons? q
-    then
-      list_append_init_last q
-    else
-      ()
-
-let rec list_init_last_def (#a: Type) (l: list a) (x: a) : Lemma
-  (let l' = L.append l [x] in
-  L.init l' == l /\ L.last l' == x)
-= match l with
-  | [] -> ()
-  | y :: q -> list_init_last_def q x
-
-let list_init_last_inj (#a: Type) (l1: list a { Cons? l1 } ) (l2: list a { Cons? l2 } ) : Lemma
-  (requires (L.init l1 == L.init l2 /\ L.last l1 == L.last l2))
-  (ensures (l1 == l2))
-= list_append_init_last l1;
-  list_append_init_last l2
-
 let has_binders (m: H.handshake) : Tot bool = (* TODO: harmonize with HSL.Transcript.client_hello_has_psk *)
   H.M_client_hello? m && (
   let c = H.M_client_hello?._0 m in
@@ -65,7 +42,7 @@ val set_binders (m: H.handshake {has_binders m}) (b' : Psks.offeredPsks_binders 
 
 let set_binders_get_binders (m: H.handshake {has_binders m}) : Lemma
   (set_binders m (get_binders m) == m)
-= list_init_last_inj (H.M_client_hello?._0 m).CH.extensions (H.M_client_hello?._0 (set_binders m (get_binders m))).CH.extensions
+= L.init_last_inj (H.M_client_hello?._0 m).CH.extensions (H.M_client_hello?._0 (set_binders m (get_binders m))).CH.extensions
 
 val set_binders_bytesize
   (m: H.handshake {has_binders m})
@@ -79,7 +56,7 @@ let set_binders_set_binders
   (b2: Psks.offeredPsks_binders { Psks.offeredPsks_binders_bytesize b2 == Psks.offeredPsks_binders_bytesize b1})
 : Lemma
   (set_binders (set_binders m b1) b2 == set_binders m b2)
-= list_init_last_inj (H.M_client_hello?._0 (set_binders (set_binders m b1) b2)).CH.extensions (H.M_client_hello?._0 (set_binders m b2)).CH.extensions
+= L.init_last_inj (H.M_client_hello?._0 (set_binders (set_binders m b1) b2)).CH.extensions (H.M_client_hello?._0 (set_binders m b2)).CH.extensions
 
 val binders_offset
   (m: H.handshake {has_binders m})
