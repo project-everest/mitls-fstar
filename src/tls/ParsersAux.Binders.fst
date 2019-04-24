@@ -461,6 +461,10 @@ let binders_offset_clientHello_set_binders
 
 #pop-options
 
+friend Parsers.Handshake_m_client_hello
+
+#push-options "--z3rlimit 16"
+
 let serialize_handshake_m_client_hello_eq
   (c: H.handshake_m_client_hello)
 : Lemma
@@ -468,9 +472,7 @@ let serialize_handshake_m_client_hello_eq
    LP.serialize (LPs.serialize_bounded_integer 3) (U32.uint_to_t (CH.clientHello_bytesize c))
    `Seq.append`
    LP.serialize CH.clientHello_serializer c)
-= admit ()
-
-#push-options "--z3rlimit 16"
+= CH.clientHello_bytesize_eq c
 
 let handshake_m_client_hello_binders_offset
   (c: H.handshake_m_client_hello {
