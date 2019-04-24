@@ -30,7 +30,7 @@ type hkey (a:alg) = b:bytes{
   // 18-09-12 this usage restriction is dubious, but always met in
   // miTLS; it avoids a null-pointer case in the wrapper below.
   length b > 0 /\
-  EverCrypt.HMAC.keysized a (length b)}
+  Spec.HMAC.keysized a (length b)}
 
 val hmac:
   a:alg ->
@@ -39,7 +39,7 @@ val hmac:
   GTot (t:tag a{
     let text = Bytes.reveal text in
     Seq.length text + blockLength a <= maxLength a /\
-    Bytes.reveal t = EverCrypt.HMAC.hmac a (Bytes.reveal k) text})
+    Bytes.reveal t = Spec.HMAC.hmac a (Bytes.reveal k) text})
 
 let hmac a k text =
   let k = Bytes.reveal k in
@@ -47,7 +47,7 @@ let hmac a k text =
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
   assert (Seq.length text + blockLength a <= maxLength a);
-  let t: EverCrypt.Hash.tag a = EverCrypt.HMAC.hmac a k text in
+  let t: EverCrypt.Hash.tag a = Spec.HMAC.hmac a k text in
   Bytes.hide t
 
 //18-08-31 review
@@ -78,7 +78,7 @@ let tls_tagLen = function
   | Hash a  -> tagLen a
   | MD5SHA1 -> tagLen MD5 + tagLen SHA1
 
-type tls_macAlg = EverCrypt.HMAC.ha
+type tls_macAlg = EverCrypt.HMAC.supported_alg
 
 (* for reference, a bytes spec of HMAC:
 let hmac a key message = EverCrypt.Hash.

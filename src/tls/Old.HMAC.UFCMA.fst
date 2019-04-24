@@ -111,7 +111,7 @@ val mac: #i:id -> #good:(bytes -> Type) -> k:key i good -> p:bytes { authId i ==
 let mac #i #good k p =
   let a = alg i in 
   assume (length p + Hashing.Spec.blockLength a < pow2 32);
-  assert_norm(EverCrypt.HMAC.keysized a (EverCrypt.Hash.tagLength a));
+  assert_norm(Spec.HMAC.keysized a (EverCrypt.Hash.tagLength a));
   let p : p:bytes { authId i ==> good p } = p in
   let t = HMAC.hmac a k.kv p in
   let e : entry i good = Entry t p in
