@@ -363,7 +363,7 @@ let prfMacAlg_of_ciphersuite_aux =
   | _                               -> None
 
 (** Determine if the tuple PV and CS is the correct association with PRF *)
-let pvcs (pv:protocolVersion) (cs:cipherSuite) =
+let pvcs (pv:Parsers.ProtocolVersion.protocolVersion) (cs:cipherSuite) =
   match pv, cs with
   | TLS_1p3, CipherSuite13 _ _ -> true
   | TLS_1p3, CipherSuite _ _ _ -> false

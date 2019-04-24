@@ -39,6 +39,9 @@ val print_namedGroupList
   (requires (fun h -> LP.valid Parsers.NamedGroupList.namedGroupList_parser h sl pos))
   (ensures (fun h _ h' -> B.modifies B.loc_none h h'))
 
+
+let implemented_version = pv:protocolVersion {pv = TLS_1p2 || pv = TLS_1p3}
+
 type pre_share = g:CommonDH.group & CommonDH.pre_share g
 type share = g:CommonDH.group & CommonDH.share g
 
@@ -83,7 +86,7 @@ noeq type mode =
     n_hrr: option (retryInfo n_offer) ->  // optional HRR roundtrip
 
     // more from SH (both TLS 1.2 and TLS 1.3)
-    n_protocol_version: protocolVersion ->
+    n_protocol_version: implemented_version ->
     n_server_random: TLSInfo.random ->
     n_sessionID: sessionID ->
     n_cipher_suite: cipherSuite ->
@@ -246,40 +249,50 @@ val getMode: reader mode
 val version: reader protocolVersion 
 val is_hrr: reader bool
 
+let inv (#region:rgn) (#role:TLSConstants.role) (ns:t region role) h0 = h0 `HS.contains` ns.state
+
 // TODO 19-01-06 effect of signing
 val sign: 
   #region:rgn -> #role:TLSConstants.role -> ns:t region role -> 
   bytes -> 
   ST (result HandshakeMessages.certificateVerify13)
-  (requires (fun h0 -> h0 `HS.contains` ns.state ))
-  (ensures (fun h0 _ h1 -> h0 == h1))
+  (requires fun h0 -> inv ns h0)
+  (ensures fun h0 _ h1 -> inv ns h1)
 
 
 (* CLIENT *) 
 
+// [C_Init ==> C_Offer]
 val client_ClientHello: 
-  #region:rgn -> t region Client -> 
+  #region:rgn -> ns:t region Client -> 
   oks:option Extensions.keyShareClientHello -> 
-  St (result offer)
-  // [C_Init ==> C_Offer]
+  ST (result offer)
+  (requires fun h0 -> inv ns h0 /\ C_Init? (HS.sel h0 ns.state))
+  (ensures fun h0 r h1 -> inv ns h1 /\ 
+    (match r with
+    | Correct offer -> HS.sel h1 ns.state == C_Offer offer
+    | _ -> True))
   // ensures offer = client_offer ns.cfg ns.nonce oks ns.resume now [used e.g. for binder auth] 
   // oks: optional client key shares created by ks_client_init
   // now: stateful time for age obfuscation (return it ghostly?)
-
+// TODO retry
 val group_of_hrr: hrr -> option CommonDH.namedGroup
 
 val client_HelloRetryRequest:
-  #region:rgn -> t region Client -> 
+  #region:rgn -> ns:t region Client -> 
   hrr -> 
   option share -> 
-  St (result offer) 
+  ST (result offer) 
+  (requires fun h0 -> inv ns h0)
+  (ensures fun h0 _ h1 -> inv ns h1)
   // [C_Offer ==> C_HRR] TODO separate pure spec
   
 val client_ServerHello: 
-  #region:rgn -> 
-  t region Client ->
+  #region:rgn -> ns: t region Client ->
   HandshakeMessages.serverHello ->
-  St (result mode) 
+  ST (result mode) 
+  (requires fun h0 -> inv ns h0) 
+  (ensures fun h0 _ h1 -> inv ns h1) 
   // [C_Offer | C_HRR_offer ==> C_Mode] with TODO hrr.  
   // ensures client_mode ns offer sh == Correct mode
 
@@ -292,28 +305,35 @@ val to_be_signed:
   bytes
 
 val client_ServerKeyExchange: 
-  #region:rgn -> t region Client ->
+  #region:rgn -> ns: t region Client ->
   serverCert:HandshakeMessages.certificate12 ->
   kex: Parsers.KeyExchangeAlgorithm.keyExchangeAlgorithm ->
   ske: HandshakeMessages.serverKeyExchange kex ->
   ocr:option HandshakeMessages.certificateRequest12 ->
-  St (result mode)
+  ST (result mode)
+  (requires fun h0 -> inv ns h0) 
+  (ensures fun h0 _ h1 -> inv ns h1) 
   // [C_Mode ==> C_Mode] setting [server_share; client_cert_request; server_cert] in mode,
   // requires mode.n_protocol_version = TLS_1p2
 
 val clientComplete_13: 
-  #region:rgn -> t region Client ->
+  #region:rgn -> ns:t region Client ->
   ee: HandshakeMessages.encryptedExtensions ->
   optCertRequest: option HandshakeMessages.certificateRequest13 ->
   optServerCert: option Cert.chain13 -> // Not sent with PSK
   optCertVerify: option HandshakeMessages.certificateVerify13 -> // Not sent with PSK
   digest: option (b:bytes{length b <= 32}) ->
-  St (result mode) // it needs to be computed, whether returned or not
+  ST (result mode) // it needs to be computed, whether returned or not
+  (requires fun h0 -> 
+    inv ns h0 /\ (match HS.sel h0 ns.state with
+    | C_Mode m -> m.n_protocol_version = TLS_1p3
+    | _ -> False ))
+  (ensures fun h0 _ h1 -> True)
   // [C_Mode ==> C_Complete] setting [sexts optCertRequest schain] in mode and recording [ccert]
   // ensures schain-based server authentication of the mode (including sexts) 
   // ensures consistency of sexts and schain with the offer.
   // TODO client sigs; till then ccert=None and optCertRequest is ignored.
-
+  // 19-04-19 TODO inv preservation through callbacks?
 
 (* SERVER *) 
 
@@ -347,11 +367,12 @@ val server_ClientHello:
 /// (the two-step decomposition enables DH generation from partial mode in-between)
 /// 
 val server_ServerShare: 
-  #region:rgn -> 
-  t region Server ->
+  #region:rgn -> ns: t region Server ->
   oks:option (g:CommonDH.group & CommonDH.pre_share g) -> //19-01-22 to be refined?
   app_exts: extra_sext ->
-  St (result mode)
+  ST (result mode)
+  (requires fun h0 -> inv ns h0) 
+  (ensures fun h0 _ h1 -> inv ns h1) 
   // [S_ClientHello ==> S_Mode] setting [sexts, oks] in mode
   // requires oks is consistent with mode (?)
   // ensures sexts = server_negotiateExtensions ns mode cexts @ app_exts
