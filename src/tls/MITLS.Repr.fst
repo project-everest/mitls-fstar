@@ -56,7 +56,7 @@ type const_slice =
       const_slice
 
 (* Some abbreviations *)
-let slice = const_slice //dubious; revise existing code to just use const_slice
+let slice = const_slice //temporary; revise existing code to just use const_slice
 let mut_p = LowStar.Buffer.trivial_preorder LP.byte
 let immut_p = LowStar.ImmutableBuffer.immutable_preorder LP.byte
 let preorder (c:const_slice) = C.qbuf_pre (C.as_qbuf c.base)
@@ -147,7 +147,7 @@ let repr_p (t:Type) (b:slice) #k (parser:LP.parser k t) =
 ///   First, we provide `valid'`, a transparent definition and then
 ///   turn it `abstract` by the `valid` predicate just below.
 ///
-///   Validity encapsulate two related LowParse notions:
+///   Validity encapsulates three related LowParse notions:
 ///
 ///    1. That the underlying slice contains a valid wire-format
 ///    (`valid_pos`)
@@ -155,6 +155,8 @@ let repr_p (t:Type) (b:slice) #k (parser:LP.parser k t) =
 ///    2. That the ghost value associated with the `repr` is the
 ///    parsed value of the wire format.
 ///
+///    3. The bytes of the slice are indeed the representation of the
+///    ghost value in wire format
 let valid' (#t:Type) (#b:slice) (r:repr t b) (h:HS.mem)
   = let m = Ghost.reveal r.meta in
     let b = to_slice b in
@@ -250,7 +252,7 @@ let mk (b:LP.slice mut_p mut_p{ LP.(b.len <= validator_max_length) })
 
    TODO: The feature also relies on an as yet unimplemented feature to
          atomically allocate and initialize a buffer to a chosen
-         value.
+         value. This will soon be added to the LowStar library.
 *)
 
 module I = LowStar.ImmutableBuffer
@@ -301,7 +303,12 @@ let stable_repr t b = r:repr t b { valid_if_live r }
 
 /// `valid_if_live_intro` :
 ///    An internal lemma to introduce `valid_if_live`
-#push-options "--z3rlimit_factor 8 --max_fuel 0 --max_ifuel 0"
+
+// Note: the next proof is flaky and occasionally enters a triggering
+// vortex with the notorious FStar.Seq.Properties.slice_slice
+// Removing that from the context makes the proof instantaneous
+#reset-options "--max_fuel 0 --max_ifuel 0 \
+                --using_facts_from '* -FStar.Seq.Properties.slice_slice'"
 let valid_if_live_intro #t (#b:slice) (r:repr t b) (h:HS.mem)
   : Lemma
     (requires (
@@ -326,7 +333,6 @@ let valid_if_live_intro #t (#b:slice) (r:repr t b) (h:HS.mem)
           LP.valid_ext_intro m.parser h (to_slice b) r.start_pos h' (to_slice b) r.start_pos
     in
     ()
-#pop-options
 
 /// `recall_stable_repr` Main lemma: if the underlying buffer is live
 ///    then a stable repr is valid
@@ -365,7 +371,8 @@ let stash (rgn:HS.rid) #t #b (r:repr t b)
      valid r h)
    (ensures fun h0 (|s, r'|) h1 ->
      B.modifies B.loc_none h0 h1 /\
-     valid r' h1)
+     valid r' h1 /\
+     r.meta == r'.meta)
  = let r_len = r.end_pos - r.start_pos in
    let b_sub = C.sub b.base r.start_pos r_len in
    let buf' = alloc_and_blit rgn (C.cast b_sub) r_len in
