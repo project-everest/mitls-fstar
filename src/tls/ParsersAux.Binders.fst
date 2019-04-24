@@ -7,7 +7,7 @@ module U32 = FStar.UInt32
 (* ClientHello binders *)
 
 module L = FStar.List.Tot
-module H = Parsers.Handshake
+module H = ParsersAux.Handshake
 module CH = Parsers.ClientHello
 module CHE = ParsersAux.ClientHelloExtension
 
