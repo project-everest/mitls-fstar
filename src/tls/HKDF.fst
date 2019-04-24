@@ -32,7 +32,7 @@ HKDF-Extract(salt, IKM) -> PRK
 
 inline_for_extraction
 val extract:
-  #ha: EverCrypt.HMAC.ha ->
+  #ha: EverCrypt.HMAC.supported_alg ->
   salt: hkey ha ->
   ikm: macable ha ->
   ST (hkey ha)
@@ -93,7 +93,7 @@ let expand #ha prk info len =
   let tlen = EverCrypt.Hash.tagLen ha in
   let prk_p = LowStar.Buffer.alloca 0uy tlen in
   store_bytes prk prk_p;
-  assert_norm(EverCrypt.HMAC.keysized ha (EverCrypt.Hash.tagLength ha));
+  assert_norm(Spec.HMAC.keysized ha (EverCrypt.Hash.tagLength ha));
 
   let tag_p = LowStar.Buffer.alloca 0uy len in
   let infolen = Bytes.len info in
@@ -271,7 +271,7 @@ let expand_label #ha secret label digest len =
 /// used in both hanshakes for deriving intermediate HKDF keys.
 
 val derive_secret:
-  ha: EverCrypt.HMAC.ha ->
+  ha: EverCrypt.HMAC.supported_alg ->
   secret: lbytes (EverCrypt.Hash.tagLength ha) ->
   label: string{length (bytes_of_string label) < 256-6} ->
   digest: bytes{length digest < 256} ->
@@ -288,7 +288,7 @@ let derive_secret ha secret label digest =
 /// not used anymore? 
 
 val expand_secret:
-  #ha: EverCrypt.HMAC.ha ->
+  #ha: EverCrypt.HMAC.supported_alg ->
   secret: hkey ha ->
   label: string{length (bytes_of_string label) < 256-6} ->
   hs_hash: bytes{length hs_hash < 256} ->
