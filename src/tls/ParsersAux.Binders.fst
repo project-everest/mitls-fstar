@@ -550,21 +550,57 @@ let binders_offset_handshake_m_client_hello_set_binders
 
 #pop-options
 
+module HT = Parsers.HandshakeType
+
 let set_binders m b' =
   let c = H.M_client_hello?._0 m in
   H.M_client_hello (handshake_m_client_hello_set_binders c b')
 
 let set_binders_bytesize m b' = ()
 
-let binders_offset m = admit ()
+#push-options "--z3rlimit 16"
 
-let binders_offset_set_binder m b' = admit ()
+let binders_offset h =
+  H.handshake_bytesize_eq h;
+  1ul `U32.add` handshake_m_client_hello_binders_offset (H.M_client_hello?._0 h)
 
-let truncate_clientHello_bytes_correct m = admit ()
+#pop-options
 
-let truncate_clientHello_bytes_set_binders m b' = admit ()
+let truncate_handshake
+  (h: H.handshake {has_binders h})
+: GTot LP.bytes
+= Seq.slice (LP.serialize H.handshake_serializer h) 0 (U32.v (binders_offset h))
 
-#push-options "--z3rlimit 16" 
+#push-options "--z3rlimit 64"
+
+let binders_offset_handshake_set_binders
+  (h: H.handshake {has_binders h})
+  (b' : Psks.offeredPsks_binders { Psks.offeredPsks_binders_bytesize b' == Psks.offeredPsks_binders_bytesize (get_binders h)})
+: Lemma
+  (let h' = set_binders h b' in
+  let off = binders_offset h in
+  let tr = truncate_handshake h in
+  binders_offset h' == off /\
+  truncate_handshake h' `Seq.equal` tr /\
+  LP.serialize H.handshake_serializer h' `Seq.equal`
+  (tr `Seq.append` LP.serialize Psks.offeredPsks_binders_serializer b'))
+= let h' = set_binders h b' in
+  let off = binders_offset h in
+  H.serialize_handshake_eq_client_hello h;
+  H.serialize_handshake_eq_client_hello h';
+  binders_offset_handshake_m_client_hello_set_binders (H.M_client_hello?._0 h) b'
+
+#pop-options
+
+let binders_offset_set_binder m b' = binders_offset_handshake_set_binders m b'
+
+let truncate_clientHello_bytes_correct m =
+  set_binders_get_binders m;
+  binders_offset_handshake_set_binders m (get_binders m)
+
+let truncate_clientHello_bytes_set_binders m b' = binders_offset_handshake_set_binders m b'
+
+#set-options "--z3rlimit 32"
 
 let truncate_clientHello_bytes_inj_binders_bytesize m1 m2 = admit ()
 
