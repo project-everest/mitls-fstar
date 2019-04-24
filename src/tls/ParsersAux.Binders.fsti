@@ -10,6 +10,7 @@ module L = FStar.List.Tot
 module H = Parsers.Handshake
 module CH = Parsers.ClientHello
 module CHE = Parsers.ClientHelloExtension
+module Psks = Parsers.OfferedPsks
 
 let rec list_append_init_last (#a: Type) (l: list a { Cons? l }) : Lemma
   (l == L.append (L.init l) [L.last l])
@@ -40,8 +41,6 @@ let has_binders (m: H.handshake) : Tot bool = (* TODO: harmonize with HSL.Transc
   Cons? (c.CH.extensions) &&
   CHE.CHE_pre_shared_key? (L.last c.CH.extensions)
   )
-
-module Psks = Parsers.OfferedPsks
 
 let get_binders (m: H.handshake {has_binders m}) : Tot Psks.offeredPsks_binders =
   let c = H.M_client_hello?._0 m in
