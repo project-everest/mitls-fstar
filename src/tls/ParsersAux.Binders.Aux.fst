@@ -77,6 +77,10 @@ let rec serialize_list_eq_parser_fail
 
 #pop-options
 
+let serialize_list_clientHelloExtension_inj_prefix
+  l1 l2 b1 b2
+= serialize_list_eq_parser_fail CHE.clientHelloExtension_serializer l1 l2 b1 b2
+
 let size32_list_clientHelloExtension
   l
 = LS.size32_list CHE.clientHelloExtension_size32 () l
