@@ -35,6 +35,19 @@ val serialize_list_clientHelloExtension_eq
   serialize_list_clientHelloExtension (L.init l) `Seq.append`
   LP.serialize CHE.clientHelloExtension_serializer (L.last l))
 
+val serialize_list_clientHelloExtension_inj_prefix
+  (l1 l2: list CHE.clientHelloExtension)
+  (b1 b2: LP.bytes)
+: Lemma
+  (requires (
+    serialize_list_clientHelloExtension l1 `Seq.append` b1 == serialize_list_clientHelloExtension l2 `Seq.append` b2 /\
+    LP.parse CHE.clientHelloExtension_parser b1 == None /\
+    LP.parse CHE.clientHelloExtension_parser b2 == None
+  ))
+  (ensures (
+    l1 == l2 /\ b1 == b2
+  ))
+
 val size32_list_clientHelloExtension (l: list CHE.clientHelloExtension { Seq.length (serialize_list_clientHelloExtension l) < 4294967296 }) : Tot (x: U32.t { U32.v x == Seq.length (serialize_list_clientHelloExtension l) })
 
 val clientHelloExtensions_list_bytesize_eq'
