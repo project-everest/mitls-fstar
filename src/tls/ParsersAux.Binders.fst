@@ -394,6 +394,34 @@ let binders_offset_clientHelloExtensions_set_binders
   serialize_clientHelloExtensions_eq l';
   binders_offset_list_clientHelloExtension_set_binders l b'
 
+let truncate_clientHelloExtensions_eq_left
+  (l: CHEs.clientHelloExtensions {
+    Cons? l /\
+    CHE.CHE_pre_shared_key? (L.last l)
+  })
+: Lemma
+  (truncate_clientHelloExtensions l `Seq.equal` (LP.serialize (LI.serialize_bounded_integer 2) (U32.uint_to_t (CHEs.clientHelloExtensions_list_bytesize l)) `Seq.append` truncate_list_clientHelloExtension l))
+= serialize_clientHelloExtensions_eq l
+
+let truncate_clientHelloExtensions_inj_binders_bytesize
+  (l1: CHEs.clientHelloExtensions {
+    Cons? l1 /\
+    CHE.CHE_pre_shared_key? (L.last l1)
+  })
+  (l2: CHEs.clientHelloExtensions {
+    Cons? l2 /\
+    CHE.CHE_pre_shared_key? (L.last l2)
+  })
+: Lemma
+  (requires (truncate_clientHelloExtensions l1 == truncate_clientHelloExtensions l2))
+  (ensures (
+    Psks.offeredPsks_binders_bytesize (CHE.CHE_pre_shared_key?._0 (L.last l1)).Psks.binders == Psks.offeredPsks_binders_bytesize (CHE.CHE_pre_shared_key?._0 (L.last l2)).Psks.binders
+  ))
+= truncate_clientHelloExtensions_eq_left l1;
+  truncate_clientHelloExtensions_eq_left l2;
+  LP.serialize_strong_prefix (LI.serialize_bounded_integer 2) (U32.uint_to_t (CHEs.clientHelloExtensions_list_bytesize l1)) (U32.uint_to_t (CHEs.clientHelloExtensions_list_bytesize l2)) (truncate_list_clientHelloExtension l1) (truncate_list_clientHelloExtension l2);
+  truncate_list_clientHelloExtension_inj_binders_bytesize l1 l2
+
 let clientHello_binders_offset
   (c: CH.clientHello {
     let l = c.CH.extensions in
@@ -453,6 +481,8 @@ let clientHello_set_binders
     CH.extensions = clientHelloExtensions_set_binders c.CH.extensions b'
   }
 
+#push-options "--z3rlimit 16"
+
 let binders_offset_clientHello_set_binders
   (c: CH.clientHello {
     let l = c.CH.extensions in
@@ -474,6 +504,91 @@ let binders_offset_clientHello_set_binders
   serialize_clientHello_eq c;
   serialize_clientHello_eq c';
   binders_offset_clientHelloExtensions_set_binders c.CH.extensions b'
+
+let truncate_clientHello_eq_left
+  (c: CH.clientHello {
+    let l = c.CH.extensions in
+    Cons? l /\
+    CHE.CHE_pre_shared_key? (L.last l)
+  })
+: Lemma
+  (truncate_clientHello c `Seq.equal` (
+   LP.serialize Parsers.ProtocolVersion.protocolVersion_serializer c.CH.version `Seq.append` (
+   LP.serialize Parsers.Random.random_serializer c.CH.random `Seq.append` (
+   LP.serialize Parsers.SessionID.sessionID_serializer c.CH.session_id `Seq.append` (
+   LP.serialize Parsers.ClientHello_cipher_suites.clientHello_cipher_suites_serializer c.CH.cipher_suites  `Seq.append` (
+   LP.serialize Parsers.ClientHello_compression_method.clientHello_compression_method_serializer c.CH.compression_method `Seq.append` (
+   truncate_clientHelloExtensions c.CH.extensions
+  )))))))
+= serialize_clientHello_eq c
+
+#pop-options
+
+let truncate_clientHello_inj_binders_bytesize
+  (c1: CH.clientHello {
+    let l = c1.CH.extensions in
+    Cons? l /\
+    CHE.CHE_pre_shared_key? (L.last l)
+  })
+  (c2: CH.clientHello {
+    let l = c2.CH.extensions in
+    Cons? l /\
+    CHE.CHE_pre_shared_key? (L.last l)
+  })
+: Lemma
+  (requires (truncate_clientHello c1 == truncate_clientHello c2))
+  (ensures (
+    let l1 = c1.CH.extensions in
+    let l2 = c2.CH.extensions in
+    Psks.offeredPsks_binders_bytesize (CHE.CHE_pre_shared_key?._0 (L.last l1)).Psks.binders == Psks.offeredPsks_binders_bytesize (CHE.CHE_pre_shared_key?._0 (L.last l2)).Psks.binders
+  ))
+= truncate_clientHello_eq_left c1;
+  truncate_clientHello_eq_left c2;
+  LP.serialize_strong_prefix Parsers.ProtocolVersion.protocolVersion_serializer c1.CH.version c2.CH.version
+    (LP.serialize Parsers.Random.random_serializer c1.CH.random `Seq.append` (
+      LP.serialize Parsers.SessionID.sessionID_serializer c1.CH.session_id `Seq.append` (
+      LP.serialize Parsers.ClientHello_cipher_suites.clientHello_cipher_suites_serializer c1.CH.cipher_suites  `Seq.append` (
+      LP.serialize Parsers.ClientHello_compression_method.clientHello_compression_method_serializer c1.CH.compression_method `Seq.append` (
+   truncate_clientHelloExtensions c1.CH.extensions
+     )))))
+     (LP.serialize Parsers.Random.random_serializer c2.CH.random `Seq.append` (
+       LP.serialize Parsers.SessionID.sessionID_serializer c2.CH.session_id `Seq.append` (
+       LP.serialize Parsers.ClientHello_cipher_suites.clientHello_cipher_suites_serializer c2.CH.cipher_suites  `Seq.append` (
+       LP.serialize Parsers.ClientHello_compression_method.clientHello_compression_method_serializer c2.CH.compression_method `Seq.append` (
+       truncate_clientHelloExtensions c2.CH.extensions
+   )))));
+  LP.serialize_strong_prefix Parsers.Random.random_serializer c1.CH.random c2.CH.random
+     (LP.serialize Parsers.SessionID.sessionID_serializer c1.CH.session_id `Seq.append` (
+      LP.serialize Parsers.ClientHello_cipher_suites.clientHello_cipher_suites_serializer c1.CH.cipher_suites  `Seq.append` (
+      LP.serialize Parsers.ClientHello_compression_method.clientHello_compression_method_serializer c1.CH.compression_method `Seq.append` (
+   truncate_clientHelloExtensions c1.CH.extensions
+     ))))
+     (LP.serialize Parsers.SessionID.sessionID_serializer c2.CH.session_id `Seq.append` (
+       LP.serialize Parsers.ClientHello_cipher_suites.clientHello_cipher_suites_serializer c2.CH.cipher_suites  `Seq.append` (
+       LP.serialize Parsers.ClientHello_compression_method.clientHello_compression_method_serializer c2.CH.compression_method `Seq.append` (
+       truncate_clientHelloExtensions c2.CH.extensions
+   ))));
+  LP.serialize_strong_prefix Parsers.SessionID.sessionID_serializer c1.CH.session_id c2.CH.session_id
+     (LP.serialize Parsers.ClientHello_cipher_suites.clientHello_cipher_suites_serializer c1.CH.cipher_suites  `Seq.append` (
+      LP.serialize Parsers.ClientHello_compression_method.clientHello_compression_method_serializer c1.CH.compression_method `Seq.append` (
+   truncate_clientHelloExtensions c1.CH.extensions
+     )))
+     (LP.serialize Parsers.ClientHello_cipher_suites.clientHello_cipher_suites_serializer c2.CH.cipher_suites  `Seq.append` (
+       LP.serialize Parsers.ClientHello_compression_method.clientHello_compression_method_serializer c2.CH.compression_method `Seq.append` (
+       truncate_clientHelloExtensions c2.CH.extensions
+   )));
+  LP.serialize_strong_prefix CH.clientHello_cipher_suites_serializer c1.CH.cipher_suites c2.CH.cipher_suites
+     (LP.serialize Parsers.ClientHello_compression_method.clientHello_compression_method_serializer c1.CH.compression_method `Seq.append` (
+   truncate_clientHelloExtensions c1.CH.extensions
+     ))
+     (LP.serialize Parsers.ClientHello_compression_method.clientHello_compression_method_serializer c2.CH.compression_method `Seq.append` (
+       truncate_clientHelloExtensions c2.CH.extensions
+   ));
+  LP.serialize_strong_prefix CH.clientHello_compression_method_serializer c1.CH.compression_method c2.CH.compression_method
+    (truncate_clientHelloExtensions c1.CH.extensions)
+    (truncate_clientHelloExtensions c2.CH.extensions)
+  ;
+  truncate_clientHelloExtensions_inj_binders_bytesize c1.CH.extensions c2.CH.extensions
 
 let handshake_m_client_hello_binders_offset
   (c: H.handshake_m_client_hello {
@@ -547,7 +662,40 @@ let binders_offset_handshake_m_client_hello_set_binders
   serialize_handshake_m_client_hello_eq c';
   binders_offset_clientHello_set_binders c b'
 
-#pop-options
+let truncate_handshake_m_client_hello_eq_left
+  (c: H.handshake_m_client_hello {
+    let l = c.CH.extensions in
+    Cons? l /\
+    CHE.CHE_pre_shared_key? (L.last l)
+  })
+: Lemma
+  (truncate_handshake_m_client_hello c `Seq.equal` (
+    LP.serialize (LI.serialize_bounded_integer 3) (U32.uint_to_t (CH.clientHello_bytesize c)) `Seq.append` (truncate_clientHello c)
+  ))
+= serialize_handshake_m_client_hello_eq c
+
+let truncate_handshake_m_client_hello_inj_binders_bytesize
+  (c1: H.handshake_m_client_hello {
+    let l = c1.CH.extensions in
+    Cons? l /\
+    CHE.CHE_pre_shared_key? (L.last l)
+  })
+  (c2: H.handshake_m_client_hello {
+    let l = c2.CH.extensions in
+    Cons? l /\
+    CHE.CHE_pre_shared_key? (L.last l)
+  })
+: Lemma
+  (requires (truncate_handshake_m_client_hello c1 == truncate_handshake_m_client_hello c2))
+  (ensures (
+    let l1 = c1.CH.extensions in
+    let l2 = c2.CH.extensions in
+    Psks.offeredPsks_binders_bytesize (CHE.CHE_pre_shared_key?._0 (L.last l1)).Psks.binders == Psks.offeredPsks_binders_bytesize (CHE.CHE_pre_shared_key?._0 (L.last l2)).Psks.binders
+  ))
+= truncate_handshake_m_client_hello_eq_left c1;
+  truncate_handshake_m_client_hello_eq_left c2;
+  LP.serialize_strong_prefix (LI.serialize_bounded_integer 3) (U32.uint_to_t (CH.clientHello_bytesize c1)) (U32.uint_to_t (CH.clientHello_bytesize c2)) (truncate_clientHello c1) (truncate_clientHello c2);
+  truncate_clientHello_inj_binders_bytesize c1 c2
 
 let set_binders m b' =
   let c = H.M_client_hello?._0 m in
@@ -596,6 +744,19 @@ let truncate_clientHello_bytes_set_binders m b' = binders_offset_handshake_set_b
 
 #set-options "--z3rlimit 16"
 
-let truncate_clientHello_bytes_inj_binders_bytesize m1 m2 = admit ()
+let truncate_handshake_eq_left
+  (c: H.handshake { has_binders c })
+: Lemma
+  (truncate_handshake c `Seq.equal` (
+    LP.serialize HT.handshakeType_serializer HT.Client_hello `Seq.append`
+    truncate_handshake_m_client_hello (H.M_client_hello?._0 c)
+  ))
+= H.serialize_handshake_eq_client_hello c
+
+let truncate_clientHello_bytes_inj_binders_bytesize m1 m2 =
+  truncate_handshake_eq_left m1;
+  truncate_handshake_eq_left m2;
+  LP.serialize_strong_prefix HT.handshakeType_serializer HT.Client_hello HT.Client_hello (truncate_handshake_m_client_hello (H.M_client_hello?._0 m1)) (truncate_handshake_m_client_hello (H.M_client_hello?._0 m2));
+  truncate_handshake_m_client_hello_inj_binders_bytesize (H.M_client_hello?._0 m1) (H.M_client_hello?._0 m2)
 
 let binders_pos #rrel #rel sl pos = admit ()
