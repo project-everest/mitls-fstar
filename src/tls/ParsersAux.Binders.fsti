@@ -196,7 +196,6 @@ val binders_pos
   (ensures (fun h res h' ->
     let m = LP.contents H.handshake_parser h sl pos in
     B.modifies B.loc_none h h' /\
-    U32.v res <= U32.v pos /\
     U32.v pos + U32.v (binders_offset m) == U32.v res /\
     LP.valid_content_pos Psks.offeredPsks_binders_parser h sl res (get_binders m) (LP.get_valid_pos H.handshake_parser h sl pos)
   ))
