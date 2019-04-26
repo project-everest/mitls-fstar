@@ -305,7 +305,7 @@ let list_clientHelloExtension_binders_offset
     CHE.CHE_pre_shared_key? (L.last l) /\
     CHEs.clientHelloExtensions_list_bytesize l <= 65535
   })
-: Tot (x: U32.t { U32.v x <= Seq.length (serialize_list_clientHelloExtension l) })
+: Tot (x: U32.t { U32.v x < Seq.length (serialize_list_clientHelloExtension l) })
 = serialize_list_clientHelloExtension_eq l;
   clientHelloExtensions_list_bytesize_eq' l;
   size32_list_clientHelloExtension (L.init l) `U32.add` clientHelloExtension_binders_offset (L.last l)
@@ -439,7 +439,7 @@ let clientHelloExtensions_binders_offset
     Cons? l /\
     CHE.CHE_pre_shared_key? (L.last l)
   })
-: Tot (x: U32.t { U32.v x <= Seq.length (LP.serialize CHEs.clientHelloExtensions_serializer l) })
+: Tot (x: U32.t { U32.v x < Seq.length (LP.serialize CHEs.clientHelloExtensions_serializer l) })
 = serialize_clientHelloExtensions_eq l;
   clientHelloExtensions_list_bytesize_eq' l;
   2ul `U32.add` list_clientHelloExtension_binders_offset l
@@ -552,7 +552,7 @@ let clientHello_binders_offset
     Cons? l /\
     CHE.CHE_pre_shared_key? (L.last l)
   })
-: Tot (x: U32.t { U32.v x <= Seq.length (LP.serialize CH.clientHello_serializer c) })
+: Tot (x: U32.t { U32.v x < Seq.length (LP.serialize CH.clientHello_serializer c) })
 = serialize_clientHello_eq c;
   Parsers.ProtocolVersion.protocolVersion_size32 c.CH.version `U32.add`
   Parsers.Random.random_size32 c.CH.random `U32.add`
@@ -753,7 +753,7 @@ let handshake_m_client_hello_binders_offset
     Cons? l /\
     CHE.CHE_pre_shared_key? (L.last l)
   })
-: Tot (x: U32.t { U32.v x <= Seq.length (LP.serialize H.handshake_m_client_hello_serializer c) })
+: Tot (x: U32.t { U32.v x < Seq.length (LP.serialize H.handshake_m_client_hello_serializer c) })
 = serialize_handshake_m_client_hello_eq c;
   3ul `U32.add` clientHello_binders_offset c
 
@@ -918,6 +918,10 @@ let binders_offset_handshake_set_binders
 #pop-options
 
 let binders_offset_set_binder m b' = binders_offset_handshake_set_binders m b'
+
+let parse_truncate_clientHello_bytes
+  m
+= parse_truncate H.handshake_serializer m (U32.v (binders_offset m))
 
 let truncate_clientHello_bytes_correct m =
   set_binders_get_binders m;

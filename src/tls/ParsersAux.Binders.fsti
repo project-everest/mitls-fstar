@@ -1,5 +1,6 @@
 module ParsersAux.Binders
 
+module Seq = FStar.Seq
 module LP = LowParse.Low.Base
 module HS = FStar.HyperStack
 module U32 = FStar.UInt32
@@ -60,7 +61,7 @@ let set_binders_set_binders
 
 val binders_offset
   (m: H.handshake {has_binders m})
-: Tot (u: U32.t { U32.v u <= Seq.length (LP.serialize H.handshake_serializer m) })
+: Tot (u: U32.t { U32.v u < Seq.length (LP.serialize H.handshake_serializer m) })
 
 val binders_offset_set_binder
   (m: H.handshake {has_binders m})
@@ -74,6 +75,11 @@ let truncate_clientHello_bytes
   (m: H.handshake {has_binders m})
 : Tot BY.bytes
 = BY.slice (H.handshake_serializer32 m) 0ul (binders_offset m)
+
+val parse_truncate_clientHello_bytes
+  (m: H.handshake {has_binders m})
+: Lemma
+  (H.handshake_parser32 (truncate_clientHello_bytes m) == None)
 
 val truncate_clientHello_bytes_correct
   (m: H.handshake {has_binders m})
