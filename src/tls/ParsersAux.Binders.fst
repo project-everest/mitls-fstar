@@ -7,6 +7,7 @@ module U32 = FStar.UInt32
 
 (* ClientHello binders *)
 
+module Seq = FStar.Seq
 module L = FStar.List.Tot
 module H = ParsersAux.Handshake
 module CH = Parsers.ClientHello
@@ -24,6 +25,7 @@ module CHEs = Parsers.ClientHelloExtensions
 module HT = Parsers.HandshakeType
 
 open ParsersAux.Binders.Aux
+open ParsersAux.Seq
 
 let offeredPsks_set_binders
   (o: Psks.offeredPsks)
@@ -46,61 +48,6 @@ let offeredPsks_binders_offset
   })
 = serialize_offeredPsks_eq o;
   Psks.offeredPsks_identities_size32 o.Psks.identities
-
-let seq_starts_with (#t: Type) (slong sshort: Seq.seq t) : GTot Type0 =
-  Seq.length sshort <= Seq.length slong /\
-  Seq.slice slong 0 (Seq.length sshort) `Seq.equal` sshort
-
-let seq_starts_with_trans (#t: Type) (s1 s2 s3: Seq.seq t) : Lemma
-  (requires (s1 `seq_starts_with` s2 /\ s2 `seq_starts_with` s3))
-  (ensures (s1 `seq_starts_with` s3))
-= ()
-
-let seq_starts_with_append_l_intro (#t: Type) (s1 s2: Seq.seq t) : Lemma
-  ((s1 `Seq.append` s2) `seq_starts_with` s1)
-= ()
-
-let seq_starts_with_append_r_elim (#t: Type) (s s1 s2: Seq.seq t) : Lemma
-  (requires (s `seq_starts_with` (s1 `Seq.append` s2)))
-  (ensures (
-    s `seq_starts_with` s1 /\
-    Seq.slice s (Seq.length s1) (Seq.length s) `seq_starts_with` s2
-  ))
-  [SMTPat (s `seq_starts_with` (s1 `Seq.append` s2))]
-= let s3 = Seq.slice s (Seq.length s1 + Seq.length s2) (Seq.length s) in
-  assert (s `Seq.equal` (s1 `Seq.append` s2 `Seq.append` s3))
-
-inline_for_extraction
-noextract
-let jump_serializer
-  (#k: _)
-  (#t: _)
-  (#p: LP.parser k t)
-  (s: LP.serializer p { k.LP.parser_kind_subkind == Some LP.ParserStrong })
-  (j: LP.jumper p)
-  (#rrel #rel: _)
-  (sl: LP.slice rrel rel)
-  (pos: U32.t)
-  (x: Ghost.erased t)
-: HST.Stack U32.t
-  (requires (fun h ->
-    let sq = LP.serialize s (Ghost.reveal x) in
-    LP.live_slice h sl /\
-    U32.v pos <= U32.v sl.LP.len /\
-    LP.bytes_of_slice_from h sl pos `seq_starts_with` sq
-  ))
-  (ensures (fun h res h' ->
-    B.modifies B.loc_none h h' /\
-    U32.v pos + Seq.length (LP.serialize s (Ghost.reveal x)) == U32.v res
-  ))
-= let h = HST.get () in
-  let gsq = Ghost.hide (LP.serialize s (Ghost.reveal x)) in
-  let glen = Ghost.hide (Seq.length (Ghost.reveal gsq)) in
-  let gpos' = Ghost.hide (pos `U32.add` U32.uint_to_t (Ghost.reveal glen)) in
-  assert (LP.bytes_of_slice_from_to h sl pos (Ghost.reveal gpos') == Seq.slice (LP.bytes_of_slice_from h sl pos) 0 (Seq.length (LP.serialize s (Ghost.reveal x))));
-  LP.serialize_valid_exact s h sl (Ghost.reveal x) pos (Ghost.reveal gpos');
-  LP.valid_exact_valid p h sl pos (Ghost.reveal gpos');
-  j sl pos
 
 inline_for_extraction
 let offeredPsks_binders_pos
@@ -169,6 +116,28 @@ let clientHelloExtension_CHE_pre_shared_key_binders_offset
 = serialize_clientHelloExtension_CHE_pre_shared_key_eq o;
   2ul `U32.add` offeredPsks_binders_offset o
 
+inline_for_extraction
+let clientHelloExtension_CHE_pre_shared_key_binders_pos
+  (#rrel #rel: _)
+  (sl: LP.slice rrel rel)
+  (pos: U32.t)
+  (x: Ghost.erased CHE.clientHelloExtension_CHE_pre_shared_key)
+: HST.Stack U32.t
+  (requires (fun h -> 
+    let sq = LP.serialize CHE.clientHelloExtension_CHE_pre_shared_key_serializer (Ghost.reveal x) in
+    LP.live_slice h sl /\
+    U32.v pos <= U32.v sl.LP.len /\
+    (LP.bytes_of_slice_from h sl pos `seq_starts_with` sq)
+  ))
+  (ensures (fun h res h' ->
+    B.modifies B.loc_none h h' /\
+    U32.v pos + U32.v (clientHelloExtension_CHE_pre_shared_key_binders_offset (Ghost.reveal x)) == U32.v res
+  ))
+= serialize_clientHelloExtension_CHE_pre_shared_key_eq (Ghost.reveal x);
+  let h = HST.get () in
+  let pos1 = jump_serializer (LI.serialize_bounded_integer 2) (LP.jump_constant_size (LI.parse_bounded_integer 2) 2ul ()) sl pos (Ghost.hide (U32.uint_to_t (Psks.offeredPsks_bytesize (Ghost.reveal x)))) in
+  offeredPsks_binders_pos sl pos1 (Ghost.hide (Ghost.reveal x))
+
 let truncate_clientHelloExtension_CHE_pre_shared_key
   (o: CHE.clientHelloExtension_CHE_pre_shared_key)
 : GTot LP.bytes
@@ -218,6 +187,28 @@ let clientHelloExtension_binders_offset
 = CHE.clientHelloExtension_bytesize_eq e;
   CHE.serialize_clientHelloExtension_eq_pre_shared_key e;
   2ul `U32.add` clientHelloExtension_CHE_pre_shared_key_binders_offset (CHE.CHE_pre_shared_key?._0 e)
+
+inline_for_extraction
+let clientHelloExtension_binders_pos
+  (#rrel #rel: _)
+  (sl: LP.slice rrel rel)
+  (pos: U32.t)
+  (x: Ghost.erased CHE.clientHelloExtension { CHE.CHE_pre_shared_key? (Ghost.reveal x) } )
+: HST.Stack U32.t
+  (requires (fun h -> 
+    let sq = LP.serialize CHE.clientHelloExtension_serializer (Ghost.reveal x) in
+    LP.live_slice h sl /\
+    U32.v pos <= U32.v sl.LP.len /\
+    (LP.bytes_of_slice_from h sl pos `seq_starts_with` sq)
+  ))
+  (ensures (fun h res h' ->
+    B.modifies B.loc_none h h' /\
+    U32.v pos + U32.v (clientHelloExtension_binders_offset (Ghost.reveal x)) == U32.v res
+  ))
+= CHE.serialize_clientHelloExtension_eq_pre_shared_key (Ghost.reveal x);
+  let h = HST.get () in
+  let pos1 = jump_serializer ET.extensionType_serializer ET.extensionType_jumper sl pos (Ghost.hide ET.Pre_shared_key) in
+  clientHelloExtension_CHE_pre_shared_key_binders_pos sl pos1 (Ghost.hide (CHE.CHE_pre_shared_key?._0 (Ghost.reveal x)))
 
 let truncate_clientHelloExtension
   (e: CHE.clientHelloExtension {CHE.CHE_pre_shared_key? e})

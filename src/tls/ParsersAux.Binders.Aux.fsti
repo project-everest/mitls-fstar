@@ -1,7 +1,10 @@
 module ParsersAux.Binders.Aux
 
 module LP = LowParse.Spec.BoundedInt
+module LL = LowParse.Low.Base
 module U32 = FStar.UInt32
+module B = LowStar.Monotonic.Buffer
+module HST = FStar.HyperStack.ST
 
 module L = FStar.List.Tot
 module H = Parsers.Handshake
@@ -49,6 +52,25 @@ val serialize_list_clientHelloExtension_inj_prefix
   ))
 
 val size32_list_clientHelloExtension (l: list CHE.clientHelloExtension { Seq.length (serialize_list_clientHelloExtension l) < 4294967296 }) : Tot (x: U32.t { U32.v x == Seq.length (serialize_list_clientHelloExtension l) })
+
+val list_clientHelloExtension_last_pos
+  (#rrel #rel: _)
+  (sl: LL.slice rrel rel)
+  (pos pos' : U32.t)
+  (gl: Ghost.erased (list CHE.clientHelloExtension))
+: HST.Stack U32.t
+  (requires (fun h ->
+    let l = Ghost.reveal gl in
+    LL.live_slice h sl /\
+    U32.v pos <= U32.v pos' /\
+    U32.v pos' <= U32.v sl.LL.len /\
+    serialize_list_clientHelloExtension l `Seq.equal` LL.bytes_of_slice_from_to h sl pos pos' /\
+    Cons? l
+  ))
+  (ensures (fun h res h' ->
+    B.modifies B.loc_none h h' /\
+    U32.v pos + Seq.length (serialize_list_clientHelloExtension (L.init (Ghost.reveal gl))) == U32.v res
+  ))
 
 val clientHelloExtensions_list_bytesize_eq'
   (l: list CHE.clientHelloExtension)

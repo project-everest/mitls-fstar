@@ -20,6 +20,8 @@ friend Parsers.ClientHelloExtensions
 friend Parsers.ClientHello
 friend Parsers.Handshake_m_client_hello
 
+open ParsersAux.Seq
+
 let serialize_offeredPsks_eq
   o
 = LP.serialize_synth_eq _ Psks.synth_offeredPsks Psks.offeredPsks'_serializer Psks.synth_offeredPsks_recip () o;
@@ -84,6 +86,100 @@ let serialize_list_clientHelloExtension_inj_prefix
 let size32_list_clientHelloExtension
   l
 = LS.size32_list CHE.clientHelloExtension_size32 () l
+
+module HST = FStar.HyperStack.ST
+module B = LowStar.Buffer
+module HS = FStar.HyperStack
+
+#push-options "--z3rlimit 16"
+
+inline_for_extraction
+let rec list_last_pos
+  (#k: _)
+  (#t: _)
+  (#p: LP.parser k t)
+  (s: LP.serializer p)
+  (j: LP.jumper p)
+  (#rrel #rel: _)
+  (sl: LP.slice rrel rel)
+  (pos pos' : U32.t)
+  (l: Ghost.erased (list t))
+: HST.Stack U32.t
+  (requires (fun h ->
+    k.LP.parser_kind_subkind == Some LP.ParserStrong /\
+    k.LP.parser_kind_low > 0 /\
+    LP.live_slice h sl /\
+    U32.v pos <= U32.v pos' /\
+    U32.v pos' <= U32.v sl.LP.len /\
+    LP.bytes_of_slice_from_to h sl pos pos' `Seq.equal` LP.serialize (LP.serialize_list _ s) (Ghost.reveal l) /\
+    Cons? (Ghost.reveal l)
+  ))
+  (ensures (fun h res h' ->
+    B.modifies B.loc_none h h' /\
+    U32.v pos + Seq.length (LP.serialize (LP.serialize_list _ s) (L.init (Ghost.reveal l))) == U32.v res
+  ))
+= let h0 = HST.get () in
+  HST.push_frame ();
+  let h1 = HST.get () in
+  let bgleft = B.alloca (Ghost.hide ([] <: list t)) 1ul in
+  let bgright = B.alloca l 1ul in
+  let bpos1 = B.alloca pos 1ul in
+  LP.serialize_list_nil _ s;
+  let _ = C.Loops.do_while
+    (fun h stop ->
+      B.modifies (B.loc_region_only true (HS.get_tip h1)) h1 h /\
+      B.live h bgleft /\
+      B.live h bgright /\
+      B.live h bpos1 /\ (
+      let left = Ghost.reveal (Seq.index (B.as_seq h bgleft) 0) in
+      let right = Ghost.reveal (Seq.index (B.as_seq h bgright) 0) in
+      let pos1 = Seq.index (B.as_seq h bpos1) 0 in
+      Ghost.reveal l == left `L.append` right /\
+      U32.v pos + Seq.length (LP.serialize (LP.serialize_list _ s) left) == U32.v pos1 /\
+      U32.v pos1 <= U32.v pos' /\
+      LP.bytes_of_slice_from_to h0 sl pos1 pos' `Seq.equal` LP.serialize (LP.serialize_list _ s) right /\
+      Cons? right /\
+      (stop == true ==> L.length right == 1)
+    ))
+    (fun _ ->
+      let pos1 = B.index bpos1 0ul in
+      let gright = B.index bgright 0ul in
+      LP.serialize_list_cons _ s (L.hd (Ghost.reveal gright)) (L.tl (Ghost.reveal gright));
+      assert (LP.bytes_of_slice_from h0 sl pos1 `seq_starts_with` LP.bytes_of_slice_from_to h0 sl pos1 pos');
+      let pos2 = jump_serializer s j sl pos1 (Ghost.hide (L.hd (Ghost.reveal gright))) in
+      if pos2 = pos'
+      then begin
+        let f () : Lemma
+          (Nil? (L.tl (Ghost.reveal gright)))
+        = match L.tl (Ghost.reveal gright) with
+          | [] -> ()
+          | a :: q -> LP.serialize_list_cons _ s a q   
+        in
+        f ();
+        true
+      end else begin
+        let gleft = B.index bgleft 0ul in
+        B.upd bgleft 0ul (Ghost.hide (Ghost.reveal gleft `L.append` [L.hd (Ghost.reveal gright)]));
+        B.upd bgright 0ul (Ghost.hide (L.tl (Ghost.reveal gright)));
+        B.upd bpos1 0ul pos2;
+        L.append_assoc (Ghost.reveal gleft) [L.hd (Ghost.reveal gright)] (L.tl (Ghost.reveal gright));
+        LP.serialize_list_singleton _ s (L.hd (Ghost.reveal gright));
+        LP.serialize_list_append _ s (Ghost.reveal gleft) [L.hd (Ghost.reveal gright)];
+        false
+      end
+    )
+  in
+  let res = B.index bpos1 0ul in
+  let h = HST.get () in
+  L.init_last_def (Ghost.reveal (Seq.index (B.as_seq h bgleft) 0)) (L.hd (Ghost.reveal (Seq.index (B.as_seq h bgright) 0)));
+  HST.pop_frame ();
+  res
+
+#pop-options
+
+let list_clientHelloExtension_last_pos
+  #rrel #rel sl pos pos' gl
+= list_last_pos CHE.clientHelloExtension_serializer CHE.clientHelloExtension_jumper sl pos pos' gl
 
 let clientHelloExtensions_list_bytesize_eq'
   l
