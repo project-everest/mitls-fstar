@@ -25,7 +25,6 @@ module CHEs = Parsers.ClientHelloExtensions
 module HT = Parsers.HandshakeType
 
 open ParsersAux.Binders.Aux
-open ParsersAux.Seq
 
 let offeredPsks_set_binders
   (o: Psks.offeredPsks)
@@ -60,7 +59,7 @@ let offeredPsks_binders_pos
     let sq = LP.serialize Psks.offeredPsks_serializer (Ghost.reveal x) in
     LP.live_slice h sl /\
     U32.v pos <= U32.v sl.LP.len /\
-    (LP.bytes_of_slice_from h sl pos `seq_starts_with` sq)
+    (LP.bytes_of_slice_from h sl pos `LP.seq_starts_with` sq)
   ))
   (ensures (fun h res h' ->
     B.modifies B.loc_none h h' /\
@@ -68,7 +67,7 @@ let offeredPsks_binders_pos
   ))
 = serialize_offeredPsks_eq (Ghost.reveal x);
   let h = HST.get () in
-  jump_serializer Psks.offeredPsks_identities_serializer Psks.offeredPsks_identities_jumper sl pos (Ghost.hide (Ghost.reveal x).Psks.identities)
+  LP.jump_serializer Psks.offeredPsks_identities_serializer Psks.offeredPsks_identities_jumper sl pos (Ghost.hide (Ghost.reveal x).Psks.identities)
 
 let truncate_offeredPsks
   (o: Psks.offeredPsks)
@@ -127,7 +126,7 @@ let clientHelloExtension_CHE_pre_shared_key_binders_pos
     let sq = LP.serialize CHE.clientHelloExtension_CHE_pre_shared_key_serializer (Ghost.reveal x) in
     LP.live_slice h sl /\
     U32.v pos <= U32.v sl.LP.len /\
-    (LP.bytes_of_slice_from h sl pos `seq_starts_with` sq)
+    (LP.bytes_of_slice_from h sl pos `LP.seq_starts_with` sq)
   ))
   (ensures (fun h res h' ->
     B.modifies B.loc_none h h' /\
@@ -135,7 +134,7 @@ let clientHelloExtension_CHE_pre_shared_key_binders_pos
   ))
 = serialize_clientHelloExtension_CHE_pre_shared_key_eq (Ghost.reveal x);
   let h = HST.get () in
-  let pos1 = jump_serializer (LI.serialize_bounded_integer 2) (LP.jump_constant_size (LI.parse_bounded_integer 2) 2ul ()) sl pos (Ghost.hide (U32.uint_to_t (Psks.offeredPsks_bytesize (Ghost.reveal x)))) in
+  let pos1 = LP.jump_serializer (LI.serialize_bounded_integer 2) (LP.jump_constant_size (LI.parse_bounded_integer 2) 2ul ()) sl pos (Ghost.hide (U32.uint_to_t (Psks.offeredPsks_bytesize (Ghost.reveal x)))) in
   offeredPsks_binders_pos sl pos1 (Ghost.hide (Ghost.reveal x))
 
 let truncate_clientHelloExtension_CHE_pre_shared_key
@@ -199,7 +198,7 @@ let clientHelloExtension_binders_pos
     let sq = LP.serialize CHE.clientHelloExtension_serializer (Ghost.reveal x) in
     LP.live_slice h sl /\
     U32.v pos <= U32.v sl.LP.len /\
-    (LP.bytes_of_slice_from h sl pos `seq_starts_with` sq)
+    (LP.bytes_of_slice_from h sl pos `LP.seq_starts_with` sq)
   ))
   (ensures (fun h res h' ->
     B.modifies B.loc_none h h' /\
@@ -207,7 +206,7 @@ let clientHelloExtension_binders_pos
   ))
 = CHE.serialize_clientHelloExtension_eq_pre_shared_key (Ghost.reveal x);
   let h = HST.get () in
-  let pos1 = jump_serializer ET.extensionType_serializer ET.extensionType_jumper sl pos (Ghost.hide ET.Pre_shared_key) in
+  let pos1 = LP.jump_serializer ET.extensionType_serializer ET.extensionType_jumper sl pos (Ghost.hide ET.Pre_shared_key) in
   clientHelloExtension_CHE_pre_shared_key_binders_pos sl pos1 (Ghost.hide (CHE.CHE_pre_shared_key?._0 (Ghost.reveal x)))
 
 let truncate_clientHelloExtension
@@ -264,32 +263,11 @@ let truncate_clientHelloExtension_inj_binders_bytesize
   LP.serialize_strong_prefix ET.extensionType_serializer ET.Pre_shared_key ET.Pre_shared_key (truncate_clientHelloExtension_CHE_pre_shared_key o1) (truncate_clientHelloExtension_CHE_pre_shared_key o2);
   truncate_clientHelloExtension_CHE_pre_shared_key_inj_binders_bytesize o1 o2
 
-let parse_truncate
-  (#k: LP.parser_kind)
-  (#t: Type)
-  (#p: LP.parser k t)
-  (s: LP.serializer p { k.LP.parser_kind_subkind == Some LP.ParserStrong })
-  (x: t)
-  (n: nat)
-: Lemma
-  (requires (
-    n < Seq.length (LP.serialize s x)
-  ))
-  (ensures (
-    LP.parse p (Seq.slice (LP.serialize s x) 0 n) == None
-  ))
-= let sq0 = LP.serialize s x in
-  let sq1 = Seq.slice sq0 0 n in
-  match LP.parse p sq1 with
-  | None -> ()
-  | Some (x', consumed) ->
-    LP.parse_strong_prefix p sq1 sq0
-
 let parse_truncate_clientHelloExtension
   (e: CHE.clientHelloExtension { CHE.CHE_pre_shared_key? e })
 : Lemma
   (LP.parse CHE.clientHelloExtension_parser (truncate_clientHelloExtension e) == None)
-= parse_truncate CHE.clientHelloExtension_serializer e (U32.v (clientHelloExtension_binders_offset e))
+= LP.parse_truncate CHE.clientHelloExtension_serializer e (U32.v (clientHelloExtension_binders_offset e))
 
 let rec clientHelloExtensions_list_bytesize_append
   (l1 l2: list CHE.clientHelloExtension)
@@ -458,7 +436,7 @@ let clientHelloExtensions_binders_pos
     let sq = LP.serialize CHEs.clientHelloExtensions_serializer (Ghost.reveal x) in
     LP.live_slice h sl /\
     U32.v pos <= U32.v sl.LP.len /\
-    (LP.bytes_of_slice_from h sl pos `seq_starts_with` sq)
+    (LP.bytes_of_slice_from h sl pos `LP.seq_starts_with` sq)
   ))
   (ensures (fun h res h' ->
     B.modifies B.loc_none h h' /\
@@ -466,8 +444,8 @@ let clientHelloExtensions_binders_pos
   ))
 = serialize_clientHelloExtensions_eq (Ghost.reveal x);
   let h = HST.get () in
-  let pos' = jump_serializer CHEs.clientHelloExtensions_serializer CHEs.clientHelloExtensions_jumper sl pos x in
-  let pos1 = jump_serializer (LI.serialize_bounded_integer 2) (LP.jump_constant_size (LI.parse_bounded_integer 2) 2ul ()) sl pos (Ghost.hide (U32.uint_to_t
+  let pos' = LP.jump_serializer CHEs.clientHelloExtensions_serializer CHEs.clientHelloExtensions_jumper sl pos x in
+  let pos1 = LP.jump_serializer (LI.serialize_bounded_integer 2) (LP.jump_constant_size (LI.parse_bounded_integer 2) 2ul ()) sl pos (Ghost.hide (U32.uint_to_t
    (CHEs.clientHelloExtensions_list_bytesize (Ghost.reveal x)))) in
   list_clientHelloExtension_binders_pos sl pos1 pos' (Ghost.hide (Ghost.reveal x))
 
@@ -577,18 +555,18 @@ let clientHello_binders_pos
     let sq = LP.serialize CH.clientHello_serializer (Ghost.reveal x) in
     LP.live_slice h sl /\
     U32.v pos <= U32.v sl.LP.len /\
-    (LP.bytes_of_slice_from h sl pos `seq_starts_with` sq)
+    (LP.bytes_of_slice_from h sl pos `LP.seq_starts_with` sq)
   ))
   (ensures (fun h res h' ->
     B.modifies B.loc_none h h' /\
     U32.v pos + U32.v (clientHello_binders_offset (Ghost.reveal x)) == U32.v res
   ))
 = serialize_clientHello_eq (Ghost.reveal x);
-  let pos1 = jump_serializer Parsers.ProtocolVersion.protocolVersion_serializer  Parsers.ProtocolVersion.protocolVersion_jumper sl pos (Ghost.hide (Ghost.reveal x).CH.version) in
-  let pos2 = jump_serializer Parsers.Random.random_serializer Parsers.Random.random_jumper sl pos1 (Ghost.hide (Ghost.reveal x).CH.random) in
-  let pos3 = jump_serializer Parsers.SessionID.sessionID_serializer Parsers.SessionID.sessionID_jumper sl pos2 (Ghost.hide (Ghost.reveal x).CH.session_id) in
-  let pos4 = jump_serializer CH.clientHello_cipher_suites_serializer CH.clientHello_cipher_suites_jumper sl pos3 (Ghost.hide (Ghost.reveal x).CH.cipher_suites) in
-  let pos5 = jump_serializer CH.clientHello_compression_method_serializer CH.clientHello_compression_method_jumper sl pos4 (Ghost.hide (Ghost.reveal x).CH.compression_method) in
+  let pos1 = LP.jump_serializer Parsers.ProtocolVersion.protocolVersion_serializer  Parsers.ProtocolVersion.protocolVersion_jumper sl pos (Ghost.hide (Ghost.reveal x).CH.version) in
+  let pos2 = LP.jump_serializer Parsers.Random.random_serializer Parsers.Random.random_jumper sl pos1 (Ghost.hide (Ghost.reveal x).CH.random) in
+  let pos3 = LP.jump_serializer Parsers.SessionID.sessionID_serializer Parsers.SessionID.sessionID_jumper sl pos2 (Ghost.hide (Ghost.reveal x).CH.session_id) in
+  let pos4 = LP.jump_serializer CH.clientHello_cipher_suites_serializer CH.clientHello_cipher_suites_jumper sl pos3 (Ghost.hide (Ghost.reveal x).CH.cipher_suites) in
+  let pos5 = LP.jump_serializer CH.clientHello_compression_method_serializer CH.clientHello_compression_method_jumper sl pos4 (Ghost.hide (Ghost.reveal x).CH.compression_method) in
   clientHelloExtensions_binders_pos sl pos5 (Ghost.hide (Ghost.reveal x).CH.extensions)
 
 #pop-options
@@ -772,14 +750,14 @@ let handshake_m_client_hello_binders_pos
     let sq = LP.serialize H.handshake_m_client_hello_serializer (Ghost.reveal c) in
     LP.live_slice h sl /\
     U32.v pos <= U32.v sl.LP.len /\
-    (LP.bytes_of_slice_from h sl pos `seq_starts_with` sq)
+    (LP.bytes_of_slice_from h sl pos `LP.seq_starts_with` sq)
   ))
   (ensures (fun h res h' ->
     B.modifies B.loc_none h h' /\
     U32.v pos + U32.v (handshake_m_client_hello_binders_offset (Ghost.reveal c)) == U32.v res
   ))
 = serialize_handshake_m_client_hello_eq (Ghost.reveal c);
-  let pos1 = jump_serializer (LI.serialize_bounded_integer 3) (LP.jump_constant_size (LI.parse_bounded_integer 3) 3ul ()) sl pos (Ghost.hide (U32.uint_to_t
+  let pos1 = LP.jump_serializer (LI.serialize_bounded_integer 3) (LP.jump_constant_size (LI.parse_bounded_integer 3) 3ul ()) sl pos (Ghost.hide (U32.uint_to_t
    (CH.clientHello_bytesize (Ghost.reveal c)))) in
   clientHello_binders_pos sl pos1 (Ghost.hide (Ghost.reveal c))
 
@@ -921,7 +899,7 @@ let binders_offset_set_binder m b' = binders_offset_handshake_set_binders m b'
 
 let parse_truncate_clientHello_bytes
   m
-= parse_truncate H.handshake_serializer m (U32.v (binders_offset m))
+= LP.parse_truncate H.handshake_serializer m (U32.v (binders_offset m))
 
 let truncate_clientHello_bytes_correct m =
   set_binders_get_binders m;
@@ -953,8 +931,8 @@ let binders_pos #rrel #rel sl pos =
   LP.valid_valid_exact H.handshake_parser h sl pos;
   LP.valid_exact_serialize H.handshake_serializer h sl pos (Ghost.reveal gpos');
   H.serialize_handshake_eq_client_hello (Ghost.reveal x);
-  assert (LP.bytes_of_slice_from h sl pos `seq_starts_with` LP.bytes_of_slice_from_to h sl pos (Ghost.reveal gpos'));
-  let pos1 = jump_serializer HT.handshakeType_serializer HT.handshakeType_jumper sl pos (Ghost.hide HT.Client_hello) in
+  assert (LP.bytes_of_slice_from h sl pos `LP.seq_starts_with` LP.bytes_of_slice_from_to h sl pos (Ghost.reveal gpos'));
+  let pos1 = LP.jump_serializer HT.handshakeType_serializer HT.handshakeType_jumper sl pos (Ghost.hide HT.Client_hello) in
   let res = handshake_m_client_hello_binders_pos sl pos1 (Ghost.hide (H.M_client_hello?._0 (Ghost.reveal x))) in
   set_binders_get_binders (Ghost.reveal x);
   truncate_clientHello_bytes_correct (Ghost.reveal x);
