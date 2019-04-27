@@ -222,8 +222,8 @@ let valid_binders_mutate
     has_binders m /\
     U32.v pos + U32.v (binders_offset m) == U32.v pos1 /\
     LP.valid_pos Psks.offeredPsks_binders_parser h2 sl pos1 pos' /\
-    B.modifies (l `B.loc_union` LP.loc_slice_from_to sl pos1 pos') h1 h2 /\
-    B.loc_disjoint l (LP.loc_slice_from_to sl pos pos')
+    B.modifies l h1 h2 /\
+    B.loc_disjoint l (LP.loc_slice_from_to sl pos pos1)
   )))
   (ensures (
     let m = LP.contents H.handshake_parser h1 sl pos in
