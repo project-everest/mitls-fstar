@@ -93,8 +93,8 @@ $(DEP_FILE).pdf: $(DEP_FILE).dot
 
 depend: $(DEP_FILE)
 
-include $(DEP_FILE).opt
-include $(DEP_FILE)
+-include $(DEP_FILE).opt
+-include $(DEP_FILE)
 
 # REMARK:
 # $(subst ...) turns command strings into single-line strings, so they are
