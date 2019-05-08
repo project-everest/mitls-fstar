@@ -785,9 +785,11 @@ noeq type config : Type0 = {
     (* Client side *)
 
     // honor hello retry requests from the server
+    //19-05-04  not used? 
     hello_retry: bool;          
 
     // propose share from these groups (it should it be a subset of [named_groups]).
+    //19-05-04 only makes sense with TLS 1.3; but must be non-empty? 
     offer_shares: CommonDH.supportedNamedGroups;
 
     custom_extensions: custom_extensions;
@@ -796,11 +798,13 @@ noeq type config : Type0 = {
     use_tickets: list (psk_identifier * ticket_seal);
 
     (* Server side *)
+    
     send_ticket: option bytes;
     check_client_version_in_pms_for_old_tls: bool;
     request_client_certificate: bool; // TODO: generalize to CertificateRequest contents: a list of CAs.
 
     (* Common *)
+    
     non_blocking_read: bool;
     max_early_data: option UInt32.t;   // 0-RTT offer (client) and support (server), and data limit
     safe_renegotiation: bool;     // demands this extension when renegotiating
@@ -808,6 +812,7 @@ noeq type config : Type0 = {
     enable_tickets: bool;         // Client: offer ticket support; server: emit and accept tickets
 
     (* Callbacks *)
+    
     ticket_callback: ticket_cb;   // Ticket callback, called when issuing or receiving a new ticket
     nego_callback: nego_cb;// Callback to decide stateless retry and negotiate extra extensions
     cert_callbacks: cert_cb;      // Certificate callbacks, called on all PKI-related operations

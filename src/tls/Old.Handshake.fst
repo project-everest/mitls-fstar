@@ -355,8 +355,7 @@ let client_ClientHello hs i =
   let groups =
     match (config_of hs).max_version with
     | TLS_1p3 ->
-      trace "offering ClientHello 1.3";
-      Some ((config_of hs).offer_shares)
+      trace "offering ClientHello 1.3"; Some (config_of hs).offer_shares
     | _ ->
       trace "offering ClientHello 1.2"; None
     in
@@ -369,7 +368,7 @@ let client_ClientHello hs i =
   match Nego.client_ClientHello hs.nego shares with
   | Error z -> Error z
   | Correct offer ->
-    // Comptue and send PSK binders & 0-RTT signals
+    // Compute and send PSK binders & 0-RTT signals
     client_Binders hs offer;
     // we may still need to keep parts of ch
     hs.state := C_Wait_ServerHello;
@@ -611,23 +610,25 @@ let rec iutf8 (m:bytes) : St (s:string{String.length s < pow2 30 /\ utf8_encode 
     | Some s -> s
 
 // Processing of the server CCS and optional NewSessionTicket
-// This is used both in full handshake and resumption
+// This is used both in full handshake and in resumption
 let client_NewSessionTicket_12 (hs:hs) (resume:bool) (digest:Hashing.anyTag) (st: HSM.newSessionTicket12)
   : St incoming =
   let open Parsers.NewSessionTicket12 in
   trace ("Processing ticket: "^(print_bytes st.ticket));
   hs.state := C_Wait_CCS (resume, digest);
-  let mode = Nego.getMode hs.nego in
   let cfg = Nego.local_config hs.nego in
-  let sni = iutf8 (Nego.get_sni mode.Nego.n_offer) in
-  let (msId, ms) = KeySchedule.ks_12_ms hs.ks in
-  let pv = mode.Nego.n_protocol_version in
-  let cs = mode.Nego.n_cipher_suite in
   let tcb = cfg.ticket_callback in
-  tcb.new_ticket tcb.ticket_context sni st.ticket (TicketInfo_12 (pv, cs, Nego.emsFlag mode)) ms;
+  let mode = Nego.getMode hs.nego in
+  let sni = iutf8 (Nego.get_sni mode.Nego.n_offer) in
+  let (_msId, ms) = KeySchedule.ks_12_ms hs.ks in
+  let info = TicketInfo_12 (
+    mode.Nego.n_protocol_version,
+    mode.Nego.n_cipher_suite,
+    Nego.emsFlag mode) in 
+  tcb.new_ticket tcb.ticket_context sni st.ticket info ms;
   InAck false false
 
-// Process an incoming ticket (1.3)
+// Process an incoming ticket (pre: TLS 1.3 after completion)
 let client_NewSessionTicket_13 (hs:hs) (st13:HSM.newSessionTicket13)
   : St incoming =
   let open Parsers.NewSessionTicket13 in
@@ -638,10 +639,9 @@ let client_NewSessionTicket_13 (hs:hs) (st13:HSM.newSessionTicket13)
   trace ("Received ticket: "^(hex_of_bytes tid)^" nonce: "^(hex_of_bytes nonce));
   let mode = Nego.getMode hs.nego in
   let CipherSuite13 ae h = mode.Nego.n_cipher_suite in
-  let t_ext = st13.extensions in
-  let ed = List.Tot.find NSTE_early_data? t_ext in
+  let ed = List.Tot.find NSTE_early_data? st13.extensions in
   let now = UInt32.uint_to_t (FStar.Date.secondsFromDawn()) in
-  let pskInfo = TLSConstants.({
+  let info = TicketInfo_13 TLSConstants.({
     ticket_nonce = Some nonce;
     time_created = now;
     ticket_age_add = age_add;
@@ -663,7 +663,7 @@ let client_NewSessionTicket_13 (hs:hs) (st13:HSM.newSessionTicket13)
     else true in
   if valid_ed then
     (let tcb = cfg.ticket_callback in
-    tcb.new_ticket tcb.ticket_context sni tid (TicketInfo_13 pskInfo) psk;
+    tcb.new_ticket tcb.ticket_context sni tid info psk;
     InAck false false)
   else InError (fatalAlert Illegal_parameter, "QUIC tickets must allow 0xFFFFFFFF bytes of early data")
 
@@ -741,6 +741,7 @@ let serverHello (m:Nego.mode) =
 
 type binders = Parsers.OfferedPsks_binders.offeredPsks_binders
 
+//19-05-04 Now ensured by parsing? 
 val  consistent_truncation: option Extensions.offeredPsks -> bool
 let consistent_truncation x =
   match x with
