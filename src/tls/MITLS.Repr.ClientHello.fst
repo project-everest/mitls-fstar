@@ -34,10 +34,10 @@ open FStar.HyperStack.ST
 
 let t = CH.clientHello
 
-let repr (b:R.slice) =
+let repr (b:R.const_slice) =
   R.repr_p CH.clientHello b CH.clientHello_parser
 
-let version (#b:R.slice) (r:repr b)
+let version (#b:R.const_slice) (r:repr b)
   : Stack Parsers.ProtocolVersion.protocolVersion
     (requires R.valid r)
     (ensures fun h0 pv h1 ->
@@ -45,5 +45,6 @@ let version (#b:R.slice) (r:repr b)
       pv == CH.((R.value r).version))
   = let open R in
     R.reveal_valid();
+    let b = R.to_slice b in
     let pos = CH.accessor_clientHello_version b r.start_pos in
     Parsers.ProtocolVersion.protocolVersion_reader b pos

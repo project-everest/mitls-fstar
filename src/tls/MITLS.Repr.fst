@@ -56,7 +56,6 @@ type const_slice =
       const_slice
 
 (* Some abbreviations *)
-let slice = const_slice //temporary; revise existing code to just use const_slice
 let mut_p = LowStar.Buffer.trivial_preorder LP.byte
 let immut_p = LowStar.ImmutableBuffer.immutable_preorder LP.byte
 let preorder (c:const_slice) = C.qbuf_pre (C.as_qbuf c.base)
@@ -113,7 +112,7 @@ type repr_meta (t:Type) = {
 ///
 ///   * The representation is described by erased the `meta` field
 noeq
-type repr (t:Type) (b:slice) = {
+type repr (t:Type) (b:const_slice) = {
   start_pos: index b;
   end_pos: i:index b {start_pos <= i /\ i <= b.len};
   meta: Ghost.erased (repr_meta t)
@@ -132,7 +131,7 @@ type repr (t:Type) (b:slice) = {
 /// representations from wire formats. At those points, the `repr_p`
 /// type is useful, since it is a `repr` that is also indexed by a
 /// parser.
-let repr_p (t:Type) (b:slice) #k (parser:LP.parser k t) =
+let repr_p (t:Type) (b:const_slice) #k (parser:LP.parser k t) =
   r:repr t b {
     let meta = Ghost.reveal r.meta in
     meta.parser_kind == k /\
@@ -157,7 +156,7 @@ let repr_p (t:Type) (b:slice) #k (parser:LP.parser k t) =
 ///
 ///    3. The bytes of the slice are indeed the representation of the
 ///    ghost value in wire format
-let valid' (#t:Type) (#b:slice) (r:repr t b) (h:HS.mem)
+let valid' (#t:Type) (#b:const_slice) (r:repr t b) (h:HS.mem)
   = let m = Ghost.reveal r.meta in
     let b = to_slice b in
     LP.valid_pos m.parser h b r.start_pos r.end_pos /\
@@ -167,21 +166,21 @@ let valid' (#t:Type) (#b:slice) (r:repr t b) (h:HS.mem)
 
 /// `valid`: abstract validity
 abstract
-let valid (#t:Type) (#b:slice) (r:repr t b) (h:HS.mem)
+let valid (#t:Type) (#b:const_slice) (r:repr t b) (h:HS.mem)
   = valid' r h
 
 
 /// `reveal_valid`:
 ///   An explicit lemma exposes the definition of `valid`
 let reveal_valid ()
-  : Lemma (forall (t:Type) (b:slice) (r:repr t b) (h:HS.mem).
+  : Lemma (forall (t:Type) (b:const_slice) (r:repr t b) (h:HS.mem).
               {:pattern (valid #t #b r h)}
            valid #t #b r h <==> valid' #t #b r h)
   = ()
 
 /// `fp r`: The memory footprint of a repr is the
 ///         sub-slice b.[from, to)
-let fp #t (#b:slice) (r:repr t b)
+let fp #t (#b:const_slice) (r:repr t b)
   : GTot B.loc
   = LP.loc_slice_from_to (to_slice b) r.start_pos r.end_pos
 
@@ -225,6 +224,40 @@ let mk (b:LP.slice mut_p mut_p{ LP.(b.len <= validator_max_length) })
       r.end_pos = to /\
       value r == LP.contents parser h1 b from)
   = let h = get () in
+    let m =
+      let v = LP.contents parser h b from in
+      Ghost.hide ({
+        parser_kind = _;
+        parser = parser;
+        value = v;
+        repr_bytes = LP.bytes_of_slice_from_to h b from to
+      })
+    in
+    {
+      start_pos = from;
+      end_pos = to;
+      meta = m
+    }
+
+/// `mk b from to p`:
+///    Constructing a `repr` from a sub-slice
+///      b.[from, to)
+///    known to be valid for a given wire-format parser `p`
+let mk_from_const_slice
+         (b:const_slice)
+         (from to:index b)
+         (#k:strong_parser_kind) #t (parser:LP.parser k t)
+  : Stack (repr_p t b parser)
+    (requires fun h ->
+      LP.valid_pos parser h (to_slice b) from to)
+    (ensures fun h0 r h1 ->
+      h0 == h1 /\
+      valid r h1 /\
+      r.start_pos = from /\
+      r.end_pos = to /\
+      value r == LP.contents parser h1 (to_slice b) from)
+  = let h = get () in
+    let b = to_slice b in
     let m =
       let v = LP.contents parser h b from in
       Ghost.hide ({
@@ -284,7 +317,7 @@ val alloc_and_blit
 /// `valid_if_live`: A pure predicate on `r:repr t b` that states that
 /// so long as the underlying buffer is live in a given state `h`, that
 /// `r` is valid in that state
-let valid_if_live #t (#b:slice) (r:repr t b) =
+let valid_if_live #t (#b:const_slice) (r:repr t b) =
   C.qbuf_qual (C.as_qbuf b.base) == C.IMMUTABLE /\
   (let i : I.ibuffer LP.byte = C.as_mbuf b.base in
    let m = Ghost.reveal r.meta in
@@ -309,7 +342,7 @@ let stable_repr t b = r:repr t b { valid_if_live r }
 // Removing that from the context makes the proof instantaneous
 #reset-options "--max_fuel 0 --max_ifuel 0 \
                 --using_facts_from '* -FStar.Seq.Properties.slice_slice'"
-let valid_if_live_intro #t (#b:slice) (r:repr t b) (h:HS.mem)
+let valid_if_live_intro #t (#b:const_slice) (r:repr t b) (h:HS.mem)
   : Lemma
     (requires (
       C.qbuf_qual (C.as_qbuf b.base) == C.IMMUTABLE /\
@@ -365,7 +398,7 @@ let recall_stable_repr #t #b (r:stable_repr t b)
 /// `stash`: Main stateful operation
 ///    Copies a repr into a fresh stable repr
 let stash (rgn:HS.rid) #t #b (r:repr t b)
-  : Stack (s:slice &
+  : Stack (s:const_slice &
            r':stable_repr t s)
    (requires fun h ->
      valid r h)

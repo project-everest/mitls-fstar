@@ -48,6 +48,7 @@ open FStar.HyperStack.ST
 module List = FStar.List.Tot
 module HS = FStar.HyperStack
 module B = LowStar.Buffer
+module C = LowStar.ConstBuffer
 module G = FStar.Ghost
 
 module HSM = Parsers.Handshake
@@ -70,11 +71,11 @@ module SH = Parsers.ServerHello
 
 
 //TODO: move to a separate module
-let repr_hs12 (b:R.slice) =
+let repr_hs12 (b:R.const_slice) =
   R.repr_p _ b HSM12.handshake12_parser
 
 //TODO: move to a separate module
-let repr_hs13 (b:R.slice) =
+let repr_hs13 (b:R.const_slice) =
   R.repr_p _ b HSM13.handshake13_parser
 
 type bytes = FStar.Seq.seq uint_8
@@ -83,6 +84,67 @@ type bytes = FStar.Seq.seq uint_8
 /// hold client and server hellos, respectively
 let hs_ch = ch:HSM.handshake{HSM.M_client_hello? ch}
 let hs_sh = sh:HSM.handshake{HSM.M_server_hello? sh}
+
+/// `hs_tch`: Handshake message holding a truncated client hello
+///
+/// Truncated client hellos are related to pre-shared keys.
+/// See below for more details
+
+//TODO: fill this out with Tahina's definition
+val empty_binders (bs:Parsers.OfferedPsks_binders.offeredPsks_binders) : prop
+
+let is_tch (ch:hs_ch) =
+    let open Parsers.OfferedPsks in
+    let open Parsers.ClientHelloExtension in
+    let open Parsers.ClientHello in
+    let ch = HSM.M_client_hello?._0 ch in
+    Cons? ch.extensions /\
+    CHE_pre_shared_key? (List.last ch.extensions) /\
+    (let offeredPsks = CHE_pre_shared_key?._0 (List.last ch.extensions) in
+     empty_binders offeredPsks.binders
+     )
+let hs_tch = ch:hs_ch{ is_tch ch }
+
+noeq
+type pre_client_offer = {
+  version : Parsers.ProtocolVersion.protocolVersion;
+  random : Parsers.Random.random;
+  session_id : Parsers.SessionID.sessionID;
+  cipher_suites : CH.clientHello_cipher_suites;
+  compression_method : CH.clientHello_compression_method;
+  extensions : list Parsers.ClientHelloExtension.clientHelloExtension;
+  psks: option (Parsers.OfferedPsks.offeredPsks_identities & uint_32)
+}
+
+let offer_of (ch:hs_ch) : pre_client_offer =
+  let ch = HSM.M_client_hello?._0 ch in
+  let extensions, psks =
+    if Cons? CH.(ch.extensions) &&
+      Parsers.ClientHelloExtension.CHE_pre_shared_key? (List.last ch.CH.extensions)
+    then
+      let open Parsers.OfferedPsks in
+      let init = List.init ch.CH.extensions in
+      let o = Parsers.ClientHelloExtension.CHE_pre_shared_key?._0 (List.last ch.CH.extensions) in
+      let len = (offeredPsks_binders_size32 o.binders) in
+      init,
+      Some (o.identities, len)
+    else ch.CH.extensions, None
+  in
+  { version = CH.(ch.version);
+    random = CH.(ch.random);
+    session_id = CH.(ch.session_id);
+    cipher_suites = CH.(ch.cipher_suites);
+    compression_method = CH.(ch.compression_method);
+    extensions = extensions;
+    psks = psks
+  }
+
+let client_offer = co:pre_client_offer{exists (ch:hs_ch). offer_of ch == co}
+
+let client_hello_of_client_offer (co:client_offer)
+  : GTot (ch:hs_ch{ offer_of ch == co })
+  = let (| ch, _ |) = FStar.IndefiniteDescription.indefinite_description hs_ch (fun ch -> offer_of ch == co) in
+    ch
 
 /// `is_hrr`: For now, we assume the existence of a pure function to
 /// decide if a server-hello message is a hello-retry-request (hrr)
@@ -99,13 +161,13 @@ type retry =
   hs_ch
   & hello_retry_request
 
-/// `client_hello_has_psk`: A client hello has a pre-shared key if
-///    that mode appears in one of its extensions
-let client_hello_has_psk (ch:CH.clientHello) =
-  exists (ext:_).
-    List.memP ext Parsers.ClientHello.(ch.extensions) /\
-    Parsers.ClientHelloExtension.CHE_pre_shared_key? ext /\
-    True (* what else do we need? e.g., that it has as many binders as ids? *)
+// /// `client_hello_has_psk`: A client hello has a pre-shared key if
+// ///    that mode appears in one of its extensions
+// let client_hello_has_psk (ch:CH.clientHello) =
+//   exists (ext:_).
+//     List.memP ext Parsers.ClientHello.(ch.extensions) /\
+//     Parsers.ClientHelloExtension.CHE_pre_shared_key? ext /\
+//     True (* what else do we need? e.g., that it has as many binders as ids? *)
 
 /// `nego_version`: This is to be provided eventually by a refactoring
 /// of the Negotiation module.
@@ -174,6 +236,11 @@ type transcript_t =
       ch:hs_ch ->
       transcript_t
 
+  | TruncatedHello:
+      retried:option retry ->
+      offer:client_offer ->
+      transcript_t
+
   | Transcript12:
       ch:hs_ch ->
       sh:hs_sh{nego_version ch sh == PV.TLS_1p2} ->
@@ -192,7 +259,8 @@ type transcript_t =
 let transcript_size (t:transcript_t) =
     match t with
     | Start _
-    | Hello _ _ -> 0
+    | Hello _ _
+    | TruncatedHello _ _ -> 0
     | Transcript12 _ _ rest -> List.length rest
     | Transcript13 _ _ _ rest -> List.length rest
 
@@ -201,12 +269,15 @@ let transcript_size (t:transcript_t) =
 let extensible (t:transcript_t) = transcript_size t < max_transcript_size - 1
 let ext_transcript_t = t:transcript_t{extensible t}
 
-/// `transcript_bytes`: The input of the hash algorithm computed by
-/// concatenated the message formatting of the messages
-val transcript_bytes (t:transcript_t)
-  : GTot (b: bytes {
-       Seq.length b <= (max_transcript_size + 4) * max_message_size
-    })
+val transcript_hash (a:HashDef.hash_alg) (t:transcript_t)
+  : GTot (b: HashDef.lbytes (HashDef.hash_length a))
+
+// /// `transcript_bytes`: The input of the hash algorithm computed by
+// /// concatenated the message formatting of the messages
+// val transcript_bytes (t:transcript_t)
+//   : GTot (b: bytes {
+//        Seq.length b <= (max_transcript_size + 4) * max_message_size
+//     })
 
 (** TRANSITIONS **)
 
@@ -350,7 +421,6 @@ val create (r:Mem.rgn) (a:HashDef.hash_alg)
          B.fresh_loc (footprint s) h0 h1)
 
 (** CONCRETE STATE TRANSITIONS **)
-
 /// `extend_pre_common`: Every state transition
 /// has some basic requirements
 ///   -- state machine invariant
@@ -360,11 +430,11 @@ val create (r:Mem.rgn) (a:HashDef.hash_alg)
 unfold
 let extend_pre_common
   #a (s:state a)
-  #t (#b:R.slice) (r:R.repr t b)
+  #t (#b:R.const_slice) (r:R.repr t b)
   (tx:transcript_t) (h:HS.mem)
   = invariant s tx h /\
     R.valid r h /\
-    B.loc_disjoint (B.loc_buffer LP.(b.base)) (footprint s) /\
+    B.loc_disjoint (C.loc_buffer R.(b.base)) (footprint s) /\
     extensible tx
 
 /// `extend_hash_post_common`: Every state transition
@@ -381,7 +451,7 @@ let extend_post_common
 ///    - the state evolves according to `transition_hsm`
 val extend_hsm
   (#a:_) (s:state a)
-  (#b:R.slice) (r:R_HS.repr b)
+  (#b:R.const_slice) (r:R_HS.repr b)
   (tx:G.erased transcript_t)
   : Stack (G.erased transcript_t)
     (requires fun h ->
@@ -398,7 +468,7 @@ val extend_hsm
 ///    - the state evolves according to `transition_hsm12`
 val extend_hsm12
   (#a:_) (s:state a)
-  (#b:R.slice) (r:repr_hs12 b)
+  (#b:R.const_slice) (r:repr_hs12 b)
   (tx:G.erased transcript_t)
   : Stack (G.erased transcript_t)
     (requires fun h ->
@@ -415,7 +485,7 @@ val extend_hsm12
 ///    - the state evolves according to `transition_hsm13`
 val extend_hsm13
   (#a:_) (s:state a)
-  (#b:R.slice) (r:repr_hs13 b)
+  (#b:R.const_slice) (r:repr_hs13 b)
   (tx:G.erased transcript_t)
   : Stack (G.erased transcript_t)
     (requires fun h ->
