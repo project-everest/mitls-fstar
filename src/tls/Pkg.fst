@@ -18,6 +18,7 @@ module Pkg
 
 open Mem
 
+module M = LowStar.Modifies
 module MDM = FStar.Monotonic.DependentMap
 module MH = FStar.Monotonic.Heap
 module HS = FStar.HyperStack
@@ -87,9 +88,14 @@ noeq type pkg_inv_r =
   | Pinv_region: r:rid{r `disjoint` tls_define_region} -> pkg_inv_r
   | Pinv_define: #it:eqtype -> #vt:(it -> Type) -> t:mem_table vt -> pkg_inv_r
 
+
+
 // When calling create or coerce, the footprint of a package grows only with
 // fresh subregions
-type modifies_footprint (fp:mem->GTot rset) h0 h1 =
+type modifies_footprint (fp: mem -> GTot M.loc) h0 h1 =
+  M.loc_includes (fp h0) (fp h1) /\
+  forall (l:M.loc).{:pattern }
+    l `M.loc_includes` (fp h0) /\ loc
   forall (r:rid). (Set.mem r (fp h0) /\ ~(Set.mem r (fp h1))) ==> fresh_region r h0 h1  
   //AR: 12/05: Could use the pattern {:pattern (Set.mem r (fp h0)); (Set.mem r (fp h1))}
 
