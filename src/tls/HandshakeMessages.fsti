@@ -18,8 +18,13 @@ include Parsers.Handshake
 include Parsers.Handshake12
 include Parsers.Handshake13
 
-include Parsers.ClientHello
+(* ServerHello also encodes HelloRetryRequest *)
 include Parsers.ServerHello
+include Parsers.ServerHello_is_hrr
+include Parsers.HRRKind
+include Parsers.SHKind
+
+include Parsers.ClientHello
 include Parsers.NewSessionTicket12
 include Parsers.NewSessionTicket13
 include Parsers.EncryptedExtensions

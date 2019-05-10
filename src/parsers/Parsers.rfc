@@ -1224,6 +1224,7 @@ struct {
 opaque SessionID<0..32>;
 
 enum /*@open*/ { nullCompression(0), (255) } CompressionMethod;
+enum { nullCompression(0), (255) } LegacyCompression;
 
 /** Shared Handshake Message Types **/
 
@@ -1232,17 +1233,31 @@ struct {
   Random random;
   SessionID session_id;
   CipherSuite cipher_suites<2..2^16-2>;
-  CompressionMethod compression_method<1..2^8-1>;
+  CompressionMethod compression_methods<1..2^8-1>;
   ClientHelloExtensions extensions;
 } ClientHello;
 
 struct {
-  ProtocolVersion version;
-  Random random;
   SessionID session_id;
   CipherSuite cipher_suite;
   CompressionMethod compression_method;
   ServerHelloExtensions extensions;
+} SHKind;
+
+struct {
+  SessionID session_id;
+  CipherSuite cipher_suite;
+  LegacyCompression legacy_compression;
+  HRRExtensions extensions;
+} HRRKind;
+
+struct {
+  ProtocolVersion version;
+  opaque random[32];
+  (if random = "CF21AD74E59A6111BE1D8C021E65B891C2A211167ABB8C5E079E09E2C8A8339C"
+    HRRKind
+  else
+    SHKind) is_hrr;
 } ServerHello;
 
 /** TLS 1.3 Handshake Messages */
