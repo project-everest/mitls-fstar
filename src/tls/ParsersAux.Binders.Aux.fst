@@ -69,11 +69,27 @@ let serialize_clientHelloExtensions_eq
 let serialize_clientHello_eq
   c
 = LP.serialize_synth_eq _ CH.synth_clientHello CH.clientHello'_serializer CH.synth_clientHello_recip () c;
-  LP.serialize_nondep_then_eq Parsers.ProtocolVersion.protocolVersion_serializer Parsers.Random.random_serializer (c.CH.version, c.CH.random);
-  LP.serialize_nondep_then_eq (LP.serialize_nondep_then Parsers.ProtocolVersion.protocolVersion_serializer Parsers.Random.random_serializer) Parsers.SessionID.sessionID_serializer ((c.CH.version, c.CH.random), c.CH.session_id);
-  LP.serialize_nondep_then_eq (LP.serialize_nondep_then (LP.serialize_nondep_then Parsers.ProtocolVersion.protocolVersion_serializer Parsers.Random.random_serializer) Parsers.SessionID.sessionID_serializer) CH.clientHello_cipher_suites_serializer (((c.CH.version, c.CH.random), c.CH.session_id), c.CH.cipher_suites);
-  LP.serialize_nondep_then_eq (LP.serialize_nondep_then (LP.serialize_nondep_then (LP.serialize_nondep_then Parsers.ProtocolVersion.protocolVersion_serializer Parsers.Random.random_serializer) Parsers.SessionID.sessionID_serializer) CH.clientHello_cipher_suites_serializer) CH.clientHello_compression_method_serializer ((((c.CH.version, c.CH.random), c.CH.session_id), c.CH.cipher_suites), c.CH.compression_method);
-  LP.serialize_nondep_then_eq (LP.serialize_nondep_then (LP.serialize_nondep_then (LP.serialize_nondep_then (LP.serialize_nondep_then Parsers.ProtocolVersion.protocolVersion_serializer Parsers.Random.random_serializer) Parsers.SessionID.sessionID_serializer) CH.clientHello_cipher_suites_serializer) CH.clientHello_compression_method_serializer) CHEs.clientHelloExtensions_serializer (((((c.CH.version, c.CH.random), c.CH.session_id), c.CH.cipher_suites), c.CH.compression_method), c.CH.extensions)
+  LP.serialize_nondep_then_eq
+    ((Parsers.ProtocolVersion.protocolVersion_serializer `LP.serialize_nondep_then` Parsers.Random.random_serializer) `LP.serialize_nondep_then` (Parsers.SessionID.sessionID_serializer `LP.serialize_nondep_then` CH.clientHello_cipher_suites_serializer))
+    (CH.clientHello_compression_method_serializer `LP.serialize_nondep_then` CHEs.clientHelloExtensions_serializer)
+    (((c.CH.version, c.CH.random), (c.CH.session_id, c.CH.cipher_suites)),
+    (c.CH.compression_method, c.CH.extensions));
+  LP.serialize_nondep_then_eq
+    (Parsers.ProtocolVersion.protocolVersion_serializer `LP.serialize_nondep_then` Parsers.Random.random_serializer)
+    (Parsers.SessionID.sessionID_serializer `LP.serialize_nondep_then` CH.clientHello_cipher_suites_serializer)
+    ((c.CH.version, c.CH.random), (c.CH.session_id, c.CH.cipher_suites));
+  LP.serialize_nondep_then_eq
+    Parsers.ProtocolVersion.protocolVersion_serializer
+    Parsers.Random.random_serializer
+    (c.CH.version, c.CH.random);
+  LP.serialize_nondep_then_eq
+    Parsers.SessionID.sessionID_serializer
+    CH.clientHello_cipher_suites_serializer
+    (c.CH.session_id, c.CH.cipher_suites);
+  LP.serialize_nondep_then_eq
+    CH.clientHello_compression_method_serializer
+    CHEs.clientHelloExtensions_serializer
+    (c.CH.compression_method, c.CH.extensions)
 
 let serialize_handshake_m_client_hello_eq
   c
