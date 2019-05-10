@@ -88,15 +88,15 @@ noeq type pkg_inv_r =
   | Pinv_region: r:rid{r `disjoint` tls_define_region} -> pkg_inv_r
   | Pinv_define: #it:eqtype -> #vt:(it -> Type) -> t:mem_table vt -> pkg_inv_r
 
-
-
 // When calling create or coerce, the footprint of a package grows only with
 // fresh subregions
 type modifies_footprint (fp: mem -> GTot M.loc) h0 h1 =
   M.loc_includes (fp h0) (fp h1) /\
-  forall (l:M.loc).{:pattern }
-    l `M.loc_includes` (fp h0) /\ loc
-  forall (r:rid). (Set.mem r (fp h0) /\ ~(Set.mem r (fp h1))) ==> fresh_region r h0 h1  
+  (forall (l:M.loc).{:pattern (M.loc_includes l (fp h1)); (M.loc_disjoint l (fp h1))}
+    l `M.loc_includes` (fp h1) /\ l `M.loc_disjoint` (fp h0) ==> fresh_loc l h0 h1)
+
+// Old region-based definition:
+//  forall (r:rid). (Set.mem r (fp h0) /\ ~(Set.mem r (fp h1))) ==> fresh_region r h0 h1  
   //AR: 12/05: Could use the pattern {:pattern (Set.mem r (fp h0)); (Set.mem r (fp h1))}
 
 inline_for_extraction
@@ -112,7 +112,7 @@ noeq type pkg (ip: ipkg) = | Pkg:
   // The package footprint is a function of the table contents;
   // that collects all global and instance-local regions, but not [define_table]
   define_table: mem_table #(i:ip.t {ip.registered i}) key ->
-  footprint: (mem -> GTot rset) ->
+  footprint: (mem -> GTot M.loc) ->
   footprint_framing: (h0:mem -> h1:mem -> Lemma
     (requires mem_stable define_table h0 h1)
     (ensures footprint h0 == footprint h1)) ->
@@ -120,21 +120,25 @@ noeq type pkg (ip: ipkg) = | Pkg:
   // we maintain a package invariant,
   // which only depends on the table and footpring.
   package_invariant: (mem -> Type0) ->
-  package_invariant_framing: (h0:mem -> r:pkg_inv_r -> h1:mem -> Lemma
-    (requires package_invariant h0 /\ mem_contains define_table h0 /\
-      (match r with
-      | Pinv_region r -> modifies_one r h0 h1 /\ ~(Set.mem r (footprint h0))
-      | Pinv_define #it #vt t ->
-        mem_contains t h0 /\ modifies_mem_table t h0 h1 /\ mem_disjoint t define_table))
+  package_invariant_framing: (h0:mem -> l:M.loc -> h1:mem -> Lemma
+    (requires M.modifies l h0 h1 /\
+      package_invariant h0 /\
+      mem_contains define_table h0 /\
+      M.loc_disjoint l (footprint h0))
+//      (match r with
+//      | Pinv_region r -> modifies_one r h0 h1 /\ ~(Set.mem r (footprint h0))
+//      | Pinv_define #it #vt t ->
+//        mem_contains t h0 /\ modifies_mem_table t h0 h1 /\ mem_disjoint t define_table))
     (ensures package_invariant h1)) ->
 
   // create and coerce, with a shared post-condition and framing lemma
   // so that [derive] can pass the post-condition to its caller; the
   // concrete part of the postcondition is what we need in [derive].
   post: (#i:ip.t{ip.registered i} -> info i -> key i -> mem -> GTot Type0) ->
-  post_framing: (#i:ip.t{ip.registered i} -> a:info i -> k:key i ->  h0:mem -> r:rid -> h1:mem -> Lemma
-     (requires (post a k h0 /\ modifies_one r h0 h1 /\ ~(r `Set.mem` footprint h0)))
-     (ensures (post a k h1))) ->
+  post_framing: (#i:ip.t{ip.registered i} -> a:info i -> k:key i ->
+    h0:mem -> l:M.loc -> h1:mem -> Lemma
+     (requires post a k h0 /\ M.modifies l h0 h1 /\ M.loc_disjoint l (footprint h0))
+     (ensures post a k h1)) ->
 
   create: (i:ip.t{ip.registered i} -> a:info i -> ST (key i)
     (requires fun h0 ->
@@ -160,10 +164,6 @@ noeq type pkg (ip: ipkg) = | Pkg:
       mem_update define_table i k h0 h1)) ->
   pkg ip
 
-type fresh_regions (s:rset) (h0:mem) (h1:mem) =
-  forall (r:rid).{:pattern (Set.mem r s)} Set.mem r s ==>
-    (fresh_region r h0 h1 \/ is_tls_rgn r)
-
 /// packages of instances with local private state, before ensuring
 /// their unique definition at every index and the disjointness of
 /// their footprints.
@@ -174,30 +174,32 @@ noeq type local_pkg (ip: ipkg) =
   info: (ip.t -> Type0) ->
   len: (#i:ip.t -> info i -> keylen) ->
   ideal: Type0 ->
-  (* regions that are shared accross instances of the functionality *)
-  shared_footprint: rset ->
-  (* regions that are specific to each instance and freshly allocated when the instance is created *)
-  local_footprint: (#i:ip.t{ip.registered i} -> key i -> GTot (s:rset{s `Set.disjoint` shared_footprint})) ->
-  local_invariant: (#i:ip.t{ip.registered i} -> key i -> mem -> GTot Type0) (* instance invariant *) ->
-  local_invariant_framing: (i:ip.t{ip.registered i} -> k:key i -> h0:mem -> r:rid -> h1:mem -> Lemma
-    (requires local_invariant k h0 /\ modifies_one r h0 h1
-      /\ ~(r `Set.mem` local_footprint k) /\ ~(r `Set.mem` shared_footprint))
+  shared_footprint: M.loc ->
+  local_footprint: (#i:ip.t{ip.registered i} -> key i -> GTot (l:M.loc{M.loc_disjoint l shared_footprint})) ->
+  local_invariant: (#i:ip.t{ip.registered i} -> key i -> mem -> GTot Type0) ->
+  local_invariant_framing: (i:ip.t{ip.registered i} -> k:key i ->
+    h0:mem -> l:M.loc -> h1:mem -> Lemma
+    (requires local_invariant k h0 /\ M.modifies l h0 h1
+      /\ M.loc_disjoint l shared_footprint /\ M.loc_disjoint l (local_footprint k))
     (ensures local_invariant k h1)) ->
   post: (#i:ip.t{ip.registered i} -> info i -> key i -> mem -> GTot Type0) ->
-  post_framing: (#i:ip.t{ip.registered i} -> a:info i -> k:key i -> h0:mem -> r:rid -> h1:mem -> Lemma
-    (requires (post a k h0 /\ modifies_one r h0 h1 /\ ~(r `Set.mem` local_footprint k)))
-    (ensures (post a k h1))) ->
+  post_framing: (#i:ip.t{ip.registered i} -> a:info i -> k:key i ->
+    h0:mem -> l:M.loc -> h1:mem -> Lemma
+    (requires post a k h0 /\ M.modifies l h0 h1 /\ M.loc_disjoint l (local_footprint k))
+    (ensures post a k h1)) ->
   create: (i:ip.t{ip.registered i} -> a:info i -> ST (key i)
     (requires fun h0 -> model)
     (ensures fun h0 k h1 ->
-       modifies_none h0 h1 /\ local_invariant k h1 /\
-       post a k h1 /\ fresh_regions (local_footprint k) h0 h1)) ->
-  coerceT: (i:ip.t{ip.registered i /\ (ideal ==> ~(ip.honest i))} -> a:info i -> lbytes32 (len a) -> GTot (key i)) ->
-  coerce: (i:ip.t{ip.registered i /\ (ideal ==> ~(ip.honest i))} -> a:info i -> rk:lbytes32 (len a) -> ST (key i)
+       M.modifies (local_footprint k) h0 h1 /\ local_invariant k h1 /\
+       post a k h1 /\ fresh_loc (local_footprint k) h0 h1)) ->
+  coerceT: (i:ip.t{ip.registered i /\ (ideal ==> ~(ip.honest i))} ->
+    a:info i -> lbytes32 (len a) -> GTot (key i)) ->
+  coerce: (i:ip.t{ip.registered i /\ (ideal ==> ~(ip.honest i))} ->
+    a:info i -> rk:lbytes32 (len a) -> ST (key i)
     (requires fun h0 -> True)
     (ensures fun h0 k h1 -> k == coerceT i a rk /\
-      modifies_none h0 h1 /\ local_invariant k h1 /\
-      post a k h1 /\ fresh_regions (local_footprint k) h0 h1)) ->
+      M.modifies (local_footprint k) h0 h1 /\ local_invariant k h1 /\
+      post a k h1 /\ fresh_loc (local_footprint k) h0 h1)) ->
   local_pkg ip
 
 (* Iterators over Monotonic.Map, require a change of implementation *)
@@ -218,7 +220,7 @@ assume type mm_forall (#a:eqtype) (#b:a -> Type) (t:MDM.map a b)
 
 let lemma_mm_forall_frame (#a:eqtype) (#b:a -> Type) (t:MDM.map a b)
   (p: (#i:a -> b i -> mem -> GTot Type0))
-  (footprint: (#i:a -> v:b i -> GTot rset))
+  (footprint: (#i:a -> v:b i -> GTot M.loc))
   (p_frame: (i:a -> v:b i -> h0:mem -> r:rid -> h1:mem ->
     Lemma (requires p v h0 /\ modifies_one r h0 h1 /\ ~(Set.mem r (footprint v)))
           (ensures p v h1)))
