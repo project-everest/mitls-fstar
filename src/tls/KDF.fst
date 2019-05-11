@@ -437,6 +437,8 @@ let compatible_packages (lp:local_pkg ii) (p:pkg ii) =
 /// The well-formedness condition on the derived label (opaque from
 /// the viewpoint of the KDF) enforces
 ///
+/// Before the call, the derived index may be defined, or not.
+/// 
 #set-options "--query_stats"
 noextract inline_for_extraction
 val derive:
@@ -448,14 +450,14 @@ val derive:
   ctx: context {~(honest_idh ctx) /\ wellformed_derive i lbl ctx} ->
   child_pkg: local_pkg ii{~(LocalPkg?.ideal child_pkg)} ->
   a': LocalPkg?.info child_pkg (derive i lbl ctx) ->
-  ST (_:squash (registered (derive i lbl ctx)) &
-      (LocalPkg?.key child_pkg) (derive i lbl ctx))
+  ST (
+    _:squash (registered (derive i lbl ctx)) &
+    (LocalPkg?.key child_pkg) (derive i lbl ctx))
   (requires fun h0 ->
-    (LocalPkg?.len child_pkg) a' == EverCrypt.Hash.tagLen (get_info k).ha /\
-    ((u_of_t t) `has_lbl` lbl ==>
-      compatible_packages child_pkg (child (u_of_t t) lbl)) /\
     mem_defined (kdf_dt t) i /\
-    tree_invariant t h0)
+    tree_invariant t h0 /\
+    (LocalPkg?.len child_pkg) a' == EverCrypt.Hash.tagLen (get_info k).ha /\
+    (u_of_t t `has_lbl` lbl ==> compatible_packages child_pkg (child (u_of_t t) lbl)) )
   (ensures fun h0 (| () , r |) h1 ->
     modifies_derive k lbl ctx h0 h1 /\
     tree_invariant t h1 /\
@@ -472,6 +474,8 @@ let derive #ideal #t #i k lbl ctx child_pkg a' =
   let u = u_of_t t in
   let dt = kdf_dt t in
   let h0 = get() in
+
+  // parent honesty is defined; child honesty is set accordingly if it is unregistered.
   let honest = get_honesty i in
   let i', honest' = register_derive i lbl ctx in
   let h1 = get() in

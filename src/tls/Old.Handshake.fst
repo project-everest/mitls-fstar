@@ -15,8 +15,8 @@ open Old.Epochs
 
 module U32 = FStar.UInt32
 module MS = FStar.Monotonic.Seq
-module Nego = Negotiation
 module HS = FStar.HyperStack
+module Nego = Negotiation
 module HST = FStar.HyperStack.ST
 module Epochs = Old.Epochs
 module KeySchedule = Old.KeySchedule
@@ -97,7 +97,7 @@ noeq type hs' = | HS:
   state: ref machineState {HS.frameOf state = region} -> // state machine; should be opaque and depend on r.
   hs'
 
-let hs = hs' //17-04-08 interface limitation
+let hs = hs' //17-04-08 around .fsti limitation
 
 let nonce (s:hs) = Nego.nonce s.nego
 let region_of (s:hs) = s.region
@@ -295,9 +295,9 @@ let verify_binder hs (bkey:(i:binderId & bk:KeySchedule.binderKey i)) (tag:btag 
 // may be called both by client_ClientHello and client_HelloRetryRequest
 let client_Binders hs offer =
   match Nego.resume hs.nego with
-  | _, [] ->
+  | (_, []) ->
     HandshakeLog.send hs.log (HSL.Msg (HSM.M_client_hello offer))
-  | _, pskl ->
+  | (_, pskl) ->
     let binderKeys = KeySchedule.ks_client_13_get_binder_keys hs.ks pskl in
     let blen = Extensions.bindersLen offer.CH.extensions in    
     HSL.send_truncated hs.log (HSL.Msg (HSM.M_client_hello offer)) blen;
@@ -413,11 +413,11 @@ let client_ServerHello (s:hs) (sh:HSM.serverHello) (* digest:Hashing.anyTag *) :
     | TLS_1p3 ->
       begin
         trace "Running TLS 1.3";
-        let digest = HandshakeLog.hash_tag #ha s.log in
+        let digest_ServerHello = HandshakeLog.hash_tag #ha s.log in
         let hs_keys = KeySchedule.ks_client_13_sh s.ks
           mode.Nego.n_server_random
           mode.Nego.n_cipher_suite
-          digest
+          digest_ServerHello
           mode.Nego.n_server_share
           mode.Nego.n_pski in
         register s hs_keys; // register new epoch
@@ -522,7 +522,7 @@ let client_ServerHelloDone hs c ske_bytes ocr =
       let msg = HSM.M12_client_key_exchange (
         clientKeyExchange_serializer32 kex cke) in
       let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
-      let digestClientKeyExchange = HandshakeLog.send_tag #ha hs.log (HSL.Msg12 msg)  in
+      let digestClientKeyExchange = HandshakeLog.send_tag #ha hs.log (HSL.Msg12 msg) in
       let cfin_key, app_keys = KeySchedule.ks_client_12_set_session_hash hs.ks digestClientKeyExchange in
       register hs app_keys;
       // we send CCS then Finished;  we will use the new keys only after CCS
@@ -615,16 +615,19 @@ let client_NewSessionTicket_12 (hs:hs) (resume:bool) (digest:Hashing.anyTag) (st
   : St incoming =
   let open Parsers.NewSessionTicket12 in
   trace ("Processing ticket: "^(print_bytes st.ticket));
+
   hs.state := C_Wait_CCS (resume, digest);
   let cfg = Nego.local_config hs.nego in
   let tcb = cfg.ticket_callback in
   let mode = Nego.getMode hs.nego in
   let sni = iutf8 (Nego.get_sni mode.Nego.n_offer) in
+
   let (_msId, ms) = KeySchedule.ks_12_ms hs.ks in
   let info = TicketInfo_12 (
     mode.Nego.n_protocol_version,
     mode.Nego.n_cipher_suite,
     Nego.emsFlag mode) in 
+
   tcb.new_ticket tcb.ticket_context sni st.ticket info ms;
   InAck false false
 
@@ -640,6 +643,7 @@ let client_NewSessionTicket_13 (hs:hs) (st13:HSM.newSessionTicket13)
   let mode = Nego.getMode hs.nego in
   let CipherSuite13 ae h = mode.Nego.n_cipher_suite in
   let ed = List.Tot.find NSTE_early_data? st13.extensions in
+
   let now = UInt32.uint_to_t (FStar.Date.secondsFromDawn()) in
   let info = TicketInfo_13 TLSConstants.({
     ticket_nonce = Some nonce;
@@ -651,6 +655,7 @@ let client_NewSessionTicket_13 (hs:hs) (st13:HSM.newSessionTicket13)
     early_ae = ae; early_hash = h;
     identities = (empty_bytes, empty_bytes); // TODO certs
   }) in
+
   let psk = KeySchedule.ks_client_13_rms_psk hs.ks nonce in
   let sni = iutf8 (Nego.get_sni mode.Nego.n_offer) in
   let cfg = Nego.local_config hs.nego in
@@ -665,7 +670,8 @@ let client_NewSessionTicket_13 (hs:hs) (st13:HSM.newSessionTicket13)
     (let tcb = cfg.ticket_callback in
     tcb.new_ticket tcb.ticket_context sni tid info psk;
     InAck false false)
-  else InError (fatalAlert Illegal_parameter, "QUIC tickets must allow 0xFFFFFFFF bytes of early data")
+  else 
+    InError (fatalAlert Illegal_parameter, "QUIC tickets must allow 0xFFFFFFFF bytes of early data")
 
 let client_ServerFinished hs f digestClientFinished =
   let sfin_key = KeySchedule.ks_12_finished_key hs.ks in
@@ -742,7 +748,7 @@ let serverHello (m:Nego.mode) =
 type binders = Parsers.OfferedPsks_binders.offeredPsks_binders
 
 //19-05-04 Now ensured by parsing? 
-val  consistent_truncation: option Extensions.offeredPsks -> bool
+val consistent_truncation: option Extensions.offeredPsks -> bool
 let consistent_truncation x =
   match x with
   | None -> true
@@ -873,7 +879,8 @@ let server_ClientHello hs offer =
           begin
             let zeroing = Nego.zeroRTT mode in
             if zeroing  then (
-              let early_exporter_secret, zero_keys = KeySchedule.ks_server_13_0rtt_key hs.ks digestClientHelloBinders in
+              let early_exporter_secret, zero_keys = 
+                KeySchedule.ks_server_13_0rtt_key hs.ks digestClientHelloBinders in
               export hs early_exporter_secret;
               register hs zero_keys;
 	      Epochs.incr_reader hs.epochs // Be ready to read 0-RTT data
