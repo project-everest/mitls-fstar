@@ -4,7 +4,6 @@ open C.String
 open FStar.Error
 open FStar.HyperStack.ST
 open LowStar.BufferOps
-open Parsers
 
 module B = FStar.Bytes
 module LB = LowStar.Buffer
@@ -35,6 +34,11 @@ let from_bytes (b:B.bytes{B.length b <> 0}) : StackInline (LB.buffer LPL.byte)
   let h1 = get () in
   LB.(modifies_only_not_unused_in loc_none h0 h1);
   lb
+
+module ClientHello = Parsers.ClientHello
+module Handshake13 = Parsers.Handshake13
+module Handshake12 = Parsers.Handshake12
+module Handshake = Parsers.Handshake
 
 let test_clientHello () : St bool =
   (* From Chrome 70 *)

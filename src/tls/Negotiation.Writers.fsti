@@ -24,7 +24,9 @@ module B = LowStar.Buffer
 (* extraction test, do not run *)
 
 val test_write_final_extensions
-  (cfg: config)
+  (#rrelcfg #relcfg: _)
+  (scfg: LP.slice rrelcfg relcfg)
+  (pcfg: U32.t)
   (edi: bool)
   (#rrel #rel: _)
   (sin: LP.slice rrel rel)

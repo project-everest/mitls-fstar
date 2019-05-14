@@ -131,7 +131,7 @@ noextract
 let create ip _ _ i u =
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
-  assert_norm(EverCrypt.HMAC.keysized u.alg (EverCrypt.Hash.tagLength u.alg));
+  assert_norm(Spec.HMAC.keysized u.alg (EverCrypt.Hash.tagLength u.alg));
   let kv: keyrepr u = Random.sample32 (Hashing.tagLen u.alg) in
   let ck = MAC u kv in
   let k : ir_key ip i =
@@ -152,7 +152,7 @@ let coerceT (ip: ipkg) (ha_of_i: ip.Pkg.t -> ha) (good_of_i: (i:ip.Pkg.t -> Hash
   =
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
-  assert_norm(EverCrypt.HMAC.keysized u.alg (EverCrypt.Hash.tagLength u.alg));
+  assert_norm(Spec.HMAC.keysized u.alg (EverCrypt.Hash.tagLength u.alg));
   let ck = MAC u kv in
   if model then
     let k: ir_key ip i = RealKey ck in k
@@ -185,7 +185,7 @@ val coerce:
 let coerce ip _ _ i u kv =
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
-  assert_norm(EverCrypt.HMAC.keysized u.alg (EverCrypt.Hash.tagLength u.alg));
+  assert_norm(Spec.HMAC.keysized u.alg (EverCrypt.Hash.tagLength u.alg));
   let ck = MAC u kv in
   if model then
     let k: ir_key ip i = RealKey ck in k

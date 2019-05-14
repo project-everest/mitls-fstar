@@ -4,6 +4,7 @@ open FStar.HyperStack.ST
 open FStar.HyperStack.IO
 
 module NW = Negotiation.Writers // for extraction purposes only
+module PBinders = ParsersAux.Binders // for verification purposes only
 
 #set-options "--admit_smt_queries true"
 

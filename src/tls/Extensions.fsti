@@ -146,11 +146,34 @@ include Parsers.ServerHelloExtensions
 include Parsers.ClientHelloExtension
 include Parsers.ClientHelloExtensions
 
+(* Unknown extension, with its tag *)
+
+include Parsers.TaggedUnknownExtension
+
+
 // TLSConstants defines the application-level type for custom extensions
 val cext_of_custom: custom_extensions -> clientHelloExtensions
 val eext_of_custom: custom_extensions -> encryptedExtensions
 val custom_of_cext: clientHelloExtensions -> custom_extensions
 val custom_of_eext: encryptedExtensions -> custom_extensions
+
+val clientHelloExtensions_of_tagged_unknown_extensions (x: list taggedUnknownExtension) : Tot (list clientHelloExtension)
+
+module HS = FStar.HyperStack
+module LP = LowParse.Low.Base
+module U32 = FStar.UInt32
+
+val valid_list_clientHelloExtensions_of_tagged_unknown_extensions
+  (h: HS.mem)
+  (#rrel #rel: _)
+  (sl: LP.slice rrel rel)
+  (pos pos': U32.t)
+: Lemma
+  (requires (LP.valid_list taggedUnknownExtension_parser h sl pos pos'))
+  (ensures (
+    LP.valid_list clientHelloExtension_parser h sl pos pos' /\
+    LP.contents_list clientHelloExtension_parser h sl pos pos' == clientHelloExtensions_of_tagged_unknown_extensions (LP.contents_list taggedUnknownExtension_parser h sl pos pos')
+  ))
 
 val bindersLen: clientHelloExtensions -> UInt32.t
 

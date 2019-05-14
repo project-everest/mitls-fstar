@@ -98,7 +98,7 @@ val hmac:
   a:alg -> 
   k:tag a -> 
   m:bytes {length m + blockLength a <= maxLength a } -> 
-  Stack (t:tag a {reveal t == EverCrypt.HMAC.hmac a (reveal k) (reveal m)})
+  Stack (t:tag a {reveal t == Spec.HMAC.hmac a (reveal k) (reveal m)})
   (requires fun h0 -> True)
   (ensures fun h0 t h1 -> modifies Set.empty h0 h1)
 *)
