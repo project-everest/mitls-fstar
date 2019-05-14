@@ -212,3 +212,6 @@ let fresh_is_disjoint (old_loc:M.loc) (new_loc:M.loc)
   (requires (fresh_loc new_loc h0 h1 /\ old_loc `loc_in` h0))
   (ensures (M.loc_disjoint old_loc new_loc))
   = ()
+
+type sub_loc (parent:M.loc) =
+  l:M.loc{if model then M.loc_includes parent l else l == M.loc_none}
