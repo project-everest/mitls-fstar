@@ -19,6 +19,7 @@ open FStar.Bytes // still used for cookies, tickets, signatures...
 open Mem
 open TLSError
 open TLSInfo
+open TLS.Callbacks
 open TLSConstants
 
 module B = LowStar.Buffer
@@ -412,7 +413,7 @@ noeq type serverMode =
     serverMode
   | ServerMode: mode -> certNego -> extra_sext -> serverMode
 
-(* Returns the server name, if any, or an empty bytestring; review. *)
+(* Returns the server hostName, if any, or an empty bytestring; review. *)
 val get_sni: offer -> Tot bytes 
 
 (* for QUIC *) 

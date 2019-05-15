@@ -472,6 +472,7 @@ let check_cookie b = None
 #pop-options
 
 let ticket_pskinfo (t:ticket) =
+  let open TLS.Callbacks in 
   match t with
   | Ticket13 cs li _ _ nonce created age_add custom ->
     let CipherSuite13 ae h = cs in
@@ -489,7 +490,8 @@ let ticket_pskinfo (t:ticket) =
   | _ -> None
 
 noextract
-let ticketContents13_pskinfo (t: TC13.ticketContents13) : Tot pskInfo =
+let ticketContents13_pskinfo (t: TC13.ticketContents13) : Tot TLS.Callbacks.pskInfo =
+  let open TLS.Callbacks in 
   match t with
   | ({ TC13.cs = cs; TC13.nonce = nonce; TC13.creation_time = created; TC13.age_add = age_add; TC13.custom_data = custom }) ->
     begin match cipherSuite_of_cipherSuite13 cs with
@@ -508,7 +510,7 @@ let ticketContents13_pskinfo (t: TC13.ticketContents13) : Tot pskInfo =
     end
 
 noextract
-let ticketContents_pskinfo (t:TC.ticketContents) : Tot (option pskInfo) =
+let ticketContents_pskinfo (t:TC.ticketContents) : Tot (option TLS.Callbacks.pskInfo) =
   match t with
   | TC.T_ticket13 t13 -> Some (ticketContents13_pskinfo t13)
   | _ -> None

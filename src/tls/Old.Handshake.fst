@@ -9,6 +9,7 @@ open FStar.Bytes
 
 open TLSError
 open TLSInfo
+open TLS.Callbacks
 open TLSConstants
 open Range
 open Old.Epochs
@@ -645,7 +646,7 @@ let client_NewSessionTicket_13 (hs:hs) (st13:HSM.newSessionTicket13)
   let ed = List.Tot.find NSTE_early_data? st13.extensions in
 
   let now = UInt32.uint_to_t (FStar.Date.secondsFromDawn()) in
-  let info = TicketInfo_13 TLSConstants.({
+  let info = TicketInfo_13 TLS.Callbacks.({
     ticket_nonce = Some nonce;
     time_created = now;
     ticket_age_add = age_add;

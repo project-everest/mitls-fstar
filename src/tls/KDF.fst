@@ -479,6 +479,7 @@ let derive #ideal #t #i k lbl ctx child_pkg a' =
   let honest = get_honesty i in
   let i', honest' = register_derive i lbl ctx in
   let h1 = get() in
+  
   tree_invariant_frame t h0 h1;
   lemma_corrupt_invariant i lbl ctx;
 
@@ -519,13 +520,12 @@ let derive #ideal #t #i k lbl ctx child_pkg a' =
       (| (), dk |)
      end
    end
-  else
+  else 
    begin
     assert(h1 == h0);
     let len' = (LocalPkg?.len child_pkg) a' in 
     let (| a, key |) = Model.real k in
-    let lb = FStar.Bytes.bytes_of_string lbl in
-    let raw = HKDF.expand #(a.ha) key lb len' in
+    let raw = HKDF.expand #a.ha key (Bytes.bytes_of_string lbl) len' in
     let dk = (LocalPkg?.coerce child_pkg) i' a' raw in
     let h2 = get() in
 //    assert(modifies_none h1 h2); 

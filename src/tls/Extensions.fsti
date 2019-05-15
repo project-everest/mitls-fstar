@@ -150,8 +150,9 @@ include Parsers.ClientHelloExtensions
 
 include Parsers.TaggedUnknownExtension
 
+type custom_extension = TLS.Callbacks.custom_extension
+type custom_extensions = TLS.Callbacks.custom_extensions
 
-// TLSConstants defines the application-level type for custom extensions
 val cext_of_custom: custom_extensions -> clientHelloExtensions
 val eext_of_custom: custom_extensions -> encryptedExtensions
 val custom_of_cext: clientHelloExtensions -> custom_extensions

@@ -15,6 +15,7 @@ open FStar.Bytes
 open Mem
 open TLSError
 open TLSInfo
+open TLS.Callbacks
 open TLSConstants
 
 module HS = FStar.HyperStack
@@ -64,6 +65,9 @@ module HST = FStar.HyperStack.ST
 module B = LowStar.Buffer
 
 #reset-options
+
+// 19-05-17 Sample low-level printer for namedGroupList. We will need
+// plenty of the same, we still don't know what to automate.
 
 let print_namedGroupList
   #rrel #rel sl pos
@@ -273,12 +277,13 @@ let keyshares cfg (ks: option clientHelloExtension_CHE_key_share): list clientHe
   | TLS_1p3, Some ks -> [CHE_key_share ks]
   | _,_              -> [] 
 
+// 19-05-17 Experiment using a lower QD-generated [config] representation.
 module CFG = Parsers.MiTLSConfig
-
 let keyshares_new cfg (ks: option clientHelloExtension_CHE_key_share): list clientHelloExtension = 
   match Parsers.KnownProtocolVersion.tag_of_knownProtocolVersion cfg.CFG.max_version, ks with
   | TLS_1p3, Some ks -> [CHE_key_share ks]
   | _,_              -> [] 
+
 
 //TODO make serverName_bytesize transparent (for all sums)
 assume val sz_Sni_host_name: dns: Parsers.HostName.hostName -> Lemma(
@@ -525,6 +530,58 @@ let allow_dhe_resumption_new (r: Parsers.ResumeInfo13.resumeInfo13) : Tot bool =
   (Ticket.ticketContents13_pskinfo r.Parsers.ResumeInfo13.ticket).allow_dhe_resumption
 
 #reset-options
+
+(*
+inline_for_extraction
+let bind (#a:Type) (#b:Type)
+         (f:result a)
+         (g: a -> result b)
+    : result b
+    = match f with
+      | Correct x -> g x
+      | Error z -> Error z
+
+inline_for_extraction
+let return (#a:Type) (x:a) : result a = Correct x
+
+inline_for_extraction
+let fail (#a:Type) z : result a = Error z
+
+noextract
+let final_extensions_alt
+  (cfg: CFG.miTLSConfig) (edi: bool) (l: list Parsers.ResumeInfo13.resumeInfo13) (now: U32.t)
+: Tot (result (list clientHelloExtension))
+= match Parsers.KnownProtocolVersion.tag_of_knownProtocolVersion cfg.CFG.max_version with
+  | TLS_1p3 ->
+    let allow_psk_resumption = List.Tot.existsb allow_psk_resumption_new l in
+    let allow_dhe_resumption = List.Tot.existsb allow_dhe_resumption_new l in
+    if allow_psk_resumption || allow_dhe_resumption
+    then
+      let psk_kex =
+        (if allow_psk_resumption then [Psk_ke] else []) @ (if allow_dhe_resumption then [Psk_dhe_ke] else [])
+      in
+      let binders = List.Tot.map (fun r -> compute_binder_ph_new r.Parsers.ResumeInfo13.ticket) l in
+      let pskidentities = List.Tot.map (obfuscate_age_new now) l in
+      ke <-- (
+        if not (check_offeredPsks_identities_list_bytesize pskidentities)
+        then fail (fatal Internal_error "final_extensions: check_offeredPsks_identities_list_bytesize failed")
+        else if not (check_offeredPsks_binders_list_bytesize binders) 
+        then fail (fatal Internal_error "final_extensions: check_offeredPsks_binders_list_bytesize failed")
+        else return ({ identities = pskidentities; binders = binders; }) );
+      exts <- (
+        if
+          check_clientHelloExtension_CHE_pre_shared_key_bytesize ke
+        then
+          return ([CHE_psk_key_exchange_modes psk_kex] @
+            (if edi then [CHE_early_data ()] else []) @
+            [CHE_pre_shared_key ke]
+          )
+        else fail (fatal Internal_error "final_extensions: check_preSharedKeyClientExtension_bytesize failed"))
+      end
+    else
+      Correct [CHE_psk_key_exchange_modes [Psk_ke; Psk_dhe_ke]]
+  | _ -> Correct []
+*)
 
 noextract
 let final_extensions_new
@@ -1026,7 +1083,7 @@ let sign #region #role ns tbs =
   // TODO(adl) make the pattern below a static pre-condition
   assume False;
   let S_Mode mode (Some (cert, sa)) = !ns.state in
-  match cert_sign_cb ns.cfg cert sa tbs with
+  match cert_sign_cb ns.cfg.cert_callbacks cert sa tbs with
   | None -> fatal Bad_certificate (perror __SOURCE_FILE__ __LINE__ "Failed to sign with selected certificate.")
   | Some sigv ->
     Correct HSM.({algorithm = sa; signature = sigv})
@@ -1736,7 +1793,9 @@ let client_ServerKeyExchange #region ns crt kex ske ocr =
     | Correct sa ->
       let csr = ns.nonce @| mode.n_server_random in
       let tbs = to_be_signed mode.n_protocol_version Server (Some csr) tbs in
-      let valid = cert_verify_cb ns.cfg (coerce_crt crt) sa tbs sig.signature_payload in
+      //let h = get() in assert(inv ns h);
+      let valid = cert_verify_cb ns.cfg.cert_callbacks (coerce_crt crt) sa tbs sig.signature_payload in
+      //let h = get() in assume(inv ns h);
       trace ("ServerKeyExchange signature: " ^ (if valid then "Valid" else "Invalid"));
       if not valid then
         fatal Handshake_failure (perror __SOURCE_FILE__ __LINE__ "Failed to check SKE signature")
@@ -1782,7 +1841,7 @@ let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify d
           if List.Tot.mem sa sal then
             let tbs = to_be_signed pv Server None digest in
             
-            cert_verify_cb ns.cfg (coerce_crt (Cert.chain_down c)) sa tbs cv.HSM.signature, chain
+            cert_verify_cb ns.cfg.cert_callbacks (coerce_crt (Cert.chain_down c)) sa tbs cv.HSM.signature, chain
           else false, None in // The server signed with an algorithm we did not offer
           // let h0 = HST.get() in 
           // assert(h0 `HS.contains` ns.state);
@@ -1999,7 +2058,7 @@ let computeServerMode cfg co serverRandom =
         if sigalgs = [] then
 	  (trace "No shared signature algorithm, restricting to PSK"; None)
         // FIXME(adl) workaround for a bug in TLSConstants that causes signature schemes list to be parsed in reverse order
-        else cert_select_cb cfg TLS_1p3 (get_sni co) (nego_alpn co cfg) (List.Tot.rev sigalgs)
+        else cert_select_cb cfg.cert_callbacks TLS_1p3 (get_sni co) (nego_alpn co cfg) (List.Tot.rev sigalgs)
       in
     match compute_cs13 cfg co pske shares (Some? scert) with
     | Error z -> Error z
@@ -2035,7 +2094,7 @@ let computeServerMode cfg co serverRandom =
     | Correct ((JUST_EDH gx cs) :: _, _) ->
       (trace "Negotiated Pure EDH key exchange";
       let Some (cert, sa) = scert in
-      let schain = cert_format_cb cfg cert in
+      let schain = cert_format_cb cfg.cert_callbacks cert in
       trace ("Negotiated " ^ string_of_signatureScheme sa);
       Correct
         (ServerMode
@@ -2089,12 +2148,12 @@ let computeServerMode cfg co serverRandom =
         | None -> [Unknown_signatureScheme 0xFFFFus; Ecdsa_sha1]
         | Some sigalgs -> List.Helpers.filter_aux cfg.signature_algorithms List.Helpers.mem_rev sigalgs
         in
-      match cert_select_cb cfg pv (get_sni co) (nego_alpn co cfg) salgs with
+      match cert_select_cb cfg.cert_callbacks pv (get_sni co) (nego_alpn co cfg) salgs with
       | None -> 
         //18-10-29 review Certificate_unknown; was No_certificate
         fatal Certificate_unknown (perror __SOURCE_FILE__ __LINE__ "No compatible certificate can be selected")
       | Some (cert, sa) ->
-        let schain = cert_format_cb cfg cert in
+        let schain = cert_format_cb cfg.cert_callbacks cert in
         let sig, _ = sigHashAlg_of_signatureScheme sa in
         match negotiateCipherSuite cfg pv co.CH.cipher_suites sig with
         | Error z -> Error z

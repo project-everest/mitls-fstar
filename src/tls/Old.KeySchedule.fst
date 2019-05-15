@@ -9,6 +9,7 @@ open FStar.Error
 //open FStar.Integers 
 
 open TLSError
+open TLS.Callbacks
 open TLSConstants
 open Extensions
 open TLSInfo
