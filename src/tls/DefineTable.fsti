@@ -50,14 +50,14 @@ let lemma_fresh_frame (#it:eqtype) (#vt:it -> Type) (t:dt vt) (i:it)
     M.loc_disjoint l (loc t) /\ live t h0)
   (ensures fresh t i h1) = ()
 
-type defined_as (#it:eqtype) (#vt:it -> Type) (t:dt vt) (i:it) (k:vt i) (h:mem) =
+type defined_as (#it:eqtype) (#vt:it -> Type) (t:dt vt) (#i:it) (k:vt i) (h:mem) =
   model ==> (MDM.sel (HS.sel h (ideal t)) i == Some k)
 
 type defined (#it:eqtype) (#vt:it -> Type) (t:dt vt) (i:it) =
   model ==> witnessed (MDM.defined (ideal t) i)
 
 type extended (#it:eqtype) (#vt:it -> Type) (t:dt vt)
-  (i:it) (v:vt i) (h0 h1:mem) =
+  (#i:it) (v:vt i) (h0 h1:mem) =
   (if model then
     M.modifies (loc t) h0 h1 /\
     MDM.fresh (ideal t) i h0 /\
@@ -98,11 +98,11 @@ val extend:
   #it:eqtype ->
   #vt: (it -> Type) ->
   t: dt vt ->
-  i: it ->
+  #i: it ->
   k: vt i ->
   ST unit
   (requires fun h0 -> fresh t i h0)
-  (ensures fun h0 () h1 -> extended t i k h0 h1)
+  (ensures fun h0 () h1 -> extended t k h0 h1)
 
 (* Used to define a joint invariant over all defined instances
 The definition is opaque but the lemmas below are enough to use
@@ -115,25 +115,33 @@ val dt_forall:
   h: mem ->
   Type0
 
-type local_fp (#it:eqtype) (vt:it->Type) (parent:M.loc) =
-  #i:it -> vt i -> sub_loc parent
+type local_fp (#it:eqtype) (vt:it->Type) =
+  #i:it -> vt i -> l:M.loc{not model ==> l == M.loc_none}
 
 // Package footprint = union of all instance footprints
 val footprint:
   #it: eqtype ->
   #vt: (it -> Type) ->
   t: dt vt ->
-  #parent: M.loc ->
-  fp: local_fp vt parent ->
+  fp: local_fp vt ->
   h: mem ->
-  GTot (sub_loc parent)
+  GTot M.loc
+
+val lemma_footprint_empty:
+  #it: eqtype ->
+  #vt: (it -> Type) ->
+  t: dt vt ->
+  fp: local_fp vt ->
+  h: mem ->  
+  Lemma
+    (requires empty t h)
+    (ensures footprint t fp h == M.loc_none)
 
 val lemma_footprint_frame:
   #it: eqtype ->
   #vt: (it -> Type) ->
   t: dt vt ->
-  #parent: M.loc ->
-  fp: local_fp vt parent ->
+  fp: local_fp vt ->
   h0: mem ->
   h1: mem ->
   Lemma
@@ -144,27 +152,25 @@ val lemma_footprint_extend:
   #it: eqtype ->
   #vt: (it -> Type) ->
   t: dt vt ->
-  #parent: M.loc ->
-  fp: local_fp vt parent ->
-  i: it ->
+  fp: local_fp vt ->
+  #i: it ->
   k: vt i ->
   h0: mem ->
   h1: mem ->
   Lemma
-    (requires extended t i k h0 h1)
+    (requires extended t k h0 h1)
     (ensures footprint t fp h1 == M.loc_union (footprint t fp h0) (fp k))
 
 val lemma_footprint_includes:
   #it: eqtype ->
   #vt: (it -> Type) ->
   t: dt vt ->
-  #parent: M.loc ->
-  fp: local_fp vt parent ->
-  i: it ->
+  fp: local_fp vt ->
+  #i: it ->
   k: vt i ->
   h: mem ->
   Lemma
-    (requires defined_as t i k h)
+    (requires defined_as t k h)
     (ensures (footprint t fp h) `M.loc_includes` (fp k))
 
 val lemma_forall_empty:
@@ -182,27 +188,25 @@ val lemma_forall_elim:
   #vt: (it -> Type) ->
   t: dt vt ->
   pred: (#i:it -> vt i -> mem -> GTot Type0) ->
-  i: it -> k: vt i ->
-  h: mem ->
+  h: mem -> #i: it -> k: vt i{defined_as t k h} ->
   Lemma
     (requires dt_forall t pred h /\ model)
-    (ensures defined_as t i k h ==> pred k h)
+    (ensures pred k h)
 
 val lemma_forall_extend:
   #it: eqtype ->
   #vt: (it -> Type) ->
   t: dt vt ->
   pred: (#i:it -> vt i -> mem -> GTot Type0) ->
-  #parent: M.loc ->
-  fp: local_fp vt parent ->
+  fp: local_fp vt ->
   pred_frame: (#i:it -> k:vt i -> h0:mem -> l:M.loc -> h1:mem -> Lemma
     (requires pred k h0 /\ M.modifies l h0 h1 /\ M.loc_disjoint l (fp k))
     (ensures pred k h1)) ->
   #i: it -> k: vt i ->
   h0: mem -> h1: mem ->
   Lemma
-    (requires dt_forall t pred h0 /\ extended t i k h0 h1 /\
-      pred k h1 /\ M.loc_disjoint (loc t) parent)
+    (requires dt_forall t pred h0 /\ extended t k h0 h1 /\
+      pred k h1 /\ M.loc_disjoint (loc t) (footprint t fp h0))
     (ensures dt_forall t pred h1)
 
 val lemma_forall_frame:
@@ -210,8 +214,7 @@ val lemma_forall_frame:
   #vt: (it -> Type) ->
   t: dt vt ->
   pred: (#i:it -> vt i -> mem -> GTot Type0) ->
-  #parent: M.loc ->
-  fp: local_fp vt parent ->
+  fp: local_fp vt ->
   pred_frame: (#i:it -> k:vt i -> h0:mem -> l:M.loc -> h1:mem -> Lemma
     (requires pred k h0 /\ M.modifies l h0 h1 /\ M.loc_disjoint l (fp k))
     (ensures pred k h1)) ->
@@ -221,15 +224,3 @@ val lemma_forall_frame:
       /\ M.modifies l h0 h1 /\ t `live` h0
       /\ M.loc_disjoint l (loc t) /\ M.loc_disjoint l (footprint t fp h0))
     (ensures dt_forall t pred h1)
-
-(*
-val dt_fold:
-  #it: eqtype ->
-  #vt: (it -> Type) ->
-  t: dt vt ->
-  #rt: Type ->
-  init: rt ->
-  f: (rt -> i:it -> vt i -> rt) ->
-  h: mem ->
-  GTot rt
-*)

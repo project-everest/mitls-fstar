@@ -15,9 +15,21 @@ open Mem
 open Pkg
 open Idx 
 open Pkg.Tree
+open FStar.HyperStack.ST
 
+module M = LowStar.Modifies
+module DM = FStar.DependentMap
 module MDM = FStar.Monotonic.DependentMap
 module HS = FStar.HyperStack
+module DT = DefineTable
+
+(*
+This modue defines a universal, packaged KDF parametric in its
+usage (which is a tree of derived packages).
+
+The KDF is idealized as a memoization table from label and context
+to instances (whose type is computed from the usage and label)
+*)
 
 inline_for_extraction
 let sample (len:UInt32.t): ST (lbytes32 len)
@@ -35,21 +47,19 @@ type info =
   ha:kdfa ->
   option (details ha) -> info
 
-noextract
-let rec index_info (i:id{model}) =
+noextract let rec index_info (i:id{model}) =
   let i':pre_id = i in
   match i' with
   | Preshared a _ -> Info a None
   | Derive i l (ExpandLog log hv) -> Info (ha_of_id i) (Some (Log log hv))
   | Derive i _ _ -> index_info i
 
-let valid_info (i0:id) (v:info) =
-  if model then v == index_info i0 else True
-
+let valid_info (i:id) (v:info) = model ==> (v == index_info i)
 type info0 (i:id) = u:info{valid_info i u}
 type iflag = b:bool{b ==> model}
 type usage (ideal:iflag) = children (b2t ideal)
 
+(* Computes the type of a derived instance from the KDF usage *)
 let derived_key
   (#ideal:iflag)
   (u: usage ideal)
@@ -58,14 +68,15 @@ let derived_key
   (ctx: context)
   : Pure Type0
   (requires wellformed_derive i lbl ctx /\
-    registered (derive i lbl ctx) /\ model)
-//    (model ==> Pkg?.key (child u lbl) == ktype))
+    registered (derive i lbl ctx))
   (ensures fun t -> True)
   =
-  Pkg?.key (child u lbl) (Derive i lbl ctx)
-//  (Pkg?.key (child u lbl)) (Derive i lbl ctx)
+  if model then 
+    Pkg?.key (child u lbl) (Derive i lbl ctx)
+  else unit
 
-let kdf_tables_region : tls_rgn = new_region Mem.tls_tables_region
+let kdf_region : tls_rgn = new_region tls_tables_region
+let kdf_loc = M.loc_region_only true kdf_region
 
 /// key-derivation table (memoizing create/coerce)
 noextract
@@ -76,15 +87,12 @@ type domain (#ideal:iflag) (u:usage ideal) (i:regid) : eqtype =
   domain u i
 
 noextract
-let kdf_range (#ideal:iflag) (u:usage ideal) (i:regid{model}) (d:domain u i) =
+let kdf_range (#ideal:iflag) (u:usage ideal) (i:regid) (d:domain u i) =
   (let Domain lbl ctx = d in derived_key u i lbl ctx)
 
 noextract
-noeq private type table (#ideal:iflag) (u:usage ideal) (i:regid) (s:squash model) =
-  | KDF_table:
-    r:subrgn kdf_tables_region ->
-    t:MDM.t r (domain u i) (kdf_range u i) (fun _ -> True) ->
-    table u i s
+abstract type table (#ideal:iflag) (u:usage ideal) (i:regid) =
+  MDM.t kdf_region (domain u i) (kdf_range u i) (fun _ -> True)
 
 inline_for_extraction
 let secret_len (a:info) : keylen = Hashing.Spec.tagLen a.ha
@@ -99,74 +107,99 @@ type secret (#ideal:iflag) (u:usage ideal) (i:regid) =
 /// Real KDF schemes, parameterized by an algorithm computed from the
 /// index (existing code).
 
+assume val give_witness: p:mem_predicate -> Ghost mem
+  (requires witnessed p) (ensures fun h -> p h)
+
 let lemma_honest_parent (i:regid) (lbl:label) (ctx:context)
   : Lemma (requires wellformed_derive i lbl ctx /\ registered (derive i lbl ctx) /\ ~(honest_idh ctx))
   (ensures honest (derive i lbl ctx) ==> honest i)
-  = admit() // hard, uses the monotonic excluded middle axiom and table invariant
+  =
+  if model then
+    let log : Idx.i_honesty_table = Idx.honesty_table in
+    let h = give_witness (MDM.defined log (derive i lbl ctx)) in
+    let t = MDM.repr (HS.sel h log) in
+    assert((~(honest_idh ctx) /\ DM.sel t (derive i lbl ctx) <> Some false) ==> (DM.sel t i <> Some false));
+    assert(MDM.contains log (derive i lbl ctx) true h ==> MDM.contains log i true h);
+    admit() // Stuck, can't go back to witnessed
+  else ()
 
 inline_for_extraction
 let get_info (#ideal:iflag) (#u:usage ideal) (#i:regid) (k:secret u i) =
-  if Model.is_safe k then index_info i
-  else dfst (Model.real k)
+  if Model.is_safe k then index_info i else dfst (Model.real k)
 
-// For KDF, we require that being fresh in the KDF table implies being fresh
-// in the derived package's definition table
-#set-options "--z3rlimit 30"
-type local_kdf_invariant (#ideal:iflag) (#u:usage ideal) (#i:regid) (k:secret u i) (h:mem) =
-  (forall (lbl:label {u `has_lbl` lbl}) (ctx':context).
-    (~(honest_idh ctx') /\ wellformed_derive i lbl ctx' /\ registered (derive i lbl ctx')) ==>
-    (if model then
-      let ctx : c:context{wellformed_derive i lbl c /\ registered (derive i lbl c)} = ctx' in
-      let i' : regid = derive i lbl ctx in
-      lemma_honest_parent i lbl ctx;
-      let pkg' = child u lbl in
-      // Nice: we get this from the tree structure for free!
-      assert(Pkg?.ideal pkg' ==> b2t ideal);
-      let dt = itable pkg'.define_table in
-      match Model.is_safe k with
-      | true ->
-        // the entries in the KDF table match those of the child's define_table
-        let KDF_table r t : table u i () = Model.ideal k () in
-        MDM.sel (sel h t) (Domain lbl ctx) == MDM.sel (sel h dt) i'
-      | false ->
-        let (| a, raw |) = Model.real k in
-        assert(~(safe u i));
-        assert(honest i' ==> honest i);
-        assert(Pkg?.ideal pkg' ==> ~(honest i')); // to call coerceT
-        // the child's define table has correctly-computed coerced entries
-        (match MDM.sel (sel h dt) i' with
-        | None -> True
-        | Some k' -> exists (a': (Pkg?.info pkg') i').
-          // we recompute the concrete key materials, and recall the
-          // existence of some prior info, which (by specification
-          // of coerceT) must yield exactly the same instance as the
-          // one recorded earlier.
-          let i'': i:regid{Pkg?.ideal pkg' ==> ~(honest i)} = i' in
-	  let len' = Pkg?.len pkg' a' in
-          let lb = FStar.Bytes.bytes_of_string lbl in
-          let raw' = HKDF.expand_spec #a.ha raw lb len' in
-          k' == Pkg?.coerceT pkg' i'' a' raw')
-    else True))
-#reset-options
+// FIXME(adl) missing the case honest_idh ctx
 
-noextract
-let kdf_shared_footprint (#ideal:iflag) (u:usage ideal) : rset =
-  assume false; Set.empty
-  // List.Tot.fold_left (Set.empty) (fun s p -> rset_union s p.define_region) u
-
-let kdf_footprint (#ideal:iflag) (#u:usage ideal) (#i:regid) (k:secret u i)
-  : GTot (s:rset{s `Set.disjoint` kdf_shared_footprint u}) =
-  assume false; // WIP(adl) Fix rset for define_region subrgn
+// The KDF invariant specifies that when the KDF is ideal,
+// its table contains entries that are defined if, and only if,
+// the derived index is in the define table of the child package.
+// 
+// If the KDF is real, we functionally specify the instances that
+// defined in the child package's define table using coerceT
+type kdf_invariant_wit (#ideal:iflag) (#u:usage ideal) (#i:regid)
+  (k:secret u i) (h:mem) (lbl:label {u `has_lbl` lbl})
+  (ctx:context{~(honest_idh ctx) /\ wellformed_derive i lbl ctx /\ registered (derive i lbl ctx)})
+  =
+  (let i' : regid = derive i lbl ctx in
+  lemma_honest_parent i lbl ctx;
+  let pkg' = child u lbl in
+  let dt = DT.ideal pkg'.define_table in
   if Model.is_safe k then
-    let KDF_table r _ = Model.ideal k () in
-    Set.singleton r
-  else Set.empty
+     MDM.sel (sel h (Model.ideal k)) (Domain lbl ctx) == MDM.sel (sel h dt) i'
+  else
+   begin
+    let (| a, raw |) = Model.real k in
+    (match MDM.sel (sel h dt) i' with
+    | None -> True
+    | Some k' ->
+      let a' = Pkg?.info_of_id pkg' i' in
+      let len' = Pkg?.len pkg' a' in
+      let lb = FStar.Bytes.bytes_of_string lbl in
+      let raw' = HKDF.expand_spec #a.ha raw lb len' in
+      k' == Pkg?.coerceT pkg' i' a' raw')
+   end)
 
-let local_kdf_invariant_framing (#ideal:iflag) (#u:usage ideal) (i:regid) (k:secret u i) (h0:mem) (r:rid) (h1:mem)
-  : Lemma (requires local_kdf_invariant k h0 /\ modifies_one r h0 h1
-            /\ ~(r `Set.mem` kdf_footprint k) /\ ~(r `Set.mem` kdf_shared_footprint u))
-          (ensures local_kdf_invariant k h1)
-  = admit()
+// The KDF invariant holds for all children (i.e. all lbl s.t. u `has_lbl` lbl)
+type kdf_invariant (#ideal:iflag) (#u:usage ideal) (#i:regid) (k:secret u i) (h:mem) =
+  (if model then
+    (forall (lbl:label {u `has_lbl` lbl})
+       (ctx:context{~(honest_idh ctx) /\ wellformed_derive i lbl ctx /\ registered (derive i lbl ctx)}).
+    kdf_invariant_wit k h lbl ctx)
+  else True)
+
+// The union of all the define table of the children of the KDF
+let rec children_fp (#ideal:iflag) (u:usage ideal) : GTot M.loc =
+  if model then
+    let l : children' (b2t ideal) = u in
+    match l with
+    | [] -> M.loc_none
+    | (lbl, _)::t ->
+      M.loc_union (DT.loc (child u lbl).define_table) (children_fp #ideal t)
+  else M.loc_none
+
+// The footprint of the KDF invariant is:
+//  - 1. its idealized KDF table
+//  - 2. the define table of all child packages
+let kdf_footprint (#ideal:iflag) (#u:usage ideal) (#i:regid) (k:secret u i)
+  : GTot M.loc
+  =
+  if Model.is_safe k then
+    M.loc_union (M.loc_mreference (Model.ideal k)) (children_fp u)
+  else M.loc_none
+
+let kdf_invariant_framing_wit (#ideal:iflag) (#u:usage ideal)
+  (i:regid) (k:secret u i) (h0:mem) (l:M.loc) (h1:mem) (lbl:label {u `has_lbl` lbl})
+  (ctx:context{~(honest_idh ctx) /\ wellformed_derive i lbl ctx /\ registered (derive i lbl ctx)})
+  : Lemma
+  (requires kdf_invariant_wit k h0 lbl ctx /\ M.modifies l h0 h1 /\
+    M.loc_disjoint l (kdf_footprint k))
+  (ensures kdf_invariant_wit k h1 lbl ctx)
+  =
+  let i' : regid = derive i lbl ctx in
+  lemma_honest_parent i lbl ctx;
+  let pkg' = child u lbl in
+  let dt = DT.ideal pkg'.define_table in
+  if Model.is_safe k then admit()
+  else ()
 
 /// maybe reverse-inline sampling from low-level KeyGen?
 /// otherwise we have to argue it is what Create does.
