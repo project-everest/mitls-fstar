@@ -4,6 +4,8 @@ open Mem
 open Pkg
 open Idx
 
+module DT = DefineTable
+
 /// We use subtrees to specify KDF usages. We hope we can erase
 /// them when modelling is off!
 ///
@@ -47,15 +49,16 @@ type children (p:Type0) =
 
 inline_for_extraction
 let rec find_lbl (#p:Type0) (u:children p) (l: label) : option (tree p) =
-  if not model then None else
-  let u' : children' p = u in
-  match u' with
-  | [] -> None
-  | (lbl, t) :: tl ->
-    if lbl = l then Some t
-    else
-      let tl : children p = tl in
-      find_lbl tl l
+  if model then
+    let u' : children' p = u in
+    match u' with
+    | [] -> None
+    | (lbl, t) :: tl ->
+      if lbl = l then Some t
+      else
+	let tl : children p = tl in
+	find_lbl tl l
+  else None
 
 inline_for_extraction
 let has_lbl (#p:Type0) (u:children p) (l: label) =
@@ -73,3 +76,14 @@ let child (#p:Type0) (u:children p) (l:label{model /\ u `has_lbl` l})
   match x with
   | Leaf p -> p
   | Node p c -> p
+
+(*
+let rec index_consistent (#p:Type0) (u:children p)
+  (#it:eqtype) (#vt:it->Type) (t:DT.dt vt) (h:mem) =
+  if model then
+    let u' : children' p = u in
+    match u with
+    | [] -> True
+    | (lbl,t) :: tl -> True
+  else True
+*)

@@ -127,6 +127,12 @@ inline_for_extraction
 let get_info (#ideal:iflag) (#u:usage ideal) (#i:regid) (k:secret u i) =
   if Model.is_safe k then index_info i else dfst (Model.real k)
 
+type empty (#ideal:iflag) (#u:usage ideal) (#i:regid) (k:secret u i) (h:mem) =
+  (if Model.is_safe k then HS.sel h (Model.ideal k) == MDM.empty else True)
+
+type live (#ideal:iflag) (#u:usage ideal) (#i:regid) (k:secret u i) (h:mem) =
+  Model.is_safe k ==> h `HS.contains` (Model.ideal k)
+
 // FIXME(adl) missing the case honest_idh ctx
 
 // The KDF invariant specifies that when the KDF is ideal,
@@ -143,9 +149,11 @@ type kdf_invariant_wit (#ideal:iflag) (#u:usage ideal) (#i:regid)
   lemma_honest_parent i lbl ctx;
   let pkg' = child u lbl in
   let dt = DT.ideal pkg'.define_table in
-  if Model.is_safe k then
-     MDM.sel (sel h (Model.ideal k)) (Domain lbl ctx) == MDM.sel (sel h dt) i'
-  else
+  DT.live #_ #(Pkg?.key pkg') dt h /\
+  (if Model.is_safe k then (
+    h `HS.contains` (Model.ideal k) /\ // KDF table is live
+    MDM.sel (sel h (Model.ideal k)) (Domain lbl ctx) == MDM.sel (sel h dt) i'
+  ) else
    begin
     let (| a, raw |) = Model.real k in
     (match MDM.sel (sel h dt) i' with
@@ -156,8 +164,21 @@ type kdf_invariant_wit (#ideal:iflag) (#u:usage ideal) (#i:regid)
       let lb = FStar.Bytes.bytes_of_string lbl in
       let raw' = HKDF.expand_spec #a.ha raw lb len' in
       k' == Pkg?.coerceT pkg' i' a' raw')
-   end)
+   end))
 
+let lemma_kdf_invariant_init_wit (#ideal:iflag) (#u:usage ideal) (#i:regid)
+  (k:secret u i) (h:mem) (lbl:label {u `has_lbl` lbl})
+  (ctx:context{~(honest_idh ctx) /\ wellformed_derive i lbl ctx /\ registered (derive i lbl ctx)})
+  : Lemma (requires empty k h /\ live k h /\
+    DT.live (child u lbl).define_table h /\
+    DT.empty (child u lbl).define_table h)
+  (ensures kdf_invariant_wit k h lbl ctx)
+  =
+  if model then (
+    let dt = DT.ideal (child u lbl).define_table in
+    assert_norm(DT.empty (child u lbl).define_table h == (model ==> HS.sel h dt == MDM.empty))
+  ) else ()
+  
 // The KDF invariant holds for all children (i.e. all lbl s.t. u `has_lbl` lbl)
 type kdf_invariant (#ideal:iflag) (#u:usage ideal) (#i:regid) (k:secret u i) (h:mem) =
   (if model then
@@ -176,50 +197,97 @@ let rec children_fp (#ideal:iflag) (u:usage ideal) : GTot M.loc =
       M.loc_union (DT.loc (child u lbl).define_table) (children_fp #ideal t)
   else M.loc_none
 
+let loc (#ideal:iflag) (#u:usage ideal) (#i:regid) (k:secret u i) =
+  if Model.is_safe k then M.loc_mreference (Model.ideal k) else M.loc_none
+
 // The footprint of the KDF invariant is:
 //  - 1. its idealized KDF table
-//  - 2. the define table of all child packages
+//  - 2. the define table of all children
 let kdf_footprint (#ideal:iflag) (#u:usage ideal) (#i:regid) (k:secret u i)
   : GTot M.loc
   =
-  if Model.is_safe k then
-    M.loc_union (M.loc_mreference (Model.ideal k)) (children_fp u)
-  else M.loc_none
+  M.loc_union (loc k) (children_fp u)
 
-let kdf_invariant_framing_wit (#ideal:iflag) (#u:usage ideal)
-  (i:regid) (k:secret u i) (h0:mem) (l:M.loc) (h1:mem) (lbl:label {u `has_lbl` lbl})
-  (ctx:context{~(honest_idh ctx) /\ wellformed_derive i lbl ctx /\ registered (derive i lbl ctx)})
-  : Lemma
-  (requires kdf_invariant_wit k h0 lbl ctx /\ M.modifies l h0 h1 /\
-    M.loc_disjoint l (kdf_footprint k))
-  (ensures kdf_invariant_wit k h1 lbl ctx)
+// Intuitively, if a location is disjoint from the KDF footprint,
+// it is disjoint from the define table of all children. The proof
+// is by induction over the children but it is very difficult to define
+// the restriction of a KDF to a sub-list of children.
+let lemma_kdf_footprint_disjoint_wit (#ideal:iflag) (#u:usage ideal)
+  (#i:regid) (k:secret u i) (lbl:label {u `has_lbl` lbl})
+  (ctx:context{~(honest_idh ctx) /\ wellformed_derive i lbl ctx
+    /\ registered (derive i lbl ctx)}) (l:M.loc)
+  : Lemma (requires M.loc_disjoint l (kdf_footprint k))
+  (ensures M.loc_disjoint l (DT.loc (child u lbl).define_table))
   =
-  let i' : regid = derive i lbl ctx in
-  lemma_honest_parent i lbl ctx;
-  let pkg' = child u lbl in
-  let dt = DT.ideal pkg'.define_table in
-  if Model.is_safe k then admit()
+  if model then
+    let rec aux (#ideal:iflag) (u:usage ideal) (lbl:label{model /\ u `has_lbl` lbl})
+      : Lemma
+        (requires M.loc_disjoint l (children_fp u))
+        (ensures M.loc_disjoint l (DT.loc (child u lbl).define_table))
+      =
+      if model then
+	let c : children' (b2t ideal) = u in
+	match c with
+	| [] -> assert_norm(u `find_lbl` lbl == None)
+	| (lbl', _) :: t ->
+          if lbl = lbl' then ()
+          else aux #ideal t lbl
+      else ()
+      in
+    aux u lbl
   else ()
 
-/// maybe reverse-inline sampling from low-level KeyGen?
-/// otherwise we have to argue it is what Create does.
-///
-/// MK: what does reverse-inline of low-level KeyGen mean?
+// Trivial lemma but useful to drive stateful proofs by introducing
+// the expected goals and the right patterns
+private let lemma_unchanged #a #rel (r:mreference a rel) h0 l h1 : Lemma
+  (requires M.modifies l h0 h1 /\ h0 `HS.contains` r /\
+    M.loc_disjoint l (M.loc_mreference r))
+  (ensures HS.sel h0 r == HS.sel h1 r) = ()
 
-// The post-condition of creating a KDF is that its table is empty
-// This is useful to re-establish the multi-KDF invariant
-type kdf_post (#ideal:iflag) (#u:usage ideal) (#i:regid)
-  (a:info0 i) (k:secret u i) (h:mem) =
-  (safe u i ==>
-    (let KDF_table r t = Model.ideal k () in
-     sel h t == MDM.empty #(domain u i) #(kdf_range u i)))
+let lemma_kdf_invariant_init (#ideal:iflag) (#u:usage ideal)
+  (#i:regid) (k:secret u i) (h:mem)
+  : Lemma (requires empty k h /\ live k h /\
+    (forall (l:label{u `has_lbl` l}).
+      DT.live (child u l).define_table h /\
+      DT.empty (child u l).define_table h))
+    (ensures kdf_invariant k h)
+  =
+  if model then
+    let prove_on_witness (lbl:label {u `has_lbl` lbl})
+      (ctx:context{~(honest_idh ctx) /\ wellformed_derive i lbl ctx
+        /\ registered (derive i lbl ctx)})
+      : Lemma (kdf_invariant_wit k h lbl ctx)
+      =
+      lemma_kdf_invariant_init_wit k h lbl ctx
+    in
+    FStar.Classical.forall_intro_2 prove_on_witness
+  else ()
 
-// Framing for the kdf_post depends only on kdf_footprint k
-let kdf_post_framing (#ideal:iflag) (#u:usage ideal) (#i:regid) (a:info0 i)
-  (k:secret u i) (h0:mem) (r:rid) (h1:mem)
-  : Lemma (requires (kdf_post a k h0 /\ modifies_one r h0 h1 /\ ~(r `Set.mem` kdf_footprint k)))
-          (ensures (kdf_post a k h1))
-  = admit()
+let kdf_invariant_framing (#ideal:iflag) (#u:usage ideal)
+  (#i:regid) (k:secret u i) (h0:mem) (l:M.loc) (h1:mem)
+  : Lemma (requires kdf_invariant k h0 /\ M.modifies l h0 h1 /\
+    M.loc_disjoint l (kdf_footprint k))
+    (ensures kdf_invariant k h1)
+  =
+  if model then
+    let prove_on_witness (lbl:label {u `has_lbl` lbl})
+      (ctx:context{~(honest_idh ctx) /\ wellformed_derive i lbl ctx
+        /\ registered (derive i lbl ctx)})
+      : Lemma (kdf_invariant_wit k h1 lbl ctx)
+      =
+      let i' : regid = derive i lbl ctx in
+      lemma_honest_parent i lbl ctx;
+      let pkg' = child u lbl in
+      let dt : DT.table (Pkg?.key pkg') = DT.ideal pkg'.define_table in
+      assert_norm(DT.live pkg'.define_table h0 == (model ==> h0 `HS.contains` dt));
+      assert_norm(DT.loc pkg'.define_table == (if model then M.loc_mreference dt else M.loc_none));
+      lemma_kdf_footprint_disjoint_wit k lbl ctx l;
+      lemma_unchanged dt h0 l h1; // Trivial, but helps the proof
+      if Model.is_safe k then lemma_unchanged (Model.ideal k) h0 l h1
+      else ()
+    in
+    FStar.Classical.forall_intro_2 prove_on_witness
+  else ()
 
 val coerceT:
   #ideal: iflag ->
@@ -238,19 +306,18 @@ val coerce:
   a: info0 i ->
   repr: lbytes32 (secret_len a) ->
   ST (secret u i)
-  (requires fun h0 -> True)
-  (ensures fun h0 k h1 -> modifies_none h0 h1
-    /\ k == coerceT u i a repr
-    /\ fresh_regions (kdf_footprint k) h0 h1
-    /\ kdf_post a k h1 /\ local_kdf_invariant k h1)
+  (requires fun h0 -> valid_info i a)
+  (ensures fun h0 k h1 -> M.modifies M.loc_none h0 h1 /\
+    k == coerceT u i a repr /\
+    fresh_loc (kdf_footprint k) h0 h1 /\
+    kdf_invariant k h1)
 
-#reset-options "--z3rlimit 100" 
 let coerce #ideal u i a repr =
   let k = Model.mk_real (| a, repr |) in
-  let h1 = get() in
-  // WIP stronger packaging
-  (if model then assume(local_kdf_invariant k h1));
-  k
+  
+// WIP stronger packaging
+//  (if model then assume(local_kdf_invariant k h1));
+//  k
 
 /// NS:
 /// MDM.alloc is a stateful function with all implicit arguments
