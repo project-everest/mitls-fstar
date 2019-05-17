@@ -107,20 +107,24 @@ type secret (#ideal:iflag) (u:usage ideal) (i:regid) =
 /// Real KDF schemes, parameterized by an algorithm computed from the
 /// index (existing code).
 
-assume val give_witness: p:mem_predicate -> Ghost mem
-  (requires witnessed p) (ensures fun h -> p h)
+val lemma_witnessed_true (p:mem_predicate) :
+  Lemma (requires (forall h. p h)) (ensures witnessed p)
+let lemma_witnessed_true p =
+  lemma_witnessed_constant True;
+  weaken_witness (fun _ -> True) p
 
-let lemma_honest_parent (i:regid) (lbl:label) (ctx:context)
-  : Lemma (requires wellformed_derive i lbl ctx /\ registered (derive i lbl ctx) /\ ~(honest_idh ctx))
-  (ensures honest (derive i lbl ctx) ==> honest i)
-  =
+val lemma_honest_parent (i:regid) (lbl:label) (ctx:context)
+  : Lemma (requires
+            wellformed_derive i lbl ctx /\ 
+            registered (derive i lbl ctx) /\ 
+            ~(honest_idh ctx) /\ 
+            honest (derive i lbl ctx))
+          (ensures honest i)
+let lemma_honest_parent i lbl ctx =
   if model then
-    let log : Idx.i_honesty_table = Idx.honesty_table in
-    let h = give_witness (MDM.defined log (derive i lbl ctx)) in
-    let t = MDM.repr (HS.sel h log) in
-    assert((~(honest_idh ctx) /\ DM.sel t (derive i lbl ctx) <> Some false) ==> (DM.sel t i <> Some false));
-    assert(MDM.contains log (derive i lbl ctx) true h ==> MDM.contains log i true h);
-    admit() // Stuck, can't go back to witnessed
+    let log : i_honesty_table = honesty_table in
+    lemma_witnessed_true (fun h -> MDM.contains log (derive i lbl ctx) true h ==> MDM.contains log i true h);
+    lemma_witnessed_impl (MDM.contains log (derive i lbl ctx) true) (MDM.contains log i true)
   else ()
 
 inline_for_extraction
