@@ -12,7 +12,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "ce00608593f9fa08165b679f19e7ef9f"
+      "b6467f2a9931bc16ed5ebe2829db1f10"
     ],
     [
       "Negotiation.trace",
@@ -24,7 +24,7 @@
         "equation_DebugFlags.debug_NGO"
       ],
       0,
-      "36ce9c2d162d500112223dfec8c80ced"
+      "20169788b184dec0c8a2c43eab8cfc55"
     ],
     [
       "Negotiation.string_of_option_extensions",
@@ -42,7 +42,7 @@
         "typing_FStar.Pervasives.Native.uu___is_Some"
       ],
       0,
-      "04691f15c8ff618f096dfab1e935f95b"
+      "724ff5e52f9ef9d37f7d10e344f76f35"
     ],
     [
       "Negotiation.resumption_offer_12",
@@ -55,7 +55,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "1b78c488c7cee13df693af7611a57ba3"
+      "6491cf97f1747953766730d5c5b89f3c"
     ],
     [
       "Negotiation.__proj__OfferTicket__item___0",
@@ -69,7 +69,7 @@
         "refinement_interpretation_Tm_refine_081bfe5b8951a3764f42adb98a5e8a44"
       ],
       0,
-      "53774a8a9024074cc142e707f0d3e57a"
+      "f87a57e7db8b7bd9548550bdfd2be404"
     ],
     [
       "Negotiation.__proj__OfferSid__item___0",
@@ -83,7 +83,7 @@
         "refinement_interpretation_Tm_refine_275bdec0501ce3a0442f80dcb62a3a71"
       ],
       0,
-      "3a50ba1d0b95ae0c68305a121c2a0142"
+      "27165490a0df17e77e9baa09de41d30b"
     ],
     [
       "Negotiation.find_client_extension",
@@ -103,7 +103,7 @@
         "typing_HandshakeMessages.__proj__Mkch__item__ch_extensions"
       ],
       0,
-      "085f497f528b05bab625ca66156c409b"
+      "9261eb2146e405c1cecdc4e2a105885e"
     ],
     [
       "Negotiation.find_client_extension_aux",
@@ -123,7 +123,7 @@
         "typing_HandshakeMessages.__proj__Mkch__item__ch_extensions"
       ],
       0,
-      "161541e075aeca394117c1b0d8d29bb0"
+      "8a4e4a15915b4c3cb96f14e3bb690f97"
     ],
     [
       "Negotiation.find_supported_versions",
@@ -148,7 +148,7 @@
         "typing_Negotiation.find_client_extension"
       ],
       0,
-      "1f61cc8be576b276d4463f3d05c305f3"
+      "9b0bedfaac1dd2d6080322105a69d4ec"
     ],
     [
       "Negotiation.find_signature_algorithms",
@@ -173,7 +173,7 @@
         "typing_Negotiation.find_client_extension"
       ],
       0,
-      "852f41bfef700f4204bf4da479ac329b"
+      "717f36c12b15f2903c36f2673d28b0c0"
     ],
     [
       "Negotiation.find_signature_algorithms_cert",
@@ -198,7 +198,7 @@
         "typing_Negotiation.find_client_extension"
       ],
       0,
-      "9c0c23be9eeb9a1e9e2b2970682e8e2f"
+      "7cd5cced5a49ef53c85a145b6bfa4692"
     ],
     [
       "Negotiation.find_cookie",
@@ -223,7 +223,7 @@
         "typing_Negotiation.find_client_extension"
       ],
       0,
-      "1a10c678ea4ebd666cfc73ee2fe80130"
+      "2ca286e2ea9dc754e553a1946201a67f"
     ],
     [
       "Negotiation.find_sessionTicket",
@@ -248,7 +248,7 @@
         "typing_Negotiation.find_client_extension"
       ],
       0,
-      "55d9f838c73afd51c8bd6c294fc253ba"
+      "22ef54c8c74093121273cbeff897d5b2"
     ],
     [
       "Negotiation.find_clientPske",
@@ -262,7 +262,7 @@
         "fuel_guarded_inversion_Extensions.psk"
       ],
       0,
-      "cbcb002cdcf02bc3911d8e66a586e62f"
+      "66f40e9d91f05f38e963425133122e4a"
     ],
     [
       "Negotiation.find_serverPske",
@@ -282,7 +282,7 @@
         "typing_HandshakeMessages.__proj__Mksh__item__sh_extensions"
       ],
       0,
-      "a4acb237dd233ee8c70c611d3e403626"
+      "8046eac6ccfb51ed03e1a1cd6e360a1d"
     ],
     [
       "Negotiation.find_serverKeyShare",
@@ -302,7 +302,7 @@
         "typing_HandshakeMessages.__proj__Mksh__item__sh_extensions"
       ],
       0,
-      "679ce5ab80036fb53e019f9992190563"
+      "d936272eaf58cde81468bc54be778d6f"
     ],
     [
       "Negotiation.pski",
@@ -314,7 +314,7 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "de72845f48e6dfc1f7d2d873761da9c9"
+      "20e554fa32dd0c7a4a4ac01fed1b007c"
     ],
     [
       "Negotiation.find_supported_groups",
@@ -339,7 +339,7 @@
         "typing_Negotiation.find_client_extension"
       ],
       0,
-      "e13da8ad115f7536bbbad52c14fa5dd6"
+      "51000bf810847acf161ed4dd0bf56f67"
     ],
     [
       "Negotiation.list_of_ClientKeyShare",
@@ -360,7 +360,7 @@
         "subterm_ordering_Prims.Cons", "typing_Prims.__proj__Cons__item__hd"
       ],
       0,
-      "93dde7592c8bb82a072de22610ebe0cf"
+      "6a08f5e1d7524113dd0e1feec43a34be"
     ],
     [
       "Negotiation.find_early_data",
@@ -385,7 +385,7 @@
         "typing_Negotiation.find_client_extension"
       ],
       0,
-      "41cade8af4dec2f1b512428fafea3982"
+      "77d10552e9fe4f15879f539685e96e35"
     ],
     [
       "Negotiation.__proj__Mode__item__n_pski",
@@ -397,7 +397,7 @@
         "projection_inverse_Negotiation.Mode_n_offer"
       ],
       0,
-      "1ab3d997482d248c65c4bb6e8a722b01"
+      "c86467984bf1cbc51cbf79c9b63cea9e"
     ],
     [
       "Negotiation.find_server_extension",
@@ -417,7 +417,7 @@
         "typing_Negotiation.__proj__Mode__item__n_server_extensions"
       ],
       0,
-      "ce6f128f32e9119dfd3fc5da872d97ca"
+      "009c9f41e77b04512fd6c10e72b68fd9"
     ],
     [
       "Negotiation.is_resumption12",
@@ -431,7 +431,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "b0fc863eb47e42b8948c9f1977e1d546"
+      "99966cf8dc709e5620112f2b998d08ad"
     ],
     [
       "Negotiation.is_cacheable12",
@@ -445,7 +445,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "7522d14f066b2042a8a8327e09778fb2"
+      "1a0a8c60c69743db346849f76368e1ef"
     ],
     [
       "Negotiation.__proj__C_Init__item__n_client_random",
@@ -458,7 +458,7 @@
         "refinement_interpretation_Tm_refine_f824580933b3e5c204f427df2ea87d5d"
       ],
       0,
-      "d87393e8f70a5d8602629f42c1da96b9"
+      "2a513d554f9380cb077eb715b9200119"
     ],
     [
       "Negotiation.__proj__C_Offer__item__n_offer",
@@ -472,7 +472,7 @@
         "refinement_interpretation_Tm_refine_ce40c987ecf6efe9977a30194a918c6e"
       ],
       0,
-      "f6defb2892d97c78db5d0e00848e9d34"
+      "c523da9968b7c7963e186c526e0b111a"
     ],
     [
       "Negotiation.__proj__C_HRR__item__n_offer",
@@ -485,7 +485,7 @@
         "refinement_interpretation_Tm_refine_4c285493f7adcf31dfd5565912bc8c98"
       ],
       0,
-      "ae5789c73046cc5c239dc0230c8438a9"
+      "97d4e37cc33727ea79081bab01c9cfdf"
     ],
     [
       "Negotiation.__proj__C_HRR__item__n_hrr",
@@ -498,7 +498,7 @@
         "refinement_interpretation_Tm_refine_4c285493f7adcf31dfd5565912bc8c98"
       ],
       0,
-      "c8a72ac56196996f28837c56611a9a12"
+      "8e227f15bf4c7a6adcbe4c452cb5da58"
     ],
     [
       "Negotiation.__proj__C_WaitFinished1__item__n_partialmode",
@@ -512,7 +512,7 @@
         "refinement_interpretation_Tm_refine_939ce2fde9ef14ae506a678a7092f418"
       ],
       0,
-      "65685b0ce972a44dd0d5de272c964d7b"
+      "b0eb8dab294b2e594ac8b24775680696"
     ],
     [
       "Negotiation.__proj__C_Mode__item__n_mode",
@@ -525,7 +525,7 @@
         "refinement_interpretation_Tm_refine_43182a47fdfd7b1070a6e10da1df33cb"
       ],
       0,
-      "ddabeae0127994da9a87b54fc916c3ff"
+      "51a3a103bdd43586422f5473b678eb0e"
     ],
     [
       "Negotiation.__proj__C_WaitFinished2__item__n_mode",
@@ -539,7 +539,7 @@
         "refinement_interpretation_Tm_refine_d37045c605d3e4dd6cc3448462659bad"
       ],
       0,
-      "8661989b81235d6fe7336ca87fb531db"
+      "cdda4d5af0e76cdb7584aa1cda3308d6"
     ],
     [
       "Negotiation.__proj__C_WaitFinished2__item__n_client_certificate",
@@ -553,7 +553,7 @@
         "refinement_interpretation_Tm_refine_d37045c605d3e4dd6cc3448462659bad"
       ],
       0,
-      "90cbef3f3ea84bdd8989f81e658e2e65"
+      "c10b53b00fea88ed6d956f61e54f8e37"
     ],
     [
       "Negotiation.__proj__C_Complete__item__n_mode",
@@ -567,7 +567,7 @@
         "refinement_interpretation_Tm_refine_adfbeb973f138ebfd624cef06c951607"
       ],
       0,
-      "1065a9734e180297022484ba84d091b3"
+      "4aa0b64e700611e0cabf461fad46b215"
     ],
     [
       "Negotiation.__proj__C_Complete__item__n_client_certificate",
@@ -581,7 +581,7 @@
         "refinement_interpretation_Tm_refine_adfbeb973f138ebfd624cef06c951607"
       ],
       0,
-      "48e1ecb1b7dc9629b3d780ba4aed40ed"
+      "0a8906cf92611ec3a71ced5f5ffdcdee"
     ],
     [
       "Negotiation.__proj__S_Init__item__n_server_random",
@@ -594,7 +594,7 @@
         "refinement_interpretation_Tm_refine_8876f1ee849d4ee1bb53d2b51ce16214"
       ],
       0,
-      "874b7acd74e2d9a2ecc113fc2c271e43"
+      "3af89a2e057c988495c4ab8e5409df45"
     ],
     [
       "Negotiation.__proj__S_HRR__item__n_offer",
@@ -607,7 +607,7 @@
         "refinement_interpretation_Tm_refine_e49aff01f1b4c208743d67bc8e8a3825"
       ],
       0,
-      "bc51a8297d8edfe0ea4bb448a98f274a"
+      "367110539a68817869d3e17ba45ac285"
     ],
     [
       "Negotiation.__proj__S_HRR__item__n_hrr",
@@ -620,7 +620,7 @@
         "refinement_interpretation_Tm_refine_e49aff01f1b4c208743d67bc8e8a3825"
       ],
       0,
-      "d355191d10446e5310a75a93d179d6e8"
+      "9ed541b0d5320fee2db62d90e32521f8"
     ],
     [
       "Negotiation.__proj__S_ClientHello__item__n_mode",
@@ -634,7 +634,7 @@
         "refinement_interpretation_Tm_refine_377470996a4b896d8a26514bddd1b6f4"
       ],
       0,
-      "a119c4a7b5be24ea223050c5d253519a"
+      "51cdb93f43269c8e27c1357877bad1b6"
     ],
     [
       "Negotiation.__proj__S_ClientHello__item__n_selected_cert",
@@ -648,7 +648,7 @@
         "refinement_interpretation_Tm_refine_377470996a4b896d8a26514bddd1b6f4"
       ],
       0,
-      "b2bd156806bf5c17b14b8fa62f0685d1"
+      "7dd651e94a06c6731924045e92447b81"
     ],
     [
       "Negotiation.__proj__S_Mode__item__n_mode",
@@ -661,7 +661,7 @@
         "refinement_interpretation_Tm_refine_e37291de1d7103c73251cd3b62ef5f82"
       ],
       0,
-      "c436571da9cf6ef415ec3bc57cd8bf55"
+      "a533a70a2664823489692cf1d2aa62cb"
     ],
     [
       "Negotiation.__proj__S_Mode__item__n_selected_cert",
@@ -674,7 +674,7 @@
         "refinement_interpretation_Tm_refine_e37291de1d7103c73251cd3b62ef5f82"
       ],
       0,
-      "1932c1c327746d7ce09306c1f5859d55"
+      "432a419e188f2f8154c3dc6602b0d224"
     ],
     [
       "Negotiation.__proj__S_Complete__item__n_mode",
@@ -688,7 +688,7 @@
         "refinement_interpretation_Tm_refine_386efaf75601b26efd171ce33b377102"
       ],
       0,
-      "be7f6c30928ed853b05589c41a1ed4c4"
+      "e6202a70fe5f812271227bcc0a114488"
     ],
     [
       "Negotiation.__proj__S_Complete__item__n_client_certificate",
@@ -702,7 +702,7 @@
         "refinement_interpretation_Tm_refine_386efaf75601b26efd171ce33b377102"
       ],
       0,
-      "f3c97d4f8c5ce96713eeafa70a03b7aa"
+      "975bc5bad2c589f0f147501809e53a7b"
     ]
   ]
 ]
