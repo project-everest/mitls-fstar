@@ -50,6 +50,8 @@ type info0 (i:id) = u:info{valid_info i u}
 type iflag = b:bool{b ==> model}
 type usage (ideal:iflag) = children (b2t ideal)
 
+unfold type regid = i:(Idx?.t ii){(Idx?.registered ii) i}
+
 let derived_key
   (#ideal:iflag)
   (u: usage ideal)
@@ -277,6 +279,7 @@ let create #ideal u i a =
     k
    end
 
+
 /// We are using many KDF packages (one for each usage),
 /// idealized one at a time.  (Having one proof step for each nested
 /// level of key derivation seems unavoidable: we need to idealize
@@ -410,14 +413,12 @@ type modifies_derive (#ideal:iflag) (#u:usage ideal) (#i:regid) (k:secret u i)
     /\ HS.modifies_ref tls_define_region (Set.singleton (mem_addr (itable utable))) h0 h1
   else modifies_none h0 h1) // FIXME concrete state
 
-unfold type rid = i:(Idx?.t ii){(Idx?.registered ii) i}
-
 (** Ugly coercion, required because the type equality is proved by normalization **)
 noextract
 private let _mem_coerce (#t0:eqtype) (#t1:t0 -> Type) (dt:mem_table t1) (#ideal:iflag) (t:tree (b2t ideal){kdf_subtree ideal t})
   : Pure (mem_table (secret (u_of_t t)))
-  (requires model /\ t0 == rid /\ t1 == secret (u_of_t t))
-  (ensures fun dt' -> True) = assert_norm(rid == regid); dt
+  (requires model /\ t0 == regid /\ t1 == secret (u_of_t t))
+  (ensures fun dt' -> True) = dt
 
 inline_for_extraction noextract
 let kdf_dt (#ideal:iflag) (t:tree (b2t ideal){kdf_subtree ideal t})

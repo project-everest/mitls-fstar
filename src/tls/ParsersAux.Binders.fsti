@@ -244,3 +244,9 @@ let valid_binders_mutate
   truncate_clientHello_bytes_set_binders m b2;
   B.modifies_buffer_from_to_elim sl.LP.base pos pos1 (l `B.loc_union` LP.loc_slice_from_to sl pos1 pos') h1 h2;
   truncate_clientHello_valid h2 sl pos pos1 pos' (set_binders m b2)
+
+(* Build a (dummy, but) canonical list of binders, for a given size *)
+
+val build_canonical_binders (len: U32.t) : Pure Psks.offeredPsks_binders
+  (requires (35 <= U32.v len /\ U32.v len <= 65537))
+  (ensures (fun y -> Psks.offeredPsks_binders_bytesize y == U32.v len))
