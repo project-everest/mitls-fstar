@@ -87,10 +87,11 @@ let hs_sh = sh:HSM.handshake{HSM.M_server_hello? sh}
 // assume
 val is_hrr (sh:SH.serverHello) : bool
 
+let any_hash_tag = s:Seq.seq UInt8.t{forall a. Seq.length s <= HashDef.hash_word_length a}
 
-/// `retry`: a pair of a client hello and hello retry request
+/// `retry`: a pair of a client hello hash and hello retry request
 type retry =
-  CH.clientHello & s:SH.serverHello{is_hrr s}
+  any_hash_tag & s:SH.serverHello{is_hrr s}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Truncated client hellos
@@ -125,7 +126,7 @@ let binders_len = len:uint_32{
   UInt32.v len <= 65537
 }
 
-/// TODO: check with Tahina how to implement this function
+/// The length of all the binders in a clientHello
 let tch_binders_len (ch:clientHello_with_binders)
   : Tot (b:binders_len {
            let hs_ch = HSM.M_client_hello ch in
@@ -141,8 +142,11 @@ let tch_binders_len (ch:clientHello_with_binders)
   = let hs_ch = HSM.M_client_hello ch in
     Psks.offeredPsks_binders_bytesize_eq (PB.get_binders hs_ch);
     Psks.offeredPsks_binders_size32 (PB.get_binders hs_ch)
+    // An alternative way to compute it in GTot
     // UInt32.uint_to_t (Psks.offeredPsks_binders_bytesize (PB.get_binders ch))
 
+
+/// `hs_tch` is a client hello with dummy binders
 let hs_tch = tch:clientHello_with_binders{
   PB.get_binders (HSM.M_client_hello tch) ==
   PB.build_canonical_binders (tch_binders_len tch)
@@ -221,14 +225,14 @@ type transcript_t =
       retried:option retry ->
       transcript_t
 
-  | ClientHello:
-      retried:option retry ->
-      ch:CH.clientHello ->
-      transcript_t
-
   | TruncatedClientHello:
       retried:option retry ->
       tch:hs_tch ->
+      transcript_t
+
+  | ClientHello:
+      retried:option retry ->
+      ch:CH.clientHello ->
       transcript_t
 
   | Transcript12:
@@ -381,8 +385,7 @@ let transition (t:transcript_t) (l:label)
     | _ -> None
 
 let ( ~~> ) (t1 t2:transcript_t) =
-  t1 == t2 \/
-  (exists l. Some t2 == transition t1 l)
+  exists l. Some t2 == transition t1 l
 
 (* TODO: Transitive closure of ~~>
  let ( ~~>* ) (t1 t2:transcript_t) =
@@ -486,7 +489,7 @@ type label_repr =
 
   | LR_HRR:
       #b1:R.const_slice ->
-      ch:hs_ch_repr b1 ->
+      ch_tag:R.repr any_hash_tag b1 ->
       #b2:R.const_slice ->
       hrr:hs_sh_repr b2{is_hrr (HSM.M_server_hello?._0 (R.value hrr))} ->
       label_repr
@@ -517,7 +520,7 @@ let label_of_label_repr (l:label_repr)
       L_CompleteTCH (HSM.M_client_hello?._0 (R.value ch))
 
     | LR_HRR ch sh ->
-      L_HRR (HSM.M_client_hello?._0 (R.value ch),
+      L_HRR (R.value ch,
              HSM.M_server_hello?._0 (R.value sh))
 
     | LR_HSM12 hs12 ->
