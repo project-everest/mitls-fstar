@@ -192,13 +192,14 @@ let parse (b:bytes) (nonce:bytes) : St (option ticket) =
 let ticket_decrypt (seal:bool) cipher : St (option bytes) =
   let Key tid _ rd = if seal then get_sealing_key () else get_ticket_key () in
   let salt = AE.salt_of_state rd in
-  let (nb, b) = split_ cipher (AE.iv_length tid) in
+  let (iv, b) = split_ cipher (AE.iv_length tid) in
   let plain_len = length b - AE.taglen tid in
-  let iv = AE.coerce_iv tid (xor_ #(AE.iv_length tid) nb salt) in
-  AE.decrypt #tid #plain_len rd iv empty_bytes b
+  let iv = AE.coerce_iv tid (xor_ #(AE.iv_length tid) iv salt) in
+  let ad = empty_bytes in 
+  AE.decrypt #tid #plain_len rd iv ad b
 
 let check_ticket (seal:bool) (b:bytes{length b <= 65551}) : St (option ticket) =
-  trace ("Decrypting ticket "^(hex_of_bytes b));
+  trace ("Decrypting ticket "^hex_of_bytes b);
   let Key tid _ rd = get_ticket_key () in
   if length b < AE.iv_length tid + AE.taglen tid + 8 (*was: 32*) 
   then None 
@@ -245,6 +246,12 @@ let ticketContents_of_ticket (t: ticket) : GTot TC.ticketContents =
       TC13.age_add = age;
       TC13.custom_data = custom;
     })
+
+
+
+
+/// Low-level ticket writers called by server, using its custom
+/// formats for TLS 1.2 and TLS 1.3, prior to ticket encryption.
 
 #reset-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1 --z3rlimit 64 --z3cliopt smt.arith.nl=false --z3refresh --using_facts_from '* -FStar.Tactics -FStar.Reflection' --log_queries"
 
@@ -417,7 +424,16 @@ let write_ticket
   | Ticket13 cs _ _ rms nonce created age custom ->
     write_ticket13 t sl pos
 
+
+
+
 #push-options "--admit_smt_queries true"
+
+/// Tickets are doubly-encrypted: at the server using its ticket key,
+/// then at the client using its sealing key.
+
+//$ use the lower-evel EverCrypt calling convention.
+//$ where is the corresponding decryptor?
 
 let ticket_encrypt (seal:bool) plain : St bytes =
   let Key tid wr _ = if seal then get_sealing_key () else get_ticket_key () in
@@ -472,6 +488,7 @@ let check_cookie b = None
 #pop-options
 
 let ticket_pskinfo (t:ticket) =
+  let open TLS.Callbacks in 
   match t with
   | Ticket13 cs li _ _ nonce created age_add custom ->
     let CipherSuite13 ae h = cs in
@@ -489,7 +506,8 @@ let ticket_pskinfo (t:ticket) =
   | _ -> None
 
 noextract
-let ticketContents13_pskinfo (t: TC13.ticketContents13) : Tot pskInfo =
+let ticketContents13_pskinfo (t: TC13.ticketContents13) : Tot TLS.Callbacks.pskInfo =
+  let open TLS.Callbacks in 
   match t with
   | ({ TC13.cs = cs; TC13.nonce = nonce; TC13.creation_time = created; TC13.age_add = age_add; TC13.custom_data = custom }) ->
     begin match cipherSuite_of_cipherSuite13 cs with
@@ -508,7 +526,7 @@ let ticketContents13_pskinfo (t: TC13.ticketContents13) : Tot pskInfo =
     end
 
 noextract
-let ticketContents_pskinfo (t:TC.ticketContents) : Tot (option pskInfo) =
+let ticketContents_pskinfo (t:TC.ticketContents) : Tot (option TLS.Callbacks.pskInfo) =
   match t with
   | TC.T_ticket13 t13 -> Some (ticketContents13_pskinfo t13)
   | _ -> None
