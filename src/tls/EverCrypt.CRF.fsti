@@ -1,5 +1,19 @@
 module EverCrypt.CRF
 
+/// Status. See also `Test.CRF.fst`.
+///
+/// * Relocate to EverCrypt? But we depend on mitls flags.
+/// 
+/// * Still relies on `FStar.Monotonic.DependentMap`, not clearly
+///   compatible with location-based modifies and Stack. For now I am
+///   assuming a modifies clause. But we need to find a style where we
+///   can modify the TLS region without too much trouble.
+///
+/// * This suggests improvements to the incremental interface (see comments in the files).
+///
+/// * We should make the incremental-state abstract: this is required
+///   for the `switch` step, and may help with verification speed.
+
 module Concrete = EverCrypt.Hash.Incremental
 module Hash = EverCrypt.Hash 
 
@@ -19,12 +33,14 @@ let model = Flags.model
 
 // TODO test that verification usability matches Concrete. 
 // TODO refactor EverCrypt to make such switches less verbose? 
+// TODO make the state abstract---requires pre/post rewriting
+// TODO hide Model, treating hashed as an abstract predicate. Confirm we don't import algorithmic specs.
 
+let bytes = Model.CRF.bytes 
+let hashed = Model.CRF.hashed 
+//type hashable = b:bytes {Model.CRF.hashable b}
 
-let bytes = Concrete.bytes 
-type hashable = s:bytes  {Seq.length s < pow2 61} 
-
-type mstate = hashable 
+type mstate = bytes // hashable 
 // tried first a stateful variant, unnecessary since Concrete is
 // actually state-passing.
 // type mstate = b:B.buffer hashable {B.length b = 1}
@@ -63,13 +79,14 @@ let modifies_disjoint_preserves #a (l: B.loc) (h0 h1: HS.mem) (s: state a): Lemm
 // #set-options "--max_fuel 0 --max_ifuel 0"
 unfold
 let hashes (#a: Hash.alg) (h: HS.mem) (s: state a) (b: bytes) =
+  Seq.length b < pow2 61 /\ (
   if model then (
-    Seq.length b < pow2 61 /\  Seq.equal s b 
+    Seq.equal s b 
     // B.live h (s <: mstate) /\
     // Seq.equal (B.get h (s <: mstate) 0) b
     )
   else 
-    Concrete.hashes #a h s b 
+    Concrete.hashes #a h s b ) 
 
 val create_in (a: Hash.alg) (r: HS.rid): ST (state a)
   (requires (fun _ ->
@@ -136,12 +153,16 @@ let finish_st (a: Hash.alg) =
       B.live h0 dst /\
       B.(loc_disjoint (loc_buffer dst) (footprint s h0)))
     (ensures fun h0 s' h1 ->
+      let text = Ghost.reveal prev in 
       assert_norm (pow2 61 < pow2 125);
       hashes h1 s (Ghost.reveal prev) /\
       preserves_freeable s h0 h1 /\
       footprint s h0 == footprint s h1 /\
       B.(modifies (loc_union (loc_buffer dst) (footprint s h0)) h0 h1) /\
-      Seq.equal (B.as_seq h1 dst) (Spec.Hash.hash a (Ghost.reveal prev)))
+      Seq.equal (B.as_seq h1 dst) (Spec.Hash.hash a text) /\
+      (*new*)
+      hashed a text 
+      )
 
 val finish: a:Hash.alg -> finish_st a
 

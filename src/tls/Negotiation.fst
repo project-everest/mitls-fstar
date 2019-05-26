@@ -186,6 +186,7 @@ let find_supported_groups o =
   | None -> None
   | Some (CHE_supported_groups gns) -> Some gns
 
+// wrong result type? keep the extension contents? 
 let find_key_shares (o:offer) : list pre_share =
   match find_client_extension CHE_key_share? o with
   | None -> []
@@ -1820,13 +1821,14 @@ let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify d
     trace ("Encrypted Extensions "^string_of_ees ee);
     let nego_cb = ns.cfg.nego_callback in
     let uexts = List.Tot.filter EE_Unknown_extensionType? ee in
-
+    // this could be statically excluded from the definition of filtering 
     if not (check_encryptedExtensions_list_bytesize uexts) then 
       fatal Internal_error "encrypted extensions are too large"
     else
     let uexts_bytes = encryptedExtensions_serializer32 uexts in
     trace ("Negotiation callback to process application extensions.");
 
+    // to be simplified (see TLS.Callbacks)
     match nego_cb.negotiate nego_cb.nego_context pv uexts_bytes None with
     | Nego_abort -> fatal Handshake_failure (perror __SOURCE_FILE__ __LINE__ "application requested to abort the handshake")
     | Nego_retry _ -> fatal Internal_error (perror __SOURCE_FILE__ __LINE__ "client application requested a server retry")

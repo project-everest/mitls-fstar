@@ -54,13 +54,17 @@ let update a s prev data len =
   else
     Concrete.update a s prev data len 
 
+#set-options "--z3rlimit 100" 
 let finish a s prev dst = 
   assert_norm(pow2 61 < pow2 125);
+  assert(Model.CRF.hashable (Ghost.reveal prev));
+  assert(Seq.length (Ghost.reveal prev) < Hash.maxLength a);
   if model then 
     let tag = Model.CRF.hash a s in
     dst `of_seq` tag
-  else 
-    Concrete.finish a s prev dst
-
+  else (
+    Model.CRF.concrete_hashed a (Ghost.reveal prev);
+    Concrete.finish a s prev dst)
+    
 let free a s = if model then () else Concrete.free a s
     

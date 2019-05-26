@@ -109,6 +109,25 @@ noeq type mode =
     // { both shares are in the same negotiated group }
     mode
 
+(* 19-05-28
+// are we better off with a concrete mode? 
+// in specs, it avoids existentials;
+// in the implementation, we can cache the accepted outcomes of the negotiation:
+// { pv, sr, ciphersuite, pski, ... } 
+
+noeq type partial_mode_c13 = {
+  n_offer: offer; 
+  n_sh: Parsers.ServerHello.serverHello;
+  // n_retry: option (initial_retry n_offer n_sh) 
+  }
+  
+noeq type complete_mode13 = { 
+  n_offer: offer; 
+  n_sh: Parsers.ServerHello.serverHello; 
+  n_ee: Parsers.EncryptedExtensions.encryptedExtensions; 
+  }
+*)
+
 //19-01-23 collecting refinements we may need
 // m.n_protocol_version is supported 
 // m.n_protocol_version = TLS_1p2 ==> CipherSuite? m.n_cipher_suite 
@@ -380,6 +399,7 @@ val client_ServerKeyExchange:
   // [C_Mode ==> C_Mode] setting [server_share; client_cert_request; server_cert] in mode,
   // requires mode.n_protocol_version = TLS_1p2
 
+//$ align name to Handshake machine; strengthen post-condition using server Finished1.
 val clientComplete_13: 
   #region:rgn -> ns:t region Client ->
   ee: HandshakeMessages.encryptedExtensions ->

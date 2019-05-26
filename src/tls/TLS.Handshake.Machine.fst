@@ -51,15 +51,57 @@ assume val shares_of_ks:
   #groups: list CommonDH.group -> 
   secret_c13_wait_ServerHello psks groups -> option Extensions.keyShareClientHello
 
-// should be in transcript
+// will go to Transcript
 let trans (n:nat) = tr: Transcript.transcript_t { Transcript.transcript_size tr <= n }
+
+
+// to be adapted in Nego
+assume val nego_find_key_shares: Negotiation.offer -> option Extensions.keyShareClientHello 
+
+val deobfuscate: Negotiation.offer -> Negotiation.resumeInfo -> UInt32.t 
+let deobfuscate offer resumeInfo = 
+  let _, ris = resumeInfo in 
+  match Negotiation.find_clientPske offer, ris with
+  //  | Some (pski::_), ((_,ticket)::_)  -> PSK.decode_age pski.ticket_age ticket.ticket_age_add 
+  | _ -> PSK.default_obfuscated_age 
+
+// witnessed to produce the binder.
+// TBC re: prior consistency; we probably need to branch as only the
+// initial offer is a function of the config.
+
+let offered0 ((cfg,resume):client_config) (offer:Negotiation.offer) = 
+  let ks = nego_find_key_shares offer in 
+  let now = deobfuscate offer resume in 
+  Correct offer == Negotiation.client_offer cfg offer.Parsers.ClientHello.random ks resume now 
+
+let offered ((cfg,resume):client_config) (prior:option Transcript.retry) (offer:Negotiation.offer) = 
+  match prior with
+  | None -> offered0 (cfg,resume) offer 
+  | Some (digest_ch0, hrr) -> 
+    let ks = nego_find_key_shares offer in 
+    let now = deobfuscate offer resume in 
+    exists (offer0: Negotiation.offer).
+    offered0 (cfg,resume) offer0 
+    // TBC Negotiation: /\ 
+    // digest_ch0 = hash (selected_hashAlg hrr) offer0 /\ 
+    // Correct offer == Negotiation.client_retry cfg offer0 ks now 
+
+let accepted 
+  (cfg:_) // avoid? 
+  (prior: option Transcript.retry) 
+  (offer: Negotiation.offer) 
+  (sh: Parsers.ServerHello.serverHello)
+  (ee: Parsers.EncryptedExtensions.encryptedExtensions) = 
+  Negotiation.accept_ServerHello cfg offer sh 
+  // TBC Negotiation: 
+  // missing the late processing of encrypted extensions and its callback. 
 
 
 /// State machine for the connection handshake (private to Handshake).
 /// Each role now has its own type.
 noeq type client_state  
-  (region:rgn) // unused for now; worth the trouble? passed only as stateful-invariant argument? 
-  (cfg: client_config) 
+  (region:rgn)            // unused for now; worth the trouble? passed only as stateful-invariant argument? 
+  (cfg: client_config)    // duplicating Nego? 
   (nonce: TLSInfo.random) // could be a function of the transcript, saving one argument? 
   = 
 
@@ -67,8 +109,8 @@ noeq type client_state
   | C_init: 
     client_state region cfg nonce 
 
-  // intermediate step for witnessing the truncated transcript, a
-  // pre-condition for the binder HMACs. 
+  // intermediate step for witnessing the truncated transcript, 
+  // a pre-condition for the binder HMACs. 
   // TODO The Transcript state should be TruncatedHello. 
   | C_truncated_ClientHello:
     transcript: Ghost.erased (trans 0) -> 
@@ -94,7 +136,7 @@ noeq type client_state
       } -> 
     client_state region cfg nonce 
 
-  // TLS 1.3 waiting for encrypted handshake
+  // waiting for encrypted handshake (1.3 only)
   | C13_wait_Finished1: 
     transcript: Ghost.erased (trans 1) -> 
     nego: Negotiation.mode ->
@@ -105,7 +147,8 @@ noeq type client_state
       Correct offer == Negotiation.client_offer (fst cfg) nonce shares (snd cfg) now /\
       Correct nego == Negotiation.accept_ServerHello (fst cfg) offer sh /\ 
       Transcript.nego_version (HSM.M_client_hello offer) (HSM.M_server_hello sh) == TLS_1p3 /\ 
-      transcript == Transcript.Transcript13 None (HSM.M_client_hello offer) (HSM.M_server_hello sh) [] )
+      transcript == Transcript.Transcript13 
+        None (HSM.M_client_hello offer) (HSM.M_server_hello sh) [] )
     }                                 
     -> 
     //i:   Secret.hs_id ->
@@ -114,7 +157,37 @@ noeq type client_state
     //sfk: Secret.fink (Secret.sfk_of_hms i) -> 
     client_state region cfg nonce 
 
-(* TBC. It would be nice to reach Complete with some label abstraction.
+  // waiting for post-handshake messages (1.3 only; TBC rekeying)
+  // this state is witnessed to produce Finished2, 
+  // hencee it does not include it in the transcript. 
+  | C13_complete: 
+    transcript: Ghost.erased (trans 5) -> 
+    nego: Negotiation.mode -> 
+    digest: Transcript.state (Negotiation.hashAlg nego)
+    { let transcript = Ghost.reveal transcript in 
+      let offer = nego.Negotiation.n_offer in (
+      exists 
+        (now:UInt32.t) 
+        (shares:_)
+        (sh:_) (ee:_) (* we care about their contributions to the negotiated mode *)
+        (fin:_)       (* ignored once verified *) 
+        .
+      Correct offer == Negotiation.client_offer (fst cfg) nonce shares (snd cfg) now /\
+      Correct nego == Negotiation.accept_ServerHello (fst cfg) offer sh /\ 
+      Transcript.nego_version (HSM.M_client_hello offer) (HSM.M_server_hello sh) == TLS_1p3 /\ 
+      transcript == Transcript.Transcript13 
+        None (HSM.M_client_hello offer) (HSM.M_server_hello sh) 
+        [ Parsers.Handshake13.M13_encrypted_extensions ee; 
+          Parsers.Handshake13.M13_finished fin ] )
+      // TBC experiment with branching abstraction? 
+    }
+    -> 
+    //i:   Secret.ams_id ->
+    //rms: Secret.secret (rms_of_ams i tr) (* for accepting resumption tickets *) ->
+    client_state region cfg nonce 
+
+
+(*
   // TLS 1.3 #20 aggravation, optional from C13_wait_Finished1
   | C13_sent_EOED: 
     transcript: Ghost.erased (transcript: trans 4 { Transcript.Hello? transcript }) -> 
@@ -123,12 +196,6 @@ noeq type client_state
     //cfk: Secret.fink (Secret.cfk_of_hms i) ->
     //digest (* _EOED *) ->
     //option HSM.cr13 -> 
-    st region role cfg resume nonce 
-
-  | C13_complete: // TLS 1.3 waiting for post-handshake messages (TBC rekeying)
-    transcript: Ghost.erased (transcript: trans 10 { Transcript.Hello? transcript }) -> 
-    // i:   Secret.ams_id ->
-//    rms: Secret.secret (rms_of_ams i tr) (* for accepting resumption tickets *) ->
     st region role cfg resume nonce 
 
   | C12_wait_CCS1 of digest      // TLS resume, digest to be authenticated by server
@@ -229,45 +296,41 @@ let m_offer
 
 let mrel 
   (#region:rgn) (#cfg: client_config) (#nonce: TLSInfo.random)
-= TC.reflexive_transitive_closure (step #region #cfg #nonce)
+= ReflexiveTransitiveClosure.closure (step #region #cfg #nonce)
 
 /// Main type for the connection handshake
-noeq abstract type t 
-  (region:rgn) 
-  = 
-  | C_State: 
-  cfg: client_config ->
-  nonce: TLSInfo.random ->
-  state: HST.mreference 
+noeq abstract type t (region:rgn) = {
+  cfg: client_config;
+  nonce: TLSInfo.random;
+  state: st:HST.mreference 
     (client_state region cfg nonce) 
     (mrel #region #cfg #nonce) 
-    { HS.frameOf state = region } -> 
-  t region 
+    { HS.frameOf st = region } }
 
-(*
-/// Testing monotonicity; not quite there. 
+/// Testing monotonicity, thanks to the new closure library
 
-let witness_offer (#region:rgn) (st:t region): 
-  ST (
-    o: Negotiation.offer {
-      let C_State cfg nonce r = st in 
-      token_p r (fun h0 -> st_offer (HS.sel h0 r) = Some o) } )
-  (requires fun h0 -> 
-    let C_State cfg nonce r = st in 
-    h0 `HS.contains` r)
-  (ensures fun h0 r h1 -> True)
-= 
-  match st with 
-  | C_State cfg nonce r -> (
-    match st_offer !r with 
-      | Some o -> (
-          let p h0 = st_offer (HS.sel h0 r) == Some o in 
-          TC.inv_closure step p m_offer;
-          assert(p `HST.stable_on` r);
-          witness_p r p;
-          o )
-    | _ -> admit())
-*)
+let p #region (st:t region) (o:Negotiation.offer) h0 = 
+  st_offer (HS.sel h0 st.state) == Some o 
+
+val witness_offer (#region:rgn) (st:t region): 
+  Stack 
+    (o: Negotiation.offer{ token_p st.state (p st o) })
+    (requires fun h0 -> 
+      h0 `HS.contains` st.state /\
+      (match HS.sel h0 st.state with 
+      | C_wait_ServerHello _ _ _ _ 
+      | C13_wait_Finished1 _ _ _ -> True
+      | _ -> False ))
+    (ensures fun h0 o h1 -> modifies_none h0 h1)
+
+let witness_offer #region st =
+  match st_offer !st.state with 
+  | Some o -> (
+      ReflexiveTransitiveClosure.stable_on_closure 
+        (step #region #st.cfg #st.nonce) 
+        (fun st -> st_offer st == Some o) ();         
+      witness_p st.state (p st o);
+      o )
 
 
 (* TODO server-side
