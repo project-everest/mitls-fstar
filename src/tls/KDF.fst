@@ -127,6 +127,14 @@ let lemma_honest_parent i lbl ctx =
     lemma_witnessed_impl (MDM.contains log (derive i lbl ctx) true) (MDM.contains log i true)
   else ()
 
+let lemma_honest_parent_impl (i:regid) (lbl:label) (ctx:context)
+  : Lemma (requires wellformed_derive i lbl ctx /\ 
+            registered (derive i lbl ctx) /\ 
+            ~(honest_idh ctx))
+	  (ensures honest (derive i lbl ctx) ==> honest i)
+  = FStar.Classical.impl_intro_gen #(honest (derive i lbl ctx)) #(fun _ -> honest i)
+    (fun (u:squash (honest (derive i lbl ctx))) -> lemma_honest_parent i lbl ctx)
+
 inline_for_extraction
 let get_info (#ideal:iflag) (#u:usage ideal) (#i:regid) (k:secret u i) =
   if Model.is_safe k then index_info i else dfst (Model.real k)
@@ -150,7 +158,7 @@ type kdf_invariant_wit (#ideal:iflag) (#u:usage ideal) (#i:regid)
   (ctx:context{~(honest_idh ctx) /\ wellformed_derive i lbl ctx /\ registered (derive i lbl ctx)})
   =
   (let i' : regid = derive i lbl ctx in
-  lemma_honest_parent i lbl ctx;
+  lemma_honest_parent_impl i lbl ctx;
   let pkg' = child u lbl in
   let dt = DT.ideal pkg'.define_table in
   DT.live #_ #(Pkg?.key pkg') dt h /\
@@ -318,6 +326,7 @@ val coerce:
 
 let coerce #ideal u i a repr =
   let k = Model.mk_real (| a, repr |) in
+  admit()
   
 // WIP stronger packaging
 //  (if model then assume(local_kdf_invariant k h1));
