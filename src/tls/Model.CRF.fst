@@ -8,8 +8,10 @@ open EverCrypt.Hash // only for the specs (renamings)
 //2018.04.24 SZ: to be moved elsewhere, set to false for real extraction
 //inline_for_extraction
 // let crf _ = false
+noextract 
 assume val crf: alg -> Tot bool
 
+noextract 
 let h = Spec.Hash.hash 
 
 (* Depending on a single, global idealization function, we keep a global
@@ -23,21 +25,29 @@ open Mem
 module MDM = FStar.Monotonic.DependentMap 
 
 // now bounded irrespective of a, as in EverCrypt.Incremental (TBD)
+noextract 
 let bytes = Seq.seq UInt8.t
 
 //$ avoid using it because ghost lack structural subtyping.
+noextract 
 let hashable (s:bytes) = Seq.length s < pow2 61
 // type hashable (a:alg) = v:Seq.seq UInt8.t {Seq.length v < maxLength a}
 
 // the precise types guarantee that the table stays empty when crf _ = false
+noextract 
 private type range = | Computed: a: alg {crf a} -> t: tag a -> range
+
+noextract 
 private type domain (r:range) =
   b:Seq.seq UInt8.t {
     let Computed a t = r in 
     Seq.length b < maxLength a /\ 
     h a b = t}
 
+noextract 
 private let inv (f:MDM.partial_dependent_map range domain) = True // a bit overkill?
+
+noextract 
 private let table : MDM.t tls_tables_region range domain inv = MDM.alloc()
 
 // witnessing that we hashed this particular content (for collision detection)
@@ -46,6 +56,7 @@ private let table : MDM.t tls_tables_region range domain inv = MDM.alloc()
 
 //val hashed: a:alg -> b:bytes -> Type
 
+noextract 
 abstract type hashed (a:alg) (b:bytes) =
   model /\ crf a ==> (
     hashable b /\
@@ -55,6 +66,7 @@ abstract type hashed (a:alg) (b:bytes) =
     witnessed (MDM.contains table (Computed a t) (b <: domain (Computed a t)))))
 
 // required to go through abstraction when switching 
+noextract 
 let concrete_hashed a b: Lemma (~model ==> hashed a b) = ()
 
 val injective (a:alg) (b0 b1: Ghost.erased bytes): 
@@ -85,6 +97,7 @@ private val stop: s:string -> Stack 'a
   (ensures fun h0 r h1 -> False)
 let rec stop (s:string) = stop s
 
+noextract 
 val hash: a:alg -> v:bytes -> Stack (tag a)
   (requires fun h0 -> hashable v)
   (ensures fun h0 t h1 ->
@@ -117,6 +130,8 @@ let hash a v =
 // sanity check
 
 open FStar.Seq
+
+noextract 
 private val test (a:alg {crf a}) (b0 b1: (b:bytes{hashable b})): St unit
 let test a b0 b1 =
   let t0 = hash a b0 in 
