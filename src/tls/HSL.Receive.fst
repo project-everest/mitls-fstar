@@ -77,9 +77,20 @@ let create r =
 (***** TODO: these errors should move somewhere
        so that clients can match on them *****)
 
-assume val parsing_error : TLSError.error
-assume val unexpected_flight_error : TLSError.error
-assume val bytes_remain_error : TLSError.error
+let parsing_error : TLSError.error = {
+  Parsers.Alert.level = Parsers.AlertLevel.Fatal;
+  Parsers.Alert.description = Parsers.AlertDescription.Unexpected_message
+}, ""
+
+let unexpected_flight_error : TLSError.error = {
+  Parsers.Alert.level = Parsers.AlertLevel.Fatal;
+  Parsers.Alert.description = Parsers.AlertDescription.Unexpected_message
+}, ""
+
+let bytes_remain_error : TLSError.error = {
+  Parsers.Alert.level = Parsers.AlertLevel.Fatal;
+  Parsers.Alert.description = Parsers.AlertDescription.Unexpected_message
+}, ""
 
 
 /// Main workhorse of parsing messages
@@ -191,52 +202,58 @@ private let err_or_insufficient_data
 /// Specialize the parse_common function for Handshake13 messages
 
 inline_for_extraction noextract
-let parse_hsm13 =
-  parse_common
-    HSM13.handshake13_validator
-    HSM13.tag_of_handshake13
-
-/// And then for specific Handshake13 messages
-
-inline_for_extraction noextract
 let parse_hsm13_ee
-  =  parse_hsm13
+  = parse_common
+      HSM13.handshake13_validator
+      HSM13.tag_of_handshake13
       HSMType.Encrypted_extensions
       HSM13.handshake13_accessor_encrypted_extensions
       
 inline_for_extraction noextract
 let parse_hsm13_c
-  = parse_hsm13
+  = parse_common
+      HSM13.handshake13_validator
+      HSM13.tag_of_handshake13
       HSMType.Certificate
       HSM13.handshake13_accessor_certificate
 
 inline_for_extraction noextract
 let parse_hsm13_cv
-  = parse_hsm13
+  = parse_common
+      HSM13.handshake13_validator
+      HSM13.tag_of_handshake13
       HSMType.Certificate_verify
       HSM13.handshake13_accessor_certificate_verify
 
 inline_for_extraction noextract
 let parse_hsm13_fin
-  = parse_hsm13 
+  = parse_common
+      HSM13.handshake13_validator
+      HSM13.tag_of_handshake13
       HSMType.Finished
       HSM13.handshake13_accessor_finished
 
 inline_for_extraction noextract
 let parse_hsm13_cr
-  = parse_hsm13 
+  = parse_common
+      HSM13.handshake13_validator
+      HSM13.tag_of_handshake13
       HSMType.Certificate_request
       HSM13.handshake13_accessor_certificate_request
 
 inline_for_extraction noextract
 let parse_hsm13_eoed
-  = parse_hsm13 
+  = parse_common
+      HSM13.handshake13_validator
+      HSM13.tag_of_handshake13
       HSMType.End_of_early_data
       HSM13.handshake13_accessor_end_of_early_data
 
 inline_for_extraction noextract
 let parse_hsm13_nst
-  = parse_hsm13 
+  = parse_common
+      HSM13.handshake13_validator
+      HSM13.tag_of_handshake13
       HSMType.New_session_ticket
       HSM13.handshake13_accessor_new_session_ticket
 
@@ -412,56 +429,62 @@ let receive_flight13_nst st b from to =
 (*** 1.2 flights ***)
 
 
+
 /// Specialize the parse_common function for Handshake12 messages
 
 inline_for_extraction noextract
-let parse_hsm12 =
-  parse_common
-    HSM12.handshake12_validator
-    HSM12.tag_of_handshake12
-
-
-/// And then for specific Handshake12 messages
-
-inline_for_extraction noextract
 let parse_hsm12_c
-  =  parse_hsm12
+  = parse_common
+      HSM12.handshake12_validator
+      HSM12.tag_of_handshake12
       HSMType.Certificate
       HSM12.handshake12_accessor_certificate
 
 inline_for_extraction noextract
 let parse_hsm12_ske
-  = parse_hsm12
+  = parse_common
+      HSM12.handshake12_validator
+      HSM12.tag_of_handshake12
       HSMType.Server_key_exchange
       HSM12.handshake12_accessor_server_key_exchange
 
 inline_for_extraction noextract
 let parse_hsm12_shd
-  = parse_hsm12
+  = parse_common
+      HSM12.handshake12_validator
+      HSM12.tag_of_handshake12
       HSMType.Server_hello_done
       HSM12.handshake12_accessor_server_hello_done
 
 inline_for_extraction noextract
 let parse_hsm12_cr
-  =  parse_hsm12
+  = parse_common
+      HSM12.handshake12_validator
+      HSM12.tag_of_handshake12
       HSMType.Certificate_request
       HSM12.handshake12_accessor_certificate_request
 
 inline_for_extraction noextract
 let parse_hsm12_fin
-  =  parse_hsm12
+  = parse_common
+      HSM12.handshake12_validator
+      HSM12.tag_of_handshake12
       HSMType.Finished
       HSM12.handshake12_accessor_finished
 
 inline_for_extraction noextract
 let parse_hsm12_nst
-  =  parse_hsm12
+  = parse_common
+      HSM12.handshake12_validator
+      HSM12.tag_of_handshake12
       HSMType.New_session_ticket
       HSM12.handshake12_accessor_new_session_ticket
 
 inline_for_extraction noextract
 let parse_hsm12_cke
-  =  parse_hsm12
+  = parse_common
+      HSM12.handshake12_validator
+      HSM12.tag_of_handshake12
       HSMType.Client_key_exchange
       HSM12.handshake12_accessor_client_key_exchange
 
@@ -572,26 +595,21 @@ let receive_flight12_cke st b from to =
 (*** ClientHello and ServerHello ***)
 
 
-/// Specialize the parse_common function for Handshake messages
-
-inline_for_extraction noextract
-let parse_hsm =
-  parse_common
-    HSM.handshake_validator
-    HSM.tag_of_handshake
-
-
-/// And then for CH and SH
+/// Specialize the parse_common function for CH and SH
 
 inline_for_extraction noextract
 let parse_hsm_ch
-  =  parse_hsm
+  = parse_common
+      HSM.handshake_validator
+      HSM.tag_of_handshake
       HSMType.Client_hello
       HSM.handshake_accessor_client_hello
 
 inline_for_extraction noextract
 let parse_hsm_sh
-  = parse_hsm
+  = parse_common
+      HSM.handshake_validator
+      HSM.tag_of_handshake
       HSMType.Server_hello
       HSM.handshake_accessor_server_hello
 
