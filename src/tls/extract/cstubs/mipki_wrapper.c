@@ -327,7 +327,7 @@ FStar_Dyn_dyn PKI_init(Prims_string cafile, Prims_list__K___Prims_string_Prims_s
 }
 
 #ifdef KRML_NOSTRUCT_PASSING
-void PKI_tls_callbacks(FStar_Dyn_dyn x0, TLSConstants_cert_cb *dst)
+void PKI_tls_callbacks(FStar_Dyn_dyn x0, TLS_Callbacks_cert_cb *dst)
 {
   dst->app_context = x0;
   dst->cert_select_ptr = NULL;
@@ -340,9 +340,9 @@ void PKI_tls_callbacks(FStar_Dyn_dyn x0, TLSConstants_cert_cb *dst)
   dst->cert_verify_cb = PKI_verify_;
 }
 #else
-TLSConstants_cert_cb PKI_tls_callbacks(FStar_Dyn_dyn x0)
+TLS_Callbacks_cert_cb PKI_tls_callbacks(FStar_Dyn_dyn x0)
 {
-  return (TLSConstants_cert_cb){
+  return (TLS_Callbacks_cert_cb){
     .app_context = x0,
     .cert_select_ptr = NULL,
     .cert_select_cb = PKI_select,

@@ -362,7 +362,7 @@ typedef struct {
   pfn_FFI_ticket_cb cb;
 } wrapped_ticket_cb;
 
-static void ticket_cb_proxy(FStar_Dyn_dyn cbs, Prims_string sni, FStar_Bytes_bytes ticket, TLSConstants_ticketInfo info, FStar_Bytes_bytes rawkey)
+static void ticket_cb_proxy(FStar_Dyn_dyn cbs, Prims_string sni, FStar_Bytes_bytes ticket, TLS_Callbacks_ticketInfo info, FStar_Bytes_bytes rawkey)
 {
   wrapped_ticket_cb *cb = (wrapped_ticket_cb*)cbs;
   FStar_Bytes_bytes session = FFI_ffiTicketInfoBytes(info, rawkey);
@@ -415,15 +415,15 @@ static mitls_version convert_pv(Parsers_ProtocolVersion_protocolVersion pv)
   return TLS_SSL3; // unreachable
 }
 
-static TLSConstants_nego_action nego_cb_proxy(FStar_Dyn_dyn cbs, Parsers_ProtocolVersion_protocolVersion pv,
+static TLS_Callbacks_nego_action nego_cb_proxy(FStar_Dyn_dyn cbs, Parsers_ProtocolVersion_protocolVersion pv,
   FStar_Bytes_bytes extb, FStar_Pervasives_Native_option__FStar_Bytes_bytes cookie)
 {
   wrapped_nego_cb *cb = (wrapped_nego_cb*)cbs;
   unsigned char *app_cookie = NULL, *c;
   mitls_extension *extra_exts = NULL;
   size_t i, app_cookie_len = 0, extra_exts_len = 0;
-  TLSConstants_nego_action a;
-  TLSConstants_custom_extensions cexts;
+  TLS_Callbacks_nego_action a;
+  TLS_Callbacks_custom_extensions cexts;
 
   if(cookie.tag == FStar_Pervasives_Native_Some)
   {
@@ -438,16 +438,16 @@ static TLSConstants_nego_action nego_cb_proxy(FStar_Dyn_dyn cbs, Parsers_Protoco
   switch(r)
   {
     case TLS_nego_abort:
-      a.tag = TLSConstants_Nego_abort;
+      a.tag = TLS_Callbacks_Nego_abort;
       break;
     case TLS_nego_accept:
-      a.tag = TLSConstants_Nego_accept;
-      cexts = TLSConstants_empty_custom_extensions();
+      a.tag = TLS_Callbacks_Nego_accept;
+      cexts = TLS_Callbacks_empty_custom_extensions();
       if(extra_exts != NULL && extra_exts_len > 0)
       {
         for(i=0; i<extra_exts_len; i++)
         {
-          cexts = TLSConstants_add_custom_extension(cexts, extra_exts->ext_type,
+          cexts = TLS_Callbacks_add_custom_extension(cexts, extra_exts->ext_type,
             (FStar_Bytes_bytes){.data = (const char*)extra_exts->ext_data, .length = extra_exts->ext_data_len});
           extra_exts++;
         }
@@ -455,7 +455,7 @@ static TLSConstants_nego_action nego_cb_proxy(FStar_Dyn_dyn cbs, Parsers_Protoco
       a.val.case_Nego_accept = cexts;
       break;
     case TLS_nego_retry:
-      a.tag = TLSConstants_Nego_retry;
+      a.tag = TLS_Callbacks_Nego_retry;
       c = KRML_HOST_MALLOC(app_cookie_len);
       if(app_cookie != NULL) memcpy(c, app_cookie, app_cookie_len);
       a.val.case_Nego_retry = (FStar_Bytes_bytes){.data = (const char*)c, .length = app_cookie_len};
@@ -664,7 +664,7 @@ int MITLS_CALLCONV FFI_mitls_configure_cert_callbacks(/* in */ mitls_state *stat
   cbs->sign = cert_cb->sign;
   cbs->verify = cert_cb->verify;
 
-  TLSConstants_cert_cb cb = {
+  TLS_Callbacks_cert_cb cb = {
     .app_context = (void*)cbs,
     .cert_select_ptr = NULL,
     .cert_select_cb = wrapped_select,
@@ -956,7 +956,7 @@ static TLSConstants_config quic_set_config(TLSConstants_config c0, const quic_co
       cbs->sign = cfg->cert_callbacks->sign;
       cbs->verify = cfg->cert_callbacks->verify;
 
-      TLSConstants_cert_cb cb = {
+      TLS_Callbacks_cert_cb cb = {
         .app_context = (void*)cbs,
         .cert_select_ptr = NULL,
         .cert_select_cb = wrapped_select,

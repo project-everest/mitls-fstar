@@ -1,7 +1,7 @@
 module Negotiation
 
-/// Negotiates the TLS parameters for connection establishment, based
-/// on the local configuration and the peer's hello message.
+/// Negotiates the TLS parameters for connection establishment,
+/// based on the local configuration and the peer's hello message.
 ///
 /// Defines datatypes holding the TLS parameters: [offer] and [mode]
 /// used in Handshake, FFI, QUIC.
@@ -10,56 +10,55 @@ module Negotiation
 // pure specs and the supporting state machine? Keep offer and mode
 // transparent?
 
-// application-specific negotation relies on a callback in the
+// Application-specific negotation relies on a callback in the
 // configuration.
 
 open FStar.Error
-open FStar.Bytes
+open FStar.Bytes // still used for cookies, tickets, signatures... 
 
 open Mem
 open TLSError
 open TLSInfo
+open TLS.Callbacks
 open TLSConstants
 
+module B = LowStar.Buffer
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
-module HSM = HandshakeMessages
-module CH = Parsers.ClientHello
-module SH = Parsers.ServerHello
-module LP = LowParse.Low.Base
-module U32 = FStar.UInt32
-module HST = FStar.HyperStack.ST
-module B = LowStar.Buffer
 
+module HSM = HandshakeMessages
+module LP = LowParse.Low.Base
+
+//19-05-04 sample low-level printer, not used so far. Not extracted ?!
 val print_namedGroupList
   (#rrel #rel: _)
   (sl: LP.slice rrel rel)
-  (pos: U32.t)
+  (pos: UInt32.t)
 : HST.Stack unit
   (requires (fun h -> LP.valid Parsers.NamedGroupList.namedGroupList_parser h sl pos))
   (ensures (fun h _ h' -> B.modifies B.loc_none h h'))
-
 
 let implemented_version = pv:protocolVersion {pv = TLS_1p2 || pv = TLS_1p3}
 
 type pre_share = g:CommonDH.group & CommonDH.pre_share g
 type share = g:CommonDH.group & CommonDH.share g
 
-let offer = CH.clientHello
+let offer = Parsers.ClientHello.clientHello
 type hrr = unit
 
 (*
-  We keep both the server's HelloRetryRequest
-  and the overwritten parts of the initial offer
+  After issuing/receiving the second ClientHello, 
+  we keep both the server's HelloRetryRequest
+  and the overwritten parts of the initial offer.
 *)
 type retryInfo (offer:offer) =
   hrr *
   list pre_share (* we should actually keep the raw client extension content *) *
   list Extensions.pskIdentity
 
-val find_cookie: offer -> option (b:bytes {0 < length b /\ length b < 65536})
+val find_cookie: offer -> option Extensions.cookie 
 val find_psk_key_exchange_modes: offer -> list Extensions.pskKeyExchangeMode // [] when not found; pick better representation?
-val find_sessionTicket: offer -> option bytes // TODO refine
+val find_sessionTicket: offer -> option Extensions.clientHelloExtension_CHE_session_ticket 
 val find_clientPske: offer -> option Extensions.offeredPsks 
 
 // index in the list of PSKs offered by the client
@@ -109,6 +108,25 @@ noeq type mode =
     n_client_share: option share ->
     // { both shares are in the same negotiated group }
     mode
+
+(* 19-05-28
+// are we better off with a concrete mode? 
+// in specs, it avoids existentials;
+// in the implementation, we can cache the accepted outcomes of the negotiation:
+// { pv, sr, ciphersuite, pski, ... } 
+
+noeq type partial_mode_c13 = {
+  n_offer: offer; 
+  n_sh: Parsers.ServerHello.serverHello;
+  // n_retry: option (initial_retry n_offer n_sh) 
+  }
+  
+noeq type complete_mode13 = { 
+  n_offer: offer; 
+  n_sh: Parsers.ServerHello.serverHello; 
+  n_ee: Parsers.EncryptedExtensions.encryptedExtensions; 
+  }
+*)
 
 //19-01-23 collecting refinements we may need
 // m.n_protocol_version is supported 
@@ -251,6 +269,7 @@ val is_hrr: reader bool
 
 let inv (#region:rgn) (#role:TLSConstants.role) (ns:t region role) h0 = h0 `HS.contains` ns.state
 
+// signature callback; is it used outside Negotiation? 
 // TODO 19-01-06 effect of signing
 val sign: 
   #region:rgn -> #role:TLSConstants.role -> ns:t region role -> 
@@ -262,22 +281,41 @@ val sign:
 
 (* CLIENT *) 
 
-// [C_Init ==> C_Offer]
+/// What the client offers, abstractly. 
+val client_offer: 
+  cfg:config -> 
+  nonce:TLSInfo.random -> 
+  ks:option Extensions.keyShareClientHello -> 
+  resume:resumeInfo -> 
+  now:UInt32.t -> result offer
+
+/// [C_Init ==> C_Offer]
+///
+/// [oks] are the optional client key shares sampled by [ks_client_init]
+///
+/// [now] is the current time (an underspecified read effect) used for
+/// age obfuscation; we could also return it ghostly or pass it in
+/// config.
+///
+/// Fails when the version is misconfigurated 
+/// 
 val client_ClientHello: 
   #region:rgn -> ns:t region Client -> 
   oks:option Extensions.keyShareClientHello -> 
   ST (result offer)
-  (requires fun h0 -> inv ns h0 /\ C_Init? (HS.sel h0 ns.state))
-  (ensures fun h0 r h1 -> inv ns h1 /\ 
-    (match r with
-    | Correct offer -> HS.sel h1 ns.state == C_Offer offer
-    | _ -> True))
-  // ensures offer = client_offer ns.cfg ns.nonce oks ns.resume now [used e.g. for binder auth] 
-  // oks: optional client key shares created by ks_client_init
-  // now: stateful time for age obfuscation (return it ghostly?)
-// TODO retry
+  (requires fun h0 -> 
+    inv ns h0 /\ 
+    C_Init? (HS.sel h0 ns.state))
+  (ensures fun h0 r h1 -> 
+    inv ns h1 /\ (
+    (exists (now:UInt32.t). (r = client_offer ns.cfg ns.nonce oks ns.resume now )) /\ 
+    ( match r with
+      | Correct offer -> HS.sel h1 ns.state == C_Offer offer 
+      | _             -> True)))
+
 val group_of_hrr: hrr -> option CommonDH.namedGroup
 
+// [C_Offer ==> C_HRR] TODO separate pure spec
 val client_HelloRetryRequest:
   #region:rgn -> ns:t region Client -> 
   hrr -> 
@@ -285,24 +323,69 @@ val client_HelloRetryRequest:
   ST (result offer) 
   (requires fun h0 -> inv ns h0)
   (ensures fun h0 _ h1 -> inv ns h1)
-  // [C_Offer ==> C_HRR] TODO separate pure spec
-  
+
+
+/// What the client accepts, abstractly.
+///
+/// This mode is still partial.
+/// Do we need some spec-level matching with the server's mode?
+///
+/// let offer = client_offer client cfg in 
+/// let server_mode = computeServerMode server_cfg offer sr in
+/// let sh = Handshake.serverHello server_mode in 
+/// let client_mode = accept_ServerHello client_cfg offer sh in
+/// server_mode == client_mode // excluding encrypted extensions, server_cert, etc 
+///
+val accept_ServerHello: 
+  config -> 
+  offer: offer -> 
+  HandshakeMessages.serverHello -> result (m:mode {m.n_offer == offer})
+
+/// [C_Offer | C_HRR_offer ==> C_Mode] with TODO hrr
+///
+/// Fails if the server's choices are unacceptable
+/// 
 val client_ServerHello: 
   #region:rgn -> ns: t region Client ->
-  HandshakeMessages.serverHello ->
-  ST (result mode) 
-  (requires fun h0 -> inv ns h0) 
-  (ensures fun h0 _ h1 -> inv ns h1) 
-  // [C_Offer | C_HRR_offer ==> C_Mode] with TODO hrr.  
-  // ensures client_mode ns offer sh == Correct mode
+  sh: HandshakeMessages.serverHello ->
+  ST (result mode)
+  (requires fun h0 -> 
+    inv ns h0 /\ 
+    C_Offer? (HS.sel h0 ns.state)) 
+  (ensures fun h0 r h1 -> 
+    let C_Offer offer = HS.sel h0 ns.state in 
+    inv ns h1 /\ 
+    // r == accept_ServerHello ns.cfg offer sh /\
+    // would not work (structural subtyping) 
+    ( match r, accept_ServerHello ns.cfg offer sh with 
+      | Correct m0, Correct m1 -> HS.sel h1 ns.state == C_Mode m0 /\ m0 == m1 
+      | Error z0, Error z1     -> z0 == z1 
+      | _                      -> False))  
+    
 
-// used internally, but also directly called by Handshake 
+/// Formatting of the server's signed information: called by Handshake
+/// for signing, called by Negotiation for verification,
+///
+/// We can implement the two functions separately, but still need
+/// joint injectivity relying on honest nonces never being zero.
+///
+/// Can we use QD/LP?
+///
+/// if pv = TLS_1p3
+/// then
+///   tbs is transcript hash up to Certificate 
+///   injective on (role and tbs), of total size 64 + 34 + tbs
+/// else
+///   csr is clientRandom @ serverRandom, tbs is the raw DH share, 
+///   injective on (csr, tbs), of total size 64 + tbs
+ 
 val to_be_signed: 
   pv:protocolVersion -> 
   role -> 
   csr:option (lbytes 64) -> 
   tbs:bytes {(None? csr <==> pv == TLS_1p3) /\ Bytes.length tbs <= 128} -> 
   bytes
+
 
 val client_ServerKeyExchange: 
   #region:rgn -> ns: t region Client ->
@@ -316,6 +399,7 @@ val client_ServerKeyExchange:
   // [C_Mode ==> C_Mode] setting [server_share; client_cert_request; server_cert] in mode,
   // requires mode.n_protocol_version = TLS_1p2
 
+//$ align name to Handshake machine; strengthen post-condition using server Finished1.
 val clientComplete_13: 
   #region:rgn -> ns:t region Client ->
   ee: HandshakeMessages.encryptedExtensions ->
@@ -335,6 +419,7 @@ val clientComplete_13:
   // TODO client sigs; till then ccert=None and optCertRequest is ignored.
   // 19-04-19 TODO inv preservation through callbacks?
 
+
 (* SERVER *) 
 
 // For application-handled extensions set by nego callback,
@@ -348,7 +433,7 @@ noeq type serverMode =
     serverMode
   | ServerMode: mode -> certNego -> extra_sext -> serverMode
 
-(* Returns the server name, if any, or an empty bytestring; review. *)
+(* Returns the server hostName, if any, or an empty bytestring; review. *)
 val get_sni: offer -> Tot bytes 
 
 (* for QUIC *) 

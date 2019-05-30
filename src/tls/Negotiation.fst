@@ -15,6 +15,7 @@ open FStar.Bytes
 open Mem
 open TLSError
 open TLSInfo
+open TLS.Callbacks
 open TLSConstants
 
 module HS = FStar.HyperStack
@@ -64,6 +65,9 @@ module HST = FStar.HyperStack.ST
 module B = LowStar.Buffer
 
 #reset-options
+
+// 19-05-17 Sample low-level printer for namedGroupList. We will need
+// plenty of the same, we still don't know what to automate.
 
 let print_namedGroupList
   #rrel #rel sl pos
@@ -182,6 +186,7 @@ let find_supported_groups o =
   | None -> None
   | Some (CHE_supported_groups gns) -> Some gns
 
+// wrong result type? keep the extension contents? 
 let find_key_shares (o:offer) : list pre_share =
   match find_client_extension CHE_key_share? o with
   | None -> []
@@ -273,12 +278,13 @@ let keyshares cfg (ks: option clientHelloExtension_CHE_key_share): list clientHe
   | TLS_1p3, Some ks -> [CHE_key_share ks]
   | _,_              -> [] 
 
+// 19-05-17 Experiment using a lower QD-generated [config] representation.
 module CFG = Parsers.MiTLSConfig
-
 let keyshares_new cfg (ks: option clientHelloExtension_CHE_key_share): list clientHelloExtension = 
   match Parsers.KnownProtocolVersion.tag_of_knownProtocolVersion cfg.CFG.max_version, ks with
   | TLS_1p3, Some ks -> [CHE_key_share ks]
   | _,_              -> [] 
+
 
 //TODO make serverName_bytesize transparent (for all sums)
 assume val sz_Sni_host_name: dns: Parsers.HostName.hostName -> Lemma(
@@ -526,6 +532,58 @@ let allow_dhe_resumption_new (r: Parsers.ResumeInfo13.resumeInfo13) : Tot bool =
 
 #reset-options
 
+(*
+inline_for_extraction
+let bind (#a:Type) (#b:Type)
+         (f:result a)
+         (g: a -> result b)
+    : result b
+    = match f with
+      | Correct x -> g x
+      | Error z -> Error z
+
+inline_for_extraction
+let return (#a:Type) (x:a) : result a = Correct x
+
+inline_for_extraction
+let fail (#a:Type) z : result a = Error z
+
+noextract
+let final_extensions_alt
+  (cfg: CFG.miTLSConfig) (edi: bool) (l: list Parsers.ResumeInfo13.resumeInfo13) (now: U32.t)
+: Tot (result (list clientHelloExtension))
+= match Parsers.KnownProtocolVersion.tag_of_knownProtocolVersion cfg.CFG.max_version with
+  | TLS_1p3 ->
+    let allow_psk_resumption = List.Tot.existsb allow_psk_resumption_new l in
+    let allow_dhe_resumption = List.Tot.existsb allow_dhe_resumption_new l in
+    if allow_psk_resumption || allow_dhe_resumption
+    then
+      let psk_kex =
+        (if allow_psk_resumption then [Psk_ke] else []) @ (if allow_dhe_resumption then [Psk_dhe_ke] else [])
+      in
+      let binders = List.Tot.map (fun r -> compute_binder_ph_new r.Parsers.ResumeInfo13.ticket) l in
+      let pskidentities = List.Tot.map (obfuscate_age_new now) l in
+      ke <-- (
+        if not (check_offeredPsks_identities_list_bytesize pskidentities)
+        then fail (fatal Internal_error "final_extensions: check_offeredPsks_identities_list_bytesize failed")
+        else if not (check_offeredPsks_binders_list_bytesize binders) 
+        then fail (fatal Internal_error "final_extensions: check_offeredPsks_binders_list_bytesize failed")
+        else return ({ identities = pskidentities; binders = binders; }) );
+      exts <- (
+        if
+          check_clientHelloExtension_CHE_pre_shared_key_bytesize ke
+        then
+          return ([CHE_psk_key_exchange_modes psk_kex] @
+            (if edi then [CHE_early_data ()] else []) @
+            [CHE_pre_shared_key ke]
+          )
+        else fail (fatal Internal_error "final_extensions: check_preSharedKeyClientExtension_bytesize failed"))
+      end
+    else
+      Correct [CHE_psk_key_exchange_modes [Psk_ke; Psk_dhe_ke]]
+  | _ -> Correct []
+*)
+
 noextract
 let final_extensions_new
   (cfg: CFG.miTLSConfig) (edi: bool) (l: list Parsers.ResumeInfo13.resumeInfo13) (now: U32.t)
@@ -760,114 +818,6 @@ let parseRenegotiationInfo b =
     | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse renegotiation info length")
   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Renegotiation info bytes are too short")
 *)
-
-val computeOffer: 
-  cfg:config -> 
-  nonce:TLSInfo.random -> 
-  ks:option Extensions.keyShareClientHello -> 
-  resume:resumeInfo -> 
-  now:UInt32.t -> result offer
-let computeOffer cfg nonce ks resume now =
-  let ticket12, sid =
-    match fst resume, cfg.enable_tickets, cfg.min_version with
-    | _, _, TLS_1p3 -> None, empty_bytes // Don't bother sending session_ticket
-    // Similar to what OpenSSL does, when we offer a 1.2 ticket
-    // we send the hash of the ticket as SID to disambiguate the state machine
-    | Some (tid, _), true, _ ->
-      // FIXME Cannot compute hash in Tot
-      //let sid = Hashing.compute Hashing.Spec.SHA2_256 t
-      let sid = if length tid <= 32 then tid else fst (split tid 32ul) in
-      Some (assume False;tid), sid
-    | None, true, _ -> Some (assume False; empty_bytes), empty_bytes
-    | _ -> None, empty_bytes in
-  let pskinfo = 
-    assume false; //18-12-16 FIXME 
-    ticket13_pskinfo [] (snd resume) in
-  // Don't offer EDI if there is no PSK or first PSK doesn't have ED enabled
-  let compatible_psk =
-    match pskinfo with
-    | (_, i) :: _ -> i.allow_early_data // Must be the first PSK
-    | _ -> false in
-  match prepareClientExtensions 
-      cfg 
-      (compatible_psk && Some? cfg.max_early_data)
-      ticket12
-      None //: option (cVerifyData * sVerifyData)
-      ks
-      pskinfo
-      now
-  with 
-  | Error z -> Error z 
-  | Correct extensions -> Correct CH.(
-  {
-    version = minPV TLS_1p2 cfg.max_version; // legacy for 1.3
-    random = nonce;
-    session_id = sid;
-    cipher_suites = nameList_of_cipherSuites cfg.TLSConstants.cipher_suites;
-    // This file is reconstructed from ch_cipher_suites in HandshakeMessages.clientHelloBytes;
-    compression_method = [NullCompression];
-    extensions = (assume False; extensions)
-  })
-
-#reset-options
-
-val computeOffer_new:
-  cfg: CFG.miTLSConfig -> 
-  nonce:TLSInfo.random -> 
-  ks: option clientHelloExtension_CHE_key_share ->
-  resume: Parsers.ResumeInfo.resumeInfo ->
-  now:UInt32.t ->
-  Tot (result offer)
-
-let computeOffer_new cfg nonce ks resume now =
-  if Nil? cfg.CFG.cipher_suites
-  then
-    // TODO: remove this case by strengthening the type of cfg.cipher_suites
-    fatal Internal_error "computeOffer: not enough cipher_suites in cfg"
-  else
-    let ticket12, sid =
-      match resume.Parsers.ResumeInfo.resumeInfo12, cfg.CFG.enable_tickets, Parsers.KnownProtocolVersion.tag_of_knownProtocolVersion cfg.CFG.min_version with
-      | _, _, TLS_1p3 -> None, empty_bytes // Don't bother sending session_ticket
-      // Similar to what OpenSSL does, when we offer a 1.2 ticket
-      // we send the hash of the ticket as SID to disambiguate the state machine
-      | Parsers.ResumeInfo_resumeInfo12.ResumeInfo12_b_true ({ Parsers.ResumeInfo12.identity = tid }), Parsers.Boolean.B_true, _ ->
-        // FIXME Cannot compute hash in Tot
-        //let sid = Hashing.compute Hashing.Spec.SHA2_256 t
-        let sid = if length tid <= 32 then tid else fst (split tid 32ul) in
-        Some tid, sid
-      | Parsers.ResumeInfo_resumeInfo12.ResumeInfo12_b_false _, Parsers.Boolean.B_true, _ -> Some empty_bytes, empty_bytes
-      | _ -> None, (empty_bytes <: FStar.Bytes.bytes)
-    in
-    let pskinfo = resume.Parsers.ResumeInfo.resumeInfo13 in
-    // Don't offer EDI if there is no PSK or first PSK doesn't have ED enabled
-    let compatible_psk =
-      match pskinfo with
-      | ({ Parsers.ResumeInfo13.ticket = i }) :: _ -> (Ticket.ticketContents13_pskinfo i).allow_early_data // Must be the first PSK
-      | _ -> false
-    in
-    match prepareClientExtensions_new
-      cfg 
-      (compatible_psk && CFG.Max_early_data_b_true? cfg.CFG.max_early_data)
-      ticket12
-(*      None //: option (cVerifyData * sVerifyData) *)
-      ks
-      pskinfo
-      now
-    with
-    | Error z -> Error z
-    | Correct extensions ->
-      if check_clientHelloExtensions_list_bytesize extensions
-      then
-        Correct ({
-          Parsers.ClientHello.version = minPV TLS_1p2 (Parsers.KnownProtocolVersion.tag_of_knownProtocolVersion cfg.CFG.max_version); // legacy for 1.3
-          Parsers.ClientHello.random = nonce;
-          Parsers.ClientHello.session_id = sid;
-          Parsers.ClientHello.cipher_suites = cfg.CFG.cipher_suites;
-          Parsers.ClientHello.compression_method = [NullCompression];
-          Parsers.ClientHello.extensions = extensions;
-        })
-      else
-        fatal Internal_error "computeOffer: check_clientHelloExtensions_list_bytesize failed"
 
 #reset-options "--using_facts_from '* -LowParse'"
 
@@ -1134,10 +1084,11 @@ let sign #region #role ns tbs =
   // TODO(adl) make the pattern below a static pre-condition
   assume False;
   let S_Mode mode (Some (cert, sa)) = !ns.state in
-  match cert_sign_cb ns.cfg cert sa tbs with
+  match cert_sign_cb ns.cfg.cert_callbacks cert sa tbs with
   | None -> fatal Bad_certificate (perror __SOURCE_FILE__ __LINE__ "Failed to sign with selected certificate.")
   | Some sigv ->
     Correct HSM.({algorithm = sa; signature = sigv})
+
 
 (* CLIENT *)
 
@@ -1159,6 +1110,115 @@ let sign #region #role ns tbs =
 // TR: added according to AR's remark above
 // CF: restored; let's keep at least high-level code under CI
 
+let client_offer cfg nonce ks resume now =
+  let ticket12, sid =
+    match fst resume, cfg.enable_tickets, cfg.min_version with
+    | _, _, TLS_1p3 -> 
+      // Don't bother sending 1.2 session_ticket when offering 1.3 
+      None, empty_bytes 
+
+    | Some (tid, _), true, _ ->
+      // Similar to what OpenSSL does, when we offer a 1.2 ticket
+      // we send the hash of the ticket as SID to disambiguate the state machine
+      // FIXME Cannot compute hash in Tot
+      //let sid = Hashing.compute Hashing.Spec.SHA2_256 t
+      let sid = if length tid <= 32 then tid else fst (split tid 32ul) in
+      Some (assume False;tid), sid
+
+    | None, true, _ -> Some (assume False; empty_bytes), empty_bytes
+    | _ -> None, empty_bytes in
+  let pskinfo = 
+    assume false; //18-12-16 FIXME 
+    ticket13_pskinfo [] (snd resume) in
+  // Don't offer EDI if there is no PSK or first PSK doesn't have ED enabled
+  let compatible_psk =
+    match pskinfo with
+    | (_, i) :: _ -> i.allow_early_data // Must be the first PSK
+    | _ -> false in
+  match prepareClientExtensions 
+      cfg 
+      (compatible_psk && Some? cfg.max_early_data)
+      ticket12
+      None //: option (cVerifyData * sVerifyData)
+      ks
+      pskinfo
+      now
+  with 
+  | Error z -> Error z 
+  | Correct extensions -> Correct CH.(
+  {
+    version = minPV TLS_1p2 cfg.max_version; // legacy for 1.3
+    random = nonce;
+    session_id = sid;
+    cipher_suites = nameList_of_cipherSuites cfg.TLSConstants.cipher_suites;
+    // This file is reconstructed from ch_cipher_suites in HandshakeMessages.clientHelloBytes;
+    compression_method = [NullCompression];
+    extensions = (assume False; extensions)
+  })
+
+#reset-options
+
+//19-05-04 ?
+val client_offer_new:
+  cfg: CFG.miTLSConfig -> 
+  nonce:TLSInfo.random -> 
+  ks: option clientHelloExtension_CHE_key_share ->
+  resume: Parsers.ResumeInfo.resumeInfo ->
+  now:UInt32.t ->
+  Tot (result offer)
+
+let client_offer_new cfg nonce ks resume now =
+  if Nil? cfg.CFG.cipher_suites
+  then
+    // TODO: remove this case by strengthening the type of cfg.cipher_suites
+    fatal Internal_error "computeOffer: not enough cipher_suites in cfg"
+  else
+    let ticket12, sid =
+      match resume.Parsers.ResumeInfo.resumeInfo12, cfg.CFG.enable_tickets, Parsers.KnownProtocolVersion.tag_of_knownProtocolVersion cfg.CFG.min_version with
+      | _, _, TLS_1p3 -> None, empty_bytes // Don't bother sending session_ticket
+      // Similar to what OpenSSL does, when we offer a 1.2 ticket
+      // we send the hash of the ticket as SID to disambiguate the state machine
+      | Parsers.ResumeInfo_resumeInfo12.ResumeInfo12_b_true ({ Parsers.ResumeInfo12.identity = tid }), Parsers.Boolean.B_true, _ ->
+        // FIXME Cannot compute hash in Tot
+        //let sid = Hashing.compute Hashing.Spec.SHA2_256 t
+        let sid = if length tid <= 32 then tid else fst (split tid 32ul) in
+        Some tid, sid
+      | Parsers.ResumeInfo_resumeInfo12.ResumeInfo12_b_false _, Parsers.Boolean.B_true, _ -> Some empty_bytes, empty_bytes
+      | _ -> None, (empty_bytes <: FStar.Bytes.bytes)
+    in
+    let pskinfo = resume.Parsers.ResumeInfo.resumeInfo13 in
+    // Don't offer EDI if there is no PSK or first PSK doesn't have ED enabled
+    let compatible_psk =
+      match pskinfo with
+      | ({ Parsers.ResumeInfo13.ticket = i }) :: _ -> (Ticket.ticketContents13_pskinfo i).allow_early_data // Must be the first PSK
+      | _ -> false
+    in
+    match prepareClientExtensions_new
+      cfg 
+      (compatible_psk && CFG.Max_early_data_b_true? cfg.CFG.max_early_data)
+      ticket12
+(*      None //: option (cVerifyData * sVerifyData) *)
+      ks
+      pskinfo
+      now
+    with
+    | Error z -> Error z
+    | Correct extensions ->
+      if check_clientHelloExtensions_list_bytesize extensions
+      then
+        Correct ({
+          Parsers.ClientHello.version = minPV TLS_1p2 (Parsers.KnownProtocolVersion.tag_of_knownProtocolVersion cfg.CFG.max_version); // legacy for 1.3
+          Parsers.ClientHello.random = nonce;
+          Parsers.ClientHello.session_id = sid;
+          Parsers.ClientHello.cipher_suites = cfg.CFG.cipher_suites;
+          Parsers.ClientHello.compression_method = [NullCompression];
+          Parsers.ClientHello.extensions = extensions;
+        })
+      else
+        fatal Internal_error "computeOffer: check_clientHelloExtensions_list_bytesize failed"
+
+
+
 let client_ClientHello #region ns oks =
   match !ns.state with
   | C_Init _ ->
@@ -1168,8 +1228,9 @@ let client_ClientHello #region ns oks =
         | _ -> false)
         then "Offering a PSK compatible with 0-RTT"
         else "No PSK or 0-RTT disabled");
+
       let now = UInt32.uint_to_t (FStar.Date.secondsFromDawn()) in
-      match computeOffer ns.cfg ns.nonce oks ns.resume now with 
+      match client_offer ns.cfg ns.nonce oks ns.resume now with 
       | Error z -> Error z 
       | Correct offer -> (
       trace ("offering client extensions "^string_of_ches offer.CH.extensions);
@@ -1370,16 +1431,13 @@ let rec negotiateGroupKeyShare cfg pv exts =
 *)
 
 
-/// imported from Extensions for server.
-///
-
-
-
 
 (* TODO (adl):
    The negotiation of renegotiation indication is incorrect,
    Needs to be consistent with clientToNegotiatedExtension
 *)
+
+
 
 private let illegal msg = fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ msg)
 private let unsupported msg = fatal Unsupported_extension (perror __SOURCE_FILE__ __LINE__ msg)
@@ -1540,7 +1598,7 @@ let accept_pski offer sh: result (option (pski offer)) =
     fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "PSK not offered")
   | _, _ -> Correct None
 
-let accept_ServerHello cfg offer sh: result (m:mode {m.n_offer == offer}) = 
+let accept_ServerHello cfg offer sh = 
   match Negotiation.Version.accept cfg sh with 
   | Error z -> Error z
   | Correct pv -> (
@@ -1613,7 +1671,7 @@ let accept_ServerHello cfg offer sh: result (m:mode {m.n_offer == offer}) =
           client_share 
           ))
     | _ -> fatal Decode_error "ServerHello ciphersuite is not a real ciphersuite" )))
-
+ 
 let client_ServerHello #region ns sh =
   match !ns.state with
 //| C_HRR offer _ // -> FIXME validation; also outside the Negotiation state machine!
@@ -1623,15 +1681,12 @@ let client_ServerHello #region ns sh =
     | Correct mode -> 
       ns.state := C_Mode mode;
       Correct mode )
-  | _ -> 
-    fatal Internal_error "to be statically excluded" 
 
 //19-01-04 should we check that we have a matching client share? 
 
 (* ---------------- signature stuff, to be removed from Handshake -------------------- *)
 
 // why an option? why csr instead of the two nonces? we'll need to prove some injectivity property, which seems to rely on nonces not being all zeros
-
 
 #push-options "--z3rlimit 30"
 let to_be_signed pv role csr tbs =
@@ -1743,7 +1798,9 @@ let client_ServerKeyExchange #region ns crt kex ske ocr =
     | Correct sa ->
       let csr = ns.nonce @| mode.n_server_random in
       let tbs = to_be_signed mode.n_protocol_version Server (Some csr) tbs in
-      let valid = cert_verify_cb ns.cfg (coerce_crt crt) sa tbs sig.signature_payload in
+      //let h = get() in assert(inv ns h);
+      let valid = cert_verify_cb ns.cfg.cert_callbacks (coerce_crt crt) sa tbs sig.signature_payload in
+      //let h = get() in assume(inv ns h);
       trace ("ServerKeyExchange signature: " ^ (if valid then "Valid" else "Invalid"));
       if not valid then
         fatal Handshake_failure (perror __SOURCE_FILE__ __LINE__ "Failed to check SKE signature")
@@ -1764,13 +1821,14 @@ let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify d
     trace ("Encrypted Extensions "^string_of_ees ee);
     let nego_cb = ns.cfg.nego_callback in
     let uexts = List.Tot.filter EE_Unknown_extensionType? ee in
-
+    // this could be statically excluded from the definition of filtering 
     if not (check_encryptedExtensions_list_bytesize uexts) then 
       fatal Internal_error "encrypted extensions are too large"
     else
     let uexts_bytes = encryptedExtensions_serializer32 uexts in
     trace ("Negotiation callback to process application extensions.");
 
+    // to be simplified (see TLS.Callbacks)
     match nego_cb.negotiate nego_cb.nego_context pv uexts_bytes None with
     | Nego_abort -> fatal Handshake_failure (perror __SOURCE_FILE__ __LINE__ "application requested to abort the handshake")
     | Nego_retry _ -> fatal Internal_error (perror __SOURCE_FILE__ __LINE__ "client application requested a server retry")
@@ -1789,7 +1847,7 @@ let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify d
           if List.Tot.mem sa sal then
             let tbs = to_be_signed pv Server None digest in
             
-            cert_verify_cb ns.cfg (coerce_crt (Cert.chain_down c)) sa tbs cv.HSM.signature, chain
+            cert_verify_cb ns.cfg.cert_callbacks (coerce_crt (Cert.chain_down c)) sa tbs cv.HSM.signature, chain
           else false, None in // The server signed with an algorithm we did not offer
           // let h0 = HST.get() in 
           // assert(h0 `HS.contains` ns.state);
@@ -2006,7 +2064,7 @@ let computeServerMode cfg co serverRandom =
         if sigalgs = [] then
 	  (trace "No shared signature algorithm, restricting to PSK"; None)
         // FIXME(adl) workaround for a bug in TLSConstants that causes signature schemes list to be parsed in reverse order
-        else cert_select_cb cfg TLS_1p3 (get_sni co) (nego_alpn co cfg) (List.Tot.rev sigalgs)
+        else cert_select_cb cfg.cert_callbacks TLS_1p3 (get_sni co) (nego_alpn co cfg) (List.Tot.rev sigalgs)
       in
     match compute_cs13 cfg co pske shares (Some? scert) with
     | Error z -> Error z
@@ -2042,7 +2100,7 @@ let computeServerMode cfg co serverRandom =
     | Correct ((JUST_EDH gx cs) :: _, _) ->
       (trace "Negotiated Pure EDH key exchange";
       let Some (cert, sa) = scert in
-      let schain = cert_format_cb cfg cert in
+      let schain = cert_format_cb cfg.cert_callbacks cert in
       trace ("Negotiated " ^ string_of_signatureScheme sa);
       Correct
         (ServerMode
@@ -2096,12 +2154,12 @@ let computeServerMode cfg co serverRandom =
         | None -> [Unknown_signatureScheme 0xFFFFus; Ecdsa_sha1]
         | Some sigalgs -> List.Helpers.filter_aux cfg.signature_algorithms List.Helpers.mem_rev sigalgs
         in
-      match cert_select_cb cfg pv (get_sni co) (nego_alpn co cfg) salgs with
+      match cert_select_cb cfg.cert_callbacks pv (get_sni co) (nego_alpn co cfg) salgs with
       | None -> 
         //18-10-29 review Certificate_unknown; was No_certificate
         fatal Certificate_unknown (perror __SOURCE_FILE__ __LINE__ "No compatible certificate can be selected")
       | Some (cert, sa) ->
-        let schain = cert_format_cb cfg cert in
+        let schain = cert_format_cb cfg.cert_callbacks cert in
         let sig, _ = sigHashAlg_of_signatureScheme sa in
         match negotiateCipherSuite cfg pv co.CH.cipher_suites sig with
         | Error z -> Error z

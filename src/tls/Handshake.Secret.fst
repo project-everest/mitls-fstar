@@ -103,7 +103,7 @@ let iv_of_ts  (i: ts_id)        = Derive i "iv"          Expand // AEAD static I
 let key_of_ts (i: ts_id)        = Derive i "key"         Expand // AEAD keying
 let ts_of_ts  (i: ts_id): ts_id = Derive i "traffic upd" Expand // post-handshake rekeying 
 
-// we have three derived MACs for Binders for Finished messages. 
+// we have three derived MACs for Binders and for Finished messages. 
 let fnk_of_s i = Derive i "finished"    Expand // binder/finished MAC keying (not always a ts)
 let bfk_of_ems i = fnk_of_s (bns_of_ems i)
 let cfk_of_hms i transcript = fnk_of_s (cts_of_hms i transcript)
@@ -319,18 +319,24 @@ noeq type ks12_state =
     id:TLSInfo.msId -> 
     ms:ms -> ks12_state
 
-/// state after sending ClientHello (for all protocol  versions)
+/// State after sending ClientHello (for all protocol versions) with
+/// an early master secret for every offered PSK, and a DH secret for
+/// every offered group.
 /// 
 abstract type c13_wait_ServerHello 
   (psks  : list (i:id{~(no_psk i)})) 
   (groups: list CommonDH.group) = 
 | C13_wait_ServerHello:
   // symmetric extracts for the PSKs the client is proposing
-  // (the indexes are a function of those of the PKSs)
+  // TODO the indexes are a function of those of the PKSs: ems_of_psk 
+  // TODO what do we need to know about the KDF state? 
   esl: list (i:id{~(no_psk i)} & ems i) ->
   // private exponents for the honestly-generated shares the client is
   // proposing (overwritten on hello_retry)
+  // TODO the groups are indexing the shares
+  // TODO what do we need to know about the DH state? 
   gxs: list CommonDH.dhi -> c13_wait_ServerHello psks groups
+
 
 // now just ams i:
 // abstract type c13_wait_ServerFinished (i: amsId) = 

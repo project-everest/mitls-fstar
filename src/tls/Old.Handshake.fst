@@ -9,14 +9,15 @@ open FStar.Bytes
 
 open TLSError
 open TLSInfo
+open TLS.Callbacks
 open TLSConstants
 open Range
 open Old.Epochs
 
 module U32 = FStar.UInt32
 module MS = FStar.Monotonic.Seq
-module Nego = Negotiation
 module HS = FStar.HyperStack
+module Nego = Negotiation
 module HST = FStar.HyperStack.ST
 module Epochs = Old.Epochs
 module KeySchedule = Old.KeySchedule
@@ -97,7 +98,7 @@ noeq type hs' = | HS:
   state: ref machineState {HS.frameOf state = region} -> // state machine; should be opaque and depend on r.
   hs'
 
-let hs = hs' //17-04-08 interface limitation
+let hs = hs' //17-04-08 around .fsti limitation
 
 let nonce (s:hs) = Nego.nonce s.nego
 let region_of (s:hs) = s.region
@@ -295,9 +296,9 @@ let verify_binder hs (bkey:(i:binderId & bk:KeySchedule.binderKey i)) (tag:btag 
 // may be called both by client_ClientHello and client_HelloRetryRequest
 let client_Binders hs offer =
   match Nego.resume hs.nego with
-  | _, [] ->
+  | (_, []) ->
     HandshakeLog.send hs.log (HSL.Msg (HSM.M_client_hello offer))
-  | _, pskl ->
+  | (_, pskl) ->
     let binderKeys = KeySchedule.ks_client_13_get_binder_keys hs.ks pskl in
     let blen = Extensions.bindersLen offer.CH.extensions in    
     HSL.send_truncated hs.log (HSL.Msg (HSM.M_client_hello offer)) blen;
@@ -355,8 +356,7 @@ let client_ClientHello hs i =
   let groups =
     match (config_of hs).max_version with
     | TLS_1p3 ->
-      trace "offering ClientHello 1.3";
-      Some ((config_of hs).offer_shares)
+      trace "offering ClientHello 1.3"; Some (config_of hs).offer_shares
     | _ ->
       trace "offering ClientHello 1.2"; None
     in
@@ -369,7 +369,7 @@ let client_ClientHello hs i =
   match Nego.client_ClientHello hs.nego shares with
   | Error z -> Error z
   | Correct offer ->
-    // Comptue and send PSK binders & 0-RTT signals
+    // Compute and send PSK binders & 0-RTT signals
     client_Binders hs offer;
     // we may still need to keep parts of ch
     hs.state := C_Wait_ServerHello;
@@ -414,11 +414,11 @@ let client_ServerHello (s:hs) (sh:HSM.serverHello) (* digest:Hashing.anyTag *) :
     | TLS_1p3 ->
       begin
         trace "Running TLS 1.3";
-        let digest = HandshakeLog.hash_tag #ha s.log in
+        let digest_ServerHello = HandshakeLog.hash_tag #ha s.log in
         let hs_keys = KeySchedule.ks_client_13_sh s.ks
           mode.Nego.n_server_random
           mode.Nego.n_cipher_suite
-          digest
+          digest_ServerHello
           mode.Nego.n_server_share
           mode.Nego.n_pski in
         register s hs_keys; // register new epoch
@@ -523,14 +523,18 @@ let client_ServerHelloDone hs c ske_bytes ocr =
       let msg = HSM.M12_client_key_exchange (
         clientKeyExchange_serializer32 kex cke) in
       let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
-      let digestClientKeyExchange = HandshakeLog.send_tag #ha hs.log (HSL.Msg12 msg)  in
+      let digestClientKeyExchange = HandshakeLog.send_tag #ha hs.log (HSL.Msg12 msg) in
       let cfin_key, app_keys = KeySchedule.ks_client_12_set_session_hash hs.ks digestClientKeyExchange in
       register hs app_keys;
       // we send CCS then Finished;  we will use the new keys only after CCS
       let cvd = TLSPRF.finished12 ha cfin_key Client digestClientKeyExchange in
       let fin = HSM.M12_finished cvd in
       let digestClientFinished = HandshakeLog.send_CCS_tag #ha hs.log (HSL.Msg12 fin) false in
-      hs.state := (if nst then C_Wait_NST false else C_Wait_CCS (false, digestClientFinished));
+      hs.state := (
+        if nst then 
+          C_Wait_NST false 
+        else 
+          C_Wait_CCS (false, digestClientFinished));
       InAck false false)
 
 #set-options "--admit_smt_queries true"
@@ -611,23 +615,28 @@ let rec iutf8 (m:bytes) : St (s:string{String.length s < pow2 30 /\ utf8_encode 
     | Some s -> s
 
 // Processing of the server CCS and optional NewSessionTicket
-// This is used both in full handshake and resumption
+// This is used both in full handshake and in resumption
 let client_NewSessionTicket_12 (hs:hs) (resume:bool) (digest:Hashing.anyTag) (st: HSM.newSessionTicket12)
   : St incoming =
   let open Parsers.NewSessionTicket12 in
-  trace ("Processing ticket: "^(print_bytes st.ticket));
+  trace ("Processing ticket: "^print_bytes st.ticket);
+
   hs.state := C_Wait_CCS (resume, digest);
-  let mode = Nego.getMode hs.nego in
   let cfg = Nego.local_config hs.nego in
-  let sni = iutf8 (Nego.get_sni mode.Nego.n_offer) in
-  let (msId, ms) = KeySchedule.ks_12_ms hs.ks in
-  let pv = mode.Nego.n_protocol_version in
-  let cs = mode.Nego.n_cipher_suite in
   let tcb = cfg.ticket_callback in
-  tcb.new_ticket tcb.ticket_context sni st.ticket (TicketInfo_12 (pv, cs, Nego.emsFlag mode)) ms;
+  let mode = Nego.getMode hs.nego in
+  let sni = iutf8 (Nego.get_sni mode.Nego.n_offer) in
+
+  let (_msId, ms) = KeySchedule.ks_12_ms hs.ks in
+  let info = TicketInfo_12 (
+    mode.Nego.n_protocol_version,
+    mode.Nego.n_cipher_suite,
+    Nego.emsFlag mode) in 
+
+  tcb.new_ticket tcb.ticket_context sni st.ticket info ms;
   InAck false false
 
-// Process an incoming ticket (1.3)
+// Process an incoming ticket (pre: TLS 1.3 after completion)
 let client_NewSessionTicket_13 (hs:hs) (st13:HSM.newSessionTicket13)
   : St incoming =
   let open Parsers.NewSessionTicket13 in
@@ -638,10 +647,10 @@ let client_NewSessionTicket_13 (hs:hs) (st13:HSM.newSessionTicket13)
   trace ("Received ticket: "^(hex_of_bytes tid)^" nonce: "^(hex_of_bytes nonce));
   let mode = Nego.getMode hs.nego in
   let CipherSuite13 ae h = mode.Nego.n_cipher_suite in
-  let t_ext = st13.extensions in
-  let ed = List.Tot.find NSTE_early_data? t_ext in
+  let ed = List.Tot.find NSTE_early_data? st13.extensions in
+
   let now = UInt32.uint_to_t (FStar.Date.secondsFromDawn()) in
-  let pskInfo = TLSConstants.({
+  let info = TicketInfo_13 TLS.Callbacks.({
     ticket_nonce = Some nonce;
     time_created = now;
     ticket_age_add = age_add;
@@ -651,6 +660,7 @@ let client_NewSessionTicket_13 (hs:hs) (st13:HSM.newSessionTicket13)
     early_ae = ae; early_hash = h;
     identities = (empty_bytes, empty_bytes); // TODO certs
   }) in
+
   let psk = KeySchedule.ks_client_13_rms_psk hs.ks nonce in
   let sni = iutf8 (Nego.get_sni mode.Nego.n_offer) in
   let cfg = Nego.local_config hs.nego in
@@ -663,9 +673,10 @@ let client_NewSessionTicket_13 (hs:hs) (st13:HSM.newSessionTicket13)
     else true in
   if valid_ed then
     (let tcb = cfg.ticket_callback in
-    tcb.new_ticket tcb.ticket_context sni tid (TicketInfo_13 pskInfo) psk;
+    tcb.new_ticket tcb.ticket_context sni tid info psk;
     InAck false false)
-  else InError (fatalAlert Illegal_parameter, "QUIC tickets must allow 0xFFFFFFFF bytes of early data")
+  else 
+    InError (fatalAlert Illegal_parameter, "QUIC tickets must allow 0xFFFFFFFF bytes of early data")
 
 let client_ServerFinished hs f digestClientFinished =
   let sfin_key = KeySchedule.ks_12_finished_key hs.ks in
@@ -741,7 +752,8 @@ let serverHello (m:Nego.mode) =
 
 type binders = Parsers.OfferedPsks_binders.offeredPsks_binders
 
-val  consistent_truncation: option Extensions.offeredPsks -> bool
+//19-05-04 Now ensured by parsing? 
+val consistent_truncation: option Extensions.offeredPsks -> bool
 let consistent_truncation x =
   match x with
   | None -> true
@@ -872,7 +884,8 @@ let server_ClientHello hs offer =
           begin
             let zeroing = Nego.zeroRTT mode in
             if zeroing  then (
-              let early_exporter_secret, zero_keys = KeySchedule.ks_server_13_0rtt_key hs.ks digestClientHelloBinders in
+              let early_exporter_secret, zero_keys = 
+                KeySchedule.ks_server_13_0rtt_key hs.ks digestClientHelloBinders in
               export hs early_exporter_secret;
               register hs zero_keys;
 	      Epochs.incr_reader hs.epochs // Be ready to read 0-RTT data
@@ -1043,8 +1056,10 @@ let server_Ticket hs (app_data:bytes) =
   let cs = mode.Nego.n_cipher_suite in
   let age_add = Random.sample32 4ul in
   let age_add = Parse.uint32_of_bytes age_add in
+  
   let now = UInt32.uint_to_t (FStar.Date.secondsFromDawn()) in
   let ticket = Ticket.Ticket13 cs li rmsid rms empty_bytes now age_add app_data in
+
   let tb = Ticket.create_ticket false ticket in
   trace ("Sending ticket: "^(print_bytes tb));
   trace ("Application data in ticket: "^(print_bytes app_data));
@@ -1054,6 +1069,7 @@ let server_Ticket hs (app_data:bytes) =
     | Some max_ed -> [NSTE_early_data max_ed]
     | None -> [] in
   let tnonce, _ = split_ tb 12 in
+  
   HandshakeLog.send hs.log (HSL.Msg13 (HSM.M13_new_session_ticket
   Parsers.NewSessionTicket13.({
     ticket_lifetime = 3600ul;

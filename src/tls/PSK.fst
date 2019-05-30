@@ -5,6 +5,7 @@ open FStar.Error
 
 open Mem
 open TLSError
+open TLS.Callbacks // now defining psk_identifier, pskInfo, tickets... 
 open TLSConstants
 
 module DM = FStar.DependentMap
@@ -12,8 +13,6 @@ module MDM = FStar.Monotonic.DependentMap
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
 
-// Has been moved to TLSConstants as it appears in config for ticket callbacks
-type pskInfo = TLSConstants.pskInfo
 
 // SESSION TICKET DATABASE (TLS 1.3)
 // Note that the associated PSK are stored in the PSK table defined below in this file
@@ -50,9 +49,10 @@ let s12_extend (tid:bytes) (s:session12 tid) = MDM.extend sessions12 tid s
 //  - for tickets, the encrypted serialized state is the PSK identifier
 //  - we store in the table the PSK context and compromise status
 
-// The pskInfo type has been moved to TLSConstants as it appears in config
+// The pskInfo type has been moved to Callbacks as it appears in config
 // for the new ticket callback API
 
+type pskInfo = TLS.Callbacks.pskInfo
 let pskInfo_hash pi = pi.early_hash
 let pskInfo_ae pi = pi.early_ae
 
@@ -255,3 +255,34 @@ let encode_age (t:ticket_age)  mask = t +%^ mask
 let decode_age (t:obfuscated_ticket_age) mask = t -%^ mask
 
 private let inverse_mask t mask: Lemma (decode_age (encode_age t mask) mask = t) = ()
+
+
+
+/// By default we use an in-memory ticket table
+/// and the in-memory internal PSK database
+
+val defaultTicketCBFun: context -> ticket_cb_fun
+let defaultTicketCBFun _ sni ticket info psk =
+  let h0 = get() in
+  begin
+  match info with
+  | TicketInfo_12 (pv, cs, ems) ->
+    // 2018.03.10 SZ: The ticket must be fresh
+    assume False;
+    s12_extend ticket (pv, cs, ems, psk) // modifies PSK.tregion
+  | TicketInfo_13 pskInfo ->
+    // 2018.03.10 SZ: Missing refinement in ticket_cb_fun
+    assume (exists i.{:pattern index psk i} index psk i <> 0z);
+    // 2018.03.10 SZ: The ticket must be fresh
+    assume False;
+    coerce_psk ticket pskInfo psk;      // modifies psk_region
+    extend sni ticket                   // modifies PSK.tregion
+  end;
+  let h1 = ST.get() in
+  // 2018.03.10 SZ: [ticket_cb_fun] ensures [modifies_none]
+  assume (modifies_none h0 h1)
+
+let defaultTicketCB = {
+  ticket_context = default_context();
+  new_ticket = defaultTicketCBFun;
+}
