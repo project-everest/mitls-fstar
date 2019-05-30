@@ -55,10 +55,17 @@ type const_slice =
       } ->
       const_slice
 
+[@(deprecated "use const_slice instead")]
+let slice = const_slice
+
 (* Some abbreviations *)
 let mut_p = LowStar.Buffer.trivial_preorder LP.byte
 let immut_p = LowStar.ImmutableBuffer.immutable_preorder LP.byte
 let preorder (c:const_slice) = C.qbuf_pre (C.as_qbuf c.base)
+
+let live h (b:const_slice) = LowStar.ConstBuffer.live h b.base
+let loc (b:const_slice) = LowStar.ConstBuffer.loc_buffer b.base
+let as_seq h (b:const_slice) = LowStar.ConstBuffer.as_seq h b.base
 
 (* conversion between LP.slices and const_slices *)
 let of_slice (x:LP.slice mut_p mut_p { LP.(x.len <= LP.validator_max_length) })

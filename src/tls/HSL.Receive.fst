@@ -93,7 +93,8 @@ let parse_common
   (#p1:LP.parser k1 a1)
   (validator:LP.validator #k1 #a1 p1)  //a1, p1, etc. are HSM12, HSM13, or HSM
   (tag_fn:a1 -> HSMType.handshakeType{  //this refinment is basically capturing lemma_valid_handshake13_valid_handshakeType kind of lemmas
-    forall (b:R.slice) (pos:UInt32.t) (h:HS.mem).
+    forall (b:R.const_slice) (pos:UInt32.t) (h:HS.mem).
+      let b = R.to_slice b in
       LP.valid p1 h b pos ==>
       (LP.valid HSMType.handshakeType_parser h b pos /\
        LP.contents HSMType.handshakeType_parser h b pos ==
@@ -105,11 +106,11 @@ let parse_common
     forall (m:a1).
       (tag_fn m == tag) <==> cl.LP.clens_cond m})
   (acc:LP.accessor gacc)
-  : b:R.slice -> from:uint_32 ->
+  : b:R.const_slice -> from:uint_32 ->
     Stack (TLSError.result (option (R.repr_p a1 b p1 & uint_32)))
     (requires fun h ->
-      B.live h b.LP.base /\
-      from <= b.LP.len)
+      R.live h b /\
+      from <= b.R.len)
     (ensures fun h0 r h1 ->
       B.modifies B.loc_none h0 h1 /\
       (match r with
@@ -122,13 +123,13 @@ let parse_common
          cl.LP.clens_cond (R.value repr)))
          
   = fun b from ->
-
-    let pos = validator b from in  //validator gives us the valid postcondition
+    let lp_b = R.to_slice b in
+    let pos = validator lp_b from in  //validator gives us the valid postcondition
 
     if pos <= LP.validator_max_length then begin
-      let parsed_tag = HSMType.handshakeType_reader b from in
+      let parsed_tag = HSMType.handshakeType_reader lp_b from in
       if parsed_tag = tag then  //and this dynamic check gives us the lens postcondition
-        let r = R.mk b from pos p1 in
+        let r = R.mk_from_const_slice b from pos p1 in
         E.Correct (Some (r, pos))
       else E.Error unexpected_flight_error
     end
@@ -158,12 +159,12 @@ private let err_or_insufficient_data
   (#a:Type) (#t:Type)
   (parse_result:TLSError.result (option a))
   (in_progress:in_progress_flt_t)
-  (st:hsl_state) (b:R.slice) (from to:uint_32)
+  (st:hsl_state) (b:R.const_slice) (from to:uint_32)
   : Stack (TLSError.result (option t))
     (requires fun h ->
-      B.live h st.inc_st /\ B.live h b.LP.base /\
-      B.loc_disjoint (footprint st) (B.loc_buffer b.LP.base) /\
-      from <= to /\ to <= b.LP.len /\
+      B.live h st.inc_st /\ R.live h b /\
+      B.loc_disjoint (footprint st) (R.loc b) /\
+      from <= to /\ to <= b.R.len /\
       (E.Error? parse_result \/ parse_result == E.Correct None))
     (ensures  fun h0 r h1 ->
       B.modifies (footprint st) h0 h1 /\
@@ -172,14 +173,14 @@ private let err_or_insufficient_data
        | E.Correct None ->
          r == E.Correct None /\
          parsed_bytes st h1 ==
-           Seq.slice (B.as_seq h0 b.LP.base) (v from) (v to) /\
+           Seq.slice (R.as_seq h0 b) (v from) (v to) /\
          in_progress_flt st h1 == in_progress))
   = match parse_result with
     | E.Error e -> E.Error e
     | E.Correct None ->
       let inc_st =
         let h = ST.get () in
-        let parsed_bytes = LP.bytes_of_slice_from_to h b from to in
+        let parsed_bytes = LP.bytes_of_slice_from_to h (R.to_slice b) from to in
         G.hide (parsed_bytes, in_progress)
       in
       B.upd st.inc_st 0ul inc_st;
