@@ -24,24 +24,23 @@ module R_SH = MITLS.Repr.ServerHello
 module SH = Parsers.ServerHello
 
 let is_hrr _ = false
-
 let nego_version _ _ = admit ()
-let transcript_bytes _ = admit ()
-let state _ = admit ()
-let invariant #_ _ _ _ = admit ()
-let footprint #_ _ = admit ()
+
+type state a = unit
+let invariant #_ _ _ _ = True
+let footprint #_ _ = B.loc_none
 let elim_invariant #_ _ _ _ = admit ()
 let region_of #_ _ = admit ()
 let frame_invariant #_ _ _ _ _ _ = admit ()
+
+
 let create _ _ = admit ()
-let extend_hsm #_ _ #_ _ _ = admit ()
-let extend_hsm12 #_ _ #_ _ _ = admit ()
-let extend_hsm13 #_ _ #_ _ _ = admit ()
-let extend_ch_with_psk #_ _ #_ _ _ = admit ()
-let extend_hrr #_ _ #_ _ #_ _ _ = admit ()
-let extend_hash #_ _ _ _ = admit ()
+
+let extend #_ _ _ _ = admit()
+
+let transcript_hash _ _ = admit()
+
 let extract_hash #_ _ _ _ = admit ()
-let injectivity _ _ _ = admit ()
 
 // assume
 // val serialize (#pk:_) (#t:_) (#p:LP.parser pk t) (s:LP.serializer p)
