@@ -45,7 +45,8 @@ include Makefile.common
 VFLAGS     += --admit_smt_queries true
 
 # AR: this is temporary, should move to Makefile.common or something when things are more stable
-ROOTS += HSL.Common.fst HSL.Receive.fsti HSL.Receive.fst
+#     Disabling until I fix the extraction for const buffers, a wip
+#ROOTS += HSL.Common.fst HSL.Receive.fsti HSL.Receive.fst
 
 clean: clean-internal-test clean-library clean-msvc-library clean-external-test
 	rm -f $(DEP_FILE)
