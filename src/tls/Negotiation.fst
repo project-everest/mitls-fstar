@@ -533,21 +533,6 @@ let allow_dhe_resumption_new (r: Parsers.ResumeInfo13.resumeInfo13) : Tot bool =
 #reset-options
 
 (*
-inline_for_extraction
-let bind (#a:Type) (#b:Type)
-         (f:result a)
-         (g: a -> result b)
-    : result b
-    = match f with
-      | Correct x -> g x
-      | Error z -> Error z
-
-inline_for_extraction
-let return (#a:Type) (x:a) : result a = Correct x
-
-inline_for_extraction
-let fail (#a:Type) z : result a = Error z
-
 noextract
 let final_extensions_alt
   (cfg: CFG.miTLSConfig) (edi: bool) (l: list Parsers.ResumeInfo13.resumeInfo13) (now: U32.t)
@@ -1598,34 +1583,47 @@ let accept_pski offer sh: result (option (pski offer)) =
     fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "PSK not offered")
   | _, _ -> Correct None
 
-let accept_ServerHello cfg offer sh = 
-  match Negotiation.Version.accept cfg sh with 
-  | Error z -> Error z
-  | Correct pv -> (
-  
+
+// experimenting with lightweight error propagation
+
+inline_for_extraction
+let return (#a:Type) (x:a) : result a = Correct x
+
+inline_for_extraction
+let fail (#a:Type) z : result a = Error z
+
+// let cs_pv pv = 
+//  cs:_ { (TLS_1p2? pv && CipherSuite? cs) || (TLS_1p3? pv && CipherSuite13? cs) }
+    
+let ciphersuite_accept cfg pv sh = 
   match cipherSuite_of_name sh.SH.cipher_suite with 
   | None -> fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "Server cipherSuite") 
   | Some cs -> 
-  
-  if not (acceptableCipherSuite cfg pv cs) then
-    fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
-  else ( 
-  
-  let ces = offer.CH.extensions in 
+    if acceptableCipherSuite cfg pv cs then 
+      if (TLS_1p2? pv && CipherSuite? cs) || (TLS_1p3? pv && CipherSuite13? cs) 
+      then 
+        correct cs 
+      else 
+        fatal Internal_error "Statically Excluded"
+    else
+      fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
+
+let accept_ServerHello cfg offer sh = 
+  let r = m:mode{Mode?.n_offer m == offer} in 
+  pv <-- Negotiation.Version.accept cfg sh; 
+  cs <-- ciphersuite_accept cfg pv sh;
   let sr   = sh.SH.random in
   let ssid = sh.SH.session_id in
   let ses  = sh.SH.extensions in
   let resume = 
     ssid = offer.CH.session_id && 
     length offer.CH.session_id > 0 in
-  match checkServerExtensions resume ces ses with 
-  | Error z -> Error z 
-  | Correct _ -> 
-  
+  _ <-- checkServerExtensions resume offer.CH.extensions ses;
+  m <--  (
   match cs with
-  | NullCipherSuite | SCSV -> fatal Internal_error "Statically Excluded"
+  | NullCipherSuite | SCSV -> fatal #r Internal_error "Statically Excluded"
   | CipherSuite kex sa ae -> (
-      Correct (Mode
+      correct (Mode
         offer
         None
         pv
@@ -1639,14 +1637,13 @@ let accept_ServerHello cfg offer sh =
         NoRequest // n_client_cert_request
         None // n_server_cert
         None // n_client_share
+        <: r 
         ))
   | CipherSuite13 ae ha -> (
-      match accept_pski offer sh with
-      | Error z -> Error z
-      | Correct pski -> (
-        if pv <> TLS_1p3 then 
-          fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "Impossible: TLS 1.3 PSK")
-        else 
+      pski <-- accept_pski offer sh;  
+      if pv <> TLS_1p3 then 
+        fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "Impossible: TLS 1.3 PSK")
+      else 
         let server_share, client_share = 
           match find_serverKeyShare sh with 
           | Some (| g, gy |) ->
@@ -1655,7 +1652,7 @@ let accept_ServerHello cfg offer sh =
             (Some server_share, client_share) 
           | None -> 
             (None, None) in 
-        Correct (Mode
+        correct (Mode
           offer
           None // n_hrr
           pv
@@ -1669,8 +1666,10 @@ let accept_ServerHello cfg offer sh =
           NoRequest // n_client_cert_request
           None // n_server_cert
           client_share 
+          <: r
           ))
-    | _ -> fatal Decode_error "ServerHello ciphersuite is not a real ciphersuite" )))
+  | _ -> fatal Decode_error "ServerHello ciphersuite is not a real ciphersuite" );
+  return #(m:mode{Mode?.n_offer m == offer}) m
  
 let client_ServerHello #region ns sh =
   match !ns.state with

@@ -78,8 +78,8 @@ let offered ((cfg,resume):client_config) (prior:option Transcript.retry) (offer:
   match prior with
   | None -> offered0 (cfg,resume) offer 
   | Some (digest_ch0, hrr) -> 
-    let ks = nego_find_key_shares offer in 
-    let now = deobfuscate offer resume in 
+    let ks1 = nego_find_key_shares offer in 
+    let now1 = deobfuscate offer resume in 
     exists (offer0: Negotiation.offer).
     offered0 (cfg,resume) offer0 
     // TBC Negotiation: /\ 
@@ -97,8 +97,13 @@ let accepted
   // missing the late processing of encrypted extensions and its callback. 
 
 
+
 /// State machine for the connection handshake (private to Handshake).
 /// Each role now has its own type.
+///
+/// Low*: we'll turn all high-level messages constructor arguments
+/// into ghost, possibly using reprs.
+
 noeq type client_state  
   (region:rgn)            // unused for now; worth the trouble? passed only as stateful-invariant argument? 
   (cfg: client_config)    // duplicating Nego? 
@@ -112,7 +117,12 @@ noeq type client_state
   // intermediate step for witnessing the truncated transcript, 
   // a pre-condition for the binder HMACs. 
   // TODO The Transcript state should be TruncatedHello. 
-  | C_truncated_ClientHello:
+  | C_truncated_ClientHello: (*
+    retry: _
+    ch : _ 
+    let ha = ... in
+    let transcript = erased (Transcript.ClientHello (Transcript.retry_of retry) (HSM.hsm_of_ch ch)) in 
+    Transcript.digest ha transcript   *)
     transcript: Ghost.erased (trans 0) -> 
     offer: Negotiation.offer (* TODO with zeroed binders *) ->
     digest: Transcript.state (ha_of_offer offer) -> 
@@ -249,8 +259,10 @@ let client_invariant
 let step
   (#region:rgn) (#cfg: client_config) (#nonce: TLSInfo.random)
   (st0 st1: client_state region cfg nonce)
-= 
+= //st0 == undo_last_step st1 
   match st0, st1 with 
+
+  // | Cn x, Cn' x' y' -> x == x'  
   | C_init,
     C_truncated_ClientHello transcript0 offer0 digest0 ks0 -> True
 

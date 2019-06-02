@@ -232,6 +232,10 @@ let receive_post
 
 (****** Flight [ EncryptedExtensions; Certificate13; CertificateVerify; Finished ] ******)
 
+//19-05-28 could we use vale-style metaprogramming on message lists? fine as is. 
+
+//19-05-28 why not refining each message individually? the type abbreviations may be useful additions to their repr modules.
+
 noeq
 type flight13_ee_c_cv_fin (b:R.slice) = {
   ee_msg  : HSM13R.repr b;
@@ -244,6 +248,8 @@ type flight13_ee_c_cv_fin (b:R.slice) = {
     HSM13R.is_fin m
   }
 }
+
+//19-05-28 the handshake may not need the position details, as long as all messages are in from..to. 
 
 unfold let valid_flight13_ee_c_cv_fin
   (#b:R.slice) (from to:uint_32)
@@ -365,6 +371,8 @@ val receive_flight13_fin (st:hsl_state) (b:R.slice) (from to:uint_32)
 
 
 (****** Flight [ Certificate13; CertificateVerify; Finished ] ******)
+
+//19-05-28 not sure when this flight is acceptable; maybe after EOED? 
 
 noeq
 type flight13_c_cv_fin (b:R.slice) = {
