@@ -1103,7 +1103,7 @@ private let allow_resumption ((_,x):PSK.pskid * pskInfo) =
 private let send_supported_groups cs = isDHECipherSuite cs || CipherSuite13? cs
 private let compute_binder_len (ctr:nat) (pski:pskInfo) =
   let h = PSK.pskInfo_hash pski in
-  ctr + 1 + (UInt32.v (Hashing.Spec.tagLen h))
+  ctr + 1 + (UInt32.v (Hacl.Hash.Definitions.hash_len h))
 
 private val obfuscate_age: UInt32.t -> list (PSK.pskid * pskInfo) -> list pskIdentity
 let rec obfuscate_age now = function

@@ -35,7 +35,7 @@ type expand_kind (i:id) =
      expand_kind i
 
 type extracted_secret (#i:id) (x:expand_kind i) =
-  lbytes (Hashing.Spec.tagLen (secretId_hash i))
+  lbytes (Hashing.Spec.Spec.Hash.Definitions.hash_len (secretId_hash i))
 
 type expand_log (i:id) (r:rgn) =
   (if ideal_Expand then
