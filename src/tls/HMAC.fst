@@ -24,7 +24,7 @@ val hmac:
 let hmac a k m =
   let h00 = get() in
   push_frame();
-  let lt = EverCrypt.Hash.tagLen a in
+  let lt = Hacl.Hash.Definitions.hash_len a in
   let lk = Bytes.len k in
   let bk = LowStar.Buffer.alloca 0uy lk in
   Bytes.store_bytes k bk;

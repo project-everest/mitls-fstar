@@ -126,7 +126,7 @@ abstract type res_psk (i:rmsId) =
   b:bytes{exists i.{:pattern index b i} index b i <> 0z}
 
 abstract type res_context (i:rmsId) =
-  b:bytes{length b = CoreCrypto.H.tagLen (rmsId_hash i)}
+  b:bytes{length b = CoreCrypto.H.hash_len (rmsId_hash i)}
 
 private type res_psk_entry (i:rmsId) =
   (res_psk i) * (res_context i) * ctx:psk_context * leaked:(rref tls_tables_region bool)
@@ -410,7 +410,7 @@ private let keygen_13 h secret ae : St (bytes * bytes) =
 
 // // Extract finished keys
 // private let derive_finished13 h secret: St bytes =
-//   HKDF.expand_label h secret "finished" empty_bytes (H.tagLen h)
+//   HKDF.expand_label h secret "finished" empty_bytes (H.hash_len h)
 
 (* GONE: 
 // Create a fresh key schedule instance
@@ -521,7 +521,7 @@ let client13_compute_es_and_bfk #rid (pskid,_) is_quic =
   let ibfk = bfk_of_ems i in 
   let bfk: HMAC.UFCMA.key ii ibfk = 
     // KDF.derive bk ha "finished" in
-    HKDF.expand_label #ha bk "finished" empty_bytes (Hashing.tagLen ha) is_quic in 
+    HKDF.expand_label #ha bk "finished" empty_bytes (Hacl.Hash.Definitions.hash_len ha) is_quic in 
     // finished_13 bk is_quic in 
   dbg ("binder Finished key: "^print_bytes (secret_bytes #ibfk bfk));
 

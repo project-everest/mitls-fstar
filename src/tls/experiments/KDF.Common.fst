@@ -46,7 +46,7 @@ type expand_kind (i:id) =
 // However, the table stores actual key values, and the proper interface for
 // accessing it is spread between KDF.Salt.X and KDF.Expand
 type extracted_secret (#i:id) (x:expand_kind i) =
-  lbytes (Hashing.Spec.tagLen (secretId_hash i))
+  lbytes (Hashing.Spec.hash_len (secretId_hash i))
 *)
 
 type ideal_log (dt:Type0) (rt:dt -> Tot Type0) (r:rgn) =
@@ -115,8 +115,8 @@ let expand (#it:Type0) (#i:it) (prf:prf #it i) (input:PRF?.domain prf)
       let h1 = HST.get() in
       cut(h0 == h1);
       let key =
-        if PRF?.honest_prf prf then random (UInt32.v (Hashing.Spec.tagLen ha))
-        else HKDF.expand (PRF?.key prf) ((PRF?.format prf) input) (Hashing.Spec.tagLen ha) in
+        if PRF?.honest_prf prf then random (UInt32.v (Hashing.Spec.hash_len ha))
+        else HKDF.expand (PRF?.key prf) ((PRF?.format prf) input) (Hashing.Spec.hash_len ha) in
       let h2 = HST.get() in
       assume(h2 == h1);
       cut((PRF?.pre prf) input (PRF?.log prf) h2);
@@ -133,5 +133,5 @@ let expand (#it:Type0) (#i:it) (prf:prf #it i) (input:PRF?.domain prf)
       MDM.extend log input output;
       output
   else
-    let k = HKDF.expand (PRF?.key prf) ((PRF?.format prf) input) (Hashing.Spec.tagLen ha) in
+    let k = HKDF.expand (PRF?.key prf) ((PRF?.format prf) input) (Hashing.Spec.hash_len ha) in
     (PRF?.coerce prf) input k

@@ -59,7 +59,7 @@ let is_kdf_p (p: pkg ii) d children = // same as ksd_subtree
 /// IV packages. We should add agility. 
 
 inline_for_extraction noextract
-let ivlen (i:id) : keylen = EverCrypt.Hash.tagLen Hashing.Spec.SHA2_256
+let ivlen (i:id) : keylen = Hacl.Hash.Definitions.hash_len Hashing.Spec.SHA2_256
 
 let is_iv_p (p:pkg ii) =
   Pkg?.key p == IV.raw ii ivlen /\

@@ -10,7 +10,7 @@ open TLSInfo
 
 module AE = AEADProvider
 
-let hashLen = Hashing.tagLen
+let hashLen = Hacl.Hash.Definitions.hash_len
 
 #reset-options "--using_facts_from '* -LowParse.Spec.Base'"
 
