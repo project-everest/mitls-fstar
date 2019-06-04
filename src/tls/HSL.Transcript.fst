@@ -57,7 +57,7 @@ val serialize_list_max_size
   (ensures (
     Seq.length (LP.serialize (LPSL.serialize_list _ s) x) <= List.Tot.length x * max_message_size
   ))
-  [SMTPat (Seq.length (LP.serialize (LPSL.serialize_list _ s) x))]
+//  [SMTPat (Seq.length (LP.serialize (LPSL.serialize_list _ s) x))]
 
 let serialize_retry (r:option retry)
   : GTot (b:bytes{Seq.length b < 2 * max_message_size })
@@ -110,9 +110,9 @@ let rec transcript_bytes_injective (t1 t2:transcript_t)
       transcript_bytes t1 `Seq.equal` transcript_bytes t2)
     (ensures
       t1 == t2)
-  = match t1 with
-    | Start r1 ->
-      
+  = // match t1 with
+    // | Start r1 ->
+    admit()        
       
 
 noeq
@@ -151,13 +151,27 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
   match l with
   | LR_ClientHello #b ch ->
     let h0 = HyperStack.ST.get() in
-    assert (let Start retry = G.reveal tx in IncHash.hashes h0 s.hash_state (serialize_retry retry) );
-    assert (let Start retry = G.reveal tx in
-      ClientHello retry (HSM.M_client_hello?._0 (R.value ch)) ==
-      Some?.v (transition (G.reveal tx) (label_of_label_repr l)));
+    // assert (let Start retry = G.reveal tx in IncHash.hashes h0 s.hash_state (serialize_retry retry) );
+    // assert (let Start retry = G.reveal tx in
+    //   ClientHello retry (HSM.M_client_hello?._0 (R.value ch)) ==
+    //   Some?.v (transition (G.reveal tx) (label_of_label_repr l)));
+
+//    assume (C.qbuf_qual b.R.base = C.MUTABLE);
+    // assert (R.valid ch h0);
+    R.reveal_valid();
+    // assert (R.valid' ch h0);
+    LP.valid_pos_valid_exact HSM.handshake_parser h0 (R.to_slice b) ch.R.start_pos ch.R.end_pos;
+    LP.valid_exact_serialize HSM.handshake_serializer h0 (R.to_slice b) ch.R.start_pos ch.R.end_pos;
+
+    let data = C.sub b.R.base ch.R.start_pos (ch.R.end_pos - ch.R.start_pos) in
+
+//    let h1 = HyperStack.ST.get() in
+    assert (C.as_seq h0 data == serialize_client_hello (HSM.M_client_hello?._0 (R.value ch)));
+
     admit();
     // TODO: Call IncHash.update a s tx data len
-    // where as_seq data == serialize CH.clientHello_serializer ch and len is its length
+    // Needs to make sure that data is actually a B.buffer with trivial preorders
+    // while EverCrypt.Incremental.Hash does not support const buffers
     G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l)))
   | _ -> admit()
 
