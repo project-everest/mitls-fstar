@@ -118,6 +118,11 @@ val dt_forall:
 type local_fp (#it:eqtype) (vt:it->Type) =
   #i:it -> vt i -> l:M.loc{not model ==> l == M.loc_none}
 
+val empty_fp:
+  #it:eqtype ->
+  vt:(it->Type) ->
+  local_fp vt
+
 // Package footprint = union of all instance footprints
 val footprint:
   #it: eqtype ->
@@ -126,6 +131,13 @@ val footprint:
   fp: local_fp vt ->
   h: mem ->
   GTot M.loc
+
+val lemma_footprint_empty_fp:
+  #it: eqtype ->
+  #vt: (it -> Type) ->
+  t: dt vt ->
+  h: mem ->
+  Lemma (footprint t (empty_fp vt) h == M.loc_none)
 
 val lemma_footprint_empty:
   #it: eqtype ->

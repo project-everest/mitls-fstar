@@ -40,11 +40,31 @@ let fp_add (#it:eqtype) (#vt:it->Type)
   let (| i, k |) = cur in
   M.loc_union l (fp k)
 
+let empty_fp #it vt =
+  fun (#i:it) (k:vt i) -> M.loc_none
+
+let rec lemma_fold_constant (#it:eqtype) (#vt:it->Type)
+  (f: M.loc -> (i:it & vt i) -> GTot M.loc)
+  (x0:M.loc) (l: list (i:it & vt i))
+  : Lemma
+    (requires (forall (x:M.loc) (y:(i:it & vt i)). f x y == x))
+    (ensures fold_gtot f x0 l == x0)
+  =
+  match l with
+  | [] -> ()
+  | h :: t -> lemma_fold_constant f x0 t
+
 let footprint #it #vt t fp h =
   if model then 
     let l = HS.sel h (ideal t) in
     fold_gtot (fp_add fp) M.loc_none l
   else M.loc_none
+
+let lemma_footprint_empty_fp #it #vt t h =
+  if model then
+    let l = HS.sel h (ideal t) in
+    lemma_fold_constant (fp_add (empty_fp vt)) M.loc_none l
+  else ()
 
 let lemma_footprint_empty #it #vt t fp h0 = ()
 

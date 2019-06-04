@@ -122,9 +122,8 @@ private
 let lbytes_pair_serializer (coordinate_length:coordinate_length_type)
   : LP.serializer (lbytes_pair_parser coordinate_length) 
   = let l = U32.v coordinate_length in
-    let p = LP.parse_flbytes l in
     let s = LP.serialize_flbytes l in
-    LP.serialize_nondep_then p s () p s
+    LP.serialize_nondep_then s s
 
 #reset-options "--using_facts_from '* -FStar.Reflection -FStar.Tactics' --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16 --z3rlimit 10"
 private
@@ -133,9 +132,8 @@ let lbytes_pair_serializer32 (coordinate_length:coordinate_length_type)
   : LP.serializer32 (lbytes_pair_serializer coordinate_length) 
   = [@inline_let]
     let l = U32.v coordinate_length in
-    LP.serialize32_nondep_then
-      (LP.serialize32_flbytes l) ()
-      (LP.serialize32_flbytes l) ()
+    [@inline_let] let s32 = LP.serialize32_flbytes l in
+    s32 `LP.serialize32_nondep_then` s32
 #reset-options
 
 #reset-options "--using_facts_from '* -FStar.Reflection -FStar.Tactics'"
@@ -148,10 +146,7 @@ let uncompressedPointRepresentation_serializer (coordinate_length:coordinate_len
       (LP.nondep_then (constantByte_parser 4uy) (lbytes_pair_parser l))
       ucp_of_cuv
       (LP.serialize_nondep_then 
-        (constantByte_parser 4uy)
         (constantByte_serializer 4uy) 
-        ()
-        (lbytes_pair_parser l)
         (lbytes_pair_serializer l))
       cuv_of_ucp
       ()
@@ -166,10 +161,10 @@ let uncompressedPointRepresentation_serializer32 (coordinate_length:coordinate_l
     LP.serialize32_synth 
       (LP.nondep_then (constantByte_parser 4uy) (lbytes_pair_parser l))      
       ucp_of_cuv
-      (LP.serialize_nondep_then (constantByte_parser 4uy) (constantByte_serializer 4uy) ()
-                                (lbytes_pair_parser l) (lbytes_pair_serializer l))
-      (LP.serialize32_nondep_then (constantByte_serializer32 4uy) ()
-                                  (lbytes_pair_serializer32 l) ())
+      (LP.serialize_nondep_then (constantByte_serializer 4uy)
+                                (lbytes_pair_serializer l))
+      (LP.serialize32_nondep_then (constantByte_serializer32 4uy)
+                                  (lbytes_pair_serializer32 l))
       cuv_of_ucp
       (fun x -> cuv_of_ucp x)
       ()
