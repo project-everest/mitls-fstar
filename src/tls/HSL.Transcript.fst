@@ -26,104 +26,112 @@ module SH = Parsers.ServerHello
 let is_hrr _ = false
 let nego_version _ _ = admit ()
 
-type state a = unit
-let invariant #_ _ _ _ = True
-let footprint #_ _ = B.loc_none
-let elim_invariant #_ _ _ _ = admit ()
-let region_of #_ _ = admit ()
-let frame_invariant #_ _ _ _ _ _ = admit ()
+assume
+val serialize (#pk:_) (#t:_) (#p:LP.parser pk t) (s:LP.serializer p)
+              (x:t)
+  : GTot (b:bytes{Seq.length b < max_message_size})
 
+let rec serialize_list (#pk:_) (#t:_) (#p:LP.parser pk t) (s:LP.serializer p)
+                       (x:list t)
+  : GTot (b:bytes{Seq.length b <= List.Tot.length x * max_message_size})
+  = match x with
+    | [] -> Seq.empty
+    | hd::tl -> serialize s hd `Seq.append` serialize_list s tl
 
-let create _ _ = admit ()
+let serialize_retry (r:option retry)
+  : GTot (b:bytes{Seq.length b < 2 * max_message_size })
+  =
+  match r with
+  | None -> Seq.empty
+  | Some (ht, sh) ->
+    ht `Seq.append`
+    SH.serverHello_serializer sh
 
-let extend #_ _ _ _ = admit()
+let transcript_bytes (t:transcript_t)
+  : GTot (b:bytes {
+    Seq.length b <= (max_transcript_size + 4) * max_message_size
+    })
+  = match t with
+  | Start r ->
+    serialize_retry r
 
-let transcript_hash _ _ = admit()
+  | TruncatedClientHello r tch ->
+    serialize_retry r `Seq.append`
+    serialize CH.clientHello_serializer tch
 
-let extract_hash #_ _ _ _ = admit ()
+  | ClientHello r ch ->
+    serialize_retry r `Seq.append`
+    serialize CH.clientHello_serializer ch
 
-// assume
-// val serialize (#pk:_) (#t:_) (#p:LP.parser pk t) (s:LP.serializer p)
-//               (x:t)
-//   : GTot (b:bytes{Seq.length b < max_message_size})
+  | Transcript12 ch sh rest ->
+    serialize CH.clientHello_serializer ch `Seq.append`
+    serialize SH.serverHello_serializer sh `Seq.append`
+    serialize_list HSM12.handshake12_serializer rest
 
-// let rec serialize_list (#pk:_) (#t:_) (#p:LP.parser pk t) (s:LP.serializer p)
-//                        (x:list t)
-//   : GTot (b:bytes{Seq.length b <= List.Tot.length x * max_message_size})
-//   = match x with
-//     | [] -> Seq.empty
-//     | hd::tl -> serialize s hd `Seq.append` serialize_list s tl
+  | Transcript13 retry ch sh rest ->
+    serialize_retry retry `Seq.append`
+    serialize CH.clientHello_serializer ch `Seq.append`
+    serialize SH.serverHello_serializer sh `Seq.append`
+    serialize_list HSM13.handshake13_serializer rest
 
-// let transcript_bytes (t:transcript_t)
-//   : GTot (b:bytes {
-//     Seq.length b <= (max_transcript_size + 4) * max_message_size
-//     })
-//   =
-//   let serialize_retry (r:option retry)
-//     : GTot (b:bytes{Seq.length b < 2 * max_message_size })
-//     =
-//     match r with
-//     | None -> Seq.empty
-//     | Some (ch, sh) ->
-//       serialize HSM.handshake_serializer ch `Seq.append`
-//       serialize HSM.handshake_serializer sh
-//   in
-//   match t with
-//   | Start r ->
-//     serialize_retry r
+let transcript_bytes_injective (t1 t2:transcript_t)
+  : Lemma
+    (requires
+      transcript_bytes t1 `Seq.equal` transcript_bytes t2)
+    (ensures
+      t1 == t2)
+  = admit()
 
-//   | Hello r ch ->
-//     serialize_retry r `Seq.append`
-//     serialize HSM.handshake_serializer ch
+noeq
+type state (a:HashDef.hash_alg) = {
+  region:Mem.rgn;
+  loc: Ghost.erased B.loc;
+  hash_state: IncHash.state a
+}
 
-//   | Transcript12 ch sh rest ->
-//     serialize HSM.handshake_serializer ch `Seq.append`
-//     serialize HSM.handshake_serializer sh `Seq.append`
-//     serialize_list HSM12.handshake12_serializer rest
+let invariant (#a:HashDef.hash_alg) (s:state a) (tx:transcript_t) (h:HS.mem) =
+  IncHash.hashes h s.hash_state (transcript_bytes tx) /\
+  B.loc_region_only true s.region `B.loc_includes` Ghost.reveal s.loc /\
+  Ghost.reveal s.loc == IncHash.footprint s.hash_state h /\
+  B.loc_not_unused_in h `B.loc_includes` Ghost.reveal s.loc
 
-//   | Transcript13 retry ch sh rest ->
-//     serialize_retry retry `Seq.append`
-//     serialize HSM.handshake_serializer ch `Seq.append`
-//     serialize HSM.handshake_serializer sh `Seq.append`
-//     serialize_list HSM13.handshake13_serializer rest
+let footprint (#a:HashDef.hash_alg) (s:state a) = Ghost.reveal s.loc
 
-// let transcript_bytes_injective (t1 t2:transcript_t)
-//   : Lemma
-//     (requires
-//       transcript_bytes t1 `Seq.equal` transcript_bytes t2)
-//     (ensures
-//       t1 == t2)
-//   = admit()
+let elim_invariant #a s t h = ()
 
-// noeq
-// type state (a:alg) = {
-//   region:Mem.rgn;
-//   loc: Ghost.erased B.loc;
-//   hash_state: IncHash.state a
-// }
+let region_of #a s = s.region
 
-// let invariant (#a:alg) (s:state a) (tx:transcript_t) (h:HS.mem) =
-//   IncHash.hashes h s.hash_state (transcript_bytes tx) /\
-//   B.loc_region_only true s.region `B.loc_includes` Ghost.reveal s.loc /\
-//   Ghost.reveal s.loc == IncHash.footprint s.hash_state h /\
-//   B.loc_not_unused_in h `B.loc_includes` Ghost.reveal s.loc
+let frame_invariant (#a:_) (s:state a) (t: transcript_t) (h0 h1:HS.mem) (l:B.loc) =
+  IncHash.modifies_disjoint_preserves l h0 h1 s.hash_state
 
-// let footprint (#a:alg) (s:state a) = Ghost.reveal s.loc
+#set-options "--max_fuel 0 --max_ifuel  1 --initial_ifuel  1"
+let create r a =
+  let h0 = get() in
+  let s = IncHash.create_in a r in
+  let h1 = get () in
+  {region=r;
+   loc=Ghost.hide (IncHash.footprint s h1);
+   hash_state=s},
+  Ghost.hide (Start None)
 
-// let elim_invariant #a s t h = ()
+let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
+  match l with
+  | LR_ClientHello #b ch ->
+    let h0 = HyperStack.ST.get() in
+    assert (let Start retry = G.reveal tx in IncHash.hashes h0 s.hash_state (serialize_retry retry) );
+    assert (let Start retry = G.reveal tx in
+      ClientHello retry (HSM.M_client_hello?._0 (R.value ch)) ==
+      Some?.v (transition (G.reveal tx) (label_of_label_repr l)));
+    admit();
+    // TODO: Call IncHash.update a s tx data len
+    // where as_seq data == serialize CH.clientHello_serializer ch and len is its length
+    G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l)))
+  | _ -> admit()
 
-// let region_of #a s = s.region
+let transcript_hash (a:HashDef.hash_alg) (t:transcript_t) = Spec.Hash.hash a (transcript_bytes t)
 
-// let frame_invariant (#a:_) (s:state a) (t: transcript_t) (h0 h1:HS.mem) (l:B.loc) =
-//   IncHash.modifies_disjoint_preserves l h0 h1 s.hash_state
-
-// #set-options "--max_fuel 0 --max_ifuel  1 --initial_ifuel  1"
-// let create r a =
-//   let h0 = get() in
-//   let s = IncHash.create_in a r in
-//   let h1 = get () in
-//   {region=r;
-//    loc=Ghost.hide (IncHash.footprint s h1);
-//    hash_state=s},
-//   Ghost.hide (Start None)
+let extract_hash (#a:_) (s:state a) 
+  (tag:Hacl.Hash.Definitions.hash_t a)
+  (tx:G.erased transcript_t)
+  = IncHash.finish a s.hash_state (G.hide (transcript_bytes (G.reveal tx))) tag
 
