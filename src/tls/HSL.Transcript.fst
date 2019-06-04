@@ -26,17 +26,38 @@ module SH = Parsers.ServerHello
 let is_hrr _ = false
 let nego_version _ _ = admit ()
 
-assume
-val serialize (#pk:_) (#t:_) (#p:LP.parser pk t) (s:LP.serializer p)
-              (x:t)
-  : GTot (b:bytes{Seq.length b < max_message_size})
+//Seems to be automatic
+let serialize_max_size
+  (#pk:_) (#t:_) (#p:LP.parser pk t) (s:LP.serializer p)
+  (x:t)
+: Lemma
+  (requires (
+    match pk.LP.parser_kind_high with
+    | None -> False
+    | Some n -> n < max_message_size
+  ))
+  (ensures (
+    Seq.length (LP.serialize s x) < max_message_size
+  ))
+= ()
 
-let rec serialize_list (#pk:_) (#t:_) (#p:LP.parser pk t) (s:LP.serializer p)
-                       (x:list t)
-  : GTot (b:bytes{Seq.length b <= List.Tot.length x * max_message_size})
-  = match x with
-    | [] -> Seq.empty
-    | hd::tl -> serialize s hd `Seq.append` serialize_list s tl
+module LPSL = LowParse.Spec.List
+
+assume
+val serialize_list_max_size
+  (#pk:_) (#t:_) (#p:LP.parser pk t) (s:LP.serializer p)
+  (x:list t)
+: Lemma
+  (requires (
+    LPSL.serialize_list_precond pk /\ (
+    match pk.LP.parser_kind_high with
+    | None -> False
+    | Some n -> n < max_message_size
+  )))
+  (ensures (
+    Seq.length (LP.serialize (LPSL.serialize_list _ s) x) <= List.Tot.length x * max_message_size
+  ))
+  [SMTPat (Seq.length (LP.serialize (LPSL.serialize_list _ s) x))]
 
 let serialize_retry (r:option retry)
   : GTot (b:bytes{Seq.length b < 2 * max_message_size })
@@ -44,8 +65,15 @@ let serialize_retry (r:option retry)
   match r with
   | None -> Seq.empty
   | Some (ht, sh) ->
-    ht `Seq.append`
-    SH.serverHello_serializer sh
+    let ht = FStar.Bytes.hide ht in
+    LP.serialize HSM.handshake_serializer (Parsers.Handshake.M_message_hash ht) `Seq.append`
+    LP.serialize SH.serverHello_serializer sh
+
+let serialize_client_hello (ch:CH.clientHello) =
+  LP.serialize HSM.handshake_serializer (HSM.M_client_hello ch)
+
+let serialize_server_hello (sh:SH.serverHello) =
+  LP.serialize HSM.handshake_serializer (HSM.M_server_hello sh)
 
 let transcript_bytes (t:transcript_t)
   : GTot (b:bytes {
@@ -57,30 +85,35 @@ let transcript_bytes (t:transcript_t)
 
   | TruncatedClientHello r tch ->
     serialize_retry r `Seq.append`
-    serialize CH.clientHello_serializer tch
+    FStar.Bytes.reveal (PB.truncate_clientHello_bytes (HSM.M_client_hello tch))
 
   | ClientHello r ch ->
     serialize_retry r `Seq.append`
-    serialize CH.clientHello_serializer ch
-
+    serialize_client_hello ch
+    
   | Transcript12 ch sh rest ->
-    serialize CH.clientHello_serializer ch `Seq.append`
-    serialize SH.serverHello_serializer sh `Seq.append`
-    serialize_list HSM12.handshake12_serializer rest
+    serialize_list_max_size HSM12.handshake12_serializer rest;
+    serialize_client_hello ch `Seq.append`
+    serialize_server_hello sh `Seq.append`
+    LP.serialize (LPSL.serialize_list _ HSM12.handshake12_serializer) rest
 
   | Transcript13 retry ch sh rest ->
+    serialize_list_max_size HSM13.handshake13_serializer rest;
     serialize_retry retry `Seq.append`
-    serialize CH.clientHello_serializer ch `Seq.append`
-    serialize SH.serverHello_serializer sh `Seq.append`
-    serialize_list HSM13.handshake13_serializer rest
+    serialize_client_hello ch `Seq.append`
+    serialize_server_hello sh `Seq.append`
+    LP.serialize (LPSL.serialize_list _ HSM13.handshake13_serializer) rest
 
-let transcript_bytes_injective (t1 t2:transcript_t)
+let rec transcript_bytes_injective (t1 t2:transcript_t)
   : Lemma
     (requires
       transcript_bytes t1 `Seq.equal` transcript_bytes t2)
     (ensures
       t1 == t2)
-  = admit()
+  = match t1 with
+    | Start r1 ->
+      
+      
 
 noeq
 type state (a:HashDef.hash_alg) = {

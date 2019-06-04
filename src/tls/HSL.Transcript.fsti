@@ -186,7 +186,7 @@ val nego_version (ch:CH.clientHello)
 ///       handshake13_parser_kind.parser_kind_high,
 ///       handshake_parser_kind.parser_kind_high)
 unfold
-let max_message_size = normalize_term (pow2 24)
+let max_message_size = normalize_term (pow2 25)
 
 unfold
 let max_transcript_size : pos = normalize_term (pow2 32)
