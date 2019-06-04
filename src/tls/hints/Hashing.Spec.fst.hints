@@ -1,5 +1,5 @@
 [
-  "oºp­¬òã“°g]þ¦¨ÎA",
+  "àràòu¥©\u0003I+ž™ªF¶\u0001",
   [
     [
       "Hashing.Spec.anyTag",
@@ -14,7 +14,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "df8539908c7b4ff23963dde34ac7174d"
+      "7467c32a8b63b90e5e2222728cbb6eb5"
     ],
     [
       "Hashing.Spec.hkey",
@@ -23,7 +23,7 @@
       1,
       [ "@query" ],
       0,
-      "68590f7ac456555fdf9ef584d3b4ef0a"
+      "f5672a1b3a16eb35d7b54a2a78bfcadc"
     ],
     [
       "Hashing.Spec.hmac",
@@ -34,14 +34,14 @@
         "@MaxIFuel_assumption", "@query",
         "assumption_FStar.Seq.Base.seq__uu___haseq",
         "assumption_FStar.UInt8.t__uu___haseq", "equation_Hashing.Spec.hkey",
-        "equation_Hashing.Spec.maxLength",
+        "equation_Hashing.Spec.max_input_length",
         "function_token_typing_FStar.UInt8.t",
         "lemma_FStar.Bytes.length_reveal", "primitive_Prims.op_Subtraction",
         "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_Tm_refine_f516b55a9e83e803e5bf840bd0e72ffd"
       ],
       0,
-      "63ec59bc30fabb8fa98dc45ce9b800b1"
+      "a1930f04c734f2c055ea419b639db1b4"
     ],
     [
       "Hashing.Spec.hmac",
@@ -67,10 +67,12 @@
         "equation_FStar.Integers.int_t",
         "equation_Hacl.Hash.Definitions.hash_len",
         "equation_Hashing.Spec.hkey", "equation_Hashing.Spec.macable",
-        "equation_Hashing.Spec.maxLength", "equation_Prims.nat",
+        "equation_Hashing.Spec.max_input_length", "equation_Prims.nat",
         "equation_Spec.HMAC.keysized",
         "equation_Spec.Hash.Definitions.block_length",
         "equation_Spec.Hash.Definitions.block_word_length",
+        "equation_Spec.Hash.Definitions.bytes",
+        "equation_Spec.Hash.Definitions.bytes_hash",
         "equation_Spec.Hash.Definitions.hash_length",
         "equation_Spec.Hash.Definitions.hash_word_length",
         "equation_Spec.Hash.Definitions.max_input_length",
@@ -83,17 +85,17 @@
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_FStar.Integers.Signed__0",
         "projection_inverse_FStar.Integers.Unsigned__0",
+        "refinement_interpretation_Tm_refine_046c9e96d509a0c02bc59935acfefae6",
         "refinement_interpretation_Tm_refine_3152a08c3e36faa49d79fe7a4ed05e58",
         "refinement_interpretation_Tm_refine_36c12323dbf231e2a6b4d0836a1ea634",
         "refinement_interpretation_Tm_refine_55a09564bd638637b3e90a918ab57130",
-        "refinement_interpretation_Tm_refine_abd9070821fa3caa8cdcdd72bdf35547",
         "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "refinement_interpretation_Tm_refine_f516b55a9e83e803e5bf840bd0e72ffd",
         "typing_FStar.Bytes.len", "typing_Hacl.Hash.Definitions.hash_len",
         "typing_Spec.Hash.Definitions.word_length"
       ],
       0,
-      "ef75f71142e4029e6009046c4313c0af"
+      "4ed7cd643a309b16f35ac4014484a4e5"
     ],
     [
       "Hashing.Spec.zeroHash",
@@ -131,7 +133,7 @@
         "typing_Hacl.Hash.Definitions.hash_len", "typing_Prims.pow2"
       ],
       0,
-      "37ba3740cd5a74f4866e2c5cad4f78bd"
+      "976869af38b356ad2717f3f1065512df"
     ],
     [
       "Hashing.Spec.tls_alg",
@@ -140,7 +142,7 @@
       1,
       [ "@query", "assumption_Spec.Hash.Definitions.hash_alg__uu___haseq" ],
       0,
-      "93597f1e8c0ccafd9e8ebedcf18bdb48"
+      "946b71c78283186d25a0569221ee02cb"
     ],
     [
       "Hashing.Spec.__proj__Hash__item___0",
@@ -153,7 +155,7 @@
         "refinement_interpretation_Tm_refine_cc1ea40d38e5f63ed2e1772a24033a7a"
       ],
       0,
-      "04607f4a2c2107540dd404331f8e0a13"
+      "4a8b8a67aa346c7fd879445bc1cdf65b"
     ],
     [
       "Hashing.Spec.tls_tagLen",
@@ -162,7 +164,7 @@
       1,
       [ "@query", "assumption_Hashing.Spec.tls_alg__uu___haseq" ],
       0,
-      "da11af508c058b47bd60c7e797da3701"
+      "de61cfa58ffc0c252caf0b4ef5d924a7"
     ],
     [
       "Hashing.Spec.tls_tagLen",
@@ -171,7 +173,7 @@
       1,
       [ "@query", "assumption_Hashing.Spec.tls_alg__uu___haseq" ],
       0,
-      "b643c37db231ced151c9a21d797c2b15"
+      "65710ecaefbde817c5cf5fc0f15a1048"
     ],
     [
       "Hashing.Spec.tls_tagLen",
@@ -235,7 +237,7 @@
         "typing_tok_Spec.Hash.Definitions.MD5@tok"
       ],
       0,
-      "d9a1002b49b2301c1bd83599660c3946"
+      "34057605140d6e5bbc763bc1792401ee"
     ]
   ]
 ]
