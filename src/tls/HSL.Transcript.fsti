@@ -582,7 +582,7 @@ let loc_of_label_repr (l:label_repr) =
 ///      -- that it mutates only the state machine's footprint
 ///      -- that the new state is the one computed by the transition
 val extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t)
-  : Stack (G.erased transcript_t)
+  : Stack (state a & G.erased transcript_t)
     (requires fun h ->
         let tx = G.reveal tx in
         invariant s tx h /\
@@ -590,11 +590,12 @@ val extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t)
         B.loc_disjoint (loc_of_label_repr l) (footprint s) /\
         extensible tx /\
         Some? (transition tx (label_of_label_repr l)))
-    (ensures fun h0 tx' h1 ->
+    (ensures fun h0 (s', tx') h1 ->
         let tx = G.reveal tx in
         let tx' = G.reveal tx' in
-        invariant s tx' h1 /\
+        invariant s' tx' h1 /\
         B.modifies (footprint s) h0 h1 /\
+        footprint s == footprint s' /\
         tx' == Some?.v (transition tx (label_of_label_repr l)))
 
 

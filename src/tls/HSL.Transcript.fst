@@ -196,33 +196,102 @@ let create r a =
    hash_state=s},
   Ghost.hide (Start None)
 
+#set-options "--max_fuel 0 --max_ifuel  1 --initial_ifuel  1 --z3rlimit 20"
+
 let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
+  let h0 = HyperStack.ST.get() in
   match l with
   | LR_ClientHello #b ch ->
-    let h0 = HyperStack.ST.get() in
+    admit(); // Working
+    assume (C.qbuf_qual (C.as_qbuf b.R.base) = C.MUTABLE);
+
+    // These three lemmas prove that the data in the subbuffer data is
+    // the serialized data corresponding to the client hello that is being added
+    R.reveal_valid();
+    LP.valid_pos_valid_exact HSM.handshake_parser h0 (R.to_slice b) ch.R.start_pos ch.R.end_pos;
+    LP.valid_exact_serialize HSM.handshake_serializer h0 (R.to_slice b) ch.R.start_pos ch.R.end_pos;
+
+    let len = ch.R.end_pos - ch.R.start_pos in
+    let data = C.sub b.R.base ch.R.start_pos len in
+
+    assert_norm (pow2 32 < pow2 61);
+    let st' = IncHash.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
+
+    let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
+    
+    {s with hash_state = st'}, tx'
+
+  | LR_ServerHello #b sh ->
+    admit(); // Working
+    assume (C.qbuf_qual (C.as_qbuf b.R.base) = C.MUTABLE);
+
     // assert (let Start retry = G.reveal tx in IncHash.hashes h0 s.hash_state (serialize_retry retry) );
     // assert (let Start retry = G.reveal tx in
     //   ClientHello retry (HSM.M_client_hello?._0 (R.value ch)) ==
     //   Some?.v (transition (G.reveal tx) (label_of_label_repr l)));
 
-//    assume (C.qbuf_qual b.R.base = C.MUTABLE);
-    // assert (R.valid ch h0);
+
+    // These three lemmas prove that the data in the subbuffer data is
+    // the serialized data corresponding to the server hello that is being added
     R.reveal_valid();
-    // assert (R.valid' ch h0);
-    LP.valid_pos_valid_exact HSM.handshake_parser h0 (R.to_slice b) ch.R.start_pos ch.R.end_pos;
-    LP.valid_exact_serialize HSM.handshake_serializer h0 (R.to_slice b) ch.R.start_pos ch.R.end_pos;
+    LP.valid_pos_valid_exact HSM.handshake_parser h0 (R.to_slice b) sh.R.start_pos sh.R.end_pos;
+    LP.valid_exact_serialize HSM.handshake_serializer h0 (R.to_slice b) sh.R.start_pos sh.R.end_pos;
 
-    let data = C.sub b.R.base ch.R.start_pos (ch.R.end_pos - ch.R.start_pos) in
+    let len = sh.R.end_pos - sh.R.start_pos in
+    let data = C.sub b.R.base sh.R.start_pos len in
 
-//    let h1 = HyperStack.ST.get() in
-    assert (C.as_seq h0 data == serialize_client_hello (HSM.M_client_hello?._0 (R.value ch)));
+    // assert (C.as_seq h0 data == serialize_server_hello (HSM.M_server_hello?._0 (R.value sh)));
 
-    admit();
-    // TODO: Call IncHash.update a s tx data len
-    // Needs to make sure that data is actually a B.buffer with trivial preorders
-    // while EverCrypt.Incremental.Hash does not support const buffers
-    G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l)))
-  | _ -> admit()
+
+    assert_norm (pow2 32 < pow2 61);
+    let st' = IncHash.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
+    let h1 = HyperStack.ST.get() in
+
+    let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
+
+    LPSL.serialize_list_nil HSM12.handshake12_parser HSM12.handshake12_serializer;
+    LPSL.serialize_list_nil HSM13.handshake13_parser HSM13.handshake13_serializer;
+    assert ((transcript_bytes (G.reveal tx) `Seq.append` 
+             serialize_server_hello (HSM.M_server_hello?._0 (R.value sh)))
+        `Seq.equal`     
+             transcript_bytes (G.reveal tx'));
+
+    {s with hash_state = st'}, tx'
+
+  | LR_TCH #b tch ->
+    assume (C.qbuf_qual (C.as_qbuf b.R.base) = C.MUTABLE);
+
+    // These three lemmas prove that the data in the subbuffer data is
+    // the serialized data corresponding to the client hello that is being added
+    R.reveal_valid();
+    LP.valid_pos_valid_exact HSM.handshake_parser h0 (R.to_slice b) tch.R.start_pos tch.R.end_pos;
+    LP.valid_exact_serialize HSM.handshake_serializer h0 (R.to_slice b) tch.R.start_pos tch.R.end_pos;
+    // PB.truncate_clientHello_bytes_correct (R.value tch);
+
+    // LP.valid_equiv 
+    // let h0 = HyperStack.ST.get() in
+    // assume (LP.valid HSM.handshake_parser h0 (R.to_slice b) tch.R.start_pos);
+    // let end_pos = PB.binders_pos (R.to_slice b) tch.R.start_pos in
+
+    admit()
+
+    // let len = tch.R.end_pos - tch.R.start_pos in
+    // let data = C.sub b.R.base tch.R.start_pos len in
+
+    // assert_norm (pow2 32 < pow2 61);
+    // let st' = IncHash.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
+
+    // let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
+    
+    // {s with hash_state = st'}, tx'    
+
+  | LR_CompleteTCH #b tch -> admit()
+
+  | LR_HRR #b1 ch_tag #b2 hrr -> admit()
+
+  | LR_HSM12 #b hs12 -> admit()
+
+  | LR_HSM13 #b hs13 -> admit()
 
 let transcript_hash (a:HashDef.hash_alg) (t:transcript_t) = Spec.Hash.hash a (transcript_bytes t)
 
