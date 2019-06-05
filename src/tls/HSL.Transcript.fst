@@ -280,30 +280,38 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
 *)
 
   | LR_TCH #b tch ->
-    admit()
-    //assume (C.qbuf_qual (C.as_qbuf b.R.base) = C.MUTABLE)
+    assume (C.qbuf_qual (C.as_qbuf b.R.base) = C.MUTABLE);
 
     // These three lemmas prove that the data in the subbuffer data is
     // the serialized data corresponding to the client hello that is being added
-    // R.reveal_valid();
+    R.reveal_valid();
     // LP.valid_pos_valid_exact HSM.handshake_parser h0 (R.to_slice b) tch.R.start_pos tch.R.end_pos;
     // LP.valid_exact_serialize HSM.handshake_serializer h0 (R.to_slice b) tch.R.start_pos tch.R.end_pos
     // PB.truncate_clientHello_bytes_correct (R.value tch);
 
     // LP.valid_equiv 
-    // let h0 = HyperStack.ST.get() in
-    // assume (LP.valid HSM.handshake_parser h0 (R.to_slice b) tch.R.start_pos);
-    // let end_pos = PB.binders_pos (R.to_slice b) tch.R.start_pos in
+    let h0 = HyperStack.ST.get() in
+    assert (LP.valid HSM.handshake_parser h0 (R.to_slice b) tch.R.start_pos);
+    let end_pos = PB.binders_pos (R.to_slice b) tch.R.start_pos in
 
-    // let len = tch.R.end_pos - tch.R.start_pos in
-    // let data = C.sub b.R.base tch.R.start_pos len in
+    let len = end_pos - tch.R.start_pos in
+    let data = C.sub b.R.base tch.R.start_pos len in
 
-    // assert_norm (pow2 32 < pow2 61);
-    // let st' = IncHash.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
+    PB.valid_truncate_clientHello h0 (R.to_slice b) tch.R.start_pos;
+    assert (C.as_seq h0 data == FStar.Bytes.reveal (PB.truncate_clientHello_bytes (R.value tch)));
 
-    // let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
+    assert_norm (pow2 32 < pow2 61);
+    let h1 = HyperStack.ST.get () in
+    IncHash.modifies_disjoint_preserves B.loc_none h0 h1 s.hash_state;
+    let st' = IncHash.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
+
+    let hf = HyperStack.ST.get() in
+    let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
+
+    assume (IncHash.hashes hf st' (transcript_bytes (G.reveal tx')));
+
     
-    // {s with hash_state = st'}, tx'    
+    {s with hash_state = st'}, tx'
 
   | LR_CompleteTCH #b tch -> admit()
 
