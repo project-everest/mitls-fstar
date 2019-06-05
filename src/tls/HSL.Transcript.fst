@@ -23,7 +23,7 @@ module CH = Parsers.ClientHello
 module R_SH = MITLS.Repr.ServerHello
 module SH = Parsers.ServerHello
 
-let is_hrr _ = false
+let is_hrr _ = admit()
 let nego_version _ _ = admit ()
 
 //Seems to be automatic
@@ -43,7 +43,6 @@ let serialize_max_size
 
 module LPSL = LowParse.Spec.List
 
-assume
 val serialize_list_max_size
   (#pk:_) (#t:_) (#p:LP.parser pk t) (s:LP.serializer p)
   (x:list t)
@@ -59,6 +58,16 @@ val serialize_list_max_size
   ))
 //  [SMTPat (Seq.length (LP.serialize (LPSL.serialize_list _ s) x))]
 
+
+let rec serialize_list_max_size #pk #t #p s x =
+  match x with
+  | [] -> LPSL.serialize_list_nil p s
+  | hd::tl -> LPSL.serialize_list_cons p s hd tl; serialize_list_max_size s tl
+   
+let serialize_any_tag (ht:any_hash_tag) =
+    let ht = FStar.Bytes.hide ht in
+    LP.serialize HSM.handshake_serializer (Parsers.Handshake.M_message_hash ht)
+
 let serialize_client_hello (ch:CH.clientHello) =
   LP.serialize HSM.handshake_serializer (HSM.M_client_hello ch)
 
@@ -71,8 +80,7 @@ let serialize_retry (r:option retry)
   match r with
   | None -> Seq.empty
   | Some (ht, sh) ->
-    let ht = FStar.Bytes.hide ht in
-    LP.serialize HSM.handshake_serializer (Parsers.Handshake.M_message_hash ht) `Seq.append`
+    serialize_any_tag ht `Seq.append`
     serialize_server_hello sh
 
 let transcript_bytes (t:transcript_t)
@@ -196,13 +204,12 @@ let create r a =
    hash_state=s},
   Ghost.hide (Start None)
 
-#set-options "--max_fuel 0 --max_ifuel  1 --initial_ifuel  1 --z3rlimit 20"
+#set-options "--max_fuel 0 --max_ifuel  1 --initial_ifuel  1 --z3rlimit 50"
 
 let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
   let h0 = HyperStack.ST.get() in
   match l with
   | LR_ClientHello #b ch ->
-    admit(); // Working
     assume (C.qbuf_qual (C.as_qbuf b.R.base) = C.MUTABLE);
 
     // These three lemmas prove that the data in the subbuffer data is
@@ -222,7 +229,6 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     {s with hash_state = st'}, tx'
 
   | LR_ServerHello #b sh ->
-    admit(); // Working
     assume (C.qbuf_qual (C.as_qbuf b.R.base) = C.MUTABLE);
 
     // assert (let Start retry = G.reveal tx in IncHash.hashes h0 s.hash_state (serialize_retry retry) );
@@ -259,21 +265,20 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     {s with hash_state = st'}, tx'
 
   | LR_TCH #b tch ->
-    assume (C.qbuf_qual (C.as_qbuf b.R.base) = C.MUTABLE);
+    admit()
+    //assume (C.qbuf_qual (C.as_qbuf b.R.base) = C.MUTABLE)
 
     // These three lemmas prove that the data in the subbuffer data is
     // the serialized data corresponding to the client hello that is being added
-    R.reveal_valid();
-    LP.valid_pos_valid_exact HSM.handshake_parser h0 (R.to_slice b) tch.R.start_pos tch.R.end_pos;
-    LP.valid_exact_serialize HSM.handshake_serializer h0 (R.to_slice b) tch.R.start_pos tch.R.end_pos;
+    // R.reveal_valid();
+    // LP.valid_pos_valid_exact HSM.handshake_parser h0 (R.to_slice b) tch.R.start_pos tch.R.end_pos;
+    // LP.valid_exact_serialize HSM.handshake_serializer h0 (R.to_slice b) tch.R.start_pos tch.R.end_pos
     // PB.truncate_clientHello_bytes_correct (R.value tch);
 
     // LP.valid_equiv 
     // let h0 = HyperStack.ST.get() in
     // assume (LP.valid HSM.handshake_parser h0 (R.to_slice b) tch.R.start_pos);
     // let end_pos = PB.binders_pos (R.to_slice b) tch.R.start_pos in
-
-    admit()
 
     // let len = tch.R.end_pos - tch.R.start_pos in
     // let data = C.sub b.R.base tch.R.start_pos len in
@@ -287,11 +292,109 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
 
   | LR_CompleteTCH #b tch -> admit()
 
-  | LR_HRR #b1 ch_tag #b2 hrr -> admit()
+  | LR_HRR #b1 ch_tag #b2 hrr ->
+    assume (C.qbuf_qual (C.as_qbuf b1.R.base) = C.MUTABLE);
+    assume (C.qbuf_qual (C.as_qbuf b2.R.base) = C.MUTABLE);
 
-  | LR_HSM12 #b hs12 -> admit()
 
-  | LR_HSM13 #b hs13 -> admit()
+    // These three lemmas prove that the data in the subbuffer data is
+    // the serialized data corresponding to the client hello that is being added
+    R.reveal_valid();
+
+    admit();
+    // TODO: What is the parser for any tag?
+
+    LP.valid_pos_valid_exact HSM.handshake_parser h0 (R.to_slice b1) ch_tag.R.start_pos ch_tag.R.end_pos;
+    LP.valid_exact_serialize HSM.handshake_serializer h0 (R.to_slice b1) ch_tag.R.start_pos ch_tag.R.end_pos;
+
+    LP.valid_pos_valid_exact HSM.handshake_parser h0 (R.to_slice b2) hrr.R.start_pos hrr.R.end_pos;
+    LP.valid_exact_serialize HSM.handshake_serializer h0 (R.to_slice b2) hrr.R.start_pos hrr.R.end_pos;
+
+
+    let len = ch_tag.R.end_pos - ch_tag.R.start_pos in
+    let data = C.sub b1.R.base ch_tag.R.start_pos len in
+
+    assert_norm (pow2 32 < pow2 61);
+    let st' = IncHash.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
+
+
+    let len = hrr.R.end_pos - hrr.R.start_pos in
+    let data = C.sub b2.R.base hrr.R.start_pos len in
+
+    assert_norm (pow2 32 < pow2 61);
+
+    let st' = IncHash.update a st' (G.elift1 (fun x -> transcript_bytes x `Seq.append` serialize_any_tag (R.value ch_tag)) tx) (C.to_buffer data) len in
+
+
+
+    let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
+    
+    {s with hash_state = st'}, tx'
+  
+
+  | LR_HSM12 #b hs12 ->
+    assume (C.qbuf_qual (C.as_qbuf b.R.base) = C.MUTABLE);
+
+    // These three lemmas prove that the data in the subbuffer data is
+    // the serialized data corresponding to the client hello that is being added
+    R.reveal_valid();
+    LP.valid_pos_valid_exact HSM12.handshake12_parser h0 (R.to_slice b) hs12.R.start_pos hs12.R.end_pos;
+    LP.valid_exact_serialize HSM12.handshake12_serializer h0 (R.to_slice b) hs12.R.start_pos hs12.R.end_pos;
+
+    let len = hs12.R.end_pos - hs12.R.start_pos in
+    let data = C.sub b.R.base hs12.R.start_pos len in
+
+//    assert (C.as_seq h0 data == LP.serialize HSM13.handshake13_serializer (R.value hs13));
+
+    let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
+
+    LPSL.serialize_list_singleton HSM12.handshake12_parser HSM12.handshake12_serializer
+      (R.value hs12);
+    LPSL.serialize_list_append HSM12.handshake12_parser HSM12.handshake12_serializer
+      (let Transcript12 _ _ rest = G.reveal tx in rest)
+      [R.value hs12];
+    assert ((transcript_bytes (G.reveal tx) `Seq.append` 
+                              LP.serialize HSM12.handshake12_serializer (R.value hs12))
+        `Seq.equal`     
+             transcript_bytes (G.reveal tx'));
+    
+    assert_norm ((max_transcript_size + 4) * max_message_size < pow2 61);
+
+    let st' = IncHash.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
+
+    {s with hash_state = st'}, tx'
+  
+
+  | LR_HSM13 #b hs13 ->
+    assume (C.qbuf_qual (C.as_qbuf b.R.base) = C.MUTABLE);
+
+    // These three lemmas prove that the data in the subbuffer data is
+    // the serialized data corresponding to the client hello that is being added
+    R.reveal_valid();
+    LP.valid_pos_valid_exact HSM13.handshake13_parser h0 (R.to_slice b) hs13.R.start_pos hs13.R.end_pos;
+    LP.valid_exact_serialize HSM13.handshake13_serializer h0 (R.to_slice b) hs13.R.start_pos hs13.R.end_pos;
+
+    let len = hs13.R.end_pos - hs13.R.start_pos in
+    let data = C.sub b.R.base hs13.R.start_pos len in
+
+    let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
+
+    LPSL.serialize_list_singleton HSM13.handshake13_parser HSM13.handshake13_serializer
+      (R.value hs13);
+    LPSL.serialize_list_append HSM13.handshake13_parser HSM13.handshake13_serializer
+      (let Transcript13 _ _ _ rest = G.reveal tx in rest)
+      [R.value hs13];
+    assert ((transcript_bytes (G.reveal tx) `Seq.append` 
+                              LP.serialize HSM13.handshake13_serializer (R.value hs13))
+        `Seq.equal`     
+             transcript_bytes (G.reveal tx'));
+
+    
+    assert_norm ((max_transcript_size + 4) * max_message_size < pow2 61);
+
+    let st' = IncHash.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
+
+    {s with hash_state = st'}, tx'
 
 let transcript_hash (a:HashDef.hash_alg) (t:transcript_t) = Spec.Hash.hash a (transcript_bytes t)
 
