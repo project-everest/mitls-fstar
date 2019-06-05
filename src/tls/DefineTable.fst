@@ -43,6 +43,8 @@ let fp_add (#it:eqtype) (#vt:it->Type)
 let empty_fp #it vt =
   fun (#i:it) (k:vt i) -> M.loc_none
 
+let lemma_empty_fp_none #it #vt #i k = ()
+
 let rec lemma_fold_constant (#it:eqtype) (#vt:it->Type)
   (f: M.loc -> (i:it & vt i) -> GTot M.loc)
   (x0:M.loc) (l: list (i:it & vt i))

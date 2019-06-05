@@ -3,6 +3,7 @@ module Idx
 open Mem
 //open Pkg
 
+module M = LowStar.Modifies
 module DM = FStar.DependentMap
 module MDM = FStar.Monotonic.DependentMap
 
@@ -126,8 +127,10 @@ type honest_idh (c:context) =
 type honesty_invariant (m:DM.t id (MDM.opt (fun _ -> bool))) =
   (forall (i:id) (l:label) (c:context{wellformed_derive i l c}).
   {:pattern (DM.sel m (Derive i l c))}
-  Some? (DM.sel m (derive i l c)) ==> Some? (DM.sel m i) /\
-  (DM.sel m i = Some false ==> (honest_idh c \/ DM.sel m (derive i l c) = Some false)))
+  (match DM.sel m i, DM.sel m (derive i l c) with
+  | Some false, Some true -> honest_idh c // DH-based idealization
+  | None, Some _ -> False // Can't define honesty of index derived from unregistered parent
+  | _ -> True))
 
 //17-12-08 removed [private] twice, as we need to recall it in ODH :(
 type i_honesty_table =
@@ -138,6 +141,10 @@ let honesty_table: h_table =
   if model then
     MDM.alloc #id #(fun _ -> bool) #honesty_invariant #tls_honest_region ()
   else ()
+
+let honesty_loc =
+  if model then M.loc_region_only true tls_honest_region
+  else M.loc_none
 
 // Registered is monotonic
 type registered (i:id) =
@@ -221,13 +228,13 @@ private let lemma_not_honest_and_corrupt (i:regid)
  *)
 inline_for_extraction
 let lemma_honest_corrupt_st (i:regid)
-  :ST unit (requires (fun _ -> True)) (ensures (fun h0 _ h1 -> h0 == h1 /\ (honest i <==> (~ (corrupt i)))))
+  : ST unit (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1 /\ (honest i <==> (~ (corrupt i)))))
   = lemma_honest_or_corrupt i; lemma_not_honest_and_corrupt i
 
-// ADL: difficult to prove, relies on an axiom outside the current formalization of FStar.Monotonic
-inline_for_extraction
-let lemma_honest_corrupt (i:regid)
-  : Lemma (honest i <==> ~(corrupt i)) =
+// ADL: this may not be provable in the current monotonicity model,
+// but the above stateful version of the lemma is
+let lemma_honest_corrupt (i:regid) : Lemma (honest i <==> ~(corrupt i)) =
   admit()
 
 #set-options "--z3rlimit 100" 
@@ -292,44 +299,68 @@ let get_honesty (i:id {registered i}) : ST bool
         b
     else false
 
-// TODO(adl) preservation of the honesty table invariant
-let rec lemma_honesty_update (m:DM.t id (MDM.opt (fun _ -> bool)))
-  (i:regid) (l:label) (c:context) (b:bool{b <==> honest i})
-  : Lemma (requires wellformed_derive i l c)
+let lemma_honesty_update (m:DM.t id (MDM.opt (fun _ -> bool)))
+  (i:regid) (l:label) (c:context) (b:bool)
+  : Lemma
+    (requires wellformed_derive i l c /\
+      honesty_invariant m /\
+      Some? (DM.sel m i) /\ // Parent honesty is defined
+      None? (DM.sel m (derive i l c)) /\ // Derived honesty is not yet defined
+       // To derive honest, the parent is honest or the derivation uses honest shares
+      (b ==> (honest_idh c \/ DM.sel m i == Some true)))
     (ensures honesty_invariant (DM.upd m (derive i l c) (Some b)))
-// : Lemma (requires Some? (m i ) /\ None? (m (Derive i l c)) /\ m i == Some false ==> not b)
-//         (ensures honesty_invariant (MDM.upd m (Derive i l c) b))
-  = admit() // easy
+  =
+  let j = derive i l c in
+  let m' = DM.upd m j (Some b) in
+  let wit (i0:id) (l0:label) (c0:context{wellformed_derive i0 l0 c0})
+    : Lemma (match DM.sel m' i0, DM.sel m' (derive i0 l0 c0) with
+      | Some false, Some true -> honest_idh c0
+      | None, Some _ -> False | _ -> True)
+    =
+    let j0 = derive i0 l0 c0 in
+    if j = j0 then (
+      if i0 <> j then DM.sel_upd_other m j (Some b) i0;
+      DM.sel_upd_same m j (Some b)
+    ) else (
+      if i0 <> j then DM.sel_upd_other m j (Some b) i0;
+      DM.sel_upd_other m j (Some b) j0
+    )
+    in
+  FStar.Classical.forall_intro_3 wit
 
-#reset-options "--admit_smt_queries true"
 inline_for_extraction noextract
 let register_derive (i:regid) (l:label) (c:context)
   : ST (regid * bool)
   (requires fun h0 -> wellformed_derive i l c)
   (ensures fun h0 (i', b) h1 ->
-    (if model then modifies_one tls_honest_region h0 h1 else h0 == h1)
-    /\ i' == derive i l c
-    /\ (b2t b <==> honest i'))
+    M.modifies honesty_loc h0 h1 /\
+    i' == derive i l c /\ (b <==> honest i'))
   =
   if model then
     let i':id = Derive i l c in
+    let h0 = get () in
     let log : i_honesty_table = honesty_table in
     recall log;
     match MDM.lookup log i' with
     | Some b ->
-//      MDM.contains_stable log i' true;
-//      mr_witness log (MDM.contains log i' true);
-      assume (registered i'); // FIXME
-      lemma_honest_corrupt i'; (i', b)
-    | None ->
-      let b = get_honesty i in
-      let h = get () in
-//      lemma_honesty_update (sel h log) i l c b;
-      MDM.extend log i' b;
+      MDM.defined_stable log i';
+      mr_witness log (MDM.defined log i');
       lemma_honest_corrupt i';
       (i', b)
+    | None ->
+      testify (MDM.defined log i);
+      let Some b = MDM.lookup log i in
+      let h = get () in
+      lemma_honesty_update (MDM.repr (sel h log)) i l c b;
+      MDM.extend log i' b;
+      MDM.defined_stable log i';
+      mr_witness log (MDM.defined log i');
+      lemma_honest_corrupt i';
+      let h1 = get () in
+      // FIXME(adl) convert old modifies/modifies_ref?
+      assume(M.modifies honesty_loc h0 h1);
+      (i', b)
   else ((), false)
-#reset-options
 
 // 17-10-21 WIDE/NARROW INDEXES (old)
 //

@@ -288,7 +288,7 @@ let kdf_invariant_framing (#ideal:iflag) (#u:usage ideal)
       : Lemma (kdf_invariant_wit k h1 lbl ctx)
       =
       let i' : regid = derive i lbl ctx in
-      lemma_honest_parent i lbl ctx;
+      lemma_honest_parent_impl i lbl ctx;
       let pkg' = child u lbl in
       let dt : DT.table (Pkg?.key pkg') = DT.ideal pkg'.define_table in
       assert_norm(DT.live pkg'.define_table h0 == (model ==> h0 `HS.contains` dt));
@@ -308,6 +308,7 @@ val coerceT:
   a: info0 i ->
   repr: lbytes32 (secret_len a) ->
   GTot (secret u i)
+
 let coerceT #ideal u i a repr =
   Model.mk_real (| a, repr |)
 
@@ -325,12 +326,12 @@ val coerce:
     kdf_invariant k h1)
 
 let coerce #ideal u i a repr =
+  let h0 = get () in
   let k = Model.mk_real (| a, repr |) in
-  admit()
-  
-// WIP stronger packaging
-//  (if model then assume(local_kdf_invariant k h1));
-//  k
+  let h1 = get () in
+  assume false;
+  lemma_kdf_invariant_init k h1;
+  k
 
 /// NS:
 /// MDM.alloc is a stateful function with all implicit arguments

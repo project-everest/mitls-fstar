@@ -123,6 +123,14 @@ val empty_fp:
   vt:(it->Type) ->
   local_fp vt
 
+val lemma_empty_fp_none:
+  #it:eqtype ->
+  #vt:(it -> Type) ->
+  #i:it ->
+  k:vt i ->
+  Lemma (empty_fp vt k == M.loc_none)
+  [SMTPat (empty_fp vt k)]
+
 // Package footprint = union of all instance footprints
 val footprint:
   #it: eqtype ->
