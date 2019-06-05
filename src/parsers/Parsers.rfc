@@ -1631,29 +1631,20 @@ enum {
 
 enum { b_false, b_true, (255)} boolean;
 
-
 struct {
   ProtocolVersion pv;
   CipherSuite cs;
   boolean ems;
-} TicketInfo12;
-
-struct {
-  TicketInfo12 info;
   opaque master_secret[48];
 } TicketContents12;
 
 struct {
+  CipherSuite13 cs;
+  opaque rms<32..255>;
+  opaque nonce<0..255>;
   uint32 creation_time;
   uint32 age_add;
-  opaque nonce<0..255>;
-  CipherSuite13 cs;
   opaque custom_data<0..2^16-1>;
-} TicketInfo13;
-
-struct {
-  TicketInfo13 info;
-  opaque rms<32..255>;
 } TicketContents13;
 
 struct {

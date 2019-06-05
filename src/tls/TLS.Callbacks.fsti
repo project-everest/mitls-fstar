@@ -10,13 +10,144 @@ include Parsers.ProtocolNameList
 include Parsers.PskIdentity
 include CipherSuite 
 
+(*
+
+/// ------------------------------------------------------------------------------
+/// Ticket callback, used to store received tickets with their authenticated info
+
+/// Server-side early processing of the PSK extension in clientHello,
+/// producing a (vlbyte) list of received_psk_info for the nego
+/// callback:
+/// 
+/// For each psk_identity,
+
+let verify_ticket contents tch binder = 
+  let ha = contents.pskinfo.early_hash in 
+  let digest = Transcript.early_hash ha tch in 
+  if HMAC.verify ticket_info.rms digest then 
+    Valid contents
+  else
+    InvalidBinder contents 
+  
+let open_ticket config0 tch identity  binder = 
+  match Ticket.decrypt identity with
+  | None -> 
+      match config0.cb_get_seal tch identity with
+      | None -> UnknownKey 
+      | Some seal -> 
+          match Ticket.unseal seal with 
+          | None -> InvalidSeal 
+          | Some contents -> verify_ticket contents tch binder
+  | Some contents -> verify_ticket contents tch binder
+
+/// Client-side:
+///
+/// Similarly not sure how to register an app-psk.
+/// 
+/// For each initially-offered seal, call Ticket.unseal (treating
+/// decryption errors as fatal) then add the unsealed ticketInfo to
+/// the configuration.
+///
+/// For each received ticket,
+///   let contents = ...(local_context,ticket) in 
+///   config.cb_store_ticket (sni,alpn) (Ticket.seal contents)
+/// 
+
+// shortcut: initially handle only one valid ticket (avoiding an intermediate list)
+
+///
+///   let open_ticket 
+///   if decryption with server-ticket-key fails, call back the
+///   application for the sealed secret to use, passing the
+///   psk_identity and selected extensions (sni, alph, psk, custom)
+///
+///     if the application does not return a sealed secret,
+///     record "UnknownKey" 
+/// 
+///     if the application returns a sealed secret that does decrypt,
+///     record "InvalidKey"
+///
+///   // we have an unsealed ticket info.
+///
+///   if the binder does not verify then
+///     record "InvalidBinder"
+///   else
+///     record "Valid (projection of sealed info)" and  keep the associated info & secret.
+
+
+val app_info: pskInfo13 -> vlbytespl 0 65535 
+
+// We don't keep much for TLS 1.2; TBC
+type pskInfo_12 = 
+  Parsers.ProtocolVersion.protocolVersion * 
+  cipherSuite * 
+  ems:bool
+
+// Only for our TLS 1.3 API, both for app-psk and resumption-psk.
+//
+// We instantiate psk_identity to spec-level bytes, and also to
+// low-level slices containing those bytes at the API.
+
+type pskInfo (a:type) = {
+  // dataflow? this is overwritten at key-wrapping time, and may
+  // differ between users of the same app PSK.
+  time_created: UInt32.t;
+
+  // usage policy & algorithms for this PSK
+  allow_early_data: bool;
+  allow_dhe_resumption: bool; 
+  allow_psk_resumption: bool;
+  // these two fields are equivalent to a TLS 1.3 ciphersuite, 
+  // but less TLS-specific for crypto modelling; 
+  // they control 0RTT agility.
+  early_ae: aeadAlg;
+  early_hash: hash_alg;
+
+  // creation context, identifying both client and server (mode, certs, etc); TBC
+  psk_identity: a;
+}
+// contrary to ticketInfo, excluding the secret key val.
+
+type open_ticket = 
+  | Valid of vlbytespl 0 65535
+  | UnknownKey // decryption failed 
+  | InvalidKey
+  | InvalidBinder // binder verification failed 
+
+// Bundles a pksInfo, its associated secret, and ticket-specific details.
+// Used as plaintext for client sealing and server ticket-encryption.
+type ticketInfo =
+  | TicketInfo_12: 
+    pskinfo: pskInfo_12 -> ticketInfo 
+
+  | TicketInfo_13:
+    pskinfo: pskInfo -> 
+    // now a function of pskinfo: cs: cipherSuite{CipherSuite13? cs} ->
+
+    // nonce used to derive separate PSKs from different tickets issued
+    // for the same RMS. (Unused for app PSKs.)
+    nonce: vlbytespl 0 255 -> // replacing: ticket_nonce: option (vlbytespl 0 255) -> 
+    // ticket-issuance time and mask, 
+    // used to filter old tickets after decryption
+    ticket_created: UInt32.t ->
+    ticket_age_add: UInt32.t ->
+
+    application_context: vlbytespl 0 65535 -> 
+// now produced by the server (with empty ticket) and sealed by the client 
+
+    // the actual secret
+    rms: vlbytespl 32 255 ->
+
+    // the received ticket (client sealing) or empty (server ticketing)
+    encrypted_ticket: vlbytespl 0 65535 -> 
+
+    ticketInfo 
+ *)
+
 /// opaque context pointers provided by the application and passed back to it.
 
 val context: Type0
 val default_context: unit -> EXT context 
-
-/// ------------------------------------------------------------------------------
-/// Ticket callback, used to store received tickets with their authenticated info
 
 type psk_identifier = pskIdentity_identity
 
@@ -40,6 +171,7 @@ type ticketInfo =
   | TicketInfo_12 of Parsers.ProtocolVersion.protocolVersion * cipherSuite * ems:bool
   | TicketInfo_13 of pskInfo
 
+// Encrypted seals, stored by the application as opaque bytestrings.
 type ticket_seal = b:bytes{length b < 65536}
 
 
@@ -56,7 +188,7 @@ type ticket_cb_fun =
   sni:string -> 
   ticket:ticket_seal -> 
   info:ticketInfo -> 
-  rawkey:bytes -> 
+  rawkey:bytes ->  // ADL will remove it
   ST unit
     (requires fun _ -> True)
     (ensures fun h0 _ h1 -> modifies_none h0 h1)
