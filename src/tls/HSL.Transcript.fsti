@@ -66,6 +66,7 @@ module R_SH = MITLS.Repr.ServerHello
 module SH = Parsers.ServerHello
 module Psks = Parsers.OfferedPsks
 module PB = ParsersAux.Binders
+module CRF = EverCrypt.CRF
 
 //TODO: move to a separate module
 let repr_hs12 (b:R.const_slice) =
@@ -604,6 +605,9 @@ val extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t)
 val transcript_hash (a:HashDef.hash_alg) (t:transcript_t)
   : GTot (b: HashDef.lbytes (HashDef.hash_length a))
 
+/// `hashed a t`: An abstract predicate recording that the transcript
+/// has been hashed in ideal state, if idealization is on
+val hashed (a:HashDef.hash_alg) (t:transcript_t) : Type0
 
 /// `extract_hash`:
 ///
@@ -628,25 +632,25 @@ val extract_hash
       invariant s tx h1 /\
       modifies (loc_union (footprint s) (loc_buffer tag)) h0 h1 /\
       B.live h1 tag /\
-      B.as_seq h1 tag == transcript_hash a tx)
+      B.as_seq h1 tag == transcript_hash a tx /\
+      hashed a tx)
 
 
 /// `injectivity`: The main lemma provided by this module is a form of
 ///  collision resistance adapted to transcripts, i.e., if the hashes
 ///  of two transcripts match then the transcripts themselves do.
-
-/// TODO, still need to understand how to state this in terms of
-/// Hashing.CRF
-///
-/// Something like
-
-// val injectivity (a:HashDef.hash_alg) (tx1 tx2:G.erased transcript_t)
-//   : Stack unit
-//     (requires fun h ->
-//       hashed a tx1 /\
-//       hashed a tx2)
-//     (ensures fun h0 _ h1 ->
-//       h0 == h1 /\
-//       (crf a /\
-//        transcript_hash a tx1 == transcript_hash a tx2 ==>
-//        tx1 == tx2))
+val injectivity (a:HashDef.hash_alg) (tx1 tx2:G.erased transcript_t)
+  : Stack unit
+    (requires fun h ->
+      let tx1 = Ghost.reveal tx1 in
+      let tx2 = Ghost.reveal tx2 in
+      hashed a tx1 /\
+      hashed a tx2)
+    (ensures fun h0 _ h1 ->
+      let tx1 = Ghost.reveal tx1 in
+      let tx2 = Ghost.reveal tx2 in
+      h0 == h1 /\
+      (CRF.model /\
+       Model.CRF.crf a /\
+       transcript_hash a tx1 == transcript_hash a tx2 ==>
+       tx1 == tx2))

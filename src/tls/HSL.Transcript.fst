@@ -12,7 +12,6 @@ module HSM13 = Parsers.Handshake13
 
 module PV = Parsers.ProtocolVersion
 module LP = LowParse.Low.Base
-module IncHash = EverCrypt.Hash.Incremental
 
 module R = MITLS.Repr
 module R_HS = MITLS.Repr.Handshake
@@ -22,6 +21,8 @@ module CH = Parsers.ClientHello
 
 module R_SH = MITLS.Repr.ServerHello
 module SH = Parsers.ServerHello
+module CRF = EverCrypt.CRF
+module TestCRF = Test.CRF
 
 let is_hrr _ = false
 let nego_version _ _ = admit ()
@@ -106,26 +107,22 @@ let transcript_bytes (t:transcript_t)
 
 let rec transcript_bytes_injective (t1 t2:transcript_t)
   : Lemma
-    (requires
-      transcript_bytes t1 `Seq.equal` transcript_bytes t2)
-    (ensures
-      t1 == t2)
-  = match t1 with
-    | Start r1 ->
-      
+    (transcript_bytes t1 `Seq.equal` transcript_bytes t2 ==>
+     t1 == t2)
+  = admit()
       
 
 noeq
 type state (a:HashDef.hash_alg) = {
   region:Mem.rgn;
   loc: Ghost.erased B.loc;
-  hash_state: IncHash.state a
+  hash_state: CRF.state a
 }
 
 let invariant (#a:HashDef.hash_alg) (s:state a) (tx:transcript_t) (h:HS.mem) =
-  IncHash.hashes h s.hash_state (transcript_bytes tx) /\
+  CRF.hashes h s.hash_state (transcript_bytes tx) /\
   B.loc_region_only true s.region `B.loc_includes` Ghost.reveal s.loc /\
-  Ghost.reveal s.loc == IncHash.footprint s.hash_state h /\
+  Ghost.reveal s.loc == CRF.footprint s.hash_state h /\
   B.loc_not_unused_in h `B.loc_includes` Ghost.reveal s.loc
 
 let footprint (#a:HashDef.hash_alg) (s:state a) = Ghost.reveal s.loc
@@ -135,15 +132,15 @@ let elim_invariant #a s t h = ()
 let region_of #a s = s.region
 
 let frame_invariant (#a:_) (s:state a) (t: transcript_t) (h0 h1:HS.mem) (l:B.loc) =
-  IncHash.modifies_disjoint_preserves l h0 h1 s.hash_state
+  CRF.modifies_disjoint_preserves l h0 h1 s.hash_state
 
 #set-options "--max_fuel 0 --max_ifuel  1 --initial_ifuel  1"
 let create r a =
   let h0 = get() in
-  let s = IncHash.create_in a r in
+  let s = CRF.create_in a r in
   let h1 = get () in
   {region=r;
-   loc=Ghost.hide (IncHash.footprint s h1);
+   loc=Ghost.hide (CRF.footprint s h1);
    hash_state=s},
   Ghost.hide (Start None)
 
@@ -151,7 +148,7 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
   match l with
   | LR_ClientHello #b ch ->
     let h0 = HyperStack.ST.get() in
-    assert (let Start retry = G.reveal tx in IncHash.hashes h0 s.hash_state (serialize_retry retry) );
+    assert (let Start retry = G.reveal tx in CRF.hashes h0 s.hash_state (serialize_retry retry) );
     assert (let Start retry = G.reveal tx in
       ClientHello retry (HSM.M_client_hello?._0 (R.value ch)) ==
       Some?.v (transition (G.reveal tx) (label_of_label_repr l)));
@@ -161,10 +158,19 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l)))
   | _ -> admit()
 
-let transcript_hash (a:HashDef.hash_alg) (t:transcript_t) = Spec.Hash.hash a (transcript_bytes t)
+let transcript_hash (a:HashDef.hash_alg) (t:transcript_t)
+  = Spec.Hash.hash a (transcript_bytes t)
 
+let hashed (a:HashDef.hash_alg) (t:transcript_t) = 
+  Model.CRF.hashed a (transcript_bytes t)
+  
 let extract_hash (#a:_) (s:state a) 
   (tag:Hacl.Hash.Definitions.hash_t a)
   (tx:G.erased transcript_t)
-  = IncHash.finish a s.hash_state (G.hide (transcript_bytes (G.reveal tx))) tag
+  = CRF.finish a s.hash_state (G.hide (transcript_bytes (G.reveal tx))) tag
 
+let injectivity a t0 t1 =
+  let b0 = Ghost.hide (transcript_bytes (Ghost.reveal t0)) in
+  let b1 = Ghost.hide (transcript_bytes (Ghost.reveal t1)) in
+  Model.CRF.injective a b0 b1;
+  transcript_bytes_injective (Ghost.reveal t0) (Ghost.reveal t1)
