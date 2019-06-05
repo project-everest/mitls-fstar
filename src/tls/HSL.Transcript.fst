@@ -65,8 +65,7 @@ let rec serialize_list_max_size #pk #t #p s x =
   | hd::tl -> LPSL.serialize_list_cons p s hd tl; serialize_list_max_size s tl
    
 let serialize_any_tag (ht:any_hash_tag) =
-    let ht = FStar.Bytes.hide ht in
-    LP.serialize HSM.handshake_serializer (Parsers.Handshake.M_message_hash ht)
+    LP.serialize HSM.handshake_serializer ht // (Parsers.Handshake.M_message_hash ht)
 
 let serialize_client_hello (ch:CH.clientHello) =
   LP.serialize HSM.handshake_serializer (HSM.M_client_hello ch)
@@ -101,16 +100,18 @@ let transcript_bytes (t:transcript_t)
     
   | Transcript12 ch sh rest ->
     serialize_list_max_size HSM12.handshake12_serializer rest;
-    serialize_client_hello ch `Seq.append`
+    serialize_client_hello ch `Seq.append` (
     serialize_server_hello sh `Seq.append`
     LP.serialize (LPSL.serialize_list _ HSM12.handshake12_serializer) rest
+    )
 
   | Transcript13 retry ch sh rest ->
     serialize_list_max_size HSM13.handshake13_serializer rest;
-    serialize_retry retry `Seq.append`
-    serialize_client_hello ch `Seq.append`
-    serialize_server_hello sh `Seq.append`
+    serialize_retry retry `Seq.append` (
+    serialize_client_hello ch `Seq.append` (
+    serialize_server_hello sh `Seq.append` (
     LP.serialize (LPSL.serialize_list _ HSM13.handshake13_serializer) rest
+    )))
 
 let transcript_is_empty (t: transcript_t) : Tot bool = match t with
   | Start None -> true
@@ -142,7 +143,13 @@ let transcript_bytes_does_not_start_with_message_hash
 : Lemma
   (requires (transcript_get_retry t == None /\ transcript_bytes t == serialize_retry (Some r) `Seq.append` q))
   (ensures False)
-= ()
+= admit ()
+
+let seq_append_empty () : Lemma
+  (forall (s: Seq.seq LP.byte) . {:pattern (Seq.empty `Seq.append` s)} Seq.empty `Seq.append` s == s)
+= assert (forall (s: Seq.seq LP.byte) . {:pattern (Seq.empty `Seq.append` s)} (Seq.empty `Seq.append` s) `Seq.equal` s)
+
+#push-options "--z3rlimit 16"
 
 let transcript_bytes_injective_retry
   (r1: option retry)
@@ -152,14 +159,19 @@ let transcript_bytes_injective_retry
 : Lemma
   (requires (serialize_retry r1 `Seq.append` transcript_bytes t1 == serialize_retry r2 `Seq.append` transcript_bytes t2))
   (ensures (r1 == r2 /\ transcript_bytes t1 `Seq.equal` transcript_bytes t2))
-= match r1, r2 with
-  | None, None ->
-    assert (transcript_bytes t1 `Seq.equal` (Seq.empty `Seq.append` transcript_bytes t1));
-    assert (transcript_bytes t2 `Seq.equal` (Seq.empty `Seq.append` transcript_bytes t2))
+= seq_append_empty ();
+  match r1, r2 with
+  | None, None -> ()
   | Some (ht1, sh1), Some (ht2, sh2) ->
-    assert ((serialize_retry r1 `Seq.append` transcript_bytes t1) `Seq.equal` (LP.serialize HSM.handshake_serializer (HSM.M_message_hash (FStar.Bytes.hide ht1)) `Seq.append` (serialize_server_hello sh1 `Seq.append` transcript_bytes t1)));
-    assert ((serialize_retry r2 `Seq.append` transcript_bytes t2) `Seq.equal` (LP.serialize HSM.handshake_serializer (HSM.M_message_hash (FStar.Bytes.hide ht2)) `Seq.append` (serialize_server_hello sh2 `Seq.append` transcript_bytes t2)));
+    assert ((serialize_retry r1 `Seq.append` transcript_bytes t1) `Seq.equal` (serialize_any_tag ht1 `Seq.append` (serialize_server_hello sh1 `Seq.append` transcript_bytes t1)));
+    assert ((serialize_retry r2 `Seq.append` transcript_bytes t2) `Seq.equal` (serialize_any_tag ht2 `Seq.append` (serialize_server_hello sh2 `Seq.append` transcript_bytes t2)));
     assume (r1 == r2 /\ transcript_bytes t1 == transcript_bytes t2)
+  | Some r1, _ ->
+    transcript_bytes_does_not_start_with_message_hash t2 r1 (transcript_bytes t1)
+  | _, Some r2 ->
+    transcript_bytes_does_not_start_with_message_hash t1 r2 (transcript_bytes t2)
+
+#pop-options
 
 let transcript_bytes_injective (t1 t2:transcript_t)
   : Lemma
@@ -209,6 +221,7 @@ let create r a =
 let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
   let h0 = HyperStack.ST.get() in
   match l with
+(*
   | LR_ClientHello #b ch ->
     assume (C.qbuf_qual (C.as_qbuf b.R.base) = C.MUTABLE);
 
@@ -291,6 +304,7 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     // {s with hash_state = st'}, tx'    
 
   | LR_CompleteTCH #b tch -> admit()
+*)
 
   | LR_HRR #b1 ch_tag #b2 hrr ->
     assume (C.qbuf_qual (C.as_qbuf b1.R.base) = C.MUTABLE);
@@ -301,25 +315,29 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     // the serialized data corresponding to the client hello that is being added
     R.reveal_valid();
 
-    admit();
-    // TODO: What is the parser for any tag?
-
     LP.valid_pos_valid_exact HSM.handshake_parser h0 (R.to_slice b1) ch_tag.R.start_pos ch_tag.R.end_pos;
     LP.valid_exact_serialize HSM.handshake_serializer h0 (R.to_slice b1) ch_tag.R.start_pos ch_tag.R.end_pos;
-
-    LP.valid_pos_valid_exact HSM.handshake_parser h0 (R.to_slice b2) hrr.R.start_pos hrr.R.end_pos;
-    LP.valid_exact_serialize HSM.handshake_serializer h0 (R.to_slice b2) hrr.R.start_pos hrr.R.end_pos;
 
 
     let len = ch_tag.R.end_pos - ch_tag.R.start_pos in
     let data = C.sub b1.R.base ch_tag.R.start_pos len in
 
+    assert (C.as_seq h0 data == LP.serialize HSM.handshake_serializer (R.value ch_tag));
+
+
     assert_norm (pow2 32 < pow2 61);
     let st' = IncHash.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
+
+    let h1 = HyperStack.ST.get() in
+
+    LP.valid_pos_valid_exact HSM.handshake_parser h1 (R.to_slice b2) hrr.R.start_pos hrr.R.end_pos;
+    LP.valid_exact_serialize HSM.handshake_serializer h1 (R.to_slice b2) hrr.R.start_pos hrr.R.end_pos;
 
 
     let len = hrr.R.end_pos - hrr.R.start_pos in
     let data = C.sub b2.R.base hrr.R.start_pos len in
+    assert (C.as_seq h1 data == LP.serialize HSM.handshake_serializer (R.value hrr));
+
 
     assert_norm (pow2 32 < pow2 61);
 
@@ -328,10 +346,15 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
 
 
     let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
-    
+
+
+    let hf = HyperStack.ST.get () in
+    assume (IncHash.hashes hf st' (transcript_bytes (G.reveal tx')));
+
     {s with hash_state = st'}, tx'
   
 
+(*
   | LR_HSM12 #b hs12 ->
     assume (C.qbuf_qual (C.as_qbuf b.R.base) = C.MUTABLE);
 
@@ -395,6 +418,9 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     let st' = IncHash.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
 
     {s with hash_state = st'}, tx'
+*)
+
+  | _ -> admit ()
 
 let transcript_hash (a:HashDef.hash_alg) (t:transcript_t) = Spec.Hash.hash a (transcript_bytes t)
 

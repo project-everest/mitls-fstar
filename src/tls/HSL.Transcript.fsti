@@ -87,7 +87,11 @@ let hs_sh = sh:HSM.handshake{HSM.M_server_hello? sh}
 // assume
 val is_hrr (sh:SH.serverHello) : bool
 
-let any_hash_tag = s:Seq.seq UInt8.t{forall a. Seq.length s <= HashDef.hash_word_length a}
+let is_any_hash_tag (h: HSM.handshake) : GTot Type0 =
+  HSM.M_message_hash? h /\ (forall a. FStar.Bytes.length (HSM.M_message_hash?._0 h) <= HashDef.hash_word_length a)
+
+let any_hash_tag = 
+  (h: HSM.handshake { is_any_hash_tag h })
 
 /// `retry`: a pair of a client hello hash and hello retry request
 type retry =
@@ -489,7 +493,7 @@ type label_repr =
 
   | LR_HRR:
       #b1:R.const_slice ->
-      ch_tag:R.repr any_hash_tag b1 ->
+      ch_tag: R_HS.repr b1 { is_any_hash_tag (R.value ch_tag) }  ->
       #b2:R.const_slice ->
       hrr:hs_sh_repr b2{is_hrr (HSM.M_server_hello?._0 (R.value hrr))} ->
       label_repr
@@ -553,7 +557,7 @@ let loc_of_label_repr (l:label_repr) =
   | LR_HRR #b1 _ #b2 _ ->
     B.loc_union
       (C.loc_buffer R.(b1.base))
-      (C.loc_buffer R.(b1.base))
+      (C.loc_buffer R.(b2.base))
 
   | LR_ClientHello #b _
   | LR_ServerHello #b _
