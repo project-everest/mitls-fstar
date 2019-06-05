@@ -13,7 +13,7 @@ module KDF
 
 open Mem
 open Pkg
-open Idx 
+open Idx
 open Pkg.Tree
 open FStar.HyperStack.ST
 
@@ -23,8 +23,10 @@ module MDM = FStar.Monotonic.DependentMap
 module HS = FStar.HyperStack
 module DT = DefineTable
 
+#set-options "--max_fuel 0 --max_ifuel 0 --z3rlimit 30"
+
 (*
-This modue defines a universal, packaged KDF parametric in its
+This module defines a universal, packaged KDF parametric in its
 usage (which is a tree of derived packages).
 
 The KDF is idealized as a memoization table from label and context
@@ -47,14 +49,20 @@ type info =
   ha:kdfa ->
   option (details ha) -> info
 
-noextract let rec index_info (i:id{model}) =
+#push-options "--max_fuel 1 --max_ifuel 1"
+
+noextract
+let rec index_info (i:id{model}) =
   let i':pre_id = i in
   match i' with
   | Preshared a _ -> Info a None
   | Derive i l (ExpandLog log hv) -> Info (ha_of_id i) (Some (Log log hv))
   | Derive i _ _ -> index_info i
 
+#pop-options
+
 let valid_info (i:id) (v:info) = model ==> (v == index_info i)
+
 type info0 (i:id) = u:info{valid_info i u}
 type iflag = b:bool{b ==> model}
 type usage (ideal:iflag) = children (b2t ideal)
@@ -67,11 +75,10 @@ let derived_key
   (lbl: label {u `has_lbl` lbl})
   (ctx: context)
   : Pure Type0
-  (requires wellformed_derive i lbl ctx /\
-    registered (derive i lbl ctx))
+  (requires wellformed_derive i lbl ctx /\ registered (derive i lbl ctx))
   (ensures fun t -> True)
   =
-  if model then 
+  if model then
     Pkg?.key (child u lbl) (Derive i lbl ctx)
   else unit
 
@@ -113,11 +120,13 @@ let lemma_witnessed_true p =
   lemma_witnessed_constant True;
   weaken_witness (fun _ -> True) p
 
+#push-options "--max_ifuel 1"
+
 val lemma_honest_parent (i:regid) (lbl:label) (ctx:context)
   : Lemma (requires
-            wellformed_derive i lbl ctx /\ 
-            registered (derive i lbl ctx) /\ 
-            ~(honest_idh ctx) /\ 
+            wellformed_derive i lbl ctx /\
+            registered (derive i lbl ctx) /\
+            ~(honest_idh ctx) /\
             honest (derive i lbl ctx))
           (ensures honest i)
 let lemma_honest_parent i lbl ctx =
@@ -125,13 +134,14 @@ let lemma_honest_parent i lbl ctx =
     let log : i_honesty_table = honesty_table in
     lemma_witnessed_true (fun h -> MDM.contains log (derive i lbl ctx) true h ==> MDM.contains log i true h);
     lemma_witnessed_impl (MDM.contains log (derive i lbl ctx) true) (MDM.contains log i true)
-  else ()
+
+#pop-options
 
 let lemma_honest_parent_impl (i:regid) (lbl:label) (ctx:context)
-  : Lemma (requires wellformed_derive i lbl ctx /\ 
-            registered (derive i lbl ctx) /\ 
+  : Lemma (requires wellformed_derive i lbl ctx /\
+            registered (derive i lbl ctx) /\
             ~(honest_idh ctx))
-	  (ensures honest (derive i lbl ctx) ==> honest i)
+          (ensures honest (derive i lbl ctx) ==> honest i)
   = FStar.Classical.impl_intro_gen #(honest (derive i lbl ctx)) #(fun _ -> honest i)
     (fun (u:squash (honest (derive i lbl ctx))) -> lemma_honest_parent i lbl ctx)
 
@@ -150,7 +160,7 @@ type live (#ideal:iflag) (#u:usage ideal) (#i:regid) (k:secret u i) (h:mem) =
 // The KDF invariant specifies that when the KDF is ideal,
 // its table contains entries that are defined if, and only if,
 // the derived index is in the define table of the child package.
-// 
+//
 // If the KDF is real, we functionally specify the instances that
 // defined in the child package's define table using coerceT
 type kdf_invariant_wit (#ideal:iflag) (#u:usage ideal) (#i:regid)
@@ -190,7 +200,7 @@ let lemma_kdf_invariant_init_wit (#ideal:iflag) (#u:usage ideal) (#i:regid)
     let dt = DT.ideal (child u lbl).define_table in
     assert_norm(DT.empty (child u lbl).define_table h == (model ==> HS.sel h dt == MDM.empty))
   ) else ()
-  
+
 // The KDF invariant holds for all children (i.e. all lbl s.t. u `has_lbl` lbl)
 type kdf_invariant (#ideal:iflag) (#u:usage ideal) (#i:regid) (k:secret u i) (h:mem) =
   (if model then
@@ -198,6 +208,8 @@ type kdf_invariant (#ideal:iflag) (#u:usage ideal) (#i:regid) (k:secret u i) (h:
        (ctx:context{~(honest_idh ctx) /\ wellformed_derive i lbl ctx /\ registered (derive i lbl ctx)}).
     kdf_invariant_wit k h lbl ctx)
   else True)
+
+#push-options "--max_fuel 1 --max_ifuel 1"
 
 // The union of all the define table of the children of the KDF
 let rec children_fp (#ideal:iflag) (u:usage ideal) : GTot M.loc =
@@ -238,16 +250,15 @@ let lemma_kdf_footprint_disjoint_wit (#ideal:iflag) (#u:usage ideal)
         (ensures M.loc_disjoint l (DT.loc (child u lbl).define_table))
       =
       if model then
-	let c : children' (b2t ideal) = u in
-	match c with
-	| [] -> assert_norm(u `find_lbl` lbl == None)
-	| (lbl', _) :: t ->
+        let c : children' (b2t ideal) = u in
+        match c with
+        | [] -> assert_norm(u `find_lbl` lbl == None)
+        | (lbl', _) :: t ->
           if lbl = lbl' then ()
           else aux #ideal t lbl
       else ()
       in
     aux u lbl
-  else ()
 
 // Trivial lemma but useful to drive stateful proofs by introducing
 // the expected goals and the right patterns
@@ -255,6 +266,8 @@ private let lemma_unchanged #a #rel (r:mreference a rel) h0 l h1 : Lemma
   (requires M.modifies l h0 h1 /\ h0 `HS.contains` r /\
     M.loc_disjoint l (M.loc_mreference r))
   (ensures HS.sel h0 r == HS.sel h1 r) = ()
+
+#pop-options
 
 let lemma_kdf_invariant_init (#ideal:iflag) (#u:usage ideal)
   (#i:regid) (k:secret u i) (h:mem)
@@ -273,7 +286,6 @@ let lemma_kdf_invariant_init (#ideal:iflag) (#u:usage ideal)
       lemma_kdf_invariant_init_wit k h lbl ctx
     in
     FStar.Classical.forall_intro_2 prove_on_witness
-  else ()
 
 let kdf_invariant_framing (#ideal:iflag) (#u:usage ideal)
   (#i:regid) (k:secret u i) (h0:mem) (l:M.loc) (h1:mem)
@@ -296,10 +308,8 @@ let kdf_invariant_framing (#ideal:iflag) (#u:usage ideal)
       lemma_kdf_footprint_disjoint_wit k lbl ctx l;
       lemma_unchanged dt h0 l h1; // Trivial, but helps the proof
       if Model.is_safe k then lemma_unchanged (Model.ideal k) h0 l h1
-      else ()
     in
     FStar.Classical.forall_intro_2 prove_on_witness
-  else ()
 
 val coerceT:
   #ideal: iflag ->
@@ -320,7 +330,8 @@ val coerce:
   repr: lbytes32 (secret_len a) ->
   ST (secret u i)
   (requires fun h0 -> valid_info i a)
-  (ensures fun h0 k h1 -> M.modifies M.loc_none h0 h1 /\
+  (ensures fun h0 k h1 ->
+    M.modifies M.loc_none h0 h1 /\
     k == coerceT u i a repr /\
     fresh_loc (kdf_footprint k) h0 h1 /\
     kdf_invariant k h1)
@@ -342,11 +353,11 @@ let coerce #ideal u i a repr =
 ///
 /// I added a unit here
 ///
-/// CF: Ok; I did not know. Is it a style bug in FStar.Monotonic.Map ? 
-let alloc #a #b #inv (r: erid): 
+/// CF: Ok; I did not know. Is it a style bug in FStar.Monotonic.Map ?
+let alloc #a #b #inv (r: erid):
   ST (MDM.t r a b inv)
-    (requires (fun h -> 
-      inv (MDM.empty_partial_dependent_map #a #b) /\ 
+    (requires (fun h ->
+      inv (MDM.empty_partial_dependent_map #a #b) /\
       witnessed (region_contains_pred r) ))
     (ensures (fun h0 x h1 ->
       inv (MDM.empty_partial_dependent_map #a #b) /\
@@ -605,7 +616,7 @@ let derive #ideal #t #i k lbl ctx child_pkg a' =
       in
     let pkg = child u lbl in
     assert(Pkg?.ideal pkg ==> b2t ideal); // Nice!
-    
+
     if (u `has_lbl` lbl) && ideal && honest then
      begin
       let x: domain u i = Domain lbl ctx in
@@ -614,16 +625,16 @@ let derive #ideal #t #i k lbl ctx child_pkg a' =
       match v with
       | Some dk -> (| (), dk |)
       | None ->
-	let dk = (Pkg?.create pkg) i' a' in
-	let h2 = get() in
-	assume(tree_invariant t h2);
-	assert(mem_fresh pkg.define_table i' h2); // from kdf_local_inv
-	MDM.extend kdf_t x dk;
-	(| (), dk |)
+        let dk = (Pkg?.create pkg) i' a' in
+        let h2 = get() in
+        assume(tree_invariant t h2);
+        assert(mem_fresh pkg.define_table i' h2); // from kdf_local_inv
+        MDM.extend kdf_t x dk;
+        (| (), dk |)
       end
     else
      begin
-      let dlen = (LocalPkg?.len child_pkg) a' in 
+      let dlen = (LocalPkg?.len child_pkg) a' in
       let raw = HKDF.expand #((get_info k).ha) (dsnd (Model.real k)) (FStar.Bytes.bytes_of_string lbl) dlen in
       let dk = (LocalPkg?.coerce child_pkg) i' a' raw in
       (| (), dk |)
@@ -632,13 +643,13 @@ let derive #ideal #t #i k lbl ctx child_pkg a' =
   else
    begin
     assert(h1 == h0);
-    let len' = (LocalPkg?.len child_pkg) a' in 
+    let len' = (LocalPkg?.len child_pkg) a' in
     let (| a, key |) = Model.real k in
     let lb = FStar.Bytes.bytes_of_string lbl in
     let raw = HKDF.expand #(a.ha) key lb len' in
     let dk = (LocalPkg?.coerce child_pkg) i' a' raw in
     let h2 = get() in
-//    assert(modifies_none h1 h2); 
+//    assert(modifies_none h1 h2);
     assume(modifies_derive k lbl ctx h0 h2); // FIXME stronger spec for Pkg.coerce?
     (| (), dk |)
    end

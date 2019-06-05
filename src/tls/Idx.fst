@@ -1,30 +1,26 @@
 module Idx
 
 open Mem
-//open Pkg
 
-module M = LowStar.Modifies
+module B = LowStar.Buffer
 module DM = FStar.DependentMap
 module MDM = FStar.Monotonic.DependentMap
 
+#set-options "--max_fuel 0 --max_ifuel 0 --z3rlimit 30" 
+
 type info = TLSInfo.logInfo
 
-// 17-12-08 we considered separating "honesty" from the more ad hoc parts of this file.
+/// TLS-specific Key Indices
 
-/// TLS-SPECIFIC KEY INDICES
-/// --------------------------------------------------------------------------------------------------
-///
 /// We provide an instance of ipkg to track key derivation (here using constant labels)
-/// these labels are specific to HKDF, for now strings e.g. "e exp master".
+/// These labels are specific to HKDF, for now strings e.g. "e exp master"
 type label = s:string{Bytes.length (Bytes.bytes_of_string s) < 250}
 
-/// the middle extraction takes an optional DH secret, identified by this triple
-/// we use our own datatype to simplify typechecking
+/// The middle extraction takes an optional DH secret, identified by this triple
+/// We use our own datatype to simplify typechecking
 type id_dhe =
   | NoIDH
-  | IDH:
-    gX: CommonDH.dhi ->
-    gY: CommonDH.dhr gX -> id_dhe
+  | IDH: gX: CommonDH.dhi -> gY: CommonDH.dhr gX -> id_dhe
 
 // The "ciphersuite hash algorithms" eligible for TLS 1.3 key derivation.
 // We will be more restrictive.
@@ -32,8 +28,8 @@ type kdfa = EverCrypt.HMAC.supported_alg
 
 /// Runtime key-derivation parameters, to be adjusted.
 ///
-/// HKDF defines an injective function from label * context to bytes, to be used as KDF indexes.
-///
+/// HKDF defines an injective function from (label * context) to bytes,
+/// to be used as KDF indices
 type context =
   | Extract: context // TLS extractions have no label and no context; we may separate Extract0 and Extract2
   | ExtractDH: v:id_dhe -> context // This is Extract1 (the middle extraction)
@@ -42,7 +38,6 @@ type context =
     info: TLSInfo.logInfo (* ghost, abstract summary of the transcript *) ->
     hv: Hashing.Spec.anyTag (* requires stratification *) -> context
 // 18-09-25 should info be HandshakeLog.hs_transcript? 
-
 
 /// Underneath, HKDF takes a "context" and a required length, with
 /// disjoint internal encodings of the context:
@@ -55,7 +50,7 @@ type id_psk = nat // external application PSKs only; we may also set the usage's
 [@ Gc]
 type pre_id =
   | Preshared:
-      a: kdfa (* fixing the hash algorithm *) ->
+      a:kdfa (* fixing the hash algorithm *) ->
       id_psk  ->
       pre_id
   | Derive:
@@ -64,27 +59,29 @@ type pre_id =
       context (* dynamic part of the derivation label *) ->
       pre_id
 
-// always bound by the index (and also passed concretely at creation-time).
-val ha_of_id: i:pre_id -> kdfa
+#push-options "--max_ifuel 1"
+
+// Always bound by the index (and also passed concretely at creation-time).
+val ha_of_id: pre_id -> kdfa
 let rec ha_of_id = function
   | Preshared a _ -> a
   | Derive i lbl ctx -> ha_of_id i
 
-// placeholders
-assume val idh_of_log: TLSInfo.logInfo -> id_dhe
+// Placeholders
+assume val idh_of_log: TLSInfo.logInfo -> id_dhe // 2019.06.05 SZ: Unused?
 assume val summary: Bytes.bytes -> TLSInfo.logInfo
 
 // concrete transcript digest
-let digest_info (a:kdfa) (info:TLSInfo.logInfo) (hv: Hashing.Spec.anyTag) =
+let digest_info (a:kdfa) (info:TLSInfo.logInfo) (hv:Hashing.Spec.anyTag) =
   exists (transcript: Hashing.hashable a).
     // Bytes.length hv = tagLen a /\
     hv = Hashing.h a transcript /\
     Hashing.CRF.hashed a transcript /\
     info = summary transcript
 
-/// stratified definition of id required.
+/// Stratified definition of id required.
 ///
-/// we will enforce
+/// We will enforce
 /// * consistency on the hash algorithm
 /// * monotonicity of the log infos (recursively including earlier resumption logs).
 /// * usage restriction: the log after DH must include the DH identifier of the parent.
@@ -93,28 +90,34 @@ let digest_info (a:kdfa) (info:TLSInfo.logInfo) (hv: Hashing.Spec.anyTag) =
 val pre_wellformed_id: pre_id -> Type0
 let rec pre_wellformed_id = function
   | Preshared a _ -> True
-  | Derive i l (ExpandLog info hv) -> pre_wellformed_id i /\ digest_info (ha_of_id i) info hv
+  | Derive i l (ExpandLog info hv) -> 
+      pre_wellformed_id i /\ digest_info (ha_of_id i) info hv
   | Derive i lbl ctx ->
       //TODO "ctx either extends the parent's, or includes its idh" /\
       pre_wellformed_id i
 
+#pop-options
+
 /// Indexes are used concretely in model code, so we
 /// erase them conditionally on model
-type id = 
-  (if model then i:pre_id {pre_wellformed_id i}
-  else unit)
+let id: Type0 = 
+  if model then i:pre_id {pre_wellformed_id i} else unit
 
-unfold type wellformed_id (i:id) =
-  (if model then pre_wellformed_id i else True)
+unfold 
+let wellformed_id (i:id) : Type0 =
+  if model then pre_wellformed_id i else True
 
-unfold let wellformed_derive (i:id) (l:label) (ctx:context) =
-  (if model then pre_wellformed_id (Derive i l ctx) else True)
+unfold 
+let wellformed_derive (i:id) (l:label) (ctx:context) : Type0 =
+  if model then pre_wellformed_id (Derive i l ctx) else True
 
-unfold let derive (i:id) (l:label) (ctx:context{wellformed_derive i l ctx}) : id =
-  (if model then Derive i l ctx else ())
+unfold 
+let derive (i:id) (l:label) (ctx:context{wellformed_derive i l ctx}) : id =
+  if model then Derive i l ctx else ()
 
 type honest_idh (c:context) =
-  ExtractDH? c /\ IDH? (ExtractDH?.v c) /\
+  ExtractDH? c /\ 
+  IDH? (ExtractDH?.v c) /\
   (let ExtractDH (IDH gX gY) = c in CommonDH.honest_dhr gY)
 
 /// We use a global honesty table for all indexes. Inside ipkg, we
@@ -126,15 +129,17 @@ type honest_idh (c:context) =
 ///
 type honesty_invariant (m:DM.t id (MDM.opt (fun _ -> bool))) =
   (forall (i:id) (l:label) (c:context{wellformed_derive i l c}).
-  {:pattern (DM.sel m (Derive i l c))}
+  {:pattern (DM.sel m (derive i l c))}
   (match DM.sel m i, DM.sel m (derive i l c) with
   | Some false, Some true -> honest_idh c // DH-based idealization
+  //| Some false, None -> honest_idh c
   | None, Some _ -> False // Can't define honesty of index derived from unregistered parent
   | _ -> True))
 
-//17-12-08 removed [private] twice, as we need to recall it in ODH :(
+//Intentionally non-private because we need to recall it in ODH
 type i_honesty_table =
   MDM.t tls_honest_region id (fun (t:id) -> bool) honesty_invariant
+
 let h_table = if model then i_honesty_table else unit
 
 let honesty_table: h_table =
@@ -142,174 +147,160 @@ let honesty_table: h_table =
     MDM.alloc #id #(fun _ -> bool) #honesty_invariant #tls_honest_region ()
   else ()
 
+(* 2019.06.05 SZ: this doesn't quite work and stalls proofs if marked as unfold
 let honesty_loc =
-  if model then M.loc_region_only true tls_honest_region
-  else M.loc_none
+  if model then B.loc_region_only true tls_honest_region
+  else B.loc_none
+*)
 
 // Registered is monotonic
-type registered (i:id) =
-  (if model then
+let registered (i:id) : Type0 =
+  if model then
     let log : i_honesty_table = honesty_table in
     witnessed (MDM.defined log i)
-  else True)
+  else True
 
 type regid = i:id{registered i}
 
-type honest (i:id) =
-  (if model then
+let honest (i:id) : Type0 =
+  if model then
     let log: i_honesty_table = honesty_table in
     witnessed (MDM.contains log i true)
-  else False)
+  else False
 
-type corrupt (i:id) =
-  (if model then
+let corrupt (i:id) : Type0 =
+  if model then
     let log : i_honesty_table = honesty_table in
     witnessed (MDM.contains log i false)
-  else True)
+  else True
 
-assume val bind_squash_st:
-  #a:Type ->
-  #b:Type ->
-  #pre:(mem -> Type) ->
-  squash a ->
-  $f:(a -> ST (squash b) (requires (fun h0 -> pre h0)) (ensures (fun h0 _ h1 -> h0 == h1))) ->
-  ST (squash b) (requires (fun h0 -> pre h0)) (ensures (fun h0 _ h1 -> h0 == h1))
+///  Lemmata relating registered, honest, and corrupt
 
-#set-options "--z3rlimit 100"
-inline_for_extraction
-private let lemma_honest_or_corrupt (i:regid)
-  :ST unit (requires (fun _ -> True)) (ensures (fun h0 _ h1 -> h0 == h1 /\ (honest i \/ corrupt i)))
-  = if model then begin
-      let log:i_honesty_table = honesty_table in
-      let aux :(h:mem) -> (c_or (MDM.contains log i true h) (~ (MDM.contains log i true h)))
-               -> ST (squash (honest i \/ corrupt i))
-	            (requires (fun h0     -> h == h0))
-		        (ensures (fun h0 _ h1 -> h0 == h1))
-        = fun _ x ->
-	  recall log;
-	  testify (MDM.defined log i);
-	  match x with
-	  | Left  h ->
-	    MDM.contains_stable log i true;
-	    mr_witness log (MDM.contains log i true)
-	  | Right h ->
-	    MDM.contains_stable log i false;
-	    mr_witness log (MDM.contains log i false)
-      in
-      let h = get () in
-      let y = Squash.bind_squash (Squash.get_proof (l_or (MDM.contains log i true h) (~ (MDM.contains log i true h)))) (fun y -> y) in
-      bind_squash_st y (aux h)
+// TODO: move to ulib?
+private
+val lemma_witnessed_true (p:mem_predicate) :
+  Lemma (requires forall h. p h) (ensures witnessed p)
+let lemma_witnessed_true p =
+  lemma_witnessed_constant True;
+  weaken_witness (fun _ -> True) p
+
+val lemma_honest_registered (i:id) : Lemma
+  (requires honest i)
+  (ensures  registered i)
+  [SMTPat (honest i)]
+let lemma_honest_registered i = 
+  if model then
+    begin
+    let log: i_honesty_table = honesty_table in
+    let p = MDM.contains log i true in
+    let q = MDM.defined log i in
+    lemma_witnessed_impl p q;
+    lemma_witnessed_true (fun h -> p h ==> q h)
     end
-    else ()
-
-inline_for_extraction
-private let lemma_not_honest_and_corrupt (i:regid)
-  :ST unit (requires (fun _ -> True)) (ensures (fun h0 _ h1 -> h0 == h1 /\ (~ (honest i /\ corrupt i))))
-  = if model then begin
-      let log:i_honesty_table = honesty_table in
-      let aux :(c_or (honest i /\ corrupt i) (~ (honest i /\ corrupt i)))
-               -> ST (squash (~ (honest i /\ corrupt i)))
-	            (requires (fun h0     -> True))
-		    (ensures (fun h0 _ h1 -> h0 == h1))
-        = fun x ->
-	  recall log;
-	  testify (MDM.defined log i);
-	  match x with
-	  | Left  h -> testify (MDM.contains log i true); testify (MDM.contains log i false)
-	  | Right h -> ()
-      in
-      let y = Squash.bind_squash (Squash.get_proof (l_or (honest i /\ corrupt i) (~ (honest i /\ corrupt i)))) (fun y -> y) in
-      bind_squash_st y aux
+    
+val lemma_corrupt_registered (i:id) : Lemma
+  (requires corrupt i)
+  (ensures  registered i)
+  [SMTPat (corrupt i)]
+let lemma_corrupt_registered i =
+  if model then
+    begin
+    let log: i_honesty_table = honesty_table in
+    let p = MDM.contains log i false in
+    let q = MDM.defined log i in
+    lemma_witnessed_impl p q;
+    lemma_witnessed_true (fun h -> p h ==> q h)
     end
-    else ()
 
-(*
- * AR: 04/01: A stateful version of the lemma_honest_corrupt
- *)
-inline_for_extraction
-let lemma_honest_corrupt_st (i:regid)
-  : ST unit (requires (fun _ -> True))
-  (ensures (fun h0 _ h1 -> h0 == h1 /\ (honest i <==> (~ (corrupt i)))))
-  = lemma_honest_or_corrupt i; lemma_not_honest_and_corrupt i
+val lemma_honest_not_corrupt: i:regid -> Lemma (honest i ==> ~(corrupt i))
+let lemma_honest_not_corrupt i =
+  if model then
+    begin
+    let log: i_honesty_table = honesty_table in
+    lemma_witnessed_and (MDM.contains log i true) (MDM.contains log i false);
+    lemma_witnessed_impl (fun h -> MDM.contains log i true h /\ MDM.contains log i false h) (fun _ -> False);
+    lemma_witnessed_true (fun h -> MDM.contains log i true h /\ MDM.contains log i false h ==> False);
+    lemma_witnessed_constant False
+    end
 
-// ADL: this may not be provable in the current monotonicity model,
-// but the above stateful version of the lemma is
-let lemma_honest_corrupt (i:regid) : Lemma (honest i <==> ~(corrupt i)) =
-  admit()
+#push-options "--max_ifuel 1"
 
-#set-options "--z3rlimit 100" 
-inline_for_extraction
-let lemma_corrupt_invariant (i:regid) (lbl:label) (ctx:context)
-  : ST unit
-  (requires fun h0 -> ~(honest_idh ctx) /\
-    wellformed_derive i lbl ctx /\ registered (derive i lbl ctx))
-  (ensures fun h0 _ h1 -> h0 == h1 /\
-    corrupt i ==> corrupt (derive i lbl ctx))
-  =
-  if not model then () else
-  begin
-    lemma_honest_corrupt i;
-    lemma_honest_corrupt (derive i lbl ctx);
-    let log : i_honesty_table = honesty_table in
-    recall log;
-    testify (MDM.defined log i);
-    match MDM.lookup log i with
-    | Some true -> ()
-    | Some false ->
-      let m = !log in
-      // No annotation, but the proof relies on the global log invariant
-      testify (MDM.defined log (derive i lbl ctx));
-      MDM.contains_stable log (derive i lbl ctx) false;
-      mr_witness log (MDM.contains log (derive i lbl ctx) false)
-  end
+val lemma_corrupt_invariant (i:regid) (lbl:label) (ctx:context) : Lemma
+  (requires 
+    wellformed_derive i lbl ctx /\ 
+    ~(honest_idh ctx) /\
+    registered (derive i lbl ctx) /\
+    corrupt i)
+  (ensures corrupt (derive i lbl ctx))
+let lemma_corrupt_invariant i lbl ctx =
+  if model then
+    begin
+    let log: i_honesty_table = honesty_table in
+    let p1 = fun h -> honesty_invariant (MDM.repr (sel h log)) in
+    let p2 = MDM.contains log i false in
+    let p3 = MDM.defined log (derive i lbl ctx) in
+    let q  = MDM.contains log (derive i lbl ctx) false in
+    lemma_witnessed_true p1; // From monotonicity of honesty_table
+    assert (witnessed p2);   // From corrupt i
+    lemma_witnessed_and p1 p2;
+    lemma_witnessed_and (fun h -> p1 h /\ p2 h) p3;
+    lemma_witnessed_impl (fun h -> p1 h /\ p2 h /\ p3 h) q; // From honesty_invariant and ~(honest_idh ctx)
+    lemma_witnessed_true (fun h -> (p1 h /\ p2 h /\ p3 h) ==> q h);
+    assert (witnessed q) // Modus ponens
+    end
+
+// 2019.06.05 SZ
+// This isn't provable from the monotonicity API:
+//
+//  val lemma_not_corrupt_honest: i:regid -> Lemma (honest i \/ corrupt i)
+//
+// The following stateful variant
+//
+//  val lemma_honest_or_corrupt (i:regid) : ST unit 
+//    (requires fun _ -> True) 
+//    (ensures  fun h0 _ h1 -> h0 == h1 /\ (honest i \/ corrupt i))
+//
+// is provable adding this benign-looking axiom:
+//
+//  val bind_squash_st: #a:Type -> #b:Type -> #pre:(mem -> Type) ->
+//    squash a ->
+//    $f:(a -> ST (squash b) (requires fun h0 -> pre h0) (ensures fun h0 _ h1 -> h0 == h1)) ->
+//    ST (squash b) (requires fun h0 -> pre h0) (ensures fun h0 _ h1 -> h0 == h1)
+//
+// See git history from an actual proof. 
+// Together with lemma_honest_not_corrupt above it implies
+//
+//  val lemma_honest_corrupt_st (i:regid) : ST unit 
+//    (requires fun _ -> True) 
+//    (ensures  fun h0 _ h1 -> h0 == h1 /\ (honest i <==> ~(corrupt i)))
+//
+// However, it looks like this lemma is unnecessary and we don't need 
+// to introduce any axioms.
 
 inline_for_extraction noextract
-let get_honesty (i:id {registered i}) : ST bool
+val get_honesty (i:regid) : ST bool
   (requires fun h0 -> True)
-  (ensures fun h0 b h1 -> h0 == h1 /\ (b <==> honest i))
-  = if model then
-      let log : i_honesty_table = honesty_table in
-      recall log;
-      testify (MDM.defined log i);
-      match MDM.lookup log i with
-      | Some b ->
-        (*
-         * AR: 03/01
-         *     We need to show b <==> honest i
-         *     The direction b ==> honest i is straightforward, from the postcondition of MDM.lookup
-         *     For the other direction, we need to do a recall on the witnessed predicate in honest i
-         *     One way is to go through squash types, using a bind_squash_st axiom above
-         *)
-        let aux (b:bool) : ST unit
-                             (requires (fun h0     -> MDM.contains log i b h0))
-	    		     (ensures (fun h0 _ h1 -> h0 == h1 /\ (honest i ==> b)))
-          = let f :(b:bool) -> (c_or (honest i) (~ (honest i)))
-	           -> ST (squash (honest i ==> b2t b))
-	                (requires (fun h0      -> MDM.contains log i b h0))
-                        (ensures  (fun h0 _ h1 -> h0 == h1))
-	      = fun _ x ->
-	        match x with
-	        | Left  h -> Squash.return_squash h; testify (MDM.contains log i true)
-	        | Right h -> Squash.return_squash h; assert (~ (honest i))
-	    in
-	    let y = Squash.bind_squash (Squash.get_proof (l_or (honest i) (~ (honest i)))) (fun y -> y) in
-	    bind_squash_st y (f b)
-        in
-        aux b;
-        b
-    else false
-
-let lemma_honesty_update (m:DM.t id (MDM.opt (fun _ -> bool)))
-  (i:regid) (l:label) (c:context) (b:bool)
-  : Lemma
-    (requires wellformed_derive i l c /\
+  (ensures  fun h0 b h1 -> h0 == h1 /\ (b <==> honest i))
+let get_honesty i =  
+  if model then
+    let log : i_honesty_table = honesty_table in
+    testify (MDM.defined log i);
+    match MDM.lookup log i with
+    | Some true -> true
+    | Some false -> lemma_honest_not_corrupt i; false
+  else false
+ 
+val lemma_honesty_update (m:DM.t id (MDM.opt (fun _ -> bool)))
+  (i:regid) (l:label) (c:context) (b:bool) : Lemma
+    (requires 
+      wellformed_derive i l c /\
       honesty_invariant m /\
       Some? (DM.sel m i) /\ // Parent honesty is defined
       None? (DM.sel m (derive i l c)) /\ // Derived honesty is not yet defined
-       // To derive honest, the parent is honest or the derivation uses honest shares
+      // To derive honest, the parent is honest or the derivation uses honest shares
       (b ==> (honest_idh c \/ DM.sel m i == Some true)))
     (ensures honesty_invariant (DM.upd m (derive i l c) (Some b)))
-  =
+let lemma_honesty_update m i l c b =
   let j = derive i l c in
   let m' = DM.upd m j (Some b) in
   let wit (i0:id) (l0:label) (c0:context{wellformed_derive i0 l0 c0})
@@ -328,39 +319,66 @@ let lemma_honesty_update (m:DM.t id (MDM.opt (fun _ -> bool)))
     in
   FStar.Classical.forall_intro_3 wit
 
+#push-options "--max_ifuel 1"
+
 inline_for_extraction noextract
-let register_derive (i:regid) (l:label) (c:context)
-  : ST (regid * bool)
+let register_derive (i:regid) (l:label) (c:context) : ST (regid * bool)
   (requires fun h0 -> wellformed_derive i l c)
-  (ensures fun h0 (i', b) h1 ->
-    M.modifies honesty_loc h0 h1 /\
-    i' == derive i l c /\ (b <==> honest i'))
+  (ensures  fun h0 (i', b) h1 ->
+    (if model then B.modifies (B.loc_region_only true tls_honest_region) h0 h1
+     else h0 == h1) /\
+    i' == derive i l c /\ 
+    (b <==> honest i'))
   =
   if model then
-    let i':id = Derive i l c in
-    let h0 = get () in
+    let h0 = get() in
+    let i' = Derive i l c in
     let log : i_honesty_table = honesty_table in
     recall log;
     match MDM.lookup log i' with
-    | Some b ->
-      MDM.defined_stable log i';
-      mr_witness log (MDM.defined log i');
-      lemma_honest_corrupt i';
-      (i', b)
+    | Some true ->
+      begin
+      lemma_honest_registered i';
+      lemma_honest_not_corrupt i'; 
+      (i', true)
+      end
+    | Some false ->
+      begin
+      lemma_corrupt_registered i';
+      lemma_honest_not_corrupt i'; 
+      (i', false)
+      end
     | None ->
+      begin
+      let h = get() in
       testify (MDM.defined log i);
-      let Some b = MDM.lookup log i in
-      let h = get () in
-      lemma_honesty_update (MDM.repr (sel h log)) i l c b;
-      MDM.extend log i' b;
-      MDM.defined_stable log i';
-      mr_witness log (MDM.defined log i');
-      lemma_honest_corrupt i';
-      let h1 = get () in
-      // FIXME(adl) convert old modifies/modifies_ref?
-      assume(M.modifies honesty_loc h0 h1);
-      (i', b)
+      match MDM.lookup log i with
+      | Some true ->
+        begin
+        assert (honest i);
+        lemma_honesty_update (MDM.repr (sel h log)) i l c true;
+        MDM.extend log i' true;
+        lemma_honest_registered i';
+        let h1 = get() in
+        // Compatibility lemma to bridge between LowStar and HST modifies 
+        B.modifies_loc_regions_intro (Set.singleton tls_honest_region) h0 h1;
+        (i', true)
+        end
+      | Some false ->
+        begin
+        assert (corrupt i);
+        lemma_honesty_update (MDM.repr (sel h log)) i l c false;
+        MDM.extend log i' false;
+        lemma_corrupt_registered i';
+        lemma_honest_not_corrupt i';
+        let h1 = get() in
+        // Compatibility lemma to bridge between LowStar and HST modifies 
+        B.modifies_loc_regions_intro (Set.singleton tls_honest_region) h0 h1;
+        (i', false)
+        end
+      end
   else ((), false)
+
 
 // 17-10-21 WIDE/NARROW INDEXES (old)
 //
