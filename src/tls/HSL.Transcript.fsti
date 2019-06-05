@@ -88,8 +88,8 @@ let hs_sh = sh:HSM.handshake{HSM.M_server_hello? sh}
 val is_hrr (sh:SH.serverHello) : bool
 
 let is_any_hash_tag (h: HSM.handshake) : GTot Type0 =
-  HSM.M_message_hash? h /\ (forall a. FStar.Bytes.length (HSM.M_message_hash?._0 h) <= HashDef.hash_word_length a)
-
+  HSM.M_message_hash? h /\ (FStar.Bytes.length (HSM.M_message_hash?._0 h) <= 64)
+  
 let any_hash_tag = 
   (h: HSM.handshake { is_any_hash_tag h })
 
