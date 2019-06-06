@@ -96,6 +96,8 @@ let lemma_forall_empty #it #vt t pred h = ()
 
 let lemma_forall_elim #it #vt t pred h #i k = ()
 
+let lemma_forall_restore #it #vt t pred fp #i k h0 h1 = admit ()
+
 let lemma_forall_extend #it #vt t pred fp pred_frame #i k h0 h1 =
   if model then
     let prove_on_witness (x:it) (y:vt x{defined_as t y h1})

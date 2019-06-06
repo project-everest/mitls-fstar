@@ -14,6 +14,19 @@ module DT = DefineTable
 /// package. The TLS-specific details are filled-in in KeySchedule.
 
 type t = pkg ii
+let regid : eqtype = Pkg.regid ii
+
+let rec does_not_contain_label (l:list (label * 'a)) (lbl:label) =
+  match l with
+  | [] -> True
+  | (lbl', _) :: t -> lbl <> lbl' /\ does_not_contain_label t lbl
+
+let rec disjoint_labels (l:list (label * 'a)) : Type0 =
+  match l with
+  | [] -> True
+  | (lbl,_)::t -> does_not_contain_label t lbl /\ disjoint_labels t
+
+// FIXME(adl): need to refine children' with disjoint_labels
 
 noeq noextract
 type tree' (par_ideal:Type0) =
@@ -82,13 +95,19 @@ let down (#p:Type0) (u:children p) (l:label{u `has_lbl` l}) : tree p =
   Some?.v (find_lbl u l)
 
 noextract
-let child (#p:Type0) (u:children' p) (l:label{u `has_lbl'` l})
-  : pkg:t{Pkg?.ideal pkg ==> p}
+let child' (#p:Type0) (u:children' p) (l:label{u `has_lbl'` l})
+  : Pure t (requires True) (ensures fun pkg -> Pkg?.ideal pkg ==> p)
   =
   let x : tree' p = down' u l in
   match x with
   | Leaf p -> p
   | Node p c -> p
+
+noextract
+let child (#p:Type0) (u:children p) (l:label{u `has_lbl` l})
+  : Pure t (requires True) (ensures fun pkg -> Pkg?.ideal pkg ==> p)
+  =
+  child' (u <: children' p) l
 
 type initial_state (#p:Type0) (pkg:t{Pkg?.ideal pkg ==> p}) (h:mem) =
   DT.empty (Pkg?.define_table pkg)
@@ -114,8 +133,6 @@ Furthermore, the invariant of a node pacakge implies the
 invariant of every descendent package.
 *)
 
-let regid : eqtype = i:ii.t{ii.registered i}
-
 val tree_inv': #p:Type0 -> t:tree' p -> mem ->
   Ghost Type0 (requires model) (ensures fun _ -> True) (decreases %[t])
 val children_inv': #vt:(regid->Type) -> DT.dt vt -> #p:Type0 -> u:children' p -> mem ->
@@ -130,6 +147,13 @@ let child_instance_inv (#vt:regid->Type) (parent_dt:DT.dt vt)
   | Derive j lbl' ctx -> lbl == lbl' /\
     registered j /\ DT.defined parent_dt j
 
+let rec pairwise_disjoin_dt (#p:Type0) (u:children' p) (l:M.loc) =
+  match u with
+  | [] -> True
+  | (_,p) :: tl ->
+    let pkg = match p with Node p _ -> p | Leaf p -> p in
+    M.loc_disjoint l (DT.loc pkg.define_table) /\ pairwise_disjoin_dt tl l
+
 let rec tree_inv' #p t h =
   match t with
   | Leaf p -> Pkg?.package_invariant p h
@@ -142,6 +166,7 @@ and children_inv' #vt parent_dt #p u h =
   | (lbl,x)::tl ->
     let pkg = match x with Leaf p -> p | Node p _ -> p in
     tree_inv' x h /\ children_inv' parent_dt tl h /\
+    pairwise_disjoin_dt tl (DT.loc pkg.define_table) /\
     M.loc_disjoint (DT.loc parent_dt) (DT.loc pkg.define_table) /\
     DT.dt_forall pkg.define_table (child_instance_inv parent_dt lbl) h
 
@@ -150,6 +175,38 @@ let tree_inv (#p:Type0) (t:tree p) (h:mem) =
 
 let children_inv #vt (dt:DT.dt vt) (#p:Type0) (t:children p) (h:mem) =
   (if model then children_inv' dt (t <: children' p) h else True)
+
+val lemma_derive_children:
+  #vt: (regid->Type) ->
+  dt: DT.dt vt ->
+  #p: Type0 ->
+  u: children' p ->
+  i: regid{DT.defined dt i} ->
+  lbl: label{u `has_lbl'` lbl} ->
+  ctx: context{wellformed_derive i lbl ctx /\ registered (derive i lbl ctx)} ->
+  k: Pkg?.key (child' u lbl) (derive i lbl ctx) ->
+  h0:mem -> h1:mem ->
+  Lemma (requires model /\ children_inv' dt u h0 /\
+    DT.extended (child' u lbl).define_table k h0 h1 /\
+    (child' u lbl).package_invariant h1)
+  (ensures children_inv' dt u h1)
+  (decreases %[u])
+
+val lemma_derive_tree:
+  #p: Type0 ->
+  t: tree' p ->
+  h0:mem -> l:M.loc -> h1:mem ->
+  Lemma (requires model /\ tree_inv' t h0 /\ M.modifies l h0 h1 /\
+    M.loc_disjoint l l)
+  (ensures tree_inv' t h1)
+  (decreases %[t])
+
+(*
+let rec lemma_derive_children #vt dt #p u i lbl ctx k h0 h1 =
+and lemma_derive_tree #p t h0 l h1 =
+*)
+
+(**** Relating indexes to tree paths ****)
 
 noextract
 let rec labels_of_id (i:pre_id) (acc:list label) =
@@ -163,6 +220,7 @@ let y : label = assume false; "y"
 let _ = assert_norm (labels_of_id (Derive(Derive (Preshared Hashing.Spec.SHA1 0) x Extract) y Extract) [] == [x; y])
 *)
 
+(*
 let rec subtree (#p:Type0) (t:tree' p)
   (#q:Type0) (c:children' q) (l:list label)
   : Pure Type (requires model) (ensures fun _ -> True) (decreases %[l])
@@ -174,6 +232,7 @@ let rec subtree (#p:Type0) (t:tree' p)
     let c' = Node?.children t in
     c' `has_lbl'` lbl /\
     subtree (down' c' lbl) c tl)
+*)
 
 let rec defined_path (#p:Type0) (t:tree' p) (l:list label)
   : GTot Type (decreases %[l]) =
@@ -210,51 +269,23 @@ let defined' (#p:Type0) (t:tree' p) (i:regid{model}) =
 let defined (#p:Type0) (t:tree p) (i:regid) =
   if model then defined' (t <: tree' p) i else True
 
-val lemma_derive_children:
-  #vt: (regid->Type) ->
-  dt: DT.dt vt ->
-  #p: Type0 ->
-  u: children' p ->
-  i: regid{DT.defined dt i} ->
-  lbl: label{u `has_lbl'` lbl} ->
-  ctx: context{wellformed_derive i lbl ctx /\ registered (derive i lbl ctx)} ->
-  k: Pkg?.key (child u lbl) (derive i lbl ctx) ->
-  h0:mem -> h1:mem ->
-  Lemma (requires model /\ children_inv' dt u h0 /\
-    DT.extended (child u lbl).define_table k h0 h1 /\
-    (child u lbl).package_invariant h1)
-  (ensures children_inv' dt u h1)
-  (decreases %[u])
-
-val lemma_derive_tree:
-  #p: Type0 ->
-  t: tree' p ->
-  h0:mem -> l:M.loc -> h1:mem ->
-  Lemma (requires model /\ tree_inv' t h0 /\ M.modifies l h0 h1 /\
-    M.loc_disjoint l l)
-  (ensures tree_inv' t h1)
-  (decreases %[t])
-
-(*
-// Local subtree invariant restoration
-let rec lemma_derive 
+let lemma_tree_inv_frame_local_instance
+  (#p:Type) (t:tree' p)
+  (pkg:local_pkg ii)
+  (i: regid)
+  (k: LocalPkg?.key pkg i)
+  (h0 h1:mem)
+  : Lemma
+    (requires model /\ tree_inv' t h0 /\ defined' t i /\
+      locally_packaged (get_package t (labels_of_id i [])) pkg /\
+      M.modifies (pkg.local_footprint k) h0 h1 /\
+      LocalPkg?.inv pkg k h1)
+    (ensures tree_inv' t h1)
   =
-  match u with
-  | [] -> ()
-  | (lbl', t) :: tl ->
-    if lbl = lbl' then
-     begin
-      lemma_
-     end
-    else lemma_derive dt tl i lbl ctx k h0 h1
-  
-  let rec aux
-    : Lemma ()
-    =
-    admit()
-    in
+  let p = get_package t (labels_of_id i []) in
+  DT.lemma_forall_frame p.define_table pkg.inv pkg.local_footprint pkg.inv_framing h0 M.loc_none h1;
   admit()
-*)
+
 
 (*
 Building the tree is quite technical because the tree

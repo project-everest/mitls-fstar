@@ -9,34 +9,21 @@ open TLSConstants
 
 module DM = FStar.DependentMap
 module MDM = FStar.Monotonic.DependentMap
+module DT = DefineTable
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
 
-// Has been moved to TLSConstants as it appears in config for ticket callbacks
+(* Main RFC data types for PSKs *)
+include Parsers.PskIdentity
+include Parsers.PskIdentity_identity
+include Parsers.OfferedPsks
+
+// The type of PSK identifiers (labels used in TLS messages)
+type pskName = pskIdentity_identity
+
+// The information associated with a PSK, i.e. time created,
+// usage (PSK+DHE or PSK only), hash, and AEAD (for 0-RTT)
 type pskInfo = TLSConstants.pskInfo
-
-// SESSION TICKET DATABASE (TLS 1.3)
-// Note that the associated PSK are stored in the PSK table defined below in this file
-let hostname : eqtype = string
-
-let tlabel (h:hostname) = bytes
-
-noextract
-private let tregion:rgn = new_region tls_tables_region
-private let tickets : MDM.t tregion hostname tlabel (fun _ -> True) =
-  MDM.alloc ()
-
-let lookup (h:hostname) = MDM.lookup tickets h
-let extend (h:hostname) (t:tlabel h) = MDM.extend tickets h t
-
-// SESSION TICKET DATABASE (TLS 1.2)
-// Note that this table also stores the master secret
-type session12 (tid:bytes) = protocolVersion * cipherSuite * ems:bool * ms:bytes
-private let sessions12 : MDM.t tregion bytes session12 (fun _ -> True) =
-  MDM.alloc ()
-
-let s12_lookup (tid:bytes) = MDM.lookup sessions12 tid
-let s12_extend (tid:bytes) (s:session12 tid) = MDM.extend sessions12 tid s
 
 // *** PSK ***
 

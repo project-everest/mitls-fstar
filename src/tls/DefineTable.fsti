@@ -229,6 +229,21 @@ val lemma_forall_extend:
       pred k h1 /\ M.loc_disjoint (loc t) (footprint t fp h0))
     (ensures dt_forall t pred h1)
 
+val lemma_forall_restore:
+  #it: eqtype ->
+  #vt: (it -> Type) ->
+  t: dt vt ->
+  pred: (#i:it -> vt i -> mem -> GTot Type0) ->
+  fp: local_fp vt ->
+  pred_frame: (#i:it -> k:vt i -> #j:it -> k':vt j -> Lemma
+    (requires i <> j)
+    (ensures M.loc_disjoint (fp k) (fp k'))) ->
+  #i: it -> k: vt i ->
+  h0: mem -> h1: mem ->
+  Lemma
+    (requires dt_forall t pred h0 /\ M.modifies (fp k) h0 h1 /\ pred k h1)
+    (ensures dt_forall t pred h1)
+
 val lemma_forall_frame:
   #it: eqtype ->
   #vt: (it -> Type) ->
@@ -244,3 +259,28 @@ val lemma_forall_frame:
       /\ M.modifies l h0 h1 /\ t `live` h0
       /\ M.loc_disjoint l (loc t) /\ M.loc_disjoint l (footprint t fp h0))
     (ensures dt_forall t pred h1)
+
+(*
+
+type projection (#it:eqtype) (#vt:it->Type) (t:dt vt) (pred:it->bool) =
+  m:DM.t it (MDM.opt vt){forall (i:it). Some? (DM.sel m i) ==> pred i}
+
+val filter:
+  #it: eqtype ->
+  #vt: (it -> Type) ->
+  t: dt vt ->
+  pred: (i:it -> bool) ->
+  h: mem ->
+  GTot (projection t pred)
+
+val lemma_filter_sel:
+  #it: eqtype ->
+  #vt: (it -> Type) ->
+  t: dt vt ->
+  pred: (i:it -> bool) ->
+  h: mem ->
+  i: it ->
+  Lemma (requires model)
+  (ensures DM.sel (filter t pred h) i ==
+    (if pred i then MDM.sel (HS.sel h (ideal t)) i else None))
+*)

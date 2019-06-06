@@ -61,11 +61,13 @@ let default_groups : (x: CommonDH.supportedNamedGroups { let l = Parsers.NamedGr
   assert_norm (List.Tot.length groups == 7);
   groups
 
-// By default we use an in-memory ticket table
-// and the in-memory internal PSK database
+// We used to have an in-memory ticket table
+// and the in-memory internal PSK database, but
+// these are disabled for thread safety.
 val defaultTicketCBFun: ticket_cb_fun
 let defaultTicketCBFun _ sni ticket info psk =
   let h0 = get() in
+  (* The internal PSK database is obsolete
   begin
   match info with
   | TicketInfo_12 (pv, cs, ems) ->
@@ -80,6 +82,7 @@ let defaultTicketCBFun _ sni ticket info psk =
     PSK.coerce_psk ticket pskInfo psk;      // modifies psk_region
     PSK.extend sni ticket                   // modifies PSK.tregion
   end;
+  *)
   let h1 = HST.get() in
   // 2018.03.10 SZ: [ticket_cb_fun] ensures [modifies_none]
   assume (modifies_none h0 h1)

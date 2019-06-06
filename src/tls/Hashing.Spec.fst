@@ -11,15 +11,33 @@ include Spec.Hash.Definitions
 
 open FStar.Integers
 open FStar.Bytes
+
 type tag (a:alg) = Bytes.lbytes32 (tagLen a)
+
+let maxTagLength = 64
 let maxTagLen = 64ul
-type anyTag = lbytes (Integers.v maxTagLen)
+type anyTag = lbytes maxTagLength
+
+let maxBlockLength = 128
+let maxBlockLen = 128ul
+
+private let lemma_tagLen (a:alg)
+  : Lemma (UInt32.v (tagLen a) <= maxTagLength)
+  [SMTPat (tagLen a)]
+  = ()
+
+private let lemma_blockLength (a:alg)
+  : Lemma (blockLength a <= maxBlockLength)
+  [SMTPat (blockLength a)]
+  = ()
 
 // JP: override the definition from evercrypt (which uses <) with miTLS
 // compatible definitions (which uses <=)
 let maxLength a = EverCrypt.Hash.maxLength a - 1
 
 let macable a = b:bytes {length b + blockLength a < pow2 32}
+let macable_any = b:bytes{length b + maxBlockLength < pow2 32}
+
 // 32-bit implementation restriction
 
 // Adapting EverCrypt's HMAC specification to TLS. In contrast with
