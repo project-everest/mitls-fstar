@@ -173,16 +173,56 @@ let transcript_bytes_injective_retry
 
 #pop-options
 
+let transcript_arbitrary_index
+  (t1: transcript_t)
+: GTot nat
+= match t1 with
+  | Start _ -> 0
+  | TruncatedClientHello _ _ -> 1
+  | ClientHello _ _ -> 2
+  | Transcript12 _ _ _ -> 3
+  | Transcript13 _ _ _ _ -> 4
+
+let rec transcript_bytes_injective_no_retry
+  (t1: transcript_t { transcript_get_retry t1 == None } )
+  (t2: transcript_t { transcript_get_retry t2 == None } )
+: Lemma
+    (requires
+      transcript_bytes t1 `Seq.equal` transcript_bytes t2)
+    (ensures
+      t1 == t2)
+    (decreases (transcript_arbitrary_index t2))
+= seq_append_empty ();
+  if transcript_arbitrary_index t1 < transcript_arbitrary_index t2
+  then transcript_bytes_injective_no_retry t2 t1
+  else
+    match t1 with
+    | Start _ -> ()
+    | TruncatedClientHello _ tch1 ->
+      begin match t2 with
+      | Start _ -> ()
+      | TruncatedClientHello _ tch2 ->
+        let tch1' = HSM.M_client_hello tch1 in
+        let tch2' = HSM.M_client_hello tch2 in
+        PB.truncate_clientHello_bytes_inj_binders_bytesize tch1' tch2';
+        PB.set_binders_get_binders tch1';
+        PB.set_binders_get_binders tch2';
+        PB.truncate_clientHello_bytes_inj tch1' tch2' (PB.build_canonical_binders (tch_binders_len tch1))
+      end
+    | _ -> assume (t1 == t2)
+
 let transcript_bytes_injective (t1 t2:transcript_t)
   : Lemma
     (requires
       transcript_bytes t1 `Seq.equal` transcript_bytes t2)
     (ensures
       t1 == t2)
-  = // match t1 with
-    // | Start r1 ->
-    admit()        
-      
+  = let t1' = transcript_set_retry t1 None in
+    let t2' = transcript_set_retry t2 None in
+    transcript_script_bytes t1;
+    transcript_script_bytes t2;
+    transcript_bytes_injective_retry (transcript_get_retry t1) t1' (transcript_get_retry t2) t2' ;
+    transcript_bytes_injective_no_retry t1' t2'
 
 noeq
 type state (a:HashDef.hash_alg) = {

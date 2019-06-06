@@ -61,7 +61,7 @@ let set_binders_set_binders
 
 val binders_offset
   (m: H.handshake {has_binders m})
-: Tot (u: U32.t { U32.v u < Seq.length (LP.serialize H.handshake_serializer m) })
+: Tot (u: U32.t { 0 < U32.v u /\ U32.v u < Seq.length (LP.serialize H.handshake_serializer m) })
 
 val binders_offset_set_binder
   (m: H.handshake {has_binders m})
