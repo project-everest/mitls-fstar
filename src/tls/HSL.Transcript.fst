@@ -338,7 +338,7 @@ let create r a =
    hash_state=s},
   Ghost.hide (Start None)
 
-#set-options "--max_fuel 0 --max_ifuel  1 --initial_ifuel  1 --z3rlimit 100"
+#set-options "--max_fuel 0 --max_ifuel  1 --initial_ifuel  1 --z3rlimit 200"
 
 let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
   let h0 = HyperStack.ST.get() in
@@ -567,4 +567,8 @@ let injectivity a t0 t1 =
   let b0 = Ghost.hide (transcript_bytes (Ghost.reveal t0)) in
   let b1 = Ghost.hide (transcript_bytes (Ghost.reveal t1)) in
   Model.CRF.injective a b0 b1;
-  transcript_bytes_injective (Ghost.reveal t0) (Ghost.reveal t1)
+  let aux () : Lemma
+    (requires CRF.model /\ Model.CRF.crf a /\ b0 == b1)
+    (ensures Ghost.reveal t0 == Ghost.reveal t1) =
+    transcript_bytes_injective (Ghost.reveal t0) (Ghost.reveal t1)
+  in Classical.move_requires aux ()
