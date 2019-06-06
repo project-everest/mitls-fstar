@@ -183,6 +183,10 @@ let transcript_arbitrary_index
   | Transcript12 _ _ _ -> 3
   | Transcript13 _ _ _ _ -> 4
 
+let seq_append_empty_r () : Lemma
+  (forall (s: Seq.seq LP.byte) . {:pattern (s `Seq.append` Seq.empty)} s `Seq.append` Seq.empty  == s)
+= assert   (forall (s: Seq.seq LP.byte) . {:pattern (s `Seq.append` Seq.empty)} (s `Seq.append` Seq.empty) `Seq.equal` s)
+
 let rec transcript_bytes_injective_no_retry
   (t1: transcript_t { transcript_get_retry t1 == None } )
   (t2: transcript_t { transcript_get_retry t2 == None } )
@@ -196,11 +200,11 @@ let rec transcript_bytes_injective_no_retry
   if transcript_arbitrary_index t1 < transcript_arbitrary_index t2
   then transcript_bytes_injective_no_retry t2 t1
   else
-    match t1 with
-    | Start _ -> ()
+    if Start? t2
+    then ()
+    else match t1 with
     | TruncatedClientHello _ tch1 ->
       begin match t2 with
-      | Start _ -> ()
       | TruncatedClientHello _ tch2 ->
         let tch1' = HSM.M_client_hello tch1 in
         let tch2' = HSM.M_client_hello tch2 in
@@ -209,7 +213,48 @@ let rec transcript_bytes_injective_no_retry
         PB.set_binders_get_binders tch2';
         PB.truncate_clientHello_bytes_inj tch1' tch2' (PB.build_canonical_binders (tch_binders_len tch1))
       end
-    | _ -> assume (t1 == t2)
+    | ClientHello _ ch1 ->
+      begin match t2 with
+      | TruncatedClientHello _ tch2 ->
+        PB.parse_truncate_clientHello_bytes (HSM.M_client_hello tch2)
+      | ClientHello _ ch2 ->
+        LP.serializer_injective _ HSM.handshake_serializer (HSM.M_client_hello ch1) (HSM.M_client_hello ch2)
+      end
+    | Transcript12  ch1 sh1 rest1 ->
+      begin match t2 with
+      | TruncatedClientHello _ tch2 ->
+        LP.parse_strong_prefix HSM.handshake_parser (LP.serialize HSM.handshake_serializer (HSM.M_client_hello ch1)) (transcript_bytes t1);
+        PB.parse_truncate_clientHello_bytes (HSM.M_client_hello tch2)
+      | ClientHello _ ch2 ->
+        seq_append_empty_r ();
+        LP.serialize_strong_prefix HSM.handshake_serializer (HSM.M_client_hello ch1) (HSM.M_client_hello ch2) (serialize_server_hello sh1 `Seq.append` (
+    LP.serialize (LPSL.serialize_list _ HSM12.handshake12_serializer) rest1)) Seq.empty
+      | Transcript12 ch2 sh2 rest2 ->
+        LP.serialize_strong_prefix HSM.handshake_serializer (HSM.M_client_hello ch1) (HSM.M_client_hello ch2) (serialize_server_hello sh1 `Seq.append` (
+    LP.serialize (LPSL.serialize_list _ HSM12.handshake12_serializer) rest1)) (serialize_server_hello sh2 `Seq.append` (
+    LP.serialize (LPSL.serialize_list _ HSM12.handshake12_serializer) rest2));
+        LP.serialize_strong_prefix HSM.handshake_serializer (HSM.M_server_hello sh1) (HSM.M_server_hello sh2)     (LP.serialize (LPSL.serialize_list _ HSM12.handshake12_serializer) rest1) (
+    LP.serialize (LPSL.serialize_list _ HSM12.handshake12_serializer) rest2);
+        LP.serializer_injective _ (LPSL.serialize_list _ HSM12.handshake12_serializer) rest1 rest2
+      end      
+    | Transcript13 _ ch1 sh1 rest1 ->
+      begin match t2 with
+      | TruncatedClientHello _ tch2 ->
+        LP.parse_strong_prefix HSM.handshake_parser (LP.serialize HSM.handshake_serializer (HSM.M_client_hello ch1)) (transcript_bytes t1);
+        PB.parse_truncate_clientHello_bytes (HSM.M_client_hello tch2)
+      | ClientHello _ ch2 ->
+        seq_append_empty_r ();
+        LP.serialize_strong_prefix HSM.handshake_serializer (HSM.M_client_hello ch1) (HSM.M_client_hello ch2) (serialize_server_hello sh1 `Seq.append` (
+    LP.serialize (LPSL.serialize_list _ HSM13.handshake13_serializer) rest1)) Seq.empty
+      | Transcript12 ch2 sh2 _ -> ()
+      | Transcript13 _ ch2 sh2 rest2 ->
+        LP.serialize_strong_prefix HSM.handshake_serializer (HSM.M_client_hello ch1) (HSM.M_client_hello ch2) (serialize_server_hello sh1 `Seq.append` (
+    LP.serialize (LPSL.serialize_list _ HSM13.handshake13_serializer) rest1)) (serialize_server_hello sh2 `Seq.append` (
+    LP.serialize (LPSL.serialize_list _ HSM13.handshake13_serializer) rest2));
+        LP.serialize_strong_prefix HSM.handshake_serializer (HSM.M_server_hello sh1) (HSM.M_server_hello sh2)     (LP.serialize (LPSL.serialize_list _ HSM13.handshake13_serializer) rest1) (
+    LP.serialize (LPSL.serialize_list _ HSM13.handshake13_serializer) rest2);
+        LP.serializer_injective _ (LPSL.serialize_list _ HSM13.handshake13_serializer) rest1 rest2
+      end
 
 let transcript_bytes_injective (t1 t2:transcript_t)
   : Lemma
