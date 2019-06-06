@@ -23,6 +23,8 @@ module CH = Parsers.ClientHello
 module R_SH = MITLS.Repr.ServerHello
 module SH = Parsers.ServerHello
 
+module PSKSB = Parsers.OfferedPsks_binders
+
 let is_hrr _ = admit()
 let nego_version _ _ = admit ()
 
@@ -301,13 +303,11 @@ let create r a =
    hash_state=s},
   Ghost.hide (Start None)
 
-#set-options "--max_fuel 0 --max_ifuel  1 --initial_ifuel  1 --z3rlimit 50"
+#set-options "--max_fuel 0 --max_ifuel  1 --initial_ifuel  1 --z3rlimit 100"
 
 let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
   let h0 = HyperStack.ST.get() in
   match l with
-// Verifies, but commented out during proof development
-(*
   | LR_ClientHello #b ch ->
     assume (C.qbuf_qual (C.as_qbuf b.R.base) = C.MUTABLE);
 
@@ -362,25 +362,18 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
              transcript_bytes (G.reveal tx'));
 
     {s with hash_state = st'}, tx'
-*)
 
-  | LR_TCH #b tch ->
+  | LR_TCH #b tch   ->
     assume (C.qbuf_qual (C.as_qbuf b.R.base) = C.MUTABLE);
 
-    // These three lemmas prove that the data in the subbuffer data is
-    // the serialized data corresponding to the client hello that is being added
     R.reveal_valid();
-    // LP.valid_pos_valid_exact HSM.handshake_parser h0 (R.to_slice b) tch.R.start_pos tch.R.end_pos;
-    // LP.valid_exact_serialize HSM.handshake_serializer h0 (R.to_slice b) tch.R.start_pos tch.R.end_pos
-    // PB.truncate_clientHello_bytes_correct (R.value tch);
-
-    // LP.valid_equiv 
     let h0 = HyperStack.ST.get() in
     assert (LP.valid HSM.handshake_parser h0 (R.to_slice b) tch.R.start_pos);
     let end_pos = PB.binders_pos (R.to_slice b) tch.R.start_pos in
 
     let len = end_pos - tch.R.start_pos in
     let data = C.sub b.R.base tch.R.start_pos len in
+
 
     PB.valid_truncate_clientHello h0 (R.to_slice b) tch.R.start_pos;
     assert (C.as_seq h0 data == FStar.Bytes.reveal (PB.truncate_clientHello_bytes (R.value tch)));
@@ -390,18 +383,48 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     IncHash.modifies_disjoint_preserves B.loc_none h0 h1 s.hash_state;
     let st' = IncHash.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
 
-    let hf = HyperStack.ST.get() in
     let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
 
-    assume (IncHash.hashes hf st' (transcript_bytes (G.reveal tx')));
+    PB.truncate_clientHello_bytes_set_binders
+      (R.value tch)
+      (PB.build_canonical_binders (tch_binders_len (HSM.M_client_hello?._0 (R.value tch))));
 
     
     {s with hash_state = st'}, tx'
 
-  | LR_CompleteTCH #b tch -> admit()
+  | LR_CompleteTCH #b tch -> 
+    assume (C.qbuf_qual (C.as_qbuf b.R.base) = C.MUTABLE);
 
-// Verifies, but commented out during proof development
-(*
+    R.reveal_valid();
+    // Needed to detect that the whole b.R.base between start and pos is actually serialize tch
+    LP.valid_pos_valid_exact HSM.handshake_parser h0 (R.to_slice b) tch.R.start_pos tch.R.end_pos;
+    LP.valid_exact_serialize HSM.handshake_serializer h0 (R.to_slice b) tch.R.start_pos tch.R.end_pos;
+    
+    let h0 = HyperStack.ST.get() in
+    assert (LP.valid HSM.handshake_parser h0 (R.to_slice b) tch.R.start_pos);
+    let start_pos = PB.binders_pos (R.to_slice b) tch.R.start_pos in
+
+    let len = tch.R.end_pos - start_pos in
+    let data = C.sub b.R.base start_pos len in
+
+    PB.valid_truncate_clientHello h0 (R.to_slice b) tch.R.start_pos;
+    assert_norm (pow2 32 < pow2 61);
+    let h1 = HyperStack.ST.get () in
+    IncHash.modifies_disjoint_preserves B.loc_none h0 h1 s.hash_state;
+    let st' = IncHash.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
+
+    let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
+
+    PB.truncate_clientHello_bytes_set_binders
+      (R.value tch)
+      (PB.build_canonical_binders (tch_binders_len (HSM.M_client_hello?._0 (R.value tch))));
+
+    assert ((transcript_bytes (G.reveal tx) `Seq.append` (C.as_seq h0 data))
+        `Seq.equal` 
+          transcript_bytes (G.reveal tx'));
+
+    {s with hash_state = st'}, tx'
+
   | LR_HRR #b1 ch_tag #b2 hrr ->
     assume (C.qbuf_qual (C.as_qbuf b1.R.base) = C.MUTABLE);
     assume (C.qbuf_qual (C.as_qbuf b2.R.base) = C.MUTABLE);
@@ -503,9 +526,7 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     let st' = IncHash.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
 
     {s with hash_state = st'}, tx'
-*)
 
-  | _ -> admit ()
 
 let transcript_hash (a:HashDef.hash_alg) (t:transcript_t) = Spec.Hash.hash a (transcript_bytes t)
 
