@@ -233,7 +233,6 @@ let receive_post
 
 //19-05-28 could we use vale-style metaprogramming on message lists? fine as is. 
 
-//19-05-28 why not refining each message individually? the type abbreviations may be useful additions to their repr modules.
 
 noeq
 type flight13_ee_c_cv_fin (b:R.const_slice) = {
@@ -248,7 +247,27 @@ type flight13_ee_c_cv_fin (b:R.const_slice) = {
   }
 }
 
-//19-05-28 the handshake may not need the position details, as long as all messages are in from..to. 
+//19-05-28 why not refining each message individually? or have a
+// function from tags to those refined types? such type abbreviations
+// may be useful additions to their repr modules, e.g.
+// 
+type ee_repr b  = m:HSM13R.repr b { HSM13R.is_ee m }
+type cr_repr b  = m:HSM13R.repr b { HSM13R.is_cr m } 
+type c_repr b   = m:HSM13R.repr b { HSM13R.is_c m } 
+type cv_repr b  = m:HSM13R.repr b { HSM13R.is_cv m } 
+type fin_repr b = m:HSM13R.repr b { HSM13R.is_fin m } 
+// (those could be defined in HSM13R)
+// now covering all 3 variants of this flight (and a 4th one, which we may support later)
+noeq type c13_Finished1 b = {
+  ee: ee_repr b;
+  cr: option (cr_repr b); 
+  ccv: option (c_repr b & cv_repr b);
+  fin: fin_repr b;
+}  
+
+
+//19-05-28 the handshake may not need the position details; the only
+// thing that matters is that all messages are within from..to.
 
 unfold let valid_flight13_ee_c_cv_fin
   (#b:R.const_slice) (from to:uint_32)
@@ -266,6 +285,7 @@ unfold let valid_flight13_ee_c_cv_fin
     valid flt.cv_msg h /\
     valid flt.fin_msg h
 
+// c13_wait_Finished1 for all 3 ee...fin
 val receive_flight13_ee_c_cv_fin
   (st:hsl_state) (b:R.const_slice) (from to:uint_32)
   : ST (TLSError.result (option (flight13_ee_c_cv_fin b)))
@@ -363,6 +383,7 @@ let valid_flight13_fin
 
     valid flt.fin_msg h
 
+// s13_wait_Finished2 (with a second case below)
 val receive_flight13_fin (st:hsl_state) (b:R.const_slice) (from to:uint_32)
   : ST (TLSError.result (option (flight13_fin b)))
        (requires receive_pre st b from to F13_fin)
@@ -370,8 +391,6 @@ val receive_flight13_fin (st:hsl_state) (b:R.const_slice) (from to:uint_32)
 
 
 (****** Flight [ Certificate13; CertificateVerify; Finished ] ******)
-
-//19-05-28 not sure when this flight is acceptable; maybe after EOED? 
 
 noeq
 type flight13_c_cv_fin (b:R.const_slice) = {
@@ -424,6 +443,7 @@ let valid_flight13_eoed
 
     valid flt.eoed_msg h
 
+// s13_wait_EOED
 val receive_flight13_eoed (st:hsl_state) (b:R.const_slice) (from to:uint_32)
   : ST (TLSError.result (option (flight13_eoed b)))
        (requires receive_pre st b from to F13_eoed)
@@ -448,6 +468,7 @@ let valid_flight13_nst
 
     valid flt.nst_msg h
 
+// c13_complete 
 val receive_flight13_nst (st:hsl_state) (b:R.const_slice) (from to:uint_32)
   : ST (TLSError.result (option (flight13_nst b)))
        (requires receive_pre st b from to F13_nst)
@@ -485,6 +506,7 @@ let valid_flight12_c_ske_shd
     valid flt.ske_msg h /\
     valid flt.shd_msg h
 
+// c12_wait_ServerHelloDone (2 variants)
 val receive_flight12_c_ske_shd (st:hsl_state) (b:R.const_slice) (from to:uint_32)
   : ST (TLSError.result (option (flight12_c_ske_shd b)))
        (requires receive_pre st b from to F12_c_ske_shd)
@@ -547,6 +569,7 @@ let valid_flight12_fin
 
     valid flt.fin_msg h
 
+// c12_wait_Finished [used for both Finished1 and Finished2]
 val receive_flight12_fin (st:hsl_state) (b:R.const_slice) (from to:uint_32)
   : ST (TLSError.result (option (flight12_fin b)))
        (requires receive_pre st b from to F12_fin)
@@ -571,6 +594,7 @@ let valid_flight12_nst
 
     valid flt.nst_msg h
 
+// c12_wait_NewSessionTicket 
 val receive_flight12_nst (st:hsl_state) (b:R.const_slice) (from to:uint_32)
   : ST (TLSError.result (option (flight12_nst b)))
        (requires receive_pre st b from to F12_nst)
@@ -593,6 +617,9 @@ let valid_flight12_cke
     flt.cke_msg.end_pos == to /\
 
     valid flt.cke_msg h
+
+// s12_wait_ClientKeyExchange 
+// note the HS should wait for CCS1 before accepting this message.
 
 val receive_flight12_cke (st:hsl_state) (b:R.const_slice) (from to:uint_32)
   : ST (TLSError.result (option (flight12_cke b)))
@@ -621,6 +648,7 @@ let valid_flight_ch
 
     valid flt.ch_msg h
 
+// s_wait_ClientHello 
 val receive_flight_ch (st:hsl_state) (b:R.const_slice) (from to:uint_32)
   : ST (TLSError.result (option (flight_ch b)))
        (requires receive_pre st b from to F_ch)
@@ -645,7 +673,45 @@ let valid_flight_sh
 
     valid flt.sh_msg h
 
+// c_wait_ServerHello 
 val receive_flight_sh (st:hsl_state) (b:R.const_slice) (from to:uint_32)
   : ST (TLSError.result (option (flight_sh b)))
        (requires receive_pre st b from to F_sh)
        (ensures  receive_post st b from to F_sh valid_flight_sh)
+
+
+
+/// Stub that will remain in HandshakeLog.state, at least for now,
+/// replacing {incoming, parsed, hashes}. It may actually be
+/// convenient for each of the receive functions and conditions above
+/// to take the same struct as input instead of 4 parameters.
+
+noeq type receive_state = { 
+    st: hsl_state; 
+    input: R.const_slice; // large enough in practice; TODO not const! 
+    from: UInt32.t;
+    to: UInt32.t; // both within the slice 
+    // with invariant framed on input
+    // with state disjoint from input and everything else
+    }
+
+let receive f s = f s.st s.input s.from s.to 
+
+//type receive_t flt flight valid_flight = 
+//  s:receive_state -> 
+//  ST (TLSError.result (option (flight s.input)))
+//    (requires receive_pre s.st s.input s.from s.to F_sh)
+//    (ensures receive_post s.st s.input s.from s.to F_sh valid_flight)
+
+
+// TODO code for storing high-level bytes received through the HS
+// interface into [input], between [to] and the end of the slice.
+
+// TODO code for updating from..to based on Receive result and
+// processing within Handshake.
+
+// TODO write sample code bridging high-level HS and low-level
+// receive, e.g. calling parse32 on the received flights and computing
+// a few tags before calling the functions on the rhs of the patterns
+// at the end of Old.Handshake.
+

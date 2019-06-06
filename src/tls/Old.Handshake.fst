@@ -1202,22 +1202,30 @@ let rec recv_fragment (hs:hs) #i rg f =
   | Correct None -> InAck false false // nothing happened
   | Correct (Some (ms,ts)) ->
     match !hs.state, ms, ts with
+
+    (* CLIENT *) 
+
     | C_Idle, _, _ -> InError (fatalAlert Unexpected_message, "Client hasn't sent hello yet")
     | C_Wait_ServerHello, [Msg (M_server_hello sh)], [] ->
       recv_again (client_ServerHello hs sh)
-//      | C_Wait_ServerHello, [HelloRetryRequest hrr], [] ->
-//        client_HelloRetryRequest hs hrr
+//  | C_Wait_ServerHello, [HelloRetryRequest hrr], [] ->
+//    client_HelloRetryRequest hs hrr
 //  | C_Wait_ServerHello, Some ([ServerHello sh], [digest]) -> client_ServerHello hs sh digest
 
+    // 1.2 full: wrap these two into a single received flight with optional [cr]
     | C_Wait_ServerHelloDone, [Msg12 (M12_certificate c); Msg12 (M12_server_key_exchange ske); Msg12 (M12_server_hello_done ())], [_] ->
       client_ServerHelloDone hs c ske None
 
     | C_Wait_ServerHelloDone, [Msg12 (M12_certificate c); Msg12 (M12_server_key_exchange ske); Msg12 (M12_certificate_request cr); Msg12 (M12_server_hello_done ())], [_] ->
       client_ServerHelloDone hs c ske (Some cr)
 
+    | C_Wait_Finished2 digestClientFinished, [Msg12 (M12_finished f)], [digestServerFinished] ->
+      client_ServerFinished hs f digestClientFinished
+
     | C_Wait_NST resume, [Msg12 (M12_new_session_ticket st)], [digestNewSessionTicket] ->
       client_NewSessionTicket_12 hs resume digestNewSessionTicket st
 
+    // 1.3; wrap these three into single flight with optional cr and optional (c;cv).
     | C_Wait_Finished1, [Msg13 (M13_encrypted_extensions ee); Msg13 (M13_certificate c); Msg13 (M13_certificate_verify cv); Msg13 (M13_finished f)],
       [_; digestCert; digestCertVerify; digestServerFinished] ->
       client_ServerFinished_13 hs ee None (Some c) (Some cv) f
@@ -1232,19 +1240,27 @@ let rec recv_fragment (hs:hs) #i rg f =
                         [digestEE; digestServerFinished] ->
       client_ServerFinished_13 hs ee None None None f None digestEE digestServerFinished
 
+    | C_Complete, [Msg13 (M13_new_session_ticket st13)], [_] ->
+      client_NewSessionTicket_13 hs st13
+
+    // 1.2 resumption 
     | C_Wait_R_Finished1 digestNewSessionTicket, [Msg12 (M12_finished f)], [digestServerFinished] ->
       client_R_ServerFinished hs f digestNewSessionTicket digestServerFinished
 
-    | C_Wait_Finished2 digestClientFinished, [Msg12 (M12_finished f)], [digestServerFinished] ->
-      client_ServerFinished hs f digestClientFinished
-
+    (* SERVER *) 
     | S_Idle, [Msg (M_client_hello ch)], []  -> server_ClientHello hs ch
 
+    // 1.2 full 
     | S_Wait_Finished1 digest, [Msg12 (M12_finished f)], [digestClientFinish] ->
       server_ClientFinished hs f digest digestClientFinish
 
+    // 1.2 resumption 
     | S_Wait_CF2 digest, [Msg12 (M12_finished f)], [digestClientFinished] -> // classic resumption
       server_ClientFinished2 hs f digest digestClientFinished
+
+    // 1.3, similarly group cases with optional EOED and (c,cv)?
+    | S_Wait_EOED, [Msg13 (M13_end_of_early_data ())], [digestEOED] ->
+      server_EOED hs digestEOED
 
     | S_Wait_Finished2 (digestServerFinished),
       [Msg13 (M13_finished f)], [digestClientFinished] ->
@@ -1253,12 +1269,6 @@ let rec recv_fragment (hs:hs) #i rg f =
     | S_Wait_Finished2 (digestServerFinished),
       [Msg13 (M13_certificate c); Msg13 (M13_certificate_verify cv); Msg13 (M13_finished f)], [digestSigned; digestCertVerify; digestClientFinished] ->
       server_ClientFinished_13 hs f digestCertVerify digestClientFinished (Some (c, cv, digestSigned))
-
-    | S_Wait_EOED, [Msg13 (M13_end_of_early_data ())], [digestEOED] ->
-      server_EOED hs digestEOED
-
-    | C_Complete, [Msg13 (M13_new_session_ticket st13)], [_] ->
-      client_NewSessionTicket_13 hs st13
 
     // are we missing the case with a Certificate but no CertificateVerify?
     | _,  _, _ ->
