@@ -12,7 +12,6 @@ module HSM13 = Parsers.Handshake13
 
 module PV = Parsers.ProtocolVersion
 module LP = LowParse.Low.Base
-module IncHash = EverCrypt.Hash.Incremental
 
 module R = MITLS.Repr
 module R_HS = MITLS.Repr.Handshake
@@ -22,6 +21,8 @@ module CH = Parsers.ClientHello
 
 module R_SH = MITLS.Repr.ServerHello
 module SH = Parsers.ServerHello
+module CRF = EverCrypt.CRF
+module TestCRF = Test.CRF
 
 let is_hrr _ = admit()
 let nego_version _ _ = admit ()
@@ -309,13 +310,13 @@ noeq
 type state (a:HashDef.hash_alg) = {
   region:Mem.rgn;
   loc: Ghost.erased B.loc;
-  hash_state: IncHash.state a
+  hash_state: CRF.state a
 }
 
 let invariant (#a:HashDef.hash_alg) (s:state a) (tx:transcript_t) (h:HS.mem) =
-  IncHash.hashes h s.hash_state (transcript_bytes tx) /\
+  CRF.hashes h s.hash_state (transcript_bytes tx) /\
   B.loc_region_only true s.region `B.loc_includes` Ghost.reveal s.loc /\
-  Ghost.reveal s.loc == IncHash.footprint s.hash_state h /\
+  Ghost.reveal s.loc == CRF.footprint s.hash_state h /\
   B.loc_not_unused_in h `B.loc_includes` Ghost.reveal s.loc
 
 let footprint (#a:HashDef.hash_alg) (s:state a) = Ghost.reveal s.loc
@@ -325,15 +326,15 @@ let elim_invariant #a s t h = ()
 let region_of #a s = s.region
 
 let frame_invariant (#a:_) (s:state a) (t: transcript_t) (h0 h1:HS.mem) (l:B.loc) =
-  IncHash.modifies_disjoint_preserves l h0 h1 s.hash_state
+  CRF.modifies_disjoint_preserves l h0 h1 s.hash_state
 
 #set-options "--max_fuel 0 --max_ifuel  1 --initial_ifuel  1"
 let create r a =
   let h0 = get() in
-  let s = IncHash.create_in a r in
+  let s = CRF.create_in a r in
   let h1 = get () in
   {region=r;
-   loc=Ghost.hide (IncHash.footprint s h1);
+   loc=Ghost.hide (CRF.footprint s h1);
    hash_state=s},
   Ghost.hide (Start None)
 
@@ -355,7 +356,7 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     let data = C.sub b.R.base ch.R.start_pos len in
 
     assert_norm (pow2 32 < pow2 61);
-    let st' = IncHash.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
+    let st' = CRF.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
 
     let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
     
@@ -363,12 +364,6 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
 
   | LR_ServerHello #b sh ->
     assume (C.qbuf_qual (C.as_qbuf b.R.base) = C.MUTABLE);
-
-    // assert (let Start retry = G.reveal tx in IncHash.hashes h0 s.hash_state (serialize_retry retry) );
-    // assert (let Start retry = G.reveal tx in
-    //   ClientHello retry (HSM.M_client_hello?._0 (R.value ch)) ==
-    //   Some?.v (transition (G.reveal tx) (label_of_label_repr l)));
-
 
     // These three lemmas prove that the data in the subbuffer data is
     // the serialized data corresponding to the server hello that is being added
@@ -379,11 +374,8 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     let len = sh.R.end_pos - sh.R.start_pos in
     let data = C.sub b.R.base sh.R.start_pos len in
 
-    // assert (C.as_seq h0 data == serialize_server_hello (HSM.M_server_hello?._0 (R.value sh)));
-
-
     assert_norm (pow2 32 < pow2 61);
-    let st' = IncHash.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
+    let st' = CRF.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
     let h1 = HyperStack.ST.get() in
 
     let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
@@ -408,14 +400,13 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     let len = end_pos - tch.R.start_pos in
     let data = C.sub b.R.base tch.R.start_pos len in
 
-
     PB.valid_truncate_clientHello h0 (R.to_slice b) tch.R.start_pos;
     assert (C.as_seq h0 data == FStar.Bytes.reveal (PB.truncate_clientHello_bytes (R.value tch)));
 
     assert_norm (pow2 32 < pow2 61);
     let h1 = HyperStack.ST.get () in
-    IncHash.modifies_disjoint_preserves B.loc_none h0 h1 s.hash_state;
-    let st' = IncHash.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
+    CRF.modifies_disjoint_preserves B.loc_none h0 h1 s.hash_state;
+    let st' = CRF.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
 
     let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
 
@@ -444,8 +435,8 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     PB.valid_truncate_clientHello h0 (R.to_slice b) tch.R.start_pos;
     assert_norm (pow2 32 < pow2 61);
     let h1 = HyperStack.ST.get () in
-    IncHash.modifies_disjoint_preserves B.loc_none h0 h1 s.hash_state;
-    let st' = IncHash.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
+    CRF.modifies_disjoint_preserves B.loc_none h0 h1 s.hash_state;
+    let st' = CRF.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
 
     let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
 
@@ -480,7 +471,7 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     let data = C.sub b1.R.base ch_tag.R.start_pos len in
 
     assert_norm (pow2 32 < pow2 61);
-    let st' = IncHash.update a s.hash_state (G.hide Seq.empty) (C.to_buffer data) len in
+    let st' = CRF.update a s.hash_state (G.hide Seq.empty) (C.to_buffer data) len in
 
     assert ((Seq.empty `Seq.append`  LP.serialize HSM.handshake_serializer (R.value ch_tag))
       `Seq.equal`
@@ -491,7 +482,7 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     let len = hrr.R.end_pos - hrr.R.start_pos in
     let data = C.sub b2.R.base hrr.R.start_pos len in
 
-    let st' = IncHash.update a st' (G.hide (serialize_any_tag (R.value ch_tag))) (C.to_buffer data) len in
+    let st' = CRF.update a st' (G.hide (serialize_any_tag (R.value ch_tag))) (C.to_buffer data) len in
 
     let hf = HyperStack.ST.get () in
 
@@ -525,7 +516,7 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     
     assert_norm ((max_transcript_size + 4) * max_message_size < pow2 61);
 
-    let st' = IncHash.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
+    let st' = CRF.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
 
     {s with hash_state = st'}, tx'
   
@@ -557,15 +548,23 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     
     assert_norm ((max_transcript_size + 4) * max_message_size < pow2 61);
 
-    let st' = IncHash.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
+    let st' = CRF.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
 
     {s with hash_state = st'}, tx'
 
+let transcript_hash (a:HashDef.hash_alg) (t:transcript_t)
+  = Spec.Hash.hash a (transcript_bytes t)
 
-let transcript_hash (a:HashDef.hash_alg) (t:transcript_t) = Spec.Hash.hash a (transcript_bytes t)
-
+let hashed (a:HashDef.hash_alg) (t:transcript_t) = 
+  Model.CRF.hashed a (transcript_bytes t)
+  
 let extract_hash (#a:_) (s:state a) 
   (tag:Hacl.Hash.Definitions.hash_t a)
   (tx:G.erased transcript_t)
-  = IncHash.finish a s.hash_state (G.hide (transcript_bytes (G.reveal tx))) tag
+  = CRF.finish a s.hash_state (G.hide (transcript_bytes (G.reveal tx))) tag
 
+let injectivity a t0 t1 =
+  let b0 = Ghost.hide (transcript_bytes (Ghost.reveal t0)) in
+  let b1 = Ghost.hide (transcript_bytes (Ghost.reveal t1)) in
+  Model.CRF.injective a b0 b1;
+  transcript_bytes_injective (Ghost.reveal t0) (Ghost.reveal t1)

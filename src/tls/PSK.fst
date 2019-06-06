@@ -13,29 +13,8 @@ module MDM = FStar.Monotonic.DependentMap
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
 
+//19-05-30 Should we keep relying on MDM? Upgrade it?
 
-// SESSION TICKET DATABASE (TLS 1.3)
-// Note that the associated PSK are stored in the PSK table defined below in this file
-let hostname : eqtype = string
-
-let tlabel (h:hostname) = bytes
-
-noextract
-private let tregion:rgn = new_region tls_tables_region
-private let tickets : MDM.t tregion hostname tlabel (fun _ -> True) =
-  MDM.alloc ()
-
-let lookup (h:hostname) = MDM.lookup tickets h
-let extend (h:hostname) (t:tlabel h) = MDM.extend tickets h t
-
-// SESSION TICKET DATABASE (TLS 1.2)
-// Note that this table also stores the master secret
-type session12 (tid:bytes) = protocolVersion * cipherSuite * ems:bool * ms:bytes
-private let sessions12 : MDM.t tregion bytes session12 (fun _ -> True) =
-  MDM.alloc ()
-
-let s12_lookup (tid:bytes) = MDM.lookup sessions12 tid
-let s12_extend (tid:bytes) (s:session12 tid) = MDM.extend sessions12 tid s
 
 // *** PSK ***
 
@@ -246,6 +225,47 @@ The authenticated property of the binder should includes
 Hence, the server authenticates age, and may filter 0RTT accordingly.
 
 *)
+
+
+
+
+/// Towards TLS.Ticket
+
+/// TLS clients (and possibly later servers) keep sealed PSKs, their
+/// tickets, and their authenticated contexts in an external database
+/// accessed via callbacks.
+///
+/// Our cryptopgraphic model also keeps tables from indexes to PSKs,
+/// with a table for TLS 1.2 and multiple tables in the key-derivation
+/// tree for TLS 1.3. Their (global, model-only) indexes should not be
+/// confused with the (concrete, local) identifiers exchanged by TLS.
+///
+// SESSION TICKET DATABASE (TLS 1.3)
+// Note that the associated PSK are stored in the PSK table defined below in this file
+let hostname : eqtype = string
+
+let tlabel (h:hostname) = bytes
+
+noextract
+private let tregion:rgn = new_region tls_tables_region
+private let tickets : MDM.t tregion hostname tlabel (fun _ -> True) =
+  MDM.alloc ()
+
+let lookup (h:hostname) = MDM.lookup tickets h
+let extend (h:hostname) (t:tlabel h) = MDM.extend tickets h t
+
+// SESSION TICKET DATABASE (TLS 1.2)
+// Note that this table also stores the master secrets
+type session12 (tid:bytes) = 
+  protocolVersion * cipherSuite * ems:bool * ms:bytes
+
+private let sessions12 : MDM.t tregion bytes session12 (fun _ -> True) =
+  MDM.alloc ()
+
+let s12_lookup (tid:bytes) = MDM.lookup sessions12 tid
+let s12_extend (tid:bytes) (s:session12 tid) = MDM.extend sessions12 tid s
+
+
 
 type ticket_age = UInt32.t
 type obfuscated_ticket_age = UInt32.t

@@ -61,7 +61,7 @@ val find_psk_key_exchange_modes: offer -> list Extensions.pskKeyExchangeMode // 
 val find_sessionTicket: offer -> option Extensions.clientHelloExtension_CHE_session_ticket 
 val find_clientPske: offer -> option Extensions.offeredPsks 
 
-// index in the list of PSKs offered by the client
+// the type of correct indexes into the list of PSKs offered by the client
 type pski (o:offer) = n:nat {
   // o.ch_protocol_version = TLS_1p3 /\ // 19-01-04  was mistaken?
   (match find_clientPske o with
@@ -330,11 +330,11 @@ val client_HelloRetryRequest:
 /// This mode is still partial.
 /// Do we need some spec-level matching with the server's mode?
 ///
-/// let offer = client_offer client cfg in 
-/// let server_mode = computeServerMode server_cfg offer sr in
-/// let sh = Handshake.serverHello server_mode in 
-/// let client_mode = accept_ServerHello client_cfg offer sh in
-/// server_mode == client_mode // excluding encrypted extensions, server_cert, etc 
+///   let offer = client_offer client cfg in 
+///   let server_mode = computeServerMode server_cfg offer sr in
+///   let sh = Handshake.serverHello server_mode in 
+///   let client_mode = accept_ServerHello client_cfg offer sh in
+///   server_mode == client_mode // excluding encrypted extensions, server_cert, etc 
 ///
 val accept_ServerHello: 
   config -> 

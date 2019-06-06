@@ -112,7 +112,8 @@ noeq type client = | Client:
     // hello_retry: bool;          
 
     // propose share from these groups (it should it be a subset of [named_groups]).
-    //19-05-04 only makes sense with TLS 1.3; but must be non-empty? 
+    //19-05-04 only makes sense with TLS 1.3; but must be non-empty?
+    //19-05-28 recoverable from CH.
     shares: offered_groups base -> 
     
     // Send a [server_name] extension with these indications. 

@@ -27,6 +27,9 @@ unfold let trace = if DebugFlags.debug_NGO then print else (fun _ -> ())
 type hostname = string
 type tlabel (h:hostname) = t:bytes * tls13:bool
 
+
+/// private keys for sealing (client-only) and ticketing (server-only)
+
 noextract
 private let region:rgn = new_region tls_tables_region
 
@@ -60,14 +63,17 @@ private let keygen () : St ticket_key =
   let rd = AE.genReader region #id0 wr in
   Key id0 wr rd
 
-let get_ticket_key () : St ticket_key =
+// by design, the application may push its own keys, but not retrieve
+// them.
+
+private let get_ticket_key () : St ticket_key =
   match !ticket_enc with
   | Some k -> k
   | None ->
     let k = keygen () in
     ticket_enc := Some k; k
 
-let get_sealing_key () : St ticket_key =
+private let get_sealing_key () : St ticket_key =
   match !sealing_enc with
   | Some k -> k
   | None ->
@@ -94,6 +100,9 @@ let set_ticket_key (a:aeadAlg) (kv:bytes) : St bool =
 
 let set_sealing_key (a:aeadAlg) (kv:bytes) : St bool =
   set_internal_key true a kv
+
+
+/// ticket payloads (to be server-encrypted)
 
 [@unifier_hint_injective]
 inline_for_extraction

@@ -3,6 +3,8 @@ open FStar.String
 (* TLS explicitly returns run-time errors:
    results carry either values or error descriptions *)
 
+include FStar.Error // avoids double-include in other modules
+
 include Parsers.AlertDescription
 include Parsers.AlertLevel
 include Parsers.Alert
@@ -55,6 +57,7 @@ let string_of_result f = function
   | Error z -> "Error: "^string_of_error z
   | Correct v -> f v
 
+
 let fatal #t a s: result t = Error(fatalAlert a, s)
 
 val resT: r:result 'a { FStar.Error.Correct? r } -> Tot 'a
@@ -92,3 +95,19 @@ let option_of_result (#t: Type) (r: result t) : Tot (option t) =
   match r with
   | Error _ -> None
   | Correct c -> Some c
+
+
+(* lightweight error handling? *) 
+
+// masking the polymorphic one in FStar.Error
+let correct #t x: result t = Correct x
+let fail #t z: result t = Error z
+
+inline_for_extraction
+let bind (#a:Type) (#b:Type)
+         (f:result a)
+         (g: a -> result b)
+    : result b
+    = match f with
+      | Correct x -> g x
+      | Error z -> Error z
