@@ -23,8 +23,6 @@ module CH = Parsers.ClientHello
 module R_SH = MITLS.Repr.ServerHello
 module SH = Parsers.ServerHello
 
-module PSKSB = Parsers.OfferedPsks_binders
-
 let is_hrr _ = admit()
 let nego_version _ _ = admit ()
 
@@ -138,6 +136,10 @@ let transcript_script_bytes (t: transcript_t) : Lemma
   (transcript_bytes t `Seq.equal` (serialize_retry (transcript_get_retry t) `Seq.append` transcript_bytes (transcript_set_retry t None)))
 = ()
 
+let seq_append_empty () : Lemma
+  (forall (s: Seq.seq LP.byte) . {:pattern (Seq.empty `Seq.append` s)} Seq.empty `Seq.append` s == s)
+= assert (forall (s: Seq.seq LP.byte) . {:pattern (Seq.empty `Seq.append` s)} (Seq.empty `Seq.append` s) `Seq.equal` s)
+
 let transcript_bytes_does_not_start_with_message_hash
   (t: transcript_t)
   (r: retry)
@@ -145,11 +147,38 @@ let transcript_bytes_does_not_start_with_message_hash
 : Lemma
   (requires (transcript_get_retry t == None /\ transcript_bytes t == serialize_retry (Some r) `Seq.append` q))
   (ensures False)
-= admit ()
+= let ht, hrr = r in
+  seq_append_empty();
+  assert (transcript_bytes t `Seq.equal` 
+    (serialize_any_tag ht `Seq.append` (serialize_server_hello hrr `Seq.append` q)));  
+  match t with
+  | ClientHello _ ch ->
+    assert (transcript_bytes t `Seq.equal` (serialize_client_hello ch `Seq.append` Seq.empty));
+    LP.serialize_strong_prefix HSM.handshake_serializer 
+      ht (HSM.M_client_hello ch)
+      (serialize_server_hello hrr `Seq.append` q)
+      Seq.empty
 
-let seq_append_empty () : Lemma
-  (forall (s: Seq.seq LP.byte) . {:pattern (Seq.empty `Seq.append` s)} Seq.empty `Seq.append` s == s)
-= assert (forall (s: Seq.seq LP.byte) . {:pattern (Seq.empty `Seq.append` s)} (Seq.empty `Seq.append` s) `Seq.equal` s)
+  | TruncatedClientHello _ tch -> 
+    PB.parse_truncate_clientHello_bytes (HSM.M_client_hello tch);
+    LP.parse_strong_prefix HSM.handshake_parser 
+      (serialize_any_tag ht)
+      (Bytes.reveal (PB.truncate_clientHello_bytes (HSM.M_client_hello tch)))
+
+  | Transcript12 ch sh rest ->
+    LP.serialize_strong_prefix HSM.handshake_serializer 
+      ht (HSM.M_client_hello ch)
+      (serialize_server_hello hrr `Seq.append` q)
+      (serialize_server_hello sh `Seq.append`
+        LP.serialize (LPSL.serialize_list _ HSM12.handshake12_serializer) rest)
+
+  | Transcript13 _ ch sh rest ->
+    LP.serialize_strong_prefix HSM.handshake_serializer 
+      ht (HSM.M_client_hello ch)
+      (serialize_server_hello hrr `Seq.append` q)
+      (serialize_server_hello sh `Seq.append`
+        LP.serialize (LPSL.serialize_list _ HSM13.handshake13_serializer) rest)
+
 
 #push-options "--z3rlimit 16"
 
@@ -167,7 +196,12 @@ let transcript_bytes_injective_retry
   | Some (ht1, sh1), Some (ht2, sh2) ->
     assert ((serialize_retry r1 `Seq.append` transcript_bytes t1) `Seq.equal` (serialize_any_tag ht1 `Seq.append` (serialize_server_hello sh1 `Seq.append` transcript_bytes t1)));
     assert ((serialize_retry r2 `Seq.append` transcript_bytes t2) `Seq.equal` (serialize_any_tag ht2 `Seq.append` (serialize_server_hello sh2 `Seq.append` transcript_bytes t2)));
-    assume (r1 == r2 /\ transcript_bytes t1 == transcript_bytes t2)
+    LP.serialize_strong_prefix HSM.handshake_serializer ht1 ht2
+      (serialize_server_hello sh1 `Seq.append` transcript_bytes t1)
+      (serialize_server_hello sh2 `Seq.append` transcript_bytes t2);        
+    LP.serialize_strong_prefix HSM.handshake_serializer
+      (HSM.M_server_hello sh1) (HSM.M_server_hello sh2)
+      (transcript_bytes t1) (transcript_bytes t2)
   | Some r1, _ ->
     transcript_bytes_does_not_start_with_message_hash t2 r1 (transcript_bytes t1)
   | _, Some r2 ->
