@@ -82,7 +82,7 @@ let ssl_verifyCertificate hashAlg ms log  =
 #reset-options "--admit_smt_queries true"
 private val p_hash_int: 
   alg: macAlg -> 
-  secret: lbytes32 (EverCrypt.Hash.tagLen alg) -> 
+  secret: lbytes32 (Hacl.Hash.Definitions.hash_len alg) -> 
   seed: bytes -> 
   U32.t -> U32.t -> bytes -> bytes -> ST bytes
   (requires (fun _ -> True))
@@ -91,7 +91,7 @@ let rec p_hash_int alg secret seed len it aPrev acc =
   let aCur = HMAC.tls_mac alg secret aPrev in
   let pCur = HMAC.tls_mac alg secret (aCur @| seed) in
   if it = 1ul then
-    let hs = EverCrypt.Hash.tagLen alg in
+    let hs = Hacl.Hash.Definitions.hash_len alg in
     let r = U32.(len %^ hs) in
     let (pCur,_) = split pCur r in
     acc @| pCur
@@ -100,10 +100,10 @@ let rec p_hash_int alg secret seed len it aPrev acc =
 
 val p_hash: 
   a: macAlg -> 
-  secret: lbytes32 (EverCrypt.Hash.tagLen a) -> 
+  secret: lbytes32 (Hacl.Hash.Definitions.hash_len a) -> 
   seed: bytes -> len:U32.t -> St (lbytes32 len)
 let p_hash alg secret seed len =
-  let hs = EverCrypt.Hash.tagLen alg in
+  let hs = Hacl.Hash.Definitions.hash_len alg in
   let it = U32.((len /^ hs) +^ 1ul) in
   let r = p_hash_int alg secret seed len it seed empty_bytes in
   assume(Bytes.len r = len); //18-02-14 TODO

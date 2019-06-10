@@ -244,16 +244,16 @@ let test_rekey(): St C.exit_code
   [@inline_let] let cpkg': local_pkg ii = concrete_pkg t2 "RE" in
   assume(
     32ul == //(LocalPkg?.len cpkg') a1 == 
-    EverCrypt.Hash.tagLen KDF.((get_info kdf2).ha));
+    Hacl.Hash.Definitions.hash_len KDF.((get_info kdf2).ha));
   //assert_norm(
   //  32ul == //(LocalPkg?.len cpkg') a1 == 
-  //  EverCrypt.Hash.tagLen KDF.((get_info kdf2).ha));
+  //  Hacl.Hash.Definitions.hash_len KDF.((get_info kdf2).ha));
 
   // TBC for now only testing extraction.
   assume False; 
   let (| (), kdf1 |) = KDF.derive #(flagKDF 3) #t2 #i2 kdf2 (mklabel "RE") Expand cpkg' a1 in
 
-    // assert((Pkg.LocalPkg?.len cpkg') #i1 a1 == EverCrypt.Hash.tagLen (KDF.get_info kdf2).KDF.ha);
+    // assert((Pkg.LocalPkg?.len cpkg') #i1 a1 == Hacl.Hash.Definitions.hash_len (KDF.get_info kdf2).KDF.ha);
   let t1 = _down t2 in
 
   let i1' = derive i2 (mklabel "IV") Expand in

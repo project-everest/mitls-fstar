@@ -39,7 +39,7 @@ val test: unit -> ST unit
 #set-options "--z3rlimit 1000"
 let test() =
   push_frame(); 
-  let t = B.alloca 0uy (Hash.tagLen a) in  
+  let t = B.alloca 0uy (Hash.hash_len a) in  
   let x = B.alloca 1uy 11ul in  
   let s = create_in a HyperStack.root in 
   let h0 = get() in 
