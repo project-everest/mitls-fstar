@@ -51,7 +51,7 @@ let write_binder_ph
   let ph = Ghost.hide (compute_binder_ph_new (LP.contents Parsers.TicketContents13.ticketContents13_parser h0 sin pin)) in
   let c = CipherSuite.cipherSuite13_reader sin (Parsers.TicketContents13.accessor_ticketContents13_cs sin pin) in
   let (CipherSuite13 _ h) = cipherSuite_of_cipherSuite13 c in
-  let len : U32.t = Spec.Hash.Definitions.hash_length h in
+  let len : U32.t = Hacl.Hash.Definitions.hash_len h in
   if (1ul `U32.add` len) `U32.gt` (sout.LP.len `U32.sub` pout_from)
   then begin
     LP.serialized_length_eq pskBinderEntry_serializer (Ghost.reveal ph);
