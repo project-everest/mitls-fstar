@@ -77,6 +77,8 @@ let finish a st dst =
     (**) frame_invariant #a (B.loc_region_only true Mem.tls_tables_region) st h0 h1;
     dst `of_seq` hash
   else
+    (**) let h0 = ST.get () in
+    Model.CRF.concrete_hashed (G.reveal a) (Concrete.hashed #(G.reveal a) h0 st);
     Concrete.finish a st dst
 
 let free a s =

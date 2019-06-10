@@ -270,7 +270,9 @@ let finish_st (a: Hash.alg) =
       B.(modifies (loc_buffer dst `loc_union`
         footprint h0 s `loc_union`
         loc_region_only true Mem.tls_tables_region) h0 h1) /\
-      S.equal (B.as_seq h1 dst) (Spec.Hash.hash a (hashed h0 s)))
+      S.equal (B.as_seq h1 dst) (Spec.Hash.hash a (hashed h0 s)) /\
+      // NEW! ↓
+      Model.CRF.hashed a (hashed h0 s))
 
 (** @type: true
 *)
