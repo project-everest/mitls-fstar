@@ -54,64 +54,17 @@ let fresh_loc = Concrete.fresh_loc
 /// Overriding things
 /// -----------------
 
-/// This is very finely tuned to avoid inference issues.
-type mstate a = a': Concrete.alg { a' == a } & p:B.pointer bytes {
-  B.(loc_disjoint (loc_addr_of_buffer p) (loc_region_only true Mem.tls_tables_region))
-}
-
-let state (a: Concrete.alg) =
-  if model then
-    mstate a
-  else
-    Concrete.state a
-
-// UGH!!!
-noextract inline_for_extraction
-let fst (#a: e_alg) (s: state (G.reveal a){model}):
-  Tot (a': Concrete.alg { G.reveal a == a' })
-=
-  if model then
-    let (| a, s |) = (s <: mstate (G.reveal a)) in
-    a
-  else
-    false_elim ()
-
-noextract inline_for_extraction
-let snd (#a: e_alg) (s: state (G.reveal a){model}):
-  Tot (p:B.pointer bytes {
-    B.(loc_disjoint (loc_addr_of_buffer p) (loc_region_only true Mem.tls_tables_region))
-  })
-=
-  if model then
-    let (| a, s |) = (s <: mstate (G.reveal a)) in
-    s
-  else
-    false_elim ()
-
-let freeable #a h (s:state a) =
-  if model then
-    let s: B.pointer bytes = snd #(G.hide a) s in
-    B.freeable s
-  else
-    Concrete.freeable #a h s
+val state: Concrete.alg -> Type0
+val freeable: #a:Concrete.alg -> HS.mem -> state a -> Type0
 
 let preserves_freeable #a (s: state a) (h0 h1: HS.mem) =
   freeable h0 s ==> freeable h1 s
 
-let footprint #a h (s: state a) =
-  if model then
-    B.loc_addr_of_buffer (snd #(G.hide a) s)
-  else
-    Concrete.footprint #a h s
+val footprint: #a:Concrete.alg -> HS.mem -> state a -> GTot B.loc
 
-let invariant #a h (s: state a) =
-  if model then
-    let s: B.pointer bytes = snd #(G.hide a) s in
-    B.live h s /\ S.length (B.deref h s) < pow2 61
-  else
-    Concrete.invariant #a h s
+val invariant: #a:Concrete.alg -> HS.mem -> state a -> Type0
 
-let invariant_loc_in_footprint
+val invariant_loc_in_footprint
   (#a: Concrete.alg)
   (s: state a)
   (m: HS.mem)
@@ -119,30 +72,17 @@ let invariant_loc_in_footprint
   (requires (invariant m s))
   (ensures (Concrete.loc_in (footprint m s) m))
   [SMTPat (invariant m s)]
-=
-  ()
 
-let hashed #a h (s: state a) =
-  if model then
-    let s: B.pointer bytes = snd #(G.hide a) s in
-    B.deref h s
-  else
-    let s: Concrete.state a = s in
-    Concrete.hashed h s
+val hashed: #a:Concrete.alg -> HS.mem -> state a -> GTot bytes
 
-#push-options "--max_ifuel 1"
-let hash_fits (#a:Hash.alg) (h:HS.mem) (s:state a): Lemma
+val hash_fits (#a:Hash.alg) (h:HS.mem) (s:state a): Lemma
   (requires (
     invariant h s))
   (ensures (
     S.length (hashed h s) < Spec.Hash.Definitions.max_input_length a))
   [ SMTPat (hashed h s) ]
-=
-  assert_norm (pow2 61 < pow2 125);
-  ()
-#pop-options
 
-let frame_invariant (#a: Concrete.alg) (l: B.loc) (s: state a) (h0 h1: HS.mem): Lemma
+val frame_invariant (#a: Concrete.alg) (l: B.loc) (s: state a) (h0 h1: HS.mem): Lemma
   (requires (
     invariant h0 s /\
     B.loc_disjoint l (footprint h0 s) /\
@@ -151,20 +91,16 @@ let frame_invariant (#a: Concrete.alg) (l: B.loc) (s: state a) (h0 h1: HS.mem): 
     invariant h1 s /\
     footprint h0 s == footprint h1 s))
   [ SMTPat (invariant h1 s); SMTPat (B.modifies l h0 h1) ]
-=
-  ()
 
-let frame_hashed (#a: Concrete.alg) (l: B.loc) (s: state a) (h0 h1: HS.mem): Lemma
+val frame_hashed (#a: Concrete.alg) (l: B.loc) (s: state a) (h0 h1: HS.mem): Lemma
   (requires (
     invariant h0 s /\
     B.loc_disjoint l (footprint h0 s) /\
     B.modifies l h0 h1))
   (ensures (hashed h0 s == hashed h1 s))
   [ SMTPat (hashed h1 s); SMTPat (B.modifies l h0 h1) ]
-=
-  ()
 
-let frame_freeable (#a: Concrete.alg) (l: B.loc) (s: state a) (h0 h1: HS.mem): Lemma
+val frame_freeable (#a: Concrete.alg) (l: B.loc) (s: state a) (h0 h1: HS.mem): Lemma
   (requires (
     invariant h0 s /\
     freeable h0 s /\
@@ -172,8 +108,6 @@ let frame_freeable (#a: Concrete.alg) (l: B.loc) (s: state a) (h0 h1: HS.mem): L
     B.modifies l h0 h1))
   (ensures (freeable h1 s))
   [ SMTPat (freeable h1 s); SMTPat (B.modifies l h0 h1) ]
-=
-  ()
 
 /// Stateful API
 /// ------------
