@@ -1,4 +1,4 @@
-module EverCrypt.CRF
+module Crypto.CRF
 
 /// Status. See also `Test.CRF.fst`.
 ///

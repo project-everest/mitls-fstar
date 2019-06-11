@@ -21,7 +21,7 @@ module CH = Parsers.ClientHello
 
 module R_SH = MITLS.Repr.ServerHello
 module SH = Parsers.ServerHello
-module CRF = EverCrypt.CRF
+module CRF = Crypto.CRF
 module TestCRF = Test.CRF
 
 let is_hrr _ = false

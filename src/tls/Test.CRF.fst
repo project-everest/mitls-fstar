@@ -8,7 +8,7 @@ let a = Spec.Hash.Definitions.SHA2_512
 open FStar.Integers
 open FStar.HyperStack.ST
 //open EverCrypt.Hash.Incremental
-open EverCrypt.CRF
+open Crypto.CRF
 
 val test: unit -> ST unit
   (requires fun h0 -> True)

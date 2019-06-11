@@ -1,4 +1,4 @@
-module EverCrypt.CRF
+module Crypto.CRF
 
 module Concrete = EverCrypt.Hash.Incremental
 module Hash = EverCrypt.Hash
