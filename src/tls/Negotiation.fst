@@ -1609,6 +1609,7 @@ let ciphersuite_accept cfg pv sh =
       fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
 
 let accept_ServerHello cfg offer sh = 
+  [@inline_let]
   let r = m:mode{Mode?.n_offer m == offer} in 
   pv <-- Negotiation.Version.accept cfg sh; 
   cs <-- ciphersuite_accept cfg pv sh;

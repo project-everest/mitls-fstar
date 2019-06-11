@@ -350,7 +350,7 @@ type kdfAlg_t = prePrfAlg
 type vdAlg_t = protocolVersion * cipherSuite
 
 // Only to be invoked with TLS 1.2 (hardcoded in previous versions)
-// BB.TODO: Documentation ? Confirm that it is used with TLS 1.3 ! CF: no, for TLS 1.3 use tagLen a, e.g. 32 or 64
+// BB.TODO: Documentation ? Confirm that it is used with TLS 1.3 ! CF: no, for TLS 1.3 use hash_len a, e.g. 32 or 64
 // let verifyDataLen_of_ciphersuite (cs:cipherSuite) = 12
 
 // Only to be invoked with TLS 1.2 (hardcoded in previous versions)

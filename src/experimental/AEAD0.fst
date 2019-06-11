@@ -109,14 +109,14 @@ assume val repr: #i:id -> #l:plainLen -> p:plain i l -> Tot (lbytes l)
 type adata i = b:bytes { 5 < length b /\ length b < 2000 } 
 
 // Cipher, including the tag suffix, but not any explicit IV
-let tagLen i : nat = CoreCrypto.aeadTagSize (alg i)
-let cipherLen i (l:plainLen) : nat = l + tagLen i
+let Spec.Hash.Definitions.hash_len i : nat = CoreCrypto.aeadTagSize (alg i)
+let cipherLen i (l:plainLen) : nat = l + Spec.Hash.Definitions.hash_len i
 type cipher i (l:plainLen) = lbytes (cipherLen i l)
 // TODO reconcile with 
 // type cipher (i:id) = c:bytes{ valid_clen i (length c) }, which supported only TLS 1.2
 
 // Presumed plaintext length when decrypting c
-let lenCipher i (c:bytes { tagLen i <= length c }) : nat = length c - tagLen i
+let lenCipher i (c:bytes { Spec.Hash.Definitions.hash_len i <= length c }) : nat = length c - Spec.Hash.Definitions.hash_len i
 
 
 //16-09-10 causing a lexing error, why? 

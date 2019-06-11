@@ -111,8 +111,8 @@ val transcript_format_injective: ms0:hs_transcript -> ms1:hs_transcript ->
 //val transcript_bytes_append: ms0: hs_transcript -> ms1: list msg ->
 //  Lemma (transcript_bytes (ms0 @ ms1) = transcript_bytes ms0 @| transcript_bytes ms1)
 
-let narrowTag a (b:anyTag { len b = tagLen a}) : tag a = b
-let tagLength (b:anyTag) = len b
+let narrowTag a (b:anyTag { len b = Hacl.Hash.Definitions.hash_len a}) : tag a = b
+let hash_length (b:anyTag) = len b
 
 // full specification of the hashed-prefix tags required for a given flight
 // (in relational style to capture computational-hashed)
@@ -127,7 +127,7 @@ let rec tags (a:alg) (prior: list msg) (ms: list msg) (hs:list anyTag) : Tot Typ
       | true, h::hs ->
           valid_transcript prior /\ (
           let t = transcript_bytes prior in
-          (  tagLength h = tagLen a /\
+          (  hash_length h = Hacl.Hash.Definitions.hash_len a /\
              (  let h = narrowTag a h in
                 hashed a t /\ h == Hashing.h a t /\
                 tags a prior ms hs ))

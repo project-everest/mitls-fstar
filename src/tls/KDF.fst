@@ -89,7 +89,7 @@ noeq private type table (#ideal:iflag) (u:usage ideal) (i:regid) (s:squash model
     table u i s
 
 inline_for_extraction
-let secret_len (a:info) : keylen = Hashing.Spec.tagLen a.ha
+let secret_len (a:info) : keylen = Hacl.Hash.Definitions.hash_len a.ha
 type real_secret (i:regid) = a:info0 i & lbytes32 (secret_len a)
 
 let safe (#ideal:iflag) (u:usage ideal) (i:regid) =
@@ -457,8 +457,10 @@ val derive:
   (requires fun h0 ->
     mem_defined (kdf_dt t) i /\
     tree_invariant t h0 /\
-    (LocalPkg?.len child_pkg) a' == EverCrypt.Hash.tagLen (get_info k).ha /\
-    (u_of_t t `has_lbl` lbl ==> compatible_packages child_pkg (child (u_of_t t) lbl)) )
+    (LocalPkg?.len child_pkg) a' == Hacl.Hash.Definitions.hash_len (get_info k).ha /\
+    ((u_of_t t) `has_lbl` lbl ==>
+      compatible_packages child_pkg (child (u_of_t t) lbl))
+  )
   (ensures fun h0 (| () , r |) h1 ->
     modifies_derive k lbl ctx h0 h1 /\
     tree_invariant t h1 /\
