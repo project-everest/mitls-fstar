@@ -6,10 +6,6 @@ build: build-internal-test build-library build-msvc-library build-external-test
 
 test: test-internal-test test-library test-msvc-library test-external-test
 
-ifneq (,$(MITLS_USE_OPENSSL))
-CONCRETE_FLAVOR = -OpenSSL
-endif
-
 VALE_BUNDLES=\
   -bundle CanonCommMonoid,CanonCommSemiring,CanonCommSwaps[rename=Unused] \
   -bundle FastUtil_helpers,FastHybrid_helpers,FastSqr_helpers,FastMul_helpers[rename=Unused2] \
@@ -48,14 +44,16 @@ MITLS_BUNDLES = \
   $(VALE_BUNDLES)
 
 # To include Makefile.common, you need to specify
-# the following five variables
-FLAVOR		= Kremlin$(CONCRETE_FLAVOR)
+# the following variables
 # Don't extract modules from mitls that are implemented in C
 EXTRACT		= '* -DHDB -FFICallbacks -BufferBytes'
-SPECINC     	= $(MITLS_HOME)/src/tls/concrete-flags $(MITLS_HOME)/src/tls/concrete-flags/$(FLAVOR)
+SPECINC     	= $(MITLS_HOME)/src/tls/concrete-flags
 
-# SMT verification is disabled, so do not record hints
+# if SMT verification is disabled, do not record hints
+# (https://github.com/FStarLang/FStar/issues/1651)
+ifneq ($(filter --admit_smt_queries,$(OTHERFLAGS)),)
 OTHERFLAGS := $(filter-out --record_hints,$(OTHERFLAGS))
+endif
 
 include Makefile.common
 

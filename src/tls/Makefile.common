@@ -32,10 +32,6 @@ INCLUDE_PATHS = \
   $(HACL_HOME)/vale/code/arch/x64/interop \
   $(HACL_HOME)/vale/code/crypto/aes \
   $(HACL_HOME)/vale/code/crypto/aes/x64 \
-<<<<<<< HEAD
-  $(HACL_HOME)/vale/code/crypto/aes/x64/stdcalls \
-=======
->>>>>>> origin/master
   $(HACL_HOME)/vale/code/crypto/ecc/curve25519 \
   $(HACL_HOME)/vale/code/crypto/poly1305/x64 \
   $(HACL_HOME)/vale/code/crypto/sha \
@@ -84,8 +80,8 @@ else
 endif
 
 HINTS_DIR  ?= hints
-CACHE_DIR   = cache/$(FLAVOR)
-EXTRACT_DIR = extract/$(FLAVOR)
+CACHE_DIR   = cache/
+EXTRACT_DIR = extract/Kremlin
 DEP_FILE    = $(CACHE_DIR)/.depend
 FSTAR       = $(FSTAR_HOME)/bin/fstar.exe --cache_dir $(CACHE_DIR) --cache_checked_modules $(OTHERFLAGS)
 VFLAGS     ?= --warn_error -272-241
@@ -103,7 +99,7 @@ ROOTS ?= QUIC.fst Test.Main.fst \
   # HSL.Transcript.fst
 
 
-EVERYTHING=$(wildcard *.fst *.fsti Make* $(MITLS_HOME)/src/pki/* $(MITLS_HOME)/libs/ffi/* ideal-flags/* concrete-flags/* concrete-flags/$(FLAVOR)/*)
+EVERYTHING=$(wildcard *.fst *.fsti Make* $(MITLS_HOME)/src/pki/* $(MITLS_HOME)/libs/ffi/* ideal-flags/* concrete-flags/* concrete-flags/*)
 
 # Production Rules
 

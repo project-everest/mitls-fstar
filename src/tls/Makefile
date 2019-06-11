@@ -1,10 +1,9 @@
 EXTRACT='Nothing'
-FLAVOR?=Kremlin
 
 all: refresh-depend kremlin-all
 
 clean-depend:
-	rm -f cache/Kremlin/.depend
+	rm -f cache/.depend
 
 refresh-depend: clean-depend
 	+$(MAKE) -C ../parsers gen
