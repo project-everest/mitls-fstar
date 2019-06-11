@@ -151,6 +151,8 @@ assume val pskis_of_psks: option Extensions.offeredPsks -> list (i:_{is_psk i})
 /// Low*: we'll turn all high-level messages constructor arguments
 /// into ghost, possibly using reprs.
 
+// extending the current states in Old.Handshake. Note that there is
+// no need to precompute and store tags for the current transcript.
 noeq type client_state 
   (region:rgn) // unused for now; worth the trouble? passed only as stateful-invariant argument? 
   (cfg: client_config) 
@@ -196,6 +198,11 @@ noeq type client_state
     //sfk: Secret.fink (Secret.sfk_of_hms i) -> 
     client_state region cfg 
 
+  // TODO add optional intermediate model-irrelevant C13_sent_EOED,
+  // possibly just making fin2 optional in C13_complete; Old.Handshake
+  // currently holds [digestEOED ocr cfin_key] in that state to
+  // complete the transaction after installing the new keys.
+  
   // waiting for post-handshake messages (1.3 only; TBC rekeying);
   // also used for witnessing the pre-condition of the client finished
   // HMAC (and the client signature TBC) in which case fin2 is not yet
