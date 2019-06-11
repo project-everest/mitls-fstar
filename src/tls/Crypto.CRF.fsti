@@ -21,6 +21,7 @@ module G = FStar.Ghost
 
 open FStar.HyperStack.ST
 
+inline_for_extraction
 let model = Flags.model
 // not sure where to put the flags, or if we need a separate one
 
@@ -54,7 +55,9 @@ let fresh_loc = Concrete.fresh_loc
 /// Overriding things
 /// -----------------
 
+inline_for_extraction
 val state: Concrete.alg -> Type0
+
 val freeable: #a:Concrete.alg -> HS.mem -> state a -> Type0
 
 let preserves_freeable #a (s: state a) (h0 h1: HS.mem) =

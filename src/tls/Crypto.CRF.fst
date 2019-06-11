@@ -9,6 +9,14 @@ module HS = FStar.HyperStack
 
 open FStar.HyperStack.ST
 
+/// Overview
+/// --------
+///
+/// This module is not meant to be extracted. To that end, we use -bundle
+/// Model.* in the arguments passed to KreMLin. Combined with elimination at
+/// extraction-time of ideal code, none of the remaining declarations in this module
+/// should be reachable.
+
 /// Helpers
 /// -------
 ///
@@ -49,6 +57,7 @@ type mstate a = a': Concrete.alg { a' == a } & p:B.pointer bytes {
   B.(loc_disjoint (loc_addr_of_buffer p) (loc_region_only true Mem.tls_tables_region))
 }
 
+inline_for_extraction
 let state (a: Concrete.alg) =
   if model then
     mstate a
