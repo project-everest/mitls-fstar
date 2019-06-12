@@ -1,26 +1,26 @@
 module DebugFlags
 
 [@ CIfDef ]
-assume val debug : bool
+val debug : bool
 [@ CIfDef ]
-assume val debug_CDH : bool
+val debug_CDH : bool
 [@ CIfDef ]
-assume val debug_Epochs : bool
+val debug_Epochs : bool
 [@ CIfDef ]
-assume val debug_FFI : bool
+val debug_FFI : bool
 [@ CIfDef ]
-assume val debug_HS : bool
+val debug_HS : bool
 [@ CIfDef ]
-assume val debug_HSL : bool
+val debug_HSL : bool
 [@ CIfDef ]
-assume val debug_KS : bool
+val debug_KS : bool
 [@ CIfDef ]
-assume val debug_NGO : bool
+val debug_NGO : bool
 [@ CIfDef ]
-assume val debug_QUIC : bool 
+val debug_QUIC : bool 
 [@ CIfDef ]
-assume val debug_Record : bool 
+val debug_Record : bool 
 [@ CIfDef ]
-assume val debug_TLS : bool
+val debug_TLS : bool
 [@ CIfDef ]
-assume val debug_AEP : bool
+val debug_AEP : bool
