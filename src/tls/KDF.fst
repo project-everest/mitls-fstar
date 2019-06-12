@@ -77,7 +77,7 @@ let derived_key
   = Pkg?.key (child u lbl) (Derive i lbl ctx)
 
 inline_for_extraction
-let secret_len (a:info) : keylen = Hashing.Spec.tagLen a.ha
+let secret_len (a:info) : keylen = Hacl.Hash.Definitions.hash_len a.ha
 type real_secret (i:regid) = a:info0 i & lbytes32 (secret_len a)
 
 let safe (#ideal:iflag) (u:usage ideal) (i:regid) =
@@ -484,6 +484,7 @@ let create #ideal u i a =
     k
    end
 
+
 /// We are using many KDF packages (one for each usage),
 /// idealized one at a time.  (Having one proof step for each nested
 /// level of key derivation seems unavoidable: we need to idealize
@@ -612,8 +613,9 @@ val derive:
   ctx: context {~(honest_idh ctx) /\ wellformed_derive i lbl ctx} ->
   child_pkg: local_pkg ii{~(LocalPkg?.ideal child_pkg)} ->
   a': LocalPkg?.info child_pkg (derive i lbl ctx) ->
-  ST (_:squash (registered (derive i lbl ctx)) &
-      (LocalPkg?.key child_pkg) (derive i lbl ctx))
+  ST (
+    _:squash (registered (derive i lbl ctx)) &
+    (LocalPkg?.key child_pkg) (derive i lbl ctx))
   (requires fun h0 ->
     (LocalPkg?.len child_pkg) a' == EverCrypt.Hash.tagLen (get_info k).ha /\
     ((u_of_t t) `has_lbl` lbl ==>
@@ -637,6 +639,8 @@ let derive #ideal #t #i k lbl ctx child_pkg a' =
   let u = u_of_t t in
   let dt = kdf_dt t in
   let h0 = get() in
+
+  // parent honesty is defined; child honesty is set accordingly if it is unregistered.
   let honest = get_honesty i in
   let i', honest' = register_derive i lbl ctx in
   let h1 = get() in
@@ -683,13 +687,12 @@ let derive #ideal #t #i k lbl ctx child_pkg a' =
     *)
     admit()
    end
-  else
+  else 
    begin
     assert(h1 == h0);
     let len' = (LocalPkg?.len child_pkg) a' in
     let (| a, key |) = Model.real k in
-    let lb = FStar.Bytes.bytes_of_string lbl in
-    let raw = HKDF.expand #(a.ha) key lb len' in
+    let raw = HKDF.expand #a.ha key (Bytes.bytes_of_string lbl) len' in
     let dk = (LocalPkg?.coerce child_pkg) i' a' raw in
     let h2 = get() in
     (| (), dk |)

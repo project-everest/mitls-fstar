@@ -48,33 +48,32 @@ open FStar.HyperStack.ST
 module List = FStar.List.Tot
 module HS = FStar.HyperStack
 module B = LowStar.Buffer
+module C = LowStar.ConstBuffer
 module G = FStar.Ghost
 
 module HSM = Parsers.Handshake
 module HSM12 = Parsers.Handshake12
 module HSM13 = Parsers.Handshake13
-
 module PV = Parsers.ProtocolVersion
 module LP = LowParse.Low.Base
 module IncHash = EverCrypt.Hash.Incremental
 module HashDef = Spec.Hash.Definitions
-
 module R = MITLS.Repr
 module R_HS = MITLS.Repr.Handshake
-
 module R_CH = MITLS.Repr.ClientHello
 module CH = Parsers.ClientHello
-
 module R_SH = MITLS.Repr.ServerHello
 module SH = Parsers.ServerHello
-
+module Psks = Parsers.OfferedPsks
+module PB = ParsersAux.Binders
+module CRF = Crypto.CRF
 
 //TODO: move to a separate module
-let repr_hs12 (b:R.slice) =
+let repr_hs12 (b:R.const_slice) =
   R.repr_p _ b HSM12.handshake12_parser
 
 //TODO: move to a separate module
-let repr_hs13 (b:R.slice) =
+let repr_hs13 (b:R.const_slice) =
   R.repr_p _ b HSM13.handshake13_parser
 
 type bytes = FStar.Seq.seq uint_8
@@ -87,31 +86,89 @@ let hs_sh = sh:HSM.handshake{HSM.M_server_hello? sh}
 /// `is_hrr`: For now, we assume the existence of a pure function to
 /// decide if a server-hello message is a hello-retry-request (hrr)
 // assume
-val is_hrr (sh:hs_sh) : bool
+val is_hrr (sh:SH.serverHello) : bool
 
-/// `hello_retry_request`: The type of HRR messages
-inline_for_extraction
-let hello_retry_request : Type0 =
-  s:hs_sh { is_hrr s }
+let any_hash_tag = s:Seq.seq UInt8.t{forall a. Seq.length s <= HashDef.hash_word_length a}
 
-/// `retry`: a pair of a client hello and hello retry request
+/// `retry`: a pair of a client hello hash and hello retry request
 type retry =
-  hs_ch
-  & hello_retry_request
+  any_hash_tag & s:SH.serverHello{is_hrr s}
 
-/// `client_hello_has_psk`: A client hello has a pre-shared key if
-///    that mode appears in one of its extensions
-let client_hello_has_psk (ch:CH.clientHello) =
-  exists (ext:_).
-    List.memP ext Parsers.ClientHello.(ch.extensions) /\
-    Parsers.ClientHelloExtension.CHE_pre_shared_key? ext /\
-    True (* what else do we need? e.g., that it has as many binders as ids? *)
+////////////////////////////////////////////////////////////////////////////////
+// Truncated client hellos
+////////////////////////////////////////////////////////////////////////////////
+
+/// `hs_tch`: Handshake message holding a truncated client hello
+///
+/// Truncated client hellos are related to pre-shared keys.
+///
+/// See https://tlswg.org/tls13-spec/draft-ietf-tls-tls13.html#rfc.section.4.2.11
+///
+/// Broadly, the server selects a particular PSK binder to validate.
+///
+/// Validation involves checking the hash of the transcript up to the
+/// truncated client hello under a PSK binder key. Note, this may be
+/// more than just the truncated client hello, since the transcript
+/// may also include a hello-retry request.
+///
+/// At the client side, in order to prepare the client hello message,
+/// the client prepares a draft client hello with default binders of
+/// the appropriate length. It then repeatedly hashes the truncation
+/// of this draft client hello to compute the binder values, each time
+/// perhaps using a different hashing algorithm (as determined by the
+/// PSK identity).
+
+let clientHello_with_binders = ch:CH.clientHello {
+  PB.has_binders (HSM.M_client_hello ch)
+}
+
+let binders_len = len:uint_32{
+  35 <= UInt32.v len /\
+  UInt32.v len <= 65537
+}
+
+/// The length of all the binders in a clientHello
+let tch_binders_len (ch:clientHello_with_binders)
+  : Tot (b:binders_len {
+           let hs_ch = HSM.M_client_hello ch in
+           UInt32.v b =
+           Psks.offeredPsks_binders_bytesize
+             (PB.get_binders hs_ch) /\
+           UInt32.v b =
+           Seq.length
+             (LP.serialize
+               Psks.offeredPsks_binders_serializer
+                 (PB.get_binders hs_ch))
+         })
+  = let hs_ch = HSM.M_client_hello ch in
+    Psks.offeredPsks_binders_bytesize_eq (PB.get_binders hs_ch);
+    Psks.offeredPsks_binders_size32 (PB.get_binders hs_ch)
+    // An alternative way to compute it in GTot
+    // UInt32.uint_to_t (Psks.offeredPsks_binders_bytesize (PB.get_binders ch))
+
+
+/// `hs_tch` is a client hello with dummy binders
+let hs_tch = tch:clientHello_with_binders{
+  PB.get_binders (HSM.M_client_hello tch) ==
+  PB.build_canonical_binders (tch_binders_len tch)
+}
+
+/// `truncate`: A specificational version of truncation
+/// which replaces the binders of a client hellow with canonical binders
+/// of the appropriate length
+let truncate (ch:clientHello_with_binders)
+  : GTot hs_tch
+  = let cb = PB.build_canonical_binders (tch_binders_len ch) in
+    let hs_ch = HSM.M_client_hello ch in
+    let tch = PB.set_binders hs_ch cb in
+    PB.truncate_clientHello_bytes_set_binders hs_ch cb;
+    HSM.M_client_hello?._0 tch
+
 
 /// `nego_version`: This is to be provided eventually by a refactoring
 /// of the Negotiation module.
-// assume
-val nego_version (ch:hs_ch)
-                 (sh:hs_sh)
+val nego_version (ch:CH.clientHello)
+                 (sh:SH.serverHello)
        : PV.protocolVersion
 
 /// `max_transcript_size` and `max_message_size`:
@@ -130,7 +187,7 @@ val nego_version (ch:hs_ch)
 ///       handshake13_parser_kind.parser_kind_high,
 ///       handshake_parser_kind.parser_kind_high)
 unfold
-let max_message_size = normalize_term (pow2 24)
+let max_message_size = normalize_term (pow2 25)
 
 unfold
 let max_transcript_size : pos = normalize_term (pow2 32)
@@ -169,21 +226,26 @@ type transcript_t =
       retried:option retry ->
       transcript_t
 
-  | Hello:
+  | TruncatedClientHello:
       retried:option retry ->
-      ch:hs_ch ->
+      tch:hs_tch ->
+      transcript_t
+
+  | ClientHello:
+      retried:option retry ->
+      ch:CH.clientHello ->
       transcript_t
 
   | Transcript12:
-      ch:hs_ch ->
-      sh:hs_sh{nego_version ch sh == PV.TLS_1p2} ->
+      ch:CH.clientHello ->
+      sh:SH.serverHello{nego_version ch sh == PV.TLS_1p2} ->
       rest:bounded_list HSM12.handshake12 max_transcript_size ->
       transcript_t
 
   | Transcript13:
       retried:option retry ->
-      ch:hs_ch ->
-      sh:hs_sh{nego_version ch sh == PV.TLS_1p3} ->
+      ch:CH.clientHello ->
+      sh:SH.serverHello{nego_version ch sh == PV.TLS_1p3} ->
       rest:bounded_list HSM13.handshake13 max_transcript_size ->
       transcript_t
 
@@ -192,7 +254,8 @@ type transcript_t =
 let transcript_size (t:transcript_t) =
     match t with
     | Start _
-    | Hello _ _ -> 0
+    | ClientHello _ _
+    | TruncatedClientHello _ _ -> 0
     | Transcript12 _ _ rest -> List.length rest
     | Transcript13 _ _ _ rest -> List.length rest
 
@@ -201,85 +264,134 @@ let transcript_size (t:transcript_t) =
 let extensible (t:transcript_t) = transcript_size t < max_transcript_size - 1
 let ext_transcript_t = t:transcript_t{extensible t}
 
-/// `transcript_bytes`: The input of the hash algorithm computed by
-/// concatenated the message formatting of the messages
-val transcript_bytes (t:transcript_t)
-  : GTot (b: bytes {
-       Seq.length b <= (max_transcript_size + 4) * max_message_size
-    })
+(* A depiction of the state machine for transcript hashes
+
+
+   Start None ----ch--> Hello None ch ---------------.-------------.
+      |                     ^                        |             |
+      |                     |                       sh13         sh12
+      |                  complete_tch                |             |
+      |                     |                        v             v
+      .---------tch---> TCH None tch         Transcript13 None ... Transcript12 None ...
+      |                                        |          ^           |          ^
+      |                                        |          |           |          |
+      |                                        .---hsm13--.           .---hsm12--.
+     hrr
+      |                               Transcript13 (Some hrr)
+      |                                |         ^    ^
+      |                                |         |    |
+      |                                .--hsm13--.   sh13
+      v                                               |
+   Start (Some hrr) --ch-> Hello (Some hrr) ch -------.
+      |                         ^
+      |                         |
+      |                       complete_tch
+      |                         |
+      .---------tch------> TCH (Some hrr) tch
+
+   The machine is roughly structured as two copies of the same
+   machine, related by a hello-retry-request (hrr) transition. Note,
+   hrr is only in TLS1.3---so once that transition is taken, one can
+   no longer reach that Transcript12 state.
+
+   One subtlety is that, in practice, the client side of the protocol
+   takes a slightly different path through the machine than the
+   server. In the upper half of the machine (i.e., before hrr), the
+   client does not know which hashing algorithm will be
+   negotiated. But, it still needs to construct offered psk binders
+   using truncated client hellos. So, an expected usage is that the
+   client creates many instances of the of the transcript hash for
+   each hash algorithm prescribed by each chosen binder; computes the
+   hash of the truncated client hello and populates the binder value.
+
+   Further, in the case of 0-RTT keys, the client optimistically uses
+   computes a key using the hash of entire client hello using the
+   hashing algorithm of the first PSK identity: in this scenario, the
+   first transcript hash instance created above transitions from the
+   TCH state to the Hello state using the complete_tch transition.
+
+   Additionally, if/when the server picks a particular hashing
+   algorithm/binder, the client may constructs a new transcript
+   instance with that algorithm and moves from `Start None` to `Hello
+   None ch` atomically, rather than via the `TCH` state.
+
+   OTOH, once an hrr message is sent, the hashing algorithm is already
+   chosen by the server and the client can move to the `Hello` state
+   via `TCH` (in the bottom half of the picture), just as the server.
+
+   Another subtlety is that the sh13 transitions shown above should
+   not be enabled for ServerHello messages that are actually hello
+   retry requests: however, we do not enforce that restriction in this
+   state machine, leaving it to upper layers (the handshake state
+   machine) to enforce.
+ *)
+
+/// The state machine above is split into several transition functions
+/// for convenience and ease of typability (note, the labels that
+/// guard the transitions do not all have the same type)
 
 (** TRANSITIONS **)
 
-/// `extend_with_hsm`: The main transition function
-///
-///    Dictates which next state to transition to (if any) from a
-///    given transcript and a message
-let transition_hsm
-      (t:transcript_t)
-      (m:HSM.handshake)
+noeq
+type label =
+  | L_ClientHello of CH.clientHello
+  | L_ServerHello of SH.serverHello
+  | L_TCH of clientHello_with_binders
+  | L_CompleteTCH of clientHello_with_binders
+  | L_HRR of retry
+  | L_HSM12 of HSM12.handshake12
+  | L_HSM13 of HSM13.handshake13
+
+let transition (t:transcript_t) (l:label)
   : GTot (option transcript_t)
-  = match t, m with
-    | Start retry, HSM.M_client_hello ch ->
-      //Missing: consistency between retry and ch
-      Some (Hello retry m)
+  = match t, l with
+    | Start None, L_HRR retry ->
+      Some (Start (Some retry))
 
-    | Hello retry ch, HSM.M_server_hello sh ->
-      if None? retry
-      && is_hrr m
-      then None
-      else
-        begin
-        match nego_version ch m, retry with
-        | PV.TLS_1p2, None ->
-          Some (Transcript12 ch m [])
+    | Start retry, L_ClientHello ch ->
+      Some (ClientHello retry ch)
 
-        | PV.TLS_1p3, _ ->
-          Some (Transcript13 retry ch m [])
+    | Start retry, L_TCH ch ->
+      Some (TruncatedClientHello retry (truncate ch))
 
-        | _ -> None
-        end
+    | TruncatedClientHello retry tch, L_CompleteTCH ch ->
+      if tch = truncate ch
+      then Some (ClientHello retry ch)
+      else None
 
-    | _ ->
-      None
+    | ClientHello retry ch, L_ServerHello sh ->
+      begin
+      match nego_version ch sh, retry with
+      | PV.TLS_1p2, None ->
+        Some (Transcript12 ch sh [])
 
-/// `transition_hrr`:
-///    An auxiliary transition function, specific to TLS1.3
-///    that handles hello-retry requests
-let transition_hrr
-       (t:transcript_t)
-       (ch:HSM.handshake)
-       (sh:HSM.handshake) =
-  match t, ch, sh with
-  | Start None, HSM.M_client_hello _, HSM.M_server_hello _ ->
-    if is_hrr sh
-    then Some (Start (Some (ch, sh)))
-    else None
-  | _ ->
-    None
+      | PV.TLS_1p3, _ ->
+        Some (Transcript13 retry ch sh [])
 
-/// `transition_hsm12`:
-///    An auxiliary transition function, specific to TLS1.2
-///    It only enforces the length constraint on the suffix
-let transition_hsm12 (t:ext_transcript_t) (m:HSM12.handshake12)
-  : option transcript_t
-  = match t with
-    | Transcript12 ch sh rest ->
-      List.append_length rest [m];
-      Some (Transcript12 ch sh (List.snoc (rest, m)))
+      | _ -> None
+      end
+
+    | Transcript12 ch sh rest, L_HSM12 m ->
+      let msgs = List.snoc (rest, m) in
+      if List.length msgs < max_transcript_size
+      then Some (Transcript12 ch sh msgs)
+      else None
+
+    | Transcript13 retry ch sh rest, L_HSM13 m ->
+      let msgs = List.snoc (rest, m) in
+      if List.length msgs < max_transcript_size
+      then Some (Transcript13 retry ch sh msgs)
+      else None
 
     | _ -> None
 
-/// `transition_hsm13`:
-///    An auxiliary transition function, specific to TLS1.3
-///    It only enforces the length constraint on the suffix
-let transition_hsm13 (t:ext_transcript_t) (m:HSM13.handshake13)
-  : option transcript_t
-  = match t with
-    | Transcript13 retry ch sh rest ->
-      List.append_length rest [m];
-      Some (Transcript13 retry ch sh (List.snoc (rest, m)))
+let ( ~~> ) (t1 t2:transcript_t) =
+  exists l. Some t2 == transition t1 l
 
-    | _ -> None
+(* TODO: Transitive closure of ~~>
+ let ( ~~>* ) (t1 t2:transcript_t) =
+  exists l. Some t2 == transition t1 l
+*)
 
 (*** Concrete state and transitions ***)
 
@@ -351,154 +463,151 @@ val create (r:Mem.rgn) (a:HashDef.hash_alg)
 
 (** CONCRETE STATE TRANSITIONS **)
 
-/// `extend_pre_common`: Every state transition
-/// has some basic requirements
-///   -- state machine invariant
-///   -- validity of message representations
-///   -- disjointness of machine state and representation state
-///   -- extensibility of the transcript
-unfold
-let extend_pre_common
-  #a (s:state a)
-  #t (#b:R.slice) (r:R.repr t b)
-  (tx:transcript_t) (h:HS.mem)
-  = invariant s tx h /\
-    R.valid r h /\
-    B.loc_disjoint (B.loc_buffer LP.(b.base)) (footprint s) /\
-    extensible tx
+let hs_ch_repr b = ch:R_HS.repr b { R_HS.is_ch ch }
+let hs_sh_repr b = sh:R_HS.repr b { R_HS.is_sh sh }
 
-/// `extend_hash_post_common`: Every state transition
-/// has some basic guarantees
-///   -- state machine invariant
-///   -- mutates only the state machine's footprint
-unfold
-let extend_post_common
-  #a (s:state a) (t:transcript_t) (h0 h1:HS.mem)
-  = invariant s t h1 /\
-    B.modifies (footprint s) h0 h1
+noeq
+type label_repr =
+  | LR_ClientHello:
+       #b:R.const_slice ->
+       ch:hs_ch_repr b ->
+       label_repr
 
-/// `extend_hsm`: The main transition
-///    - the state evolves according to `transition_hsm`
-val extend_hsm
-  (#a:_) (s:state a)
-  (#b:R.slice) (r:R_HS.repr b)
-  (tx:G.erased transcript_t)
+  | LR_ServerHello:
+       #b:R.const_slice ->
+       ch:hs_sh_repr b ->
+       label_repr
+
+  | LR_TCH:
+      #b:R.const_slice ->
+      ch:hs_ch_repr b{PB.has_binders (R.value ch)} ->
+      label_repr
+
+  | LR_CompleteTCH:
+      #b:R.const_slice ->
+      ch:hs_ch_repr b{PB.has_binders (R.value ch)} ->
+      label_repr
+
+  | LR_HRR:
+      #b1:R.const_slice ->
+      ch_tag:R.repr any_hash_tag b1 ->
+      #b2:R.const_slice ->
+      hrr:hs_sh_repr b2{is_hrr (HSM.M_server_hello?._0 (R.value hrr))} ->
+      label_repr
+
+  | LR_HSM12:
+      #b:R.const_slice ->
+      hs12:repr_hs12 b ->
+      label_repr
+
+  | LR_HSM13:
+      #b:R.const_slice ->
+      hs13:repr_hs13 b ->
+      label_repr
+
+let label_of_label_repr (l:label_repr)
+  : GTot label
+  = match l with
+    | LR_ClientHello ch ->
+      L_ClientHello (HSM.M_client_hello?._0 (R.value ch))
+
+    | LR_ServerHello sh ->
+      L_ServerHello (HSM.M_server_hello?._0 (R.value sh))
+
+    | LR_TCH ch ->
+      L_TCH (HSM.M_client_hello?._0 (R.value ch))
+
+    | LR_CompleteTCH ch ->
+      L_CompleteTCH (HSM.M_client_hello?._0 (R.value ch))
+
+    | LR_HRR ch sh ->
+      L_HRR (R.value ch,
+             HSM.M_server_hello?._0 (R.value sh))
+
+    | LR_HSM12 hs12 ->
+      L_HSM12 (R.value hs12)
+
+    | LR_HSM13 hs13 ->
+      L_HSM13 (R.value hs13)
+
+
+/// `valid_label`: Validity of the labels is simply the validity of
+///  the message representations it contains
+let valid_label_repr (l:label_repr) (h:HS.mem) =
+  match l with
+  | LR_HRR ch hrr ->
+    R.valid ch h /\
+    R.valid hrr h
+
+  | LR_ClientHello r
+  | LR_ServerHello r
+  | LR_TCH r
+  | LR_CompleteTCH r
+  | LR_HSM12 r
+  | LR_HSM13 r ->
+    R.valid r h
+
+/// `loc_of_label`: The footprint of a label is simply the union of
+///  the footprints of all the message representations it contains
+let loc_of_label_repr (l:label_repr) =
+  match l with
+  | LR_HRR #b1 _ #b2 _ ->
+    B.loc_union
+      (C.loc_buffer R.(b1.base))
+      (C.loc_buffer R.(b1.base))
+
+  | LR_ClientHello #b _
+  | LR_ServerHello #b _
+  | LR_TCH #b _
+  | LR_CompleteTCH #b _
+  | LR_HSM12 #b _
+  | LR_HSM13 #b _ ->
+    C.loc_buffer R.(b.base)
+
+/// `extend`: The single, concrete state transition function
+///
+///   `extend s l tx` transitions and returns the new state tx'
+///    in case the transition is enabled.
+///
+///    Internally, it extends the running hash of the transcript
+///
+///    It requires
+///      -- state machine invariant
+///      -- validity of message representations in the label
+///      -- disjointness of machine state and label state
+///      -- extensibility of the transcript
+///      -- and that the transition be enabled
+///
+///    It ensures
+///      -- state machine invariant
+///      -- that it mutates only the state machine's footprint
+///      -- that the new state is the one computed by the transition
+val extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t)
   : Stack (G.erased transcript_t)
     (requires fun h ->
-      let tx = G.reveal tx in
-      extend_pre_common s r tx h /\
-      Some? (transition_hsm tx (R.value r)))
+        let tx = G.reveal tx in
+        invariant s tx h /\
+        valid_label_repr l h /\
+        B.loc_disjoint (loc_of_label_repr l) (footprint s) /\
+        extensible tx /\
+        Some? (transition tx (label_of_label_repr l)))
     (ensures fun h0 tx' h1 ->
-      let tx = G.reveal tx in
-      let tx' = G.reveal tx' in
-      tx' == Some?.v (transition_hsm tx (R.value r)) /\
-      extend_post_common s tx' h0 h1)
+        let tx = G.reveal tx in
+        let tx' = G.reveal tx' in
+        invariant s tx' h1 /\
+        B.modifies (footprint s) h0 h1 /\
+        tx' == Some?.v (transition tx (label_of_label_repr l)))
 
-/// `extend_hsm12`: Append to Transcript12
-///    - the state evolves according to `transition_hsm12`
-val extend_hsm12
-  (#a:_) (s:state a)
-  (#b:R.slice) (r:repr_hs12 b)
-  (tx:G.erased transcript_t)
-  : Stack (G.erased transcript_t)
-    (requires fun h ->
-      let tx = G.reveal tx in
-      extend_pre_common s r tx h /\
-      Some? (transition_hsm12 tx (R.value r)))
-    (ensures fun h0 tx' h1 ->
-      let tx = G.reveal tx in
-      let tx' = G.reveal tx' in
-      tx' == Some?.v (transition_hsm12 tx (R.value r)) /\
-      extend_post_common s tx' h0 h1)
 
-/// `extend_hsm13`: Append to Transcript13
-///    - the state evolves according to `transition_hsm13`
-val extend_hsm13
-  (#a:_) (s:state a)
-  (#b:R.slice) (r:repr_hs13 b)
-  (tx:G.erased transcript_t)
-  : Stack (G.erased transcript_t)
-    (requires fun h ->
-      let tx = G.reveal tx in
-      extend_pre_common s r tx h /\
-      Some? (transition_hsm13 tx (R.value r)))
-    (ensures fun h0 tx' h1 ->
-      let tx = G.reveal tx in
-      let tx' = G.reveal tx' in
-      tx' == Some?.v (transition_hsm13 tx (R.value r)) /\
-      extend_post_common s tx' h0 h1)
+(*** Hashes and injectivity ***)
 
-/// `extend_ch_with_psk`:
-///
-///    This is a specialized transition used by the server to process
-///    client hello's with pre-shared key binders.
-///
-///    See https://tlswg.org/tls13-spec/draft-ietf-tls-tls13.html#rfc.section.4.2.11
-///
-///    Broadly, the server selects a particular PSK binder to validate.
-///
-///    Validation involves checking the hash of the transcript up to
-///    the truncated client hello under a PSK binder key. Note, this
-///    may be more than just the truncated client hello, since the
-///    transcript may als include a hello-retry request.
-///
-///    This function does the following:
-///
-///      - truncates the client hello (until just before the first PSK
-///        binder)
-///
-///      - extends the transcript hash with the truncation, extracts
-///        that hash to a freshly allocation on the stack (in the
-///        caller's stack frame; note the `StackInline`)
-///
-///      - then extends the transcript hash to with the suffix of the
-///        client hello (i.e., all the binders excluded by the truncation)
-///
-///      - and correspondingly transitions the state machine to
-///        include the entire client hello
-val extend_ch_with_psk
-  (#a:_) (s:state a)
-  (#b:R.slice) (r:R_HS.repr b)
-  (tx:G.erased transcript_t)
-  : StackInline
-      (Hacl.Hash.Definitions.hash_t a &
-       G.erased transcript_t)
-    (requires fun h ->
-      let tx = G.reveal tx in
-      let hs = R.value r in
-      extend_pre_common s r tx h /\
-      Start? tx /\
-      HSM.M_client_hello? hs /\
-      client_hello_has_psk (HSM.M_client_hello?._0 hs))
-    (ensures fun h0 (hash, tx') h1 ->
-      let tx = G.reveal tx in
-      let tx' = G.reveal tx' in
-      B.fresh_loc (B.loc_buffer hash) h0 h1 /\
-      B.live h1 hash /\
-      tx' == Hello (Start?.retried tx) (R.value r) /\
-      extend_post_common s tx' h0 h1)
+/// `transcript_hash`: The specificational hash of the transcript
+val transcript_hash (a:HashDef.hash_alg) (t:transcript_t)
+  : GTot (b: HashDef.lbytes (HashDef.hash_length a))
 
-/// `extend_hrr`: Hello retry requests
-///     See https://tlswg.org/tls13-spec/draft-ietf-tls-tls13.html#rfc.section.4.1.4
-///  Transitions according to `transition_hrr`
-val extend_hrr
-  (#a:_) (s:state a)
-  (#b:R.slice) (r_ch:R_HS.repr b)
-  (#b':R.slice) (r_sh:R_HS.repr b')
-  (tx:G.erased transcript_t)
-  : Stack (G.erased transcript_t)
-    (requires fun h ->
-      let tx = G.reveal tx in
-      extend_pre_common s r_ch tx h /\
-      extend_pre_common s r_sh tx h /\
-      Some? (transition_hrr tx (R.value r_ch) (R.value r_sh)))
-    (ensures fun h0 tx' h1 ->
-      let tx = G.reveal tx in
-      let tx' = G.reveal tx' in
-      tx' == Some?.v (transition_hrr tx (R.value r_ch) (R.value r_sh)) /\
-      extend_post_common s tx' h0 h1)
-
-(*** Extracting hashes and injectivity ***)
+/// `hashed a t`: An abstract predicate recording that the transcript
+/// has been hashed in ideal state, if idealization is on
+val hashed (a:HashDef.hash_alg) (t:transcript_t) : Type0
 
 /// `extract_hash`:
 ///
@@ -512,28 +621,36 @@ val extract_hash
   (tag:Hacl.Hash.Definitions.hash_t a)
   (tx:G.erased transcript_t)
   : Stack unit
-    (requires (fun h0 ->
+    (requires fun h0 ->
       let tx = G.reveal tx in
       invariant s tx h0 /\
       B.live h0 tag /\
-      B.loc_disjoint (footprint s) (B.loc_buffer tag)))
-    (ensures (fun h0 _ h1 ->
+      B.loc_disjoint (footprint s) (B.loc_buffer tag))
+    (ensures fun h0 _ h1 ->
       let open B in
       let tx = G.reveal tx in
       invariant s tx h1 /\
       modifies (loc_union (footprint s) (loc_buffer tag)) h0 h1 /\
       B.live h1 tag /\
-      B.as_seq h1 tag == Spec.Hash.hash a (transcript_bytes tx)))
+      B.as_seq h1 tag == transcript_hash a tx /\
+      hashed a tx)
 
 
 /// `injectivity`: The main lemma provided by this module is a form of
 ///  collision resistance adapted to transcripts, i.e., if the hashes
 ///  of two transcripts match then the transcripts themselves do.
 val injectivity (a:HashDef.hash_alg) (tx1 tx2:G.erased transcript_t)
-  : Lemma
-    (ensures (
-      let tx1 = G.reveal tx1 in
-      let tx2 = G.reveal tx2 in
-      Spec.Hash.hash a (transcript_bytes tx1) ==
-      Spec.Hash.hash a (transcript_bytes tx2) ==>
-      tx1 == tx2))
+  : Stack unit
+    (requires fun h ->
+      let tx1 = Ghost.reveal tx1 in
+      let tx2 = Ghost.reveal tx2 in
+      hashed a tx1 /\
+      hashed a tx2)
+    (ensures fun h0 _ h1 ->
+      let tx1 = Ghost.reveal tx1 in
+      let tx2 = Ghost.reveal tx2 in
+      h0 == h1 /\
+      (CRF.model /\
+       Model.CRF.crf a /\
+       transcript_hash a tx1 == transcript_hash a tx2 ==>
+       tx1 == tx2))

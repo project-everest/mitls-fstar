@@ -111,8 +111,8 @@ val transcript_format_injective: ms0:hs_transcript -> ms1:hs_transcript ->
 //val transcript_bytes_append: ms0: hs_transcript -> ms1: list msg ->
 //  Lemma (transcript_bytes (ms0 @ ms1) = transcript_bytes ms0 @| transcript_bytes ms1)
 
-let narrowTag a (b:anyTag { len b = tagLen a}) : tag a = b
-let tagLength (b:anyTag) = len b
+let narrowTag a (b:anyTag { len b = Hacl.Hash.Definitions.hash_len a}) : tag a = b
+let hash_length (b:anyTag) = len b
 
 // full specification of the hashed-prefix tags required for a given flight
 // (in relational style to capture computational-hashed)
@@ -127,7 +127,7 @@ let rec tags (a:alg) (prior: list msg) (ms: list msg) (hs:list anyTag) : Tot Typ
       | true, h::hs ->
           valid_transcript prior /\ (
           let t = transcript_bytes prior in
-          (  tagLength h = tagLen a /\
+          (  hash_length h = Hacl.Hash.Definitions.hash_len a /\
              (  let h = narrowTag a h in
                 hashed a t /\ h == Hashing.h a t /\
                 tags a prior ms hs ))
@@ -286,7 +286,7 @@ val send_CCS_tag: #a:alg -> s:log -> m:msg -> complete:bool -> ST (tag a)
     hashed a bs /\ h == Hashing.h a bs ))
 
 // Setting signals 'drops' the writing state, to prevent further writings until the signals have been transmitted
-val send_signals: s:log -> next_keys:option (bool * bool) -> complete:bool -> ST unit
+val send_signals: s:log -> next_keys:option (bool & bool) -> complete:bool -> ST unit
   (requires fun h0 ->
     writing h0 s /\
     (Some? next_keys || complete))
@@ -358,8 +358,8 @@ val next_fragment: s:log -> i:id -> ST (outgoing i)
 (* Incoming *)
 
 // We receive messages & hashes in whole flights;
-// Untill a full flight is received, we lose "writing h1 r"
-val receive: s:log -> bytes -> ST (result (option (list msg * list anyTag)))
+// Until a full flight is received, we lose "writing h1 r"
+val receive: s:log -> bytes -> ST (result (option (list msg & list anyTag)))
 //TODO return instead ST (result (list msg * list anyTag))
   (requires (fun h0 -> True))
   (ensures (fun h0 o h1 ->
@@ -381,7 +381,7 @@ val receive: s:log -> bytes -> ST (result (option (list msg * list anyTag)))
 // we return the messages & hashes processed so far, and their final tag;
 // we still can't write (we should receive Finished next)
 // This should *fail* if there are pending input bytes.
-val receive_CCS: #a:Hashing.alg -> s:log -> ST (result (list msg * list anyTag * anyTag))
+val receive_CCS: #a:Hashing.alg -> s:log -> ST (result (list msg & list anyTag & anyTag))
   (requires (fun h0 -> hashAlg h0 s == Some a))
   (ensures (fun h0 res h1 ->
     let oa = hashAlg h1 s in

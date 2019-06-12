@@ -939,3 +939,20 @@ let binders_pos #rrel #rel sl pos =
   LP.serialize_valid_exact Psks.offeredPsks_binders_serializer h sl (get_binders (Ghost.reveal x)) res (Ghost.reveal gpos');
   LP.valid_exact_valid Psks.offeredPsks_binders_parser h sl res (Ghost.reveal gpos');
   res
+
+let rec build_canonical_list_binders (len: U32.t) (accu: list Parsers.PskBinderEntry.pskBinderEntry) : Pure (list Parsers.PskBinderEntry.pskBinderEntry)
+  (requires (
+    33 <= U32.v len /\
+    U32.v len + Psks.offeredPsks_binders_list_bytesize accu <= 65535
+  ))
+  (ensures (fun y -> Psks.offeredPsks_binders_list_bytesize y == Psks.offeredPsks_binders_list_bytesize accu + U32.v len))
+  (decreases (U32.v len))
+= if len `U32.lt` 255ul
+  then
+    let binder : Parsers.PskBinderEntry.pskBinderEntry = FStar.Bytes.create (len `U32.sub` 1ul) 0uy in
+    binder :: accu
+  else
+    let binder : Parsers.PskBinderEntry.pskBinderEntry = FStar.Bytes.create 221ul 0uy in
+    build_canonical_list_binders (len `U32.sub` 222ul) (binder :: accu)
+
+let build_canonical_binders len = build_canonical_list_binders (len `U32.sub` 2ul) []

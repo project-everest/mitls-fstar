@@ -1,20 +1,14 @@
 module CipherSuite
 
-open FStar.Seq
-open FStar.UInt32
-open FStar.Bytes
-open FStar.Error
 open TLSError
 
-open Mem
-open Parse
-//include Parse
+/// Datatypes and wire formats for ciphersuites. In addition to QD
+/// types tracking the RFCs, we rely on a higher-level, more
+/// structure, handwritten ADT, with explicit conversions between the
+/// two.
 
-
-/// CIPHERSUITES, with new structure for TLS 1.3
-/// 18-02-22 QD fodder, will require a manual translation as we
-/// primarily use this structured ADT --- see also cipherSuiteName
-/// below, closer to the RFC.
+// Consider eliminating some of these ad hoc types? In many cases, we
+// could now re-use those defined in the EverCrypt specs. 
 
 include Parsers.CipherSuite // for TLS_DH_DSS_WITH_3DES_EDE_CBC_SHA
 
@@ -22,10 +16,10 @@ include Parsers.CipherSuite // for TLS_DH_DSS_WITH_3DES_EDE_CBC_SHA
 
 (** Signature algorithms *)
 type sigAlg =
- | RSASIG
- | DSA
- | ECDSA
- | RSAPSS
+  | RSASIG
+  | DSA
+  | ECDSA
+  | RSAPSS
 
 (** Key exchange algorithms **)
 type kexAlg =
@@ -38,9 +32,9 @@ type kexAlg =
   | Kex_ECDHE
 
 (** Crypto algorithm names are defined in EverCrypt **)
-type blockCipher = EverCrypt.block_cipher_alg
+type blockCipher  = EverCrypt.block_cipher_alg
 type streamCipher = EverCrypt.stream_cipher_alg
-type aeadAlg = EverCrypt.aead_alg
+type aeadAlg      = EverCrypt.aead_alg
 
 (** Modes for the initialization vectors *)
 type ivMode =
@@ -54,15 +48,13 @@ type encAlg =
 
 (** TLS-specific hash and MAC algorithms *)
 
-//18-09-08 eliminate once EverCrypt/Hashing are stable.
+type hash_alg = EverCrypt.Hash.alg
+type macAlg   = EverCrypt.Hash.alg 
+type hashAlg  = Hashing.Spec.tls_alg
 
-type hash_alg = Hashing.Spec.alg
-type hashAlg = Hashing.Spec.tls_alg
-type macAlg = Hashing.Spec.alg
-
-let hashSize = Hashing.Spec.tls_tagLen
-let macKeySize = Hashing.Spec.tagLen
-let macSize = Hashing.Spec.tagLen
+//let hashSize = Hashing.Spec.tls_tagLen
+let macKeySize = Hacl.Hash.Definitions.hash_len
+let macSize = Hacl.Hash.Definitions.hash_len
 
 (** Authenticated Encryption modes *)
 type aeAlg =
@@ -352,18 +344,21 @@ let rec nameList_of_cipherSuites_aux (l: list cipherSuite) (accu: list cipherSui
 let nameList_of_cipherSuites (l: list cipherSuite) : Tot (l' : list cipherSuiteName { List.Tot.length l' == List.Tot.length l } ) =
   nameList_of_cipherSuites_aux l []
 
-(* Parsers and serializers for cipherSuite *names* *)
+
+(* Parsers and serializers for cipherSuite *names*; used only in Ticket? *)
 
 #reset-options
 
-let cipherSuiteNameBytes : cipherSuiteName -> Tot (lbytes 2) =
+type csbytes = b:Bytes.bytes {Bytes.length b = 2}
+
+let cipherSuiteNameBytes : cipherSuiteName -> Tot csbytes =
   LowParseWrappers.wrap_serializer32_constant_length cipherSuite_serializer32 2 ()
 
 inline_for_extraction
 let parse_cipherSuiteName_error_msg : string =
   FStar.Error.perror __SOURCE_FILE__ __LINE__ ""
 
-let parseCipherSuiteName: b:lbytes 2
+let parseCipherSuiteName: b:csbytes
   -> Tot (cm:cipherSuiteName{cipherSuiteNameBytes cm == b}) =
   LowParseWrappers.wrap_parser32_total_constant_length cipherSuite_serializer32 cipherSuite_parser32 2 ()
 
@@ -425,5 +420,4 @@ val cipherSuite_of_cipherSuite13_of_cipherSuite
   [SMTPat (cipherSuite_of_cipherSuite13 (cipherSuite13_of_cipherSuite c))]
 
 val cipherSuite13_writer : LowParse.Low.Base.leaf_writer_strong cipherSuite13_serializer
-
 val cipherSuite13_reader : LowParse.Low.Base.leaf_reader cipherSuite13_parser

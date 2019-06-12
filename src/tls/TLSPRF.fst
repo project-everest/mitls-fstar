@@ -81,8 +81,8 @@ let ssl_verifyCertificate hashAlg ms log  =
 
 #reset-options "--admit_smt_queries true"
 private val p_hash_int: 
-  a: macAlg -> 
-  secret: lbytes32 (macKeySize a) -> 
+  alg: macAlg -> 
+  secret: lbytes32 (Hacl.Hash.Definitions.hash_len alg) -> 
   seed: bytes -> 
   U32.t -> U32.t -> bytes -> bytes -> ST bytes
   (requires (fun _ -> True))
@@ -91,7 +91,7 @@ let rec p_hash_int alg secret seed len it aPrev acc =
   let aCur = HMAC.tls_mac alg secret aPrev in
   let pCur = HMAC.tls_mac alg secret (aCur @| seed) in
   if it = 1ul then
-    let hs = macSize alg in
+    let hs = Hacl.Hash.Definitions.hash_len alg in
     let r = U32.(len %^ hs) in
     let (pCur,_) = split pCur r in
     acc @| pCur
@@ -100,16 +100,16 @@ let rec p_hash_int alg secret seed len it aPrev acc =
 
 val p_hash: 
   a: macAlg -> 
-  secret: lbytes32 (macKeySize a) -> 
+  secret: lbytes32 (Hacl.Hash.Definitions.hash_len a) -> 
   seed: bytes -> len:U32.t -> St (lbytes32 len)
 let p_hash alg secret seed len =
-  let hs = macSize alg in
+  let hs = Hacl.Hash.Definitions.hash_len alg in
   let it = U32.((len /^ hs) +^ 1ul) in
   let r = p_hash_int alg secret seed len it seed empty_bytes in
   assume(Bytes.len r = len); //18-02-14 TODO
   r
   
-val tls_prf: lbytes32 (hashSize Hashing.MD5SHA1) -> bytes -> bytes -> len:U32.t -> St (lbytes32 len)
+val tls_prf: lbytes32 (Hashing.Spec.tls_tagLen Hashing.MD5SHA1) -> bytes -> bytes -> len:U32.t -> St (lbytes32 len)
 let tls_prf secret label seed len =
   //18-02-14 fixed broken implementation, but currently unused and untested. 
   let l_s = length secret in
@@ -132,7 +132,7 @@ let tls_finished_label =
 
 let verifyDataLen = 12ul
 
-val tls_verifyData: lbytes32 (hashSize Hashing.MD5SHA1) -> role -> bytes -> St (lbytes32 verifyDataLen)
+val tls_verifyData: lbytes32 (Hashing.Spec.tls_tagLen Hashing.MD5SHA1) -> role -> bytes -> St (lbytes32 verifyDataLen)
 let tls_verifyData ms role data =
   let md5hash  = Hashing.compute MD5 data in
   let sha1hash = Hashing.compute SHA1 data in

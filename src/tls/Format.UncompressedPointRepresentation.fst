@@ -132,8 +132,9 @@ let lbytes_pair_serializer32 (coordinate_length:coordinate_length_type)
   : LP.serializer32 (lbytes_pair_serializer coordinate_length) 
   = [@inline_let]
     let l = U32.v coordinate_length in
-    [@inline_let] let s32 = LP.serialize32_flbytes l in
-    s32 `LP.serialize32_nondep_then` s32
+    LP.serialize32_nondep_then
+      (LP.serialize32_flbytes l)
+      (LP.serialize32_flbytes l)
 #reset-options
 
 #reset-options "--using_facts_from '* -FStar.Reflection -FStar.Tactics'"

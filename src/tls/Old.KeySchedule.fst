@@ -9,13 +9,14 @@ open FStar.Error
 //open FStar.Integers 
 
 open TLSError
+open TLS.Callbacks
 open TLSConstants
 open Extensions
 open TLSInfo
 open Range
 open StatefulLHAE
 open HKDF
-open PSK
+//open PSK
 
 module MDM = FStar.Monotonic.DependentMap
 module HS = FStar.HyperStack
@@ -54,7 +55,7 @@ abstract type res_psk (i:rmsId) =
   b:bytes{exists i.{:pattern index b i} index b i <> 0z}
 
 abstract type res_context (i:rmsId) =
-  b:bytes{length b = CoreCrypto.H.tagLen (rmsId_hash i)}
+  b:bytes{length b = CoreCrypto.H.hash_len (rmsId_hash i)}
 
 private type res_psk_entry (i:rmsId) =
   (res_psk i) * (res_context i) * ctx:psk_context * leaked:(rref tls_tables_region bool)
@@ -83,7 +84,7 @@ private let res_psk_value (i:rmsId{registered_res_psk i}) =
 // Note that application PSK is externally defined but should
 // be idealized together with KS
 abstract let psk (i:esId) =
-  b:bytes{len b = H.tagLen (esId_hash i)}
+  b:bytes{len b = Hacl.Hash.Definitions.hash_len (esId_hash i)}
 
 let read_psk (i:PSK.pskid)
   : ST (esId * pskInfo * PSK.app_psk i)
@@ -259,7 +260,7 @@ private let keygen_13 h secret ae is_quic : St (bytes * bytes * option bytes) =
 
 // Extract finished keys
 private let finished_13 h secret : St (bytes) =
-  HKDF.expand_label #h secret "finished" empty_bytes (H.tagLen h)
+  HKDF.expand_label #h secret "finished" empty_bytes (Hacl.Hash.Definitions.hash_len h)
 
 // Create a fresh key schedule instance
 // We expect this to be called when the Handshake instance is created

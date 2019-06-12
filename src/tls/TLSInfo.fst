@@ -13,6 +13,7 @@ module TLSInfo
 
 open FStar.Bytes
 open Mem
+open TLS.Callbacks 
 open TLSConstants
 
 module DM = FStar.DependentMap
@@ -61,73 +62,7 @@ let default_groups : (x: CommonDH.supportedNamedGroups { let l = Parsers.NamedGr
   assert_norm (List.Tot.length groups == 7);
   groups
 
-// We used to have an in-memory ticket table
-// and the in-memory internal PSK database, but
-// these are disabled for thread safety.
-val defaultTicketCBFun: ticket_cb_fun
-let defaultTicketCBFun _ sni ticket info psk =
-  let h0 = get() in
-  (* The internal PSK database is obsolete
-  begin
-  match info with
-  | TicketInfo_12 (pv, cs, ems) ->
-    // 2018.03.10 SZ: The ticket must be fresh
-    assume False;
-    PSK.s12_extend ticket (pv, cs, ems, psk) // modifies PSK.tregion
-  | TicketInfo_13 pskInfo ->
-    // 2018.03.10 SZ: Missing refinement in ticket_cb_fun
-    assume (exists i.{:pattern index psk i} index psk i <> 0z);
-    // 2018.03.10 SZ: The ticket must be fresh
-    assume False;
-    PSK.coerce_psk ticket pskInfo psk;      // modifies psk_region
-    PSK.extend sni ticket                   // modifies PSK.tregion
-  end;
-  *)
-  let h1 = HST.get() in
-  // 2018.03.10 SZ: [ticket_cb_fun] ensures [modifies_none]
-  assume (modifies_none h0 h1)
-
-val defaultTicketCB: ticket_cb
-let defaultTicketCB = {
-  ticket_context = (FStar.Dyn.mkdyn ());
-  new_ticket = defaultTicketCBFun;
-}
-
-val defaultServerNegoCBFun: nego_cb_fun
-let defaultServerNegoCBFun _ pv cext ocookie =
-  Nego_accept []
-
-let defaultServerNegoCB : nego_cb = {
-  nego_context = FStar.Dyn.mkdyn ();
-  negotiate = defaultServerNegoCBFun;
-}
-
-let none6 = fun _ _ _ _ _ _ -> None
-let empty3 = fun _ _ _ -> []
-let none5 = fun _ _ _ _ _ -> None
-let false6 = fun _ _ _ _ _ _ -> false
-
-let defaultCertCB_app_context : FStar.Dyn.dyn = FStar.Dyn.mkdyn ()
-
-let defaultCertCB_cert_select_ptr : FStar.Dyn.dyn = FStar.Dyn.mkdyn ()
-
-let defaultCertCB_cert_format_ptr : FStar.Dyn.dyn = FStar.Dyn.mkdyn ()
-
-let defaultCertCB_cert_sign_ptr : FStar.Dyn.dyn = FStar.Dyn.mkdyn ()
-
-let defaultCertCB_cert_verify_ptr : FStar.Dyn.dyn = FStar.Dyn.mkdyn ()
-
-let defaultCertCB : cert_cb =
-  TLSConstants.mk_cert_cb
-     defaultCertCB_app_context
-     defaultCertCB_cert_select_ptr
-     none6
-     defaultCertCB_cert_format_ptr
-     empty3
-     defaultCertCB_cert_sign_ptr
-     none5
-     defaultCertCB_cert_verify_ptr
-     false6
+// 19-05-21 Move the default callbacks to TLS.Callbacks.fst and PSK
 
 val defaultConfig: config
 let defaultConfig =
@@ -160,7 +95,7 @@ let defaultConfig =
   extended_master_secret = true;
   enable_tickets = true;
 
-  ticket_callback = defaultTicketCB;
+  ticket_callback = PSK.defaultTicketCB;
   nego_callback = defaultServerNegoCB;
   cert_callbacks = defaultCertCB;
 
@@ -540,7 +475,7 @@ let esId_ae (i:pre_esId{ApplicationPSK? i \/ ResumptionPSK? i}) =
 
 noextract
 type valid_hlen (b:bytes) (h:hash_alg) =
-  len b = Hashing.Spec.tagLen h
+  len b = Hacl.Hash.Definitions.hash_len h
 
 type pre_index =
 | I_ES of pre_esId

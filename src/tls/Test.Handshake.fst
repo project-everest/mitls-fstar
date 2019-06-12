@@ -429,7 +429,7 @@ let client_13 config host port : ML unit =
     (if Cert.validate_chain sc.crt_chain true (Some host) config.ca_file then
       "OK" else "FAIL")^"\n");
 
-  let hL = Hashing.Spec.tagLen h in
+  let hL = Hacl.Hash.Definitions.hash_len h in
   let zeroes = FStar.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
   let rc = Hashing.compute h zeroes in
   let cv_log = (HandshakeLog.getHash lg h) @| rc in
@@ -518,7 +518,7 @@ private let rec server_loop_13 config sock : ML unit =
   let _ = lg @@ (EncryptedExtensions ({ee_extensions=[]})) in
   let _ = lg @@ (Certificate crt) in
 
-  let hL = Hashing.Spec.tagLen h in
+  let hL = Hacl.Hash.Definitions.hash_len h in
   let zeroes = FStar.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
   let rc = Hashing.compute h zeroes in
   let cv_log = (HandshakeLog.getHash lg h) @| rc in

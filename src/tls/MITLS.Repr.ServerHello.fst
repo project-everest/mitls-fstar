@@ -34,10 +34,10 @@ open FStar.HyperStack.ST
 
 let t = SH.serverHello
 
-let repr (b:R.slice) =
+let repr (b:R.const_slice) =
   R.repr_p SH.serverHello b SH.serverHello_parser
 
-let cipherSuite (#b:R.slice) (r:repr b)
+let cipherSuite (#b:R.const_slice) (r:repr b)
   : Stack Parsers.CipherSuite.cipherSuite
     (requires R.valid r)
     (ensures fun h0 cs h1 ->
@@ -45,5 +45,6 @@ let cipherSuite (#b:R.slice) (r:repr b)
       cs == SH.((R.value r).cipher_suite))
   = let open R in
     R.reveal_valid();
+    let b = R.to_slice b in
     let pos = SH.accessor_serverHello_cipher_suite b r.start_pos in
     Parsers.CipherSuite.cipherSuite_reader b pos

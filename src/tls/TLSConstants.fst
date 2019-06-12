@@ -17,7 +17,7 @@ module TLSConstants
 /// - prf details ==> KeySchedule
 /// - parsed extension contents ==> Extensions
 /// - split Config (defaults are defined much later); align to EverCrypt
-/// - callbacks + ad hoc string conversions ==> FFI ?
+
 
 //18-02-27 not a reasonable default?
 //#set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1"
@@ -350,7 +350,7 @@ type kdfAlg_t = prePrfAlg
 type vdAlg_t = protocolVersion * cipherSuite
 
 // Only to be invoked with TLS 1.2 (hardcoded in previous versions)
-// BB.TODO: Documentation ? Confirm that it is used with TLS 1.3 ! CF: no, for TLS 1.3 use tagLen a, e.g. 32 or 64
+// BB.TODO: Documentation ? Confirm that it is used with TLS 1.3 ! CF: no, for TLS 1.3 use hash_len a, e.g. 32 or 64
 // let verifyDataLen_of_ciphersuite (cs:cipherSuite) = 12
 
 // Only to be invoked with TLS 1.2 (hardcoded in previous versions)
@@ -619,156 +619,36 @@ type ServerCertificateRequest // something that determines this Handshake messag
 request_client_certificate: single_assign ServerCertificateRequest // uses this one, or asks the server; by default Some None.
 *)
 
-
-
-
-
-/// 18-02-22 QD fodder; their formatting is in Extensions.
-
-include Parsers.ServerName
-include Parsers.ProtocolName
-include Parsers.ProtocolNameList
-include Parsers.PskIdentity
-
-type psk_identifier = pskIdentity_identity
-
-type pskInfo = {
-  ticket_nonce: option bytes;
-  time_created: UInt32.t;
-  ticket_age_add: UInt32.t;
-  allow_early_data: bool;      // New draft 13 flag
-  allow_dhe_resumption: bool;  // New draft 13 flag
-  allow_psk_resumption: bool;  // New draft 13 flag
-  early_ae: aeadAlg;
-  early_hash: hash_alg;
-  identities: bytes * bytes;
-}
-
-type ticketInfo =
-  | TicketInfo_12 of protocolVersion * cipherSuite * ems:bool
-  | TicketInfo_13 of pskInfo
-
-type ticket_seal = b:bytes{length b < 65536}
-
-// 2018.03.10 SZ: Allow it to modify [psk_region]?
-// Missing refinements on arguments from types in PSK
-type ticket_cb_fun =
-  (FStar.Dyn.dyn -> sni:string -> ticket:bytes{length ticket < 65536} -> info:ticketInfo -> rawkey:bytes -> ST unit
-    (requires fun _ -> True)
-    (ensures fun h0 _ h1 -> modifies_none h0 h1))
-
-noeq type ticket_cb = {
-  ticket_context: FStar.Dyn.dyn;
-  new_ticket: ticket_cb_fun;
-}
-
-/// Custom Extensions
-
-include Parsers.ExtensionType
-include Parsers.UnknownExtension
-
-// 18-12-22 TODO use a vl wire format instead of a list
-type custom_id = v:UInt16.t{~(known_extensionType_repr v)}
-type custom_extension = custom_id * unknownExtension
-type custom_extensions = l:list custom_extension
-
-(* Helper functions for the C API to construct the list from array *)
-let empty_custom_extensions () : list custom_extension = []
-let add_custom_extension 
-  (l:list custom_extension) 
-  (hd:UInt16.t) 
-  (b:bytes {length b < 65533}) = (hd, b) :: l
-
-/// Nego Callback
-
-type nego_action =
-  | Nego_abort: nego_action
-  | Nego_retry: cookie_extra: bytes -> nego_action
-  | Nego_accept: extra_ext: custom_extensions -> nego_action
-
-type nego_cb_fun =
-  (FStar.Dyn.dyn -> pv: protocolVersion -> client_ext: bytes -> cookie: option bytes -> ST nego_action
-    (requires fun _ -> True)
-    (ensures fun h0 r h1 -> Nego_retry? r ==> None? cookie /\ modifies_none h0 h1))
-
-noeq type nego_cb = {
-  nego_context: FStar.Dyn.dyn;
-  negotiate: nego_cb_fun;
-}
-
-/// Cert callbacks
-
-type cert_repr = b:bytes {length b < 16777216}
-type cert_type = FFICallbacks.callbacks
-
-noeq abstract
-type cert_cb = {
-  app_context : FStar.Dyn.dyn;
-  (* Each callback takes an application context (app_context)
-     and a function pointer to an application-provided functionality.
-
-     The callback is actually performed in FFI.fst, which calls into ffi.c
-     and takes care of marshalling miTLS parameters like signatureSchemeList
-     to the types expected by the application.
-
-     This explicit representation of closures is necessary for compiling this
-     to C via KreMLin. The representation is hidden from callers and the wrappers
-     are provided below to implement it.
-   *)
-  cert_select_ptr: FStar.Dyn.dyn;
-  cert_select_cb:
-    (FStar.Dyn.dyn -> FStar.Dyn.dyn -> pv:protocolVersion -> sni:bytes -> alpn:bytes -> sig:signatureSchemeList -> ST (option (cert_type * signatureScheme))
-    (requires fun _ -> True)
-    (ensures fun h0 _ h1 -> modifies_none h0 h1));
-
-  cert_format_ptr: FStar.Dyn.dyn;
-  cert_format_cb:
-    (FStar.Dyn.dyn -> FStar.Dyn.dyn -> cert_type -> ST (list cert_repr)
-    (requires fun _ -> True)
-    (ensures fun h0 _ h1 -> modifies_none h0 h1));
-
-  cert_sign_ptr: FStar.Dyn.dyn;
-  cert_sign_cb:
-    (FStar.Dyn.dyn -> FStar.Dyn.dyn -> cert_type -> signatureScheme -> tbs:bytes -> ST (option bytes)
-    (requires fun _ -> True)
-    (ensures fun h0 _ h1 -> modifies_none h0 h1));
-
-  cert_verify_ptr: FStar.Dyn.dyn;
-  cert_verify_cb:
-    (FStar.Dyn.dyn -> FStar.Dyn.dyn -> list cert_repr -> signatureScheme -> tbs:bytes -> sigv:bytes -> ST bool
-    (requires fun _ -> True)
-    (ensures fun h0 _ h1 -> modifies_none h0 h1));
-}
-
-[@"opaque_to_smt"]
-inline_for_extraction
-noextract
-let mk_cert_cb
-  app_ctx
-  cert_select_ptr
-  cert_select_cb
-  cert_format_ptr
-  cert_format_cb
-  cert_sign_ptr
-  cert_sign_cb
-  cert_verify_ptr
-  cert_verify_cb = {
-  app_context  = app_ctx;
-  cert_select_ptr = cert_select_ptr;
-  cert_select_cb = cert_select_cb;
-  cert_format_ptr = cert_format_ptr;
-  cert_format_cb = cert_format_cb;
-  cert_sign_ptr = cert_sign_ptr;
-  cert_sign_cb = cert_sign_cb;
-  cert_verify_ptr = cert_verify_ptr;
-  cert_verify_cb = cert_verify_cb
-}
-
-
 type alpn = Parsers.ClientHelloExtension.clientHelloExtension_CHE_application_layer_protocol_negotiation
 
+
+(*
+noeq type miniconfig0: Type0 = {
+    is_quic: bool; 
+    cipher_suites: Parsers.CipherSuites.ciphersuites;
+}
+
+noeq type miniconfig: Type0 = { 
+    is_quic: bool; 
+    cipher_suites: ptr_len; // with len refinement  
+}
+
+let miniconfig_valid h0 (cfg0: erased spec) (cfg:from client) = 
+  "cipher_suites contains exactly a valid Parsers.CipherSuites.ciphersuites"
+
+create's precondition
+
+  live h0 cipher_suites /\ 
+
+scanning ensures valid ptr_len Parsers.CipherSuites.ciphersuites
+
+*)  
+
+
+open TLS.Callbacks 
 noeq type config : Type0 = {
     // supported versions, implicitly preferring the latest versions
+    //QD: we could instead pass a [Parsers.SupportedVersions.supportedversions]
     min_version: protocolVersion; 
     max_version: protocolVersion;
 
@@ -776,6 +656,7 @@ noeq type config : Type0 = {
     is_quic: bool; 
 
     // supported parameters, ordered by decreasing preference. 
+    //QD: we could instead pass a [Parsers.CipherSuites.ciphersuites]
     cipher_suites: x:valid_cipher_suites{List.Tot.length x < 256};
 
     //19-01-22 carried by CH,EE,SH...; was CommonDH.supportedNamedGroups, overly restrictive. 
@@ -785,22 +666,35 @@ noeq type config : Type0 = {
     (* Client side *)
 
     // honor hello retry requests from the server
+    //19-05-04  not used? 
     hello_retry: bool;          
 
     // propose share from these groups (it should it be a subset of [named_groups]).
+    //19-05-04 only makes sense with TLS 1.3; but must be non-empty? 
+    //QD: use instead [Parsers.NamedGroupList]
     offer_shares: CommonDH.supportedNamedGroups;
 
+    //QD: see new [TaggedUnknownExtension]. We will use a
+    // manually-written coercion in [Extensions] but we still need to
+    // prove that the two parsers coincide. 
     custom_extensions: custom_extensions;
 
     // propose these tickets 
+    
+    //QD: for now we decrypt them and pass resumeInfo as an extra
+    // parameter. One low-level approach might be to decrypt them
+    // in-place. Or we could decrypt before passing the config to the
+    // new connection.
     use_tickets: list (psk_identifier * ticket_seal);
 
     (* Server side *)
-    send_ticket: option bytes;
+    
+    send_ticket: option bytes; // contents??
     check_client_version_in_pms_for_old_tls: bool;
     request_client_certificate: bool; // TODO: generalize to CertificateRequest contents: a list of CAs.
 
     (* Common *)
+    
     non_blocking_read: bool;
     max_early_data: option UInt32.t;   // 0-RTT offer (client) and support (server), and data limit
     safe_renegotiation: bool;     // demands this extension when renegotiating
@@ -808,60 +702,21 @@ noeq type config : Type0 = {
     enable_tickets: bool;         // Client: offer ticket support; server: emit and accept tickets
 
     (* Callbacks *)
-    ticket_callback: ticket_cb;   // Ticket callback, called when issuing or receiving a new ticket
-    nego_callback: nego_cb;// Callback to decide stateless retry and negotiate extra extensions
-    cert_callbacks: cert_cb;      // Certificate callbacks, called on all PKI-related operations
+    
+    // Ticket callback, called when issuing or receiving a new ticket
+    ticket_callback: ticket_cb;  
+    // Callback to decide stateless retry and negotiate extra extensions
+    nego_callback: nego_cb;
+    // Certificate callbacks, called on all PKI-related operations
+    cert_callbacks: cert_cb;
 
     // ALPN offers (for client) or preferences (for server)
     // we use the wire-format type, structurally shared between clients and servers. 
+    //QD: pass [clientHelloExtension_CHE_application_layer_protocol_negotiation] instead. No need for an option. 
     alpn: option alpn;
     peer_name: option (n:Parsers.HostName.hostName{Bytes.length n <= 65535 - 5}); // The expected name to match against the peer certificate
     // 19-01-19 Hoisted parser refinements for, to be propagated. 
   }
-
-let cert_select_cb (c:config) (pv:protocolVersion) (sni:bytes) (alpn:bytes) (sig:signatureSchemeList)
-   : ST (option (cert_type * signatureScheme))
-        (requires fun _ -> True)
-        (ensures fun h0 _ h1 -> modifies_none h0 h1)
-   = c.cert_callbacks.cert_select_cb
-            c.cert_callbacks.app_context
-            c.cert_callbacks.cert_select_ptr
-            pv
-            sni
-            alpn
-            sig
-
-let cert_format_cb (c:config) (ct:cert_type)
-   : ST (list cert_repr)
-        (requires fun _ -> True)
-        (ensures fun h0 _ h1 -> modifies_none h0 h1)
-   = c.cert_callbacks.cert_format_cb
-            c.cert_callbacks.app_context
-            c.cert_callbacks.cert_format_ptr
-            ct
-
-let cert_sign_cb (c:config) (ct:cert_type) (ss:signatureScheme) (tbs:bytes)
-   : ST (option bytes)
-        (requires fun _ -> True)
-        (ensures fun h0 _ h1 -> modifies_none h0 h1)
-   = c.cert_callbacks.cert_sign_cb
-            c.cert_callbacks.app_context
-            c.cert_callbacks.cert_sign_ptr
-            ct
-            ss
-            tbs
-
-let cert_verify_cb (c:config) (cl:list cert_repr) (ss:signatureScheme) (tbs:bytes) (sigv:bytes)
-   : ST bool
-        (requires fun _ -> True)
-        (ensures fun h0 _ h1 -> modifies_none h0 h1)
-   = c.cert_callbacks.cert_verify_cb
-            c.cert_callbacks.app_context
-            c.cert_callbacks.cert_verify_ptr
-            cl
-            ss
-            tbs
-            sigv
 
 type cVerifyData = b:bytes{length b <= 64} (* ClientFinished payload *)
 type sVerifyData = b:bytes{length b <= 64} (* ServerFinished payload *)

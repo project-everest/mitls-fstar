@@ -8,7 +8,7 @@ open Mem
 open TLSError
 open TLSInfo
 open TLSConstants
-open HandshakeMessages // for the message syntax
+// open HandshakeMessages // for the message syntax
 open HandshakeLog // for Outgoing
 open Epochs
 open Mem
@@ -18,9 +18,14 @@ module MS = FStar.Monotonic.Seq
 module HS = FStar.HyperStack
 module Nego = Negotiation
 module Secret = Handshake.Secret
+// added back to simplify the diff
 module KeySchedule = Handshake.Secret
-
-#set-options "--admit_smt_queries true"
+module HMAC_UFCMA = HMAC.UFCMA
+module HSM = HandshakeMessages
+module HSL = HandshakeLog
+module CH = Parsers.ClientHello
+module SH = Parsers.ServerHello
+// For readabililty, we try to open/abbreviate fewer modules
 
 (* A flag for runtime debugging of Handshake data.
    The F* normalizer will erase debug prints at extraction
@@ -35,7 +40,6 @@ unfold val trace: s:string -> ST unit
   (ensures (fun h0 _ h1 -> h0 == h1))
 unfold let trace = if DebugFlags.debug_HS then print else (fun _ -> ())
 
-
 // TODO : implement resumption
 //val getCachedSession: cfg:config -> ch:ch -> ST (option session)
 //  (requires (fun h -> True))
@@ -49,59 +53,62 @@ unfold let trace = if DebugFlags.debug_HS then print else (fun _ -> ())
 /// state, and some digests (from time of hashing to time of use).
 /// TODO: we need to know the hash algorithm matches HandshakeLog's.
 
+//19-05-11 should be bound in Transcript
+// some states keep digests (irrespective of their hash algorithm)
 type digest = Hashing.anyTag //  l:bytes{length l <= 32}
 
+#set-options "--admit_smt_queries true"
 type machineState =
   | C_Idle
-  | C_wait_ServerHello: // waiting for plaintext handshake 
-    psks: list (i:Idx.id{~(Secret.no_psk i)}) -> 
+  | C_wait_ServerHello: // waiting for plaintext handshake
+    psks: list (i:Idx.id{~(Secret.no_psk i)}) ->
     groups: list CommonDH.group -> // ghost summary of our offer
-    ks: Secret.c13_wait_ServerHello psks groups -> machineState 
+    ks: Secret.c13_wait_ServerHello psks groups -> machineState
 
-  | C13_wait_Finished1: // TLS 1.3 waiting for encrypted handshake 
-    i:   Secret.hs_id -> 
+  | C13_wait_Finished1: // TLS 1.3 waiting for encrypted handshake
+    i:   Secret.hs_id ->
     ams: Secret.ams (Secret.ams_of_hms i) ->
     cfk: Secret.fink (Secret.cfk_of_hms i) ->
     sfk: Secret.fink (Secret.sfk_of_hms i) -> machineState
 
-  | C13_sent_EOED: // TLS 1.3 #20 aggravation, optional from C13_wait_Finished1 
-    i:   Secret.hs_id -> 
+  | C13_sent_EOED: // TLS 1.3 #20 aggravation, optional from C13_wait_Finished1
+    i:   Secret.hs_id ->
     ams: Secret.ams (Secret.ams_of_hms i) ->
     cfk: Secret.fink (Secret.cfk_of_hms i) ->
-    digest (* _EOED *) -> 
-    option HandshakeMessages.cr13 -> machineState 
+    digest (* _EOED *) ->
+    option HSM.cr13 -> machineState
 
   | C13_complete: // TLS 1.3 waiting for post-handshake messages (TBC rekeying)
-    i:   Secret.ams_id -> 
+    i:   Secret.ams_id ->
 //    rms: Secret.secret (rms_of_ams i tr) (* for accepting resumption tickets *) ->
     machineState
 
   | C12_wait_CCS1 of digest      // TLS resume, digest to be authenticated by server
   | C12_wait_R_Finished1 of digest // TLS resume, digest to be authenticated by server
   | C12_wait_ServerHelloDone:
-    // cr:random -> 
-    machineState 
-  
+    // cr:random ->
+    machineState
+
   | C12_wait_CCS2: // TLS classic
-    ks: Secret.ks12_state -> 
+    ks: Secret.ks12_state ->
     digest_Finished1: digest -> // to be authenticated in the server Finished
     machineState
-    
+
   | C12_wait_Finished2: // TLS classic
-    ks: Secret.ks12_state -> 
+    ks: Secret.ks12_state ->
     digest_Finished1: digest -> // to be authenticated in the server Finished
     machineState
 
   | C_Complete // TODO add state
 
   | S_Idle
-  
+
   | S13_sent_ServerHello:      // TLS 1.3, intermediate state to encryption
-    i: Idx.id -> // Secret.esId -> 
+    i: Idx.id -> // Secret.esId ->
     idh: Idx.id_dhe ->
     ks: Secret.s13_wait_ServerHello i idh -> machineState
-      
-  
+
+
   | S_wait_EOED                // Waiting for EOED
   | S_wait_Finished2 of digest // TLS 1.3, digest to be MACed by client
   | S_wait_CCS1                // TLS classic
@@ -110,12 +117,15 @@ type machineState =
   | S_wait_CF2 of digest       // TLS resume (CF)
   | S_Complete
 
-  
+
 // 17-03-24 considered using instead "if role = Client then
 // clientState else serverServer" but that may break extraction to
 // Kremlin and complicate typechecking; we could also use refinements.
 
 // Removed error states, consider adding again to ensure the machine is stuck?
+
+// TODO add ghost transcript and the Transcript state; unclear where
+// they fit, e.g. above or under machine states.
 
 noeq type hs' = | HS:
   #region: rgn {is_hs_rgn region} ->
@@ -127,7 +137,7 @@ noeq type hs' = | HS:
   state: ref machineState {HS.frameOf state = region} -> // state machine; should be opaque and depend on r.
   hs'
 
-let hs = hs' //17-04-08 around fsti limitation
+let hs = hs' //17-04-08 around .fsti limitation
 
 let nonce         (s:hs) = Nego.nonce s.nego
 let region_of     (s:hs) = s.region
@@ -139,6 +149,8 @@ let get_mode (s:hs) = Nego.getMode s.nego
 let is_server_hrr (s:hs) = Nego.is_server_hrr s.nego
 let is_0rtt_offered (s:hs) =
   let mode = get_mode s in Nego.zeroRTToffer mode.Nego.n_offer
+let is_post_handshake (s:hs) =
+  match !s.state with | C_Complete | S_Complete -> true | _ -> false
 let epochs_of (s:hs) = s.epochs
 
 (* WIP on the handshake invariant
@@ -194,8 +206,8 @@ let completed #rgn #nonce e = True
 // consider adding an optional (resume: option sid) on the client side
 // for now this bit is not explicitly authenticated.
 
-/// Handshake invariant (TBC) 
-/// HS machine state, e.g. 
+p/// Handshake invariant (TBC)
+/// HS machine state, e.g.
 /// | C_wait_ServerHello ->
 ///   related states for Nego, KS, HSL
 ///   transcript = [...] /\
@@ -204,56 +216,56 @@ let completed #rgn #nonce e = True
 /// nego lookups are readers functions
 /// (returning a result and its witness---or just mon. transcript?)
 /// defined once the transcript is big enough.
-/// 
+///
 // WIP on the handshake invariant; see also hs_inv below!
 // let inv (s:hs) (h:HyperStack.mem) =
 //   let n = Negotiation.negotiationState h hs.nego in // let context = Negotiation.context h hs.nego in
-//   let tr = HandshakeLog.transcript h hs.log in
-//   let control = HyperStack.sel h s.state in 
-//   let kst = Secret.state h hs.ks in 
-//   (Correct nego = Nego.replay transcript /\ 
+//   let tr = HSL.transcript h hs.log in
+//   let control = HyperStack.sel h s.state in
+//   let kst = Secret.state h hs.ks in
+//   (Correct nego = Nego.replay transcript /\
 //   (match control with
-//   | C_Idle -> 
+//   | C_Idle ->
 //       // create...client_ClientHello
-//       hs.role = Client /\ 
-//       tr = [] /\ 
-//       writing h hs.nego /\ 
+//       hs.role = Client /\
+//       tr = [] /\
+//       writing h hs.nego /\
 //       C_Init? kst // unclear we care about its nonce, otherwise see client_ClientHello
 
 //   | C_wait_ServerHello ->
 //       // client_ClientHello...(client_HelloRetryRequest \/ client_ServerHello)
-//       // with a branch on proposing TLS 1.3 or not 
+//       // with a branch on proposing TLS 1.3 or not
 //       hs.role = Client /\
 //       tr = [clientHello hs.nonce (Negotiation.offer_of nego)] /\
-//       ( match kst with 
-//         | C_13_wait_SH (*cr*) esl gs -> "esl and gs compatible with offer" 
+//       ( match kst with
+//         | C_13_wait_SH (*cr*) esl gs -> "esl and gs compatible with offer"
 //         | _ -> False )
 // (*
-//   | C13_wait_Finished1 -> 
-//       hs.role = Client /\ 
-//       tr = [clientHello hs.nonce (Negotiation.offer_of nego); ServerHello ...] /\ 
+//   | C13_wait_Finished1 ->
+//       hs.role = Client /\
+//       tr = [clientHello hs.nonce (Negotiation.offer_of nego); ServerHello ...] /\
 //       // When do we care about precise indexes? We plan to sync
 //       // with Secret on indexes, rather than transcripts
 //       // (abstract for Secret).  we'll need to keep around at
 //       // least the PSK index in addition to the log
-//       match kst with 
-//       | C_13_wait_SF (*subsumed by i?: alpha*) i1 transcript_sh (*for deriving the indexes of*) cfk sfk ams -> 
-//           i1 = i_hs_secret_of_transcript tr /\ 
+//       match kst with
+//       | C_13_wait_SF (*subsumed by i?: alpha*) i1 transcript_sh (*for deriving the indexes of*) cfk sfk ams ->
+//           i1 = i_hs_secret_of_transcript tr /\
 //           transcript_sh = tr `up_to` ServerHello?
-//           "something about local writers?"  
+//           "something about local writers?"
 //       | _ -> False
 // *)
-//   | S_Idle -> 
-//       hs.role = Server /\ 
-//       tr = [] /\ 
+//   | S_Idle ->
+//       hs.role = Server /\
+//       tr = [] /\
 //       S_Init? kst
 
 //   | _ -> True
 //   ))
-  
+
 (*
 /// i.e. we expect this definition in Secret
-/// to keep C_13_wait_SH abstract, we'd need to record the 
+/// to keep C_13_wait_SH abstract, we'd need to record the
 
 | C_13_wait_SH:
     // *overwritten* symmetric extracts for the PSKs we are proposing
@@ -262,14 +274,14 @@ let completed #rgn #nonce e = True
     // *overwritten* when hello_retry
     // private exponents for the honestly-generated shares we are proposing
     gs: list (g:CommonDH.group & CommonDH.keyshare g) -> ks_client_state
-// ---> 
+// --->
 
-| C_13_wait_SF: 
+| C_13_wait_SF:
     i1: id (* ghost, synchronized with HS invariant *) ->
-    transcript: (*ghost*) list msg -> 
+    transcript: (*ghost*) list msg ->
     cfk: MAC.UFCMA.key (derive_cfk1 i1 transcript) ->
     sfk: MAC.UFCMA.key (derive_sfk1 i1 transcript) ->
-    ams: KDF.secret (derive_ams1 i1) -> ks_client_state 
+    ams: KDF.secret (derive_ams1 i1) -> ks_client_state
 *)
 
 
@@ -293,8 +305,6 @@ let hs_inv (s:hs) (h: HS.mem) = True
 
 //A framing lemma with a very trivial proof, because of the way stateT abstracts the state-dependent parts
 *)
-
-
 
 #set-options "--admit_smt_queries true"
 let frame_iT_trivial  (s:hs) (rw:rw) (h0:HS.mem) (h1:HS.mem)
@@ -326,7 +336,7 @@ let frame_iT  (s:hs) (rw:rw) (h0:HS.mem) (h1:HS.mem) (mods:Set.set rid)
 
 
 // factored out; indexing to be reviewed
-val register: hs -> Secret.recordInstance -> St unit
+val register: hs -> KeySchedule.recordInstance -> St unit
 let register hs keys =
     let ep = //? we don't have a full index yet for the epoch; reuse the one for keys??
       let h = Nego.Fresh ({ Nego.session_nego = None }) in
@@ -335,7 +345,7 @@ let register hs keys =
       Epochs.recordInstanceToEpoch #hs.region #(nonce hs) h (Handshake.Secret.StAEInstance #id r w) in // just coercion
     Epochs.add_epoch hs.epochs ep // actually extending the epochs log
 
-val export: hs -> Secret.exportKey -> St unit
+val export: hs -> KeySchedule.exportKey -> St unit
 let export hs xk =
   trace "exporting a key";
   Monotonic.Seq.i_write_at_end hs.epochs.exporter xk
@@ -373,8 +383,10 @@ let clientHello offer = // pure; shared by Client and Server
 
 (* -------------------- Handshake Client ------------------------ *)
 
+// now in Secret: type binderId = HMAC_UFCMA.binderId
+
 type btag (binderKey:(i:binderId & bk:KeySchedule.binderKey i)) =
-  HMAC.UFCMA.tag (HMAC.UFCMA.HMAC_Binder (let (|i,_|) = binderKey in i))
+  HMAC_UFCMA.tag (HMAC_UFCMA.HMAC_Binder (let (|i,_|) = binderKey in i))
 
 val map_ST2: 'c -> ('c -> 'a -> KeySchedule.ST0 'b) -> list 'a -> KeySchedule.ST0 (list 'b)
 let rec map_ST2 env f x = match x with
@@ -387,7 +399,7 @@ let compute_binder hs (bkey:(i:binderId & bk:KeySchedule.binderKey i)): ST (btag
   =
   let (| bid, bk |) = bkey in
   let digest_CH0 = HandshakeLog.hash_tag #(binderId_hash bid) hs.log in
-  HMAC.UFCMA.mac bk digest_CH0
+  HMAC_UFCMA.mac bk digest_CH0
 
 let verify_binder hs (bkey:(i:binderId & bk:KeySchedule.binderKey i)) (tag:btag bkey) tlen: ST bool
     (requires fun h0 -> True)
@@ -395,7 +407,7 @@ let verify_binder hs (bkey:(i:binderId & bk:KeySchedule.binderKey i)) (tag:btag 
   =
   let (| bid, bk |) = bkey in
   let digest_CH0 = HandshakeLog.hash_tag_truncated #(binderId_hash bid) hs.log tlen in
-  HMAC.UFCMA.verify bk digest_CH0 tag
+  HMAC_UFCMA.verify bk digest_CH0 tag
 
 
 
@@ -408,9 +420,9 @@ private type client_binders_state = list (i:id & info i * es i)
 // For each proposed PSK, start keying and produce the binder tag.
 //
 // not yet tail-recursive (fix later with list processing)
-// we could also output the binders instead of building a list. 
-private let rec client_Binder_loop hs (pskids: list (PSK.pskid * PSK.obfuscated_ticket_age)): 
-  ST (client_Binder_state * Extensions.binders) 
+// we could also output the binders instead of building a list.
+private let rec client_Binder_loop hs (pskids: list (PSK.pskid * PSK.obfuscated_ticket_age)):
+  ST (client_Binder_state * Extensions.binders)
   (requires fun h0 -> True
     // HSL contains the truncated hello message to be authenticated in
     // binders (satisfying their logical payloand) and these pskids
@@ -418,68 +430,70 @@ private let rec client_Binder_loop hs (pskids: list (PSK.pskid * PSK.obfuscated_
     )
   (ensures fun h0 (earlies, binders) h1 -> True
     // modifies "only creates local keys?"
-    // if early was None and the list is non-empty, then early is the first early context 
+    // if early was None and the list is non-empty, then early is the first early context
     )
-= 
-  match pskids with 
+=
+  match pskids with
   | [] -> (early, binders)
-  | (pskid, _obfuscated_age) :: pskids -> 
-      let (| i, info, es, bfk |) = Secret.compute_es_and_bfk pskid in  
-      let digest_truncated_ClientHello = HandshakeLog.hash_tag #(binderId_hash info) hs.log in 
-      let binder = HMAC.UFCMA.mac bfk digest_truncated_ClientHello in 
-      let earlies, binders = client_Binder_loop hs pskids in 
+  | (pskid, _obfuscated_age) :: pskids ->
+      let (| i, info, es, bfk |) = Secret.compute_es_and_bfk pskid in
+      let digest_truncated_ClientHello = HSL.hash_tag #(binderId_hash info) hs.log in
+      let binder = HMAC_UFCMA.mac bfk digest_truncated_ClientHello in
+      let earlies, binders = client_Binder_loop hs pskids in
       ((| i, info, es |) :: earlies), (binder :: binders)
 
 // Compute and send the PSK binders if necessary; may be called both
 // by client_ClientHello and client_HelloRetryRequest.  On the client
 // side, we don't actually care about the presence or contents of
 // Binders in the transcript.
-val client_Binders: s:hs -> offer -> ST client_binders_state 
+val client_Binders: s:hs -> offer -> ST client_binders_state
   (requires fun h0 -> True
     // HSL contains the truncated hello message to be authenticated in
     // binders (satisfying their logical payloand)
     )
   (ensures fun h0 _ h1 ->
-    // TODO modifies only the transcript 
-    // only dealing with Some? for now 
+    // TODO modifies only the transcript
+    // only dealing with Some? for now
     // we don't care about the presence and contents of Binders in the transcript
-    let tr0 = HandshakeLog.transcript h0 hs.log in
-    let tr1 = HandshakeLog.transcript h1 hs.log in
+    let tr0 = HSL.transcript h0 hs.log in
+    let tr1 = HSL.transcript h1 hs.log in
     if None? (Nego.find_clientPske offer)
-    then tr1 = tr0 
+    then tr1 = tr0
     else (exists (b:Extensions.binders). tr1 = tr0 @ [Binders b])
     )
+
+
 let client_Binders hs offer =
   match Nego.resume hs.nego with
   | (_, []) -> () // No PSK, no binders
   | (_, pskl) ->
     let binderKeys = KeySchedule.ks_client_13_get_binder_keys hs.ks pskl in
     let binders = map_ST2 hs compute_binder binderKeys in
-    HandshakeLog.send hs.log (Binders binders);
+    HSL.send hs.log (Binders binders);
     earlies
 
 /// 17-11-11 verification style? we hope to factor out most of the
 /// pre/post in the invariant (but note we just called
-/// HandshakeLog.next_fragment so the transcript has changed).
-/// 
-val client_ClientHello: s:hs -> i:id -> ST (result (HandshakeLog.outgoing i))
+/// HSL.next_fragment so the transcript has changed).
+///
+val client_ClientHello: s:hs -> i:id -> ST (result (HSL.outgoing i))
   (requires fun h0 ->
     let n = HS.sel h0 Nego.(s.nego.state) in
-    let t = transcript h0 s.log in
+    let t = HSL.transcript h0 s.log in
     let k = HS.sel h0 s.ks.KeySchedule.state in
     match n with
-    | Nego.C_Init nonce -> k = Secret.(C (C_Init nonce)) /\ t = []
+    | Nego.C_Init nonce -> k = KeySchedule.(C (C_Init nonce)) /\ t = []
     | _ -> False )
   (ensures fun h0 r h1 ->
     let n = HS.sel h0 Nego.(s.nego.state) in
-    let t = transcript h0 s.log in
+    let t = HSL.transcript h0 s.log in
     let k = HS.sel h1 s.ks.KeySchedule.state in
     ( Correct? r ==>
       ( match n with
         | Nego.C_Offer offer -> (
-          ( if offer.ch_protocol_version = TLS_1p3
+          ( if offer.CH.version = TLS_1p3
             then
-             k = Secret.(C(C_13_wait_SH
+             k = KeySchedule.(C(C_13_wait_SH
               (nonce s)
               [] (*TODO: es for 0RTT*)
               (C_13_wait_SH?.gs (C?.s k)) // TODO
@@ -487,18 +501,21 @@ val client_ClientHello: s:hs -> i:id -> ST (result (HandshakeLog.outgoing i))
                  // + check that that the group and CommonDH.pubshare g gx match
               //(Nego.gs_of offer)
              ))
-            else k = Secret.(C(C_12_Full_CH offer.ch_client_random)) /\
-          t = [ClientHello offer] ))
-        | _ -> False ))
-        )
+            else k = KeySchedule.(C(C_12_Full_CH offer.CH.random)) /\
+          t = [HSL.Msg (HSM.M_client_hello offer)] ))
+        | _ -> False )))
+
 let client_ClientHello hs i =
   // The configuration determines which groups to propose (duplicating Nego?)
   // groups = None indicates a 1.2 handshake
   // groups = Some [] is valid, to deliberately trigger HRR.
   let groups =
     match (config_of hs).max_version with
-    | TLS_1p3 -> trace "offering ClientHello 1.3"; Some (config_of hs).offer_shares
-    | _       -> trace "offering ClientHello 1.2"; None in
+    | TLS_1p3 ->
+      trace "offering ClientHello 1.3"; Some (config_of hs).offer_shares
+    | _ ->
+      trace "offering ClientHello 1.2"; None
+    in
 
   // Secret samples the corresponding key shares, keeping their private exponents.
   // (threading hs.ks ensures these shares are single-use).
@@ -507,67 +524,71 @@ let client_ClientHello hs i =
   // Nego compute the full client offer
   let offer = Nego.client_ClientHello hs.nego shares in
 
-  // We send it in two steps: 
+  // We send it in two steps:
   // 1. the truncated ClientHello;
   // 2. the binders that authenticate its offer.
-  HandshakeLog.send hs.log (ClientHello offer);
-  let earlies = client_Binders hs offer in 
-    
+  HSL.send hs.log (ClientHello offer);
+  let earlies = client_Binders hs offer in
+
   if Some? (Nego.find_early_data offer) then (
     // optional EDI
-    assert(earlies <> []); 
-    let (| i, info, _ |) = head earlies in 
-    let ha = ha_of_info info in 
-    let digest_full_ClientHello = HandshakeLog.hash_tag #ha hs.log in
-    let early_exporter_secret, edk = 
+    assert(earlies <> []);
+    let (| i, info, _ |) = head earlies in
+    let ha = ha_of_info info in
+    let digest_full_ClientHello = HSL.hash_tag #ha hs.log in
+    let early_exporter_secret, edk =
       Secret.client13_0RTT (head earlies) digest_full_ClientHello in
     export hs early_exporter_secret;
     register hs edk;
-    HandshakeLog.send_signals hs.log (Some (true, false)) false );
+    HSL.send_signals hs.log (Some (true, false)) false );
 
-  let ks0 = (shares, earlies) in 
-  hs.state := C_wait_ServerHello ks0; 
-  Correct(HandshakeLog.next_fragment hs.log i)
+  let ks0 = (shares, earlies) in
+  hs.state := C_wait_ServerHello ks0;
+  Correct(HSL.next_fragment hs.log i)
 
 let client_HelloRetryRequest (hs:hs) (hrr:hrr) : St incoming =
   trace "client_HelloRetryRequest";
-  let s = match Nego.group_of_hrr hrr with
+  let s =
+    match Nego.group_of_hrr hrr with
     | None ->
       // this case should only ever happen in QUIC stateless retry address validation
       trace "Server did not specify a group in HRR, re-using the previous choice"; None
-    | Some g -> let s = KeySchedule.ks_client_13_hello_retry hs.ks g in Some (| g, s |)
+    | Some ng ->
+        let Some g = CommonDH.group_of_namedGroup ng in
+        let s = KeySchedule.ks_client_13_hello_retry hs.ks g in
+	Some (| g, s |)
     in
   match Nego.client_HelloRetryRequest hs.nego hrr s with
   | Error z -> InError z
   | Correct(ch) ->
-    HandshakeLog.send hs.log (ClientHello ch);
+    HSL.send hs.log (HSL.Msg (HSM.M_client_hello ch));
     client_Binders hs ch;
     // Note: we stay in Wait_ServerHello
     // Only the Nego state machine was moved by HRR
     InAck false false
 
-// 17-11-11 
-// how to avoid duplicating the invariant after reading the flight? 
+// 17-11-11
+// how to avoid duplicating the invariant after reading the flight?
 // pass the whole state before calling HSL?
 // share [c_WaitServerHello tr] formulas between pre/post and the invariant?
-val client_ServerHello: 
-  s:hs -> 
-  ks: Secret.c13_wait_serverHello psks groups (*scope?*) -> 
-  sh:sh -> 
-  ST incoming 
-  (requires fun h0 -> 
+val client_ServerHello:
+  s:hs ->
+  ks: Secret.c13_wait_serverHello psks groups (*scope?*) ->
+  sh:sh ->
+  ST incoming
+  (requires fun h0 ->
     inv s h0 /\ (
-    let control = HyperStack.sel h0 s.state in 
+    let control = HyperStack.sel h0 s.state in
     control = C_WaitServerHello /\
-    writing h hs.nego 
+    writing h hs.nego
     ))
-  (ensures fun h0 r h1 -> 
+  (ensures fun h0 r h1 ->
     inv s h1 /\ (
-    let control = HyperStack.sel h1 s.state in 
-    // correct TLS 1.3 ==> 
-    //   tr = [CH;B;SH] 
-    //   control = C13_wait_Finished1 
-    //   HSL has parameters set; 
+    let control = HyperStack.sel h1 s.state in
+    // correct TLS 1.3 ==>
+    //   tr = [CH;B;SH]
+    //   control = C13_wait_Finished1
+    //   HSL has parameters set;
     //   installed handshake keys
     True
     ))
@@ -577,35 +598,46 @@ let client_ServerHello (s:hs) ks (sh:sh) (* digest:Hashing.anyTag *): St incomin
   | Error z -> InError z
   | Correct mode ->
     let pv = mode.Nego.n_protocol_version in
+    let cfg = Nego.local_config s.nego in
     let ha = Nego.hashAlg mode in
     let ka = Nego.kexAlg mode in
     HandshakeLog.setParams s.log pv ha (Some ka) None (*?*);
     match pv with
-    | TLS_1p3 -> (
+    | TLS_1p3 ->
+      begin
         trace "Running TLS 1.3";
         let digest_ServerHello = HandshakeLog.hash_tag #ha s.log in
-        let hsi, ks', cfk, sfk, hs_wr, hs_rd = Secret.client13_ServerHello
+        let hsi, ks', cfk, sfk, hs_wr, hs_rd = KeySchedule.client13_ServerHello
           psks groups ks
           mode.Nego.n_server_random
           mode.Nego.n_cipher_suite
-          digest
+          digest_ServerHello
           mode.Nego.n_server_share
           mode.Nego.n_pski in
         register s hs_keys; // register new epoch
         if Nego.zeroRTToffer mode.Nego.n_offer then
          begin
-          trace (if Some? mode.Nego.n_pski then "0RTT potentially accepted (wait for EE to confirm)"
-                 else "No 0RTT possible because of rejected PSK");
           // Skip the 0-RTT epoch on the reading side
-          Epochs.incr_reader s.epochs
-         end;
+          Epochs.incr_reader s.epochs;
+	  match mode.Nego.n_pski with
+	  | None ->
+	    trace "0-RTT rejected early (no PSK was selected)";
+	    Epochs.incr_writer s.epochs
+	  | Some _ ->
+            trace "0RTT potentially accepted (wait for EE to confirm)";
+	    // No EOED in QUIC, so we immediately enable HSK
+	    if cfg.is_quic then Epochs.incr_writer s.epochs
+         end
+	else // No EOED to send in 0-RTT epoch
+	  Epochs.incr_writer s.epochs; // Next flight (CFin) will use HSK
         s.state := C_Wait_Finished1;
         Epochs.incr_reader s.epochs; // Client 1.3 HSK switch to handshake key for decrypting EE etc...
         InAck true false // Client 1.3 HSK
-      )
-    | _ -> (
+      end
+    | _ ->
+      begin
         trace "Running classic TLS";
-        trace ("Offered SID="^(print_bytes mode.Nego.n_offer.ch_sessionID)^" Server SID="^(print_bytes mode.Nego.n_sessionID));
+        trace ("Offered SID="^(print_bytes mode.Nego.n_offer.CH.session_id)^" Server SID="^(print_bytes mode.Nego.n_sessionID));
         if Nego.resume_12 mode then
          begin // 1.2 resumption
           trace "Server accepted our 1.2 ticket.";
@@ -628,14 +660,15 @@ let client_ServerHello (s:hs) ks (sh:sh) (* digest:Hashing.anyTag *): St incomin
          begin // 1.2 full handshake
            s.state := C12_wait_ServerHelloDone;
            InAck false false
-         end )
+         end
+      end
 
 (* receive Certificate...ServerHelloDone, with optional cert request. Not for TLS 1.3 *)
 val client_ServerHelloDone:
   hs ->
-  HandshakeMessages.crt ->
-  HandshakeMessages.ske ->
-  option HandshakeMessages.cr ->
+  HSM.crt ->
+  HSM.ske ->
+  option HSM.cr ->
   ST incoming
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
@@ -652,8 +685,9 @@ let client_ServerHelloDone hs c ske ocr =
             HandshakeLog.send hs.log (Certificate cc));
 
       let gy = Some?.v (mode.Nego.n_server_share) in // already set in KS
-      let ks, gx = Secret.client12_full_dh 
-        mode.Nego.n_offer.HandshakeMessages.ch_client_random //17-12-02 simplify?
+      let ks, gx = 
+        KeySchedule.client12_full_dh
+        mode.Nego.n_offer.HSM.ch_client_random //17-12-02 simplify?
         mode.Nego.n_server_random
         mode.Nego.n_protocol_version
         mode.Nego.n_cipher_suite
@@ -662,91 +696,91 @@ let client_ServerHelloDone hs c ske ocr =
       let (|g, _|) = gy in
       let msg = ClientKeyExchange ({cke_kex_c = kex_c_of_dh_key #g gx}) in
       let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
-      let digestClientKeyExchange = HandshakeLog.send_tag #ha hs.log msg  in
-      let ks, cfin_key, app_keys = Secret.client12_set_session_hash ks digestClientKeyExchange in
+      let digestClientKeyExchange = HandshakeLog.send_tag #ha hs.log (HSL.Msg12 msg) in
+      let ks, cfin_key, app_keys = KeySchedule.client12_set_session_hash ks digestClientKeyExchange in
       register hs app_keys;
       // we send CCS then Finished;  we will use the new keys only after CCS
 
       trace ("digest is "^print_bytes digestClientKeyExchange);
       //let cvd = TLSPRF.verifyData (mode.Nego.n_protocol_version,mode.Nego.n_cipher_suite) cfin_key Client digestClientKeyExchange in
       let cvd = TLSPRF.finished12 ha cfin_key Client digestClientKeyExchange in
-      let digestClientFinished = HandshakeLog.send_CCS_tag #ha hs.log (Finished ({fin_vd = cvd})) false in
+      let fin = HSM.M12_finished cvd in
+      let digestClientFinished = HandshakeLog.send_CCS_tag #ha hs.log (HSL.Msg12 fin) false in
       hs.state := C12_wait_CCS2 ks digestClientFinished;
       InAck false false)
 
 #set-options "--admit_smt_queries true"
-
 (* completes the handshake; called either by client13_ServerFinished
    or after sending EOED *)
-private val client13_ClientFinished: 
-  i: Secret.hs_id -> 
-  secret: ams (Secret.ams_of_hms i) -> 
+private val client13_ClientFinished:
+  i: Secret.hs_id ->
+  secret: ams (Secret.ams_of_hms i) ->
   cfk: Secret.fink (Secret.cfk_of_hms i) -> //17-12-28 wrong index; we probably need i1 instead of i2.
-  digest (* either ...ServerFinished or ...ServerFinished; EOED *) -> 
-  option HandshakeMessages.cr13 -> 
+  digest (* either ...ServerFinished or ...ServerFinished; EOED *) ->
+  option HSM.cr13 ->
   St unit
 let client13_ClientFinished i secret cfk digest ocr =
   let mode = Nego.getMode hs.nego in
   let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
   let digest_cvd =
     match ocr with
-    | Some cr -> HandshakeLog.send_tag #ha hs.log (Certificate13 ({crt_request_context = empty_bytes; crt_chain13 = []}))
+    | Some cr -> HSL.send_tag #ha hs.log (Certificate13 ({crt_request_context = empty_bytes; crt_chain13 = []}))
     | None -> digest in
-  let cvd = HMAC.UFCMA.mac cfk digest_cvd in
+  let cvd = HMAC_UFCMA.mac cfk digest_cvd in
   if not (Nego.zeroRTT mode) then Epochs.incr_writer hs.epochs; // to HSK, 0-RTT case is treated in EOED logic
-  let digest_ClientFinished = HandshakeLog.send_tag #ha hs.log (Finished ({fin_vd = cvd})) in
-  let i2 = ams_of_hms i in 
-  let rms = Secret.rms13_ClientFinished i2 ams digest_ClientFinished in // for Post-HS
+  let digest_ClientFinished = HSL.send_tag #ha hs.log (Finished ({fin_vd = cvd})) in
+  let i2 = ams_of_hms i in
+  let rms = KeySchedule.rms13_ClientFinished i2 ams digest_ClientFinished in // for Post-HS
   Epochs.incr_reader hs.epochs; // to ATK
   HandshakeLog.send_signals hs.log (Some (true, false)) true; //was: Epochs.incr_writer hs.epochs
   hs.state := C13_complete i2 rms // full_mode (cvd,svd); do we still need to keep those?
 
-(* receive EncryptedExtension...ServerFinished for TLS 1.3, 
-   roughly mirroring client_ServerHelloDone; 
+(* receive EncryptedExtension...ServerFinished for TLS 1.3,
+   roughly mirroring client_ServerHelloDone;
    may still fail on Finished, CertificateVerify, or negotiation;
    otherwise complete the handshake. *)
 val client13_ServerFinished:
   s: hs ->
-  ee: HandshakeMessages.ee ->
-  ocr: option HandshakeMessages.cr13 ->
-  oc_digest: option (HandshakeMessages.crt13 * Hashing.anyTag) ->
-  ocv: option HandshakeMessages.cv ->
+  ee: HSM.ee ->
+  ocr: option HSM.cr13 ->
+  oc_digest: option (HSM.crt13 * Hashing.anyTag) ->
+  ocv: option HSM.cv ->
   svd: bytes ->
-  digestCertVerify: Hashing.anyTag (* authenticated by Finished *) -> 
+  digestCertVerify: Hashing.anyTag (* authenticated by Finished *) ->
   digestServerFinished: Hashing.anyTag (* including Finished *) ->
   ST incoming
-  (requires fun h0 -> 
-    let control = HyperStack.sel h0 s.state in 
+  (requires fun h0 ->
+    let control = HyperStack.sel h0 s.state in
     C13_wait_Finished1? control)
   (ensures fun h0 r h1 -> True)
 let client13_ServerFinished hs ee ocr oc_digest ocv (svd:bytes) digestCertVerify digestServerFinished =
-  let C13_wait_Finished1 i ams cfk sfk = !hs.state in 
-  let i2 = Secret.ams_of_hms i in 
-  let verified_Finished = HMAC.UFCMA.verify sfin_key digestCertVerify svd in 
+  let C13_wait_Finished1 i ams cfk sfk = !hs.state in
+  let i2 = Secret.ams_of_hms i in
+  let verified_Finished = HMAC_UFCMA.verify sfin_key digestCertVerify svd in
   if (not verified_Finished)
   then InError (fatalAlert Decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestCertVerify )
   else
   let oc, digestCert = // push this to Nego?
-    match oc_digest with 
-    | None -> None 
+    match oc_digest with
+    | None -> None
     | Some (c,dc) -> (Some c.crt_chain13), Some dc in
   match Nego.clientComplete_13 hs.nego ee ocr oc ocv digestCert with
   | Error z -> InError z
   | Correct mode ->
-      let r, w, x1s = Secret.client13_ServerFinished ks digestServerFinished in
+      let r, w, x1s = KeySchedule.client13_ServerFinished ks digestServerFinished in
       export hs x1s;
       register hs (r,w); // application data keys are ready to use in both directions
       if Nego.zeroRTT mode then (
         trace "Early data accepted; emitting EOED.";
         let ha = Nego.hashAlg mode in
-        let digestEOED = HandshakeLog.send_tag #ha hs.log EndOfEarlyData in
-        HandshakeLog.send_signals hs.log (Some (false, false)) false;
+        let digestEOED = HSL.send_tag #ha hs.log EndOfEarlyData in
+        HSL.send_signals hs.log (Some (false, false)) false;
         hs.state := C13_sent_EOED i digestEOED ocr cfin_key;
         // will call client13_ClientFinished next
         InAck false false )
       else (
         trace "Early data rejected";
-        //17-12-28 missing parameters for resumption and ticketing. 
+        //17-12-28 missing parameters for resumption and ticketing.
         client13_ClientFinished i ams cfk digestServerFinished ocr;
         InAck true false // Client 1.3 ATK; next the client will read again to send Finished, writer++, and the Complete signal
       ) // moving to C_Complete
@@ -819,7 +853,7 @@ let client13_NewSessionTicket (hs:hs) (st13:sticket13)
     (let tcb = cfg.ticket_callback in
     tcb.new_ticket tcb.ticket_context sni tid (TicketInfo_13 pskInfo) psk;
     InAck false false)
-  else InError (fatalAlert Illegal_parameter, "QUIC tickets must allow 0xFFFFFFFF bytes of ealy data")
+  else InError (fatalAlert Illegal_parameter, "QUIC tickets must allow 0xFFFFFFFF bytes of early data")
 
 let client_ServerFinished hs f digestClientFinished =
   let sfin_key = KeySchedule.ks_12_finished_key hs.ks in
@@ -839,14 +873,14 @@ let client_ServerFinished hs f digestClientFinished =
 let client_R_ServerFinished hs f digestNewSessionTicket digestServerFinished
   : St incoming =
   trace "client_R_ServerFinished";
-  let sfin_key = Secret.ks_12_finished_key hs.ks in
+  let sfin_key = KeySchedule.ks_12_finished_key hs.ks in
   let mode = Nego.getMode hs.nego in
   let ha = verifyDataHashAlg_of_ciphersuite mode.Nego.n_cipher_suite in
   let expected_svd = TLSPRF.finished12 ha sfin_key Server digestNewSessionTicket in
   if f.fin_vd = expected_svd
   then (
     let cvd = TLSPRF.finished12 ha sfin_key Client digestServerFinished in
-    let _ = HandshakeLog.send_CCS_tag #ha hs.log (Finished ({fin_vd = cvd})) true in
+    let _ = HandshakeLog.send_CCS_tag #ha hs.log (HSL.Msg12 (HSM.M12_finished cvd)) true in
     hs.state := C_Complete; // ADL: TODO need a proper renego state Idle (Some (vd,svd)))};
     InAck false false // send_CCS_tag buffers the complete
   )
@@ -858,6 +892,7 @@ let client_R_ServerFinished hs f digestNewSessionTicket digestServerFinished
 (* called by server_ClientHello after sending TLS 1.2 ServerHello *)
 // static precondition: n.n_protocol_version <> TLS_1p3 && Some? n.n_sigAlg && (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)
 // should instead use Nego for most of this processing
+
 val server_ServerHelloDone: hs -> St incoming // why do I need an explicit val?
 let server_ServerHelloDone hs =
   trace "Sending ...ServerHelloDone";
@@ -877,15 +912,13 @@ let server_ServerHelloDone hs =
     in
     match Nego.sign hs.nego tbs with
     | Error z -> InError z
-    | Correct signature ->
-      begin
-      let ske = {ske_kex_s = kex_s; ske_signed_params = signature} in
-      HandshakeLog.send hs.log (Certificate ({crt_chain = Cert.chain_down chain}));
-      HandshakeLog.send hs.log (ServerKeyExchange ske);
-      HandshakeLog.send hs.log ServerHelloDone;
+    | Correct sig ->
+      let ske = sv @| Parsers.CertificateVerify13.certificateVerify13_serializer32 sig in
+      HandshakeLog.send hs.log (HSL.Msg12 (HSM.M12_certificate (Cert.chain_down chain)));
+      HandshakeLog.send hs.log (HSL.Msg12 (HSM.M12_server_key_exchange ske));
+      HandshakeLog.send hs.log (HSL.Msg12 (HSM.M12_server_hello_done ()));
       hs.state := S_wait_CCS1;
       InAck false false // Server 1.2 ATK
-      end
 
 // the ServerHello message is a simple function of the mode.
 let not_encryptedExtension e = not (Extensions.encryptedExtension e)
@@ -905,7 +938,7 @@ let serverHello (m:Nego.mode) =
       | _ -> m.n_server_extensions
    })
 
-val  consistent_truncation: option (list Extensions.pskIdentity * nat) -> option Extensions.binders -> bool
+val consistent_truncation: option (list Extensions.pskIdentity * nat) -> option Extensions.binders -> bool
 let consistent_truncation x y =
   match x, y with
   | None, None -> true
@@ -914,21 +947,22 @@ let consistent_truncation x y =
   | Some (psks,_), Some binders -> List.length psks = List.length binders
 
 (* receive ClientHello, choose a protocol version and mode *)
-val server_ClientHello: 
-  hs -> HandshakeMessages.ch -> option Extensions.binders -> ST incoming
+val server_ClientHello: hs -> HSM.clientHello -> ST incoming
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
-let server_ClientHello hs offer obinders =
-    trace ("Processing ClientHello"
-           ^ (if Some? obinders
-              then " with "
-                   ^ string_of_int (List.length (Some?.v obinders))
-                   ^ " binder(s)"
-              else ""));
 
-    // Check consistency across the truncated PSK extension (is is redundant?)
-    let opsk = Nego.find_clientPske offer in
-    if not (consistent_truncation opsk obinders)
+let server_ClientHello hs offer =
+  let open Parsers.OfferedPsks in
+  let binders = Nego.find_clientPske offer in
+
+    trace ("Processing ClientHello"
+           ^ (match binders with
+	     | None -> ""
+             | Some opsk -> " with "
+	       ^ string_of_int (List.length opsk.binders)
+               ^ " binder(s)"));
+
+    if not (consistent_truncation binders)
     then InError (fatalAlert Illegal_parameter, "unexpected number of binders")
     else
 
@@ -947,7 +981,7 @@ let server_ClientHello hs offer obinders =
     | Correct (Nego.ServerMode mode cert app_exts) ->
 
     let pv = mode.Nego.n_protocol_version in
-    let cr = mode.Nego.n_offer.ch_client_random in
+    let cr = mode.Nego.n_offer.CH.random in
     let ha = Nego.hashAlg mode in
 
     if Nego.resume_12 mode
@@ -962,7 +996,7 @@ let server_ClientHello hs offer obinders =
       // TODO don't decrypt twice between Nego and HS
       let Some tid = Nego.find_sessionTicket offer in
       let Some (pv, cs, ems, msId, ms) = Ticket.check_ticket12 tid in
-      let adk = Secret.server12_resume hs.ks cr pv cs ems msId ms in
+      let adk = KeySchedule.server12_resume hs.ks cr pv cs ems msId ms in
       register hs adk;
 
       match Nego.server_ServerShare hs.nego None app_exts with
@@ -971,16 +1005,18 @@ let server_ClientHello hs offer obinders =
         let digestSessionTicket =
           if Nego.sendticket_12 mode then
             // Save hashing the SH if we don't send a ticket
-            let _ = HandshakeLog.send hs.log (serverHello mode) in
-            let ticket = {sticket_lifetime = 3600ul; sticket_ticket = tid; } in
-            HandshakeLog.send_tag #ha hs.log (NewSessionTicket ticket)
+            let _ = HandshakeLog.send hs.log (HSL.Msg (serverHello mode)) in
+            let ticket =
+	      let open Parsers.NewSessionTicket12 in
+	      {lifetime_hint = 3600ul; ticket = tid; } in
+            HandshakeLog.send_tag #ha hs.log (HSL.Msg12 (HSM.M12_new_session_ticket ticket))
           else
-            HandshakeLog.send_tag #ha hs.log (serverHello mode)
+            HandshakeLog.send_tag #ha hs.log (HSL.Msg (serverHello mode))
           in
         let digestServerFinished =
-          let fink = Secret.ks_12_finished_key hs.ks in
+          let fink = KeySchedule.ks_12_finished_key hs.ks in
           let svd = TLSPRF.finished12 ha fink Server digestSessionTicket in
-          HandshakeLog.send_CCS_tag #ha hs.log (Finished ({fin_vd = svd})) true in
+          HandshakeLog.send_CCS_tag #ha hs.log (HSL.Msg12 (HSM.M12_finished svd)) true in
         hs.state := S_wait_CCS2 digestServerFinished;
         InAck false false
      end // 1.2 resumption
@@ -991,7 +1027,7 @@ let server_ClientHello hs offer obinders =
         if pv = TLS_1p3  then
         match mode.Nego.n_pski with
         | None ->
-            let server_share, None = Secret.server13_init cr sr cs None g_gx (HandshakeLog.transcript h1 hs.log) in
+            let server_share, None = KeySchedule.server13_init cr sr cs None g_gx (HSL.transcript h1 hs.log) in
             Correct server_share
         | Some i -> (
             trace ("accepted TLS 1.3 psk #"^string_of_int i);
@@ -1000,20 +1036,19 @@ let server_ClientHello hs offer obinders =
             let Some (id, _) = List.Tot.nth psks i in
             let Some tag = List.Tot.nth (Some?.v obinders) i in
             assume(PSK.registered_psk id);
-            let server_share, Some binderKey = Secret.server13_init cr cs (Some id) g_gx (HandshakeLog.transcript h1 hs.log) in
+            let server_share, Some binderKey = KeySchedule.server13_init cr cs (Some id) g_gx (HSL.transcript h1 hs.log) in
             if verify_binder hs binderKey tag tlen
             then Correct server_share
             else
               //( trace ("WARNING: binder verification failed, tlen="^string_of_int tlen); Correct server_share))
-              Error (AD_bad_record_mac, "binder verification failed"))
+              fatal Bad_record_mac "binder verification failed")
         else
         match Nego.kexAlg mode with
           | Kex_DHE | Kex_ECDHE ->
             let Some g = Nego.chosenGroup mode in
-            let ks, gy = Secret.server12_init_dh cr sr pv cs (Nego.emsFlag mode) g in
+            let ks, gy = KeySchedule.server12_init_dh cr sr pv cs (Nego.emsFlag mode) g in
             Correct (Some (CommonDH.Share g gy))
-          | _ -> Error (AD_handshake_failure, "Unsupported RSA key exchange") in
-
+          | _ -> fatal Handshake_failure "Unsupported RSA key exchange" in
       match key_share_result with
       | Error z -> InError z
       | Correct optional_server_share ->
@@ -1025,14 +1060,14 @@ let server_ClientHello hs offer obinders =
         let ha = verifyDataHashAlg_of_ciphersuite mode.Nego.n_cipher_suite in
         // these hashes are not always used
         let digestClientHelloBinders = HandshakeLog.hash_tag #ha hs.log in
-        let digestServerHello = HandshakeLog.send_tag #ha hs.log (serverHello mode) in
+        let digestServerHello = HandshakeLog.send_tag #ha hs.log (HSL.Msg (serverHello mode)) in
         if pv = TLS_1p3
         then
           begin
             let zeroing = Nego.zeroRTT mode in
             if zeroing  then (
-              let early_exporter_secret, zero_keys = 
-                Secret.server13_0rtt_key hs.ks digestClientHelloBinders in
+              let early_exporter_secret, zero_keys =
+                KeySchedule.server13_0rtt_key hs.ks digestClientHelloBinders in
               export hs early_exporter_secret;
               register hs zero_keys
             );
@@ -1041,7 +1076,7 @@ let server_ClientHello hs offer obinders =
             // - do the signalling
             HandshakeLog.send_signals hs.log (Some (false, zeroing)) false; // signal key change after writing ServerHello
             trace "derive handshake keys";
-            let hs_keys = Secret.server13_ServerHello hs.ks digestServerHello (* digestServerHello *)  in
+            let hs_keys = KeySchedule.server13_ServerHello hs.ks digestServerHello (* digestServerHello *)  in
             register hs hs_keys;
             // We will start using the HTKs later (after sending SH, and after receiving 0RTT traffic)
             hs.state := S13_sent_ServerHello;
@@ -1051,8 +1086,10 @@ let server_ClientHello hs offer obinders =
           server_ServerHelloDone hs // sending our whole flight hopefully in a single packet.
     )
 
+inline_for_extraction type cke_t = Parsers.Handshake12_m12_client_key_exchange.handshake12_m12_client_key_exchange
+
 (* receive ClientKeyExchange; CCS *)
-let server_ClientCCS1 hs cke (* clientCert *) digestCCS1 =
+let server_ClientCCS1 hs (cke:cke_t) (* clientCert *) digestCCS1 =
     // FIXME support optional client c and cv
     // let ems = n.n_extensions.ne_extended_ms in // ask Nego?
     trace "process Client CCS";
@@ -1078,7 +1115,7 @@ let server_ClientCCS1 hs cke (* clientCert *) digestCCS1 =
 // Resumption client finished
 let server_ClientFinished2 hs cvd digestSF digestCF =
   trace "Process Client Finished";
-  let fink = Secret.ks_12_finished_key hs.ks in
+  let fink = KeySchedule.ks_12_finished_key hs.ks in
   let mode = Nego.getMode hs.nego in
   let pv = mode.Nego.n_protocol_version in
   let cs = mode.Nego.n_cipher_suite in
@@ -1094,7 +1131,7 @@ val server_ClientFinished:
   hs -> bytes -> Hashing.anyTag -> Hashing.anyTag -> St incoming
 let server_ClientFinished hs cvd digestCCS digestClientFinished =
     trace "Process Client Finished";
-    let fink = Secret.ks_12_finished_key hs.ks in
+    let fink = KeySchedule.ks_12_finished_key hs.ks in
     let mode = Nego.getMode hs.nego in
     let cfg = Nego.local_config hs.nego in
     let pv = mode.Nego.n_protocol_version in
@@ -1108,16 +1145,16 @@ let server_ClientFinished hs cvd digestCCS digestClientFinished =
       //let svd = TLSPRF.verifyData alpha fink Server digestClientFinished in
       let digestTicket =
         if Nego.sendticket_12 mode then
-          let (msId, ms) = Secret.ks_12_ms hs.ks in
+          let (msId, ms) = KeySchedule.ks_12_ms hs.ks in
           let ticket = Ticket.Ticket12 pv cs (Nego.emsFlag mode) msId ms in
-          let ticket = {
-            sticket_lifetime = FStar.UInt32.(uint_to_t 3600);
-            sticket_ticket = Ticket.create_ticket false ticket;
-          } in
-          HandshakeLog.send_tag #ha hs.log (NewSessionTicket ticket)
+          let ticket = Parsers.NewSessionTicket12.({
+            lifetime_hint = 3600ul;
+            ticket = Ticket.create_ticket false ticket;
+          }) in
+          HandshakeLog.send_tag #ha hs.log (HSL.Msg12 (HSM.M12_new_session_ticket ticket))
         else digestClientFinished in
       let svd = TLSPRF.finished12 ha fink Server digestTicket in
-      let unused_digest = HandshakeLog.send_CCS_tag #ha hs.log (Finished ({fin_vd = svd})) true in
+      let unused_digest = HandshakeLog.send_CCS_tag #ha hs.log (HSL.Msg12 (HSM.M12_finished svd)) true in
       hs.state := S_Complete;
       InAck false false // Server 1.2 ATK; will switch write key and signal completion after sending
     else
@@ -1144,24 +1181,27 @@ let server_ServerFinished_13 hs i =
     let digestFinished =
       match kex with
       | Kex_ECDHE -> // [Certificate; CertificateVerify]
-        HandshakeLog.send hs.log (EncryptedExtensions eexts);
+        HandshakeLog.send hs.log (HSL.Msg13 (HSM.M13_encrypted_extensions eexts));
         let Some (chain, sa) = mode.Nego.n_server_cert in
-        let digestSig = HandshakeLog.send_tag #halg hs.log (Certificate13 ({crt_request_context = empty_bytes; crt_chain13 = chain})) in
+	let c = Parsers.Certificate13.({
+	  certificate_request_context = empty_bytes;
+	  certificate_list = chain}) in
+        let digestSig = HandshakeLog.send_tag #halg hs.log (HSL.Msg13 (HSM.M13_certificate c)) in
         let tbs = Nego.to_be_signed pv Server None digestSig in
         (match Nego.sign hs.nego tbs with
         | Error z -> Error z
-        | Correct signature -> Correct (HandshakeLog.send_tag #halg hs.log (CertificateVerify (signature))))
+        | Correct signature -> Correct (HandshakeLog.send_tag #halg hs.log (HSL.Msg13 (HSM.M13_certificate_verify signature))))
       | _ -> // PSK
-        Correct (HandshakeLog.send_tag #halg hs.log (EncryptedExtensions eexts))
+        Correct (HandshakeLog.send_tag #halg hs.log (HSL.Msg13 (HSM.M13_encrypted_extensions eexts)))
       in
 
     match digestFinished with
     | Correct digestFinished ->
-      let (| sfinId, sfin_key |) = Secret.ks_server_13_server_finished hs.ks in
-      let svd = HMAC.UFCMA.mac sfin_key digestFinished in
-      let digestServerFinished = HandshakeLog.send_tag #halg hs.log (Finished ({fin_vd = svd})) in
+      let (| sfinId, sfin_key |) = KeySchedule.ks_server_13_server_finished hs.ks in
+      let svd = HMAC_UFCMA.mac sfin_key digestFinished in
+      let digestServerFinished = HandshakeLog.send_tag #halg hs.log (HSL.Msg13 (HSM.M13_finished svd)) in
       // we need to call KeyScheduke twice, to pass this digest
-      let app_keys, exporter_master_secret = Secret.ks_server_13_sf hs.ks digestServerFinished in
+      let app_keys, exporter_master_secret = KeySchedule.ks_server_13_sf hs.ks digestServerFinished in
       export hs exporter_master_secret;
       register hs app_keys;
       HandshakeLog.send_signals hs.log (Some (true,false)) false;
@@ -1170,7 +1210,7 @@ let server_ServerFinished_13 hs i =
       hs.state :=
         (if Nego.zeroRTT mode then S_wait_EOED
          else S_wait_Finished2 digestServerFinished);
-      Correct(HandshakeLog.next_fragment hs.log i)
+      Correct(HSL.next_fragment hs.log i)
     | Error z -> Error z
 
 let server_EOED hs (digestEOED: Hashing.anyTag)
@@ -1186,7 +1226,7 @@ val server_ClientFinished_13: hs ->
   cvd:bytes ->
   Hashing.anyTag -> // Digest either up to ServerFinished or up to CertificateVerify with client certg
   Hashing.anyTag -> // Digest up to ClientFinished
-  option (HandshakeMessages.crt13 * HandshakeMessages.cv * Hashing.anyTag) -> St incoming
+  option (HSM.crt13 * HSM.cv * Hashing.anyTag) -> St incoming
 let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinished clientAuth =
    trace "Process Client Finished";
    match clientAuth with
@@ -1196,7 +1236,7 @@ let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinishe
    | None ->
        let (| i, cfin_key |) = KeySchedule.ks_server_13_client_finished hs.ks in
        let mode = Nego.getMode hs.nego in
-       if HMAC.UFCMA.verify cfin_key digestBeforeClientFinished f
+       if HMAC_UFCMA.verify cfin_key digestBeforeClientFinished f
        then
         begin
          (* NewSessionTicket is sent if client advertised a PSK_KEX mode *)
@@ -1253,7 +1293,7 @@ let create (parent:rid) cfg role =
   let r = new_region parent in
   let log = HandshakeLog.create r None (* cfg.max_version (Nego.hashAlg nego) *) in
   //let nonce = Nonce.mkHelloRandom r r0 in //NS: should this really be Client?
-  let ks, nonce = Secret.create #r role in
+  let ks, nonce = KeySchedule.create #r role in
   let nego = Nego.create r role cfg nonce in
   let epochs = Epochs.create r nonce in
   let state = ralloc r (if role = Client then C_Idle else S_Idle) in
@@ -1275,18 +1315,18 @@ let invalidateSession hs = ()
 
 let next_fragment (hs:hs) i =
     trace "next_fragment";
-    let outgoing = HandshakeLog.next_fragment hs.log i in
+    let outgoing = HSL.next_fragment hs.log i in
     match outgoing, !hs.state with
     // When the output buffer is empty, we send extra messages in 3 cases
     // * we prepare the initial ClientHello; or
     // * we continue with encrypted traffic after sending ServerHello in plaintext; or
-    // * we continue with hs-encrypted traffic after sending EOED. 
+    // * we continue with hs-encrypted traffic after sending EOED.
     // Otherwise, we just returns buffered messages and signals
     | Outgoing None None false, C_Idle -> client_ClientHello hs i
     | Outgoing None None false, S13_sent_ServerHello -> server_ServerFinished_13 hs i
-    | Outgoing None None false, C13_sent_EOED d ocr cfk -> 
-        client13_ClientFinished hs d ocr cfk; 
-        Correct(HandshakeLog.next_fragment hs.log i)
+    | Outgoing None None false, C13_sent_EOED d ocr cfk ->
+        client13_ClientFinished hs d ocr cfk;
+        Correct(HSL.next_fragment hs.log i)
 
     //| Outgoing msg  true _ _, _ -> (Epochs.incr_writer hs.epochs; Correct outgoing) // delayed
     | _ -> Correct outgoing // nothing to do
@@ -1296,11 +1336,12 @@ let next_fragment (hs:hs) i =
 let rec recv_fragment (hs:hs) #i rg f =
     let recv_again r =
       match r with
-      | InAck false false -> recv_fragment hs #i (0,0) empty_bytes // only case where the next incoming flight may already have been buffered.
+      // only case where the next incoming flight may already have been buffered.
+      | InAck false false -> recv_fragment hs #i (0,0) empty_bytes 
       | r -> r  in
     trace "recv_fragment";
     let h0 = get() in
-    let flight = HandshakeLog.receive hs.log f in
+    let flight = HSL.receive hs.log f in
     match flight with
     | Error z -> InError z
     | Correct None -> InAck false false // nothing happened
@@ -1312,7 +1353,7 @@ let rec recv_fragment (hs:hs) #i rg f =
         client_HelloRetryRequest hs hrr
 
       | C_wait_ServerHello, [ServerHello sh], [] ->
-        let r = client_ServerHello hs sh in 
+        let r = client_ServerHello hs sh in
         recv_again r
 
     //| C_wait_ServerHello, Some ([ServerHello sh], [digest]) -> client_ServerHello hs sh digest
@@ -1322,27 +1363,27 @@ let rec recv_fragment (hs:hs) #i rg f =
       | C12_wait_ServerHelloDone, [Certificate c; ServerKeyExchange ske; CertificateRequest cr; ServerHelloDone], [] ->
         client_ServerHelloDone hs c ske (Some cr)
 
-      | C13_wait_Finished1 _ _ _ _, 
+      | C13_wait_Finished1 _ _ _ _,
         [EncryptedExtensions ee; Certificate13 c; CertificateVerify cv; Finished f],
         [_; digestCert; digestCertVerify; digestServerFinished] ->
         client13_ServerFinished hs ee None (Some (c, digestCert)) (Some cv) f.fin_vd
                                 digestCertVerify digestServerFinished
-      | C13_wait_Finished1 _ _ _ _, 
+      | C13_wait_Finished1 _ _ _ _,
         [EncryptedExtensions ee; CertificateRequest13 cr; Certificate13 c; CertificateVerify cv; Finished f],
         [_; digestCert; digestCertVerify; digestServerFinished] ->
         client13_ServerFinished hs ee (Some cr) (Some (c, digestCert)) (Some cv) f.fin_vd
                                 digestCertVerify digestServerFinished
-      | C13_wait_Finished1 _ _ _ _, 
+      | C13_wait_Finished1 _ _ _ _,
         [EncryptedExtensions ee; Finished f],
         [digestEE; digestServerFinished] ->
-        client13_ServerFinished hs ee None None None f.fin_vd 
+        client13_ServerFinished hs ee None None None f.fin_vd
                                 digestEE digestServerFinished
 
       | C12_wait_R_Finished1 digestNewSessionTicket, [Finished f], [digestServerFinished] ->
         client_R_ServerFinished hs f digestNewSessionTicket digestServerFinished
 
       | C12_wait_Finished2 _ _, [Finished f], [digestServerFinished] ->
-        client_ServerFinished hs f 
+        client_ServerFinished hs f
 
       | S_Idle, [ClientHello ch], []  -> server_ClientHello hs ch None
       | S_Idle, [ClientHello ch; Binders binders], []  -> server_ClientHello hs ch (Some binders)
@@ -1393,7 +1434,7 @@ let recv_ccs (hs:hs) =
     else
       // CCS triggers completion of the incoming flight of messages.
       let mode = Nego.getMode hs.nego in
-      match HandshakeLog.receive_CCS #(Nego.hashAlg mode) hs.log with
+      match HSL.receive_CCS #(Nego.hashAlg mode) hs.log with
       | Error z -> InError z
       | Correct (ms, digests, digestCCS) ->
         match !hs.state, ms, digests with

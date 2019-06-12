@@ -7,9 +7,6 @@ open Idx
 module M = LowStar.Modifies
 module DT = DefineTable
 
-/// We use subtrees to specify KDF usages. We hope we can erase
-/// them when modelling is off!
-///
 /// This module is generic, and could be made parametric in its index
 /// package. The TLS-specific details are filled-in in KeySchedule.
 
@@ -28,18 +25,22 @@ let rec disjoint_labels (l:list (label * 'a)) : Type0 =
 
 // FIXME(adl): need to refine children' with disjoint_labels
 
+/// Structural tree property: we idealize from the top, hence a child
+/// can be ideal only if its parent is ideal.
+
 noeq noextract
-type tree' (par_ideal:Type0) =
-  | Leaf: package:t{Pkg?.ideal package ==> par_ideal} -> tree' par_ideal
-  | Node: node:t{Pkg?.ideal node ==> par_ideal} -> children: children' (Pkg?.ideal node) -> tree' par_ideal
-and children' (par_ideal:Type0) = list (label * tree' par_ideal)
+type tree' (ideal_parent:Type0) =
+  | Leaf: package:t{Pkg?.ideal package ==> ideal_parent} -> tree' ideal_parent
+  | Node: node:t{Pkg?.ideal node ==> ideal_parent} -> children: children' (Pkg?.ideal node) -> tree' ideal_parent
+and children' (ideal_parent:Type0) = list (label * tree' ideal_parent)
 
 // would prefer to use Map.t, but positivity check fails
 
 inline_for_extraction noextract
 let max x y = if x <= y then y else x
 
-// induction on n-ary trees requires explicit termination
+/// induction on n-ary trees requires explicit termination based on their depths
+
 noextract
 let rec depth (#p:Type0) (x:tree' p) : nat =
   match x with
@@ -49,6 +50,8 @@ and children_depth (#p:Type0) (lxs:children' p) : nat  =
   match lxs with
   | (_,x) :: lxs -> max (depth x) (children_depth lxs)
   | [] -> 0
+
+/// Eliding trees when model is off
 
 inline_for_extraction
 let no_tree : Type u#1 = a:Type u#0 -> GTot unit
@@ -283,9 +286,8 @@ let lemma_tree_inv_frame_local_instance
     (ensures tree_inv' t h1)
   =
   let p = get_package t (labels_of_id i []) in
-  DT.lemma_forall_frame p.define_table pkg.inv pkg.local_footprint pkg.inv_framing h0 M.loc_none h1;
+//  DT.lemma_forall_frame p.define_table pkg.inv pkg.local_footprint pkg.inv_framing h0 M.loc_none h1;
   admit()
-
 
 (*
 Building the tree is quite technical because the tree
