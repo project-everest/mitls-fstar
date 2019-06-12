@@ -10,6 +10,7 @@ open TLSConstants
 open TLSInfo
 
 module AE = AEADProvider
+module HSM = HandshakeMessages
 
 #push-options "--admit_smt_queries true"
 
@@ -26,7 +27,6 @@ unfold let trace = if DebugFlags.debug_NGO then print else (fun _ -> ())
 // verification-only
 type hostname = string
 type tlabel (h:hostname) = t:bytes * tls13:bool
-
 
 /// private keys for sealing (client-only) and ticketing (server-only)
 
@@ -100,7 +100,6 @@ let set_ticket_key (a:aeadAlg) (kv:bytes) : St bool =
 
 let set_sealing_key (a:aeadAlg) (kv:bytes) : St bool =
   set_internal_key true a kv
-
 
 /// ticket payloads (to be server-encrypted)
 
@@ -457,42 +456,37 @@ let create_ticket (seal:bool) t =
   ticket_encrypt seal plain
 
 // FIXME(adl): restore HRR support in QD
-let create_cookie (*hrr:HandshakeMessages.hrr*) (digest:bytes) (extra:bytes) =
-  empty_bytes
-(*
-  let hrm = HandshakeMessages.HelloRetryRequest hrr in
-  let hrb = vlbytes 3 (HandshakeMessages.handshakeMessageBytes None hrm) in
+let create_cookie (hr:HSM.hrr) (digest:bytes) (extra:bytes) =
+  let hrb = HSM.(handshake_serializer32 (M_server_hello (serverHello_of_hrr hr))) in
   let plain = hrb @| (vlbytes 1 digest) @| (vlbytes 2 extra) in
   let cipher = ticket_encrypt false plain in
   trace ("Encrypting cookie: "^(hex_of_bytes plain));
   trace ("Encrypted cookie:  "^(hex_of_bytes cipher));
   cipher
-*)
 
-val check_cookie: b:bytes -> St (option ((*HandshakeMessages.hrr*) bytes * bytes * bytes))
-let check_cookie b = None
-(*
+val check_cookie: b:bytes -> St (option (HSM.hrr * bytes * bytes))
+let check_cookie b =
   trace ("Decrypting cookie "^(hex_of_bytes b));
   if length b < 32 then None else
   match ticket_decrypt false b with
   | None -> trace ("Cookie decryption failed."); None
   | Some plain ->
     trace ("Plain cookie: "^(hex_of_bytes plain));
-    match vlsplit 3 plain with
-    | Error _ -> trace ("Cookie decode error: HRR"); None
-    | Correct (hrb, b) ->
-      let (_, hrb) = split hrb 4ul in // Skip handshake tag and vlbytes 3
-      match HandshakeMessages.parseHelloRetryRequest hrb with
-      | Error (_, m) -> trace ("Cookie decode error: parse HRR, "^m); None
-      | Correct hrr ->
+    match HSM.handshake_parser32 plain with
+    | Some (HSM.M_server_hello sh, l) ->
+      if HSM.is_hrr sh then
+       begin
+        let hrr = HSM.get_hrr sh in
+        let (_, b) = split plain l in
         match vlsplit 1 b with
         | Error _ -> trace ("Cookie decode error: digest"); None
         | Correct (digest, b) ->
           match vlparse 2 b with
           | Error _ -> trace ("Cookie decode error: application data"); None
-          | Correct extra ->
-            Some (hrr, digest, extra)
-*)
+          | Correct extra -> Some (hrr, digest, extra)
+       end
+      else (trace ("Warning: bad HRR in cookie (file bug report)"); None)
+    | _ -> trace ("Cookie decode error (file bug report)"); None
 
 #pop-options
 
@@ -600,7 +594,3 @@ val check_ticket12_low:
     LL.valid_content ticketContents12_master_secret_parser h0 x ms_pos ms
     ))
 *)    
-
-   
-    
-

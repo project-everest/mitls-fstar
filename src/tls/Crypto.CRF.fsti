@@ -11,6 +11,7 @@ module Crypto.CRF
 
 module Concrete = EverCrypt.Hash.Incremental
 module Hash = EverCrypt.Hash
+module HD = Spec.Hash.Definitions
 
 module B = LowStar.Buffer
 module ST = FStar.HyperStack.ST
@@ -19,6 +20,7 @@ module S = FStar.Seq
 module U32 = FStar.UInt32
 module G = FStar.Ghost
 
+open Mem
 open FStar.HyperStack.ST
 
 inline_for_extraction
@@ -47,45 +49,45 @@ unfold noextract
 let bytes = Model.CRF.bytes
 
 unfold noextract
-let e_alg = Concrete.e_alg
+let alg = Concrete.alg
 
 unfold noextract
-let fresh_loc = Concrete.fresh_loc
+let e_alg = Concrete.e_alg
 
 /// Overriding things
 /// -----------------
 
 inline_for_extraction
-val state: Concrete.alg -> Type0
+val state: alg -> Type0
 
-val freeable: #a:Concrete.alg -> HS.mem -> state a -> Type0
+val freeable: #a:alg -> HS.mem -> state a -> Type0
 
 let preserves_freeable #a (s: state a) (h0 h1: HS.mem) =
   freeable h0 s ==> freeable h1 s
 
-val footprint: #a:Concrete.alg -> HS.mem -> state a -> GTot B.loc
+val footprint: #a:alg -> HS.mem -> state a -> GTot B.loc
 
-val invariant: #a:Concrete.alg -> HS.mem -> state a -> Type0
+val invariant: #a:alg -> HS.mem -> state a -> Type0
 
 val invariant_loc_in_footprint
-  (#a: Concrete.alg)
+  (#a: alg)
   (s: state a)
   (m: HS.mem)
 : Lemma
   (requires (invariant m s))
-  (ensures (Concrete.loc_in (footprint m s) m))
+  (ensures (loc_in (footprint m s) m))
   [SMTPat (invariant m s)]
 
-val hashed: #a:Concrete.alg -> HS.mem -> state a -> GTot bytes
+val hashed: #a:alg -> HS.mem -> state a -> GTot bytes
 
-val hash_fits (#a:Hash.alg) (h:HS.mem) (s:state a): Lemma
+val hash_fits (#a:alg) (h:HS.mem) (s:state a): Lemma
   (requires (
     invariant h s))
   (ensures (
-    S.length (hashed h s) < Spec.Hash.Definitions.max_input_length a))
+    S.length (hashed h s) < HD.max_input_length a))
   [ SMTPat (hashed h s) ]
 
-val frame_invariant (#a: Concrete.alg) (l: B.loc) (s: state a) (h0 h1: HS.mem): Lemma
+val frame_invariant (#a: alg) (l: B.loc) (s: state a) (h0 h1: HS.mem): Lemma
   (requires (
     invariant h0 s /\
     B.loc_disjoint l (footprint h0 s) /\
@@ -95,7 +97,7 @@ val frame_invariant (#a: Concrete.alg) (l: B.loc) (s: state a) (h0 h1: HS.mem): 
     footprint h0 s == footprint h1 s))
   [ SMTPat (invariant h1 s); SMTPat (B.modifies l h0 h1) ]
 
-val frame_hashed (#a: Concrete.alg) (l: B.loc) (s: state a) (h0 h1: HS.mem): Lemma
+val frame_hashed (#a: alg) (l: B.loc) (s: state a) (h0 h1: HS.mem): Lemma
   (requires (
     invariant h0 s /\
     B.loc_disjoint l (footprint h0 s) /\
@@ -103,7 +105,7 @@ val frame_hashed (#a: Concrete.alg) (l: B.loc) (s: state a) (h0 h1: HS.mem): Lem
   (ensures (hashed h0 s == hashed h1 s))
   [ SMTPat (hashed h1 s); SMTPat (B.modifies l h0 h1) ]
 
-val frame_freeable (#a: Concrete.alg) (l: B.loc) (s: state a) (h0 h1: HS.mem): Lemma
+val frame_freeable (#a: alg) (l: B.loc) (s: state a) (h0 h1: HS.mem): Lemma
   (requires (
     invariant h0 s /\
     freeable h0 s /\
@@ -117,7 +119,7 @@ val frame_freeable (#a: Concrete.alg) (l: B.loc) (s: state a) (h0 h1: HS.mem): L
 
 (** @type: true
 *)
-val create_in (a: Hash.alg) (r: HS.rid): ST (state a)
+val create_in (a: alg) (r: HS.rid): ST (state a)
   (requires (fun _ ->
     // NEW! ↓
     B.(loc_disjoint (loc_region_only true r) (loc_region_only true Mem.tls_tables_region)) /\

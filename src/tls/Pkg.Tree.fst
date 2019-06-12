@@ -10,8 +10,8 @@ module DT = DefineTable
 /// This module is generic, and could be made parametric in its index
 /// package. The TLS-specific details are filled-in in KeySchedule.
 
-type t = pkg ii
-let regid : eqtype = Pkg.regid ii
+noextract type t = pkg ii
+noextract let regid : eqtype = Pkg.regid ii
 
 let rec does_not_contain_label (l:list (label * 'a)) (lbl:label) =
   match l with
@@ -36,7 +36,7 @@ and children' (ideal_parent:Type0) = list (label * tree' ideal_parent)
 
 // would prefer to use Map.t, but positivity check fails
 
-inline_for_extraction noextract
+noextract
 let max x y = if x <= y then y else x
 
 /// induction on n-ary trees requires explicit termination based on their depths
@@ -53,14 +53,16 @@ and children_depth (#p:Type0) (lxs:children' p) : nat  =
 
 /// Eliding trees when model is off
 
-inline_for_extraction
+inline_for_extraction noextract
 let no_tree : Type u#1 = a:Type u#0 -> GTot unit
-inline_for_extraction
+inline_for_extraction noextract
 let erased_tree : no_tree = fun (_:Type0) -> ()
 
+noextract
 type tree (p:Type0) =
   (if model then tree' p else no_tree)
 
+noextract
 type children (p:Type0) =
   (if model then children' p else no_tree)
 
@@ -69,7 +71,7 @@ inline_for_extraction noextract
 let no_children (p:Type0) : children p =
   (if model then [] <: children' p else erased_tree)
 
-inline_for_extraction
+inline_for_extraction noextract
 let rec find_lbl' (#p:Type0) (u:children' p) (l: label) : option (tree' p) =
   match u with
   | [] -> None
@@ -77,27 +79,27 @@ let rec find_lbl' (#p:Type0) (u:children' p) (l: label) : option (tree' p) =
     if lbl = l then Some t
     else find_lbl' tl l
 
-noextract
+inline_for_extraction noextract
 let rec find_lbl (#p:Type0) (u:children p) (l:label) : option (tree p) =
   if model then find_lbl' (u <: children' p) l else None
 
-inline_for_extraction
+inline_for_extraction noextract
 let has_lbl' (#p:Type0) (u:children' p) (l: label) =
   Some? (find_lbl' u l)
 
-inline_for_extraction
+inline_for_extraction noextract
 let has_lbl (#p:Type0) (u:children p) (l: label) =
   if model then (u <: children' p) `has_lbl'` l else false
 
-noextract
+inline_for_extraction noextract
 let down' (#p:Type0) (u:children' p) (l:label{u `has_lbl'` l}) : tree' p =
   Some?.v (find_lbl' u l)
 
-noextract
+inline_for_extraction noextract
 let down (#p:Type0) (u:children p) (l:label{u `has_lbl` l}) : tree p =
   Some?.v (find_lbl u l)
 
-noextract
+inline_for_extraction noextract
 let child' (#p:Type0) (u:children' p) (l:label{u `has_lbl'` l})
   : Pure t (requires True) (ensures fun pkg -> Pkg?.ideal pkg ==> p)
   =
@@ -106,12 +108,13 @@ let child' (#p:Type0) (u:children' p) (l:label{u `has_lbl'` l})
   | Leaf p -> p
   | Node p c -> p
 
-noextract
+inline_for_extraction noextract
 let child (#p:Type0) (u:children p) (l:label{u `has_lbl` l})
   : Pure t (requires True) (ensures fun pkg -> Pkg?.ideal pkg ==> p)
   =
   child' (u <: children' p) l
 
+noextract
 type initial_state (#p:Type0) (pkg:t{Pkg?.ideal pkg ==> p}) (h:mem) =
   DT.empty (Pkg?.define_table pkg)
 
@@ -141,6 +144,7 @@ val tree_inv': #p:Type0 -> t:tree' p -> mem ->
 val children_inv': #vt:(regid->Type) -> DT.dt vt -> #p:Type0 -> u:children' p -> mem ->
   Ghost Type0 (requires model) (ensures fun _ -> True) (decreases %[u])
 
+noextract
 let child_instance_inv (#vt:regid->Type) (parent_dt:DT.dt vt)
   (lbl:label) (#kt:regid->Type) (#i:regid) (k:kt i) (h:mem)
   : Ghost Type0 (requires model) (ensures fun _ -> True) =
@@ -173,9 +177,11 @@ and children_inv' #vt parent_dt #p u h =
     M.loc_disjoint (DT.loc parent_dt) (DT.loc pkg.define_table) /\
     DT.dt_forall pkg.define_table (child_instance_inv parent_dt lbl) h
 
+noextract
 let tree_inv (#p:Type0) (t:tree p) (h:mem) =
   (if model then tree_inv' (t <: tree' p) h else True)
 
+noextract
 let children_inv #vt (dt:DT.dt vt) (#p:Type0) (t:children p) (h:mem) =
   (if model then children_inv' dt (t <: children' p) h else True)
 
@@ -263,12 +269,14 @@ let rec get_usage (#p:Type0) (t:tree' p) (l:list label{defined_path t l})
     | [] -> (| p, c |)
     | lbl :: tl -> get_usage (down' c lbl) tl
 
+noextract
 let defined' (#p:Type0) (t:tree' p) (i:regid{model}) =
   let path = labels_of_id i [] in
   defined_path t path /\
   (let pkg = get_package t path in
   DT.defined pkg.define_table i)
 
+noextract
 let defined (#p:Type0) (t:tree p) (i:regid) =
   if model then defined' (t <: tree' p) i else True
 

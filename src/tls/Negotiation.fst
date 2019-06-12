@@ -23,7 +23,8 @@ module HST = FStar.HyperStack.ST
 
 module HSM = HandshakeMessages
 module CH = Parsers.ClientHello
-module SH = Parsers.ServerHello
+module SH = Parsers.RealServerHello
+module HRR = Parsers.HelloRetryRequest
 
 open Extensions // for its aggregated datatypes
 
@@ -175,7 +176,6 @@ let find_serverSupportedVersions (ses: serverHelloExtensions): option protocolVe
   | None -> None
   | Some (SHE_supported_versions spv) -> Some spv
 
-module SH = Parsers.ServerHello
 let find_serverPske sh =
   match List.Tot.find SHE_pre_shared_key? sh.SH.extensions with
   | None -> None
@@ -414,11 +414,10 @@ private let rec list_valid_ng_is_list_ng (l:CommonDH.supportedNamedGroups) : Tot
 // We fill binders with placeholders to use QD clientHelloextensions_serializer32
 
 private let compute_binder_ph (pski:pskInfo) : Tot pskBinderEntry =
-  let h = PSK.pskInfo_hash pski in
+  let h = pski.early_hash in
   let len : UInt32.t = Hacl.Hash.Definitions.hash_len h in
   assume (32 <= U32.v len /\ U32.v len <= 256); // hash must not be MD5 or SHA1...
   FStar.Bytes.create len 0uy
-
 
 #push-options "--z3rlimit 16"
 
@@ -426,7 +425,7 @@ private let compute_binder_ph (pski:pskInfo) : Tot pskBinderEntry =
 
 let compute_binder_ph_new (t: Parsers.TicketContents13.ticketContents13) : Tot pskBinderEntry =
   let pski = Ticket.ticketContents13_pskinfo t in
-  let h = PSK.pskInfo_hash pski in
+  let h = pski.early_hash in
   let len : UInt32.t = Hacl.Hash.Definitions.hash_len h in
   assert (32 <= U32.v len /\ U32.v len <= 256); // hash must not be MD5 or SHA1...
   FStar.Bytes.create len 0uy
@@ -1074,7 +1073,6 @@ let sign #region #role ns tbs =
   | Some sigv ->
     Correct HSM.({algorithm = sa; signature = sigv})
 
-
 (* CLIENT *)
 
 // effect ST0 (a:Type) = ST a (fun _ -> True) (fun h0 _ h1 -> modifies_none h0 h1)
@@ -1130,14 +1128,13 @@ let client_offer cfg nonce ks resume now =
       now
   with 
   | Error z -> Error z 
-  | Correct extensions -> Correct CH.(
-  {
+  | Correct extensions -> Correct CH.({
     version = minPV TLS_1p2 cfg.max_version; // legacy for 1.3
     random = nonce;
     session_id = sid;
     cipher_suites = nameList_of_cipherSuites cfg.TLSConstants.cipher_suites;
     // This file is reconstructed from ch_cipher_suites in HandshakeMessages.clientHelloBytes;
-    compression_method = [NullCompression];
+    compression_methods = [NullCompression];
     extensions = (assume False; extensions)
   })
 
@@ -1191,18 +1188,16 @@ let client_offer_new cfg nonce ks resume now =
     | Correct extensions ->
       if check_clientHelloExtensions_list_bytesize extensions
       then
-        Correct ({
-          Parsers.ClientHello.version = minPV TLS_1p2 (Parsers.KnownProtocolVersion.tag_of_knownProtocolVersion cfg.CFG.max_version); // legacy for 1.3
-          Parsers.ClientHello.random = nonce;
-          Parsers.ClientHello.session_id = sid;
-          Parsers.ClientHello.cipher_suites = cfg.CFG.cipher_suites;
-          Parsers.ClientHello.compression_method = [NullCompression];
-          Parsers.ClientHello.extensions = extensions;
+        Correct CH.({
+          version = minPV TLS_1p2 (Parsers.KnownProtocolVersion.tag_of_knownProtocolVersion cfg.CFG.max_version); // legacy for 1.3
+          random = nonce;
+          session_id = sid;
+          cipher_suites = cfg.CFG.cipher_suites;
+          compression_methods = [NullCompression];
+          extensions = extensions;
         })
       else
         fatal Internal_error "computeOffer: check_clientHelloExtensions_list_bytesize failed"
-
-
 
 let client_ClientHello #region ns oks =
   match !ns.state with
@@ -1223,12 +1218,10 @@ let client_ClientHello #region ns oks =
       ns.state := C_Offer offer;
       Correct offer )
 
-let group_of_hrr hrr : option namedGroup = None
-(*
-  match List.Tot.find HRRE_key_share? hrr.hrr_extensions with
+let group_of_hrr hrr : option namedGroup =
+  match List.Tot.find HRRE_key_share? hrr.HRR.extensions with
   | Some (HRRE_key_share ng) -> Some ng
   | _ -> None
-*)
 
 private
 let choose_extension (s:option share) (e:clientHelloExtension) =
@@ -1248,30 +1241,30 @@ let choose_extension (s:option share) (e:clientHelloExtension) =
 
 
 
-#push-options "--z3rlimit 100"
+#push-options "--admit_smt_queries true"
 let client_HelloRetryRequest #region (ns:t region Client) hrr (s:option share) =
-  fatal Internal_error "Disabled"
-  (*
-  let { hrr_sessionID = sid;
-        hrr_cipher_suite = cs;
-        hrr_extensions = el } = hrr in
-  trace("Got HRR, extensions: " ^ string_of_hrres hrr.hrr_extensions);
+  let open Parsers.HelloRetryRequest in
+  let { version = _; session_id = sid; cipher_suite = cs; extensions = el } = hrr in
+  trace("Got HRR, extensions: " ^ string_of_hrres el);
   match !ns.state with
   | C_Offer offer ->
     let old_shares = find_key_shares offer in
+
     let old_psk =
       match find_pske offer with
       | None -> []
       | Some pskl -> pskl.identities in
+
     // TODO early data not recorded in retryInfo
-    let ext' = List.Helpers.choose_aux s choose_extension offer.ch_extensions in
+    let ext' = List.Helpers.choose_aux s choose_extension offer.CH.extensions in
 
     // Echo the cookie for QUIC stateless retry
-    let ext', no_cookie = match List.Tot.find HRRE_cookie? el with
-      | Some (HRRE_cookie c) -> CHE_cookie c :: ext', false
+    let ext', no_cookie : list clientHelloExtension * bool =
+      match List.Tot.find HRRE_cookie? el with
+      | Some (HRRE_cookie c) -> (CHE_cookie c) :: ext', false
       | None -> ext', true in
 
-    if sid <> offer.ch_sessionID then
+    if sid <> offer.CH.session_id then
       fatal Illegal_parameter "mismatched session ID in HelloRetryRequest"
     // 2018.03.08 SZ: TODO We must Update PSK extension if present
     // See https://tools.ietf.org/html/draft-ietf-tls-tls13-26#section-4.1.2
@@ -1279,12 +1272,12 @@ let client_HelloRetryRequest #region (ns:t region Client) hrr (s:option share) =
       fatal Illegal_parameter "received a HRR that would yield the same ClientHello"
     else
      begin
-      let offer' = {offer with ch_extensions = ext'} in
+      assume(clientHelloExtensions_list_bytesize ext' <= 65535);
+      let offer' = {offer with CH.extensions = ext'} in
       let ri = (hrr, old_shares, old_psk) in
       ns.state := (C_HRR offer' ri);
       Correct(offer')
      end
-  *)
 #pop-options
 
 // usable on both sides; following https://tlswg.github.io/tls13-spec/#rfc.section.4.2.1
@@ -1671,7 +1664,7 @@ let accept_ServerHello cfg offer sh =
           ))
   | _ -> fatal Decode_error "ServerHello ciphersuite is not a real ciphersuite" );
   return #(m:mode{Mode?.n_offer m == offer}) m
- 
+
 let client_ServerHello #region ns sh =
   match !ns.state with
 //| C_HRR offer _ // -> FIXME validation; also outside the Negotiation state machine!
@@ -1845,9 +1838,10 @@ let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify d
           let chain = Some (c, sa) in
           let r = 
           if List.Tot.mem sa sal then
-            let tbs = to_be_signed pv Server None digest in
-            
-            cert_verify_cb ns.cfg.cert_callbacks (coerce_crt (Cert.chain_down c)) sa tbs cv.HSM.signature, chain
+            let tbs = to_be_signed pv Server None digest in            
+            cert_verify_cb ns.cfg.cert_callbacks
+	      (coerce_crt (Cert.chain_down c)) sa tbs cv.HSM.signature,
+	    chain
           else false, None in // The server signed with an algorithm we did not offer
           // let h0 = HST.get() in 
           // assert(h0 `HS.contains` ns.state);
@@ -2070,16 +2064,17 @@ let computeServerMode cfg co serverRandom =
     | Error z -> Error z
     | Correct ([], None) -> fatal Handshake_failure "ciphersuite negotiation failed"
     | Correct ([], Some (ng, cs)) ->
-(*      let hrr = {
-        hrr_sessionID = co.ch_sessionID;
-        hrr_cipher_suite = name_of_cipherSuite cs;
-        hrr_extensions = [
+      let hrr = HRR.({
+        version = TLS_1p2;
+        session_id = co.CH.session_id;
+	legacy_compression = Parsers.LegacyCompression.NullCompression;
+        cipher_suite = name_of_cipherSuite cs;
+        extensions = [
           HRRE_supported_versions TLS_1p3;
           HRRE_key_share ng;
-        ]; } in
-      Correct(ServerHelloRetryRequest hrr cs)
-   *)
-     fatal Internal_error "HRR disabled"
+        ];
+      }) in
+      Correct(ServerRetry hrr)
     | Correct ((PSK_EDH j ogx cs)::_, _) ->
       (trace "Negotiated PSK_EDH key exchange";
       Correct (ServerMode (Mode
@@ -2147,7 +2142,7 @@ let computeServerMode cfg co serverRandom =
         None) None [])
     | _ ->
       // Make sure NullCompression is offered
-      if not (List.Tot.mem NullCompression co.CH.compression_method)
+      if not (List.Tot.mem NullCompression co.CH.compression_methods)
       then fatal Illegal_parameter "Compression is deprecated" else
       let salgs =
         match find_signature_algorithms co with
@@ -2232,15 +2227,12 @@ let server_ClientHello #region ns offer log =
     let extension_ok =
         List.Helpers.forall_aux (o1, hrr) valid_ch2_extension o2.CH.extensions
     in
-    fatal Internal_error "HRR is disabled"
-  (*
     if
       o1.CH.version = o2.CH.version &&
       o1.CH.random = o2.CH.random &&
       o1.CH.session_id = o2.CH.session_id &&
-//      o1.CH.session_id = hrr.hrr_session_id &&
-      List.Tot.mem hrr.hrr_cipher_suite o2.ch_cipher_suites &&
-      o1.ch_compressions = o2.ch_compressions &&
+      List.Tot.mem hrr.HRR.cipher_suite o2.CH.cipher_suites &&
+      o1.CH.compression_methods = o2.CH.compression_methods &&
       extension_ok
     then
       let sm = computeServerMode ns.cfg offer ns.nonce in
@@ -2248,12 +2240,12 @@ let server_ClientHello #region ns offer log =
       | Error z ->
         trace ("negotiation failed: "^string_of_error z);
         Error z
-      | Correct (ServerHelloRetryRequest hrr _) ->
+      | Correct (ServerRetry hrr) ->
         fatal Illegal_parameter "client sent the same hello in response to hello retry"
       | Correct (ServerMode m cert _) ->
         trace ("negotiated after HRR "^string_of_pv m.n_protocol_version^" "^string_of_ciphersuite m.n_cipher_suite);
         let nego_cb = ns.cfg.nego_callback in
-        let exts = List.Tot.filter CHE_Unknown_extensionType? offer.ch_extensions in
+        let exts = List.Tot.filter CHE_Unknown_extensionType? offer.CH.extensions in
         let exts_bytes = clientHelloExtensions_serializer32 exts in
         trace ("Negotiation callback to handle extra extensions.");
         match nego_cb.negotiate nego_cb.nego_context m.n_protocol_version exts_bytes (Some empty_bytes) with
@@ -2266,7 +2258,6 @@ let server_ClientHello #region ns offer log =
           fatal Handshake_failure "application aborted the handshake by callback"
     else
       fatal Illegal_parameter "Inconsistant parameters between first and second client hello"
-*)
   | S_Init _ ->
     let sm = computeServerMode ns.cfg offer ns.nonce in
     let previous_cookie = // for stateless HRR
@@ -2276,35 +2267,31 @@ let server_ClientHello #region ns offer log =
         match Ticket.check_cookie c with
         | None -> trace ("WARNING: ignorning invalid cookie "^(hex_of_bytes c)); None
         | Some (hrr, digest, extra) ->
-	  None
-	  (*
           trace ("Loaded stateless retry cookie "^(hex_of_bytes c));
-          let hrr = { hrr with hrr_extensions =
-            (HRRE_cookie c) :: hrr.hrr_extensions; } in
+          let hrr = { hrr with HRR.extensions =
+            (HRRE_cookie c) :: hrr.HRR.extensions; } in
           // Overwrite the current transcript digest with values from cookie
           trace ("Overwriting the transcript digest with CH1 hash "^(hex_of_bytes digest));
           HandshakeLog.load_stateless_cookie log hrr digest;
           Some extra // for the server nego callback
-	  *)
       in
     match sm with
     | Error z ->
       trace ("negotiation failed: "^string_of_error z);
       Error z
-      (*
-    | Correct (ServerHelloRetryRequest hrr cs) ->
+    | Correct (ServerRetry hrr) ->
       // Internal HRR caused by group negotiation
       // We do not invoke the server nego callback in this case
       // record the initial offer and return the HRR to HS
       trace ("no common group, sending a retry request...");
+      let Some cs = cipherSuite_of_name hrr.HRR.cipher_suite in
       let ha = verifyDataHashAlg_of_ciphersuite cs in
       let digest = HandshakeLog.hash_tag #ha log in
       let cookie = Ticket.create_cookie hrr digest empty_bytes in
-      let hrr = { hrr with hrr_extensions =
-        (HRRE_cookie cookie) :: hrr.hrr_extensions; } in
+      let hrr = { hrr with HRR.extensions =
+        (HRRE_cookie cookie) :: hrr.HRR.extensions; } in
       HST.op_Colon_Equals ns.state (S_HRR offer hrr);
       sm
-      *)
     | Correct (ServerMode m cert _) ->
       let nego_cb = ns.cfg.nego_callback in
       let exts = List.Tot.filter CHE_Unknown_extensionType? offer.CH.extensions in
@@ -2316,22 +2303,21 @@ let server_ClientHello #region ns offer log =
         trace ("Application requested to abort the handshake.");
         fatal Handshake_failure "application aborted the handshake by callback"
       | Nego_retry cextra ->
-        fatal Internal_error "HRR disabled"
-	(*
-        let hrr = ({
-          hrr_sessionID = offer.ch_sessionID;
-          hrr_cipher_suite = name_of_cipherSuite m.n_cipher_suite;
-          hrr_extensions = [
+        let hrr = HRR.({
+	  version = TLS_1p2;
+          session_id = offer.CH.session_id;
+	  legacy_compression = Parsers.LegacyCompression.NullCompression;
+          cipher_suite = name_of_cipherSuite m.n_cipher_suite;
+          extensions = [
             HRRE_supported_versions TLS_1p3;
           ]}) in
         let ha = verifyDataHashAlg_of_ciphersuite m.n_cipher_suite in
         let digest = HandshakeLog.hash_tag #ha log in
         let cookie = Ticket.create_cookie hrr digest cextra in
-        let hrr = { hrr with hrr_extensions =
-	  (HRRE_cookie cookie) :: hrr.hrr_extensions; } in
+        let hrr = { hrr with HRR.extensions =
+	  (HRRE_cookie cookie) :: hrr.HRR.extensions; } in
         ns.state := (S_HRR offer hrr);
-        Correct (ServerHelloRetryRequest hrr m.n_cipher_suite)
-	*)
+        Correct (ServerRetry hrr)
       | Nego_accept sexts ->
         trace ("negotiated "^string_of_pv m.n_protocol_version^" "^string_of_ciphersuite m.n_cipher_suite);
         ns.state := S_ClientHello m cert;

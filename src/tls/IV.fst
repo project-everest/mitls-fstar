@@ -94,6 +94,7 @@ private let len_of_i  (i:id): keylen =
   if i > 0 && i < 32 then UInt32.uint_to_t i
   else 32ul
 
+noextract
 let test() : ST unit
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> True)
@@ -103,8 +104,7 @@ let test() : ST unit
   let k = Bytes.create 12ul 0uy in
   print (Bytes.hex_of_bytes k);
 
-  [@inline_let]
-  let p = local_raw_pkg #ip len_of_i in
+  [@inline_let] let p = local_raw_pkg #ip len_of_i in
   let v0 = LocalPkg?.coerce p 12 kl k in
   print (Bytes.hex_of_bytes v0);
   

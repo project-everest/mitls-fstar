@@ -162,42 +162,6 @@ let ssa #a =
     | _ -> False in
   f
 
-(* ADL: deprecated in favor of loc
-
-// We use this instead of Set.set rgn because otherwise subtyping fails in pkg.
-// The second line embeds the definition of rgn because of the unification bug
-//
-// An rset can be thought of as a set of disjoint subtrees in the region tree
-// rset are downward closed - if r is in s and r' extends r then r' is in s too
-// this allows us to prove disjointness with negation of set membership.
-
-type rset = s:Set.set HS.rid{
-  (forall (r1:HS.rid).{:pattern (Set.mem r1 s)} (Set.mem r1 s ==> 
-     r1 <> HS.root /\
-     (is_tls_rgn r1 ==> r1 `HS.extends` tls_tables_region) /\
-     (forall (r':HS.rid).{:pattern (r' `HS.includes` r1)} r' `is_below` r1 ==> Set.mem r' s)))}
-
-let rset_empty (): GTot rset = Set.empty
-let rset_union (s1:rset) (s2:rset): GTot rset = let r = (Set.union s1 s2) in r
-
-/// SZ: This is the strongest lemma that is provable
-/// Note that this old stronger version doesn't hold:
-///
-/// let lemma_rset_disjoint (s:rset) (r:HS.rid) (r':HS.rid)
-///  : Lemma (requires ~(Set.mem r s) /\ (Set.mem r' s))
-///          (ensures  r `HS.disjoint` r')
-
-let lemma_rset_disjoint (s:rset) (r:HS.rid) (r':HS.rid)
-  : Lemma (requires Set.mem r s /\ ~(Set.mem r' s) /\ r' `is_below` r)
-          (ensures  r `HS.disjoint` r')
-  = ()
-
-// We get from the definition of rset that define_region and tls_honest_region are disjoint
-let lemma_define_tls_honest_regions (s:rset)
-  : Lemma (~(Set.mem tls_define_region s) /\ ~(Set.mem tls_honest_region s))
-  = ()
-*)
-
 let loc_in (l: M.loc) (h: HS.mem) =
   M.loc_not_unused_in h `M.loc_includes` l
 

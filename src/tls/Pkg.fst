@@ -92,7 +92,7 @@ type modifies_footprint (fp: mem -> GTot M.loc) h0 h1 =
 //AR: 12/05: Could use the pattern {:pattern (Set.mem r (fp h0)); (Set.mem r (fp h1))}
 *)
 
-inline_for_extraction
+inline_for_extraction noextract
 noeq type pkg (ip: ipkg) = | Pkg:
   key: (regid ip -> Type0)  (* indexed state of the functionality *) ->
   info: (ip.t -> Type0)                     (* creation-time arguments, typically refined using i:ip.t *) ->
@@ -155,7 +155,7 @@ noeq type pkg (ip: ipkg) = | Pkg:
 /// packages of instances with local private state, before ensuring
 /// their unique definition at every index and the disjointness of
 /// their footprints.
-inline_for_extraction
+inline_for_extraction noextract
 noeq type local_pkg (ip: ipkg) =
 | LocalPkg:
   key: (regid ip -> Type0) ->
@@ -281,6 +281,7 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($dt:DT.dt p.key) : pkg ip
     (fun #_ _ _ h -> True) (fun #_ _ _ _ _ _ -> ())
     create p.coerceT coerce)
 
+noextract
 let locally_packaged (#ip:ipkg) (p:pkg ip) (p':local_pkg ip) =
   LocalPkg?.key p' == Pkg?.key p /\
   p == memoization p' p.define_table

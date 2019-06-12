@@ -33,7 +33,7 @@ val set_binders (m: H.handshake {has_binders m}) (b' : Psks.offeredPsks_binders 
     c'.CH.random == c.CH.random /\
     c'.CH.session_id == c.CH.session_id /\
     c'.CH.cipher_suites == c.CH.cipher_suites /\
-    c'.CH.compression_method == c.CH.compression_method /\
+    c'.CH.compression_methods == c.CH.compression_methods /\
     Cons? c'.CH.extensions /\
     L.init c'.CH.extensions == L.init c.CH.extensions /\
     CHE.CHE_pre_shared_key? (L.last c'.CH.extensions) /\

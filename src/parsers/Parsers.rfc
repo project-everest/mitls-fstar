@@ -1251,6 +1251,15 @@ struct {
   HRRExtensions extensions;
 } HRRKind;
 
+/*
+We need to change the definition of the ServerHello
+type to account for the syntactic differences between
+ServerHello and HelloRetryRequest.
+
+In a HRR, the compression_method must be null and the
+format of some extensions is different (e.g. key_share
+is a KeyShareEntry in SH and a GroupName in HRR)
+*/
 struct {
   ProtocolVersion version;
   opaque random[32];
@@ -1259,6 +1268,27 @@ struct {
   else
     SHKind) is_hrr;
 } ServerHello;
+
+/*
+Using an if-then-else type is annoying, in the specification
+of the handshake we want to convert it to either SH or HRR.
+*/
+struct {
+  ProtocolVersion version;
+  Random random;
+  SessionID session_id;
+  CipherSuite cipher_suite;
+  CompressionMethod compression_method;
+  ServerHelloExtensions extensions;
+} RealServerHello;
+
+struct {
+  ProtocolVersion version;
+  SessionID session_id;
+  CipherSuite cipher_suite;
+  LegacyCompression legacy_compression;
+  HRRExtensions extensions;
+} HelloRetryRequest;
 
 /** TLS 1.3 Handshake Messages */
 

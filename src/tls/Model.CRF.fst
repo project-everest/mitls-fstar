@@ -3,6 +3,8 @@ module Model.CRF
 
 /// This module should not be extracted
 
+open Spec.Hash.Definitions
+open EverCrypt.Hash
 open EverCrypt.Hash.Incremental // only for the specs (renamings)
 
 #set-options "--max_fuel 0 --max_ifuel 0"
@@ -40,9 +42,7 @@ private type domain (r:range) =
     Seq.length b < max_input_length a /\
     h a b = t}
 
-private let inv (f:MDM.partial_dependent_map range domain) = True // a bit overkill?
-
-private let table : MDM.t tls_tables_region range domain inv = MDM.alloc()
+private let table : MDM.t tls_tables_region range domain (fun _ -> True) = MDM.alloc()
 
 // witnessing that we hashed this particular content (for collision detection)
 // to be replaced by a witness of inclusion in a global table of all hash computations.

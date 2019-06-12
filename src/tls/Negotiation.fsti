@@ -43,8 +43,7 @@ let implemented_version = pv:protocolVersion {pv = TLS_1p2 || pv = TLS_1p3}
 type pre_share = g:CommonDH.group & CommonDH.pre_share g
 type share = g:CommonDH.group & CommonDH.share g
 
-let offer = Parsers.ClientHello.clientHello
-type hrr = unit
+let offer = HSM.clientHello
 
 (*
   After issuing/receiving the second ClientHello, 
@@ -52,7 +51,7 @@ type hrr = unit
   and the overwritten parts of the initial offer.
 *)
 type retryInfo (offer:offer) =
-  hrr *
+  HSM.hrr *
   list pre_share (* we should actually keep the raw client extension content *) *
   list Extensions.pskIdentity
 
@@ -177,7 +176,7 @@ noeq type negotiationState (r:role) (cfg:config) : Type0 =
 
   // Waiting for ClientHello2
   | S_HRR:      n_offer: offer ->
-                n_hrr: hrr ->
+                n_hrr: HSM.hrr ->
                 negotiationState r cfg
 
   | S_ClientHello: // Transitional state to allow Handshake to call KS and generate a share
@@ -208,7 +207,6 @@ noeq type t (region:rgn) (role:TLSConstants.role) : Type0 =
     nonce: TLSInfo.random ->
     state: HST.reference (negotiationState role cfg) { HS.frameOf state = region }->
     t region role
-
 
 val create:
   region:rgn -> 
@@ -313,17 +311,16 @@ val client_ClientHello:
       | Correct offer -> HS.sel h1 ns.state == C_Offer offer 
       | _             -> True)))
 
-val group_of_hrr: hrr -> option CommonDH.namedGroup
+val group_of_hrr: HSM.hrr -> option CommonDH.namedGroup
 
 // [C_Offer ==> C_HRR] TODO separate pure spec
 val client_HelloRetryRequest:
   #region:rgn -> ns:t region Client -> 
-  hrr -> 
+  HSM.hrr -> 
   option share -> 
   ST (result offer) 
   (requires fun h0 -> inv ns h0)
   (ensures fun h0 _ h1 -> inv ns h1)
-
 
 /// What the client accepts, abstractly.
 ///
@@ -339,7 +336,8 @@ val client_HelloRetryRequest:
 val accept_ServerHello: 
   config -> 
   offer: offer -> 
-  HandshakeMessages.serverHello -> result (m:mode {m.n_offer == offer})
+  HSM.sh -> 
+  result (m:mode {m.n_offer == offer})
 
 /// [C_Offer | C_HRR_offer ==> C_Mode] with TODO hrr
 ///
@@ -347,7 +345,7 @@ val accept_ServerHello:
 /// 
 val client_ServerHello: 
   #region:rgn -> ns: t region Client ->
-  sh: HandshakeMessages.serverHello ->
+  sh: HSM.sh ->
   ST (result mode)
   (requires fun h0 -> 
     inv ns h0 /\ 
@@ -361,7 +359,6 @@ val client_ServerHello:
       | Correct m0, Correct m1 -> HS.sel h1 ns.state == C_Mode m0 /\ m0 == m1 
       | Error z0, Error z1     -> z0 == z1 
       | _                      -> False))  
-    
 
 /// Formatting of the server's signed information: called by Handshake
 /// for signing, called by Negotiation for verification,
@@ -427,10 +424,9 @@ val clientComplete_13:
 type extra_sext = list (s:Extensions.encryptedExtension{Extensions.EE_Unknown_extensionType? s})
 
 //17-03-30 still missing a few for servers.
+module HRR = Parsers.HelloRetryRequest
 noeq type serverMode =
-  | ServerHelloRetryRequest: hrr:hrr ->
-    cs:cipherSuite{(*name_of_cipherSuite cs = hrr.hrr_cipher_suite*) True} ->
-    serverMode
+  | ServerRetry: hrr:HSM.hrr -> serverMode
   | ServerMode: mode -> certNego -> extra_sext -> serverMode
 
 (* Returns the server hostName, if any, or an empty bytestring; review. *)
@@ -441,7 +437,7 @@ val get_alpn: offer -> Tot Extensions.clientHelloExtension_CHE_application_layer
 
 val server_ClientHello: 
   #region:rgn -> t region Server ->
-  HandshakeMessages.clientHello -> 
+  HSM.clientHello -> 
   log:HandshakeLog.t ->
   St (result serverMode)
   // [S_Init | S_HRR ==> S_ClientHello m cert] 

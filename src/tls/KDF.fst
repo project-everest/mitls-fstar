@@ -22,6 +22,7 @@ module DM = FStar.DependentMap
 module MDM = FStar.Monotonic.DependentMap
 module HS = FStar.HyperStack
 module DT = DefineTable
+module HD = Spec.Hash.Definitions
 
 #set-options "--max_fuel 1 --max_ifuel 1 --z3rlimit 30"
 
@@ -617,7 +618,7 @@ val derive:
     _:squash (registered (derive i lbl ctx)) &
     (LocalPkg?.key child_pkg) (derive i lbl ctx))
   (requires fun h0 ->
-    (LocalPkg?.len child_pkg) a' == EverCrypt.Hash.tagLen (get_info k).ha /\
+    UInt32.v ((LocalPkg?.len child_pkg) a') == HD.hash_length (get_info k).ha /\
     ((u_of_t t) `has_lbl` lbl ==>
       compatible_packages child_pkg (child (u_of_t t) lbl)) /\
     DT.defined (kdf_dt t) i /\

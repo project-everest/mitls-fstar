@@ -23,6 +23,8 @@ include Parsers.ServerHello
 include Parsers.ServerHello_is_hrr
 include Parsers.HRRKind
 include Parsers.SHKind
+include Parsers.RealServerHello
+include Parsers.HelloRetryRequest
 
 include Parsers.ClientHello
 include Parsers.NewSessionTicket12
@@ -45,3 +47,65 @@ include Parsers.KeyExchangeAlgorithm
 type finished = FStar.Seq.(b: seq UInt8.t {0 <= length b /\ length b <= 16777215})
 type eoed = unit 
 
+type sh = realServerHello
+type hrr = helloRetryRequest
+
+let is_hrr (m:serverHello) =
+  match m.is_hrr with
+  | ServerHello_is_hrr_false _ -> false
+  | ServerHello_is_hrr_true _ -> true
+
+module SH = Parsers.ServerHello
+module HRK = Parsers.HRRKind
+module SHK = Parsers.SHKind
+
+let get_hrr (m:serverHello{is_hrr m}) : hrr =
+  let ServerHello_is_hrr_true hrr = m.is_hrr in
+  let open Parsers.HelloRetryRequest in
+  ({
+    version = m.SH.version;
+    session_id = hrr.HRK.session_id;
+    cipher_suite = hrr.HRK.cipher_suite;
+    legacy_compression = hrr.HRK.legacy_compression;
+    extensions = hrr.HRK.extensions;
+  })
+
+let get_sh (m:serverHello{not (is_hrr m)}) : sh =
+  let ServerHello_is_hrr_false sh = m.is_hrr in
+  let open Parsers.RealServerHello in
+  ({
+    version = m.SH.version;
+    random = sh.tag;
+    session_id = sh.value.SHK.session_id;
+    cipher_suite = sh.value.SHK.cipher_suite;
+    compression_method = sh.value.SHK.compression_method;
+    extensions = sh.value.SHK.extensions;
+  })
+
+module RSH = Parsers.RealServerHello
+module HRR = Parsers.HelloRetryRequest
+
+let serverHello_of_sh (m:sh{m.RSH.random <> serverHello_is_hrr_cst}) =
+  SH.({
+    version = m.RSH.version;
+    is_hrr = ServerHello_is_hrr_false Parsers.ServerHello_is_hrr.({
+      tag = m.RSH.random;
+      value = Parsers.SHKind.({
+        session_id = m.RSH.session_id;
+	cipher_suite = m.RSH.cipher_suite;
+	compression_method = m.RSH.compression_method;
+	extensions = m.RSH.extensions;
+      });
+    });
+  })
+
+let serverHello_of_hrr (m:hrr) =
+  SH.({
+    version = m.HRR.version;
+    is_hrr = ServerHello_is_hrr_true Parsers.HRRKind.({
+      session_id = m.HRR.session_id;
+      cipher_suite = m.HRR.cipher_suite;
+      legacy_compression = m.HRR.legacy_compression;
+      extensions = m.HRR.extensions;
+    })
+  })

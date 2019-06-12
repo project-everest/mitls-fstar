@@ -1,14 +1,11 @@
 module KDF.Rekey
 
 open Mem
-open Pkg
 open Idx
+open Pkg
 open Pkg.Tree
-//open KDF
-//open IV
 
-//include AEAD.Pkg
-//include KDF
+module H = Hashing.Spec
 
 /// This module illustrates our use of indexes, packages, and KDF on a
 /// simple recursive subset of the TLS key-schedule: late rekeying. It
@@ -59,11 +56,11 @@ let is_kdf_p (p: pkg ii) d children = // same as ksd_subtree
 /// IV packages. We should add agility. 
 
 inline_for_extraction noextract
-let ivlen (i:id) : keylen = Hacl.Hash.Definitions.hash_len Hashing.Spec.SHA2_256
+let ivlen (i:id) : keylen = H.hash_len H.SHA2_256
 
 let is_iv_p (p:pkg ii) =
-  Pkg?.key p == IV.raw ii ivlen /\
-  p == memoization (IV.local_raw_pkg ii ivlen) (p.define_table)
+  Pkg?.key p == IV.raw ivlen /\
+  p == memoization (IV.local_raw_pkg ivlen) (p.define_table)
 
 /// Gradual idealization of our KDF: when modelling, we start
 /// idealizing at some d > 0, irrespective of the tree depth. 
@@ -136,7 +133,7 @@ let rec mk_rekey' n =
     Node p u
   ) else (
     let re : tree' (idealKDF n) = mk_rekey' (n-1) in
-    let iv = memoization_ST (IV.local_raw_pkg ii ivlen) in
+    let iv = memoization_ST (IV.local_raw_pkg ivlen) in
     assume(b2t Flags.flag_Raw ==> idealKDF n);
     let iv_leaf : tree' (idealKDF n) = Leaf iv in
     let u : children (idealKDF n) = lift_children' [mklabel "IV", iv_leaf; mklabel "RE",re] in
@@ -150,12 +147,12 @@ let mk_rekey (n:nat)
   (requires fun h0 -> True)
   (ensures fun h0 t h1 ->
     is_rekey_tree n t /\
-    KDF.tree_invariant t h1)
+    tree_inv t h1)
   =
   if model then
-    let t' = mk_rekey' n in
+    let t' : tree' (idealKDF (n+1)) = mk_rekey' n in
     let h = get () in
-    let _ = assume(KDF.tree_invariant' t' h) in
+    let _ = assume(tree_inv' t' h) in
     t'
   else erased_tree
 
@@ -165,7 +162,7 @@ noextract inline_for_extraction let _cpkg (l:label) =
        if model then _mchildren false #False []
        else erased_tree in
      KDF.local_kdf_pkg false u
-  else IV.local_raw_pkg ii ivlen
+  else IV.local_raw_pkg ivlen
 
 noextract inline_for_extraction let
 concrete_pkg (#n:nat) (t:tree (idealKDF (n+1)){is_rekey_tree n t}) (l:label) =
@@ -176,7 +173,7 @@ concrete_pkg (#n:nat) (t:tree (idealKDF (n+1)){is_rekey_tree n t}) (l:label) =
     if has_lbl #(idealKDF n) u l then
       match l with
       | "RE" -> KDF.local_kdf_pkg (flagKDF n) u
-      | "IV" -> IV.local_raw_pkg ii ivlen
+      | "IV" -> IV.local_raw_pkg ivlen
     else _cpkg l
   else
     _cpkg l
@@ -205,8 +202,8 @@ let coerce_root_kdf (n:nat) (t:tree (idealKDF (n+1)){is_rekey_tree n t})
     [@inline_let] let t':tree' (idealKDF (n+1)) = t in
     [@inline_let] let Node p u = t' in
     let h0 = get() in 
-    assume(p.package_invariant h0); 
-    assume(mem_fresh p.define_table i h0); 
+    assume(p.package_invariant h0);
+    assume(DefineTable.fresh p.define_table i h0);
     Pkg?.coerce p i a k
   else 
     KDF.coerce #(flagKDF n) erased_tree i a k
@@ -221,7 +218,6 @@ let _down (#n:nat{n>0}) (t:tree (idealKDF (n+1)){is_rekey_tree n t})
   else 
     erased_tree
 
-
 #set-options "--z3rlimit 200"
 //#set-options "--admit_smt_queries true"
 let test_rekey(): St C.exit_code
@@ -230,11 +226,9 @@ let test_rekey(): St C.exit_code
   let h0 = get() in
 
   let i2:regid = 
-    let ipsk: id = if model then Preshared Hashing.Spec.SHA2_256 0 else () in 
-
+    let ipsk : id = if model then Preshared Hashing.Spec.SHA2_256 0 else () in 
     // TODO no registered post in Idx??
-    assume(registered ipsk /\ corrupt ipsk);
-    lemma_honest_corrupt ipsk;
+    assume(registered ipsk /\ ~(honest ipsk));
     ipsk in 
 
   let a2 : KDF.info0 i2 = KDF.Info Hashing.Spec.SHA2_256 None in

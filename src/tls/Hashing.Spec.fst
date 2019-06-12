@@ -12,6 +12,17 @@ include Spec.Hash.Definitions
 open FStar.Integers
 open FStar.Bytes
 
+let hash_len (a:alg)
+  : n:UInt32.t{UInt32.v n == hash_length a}
+  =
+  match a with
+  | MD5 -> assert_norm(hash_length MD5 == 16); 16ul
+  | SHA1 -> assert_norm(hash_length SHA1 == 20); 20ul
+  | SHA2_224 -> assert_norm(hash_length SHA2_224 == 28); 28ul
+  | SHA2_256 -> assert_norm(hash_length SHA2_256 == 32); 32ul
+  | SHA2_384 -> assert_norm(hash_length SHA2_384 == 48); 48ul
+  | SHA2_512 -> assert_norm(hash_length SHA2_512 == 64); 64ul
+
 type tag (a:alg) = Bytes.lbytes (hash_length a)
 
 let max_hash_length = 64
