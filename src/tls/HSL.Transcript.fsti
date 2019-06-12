@@ -455,7 +455,7 @@ val frame_invariant (#a:_) (s:state a) (t: transcript_t) (h0 h1:HS.mem) (l:B.loc
 ///   -- The transcript's initial state is empty
 val create (r:Mem.rgn) (a:HashDef.hash_alg)
   : ST (state a & Ghost.erased transcript_t)
-       (requires fun _ -> True)
+       (requires fun _ -> B.(loc_disjoint (loc_region_only true r) (loc_region_only true Mem.tls_tables_region)))
        (ensures fun h0 (s, tx) h1 ->
          let tx = Ghost.reveal tx in
          tx == Start None /\
@@ -587,7 +587,7 @@ let loc_of_label_repr (l:label_repr) =
 ///      -- that it mutates only the state machine's footprint
 ///      -- that the new state is the one computed by the transition
 val extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t)
-  : Stack (state a & G.erased transcript_t)
+  : Stack (G.erased transcript_t)
     (requires fun h ->
         let tx = G.reveal tx in
         invariant s tx h /\
@@ -595,12 +595,11 @@ val extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t)
         B.loc_disjoint (loc_of_label_repr l) (footprint s) /\
         extensible tx /\
         Some? (transition tx (label_of_label_repr l)))
-    (ensures fun h0 (s', tx') h1 ->
+    (ensures fun h0 tx' h1 ->
         let tx = G.reveal tx in
         let tx' = G.reveal tx' in
-        invariant s' tx' h1 /\
+        invariant s tx' h1 /\
         B.modifies (footprint s) h0 h1 /\
-        footprint s == footprint s' /\
         tx' == Some?.v (transition tx (label_of_label_repr l)))
 
 
@@ -625,17 +624,21 @@ val extract_hash
   (#a:_) (s:state a)
   (tag:Hacl.Hash.Definitions.hash_t a)
   (tx:G.erased transcript_t)
-  : Stack unit
+  : ST unit
     (requires fun h0 ->
       let tx = G.reveal tx in
       invariant s tx h0 /\
       B.live h0 tag /\
+      B.(loc_disjoint (loc_buffer tag) (loc_region_only true Mem.tls_tables_region)) /\      
       B.loc_disjoint (footprint s) (B.loc_buffer tag))
     (ensures fun h0 _ h1 ->
       let open B in
       let tx = G.reveal tx in
       invariant s tx h1 /\
-      modifies (loc_union (footprint s) (loc_buffer tag)) h0 h1 /\
+      modifies (
+        loc_buffer tag `loc_union`
+        footprint s `loc_union`
+        loc_region_only true Mem.tls_tables_region) h0 h1 /\
       B.live h1 tag /\
       B.as_seq h1 tag == transcript_hash a tx /\
       hashed a tx)

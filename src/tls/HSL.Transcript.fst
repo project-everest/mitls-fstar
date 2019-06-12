@@ -315,8 +315,9 @@ type state (a:HashDef.hash_alg) = {
 
 let invariant (#a:HashDef.hash_alg) (s:state a) (tx:transcript_t) (h:HS.mem) =
   CRF.hashed h s.hash_state `Seq.equal` transcript_bytes tx /\
+  CRF.invariant h s.hash_state /\
   B.loc_region_only true s.region `B.loc_includes` Ghost.reveal s.loc /\
-  Ghost.reveal s.loc == CRF.footprint s.hash_state h /\
+  Ghost.reveal s.loc == CRF.footprint h s.hash_state /\
   B.loc_not_unused_in h `B.loc_includes` Ghost.reveal s.loc
 
 let footprint (#a:HashDef.hash_alg) (s:state a) = Ghost.reveal s.loc
@@ -326,7 +327,7 @@ let elim_invariant #a s t h = ()
 let region_of #a s = s.region
 
 let frame_invariant (#a:_) (s:state a) (t: transcript_t) (h0 h1:HS.mem) (l:B.loc) =
-  CRF.modifies_disjoint_preserves l h0 h1 s.hash_state
+  CRF.frame_invariant l s.hash_state h0 h1
 
 #set-options "--max_fuel 0 --max_ifuel  1 --initial_ifuel  1"
 let create r a =
@@ -334,7 +335,7 @@ let create r a =
   let s = CRF.create_in a r in
   let h1 = get () in
   {region=r;
-   loc=Ghost.hide (CRF.footprint s h1);
+   loc=Ghost.hide (CRF.footprint h1 s);
    hash_state=s},
   Ghost.hide (Start None)
 
@@ -356,11 +357,11 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     let data = C.sub b.R.base ch.R.start_pos len in
 
     assert_norm (pow2 32 < pow2 61);
-    let st' = CRF.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
+    CRF.update (Ghost.hide a) s.hash_state (C.to_buffer data) len;
 
     let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
-    
-    {s with hash_state = st'}, tx'
+
+    tx'
 
   | LR_ServerHello #b sh ->
     assume (C.qbuf_qual (C.as_qbuf b.R.base) = C.MUTABLE);
@@ -375,7 +376,7 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     let data = C.sub b.R.base sh.R.start_pos len in
 
     assert_norm (pow2 32 < pow2 61);
-    let st' = CRF.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
+    CRF.update (Ghost.hide a) s.hash_state (C.to_buffer data) len;
     let h1 = HyperStack.ST.get() in
 
     let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
@@ -387,7 +388,7 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
         `Seq.equal`     
              transcript_bytes (G.reveal tx'));
 
-    {s with hash_state = st'}, tx'
+    tx'
 
   | LR_TCH #b tch   ->
     assume (C.qbuf_qual (C.as_qbuf b.R.base) = C.MUTABLE);
@@ -405,8 +406,8 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
 
     assert_norm (pow2 32 < pow2 61);
     let h1 = HyperStack.ST.get () in
-    CRF.modifies_disjoint_preserves B.loc_none h0 h1 s.hash_state;
-    let st' = CRF.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
+    CRF.frame_invariant B.loc_none s.hash_state h0 h1;
+    CRF.update (Ghost.hide a) s.hash_state (C.to_buffer data) len;
 
     let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
 
@@ -415,7 +416,7 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
       (PB.build_canonical_binders (tch_binders_len (HSM.M_client_hello?._0 (R.value tch))));
 
     
-    {s with hash_state = st'}, tx'
+    tx'
 
   | LR_CompleteTCH #b tch -> 
     assume (C.qbuf_qual (C.as_qbuf b.R.base) = C.MUTABLE);
@@ -435,8 +436,8 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     PB.valid_truncate_clientHello h0 (R.to_slice b) tch.R.start_pos;
     assert_norm (pow2 32 < pow2 61);
     let h1 = HyperStack.ST.get () in
-    CRF.modifies_disjoint_preserves B.loc_none h0 h1 s.hash_state;
-    let st' = CRF.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
+    CRF.frame_invariant B.loc_none s.hash_state h0 h1;
+    CRF.update (Ghost.hide a) s.hash_state (C.to_buffer data) len;
 
     let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
 
@@ -448,7 +449,7 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
         `Seq.equal` 
           transcript_bytes (G.reveal tx'));
 
-    {s with hash_state = st'}, tx'
+    tx'
 
   | LR_HRR #b1 ch_tag #b2 hrr ->
     assume (C.qbuf_qual (C.as_qbuf b1.R.base) = C.MUTABLE);
@@ -471,7 +472,7 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     let data = C.sub b1.R.base ch_tag.R.start_pos len in
 
     assert_norm (pow2 32 < pow2 61);
-    let st' = CRF.update a s.hash_state (G.hide Seq.empty) (C.to_buffer data) len in
+    CRF.update (Ghost.hide a) s.hash_state (C.to_buffer data) len;
 
     assert ((Seq.empty `Seq.append`  LP.serialize HSM.handshake_serializer (R.value ch_tag))
       `Seq.equal`
@@ -482,11 +483,11 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     let len = hrr.R.end_pos - hrr.R.start_pos in
     let data = C.sub b2.R.base hrr.R.start_pos len in
 
-    let st' = CRF.update a st' (G.hide (serialize_any_tag (R.value ch_tag))) (C.to_buffer data) len in
+    CRF.update (Ghost.hide a) s.hash_state (C.to_buffer data) len;
 
     let hf = HyperStack.ST.get () in
 
-    {s with hash_state = st'}, tx'
+    tx'
   
   | LR_HSM12 #b hs12 ->
     assume (C.qbuf_qual (C.as_qbuf b.R.base) = C.MUTABLE);
@@ -516,10 +517,9 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     
     assert_norm ((max_transcript_size + 4) * max_message_size < pow2 61);
 
-    let st' = CRF.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
+    CRF.update (Ghost.hide a) s.hash_state (C.to_buffer data) len;
 
-    {s with hash_state = st'}, tx'
-  
+    tx'
 
   | LR_HSM13 #b hs13 ->
     assume (C.qbuf_qual (C.as_qbuf b.R.base) = C.MUTABLE);
@@ -548,9 +548,9 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     
     assert_norm ((max_transcript_size + 4) * max_message_size < pow2 61);
 
-    let st' = CRF.update a s.hash_state (G.elift1 transcript_bytes tx) (C.to_buffer data) len in
+    CRF.update (Ghost.hide a) s.hash_state (C.to_buffer data) len;
 
-    {s with hash_state = st'}, tx'
+    tx'
 
 let transcript_hash (a:HashDef.hash_alg) (t:transcript_t)
   = Spec.Hash.hash a (transcript_bytes t)
@@ -561,7 +561,13 @@ let hashed (a:HashDef.hash_alg) (t:transcript_t) =
 let extract_hash (#a:_) (s:state a) 
   (tag:Hacl.Hash.Definitions.hash_t a)
   (tx:G.erased transcript_t)
-  = CRF.finish a s.hash_state (G.hide (transcript_bytes (G.reveal tx))) tag
+  = 
+    let h0 = HyperStack.ST.get() in
+    CRF.finish (Ghost.hide a) s.hash_state tag;
+    let h1 = HyperStack.ST.get() in
+    B.(modifies_liveness_insensitive_buffer
+      (footprint s `loc_union` (loc_region_only true Mem.tls_tables_region))
+      (B.loc_buffer tag) h0 h1 tag)
 
 let injectivity a t0 t1 =
   let b0 = Ghost.hide (transcript_bytes (Ghost.reveal t0)) in
