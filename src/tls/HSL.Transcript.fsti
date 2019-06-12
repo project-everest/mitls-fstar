@@ -88,7 +88,11 @@ let hs_sh = sh:HSM.handshake{HSM.M_server_hello? sh}
 // assume
 val is_hrr (sh:SH.serverHello) : bool
 
-let any_hash_tag = s:Seq.seq UInt8.t{forall a. Seq.length s <= HashDef.hash_word_length a}
+let is_any_hash_tag (h: HSM.handshake) : GTot Type0 =
+  HSM.M_message_hash? h /\ (FStar.Bytes.length (HSM.M_message_hash?._0 h) <= 64)
+  
+let any_hash_tag = 
+  (h: HSM.handshake { is_any_hash_tag h })
 
 /// `retry`: a pair of a client hello hash and hello retry request
 type retry =
@@ -451,7 +455,7 @@ val frame_invariant (#a:_) (s:state a) (t: transcript_t) (h0 h1:HS.mem) (l:B.loc
 ///   -- The transcript's initial state is empty
 val create (r:Mem.rgn) (a:HashDef.hash_alg)
   : ST (state a & Ghost.erased transcript_t)
-       (requires fun _ -> True)
+       (requires fun _ -> B.(loc_disjoint (loc_region_only true r) (loc_region_only true Mem.tls_tables_region)))
        (ensures fun h0 (s, tx) h1 ->
          let tx = Ghost.reveal tx in
          tx == Start None /\
@@ -490,7 +494,7 @@ type label_repr =
 
   | LR_HRR:
       #b1:R.const_slice ->
-      ch_tag:R.repr any_hash_tag b1 ->
+      ch_tag: R_HS.repr b1 { is_any_hash_tag (R.value ch_tag) }  ->
       #b2:R.const_slice ->
       hrr:hs_sh_repr b2{is_hrr (HSM.M_server_hello?._0 (R.value hrr))} ->
       label_repr
@@ -554,7 +558,7 @@ let loc_of_label_repr (l:label_repr) =
   | LR_HRR #b1 _ #b2 _ ->
     B.loc_union
       (C.loc_buffer R.(b1.base))
-      (C.loc_buffer R.(b1.base))
+      (C.loc_buffer R.(b2.base))
 
   | LR_ClientHello #b _
   | LR_ServerHello #b _
@@ -620,17 +624,21 @@ val extract_hash
   (#a:_) (s:state a)
   (tag:Hacl.Hash.Definitions.hash_t a)
   (tx:G.erased transcript_t)
-  : Stack unit
+  : ST unit
     (requires fun h0 ->
       let tx = G.reveal tx in
       invariant s tx h0 /\
       B.live h0 tag /\
+      B.(loc_disjoint (loc_buffer tag) (loc_region_only true Mem.tls_tables_region)) /\      
       B.loc_disjoint (footprint s) (B.loc_buffer tag))
     (ensures fun h0 _ h1 ->
       let open B in
       let tx = G.reveal tx in
       invariant s tx h1 /\
-      modifies (loc_union (footprint s) (loc_buffer tag)) h0 h1 /\
+      modifies (
+        loc_buffer tag `loc_union`
+        footprint s `loc_union`
+        loc_region_only true Mem.tls_tables_region) h0 h1 /\
       B.live h1 tag /\
       B.as_seq h1 tag == transcript_hash a tx /\
       hashed a tx)
