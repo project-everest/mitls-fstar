@@ -228,42 +228,57 @@ let receive_post
 
 (*** 1.3 flights ***)
 
+/// The receive functions, and the flight types are designed as per the Handshake state
 
-(****** Flight [ EncryptedExtensions; Certificate13; CertificateVerify; Finished ] ******)
+type ee13_repr (b:R.const_slice) = r:HSM13R.repr b{HSM13R.is_ee r}
+type c13_repr (b:R.const_slice) = r:HSM13R.repr b{HSM13R.is_c r}
+type cv13_repr (b:R.const_slice) = r:HSM13R.repr b{HSM13R.is_cv r}
+type fin13_repr (b:R.const_slice) = r:HSM13R.repr b{HSM13R.is_fin r}
+type cr13_repr (b:R.const_slice) = r:HSM13R.repr b{HSM13R.is_cr r}
+type eoed13_repr (b:R.const_slice) = r:HSM13R.repr b{HSM13R.is_eoed r}
+type nst13_repr (b:R.const_slice) = r:HSM13R.repr b{HSM13R.is_nst r}
 
-//19-05-28 could we use vale-style metaprogramming on message lists? fine as is. 
+unfold let none_or_in_range
+  (#b:R.const_slice) (r:option (HSM13R.repr b))
+  (from to:uint_32)
+  = let open R in
+    r == None \/
+    (let r = Some?.v r in
+     from <= r.start_pos /\ r.end_pos <= to)
 
 
-noeq
-type flight13_ee_c_cv_fin (b:R.const_slice) = {
-  ee_msg  : HSM13R.repr b;
-  c_msg   : HSM13R.repr b;
-  cv_msg  : HSM13R.repr b;
-  fin_msg : m:HSM13R.repr b{
-    HSM13R.is_ee ee_msg /\
-    HSM13R.is_c c_msg /\
-    HSM13R.is_cv cv_msg /\
-    HSM13R.is_fin m
-  }
+(****** Handshake state C13_wait_Finished1 ******)
+
+//19-05-28 CF: could we use vale-style metaprogramming on message lists? fine as is. 
+
+
+/// Handshake state C13_wait_Finished1 expects three flights:
+///
+/// [ EE; C; CV; Fin ]
+/// [ EE; CR; C; CV; Fin ]
+/// [ EE; Fin ]
+///
+/// The following type covers all these cases
+
+noeq type c13_wait_Finished1 (b:R.const_slice) = {
+  ee_msg   : ee13_repr b;
+  cr_msg   : option (cr13_repr b);
+  c_cv_msg : option (c13_repr b & cv13_repr b);
+  fin_msg  : fin13_repr b
 }
 
-//19-05-28 why not refining each message individually? or have a
-// function from tags to those refined types? such type abbreviations
-// may be useful additions to their repr modules, e.g.
-// 
-type ee_repr b  = m:HSM13R.repr b { HSM13R.is_ee m }
-type cr_repr b  = m:HSM13R.repr b { HSM13R.is_cr m } 
-type c_repr b   = m:HSM13R.repr b { HSM13R.is_c m } 
-type cv_repr b  = m:HSM13R.repr b { HSM13R.is_cv m } 
-type fin_repr b = m:HSM13R.repr b { HSM13R.is_fin m } 
-// (those could be defined in HSM13R)
-// now covering all 3 variants of this flight (and a 4th one, which we may support later)
-noeq type c13_Finished1 b = {
-  ee: ee_repr b;
-  cr: option (cr_repr b); 
-  ccv: option (c_repr b & cv_repr b);
-  fin: fin_repr b;
-}  
+unfold let valid_c13_wait_Finished1
+  (#b:R.const_slice) (from to:uint_32)
+  (flt:c13_wait_Finished1) (h:HS.mem)
+  = let open R in
+
+    flt.ee_msg.start_pos == from /\
+    
+    flt.fin_msg.end_pos == to /\ True
+    
+
+
+
 
 
 //19-05-28 the handshake may not need the position details; the only
