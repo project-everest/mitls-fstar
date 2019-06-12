@@ -1,0 +1,41 @@
+[
+  "²¬ž­æHA9^aÿÆTœ%ˆ",
+  [
+    [
+      "Parsers.OfferedPsks.offeredPsks",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_Parsers.PskIdentity.pskIdentity__uu___haseq",
+        "assumption_Prims.list__uu___haseq",
+        "equation_Parsers.OfferedPsks_binders.offeredPsks_binders",
+        "equation_Parsers.OfferedPsks_identities.offeredPsks_identities",
+        "equation_Parsers.PskBinderEntry.pskBinderEntry",
+        "function_token_typing_Parsers.PskBinderEntry.pskBinderEntry",
+        "haseqTm_refine_8c0714c5508deecd4c7dd8b2b9d054de",
+        "haseqTm_refine_a2072dd47f2a1746c84c8369c0d289e3",
+        "haseqTm_refine_d12ede7312cbc074195ccbfb82cc246f",
+        "kinding_Parsers.PskIdentity.pskIdentity@tok",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
+      ],
+      0,
+      "16ac58a25361b7209989b87a07f72e8b"
+    ],
+    [
+      "Parsers.OfferedPsks.offeredPsks_valid",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.squash",
+        "l_and-interp",
+        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+      ],
+      0,
+      "cb97cc58d57d0754fb8f5dd96cdc366c"
+    ]
+  ]
+]

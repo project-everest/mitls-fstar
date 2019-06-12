@@ -1,0 +1,93 @@
+[
+  "B\u000eÔ\u000eïhlqf·“qüa\u001aÕ",
+  [
+    [
+      "Parsers.NameType.nameType_repr_eq",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "equation_Parsers.NameType.nameType_repr"
+      ],
+      0,
+      "2d1ff0f672b5d858f3cf8f4e0b53c479"
+    ],
+    [
+      "Parsers.NameType.nameType",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
+      0,
+      "ca18f1a6af6c6ad37c7bb9d5b57ff21c"
+    ],
+    [
+      "Parsers.NameType.__proj__Unknown_nameType__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.NameType.Unknown_nameType",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_b1afbf58f73857863e8e6d07d8ea5330"
+      ],
+      0,
+      "46aa4b2df5682f45f5361f91aae6444b"
+    ],
+    [
+      "Parsers.NameType.string_of_nameType",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.NameType.Host_name",
+        "disc_equation_Parsers.NameType.Unknown_nameType",
+        "fuel_guarded_inversion_Parsers.NameType.nameType"
+      ],
+      0,
+      "5635efac14ad03aaac1dcfdf1e303156"
+    ],
+    [
+      "Parsers.NameType.nameType_validator",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "equation_LowParse.Low.Base.validator_max_length",
+        "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.NameType.nameType_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
+        "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
+        "refinement_interpretation_Tm_refine_07033d2b2c1d2fb6c1dd88a8f1110ac2",
+        "typing_LowParse.Low.Base.validator_max_length"
+      ],
+      0,
+      "f6daa55e3cdc82be0621469f03e34d6c"
+    ],
+    [
+      "Parsers.NameType.nameType_jumper",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.NameType.nameType_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
+      ],
+      0,
+      "d755acda784743a44d199baa336f7609"
+    ]
+  ]
+]

@@ -1,0 +1,35 @@
+[
+  "îæsÃñ—Â„\bníMÌø»\u0007",
+  [
+    [
+      "Parsers.OIDFilter.oIDFilter",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "equation_Parsers.OIDFilter_certificate_extension_oid.oIDFilter_certificate_extension_oid",
+        "equation_Parsers.OIDFilter_certificate_extension_values.oIDFilter_certificate_extension_values",
+        "haseqTm_refine_bc1a96f20b06a0bd0d936da7c6c01d5c",
+        "haseqTm_refine_ded83f0e40056526ff4d5b32368d0718",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
+      ],
+      0,
+      "5eb4ce0a32fed6b901b8018c74bcddc6"
+    ],
+    [
+      "Parsers.OIDFilter.oIDFilter_valid",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.squash",
+        "l_and-interp",
+        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+      ],
+      0,
+      "8ab826fed915698c233963fb1b6e7ba8"
+    ]
+  ]
+]

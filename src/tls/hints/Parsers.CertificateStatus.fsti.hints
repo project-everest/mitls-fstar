@@ -1,0 +1,34 @@
+[
+  "∑g\bòlG\u000f\u0016ŸKÜœMêÛ",
+  [
+    [
+      "Parsers.CertificateStatus.certificateStatus",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_Parsers.CertificateStatusType.certificateStatusType__uu___haseq",
+        "equation_Parsers.OCSPResponse.oCSPResponse",
+        "haseqTm_refine_a01ac5bfebaba47f5d5417c3a01e3f9b",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
+      ],
+      0,
+      "b9856d8d5f082d0361c980af4c847101"
+    ],
+    [
+      "Parsers.CertificateStatus.certificateStatus_valid",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.squash",
+        "l_and-interp",
+        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+      ],
+      0,
+      "6bd23dddeee6a081711d86e95bb48691"
+    ]
+  ]
+]

@@ -1,0 +1,39 @@
+[
+  "^ø T{P—6Ç‡Aöÿ\u0007¾…",
+  [
+    [
+      "Parsers.UseSRTPData.useSRTPData",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_Prims.list__uu___haseq", "equation_FStar.Bytes.lbytes",
+        "equation_Parsers.SRTPProtectionProfile.sRTPProtectionProfile",
+        "equation_Parsers.SRTPProtectionProfiles.sRTPProtectionProfiles",
+        "equation_Parsers.UseSRTPData_srtp_mki.useSRTPData_srtp_mki",
+        "function_token_typing_Parsers.SRTPProtectionProfile.sRTPProtectionProfile",
+        "haseqTm_refine_7ff0f9a372eb29179e72facc8f4a42b7",
+        "haseqTm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
+        "haseqTm_refine_bf1c6d37d342588851e49d57c7aa9592",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
+      ],
+      0,
+      "5f2fbfd8dbe7bb574921aacea9e7dcc9"
+    ],
+    [
+      "Parsers.UseSRTPData.useSRTPData_valid",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.squash",
+        "l_and-interp",
+        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+      ],
+      0,
+      "c41bb7d511fb6b8bcedd82f3f274b5a2"
+    ]
+  ]
+]

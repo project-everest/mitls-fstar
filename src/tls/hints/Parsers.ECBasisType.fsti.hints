@@ -1,0 +1,35 @@
+[
+  "ÎCpƒ\u0002`Já,ß¹ O\u001d\n^",
+  [
+    [
+      "Parsers.ECBasisType.string_of_eCBasisType",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.ECBasisType.Ec_basis_pentanomial",
+        "disc_equation_Parsers.ECBasisType.Ec_basis_trinomial",
+        "fuel_guarded_inversion_Parsers.ECBasisType.eCBasisType"
+      ],
+      0,
+      "f0a63f57bb1b73236422e3e097fa7ecb"
+    ],
+    [
+      "Parsers.ECBasisType.eCBasisType_jumper",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.ECBasisType.eCBasisType_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
+      ],
+      0,
+      "1f0c2615d146bbd5859e88f232471c11"
+    ]
+  ]
+]
