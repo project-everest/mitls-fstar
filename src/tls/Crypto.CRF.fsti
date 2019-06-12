@@ -2,7 +2,8 @@ module Crypto.CRF
 
 /// Status. See also `Test.CRF.fst`.
 ///
-/// * Relocate to EverCrypt? But we depend on mitls flags.
+/// * Later: relocate to hacl-star/secure; we still depend on mitls
+/// * flags.
 ///
 /// * Still relies on `FStar.Monotonic.DependentMap`, not clearly
 ///   compatible with location-based modifies and Stack. For now I am
@@ -25,17 +26,20 @@ inline_for_extraction
 let model = Flags.model
 // not sure where to put the flags, or if we need a separate one
 
-/// We first switch to a (non-extracted) implementation of the
+/// We first switch (on [model]) to a non-extracted,
+/// specification-based implementation of the
 /// EverCrypt.Hash.Incremental API that accumulates the text to hash
-/// it using the pure spec only at extraction-time. When model=false,
-/// the two implementations share the same full specs.
+/// it only to compute the tag.
 ///
-/// JP: Note that the state is not abstract, i.e. we don't re-add another layer
-/// of abstraction with framing lemmas. Should we?
+/// To justify the switch, we review that the two implementations
+/// share the same full functional specs and operate on an abstract
+/// type that hides the change of representation.
+
+// DONE JP: Note that the state is not abstract, i.e. we don't re-add
+// another layer of abstraction with framing lemmas. Should we?
 
 // TODO test that verification usability matches Concrete.
 // TODO refactor EverCrypt to make such switches less verbose?
-// TODO make the state abstract---requires pre/post rewriting
 // TODO hide Model, treating hashed as an abstract predicate. Confirm we don't import algorithmic specs.
 
 #set-options "--max_fuel 0 --max_ifuel 0"
@@ -190,7 +194,7 @@ inline_for_extraction
 let finish_st (a: Hash.alg) =
   s:state a ->
   dst: Hacl.Hash.Definitions.hash_t a ->
-  // NEW! ↓ constrained to ST because Model.CRF.hash (fix MDM?)
+  // NEW! ↓ Constrained to ST because Model.CRF.hash updates a global table.
   ST unit
     (requires fun h0 ->
       invariant h0 s /\
@@ -204,7 +208,8 @@ let finish_st (a: Hash.alg) =
       hashed h0 s == hashed h1 s /\
       footprint h0 s == footprint h1 s /\
       // NEW! ↓
-      B.(modifies (loc_buffer dst `loc_union`
+      B.(modifies (
+        loc_buffer dst `loc_union`
         footprint h0 s `loc_union`
         loc_region_only true Mem.tls_tables_region) h0 h1) /\
       S.equal (B.as_seq h1 dst) (Spec.Hash.hash a (hashed h0 s)) /\
