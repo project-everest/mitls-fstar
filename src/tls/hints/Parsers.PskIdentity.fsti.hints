@@ -1,0 +1,34 @@
+[
+  "\u0012À\u0010¨7n3Ü‡~V\u007fV\u001aµÛ",
+  [
+    [
+      "Parsers.PskIdentity.pskIdentity",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_FStar.UInt32.t__uu___haseq",
+        "equation_Parsers.PskIdentity_identity.pskIdentity_identity",
+        "haseqTm_refine_9a2308e4216787a42fcd90fc40592982",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
+      ],
+      0,
+      "fdcbf218b63c3d89663c39e1361c1c35"
+    ],
+    [
+      "Parsers.PskIdentity.pskIdentity_valid",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.squash",
+        "l_and-interp",
+        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+      ],
+      0,
+      "d844f7d6a9a9d747204e6ce029ba3aac"
+    ]
+  ]
+]

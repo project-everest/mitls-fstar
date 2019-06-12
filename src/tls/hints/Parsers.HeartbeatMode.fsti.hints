@@ -1,61 +1,58 @@
 [
-  "¿H7\u00072¶Ÿ@3¬(◊ä⁄\u000f»",
+  "\u0010\u001bÏ‚ê˜\u00110y5\u007f∫g@∏Y",
   [
     [
-      "Parsers.ProtocolVersion.protocolVersion_repr_eq",
+      "Parsers.HeartbeatMode.heartbeatMode_repr_eq",
       1,
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt16.t__uu___haseq",
-        "equation_Parsers.ProtocolVersion.protocolVersion_repr"
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "equation_Parsers.HeartbeatMode.heartbeatMode_repr"
       ],
       0,
-      "e5c6e3e035f109d3d46fb583cdd6fd3c"
+      "7c25be6b7c8f45246df7bcac7a7f85a9"
     ],
     [
-      "Parsers.ProtocolVersion.protocolVersion",
+      "Parsers.HeartbeatMode.heartbeatMode",
       1,
       2,
       1,
-      [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
+      [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
       0,
-      "016f91491bc418830ab51906d235f75c"
+      "ae5da4ca414ba2045e177f8b2553e6e9"
     ],
     [
-      "Parsers.ProtocolVersion.__proj__Unknown_protocolVersion__item___0",
+      "Parsers.HeartbeatMode.__proj__Unknown_heartbeatMode__item___0",
       1,
       2,
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "disc_equation_Parsers.ProtocolVersion.Unknown_protocolVersion",
+        "disc_equation_Parsers.HeartbeatMode.Unknown_heartbeatMode",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_de0484a62d509e9de813bfe30726d436"
+        "refinement_interpretation_Tm_refine_5373888fe1b64e7c73aa81cd26a5a735"
       ],
       0,
-      "3bb54f85eb3f133b959aefb2ef0a86e8"
+      "d2cf1a5089fdabefd0e5b4d3831d8cc0"
     ],
     [
-      "Parsers.ProtocolVersion.string_of_protocolVersion",
+      "Parsers.HeartbeatMode.string_of_heartbeatMode",
       1,
       2,
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "disc_equation_Parsers.ProtocolVersion.SSL_3p0",
-        "disc_equation_Parsers.ProtocolVersion.TLS_1p0",
-        "disc_equation_Parsers.ProtocolVersion.TLS_1p1",
-        "disc_equation_Parsers.ProtocolVersion.TLS_1p2",
-        "disc_equation_Parsers.ProtocolVersion.TLS_1p3",
-        "disc_equation_Parsers.ProtocolVersion.Unknown_protocolVersion",
-        "fuel_guarded_inversion_Parsers.ProtocolVersion.protocolVersion"
+        "disc_equation_Parsers.HeartbeatMode.Peer_allowed_to_send",
+        "disc_equation_Parsers.HeartbeatMode.Peer_not_allowed_to_send",
+        "disc_equation_Parsers.HeartbeatMode.Unknown_heartbeatMode",
+        "fuel_guarded_inversion_Parsers.HeartbeatMode.heartbeatMode"
       ],
       0,
-      "0b2b3ae31bbd2561d5dd1cb1b94a1748"
+      "a9d7eb878efaa30099b4557c85af326b"
     ],
     [
-      "Parsers.ProtocolVersion.protocolVersion_validator",
+      "Parsers.HeartbeatMode.heartbeatMode_validator",
       1,
       2,
       1,
@@ -63,7 +60,7 @@
         "@MaxIFuel_assumption", "@query",
         "equation_LowParse.Low.Base.validator_max_length",
         "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_Parsers.ProtocolVersion.protocolVersion_parser_kind",
+        "equation_Parsers.HeartbeatMode.heartbeatMode_parser_kind",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
@@ -75,23 +72,23 @@
         "typing_LowParse.Low.Base.validator_max_length"
       ],
       0,
-      "4cf2055462a6ba936c6878f602bb623f"
+      "50676b95ec818a4f548f0ca071ee016b"
     ],
     [
-      "Parsers.ProtocolVersion.protocolVersion_jumper",
+      "Parsers.HeartbeatMode.heartbeatMode_jumper",
       1,
       2,
       1,
       [
         "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_Parsers.ProtocolVersion.protocolVersion_parser_kind",
+        "equation_Parsers.HeartbeatMode.heartbeatMode_parser_kind",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "902bb8f91ff600a7ebc13cddf19f0bf3"
+      "3919b9b087261fe7de53a4765a1498cf"
     ]
   ]
 ]

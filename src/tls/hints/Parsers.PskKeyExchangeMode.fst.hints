@@ -1,102 +1,105 @@
 [
-  "Fò›6N…'Ñ€ÑÚ\u0016ó’\u0016µ",
+  "Ä\u0018ô\u001115[…§¿‰ìÐÕí,",
   [
     [
-      "Parsers.CompressionMethod.compressionMethod_repr_eq",
+      "Parsers.PskKeyExchangeMode.pskKeyExchangeMode_repr_eq",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "equation_Parsers.CompressionMethod.compressionMethod_repr"
+        "equation_Parsers.PskKeyExchangeMode.pskKeyExchangeMode_repr"
       ],
       0,
-      "a27ecdfca5b7b94fe1d84e6ece4d0338"
+      "28d9328e50b8404d7b788e89cdcc7614"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod",
+      "Parsers.PskKeyExchangeMode.pskKeyExchangeMode",
       1,
       2,
       1,
       [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
       0,
-      "fc9414677a86359ee64ac474ba205f44"
+      "36af9d25eb8569590186ac5e5a3fd720"
     ],
     [
-      "Parsers.CompressionMethod.__proj__Unknown_compressionMethod__item___0",
+      "Parsers.PskKeyExchangeMode.__proj__Unknown_pskKeyExchangeMode__item___0",
       1,
       2,
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "disc_equation_Parsers.CompressionMethod.Unknown_compressionMethod",
+        "disc_equation_Parsers.PskKeyExchangeMode.Unknown_pskKeyExchangeMode",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_024d66cc355bb4f5c02304d3ef6c059f"
+        "refinement_interpretation_Tm_refine_a4570551335736ba0653e22860d0abd7"
       ],
       0,
-      "100728d6a2ecedbdbddb015bd56d4882"
+      "5d73a9d6e07f6cbd5e933c2d05222b49"
     ],
     [
-      "Parsers.CompressionMethod.string_of_compressionMethod",
+      "Parsers.PskKeyExchangeMode.string_of_pskKeyExchangeMode",
       1,
       2,
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "disc_equation_Parsers.CompressionMethod.NullCompression",
-        "disc_equation_Parsers.CompressionMethod.Unknown_compressionMethod",
-        "fuel_guarded_inversion_Parsers.CompressionMethod.compressionMethod"
+        "disc_equation_Parsers.PskKeyExchangeMode.Psk_dhe_ke",
+        "disc_equation_Parsers.PskKeyExchangeMode.Psk_ke",
+        "disc_equation_Parsers.PskKeyExchangeMode.Unknown_pskKeyExchangeMode",
+        "fuel_guarded_inversion_Parsers.PskKeyExchangeMode.pskKeyExchangeMode"
       ],
       0,
-      "7fd118ebfff8ae5bfb9dd469d6983e59"
+      "371995045c276737c80fd29377ebb2c4"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_enum",
+      "Parsers.PskKeyExchangeMode.pskKeyExchangeMode_enum",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.PskKeyExchangeMode.pskKeyExchangeMode__uu___haseq"
       ],
       0,
-      "9634b1a57b656d036b399ce94c77de45"
+      "5a051a539bae2490d47442a2f68e9708"
     ],
     [
-      "Parsers.CompressionMethod.synth_compressionMethod",
+      "Parsers.PskKeyExchangeMode.synth_pskKeyExchangeMode",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.PskKeyExchangeMode.pskKeyExchangeMode__uu___haseq"
       ],
       0,
-      "bdab6b5afb060511a1d45d5b31e15357"
+      "3903e7ad5f13bc26f81e6f7042365b8b"
     ],
     [
-      "Parsers.CompressionMethod.synth_compressionMethod",
+      "Parsers.PskKeyExchangeMode.synth_pskKeyExchangeMode",
       2,
       2,
       1,
       [
         "@MaxIFuel_assumption", "@query",
+        "Parsers.PskKeyExchangeMode_pretyping_83c7c1006d42425bec6377cdd1f62952",
         "assumption_FStar.UInt8.t__uu___haseq",
         "data_elim_LowParse.Spec.Enum.Unknown",
+        "data_typing_intro_Parsers.PskKeyExchangeMode.Psk_dhe_ke@tok",
         "disc_equation_LowParse.Spec.Enum.Known",
         "disc_equation_LowParse.Spec.Enum.Unknown",
         "equation_LowParse.Spec.Enum.unknown_enum_repr",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.PskKeyExchangeMode.pskKeyExchangeMode_enum",
         "fuel_guarded_inversion_LowParse.Spec.Enum.maybe_enum_key",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_LowParse.Spec.Enum.Unknown__0",
         "refinement_interpretation_Tm_refine_42952339d1ff6a9a240497d58590f0b2"
       ],
       0,
-      "0f6aebd19604d01a7af88849ae895003"
+      "58fdad9ffece17a2d78e0d3a735eff1e"
     ],
     [
-      "Parsers.CompressionMethod.synth_compressionMethod_inv",
+      "Parsers.PskKeyExchangeMode.synth_pskKeyExchangeMode_inv",
       1,
       2,
       1,
@@ -105,70 +108,69 @@
         "Prims_pretyping_f537159ed795b314b4e58c260361ae86",
         "Prims_pretyping_f8666440faa91836cc5a13998af863fc",
         "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.PskKeyExchangeMode.pskKeyExchangeMode__uu___haseq",
         "b2t_def", "bool_inversion", "bool_typing", "equation_Prims.l_imp",
         "equation_Prims.squash", "l_imp-interp",
         "primitive_Prims.op_Negation", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_6c62fe0923ba96eeef1e7e6fcb82ed91",
+        "refinement_interpretation_Tm_refine_375c771fe7608463243e9176217cdcb6",
+        "refinement_interpretation_Tm_refine_40260a7dbb31a2f832036b6a1e4862ad",
         "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
-        "refinement_interpretation_Tm_refine_8f298af8c6d13fcf45122e9d42fdb6a4",
-        "typing_Parsers.CompressionMethod.uu___is_Unknown_compressionMethod",
+        "typing_Parsers.PskKeyExchangeMode.uu___is_Unknown_pskKeyExchangeMode",
         "unit_typing"
       ],
       0,
-      "c5db81696691ea9693ab162a39022fc3"
+      "bd7ca034618621ef1a0eb0af15694fe6"
     ],
     [
-      "Parsers.CompressionMethod.lemma_synth_compressionMethod_inv'",
+      "Parsers.PskKeyExchangeMode.lemma_synth_pskKeyExchangeMode_inv'",
       1,
       2,
       1,
       [
         "@MaxIFuel_assumption", "@query",
         "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.PskKeyExchangeMode.pskKeyExchangeMode__uu___haseq",
         "equation_LowParse.Spec.Combinators.synth_inverse",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.PskKeyExchangeMode.pskKeyExchangeMode_enum",
         "equation_Prims.l_Forall", "equation_Prims.squash",
-        "l_quant_interp_96b3beb56ccf1a05efd29bfedf681b1b",
+        "l_quant_interp_1a0e301bf35b4e3a211a2afe52ffc1ef",
         "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
-        "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod",
-        "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod_inv"
+        "token_correspondence_Parsers.PskKeyExchangeMode.synth_pskKeyExchangeMode",
+        "token_correspondence_Parsers.PskKeyExchangeMode.synth_pskKeyExchangeMode_inv"
       ],
       0,
-      "83f1c6516d19d9bc08a7cd0f745fa222"
+      "e18b39178107be9a820a312229adc5b9"
     ],
     [
-      "Parsers.CompressionMethod.lemma_synth_compressionMethod_inj",
+      "Parsers.PskKeyExchangeMode.lemma_synth_pskKeyExchangeMode_inj",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.PskKeyExchangeMode.pskKeyExchangeMode__uu___haseq"
       ],
       0,
-      "a536b07bc0d3c9c5840e4545ff82d244"
+      "9542824aa33690f68485a9db864f6470"
     ],
     [
-      "Parsers.CompressionMethod.lemma_synth_compressionMethod_inv",
+      "Parsers.PskKeyExchangeMode.lemma_synth_pskKeyExchangeMode_inv",
       1,
       0,
       0,
       [
         "@MaxIFuel_assumption", "@query",
-        "Parsers.CompressionMethod_pretyping_0b005f481768a7bd4dd503e17d391cea",
+        "Parsers.PskKeyExchangeMode_pretyping_83c7c1006d42425bec6377cdd1f62952",
         "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.PskKeyExchangeMode.pskKeyExchangeMode__uu___haseq",
         "constructor_distinct_LowParse.Spec.Enum.Known",
         "constructor_distinct_LowParse.Spec.Enum.Unknown",
-        "equality_tok_Parsers.CompressionMethod.NullCompression@tok",
+        "equality_tok_Parsers.PskKeyExchangeMode.Psk_ke@tok",
         "equation_LowParse.Spec.Combinators.synth_inverse",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
-        "equation_Parsers.CompressionMethod.synth_compressionMethod",
-        "equation_Parsers.CompressionMethod.synth_compressionMethod_inv",
-        "fuel_guarded_inversion_Parsers.CompressionMethod.compressionMethod",
-        "inversion-interp", "projection_inverse_LowParse.Spec.Enum.Known__0",
+        "equation_Parsers.PskKeyExchangeMode.pskKeyExchangeMode_enum",
+        "equation_Parsers.PskKeyExchangeMode.synth_pskKeyExchangeMode",
+        "equation_Parsers.PskKeyExchangeMode.synth_pskKeyExchangeMode_inv",
+        "projection_inverse_LowParse.Spec.Enum.Known__0",
         "projection_inverse_LowParse.Spec.Enum.Known_e",
         "projection_inverse_LowParse.Spec.Enum.Known_key",
         "projection_inverse_LowParse.Spec.Enum.Known_repr",
@@ -176,228 +178,228 @@
         "projection_inverse_LowParse.Spec.Enum.Unknown_e",
         "projection_inverse_LowParse.Spec.Enum.Unknown_key",
         "projection_inverse_LowParse.Spec.Enum.Unknown_repr",
-        "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod",
-        "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod_inv",
-        "typing_tok_Parsers.CompressionMethod.NullCompression@tok"
+        "token_correspondence_Parsers.PskKeyExchangeMode.synth_pskKeyExchangeMode",
+        "token_correspondence_Parsers.PskKeyExchangeMode.synth_pskKeyExchangeMode_inv",
+        "typing_tok_Parsers.PskKeyExchangeMode.Psk_ke@tok"
       ],
       0,
-      "525470ebe7e2b0b2f7353b19375cc573"
+      "0d78ae6f1a6fcdc924298860f74e8b3d"
     ],
     [
-      "Parsers.CompressionMethod.parse_maybe_compressionMethod_key",
+      "Parsers.PskKeyExchangeMode.parse_maybe_pskKeyExchangeMode_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.PskKeyExchangeMode.pskKeyExchangeMode__uu___haseq"
       ],
       0,
-      "48792b18eba838e9e60393b858c9df6d"
+      "063954ce1f23d43d745a14c5fb62542c"
     ],
     [
-      "Parsers.CompressionMethod.serialize_maybe_compressionMethod_key",
+      "Parsers.PskKeyExchangeMode.serialize_maybe_pskKeyExchangeMode_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.PskKeyExchangeMode.pskKeyExchangeMode__uu___haseq"
       ],
       0,
-      "b3b57ea9a26f6424f0e849790d2f416f"
+      "7d4780dc25a67f704d4c25ca3850369f"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_parser",
+      "Parsers.PskKeyExchangeMode.pskKeyExchangeMode_parser",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.PskKeyExchangeMode.pskKeyExchangeMode__uu___haseq"
       ],
       0,
-      "189fefb6da9b7fb850a95850df27fadb"
+      "ec355821ec7109f645ed9d436e9e4760"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_serializer",
+      "Parsers.PskKeyExchangeMode.pskKeyExchangeMode_serializer",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.PskKeyExchangeMode.pskKeyExchangeMode__uu___haseq"
       ],
       0,
-      "85fabf252cc1bedf85e7396724cf4ac7"
+      "b955f4cf45720178beae5a787b88bcfd"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_bytesize_eq",
+      "Parsers.PskKeyExchangeMode.pskKeyExchangeMode_bytesize_eq",
       1,
       2,
       1,
       [
         "@query", "equation_LowParse.Spec.Base.serialize",
-        "equation_Parsers.CompressionMethod.compressionMethod_bytesize"
+        "equation_Parsers.PskKeyExchangeMode.pskKeyExchangeMode_bytesize"
       ],
       0,
-      "c3bd8b34300d56b02ea654547546b47f"
+      "f9a03d56f0052834ffe4b79c5a9aee55"
     ],
     [
-      "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
+      "Parsers.PskKeyExchangeMode.parse32_maybe_pskKeyExchangeMode_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.PskKeyExchangeMode.pskKeyExchangeMode__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.PskKeyExchangeMode.pskKeyExchangeMode_enum",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_Prims.Cons_a",
         "projection_inverse_Prims.Cons_hd",
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "0e39fc70ef887c6b980b7bb000c77b01"
+      "6aeaa7d55455675b09a869eea2c9ecdc"
     ],
     [
-      "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
+      "Parsers.PskKeyExchangeMode.parse32_maybe_pskKeyExchangeMode_key",
       2,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.PskKeyExchangeMode.pskKeyExchangeMode__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.PskKeyExchangeMode.pskKeyExchangeMode_enum",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_Prims.Cons_a",
         "projection_inverse_Prims.Cons_hd",
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "7b84e74fb044fa06f31425f55ca57c29"
+      "af74592e5be222d657eec3f22cf50ad7"
     ],
     [
-      "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
+      "Parsers.PskKeyExchangeMode.parse32_maybe_pskKeyExchangeMode_key",
       3,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.PskKeyExchangeMode.pskKeyExchangeMode__uu___haseq"
       ],
       0,
-      "4d159033593b248eb851a52de20db566"
+      "e015ffdedde3a87ca78ebe1c2c425e2f"
     ],
     [
-      "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
+      "Parsers.PskKeyExchangeMode.parse32_maybe_pskKeyExchangeMode_key",
       4,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.PskKeyExchangeMode.pskKeyExchangeMode__uu___haseq"
       ],
       0,
-      "9ae94b79dc0bfcd43d0456855068416d"
+      "d2fd956b9745c6e9be7b47e1adcf3d5a"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_parser32",
+      "Parsers.PskKeyExchangeMode.pskKeyExchangeMode_parser32",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.PskKeyExchangeMode.pskKeyExchangeMode__uu___haseq"
       ],
       0,
-      "4b2cdf2db9fcbef3933065b6d984e043"
+      "e0a2571d3b52d69fb5e52af9e103bae5"
     ],
     [
-      "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
+      "Parsers.PskKeyExchangeMode.serialize32_maybe_pskKeyExchangeMode_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.PskKeyExchangeMode.pskKeyExchangeMode__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.PskKeyExchangeMode.pskKeyExchangeMode_enum",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_Prims.Cons_a",
         "projection_inverse_Prims.Cons_hd",
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "d37369da63abb4ba2abaa238c6fc9999"
+      "64cec2a467c49a509d25d4f28bff5cc7"
     ],
     [
-      "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
+      "Parsers.PskKeyExchangeMode.serialize32_maybe_pskKeyExchangeMode_key",
       2,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.PskKeyExchangeMode.pskKeyExchangeMode__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.PskKeyExchangeMode.pskKeyExchangeMode_enum",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_Prims.Cons_a",
         "projection_inverse_Prims.Cons_hd",
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "7b43d8f098163ed8681a2ece2dd200ac"
+      "794ceb97c4d54262314a0f6f306c0ae4"
     ],
     [
-      "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
+      "Parsers.PskKeyExchangeMode.serialize32_maybe_pskKeyExchangeMode_key",
       3,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.PskKeyExchangeMode.pskKeyExchangeMode__uu___haseq"
       ],
       0,
-      "ede5ef917f3805ff56a43b5673232b70"
+      "e3bef1a82042b975723f4a76777b6e49"
     ],
     [
-      "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
+      "Parsers.PskKeyExchangeMode.serialize32_maybe_pskKeyExchangeMode_key",
       4,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.PskKeyExchangeMode.pskKeyExchangeMode__uu___haseq"
       ],
       0,
-      "f57f9107b743f2285ad149f47f0e3ba8"
+      "6439ff712d698c7f12c58f72859cf692"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_serializer32",
+      "Parsers.PskKeyExchangeMode.pskKeyExchangeMode_serializer32",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.PskKeyExchangeMode.pskKeyExchangeMode__uu___haseq"
       ],
       0,
-      "600bb6e44c14de186f718205c366861c"
+      "4dd5cae7dd1148c2ef197708a7e8e00c"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_size32",
+      "Parsers.PskKeyExchangeMode.pskKeyExchangeMode_size32",
       1,
       2,
       1,
       [ "@query" ],
       0,
-      "63e2568057d92d2bf3c412ef78f3f199"
+      "921f3f15662ced212c7deed449aea389"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_validator",
+      "Parsers.PskKeyExchangeMode.pskKeyExchangeMode_validator",
       1,
       2,
       1,
@@ -405,7 +407,7 @@
         "@MaxIFuel_assumption", "@query",
         "equation_LowParse.Low.Base.validator_max_length",
         "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_Parsers.CompressionMethod.compressionMethod_parser_kind",
+        "equation_Parsers.PskKeyExchangeMode.pskKeyExchangeMode_parser_kind",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
@@ -417,74 +419,74 @@
         "typing_LowParse.Low.Base.validator_max_length"
       ],
       0,
-      "bd468b38e623c560baa4b55a376f45d5"
+      "f763d87c1cc50a9ef1c71f005f655d80"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_jumper",
+      "Parsers.PskKeyExchangeMode.pskKeyExchangeMode_jumper",
       1,
       2,
       1,
       [
         "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_Parsers.CompressionMethod.compressionMethod_parser_kind",
+        "equation_Parsers.PskKeyExchangeMode.pskKeyExchangeMode_parser_kind",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "cf77d39f8c901d35ba97030e75d81064"
+      "69af4b35092601adb62757966ae5b5d6"
     ],
     [
-      "Parsers.CompressionMethod.read_maybe_compressionMethod_key",
+      "Parsers.PskKeyExchangeMode.read_maybe_pskKeyExchangeMode_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.PskKeyExchangeMode.pskKeyExchangeMode__uu___haseq"
       ],
       0,
-      "8185c8e5f2920df26bc88a038ccaeadc"
+      "bd369a9cc5afa78db57ba6c06c899281"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_reader",
+      "Parsers.PskKeyExchangeMode.pskKeyExchangeMode_reader",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.PskKeyExchangeMode.pskKeyExchangeMode__uu___haseq"
       ],
       0,
-      "209d4d5d4d353b37e5df702f191bbd89"
+      "f2c99a9046efd4ea377bd9d0db832939"
     ],
     [
-      "Parsers.CompressionMethod.write_maybe_compressionMethod_key",
+      "Parsers.PskKeyExchangeMode.write_maybe_pskKeyExchangeMode_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.PskKeyExchangeMode.pskKeyExchangeMode__uu___haseq"
       ],
       0,
-      "97503d61514e4b7cedba2dfee12fa1a5"
+      "b79ec95b0e95aa52a6e6872ba63cc152"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_writer",
+      "Parsers.PskKeyExchangeMode.pskKeyExchangeMode_writer",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.PskKeyExchangeMode.pskKeyExchangeMode__uu___haseq"
       ],
       0,
-      "9a6ed720f66e8bed3f4b65c9bd779582"
+      "a1ff63dc704c121861f8481b5bb47225"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_bytesize_eqn",
+      "Parsers.PskKeyExchangeMode.pskKeyExchangeMode_bytesize_eqn",
       1,
       2,
       1,
@@ -492,9 +494,9 @@
         "@MaxIFuel_assumption", "@query",
         "constructor_distinct_FStar.Pervasives.Native.Some",
         "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_Parsers.CompressionMethod.compressionMethod_parser_kind",
+        "equation_Parsers.PskKeyExchangeMode.pskKeyExchangeMode_parser_kind",
         "equation_Prims.nat", "int_inversion",
-        "kinding_Parsers.CompressionMethod.compressionMethod@tok",
+        "kinding_Parsers.PskKeyExchangeMode.pskKeyExchangeMode@tok",
         "lemma_LowParse.Spec.Base.serialize_length",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
@@ -503,13 +505,13 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "typing_Parsers.CompressionMethod.compressionMethod_bytesize",
-        "typing_Parsers.CompressionMethod.compressionMethod_parser",
-        "typing_Parsers.CompressionMethod.compressionMethod_parser_kind",
-        "typing_Parsers.CompressionMethod.compressionMethod_serializer"
+        "typing_Parsers.PskKeyExchangeMode.pskKeyExchangeMode_bytesize",
+        "typing_Parsers.PskKeyExchangeMode.pskKeyExchangeMode_parser",
+        "typing_Parsers.PskKeyExchangeMode.pskKeyExchangeMode_parser_kind",
+        "typing_Parsers.PskKeyExchangeMode.pskKeyExchangeMode_serializer"
       ],
       0,
-      "a44bc2622ddcc2e17e334ff6f29106be"
+      "736dd199c07d397cfcebfde7ff44a4d1"
     ]
   ]
 ]

@@ -1,61 +1,60 @@
 [
-  "ÀH7\u00072¦Ù@3Â(×ŠÚ\u000fÈ",
+  "ok\u0006,ÉRc:\u0007\u0010ö²wÆlt",
   [
     [
-      "Parsers.ProtocolVersion.protocolVersion_repr_eq",
+      "Parsers.MaxFragmentLength.maxFragmentLength_repr_eq",
       1,
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt16.t__uu___haseq",
-        "equation_Parsers.ProtocolVersion.protocolVersion_repr"
+        "@query", "assumption_FStar.UInt8.t__uu___haseq",
+        "equation_Parsers.MaxFragmentLength.maxFragmentLength_repr"
       ],
       0,
-      "e5c6e3e035f109d3d46fb583cdd6fd3c"
+      "83a28b5c3cc464649dd441bc001147f4"
     ],
     [
-      "Parsers.ProtocolVersion.protocolVersion",
+      "Parsers.MaxFragmentLength.maxFragmentLength",
       1,
       2,
       1,
-      [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
+      [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
       0,
-      "016f91491bc418830ab51906d235f75c"
+      "ae9e379e60defdc67bb932e340644165"
     ],
     [
-      "Parsers.ProtocolVersion.__proj__Unknown_protocolVersion__item___0",
+      "Parsers.MaxFragmentLength.__proj__Unknown_maxFragmentLength__item___0",
       1,
       2,
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "disc_equation_Parsers.ProtocolVersion.Unknown_protocolVersion",
+        "disc_equation_Parsers.MaxFragmentLength.Unknown_maxFragmentLength",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_de0484a62d509e9de813bfe30726d436"
+        "refinement_interpretation_Tm_refine_6be2819934b3bd3b1cc202fe0946d3f2"
       ],
       0,
-      "3bb54f85eb3f133b959aefb2ef0a86e8"
+      "e34271242bee577f410a64652e101f1b"
     ],
     [
-      "Parsers.ProtocolVersion.string_of_protocolVersion",
+      "Parsers.MaxFragmentLength.string_of_maxFragmentLength",
       1,
       2,
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "disc_equation_Parsers.ProtocolVersion.SSL_3p0",
-        "disc_equation_Parsers.ProtocolVersion.TLS_1p0",
-        "disc_equation_Parsers.ProtocolVersion.TLS_1p1",
-        "disc_equation_Parsers.ProtocolVersion.TLS_1p2",
-        "disc_equation_Parsers.ProtocolVersion.TLS_1p3",
-        "disc_equation_Parsers.ProtocolVersion.Unknown_protocolVersion",
-        "fuel_guarded_inversion_Parsers.ProtocolVersion.protocolVersion"
+        "disc_equation_Parsers.MaxFragmentLength.Two_10",
+        "disc_equation_Parsers.MaxFragmentLength.Two_11",
+        "disc_equation_Parsers.MaxFragmentLength.Two_12",
+        "disc_equation_Parsers.MaxFragmentLength.Two_9",
+        "disc_equation_Parsers.MaxFragmentLength.Unknown_maxFragmentLength",
+        "fuel_guarded_inversion_Parsers.MaxFragmentLength.maxFragmentLength"
       ],
       0,
-      "0b2b3ae31bbd2561d5dd1cb1b94a1748"
+      "c7ea7a65afe51053800da9305572d617"
     ],
     [
-      "Parsers.ProtocolVersion.protocolVersion_validator",
+      "Parsers.MaxFragmentLength.maxFragmentLength_validator",
       1,
       2,
       1,
@@ -63,7 +62,7 @@
         "@MaxIFuel_assumption", "@query",
         "equation_LowParse.Low.Base.validator_max_length",
         "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_Parsers.ProtocolVersion.protocolVersion_parser_kind",
+        "equation_Parsers.MaxFragmentLength.maxFragmentLength_parser_kind",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
@@ -75,23 +74,23 @@
         "typing_LowParse.Low.Base.validator_max_length"
       ],
       0,
-      "4cf2055462a6ba936c6878f602bb623f"
+      "b16238e4a0d585cf587f7e38adb51e1a"
     ],
     [
-      "Parsers.ProtocolVersion.protocolVersion_jumper",
+      "Parsers.MaxFragmentLength.maxFragmentLength_jumper",
       1,
       2,
       1,
       [
         "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_Parsers.ProtocolVersion.protocolVersion_parser_kind",
+        "equation_Parsers.MaxFragmentLength.maxFragmentLength_parser_kind",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "902bb8f91ff600a7ebc13cddf19f0bf3"
+      "048d4ea890100646f95eb1523f569c39"
     ]
   ]
 ]

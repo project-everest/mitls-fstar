@@ -1,102 +1,105 @@
 [
-  "Fò›6N…'Ñ€ÑÚ\u0016ó’\u0016µ",
+  "‰ƒ\u0010,Šy\u0007dM¦ýe§\u0006‡Ž",
   [
     [
-      "Parsers.CompressionMethod.compressionMethod_repr_eq",
+      "Parsers.HeartbeatMode.heartbeatMode_repr_eq",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "equation_Parsers.CompressionMethod.compressionMethod_repr"
+        "equation_Parsers.HeartbeatMode.heartbeatMode_repr"
       ],
       0,
-      "a27ecdfca5b7b94fe1d84e6ece4d0338"
+      "b094c74717aee90d75c951c0a1ed8d4f"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod",
+      "Parsers.HeartbeatMode.heartbeatMode",
       1,
       2,
       1,
       [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
       0,
-      "fc9414677a86359ee64ac474ba205f44"
+      "ae5da4ca414ba2045e177f8b2553e6e9"
     ],
     [
-      "Parsers.CompressionMethod.__proj__Unknown_compressionMethod__item___0",
+      "Parsers.HeartbeatMode.__proj__Unknown_heartbeatMode__item___0",
       1,
       2,
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "disc_equation_Parsers.CompressionMethod.Unknown_compressionMethod",
+        "disc_equation_Parsers.HeartbeatMode.Unknown_heartbeatMode",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_024d66cc355bb4f5c02304d3ef6c059f"
+        "refinement_interpretation_Tm_refine_5373888fe1b64e7c73aa81cd26a5a735"
       ],
       0,
-      "100728d6a2ecedbdbddb015bd56d4882"
+      "d2cf1a5089fdabefd0e5b4d3831d8cc0"
     ],
     [
-      "Parsers.CompressionMethod.string_of_compressionMethod",
+      "Parsers.HeartbeatMode.string_of_heartbeatMode",
       1,
       2,
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "disc_equation_Parsers.CompressionMethod.NullCompression",
-        "disc_equation_Parsers.CompressionMethod.Unknown_compressionMethod",
-        "fuel_guarded_inversion_Parsers.CompressionMethod.compressionMethod"
+        "disc_equation_Parsers.HeartbeatMode.Peer_allowed_to_send",
+        "disc_equation_Parsers.HeartbeatMode.Peer_not_allowed_to_send",
+        "disc_equation_Parsers.HeartbeatMode.Unknown_heartbeatMode",
+        "fuel_guarded_inversion_Parsers.HeartbeatMode.heartbeatMode"
       ],
       0,
-      "7fd118ebfff8ae5bfb9dd469d6983e59"
+      "a9d7eb878efaa30099b4557c85af326b"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_enum",
+      "Parsers.HeartbeatMode.heartbeatMode_enum",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.HeartbeatMode.heartbeatMode__uu___haseq"
       ],
       0,
-      "9634b1a57b656d036b399ce94c77de45"
+      "339bba66fd4f90988b0e1e5a80d9d472"
     ],
     [
-      "Parsers.CompressionMethod.synth_compressionMethod",
+      "Parsers.HeartbeatMode.synth_heartbeatMode",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.HeartbeatMode.heartbeatMode__uu___haseq"
       ],
       0,
-      "bdab6b5afb060511a1d45d5b31e15357"
+      "3f6a49798d6da0695b38c43919bd6d66"
     ],
     [
-      "Parsers.CompressionMethod.synth_compressionMethod",
+      "Parsers.HeartbeatMode.synth_heartbeatMode",
       2,
       2,
       1,
       [
         "@MaxIFuel_assumption", "@query",
+        "Parsers.HeartbeatMode_pretyping_4cd825c5abab6bde26a916d9266f085b",
         "assumption_FStar.UInt8.t__uu___haseq",
         "data_elim_LowParse.Spec.Enum.Unknown",
+        "data_typing_intro_Parsers.HeartbeatMode.Peer_not_allowed_to_send@tok",
         "disc_equation_LowParse.Spec.Enum.Known",
         "disc_equation_LowParse.Spec.Enum.Unknown",
         "equation_LowParse.Spec.Enum.unknown_enum_repr",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.HeartbeatMode.heartbeatMode_enum",
         "fuel_guarded_inversion_LowParse.Spec.Enum.maybe_enum_key",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_LowParse.Spec.Enum.Unknown__0",
         "refinement_interpretation_Tm_refine_42952339d1ff6a9a240497d58590f0b2"
       ],
       0,
-      "0f6aebd19604d01a7af88849ae895003"
+      "eabe11387fb848ff9a19952fbf7696c8"
     ],
     [
-      "Parsers.CompressionMethod.synth_compressionMethod_inv",
+      "Parsers.HeartbeatMode.synth_heartbeatMode_inv",
       1,
       2,
       1,
@@ -105,70 +108,69 @@
         "Prims_pretyping_f537159ed795b314b4e58c260361ae86",
         "Prims_pretyping_f8666440faa91836cc5a13998af863fc",
         "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.HeartbeatMode.heartbeatMode__uu___haseq",
         "b2t_def", "bool_inversion", "bool_typing", "equation_Prims.l_imp",
         "equation_Prims.squash", "l_imp-interp",
         "primitive_Prims.op_Negation", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_6c62fe0923ba96eeef1e7e6fcb82ed91",
+        "refinement_interpretation_Tm_refine_37114d57c200171fdc9368993041b693",
         "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
-        "refinement_interpretation_Tm_refine_8f298af8c6d13fcf45122e9d42fdb6a4",
-        "typing_Parsers.CompressionMethod.uu___is_Unknown_compressionMethod",
+        "refinement_interpretation_Tm_refine_f90d42a0eec70a3e345bf1bf330b1b45",
+        "typing_Parsers.HeartbeatMode.uu___is_Unknown_heartbeatMode",
         "unit_typing"
       ],
       0,
-      "c5db81696691ea9693ab162a39022fc3"
+      "6264da4cf8856acdb41d6bec682b99ca"
     ],
     [
-      "Parsers.CompressionMethod.lemma_synth_compressionMethod_inv'",
+      "Parsers.HeartbeatMode.lemma_synth_heartbeatMode_inv'",
       1,
       2,
       1,
       [
         "@MaxIFuel_assumption", "@query",
         "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.HeartbeatMode.heartbeatMode__uu___haseq",
         "equation_LowParse.Spec.Combinators.synth_inverse",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.HeartbeatMode.heartbeatMode_enum",
         "equation_Prims.l_Forall", "equation_Prims.squash",
-        "l_quant_interp_96b3beb56ccf1a05efd29bfedf681b1b",
+        "l_quant_interp_d1548760de9c407851c63b257c8dc448",
         "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
-        "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod",
-        "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod_inv"
+        "token_correspondence_Parsers.HeartbeatMode.synth_heartbeatMode",
+        "token_correspondence_Parsers.HeartbeatMode.synth_heartbeatMode_inv"
       ],
       0,
-      "83f1c6516d19d9bc08a7cd0f745fa222"
+      "9b1a3fa3a90354eb94e5b1a63b9bc862"
     ],
     [
-      "Parsers.CompressionMethod.lemma_synth_compressionMethod_inj",
+      "Parsers.HeartbeatMode.lemma_synth_heartbeatMode_inj",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.HeartbeatMode.heartbeatMode__uu___haseq"
       ],
       0,
-      "a536b07bc0d3c9c5840e4545ff82d244"
+      "4aaf4412f79e99c9720e620098b766bf"
     ],
     [
-      "Parsers.CompressionMethod.lemma_synth_compressionMethod_inv",
+      "Parsers.HeartbeatMode.lemma_synth_heartbeatMode_inv",
       1,
       0,
       0,
       [
         "@MaxIFuel_assumption", "@query",
-        "Parsers.CompressionMethod_pretyping_0b005f481768a7bd4dd503e17d391cea",
+        "Parsers.HeartbeatMode_pretyping_4cd825c5abab6bde26a916d9266f085b",
         "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.HeartbeatMode.heartbeatMode__uu___haseq",
         "constructor_distinct_LowParse.Spec.Enum.Known",
         "constructor_distinct_LowParse.Spec.Enum.Unknown",
-        "equality_tok_Parsers.CompressionMethod.NullCompression@tok",
+        "equality_tok_Parsers.HeartbeatMode.Peer_allowed_to_send@tok",
         "equation_LowParse.Spec.Combinators.synth_inverse",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
-        "equation_Parsers.CompressionMethod.synth_compressionMethod",
-        "equation_Parsers.CompressionMethod.synth_compressionMethod_inv",
-        "fuel_guarded_inversion_Parsers.CompressionMethod.compressionMethod",
-        "inversion-interp", "projection_inverse_LowParse.Spec.Enum.Known__0",
+        "equation_Parsers.HeartbeatMode.heartbeatMode_enum",
+        "equation_Parsers.HeartbeatMode.synth_heartbeatMode",
+        "equation_Parsers.HeartbeatMode.synth_heartbeatMode_inv",
+        "projection_inverse_LowParse.Spec.Enum.Known__0",
         "projection_inverse_LowParse.Spec.Enum.Known_e",
         "projection_inverse_LowParse.Spec.Enum.Known_key",
         "projection_inverse_LowParse.Spec.Enum.Known_repr",
@@ -176,228 +178,228 @@
         "projection_inverse_LowParse.Spec.Enum.Unknown_e",
         "projection_inverse_LowParse.Spec.Enum.Unknown_key",
         "projection_inverse_LowParse.Spec.Enum.Unknown_repr",
-        "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod",
-        "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod_inv",
-        "typing_tok_Parsers.CompressionMethod.NullCompression@tok"
+        "token_correspondence_Parsers.HeartbeatMode.synth_heartbeatMode",
+        "token_correspondence_Parsers.HeartbeatMode.synth_heartbeatMode_inv",
+        "typing_tok_Parsers.HeartbeatMode.Peer_allowed_to_send@tok"
       ],
       0,
-      "525470ebe7e2b0b2f7353b19375cc573"
+      "916d27de596e545f831f4fbb1bc02184"
     ],
     [
-      "Parsers.CompressionMethod.parse_maybe_compressionMethod_key",
+      "Parsers.HeartbeatMode.parse_maybe_heartbeatMode_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.HeartbeatMode.heartbeatMode__uu___haseq"
       ],
       0,
-      "48792b18eba838e9e60393b858c9df6d"
+      "4bf7531ddcfdd33e8348b27523755e5f"
     ],
     [
-      "Parsers.CompressionMethod.serialize_maybe_compressionMethod_key",
+      "Parsers.HeartbeatMode.serialize_maybe_heartbeatMode_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.HeartbeatMode.heartbeatMode__uu___haseq"
       ],
       0,
-      "b3b57ea9a26f6424f0e849790d2f416f"
+      "3e6fd6dbed5969bf16b12995053eb3c1"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_parser",
+      "Parsers.HeartbeatMode.heartbeatMode_parser",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.HeartbeatMode.heartbeatMode__uu___haseq"
       ],
       0,
-      "189fefb6da9b7fb850a95850df27fadb"
+      "7aa6a761fee37ded8194c22a7dcbbfef"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_serializer",
+      "Parsers.HeartbeatMode.heartbeatMode_serializer",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.HeartbeatMode.heartbeatMode__uu___haseq"
       ],
       0,
-      "85fabf252cc1bedf85e7396724cf4ac7"
+      "090e992cfc3fdbf8e98b2433ea01ebd4"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_bytesize_eq",
+      "Parsers.HeartbeatMode.heartbeatMode_bytesize_eq",
       1,
       2,
       1,
       [
         "@query", "equation_LowParse.Spec.Base.serialize",
-        "equation_Parsers.CompressionMethod.compressionMethod_bytesize"
+        "equation_Parsers.HeartbeatMode.heartbeatMode_bytesize"
       ],
       0,
-      "c3bd8b34300d56b02ea654547546b47f"
+      "c888d8386df8d4b30a78318c6bdc64b5"
     ],
     [
-      "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
+      "Parsers.HeartbeatMode.parse32_maybe_heartbeatMode_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.HeartbeatMode.heartbeatMode__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.HeartbeatMode.heartbeatMode_enum",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_Prims.Cons_a",
         "projection_inverse_Prims.Cons_hd",
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "0e39fc70ef887c6b980b7bb000c77b01"
+      "ceb1676936e05670f616dac462bb00f1"
     ],
     [
-      "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
+      "Parsers.HeartbeatMode.parse32_maybe_heartbeatMode_key",
       2,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.HeartbeatMode.heartbeatMode__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.HeartbeatMode.heartbeatMode_enum",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_Prims.Cons_a",
         "projection_inverse_Prims.Cons_hd",
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "7b84e74fb044fa06f31425f55ca57c29"
+      "ae422d6cb20a4a7bdf5219791d395681"
     ],
     [
-      "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
+      "Parsers.HeartbeatMode.parse32_maybe_heartbeatMode_key",
       3,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.HeartbeatMode.heartbeatMode__uu___haseq"
       ],
       0,
-      "4d159033593b248eb851a52de20db566"
+      "f3a17d497b639d92f8640fa3265a3c49"
     ],
     [
-      "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
+      "Parsers.HeartbeatMode.parse32_maybe_heartbeatMode_key",
       4,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.HeartbeatMode.heartbeatMode__uu___haseq"
       ],
       0,
-      "9ae94b79dc0bfcd43d0456855068416d"
+      "fea990c88eefb3a30d212966517e486b"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_parser32",
+      "Parsers.HeartbeatMode.heartbeatMode_parser32",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.HeartbeatMode.heartbeatMode__uu___haseq"
       ],
       0,
-      "4b2cdf2db9fcbef3933065b6d984e043"
+      "2949c6f05dcb2533b3584d9efc7c7d5b"
     ],
     [
-      "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
+      "Parsers.HeartbeatMode.serialize32_maybe_heartbeatMode_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.HeartbeatMode.heartbeatMode__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.HeartbeatMode.heartbeatMode_enum",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_Prims.Cons_a",
         "projection_inverse_Prims.Cons_hd",
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "d37369da63abb4ba2abaa238c6fc9999"
+      "07cacc2e5686f48d84de0f4ff8526af3"
     ],
     [
-      "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
+      "Parsers.HeartbeatMode.serialize32_maybe_heartbeatMode_key",
       2,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.HeartbeatMode.heartbeatMode__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.HeartbeatMode.heartbeatMode_enum",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_Prims.Cons_a",
         "projection_inverse_Prims.Cons_hd",
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "7b43d8f098163ed8681a2ece2dd200ac"
+      "9a7b0ba8addc874f84d11074e839f4dd"
     ],
     [
-      "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
+      "Parsers.HeartbeatMode.serialize32_maybe_heartbeatMode_key",
       3,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.HeartbeatMode.heartbeatMode__uu___haseq"
       ],
       0,
-      "ede5ef917f3805ff56a43b5673232b70"
+      "f253ad429da1aac9975c54795d38fc04"
     ],
     [
-      "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
+      "Parsers.HeartbeatMode.serialize32_maybe_heartbeatMode_key",
       4,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.HeartbeatMode.heartbeatMode__uu___haseq"
       ],
       0,
-      "f57f9107b743f2285ad149f47f0e3ba8"
+      "92356eed7a92ea70a7583f6201261953"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_serializer32",
+      "Parsers.HeartbeatMode.heartbeatMode_serializer32",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.HeartbeatMode.heartbeatMode__uu___haseq"
       ],
       0,
-      "600bb6e44c14de186f718205c366861c"
+      "0222991e644022fd77cc8e5083d0d8bc"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_size32",
+      "Parsers.HeartbeatMode.heartbeatMode_size32",
       1,
       2,
       1,
       [ "@query" ],
       0,
-      "63e2568057d92d2bf3c412ef78f3f199"
+      "a3a03f7960c732edb6e2650d82f4b18b"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_validator",
+      "Parsers.HeartbeatMode.heartbeatMode_validator",
       1,
       2,
       1,
@@ -405,7 +407,7 @@
         "@MaxIFuel_assumption", "@query",
         "equation_LowParse.Low.Base.validator_max_length",
         "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_Parsers.CompressionMethod.compressionMethod_parser_kind",
+        "equation_Parsers.HeartbeatMode.heartbeatMode_parser_kind",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
@@ -417,74 +419,74 @@
         "typing_LowParse.Low.Base.validator_max_length"
       ],
       0,
-      "bd468b38e623c560baa4b55a376f45d5"
+      "0815280fdea57e5c31a953382f41793b"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_jumper",
+      "Parsers.HeartbeatMode.heartbeatMode_jumper",
       1,
       2,
       1,
       [
         "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_Parsers.CompressionMethod.compressionMethod_parser_kind",
+        "equation_Parsers.HeartbeatMode.heartbeatMode_parser_kind",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "cf77d39f8c901d35ba97030e75d81064"
+      "482d0abb441f57436974aa8c14c93c1e"
     ],
     [
-      "Parsers.CompressionMethod.read_maybe_compressionMethod_key",
+      "Parsers.HeartbeatMode.read_maybe_heartbeatMode_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.HeartbeatMode.heartbeatMode__uu___haseq"
       ],
       0,
-      "8185c8e5f2920df26bc88a038ccaeadc"
+      "83ae2e10c7b9408fc6cc021affb4c263"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_reader",
+      "Parsers.HeartbeatMode.heartbeatMode_reader",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.HeartbeatMode.heartbeatMode__uu___haseq"
       ],
       0,
-      "209d4d5d4d353b37e5df702f191bbd89"
+      "582870302e47184de636c5fe1fb0d31d"
     ],
     [
-      "Parsers.CompressionMethod.write_maybe_compressionMethod_key",
+      "Parsers.HeartbeatMode.write_maybe_heartbeatMode_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.HeartbeatMode.heartbeatMode__uu___haseq"
       ],
       0,
-      "97503d61514e4b7cedba2dfee12fa1a5"
+      "0094ccc6fdee43274e4522b09a455705"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_writer",
+      "Parsers.HeartbeatMode.heartbeatMode_writer",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.HeartbeatMode.heartbeatMode__uu___haseq"
       ],
       0,
-      "9a6ed720f66e8bed3f4b65c9bd779582"
+      "3db165163b70985614a3628a6313e115"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_bytesize_eqn",
+      "Parsers.HeartbeatMode.heartbeatMode_bytesize_eqn",
       1,
       2,
       1,
@@ -492,9 +494,9 @@
         "@MaxIFuel_assumption", "@query",
         "constructor_distinct_FStar.Pervasives.Native.Some",
         "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_Parsers.CompressionMethod.compressionMethod_parser_kind",
+        "equation_Parsers.HeartbeatMode.heartbeatMode_parser_kind",
         "equation_Prims.nat", "int_inversion",
-        "kinding_Parsers.CompressionMethod.compressionMethod@tok",
+        "kinding_Parsers.HeartbeatMode.heartbeatMode@tok",
         "lemma_LowParse.Spec.Base.serialize_length",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
@@ -503,13 +505,13 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "typing_Parsers.CompressionMethod.compressionMethod_bytesize",
-        "typing_Parsers.CompressionMethod.compressionMethod_parser",
-        "typing_Parsers.CompressionMethod.compressionMethod_parser_kind",
-        "typing_Parsers.CompressionMethod.compressionMethod_serializer"
+        "typing_Parsers.HeartbeatMode.heartbeatMode_bytesize",
+        "typing_Parsers.HeartbeatMode.heartbeatMode_parser",
+        "typing_Parsers.HeartbeatMode.heartbeatMode_parser_kind",
+        "typing_Parsers.HeartbeatMode.heartbeatMode_serializer"
       ],
       0,
-      "a44bc2622ddcc2e17e334ff6f29106be"
+      "2b2ed9586cea430b96333d8ae99f1d79"
     ]
   ]
 ]

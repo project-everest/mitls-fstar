@@ -1,102 +1,107 @@
 [
-  "Fò›6N…'Ñ€ÑÚ\u0016ó’\u0016µ",
+  "oúX@\u0017óÃj\u0001ßV^\u000b\u0018tn",
   [
     [
-      "Parsers.CompressionMethod.compressionMethod_repr_eq",
+      "Parsers.MaxFragmentLength.maxFragmentLength_repr_eq",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "equation_Parsers.CompressionMethod.compressionMethod_repr"
+        "equation_Parsers.MaxFragmentLength.maxFragmentLength_repr"
       ],
       0,
-      "a27ecdfca5b7b94fe1d84e6ece4d0338"
+      "d76cc3574acee1d326c166f81583df37"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod",
+      "Parsers.MaxFragmentLength.maxFragmentLength",
       1,
       2,
       1,
       [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
       0,
-      "fc9414677a86359ee64ac474ba205f44"
+      "8653c8ecb2eedb16ebaa5a1f32a2140d"
     ],
     [
-      "Parsers.CompressionMethod.__proj__Unknown_compressionMethod__item___0",
+      "Parsers.MaxFragmentLength.__proj__Unknown_maxFragmentLength__item___0",
       1,
       2,
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "disc_equation_Parsers.CompressionMethod.Unknown_compressionMethod",
+        "disc_equation_Parsers.MaxFragmentLength.Unknown_maxFragmentLength",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_024d66cc355bb4f5c02304d3ef6c059f"
+        "refinement_interpretation_Tm_refine_6be2819934b3bd3b1cc202fe0946d3f2"
       ],
       0,
-      "100728d6a2ecedbdbddb015bd56d4882"
+      "70fbf6b6a931988ec0a3ff2114e09124"
     ],
     [
-      "Parsers.CompressionMethod.string_of_compressionMethod",
+      "Parsers.MaxFragmentLength.string_of_maxFragmentLength",
       1,
       2,
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "disc_equation_Parsers.CompressionMethod.NullCompression",
-        "disc_equation_Parsers.CompressionMethod.Unknown_compressionMethod",
-        "fuel_guarded_inversion_Parsers.CompressionMethod.compressionMethod"
+        "disc_equation_Parsers.MaxFragmentLength.Two_10",
+        "disc_equation_Parsers.MaxFragmentLength.Two_11",
+        "disc_equation_Parsers.MaxFragmentLength.Two_12",
+        "disc_equation_Parsers.MaxFragmentLength.Two_9",
+        "disc_equation_Parsers.MaxFragmentLength.Unknown_maxFragmentLength",
+        "fuel_guarded_inversion_Parsers.MaxFragmentLength.maxFragmentLength"
       ],
       0,
-      "7fd118ebfff8ae5bfb9dd469d6983e59"
+      "499cc1c9de1807ec9fb42f1e68ccda95"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_enum",
+      "Parsers.MaxFragmentLength.maxFragmentLength_enum",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.MaxFragmentLength.maxFragmentLength__uu___haseq"
       ],
       0,
-      "9634b1a57b656d036b399ce94c77de45"
+      "2a45581dcede3c3d78affb05f5f23979"
     ],
     [
-      "Parsers.CompressionMethod.synth_compressionMethod",
+      "Parsers.MaxFragmentLength.synth_maxFragmentLength",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.MaxFragmentLength.maxFragmentLength__uu___haseq"
       ],
       0,
-      "bdab6b5afb060511a1d45d5b31e15357"
+      "696a5971c2a9969100f887fa7aa5e5ff"
     ],
     [
-      "Parsers.CompressionMethod.synth_compressionMethod",
+      "Parsers.MaxFragmentLength.synth_maxFragmentLength",
       2,
       2,
       1,
       [
         "@MaxIFuel_assumption", "@query",
+        "Parsers.MaxFragmentLength_pretyping_e3404302d6b91b04bd02ab4506001af7",
         "assumption_FStar.UInt8.t__uu___haseq",
         "data_elim_LowParse.Spec.Enum.Unknown",
+        "data_typing_intro_Parsers.MaxFragmentLength.Two_10@tok",
         "disc_equation_LowParse.Spec.Enum.Known",
         "disc_equation_LowParse.Spec.Enum.Unknown",
         "equation_LowParse.Spec.Enum.unknown_enum_repr",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.MaxFragmentLength.maxFragmentLength_enum",
         "fuel_guarded_inversion_LowParse.Spec.Enum.maybe_enum_key",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_LowParse.Spec.Enum.Unknown__0",
         "refinement_interpretation_Tm_refine_42952339d1ff6a9a240497d58590f0b2"
       ],
       0,
-      "0f6aebd19604d01a7af88849ae895003"
+      "afa0922d6197b0f50521093661b2f1a3"
     ],
     [
-      "Parsers.CompressionMethod.synth_compressionMethod_inv",
+      "Parsers.MaxFragmentLength.synth_maxFragmentLength_inv",
       1,
       2,
       1,
@@ -105,70 +110,69 @@
         "Prims_pretyping_f537159ed795b314b4e58c260361ae86",
         "Prims_pretyping_f8666440faa91836cc5a13998af863fc",
         "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.MaxFragmentLength.maxFragmentLength__uu___haseq",
         "b2t_def", "bool_inversion", "bool_typing", "equation_Prims.l_imp",
         "equation_Prims.squash", "l_imp-interp",
         "primitive_Prims.op_Negation", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_6c62fe0923ba96eeef1e7e6fcb82ed91",
+        "refinement_interpretation_Tm_refine_27b7e01b595174f0d620d3febfbbdf6c",
         "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
-        "refinement_interpretation_Tm_refine_8f298af8c6d13fcf45122e9d42fdb6a4",
-        "typing_Parsers.CompressionMethod.uu___is_Unknown_compressionMethod",
+        "refinement_interpretation_Tm_refine_e48b1cc4a1f64aac88a1489efab9c4bc",
+        "typing_Parsers.MaxFragmentLength.uu___is_Unknown_maxFragmentLength",
         "unit_typing"
       ],
       0,
-      "c5db81696691ea9693ab162a39022fc3"
+      "84b2a88b1426716568ba7e21014a12b3"
     ],
     [
-      "Parsers.CompressionMethod.lemma_synth_compressionMethod_inv'",
+      "Parsers.MaxFragmentLength.lemma_synth_maxFragmentLength_inv'",
       1,
       2,
       1,
       [
         "@MaxIFuel_assumption", "@query",
         "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.MaxFragmentLength.maxFragmentLength__uu___haseq",
         "equation_LowParse.Spec.Combinators.synth_inverse",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.MaxFragmentLength.maxFragmentLength_enum",
         "equation_Prims.l_Forall", "equation_Prims.squash",
-        "l_quant_interp_96b3beb56ccf1a05efd29bfedf681b1b",
+        "l_quant_interp_7eaa32d72c3030624f7e688cd8878167",
         "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
-        "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod",
-        "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod_inv"
+        "token_correspondence_Parsers.MaxFragmentLength.synth_maxFragmentLength",
+        "token_correspondence_Parsers.MaxFragmentLength.synth_maxFragmentLength_inv"
       ],
       0,
-      "83f1c6516d19d9bc08a7cd0f745fa222"
+      "7b22a55976f8bceabe83b0096acb923e"
     ],
     [
-      "Parsers.CompressionMethod.lemma_synth_compressionMethod_inj",
+      "Parsers.MaxFragmentLength.lemma_synth_maxFragmentLength_inj",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.MaxFragmentLength.maxFragmentLength__uu___haseq"
       ],
       0,
-      "a536b07bc0d3c9c5840e4545ff82d244"
+      "a0fa0475d8e208ff005e1ad1a0fed110"
     ],
     [
-      "Parsers.CompressionMethod.lemma_synth_compressionMethod_inv",
+      "Parsers.MaxFragmentLength.lemma_synth_maxFragmentLength_inv",
       1,
       0,
       0,
       [
         "@MaxIFuel_assumption", "@query",
-        "Parsers.CompressionMethod_pretyping_0b005f481768a7bd4dd503e17d391cea",
+        "Parsers.MaxFragmentLength_pretyping_e3404302d6b91b04bd02ab4506001af7",
         "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.MaxFragmentLength.maxFragmentLength__uu___haseq",
         "constructor_distinct_LowParse.Spec.Enum.Known",
         "constructor_distinct_LowParse.Spec.Enum.Unknown",
-        "equality_tok_Parsers.CompressionMethod.NullCompression@tok",
+        "equality_tok_Parsers.MaxFragmentLength.Two_9@tok",
         "equation_LowParse.Spec.Combinators.synth_inverse",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
-        "equation_Parsers.CompressionMethod.synth_compressionMethod",
-        "equation_Parsers.CompressionMethod.synth_compressionMethod_inv",
-        "fuel_guarded_inversion_Parsers.CompressionMethod.compressionMethod",
-        "inversion-interp", "projection_inverse_LowParse.Spec.Enum.Known__0",
+        "equation_Parsers.MaxFragmentLength.maxFragmentLength_enum",
+        "equation_Parsers.MaxFragmentLength.synth_maxFragmentLength",
+        "equation_Parsers.MaxFragmentLength.synth_maxFragmentLength_inv",
+        "projection_inverse_LowParse.Spec.Enum.Known__0",
         "projection_inverse_LowParse.Spec.Enum.Known_e",
         "projection_inverse_LowParse.Spec.Enum.Known_key",
         "projection_inverse_LowParse.Spec.Enum.Known_repr",
@@ -176,228 +180,228 @@
         "projection_inverse_LowParse.Spec.Enum.Unknown_e",
         "projection_inverse_LowParse.Spec.Enum.Unknown_key",
         "projection_inverse_LowParse.Spec.Enum.Unknown_repr",
-        "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod",
-        "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod_inv",
-        "typing_tok_Parsers.CompressionMethod.NullCompression@tok"
+        "token_correspondence_Parsers.MaxFragmentLength.synth_maxFragmentLength",
+        "token_correspondence_Parsers.MaxFragmentLength.synth_maxFragmentLength_inv",
+        "typing_tok_Parsers.MaxFragmentLength.Two_9@tok"
       ],
       0,
-      "525470ebe7e2b0b2f7353b19375cc573"
+      "9cabfafa5b8f63d5e7517c1ed489ff62"
     ],
     [
-      "Parsers.CompressionMethod.parse_maybe_compressionMethod_key",
+      "Parsers.MaxFragmentLength.parse_maybe_maxFragmentLength_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.MaxFragmentLength.maxFragmentLength__uu___haseq"
       ],
       0,
-      "48792b18eba838e9e60393b858c9df6d"
+      "2a13ba82abcfb511c0bba81d8b1efef7"
     ],
     [
-      "Parsers.CompressionMethod.serialize_maybe_compressionMethod_key",
+      "Parsers.MaxFragmentLength.serialize_maybe_maxFragmentLength_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.MaxFragmentLength.maxFragmentLength__uu___haseq"
       ],
       0,
-      "b3b57ea9a26f6424f0e849790d2f416f"
+      "3ae51fe3bb54bd516c9d9d8d03f4e748"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_parser",
+      "Parsers.MaxFragmentLength.maxFragmentLength_parser",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.MaxFragmentLength.maxFragmentLength__uu___haseq"
       ],
       0,
-      "189fefb6da9b7fb850a95850df27fadb"
+      "68465cf85f71552ef592b3ba5cae02f1"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_serializer",
+      "Parsers.MaxFragmentLength.maxFragmentLength_serializer",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.MaxFragmentLength.maxFragmentLength__uu___haseq"
       ],
       0,
-      "85fabf252cc1bedf85e7396724cf4ac7"
+      "6fafde424447e986fd1790842db7d10e"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_bytesize_eq",
+      "Parsers.MaxFragmentLength.maxFragmentLength_bytesize_eq",
       1,
       2,
       1,
       [
         "@query", "equation_LowParse.Spec.Base.serialize",
-        "equation_Parsers.CompressionMethod.compressionMethod_bytesize"
+        "equation_Parsers.MaxFragmentLength.maxFragmentLength_bytesize"
       ],
       0,
-      "c3bd8b34300d56b02ea654547546b47f"
+      "3eeb94e69d2df1cc3649e406c19eff30"
     ],
     [
-      "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
+      "Parsers.MaxFragmentLength.parse32_maybe_maxFragmentLength_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.MaxFragmentLength.maxFragmentLength__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.MaxFragmentLength.maxFragmentLength_enum",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_Prims.Cons_a",
         "projection_inverse_Prims.Cons_hd",
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "0e39fc70ef887c6b980b7bb000c77b01"
+      "f2572536063c857f31906a691edf0f8c"
     ],
     [
-      "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
+      "Parsers.MaxFragmentLength.parse32_maybe_maxFragmentLength_key",
       2,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.MaxFragmentLength.maxFragmentLength__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.MaxFragmentLength.maxFragmentLength_enum",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_Prims.Cons_a",
         "projection_inverse_Prims.Cons_hd",
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "7b84e74fb044fa06f31425f55ca57c29"
+      "53e24613c58dc947794d14ef1c9a48c7"
     ],
     [
-      "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
+      "Parsers.MaxFragmentLength.parse32_maybe_maxFragmentLength_key",
       3,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.MaxFragmentLength.maxFragmentLength__uu___haseq"
       ],
       0,
-      "4d159033593b248eb851a52de20db566"
+      "e19e2f60b4deeab1241153772fcb9d5c"
     ],
     [
-      "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
+      "Parsers.MaxFragmentLength.parse32_maybe_maxFragmentLength_key",
       4,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.MaxFragmentLength.maxFragmentLength__uu___haseq"
       ],
       0,
-      "9ae94b79dc0bfcd43d0456855068416d"
+      "7b3566d33d2e861baced8c439f1374a9"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_parser32",
+      "Parsers.MaxFragmentLength.maxFragmentLength_parser32",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.MaxFragmentLength.maxFragmentLength__uu___haseq"
       ],
       0,
-      "4b2cdf2db9fcbef3933065b6d984e043"
+      "814d773c534cecd5b638c0cbd2d859aa"
     ],
     [
-      "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
+      "Parsers.MaxFragmentLength.serialize32_maybe_maxFragmentLength_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.MaxFragmentLength.maxFragmentLength__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.MaxFragmentLength.maxFragmentLength_enum",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_Prims.Cons_a",
         "projection_inverse_Prims.Cons_hd",
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "d37369da63abb4ba2abaa238c6fc9999"
+      "db1d315197de473a91a432d06efa3ff3"
     ],
     [
-      "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
+      "Parsers.MaxFragmentLength.serialize32_maybe_maxFragmentLength_key",
       2,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.MaxFragmentLength.maxFragmentLength__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.MaxFragmentLength.maxFragmentLength_enum",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_Prims.Cons_a",
         "projection_inverse_Prims.Cons_hd",
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "7b43d8f098163ed8681a2ece2dd200ac"
+      "9ad39579d2c3ccc440bced05a15be1aa"
     ],
     [
-      "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
+      "Parsers.MaxFragmentLength.serialize32_maybe_maxFragmentLength_key",
       3,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.MaxFragmentLength.maxFragmentLength__uu___haseq"
       ],
       0,
-      "ede5ef917f3805ff56a43b5673232b70"
+      "b1c60e727e677589812cd96370c1abb4"
     ],
     [
-      "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
+      "Parsers.MaxFragmentLength.serialize32_maybe_maxFragmentLength_key",
       4,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.MaxFragmentLength.maxFragmentLength__uu___haseq"
       ],
       0,
-      "f57f9107b743f2285ad149f47f0e3ba8"
+      "df2c31aceacc3c6efbade68bfe1e2bef"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_serializer32",
+      "Parsers.MaxFragmentLength.maxFragmentLength_serializer32",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.MaxFragmentLength.maxFragmentLength__uu___haseq"
       ],
       0,
-      "600bb6e44c14de186f718205c366861c"
+      "6f2485426d76a2fbc54179a7796b78c1"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_size32",
+      "Parsers.MaxFragmentLength.maxFragmentLength_size32",
       1,
       2,
       1,
       [ "@query" ],
       0,
-      "63e2568057d92d2bf3c412ef78f3f199"
+      "c612ade20c0f8caa06dff4f94ccd455a"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_validator",
+      "Parsers.MaxFragmentLength.maxFragmentLength_validator",
       1,
       2,
       1,
@@ -405,7 +409,7 @@
         "@MaxIFuel_assumption", "@query",
         "equation_LowParse.Low.Base.validator_max_length",
         "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_Parsers.CompressionMethod.compressionMethod_parser_kind",
+        "equation_Parsers.MaxFragmentLength.maxFragmentLength_parser_kind",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
@@ -417,74 +421,74 @@
         "typing_LowParse.Low.Base.validator_max_length"
       ],
       0,
-      "bd468b38e623c560baa4b55a376f45d5"
+      "2216d0db4758fbed144176b715d9b63e"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_jumper",
+      "Parsers.MaxFragmentLength.maxFragmentLength_jumper",
       1,
       2,
       1,
       [
         "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_Parsers.CompressionMethod.compressionMethod_parser_kind",
+        "equation_Parsers.MaxFragmentLength.maxFragmentLength_parser_kind",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "cf77d39f8c901d35ba97030e75d81064"
+      "73c503a50c76742a91a838bba184ba4e"
     ],
     [
-      "Parsers.CompressionMethod.read_maybe_compressionMethod_key",
+      "Parsers.MaxFragmentLength.read_maybe_maxFragmentLength_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.MaxFragmentLength.maxFragmentLength__uu___haseq"
       ],
       0,
-      "8185c8e5f2920df26bc88a038ccaeadc"
+      "26abceb97ff89e07d7af22773f2dd06f"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_reader",
+      "Parsers.MaxFragmentLength.maxFragmentLength_reader",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.MaxFragmentLength.maxFragmentLength__uu___haseq"
       ],
       0,
-      "209d4d5d4d353b37e5df702f191bbd89"
+      "bc0afcb59080dea94bc1e23e8695a232"
     ],
     [
-      "Parsers.CompressionMethod.write_maybe_compressionMethod_key",
+      "Parsers.MaxFragmentLength.write_maybe_maxFragmentLength_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.MaxFragmentLength.maxFragmentLength__uu___haseq"
       ],
       0,
-      "97503d61514e4b7cedba2dfee12fa1a5"
+      "a2c656e2a9a62c0d8caf2324e2a6ab75"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_writer",
+      "Parsers.MaxFragmentLength.maxFragmentLength_writer",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.MaxFragmentLength.maxFragmentLength__uu___haseq"
       ],
       0,
-      "9a6ed720f66e8bed3f4b65c9bd779582"
+      "5c200c67f0c9336d68de7578f0bd0936"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_bytesize_eqn",
+      "Parsers.MaxFragmentLength.maxFragmentLength_bytesize_eqn",
       1,
       2,
       1,
@@ -492,9 +496,9 @@
         "@MaxIFuel_assumption", "@query",
         "constructor_distinct_FStar.Pervasives.Native.Some",
         "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_Parsers.CompressionMethod.compressionMethod_parser_kind",
+        "equation_Parsers.MaxFragmentLength.maxFragmentLength_parser_kind",
         "equation_Prims.nat", "int_inversion",
-        "kinding_Parsers.CompressionMethod.compressionMethod@tok",
+        "kinding_Parsers.MaxFragmentLength.maxFragmentLength@tok",
         "lemma_LowParse.Spec.Base.serialize_length",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
@@ -503,13 +507,13 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "typing_Parsers.CompressionMethod.compressionMethod_bytesize",
-        "typing_Parsers.CompressionMethod.compressionMethod_parser",
-        "typing_Parsers.CompressionMethod.compressionMethod_parser_kind",
-        "typing_Parsers.CompressionMethod.compressionMethod_serializer"
+        "typing_Parsers.MaxFragmentLength.maxFragmentLength_bytesize",
+        "typing_Parsers.MaxFragmentLength.maxFragmentLength_parser",
+        "typing_Parsers.MaxFragmentLength.maxFragmentLength_parser_kind",
+        "typing_Parsers.MaxFragmentLength.maxFragmentLength_serializer"
       ],
       0,
-      "a44bc2622ddcc2e17e334ff6f29106be"
+      "96b9222bf3c07b521ea1405e8e52fc12"
     ]
   ]
 ]
