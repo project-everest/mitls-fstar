@@ -1,30 +1,33 @@
 ﻿(** computational assumption: collision resistance *)
 module Model.CRF
 
-/// This module should not be extracted
+/// This module should not be extracted to C.
 
+open Mem
 open Spec.Hash.Definitions
 open EverCrypt.Hash
 open EverCrypt.Hash.Incremental // only for the specs (renamings)
 
+module MDM = FStar.Monotonic.DependentMap
+
 #set-options "--max_fuel 0 --max_ifuel 0"
 
-//2018.04.24 SZ: to be moved elsewhere, set to false for real extraction
-//inline_for_extraction
-// let crf _ = false
+/// Verification is parametric in this specification function. Its
+/// concrete definition would state our collision-resistance
+/// assumption for a subset of the algorithms supported by EverCrypt.
+
 assume val crf: alg -> Tot bool
 
 let h = Spec.Hash.hash
 
-(* Depending on a single, global idealization function, we keep a global
-    inverse table for all (finalized) hash computations, and we use it to
-    detect concrete collisions. Technically, this is modelled as
-    non-termination of a stateful, partially-correct finalize filter.
-    This may depend on some prior flag to keep the hashed input in the
-    incremental hash implementation. (This is always the case for now.)  *)
+/// Depending on a single, global idealization function, we keep a
+/// global inverse table for all (finalized) hash computations, and we
+/// use it to detect concrete collisions. Technically, this is
+/// modelled as non-termination of a stateful, partially-correct
+/// finalize filter. This may depend on some prior flag to keep the
+/// hashed input in the incremental hash implementation. (This is
+/// always the case for now.)
 
-open Mem
-module MDM = FStar.Monotonic.DependentMap
 
 // now bounded irrespective of a, as in EverCrypt.Incremental (TBD)
 let bytes = Seq.seq UInt8.t
@@ -80,7 +83,7 @@ let injective a b0 b1 =
   )
 
 /// We use [stop] to model the exclusion of "bad" events, in this case
-/// a hash collision.  We should review this "flagless" style for
+/// a hash collision. We should review this "flagless" style for
 /// crypto modelling.
 
 private val stop: s:string -> Stack 'a
@@ -88,9 +91,8 @@ private val stop: s:string -> Stack 'a
   (ensures fun h0 r h1 -> False)
 let rec stop (s:string) = stop s
 
-// JP, NS: probably need to redo MDM to use modifies clauses; is Stack really
-// desired here or is ST ok? (note that MDM.extend could probably be redone to
-// use Stack instead of ST)
+// Note the use of ST instead of Stack, as we log the plaintext in a
+// global collision-detection table.
 val hash: a:alg -> v:bytes -> ST (bytes_hash a)
   (requires fun h0 -> hashable v)
   (ensures fun h0 t h1 ->
@@ -120,9 +122,9 @@ let hash a v =
   //assume(h0 == h1); //modifies loc_none h0 h1);
   t
 
-#set-options "--z3rlimit 100"
 // sanity check
 
+#set-options "--z3rlimit 100"
 open FStar.Seq
 
 private val test (a:alg {crf a}) (b0 b1: (b:bytes{hashable b})): St unit
@@ -131,4 +133,3 @@ let test a b0 b1 =
   let t1 = hash a b1 in
   injective a (Ghost.hide b0) (Ghost.hide b1);
   if model && t0 = t1 then assert(b0 == b1)
-
