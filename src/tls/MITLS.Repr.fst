@@ -297,30 +297,6 @@ let mk_from_const_slice
 
 module I = LowStar.ImmutableBuffer
 
-/// `alloc_and_blit`:
-///   A new allocate & initialize primitive that produces
-///   an initialized immutable buffer atomically.
-///
-///   This will move to the LowStar.ImmutableBuffer library
-assume
-val alloc_and_blit
-      (r:HS.rid)
-      (#a:Type0) (#p #q:B.srel a) (x:B.mbuffer a p q)
-      (len:uint_32{len <= B.len x})
-   : Stack (y:LowStar.ImmutableBuffer.ibuffer a)
-     (requires fun h ->
-       B.live h x)
-     (ensures fun h0 y h1 ->
-       let v : Ghost.erased (Seq.seq a) = Ghost.hide (B.as_seq h0 x) in
-       B.modifies B.loc_none h0 h1 /\
-       B.live h1 y /\
-       B.fresh_loc (B.loc_buffer y) h0 h1 /\
-       B.frameOf y == r /\
-       B.len y == len /\
-       B.as_seq h1 y == B.as_seq h0 x /\
-       y `I.value_is` v
-       )
-
 /// `valid_if_live`: A pure predicate on `r:repr t b` that states that
 /// so long as the underlying buffer is live in a given state `h`, that
 /// `r` is valid in that state
@@ -405,8 +381,8 @@ let recall_stable_repr #t #b (r:stable_repr t b)
 /// `stash`: Main stateful operation
 ///    Copies a repr into a fresh stable repr
 let stash (rgn:HS.rid) #t #b (r:repr t b)
-  : Stack (s:const_slice &
-           r':stable_repr t s)
+  : ST (s:const_slice &
+        r':stable_repr t s)
    (requires fun h ->
      valid r h)
    (ensures fun h0 (|s, r'|) h1 ->
@@ -415,7 +391,16 @@ let stash (rgn:HS.rid) #t #b (r:repr t b)
      r.meta == r'.meta)
  = let r_len = r.end_pos - r.start_pos in
    let b_sub = C.sub b.base r.start_pos r_len in
-   let buf' = alloc_and_blit rgn (C.cast b_sub) r_len in
+   (*
+    * AR: Should this be a precondition?
+    *)
+   assume (is_eternal_region rgn);
+   (*
+    * AR: Allocation functions in the buffer library require r_len > 0
+    *     Should we maintain anyway that in a repr end_pos > start_pos?
+    *)
+   assume (r_len > 0ul);
+   let buf' = I.igcmalloc_and_blit rgn (C.cast b_sub) 0ul r_len in
    let s = MkSlice (C.of_ibuffer buf') r_len in
    let h1 = get () in
    let _ =
