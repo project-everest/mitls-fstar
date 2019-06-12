@@ -1,102 +1,105 @@
 [
-  "Fò›6N…'Ñ€ÑÚ\u0016ó’\u0016µ",
+  "Ø\u0016¶\u001eMÏ¤PïZÆrçD6¿",
   [
     [
-      "Parsers.CompressionMethod.compressionMethod_repr_eq",
+      "Parsers.CertificateType.certificateType_repr_eq",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "equation_Parsers.CompressionMethod.compressionMethod_repr"
+        "equation_Parsers.CertificateType.certificateType_repr"
       ],
       0,
-      "a27ecdfca5b7b94fe1d84e6ece4d0338"
+      "fb8495412624983f96d0dafb151a06e7"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod",
+      "Parsers.CertificateType.certificateType",
       1,
       2,
       1,
       [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
       0,
-      "fc9414677a86359ee64ac474ba205f44"
+      "042ebd25badad9ed86d2c27731b521d4"
     ],
     [
-      "Parsers.CompressionMethod.__proj__Unknown_compressionMethod__item___0",
+      "Parsers.CertificateType.__proj__Unknown_certificateType__item___0",
       1,
       2,
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "disc_equation_Parsers.CompressionMethod.Unknown_compressionMethod",
+        "disc_equation_Parsers.CertificateType.Unknown_certificateType",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_024d66cc355bb4f5c02304d3ef6c059f"
+        "refinement_interpretation_Tm_refine_b9ee3cb09146644370d374575041d721"
       ],
       0,
-      "100728d6a2ecedbdbddb015bd56d4882"
+      "c285d2c31d6aba877193e1735dbdc2fa"
     ],
     [
-      "Parsers.CompressionMethod.string_of_compressionMethod",
+      "Parsers.CertificateType.string_of_certificateType",
       1,
       2,
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "disc_equation_Parsers.CompressionMethod.NullCompression",
-        "disc_equation_Parsers.CompressionMethod.Unknown_compressionMethod",
-        "fuel_guarded_inversion_Parsers.CompressionMethod.compressionMethod"
+        "disc_equation_Parsers.CertificateType.RawPublicKey",
+        "disc_equation_Parsers.CertificateType.Unknown_certificateType",
+        "disc_equation_Parsers.CertificateType.X509",
+        "fuel_guarded_inversion_Parsers.CertificateType.certificateType"
       ],
       0,
-      "7fd118ebfff8ae5bfb9dd469d6983e59"
+      "63b75a6934463a11d904f1579961959b"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_enum",
+      "Parsers.CertificateType.certificateType_enum",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.CertificateType.certificateType__uu___haseq"
       ],
       0,
-      "9634b1a57b656d036b399ce94c77de45"
+      "3ac6f945f65430e412bf752ac3066bb4"
     ],
     [
-      "Parsers.CompressionMethod.synth_compressionMethod",
+      "Parsers.CertificateType.synth_certificateType",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.CertificateType.certificateType__uu___haseq"
       ],
       0,
-      "bdab6b5afb060511a1d45d5b31e15357"
+      "578a75052c6073bdf138c054ed83932b"
     ],
     [
-      "Parsers.CompressionMethod.synth_compressionMethod",
+      "Parsers.CertificateType.synth_certificateType",
       2,
       2,
       1,
       [
         "@MaxIFuel_assumption", "@query",
+        "Parsers.CertificateType_pretyping_52fe19095bbe142ddfc5840d6b5dfeea",
         "assumption_FStar.UInt8.t__uu___haseq",
         "data_elim_LowParse.Spec.Enum.Unknown",
+        "data_typing_intro_Parsers.CertificateType.RawPublicKey@tok",
         "disc_equation_LowParse.Spec.Enum.Known",
         "disc_equation_LowParse.Spec.Enum.Unknown",
         "equation_LowParse.Spec.Enum.unknown_enum_repr",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.CertificateType.certificateType_enum",
         "fuel_guarded_inversion_LowParse.Spec.Enum.maybe_enum_key",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_LowParse.Spec.Enum.Unknown__0",
         "refinement_interpretation_Tm_refine_42952339d1ff6a9a240497d58590f0b2"
       ],
       0,
-      "0f6aebd19604d01a7af88849ae895003"
+      "18bb8c869f647ad17955e67a77a0c298"
     ],
     [
-      "Parsers.CompressionMethod.synth_compressionMethod_inv",
+      "Parsers.CertificateType.synth_certificateType_inv",
       1,
       2,
       1,
@@ -105,70 +108,69 @@
         "Prims_pretyping_f537159ed795b314b4e58c260361ae86",
         "Prims_pretyping_f8666440faa91836cc5a13998af863fc",
         "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.CertificateType.certificateType__uu___haseq",
         "b2t_def", "bool_inversion", "bool_typing", "equation_Prims.l_imp",
         "equation_Prims.squash", "l_imp-interp",
         "primitive_Prims.op_Negation", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_6c62fe0923ba96eeef1e7e6fcb82ed91",
+        "refinement_interpretation_Tm_refine_3dc6ac9e1b74d57af3f5db52532dc13e",
         "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
-        "refinement_interpretation_Tm_refine_8f298af8c6d13fcf45122e9d42fdb6a4",
-        "typing_Parsers.CompressionMethod.uu___is_Unknown_compressionMethod",
+        "refinement_interpretation_Tm_refine_b664a7c7c269966b5a69601156a11914",
+        "typing_Parsers.CertificateType.uu___is_Unknown_certificateType",
         "unit_typing"
       ],
       0,
-      "c5db81696691ea9693ab162a39022fc3"
+      "4d5902ba161321ac135c5b22ebffeec8"
     ],
     [
-      "Parsers.CompressionMethod.lemma_synth_compressionMethod_inv'",
+      "Parsers.CertificateType.lemma_synth_certificateType_inv'",
       1,
       2,
       1,
       [
         "@MaxIFuel_assumption", "@query",
         "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.CertificateType.certificateType__uu___haseq",
         "equation_LowParse.Spec.Combinators.synth_inverse",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.CertificateType.certificateType_enum",
         "equation_Prims.l_Forall", "equation_Prims.squash",
-        "l_quant_interp_96b3beb56ccf1a05efd29bfedf681b1b",
+        "l_quant_interp_5a875568324df579c3f422c9ec97fd6d",
         "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
-        "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod",
-        "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod_inv"
+        "token_correspondence_Parsers.CertificateType.synth_certificateType",
+        "token_correspondence_Parsers.CertificateType.synth_certificateType_inv"
       ],
       0,
-      "83f1c6516d19d9bc08a7cd0f745fa222"
+      "9a96d72fbbd466910f97c499e39a2477"
     ],
     [
-      "Parsers.CompressionMethod.lemma_synth_compressionMethod_inj",
+      "Parsers.CertificateType.lemma_synth_certificateType_inj",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.CertificateType.certificateType__uu___haseq"
       ],
       0,
-      "a536b07bc0d3c9c5840e4545ff82d244"
+      "91e52018fc53cdc0efebbc29a44331fe"
     ],
     [
-      "Parsers.CompressionMethod.lemma_synth_compressionMethod_inv",
+      "Parsers.CertificateType.lemma_synth_certificateType_inv",
       1,
       0,
       0,
       [
         "@MaxIFuel_assumption", "@query",
-        "Parsers.CompressionMethod_pretyping_0b005f481768a7bd4dd503e17d391cea",
+        "Parsers.CertificateType_pretyping_52fe19095bbe142ddfc5840d6b5dfeea",
         "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.CertificateType.certificateType__uu___haseq",
         "constructor_distinct_LowParse.Spec.Enum.Known",
         "constructor_distinct_LowParse.Spec.Enum.Unknown",
-        "equality_tok_Parsers.CompressionMethod.NullCompression@tok",
+        "equality_tok_Parsers.CertificateType.X509@tok",
         "equation_LowParse.Spec.Combinators.synth_inverse",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
-        "equation_Parsers.CompressionMethod.synth_compressionMethod",
-        "equation_Parsers.CompressionMethod.synth_compressionMethod_inv",
-        "fuel_guarded_inversion_Parsers.CompressionMethod.compressionMethod",
-        "inversion-interp", "projection_inverse_LowParse.Spec.Enum.Known__0",
+        "equation_Parsers.CertificateType.certificateType_enum",
+        "equation_Parsers.CertificateType.synth_certificateType",
+        "equation_Parsers.CertificateType.synth_certificateType_inv",
+        "projection_inverse_LowParse.Spec.Enum.Known__0",
         "projection_inverse_LowParse.Spec.Enum.Known_e",
         "projection_inverse_LowParse.Spec.Enum.Known_key",
         "projection_inverse_LowParse.Spec.Enum.Known_repr",
@@ -176,228 +178,228 @@
         "projection_inverse_LowParse.Spec.Enum.Unknown_e",
         "projection_inverse_LowParse.Spec.Enum.Unknown_key",
         "projection_inverse_LowParse.Spec.Enum.Unknown_repr",
-        "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod",
-        "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod_inv",
-        "typing_tok_Parsers.CompressionMethod.NullCompression@tok"
+        "token_correspondence_Parsers.CertificateType.synth_certificateType",
+        "token_correspondence_Parsers.CertificateType.synth_certificateType_inv",
+        "typing_tok_Parsers.CertificateType.X509@tok"
       ],
       0,
-      "525470ebe7e2b0b2f7353b19375cc573"
+      "837b1c5410198bd1bc824710f857069f"
     ],
     [
-      "Parsers.CompressionMethod.parse_maybe_compressionMethod_key",
+      "Parsers.CertificateType.parse_maybe_certificateType_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.CertificateType.certificateType__uu___haseq"
       ],
       0,
-      "48792b18eba838e9e60393b858c9df6d"
+      "668d7079cb7c211c4139e43833932adc"
     ],
     [
-      "Parsers.CompressionMethod.serialize_maybe_compressionMethod_key",
+      "Parsers.CertificateType.serialize_maybe_certificateType_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.CertificateType.certificateType__uu___haseq"
       ],
       0,
-      "b3b57ea9a26f6424f0e849790d2f416f"
+      "e31c0bbceaccce51e794d1d767f12b66"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_parser",
+      "Parsers.CertificateType.certificateType_parser",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.CertificateType.certificateType__uu___haseq"
       ],
       0,
-      "189fefb6da9b7fb850a95850df27fadb"
+      "5c088d191b223cbdabeeb687c6c63a22"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_serializer",
+      "Parsers.CertificateType.certificateType_serializer",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.CertificateType.certificateType__uu___haseq"
       ],
       0,
-      "85fabf252cc1bedf85e7396724cf4ac7"
+      "162d85b871fb845126125e9d762b8f36"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_bytesize_eq",
+      "Parsers.CertificateType.certificateType_bytesize_eq",
       1,
       2,
       1,
       [
         "@query", "equation_LowParse.Spec.Base.serialize",
-        "equation_Parsers.CompressionMethod.compressionMethod_bytesize"
+        "equation_Parsers.CertificateType.certificateType_bytesize"
       ],
       0,
-      "c3bd8b34300d56b02ea654547546b47f"
+      "a4f4cb543d323c2905f38fd10d828cdd"
     ],
     [
-      "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
+      "Parsers.CertificateType.parse32_maybe_certificateType_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.CertificateType.certificateType__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.CertificateType.certificateType_enum",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_Prims.Cons_a",
         "projection_inverse_Prims.Cons_hd",
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "0e39fc70ef887c6b980b7bb000c77b01"
+      "dbb866b562f880a2375bf778c232e492"
     ],
     [
-      "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
+      "Parsers.CertificateType.parse32_maybe_certificateType_key",
       2,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.CertificateType.certificateType__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.CertificateType.certificateType_enum",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_Prims.Cons_a",
         "projection_inverse_Prims.Cons_hd",
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "7b84e74fb044fa06f31425f55ca57c29"
+      "01e83472fa05e598a990341d9a523643"
     ],
     [
-      "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
+      "Parsers.CertificateType.parse32_maybe_certificateType_key",
       3,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.CertificateType.certificateType__uu___haseq"
       ],
       0,
-      "4d159033593b248eb851a52de20db566"
+      "7d64ad3e6ad6b5983174d01d00ef2f2f"
     ],
     [
-      "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
+      "Parsers.CertificateType.parse32_maybe_certificateType_key",
       4,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.CertificateType.certificateType__uu___haseq"
       ],
       0,
-      "9ae94b79dc0bfcd43d0456855068416d"
+      "f8dfb7ce33881bd5c90ba8a30b18a32f"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_parser32",
+      "Parsers.CertificateType.certificateType_parser32",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.CertificateType.certificateType__uu___haseq"
       ],
       0,
-      "4b2cdf2db9fcbef3933065b6d984e043"
+      "0b6243aefe5e216a0e46581203da0975"
     ],
     [
-      "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
+      "Parsers.CertificateType.serialize32_maybe_certificateType_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.CertificateType.certificateType__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.CertificateType.certificateType_enum",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_Prims.Cons_a",
         "projection_inverse_Prims.Cons_hd",
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "d37369da63abb4ba2abaa238c6fc9999"
+      "8c1a553f3716db70f9e3d2c0b44f86d6"
     ],
     [
-      "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
+      "Parsers.CertificateType.serialize32_maybe_certificateType_key",
       2,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.CertificateType.certificateType__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.CertificateType.certificateType_enum",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_Prims.Cons_a",
         "projection_inverse_Prims.Cons_hd",
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "7b43d8f098163ed8681a2ece2dd200ac"
+      "619741839ac03e20d9834f9f1a7c55f2"
     ],
     [
-      "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
+      "Parsers.CertificateType.serialize32_maybe_certificateType_key",
       3,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.CertificateType.certificateType__uu___haseq"
       ],
       0,
-      "ede5ef917f3805ff56a43b5673232b70"
+      "c49990fab3ce384dbdfa60c42cd627ca"
     ],
     [
-      "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
+      "Parsers.CertificateType.serialize32_maybe_certificateType_key",
       4,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.CertificateType.certificateType__uu___haseq"
       ],
       0,
-      "f57f9107b743f2285ad149f47f0e3ba8"
+      "c36c88d17461bf195b95f2b06b1bd850"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_serializer32",
+      "Parsers.CertificateType.certificateType_serializer32",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.CertificateType.certificateType__uu___haseq"
       ],
       0,
-      "600bb6e44c14de186f718205c366861c"
+      "684f084904c0254e1deec6cd6d1f5ea2"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_size32",
+      "Parsers.CertificateType.certificateType_size32",
       1,
       2,
       1,
       [ "@query" ],
       0,
-      "63e2568057d92d2bf3c412ef78f3f199"
+      "0040c476658dd54f19c9af96a8c371fa"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_validator",
+      "Parsers.CertificateType.certificateType_validator",
       1,
       2,
       1,
@@ -405,7 +407,7 @@
         "@MaxIFuel_assumption", "@query",
         "equation_LowParse.Low.Base.validator_max_length",
         "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_Parsers.CompressionMethod.compressionMethod_parser_kind",
+        "equation_Parsers.CertificateType.certificateType_parser_kind",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
@@ -417,74 +419,74 @@
         "typing_LowParse.Low.Base.validator_max_length"
       ],
       0,
-      "bd468b38e623c560baa4b55a376f45d5"
+      "e96354103e25d8b1ebc7c812c2c1fb12"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_jumper",
+      "Parsers.CertificateType.certificateType_jumper",
       1,
       2,
       1,
       [
         "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_Parsers.CompressionMethod.compressionMethod_parser_kind",
+        "equation_Parsers.CertificateType.certificateType_parser_kind",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "cf77d39f8c901d35ba97030e75d81064"
+      "30f792f82f1b129f48157aee33870f1b"
     ],
     [
-      "Parsers.CompressionMethod.read_maybe_compressionMethod_key",
+      "Parsers.CertificateType.read_maybe_certificateType_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.CertificateType.certificateType__uu___haseq"
       ],
       0,
-      "8185c8e5f2920df26bc88a038ccaeadc"
+      "c78c692b15b4670b38f971a916d86531"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_reader",
+      "Parsers.CertificateType.certificateType_reader",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.CertificateType.certificateType__uu___haseq"
       ],
       0,
-      "209d4d5d4d353b37e5df702f191bbd89"
+      "a40ef2eb3af16b9bd8de75db9f3149d1"
     ],
     [
-      "Parsers.CompressionMethod.write_maybe_compressionMethod_key",
+      "Parsers.CertificateType.write_maybe_certificateType_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.CertificateType.certificateType__uu___haseq"
       ],
       0,
-      "97503d61514e4b7cedba2dfee12fa1a5"
+      "1d2b6ec52d569343b20de65dddf66585"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_writer",
+      "Parsers.CertificateType.certificateType_writer",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.CertificateType.certificateType__uu___haseq"
       ],
       0,
-      "9a6ed720f66e8bed3f4b65c9bd779582"
+      "c902a95ca579ae0d575de8e1ab2a652b"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_bytesize_eqn",
+      "Parsers.CertificateType.certificateType_bytesize_eqn",
       1,
       2,
       1,
@@ -492,9 +494,9 @@
         "@MaxIFuel_assumption", "@query",
         "constructor_distinct_FStar.Pervasives.Native.Some",
         "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_Parsers.CompressionMethod.compressionMethod_parser_kind",
+        "equation_Parsers.CertificateType.certificateType_parser_kind",
         "equation_Prims.nat", "int_inversion",
-        "kinding_Parsers.CompressionMethod.compressionMethod@tok",
+        "kinding_Parsers.CertificateType.certificateType@tok",
         "lemma_LowParse.Spec.Base.serialize_length",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
@@ -503,13 +505,13 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "typing_Parsers.CompressionMethod.compressionMethod_bytesize",
-        "typing_Parsers.CompressionMethod.compressionMethod_parser",
-        "typing_Parsers.CompressionMethod.compressionMethod_parser_kind",
-        "typing_Parsers.CompressionMethod.compressionMethod_serializer"
+        "typing_Parsers.CertificateType.certificateType_bytesize",
+        "typing_Parsers.CertificateType.certificateType_parser",
+        "typing_Parsers.CertificateType.certificateType_parser_kind",
+        "typing_Parsers.CertificateType.certificateType_serializer"
       ],
       0,
-      "a44bc2622ddcc2e17e334ff6f29106be"
+      "a57fde29991c804df25490de4a599790"
     ]
   ]
 ]

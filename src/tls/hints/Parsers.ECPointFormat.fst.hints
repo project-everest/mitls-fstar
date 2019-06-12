@@ -1,102 +1,106 @@
 [
-  "Fò›6N…'Ñ€ÑÚ\u0016ó’\u0016µ",
+  "Æì•\u007f“–b–?U±P\u000b-se",
   [
     [
-      "Parsers.CompressionMethod.compressionMethod_repr_eq",
+      "Parsers.ECPointFormat.eCPointFormat_repr_eq",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "equation_Parsers.CompressionMethod.compressionMethod_repr"
+        "equation_Parsers.ECPointFormat.eCPointFormat_repr"
       ],
       0,
-      "a27ecdfca5b7b94fe1d84e6ece4d0338"
+      "d5d4539d89f2d12776004bedf39b1e99"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod",
+      "Parsers.ECPointFormat.eCPointFormat",
       1,
       2,
       1,
       [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
       0,
-      "fc9414677a86359ee64ac474ba205f44"
+      "c1dd33c5b5aaf5dcd1192ab5609548c0"
     ],
     [
-      "Parsers.CompressionMethod.__proj__Unknown_compressionMethod__item___0",
+      "Parsers.ECPointFormat.__proj__Unknown_eCPointFormat__item___0",
       1,
       2,
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "disc_equation_Parsers.CompressionMethod.Unknown_compressionMethod",
+        "disc_equation_Parsers.ECPointFormat.Unknown_eCPointFormat",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_024d66cc355bb4f5c02304d3ef6c059f"
+        "refinement_interpretation_Tm_refine_1d845b2445c0da4e5592ee920f69260f"
       ],
       0,
-      "100728d6a2ecedbdbddb015bd56d4882"
+      "c7e790813d936b6d8c093a1efd397d3a"
     ],
     [
-      "Parsers.CompressionMethod.string_of_compressionMethod",
+      "Parsers.ECPointFormat.string_of_eCPointFormat",
       1,
       2,
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "disc_equation_Parsers.CompressionMethod.NullCompression",
-        "disc_equation_Parsers.CompressionMethod.Unknown_compressionMethod",
-        "fuel_guarded_inversion_Parsers.CompressionMethod.compressionMethod"
+        "disc_equation_Parsers.ECPointFormat.AnsiX962_compressed_char2",
+        "disc_equation_Parsers.ECPointFormat.AnsiX962_compressed_prime",
+        "disc_equation_Parsers.ECPointFormat.Uncompressed",
+        "disc_equation_Parsers.ECPointFormat.Unknown_eCPointFormat",
+        "fuel_guarded_inversion_Parsers.ECPointFormat.eCPointFormat"
       ],
       0,
-      "7fd118ebfff8ae5bfb9dd469d6983e59"
+      "091c512964167aea0be1dfb33374d604"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_enum",
+      "Parsers.ECPointFormat.eCPointFormat_enum",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.ECPointFormat.eCPointFormat__uu___haseq"
       ],
       0,
-      "9634b1a57b656d036b399ce94c77de45"
+      "1547aae61ae80f0cc15ff342df8d4558"
     ],
     [
-      "Parsers.CompressionMethod.synth_compressionMethod",
+      "Parsers.ECPointFormat.synth_eCPointFormat",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.ECPointFormat.eCPointFormat__uu___haseq"
       ],
       0,
-      "bdab6b5afb060511a1d45d5b31e15357"
+      "f7d53800f72bcd870f66d2359863cb09"
     ],
     [
-      "Parsers.CompressionMethod.synth_compressionMethod",
+      "Parsers.ECPointFormat.synth_eCPointFormat",
       2,
       2,
       1,
       [
         "@MaxIFuel_assumption", "@query",
+        "Parsers.ECPointFormat_pretyping_1b4082f99aab4e7d3cea881447030161",
         "assumption_FStar.UInt8.t__uu___haseq",
         "data_elim_LowParse.Spec.Enum.Unknown",
+        "data_typing_intro_Parsers.ECPointFormat.AnsiX962_compressed_prime@tok",
         "disc_equation_LowParse.Spec.Enum.Known",
         "disc_equation_LowParse.Spec.Enum.Unknown",
         "equation_LowParse.Spec.Enum.unknown_enum_repr",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.ECPointFormat.eCPointFormat_enum",
         "fuel_guarded_inversion_LowParse.Spec.Enum.maybe_enum_key",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_LowParse.Spec.Enum.Unknown__0",
         "refinement_interpretation_Tm_refine_42952339d1ff6a9a240497d58590f0b2"
       ],
       0,
-      "0f6aebd19604d01a7af88849ae895003"
+      "a14428a65edee2614cfc8a9d8cae6785"
     ],
     [
-      "Parsers.CompressionMethod.synth_compressionMethod_inv",
+      "Parsers.ECPointFormat.synth_eCPointFormat_inv",
       1,
       2,
       1,
@@ -105,70 +109,69 @@
         "Prims_pretyping_f537159ed795b314b4e58c260361ae86",
         "Prims_pretyping_f8666440faa91836cc5a13998af863fc",
         "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.ECPointFormat.eCPointFormat__uu___haseq",
         "b2t_def", "bool_inversion", "bool_typing", "equation_Prims.l_imp",
         "equation_Prims.squash", "l_imp-interp",
         "primitive_Prims.op_Negation", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_6c62fe0923ba96eeef1e7e6fcb82ed91",
+        "refinement_interpretation_Tm_refine_184a16ad654419d4ca99951efff7bcb5",
+        "refinement_interpretation_Tm_refine_71c76435d795d386319bccebe07a3367",
         "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
-        "refinement_interpretation_Tm_refine_8f298af8c6d13fcf45122e9d42fdb6a4",
-        "typing_Parsers.CompressionMethod.uu___is_Unknown_compressionMethod",
+        "typing_Parsers.ECPointFormat.uu___is_Unknown_eCPointFormat",
         "unit_typing"
       ],
       0,
-      "c5db81696691ea9693ab162a39022fc3"
+      "9f90dc731df4a5b8f031a636b626c064"
     ],
     [
-      "Parsers.CompressionMethod.lemma_synth_compressionMethod_inv'",
+      "Parsers.ECPointFormat.lemma_synth_eCPointFormat_inv'",
       1,
       2,
       1,
       [
         "@MaxIFuel_assumption", "@query",
         "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.ECPointFormat.eCPointFormat__uu___haseq",
         "equation_LowParse.Spec.Combinators.synth_inverse",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.ECPointFormat.eCPointFormat_enum",
         "equation_Prims.l_Forall", "equation_Prims.squash",
-        "l_quant_interp_96b3beb56ccf1a05efd29bfedf681b1b",
+        "l_quant_interp_58a7579a8e10930513f9accd7161be13",
         "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
-        "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod",
-        "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod_inv"
+        "token_correspondence_Parsers.ECPointFormat.synth_eCPointFormat",
+        "token_correspondence_Parsers.ECPointFormat.synth_eCPointFormat_inv"
       ],
       0,
-      "83f1c6516d19d9bc08a7cd0f745fa222"
+      "ab5eefdbe140510bbb7a0cf908a50e8d"
     ],
     [
-      "Parsers.CompressionMethod.lemma_synth_compressionMethod_inj",
+      "Parsers.ECPointFormat.lemma_synth_eCPointFormat_inj",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.ECPointFormat.eCPointFormat__uu___haseq"
       ],
       0,
-      "a536b07bc0d3c9c5840e4545ff82d244"
+      "af03f67d7c3e9f5dca23e59a2ced83c6"
     ],
     [
-      "Parsers.CompressionMethod.lemma_synth_compressionMethod_inv",
+      "Parsers.ECPointFormat.lemma_synth_eCPointFormat_inv",
       1,
       0,
       0,
       [
         "@MaxIFuel_assumption", "@query",
-        "Parsers.CompressionMethod_pretyping_0b005f481768a7bd4dd503e17d391cea",
+        "Parsers.ECPointFormat_pretyping_1b4082f99aab4e7d3cea881447030161",
         "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.ECPointFormat.eCPointFormat__uu___haseq",
         "constructor_distinct_LowParse.Spec.Enum.Known",
         "constructor_distinct_LowParse.Spec.Enum.Unknown",
-        "equality_tok_Parsers.CompressionMethod.NullCompression@tok",
+        "equality_tok_Parsers.ECPointFormat.Uncompressed@tok",
         "equation_LowParse.Spec.Combinators.synth_inverse",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
-        "equation_Parsers.CompressionMethod.synth_compressionMethod",
-        "equation_Parsers.CompressionMethod.synth_compressionMethod_inv",
-        "fuel_guarded_inversion_Parsers.CompressionMethod.compressionMethod",
-        "inversion-interp", "projection_inverse_LowParse.Spec.Enum.Known__0",
+        "equation_Parsers.ECPointFormat.eCPointFormat_enum",
+        "equation_Parsers.ECPointFormat.synth_eCPointFormat",
+        "equation_Parsers.ECPointFormat.synth_eCPointFormat_inv",
+        "projection_inverse_LowParse.Spec.Enum.Known__0",
         "projection_inverse_LowParse.Spec.Enum.Known_e",
         "projection_inverse_LowParse.Spec.Enum.Known_key",
         "projection_inverse_LowParse.Spec.Enum.Known_repr",
@@ -176,228 +179,228 @@
         "projection_inverse_LowParse.Spec.Enum.Unknown_e",
         "projection_inverse_LowParse.Spec.Enum.Unknown_key",
         "projection_inverse_LowParse.Spec.Enum.Unknown_repr",
-        "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod",
-        "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod_inv",
-        "typing_tok_Parsers.CompressionMethod.NullCompression@tok"
+        "token_correspondence_Parsers.ECPointFormat.synth_eCPointFormat",
+        "token_correspondence_Parsers.ECPointFormat.synth_eCPointFormat_inv",
+        "typing_tok_Parsers.ECPointFormat.Uncompressed@tok"
       ],
       0,
-      "525470ebe7e2b0b2f7353b19375cc573"
+      "ec0021da0efc9c63da6ef8522442ef72"
     ],
     [
-      "Parsers.CompressionMethod.parse_maybe_compressionMethod_key",
+      "Parsers.ECPointFormat.parse_maybe_eCPointFormat_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.ECPointFormat.eCPointFormat__uu___haseq"
       ],
       0,
-      "48792b18eba838e9e60393b858c9df6d"
+      "f3edf7a9c2a8c1ea94316ecd8626bf98"
     ],
     [
-      "Parsers.CompressionMethod.serialize_maybe_compressionMethod_key",
+      "Parsers.ECPointFormat.serialize_maybe_eCPointFormat_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.ECPointFormat.eCPointFormat__uu___haseq"
       ],
       0,
-      "b3b57ea9a26f6424f0e849790d2f416f"
+      "4fef51277d42bc5cdab1499ce7b95d14"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_parser",
+      "Parsers.ECPointFormat.eCPointFormat_parser",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.ECPointFormat.eCPointFormat__uu___haseq"
       ],
       0,
-      "189fefb6da9b7fb850a95850df27fadb"
+      "b7017471c63d4b858149fe689b78ad54"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_serializer",
+      "Parsers.ECPointFormat.eCPointFormat_serializer",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.ECPointFormat.eCPointFormat__uu___haseq"
       ],
       0,
-      "85fabf252cc1bedf85e7396724cf4ac7"
+      "4626a16c903391c5318048608a040980"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_bytesize_eq",
+      "Parsers.ECPointFormat.eCPointFormat_bytesize_eq",
       1,
       2,
       1,
       [
         "@query", "equation_LowParse.Spec.Base.serialize",
-        "equation_Parsers.CompressionMethod.compressionMethod_bytesize"
+        "equation_Parsers.ECPointFormat.eCPointFormat_bytesize"
       ],
       0,
-      "c3bd8b34300d56b02ea654547546b47f"
+      "0c57bbeb9c4a29ea720fe433272dd23f"
     ],
     [
-      "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
+      "Parsers.ECPointFormat.parse32_maybe_eCPointFormat_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.ECPointFormat.eCPointFormat__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.ECPointFormat.eCPointFormat_enum",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_Prims.Cons_a",
         "projection_inverse_Prims.Cons_hd",
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "0e39fc70ef887c6b980b7bb000c77b01"
+      "7b64228543467f5c9b1589be5e977c79"
     ],
     [
-      "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
+      "Parsers.ECPointFormat.parse32_maybe_eCPointFormat_key",
       2,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.ECPointFormat.eCPointFormat__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.ECPointFormat.eCPointFormat_enum",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_Prims.Cons_a",
         "projection_inverse_Prims.Cons_hd",
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "7b84e74fb044fa06f31425f55ca57c29"
+      "bf75846d68aa05f880b5cbf16663c33c"
     ],
     [
-      "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
+      "Parsers.ECPointFormat.parse32_maybe_eCPointFormat_key",
       3,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.ECPointFormat.eCPointFormat__uu___haseq"
       ],
       0,
-      "4d159033593b248eb851a52de20db566"
+      "e56c03295dc064501cc777ff6dee6645"
     ],
     [
-      "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
+      "Parsers.ECPointFormat.parse32_maybe_eCPointFormat_key",
       4,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.ECPointFormat.eCPointFormat__uu___haseq"
       ],
       0,
-      "9ae94b79dc0bfcd43d0456855068416d"
+      "c444e2e8322007b6e3a001e8d1dd5deb"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_parser32",
+      "Parsers.ECPointFormat.eCPointFormat_parser32",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.ECPointFormat.eCPointFormat__uu___haseq"
       ],
       0,
-      "4b2cdf2db9fcbef3933065b6d984e043"
+      "dbf81353cb8b88818f658b55d4738ff9"
     ],
     [
-      "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
+      "Parsers.ECPointFormat.serialize32_maybe_eCPointFormat_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.ECPointFormat.eCPointFormat__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.ECPointFormat.eCPointFormat_enum",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_Prims.Cons_a",
         "projection_inverse_Prims.Cons_hd",
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "d37369da63abb4ba2abaa238c6fc9999"
+      "9ff1af0ca3ed6ffcfa7378dd5a9be896"
     ],
     [
-      "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
+      "Parsers.ECPointFormat.serialize32_maybe_eCPointFormat_key",
       2,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "assumption_Parsers.ECPointFormat.eCPointFormat__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
-        "equation_Parsers.CompressionMethod.compressionMethod_enum",
+        "equation_Parsers.ECPointFormat.eCPointFormat_enum",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_Prims.Cons_a",
         "projection_inverse_Prims.Cons_hd",
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "7b43d8f098163ed8681a2ece2dd200ac"
+      "5236cf47a4455df057914b6a0a69377c"
     ],
     [
-      "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
+      "Parsers.ECPointFormat.serialize32_maybe_eCPointFormat_key",
       3,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.ECPointFormat.eCPointFormat__uu___haseq"
       ],
       0,
-      "ede5ef917f3805ff56a43b5673232b70"
+      "103a1dc97859cf95f0a1108e83a1ad01"
     ],
     [
-      "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
+      "Parsers.ECPointFormat.serialize32_maybe_eCPointFormat_key",
       4,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.ECPointFormat.eCPointFormat__uu___haseq"
       ],
       0,
-      "f57f9107b743f2285ad149f47f0e3ba8"
+      "1a1467e550a03eb3d6891c8e85825e78"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_serializer32",
+      "Parsers.ECPointFormat.eCPointFormat_serializer32",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.ECPointFormat.eCPointFormat__uu___haseq"
       ],
       0,
-      "600bb6e44c14de186f718205c366861c"
+      "00bb0f1a24beb1fe9b67932758b5f89e"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_size32",
+      "Parsers.ECPointFormat.eCPointFormat_size32",
       1,
       2,
       1,
       [ "@query" ],
       0,
-      "63e2568057d92d2bf3c412ef78f3f199"
+      "616d5749ba2494dee27169cb69a75932"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_validator",
+      "Parsers.ECPointFormat.eCPointFormat_validator",
       1,
       2,
       1,
@@ -405,7 +408,7 @@
         "@MaxIFuel_assumption", "@query",
         "equation_LowParse.Low.Base.validator_max_length",
         "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_Parsers.CompressionMethod.compressionMethod_parser_kind",
+        "equation_Parsers.ECPointFormat.eCPointFormat_parser_kind",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
@@ -417,74 +420,74 @@
         "typing_LowParse.Low.Base.validator_max_length"
       ],
       0,
-      "bd468b38e623c560baa4b55a376f45d5"
+      "94c8d5d3814addb64d456b18c36c9056"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_jumper",
+      "Parsers.ECPointFormat.eCPointFormat_jumper",
       1,
       2,
       1,
       [
         "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_Parsers.CompressionMethod.compressionMethod_parser_kind",
+        "equation_Parsers.ECPointFormat.eCPointFormat_parser_kind",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "cf77d39f8c901d35ba97030e75d81064"
+      "5ec0b8316c670de7247d6bd890692f8d"
     ],
     [
-      "Parsers.CompressionMethod.read_maybe_compressionMethod_key",
+      "Parsers.ECPointFormat.read_maybe_eCPointFormat_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.ECPointFormat.eCPointFormat__uu___haseq"
       ],
       0,
-      "8185c8e5f2920df26bc88a038ccaeadc"
+      "a38503bbf2b60f023b5502281e635825"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_reader",
+      "Parsers.ECPointFormat.eCPointFormat_reader",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.ECPointFormat.eCPointFormat__uu___haseq"
       ],
       0,
-      "209d4d5d4d353b37e5df702f191bbd89"
+      "0a3843416903d0ed4b15cf4bdaa54867"
     ],
     [
-      "Parsers.CompressionMethod.write_maybe_compressionMethod_key",
+      "Parsers.ECPointFormat.write_maybe_eCPointFormat_key",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.ECPointFormat.eCPointFormat__uu___haseq"
       ],
       0,
-      "97503d61514e4b7cedba2dfee12fa1a5"
+      "e2968f45d71f4312b0a6ce6bc395212c"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_writer",
+      "Parsers.ECPointFormat.eCPointFormat_writer",
       1,
       2,
       1,
       [
         "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "assumption_Parsers.ECPointFormat.eCPointFormat__uu___haseq"
       ],
       0,
-      "9a6ed720f66e8bed3f4b65c9bd779582"
+      "2d80e3f30568cc32034153109eba1a39"
     ],
     [
-      "Parsers.CompressionMethod.compressionMethod_bytesize_eqn",
+      "Parsers.ECPointFormat.eCPointFormat_bytesize_eqn",
       1,
       2,
       1,
@@ -492,9 +495,9 @@
         "@MaxIFuel_assumption", "@query",
         "constructor_distinct_FStar.Pervasives.Native.Some",
         "equation_LowParse.Spec.Base.strong_parser_kind",
-        "equation_Parsers.CompressionMethod.compressionMethod_parser_kind",
+        "equation_Parsers.ECPointFormat.eCPointFormat_parser_kind",
         "equation_Prims.nat", "int_inversion",
-        "kinding_Parsers.CompressionMethod.compressionMethod@tok",
+        "kinding_Parsers.ECPointFormat.eCPointFormat@tok",
         "lemma_LowParse.Spec.Base.serialize_length",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
@@ -503,13 +506,13 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "typing_Parsers.CompressionMethod.compressionMethod_bytesize",
-        "typing_Parsers.CompressionMethod.compressionMethod_parser",
-        "typing_Parsers.CompressionMethod.compressionMethod_parser_kind",
-        "typing_Parsers.CompressionMethod.compressionMethod_serializer"
+        "typing_Parsers.ECPointFormat.eCPointFormat_bytesize",
+        "typing_Parsers.ECPointFormat.eCPointFormat_parser",
+        "typing_Parsers.ECPointFormat.eCPointFormat_parser_kind",
+        "typing_Parsers.ECPointFormat.eCPointFormat_serializer"
       ],
       0,
-      "a44bc2622ddcc2e17e334ff6f29106be"
+      "0a7cab22d09ca0ef1207d4a803a76b76"
     ]
   ]
 ]

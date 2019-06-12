@@ -1,0 +1,48 @@
+[
+  "670\u0011êrq‚ÿ)¿«˙ä´°",
+  [
+    [
+      "Parsers.HandshakeType.string_of_handshakeType",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.HandshakeType.Certificate",
+        "disc_equation_Parsers.HandshakeType.Certificate_request",
+        "disc_equation_Parsers.HandshakeType.Certificate_verify",
+        "disc_equation_Parsers.HandshakeType.Client_hello",
+        "disc_equation_Parsers.HandshakeType.Client_key_exchange",
+        "disc_equation_Parsers.HandshakeType.Encrypted_extensions",
+        "disc_equation_Parsers.HandshakeType.End_of_early_data",
+        "disc_equation_Parsers.HandshakeType.Finished",
+        "disc_equation_Parsers.HandshakeType.Hello_request",
+        "disc_equation_Parsers.HandshakeType.Key_update",
+        "disc_equation_Parsers.HandshakeType.Message_hash",
+        "disc_equation_Parsers.HandshakeType.New_session_ticket",
+        "disc_equation_Parsers.HandshakeType.Server_hello",
+        "disc_equation_Parsers.HandshakeType.Server_hello_done",
+        "disc_equation_Parsers.HandshakeType.Server_key_exchange",
+        "fuel_guarded_inversion_Parsers.HandshakeType.handshakeType"
+      ],
+      0,
+      "728fb4ff3ada05739cfeea070059e130"
+    ],
+    [
+      "Parsers.HandshakeType.handshakeType_jumper",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.HandshakeType.handshakeType_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
+      ],
+      0,
+      "d8f232b4f4d2cd2a9f90ef62a71d9df8"
+    ]
+  ]
+]
