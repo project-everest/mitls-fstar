@@ -53,8 +53,8 @@ type macAlg   = EverCrypt.Hash.alg
 type hashAlg  = Hashing.Spec.tls_alg
 
 //let hashSize = Hashing.Spec.tls_tagLen
-let macKeySize = Hashing.Spec.tagLen
-let macSize = Hashing.Spec.tagLen
+let macKeySize = Hacl.Hash.Definitions.hash_len
+let macSize = Hacl.Hash.Definitions.hash_len
 
 (** Authenticated Encryption modes *)
 type aeAlg =

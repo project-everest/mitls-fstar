@@ -21,7 +21,7 @@ module CH = Parsers.ClientHello
 
 module R_SH = MITLS.Repr.ServerHello
 module SH = Parsers.ServerHello
-module CRF = EverCrypt.CRF
+module CRF = Crypto.CRF
 module TestCRF = Test.CRF
 
 let is_hrr _ = admit()
@@ -314,7 +314,7 @@ type state (a:HashDef.hash_alg) = {
 }
 
 let invariant (#a:HashDef.hash_alg) (s:state a) (tx:transcript_t) (h:HS.mem) =
-  CRF.hashes h s.hash_state (transcript_bytes tx) /\
+  CRF.hashed h s.hash_state `Seq.equal` transcript_bytes tx /\
   B.loc_region_only true s.region `B.loc_includes` Ghost.reveal s.loc /\
   Ghost.reveal s.loc == CRF.footprint s.hash_state h /\
   B.loc_not_unused_in h `B.loc_includes` Ghost.reveal s.loc

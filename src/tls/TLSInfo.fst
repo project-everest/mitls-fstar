@@ -475,7 +475,7 @@ let esId_ae (i:pre_esId{ApplicationPSK? i \/ ResumptionPSK? i}) =
 
 noextract
 type valid_hlen (b:bytes) (h:hash_alg) =
-  len b = Hashing.Spec.tagLen h
+  len b = Hacl.Hash.Definitions.hash_len h
 
 type pre_index =
 | I_ES of pre_esId

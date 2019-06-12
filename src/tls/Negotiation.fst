@@ -415,7 +415,7 @@ private let rec list_valid_ng_is_list_ng (l:CommonDH.supportedNamedGroups) : Tot
 
 private let compute_binder_ph (pski:pskInfo) : Tot pskBinderEntry =
   let h = PSK.pskInfo_hash pski in
-  let len : UInt32.t = Hashing.Spec.tagLen h in
+  let len : UInt32.t = Hacl.Hash.Definitions.hash_len h in
   assume (32 <= U32.v len /\ U32.v len <= 256); // hash must not be MD5 or SHA1...
   FStar.Bytes.create len 0uy
 
@@ -427,7 +427,7 @@ private let compute_binder_ph (pski:pskInfo) : Tot pskBinderEntry =
 let compute_binder_ph_new (t: Parsers.TicketContents13.ticketContents13) : Tot pskBinderEntry =
   let pski = Ticket.ticketContents13_pskinfo t in
   let h = PSK.pskInfo_hash pski in
-  let len : UInt32.t = Hashing.Spec.tagLen h in
+  let len : UInt32.t = Hacl.Hash.Definitions.hash_len h in
   assert (32 <= U32.v len /\ U32.v len <= 256); // hash must not be MD5 or SHA1...
   FStar.Bytes.create len 0uy
 
@@ -1609,6 +1609,7 @@ let ciphersuite_accept cfg pv sh =
       fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
 
 let accept_ServerHello cfg offer sh = 
+  [@inline_let]
   let r = m:mode{Mode?.n_offer m == offer} in 
   pv <-- Negotiation.Version.accept cfg sh; 
   cs <-- ciphersuite_accept cfg pv sh;

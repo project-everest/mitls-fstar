@@ -66,7 +66,7 @@ module R_SH = MITLS.Repr.ServerHello
 module SH = Parsers.ServerHello
 module Psks = Parsers.OfferedPsks
 module PB = ParsersAux.Binders
-module CRF = EverCrypt.CRF
+module CRF = Crypto.CRF
 
 //TODO: move to a separate module
 let repr_hs12 (b:R.const_slice) =
