@@ -1436,7 +1436,10 @@ let same_she_che_type (s: serverHelloExtension) (c: clientHelloExtension) =
 let same_che_che_type (c0 c1: clientHelloExtension) = 
   tag_of_clientHelloExtension c0 = tag_of_clientHelloExtension c1 
 
-let checkServerExtension resuming (ces: clientHelloExtensions) (se: serverHelloExtension): result unit =
+// 19-06-12 Although we have different types for SE and EE, the same
+// extension may occur in SE for 1.2 and EE for 1.3. We could be more
+// restrictive depending on [pv] here.
+let accept_ServerExtension resuming (ces: clientHelloExtensions) (se: serverHelloExtension): result unit =
   if not (List.Helpers.exists_b_aux se same_she_che_type ces) then
     unsupported "received unsolicited server extension"
   else 
@@ -1449,6 +1452,7 @@ let checkServerExtension resuming (ces: clientHelloExtensions) (se: serverHelloE
         else correct () 
       
     | SHE_application_layer_protocol_negotiation sal -> 
+        // The wire format is too permissive, hence this additional check
         if List.length sal <> 1 then illegal "Multiple ALPN selected by server"
         else correct() 
         
@@ -1458,7 +1462,7 @@ let checkServerExtension resuming (ces: clientHelloExtensions) (se: serverHelloE
         
     | SHE_ec_point_formats _  // can be sent in resumption, apparently (RFC 4492, 5.2)
     | SHE_pre_shared_key _    // bound check later in  Nego
-    | SHE_supported_versions _
+    | SHE_supported_versions _ // validated earlier 
     | SHE_session_ticket _
     | SHE_extended_master_secret _
     | SHE_key_share _
@@ -1483,19 +1487,19 @@ let checkServerExtension resuming (ces: clientHelloExtensions) (se: serverHelloE
 /// Client validation of the ServerHello extensions;
 /// returns the negotiated protocol version .
 /// 
-val checkServerExtensions:
+val accept_ServerExtensions:
   resuming: bool ->
 //option (cVerifyData * sVerifyData) ->
   clientHelloExtensions ->
   serverHelloExtensions ->
   result unit
-let rec checkServerExtensions resuming ces ses = 
+let rec accept_ServerExtensions resuming ces ses = 
   match ses with
   | [] -> Correct () 
   | se ::  ses -> 
-      match checkServerExtension resuming ces se with 
+      match accept_ServerExtension resuming ces se with 
       | Error z   -> Error z 
-      | Correct _ -> checkServerExtensions resuming ces ses 
+      | Correct _ -> accept_ServerExtensions resuming ces ses 
 
 (* now in Negotiation.Version:
 
@@ -1592,10 +1596,11 @@ let return (#a:Type) (x:a) : result a = Correct x
 inline_for_extraction
 let fail (#a:Type) z : result a = Error z
 
-// let cs_pv pv = 
-//  cs:_ { (TLS_1p2? pv && CipherSuite? cs) || (TLS_1p3? pv && CipherSuite13? cs) }
+let cs_pv pv = 
+  cs: cipherSuite { (TLS_1p2? pv /\ CipherSuite? cs) \/ (TLS_1p3? pv /\ CipherSuite13? cs) }
     
-let ciphersuite_accept cfg pv sh = 
+let ciphersuite_accept cfg pv sh : result (cs_pv pv) 
+= 
   match cipherSuite_of_name sh.SH.cipher_suite with 
   | None -> fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "Server cipherSuite") 
   | Some cs -> 
@@ -1613,18 +1618,19 @@ let accept_ServerHello cfg offer sh =
   let r = m:mode{Mode?.n_offer m == offer} in 
   pv <-- Negotiation.Version.accept cfg sh; 
   cs <-- ciphersuite_accept cfg pv sh;
-  let sr   = sh.SH.random in
+  pski <-- accept_pski offer sh;  
   let ssid = sh.SH.session_id in
-  let ses  = sh.SH.extensions in
   let resume = 
     ssid = offer.CH.session_id && 
     length offer.CH.session_id > 0 in
-  _ <-- checkServerExtensions resume offer.CH.extensions ses;
-  m <--  (
+  let ses  = sh.SH.extensions in
+  _ <-- accept_ServerExtensions resume offer.CH.extensions ses;
+  let sr = sh.SH.random in
+  let m:r = (
   match cs with
-  | NullCipherSuite | SCSV -> fatal #r Internal_error "Statically Excluded"
-  | CipherSuite kex sa ae -> (
-      correct (Mode
+  // | NullCipherSuite | SCSV -> fatal #r Internal_error "Statically Excluded"
+  | CipherSuite kex sa ae -> 
+      Mode
         offer
         None
         pv
@@ -1638,38 +1644,32 @@ let accept_ServerHello cfg offer sh =
         NoRequest // n_client_cert_request
         None // n_server_cert
         None // n_client_share
-        <: r 
-        ))
+        
   | CipherSuite13 ae ha -> (
-      pski <-- accept_pski offer sh;  
-      if pv <> TLS_1p3 then 
-        fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "Impossible: TLS 1.3 PSK")
-      else 
-        let server_share, client_share = 
-          match find_serverKeyShare sh with 
-          | Some (| g, gy |) ->
-            let server_share = (|g, gy|) in
-            let client_share = matching_share offer.CH.extensions g in
-            (Some server_share, client_share) 
-          | None -> 
-            (None, None) in 
-        correct (Mode
-          offer
-          None // n_hrr
-          pv
-          sr
-          ssid
-          cs
-          pski
-          ses
-          None // n_encrypted_extensions (not yet received)
-          server_share
-          NoRequest // n_client_cert_request
-          None // n_server_cert
-          client_share 
-          <: r
-          ))
-  | _ -> fatal Decode_error "ServerHello ciphersuite is not a real ciphersuite" );
+      //assert(pv != TLS_1p3);
+      let server_share, client_share = 
+        match find_serverKeyShare sh with 
+        | None -> (None, None) 
+        | Some (| g, gy |) ->
+          let server_share = (|g, gy|) in
+          let client_share = matching_share offer.CH.extensions g in
+          (Some server_share, client_share) 
+      in 
+      Mode
+        offer
+        None // n_hrr
+        pv
+        sr
+        ssid
+        cs
+        pski
+        ses
+        None // n_encrypted_extensions (not yet received)
+        server_share
+        NoRequest // n_client_cert_request
+        None // n_server_cert
+        client_share 
+        )) in 
   return #(m:mode{Mode?.n_offer m == offer}) m
  
 let client_ServerHello #region ns sh =
