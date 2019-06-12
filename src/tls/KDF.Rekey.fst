@@ -1,16 +1,13 @@
 module KDF.Rekey
 
 open Mem
-open Pkg
 open Idx
+open Pkg
 open Pkg.Tree
-//open KDF
-//open IV
 
-//include AEAD.Pkg
-//include KDF
+module H = Hashing.Spec
 
-/// This file illustrates our use of indexes, packages, and KDF on a
+/// This module illustrates our use of indexes, packages, and KDF on a
 /// simple recursive subset of the TLS key-schedule: late rekeying. It
 /// also provides a standalone test for verification and extraction.
 
@@ -19,6 +16,20 @@ val discard: bool -> ST unit
   (ensures (fun h0 _ h1 -> h0 == h1))
 let discard _ = ()
 let print s = discard (IO.debug_print_string ("RKY| "^s^"\n"))
+
+
+/// Derivation labels are short constant strings.
+
+// Move  to Idx? 
+// utf8_encode gives this but not bytes_of_string
+assume val lemma_bytes_of_string_length: s:string -> Lemma
+  (Bytes.length (Bytes.bytes_of_string s) <= op_Multiply 4 (String.length s))
+
+inline_for_extraction noextract let mklabel (s:string) : Pure (s':label {s = s'})
+  (requires normalize (String.length s < 32))
+  (ensures fun l -> True) =
+  lemma_bytes_of_string_length s; s
+
 
 (*
 //17-11-15 for testing; rename to aeadAlg_of_id ?
@@ -42,18 +53,24 @@ let is_kdf_p (p: pkg ii) d children = // same as ksd_subtree
 
 //let test_rekey(): St C.exit_code = C.EXIT_SUCCESS
 
+/// IV packages. We should add agility. 
+
 inline_for_extraction noextract
-let ivlen (i:id) : keylen = EverCrypt.Hash.tagLen Hashing.Spec.SHA2_256
+let ivlen (i:id) : keylen = H.hash_len H.SHA2_256
 
 let is_iv_p (p:pkg ii) =
-  Pkg?.key p == IV.raw ii ivlen /\
-  p == memoization (IV.local_raw_pkg ii ivlen) (p.define_table)
+  Pkg?.key p == IV.raw ivlen /\
+  p == memoization (IV.local_raw_pkg ivlen) (p.define_table)
+
+/// Gradual idealization of our KDF: when modelling, we start
+/// idealizing at some d > 0, irrespective of the tree depth. 
 
 assume noextract val flagKDF': d:nat -> b:KDF.iflag{d=0 ==> b = false}
 inline_for_extraction noextract let flagKDF d = if model then flagKDF' d else false
 noextract let idealKDF d = b2t (flagKDF d)
 
-assume noextract val lemma_KDF_depth: d:nat -> Lemma
+assume noextract 
+val lemma_KDF_depth: d:nat -> Lemma
   (idealKDF d == b2t (flagKDF d) /\ (match d with 0 -> idealKDF 0 == False | d -> idealKDF d ==> idealKDF (d+1)))
 
 type is_kdf_p (p:pkg ii) (#ideal:KDF.iflag) (u:KDF.usage ideal) =
@@ -90,6 +107,8 @@ let is_rekey_tree (n:nat) (x:tree (idealKDF (n+1))) =
   if model then is_rekey_tree' n (KDF.itree x)
   else True
 
+/// Generate a tree of packages and establish its structural invariant
+
 noextract
 val mk_rekey' (n:nat)
   : ST (tree' (idealKDF (n+1)))
@@ -103,14 +122,6 @@ private noextract
 let lift_children' (#p:Type0) (u:children' p)
   : Pure (children p) (requires model) (ensures fun u' -> u' == u) = u
 
-// utf8_encode gives this but not bytes_of_string
-assume val lemma_bytes_of_string_length: s:string -> Lemma
-  (Bytes.length (Bytes.bytes_of_string s) <= op_Multiply 4 (String.length s))
-
-inline_for_extraction noextract let mklabel (s:string) : Pure label
-  (requires normalize (String.length s < 32))
-  (ensures fun l -> True) =
-  lemma_bytes_of_string_length s; s
 
 #set-options "--z3rlimit 30"
 noextract
@@ -122,7 +133,7 @@ let rec mk_rekey' n =
     Node p u
   ) else (
     let re : tree' (idealKDF n) = mk_rekey' (n-1) in
-    let iv = memoization_ST (IV.local_raw_pkg ii ivlen) in
+    let iv = memoization_ST (IV.local_raw_pkg ivlen) in
     assume(b2t Flags.flag_Raw ==> idealKDF n);
     let iv_leaf : tree' (idealKDF n) = Leaf iv in
     let u : children (idealKDF n) = lift_children' [mklabel "IV", iv_leaf; mklabel "RE",re] in
@@ -136,12 +147,12 @@ let mk_rekey (n:nat)
   (requires fun h0 -> True)
   (ensures fun h0 t h1 ->
     is_rekey_tree n t /\
-    KDF.tree_invariant t h1)
+    tree_inv t h1)
   =
   if model then
-    let t' = mk_rekey' n in
+    let t' : tree' (idealKDF (n+1)) = mk_rekey' n in
     let h = get () in
-    let _ = assume(KDF.tree_invariant' t' h) in
+    let _ = assume(tree_inv' t' h) in
     t'
   else erased_tree
 
@@ -151,7 +162,7 @@ noextract inline_for_extraction let _cpkg (l:label) =
        if model then _mchildren false #False []
        else erased_tree in
      KDF.local_kdf_pkg false u
-  else IV.local_raw_pkg ii ivlen
+  else IV.local_raw_pkg ivlen
 
 noextract inline_for_extraction let
 concrete_pkg (#n:nat) (t:tree (idealKDF (n+1)){is_rekey_tree n t}) (l:label) =
@@ -162,64 +173,98 @@ concrete_pkg (#n:nat) (t:tree (idealKDF (n+1)){is_rekey_tree n t}) (l:label) =
     if has_lbl #(idealKDF n) u l then
       match l with
       | "RE" -> KDF.local_kdf_pkg (flagKDF n) u
-      | "IV" -> IV.local_raw_pkg ii ivlen
+      | "IV" -> IV.local_raw_pkg ivlen
     else _cpkg l
   else
     _cpkg l
 
+
+// 19-05-10 preconditions for coercing (assumed for now): the index is
+// registered but undefined, a property of the package at the root of
+// the tree.
+
 inline_for_extraction noextract
-let fake_kdf (n:nat) (t:tree (idealKDF (n+1)){is_rekey_tree n t})
+let coerce_root_kdf (n:nat) (t:tree (idealKDF (n+1)){is_rekey_tree n t})
   (i:regid) (a:KDF.info0 i) (k:lbytes32 (KDF.secret_len a))
   : ST (KDF.secret #(flagKDF n)
    (if model then let t':tree' (idealKDF (n+1)) = t in
    Node?.children t' else erased_tree) i)
-   (requires fun h0 -> True)
-   (ensures fun h0 s h1 -> h0 == h1 /\ KDF.local_kdf_invariant s h1)
-  = assume false;
+   (requires fun h0 -> 
+     // TODO freshness and invariant
+     // Pkg.package_invariant h0 /\
+     // Pkg.mem_fresh define_table i h0 /\
+     ~(ii.honest i))
+   (ensures fun h0 s h1 -> True 
+     // TODO footprint and invariant 
+     )
+  = 
   if model then
     [@inline_let] let t':tree' (idealKDF (n+1)) = t in
     [@inline_let] let Node p u = t' in
-    (Pkg?.coerce p) i a k
-  else KDF.coerce #(flagKDF n) erased_tree i a k
+    let h0 = get() in 
+    assume(p.package_invariant h0);
+    assume(DefineTable.fresh p.define_table i h0);
+    Pkg?.coerce p i a k
+  else 
+    KDF.coerce #(flagKDF n) erased_tree i a k
 
 inline_for_extraction noextract
 let _down (#n:nat{n>0}) (t:tree (idealKDF (n+1)){is_rekey_tree n t})
   : t':tree (idealKDF n){is_rekey_tree (n-1) t'}
   =
-  if model then magic() else erased_tree
+  if model then 
+    [@inline_let] let Node p u = t <: tree' (idealKDF (n+1)) in
+    down u (mklabel "RE")
+  else 
+    erased_tree
 
-//#set-options "--z3rlimit 200"
-#set-options "--admit_smt_queries true"
+#set-options "--z3rlimit 200"
+//#set-options "--admit_smt_queries true"
 let test_rekey(): St C.exit_code
 =
   let t2 = mk_rekey 2 in
   let h0 = get() in
 
-  let i2:regid = if model then magic() else unit in
-  let a2 : KDF.info0 i2 = KDF.Info Hashing.Spec.SHA2_256 None in
-  let kdf2 = fake_kdf 2 t2 i2 a2 (Random.sample32 32ul) in
+  let i2:regid = 
+    let ipsk : id = if model then Preshared Hashing.Spec.SHA2_256 0 else () in 
+    // TODO no registered post in Idx??
+    assume(registered ipsk /\ ~(honest ipsk));
+    ipsk in 
 
-  let i1 = derive i2 "RE" Expand in
+  let a2 : KDF.info0 i2 = KDF.Info Hashing.Spec.SHA2_256 None in
+  let kdf2 = coerce_root_kdf 2 t2 i2 a2 (Random.sample32 32ul) in
+  let i1 = Idx.derive i2 (mklabel "RE") Expand in
   let a1 : KDF.info0 i1 = KDF.Info Hashing.Spec.SHA2_256 None in
-  [@inline_let] let cpkg' = concrete_pkg t2 "RE" in
-  let (| (), kdf1 |) = KDF.derive #(flagKDF 3) #t2 #i2 kdf2 "RE" Expand cpkg' a1 in
+  [@inline_let] let cpkg': local_pkg ii = concrete_pkg t2 "RE" in
+  assume(
+    32ul == //(LocalPkg?.len cpkg') a1 == 
+    Hacl.Hash.Definitions.hash_len KDF.((get_info kdf2).ha));
+  //assert_norm(
+  //  32ul == //(LocalPkg?.len cpkg') a1 == 
+  //  Hacl.Hash.Definitions.hash_len KDF.((get_info kdf2).ha));
+
+  // TBC for now only testing extraction.
+  assume False; 
+  let (| (), kdf1 |) = KDF.derive #(flagKDF 3) #t2 #i2 kdf2 (mklabel "RE") Expand cpkg' a1 in
+
+    // assert((Pkg.LocalPkg?.len cpkg') #i1 a1 == Hacl.Hash.Definitions.hash_len (KDF.get_info kdf2).KDF.ha);
   let t1 = _down t2 in
 
-  let i1' = derive i2 "IV" Expand in
+  let i1' = derive i2 (mklabel "IV") Expand in
   let a1' = ivlen i1' in
   [@inline_let] let cpkg' = concrete_pkg t2 "IV" in
-  let (| (), iv1 |) = KDF.derive #(flagKDF 2) #t #i2 kdf2 "IV" Expand cpkg' a1' in
+  let (| (), iv1 |) = KDF.derive #(flagKDF 2) #t2 #i2 kdf2 (mklabel "IV") Expand cpkg' a1' in
   print ("IV1: "^(Bytes.hex_of_bytes iv1));
 
-  let i0 = derive i1 "RE" Expand in
+  let i0 = derive i1 (mklabel "RE") Expand in
   let a0  : KDF.info0 i0 = KDF.Info Hashing.Spec.SHA2_256 None in
   [@inline_let] let cpkg' = concrete_pkg #1 t1 "RE" in
-  let (| (), kdf0 |) = KDF.derive #(flagKDF 1) #t1 #i1 kdf1 "RE" Expand cpkg' a0 in
+  let (| (), kdf0 |) = KDF.derive #(flagKDF 1) #t1 #i1 kdf1 (mklabel "RE") Expand cpkg' a0 in
 
-  let i0' = derive i1 "IV" Expand in
+  let i0' = derive i1 (mklabel "IV") Expand in
   let a0' = ivlen i0' in
   [@inline_let] let cpkg' = concrete_pkg #1 t1 "IV" in
-  let (| (), iv0 |) = KDF.derive #(flagKDF 1) #t1 #i1 kdf1 "IV" Expand cpkg' a0' in
+  let (| (), iv0 |) = KDF.derive #(flagKDF 1) #t1 #i1 kdf1 (mklabel "IV") Expand cpkg' a0' in
   print ("IV0: "^(Bytes.hex_of_bytes iv0));
   
   C.EXIT_SUCCESS

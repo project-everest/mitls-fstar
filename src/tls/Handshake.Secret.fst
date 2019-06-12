@@ -103,7 +103,7 @@ let iv_of_ts  (i: ts_id)        = Derive i "iv"          Expand // AEAD static I
 let key_of_ts (i: ts_id)        = Derive i "key"         Expand // AEAD keying
 let ts_of_ts  (i: ts_id): ts_id = Derive i "traffic upd" Expand // post-handshake rekeying 
 
-// we have three derived MACs for Binders for Finished messages. 
+// we have three derived MACs for Binders and for Finished messages. 
 let fnk_of_s i = Derive i "finished"    Expand // binder/finished MAC keying (not always a ts)
 let bfk_of_ems i = fnk_of_s (bns_of_ems i)
 let cfk_of_hms i transcript = fnk_of_s (cts_of_hms i transcript)
@@ -126,7 +126,7 @@ abstract type res_psk (i:rmsId) =
   b:bytes{exists i.{:pattern index b i} index b i <> 0z}
 
 abstract type res_context (i:rmsId) =
-  b:bytes{length b = CoreCrypto.H.tagLen (rmsId_hash i)}
+  b:bytes{length b = CoreCrypto.H.hash_len (rmsId_hash i)}
 
 private type res_psk_entry (i:rmsId) =
   (res_psk i) * (res_context i) * ctx:psk_context * leaked:(rref tls_tables_region bool)
@@ -319,18 +319,24 @@ noeq type ks12_state =
     id:TLSInfo.msId -> 
     ms:ms -> ks12_state
 
-/// state after sending ClientHello (for all protocol  versions)
+/// State after sending ClientHello (for all protocol versions) with
+/// an early master secret for every offered PSK, and a DH secret for
+/// every offered group.
 /// 
 abstract type c13_wait_ServerHello 
   (psks  : list (i:id{~(no_psk i)})) 
   (groups: list CommonDH.group) = 
 | C13_wait_ServerHello:
   // symmetric extracts for the PSKs the client is proposing
-  // (the indexes are a function of those of the PKSs)
+  // TODO the indexes are a function of those of the PKSs: ems_of_psk 
+  // TODO what do we need to know about the KDF state? 
   esl: list (i:id{~(no_psk i)} & ems i) ->
   // private exponents for the honestly-generated shares the client is
   // proposing (overwritten on hello_retry)
+  // TODO the groups are indexing the shares
+  // TODO what do we need to know about the DH state? 
   gxs: list CommonDH.dhi -> c13_wait_ServerHello psks groups
+
 
 // now just ams i:
 // abstract type c13_wait_ServerFinished (i: amsId) = 
@@ -404,7 +410,7 @@ private let keygen_13 h secret ae : St (bytes * bytes) =
 
 // // Extract finished keys
 // private let derive_finished13 h secret: St bytes =
-//   HKDF.expand_label h secret "finished" empty_bytes (H.tagLen h)
+//   HKDF.expand_label h secret "finished" empty_bytes (H.hash_len h)
 
 (* GONE: 
 // Create a fresh key schedule instance
@@ -515,7 +521,7 @@ let client13_compute_es_and_bfk #rid (pskid,_) is_quic =
   let ibfk = bfk_of_ems i in 
   let bfk: HMAC.UFCMA.key ii ibfk = 
     // KDF.derive bk ha "finished" in
-    HKDF.expand_label #ha bk "finished" empty_bytes (Hashing.tagLen ha) is_quic in 
+    HKDF.expand_label #ha bk "finished" empty_bytes (Hacl.Hash.Definitions.hash_len ha) is_quic in 
     // finished_13 bk is_quic in 
   dbg ("binder Finished key: "^print_bytes (secret_bytes #ibfk bfk));
 

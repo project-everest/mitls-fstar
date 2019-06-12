@@ -23,7 +23,6 @@ EXPORTS
   EverCrypt_AutoConfig2_wants_hacl
   EverCrypt_AutoConfig2_wants_openssl
   EverCrypt_AutoConfig2_wants_vale
-  EverCrypt_Hash_blockLen
   EverCrypt_Hash_copy
   EverCrypt_Hash_create
   EverCrypt_Hash_create_in
@@ -35,7 +34,6 @@ EXPORTS
   EverCrypt_Hash_Incremental_update
   EverCrypt_Hash_init
   EverCrypt_Hash_string_of_alg
-  EverCrypt_Hash_tagLen
   EverCrypt_Hash_update
   EverCrypt_Hash_update_last
   EverCrypt_Hash_update_multi
@@ -43,7 +41,7 @@ EXPORTS
   EverCrypt_Chacha20Poly1305_aead_encrypt
   EverCrypt_AEAD_decrypt
   EverCrypt_AEAD_encrypt
-  EverCrypt_AEAD_expand_in
+  EverCrypt_AEAD_create_in
   EverCrypt_aead_create
   EverCrypt_aead_decrypt
   EverCrypt_aead_encrypt

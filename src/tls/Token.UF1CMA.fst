@@ -38,10 +38,10 @@ noeq type info = {
   good: bool //TODO: should be Type0 instead of bool, and erased, but hard to propagate
 }
 
-type tag (u:info) = lbytes32 (Hashing.tagLen u.alg)
+type tag (u:info) = lbytes32 (Hacl.Hash.Definitions.hash_len u.alg)
 
-let keylen (u:info): Pkg.keylen = Hashing.Spec.tagLen u.alg
-type keyrepr (u:info) = lbytes (Hashing.Spec.tagLength u.alg)
+let keylen (u:info): Pkg.keylen = Hacl.Hash.Definitions.hash_len u.alg
+type keyrepr (u:info) = lbytes (Hashing.Spec.hash_length u.alg)
 
 let goodish (#ip:ipkg) (i:ip.Pkg.t) (u:info) = _: unit{~(safe i) \/ u.good}
 
@@ -115,8 +115,8 @@ val create:
 let create ip _ _ i u =
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
-  assert(EverCrypt.HMAC.keysized u.alg (EverCrypt.Hash.tagLength u.alg));
-  let kv: keyrepr u = Random.sample32 (Hashing.tagLen u.alg) in
+  assert(Spec.HMAC.keysized u.alg (Spec.Hash.Definitions.hash_length u.alg));
+  let kv: keyrepr u = Random.sample32 (Hacl.Hash.Definitions.hash_len u.alg) in
   let ck = MAC u kv in
   let k : ir_key ip i =
     if is_safe i then
@@ -135,7 +135,7 @@ let coerceT (ip: ipkg) (ha_of_i: ip.Pkg.t -> ha) (good_of_i: ip.Pkg.t -> bool)
   =
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
-  assert(EverCrypt.HMAC.keysized u.alg (EverCrypt.Hash.tagLength u.alg));
+  assert(Spec.HMAC.keysized u.alg (Spec.Hash.Definitions.hash_length u.alg));
   let ck = MAC u kv in
   if model then
     let k : ir_key ip i = RealKey ck in k
@@ -156,7 +156,7 @@ val coerce:
 let coerce ip _ _ i u kv =
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
-  assert(EverCrypt.HMAC.keysized u.alg (EverCrypt.Hash.tagLength u.alg));
+  assert(Spec.HMAC.keysized u.alg (Spec.Hash.Definitions.hash_length u.alg));
   let ck = MAC u kv in
   if model then
     let k : ir_key ip i = RealKey ck in k

@@ -16,7 +16,7 @@ MITLS_BUNDLES = \
   -bundle 'Format.\*' \
   -bundle 'EverCrypt=EverCrypt,EverCrypt.\*' \
   -bundle 'FStar.\*,LowStar.\*,C,C.\*[rename=Mitls_Kremlib]' \
-  -bundle 'Parsers.\*' \
+  -bundle 'Parsers=Parsers.\*,ParsersAux.\*' \
   -bundle 'Spec.\*' \
   -bundle Lib.*[rename=Hacl_Lib] \
   -bundle TLSConstants=TLSConstants,QD.TLS_protocolVersion,List.Helpers \
@@ -30,6 +30,7 @@ MITLS_BUNDLES = \
   -bundle PMS=PMS,RSAKey,TLSPRF \
   -bundle Crypto.Plain=Buffer.Utils,Crypto.Indexing,Crypto.Plain,Crypto.Symmetric.Bytes \
   -bundle Flags=DebugFlags,Flags,Flag,TLSInfoFlags \
+  -bundle 'Model,Model.\*[rename=Unused]' \
   $(VALE_BUNDLES)
 
 # To include Makefile.common, you need to specify
@@ -43,6 +44,10 @@ SPECINC     	= $(MITLS_HOME)/src/tls/concrete-flags $(MITLS_HOME)/src/tls/concre
 OTHERFLAGS := $(filter-out --record_hints,$(OTHERFLAGS))
 
 include Makefile.common
+
+# AR: this is temporary, should move to Makefile.common or something when things are more stable
+#     Disabling until I fix the extraction for const buffers, a wip
+#ROOTS += HSL.Common.fst HSL.Receive.fsti HSL.Receive.fst
 
 clean: clean-internal-test clean-library clean-msvc-library clean-external-test
 	rm -f $(DEP_FILE)
@@ -169,7 +174,7 @@ ifdef VERBOSE
 	@echo -e "\033[1;32m=== Extracting $@ ...\033[;37m"
 endif
 	for f in $^ ; do echo $$f ; done > $(LIBRARY_DIR)/files.rsp
-	$(KRML_COMMAND) @$(LIBRARY_DIR)/files.rsp -tmpdir $(LIBRARY_DIR) -skip-compilation
+	$(KRML_COMMAND) @$(LIBRARY_DIR)/files.rsp -tmpdir $(LIBRARY_DIR) -skip-compilation -o libmitls.so
 
 library-copy: $(addprefix $(LIBRARY_DIR)/, $(filter-out pki/mipki.h, $(ALL_EXTERNAL_FILES))) \
   $(LIBRARY_DIR)/stub/mitlsffi.c \

@@ -10,6 +10,7 @@ open TLSConstants
 open TLSInfo
 
 module AE = AEADProvider
+module HSM = HandshakeMessages
 
 #push-options "--admit_smt_queries true"
 
@@ -26,6 +27,8 @@ unfold let trace = if DebugFlags.debug_NGO then print else (fun _ -> ())
 // verification-only
 type hostname = string
 type tlabel (h:hostname) = t:bytes * tls13:bool
+
+/// private keys for sealing (client-only) and ticketing (server-only)
 
 noextract
 private let region:rgn = new_region tls_tables_region
@@ -60,14 +63,17 @@ private let keygen () : St ticket_key =
   let rd = AE.genReader region #id0 wr in
   Key id0 wr rd
 
-let get_ticket_key () : St ticket_key =
+// by design, the application may push its own keys, but not retrieve
+// them.
+
+private let get_ticket_key () : St ticket_key =
   match !ticket_enc with
   | Some k -> k
   | None ->
     let k = keygen () in
     ticket_enc := Some k; k
 
-let get_sealing_key () : St ticket_key =
+private let get_sealing_key () : St ticket_key =
   match !sealing_enc with
   | Some k -> k
   | None ->
@@ -94,6 +100,8 @@ let set_ticket_key (a:aeadAlg) (kv:bytes) : St bool =
 
 let set_sealing_key (a:aeadAlg) (kv:bytes) : St bool =
   set_internal_key true a kv
+
+/// ticket payloads (to be server-encrypted)
 
 [@unifier_hint_injective]
 inline_for_extraction
@@ -192,13 +200,14 @@ let parse (b:bytes) (nonce:bytes) : St (option ticket) =
 let ticket_decrypt (seal:bool) cipher : St (option bytes) =
   let Key tid _ rd = if seal then get_sealing_key () else get_ticket_key () in
   let salt = AE.salt_of_state rd in
-  let (nb, b) = split_ cipher (AE.iv_length tid) in
+  let (iv, b) = split_ cipher (AE.iv_length tid) in
   let plain_len = length b - AE.taglen tid in
-  let iv = AE.coerce_iv tid (xor_ #(AE.iv_length tid) nb salt) in
-  AE.decrypt #tid #plain_len rd iv empty_bytes b
+  let iv = AE.coerce_iv tid (xor_ #(AE.iv_length tid) iv salt) in
+  let ad = empty_bytes in 
+  AE.decrypt #tid #plain_len rd iv ad b
 
 let check_ticket (seal:bool) (b:bytes{length b <= 65551}) : St (option ticket) =
-  trace ("Decrypting ticket "^(hex_of_bytes b));
+  trace ("Decrypting ticket "^hex_of_bytes b);
   let Key tid _ rd = get_ticket_key () in
   if length b < AE.iv_length tid + AE.taglen tid + 8 (*was: 32*) 
   then None 
@@ -238,13 +247,19 @@ let ticketContents_of_ticket (t: ticket) : GTot TC.ticketContents =
     })
   | Ticket13 cs _ _ rms nonce created age custom ->
     TC.T_ticket13 ({
-      TC13.cs = name_of_cipherSuite cs;
+      TC13.cs = cipherSuite13_of_cipherSuite cs;
       TC13.rms = rms;
       TC13.nonce = nonce;
       TC13.creation_time = created;
       TC13.age_add = age;
       TC13.custom_data = custom;
     })
+
+
+
+
+/// Low-level ticket writers called by server, using its custom
+/// formats for TLS 1.2 and TLS 1.3, prior to ticket encryption.
 
 #reset-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1 --z3rlimit 64 --z3cliopt smt.arith.nl=false --z3refresh --using_facts_from '* -FStar.Tactics -FStar.Reflection' --log_queries"
 
@@ -377,7 +392,7 @@ let write_ticket13
     then LPB.max_uint32
     else begin
       let pos1 = pos `U32.add` 1ul in
-      let pos2 = Parsers.CipherSuite.cipherSuite_writer (name_of_cipherSuite cs) sl pos1 in
+      let pos2 = CipherSuite.cipherSuite13_writer (cipherSuite13_of_cipherSuite cs) sl pos1 in
       let len_rms = len rms in
       let _ = FStar.Bytes.store_bytes rms (B.sub sl.LPB.base (pos2 `U32.add` 1ul) len_rms) in
       let pos3 = Parsers.TicketContents13_rms.ticketContents13_rms_finalize sl pos2 len_rms in
@@ -417,7 +432,16 @@ let write_ticket
   | Ticket13 cs _ _ rms nonce created age custom ->
     write_ticket13 t sl pos
 
+
+
+
 #push-options "--admit_smt_queries true"
+
+/// Tickets are doubly-encrypted: at the server using its ticket key,
+/// then at the client using its sealing key.
+
+//$ use the lower-evel EverCrypt calling convention.
+//$ where is the corresponding decryptor?
 
 let ticket_encrypt (seal:bool) plain : St bytes =
   let Key tid wr _ = if seal then get_sealing_key () else get_ticket_key () in
@@ -431,16 +455,16 @@ let create_ticket (seal:bool) t =
   let plain = serialize t in
   ticket_encrypt seal plain
 
-let create_cookie (hrr:HandshakeMessages.hrr) (digest:bytes) (extra:bytes) =
-  let hrm = HandshakeMessages.HelloRetryRequest hrr in
-  let hrb = vlbytes 3 (HandshakeMessages.handshakeMessageBytes None hrm) in
+// FIXME(adl): restore HRR support in QD
+let create_cookie (hr:HSM.hrr) (digest:bytes) (extra:bytes) =
+  let hrb = HSM.(handshake_serializer32 (M_server_hello (serverHello_of_hrr hr))) in
   let plain = hrb @| (vlbytes 1 digest) @| (vlbytes 2 extra) in
   let cipher = ticket_encrypt false plain in
   trace ("Encrypting cookie: "^(hex_of_bytes plain));
   trace ("Encrypted cookie:  "^(hex_of_bytes cipher));
   cipher
 
-val check_cookie: b:bytes -> St (option (HandshakeMessages.hrr * bytes * bytes))
+val check_cookie: b:bytes -> St (option (HSM.hrr * bytes * bytes))
 let check_cookie b =
   trace ("Decrypting cookie "^(hex_of_bytes b));
   if length b < 32 then None else
@@ -448,24 +472,26 @@ let check_cookie b =
   | None -> trace ("Cookie decryption failed."); None
   | Some plain ->
     trace ("Plain cookie: "^(hex_of_bytes plain));
-    match vlsplit 3 plain with
-    | Error _ -> trace ("Cookie decode error: HRR"); None
-    | Correct (hrb, b) ->
-      let (_, hrb) = split hrb 4ul in // Skip handshake tag and vlbytes 3
-      match HandshakeMessages.parseHelloRetryRequest hrb with
-      | Error (_, m) -> trace ("Cookie decode error: parse HRR, "^m); None
-      | Correct hrr ->
+    match HSM.handshake_parser32 plain with
+    | Some (HSM.M_server_hello sh, l) ->
+      if HSM.is_hrr sh then
+       begin
+        let hrr = HSM.get_hrr sh in
+        let (_, b) = split plain l in
         match vlsplit 1 b with
         | Error _ -> trace ("Cookie decode error: digest"); None
         | Correct (digest, b) ->
           match vlparse 2 b with
           | Error _ -> trace ("Cookie decode error: application data"); None
-          | Correct extra ->
-            Some (hrr, digest, extra)
+          | Correct extra -> Some (hrr, digest, extra)
+       end
+      else (trace ("Warning: bad HRR in cookie (file bug report)"); None)
+    | _ -> trace ("Cookie decode error (file bug report)"); None
 
 #pop-options
 
 let ticket_pskinfo (t:ticket) =
+  let open TLS.Callbacks in 
   match t with
   | Ticket13 cs li _ _ nonce created age_add custom ->
     let CipherSuite13 ae h = cs in
@@ -483,12 +509,13 @@ let ticket_pskinfo (t:ticket) =
   | _ -> None
 
 noextract
-let ticketContents_pskinfo (t:TC.ticketContents) : Tot (option pskInfo) =
+let ticketContents13_pskinfo (t: TC13.ticketContents13) : Tot TLS.Callbacks.pskInfo =
+  let open TLS.Callbacks in 
   match t with
-  | TC.T_ticket13 ({ TC13.cs = cs; TC13.nonce = nonce; TC13.creation_time = created; TC13.age_add = age_add; TC13.custom_data = custom }) ->
-    begin match cipherSuite_of_name cs with
-    | Some (CipherSuite13 ae h) ->
-      Some ({
+  | ({ TC13.cs = cs; TC13.nonce = nonce; TC13.creation_time = created; TC13.age_add = age_add; TC13.custom_data = custom }) ->
+    begin match cipherSuite_of_cipherSuite13 cs with
+    | (CipherSuite13 ae h) ->
+      ({
         ticket_nonce = Some nonce;
         time_created = created;
         ticket_age_add = age_add;
@@ -499,8 +526,12 @@ let ticketContents_pskinfo (t:TC.ticketContents) : Tot (option pskInfo) =
         early_hash = h;
         identities = (empty_bytes, empty_bytes);
       })
-    | _ -> None
     end
+
+noextract
+let ticketContents_pskinfo (t:TC.ticketContents) : Tot (option TLS.Callbacks.pskInfo) =
+  match t with
+  | TC.T_ticket13 t13 -> Some (ticketContents13_pskinfo t13)
   | _ -> None
 
 let ticketContents_pskinfo_ticketContents_of_ticket (t: ticket) : Lemma
@@ -563,7 +594,3 @@ val check_ticket12_low:
     LL.valid_content ticketContents12_master_secret_parser h0 x ms_pos ms
     ))
 *)    
-
-   
-    
-

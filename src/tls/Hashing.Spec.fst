@@ -11,15 +11,44 @@ include Spec.Hash.Definitions
 
 open FStar.Integers
 open FStar.Bytes
-type tag (a:alg) = Bytes.lbytes32 (tagLen a)
-let maxTagLen = 64ul
-type anyTag = lbytes (Integers.v maxTagLen)
+
+let hash_len (a:alg)
+  : n:UInt32.t{UInt32.v n == hash_length a}
+  =
+  match a with
+  | MD5 -> assert_norm(hash_length MD5 == 16); 16ul
+  | SHA1 -> assert_norm(hash_length SHA1 == 20); 20ul
+  | SHA2_224 -> assert_norm(hash_length SHA2_224 == 28); 28ul
+  | SHA2_256 -> assert_norm(hash_length SHA2_256 == 32); 32ul
+  | SHA2_384 -> assert_norm(hash_length SHA2_384 == 48); 48ul
+  | SHA2_512 -> assert_norm(hash_length SHA2_512 == 64); 64ul
+
+type tag (a:alg) = Bytes.lbytes (hash_length a)
+
+let max_hash_length = 64
+let max_hash_len = 64ul
+type anyTag = lbytes max_hash_length
+
+let max_block_length = 128
+let max_block_len = 128ul
+
+private let lemma_tagLen (a:alg)
+  : Lemma (hash_length a <= max_hash_length)
+  [SMTPat (hash_length a)]
+  = ()
+
+private let lemma_blockLength (a:alg)
+  : Lemma (block_length a <= max_block_length)
+  [SMTPat (block_length a)]
+  = ()
 
 // JP: override the definition from evercrypt (which uses <) with miTLS
 // compatible definitions (which uses <=)
-let maxLength a = EverCrypt.Hash.maxLength a - 1
+let max_input_length a = max_input_length a - 1
 
-let macable a = b:bytes {length b + blockLength a < pow2 32}
+let macable a = b:bytes {length b + block_length a < pow2 32}
+let macable_any = b:bytes{length b + max_block_length < pow2 32}
+
 // 32-bit implementation restriction
 
 // Adapting EverCrypt's HMAC specification to TLS. In contrast with
@@ -30,7 +59,7 @@ type hkey (a:alg) = b:bytes{
   // 18-09-12 this usage restriction is dubious, but always met in
   // miTLS; it avoids a null-pointer case in the wrapper below.
   length b > 0 /\
-  EverCrypt.HMAC.keysized a (length b)}
+  Spec.HMAC.keysized a (length b)}
 
 val hmac:
   a:alg ->
@@ -38,16 +67,16 @@ val hmac:
   text:macable a ->
   GTot (t:tag a{
     let text = Bytes.reveal text in
-    Seq.length text + blockLength a <= maxLength a /\
-    Bytes.reveal t = EverCrypt.HMAC.hmac a (Bytes.reveal k) text})
+    Seq.length text + block_length a <= max_input_length a /\
+    Bytes.reveal t = Spec.HMAC.hmac a (Bytes.reveal k) text})
 
 let hmac a k text =
   let k = Bytes.reveal k in
   let text = Bytes.reveal text in
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
-  assert (Seq.length text + blockLength a <= maxLength a);
-  let t: EverCrypt.Hash.tag a = EverCrypt.HMAC.hmac a k text in
+  assert (Seq.length text + block_length a <= max_input_length a);
+  let t: Spec.Hash.Definitions.bytes_hash a = Spec.HMAC.hmac a k text in
   Bytes.hide t
 
 //18-08-31 review
@@ -64,7 +93,7 @@ let emptyHash : a:alg -> Tot (tag a) =
 #reset-options
 
 // A "placeholder" hash whose bytes are all 0, used for key-derivation in Handshake.Secret
-let zeroHash (a:alg): Tot (tag a) = Bytes.create (tagLen a) 0uy
+let zeroHash (a:alg): Tot (tag a) = Bytes.create (Hacl.Hash.Definitions.hash_len a) 0uy
 
 
 // TLS-specific hash and MAC algorithms (review)
@@ -75,16 +104,16 @@ type tls_alg =
 
 val tls_tagLen: h:tls_alg{h<>NULL} -> Tot UInt32.t
 let tls_tagLen = function
-  | Hash a  -> tagLen a
-  | MD5SHA1 -> tagLen MD5 + tagLen SHA1
+  | Hash a  -> Hacl.Hash.Definitions.hash_len a
+  | MD5SHA1 -> Hacl.Hash.Definitions.hash_len MD5 + Hacl.Hash.Definitions.hash_len SHA1
 
-type tls_macAlg = EverCrypt.HMAC.ha
+type tls_macAlg = EverCrypt.HMAC.supported_alg
 
 (* for reference, a bytes spec of HMAC:
 let hmac a key message = EverCrypt.Hash.
-  let xkey = key @| create U32.(blockLen a -^ tagLen a) 0x0z  in
-  let outer_key_pad = xor (blockLen a) xkey (create (blockLen a) 0x5cz) in
-  let inner_key_pad = xor (blockLen a) xkey (create (blockLen a) 0x36z) in
+  let xkey = key @| create U32.(block_len a -^ hash_len a) 0x0z  in
+  let outer_key_pad = xor (block_len a) xkey (create (block_len a) 0x5cz) in
+  let inner_key_pad = xor (block_len a) xkey (create (block_len a) 0x36z) in
   assume (FStar.UInt.fits (length inner_key_pad + length message) 32);
   hash a (outer_key_pad @| hash a (inner_key_pad @| message))
 *)

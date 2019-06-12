@@ -39,9 +39,9 @@ val authId: id -> Tot bool
 let authId id = false // TODO: move to Flags
 
 type text = bytes
-type tag (i:id) = lbytes32 (Hashing.Spec.tagLen (alg i))
+type tag (i:id) = lbytes32 (Hacl.Hash.Definitions.hash_len (alg i))
 
-let keysize (i:id) = Hashing.Spec.tagLen (alg i)
+let keysize (i:id) = Hacl.Hash.Definitions.hash_len (alg i)
 type keyrepr (i:id) = lbytes32 (keysize i)
 
 type fresh_subregion rg parent h0 h1 = HS.fresh_region rg h0 h1 /\ extends rg parent
@@ -110,8 +110,10 @@ val mac: #i:id -> #good:(bytes -> Type) -> k:key i good -> p:bytes { authId i ==
 // We log every authenticated texts, with their index and resulting tag
 let mac #i #good k p =
   let a = alg i in 
-  assume (length p + Hashing.Spec.blockLength a < pow2 32);
-  assert_norm(EverCrypt.HMAC.keysized a (EverCrypt.Hash.tagLength a));
+  assume (length p + Hashing.Spec.block_length a < pow2 32);
+  assert_norm (pow2 32 < pow2 61);
+  assert_norm (pow2 32 < pow2 125);
+  assert_norm(Spec.HMAC.keysized a (Spec.Hash.Definitions.hash_length a));
   let p : p:bytes { authId i ==> good p } = p in
   let t = HMAC.hmac a k.kv p in
   let e : entry i good = Entry t p in

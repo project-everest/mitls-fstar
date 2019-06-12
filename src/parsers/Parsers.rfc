@@ -154,7 +154,7 @@ struct {
   OCSPStatusRequest request;
 } CertificateStatusRequest;
 
-opaque OCSPResponse<1..2^24-1>;
+opaque OCSPResponse<1..2^24-1 : uint24>;
 
 /*
 Since OCSPResponse is vlbytes, this select
@@ -1209,9 +1209,22 @@ enum /*@open*/ {
   (65535)
 } CipherSuite;
 
+struct {
+  CipherSuite cs;
+  select (cs) {
+    case TLS_AES_128_GCM_SHA256: Empty;
+    case TLS_AES_256_GCM_SHA384: Empty;
+    case TLS_CHACHA20_POLY1305_SHA256: Empty;
+    case TLS_AES_128_CCM_SHA256: Empty;
+    case TLS_AES_128_CCM_8_SHA256: Empty;
+    default: Fail;
+  } constraint;
+} CipherSuite13;
+
 opaque SessionID<0..32>;
 
 enum /*@open*/ { nullCompression(0), (255) } CompressionMethod;
+enum { nullCompression(0), (255) } LegacyCompression;
 
 /** Shared Handshake Message Types **/
 
@@ -1220,10 +1233,46 @@ struct {
   Random random;
   SessionID session_id;
   CipherSuite cipher_suites<2..2^16-2>;
-  CompressionMethod compression_method<1..2^8-1>;
+  CompressionMethod compression_methods<1..2^8-1>;
   ClientHelloExtensions extensions;
 } ClientHello;
 
+struct {
+  SessionID session_id;
+  CipherSuite cipher_suite;
+  CompressionMethod compression_method;
+  ServerHelloExtensions extensions;
+} SHKind;
+
+struct {
+  SessionID session_id;
+  CipherSuite cipher_suite;
+  LegacyCompression legacy_compression;
+  HRRExtensions extensions;
+} HRRKind;
+
+/*
+We need to change the definition of the ServerHello
+type to account for the syntactic differences between
+ServerHello and HelloRetryRequest.
+
+In a HRR, the compression_method must be null and the
+format of some extensions is different (e.g. key_share
+is a KeyShareEntry in SH and a GroupName in HRR)
+*/
+struct {
+  ProtocolVersion version;
+  opaque random[32];
+  (if random = "CF21AD74E59A6111BE1D8C021E65B891C2A211167ABB8C5E079E09E2C8A8339C"
+    HRRKind
+  else
+    SHKind) is_hrr;
+} ServerHello;
+
+/*
+Using an if-then-else type is annoying, in the specification
+of the handshake we want to convert it to either SH or HRR.
+*/
 struct {
   ProtocolVersion version;
   Random random;
@@ -1231,7 +1280,15 @@ struct {
   CipherSuite cipher_suite;
   CompressionMethod compression_method;
   ServerHelloExtensions extensions;
-} ServerHello;
+} RealServerHello;
+
+struct {
+  ProtocolVersion version;
+  SessionID session_id;
+  CipherSuite cipher_suite;
+  LegacyCompression legacy_compression;
+  HRRExtensions extensions;
+} HelloRetryRequest;
 
 /** TLS 1.3 Handshake Messages */
 
@@ -1241,7 +1298,7 @@ struct {
 } CertificateRequest13;
 
 struct {
-  opaque cert_data<1..2^24-1>;
+  opaque cert_data<1..2^24-1 : uint24>;
   CertificateExtensions extensions;
 } CertificateEntry13;
 
@@ -1255,10 +1312,23 @@ struct {
   opaque signature<0..2^16-1>;
 } CertificateVerify13;
 
+/*
+We can force the application to validate
+the length of the Finished message by
+providing the expected size during staged
+parsing (due to implicit tag).
+
+Alternatively, we use the explicit length
+in the handshake header to turn Finished into
+opaque<0..2^24-1> (handshake must validate
+this length)
+
 enum {
-  hash_32, hash_48, hash_64, (255)
+  hash_legacy, hash_20, hash_32, hash_48, hash_64, (255)
 } DigestSize;
 
+opaque Finished12[12];
+opaque Finished20[20];
 opaque Finished32[32];
 opaque Finished48[48];
 opaque Finished64[64];
@@ -1266,11 +1336,13 @@ opaque Finished64[64];
 struct {
   /*@implicit*/ DigestSize hlen;
   select(hlen) {
+    case hash_legacy: Finished12;
     case hash_32: Finished32;
     case hash_48: Finished48;
     case hash_64: Finished64;
   } verify_data;
 } Finished;
+*/
 
 struct {
   uint32 ticket_lifetime;
@@ -1307,6 +1379,12 @@ enum {
   (255)
 } HandshakeType;
 
+/* Just the header, useful for defragmenting handshake messages */
+struct {
+  HandshakeType msg_type;
+  uint24 length;
+} HandshakeHeader;
+
 struct {
   HandshakeType msg_type;
   uint24 length;
@@ -1326,17 +1404,17 @@ struct {
     case certificate_request:   CertificateRequest13;
     case certificate:           Certificate13;
     case certificate_verify:    CertificateVerify13;
-    case finished:              Finished;
+    case finished:              opaque; /* Finished; */
     case new_session_ticket:    NewSessionTicket13;
     case key_update:            KeyUpdate;
-  } m[length]; /*body*/
+  } m13[length]; /*body*/
 } Handshake13;
 
 struct {
   opaque signature<0..2^16-1>;
 } CertificateVerify12;
 
-opaque ASN1Cert<1..2^24-1>;
+opaque ASN1Cert<1..2^24-1 : uint24>;
 
 enum /*@open*/ {
   rsa_sign(1), dss_sign(2), rsa_fixed_dh(3), dss_fixed_dh(4),
@@ -1543,6 +1621,14 @@ struct {
   ECPoint ecdh_Yc;
 } ClientECDiffieHellmanPublic;
 
+/*
+Note the implicit attribute on the tag - this causes
+QD to emit a parametric parser, where the application
+must provide the value of the kex.
+
+See "A cross-protocol attack on the TLS protocol"
+(Mavrogiannopoulos et al) for why this is a bad idea.
+*/
 struct {
   /*@implicit*/ KeyExchangeAlgorithm kex;
   select (kex) {
@@ -1553,6 +1639,17 @@ struct {
   } cke; /*exchange_keys*/
 } ClientKeyExchange;
 
+/*
+https://tools.ietf.org/html/rfc5077#section-3.3
+*/
+struct {
+  uint32 lifetime_hint;
+  opaque ticket<0..2^16-1>;
+} NewSessionTicket12;
+
+/*
+Add Heartbeat?
+*/
 struct {
   HandshakeType msg_type;
   uint24 length;
@@ -1564,8 +1661,9 @@ struct {
     case server_hello_done:   Empty;
     case certificate_verify:  CertificateVerify12;
     case client_key_exchange: ClientKeyExchange;
-    case finished:            Finished;
-  } m[length]; /*body*/
+    case new_session_ticket:  NewSessionTicket12;
+    case finished:            opaque; /* Finished; */
+  } m12[length]; /*body*/
 } Handshake12;
 
 /*
@@ -1586,7 +1684,7 @@ struct {
 } TicketContents12;
 
 struct {
-  CipherSuite cs;
+  CipherSuite13 cs;
   opaque rms<32..255>;
   opaque nonce<0..255>;
   uint32 creation_time;
@@ -1620,3 +1718,84 @@ struct {
   } resumeInfo12;
   ResumeInfo13 resumeInfo13<0..2^16-1>; /* arbitrary bound */
 } ResumeInfo;
+
+struct {
+  ProtocolVersion version;
+  select (version) {
+    case SSL_3p0: Empty;
+    case TLS_1p0: Empty;
+    case TLS_1p1: Empty;
+    case TLS_1p2: Empty;
+    case TLS_1p3: Empty;
+    default: Fail;
+  } constraint;
+} KnownProtocolVersion;
+
+struct {
+  ExtensionType type;
+  uint16 len;
+  /*@failmissing*/ select(type)
+  {
+    default: opaque;
+  } payload[len]; /*extension_data*/
+} TaggedUnknownExtension; /* should be UnknownExtension */
+
+opaque TicketSeal<0..2^16-1>;
+
+struct {
+  PskIdentity_identity identity;
+  TicketSeal ticket_seal;
+} MiTLSConfigUseTicket;
+
+struct {
+
+  KnownProtocolVersion min_version;
+  KnownProtocolVersion max_version;
+  
+  boolean is_quic;
+  
+  CipherSuite cipher_suites<0..2^16-2>;
+  
+  uint16 named_groups_len;
+  NamedGroupList named_groups[named_groups_len]; /* to match the supported_groups case of ClientHelloExtension.CHE */
+  SignatureSchemeList signature_algorithms;
+  
+  boolean hello_retry;
+  
+  NamedGroupList offer_shares; /* TODO: maybe we should define a supportedNamedGroups type here, unless it is to be defined by the provider */
+  
+  TaggedUnknownExtension custom_extensions<0..2^16-1>;
+  
+  MiTLSConfigUseTicket use_tickets<0..2^16-1>; /* unsure about bounds */
+
+  boolean has_send_ticket;
+  select (has_send_ticket) {
+    case b_false: Empty;
+    case b_true:  TicketSeal; /* not sure about bounds, was plain bytes */
+  } send_ticket;
+  boolean check_client_version_in_pms_for_old_tls;
+  boolean request_client_certificate;
+
+  boolean non_blocking_read;
+  boolean has_max_early_data;
+  select (has_max_early_data) {
+    case b_false: Empty;
+    case b_true:  uint32;
+  } max_early_data;
+  boolean safe_renegotiation;
+  boolean extend_master_secret;
+  boolean enable_tickets;
+
+  boolean has_alpn;
+  uint16 alpn_length;
+  select (has_alpn) {
+    case b_false: Empty;
+    case b_true:  ProtocolNameList;
+  } alpn[alpn_length]; /* to match the application_layer_protocol_negotiation case of ClientHelloExtension.CHE */
+  boolean has_peer_name;
+  select (has_peer_name) {
+    case b_false: Empty;
+    case b_true:  HostName;
+  } peer_name;
+
+} MiTLSConfig;

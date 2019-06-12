@@ -97,4 +97,4 @@ val send_fragment
 
 
 /// Need another API to be used by record
-/// That resets indices and signals to None?
+/// that resets indices and signals to None?

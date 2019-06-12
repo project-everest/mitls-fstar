@@ -32,7 +32,7 @@ HKDF-Extract(salt, IKM) -> PRK
 
 inline_for_extraction
 val extract:
-  #ha: EverCrypt.HMAC.ha ->
+  #ha: EverCrypt.HMAC.supported_alg ->
   salt: hkey ha ->
   ikm: macable ha ->
   ST (hkey ha)
@@ -73,14 +73,14 @@ assume val expand_spec:
   #ha:Hashing.alg ->
   prk: Hashing.Spec.tag ha ->
   info: bytes {Bytes.length info < 1024 (* somewhat arbitrary *) } ->
-  len: UInt32.t {0 < v len /\ v len <= op_Multiply 255 (tagLength ha)} ->
+  len: UInt32.t {0 < v len /\ v len <= op_Multiply 255 (hash_length ha)} ->
   GTot (lbytes32 len)
 
 val expand:
-  #ha:Hashing.alg ->
-  prk: lbytes (EverCrypt.Hash.tagLength ha) ->
+  #ha:EverCrypt.HMAC.supported_alg ->
+  prk: lbytes (Spec.Hash.Definitions.hash_length ha) ->
   info: bytes {Bytes.length info < 1024 (* somewhat arbitrary *) } ->
-  len: UInt32.t {0 < v len /\ v len <= op_Multiply 255 (tagLength ha)} ->
+  len: UInt32.t {0 < v len /\ v len <= op_Multiply 255 (hash_length ha)} ->
   ST (lbytes32 len)
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> modifies_none h0 h1 /\
@@ -90,10 +90,10 @@ val expand:
 let expand #ha prk info len =
   let h00 = HyperStack.ST.get() in
   push_frame();
-  let tlen = EverCrypt.Hash.tagLen ha in
+  let tlen = Hacl.Hash.Definitions.hash_len ha in
   let prk_p = LowStar.Buffer.alloca 0uy tlen in
   store_bytes prk prk_p;
-  assert_norm(EverCrypt.HMAC.keysized ha (EverCrypt.Hash.tagLength ha));
+  assert_norm(Spec.HMAC.keysized ha (Spec.Hash.Definitions.hash_length ha));
 
   let tag_p = LowStar.Buffer.alloca 0uy len in
   let infolen = Bytes.len info in
@@ -106,7 +106,7 @@ let expand #ha prk info len =
     push_frame();
     let info_p = LowStar.Buffer.alloca 0uy infolen in
     store_bytes info info_p;
-    assert(tagLength ha + v infolen + 1 + blockLength ha < pow2 32);
+    assert(hash_length ha + v infolen + 1 + block_length ha < pow2 32);
     EverCrypt.HKDF.hkdf_expand ha tag_p prk_p tlen info_p infolen len;
     pop_frame ()
   );
@@ -134,16 +134,16 @@ let expand #ha prk info len =
 private val expand_int:
   #ha: Hashing.alg -> prk: hkey ha ->
   info: bytes ->
-  len: UInt32.t {UInt32.v len <= op_Multiply 255 (tagLength ha)} ->
+  len: UInt32.t {UInt32.v len <= op_Multiply 255 (hash_length ha)} ->
   count: UInt8.t ->
-//curr: UInt32.t {curr = Int.Cast.uint8_to_uint32 count *^ tagLen ha} ->
-  curr: UInt32.t {v curr = op_Multiply (UInt8.v count) (tagLength ha)} ->
-  previous: lbytes32 (if count = 0uy then 0ul else tagLen ha) ->
+//curr: UInt32.t {curr = Int.Cast.uint8_to_uint32 count *^ hash_len ha} ->
+  curr: UInt32.t {v curr = op_Multiply (UInt8.v count) (hash_length ha)} ->
+  previous: lbytes32 (if count = 0uy then 0ul else hash_len ha) ->
   ST (b: bytes{
     v len - v curr <= length b /\
-    length b <= op_Multiply (UInt8.v count) (blockLength ha)
+    length b <= op_Multiply (UInt8.v count) (block_length ha)
     }) (decreases (max 0 (v len - v curr)))
-  (requires fun h0 -> length previous + length info + 1 + Hashing.blockLength ha <= Hashing.maxLength ha)
+  (requires fun h0 -> length previous + length info + 1 + Hashing.block_length ha <= Hashing.max_input_length ha)
   (ensures (fun h0 t h1 -> modifies_none h0 h1))
 
 #set-options "--z3rlimit 10 --admit_smt_queries true"
@@ -152,11 +152,11 @@ let rec expand_int #ha prk info len count curr previous =
     assert(FStar.UInt8.(count <^ 255uy));
     assert(UInt8.v count < 255);
     let count = FStar.UInt8.(count +^ 1uy) in
-    let curr = curr +^ tagLen ha in
+    let curr = curr +^ hash_len ha in
     lemma_repr_bytes_values (UInt8.v count);
     assume (UInt.fits (length previous + length info + 1) 32);
     let block = HMAC.hmac ha prk (previous @| info @| bytes_of_int8 count) in
-    assume (v curr = Mul.op_Star (FStar.UInt8.v count) (tagLength ha));
+    assume (v curr = Mul.op_Star (FStar.UInt8.v count) (hash_length ha));
     let next = expand_int prk info len count curr block in
     block @| next )
   else empty_bytes
@@ -170,7 +170,7 @@ let rec expand_int #ha prk info len count curr previous =
 val expand2:
   #ha:Hashing.alg -> prk: hkey ha ->
   info: bytes ->
-  len: UInt32.t {v len <= op_Multiply 255 (tagLength ha)} ->
+  len: UInt32.t {v len <= op_Multiply 255 (hash_length ha)} ->
   ST (lbytes32 len)
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
@@ -203,19 +203,25 @@ HKDF-Expand-Label(Secret, Label, Messages, Length) =
 *)
 
 let tls13_prefix : lbytes 6 =
+  [@inline_let]
   let s = bytes_of_string "tls13 " in
-  assume(length s = 6); s
+  [@inline_let]
+  let _ = assume(length s = 6) in
+  s
 
 let quic_prefix : lbytes 5 =
+  [@inline_let]
   let s = bytes_of_string "quic " in
-  assume(length s = 5); s
+  [@inline_let]
+  let _ = assume(length s = 5) in
+  s
 
 inline_for_extraction private 
 val format:
   ha: Hashing.alg ->
   label: string{length (bytes_of_string label) < 256 - 6} ->
   digest: bytes{length digest < 256} ->
-  len: UInt32.t {v len <= op_Multiply 255 (tagLength ha)} ->
+  len: UInt32.t {v len <= op_Multiply 255 (hash_length ha)} ->
   Tot (b: bytes {length b < 1024})
 
 /// since derivations depend on the concrete info, we will need to
@@ -242,11 +248,11 @@ let format ha label digest len =
 /// used for computing all derived keys; 
 
 val expand_label:
-  #ha: HMAC.ha ->
-  secret: lbytes (EverCrypt.Hash.tagLength ha) ->
+  #ha: EverCrypt.HMAC.supported_alg ->
+  secret: lbytes (Spec.Hash.Definitions.hash_length ha) ->
   label: string{length (bytes_of_string label) < 256 - 6} -> // -9?
   hv: bytes{length hv < 256} ->
-  len: UInt32.t {0 < v len /\ v len <= op_Multiply 255 (tagLength ha)} ->
+  len: UInt32.t {0 < v len /\ v len <= op_Multiply 255 (hash_length ha)} ->
   ST (lbytes32 len)
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> modifies_none h0 h1))
@@ -265,16 +271,16 @@ let expand_label #ha secret label digest len =
 /// used in both hanshakes for deriving intermediate HKDF keys.
 
 val derive_secret:
-  ha: EverCrypt.HMAC.ha ->
-  secret: lbytes (EverCrypt.Hash.tagLength ha) ->
+  ha: EverCrypt.HMAC.supported_alg ->
+  secret: lbytes (Spec.Hash.Definitions.hash_length ha) ->
   label: string{length (bytes_of_string label) < 256-6} ->
   digest: bytes{length digest < 256} ->
-  ST (lbytes32 (Hashing.Spec.tagLen ha))
+  ST (lbytes32 (Hacl.Hash.Definitions.hash_len ha))
   (requires fun h -> True)
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
 
 let derive_secret ha secret label digest =
-  let len = Hashing.Spec.tagLen ha in
+  let len = Hacl.Hash.Definitions.hash_len ha in
   expand_label secret label digest len
 
 (*
@@ -282,7 +288,7 @@ let derive_secret ha secret label digest =
 /// not used anymore? 
 
 val expand_secret:
-  #ha: EverCrypt.HMAC.ha ->
+  #ha: EverCrypt.HMAC.supported_alg ->
   secret: hkey ha ->
   label: string{length (bytes_of_string label) < 256-6} ->
   hs_hash: bytes{length hs_hash < 256} ->
@@ -291,6 +297,6 @@ val expand_secret:
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
 
 let expand_secret #ha prk label hv =
-  expand_label prk label hv (Hashing.Spec.tagLen ha) false
+  expand_label prk label hv (Hacl.Hash.Definitions.hash_len ha) false
 *)
 

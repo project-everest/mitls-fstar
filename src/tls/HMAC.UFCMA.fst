@@ -36,9 +36,9 @@ noeq type info = | Info:
 
 //18-02-25 should we index by i instead?
 type text (u:info) = Hashing.macable u.alg
-type tag (u:info) = lbytes32 (Hashing.tagLen u.alg)
+type tag (u:info) = lbytes32 (Hacl.Hash.Definitions.hash_len u.alg)
 
-let keylen (u:info): Pkg.keylen = Hashing.tagLen u.alg
+let keylen (u:info): Pkg.keylen = Hacl.Hash.Definitions.hash_len u.alg
 type keyrepr (u:info) = Hashing.hkey u.alg
 
 let goodish (#ip:ipkg) (i:ip.Pkg.t) (u:info) (msg:text u) =
@@ -131,8 +131,8 @@ noextract
 let create ip _ _ i u =
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
-  assert_norm(EverCrypt.HMAC.keysized u.alg (EverCrypt.Hash.tagLength u.alg));
-  let kv: keyrepr u = Random.sample32 (Hashing.tagLen u.alg) in
+  assert_norm(Spec.HMAC.keysized u.alg (Spec.Hash.Definitions.hash_length u.alg));
+  let kv: keyrepr u = Random.sample32 (Hacl.Hash.Definitions.hash_len u.alg) in
   let ck = MAC u kv in
   let k : ir_key ip i =
     if is_safe i then
@@ -152,7 +152,7 @@ let coerceT (ip: ipkg) (ha_of_i: ip.Pkg.t -> ha) (good_of_i: (i:ip.Pkg.t -> Hash
   =
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
-  assert_norm(EverCrypt.HMAC.keysized u.alg (EverCrypt.Hash.tagLength u.alg));
+  assert_norm(Spec.HMAC.keysized u.alg (Spec.Hash.Definitions.hash_length u.alg));
   let ck = MAC u kv in
   if model then
     let k: ir_key ip i = RealKey ck in k
@@ -185,7 +185,7 @@ val coerce:
 let coerce ip _ _ i u kv =
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
-  assert_norm(EverCrypt.HMAC.keysized u.alg (EverCrypt.Hash.tagLength u.alg));
+  assert_norm(Spec.HMAC.keysized u.alg (Spec.Hash.Definitions.hash_length u.alg));
   let ck = MAC u kv in
   if model then
     let k: ir_key ip i = RealKey ck in k
@@ -378,14 +378,14 @@ let unit_test(): St bool =
   let here = new_colored_region root hs_color in
   let b0 = 
     let a = Hashing.SHA1 in 
-    assert_norm(Hashing.Spec.blockLength a <= Hashing.Spec.maxLength a);
-    test a here empty_bytes (Bytes.create (Hashing.tagLen a) 42z) in
+    assert_norm(Hashing.Spec.block_length a <= Hashing.Spec.max_input_length a);
+    test a here empty_bytes (Bytes.create (Hacl.Hash.Definitions.hash_len a) 42z) in
   let b1 = 
     let a = Hashing.SHA1 in 
-    test a here empty_bytes (Bytes.create (Hashing.tagLen a) 42z) in
+    test a here empty_bytes (Bytes.create (Hacl.Hash.Definitions.hash_len a) 42z) in
   let b2 = 
     let a = Hashing.SHA1 in 
-    test a here empty_bytes (Bytes.create (Hashing.tagLen a) 42z) in
+    test a here empty_bytes (Bytes.create (Hacl.Hash.Definitions.hash_len a) 42z) in
   b0 && b1 && b2
   // nothing bigger? 
 

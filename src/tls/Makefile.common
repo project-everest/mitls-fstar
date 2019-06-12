@@ -59,10 +59,9 @@ endif
 
 # Add more roots here!
 ROOTS ?= QUIC.fst Test.Main.fst \
-  HSL.Common.fst HSL.Send.fsti HSL.Transcript.fsti HSL.Receive.fst HSL.Receive.fsti \
+  HSL.Common.fst HSL.Send.fsti HSL.Receive.fst \
   IV.fst HMAC.UFCMA.fst Token.UF1CMA.fst Pkg.Tree.fst AEAD.Pkg.fst \
-  # HSL.Transcript.fst
-
+  HSL.Transcript.fst
 
 EVERYTHING=$(wildcard *.fst *.fsti Make* $(MITLS_HOME)/src/pki/* $(MITLS_HOME)/libs/ffi/* ideal-flags/* concrete-flags/* concrete-flags/$(FLAVOR)/*)
 

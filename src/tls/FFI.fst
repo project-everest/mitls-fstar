@@ -17,6 +17,7 @@ open FStar.Error
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 
+open TLS.Callbacks
 open TLSConstants
 open TLSInfo
 module Range = Range
@@ -424,11 +425,11 @@ let ffiSend c b =
   write c b
 
 
-let ffiSetTicketCallback (cfg:config) (ctx:FStar.Dyn.dyn) (cb:ticket_cb_fun) =
+let ffiSetTicketCallback (cfg:config) (ctx:context) (cb:context -> ticket_cb_fun) =
   trace "Setting a new ticket callback.";
   {cfg with ticket_callback = {ticket_context = ctx; new_ticket = cb}}
 
-let ffiSetNegoCallback (cfg:config) (ctx:FStar.Dyn.dyn) (cb:nego_cb_fun) =
+let ffiSetNegoCallback (cfg:config) (ctx:context) (cb:context -> nego_cb_fun) =
   trace "Setting a new server negotiation callback.";
   {cfg with nego_callback = {nego_context = ctx; negotiate = cb}}
 
