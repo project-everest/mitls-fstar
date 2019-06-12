@@ -535,7 +535,7 @@ let clientHello_binders_offset
   Parsers.ProtocolVersion.protocolVersion_size32 c.CH.version `U32.add`
   Parsers.Random.random_size32 c.CH.random `U32.add`
   Parsers.SessionID.sessionID_size32 c.CH.session_id `U32.add`
-  Parsers.ClientHello_cipher_suites.clientHello_cipher_suites_size32 c.CH.cipher_suites `U32.add` Parsers.ClientHello_compression_method.clientHello_compression_method_size32 c.CH.compression_method `U32.add`
+  Parsers.ClientHello_cipher_suites.clientHello_cipher_suites_size32 c.CH.cipher_suites `U32.add` Parsers.ClientHello_compression_methods.clientHello_compression_methods_size32 c.CH.compression_methods `U32.add`
   clientHelloExtensions_binders_offset c.CH.extensions
 
 #push-options "--z3rlimit 16"
@@ -566,7 +566,7 @@ let clientHello_binders_pos
   let pos2 = LP.jump_serializer Parsers.Random.random_serializer Parsers.Random.random_jumper sl pos1 (Ghost.hide (Ghost.reveal x).CH.random) in
   let pos3 = LP.jump_serializer Parsers.SessionID.sessionID_serializer Parsers.SessionID.sessionID_jumper sl pos2 (Ghost.hide (Ghost.reveal x).CH.session_id) in
   let pos4 = LP.jump_serializer CH.clientHello_cipher_suites_serializer CH.clientHello_cipher_suites_jumper sl pos3 (Ghost.hide (Ghost.reveal x).CH.cipher_suites) in
-  let pos5 = LP.jump_serializer CH.clientHello_compression_method_serializer CH.clientHello_compression_method_jumper sl pos4 (Ghost.hide (Ghost.reveal x).CH.compression_method) in
+  let pos5 = LP.jump_serializer CH.clientHello_compression_methods_serializer CH.clientHello_compression_methods_jumper sl pos4 (Ghost.hide (Ghost.reveal x).CH.compression_methods) in
   clientHelloExtensions_binders_pos sl pos5 (Ghost.hide (Ghost.reveal x).CH.extensions)
 
 #pop-options
@@ -596,7 +596,7 @@ let clientHello_set_binders
     c'.CH.random == c.CH.random /\
     c'.CH.session_id == c.CH.session_id /\
     c'.CH.cipher_suites == c.CH.cipher_suites /\
-    c'.CH.compression_method == c.CH.compression_method /\
+    c'.CH.compression_methods == c.CH.compression_methods /\
     Cons? l' /\ (
     let l = c.CH.extensions in
     let e = L.last l in
@@ -612,7 +612,7 @@ let clientHello_set_binders
     CH.random = c.CH.random;
     CH.session_id = c.CH.session_id;
     CH.cipher_suites = c.CH.cipher_suites;
-    CH.compression_method = c.CH.compression_method;
+    CH.compression_methods = c.CH.compression_methods;
     CH.extensions = clientHelloExtensions_set_binders c.CH.extensions b'
   }
 
@@ -652,7 +652,7 @@ let truncate_clientHello_eq_left
    LP.serialize Parsers.Random.random_serializer c.CH.random `Seq.append` (
    LP.serialize Parsers.SessionID.sessionID_serializer c.CH.session_id `Seq.append` (
    LP.serialize Parsers.ClientHello_cipher_suites.clientHello_cipher_suites_serializer c.CH.cipher_suites  `Seq.append` (
-   LP.serialize Parsers.ClientHello_compression_method.clientHello_compression_method_serializer c.CH.compression_method `Seq.append` (
+   LP.serialize Parsers.ClientHello_compression_methods.clientHello_compression_methods_serializer c.CH.compression_methods `Seq.append` (
    truncate_clientHelloExtensions c.CH.extensions
   )))))))
 = serialize_clientHello_eq c
@@ -683,43 +683,43 @@ let truncate_clientHello_inj_binders_bytesize
     (LP.serialize Parsers.Random.random_serializer c1.CH.random `Seq.append` (
       LP.serialize Parsers.SessionID.sessionID_serializer c1.CH.session_id `Seq.append` (
       LP.serialize Parsers.ClientHello_cipher_suites.clientHello_cipher_suites_serializer c1.CH.cipher_suites  `Seq.append` (
-      LP.serialize Parsers.ClientHello_compression_method.clientHello_compression_method_serializer c1.CH.compression_method `Seq.append` (
+      LP.serialize Parsers.ClientHello_compression_methods.clientHello_compression_methods_serializer c1.CH.compression_methods `Seq.append` (
    truncate_clientHelloExtensions c1.CH.extensions
      )))))
      (LP.serialize Parsers.Random.random_serializer c2.CH.random `Seq.append` (
        LP.serialize Parsers.SessionID.sessionID_serializer c2.CH.session_id `Seq.append` (
        LP.serialize Parsers.ClientHello_cipher_suites.clientHello_cipher_suites_serializer c2.CH.cipher_suites  `Seq.append` (
-       LP.serialize Parsers.ClientHello_compression_method.clientHello_compression_method_serializer c2.CH.compression_method `Seq.append` (
+       LP.serialize Parsers.ClientHello_compression_methods.clientHello_compression_methods_serializer c2.CH.compression_methods `Seq.append` (
        truncate_clientHelloExtensions c2.CH.extensions
    )))));
   LP.serialize_strong_prefix Parsers.Random.random_serializer c1.CH.random c2.CH.random
      (LP.serialize Parsers.SessionID.sessionID_serializer c1.CH.session_id `Seq.append` (
       LP.serialize Parsers.ClientHello_cipher_suites.clientHello_cipher_suites_serializer c1.CH.cipher_suites  `Seq.append` (
-      LP.serialize Parsers.ClientHello_compression_method.clientHello_compression_method_serializer c1.CH.compression_method `Seq.append` (
+      LP.serialize Parsers.ClientHello_compression_methods.clientHello_compression_methods_serializer c1.CH.compression_methods `Seq.append` (
    truncate_clientHelloExtensions c1.CH.extensions
      ))))
      (LP.serialize Parsers.SessionID.sessionID_serializer c2.CH.session_id `Seq.append` (
        LP.serialize Parsers.ClientHello_cipher_suites.clientHello_cipher_suites_serializer c2.CH.cipher_suites  `Seq.append` (
-       LP.serialize Parsers.ClientHello_compression_method.clientHello_compression_method_serializer c2.CH.compression_method `Seq.append` (
+       LP.serialize Parsers.ClientHello_compression_methods.clientHello_compression_methods_serializer c2.CH.compression_methods `Seq.append` (
        truncate_clientHelloExtensions c2.CH.extensions
    ))));
   LP.serialize_strong_prefix Parsers.SessionID.sessionID_serializer c1.CH.session_id c2.CH.session_id
      (LP.serialize Parsers.ClientHello_cipher_suites.clientHello_cipher_suites_serializer c1.CH.cipher_suites  `Seq.append` (
-      LP.serialize Parsers.ClientHello_compression_method.clientHello_compression_method_serializer c1.CH.compression_method `Seq.append` (
+      LP.serialize Parsers.ClientHello_compression_methods.clientHello_compression_methods_serializer c1.CH.compression_methods `Seq.append` (
    truncate_clientHelloExtensions c1.CH.extensions
      )))
      (LP.serialize Parsers.ClientHello_cipher_suites.clientHello_cipher_suites_serializer c2.CH.cipher_suites  `Seq.append` (
-       LP.serialize Parsers.ClientHello_compression_method.clientHello_compression_method_serializer c2.CH.compression_method `Seq.append` (
+       LP.serialize Parsers.ClientHello_compression_methods.clientHello_compression_methods_serializer c2.CH.compression_methods `Seq.append` (
        truncate_clientHelloExtensions c2.CH.extensions
    )));
   LP.serialize_strong_prefix CH.clientHello_cipher_suites_serializer c1.CH.cipher_suites c2.CH.cipher_suites
-     (LP.serialize Parsers.ClientHello_compression_method.clientHello_compression_method_serializer c1.CH.compression_method `Seq.append` (
+     (LP.serialize Parsers.ClientHello_compression_methods.clientHello_compression_methods_serializer c1.CH.compression_methods `Seq.append` (
    truncate_clientHelloExtensions c1.CH.extensions
      ))
-     (LP.serialize Parsers.ClientHello_compression_method.clientHello_compression_method_serializer c2.CH.compression_method `Seq.append` (
+     (LP.serialize Parsers.ClientHello_compression_methods.clientHello_compression_methods_serializer c2.CH.compression_methods `Seq.append` (
        truncate_clientHelloExtensions c2.CH.extensions
    ));
-  LP.serialize_strong_prefix CH.clientHello_compression_method_serializer c1.CH.compression_method c2.CH.compression_method
+  LP.serialize_strong_prefix CH.clientHello_compression_methods_serializer c1.CH.compression_methods c2.CH.compression_methods
     (truncate_clientHelloExtensions c1.CH.extensions)
     (truncate_clientHelloExtensions c2.CH.extensions)
   ;
@@ -786,7 +786,7 @@ let handshake_m_client_hello_set_binders
     c'.CH.random == c.CH.random /\
     c'.CH.session_id == c.CH.session_id /\
     c'.CH.cipher_suites == c.CH.cipher_suites /\
-    c'.CH.compression_method == c.CH.compression_method /\
+    c'.CH.compression_methods == c.CH.compression_methods /\
     Cons? l' /\ (
     let l = c.CH.extensions in
     let e = L.last l in

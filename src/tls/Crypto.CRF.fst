@@ -2,6 +2,7 @@ module Crypto.CRF
 
 module Concrete = EverCrypt.Hash.Incremental
 module Hash = EverCrypt.Hash
+module HD = Spec.Hash.Definitions
 
 module B = LowStar.Buffer
 module ST = FStar.HyperStack.ST
@@ -53,69 +54,59 @@ assume val of_seq
 /// ---------------------------
 
 /// This is very finely tuned to avoid inference issues.
-type mstate a = a': Concrete.alg { a' == a } & p:B.pointer bytes {
+type mstate a = a': alg { a' == a } & p:B.pointer bytes {
   B.(loc_disjoint (loc_addr_of_buffer p) (loc_region_only true Mem.tls_tables_region))
 }
 
 inline_for_extraction
-let state (a: Concrete.alg) =
+let state (a: alg) =
   if model then
     mstate a
   else
     Concrete.state a
 
-// UGH!!!
-noextract inline_for_extraction
-let fst (#a: e_alg) (s: state (G.reveal a){model}):
-  Tot (a': Concrete.alg { G.reveal a == a' })
-=
-  if model then
-    let (| a, s |) = (s <: mstate (G.reveal a)) in
-    a
-  else
-    false_elim ()
+noextract let ideal (#a:alg) (s:state a)
+  : Pure (mstate a) (requires model) (ensures fun _ -> True)
+  = s
+noextract let gideal (#a:e_alg) (s:state (G.reveal a))
+  : Pure (mstate (G.reveal a)) (requires model) (ensures fun _ -> True)
+  = s
 
-noextract inline_for_extraction
-let snd (#a: e_alg) (s: state (G.reveal a){model}):
-  Tot (p:B.pointer bytes {
-    B.(loc_disjoint (loc_addr_of_buffer p) (loc_region_only true Mem.tls_tables_region))
-  })
-=
-  if model then
-    let (| a, s |) = (s <: mstate (G.reveal a)) in
-    s
-  else
-    false_elim ()
+inline_for_extraction noextract let real (#a:alg) (s:state a)
+  : Pure (Concrete.state a) (requires not model) (ensures fun _ -> True)
+  = s
+inline_for_extraction noextract let greal (#a:e_alg) (s:state (G.reveal a))
+  : Pure (Concrete.state (G.reveal a)) (requires not model) (ensures fun _ -> True)
+  = s
 
 let freeable #a h (s:state a) =
   if model then
-    let s: B.pointer bytes = snd #(G.hide a) s in
+    let (| a, s |) = ideal s in
     B.freeable s
   else
-    Concrete.freeable #a h s
+    Concrete.freeable h (real s)
 
 let footprint #a h (s: state a) =
   if model then
-    B.loc_addr_of_buffer (snd #(G.hide a) s)
+    B.loc_addr_of_buffer (dsnd (ideal s))
   else
-    Concrete.footprint #a h s
+    Concrete.footprint h (real s)
 
 let invariant #a h (s: state a) =
   if model then
-    let s: B.pointer bytes = snd #(G.hide a) s in
+    let (| _, s |) = ideal s in
     B.live h s /\ S.length (B.deref h s) < pow2 61
   else
-    Concrete.invariant #a h s
+    Concrete.invariant h (real s)
 
 let invariant_loc_in_footprint #_ _ _ = ()
 
 let hashed #a h (s: state a) =
   if model then
-    let s: B.pointer bytes = snd #(G.hide a) s in
+    let (| _, s |) = ideal s in
     B.deref h s
   else
-    let s: Concrete.state a = s in
-    Concrete.hashed h s
+    Concrete.hashed h (real s)
 
 #push-options "--max_ifuel 1"
 let hash_fits #_ _ _ =
@@ -141,25 +132,23 @@ let create_in a r =
 let init a s =
   let open LowStar.BufferOps in
   if model then
-    let s: B.pointer bytes = snd s in
-    s *= S.empty
+    dsnd (gideal s) *= S.empty
   else
-    Concrete.init a s
+    Concrete.init a (greal s)
 
 let update a s data len =
   let open LowStar.BufferOps in
   if model then
-    let s: B.pointer bytes = snd s in
+    let (| _, s |) = gideal s in
     s *= (S.append !*s (to_seq data len))
   else
-    Concrete.update a s data len
+    Concrete.update a (greal s) data len
 
 #push-options "--z3rlimit 50"
 let finish a st dst =
   let open LowStar.BufferOps in
   if model then
-    let a = fst #a st in
-    let s: B.pointer bytes = snd st in
+    let (| a, s |) = gideal st in
     (**) assert B.(loc_disjoint (B.loc_addr_of_buffer s)
       (B.loc_region_only true Mem.tls_tables_region));
     (**) let h0 = ST.get () in
@@ -175,7 +164,6 @@ let finish a st dst =
 
 let free a s =
   if model then
-    B.free (snd s)
+    B.free (dsnd (gideal s))
   else
     Concrete.free a s
-

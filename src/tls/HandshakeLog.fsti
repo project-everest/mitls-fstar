@@ -77,9 +77,11 @@ let weak_valid_transcript hsl =
     | (Msg (M_client_hello ch)) :: (Msg (M_server_hello sh)) :: rest -> true
     | _ -> false
 
+module SH = Parsers.ServerHello
 let transcript_version (x: list msg {weak_valid_transcript x}) = 
     match x with
-    | (Msg (M_client_hello ch)) :: (Msg (M_server_hello sh)) :: rest -> Some sh.version
+    | (Msg (M_client_hello ch)) :: (Msg (M_server_hello sh)) :: rest ->
+      Some sh.SH.version
     | _ -> None
 
 (* TODO: move to something like FStar.List.GTot *)
@@ -193,7 +195,6 @@ val setParams: s:log ->
     writing h1 s == writing h0 s /\
     hashAlg h1 s == Some a ))
 
-
 (* Outgoing *)
 
 // We send one message at a time (or in two steps for CH);
@@ -208,11 +209,10 @@ let write_transcript h0 h1 (s:log) (m:msg) =
     writing h1 s /\
     hashAlg h1 s == hashAlg h0 s /\
     transcript h1 s == transcript h0 s @ [m]
-(*
+
 val load_stateless_cookie: s:log -> h:hrr -> digest:bytes -> ST unit
   (requires (fun h0 -> writing h0 s /\ valid_transcript (transcript h0 s)))
   (ensures (fun h0 _ h1 -> modifies_one s h0 h1 /\ writing h1 s))
-*)
 
 val send_truncated: s:log -> m:msg -> t:UInt32.t -> ST unit
   (requires (fun h0 ->

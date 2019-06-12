@@ -122,7 +122,6 @@ private
 let lbytes_pair_serializer (coordinate_length:coordinate_length_type)
   : LP.serializer (lbytes_pair_parser coordinate_length) 
   = let l = U32.v coordinate_length in
-    let p = LP.parse_flbytes l in
     let s = LP.serialize_flbytes l in
     LP.serialize_nondep_then s s
 

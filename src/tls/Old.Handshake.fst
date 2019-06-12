@@ -25,7 +25,10 @@ module HMAC_UFCMA = Old.HMAC.UFCMA
 module HSM = HandshakeMessages
 module HSL = HandshakeLog
 module CH = Parsers.ClientHello
-module SH = Parsers.ServerHello
+module SH = Parsers.RealServerHello
+module HRR = Parsers.HelloRetryRequest
+module FSH = Parsers.ServerHello
+
 // For readabililty, we try to open/abbreviate fewer modules
 
 (* A flag for runtime debugging of Handshake data.
@@ -375,9 +378,7 @@ let client_ClientHello hs i =
     hs.state := C_wait_ServerHello;
     Correct ()
 
-type hrr = unit
-
-let client_HelloRetryRequest (hs:hs) (hrr:hrr) : St incoming =
+let client_HelloRetryRequest (hs:hs) (hrr:HSM.hrr) : St incoming =
   trace "client_HelloRetryRequest";
   let s =
     match Nego.group_of_hrr hrr with
@@ -400,7 +401,7 @@ let client_HelloRetryRequest (hs:hs) (hrr:hrr) : St incoming =
 
 // requires !hs.state = Wait_ServerHello
 // ensures TLS 1.3 ==> installed handshake keys
-let client_ServerHello (s:hs) (sh:HSM.serverHello) (* digest:Hashing.anyTag *) : St incoming =
+let client_ServerHello (s:hs) (sh:HSM.sh) (* digest:Hashing.anyTag *) : St incoming =
   trace "client_ServerHello";
   match Nego.client_ServerHello s.nego sh with
   | Error z -> InError z
@@ -741,14 +742,14 @@ let server_ServerHelloDone hs =
 
 let serverHello (m:Nego.mode) =
   let open Nego in
-  HSM.M_server_hello ({
-    SH.version = minPV TLS_1p2 m.n_protocol_version;
-    SH.random = m.n_server_random;
-    SH.session_id = m.n_sessionID;
-    SH.cipher_suite = name_of_cipherSuite m.n_cipher_suite;
-    SH.compression_method = NullCompression;
-    SH.extensions = m.n_server_extensions;
-   })
+  HSM.M_server_hello (HSM.serverHello_of_sh SH.({
+    version = minPV TLS_1p2 m.n_protocol_version;
+    random = m.n_server_random;
+    session_id = m.n_sessionID;
+    cipher_suite = name_of_cipherSuite m.n_cipher_suite;
+    compression_method = NullCompression;
+    extensions = m.n_server_extensions;
+   }))
 
 type binders = Parsers.OfferedPsks_binders.offeredPsks_binders
 
@@ -786,13 +787,11 @@ let server_ClientHello hs offer =
     // the HRR group
     match Nego.server_ClientHello hs.nego offer hs.log with
     | Error z -> InError z
-    | Correct (Nego.ServerHelloRetryRequest hrr _) ->
-      InError (fatalAlert Internal_error, "disabled HRR")
-    (*
-      HandshakeLog.send hs.log (HelloRetryRequest hrr);
+    | Correct (Nego.ServerRetry hrr) ->
+      let m = HSM.M_server_hello (HSM.serverHello_of_hrr hrr) in
+      HandshakeLog.send hs.log (HSL.Msg m);
       // Note: no handshake state machine transition
       InAck false false
-     *)
     | Correct (Nego.ServerMode mode cert app_exts) ->
 
     let pv = mode.Nego.n_protocol_version in
@@ -1207,10 +1206,10 @@ let rec recv_fragment (hs:hs) #i rg f =
 
     | C_init, _, _ -> InError (fatalAlert Unexpected_message, "Client hasn't sent hello yet")
     | C_wait_ServerHello, [Msg (M_server_hello sh)], [] ->
-      recv_again (client_ServerHello hs sh)
-//  | C_wait_ServerHello, [HelloRetryRequest hrr], [] ->
-//    client_HelloRetryRequest hs hrr
-//  | C_wait_ServerHello, Some ([ServerHello sh], [digest]) -> client_ServerHello hs sh digest
+      if HSM.is_hrr sh then
+        client_HelloRetryRequest hs (HSM.get_hrr sh)
+      else
+        recv_again (client_ServerHello hs (HSM.get_sh sh))
 
     // 1.2 full: wrap these two into a single received flight with optional [cr]
     | C_wait_ServerHelloDone, [Msg12 (M12_certificate c); Msg12 (M12_server_key_exchange ske); Msg12 (M12_server_hello_done ())], [_] ->

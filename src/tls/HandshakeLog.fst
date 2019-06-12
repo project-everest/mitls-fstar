@@ -277,8 +277,6 @@ let setParams l pv ha kexo dho =
         st.transcript st.out st.incoming st.parsed
         hs (Some pv) kexo dho
 
-#set-options "--admit_smt_queries true"
-
 (*
 val getHash: #ha:hash_alg -> t:log -> ST (tag ha)
     (requires (fun h -> hashAlg h t == Some ha))
@@ -292,23 +290,22 @@ let getHash #ha (LOG #reg st) =
     Hashing.finalize #ha cst.hash
 *)
 
+#set-options "--admit_smt_queries true"
 // Must be called after receiving a CH in the Init state of nego, indicating
 // that the retry is stateless.
-let load_stateless_cookie l hrr digest = admit()
-(*
+let load_stateless_cookie (l:log) hrr digest =
   let st = !l in
   // The cookie is loaded after CH2 is written to the hash buffer
-  let OpenHash ch2b = st.hashes in
+  let OpenHash ch2b = st.hashes in  
   let fake_ch = (bytes_of_hex "fe0000") @| (Parse.vlbytes 1 digest) in
   trace ("Installing prefix to transcript: "^(hex_of_bytes fake_ch));
-  let hrb = handshakeMessageBytes None (HelloRetryRequest hrr) in
+  let hrb = handshake_serializer32 (M_server_hello (serverHello_of_hrr hrr)) in
   trace ("HRR bytes: "^(hex_of_bytes hrb));
-  let h = OpenHash (fake_ch @| hrb @| ch2b) in
-  l := State st.transcript st.outgoing st.outgoing_next_keys st.outgoing_complete
-             st.incoming st.parsed h st.pv st.kex st.dh_group
-*)
+  let h = OpenHash (fake_ch @| hrb @| ch2b) in  
+  l := State st.transcript st.out st.incoming st.parsed h st.pv st.kex st.dh_group
 
 
+module HRR = Parsers.HelloRetryRequest
 
 let send_truncated l m tr =
   trace ("emit "^string_of_handshakeType (tag_of m));
@@ -323,12 +320,14 @@ let send_truncated l m tr =
       FixedHash a acc hl
     | OpenHash p ->
       (match m with
-      (*
-      | HelloRetryRequest hrr ->
-        let Some cs = cipherSuite_of_name hrr.hrr_cipher_suite in
-        let hmsg = Hashing.compute (verifyDataHashAlg_of_ciphersuite cs) p in
-        let hht = (bytes_of_hex "fe0000") @| (bytes_of_int 1 (length hmsg)) @| hmsg in
-        OpenHash (hht @| mb) *)
+      | Msg (M_server_hello sh) ->
+        if is_hrr sh then
+          let hrr = get_hrr sh in
+          let Some cs = cipherSuite_of_name hrr.HRR.cipher_suite in
+          let hmsg = Hashing.compute (verifyDataHashAlg_of_ciphersuite cs) p in
+          let hht = (bytes_of_hex "fe0000") @| (bytes_of_int 1 (length hmsg)) @| hmsg in
+          OpenHash (hht @| mb)
+	else OpenHash (p @| mb)
       | _ -> OpenHash (p @| mb))
     in
   let sto = st.out in
@@ -521,15 +520,21 @@ let rec hashHandshakeMessages t p hs n nb =
     | m::mrest, mb::brest ->
       (match hs with
       | OpenHash b ->
-        let hs = match m with (*
-          | HelloRetryRequest hrr ->
-            let hmsg = match cipherSuite_of_name hrr.hrr_cipher_suite with
-              | Some cs -> Hashing.compute (verifyDataHashAlg_of_ciphersuite cs) b
-              | None -> b in
-            let hht = (bytes_of_hex "fe0000") @| (Parse.vlbytes 1 hmsg) in
-            trace ("Replacing CH1 in transcript with "^(hex_of_bytes hht));
-            trace ("HRR bytes: "^(hex_of_bytes mb));
-            OpenHash (hht @| mb) *)
+        let hs =
+	  match m with
+          | Msg (M_server_hello sh) ->
+	    if is_hrr sh then
+	     begin
+	      let hrr = get_hrr sh in
+              let hmsg = match cipherSuite_of_name hrr.HRR.cipher_suite with
+                | Some cs -> Hashing.compute (verifyDataHashAlg_of_ciphersuite cs) b
+                | None -> b in
+              let hht = (bytes_of_hex "fe0000") @| (Parse.vlbytes 1 hmsg) in
+              trace ("Replacing CH1 in transcript with "^(hex_of_bytes hht));
+              trace ("HRR bytes: "^(hex_of_bytes mb));
+              OpenHash (hht @| mb)
+	     end
+	    else OpenHash (b @| mb)
           | _ -> OpenHash (b @| mb)
         in
         hashHandshakeMessages t (p @ [m]) hs mrest brest

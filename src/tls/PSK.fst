@@ -10,11 +10,14 @@ open TLSConstants
 
 module DM = FStar.DependentMap
 module MDM = FStar.Monotonic.DependentMap
+module DT = DefineTable
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
 
-//19-05-30 Should we keep relying on MDM? Upgrade it?
-
+(* Main RFC data types for PSKs *)
+include Parsers.PskIdentity
+include Parsers.PskIdentity_identity
+include Parsers.OfferedPsks
 
 // *** PSK ***
 
@@ -28,12 +31,12 @@ module ST = FStar.HyperStack.ST
 //  - for tickets, the encrypted serialized state is the PSK identifier
 //  - we store in the table the PSK context and compromise status
 
-// The pskInfo type has been moved to Callbacks as it appears in config
-// for the new ticket callback API
+// The type of PSK identifiers (labels used in TLS messages)
+type pskName = pskIdentity_identity
 
+// The information associated with a PSK, i.e. time created,
+// usage (PSK+DHE or PSK only), hash, and AEAD (for 0-RTT)
 type pskInfo = TLS.Callbacks.pskInfo
-let pskInfo_hash pi = pi.early_hash
-let pskInfo_ae pi = pi.early_ae
 
 // We rule out all PSK that do not have at least one non-null byte
 // thus avoiding possible confusion with non-PSK for all possible hash algs
@@ -43,13 +46,6 @@ type app_psk (i:psk_identifier) =
 type app_psk_entry (i:psk_identifier) =
   (app_psk i) * pskInfo * bool
 
-// Global invariant on the PSK idealization table
-// No longer necessary now that FStar.Monotonic.DependentMap uses eqtype
-//type app_psk_injective (m:MDM.map' psk_identifier app_psk_entry) =
-//  forall i1 i2.{:pattern (MDM.sel m i1); (MDM.sel m i2)}
-//      Seq.equal i1 i2 <==> (match MDM.sel m i1, MDM.sel m i2 with
-//                  | Some (psk1, pski1, h1), Some (psk2, pski2, h2) -> Seq.equal psk1 psk2 /\ h1 == h2
-//                  | _ -> True)
 type psk_table_invariant (m:MDM.partial_dependent_map psk_identifier app_psk_entry) = True
 
 /// Ideal table for application PSKs
@@ -165,7 +161,7 @@ let coerce_psk (i:psk_identifier) (ctx:pskInfo) (k:app_psk i)
 let compatible_hash_ae_st (i:pskid) (ha:hash_alg) (ae:aeadAlg) (h:mem) =
   (MDM.defined app_psk_table i h /\
   (let (_,ctx,_) = MDM.value_of app_psk_table i h in
-  ha = pskInfo_hash ctx /\ ae = pskInfo_ae ctx))
+  ha = ctx.early_hash /\ ae = ctx.early_ae))
 
 let compatible_hash_ae (i:pskid) (h:hash_alg) (a:aeadAlg) =
   witnessed (compatible_hash_ae_st i h a)
@@ -190,7 +186,7 @@ let verify_hash_ae (i:pskid) (ha:hash_alg) (ae:aeadAlg) : ST bool
     cut(MDM.contains app_psk_table i x h);
     cut(MDM.value_of app_psk_table i h = x);
     let (_, ctx, _) = x in
-    if pskInfo_hash ctx = ha && pskInfo_ae ctx = ae then
+    if ctx.early_hash = ha && ctx.early_ae = ae then
      begin
       cut(compatible_hash_ae_st i ha ae h);
       assume(stable_on_t app_psk_table (compatible_hash_ae_st i ha ae));
@@ -198,7 +194,6 @@ let verify_hash_ae (i:pskid) (ha:hash_alg) (ae:aeadAlg) : ST bool
       true
      end
     else false
-
 
 (*
 Provisional support for the PSK extension
@@ -226,47 +221,6 @@ Hence, the server authenticates age, and may filter 0RTT accordingly.
 
 *)
 
-
-
-
-/// Towards TLS.Ticket
-
-/// TLS clients (and possibly later servers) keep sealed PSKs, their
-/// tickets, and their authenticated contexts in an external database
-/// accessed via callbacks.
-///
-/// Our cryptopgraphic model also keeps tables from indexes to PSKs,
-/// with a table for TLS 1.2 and multiple tables in the key-derivation
-/// tree for TLS 1.3. Their (global, model-only) indexes should not be
-/// confused with the (concrete, local) identifiers exchanged by TLS.
-///
-// SESSION TICKET DATABASE (TLS 1.3)
-// Note that the associated PSK are stored in the PSK table defined below in this file
-let hostname : eqtype = string
-
-let tlabel (h:hostname) = bytes
-
-noextract
-private let tregion:rgn = new_region tls_tables_region
-private let tickets : MDM.t tregion hostname tlabel (fun _ -> True) =
-  MDM.alloc ()
-
-let lookup (h:hostname) = MDM.lookup tickets h
-let extend (h:hostname) (t:tlabel h) = MDM.extend tickets h t
-
-// SESSION TICKET DATABASE (TLS 1.2)
-// Note that this table also stores the master secrets
-type session12 (tid:bytes) = 
-  protocolVersion * cipherSuite * ems:bool * ms:bytes
-
-private let sessions12 : MDM.t tregion bytes session12 (fun _ -> True) =
-  MDM.alloc ()
-
-let s12_lookup (tid:bytes) = MDM.lookup sessions12 tid
-let s12_extend (tid:bytes) (s:session12 tid) = MDM.extend sessions12 tid s
-
-
-
 type ticket_age = UInt32.t
 type obfuscated_ticket_age = UInt32.t
 let default_obfuscated_age = 0ul
@@ -277,7 +231,6 @@ let decode_age (t:obfuscated_ticket_age) mask = t -%^ mask
 private let inverse_mask t mask: Lemma (decode_age (encode_age t mask) mask = t) = ()
 
 
-
 /// By default we use an in-memory ticket table
 /// and the in-memory internal PSK database
 
@@ -285,6 +238,7 @@ val defaultTicketCBFun: context -> ticket_cb_fun
 let defaultTicketCBFun _ sni ticket info psk =
   let h0 = get() in
   begin
+  (*
   match info with
   | TicketInfo_12 (pv, cs, ems) ->
     // 2018.03.10 SZ: The ticket must be fresh
@@ -297,6 +251,7 @@ let defaultTicketCBFun _ sni ticket info psk =
     assume False;
     coerce_psk ticket pskInfo psk;      // modifies psk_region
     extend sni ticket                   // modifies PSK.tregion
+  *) ()
   end;
   let h1 = ST.get() in
   // 2018.03.10 SZ: [ticket_cb_fun] ensures [modifies_none]
