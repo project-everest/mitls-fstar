@@ -1,0 +1,34 @@
+[
+  "ÆÜ+²c_^·úÌ•”×Ã",
+  [
+    [
+      "Parsers.Signature.signature",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_Parsers.SignatureScheme.signatureScheme__uu___haseq",
+        "equation_Parsers.Signature_signature_payload.signature_signature_payload",
+        "haseqTm_refine_bc1a96f20b06a0bd0d936da7c6c01d5c",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
+      ],
+      0,
+      "e6dc7ddbe834f9ea75c3cb098cedac79"
+    ],
+    [
+      "Parsers.Signature.signature_valid",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.squash",
+        "l_and-interp",
+        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+      ],
+      0,
+      "1a0db54e6c5c4c86a4d0b03d9e2a43d1"
+    ]
+  ]
+]

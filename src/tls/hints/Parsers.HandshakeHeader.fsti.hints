@@ -1,0 +1,48 @@
+[
+  "%\u000b\t\u0004F6‹\u0006~åoiù÷¤[",
+  [
+    [
+      "Parsers.HandshakeHeader.handshakeHeader",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt32.t__uu___haseq",
+        "assumption_Parsers.HandshakeType.handshakeType__uu___haseq",
+        "equation_LowParse.Spec.BoundedInt.bounded_integer",
+        "haseqTm_refine_22e74dfa2e8dfb6c739b3c533a63922e"
+      ],
+      0,
+      "0c05f674951099b8da1d8a473f126b0e"
+    ],
+    [
+      "Parsers.HandshakeHeader.handshakeHeader_jumper",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.HandshakeHeader.handshakeHeader_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
+      ],
+      0,
+      "6a966579da2aef2a61e522753605dd70"
+    ],
+    [
+      "Parsers.HandshakeHeader.handshakeHeader_valid",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.squash",
+        "l_and-interp",
+        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+      ],
+      0,
+      "5b8b81659c748e94bebcde1de98f35ca"
+    ]
+  ]
+]

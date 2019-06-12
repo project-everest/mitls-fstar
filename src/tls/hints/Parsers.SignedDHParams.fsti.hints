@@ -1,0 +1,36 @@
+[
+  "\u001b\u001d \u0012é\"’HÉ\u0000BYÝ¾ýÎ",
+  [
+    [
+      "Parsers.SignedDHParams.signedDHParams",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_Parsers.ServerDHParams.serverDHParams__uu___haseq",
+        "equation_FStar.Bytes.lbytes",
+        "equation_Parsers.SignedDHParams_client_random.signedDHParams_client_random",
+        "equation_Parsers.SignedDHParams_server_random.signedDHParams_server_random",
+        "haseqTm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
+      ],
+      0,
+      "7b40e94cd2f2dd60190329b10f51157f"
+    ],
+    [
+      "Parsers.SignedDHParams.signedDHParams_valid",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.squash",
+        "l_and-interp",
+        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+      ],
+      0,
+      "f43d5f80ce0a1442e68a66ca6182c376"
+    ]
+  ]
+]

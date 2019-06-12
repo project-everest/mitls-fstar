@@ -1,0 +1,37 @@
+[
+  "\"ø$FT\u001bÅ7\\WËª÷C´œ",
+  [
+    [
+      "Parsers.KeyExchangeAlgorithm.string_of_keyExchangeAlgorithm",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.KeyExchangeAlgorithm.Dh_anon",
+        "disc_equation_Parsers.KeyExchangeAlgorithm.Dhe",
+        "disc_equation_Parsers.KeyExchangeAlgorithm.Ecdhe",
+        "disc_equation_Parsers.KeyExchangeAlgorithm.Rsa",
+        "fuel_guarded_inversion_Parsers.KeyExchangeAlgorithm.keyExchangeAlgorithm"
+      ],
+      0,
+      "c236acb1a334572ca63e8b4651957143"
+    ],
+    [
+      "Parsers.KeyExchangeAlgorithm.keyExchangeAlgorithm_jumper",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.KeyExchangeAlgorithm.keyExchangeAlgorithm_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
+      ],
+      0,
+      "7a7b6c856066611fa87e7ed25e14c959"
+    ]
+  ]
+]

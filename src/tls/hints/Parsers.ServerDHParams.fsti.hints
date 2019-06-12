@@ -1,0 +1,35 @@
+[
+  "\u001eé_Îïþj?\r\u000ei ‚¥…\u0018",
+  [
+    [
+      "Parsers.ServerDHParams.serverDHParams",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "equation_Parsers.ServerDHParams_dh_Ys.serverDHParams_dh_Ys",
+        "equation_Parsers.ServerDHParams_dh_g.serverDHParams_dh_g",
+        "equation_Parsers.ServerDHParams_dh_p.serverDHParams_dh_p",
+        "haseqTm_refine_9a2308e4216787a42fcd90fc40592982",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
+      ],
+      0,
+      "7546713bd6ae11b55e3d09b311a11904"
+    ],
+    [
+      "Parsers.ServerDHParams.serverDHParams_valid",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.squash",
+        "l_and-interp",
+        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+      ],
+      0,
+      "20e81262639ad501db77bd127e3a9aba"
+    ]
+  ]
+]

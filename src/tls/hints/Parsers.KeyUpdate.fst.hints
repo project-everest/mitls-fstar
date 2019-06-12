@@ -1,0 +1,59 @@
+[
+  ":©O0¬fw`Nˆ›’çÑ»\u000e",
+  [
+    [
+      "Parsers.KeyUpdate.keyUpdate_bytesize_eq",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.serialize",
+        "equation_Parsers.KeyUpdate.keyUpdate",
+        "equation_Parsers.KeyUpdate.keyUpdate_bytesize"
+      ],
+      0,
+      "736660488e5e2b8482c7768e5eaaacea"
+    ],
+    [
+      "Parsers.KeyUpdate.keyUpdate_jumper",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.KeyUpdate.keyUpdate_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
+      ],
+      0,
+      "50da82e097f3801ec64d4ec053b42430"
+    ],
+    [
+      "Parsers.KeyUpdate.keyUpdate_bytesize_eqn",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.serialize",
+        "equation_Parsers.KeyUpdate.keyUpdate_bytesize",
+        "equation_Parsers.KeyUpdate.keyUpdate_serializer"
+      ],
+      0,
+      "7a7b854f01f8b4cbcb5e7fb2d4f20f29"
+    ],
+    [
+      "Parsers.KeyUpdate.keyUpdate_parser_serializer_eq",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_Parsers.KeyUpdate.keyUpdate_parser",
+        "equation_Parsers.KeyUpdate.keyUpdate_serializer"
+      ],
+      0,
+      "757e9412218bed690f5bca750d89c484"
+    ]
+  ]
+]

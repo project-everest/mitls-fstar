@@ -1,0 +1,35 @@
+[
+  "\u0000éº\tsKü˜Ïf¬Þëèj‡",
+  [
+    [
+      "Parsers.MiTLSConfigUseTicket.miTLSConfigUseTicket",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "equation_Parsers.PskIdentity_identity.pskIdentity_identity",
+        "equation_Parsers.TicketSeal.ticketSeal",
+        "haseqTm_refine_9a2308e4216787a42fcd90fc40592982",
+        "haseqTm_refine_bc1a96f20b06a0bd0d936da7c6c01d5c",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
+      ],
+      0,
+      "0780fa1110829e5ddee6f759a3376363"
+    ],
+    [
+      "Parsers.MiTLSConfigUseTicket.miTLSConfigUseTicket_valid",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.squash",
+        "l_and-interp",
+        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+      ],
+      0,
+      "e05417de80c95beebc8ed8f7cbd19637"
+    ]
+  ]
+]

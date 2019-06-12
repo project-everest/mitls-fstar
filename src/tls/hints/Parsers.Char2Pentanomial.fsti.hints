@@ -1,0 +1,35 @@
+[
+  "h¬Œ»”kªWˆÝGH»HÑ\u0016",
+  [
+    [
+      "Parsers.Char2Pentanomial.char2Pentanomial",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "equation_Parsers.Char2Pentanomial_k1.char2Pentanomial_k1",
+        "equation_Parsers.Char2Pentanomial_k2.char2Pentanomial_k2",
+        "equation_Parsers.Char2Pentanomial_k3.char2Pentanomial_k3",
+        "haseqTm_refine_ded83f0e40056526ff4d5b32368d0718",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
+      ],
+      0,
+      "2e21fe19eba6de253e0c79a6d2d28592"
+    ],
+    [
+      "Parsers.Char2Pentanomial.char2Pentanomial_valid",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.squash",
+        "l_and-interp",
+        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+      ],
+      0,
+      "e893c6b0b34c0b9af7d4602aa06b6c8c"
+    ]
+  ]
+]

@@ -1,0 +1,44 @@
+[
+  "\u0016\u0000\u001eKO\u0014—ovÌ7ÐJzÌ\u001b",
+  [
+    [
+      "Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_bytesize_eq",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.serialize",
+        "equation_Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension",
+        "equation_Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_bytesize"
+      ],
+      0,
+      "8418e25de2d7d33cfb82a05a8e644c83"
+    ],
+    [
+      "Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_bytesize_eqn",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.serialize",
+        "equation_Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_bytesize",
+        "equation_Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_serializer"
+      ],
+      0,
+      "5283d34f8e96bc9fc2a9dec4133e75cb"
+    ],
+    [
+      "Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_parser_serializer_eq",
+      1,
+      2,
+      1,
+      [
+        "@query",
+        "equation_Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_parser",
+        "equation_Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_serializer"
+      ],
+      0,
+      "2f8c463cefd49c3296300a2d9d581070"
+    ]
+  ]
+]
