@@ -19,11 +19,11 @@ else
   TIME := /usr/bin/time
 endif
 
-MITLS_HOME      ?= ../..
-FSTAR_HOME      ?= $(MITLS_HOME)/../FStar
-KREMLIN_HOME    ?= $(MITLS_HOME)/../kremlin
-HACL_HOME       ?= $(MITLS_HOME)/../hacl-star
-MLCRYPTO_HOME   ?= $(MITLS_HOME)/../MLCrypto
+MITLS_HOME	?= ../..
+FSTAR_HOME	?= $(MITLS_HOME)/../FStar
+KREMLIN_HOME	?= $(MITLS_HOME)/../kremlin
+HACL_HOME	?= $(MITLS_HOME)/../hacl-star
+MLCRYPTO_HOME	?= $(MITLS_HOME)/../MLCrypto
 QD_HOME		?= $(MITLS_HOME)/../quackyducky
 
 include $(HACL_HOME)/Makefile.include
