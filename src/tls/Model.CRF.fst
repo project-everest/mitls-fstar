@@ -4,6 +4,8 @@ module Model.CRF
 /// This module should not be extracted to C.
 
 open Mem
+open Spec.Hash.Definitions
+open EverCrypt.Hash
 open EverCrypt.Hash.Incremental // only for the specs (renamings)
 
 module MDM = FStar.Monotonic.DependentMap
@@ -43,9 +45,7 @@ private type domain (r:range) =
     Seq.length b < max_input_length a /\
     h a b = t}
 
-private let inv (f:MDM.partial_dependent_map range domain) = True // a bit overkill?
-
-private let table : MDM.t tls_tables_region range domain inv = MDM.alloc()
+private let table : MDM.t tls_tables_region range domain (fun _ -> True) = MDM.alloc()
 
 // witnessing that we hashed this particular content (for collision detection)
 // to be replaced by a witness of inclusion in a global table of all hash computations.

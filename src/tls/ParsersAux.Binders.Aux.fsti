@@ -92,7 +92,7 @@ val serialize_clientHello_eq
    LP.serialize Parsers.Random.random_serializer c.CH.random `Seq.append`
    LP.serialize Parsers.SessionID.sessionID_serializer c.CH.session_id `Seq.append`
    LP.serialize Parsers.ClientHello_cipher_suites.clientHello_cipher_suites_serializer c.CH.cipher_suites  `Seq.append`
-   LP.serialize Parsers.ClientHello_compression_method.clientHello_compression_method_serializer c.CH.compression_method `Seq.append`
+   LP.serialize Parsers.ClientHello_compression_methods.clientHello_compression_methods_serializer c.CH.compression_methods `Seq.append`
    LP.serialize CHEs.clientHelloExtensions_serializer c.CH.extensions
  ))
 
@@ -103,4 +103,3 @@ val serialize_handshake_m_client_hello_eq
    LP.serialize (LP.serialize_bounded_integer 3) (U32.uint_to_t (CH.clientHello_bytesize c))
    `Seq.append`
    LP.serialize CH.clientHello_serializer c)
-

@@ -116,12 +116,7 @@ let rec valid_transcript_to_list_valid_hs_msg_aux_inj
   | _ -> ()
 *)
 
-#set-options "--z3rlimit 64 --admit_smt_queries true"
-
-let msg_bytes = function
-| Msg h -> handshake_serializer32 h
-| Msg12 h -> handshake12_serializer32 h
-| Msg13 h -> handshake13_serializer32 h
+#set-options "--admit_smt_queries true"
 
 let transcript_bytes l =
   List.Tot.fold_left (fun b m -> b @| (msg_bytes m)) empty_bytes l
@@ -207,32 +202,6 @@ noeq type hashState (prior: erased_transcript) (parsed: list msg) =
       hashes: list anyTag { tags a (reveal_log prior) parsed hashes } ->
       hashState prior parsed
 
-/// towards separate high-level temporary HSL.Send
-///
-///
-open FStar.Integers
-noeq
-inline_for_extraction
-type outbuffer (*rrel rel: srel byte*) = {
-  base: Buffer.buffer UInt8.t;
-  pos: (pos: UInt32.t{ v pos <= Buffer.length base });
-  len: (len: UInt32.t{ v len = Buffer.length base });
-}
-
-noeq type send_state = {
-  // outgoing data, already formatted and hashed. Overflows are fatal.
-  outgoing: bytes; // should become an [outbuffer]
-
-  // still supporting the high-level API to TLS and Record;
-  // as next_keys_use, with next fragment after CCS
-  outgoing_next_keys: option (bool & option bytes & bool);
-  outgoing_complete: bool;
-}
-let send_state0 = {
-  outgoing = empty_bytes;
-  outgoing_next_keys = None;
-  outgoing_complete = false; }
-
 noeq type state =
   | State:
     transcript: erased_transcript ->
@@ -308,8 +277,6 @@ let setParams l pv ha kexo dho =
         st.transcript st.out st.incoming st.parsed
         hs (Some pv) kexo dho
 
-#set-options "--admit_smt_queries true"
-
 (*
 val getHash: #ha:hash_alg -> t:log -> ST (tag ha)
     (requires (fun h -> hashAlg h t == Some ha))
@@ -323,25 +290,22 @@ let getHash #ha (LOG #reg st) =
     Hashing.finalize #ha cst.hash
 *)
 
+#set-options "--admit_smt_queries true"
 // Must be called after receiving a CH in the Init state of nego, indicating
 // that the retry is stateless.
-let load_stateless_cookie l hrr digest = admit()
-(*
+let load_stateless_cookie (l:log) hrr digest =
   let st = !l in
   // The cookie is loaded after CH2 is written to the hash buffer
-  let OpenHash ch2b = st.hashes in
+  let OpenHash ch2b = st.hashes in  
   let fake_ch = (bytes_of_hex "fe0000") @| (Parse.vlbytes 1 digest) in
   trace ("Installing prefix to transcript: "^(hex_of_bytes fake_ch));
-  let hrb = handshakeMessageBytes None (HelloRetryRequest hrr) in
+  let hrb = handshake_serializer32 (M_server_hello (serverHello_of_hrr hrr)) in
   trace ("HRR bytes: "^(hex_of_bytes hrb));
-  let h = OpenHash (fake_ch @| hrb @| ch2b) in
-  l := State st.transcript st.outgoing st.outgoing_next_keys st.outgoing_complete
-             st.incoming st.parsed h st.pv st.kex st.dh_group
-*)
+  let h = OpenHash (fake_ch @| hrb @| ch2b) in  
+  l := State st.transcript st.out st.incoming st.parsed h st.pv st.kex st.dh_group
 
 
-///
-/// SEND --> high & low adaptor between Old.Handshake and Transcript
+module HRR = Parsers.HelloRetryRequest
 
 let send_truncated l m tr =
   trace ("emit "^string_of_handshakeType (tag_of m));
@@ -356,12 +320,14 @@ let send_truncated l m tr =
       FixedHash a acc hl
     | OpenHash p ->
       (match m with
-      (*
-      | HelloRetryRequest hrr ->
-        let Some cs = cipherSuite_of_name hrr.hrr_cipher_suite in
-        let hmsg = Hashing.compute (verifyDataHashAlg_of_ciphersuite cs) p in
-        let hht = (bytes_of_hex "fe0000") @| (bytes_of_int 1 (length hmsg)) @| hmsg in
-        OpenHash (hht @| mb) *)
+      | Msg (M_server_hello sh) ->
+        if is_hrr sh then
+          let hrr = get_hrr sh in
+          let Some cs = cipherSuite_of_name hrr.HRR.cipher_suite in
+          let hmsg = Hashing.compute (verifyDataHashAlg_of_ciphersuite cs) p in
+          let hht = (bytes_of_hex "fe0000") @| (bytes_of_int 1 (length hmsg)) @| hmsg in
+          OpenHash (hht @| mb)
+	else OpenHash (p @| mb)
       | _ -> OpenHash (p @| mb))
     in
   let sto = st.out in
@@ -456,90 +422,31 @@ let send_CCS_tag #a l m cf =
       let tg = Hashing.finalize #a acc in
       (FixedHash a acc hl,tg)
     in
-  let t = extend_hs_transcript st.transcript m in
   let nk =
     match st.out.outgoing_next_keys with
     | None -> Some (false, Some mb, false) in
   let sto = { st.out with outgoing_next_keys = nk; outgoing_complete = cf } in
-  l := State t sto
-    st.incoming st.parsed h st.pv st.kex st.dh_group;
+  let t = extend_hs_transcript st.transcript m in
+  l := State t sto st.incoming st.parsed h st.pv st.kex st.dh_group;
   tg
 
 #set-options "--admit_smt_queries true"
-// TODO require or check that both flags are clear before the call
 let send_signals l next_keys1 complete1 =
-  let State transcript sto incoming parsed hashes pv kex dh_group = !l in
-  if Some? sto.outgoing_next_keys then trace "WARNING: dirty next-key flag -- use send_CCS instead";
-  if sto.outgoing_complete then trace "WARNING: dirty complete flag";
-  let outgoing_next_keys1 =
-    match next_keys1 with
-    | Some (enable_appdata,skip_0rtt) -> Some (enable_appdata, None, skip_0rtt)
-    | None -> None in
-  let sto = { sto with outgoing_next_keys = outgoing_next_keys1; outgoing_complete = complete1 } in
-  l := State transcript sto incoming parsed hashes pv kex dh_group
+  let st = !l in
+  let sto = TLS.Handshake.Send.signals st.out next_keys1 complete1 in
+  l := State st.transcript sto st.incoming st.parsed st.hashes st.pv st.kex st.dh_group
 
 let to_be_written (l:log) =
   let st = !l in
   length st.out.outgoing
 
-// For QUIC handshake interface
-// do not do TLS fragmentation, support
-// max output buffer size
-let write_at_most (l:log) (i:id) (max:nat)
-  : ST (outgoing i)
-  (requires fun h0 -> True)
-  (ensures fun h0 _ h1 ->
-    modifies_one l h0 h1 /\
-    hashAlg h0 l == hashAlg h1 l /\
-    transcript h0 l == transcript h1 l)
-  =
+let write_at_most l (i:id) (n:nat) =
   let st = !l in
-  // do we have a fragment to send?
-  let fragment, outgoing' =
-    let o = st.out.outgoing in
-    let lo = length o in
-    if lo = 0 then // nothing to send
-       (None, empty_bytes)
-    else // at most one fragment
-    if (lo <= max) then
-      let rg = (lo, lo) in
-      (Some (| rg, o |), empty_bytes)
-    else // at least two fragments
-      let (x,y) = split_ o max in
-      let lx = length x in
-      let rg = (lx, lx) in
-      (Some (| rg, x |), y) in
-  if length outgoing' = 0 || max = 0
-    then (
-      // send signals only after flushing the output buffer
-      let next_keys1, outgoing1 = match st.out.outgoing_next_keys with
-      | Some(a, Some finishedFragment, z) ->
-        (if a || z then trace "unexpected 1.2 signals");
-        Some({
-          out_appdata = a;
-          out_ccs_first = true;
-          out_skip_0RTT = z}), finishedFragment
-      | Some(a, None, z) ->
-        Some({
-          out_appdata = a;
-          out_ccs_first = false;
-          out_skip_0RTT = z}), outgoing'
-      | None -> None, outgoing' in
-      let sto = { outgoing = outgoing1; outgoing_next_keys = None; outgoing_complete = false } in
-      l := State
-              st.transcript sto
-              st.incoming st.parsed st.hashes st.pv st.kex st.dh_group;
-      Outgoing fragment next_keys1 st.out.outgoing_complete
-      )
-    else (
-      let sto = { st.out with outgoing = outgoing' } in
-      l := State st.transcript sto st.incoming st.parsed st.hashes st.pv st.kex st.dh_group;
-      Outgoing fragment None false )
+  let sto',r = TLS.Handshake.Send.write_at_most st.out i max_TLSPlaintext_fragment_length in
+  l := State st.transcript sto' st.incoming st.parsed st.hashes st.pv st.kex st.dh_group;
+  r
 
-let next_fragment l (i:id) =
-  write_at_most l i max_TLSPlaintext_fragment_length
-
-
+let next_fragment l i = write_at_most l i max_TLSPlaintext_fragment_length
 
 
 #reset-options
@@ -613,15 +520,21 @@ let rec hashHandshakeMessages t p hs n nb =
     | m::mrest, mb::brest ->
       (match hs with
       | OpenHash b ->
-        let hs = match m with (*
-          | HelloRetryRequest hrr ->
-            let hmsg = match cipherSuite_of_name hrr.hrr_cipher_suite with
-              | Some cs -> Hashing.compute (verifyDataHashAlg_of_ciphersuite cs) b
-              | None -> b in
-            let hht = (bytes_of_hex "fe0000") @| (Parse.vlbytes 1 hmsg) in
-            trace ("Replacing CH1 in transcript with "^(hex_of_bytes hht));
-            trace ("HRR bytes: "^(hex_of_bytes mb));
-            OpenHash (hht @| mb) *)
+        let hs =
+	  match m with
+          | Msg (M_server_hello sh) ->
+	    if is_hrr sh then
+	     begin
+	      let hrr = get_hrr sh in
+              let hmsg = match cipherSuite_of_name hrr.HRR.cipher_suite with
+                | Some cs -> Hashing.compute (verifyDataHashAlg_of_ciphersuite cs) b
+                | None -> b in
+              let hht = (bytes_of_hex "fe0000") @| (Parse.vlbytes 1 hmsg) in
+              trace ("Replacing CH1 in transcript with "^(hex_of_bytes hht));
+              trace ("HRR bytes: "^(hex_of_bytes mb));
+              OpenHash (hht @| mb)
+	     end
+	    else OpenHash (b @| mb)
           | _ -> OpenHash (b @| mb)
         in
         hashHandshakeMessages t (p @ [m]) hs mrest brest

@@ -112,7 +112,7 @@ let offered ((cfg,resume):client_config) (offer:full_offer) =
     // Correct offer == Negotiation.client_retry cfg offer0 ks now 
 
 let accepted 
-  (cfg:_) // avoid? 
+  (cfg:_) // avoid? unimportant 
   (prior: option Transcript.retry) 
   (offer: Negotiation.offer) 
   (sh: Parsers.ServerHello.serverHello)
@@ -121,7 +121,10 @@ let accepted
   // TBC Negotiation: 
   // missing the late processing of encrypted extensions and its callback. 
 
-assume val accepted13: full_offer -> serverHello -> Type0
+  // what's actually computed and may be worth caching: 
+  // pv cs resume? checkServerExtensions? pski 
+
+assume val accepted13: cfg: config -> full_offer -> serverHello -> Type0
 
 assume val client_complete: full_offer -> serverHello -> encryptedExtensions -> serverCredentials -> Type0
 
@@ -181,6 +184,8 @@ noeq type client_state
       (pskis_of_psks (offered_psks offer.full_ch)) 
       (groups_of_ks (offered_shares offer.full_ch)) ->
     // keeping the associated infos, master secrets, and exponents
+    // could also use unverified Old.KeySchedule.C_13_wait_SH 
+
     client_state region cfg  
 
   // waiting for encrypted handshake (1.3 only). The optional binders
@@ -189,7 +194,7 @@ noeq type client_state
   | C13_wait_Finished1: 
     offer: full_offer{ offered cfg offer } -> 
 
-    sh: serverHello{ accepted13 offer sh (* not yet authenticated *) } -> 
+    sh: serverHello{ accepted13 cfg offer sh (* not yet authenticated *) } -> 
     digest: Transcript.state (selected_ha sh) (* ..sh, now using the server's ha *) -> 
     // TODO key-schedule state 
     //i:   Secret.hs_id ->

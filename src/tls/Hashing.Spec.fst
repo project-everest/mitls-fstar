@@ -11,15 +11,44 @@ include Spec.Hash.Definitions
 
 open FStar.Integers
 open FStar.Bytes
-type tag (a:alg) = Bytes.lbytes32 (Hacl.Hash.Definitions.hash_len a)
-let maxTagLen = 64ul
-type anyTag = lbytes (Integers.v maxTagLen)
+
+let hash_len (a:alg)
+  : n:UInt32.t{UInt32.v n == hash_length a}
+  =
+  match a with
+  | MD5 -> assert_norm(hash_length MD5 == 16); 16ul
+  | SHA1 -> assert_norm(hash_length SHA1 == 20); 20ul
+  | SHA2_224 -> assert_norm(hash_length SHA2_224 == 28); 28ul
+  | SHA2_256 -> assert_norm(hash_length SHA2_256 == 32); 32ul
+  | SHA2_384 -> assert_norm(hash_length SHA2_384 == 48); 48ul
+  | SHA2_512 -> assert_norm(hash_length SHA2_512 == 64); 64ul
+
+type tag (a:alg) = Bytes.lbytes (hash_length a)
+
+let max_hash_length = 64
+let max_hash_len = 64ul
+type anyTag = lbytes max_hash_length
+
+let max_block_length = 128
+let max_block_len = 128ul
+
+private let lemma_tagLen (a:alg)
+  : Lemma (hash_length a <= max_hash_length)
+  [SMTPat (hash_length a)]
+  = ()
+
+private let lemma_blockLength (a:alg)
+  : Lemma (block_length a <= max_block_length)
+  [SMTPat (block_length a)]
+  = ()
 
 // JP: override the definition from evercrypt (which uses <) with miTLS
 // compatible definitions (which uses <=)
 let max_input_length a = max_input_length a - 1
 
 let macable a = b:bytes {length b + block_length a < pow2 32}
+let macable_any = b:bytes{length b + max_block_length < pow2 32}
+
 // 32-bit implementation restriction
 
 // Adapting EverCrypt's HMAC specification to TLS. In contrast with
