@@ -21,35 +21,35 @@ noextract private let is_safe (#ip:ipkg) (i:regid ip) : ST bool
   let b = ip.get_honesty i in ideal && b
 
 // Concrete parameters of an HMAC instance
-noeq type info =
+noeq type info (#ip:ipkg) (i:ip.t) =
 | Info: 
   alg: HMAC.ha -> 
   good: (Hashing.macable alg -> bool) ->
-  info
+  info i
 
-let klen (a:info) : keylen = H.hash_len a.alg
-type krepr (a:info) = Hashing.hkey a.alg
-type text (a:info) = Hashing.macable a.alg
-type tag (a:info) = B.lbytes32 (klen a)
+let klen (a:H.alg) : keylen = H.hash_len a
+type krepr (a:H.alg) = Hashing.hkey a
+type text (a:H.alg) = Hashing.macable a
+type tag (a:H.alg) = B.lbytes32 (klen a)
 
 // Type of keyed entries in the MAC idealization table
-let log_key (a:info) = tag a * text a
-let entry (#ip:ipkg) (i:ip.t) (a:info) (k:log_key a) =
+let log_key (a:H.alg) = tag a * text a
+let entry (#ip:ipkg) (i:ip.t) (a:info i) (k:log_key a.alg) =
   squash (safe i ==> a.good (snd k))
 
 // We create a log only for safe instaces
-noeq type log_t (#ip:ipkg) (i:ip.t) (a:info) = 
+noeq type log_t (#ip:ipkg) (i:ip.t) (a:info i) = 
 | Ideal of DT.dt (entry i a)
 | Real
 
-noeq type key (ip:ipkg) (i:regid ip) =
+noeq type key (#ip:ipkg) (i:regid ip) =
 | MAC:
-  info: info ->
-  krepr: krepr info ->
+  info: info i ->
+  krepr: krepr info.alg ->
   log: log_t i info{Ideal? log <==> safe i} ->
-  key ip i
+  key i
 
-let footprint (#ip:ipkg) (#i:regid ip) (k:key ip i)
+let footprint (#ip:ipkg) (#i:regid ip) (k:key i)
   : GTot (l:M.loc{not model ==> l == M.loc_none}) =
   match k.log with
   | Ideal log -> DT.loc log
@@ -57,74 +57,71 @@ let footprint (#ip:ipkg) (#i:regid ip) (k:key ip i)
 
 noextract
 val create:
-  ip: ipkg ->
-  valid_info: (i:ip.t{model} -> info -> Type) ->
+  #ip: ipkg ->
   i: regid ip ->
-  a: info ->
-  ST (k:key ip i)
-    (requires fun _ -> model /\ valid_info i a)
-    (ensures fun h0 k h1 -> M.modifies M.loc_none h0 h1 /\
+  a: info i ->
+  ST (k:key i)
+    (requires fun _ -> model)
+    (ensures fun h0 k h1 -> k.info == a /\
+      M.modifies M.loc_none h0 h1 /\
       fresh_loc (footprint k) h0 h1)
 
-let create ip valid_info i a =
+let create #ip i a =
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
   assert_norm(Spec.HMAC.keysized a.alg (H.hash_length a.alg));
-  let kv: krepr a = Random.sample32 (H.hash_len a.alg) in
+  let kv: krepr a.alg = Random.sample32 (H.hash_len a.alg) in
   let log =
     if is_safe i then Ideal (DT.alloc (entry i a))
     else Real in
   MAC a kv log
 
 noextract
-let coerceT (ip: ipkg)
-  (valid_info: (i:ip.t{model} -> info -> Type))
+let coerceT (#ip: ipkg)
   (i: regid ip{~(safe i)})
-  (a: info)
-  (kv: lbytes32 (klen a))
-  : GTot (key ip i) =
+  (a: info i)
+  (kv: lbytes32 (klen a.alg))
+  : GTot (key i) =
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
   assert_norm(Spec.HMAC.keysized a.alg (H.hash_length a.alg));
   MAC a kv Real
 
 val coerce:
-  ip: ipkg ->
-  valid_info: (i:ip.t{model} -> info -> Type) ->
+  #ip: ipkg ->
   i: regid ip{~(safe i)} ->
-  a: info ->
-  kv: lbytes32 (klen a) ->
-  ST (key ip i)
-  (requires fun _ -> model ==> valid_info i a)
-  (ensures fun h0 k h1 ->
-    k == coerceT ip valid_info i a kv /\
+  a: info i ->
+  kv: lbytes32 (klen a.alg) ->
+  ST (key i)
+  (requires fun _ -> True)
+  (ensures fun h0 k h1 -> k.info == a /\
+    k == coerceT i a kv /\
     M.modifies M.loc_none h0 h1 /\
     fresh_loc (footprint k) h0 h1)
 
-let coerce ip valid_info i a kv =
+let coerce #ip i a kv =
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
   assert_norm(Spec.HMAC.keysized a.alg (H.hash_length a.alg));
   MAC a kv Real
 
-let log_of (#ip:ipkg) (#i:regid ip) (k:key ip i)
+let log_of (#ip:ipkg) (#i:regid ip) (k:key i)
   : Pure (DT.dt (entry i k.info)) (requires safe i) (ensures fun _ -> True)
   =
   let Ideal log = k.log in log
 
 val mac:
-  ip: ipkg ->
-  valid_info: (i:ip.t{model} -> info -> Type) ->
+  #ip: ipkg ->
   #i: regid ip -> 
-  k: key ip i ->
-  p: text k.info ->
-  ST (tag k.info)
+  k: key i ->
+  p: text k.info.alg ->
+  ST (tag k.info.alg)
   (requires fun _ -> k.info.good p)
   (ensures fun h0 t h1 ->
     M.modifies (footprint k) h0 h1 /\
     (safe i ==> DT.defined (log_of k) (t,p)))
 
-let mac ip valid_info #i k p =
+let mac #ip #i k p =
   let tag = HMAC.hmac k.info.alg k.krepr p in
   if is_safe i then
    begin
@@ -136,18 +133,17 @@ let mac ip valid_info #i k p =
   tag
 
 val verify:
-  ip: ipkg ->
-  valid_info: (i:ip.t{model} -> info -> Type) ->
+  #ip: ipkg ->
   #i: regid ip -> 
-  k: key ip i ->
-  p: text k.info ->
-  t: tag k.info -> 
+  k: key i ->
+  p: text k.info.alg ->
+  t: tag k.info.alg -> 
   ST bool
   (requires fun _ -> True)
   (ensures fun h0 b h1 -> M.modifies M.loc_none h0 h1 /\
     ((b /\ safe i) ==> k.info.good p))
- 
-let verify ip valid_info #i k p t =
+
+let verify #ip #i k p t =
   let verified = HMAC.hmacVerify k.info.alg k.krepr p t in
   if is_safe i then
     (match DT.lookup (log_of k) (t,p) with
@@ -171,40 +167,35 @@ let verify ip valid_info #i k p t =
 noextract
 unfold let localpkg 
   (ip: ipkg)
-  (valid_info: (i:ip.t{model} -> info -> Type))
   : Pure (local_pkg ip)
   (requires True) 
   (ensures fun p ->
-//    LocalPkg?.key p == key ip /\
+    LocalPkg?.key p == key #ip /\
     LocalPkg?.info p == info)
   =
   Pkg.LocalPkg
-    (key ip)
+    (key #ip)
     info
-    valid_info
-    klen
+    (fun #i k -> k.info)
+    (fun #i a -> klen a.alg)
     (b2t ideal)
     (footprint #ip) // local footprint
     (fun #_ k h -> True) // local invariant
     (fun #i k h0 l h1 -> ()) // Local invariant framing
-    (create ip valid_info)
-    (coerceT ip valid_info)
-    (coerce ip valid_info)
+    (create #ip)
+    (coerceT #ip)
+    (coerce #ip)
 
 //TODO (later) support dynamic key compromise
 
 // 18-01-07 only for debugging; how to reliably disable this function otherwise?
 noextract 
-let string_of_key (#ip:ipkg) (#i:regid ip) (k:key ip i) : string = 
+let string_of_key (#ip:ipkg) (#i:regid ip) (k:key i) : string = 
 //18-08-31 TODO string vs string
 //"HMAC-"^Hashing.Spec.string_of_alg u.alg^" key="^print_bytes kv
 "HMAC key="^print_bytes (k.krepr)
 
 (**! Unit test for the packaging of UFCMA *)
-
-val coerce_eq2: a: (nat -> Type0) -> b: (nat -> Type0) -> v:a 0 -> Pure (b 0)
-  (requires a == b) (ensures fun _ -> True)
-let coerce_eq2 _ _ v = v // this works; many similar variants did not.
 
 private type id0 =
 | Index: hash_alg:H.alg -> nat -> id0
@@ -219,15 +210,10 @@ private let test (a: HMAC.ha) (v': Hashing.macable a) (t': H.tag a)
   (requires fun h0 -> model)
   (ensures fun h0 _ h1 -> True)
   =
-  let a0 = Info a (fun v -> length v = 0) in
-  let valid_info (i:ip.t{model}) (a:info) =
-    let i : id0 = i in i.hash_alg == a.alg
-    in
-  let p = localpkg ip valid_info in
+  let p = localpkg ip in
   let q = memoization_ST p in
-  assert(Pkg.Pkg?.key q == key ip);
-  assert(Pkg.Pkg?.info q == info);
   let h0 = Mem.get() in
+  
   // assert(
   //   let open Pkg in
   //   let log : i_mem_table p.key = itable q.define_table in
@@ -251,17 +237,17 @@ private let test (a: HMAC.ha) (v': Hashing.macable a) (t': H.tag a)
   // assert_by_tactic(u:info{u.alg = ha_of_i 0 /\ u.good == good_of_i 0} == Pkg.Pkg?.info q 0) FStar.Tactics.(norm "foo");
   // let u = u <: Pkg.Pkg?.info q 0 in
   let i0 = Index a 0 in
+  let a0 : info #ip i0 = Info a (fun v -> length v = 0) in
   assume(DT.fresh q.define_table i0 h0);
-  let k: key ip i0 = Pkg?.create q i0 a0 in
-  
+  let k: key #ip i0 = Pkg?.create q i0 a0 in
+
   // testing usability of logical payloads
   let v = empty_bytes in
   assert(a0.good v);
-  assume(k.info == a0);
-  let t = mac ip valid_info k v in
-  let b0 = verify ip valid_info k v' t in
+  let t = mac k v in
+  let b0 = verify k v' t in
   assert(b0 /\ b2t ideal ==> length v' = 0);
-  let b1 = verify ip valid_info k v' t' in
+  let b1 = verify k v' t' in
   assert(b1 /\ b2t ideal ==> length v' = 0);
   //assert false; // sanity check
   let _ = IO.debug_print_string (string_of_key k^" tag="^print_bytes t^"\n") in

@@ -42,9 +42,12 @@ noeq type info =
   good: bool ->
   info
 
-let keylen (u:info) : keylen = H.hash_len u.alg
-type keyrepr (u:info) = lbytes (Hashing.Spec.hash_length u.alg)
-type tag (u:info) = lbytes32 (keylen u)
+type info0 (#ip:ipkg) (ha_of_i: ip.t -> ha) (good_of_i: ip.t -> bool) (i:ip.t) =
+  a:info{a.alg == ha_of_i i /\ a.good == good_of_i i}
+
+let keylen (a:H.alg) : keylen = H.hash_len a
+type keyrepr (a:H.alg) = lbytes32 (keylen a)
+type tag (a:H.alg) = lbytes32 (keylen a)
 
 let goodish (#ip:ipkg) (i:ip.Pkg.t) (u:info) =
   squash (safe i ==>  u.good)
@@ -53,157 +56,165 @@ private type log_t (#ip:ipkg) (i:ip.Pkg.t) (u:info) (r:rgn) =
   m_rref r (option (goodish #ip i u)) ssa
 
 // runtime (concrete) type of MAC instances
-noeq abstract type concrete_key =
-  | MAC: u:info -> k:keyrepr u -> concrete_key
+noeq abstract
+type concrete_key (#ip:ipkg) (ha_of_i: ip.t -> ha) (good_of_i: ip.t -> bool) (i:ip.t) =
+  | MAC: u:info0 ha_of_i good_of_i i -> k:keyrepr u.alg -> concrete_key ha_of_i good_of_i i
 
 // The model type of instances - either ideal, or real
 // The real and concrete version are related by the functional correctness of HMAC
-noeq (* abstract *) type ir_key (ip:ipkg) (i:ip.Pkg.t) =
+noeq (* abstract *) type ir_key (#ip:ipkg)
+  (ha_of_i: ip.t -> ha) (good_of_i: ip.t -> bool) (i:ip.Pkg.t) =
   | IdealKey:
-    ck: concrete_key ->
+    ck: concrete_key ha_of_i good_of_i i ->
     region: Mem.subrgn ck.u.parent {~(is_tls_rgn region)} ->  // intuitively, the writer's region
     log: log_t i ck.u region ->
-    ir_key ip i
-  | RealKey: ck:concrete_key -> ir_key ip i
+    ir_key ha_of_i good_of_i i
+  | RealKey: ck:concrete_key ha_of_i good_of_i i -> ir_key ha_of_i good_of_i i
 
-type key (ip:ipkg) (i:ip.Pkg.t{ip.Pkg.registered i}) =
+type key (#ip:ipkg) (ha_of_i: ip.t -> ha) (good_of_i: ip.t -> bool) (i:regid ip) =
   (if model
-  then k:ir_key ip i{IdealKey? k <==> safe i}
-  else concrete_key)
+  then k:ir_key ha_of_i good_of_i i{IdealKey? k <==> safe i}
+  else concrete_key ha_of_i good_of_i i)
 
-let usage (#ip:ipkg) (#i:ip.Pkg.t{ip.Pkg.registered i}) (k:key ip i): GTot info =
+let usage #ip #hofi #gofi #i (k:key #ip hofi gofi i) =
   if model then
-    let k' : ir_key ip i = k in
+    let k' : ir_key hofi gofi i = k in
     match k' with
     | IdealKey ck _ _ -> ck.u
     | RealKey ck -> ck.u
-  else k.u
+  else (k <: concrete_key hofi gofi i).u
 
-let keyval (#ip:ipkg) (#i:ip.Pkg.t{ip.Pkg.registered i}) (k:key ip i): GTot (keyrepr (usage k)) =
+let keyval #ip #hofi #gofi #i (k:key #ip hofi gofi i): GTot (keyrepr (usage k).alg) =
   if model then
-    let k' : ir_key ip i = k in
+    let k' : ir_key hofi gofi i = k in
     match k' with
     | IdealKey ck _ _ -> ck.k
     | RealKey ck -> ck.k
-  else k.k
+  else (k <: concrete_key hofi gofi i).k
 
-let region (#ip:ipkg) (#i:ip.Pkg.t{ip.Pkg.registered i}) (k:key ip i):
-  Ghost (subrgn (usage k).parent)
-  (requires safe i)
-  (ensures fun _ -> True)
-  = let IdealKey _ r _ = k <: ir_key ip i in r
-
-let footprint (#ip:ipkg) : DT.local_fp (key ip)
+let footprint #ip #hofi #gofi : DT.local_fp (key #ip hofi gofi)
   = fun #i k ->
-//  assume false; //TODO downwards closed set
   if model then
-    let k' : ir_key ip i = k in
+    let k' : ir_key hofi gofi i = k in
     match k' with
     | IdealKey _ r _ -> M.loc_region_only true r
     | RealKey _ -> M.loc_none
   else M.loc_none
 
 val create:
-  ip:ipkg -> ha_of_i: (ip.Pkg.t -> ha) -> good_of_i: (ip.Pkg.t -> bool) ->
-  i:ip.Pkg.t {ip.Pkg.registered i} ->
-  u:info {u.alg = ha_of_i i /\ u.good == good_of_i i} -> ST (k:key ip i)
+  #ip:ipkg ->
+  ha_of_i: (i:ip.t -> ha) ->
+  good_of_i: (ip.t -> bool) ->
+  i: regid ip ->
+  u: info0 ha_of_i good_of_i i ->
+  ST (k:key ha_of_i good_of_i i)
   (requires fun _ -> model)
   (ensures fun h0 k h1 ->
-    modifies Set.empty h0 h1 /\
+    M.modifies M.loc_none h0 h1 /\
     usage k == u /\
     fresh_loc (footprint k) h0 h1)
 
-let create ip _ _ i u =
+let create #ip hofi gofi i u =
   assume false;
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
   assert(Spec.HMAC.keysized u.alg (Spec.Hash.Definitions.hash_length u.alg));
-  let kv: keyrepr u = Random.sample32 (Hacl.Hash.Definitions.hash_len u.alg) in
+  let kv: keyrepr u.alg = Random.sample32 (Hacl.Hash.Definitions.hash_len u.alg) in
   let ck = MAC u kv in
-  let k : ir_key ip i =
+  let k : ir_key hofi gofi i =
     if is_safe i then
       let region: Mem.subrgn u.parent = new_region u.parent in
       let log: log_t #ip i u region = ralloc region None in
       IdealKey ck region log
     else
       RealKey ck in
-  k <: key ip i
+  k <: key hofi gofi i
 
-let coerceT (ip: ipkg) (ha_of_i: ip.Pkg.t -> ha) (good_of_i: ip.Pkg.t -> bool)
-  (i: ip.Pkg.t {ip.Pkg.registered i /\ ~(safe i)})
-  (u: info {u.alg = ha_of_i i /\ u.good == good_of_i i})
-  (kv: lbytes32 (keylen u)) : GTot (key ip i)
+let coerceT (#ip: ipkg) (ha_of_i: ip.Pkg.t -> ha) (good_of_i: ip.Pkg.t -> bool)
+  (i: regid ip{~(safe i)}) (u: info0 ha_of_i good_of_i i)
+  (kv: lbytes32 (keylen u.alg)) : GTot (key ha_of_i good_of_i i)
   =
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
   assert(Spec.HMAC.keysized u.alg (Spec.Hash.Definitions.hash_length u.alg));
   let ck = MAC u kv in
   if model then
-    let k : ir_key ip i = RealKey ck in k
+    let k : ir_key ha_of_i good_of_i i = RealKey ck in k
   else ck
 
 val coerce:
-  ip: ipkg -> ha_of_i: (ip.Pkg.t -> ha) -> good_of_i: (ip.Pkg.t -> bool) ->
-  i: ip.Pkg.t {ip.Pkg.registered i /\ ~(safe i)} ->
-  u: info {u.alg = ha_of_i i /\ u.good == good_of_i i} ->
-  kv: lbytes32 (keylen u) -> ST (k:key ip i)
+  #ip: ipkg ->
+  ha_of_i: (ip.Pkg.t -> ha) ->
+  good_of_i: (ip.Pkg.t -> bool) ->
+  i: regid ip{~(safe i)} ->
+  u: info0 ha_of_i good_of_i i ->
+  kv: lbytes32 (keylen u.alg) -> ST (k:key ha_of_i good_of_i i)
   (requires fun _ -> True)
   (ensures fun h0 k h1 ->
-    modifies_none h0 h1 /\
-    k == coerceT ip ha_of_i good_of_i i u kv /\
+    M.modifies M.loc_none h0 h1 /\
+    k == coerceT ha_of_i good_of_i i u kv /\
     usage k == u /\
     fresh_loc (footprint k) h0 h1)
 
-let coerce ip _ _ i u kv =
-  assume False;
+let coerce #ip hofi gofi i u kv =
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
   assert(Spec.HMAC.keysized u.alg (Spec.Hash.Definitions.hash_length u.alg));
   let ck = MAC u kv in
   if model then
-    let k : ir_key ip i = RealKey ck in k
+    let k : ir_key hofi gofi i = RealKey ck in k
   else ck
 
 // not quite doable without reification?
 // assert_norm(forall ip i u. (create #ip i u == coerce #ip i u (CoreCrypto.random (UInt32.v (keylen u)))))
 
-private let get_key (#ip:ipkg) (#i:ip.Pkg.t{ip.Pkg.registered i}) (k:key ip i)
-  : concrete_key
+private let get_key #ip #hofi #gofi #i (k:key #ip hofi gofi i)
+  : concrete_key hofi gofi i
   =
   if model then
-    let k' : ir_key ip i = k in
+    let k' : ir_key hofi gofi i = k in
     match k' with
     | IdealKey rk _ _ -> rk
     | RealKey rk -> rk
   else k
 
 val token:
-  #ip:ipkg -> #i:ip.Pkg.t{ip.Pkg.registered i} -> k:key ip i ->
-  ST (tag (usage k))
-  (requires fun _ -> (usage k).good \/ ~(safe i))
+  #ip:ipkg ->
+  #ha_of_i: (ip.Pkg.t -> ha) ->
+  #good_of_i: (ip.Pkg.t -> bool) ->
+  #i:regid ip ->
+  k:key ha_of_i good_of_i i ->
+  ST (tag (usage k).alg)
+  (requires fun h0 -> safe i ==> (usage k).good)
   (ensures fun h0 t h1 -> M.modifies (footprint k) h0 h1)
-  // we may be more precise to prove ideal functional correctness,
-let token #ip #i k =
+
+// we may be more precise to prove ideal functional correctness,
+let token #ip #hofi #gofi #i k =
   let MAC _ t = get_key k in
   if is_safe i then
-    (let IdealKey _ _ log = k <: ir_key ip i in
+    (let IdealKey _ _ log = k <: ir_key hofi gofi i in
     log := Some ());
   t
 
 val verify:
-  #ip:ipkg -> #i:ip.Pkg.t {ip.Pkg.registered i} -> k:key ip i ->
-  t: tag (usage k) -> ST bool
+  #ip:ipkg ->
+  #ha_of_i: (ip.Pkg.t -> ha) ->
+  #good_of_i: (ip.Pkg.t -> bool) ->
+  #i:regid ip ->
+  k:key ha_of_i good_of_i i ->
+  t: tag (usage k).alg ->
+  ST bool
   (requires fun _ -> True)
   (ensures fun h0 b h1 ->
     M.modifies M.loc_none h0 h1 /\
     (b /\ safe i ==> (usage k).good))
 
-let verify #ip #i k t =
+let verify #ip #hofi #gofi #i k t =
   let MAC _ t' = get_key k in
   let verified = (t = t') in
   if is_safe i then
     // We use the log to correct any verification errors
-    let IdealKey _ _ log = k <: ir_key ip i in
+    let IdealKey _ _ log = k <: ir_key hofi gofi i in
     match !log with
     | Some () -> verified
     | None    ->
@@ -212,23 +223,24 @@ let verify #ip #i k t =
   else
     verified
 
-#set-options "--admit_smt_queries true"
-unfold let localpkg (ip: ipkg) (ha_of_i: (i:ip.Pkg.t -> ha)) (good_of_i: ip.Pkg.t -> bool)
+let localpkg (ip: ipkg) (ha_of_i: (i:ip.Pkg.t -> ha)) (good_of_i: ip.Pkg.t -> bool)
   : Pure (Pkg.local_pkg ip)
-  (requires True) (ensures fun p -> p.Pkg.key == key ip /\ p.Pkg.info == info)
+  (requires True) (ensures fun p ->
+    p.Pkg.key == key ha_of_i good_of_i /\
+    p.Pkg.info == info0 ha_of_i good_of_i)
   =
   Pkg.LocalPkg
-    (key ip)
-    info
-    (fun i a -> ha_of_i i == a.alg /\ good_of_i i == a.good)
-    (fun u -> keylen u)
+    (key ha_of_i good_of_i)
+    (info0 ha_of_i good_of_i)
+    (usage #ip #ha_of_i #good_of_i)
+    (fun #i u -> keylen u.alg)
     (b2t ideal)
-    (footprint #ip) // local footprint
+    (footprint #ip #ha_of_i #good_of_i) // local footprint
     (fun #_ k h -> True) // local invariant
     (fun #i k h0 l h1 -> ()) // Local invariant framing
-    (create ip ha_of_i good_of_i)
-    (coerceT ip ha_of_i good_of_i)
-    (coerce ip ha_of_i good_of_i)
+    (create ha_of_i good_of_i)
+    (coerceT ha_of_i good_of_i)
+    (coerce ha_of_i good_of_i)
 
 //TODO (later) support dynamic key compromise
 
@@ -258,10 +270,6 @@ private let test (r:rgn {~(is_tls_rgn r)}) (t': Hashing.Spec.tag Hashing.SHA2_25
   let p = localpkg ip ha_of_i good_of_i in
   let q = Pkg.memoization_ST p in
 
-  assert(Pkg.Pkg?.key q == key ip);
-  assert(Pkg.Pkg?.info q == info);
-
-  let u : info = Info r a (good_of_i 0) in
   let h0 = Mem.get() in
   // assert(
   //   let open Pkg in
@@ -272,21 +280,23 @@ private let test (r:rgn {~(is_tls_rgn r)}) (t': Hashing.Spec.tag Hashing.SHA2_25
   // assert_norm(q.Pkg.package_invariant h0);
   //if model then
   //  else True in
-  assume(False);
+//  assume(False);
   //TODO call memoization_ST instead of memoization? We miss this postcondition.
-  assume(q.Pkg.package_invariant h0);
-  assert(DT.fresh q.define_table 0 h0);
+//  assume(q.Pkg.package_invariant h0);
 
   //17-11-23  causing mysterious squash error
   // assert_by_tactic(u:info{u.alg = ha_of_i 0 /\ u.good == good_of_i 0} == Pkg.Pkg?.info q 0) FStar.Tactics.(norm "foo");
   // let u = u <: Pkg.Pkg?.info q 0 in
-  let k: key ip 0 = Pkg.Pkg?.create q 0 u in
+  let i0 : ip.t = 0 in
+  let a0 : info0 ha_of_i good_of_i i0 = Info r a (good_of_i 0) in
+  assume(DT.fresh q.define_table 0 h0);
+  let k : key ha_of_i good_of_i i0 = Pkg.Pkg?.create q i0 a0 in
 
   // testing usability of logical payloads
   assert(good_of_i 0);
-  let t = token #ip #0 k in
+  let t = token k in
 
-  let b = verify #ip #0 k t in
+  let b = verify k t in
   assert(b /\ b2t ideal ==> good_of_i 0);
   // assert false; // sanity check
   ()
