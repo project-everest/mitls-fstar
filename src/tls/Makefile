@@ -24,7 +24,7 @@ FSTAR_HOME      ?= $(MITLS_HOME)/../FStar
 KREMLIN_HOME    ?= $(MITLS_HOME)/../kremlin
 HACL_HOME       ?= $(MITLS_HOME)/../hacl-star
 MLCRYPTO_HOME   ?= $(MITLS_HOME)/../MLCrypto
-LOWPARSE_HOME	?= $(MITLS_HOME)/../quackyducky/src/lowparse
+QD_HOME		?= $(MITLS_HOME)/../quackyducky
 
 include $(HACL_HOME)/Makefile.include
 
@@ -34,7 +34,7 @@ INCLUDE_PATHS 	= \
   $(KREMLIN_HOME)/kremlib/compat \
   $(KREMLIN_HOME)/kremlib \
   $(MITLS_HOME)/libs/ffi \
-  $(LOWPARSE_HOME) \
+  $(MITLS_HOME)/../quackyducky/src/lowparse \
   $(MITLS_HOME)/src/parsers/generated
 
 # Flat directory structure for miTLS
