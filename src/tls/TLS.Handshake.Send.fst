@@ -80,7 +80,7 @@ type transcript = unit
 val tag: #a:EverCrypt.Hash.alg -> transcript_state a -> transcript -> St bytes
 let tag #a stt transcript =
   push_frame();
-  let ltag =  EverCrypt.Hash.tagLen a in
+  let ltag =  Hashing.Spec.hash_len a in
   let btag = LowStar.Buffer.alloca 0uy ltag in
   // HSL.Transcript.extract stt btag transcript1;
   let tag = FStar.Bytes.of_buffer ltag btag in
