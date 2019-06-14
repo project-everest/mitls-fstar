@@ -233,7 +233,7 @@ noeq type client_state
     { client_complete offer sh ee server_id } -> 
 
     ks: KeySchedule.ks -> 
-    // in unverified state [Old.KeySchedule.C_13_postHS]
+    // in unverified state [Old.KeySchedule.C_13_wait_CF/postHS]
     // TODO key-schedule state 
     //  i:   Secret.ams_id ->
     //  rms: Secret.secret (rms_of_ams i tr) (* for accepting resumption tickets *) ->
