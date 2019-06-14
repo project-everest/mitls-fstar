@@ -1,8 +1,6 @@
 # A revamped Makefile inspired from HACL
 # --------------------------------------
 
-all: compile
-
 SHELL		= /bin/bash
 
 ifeq ($(shell uname -s),Darwin)
@@ -42,6 +40,7 @@ FSTAR_ROOTS	= $(wildcard *.fst *.fsti)
 
 OUTPUT_DIR	= obj
 
+
 ##########################
 # Pretty-printing helper #
 ##########################
@@ -78,6 +77,11 @@ else
 run-with-log = $1
 endif
 
+###############
+# Main Target #
+###############
+
+all: compile
 
 #########
 # FStar #
@@ -110,7 +114,7 @@ FSTAR = $(FSTAR_NO_FLAGS) $(OTHERFLAGS)
 
 .PHONY: parsers
 parsers:
-	$(MAKE) -C ../parsers
+	QD_HOME=$(QD_HOME) $(MAKE) -C ../parsers
 
 
 ##########
