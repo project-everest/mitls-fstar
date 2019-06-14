@@ -295,10 +295,15 @@ let verify_binder hs (bkey:(i:binderId & bk:KeySchedule.binderKey i)) (tag:btag 
   let digest_CH0 = HandshakeLog.hash_tag_truncated #(binderId_hash bid) hs.log tlen in
   HMAC_UFCMA.verify bk digest_CH0 tag
 
-// Compute and send the PSK binders if necessary
-// may be called both by client_ClientHello and client_HelloRetryRequest
+// Send ClientHello; when offering PSKs, we first send a truncated
+// ClientHello, then compute & send the resulting binders.
+//
+// May be called both by client_ClientHello and client_HelloRetryRequest
+//
+// See more recent code in Handshake.fst
 let client_Binders hs offer =
-  match Nego.resume hs.nego with
+  match Nego.resume hs.nego //$ use instead the hs.client_config
+  with
   | (_, []) ->
     HandshakeLog.send hs.log (HSL.Msg (HSM.M_client_hello offer))
   | (_, pskl) ->
@@ -375,7 +380,7 @@ let client_ClientHello hs i =
     // Compute and send PSK binders & 0-RTT signals
     client_Binders hs offer;
     // we may still need to keep parts of ch
-    hs.state := C_wait_ServerHello;
+    hs.state := C_wait_ServerHello; //$ full_offer digest ks
     Correct ()
 
 let client_HelloRetryRequest (hs:hs) (hrr:HSM.hrr) : St incoming =
