@@ -249,7 +249,7 @@ let test_rekey(): St C.exit_code
   let t1 = _down t2 in
 
   let i1' = derive i2 (mklabel "IV") Expand in
-  let a1' = ivlen i1' in
+  let a1' : IV.info ivlen i1' = H.hash_len H.SHA2_256 in
   [@inline_let] let cpkg' = concrete_pkg t2 "IV" in
   let (| (), iv1 |) = KDF.derive #(flagKDF 2) #t2 #i2 kdf2 (mklabel "IV") Expand cpkg' a1' in
   print ("IV1: "^(Bytes.hex_of_bytes iv1));
@@ -260,7 +260,7 @@ let test_rekey(): St C.exit_code
   let (| (), kdf0 |) = KDF.derive #(flagKDF 1) #t1 #i1 kdf1 (mklabel "RE") Expand cpkg' a0 in
 
   let i0' = derive i1 (mklabel "IV") Expand in
-  let a0' = ivlen i0' in
+  let a0' : IV.info ivlen i0' = H.hash_len H.SHA2_256 in
   [@inline_let] let cpkg' = concrete_pkg #1 t1 "IV" in
   let (| (), iv0 |) = KDF.derive #(flagKDF 1) #t1 #i1 kdf1 (mklabel "IV") Expand cpkg' a0' in
   print ("IV0: "^(Bytes.hex_of_bytes iv0));
