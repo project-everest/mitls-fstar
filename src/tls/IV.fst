@@ -18,34 +18,37 @@ module U32 = FStar.UInt32
 /// vector is fresh whenever create is called instead of coerce.
 
 type idealRaw = b2t Flags.flag_Raw
-type valid_len (ip:ipkg) = i:ip.t{model} -> keylen -> Type
+type valid_len (ip:ipkg) = i:ip.t -> keylen -> Type
+
+type info (#ip:ipkg) (lid:valid_len ip) (i:ip.t) =
+  len:keylen{lid i len}
 
 type raw (#ip:ipkg) (lid:valid_len ip) (i:regid ip) =
   b:B.bytes{let l = B.len b in
-  0 < U32.v l /\ U32.v l <= 255}
+  0 < U32.v l /\ U32.v l <= 255 /\ lid i l}
 
 noextract inline_for_extraction
-let create_raw (#ip:ipkg) (lid:valid_len ip) (i:regid ip) (len:keylen)
+let create_raw (#ip:ipkg) (lid:valid_len ip) (i:regid ip) (len:info lid i)
   : ST (raw lid i)
-  (requires fun h0 -> model /\ lid i len)
-  (ensures fun h0 p h1 ->
+  (requires fun h0 -> model)
+  (ensures fun h0 p h1 -> B.len p == len /\
     M.modifies M.loc_none h0 h1 /\
     fresh_loc M.loc_none h0 h1)
   = Random.sample32 len
 
 let coerceT_raw (#ip:ipkg) (lid:valid_len ip)
   (i: regid ip{idealRaw ==> ~(ip.honest i)})
-  (len:keylen) (r:Bytes.lbytes32 len)
+  (len:info lid i) (r:Bytes.lbytes32 len)
   : GTot (raw lid i) 
   = r
 
 inline_for_extraction
 let coerce_raw (#ip: ipkg) (lid:valid_len ip)
   (i: regid ip{idealRaw ==> ~(ip.honest i)})
-  (len: keylen) (r: Bytes.lbytes32 len):
+  (len: info lid i) (r: Bytes.lbytes32 len):
   ST (raw lid i)
-  (requires fun h0 -> model ==> lid i len)
-  (ensures fun h0 k h1 ->
+  (requires fun h0 -> True)
+  (ensures fun h0 k h1 -> B.len k == len /\
     k == coerceT_raw lid i len r /\
     M.modifies M.loc_none h0 h1)
   = r
@@ -58,9 +61,9 @@ let local_raw_pkg (#ip:ipkg) (lid:valid_len ip)
   =
   LocalPkg
     (raw lid)
-    (keylen)
-    (fun (i:ip.t{model}) -> lid i)
-    (fun a -> a)
+    (info lid)
+    (fun #i k -> B.len k)
+    (fun #i a -> a)
     idealRaw
     (DT.empty_fp (raw lid))
     (fun #_ _ _ -> True) // no invariant

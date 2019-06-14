@@ -3,6 +3,7 @@ TLS 1.3 HKDF extract and expand constructions, parametrized by their hash algori
 *)
 module HKDF
 
+module M = LowStar.Modifies
 open Mem
 
 open FStar.UInt32
@@ -11,6 +12,7 @@ open FStar.UInt32
 
 open Hashing.Spec
 open FStar.Bytes
+
 
 (*-------------------------------------------------------------------*)
 (*
@@ -37,7 +39,7 @@ val extract:
   ikm: macable ha ->
   ST (hkey ha)
   (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
+  (ensures (fun h0 t h1 -> M.modifies M.loc_none h0 h1))
 
 inline_for_extraction
 let extract #ha salt ikm = HMAC.hmac ha salt ikm
@@ -83,7 +85,7 @@ val expand:
   len: UInt32.t {0 < v len /\ v len <= op_Multiply 255 (hash_length ha)} ->
   ST (lbytes32 len)
   (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> modifies_none h0 h1 /\
+  (ensures (fun h0 t h1 -> M.modifies M.loc_none h0 h1 /\
     t == expand_spec #ha prk info len))
 
 #set-options "--z3rlimit 100" 
@@ -114,8 +116,6 @@ let expand #ha prk info len =
   let tag = of_buffer len tag_p in
   pop_frame();
   let h11 = HyperStack.ST.get() in
-  //18-09-01 todo, as in Hashing.compute; similarly missing Stack vs ST. 
-  assume(modifies_none h00 h11);
   assume(tag == expand_spec #ha prk info len); // FIXME(adl) I need a functional spec for KDF
   tag
 #reset-options ""
@@ -255,7 +255,7 @@ val expand_label:
   len: UInt32.t {0 < v len /\ v len <= op_Multiply 255 (hash_length ha)} ->
   ST (lbytes32 len)
   (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> modifies_none h0 h1))
+  (ensures (fun h0 t h1 -> M.modifies M.loc_none h0 h1))
 
 let expand_label #ha secret label digest len =
   let info = format ha label digest len in
@@ -277,7 +277,7 @@ val derive_secret:
   digest: bytes{length digest < 256} ->
   ST (lbytes32 (Hacl.Hash.Definitions.hash_len ha))
   (requires fun h -> True)
-  (ensures fun h0 _ h1 -> modifies_none h0 h1)
+  (ensures fun h0 _ h1 -> M.modifies M.loc_none h0 h1)
 
 let derive_secret ha secret label digest =
   let len = Hacl.Hash.Definitions.hash_len ha in
@@ -299,4 +299,3 @@ val expand_secret:
 let expand_secret #ha prk label hv =
   expand_label prk label hv (Hacl.Hash.Definitions.hash_len ha) false
 *)
-
