@@ -80,37 +80,34 @@ type regid (ip:ipkg) = i:ip.t{ip.registered i}
 /// Derived key length restriction when using HKDF
 type keylen = l:UInt32.t {0 < UInt32.v l /\ UInt32.v l <= 255}
 
-(*
-// When calling create or coerce, the footprint of a package grows only with
-// fresh subregions
-type modifies_footprint (fp: mem -> GTot M.loc) h0 h1 =
-  M.loc_includes (fp h0) (fp h1) /\
-  (forall (l:M.loc).{:pattern (M.loc_includes l (fp h1)); (M.loc_disjoint l (fp h1))}
-    l `M.loc_includes` (fp h1) /\ l `M.loc_disjoint` (fp h0) ==> fresh_loc l h0 h1)
-// Old region-based definition:
-//  forall (r:rid). (Set.mem r (fp h0) /\ ~(Set.mem r (fp h1))) ==> fresh_region r h0 h1  
-//AR: 12/05: Could use the pattern {:pattern (Set.mem r (fp h0)); (Set.mem r (fp h1))}
-*)
-
+/// A package describes how instances of an idealized,
+/// multi-instance cryptographic functionality are created.
+/// 
+/// It implements the key packages from the code-based
+/// game-playing proof framework of https://eprint.iacr.org/2018/306.pdf
 inline_for_extraction noextract
 noeq type pkg (ip: ipkg) = | Pkg:
-  key: (regid ip -> Type0)  (* indexed state of the functionality *) ->
-  info: (ip.t -> Type0)                     (* creation-time arguments, typically refined using i:ip.t *) ->
-  info_of_id: (i:ip.t{model} -> info i) -> (* To ensure consistency between the erased index and the concrete info *)
-  len: (#i:ip.t -> info i -> keylen)         (* computes the key-material length from those arguments *) ->
-  ideal: Type0{ideal ==> model}             (* type-level access to the ideal flag of the package *) ->
-
+  // Type of instances
+  key: (regid ip -> Type0) ->
+  // Concrete parameters of each instance, compatible with the index i
+  info: (ip.t -> Type0) ->
+  // info is no longer computable from index, we need an accessor
+  get_info: (#i:regid ip -> k:key i -> info i) ->
+  // Length of key used to create an instance
+  len: (#i:ip.t -> info i -> keylen) ->
+  // Type-level idealization flag of the functionality
+  ideal: Type0{ideal ==> model} ->
   // when modelling, we maintain a global table of all allocated
-  // instances of the package. Only the package modifies the table.
+  // instances of the package. Only the package modifies the table,
+  // when a new instance is created (regardless of ideal flag).
   //
   // The package footprint is a function of the table contents;
-  // that collects all global and instance-local regions, but not [define_table]
+  // by convention the define table is excluded from the footprint.
   define_table: DT.dt key ->
   footprint: (mem -> GTot M.loc) ->
   footprint_framing: (h0:mem -> h1:mem -> Lemma
     (requires DT.unchanged define_table h0 h1)
     (ensures footprint h0 == footprint h1)) ->
-
   // we maintain a package invariant,
   // which only depends on the table and footpring.
   package_invariant: (mem -> Type0) ->
@@ -119,35 +116,41 @@ noeq type pkg (ip: ipkg) = | Pkg:
       M.modifies l h0 h1 /\ define_table `DT.live` h0 /\
       M.loc_disjoint l (DT.loc define_table) /\ M.loc_disjoint l (footprint h0))
     (ensures package_invariant h1)) ->
-
   // create and coerce, with a shared post-condition and framing lemma
   // so that [derive] can pass the post-condition to its caller; the
   // concrete part of the postcondition is what we need in [derive].
-  post: (#i:regid ip -> info i -> key i -> mem -> GTot Type0) ->
-  post_framing: (#i:regid ip -> a:info i -> k:key i ->
+  post: (#i:regid ip -> key i -> info i -> mem -> GTot Type0) ->
+  post_framing: (#i:regid ip -> k:key i -> a:info i ->
     h0:mem -> l:M.loc -> h1:mem -> Lemma
-     (requires post a k h0 /\
+     (requires post k a h0 /\
        M.modifies l h0 h1 /\ define_table `DT.live` h0 /\
        M.loc_disjoint l (DT.loc define_table) /\ M.loc_disjoint l (footprint h0))
-     (ensures post a k h1)) ->
-
+     (ensures post k a h1)) ->
+  // Create an honest instance (that may or may not be idealized,
+  // depending on the secret idealization flag).
   create: (i:regid ip -> a:info i -> ST (key i)
-    (requires fun h0 -> model /\ info_of_id i == a /\
+    (requires fun h0 -> model /\
       package_invariant h0 /\
       DT.fresh define_table i h0)
-    (ensures fun h0 k h1 ->
-      post a k h1 /\ package_invariant h1 /\
+    (ensures fun h0 k h1 -> post k a h1 /\
+      get_info k == a /\
+      package_invariant h1 /\
       (footprint h1) `M.loc_includes` (footprint h0) /\
       DT.extended define_table k h0 h1)) ->
-
-  coerceT: (i:regid ip{ideal ==> ~(ip.honest i)} -> a:info i -> lbytes32 (len a) -> GTot (key i)) ->
-  coerce: (i:regid ip{ideal ==> ~(ip.honest i)} -> a:info i -> rk: lbytes32 (len a) -> ST (key i)
-    (requires fun h0 -> (model ==> info_of_id i == a) /\
+  // We need a functional specification of coerce, to ensure
+  // that the concrete (model off) functionality behaves like
+  // the real (model on, ideal off) one
+  coerceT: (i:regid ip{ideal ==> ~(ip.honest i)} ->
+    a:info i -> lbytes32 (len a) -> GTot (key i)) ->
+  coerce: (i:regid ip{ideal ==> ~(ip.honest i)} ->
+    a:info i -> rk: lbytes32 (len a) -> ST (key i)
+    (requires fun h0 ->
       package_invariant h0 /\
       DT.fresh define_table i h0)
-    (ensures fun h0 k h1 ->
+    (ensures fun h0 k h1 -> post k a h1 /\
+      get_info k == a /\
       k == coerceT i a rk /\
-      post a k h1 /\ package_invariant h1 /\
+      package_invariant h1 /\
       (footprint h1) `M.loc_includes` (footprint h0) /\
       DT.extended define_table k h0 h1)) ->
   pkg ip
@@ -160,7 +163,7 @@ noeq type local_pkg (ip: ipkg) =
 | LocalPkg:
   key: (regid ip -> Type0) ->
   info: (ip.t -> Type0) ->
-  info_of_id: (i:ip.t{model} -> info i) ->
+  get_info: (#i:regid ip -> k:key i -> info i) ->
   len: (#i:ip.t -> info i -> keylen) ->
   ideal: Type0{ideal ==> model} ->
   local_footprint: DT.local_fp key ->
@@ -170,16 +173,16 @@ noeq type local_pkg (ip: ipkg) =
     (requires inv k h0 /\ M.modifies l h0 h1 /\ M.loc_disjoint l (local_footprint k))
     (ensures inv k h1)) ->
   create: (i:regid ip -> a:info i -> ST (key i)
-    (requires fun h0 -> model /\ info_of_id i == a)
+    (requires fun h0 -> model)
     (ensures fun h0 k h1 -> M.modifies M.loc_none h0 h1 /\
-       inv k h1 /\ fresh_loc (local_footprint k) h0 h1)) ->
+       get_info k == a /\ inv k h1 /\ fresh_loc (local_footprint k) h0 h1)) ->
   coerceT: (i:regid ip{ideal ==> ~(ip.honest i)} ->
     a:info i -> lbytes32 (len a) -> GTot (key i)) ->
   coerce: (i:regid ip{ideal ==> ~(ip.honest i)} ->
     a:info i -> rk:lbytes32 (len a) -> ST (key i)
-    (requires fun h0 -> model ==> info_of_id i == a)
+    (requires fun h0 -> True)
     (ensures fun h0 k h1 -> k == coerceT i a rk /\ M.modifies M.loc_none h0 h1 /\
-      inv k h1 /\ fresh_loc (local_footprint k) h0 h1)) ->
+      get_info k == a /\ inv k h1 /\ fresh_loc (local_footprint k) h0 h1)) ->
   local_pkg ip
 
 // Memoization functor from local to global packages that memoize
@@ -212,9 +215,10 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($dt:DT.dt p.key) : pkg ip
     in
   [@inline_let]
   let create (i:regid ip) (a:p.info i) : ST (p.key i)
-    (requires fun h0 -> model /\ p.info_of_id i == a /\
+    (requires fun h0 -> model /\
       package_invariant h0 /\ DT.fresh dt i h0)
-    (ensures fun h0 k h1 -> package_invariant h1 /\
+    (ensures fun h0 k h1 -> p.get_info k == a /\
+      package_invariant h1 /\
       (footprint h1) `M.loc_includes` (footprint h0) /\
       DT.extended dt k h0 h1)
     =
@@ -235,11 +239,12 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($dt:DT.dt p.key) : pkg ip
     k
     in
   [@inline_let]
-  let coerce (i:regid ip{p.ideal ==> ~(ip.honest i)}) (a:p.info i) (k0:lbytes32 (p.len a))
+  let coerce (i:regid ip{p.ideal ==> ~(ip.honest i)})
+    (a:p.info i) (k0:lbytes32 (p.len a))
     : ST (p.key i)
-    (requires fun h0 -> (model ==> p.info_of_id i == a) /\
-      package_invariant h0 /\ DT.fresh dt i h0)
-    (ensures fun h0 k h1 -> k == p.coerceT i a k0 /\
+    (requires fun h0 -> package_invariant h0 /\ DT.fresh dt i h0)
+    (ensures fun h0 k h1 -> p.get_info k == a /\
+      k == p.coerceT i a k0 /\
       package_invariant h1 /\
       (footprint h1) `M.loc_includes` (footprint h0) /\
       DT.extended dt k h0 h1)
@@ -272,13 +277,13 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($dt:DT.dt p.key) : pkg ip
   (Pkg
     p.key
     p.info
-    p.info_of_id
+    p.get_info
     p.len
     p.ideal
     dt
     footprint (DT.lemma_footprint_frame dt p.local_footprint)
     package_invariant package_invariant_framing
-    (fun #_ _ _ h -> True) (fun #_ _ _ _ _ _ -> ())
+    (fun #_ _ _ _ -> True) (fun #_ _ _ _ _ _ -> ())
     create p.coerceT coerce)
 
 noextract

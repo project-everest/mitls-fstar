@@ -54,9 +54,8 @@ let is_kdf_p (p: pkg ii) d children = // same as ksd_subtree
 //let test_rekey(): St C.exit_code = C.EXIT_SUCCESS
 
 /// IV packages. We should add agility. 
-
-inline_for_extraction noextract
-let ivlen (i:id) : keylen = H.hash_len H.SHA2_256
+let ivlen: IV.valid_len ii =
+  fun i l ->l == H.hash_len H.SHA2_256
 
 let is_iv_p (p:pkg ii) =
   Pkg?.key p == IV.raw ivlen /\
@@ -121,7 +120,6 @@ val mk_rekey' (n:nat)
 private noextract
 let lift_children' (#p:Type0) (u:children' p)
   : Pure (children p) (requires model) (ensures fun u' -> u' == u) = u
-
 
 #set-options "--z3rlimit 30"
 noextract

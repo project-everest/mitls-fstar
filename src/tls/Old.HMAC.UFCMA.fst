@@ -14,6 +14,7 @@ open Mem
 open TLSError
 open TLSInfo
 
+module M = LowStar.Modifies
 module HS = FStar.HyperStack
 
 // idealizing HMAC
@@ -115,7 +116,10 @@ let mac #i #good k p =
   assert_norm (pow2 32 < pow2 125);
   assert_norm(Spec.HMAC.keysized a (Spec.Hash.Definitions.hash_length a));
   let p : p:bytes { authId i ==> good p } = p in
+  let h0 = get () in
   let t = HMAC.hmac a k.kv p in
+  let h1 = get () in
+  assume(modifies_none h0 h1); // FIXME update memory model in HS
   let e : entry i good = Entry t p in
   recall k.log;
   k.log := snoc !k.log e;

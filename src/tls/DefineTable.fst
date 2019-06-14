@@ -16,13 +16,25 @@ let alloc #it vt =
     MDM.alloc #it #vt #(fun _ -> True) #tls_define_region ()
   else ()
 
+let lookup #it #vt t i =
+  if model then
+   begin
+    let t0 = ideal t in
+    recall t0;
+    match MDM.sel !t0 i with
+    | None -> None
+    | Some v -> mr_witness t0 (MDM.defined t0 i); Some v
+   end
+  else None
+
 let extend #it #vt t #i k =
   if model then
    begin
     let t0 = ideal t in
     recall t0;
     t0 := MDM.upd !t0 i k;
-    mr_witness t0 (MDM.contains t0 i k)
+    mr_witness t0 (MDM.contains t0 i k);
+    mr_witness t0 (MDM.defined t0 i)
    end
   else ()
 

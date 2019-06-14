@@ -91,12 +91,9 @@ let fresh_addresses (rid:rid) (addrs:Set.set address) (m0:mem) (m1:mem) =
        addr_unused_in rid a m0 /\
        contains_addr  rid a m1
 
-(** Downward closure of [prf_region i] *)
-val shared_footprint: rset
-
-(** Downward closure of [log_region i] *)
-val footprint: #i:I.id -> #rw:_ -> aead_state i rw -> 
-  GTot (s:rset{s `Set.disjoint` shared_footprint})
+// (** Downward closure of [log_region i] *)
+//val footprint: #i:regid ii -> #rw:_ -> aead_state i rw -> 
+//  GTot (s:rset{s `Set.disjoint` shared_footprint})
 
 //Leaving this abstract for now; but it should imply Crypto.AEAD.Invariant.safelen i len (otp_offset i)
 val safelen: I.id -> nat -> bool
@@ -108,8 +105,9 @@ val invariant : #i:_ -> #rw:_ -> aead_state i rw -> mem -> Type0
 val frame_invariant: #i:_ -> #rw:_ -> st:aead_state i rw -> h0:mem -> r:rid -> h1:mem ->
     Lemma (requires (invariant st h0 /\
            modifies_one r h0 h1 /\
-           ~(r `Set.mem` footprint st) /\
-           ~(r `Set.mem` shared_footprint)))
+	   True))
+//           ~(r `Set.mem` footprint st) /\
+//           ~(r `Set.mem` shared_footprint)))
           (ensures invariant st h1)
 
 val frame_log: #i:_ -> #rw:_ -> st:aead_state i rw -> l:Seq.seq (entry i) ->
@@ -118,7 +116,8 @@ val frame_log: #i:_ -> #rw:_ -> st:aead_state i rw -> l:Seq.seq (entry i) ->
           safeMac i /\
           log st h0 == l /\
           modifies_one r h0 h1 /\
-          ~(r `Set.mem` footprint st))
+	  True)
+//          ~(r `Set.mem` footprint st))
         (ensures log st h1 == l)
 
 (*** The main stateful API ***)
@@ -132,11 +131,11 @@ val gen (i:I.id)
     (ensures  (fun h0 s h1 ->
                log_region s == log_rgn /\
                prf_region i == prf_rgn /\
-               modifies_none h0 h1 /\ // allocates only
-               (exists fresh.
-                  fresh_addresses prf_rgn fresh h0 h1 /\
-                  footprint s == Set.singleton log_rgn /\
-                  shared_footprint == Set.singleton prf_rgn) /\
+//               modifies_none h0 h1 /\ // allocates only
+//               (exists fresh.
+//                  fresh_addresses prf_rgn fresh h0 h1 /\
+//                  footprint s == Set.singleton log_rgn /\
+//                  shared_footprint == Set.singleton prf_rgn) /\
                (safeMac i ==> log s h1 == Seq.empty) /\
                invariant s h1
               ))

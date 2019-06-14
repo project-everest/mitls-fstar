@@ -94,6 +94,19 @@ val alloc:
   (ensures fun h0 t h1 -> M.modifies M.loc_none h0 h1 /\
     empty t h1 /\ fresh_loc (loc t) h0 h1)
 
+val lookup:
+  #it:eqtype ->
+  #vt: (it -> Type) ->
+  t: dt vt ->
+  i: it ->
+  ST (option (vt i))
+  (requires fun h0 -> True)
+  (ensures fun h0 r h1 -> h0 == h1 /\
+    (model ==> r == MDM.sel (HS.sel h0 (ideal t)) i) /\
+    (match r with
+    | None -> fresh t i h1
+    | Some k -> defined t i /\ defined_as t k h1))
+
 val extend:
   #it:eqtype ->
   #vt: (it -> Type) ->
@@ -102,7 +115,8 @@ val extend:
   k: vt i ->
   ST unit
   (requires fun h0 -> fresh t i h0)
-  (ensures fun h0 () h1 -> extended t k h0 h1)
+  (ensures fun h0 () h1 -> defined t i /\ defined_as t k h1 /\
+    extended t k h0 h1)
 
 (* Used to define a joint invariant over all defined instances
 The definition is opaque but the lemmas below are enough to use
@@ -116,7 +130,7 @@ val dt_forall:
   Type0
 
 type local_fp (#it:eqtype) (vt:it->Type) =
-  #i:it -> vt i -> l:M.loc{not model ==> l == M.loc_none}
+  #i:it -> vt i -> GTot (l:M.loc{not model ==> l == M.loc_none})
 
 val empty_fp:
   #it:eqtype ->
