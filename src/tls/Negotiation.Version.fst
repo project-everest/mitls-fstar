@@ -7,6 +7,7 @@ open TLSConstants // for leqPV and the configuration
 open FStar.Error
 open TLSError
 
+module HSM = HandshakeMessages
 module CFG = Parsers.MiTLSConfig
 
 #reset-options "--query_stats --using_facts_from '* -FStar.Reflection -FStar.Tactics -EverCrypt -Crypto -Spec -Hacl'" 
@@ -463,14 +464,16 @@ let isSentinelRandomValue client_pv server_pv server_random =
   (server_pv `leqPV` TLS_1p1 && TLS_1p2 `leqPV` client_pv && server_random = down @| abyte 0z)
 // TODO do we produce them? do we get downgrade resistance from them?
 
+module SH = Parsers.RealServerHello
+
 /// ServerHello sets the protocol version
 let chosen sh =
-  let pv0 = sh.Parsers.ServerHello.version in 
+  let pv0 = sh.SH.version in 
   if TLS_1p3 `leqPV` pv0 then
     fatal Illegal_parameter "Server selected an illegal legacy protocol version"
   else
     let open Parsers.ServerHelloExtension in
-    match List.Tot.find SHE_supported_versions? sh.Parsers.ServerHello.extensions with
+    match List.Tot.find SHE_supported_versions? sh.SH.extensions with
       | None -> correct pv0 // old style
       | Some (SHE_supported_versions pv1) ->
         if TLS_1p3 `leqPV` pv1 && pv0 <> TLS_1p2 then 
@@ -480,7 +483,7 @@ let chosen sh =
 /// The client checks it is compatible with its offer
 val accept:
   cfg: config ->
-  sh: Parsers.ServerHello.serverHello ->
+  sh: HSM.sh ->
 //pv: protocolVersion ->
 //ses: Parsers.ServerHelloExtensions.serverHelloExtensions ->
 //sr: TLSInfo.random ->
@@ -490,7 +493,7 @@ let accept cfg sh (*pv ses sr*) =
   match chosen sh with
   | Error z -> Error z 
   | Correct pv -> 
-    if isSentinelRandomValue cfg.max_version pv sh.Parsers.ServerHello.random then 
+    if isSentinelRandomValue cfg.max_version pv sh.SH.random then 
       fatal Illegal_parameter "Protocol-version downgrade attempt detected"
     else 
     if not (supported cfg pv) then 

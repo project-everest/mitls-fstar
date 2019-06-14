@@ -20,6 +20,8 @@ open FStar.Bytes
 open Mem
 open Pkg
 
+module M = LowStar.Modifies
+module DT = DefineTable
 module AE = AEAD
 module I  = Crypto.Indexing
 
@@ -30,9 +32,7 @@ type aeadAlg =
   | AES_GCM256
 
 val ideal: b:bool{b ==> model}
-let ideal =
-  assume (b2t Flags.ideal_AEAD ==> model);
-  Flags.ideal_AEAD
+let ideal = Flags.ideal_AEAD
 
 type safe (#ip:ipkg) (i:ip.t) = ideal /\ ip.honest i
 
@@ -111,33 +111,27 @@ let keyval #ip #index_of_i #i k =
     | Real ck -> ck.k
   else k.k
 
-val shared_footprint: rset
-let shared_footprint =
-  if model then AE.shared_footprint
-  else Set.empty
-
 abstract
 val footprint:
   #ip:ipkg ->
   #index_of_i:(ip.t -> I.id) ->
-  #i:ip.t{ip.registered i} ->
-  k:key ip index_of_i i ->
-  GTot (s:rset{s `Set.disjoint` shared_footprint})
-let footprint #ip #index_of_i #i k =
-  Set.lemma_equal_intro (Set.empty `Set.intersect` shared_footprint) Set.empty;
+  DT.local_fp (key ip index_of_i)
+
+let footprint #ip #index_of_i =
+  fun #i k ->
   if model then
     let k: _key index_of_i i = k in
     match k with
-    | Ideal _ st -> AE.footprint st
-    | Real _ -> Set.empty
-  else Set.empty
+    | Ideal _ st -> M.loc_none // AE.footprint st
+    | Real _ -> M.loc_none
+  else M.loc_none
 
 (** The local AEAD invariant *)
 abstract
 val invariant:
   #ip:ipkg ->
   #index_of_i:(ip.t -> I.id) ->
-  #i:ip.t{ip.registered i} ->
+  #i:regid ip ->
   k:key ip index_of_i i ->
   h:mem ->
   GTot Type0
@@ -153,21 +147,23 @@ abstract
 val invariant_framing:
   #ip:ipkg ->
   #index_of_i:(ip.t -> I.id) ->
-  i:ip.t{ip.registered i} ->
+  #i:ip.t{ip.registered i} ->
   k:key ip index_of_i i ->
   h0:mem ->
-  r:rid ->
+  l:M.loc ->
   h1:mem ->
   Lemma (requires invariant k h0 /\
-         modifies_one r h0 h1 /\
-         ~(r `Set.mem` footprint k) /\
-         ~(r `Set.mem` shared_footprint))
+         M.modifies l h0 h1 /\
+	 M.loc_disjoint l (footprint k))
+//         ~(r `Set.mem` footprint k) /\
+//         ~(r `Set.mem` shared_footprint))
         (ensures invariant k h1)
-let invariant_framing #ip #index_of_i i k h0 r h1 =
+
+let invariant_framing #ip #index_of_i #i k h0 r h1 =
   if model then
     let k: _key index_of_i i = k in
     match k with
-    | Ideal _ st -> AE.frame_invariant st h0 r h1
+    | Ideal _ st -> admit() //AE.frame_invariant st h0 r h1
     | Real _ -> ()
 
 abstract
@@ -205,7 +201,8 @@ val empty_log_framing:
   Lemma
     (requires (empty_log a k h0 /\
                modifies_one r h0 h1 /\
-               ~(r `Set.mem` footprint k)))
+	       True))
+//               ~(r `Set.mem` footprint k)))
     (ensures  (empty_log a k h1))
 let empty_log_framing #ip #aeadAlg_of_i #index_of_i #i a k h0 r h1 =
   if model then
@@ -232,10 +229,11 @@ val create_key:
   ST (key ip index_of_i i)
      (requires fun h0 -> model) ///\ live_region h0 (AE.prf_region (index_of_i i)))
      (ensures  fun h0 k h1 ->
-       modifies_none h0 h1 /\
-       fresh_regions (footprint k) h0 h1 /\
-       empty_log #ip #aeadAlg_of_i #index_of_i #i a k h1 /\
+       M.modifies M.loc_none h0 h1 /\
+       fresh_loc (footprint k) h0 h1 /\
+//       empty_log #ip #aeadAlg_of_i #index_of_i #i a k h1 /\
        invariant k h1)
+
 let create_key ip aeadAlg_of_i index_of_i i a =
   let id = index_of_i i in
   let prf_rgn = AE.prf_region id in //new_region a.parent in
@@ -265,11 +263,14 @@ assume val coerce_key:
   ST (key ip index_of_i i)
     (requires fun h0 -> True)
     (ensures fun h0 k h1 -> k == coerceT_key ip aeadAlg_of_i index_of_i i a k0
-      /\ modifies_none h0 h1 /\ fresh_regions (footprint k) h0 h1
-      /\ empty_log #ip #aeadAlg_of_i #index_of_i #i a k h1 /\ invariant k h1)
+      /\ M.modifies M.loc_none h0 h1 /\ fresh_loc (footprint k) h0 h1
+ //     /\ empty_log #ip #aeadAlg_of_i #index_of_i #i a k h1
+      /\ invariant k h1)
 
 let len #ip #aeadAlg_of_i #i (u:info1 #ip aeadAlg_of_i i) =
   keylen u.alg
+
+(*
 
 let local_ae_pkg (ip:ipkg) (aeadAlg_of_i:ip.t -> aeadAlg) (index_of_i: ip.t -> I.id)
   : Tot (local_pkg ip)
@@ -277,14 +278,12 @@ let local_ae_pkg (ip:ipkg) (aeadAlg_of_i:ip.t -> aeadAlg) (index_of_i: ip.t -> I
   LocalPkg
     (key ip index_of_i)
     (info1 #ip aeadAlg_of_i)
+    (fun #i k -> admit())
     (len #ip #aeadAlg_of_i)
-    ideal
-    shared_footprint
+    (b2t ideal)
     (footprint #ip #index_of_i)
     (invariant #ip #index_of_i)
     (invariant_framing #ip #index_of_i)
-    (empty_log #ip #aeadAlg_of_i #index_of_i)
-    (empty_log_framing #ip #aeadAlg_of_i #index_of_i)
     (create_key ip aeadAlg_of_i index_of_i)
     (coerceT_key ip aeadAlg_of_i index_of_i)
     (coerce_key ip aeadAlg_of_i index_of_i)
@@ -313,3 +312,5 @@ let encrypt _ _ _ #_ k v = v + 1
  // if model then
  // ...
  // else AEAD.encrypt k.Real?.ck.info.alg v
+
+*)

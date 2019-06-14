@@ -44,6 +44,7 @@ open LowStar.BufferOps
 // [b *= v; !*b] when i = 0 for even nicer C syntax
 
 module B = LowStar.Buffer // rather than bytes
+module M = LowStar.Modifies
 
 (* trying out  syntax 
 open FStar.Integers 
@@ -74,9 +75,6 @@ module MDM = FStar.Monotonic.DependentMap
 
 inline_for_extraction 
 let model = Flags.model 
-
-// disjointness of regions; otherwise use LowStar.Buffer.loc_disjoint 
-let disjoint = HS.disjoint
 
 /// 18-01-04 We need to explicitly choose between using colors and
 /// using hierarchy & transitivity.
@@ -164,119 +162,20 @@ let ssa #a =
     | _ -> False in
   f
 
+let loc_in (l: M.loc) (h: HS.mem) =
+  M.loc_not_unused_in h `M.loc_includes` l
 
-(* An earlier variant of the code below, to be deleted 
+let loc_unused_in (l: M.loc) (h: HS.mem) =
+  M.loc_unused_in h `M.loc_includes` l
 
-// FIXME(adl) can't write Set.set rgn because unification fails in pkg!!
-// FIXME(adl) overcomplicated type because of transitive modifications.
-// An rset can be thought of as a set of disjoint subtrees in the region tree
-// the second line embeds the definition of rgn because of the unification bug
-type rset = s:Set.set HS.rid{
-  (forall (r1:rgn) (r2:rgn).{:pattern (Set.mem r1 s /\ Set.mem r2 s)} (Set.mem r1 s /\ Set.mem r2 s) ==> (r1 == r2 \/ HS.disjoint r1 r2)) /\
-  (forall (r1:rgn). (Set.mem r1 s ==>
-     r1<>HS.root /\
-     (is_tls_rgn r1 ==> r1 `HS.extends` tls_tables_region) /\
-     (forall (s:HS.rid).{:pattern is_eternal_region s} s `is_above` r1 ==> is_eternal_region s)))}
+let fresh_loc (l: M.loc) (h0 h1: HS.mem) =
+  loc_unused_in l h0 /\ loc_in l h1
 
-// We get from the definition of rset that define_region and tls_honest_region are disjoint
-let lemma_define_tls_honest_regions (s:rset)
-  : Lemma (~(Set.mem tls_define_region s) /\ ~(Set.mem tls_honest_region s))
+let fresh_is_disjoint (old_loc:M.loc) (new_loc:M.loc)
+  (h0 h1:HS.mem) : Lemma
+  (requires (fresh_loc new_loc h0 h1 /\ old_loc `loc_in` h0))
+  (ensures (M.loc_disjoint old_loc new_loc))
   = ()
 
-//  if Set.mem tls_define_region s then
-//    assert(tls_define_region `HS.extends` tls_)
-
-type disjoint_rset (s1:rset) (s2:rset) =
-  Set.disjoint s1 s2 /\
-  (forall (r1:rgn) (r2:rgn).{:pattern (Set.mem r1 s1 /\ Set.mem r2 s2)}
-   (Set.mem r1 s1 /\ Set.mem r2 s2) ==> HS.disjoint r1 r2)
-
-assume val lemma_disjoint_ancestors:
-  r1:rgn -> r2:rgn -> p1:rgn{r1 `is_below` p1} -> p2:rgn{r2 `is_below` p2}
-  -> Lemma (requires p1 <> p2) (ensures HS.disjoint r1 r2 /\ r1 <> r2)
-*)
-
-
-// We use this instead of Set.set rgn because otherwise subtyping fails in pkg.
-// The second line embeds the definition of rgn because of the unification bug
-//
-// An rset can be thought of as a set of disjoint subtrees in the region tree
-// rset are downward closed - if r is in s and r' extends r then r' is in s too
-// this allows us to prove disjointness with negation of set membership.
-
-type rset = s:Set.set HS.rid{
-  (forall (r1:HS.rid).{:pattern (Set.mem r1 s)} (Set.mem r1 s ==> 
-     r1 <> HS.root /\
-     (is_tls_rgn r1 ==> r1 `HS.extends` tls_tables_region) /\
-     (forall (r':HS.rid).{:pattern (r' `HS.includes` r1)} r' `is_below` r1 ==> Set.mem r' s)))}
-
-let rset_empty (): GTot rset = Set.empty
-let rset_union (s1:rset) (s2:rset): GTot rset = let r = (Set.union s1 s2) in r
-
-/// SZ: This is the strongest lemma that is provable
-/// Note that this old stronger version doesn't hold:
-///
-/// let lemma_rset_disjoint (s:rset) (r:HS.rid) (r':HS.rid)
-///  : Lemma (requires ~(Set.mem r s) /\ (Set.mem r' s))
-///          (ensures  r `HS.disjoint` r')
-
-let lemma_rset_disjoint (s:rset) (r:HS.rid) (r':HS.rid)
-  : Lemma (requires Set.mem r s /\ ~(Set.mem r' s) /\ r' `is_below` r)
-          (ensures  r `HS.disjoint` r')
-  = ()
-
-// We get from the definition of rset that define_region and tls_honest_region are disjoint
-let lemma_define_tls_honest_regions (s:rset)
-  : Lemma (~(Set.mem tls_define_region s) /\ ~(Set.mem tls_honest_region s))
-  = ()
-
-//18-01-04 Consider moving the rest to a separate library
-type trivial_inv #it #vt: DM.t it (MDM.opt vt) -> Tot Type = fun _ -> True
-type i_mem_table (#it:eqtype) (vt:it -> Type) =
-  MDM.t tls_define_region it vt trivial_inv
-type mem_table (#it:eqtype) (vt:it -> Type) =
-  (if model then i_mem_table vt else unit)
-
-noextract inline_for_extraction
-let itable (#it:eqtype) (#vt:it -> Type) (t:mem_table vt)
-  : Pure (i_mem_table vt) (requires model) (ensures fun _ -> True) = t
-
-let mem_addr (#it:eqtype) (#vt:it -> Type) (t:i_mem_table vt): GTot nat = HS.as_addr t
-
-type mem_fresh (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (i:it) (h:mem) =
-  model ==> MDM.fresh (itable t) i h
-type mem_defined (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (i:it) =
-  model ==> witnessed (MDM.defined (itable t) i)
-type mem_update (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (i:it) (v:vt i) (h0 h1:mem) =
-  mem_defined t i /\
-  (model ==> HS.sel h1 (itable t) == MDM.upd (HS.sel h0 (itable t)) i v)
-
-type mem_stable (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (h0 h1:mem) =
-  model ==> HS.sel h0 (itable t) == HS.sel h1 (itable t)
-type mem_empty (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (h1:mem) =
-  model ==> HS.sel h1 (itable t) == MDM.empty
-
-type modifies_mem_table (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (h0 h1:mem) =
-  (if model then
-     (modifies_one tls_define_region h0 h1 /\
-     HS.modifies_ref tls_define_region (Set.singleton (mem_addr (itable t))) h0 h1)
-  else modifies_none h0 h1)
-type mem_disjoint (#it:eqtype) (#vt:it -> Type) (t:mem_table vt)
-  (#it':eqtype) (#vt':it' -> Type) (t':mem_table vt') =
-  model ==> mem_addr (itable t) <> mem_addr (itable t')
-
-let mem_alloc (#it:eqtype) (vt:it -> Type) : ST (mem_table vt)
-  (requires fun h0 -> True)
-  (ensures fun h0 t h1 -> modifies_mem_table t h0 h1 /\ mem_empty t h1)
-  =
-  if model then (MDM.alloc #it #vt #trivial_inv #tls_define_region ())  else ()
-
-type mem_contains (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (h:mem) =
-  model ==> h `contains` (itable t)
-let lemma_mem_disjoint_stable (#it:eqtype) (#vt:it -> Type) (t:mem_table vt)
-  (#it':eqtype) (#vt':it' -> Type) (t':mem_table vt') (h0:mem) (h1:mem) : Lemma
-  (requires modifies_mem_table t h0 h1 /\ mem_disjoint t t' /\ mem_contains t h0 /\ mem_contains t' h0)
-  (ensures mem_stable t' h0 h1) = ()
-let lemma_mem_frame (#it:eqtype) (#vt:it -> Type) (t:mem_table vt) (h0:mem) (r:HS.rid) (h1:mem) : Lemma
-  (requires modifies_one r h0 h1 /\ tls_define_region `HS.disjoint` r /\ mem_contains t h0)
-  (ensures mem_stable t h0 h1) = ()
+type sub_loc (parent:M.loc) =
+  l:M.loc{if model then M.loc_includes parent l else l == M.loc_none}

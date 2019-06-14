@@ -3,6 +3,7 @@
 open Hashing.Spec // for the algorithm names, instead of CoreCrypt
 open Mem
 
+module M = LowStar.Modifies
 open FStar.HyperStack.ST
 
 let ha = EverCrypt.HMAC.supported_alg
@@ -17,7 +18,7 @@ val hmac:
   ST (tag a)
   (requires fun h0 -> True)
   (ensures fun h0 t h1 ->
-    modifies_none h0 h1 /\ // FIXME(adl) this is now wrong
+    M.modifies M.loc_none h0 h1 /\
     t = Hashing.Spec.hmac a k m)
 
 #set-options "--z3rlimit 20"
@@ -55,22 +56,23 @@ let hmac a k m =
   assert(t = Hashing.Spec.hmac a k m);
   pop_frame();
   let h11 = HyperStack.ST.get() in
-  //18-09-01 todo, as in Hashing.compute
-  assert(LowStar.Modifies.(modifies loc_none h00 h11));
-  assume(modifies_none h00 h11); //18-09-12 missing compatibility lemma?
   t
 
 
 //18-09-02 TODO lower code to avoid bytes-allocating the tag.
 
-val hmacVerify: a:ha -> k:hkey a -> m:macable a -> t: tag a -> ST (b:bool {b <==> (t == Hashing.Spec.hmac a k m)})
+val hmacVerify:
+  a:ha ->
+  k:hkey a ->
+  m:macable a ->
+  t: tag a ->
+  ST (b:bool {b <==> (t == Hashing.Spec.hmac a k m)})
   (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
+  (ensures (fun h0 t h1 -> M.modifies M.loc_none h0 h1))
 
 let hmacVerify a k p t =
   let result = hmac a k p in
   result = t
-
 
 /// Historical constructions from SSL, still used in TLS 1.0, actually
 /// just HMAC. Disable in this version of the code.
@@ -127,7 +129,7 @@ val tls_mac: a:
   msg:macable ->
   ST (tag a)
   (requires fun h0 -> True)
-  (ensures fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1)
+  (ensures fun h0 t h1 -> M.modifies M.loc_none h0 h1)
 let tls_mac a k msg  = hmac a k msg
 
 val tls_macVerify:
@@ -137,5 +139,5 @@ val tls_macVerify:
   tag a ->
   ST bool
   (requires fun h0 -> True)
-  (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
+  (ensures (fun h0 t h1 -> M.modifies M.loc_none h0 h1))
 let tls_macVerify a k d t = hmacVerify a k d t
