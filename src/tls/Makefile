@@ -119,7 +119,7 @@ parsers:
 
 .PHONY: depend-warning
 depend-warning:
-	@echo "⚠ Starting dependency analysis... may take up to ten minutes. Remember to run subsequent builds with NODEPEND=1 !"
+	@echo "⚠ Starting dependency analysis... may take a couple minutes. Remember to run subsequent builds with NODEPEND=1 !"
 
 ifndef NODEPEND
 ifndef MAKE_RESTARTS
