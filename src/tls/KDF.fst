@@ -291,12 +291,12 @@ type kdf_invariant_wit (#ideal:iflag) (#u:usage ideal) (#i:regid)
     let (| a, raw |) = Model.real k in
     (match MDM.sel (sel h dt) i' with
     | None -> True
-    | Some k' -> True)
-//      let a' = Pkg?.info_of_id pkg' i' in
-//      let len' = Pkg?.len pkg' a' in
-//      let lb = FStar.Bytes.bytes_of_string lbl in
-//      let raw' = HKDF.expand_spec #a.ha raw lb len' in
-//      k' == Pkg?.coerceT pkg' i' a' raw')
+    | Some k' ->
+      let a' = Pkg?.get_info pkg' k' in
+      let len' = Pkg?.len pkg' a' in
+      let lb = FStar.Bytes.bytes_of_string lbl in
+      let raw' = HKDF.expand_spec #a.ha raw lb len' in
+      k' == Pkg?.coerceT pkg' i' a' raw')
    end))
 
 let lemma_kdf_invariant_init_wit (#ideal:iflag) (#u:usage ideal) (#i:regid)
@@ -516,39 +516,6 @@ let pp (ideal:iflag) (u:usage ideal) : ST (pkg ii)
   =
   memoization_ST #ii (local_kdf_pkg ideal u)
 
-// library??
-noextract
-val list_forall: ('a -> Type0) -> list 'a -> Tot Type0
-let rec list_forall f l = match l with
-    | [] -> True
-    | hd::tl -> f hd /\ list_forall f tl
-
-(*
-noextract
-let rec tree_invariant' (#pp:Type0) (x:tree' pp) (h:mem)
-  : Tot Type0 (decreases %[depth x]) =
-  match x with
-  | Leaf p -> Pkg?.package_invariant p h
-  | Node p lxs ->
-    Pkg?.package_invariant p h /\
-    children_forall lxs (fun x -> tree_invariant' x h) /\
-    disjoint_children h lxs
-
-inline_for_extraction
-let tree_invariant #p (x:tree p) h =
-  if model then
-    let x' : tree' p = x in tree_invariant' x' h
-  else True
-
-// We can frame the multi-pkg invariant for free when touching tls_honest_region
-let tree_invariant_frame #p (t:tree p) (h0:mem) (h1:mem)
-  : Lemma (requires tree_invariant t h0 /\ (modifies_none h0 h1 \/ modifies_one tls_honest_region h0 h1))
-          (ensures tree_invariant t h1)
-  = admit()
-*)
-
-// TODO 17-12-01 we need an hypothesis that captures that p is in the tree, e.g. only deal with the case where p is a child.
-
 type kdf_subtree (ideal:iflag) (t:tree (b2t ideal)) =
   (if model then
     let t : tree' (b2t ideal) = t in
@@ -640,42 +607,19 @@ let derive #ideal #t #i k lbl ctx child_pkg a' =
   let u = u_of_t t in
   let dt = kdf_dt t in
   let h0 = get() in
-
-  // parent honesty is defined; child honesty is set accordingly if it is unregistered.
-  let honest = get_honesty i in
   let i', honest' = register_derive i lbl ctx in
   let h1 = get() in
-//  tree_invariant_frame t h0 h1;
   lemma_corrupt_invariant i lbl ctx;
 
   if model then
    begin
-   (*
-    assume false; // Ideal branch is WIP, working on extraction now
-    let _ = // Ghost section
-      let log = itable dt in
-      recall log;
-      let m = sel h1 log in
-      assume(MDM.sel m i == Some k); // testify
-      lemma_mm_forall_elim m local_kdf_invariant i k h1;
-      assert(local_kdf_invariant k h1)
-      in
-    let pkg = child u lbl in
-    assert(Pkg?.ideal pkg ==> b2t ideal); // Nice!
-
-    if (u `has_lbl` lbl) && ideal && honest then
+    if (u `has_lbl` lbl) && Model.is_safe k then
      begin
-      let x: domain u i = Domain lbl ctx in
-      let KDF_table kdf_r kdf_t : table u i () = Model.ideal k () in
-      let v: option (derived_key u i lbl ctx) = MDM.lookup kdf_t x in
-      match v with
+      let pkg = child u lbl in
+      match DT.lookup pkg.define_table i' with
       | Some dk -> (| (), dk |)
       | None ->
         let dk = (Pkg?.create pkg) i' a' in
-        let h2 = get() in
-        assume(tree_invariant t h2);
-        assert(mem_fresh pkg.define_table i' h2); // from kdf_local_inv
-        MDM.extend kdf_t x dk;
         (| (), dk |)
       end
     else
@@ -685,12 +629,9 @@ let derive #ideal #t #i k lbl ctx child_pkg a' =
       let dk = (LocalPkg?.coerce child_pkg) i' a' raw in
       (| (), dk |)
      end
-    *)
-    admit()
    end
   else 
    begin
-    assert(h1 == h0);
     let len' = (LocalPkg?.len child_pkg) a' in
     let (| a, key |) = Model.real k in
     let raw = HKDF.expand #a.ha key (Bytes.bytes_of_string lbl) len' in
